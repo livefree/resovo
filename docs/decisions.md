@@ -9618,4 +9618,267 @@ RETURNING id, display_name, locale, avatar_url
 **后续解锁卡**：
 - **CHG-SN-8-FUP-USERS-EDIT-EP**：按本 ADR 实施 2 migration + 2 route handler + DB queries + R-MID-1 7 文件 + 测试 surface #1-#22 + 前端消费（columns actions 列加「改邮箱」/「编辑资料」按钮 + 对应 Modal）
 
+---
+
+## ADR-138 — admin_audit_log 通用回滚端点协议（CHG-SN-8-FUP-AUDIT-ROLLBACK-EP）
+
+**状态**：Accepted（arch-reviewer A− PASS / 2 非阻塞建议 N1-138-1 + N1-138-2 登记 follow-up）
+**日期**：2026-05-22
+**arch-reviewer**：claude-opus-4-7（子代理评级；本主循环亦 claude-opus-4-7）
+**关联 GAP**：`#G-audit-rollback-universal`（P3 体验优化，消费层跳转已闭合；本 ADR 推进通用后端回滚）
+**关联任务**：CHG-SN-8-FUP-AUDIT-ROLLBACK-ADR（本卡 / ADR 起草）/ CHG-SN-8-FUP-AUDIT-ROLLBACK-EP（实施 follow-up）
+
+---
+
+### 1. 决策摘要
+
+新增 admin 写端点 `POST /admin/audit/logs/:id/rollback`，采用**方案 D（混合策略）**：简单 UPDATE 类 actionType 走 JSONB diff 反向自动回滚（`before_jsonb` 字段白名单约束 UPDATE），复杂业务操作（staging.publish / video.merge / video.split 等多表/状态机操作）走注册的 `reverse_handler` 扩展点，不可回滚的单向操作（采集/重扫/导入/缓存清除等 24 类）返回 422 `AUDIT_ROLLBACK_UNSUPPORTED`。回滚操作本身写入新 actionType `system.audit_rollback` 到 audit_log（形成 audit-of-audit 追溯链）。字段白名单机制防止 `password_hash` / `role` 等敏感字段被 audit log 回滚注入。权限限定 admin only + 高敏感 actionType 需前端二次确认（后端不强制）。
+
+---
+
+### 2. 背景
+
+**问题**：CHG-SN-8-GAPS-AUDIT-ROLLBACK（commit 14e6b9b7）已通过消费层补齐闭合 `#G-audit-rollback-universal`，在 `/admin/audit` 页面每行加「回滚」按钮：8 类 actionType 跳转到对应业务页的已有反向操作入口，22 类单向操作 disabled 显示 tooltip。但用户期望的体验是：点击「回滚」后直接在 audit 页面完成反向操作，无需跳转到另一个页面再手动执行。
+
+**rollback-routes.ts 消费层现状实证**（`apps/server-next/src/lib/audit/rollback-routes.ts`）：`resolveRollbackTarget` switch 映射 40 个显式 actionType + 4 个 targetKind fallback；可跳转 18（8 组）/ disabled 22 / fallback 4。
+
+**核心设计挑战**：
+1. audit_log 的 `before_jsonb` / `after_jsonb` 只存涉及字段子集（ADR-109 注释），反向写回需确保字段子集是安全且充分的
+2. 部分 actionType 涉及多表写入、状态机约束、外部副作用，不能简单 UPDATE 回滚
+3. audit_log 可能记录了已不存在的 schema 字段（DB migration 后 before_jsonb 含已删除列）
+4. 敏感字段（password_hash / role）若被 audit log 记录，自动回滚可能成为权限提升攻击向量
+
+---
+
+### 3. 决策
+
+#### D-138-1 回滚算法策略
+
+选择**方案 D（混合策略）**：JSONB diff 反向 UPDATE 通用路径 + reverse_handler 注册扩展点 + UNSUPPORTED Set 24 项。
+
+| 维度 | 方案 A: reverse_action 静态映射 | 方案 B: JSONB diff 反向 UPDATE | 方案 C: 仅删除式回滚 | 方案 D: 混合 |
+|------|---|---|---|---|
+| **覆盖范围** | 高（理论全 44 actionType） | 中高（UPDATE 类） | 极低（~5 actionType） | **高（B 自动 + handler 复杂）** |
+| **实施复杂度** | 极高（44 个独立反向端点） | 中（通用逻辑 + 映射 + 白名单） | 低 | **中高（首期 ~0.5w）** |
+| **R-MID-1 audit** | 各独立 | 统一 `system.audit_rollback` | N/A | **自动写 + handler 可自定义** |
+| **失败处置** | 独立处理 | 通用层 | 简单 | **通用层兜底 + handler 覆盖** |
+| **跨表 schema 漂移容忍** | 高 | 低 | N/A | **中（白名单 + 422 降级）** |
+| **安全性** | 高 | 中（需白名单） | 高 | **高（白名单 + 显式声明 + 二次确认）** |
+| **向后兼容** | 手动维护 | 自动覆盖 | N/A | **新 UPDATE 自动 + 新复杂需注册** |
+| **渐进交付** | 必须一次实现 | 一次实现 | 一次但价值低 | **首期通用 + 后续按需注册** |
+
+**架构分层**：
+
+```
+POST /admin/audit/logs/:id/rollback
+  → Route 层：鉴权 + 参数解析 + 调 Service
+  → AuditRollbackService.rollback(auditLogId, actorContext)
+    → 1. 读取 audit_log 行
+    → 2. 查 ROLLBACK_REGISTRY[actionType]
+       → 若有注册 handler → 调 handler(auditLog, db, actorContext)
+       → 若无 handler → 查 UNSUPPORTED_SET[actionType]
+          → 若在不可回滚集 → 422 AUDIT_ROLLBACK_UNSUPPORTED
+          → 若不在 → 走通用 JSONB 反向 UPDATE 路径
+    → 3. 通用路径：target_kind → table_name 映射 → before_jsonb ∩ 白名单 → UPDATE
+       → 写 system.audit_rollback audit_log（事务内 INSERT）
+    → 4. 返回 { rolledBack: true, rollbackAuditLogId, warnings? }
+```
+
+#### D-138-2 权限范围
+
+**admin only**。与现有 3 个 audit 端点（`apps/api/src/routes/admin/audit.ts:21` adminOnly）一致。
+
+**高敏感 actionType 前端二次确认清单**：`user.role_change` / `user.email_change` / `system.settings_update` / `system.config_update` / `home_module.delete` / `crawler_site.delete` — 前端 confirm dialog 守门（同 video.merge / staging.publish 范式），后端不强制 `X-Confirm` header。
+
+#### D-138-3 R-MID-1 rollback action audit
+
+**触发 R-MID-1 7 文件框架**（ADR-121）。
+
+**新增 actionType（1 项）**：`system.audit_rollback` — targetKind = `'system'`（复用，不扩展 CHECK 约束）/ targetId = NULL（rollback 目标是 audit_log 行，sourceAuditLogId 存入 before/after jsonb）/ before/after_jsonb 含 sourceAuditLogId / sourceActionType / sourceTargetKind / sourceTargetId / rolledBackFields / restoredFields。
+
+**R-MID-1 7 文件清单**：
+1. `packages/types/src/admin-moderation.types.ts` — union 扩
+2. `apps/api/src/services/AuditLogService.ts` — ACTION_TYPES 扩
+3. `tests/unit/api/audit-log-service-enums-set-equal.test.ts` — EXPECTED 同步
+4. `tests/unit/api/audit-log-coverage.test.ts` — REQUIRED + PAYLOAD 扩
+5. `apps/api/src/routes/admin/audit.ts` — 端点 handler
+6. `tests/unit/api/audit-rollback.test.ts` — payload 内容断言
+7. `docs/changelog.md` — 完成备注
+
+#### D-138-4 失败处置 + 边界
+
+**8 种失败场景处理**：
+
+| # | 场景 | HTTP | ErrorCode | 策略 |
+|---|---|---|---|---|
+| F-1 | 不可回滚 actionType（22+ 类单向操作） | 422 | `AUDIT_ROLLBACK_UNSUPPORTED` | UNSUPPORTED_ACTION_TYPES Set 查询 |
+| F-2 | 已被后续操作覆盖（状态机冲突） | 409 | `AUDIT_ROLLBACK_STALE` | UPDATE 前 SELECT 当前行，比对 after_jsonb；不一致则拒绝（不强制覆盖） |
+| F-3 | 跨表 schema 漂移（字段被 migration 删除） | 422 | `AUDIT_ROLLBACK_SCHEMA_DRIFT` | before_jsonb ∩ 白名单为空 → 拒绝；部分过滤 → warnings |
+| F-4 | 二次回滚（system.audit_rollback 被 rollback） | 422 | `AUDIT_ROLLBACK_UNSUPPORTED` | 加入 UNSUPPORTED Set，避免无限链 |
+| F-5 | audit_log 行不存在 | 404 | `NOT_FOUND` | 复用 getAdminAuditLogById |
+| F-6 | target_id NULL（batch action） | 422 | `AUDIT_ROLLBACK_UNSUPPORTED` | batch 操作不在通用路径范围 |
+| F-7 | before_jsonb NULL（CREATE 类） | 422 | `AUDIT_ROLLBACK_UNSUPPORTED` | CREATE 反向 = DELETE，需 handler 而非通用 |
+| F-8 | 目标业务行不存在 / soft deleted | 404 | `NOT_FOUND` | WHERE id = $1 AND deleted_at IS NULL 返 0 行 |
+
+#### D-138-5 跨表 schema 约束
+
+**target_kind → table_name 映射**（11 项；source_route / system / image_health 无对应单一表 → 需 handler 或入 UNSUPPORTED）。
+
+**字段白名单设计**：每个 target_kind+table 维护显式白名单 Set（编译时常量），UPDATE 时 before_jsonb 字段 ∩ 白名单 = SET 列表。**3 个示例**：
+
+- **video.staff_note** (video / videos)：`{ staff_note, review_status, is_published, is_visible, meta_score, title }`（排除 deleted_at / created_at / catalog_id）
+- **user.email_change** (user / users)：`{ email, display_name, locale, avatar_url }`（排除 password_hash / role / role_changed_at / banned_at / deleted_at）
+- **home_module.update** (home_module / home_modules)：`{ title, subtitle, type, config, is_published, sort_order, brand_slug }`
+
+**唯一性约束处理**：email 回滚捕获 PG 23505 → 422 `AUDIT_ROLLBACK_STALE`。
+
+**schema 变更后白名单未同步**：
+1. 新增列未加白名单 → 部分回滚 + warnings
+2. 删除列仍在白名单 → information_schema 防御性查询（缓存 60s）+ 422 SCHEMA_DRIFT
+3. 实施卡 R-MID-1 框架自然要求新增列同步白名单（CLAUDE.md schema 同步约束延伸）
+
+#### D-138-6 关联 ADR + 性能 + ErrorCode
+
+**关联 ADR**：ADR-109 (audit schema) / ADR-110 (ErrorCode) / ADR-118 (audit 视图) / ADR-121 (R-MID-1) / ADR-139 (user.role_change 范式) / ADR-140 (user.email_change 范式 + audit CHECK 扩展)
+
+**性能**：
+- **事务**：单 PG 事务 BEGIN → SELECT audit_log → SELECT 当前行 → UPDATE 业务表 → INSERT audit_log → COMMIT
+- **同步 audit 写入**：回滚的 audit 写入不走 fire-and-forget（事务内 INSERT 保证原子性，与 ADR-139 R-139-4 同模式但反向）
+- **p95 目标**：< 200ms（单行 SELECT + UPDATE + INSERT，主键索引）
+- **information_schema 缓存**：白名单字段验证缓存 60s
+
+**新增 ErrorCode（3 码）**：
+
+| CODE | HTTP | 触发 |
+|------|------|------|
+| `AUDIT_ROLLBACK_UNSUPPORTED` | 422 | actionType 不可回滚 / target_id NULL / before_jsonb NULL / 二次回滚 |
+| `AUDIT_ROLLBACK_STALE` | 409 | after_jsonb 与当前 DB 值不一致 / UNIQUE 违反 |
+| `AUDIT_ROLLBACK_SCHEMA_DRIFT` | 422 | before_jsonb ∩ 白名单 = ∅ / 字段在当前 schema 不存在 |
+
+---
+
+### 端点契约
+
+| # | Method | Path | 权限 | Body | Response `data` | 新增 ErrorCode | ADR |
+|---|--------|------|------|------|----------------|---------------|-----|
+| 1 | POST | `/admin/audit/logs/:id/rollback` | admin | `{}` (空 body) | `{ rolledBack: true, rollbackAuditLogId: string, warnings?: string[] }` | `AUDIT_ROLLBACK_UNSUPPORTED` (422) / `AUDIT_ROLLBACK_STALE` (409) / `AUDIT_ROLLBACK_SCHEMA_DRIFT` (422) | ADR-138 |
+
+**Path param**：`:id` 为 admin_audit_log.id（bigserial 数字字符串）；空 body 设计：回滚信息全部从 audit_log 行取，无需客户端传递（降低 API 表面 + 防篡改）；未来扩展口 `{ force?: boolean }`（N1-138-2）。
+
+---
+
+### 5. SQL / Schema 设计
+
+**无新 migration**：admin_audit_log 表无需新增列；`system.audit_rollback` 复用 `system` targetKind 不扩展 CHECK；业务表无变更。
+
+**新增 DB Query 函数**（`apps/api/src/db/queries/auditLog.ts`）：
+- `rollbackAuditLogTarget(client, tableName, primaryKeyColumn, targetId, fieldsToRestore, softDeleteColumn?)` — 通用反向 UPDATE
+- `selectCurrentRowForRollback(client, tableName, primaryKeyColumn, targetId, fieldNames, softDeleteColumn?)` — stale 检测
+
+**SQL 注入防护**：table_name / column_name 全部从编译时常量白名单取（不接受用户输入），手动 PG 标识符转义。
+
+---
+
+### 6. Response 结构 / 错误码
+
+**成功响应**（200）：
+
+```json
+{
+  "data": {
+    "rolledBack": true,
+    "rollbackAuditLogId": "12345",
+    "warnings": ["字段 'year' 不在当前白名单中，已跳过"]
+  }
+}
+```
+
+`warnings` 仅在部分字段被白名单过滤但不影响回滚成功时返回。
+
+**错误响应**：复用 ADR-110 `ApiErrorBody` 信封 + 3 新 ErrorCode + 现有 NOT_FOUND/FORBIDDEN/VALIDATION_ERROR/INTERNAL_ERROR。
+
+---
+
+### 7. 关联 ADR
+
+详见 D-138-6 关联 ADR 表。
+
+---
+
+### 8. R-MID-1 文件清单
+
+**适用**。详见 D-138-3 7 文件清单。
+
+**实施卡 CHG-SN-8-FUP-AUDIT-ROLLBACK-EP 完整文件范围**（10 文件 = 7 R-MID-1 + 3 扩展）：
+
+| # | 文件 | 角色 |
+|---|------|------|
+| 1 | `packages/types/src/admin-moderation.types.ts` | union 扩 `system.audit_rollback` |
+| 2 | `packages/types/src/api-errors.ts` | ERRORS 字典扩 3 码 |
+| 3 | `apps/api/src/services/AuditLogService.ts` | ACTION_TYPES 扩 |
+| 4 | `apps/api/src/services/AuditRollbackService.ts` | 新 Service：回滚算法核心 + 白名单 + handler 注册 |
+| 5 | `apps/api/src/db/queries/auditLog.ts` | 新 query 函数 |
+| 6 | `apps/api/src/routes/admin/audit.ts` | 端点 handler |
+| 7 | `tests/unit/api/audit-log-service-enums-set-equal.test.ts` | EXPECTED 同步 |
+| 8 | `tests/unit/api/audit-log-coverage.test.ts` | REQUIRED + PAYLOAD 扩 |
+| 9 | `tests/unit/api/audit-rollback.test.ts` | 端点 + 回滚逻辑单测 |
+| 10 | `docs/changelog.md` | 完成备注 |
+
+注：超出 R-MID-1 最小 7 文件，但属功能必需不可拆。建议实施卡可考虑拆 2 子卡：A（Service + Query + 端点 + 测试）/ B（R-MID-1 4 真源 + coverage）。
+
+---
+
+### 9. 测试 surface
+
+19 用例（happy path 3 + 不可回滚 4 + stale 2 + schema drift 2 + 边界 4 + audit 写入 2 + 权限 2）— 完整列表见 ADR §9 测试 surface 表（CHG-SN-8-FUP-AUDIT-ROLLBACK-EP 实施卡内落地，文件 `tests/unit/api/audit-rollback.test.ts`）。
+
+---
+
+### 10. 风险与回退
+
+| # | 风险 | 严重性 | 缓解 |
+|---|------|--------|------|
+| R-138-1 | 白名单维护负担 | 中 | R-MID-1 框架同步要求 + CLAUDE.md schema 同步约束延伸 |
+| R-138-2 | 通用 JSONB 回滚绕过业务校验 | 高 | stale 检测 + 白名单不含状态机字段 + handler 注册路径 |
+| R-138-3 | 动态 SQL 构建潜在注入 | 高 | table_name / column_name 编译时常量白名单 + PG 标识符转义 |
+| R-138-4 | 高频回滚造成业务数据振荡 | 低 | admin only + 前端 confirm + 不可二次回滚 |
+| R-138-5 | before/after jsonb 只存子集 → 部分字段恢复 | 中 | 设计内行为（ADR-109）+ 文档说明 + 前端 confirm 文案 |
+
+**回退路径**：1. 代码 revert POST handler + AuditRollbackService + query 扩展 2. ErrorCode 保留无副作用 3. actionType 保留历史可查 4. 消费层 rollback-routes.ts 不受影响
+
+---
+
+### 11. 非阻塞建议 / N1
+
+**N1-138-1（handler 注册优先级）**：首期实施仅覆盖通用 JSONB 反向 UPDATE 路径（~12 个简单 UPDATE 类 actionType）。以下复杂 actionType 建议按 P1/P2/P3 渐进注册 reverse_handler：
+- P1：video.approve / video.reject_labeled（review_status 状态机 + ModerationService.reopen）
+- P2：home_module.create / home_module.delete（CREATE 反向 soft-delete / DELETE 反向 restore）
+- P3：staging.publish（多表 + 状态机，需独立 ADR）
+
+**状态**：登记 follow-up CHG-SN-8-FUP-AUDIT-ROLLBACK-HANDLERS（P3 按需）。
+
+**N1-138-2（force 参数）**：当前 stale 检测发现不一致返 409，admin 无法强制覆盖。如运营反馈频繁需求，可扩展 `{ force?: boolean }` 跳过 stale 校验。该扩展不破坏空 body 契约。**状态**：待运营反馈触发 CHG-SN-8-FUP-AUDIT-ROLLBACK-FORCE。
+
+---
+
+**不可回滚 actionType 完整列表**（首期 UNSUPPORTED_ACTION_TYPES Set，24 项）：
+
+| 类别 | actionType |
+|---|---|
+| 系统单向 | `system.cache_clear` / `system.sources_import` / `system.audit_rollback`（二次回滚） |
+| 采集状态 | `crawler.freeze` / `crawler.run_create` / `crawler.auto_config` / `crawler.stop_all` / `crawler.reindex` / `crawler_run.cancel/pause/resume` |
+| batch 操作 | `crawler_site.batch` / `staging.batch_publish` / `video_source.disable_dead_batch` |
+| 异步触发 | `video.refetch_sources` / `image_health.rescan` / `image_health.switch_domain` |
+| 复杂多表 | `sources.route_action` / `source_line_alias.upsert` / `video.merge` / `video.unmerge` / `video.split` / `staging.publish` / `crawler_site.category_mapping_update` |
+
+**首期可自动回滚的 actionType**（~12 项纯字段 UPDATE 类）：`video.staff_note` / `video.visibility_patch` / `video.approve` / `video.reject_labeled` / `video.reopen` / `video_source.toggle` / `staging.revert` / `home_module.update` / `home_module.publish_toggle` / `home_module.reorder` / `crawler_site.update` / `user.email_change` / `user.profile_update` / `user_submission.action` —— 注：实施卡需澄清，`user.role_change`（需 session invalidate 联动）/ `home_module.create/delete`（CREATE/DELETE 反向语义）/ `system.settings_update/config_update`（嵌套 JSON）等如未注册 handler，首期需入 UNSUPPORTED Set（N1-138-1）。
+
+---
+
+**后续解锁卡**：
+- **CHG-SN-8-FUP-AUDIT-ROLLBACK-EP**：按本 ADR 实施 10 文件清单 + 19 测试 surface
+- **CHG-SN-8-FUP-AUDIT-ROLLBACK-HANDLERS**：渐进注册 reverse_handler（P1/P2/P3）
+- **CHG-SN-8-FUP-AUDIT-ROLLBACK-FORCE**：`{ force?: boolean }` 强制覆盖参数（待运营反馈）
+- **消费层升级**：`rollback-routes.ts` 可回滚 actionType 从"跳转模式"切换为"直接调 POST 端点"
+
 

@@ -74,7 +74,12 @@
   - `user_submission.action` → `/admin/user-submissions`
 - **不可回滚类型**（按钮 disabled + tooltip）：`crawler.*` / `crawler_run.*` / `crawler_site.*` / `image_health.*` / `system.*` / `sources.route_action` / `source_line_alias.upsert` / `video.refetch_sources` — 这些是采集/重扫/导入等单向只增操作，无反向语义
 - **未知 actionType**：按 targetKind fallback 跳详情页（video → /admin/videos / user → /admin/users 等）
-- **通用端点 follow-up**：CHG-SN-8-FUP-AUDIT-ROLLBACK-EP — 起 ADR-138 设计 `POST /admin/audit/logs/:id/rollback` + reverse_action 映射协议（消费已有 before_jsonb / after_jsonb 一键回滚）；需 Opus 评审
+- **通用端点 follow-up**：CHG-SN-8-FUP-AUDIT-ROLLBACK-EP — 按 ADR-138 实施 `POST /admin/audit/logs/:id/rollback`（**ADR 已起草 A− PASS** 2026-05-22 / commit 待）
+  - **方案 D 混合策略**：JSONB diff 反向 UPDATE 通用路径（首期 ~12 个简单 UPDATE 类 actionType）+ reverse_handler 注册扩展点 + UNSUPPORTED Set 24 项不可回滚（采集/重扫/导入/缓存等单向操作 + batch 操作 + 复杂多表）
+  - **字段白名单**：防 password_hash / role 等敏感字段被 audit log 注入回滚（D-138-5）
+  - **3 新 ErrorCode**：`AUDIT_ROLLBACK_UNSUPPORTED` 422 / `AUDIT_ROLLBACK_STALE` 409（stale 检测）/ `AUDIT_ROLLBACK_SCHEMA_DRIFT` 422（schema 漂移）
+  - **R-MID-1 第 19 次系统化**：新 actionType `system.audit_rollback` 形成 audit-of-audit 追溯链
+  - **N1 follow-up**：reverse_handler 渐进注册 P1/P2/P3（CHG-SN-8-FUP-AUDIT-ROLLBACK-HANDLERS）/ `force` 强制覆盖参数（CHG-SN-8-FUP-AUDIT-ROLLBACK-FORCE）
 
 ## 4. 进阶操作
 
