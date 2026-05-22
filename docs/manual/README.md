@@ -67,7 +67,8 @@ docs/manual/
 │   ├── ContentRefPicker.md
 │   ├── UserPicker.md
 │   └── SitePicker.md
-└── 90-glossary.md                         术语：双信号 / 线路别名 / 暂存 / 软删 / fallback 域
+├── 90-glossary.md                         术语：双信号 / 线路别名 / 暂存 / 软删 / fallback 域
+└── GAPS.md                                实施缺失 / 意义不明模块汇总（CHG-SN-8-MANUAL-BATCH-1 起活跃登记）
 ```
 
 ## 3. 4 条硬约束（M-SN-8 完结态）

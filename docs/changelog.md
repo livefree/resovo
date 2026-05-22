@@ -14414,3 +14414,54 @@ H2 硬约束（零死按钮）在用户菜单维度起步完成。
 - W4 合并工作流端到端闭合（视频库 → Merge 页 → 完成合并）
 - VideoPicker 第 3 个业务消费方接入（字幕上传 + 首页模块 + Merge）
 - H3 零断链 + H4 零 UUID 进一步推进
+
+## [CHG-SN-8-MANUAL-BATCH-1] 高 ROI 4 页面手册定稿 + GAPS.md 新建（实施缺失登记）
+
+- **完成时间**：2026-05-21
+- **记录时间**：2026-05-21
+- **执行模型**：claude-opus-4-7
+- **子代理**：无（纯文档）
+- **关联 SEQ**：SEQ-20260521-05 manual 大补全（batch 1/4）
+- **修改文件**：
+  - `docs/manual/20-pages/P-videos.md` 36 → 179 行（视频库标杆完整定稿）
+  - `docs/manual/20-pages/P-dashboard.md` 36 → 96 行（首屏 5 类信息 + 8 卡）
+  - `docs/manual/20-pages/P-moderation.md` 102 → 168 行（§3.1 J/K 流 + §3.2 拒绝 + §3.4 预设 + §4 进阶 + §5/§6/§7 全填）
+  - `docs/manual/20-pages/P-merge.md` 36 → 136 行（3 类入口 + DirectMergeWorkspace + 5 字段 + 6 FAQ）
+  - 新建 `docs/manual/GAPS.md`（11 条实施 gap 登记 + 闭合规则）
+  - `docs/manual/README.md`（目录树新增 GAPS.md 索引行）
+  - `docs/task-queue.md` + `docs/changelog.md`
+- **新增依赖**：无
+- **数据库变更**：无
+- **API 变更**：无（纯文档卡）
+
+### GAPS.md 11 条登记（按优先级）
+
+| 编号 | 页面 | 优先级 | 状态 |
+|---|---|---|---|
+| #G-shell-notifications | 用户问题 #1 | P0/P1 | 🔄 已立 follow-up |
+| #G-dashboard-runall | P-dashboard | P1 | ⬜ 未启动 |
+| #G-videos-add | P-videos | P2 | ⬜ 待复核 |
+| #G-moderation-batch-ui | P-moderation | P1 | ⬜ 未启动 |
+| #G-moderation-preset-team | P-moderation | P3 | ⬜ 未启动 |
+| #G-merge-candidate-b-auto | P-merge | P1 | ⬜ 未启动 |
+| #G-sources-replace-similar | P-sources | P2 | 🔄 已立 CHG-SN-8-FUP-SOURCES-REPLACE-ADR |
+| #G-dashboard-edit-mode | P-dashboard | P3 | ⬜ 长期 backlog |
+| #G-dashboard-activities-mock | P-dashboard | P2 | ⬜ 待复核 |
+| #G-dev-mode-3panels | 用户问题 #12 | P3 | ⬜ 长期 backlog |
+| #G-user-menu-real-features | 用户菜单 | P3 | 🔄 部分（FUP-USER-MENU 已占位）|
+
+### 价值
+- 4 份高 ROI 手册定稿（视频库 + 首屏 + 审核台核心 + 合并工作台）— 覆盖每运营/审核员日常 80%+ 流量
+- GAPS.md 系统化登记 → 后续 follow-up 卡有依据；用户能从 manual FAQ 反向追踪到 gap
+- 用户原意「发现功能缺失记录」要求达成 — 11 条 gap 全部入册并标优先级 + 状态 + 建议
+
+### DoD 全勾
+- [x] 4 份 P-* 完整定稿（8 章节）
+- [x] GAPS.md 11 条登记
+- [x] manual README 索引更新
+- [x] verify:manual-coverage PASS
+
+### 后续 batch
+- **Batch 2**：P-users / P-settings / P-audit / P-home（admin/编辑页，~4 份 0.2-0.3w）
+- **Batch 3**：P-login / P-submissions-deprecated（小页面，~0.1w）
+- **Batch 4**：W2-W5 工作流（4 份 ~0.15w）

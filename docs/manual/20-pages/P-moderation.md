@@ -51,9 +51,21 @@
 - **「清除筛选」**：点击右侧按钮 → 移除 url `run_id` 参数，banner 消失
 - **未来增强**（CHG-SN-8-03-B）：后端按 runId 严格过滤队列，仅显示该次 run 新增视频
 
-### 3.1 处理待审视频（J/K 翻页）
+### 3.1 处理待审视频（J/K 翻页 · 高频核心流）
 
-（待 CHG-SN-8-04 填写键盘流；CHG-SN-8-06 通过即上架开关见 §3.1b）
+- **前置**：moderator+ 角色 / Segment Tab = pending
+- **键盘流（CHG-SN-4-FIX-C 实装）**：
+  - `J` / 下方向键 → 队列下一条
+  - `K` / 上方向键 → 队列上一条
+  - `A` → 通过（视 §3.1b toggle 决定 approve 或 approve_and_publish）
+  - `R` → 打开 RejectModal（带 label）→ §3.2
+  - `S` → 跳过（不改状态，仅 activeIdx + 1）
+  - `Esc` → 关闭 Modal / Drawer
+- **鼠标流**：左队列点击视频 → 中央预览 + 右栏 tabs（详情/历史/类似）
+- **乐观更新**：通过/拒绝即在左队列移除该条，API 失败则回滚
+- **失败处理**：
+  - 409 REVIEW_RACE「已被其他审核员处理」→ 刷新队列
+  - 403 FORBIDDEN（approve_and_publish 非 admin）→ toast + 回滚
 
 ### 3.1b 「通过即上架」开关（CHG-SN-8-06 / W1 反例 #5 修复）
 
@@ -75,9 +87,16 @@
   - fetch 失败："重测失败 · ${错误}"（danger）
 - **未来增强**（CHG-SN-8-05-B follow-up）：LinesPanel 每行 inline「重测」xs btn 触发单线路重测；需 admin-ui API 扩展 + Opus 评审
 
-### 3.2 拒绝视频（带 label）
+### 3.2 拒绝视频（带 label · RejectModal）
 
-（待填）
+- **触发**：R 键 / 「✕ 拒绝」按钮
+- **Modal 内容**：
+  - 必选 `labelKey` enum（来自 review_labels 表 / `GET /admin/review-labels`，如 `quality_low` / `duplicate` / `spam`）
+  - 可选 `reason` 文本（500 字内）
+- **行为**：调 `POST /admin/moderation/:id/reject-labeled` + 乐观更新移除
+- **失败处理**：
+  - 400 LABEL_UNKNOWN → labelKey 不存在
+  - 409 REVIEW_RACE → 刷新
 
 ### 3.3 查看历史 / 类似 / 详情（右栏 tabs）
 
@@ -94,6 +113,60 @@
 - 「发起合并」→ 跳 `/admin/merge?candidate_a=<当前视频>&candidate_b=<选中相似>&from=moderation` → Merge 页顶部显示 candidate_a banner（CHG-SN-8-08）
 - 空召回 → EmptyState「未找到类似视频」（说明该视频在同类型/年份范围无相似项；可考虑直接审核或检查元数据完整性）
 - 网络错误 → ErrorState + 「重试」按钮（refetch）
+
+### 3.4 筛选预设（FilterPresetPopover · CHG-SN-4-FIX-F）
+
+- **位置**：Segment tabs 旁齿轮 icon → Popover
+- **行为**：保存当前 filter 组合为命名预设（如「我的待审」「本周新增」）+ 设为默认
+- **持久化**：sessionStorage `admin.moderation.presets.<tab>.v1`
+- **多账号共享**：⬜ 未实装（GAPS.md #G-moderation-preset-team）
+
+## 4. 进阶操作
+
+### 4.1 重开审核（rejected → pending）
+
+- 入口：右栏 → 详情 Tab 或视频库行级
+- 调 `POST /admin/moderation/:id/reopen`
+- 影响：清空 review_reason + 重置 reviewedAt/reviewedBy
+
+### 4.2 批量审核（pending → approved）
+
+- 入口：⬜ **未实装独立批量入口**（GAPS.md #G-moderation-batch-ui）；后端 `batch-approve` 端点存在但前端无 UI
+
+## 5. 字段含义
+
+| VideoQueueRow 字段 | 含义 |
+|---|---|
+| review_status | pending_review / approved / rejected |
+| visibility_status | public / internal / hidden |
+| is_published | true/false（视为暂存与上架的核心标记）|
+| probe / render | DualSignal 探测/播放双信号 |
+| sourceCheckStatus | ok / partial / all_dead / unknown |
+| metaScore | 0-100 元数据完整度 |
+| doubanStatus | matched / candidate / unmatched |
+| trendingTag | 'hot' / 'weekly_top' / 'editors_pick' / 'exclusive' |
+| reviewSource | 'auto' / 'manual' / 'crawler' |
+| badges | 端点投影计算（如 "线路全失效" / "图片失效"）|
+
+## 6. 状态颜色
+
+| pill | 含义 |
+|---|---|
+| 绿（ok）| approved / probe.ok / render.ok / matched |
+| 黄（warn）| pending_review / partial / candidate / staging |
+| 红（danger）| rejected / all_dead / unmatched |
+| 灰（muted）| 未审 / 未测 |
+| 蓝（info）| running / 部分新数据 |
+
+## 7. FAQ
+
+| 现象 | 原因 | 解决 |
+|---|---|---|
+| 通过后跳 staging 而非前台 | toggle off | 切 §3.1b on（需 admin）|
+| toast「approve_and_publish 仅限 admin」| moderator 切了 toggle on | toggle off 走 staging 路径 |
+| RightPane「类似」Tab 空召回 | 该视频同 type/year 范围无相似项 | 检查 metadata 完整性 |
+| 「重测此视频线路」空线路 | 视频无 sources | 走 P-crawler 重新采集 |
+| FilterPresetPopover 预设丢失 | sessionStorage 浏览器关闭清 | M-SN-N 加 localStorage 持久化 |
 
 ## 8. 与其他页面的关系
 
