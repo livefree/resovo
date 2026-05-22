@@ -24,6 +24,8 @@ export interface User {
   bannedAt: string | null  // 封号时间，null 表示正常
   // ADR-139：admin 变更该用户角色的最后时间戳（ISO 8601）；NULL = 从未被改过
   roleChangedAt?: string | null
+  // ADR-140：admin 可编辑的用户展示名（1-50 字符）；NULL 时前端降级到 username
+  displayName?: string | null
 }
 
 // ── 认证 ─────────────────────────────────────────────────────────

@@ -77,9 +77,18 @@
 - **当前替代**：逐行操作（PageHeader disabled 按钮 hover 显示提示）
 
 ### 4.2 改用户邮箱 / 编辑显示名
-- **状态**：🔄 ADR 已起草（ADR-140 A− PASS 2026-05-21 / CHG-SN-8-FUP-USERS-EDIT-ADR）；实施 follow-up CHG-SN-8-FUP-USERS-EDIT-EP 待立
-- **ADR-140 设计**：双端点 `PATCH /admin/users/:id/email` + `PATCH /admin/users/:id/profile`（displayName + locale + avatarUrl）/ email 直接生效（无邮件服务基础设施）/ users 加 display_name 列 / audit log 扩 `'user'` targetKind + 2 actionType / admin 互改保护沿用现有 role === 'admin' 守卫 / 触发 R-MID-1 7 文件框架
-- **当前替代**：实施完成前 admin 仍走数据库直接改邮箱 / displayName
+- **状态**：✅ **已实装**（ADR-140 + CHG-SN-8-FUP-USERS-EDIT-EP 闭合 / 2026-05-22）
+- **改邮箱**：行尾「改邮箱」ghost btn → EditEmailModal → 后端 `PATCH /admin/users/:id/email`
+  - 唯一性：Service 层 prevalidation + DB UNIQUE 双保险（409 CONFLICT）
+  - 同邮箱幂等不写 DB / 不写 audit
+  - admin 目标 disabled + tooltip + 后端 403 双层保护
+  - audit log：`user.email_change` actionType + before/after.email
+- **编辑资料**：行尾「编辑资料」ghost btn → EditProfileModal（displayName / locale / avatarUrl 3 字段，至少一个必填）→ 后端 `PATCH /admin/users/:id/profile`
+  - displayName 1-50 + Unicode 字符集（多语言字母/数字/Emoji/空格/`-_.`）；null = 清除
+  - locale BCP 47（en / zh-CN）
+  - avatarUrl URL 校验；null = 清除
+  - audit 仅含实际变更字段（partial before/after）
+- **当前限制**：邮件验证流程未实装（ADR-140 D-140-2 因项目无邮件服务，方案 A 直接生效）；未来邮件服务上线后可升级为方案 B（用户确认）/ C（旧邮箱通知）— N1-140-1 follow-up
 
 ## 5. 字段含义
 

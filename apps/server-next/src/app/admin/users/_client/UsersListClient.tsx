@@ -49,6 +49,8 @@ import { downloadCsv, type CsvColumn } from '@/lib/csv-export'
 import { RoleMatrixModal } from './RoleMatrixModal'
 import { InviteUserModal } from './InviteUserModal'
 import { ResetPasswordModal } from './ResetPasswordModal'
+import { EditEmailModal } from './EditEmailModal'
+import { EditProfileModal } from './EditProfileModal'
 
 // ── 常量 ──────────────────────────────────────────────────────────
 
@@ -108,6 +110,8 @@ export function UsersListClient() {
   const [roleMatrixOpen, setRoleMatrixOpen] = useState(false)
   const [inviteOpen, setInviteOpen] = useState(false)
   const [resetPwdTarget, setResetPwdTarget] = useState<UserRow | null>(null)
+  const [editEmailTarget, setEditEmailTarget] = useState<UserRow | null>(null)
+  const [editProfileTarget, setEditProfileTarget] = useState<UserRow | null>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
@@ -221,15 +225,25 @@ export function UsersListClient() {
     setResetPwdTarget(row)
   }, [])
 
+  const handleEditEmail = useCallback((row: UserRow) => {
+    setEditEmailTarget(row)
+  }, [])
+
+  const handleEditProfile = useCallback((row: UserRow) => {
+    setEditProfileTarget(row)
+  }, [])
+
   const columns = useMemo(
     () => buildUserColumns({
       onBan: (id) => void handleBan(id),
       onUnban: (id) => void handleUnban(id),
       onRoleChange: (id, role) => void handleRoleChange(id, role),
       onResetPassword: handleResetPassword,
+      onEditEmail: handleEditEmail,
+      onEditProfile: handleEditProfile,
       pendingId,
     }),
-    [handleBan, handleUnban, handleRoleChange, handleResetPassword, pendingId],
+    [handleBan, handleUnban, handleRoleChange, handleResetPassword, handleEditEmail, handleEditProfile, pendingId],
   )
 
   const query = useMemo(
@@ -331,6 +345,22 @@ export function UsersListClient() {
       open={resetPwdTarget != null}
       onClose={() => setResetPwdTarget(null)}
       user={resetPwdTarget}
+    />
+    <EditEmailModal
+      open={editEmailTarget != null}
+      onClose={() => setEditEmailTarget(null)}
+      user={editEmailTarget}
+      onSuccess={refresh}
+    />
+    <EditProfileModal
+      open={editProfileTarget != null}
+      onClose={() => setEditProfileTarget(null)}
+      user={editProfileTarget ? {
+        id: editProfileTarget.id,
+        username: editProfileTarget.username,
+        displayName: editProfileTarget.display_name,
+      } : null}
+      onSuccess={refresh}
     />
     <div data-users-list-client style={PAGE_STYLE}>
       <PageHeader

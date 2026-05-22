@@ -74,6 +74,9 @@ const EXPECTED_ACTION_TYPES = [
   'user_submission.action',
   // CHG-SN-8-FUP-USERS-ROLE-INV-EP / ADR-139 / R-MID-1 系统化第 16 次
   'user.role_change',
+  // CHG-SN-8-FUP-USERS-EDIT-EP / ADR-140 / R-MID-1 系统化第 17 次（双 actionType）
+  'user.email_change',
+  'user.profile_update',
 ] as const
 
 const EXPECTED_TARGET_KINDS = [

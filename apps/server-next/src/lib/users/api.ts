@@ -42,3 +42,23 @@ export async function resetUserPassword(id: string): Promise<{ newPassword: stri
   const res = await apiClient.post<{ data: { newPassword: string } }>(`/admin/users/${id}/reset-password`)
   return res.data
 }
+
+// CHG-SN-8-FUP-USERS-EDIT-EP / ADR-140：admin 改用户邮箱
+// 409 CONFLICT = 邮箱已被其他用户注册；403 = 不能修改 admin；422 = 邮箱格式无效
+export async function updateUserEmail(id: string, email: string): Promise<{ id: string; email: string; previousEmail: string }> {
+  const res = await apiClient.patch<{ data: { id: string; email: string; previousEmail: string } }>(`/admin/users/${id}/email`, { email })
+  return res.data
+}
+
+// CHG-SN-8-FUP-USERS-EDIT-EP / ADR-140：admin 编辑用户资料（displayName / locale / avatarUrl）
+// displayName null = 清除；undefined / 不传 = 不修改；至少一个字段必填
+export interface UpdateUserProfileInput {
+  readonly displayName?: string | null
+  readonly locale?: string
+  readonly avatarUrl?: string | null
+}
+
+export async function updateUserProfile(id: string, input: UpdateUserProfileInput): Promise<{ id: string; displayName: string | null; locale: string; avatarUrl: string | null }> {
+  const res = await apiClient.patch<{ data: { id: string; displayName: string | null; locale: string; avatarUrl: string | null } }>(`/admin/users/${id}/profile`, input)
+  return res.data
+}

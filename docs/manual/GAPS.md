@@ -110,12 +110,14 @@
 ### #G-users-edit-profile · 改用户邮箱 / 重置密码 / 编辑显示名缺失
 
 - **页面**：P-users §3.5 / §4.2
-- **状态**：⚠️ 部分实装 + 🔄 ADR 已起草（reset-pwd ✅ 1/3 闭合 / email + profile ADR-140 A− PASS 2/3 / 实施 follow-up CHG-SN-8-FUP-USERS-EDIT-EP 待立）
+- **状态**：✅ **完全闭合**（2026-05-22 / reset-pwd + ADR-140 + EP 全部 PASS）
 - **优先级**：P2
-- **现象（已核查）**：后端 3 端点状态 — `POST /admin/users/:id/reset-password` ✅ 已存在（生成 12 位随机密码 + admin 目标 403）/ `PATCH /admin/users/:id/email` ❌ 不存在 / `PATCH /admin/users/:id/profile`（含 displayName）❌ 不存在
-- **消费层补齐 1/3**：CHG-SN-8-FUP-USERS-RESET-PWD — `apps/server-next/src/lib/users/api.ts` 加 `resetUserPassword(id)` lib 封装；新建 `ResetPasswordModal.tsx`（2 态：confirm + success 显示新密码 + 复制按钮 + 一次性警示「关闭后不可复看」）；columns.tsx actions 列加「重置密码」xs ghost btn（admin 目标 disabled + tooltip）
-- **改邮箱/改显示名 ADR 2/3**：CHG-SN-8-FUP-USERS-EDIT-ADR — ADR-140 完整起草（D-140-1..6 / Opus arch-reviewer A− PASS / 2 N1 登记）；决策：双端点 `PATCH /admin/users/:id/email` + `PATCH /admin/users/:id/profile`（locale + avatarUrl + displayName）/ email 直接生效（无邮件服务）/ users 加 `display_name VARCHAR(50)` / admin_audit_log CHECK 扩 `'user'` targetKind + 5 历史漂移补齐 / 2 新 actionType `user.email_change` + `user.profile_update` / R-MID-1 7 文件框架触发
-- **实施 follow-up 3/3**：CHG-SN-8-FUP-USERS-EDIT-EP — 按 ADR-140 落 2 migration + 2 route handler + DB queries + R-MID-1 7 文件 + 测试 surface #1-#22 + 前端 columns 加按钮 + 对应 Modal；工时 ~0.4-0.5w
+- **现象（已核查）**：后端 3 端点状态 — `POST /admin/users/:id/reset-password` ✅ 已存在 / `PATCH /admin/users/:id/email` ✅ 新增（ADR-140）/ `PATCH /admin/users/:id/profile`（含 displayName / locale / avatarUrl）✅ 新增（ADR-140）
+- **闭环路径（3/3）**：
+  - **1/3 reset-pwd**：CHG-SN-8-FUP-USERS-RESET-PWD（commit e963e33e）— `resetUserPassword(id)` lib + `ResetPasswordModal.tsx`（2 态 + 复制 + 一次性警示）
+  - **2/3 ADR**：CHG-SN-8-FUP-USERS-EDIT-ADR（commit 2523a920）— ADR-140 A− PASS（D-140-1..6 + 3 方案 trade-off + 22 测试 surface + 2 N1）
+  - **3/3 EP 实施**：CHG-SN-8-FUP-USERS-EDIT-EP — 2 migration（068 users.display_name + 069 audit_log CHECK 6→13 含 user + 5 历史漂移修复）+ DB queries（updateUserEmail/updateUserProfile + mapUser displayName + findUserByEmailExcludingId 唯一性预验）+ User type 扩 displayName + R-MID-1 第 18 次系统化（user.email_change + user.profile_update + targetKind user）+ 2 PATCH route handler（admin 守卫 + 409 CONFLICT email 唯一性 + zod 校验 + audit fire-and-forget + DB UNIQUE race 23505 兜底）+ 前端 EditEmailModal + EditProfileModal + columns 2 按钮（admin disabled + tooltip）+ 22 后端单测 + 12 前端单测
+- **N1 follow-up**：N1-140-1（邮件服务上线后 email 升级路径方案 B / C）按需启动；N1-140-2（email 变更后 session invalidate）按需启动
 
 ### #G-settings-webhook-impl · API·Webhook Tab 字段已存但回调未实装
 

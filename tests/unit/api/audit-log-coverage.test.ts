@@ -79,6 +79,9 @@ const REQUIRED_ACTION_TYPES = [
   'image_health.switch_domain',
   // CHG-SN-8-FUP-USERS-ROLE-INV-EP / ADR-139：admin 改用户角色 audit（R-MID-1 第 17 次）
   'user.role_change',
+  // CHG-SN-8-FUP-USERS-EDIT-EP / ADR-140：admin 改邮箱 + 编辑资料 audit（R-MID-1 第 18 次）
+  'user.email_change',
+  'user.profile_update',
 ] as const
 
 const ACTION_TYPE_REGEX = /actionType:\s*['"]([a-z_.]+)['"]/g
@@ -149,6 +152,9 @@ const PAYLOAD_ASSERTION_REQUIRED = [
   'image_health.switch_domain',
   // CHG-SN-8-FUP-USERS-ROLE-INV-EP / ADR-139：admin 改用户角色 audit payload 内容断言（R-MID-1 第 17 次）
   'user.role_change',
+  // CHG-SN-8-FUP-USERS-EDIT-EP / ADR-140：admin 改邮箱 + 编辑资料 audit payload 内容断言（R-MID-1 第 18 次）
+  'user.email_change',
+  'user.profile_update',
 ] as const
 
 // CHG-SN-6-10：plan v1.4 §3.0.5 M-SN-4 legacy 11 项已迁移至 PAYLOAD_ASSERTION_REQUIRED

@@ -171,6 +171,10 @@ export type AdminAuditActionType =
   // CHG-SN-8-FUP-USERS-ROLE-INV-EP / ADR-139：admin 修改用户角色 audit（含 session invalidate 触发）
   | 'user.role_change'            // PATCH /admin/users/:id/role
 
+  // CHG-SN-8-FUP-USERS-EDIT-EP / ADR-140：admin 改邮箱 + 编辑资料 audit
+  | 'user.email_change'           // PATCH /admin/users/:id/email
+  | 'user.profile_update'         // PATCH /admin/users/:id/profile
+
 export type AdminAuditTargetKind =
   | 'video'
   | 'video_source'

@@ -89,6 +89,9 @@ export const ACTION_TYPES: readonly AdminAuditActionType[] = [
   'user_submission.action',
   // CHG-SN-8-FUP-USERS-ROLE-INV-EP / ADR-139：admin 改用户角色（触发 session invalidate）
   'user.role_change',
+  // CHG-SN-8-FUP-USERS-EDIT-EP / ADR-140：admin 改邮箱 + 编辑资料
+  'user.email_change',
+  'user.profile_update',
 ]
 export const TARGET_KINDS: readonly AdminAuditTargetKind[] = [
   'video',

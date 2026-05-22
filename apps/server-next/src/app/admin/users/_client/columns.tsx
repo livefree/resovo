@@ -90,6 +90,8 @@ export interface BuildColumnsOptions {
   readonly onUnban: (id: string) => void
   readonly onRoleChange: (id: string, role: 'user' | 'moderator') => void
   readonly onResetPassword: (row: UserRow) => void
+  readonly onEditEmail: (row: UserRow) => void
+  readonly onEditProfile: (row: UserRow) => void
   readonly pendingId: string | null
 }
 
@@ -98,6 +100,8 @@ export function buildUserColumns({
   onUnban,
   onRoleChange,
   onResetPassword,
+  onEditEmail,
+  onEditProfile,
   pendingId,
 }: BuildColumnsOptions): readonly TableColumn<UserRow>[] {
   return [
@@ -175,7 +179,7 @@ export function buildUserColumns({
       id: 'actions',
       header: '操作',
       accessor: () => null,
-      width: 240, minWidth: 210,
+      width: 340, minWidth: 290,
       enableResizing: false,
       enableSorting: false,
       defaultVisible: true,
@@ -235,6 +239,26 @@ export function buildUserColumns({
               data-testid={`user-reset-pwd-${row.id}`}
             >
               重置密码
+            </AdminButton>
+            <AdminButton
+              variant="ghost"
+              size="sm"
+              disabled={isPending || isAdmin}
+              onClick={() => onEditEmail(row)}
+              title={isAdmin ? 'admin 账号不可改邮箱' : '修改邮箱'}
+              data-testid={`user-edit-email-${row.id}`}
+            >
+              改邮箱
+            </AdminButton>
+            <AdminButton
+              variant="ghost"
+              size="sm"
+              disabled={isPending || isAdmin}
+              onClick={() => onEditProfile(row)}
+              title={isAdmin ? 'admin 账号不可编辑资料' : '编辑显示名 / 语言 / 头像'}
+              data-testid={`user-edit-profile-${row.id}`}
+            >
+              编辑资料
             </AdminButton>
           </span>
         )

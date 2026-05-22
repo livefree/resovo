@@ -15105,3 +15105,65 @@ Plan-Revision: 无
 Cleanup-Audit: #G-users-role-session-invalidate ✅ 闭合
 Plan-Revision: 无（按 ADR-139 既定决策实施 / N1 follow-up 登记保留）
 
+---
+
+## [CHG-SN-8-FUP-USERS-EDIT-EP] ADR-140 实施 — admin 改邮箱 + 编辑资料完整端点 + R-MID-1 + audit CHECK 历史漂移修复 (#G-users-edit-profile ✅)
+
+- **完成时间**：2026-05-22
+- **记录时间**：2026-05-22 03:42
+- **执行模型**：claude-opus-4-7
+- **子代理**：无（按 ADR-140 D-140-1..6 既定决策直接实施 / ADR 已 Opus PASS commit 2523a920）
+- **依赖**：ADR-140 ✅ Accepted（commit 2523a920）+ USERS-ROLE-INV-EP（commit c2594fa7 引入 'user' targetKind，本卡 migration 069 一次性补 CHECK 约束）
+- **修改文件**（21）：
+  - `apps/api/src/db/migrations/068_users_add_display_name.sql` — 新建（ADR-140 §5 Migration A / 幂等 + COMMENT / VARCHAR(50)）
+  - `apps/api/src/db/migrations/069_audit_log_extend_target_kind.sql` — 新建（ADR-140 §5 Migration B / DROP+ADD CHECK 6→12 含 user + 5 历史漂移 home_module/source_line_alias/source_route/user_submission/image_health）
+  - `apps/api/src/db/queries/users.ts` — DbUserRow + mapUser 加 display_name；findAdminUserById 显式列加 display_name；listAdminUsers 显式列加 display_name；新增 findUserByEmailExcludingId / updateUserEmail / updateUserProfile（动态 SET 列表 + undefined 跳过 / null 清除）
+  - `packages/types/src/user.types.ts` — User 接口加 `displayName?: string | null`（向后兼容）
+  - `packages/types/src/admin-moderation.types.ts` — AdminAuditActionType union 加 `user.email_change` + `user.profile_update`
+  - `apps/api/src/services/AuditLogService.ts` — ACTION_TYPES 同步 +2
+  - `apps/api/src/routes/admin/users.ts` — 2 新 PATCH handler（email + profile）：admin 守卫 + 404/403/409/422 完整错误处理 + Service 层唯一性预验 + DB UNIQUE race 23505 兜底 + audit fire-and-forget（payload 仅含实际变更字段）
+  - `apps/server-next/src/lib/users/api.ts` — updateUserEmail + updateUserProfile lib 封装
+  - `apps/server-next/src/lib/users/types.ts` — UserRow 加 `display_name?: string | null`
+  - `apps/server-next/src/app/admin/users/_client/EditEmailModal.tsx` — 新建（初始填入 + 格式校验 + 同邮箱短路 + CONFLICT/FORBIDDEN 内联错误 + toast 反馈）
+  - `apps/server-next/src/app/admin/users/_client/EditProfileModal.tsx` — 新建（3 字段 + 差异检测 + null 清除语义 + locale/URL 校验 + 422/403 内联错误）
+  - `apps/server-next/src/app/admin/users/_client/columns.tsx` — BuildColumnsOptions 加 onEditEmail/onEditProfile；actions 列加 2 按钮（admin disabled + tooltip）；列宽 240 → 340
+  - `apps/server-next/src/app/admin/users/_client/UsersListClient.tsx` — import 2 Modal + state + handler + render（onSuccess=refresh）
+  - **R-MID-1 测试同步（2 文件）**：
+    - `tests/unit/api/audit-log-service-enums-set-equal.test.ts` — EXPECTED_ACTION_TYPES +2（R-MID-1 第 17 次系统化双 actionType）
+    - `tests/unit/api/audit-log-coverage.test.ts` — REQUIRED_ACTION_TYPES + PAYLOAD_ASSERTION_REQUIRED +2（R-MID-1 第 18 次系统化）
+  - **新测试（3 文件）**：
+    - `tests/unit/api/admin-users-edit.test.ts` — 22 用例 PASS（email 10 + profile 10 + audit 2）
+    - `tests/unit/components/server-next/admin/users/EditEmailModal.test.tsx` — 6 用例 PASS
+    - `tests/unit/components/server-next/admin/users/EditProfileModal.test.tsx` — 6 用例 PASS
+  - **文档（4）**：`docs/manual/GAPS.md` #G-users-edit-profile ⚠️+🔄 → ✅ 完全闭合；`docs/manual/20-pages/P-users.md` §4.2 完整重写（含 audit / 唯一性 / null 语义）；`docs/task-queue.md` SEQ-20260521-06 #27 子卡 ✅；`docs/tasks.md` 清卡片
+- **新增依赖**：无
+- **数据库变更**：2 migration — 068 users.display_name VARCHAR(50) DEFAULT NULL（向后兼容）+ 069 admin_audit_log.target_kind CHECK 6→12（DROP+ADD；向后兼容）
+- **D-N 偏离闭环**：D-140-1..6（ADR-140 commit 2523a920 已闭环 6 条）；本卡无新 D-N 偏离
+- **R-MID-1 系统化**：第 18 次（user.email_change + user.profile_update 双 actionType 同卡落地）
+- **ErrorCode**：零新增（复用 ADR-110 14+1=15 码 — ROLE_CHANGED 已加于 USERS-ROLE-INV-EP；本卡复用 CONFLICT 409 + NOT_FOUND 404 + FORBIDDEN 403 + VALIDATION_ERROR 422）
+- **注意事项**：
+  - **migration 069 紧迫**：USERS-ROLE-INV-EP commit c2594fa7 已用 `'user'` target_kind 写 audit 但 admin_audit_log CHECK 约束仍是 6 种（migration 052） — 生产 DB PG 会 reject INSERT；本卡 migration 069 一次性补齐 CHECK 至 12 种（含 user + 5 个历史漂移 home_module / source_line_alias / source_route / user_submission / image_health 一次性消除 TS union 与 DB CHECK 长期漂移）；ADR-140 §D-140-5 + §10 R-140-4 指定
+  - **email 同邮箱幂等**：测试 #5 — 提交相同邮箱时短路 + 不写 DB / 不写 audit（避免噪声）；前端 Modal 同样短路
+  - **profile partial audit**：测试 #21 — 仅传 displayName 时 audit before/after 不应含 locale/avatarUrl（避免 audit 噪声）
+  - **DB UNIQUE race 双保险**：Service 层 findUserByEmailExcludingId 预验 + DB UNIQUE 23505 兜底（测试 #10）；ADR-140 §10 R-140-2
+  - **admin 互改保护**：沿用 4 个已有端点（ban/unban/role/delete/reset-password）一致 `user.role === 'admin'` 守卫 → 403 FORBIDDEN（ADR-140 §D-140-4）
+  - **前端 onSuccess 触发列表 refresh**：保证编辑后表格立即反映新值（虽然 displayName 还未在 columns 列展示，但 email 列会立即更新）
+  - **N1 处置**：N1-140-1（邮件升级路径）待邮件服务上线触发；N1-140-2（email session invalidate）待安全评审触发
+
+### 验收
+- typecheck PASS（FULL TURBO 部分缓存）/ lint PASS / verify:manual-coverage PASS
+- verify:adr-contracts PASS — **verify-endpoint-adr 173 → 175**（新增 PATCH email + /profile 2 端点自动对齐 ADR-140 §端点契约）/ verify-adr-d-numbers 全 86 闭环 / verify-style-shorthand-conflict 0 命中
+- **全 unit 4516/4515 PASS（+38 新 / 1 pre-existing flaky CrawlerClient #14b isolated PASS 与本卡无关）**
+- admin-users-edit.test 22/22 / EditEmailModal.test 6/6 / EditProfileModal.test 6/6 / audit-log-coverage 91/91 / audit-log-service-enums-set-equal 4/4 / 全 users 8 文件 55/55 — R-MID-1 4 文件守卫全绿
+
+### 价值
+- **P2 GAPS #G-users-edit-profile 完全闭合 3/3**（reset-pwd 1/3 + ADR 2/3 + EP 3/3 全部 PASS）
+- admin 不再需走 DB 直改邮箱 / displayName / locale / avatarUrl — 完整前端 UI + 后端端点 + audit 追溯
+- **顺手修复 USERS-ROLE-INV-EP 生产可用性 BLOCKER**：migration 069 补 admin_audit_log CHECK 约束至 12 种 target_kind（含 user + 5 历史漂移），消除 ROLE-INV-EP 在真 PG 的 INSERT reject 风险
+- R-MID-1 第 18 次系统化（2 actionType + 1 targetKind 单卡落地）— 体系化覆盖最快记录
+- 端点契约 verify-endpoint-adr 173 → 175 自动对齐，ADR-140 §端点契约表 100% 反映在代码中
+- 解锁未来邮件服务上线后的 email 验证流程升级路径（N1-140-1，端点签名不变 + 加 pendingEmail 可选字段）
+
+Cleanup-Audit: #G-users-edit-profile ✅ 完全闭合 / admin_audit_log CHECK 历史漂移消除（13 种 target_kind 已对齐 TS union）
+Plan-Revision: 无（按 ADR-140 既定决策实施 / N1 follow-up 登记保留）
+

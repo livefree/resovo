@@ -18,6 +18,8 @@ export interface UserRow {
   readonly avatar_url: string | null
   readonly banned_at: string | null
   readonly created_at: string
+  // ADR-140：admin 可编辑（后端 PATCH /admin/users/:id/profile）；可能为 null（未设置）
+  readonly display_name?: string | null
 }
 
 export interface UserListResult {

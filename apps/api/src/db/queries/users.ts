@@ -20,6 +20,7 @@ interface DbUserRow {
   deleted_at: string | null
   created_at: string
   role_changed_at: string | null  // ADR-139
+  display_name: string | null  // ADR-140
 }
 
 /** 带 passwordHash 的内部用户类型，仅用于认证模块 */
@@ -39,6 +40,7 @@ function mapUser(row: DbUserRow): UserWithHash {
     bannedAt: row.banned_at,
     createdAt: row.created_at,
     roleChangedAt: row.role_changed_at,  // ADR-139
+    displayName: row.display_name,  // ADR-140
   }
 }
 
@@ -142,7 +144,7 @@ export async function listAdminUsers(
 
   const [rows, countResult] = await Promise.all([
     db.query(
-      `SELECT id, username, email, role, avatar_url, banned_at, created_at
+      `SELECT id, username, email, role, avatar_url, banned_at, created_at, display_name
        FROM users
        WHERE ${where}
        ORDER BY ${orderCol} ${orderDir}
@@ -164,9 +166,10 @@ export async function listAdminUsers(
 export async function findAdminUserById(
   db: Pool,
   id: string
-): Promise<{ id: string; username: string; email: string; role: UserRole; avatar_url: string | null; locale: string; banned_at: string | null; created_at: string } | null> {
-  const result = await db.query<{ id: string; username: string; email: string; role: UserRole; avatar_url: string | null; locale: string; banned_at: string | null; created_at: string }>(
-    `SELECT id, username, email, role, avatar_url, locale, banned_at, created_at
+): Promise<{ id: string; username: string; email: string; role: UserRole; avatar_url: string | null; locale: string; banned_at: string | null; created_at: string; display_name: string | null } | null> {
+  // ADR-140：返回 display_name 字段供前端展示
+  const result = await db.query<{ id: string; username: string; email: string; role: UserRole; avatar_url: string | null; locale: string; banned_at: string | null; created_at: string; display_name: string | null }>(
+    `SELECT id, username, email, role, avatar_url, locale, banned_at, created_at, display_name
      FROM users WHERE id = $1 AND deleted_at IS NULL`,
     [id]
   )
@@ -216,6 +219,69 @@ export async function resetUserPassword(
   const result = await db.query<{ id: string }>(
     `UPDATE users SET password_hash = $1 WHERE id = $2 AND deleted_at IS NULL RETURNING id`,
     [newPasswordHash, id]
+  )
+  return result.rows[0] ?? null
+}
+
+// ── ADR-140: admin 改邮箱 + 编辑资料 ─────────────────────────────────────
+
+// 检查邮箱是否已被其他用户使用（updateUserEmail Service 层先验，DB UNIQUE 保底）
+export async function findUserByEmailExcludingId(
+  db: Pool,
+  email: string,
+  excludeId: string,
+): Promise<{ id: string } | null> {
+  const result = await db.query<{ id: string }>(
+    `SELECT id FROM users WHERE email = $1 AND id != $2 AND deleted_at IS NULL LIMIT 1`,
+    [email, excludeId],
+  )
+  return result.rows[0] ?? null
+}
+
+export async function updateUserEmail(
+  db: Pool,
+  id: string,
+  email: string,
+): Promise<{ id: string; email: string } | null> {
+  const result = await db.query<{ id: string; email: string }>(
+    `UPDATE users SET email = $1 WHERE id = $2 AND deleted_at IS NULL RETURNING id, email`,
+    [email, id],
+  )
+  return result.rows[0] ?? null
+}
+
+export interface UpdateUserProfileInput {
+  displayName?: string | null  // undefined = 不修改；null = 清除；string = 设置
+  locale?: string
+  avatarUrl?: string | null
+}
+
+export async function updateUserProfile(
+  db: Pool,
+  id: string,
+  input: UpdateUserProfileInput,
+): Promise<{ id: string; display_name: string | null; locale: string; avatar_url: string | null } | null> {
+  // ADR-140 D-140-3 + §5：动态构造 SET 列表，仅更新显式传入的字段（undefined 跳过；null 显式设为 NULL）
+  const sets: string[] = []
+  const params: unknown[] = []
+  let idx = 1
+  if (input.displayName !== undefined) {
+    sets.push(`display_name = $${idx++}`)
+    params.push(input.displayName)
+  }
+  if (input.locale !== undefined) {
+    sets.push(`locale = $${idx++}`)
+    params.push(input.locale)
+  }
+  if (input.avatarUrl !== undefined) {
+    sets.push(`avatar_url = $${idx++}`)
+    params.push(input.avatarUrl)
+  }
+  if (sets.length === 0) return null  // 调用方应已校验，防御性返回
+  params.push(id)
+  const result = await db.query<{ id: string; display_name: string | null; locale: string; avatar_url: string | null }>(
+    `UPDATE users SET ${sets.join(', ')} WHERE id = $${idx} AND deleted_at IS NULL RETURNING id, display_name, locale, avatar_url`,
+    params,
   )
   return result.rows[0] ?? null
 }
