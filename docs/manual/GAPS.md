@@ -16,10 +16,9 @@
 ### #G-dashboard-runall · dashboard 顶部「全站全量采集」未跟进 CHG-SN-8-01 双重 confirm
 
 - **页面**：P-dashboard §3.4
-- **状态**：⬜ 未启动
+- **状态**：✅ 已闭合（2026-05-21 / CHG-SN-8-GAPS-BATCH-1）
 - **优先级**：P1（误触爆炸性损耗风险）
-- **现象**：dashboard PageHeader「全站全量采集」按钮 onClick 调用模式与 P-crawler 旧路径同；CHG-SN-8-01 已把 crawler 页主按钮改为「全站增量」+ 全量移高级 dropdown + 双重 confirm，但 dashboard 这个按钮没跟进
-- **建议修复**：同 P-crawler 范式 — 该按钮改「全站增量」primary + 全量入口移至 advanced 或直接删除（dashboard 不应承担破坏性 admin 入口）
+- **修复**：dashboard PageHeader 拆 2 按钮 — 「全站增量」primary + 「全站全量」ghost；全量加双重 confirm（confirm + prompt 输入"全量"）；与 P-crawler CHG-SN-8-01 同范式
 
 ### #G-dashboard-edit-mode · dashboard 编辑态 / CardLibrary / Fullscreen 未实装
 
@@ -37,13 +36,13 @@
 - **现象**：CHG-SN-DASHBOARD-2 接通 stats 3 endpoints 含 activities，但具体子项是否全 live 未在 manual 编写时确认；可能存在 mock fallback
 - **建议**：grep `RecentActivityCard` 调用点 + sample data 引用；如有 mock 立 follow-up 接真端点
 
-### #G-videos-add · 视频库「+ 添加视频」按钮当前状态待确认
+### #G-videos-add · 视频库「+ 添加视频」按钮
 
 - **页面**：P-videos §3.5 / §7 FAQ
-- **状态**：⬜ 待复核
+- **状态**：⚠️ **已部分实装**（按钮存在 disabled + tooltip「功能开发中（follow-up VIDEO-MANUAL-ADD）」）；实际创建功能待 follow-up
 - **优先级**：P2
-- **现象**：reference §5.3 设计稿要求「手动添加视频」PageHeader action；当前 VideoListClient.tsx 未确认是否含 + 添加按钮（创建模式 VideoEditDrawer 是否可独立打开）；如无则用户唯一入口是后端 POST API
-- **建议**：grep VideoListClient 「添加」/ create 入口；缺失则补 PageHeader actions + 创建模式 Drawer 打开
+- **现状**：VideoListClient.tsx:685 `<button disabled title="功能开发中（follow-up VIDEO-MANUAL-ADD）">手动添加视频</button>`；H2 死按钮已避免（disabled+title 不算死按钮），但实际功能未实装
+- **建议**：将 disabled 按钮改造为「直接打开 VideoEditDrawer 创建模式」+ 后端 POST 端点；或保留 disabled 不补
 
 ### #G-moderation-batch-ui · 批量审核独立入口缺失
 
@@ -64,10 +63,9 @@
 ### #G-merge-candidate-b-auto · 审核台类似 tab 深链 candidate_b 未自动填入 Merge 页
 
 - **页面**：P-merge §3.3 / §7 FAQ
-- **状态**：⬜ 未启动
+- **状态**：✅ 已闭合（2026-05-21 / CHG-SN-8-GAPS-BATCH-1）
 - **优先级**：P1（W4 工作流流畅度）
-- **现象**：CHG-SN-8-04-VIEW 行级「发起合并」深链已携带 `?candidate_a=<当前>&candidate_b=<相似>`，但 MergeClient 当前仅消费 candidate_a；candidate_b 在 URL 但 DirectMergeWorkspace 内 VideoPicker 默认 null 需手动重选
-- **建议修复**：MergeClient 增 `const candidateBParam = searchParams.get('candidate_b')` + 初始 fetch 一次 PickerVideoItem 注入 VideoPicker.value；移除「手动重选」步骤
+- **修复**：DirectMergeWorkspace 增 `candidateBIdFromUrl` prop + useEffect 一次性 fetch + 注入 picker；同 ContentRefPicker 编辑态恢复范式（含 AbortController cleanup）
 
 ### #G-sources-replace-similar · 「一键替换最相似 URL」算法实装
 

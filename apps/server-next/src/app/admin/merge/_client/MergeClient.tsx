@@ -222,10 +222,12 @@ export function MergeClient() {
         </AdminCard>
       )}
 
-      {/* CHG-SN-8-08-B：直接合并工作区（candidate_a 锁定后 VideoPicker 选 B + 立即合并） */}
+      {/* CHG-SN-8-08-B：直接合并工作区（candidate_a 锁定后 VideoPicker 选 B + 立即合并）
+          GAPS #G-merge-candidate-b-auto：URL ?candidate_b 自动填入 picker（来自审核台类似 tab 深链）*/}
       {candidateAParam && (
         <DirectMergeWorkspace
           candidateAId={candidateAParam}
+          candidateBIdFromUrl={searchParams.get('candidate_b')}
           onMergeSuccess={dismissCandidateBanner}
         />
       )}
@@ -517,13 +519,37 @@ function CandidateExpand({ group, onMerge }: CandidateExpandProps) {
 
 interface DirectMergeWorkspaceProps {
   readonly candidateAId: string
+  /** GAPS #G-merge-candidate-b-auto：从 URL ?candidate_b 注入；mount 时 fetch 一次注入 picker.value */
+  readonly candidateBIdFromUrl: string | null
   readonly onMergeSuccess: () => void
 }
 
-function DirectMergeWorkspace({ candidateAId, onMergeSuccess }: DirectMergeWorkspaceProps) {
+function DirectMergeWorkspace({ candidateAId, candidateBIdFromUrl, onMergeSuccess }: DirectMergeWorkspaceProps) {
   const toast = useToast()
   const [candidateB, setCandidateB] = useState<PickerVideoItem | null>(null)
   const [merging, setMerging] = useState(false)
+
+  // GAPS #G-merge-candidate-b-auto：URL 含 ?candidate_b 时一次性 fetch 注入 picker
+  useEffect(() => {
+    if (!candidateBIdFromUrl) return
+    if (candidateB?.id === candidateBIdFromUrl) return
+    if (candidateBIdFromUrl === candidateAId) return // B === A 时不自动注入（picker 校验也会拦）
+    const ctrl = new AbortController()
+    let cancelled = false
+    videoPickerFetcher({ q: candidateBIdFromUrl, limit: 1, signal: ctrl.signal })
+      .then((res) => {
+        if (cancelled) return
+        const found = res.items.find((it) => it.id === candidateBIdFromUrl)
+        if (found) setCandidateB(found)
+      })
+      .catch((err) => {
+        if (cancelled) return
+        if (err instanceof DOMException && err.name === 'AbortError') return
+        // eslint-disable-next-line no-console
+        console.error('DirectMergeWorkspace: candidate_b auto-fill fetch failed', err)
+      })
+    return () => { cancelled = true; ctrl.abort() }
+  }, [candidateBIdFromUrl, candidateAId, candidateB?.id])
 
   const handleMerge = useCallback(async () => {
     if (!candidateB) {

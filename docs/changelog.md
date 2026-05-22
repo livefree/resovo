@@ -14539,3 +14539,50 @@ H2 硬约束（零死按钮）在用户菜单维度起步完成。
 
 ### SEQ-20260521-05 收尾
 3 batch 全 PASS / 13 份新定稿 + 4 份补完 + 4 份工作流定稿 + 2 份 README 更新；3 commits 落地（57dd178b + 7983ff4b + 此 commit）
+
+## [CHG-SN-8-GAPS-BATCH-1] GAPS 3 件小事打包 — merge candidate_b auto-fill + dashboard runAll 改造 + videos-add 验证
+
+- **完成时间**：2026-05-21
+- **记录时间**：2026-05-21
+- **执行模型**：claude-opus-4-7
+- **子代理**：无
+- **关联 SEQ**：SEQ-20260521-06 GAPS 高 ROI 闭合
+
+### 修改文件
+- `apps/server-next/src/app/admin/merge/_client/MergeClient.tsx`：
+  - MergeClient 传 `candidateBIdFromUrl={searchParams.get('candidate_b')}` 给 DirectMergeWorkspace
+  - DirectMergeWorkspace props 增 `candidateBIdFromUrl: string | null`
+  - 增 useEffect 一次性 fetch 注入 picker（含 AbortController cleanup + B===A 守卫）
+- `apps/server-next/src/app/admin/_client/DashboardClient.tsx`：
+  - 拆 `handleFullCrawl` → `handleIncrementalCrawl`（单次 confirm + incremental）+ 改造后的 `handleFullCrawl`（双重 confirm + prompt 输入"全量"+ full）
+  - PageHeader actions 拆 2 按钮：「全站全量」ghost + 「全站增量」primary
+- `tests/unit/components/server-next/admin/merge/MergeDirectWorkspace.test.tsx`：补 1 用例（4. ?candidate_b 自动填入 picker）→ 4/4 PASS
+- `tests/unit/components/server-next/admin/dashboard/DashboardClient.test.tsx`：改造 2 旧用例 + 增 2 新用例（4 用例总；含 incremental + 双重 confirm + prompt 输错 + confirm 取消）→ 16/16 PASS
+- `docs/manual/GAPS.md` 3 条状态更新：
+  - #G-merge-candidate-b-auto ✅ 已闭合
+  - #G-dashboard-runall ✅ 已闭合
+  - #G-videos-add ⚠️ 部分实装（H2 已避免死按钮 / 实际创建功能 follow-up）
+
+### GAPS 闭合统计
+
+| 时间 | 21 条状态 |
+|---|---|
+| 本会话开始 | 0 闭合 / 0 部分 |
+| Batch-1 后 | 0 闭合 / 0 部分 |
+| Batch-2 后 | 0 闭合 / 0 部分 |
+| **GAPS-BATCH-1 后** | **2 ✅ 闭合 + 1 ⚠️ 部分**（共 21 条 follow-up）|
+
+### 验收
+- typecheck PASS
+- lint PASS
+- verify:manual-coverage PASS
+- merge 测试 4/4 PASS
+- dashboard 测试 16/16 PASS
+
+### 价值
+- W4 合并工作流流畅度大幅提升：从审核台「类似」深链到 Merge 页可一步完成合并（不需手动重选 B）
+- dashboard 误触爆炸性损耗风险消除：与 P-crawler 同范式双重 confirm
+- videos-add 状态明确：已规避死按钮，follow-up 真实实装等独立卡
+
+Cleanup-Audit: GAPS 2 ✅ 闭合 + 1 ⚠️ 升级
+Plan-Revision: 无

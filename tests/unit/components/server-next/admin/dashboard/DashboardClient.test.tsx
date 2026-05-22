@@ -248,8 +248,10 @@ describe('DashboardClient — case D：page head 按钮行为（MISC-DASHBOARD-1
     expect(mockPush).toHaveBeenCalledWith('/admin/moderation')
   })
 
-  it('"全站全量采集"→ confirm + runCrawlerAll("full") + toast success', async () => {
-    mockRunCrawlerAll.mockResolvedValue({ runId: 'run-42' })
+  it('"全站全量"→ 双重 confirm + prompt 输入"全量"+ runCrawlerAll("full") [GAPS #G-dashboard-runall]', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    vi.spyOn(window, 'prompt').mockReturnValue('全量')
+    mockRunCrawlerAll.mockResolvedValue({ runId: 'run-42-full' })
     const { container } = render(<DashboardClient />)
     await waitFor(() => expect(container.querySelector('[data-page-head]')).toBeTruthy())
     const btn = container.querySelector('[data-page-action="full-crawl"]') as HTMLButtonElement
@@ -257,16 +259,41 @@ describe('DashboardClient — case D：page head 按钮行为（MISC-DASHBOARD-1
     fireEvent.click(btn)
     await waitFor(() => expect(mockRunCrawlerAll).toHaveBeenCalledWith('full'))
     await waitFor(() => expect(toastPushMock).toHaveBeenCalledWith(
-      expect.objectContaining({ level: 'success', title: expect.stringContaining('run-42') }),
+      expect.objectContaining({ level: 'success', title: expect.stringContaining('run-42-f') }),
     ))
   })
 
-  it('"全站全量采集"confirm 取消 → 不调用 runCrawlerAll', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(false)
+  it('"全站全量"prompt 输错 → 静默中止不调 API [GAPS #G-dashboard-runall]', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    vi.spyOn(window, 'prompt').mockReturnValue('错的')
     const { container } = render(<DashboardClient />)
     await waitFor(() => expect(container.querySelector('[data-page-head]')).toBeTruthy())
     const btn = container.querySelector('[data-page-action="full-crawl"]') as HTMLButtonElement
     fireEvent.click(btn)
+    await new Promise((r) => setTimeout(r, 0))
+    expect(mockRunCrawlerAll).not.toHaveBeenCalled()
+  })
+
+  it('"全站增量"→ 单次 confirm + runCrawlerAll("incremental") [GAPS #G-dashboard-runall]', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    mockRunCrawlerAll.mockResolvedValue({ runId: 'run-42-inc' })
+    const { container } = render(<DashboardClient />)
+    await waitFor(() => expect(container.querySelector('[data-page-head]')).toBeTruthy())
+    const btn = container.querySelector('[data-page-action="incremental-crawl"]') as HTMLButtonElement
+    expect(btn).toBeTruthy()
+    expect(btn.textContent).toContain('全站增量')
+    fireEvent.click(btn)
+    await waitFor(() => expect(mockRunCrawlerAll).toHaveBeenCalledWith('incremental'))
+  })
+
+  it('"全站全量"第一次 confirm 取消 → 不调 prompt 也不调 API', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(false)
+    const promptSpy = vi.spyOn(window, 'prompt')
+    const { container } = render(<DashboardClient />)
+    await waitFor(() => expect(container.querySelector('[data-page-head]')).toBeTruthy())
+    const btn = container.querySelector('[data-page-action="full-crawl"]') as HTMLButtonElement
+    fireEvent.click(btn)
+    expect(promptSpy).not.toHaveBeenCalled()
     expect(mockRunCrawlerAll).not.toHaveBeenCalled()
   })
 })

@@ -126,6 +126,17 @@ describe('DirectMergeWorkspace (CHG-SN-8-08-B)', () => {
     })
   })
 
+  it('4. ?candidate_b 存在 → VideoPicker 自动填入（GAPS #G-merge-candidate-b-auto）', async () => {
+    mockSearchString = `candidate_a=video-uuid-aaaa-1111&candidate_b=${VIDEO_B.id}&from=moderation`
+    listVideosMock.mockResolvedValue({ data: [VIDEO_B], total: 1, page: 1, limit: 20 })
+    render(<MergeClient />)
+    // 等待 useEffect fetch 完成 + picker 触发器显示 B title
+    await waitFor(() => {
+      const trigger = screen.getByTestId('merge-candidate-b-picker')
+      expect(trigger.textContent).toContain(VIDEO_B.title)
+    })
+  })
+
   it('3. B === A → toast warn + 不调 API', async () => {
     // candidate_a 与 picker 返回的视频 ID 相同
     const SAME_ID = 'video-uuid-same-1234'

@@ -168,12 +168,29 @@ export function DashboardClient() {
     [stats, overview],
   )
 
+  // GAPS #G-dashboard-runall：跟齐 CHG-SN-8-01 范式 — 主按钮改增量 + 全量加双重 confirm（输入"全量"防误触）
+  const handleIncrementalCrawl = useCallback(async () => {
+    if (!window.confirm('确认启动全站增量采集？')) return
+    setFullCrawlRunning(true)
+    try {
+      const result = await runCrawlerAll('incremental')
+      toast.push({ title: `全站增量已启动（runId=${result.runId.slice(0, 8)}）`, level: 'success' })
+    } catch (err: unknown) {
+      const msg = err instanceof ApiClientError ? err.message : '启动采集失败，请重试'
+      toast.push({ title: '启动失败', description: msg, level: 'danger' })
+    } finally {
+      setFullCrawlRunning(false)
+    }
+  }, [toast])
+
   const handleFullCrawl = useCallback(async () => {
-    if (!window.confirm('确认启动全站全量采集？这将触发所有站点的完整抓取任务。')) return
+    if (!window.confirm('确定对全站发起【全量】采集？此操作会创建多个 task，且耗时较长。')) return
+    const second = window.prompt('再次确认：请输入"全量"二字以继续；输入其它内容将中止。')
+    if (second?.trim() !== '全量') return
     setFullCrawlRunning(true)
     try {
       const result = await runCrawlerAll('full')
-      toast.push({ title: `全量采集任务已启动（批次 #${result.runId}）`, level: 'success' })
+      toast.push({ title: `全站全量已启动（runId=${result.runId.slice(0, 8)}）`, level: 'success' })
     } catch (err: unknown) {
       const msg = err instanceof ApiClientError ? err.message : '启动采集失败，请重试'
       toast.push({ title: '启动失败', description: msg, level: 'danger' })
@@ -204,7 +221,9 @@ export function DashboardClient() {
               <p style={HEAD_SUB_STYLE} data-page-head-sub>{dashboardStats.headSub}</p>
             </div>
             <div style={HEAD_ACTIONS_STYLE} data-page-head-actions>
-              <button type="button" style={HEAD_BTN_STYLE} data-page-action="full-crawl" disabled={fullCrawlRunning} onClick={() => void handleFullCrawl()}>{fullCrawlRunning ? '采集中…' : '全站全量采集'}</button>
+              {/* GAPS #G-dashboard-runall：增量为主按钮（高频）+ 全量降级 ghost 双重 confirm（低频危险）*/}
+              <button type="button" style={HEAD_BTN_STYLE} data-page-action="full-crawl" disabled={fullCrawlRunning} onClick={() => void handleFullCrawl()} title="低频危险：批量重抓所有源（需双重确认）">{fullCrawlRunning ? '采集中…' : '全站全量'}</button>
+              <button type="button" style={HEAD_BTN_PRIMARY_STYLE} data-page-action="incremental-crawl" disabled={fullCrawlRunning} onClick={() => void handleIncrementalCrawl()}>全站增量</button>
               <button type="button" style={HEAD_BTN_PRIMARY_STYLE} data-page-action="enter-moderation" onClick={() => router.push('/admin/moderation')}>进入审核台</button>
             </div>
           </header>
