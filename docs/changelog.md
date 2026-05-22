@@ -14834,3 +14834,40 @@ Plan-Revision: 无
 Cleanup-Audit: #G-audit-self-scope ⚠️（消费层完成 / 后端 self-scope follow-up CHG-SN-8-FUP-AUDIT-SELF-SCOPE-EP 待立）
 Plan-Revision: 无
 
+---
+
+## [CHG-SN-8-FUP-USERS-ROLE-INV-ADR] ADR-139 起草 — 管理员变更用户角色后 session invalidate 协议
+
+- **完成时间**：2026-05-21
+- **记录时间**：2026-05-21 22:50
+- **执行模型**：claude-opus-4-7
+- **子代理**：arch-reviewer (claude-opus-4-7) — 1 轮 A− PASS（D-139-1..8 完整 / 4 方案 trade-off 表 / 端点契约 / SQL / R-MID-1 评估 / 12 测试 surface / 4 风险 / 2 N1 非阻塞建议）
+- **修改文件**：
+  - `docs/decisions.md` — 新增 ADR-139 完整正文（11 节，~370 行）；状态 Accepted；含 D-139-1..8 + 端点契约 + Migration SQL（含 IF NOT EXISTS 幂等 + 回滚 SQL）+ Response/ErrorCode `ROLE_CHANGED` 401 + 关联 ADR 5 项 + R-MID-1 降级理由 + 12 测试 surface + 4 风险登记 + 2 N1 follow-up
+  - `docs/manual/GAPS.md` — #G-users-role-session-invalidate ⬜ → 🔄 ADR 已起草；ADR-139 决策摘要 + 实施 follow-up CHG-SN-8-FUP-USERS-ROLE-INV-EP 完整范围登记
+  - `docs/manual/20-pages/P-users.md` — §3.3 改用户角色「影响」段重写（明示 15min 穿越窗口 + ADR-139 已起草 0 穿越方案 + 实施卡 ID）；§7 FAQ 同步更新
+  - `docs/task-queue.md` SEQ-20260521-06 #20 子卡 ✅
+  - `docs/tasks.md` 清卡片
+- **新增依赖**：无
+- **数据库变更**：无（schema 变更落地在实施卡 CHG-SN-8-FUP-USERS-ROLE-INV-EP；ADR 仅设计）
+- **D-N 偏离闭环**（advisory verify-adr-d-numbers）：D-139-1（方案 B 选型）/ D-139-2（401 ROLE_CHANGED 语义）/ D-139-3（refresh 拒绝）/ D-139-4（user_role cookie 同步策略）/ D-139-5（schema 变更）/ D-139-6（R-MID-1 评估）/ D-139-7（性能 / Redis 缓存）/ D-139-8（admin 自残保护现状确认）— 8 条 D-N 在 ADR-139 §3 完整定稿
+- **注意事项**：
+  - 本卡仅 ADR 起草，**不实施任何端点 / Service / migration / 前端代码**；实施落地为独立 follow-up CHG-SN-8-FUP-USERS-ROLE-INV-EP，工时 0.4-0.6w，需走 R-MID-1 7 文件框架（补 `user.role_change` audit actionType + `user` targetKind）
+  - ADR-138 已占用（CHG-SN-8-FUP-AUDIT-ROLLBACK-EP follow-up 预留，未起草），本 ADR 编号 139
+  - N1-139-1（cache miss 时 DB fallback）+ N1-139-2（ban/unban 同类穿越）登记 ADR-139 §11；前者由实施卡评估，后者立独立 follow-up CHG-SN-8-FUP-USERS-BAN-INV 按需启动
+  - ADR 决策由 arch-reviewer Opus 独立子代理（非主循环）评级 A−，符合 CLAUDE.md §模型路由「强制升 Opus」第 3 条「撰写即将成为 ADR 的决策文档」
+
+### 验收
+- typecheck PASS（FULL TURBO 缓存命中）/ lint PASS / verify:manual-coverage PASS
+- verify:adr-contracts advisory：8 条 D-139-N advisory 通过本 changelog 闭环
+- 不跑 unit/e2e（纯文档；无代码变更）
+
+### 价值
+- P2 GAPS #G-users-role-session-invalidate 推进到 🔄 ADR 已起草（待实施）
+- 完整设计文档落盘，实施 follow-up CHG-SN-8-FUP-USERS-ROLE-INV-EP 可直接按 D-139-1..8 + 12 测试 surface 落地，无需重新评审
+- 4 方案对比表 + 性能评估（< 1ms p99 增量）+ 4 风险登记 + 回退路径 — 投产前 review 必备材料完备
+- N1 非阻塞建议（DB fallback + ban/unban 同模式）登记，扩展空间留出
+
+Cleanup-Audit: #G-users-role-session-invalidate 🔄（ADR 已起草 / 实施 follow-up CHG-SN-8-FUP-USERS-ROLE-INV-EP 待立）
+Plan-Revision: ADR-139 + 1（plan §9 ADR 索引若有手动表则同步推进至 139；自动索引由 verify:adr-contracts 维护）
+

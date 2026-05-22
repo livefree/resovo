@@ -90,10 +90,11 @@
 ### #G-users-role-session-invalidate · 改用户角色后 session 未强制失效
 
 - **页面**：P-users §3.3 / §7 FAQ
-- **状态**：⬜ 未启动
+- **状态**：🔄 ADR 已起草（ADR-139 A− PASS 2026-05-21 / CHG-SN-8-FUP-USERS-ROLE-INV-ADR）；实施 follow-up：CHG-SN-8-FUP-USERS-ROLE-INV-EP
 - **优先级**：P2（安全）
-- **现象**：admin 把某用户从 admin 改 moderator 后，该用户当前 session 仍持有 admin 权限直到自然过期或重新登录
-- **建议**：role 变更端点写入后强制 invalidate 该 user 所有 active session
+- **现象（已核查）**：`PATCH /admin/users/:id/role`（apps/api/src/routes/admin/users.ts:98-125）仅 UPDATE DB，未 invalidate 已发 access token（15min TTL，含旧 role）/ refresh token（30d）/ user_role cookie；权限穿越窗口最大 15 分钟
+- **ADR-139 决策**：方案 B（`users.role_changed_at` TIMESTAMPTZ + access token `iat` 校验）+ Redis 缓存 `user:rca:{userId}` EX 900 + middleware `resolveUser` 401 ROLE_CHANGED + refresh 端点拒绝 + 前端强制 logout；权限穿越窗口降至 0
+- **实施 follow-up**：CHG-SN-8-FUP-USERS-ROLE-INV-EP — 按 ADR-139 落 migration（users 加 role_changed_at TIMESTAMPTZ）+ updateUserRole SET ... NOW() + 缓存写 + middleware + refresh + ErrorCode `ROLE_CHANGED` + 前端 interceptor + R-MID-1 7 文件（补 `user.role_change` actionType + `user` targetKind）+ 测试 12 用例（4 unit + 1 integration + 1 e2e + 2 边界），工时 0.4-0.6w
 
 ### #G-users-batch-ban · 批量封禁 UI 缺失
 

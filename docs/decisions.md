@@ -9013,3 +9013,291 @@ const SimilarQueryParams = z.object({
 
 **N1 非阻塞建议 — ✅ 已闭合（CHG-SN-8-04-N1 / 2026-05-21）**：评分公式中 `type` 维度占 40 分且作为 SQL WHERE 严格相等条件，意味着跨类型相似视频（如同名电影的 anime 改编版）永远不会被召回。建议在实施时考虑：当 type 严格匹配候选 < limit 时，可 fallback 到 type 不限的二次查询补足。**实施落地**：`listSimilarCandidates` 新增 `relaxType?: boolean` + `excludeIds?: readonly string[]` 参数；`ModerationService.listSimilar` strict 通过 minScore 后 < limit 时发起 fallback relaxType 查询（excludeIds 排除首次结果避免重复）；跨类型候选 `computeSimilarityScore` 自然在 type 维度 +0（不变公式）；合并后整体 score 排序 + slice top-N。测试新增 2 用例（fallback 命中 + strict ≥ limit 不触发），全 15 PASS。
 
+---
+
+## ADR-139 — 管理员变更用户角色后 session invalidate 协议（CHG-SN-8-FUP-USERS-ROLE-INV）
+
+**状态**：Accepted（arch-reviewer A− PASS / 2 非阻塞建议 N1-139-1 + N1-139-2 登记 follow-up）
+**日期**：2026-05-21
+**arch-reviewer**：claude-opus-4-7（子代理评级；本主循环亦 claude-opus-4-7）
+**关联 GAP**：`#G-users-role-session-invalidate`（P2 安全）
+
+---
+
+### 1. 决策摘要
+
+采用**方案 B（`users.role_changed_at` 时间戳 + access token `iat` 校验）**作为角色变更后的 session invalidate 策略，并**在 refresh 端点拒绝过期 token**（强制重新登录），同时清除 `user_role` cookie 使 Next.js middleware 立即失去旧角色 gate。该方案以 1 列 schema 变更 + middleware 增加 1 次 Redis 缓存查询的成本，将角色变更后的权限穿越窗口从最大 15 分钟降至 0（middleware 实时校验），闭合 GAPS.md `#G-users-role-session-invalidate` P2 安全风险。
+
+---
+
+### 2. 背景
+
+**问题 1 — access token 权限穿越**：当前 `PATCH /admin/users/:id/role` 端点（`apps/api/src/routes/admin/users.ts:98-125`）仅调用 `usersQueries.updateUserRole` 写 DB，不触及 JWT 或 Redis。被降级用户的 access token（`apps/api/src/lib/auth.ts:15` ACCESS_TOKEN_EXPIRES_IN = `'15m'`）内嵌 `role` 字段仍为旧值，15 分钟有效期内可继续通过 `requireRole` 校验（`apps/api/src/plugins/authenticate.ts:100-113` 仅检查 `request.user.role`，不查 DB）。
+
+**问题 2 — refresh token 静默续约**：被降级用户的 refresh token（30 天 TTL，`apps/api/src/lib/auth.ts:16`）未被 blacklist。`UserService.refresh`（`apps/api/src/services/UserService.ts:110-127`）基于 DB 当前 role 重签 access token，新 token 含新 role — 但 refresh 路由（`apps/api/src/routes/auth.ts:131-153`）**不更新 `user_role` cookie**（仅 login/register/dev-login 设置该 cookie），导致 Next.js middleware 层面仍读旧 cookie。
+
+**问题 3 — `user_role` cookie 滞留**：`user_role` cookie 为非 HttpOnly（`apps/api/src/routes/auth.ts:33-39`，30 天 maxAge），供 `apps/server-next/src/middleware.ts` 的 `parseUserRole` + `canAccessAdmin` 做路径 gate。角色降级为 `user` 后，cookie 仍为 `moderator`/`admin`，用户可继续访问 `/admin/**` 页面直至 cookie 自然过期或手动 logout。
+
+---
+
+### 3. 决策
+
+#### D-139-1 失效策略选型
+
+选择**方案 B（`users.role_changed_at` 时间戳）**。
+
+| 维度 | 方案 A: `role_version` int | 方案 B: `role_changed_at` timestamp | 方案 C: refresh blacklist by user_id | 方案 D: 混合 (B+C) |
+|------|---|---|---|---|
+| **schema 变更** | `users` 加 `role_version INT DEFAULT 0` | `users` 加 `role_changed_at TIMESTAMPTZ DEFAULT NULL` | 不动 users；Redis sorted set `user:rt:{userId}` | `users` 加 `role_changed_at` + Redis sorted set |
+| **access token payload 变更** | 新增 `roleVersion` 字段 | 无（复用已有 `iat`） | 无 | 无（复用 `iat`） |
+| **middleware 校验成本** | 每请求查 DB 或 Redis 取 `role_version` 并比对 token 内 `roleVersion` | 每请求查 DB 或 Redis 取 `role_changed_at` 并比对 token 内 `iat` | 无额外校验（access token 自然过期） | 每请求查 `role_changed_at` |
+| **权限穿越窗口** | 0（实时校验） | 0（实时校验） | 最大 15 分钟（access token TTL） | 0（实时校验） |
+| **refresh 端点影响** | Service 层需比对 version | Service 层比对 `iat >= role_changed_at` | 黑名单查询（已有模式）| 两者都做 |
+| **Token payload 向后兼容** | 破坏（旧 token 无 `roleVersion`） | 兼容（`iat` 已存在） | 兼容 | 兼容 |
+| **Redis 数据结构复杂度** | 可选缓存 `role_version` | 可选缓存 `role_changed_at` | 新增 sorted set 维护 user_id → token_hash 集合 | 缓存 + sorted set |
+| **实现复杂度** | 中（改 payload 类型 + 签发 + 校验 3 处） | 低（只改 middleware + refresh service 2 处） | 中（需在 login/register 写 set + role 变更时遍历 set） | 高（B+C 全部工作量） |
+| **回退风险** | 回退时旧 token 无 `roleVersion` 需兼容逻辑 | 回退时 `role_changed_at NULL` 即放行，天然兼容 | 回退时 sorted set 残留无害 | 复合回退 |
+
+**选择理由**：方案 B 以最小改动（1 列 + 不改 token payload）实现 0 穿越窗口，且天然向后兼容（`role_changed_at IS NULL` 意味着角色从未被改，放行）。方案 A 需改 `AccessTokenPayload` 类型 + 所有签发位点 + 所有验证位点，破坏已发出 token 的兼容性。方案 C 虽不需 schema 变更但 15 分钟穿越窗口不满足 P2 安全要求。方案 D 功能最全但复杂度是 B 的 2 倍以上，且 B 已覆盖安全需求（权限穿越窗口 = 0），C 部分为冗余。
+
+#### D-139-2 access token 失效语义
+
+当 middleware（`apps/api/src/plugins/authenticate.ts` 的 `resolveUser` 函数）检测到 `token.iat < user.role_changed_at` 时：
+
+- 返回 `401` + 错误码 `ROLE_CHANGED`（新增 ErrorCode）
+- 错误 message：`'您的权限已变更，请重新登录'`
+- 前端收到 `ROLE_CHANGED` 后执行 forced logout（调 `POST /auth/logout` 清 cookie + 清内存 token + redirect `/login?reason=role_changed`）
+- **不静默续约**：不调 refresh 尝试获取新 access token。理由：角色变更是管理员主动行为，用户应明确感知并重新建立 session，避免「权限悄悄变了但用户不知道」的 UX 问题。
+
+#### D-139-3 refresh token 处置
+
+选择**拒绝 refresh + 强制重新登录**。
+
+当 `POST /auth/refresh` 被调用时，`UserService.refresh` 已查 DB 获取当前用户（`apps/api/src/services/UserService.ts:122`）。新增逻辑：若 `user.roleChangedAt` 非空且 `refreshTokenPayload.iat < user.roleChangedAt`，抛出 `UnauthorizedError('您的权限已变更，请重新登录')`，返回 401 `ROLE_CHANGED`。
+
+**理由**：允许用旧 refresh token 拿新 access token 虽然新 token 含正确 role，但 `user_role` cookie 在 refresh 路由中当前不更新（需额外改动），且用户无感知角色变更的 UX 问题仍存在。强制重新登录是更安全且 UX 更明确的选择。
+
+#### D-139-4 user_role cookie 同步
+
+选择**强制 logout 让 cookie 自然消失**。
+
+与 D-139-3 一致：角色变更后，用户下次任何 API 请求（携带旧 access token）触发 401 `ROLE_CHANGED` → 前端执行 logout → `POST /auth/logout` 路由（`apps/api/src/routes/auth.ts:206-221`）已有 `reply.clearCookie(ROLE_COOKIE, { path: '/' })`，cookie 被清除。用户重新登录时，login 路由（`apps/api/src/routes/auth.ts:114-115`）设置新的 `user_role` cookie。
+
+**一致性核对**：D-139-3 拒绝 refresh → D-139-4 不依赖 refresh 更新 cookie → 用户只能通过 logout + re-login 获得新 cookie → 自洽。
+
+**Next.js middleware 过渡窗口**：在用户前端尚未收到 401 之前，`user_role` cookie 仍为旧值，Next.js middleware 可能放行已降级用户访问 `/admin/**` 页面。但页面内的 API 调用会被后端 middleware 拦截（401 ROLE_CHANGED），页面功能不可用。该窗口为纯前端路由层面，无实际数据泄露风险（API 层已守门）。
+
+#### D-139-5 schema 变更
+
+```sql
+ALTER TABLE users ADD COLUMN role_changed_at TIMESTAMPTZ DEFAULT NULL;
+```
+
+- **列名**：`role_changed_at`
+- **类型**：`TIMESTAMPTZ`
+- **默认值**：`NULL`（从未被改过角色的用户为 NULL，middleware 视为放行）
+- **索引**：不需要。该列仅在 middleware per-request 查询中作为 WHERE 条件的一部分（按 `users.id` 主键查询后取值），不作为独立查询条件。
+- **Migration 编号**：实施卡填实际编号（按 `ls apps/api/src/db/migrations | sort -t_ -n -k1` 取末尾 +1）
+
+不修改 `admin_audit_log` 的 `target_kind` CHECK 约束（`user` target_kind 的新增属于 R-MID-1 audit 补齐范畴，不在本 ADR 范围内；D-139-6 详述）。
+
+#### D-139-6 R-MID-1 评估
+
+**当前状态**：`PATCH /admin/users/:id/role` 路由（`apps/api/src/routes/admin/users.ts:98-125`）**未挂载** `insertAuditLog` 调用。grep 确认 `users.ts` 中无 `insertAuditLog` / `auditSvc` / `audit` 引用。
+
+**评估**：
+
+1. **role 变更端点的 audit log**：应补齐。需新增 `AdminAuditActionType = 'user.role_change'` + `AdminAuditTargetKind` 扩展含 `'user'`。但这属于 R-MID-1 7 文件框架（ADR-121）范畴，需同步 4 真源 + 7 文件。本 ADR-139 仅设计 session invalidate 协议，audit 补齐应作为 CHG-SN-8-FUP-USERS-ROLE-INV-EP 实施卡的 R-MID-1 子任务。
+
+2. **middleware 401 ROLE_CHANGED 是否需新 audit type**：否。middleware 层的 401 是鉴权拒绝，与 `admin_audit_log`（记录 admin 写操作）语义不同。401 已有 pino request log 记录（logging-rules.md），不额外写 audit。
+
+3. **结论**：本 ADR 不触发 R-MID-1 7 文件框架。audit 补齐（`user.role_change` actionType + `user` targetKind + 4 真源同步）在实施卡 follow-up 中执行，本 ADR 仅登记此需求。
+
+#### D-139-7 性能影响
+
+**middleware 多一次查询**：`resolveUser`（`apps/api/src/plugins/authenticate.ts:47-65`）当前只做 JWT verify + Redis blacklist check。新增需查询 `users.role_changed_at`。
+
+**方案**：Redis 缓存，key `user:rca:{userId}`，值为 `role_changed_at` ISO 字符串或 `"null"`。
+
+- **写时机**：`PATCH /admin/users/:id/role` 端点在 DB UPDATE 后同步写 `SET user:rca:{userId} <role_changed_at> EX 900`（15 分钟 TTL = access token 生命周期；超过 15 分钟后旧 access token 自然过期，无需继续校验）。
+- **读时机**：middleware `resolveUser` 在 JWT verify 成功后，`GET user:rca:{userId}`。若 key 不存在（cache miss 或从未被改角色），放行（等价于 `role_changed_at IS NULL`）。若 key 存在且 `token.iat < parseInt(value)`，返回 null（触发 401）。
+- **cache miss 降级**：key 不存在 = 放行。不回查 DB。理由：缓存 TTL = access token TTL，在 TTL 内 cache 一定存在（role 变更端点刚写入）；TTL 过期后旧 access token 也过期了，不需要再校验。
+- **成本**：每请求 1 次 Redis GET（O(1)，与现有 blacklist check 并行 `Promise.all`）。无额外 DB 查询。p99 增量 < 1ms。
+
+#### D-139-8 admin 自残保护
+
+**现状确认**（grep 实证 `apps/api/src/routes/admin/users.ts:111-121`）：
+
+```typescript
+const user = await usersQueries.findAdminUserById(db, id)
+if (user.role === 'admin') {
+  return reply.code(403).send({
+    error: { code: 'FORBIDDEN', message: '不能修改 admin 账号的角色' },
+  })
+}
+```
+
+判断逻辑是检查**目标用户**的当前 role。若目标用户 role === `'admin'`，无论调用者是谁（即使是另一个 admin），一律返回 403。
+
+`RoleSchema` 只接受 `z.enum(['user', 'moderator'])`（行 101），不允许设为 `admin`。
+
+**结论**：admin-A 不能修改 admin-B 的角色（403 FORBIDDEN）。admin 不能把自己改为 user/moderator（同样会命中 `user.role === 'admin'` 守卫）。**当前保护已充分，ADR-139 不修改此逻辑**。
+
+---
+
+### 端点契约
+
+| # | Method | Path | 权限 | Body / Query | Response `data` | 新增 ErrorCode | ADR |
+|---|--------|------|------|-------------|----------------|---------------|-----|
+| 1 | PATCH | `/admin/users/:id/role` | admin | `{ role: 'user' \| 'moderator' }` | `{ id, role }` + side-effect: DB `role_changed_at = NOW()` + Redis `user:rca:{id}` | `ROLE_CHANGED` (401, 仅 middleware 返回给被变更用户) | ADR-139 |
+
+注：端点路径和 HTTP Method 不变（无新增端点），仅扩展内部行为。`ROLE_CHANGED` 错误码不在此端点响应中出现，而是在被变更用户后续请求的 middleware 中返回。
+
+---
+
+### 5. SQL / Schema 设计
+
+**Migration**（实施卡填实际编号 NNN_users_role_changed_at.sql）：
+
+```sql
+-- NNN_users_role_changed_at.sql
+-- 描述：users 表新增 role_changed_at 列（ADR-139 session invalidate 协议）
+-- 日期：2026-05-XX（实施卡落地时填写）
+-- ADR：ADR-139
+-- 任务卡：CHG-SN-8-FUP-USERS-ROLE-INV-EP
+-- 幂等：是（IF NOT EXISTS 模式 — ALTER ADD COLUMN 使用 DO block）
+
+BEGIN;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'users' AND column_name = 'role_changed_at'
+  ) THEN
+    ALTER TABLE users ADD COLUMN role_changed_at TIMESTAMPTZ DEFAULT NULL;
+  END IF;
+END
+$$;
+
+COMMENT ON COLUMN users.role_changed_at
+  IS 'admin 变更该用户角色的最后时间戳（ADR-139）；NULL = 从未被改过；middleware 比对 access token iat 决定是否拒绝';
+
+COMMIT;
+```
+
+**回滚 SQL**：
+
+```sql
+BEGIN;
+ALTER TABLE users DROP COLUMN IF EXISTS role_changed_at;
+COMMIT;
+```
+
+**`updateUserRole` query 修改**（`apps/api/src/db/queries/users.ts`）：
+
+```sql
+UPDATE users
+SET role = $1, role_changed_at = NOW()
+WHERE id = $2 AND deleted_at IS NULL
+RETURNING id, role, role_changed_at
+```
+
+**`findUserById` query**：无需修改 — 当前为 `SELECT *`，会自动包含新列。映射函数 `mapUser` 需扩展 `roleChangedAt` 字段。
+
+---
+
+### 6. Response 结构 / 错误码
+
+**新增 ErrorCode：`ROLE_CHANGED`**
+
+| CODE | HTTP | 触发条件 | 返回位点 |
+|------|------|----------|---------|
+| `ROLE_CHANGED` | 401 | middleware `resolveUser` 检测到 `token.iat < user.roleChangedAt` | `apps/api/src/plugins/authenticate.ts` |
+| `ROLE_CHANGED` | 401 | refresh 端点检测到 `refreshToken.iat < user.roleChangedAt` | `apps/api/src/services/UserService.ts` |
+
+**响应体**（与现有 401 格式一致，ADR-110 `ApiErrorBody`）：
+
+```json
+{
+  "error": {
+    "code": "ROLE_CHANGED",
+    "message": "您的权限已变更，请重新登录",
+    "status": 401
+  }
+}
+```
+
+前端处理约定：auth store / interceptor 检测到 `error.code === 'ROLE_CHANGED'` 时，执行强制 logout 流程（不走 silent refresh），redirect 到 `/login?reason=role_changed`。login 页面可选展示提示文案。
+
+---
+
+### 7. 关联 ADR
+
+| ADR | 关系 | 说明 |
+|-----|------|------|
+| ADR-003 | 依赖 | JWT 双 Token 方案；refresh token 黑名单 key 格式；access token 15min / refresh 30d TTL |
+| ADR-010 | 依赖 | 三级角色体系 + `user_role` 非 HttpOnly cookie + Next.js middleware gate |
+| ADR-109 | 参考 | admin_audit_log schema（role 变更 audit 补齐的前置表 — 实施卡 follow-up） |
+| ADR-110 | 对齐 | ApiResponse 信封 + ErrorCode 真源（新增 `ROLE_CHANGED`） |
+| ADR-121 | 延伸 | R-MID-1 7 文件框架（`user.role_change` actionType 补齐在实施卡内执行） |
+
+---
+
+### 8. R-MID-1 文件清单
+
+**不适用（降级）**。理由：
+
+- 本 ADR-139 仅设计 session invalidate 协议，不实施端点代码。
+- `PATCH /admin/users/:id/role` 是**已有端点**的行为扩展（新增 side-effect），不是新增端点。
+- R-MID-1 7 文件框架适用于**新增 audit actionType** 的场景。`user.role_change` audit 补齐作为实施卡 CHG-SN-8-FUP-USERS-ROLE-INV-EP 的子任务，在该卡内走 R-MID-1 完整流程（新增 `'user.role_change'` → union / ACTION_TYPES / set-equal / coverage / route audit 调用 / audit 内容断言测试 / changelog — 7 文件）。
+
+---
+
+### 9. 测试 surface
+
+| # | 类型 | 场景 | 预期 | 文件 |
+|---|------|------|------|------|
+| 1 | unit | role 变更 → `updateUserRole` 同时更新 `role_changed_at` | RETURNING 含 `role_changed_at` 非空 | `tests/unit/api/admin-users.test.ts` |
+| 2 | unit | role 变更 → Redis `user:rca:{userId}` 被写入（TTL 900s） | `redis.set` called with correct key + EX 900 | `tests/unit/api/admin-users.test.ts` |
+| 3 | unit | middleware: `token.iat < role_changed_at` → 401 ROLE_CHANGED | `resolveUser` 返回 null + 响应 401 | `tests/unit/api/auth.test.ts` |
+| 4 | unit | middleware: `token.iat >= role_changed_at` → 正常放行 | `resolveUser` 返回 user | `tests/unit/api/auth.test.ts` |
+| 5 | unit | middleware: Redis key 不存在（cache miss）→ 放行 | `resolveUser` 返回 user | `tests/unit/api/auth.test.ts` |
+| 6 | unit | refresh: `refreshToken.iat < role_changed_at` → 401 ROLE_CHANGED | `UserService.refresh` 抛 `UnauthorizedError` | `tests/unit/api/auth.test.ts` |
+| 7 | unit | refresh: `refreshToken.iat >= role_changed_at` → 正常签发 | 返回新 access token | `tests/unit/api/auth.test.ts` |
+| 8 | unit | refresh: `role_changed_at IS NULL` → 正常签发 | 返回新 access token（兼容未变更用户） | `tests/unit/api/auth.test.ts` |
+| 9 | unit | admin 不能改 admin（现有测试不变） | 403 FORBIDDEN | `tests/unit/api/admin-users.test.ts` |
+| 10 | integration | 完整流程：login → admin 改角色 → 旧 token 请求 → 401 → re-login → 新 role | 端到端状态流转正确 | `tests/unit/api/role-invalidate-integration.test.ts` (新) |
+| 11 | e2e | 前端收到 ROLE_CHANGED → 自动 logout → redirect /login | 页面跳转 + toast 提示 | `tests/e2e/auth.spec.ts` (扩展) |
+| 12 | unit | 并发竞态：两个 admin 同时改同一用户角色 → 最后写入的 `role_changed_at` 生效 | DB 自然串行，最后 UPDATE 的 NOW() 覆盖 | `tests/unit/api/admin-users.test.ts` |
+
+---
+
+### 10. 风险与回退
+
+| # | 风险 | 严重性 | 缓解 |
+|---|------|--------|------|
+| R-139-1 | middleware 增加 Redis GET 导致每请求延迟增加 | 低 | Redis GET O(1) < 1ms；与现有 blacklist check `Promise.all` 并行；Redis down 时降级放行（与现有 blacklist 降级策略一致） |
+| R-139-2 | `role_changed_at` 缓存 TTL 900s 内 Redis 宕机 → cache miss → 旧 token 放行 | 中 | 穿越窗口最大 15 分钟（与方案 C 等价 worst case）；Redis 恢复后缓存重建（role 变更端点下次调用时写入）；可选 fallback：cache miss 时查 DB（本 ADR 选择不查，保持 middleware 零 DB 依赖） |
+| R-139-3 | 前端未正确处理 `ROLE_CHANGED` 错误码 → 陷入无限 refresh 循环 | 高 | 前端 interceptor 必须识别 `ROLE_CHANGED` 并跳过 silent refresh 直接 logout；测试 surface #11 覆盖此场景 |
+| R-139-4 | 回退部署时旧代码不识别 `role_changed_at` 列 | 低 | 旧代码 `SELECT *` 会多读一列但不使用（JS 忽略多余字段）；`updateUserRole` 旧版 SQL 不含 `role_changed_at = NOW()`，该列保持 NULL = 放行 |
+
+**回退路径**：
+
+1. 代码回退：revert middleware 校验 + refresh 校验 + Redis 写入。旧 token 自然恢复放行。
+2. Schema 保留：`role_changed_at` 列为 NULL 默认值，旧代码不读不写，无副作用。需要完全清理时执行 `ALTER TABLE users DROP COLUMN role_changed_at`。
+3. Redis 清理：`DEL user:rca:*` 即可。
+
+---
+
+### 11. 非阻塞建议 / N1
+
+**N1-139-1（评级 A− 因素）**：本 ADR 选择 cache miss 时**放行**（不回查 DB），理由是 TTL 900s 覆盖 access token 生命周期。但存在极端场景：admin 改角色后立即重启 Redis（数据丢失）→ 被降级用户在 15 分钟内继续持有旧权限。如果此风险不可接受，实施卡可在 `resolveUser` 中增加 cache miss + `role_changed_at` 列存在 → 查 DB fallback（每次 cache miss 多 1 次 DB 查询，频率极低）。建议作为实施卡内条件判断，不阻塞本 ADR 通过。**状态**：待实施卡评估（CHG-SN-8-FUP-USERS-ROLE-INV-EP）。
+
+**N1-139-2**：本 ADR 不涉及 `PATCH /admin/users/:id/ban` 的 session invalidate。封禁用户后同样存在 access token 15 分钟穿越窗口。建议未来独立 ADR（或扩展本 ADR scope）覆盖 ban/unban 场景，复用 `role_changed_at` 同模式（或新增 `banned_changed_at`，或统一为 `session_invalidated_at`）。**状态**：登记 follow-up 卡 CHG-SN-8-FUP-USERS-BAN-INV（按需启动）。
+
+---
+
+**后续解锁卡**：
+- **CHG-SN-8-FUP-USERS-ROLE-INV-EP**：按本 ADR 实施 migration + Service + Route + middleware + 前端 interceptor + 测试 surface #1-#12
+
