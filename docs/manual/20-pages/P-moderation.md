@@ -118,8 +118,9 @@
 
 - **位置**：Segment tabs 旁齿轮 icon → Popover
 - **行为**：保存当前 filter 组合为命名预设（如「我的待审」「本周新增」）+ 设为默认
-- **持久化**：sessionStorage `admin.moderation.presets.<tab>.v1`
-- **多账号共享**：⬜ 未实装（GAPS.md #G-moderation-preset-team）
+- **持久化**：localStorage `admin.moderation.presets.v1`（仅本浏览器）
+- **视觉警示**：popover header 右侧「仅本地」warn chip + title tooltip 解释（CHG-SN-8-GAPS-PRESET-LOCAL-BADGE）— 提醒审核员预设未跨账号同步
+- **多账号共享**：⚠️ 视觉警示已加；后端 `user_filter_presets` 表 + 团队共享 UI 待 follow-up CHG-SN-8-FUP-PRESET-TEAM-EP（GAPS.md #G-moderation-preset-team）
 
 ### 3.5 批量审核（CHG-SN-8-GAPS-MOD-BATCH）
 
@@ -181,7 +182,7 @@
 | toast「approve_and_publish 仅限 admin」| moderator 切了 toggle on | toggle off 走 staging 路径 |
 | RightPane「类似」Tab 空召回 | 该视频同 type/year 范围无相似项 | 检查 metadata 完整性 |
 | 「重测此视频线路」空线路 | 视频无 sources | 走 P-crawler 重新采集 |
-| FilterPresetPopover 预设丢失 | sessionStorage 浏览器关闭清 | M-SN-N 加 localStorage 持久化 |
+| FilterPresetPopover 预设跨浏览器丢失 | localStorage 仅本浏览器（popover header「仅本地」chip 已警示）| 团队共享待 CHG-SN-8-FUP-PRESET-TEAM-EP follow-up |
 
 ## 8. 与其他页面的关系
 

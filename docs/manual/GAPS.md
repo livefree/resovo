@@ -54,10 +54,11 @@
 ### #G-moderation-preset-team · FilterPreset 多账号共享缺失
 
 - **页面**：P-moderation §3.4 / §7 FAQ
-- **状态**：⬜ 未启动
+- **状态**：⚠️ 已部分实装（CHG-SN-8-GAPS-PRESET-LOCAL-BADGE 消费层视觉警示；团队共享 follow-up：CHG-SN-8-FUP-PRESET-TEAM-EP）
 - **优先级**：P3
-- **现象**：sessionStorage 仅本地浏览器；同团队审核员无法共享预设
-- **建议**：加 `team_scope` 字段 + 后端 user_filter_presets 表 + 共享 UI
+- **现象（已核查）**：`apps/server-next/src/lib/moderation/use-filter-presets.ts:5` localStorage 持久化（key `admin.moderation.presets.v1`），仅本浏览器；同团队审核员无法共享预设（原描述「sessionStorage」实证为 localStorage，已修正）
+- **消费层补齐**：CHG-SN-8-GAPS-PRESET-LOCAL-BADGE — FilterPresetPopover header 加「仅本地」warn chip + tooltip（state-warning-bg + cursor: help + title 含"未跨账号同步 + 团队共享待 follow-up + 指向 GAPS"）；与 DASH-ACTIVITY mock 警示同范式
+- **团队共享 follow-up**：CHG-SN-8-FUP-PRESET-TEAM-EP — 起 ADR-141（或后续可用编号）设计后端 `user_filter_presets` 表（user_id / name / query_jsonb / scope: 'private' \| 'team' / tab_filter / is_default / created_at）+ 4 端点（GET list / POST create / PATCH 编辑 / DELETE）+ 前端 scope toggle + 团队成员预设可见性策略；需 Opus arch-reviewer 评审；工时 ADR ~0.2w + 实施 ~0.4w
 
 ### #G-merge-candidate-b-auto · 审核台类似 tab 深链 candidate_b 未自动填入 Merge 页
 

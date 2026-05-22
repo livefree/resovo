@@ -39,6 +39,25 @@ const HEADER_STYLE: React.CSSProperties = {
   fontWeight: 600,
   color: 'var(--fg-default)',
   flexShrink: 0,
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  gap: 8,
+}
+
+// CHG-SN-8-GAPS-PRESET-LOCAL-BADGE：localStorage 仅本地警示 chip（GAPS.md #G-moderation-preset-team）
+const LOCAL_BADGE_STYLE: React.CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  padding: '1px 7px',
+  borderRadius: 'var(--radius-sm)',
+  fontSize: 'var(--font-size-2xs)',
+  fontWeight: 500,
+  background: 'var(--state-warning-bg)',
+  color: 'var(--state-warning-fg)',
+  border: '1px solid var(--state-warning-border)',
+  cursor: 'help',
+  whiteSpace: 'nowrap',
 }
 
 const LIST_STYLE: React.CSSProperties = {
@@ -200,7 +219,16 @@ export function FilterPresetPopover({
         style={POPOVER_STYLE}
         data-filter-preset-popover
       >
-        <div style={HEADER_STYLE}>{M.preset.popoverTitle}</div>
+        <div style={HEADER_STYLE}>
+          <span>{M.preset.popoverTitle}</span>
+          <span
+            style={LOCAL_BADGE_STYLE}
+            title={M.preset.localOnlyTooltip}
+            data-testid="filter-preset-local-badge"
+          >
+            {M.preset.localOnlyBadge}
+          </span>
+        </div>
 
         <div style={LIST_STYLE}>
           {presets.length === 0 ? (

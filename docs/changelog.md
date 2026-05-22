@@ -14950,3 +14950,38 @@ Plan-Revision: 无
 Cleanup-Audit: #G-users-edit-profile ⚠️ + 🔄（reset-pwd 1/3 ✅ / ADR-140 2/3 ✅ / 实施 follow-up CHG-SN-8-FUP-USERS-EDIT-EP 待立）
 Plan-Revision: ADR-140 + 1（plan §9 ADR 索引若有手动表则同步推进至 140；自动索引由 verify:adr-contracts 维护）
 
+---
+
+## [CHG-SN-8-GAPS-PRESET-LOCAL-BADGE] FilterPreset 「仅本地」视觉警示（#G-moderation-preset-team 消费层）
+
+- **完成时间**：2026-05-22
+- **记录时间**：2026-05-22 00:48
+- **执行模型**：claude-opus-4-7
+- **子代理**：无（纯前端 visual + i18n）
+- **修改文件**：
+  - `apps/server-next/src/i18n/messages/zh-CN/moderation.ts` — preset 块新增 `localOnlyBadge` + `localOnlyTooltip` 2 key（tooltip 文案明示 localStorage + 未跨账号同步 + 指向 GAPS #G-moderation-preset-team）
+  - `apps/server-next/src/app/admin/moderation/_client/FilterPresetPopover.tsx` — HEADER_STYLE 增 flex/justify-between；新增 LOCAL_BADGE_STYLE（state-warning-bg/fg/border + cursor: help）；header 拆 popoverTitle + 「仅本地」chip with title tooltip + data-testid
+  - `tests/unit/components/server-next/admin/moderation/FilterPresetPopoverBadge.test.tsx` — 新建 3 用例 PASS（chip 渲染 / tooltip 含完整文案 / open=false 不渲染）
+  - `docs/manual/GAPS.md` — #G-moderation-preset-team ⬜ → ⚠️ 部分实装；修正「sessionStorage」→ localStorage 实证；登记团队共享 follow-up CHG-SN-8-FUP-PRESET-TEAM-EP（含 user_filter_presets 表 + 4 端点 + scope toggle 设计）
+  - `docs/manual/20-pages/P-moderation.md` — §3.4 筛选预设段重写（持久化改 localStorage 实证 + 视觉警示说明 + 多账号共享状态升级）；§7 FAQ 同步
+  - `docs/task-queue.md` SEQ-20260521-06 #23 子卡 ✅
+  - `docs/tasks.md` 清卡片
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - 团队共享需后端表（`user_filter_presets`）+ 4 端点 + scope toggle UI；触发 R-MID-1 + Opus 评审；超出本卡范围；登记 CHG-SN-8-FUP-PRESET-TEAM-EP follow-up
+  - 视觉警示范式：与 DASH-ACTIVITY mock 警示同模式（state-warning-bg + tooltip 指 follow-up 卡）；H1 硬约束（避免 mock 数据误导）扩展到「跨设备/团队共享假象」的同等处理
+  - 实证修正：原 GAPS 描述「sessionStorage 仅本地浏览器」与代码事实不符，实际 `use-filter-presets.ts:5,56,71` 是 localStorage；本卡顺带修正 P-moderation §3.4 + §7 FAQ + GAPS 描述
+
+### 验收
+- typecheck PASS / lint PASS / verify:manual-coverage PASS
+- FilterPresetPopoverBadge 3/3 PASS（含 tooltip 内容断言）
+
+### 价值
+- P3 GAPS #G-moderation-preset-team 推进到 ⚠️ 消费层闭合（审核员视觉上能识别预设仅本浏览器存储）
+- 顺手修正持久化层描述漂移（sessionStorage → localStorage 文档与代码对齐）
+- 团队共享后端 follow-up 立独立卡 + 包含完整 schema 设计草案
+
+Cleanup-Audit: #G-moderation-preset-team ⚠️（消费层完成 / 团队共享 follow-up CHG-SN-8-FUP-PRESET-TEAM-EP 待立）
+Plan-Revision: 无
+

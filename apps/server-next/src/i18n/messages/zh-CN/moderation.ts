@@ -59,6 +59,8 @@ export const M = {
   },
   preset: {
     popoverTitle: '筛选预设',
+    localOnlyBadge: '仅本地',
+    localOnlyTooltip: '当前预设仅保存在你的浏览器（localStorage），未跨账号同步；团队共享待 follow-up（GAPS.md #G-moderation-preset-team）',
     empty: '尚无保存的预设',
     applyBtn: '应用',
     setDefaultBtn: '设为默认',
