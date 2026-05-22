@@ -9881,4 +9881,264 @@ POST /admin/audit/logs/:id/rollback
 - **CHG-SN-8-FUP-AUDIT-ROLLBACK-FORCE**：`{ force?: boolean }` 强制覆盖参数（待运营反馈）
 - **消费层升级**：`rollback-routes.ts` 可回滚 actionType 从"跳转模式"切换为"直接调 POST 端点"
 
+---
+
+## ADR-141 — dashboard activities 真端点协议设计（GET /admin/dashboard/activities / CHG-SN-8-FUP-DASH-ACTIVITY-LIVE）
+
+**状态**：Accepted（arch-reviewer A PASS / 2 非阻塞建议）
+**日期**：2026-05-22
+**arch-reviewer**：claude-opus-4-7（子代理评级；本主循环亦 claude-opus-4-7）
+**关联 GAP**：`#G-dashboard-activities-mock`（CHG-SN-8-FUP-DASH-ACTIVITY-LIVE follow-up）
+**关联任务**：CHG-SN-8-FUP-DASH-ACTIVITY-ADR（本卡）/ CHG-SN-8-FUP-DASH-ACTIVITY-LIVE（实施 follow-up）
+
+---
+
+### 1. 决策摘要
+
+新增只读端点 `GET /admin/dashboard/activities`，从 `admin_audit_log` 表派生最近 N 条 admin 操作活动时序，替换 dashboard RecentActivityCard 当前全 mock 数据。采用方案 C（audit_log 直接派生 + 内存 TTL 缓存 60s），新增 1 个 `(created_at DESC)` 单列索引保证 p95 < 200ms（实际预估 < 10ms），actionType 中文 label 映射由前端 i18n 文件承担（返回 actionType 原值）。端点路径挂入现有 `/admin/dashboard/*` 路由组，admin only 权限与 ADR-127 三兄弟一致。零新 ErrorCode（复用 ADR-110 字典）。R-MID-1 GET 只读不适用（降级 5 文件清单）。闭合 `#G-dashboard-activities-mock`，消除 dashboard 首页最后一个 mock 警示 chip。
+
+---
+
+### 2. 背景
+
+- **当前实现**：`apps/server-next/src/lib/dashboard-data.ts` 的 `MOCK_ACTIVITIES` 常量（6 条硬编码条目）被两条 return 路径共同引用；`activitiesDataSource` 始终为 `'mock'`
+- **视觉警示**：CHG-SN-8-GAPS-DASH-ACTIVITY（commit b4fdabfe）追加"示例数据"chip + tooltip 指向 follow-up
+- **数据源就绪**：`admin_audit_log` 表已覆盖 37 种 actionType（M-SN-4 起全部 admin 写端点 fire-and-forget audit）；自 2026-05-01 起持续积累
+- **既有审计端点**：ADR-118 `/admin/audit/logs`（多维 filter + 分页 + payloadSummary）是完整审计视图；dashboard activities 为其轻量投影
+- **dashboard 路由组**：ADR-127 已建立 `/admin/dashboard/{overview,spark,analytics}` 三端点；本端点为第四
+
+---
+
+### 3. 决策
+
+#### D-141-1 数据源选型
+
+选择**方案 C（admin_audit_log 直接派生 + Service 层内存 TTL 缓存）**。
+
+| 维度 | 方案 A: 直接查询 | 方案 B: 独立 activities 表 | 方案 C: 缓存 |
+|------|---|---|---|
+| **实施复杂度** | 低（1 query + Service + Route） | 高（migration + 物化 + cron） | 低+（A + ~15 行缓存） |
+| **查询性能** | 中（每请求 SQL，p95 < 50ms） | 高（预计算 O(1)） | 高（命中 0ms / miss 同 A） |
+| **schema 耦合** | 零新表 | 高（与 audit_log 演化耦合） | 零新表 |
+| **数据新鲜度** | 实时 | 延迟 1-5 min | 近实时（60s TTL） |
+| **维护负担** | 极低 | 高（cron + 清理 + 双写） | 低（无状态） |
+| **与 ADR-118 关系** | 独立 query | 脱离 audit_log query 层 | 独立 query |
+
+**选择理由**：dashboard activities 低频读 / audit_log 写频率不高（日均 ~100-500 行）；方案 C 在 A 基础上追加极轻量 Map 级 TTL 缓存，零新表零 cron 保持运维简洁；方案 B 在当前数据量级完全过度设计。
+
+#### D-141-2 返回字段集 + JOIN 策略
+
+**必含字段**：`id` (bigserial 转 string) / `actorId` / `actorUsername` (LEFT JOIN users，actor 删除兜底 null) / `actionType` / `targetKind` / `targetId` / `createdAt` (ISO 8601)
+
+**不含字段**（与 ADR-118 listAdminAuditLog 差异）：beforeJsonb / afterJsonb / payloadSummary / requestId / ipHash / targetDisplayName（N1-141-1 follow-up）
+
+**actionType 中文 label 映射**：选择**方案 B（前端 i18n 文件映射）**。
+
+| 维度 | 方案 A: 后端 Record | 方案 B: 前端 i18n |
+|------|---|---|
+| 维护负担 | 37 项 Record 需与 union 手工同步 | 前端 i18n 新增 1 key |
+| 国际化准备 | 硬编码中文 | 天然 i18n 就绪 |
+| 已有先例 | 无 | 已有 `M.history.action`（11 项，dashboard 需扩展到 37 项） |
+
+**选择理由**：与项目既有 i18n 架构一致；关注点分离（后端不承担 UI label 翻译）；37 项 label 在后端属高频变动源（新增 actionType 多一处忘改风险）。实施卡需扩展现有 `moderation.ts` 的 11 项 action 映射到 37 项全集（或抽为独立 i18n 文件 `audit-action-labels.ts`），供 RecentActivityCard 和 AuditClient 共用。
+
+#### D-141-3 分页 / limit 策略
+
+选择**方案 A（单 limit 参数，无 offset / cursor）**。
+
+| 维度 | A: 单 limit | B: cursor | C: offset |
+|------|---|---|---|
+| dashboard 场景适配 | 精确匹配 | 过度设计 | 过度设计 |
+| 实现复杂度 | 极低 | 中 | 低 |
+| 响应体 | 无元数据 | 含 nextCursor | 含 total/page |
+| 可扩展性 | "查看全部"深链 `/admin/audit` | 增量加载 | 任意页 |
+
+**参数**：`limit?: z.coerce.number().int().min(1).max(50).default(10)`。"查看更多"按钮跳转 `/admin/audit`（ADR-118 完整视图）而非端点翻页。响应信封 `{ data: DashboardActivityRow[] }`，无 total / page / limit 元数据。
+
+#### D-141-4 权限范围
+
+选择 **admin only**。与 ADR-127 dashboard 3 兄弟权限一致；与 Next.js middleware `canAccessAdmin` + 后端 `requireRole(['admin'])` 双守门一致；moderator 自身活动查看属 `#G-audit-self-scope` 独立 GAP 范畴；一致性最简（不引入 self-scope 过滤逻辑）。
+
+#### D-141-5 性能优化
+
+**现有索引分析**（不能服务 `ORDER BY created_at DESC LIMIT N`）：
+
+| 索引 | 定义 | 能否服务？ |
+|------|------|---|
+| `idx_admin_audit_log_actor_created` | `(actor_id, created_at DESC)` | 否 — 前导列 actor_id 不固定 |
+| `idx_admin_audit_log_target` | `(target_kind, target_id, created_at DESC)` | 否 — 同理 |
+| `idx_admin_audit_log_action_created` | `(action_type, created_at DESC)` | 否 — 用 ANY 全集强制扫仍需全表 sort |
+| `idx_admin_audit_log_request_id` | `(request_id) WHERE request_id IS NOT NULL` | 无关 |
+
+**结论：需新增 migration** `CREATE INDEX IF NOT EXISTS idx_admin_audit_log_created ON admin_audit_log (created_at DESC)`。
+
+**代价评估**：
+- 写入开销：每行 INSERT 多 1 个 btree 索引项（audit_log 日写 ~100-500 行，可忽略）
+- 存储开销：单列 TIMESTAMPTZ ~24 bytes/行，10 万行 ~2.4MB（可忽略）
+- 查询收益：`ORDER BY created_at DESC LIMIT N` 直接 Index Scan (Backward)，扫描恰 N 行后停止；JOIN users 通过 PK Nested Loop（N <= 50 次 lookup）；p95 预估 < 10ms
+
+**缓存层**：Service 层 `Map<number, { data, expiry }>`（key = limit 值），TTL = 60s。无需 Redis（单进程内存足够；多进程独立缓存 miss 率略高但 DB < 10ms 不构成问题）。缓存失效靠 TTL 自然过期，不需要写入时主动 invalidate（60s 延迟可接受）。
+
+**p95 目标**：< 200ms（实际预估 < 10ms SQL + < 1ms 缓存查找）。
+
+#### D-141-6 关联 ADR + ErrorCode
+
+**关联 ADR**：ADR-109（audit log schema 真源）/ ADR-118（完整审计视图；本端点为其 dashboard 投影）/ ADR-127（dashboard 路由组并列设计）/ ADR-110（ApiResponse + ErrorCode 真源）/ ADR-136（同类 dashboard KPI 端点参照）/ ADR-121（R-MID-1 评估基线）
+
+**ErrorCode**：零新增。复用 `VALIDATION_ERROR` 422（limit 超范围）/ `INTERNAL_ERROR` 500（DB 兜底）。
+
+ADR-118 enums 端点**不融合**：enums 返回全量 actionTypes + targetKinds 供审计视图筛选器，与 dashboard activities 消费场景无关。
+
+---
+
+### 端点契约
+
+| # | Method | Path | 权限 | Query Params | Response `data` 字段 | ADR |
+|---|--------|------|------|-------------|---------------------|-----|
+| 1 | GET | `/admin/dashboard/activities` | admin | `limit?: 1-50 (default 10)` | `DashboardActivityRow[]` | ADR-141 |
+
+---
+
+### 5. SQL / Schema 设计
+
+**Migration**（实施卡填实际编号 `NNN_admin_audit_log_created_index.sql`）：
+
+```sql
+BEGIN;
+
+CREATE INDEX IF NOT EXISTS idx_admin_audit_log_created
+  ON admin_audit_log (created_at DESC);
+
+COMMENT ON INDEX idx_admin_audit_log_created
+  IS 'dashboard activities 端点 ORDER BY created_at DESC LIMIT N 专用（ADR-141 D-141-5）';
+
+COMMIT;
+```
+
+**回滚 SQL**：`DROP INDEX IF EXISTS idx_admin_audit_log_created`
+
+**Query**（新增 `listDashboardActivities`）：
+
+```sql
+SELECT al.id::text AS id,
+       al.actor_id AS "actorId",
+       u.username AS "actorUsername",
+       al.action_type AS "actionType",
+       al.target_kind AS "targetKind",
+       al.target_id AS "targetId",
+       al.created_at AS "createdAt"
+FROM admin_audit_log al
+LEFT JOIN users u ON u.id = al.actor_id
+ORDER BY al.created_at DESC, al.id DESC
+LIMIT $1
+```
+
+索引利用：`idx_admin_audit_log_created` Index Scan (Backward) → 扫恰 $1 行；LEFT JOIN users 通过 PK Nested Loop。
+
+与 `listAdminAuditLog` / `listAuditLogByTarget` 关系：**新增独立函数**（ADR-118 D-118-5 原则 — 参数结构和 SELECT 字段完全不同不强合并）。row 类型可新建轻量 `DashboardActivityQueryRow` 或复用 `AdminAuditLogQueryRow` 后 Service 层裁剪。
+
+---
+
+### 6. Response 结构 / 错误码
+
+**响应类型**（`packages/types/src/dashboard.ts` 追加）：
+
+```typescript
+export interface DashboardActivityRow {
+  readonly id: string                          // bigserial → string
+  readonly actorId: string
+  readonly actorUsername: string | null         // LEFT JOIN users
+  readonly actionType: AdminAuditActionType    // 前端 i18n 映射中文 label
+  readonly targetKind: AdminAuditTargetKind
+  readonly targetId: string | null              // batch action 时 null
+  readonly createdAt: string                   // ISO 8601
+}
+```
+
+**响应信封**（对齐 ADR-110）：
+
+```json
+{
+  "data": [
+    {
+      "id": "1042",
+      "actorId": "a1b2c3d4-...",
+      "actorUsername": "Yan",
+      "actionType": "video.approve",
+      "targetKind": "video",
+      "targetId": "e5f6g7h8-...",
+      "createdAt": "2026-05-22T10:30:00.000Z"
+    }
+  ]
+}
+```
+
+**前端消费映射**（`dashboard-data.ts` 改造）：
+- `who` = `row.actorUsername ?? '系统'`
+- `what` = i18n `actionLabels[row.actionType]`（37 项全集）
+- `when` = `formatRelativeTime(row.createdAt)`
+- `severity` = 前端规则派生（reject/fail = warn/danger / 其余 = info）
+- `activitiesDataSource` 从 'mock' 改为 'live' → RecentActivityCard chip 自动隐藏
+
+**错误码**：`VALIDATION_ERROR` 422 / `INTERNAL_ERROR` 500（零新增）。
+
+---
+
+### 7. 关联 ADR
+
+详见 D-141-6 表。
+
+---
+
+### 8. R-MID-1 文件清单
+
+**不适用（降级）**。理由：GET 只读，不写 audit；与 ADR-127 / ADR-137 / ADR-136 同 GET 端点降级原则一致。
+
+**降级为 5 文件清单**：
+
+| # | 文件 | 角色 |
+|---|------|------|
+| 1 | `apps/api/src/db/migrations/NNN_admin_audit_log_created_index.sql` | 新索引 migration |
+| 2 | `apps/api/src/db/queries/dashboardActivities.ts` | Query: `listDashboardActivities` |
+| 3 | `apps/api/src/routes/admin/dashboard.ts` | Route handler 追加 |
+| 4 | `packages/types/src/dashboard.ts` | 类型追加 DashboardActivityRow |
+| 5 | `tests/unit/api/dashboard-activities.test.ts` | 端点单测 |
+
+**前端消费改造**（不计入 R-MID-1，实施卡 follow-up 范围）：
+- `apps/server-next/src/lib/dashboard-data.ts` 替换 MOCK_ACTIVITIES 为 fetcher + `activitiesDataSource: 'live'`
+- i18n 文件（新建或扩展）37 项 actionType → 中文 label 全集映射
+
+---
+
+### 9. 测试 surface
+
+10 用例（happy / 空数据 / limit 生效 / limit 超范围 422 / limit 缺省 / 401 / 403 / actorUsername LEFT JOIN 有/无 / 缓存命中 DB 仅 1 次）；详见 ADR §9 测试 surface 表，实施卡内落地文件 `tests/unit/api/dashboard-activities.test.ts`。
+
+---
+
+### 10. 风险与回退
+
+| # | 风险 | 严重性 | 缓解 |
+|---|------|--------|------|
+| R-141-1 | 新索引 CREATE INDEX 在大表阻塞写入 | 低 | 当前 audit_log < 10k 行，耗时 < 100ms；100k+ 后可用 CREATE INDEX CONCURRENTLY |
+| R-141-2 | 内存缓存进程重启丢失 | 低 | 缓存为加速优化非正确性依赖；miss 直接查 DB < 10ms |
+| R-141-3 | LEFT JOIN users 在 RESTRICT FK 下恒非 null | 极低 | 防御性编程，与 ADR-118 同模式 |
+| R-141-4 | 前端 i18n 映射不全（新增 actionType 忘加 label） | 中 | 前端 fallback `actionLabels[type] ?? type`；CI 可选追加 set-equal 守卫 |
+
+**回退路径**：① 代码 revert handler + query + 缓存 → `MOCK_ACTIVITIES` 自动恢复 + chip 重现 ② 索引保留（无副作用），需清理时 `DROP INDEX IF EXISTS`
+
+---
+
+### 11. 非阻塞建议 / N1
+
+**N1-141-1（targetDisplayName 扩展）**：当前端点不返回目标实体名称（如视频标题 / 用户名 / 站点名），RecentActivityCard 的 `what` 文案仅 action label 缺乏上下文。建议 follow-up 扩展 `targetDisplayName?: string | null` 字段（Service 层按 `targetKind` 批量查询目标实体 display name，分组 IN 查询避免 N+1）。接口向后兼容。**状态**：登记 CHG-SN-8-FUP-DASH-ACTIVITY-DISPLAY-NAME 按需启动。
+
+**N1-141-2（severity 后端化）**：当前 severity 由前端简单规则映射。后续如需更精确分级（如"批量删除 > 100 条"标 danger），可在后端 Service 层根据 actionType + afterJsonb 内容计算 severity。当前阶段前端规则足够。**状态**：按需评估，不登记 follow-up。
+
+---
+
+**后续解锁卡**：
+- **CHG-SN-8-FUP-DASH-ACTIVITY-LIVE**：按本 ADR 实施 5 文件清单（migration + query + route + types + 单测）+ 前端 dashboard-data.ts mock → live 切换 + i18n 37 项 actionLabels 扩展
+- **CHG-SN-8-FUP-DASH-ACTIVITY-DISPLAY-NAME**：N1-141-1 targetDisplayName 扩展（按需）
+
 
