@@ -179,9 +179,11 @@ export async function findAdminUserById(
 export async function banUser(
   db: Pool,
   id: string
-): Promise<{ id: string; banned_at: string } | null> {
-  const result = await db.query<{ id: string; banned_at: string }>(
-    `UPDATE users SET banned_at = NOW() WHERE id = $1 AND deleted_at IS NULL RETURNING id, banned_at`,
+): Promise<{ id: string; banned_at: string; role_changed_at: string } | null> {
+  // ADR-139 N1-139-2 / CHG-SN-8-FUP-USERS-BAN-INV：复用 role_changed_at 字段触发 session invalidate
+  // 与 updateUserRole 同模式：ban 后被封用户旧 access/refresh token 立即失效（middleware 校验 iat < role_changed_at）
+  const result = await db.query<{ id: string; banned_at: string; role_changed_at: string }>(
+    `UPDATE users SET banned_at = NOW(), role_changed_at = NOW() WHERE id = $1 AND deleted_at IS NULL RETURNING id, banned_at, role_changed_at`,
     [id]
   )
   return result.rows[0] ?? null

@@ -9294,7 +9294,7 @@ RETURNING id, role, role_changed_at
 
 **N1-139-1（评级 A− 因素）**：本 ADR 选择 cache miss 时**放行**（不回查 DB），理由是 TTL 900s 覆盖 access token 生命周期。但存在极端场景：admin 改角色后立即重启 Redis（数据丢失）→ 被降级用户在 15 分钟内继续持有旧权限。如果此风险不可接受，实施卡可在 `resolveUser` 中增加 cache miss + `role_changed_at` 列存在 → 查 DB fallback（每次 cache miss 多 1 次 DB 查询，频率极低）。建议作为实施卡内条件判断，不阻塞本 ADR 通过。**状态**：待实施卡评估（CHG-SN-8-FUP-USERS-ROLE-INV-EP）。
 
-**N1-139-2**：本 ADR 不涉及 `PATCH /admin/users/:id/ban` 的 session invalidate。封禁用户后同样存在 access token 15 分钟穿越窗口。建议未来独立 ADR（或扩展本 ADR scope）覆盖 ban/unban 场景，复用 `role_changed_at` 同模式（或新增 `banned_changed_at`，或统一为 `session_invalidated_at`）。**状态**：登记 follow-up 卡 CHG-SN-8-FUP-USERS-BAN-INV（按需启动）。
+**N1-139-2 — ✅ 已闭合（CHG-SN-8-FUP-USERS-BAN-INV / 2026-05-22）**：本 ADR 不涉及 `PATCH /admin/users/:id/ban` 的 session invalidate。封禁用户后同样存在 access token 15 分钟穿越窗口。建议未来独立 ADR（或扩展本 ADR scope）覆盖 ban/unban 场景，复用 `role_changed_at` 同模式（或新增 `banned_changed_at`，或统一为 `session_invalidated_at`）。**实施落地**：选方案 A（复用 role_changed_at 字段，零新 schema 列）；`banUser` SQL 加 `SET role_changed_at = NOW()` + RETURNING；ban handler 在 banUser 后写 Redis `user:rca:{id}` EX 900（与 PATCH role 同模式）；middleware/refresh 现有校验逻辑自动覆盖 ban 场景（封禁用户旧 access/refresh token 立即返 401 ROLE_CHANGED）；unban 不触发 invalidate（恢复权限场景；旧 token 在 ban 时已失效，用户必须重登）；audit 补齐 user.ban / user.unban actionType 属独立 follow-up CHG-SN-8-FUP-USERS-BAN-AUDIT。测试 +4 用例（banUser SQL / Redis 写入 / admin 不可 ban / 404 边界）；全 unit 4551 PASS（+4）。语义 trade-off：role_changed_at 字段复用语义略跳（ban 而非 role 变更触发 timestamp 更新），但代价最小（零新 schema 列 / 零新 middleware 逻辑）；与 ADR-139 N1-139-2 建议路径一致。
 
 ---
 

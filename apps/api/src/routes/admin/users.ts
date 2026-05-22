@@ -86,7 +86,23 @@ export async function adminUserRoutes(fastify: FastifyInstance) {
     }
 
     const result = await usersQueries.banUser(db, id)
-    return reply.send({ data: result })
+    if (!result) {
+      return reply.code(404).send({
+        error: { code: 'NOT_FOUND', message: '用户不存在', status: 404 },
+      })
+    }
+
+    // ADR-139 N1-139-2 / CHG-SN-8-FUP-USERS-BAN-INV：写 Redis cache 让 middleware 即时校验 token.iat vs role_changed_at
+    // 防御性：role_changed_at 字段存在时才写（兼容旧 mock）+ fire-and-forget Redis 不可用降级
+    if (result.role_changed_at) {
+      redis
+        .set(ROLE_CHANGED_CACHE_KEY(id), result.role_changed_at, 'EX', ROLE_CHANGED_CACHE_TTL_SECONDS)
+        .catch((err: unknown) => {
+          fastify.log.warn({ err, userId: id }, '[admin/users] ban role_changed_at cache set failed')
+        })
+    }
+
+    return reply.send({ data: { id: result.id, banned_at: result.banned_at } })
   })
 
   // ── PATCH /admin/users/:id/unban ──────────────────────────────
