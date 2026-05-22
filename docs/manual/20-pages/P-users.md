@@ -77,8 +77,9 @@
 - **当前替代**：逐行操作
 
 ### 4.2 改用户邮箱 / 编辑显示名
-- **状态**：⬜ **未实装**（GAPS.md #G-users-edit-profile）— 重置密码部分已闭合（§3.5）；改邮箱 + 改显示名 待 ADR follow-up CHG-SN-8-FUP-USERS-EDIT-ADR（需 Opus + 邮箱唯一性 + 验证邮件）
-- **当前替代**：admin 走数据库直接改邮箱 / displayName
+- **状态**：🔄 ADR 已起草（ADR-140 A− PASS 2026-05-21 / CHG-SN-8-FUP-USERS-EDIT-ADR）；实施 follow-up CHG-SN-8-FUP-USERS-EDIT-EP 待立
+- **ADR-140 设计**：双端点 `PATCH /admin/users/:id/email` + `PATCH /admin/users/:id/profile`（displayName + locale + avatarUrl）/ email 直接生效（无邮件服务基础设施）/ users 加 display_name 列 / audit log 扩 `'user'` targetKind + 2 actionType / admin 互改保护沿用现有 role === 'admin' 守卫 / 触发 R-MID-1 7 文件框架
+- **当前替代**：实施完成前 admin 仍走数据库直接改邮箱 / displayName
 
 ## 5. 字段含义
 

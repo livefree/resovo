@@ -106,11 +106,12 @@
 ### #G-users-edit-profile · 改用户邮箱 / 重置密码 / 编辑显示名缺失
 
 - **页面**：P-users §3.5 / §4.2
-- **状态**：⚠️ 部分实装（CHG-SN-8-FUP-USERS-RESET-PWD 闭合「重置密码」1/3；改邮箱 + 改显示名 待 ADR follow-up CHG-SN-8-FUP-USERS-EDIT-ADR）
+- **状态**：⚠️ 部分实装 + 🔄 ADR 已起草（reset-pwd ✅ 1/3 闭合 / email + profile ADR-140 A− PASS 2/3 / 实施 follow-up CHG-SN-8-FUP-USERS-EDIT-EP 待立）
 - **优先级**：P2
-- **现象（已核查）**：后端 3 端点状态 — `POST /admin/users/:id/reset-password` ✅ 已存在（生成 12 位随机密码 + admin 目标 403）/ `PATCH /admin/users/:id/email` ❌ 不存在（需邮箱唯一性 + 验证流程）/ `PATCH /admin/users/:id/profile`（含 displayName）❌ 不存在
-- **消费层补齐**：CHG-SN-8-FUP-USERS-RESET-PWD — `apps/server-next/src/lib/users/api.ts` 加 `resetUserPassword(id)` lib 封装；新建 `ResetPasswordModal.tsx`（2 态：confirm + success 显示新密码 + 复制按钮 + 一次性警示「关闭后不可复看」）；columns.tsx actions 列加「重置密码」xs ghost btn（admin 目标 disabled + tooltip）；UsersListClient 接 modal state
-- **改邮箱/改显示名 follow-up**：CHG-SN-8-FUP-USERS-EDIT-ADR — 起 ADR-140 设计 `PATCH /admin/users/:id/email`（含邮箱唯一性 + 验证邮件）+ `PATCH /admin/users/:id/profile`（含 displayName / locale / 头像）协议；需 Opus arch-reviewer 评审；工时 0.2-0.3w（ADR）+ 0.3-0.5w（实施）
+- **现象（已核查）**：后端 3 端点状态 — `POST /admin/users/:id/reset-password` ✅ 已存在（生成 12 位随机密码 + admin 目标 403）/ `PATCH /admin/users/:id/email` ❌ 不存在 / `PATCH /admin/users/:id/profile`（含 displayName）❌ 不存在
+- **消费层补齐 1/3**：CHG-SN-8-FUP-USERS-RESET-PWD — `apps/server-next/src/lib/users/api.ts` 加 `resetUserPassword(id)` lib 封装；新建 `ResetPasswordModal.tsx`（2 态：confirm + success 显示新密码 + 复制按钮 + 一次性警示「关闭后不可复看」）；columns.tsx actions 列加「重置密码」xs ghost btn（admin 目标 disabled + tooltip）
+- **改邮箱/改显示名 ADR 2/3**：CHG-SN-8-FUP-USERS-EDIT-ADR — ADR-140 完整起草（D-140-1..6 / Opus arch-reviewer A− PASS / 2 N1 登记）；决策：双端点 `PATCH /admin/users/:id/email` + `PATCH /admin/users/:id/profile`（locale + avatarUrl + displayName）/ email 直接生效（无邮件服务）/ users 加 `display_name VARCHAR(50)` / admin_audit_log CHECK 扩 `'user'` targetKind + 5 历史漂移补齐 / 2 新 actionType `user.email_change` + `user.profile_update` / R-MID-1 7 文件框架触发
+- **实施 follow-up 3/3**：CHG-SN-8-FUP-USERS-EDIT-EP — 按 ADR-140 落 2 migration + 2 route handler + DB queries + R-MID-1 7 文件 + 测试 surface #1-#22 + 前端 columns 加按钮 + 对应 Modal；工时 ~0.4-0.5w
 
 ### #G-settings-webhook-impl · API·Webhook Tab 字段已存但回调未实装
 

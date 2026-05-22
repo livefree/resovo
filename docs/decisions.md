@@ -9301,3 +9301,321 @@ RETURNING id, role, role_changed_at
 **后续解锁卡**：
 - **CHG-SN-8-FUP-USERS-ROLE-INV-EP**：按本 ADR 实施 migration + Service + Route + middleware + 前端 interceptor + 测试 surface #1-#12
 
+---
+
+## ADR-140 — admin 改用户邮箱 + 编辑用户资料端点协议（CHG-SN-8-FUP-USERS-EDIT-ADR）
+
+**状态**：Accepted（arch-reviewer A− PASS / 2 非阻塞建议 N1-140-1 + N1-140-2 登记 follow-up）
+**日期**：2026-05-21
+**arch-reviewer**：claude-opus-4-7（子代理评级；本主循环亦 claude-opus-4-7）
+**关联 GAP**：`#G-users-edit-profile`（P2，reset-pwd 已闭合 1/3 / 本 ADR 推进剩余 2/3）
+**关联任务**：CHG-SN-8-FUP-USERS-EDIT-ADR（本卡 / ADR 起草）/ CHG-SN-8-FUP-USERS-EDIT-EP（实施 follow-up）
+
+---
+
+### 1. 决策摘要
+
+新增 2 个 admin 写端点：`PATCH /admin/users/:id/email`（改邮箱）+ `PATCH /admin/users/:id/profile`（改 displayName / locale / avatarUrl）。email 独立端点因唯一性约束 + 未来邮件验证扩展点语义；profile 端点合并 3 个低风险字段。admin 改邮箱采用直接生效方案（无验证邮件），因项目无邮件服务基础设施。users 表新增 `display_name` 列。`admin_audit_log` 扩展 `'user'` targetKind + 2 个新 actionType（`user.email_change` / `user.profile_update`）。admin 互改保护沿用现有 `role === 'admin'` 守卫（email/profile 允许 admin 编辑非 admin 用户，禁止编辑 admin 用户）。闭合 GAPS.md `#G-users-edit-profile` 剩余 2/3。
+
+---
+
+### 2. 背景
+
+**问题**：后台 `/admin/users` 页面已实装 8 个端点（列表 / 详情 / 封禁 / 解封 / 改角色 / 删除 / 重置密码 / 统计），但**缺失 admin 改邮箱和编辑资料能力**。运营需走 DB 直改 email / displayName，GAPS.md `#G-users-edit-profile` 登记为 P2。
+
+**Schema 现状实证**（`apps/api/src/db/migrations/001_init_tables.sql:8-20`）：
+
+```sql
+CREATE TABLE IF NOT EXISTS users (
+  id            UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  username      TEXT        NOT NULL UNIQUE,
+  email         TEXT        NOT NULL UNIQUE,
+  password_hash TEXT        NOT NULL,
+  role          TEXT        NOT NULL DEFAULT 'user' CHECK (role IN ('user', 'moderator', 'admin')),
+  locale        TEXT        NOT NULL DEFAULT 'en',
+  avatar_url    TEXT,
+  banned_at     TIMESTAMPTZ,
+  deleted_at    TIMESTAMPTZ,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+```
+
+关键事实：
+- `email` 列有 `NOT NULL UNIQUE` 约束 — DB 层保证唯一性
+- **`display_name` 列不存在** — `AdminShellUser.displayName`（`packages/admin-ui/src/shell/types.ts:71`）在 shell 客户端硬编码为 `'管理员'`（`apps/server-next/src/app/admin/admin-shell-client.tsx:59`）；`User` 类型（`packages/types/src/user.types.ts:16-25`）无 `displayName` 字段；DB 行映射（`apps/api/src/db/queries/users.ts:11-21`）无 `display_name`
+- `locale` / `avatar_url` 已存在
+
+**邮件服务基础设施实证**（grep `sendgrid` / `nodemailer` / `mailer` / `smtp`）：
+
+- `docs/manual/20-pages/P-settings.md` 规划文档提及 SMTP KV 扩展（未实装）
+- `InviteUserModal.tsx` 前端已存在但后端端点未实装
+
+**结论**：项目当前**无邮件发送服务**。任何需要发邮件的方案在当前基础设施下不可实施。
+
+**已有 admin 写端点守卫现状实证**（`apps/api/src/routes/admin/users.ts`）：4 个写端点（ban / role / delete / reset-password）**一致**检查目标用户是否为 admin，是则返回 403 `FORBIDDEN`，不区分调用者身份。
+
+---
+
+### 3. 决策
+
+#### D-140-1 端点拆分策略
+
+选择**方案 B（双端点）**：`PATCH /admin/users/:id/email` + `PATCH /admin/users/:id/profile`。
+
+| 维度 | 方案 A: 单端点 `PATCH /admin/users/:id` | 方案 B: 双端点 email + profile | 方案 C: 多端点（email / displayName / locale / avatar 各自） |
+|------|---|---|---|
+| **API 表面** | 1 端点，body 含 optional 字段集 | 2 端点，语义明确 | 4+ 端点，细粒度但 API 膨胀 |
+| **权限粒度** | 所有字段同权限；email 唯一性逻辑混入 profile 更新 | email 独立（唯一性 + 未来验证流程）；profile 字段同权限 | 最细粒度但过度设计 |
+| **audit actionType** | 1 个 `user.update`，before/after jsonb 需区分哪些字段真正变更 | 2 个分离的 actionType，audit 语义清晰 | 4+ actionType 枚举膨胀 |
+| **客户端复杂度** | 1 次调用可改多字段；需 partial body 判断 | 2 次调用分别处理；符合 UI 分区设计（email 单独表单 + profile 编辑区） | 多次调用，客户端需协调 |
+| **测试粒度** | 1 个端点的测试包含多条件分支 | 每端点测试职责单一 | 测试文件过多 |
+| **未来扩展** | email 验证流程引入时需在统一端点内分支处理 | email 端点可独立演进验证流程 + 不影响 profile | 扩展成本低但维护成本高 |
+| **与现有端点对称** | 与 `PATCH .../role`、`PATCH .../ban` 风格不一致 | **与现有子端点风格一致**（ban / unban / role 均为 `PATCH /admin/users/:id/{action}`） | 与现有风格一致但过细 |
+
+**选择理由**：email 涉及唯一性 + 潜在验证流程；双端点与现有 ban/unban/role 子端点完全对称；audit 语义分离（邮箱变更是高敏感操作）；方案 A 的 partial body 判断违反"单一职责"。
+
+#### D-140-2 邮箱唯一性 + 验证邮件
+
+选择**方案 A（直接生效 + audit log）**。
+
+| 维度 | 方案 A: 直接生效 + audit | 方案 B: PENDING_EMAIL + 发验证链接 | 方案 C: 直接生效 + 通知旧邮箱 |
+|------|---|---|---|
+| **邮件服务依赖** | **无** | 必须 | 必须 |
+| **当前可实施性** | **可实施** | **不可实施**（项目无邮件服务） | **不可实施**（同 B） |
+| **Schema 影响** | 零新列 | 需 3 列（pending_email / token / expires） | 零新列 |
+| **用户体验** | admin 改完即生效 | 验证链接确认后生效 | admin 改完即生效 + 旧邮箱通知 |
+| **安全性** | 中（admin 权限守卫 + audit log） | 高（避免邮箱劫持） | 中（通知但无法阻止） |
+| **audit 追溯** | 完整（before/after email） | 需追踪 pending 状态 | 完整 |
+
+**选择理由**：方案 B/C 均需邮件发送能力（项目零实现）；admin 操作本身已有权限守卫 + audit；方案 B 未来升级路径在邮件服务上线后无需破坏端点签名（N1-140-1 登记）。
+
+**唯一性保证**：DB UNIQUE 约束保底 + Service 层 `SELECT WHERE email = $newEmail AND id != $targetId AND deleted_at IS NULL` 提前 409；双保险捕获 PG 23505 错误码。
+
+#### D-140-3 displayName 校验
+
+**Schema 决策**：users 表新增 `display_name VARCHAR(50) DEFAULT NULL`。前端展示 fallback：`display_name ?? username`。`username` 列不变（仍为登录凭据）。
+
+**校验规则**：
+
+| 维度 | 规则 | 说明 |
+|------|------|------|
+| 长度 | 1-50 字符（zod `.min(1).max(50)`） | 空字符串不接受（传 `null` 清除）|
+| 字符集 | `/^[\p{L}\p{N}\p{Emoji_Presentation}\p{Emoji_Modifier_Base}\s\-_.]+$/u` | 允许字母（多语言）/ 数字 / Emoji / 空格 / `-` / `_` / `.` |
+| 唯一性 | **不唯一** | display_name 是展示名而非身份；username 承担唯一性 |
+| 首尾空白 | 自动 trim | 防止视觉混淆 |
+| 敏感词过滤 | **不在本 ADR 范围** | 项目无敏感词过滤服务；如需引入需独立 ADR |
+| null 语义 | 传 `null` 清除 display_name → 前端 fallback 到 username | 传 `undefined` / 不传 = 不修改 |
+
+**zod schema**：
+
+```typescript
+const ProfilePatchSchema = z.object({
+  displayName: z.string().trim().min(1).max(50)
+    .regex(/^[\p{L}\p{N}\p{Emoji_Presentation}\p{Emoji_Modifier_Base}\s\-_.]+$/u, 'displayName 含非法字符')
+    .nullable()
+    .optional(),
+  locale: z.string().min(2).max(10)
+    .regex(/^[a-z]{2}(-[A-Z]{2})?$/, '无效 locale 格式')
+    .optional(),
+  avatarUrl: z.string().url().max(500).nullable().optional(),
+}).refine(
+  (v) => v.displayName !== undefined || v.locale !== undefined || v.avatarUrl !== undefined,
+  { message: '至少需要提供一个字段' }
+)
+```
+
+#### D-140-4 admin 自残保护
+
+选择**沿用现有 `role === 'admin'` 守卫**：admin 不可编辑 admin 用户（含自己）的 email / profile。
+
+**理由**：与 ban/role/delete/reset-password 4 个已有端点一致（违反一致性会破坏 API 表面）；admin 邮箱属高敏感（影响登录凭据恢复）；admin 自编辑应走 `/settings/profile`（独立 follow-up）；未来 super-admin 扩展路径不阻断。
+
+**错误信息**：email 端点 `'不能修改 admin 账号的邮箱'` / profile 端点 `'不能修改 admin 账号的资料'`。
+
+#### D-140-5 R-MID-1 audit 评估
+
+**触发 R-MID-1 7 文件框架**（ADR-121）。
+
+**新增 actionType（2 项）**：
+
+| actionType | 端点 | beforeJsonb | afterJsonb |
+|---|---|---|---|
+| `user.email_change` | `PATCH /admin/users/:id/email` | `{ email: oldEmail }` | `{ email: newEmail }` |
+| `user.profile_update` | `PATCH /admin/users/:id/profile` | `{ displayName, locale, avatarUrl }`（仅含实际变更）| 同 before 结构 |
+
+**新增 targetKind（1 项）**：`'user'` — 与 ADR-139 D-139-6 识别的"`user` targetKind 缺失"对齐补齐。
+
+**migration**：实施卡内补 migration `NNN_audit_log_extend_target_kind.sql`，ALTER admin_audit_log CHECK 约束追加 `'user'`；同时一次性补齐已在 TS 类型中扩展但未在 DB CHECK 中反映的 5 个 targetKind（home_module / source_line_alias / source_route / user_submission / image_health），避免长期漂移。
+
+**R-MID-1 7 文件清单**：
+
+| # | 文件 | 角色 |
+|---|------|------|
+| 1 | `packages/types/src/admin-moderation.types.ts` | (1) union 扩 2 actionType + 1 targetKind |
+| 2 | `apps/api/src/services/AuditLogService.ts` | (2) ACTION_TYPES + TARGET_KINDS 扩 |
+| 3 | `tests/unit/api/audit-log-service-enums-set-equal.test.ts` | (3a) EXPECTED 同步 |
+| 4 | `tests/unit/api/audit-log-coverage.test.ts` | (3b) 镜像 + (4) REQUIRED / PAYLOAD it.each 扩 |
+| 5 | `apps/api/src/routes/admin/users.ts` | 端点 `auditSvc.write({...})` 调用 |
+| 6 | `tests/unit/api/admin-users-edit-audit.test.ts` | payload 内容断言 |
+| 7 | `docs/changelog.md` | CHG-SN-8-FUP-USERS-EDIT-EP 完成备注 |
+
+#### D-140-6 关联 ADR + Schema 影响
+
+**关联 ADR**：
+
+| ADR | 关系 | 说明 |
+|-----|------|------|
+| ADR-003 | 依赖 | JWT 双 Token；email 变更不影响 token（不含 email）|
+| ADR-010 | 参考 | 三级角色 + admin 守卫 |
+| ADR-109 | 依赖 | admin_audit_log schema（本 ADR 扩展 CHECK 约束）|
+| ADR-110 | 对齐 | ApiErrorBody + 零新 ErrorCode（复用 CONFLICT / NOT_FOUND / FORBIDDEN / VALIDATION_ERROR）|
+| ADR-118 | 参考 | 审计视图 API（新 actionType 自动反射到 `/admin/audit/enums`）|
+| ADR-121 | 依赖 | R-MID-1 7 文件框架（本 ADR 触发）|
+| ADR-136 | 参考 | 用户 KPI stats 端点（同域范式对齐）|
+| ADR-139 | 参考 | D-139-6 识别 `user` targetKind 缺失；本 ADR 补齐 |
+
+**Schema 影响**：① users 表新增 `display_name VARCHAR(50) DEFAULT NULL` ② admin_audit_log CHECK 约束扩展为 12 种 target_kind（含 `'user'` + 5 个历史漂移补齐）③ 无邮件验证相关新列（D-140-2 方案 A 直接生效）。
+
+---
+
+### 端点契约
+
+| # | Method | Path | 权限 | Body | Response `data` | 新增 ErrorCode | ADR |
+|---|--------|------|------|------|----------------|---------------|-----|
+| 1 | PATCH | `/admin/users/:id/email` | admin | `{ email: string }` | `{ id, email, previousEmail }` | 无（复用 CONFLICT 409 / NOT_FOUND 404 / FORBIDDEN 403 / VALIDATION_ERROR 422）| ADR-140 |
+| 2 | PATCH | `/admin/users/:id/profile` | admin | `{ displayName?: string \| null, locale?: string, avatarUrl?: string \| null }` | `{ id, displayName, locale, avatarUrl }` | 无（复用 VALIDATION_ERROR 422 / NOT_FOUND 404 / FORBIDDEN 403）| ADR-140 |
+
+---
+
+### 5. SQL / Schema 设计
+
+**Migration A（`NNN_users_add_display_name.sql`）**：
+
+```sql
+BEGIN;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'users' AND column_name = 'display_name'
+  ) THEN
+    ALTER TABLE users ADD COLUMN display_name VARCHAR(50) DEFAULT NULL;
+  END IF;
+END
+$$;
+
+COMMENT ON COLUMN users.display_name
+  IS '用户展示名（可选）；NULL 时前端降级到 username；admin 可编辑（ADR-140）';
+
+COMMIT;
+```
+
+**回滚**：`ALTER TABLE users DROP COLUMN IF EXISTS display_name;`
+
+**Migration B（`NNN_audit_log_extend_target_kind.sql`）**：
+
+```sql
+BEGIN;
+
+ALTER TABLE admin_audit_log DROP CONSTRAINT IF EXISTS admin_audit_log_target_kind_check;
+ALTER TABLE admin_audit_log ADD CONSTRAINT admin_audit_log_target_kind_check
+  CHECK (target_kind IN (
+    'video', 'video_source', 'staging', 'review_label', 'crawler_site', 'system',
+    'home_module', 'source_line_alias', 'source_route', 'user_submission', 'image_health',
+    'user'
+  ));
+
+COMMENT ON COLUMN admin_audit_log.target_kind
+  IS 'CHECK 约束限定 12 种（ADR-140 扩展 user + 历史漂移补齐 6→12）';
+
+COMMIT;
+```
+
+**DB queries**（`apps/api/src/db/queries/users.ts`）：
+
+```sql
+-- updateUserEmail
+UPDATE users SET email = $1 WHERE id = $2 AND deleted_at IS NULL RETURNING id, email
+
+-- updateUserProfile（COALESCE 模式 — 未传字段保持原值；null 显式清除需 Service 层区分 undefined/null）
+UPDATE users
+SET display_name = COALESCE($1, display_name),
+    locale = COALESCE($2, locale),
+    avatar_url = COALESCE($3, avatar_url)
+WHERE id = $4 AND deleted_at IS NULL
+RETURNING id, display_name, locale, avatar_url
+```
+
+---
+
+### 6. Response 结构 / 错误码
+
+**email 成功响应**：
+
+```json
+{ "data": { "id": "uuid", "email": "new@example.com", "previousEmail": "old@example.com" } }
+```
+
+`previousEmail` 字段便于前端展示确认 + 与 audit log `beforeJsonb.email` 对应。
+
+**profile 成功响应**：
+
+```json
+{ "data": { "id": "uuid", "displayName": "新显示名", "locale": "zh-CN", "avatarUrl": "https://..." } }
+```
+
+**错误码**（全部复用 ADR-110 ERRORS 字典，零新增）：
+
+| CODE | HTTP | 触发条件 | 端点 |
+|------|------|----------|------|
+| `NOT_FOUND` | 404 | 目标用户不存在 | 两端点 |
+| `FORBIDDEN` | 403 | 目标 role === 'admin' | 两端点 |
+| `VALIDATION_ERROR` | 422 | zod 校验失败 | 两端点 |
+| `CONFLICT` | 409 | 新邮箱已被其他用户注册 | email 端点 |
+
+---
+
+### 7. 关联 ADR
+
+详见 D-140-6。
+
+---
+
+### 8. R-MID-1 文件清单
+
+**适用**。详见 D-140-5 7 文件清单。
+
+---
+
+### 9. 测试 surface
+
+22 用例（11 email + 9 profile + 2 audit + 通用权限 / race condition），见 D-140-5 + 子代理评审产出表（具体 it() 描述实施卡内落地，文件路径 `tests/unit/api/admin-users-edit.test.ts` + `tests/unit/api/admin-users-edit-audit.test.ts`）。
+
+---
+
+### 10. 风险与回退
+
+| # | 风险 | 严重性 | 缓解 |
+|---|------|--------|------|
+| R-140-1 | admin 改邮箱直接生效，无用户确认 | 中 | audit log 完整 before/after；前端 toast 提示；N1-140-1 升级路径 |
+| R-140-2 | email 唯一性 race condition | 低 | DB UNIQUE 保底 + PG 23505 → 409 |
+| R-140-3 | display_name 新列对现有查询的影响 | 低 | nullable DEFAULT NULL；`listAdminUsers` 显式列需同步加 |
+| R-140-4 | admin_audit_log CHECK 修改影响现有 audit 写入 | 低 | ALTER 仅扩展（不删除）；事务内执行 |
+
+**回退路径**：① 代码 revert 2 端点 ② Schema 保留 nullable 列（旧代码不受影响）③ CHECK 约束扩展向后兼容无需回退。
+
+---
+
+### 11. 非阻塞建议 / N1
+
+**N1-140-1（邮件通知升级路径）**：邮件服务上线后（SMTP KV / `#G-settings-webhook-impl` 闭合），email 端点可升级方案 C（通知旧邮箱）或方案 B（PENDING_EMAIL + 用户确认）。端点签名不变（Body 保持 `{ email }`），响应 data 增加 `pendingEmail` 可选字段。**状态**：待邮件服务上线触发。
+
+**N1-140-2（email 变更后 session invalidate）**：当前 email 变更不触发 session invalidate（access token 不含 email）。如安全评审需"改邮箱后强制重登"，可复用 ADR-139 `role_changed_at` 模式新增 `email_changed_at`。**状态**：待安全评审触发。
+
+---
+
+**后续解锁卡**：
+- **CHG-SN-8-FUP-USERS-EDIT-EP**：按本 ADR 实施 2 migration + 2 route handler + DB queries + R-MID-1 7 文件 + 测试 surface #1-#22 + 前端消费（columns actions 列加「改邮箱」/「编辑资料」按钮 + 对应 Modal）
+
+
