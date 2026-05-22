@@ -44,13 +44,12 @@
 - **现状**：VideoListClient.tsx:685 `<button disabled title="功能开发中（follow-up VIDEO-MANUAL-ADD）">手动添加视频</button>`；H2 死按钮已避免（disabled+title 不算死按钮），但实际功能未实装
 - **建议**：将 disabled 按钮改造为「直接打开 VideoEditDrawer 创建模式」+ 后端 POST 端点；或保留 disabled 不补
 
-### #G-moderation-batch-ui · 批量审核独立入口缺失
+### #G-moderation-batch-ui · 批量审核独立入口
 
-- **页面**：P-moderation §4.2
-- **状态**：⬜ 未启动
+- **页面**：P-moderation §4.2 / §3.5（新增）
+- **状态**：✅ 已闭合（2026-05-21 / CHG-SN-8-GAPS-MOD-BATCH）
 - **优先级**：P1（审核效率）
-- **现象**：后端 `batch-approve` / `batch-reject` 端点已存在（apps/api/src/routes/admin/moderation.ts:248/279），但前端无对应批量操作 UI；审核员只能 J/K 单条处理
-- **建议**：审核台增「批量模式」toggle → 多选 → 批量动作；或在 videos 表批量动作内复用
+- **修复**：ModerationConsole 增「批量模式」toggle（位于 approveAndPublishOn 旁；仅 pending tab）+ ModListRow checkbox 支持 + bulk action bar（fixed bottom：批量通过 / 批量拒绝 / 清除选择）+ batchApproveVideos / batchRejectVideos lib 封装
 
 ### #G-moderation-preset-team · FilterPreset 多账号共享缺失
 

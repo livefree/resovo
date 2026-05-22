@@ -127,6 +127,33 @@ export async function rejectVideo(
   })
 }
 
+// ── CHG-SN-8-GAPS-MOD-BATCH · 批量审核（GAPS #G-moderation-batch-ui）
+
+export interface BatchActionResult {
+  readonly ok: number
+  readonly failed: number
+  readonly failedIds?: readonly string[]
+}
+
+/** 批量通过；后端 POST /admin/moderation/batch-approve（ids 1-50） */
+export async function batchApproveVideos(ids: readonly string[]): Promise<BatchActionResult> {
+  const res = await apiClient.post<{ data: BatchActionResult }>('/admin/moderation/batch-approve', { ids })
+  return res.data
+}
+
+/** 批量拒绝；后端 POST /admin/moderation/batch-reject（含 reason + 可选 labelKey） */
+export async function batchRejectVideos(
+  ids: readonly string[],
+  reason: string,
+  labelKey?: string,
+): Promise<BatchActionResult> {
+  const res = await apiClient.post<{ data: BatchActionResult }>(
+    '/admin/moderation/batch-reject',
+    { ids, reason, ...(labelKey ? { labelKey } : {}) },
+  )
+  return res.data
+}
+
 export async function reopenVideo(id: string): Promise<void> {
   await apiClient.post<unknown>(`/admin/moderation/${id}/reopen`, {})
 }

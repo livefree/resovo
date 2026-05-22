@@ -215,6 +215,25 @@ export function ModerationConsole(): React.ReactElement {
 
   const v = pendingVideos[activeIdx] ?? null
 
+  // CHG-SN-8-GAPS-MOD-BATCH：批量审核模式
+  const [batchModeOn, setBatchModeOn] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(new Set())
+  const [batchPending, setBatchPending] = useState(false)
+  const [batchRejectModalOpen, setBatchRejectModalOpen] = useState(false)
+  const toggleSelectId = useCallback((id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }, [])
+  const clearSelection = useCallback(() => setSelectedIds(new Set()), [])
+  // 退出批量模式时清空选择
+  useEffect(() => {
+    if (!batchModeOn) clearSelection()
+  }, [batchModeOn, clearSelection])
+
   // CHG-SN-8-06：「通过即上架」开关 — sessionStorage 持久化
   const [approveAndPublishOn, setApproveAndPublishOnRaw] = useState(false)
   useEffect(() => {
@@ -245,6 +264,48 @@ export function ModerationConsole(): React.ReactElement {
       setError(M.errors.approveFailed)
     }
   }, [pendingVideos, activeIdx, setActiveIdx, approveAndPublishOn])
+
+  // CHG-SN-8-GAPS-MOD-BATCH：批量通过 / 拒绝
+  const handleBatchApprove = useCallback(async () => {
+    if (selectedIds.size === 0) return
+    if (!confirm(`确定批量通过 ${selectedIds.size} 条视频？通过后视为「通过 → 暂存」（与 approveAndPublishOn 无关，批量端点固定 approve action）。`)) return
+    setBatchPending(true)
+    const ids = [...selectedIds]
+    try {
+      const result = await api.batchApproveVideos(ids)
+      // 乐观更新：移除已通过的 ids（保守按全部成功移除；后端可能部分失败但 result.ok 反映真实）
+      setPendingVideos(prev => prev.filter(v => !selectedIds.has(v.id)))
+      setTotalPending(t => Math.max(0, t - result.ok))
+      clearSelection()
+      setBatchModeOn(false)
+      toast?.message && undefined
+      setError(null)
+      // 用 setToast (existing) 显示反馈
+      setToast({ message: `批量通过 ${result.ok} 条${result.failed > 0 ? `（失败 ${result.failed}）` : ''}`, key: Date.now() })
+    } catch {
+      setError(M.errors.approveFailed)
+    } finally {
+      setBatchPending(false)
+    }
+  }, [selectedIds, clearSelection, toast])
+
+  const handleBatchRejectSubmit = useCallback(async (payload: RejectModalSubmitPayload) => {
+    if (selectedIds.size === 0) return
+    setRejectSubmitting(true)
+    try {
+      const result = await api.batchRejectVideos([...selectedIds], payload.reason ?? '批量拒绝', payload.labelKey)
+      setPendingVideos(prev => prev.filter(v => !selectedIds.has(v.id)))
+      setTotalPending(t => Math.max(0, t - result.ok))
+      clearSelection()
+      setBatchModeOn(false)
+      setBatchRejectModalOpen(false)
+      setToast({ message: `批量拒绝 ${result.ok} 条${result.failed > 0 ? `（失败 ${result.failed}）` : ''}`, key: Date.now() })
+    } catch {
+      setError(M.errors.rejectFailed)
+    } finally {
+      setRejectSubmitting(false)
+    }
+  }, [selectedIds, clearSelection])
 
   const handleRejectSubmit = useCallback(async (payload: RejectModalSubmitPayload) => {
     const current = pendingVideos[activeIdx]
@@ -470,6 +531,32 @@ export function ModerationConsole(): React.ReactElement {
             <span>{approveAndPublishOn ? '✓ 通过即上架' : '通过 → 暂存'}</span>
           </label>
         )}
+        {tab === 'pending' && (
+          <label
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '4px 10px',
+              fontSize: 'var(--font-size-xs)',
+              color: 'var(--fg-default)',
+              cursor: 'pointer',
+              userSelect: 'none',
+              marginLeft: 8,
+            }}
+            data-testid="moderation-batch-mode-toggle"
+            title="开启批量模式：左队列改为多选 checkbox，J/K 键盘流暂停"
+          >
+            <input
+              type="checkbox"
+              checked={batchModeOn}
+              onChange={(e) => setBatchModeOn(e.target.checked)}
+              data-testid="moderation-batch-mode-toggle-input"
+              aria-label="批量模式"
+            />
+            <span>{batchModeOn ? `✓ 批量模式（${selectedIds.size}）` : '批量模式'}</span>
+          </label>
+        )}
       </div>
 
       {/* Tab content */}
@@ -508,7 +595,15 @@ export function ModerationConsole(): React.ReactElement {
                       ) : (
                         <>
                           {pendingVideos.map((it, i) => (
-                            <ModListRow key={it.id} it={it} active={i === activeIdx} onClick={() => setActiveIdx(i)} />
+                            <ModListRow
+                              key={it.id}
+                              it={it}
+                              active={i === activeIdx}
+                              onClick={() => setActiveIdx(i)}
+                              selectionMode={batchModeOn}
+                              selected={selectedIds.has(it.id)}
+                              onToggleSelect={() => toggleSelectId(it.id)}
+                            />
                           ))}
                           <div style={{ padding: 14, textAlign: 'center', color: 'var(--fg-muted)', fontSize: 'var(--font-size-xxs)' }}>
                             {loadingMore ? M.pending.loadingMore : nextCursor ? (
@@ -569,6 +664,67 @@ export function ModerationConsole(): React.ReactElement {
         submitting={rejectSubmitting}
         title={M.rejectModal.title}
       />
+
+      {/* CHG-SN-8-GAPS-MOD-BATCH：批量拒绝 modal（复用 RejectModal）*/}
+      <RejectModal
+        open={batchRejectModalOpen}
+        onClose={() => setBatchRejectModalOpen(false)}
+        labels={reviewLabels}
+        onSubmit={handleBatchRejectSubmit}
+        submitting={rejectSubmitting}
+        title={`批量拒绝 ${selectedIds.size} 条`}
+      />
+
+      {/* CHG-SN-8-GAPS-MOD-BATCH：bulk action bar（fixed bottom）*/}
+      {batchModeOn && selectedIds.size > 0 && (
+        <div
+          style={{
+            position: 'fixed',
+            left: 0,
+            right: 0,
+            bottom: 0,
+            display: 'flex',
+            justifyContent: 'center',
+            gap: 12,
+            padding: '12px 16px',
+            background: 'var(--bg-surface-elevated)',
+            borderTop: '2px solid var(--accent-default)',
+            boxShadow: '0 -4px 12px rgba(0,0,0,0.15)',
+            zIndex: 50,
+          }}
+          data-testid="moderation-batch-bar"
+        >
+          <span style={{ alignSelf: 'center', fontSize: 'var(--font-size-sm)', color: 'var(--fg-muted)' }}>
+            已选 {selectedIds.size} 条
+          </span>
+          <button
+            type="button"
+            style={{ ...BTN_PRIMARY, fontSize: 'var(--font-size-sm-tight)' }}
+            disabled={batchPending}
+            onClick={() => void handleBatchApprove()}
+            data-testid="moderation-batch-approve"
+          >
+            {batchPending ? '处理中…' : `✓ 批量通过 (${selectedIds.size})`}
+          </button>
+          <button
+            type="button"
+            style={{ ...BTN_SM, color: 'var(--state-danger-fg)', borderColor: 'var(--state-danger-border)', fontSize: 'var(--font-size-sm-tight)' }}
+            disabled={batchPending}
+            onClick={() => setBatchRejectModalOpen(true)}
+            data-testid="moderation-batch-reject"
+          >
+            ✕ 批量拒绝 ({selectedIds.size})
+          </button>
+          <button
+            type="button"
+            style={{ ...BTN_SM, fontSize: 'var(--font-size-sm-tight)' }}
+            onClick={clearSelection}
+            data-testid="moderation-batch-clear"
+          >
+            清除选择
+          </button>
+        </div>
+      )}
 
       {/* Video edit drawer (CHG-SN-4-FIX-A · plan v1.6 §1 G1) */}
       <VideoEditDrawer

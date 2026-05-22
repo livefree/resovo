@@ -121,6 +121,21 @@
 - **持久化**：sessionStorage `admin.moderation.presets.<tab>.v1`
 - **多账号共享**：⬜ 未实装（GAPS.md #G-moderation-preset-team）
 
+### 3.5 批量审核（CHG-SN-8-GAPS-MOD-BATCH）
+
+> **用途**：审核员对显然合格 / 显然不合格的批量视频快速处理，提高效率（替代逐条 J/K）。
+
+- **位置**：Segment tabs 右侧「批量模式」toggle（仅 pending tab 显示）
+- **开启批量模式**：
+  - 左队列每行显示 checkbox + 单击行 = toggle 选中（不再跳详情）
+  - J/K 流暂停（避免误操作）
+- **选中 ≥ 1 行**：屏幕底部出现 bulk action bar（fixed bottom）：
+  - 「✓ 批量通过 (N)」primary：confirm → POST `/admin/moderation/batch-approve { ids }` → 队列移除 + toast 反馈
+  - 「✕ 批量拒绝 (N)」danger：弹 RejectModal（reason + label）→ POST `/admin/moderation/batch-reject { ids, reason, labelKey }`
+  - 「清除选择」：清空 selectedIds + 关 bulk bar
+- **后端约束**：每批 max 50 ids（端点 zod 限制）；部分失败 toast 显示「批量通过 X 条（失败 Y）」
+- **退出批量模式**：toggle off → 清空选择 + 恢复 J/K 流
+
 ## 4. 进阶操作
 
 ### 4.1 重开审核（rejected → pending）
@@ -129,9 +144,9 @@
 - 调 `POST /admin/moderation/:id/reopen`
 - 影响：清空 review_reason + 重置 reviewedAt/reviewedBy
 
-### 4.2 批量审核（pending → approved）
+### 4.2 批量审核
 
-- 入口：⬜ **未实装独立批量入口**（GAPS.md #G-moderation-batch-ui）；后端 `batch-approve` 端点存在但前端无 UI
+- **状态**：✅ 已实装（详见 §3.5）— GAPS.md #G-moderation-batch-ui 闭合
 
 ## 5. 字段含义
 

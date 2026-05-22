@@ -8,6 +8,12 @@ interface ModListRowProps {
   readonly it: VideoQueueRow
   readonly active: boolean
   readonly onClick: () => void
+  /** CHG-SN-8-GAPS-MOD-BATCH：批量模式开关；on 时显 checkbox 替代单击直跳 */
+  readonly selectionMode?: boolean
+  /** 选中状态（仅 selectionMode=true 时消费） */
+  readonly selected?: boolean
+  /** checkbox toggle 回调（selectionMode=true 时必填） */
+  readonly onToggleSelect?: () => void
 }
 
 const ROW_BASE: React.CSSProperties = {
@@ -23,20 +29,48 @@ const THUMB_FALLBACK_STYLE: React.CSSProperties = {
   color: 'var(--fg-muted)',
 }
 
-export function ModListRow({ it, active, onClick }: ModListRowProps): React.ReactElement {
+export function ModListRow({
+  it,
+  active,
+  onClick,
+  selectionMode = false,
+  selected = false,
+  onToggleSelect,
+}: ModListRowProps): React.ReactElement {
+  const handleRowClick = () => {
+    if (selectionMode && onToggleSelect) {
+      onToggleSelect()
+    } else {
+      onClick()
+    }
+  }
   return (
     <div
       role="option"
-      aria-selected={active}
-      onClick={onClick}
+      aria-selected={selectionMode ? selected : active}
+      onClick={handleRowClick}
       style={{
         ...ROW_BASE,
-        background: active ? 'var(--admin-accent-soft)' : 'transparent',
-        borderLeft: `2px solid ${active ? 'var(--accent-default)' : 'transparent'}`,
+        background: selectionMode
+          ? (selected ? 'var(--state-success-bg, var(--state-ok-soft))' : 'transparent')
+          : (active ? 'var(--admin-accent-soft)' : 'transparent'),
+        borderLeft: `2px solid ${selectionMode ? (selected ? 'var(--state-success-fg)' : 'transparent') : (active ? 'var(--accent-default)' : 'transparent')}`,
       }}
       data-mod-list-row
       data-video-id={it.id}
+      data-batch-selected={selectionMode && selected ? '' : undefined}
     >
+      {selectionMode && (
+        <input
+          type="checkbox"
+          checked={selected}
+          onChange={() => onToggleSelect?.()}
+          onClick={(e) => e.stopPropagation()}
+          style={{ alignSelf: 'center', cursor: 'pointer' }}
+          data-testid={`mod-list-checkbox-${it.id}`}
+          aria-label={`选择 ${it.title}`}
+        />
+      )}
       <Thumb
         src={it.coverUrl}
         size="poster-sm"

@@ -14586,3 +14586,46 @@ H2 硬约束（零死按钮）在用户菜单维度起步完成。
 
 Cleanup-Audit: GAPS 2 ✅ 闭合 + 1 ⚠️ 升级
 Plan-Revision: 无
+
+## [CHG-SN-8-GAPS-MOD-BATCH] 审核台批量审核 UI（GAPS #G-moderation-batch-ui P1 闭合）
+
+- **完成时间**：2026-05-21
+- **记录时间**：2026-05-21
+- **执行模型**：claude-opus-4-7
+- **子代理**：无
+- **关联 SEQ**：SEQ-20260521-06（GAPS-BATCH-2 / P1 高 ROI）
+
+### 修改文件
+- `apps/server-next/src/lib/moderation/api.ts`：
+  - 新增 `BatchActionResult` interface
+  - 新增 `batchApproveVideos(ids)` → POST /admin/moderation/batch-approve
+  - 新增 `batchRejectVideos(ids, reason, labelKey?)` → POST /admin/moderation/batch-reject
+- `apps/server-next/src/app/admin/moderation/_client/ModListRow.tsx`：
+  - props 增 `selectionMode?: boolean` + `selected?: boolean` + `onToggleSelect?: () => void`
+  - selectionMode 开时左侧渲染 checkbox；单击 row 触发 toggle 而非 onClick 跳详情
+  - 选中视觉：accent-soft 背景 + state-success 左边条 + data-batch-selected 属性
+- `apps/server-next/src/app/admin/moderation/_client/ModerationConsole.tsx`：
+  - 增 `batchModeOn` state + `selectedIds: ReadonlySet<string>` + `toggleSelectId` + `clearSelection` + useEffect 退出批量模式清选
+  - 增 `handleBatchApprove`（confirm + batchApproveVideos + 乐观更新 + 反馈 toast + 退出批量）
+  - 增 `handleBatchRejectSubmit`（batchRejectVideos + 同上）
+  - Segment tabs 区右侧紧邻 approveAndPublishOn 加「批量模式」toggle（仅 pending tab）
+  - 底部 fixed bulk action bar（仅 batchModeOn + 选中≥1 时显）：批量通过 primary / 批量拒绝 danger / 清除选择
+  - ModListRow 调用补 selectionMode / selected / onToggleSelect props
+  - 复用 RejectModal 作批量拒绝（title「批量拒绝 N 条」）
+- `tests/unit/components/server-next/admin/moderation/ModerationBatch.test.tsx` 新建（5 用例 PASS）
+- `docs/manual/20-pages/P-moderation.md` §3.5 完整章节 + §4.2 标 ✅
+- `docs/manual/GAPS.md` #G-moderation-batch-ui 状态 ✅
+
+### 验收
+- typecheck PASS
+- lint PASS
+- verify:manual-coverage PASS
+- moderation batch test 5/5 PASS
+
+### 价值
+- 审核效率大幅提升：审核员对显然合格/不合格批量视频可一次性处理（max 50 ids/批）
+- 后端 batch-approve / batch-reject 端点首次前端消费
+- P1 GAPS 第 2 条闭合
+
+Cleanup-Audit: #G-moderation-batch-ui ✅；P1 主线 GAPS 闭合 3/5
+Plan-Revision: 无
