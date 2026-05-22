@@ -131,12 +131,13 @@
 - **NEGATED 理由**：实证 `SettingsContainer.tsx:161-163` 注释明示：CHG-SN-6-AUDIT-DEBOUNCE-FIX 已删除「保存所有更改」按钮，理由「5 Tab 各自保存模型下无语义」（各 Tab 独立 debounced save 模式）。设计稿要求 vs 架构决策冲突由 CHG-SN-6 决议；后续不再追踪本 GAP
 - **NEGATED 引用范式**：CHG-SN-7-LOW-2 双子卡决策树 / CHG-SN-8-07 NEGATED 同范式
 
-### #G-audit-rollback-universal · 审计日志「回滚」按钮通用未实装
+### #G-audit-rollback-universal · 审计日志「回滚」按钮
 
 - **页面**：P-audit §3.4
-- **状态**：⬜ 未启动
+- **状态**：⚠️ 已部分实装（CHG-SN-8-GAPS-AUDIT-ROLLBACK 消费层补齐 / 通用后端端点 follow-up：CHG-SN-8-FUP-AUDIT-ROLLBACK-EP）
 - **优先级**：P2
-- **现象**：UI 占位；仅特定 actionType 可走对应业务反向 API
+- **现象（已部分闭合）**：通用后端端点路线（POST /admin/audit/logs/:id/rollback + reverse_action 映射 + 跨表 schema 回滚）需 0.5-0.8w + ADR-138 + Opus 评审；本卡走**消费层补齐** — AuditColumns 新增 actions 列 + 「回滚」xs danger button；按 actionType 路由到对应业务页的已有反向 API（如 video.approve → /admin/moderation?id=X&action=reopen / staging.publish → /admin/staging?id=X&action=revert / video.merge → /admin/merge?tab=merged）；不可回滚类型（crawler/system/image_health 等单向操作）disabled + tooltip（H2 豁免范式）；未知 actionType 按 targetKind fallback 跳详情页
+- **通用端点 follow-up**：CHG-SN-8-FUP-AUDIT-ROLLBACK-EP — 起 ADR-138 设计 `POST /admin/audit/logs/:id/rollback` + reverse_action 映射协议（消费已有 before_jsonb / after_jsonb）；需 Opus 评审
 
 ### #G-audit-time-travel · 审计日志时间穿梭未实装
 

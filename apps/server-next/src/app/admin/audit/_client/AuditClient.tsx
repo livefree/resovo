@@ -18,6 +18,8 @@
  */
 
 import { useState, useEffect, useMemo, useCallback, type CSSProperties } from 'react'
+import { useRouter } from 'next/navigation'
+import { resolveRollbackTarget } from '@/lib/audit/rollback-routes'
 import {
   DataTable,
   EmptyState,
@@ -187,7 +189,26 @@ export function AuditClient() {
     }
   }, [toast])
 
-  const columns = useMemo(() => buildAuditColumns(), [])
+  const router = useRouter()
+
+  // CHG-SN-8-GAPS-AUDIT-ROLLBACK：消费层「回滚」按钮 — 按 actionType 跳对应业务页（零新端点）
+  const handleRollback = useCallback(
+    (row: AdminAuditLogListRow) => {
+      const target = resolveRollbackTarget(row)
+      if (target.href == null) {
+        toast.push({
+          title: '不可回滚',
+          description: target.disabledReason ?? '此操作类型暂未支持回滚',
+          level: 'warn',
+        })
+        return
+      }
+      router.push(target.href)
+    },
+    [router, toast],
+  )
+
+  const columns = useMemo(() => buildAuditColumns({ onRollback: handleRollback }), [handleRollback])
 
   const actionTypeOptions = useMemo<readonly AdminSelectOption[]>(
     () => (enums?.actionTypes ?? []).map((t) => ({ value: t, label: t })),

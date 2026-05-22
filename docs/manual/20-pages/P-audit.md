@@ -60,8 +60,21 @@
 
 ### 3.4 「回滚」（行尾 danger 按钮）
 
-- **状态**：⬜ **UI 占位但未通用实装**（仅特定 actionType 如 user.ban / video.approve 可走对应业务的反向 API）
-- **登记 GAPS.md #G-audit-rollback-universal**
+- **状态**：⚠️ 消费层已实装（CHG-SN-8-GAPS-AUDIT-ROLLBACK / 通用后端 endpoint follow-up：CHG-SN-8-FUP-AUDIT-ROLLBACK-EP）
+- **行为**：按 actionType 跳转对应业务页执行反向操作（零新后端端点）：
+  - `video.approve` / `video.reject_labeled` → `/admin/moderation?id=<videoId>&action=reopen`（重开审核）
+  - `video.reopen` → `/admin/moderation?id=<videoId>`（重新审核）
+  - `staging.publish` / `staging.batch_publish` → `/admin/staging?id=<videoId>&action=revert`（回滚到暂存）
+  - `staging.revert` → `/admin/moderation?id=<videoId>`（重新审核可再 approve_and_publish）
+  - `video.merge` → `/admin/merge?tab=merged`（撤销合并）
+  - `video.unmerge` → `/admin/merge?tab=merged`（重新合并）
+  - `video.split` → `/admin/merge?tab=split`（撤销拆分）
+  - `video_source.toggle` / `disable_dead_batch` → `/admin/sources?videoId=<id>`
+  - `home_module.*` → `/admin/home`（首页编辑器内回滚）
+  - `user_submission.action` → `/admin/user-submissions`
+- **不可回滚类型**（按钮 disabled + tooltip）：`crawler.*` / `crawler_run.*` / `crawler_site.*` / `image_health.*` / `system.*` / `sources.route_action` / `source_line_alias.upsert` / `video.refetch_sources` — 这些是采集/重扫/导入等单向只增操作，无反向语义
+- **未知 actionType**：按 targetKind fallback 跳详情页（video → /admin/videos / user → /admin/users 等）
+- **通用端点 follow-up**：CHG-SN-8-FUP-AUDIT-ROLLBACK-EP — 起 ADR-138 设计 `POST /admin/audit/logs/:id/rollback` + reverse_action 映射协议（消费已有 before_jsonb / after_jsonb 一键回滚）；需 Opus 评审
 
 ## 4. 进阶操作
 
@@ -99,7 +112,8 @@
 
 | 现象 | 原因 | 解决 |
 |---|---|---|
-| 「回滚」按钮无响应 | 通用回滚未实装（GAPS）| 走对应业务页反向操作 |
+| 「回滚」按钮 disabled | actionType 是单向操作（crawler/system/image_health 等无反向） | 该操作无法回滚 / follow-up CHG-SN-8-FUP-AUDIT-ROLLBACK-EP 通用端点 |
+| 「回滚」按钮点击未触发业务回退 | 当前跳转到业务页面，需手动执行二次确认 | 跳过去后按业务页面的反向 action（如 moderation reopen / staging revert） |
 | 看不到某用户的审计 | filter 时间范围 / 用户名拼写 | 调宽 filter |
 | 「时间穿梭」按钮缺失 | 未实装 | GAPS.md #G-audit-time-travel |
 | 导出 CSV 字段不全 | csv-export 仅可见列 | 先调列显示 → 再导 |

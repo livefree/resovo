@@ -6,9 +6,18 @@ import {
   type TableColumn,
 } from '@resovo/admin-ui'
 import type { AdminAuditLogListRow } from '@resovo/types'
+import { resolveRollbackTarget } from '@/lib/audit/rollback-routes'
+
+export interface AuditColumnsOptions {
+  /** CHG-SN-8-GAPS-AUDIT-ROLLBACK：行尾回滚 handler — 由消费方注入（router.push / toast 反馈） */
+  readonly onRollback?: (row: AdminAuditLogListRow) => void
+}
 
 // CHG-SN-6-RETRO-3-C / ultrareview P2-6：4 cell 沉淀到 admin-ui，AuditClient 消费切换
-export function buildAuditColumns(): readonly TableColumn<AdminAuditLogListRow>[] {
+// CHG-SN-8-GAPS-AUDIT-ROLLBACK：新增 actions 列 + 回滚按钮（消费层补齐）
+export function buildAuditColumns(
+  options: AuditColumnsOptions = {},
+): readonly TableColumn<AdminAuditLogListRow>[] {
   return [
     {
       id: 'createdAt',
@@ -69,6 +78,42 @@ export function buildAuditColumns(): readonly TableColumn<AdminAuditLogListRow>[
       cell: ({ row }) => (
         <CodeText value={row.requestId} muted dataAttr={{ 'data-request-id': row.requestId ?? '' }} />
       ),
+    },
+    {
+      id: 'actions',
+      header: '操作',
+      accessor: () => '',
+      width: 100,
+      defaultVisible: true,
+      cell: ({ row }) => {
+        const target = resolveRollbackTarget(row)
+        const disabled = target.href == null
+        return (
+          <button
+            type="button"
+            disabled={disabled}
+            onClick={(ev) => {
+              ev.stopPropagation() // 不触发 onRowClick 抽屉
+              options.onRollback?.(row)
+            }}
+            data-audit-action="rollback"
+            data-action-type={row.actionType}
+            data-disabled={disabled ? 'true' : 'false'}
+            title={disabled ? target.disabledReason : `跳转：${target.label}`}
+            style={{
+              padding: '2px 8px',
+              fontSize: 'var(--font-size-xxs)',
+              borderRadius: 'var(--radius-sm)',
+              border: '1px solid var(--border-default)',
+              background: disabled ? 'var(--bg-disabled)' : 'var(--bg-surface)',
+              color: disabled ? 'var(--fg-muted)' : 'var(--state-error-fg)',
+              cursor: disabled ? 'not-allowed' : 'pointer',
+            }}
+          >
+            {target.label}
+          </button>
+        )
+      },
     },
   ]
 }

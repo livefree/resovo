@@ -27,6 +27,18 @@ const getAdminAuditLogDetailMock = vi.fn()
 const getAdminAuditEnumsMock = vi.fn()
 const toastPushMock = vi.fn()
 
+// CHG-SN-8-GAPS-AUDIT-ROLLBACK：AuditClient 新增 useRouter 调用（回滚按钮跳转）
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({
+    push: vi.fn(),
+    replace: vi.fn(),
+    back: vi.fn(),
+    forward: vi.fn(),
+    refresh: vi.fn(),
+    prefetch: vi.fn(),
+  }),
+}))
+
 vi.mock('../../../../../../apps/server-next/src/lib/audit/api', () => ({
   listAdminAuditLogs: (...args: unknown[]) => listAdminAuditLogsMock(...args),
   getAdminAuditLogDetail: (...args: unknown[]) => getAdminAuditLogDetailMock(...args),

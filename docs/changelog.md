@@ -14763,3 +14763,40 @@ Plan-Revision: 无
 Cleanup-Audit: #G-home-brand-multi ✅
 Plan-Revision: 无
 
+---
+
+## [CHG-SN-8-GAPS-AUDIT-ROLLBACK] 审计行尾「回滚」按钮（#G-audit-rollback-universal 消费层补齐）
+
+- **完成时间**：2026-05-21
+- **记录时间**：2026-05-21 20:28
+- **执行模型**：claude-opus-4-7
+- **子代理**：无（消费层补齐 / 不动后端 / 不起 ADR）
+- **修改文件**：
+  - `apps/server-next/src/lib/audit/rollback-routes.ts` — 新建；`resolveRollbackTarget(row)` 覆盖 40 actionType → RollbackTarget 映射（8 类业务页跳转 + 22 类单向 disabled + targetKind fallback）
+  - `apps/server-next/src/app/admin/audit/_client/AuditColumns.tsx` — buildAuditColumns 加 `options.onRollback` callback；新增 `actions` 列（danger xs button + disabled 状态视觉 + tooltip）
+  - `apps/server-next/src/app/admin/audit/_client/AuditClient.tsx` — useRouter + handleRollback（router.push / disabled 时 warn toast）；columns useMemo deps 含 handleRollback
+  - `tests/unit/server-next/audit/rollback-routes.test.ts` — 新建 12 用例 PASS
+  - `tests/unit/components/server-next/admin/audit/AuditClient.test.tsx` — 补 `vi.mock('next/navigation')` stub（与 CHG-SN-8-04-N1 顺手清 30 测试预存红同范式预防性补全）
+  - `docs/manual/GAPS.md` — #G-audit-rollback-universal ⬜ → ⚠️；登记通用端点 follow-up CHG-SN-8-FUP-AUDIT-ROLLBACK-EP
+  - `docs/manual/20-pages/P-audit.md` §3.4 完整重写（8 类跳转表 + 22 类不可回滚类型 + fallback 规则）；§7 FAQ 2 行
+  - `docs/task-queue.md` SEQ-20260521-06 #18 子卡 ✅
+  - `docs/tasks.md` 清卡片
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - 通用后端端点路线（POST /admin/audit/logs/:id/rollback + reverse_action 映射 + 跨表 schema 回滚）需 0.5-0.8w + ADR-138 + Opus 评审，超出本卡范围；登记 CHG-SN-8-FUP-AUDIT-ROLLBACK-EP follow-up
+  - 消费层补齐范式：未支持类型按 H2「零死按钮」豁免（disabled + tooltip + cursor: not-allowed），与 P-videos「+ 添加视频」按钮同范式
+  - 跳转复用已有反向 API：moderation reopen / staging revert / merge unmerge / home edit 等都是已存功能；本卡是入口聚合而非新功能
+
+### 验收
+- typecheck PASS / lint PASS / verify:adr-contracts PASS / verify:manual-coverage PASS
+- 全 unit 4453 PASS（+12 rollback-routes + 0 net AuditClient/15 PASS）
+
+### 价值
+- P2 GAPS #G-audit-rollback-universal 推进到 ⚠️ 消费层闭合（设计稿要求行尾「回滚」按钮可见 + 可用）
+- 审计员从 audit 页可一键跳转到反向操作业务页（替代手动拼 URL）
+- 通用后端端点 follow-up 立独立卡
+
+Cleanup-Audit: #G-audit-rollback-universal ⚠️（消费层完成 / 通用端点 follow-up CHG-SN-8-FUP-AUDIT-ROLLBACK-EP 待立）
+Plan-Revision: 无
+
