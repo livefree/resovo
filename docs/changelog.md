@@ -15514,3 +15514,48 @@ Plan-Revision: 无（R-MID-1 7 文件框架范式直接套用）
 Cleanup-Audit: ADR-138 N1-138-2 ✅ 闭合 / force 参数仅跳过 stale 检测 / 其它守卫保持 / audit 追溯 force flag
 Plan-Revision: 无（N1 派生按 ADR-138 N1-138-2 既定建议实施）
 
+---
+
+## [CHG-SN-8-FUP-AUDIT-ROLLBACK-HANDLERS] ADR-138 N1-138-1 P1 闭合 — 注册 video.approve + video.reject_labeled reverse_handler
+
+- **完成时间**：2026-05-22
+- **记录时间**：2026-05-22 16:42
+- **执行模型**：claude-opus-4-7
+- **子代理**：无（N1 派生 / 复用 ROLLBACK_HANDLER_REGISTRY 扩展点 / 无新 ADR）
+- **依赖**：CHG-SN-8-FUP-AUDIT-ROLLBACK-EP ✅（commit c8a2cb33）
+- **修改文件**（3 文件 + 4 doc）：
+  - `apps/api/src/services/AuditRollbackService.ts`：
+    - 新增 2 个 reverse_handler：`rollbackVideoApproveHandler` (UPDATE videos SET review_status = 'pending_review') + `rollbackVideoRejectLabeledHandler` (UPDATE + 清 review_label_id)；handler 直接同事务 client 写 SQL（避免 ModerationService.reopen / transitionVideoState 嵌套事务）
+    - ROLLBACK_HANDLER_REGISTRY 初始化为含 2 项 Map（之前为空）
+    - UNSUPPORTED_ACTION_TYPES Set 移除 video.approve + video.reject_labeled（注释 "32→30 项" + 解释 video.reopen 单独保留因反向语义模糊）
+    - 顺手修 TARGET_KIND_TABLE_MAP home_module softDeleteColumn 'deleted_at' → null（schema 实证：home_modules 表无 deleted_at 列 / hard delete / migration 050 未加）
+  - `tests/unit/api/audit-rollback.test.ts`：
+    - 扩 2 用例 PASS（#22 video.approve handler → UPDATE review_status=pending_review / #23 video.reject_labeled handler → UPDATE + 清 review_label_id；两者均 bypass 通用路径 rollbackAuditLogTarget）
+    - 修 #3 home_module.update 测试断言：第 6 参数从 `'deleted_at'` → `null`（schema 实证修正）
+  - **文档**（4）：`docs/decisions.md` ADR-138 §11 N1-138-1 P1 状态从「按需启动」→「✅ 已闭合」+ P2 推迟说明（schema 缺 deleted_at）+ P3 仍待说明；`docs/task-queue.md` SEQ-20260521-06 #36 子卡 ✅；`docs/tasks.md` 清卡片；`docs/changelog.md` 本条
+- **新增依赖**：无
+- **数据库变更**：无（端点行为扩展 / 复用现有 schema）
+- **D-N 偏离**：无新 D-N
+- **R-MID-1**：不适用（端点行为扩展 / 复用 system.audit_rollback actionType；handler 不双写 video.reopen 避免追溯链膨胀）
+- **ErrorCode**：零新增
+- **注意事项**：
+  - **handler 不复用 ModerationService.reopen / transitionVideoState**：理由是 transitionVideoState 内部 BEGIN/COMMIT 在独立 connection 执行，与 AuditRollback 事务两个连接独立 — 若 AuditRollback 后续 INSERT audit 失败 ROLLBACK，无法回滚 transitionVideoState 已 COMMIT 的视频状态变更（原子性破坏）。直接在同事务 client 写 UPDATE SQL 完美绕过该问题。
+  - **状态机校验放弃**：admin 强制反向是 audit rollback 语义；放弃 transitionVideoState 的状态机校验（如 approved → rejected 不允许）；以"管理员明确知晓"为前提。如未来需要严格状态机，可重构 transitionVideoState 接受外部 client 参数。
+  - **audit 单条**：handler 内不写 video.reopen audit（不双写），仅 AuditRollbackService 外层写 system.audit_rollback 单条；before/after jsonb 内含 sourceActionType=video.approve/reject_labeled 提供完整追溯。
+  - **顺手修 schema 漂移**：home_modules 表无 deleted_at 列实证；TARGET_KIND_TABLE_MAP 错误标了 'deleted_at'；本卡修为 null（hard delete）+ 同步修测试断言。
+  - **P2 推迟理由**：home_modules hard delete schema → home_module.create 反向需 DELETE / home_module.delete 反向需 INSERT 完整快照；audit log after_jsonb 不含完整快照（ADR-109 明示"涉及字段子集"），反向 INSERT 信息不足。若需求高可考虑加 deleted_at 列 + soft delete 改造（独立 follow-up）。
+  - **P3 仍待**：staging.publish 多表 + 状态机，需独立 ADR 评估反向语义。
+
+### 验收
+- typecheck PASS / lint PASS / verify:adr-contracts PASS（177 端点 / 98 D-N / 0 shorthand-conflict）/ verify:manual-coverage PASS
+- audit-rollback.test 23/23 PASS（21 原 + 2 新 handler）
+
+### 价值
+- **ADR-138 N1-138-1 P1 ✅ 闭合**：admin 可在 audit 页直接回滚 video.approve / video.reject_labeled 操作（之前需走 disabled + 跳 /admin/moderation?action=reopen 路径）
+- **顺手修复 schema 漂移**：home_module softDeleteColumn 字段错误从 'deleted_at' 修为 null（schema 实证）
+- ROLLBACK_HANDLER_REGISTRY 扩展点首次使用，验证了 handler 优先级架构
+- 状态机敏感 actionType 反向语义路径打通（handler 在事务内直接 SQL + audit 单条追溯）
+
+Cleanup-Audit: ADR-138 N1-138-1 P1 ✅ 闭合 / 2 handler 注册（video.approve + video.reject_labeled）/ UNSUPPORTED Set 32→30 项 / home_module softDeleteColumn schema 漂移修复
+Plan-Revision: 无（N1 派生按 ADR-138 N1-138-1 P1 既定建议实施 / P2/P3 推迟到独立卡）
+

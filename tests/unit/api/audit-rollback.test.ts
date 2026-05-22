@@ -168,8 +168,9 @@ describe('POST /admin/audit/logs/:id/rollback - happy path (ADR-138 D-138-1)', (
       method: 'POST', url: '/admin/audit/logs/103/rollback', headers: adminAuth(),
     })
     expect(res.statusCode).toBe(200)
+    // CHG-SN-8-FUP-AUDIT-ROLLBACK-HANDLERS 顺手修：home_modules schema 无 deleted_at（hard delete）
     expect(rollbackAuditLogTargetMock).toHaveBeenCalledWith(
-      client, 'home_modules', 'id', 'h-1', { title: '旧', is_published: false }, 'deleted_at',
+      client, 'home_modules', 'id', 'h-1', { title: '旧', is_published: false }, null,
     )
     await app.close()
   })
@@ -561,6 +562,73 @@ describe('POST rollback - force 参数跳过 stale (ADR-138 N1-138-2)', () => {
     })
     expect(res.statusCode).toBe(422)
     expect(res.json().error.code).toBe('AUDIT_ROLLBACK_UNSUPPORTED')
+    expect(rollbackAuditLogTargetMock).not.toHaveBeenCalled()
+    await app.close()
+  })
+})
+
+// ── ADR-138 N1-138-1 P1 / CHG-SN-8-FUP-AUDIT-ROLLBACK-HANDLERS ───
+
+describe('POST rollback - registered handlers (ADR-138 N1-138-1 P1)', () => {
+  it('#22 video.approve handler → UPDATE videos SET review_status = pending_review', async () => {
+    getAdminAuditLogByIdMock.mockResolvedValue({
+      id: '901', actorId: 'a-1', actionType: 'video.approve', targetKind: 'video', targetId: 'v-1',
+      beforeJsonb: { review_status: 'pending_review' },
+      afterJsonb: { review_status: 'approved' },
+    })
+    const client = buildMockClient()
+    // handler 内 UPDATE 返 1 rowCount
+    client.query.mockImplementation((sql: string) => {
+      if (typeof sql === 'string' && sql.includes("review_status = 'pending_review'") && !sql.includes('review_label_id')) {
+        return Promise.resolve({ rows: [{ id: 'v-1' }], rowCount: 1 })
+      }
+      return Promise.resolve({ rows: [], rowCount: 0 })
+    })
+    dbConnectMock.mockResolvedValue(client)
+
+    const app = await buildApp()
+    const res = await app.inject({
+      method: 'POST', url: '/admin/audit/logs/901/rollback', headers: adminAuth(),
+    })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.rolledBack).toBe(true)
+    // 验证调用了 handler 的 UPDATE SQL（含 pending_review 关键字）
+    const updateCall = client.query.mock.calls.find((args: unknown[]) =>
+      typeof args[0] === 'string' && (args[0] as string).includes("review_status = 'pending_review'") && !(args[0] as string).includes('review_label_id'),
+    )
+    expect(updateCall).toBeDefined()
+    expect(updateCall![1]).toEqual(['v-1'])
+    // 不走通用路径 rollbackAuditLogTarget
+    expect(rollbackAuditLogTargetMock).not.toHaveBeenCalled()
+    await app.close()
+  })
+
+  it('#23 video.reject_labeled handler → UPDATE review_status + 清 review_label_id', async () => {
+    getAdminAuditLogByIdMock.mockResolvedValue({
+      id: '902', actorId: 'a-1', actionType: 'video.reject_labeled', targetKind: 'video', targetId: 'v-2',
+      beforeJsonb: { review_status: 'pending_review', review_label_id: null },
+      afterJsonb: { review_status: 'rejected', review_label_id: 'lbl-1' },
+    })
+    const client = buildMockClient()
+    client.query.mockImplementation((sql: string) => {
+      if (typeof sql === 'string' && sql.includes('review_label_id = NULL')) {
+        return Promise.resolve({ rows: [{ id: 'v-2' }], rowCount: 1 })
+      }
+      return Promise.resolve({ rows: [], rowCount: 0 })
+    })
+    dbConnectMock.mockResolvedValue(client)
+
+    const app = await buildApp()
+    const res = await app.inject({
+      method: 'POST', url: '/admin/audit/logs/902/rollback', headers: adminAuth(),
+    })
+    expect(res.statusCode).toBe(200)
+    // 验证 SQL 含 pending_review + review_label_id = NULL
+    const updateCall = client.query.mock.calls.find((args: unknown[]) =>
+      typeof args[0] === 'string' && (args[0] as string).includes('review_label_id = NULL'),
+    )
+    expect(updateCall).toBeDefined()
+    expect(updateCall![1]).toEqual(['v-2'])
     expect(rollbackAuditLogTargetMock).not.toHaveBeenCalled()
     await app.close()
   })

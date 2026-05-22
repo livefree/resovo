@@ -9850,12 +9850,12 @@ POST /admin/audit/logs/:id/rollback
 
 ### 11. 非阻塞建议 / N1
 
-**N1-138-1（handler 注册优先级）**：首期实施仅覆盖通用 JSONB 反向 UPDATE 路径（~12 个简单 UPDATE 类 actionType）。以下复杂 actionType 建议按 P1/P2/P3 渐进注册 reverse_handler：
-- P1：video.approve / video.reject_labeled（review_status 状态机 + ModerationService.reopen）
-- P2：home_module.create / home_module.delete（CREATE 反向 soft-delete / DELETE 反向 restore）
-- P3：staging.publish（多表 + 状态机，需独立 ADR）
+**N1-138-1（handler 注册优先级）— ✅ P1 已闭合（CHG-SN-8-FUP-AUDIT-ROLLBACK-HANDLERS / 2026-05-22）**：首期实施仅覆盖通用 JSONB 反向 UPDATE 路径（~12 个简单 UPDATE 类 actionType）。以下复杂 actionType 建议按 P1/P2/P3 渐进注册 reverse_handler：
+- **P1 ✅ 已闭合**：video.approve / video.reject_labeled（review_status 状态机）— 注册 handler 不调 ModerationService.reopen / transitionVideoState（避免 transitionVideoState 内部 BEGIN/COMMIT 与 AuditRollback 事务嵌套）；直接用同事务 client 写 UPDATE SQL（review_status = 'pending_review'，reject 额外清 review_label_id）；audit 仅走 system.audit_rollback 单条（不双写 video.reopen 避免追溯链膨胀）；UNSUPPORTED_ACTION_TYPES Set 同步移除 2 项；顺手修 home_module softDeleteColumn 'deleted_at' → null（schema 实证 hard delete）；测试 +2 用例 PASS。
+- **P2 推迟**：home_module.create / home_module.delete — 实证 home_modules 表无 deleted_at 列（hard delete schema），CREATE 反向需 DELETE / DELETE 反向需 INSERT 完整快照恢复；after_jsonb 只存涉及字段子集而非完整快照，反向 INSERT 信息不足；若需求高可考虑加 deleted_at 列做 soft delete 改造（独立卡）。
+- **P3 仍待**：staging.publish（多表 + 状态机，需独立 ADR 评估）。
 
-**状态**：登记 follow-up CHG-SN-8-FUP-AUDIT-ROLLBACK-HANDLERS（P3 按需）。
+**状态**：P1 ✅；P2/P3 按需启动（CHG-SN-8-FUP-AUDIT-ROLLBACK-HANDLERS-P2/P3）。
 
 **N1-138-2（force 参数）— ✅ 已闭合（CHG-SN-8-FUP-AUDIT-ROLLBACK-FORCE / 2026-05-22）**：当前 stale 检测发现不一致返 409，admin 无法强制覆盖。如运营反馈频繁需求，可扩展 `{ force?: boolean }` 跳过 stale 校验。该扩展不破坏空 body 契约。**实施落地**：端点 Body schema 加 `{ force?: boolean }` optional（向后兼容 — 空 body 仍合法）；`AuditRollbackService.rollback(auditLogId, actor, options?: { force?: boolean })`；`rollbackGeneric(client, auditLog, force)` 在 force=true 时跳过 selectCurrentRowForRollback stale 检测；其它守卫保持（UNSUPPORTED / 白名单 / SCHEMA_DRIFT）；audit log payload 写入 force flag 供追溯审计；测试 +2 用例（#20 force 跳 stale + audit flag / #21 force 不绕 UNSUPPORTED）；audit-rollback.test 21/21 PASS。
 

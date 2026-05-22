@@ -48,7 +48,7 @@ export const TARGET_KIND_TABLE_MAP: Readonly<Partial<Record<AdminAuditTargetKind
   video:             { tableName: 'videos',                primaryKeyColumn: 'id',  softDeleteColumn: 'deleted_at' },
   video_source:      { tableName: 'video_sources',         primaryKeyColumn: 'id',  softDeleteColumn: 'deleted_at' },
   staging:           { tableName: 'videos',                primaryKeyColumn: 'id',  softDeleteColumn: 'deleted_at' },
-  home_module:       { tableName: 'home_modules',          primaryKeyColumn: 'id',  softDeleteColumn: 'deleted_at' },
+  home_module:       { tableName: 'home_modules',          primaryKeyColumn: 'id',  softDeleteColumn: null },  // 实证 schema 无 deleted_at 列（hard delete）— CHG-SN-8-FUP-AUDIT-ROLLBACK-HANDLERS 修
   crawler_site:      { tableName: 'crawler_sites',         primaryKeyColumn: 'key', softDeleteColumn: 'deleted_at' },
   user:              { tableName: 'users',                 primaryKeyColumn: 'id',  softDeleteColumn: 'deleted_at' },
   source_line_alias: { tableName: 'source_line_aliases',   primaryKeyColumn: 'id',  softDeleteColumn: null },
@@ -149,9 +149,8 @@ export const UNSUPPORTED_ACTION_TYPES: ReadonlySet<AdminAuditActionType> = new S
   'home_module.delete',
   'crawler_site.create',
   'crawler_site.delete',
-  // 状态机敏感（首期入 UNSUPPORTED，N1-138-1 P1 后续注册 handler 含 ModerationService.reopen 联动）
-  'video.approve',
-  'video.reject_labeled',
+  // 状态机敏感（reopen 暂入 UNSUPPORTED — reopen 反向是 approve/reject 二选一需上下文）
+  // video.approve + video.reject_labeled handler 已注册（CHG-SN-8-FUP-AUDIT-ROLLBACK-HANDLERS N1-138-1 P1）
   'video.reopen',
   // 用户角色变更（需 session invalidate 联动，N1-138-1 P1+ 注册 handler）
   'user.role_change',
@@ -176,7 +175,64 @@ export type ReverseHandler = (
   context: RollbackContext,
 ) => Promise<{ warnings?: readonly string[] }>
 
-export const ROLLBACK_HANDLER_REGISTRY: Map<AdminAuditActionType, ReverseHandler> = new Map()
+// ── ADR-138 N1-138-1 P1 / CHG-SN-8-FUP-AUDIT-ROLLBACK-HANDLERS ────
+//
+// video.approve / video.reject_labeled reverse_handler：
+//   admin 强制反向是 audit rollback 语义；不走 ModerationService.reopen /
+//   transitionVideoState（避免嵌套事务问题）；直接同事务 client 用 UPDATE
+//   SQL 实现反向（review_status 回 'pending_review'，reject 额外清 label_id）；
+//   audit 仅走 system.audit_rollback（不双写 video.reopen 避免追溯链膨胀）
+
+async function rollbackVideoApproveHandler(
+  client: PoolClient,
+  context: RollbackContext,
+): Promise<{ warnings?: readonly string[] }> {
+  if (!context.targetId) {
+    throw new AppError(
+      'AUDIT_ROLLBACK_UNSUPPORTED',
+      `video.approve 回滚需要 target_id（当前为 null）`,
+      422,
+    )
+  }
+  const result = await client.query(
+    `UPDATE videos SET review_status = 'pending_review'
+       WHERE id = $1 AND deleted_at IS NULL
+       RETURNING id`,
+    [context.targetId],
+  )
+  if ((result.rowCount ?? 0) === 0) {
+    throw new AppError('NOT_FOUND', '目标视频不存在或已删除', 404)
+  }
+  return {}
+}
+
+async function rollbackVideoRejectLabeledHandler(
+  client: PoolClient,
+  context: RollbackContext,
+): Promise<{ warnings?: readonly string[] }> {
+  if (!context.targetId) {
+    throw new AppError(
+      'AUDIT_ROLLBACK_UNSUPPORTED',
+      `video.reject_labeled 回滚需要 target_id（当前为 null）`,
+      422,
+    )
+  }
+  const result = await client.query(
+    `UPDATE videos SET review_status = 'pending_review', review_label_id = NULL
+       WHERE id = $1 AND deleted_at IS NULL
+       RETURNING id`,
+    [context.targetId],
+  )
+  if ((result.rowCount ?? 0) === 0) {
+    throw new AppError('NOT_FOUND', '目标视频不存在或已删除', 404)
+  }
+  return {}
+}
+
+export const ROLLBACK_HANDLER_REGISTRY: Map<AdminAuditActionType, ReverseHandler> = new Map<AdminAuditActionType, ReverseHandler>([
+  ['video.approve', rollbackVideoApproveHandler],
+  ['video.reject_labeled', rollbackVideoRejectLabeledHandler],
+])
 
 // ── 结果类型 ─────────────────────────────────────────────────────────
 
