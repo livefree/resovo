@@ -14373,3 +14373,44 @@ H2 硬约束（零死按钮）在用户菜单维度起步完成。
 - 切 fallback 域 4 步操作流程
 - KPI 4 字段 SQL 含义
 - 4 个 FAQ 解决常见疑惑
+
+## [CHG-SN-8-08-B] Merge 页 VideoPicker 选 candidate_b（W4 工作流闭合 / 消费 VideoPicker）
+
+- **完成时间**：2026-05-21
+- **记录时间**：2026-05-21
+- **执行模型**：claude-opus-4-7
+- **子代理**：无
+- **关联 SEQ**：SEQ-20260521-04（额外子卡 / CHG-SN-8-08 follow-up）
+- **修改文件**：
+  - `apps/server-next/src/app/admin/merge/_client/MergeClient.tsx`：
+    - import VideoPicker + PickerVideoItem + videoPickerFetcher
+    - candidate_a banner 下渲染 DirectMergeWorkspace（仅 candidate_a 存在时）
+    - 末尾新增 DirectMergeWorkspace 子组件（~75 行）
+  - 新建 `tests/unit/components/server-next/admin/merge/MergeDirectWorkspace.test.tsx`（3 用例 PASS）
+  - `docs/manual/10-workflows/W4-merge-split.md` §2.2 新增「视频库 → Merge 页直接合并」8 步端到端流程（含撤销路径）
+- **新增依赖**：无
+- **数据库变更**：无
+- **API 行为**：复用 mergeVideos({ sourceVideoIds, targetVideoId, reason })；无新端点
+- **DirectMergeWorkspace 设计**：
+  - AdminCard 容器 + 标题「直接合并工作区」+ 副标题说明「以 A 为主体保留；选择 B 后点立即合并将 B 软删除并合并到 A」
+  - VideoPicker label「候选 B（被合并到 A）」+ required + 复用 videoPickerFetcher（与字幕上传 / 首页模块同 fetcher）
+  - 「立即合并」AdminButton：B 未选 / B === A 时 disabled
+  - handleMerge：window.confirm 二次确认（含 A.short_id + B title + 软删除 + 可撤销说明）→ mergeVideos → 成功 toast + onMergeSuccess（清 banner）
+  - 错误处理：复用 describeError(err, 'merge')；toast danger
+- **注意事项**：
+  - **target 默认 = A**：A 是用户从视频库锁定的起点，保留 A 是直觉；M-SN-N 可加 target/source 切换开关
+  - **B === A 守卫**：按钮 disabled + handleMerge 双重检查（早 return + toast warn）
+  - **撤销路径**：toast 不含 undo action 按钮（与候选列表 segment 一致；用户走审计日志页 unmerge）
+  - **W4 工作流闭合**：从「视频库行级」入口端到端可走完合并；用户问题 #7 完全闭合
+
+### DoD 全勾
+- [x] DirectMergeWorkspace 子组件 + VideoPicker 集成
+- [x] 立即合并按钮 + handleMerge（含 confirm + 守卫 + API + toast + banner 清）
+- [x] 测试 3 用例 PASS
+- [x] typecheck + lint + verify:manual-coverage PASS
+- [x] W4 §2.2 8 步端到端流程填写
+
+### 价值
+- W4 合并工作流端到端闭合（视频库 → Merge 页 → 完成合并）
+- VideoPicker 第 3 个业务消费方接入（字幕上传 + 首页模块 + Merge）
+- H3 零断链 + H4 零 UUID 进一步推进

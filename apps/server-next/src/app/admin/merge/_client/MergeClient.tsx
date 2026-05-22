@@ -32,12 +32,15 @@ import {
   EmptyState,
   DataTable,
   Segment,
+  VideoPicker,
   useToast,
   type TableColumn,
   type SegmentItem,
+  type PickerVideoItem,
 } from '@resovo/admin-ui'
 import type { CandidateGroup, VideoSummaryForMerge } from '@resovo/types'
 import { listCandidates, mergeVideos, unmergeVideos } from '@/lib/merge/api'
+import { videoPickerFetcher } from '@/lib/videos/picker-fetcher'
 import { ApiClientError } from '@/lib/api-client'
 import { SplitSection } from './MergeSplitSection'
 import { AuditSection } from './MergeAuditSection'
@@ -217,6 +220,14 @@ export function MergeClient() {
             清除
           </AdminButton>
         </AdminCard>
+      )}
+
+      {/* CHG-SN-8-08-B：直接合并工作区（candidate_a 锁定后 VideoPicker 选 B + 立即合并） */}
+      {candidateAParam && (
+        <DirectMergeWorkspace
+          candidateAId={candidateAParam}
+          onMergeSuccess={dismissCandidateBanner}
+        />
       )}
 
       {showSplit && (
@@ -499,5 +510,89 @@ function CandidateExpand({ group, onMerge }: CandidateExpandProps) {
         </AdminButton>
       </div>
     </div>
+  )
+}
+
+// ── CHG-SN-8-08-B · 直接合并工作区（候选 A 锁定 → VideoPicker 选 B → 立即合并）─
+
+interface DirectMergeWorkspaceProps {
+  readonly candidateAId: string
+  readonly onMergeSuccess: () => void
+}
+
+function DirectMergeWorkspace({ candidateAId, onMergeSuccess }: DirectMergeWorkspaceProps) {
+  const toast = useToast()
+  const [candidateB, setCandidateB] = useState<PickerVideoItem | null>(null)
+  const [merging, setMerging] = useState(false)
+
+  const handleMerge = useCallback(async () => {
+    if (!candidateB) {
+      toast.push({ title: '请先选择候选 B', level: 'warn' })
+      return
+    }
+    if (candidateB.id === candidateAId) {
+      toast.push({ title: '候选 A 和 B 不能是同一视频', level: 'warn' })
+      return
+    }
+    if (!confirm(`确认合并？\n\n以 A（${candidateAId.slice(0, 8)}）为主体保留；\nB（${candidateB.shortId} · ${candidateB.title}）将被合并到 A 后软删除。\n\n此操作可在审计日志撤销。`)) {
+      return
+    }
+    setMerging(true)
+    try {
+      const result = await mergeVideos({
+        sourceVideoIds: [candidateB.id],
+        targetVideoId: candidateAId,
+        reason: '从视频库行级 + Merge 页直接工作区',
+      })
+      toast.push({
+        title: '合并成功',
+        description: `auditId=${result.auditId.slice(0, 8)} · 已合并到 ${candidateAId.slice(0, 8)}`,
+        level: 'success',
+      })
+      setCandidateB(null)
+      onMergeSuccess()
+    } catch (err: unknown) {
+      toast.push({
+        title: '合并失败',
+        description: describeError(err, 'merge'),
+        level: 'danger',
+      })
+    } finally {
+      setMerging(false)
+    }
+  }, [candidateAId, candidateB, onMergeSuccess, toast])
+
+  return (
+    <AdminCard
+      style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: 16 }}
+      data-testid="merge-direct-workspace"
+    >
+      <div style={{ fontSize: 'var(--font-size-sm)', fontWeight: 600, color: 'var(--fg-default)' }}>
+        直接合并工作区
+      </div>
+      <div style={{ fontSize: '11px', color: 'var(--fg-muted)' }}>
+        以 A 为主体保留；选择 B 后点「立即合并」将 B 软删除并合并到 A
+      </div>
+      <VideoPicker
+        label="候选 B（被合并到 A）"
+        value={candidateB}
+        onChange={setCandidateB}
+        fetcher={videoPickerFetcher}
+        required
+        data-testid="merge-candidate-b-picker"
+      />
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+        <AdminButton
+          size="sm"
+          variant="primary"
+          loading={merging}
+          disabled={!candidateB || candidateB.id === candidateAId}
+          onClick={() => void handleMerge()}
+          data-testid="merge-direct-execute"
+        >
+          立即合并
+        </AdminButton>
+      </div>
+    </AdminCard>
   )
 }
