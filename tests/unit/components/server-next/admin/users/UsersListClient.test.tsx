@@ -107,3 +107,23 @@ describe('UsersListClient — CSV 导出', () => {
     }
   })
 })
+
+// CHG-SN-8-GAPS-USERS-BATCH-BAN-BTN（#G-users-batch-ban）
+describe('UsersListClient — 批量封禁 disabled 入口', () => {
+  it('4. PageHeader 渲染「批量封禁」按钮（disabled + tooltip）', async () => {
+    listUsersMock.mockResolvedValueOnce(EMPTY_RES)
+    render(<UsersListClient />)
+    const btn = await waitFor(() => screen.getByTestId('users-batch-ban-disabled'))
+    expect(btn.hasAttribute('disabled')).toBe(true)
+    expect(btn.textContent).toContain('批量封禁')
+  })
+
+  it('5. tooltip 指向 GAPS + follow-up 卡号', async () => {
+    listUsersMock.mockResolvedValueOnce(EMPTY_RES)
+    render(<UsersListClient />)
+    const btn = await waitFor(() => screen.getByTestId('users-batch-ban-disabled'))
+    const title = btn.getAttribute('title') ?? ''
+    expect(title).toContain('#G-users-batch-ban')
+    expect(title).toContain('CHG-SN-8-FUP-USERS-BATCH-BAN-EP')
+  })
+})

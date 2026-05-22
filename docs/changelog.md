@@ -15019,3 +15019,36 @@ Plan-Revision: 无
 Cleanup-Audit: #G-settings-webhook-impl ⚠️（消费层完成 / 后端 follow-up CHG-SN-8-FUP-WEBHOOK-IMPL 待立）
 Plan-Revision: 无
 
+---
+
+## [CHG-SN-8-GAPS-USERS-BATCH-BAN-BTN] 用户管理「批量封禁」disabled 入口（#G-users-batch-ban 消费层）
+
+- **完成时间**：2026-05-22
+- **记录时间**：2026-05-22 02:16
+- **执行模型**：claude-opus-4-7
+- **子代理**：无（纯前端 visual / H2 死按钮豁免范式）
+- **修改文件**：
+  - `apps/server-next/src/app/admin/users/_client/UsersListClient.tsx` — PageHeader actions 邀请用户 与 刷新 之间插入 disabled「批量封禁」按钮（variant default + size sm + title tooltip 含 GAPS + follow-up 卡号）；data-testid `users-batch-ban-disabled`
+  - `tests/unit/components/server-next/admin/users/UsersListClient.test.tsx` — 扩 2 用例（#4 按钮 disabled + 文案 / #5 tooltip 指向 GAPS + follow-up）；总 5/5 PASS
+  - `docs/manual/GAPS.md` — #G-users-batch-ban ⬜ → ⚠️；登记 CHG-SN-8-FUP-USERS-BATCH-BAN-EP（含 batch endpoint 设计要点：max size + admin skip + 部分失败 + R-MID-1）
+  - `docs/manual/20-pages/P-users.md` — §4.1 重写（含 disabled 入口说明 + 当前替代）
+  - `docs/task-queue.md` SEQ-20260521-06 #25 子卡 ✅
+  - `docs/tasks.md` 清卡片
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - H2 死按钮豁免范式：disabled + title tooltip 不算死按钮（与 P-videos「+ 添加视频」/ audit-rollback 未支持类型 disabled 范式同）
+  - 后端 batch endpoint follow-up CHG-SN-8-FUP-USERS-BATCH-BAN-EP 范围：参 CHG-SN-8-GAPS-MOD-BATCH 实施范式（已闭合 #G-moderation-batch-ui）— 前端 batch mode toggle + bulk action bar + 后端 POST /admin/users/batch-ban；触发 R-MID-1（user.ban 已有 actionType；只需批量 audit 写入逻辑）
+
+### 验收
+- typecheck PASS / lint PASS / verify:manual-coverage PASS
+- UsersListClient 5/5 PASS（+2 用例 #4/#5 disabled 入口 + tooltip 内容断言）
+
+### 价值
+- P3 GAPS #G-users-batch-ban 推进到 ⚠️ 消费层闭合（admin 能看到入口存在 + 明确知道未实装 + 跳转期望）
+- 与 ModerationBatch 已闭合范式呼应（#G-moderation-batch-ui ✅ 提供 batch UI 模板，本卡 follow-up 实施时可直接复用）
+- 后端 batch endpoint follow-up CHG-SN-8-FUP-USERS-BATCH-BAN-EP 立独立卡
+
+Cleanup-Audit: #G-users-batch-ban ⚠️（消费层完成 / 后端 follow-up CHG-SN-8-FUP-USERS-BATCH-BAN-EP 待立）
+Plan-Revision: 无
+

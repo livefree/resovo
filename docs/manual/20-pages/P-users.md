@@ -73,8 +73,8 @@
 ## 4. 进阶操作
 
 ### 4.1 批量封禁
-- **状态**：⬜ 未实装（无端点 + 无 UI）；登记 GAPS.md #G-users-batch-ban
-- **当前替代**：逐行操作
+- **状态**：⚠️ 入口已加（PageHeader「批量封禁」disabled 按钮 + tooltip 明示筹备中）；后端 batch endpoint + batch mode UI follow-up CHG-SN-8-FUP-USERS-BATCH-BAN-EP（GAPS.md #G-users-batch-ban）
+- **当前替代**：逐行操作（PageHeader disabled 按钮 hover 显示提示）
 
 ### 4.2 改用户邮箱 / 编辑显示名
 - **状态**：🔄 ADR 已起草（ADR-140 A− PASS 2026-05-21 / CHG-SN-8-FUP-USERS-EDIT-ADR）；实施 follow-up CHG-SN-8-FUP-USERS-EDIT-EP 待立

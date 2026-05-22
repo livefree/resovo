@@ -100,9 +100,11 @@
 ### #G-users-batch-ban · 批量封禁 UI 缺失
 
 - **页面**：P-users §4.1
-- **状态**：⬜ 未启动
+- **状态**：⚠️ 已部分实装（CHG-SN-8-GAPS-USERS-BATCH-BAN-BTN disabled 入口；后端 follow-up：CHG-SN-8-FUP-USERS-BATCH-BAN-EP）
 - **优先级**：P3
-- **现象**：无端点 + 无 UI；当前需逐行操作
+- **现象**：无端点 + 无 batch UI；当前需逐行操作
+- **消费层补齐**：CHG-SN-8-GAPS-USERS-BATCH-BAN-BTN — UsersListClient PageHeader actions 加 disabled「批量封禁」按钮 + tooltip（H2 死按钮豁免范式，同 P-videos「+ 添加视频」/ audit-rollback 未支持类型 disabled）；tooltip 明示「筹备中」+ 指向 GAPS / follow-up
+- **后端实装 follow-up**：CHG-SN-8-FUP-USERS-BATCH-BAN-EP — 起 ADR-N 设计 `POST /admin/users/batch-ban` 端点（含 ids: UUID[] / max batch size / admin 目标 skip + 部分失败处理 / R-MID-1 `user.ban` 批量 audit）+ 前端 batch mode toggle + bulk action bar（参 ModerationBatch / CHG-SN-8-GAPS-MOD-BATCH 范式）；需 Opus arch-reviewer 评审；工时 ADR ~0.2w + 实施 ~0.3w
 
 ### #G-users-edit-profile · 改用户邮箱 / 重置密码 / 编辑显示名缺失
 
