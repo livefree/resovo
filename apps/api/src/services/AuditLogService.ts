@@ -87,6 +87,8 @@ export const ACTION_TYPES: readonly AdminAuditActionType[] = [
   'crawler_site.category_mapping_update',
   // CHG-SN-7-REDO-02-A / ADR-124：用户投稿 4 路径合并 actionType
   'user_submission.action',
+  // CHG-SN-8-FUP-USERS-ROLE-INV-EP / ADR-139：admin 改用户角色（触发 session invalidate）
+  'user.role_change',
 ]
 export const TARGET_KINDS: readonly AdminAuditTargetKind[] = [
   'video',
@@ -99,6 +101,7 @@ export const TARGET_KINDS: readonly AdminAuditTargetKind[] = [
   'source_line_alias',
   'source_route',  // CHG-SN-7-REDO-01-E2 / ADR-117 AMENDMENT 2
   'user_submission',  // CHG-SN-7-REDO-02-A / ADR-124
+  'user',  // CHG-SN-8-FUP-USERS-ROLE-INV-EP / ADR-139
 ]
 
 // ── zod schema（ADR-118 §端点契约 + D-118-3） ────────────────────────

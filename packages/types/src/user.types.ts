@@ -22,6 +22,8 @@ export interface User {
   locale: string           // BCP 47，如 zh-CN、en、ja
   createdAt: string        // ISO 8601
   bannedAt: string | null  // 封号时间，null 表示正常
+  // ADR-139：admin 变更该用户角色的最后时间戳（ISO 8601）；NULL = 从未被改过
+  roleChangedAt?: string | null
 }
 
 // ── 认证 ─────────────────────────────────────────────────────────

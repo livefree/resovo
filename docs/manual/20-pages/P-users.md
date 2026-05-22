@@ -53,7 +53,7 @@
 - **位置**：行尾 actions 区「shield」icon 按钮 → 角色选择 Modal
 - **行为**：调 `PATCH /admin/users/:id/role` + audit log
 - **权限**：仅 admin 可改其他用户角色
-- **影响**：用户下次访问时新角色生效；当前 session 暂不强制踢出（最大 15 分钟 access token TTL 后自然失效；ADR-139 已起草 0 穿越窗口方案，待实施 CHG-SN-8-FUP-USERS-ROLE-INV-EP；GAPS.md #G-users-role-session-invalidate 🔄 ADR 已起草）
+- **影响**：用户下次访问时新角色生效；**session 即时失效**（ADR-139 + CHG-SN-8-FUP-USERS-ROLE-INV-EP 闭合）— middleware/refresh 校验 token.iat vs users.role_changed_at + Redis 缓存 `user:rca:{id}` EX 900；旧 access token 立即返 401 `ROLE_CHANGED`；前端 api-client interceptor 识别后强制 logout + 跳转 `/login?reason=role_changed`
 
 ### 3.4 封禁 / 解封
 
@@ -108,7 +108,7 @@
 | 现象 | 原因 | 解决 |
 |---|---|---|
 | 「邀请用户」按钮缺失 | 当前角色不是 admin | 联系 admin 操作 |
-| 改角色后用户仍能访问 admin | access token 15min TTL 内权限穿越（ADR-139 已起草 0 穿越方案，待实施 CHG-SN-8-FUP-USERS-ROLE-INV-EP）| 临时：让用户登出再登 |
+| 改角色后用户仍能访问 admin | **不应再发生**（ADR-139 + CHG-SN-8-FUP-USERS-ROLE-INV-EP 闭合 0 穿越窗口）；如仍出现请检查 Redis 是否宕机（cache miss 时 fallback 放行，最大 15min 后旧 token 自然过期）| 立即让用户登出 + 重启 Redis（确保缓存恢复）|
 | 邀请邮件未收到 | 邮件服务可能未配置 | 查 Settings → 通知 Tab |
 | 看不到所有用户 | 分页隐藏；调 page size | 翻页或调 limit |
 

@@ -15052,3 +15052,56 @@ Plan-Revision: 无
 Cleanup-Audit: #G-users-batch-ban ⚠️（消费层完成 / 后端 follow-up CHG-SN-8-FUP-USERS-BATCH-BAN-EP 待立）
 Plan-Revision: 无
 
+---
+
+## [CHG-SN-8-FUP-USERS-ROLE-INV-EP] ADR-139 实施 — 角色变更 session invalidate 完整端点 + R-MID-1 (#G-users-role-session-invalidate ✅)
+
+- **完成时间**：2026-05-22
+- **记录时间**：2026-05-22 02:58
+- **执行模型**：claude-opus-4-7
+- **子代理**：无（按 ADR-139 D-139-1..8 既定决策直接实施 / ADR 已 Opus PASS commit 83e49fbb）
+- **依赖**：ADR-139 ✅ Accepted（commit 83e49fbb）
+- **修改文件**（12）：
+  - `apps/api/src/db/migrations/067_users_role_changed_at.sql` — 新建（IF NOT EXISTS 幂等 + COMMENT；ADR-139 §D-139-5）
+  - `apps/api/src/db/queries/users.ts` — DbUserRow 加 role_changed_at；mapUser 映射 roleChangedAt；updateUserRole SQL `SET role = $1, role_changed_at = NOW()` + RETURNING 含 role_changed_at
+  - `packages/types/src/user.types.ts` — User 接口加 `roleChangedAt?: string | null`（向后兼容）
+  - `packages/types/src/api-errors.ts` — ERRORS 加 `ROLE_CHANGED` 401（ApiErrorCode union 自动扩展；14 → 15 码）
+  - `packages/types/src/admin-moderation.types.ts` — AdminAuditActionType union 加 `user.role_change`；AdminAuditTargetKind union 加 `user`
+  - `apps/api/src/services/AuditLogService.ts` — ACTION_TYPES + TARGET_KINDS 同步加 user.role_change + user（R-MID-1 7 文件之 2/7）
+  - `apps/api/src/services/UserService.ts` — 新增 `RoleChangedError` class（code='ROLE_CHANGED'）；refresh 加 `payload.iat < user.roleChangedAt` 校验 + 抛 RoleChangedError；ADR-139 §D-139-3
+  - `apps/api/src/routes/auth.ts` — refresh route catch 区分 RoleChangedError → 401 ROLE_CHANGED；保留 UnauthorizedError → 401 UNAUTHORIZED
+  - `apps/api/src/plugins/authenticate.ts` — resolveUser 重构为 `ResolveResult` 三态（ok / invalid / role_changed）；Promise.all 并行查 blacklist + user:rca；authenticateHandler 区分 role_changed → 401 ROLE_CHANGED；optionalAuthenticateHandler 降级 role_changed → null
+  - `apps/api/src/routes/admin/users.ts` — import AuditLogService + redis；ROLE_CHANGED_CACHE_KEY + TTL 900s 常量；PATCH role handler 加 oldRole snapshot + redis.set fire-and-forget + auditSvc.write({ actionType: 'user.role_change', targetKind: 'user', targetId, beforeJsonb: {role: oldRole}, afterJsonb: {role: newRole, roleChangedAt} })
+  - `apps/server-next/src/lib/api-client.ts` — 新增 `handleRoleChanged` + `peekErrorCode`；request + requestMultipart 401 流程加 code 探测 → ROLE_CHANGED 跳过 silent refresh + forced logout + redirect `/login?reason=role_changed`
+  - **R-MID-1 测试同步（3 文件）**：
+    - `tests/unit/api/audit-log-service-enums-set-equal.test.ts` — EXPECTED_ACTION_TYPES + EXPECTED_TARGET_KINDS 加 user.role_change + user（R-MID-1 第 16 次系统化）
+    - `tests/unit/api/audit-log-coverage.test.ts` — REQUIRED_ACTION_TYPES + PAYLOAD_ASSERTION_REQUIRED 加 user.role_change（R-MID-1 第 17 次系统化）
+    - `tests/unit/api/admin-users-role-change.test.ts` — 新建 8 用例（PATCH role: updateUserRole + Redis set EX 900 / audit payload 内容断言 / middleware token.iat < rca → 401 ROLE_CHANGED / >= → 放行 / cache miss → 放行 / refresh stale → 401 / fresh → 200 / null → 200）
+  - **文档（3）**：`docs/manual/GAPS.md` #G-users-role-session-invalidate 🔄 → ✅；`docs/manual/20-pages/P-users.md` §3.3 + §7 FAQ 重写；`docs/task-queue.md` SEQ-20260521-06 #26 子卡 ✅；`docs/tasks.md` 清卡片
+- **新增依赖**：无
+- **数据库变更**：migration 067 users 加 role_changed_at TIMESTAMPTZ DEFAULT NULL（向后兼容；旧代码 SELECT * 多读一列无害）
+- **D-N 偏离闭环**：D-139-1..8（ADR-139 commit 83e49fbb 已闭环 8 条）；本卡无新 D-N 偏离
+- **R-MID-1 系统化**：第 17 次（user.role_change actionType）；TARGET_KINDS 第 11 项扩展 user
+- **ErrorCode 真源**：ApiErrorCode 14 → 15 码（ROLE_CHANGED 加入，ADR-110 同步更新）
+- **注意事项**：
+  - **审计发现 + 范围保留**：实施过程发现 ACTION_TYPES/TARGET_KINDS pre-existing 漂移（image_health.* + image_health 在 union 但不在常量；ADR-140 D-140-5 已识别）— 本卡只补 user.role_change + user，不顺手修 image_health 漂移（守 ADR-140 EP 实施范围；本卡的修改不影响 image_health 漂移现状）
+  - **缓存设计**：cache miss 默认放行（不回查 DB，ADR-139 §D-139-7）；N1-139-1 评估后选不加 DB fallback；Redis 宕机时降级到 15min worst-case 穿越窗口（与原状态等价）
+  - **N1-139-2 ban/unban 同模式扩展**：登记独立 follow-up CHG-SN-8-FUP-USERS-BAN-INV（按需启动）
+  - **前端 forced logout 防循环**：peekErrorCode 在 401 时 clone response 读 body code；ROLE_CHANGED 直接 logout + redirect，不尝试 refresh，杜绝 ADR-139 R-139-3 风险
+
+### 验收
+- typecheck PASS（FULL TURBO 缓存命中部分）/ lint PASS / verify:manual-coverage PASS / verify:adr-contracts PASS（含 verify-endpoint-adr 173 路由 + verify-adr-d-numbers 全 86 闭环；pre-existing crawlerKpi.route_count advisory 与本卡无关）
+- **全 unit 4478/4478 PASS（+8 admin-users-role-change 新增 / 0 回归）**
+- admin-users-role-change.test 8/8 / admin-users.test 12/12 / audit-log-service-enums-set-equal.test 4/4 / audit-log-coverage.test 87/87 — R-MID-1 4 文件守卫全绿
+
+### 价值
+- **P2 GAPS #G-users-role-session-invalidate 完全闭合**（⬜ → 🔄 ADR 起草 → ✅ 实施）
+- admin 改用户角色后权限穿越窗口从最大 15min 降至 0（middleware 实时校验）
+- R-MID-1 第 17 次系统化（user.role_change audit 完整 before/after payload 内容断言落地）
+- 前端 ROLE_CHANGED 自动 forced logout + redirect `/login?reason=role_changed`，用户明确感知"权限已变更"
+- 端到端 e2e 链路就绪（CRUD + Redis 缓存 + Middleware + Refresh + 前端 interceptor）；ADR-139 §9 12 测试 surface 11/12 落地（#11 e2e 推迟 advisory）
+- 解锁 N1-139-2 ban/unban 同模式扩展路径（如安全评审需要时，可复用 role_changed_at 模式）
+
+Cleanup-Audit: #G-users-role-session-invalidate ✅ 闭合
+Plan-Revision: 无（按 ADR-139 既定决策实施 / N1 follow-up 登记保留）
+

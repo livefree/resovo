@@ -67,6 +67,29 @@ function handleUnauthorized(): void {
   }
 }
 
+// ADR-139 D-139-2 + D-139-4：role_changed 强制 logout（不尝试 refresh，避免循环）+
+// redirect /login?reason=role_changed；login 页面可选展示"您的权限已变更，请重新登录"提示
+function handleRoleChanged(): void {
+  useAuthStore.getState().logout()
+  if (typeof window !== 'undefined') {
+    const { pathname, search } = window.location
+    const from = pathname.startsWith('/admin')
+      ? `&from=${encodeURIComponent(sanitizeAdminRedirect(`${pathname}${search}`))}`
+      : ''
+    window.location.assign(`/login?reason=role_changed${from}`)
+  }
+}
+
+// 401 时尝试从响应 body 提取 code，用于区分 UNAUTHORIZED vs ROLE_CHANGED
+async function peekErrorCode(response: Response): Promise<string | undefined> {
+  try {
+    const body = (await response.clone().json()) as ApiError
+    return body.error?.code
+  } catch {
+    return undefined
+  }
+}
+
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const { method = 'GET', body, headers = {}, skipAuth = false, _isRetry = false } = options
 
@@ -89,6 +112,12 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
 
   // 401 自动 refresh + retry
   if (response.status === 401 && !_isRetry && !skipAuth) {
+    // ADR-139 D-139-2：识别 ROLE_CHANGED 跳过 silent refresh + 直接 forced logout
+    const code = await peekErrorCode(response)
+    if (code === 'ROLE_CHANGED') {
+      handleRoleChanged()
+      throw new ApiClientError('ROLE_CHANGED', '您的权限已变更，请重新登录', 401)
+    }
     const refreshed = await tryRefreshToken()
     if (refreshed) {
       return request<T>(path, { ...options, _isRetry: true })
@@ -164,6 +193,12 @@ async function requestMultipart<T>(
   })
 
   if (response.status === 401 && !_isRetry) {
+    // ADR-139 D-139-2：识别 ROLE_CHANGED 跳过 silent refresh + 直接 forced logout
+    const code = await peekErrorCode(response)
+    if (code === 'ROLE_CHANGED') {
+      handleRoleChanged()
+      throw new ApiClientError('ROLE_CHANGED', '您的权限已变更，请重新登录', 401)
+    }
     const refreshed = await tryRefreshToken()
     if (refreshed) return requestMultipart<T>(path, formData, { _isRetry: true })
     handleUnauthorized()

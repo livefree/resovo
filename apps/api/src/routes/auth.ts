@@ -13,7 +13,7 @@ import { z } from 'zod'
 
 import { db } from '@/api/lib/postgres'
 import { redis } from '@/api/lib/redis'
-import { UserService, ConflictError, UnauthorizedError } from '@/api/services/UserService'
+import { UserService, ConflictError, UnauthorizedError, RoleChangedError } from '@/api/services/UserService'
 import { ERRORS, makeError } from '@/api/lib/errors'
 
 // Cookie 名称（统一管理）
@@ -140,6 +140,12 @@ export async function authRoutes(fastify: FastifyInstance) {
       const { accessToken } = await userService.refresh(refreshToken)
       return reply.send({ data: { accessToken } })
     } catch (error) {
+      // ADR-139 D-139-3：角色变更后 refresh 拒绝；返回 ROLE_CHANGED 让前端 interceptor 强制 logout
+      if (error instanceof RoleChangedError) {
+        return reply.code(401).send({
+          error: { code: 'ROLE_CHANGED', message: error.message, status: 401 },
+        })
+      }
       if (error instanceof UnauthorizedError) {
         return reply.code(401).send({
           error: { code: 'UNAUTHORIZED', message: error.message, status: 401 },

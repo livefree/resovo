@@ -40,6 +40,16 @@ export class UnauthorizedError extends Error {
   }
 }
 
+// ADR-139 / CHG-SN-8-FUP-USERS-ROLE-INV-EP：admin 改用户角色后 refresh / authenticate 检测到
+// token.iat < user.role_changed_at 时抛此错误；前端 interceptor 识别 ROLE_CHANGED 后强制 logout。
+export class RoleChangedError extends Error {
+  readonly code = 'ROLE_CHANGED'
+  constructor(message = '您的权限已变更，请重新登录') {
+    super(message)
+    this.name = 'RoleChangedError'
+  }
+}
+
 // ── UserService ──────────────────────────────────────────────────
 
 export interface RegisterInput {
@@ -121,6 +131,15 @@ export class UserService {
 
     const user = await userQueries.findUserById(this.db, payload.userId)
     if (!user) throw new UnauthorizedError('用户不存在')
+
+    // ADR-139 D-139-3：拒绝过期 refresh token + 强制重新登录
+    // payload.iat (秒) vs user.roleChangedAt (ISO ms 转秒)；cache miss / 从未改过 (NULL) 不拦截
+    if (user.roleChangedAt) {
+      const roleChangedSec = Math.floor(new Date(user.roleChangedAt).getTime() / 1000)
+      if (payload.iat < roleChangedSec) {
+        throw new RoleChangedError()
+      }
+    }
 
     const accessToken = signAccessToken({ userId: user.id, role: user.role })
     return { accessToken }

@@ -168,6 +168,9 @@ export type AdminAuditActionType =
   | 'image_health.rescan'         // POST /admin/image-health/rescan
   | 'image_health.switch_domain'  // POST /admin/image-health/switch-fallback-domain
 
+  // CHG-SN-8-FUP-USERS-ROLE-INV-EP / ADR-139：admin 修改用户角色 audit（含 session invalidate 触发）
+  | 'user.role_change'            // PATCH /admin/users/:id/role
+
 export type AdminAuditTargetKind =
   | 'video'
   | 'video_source'
@@ -180,6 +183,7 @@ export type AdminAuditTargetKind =
   | 'source_route'  // CHG-SN-7-REDO-01-E2 / ADR-117 AMENDMENT 2：sources 行级操作目标
   | 'user_submission'  // CHG-SN-7-REDO-02-A / ADR-124：用户投稿 4 类统一表
   | 'image_health'  // CHG-SN-7-MISC-IMAGE-1 / ADR-135：图片健康操作目标
+  | 'user'  // CHG-SN-8-FUP-USERS-ROLE-INV-EP / ADR-139：admin 操作用户实体（role_change 等）
 
 export interface AdminAuditLog {
   readonly id: string  // bigserial → string（避免 JS 大数精度）

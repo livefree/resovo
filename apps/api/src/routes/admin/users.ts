@@ -14,10 +14,17 @@ import { z } from 'zod'
 import crypto from 'crypto'
 import bcrypt from 'bcryptjs'
 import { db } from '@/api/lib/postgres'
+import { redis } from '@/api/lib/redis'
 import * as usersQueries from '@/api/db/queries/users'
+import { AuditLogService } from '@/api/services/AuditLogService'
+
+// ADR-139 D-139-7：role_changed_at 缓存 key + TTL（与 access token 15min 生命周期对齐）
+const ROLE_CHANGED_CACHE_KEY = (userId: string) => `user:rca:${userId}`
+const ROLE_CHANGED_CACHE_TTL_SECONDS = 15 * 60  // 900s
 
 export async function adminUserRoutes(fastify: FastifyInstance) {
   const auth = [fastify.authenticate, fastify.requireRole(['admin'])]
+  const auditSvc = new AuditLogService(db)  // CHG-SN-8-FUP-USERS-ROLE-INV-EP
 
   const USER_SORT_FIELDS = ['username', 'email', 'role', 'created_at', 'status'] as const
 
@@ -120,8 +127,33 @@ export async function adminUserRoutes(fastify: FastifyInstance) {
       })
     }
 
+    const oldRole = user.role  // CHG-SN-8-FUP-USERS-ROLE-INV-EP：audit before 快照
     const result = await usersQueries.updateUserRole(db, id, parsed.data.role)
-    return reply.send({ data: result })
+    if (!result) {
+      return reply.code(404).send({
+        error: { code: 'NOT_FOUND', message: '用户不存在', status: 404 },
+      })
+    }
+
+    // ADR-139 D-139-7：写 Redis 缓存，middleware/refresh 即时校验 token.iat vs role_changed_at
+    // fire-and-forget — Redis 不可用时降级（与现有 blacklist check 一致）
+    redis
+      .set(ROLE_CHANGED_CACHE_KEY(id), result.role_changed_at, 'EX', ROLE_CHANGED_CACHE_TTL_SECONDS)
+      .catch((err: unknown) => {
+        fastify.log.warn({ err, userId: id }, '[admin/users] role_changed_at cache set failed')
+      })
+
+    // R-MID-1：user.role_change actionType + user targetKind audit log
+    auditSvc.write({
+      actorId: request.user!.userId,
+      actionType: 'user.role_change',
+      targetKind: 'user',
+      targetId: id,
+      beforeJsonb: { role: oldRole },
+      afterJsonb: { role: result.role, roleChangedAt: result.role_changed_at },
+    })
+
+    return reply.send({ data: { id: result.id, role: result.role } })
   })
 
   // ── DELETE /admin/users/:id ──────────────────────────────────

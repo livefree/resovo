@@ -77,6 +77,8 @@ const REQUIRED_ACTION_TYPES = [
   // CHG-SN-7-MISC-IMAGE-1 / ADR-135：图片健康 rescan + domain 切换 audit（R-MID-1 第 16 次）
   'image_health.rescan',
   'image_health.switch_domain',
+  // CHG-SN-8-FUP-USERS-ROLE-INV-EP / ADR-139：admin 改用户角色 audit（R-MID-1 第 17 次）
+  'user.role_change',
 ] as const
 
 const ACTION_TYPE_REGEX = /actionType:\s*['"]([a-z_.]+)['"]/g
@@ -145,6 +147,8 @@ const PAYLOAD_ASSERTION_REQUIRED = [
   // CHG-SN-7-MISC-IMAGE-1 / ADR-135：图片健康 rescan + domain 切换（R-MID-1 第 16 次）
   'image_health.rescan',
   'image_health.switch_domain',
+  // CHG-SN-8-FUP-USERS-ROLE-INV-EP / ADR-139：admin 改用户角色 audit payload 内容断言（R-MID-1 第 17 次）
+  'user.role_change',
 ] as const
 
 // CHG-SN-6-10：plan v1.4 §3.0.5 M-SN-4 legacy 11 项已迁移至 PAYLOAD_ASSERTION_REQUIRED

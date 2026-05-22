@@ -19,6 +19,7 @@ interface DbUserRow {
   banned_at: string | null
   deleted_at: string | null
   created_at: string
+  role_changed_at: string | null  // ADR-139
 }
 
 /** 带 passwordHash 的内部用户类型，仅用于认证模块 */
@@ -37,6 +38,7 @@ function mapUser(row: DbUserRow): UserWithHash {
     avatarUrl: row.avatar_url,
     bannedAt: row.banned_at,
     createdAt: row.created_at,
+    roleChangedAt: row.role_changed_at,  // ADR-139
   }
 }
 
@@ -197,9 +199,10 @@ export async function updateUserRole(
   db: Pool,
   id: string,
   role: 'user' | 'moderator'
-): Promise<{ id: string; role: UserRole } | null> {
-  const result = await db.query<{ id: string; role: UserRole }>(
-    `UPDATE users SET role = $1 WHERE id = $2 AND deleted_at IS NULL RETURNING id, role`,
+): Promise<{ id: string; role: UserRole; role_changed_at: string } | null> {
+  // ADR-139 D-139-5：同步更新 role_changed_at 以触发 middleware 校验
+  const result = await db.query<{ id: string; role: UserRole; role_changed_at: string }>(
+    `UPDATE users SET role = $1, role_changed_at = NOW() WHERE id = $2 AND deleted_at IS NULL RETURNING id, role, role_changed_at`,
     [role, id]
   )
   return result.rows[0] ?? null

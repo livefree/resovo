@@ -1,12 +1,13 @@
 /**
  * api-errors.ts — ErrorCode 唯一真源（ADR-110）
  *
- * ERRORS 字典：14 码
+ * ERRORS 字典：15 码
  *   通用 7 码：NOT_FOUND / VALIDATION_ERROR / UNAUTHORIZED / FORBIDDEN /
  *             INTERNAL_ERROR / STATE_CONFLICT / INVALID_TRANSITION
  *   业务 6 码（CHG-SN-4-05）：STATE_INVALID / LABEL_UNKNOWN / STAGING_NOT_READY /
  *                             REVIEW_RACE / RATE_LIMITED / SOURCE_PROBE_FAILED
  *   注册冲突 1 码：CONFLICT（用户名/邮箱唯一约束违反，auth 路由）
+ *   会话失效 1 码（ADR-139 / CHG-SN-8-FUP-USERS-ROLE-INV-EP）：ROLE_CHANGED（admin 改角色后已发 token 失效）
  *
  * AppError class 留在 apps/api（class 不可跨 workspace 共享 instanceof）。
  */
@@ -37,6 +38,11 @@ export const ERRORS = {
 
   // ── 注册冲突 1 码（ADR-110 BLOCKER 补入，auth 路由唯一约束违反）──────────
   CONFLICT:           { code: 'CONFLICT',            message: '用户名或邮箱已被注册',               status: 409 },
+
+  // ── 会话失效 1 码（ADR-139 / CHG-SN-8-FUP-USERS-ROLE-INV-EP）─────────────
+  // middleware / refresh 检测到 access/refresh token iat < user.role_changed_at 时返回；
+  // 前端 interceptor 识别此码后跳过 silent refresh，直接 forced logout + redirect /login?reason=role_changed
+  ROLE_CHANGED:       { code: 'ROLE_CHANGED',        message: '您的权限已变更，请重新登录',         status: 401 },
 } as const satisfies Record<string, ApiErrorBody>
 
 export type ErrorCode = keyof typeof ERRORS

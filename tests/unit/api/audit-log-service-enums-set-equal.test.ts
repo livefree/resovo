@@ -72,6 +72,8 @@ const EXPECTED_ACTION_TYPES = [
   'crawler_site.category_mapping_update',
   // CHG-SN-7-REDO-02-A / ADR-124 / R-MID-1 系统化第 15 次
   'user_submission.action',
+  // CHG-SN-8-FUP-USERS-ROLE-INV-EP / ADR-139 / R-MID-1 系统化第 16 次
+  'user.role_change',
 ] as const
 
 const EXPECTED_TARGET_KINDS = [
@@ -85,6 +87,7 @@ const EXPECTED_TARGET_KINDS = [
   'source_line_alias',
   'source_route',  // CHG-SN-7-REDO-01-E2 / ADR-117 AMENDMENT 2
   'user_submission',  // CHG-SN-7-REDO-02-A / ADR-124
+  'user',  // CHG-SN-8-FUP-USERS-ROLE-INV-EP / ADR-139
 ] as const
 
 describe('AuditLogService enums set-equal 守卫（ultrareview P1-2）', () => {
