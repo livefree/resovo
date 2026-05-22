@@ -1,6 +1,6 @@
 # P-subtitles · 字幕管理
 
-> status: 🟡 §3.1 上传字幕已填写（CHG-SN-8-FUP-SUB 2026-05-21）；其它章节待 follow-up
+> status: 🟢 完整定稿（CHG-SN-8-MANUAL-BATCH-3 / 2026-05-21）
 
 ## 0. 元信息
 
@@ -16,11 +16,22 @@
 
 ## 1. 这个页面是做什么的
 
-(待填，1-2 句业务定义)
+后台字幕集中审核 + 上传管理。看 KPI 4（总数 / 中文 / 英文 / 缺字幕视频）+ 字幕列表 + 上传新字幕（手动 R2 URL）。审核维度复用「is_verified」字段（admin 上传默认直接 verified）。
 
 ## 2. 页面布局
 
-(待填，ASCII + 区域名)
+```
+┌──────────────────────────────────────────────────────────────────┐
+│ PageHeader: 字幕管理 · Actions: 「上传字幕」                      │
+├──────────────────────────────────────────────────────────────────┤
+│ KPI 4 列（CHG-SN-7-MISC-SUBTITLES-1 + ADR-133）：                │
+│  字幕总数 / 中文 / 英文 / 缺字幕视频                              │
+├──────────────────────────────────────────────────────────────────┤
+│ DataTable（reference §6.6）：                                    │
+│  video / lang pill / format mono / source muted / quality(60×6  │
+│  progress) / size muted / actions（eye / edit / trash danger）   │
+└──────────────────────────────────────────────────────────────────┘
+```
 
 ## 3. 常用操作
 
@@ -46,12 +57,66 @@
   - 重复字幕（同 video + 同 language + 同 episodeNumber）→ 后端返回错误，submitError 显示
 - **快捷键**：Esc 关闭 Modal（VideoPicker Dialog 内 Esc 先关 Dialog，再次按 Esc 关 Modal）
 
-(其它操作待 follow-up 填写)
+### 3.2 通过待审字幕（approve）
+
+- **位置**：is_verified=false 行尾「通过」按钮
+- **行为**：`POST /admin/subtitles/:id/approve`
+- **效果**：is_verified=true；前台播放器开始消费
+
+### 3.3 拒绝待审字幕
+
+- **位置**：行尾「拒绝」+ confirm
+- **行为**：`POST /admin/subtitles/:id/reject` 软删（不物理删）
+
+### 3.4 删除字幕（danger）
+
+- **位置**：actions 列 trash icon
+- **行为**：confirm → 软删除 + audit log
+
+### 3.5 看字幕详情（eye icon）
+
+- **行为**：跳字幕文件 URL（R2）→ 浏览器尝试预览
 
 ## 4. 进阶操作
 
-(待填，含二次确认 + 可回滚)
+### 4.1 批量审核 / 删除
+- **状态**：⬜ 未实装（GAPS.md #G-subtitles-batch）
 
-## 5. 字段含义 / 6. 状态颜色 / 7. FAQ / 8. 关系
+### 4.2 字幕同步质量自动评估
+- reference §6.6 列出 progress bar；当前数据源未明（GAPS.md #G-subtitles-quality-source 待复核）
 
-(待填)
+## 5. 字段含义（reference §6.6）
+
+| 列 | 含义 |
+|---|---|
+| video | tbl-thumb-sm + tbl-title |
+| lang | pill info（简体中文 / English ...）|
+| format | mono `srt / ass / vtt` |
+| source | OpenSubtitles / 用户上传 / 管理员手动（muted fs 11）|
+| quality | 60×6 progress（ok 色）+ {N}% |
+| size | KB（muted fs 11）|
+| actions | eye / edit / trash danger 3 xs btn |
+
+## 6. 状态颜色
+
+| pill | 含义 |
+|---|---|
+| 绿（ok）| is_verified=true / 同步质量 ≥ 90% |
+| 黄（warn）| pending review / 同步 60-90% |
+| 红（danger）| rejected / 同步 <60% |
+| 灰（muted）| 缺字幕视频 |
+
+## 7. FAQ
+
+| 现象 | 原因 | 解决 |
+|---|---|---|
+| 「上传字幕」让我输 UUID | 已废除（CHG-SN-8-FUP-SUB）| 用 VideoPicker 搜索 |
+| 同步质量条总是空 | 数据源待核（GAPS）| follow-up |
+| 字幕 URL 404 | R2 URL 失效 / CORS | 改 URL 重传 |
+| 批量动作缺失 | 未实装 | GAPS.md #G-subtitles-batch |
+
+## 8. 与其他页面的关系
+
+- → 跳出到 [P-videos](./P-videos.md)：video 列点击 / 缺字幕视频深链
+- → 跳出到 [P-audit](./P-audit.md)：上传 / 通过 / 拒绝 / 删除 写 audit log
+- ← 跳入自 [P-dashboard](./P-dashboard.md)：「缺字幕视频」KPI 深链

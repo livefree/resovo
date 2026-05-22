@@ -6,11 +6,11 @@
 
 | 编号 | 名称 | 频次 | 状态 |
 |---|---|---|---|
-| [W1](./W1-crawl-to-publish.md) | 采集 → 审核 → 上架（**金票**）| ★★★ 最高频 | 骨架（M-SN-8 落地）|
-| [W2](./W2-source-repair.md) | 线路失效 → 补源 → 复测 | ★★ | 骨架 |
-| [W3](./W3-image-fallback.md) | 封面失效 → 切 fallback 域 | ★ | 骨架 |
-| [W4](./W4-merge-split.md) | 合并候选 → 确认 / 拒绝 / 回滚 | ★ | 骨架 |
-| [W5](./W5-home-curation.md) | 首页运营位编排 | ★ | 骨架 |
+| [W1](./W1-crawl-to-publish.md) | 采集 → 审核 → 上架（**金票**）| ★★★ 最高频 | ✅ 完整定稿|
+| [W2](./W2-source-repair.md) | 线路失效 → 补源 → 复测 | ★★ | ✅ 完整定稿 |
+| [W3](./W3-image-fallback.md) | 封面失效 → 切 fallback 域 | ★ | ✅ 完整定稿 |
+| [W4](./W4-merge-split.md) | 合并候选 → 确认 / 拒绝 / 回滚 | ★ | ✅ 完整定稿 |
+| [W5](./W5-home-curation.md) | 首页运营位编排 | ★ | ✅ 完整定稿 |
 
 ## 模板
 

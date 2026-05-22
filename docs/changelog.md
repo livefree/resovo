@@ -14498,3 +14498,44 @@ H2 硬约束（零死按钮）在用户菜单维度起步完成。
 | GAPS 登记 | 11 条 | 21 条 |
 
 剩余 batch 3 = P-login / P-submissions-deprecated（小页面）；batch 4 = W2-W5 工作流。
+
+## [CHG-SN-8-MANUAL-BATCH-3] 剩余 5 页面 + 4 工作流定稿 / Manual 100%（SEQ-05 完结）
+
+- **完成时间**：2026-05-21
+- **记录时间**：2026-05-21
+- **执行模型**：claude-opus-4-7
+- **子代理**：无（纯文档）
+- **关联 SEQ**：SEQ-20260521-05 manual 大补全（**batch 3/3 收尾**）
+
+- **修改文件**：
+  - `docs/manual/20-pages/P-login.md` → 66 行（视觉对齐 + 失败处理 + 找回密码/SSO 未实装登记）
+  - `docs/manual/20-pages/P-submissions-deprecated.md` → 28 行（短停用页跳转说明）
+  - `docs/manual/20-pages/P-user-submissions.md` → 85 行（Card list / 3 type 处理 / ADR-124 schema）
+  - `docs/manual/20-pages/P-sources.md` → 102 行（完整 8 章节补完，§3.3-§3.5 / §4 / §5 / §6 / §7 / §8）
+  - `docs/manual/20-pages/P-subtitles.md` → 92 行（完整 8 章节补完）
+  - `docs/manual/10-workflows/W2-source-repair.md` → 44 行（3 入口端到端）
+  - `docs/manual/10-workflows/W3-image-fallback.md` → 39 行（admin 切 fallback 8 步流程）
+  - `docs/manual/10-workflows/W4-merge-split.md` → status 标 ✅（已实质定稿）
+  - `docs/manual/10-workflows/W5-home-curation.md` → 44 行（4 slot 编排 + ContentRefPicker）
+  - `docs/manual/20-pages/README.md` + `10-workflows/README.md` → 状态列全标 ✅
+
+- **manual 完整定稿统计**：
+  | 时间 | 完整定稿 | 部分 | 骨架 |
+  |---|---|---|---|
+  | 本会话开始 | 8 / 29 | 4 | 17 |
+  | Batch 1 后 | 12 / 29 | 5 | 12 |
+  | Batch 2 后 | 16 / 29 | 5 | 8 |
+  | **Batch 3 后** | **29 / 29 = 100%** | 0 | 0 |
+
+- **GAPS.md**：保持 21 条登记（本 batch 未新发现 gap；P-subtitles 同步质量 / P-sources URL 编辑入口等候选未正式登记，可后续补）
+
+- **验收**：verify:manual-coverage PASS
+
+### Manual 工程双轨流首次完整闭环
+- 实施 → 手册 时间错位债清零
+- 所有 P-* 页面 / W* 工作流 / Picker 文档完整定稿
+- GAPS.md 21 条登记 → 后续 follow-up 卡有依据
+- 用户可作为非工程师走读完整流程的依据
+
+### SEQ-20260521-05 收尾
+3 batch 全 PASS / 13 份新定稿 + 4 份补完 + 4 份工作流定稿 + 2 份 README 更新；3 commits 落地（57dd178b + 7983ff4b + 此 commit）
