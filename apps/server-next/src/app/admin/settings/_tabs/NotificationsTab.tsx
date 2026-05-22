@@ -55,6 +55,21 @@ const SYNC_RESULT_STYLE: CSSProperties = {
   color: 'var(--fg-muted)',
 }
 
+// CHG-SN-8-GAPS-WEBHOOK-NOT-IMPL：字段存储有效但后端 webhook 发送逻辑未实装警示
+const WEBHOOK_WARN_BANNER_STYLE: CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '4px',
+  marginBottom: '12px',
+  padding: '8px 12px',
+  borderRadius: 'var(--radius-sm)',
+  background: 'var(--state-warning-bg)',
+  border: '1px solid var(--state-warning-border)',
+  color: 'var(--state-warning-fg)',
+  fontSize: 'var(--font-size-xs)',
+  lineHeight: 1.5,
+}
+
 const ADVISORY_STYLE: CSSProperties = {
   fontSize: 'var(--font-size-xs)',
   color: 'var(--fg-muted)',
@@ -189,9 +204,17 @@ export function NotificationsTab() {
       <AdminCard
         surface="plain"
         padding="md"
-        header={{ title: 'Webhook 通知', subtitle: 'HTTP POST 推送系统事件' }}
+        header={{ title: 'Webhook 通知', subtitle: '⚠️ 字段存储有效但触发逻辑未实装（CHG-SN-8-FUP-WEBHOOK-IMPL follow-up）' }}
         data-testid="notifications-card-webhook"
       >
+        <div style={WEBHOOK_WARN_BANNER_STYLE} data-testid="webhook-not-impl-banner">
+          <div>
+            <strong>⚠ Webhook 触发逻辑未实装</strong>
+          </div>
+          <div>
+            URL 和签名密钥可保存到 KV，但后端 worker 当前**不会向该 URL 发送任何 HTTP POST**。事件订阅 / HMAC 签名 / 重试策略待 ADR + 实施（GAPS.md #G-settings-webhook-impl → CHG-SN-8-FUP-WEBHOOK-IMPL）。
+          </div>
+        </div>
         <div style={FIELD_GRID_STYLE}>
           <label style={FIELD_LABEL_STYLE}>启用 Webhook</label>
           <AdminCheckbox

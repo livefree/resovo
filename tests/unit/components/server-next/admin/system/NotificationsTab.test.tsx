@@ -122,4 +122,23 @@ describe('NotificationsTab', () => {
       expect(screen.getByTestId('notifications-tab')).not.toBeNull()
     })
   })
+
+  // CHG-SN-8-GAPS-WEBHOOK-NOT-IMPL（#G-settings-webhook-impl）
+  it('6. webhook card 含「触发逻辑未实装」warn banner', async () => {
+    getSiteSettingsMock.mockResolvedValueOnce(FIXTURE)
+    render(<NotificationsTab />)
+    await waitFor(() => expect(screen.getByTestId('webhook-not-impl-banner')).not.toBeNull())
+    const banner = screen.getByTestId('webhook-not-impl-banner')
+    expect(banner.textContent).toContain('Webhook 触发逻辑未实装')
+    expect(banner.textContent).toContain('不会向该 URL 发送任何 HTTP POST')
+  })
+
+  it('7. banner 指向 follow-up CHG-SN-8-FUP-WEBHOOK-IMPL + GAPS 编号', async () => {
+    getSiteSettingsMock.mockResolvedValueOnce(FIXTURE)
+    render(<NotificationsTab />)
+    await waitFor(() => expect(screen.getByTestId('webhook-not-impl-banner')).not.toBeNull())
+    const banner = screen.getByTestId('webhook-not-impl-banner')
+    expect(banner.textContent).toContain('#G-settings-webhook-impl')
+    expect(banner.textContent).toContain('CHG-SN-8-FUP-WEBHOOK-IMPL')
+  })
 })

@@ -76,7 +76,9 @@
 ### 3.7 API · Webhook（CHG-SN-7-REDO-03-C）
 
 - 外部回调地址列表 + secret / event filter
-- 实装状态：⬜ KV 字段在但回调发起逻辑未完整（GAPS.md #G-settings-webhook-impl）
+- 实装状态：⚠️ KV 字段可填写并存储（NotificationsTab Webhook card），但**后端零发送逻辑**（grep 实证 apps/api + apps/worker 零 webhook send 代码）
+- **视觉警示**：Webhook card 顶部 warn banner（state-warning-bg）+ subtitle ⚠️ 标记，明示「不会向该 URL 发送任何 HTTP POST」+ 指向 GAPS（CHG-SN-8-GAPS-WEBHOOK-NOT-IMPL）
+- **后端 follow-up**：CHG-SN-8-FUP-WEBHOOK-IMPL — 需 ADR 设计事件订阅 + HMAC 签名 + 重试 + worker job 派发 + 失败 audit（GAPS.md #G-settings-webhook-impl）
 
 ### 3.8 登录会话（CHG-SN-7-REDO-03-C）
 
