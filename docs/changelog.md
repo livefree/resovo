@@ -14703,3 +14703,30 @@ Plan-Revision: 无
 Cleanup-Audit: #G-dashboard-activities-mock ⚠️（视觉警示完成 / 真端点 follow-up CHG-SN-8-FUP-DASH-ACTIVITY-LIVE 待立）
 Plan-Revision: 无
 
+---
+
+## [CHG-SN-8-GAPS-SETTINGS-NEGATE] #G-settings-save-all NEGATED（架构决策不实装）
+
+- **完成时间**：2026-05-21
+- **记录时间**：2026-05-21 19:59
+- **执行模型**：claude-opus-4-7
+- **子代理**：无
+- **修改文件**：
+  - `docs/manual/GAPS.md` — #G-settings-save-all 状态 ⬜ → ❌ NEGATED（CHG-SN-7-LOW-2 双子卡决策树范式）
+  - `docs/manual/20-pages/P-settings.md` §4.1 改写为 NEGATED 说明（CHG-SN-6-AUDIT-DEBOUNCE-FIX 已删 / 5 Tab 各自 debounced 自动保存）
+  - `docs/task-queue.md` — SEQ-20260521-06 #16 子卡 ✅
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - 实证依据：`SettingsContainer.tsx:161-163` 注释明示 CHG-SN-6-AUDIT-DEBOUNCE-FIX 删除原因
+  - NEGATED 模式遵循 CHG-SN-7-LOW-2 / CHG-SN-8-07 范式：澄清「设计稿要求」与「实际架构决策」冲突，后续不再追踪本 GAP
+
+### 验收
+- verify:manual-coverage PASS（纯文档，不动业务）
+
+### 价值
+- 清理 GAPS P3 追踪条目；避免后续 follow-up 卡误启动已 NEGATED 项
+
+Cleanup-Audit: #G-settings-save-all ❌ NEGATED
+Plan-Revision: 无
+

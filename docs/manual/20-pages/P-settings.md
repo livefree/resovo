@@ -85,10 +85,11 @@
 
 ## 4. 进阶操作
 
-### 4.1 「保存所有更改」（PageHeader · 设计稿要求）
+### 4.1 「保存所有更改」（PageHeader · 设计稿要求） — ❌ NEGATED
 
-- 状态：⬜ 当前各 Tab 内独立保存；全局保存按钮未实装
-- 建议：M-SN-N 加；当前需逐 Tab 保存
+- 状态：❌ NEGATED（CHG-SN-6-AUDIT-DEBOUNCE-FIX 删除）/ 不再追踪
+- 原因：5 Tab 各自 debounced save 模型下，「保存所有更改」无语义；改动逻辑在 Tab 内自动持久化
+- 操作：保存以「在对应 Tab 内修改 → 自动 debounced save」为准；无全局按钮
 
 ### 4.2 审计日志入口（PageHeader · 设计稿要求）
 

@@ -123,11 +123,13 @@
 - **优先级**：P2（安全）
 - **现象**：session_timeout_minutes / session_max_concurrent / session_extend_on_activity 仅存储未生效
 
-### #G-settings-save-all · 「保存所有更改」全局按钮缺失
+### #G-settings-save-all · 「保存所有更改」全局按钮 — NEGATED（架构决策不实装）
 
 - **页面**：P-settings §4.1
-- **状态**：⬜ 未启动
-- **优先级**：P3
+- **状态**：❌ NEGATED（2026-05-21 / CHG-SN-8-GAPS-SETTINGS-NEGATE）
+- **优先级**：P3（不再追踪）
+- **NEGATED 理由**：实证 `SettingsContainer.tsx:161-163` 注释明示：CHG-SN-6-AUDIT-DEBOUNCE-FIX 已删除「保存所有更改」按钮，理由「5 Tab 各自保存模型下无语义」（各 Tab 独立 debounced save 模式）。设计稿要求 vs 架构决策冲突由 CHG-SN-6 决议；后续不再追踪本 GAP
+- **NEGATED 引用范式**：CHG-SN-7-LOW-2 双子卡决策树 / CHG-SN-8-07 NEGATED 同范式
 
 ### #G-audit-rollback-universal · 审计日志「回滚」按钮通用未实装
 
