@@ -94,6 +94,9 @@ export const ACTION_TYPES: readonly AdminAuditActionType[] = [
   'user.profile_update',
   // CHG-SN-8-FUP-AUDIT-ROLLBACK-EP / ADR-138：admin 通用回滚 audit（形成 audit-of-audit 追溯链）
   'system.audit_rollback',
+  // CHG-SN-8-FUP-USERS-BAN-AUDIT：admin 封禁 / 解封用户 audit（R-MID-1 第 20 次系统化）
+  'user.ban',
+  'user.unban',
 ]
 export const TARGET_KINDS: readonly AdminAuditTargetKind[] = [
   'video',

@@ -15435,3 +15435,44 @@ Plan-Revision: 无（N1 范围扩展按既定 ADR-141 N1-141-1 建议实施）
 Cleanup-Audit: ADR-139 N1-139-2 ✅ 闭合 / 被封禁用户 session 即时失效（穿越窗口 15min → 0）
 Plan-Revision: 无（N1 派生按 ADR-139 既定 N1-139-2 方案 A 建议实施）
 
+---
+
+## [CHG-SN-8-FUP-USERS-BAN-AUDIT] user.ban + user.unban audit 补齐 — R-MID-1 第 20 次系统化
+
+- **完成时间**：2026-05-22
+- **记录时间**：2026-05-22 15:22
+- **执行模型**：claude-opus-4-7
+- **子代理**：无（R-MID-1 7 文件框架直接套用 / user targetKind 已存在）
+- **依赖**：USERS-EDIT-EP migration 069（admin_audit_log CHECK 含 user）+ USERS-BAN-INV ✅（commit 4301d8e6）
+- **修改文件**（R-MID-1 7 文件 + 单测 = 8 文件）：
+  - `packages/types/src/admin-moderation.types.ts` — AdminAuditActionType union 加 `user.ban` + `user.unban` 2 项
+  - `apps/api/src/services/AuditLogService.ts` — ACTION_TYPES +2
+  - `tests/unit/api/audit-log-service-enums-set-equal.test.ts` — EXPECTED_ACTION_TYPES +2（R-MID-1 第 20 次系统化）
+  - `tests/unit/api/audit-log-coverage.test.ts` — REQUIRED_ACTION_TYPES + PAYLOAD_ASSERTION_REQUIRED +2
+  - `apps/api/src/routes/admin/users.ts` — ban handler 加 auditSvc.write（before: {banned_at: null} after: {banned_at: NEW}）；unban handler 先 findAdminUserById 取 before snapshot 再 unbanUser 后 audit（before: {banned_at: OLD} after: {banned_at: null}）；unban 路径加 404 兜底
+  - `tests/unit/api/admin-users-ban-audit.test.ts` — **新建** 4 用例 PASS（ban payload / unban payload / ban admin 403 不写 audit / unban 用户不存在 404 不写 audit）
+  - **文档**（3）：`docs/manual/20-pages/P-users.md` §3.4 audit 追溯一行替换为 ✅；`docs/task-queue.md` SEQ-20260521-06 #34 子卡 ✅；`docs/tasks.md` 清卡片
+- **新增依赖**：无
+- **数据库变更**：无（复用 USERS-EDIT-EP migration 069 已扩展的 CHECK 约束）
+- **D-N 偏离**：无新 D-N（端点行为扩展 / 无新 ADR）
+- **R-MID-1 系统化**：第 20 次（user.ban + user.unban 2 actionType 单卡落地）
+- **ErrorCode**：零新增
+- **注意事项**：
+  - **范围明确**：本卡仅补齐 audit 写入；不动 ban session invalidate 行为（USERS-BAN-INV commit 4301d8e6 已实施）；不动现有 ban/unban 业务逻辑
+  - **unban handler 加 404 兜底**：原 unban 端点缺少"用户不存在"前置守卫（直接调 unbanUser 返 null 才走 404）；本卡为取 before snapshot 加了 findAdminUserById，顺手让 404 守卫前置
+  - **R-MID-1 守卫自动验证**：audit-log-coverage 测试通过扫描 `actionType: 'xxx'` 字面量 + PAYLOAD_ASSERTION_REQUIRED 守卫双重保证；新增 2 actionType 必须有对应测试文件含 payload 内容断言 — 本卡 admin-users-ban-audit.test 4 用例满足要求
+  - **fire-and-forget**：auditSvc.write 不阻塞主响应；写失败仅 warn log（与现有 audit 调用同范式）
+
+### 验收
+- typecheck PASS / lint PASS / verify:adr-contracts PASS（177 端点 / 98 D-N / 0 shorthand-conflict）/ verify:manual-coverage PASS
+- admin-users-ban-audit.test 4/4 / admin-users-ban-inv.test 4/4 / admin-users.test 12/12 / audit-log-service-enums-set-equal.test 4/4 / audit-log-coverage.test 97/97（+2 R-MID-1 守卫覆盖 user.ban + user.unban）— 共 121/121 PASS
+
+### 价值
+- **R-MID-1 第 20 次系统化** — user.ban + user.unban 完整 audit 链路就绪
+- **闭合 ADR-139 N1-139-2 audit follow-up**（之前 USERS-BAN-INV §11 明示"audit 补齐属独立 follow-up"）
+- admin 封禁 / 解封操作有完整 audit 追溯（actor + targetId + before/after banned_at + timestamp）
+- audit-log-coverage 自动守卫保证后续新增 actionType 时不会漏 payload 测试
+
+Cleanup-Audit: R-MID-1 第 20 次系统化 ✅（user.ban + user.unban）/ ADR-139 N1-139-2 audit follow-up 完全闭环
+Plan-Revision: 无（R-MID-1 7 文件框架范式直接套用）
+

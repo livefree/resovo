@@ -79,6 +79,9 @@ const EXPECTED_ACTION_TYPES = [
   'user.profile_update',
   // CHG-SN-8-FUP-AUDIT-ROLLBACK-EP / ADR-138 / R-MID-1 系统化第 19 次（audit-of-audit 追溯链）
   'system.audit_rollback',
+  // CHG-SN-8-FUP-USERS-BAN-AUDIT / R-MID-1 系统化第 20 次（user 封禁 / 解封 audit）
+  'user.ban',
+  'user.unban',
 ] as const
 
 const EXPECTED_TARGET_KINDS = [

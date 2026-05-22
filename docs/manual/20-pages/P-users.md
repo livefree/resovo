@@ -61,7 +61,7 @@
 - **解封**：banned 行尾「解封」按钮 → `PATCH /admin/users/:id/unban`
 - **效果**：被封禁用户无法登录；**session 即时失效**（ADR-139 N1-139-2 + CHG-SN-8-FUP-USERS-BAN-INV 闭合 2026-05-22）— ban 同步更新 users.role_changed_at = NOW() + Redis user:rca cache；旧 access/refresh token 立即返 401 ROLE_CHANGED；前端 api-client interceptor 强制 logout + 跳转 /login?reason=role_changed
 - **回滚**：unban 恢复登录权（旧 token 在 ban 时已失效，用户必须重新登录获新 token）
-- **未实施**：user.ban / user.unban audit log 暂未写入（独立 follow-up CHG-SN-8-FUP-USERS-BAN-AUDIT 按需启动）
+- **audit 追溯**：✅ user.ban / user.unban actionType audit log 已写入（R-MID-1 第 20 次系统化 / CHG-SN-8-FUP-USERS-BAN-AUDIT 2026-05-22）— ban payload `{before: {banned_at: null}, after: {banned_at: NEW}}` / unban payload `{before: {banned_at: OLD}, after: {banned_at: null}}`
 
 ### 3.5 重置密码
 

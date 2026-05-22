@@ -84,6 +84,9 @@ const REQUIRED_ACTION_TYPES = [
   'user.profile_update',
   // CHG-SN-8-FUP-AUDIT-ROLLBACK-EP / ADR-138：通用回滚 audit-of-audit 追溯链（R-MID-1 第 19 次）
   'system.audit_rollback',
+  // CHG-SN-8-FUP-USERS-BAN-AUDIT：admin 封禁 / 解封用户 audit（R-MID-1 第 20 次）
+  'user.ban',
+  'user.unban',
 ] as const
 
 const ACTION_TYPE_REGEX = /actionType:\s*['"]([a-z_.]+)['"]/g
@@ -159,6 +162,9 @@ const PAYLOAD_ASSERTION_REQUIRED = [
   'user.profile_update',
   // CHG-SN-8-FUP-AUDIT-ROLLBACK-EP / ADR-138：通用回滚 audit-of-audit payload 内容断言（R-MID-1 第 19 次）
   'system.audit_rollback',
+  // CHG-SN-8-FUP-USERS-BAN-AUDIT：admin 封禁 / 解封 audit payload 内容断言（R-MID-1 第 20 次）
+  'user.ban',
+  'user.unban',
 ] as const
 
 // CHG-SN-6-10：plan v1.4 §3.0.5 M-SN-4 legacy 11 项已迁移至 PAYLOAD_ASSERTION_REQUIRED

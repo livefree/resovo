@@ -102,18 +102,48 @@ export async function adminUserRoutes(fastify: FastifyInstance) {
         })
     }
 
+    // CHG-SN-8-FUP-USERS-BAN-AUDIT：R-MID-1 第 20 次系统化 user.ban audit
+    auditSvc.write({
+      actorId: request.user!.userId,
+      actionType: 'user.ban',
+      targetKind: 'user',
+      targetId: id,
+      beforeJsonb: { banned_at: null },
+      afterJsonb: { banned_at: result.banned_at },
+    })
+
     return reply.send({ data: { id: result.id, banned_at: result.banned_at } })
   })
 
   // ── PATCH /admin/users/:id/unban ──────────────────────────────
   fastify.patch('/admin/users/:id/unban', { preHandler: auth }, async (request, reply) => {
     const { id } = request.params as { id: string }
+
+    // CHG-SN-8-FUP-USERS-BAN-AUDIT：先取 before snapshot（banned_at 旧值）
+    const before = await usersQueries.findAdminUserById(db, id)
+    if (!before) {
+      return reply.code(404).send({
+        error: { code: 'NOT_FOUND', message: '用户不存在', status: 404 },
+      })
+    }
+
     const result = await usersQueries.unbanUser(db, id)
     if (!result) {
       return reply.code(404).send({
         error: { code: 'NOT_FOUND', message: '用户不存在', status: 404 },
       })
     }
+
+    // CHG-SN-8-FUP-USERS-BAN-AUDIT：R-MID-1 第 20 次系统化 user.unban audit
+    auditSvc.write({
+      actorId: request.user!.userId,
+      actionType: 'user.unban',
+      targetKind: 'user',
+      targetId: id,
+      beforeJsonb: { banned_at: before.banned_at },
+      afterJsonb: { banned_at: null },
+    })
+
     return reply.send({ data: result })
   })
 
