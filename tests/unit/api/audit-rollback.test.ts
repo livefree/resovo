@@ -511,3 +511,57 @@ describe('POST rollback - 权限 + 白名单 (ADR-138 D-138-2/5)', () => {
     await app.close()
   })
 })
+
+// ── ADR-138 N1-138-2 / CHG-SN-8-FUP-AUDIT-ROLLBACK-FORCE ──────────
+
+describe('POST rollback - force 参数跳过 stale (ADR-138 N1-138-2)', () => {
+  it('#20 force=true 跳过 stale 检测 + 仍执行 UPDATE + audit 写入 force flag', async () => {
+    getAdminAuditLogByIdMock.mockResolvedValue({
+      id: '801', actorId: 'a-1', actionType: 'video.staff_note', targetKind: 'video', targetId: 'v-1',
+      beforeJsonb: { staff_note: '旧' },
+      afterJsonb: { staff_note: '新' },  // 当前 DB 应是 '另一个值' 但 force 跳过检测
+    })
+    const client = buildMockClient()
+    dbConnectMock.mockResolvedValue(client)
+    // 即使 mock selectCurrentRowForRollback 返回不一致值，force=true 也应跳过比对
+    selectCurrentRowForRollbackMock.mockResolvedValue({ staff_note: '另一个值' })
+    rollbackAuditLogTargetMock.mockResolvedValue({ affectedRows: 1 })
+
+    const app = await buildApp()
+    const res = await app.inject({
+      method: 'POST', url: '/admin/audit/logs/801/rollback', headers: adminAuth(),
+      payload: { force: true },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(rollbackAuditLogTargetMock).toHaveBeenCalled()
+    // force=true 时不应调 selectCurrentRowForRollback（stale 检测被跳过）
+    expect(selectCurrentRowForRollbackMock).not.toHaveBeenCalled()
+
+    // audit payload 含 force flag
+    expect(insertAuditLogInTransactionMock).toHaveBeenCalledWith(
+      client,
+      expect.objectContaining({
+        actionType: 'system.audit_rollback',
+        beforeJsonb: expect.objectContaining({ force: true }),
+        afterJsonb: expect.objectContaining({ force: true }),
+      }),
+    )
+    await app.close()
+  })
+
+  it('#21 force=true 不绕过 UNSUPPORTED 守卫 → 仍 422', async () => {
+    getAdminAuditLogByIdMock.mockResolvedValue({
+      id: '802', actionType: 'system.cache_clear', targetKind: 'system', targetId: null,
+      beforeJsonb: null, afterJsonb: null,
+    })
+    const app = await buildApp()
+    const res = await app.inject({
+      method: 'POST', url: '/admin/audit/logs/802/rollback', headers: adminAuth(),
+      payload: { force: true },
+    })
+    expect(res.statusCode).toBe(422)
+    expect(res.json().error.code).toBe('AUDIT_ROLLBACK_UNSUPPORTED')
+    expect(rollbackAuditLogTargetMock).not.toHaveBeenCalled()
+    await app.close()
+  })
+})

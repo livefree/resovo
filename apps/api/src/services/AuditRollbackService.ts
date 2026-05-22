@@ -193,11 +193,13 @@ export class AuditRollbackService {
 
   /**
    * 回滚单条 audit_log 行。
+   * @param options.force ADR-138 N1-138-2：true 时跳过 STALE 检测（D-138-4 F-2）；其它守卫保持
    * @throws AppError 失败时抛带 code + httpStatus 的域异常
    */
   async rollback(
     auditLogId: string,
     actorContext: { readonly actorId: string; readonly requestId?: string | null; readonly ipHash?: string | null },
+    options: { readonly force?: boolean } = {},
   ): Promise<RollbackResult> {
     // F-5: audit_log 行不存在
     const auditLog = await getAdminAuditLogById(this.db, auditLogId)
@@ -258,27 +260,29 @@ export class AuditRollbackService {
         warnings = handlerResult.warnings
       } else {
         // 通用路径
-        warnings = await this.rollbackGeneric(client, auditLog)
+        warnings = await this.rollbackGeneric(client, auditLog, options.force ?? false)
       }
 
       // 写 system.audit_rollback audit_log（事务内 INSERT，原子性保证 ADR-138 D-138-6）
+      // ADR-138 N1-138-2：force flag 写入 audit payload 供追溯审计（区分常规回滚 vs 强制覆盖）
+      const auditMeta = {
+        sourceAuditLogId: auditLog.id,
+        sourceActionType: actionType,
+        sourceTargetKind: targetKind,
+        sourceTargetId: auditLog.targetId,
+        ...(options.force ? { force: true } : {}),
+      }
       const rollbackAuditLogId = await insertAuditLogInTransaction(client, {
         actorId: actorContext.actorId,
         actionType: 'system.audit_rollback',
         targetKind: 'system',
         targetId: null,
         beforeJsonb: {
-          sourceAuditLogId: auditLog.id,
-          sourceActionType: actionType,
-          sourceTargetKind: targetKind,
-          sourceTargetId: auditLog.targetId,
+          ...auditMeta,
           rolledBackFields: auditLog.afterJsonb,
         },
         afterJsonb: {
-          sourceAuditLogId: auditLog.id,
-          sourceActionType: actionType,
-          sourceTargetKind: targetKind,
-          sourceTargetId: auditLog.targetId,
+          ...auditMeta,
           restoredFields: auditLog.beforeJsonb,
         },
         requestId: actorContext.requestId ?? null,
@@ -321,10 +325,13 @@ export class AuditRollbackService {
   /**
    * 通用路径：JSONB diff 反向 UPDATE + 字段白名单过滤 + stale 检测。
    * 返回 warnings（被白名单过滤的字段名列表）。
+   *
+   * @param force ADR-138 N1-138-2：true 时跳过 STALE 检测（其它守卫保持）
    */
   private async rollbackGeneric(
     client: PoolClient,
     auditLog: NonNullable<Awaited<ReturnType<typeof getAdminAuditLogById>>>,
+    force: boolean,
   ): Promise<readonly string[]> {
     const targetKind = auditLog.targetKind as AdminAuditTargetKind
     const targetId = auditLog.targetId!  // 已在 rollback() 中校验非空
@@ -365,7 +372,8 @@ export class AuditRollbackService {
     }
 
     // F-2: stale 检测 — 比对 after_jsonb 字段与当前 DB 值
-    if (after) {
+    // ADR-138 N1-138-2：force=true 时跳过该检测（admin 明确知晓数据已变更但仍要恢复旧值）
+    if (after && !force) {
       const afterFields = Object.keys(after).filter((f) => whitelist.has(f))
       if (afterFields.length > 0) {
         const currentRow = await selectCurrentRowForRollback(

@@ -9,6 +9,7 @@
  */
 
 import type { FastifyInstance } from 'fastify'
+import { z } from 'zod'
 import { db } from '@/api/lib/postgres'
 import {
   AuditLogService,
@@ -17,6 +18,13 @@ import {
 } from '@/api/services/AuditLogService'
 import { AuditRollbackService } from '@/api/services/AuditRollbackService'
 import { AppError } from '@/api/lib/errors'
+
+// ADR-138 §11 N1-138-2 / CHG-SN-8-FUP-AUDIT-ROLLBACK-FORCE：
+// force=true 跳过 D-138-4 F-2 (STALE 检测)；其它守卫保持（UNSUPPORTED / 白名单 / SCHEMA_DRIFT / NOT_FOUND）
+// 空 body 仍合法（向后兼容）；旧调用不传 body 自动 force=undefined
+const RollbackBodySchema = z.object({
+  force: z.boolean().optional(),
+}).default({})
 
 export async function adminAuditRoutes(fastify: FastifyInstance) {
   const svc = new AuditLogService(db)
@@ -76,13 +84,25 @@ export async function adminAuditRoutes(fastify: FastifyInstance) {
       })
     }
 
-    try {
-      const result = await rollbackSvc.rollback(parsed.data.id, {
-        actorId: request.user!.userId,
-        requestId: request.id,
-        // ipHash 由 logging-rules.md PII redact 中间件统一处理；本端点不强制注入
-        ipHash: null,
+    // ADR-138 N1-138-2: Body 可选 force 参数（向后兼容 — 旧调用空 body 仍合法）
+    const bodyParsed = RollbackBodySchema.safeParse(request.body ?? {})
+    if (!bodyParsed.success) {
+      return reply.code(422).send({
+        error: { code: 'VALIDATION_ERROR', message: bodyParsed.error.issues[0]?.message ?? '参数错误', status: 422 },
       })
+    }
+
+    try {
+      const result = await rollbackSvc.rollback(
+        parsed.data.id,
+        {
+          actorId: request.user!.userId,
+          requestId: request.id,
+          // ipHash 由 logging-rules.md PII redact 中间件统一处理；本端点不强制注入
+          ipHash: null,
+        },
+        { force: bodyParsed.data.force },
+      )
       return reply.send({ data: result })
     } catch (err: unknown) {
       // ADR-138 D-138-4 / D-138-6：AppError 域异常分发到对应 HTTP status + code

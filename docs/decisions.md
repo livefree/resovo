@@ -9857,7 +9857,7 @@ POST /admin/audit/logs/:id/rollback
 
 **状态**：登记 follow-up CHG-SN-8-FUP-AUDIT-ROLLBACK-HANDLERS（P3 按需）。
 
-**N1-138-2（force 参数）**：当前 stale 检测发现不一致返 409，admin 无法强制覆盖。如运营反馈频繁需求，可扩展 `{ force?: boolean }` 跳过 stale 校验。该扩展不破坏空 body 契约。**状态**：待运营反馈触发 CHG-SN-8-FUP-AUDIT-ROLLBACK-FORCE。
+**N1-138-2（force 参数）— ✅ 已闭合（CHG-SN-8-FUP-AUDIT-ROLLBACK-FORCE / 2026-05-22）**：当前 stale 检测发现不一致返 409，admin 无法强制覆盖。如运营反馈频繁需求，可扩展 `{ force?: boolean }` 跳过 stale 校验。该扩展不破坏空 body 契约。**实施落地**：端点 Body schema 加 `{ force?: boolean }` optional（向后兼容 — 空 body 仍合法）；`AuditRollbackService.rollback(auditLogId, actor, options?: { force?: boolean })`；`rollbackGeneric(client, auditLog, force)` 在 force=true 时跳过 selectCurrentRowForRollback stale 检测；其它守卫保持（UNSUPPORTED / 白名单 / SCHEMA_DRIFT）；audit log payload 写入 force flag 供追溯审计；测试 +2 用例（#20 force 跳 stale + audit flag / #21 force 不绕 UNSUPPORTED）；audit-rollback.test 21/21 PASS。
 
 ---
 
