@@ -14465,3 +14465,36 @@ H2 硬约束（零死按钮）在用户菜单维度起步完成。
 - **Batch 2**：P-users / P-settings / P-audit / P-home（admin/编辑页，~4 份 0.2-0.3w）
 - **Batch 3**：P-login / P-submissions-deprecated（小页面，~0.1w）
 - **Batch 4**：W2-W5 工作流（4 份 ~0.15w）
+
+## [CHG-SN-8-MANUAL-BATCH-2] admin/编辑页 4 份手册定稿 + GAPS 扩展 10 条
+
+- **完成时间**：2026-05-21
+- **记录时间**：2026-05-21
+- **执行模型**：claude-opus-4-7
+- **子代理**：无（纯文档）
+- **关联 SEQ**：SEQ-20260521-05 batch 2/4
+
+- **修改文件**：
+  - `docs/manual/20-pages/P-users.md` → 98 行（角色矩阵 + 邀请 + 改角色 + 封禁/解封 + 字段表 + FAQ）
+  - `docs/manual/20-pages/P-settings.md` → 97 行（8 Tab 全说明 + ADR-125 IA 收敛 + 通知/Webhook/session 实装状态）
+  - `docs/manual/20-pages/P-audit.md` → 91 行（多维 filter + Drawer + 回滚 / 时间穿梭未实装登记）
+  - `docs/manual/20-pages/P-home.md` → 103 行（4 slot + ContentRefPicker + ADR-104 协议 + sticky 预览）
+  - `docs/manual/GAPS.md` → 总条数 11 → 21（新登记 10 条）
+
+- **新登记 GAPS（10 条）**：
+  - P-users: #G-users-role-session-invalidate / batch-ban / edit-profile
+  - P-settings: #G-settings-webhook-impl / session-fields-consume（已立 follow-up）/ save-all
+  - P-audit: #G-audit-rollback-universal / time-travel（已立 follow-up）/ self-scope
+  - P-home: #G-home-brand-multi
+
+- **验收**：verify:manual-coverage PASS
+
+### Manual 进度更新
+
+| 类型 | Batch 1 后 | Batch 2 后 |
+|---|---|---|
+| 🟢 完整定稿 | 8 / 29 | 12 / 29 |
+| 🟡 部分 + 骨架 | 21 / 29 | 17 / 29 |
+| GAPS 登记 | 11 条 | 21 条 |
+
+剩余 batch 3 = P-login / P-submissions-deprecated（小页面）；batch 4 = W2-W5 工作流。

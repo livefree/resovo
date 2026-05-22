@@ -90,6 +90,76 @@
 - **优先级**：P3
 - **现象**：reference 设计稿要求 Components / Tokens / Semantic 3 栏；当前仅 components 栏（/admin/dev/components + /admin/dev/visual/）
 
+### #G-users-role-session-invalidate · 改用户角色后 session 未强制失效
+
+- **页面**：P-users §3.3 / §7 FAQ
+- **状态**：⬜ 未启动
+- **优先级**：P2（安全）
+- **现象**：admin 把某用户从 admin 改 moderator 后，该用户当前 session 仍持有 admin 权限直到自然过期或重新登录
+- **建议**：role 变更端点写入后强制 invalidate 该 user 所有 active session
+
+### #G-users-batch-ban · 批量封禁 UI 缺失
+
+- **页面**：P-users §4.1
+- **状态**：⬜ 未启动
+- **优先级**：P3
+- **现象**：无端点 + 无 UI；当前需逐行操作
+
+### #G-users-edit-profile · 改用户邮箱 / 重置密码 / 编辑显示名缺失
+
+- **页面**：P-users §4.2
+- **状态**：⬜ 未启动
+- **优先级**：P2
+- **现象**：admin 当前需走 DB 直改；缺前端 UI
+
+### #G-settings-webhook-impl · API·Webhook Tab 字段已存但回调未实装
+
+- **页面**：P-settings §3.7
+- **状态**：⬜ 未启动
+- **优先级**：P3
+- **现象**：KV 字段存在，但实际 webhook 触发逻辑缺失
+
+### #G-settings-session-fields-consume · 登录会话 3 字段未被中间件消费
+
+- **页面**：P-settings §3.8
+- **状态**：🔄 已立 CHG-SN-7-MISC-SESSION-FIELDS-CONSUME
+- **优先级**：P2（安全）
+- **现象**：session_timeout_minutes / session_max_concurrent / session_extend_on_activity 仅存储未生效
+
+### #G-settings-save-all · 「保存所有更改」全局按钮缺失
+
+- **页面**：P-settings §4.1
+- **状态**：⬜ 未启动
+- **优先级**：P3
+
+### #G-audit-rollback-universal · 审计日志「回滚」按钮通用未实装
+
+- **页面**：P-audit §3.4
+- **状态**：⬜ 未启动
+- **优先级**：P2
+- **现象**：UI 占位；仅特定 actionType 可走对应业务反向 API
+
+### #G-audit-time-travel · 审计日志时间穿梭未实装
+
+- **页面**：P-audit §4.1
+- **状态**：🔄 已立 CHG-SN-7-MISC-AUDIT-1（P3）
+- **优先级**：P3
+- **现象**：reference §5.12 设计意图 + PageHeader 按钮位预留；功能需求待用户确认
+
+### #G-audit-self-scope · moderator/editor 自己 audit 范围限制待核
+
+- **页面**：P-audit §0 / §7 FAQ
+- **状态**：⬜ 待复核
+- **优先级**：P2
+- **现象**：当前 audit 端点 admin only；按设计意图 moderator/editor 应该能看自己的 audit 条目；实际后端是否支持需 grep 确认
+
+### #G-home-brand-multi · 多品牌前台消费链路待 follow-up
+
+- **页面**：P-home §4.1
+- **状态**：⬜ 未启动
+- **优先级**：P3
+- **现象**：brandSlug 字段已存；多品牌路由层支持但前台消费 home_modules 时是否按 brand 过滤待核
+
 ### #G-user-menu-real-features · 用户菜单 profile 编辑 / preferences 全功能 / switchAccount 真实功能
 
 - **页面**：P-moderation / 00-roles-and-permissions §4
