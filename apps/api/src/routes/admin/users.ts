@@ -17,10 +17,27 @@ import { db } from '@/api/lib/postgres'
 import { redis } from '@/api/lib/redis'
 import * as usersQueries from '@/api/db/queries/users'
 import { AuditLogService } from '@/api/services/AuditLogService'
+// ADR-148 R-148-4 / CHG-SN-8-FUP-SESSION-FIELDS-CONSUME-EP-A：user:rca TTL 与 session_timeout_minutes 同步
+import { getSetting } from '@/api/db/queries/systemSettings'
 
-// ADR-139 D-139-7：role_changed_at 缓存 key + TTL（与 access token 15min 生命周期对齐）
+// ADR-139 D-139-7：role_changed_at 缓存 key
 const ROLE_CHANGED_CACHE_KEY = (userId: string) => `user:rca:${userId}`
-const ROLE_CHANGED_CACHE_TTL_SECONDS = 15 * 60  // 900s
+// ADR-148 R-148-4：TTL 与 session_timeout_minutes 同步，避免动态 timeout 后权限穿越窗口
+// 下限保留 900s（覆盖最小 5min timeout 场景），上限 1440min = 86400s（最大 timeout）
+// 防御：getSetting 失败（DB 不可用 / 测试 mock 缺失）→ 降级 900s 下限（不阻塞 role/ban 流程）
+const ROLE_CHANGED_CACHE_TTL_FLOOR_SECONDS = 15 * 60  // 900s 下限保护
+async function resolveRoleChangedCacheTtl(): Promise<number> {
+  let raw: string | null = null
+  try {
+    raw = await getSetting(db, 'session_timeout_minutes')
+  } catch {
+    // 降级默认值
+  }
+  const minutes = raw !== null ? Number(raw) : 60
+  const safe = Number.isFinite(minutes) ? minutes : 60
+  const clamped = Math.max(5, Math.min(1440, safe))
+  return Math.max(ROLE_CHANGED_CACHE_TTL_FLOOR_SECONDS, clamped * 60)
+}
 
 export async function adminUserRoutes(fastify: FastifyInstance) {
   const auth = [fastify.authenticate, fastify.requireRole(['admin'])]
@@ -94,9 +111,11 @@ export async function adminUserRoutes(fastify: FastifyInstance) {
 
     // ADR-139 N1-139-2 / CHG-SN-8-FUP-USERS-BAN-INV：写 Redis cache 让 middleware 即时校验 token.iat vs role_changed_at
     // 防御性：role_changed_at 字段存在时才写（兼容旧 mock）+ fire-and-forget Redis 不可用降级
+    // ADR-148 R-148-4：TTL 与 session_timeout_minutes 同步（避免动态 timeout 后权限穿越窗口）
     if (result.role_changed_at) {
+      const ttl = await resolveRoleChangedCacheTtl()
       redis
-        .set(ROLE_CHANGED_CACHE_KEY(id), result.role_changed_at, 'EX', ROLE_CHANGED_CACHE_TTL_SECONDS)
+        .set(ROLE_CHANGED_CACHE_KEY(id), result.role_changed_at, 'EX', ttl)
         .catch((err: unknown) => {
           fastify.log.warn({ err, userId: id }, '[admin/users] ban role_changed_at cache set failed')
         })
@@ -183,11 +202,15 @@ export async function adminUserRoutes(fastify: FastifyInstance) {
 
     // ADR-139 D-139-7：写 Redis 缓存，middleware/refresh 即时校验 token.iat vs role_changed_at
     // fire-and-forget — Redis 不可用时降级（与现有 blacklist check 一致）
-    redis
-      .set(ROLE_CHANGED_CACHE_KEY(id), result.role_changed_at, 'EX', ROLE_CHANGED_CACHE_TTL_SECONDS)
-      .catch((err: unknown) => {
-        fastify.log.warn({ err, userId: id }, '[admin/users] role_changed_at cache set failed')
-      })
+    // ADR-148 R-148-4：TTL 与 session_timeout_minutes 同步
+    {
+      const ttl = await resolveRoleChangedCacheTtl()
+      redis
+        .set(ROLE_CHANGED_CACHE_KEY(id), result.role_changed_at, 'EX', ttl)
+        .catch((err: unknown) => {
+          fastify.log.warn({ err, userId: id }, '[admin/users] role_changed_at cache set failed')
+        })
+    }
 
     // R-MID-1：user.role_change actionType + user targetKind audit log
     auditSvc.write({
@@ -453,6 +476,9 @@ export async function adminUserRoutes(fastify: FastifyInstance) {
     let skipped = 0
     let failed = 0
 
+    // ADR-148 R-148-4：batch 内 ttl 复用一次（避免 loop 内重复查 KV）
+    const cacheTtl = await resolveRoleChangedCacheTtl()
+
     for (const id of uniqueIds) {
       try {
         // D-143-3 5 类 skip 守卫
@@ -469,7 +495,7 @@ export async function adminUserRoutes(fastify: FastifyInstance) {
         // D-143-4 Redis fire-and-forget（复用单次 ban 范式）
         if (result.role_changed_at) {
           redis
-            .set(ROLE_CHANGED_CACHE_KEY(id), result.role_changed_at, 'EX', ROLE_CHANGED_CACHE_TTL_SECONDS)
+            .set(ROLE_CHANGED_CACHE_KEY(id), result.role_changed_at, 'EX', cacheTtl)
             .catch((err: unknown) => {
               fastify.log.warn({ err, userId: id }, '[admin/users] batch-ban rca cache set failed')
             })

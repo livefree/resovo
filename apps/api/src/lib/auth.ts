@@ -1,6 +1,9 @@
 /**
  * auth.ts — JWT 工具函数
- * Access Token: 15 分钟，存前端内存
+ * Access Token: 默认 15 分钟（ACCESS_TOKEN_EXPIRES_IN），运行时可由 caller 通过
+ *   signAccessToken(payload, expiresIn) 注入 KV 驱动 TTL（ADR-148 D-148-1）。
+ *   实际生产由 UserService.getSessionTimeoutMinutes() 读 system_settings
+ *   `session_timeout_minutes` KV（默认 60min / clamp [5, 1440]）。
  * Refresh Token: 30 天，通过 HttpOnly Cookie 传递（CHG-37）
  * 黑名单 key: blacklist:rt:<token_hash>（ADR-003）
  */
@@ -39,11 +42,21 @@ function getJwtSecret(): string {
   return process.env.JWT_SECRET ?? 'dev-jwt-secret-replace-in-production'
 }
 
-export function signAccessToken(payload: { userId: string; role: UserRole }): string {
+/**
+ * ADR-148 D-148-1：可选 expiresIn 参数（向后兼容）。
+ * caller（UserService 4 处）传 KV 驱动 TTL 字符串（如 '60m'）；不传走默认 '15m'。
+ */
+export function signAccessToken(
+  payload: { userId: string; role: UserRole },
+  expiresIn: string = ACCESS_TOKEN_EXPIRES_IN,
+): string {
+  // jsonwebtoken expiresIn 类型为 `number | StringValue`（ms 字符串模板）；
+  // KV 驱动 TTL 模板 `${n}m` 符合 StringValue 子集，运行时安全；显式断言绕过严格类型。
+  const signOptions = { expiresIn } as jwt.SignOptions
   return jwt.sign(
     { userId: payload.userId, role: payload.role, type: 'access' },
     getJwtSecret(),
-    { expiresIn: ACCESS_TOKEN_EXPIRES_IN }
+    signOptions,
   )
 }
 

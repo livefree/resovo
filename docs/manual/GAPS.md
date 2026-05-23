@@ -151,11 +151,11 @@
 ### #G-settings-session-fields-consume · 登录会话 3 字段未被中间件消费
 
 - **页面**：P-settings §3.8
-- **状态**：⚠️+🔄 ADR-148 起草 ✅（2026-05-23 / arch-reviewer A PASS）/ EP-A 实施 follow-up 待
+- **状态**：✅ **完全闭合 2/2**（2026-05-23 / ADR-148 A PASS + EP-A timeoutMinutes 消费 + R-148-4 user:rca TTL 同步 + 12 单测 全 PASS）；maxConcurrent + extendOnActivity 推 N1（独立 ADR）
 - **优先级**：P2（安全）
 - **现象**：session_timeout_minutes / session_max_concurrent / session_extend_on_activity 仅存储未生效
 - **ADR-148 决策**（commit 待 / 本卡）：方案 C UserService.getSessionTimeoutMinutes private helper + 4 caller 复用 + 方案 A 每次查 DB（QPS < 10）+ maxConcurrent / extendOnActivity 推 N1（独立 ADR 评估）+ 方案 C 双重防护（zod + clamp + NaN 降级）+ 零 R-MID-1 新增 + 零新表 / 零新端点 + R-148-4 关键发现 ADR-139 user:rca Redis TTL 需同步 session_timeout_minutes（实施卡 EP-A 一并修复）
-- **实施 follow-up**：EP-A 后端核心（~0.5w / 7 文件：auth.ts 加可选 expiresIn + UserService helper + 4 caller 改造 + clamp 防护 + 12 单测 + R-148-4 user:rca TTL 同步修复 + ADR-003 描述更新）+ EP-B 可选（LoginSessions Tab disabled tooltip ~0.1w）；总工时 ~0.5-0.6w
+- **后端实施 EP-A**（commit 待 / 2026-05-23）：CHG-SN-8-FUP-SESSION-FIELDS-CONSUME-EP-A — auth.ts signAccessToken 加可选 expiresIn 参数（向后兼容）+ UserService.getSessionTimeoutMinutes private helper（KV 查询 + try-catch 降级 + clamp + NaN 防护）+ 4 caller 改造（register/login/refresh/devLogin 传 `${ttl}m`）+ admin/users.ts R-148-4 修复（user:rca Redis TTL 从硬编码 900s → max(900, session_timeout_minutes * 60) 动态 + try-catch 降级）+ 12 新单测（auth.test 3 expiresIn 参数 + user-service-session-timeout.test 9 KV 消费 + clamp）+ 3 处现有测试更新（EX=900 → EX=3600 默认 60min default）；全 unit 4700/4701 PASS；零新依赖 / 零新表 / 零 R-MID-1 新增 / 零新端点
 
 ### #G-settings-save-all · 「保存所有更改」全局按钮 — NEGATED（架构决策不实装）
 

@@ -17,7 +17,14 @@ import {
   blacklistKey,
   REFRESH_TOKEN_TTL_SECONDS,
 } from '@/api/lib/auth'
+// ADR-148 D-148-1 / CHG-SN-8-FUP-SESSION-FIELDS-CONSUME-EP-A：access token TTL KV 驱动
+import { getSetting } from '@/api/db/queries/systemSettings'
 import type { User } from '@/types'
+
+// ADR-148 D-148-5 双重防护 clamp 边界（与 siteConfig zod 写入校验一致）
+const SESSION_TIMEOUT_MIN_MINUTES = 5
+const SESSION_TIMEOUT_MAX_MINUTES = 1440
+const SESSION_TIMEOUT_DEFAULT_MINUTES = 60
 
 // bcrypt cost：测试环境用 4 提高速度，生产用 12
 const BCRYPT_ROUNDS = process.env.NODE_ENV === 'test' ? 4 : 12
@@ -71,6 +78,24 @@ export class UserService {
     private redis: Redis
   ) {}
 
+  /**
+   * ADR-148 D-148-1 + D-148-5：读 KV `session_timeout_minutes` + 双重防护 clamp + NaN 降级
+   * 返回 number 分钟（供 caller 拼 `${n}m` 字符串传 signAccessToken）
+   *
+   * 防御：getSetting 查询失败（DB 不可用 / 测试 mock 缺失）→ 降级默认 60min（不阻塞登录）
+   */
+  private async getSessionTimeoutMinutes(): Promise<number> {
+    let raw: string | null = null
+    try {
+      raw = await getSetting(this.db, 'session_timeout_minutes')
+    } catch {
+      // 降级默认值（生产 DB 故障 / 测试 mock 缺失）
+    }
+    const parsed = raw !== null ? Number(raw) : SESSION_TIMEOUT_DEFAULT_MINUTES
+    const safe = Number.isFinite(parsed) ? parsed : SESSION_TIMEOUT_DEFAULT_MINUTES
+    return Math.max(SESSION_TIMEOUT_MIN_MINUTES, Math.min(SESSION_TIMEOUT_MAX_MINUTES, safe))
+  }
+
   async register(input: RegisterInput): Promise<AuthResult> {
     // 唯一性校验（email 和 username 均需唯一）
     const [byEmail, byUsername] = await Promise.all([
@@ -89,7 +114,8 @@ export class UserService {
     })
 
     const { passwordHash: _ph, ...safeUser } = user
-    const accessToken = signAccessToken({ userId: user.id, role: user.role })
+    const ttl = await this.getSessionTimeoutMinutes()
+    const accessToken = signAccessToken({ userId: user.id, role: user.role }, `${ttl}m`)
     const refreshToken = signRefreshToken(user.id)
 
     return { user: safeUser, accessToken, refreshToken }
@@ -111,7 +137,8 @@ export class UserService {
     if (!valid) throw new UnauthorizedError('账号或密码错误')
 
     const { passwordHash: _ph, ...safeUser } = user
-    const accessToken = signAccessToken({ userId: user.id, role: user.role })
+    const ttl = await this.getSessionTimeoutMinutes()
+    const accessToken = signAccessToken({ userId: user.id, role: user.role }, `${ttl}m`)
     const refreshToken = signRefreshToken(user.id)
 
     return { user: safeUser, accessToken, refreshToken }
@@ -141,7 +168,8 @@ export class UserService {
       }
     }
 
-    const accessToken = signAccessToken({ userId: user.id, role: user.role })
+    const ttl = await this.getSessionTimeoutMinutes()
+    const accessToken = signAccessToken({ userId: user.id, role: user.role }, `${ttl}m`)
     return { accessToken }
   }
 
@@ -173,7 +201,8 @@ export class UserService {
     }
 
     const { passwordHash: _ph, ...safeUser } = user
-    const accessToken = signAccessToken({ userId: user.id, role: user.role })
+    const ttl = await this.getSessionTimeoutMinutes()
+    const accessToken = signAccessToken({ userId: user.id, role: user.role }, `${ttl}m`)
     const refreshToken = signRefreshToken(user.id)
     return { user: safeUser, accessToken, refreshToken }
   }

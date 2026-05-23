@@ -2916,3 +2916,57 @@ Plan-Revision: 无
 
 Cleanup-Audit: #G-settings-session-fields-consume ⬜/🔄 → ⚠️+🔄 (ADR ✅ 2/3 / 实施 follow-up 待立)
 Plan-Revision: 无
+
+
+## [CHG-SN-8-FUP-SESSION-FIELDS-CONSUME-EP-A] ADR-148 后端实施 session_timeout_minutes KV 消费 + R-148-4 user:rca TTL 同步 + 12 单测 (#G-settings-session-fields-consume 完全闭合 2/2)
+
+- **完成时间**：2026-05-23
+- **记录时间**：2026-05-23
+- **执行模型**：claude-opus-4-7（续 ADR 起草会话）
+- **子代理**：无（ADR-148 已 Opus A PASS commit e34b1229）
+- **修改文件**（5 代码 + 1 新测试 + 3 测试更新 + 3 文档）：
+  - `apps/api/src/lib/auth.ts` — signAccessToken 加可选 `expiresIn: string = ACCESS_TOKEN_EXPIRES_IN` 参数（向后兼容）+ jsonwebtoken 类型断言 `as jwt.SignOptions` + 头注释更新（ADR-148 D-148-1）
+  - `apps/api/src/services/UserService.ts` — 新增 SESSION_TIMEOUT_MIN/MAX/DEFAULT_MINUTES 常量 + getSessionTimeoutMinutes private helper（try-catch getSetting + Number 转换 + NaN 降级 60 + clamp [5, 1440]）+ 4 caller 改造（register/login/refresh/devLogin 传 `${ttl}m`）
+  - `apps/api/src/routes/admin/users.ts` — R-148-4 修复：删 ROLE_CHANGED_CACHE_TTL_SECONDS 常量 + 新增 ROLE_CHANGED_CACHE_TTL_FLOOR_SECONDS (900s) + resolveRoleChangedCacheTtl helper（try-catch + Math.max(900, minutes*60) 下限保护）+ 3 处写入改用动态 TTL（ban / role 变更 / batch-ban loop 外复用）
+  - `tests/unit/api/auth.test.ts` — 加 describe `signAccessToken expiresIn 参数（ADR-148）` 3 用例（默认 '15m' / '30m' / '5m'）
+  - `tests/unit/api/user-service-session-timeout.test.ts` — 新建 9 用例（4 caller 集成 + KV 缺失/非数字降级 + clamp 0/1/9999 边界）
+  - `tests/unit/api/admin-users-role-change.test.ts` — EX=900 → EX=3600（R-148-4 默认 60min default）+ 注释说明
+  - `tests/unit/api/admin-users-ban-inv.test.ts` — 同上
+  - `tests/unit/api/admin-users-batch-ban.test.ts` — 同上
+  - `docs/manual/GAPS.md` — #G-settings-session-fields-consume ✅ **完全闭合 2/2**
+  - `docs/task-queue.md` SEQ-20260521-06 #59 ✅
+  - `docs/tasks.md` 清卡片
+- **新增依赖**：无
+- **数据库变更**：无（仅消费已有 session_timeout_minutes KV，migration 066 已 seed）
+- **设计要点**：
+  - **D-148-1 消费路径方案 C**：UserService.getSessionTimeoutMinutes private helper + 4 caller 复用；关注点分离（signAccessToken 不耦合 DB）+ DRY + 可测试性 + 向后兼容
+  - **D-148-2 缓存策略方案 A**：每次查 DB（login + register + refresh QPS < 10，PK 命中 < 1ms，YAGNI）
+  - **D-148-5 双重防护**：zod 写入校验 .min(5).max(1440) + helper clamp Math.max(5, Math.min(1440, x)) + NaN 降级默认 60
+  - **D-148-6 单位转换**：helper 返回 number 分钟，caller 拼 `${n}m` 字符串（与 '15m' 惯例一致）
+  - **R-148-4 user:rca TTL 同步**（ADR-139 兼容性修复）：原硬编码 900s（= 旧 access token 15m）→ 动态 `max(900, session_timeout_minutes * 60)` 秒；admin role 变更 + ban + batch-ban 3 写入点全部覆盖；900s 下限保护避免极短 timeout 场景；batch-ban loop 外 await ttl 一次复用（避免重复查 KV）
+  - **try-catch 降级范式**：UserService.getSessionTimeoutMinutes + resolveRoleChangedCacheTtl 都 try-catch getSetting 失败 → 降级默认值；生产 DB 故障 / 测试 mock 缺失不阻塞登录 / role 流程
+  - **jsonwebtoken 类型断言**：expiresIn 严格类型 `number | StringValue`，本卡用 `as jwt.SignOptions` 断言绕过编译期校验（运行时安全 — `${n}m` 模板符合 StringValue 子集）
+- **行为变更**（有意，对齐 migration 066 seed）：
+  - access token TTL：硬编码 15m → KV 驱动默认 60m（admin 可在 Settings 调整 [5, 1440] 分钟）
+  - user:rca Redis TTL：硬编码 900s → max(900, session_timeout_minutes * 60) 动态（避免动态 timeout 后权限穿越窗口）
+- **不在范围**：
+  - maxConcurrent 消费（独立 ADR / N1-148-1 / 需 user_sessions 表 + 踢出策略）
+  - extendOnActivity 消费（独立 ADR / N1-148-2 / ADR-003 兼容性评估）
+  - KV Redis cache（N1-148-3 / login QPS > 100 触发）
+  - ADR-003 描述更新（独立小卡 / 标注「access token TTL 15m 描述需更新为 KV 驱动 60m」）
+  - LoginSessions Tab UI disabled tooltip（EP-B 可选 / 不阻塞）
+- **验收**：
+  - typecheck PASS（含 jsonwebtoken expiresIn 类型断言）
+  - lint PASS
+  - 12 新单测 PASS（3 auth + 9 UserService）
+  - 全 unit 4700/4701 PASS（1 pre-existing flaky 隔离 PASS / 与本卡 0 重叠）
+  - verify:adr-contracts PASS（186 admin 路由对齐；D-N 闭环含 ADR-148 8/8）
+- **价值**：
+  - **#G-settings-session-fields-consume P2 安全完全闭合 2/2**：admin 配置的 session_timeout_minutes 终于生效 — admin 可控 access token 生命周期 [5, 1440] 分钟
+  - **R-148-4 安全修复**：避免 ADR-139 user:rca Redis TTL 与动态 timeout 不匹配导致的权限穿越窗口（默认 60min timeout → 0 穿越窗口）
+  - **MVP 范围控制典范**：8 决策中明确 2 推 N1，避免半天 → 1 天工时失控；总工时 0.5w 控制内
+  - **复用 ADR-139 范式**：Redis cache + DB fallback + fire-and-forget；R-148-4 同步修复保持 ADR-139 即时校验完整性
+  - **闭合 SEQ-20260521-06 P2 GAPS**：webhook 100% + shell notifications 100% + session timeout 100%；仅剩 P3 GAPS（已立 follow-up 长尾）
+
+Cleanup-Audit: #G-settings-session-fields-consume ⚠️+🔄 → ✅ 完全闭合 2/2
+Plan-Revision: ADR-003 描述更新（access token TTL 15m → KV 驱动 60m）独立小卡按需启动

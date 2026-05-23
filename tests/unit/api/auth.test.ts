@@ -121,6 +121,27 @@ describe('signAccessToken / verifyAccessToken', () => {
     const token = signAccessToken({ userId: 'user-1', role: 'user' })
     expect(() => verifyAccessToken(token.slice(0, -5) + 'xxxxx')).toThrow()
   })
+
+  // ADR-148 D-148-1 / CHG-SN-8-FUP-SESSION-FIELDS-CONSUME-EP-A
+  describe('signAccessToken expiresIn 参数（ADR-148）', () => {
+    it('默认 expiresIn = "15m" → exp - iat === 900', () => {
+      const token = signAccessToken({ userId: 'u', role: 'user' })
+      const payload = verifyAccessToken(token)
+      expect(payload.exp - payload.iat).toBe(900)
+    })
+
+    it('自定义 expiresIn = "30m" → exp - iat === 1800', () => {
+      const token = signAccessToken({ userId: 'u', role: 'user' }, '30m')
+      const payload = verifyAccessToken(token)
+      expect(payload.exp - payload.iat).toBe(1800)
+    })
+
+    it('自定义 expiresIn = "5m" → exp - iat === 300', () => {
+      const token = signAccessToken({ userId: 'u', role: 'user' }, '5m')
+      const payload = verifyAccessToken(token)
+      expect(payload.exp - payload.iat).toBe(300)
+    })
+  })
 })
 
 describe('signRefreshToken / verifyRefreshToken', () => {

@@ -194,7 +194,8 @@ describe('POST /admin/users/batch-ban (ADR-143)', () => {
       headers: adminAuth(),
       payload: { ids: [NORMAL_USER_1] },
     })
-    expect(redisSet).toHaveBeenCalledWith(`user:rca:${NORMAL_USER_1}`, rca, 'EX', 900)
+    // ADR-148 R-148-4：TTL 与 session_timeout_minutes 同步；测试 mock 缺失 → 降级 60min → max(900, 3600) = 3600s
+    expect(redisSet).toHaveBeenCalledWith(`user:rca:${NORMAL_USER_1}`, rca, 'EX', 3600)
     await app.close()
   })
 

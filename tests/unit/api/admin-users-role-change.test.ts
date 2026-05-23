@@ -102,7 +102,8 @@ describe('PATCH /admin/users/:id/role — Redis cache + R-MID-1 audit (ADR-139)'
 
     expect(res.statusCode).toBe(200)
     expect(mockUpdateUserRole).toHaveBeenCalledWith(expect.anything(), 'u-1', 'moderator')
-    expect(redisSet).toHaveBeenCalledWith('user:rca:u-1', rca, 'EX', 900)
+    // ADR-148 R-148-4：TTL 与 session_timeout_minutes 同步；测试 getSetting mock 缺失 → 降级 60min default → max(900, 3600) = 3600s
+    expect(redisSet).toHaveBeenCalledWith('user:rca:u-1', rca, 'EX', 3600)
     await app.close()
   })
 
