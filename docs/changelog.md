@@ -15795,4 +15795,46 @@ Cleanup-Audit: #G-moderation-preset-team ⚠️+🔄（消费层 warn chip ✅ +
 Plan-Revision: ADR-144 + 1（plan §9 ADR 索引推进至 144）
 
 
+## [CHG-SN-8-FUP-PRESET-TEAM-EP-A] ADR-144 后端实施 — FilterPreset 4 端点 + R-MID-1 第 21-23 次系统化 (#G-moderation-preset-team 后端闭合)
+
+- **完成时间**：2026-05-22
+- **记录时间**：2026-05-22 19:10
+- **执行模型**：claude-opus-4-7
+- **子代理**：无（ADR-144 已 Opus A PASS commit b1585847）
+- **拆 -A/-B 理由**：CLAUDE.md「PATCH 卡范围 > 5 项未拆 -A/-B 子卡」+ ADR-144 §8 工时 ~0.4w；本卡 -A 仅后端独立闭合（前端继续 localStorage 不影响），-B 留 follow-up
+- **修改文件**（10 文件）：
+  - `apps/api/src/db/migrations/071_user_filter_presets.sql` — 建表 (UUID PK + owner FK + scope/tab CHECK + JSONB + is_default) + 3 索引（idx_ufp_owner_scope_tab 复合 / idx_ufp_default_unique 部分唯一保证 default 单一 / idx_ufp_shared_tab 部分）+ updated_at 触发器
+  - `apps/api/src/db/migrations/072_audit_log_extend_target_kind_filter_preset.sql` — CHECK 12→13 加 filter_preset
+  - `apps/api/src/db/queries/filterPresets.ts` — CRUD 5 函数（list 含 LEFT JOIN users / findById / insert / update / clearDefaultForOwnerTab / delete）
+  - `apps/api/src/services/FilterPresetService.ts` — zod schemas（List/Create/Update）+ DTO 映射 + RBAC（owner+admin force delete shared）+ default 互斥事务 + audit fire-and-forget + 23505 → 409 STATE_CONFLICT 兜底
+  - `apps/api/src/routes/admin/filter-presets.ts` — 4 端点 GET/POST/PATCH/DELETE + auth moderator+admin + 422/404/403/409 错误码完备
+  - `apps/api/src/server.ts` — 注册 adminFilterPresetRoutes 至 /v1 prefix
+  - `packages/types/src/admin-moderation.types.ts` — AdminAuditActionType union +3（filter_preset.create/update/delete）+ AdminAuditTargetKind union +1（filter_preset）
+  - `apps/api/src/services/AuditLogService.ts` — ACTION_TYPES 同步 +3 / TARGET_KINDS +1
+  - `tests/unit/api/admin-filter-presets.test.ts` — 18 用例（CRUD happy 5 / scope filter 2 / is_default 互斥 2 + 23505→409 / 跨 owner 权限 4 / shared 跨 role 1 / R-MID-1 audit 3 路径全断言 / 422 validation 2）
+  - `tests/unit/api/audit-log-coverage.test.ts` — PAYLOAD_REQUIRED + PAYLOAD_ASSERTION_REQUIRED 各 +3
+  - `tests/unit/api/audit-log-service-enums-set-equal.test.ts` — EXPECTED_ACTION_TYPES +3 / EXPECTED_TARGET_KINDS +1
+  - `docs/decisions.md` — ADR-144 §4 补 §端点契约 子段（6 列表格满足 verify-endpoint-adr 解析）
+  - `docs/manual/GAPS.md` — #G-moderation-preset-team ⚠️+🔄 → ✅ 后端闭合
+  - `docs/manual/20-pages/P-moderation.md` — §3.4 改写为后端已实装 + 4 端点详细
+  - `docs/task-queue.md` SEQ-20260521-06 #43 ✅
+  - `docs/tasks.md` 清卡片
+- **新增依赖**：无
+- **数据库变更**：2 migration（071 user_filter_presets 建表 + 3 索引 / 072 audit CHECK 12→13）；待运维 `npm run migrate` 执行
+- **R-MID-1 第 21-23 次系统化**：filter_preset.create + filter_preset.update + filter_preset.delete 7 文件 checklist 完整闭环（types union + ACTION_TYPES + TARGET_KINDS + coverage PAYLOAD_REQUIRED + coverage PAYLOAD_ASSERTION_REQUIRED + Service audit fire-and-forget + changelog）
+- **验收**：
+  - typecheck PASS（含 R-MID-1 type union 严格一致性）/ lint PASS / verify:adr-contracts PASS（含 verify-endpoint-adr 4 端点全 ADR-144 §端点契约表覆盖）
+  - 完整 unit 4618/4620 PASS（+18 新；2 pre-existing flaky 隔离 PASS）
+  - 18 新单测覆盖：CRUD 5 happy + scope filter 2 + is_default 互斥 2 (含 23505→409) + 跨 owner 权限 4 + shared 跨 role 1 + R-MID-1 audit 3 路径全断言（create/update/delete）+ 422 validation 2
+- **价值**：
+  - **#G-moderation-preset-team P3 后端闭合**：4 端点 + 完整 R-MID-1 audit + DB 部分唯一索引保证 default 单一 + RBAC 完备
+  - **零新基础设施**：零新 ErrorCode / 零新依赖 / 零新概念（不引入 team）— 完全对齐 Resovo 当前单组织架构
+  - **复用全栈**：R-MID-1 framework / AuditLogService / fastify.requireRole / ApiResponse 信封 / ErrorCode 系统全部复用
+  - **方案 B 设计兑现**：scope private/shared 两值 CHECK 极简实现；后续 M-SN-N 多租户时可加 team_id 列扩展不破坏已有 schema
+- **下一步**：CHG-SN-8-FUP-PRESET-TEAM-EP-B 按需启动（前端 SWR 重写 + scope toggle UI + localStorage import 入口）
+
+Cleanup-Audit: #G-moderation-preset-team 后端 ✅（前端 SWR 接入留 CHG-SN-8-FUP-PRESET-TEAM-EP-B）
+Plan-Revision: 无（按 ADR-144 既定决策实施）
+
+
 

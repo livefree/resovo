@@ -87,6 +87,10 @@ const REQUIRED_ACTION_TYPES = [
   // CHG-SN-8-FUP-USERS-BAN-AUDIT：admin 封禁 / 解封用户 audit（R-MID-1 第 20 次）
   'user.ban',
   'user.unban',
+  // CHG-SN-8-FUP-PRESET-TEAM-EP-A / ADR-144：FilterPreset CRUD audit（R-MID-1 第 21-23 次）
+  'filter_preset.create',
+  'filter_preset.update',
+  'filter_preset.delete',
 ] as const
 
 const ACTION_TYPE_REGEX = /actionType:\s*['"]([a-z_.]+)['"]/g
@@ -165,6 +169,10 @@ const PAYLOAD_ASSERTION_REQUIRED = [
   // CHG-SN-8-FUP-USERS-BAN-AUDIT：admin 封禁 / 解封 audit payload 内容断言（R-MID-1 第 20 次）
   'user.ban',
   'user.unban',
+  // CHG-SN-8-FUP-PRESET-TEAM-EP-A / ADR-144：FilterPreset CRUD audit payload 内容断言（R-MID-1 第 21-23 次）
+  'filter_preset.create',
+  'filter_preset.update',
+  'filter_preset.delete',
 ] as const
 
 // CHG-SN-6-10：plan v1.4 §3.0.5 M-SN-4 legacy 11 项已迁移至 PAYLOAD_ASSERTION_REQUIRED

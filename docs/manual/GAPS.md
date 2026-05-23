@@ -57,12 +57,13 @@
 ### #G-moderation-preset-team · FilterPreset 多账号共享缺失
 
 - **页面**：P-moderation §3.4 / §7 FAQ
-- **状态**：⚠️+🔄 已部分实装 + ADR 已起草（CHG-SN-8-GAPS-PRESET-LOCAL-BADGE 消费层警示 ✅ + ADR-144 A PASS / 实施 follow-up：CHG-SN-8-FUP-PRESET-TEAM-EP 待立）
+- **状态**：✅ **后端闭合**（2026-05-22 / ADR-144 + EP-A 全 PASS）；前端 lib SWR 重写 + scope toggle UI + import 入口留独立 follow-up CHG-SN-8-FUP-PRESET-TEAM-EP-B（按需启动）
 - **优先级**：P3
 - **现象（已核查）**：`apps/server-next/src/lib/moderation/use-filter-presets.ts:5` localStorage 持久化（key `admin.moderation.presets.v1`），仅本浏览器；同团队审核员无法共享预设
 - **消费层补齐**：CHG-SN-8-GAPS-PRESET-LOCAL-BADGE — FilterPresetPopover header 加「仅本地」warn chip + tooltip
 - **ADR-144 决策**（commit 待 / 本卡）：方案 B `scope: 'private' | 'shared'`（不引入 team 概念 — Resovo 当前架构无多租户）+ user_filter_presets 表（owner_user_id / name / query_jsonb / scope CHECK / tab CHECK / is_default + 部分唯一索引）+ 4 端点（GET/POST/PATCH/DELETE list 200 上限不分页）+ owner 全权 / admin 强制删 shared / moderator 不可改他人 + R-MID-1 第 21-23 次系统化（filter_preset.create/update/delete + targetKind filter_preset migration 072 CHECK 12→13）+ 用户手动 import 迁移策略 + DB 部分唯一索引保证 is_default 单一性 + 零新 ErrorCode + 7 关联 ADR 实证
-- **后端实施 follow-up**：CHG-SN-8-FUP-PRESET-TEAM-EP — 2 migration + DB query + Service + Route + R-MID-1 7 文件 + 前端 lib SWR 重写 + scope toggle UI + import 入口 + 18 单测；工时 ~0.4w
+- **后端实施 EP-A**（commit 待 / 本卡）：CHG-SN-8-FUP-PRESET-TEAM-EP-A — 2 migration（071 建表 + 3 索引 + 072 CHECK 12→13）+ filterPresets DB query 层（CRUD 5 函数含 clearDefaultForOwnerTab）+ FilterPresetService（zod + RBAC + default 互斥 + audit fire-and-forget）+ 4 端点 Route（GET/POST/PATCH/DELETE）+ R-MID-1 7 文件（types union + ACTION_TYPES + TARGET_KINDS + coverage test）+ 18 单测 PASS
+- **前端实装 follow-up EP-B**：CHG-SN-8-FUP-PRESET-TEAM-EP-B — `use-filter-presets.ts` SWR 重写消费 4 端点 + FilterPresetPopover scope toggle 标签（private/shared switch）+「导入本地预设」入口 + localStorage 清理；工时 ~0.2w
 
 ### #G-merge-candidate-b-auto · 审核台类似 tab 深链 candidate_b 未自动填入 Merge 页
 

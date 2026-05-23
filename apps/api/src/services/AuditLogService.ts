@@ -97,6 +97,10 @@ export const ACTION_TYPES: readonly AdminAuditActionType[] = [
   // CHG-SN-8-FUP-USERS-BAN-AUDIT：admin 封禁 / 解封用户 audit（R-MID-1 第 20 次系统化）
   'user.ban',
   'user.unban',
+  // CHG-SN-8-FUP-PRESET-TEAM-EP-A / ADR-144：FilterPreset CRUD 审计（R-MID-1 第 21-23 次系统化）
+  'filter_preset.create',
+  'filter_preset.update',
+  'filter_preset.delete',
 ]
 export const TARGET_KINDS: readonly AdminAuditTargetKind[] = [
   'video',
@@ -110,6 +114,7 @@ export const TARGET_KINDS: readonly AdminAuditTargetKind[] = [
   'source_route',  // CHG-SN-7-REDO-01-E2 / ADR-117 AMENDMENT 2
   'user_submission',  // CHG-SN-7-REDO-02-A / ADR-124
   'user',  // CHG-SN-8-FUP-USERS-ROLE-INV-EP / ADR-139
+  'filter_preset',  // CHG-SN-8-FUP-PRESET-TEAM-EP-A / ADR-144（migration 072 CHECK 12→13）
 ]
 
 // ── zod schema（ADR-118 §端点契约 + D-118-3） ────────────────────────

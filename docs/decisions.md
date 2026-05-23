@@ -10718,14 +10718,18 @@ batch-unban 对称：`{ unbanned: 8, skipped: 2, failed: 0 }`
 
 ### 4. 端点契约
 
+### 端点契约
+
 4 个端点，全部挂 `preHandler: [fastify.authenticate, fastify.requireRole(['moderator', 'admin'])]`：
 
-| # | Method | Path | 权限 | 新增 ErrorCode |
-|---|--------|------|------|---------------|
-| 1 | GET | `/admin/filter-presets` | moderator, admin | 无 |
-| 2 | POST | `/admin/filter-presets` | moderator, admin | 无 |
-| 3 | PATCH | `/admin/filter-presets/:id` | moderator, admin (owner only) | 无 |
-| 4 | DELETE | `/admin/filter-presets/:id` | moderator, admin (owner / admin force) | 无 |
+| # | Method | Path | 权限 | Body / Query | Response `data` | 新增 ErrorCode | ADR |
+|---|--------|------|------|--------------|----------------|---------------|-----|
+| 1 | GET | `/admin/filter-presets` | moderator, admin | Query: `{ tab?, scope? }` | `FilterPresetDto[]` (200 上限不分页) | 无 | ADR-144 |
+| 2 | POST | `/admin/filter-presets` | moderator, admin | Body: `{ name, scope?, tab, query?, isDefault? }` | `{ data: FilterPresetDto }` (201) | 无 | ADR-144 |
+| 3 | PATCH | `/admin/filter-presets/:id` | moderator, admin (owner only) | Body: `{ name?, scope?, tab?, query?, isDefault? }` (≥1 字段) | `{ data: FilterPresetDto }` | 无 | ADR-144 |
+| 4 | DELETE | `/admin/filter-presets/:id` | moderator, admin (owner / admin force) | — | 204 No Content | 无 | ADR-144 |
+
+**side-effects**：POST/PATCH 触发 `clearDefaultForOwnerTab` 互斥事务（is_default=true 场景）+ R-MID-1 audit fire-and-forget（filter_preset.create / update / delete）；DB 部分唯一索引 `idx_ufp_default_unique` 作终极护栏防 race。
 
 **4.1 GET**：Query `tab?: enum / scope?: enum`；Response 含 `ownerUserId`/`ownerUsername` (LEFT JOIN users)；返回 own private + own shared + 他人 shared；200 上限 slice。
 

@@ -182,6 +182,11 @@ export type AdminAuditActionType =
   | 'user.ban'                    // PATCH /admin/users/:id/ban
   | 'user.unban'                  // PATCH /admin/users/:id/unban
 
+  // CHG-SN-8-FUP-PRESET-TEAM-EP-A / ADR-144：FilterPreset CRUD 审计（R-MID-1 第 21-23 次系统化）
+  | 'filter_preset.create'        // POST /admin/filter-presets
+  | 'filter_preset.update'        // PATCH /admin/filter-presets/:id
+  | 'filter_preset.delete'        // DELETE /admin/filter-presets/:id
+
 export type AdminAuditTargetKind =
   | 'video'
   | 'video_source'
@@ -195,6 +200,7 @@ export type AdminAuditTargetKind =
   | 'user_submission'  // CHG-SN-7-REDO-02-A / ADR-124：用户投稿 4 类统一表
   | 'image_health'  // CHG-SN-7-MISC-IMAGE-1 / ADR-135：图片健康操作目标
   | 'user'  // CHG-SN-8-FUP-USERS-ROLE-INV-EP / ADR-139：admin 操作用户实体（role_change 等）
+  | 'filter_preset'  // CHG-SN-8-FUP-PRESET-TEAM-EP-A / ADR-144：FilterPreset CRUD 目标（migration 072 CHECK 12→13）
 
 export interface AdminAuditLog {
   readonly id: string  // bigserial → string（避免 JS 大数精度）

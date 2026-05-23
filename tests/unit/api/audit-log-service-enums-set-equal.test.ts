@@ -82,6 +82,10 @@ const EXPECTED_ACTION_TYPES = [
   // CHG-SN-8-FUP-USERS-BAN-AUDIT / R-MID-1 系统化第 20 次（user 封禁 / 解封 audit）
   'user.ban',
   'user.unban',
+  // CHG-SN-8-FUP-PRESET-TEAM-EP-A / ADR-144 / R-MID-1 系统化第 21-23 次（FilterPreset CRUD audit）
+  'filter_preset.create',
+  'filter_preset.update',
+  'filter_preset.delete',
 ] as const
 
 const EXPECTED_TARGET_KINDS = [
@@ -96,6 +100,7 @@ const EXPECTED_TARGET_KINDS = [
   'source_route',  // CHG-SN-7-REDO-01-E2 / ADR-117 AMENDMENT 2
   'user_submission',  // CHG-SN-7-REDO-02-A / ADR-124
   'user',  // CHG-SN-8-FUP-USERS-ROLE-INV-EP / ADR-139
+  'filter_preset',  // CHG-SN-8-FUP-PRESET-TEAM-EP-A / ADR-144（migration 072 CHECK 12→13）
 ] as const
 
 describe('AuditLogService enums set-equal 守卫（ultrareview P1-2）', () => {
