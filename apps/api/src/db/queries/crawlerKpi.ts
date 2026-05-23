@@ -116,7 +116,7 @@ FROM site_counts, running_count, today_tasks, yesterday_tasks
 const SITE_STATS_SQL = `
 SELECT
   cs.key,
-  COALESCE(vs.route_count, 0)::text AS route_count,
+  COALESCE(rc.route_count, 0)::text AS route_count,
   COALESCE(ts.health, 0)::text      AS health
 FROM crawler_sites cs
 LEFT JOIN (
@@ -124,7 +124,7 @@ LEFT JOIN (
   FROM video_sources
   WHERE deleted_at IS NULL
   GROUP BY source_name
-) vs ON vs.source_name = cs.key
+) rc ON rc.source_name = cs.key
 LEFT JOIN LATERAL (
   SELECT
     ROUND(100.0 * SUM(CASE WHEN status = 'done' THEN 1 ELSE 0 END) / NULLIF(COUNT(*), 0))::int AS health

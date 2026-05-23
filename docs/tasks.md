@@ -6,4 +6,4 @@
 
 ## 进行中任务
 
-（空 — 上一任务 CHG-SN-8-CHORE-DOCS-DRIFT-SYNC 已完成 / SEQ-20260521-06 #61 ✅ / ADR-003 描述同步 + MOD-PLAYER 状态漂移修正闭合）
+（空 — 上一任务 CHG-SN-8-CHORE-ADR-146-D-N-CLOSE 已完成 / SEQ-20260521-06 #62 ✅ / ADR-146 D-N 编号 6 条 + crawlerKpi.ts SQL alias advisory 双清零）

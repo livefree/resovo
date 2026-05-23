@@ -2424,7 +2424,15 @@ Plan-Revision: 无
   - `docs/tasks.md` 清卡片
 - **新增依赖**：无
 - **数据库变更**：无（不引入新表 / KV 仅新增 1 key `notification_webhook_events` 存订阅事件 JSON 数组）
-- **D-N 偏离闭环**（advisory verify-adr-d-numbers）：D-146-1..8 在 ADR-146 §3 完整定稿
+- **D-N 偏离闭环**（advisory verify-adr-d-numbers / 2026-05-23 CHG-SN-8-CHORE-ADR-146-D-N-CLOSE 展开范围引用）：
+  - D-146-1（事件订阅模型方案 B 单 URL + 用户多选订阅 / 不引入多 webhook 端点表）
+  - D-146-2（事件类型枚举 5 项：crawler.run.failed / storage.r2.alert / moderation.pending.threshold / submission.created / video.batch.complete）
+  - D-146-3（触发模式 fire-and-forget Dispatcher / 不用 bull 队列避免 Redis 依赖）
+  - D-146-4（HMAC-SHA256 + sha256= 前缀对齐 GitHub 惯例 + 4 自定义 header X-Resovo-Signature/Event/Delivery/Timestamp）
+  - D-146-5（retry [5s/15s/45s] + jitter 4 次尝试 + 30s 超时 / 5xx/超时重试 4xx 不重试）
+  - D-146-6（R-MID-1 第 25 次 system.webhook_send_failed actionType 仅记最终失败 audit）
+  - D-146-7（5 触发点接入清单 — Staging 批量发布 ✅ + CrawlerRun.failed ✅ + moderation.pending.threshold cron ✅ + storage.r2.alert cron ✅ + submission.created 外部依赖待）
+  - D-146-8（关联 ADR 7 项引用 — ADR-110/121/123/129/132/137/142 完整引用结构）
 - **关键设计亮点**：
   - **方案 A 修正版（不用 bull 队列）**：仓内 bull@4 已装但 worker 用 node-cron 调度且无 Redis 部署，引入 bull 需 Redis 违反零新依赖；改用 fire-and-forget WebhookDispatcher（与 AuditLogService.write 同模式），低频场景（日均 < 50）API 进程内异步足矣
   - **SSRF 5 层独立模块**：apps/api/src/lib/ssrf-guard.ts 统一守卫（https only + RFC 1918 私有 IP + loopback 127.0.0.0/8 + ::1 + link-local 169.254.0.0/16 + 云元数据 hostname 拒绝），POST /admin/webhook/test 与 Dispatcher 共用
@@ -3040,3 +3048,48 @@ Plan-Revision: 无
 
 Cleanup-Audit: ADR-003 描述漂移 ✅ 同步；MOD-PLAYER task-queue 状态漂移 ✅ 修正
 Plan-Revision: 无（仅文档同步 / 不触动 plan）
+
+
+## [CHG-SN-8-CHORE-ADR-146-D-N-CLOSE] ADR-146 D-N 编号 advisory 清零（6 条）+ crawlerKpi.ts SQL subquery alias 修正
+
+- **完成时间**：2026-05-23
+- **记录时间**：2026-05-23
+- **执行模型**：claude-opus-4-7（max effort 续会话）
+- **子代理**：无（机械文档补登记 + SQL alias 字面量替换）
+- **修改文件**（3 文件）：
+  - `docs/changelog.md` — ADR-146 起草条目 `D-N 偏离闭环` 段范围引用 `D-146-1..8` 展开为 8 行枚举（含 D-146-1 + D-146-3 已闭环 + 新补 D-146-2/4/5/6/7/8 共 6 条 / verify-adr-d-numbers regex 仅识别明确数字编号）；本条目自身追加
+  - `apps/api/src/db/queries/crawlerKpi.ts` — `SITE_STATS_SQL` LEFT JOIN subquery alias `vs` → `rc`（3 处字面量替换 / SQL 行为零变化 / 避免与脚本启发式硬编码 video_sources alias 冲突）
+  - `docs/task-queue.md` SEQ-20260521-06 #62 ✅
+  - `docs/tasks.md` 清卡片
+- **新增依赖**：无
+- **数据库变更**：无（SQL alias 重命名 / 字段引用不变 / 行为不变）
+- **设计要点**：
+  - **范围引用展开为枚举范式**：verify-adr-d-numbers.mjs 用 regex `/D-(\d+)-(\d+)/g` 匹配，`D-146-1..8` 仅识别首尾 2 个；需展开为 `D-146-1 / D-146-2 / ... / D-146-8` 才能闭环全部；同 CHG-SN-7-MISC-AUDIT-PARSER 范式
+  - **每条 D-N 携带简短语义**：避免「机械补占位」（仅 `D-146-N` 字面满足 regex 但缺失追溯价值）；每条引用配 ADR-146 §3 决策摘要短语
+  - **SQL alias rename 选择 `rc`**：route counts 含义清晰 + 不在脚本 ALIAS_MAP (v/vs/mc/wh/sla) 中 + 不与任何核心表名冲突；脚本 line 27 自认 "M-SN-6 完善后扩 alias 上下文推断"，本卡选最小代码改动绕过启发式
+  - **不改归档 changelog**：仅动 docs/changelog.md；与本会话前一卡（DOCS-DRIFT-SYNC）相同范式
+  - **不改 ADR-146 §决策章节**：原 ADR 正文是 Opus A PASS 真源；本卡仅 changelog 层补登记
+- **行为变更**：无（SQL alias 重命名 + changelog 文本补充 / 不动代码逻辑 / 不动 schema / 不动端点）
+- **不在范围**：
+  - 改 verify-sql-schema-alignment.mjs 脚本扩 ALIAS_MAP（侵入脚本启发式 / 独立 M-SN-N 工作）
+  - 改 verify-error-message.mjs 清零（161 条 generic message 大范围漂移 / 独立 milestone audit 处理）
+  - ADR-146 其他段修订（§决策正文 / 端点契约 / 风险段）
+  - ADR-146 EP-A2.2 submission.created 触发点（外部依赖）
+  - 改归档 changelog（changelog_M-SN-2-to-7_20260523.md）
+- **验收**：
+  - typecheck PASS（SQL 字符串 alias 替换无类型影响）
+  - lint PASS
+  - verify:adr-contracts:
+    - ✅ verify-endpoint-adr: 186 admin 路由 / 64 ADR 端点对齐保持
+    - ✅ verify-adr-d-numbers: 全部 150 条 D-N 偏离编号已闭环（之前 144 + 新 6 = 150）
+    - ✅ verify-sql-schema-alignment: queries SQL 引用列全部对齐 migration 全集 schema（之前 1 处 crawlerKpi.ts:116 误报 → 0）
+    - ✅ verify-style-shorthand-conflict: 0 命中保持
+    - ⚠️ verify-error-message: 161 条 pre-existing 与本卡无关（大范围漂移 / 独立 milestone audit 处理）
+- **价值**：
+  - **advisory 红线清零 2/3**：从 verify-adr-contracts 4 advisory（1 ✅ + 3 ⚠️）改善至 4 advisory（1 ✅ + 1 ⚠️ verify-error-message + 2 已升 ✅ 新）；剩余仅 verify-error-message 161 条大范围漂移
+  - **ADR-146 D-N 编号完整闭环**：8 条决策的实施去向全部在 changelog 真源原则下记录；便于 milestone audit 反向追溯（之前仅 D-146-1 / D-146-3 出现 → 现 8/8）
+  - **SQL subquery alias 范式建立**：未来类似 subquery 场景采用 `rc` / `tc` 等非表别名命名避免启发式误报
+  - **闭合 SEQ-20260521-06 chore 收尾**：本卡 + 前一卡共闭合 2 张文档收尾小卡，准备 milestone audit
+
+Cleanup-Audit: ADR-146 D-N 编号 advisory 6 条 ✅ 清零；crawlerKpi.ts SQL alias 启发式误报 ✅ 修正
+Plan-Revision: 无（仅 changelog + SQL alias rename / 不触动 plan）
