@@ -75,10 +75,18 @@
 
 ### 3.7 API · Webhook（CHG-SN-7-REDO-03-C）
 
-- 外部回调地址列表 + secret / event filter
-- 实装状态：⚠️ KV 字段可填写并存储（NotificationsTab Webhook card），但**后端零发送逻辑**（grep 实证 apps/api + apps/worker 零 webhook send 代码）
-- **视觉警示**：Webhook card 顶部 warn banner（state-warning-bg）+ subtitle ⚠️ 标记，明示「不会向该 URL 发送任何 HTTP POST」+ 指向 GAPS（CHG-SN-8-GAPS-WEBHOOK-NOT-IMPL）
-- **后端 follow-up**：CHG-SN-8-FUP-WEBHOOK-IMPL — 需 ADR 设计事件订阅 + HMAC 签名 + 重试 + worker job 派发 + 失败 audit（GAPS.md #G-settings-webhook-impl）
+- 外部回调地址 + secret + event filter
+- 实装状态：⚠️ KV 字段可填写并存储；⚠️+🔄 **ADR-146 A PASS 已起草**（2026-05-22）；实施 follow-up CHG-SN-8-FUP-WEBHOOK-IMPL-EP-A/-B 待立
+- **视觉警示**：Webhook card warn banner 已加（CHG-SN-8-GAPS-WEBHOOK-NOT-IMPL）
+- **ADR-146 决策核心**：
+  - 事件订阅模型：方案 B（单 URL + 5 事件 enum 多选订阅，不引入多端点表）
+  - 事件枚举：`crawler.run.failed` / `storage.r2.alert` / `moderation.pending.threshold` / `submission.created` / `video.batch.complete`
+  - 触发模式：API 层 fire-and-forget WebhookDispatcher（不用 bull 避免 Redis 依赖）+ retry [5s/15s/45s] + jitter + 30s 超时
+  - HMAC-SHA256 签名 X-Resovo-Signature: sha256= 前缀（GitHub 惯例）+ 4 自定义 header
+  - SSRF 5 层防御（https only + 私有 IP / loopback / link-local / metadata hostname）
+  - R-MID-1 第 25 次系统化 `system.webhook_send_failed`（仅记最终失败）
+  - 唯一新端点 POST /admin/webhook/test（admin 连通性测试，不写 audit）
+- **实施 follow-up**：拆 EP-A 后端（WebhookDispatcher + ssrf-guard + 5 触发点 + R-MID-1 + 16 测试，~8 文件）+ EP-B 前端（NotificationsTab 事件订阅 checkbox + 测试按钮，~4 文件）；总工时 ~3h
 
 ### 3.8 登录会话（CHG-SN-7-REDO-03-C）
 

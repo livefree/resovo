@@ -11164,3 +11164,310 @@ TARGET_KINDS 不需改动（复用 `'video'` CHECK 13 种已含）。
 - **CHG-SN-8-FUP-VIDEO-MANUAL-ADD-EP-A**：按本 ADR 后端实施（4 R-MID-1 真源 + VideoService.create 重构 + Route zod + 20 测试）
 - **CHG-SN-8-FUP-VIDEO-MANUAL-ADD-EP-B**：前端 VideoEditDrawer 双模式 + 按钮 enable
 
+
+
+## ADR-146 — admin webhook 通知触发协议（事件订阅 + HMAC 签名 + Dispatcher fire-and-forget + R-MID-1 第 25 次系统化）
+
+**状态**：Accepted
+**日期**：2026-05-22
+**作者**：arch-reviewer (claude-opus-4-7)
+**关联 GAP**：`#G-settings-webhook-impl`（P3 — 字段存储有效但后端零发送逻辑）
+**关联 follow-up**：CHG-SN-8-FUP-WEBHOOK-IMPL-EP（实施卡）
+**关联任务**：CHG-SN-8-FUP-WEBHOOK-IMPL-ADR（本卡 ADR 起草）
+
+---
+
+### 1. 背景与问题
+
+**现状**：NotificationsTab 已暴露 webhookEnabled / webhookUrl / webhookSecret 三字段写入 KV；grep 实证 `apps/api/src/` + `apps/worker/src/` 0 命中 `sendWebhook` 等 — 字段存了但零发送逻辑。已加 warn banner（CHG-SN-8-GAPS-WEBHOOK-NOT-IMPL）。
+
+**用户场景**：采集失败 / R2 配额告警 / 审核积压 / 用户投稿新增 / 批量操作完成。
+
+**修复必要性**：P3 — KV/逻辑漂移已通过 warn banner 缓解，能力缺口仍需 ADR 定义触发协议后实施。
+
+---
+
+### 2. 范围与不在范围
+
+**本 ADR 决定**：事件订阅模型 / 事件枚举 + 命名规约 / 触发模式 / HMAC 签名协议 / 重试策略 / R-MID-1 第 25 次 / 触发点接入 / 测试端点。
+
+**不在范围**：实施 / 多 webhook 端点（N1）/ mTLS / Slack/Discord SDK / 事件订阅 UI 详细（留 EP）/ 新数据库表（零 migration）。
+
+---
+
+### 3. D-N 决策清单
+
+#### D-146-1 事件订阅模型
+
+| 维度 | A: 全 enable 单 webhook 全推 | B: 事件 enum + 用户多选订阅 | C: 多 webhook 配置（每 webhook 一组订阅）|
+|------|---|---|---|
+| 与现有单 URL+secret 一致 | 对齐 | **对齐** | 偏离（需新表）|
+| admin 可控性 | 差（噪音高） | **优** | 优 |
+| UI 改造 | 零 | **小**（checkbox 组） | 大（CRUD 列表）|
+| KV 兼容 | 对齐 | **新增 1 KV key 数组** | 偏离 |
+| 实施成本 | 极低 | **低** | 高 |
+
+**选择：方案 B**。新增 1 KV `notification_webhook_events`（JSON 数组）存订阅事件 enum；空数组/undefined = opt-in 不推任何事件（安全默认）。
+
+#### D-146-2 事件类型枚举
+
+**命名规约**：`<module>.<resource>.<verb>` 三段式（对齐 admin audit actionType 先例）。
+
+**首版 5 类 enum**：
+
+| # | 事件 | 触发条件 |
+|---|------|---------|
+| 1 | `crawler.run.failed` | CrawlerRunService 标记 run status=failed |
+| 2 | `storage.r2.alert` | R2 quota > 80% 阈值 |
+| 3 | `moderation.pending.threshold` | pending_review count > N（默认 50）|
+| 4 | `submission.created` | UserSubmissionService.create 成功 |
+| 5 | `video.batch.complete` | batchPublish / 批量导入完成 |
+
+类型定义 `packages/types/src/system.types.ts` 新增 `WebhookEventType` 联合。
+
+#### D-146-3 触发模式
+
+| 维度 | A: API 层 fire-and-forget Dispatcher | B: route 内联 fetch | C: event bus |
+|------|---|---|---|
+| 主请求阻塞 | **不阻塞** | 阻塞 | 不阻塞 |
+| 复用现有基础设施 | **复用 retry-backoff 模式 + AuditLogService 模式** | 无 | 需新库 |
+| 新依赖 | **零**（不用 bull 队列 / 不需 Redis） | 零 | +1 库 |
+
+**选择：方案 A（修正版）**。**不使用 bull 队列**（bull 已装但需 Redis 连接，项目当前无 Redis 依赖）。改用 `WebhookDispatcher.enqueue()` API 层 fire-and-forget 异步执行 — 与 AuditLogService.write 同模式。低频场景（日均 < 50 次）API 进程内异步足矣。N1 候选：高频时（日均 > 1000）升级 bull + Redis。
+
+#### D-146-4 HMAC 签名协议
+
+**算法**：HMAC-SHA256(rawBody, webhookSecret)
+
+**Headers**（4 自定义 + 1 标准）：
+- `X-Resovo-Signature: sha256=<hex>`（GitHub webhook 惯例前缀）
+- `X-Resovo-Event: <事件类型>`
+- `X-Resovo-Delivery: <UUIDv4>`（幂等 ID）
+- `X-Resovo-Timestamp: <ISO 8601 UTC>`（replay 防护）
+- `User-Agent: Resovo-Webhook/1.0`
+
+**Body**: `{ event, deliveryId, occurredAt, payload }` JSON
+
+**secret 空字符串**：不发 X-Resovo-Signature header（UI 应建议配置）。
+
+#### D-146-5 重试策略
+
+复用 lib/retry-backoff.ts 指数退避理念（参数独立适配 webhook）：
+- 最大 3 次重试（含首次共 4 次）
+- 退避 `[5s, 15s, 45s]` + 0-2s jitter
+- HTTP 超时 30s（AbortController）
+- 5xx/超时重试 / 4xx 不重试 / 2xx 成功
+- 总耗时 ~3.5 min 上限
+- 最终失败写 R-MID-1 `system.webhook_send_failed` audit + baseLogger.warn
+
+#### D-146-6 R-MID-1 第 25 次系统化
+
+**新增 actionType 1 个**：`system.webhook_send_failed`
+- targetKind: `system`（复用 CHECK 13 种已含）
+- actorId: 触发原始事件的 actor（系统事件用 SYSTEM_ACTOR_ID UUID 常量）
+- before_jsonb: null
+- after_jsonb: `{ event, deliveryId, webhookUrl, attempts, lastHttpStatus, lastError, payload, totalDurationMs }`
+
+**仅记失败不记成功**：成功是正常流程无审计价值；失败是运维关注点。
+
+#### D-146-7 触发点接入（5 处）
+
+| # | 触发点 | 事件 | payload 关键字段 |
+|---|--------|------|----------------|
+| 1 | CrawlerRunService 标记 failed | `crawler.run.failed` | runId, siteKey, errorMessage, failedAt |
+| 2 | R2 quota check（新 cron 或扩展 maintenanceScheduler）| `storage.r2.alert` | usagePercent, usageBytes, threshold |
+| 3 | ModerationStatsAggregator threshold（cron 1h 间隔）| `moderation.pending.threshold` | pendingCount, threshold, oldestPendingAt |
+| 4 | UserSubmissionService.create 成功 | `submission.created` | submissionId, title, submittedBy |
+| 5 | StagingPublishService.batchPublish 完成 | `video.batch.complete` | operationType, totalCount, successCount, failedCount |
+
+**统一调用**：`WebhookDispatcher.enqueue(event, payload, actorId)`。
+
+**阈值类事件 debounce**：触发点 2/3 用 KV `notification_webhook_last_alert_{event}` 记录上次告警时间 + 1h cooldown 防风暴。
+
+#### D-146-8 关联 ADR 引用
+
+| # | ADR | 关联 |
+|---|-----|------|
+| 1 | ADR-003 | JWT 双 Token + fastify.authenticate（测试端点）|
+| 2 | ADR-109 | admin_audit_log schema（webhook_send_failed 写入同表）|
+| 3 | ADR-110 | ErrorCode 系统（复用 VALIDATION_ERROR/FORBIDDEN；零新增）|
+| 4 | ADR-118 | audit 视图协议（ACTION_TYPES/TARGET_KINDS 真源）|
+| 5 | ADR-121 | R-MID-1 7 文件框架（第 25 次系统化）|
+| 6 | ADR-139 | fastify.requireRole（测试端点 admin only）|
+| 7 | ADR-145 | 最近 ADR 范式参考（同类 R-MID-1 + 零新基础设施）|
+
+---
+
+### 4. 端点契约
+
+### 端点契约
+
+1 个新端点（admin 测试 webhook 连通性），preHandler: `[authenticate, requireRole(['admin'])]`：
+
+| # | Method | Path | 权限 | Body | Response `data` | 新增 ErrorCode | ADR |
+|---|--------|------|------|------|----------------|---------------|-----|
+| 1 | POST | `/admin/webhook/test` | admin | Body: `{}` (空对象，从 KV 读 url+secret) | `{ data: { success: boolean, httpStatus: number \| null, latencyMs: number, error: string \| null } }` (200) | 无 | ADR-146 |
+
+**side-effects**：读 KV → 构造测试 payload `{ event: 'webhook.test', deliveryId, occurredAt, payload: { message } }` → HMAC 签名 → 单次 fetch（不重试 / 30s 超时 / SSRF 校验）→ 返回 success/status/latency。**不写 audit log**（测试发送非业务操作）。
+
+**前置校验**：webhookUrl 空 → 422 VALIDATION_ERROR；SSRF 校验失败 → 422 VALIDATION_ERROR `'Webhook URL 不安全'`。
+
+**错误码全复用**（零新增）：401/403/422。
+
+---
+
+### 5. WebhookDispatcher 实现 sketch
+
+```typescript
+// apps/api/src/services/WebhookDispatcher.ts
+
+class WebhookDispatcher {
+  constructor(private db: Pool, private auditSvc: AuditLogService) {}
+
+  // Fire-and-forget 入口；各 Service 调用此方法
+  enqueue(event: WebhookEventType, payload: Record<string, unknown>, actorId: string): void {
+    this.dispatch(event, payload, actorId).catch((err) => {
+      baseLogger.warn({ err, event }, '[WebhookDispatcher] unhandled')
+    })
+  }
+
+  private async dispatch(...): Promise<void> {
+    // 1. 读 KV: enabled + url + secret + subscribedEvents
+    const settings = await readWebhookSettings(this.db)
+    if (!settings.enabled || !settings.url) return
+    if (settings.subscribedEvents.length > 0 && !settings.subscribedEvents.includes(event)) return
+
+    // 2. SSRF 防御
+    if (!isAllowedWebhookUrl(settings.url)) {
+      baseLogger.warn({ url: settings.url }, '[WebhookDispatcher] SSRF blocked')
+      return
+    }
+
+    // 3. 构造 body + HMAC
+    const body = JSON.stringify({ event, deliveryId, occurredAt, payload })
+    const signature = settings.secret
+      ? 'sha256=' + crypto.createHmac('sha256', settings.secret).update(body).digest('hex')
+      : null
+
+    // 4. retry 循环（4 次尝试 / [5s,15s,45s] backoff + jitter / 30s timeout）
+    const BACKOFF = [5_000, 15_000, 45_000]
+    for (let attempt = 0; attempt <= 3; attempt++) {
+      try {
+        const res = await fetch(settings.url, { method: 'POST', headers, body, signal: AbortSignal.timeout(30_000) })
+        if (res.ok) return  // 2xx 成功
+        if (res.status >= 400 && res.status < 500) break  // 4xx 不重试
+      } catch (err) { /* 网络/超时 → 重试 */ }
+      if (attempt < 3) await sleep(BACKOFF[attempt] + Math.random() * 2000)
+    }
+
+    // 5. 最终失败 R-MID-1 audit
+    this.auditSvc.write({
+      actorId, actionType: 'system.webhook_send_failed', targetKind: 'system',
+      targetId: null, beforeJsonb: null,
+      afterJsonb: { event, deliveryId, webhookUrl: settings.url, attempts, lastHttpStatus, lastError, payload, totalDurationMs },
+    })
+  }
+}
+```
+
+POST /admin/webhook/test handler：读 KV → SSRF 校验 → 构造测试 payload → 单次 fetch（不重试）→ 200 返回 success/httpStatus/latencyMs。
+
+---
+
+### 6. R-MID-1 7 文件 checklist
+
+R-MID-1 第 25 次系统化：
+
+| # | 文件 | 改动 |
+|---|------|------|
+| 1 | `packages/types/src/admin-moderation.types.ts` | AdminAuditActionType +`'system.webhook_send_failed'` |
+| 2 | `packages/types/src/system.types.ts` | 新增 WebhookEventType 联合 + SystemSettingKey +`'notification_webhook_events'` |
+| 3 | `apps/api/src/services/AuditLogService.ts` | ACTION_TYPES 同步 +1 |
+| 4 | `tests/unit/api/audit-log-service-enums-set-equal.test.ts` | EXPECTED_ACTION_TYPES +1 |
+| 5 | `tests/unit/api/audit-log-coverage.test.ts` | PAYLOAD_REQUIRED + PAYLOAD_ASSERTION_REQUIRED 各 +1 |
+| 6 | `apps/api/src/services/WebhookDispatcher.ts` | 新文件：enqueue + dispatch + HMAC + retry + audit |
+| 7 | `docs/changelog.md` | R-MID-1 第 25 次系统化备注 |
+
+TARGET_KINDS 不需改动（复用 `'system'` CHECK 13 种已含）。
+
+---
+
+### 7. 测试 surface（16 用例）
+
+文件：`tests/unit/api/webhook-dispatcher.test.ts` + `tests/unit/api/webhook-test-endpoint.test.ts`
+
+| # | 类别 | 用例 |
+|---|------|------|
+| 1-2 | HMAC | secret 非空 → 签名手工对比 / secret 空 → 不发送 header |
+| 3-4 | 重试 | 5xx 重试 3 次 / mock timer 验证 backoff 间隔 |
+| 5-6 | 4xx 不重试 | 400/404 仅 1 次 |
+| 7 | 5xx 重试 | 503 重试 3 次 |
+| 8 | 超时 | 30s 超时 → AbortError 视为可重试 |
+| 9 | 最终失败 audit | 4 次失败后 audit afterJsonb 7 字段完整 |
+| 10-12 | 订阅过滤 | 不含当前 event 不发 / 空数组不发 / 含 event 正常发 |
+| 13-14 | SSRF | 169.254.169.254 / localhost 不发 |
+| 15-16 | 测试端点 | URL 未配置 → 422 / 正常 URL → 200 返回 success/status/latency |
+
+---
+
+### 8. 实施 follow-up 拆解
+
+**CHG-SN-8-FUP-WEBHOOK-IMPL-EP**（~3h / ~12 文件）：
+
+| 子步骤 | 文件 | 工时 |
+|--------|------|------|
+| 8-A R-MID-1 4 真源同步 | 4 | 20 min |
+| 8-B WebhookDispatcher 核心 + SSRF 校验 | 1 | 40 min |
+| 8-C POST /admin/webhook/test route | 1 | 15 min |
+| 8-D 5 触发点接入 | 3-5 | 25 min |
+| 8-E NotificationsTab 事件订阅 checkbox + KV 读写 | 2 | 30 min |
+| 8-F 16 单测 | 2 | 30 min |
+| 8-G changelog + commit | 1 | 5 min |
+
+按「范围 > 5 项」拆 -A 后端核心（8-A..D，~8 文件） + -B 前端 + 测试（8-E..F，~4 文件）。
+
+**触发点 2/3 可选**：若现有 maintenanceScheduler 不含 R2 / pending threshold 检查，实施时可先实装 1/4/5（直接接入已有 Service），2/3 作为独立子卡延后。
+
+---
+
+### 9. 风险（4 条）
+
+| # | 风险 | 严重度 | 缓解 |
+|---|------|--------|------|
+| R-146-1 | **SSRF** — webhookUrl 指向内网/云元数据端点 | 高 | `isAllowedWebhookUrl()` 5 层防御：(1) https only (2) 私有 IP RFC 1918 拒绝 (3) loopback 127.0.0.0/8 + ::1 拒绝 (4) link-local 169.254.0.0/16 拒绝 (5) metadata hostname 拒绝；独立 `apps/api/src/lib/ssrf-guard.ts` 模块 |
+| R-146-2 | **secret 泄露** — 明文 KV 存储 | 中 | (1) baseLogger redact (2) GET settings response mask 尾 4 位 (3) N1 长远 AES-256 加密 |
+| R-146-3 | **重试风暴** — 目标长时 5xx + 高频事件 → 内存/连接挤占 | 中 | (1) 同 URL 并发上限 3 (2) 阈值事件 1h debounce (3) backoff 足够大 (4) 总耗时 ~3.5 min 上限 |
+| R-146-4 | **触发点性能** — 5 处加 KV 读 | 低 | (1) fire-and-forget 不阻塞 (2) 进程内 LRU 缓存 60s (3) P3 低频可忽略 |
+
+---
+
+### 10. N1 候选
+
+**N1-146-1（多 webhook 端点）**：3+ admin 反馈多端点需求时触发。新建 `webhook_endpoints` 表 + Dispatcher 多端点路由。
+
+**N1-146-2（webhook 投递历史）**：admin 调试连通性时反馈 audit 不够直观。新表 `webhook_delivery_log` 或扩展 audit 查询。
+
+---
+
+### 11. 评级
+
+| 维度 | 评分 | 理由 |
+|------|------|------|
+| 方案完整性 | A | 8 D-N 覆盖订阅/枚举/触发/HMAC/重试/audit/接入/ADR 关联 |
+| 与现有架构对齐 | A | 零新 ErrorCode / 零新依赖 / 零新 migration / 零新表；复用 AuditLogService/retry-backoff/KV/R-MID-1 |
+| 关联 ADR 实证 | A | 7 项实证（3/109/110/118/121/139/145）|
+| 实施可行性 | A | ~12 文件拆 -A/-B；16 测试 surface；Dispatcher 独立模块 |
+| SSRF 防御 | A | 5 层防御独立模块覆盖主要攻击向量 |
+| 扩展预留 | A- | enum 增值 + KV 追加可扩；N1 多端点不影响 Dispatcher 接口 |
+| 风险控制 | A | 4 风险 1 高 3 中低 + 完整缓解 |
+
+**推荐评级：A**
+
+方案 B 事件 enum 对齐现有单 URL KV（零新表）；方案 A 修正版 fire-and-forget Dispatcher 避免引入 Redis（bull 已装但需 Redis 部署）；HMAC-SHA256 对齐 GitHub 行业惯例；retry 模式复用 retry-backoff 理念；R-MID-1 第 25 次遵循 7 文件 checklist；SSRF 5 层防御独立模块；唯一新端点 POST /admin/webhook/test 满足 verify-endpoint-adr。
+
+---
+
+**后续解锁卡**：
+- **CHG-SN-8-FUP-WEBHOOK-IMPL-EP-A**：按本 ADR 后端实施（R-MID-1 4 真源 + WebhookDispatcher + ssrf-guard + 5 触发点接入 + POST /admin/webhook/test + 16 测试）
+- **CHG-SN-8-FUP-WEBHOOK-IMPL-EP-B**：前端 NotificationsTab 事件订阅 checkbox + 测试按钮接入
+

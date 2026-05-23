@@ -16005,4 +16005,45 @@ Cleanup-Audit: #G-videos-add ✅ 完全闭合（4/4 全 ✅）
 Plan-Revision: 无
 
 
+## [CHG-SN-8-FUP-WEBHOOK-IMPL-ADR] ADR-146 起草 — admin webhook 通知触发协议（#G-settings-webhook-impl ⚠️+🔄）
+
+- **完成时间**：2026-05-22
+- **记录时间**：2026-05-22 23:25
+- **执行模型**：claude-opus-4-7
+- **子代理**：arch-reviewer (claude-opus-4-7) — 1 轮 **A PASS**（最高级 / D-146-1..8 完整 / 8 维 trade-off / 16 测试 surface / 4 风险 / 2 N1）
+- **修改文件**：
+  - `docs/decisions.md` — 新增 ADR-146 完整正文（11 节）；含 D-146-1..8（事件订阅方案 B 单 URL + 5 事件 enum / 命名规约 `<module>.<resource>.<verb>` / 触发方案 A 修正版 fire-and-forget Dispatcher 不用 bull 避免 Redis 依赖 / HMAC-SHA256 + 4 自定义 header 对齐 GitHub 惯例 / retry [5s/15s/45s] + jitter 4 次 + 30s 超时 / R-MID-1 第 25 次 system.webhook_send_failed 仅记最终失败 / 5 触发点接入 + 阈值事件 1h debounce / 7 关联 ADR）+ 端点契约 1 端点 POST /admin/webhook/test（6 列表格满足 verify-endpoint-adr）+ WebhookDispatcher 实现 sketch + R-MID-1 7 文件 checklist + 16 测试 surface + 4 风险 + 2 N1
+  - `docs/manual/GAPS.md` — #G-settings-webhook-impl ⚠️ → ⚠️+🔄；ADR-146 完整决策摘要
+  - `docs/manual/20-pages/P-settings.md` — §3.7 改写为 ADR-146 决策摘要 + 5 事件 enum + SSRF 5 层防御说明
+  - `docs/task-queue.md` SEQ-20260521-06 #48 ✅
+  - `docs/tasks.md` 清卡片
+- **新增依赖**：无
+- **数据库变更**：无（不引入新表 / KV 仅新增 1 key `notification_webhook_events` 存订阅事件 JSON 数组）
+- **D-N 偏离闭环**（advisory verify-adr-d-numbers）：D-146-1..8 在 ADR-146 §3 完整定稿
+- **关键设计亮点**：
+  - **方案 A 修正版（不用 bull 队列）**：仓内 bull@4 已装但 worker 用 node-cron 调度且无 Redis 部署，引入 bull 需 Redis 违反零新依赖；改用 fire-and-forget WebhookDispatcher（与 AuditLogService.write 同模式），低频场景（日均 < 50）API 进程内异步足矣
+  - **SSRF 5 层独立模块**：apps/api/src/lib/ssrf-guard.ts 统一守卫（https only + RFC 1918 私有 IP + loopback 127.0.0.0/8 + ::1 + link-local 169.254.0.0/16 + 云元数据 hostname 拒绝），POST /admin/webhook/test 与 Dispatcher 共用
+  - **HMAC 对齐行业惯例**：sha256= 前缀 + X-Resovo-Signature/Event/Delivery/Timestamp 4 自定义 header + User-Agent 标识；secret 空时不发送 signature（建议 UI 强制配置）
+  - **零新基础设施**：零新 ErrorCode（复用 VALIDATION_ERROR/FORBIDDEN）+ 零新依赖（bull 已装但不用）+ 零新 migration + 零新表 + 零新 targetKind（复用 'system' CHECK 13 种已含）
+- **注意事项**：
+  - **本卡仅 ADR 起草**：实施 follow-up 拆 EP-A 后端（4 R-MID-1 真源 + WebhookDispatcher + ssrf-guard + 5 触发点 + POST test + 16 测试，~8 文件）+ EP-B 前端（NotificationsTab 事件订阅 checkbox + 测试按钮，~4 文件）；总工时 ~3h
+  - **触发点 2/3 可选延后**：R2 quota / pending threshold 检查需 maintenanceScheduler 扩展；可先实装 1/4/5（直接接入已有 Service）
+  - **N1-146-1**（多 webhook 端点）：3+ admin 反馈时启动；webhook_endpoints 新表
+  - **N1-146-2**（webhook 投递历史）：admin 调试反馈 audit 不直观时启动
+
+### 验收
+- typecheck PASS / lint PASS / verify:adr-contracts PASS（含 verify-endpoint-adr 183 admin 路由全部对齐 61 ADR 端点）
+- 不跑 unit/e2e（纯文档 / 无代码变更）
+
+### 价值
+- **P3 GAPS #G-settings-webhook-impl 路径全清晰**：消费层 warn banner ✅ 1/3 + ADR ✅ 2/3 + 实施 follow-up 3/3 待立
+- **A 评级 + 零成本设计**：8 D-N 决策完整 / 7 关联 ADR 实证 / 16 测试 surface / 4 风险（1 高 3 中低）+ 完整 SSRF 5 层缓解
+- **方案 A 修正版避免 Redis 依赖**：bull 已装但不用，与 Resovo 当前无 Redis 部署架构对齐
+- **R-MID-1 第 25 次系统化预设**：system.webhook_send_failed audit 完整覆盖运维失败追溯
+- **SEQ-20260521-06 即将全部 ✅**：剩余开放 follow-up 全部完成 ADR 起草
+
+Cleanup-Audit: #G-settings-webhook-impl ⚠️+🔄（消费层 warn banner ✅ + ADR ✅ / 实施 follow-up 待立 + 2 N1 登记）
+Plan-Revision: ADR-146 + 1（plan §9 ADR 索引推进至 146）
+
+
 

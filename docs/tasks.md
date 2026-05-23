@@ -6,5 +6,5 @@
 
 ## 进行中任务
 
-（空 — 上一任务 CHG-SN-8-FUP-VIDEO-MANUAL-ADD-EP-B 已完成 / #G-videos-add 完全 ✅ 4/4）
+（空 — 上一任务 CHG-SN-8-FUP-WEBHOOK-IMPL-ADR 已完成 / #G-settings-webhook-impl ⚠️ → ⚠️+🔄；实施 follow-up CHG-SN-8-FUP-WEBHOOK-IMPL-EP-A/-B 待立卡）
 

@@ -131,11 +131,12 @@
 ### #G-settings-webhook-impl · API·Webhook Tab 字段已存但回调未实装
 
 - **页面**：P-settings §3.7
-- **状态**：⚠️ 已部分实装（CHG-SN-8-GAPS-WEBHOOK-NOT-IMPL 消费层视觉警示；后端实装 follow-up：CHG-SN-8-FUP-WEBHOOK-IMPL）
+- **状态**：⚠️+🔄 已部分实装 + **ADR-146 A PASS 已起草**（2026-05-22）；实施 follow-up CHG-SN-8-FUP-WEBHOOK-IMPL-EP-A/-B 待立
 - **优先级**：P3
-- **现象（已核查）**：前端字段在「通知设置」Tab Webhook card（apps/server-next/src/app/admin/settings/_tabs/NotificationsTab.tsx）可填 enabled / URL / 签名密钥，写入 KV 通过 saveSiteSettings；但后端 `apps/api/src/` + `apps/worker/src/` **零** webhook 发送逻辑（grep 实证 `webhookEnabled` / `sendWebhook` 0 匹配）— 字段存了但永远不会向 URL 发任何 HTTP POST
-- **消费层补齐**：CHG-SN-8-GAPS-WEBHOOK-NOT-IMPL — NotificationsTab webhook card subtitle 改 `⚠️ 字段存储有效但触发逻辑未实装（CHG-SN-8-FUP-WEBHOOK-IMPL follow-up）`；card 顶部加 warn banner（state-warning-bg + 明示「不会向该 URL 发送任何 HTTP POST」+ 指向 GAPS）；字段保留可填以便实装后无迁移成本
-- **后端实装 follow-up**：CHG-SN-8-FUP-WEBHOOK-IMPL — 起 ADR-N（编号待定）设计 webhook 触发协议：① 事件订阅枚举（采集失败 / 存储告警 / 审核待处理超阈值 / 用户投稿新增 等）② HTTP POST + HMAC-SHA256 签名（X-Resovo-Signature 头）③ 重试策略（exponential backoff + 最多 3 次）④ 失败 audit log 类型 `system.webhook_send_failed` ⑤ worker job 派发模式 vs route 内联触发；需 Opus arch-reviewer 评审；工时 ADR ~0.25w + 实施 ~0.5w（含 worker job）
+- **现象（已核查）**：NotificationsTab webhookEnabled / webhookUrl / webhookSecret 写 KV；后端 apps/api/src/ + apps/worker/src/ 零发送逻辑
+- **消费层补齐**：CHG-SN-8-GAPS-WEBHOOK-NOT-IMPL — NotificationsTab warn banner 已加
+- **ADR-146 决策**：方案 B 事件 enum + 用户多选订阅（不引入多 webhook 端点表）+ 5 事件类型（crawler.run.failed / storage.r2.alert / moderation.pending.threshold / submission.created / video.batch.complete）+ 方案 A 修正版 fire-and-forget WebhookDispatcher（不用 bull 队列避免 Redis 依赖；与 AuditLogService 同模式）+ HMAC-SHA256 签名（X-Resovo-Signature: sha256= 前缀对齐 GitHub 惯例 + 4 自定义 header）+ retry [5s/15s/45s] + jitter 4 次尝试 + 30s 超时 + 5xx/超时重试 4xx 不重试 + R-MID-1 第 25 次（system.webhook_send_failed audit 仅记失败）+ SSRF 5 层防御独立模块 ssrf-guard（https only / RFC 1918 私有 IP / loopback / link-local / metadata hostname）+ 5 触发点接入 + 唯一新端点 POST /admin/webhook/test + 零新 ErrorCode / 零新依赖 / 零新 migration / 零新表
+- **实施 follow-up**：拆 EP-A 后端核心（4 R-MID-1 + WebhookDispatcher + ssrf-guard + 5 触发点 + POST test + 16 测试，~8 文件）+ EP-B 前端（NotificationsTab 事件订阅 checkbox + 测试按钮接入，~4 文件）；总工时 ~3h
 
 ### #G-settings-session-fields-consume · 登录会话 3 字段未被中间件消费
 
