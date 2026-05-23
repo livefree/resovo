@@ -42,10 +42,11 @@
 ### #G-videos-add · 视频库「+ 添加视频」按钮
 
 - **页面**：P-videos §3.5 / §7 FAQ
-- **状态**：⚠️ **已部分实装**（按钮存在 disabled + tooltip「功能开发中（follow-up VIDEO-MANUAL-ADD）」）；实际创建功能待 follow-up
+- **状态**：⚠️+🔄 已部分实装 + **ADR-145 A PASS 已起草**（2026-05-22）；实施 follow-up CHG-SN-8-FUP-VIDEO-MANUAL-ADD-EP-A/-B 待立
 - **优先级**：P2
-- **现状**：VideoListClient.tsx:685 `<button disabled title="功能开发中（follow-up VIDEO-MANUAL-ADD）">手动添加视频</button>`；H2 死按钮已避免（disabled+title 不算死按钮），但实际功能未实装
-- **建议**：将 disabled 按钮改造为「直接打开 VideoEditDrawer 创建模式」+ 后端 POST 端点；或保留 disabled 不补
+- **现状**：VideoListClient.tsx 按钮 disabled + tooltip；POST /admin/videos 端点已注册但存在 6 项技术债（绕过 MediaCatalogService.findOrCreate / Record<string,unknown> 无类型 / 零 audit / 零重复检测 / 无 publishMode / locked_fields 不保护）
+- **ADR-145 决策**：方案 C 最小 3 字段（title/type/contentRating 必填 + 14 元数据 optional）+ 方案 B 重复检测（findOrCreate isNewlyCreated + force 跳过）+ 方案 B catalog 复用 findOrCreate(metadataSource='manual') + 方案 C publishMode 三路径（draft/staging 默认/published）+ R-MID-1 第 24 次系统化（video.manual_add）+ 零新 ErrorCode（复用 STATE_CONFLICT）+ VideoEditDrawer 双模式（videoId=null 创建 / 有值编辑）+ 7 关联 ADR 实证
+- **实施 follow-up**：拆 EP-A 后端（4 R-MID-1 + Service 重构 + Route zod + 20 测试，5 文件）+ EP-B 前端（Drawer 双模式 + 按钮 enable，3 文件）；总工时 ~2.5h
 
 ### #G-moderation-batch-ui · 批量审核独立入口
 

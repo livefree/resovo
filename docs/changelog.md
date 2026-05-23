@@ -15879,4 +15879,41 @@ Cleanup-Audit: #G-moderation-preset-team ✅ 完全闭合（4/4 全 ✅）
 Plan-Revision: 无
 
 
+## [CHG-SN-8-FUP-VIDEO-MANUAL-ADD-ADR] ADR-145 起草 — admin 手动添加视频端点协议（#G-videos-add ⚠️+🔄）
+
+- **完成时间**：2026-05-22
+- **记录时间**：2026-05-22 20:15
+- **执行模型**：claude-opus-4-7
+- **子代理**：arch-reviewer (claude-opus-4-7) — 1 轮 **A PASS**（最高级 / D-145-1..8 完整 / 8 维 trade-off / 20 测试 surface / 4 风险 / 2 N1）
+- **修改文件**：
+  - `docs/decisions.md` — 新增 ADR-145 完整正文（11 节）；含 D-145-1..8（最小 3 字段 + 14 optional / 重复检测软匹配 + force 跳过 / catalog 复用 findOrCreate metadataSource='manual' / publishMode 三路径 admin 可选 / R-MID-1 第 24 次系统化 video.manual_add / 零新 ErrorCode 复用 STATE_CONFLICT / VideoEditDrawer 双模式 / 7 关联 ADR 实证）+ 端点契约 6 列表格满足 verify-endpoint-adr 解析 + 端点 sketch + R-MID-1 7 文件 checklist + 20 测试 surface + 4 风险 + 2 N1
+  - `docs/manual/GAPS.md` — #G-videos-add ⚠️ → ⚠️+🔄；ADR-145 决策摘要 + 6 项现有技术债说明
+  - `docs/manual/20-pages/P-videos.md` — §3.5 完整改写为 ADR-145 决策摘要
+  - `docs/task-queue.md` SEQ-20260521-06 #45 ✅
+  - `docs/tasks.md` 清卡片
+- **新增依赖**：无
+- **数据库变更**：无（不引入新表 / 复用现有 videos + media_catalog 双表）
+- **D-N 偏离闭环**（advisory verify-adr-d-numbers）：D-145-1（最小 3 字段方案 C / year+sourceUrl optional 对齐 crawler 实证）/ D-145-2（重复检测方案 B 软匹配 + force）/ D-145-3（catalog 复用 findOrCreate metadataSource='manual'）/ D-145-4（publishMode 三路径默认 staging）/ D-145-5（R-MID-1 第 24 次 video.manual_add 复用 targetKind video）/ D-145-6（复用 STATE_CONFLICT 零新 ErrorCode）/ D-145-7（VideoEditDrawer 双模式 videoId=null 创建）/ D-145-8（7 关联 ADR）— 8 条 D-N 在 ADR-145 §3 完整定稿
+- **注意事项**：
+  - **本卡仅 ADR 起草**：实施 follow-up 拆 EP-A 后端（5 文件 / 4 R-MID-1 真源 + Service 重构 + Route zod + 20 测试）+ EP-B 前端（3 文件 / Drawer 双模式 + 按钮 enable）；总工时 ~2.5h
+  - **修复 6 项现有技术债**：本 ADR 重构 POST /admin/videos 而非新增端点 — 修复绕过 MediaCatalogService / 无类型 / 零 audit / 零重复检测 / 无 publishMode / locked_fields 不保护 全部
+  - **零新基础设施**：零新 ErrorCode / 零新依赖 / 零新概念 / 零新 migration / targetKind 复用 video（CHECK 13 种已含）
+  - **N1-145-1**（批量 CSV 导入）：admin 反馈 >10 条/周触发；POST /admin/videos/batch-import + CSV parser
+  - **N1-145-2**（模板预填）：admin 反馈重复模式时触发；localStorage 模板（类似 FilterPreset 初始方案）
+
+### 验收
+- typecheck PASS / lint PASS / verify:adr-contracts PASS（含 verify-endpoint-adr 183 admin 路由全部对齐 60 ADR 端点）
+- verify-endpoint-adr advisory：ADR-145 §端点契约 6 列表格满足解析
+- 不跑 unit/e2e（纯文档 / 无代码变更）
+
+### 价值
+- **P2 GAPS #G-videos-add 路径全清晰**：消费层 disabled btn ✅ 1/3 + ADR ✅ 2/3 + 实施 follow-up 3/3 待立
+- **A 评级 + 修复 6 项现有技术债**：本 ADR 不仅设计新功能，更修复现有 POST /admin/videos 端点的全部质量问题
+- **零成本扩展**：零新 ErrorCode / 零新依赖 / 零新概念 / 零新 migration — 完全对齐 Resovo 既有架构
+- **R-MID-1 第 24 次系统化预设**：video.manual_add audit 完整覆盖 + targetKind 复用零 CHECK 扩展
+
+Cleanup-Audit: #G-videos-add ⚠️+🔄（消费层 disabled btn ✅ + ADR ✅ / 实施 follow-up 待立 + 2 N1 登记）
+Plan-Revision: ADR-145 + 1（plan §9 ADR 索引推进至 145）
+
+
 

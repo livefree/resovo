@@ -10909,3 +10909,258 @@ COMMIT;
 - **CHG-SN-8-FUP-PRESET-TEAM-EP**：按本 ADR 实施全栈（2 migration + Query + Service + Route + R-MID-1 7 文件 + 前端 lib 重写 + scope toggle UI + import + 18 测试）
 
 
+
+
+## ADR-145 — admin 手动添加视频端点协议（POST /admin/videos 重构 + catalog 同步 + R-MID-1 第 24 次系统化）
+
+**状态**：Accepted
+**日期**：2026-05-22
+**作者**：arch-reviewer (claude-opus-4-7)
+**关联 GAP**：`#G-videos-add`（P2 运营能力缺口）
+**关联 follow-up**：CHG-SN-8-FUP-VIDEO-MANUAL-ADD-EP（实施卡）
+**关联任务**：CHG-SN-8-FUP-VIDEO-MANUAL-ADD-ADR（本卡 ADR 起草）
+
+---
+
+### 1. 背景与问题
+
+**现状**：后台视频库（`/admin/videos`）PageHeader「+ 手动添加视频」按钮 disabled。视频入库完全依赖 crawler 自动派发（`CrawlerService` → `insertCrawledVideo` → `MediaCatalogService.findOrCreate` → `createVideo`）。
+
+**已有端点技术债**：POST /admin/videos 已注册但实现存在 6 项问题——绕过 MediaCatalogService.findOrCreate / 输入 Record<string,unknown> 无类型 / 零 audit log / 零重复检测 / 无 publishMode 控制 / metadataSource 标 'manual' 但 catalog 创建不受 locked_fields 保护。
+
+**用户场景（P2）**：数据修复（crawler 漏采） / 测试条目（开发 QA） / 运营特例（临时补录冷门片源）。
+
+**修复必要性**：P2。本 ADR 重构现有端点至生产标准，非新增端点。
+
+---
+
+### 2. 范围与不在范围
+
+**本 ADR 决定**：POST /admin/videos 完整 schema / 与 MediaCatalogService.findOrCreate 集成 / 重复检测（title+year+type 软匹配）/ publishMode 三路径 / R-MID-1 video.manual_add 第 24 次系统化 / VideoEditDrawer 双模式复用 / ErrorCode 复用。
+
+**不在范围**：批量 CSV 导入（N1）/ 模板预填（N1）/ 内联 video_sources 创建 / 字幕上传 / 新表 / ES 索引策略变更（复用 indexSync.syncVideo）。
+
+---
+
+### 3. D-N 决策清单
+
+#### D-145-1 minimum required 字段集
+
+| 维度 | A: 完整 80 字段 | B: minimum 5 字段（含 year+sourceUrl required）| C: minimum 3 字段（title/type/contentRating + 其余 optional） |
+|------|---|---|---|
+| 用户体验 | 极差 | 中 | **平衡** |
+| 与 CreateVideoInput 对齐 | 远超 | 部分 | **完全对齐** |
+| 与 crawler year=null 8% 实证一致 | 偏离 | 偏离 | **对齐** |
+| YAGNI | 违反 | 部分违反 | **满足** |
+| 后续编辑成本 | 零 | 低 | **低**（Drawer 编辑模式已成熟） |
+
+**选择：方案 C**。理由：year/sourceUrl 应 optional（crawler 同样存 year=null 约 8% / source 空待补的视频）；与 CreateVideoInput 真正必填项对齐（catalogId 由 Service 自动 findOrCreate 生成）；可选字段覆盖 VideoMetaSchema 已有定义 + publishMode。
+
+#### D-145-2 重复检测策略
+
+| 维度 | A: 仅 catalogId 已存在拒绝 | B: title+year+type 软匹配警告（force=true 跳过） | C: imdbId/tmdbId 优先 + title 回退 |
+|------|---|---|---|
+| 与 MediaCatalogService 5 步匹配对齐 | 部分 | **完全对齐**（复用 findOrCreate 返回 isNewlyCreated） | 重叠但实现不同 |
+| 误阻率 | 高（同名不同版本） | **低**（软警告 + force 跳过） | 低 |
+| admin 控制力 | 差 | **优** | 优 |
+
+**选择：方案 B**。Service 层 findOrCreate 后 `SELECT count FROM videos WHERE catalog_id=$1 AND deleted_at IS NULL`。有 + force≠true → 409 STATE_CONFLICT body 含 `detail: { existingVideoId, existingTitle }`；有 + force=true → 同 catalog 多 video 实例合法（不同 siteKey 同名视频场景）。**不修改** MediaCatalogService.findOrCreate 签名。
+
+#### D-145-3 与 media_catalog 关系
+
+| 维度 | A: 绕过 catalog NULL | B: 复用 MediaCatalogService.findOrCreate | C: admin 可选 existingCatalogId 否则自动 |
+|------|---|---|---|
+| 双表一致性 | 破坏 | **保证** | 保证 |
+| 元数据治理（locked_fields / metadataSource）| 不触发 | **触发** | 触发 |
+| 与 crawler 路径对齐 | 偏离 | **完全对齐** | 部分 |
+| 修复现有技术债 | 不修复 | **修复**（替换 insertCrawledVideo 路径） | 修复 |
+
+**选择：方案 B**。VideoService.create 重构：findOrCreate(metadataSource='manual') → createVideo → 手动输入字段获 locked_fields 最高优先级（5）保护。
+
+#### D-145-4 与 staging/review 关系
+
+| 维度 | A: 直接 published=true | B: 强制入 staging | C: admin 可选 publishMode（默认 staging）|
+|------|---|---|---|
+| admin 效率 | 高（无审核兜底） | 低（自审一遍） | **高** |
+| 数据质量 | 风险 | 高 | **可控** |
+| 灵活性 | 无 | 无 | **高** |
+
+**选择：方案 C**。Body 加 `publishMode?: 'draft' | 'staging' | 'published'` 默认 `'staging'`：
+- `draft` → pending_review + hidden + false
+- `staging`（默认）→ pending_review + internal + false
+- `published` → approved + public + true（reviewed_by=actor，自审自发）
+
+#### D-145-5 R-MID-1 framework
+
+**新增 actionType 1 个，第 24 次系统化**：
+- `video.manual_add`：targetKind=`video`（复用，CHECK 13 种已含）
+- before_jsonb=null / after_jsonb={ id, title, type, year, publishMode, catalogId, isNewCatalog, contentRating }
+
+targetKind 复用零 migration 扩展。
+
+#### D-145-6 ErrorCode 复用
+
+| 维度 | A: 新 DUPLICATE_VIDEO | B: 复用 STATE_CONFLICT |
+|------|---|---|
+| 与 ADR-110 零新 ErrorCode 原则 | 偏离 | **对齐** |
+| 语义精度 | 高（专用码） | **足够**（409=状态冲突，重复检测本质 catalog 已有 video 状态冲突） |
+| ErrorCode 膨胀控制 | 18→19 | **保持 18** |
+| 前端消费 | 需新 handler | **零改动** |
+
+**选择：方案 B**。409 response 携带 `detail: { existingVideoId, existingTitle }`。
+
+#### D-145-7 前端复用策略
+
+| 维度 | A: 复用 VideoEditDrawer 双模式 | B: 新建 VideoCreateModal | C: Quick Add 简表单 |
+|------|---|---|---|
+| 组件数量 | **不增加** | +1 | +1 |
+| Tab 结构复用 | **完整** | 重实现 | 不含 |
+| 编辑→创建切换 UX | **自然** | 断裂 | 断裂 |
+| 实施成本 | **低** | 高 | 中 |
+
+**选择：方案 A**。`videoId === null` → 创建模式（POST + 空白表单 + 文案"添加视频" + lines/images/douban tab disabled 需先创建）；`videoId !== null` → 编辑模式（现有不变）。Props 零改动（videoId 已是 string | null）。
+
+#### D-145-8 关联 ADR 引用
+
+| # | ADR | 关联点 |
+|---|-----|--------|
+| 1 | ADR-003 | JWT 双 Token 认证（fastify.authenticate 复用）|
+| 2 | ADR-109 | admin_audit_log schema（migration 052）|
+| 3 | ADR-110 | ErrorCode 系统（复用 STATE_CONFLICT/VALIDATION_ERROR/FORBIDDEN；零新增）|
+| 4 | ADR-118 | audit 视图协议（ACTION_TYPES/TARGET_KINDS 真源）|
+| 5 | ADR-121 | R-MID-1 7 文件框架（第 24 次系统化）|
+| 6 | ADR-139 | fastify.requireRole 复用 |
+| 7 | ADR-144 | 最近 ADR 范式参考（同类 R-MID-1 + 零新 ErrorCode）|
+
+---
+
+### 4. 端点契约
+
+### 端点契约
+
+1 个端点（重构现有），preHandler: `[authenticate, requireRole(['moderator','admin'])]`：
+
+| # | Method | Path | 权限 | Body | Response `data` | 新增 ErrorCode | ADR |
+|---|--------|------|------|------|----------------|---------------|-----|
+| 1 | POST | `/admin/videos` | moderator, admin | Body: `{ title, type, contentRating, publishMode?, force?, titleEn?, description?, coverUrl?, year?, country?, episodeCount?, status?, rating?, director?, cast?, writers?, genres?, doubanId? }` | `{ data: { id, shortId, title, type, catalogId, reviewStatus, visibilityStatus, isPublished, createdAt } }` (201) | 无 | ADR-145 |
+
+**side-effects**：MediaCatalogService.findOrCreate（metadataSource='manual' + locked_fields 自动加锁）+ createVideo + indexSync.syncVideo fire-and-forget + R-MID-1 audit fire-and-forget `video.manual_add`
+
+**Body zod schema** `ManualAddVideoSchema`：title z.string().min(1).max(200) + type z.enum 11 值 + contentRating default 'general' + publishMode default 'staging' + force default false + 14 optional 元数据字段。
+
+**Error responses**：401 UNAUTHORIZED / 403 FORBIDDEN / 409 STATE_CONFLICT（detail.existingVideoId + existingTitle） / 422 VALIDATION_ERROR。
+
+---
+
+### 5. 端点实现 sketch
+
+```
+POST /admin/videos handler:
+1. zod parse ManualAddVideoSchema (→ 422)
+2. auth check (preHandler 覆盖)
+3. catalog = MediaCatalogService.findOrCreate({ ...input, metadataSource: 'manual' })
+4. 重复检测：SELECT count FROM videos WHERE catalog_id=catalog.id AND deleted_at IS NULL LIMIT 1
+   有 + !force → 409 STATE_CONFLICT { detail: { existingVideoId, existingTitle } }
+5. publishMode 映射 stateMap[mode] → { reviewStatus, visibilityStatus, isPublished }
+6. video = createVideo(db, { catalogId, title, type, episodeCount?, contentRating })
+7. publishMode === 'draft'/'published' 时 transitionVideoState 或 UPDATE 状态
+8. void indexSync.syncVideo(video.id)
+9. void auditSvc.write({ actorId, actionType: 'video.manual_add', targetKind: 'video',
+     targetId: video.id, beforeJsonb: null, afterJsonb: { id, title, type, year, publishMode, catalogId, isNewCatalog, contentRating } })
+10. → 201 { data: { id, shortId, title, type, catalogId, reviewStatus, visibilityStatus, isPublished, createdAt } }
+```
+
+Step 3 findOrCreate 内部已处理 5 步匹配 + ON CONFLICT + 事务，调用方无需额外事务。Step 7 published 路径用 transitionVideoState（状态机 trigger 守卫），approve_and_publish 要求 review_status='pending_review'，createVideo 默认满足。
+
+---
+
+### 6. R-MID-1 7 文件 checklist
+
+R-MID-1 第 24 次系统化：
+
+| # | 文件 | 改动 |
+|---|------|------|
+| 1 | `packages/types/src/admin-moderation.types.ts` | AdminAuditActionType 追加 `'video.manual_add'` |
+| 2 | `apps/api/src/services/AuditLogService.ts` | ACTION_TYPES 追加 |
+| 3 | `tests/unit/api/audit-log-service-enums-set-equal.test.ts` | EXPECTED_ACTION_TYPES 追加 |
+| 4 | `tests/unit/api/audit-log-coverage.test.ts` | PAYLOAD_REQUIRED + PAYLOAD_ASSERTION_REQUIRED 各追加 |
+| 5 | `apps/api/src/routes/admin/videos.ts` | POST /admin/videos handler 重构 + audit |
+| 6 | `tests/unit/api/video-manual-add-audit.test.ts` | 20 用例新测试文件 |
+| 7 | `docs/changelog.md` | R-MID-1 第 24 次系统化备注 |
+
+TARGET_KINDS 不需改动（复用 `'video'` CHECK 13 种已含）。
+
+---
+
+### 7. 测试 surface（20 用例）
+
+| # | 类别 | 用例 |
+|---|------|------|
+| 1-5 | Happy path CRUD | 最小 3 字段 / 全字段 / publishMode 3 路径（draft/staging/published） |
+| 6-9 | 重复检测 | 匹配 catalog 无 force → 409 / 含 detail / force=true 成功 / 不同 type 不冲突 / year=null 不匹配 |
+| 10-12 | catalog 同步 | 新建 catalog metadataSource='manual' / 复用 imdbId 精确匹配 / locked_fields 自动加锁 |
+| 13-16 | Audit payload | happy path actionType/targetKind/targetId/payload 完整断言 / 422 不写 audit / 403 不写 / 409 不写 |
+| 17-19 | 422 validation | title>200 / type 非枚举 / year<1900 |
+| 20 | 权限 | 未登录 → 401 |
+
+文件：`tests/unit/api/video-manual-add-audit.test.ts`
+
+---
+
+### 8. 实施 follow-up 拆解
+
+**CHG-SN-8-FUP-VIDEO-MANUAL-ADD-EP**（~2.5h / 12 文件）：
+
+| 子步骤 | 文件数 | 工时 |
+|--------|--------|------|
+| 8-A R-MID-1 4 真源同步 | 4 | 20 min |
+| 8-B VideoService.create 重构（findOrCreate 集成 + publishMode + 重复检测）| 2 | 40 min |
+| 8-C Route zod + handler 重构 + audit | 1 | 20 min |
+| 8-D 单测 20 用例 | 1 | 30 min |
+| 8-E 前端 VideoEditDrawer 双模式 + 按钮 enable | 2-3 | 40 min |
+| 8-F changelog + commit | 1 | 5 min |
+
+按 CLAUDE.md「范围 > 5 项」拆 -A 后端（8-A..D，5 文件） + -B 前端（8-E，3 文件）2 张子卡。
+
+---
+
+### 9. 风险（4 条）
+
+| # | 风险 | 严重度 | 缓解 |
+|---|------|--------|------|
+| R-145-1 | catalog 重复创建（findOrCreate 对手动 typo 精度不足）| 中 | D-145-2 重复检测 + force=true 二次确认 + Drawer 编辑模式可修正 |
+| R-145-2 | publishMode='published' 绕过审核 | 低 | 仅 moderator+admin / audit 记录可追溯 |
+| R-145-3 | metaScore 误差（仅 3 必填字段） | 低 | 后台定时重算 + Drawer 编辑补齐自动提升 |
+| R-145-4 | Drawer 创建/编辑模式 form state 冲突 | 低 | useEffect 依赖 videoId 重置（现有 EMPTY_FORM 已覆盖） |
+
+---
+
+### 10. N1 候选
+
+**N1-145-1（批量 CSV 导入）**：admin 反馈手动添加 > 10 条/周时触发。POST /admin/videos/batch-import + CSV parser + progress。
+
+**N1-145-2（模板预填）**：admin 反馈重复填写相同元数据模式时触发。前端 localStorage 模板存储（类似 FilterPreset 初始方案）。
+
+---
+
+### 11. 评级
+
+| 维度 | 评分 | 理由 |
+|------|------|------|
+| 方案完整性 | A | 8 D-N 决策覆盖字段/重复/catalog/状态/audit/ErrorCode/前端/ADR 关联 |
+| 与现有架构对齐 | A | 零新 ErrorCode / 零新依赖 / 零新概念；复用 MediaCatalogService/R-MID-1/AuditLogService/findOrCreate 全栈 |
+| 关联 ADR 实证 | A | 7 项实证（3/109/110/118/121/139/144）|
+| 实施可行性 | A | 12 文件拆 -A/-B 子卡；20 测试 surface 覆盖完整；Service 重构 + zod 替换可独立 PR |
+| 扩展预留 | A- | publishMode 可扩 'scheduled'；minimum 字段集可增减；N1 批量导入路径复用核心 Service |
+| 风险控制 | A | 4 风险全低/中 + Drawer 双模式状态隔离 + 重复检测兜底 |
+
+**推荐评级：A**
+
+理由：方案 C 最小 3 字段对齐 crawler 实证（year=null 8%）；方案 B 重复检测复用 findOrCreate 5 步匹配；方案 C publishMode 三路径给 admin 完整控制（默认 staging 安全）；零新 ErrorCode / 零新 migration / R-MID-1 第 24 次系统化遵循已建立 7 文件 checklist；VideoEditDrawer 双模式复用避免组件膨胀。同时修复现有 POST /admin/videos 6 项技术债。
+
+---
+
+**后续解锁卡**：
+- **CHG-SN-8-FUP-VIDEO-MANUAL-ADD-EP-A**：按本 ADR 后端实施（4 R-MID-1 真源 + VideoService.create 重构 + Route zod + 20 测试）
+- **CHG-SN-8-FUP-VIDEO-MANUAL-ADD-EP-B**：前端 VideoEditDrawer 双模式 + 按钮 enable
+

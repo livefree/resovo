@@ -86,9 +86,16 @@
 
 ### 3.5 添加视频（PageHeader「+ 添加视频」）
 
-- **行为**：打开 VideoEditDrawer 创建模式（空表单）
-- **必填**：title / type；可选 year / 海报 URL / genres 等
-- **保存**：POST 新视频（默认 visibility=internal / review=pending）
+- **状态**：⚠️ 按钮 disabled + tooltip；**ADR-145 A PASS 已起草**（2026-05-22，CHG-SN-8-FUP-VIDEO-MANUAL-ADD-ADR）；实施 follow-up CHG-SN-8-FUP-VIDEO-MANUAL-ADD-EP-A/-B 待立
+- **ADR-145 决策**：
+  - 行为：VideoEditDrawer 双模式（videoId=null → 创建空表单 POST /admin/videos / videoId 有值 → 编辑模式 PATCH）
+  - **必填 3 字段**：title / type / contentRating（与 crawler year=null 8% 实证一致，year/sourceUrl 改 optional）
+  - **可选 14 字段**：titleEn / description / coverUrl / year / country / episodeCount / status / rating / director / cast / writers / genres / doubanId
+  - **publishMode**：admin 可选 `draft` / `staging`（默认） / `published`（admin 自审自发）
+  - **重复检测**：title+year+type 软匹配警告（409 STATE_CONFLICT detail.existingVideoId），admin 可 force=true 跳过
+  - **catalog 同步**：复用 MediaCatalogService.findOrCreate(metadataSource='manual') 自动加 locked_fields 最高优先级保护
+  - **R-MID-1 第 24 次系统化**：actionType `video.manual_add` + targetKind 复用 `video`
+- **当前替代**：通过 crawler 自动派发；少数运营场景待 EP 实施
 
 ### 3.6 导出 CSV（PageHeader 「导出」）
 
