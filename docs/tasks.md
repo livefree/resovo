@@ -6,4 +6,4 @@
 
 ## 进行中任务
 
-（空 — 上一任务 CHG-SN-8-FUP-SHELL-NOTIFICATIONS-ADR 已完成 / ADR-147 A PASS / 下一卡 EP-A 后端核心 + 14 单测 ~0.20w）
+（空 — 上一任务 CHG-SN-8-FUP-SHELL-NOTIFICATIONS-EP-A 已完成 / 后端 + ADR + 14 单测闭合 / 下一卡 EP-B 前端 SWR 接入 ~0.10w / 4 文件）

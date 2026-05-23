@@ -2772,3 +2772,54 @@ Plan-Revision: 无
 
 Cleanup-Audit: #G-shell-notifications ⬜/🔄 → ⚠️+🔄（ADR ✅ 2/3 / 实施 follow-up 待立）
 Plan-Revision: 无
+
+
+## [CHG-SN-8-FUP-SHELL-NOTIFICATIONS-EP-A] ADR-147 后端实施 admin shell notification hub MVP + 14 单测 (#G-shell-notifications 后端 + ADR 闭合)
+
+- **完成时间**：2026-05-23
+- **记录时间**：2026-05-23 03:30
+- **执行模型**：claude-opus-4-7（续 ADR 起草会话）
+- **子代理**：无（ADR-147 已 Opus A PASS commit 2a8bc91a）
+- **修改文件**（6 代码 + 2 测试 + 4 文档）：
+  - `packages/types/src/admin-shell.types.ts` — 新建（AdminNotificationItem + AdminTaskItem + AdminNotificationListResponse + AdminJobsListResponse + AdminQueueCounts；与 admin-ui SSOT 镜像对齐，避免 api 反向依赖 admin-ui）
+  - `packages/types/src/index.ts` — export admin-shell.types
+  - `apps/api/src/services/NotificationService.ts` — 新建（NOTIFICATION_ACTION_WHITELIST ReadonlySet 8 类 + LEVEL_MAP/HREF_MAP/TITLE_MAP 三 Map + list 方法 SQL ANY 子查询 + COUNT）
+  - `apps/api/src/services/TaskAggregator.ts` — 新建（STATUS_MAP + FAILED_STATUSES + mapCrawlerRun readonly-friendly + fetchBullSnapshot try-catch 降级 + mapBullJob id 前缀 + progress 0-100 clamp）
+  - `apps/api/src/routes/admin/notifications.ts` — 新建（GET /admin/notifications + zod query schema + auth requireRole admin/moderator）
+  - `apps/api/src/routes/admin/system-jobs.ts` — 新建（GET /admin/system/jobs + zod query + meta.degraded conditional）
+  - `apps/api/src/server.ts` — import + register 2 路由
+  - `tests/unit/api/notification-service.test.ts` — 9 用例（白名单 + 8 类完整 + level 映射 danger/info + href 映射 + 时间窗口透传 + limit 透传 + 401 endpoint + 200 endpoint）
+  - `tests/unit/api/task-aggregator.test.ts` — 5 用例（running/failed CrawlerRun 映射 + Redis 降级 + bull progress clamp + endpoint queueCounts）
+  - `docs/decisions.md` ADR-147 §4 加 sub-heading `### 端点契约`（触发 verify-endpoint-adr 识别）
+  - `docs/manual/GAPS.md` #G-shell-notifications → ⚠️+🔄 后端 + ADR 闭合
+  - `docs/task-queue.md` SEQ-20260521-06 #56 ✅
+  - `docs/tasks.md` 清卡片
+- **新增依赖**：无
+- **数据库变更**：无（方案 A 选中 → 零 migration / 零新表 / 零 schema 漂移）
+- **设计要点**：
+  - **白名单 8 类首版**（ADR-147 D-147-1）：system.webhook_send_failed (danger) / staging.batch_publish (info) / video.manual_add (info) / video.merge (info) / user_submission.action (info) / system.cache_clear (warn) / system.settings_update (info) / system.audit_rollback (warn)
+  - **NotificationService**：单表 audit_log + 2 并行 query（list + COUNT）；ANY($1::text[]) 安全参数化；read=false 统一返回（前端 localStorage 计算）
+  - **TaskAggregator**：CrawlerRun 主源（since 时间窗口 + ORDER BY DESC + limit）+ bull active 副源（crawlerQueue + maintenanceQueue 各 9 个 active 上限）+ Redis try-catch 全捕获 → degraded=true；CrawlerRun 优先合并（业务语义丰富）；bull id 加 `bull-${queueName}-` 前缀防冲突
+  - **NotificationItem 真源镜像**：packages/types/admin-shell.types.ts 与 packages/admin-ui/src/shell/types.ts 字段结构对齐；API 不直接依赖 admin-ui（UI 包不应被 API 引用）；N1-147-5 可改 admin-ui re-export from types 统一真源
+  - **vi.hoisted 范式**：`const { queryMock } = vi.hoisted(() => ({ queryMock: vi.fn() }))` 解决 vi.mock factory 引用顶层变量的 hoisting 错误
+  - **readonly 友好的对象构造**：用 `...(field !== undefined && { field })` 范式构造 AdminTaskItem（所有字段 readonly），避免 Cannot assign 错误
+  - **endpoint 默认值**：notifications 7 天窗口 / 50 limit / 100 max；jobs 3 天窗口 / 20 limit / 50 max（对齐 ADR-147 D-147-5）
+- **不在范围**：
+  - 前端 SWR hooks（useAdminNotifications / useAdminTasks）+ admin-shell-client mock → 真端点 + localStorage lastViewedAt（CHG-SN-8-FUP-SHELL-NOTIFICATIONS-EP-B ~0.10w / 4 文件）
+  - per-user mark-read DB 化（ADR-147 N1-147-1 按需启动）
+  - 白名单 KV 可配化（ADR-147 N1-147-2 按需启动）
+  - SSE 实时推送（ADR-147 N1-147-3 按需启动）
+- **验收**：
+  - typecheck PASS（含 readonly 修复 1 轮 + types index export 路径校验）
+  - lint PASS
+  - 14 新单测 PASS（NotificationService 9 + TaskAggregator 5）
+  - 全 unit 4683/4684 PASS（1 pre-existing flaky `use-filter-presets.test.ts` 隔离 7/7 PASS / 与本卡 zero overlap）
+  - verify:adr-contracts PASS（186 admin 路由全部对齐 63 ADR 端点；2 新端点登记 ADR-147；D-147-1..8 标记闭环 136 → 144）
+- **价值**：
+  - **#G-shell-notifications P1 后端 + ADR 闭合**：admin shell 通知 hub 后端骨架完整 — 任何 admin 写操作触发 audit 后 60s 内可在 notification drawer 可见（待 EP-B 前端接入）
+  - **零基础设施债**：复用 audit_log + CrawlerRun + bull queue + requireRole 守卫；零新表/migration/SDK/Redis 依赖；零 R-MID-1 新增
+  - **降级范式**：Redis 不可用时 TaskAggregator try-catch 软降级（meta.degraded=true，仅返回 CrawlerRun 数据），admin UI 仍可用
+  - **解锁 EP-B**：前端 SWR 接入卡可立即启动
+
+Cleanup-Audit: #G-shell-notifications ⚠️+🔄 → ⚠️+🔄 后端 + ADR 闭合（EP-B 前端 follow-up 待）
+Plan-Revision: 无

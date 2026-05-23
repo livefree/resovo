@@ -56,6 +56,9 @@ import { adminUserSubmissionsRoutes } from '@/api/routes/admin/userSubmissions'
 import { adminAuditRoutes } from '@/api/routes/admin/audit'
 import { adminFilterPresetRoutes } from '@/api/routes/admin/filter-presets'
 import { adminWebhookRoutes } from '@/api/routes/admin/webhook'
+// CHG-SN-8-FUP-SHELL-NOTIFICATIONS-EP-A / ADR-147：admin shell notification hub MVP
+import { adminNotificationRoutes } from '@/api/routes/admin/notifications'
+import { adminSystemJobsRoutes } from '@/api/routes/admin/system-jobs'
 import { VerifyService } from '@/api/services/VerifyService'
 import { db } from '@/api/lib/postgres'
 
@@ -175,6 +178,9 @@ async function start() {
   await fastify.register(adminAuditRoutes, { prefix: '/v1' })
   await fastify.register(adminFilterPresetRoutes, { prefix: '/v1' })
   await fastify.register(adminWebhookRoutes, { prefix: '/v1' })
+  // CHG-SN-8-FUP-SHELL-NOTIFICATIONS-EP-A / ADR-147：admin shell notification hub MVP
+  await fastify.register(adminNotificationRoutes, { prefix: '/v1' })
+  await fastify.register(adminSystemJobsRoutes, { prefix: '/v1' })
 
   registerVerifyWorker()
   registerCrawlerWorker()

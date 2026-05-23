@@ -84,11 +84,12 @@
 ### #G-shell-notifications · 侧栏 mock badge 未接真端点
 
 - **页面**：用户问题 #1
-- **状态**：⚠️+🔄 ADR-147 起草 ✅（2026-05-23 / arch-reviewer A PASS）/ EP-A + EP-B 实施 follow-up 待
+- **状态**：⚠️+🔄 **后端 + ADR 闭合**（2026-05-23 / ADR-147 A PASS + EP-A 后端 6 文件 + 14 单测 + 2 新端点）；剩余 EP-B 前端接入（~0.10w / 4 文件）
 - **优先级**：P1
 - **现象**：admin-shell-client.tsx:124-130 mockNotifications/mockTasks 仍是 stub；端点 `/admin/notifications` / `/admin/system/jobs` 不存在
-- **ADR-147 决策**（commit 待 / 本卡）：方案 A audit_log 子集映射（8 类白名单 actionType + level/href 映射，零新表）+ 方案 A 前端 polling 60s（零 SSE/WS 依赖）+ 方案 C 有主次 tasks 数据源（CrawlerRun 主源 + bull queue active 副源 + Redis 不可用降级）+ 方案 A localStorage lastViewedAt read 状态（MVP 不实装 per-user DB read）+ 零 R-MID-1 新增 + 零新依赖 + 2 新端点（GET /admin/notifications + GET /admin/system/jobs）+ 4 类 N1 升级路径预留（DB read / KV 白名单可配 / SSE / tasks 进度增强）
-- **实施 follow-up**：拆 EP-A 后端核心 + 测试（~0.20w / 10 文件 / 14 单测）+ EP-B 前端 SWR 接入 + localStorage（~0.10w / 4 文件）；总工时 ~0.30w
+- **ADR-147 决策**（commit 2a8bc91a）：方案 A audit_log 子集映射（8 类白名单 actionType + level/href 映射，零新表）+ 方案 A 前端 polling 60s（零 SSE/WS 依赖）+ 方案 C 有主次 tasks 数据源（CrawlerRun 主源 + bull queue active 副源 + Redis 不可用降级）+ 方案 A localStorage lastViewedAt read 状态（MVP 不实装 per-user DB read）+ 零 R-MID-1 新增 + 零新依赖 + 2 新端点（GET /admin/notifications + GET /admin/system/jobs）+ 4 类 N1 升级路径预留（DB read / KV 白名单可配 / SSE / tasks 进度增强）
+- **后端实施 EP-A**（本卡 commit 待 / 2026-05-23）：CHG-SN-8-FUP-SHELL-NOTIFICATIONS-EP-A — packages/types/admin-shell.types.ts 新建（AdminNotificationItem + AdminTaskItem + Response 信封）+ NotificationService（白名单 ReadonlySet + 3 映射 Map + list 方法 SQL 子查询）+ TaskAggregator（CrawlerRun mapper + bull active mapper + Redis try-catch 降级 + id 前缀防冲突 + progress clamp）+ 2 route + server 注册 + 14 单测（9 NotificationService + 5 TaskAggregator）；ADR-147 §4 加 sub-heading 触发 verify-endpoint-adr 识别；186 admin 路由 ↔ 63 ADR 端点对齐
+- **前端 EP-B follow-up**：CHG-SN-8-FUP-SHELL-NOTIFICATIONS-EP-B 待立 — useAdminNotifications / useAdminTasks SWR hooks + admin-shell-client mock → SWR + localStorage lastViewedAt read state + shell-data.tsx 清理 mock exports；工时 ~0.10w
 
 ### #G-dev-mode-3panels · 开发者模式 3 栏只做 1 栏
 

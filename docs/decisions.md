@@ -11617,6 +11617,8 @@ CREATE INDEX IF NOT EXISTS idx_notification_reads_user
 
 ### 4. 端点契约
 
+### 端点契约
+
 | # | Method | Path | 权限 | Query | Response `data` | 新增 ErrorCode | ADR |
 |---|--------|------|------|-------|----------------|---------------|-----|
 | 1 | GET | `/admin/notifications` | admin, moderator | `limit?, since?` | `{ data: NotificationItem[], meta: { total, limit, since } }` (200) | 无 | ADR-147 |
