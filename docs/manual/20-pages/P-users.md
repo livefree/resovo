@@ -74,7 +74,8 @@
 ## 4. 进阶操作
 
 ### 4.1 批量封禁
-- **状态**：⚠️ 入口已加（PageHeader「批量封禁」disabled 按钮 + tooltip 明示筹备中）；后端 batch endpoint + batch mode UI follow-up CHG-SN-8-FUP-USERS-BATCH-BAN-EP（GAPS.md #G-users-batch-ban）
+- **状态**：⚠️+🔄 入口已加 disabled + **ADR-143 A PASS 已起草**（2026-05-22）；ADR-143 决策：对称双端点 POST `/admin/users/batch-ban` + `/admin/users/batch-unban` + max 50 + best-effort per-id + 三计数 response + 复用 user.ban/unban actionType（零 R-MID-1 触发）+ 复用 ADR-139 Redis session invalidate
+- 实施 follow-up CHG-SN-8-FUP-USERS-BATCH-BAN-EP（GAPS.md #G-users-batch-ban）
 - **当前替代**：逐行操作（PageHeader disabled 按钮 hover 显示提示）
 
 ### 4.2 改用户邮箱 / 编辑显示名

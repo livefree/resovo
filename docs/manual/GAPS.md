@@ -104,7 +104,7 @@
 ### #G-users-batch-ban · 批量封禁 UI 缺失
 
 - **页面**：P-users §4.1
-- **状态**：⚠️ 已部分实装（CHG-SN-8-GAPS-USERS-BATCH-BAN-BTN disabled 入口；后端 follow-up：CHG-SN-8-FUP-USERS-BATCH-BAN-EP）
+- **状态**：⚠️+🔄 已部分实装 + ADR 已起草（CHG-SN-8-GAPS-USERS-BATCH-BAN-BTN disabled 入口 commit f4b91ad5 + ADR-143 A PASS commit 待 / 实施 follow-up：CHG-SN-8-FUP-USERS-BATCH-BAN-EP）
 - **优先级**：P3
 - **现象**：无端点 + 无 batch UI；当前需逐行操作
 - **消费层补齐**：CHG-SN-8-GAPS-USERS-BATCH-BAN-BTN — UsersListClient PageHeader actions 加 disabled「批量封禁」按钮 + tooltip（H2 死按钮豁免范式，同 P-videos「+ 添加视频」/ audit-rollback 未支持类型 disabled）；tooltip 明示「筹备中」+ 指向 GAPS / follow-up

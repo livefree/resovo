@@ -10381,4 +10381,213 @@ if (request.user.role !== 'admin' && detail.actorId !== request.user.userId) {
 - **CHG-SN-8-FUP-AUDIT-SELF-SCOPE-EP**：按本 ADR 实施 6 文件清单 + 12 测试 surface
 - GAPS.md `#G-audit-self-scope` 状态：⚠️ → ✅ 闭合
 
+---
+
+## ADR-143 — admin 批量封禁用户端点协议设计（CHG-SN-8-FUP-USERS-BATCH-BAN-EP）
+
+**状态**：Accepted（arch-reviewer A PASS / 1 非阻塞建议 N1-143-1 登记）
+**日期**：2026-05-22
+**arch-reviewer**：claude-opus-4-7（子代理评级；本主循环亦 claude-opus-4-7）
+**关联 GAP**：`#G-users-batch-ban`（P3 体验优化）
+**关联任务**：CHG-SN-8-FUP-USERS-BATCH-BAN-ADR（本卡）/ CHG-SN-8-FUP-USERS-BATCH-BAN-EP（实施 follow-up）
+
+---
+
+### 1. 决策摘要
+
+新增两个对称 admin 写端点 `POST /admin/users/batch-ban` + `POST /admin/users/batch-unban`（方案 B），采用 **best-effort + 详细报告**（方案 B）部分失败处置，max batch size 50（与现有 moderation batch 对齐），每个成功 ban 独立写 `user.ban` audit log（方案 A，复用现有 actionType 不新增），每个成功 ban 写 Redis `user:rca:{id}` EX 900 触发 session invalidate（复用 ADR-139 范式）。**零新 actionType / 零新 ErrorCode / 零 schema 变更 / 零 R-MID-1 7 文件触发**。与仓内 6 个现有 batch 端点命名约定和部分失败处置范式完全对齐。
+
+---
+
+### 2. 背景
+
+**现状**：
+- 单次 ban/unban 已完备：`PATCH /admin/users/:id/{ban,unban}`（含 admin 守卫 + Redis cache + audit）
+- 消费层 disabled 按钮已就位（CHG-SN-8-GAPS-USERS-BATCH-BAN-BTN commit f4b91ad5）
+- 仓内 batch 端点先例充分（6 个：moderation batch-approve/reject / submissions batch-approve/reject / videos batch-publish/unpublish / staging batch-publish）
+
+**部分失败处置先例**：moderation batch-approve/reject 采用 best-effort per-id try/catch（`moderation.ts:287-303`）+ 三计数 response。
+
+---
+
+### 3. 决策
+
+#### D-143-1 端点设计
+
+选择**方案 B（对称双端点 batch-ban + batch-unban）**。
+
+| 维度 | A: 单端点 | B: 对称双端点 | C: 通用 batch-actions |
+|------|---|---|---|
+| API 表面 | 1 端点 | 2 端点 | 1 端点 |
+| 与现有 batch 对齐 | 部分 | **完全**（仓内全部"动作专用"命名） | 偏离（无 dispatch 先例） |
+| 测试粒度 | 低 | **高**（独立测试矩阵） | 中 |
+| 客户端调用 | 低 | 低（对称） | 中（需 action 守卫） |
+| actionType 复用 | 仅 user.ban | **复用 user.ban + user.unban** | 需 dispatch |
+| YAGNI | 满足最小需求 | **对称完整**（unban 即时入口） | 过度泛化 |
+| 与单次端点对齐 | 部分 | **完全**（ban→batch-ban / unban→batch-unban） | 无对应 |
+
+**选择理由**：仓内全部 batch 端点动作专用命名；方案 B 完全对齐；为运营误操作恢复提供即时 batch-unban 入口；额外 1 个端点成本极低。
+
+#### D-143-2 部分失败处置
+
+选择**方案 B（best-effort + 详细报告）**。
+
+| 维度 | A: all-or-nothing | B: best-effort per-id | C: fail-first |
+|------|---|---|---|
+| 与 moderation batch 对齐 | 否 | **完全对齐** | 否 |
+| UX 反馈 | 全成功或失败 | **三计数详细报告** | 部分 + 顺序敏感 |
+| 事务复杂度 | 高 | 低 | 中 |
+| skip 处理（admin/已 banned） | 整批回滚 | **跳过计入** | 中断 |
+| Redis 写时机 | 事务后批量 | **per-id 成功后立即** | per-id 可被打断 |
+| 部分成功可接受 | 否 | **是** | 是但不全 |
+| 实施复杂度 | 中 | 低（复用单次 ban） | 中 |
+
+**响应结构**（对齐 moderation batch）：`{ banned: N, skipped: N, failed: N }`（unban 对称 `{ unbanned, skipped, failed }`）。
+
+#### D-143-3 max batch + 守卫
+
+**max 50**（与 moderation batch-approve/reject 对齐，保守优先）。
+
+**zod schema**：`z.array(z.string().uuid()).min(1).max(50)`
+
+**5 类守卫**（per-id skip，幂等友好）：
+| 守卫 | 行为 |
+|------|------|
+| admin 账号（user.role === 'admin'） | skip（避免 1 admin 阻塞整批） |
+| 自残（id === request.user.userId） | skip（admin 默认已被前条拦截，显式加防） |
+| 不存在 / soft deleted | skip |
+| 已 banned（banned_at IS NOT NULL）/ 未 banned（unban 场景） | skip（幂等） |
+| 重复 id | 去重（`new Set(ids)`） |
+
+#### D-143-4 session invalidate 批量联动
+
+**策略**：per-id 成功 ban 后立即 fire-and-forget 写 Redis `user:rca:{id}` EX 900（复用单次 ban 范式）。
+
+**为何不用 Promise.allSettled + Redis pipeline**：
+1. fire-and-forget per-id 与单次 ban 范式完全一致（可读性 + 可维护性）
+2. Redis SET O(1)，50 次串行 < 10ms（pipeline 优化属 N1-143-1）
+3. 失败容错已由 `.catch` warn 降级覆盖
+
+**Redis 失败容错**：单 id Redis 失败不影响其他 + 不影响 DB；降级窗口 ≤ 15 min（ADR-139 R-139-2 一致）。
+
+**batch-unban 不触发 session invalidate**（与单次 unban 一致）。
+
+#### D-143-5 R-MID-1 audit 策略
+
+选择**方案 A（每个 ban 写 1 条 user.ban audit log，共 N 条）**。
+
+| 维度 | A: N 条 user.ban | B: 1 条 user.batch_ban | C: 混合 |
+|------|---|---|---|
+| 与单次 ban audit 一致性 | **完全一致** | 偏离 | 部分 |
+| R-MID-1 7 文件触发 | **不触发** | 触发 | 触发 |
+| audit 回溯粒度 | **按 user 精确**（targetId = userId） | 需解析 payload.ids | 精确 + 汇总 |
+| AuditRollbackService 兼容 | **兼容**（user.ban 已可回滚） | 需注册新 handler | 复杂 |
+| 与 staging.batch_publish 对齐 | 偏离（合理：staging 是 service 入队不可拆，本卡是 per-id for-loop） | 对齐 | 混合 |
+| 实施复杂度 | **低** | 中高 | 高 |
+
+**选择理由**：零 R-MID-1 框架触发是决定性因素；per-id audit 允许精确回溯；不同 batch 模式选不同 audit 策略合理。
+
+#### D-143-6 关联 ADR + 性能 + ErrorCode
+
+**关联 ADR**（7 项）：ADR-110 / ADR-118 / ADR-121 / ADR-136 / ADR-139（Redis 复用）/ ADR-140（admin 互改保护）/ ADR-138（AuditRollbackService 兼容）。
+
+**性能**：
+- per-id `UPDATE users` 主键 O(1)；50 次串行 < 100ms
+- Redis 50 次 fire-and-forget < 10ms
+- Audit 50 次 fire-and-forget catch 降级不阻塞
+- 总 p95 目标 < 500ms
+
+**为何不用 `UPDATE WHERE id = ANY($1)`**：per-id 模式允许精确 skip 5 类原因 + 精确 audit；ANY 模式无法区分 skip 原因。
+
+**ErrorCode**：**零新增**。复用 `VALIDATION_ERROR` (422) / `UNAUTHORIZED` (401) / `FORBIDDEN` (403)；不引入 `BATCH_PARTIAL_FAILURE` 207（与 moderation batch 范式一致 — 200 + 三计数）。
+
+---
+
+### 端点契约
+
+| # | Method | Path | 权限 | Body | Response `data` | 新增 ErrorCode | ADR |
+|---|--------|------|------|------|----------------|---------------|-----|
+| 1 | POST | `/admin/users/batch-ban` | admin | `{ ids: UUID[] }` (1-50) | `{ banned: number, skipped: number, failed: number }` | 无 | ADR-143 |
+| 2 | POST | `/admin/users/batch-unban` | admin | `{ ids: UUID[] }` (1-50) | `{ unbanned: number, skipped: number, failed: number }` | 无 | ADR-143 |
+
+**side-effects**（batch-ban per-id）：DB UPDATE users + Redis SET user:rca:{id} EX 900（fire-and-forget）+ Audit user.ban（fire-and-forget）
+
+**side-effects**（batch-unban per-id）：DB UPDATE users + Audit user.unban；不写 Redis（与单次 unban 一致）
+
+---
+
+### 5. SQL / Schema 设计
+
+**无新 migration / 无新 query 函数**。复用现有 `banUser(db, id)` + `unbanUser(db, id)`（`apps/api/src/db/queries/users.ts:179-201`），handler 内 for-loop 调用。
+
+---
+
+### 6. Response 结构 / 错误码
+
+**成功响应**（200）：
+
+```json
+{
+  "data": { "banned": 8, "skipped": 2, "failed": 0 }
+}
+```
+
+batch-unban 对称：`{ unbanned: 8, skipped: 2, failed: 0 }`
+
+**计数语义**：`banned/unbanned`（成功）/ `skipped`（5 类守卫触发）/ `failed`（非预期 DB/服务错误）
+
+**错误响应**：复用 ADR-110 ApiErrorBody + 现有 ErrorCode；零新增。
+
+---
+
+### 7. 关联 ADR
+
+详见 D-143-6 关联 ADR 表（7 项）。
+
+---
+
+### 8. R-MID-1 文件清单
+
+**不适用（降级）**。理由：D-143-5 选方案 A 复用现有 `user.ban` / `user.unban` actionType；零新 actionType = 零触发 ADR-121 4 真源同步范式；R-MID-1 第 20 次系统化（USERS-BAN-AUDIT commit 60ecffe1）已完成 actionType 注册。
+
+---
+
+### 9. 测试 surface
+
+16 用例（happy 2 + 5 类 skip + 去重 + Redis + audit + 422 边界 3 + 401/403）：
+- batch-ban: happy / admin skip / 自残 skip / 不存在 skip / 已 banned skip / 去重 / Redis 写 / audit 写 / 422 超 50 / 422 空 / 422 非 UUID（11 用例）
+- batch-unban: happy / 未 banned skip / audit / 不写 Redis（4 用例）
+- 权限：非 admin 401/403（1 用例）
+
+文件 `tests/unit/api/admin-users-batch-ban.test.ts`。
+
+---
+
+### 10. 风险与回退
+
+| # | 风险 | 严重性 | 缓解 |
+|---|------|--------|------|
+| R-143-1 | admin 误操作批量 ban 50 用户 | 中 | max 50 + 前端 confirm dialog（实施卡消费层加二次确认）+ batch-unban 对称端点提供恢复 |
+| R-143-2 | Redis 宕机 → session invalidate 窗口 | 低 | 与单次 ban 同风险（ADR-139 R-139-2）；DB 已 banned；Redis 恢复后下次操作重建 |
+| R-143-3 | per-id 串行 50 次 → 端点延迟 | 低 | p95 < 500ms 可接受；N1-143-1 并行优化备选 |
+| R-143-4 | 50 audit fire-and-forget 短时尖刺 | 低 | AuditLogService catch 降级 + PG WAL 异步；远小于 staging batch-publish 100 上限 |
+
+**回退路径**：① 代码 revert 2 handler ② 消费层恢复 disabled 按钮 ③ 零 schema / 零 ErrorCode / 零 R-MID-1 变更 → 零残留
+
+---
+
+### 11. 非阻塞建议 / N1
+
+**N1-143-1（串行 → 并行 DB + Redis pipeline 优化）**：当前 per-id 串行 for-loop 与 moderation batch 一致。若运营反馈 50 ids 延迟不佳，可优化：
+1. `findAdminUserById` 阶段 `Promise.all` 批量预取
+2. 守卫过滤后 `UPDATE users WHERE id = ANY($1::uuid[]) AND role != 'admin' AND banned_at IS NULL AND deleted_at IS NULL RETURNING ...` 一次 SQL 批量
+3. Redis `pipeline` 批量 SET
+
+牺牲精确 skip 原因区分，将 p95 从 ~500ms → ~50ms。建议作为 follow-up 独立卡评估。**状态**：待实施卡评估。
+
+---
+
+**后续解锁卡**：
+- **CHG-SN-8-FUP-USERS-BATCH-BAN-EP**：按本 ADR 实施 2 新端点 + 16 测试 surface + 消费层 `batchBanUsers` / `batchUnbanUsers` lib + UsersListClient batch mode 启用
+
 
