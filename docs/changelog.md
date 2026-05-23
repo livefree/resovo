@@ -3147,3 +3147,50 @@ Plan-Revision: 无（仅 changelog + SQL alias rename / 不触动 plan）
 
 Cleanup-Audit: CHG-SN-7-MISC-VISUAL-CRAWLER ✅ + CHG-SN-7-MISC-VISUAL-SUBMISSIONS ✅ 同 commit 闭合（合卡）
 Plan-Revision: 无（仅 spec 落地 / capture 待用户手动）
+
+
+## [CHG-SN-7-MISC-VISUAL-BACKLOG-COMMIT] 用户先前 capture 副作用 15 PNG 入库（visual coverage 历史 backlog 收口 / admin-ui 2 张错截已排除）
+
+- **完成时间**：2026-05-23
+- **记录时间**：2026-05-23
+- **执行模型**：claude-opus-4-7（max effort 续会话）
+- **子代理**：无（baseline 已 capture / 仅 review + git add）
+- **修改文件**（15 PNG + 2 docs）：
+  - `tests/visual/moderation/moderation.visual.spec.ts-snapshots/` 8 新 PNG（ae4ea66f spec 落地时 9 张占位 baseline 用户先前 capture 8/9 / player-idle 单独 follow-up）
+    - lines-panel-collapsed / lines-panel-expanded / right-pane-detail / right-pane-history / right-pane-similar / filter-preset-popover / player-loaded（AdminPlayer Loading 状态）/ edit-drawer-open
+  - `tests/visual/admin-moderation.visual.spec.ts-snapshots/` 7 modified PNG（用户先前 capture 覆盖 / spec 7 cases 完整 cover）
+    - moderation-line-health-drawer / lines-panel / pending-detail / pending-list / reject-modal / rejected（loading 态 / 可接受）/ staging（EmptyState 4 KPI + 自动发布规则）
+  - `docs/task-queue.md` SEQ-20260521-06 追加 #64
+  - `docs/tasks.md` 清卡片
+- **review 拦截**（baseline 质量门）：
+  - `tests/visual/admin-ui/line-health-drawer.visual.spec.ts-snapshots/line-health-drawer-default-admin-visual-darwin.png` — 实际截到 Resovo 登录页（capture 时 access token 失效 → middleware redirect /login）
+  - `tests/visual/admin-ui/reject-modal.visual.spec.ts-snapshots/reject-modal-default-admin-visual-darwin.png` — 同上错截
+  - 处理：`git restore tests/visual/admin-ui/` 恢复 pre-existing baseline；独立 follow-up CHG-SN-7-MISC-VISUAL-ADMIN-UI-RECAPTURE 按需启动（需 user 登录后跑 `/admin/dev/visual/...` capture）
+- **新增依赖**：无
+- **数据库变更**：无
+- **设计要点**：
+  - **baseline 质量门**：commit 前 visual review 每张 PNG 抽检；发现 capture 时 auth 失效场景立即 restore 不入库错截；保护 visual coverage 真实性
+  - **scope 严守 + review 拦截范式**：用户请求「commit 17 PNG」但 review 发现 2 张 invalid → 主动拦截 + 范围调整为 15 PNG + 错截 follow-up 登记；符合 CLAUDE.md「执行动作前关注 reversibility 与 blast radius」原则
+  - **不动 spec / 不动 code**：纯 baseline 入库 / spec 维持 a000f59f 已 commit 状态 / 业务代码零触动
+  - **moderation backlog 收口（ae4ea66f → backlog-commit）**：ae4ea66f spec 落地时 baseline 占位 9 张；用户先前 capture 8 张；本卡 commit 入库 8/9；player-idle 单独 follow-up（需 spec 跑到不选中线路的 idle 状态）
+- **行为变更**：无（纯 baseline 入库 / 不动业务 / 不动 spec）
+- **不在范围**：
+  - 重 capture admin-ui 2 张 baseline（独立 follow-up / 需用户登录 / 跑 `/admin/dev/visual/line-health-drawer` + `/reject-modal` 路由）
+  - moderation player-idle 单张缺（独立 follow-up / 需 dev DB 有线路 + spec 跑到不选中线路状态）
+  - admin-moderation rejected loading 态 baseline 优化（loading 状态可被未来 capture 覆盖为稳定状态）
+  - 业务代码 / spec / schema / 端点变更
+- **验收**：
+  - typecheck PASS（不动 code）
+  - lint PASS
+  - 全 unit 4701/4701 PASS 保持（不动 unit test 路径）
+  - verify:adr-contracts 维持 ✅
+  - visual review 15 PNG 全部 valid（admin-ui 2 张错截已 restore）
+- **价值**：
+  - **visual coverage 累计入库 30 张完整 baseline**：admin-moderation 7 + moderation 8 + admin-ui 5 旧 + a000f59f 新 10 = 30 张（admin-ui 2 张错截 restore 保留 pre-existing）
+  - **working tree 清账**：消除 git status long-dirty（仅剩 admin-ui 错截 follow-up）
+  - **ae4ea66f baseline backlog 收口 89%**：moderation spec 9 张占位中 8 张正式入库（player-idle 缺单独 follow-up / 88.9% coverage）
+  - **review 拦截机制建立**：发现并拦截 capture 时 auth 失效错截范式；为未来 capture 操作建立 baseline 质量门
+  - **SEQ-20260521-06 第 4 张 chore 卡完成**：本会话累计 4 张 chore 卡（DOCS-DRIFT-SYNC + ADR-146-D-N-CLOSE + VISUAL-BATCH + VISUAL-BACKLOG-COMMIT + 本卡 VISUAL-BACKLOG-COMMIT = 5 commit）
+
+Cleanup-Audit: moderation backlog 8/9 入库（player-idle 缺单独 follow-up）+ admin-moderation 7/7 ✅ / admin-ui 2 张错截 review 拦截 + restore + follow-up 登记
+Plan-Revision: 无（纯 baseline 入库 + review 拦截）
