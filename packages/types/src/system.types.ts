@@ -38,6 +38,10 @@ export type SystemSettingKey =
   | 'notification_webhook_secret'
   // CHG-SN-8-FUP-WEBHOOK-IMPL-EP-A / ADR-146 D-146-1：事件订阅 JSON 数组（WebhookEventType[]）
   | 'notification_webhook_events'
+  // CHG-SN-8-FUP-WEBHOOK-IMPL-EP-A2.3 / ADR-146 D-146-7：审核积压超阈值 webhook（数字 / 默认 50）
+  | 'notification_pending_threshold'
+  // ADR-146 R-146-3：阈值类事件 1h debounce 上次告警时间戳（ms）
+  | 'notification_pending_last_alert'
   | 'session_timeout_minutes'
   | 'session_max_concurrent'
   | 'session_extend_on_activity'

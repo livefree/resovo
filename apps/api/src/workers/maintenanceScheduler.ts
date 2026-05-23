@@ -12,6 +12,9 @@ import { db } from '@/api/lib/postgres'
 import * as systemSettingsQueries from '@/api/db/queries/systemSettings'
 import type { MaintenanceJobData } from '@/api/workers/maintenanceWorker'
 import { baseLogger } from '@/api/lib/logger'
+// CHG-SN-8-FUP-WEBHOOK-IMPL-EP-A2.3 / ADR-146：审核积压超阈值 webhook
+import { WebhookDispatcher, SYSTEM_ACTOR_ID } from '@/api/services/WebhookDispatcher'
+import { AuditLogService } from '@/api/services/AuditLogService'
 
 const schedulerLog = baseLogger.child({ worker: 'maintenance-scheduler' })
 
@@ -19,15 +22,19 @@ const TICK_MS = 30 * 60_000                  // 30 分钟（auto-publish-staging
 const VERIFY_TICK_MS = 60 * 60_000           // 60 分钟（verify-published-sources）
 const STAGING_VERIFY_TICK_MS = 8 * 3600_000  // 8 小时（verify-staging-sources）
 const RECONCILE_TICK_MS = 24 * 3600_000      // 24 小时（reconcile-search-index）
+const PENDING_THRESHOLD_TICK_MS = 60 * 60_000  // 1 小时（CHG-SN-8-FUP-WEBHOOK-IMPL-EP-A2.3 / ADR-146）
+const PENDING_THRESHOLD_DEBOUNCE_MS = 60 * 60_000  // 1 小时 debounce（防风暴 ADR-146 R-146-3）
 
 let schedulerTimer: NodeJS.Timeout | null = null
 let verifyTimer: NodeJS.Timeout | null = null
 let stagingVerifyTimer: NodeJS.Timeout | null = null
 let reconcileTimer: NodeJS.Timeout | null = null
+let pendingThresholdTimer: NodeJS.Timeout | null = null
 let tickRunning = false
 let verifyTickRunning = false
 let stagingVerifyTickRunning = false
 let reconcileTickRunning = false
+let pendingThresholdTickRunning = false
 
 async function runMaintenanceTick(): Promise<void> {
   if (tickRunning) return
@@ -110,6 +117,54 @@ async function runReconcileTick(): Promise<void> {
   }
 }
 
+/**
+ * CHG-SN-8-FUP-WEBHOOK-IMPL-EP-A2.3 / ADR-146：审核积压超阈值 webhook
+ * - 直接执行不入 queue（轻量 SQL count + KV read/write + dispatcher.enqueue 异步）
+ * - 1h debounce KV `notification_pending_last_alert` 防风暴（R-146-3）
+ * - 阈值 KV `notification_pending_threshold` 默认 50；webhookEnabled+订阅 enum 由 dispatcher 内部判断
+ */
+async function runPendingThresholdTick(): Promise<void> {
+  if (pendingThresholdTickRunning) return
+  pendingThresholdTickRunning = true
+  try {
+    // 1. 查 KV 阈值（默认 50）
+    const thresholdRaw = await systemSettingsQueries.getSetting(db, 'notification_pending_threshold')
+    const threshold = thresholdRaw ? Number.parseInt(thresholdRaw, 10) : 50
+    if (!Number.isFinite(threshold) || threshold <= 0) return
+
+    // 2. 查当前 pending count
+    const countRes = await db.query<{ c: string }>(
+      `SELECT COUNT(*)::text AS c FROM videos
+       WHERE review_status = 'pending_review' AND deleted_at IS NULL`,
+    )
+    const pendingCount = Number.parseInt(countRes.rows[0]?.c ?? '0', 10)
+    if (pendingCount <= threshold) return
+
+    // 3. 1h debounce check
+    const lastAlertRaw = await systemSettingsQueries.getSetting(db, 'notification_pending_last_alert')
+    if (lastAlertRaw) {
+      const lastAlertMs = Number.parseInt(lastAlertRaw, 10)
+      if (Number.isFinite(lastAlertMs) && Date.now() - lastAlertMs < PENDING_THRESHOLD_DEBOUNCE_MS) {
+        return  // debounce 窗口内不触发
+      }
+    }
+
+    // 4. 触发 webhook + 更新 last_alert KV
+    const dispatcher = new WebhookDispatcher(db, new AuditLogService(db))
+    dispatcher.enqueue('moderation.pending.threshold', {
+      pendingCount,
+      threshold,
+      checkedAt: new Date().toISOString(),
+    }, SYSTEM_ACTOR_ID)
+    await systemSettingsQueries.setSetting(db, 'notification_pending_last_alert', String(Date.now()))
+    schedulerLog.info({ pendingCount, threshold }, 'pending threshold webhook triggered')
+  } catch (err) {
+    schedulerLog.warn({ err, stage: 'pending-threshold-check' }, 'tick failed')
+  } finally {
+    pendingThresholdTickRunning = false
+  }
+}
+
 export interface SchedulerInfo {
   name: string
   enabled: boolean
@@ -124,6 +179,7 @@ export function getSchedulerStatus(): SchedulerInfo[] {
     { name: 'verify-published-sources', enabled: globalEnabled && verifyTimer != null,          intervalMs: VERIFY_TICK_MS },
     { name: 'verify-staging-sources',   enabled: globalEnabled && stagingVerifyTimer != null,   intervalMs: STAGING_VERIFY_TICK_MS },
     { name: 'reconcile-search-index',   enabled: globalEnabled && reconcileTimer != null,       intervalMs: RECONCILE_TICK_MS },
+    { name: 'pending-threshold-check',  enabled: globalEnabled && pendingThresholdTimer != null, intervalMs: PENDING_THRESHOLD_TICK_MS },
   ]
 }
 
@@ -151,4 +207,11 @@ export function registerMaintenanceScheduler(): void {
     void runReconcileTick()
   }, RECONCILE_TICK_MS)
   schedulerLog.info({ interval_ms: RECONCILE_TICK_MS, stage: 'reconcile-search-index' }, 'registered')
+
+  // CHG-SN-8-FUP-WEBHOOK-IMPL-EP-A2.3 / ADR-146：审核积压超阈值定时检查
+  if (pendingThresholdTimer) return
+  pendingThresholdTimer = setInterval(() => {
+    void runPendingThresholdTick()
+  }, PENDING_THRESHOLD_TICK_MS)
+  schedulerLog.info({ interval_ms: PENDING_THRESHOLD_TICK_MS, stage: 'pending-threshold-check' }, 'registered')
 }

@@ -16217,4 +16217,53 @@ Cleanup-Audit: #G-settings-webhook-impl 2/5 触发点 ✅（剩余 3 触发点 f
 Plan-Revision: 无
 
 
+## [CHG-SN-8-FUP-WEBHOOK-IMPL-EP-A2.3] ADR-146 moderation.pending.threshold cron 触发点接入 (#G-settings-webhook-impl 3/5 触发点闭合)
+
+- **完成时间**：2026-05-23
+- **记录时间**：2026-05-23 01:40
+- **执行模型**：claude-opus-4-7
+- **子代理**：无
+- **修改文件**（2 文件代码 + 4 文档）：
+  - `apps/api/src/workers/maintenanceScheduler.ts`：
+    - 新增 import WebhookDispatcher + AuditLogService + SYSTEM_ACTOR_ID
+    - 新增常量 PENDING_THRESHOLD_TICK_MS = 60 * 60_000（1h tick）+ PENDING_THRESHOLD_DEBOUNCE_MS = 60 * 60_000（1h debounce 防风暴 R-146-3）
+    - 新增 pendingThresholdTimer + pendingThresholdTickRunning state
+    - 新增 `runPendingThresholdTick()` 函数：
+      1. 读 KV `notification_pending_threshold`（默认 50）
+      2. SQL `SELECT COUNT(*) FROM videos WHERE review_status='pending_review' AND deleted_at IS NULL`
+      3. pendingCount <= threshold → 直接返回
+      4. 1h debounce check：读 KV `notification_pending_last_alert` ms timestamp
+      5. dispatcher.enqueue('moderation.pending.threshold', { pendingCount, threshold, checkedAt }, SYSTEM_ACTOR_ID)
+      6. 更新 last_alert KV
+    - getSchedulerStatus 新增 pending-threshold-check 条目
+    - registerMaintenanceScheduler 末端注册 setInterval
+  - `packages/types/src/system.types.ts` — SystemSettingKey 扩 2 KV key（`'notification_pending_threshold'` / `'notification_pending_last_alert'`）
+  - `docs/manual/GAPS.md` — #G-settings-webhook-impl → 3/5 触发点闭合
+  - `docs/manual/20-pages/P-settings.md` — §3.7 状态更新
+  - `docs/task-queue.md` SEQ-20260521-06 #53 ✅
+  - `docs/tasks.md` 清卡片
+- **新增依赖**：无
+- **数据库变更**：无（仅 KV 表新增 2 key 通过 SystemSettingKey 类型扩展）
+- **设计要点**：
+  - **不入 maintenanceQueue**：runPendingThresholdTick 直接执行（轻量 SQL count + 2 KV read + 1 KV write + dispatcher.enqueue 异步），避免新增 MaintenanceJobData type 改 worker
+  - **1h debounce 防风暴**（ADR-146 R-146-3）：KV `notification_pending_last_alert` 记上次告警 ms 时间戳，debounce 窗口内不重复触发；admin 收到告警后有时间处理积压，避免每小时重复打扰
+  - **threshold 可配置**：KV `notification_pending_threshold` 默认 50；admin 可在 site_settings 端点直接 PATCH（注：本卡未扩 siteConfig zod schema，admin 需通过 KV 直接配置或后续 EP-A2.5 添加 UI）
+  - **payload 3 字段**：pendingCount / threshold / checkedAt（admin 收到 webhook 即可看到积压规模）
+- **不在范围**：
+  - submission.created 接入（EP-A2.2 等用户端 POST 实装）
+  - R2 quota cron（EP-A2.4 需调研 R2 capacity API ~30 min）
+  - threshold 阈值 UI 配置（NotificationsTab 加 number input；EP-A2.5 可选 ~10 min）
+  - 单测：依赖现有 webhook framework 17 用例 + scheduler runtime 行为验证
+- **验收**：
+  - typecheck PASS（含 SystemSettingKey 扩 2 字符串字面量）
+  - lint PASS / 全 unit 4670/4670 PASS（0 失败 / pre-existing flaky 本轮也通过）
+- **价值**：
+  - **#G-settings-webhook-impl 3/5 触发点闭合**：审核积压自动告警 — moderator 长时间未处理 pending_review 视频时 admin 在外部告警平台即时知晓
+  - **零新 maintenance job**：直接 tick 模式避免改 maintenanceWorker / job dispatcher 范式（轻量 SQL + KV 场景的合适选择）
+  - **完整 debounce 机制**：ADR-146 R-146-3 风险缓解兑现 — 1h 窗口内最多 1 次告警，避免重复打扰
+
+Cleanup-Audit: #G-settings-webhook-impl 3/5 触发点 ✅（剩余 2 触发点 EP-A2.2/.4 follow-up 待）
+Plan-Revision: 无
+
+
 
