@@ -101,6 +101,8 @@ export const ACTION_TYPES: readonly AdminAuditActionType[] = [
   'filter_preset.create',
   'filter_preset.update',
   'filter_preset.delete',
+  // CHG-SN-8-FUP-VIDEO-MANUAL-ADD-EP-A / ADR-145：admin 手动添加视频（R-MID-1 第 24 次系统化）
+  'video.manual_add',
 ]
 export const TARGET_KINDS: readonly AdminAuditTargetKind[] = [
   'video',

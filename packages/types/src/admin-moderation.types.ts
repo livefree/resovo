@@ -187,6 +187,9 @@ export type AdminAuditActionType =
   | 'filter_preset.update'        // PATCH /admin/filter-presets/:id
   | 'filter_preset.delete'        // DELETE /admin/filter-presets/:id
 
+  // CHG-SN-8-FUP-VIDEO-MANUAL-ADD-EP-A / ADR-145：admin 手动添加视频（R-MID-1 第 24 次系统化）
+  | 'video.manual_add'            // POST /admin/videos（targetKind 复用 'video'）
+
 export type AdminAuditTargetKind =
   | 'video'
   | 'video_source'

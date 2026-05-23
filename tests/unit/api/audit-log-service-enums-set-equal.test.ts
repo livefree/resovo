@@ -86,6 +86,8 @@ const EXPECTED_ACTION_TYPES = [
   'filter_preset.create',
   'filter_preset.update',
   'filter_preset.delete',
+  // CHG-SN-8-FUP-VIDEO-MANUAL-ADD-EP-A / ADR-145 / R-MID-1 系统化第 24 次（admin 手动添加视频）
+  'video.manual_add',
 ] as const
 
 const EXPECTED_TARGET_KINDS = [

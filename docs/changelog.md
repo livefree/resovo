@@ -15916,4 +15916,56 @@ Cleanup-Audit: #G-videos-add ⚠️+🔄（消费层 disabled btn ✅ + ADR ✅ 
 Plan-Revision: ADR-145 + 1（plan §9 ADR 索引推进至 145）
 
 
+## [CHG-SN-8-FUP-VIDEO-MANUAL-ADD-EP-A] ADR-145 后端实施 — POST /admin/videos 重构 + R-MID-1 第 24 次系统化 (#G-videos-add 后端闭合)
+
+- **完成时间**：2026-05-22
+- **记录时间**：2026-05-22 20:28
+- **执行模型**：claude-opus-4-7
+- **子代理**：无（ADR-145 已 Opus A PASS commit 5dcc897f）
+- **拆 -A/-B 理由**：ADR-145 §8 工时拆解；本卡 -A 后端独立闭合（按钮 disabled 维持），-B 前端 Drawer 双模式留 follow-up
+- **修改文件**（7 文件 + 4 文档）：
+  - `packages/types/src/admin-moderation.types.ts` — AdminAuditActionType +1 `'video.manual_add'`（targetKind 复用 'video'）
+  - `apps/api/src/services/AuditLogService.ts` — ACTION_TYPES 同步 +1
+  - `apps/api/src/services/VideoService.ts` — 新增 ManualAddVideoInput + VideoPublishMode + VideoManualAddResult 类型 + VideoManualAddConflictError 异常类；`create()` 完整重构：
+    - Step 1 MediaCatalogService.findOrCreate（metadataSource='manual' + normalizeTitle + 14 元数据字段透传）
+    - Step 2 重复检测 SELECT count FROM videos WHERE catalog_id (force=true 跳过 → VideoManualAddConflictError)
+    - Step 3 createVideo（catalogId + title + type + episodeCount + contentRating）
+    - Step 4 publishMode 三路径（draft=UPDATE visibility=hidden / staging=默认保持 / published=transitionVideoState approve_and_publish）
+    - Step 5 ES indexSync.syncVideo fire-and-forget
+    - Step 6 R-MID-1 audit `video.manual_add` fire-and-forget（after_jsonb 含 id/title/type/year/publishMode/catalogId/isNewCatalog/contentRating 8 字段）
+    - 返回 VideoManualAddResult（id/shortId/title/type/catalogId/reviewStatus/visibilityStatus/isPublished/createdAt）
+  - `apps/api/src/routes/admin/videos.ts` — 新增 `ManualAddVideoSchema`（contentRating default 'general' / publishMode default 'staging' / force default false）替换 CreateVideoSchema；POST /admin/videos handler 加 `request.user!.userId` 传入 + try/catch VideoManualAddConflictError → 409 STATE_CONFLICT + detail
+  - `tests/unit/api/audit-log-service-enums-set-equal.test.ts` — EXPECTED_ACTION_TYPES +1
+  - `tests/unit/api/audit-log-coverage.test.ts` — PAYLOAD_REQUIRED + PAYLOAD_ASSERTION_REQUIRED 各 +1
+  - `tests/unit/api/video-manual-add-audit.test.ts`（新建）— 20 用例：happy path 5（最小 3 字段 + 全字段 + publishMode 3 路径）+ 重复检测 4（409 detail + force=true + 不同 type 不冲突 + year=null）+ catalog 同步 3（metadataSource='manual' + 复用 catalogId + 14 字段透传 findOrCreate）+ R-MID-1 audit 4（happy payload 完整断言 + 422/403/409 不写 audit）+ 422 validation 3 + 401 权限 1
+  - `docs/manual/GAPS.md` — #G-videos-add → ✅ 后端闭合
+  - `docs/manual/20-pages/P-videos.md` — §3.5 状态更新
+  - `docs/task-queue.md` SEQ-20260521-06 #46 ✅
+  - `docs/tasks.md` 清卡片
+- **新增依赖**：无
+- **数据库变更**：无（targetKind 复用 'video' CHECK 13 种已含 / 无新表 / 无新索引）
+- **R-MID-1 第 24 次系统化完成**：7 文件 checklist 全闭环（types union + ACTION_TYPES + 2 set-equal 测试 + Service audit fire-and-forget + Route 集成 + 20 用例 audit payload 内容断言 + changelog）
+- **修复 6 项现有技术债（ADR-145 §1）**：
+  1. 不再绕过 MediaCatalogService.findOrCreate（替换 insertCrawledVideo 路径）
+  2. 输入 Record<string,unknown> → 强类型 ManualAddVideoInput
+  3. 零 audit → R-MID-1 第 24 次系统化完整覆盖
+  4. 零重复检测 → SELECT count + force=true 跳过 + 409 STATE_CONFLICT detail
+  5. 无 publishMode → 三路径完整支持
+  6. metadataSource='manual' + locked_fields 保护（findOrCreate 自动触发）
+- **验收**：
+  - typecheck PASS（含 ManualAddVideoInput 强类型 / Route handler 错误处理类型完整）
+  - lint PASS / verify:adr-contracts PASS（含 verify-endpoint-adr 4 端点全 ADR-145 §端点契约表覆盖）
+  - 完整 unit 4641/4642 PASS（+20 新测试；1 pre-existing flaky StagingEditPanel 隔离 PASS 不阻塞）
+  - 20 新单测 audit payload 内容断言完整（happy + 422/403/409 三态不写 audit）
+- **价值**：
+  - **#G-videos-add P2 后端闭合**：完整端点 + 6 技术债修复 + R-MID-1 第 24 次系统化
+  - **零新基础设施**：零新 ErrorCode / 零新依赖 / 零新 migration / 零新 targetKind — 完全对齐 Resovo 既有架构
+  - **复用全栈**：MediaCatalogService.findOrCreate（5 步匹配）/ createVideo / transitionVideoState（状态机 trigger 守卫）/ AuditLogService / indexSync 全部复用
+  - **publishMode 三路径**：admin 可选 draft/staging/published 完整控制（默认 staging 安全）
+- **下一步**：CHG-SN-8-FUP-VIDEO-MANUAL-ADD-EP-B 按需启动（前端 VideoEditDrawer 双模式 + 按钮 enable ~40 min）
+
+Cleanup-Audit: #G-videos-add 后端 ✅（前端 follow-up CHG-SN-8-FUP-VIDEO-MANUAL-ADD-EP-B 待立）
+Plan-Revision: 无（按 ADR-145 既定决策实施）
+
+
 

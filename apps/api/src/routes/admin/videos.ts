@@ -14,7 +14,7 @@ import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { db } from '@/api/lib/postgres'
 import { es } from '@/api/lib/elasticsearch'
-import { VideoService } from '@/api/services/VideoService'
+import { VideoService, VideoManualAddConflictError } from '@/api/services/VideoService'
 import { DoubanService } from '@/api/services/DoubanService'
 import { ModerationService } from '@/api/services/ModerationService'
 import * as systemSettingsQueries from '@/api/db/queries/systemSettings'
@@ -78,6 +78,14 @@ const VideoMetaSchema = z.object({
 })
 
 const CreateVideoSchema = VideoMetaSchema.required({ title: true, type: true })
+
+// ADR-145 / CHG-SN-8-FUP-VIDEO-MANUAL-ADD-EP-A：admin 手动添加视频 schema
+// 最小 3 字段（title/type/contentRating）+ 14 元数据 optional + publishMode 三路径 + force 重复检测
+const ManualAddVideoSchema = VideoMetaSchema.required({ title: true, type: true }).extend({
+  contentRating: z.enum(['general', 'adult'] as const).default('general'),
+  publishMode: z.enum(['draft', 'staging', 'published'] as const).default('staging'),
+  force: z.boolean().default(false),
+})
 
 const SORT_FIELDS = ['created_at', 'updated_at', 'title', 'year', 'type'] as const
 
@@ -367,8 +375,9 @@ export async function adminVideoRoutes(fastify: FastifyInstance) {
   })
 
   // ── POST /admin/videos ───────────────────────────────────────
+  // ADR-145：admin 手动添加视频（重构端点：findOrCreate catalog + 重复检测 + publishMode 三路径 + R-MID-1 audit）
   fastify.post('/admin/videos', { preHandler: auth }, async (request, reply) => {
-    const parsed = CreateVideoSchema.safeParse(request.body)
+    const parsed = ManualAddVideoSchema.safeParse(request.body)
     if (!parsed.success) {
       return reply.code(422).send({
         error: {
@@ -379,8 +388,22 @@ export async function adminVideoRoutes(fastify: FastifyInstance) {
       })
     }
 
-    const result = await videoService.create(parsed.data)
-    return reply.code(201).send({ data: result })
+    try {
+      const result = await videoService.create(parsed.data, request.user!.userId)
+      return reply.code(201).send({ data: result })
+    } catch (err: unknown) {
+      if (err instanceof VideoManualAddConflictError) {
+        return reply.code(409).send({
+          error: {
+            code: 'STATE_CONFLICT',
+            message: 'catalog 已存在关联视频（可设 force=true 强制创建）',
+            status: 409,
+            detail: { existingVideoId: err.existingVideoId, existingTitle: err.existingTitle },
+          },
+        })
+      }
+      throw err
+    }
   })
 
   // ── GET /admin/videos/moderation-stats ─────────────────────

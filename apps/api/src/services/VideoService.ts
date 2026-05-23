@@ -18,6 +18,55 @@ import type { CatalogUpdateData } from '@/api/db/queries/mediaCatalog'
 import { VideoIndexSyncService } from '@/api/services/VideoIndexSyncService'
 import { CACHE_PREFIXES } from '@/api/services/CacheService'
 import { AuditLogService } from '@/api/services/AuditLogService'
+import { normalizeTitle } from '@/api/services/TitleNormalizer'
+
+// ── ADR-145 / CHG-SN-8-FUP-VIDEO-MANUAL-ADD-EP-A：admin 手动添加视频 ─────
+
+export type VideoPublishMode = 'draft' | 'staging' | 'published'
+
+export interface ManualAddVideoInput {
+  title: string
+  type: VideoType
+  contentRating?: 'general' | 'adult'
+  publishMode?: VideoPublishMode
+  force?: boolean
+  titleEn?: string | null
+  description?: string | null
+  coverUrl?: string | null
+  year?: number | null
+  country?: string | null
+  episodeCount?: number
+  status?: VideoStatus
+  rating?: number | null
+  director?: string[]
+  cast?: string[]
+  writers?: string[]
+  genres?: string[]
+  doubanId?: string | null
+}
+
+export interface VideoManualAddResult {
+  id: string
+  shortId: string
+  title: string
+  type: VideoType
+  catalogId: string
+  reviewStatus: 'pending_review' | 'approved'
+  visibilityStatus: VisibilityStatus
+  isPublished: boolean
+  createdAt: string
+}
+
+export class VideoManualAddConflictError extends Error {
+  readonly existingVideoId: string
+  readonly existingTitle: string
+  constructor(existingVideoId: string, existingTitle: string) {
+    super(`catalog 已存在关联视频：${existingTitle} (${existingVideoId})`)
+    this.name = 'VideoManualAddConflictError'
+    this.existingVideoId = existingVideoId
+    this.existingTitle = existingTitle
+  }
+}
 
 const DEFAULT_LIMIT = 20
 const MAX_LIMIT = 100
@@ -124,35 +173,109 @@ export class VideoService {
     return videoQueries.findAdminVideoById(this.db, id)
   }
 
-  async create(input: Record<string, unknown>): Promise<unknown> {
-    // CHG-365 完成后，admin 流程改为先调用 MediaCatalogService.findOrCreate 获取 catalogId
-    // 当前临时将 admin 输入转换为 CrawlerInsertInput 并走 insertCrawledVideo 的 catalog 自动创建路径
-    const inserted = await videoQueries.insertCrawledVideo(this.db, {
-      shortId: Math.random().toString(36).slice(2, 10),
-      title: String(input.title ?? ''),
-      type: (input.type as VideoType) ?? 'movie',
-      sourceCategory: null,
-      contentRating: 'general',
-      episodeCount: (input.episodeCount as number) ?? 1,
-      isPublished: false,
-      reviewStatus: 'pending_review',
-      visibilityStatus: 'internal',
-      // @deprecated 临时字段，供 insertCrawledVideo 自动创建 catalog 条目
-      titleNormalized: undefined,
-      titleEn: input.titleEn as string | null,
-      coverUrl: input.coverUrl as string | null,
-      genre: Array.isArray(input.genres) && input.genres.length > 0 ? (input.genres as string[])[0] : null,
-      year: input.year as number | null,
-      country: input.country as string | null,
-      cast: (input.cast as string[]) ?? [],
-      director: (input.director as string[]) ?? [],
-      writers: (input.writers as string[]) ?? [],
-      description: input.description as string | null,
-      status: (input.status as VideoStatus) ?? 'completed',
+  /**
+   * ADR-145 / CHG-SN-8-FUP-VIDEO-MANUAL-ADD-EP-A：admin 手动添加视频
+   *
+   * 流程：findOrCreate catalog（metadataSource='manual'）→ 重复检测 →
+   *      createVideo → publishMode 三路径状态映射 → indexSync + audit fire-and-forget
+   *
+   * 错误：catalog 已有关联 video 且 force≠true → throw VideoManualAddConflictError（Route 转 409）
+   */
+  async create(input: ManualAddVideoInput, actorId: string): Promise<VideoManualAddResult> {
+    // Step 1: 复用 MediaCatalogService.findOrCreate（含 5 步匹配 + locked_fields 保护）
+    const catalogService = new MediaCatalogService(this.db)
+    const catalog = await catalogService.findOrCreate({
+      title: input.title,
+      titleNormalized: normalizeTitle(input.title),
+      type: input.type,
+      year: input.year ?? null,
+      titleEn: input.titleEn ?? null,
+      description: input.description ?? null,
+      coverUrl: input.coverUrl ?? null,
+      genres: input.genres ?? [],
+      country: input.country ?? null,
+      status: input.status ?? 'completed',
+      rating: input.rating ?? null,
+      director: input.director ?? [],
+      cast: input.cast ?? [],
+      writers: input.writers ?? [],
+      doubanId: input.doubanId ?? null,
       metadataSource: 'manual',
     })
-    void this.indexSync?.syncVideo(inserted.id as string)
-    return inserted
+
+    // Step 2: 重复检测（D-145-2 软匹配 + force 跳过）
+    const existing = await this.db.query<{ id: string; title: string }>(
+      `SELECT id, title FROM videos WHERE catalog_id = $1 AND deleted_at IS NULL LIMIT 1`,
+      [catalog.id],
+    )
+    const isCatalogNewForVideos = existing.rows.length === 0
+    if (!isCatalogNewForVideos && !input.force) {
+      throw new VideoManualAddConflictError(existing.rows[0]!.id, existing.rows[0]!.title)
+    }
+
+    // Step 3: createVideo（默认 pending_review + internal + is_published=false）
+    const video = await videoQueries.createVideo(this.db, {
+      catalogId: catalog.id,
+      title: input.title,
+      type: input.type,
+      episodeCount: input.episodeCount ?? 1,
+      contentRating: input.contentRating ?? 'general',
+    })
+
+    // Step 4: publishMode 三路径（D-145-4）
+    const publishMode = input.publishMode ?? 'staging'
+    let finalReviewStatus: 'pending_review' | 'approved' = 'pending_review'
+    let finalVisibility: VisibilityStatus = 'internal'
+    let finalIsPublished = false
+    if (publishMode === 'draft') {
+      // hidden + 仍 pending（与 staging 区别在 visibility）
+      await this.db.query(
+        `UPDATE videos SET visibility_status = 'hidden' WHERE id = $1`,
+        [video.id],
+      )
+      finalVisibility = 'hidden'
+    } else if (publishMode === 'published') {
+      // approved + public + published（admin 自审自发；走状态机 trigger 守卫）
+      await videoQueries.transitionVideoState(this.db, video.id, { action: 'approve_and_publish' })
+      finalReviewStatus = 'approved'
+      finalVisibility = 'public'
+      finalIsPublished = true
+    }
+    // 'staging' 默认：保持 createVideo 初始状态（pending_review + internal + false）
+
+    // Step 5: ES index sync（fire-and-forget）
+    void this.indexSync?.syncVideo(video.id)
+
+    // Step 6: R-MID-1 第 24 次系统化 audit fire-and-forget
+    this.auditSvc.write({
+      actorId,
+      actionType: 'video.manual_add',
+      targetKind: 'video',
+      targetId: video.id,
+      beforeJsonb: null,
+      afterJsonb: {
+        id: video.id,
+        title: input.title,
+        type: input.type,
+        year: input.year ?? null,
+        publishMode,
+        catalogId: catalog.id,
+        isNewCatalog: isCatalogNewForVideos,
+        contentRating: input.contentRating ?? 'general',
+      },
+    })
+
+    return {
+      id: video.id,
+      shortId: video.short_id,
+      title: video.title,
+      type: video.type,
+      catalogId: catalog.id,
+      reviewStatus: finalReviewStatus,
+      visibilityStatus: finalVisibility,
+      isPublished: finalIsPublished,
+      createdAt: video.created_at,
+    }
   }
 
   async update(

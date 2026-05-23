@@ -6,5 +6,5 @@
 
 ## 进行中任务
 
-（空 — 上一任务 CHG-SN-8-FUP-VIDEO-MANUAL-ADD-ADR 已完成 / #G-videos-add ⚠️ → ⚠️+🔄；实施 follow-up CHG-SN-8-FUP-VIDEO-MANUAL-ADD-EP-A/-B 待立卡）
+（空 — 上一任务 CHG-SN-8-FUP-VIDEO-MANUAL-ADD-EP-A 已完成 / #G-videos-add 后端 ✅；前端 follow-up CHG-SN-8-FUP-VIDEO-MANUAL-ADD-EP-B 待按需启动）
 
