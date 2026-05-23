@@ -22,10 +22,11 @@ import { UserMenuActionModal, type UserMenuActionModalType } from './_client/Use
 import { ThemeContext } from '@/contexts/BrandProvider'
 import { ADMIN_NAV } from '@/lib/admin-nav'
 
-// CHG-SN-8-GAPS-AUDIT-NAV-HIDE：后端 /admin/users + /admin/system/settings + /admin/audit/* 全 adminOnly；
-// moderator 进这些 href 点击 → API 403 → 死链。Path A 消费层过滤；完整 self-scope 走 follow-up
-// CHG-SN-8-FUP-AUDIT-SELF-SCOPE-EP（新增 ADR + 后端 role-aware filter + 前端 role 感知 view）。
-const ADMIN_ONLY_HREFS: ReadonlySet<string> = new Set(['/admin/users', '/admin/settings', '/admin/audit'])
+// CHG-SN-8-GAPS-AUDIT-NAV-HIDE：后端 /admin/users + /admin/system/settings 全 adminOnly；
+// moderator 进这些 href 点击 → API 403 → 死链。消费层 nav 过滤。
+// CHG-SN-8-FUP-AUDIT-SELF-SCOPE-EP（ADR-142）：/admin/audit 已恢复 moderator self-scope，
+// 从本 Set 移除；前端 moderator 看 audit 页面时显 "仅显示你的操作记录" info banner。
+const ADMIN_ONLY_HREFS: ReadonlySet<string> = new Set(['/admin/users', '/admin/settings'])
 
 function filterNavForRole(
   nav: readonly AdminNavSection[],

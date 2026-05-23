@@ -170,7 +170,7 @@
 ### #G-audit-self-scope · moderator/editor 自己 audit 范围限制待核
 
 - **页面**：P-audit §0 / §7 FAQ
-- **状态**：⚠️ 已部分实装（CHG-SN-8-GAPS-AUDIT-NAV-HIDE 消费层补齐 / 完整 self-scope follow-up：CHG-SN-8-FUP-AUDIT-SELF-SCOPE-EP）
+- **状态**：✅ **完全闭合**（2026-05-22 / 消费层 nav-hide + ADR-142 + EP 全 PASS）
 - **优先级**：P2
 - **现象（已核查）**：后端 `/admin/audit/*` 3 端点全 `adminOnly`（admin 角色才能调）；同组 `/admin/users` + `/admin/system/settings` 亦全 admin-only；前端 nav 对 moderator 也展示这 3 死链 → 点击 → 403 破坏 UX
 - **消费层补齐**：CHG-SN-8-GAPS-AUDIT-NAV-HIDE — admin-shell-client.tsx 增 `filterNavForRole(nav, role)`，按 ADMIN_ONLY_HREFS 对非 admin 隐藏「用户管理 / 站点设置 / 审计日志」3 项；admin 看见全量；moderator 仍可见审核台/视频库等业务 nav

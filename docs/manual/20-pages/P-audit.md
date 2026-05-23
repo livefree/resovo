@@ -10,7 +10,7 @@
 | 设计稿引用 | reference.md §5.12 + §6.5 列规范 |
 | 主任务卡 | CHG-SN-6-01（视图基座）+ CHG-SN-7-MISC-FILE-SIZE（AuditClient 拆分 → AuditDetailDrawer + AuditColumns）+ CHG-SN-8-MANUAL-BATCH-2（手册定稿）|
 | 涉及端点 | `GET /admin/audit/logs`（含 filter）/ `GET /admin/audit/logs/:id`（详情）/ `GET /admin/audit/enums`（actionType + targetKind 枚举元数据）|
-| 适用角色 | **admin**（全量审计日志）+ **moderator self-scope**（待 CHG-SN-8-FUP-AUDIT-SELF-SCOPE-EP 实施，ADR-142 A− PASS 已起草 2026-05-22）；moderator 当前仍由 CHG-SN-8-GAPS-AUDIT-NAV-HIDE nav 过滤隐藏入口，EP 落地后恢复 nav + 加 info banner（"仅显示你的操作记录"）；POST rollback 维持 admin only（ADR-138 D-138-2）（GAPS.md #G-audit-self-scope） |
+| 适用角色 | **admin**（全量审计日志）+ **moderator self-scope** ✅（CHG-SN-8-FUP-AUDIT-SELF-SCOPE-EP 已实施 2026-05-22）— Route 层强制覆盖 actorId / 详情端点 404 防枚举 / 前端 nav 恢复 + info banner "仅显示你的操作记录" / actorId filter 隐藏；POST rollback 维持 admin only（ADR-138 D-138-2）（GAPS.md #G-audit-self-scope ✅） |
 | 最近更新 | 2026-05-21（CHG-SN-8-MANUAL-BATCH-2）|
 
 ---

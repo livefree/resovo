@@ -15599,4 +15599,49 @@ Plan-Revision: 无（N1 派生按 ADR-138 N1-138-1 P1 既定建议实施 / P2/P3
 Cleanup-Audit: #G-audit-self-scope ⚠️+🔄（消费层 ✅ + ADR ✅ / 实施 follow-up CHG-SN-8-FUP-AUDIT-SELF-SCOPE-EP 待立 + 2 N1 follow-up 登记）
 Plan-Revision: ADR-142 + 1（plan §9 ADR 索引若有手动表则同步推进至 142；自动索引由 verify:adr-contracts 维护）
 
+---
+
+## [CHG-SN-8-FUP-AUDIT-SELF-SCOPE-EP] ADR-142 实施 — audit endpoints moderator self-scope (#G-audit-self-scope ✅)
+
+- **完成时间**：2026-05-22
+- **记录时间**：2026-05-22 17:18
+- **执行模型**：claude-opus-4-7
+- **子代理**：无（ADR-142 已 Opus A− PASS commit 0ded3c38 / 基础设施全部就绪）
+- **依赖**：ADR-142 ✅（commit 0ded3c38）+ AUDIT-NAV-HIDE（commit 3277ee7b）+ listAdminAuditLog actorId 参数已支持 + idx_admin_audit_log_actor_created 索引就位
+- **修改文件**（6 文件 R-MID-1 GET 降级清单）：
+  - `apps/api/src/routes/admin/audit.ts` — 3 GET 端点守卫 `requireRole(['admin'])` → `requireRole(['moderator', 'admin'])`（新 `auditRead` 中间件数组）；list handler 加 Route 层强制覆盖 `if (request.user!.role !== 'admin') { parsed.data.actorId = request.user!.userId }`（防 bypass）；detail handler 加所有权校验 `if (role !== 'admin' && detail.actorId !== userId) return 404`（防枚举）；enums 开放；POST rollback 维持 admin only（`adminOnly` 守卫）
+  - `apps/server-next/src/app/admin/admin-shell-client.tsx` — `ADMIN_ONLY_HREFS` Set 从 3 项 → 2 项（移除 `/admin/audit`）；注释更新引用 ADR-142 / CHG-SN-8-FUP-AUDIT-SELF-SCOPE-EP
+  - `apps/server-next/src/app/admin/audit/_client/AuditClient.tsx` — 新增 `readUserRoleFromCookie` helper + `SELF_SCOPE_BANNER_STYLE` 常量；AuditClient 顶部 useMemo 读 role；moderator 时显 info banner "仅显示你的操作记录。如需查看完整审计日志，请联系管理员。"（state-info 样式）；actorId filter input 包 `!isModerator &&` 条件渲染（moderator 看不到）；PageHeader subtitle moderator 显 "仅显示你的操作"
+  - `tests/unit/api/audit-self-scope.test.ts` — **新建** 12 用例 PASS（按 ADR-142 §9 测试 surface 完整覆盖：3 happy path + 3 bypass 防护 + 2 详情所有权 + 3 权限边界 + 1 rollback 隔离）
+  - `docs/manual/GAPS.md` — #G-audit-self-scope ⚠️+🔄 → ✅ 完全闭合
+  - `docs/manual/20-pages/P-audit.md` — §0 适用角色字段重写（admin + moderator self-scope ✅ 已实施 + banner 说明 + rollback 维持 admin only）
+- **新增依赖**：无
+- **数据库变更**：无（基础设施全部就绪）
+- **D-N 偏离**：无新 D-N（实施 ADR-142 既定决策）
+- **R-MID-1**：不适用（GET 只读端点权限扩展 / 与 ADR-142 §8 降级 6 文件清单一致 / POST rollback 由 ADR-138 D-138-3 R-MID-1 第 19 次系统化管辖不变）
+- **ErrorCode**：零新增（403 由 requireRole 覆盖 / 404 复用 NOT_FOUND）
+- **注意事项**：
+  - **基础设施零改动**：Service / Query 完全未触；仅 Route 层 + 前端少量改动
+  - **防 bypass 设计**：moderator 传 `?actorId=<other>` 时 Route 层无声覆盖为 currentUserId（不报错），确保 moderator 不能查看他人审计；测试 #4 显式验证
+  - **404 防枚举**：moderator 查看他人详情条目时返 404 而非 403，避免泄露条目存在性（security through ambiguity，与 ADR-138 F-5/F-8 同模式）；测试 #8 显式验证
+  - **前端 role 推断**：cookie `user_role` 字段（middleware ADR-010 写入，非 HttpOnly 可前端读）；防御性 fallback 默认 'admin'（实际由 middleware `canAccessAdmin` 守门保证非 user）
+  - **moderator UI gating**：info banner（仅 moderator 显）+ actorId filter（仅 admin 显）+ subtitle 文案分支（moderator vs admin）；admin 角色 UX 零变化
+  - **rollback 端点不变**：`POST /admin/audit/logs/:id/rollback` 守卫维持 `adminOnly`（ADR-138 D-138-2 明示）；测试 #10 验证 moderator → 403
+
+### 验收
+- typecheck PASS / lint PASS / verify:adr-contracts PASS（**verify-endpoint-adr 49 → 53 ADR 端点**（ADR-142 §端点契约 4 行计入）/ verify-adr-d-numbers 104 全闭环 / verify-style-shorthand-conflict 0）/ verify:manual-coverage PASS
+- audit-self-scope.test 12/12 / audit-rollback.test 23/23（无回归）/ admin-users 整组 / 51/51 PASS
+
+### 价值
+- **P2 GAPS #G-audit-self-scope 完全闭合 3/3**（消费层 nav-hide ✅ + ADR ✅ + EP ✅）
+- moderator 可在 audit 页查看自己的操作历史，减轻 admin 工单（自查审核操作 / 视频源切换 / staging 操作）
+- 防 bypass + 404 防枚举安全设计完整：moderator 不能通过 query params / id 枚举看他人数据
+- 零 schema 变更 / 零 Service 改动 / 零新 ErrorCode — ADR-142 D-142-1 方案 B 的"基础设施全部就绪"优势完美兑现
+- 端点契约 verify-endpoint-adr 49 → 53 自动对齐，ADR-142 §端点契约 4 行 100% 反映在代码中
+- 2 N1 follow-up（moderator dashboard widget / ipHash strip GDPR）登记按需评估
+
+Cleanup-Audit: #G-audit-self-scope ✅ 完全闭合 / Route 层强制覆盖防 bypass / 详情 404 防枚举 / 前端 nav 恢复 + banner
+Plan-Revision: 无（按 ADR-142 既定决策实施 / N1 follow-up 登记保留）
+
+
 

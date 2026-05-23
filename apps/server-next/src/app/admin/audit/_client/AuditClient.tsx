@@ -79,10 +79,33 @@ const DATETIME_INPUT_STYLE: CSSProperties = {
   borderRadius: 'var(--radius-sm)',
 }
 
+// ── ADR-142 / CHG-SN-8-FUP-AUDIT-SELF-SCOPE-EP：moderator self-scope UI ──
+// 读 user_role cookie 推断当前 role；moderator 走 self-scope 视图（隐藏 actorId filter + 显 info banner）
+function readUserRoleFromCookie(): 'admin' | 'moderator' | 'user' {
+  if (typeof document === 'undefined') return 'admin'  // SSR 默认（实际由 middleware 守门）
+  const match = /(?:^|;\s*)user_role=([^;]+)/.exec(document.cookie)
+  const role = match?.[1]
+  return role === 'moderator' || role === 'user' ? role : 'admin'
+}
+
+const SELF_SCOPE_BANNER_STYLE: CSSProperties = {
+  padding: '10px 14px',
+  marginBottom: '12px',
+  background: 'var(--state-info-bg)',
+  border: '1px solid var(--state-info-border)',
+  borderRadius: 'var(--radius-sm)',
+  color: 'var(--state-info-fg)',
+  fontSize: 'var(--font-size-xs)',
+  lineHeight: '1.5',
+}
+
 // ── 主组件 ────────────────────────────────────────────────────────
 
 export function AuditClient() {
   const toast = useToast()
+  // ADR-142 D-142-4：moderator self-scope UI gating
+  const currentUserRole = useMemo(() => readUserRoleFromCookie(), [])
+  const isModerator = currentUserRole === 'moderator'
 
   // ── 列表状态 ──
   const [rows, setRows] = useState<readonly AdminAuditLogListRow[]>([])
@@ -270,14 +293,16 @@ export function AuditClient() {
         data-testid="audit-filter-target-kind"
         aria-label="按 target_kind 筛选"
       />
-      <AdminInput
-        value={actorIdInput}
-        onChange={(e) => setActorIdInput(e.target.value)}
-        placeholder="actor_id (UUID)"
-        size="sm"
-        data-testid="audit-filter-actor"
-        aria-label="按 actor_id 筛选"
-      />
+      {!isModerator && (
+        <AdminInput
+          value={actorIdInput}
+          onChange={(e) => setActorIdInput(e.target.value)}
+          placeholder="actor_id (UUID)"
+          size="sm"
+          data-testid="audit-filter-actor"
+          aria-label="按 actor_id 筛选"
+        />
+      )}
       <AdminInput
         value={requestIdInput}
         onChange={(e) => setRequestIdInput(e.target.value)}
@@ -335,7 +360,9 @@ export function AuditClient() {
     <div data-audit-client style={PAGE_STYLE}>
       <PageHeader
         title="审计日志"
-        subtitle={`${total} 条记录 · admin_audit_log 全局写操作流水`}
+        subtitle={isModerator
+          ? `${total} 条记录 · 仅显示你的操作`
+          : `${total} 条记录 · admin_audit_log 全局写操作流水`}
         actions={
           <AdminButton
             variant="default"
@@ -348,6 +375,11 @@ export function AuditClient() {
         }
         data-testid="audit-page-header"
       />
+      {isModerator && (
+        <div style={SELF_SCOPE_BANNER_STYLE} data-testid="audit-moderator-banner">
+          仅显示你的操作记录。如需查看完整审计日志，请联系管理员。
+        </div>
+      )}
       {loading && rows.length === 0
         ? <LoadingState variant="skeleton" />
         : error

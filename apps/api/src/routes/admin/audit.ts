@@ -29,16 +29,22 @@ const RollbackBodySchema = z.object({
 export async function adminAuditRoutes(fastify: FastifyInstance) {
   const svc = new AuditLogService(db)
   const rollbackSvc = new AuditRollbackService(db)  // ADR-138 / CHG-SN-8-FUP-AUDIT-ROLLBACK-EP
+  // ADR-142 / CHG-SN-8-FUP-AUDIT-SELF-SCOPE-EP：3 GET 端点扩 moderator self-scope；rollback 维持 admin only
+  const auditRead = [fastify.authenticate, fastify.requireRole(['moderator', 'admin'])]
   const adminOnly = [fastify.authenticate, fastify.requireRole(['admin'])]
 
-  // ── GET /admin/audit/logs ─────────────────────────────────────────
+  // ── GET /admin/audit/logs （ADR-142：admin + moderator self-scope）──
 
-  fastify.get('/admin/audit/logs', { preHandler: adminOnly }, async (request, reply) => {
+  fastify.get('/admin/audit/logs', { preHandler: auditRead }, async (request, reply) => {
     const parsed = ListAdminAuditLogsSchema.safeParse(request.query)
     if (!parsed.success) {
       return reply.code(422).send({
         error: { code: 'VALIDATION_ERROR', message: parsed.error.issues[0]?.message ?? '参数错误', status: 422 },
       })
+    }
+    // ADR-142 D-142-3：Route 层强制覆盖 actorId 防 bypass（moderator 只能看自己）
+    if (request.user!.role !== 'admin') {
+      parsed.data.actorId = request.user!.userId
     }
     const result = await svc.listAdminAuditLogs(parsed.data)
     return reply.send({
@@ -49,9 +55,9 @@ export async function adminAuditRoutes(fastify: FastifyInstance) {
     })
   })
 
-  // ── GET /admin/audit/logs/:id ─────────────────────────────────────
+  // ── GET /admin/audit/logs/:id （ADR-142：admin + moderator self-scope）──
 
-  fastify.get('/admin/audit/logs/:id', { preHandler: adminOnly }, async (request, reply) => {
+  fastify.get('/admin/audit/logs/:id', { preHandler: auditRead }, async (request, reply) => {
     const parsed = GetAdminAuditLogDetailSchema.safeParse(request.params)
     if (!parsed.success) {
       return reply.code(422).send({
@@ -64,12 +70,18 @@ export async function adminAuditRoutes(fastify: FastifyInstance) {
         error: { code: 'NOT_FOUND', message: '审计日志不存在', status: 404 },
       })
     }
+    // ADR-142 D-142-2：moderator 详情所有权校验；404 防枚举（security through ambiguity）
+    if (request.user!.role !== 'admin' && detail.actorId !== request.user!.userId) {
+      return reply.code(404).send({
+        error: { code: 'NOT_FOUND', message: '审计日志不存在', status: 404 },
+      })
+    }
     return reply.send({ data: detail })
   })
 
-  // ── GET /admin/audit/enums ────────────────────────────────────────
+  // ── GET /admin/audit/enums （ADR-142：admin + moderator 开放枚举）──
 
-  fastify.get('/admin/audit/enums', { preHandler: adminOnly }, async (_request, reply) => {
+  fastify.get('/admin/audit/enums', { preHandler: auditRead }, async (_request, reply) => {
     const enums = svc.getAdminAuditEnums()
     return reply.send({ data: enums })
   })
