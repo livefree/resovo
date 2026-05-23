@@ -25,12 +25,19 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 const ROOT = resolve(__dirname, '..')
 const DECISIONS = join(ROOT, 'docs/decisions.md')
 const CHANGELOG = join(ROOT, 'docs/changelog.md')
+// 历史 changelog 归档（保持 D-N 闭环识别跨归档不丢失）
+const CHANGELOG_ARCHIVES = [
+  join(ROOT, 'docs/archive/changelog/changelog_M-SN-2-to-7_20260523.md'),
+]
 const OUTPUT_DIR = join(ROOT, 'docs/audit')
 const OUTPUT_PATH = join(OUTPUT_DIR, 'adr-d-status.json')
 
 function main() {
   const sections = splitAdrSections(DECISIONS)
   const closedSet = new Set(parseChangelogDeviations(CHANGELOG))
+  for (const archive of CHANGELOG_ARCHIVES) {
+    for (const n of parseChangelogDeviations(archive)) closedSet.add(n)
+  }
 
   const adrStatus = []
   let pendingTotal = 0

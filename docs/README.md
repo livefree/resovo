@@ -19,9 +19,9 @@
 3. **`docs/decisions.md`**：架构决策记录（ADR-100..136，含 NEGATED）。
 4. **`docs/server_next_plan_20260427.md`**：**server-next 主计划 v2.6**（M-SN-1..7）；ADR-103a/103b 落地路径。
 5. **`docs/designs/backend_design_v2.1/reference.md`**：**后台设计真源**（合并稿 §0 七条裁决 + §11 修复顺序）；新视图必读。
-6. **`docs/task-queue.md`**：任务序列池（活跃 SEQ：SEQ-20260521-01 docs 清理 + manual 工程地基）。
+6. **`docs/task-queue.md`**：任务序列池（活跃序列：M-SN-7 跟踪卡 + 设计稿对齐重做 + SEQ-20260521-02..06 M-SN-8 系列；M-SN-1 ~ M-SN-6 已归档至 `docs/archive/task-queue/task-queue_archive_M-SN-1-to-6_20260523.md`）。
 7. **`docs/tasks.md`**：单任务工作台。
-8. **`docs/changelog.md`**：完成任务变更历史（追加型）。
+8. **`docs/changelog.md`**：完成任务变更历史（追加型，活跃段：CHG-SN-8-01 起；CHG-SN-2-21 ~ SEQ-20260521-01 总结已归档至 `docs/archive/changelog/changelog_M-SN-2-to-7_20260523.md`）。
 9. **`docs/tracks.md`**：并行 track 历史记录（用户决策保留顶层）。
 
 ## 2. 当前执行上下文（Current Context）
@@ -58,7 +58,9 @@ SEQ-20260429-02 / M-SN-4 阶段的 plan / audit / walkthrough 共 11 份；**新
 - `docs/archive/2026Q2/server_next_view_template.md`（被 `docs/rules/admin-module-template.md` 取代）
 - `docs/archive/2026Q2/server_next_PRE-01-A-drill-2026-05-12.md`（staging cookie + nginx e2e 演练记录）
 - `docs/archive/m0-m6/frontend_design_spec_20260423.md`（M0-M6 前台设计 spec；前台 web-next 部分内容仍有参考价值）
-- `docs/archive/2026Q1/README.md` / `docs/archive/2026Q2/README.md` / `docs/archive/changelog/changelog_m0-m6.md`
+- `docs/archive/2026Q1/README.md` / `docs/archive/2026Q2/README.md`
+- changelog 分段归档：`docs/archive/changelog/changelog_m0-m6.md`（M0–M6）/ `docs/archive/changelog/changelog_M-SN-2-to-7_20260523.md`（M-SN-2 ~ M-SN-7）
+- task-queue 分段归档：`docs/archive/task-queue/task-queue_archive_20260427.md`（M0 ~ M-SN-0）/ `docs/archive/task-queue/task-queue_archive_M-SN-1-to-6_20260523.md`（M-SN-1 ~ M-SN-6）
 
 ## 4. 规则文档（Rules）
 
