@@ -190,6 +190,9 @@ export type AdminAuditActionType =
   // CHG-SN-8-FUP-VIDEO-MANUAL-ADD-EP-A / ADR-145：admin 手动添加视频（R-MID-1 第 24 次系统化）
   | 'video.manual_add'            // POST /admin/videos（targetKind 复用 'video'）
 
+  // CHG-SN-8-FUP-WEBHOOK-IMPL-EP-A / ADR-146：webhook 投递最终失败（R-MID-1 第 25 次系统化）
+  | 'system.webhook_send_failed'  // WebhookDispatcher 4 次重试后最终失败（targetKind 复用 'system'）
+
 export type AdminAuditTargetKind =
   | 'video'
   | 'video_source'

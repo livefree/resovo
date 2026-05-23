@@ -103,6 +103,8 @@ export const ACTION_TYPES: readonly AdminAuditActionType[] = [
   'filter_preset.delete',
   // CHG-SN-8-FUP-VIDEO-MANUAL-ADD-EP-A / ADR-145：admin 手动添加视频（R-MID-1 第 24 次系统化）
   'video.manual_add',
+  // CHG-SN-8-FUP-WEBHOOK-IMPL-EP-A / ADR-146：webhook 投递最终失败（R-MID-1 第 25 次系统化）
+  'system.webhook_send_failed',
 ]
 export const TARGET_KINDS: readonly AdminAuditTargetKind[] = [
   'video',

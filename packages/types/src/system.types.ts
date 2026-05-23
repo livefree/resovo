@@ -36,6 +36,8 @@ export type SystemSettingKey =
   | 'notification_webhook_enabled'
   | 'notification_webhook_url'
   | 'notification_webhook_secret'
+  // CHG-SN-8-FUP-WEBHOOK-IMPL-EP-A / ADR-146 D-146-1：事件订阅 JSON 数组（WebhookEventType[]）
+  | 'notification_webhook_events'
   | 'session_timeout_minutes'
   | 'session_max_concurrent'
   | 'session_extend_on_activity'
@@ -166,3 +168,24 @@ export type CrawlerSiteBatchAction =
   | 'unmark_adult'
   | 'mark_shortdrama'
   | 'mark_vod'
+
+// ── ADR-146 / CHG-SN-8-FUP-WEBHOOK-IMPL-EP-A：webhook 事件类型 ──
+
+/**
+ * Webhook 事件订阅类型（D-146-2）。命名规约：`<module>.<resource>.<verb>`
+ * 与 admin audit actionType 命名一致。NotificationsTab 提供多选订阅。
+ */
+export type WebhookEventType =
+  | 'crawler.run.failed'              // 采集 run 失败
+  | 'storage.r2.alert'                // R2 配额告警
+  | 'moderation.pending.threshold'    // 审核待处理积压超阈值
+  | 'submission.created'              // 用户投稿新增
+  | 'video.batch.complete'            // 批量发布/导入完成
+
+/** Webhook outbound 请求 body schema */
+export interface WebhookDispatchBody {
+  readonly event: WebhookEventType | 'webhook.test'  // test 为 admin 连通性测试
+  readonly deliveryId: string                         // UUIDv4
+  readonly occurredAt: string                         // ISO 8601 UTC
+  readonly payload: Record<string, unknown>
+}

@@ -16046,4 +16046,53 @@ Cleanup-Audit: #G-settings-webhook-impl ⚠️+🔄（消费层 warn banner ✅ 
 Plan-Revision: ADR-146 + 1（plan §9 ADR 索引推进至 146）
 
 
+## [CHG-SN-8-FUP-WEBHOOK-IMPL-EP-A] ADR-146 后端核心实施 — WebhookDispatcher + ssrf-guard + R-MID-1 第 25 次系统化 (#G-settings-webhook-impl 后端核心闭合)
+
+- **完成时间**：2026-05-23
+- **记录时间**：2026-05-23 00:10
+- **执行模型**：claude-opus-4-7
+- **子代理**：无（ADR-146 已 Opus A PASS commit 07b142ca）
+- **修改文件**（10 文件 + 4 文档）：
+  - `packages/types/src/admin-moderation.types.ts` — AdminAuditActionType +1 `'system.webhook_send_failed'`
+  - `packages/types/src/system.types.ts` — SystemSettingKey +1 `'notification_webhook_events'` + 新增 WebhookEventType 联合（5 值 crawler/storage/moderation/submission/video）+ WebhookDispatchBody interface
+  - `apps/api/src/services/AuditLogService.ts` — ACTION_TYPES 同步 +1
+  - `apps/api/src/lib/ssrf-guard.ts`（新）— `isAllowedWebhookUrl(rawUrl)` 5 层防御独立模块：(1) https only (2) RFC 1918 私有 IPv4 (3) loopback 127.0.0.0/8 + ::1 (4) link-local 169.254.0.0/16 (5) 云元数据 hostname；含 IPv6 link-local + unique local 检测
+  - `apps/api/src/services/WebhookDispatcher.ts`（新）— `enqueue()` fire-and-forget 入口 + `dispatch()` 完整 retry 流程（read KV → 订阅过滤 → SSRF → HMAC sha256= + 4 自定义 header + retry [5s/15s/45s] + jitter + 30s 超时 + 5xx 重试 / 4xx 不重试 + 最终失败 audit）+ `sendTest()` 单次不重试（POST /admin/webhook/test 用）+ SYSTEM_ACTOR_ID 常量
+  - `apps/api/src/routes/admin/webhook.ts`（新）— POST `/admin/webhook/test` handler + admin auth + 422 兜底（URL 未配置 / SSRF 拒绝）
+  - `apps/api/src/server.ts` — 注册 adminWebhookRoutes 至 /v1 prefix
+  - `tests/unit/api/audit-log-service-enums-set-equal.test.ts` — EXPECTED_ACTION_TYPES +1
+  - `tests/unit/api/audit-log-coverage.test.ts` — PAYLOAD_REQUIRED + PAYLOAD_ASSERTION_REQUIRED 各 +1
+  - `tests/unit/api/webhook-dispatcher.test.ts`（新）— 14 用例（HMAC 签名 2 / 重试 + 4xx + audit 5 / 订阅过滤 3 / SSRF 防御 2 + 加 4xx 与 audit 同分组中 2）
+  - `tests/unit/api/webhook-test-endpoint.test.ts`（新）— 2 用例（URL 未配置 → 422 / 正常 URL → 200 含 success/httpStatus/latencyMs）
+  - `docs/manual/GAPS.md` — #G-settings-webhook-impl → ✅ 后端核心闭合
+  - `docs/manual/20-pages/P-settings.md` — §3.7 状态更新
+  - `docs/task-queue.md` SEQ-20260521-06 #49 ✅
+  - `docs/tasks.md` 清卡片
+- **新增依赖**：无（bull 已装但不用 — ADR-146 D-146-3 修正版避免 Redis 依赖）
+- **数据库变更**：无（复用 system_settings KV 表 / 新增 1 key `notification_webhook_events` 存订阅 JSON）
+- **R-MID-1 第 25 次系统化完成**：7 文件 checklist 全闭环（types union + ACTION_TYPES + 2 set-equal 测试 + Dispatcher audit fire-and-forget + 14 测试含 audit payload 内容断言 4 字段 + changelog）
+- **SSRF 5 层防御亮点**：
+  - 独立模块 `apps/api/src/lib/ssrf-guard.ts`（POST test + Dispatcher 统一调用）
+  - 不做 DNS 解析（避免 DNS rebinding 攻击 / 测试环境复杂度）
+  - 静态 URL parse + IPv4/IPv6 网段判断 + hostname blacklist
+  - 单标签 hostname（无 TLD）也拒绝（避免内网 short name resolution）
+- **验收**：
+  - typecheck PASS（含 WebhookEventType 联合 + WebhookDispatchBody 强类型）
+  - lint PASS / verify:adr-contracts PASS（含 verify-endpoint-adr 184 admin 路由全部对齐 61 ADR 端点）
+  - 完整 unit 4661/4663 PASS（+19 新；2 pre-existing flaky StagingEditPanel + SourcesClient 隔离 PASS 不阻塞）
+  - 14 dispatcher 测试覆盖：HMAC 签名手工对比 / 5xx 重试 4 次后 audit 写入 + afterJsonb 7 字段完整 / 4xx 仅 1 次不重试 / AbortError 视为可重试 / 订阅过滤 3 路径 / SSRF 静默拒绝
+  - 2 endpoint 测试覆盖：URL 未配置 → 422 / 正常 URL → 200 完整 response shape
+- **价值**：
+  - **#G-settings-webhook-impl P3 后端核心闭合**：WebhookDispatcher + ssrf-guard + 测试端点 + R-MID-1 全部就绪
+  - **零新基础设施**：零新 ErrorCode / 零新依赖（bull 已装但不用） / 零新 migration / 零新表 / 零新 targetKind（复用 'system' CHECK 13 种已含）
+  - **SSRF 5 层防御就位**：admin 配置 outbound URL 受完整保护（已知最佳实践对齐）
+  - **fire-and-forget Dispatcher 与 AuditLogService 同模式**：调用方零阻塞 / 失败兜底 audit 完整追溯
+- **下一步**：
+  - CHG-SN-8-FUP-WEBHOOK-IMPL-EP-A2 按需启动（5 触发点接入 ~25 min）
+  - CHG-SN-8-FUP-WEBHOOK-IMPL-EP-B 按需启动（前端 NotificationsTab 事件订阅 checkbox + 测试按钮 ~30 min）
+
+Cleanup-Audit: #G-settings-webhook-impl 后端核心 ✅（触发点接入 + 前端 UI follow-up 待）
+Plan-Revision: 无（按 ADR-146 既定决策实施）
+
+
 

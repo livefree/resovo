@@ -93,6 +93,8 @@ const REQUIRED_ACTION_TYPES = [
   'filter_preset.delete',
   // CHG-SN-8-FUP-VIDEO-MANUAL-ADD-EP-A / ADR-145：admin 手动添加视频（R-MID-1 第 24 次）
   'video.manual_add',
+  // CHG-SN-8-FUP-WEBHOOK-IMPL-EP-A / ADR-146：webhook 投递最终失败（R-MID-1 第 25 次）
+  'system.webhook_send_failed',
 ] as const
 
 const ACTION_TYPE_REGEX = /actionType:\s*['"]([a-z_.]+)['"]/g
@@ -177,6 +179,8 @@ const PAYLOAD_ASSERTION_REQUIRED = [
   'filter_preset.delete',
   // CHG-SN-8-FUP-VIDEO-MANUAL-ADD-EP-A / ADR-145：admin 手动添加视频 audit payload 内容断言（R-MID-1 第 24 次）
   'video.manual_add',
+  // CHG-SN-8-FUP-WEBHOOK-IMPL-EP-A / ADR-146：webhook 投递最终失败 audit payload 内容断言（R-MID-1 第 25 次）
+  'system.webhook_send_failed',
 ] as const
 
 // CHG-SN-6-10：plan v1.4 §3.0.5 M-SN-4 legacy 11 项已迁移至 PAYLOAD_ASSERTION_REQUIRED
