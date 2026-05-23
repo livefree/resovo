@@ -15758,4 +15758,41 @@ Cleanup-Audit: #G-users-batch-ban ✅ 完全闭合
 Plan-Revision: 无
 
 
+## [CHG-SN-8-FUP-PRESET-TEAM-ADR] ADR-144 起草 — FilterPreset 团队共享协议（#G-moderation-preset-team ⚠️+🔄）
+
+- **完成时间**：2026-05-22
+- **记录时间**：2026-05-22 18:35
+- **执行模型**：claude-opus-4-7
+- **子代理**：arch-reviewer (claude-opus-4-7) — 1 轮 **A PASS**（最高级 / D-144-1..8 完整 / 8 维 trade-off / 18 测试 surface / 4 风险 / 2 N1）
+- **修改文件**：
+  - `docs/decisions.md` — 新增 ADR-144 完整正文（11 节）；含 D-144-1..8（scope 模型方案 B `'private'|'shared'` 不引入 team / user_filter_presets 表 schema + 3 索引 + 部分唯一索引保证 default 单一 / 4 端点契约 200 上限不分页 / owner+admin RBAC / R-MID-1 第 21-23 次系统化 filter_preset.create/update/delete + targetKind filter_preset migration 072 CHECK 12→13 / 用户手动 import 迁移策略 / 零新 ErrorCode 完全复用 / 7 关联 ADR 实证）+ migration 071+072 完整 SQL + 18 测试 surface + 4 风险 + 2 N1
+  - `docs/manual/GAPS.md` — #G-moderation-preset-team ⚠️ → ⚠️+🔄；ADR-144 决策摘要
+  - `docs/manual/20-pages/P-moderation.md` — §3.4 多账号共享段更新（ADR-144 决策核心 + 实施 follow-up）
+  - `docs/task-queue.md` SEQ-20260521-06 #42 ✅
+  - `docs/tasks.md` 清卡片
+- **新增依赖**：无
+- **数据库变更**：无（migration 071+072 留实施卡）
+- **D-N 偏离闭环**（advisory verify-adr-d-numbers）：D-144-1（scope 模型方案 B 不引入 team / 6 维 trade-off）/ D-144-2（表 schema + 3 索引）/ D-144-3（4 端点契约 + 权限矩阵）/ D-144-4（RBAC owner+admin force delete）/ D-144-5（R-MID-1 第 21-23 次系统化 + targetKind 12→13）/ D-144-6（localStorage→DB 用户手动 import）/ D-144-7（DB 部分唯一索引保证 default 单一）/ D-144-8（7 关联 ADR 实证）— 8 条 D-N 在 ADR-144 §3 完整定稿
+- **注意事项**：
+  - **本卡仅 ADR 起草**：实施 follow-up CHG-SN-8-FUP-PRESET-TEAM-EP 工时 ~0.4w（含 2 migration + DB query + Service + Route + R-MID-1 7 文件 + 前端 lib SWR 重写 + scope toggle UI + import 入口 + 18 单测）
+  - **零新概念引入**：不引入 team 表 / 不引入 team_id 字段 / 零新 ErrorCode / 零新依赖 — 完全对齐 Resovo 当前单组织架构
+  - **复用全栈**：R-MID-1 framework + ErrorCode 系统 + ApiResponse 信封 + AuditLogService + fastify.requireRole 全 7 关联 ADR
+  - **N1-144-1**（高频筛选 preset 自动建议）：需新增 moderation_filter_usage 统计表；待业务验证
+  - **N1-144-2**（preset 标签系统）：tags TEXT[] 字段 / 数量膨胀后检索；待 R-144-3 风险触发后评估
+
+### 验收
+- typecheck PASS / lint PASS / verify:manual-coverage PASS
+- verify:adr-contracts advisory：8 条 D-144-N advisory 通过本 changelog 闭环
+- 不跑 unit/e2e（纯文档 / 无代码变更）
+
+### 价值
+- **P3 GAPS #G-moderation-preset-team 路径全清晰**：消费层 warn chip ✅ 1/3 + ADR ✅ 2/3 + 实施 follow-up 3/3 待立
+- **A 评级 + 零成本设计**：8 D-N 决策完整 / 7 关联 ADR 实证 / 18 测试 surface 完备 / 4 风险全可控
+- **方案 B 极简 scope**：与 Resovo 当前架构 100% 对齐（无 team 概念）；后续 M-SN-N 多租户时可加 team_id 列扩展，不破坏已有 scope
+- **R-MID-1 第 21-23 次系统化预设**：filter_preset CRUD audit 完整覆盖 + targetKind CHECK 第 13 种
+
+Cleanup-Audit: #G-moderation-preset-team ⚠️+🔄（消费层 warn chip ✅ + ADR ✅ / 实施 follow-up 待立 + 2 N1 登记）
+Plan-Revision: ADR-144 + 1（plan §9 ADR 索引推进至 144）
+
+
 

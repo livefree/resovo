@@ -6,5 +6,5 @@
 
 ## 进行中任务
 
-（空 — 上一任务 CHG-SN-8-FUP-USERS-BATCH-BAN-UI 已完成 / #G-users-batch-ban 完全闭合）
+（空 — 上一任务 CHG-SN-8-FUP-PRESET-TEAM-ADR 已完成 / #G-moderation-preset-team ⚠️ → ⚠️+🔄；实施 follow-up CHG-SN-8-FUP-PRESET-TEAM-EP 待立卡）
 

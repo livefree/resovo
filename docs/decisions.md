@@ -10591,3 +10591,317 @@ batch-unban 对称：`{ unbanned: 8, skipped: 2, failed: 0 }`
 - **CHG-SN-8-FUP-USERS-BATCH-BAN-EP**：按本 ADR 实施 2 新端点 + 16 测试 surface + 消费层 `batchBanUsers` / `batchUnbanUsers` lib + UsersListClient batch mode 启用
 
 
+## ADR-144 — FilterPreset 团队共享协议（user_filter_presets 表 + 4 端点 + scope 模型）
+
+**状态**：Accepted
+**日期**：2026-05-22
+**作者**：arch-reviewer (claude-opus-4-7)
+**关联 GAP**：`#G-moderation-preset-team`（P3 体验优化）
+**关联 follow-up**：CHG-SN-8-FUP-PRESET-TEAM-EP（实施卡）
+**关联任务**：CHG-SN-8-FUP-PRESET-TEAM-ADR（本卡 ADR 起草）
+
+---
+
+### 1. 背景与问题
+
+**现状**：审核台 FilterPreset 完全由前端 `apps/server-next/src/lib/moderation/use-filter-presets.ts` 管理，使用 localStorage 持久化（key `admin.moderation.presets.v1`）。CRUD 操作完整（save/update/remove/setDefault），按 tab 隔离（pending/staging/rejected/all），同一 tab 最多 1 个 isDefault。
+
+**用户痛点**：跨设备不可见 / 跨账号不可见 / 隐式数据丢失 / 协作摩擦。
+
+**已有消费层铺垫**：CHG-SN-8-GAPS-PRESET-LOCAL-BADGE 已加「仅本地」warn chip 指向本 follow-up。
+
+**修复必要性**：P3 体验优化。不阻塞审核流程但长期降低团队效率。
+
+---
+
+### 2. 范围与不在范围
+
+**本 ADR 决定**：scope 模型 / 表 schema / 4 端点契约 / RBAC / R-MID-1 落地 / is_default 单一性保证 / localStorage 迁移策略。
+
+**不在范围**：实施代码（留 EP 卡）/ FilterPreset 标签系统（N1-144-2）/ 导入导出 / 频率推荐（N1-144-1）/ team/多租户概念。
+
+---
+
+### 3. D-N 决策清单
+
+#### D-144-1 scope 模型选型
+
+| 维度 | A: 引入 team 表 + team_id | B: scope `'private' \| 'shared'`（无 team） | C: scope + role-based 可见性矩阵 |
+|------|---|---|---|
+| 与 Resovo 当前架构对齐 | 偏离（无 team 概念） | **完全对齐** | 部分对齐 |
+| 实施复杂度 | 高（新表 + FK + 权限 + team CRUD） | **低**（1 列 TEXT CHECK） | 中（矩阵维护） |
+| 覆盖团队协作 | 过度完备 | **充分**（shared = 全 moderator+admin 可见） | 过度精细 |
+| 多租户扩展性 | 天然 | **可扩展**（后续加 team_id 列） | 可扩展 |
+| YAGNI | 违反 | **满足** | 部分违反 |
+| 查询复杂度 | 高（JOIN team_members） | **低** | 中 |
+
+**选择：方案 B**。理由：Resovo 当前架构无 team 表 / 无 team_id / 无多租户概念。引入 team 是过度设计。`shared` scope 语义 = "所有 moderator+admin 可见"，覆盖当前团队协作需求。后续 M-SN-N 多租户时可在 `user_filter_presets` 表加 `team_id` 列扩展，不破坏已有 scope 列。
+
+#### D-144-2 user_filter_presets 表 schema
+
+完整 schema 见 §5。设计决策：UUID PK（与仓内一致）/ owner FK ON DELETE CASCADE（非审计数据）/ 不实装 soft delete（audit log 已记 before_jsonb 可追溯）/ query 用 JSONB（前端 FilterPresetQuery 已是 object）/ name 由 Service 层 zod max 100 守卫（DB 不加 VARCHAR）/ updated_at 触发器。
+
+**索引设计**：`idx_ufp_owner_scope_tab` (复合) + `idx_ufp_default_unique` (部分唯一 WHERE is_default=true) + `idx_ufp_shared_tab` (部分 WHERE scope='shared')。
+
+#### D-144-3 端点契约
+
+| 维度 | A: 分页 | B: 200 上限不分页 |
+|------|---|---|
+| 预设数量预估 | 单用户 < 20；全局 shared < 100 | **远低于分页阈值** |
+| 实施复杂度 | 中 | **低** |
+| 与现有端点对齐 | review-labels list 不分页 | **对齐** |
+
+**选择：方案 B（200 上限不分页）**。
+
+**权限矩阵**：
+
+| 操作 | private preset (own) | shared preset (own) | shared preset (他人) |
+|------|---|---|---|
+| read (list) | moderator+admin | moderator+admin | moderator+admin |
+| create | moderator+admin | moderator+admin | N/A |
+| update | owner only | owner only | **403 FORBIDDEN** |
+| delete | owner only | owner only | **admin 可强制删** |
+
+#### D-144-4 RBAC + 跨账号写
+
+| 维度 | A: 仅 owner 可改/删 | B: shared preset 全员可改 | C: owner + admin 可改/删 |
+|------|---|---|---|
+| 数据完整性 | **高** | 低 | 中 |
+| UX 预期 | **自然** | 混乱 | 自然 |
+| 清理能力 | 无 | 有（滥用风险） | **有** |
+
+**选择：方案 A + admin 强制删除例外**。owner 全权管理自己预设；admin 仅可强制删他人 shared preset（清理场景，不可改名/改 query）；moderator 不可编辑/删除他人预设。
+
+#### D-144-5 R-MID-1 framework
+
+**新增 actionType（3 个，R-MID-1 第 21-23 次系统化）**：
+- `filter_preset.create`：before null / after `{ id, name, scope, tab, queryKeys: string[] }`
+- `filter_preset.update`：before/after diff-only（仅变更字段的旧值/新值）
+- `filter_preset.delete`：before `{ id, name, scope, tab }` / after null
+
+**新增 targetKind**：`filter_preset`（migration 072 CHECK 12 → 13）。
+
+#### D-144-6 localStorage → DB 迁移策略
+
+| 维度 | A: 自动首次登录上传 | B: 用户手动 import | C: 不迁移 |
+|------|---|---|---|
+| 用户感知 | 静默（可能困惑） | **显式操作** | 无变化 |
+| 实施复杂度 | 中 | **低** | 极低 |
+| 数据所有权 | 模糊 | **明确** | 明确 |
+| UX 流畅度 | 高 | 中 | 低 |
+
+**选择：方案 B（用户手动 import）**。不破坏现状 + 用户感知可控 + 避免重复风险。FilterPresetPopover 增"导入本地预设"入口；导入成功后清 localStorage key。未导入的 localStorage 数据继续本地使用（双源共存过渡期）。
+
+#### D-144-7 is_default 单一性保证
+
+| 维度 | A: DB 部分唯一索引 | B: Service 层事务保证 |
+|------|---|---|
+| 约束强度 | **DB 层硬约束** | 应用层（可绕过） |
+| 并发安全 | **天然安全** | 需 SERIALIZABLE / FOR UPDATE |
+| 实施复杂度 | **低**（1 行 DDL） | 中 |
+
+**选择：方案 A（DB 部分唯一索引）**。配合 Service 层事务：设 default 时先 `UPDATE ... SET is_default = FALSE WHERE owner_user_id = $1 AND tab = $2`，再 `UPDATE ... SET is_default = TRUE WHERE id = $3`。DB 部分索引作终极护栏防 race。
+
+#### D-144-8 关联 ADR 引用
+
+| # | ADR | 关联点 |
+|---|-----|--------|
+| 1 | ADR-003 | JWT 双 Token 认证（fastify.authenticate 复用） |
+| 2 | ADR-109 | admin_audit_log schema（migration 052）|
+| 3 | ADR-110 | ErrorCode 系统（复用 NOT_FOUND/VALIDATION_ERROR/FORBIDDEN；零新增）|
+| 4 | ADR-118 | audit 视图端点协议（ACTION_TYPES/TARGET_KINDS 真源）|
+| 5 | ADR-121 | R-MID-1 7 文件审计框架 |
+| 6 | ADR-139 | fastify.requireRole 复用 |
+| 7 | ADR-140 | target_kind CHECK 扩展范式（migration 069）|
+
+---
+
+### 4. 端点契约
+
+4 个端点，全部挂 `preHandler: [fastify.authenticate, fastify.requireRole(['moderator', 'admin'])]`：
+
+| # | Method | Path | 权限 | 新增 ErrorCode |
+|---|--------|------|------|---------------|
+| 1 | GET | `/admin/filter-presets` | moderator, admin | 无 |
+| 2 | POST | `/admin/filter-presets` | moderator, admin | 无 |
+| 3 | PATCH | `/admin/filter-presets/:id` | moderator, admin (owner only) | 无 |
+| 4 | DELETE | `/admin/filter-presets/:id` | moderator, admin (owner / admin force) | 无 |
+
+**4.1 GET**：Query `tab?: enum / scope?: enum`；Response 含 `ownerUserId`/`ownerUsername` (LEFT JOIN users)；返回 own private + own shared + 他人 shared；200 上限 slice。
+
+**4.2 POST**：Body zod `name(1-100) / scope=private / tab / query={} / isDefault=false`；owner_user_id 取自 request.user！；isDefault=true 时 Service 层先清同 owner+tab 旧 default；audit create；201 返回新建对象。
+
+**4.3 PATCH**：Path `:id` UUID；Body 至少 1 字段；仅 owner 可 PATCH；isDefault=true 自动清旧 default；audit update；200 返回更新对象。
+
+**4.4 DELETE**：Path `:id` UUID；owner 全权 / admin 可强制删他人 shared / moderator 不可删他人；audit delete；204。
+
+**错误码全复用**（零新增）：401 UNAUTHORIZED / 403 FORBIDDEN / 404 NOT_FOUND / 409 STATE_CONFLICT (default 互斥 23505 兜底) / 422 VALIDATION_ERROR。
+
+---
+
+### 5. 数据库 schema
+
+#### Migration 071: user_filter_presets 建表
+
+```sql
+-- 071_user_filter_presets.sql
+-- ADR-144 / CHG-SN-8-FUP-PRESET-TEAM-EP
+BEGIN;
+
+CREATE TABLE IF NOT EXISTS user_filter_presets (
+  id              UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
+  owner_user_id   UUID         NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name            TEXT         NOT NULL,
+  scope           TEXT         NOT NULL DEFAULT 'private'
+                                CHECK (scope IN ('private', 'shared')),
+  tab             TEXT         NOT NULL
+                                CHECK (tab IN ('pending', 'staging', 'rejected', 'all')),
+  query_jsonb     JSONB        NOT NULL DEFAULT '{}',
+  is_default      BOOLEAN      NOT NULL DEFAULT FALSE,
+  created_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+
+COMMENT ON TABLE user_filter_presets IS 'FilterPreset 持久化（ADR-144）；scope=private 仅 owner / scope=shared 全 moderator+admin 可见';
+COMMENT ON COLUMN user_filter_presets.scope IS 'private | shared；CHECK 限定 2 值';
+COMMENT ON COLUMN user_filter_presets.tab IS 'pending | staging | rejected | all；与前端 FilterPresetTab 对齐';
+COMMENT ON COLUMN user_filter_presets.query_jsonb IS '筛选条件 JSONB 快照';
+COMMENT ON COLUMN user_filter_presets.is_default IS '同 owner+tab 最多 1 个 default（部分唯一索引 idx_ufp_default_unique 保证）';
+
+CREATE INDEX IF NOT EXISTS idx_ufp_owner_scope_tab
+  ON user_filter_presets (owner_user_id, scope, tab);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_ufp_default_unique
+  ON user_filter_presets (owner_user_id, tab)
+  WHERE is_default = TRUE;
+
+CREATE INDEX IF NOT EXISTS idx_ufp_shared_tab
+  ON user_filter_presets (scope, tab)
+  WHERE scope = 'shared';
+
+CREATE OR REPLACE FUNCTION trg_ufp_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN NEW.updated_at = NOW(); RETURN NEW; END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_user_filter_presets_updated
+  BEFORE UPDATE ON user_filter_presets FOR EACH ROW
+  EXECUTE FUNCTION trg_ufp_updated_at();
+
+COMMIT;
+```
+
+#### Migration 072: target_kind CHECK 12 → 13
+
+```sql
+-- 072_audit_log_extend_target_kind_filter_preset.sql
+-- ADR-144 D-144-5 / R-MID-1 第 21-23 次系统化
+BEGIN;
+
+ALTER TABLE admin_audit_log DROP CONSTRAINT IF EXISTS admin_audit_log_target_kind_check;
+ALTER TABLE admin_audit_log ADD CONSTRAINT admin_audit_log_target_kind_check
+  CHECK (target_kind IN (
+    'video', 'video_source', 'staging', 'review_label', 'crawler_site', 'system',
+    'home_module', 'source_line_alias', 'source_route', 'user_submission', 'image_health',
+    'user', 'filter_preset'
+  ));
+
+COMMENT ON COLUMN admin_audit_log.target_kind IS 'CHECK 限定 13 种（ADR-144 扩展 filter_preset；12→13）';
+
+COMMIT;
+```
+
+---
+
+### 6. R-MID-1 framework 落地
+
+**R-MID-1 第 21-23 次系统化**。7 文件 checklist：
+
+| # | 文件 | 变更 |
+|---|------|------|
+| 1 | `packages/types/src/admin-moderation.types.ts` | AdminAuditActionType 新增 3 值 |
+| 2 | `packages/types/src/admin-moderation.types.ts` | AdminAuditTargetKind 新增 `'filter_preset'` |
+| 3 | `apps/api/src/services/AuditLogService.ts` | ACTION_TYPES / TARGET_KINDS 同步 |
+| 4 | `apps/api/src/services/AuditLogService.ts` | extractAuditPayloadSummary filter_preset 分支 |
+| 5 | 测试 | `audit-log-coverage.test.ts` PAYLOAD_REQUIRED 新增 3 值 |
+| 6 | Route | `apps/api/src/routes/admin/filter-presets.ts` 各写端点调用 `auditSvc.write(...)` |
+| 7 | docs | changelog R-MID-1 #21-23 |
+
+**JSONB schema**：create after = `{ id, name, scope, tab, queryKeys: string[] }` (queryKeys = Object.keys 摘要避免 JSONB 全量入 audit) / update diff-only / delete before = `{ id, name, scope, tab }`。
+
+---
+
+### 7. 测试 surface（18 用例）
+
+文件：`tests/unit/api/admin-filter-presets.test.ts`
+
+| # | 类别 | 用例 |
+|---|------|------|
+| 1-5 | CRUD happy | POST private / POST shared / GET list 三类集合 / PATCH name / DELETE own |
+| 6-7 | scope filter | GET ?scope=shared / GET ?tab=pending |
+| 8-10 | is_default 互斥 | POST 互斥 / PATCH 互斥 / 并发 23505 → 409 |
+| 11-14 | 跨 owner 权限 | moderator PATCH 他人 → 403 / moderator DELETE 他人 → 403 / admin DELETE 他人 shared → 204 / admin DELETE 他人 private → 403 |
+| 15 | shared 跨 role | moderator B 可读 moderator A 的 shared |
+| 16 | R-MID-1 audit | POST 后 admin_audit_log 有 filter_preset.create 记录 |
+| 17-18 | 422 validation | name 超 100 / tab 非法值 |
+
+---
+
+### 8. 实施 follow-up 拆解
+
+**CHG-SN-8-FUP-PRESET-TEAM-EP**（~0.4w / 2 天）：
+1. Migration 071+072 (0.5h)
+2. DB query 层 (1h)
+3. Service 层（含 RBAC + default 互斥事务 + audit）(2h)
+4. Route 层 4 端点 (1h)
+5. R-MID-1 7 文件 (1h)
+6. 前端 lib 重写 SWR + API (2h)
+7. 前端 UI scope toggle + badge (1.5h)
+8. localStorage 迁移 import (1h)
+9. 18 测试 (2h)
+10. docs 更新 (0.5h)
+
+---
+
+### 9. 风险
+
+| # | 风险 | 严重性 | 缓解 |
+|---|------|--------|------|
+| R-144-1 | Migration 071 CREATE TABLE 失败（users FK 不存在 / 权限不足） | 中 | 幂等 `IF NOT EXISTS` + users 已存在 (migration 001)；CI 先跑 migration 测试 |
+| R-144-2 | 大量 localStorage 数据用户不迁移 → 双源共存长期化 | 低 | 前端 hook 优先 DB + localStorage fallback 可无限期共存；warn chip 引导导入 |
+| R-144-3 | shared preset 滥用 — 命名混乱 / 数量膨胀 | 低 | 200 上限截断 + name max 100 + admin 可强制删除；N1-144-2 标签系统进一步治理 |
+| R-144-4 | list 端点 N+1 性能 — LEFT JOIN users 取 ownerUsername | 低 | 单次 JOIN 非 N+1；200 上限 + 3 索引覆盖；预设量远低于性能阈值 |
+
+**回退路径**：代码 revert（Route → Service → Query → Migration 072 → 071 DROP）；前端 hook 回退到纯 localStorage；R-MID-1 3 值回退；零 ErrorCode 残留。
+
+---
+
+### 10. N1 follow-up 候选
+
+**N1-144-1（基于高频筛选的 preset 自动建议）**：分析 moderator 最近 30 天筛选参数分布，toast 提示"您经常使用的筛选，要保存为预设吗？"。需新增 `moderation_filter_usage` 统计表。**状态**：待业务验证。
+
+**N1-144-2（preset 标签系统）**：为 shared preset 加 `tags TEXT[]` 字段支持分组检索。降低数量膨胀后检索成本。**状态**：待 R-144-3 风险触发后评估。
+
+---
+
+### 11. 评级
+
+| 维度 | 评分 | 理由 |
+|------|------|------|
+| 方案完整性 | A | 8 D-N 覆盖 scope / schema / 端点 / RBAC / R-MID-1 / 迁移 / 约束 / ADR 关联 |
+| 与现有架构对齐 | A | 零新概念引入；复用 R-MID-1 / auth / ErrorCode / AuditLogService 全栈 |
+| 关联 ADR 实证 | A | 7 项实证（3/109/110/118/121/139/140） |
+| 实施可行性 | A | migration 两步分离 + Service 事务 + DB 硬约束双保险 + 18 测试 |
+| 扩展预留 | A | scope 列可扩展（future `'team'`）+ query_jsonb 不限 schema 演进 |
+| 风险控制 | A | 4 风险全低/中 + 完整回退路径 |
+
+**推荐评级：A**
+
+方案 B scope 模型极简（`private | shared` 两值 CHECK，不引入 team 概念），完全对齐 Resovo 当前单组织架构。零新 ErrorCode / 零新依赖 / 零架构级新概念。7 关联 ADR 实证覆盖认证、审计、错误码、Service、DB query 全栈。R-MID-1 第 21-23 次系统化遵循已建立 7 文件 checklist。DB 部分唯一索引保证 is_default 单一性。迁移策略选用户主导（方案 B），不破坏现有 localStorage 工作流。
+
+---
+
+**后续解锁卡**：
+- **CHG-SN-8-FUP-PRESET-TEAM-EP**：按本 ADR 实施全栈（2 migration + Query + Service + Route + R-MID-1 7 文件 + 前端 lib 重写 + scope toggle UI + import + 18 测试）
+
+

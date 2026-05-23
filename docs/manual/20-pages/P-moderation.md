@@ -120,7 +120,7 @@
 - **行为**：保存当前 filter 组合为命名预设（如「我的待审」「本周新增」）+ 设为默认
 - **持久化**：localStorage `admin.moderation.presets.v1`（仅本浏览器）
 - **视觉警示**：popover header 右侧「仅本地」warn chip + title tooltip 解释（CHG-SN-8-GAPS-PRESET-LOCAL-BADGE）— 提醒审核员预设未跨账号同步
-- **多账号共享**：⚠️ 视觉警示已加；后端 `user_filter_presets` 表 + 团队共享 UI 待 follow-up CHG-SN-8-FUP-PRESET-TEAM-EP（GAPS.md #G-moderation-preset-team）
+- **多账号共享**：⚠️ 视觉警示已加 + **ADR-144 A PASS 已起草**（2026-05-22）；ADR-144 决策：方案 B `scope: 'private' | 'shared'`（不引入 team 概念，shared 全 moderator+admin 可见）+ user_filter_presets 表 + 4 端点（GET/POST/PATCH/DELETE）+ owner 全权 / admin 强制删 shared / R-MID-1 第 21-23 次系统化（filter_preset.create/update/delete）+ 用户手动 import 迁移；实施 follow-up CHG-SN-8-FUP-PRESET-TEAM-EP（GAPS.md #G-moderation-preset-team）
 
 ### 3.5 批量审核（CHG-SN-8-GAPS-MOD-BATCH）
 

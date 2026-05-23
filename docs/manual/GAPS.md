@@ -57,11 +57,12 @@
 ### #G-moderation-preset-team · FilterPreset 多账号共享缺失
 
 - **页面**：P-moderation §3.4 / §7 FAQ
-- **状态**：⚠️ 已部分实装（CHG-SN-8-GAPS-PRESET-LOCAL-BADGE 消费层视觉警示；团队共享 follow-up：CHG-SN-8-FUP-PRESET-TEAM-EP）
+- **状态**：⚠️+🔄 已部分实装 + ADR 已起草（CHG-SN-8-GAPS-PRESET-LOCAL-BADGE 消费层警示 ✅ + ADR-144 A PASS / 实施 follow-up：CHG-SN-8-FUP-PRESET-TEAM-EP 待立）
 - **优先级**：P3
-- **现象（已核查）**：`apps/server-next/src/lib/moderation/use-filter-presets.ts:5` localStorage 持久化（key `admin.moderation.presets.v1`），仅本浏览器；同团队审核员无法共享预设（原描述「sessionStorage」实证为 localStorage，已修正）
-- **消费层补齐**：CHG-SN-8-GAPS-PRESET-LOCAL-BADGE — FilterPresetPopover header 加「仅本地」warn chip + tooltip（state-warning-bg + cursor: help + title 含"未跨账号同步 + 团队共享待 follow-up + 指向 GAPS"）；与 DASH-ACTIVITY mock 警示同范式
-- **团队共享 follow-up**：CHG-SN-8-FUP-PRESET-TEAM-EP — 起 ADR-141（或后续可用编号）设计后端 `user_filter_presets` 表（user_id / name / query_jsonb / scope: 'private' \| 'team' / tab_filter / is_default / created_at）+ 4 端点（GET list / POST create / PATCH 编辑 / DELETE）+ 前端 scope toggle + 团队成员预设可见性策略；需 Opus arch-reviewer 评审；工时 ADR ~0.2w + 实施 ~0.4w
+- **现象（已核查）**：`apps/server-next/src/lib/moderation/use-filter-presets.ts:5` localStorage 持久化（key `admin.moderation.presets.v1`），仅本浏览器；同团队审核员无法共享预设
+- **消费层补齐**：CHG-SN-8-GAPS-PRESET-LOCAL-BADGE — FilterPresetPopover header 加「仅本地」warn chip + tooltip
+- **ADR-144 决策**（commit 待 / 本卡）：方案 B `scope: 'private' | 'shared'`（不引入 team 概念 — Resovo 当前架构无多租户）+ user_filter_presets 表（owner_user_id / name / query_jsonb / scope CHECK / tab CHECK / is_default + 部分唯一索引）+ 4 端点（GET/POST/PATCH/DELETE list 200 上限不分页）+ owner 全权 / admin 强制删 shared / moderator 不可改他人 + R-MID-1 第 21-23 次系统化（filter_preset.create/update/delete + targetKind filter_preset migration 072 CHECK 12→13）+ 用户手动 import 迁移策略 + DB 部分唯一索引保证 is_default 单一性 + 零新 ErrorCode + 7 关联 ADR 实证
+- **后端实施 follow-up**：CHG-SN-8-FUP-PRESET-TEAM-EP — 2 migration + DB query + Service + Route + R-MID-1 7 文件 + 前端 lib SWR 重写 + scope toggle UI + import 入口 + 18 单测；工时 ~0.4w
 
 ### #G-merge-candidate-b-auto · 审核台类似 tab 深链 candidate_b 未自动填入 Merge 页
 
