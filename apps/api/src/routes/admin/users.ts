@@ -427,4 +427,118 @@ export async function adminUserRoutes(fastify: FastifyInstance) {
       },
     })
   })
+
+  // ── POST /admin/users/batch-ban + batch-unban （ADR-143）─────────
+  //
+  // best-effort per-id（D-143-2）：5 类 skip 守卫（admin/自残/不存在/已 banned/重复）→ skipped；
+  // 成功 → banned；非预期错误 → failed。每个成功 ban 写 Redis user:rca + audit user.ban（D-143-4/5）。
+  // max 50（D-143-3 与 moderation batch 对齐）；零新 ErrorCode（D-143-6 复用 ADR-110）。
+
+  const BatchBanSchema = z.object({
+    ids: z.array(z.string().uuid()).min(1).max(50),
+  })
+
+  fastify.post('/admin/users/batch-ban', { preHandler: auth }, async (request, reply) => {
+    const parsed = BatchBanSchema.safeParse(request.body)
+    if (!parsed.success) {
+      return reply.code(422).send({
+        error: { code: 'VALIDATION_ERROR', message: parsed.error.issues[0]?.message ?? '参数错误', status: 422 },
+      })
+    }
+
+    const actorId = request.user!.userId
+    const uniqueIds = Array.from(new Set(parsed.data.ids))  // D-143-3 去重
+
+    let banned = 0
+    let skipped = 0
+    let failed = 0
+
+    for (const id of uniqueIds) {
+      try {
+        // D-143-3 5 类 skip 守卫
+        if (id === actorId) { skipped++; continue }  // 自残保护
+
+        const user = await usersQueries.findAdminUserById(db, id)
+        if (!user) { skipped++; continue }  // 不存在 / soft deleted
+        if (user.role === 'admin') { skipped++; continue }  // admin 账号
+        if (user.banned_at) { skipped++; continue }  // 已 banned（幂等）
+
+        const result = await usersQueries.banUser(db, id)
+        if (!result) { skipped++; continue }
+
+        // D-143-4 Redis fire-and-forget（复用单次 ban 范式）
+        if (result.role_changed_at) {
+          redis
+            .set(ROLE_CHANGED_CACHE_KEY(id), result.role_changed_at, 'EX', ROLE_CHANGED_CACHE_TTL_SECONDS)
+            .catch((err: unknown) => {
+              fastify.log.warn({ err, userId: id }, '[admin/users] batch-ban rca cache set failed')
+            })
+        }
+
+        // D-143-5 per-id audit（与单次 ban 完全一致）
+        auditSvc.write({
+          actorId,
+          actionType: 'user.ban',
+          targetKind: 'user',
+          targetId: id,
+          beforeJsonb: { banned_at: null },
+          afterJsonb: { banned_at: result.banned_at },
+        })
+
+        banned++
+      } catch (err) {
+        request.log.error({ err, userId: id }, '[admin/users] batch-ban per-id failed')
+        failed++
+      }
+    }
+
+    return reply.send({ data: { banned, skipped, failed } })
+  })
+
+  fastify.post('/admin/users/batch-unban', { preHandler: auth }, async (request, reply) => {
+    const parsed = BatchBanSchema.safeParse(request.body)
+    if (!parsed.success) {
+      return reply.code(422).send({
+        error: { code: 'VALIDATION_ERROR', message: parsed.error.issues[0]?.message ?? '参数错误', status: 422 },
+      })
+    }
+
+    const actorId = request.user!.userId
+    const uniqueIds = Array.from(new Set(parsed.data.ids))
+
+    let unbanned = 0
+    let skipped = 0
+    let failed = 0
+
+    for (const id of uniqueIds) {
+      try {
+        if (id === actorId) { skipped++; continue }  // 自残保护（admin 也不会被 ban，理论无意义但保持对称）
+
+        const user = await usersQueries.findAdminUserById(db, id)
+        if (!user) { skipped++; continue }
+        if (!user.banned_at) { skipped++; continue }  // 未 banned（幂等）
+
+        const oldBan = user.banned_at
+        const result = await usersQueries.unbanUser(db, id)
+        if (!result) { skipped++; continue }
+
+        // D-143-5 per-id audit（D-143-4 不写 Redis）
+        auditSvc.write({
+          actorId,
+          actionType: 'user.unban',
+          targetKind: 'user',
+          targetId: id,
+          beforeJsonb: { banned_at: oldBan },
+          afterJsonb: { banned_at: null },
+        })
+
+        unbanned++
+      } catch (err) {
+        request.log.error({ err, userId: id }, '[admin/users] batch-unban per-id failed')
+        failed++
+      }
+    }
+
+    return reply.send({ data: { unbanned, skipped, failed } })
+  })
 }

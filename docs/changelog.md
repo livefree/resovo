@@ -15681,5 +15681,38 @@ Cleanup-Audit: #G-users-batch-ban ⚠️+🔄（消费层 disabled btn ✅ + ADR
 Plan-Revision: ADR-143 + 1（plan §9 ADR 索引推进至 143；自动索引由 verify:adr-contracts 维护）
 
 
+## [CHG-SN-8-FUP-USERS-BATCH-BAN-EP] ADR-143 实施 — admin 批量封禁/解封对称双端点 (#G-users-batch-ban 后端闭合)
+
+- **完成时间**：2026-05-22
+- **记录时间**：2026-05-22 17:58
+- **执行模型**：claude-opus-4-7
+- **子代理**：无（实施卡，复用 ADR-143 决策）
+- **修改文件**：
+  - `apps/api/src/routes/admin/users.ts` — POST `/admin/users/batch-ban` + POST `/admin/users/batch-unban`（admin 守卫 + zod max 50 ids + dedupe Set + per-id for-loop + 5 类 skip 守卫：self/missing/admin/already-banned/dedup + ban 写 Redis user:rca EX 900 fire-and-forget + R-MID-1 user.ban/unban audit fire-and-forget per-id + 三计数 `{ banned/unbanned, skipped, failed }` response）
+  - `apps/server-next/src/lib/users/api.ts` — `batchBanUsers(ids)` + `batchUnbanUsers(ids)` 2 lib 封装
+  - `apps/server-next/src/app/admin/users/_client/UsersListClient.tsx` — disabled 按钮 tooltip 更新指向 follow-up UI 卡（端点就绪 + 引用 ADR-143 / GAPS / FUP-EP / FUP-UI）
+  - `tests/unit/api/admin-users-batch-ban.test.ts` — 16 用例（happy path 3 ids / admin skip / self skip / missing skip / already-banned skip / dedupe / Redis 写 / audit 写 / 422 max+50 / 422 ids=[] / 422 非 UUID / unban happy / 未 banned skip / unban audit / unban 不写 Redis / 403 非 admin）
+  - `tests/unit/components/server-next/admin/admin-shell-client.test.tsx` — 附带修：前序卡 ADR-142 self-scope 测试断言漂移（moderator 可见 /admin/audit）
+  - `docs/manual/GAPS.md` — #G-users-batch-ban ⚠️+🔄 → ✅ 后端端点闭合（前端 UI 留 FUP-UI）
+  - `docs/manual/20-pages/P-users.md` — §4.1 批量封禁段更新（后端端点详细 + lib + UI follow-up）
+  - `docs/task-queue.md` SEQ-20260521-06 #40 ✅
+  - `docs/tasks.md` 清卡片
+- **新增依赖**：无
+- **数据库变更**：无（复用现有 banUser/unbanUser）
+- **R-MID-1 第 19/20 次系统化**：复用 user.ban + user.unban actionType（已在 USERS-BAN-AUDIT 第 17/18 次落地）；本卡零新 7 文件框架触发，仅批量写
+- **验收**：
+  - typecheck PASS / lint PASS（pre-existing warning 仅 1）/ verify:adr-contracts advisory PASS
+  - 完整 unit 4593/4593 PASS（含本卡新 16 + 前序卡修 1）
+  - 16 新单测覆盖：每 skip guard 单独断言 + Redis 写 EX 900 精确断言 + audit payload beforeJsonb/afterJsonb 内容断言 + 422 三态 + 403 非 admin
+- **价值**：
+  - **P3 GAPS #G-users-batch-ban 后端闭合**：max 50 best-effort 双端点 + 三计数 + 完整 audit + Redis session invalidate
+  - **零新基础设施**：零新 schema / 零新 ErrorCode / 零新 actionType（复用 user.ban/unban）/ 零新 migration
+  - **运营场景就绪**：批量误操作恢复（unban 对称设计）+ 大型滥用清理（max 50 单次）端点即可 curl 测试
+  - **前序卡漂移同步修复**：admin-shell-client.test 中过时 audit moderator 断言更正为 ADR-142 self-scope 后真值（避免 main 全 unit 红）
+- **下一步**：CHG-SN-8-FUP-USERS-BATCH-BAN-UI 按需启动（batch mode toggle + checkbox + bulk action bar）
+
+Cleanup-Audit: #G-users-batch-ban 后端 ✅（前端 UI follow-up 待）
+Plan-Revision: 无（不触发 ADR 新增）
+
 
 

@@ -384,12 +384,14 @@ export function UsersListClient() {
             >
               邀请用户
             </AdminButton>
-            {/* CHG-SN-8-GAPS-USERS-BATCH-BAN-BTN：H2 死按钮豁免（disabled+tooltip）— 后端 batch endpoint follow-up: CHG-SN-8-FUP-USERS-BATCH-BAN-EP */}
+            {/* CHG-SN-8-FUP-USERS-BATCH-BAN-EP：ADR-143 端点已实施（POST batch-ban max 50）；
+                前端 batch mode 选择 UI 留独立 follow-up CHG-SN-8-FUP-USERS-BATCH-BAN-UI（按需启动）；
+                按钮维持 disabled+tooltip 范式至 UI 实施 */}
             <AdminButton
               variant="default"
               size="sm"
               disabled
-              title="批量封禁筹备中 — 后端 batch endpoint 待 follow-up（GAPS.md #G-users-batch-ban → CHG-SN-8-FUP-USERS-BATCH-BAN-EP）"
+              title="后端端点已就绪（POST /admin/users/batch-ban max 50；ADR-143 / GAPS.md #G-users-batch-ban）；批量选择 UI 待 follow-up CHG-SN-8-FUP-USERS-BATCH-BAN-UI（端点实施已完成 CHG-SN-8-FUP-USERS-BATCH-BAN-EP）"
               data-testid="users-batch-ban-disabled"
             >
               批量封禁

@@ -74,9 +74,14 @@
 ## 4. 进阶操作
 
 ### 4.1 批量封禁
-- **状态**：⚠️+🔄 入口已加 disabled + **ADR-143 A PASS 已起草**（2026-05-22）；ADR-143 决策：对称双端点 POST `/admin/users/batch-ban` + `/admin/users/batch-unban` + max 50 + best-effort per-id + 三计数 response + 复用 user.ban/unban actionType（零 R-MID-1 触发）+ 复用 ADR-139 Redis session invalidate
-- 实施 follow-up CHG-SN-8-FUP-USERS-BATCH-BAN-EP（GAPS.md #G-users-batch-ban）
-- **当前替代**：逐行操作（PageHeader disabled 按钮 hover 显示提示）
+- **状态**：✅ **后端端点已实装**（ADR-143 + CHG-SN-8-FUP-USERS-BATCH-BAN-EP 闭合 / 2026-05-22）；前端 batch mode UI 留独立 follow-up CHG-SN-8-FUP-USERS-BATCH-BAN-UI（按需启动）
+- **后端端点**（POST，admin only，max 50 ids，best-effort per-id）：
+  - `POST /admin/users/batch-ban`：ban 多用户，返回 `{ banned, skipped, failed }`；skip 5 类（self/missing/admin/already-banned/dedup）；每个成功 ban 写 Redis `user:rca:{id}` EX 900s（ADR-139 session invalidate）+ R-MID-1 user.ban audit
+  - `POST /admin/users/batch-unban`：unban 多用户，返回 `{ unbanned, skipped, failed }`；skip 2 类（self/missing/not-banned/dedup）；不写 Redis；R-MID-1 user.unban audit
+  - 422 校验失败（ids=[] / ids>50 / 非 UUID）；403 非 admin；零 BLOCKER（不存在的 id 不抛错按 skip）
+- **前端 lib**：`batchBanUsers(ids)` / `batchUnbanUsers(ids)` in `apps/server-next/src/lib/users/api.ts`
+- **前端 UI follow-up**：CHG-SN-8-FUP-USERS-BATCH-BAN-UI — UsersListClient batch mode toggle + checkbox 列 + bulk action bar；当前 PageHeader 按钮仍 disabled，tooltip 已更新明示「端点就绪，UI 待 follow-up」
+- **当前替代**：逐行操作（PageHeader disabled 按钮 hover 显示提示，端点可直接 curl 测试）
 
 ### 4.2 改用户邮箱 / 编辑显示名
 - **状态**：✅ **已实装**（ADR-140 + CHG-SN-8-FUP-USERS-EDIT-EP 闭合 / 2026-05-22）

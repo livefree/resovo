@@ -67,13 +67,14 @@ describe('AdminShellClient — 系统管理组 role 过滤', () => {
     expect(hrefs).toContain('/admin/audit')
   })
 
-  it('moderator 角色看不见「系统管理」组 3 个 admin-only 路由', () => {
+  it('moderator 角色看不见「系统管理」组 admin-only 路由（users / settings；audit 已 ADR-142 self-scope 放开）', () => {
     const { container } = renderClient(themeValue, { initialRole: 'moderator' })
     const hrefs = Array.from(container.querySelectorAll('[data-sidebar-item]'))
       .map((el) => el.getAttribute('data-sidebar-item'))
     expect(hrefs).not.toContain('/admin/users')
     expect(hrefs).not.toContain('/admin/settings')
-    expect(hrefs).not.toContain('/admin/audit')
+    // ADR-142 / CHG-SN-8-FUP-AUDIT-SELF-SCOPE-EP：moderator 仍可见审计日志 self-scope
+    expect(hrefs).toContain('/admin/audit')
   })
 
   it('moderator 仍可见非 admin-only 业务 nav（审核台 / 视频库 等）', () => {

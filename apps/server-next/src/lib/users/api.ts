@@ -62,3 +62,15 @@ export async function updateUserProfile(id: string, input: UpdateUserProfileInpu
   const res = await apiClient.patch<{ data: { id: string; displayName: string | null; locale: string; avatarUrl: string | null } }>(`/admin/users/${id}/profile`, input)
   return res.data
 }
+
+// CHG-SN-8-FUP-USERS-BATCH-BAN-EP / ADR-143：batch ban/unban 对称双端点
+// best-effort per-id；返回三计数（banned/unbanned + skipped + failed）；max 50
+export async function batchBanUsers(ids: readonly string[]): Promise<{ banned: number; skipped: number; failed: number }> {
+  const res = await apiClient.post<{ data: { banned: number; skipped: number; failed: number } }>(`/admin/users/batch-ban`, { ids })
+  return res.data
+}
+
+export async function batchUnbanUsers(ids: readonly string[]): Promise<{ unbanned: number; skipped: number; failed: number }> {
+  const res = await apiClient.post<{ data: { unbanned: number; skipped: number; failed: number } }>(`/admin/users/batch-unban`, { ids })
+  return res.data
+}

@@ -104,11 +104,13 @@
 ### #G-users-batch-ban · 批量封禁 UI 缺失
 
 - **页面**：P-users §4.1
-- **状态**：⚠️+🔄 已部分实装 + ADR 已起草（CHG-SN-8-GAPS-USERS-BATCH-BAN-BTN disabled 入口 commit f4b91ad5 + ADR-143 A PASS commit 待 / 实施 follow-up：CHG-SN-8-FUP-USERS-BATCH-BAN-EP）
+- **状态**：✅ **后端端点闭合**（2026-05-22 / ADR-143 + EP PASS）；前端 batch mode UI 留独立 follow-up CHG-SN-8-FUP-USERS-BATCH-BAN-UI（按需启动）
 - **优先级**：P3
-- **现象**：无端点 + 无 batch UI；当前需逐行操作
-- **消费层补齐**：CHG-SN-8-GAPS-USERS-BATCH-BAN-BTN — UsersListClient PageHeader actions 加 disabled「批量封禁」按钮 + tooltip（H2 死按钮豁免范式，同 P-videos「+ 添加视频」/ audit-rollback 未支持类型 disabled）；tooltip 明示「筹备中」+ 指向 GAPS / follow-up
-- **后端实装 follow-up**：CHG-SN-8-FUP-USERS-BATCH-BAN-EP — 起 ADR-N 设计 `POST /admin/users/batch-ban` 端点（含 ids: UUID[] / max batch size / admin 目标 skip + 部分失败处理 / R-MID-1 `user.ban` 批量 audit）+ 前端 batch mode toggle + bulk action bar（参 ModerationBatch / CHG-SN-8-GAPS-MOD-BATCH 范式）；需 Opus arch-reviewer 评审；工时 ADR ~0.2w + 实施 ~0.3w
+- **闭环路径（2/3 后端 + 1/3 前端 UI 待）**：
+  - **1/3 消费层 disabled 按钮**：CHG-SN-8-GAPS-USERS-BATCH-BAN-BTN（commit f4b91ad5）— PageHeader disabled「批量封禁」+ tooltip 范式
+  - **2/3 ADR**：CHG-SN-8-FUP-USERS-BATCH-BAN-ADR（commit de20a302）— ADR-143 A− PASS（D-143-1..6 + best-effort per-id + 三计数响应 + Self 403 + admin skip + 5 skip guards + 16 测试 surface）
+  - **3/3 后端 EP**：CHG-SN-8-FUP-USERS-BATCH-BAN-EP — `POST /admin/users/batch-ban` + `POST /admin/users/batch-unban` 对称双端点（zod max 50 ids + dedupe Set + 5 skip guards：self/missing/admin/already-banned + ban 写 Redis + R-MID-1 第 19/20 次系统化 user.ban + user.unban audit fire-and-forget + lib batchBanUsers/batchUnbanUsers + 16 单测 PASS）；按钮 tooltip 更新指向 follow-up UI 卡
+- **前端 UI follow-up**：CHG-SN-8-FUP-USERS-BATCH-BAN-UI — UsersListClient batch mode toggle + checkbox 列 + bulk action bar（参 ModerationBatch 范式）；点击 batch ban → confirm + 调 batchBanUsers + toast 三计数；按需启动；工时 ~0.3w
 
 ### #G-users-edit-profile · 改用户邮箱 / 重置密码 / 编辑显示名缺失
 
