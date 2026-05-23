@@ -69,7 +69,7 @@
 ## ADR-003 JWT 双 Token 方案，Refresh Token 存 HttpOnly Cookie
 
 - **日期**：2025-03
-- **状态**：已采纳，不可推翻
+- **状态**：已采纳，不可推翻（见下方两次 AMENDMENT — Refresh Token TTL 由 CHG-37 调整，Access Token TTL 由 ADR-148 改为 KV 驱动）
 - **决策**：Access Token 15 分钟有效期存内存，Refresh Token 7 天存 HttpOnly + Secure Cookie
 - **理由**：防止 XSS 窃取 Token，对国际化平台尤其重要
 - **架构约束**：
@@ -78,6 +78,41 @@
   - 登出时服务端将 Refresh Token 加入 Redis 黑名单（key 格式：`blacklist:rt:<token_hash>`）
   - Redis 黑名单 TTL = Refresh Token 剩余有效期
 - **影响文件**：`src/api/routes/auth.ts`，`src/lib/auth.ts`
+
+### ADR-003 AMENDMENT 2026-05-23（CHG-SN-8-CHORE-DOCS-DRIFT-SYNC）— TTL 事实同步
+
+**触发**：CHG-SN-8-FUP-SESSION-FIELDS-CONSUME-EP-A（commit dd71d1a2）已将 Access Token TTL 默认值从硬编码 15m 改为 KV `session_timeout_minutes` 驱动（默认 60m / 范围 [5, 1440]），引用 ADR-148 D-148-1..8 Opus A PASS（commit e34b1229）。同时 CHG-37 早期已将 Refresh Token TTL 从 7d 调整为 30d（见 `apps/api/src/lib/auth.ts:19` 注释 `// CHG-37: 7d → 30d`）。本 AMENDMENT 仿 ADR-105 / ADR-117 既有 AMENDMENT 范式追溯回填，**零新协议决策 / 零代码改动**。
+
+**TTL 实际值（2026-05-23 实证）**：
+
+| Token | 原 ADR-003 描述 | 当前生效值 | 变更来源 |
+|---|---|---|---|
+| Access Token | 15m 固定 | 默认 60m / 范围 [5, 1440] / KV `session_timeout_minutes` 驱动 | ADR-148（D-148-1..8 Opus A PASS / migration 066 seed） |
+| Refresh Token | 7d 固定 | 30d 固定 | CHG-37（`auth.ts:19` 注释 `// CHG-37: 7d → 30d`） |
+| Redis 黑名单 TTL | = Refresh Token 剩余有效期 | 不变（30d 自然延伸） | — |
+| user:rca Redis 缓存 TTL | （ADR-003 不涉及，ADR-139 引入） | `max(900, session_timeout_minutes * 60)` 秒 | R-148-4（ADR-139 user:rca 与动态 timeout 同步修复） |
+
+**架构约束不变**：
+
+- Access Token 仍**不存 `localStorage` / `sessionStorage`**（内存持有 / 仅请求 header `Authorization: Bearer`）— XSS 防御原则未受 TTL 改变影响
+- Refresh Token 仍**仅 HttpOnly + Secure Cookie 传递**，不在响应 body 中
+- Redis 黑名单写入逻辑（key 格式 `blacklist:rt:<token_hash>` + TTL 对齐 refresh 剩余有效期）不变
+- 与 ADR-139（角色变更 invalidate）兼容：access token `iat` 校验语义保持；R-148-4 同步修复 user:rca Redis TTL 避免动态 timeout 与缓存 TTL 失配导致权限穿越窗口
+
+**未在本 AMENDMENT 覆盖**（独立 ADR 决策）：
+
+- **session_max_concurrent 消费**（多并发会话 / 踢出策略）— N1-148-1 待独立 ADR-NNN 评估（需 user_sessions 表 + 跨设备 UX 决策）
+- **session_extend_on_activity 消费**（活跃 sliding renewal）— N1-148-2 待独立 ADR-NNN 评估（与本 ADR-003 「access token 不存 cookie」张力 / 需 X-New-Access-Token header 方案评估）
+- **KV 缓存升级 Redis**（每次查 DB → cache EX 60s）— N1-148-3 / login QPS > 100 触发
+
+**关联**：
+
+- ADR-148（access token TTL KV 驱动 / D-148-1..8 / Opus A PASS）— 本 AMENDMENT 引用的主依据
+- ADR-139（角色变更 invalidate / user:rca Redis 缓存）— R-148-4 兼容性修复点
+- ADR-146（admin webhook KV 消费同期范式 / fire-and-forget Dispatcher）— 同期 KV 字段消费协议
+- CHG-37（Refresh Token 7d → 30d 历史变更 / `auth.ts:19` 注释真源）
+
+**评级**：本 AMENDMENT **零决策 / 零代码 / 仅事实同步**，不进行 4 维度自评；引用既有 Opus PASS（ADR-148 A 级）作为真源。
 
 ---
 

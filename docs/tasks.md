@@ -6,4 +6,4 @@
 
 ## 进行中任务
 
-（空 — 上一任务 CHG-SN-8-FUP-SESSION-FIELDS-CONSUME-EP-B 已完成 / SEQ-20260521-06 P1+P2 GAPS 全部清零）
+（空 — 上一任务 CHG-SN-8-CHORE-DOCS-DRIFT-SYNC 已完成 / SEQ-20260521-06 #61 ✅ / ADR-003 描述同步 + MOD-PLAYER 状态漂移修正闭合）
