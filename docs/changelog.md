@@ -2823,3 +2823,47 @@ Plan-Revision: 无
 
 Cleanup-Audit: #G-shell-notifications ⚠️+🔄 → ⚠️+🔄 后端 + ADR 闭合（EP-B 前端 follow-up 待）
 Plan-Revision: 无
+
+
+## [CHG-SN-8-FUP-SHELL-NOTIFICATIONS-EP-B] ADR-147 前端实施 admin shell SWR 接入 + localStorage read + 5 单测 (#G-shell-notifications 完全闭合 3/3)
+
+- **完成时间**：2026-05-23
+- **记录时间**：2026-05-23 03:30
+- **执行模型**：claude-opus-4-7（续 EP-A 会话）
+- **子代理**：无（消费 EP-A 后端 + ADR-147 既定决策）
+- **修改文件**（4 代码 + 1 测试 + 3 文档）：
+  - `apps/server-next/src/lib/admin-shell-notifications.ts` — 新建（useAdminNotifications + useAdminTasks 双 hook + apiClient.get 复用 + 60s setInterval polling + cleanup + localStorage lastViewedAt + readIds Set session）
+  - `apps/server-next/src/app/admin/admin-shell-client.tsx` — mock → SWR hook（删 mockNotifications/mockTasks import + handleMarkAllNotificationsRead 用 markAllRead + handleNotificationItemClick 用 markOneRead + cancel/retry 改 toast 占位）
+  - `apps/server-next/src/lib/shell-data.tsx` — 删 mockNotifications + mockTasks exports + 清 unused NotificationItem/TaskItem import
+  - `tests/unit/lib/admin-shell-notifications.test.ts` — 5 用例（mount fetch / lastViewedAt 已读判定 / markAllRead 写 localStorage + 全部 read=true / markOneRead session readIds 不影响其他 / degraded 暴露）
+  - `docs/manual/GAPS.md` #G-shell-notifications ✅ **完全闭合 3/3**
+  - `docs/task-queue.md` SEQ-20260521-06 #57 ✅
+  - `docs/tasks.md` 清卡片
+- **新增依赖**：无
+- **数据库变更**：无
+- **设计要点**：
+  - **零 SWR 依赖**（沿用 EP-B PRESET-TEAM 范式）：useEffect + apiClient.get + setInterval 60s polling + clearInterval cleanup
+  - **read 状态前端计算**（ADR-147 D-147-4 方案 A）：`readIds.has(id) || createdAt <= lastViewedAt`
+  - **readIds Set session-only**：markOneRead 仅 session 弱反馈，不持久化；markAllRead 持久化到 localStorage
+  - **localStorage 异常兜底**：readStoredLastViewedAt / writeStoredLastViewedAt try-catch（隐私模式）
+  - **401 错误静默**：apiClient.get 401 抛 ApiClientError → catch 不刷新（避免 admin 注销后 polling loop 报错）
+  - **TaskAggregator degraded 透传**：useAdminTasks 暴露 degraded 状态给消费方（future 加 banner）
+  - **cancel/retry 占位**：CrawlerRun cancel + bull retry 真后端端点不在 ADR-147 范围；改 toast 「未实装」占位（N1-147-4 待立）
+- **不在范围**：
+  - CrawlerRun cancel + bull retry 真后端端点（N1-147-4 / 按需启动）
+  - per-user DB read 表（ADR-147 N1-147-1 / admin 多人协作时触发）
+  - SSE 实时推送（ADR-147 N1-147-3 / 同时在线 > 20 时触发）
+  - 白名单 KV 可配化（ADR-147 N1-147-2 / admin 反馈触发）
+- **验收**：
+  - typecheck PASS
+  - lint PASS
+  - 5 新单测 PASS（admin-shell-notifications.test.ts）
+  - 全 unit 4688/4689 PASS（1 pre-existing flaky 隔离 PASS / 与本卡 0 重叠）
+- **价值**：
+  - **#G-shell-notifications P1 完全闭合 3/3（ADR + 后端 + 前端）**：admin shell 通知 hub 全链路打通 — admin 在 dashboard 顶栏 60s 内可见任何 audit 触发的通知（mock badge 彻底消除）
+  - **零硬约束违反**：H1 零 mock 视图（shell-data.tsx mockNotifications/mockTasks 彻底删除）/ H4 零 UUID 输入（本卡无 UUID 交互）/ 函数 < 80 行 / 文件 < 500 行
+  - **零基础设施债**：复用 apiClient + admin-ui 真源 props 契约 + localStorage；零新依赖
+  - **闭合 SEQ-20260521-06 P1 GAPS**：webhook 框架 100% + shell notifications 100% — 仅剩 P2/P3 长尾 GAP 待清
+
+Cleanup-Audit: #G-shell-notifications ⚠️+🔄 → ✅ 完全闭合 3/3
+Plan-Revision: 无

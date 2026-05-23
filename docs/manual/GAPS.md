@@ -84,12 +84,12 @@
 ### #G-shell-notifications · 侧栏 mock badge 未接真端点
 
 - **页面**：用户问题 #1
-- **状态**：⚠️+🔄 **后端 + ADR 闭合**（2026-05-23 / ADR-147 A PASS + EP-A 后端 6 文件 + 14 单测 + 2 新端点）；剩余 EP-B 前端接入（~0.10w / 4 文件）
+- **状态**：✅ **完全闭合 3/3**（2026-05-23 / ADR-147 A PASS + EP-A 后端 + EP-B 前端全 PASS）
 - **优先级**：P1
 - **现象**：admin-shell-client.tsx:124-130 mockNotifications/mockTasks 仍是 stub；端点 `/admin/notifications` / `/admin/system/jobs` 不存在
 - **ADR-147 决策**（commit 2a8bc91a）：方案 A audit_log 子集映射（8 类白名单 actionType + level/href 映射，零新表）+ 方案 A 前端 polling 60s（零 SSE/WS 依赖）+ 方案 C 有主次 tasks 数据源（CrawlerRun 主源 + bull queue active 副源 + Redis 不可用降级）+ 方案 A localStorage lastViewedAt read 状态（MVP 不实装 per-user DB read）+ 零 R-MID-1 新增 + 零新依赖 + 2 新端点（GET /admin/notifications + GET /admin/system/jobs）+ 4 类 N1 升级路径预留（DB read / KV 白名单可配 / SSE / tasks 进度增强）
 - **后端实施 EP-A**（本卡 commit 待 / 2026-05-23）：CHG-SN-8-FUP-SHELL-NOTIFICATIONS-EP-A — packages/types/admin-shell.types.ts 新建（AdminNotificationItem + AdminTaskItem + Response 信封）+ NotificationService（白名单 ReadonlySet + 3 映射 Map + list 方法 SQL 子查询）+ TaskAggregator（CrawlerRun mapper + bull active mapper + Redis try-catch 降级 + id 前缀防冲突 + progress clamp）+ 2 route + server 注册 + 14 单测（9 NotificationService + 5 TaskAggregator）；ADR-147 §4 加 sub-heading 触发 verify-endpoint-adr 识别；186 admin 路由 ↔ 63 ADR 端点对齐
-- **前端 EP-B follow-up**：CHG-SN-8-FUP-SHELL-NOTIFICATIONS-EP-B 待立 — useAdminNotifications / useAdminTasks SWR hooks + admin-shell-client mock → SWR + localStorage lastViewedAt read state + shell-data.tsx 清理 mock exports；工时 ~0.10w
+- **前端实施 EP-B**（commit 待 / 2026-05-23）：CHG-SN-8-FUP-SHELL-NOTIFICATIONS-EP-B — admin-shell-notifications.ts 新建（useAdminNotifications + useAdminTasks 双 hook + apiClient.get + 60s setInterval polling + localStorage lastViewedAt + readIds Set session）+ admin-shell-client.tsx mock → hook + cancel/retry 改 toast 占位（N1-147-4 后端缺）+ shell-data.tsx 删 mockNotifications + mockTasks exports + 清 unused import + 5 新单测（mount fetch / lastViewedAt 已读判定 / markAllRead localStorage / markOneRead session readIds 不影响其他 / degraded 暴露）；全 unit 4688/4689 PASS（1 pre-existing flaky 隔离 PASS / 与本卡 0 重叠）
 
 ### #G-dev-mode-3panels · 开发者模式 3 栏只做 1 栏
 

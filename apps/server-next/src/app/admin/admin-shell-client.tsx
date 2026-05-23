@@ -17,7 +17,9 @@ import { useCallback, useContext, useMemo, useState } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import type { ReactNode } from 'react'
 import { AdminShell, inferBreadcrumbs, useToast } from '@resovo/admin-ui'
-import type { AdminNavSection, AdminShellUser, NotificationItem, TaskItem, UserMenuAction } from '@resovo/admin-ui'
+import type { AdminNavSection, AdminShellUser, NotificationItem, UserMenuAction } from '@resovo/admin-ui'
+// CHG-SN-8-FUP-SHELL-NOTIFICATIONS-EP-B / ADR-147：admin shell 通知 + 任务真端点
+import { useAdminNotifications, useAdminTasks } from '@/lib/admin-shell-notifications'
 import { UserMenuActionModal, type UserMenuActionModalType } from './_client/UserMenuActionModal'
 import { ThemeContext } from '@/contexts/BrandProvider'
 import { ADMIN_NAV } from '@/lib/admin-nav'
@@ -44,8 +46,6 @@ import {
   adminNavCountProviderStub,
   buildTopbarIconsStub,
   healthSnapshotStub,
-  mockNotifications,
-  mockTasks,
 } from '@/lib/shell-data'
 
 export interface AdminShellClientProps {
@@ -121,48 +121,38 @@ export function AdminShellClient({ defaultCollapsed, initialTheme, initialRole, 
     document.cookie = `${COOKIE_COLLAPSED}=${next}; path=/; max-age=31536000; SameSite=Lax`
   }, [])
 
-  // CHG-DESIGN-05：notifications / tasks 用 useState 持有 mock 数据，4 个交互 callback
-  // 真实修改 state，让点击产生可见反馈（演示完整 UI 交互通路）。
-  // M-SN-4+ 接入 /admin/notifications + /admin/system/jobs 真端点时：
-  //   - 数据源改 SWR hook 返回值（替代 useState 初始值）
-  //   - callback 改调用对应 PATCH/POST 端点 + revalidate；本地乐观更新可保留
-  const [notifications, setNotifications] = useState<readonly NotificationItem[]>(mockNotifications)
-  const [tasks, setTasks] = useState<readonly TaskItem[]>(mockTasks)
+  // CHG-SN-8-FUP-SHELL-NOTIFICATIONS-EP-B / ADR-147 D-147-2/4：60s polling + localStorage read
+  // notifications：read 状态由 useAdminNotifications 内部用 lastViewedAt 计算
+  // tasks：仅读，cancel/retry 端点 N1-147-4 待立（按需启动）
+  const { items: notifications, markAllRead, markOneRead } = useAdminNotifications()
+  const { items: tasks } = useAdminTasks()
 
   const handleNotificationItemClick = useCallback((item: NotificationItem) => {
-    setNotifications((prev) => prev.map((n) => (n.id === item.id ? { ...n, read: true } : n)))
+    markOneRead(item.id)
     if (item.href) router.push(item.href)
-  }, [router])
+  }, [markOneRead, router])
 
   const handleMarkAllNotificationsRead = useCallback(() => {
-    setNotifications((prev) => prev.map((n) => (n.read ? n : { ...n, read: true })))
-  }, [])
+    markAllRead()
+  }, [markAllRead])
 
-  const handleCancelTask = useCallback((taskId: string) => {
-    setTasks((prev) => prev.map((t) => {
-      if (t.id !== taskId) return t
-      return {
-        ...t,
-        status: 'failed' as const,
-        finishedAt: new Date().toISOString(),
-        errorMessage: '用户取消',
-      }
-    }))
-  }, [])
+  // CrawlerRun + bull job cancel/retry 端点尚未在 ADR-147 范围（N1-147-4 待立）；
+  // 维持现有 UX：当前 noop 不报错，按钮可见但点击无后端联动
+  const handleCancelTask = useCallback((_taskId: string) => {
+    toast.push({
+      title: '任务取消未实装',
+      description: 'CrawlerRun cancel 端点接入待 N1-147-4 follow-up；当前仅 read 视图',
+      level: 'info',
+    })
+  }, [toast])
 
-  const handleRetryTask = useCallback((taskId: string) => {
-    setTasks((prev) => prev.map((t) => {
-      if (t.id !== taskId) return t
-      // 重置为 running 形态：清掉 finishedAt / errorMessage，进度归零
-      return {
-        id: t.id,
-        title: t.title,
-        status: 'running' as const,
-        progress: 0,
-        startedAt: new Date().toISOString(),
-      }
-    }))
-  }, [])
+  const handleRetryTask = useCallback((_taskId: string) => {
+    toast.push({
+      title: '任务重试未实装',
+      description: 'bull job retry 端点接入待 N1-147-4 follow-up；当前仅 read 视图',
+      level: 'info',
+    })
+  }, [toast])
 
   return (
     <AdminShell
