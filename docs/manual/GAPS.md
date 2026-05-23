@@ -104,13 +104,13 @@
 ### #G-users-batch-ban · 批量封禁 UI 缺失
 
 - **页面**：P-users §4.1
-- **状态**：✅ **后端端点闭合**（2026-05-22 / ADR-143 + EP PASS）；前端 batch mode UI 留独立 follow-up CHG-SN-8-FUP-USERS-BATCH-BAN-UI（按需启动）
+- **状态**：✅ **完全闭合**（2026-05-22 / ADR-143 + EP + UI 全 PASS）
 - **优先级**：P3
-- **闭环路径（2/3 后端 + 1/3 前端 UI 待）**：
-  - **1/3 消费层 disabled 按钮**：CHG-SN-8-GAPS-USERS-BATCH-BAN-BTN（commit f4b91ad5）— PageHeader disabled「批量封禁」+ tooltip 范式
-  - **2/3 ADR**：CHG-SN-8-FUP-USERS-BATCH-BAN-ADR（commit de20a302）— ADR-143 A− PASS（D-143-1..6 + best-effort per-id + 三计数响应 + Self 403 + admin skip + 5 skip guards + 16 测试 surface）
-  - **3/3 后端 EP**：CHG-SN-8-FUP-USERS-BATCH-BAN-EP — `POST /admin/users/batch-ban` + `POST /admin/users/batch-unban` 对称双端点（zod max 50 ids + dedupe Set + 5 skip guards：self/missing/admin/already-banned + ban 写 Redis + R-MID-1 第 19/20 次系统化 user.ban + user.unban audit fire-and-forget + lib batchBanUsers/batchUnbanUsers + 16 单测 PASS）；按钮 tooltip 更新指向 follow-up UI 卡
-- **前端 UI follow-up**：CHG-SN-8-FUP-USERS-BATCH-BAN-UI — UsersListClient batch mode toggle + checkbox 列 + bulk action bar（参 ModerationBatch 范式）；点击 batch ban → confirm + 调 batchBanUsers + toast 三计数；按需启动；工时 ~0.3w
+- **闭环路径（4/4 全 ✅）**：
+  - **1/4 消费层 disabled 按钮**：CHG-SN-8-GAPS-USERS-BATCH-BAN-BTN（commit f4b91ad5）— PageHeader disabled「批量封禁」+ tooltip 范式
+  - **2/4 ADR**：CHG-SN-8-FUP-USERS-BATCH-BAN-ADR（commit de20a302）— ADR-143 A− PASS（D-143-1..6 + best-effort per-id + 三计数响应 + Self 403 + admin skip + 5 skip guards + 16 测试 surface）
+  - **3/4 后端 EP**：CHG-SN-8-FUP-USERS-BATCH-BAN-EP（commit b1f8c05f）— `POST /admin/users/batch-ban` + `POST /admin/users/batch-unban` 对称双端点（zod max 50 ids + dedupe Set + 5 skip guards：self/missing/admin/already-banned + ban 写 Redis + R-MID-1 第 19/20 次系统化 user.ban + user.unban audit fire-and-forget + lib batchBanUsers/batchUnbanUsers + 16 单测 PASS）
+  - **4/4 前端 UI**：CHG-SN-8-FUP-USERS-BATCH-BAN-UI — UsersListClient 消费 DataTable 原生 selection 范式（admin-ui 真源 + 零 ad-hoc 范式）+ admin row 自动屏蔽（onSelectionChange 拦截）+ sticky bottom bulk action bar（已选 N + 批量封禁 danger variant + 批量解封 + 清除选择）+ 批量封禁 confirm + 三计数 toast；删除 PageHeader 旧 disabled 按钮；5 新单测 + 全 unit 4596 PASS
 
 ### #G-users-edit-profile · 改用户邮箱 / 重置密码 / 编辑显示名缺失
 

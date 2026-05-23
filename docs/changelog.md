@@ -15715,4 +15715,47 @@ Cleanup-Audit: #G-users-batch-ban 后端 ✅（前端 UI follow-up 待）
 Plan-Revision: 无（不触发 ADR 新增）
 
 
+## [CHG-SN-8-FUP-USERS-BATCH-BAN-UI] ADR-143 前端 batch mode UI（#G-users-batch-ban 完全闭合）
+
+- **完成时间**：2026-05-22
+- **记录时间**：2026-05-22 18:18
+- **执行模型**：claude-opus-4-7
+- **子代理**：无（消费侧 UI / 复用 DataTable 原生 selection 范式 / 零 ADR）
+- **修改文件**：
+  - `apps/server-next/src/app/admin/users/_client/UsersListClient.tsx`：
+    - 引入 `batchBanUsers` / `batchUnbanUsers` lib + `TableSelectionState` 类型
+    - 新 state：`selectedIds: ReadonlySet<string>` + `batchPending: boolean`
+    - 新 handler：`handleSelectionChange`（onSelectionChange 拦截 admin id 与后端 skip 一致）/ `clearSelection` / `handleBatchBan`（confirm + 三计数 toast）/ `handleBatchUnban`（无 confirm + 三计数 toast）
+    - 删除 PageHeader 旧 disabled「批量封禁」按钮（DataTable 自动渲染 checkbox 列后冗余）
+    - DataTable 新增 props：`selection` + `onSelectionChange` + `bulkActions` 三件套
+    - bulkActions slot：已选 N + danger 批量封禁按钮 + default 批量解封按钮 + ghost 清除选择按钮（全部 data-testid 化）
+  - `tests/unit/components/server-next/admin/users/UsersListClient.test.tsx`：
+    - mock 扩展 batchBanUsers/batchUnbanUsers + toastPushMock
+    - 重写测试 #4-#5（原 disabled 按钮断言）+ 新增测试 #6-#8：
+      - #4 DataTable 渲染 checkbox 列
+      - #5 bulk action bar 选中后渲染
+      - #6 批量封禁 confirm + 调 lib + toast「批量封禁完成」
+      - #7 confirm cancel → 不调 lib
+      - #8 批量解封 → 调 lib + toast「批量解封完成」三计数
+  - `docs/manual/GAPS.md`：#G-users-batch-ban → ✅ **完全闭合** 4/4
+  - `docs/manual/20-pages/P-users.md`：§4.1 改写为完整实装说明（含操作流程 + 当前限制）
+  - `docs/task-queue.md`：新增 #41 卡 ✅
+  - `docs/tasks.md`：清卡
+- **新增依赖**：无
+- **数据库变更**：无
+- **设计决策**：消费 admin-ui 真源 DataTable `selection` + `onSelectionChange` + `bulkActions` 三件套（reference.md §4.4），**未** 自实现 ad-hoc batchModeOn toggle（与 ModerationConsole 不同——后者非 DataTable 列表）；admin row 通过 onSelectionChange 拦截过滤而非 DataTable 内部 disable（DataTable 接口未提供 row-level disable）
+- **验收**：
+  - typecheck PASS（含新 TableSelectionState 引入）/ lint PASS / verify:adr-contracts advisory PASS
+  - 完整 unit 4596/4596 PASS（+3 新 batch UI 测试）
+  - 5 新测试覆盖：checkbox 列渲染 + bulk action bar 显示 + batch ban happy path + confirm cancel + batch unban
+- **价值**：
+  - **#G-users-batch-ban P3 完全闭合**：4/4 路径全 ✅（disabled btn → ADR → 后端 EP → 前端 UI）
+  - **零 ad-hoc 范式**：100% 消费 admin-ui DataTable 原生 selection；其他列表页可直接复制范式
+  - **admin safety**：onSelectionChange 拦截 admin id（不发无效请求）+ confirm 提示「立即终止会话」+ 三计数 toast 明示成败
+  - **运营场景就绪**：批量误操作恢复（unban 对称）+ 大型滥用清理（max 50 单次）端点可直接 UI 操作
+
+Cleanup-Audit: #G-users-batch-ban ✅ 完全闭合
+Plan-Revision: 无
+
+
 

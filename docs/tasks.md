@@ -6,5 +6,5 @@
 
 ## 进行中任务
 
-（空 — 上一任务 CHG-SN-8-FUP-USERS-BATCH-BAN-EP 已完成）
+（空 — 上一任务 CHG-SN-8-FUP-USERS-BATCH-BAN-UI 已完成 / #G-users-batch-ban 完全闭合）
 

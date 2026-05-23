@@ -35,6 +35,7 @@ import {
   useToast,
   type AdminSelectOption,
   type TableSortState,
+  type TableSelectionState,
 } from '@resovo/admin-ui'
 import {
   listUsers,
@@ -42,6 +43,8 @@ import {
   unbanUser,
   updateUserRole,
   fetchUsersStats,
+  batchBanUsers,
+  batchUnbanUsers,
 } from '@/lib/users/api'
 import type { UserRow, UserRole, UserStats } from '@/lib/users/types'
 import { buildUserColumns } from './columns'
@@ -112,6 +115,9 @@ export function UsersListClient() {
   const [resetPwdTarget, setResetPwdTarget] = useState<UserRow | null>(null)
   const [editEmailTarget, setEditEmailTarget] = useState<UserRow | null>(null)
   const [editProfileTarget, setEditProfileTarget] = useState<UserRow | null>(null)
+  // CHG-SN-8-FUP-USERS-BATCH-BAN-UI / ADR-143 消费侧 — DataTable 原生 selection 范式
+  const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(new Set())
+  const [batchPending, setBatchPending] = useState(false)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
@@ -232,6 +238,62 @@ export function UsersListClient() {
   const handleEditProfile = useCallback((row: UserRow) => {
     setEditProfileTarget(row)
   }, [])
+
+  // CHG-SN-8-FUP-USERS-BATCH-BAN-UI：onSelectionChange 拦截 admin id（与后端 admin skip 一致，避免无效请求）
+  const handleSelectionChange = useCallback((next: TableSelectionState) => {
+    const adminIds = new Set(rows.filter((r) => r.role === 'admin').map((r) => r.id))
+    const filtered = new Set([...next.selectedKeys].filter((id) => !adminIds.has(id)))
+    setSelectedIds(filtered)
+  }, [rows])
+
+  const clearSelection = useCallback(() => setSelectedIds(new Set()), [])
+
+  const handleBatchBan = useCallback(async () => {
+    if (selectedIds.size === 0) return
+    if (!confirm(`确定批量封禁 ${selectedIds.size} 个用户？此操作将立即终止其会话（写 Redis session invalidate）；可通过批量解封恢复。`)) return
+    setBatchPending(true)
+    try {
+      const result = await batchBanUsers([...selectedIds])
+      toast.push({
+        title: '批量封禁完成',
+        description: `成功 ${result.banned} · 跳过 ${result.skipped} · 失败 ${result.failed}`,
+        level: result.failed > 0 ? 'warn' : 'success',
+      })
+      clearSelection()
+      refresh()
+    } catch (err: unknown) {
+      toast.push({
+        title: '批量封禁失败',
+        description: err instanceof Error ? err.message : '操作失败，请稍后重试',
+        level: 'danger',
+      })
+    } finally {
+      setBatchPending(false)
+    }
+  }, [selectedIds, clearSelection, refresh, toast])
+
+  const handleBatchUnban = useCallback(async () => {
+    if (selectedIds.size === 0) return
+    setBatchPending(true)
+    try {
+      const result = await batchUnbanUsers([...selectedIds])
+      toast.push({
+        title: '批量解封完成',
+        description: `成功 ${result.unbanned} · 跳过 ${result.skipped} · 失败 ${result.failed}`,
+        level: result.failed > 0 ? 'warn' : 'success',
+      })
+      clearSelection()
+      refresh()
+    } catch (err: unknown) {
+      toast.push({
+        title: '批量解封失败',
+        description: err instanceof Error ? err.message : '操作失败，请稍后重试',
+        level: 'danger',
+      })
+    } finally {
+      setBatchPending(false)
+    }
+  }, [selectedIds, clearSelection, refresh, toast])
 
   const columns = useMemo(
     () => buildUserColumns({
@@ -384,18 +446,8 @@ export function UsersListClient() {
             >
               邀请用户
             </AdminButton>
-            {/* CHG-SN-8-FUP-USERS-BATCH-BAN-EP：ADR-143 端点已实施（POST batch-ban max 50）；
-                前端 batch mode 选择 UI 留独立 follow-up CHG-SN-8-FUP-USERS-BATCH-BAN-UI（按需启动）；
-                按钮维持 disabled+tooltip 范式至 UI 实施 */}
-            <AdminButton
-              variant="default"
-              size="sm"
-              disabled
-              title="后端端点已就绪（POST /admin/users/batch-ban max 50；ADR-143 / GAPS.md #G-users-batch-ban）；批量选择 UI 待 follow-up CHG-SN-8-FUP-USERS-BATCH-BAN-UI（端点实施已完成 CHG-SN-8-FUP-USERS-BATCH-BAN-EP）"
-              data-testid="users-batch-ban-disabled"
-            >
-              批量封禁
-            </AdminButton>
+            {/* CHG-SN-8-FUP-USERS-BATCH-BAN-UI / ADR-143：batch ban/unban 通过表格 checkbox + 底部 bulk action bar 触发
+                （DataTable 原生 selection 范式 + admin row 自动屏蔽）；选中后会出现批量操作条 */}
             <AdminButton
               variant="default"
               size="sm"
@@ -464,6 +516,42 @@ export function UsersListClient() {
                 emptyState={<EmptyState title="暂无用户" description="调整筛选条件后重试" />}
                 data-testid="users-table"
                 enableHeaderMenu
+                selection={{ selectedKeys: selectedIds, mode: 'page' }}
+                onSelectionChange={handleSelectionChange}
+                bulkActions={
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }} data-testid="users-bulk-actions">
+                    <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--fg-default)' }}>
+                      已选 {selectedIds.size} 个用户
+                    </span>
+                    <AdminButton
+                      variant="danger"
+                      size="sm"
+                      onClick={() => void handleBatchBan()}
+                      disabled={batchPending || selectedIds.size === 0}
+                      data-testid="users-bulk-ban-btn"
+                    >
+                      {batchPending ? '处理中…' : `批量封禁 (${selectedIds.size})`}
+                    </AdminButton>
+                    <AdminButton
+                      variant="default"
+                      size="sm"
+                      onClick={() => void handleBatchUnban()}
+                      disabled={batchPending || selectedIds.size === 0}
+                      data-testid="users-bulk-unban-btn"
+                    >
+                      {batchPending ? '处理中…' : `批量解封 (${selectedIds.size})`}
+                    </AdminButton>
+                    <AdminButton
+                      variant="ghost"
+                      size="sm"
+                      onClick={clearSelection}
+                      disabled={batchPending}
+                      data-testid="users-bulk-clear-btn"
+                    >
+                      清除选择
+                    </AdminButton>
+                  </span>
+                }
                 toolbar={{
                   search: toolbarSearch,
                   trailing: toolbarTrailing,
