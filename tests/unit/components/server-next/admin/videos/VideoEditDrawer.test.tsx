@@ -18,6 +18,8 @@ import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 vi.mock('@/lib/videos/api', () => ({
   getVideo: vi.fn(),
   patchVideoMeta: vi.fn(),
+  // CHG-SN-8-FUP-VIDEO-MANUAL-ADD-EP-B / ADR-145：创建模式新增
+  createVideo: vi.fn(),
 }))
 
 vi.mock('@resovo/admin-ui', async () => {
@@ -63,7 +65,7 @@ function makeVideo(overrides: Partial<VideoAdminDetail> = {}): VideoAdminDetail 
   }
 }
 
-function renderDrawer(videoId = 'v1', onSaved = vi.fn(), onClose = vi.fn()) {
+function renderDrawer(videoId: string | null = 'v1', onSaved = vi.fn(), onClose = vi.fn()) {
   return render(
     <VideoEditDrawer
       open={true}
@@ -171,5 +173,61 @@ describe('VideoEditDrawer — 取消', () => {
     await waitFor(() => screen.getByTestId('data-video-edit-cancel'))
     fireEvent.click(screen.getByTestId('data-video-edit-cancel'))
     expect(onClose).toHaveBeenCalledTimes(1)
+  })
+})
+
+// CHG-SN-8-FUP-VIDEO-MANUAL-ADD-EP-B / ADR-145：创建模式（videoId=null）
+describe('VideoEditDrawer — 创建模式 (ADR-145)', () => {
+  beforeEach(() => {
+    vi.mocked(videoApi.getVideo).mockClear()
+    vi.mocked(videoApi.createVideo).mockClear()
+  })
+
+  it('videoId=null → 渲染「+ 添加视频」header + 「创建视频」按钮 + 不调 getVideo', async () => {
+    renderDrawer(null)
+    await waitFor(() => screen.getByText('+ 添加视频'))
+    // 不调 getVideo（创建模式跳过 fetch）
+    expect(vi.mocked(videoApi.getVideo)).not.toHaveBeenCalled()
+    // 提交按钮文案
+    const btn = await waitFor(() => screen.getByTestId('data-video-edit-submit'))
+    expect(btn.textContent).toBe('创建视频')
+  })
+
+  it('videoId=null + title 填写 → 提交调 createVideo + onSaved + onClose', async () => {
+    vi.mocked(videoApi.createVideo).mockResolvedValue({
+      id: 'new-1', shortId: 'aB3', title: '新视频', type: 'movie',
+      catalogId: 'cat-1', reviewStatus: 'pending_review',
+      visibilityStatus: 'internal', isPublished: false,
+      createdAt: '2026-05-22T20:00:00.000Z',
+    })
+    const onSaved = vi.fn()
+    const onClose = vi.fn()
+    renderDrawer(null, onSaved, onClose)
+    await waitFor(() => screen.getByTestId('data-video-edit-submit'))
+    // 填写 title（找 input by 占位符或 label）
+    const titleInputs = document.querySelectorAll('input')
+    const titleInput = Array.from(titleInputs).find((i) => i.name === 'title' || i.getAttribute('data-field') === 'title') ?? titleInputs[0]
+    if (titleInput) {
+      fireEvent.change(titleInput, { target: { value: '新视频' } })
+    }
+    const btn = screen.getByTestId('data-video-edit-submit') as HTMLButtonElement
+    await act(async () => { fireEvent.click(btn) })
+    await waitFor(() => {
+      expect(vi.mocked(videoApi.createVideo)).toHaveBeenCalled()
+    })
+    expect(onSaved).toHaveBeenCalled()
+    expect(onClose).toHaveBeenCalled()
+  })
+
+  it('videoId=null → 非 basic tab 按钮 disabled（lines/images/douban 需先创建）', async () => {
+    renderDrawer(null)
+    await waitFor(() => screen.getByText('+ 添加视频'))
+    const tabBtns = document.querySelectorAll('[role="tab"]')
+    expect(tabBtns.length).toBeGreaterThanOrEqual(4)
+    // basic 不 disabled / 其他 disabled
+    const basicBtn = Array.from(tabBtns).find((b) => b.textContent?.includes('基础信息'))!
+    const linesBtn = Array.from(tabBtns).find((b) => b.textContent?.includes('线路管理'))!
+    expect(basicBtn.hasAttribute('disabled')).toBe(false)
+    expect(linesBtn.hasAttribute('disabled')).toBe(true)
   })
 })

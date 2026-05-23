@@ -42,12 +42,12 @@
 ### #G-videos-add · 视频库「+ 添加视频」按钮
 
 - **页面**：P-videos §3.5 / §7 FAQ
-- **状态**：✅ **后端闭合**（2026-05-22 / ADR-145 + EP-A 全 PASS）；前端 VideoEditDrawer 双模式 + 按钮 enable 留独立 follow-up CHG-SN-8-FUP-VIDEO-MANUAL-ADD-EP-B（按需启动）
+- **状态**：✅ **完全闭合**（2026-05-22 / ADR-145 + EP-A + EP-B 全 PASS）
 - **优先级**：P2
 - **现状**：VideoListClient.tsx 按钮 disabled + tooltip；POST /admin/videos 端点已注册但存在 6 项技术债（绕过 MediaCatalogService.findOrCreate / Record<string,unknown> 无类型 / 零 audit / 零重复检测 / 无 publishMode / locked_fields 不保护）
 - **ADR-145 决策**：方案 C 最小 3 字段（title/type/contentRating 必填 + 14 元数据 optional）+ 方案 B 重复检测（findOrCreate isNewlyCreated + force 跳过）+ 方案 B catalog 复用 findOrCreate(metadataSource='manual') + 方案 C publishMode 三路径（draft/staging 默认/published）+ R-MID-1 第 24 次系统化（video.manual_add）+ 零新 ErrorCode（复用 STATE_CONFLICT）+ VideoEditDrawer 双模式（videoId=null 创建 / 有值编辑）+ 7 关联 ADR 实证
 - **后端实施 EP-A**（本卡 commit 待 / 2026-05-22）：CHG-SN-8-FUP-VIDEO-MANUAL-ADD-EP-A — 4 R-MID-1 真源同步（types union + ACTION_TYPES + 2 set-equal 测试）+ VideoService.create 重构（MediaCatalogService.findOrCreate metadataSource='manual' + 重复检测 SELECT count + publishMode 三路径状态机 + audit fire-and-forget）+ Route ManualAddVideoSchema + 409 STATE_CONFLICT detail 处理 + 20 单测 PASS（happy 5 + 重复检测 4 + catalog 同步 3 + audit 4 + 422 validation 3 + 401 权限 1）；修复 ADR-145 §1 列出的 6 项现有技术债
-- **前端实装 follow-up EP-B**：CHG-SN-8-FUP-VIDEO-MANUAL-ADD-EP-B — VideoEditDrawer 双模式（videoId=null 创建空表单 POST + 文案"添加视频" + lines/images/douban tab disabled）+ VideoListClient PageHeader 按钮 enable + 前端单测；工时 ~40 min
+- **前端实装 EP-B**（本卡 commit 待 / 2026-05-22）：CHG-SN-8-FUP-VIDEO-MANUAL-ADD-EP-B — createVideo lib 封装 + VideoEditDrawer 双模式（videoId=null 创建空表单 POST + 文案「+ 添加视频」/「创建视频」+ lines/images/douban tab disabled 不可点）+ VideoListClient drawerTarget state（'closed' | null | string）+ PageHeader 按钮 enable + 3 新单测（创建模式渲染 + 提交 + tab disabled）；全 unit 4644/4645 PASS
 
 ### #G-moderation-batch-ui · 批量审核独立入口
 

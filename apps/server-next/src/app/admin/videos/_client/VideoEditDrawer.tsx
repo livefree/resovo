@@ -3,10 +3,11 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { Drawer, LoadingState, ErrorState, VisChip, DualSignal, Thumb } from '@resovo/admin-ui'
 import type { VideoAdminDetail } from '@/lib/videos'
-import { getVideo, patchVideoMeta } from '@/lib/videos/api'
+import { getVideo, patchVideoMeta, createVideo } from '@/lib/videos/api'
+import type { VideoType } from '@resovo/types'
 import type { TabKey, FormState } from './_videoEdit/types'
 import { EMPTY_FORM } from './_videoEdit/types'
-import { videoToForm, formToPatch } from './_videoEdit/form-helpers'
+import { videoToForm, formToPatch, splitComma } from './_videoEdit/form-helpers'
 import { TabBasicInfo } from './_videoEdit/TabBasicInfo'
 import { TabLines } from './_videoEdit/TabLines'
 import { TabImages } from './_videoEdit/TabImages'
@@ -71,6 +72,8 @@ const TABS: ReadonlyArray<{ id: TabKey; label: string }> = [
 ]
 
 export function VideoEditDrawer({ open, videoId, onClose, onSaved }: VideoEditDrawerProps) {
+  // CHG-SN-8-FUP-VIDEO-MANUAL-ADD-EP-B / ADR-145：双模式 — videoId=null 创建 / 有值编辑
+  const isCreating = videoId === null
   const [video, setVideo] = useState<VideoAdminDetail | null>(null)
   const [form, setForm] = useState<FormState>(EMPTY_FORM)
   const [original, setOriginal] = useState<FormState>(EMPTY_FORM)
@@ -83,12 +86,22 @@ export function VideoEditDrawer({ open, videoId, onClose, onSaved }: VideoEditDr
   const [fullscreen, setFullscreen] = useState(false)
 
   useEffect(() => {
-    if (!open || !videoId) return
+    if (!open) return
+    setSkippedFields([])
+    setSubmitError(undefined)
+    setTab('basic')
+    if (videoId === null) {
+      // 创建模式：清空表单 + 不 fetch
+      setVideo(null)
+      setForm(EMPTY_FORM)
+      setOriginal(EMPTY_FORM)
+      setLoading(false)
+      setLoadError(undefined)
+      return
+    }
     let cancelled = false
     setLoading(true)
     setLoadError(undefined)
-    setSkippedFields([])
-    setTab('basic')
     getVideo(videoId)
       .then((v) => {
         if (cancelled) return
@@ -108,12 +121,38 @@ export function VideoEditDrawer({ open, videoId, onClose, onSaved }: VideoEditDr
 
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!form.title.trim() || !videoId) return
-    const patch = formToPatch(original, form)
-    if (Object.keys(patch).length === 0) { onClose(); return }
+    if (!form.title.trim()) return
     setSubmitting(true)
     setSubmitError(undefined)
     try {
+      if (isCreating) {
+        // CHG-SN-8-FUP-VIDEO-MANUAL-ADD-EP-B：创建模式调 POST /admin/videos
+        await createVideo({
+          title: form.title.trim(),
+          type: (form.type as VideoType) ?? 'movie',
+          contentRating: 'general',
+          publishMode: 'staging',  // 默认入 staging 走标准审核流（admin 可后续走 Drawer 编辑模式改 visibility）
+          titleEn: form.titleEn || null,
+          description: form.description || null,
+          year: form.year ? Number(form.year) : null,
+          country: form.country || null,
+          episodeCount: form.episodeCount ? Number(form.episodeCount) : undefined,
+          status: form.status || undefined,
+          rating: form.rating ? Number(form.rating) : null,
+          director: splitComma(form.director),
+          cast: splitComma(form.cast),
+          writers: splitComma(form.writers),
+          genres: splitComma(form.genres),
+          doubanId: form.doubanId || null,
+        })
+        onSaved()
+        onClose()
+        return
+      }
+      // 编辑模式（原 PATCH 路径）
+      if (!videoId) return
+      const patch = formToPatch(original, form)
+      if (Object.keys(patch).length === 0) { onClose(); return }
       const result = await patchVideoMeta(videoId, patch)
       if (result.skippedFields.length > 0) {
         setSkippedFields(result.skippedFields)
@@ -126,7 +165,7 @@ export function VideoEditDrawer({ open, videoId, onClose, onSaved }: VideoEditDr
     } finally {
       setSubmitting(false)
     }
-  }, [form, original, videoId, onClose, onSaved])
+  }, [form, original, videoId, isCreating, onClose, onSaved])
 
   const retryLoad = useCallback(() => {
     if (!videoId) return
@@ -159,7 +198,7 @@ export function VideoEditDrawer({ open, videoId, onClose, onSaved }: VideoEditDr
         {/* self-rendered header: title + fullscreen + close */}
         <div style={SELF_HEADER}>
           <span style={SELF_TITLE}>
-            {video ? `编辑 · ${video.title}` : '编辑视频'}
+            {isCreating ? '+ 添加视频' : video ? `编辑 · ${video.title}` : '编辑视频'}
           </span>
           <button
             type="button" style={ICON_BTN}
@@ -175,36 +214,43 @@ export function VideoEditDrawer({ open, videoId, onClose, onSaved }: VideoEditDr
         {loading && !video && <LoadingState variant="spinner" />}
         {loadError && !video && <ErrorState error={loadError} title="加载失败" onRetry={retryLoad} />}
 
-        {video && (
+        {(video || isCreating) && (
           <>
-            {/* tab bar */}
+            {/* tab bar — 创建模式仅 basic tab 可点（lines/images/douban 需先创建视频）*/}
             <div style={TAB_BAR} role="tablist">
-              {TABS.map((t) => (
-                <button
-                  key={t.id} type="button" role="tab"
-                  aria-selected={tab === t.id}
-                  style={tabBtnStyle(tab === t.id)}
-                  onClick={() => setTab(t.id)}
-                >
-                  {t.label}
-                </button>
-              ))}
+              {TABS.map((t) => {
+                const disabled = isCreating && t.id !== 'basic'
+                return (
+                  <button
+                    key={t.id} type="button" role="tab"
+                    aria-selected={tab === t.id}
+                    style={{ ...tabBtnStyle(tab === t.id), opacity: disabled ? 0.4 : 1, cursor: disabled ? 'not-allowed' : 'pointer' }}
+                    onClick={() => { if (!disabled) setTab(t.id) }}
+                    disabled={disabled}
+                    title={disabled ? '需先保存创建视频后才能管理' : undefined}
+                  >
+                    {t.label}
+                  </button>
+                )
+              })}
             </div>
 
-            {/* quick header */}
-            <div style={QUICK_HEAD}>
-              <Thumb src={video.cover_url} size="poster-sm" loading="eager" />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 'var(--font-size-sm-tight)', fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {video.title}
+            {/* quick header — 仅编辑模式渲染（创建模式无 video 对象）*/}
+            {video && !isCreating && (
+              <div style={QUICK_HEAD}>
+                <Thumb src={video.cover_url} size="poster-sm" loading="eager" />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 'var(--font-size-sm-tight)', fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {video.title}
+                  </div>
+                  <div style={{ fontSize: 'var(--font-size-xxs)', color: 'var(--fg-muted)' }}>
+                    ID <code>{video.id}</code> · {video.type} · {video.year ?? '—'} · {video.source_count} 源
+                  </div>
                 </div>
-                <div style={{ fontSize: 'var(--font-size-xxs)', color: 'var(--fg-muted)' }}>
-                  ID <code>{video.id}</code> · {video.type} · {video.year ?? '—'} · {video.source_count} 源
-                </div>
+                <VisChip visibility={visibility} review={review} />
+                <DualSignal probe="unknown" render="unknown" />
               </div>
-              <VisChip visibility={visibility} review={review} />
-              <DualSignal probe="unknown" render="unknown" />
-            </div>
+            )}
 
             {/* tab content */}
             <form
@@ -221,7 +267,7 @@ export function VideoEditDrawer({ open, videoId, onClose, onSaved }: VideoEditDr
                 )}
                 {tab === 'lines' && videoId && <TabLines videoId={videoId} />}
                 {tab === 'images' && videoId && <TabImages videoId={videoId} />}
-                {tab === 'douban' && videoId && (
+                {tab === 'douban' && videoId && video && (
                   <TabDouban
                     videoId={videoId}
                     doubanStatus={video.douban_status}
@@ -233,12 +279,12 @@ export function VideoEditDrawer({ open, videoId, onClose, onSaved }: VideoEditDr
               </div>
               <div style={FOOTER}>
                 <span style={{ fontSize: 'var(--font-size-xxs)', color: 'var(--fg-muted)' }}>
-                  {lastEdit ? `最后编辑 · ${lastEdit}` : '最后编辑 · —'}
+                  {isCreating ? '创建后默认入 staging 待审核（admin 可后续编辑改 visibility）' : lastEdit ? `最后编辑 · ${lastEdit}` : '最后编辑 · —'}
                 </span>
                 <span style={{ flex: 1 }} />
                 <button type="button" style={BTN_GHOST} onClick={onClose} data-testid="data-video-edit-cancel">取消</button>
                 <button type="submit" style={BTN_PRIMARY} disabled={submitting || !form.title.trim()} data-testid="data-video-edit-submit">
-                  {submitting ? '保存中…' : '保存更改'}
+                  {submitting ? (isCreating ? '创建中…' : '保存中…') : (isCreating ? '创建视频' : '保存更改')}
                 </button>
               </div>
             </form>

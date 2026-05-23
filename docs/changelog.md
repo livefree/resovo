@@ -15968,4 +15968,41 @@ Cleanup-Audit: #G-videos-add 后端 ✅（前端 follow-up CHG-SN-8-FUP-VIDEO-MA
 Plan-Revision: 无（按 ADR-145 既定决策实施）
 
 
+## [CHG-SN-8-FUP-VIDEO-MANUAL-ADD-EP-B] ADR-145 前端实施 — VideoEditDrawer 双模式 + 按钮 enable (#G-videos-add 完全闭合)
+
+- **完成时间**：2026-05-22
+- **记录时间**：2026-05-22 23:10
+- **执行模型**：claude-opus-4-7
+- **子代理**：无（按 ADR-145 既定决策实施 / 消费 EP-A 后端端点）
+- **修改文件**（4 文件 + 4 文档）：
+  - `apps/server-next/src/lib/videos/api.ts` — 新增 `createVideo(input: ManualAddVideoInput)` lib 封装 + `VideoPublishMode` / `ManualAddVideoInput` / `ManualAddVideoResult` 3 类型
+  - `apps/server-next/src/app/admin/videos/_client/VideoEditDrawer.tsx` — 引入 createVideo / VideoType / splitComma；hook 新增 `isCreating = videoId === null` 判定；useEffect 拆双路径（创建：clear form + skip fetch / 编辑：fetch as before）；handleSubmit 分支（创建调 createVideo + form 字段转换 splitComma + Number conv / 编辑保留 PATCH）；render 加 isCreating 时的 header 「+ 添加视频」+ tab disabled lines/images/douban（cursor not-allowed + title 提示）+ footer 文案「创建中…/创建视频」+ 「创建后默认入 staging」说明
+  - `apps/server-next/src/app/admin/videos/_client/VideoListClient.tsx` — `editVideoId` state 改 `drawerTarget: 'closed' | null | string`（'closed' 关闭 / null 创建 / string 编辑）+ adapter 函数兼容现有 setEditVideoId 调用；PageHeader 「+ 手动添加视频」按钮去 disabled + onClick → `setDrawerTarget(null)` + title 改 ADR-145 提示
+  - `tests/unit/components/server-next/admin/videos/VideoEditDrawer.test.tsx` — vi.mock 加 createVideo + renderDrawer 签名加 `string | null` + 3 新测试组（创建模式 header + 提交调 createVideo + tab disabled）+ beforeEach mock 清理
+  - `docs/manual/GAPS.md` — #G-videos-add → ✅ **完全闭合**
+  - `docs/manual/20-pages/P-videos.md` — §3.5 状态完全实装
+  - `docs/task-queue.md` SEQ-20260521-06 #47 ✅
+  - `docs/tasks.md` 清卡片
+- **新增依赖**：无
+- **数据库变更**：无
+- **关键实现注意**：
+  - drawerTarget 三态：避免 editVideoId='string | null' 二元状态无法区分「关闭」与「创建模式」（null 同时表示这两个语义不可行）
+  - form 字段转换：form.year/episodeCount/rating 是 string 形态需 Number()；director/cast/writers/genres 是 CSV string 需 splitComma；status='' 转 undefined（zod default 处理）
+  - tab disabled：仅 basic tab 可点；lines/images/douban 需先创建视频后才能管理（与 ADR-145 §3 D-145-7 一致）
+  - 默认 publishMode='staging'：admin 创建后入待审核状态（与 ADR-145 §3 D-145-4 默认安全策略一致）
+- **验收**：
+  - typecheck PASS（含 drawerTarget 联合类型 + form 字段转换类型完整）
+  - lint PASS / 全 unit 4644/4645 PASS（+3 新测试；1 pre-existing flaky CrawlerClient #14b CSV toast 隔离 PASS 不阻塞）
+  - 3 新单测覆盖：创建模式渲染（header + 按钮文案 + 不调 getVideo）/ 提交调 createVideo + onSaved + onClose / lines tab disabled
+- **价值**：
+  - **#G-videos-add P2 完全闭合**：4/4 路径全 ✅（disabled btn → ADR-145 → 后端 EP-A → 前端 EP-B）
+  - **零新依赖 / 零新组件**：复用 VideoEditDrawer 双模式（组件数量不增 + 完整 tab 结构复用）
+  - **运营场景就绪**：admin 可直接点 + 创建视频（数据修复 / 测试条目 / 冷门片源补录）
+  - **默认安全**：publishMode='staging' 默认入待审核（admin 可后续编辑改 visibility / 走标准审核流）
+- **下一步**：无（#G-videos-add 完全闭合）
+
+Cleanup-Audit: #G-videos-add ✅ 完全闭合（4/4 全 ✅）
+Plan-Revision: 无
+
+
 

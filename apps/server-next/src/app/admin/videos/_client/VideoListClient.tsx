@@ -456,7 +456,12 @@ export function VideoListClient() {
   const [retryKey, setRetryKey] = useState(0)
   const [sites, setSites] = useState<readonly CrawlerSite[]>([])
   const [selection, setSelection] = useState<TableSelectionState>({ selectedKeys: new Set(), mode: 'page' })
-  const [editVideoId, setEditVideoId] = useState<string | null>(null)
+  // CHG-SN-8-FUP-VIDEO-MANUAL-ADD-EP-B / ADR-145：Drawer 双模式
+  // 'closed' = 关闭 / null = 创建模式 / string = 编辑模式（videoId）
+  const [drawerTarget, setDrawerTarget] = useState<'closed' | null | string>('closed')
+  const editVideoId = drawerTarget === 'closed' ? null : drawerTarget
+  const drawerOpen = drawerTarget !== 'closed'
+  const setEditVideoId = (id: string | null) => setDrawerTarget(id === null ? 'closed' : id)
 
   // CHG-DESIGN-08 8B：saved views（personal localStorage / team mock 暂空）
   // 4 默认 views（reference §5.3「我的待审/本周/封面失效/团队新增上架」）留 follow-up
@@ -677,10 +682,10 @@ export function VideoListClient() {
           </button>
           <button
             type="button"
-            style={{ ...HEAD_BTN_PRIMARY_STYLE, ...HEAD_BTN_DISABLED_OVERLAY }}
+            style={HEAD_BTN_PRIMARY_STYLE}
             data-page-action="add-video"
-            disabled
-            title="功能开发中（follow-up VIDEO-MANUAL-ADD）"
+            onClick={() => setDrawerTarget(null)}
+            title="打开 VideoEditDrawer 创建模式 + POST /admin/videos（ADR-145）"
           >
             手动添加视频
           </button>
@@ -724,10 +729,10 @@ export function VideoListClient() {
           )
       }
       <VideoEditDrawer
-        open={editVideoId !== null}
+        open={drawerOpen}
         videoId={editVideoId}
-        onClose={() => setEditVideoId(null)}
-        onSaved={() => { setEditVideoId(null); setRetryKey((k) => k + 1) }}
+        onClose={() => setDrawerTarget('closed')}
+        onSaved={() => { setDrawerTarget('closed'); setRetryKey((k) => k + 1) }}
       />
     </div>
   )

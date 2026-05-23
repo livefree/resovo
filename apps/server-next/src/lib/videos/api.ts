@@ -39,6 +39,48 @@ export async function getVideo(id: string): Promise<VideoAdminDetail> {
   return res.data
 }
 
+// ── 手动添加视频（ADR-145 / CHG-SN-8-FUP-VIDEO-MANUAL-ADD-EP-A）─────
+
+export type VideoPublishMode = 'draft' | 'staging' | 'published'
+
+export interface ManualAddVideoInput {
+  title: string
+  type: string
+  contentRating?: 'general' | 'adult'
+  publishMode?: VideoPublishMode
+  force?: boolean
+  titleEn?: string | null
+  description?: string | null
+  coverUrl?: string | null
+  year?: number | null
+  country?: string | null
+  episodeCount?: number
+  status?: 'ongoing' | 'completed'
+  rating?: number | null
+  director?: string[]
+  cast?: string[]
+  writers?: string[]
+  genres?: string[]
+  doubanId?: string | null
+}
+
+export interface ManualAddVideoResult {
+  id: string
+  shortId: string
+  title: string
+  type: string
+  catalogId: string
+  reviewStatus: 'pending_review' | 'approved'
+  visibilityStatus: string
+  isPublished: boolean
+  createdAt: string
+}
+
+export async function createVideo(input: ManualAddVideoInput): Promise<ManualAddVideoResult> {
+  const res = await apiClient.post<{ data: ManualAddVideoResult }>(`/admin/videos`, input)
+  return res.data
+}
+
 // ── 元数据编辑 ────────────────────────────────────────────────────
 
 export interface PatchVideoResult {

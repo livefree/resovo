@@ -86,7 +86,7 @@
 
 ### 3.5 添加视频（PageHeader「+ 添加视频」）
 
-- **状态**：✅ **后端实装完成**（ADR-145 + EP-A 闭合 / 2026-05-22）；前端按钮启用 + Drawer 双模式留独立 follow-up CHG-SN-8-FUP-VIDEO-MANUAL-ADD-EP-B
+- **状态**：✅ **完全实装**（ADR-145 + EP-A + EP-B 闭合 / 2026-05-22）；端到端可用
 - **ADR-145 决策**：
   - 行为：VideoEditDrawer 双模式（videoId=null → 创建空表单 POST /admin/videos / videoId 有值 → 编辑模式 PATCH）
   - **必填 3 字段**：title / type / contentRating（与 crawler year=null 8% 实证一致，year/sourceUrl 改 optional）
