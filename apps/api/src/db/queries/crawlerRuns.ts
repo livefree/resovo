@@ -219,8 +219,15 @@ export async function listActiveRunIds(db: Pool): Promise<string[]> {
   return result.rows.map((row) => row.id)
 }
 
-export async function syncRunStatusFromTasks(db: Pool, runId: string): Promise<void> {
-  await db.query(
+// CHG-SN-8-FUP-WEBHOOK-IMPL-EP-A2.1 / ADR-146：返回 newStatus 供调用方判断是否触发 webhook
+export interface SyncRunStatusResult {
+  status: CrawlerRunStatus
+  siteKey: string | null
+  summary: Record<string, unknown> | null
+}
+
+export async function syncRunStatusFromTasks(db: Pool, runId: string): Promise<SyncRunStatusResult | null> {
+  const result = await db.query<{ status: CrawlerRunStatus; site_key: string | null; summary: Record<string, unknown> | null }>(
     `WITH agg AS (
        SELECT
          COUNT(*)::int AS total,
@@ -273,7 +280,11 @@ export async function syncRunStatusFromTasks(db: Pool, runId: string): Promise<v
            'errors', a.errors
          )
      FROM agg a
-     WHERE r.id = $1`,
+     WHERE r.id = $1
+     RETURNING r.status, r.site_key, r.summary`,
     [runId],
   )
+  const row = result.rows[0]
+  if (!row) return null
+  return { status: row.status, siteKey: row.site_key, summary: row.summary }
 }

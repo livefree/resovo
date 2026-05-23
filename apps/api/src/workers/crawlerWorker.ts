@@ -14,6 +14,9 @@ import { es } from '@/api/lib/elasticsearch'
 import { baseLogger, withJob } from '@/api/lib/logger'
 import { CrawlerService } from '@/api/services/CrawlerService'
 import { CrawlerRefetchService } from '@/api/services/CrawlerRefetchService'
+// CHG-SN-8-FUP-WEBHOOK-IMPL-EP-A2.1 / ADR-146：crawler run failed → 触发 webhook
+import { WebhookDispatcher, SYSTEM_ACTOR_ID } from '@/api/services/WebhookDispatcher'
+import { AuditLogService } from '@/api/services/AuditLogService'
 import * as crawlerSitesQueries from '@/api/db/queries/crawlerSites'
 import * as crawlerTasksQueries from '@/api/db/queries/crawlerTasks'
 import { createCrawlerTaskLog } from '@/api/db/queries/crawlerTaskLogs'
@@ -456,7 +459,22 @@ async function processCrawlJob(job: Bull.Job<CrawlJobData>): Promise<CrawlJobRes
     // 确保 signal 已中止，释放可能持有该 signal 的资源
     if (!abortController.signal.aborted) abortController.abort('JOB_DONE')
     if (runId) {
-      await crawlerRunsQueries.syncRunStatusFromTasks(db, runId)
+      const syncResult = await crawlerRunsQueries.syncRunStatusFromTasks(db, runId)
+      // CHG-SN-8-FUP-WEBHOOK-IMPL-EP-A2.1 / ADR-146：run 最终态 failed/partial_failed 时触发 webhook
+      if (syncResult && (syncResult.status === 'failed' || syncResult.status === 'partial_failed')) {
+        try {
+          const webhookDispatcher = new WebhookDispatcher(db, new AuditLogService(db))
+          webhookDispatcher.enqueue('crawler.run.failed', {
+            runId,
+            siteKey: syncResult.siteKey,
+            status: syncResult.status,
+            summary: syncResult.summary,
+          }, SYSTEM_ACTOR_ID)
+        } catch (err) {
+          // webhook 触发不阻塞 worker 正常退出
+          withJob(workerLog, job).warn({ err, runId }, 'webhook dispatcher trigger failed')
+        }
+      }
     }
   }
 }

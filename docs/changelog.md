@@ -16179,4 +16179,42 @@ Cleanup-Audit: #G-settings-webhook-impl 1/5 触发点 ✅（剩余 4 触发点 E
 Plan-Revision: 无
 
 
+## [CHG-SN-8-FUP-WEBHOOK-IMPL-EP-A2.1] ADR-146 CrawlerRun.failed 触发点接入 (#G-settings-webhook-impl 2/5 触发点闭合)
+
+- **完成时间**：2026-05-23
+- **记录时间**：2026-05-23 01:00
+- **执行模型**：claude-opus-4-7
+- **子代理**：无
+- **修改文件**（2 文件代码 + 4 文档）：
+  - `apps/api/src/db/queries/crawlerRuns.ts` — `syncRunStatusFromTasks(db, runId)` 签名变更：返回类型 `Promise<void>` → `Promise<SyncRunStatusResult | null>`（含 status/siteKey/summary 三字段）；新增 `SyncRunStatusResult` interface；SQL 加 `RETURNING r.status, r.site_key, r.summary`。8 处现有 worker 调用方 `await sync(...)` 不消费返回值 → typecheck PASS / 零 breaking change。
+  - `apps/api/src/workers/crawlerWorker.ts` — finally 块（job 最终 sync 点，line 459）加 status=`'failed'`/`'partial_failed'` 判断 + `new WebhookDispatcher(db, new AuditLogService(db)).enqueue('crawler.run.failed', payload, SYSTEM_ACTOR_ID)` 触发；try/catch 兜底 webhook 失败不阻塞 worker 退出
+  - `docs/manual/GAPS.md` — #G-settings-webhook-impl → 2/5 触发点闭合
+  - `docs/task-queue.md` SEQ-20260521-06 #52 ✅
+  - `docs/tasks.md` 清卡片
+- **新增依赖**：无
+- **数据库变更**：无（query 增加 RETURNING 子句不改 schema）
+- **最小侵入设计**：
+  - **零 worker 重复改动**：未改 7 处其他 syncRunStatusFromTasks 调用，仅最末端 finally 块接入；finally 块覆盖所有 job 退出场景（normal / cancelled / timeout / failed）；运行结束的最终状态在此点最权威
+  - **try/catch webhook 兜底**：dispatcher 实例化或 enqueue 失败不阻塞 worker normal exit
+  - **SYSTEM_ACTOR_ID**：cron / 自动事件复用 EP-A 已定义占位 UUID（`00000000-0000-4000-8000-000000000000`）
+  - **payload 4 字段**：runId / siteKey / status / summary（admin 收到 webhook 即可查询完整运行记录）
+- **不在范围**：
+  - 单测：依赖现有 webhook-dispatcher.test 14 用例 + staging-batch-publish-webhook.test 3 用例已完整覆盖 framework 行为；worker 触发点是消费方接入零新框架行为
+  - 剩余 3 触发点（EP-A2.2 submission.created 等用户端实装 / EP-A2.3 R2 quota + pending threshold cron ~40 min）
+- **验收**：
+  - typecheck PASS（8 处 worker 调用方对新返回类型 zero-impact）
+  - 全 unit 4670/4670 PASS（0 失败 / pre-existing flaky 本轮也通过）
+  - 现有 webhook 单测全 PASS（dispatcher 14 + endpoint 2 + staging 3 = 19 用例无回归）
+- **价值**：
+  - **#G-settings-webhook-impl 2/5 触发点闭合**：crawler 失败（最高频运维场景）自动触发 webhook 通知 — 运维终于可在外部告警平台即时收到采集失败
+  - **最小侵入示例**：query RETURNING + 1 处 worker 接入 covers all run failure scenarios（cancelled/timeout/failed/partial_failed 都经过同一 finally）
+  - **零新单测复用 framework 测试**：webhook 框架行为已被 14+3 测试覆盖，触发点接入是 caller 调用证明
+- **下一步**（按需）：
+  - EP-A2.2 submission.created（等用户端 POST 实装）
+  - EP-A2.3 R2 quota + pending threshold cron（~40 min）
+
+Cleanup-Audit: #G-settings-webhook-impl 2/5 触发点 ✅（剩余 3 触发点 follow-up 待）
+Plan-Revision: 无
+
+
 
