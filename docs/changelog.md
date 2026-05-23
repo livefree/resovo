@@ -2970,3 +2970,36 @@ Plan-Revision: 无
 
 Cleanup-Audit: #G-settings-session-fields-consume ⚠️+🔄 → ✅ 完全闭合 2/2
 Plan-Revision: ADR-003 描述更新（access token TTL 15m → KV 驱动 60m）独立小卡按需启动
+
+
+## [CHG-SN-8-FUP-SESSION-FIELDS-CONSUME-EP-B] ADR-148 EP-B 前端 LoginSessions Tab disabled tooltip 提示
+
+- **完成时间**：2026-05-23
+- **记录时间**：2026-05-23
+- **执行模型**：claude-opus-4-7（续 EP-A 会话）
+- **子代理**：无
+- **修改文件**（1 代码 + 2 文档）：
+  - `apps/server-next/src/app/admin/settings/_tabs/LoginSessionsTab.tsx`：
+    - timeoutMinutes hint 加「✅ 已生效（ADR-148 EP-A / commit dd71d1a2）」
+    - sessionMaxConcurrent input 加 disabled + title tooltip + hint「⏸ 即将支持」
+    - sessionExtendOnActivity checkbox 加 disabled + title tooltip + hint「⏸ 即将支持」
+  - `docs/task-queue.md` SEQ-20260521-06 #60 ✅
+  - `docs/tasks.md` 清卡片
+- **新增依赖**：无
+- **数据库变更**：无
+- **设计要点**：
+  - **H1 零 mock + UX 透明范式**：避免 admin 改了 maxConcurrent/extendOnActivity 但运行时无效果导致困惑（disabled + tooltip 明示"即将支持"+ ADR/follow-up 引用）
+  - **timeoutMinutes 状态标识**：hint 末尾加「✅ 已生效」+ commit hash，admin 一眼可见 KV 字段是否生效
+  - **现有 5 测试零回归**：disabled 属性不影响 React controlled component 的 value 测试，5/5 PASS
+- **不在范围**：
+  - 改造 input 视觉（仅加 disabled + title 不动布局）
+  - 启动 N1-148-1 / N1-148-2 独立 ADR（按用户反馈触发）
+- **验收**：
+  - typecheck PASS / lint PASS
+  - LoginSessionsTab.test 5/5 PASS
+- **价值**：
+  - **UX 透明化**：admin 不再困惑「改了 KV 是否生效」— 3 字段状态一目了然（✅ 生效 / ⏸ 即将支持）
+  - **闭合 SEQ-20260521-06 P1+P2 GAPS 全部**：本卡完成后 P1+P2 高 ROI GAPS 全部清零（webhook 100% + shell notifications 3/3 + session timeout 2/2 + maxConcurrent/extendOnActivity 视觉透明化）
+
+Cleanup-Audit: ADR-148 EP-B 收尾 ✅
+Plan-Revision: 无

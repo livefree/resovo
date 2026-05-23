@@ -171,7 +171,9 @@ export function LoginSessionsTab() {
             data-testid="session-timeout-minutes"
             aria-label="会话超时（分钟）"
           />
-          <div style={FIELD_HINT_STYLE}>范围 5–1440 分钟；超时后需重新登录</div>
+          <div style={FIELD_HINT_STYLE}>
+            范围 5–1440 分钟；超时后需重新登录。✅ 已生效（ADR-148 EP-A / commit dd71d1a2）
+          </div>
 
           <label style={FIELD_LABEL_STYLE}>最大并发会话</label>
           <AdminInput
@@ -181,8 +183,12 @@ export function LoginSessionsTab() {
             placeholder="1-50"
             data-testid="session-max-concurrent"
             aria-label="最大并发会话"
+            disabled
+            title="即将支持：需 user_sessions 表 + 踢出策略 ADR（N1-148-1 / 按需启动）"
           />
-          <div style={FIELD_HINT_STYLE}>范围 1–50；超限自动踢出最旧会话</div>
+          <div style={FIELD_HINT_STYLE}>
+            范围 1–50；超限自动踢出最旧会话。⏸ 即将支持（ADR-148 N1-148-1 待立 / 仅存储配置）
+          </div>
 
           <label style={FIELD_LABEL_STYLE}>活动续期</label>
           <AdminCheckbox
@@ -190,7 +196,12 @@ export function LoginSessionsTab() {
             checked={state.extendOnActivity}
             onChange={(e) => update('extendOnActivity', e.target.checked)}
             data-testid="session-extend-on-activity"
+            disabled
+            title="即将支持：需 ADR-003 兼容性评估 + authenticate plugin 改造（N1-148-2 / 按需启动）"
           />
+          <div style={FIELD_HINT_STYLE}>
+            ⏸ 即将支持（ADR-148 N1-148-2 待立 / 仅存储配置）
+          </div>
         </div>
       </AdminCard>
 
