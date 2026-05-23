@@ -6,5 +6,5 @@
 
 ## 进行中任务
 
-（空 — 上一任务 CHG-SN-8-FUP-PRESET-TEAM-EP-A 已完成 / #G-moderation-preset-team 后端 ✅；前端 follow-up CHG-SN-8-FUP-PRESET-TEAM-EP-B 待按需启动）
+（空 — 上一任务 CHG-SN-8-FUP-PRESET-TEAM-EP-B 已完成 / #G-moderation-preset-team 完全 ✅ 4/4）
 

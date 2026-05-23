@@ -182,6 +182,10 @@ export interface FilterPresetPopoverProps {
   readonly onRemove: (preset: FilterPreset) => void
   readonly onSaveCurrent: () => void
   readonly onClose: () => void
+  // CHG-SN-8-FUP-PRESET-TEAM-EP-B / ADR-144：双源 + import 入口
+  readonly dataSource?: 'live' | 'local'
+  readonly localPendingCount?: number
+  readonly onImportLocal?: () => void
 }
 
 export function FilterPresetPopover({
@@ -194,6 +198,9 @@ export function FilterPresetPopover({
   onRemove,
   onSaveCurrent,
   onClose,
+  dataSource = 'local',
+  localPendingCount = 0,
+  onImportLocal,
 }: FilterPresetPopoverProps): React.ReactElement | null {
   const popoverRef = useRef<HTMLDivElement>(null)
 
@@ -221,13 +228,34 @@ export function FilterPresetPopover({
       >
         <div style={HEADER_STYLE}>
           <span>{M.preset.popoverTitle}</span>
-          <span
-            style={LOCAL_BADGE_STYLE}
-            title={M.preset.localOnlyTooltip}
-            data-testid="filter-preset-local-badge"
-          >
-            {M.preset.localOnlyBadge}
-          </span>
+          {dataSource === 'live' ? (
+            <span
+              style={{ ...LOCAL_BADGE_STYLE, background: 'var(--state-success-bg)', color: 'var(--state-success-fg)' }}
+              title="预设已同步到服务器（团队共享 / 跨设备可见 / ADR-144）"
+              data-testid="filter-preset-live-badge"
+            >
+              已同步
+            </span>
+          ) : (
+            <span
+              style={LOCAL_BADGE_STYLE}
+              title={M.preset.localOnlyTooltip}
+              data-testid="filter-preset-local-badge"
+            >
+              {M.preset.localOnlyBadge}
+            </span>
+          )}
+          {dataSource === 'live' && localPendingCount > 0 && onImportLocal ? (
+            <button
+              type="button"
+              style={{ ...CHIP_BTN_PRIMARY_STYLE, marginLeft: 'auto' }}
+              onClick={onImportLocal}
+              data-testid="filter-preset-import-local-btn"
+              title={`将本地 ${localPendingCount} 条历史预设上传到服务器（默认 private scope）`}
+            >
+              导入本地 ({localPendingCount})
+            </button>
+          ) : null}
         </div>
 
         <div style={LIST_STYLE}>
@@ -239,6 +267,16 @@ export function FilterPresetPopover({
                 <div style={ROW_HEAD_STYLE}>
                   <span style={preset.isDefault ? STAR_STYLE : STAR_INACTIVE_STYLE} aria-hidden="true">⭐</span>
                   <span style={NAME_STYLE} title={preset.name}>{preset.name}</span>
+                  {/* CHG-SN-8-FUP-PRESET-TEAM-EP-B / ADR-144：shared scope 标识 + owner 显示 */}
+                  {preset.scope === 'shared' ? (
+                    <span
+                      style={{ ...LOCAL_BADGE_STYLE, background: 'var(--admin-accent-soft)', color: 'var(--accent-default)', fontSize: 'var(--font-size-2xs)' }}
+                      title={preset.ownerUsername ? `团队共享 · 创建者 @${preset.ownerUsername}` : '团队共享预设'}
+                      data-testid="filter-preset-shared-badge"
+                    >
+                      团队
+                    </span>
+                  ) : null}
                 </div>
                 <div style={SUMMARY_STYLE} title={summarizeQuery(preset.query)}>
                   {summarizeQuery(preset.query)}

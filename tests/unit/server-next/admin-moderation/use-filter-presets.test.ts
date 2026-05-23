@@ -1,7 +1,19 @@
 // @vitest-environment jsdom
 
 /**
- * use-filter-presets.test.ts — useFilterPresets hook 单元测试（CHG-SN-4-FIX-F）
+ * use-filter-presets.test.ts — useFilterPresets hook 单元测试
+ *
+ * 历史：
+ *   - CHG-SN-4-FIX-F 初版：localStorage 同步 CRUD
+ *   - CHG-SN-8-FUP-PRESET-TEAM-EP-B / ADR-144：hook 改 async + DB 持久化；
+ *     原同步 CRUD/Tab 隔离 5 用例已迁移至
+ *     `tests/unit/lib/moderation/use-filter-presets-swr.test.ts`（5 异步用例覆盖
+ *     listFilterPresets / createFilterPreset / apiUpdate 互斥 / importLocalToServer）
+ *
+ * 本文件保留：
+ *   - 初始化 3 用例（localStorage seed 仍作 mount fallback；行为不变）
+ *   - Tab 隔离 1 用例（defaultPreset 仅当前 tab 查找；不依赖 CRUD）
+ *   - summarizeQuery 3 用例（纯函数无依赖）
  */
 
 import { describe, it, expect, beforeEach } from 'vitest'
@@ -46,85 +58,23 @@ describe('useFilterPresets — 初始化', () => {
   })
 })
 
-describe('useFilterPresets — CRUD', () => {
-  it('save 新增预设 → presets +1 + 写入 localStorage', () => {
-    const { result } = renderHook(() => useFilterPresets('pending'))
-    act(() => {
-      result.current.save({ name: '高优先级', tab: 'pending', query: { needsManualReview: true } })
-    })
-    expect(result.current.presets).toHaveLength(1)
-    expect(result.current.presets[0]?.name).toBe('高优先级')
-    const stored = JSON.parse(window.localStorage.getItem(STORAGE_KEY)!)
-    expect(stored.presets).toHaveLength(1)
-  })
-
-  it('设默认时清除同 tab 已有默认（互斥）', () => {
-    const { result } = renderHook(() => useFilterPresets('pending'))
-    let firstId = ''
-    act(() => {
-      const p = result.current.save({ name: 'A', tab: 'pending', query: {}, isDefault: true })
-      firstId = p.id
-    })
-    act(() => {
-      result.current.save({ name: 'B', tab: 'pending', query: {}, isDefault: true })
-    })
-    const a = result.current.presets.find((p) => p.id === firstId)
-    expect(a?.isDefault).toBe(false)
-    const defaults = result.current.presets.filter((p) => p.isDefault)
-    expect(defaults).toHaveLength(1)
-    expect(defaults[0]?.name).toBe('B')
-  })
-
-  it('remove → presets -1 + 返回被删条供撤销', () => {
-    const { result } = renderHook(() => useFilterPresets('pending'))
-    let id = ''
-    act(() => {
-      id = result.current.save({ name: 'X', tab: 'pending', query: {} }).id
-    })
-    let removed: FilterPreset | null = null
-    act(() => {
-      removed = result.current.remove(id)
-    })
-    expect(removed).not.toBeNull()
-    expect(removed!.name).toBe('X')
-    expect(result.current.presets).toHaveLength(0)
-  })
-
-  it('restore → 撤销删除恢复条目', () => {
-    const { result } = renderHook(() => useFilterPresets('pending'))
-    let id = ''
-    act(() => {
-      id = result.current.save({ name: 'Y', tab: 'pending', query: {} }).id
-    })
-    let removed: FilterPreset | null = null
-    act(() => {
-      removed = result.current.remove(id)
-    })
-    act(() => {
-      result.current.restore(removed!)
-    })
-    expect(result.current.presets).toHaveLength(1)
-    expect(result.current.presets[0]?.id).toBe(id)
-  })
-})
-
 describe('useFilterPresets — Tab 隔离', () => {
-  it('currentTab=pending 仅返回 pending + all 的预设', () => {
-    const { result } = renderHook(() => useFilterPresets('pending'))
-    act(() => {
-      result.current.save({ name: 'P', tab: 'pending', query: {} })
-      result.current.save({ name: 'S', tab: 'staging', query: {} })
-      result.current.save({ name: 'A', tab: 'all', query: {} })
-    })
-    const names = result.current.applicablePresets.map((p) => p.name).sort()
-    expect(names).toEqual(['A', 'P'])
-  })
+  // CHG-SN-8-FUP-PRESET-TEAM-EP-B 后：CRUD 5 用例已迁移至 use-filter-presets-swr.test.ts
+  // 本测试改用 localStorage seed 而非 save() 测试 Tab 隔离逻辑（hook 内 isTabMatch 行为不变）
 
   it('defaultPreset 仅在当前 tab applicable 中查找', () => {
+    const seed: FilterPreset = {
+      id: 'p-staging-default',
+      name: 'StagingDefault',
+      tab: 'staging',
+      query: {},
+      isDefault: true,
+      createdAt: '2026-01-01T00:00:00Z',
+      updatedAt: '2026-01-01T00:00:00Z',
+    }
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ version: 'v1', presets: [seed] }))
     const { result } = renderHook(() => useFilterPresets('pending'))
-    act(() => {
-      result.current.save({ name: 'StagingDefault', tab: 'staging', query: {}, isDefault: true })
-    })
+    // staging tab 预设不应作为 pending tab 的 default
     expect(result.current.defaultPreset).toBeNull()
   })
 })

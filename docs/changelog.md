@@ -15837,4 +15837,46 @@ Cleanup-Audit: #G-moderation-preset-team 后端 ✅（前端 SWR 接入留 CHG-S
 Plan-Revision: 无（按 ADR-144 既定决策实施）
 
 
+## [CHG-SN-8-FUP-PRESET-TEAM-EP-B] ADR-144 前端实施 — DB 双源 + scope badge + import 入口 (#G-moderation-preset-team 完全闭合)
+
+- **完成时间**：2026-05-22
+- **记录时间**：2026-05-22 19:58
+- **执行模型**：claude-opus-4-7
+- **子代理**：无（按 ADR-144 既定决策实施 / 复用 EP-A 后端端点）
+- **修改文件**（5 文件代码 + 2 文档）：
+  - `apps/server-next/src/lib/moderation/filter-presets-api.ts`（新建）— 4 端点 lib 封装（listFilterPresets / createFilterPreset / updateFilterPreset / deleteFilterPreset）+ FilterPresetScope 类型 + ApiFilterPreset DTO
+  - `apps/server-next/src/lib/moderation/use-filter-presets.ts` — 改造 DB 双源持久化：
+    - useState 初始化使用 localStorage seed 作 fallback（避免 fetch 期间闪空）
+    - useEffect mount 调 listFilterPresets → 成功 setPresets + dataSource='live' / 失败保持 localStorage（offline 兜底）
+    - save / update / setDefault / remove / restore 改为 async + 调对应端点 + 本地乐观更新 + 互斥逻辑保持
+    - 新增 dataSource / localPendingCount / importLocalToServer / refresh 4 个返回字段
+    - importLocalToServer 批量上传 + 成功后清 localStorage key + refetch
+    - FilterPreset 类型扩 scope / ownerUserId / ownerUsername 3 个可选字段（向后兼容）
+  - `apps/server-next/src/app/admin/moderation/_client/ModerationConsole.tsx` — 4 handler 加 try/catch + 失败 toast 兜底 + FilterPresetPopover 透传 dataSource / localPendingCount / onImportLocal 3 个新 prop
+  - `apps/server-next/src/app/admin/moderation/_client/FilterPresetPopover.tsx` — header 区分 live/local badge（live 绿色「已同步」/ local 橙色「仅本地」）+ live 模式 + localPending>0 显示「导入本地 (N)」accent 按钮 + 每行 shared scope 显「团队」accent chip + tooltip 含创建者 @username
+  - `tests/unit/lib/moderation/use-filter-presets-swr.test.ts`（新建）— 5 用例（mount 首次 fetch / fetch 失败 localStorage fallback / save 调端点 + 乐观更新 / setDefault 互斥乐观更新 / importLocalToServer 批量上传 + 清 localStorage + refetch）
+  - `tests/unit/server-next/admin-moderation/use-filter-presets.test.ts` — 删除过时 5 个 CRUD/Tab 隔离同步测试（已迁移至 SWR 测试）+ 头部注释引用 + 保留 7 个无依赖测试（init 3 + Tab applicable 1 + summarizeQuery 3）
+  - `docs/manual/GAPS.md` — #G-moderation-preset-team → ✅ **完全闭合**
+  - `docs/manual/20-pages/P-moderation.md` — §3.4 多账号共享段改写为完整实装说明（含双源 fallback + import 流程 + 当前 scope picker 留 EP-C follow-up）
+  - `docs/task-queue.md` SEQ-20260521-06 #44 ✅
+  - `docs/tasks.md` 清卡片
+- **新增依赖**：无（不引入 SWR — CLAUDE.md 「技术栈外新依赖触发 BLOCKER」；使用仓内 useEffect + fetch 范式与 dashboard-data / users/api 一致）
+- **数据库变更**：无（消费 EP-A migration 071+072）
+- **R-MID-1 第 21-23 次系统化**：复用 EP-A 已落地的 filter_preset.create/update/delete actionType；前端通过端点触发，后端 fire-and-forget audit 透传无需前端额外动作
+- **拆 -A/-B/-C 完整路径**：本卡 -B 完成端到端持久化 + 显示；后续 -C 可选（SavePresetModal scope picker + 列表行 scope 切换 UI；工时 ~0.05w；按需启动）
+- **验收**：
+  - typecheck PASS（含 hook async 签名传染到 ModerationConsole 4 handler）/ lint PASS
+  - 完整 unit 4623/4625 PASS（+5 新 SWR + 删 5 过时 = 净增 0 数量但 hook 异步契约完整覆盖；2 pre-existing flaky 隔离 PASS）
+  - 5 新 SWR 测试覆盖：mount fetch 双源切换 / 失败 fallback / save / setDefault 互斥 / importLocalToServer 批量
+- **价值**：
+  - **#G-moderation-preset-team P3 完全闭合**：4/4 路径全 ✅（消费层 warn chip → ADR-144 → 后端 EP-A → 前端 EP-B）
+  - **零新依赖**：使用仓内 useEffect+fetch 替代 SWR；不引入新概念；不破坏 SavePresetModal 现有 UX
+  - **双源 fallback 设计**：offline + 后端故障下 localStorage 继续工作，hook 失败优雅降级；ADR-144 D-144-6 用户手动 import 策略兑现
+  - **跨设备 / 跨账号同步**：审核员预设跨浏览器 / 跨账号可见 + 团队 shared scope 协作能力
+- **下一步**（按需）：CHG-SN-8-FUP-PRESET-TEAM-EP-C 加 SavePresetModal scope picker / 列表行 scope 切换 UI
+
+Cleanup-Audit: #G-moderation-preset-team ✅ 完全闭合（4/4 全 ✅）
+Plan-Revision: 无
+
+
 

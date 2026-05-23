@@ -120,14 +120,20 @@
 - **行为**：保存当前 filter 组合为命名预设（如「我的待审」「本周新增」）+ 设为默认
 - **持久化**：localStorage `admin.moderation.presets.v1`（仅本浏览器）
 - **视觉警示**：popover header 右侧「仅本地」warn chip + title tooltip 解释（CHG-SN-8-GAPS-PRESET-LOCAL-BADGE）— 提醒审核员预设未跨账号同步
-- **多账号共享**：✅ **后端已实装**（ADR-144 + EP-A 闭合 / 2026-05-22）；前端 SWR 重写 + scope toggle UI 留独立 follow-up CHG-SN-8-FUP-PRESET-TEAM-EP-B
+- **多账号共享**：✅ **完全实装**（ADR-144 + EP-A + EP-B 闭合 / 2026-05-22）；预设跨设备 + 跨账号同步 + 团队共享 scope + 本地数据一键导入
 - **后端端点**（moderator+admin 权限，200 上限不分页）：
   - `GET /admin/filter-presets?tab=&scope=` — list 含 own private + own shared + 他人 shared
   - `POST /admin/filter-presets` — 创建（zod name 1-100 / scope private/shared / tab 4 值 / isDefault 互斥事务）
   - `PATCH /admin/filter-presets/:id` — 更新（仅 owner / diff-only audit）
   - `DELETE /admin/filter-presets/:id` — 删除（owner 全权 / admin 强制删 shared / moderator 不可删他人）
 - **数据持久化**：`user_filter_presets` 表（migration 071）+ admin_audit_log target_kind CHECK 13 种（migration 072）+ R-MID-1 第 21-23 次系统化 filter_preset.create/update/delete
-- **当前限制**：前端仍 localStorage，新端点已就绪可直接 curl 测试；前端 SWR 接入留 CHG-SN-8-FUP-PRESET-TEAM-EP-B（GAPS.md #G-moderation-preset-team）
+- **前端 UI 行为**（CHG-SN-8-FUP-PRESET-TEAM-EP-B）：
+  - 双源 fallback：mount 立即返 localStorage 旧数据避免闪空 / fetch 成功后切 DB / 失败保持 localStorage（offline 兜底）
+  - Popover header：DB 数据显「已同步」绿色 chip / fallback 显「仅本地」橙色 chip / live 模式下若 localStorage 有未上传数据显「导入本地 (N)」按钮
+  - Preset 行：scope=shared 显「团队」accent 色 chip + tooltip 含创建者 @username
+  - 保存/删除/设默认/取消默认 全部异步（失败 toast 显示错误信息）
+  - importLocalToServer：批量调 POST 端点（默认 private scope + isDefault=false 避免冲突）+ 成功后清 localStorage + 三计数 toast
+- **当前 EP-B 范围**：所有前端创建默认 scope=private（SavePresetModal 暂未加 scope picker，保持原 UX 不变）；shared preset 可通过后端 POST/PATCH 端点直接创建/转换；UI scope picker 留独立 follow-up CHG-SN-8-FUP-PRESET-TEAM-EP-C（按需启动 / 工时 ~0.05w）
 
 ### 3.5 批量审核（CHG-SN-8-GAPS-MOD-BATCH）
 

@@ -126,7 +126,14 @@ export function ModerationConsole(): React.ReactElement {
   const [toast, setToast] = useState<{ message: string; undo?: () => void; key: number } | null>(null)
   const presetAnchorRef = useRef<HTMLDivElement>(null)
   const presetTab: FilterPresetTab = tab === 'pending' || tab === 'rejected' ? tab : 'pending'
-  const { applicablePresets, defaultPreset, save: savePreset, remove: removePreset, restore: restorePreset, setDefault: setPresetDefault, update: updatePreset } = useFilterPresets(presetTab)
+  const {
+    applicablePresets, defaultPreset,
+    save: savePreset, remove: removePreset, restore: restorePreset,
+    setDefault: setPresetDefault, update: updatePreset,
+    // CHG-SN-8-FUP-PRESET-TEAM-EP-B / ADR-144：双源 + import
+    dataSource: presetDataSource, localPendingCount: presetLocalPendingCount,
+    importLocalToServer: importLocalPresets,
+  } = useFilterPresets(presetTab)
 
   const tabRef = useRef<TabId>(tab)
   useEffect(() => { tabRef.current = tab }, [tab])
@@ -385,31 +392,49 @@ export function ModerationConsole(): React.ReactElement {
     setToast({ message: M.preset.toast.applied(preset.name), key: Date.now() })
   }, [applyFiltersToUrl])
 
-  const handleRemovePreset = useCallback((preset: FilterPreset) => {
-    const removed = removePreset(preset.id)
-    if (!removed) return
-    setToast({
-      message: M.preset.toast.deleted(preset.name),
-      undo: () => { restorePreset(removed); setToast(null) },
-      key: Date.now(),
-    })
+  // CHG-SN-8-FUP-PRESET-TEAM-EP-B / ADR-144：hook 由 localStorage → DB 持久化，
+  // CRUD 改为 async；外层 handler 加 try/catch + 失败 toast 兜底
+  const handleRemovePreset = useCallback(async (preset: FilterPreset) => {
+    try {
+      const removed = await removePreset(preset.id)
+      if (!removed) return
+      setToast({
+        message: M.preset.toast.deleted(preset.name),
+        undo: () => { void restorePreset(removed); setToast(null) },
+        key: Date.now(),
+      })
+    } catch (err) {
+      setToast({ message: err instanceof Error ? err.message : '删除预设失败', key: Date.now() })
+    }
   }, [removePreset, restorePreset])
 
-  const handleSetPresetDefault = useCallback((preset: FilterPreset) => {
-    setPresetDefault(preset.id)
-    setToast({ message: M.preset.toast.defaultSet(preset.name), key: Date.now() })
+  const handleSetPresetDefault = useCallback(async (preset: FilterPreset) => {
+    try {
+      await setPresetDefault(preset.id)
+      setToast({ message: M.preset.toast.defaultSet(preset.name), key: Date.now() })
+    } catch (err) {
+      setToast({ message: err instanceof Error ? err.message : '设置默认预设失败', key: Date.now() })
+    }
   }, [setPresetDefault])
 
-  const handleUnsetPresetDefault = useCallback((preset: FilterPreset) => {
-    updatePreset(preset.id, { isDefault: false })
-    setToast({ message: M.preset.toast.defaultUnset(preset.name), key: Date.now() })
+  const handleUnsetPresetDefault = useCallback(async (preset: FilterPreset) => {
+    try {
+      await updatePreset(preset.id, { isDefault: false })
+      setToast({ message: M.preset.toast.defaultUnset(preset.name), key: Date.now() })
+    } catch (err) {
+      setToast({ message: err instanceof Error ? err.message : '取消默认预设失败', key: Date.now() })
+    }
   }, [updatePreset])
 
-  const handleSavePresetSubmit = useCallback((input: { name: string; tab: FilterPresetTab; isDefault: boolean }) => {
-    const saved = savePreset({ name: input.name, tab: input.tab, isDefault: input.isDefault, query: currentFilters })
-    setSavePresetOpen(false)
-    setPresetPopoverOpen(false)
-    setToast({ message: M.preset.toast.saved(saved.name), key: Date.now() })
+  const handleSavePresetSubmit = useCallback(async (input: { name: string; tab: FilterPresetTab; isDefault: boolean }) => {
+    try {
+      const saved = await savePreset({ name: input.name, tab: input.tab, isDefault: input.isDefault, query: currentFilters })
+      setSavePresetOpen(false)
+      setPresetPopoverOpen(false)
+      setToast({ message: M.preset.toast.saved(saved.name), key: Date.now() })
+    } catch (err) {
+      setToast({ message: err instanceof Error ? err.message : '保存预设失败', key: Date.now() })
+    }
   }, [savePreset, currentFilters])
 
   const handleKey = useCallback((e: KeyboardEvent) => {
@@ -475,6 +500,16 @@ export function ModerationConsole(): React.ReactElement {
             onRemove={handleRemovePreset}
             onSaveCurrent={() => { setSavePresetOpen(true); setPresetPopoverOpen(false) }}
             onClose={() => setPresetPopoverOpen(false)}
+            dataSource={presetDataSource}
+            localPendingCount={presetLocalPendingCount}
+            onImportLocal={async () => {
+              try {
+                const r = await importLocalPresets()
+                setToast({ message: `导入完成：成功 ${r.imported} · 失败 ${r.failed}`, key: Date.now() })
+              } catch (err) {
+                setToast({ message: err instanceof Error ? err.message : '导入失败', key: Date.now() })
+              }
+            }}
           />
         </div>
       </div>
