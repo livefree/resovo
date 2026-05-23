@@ -174,7 +174,8 @@
 - **优先级**：P2
 - **现象（已核查）**：后端 `/admin/audit/*` 3 端点全 `adminOnly`（admin 角色才能调）；同组 `/admin/users` + `/admin/system/settings` 亦全 admin-only；前端 nav 对 moderator 也展示这 3 死链 → 点击 → 403 破坏 UX
 - **消费层补齐**：CHG-SN-8-GAPS-AUDIT-NAV-HIDE — admin-shell-client.tsx 增 `filterNavForRole(nav, role)`，按 ADMIN_ONLY_HREFS 对非 admin 隐藏「用户管理 / 站点设置 / 审计日志」3 项；admin 看见全量；moderator 仍可见审核台/视频库等业务 nav
-- **完整 self-scope follow-up**：CHG-SN-8-FUP-AUDIT-SELF-SCOPE-EP — 起 ADR-N 设计 audit 端点 role-aware filter（admin 看全量 + moderator 看自己 actor_id）+ users/settings 等 admin-only 端点保持不变 + 前端 role 感知 view；需 Opus arch-reviewer 评审；工时 0.4-0.6w
+- **ADR 已起草 ✅**：CHG-SN-8-FUP-AUDIT-SELF-SCOPE-ADR — ADR-142 **A− PASS**（2026-05-22）；决策：方案 B（admin + moderator self-scope）/ Route 层强制覆盖 actorId / 详情端点 404 防枚举 / nav 恢复 + info banner / 零 schema 变更 / 零新 ErrorCode / 复用 idx_admin_audit_log_actor_created；端点 1-3 GET 扩 moderator，端点 4 POST rollback 维持 admin only
+- **实施 follow-up**：CHG-SN-8-FUP-AUDIT-SELF-SCOPE-EP — 按 ADR-142 落 6 文件（Route 守卫 + scope 注入 + ADMIN_ONLY_HREFS 删 1 项 + banner 组件 + 12 单测 + 文档）；工时 ~0.2-0.3w
 
 ### #G-home-brand-multi · 多品牌前台消费链路
 

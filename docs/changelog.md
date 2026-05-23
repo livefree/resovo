@@ -15559,3 +15559,44 @@ Plan-Revision: 无（N1 派生按 ADR-138 N1-138-2 既定建议实施）
 Cleanup-Audit: ADR-138 N1-138-1 P1 ✅ 闭合 / 2 handler 注册（video.approve + video.reject_labeled）/ UNSUPPORTED Set 32→30 项 / home_module softDeleteColumn schema 漂移修复
 Plan-Revision: 无（N1 派生按 ADR-138 N1-138-1 P1 既定建议实施 / P2/P3 推迟到独立卡）
 
+---
+
+## [CHG-SN-8-FUP-AUDIT-SELF-SCOPE-ADR] ADR-142 起草 — audit endpoints self-scope 权限协议
+
+- **完成时间**：2026-05-22
+- **记录时间**：2026-05-22 17:00
+- **执行模型**：claude-opus-4-7
+- **子代理**：arch-reviewer (claude-opus-4-7) — 1 轮 **A− PASS**（D-142-1..6 完整 / 3 方案 8 维度 trade-off / 4 endpoint 各自策略 / Route 层注入防 bypass 设计 / 6 文件降级清单 / 12 测试 surface / 4 风险 / 2 N1）
+- **修改文件**：
+  - `docs/decisions.md` — 新增 ADR-142 完整正文（11 节）；状态 Accepted；含 D-142-1..6（权限模型选型方案 B / 4 endpoint 各自策略 + 端点 2 详情 404 防枚举设计 / Route 层注入防 bypass 含伪代码 / 前端 nav 移除 + banner UI / R-MID-1 GET 降级 / 关联 ADR 7 项 + 性能预估 p95 < 10ms + 零新 ErrorCode）+ 端点契约表 4 endpoint + R-MID-1 降级 6 文件清单 + 12 测试 surface + 4 风险 + 2 N1
+  - `docs/manual/GAPS.md` — #G-audit-self-scope ⚠️ → ⚠️+🔄；ADR-142 决策摘要 + 实施 follow-up 范围登记
+  - `docs/manual/20-pages/P-audit.md` — §0 适用角色字段重写（admin + moderator self-scope 待 EP 落地 + banner 说明 + rollback 维持 admin only）
+  - `docs/task-queue.md` SEQ-20260521-06 #37 子卡 ✅
+  - `docs/tasks.md` 清卡片
+- **新增依赖**：无
+- **数据库变更**：无（schema 变更 0 — ADR-142 §5 明示无 migration / 基础设施全部就绪：Query 层 actorId 参数 + Service 层透传 + idx_admin_audit_log_actor_created 索引）
+- **D-N 偏离闭环**（advisory verify-adr-d-numbers）：D-142-1（方案 B 选型 + 8 维 trade-off）/ D-142-2（4 endpoint 策略 + 端点 2 详情 404 防枚举）/ D-142-3（Route 层注入防 bypass + 伪代码）/ D-142-4（前端 nav 移除 + banner）/ D-142-5（R-MID-1 降级 + verify:endpoint-adr 路径不变）/ D-142-6（关联 ADR 7 项 + 性能 + 安全 + 零新 ErrorCode）— 6 条 D-N 在 ADR-142 §3 完整定稿
+- **注意事项**：
+  - **本卡仅 ADR 起草**：不实施 Route 守卫 / scope 注入 / 前端 nav / banner 组件；实施 follow-up CHG-SN-8-FUP-AUDIT-SELF-SCOPE-EP 工时 ~0.2-0.3w，含 6 文件 R-MID-1 降级清单 + 12 测试
+  - **基础设施零改动**：Query 层 listAdminAuditLog actorId 参数已支持（auditLog.ts:120）；Service 层 listAdminAuditLogs 已透传（AuditLogService.ts:241）；索引 idx_admin_audit_log_actor_created 已就位（migration 052:61-62）— 实施卡仅 Route 层注入 + 前端调整
+  - **核心安全设计**：moderator 传 `?actorId=<other-id>` 时 Route 层强制覆盖为 currentUserId（无声覆盖不报错）；详情端点 404 而非 403（不可见 = 不存在 / security through ambiguity）
+  - **端点 4 POST rollback 维持 admin only**：ADR-138 D-138-2 已明示；本 ADR 不改写
+  - **ADR-118 端点契约扩展**：实施卡需同步在 ADR-118 端点契约表标注 ADR-142 权限扩展（或在 ADR-142 端点契约表覆盖声明）
+  - **N1-142-1（dashboard widget）+ N1-142-2（ipHash strip）**：按需评估不立 follow-up；GDPR 第 4 条 IP hash 隐藏需求未来规模扩大时再触发
+
+### 验收
+- typecheck PASS（FULL TURBO 缓存命中）/ lint PASS / verify:manual-coverage PASS
+- verify:adr-contracts advisory：6 条 D-142-N advisory 通过本 changelog 闭环
+- 不跑 unit/e2e（纯文档 / 无代码变更）
+
+### 价值
+- **P2 GAPS #G-audit-self-scope 路径全清晰**：消费层 nav-hide ✅ 1/3 + ADR ✅ 2/3 + 实施 follow-up 3/3 待立
+- 完整设计文档落盘：3 方案 trade-off + 4 endpoint 各自策略 + Route 层注入防 bypass + 6 文件降级清单 + 12 测试 surface 落地无歧义
+- **零 schema 变更 + 零 Service 改动**：基础设施全部就绪是方案 B 自然优势 — 实施卡仅 Route 层 + 前端少量改动
+- 端点 2 详情 404 防枚举设计：security through ambiguity 与 ADR-138 F-5/F-8 一致
+- 2 N1（dashboard widget + ipHash strip）登记，为未来 moderator 体验 / GDPR 合规保留扩展空间
+
+Cleanup-Audit: #G-audit-self-scope ⚠️+🔄（消费层 ✅ + ADR ✅ / 实施 follow-up CHG-SN-8-FUP-AUDIT-SELF-SCOPE-EP 待立 + 2 N1 follow-up 登记）
+Plan-Revision: ADR-142 + 1（plan §9 ADR 索引若有手动表则同步推进至 142；自动索引由 verify:adr-contracts 维护）
+
+

@@ -10141,4 +10141,244 @@ export interface DashboardActivityRow {
 - **CHG-SN-8-FUP-DASH-ACTIVITY-LIVE**：按本 ADR 实施 5 文件清单（migration + query + route + types + 单测）+ 前端 dashboard-data.ts mock → live 切换 + i18n 37 项 actionLabels 扩展
 - **CHG-SN-8-FUP-DASH-ACTIVITY-DISPLAY-NAME**：N1-141-1 targetDisplayName 扩展（按需）
 
+---
+
+## ADR-142 — audit endpoints self-scope 权限协议设计（CHG-SN-8-FUP-AUDIT-SELF-SCOPE-EP）
+
+**状态**：Accepted（arch-reviewer A− PASS / 2 非阻塞建议）
+**日期**：2026-05-22
+**arch-reviewer**：claude-opus-4-7（子代理评级；本主循环亦 claude-opus-4-7）
+**关联 GAP**：`#G-audit-self-scope`（P2，消费层 nav-hide 已 ⚠️ commit 3277ee7b；本 ADR 推进真实施）
+**关联任务**：CHG-SN-8-FUP-AUDIT-SELF-SCOPE-ADR（本卡）/ CHG-SN-8-FUP-AUDIT-SELF-SCOPE-EP（实施 follow-up）
+
+---
+
+### 1. 决策摘要
+
+将 `/admin/audit` 3 个 GET 端点从 **admin only** 扩展为 **admin + moderator**（方案 B self-scope），moderator 访问时后端强制注入 `actorId = request.user.userId` 过滤条件，仅返回该 moderator 自己发起的审计条目。`POST /admin/audit/logs/:id/rollback` 维持 admin only（ADR-138 D-138-2 明示）。前端从 `ADMIN_ONLY_HREFS` 移除 `/admin/audit`，moderator 可见 nav 入口，审计页页头展示"仅显示你的操作记录"信息提示。零 schema 变更，零新 ErrorCode，复用现有 `idx_admin_audit_log_actor_created` 索引，moderator self-scope 查询零额外成本。闭合 GAPS.md `#G-audit-self-scope` 从 ⚠️ → ✅。
+
+---
+
+### 2. 背景
+
+**问题**：GAPS.md `#G-audit-self-scope`（P2）指出 moderator 应能查看自己发起的 audit 条目，但当前 `/admin/audit/*` 3 个 GET 端点全部 `adminOnly` 守卫，moderator 调用 403。
+
+**消费层现状**：CHG-SN-8-GAPS-AUDIT-NAV-HIDE（commit 3277ee7b）已将 `/admin/audit` 加入 `ADMIN_ONLY_HREFS` Set，moderator 在侧边栏看不到「审计日志」入口。
+
+**基础设施就绪实证**：
+- Query 层 `listAdminAuditLog` 已支持 `actorId?: string` 参数（`apps/api/src/db/queries/auditLog.ts:120`）
+- Service 层 `listAdminAuditLogs` 已透传 actorId（`apps/api/src/services/AuditLogService.ts:241`）
+- 索引 `idx_admin_audit_log_actor_created (actor_id, created_at DESC)` 已就位（migration 052:61-62）
+- 详情查询 `getAdminAuditLogById` 返回的 `AdminAuditLogDetailRow` 含 `actorId` 字段
+- `requireRole` 已支持任意角色数组
+
+**核心设计原则**：moderator 只能看自己的操作（`actor_id = currentUserId`），不能通过 query params 查看其他人的审计日志。
+
+---
+
+### 3. 决策
+
+#### D-142-1 权限模型选型
+
+选择**方案 B（admin + moderator self-scope）**。
+
+| 维度 | 方案 A: admin only | 方案 B: admin + moderator self-scope | 方案 C: 多级 scope |
+|------|---|---|---|
+| 实施复杂度 | 零 | 低（Route 层 ~15 行 + 前端 ~5 行） | 中高 |
+| 隐私保障 | 最高 | 高（强制 actorId 覆盖） | 中 |
+| 运营调查 | 仅 admin | moderator 可自查 | moderator 可查同角色 |
+| Service 改动 | 零 | 零（基础设施就绪） | 需新增 scope 参数 |
+| 测试增量 | 零 | +6 用例 | +12 用例 |
+| DB 索引需求 | 无 | 无（已就位） | 可能需新索引 |
+| 前端改动 | 零 | ADMIN_ONLY_HREFS 删 1 项 + banner | scope 选择器 UI |
+| GAP 闭合 | 维持 ⚠️ | ✅ 闭合 | ✅ 过度实装 |
+
+**选择理由**：方案 B 以极低成本（基础设施就绪 / Service / Query 零改动）闭合 P2 GAP；方案 A 持续暴露 GAP；方案 C 引入不必要复杂度（跨用户数据可见性的隐私风险）。
+
+#### D-142-2 4 endpoint 各自策略
+
+| # | 端点 | ADR-142 权限 | moderator 行为 |
+|---|------|------------|---------------|
+| 1 | `GET /admin/audit/logs` | admin + moderator | 强制覆盖 `actorId = request.user.userId`；忽略 query 传入 |
+| 2 | `GET /admin/audit/logs/:id` | admin + moderator | 查询后校验 `audit_log.actorId === currentUserId`；不匹配返回 404 |
+| 3 | `GET /admin/audit/enums` | admin + moderator | 无限制，直接返回全量枚举 |
+| 4 | `POST /admin/audit/logs/:id/rollback` | admin only（不变） | 403 FORBIDDEN（ADR-138 D-138-2） |
+
+**端点 2 返回 404 而非 403 的安全考量**：避免 moderator 通过 403 推断 id 对应条目存在但属其他用户（不可见 = 不存在，security through ambiguity）。
+
+#### D-142-3 self-scope filter 实现层
+
+选择**方案 B（Route 层注入）**。
+
+| 维度 | A: Service 层 | B: Route 层 | C: Middleware |
+|------|---|---|---|
+| 一致性 | Service 需新增 role 参数 | Route 已有 request.user 上下文 | 新增中间件 |
+| 可维护性 | Service 通用性降低 | Route 职责明确 | 中间件抽象过度 |
+| 隐私安全 | 调用方可能绕过 | Route 直接覆盖 params | 最严格 |
+| 与现有模式对齐 | ADR-118 Service 零角色概念 | 现有 requireRole 自然延伸 | 无先例 |
+| Service 接口侵入 | 需新增参数 | 零改动 | 零改动 |
+
+**防 bypass 设计**：
+
+**列表端点**：
+```
+if (request.user.role !== 'admin') {
+  parsed.data.actorId = request.user.userId  // 强制覆盖
+}
+```
+
+**详情端点**：
+```
+const detail = await svc.getAdminAuditLogDetail(parsed.data.id)
+if (!detail) return 404
+if (request.user.role !== 'admin' && detail.actorId !== request.user.userId) {
+  return 404  // 不可见 = 不存在
+}
+```
+
+#### D-142-4 前端 nav 处理
+
+选择**方案 1（移除 + banner）**。
+
+`apps/server-next/src/app/admin/admin-shell-client.tsx:28` 的 `ADMIN_ONLY_HREFS` 从 `['/admin/users', '/admin/settings', '/admin/audit']` 改为 `['/admin/users', '/admin/settings']`。moderator 可见审计日志 nav 入口。
+
+**页头 banner**：moderator 访问 `/admin/audit` 时渲染信息提示：
+- 文案：`"仅显示你的操作记录。如需查看完整审计日志，请联系管理员。"`
+- 样式：admin-ui `Alert` 或 `Banner`，`level: 'info'`，固定展示
+- admin 角色不渲染
+- 实现位置：`apps/server-next/src/app/admin/audit/` 页面组件
+
+**筛选器限制**：moderator 视图下 actorId 筛选 dropdown 隐藏；其余 actionType / targetKind / 时间范围保持可用。
+
+#### D-142-5 R-MID-1 评估
+
+**不适用（降级）**。3 个 GET 端点为只读，不写 audit（与 ADR-137 D-137-5 / ADR-141 D-141-4 同模式）。`POST rollback` 由 ADR-138 D-138-3 R-MID-1 管辖不变。
+
+**verify:endpoint-adr 影响**：本 ADR 不新增路径，仅变更现有 3 个 GET 端点权限守卫。路径不变，脚本校验自然通过。
+
+#### D-142-6 关联 ADR + 性能 + 安全
+
+**关联 ADR**：ADR-109（schema）/ ADR-118（3 GET 端点原始协议；本 ADR 扩展权限）/ ADR-110（ErrorCode 复用）/ ADR-121（R-MID-1 降级）/ ADR-138（POST rollback 不变）/ ADR-139（role_changed_at 确保降级权限即时生效）/ ADR-141（dashboard activities admin only 不受影响）
+
+**性能**：
+- moderator self-scope 查询完美命中 `idx_admin_audit_log_actor_created` 索引（actor_id 前导列固定）；p95 预估 < 10ms
+- 详情端点所有权校验：单行 PK 查询 + 内存比对，零额外开销
+- COUNT(*) 并行模式不变，moderator scope 下 COUNT 同样走索引
+
+**安全**：
+1. 参数覆盖防 bypass（D-142-3 详述）
+2. 详情所有权校验（404 而非 403）
+3. rollback 隔离（requireRole 维持 admin only）
+4. ipHash 字段：moderator 看到的是自己的 hash(IP) 不构成 PII 泄露
+
+**新增 ErrorCode**：**零新增**。moderator 403 由 `requireRole` 覆盖；详情 404 复用 `NOT_FOUND`（不新增 ROLE_SCOPED_FORBIDDEN，避免 moderator 感知"scope 限制"与"不存在"的区别）。
+
+---
+
+### 端点契约
+
+| # | Method | Path | 权限 (ADR-142) | 权限 (ADR-118 原) | moderator 行为 |
+|---|--------|------|---------------|------------------|---------------|
+| 1 | GET | `/admin/audit/logs` | moderator + admin | admin only | 强制 actorId = currentUserId |
+| 2 | GET | `/admin/audit/logs/:id` | moderator + admin | admin only | 所有权校验 actorId === currentUserId，否则 404 |
+| 3 | GET | `/admin/audit/enums` | moderator + admin | admin only | 无限制 |
+| 4 | POST | `/admin/audit/logs/:id/rollback` | admin only（不变） | admin only | 403 FORBIDDEN |
+
+**请求 / 响应变更**：零。所有 query / path params / response 信封与 ADR-118 完全一致。仅 preHandler 守卫从 `requireRole(['admin'])` 改为 `requireRole(['moderator', 'admin'])`（端点 1-3）。
+
+---
+
+### 5. SQL / Schema 设计
+
+**无 migration**。零 schema 变更、零新索引、零新表。基础设施全部就绪。
+
+---
+
+### 6. Response 结构 / 错误码
+
+**响应结构**：与 ADR-118 完全一致，零变更。
+
+**错误码**：零新增。
+
+| CODE | HTTP | ADR-142 触发 |
+|------|------|-------------|
+| `FORBIDDEN` | 403 | moderator 调用 rollback / user 调用 audit |
+| `NOT_FOUND` | 404 | moderator 查看他人详情 / 不存在 id |
+| `VALIDATION_ERROR` | 422 | 不变 |
+| `UNAUTHORIZED` | 401 | 不变 |
+
+---
+
+### 7. 关联 ADR
+
+详见 D-142-6 关联 ADR 表。
+
+---
+
+### 8. R-MID-1 文件清单
+
+**不适用（降级）**。理由：3 个 GET 端点为只读，不写 audit（与 ADR-137 / ADR-141 同降级）。
+
+**降级为 6 文件清单（实施卡 CHG-SN-8-FUP-AUDIT-SELF-SCOPE-EP）**：
+
+| # | 文件 | 角色 |
+|---|------|------|
+| 1 | `apps/api/src/routes/admin/audit.ts` | 3 GET endpoint 权限守卫变更 + moderator scope 注入 |
+| 2 | `apps/server-next/src/app/admin/admin-shell-client.tsx` | ADMIN_ONLY_HREFS 移除 `/admin/audit` |
+| 3 | `apps/server-next/src/app/admin/audit/` 页面组件 | moderator info banner + actorId filter 隐藏 |
+| 4 | `tests/unit/api/audit-self-scope.test.ts` | 12 单测 |
+| 5 | `docs/manual/GAPS.md` | `#G-audit-self-scope` ⚠️ → ✅ |
+| 6 | `docs/changelog.md` | 完成备注 |
+
+**注**：Service / Query 零改动（基础设施就绪）。
+
+---
+
+### 9. 测试 surface
+
+12 用例（happy path 3 + bypass 防护 3 + 详情所有权 2 + 权限边界 3 + rollback 隔离 1）：
+
+| # | 用例 | 断言 |
+|---|------|------|
+| 1 | moderator GET logs 不传 actorId → 200 + 仅自己 | data.every(row => row.actorId === moderatorUserId) |
+| 2 | admin GET logs 不传 actorId → 200 + 全量 | data 含多 actor |
+| 3 | admin GET logs?actorId=X → 200 + 按 X 过滤 | data.every(row => row.actorId === X) |
+| 4 | moderator GET logs?actorId=<other-id> → 200 + 强制覆盖为自己 | data.every(row => row.actorId === moderatorUserId) |
+| 5 | moderator GET logs?actorId=<self-id> → 200 + 正常 | 同 #1 |
+| 6 | moderator GET logs + actionType filter → 200 + 自己 + 指定 actionType | 双 filter PASS |
+| 7 | moderator GET logs/:id（自己的） → 200 + detail | data.actorId === moderatorUserId |
+| 8 | moderator GET logs/:id（他人的） → 404 NOT_FOUND | error.code === 'NOT_FOUND' |
+| 9 | moderator GET enums → 200 + actionTypes + targetKinds | data.actionTypes.length > 0 |
+| 10 | moderator POST rollback → 403 FORBIDDEN | error.code === 'FORBIDDEN' |
+| 11 | 未认证 GET logs → 401 | UNAUTHORIZED |
+| 12 | user 角色 GET logs → 403 | FORBIDDEN |
+
+---
+
+### 10. 风险与回退
+
+| # | 风险 | 严重性 | 缓解 |
+|---|------|--------|------|
+| R-142-1 | moderator 枚举 bigserial id 探测条目存在性 | 低 | id 存在性本身非敏感（不泄露 actor/action/target 内容）；rate limit 中间件保护 |
+| R-142-2 | 前后端未同步部署（nav 见 + 后端 403） | 中 | 实施卡要求前后端同 commit 部署；回退路径明确 |
+| R-142-3 | moderator 降级为 user 后 cookie 滞留 | 低 | ADR-139 已解决：role_changed_at 校验 + cookie 清除 |
+| R-142-4 | 未来新 audit 端点忘加 self-scope 守卫 | 低 | 仅影响 `/admin/audit/*` 路由组；新端点默认 requireRole 守卫 |
+
+**回退路径**：1. Route 守卫回退 `requireRole(['admin'])` 2. ADMIN_ONLY_HREFS 恢复 `/admin/audit` 3. 移除 banner 4. GAPS ⚠️ 回退 5. 零 schema 回退
+
+---
+
+### 11. 非阻塞建议 / N1
+
+**N1-142-1（moderator dashboard 操作统计 widget）**：self-scope 落地后，可考虑为 moderator dashboard 增加"你本周的操作统计"轻量 widget，数据源复用 `listAdminAuditLog` + actorId filter + 日期范围。**状态**：按需评估，不登记 follow-up。
+
+**N1-142-2（审计详情 ipHash 对 moderator 隐藏）**：当前 moderator 在详情端点看到自己操作的 ipHash。虽是自己的 IP hash，但 GDPR 第 4 条 IP hash 仍属个人数据；未来 moderator 团队规模扩大时可能需 strip。Service `toDetail` 按 role 控制即可。**状态**：按需评估，不登记 follow-up。
+
+---
+
+**后续解锁卡**：
+
+- **CHG-SN-8-FUP-AUDIT-SELF-SCOPE-EP**：按本 ADR 实施 6 文件清单 + 12 测试 surface
+- GAPS.md `#G-audit-self-scope` 状态：⚠️ → ✅ 闭合
+
 
