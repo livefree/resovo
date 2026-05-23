@@ -11,6 +11,7 @@ import * as videoQueries from '@/api/db/queries/videos'
 import * as systemSettingsQueries from '@/api/db/queries/systemSettings'
 import { VideoIndexSyncService } from '@/api/services/VideoIndexSyncService'
 import { AuditLogService } from '@/api/services/AuditLogService'
+import type { WebhookDispatcher } from '@/api/services/WebhookDispatcher'
 
 export interface ReadinessResult {
   ready: boolean
@@ -25,6 +26,8 @@ export class StagingPublishService {
   constructor(
     private readonly db: Pool,
     private readonly es?: Client,
+    // CHG-SN-8-FUP-WEBHOOK-IMPL-EP-A2 / ADR-146：可选 webhook 触发器（注入则在 admin 触发批量发布后推送 video.batch.complete 事件）
+    private readonly webhookDispatcher?: WebhookDispatcher,
   ) {
     if (es) {
       this.indexSync = new VideoIndexSyncService(db, es)
@@ -168,6 +171,17 @@ export class StagingPublishService {
         afterJsonb: { ids: publishedIds, skipped: skippedIds },
         requestId: audit.requestId,
       })
+
+      // CHG-SN-8-FUP-WEBHOOK-IMPL-EP-A2 / ADR-146：admin 手动批量发布完成 → 推送 video.batch.complete
+      // 系统 Job 触发（无 audit）不推送，避免 cron 高频噪音
+      this.webhookDispatcher?.enqueue('video.batch.complete', {
+        operationType: 'staging.batch_publish',
+        totalCount: published + skipped,
+        successCount: published,
+        failedCount: skipped,
+        publishedIds,
+        skippedIds,
+      }, audit.actorId)
     }
 
     return { published, skipped, publishedIds, skippedIds }

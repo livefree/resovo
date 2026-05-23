@@ -10,6 +10,8 @@ import { z } from 'zod'
 import { db } from '@/api/lib/postgres'
 import { es } from '@/api/lib/elasticsearch'
 import { StagingPublishService } from '@/api/services/StagingPublishService'
+import { WebhookDispatcher } from '@/api/services/WebhookDispatcher'
+import { AuditLogService } from '@/api/services/AuditLogService'
 import { DoubanService } from '@/api/services/DoubanService'
 import { VideoService } from '@/api/services/VideoService'
 import { ModerationService } from '@/api/services/ModerationService'
@@ -55,7 +57,9 @@ const StagingRevertBodySchema = z.object({}).strict()
 export async function adminStagingRoutes(fastify: FastifyInstance) {
   const auth = [fastify.authenticate, fastify.requireRole(['moderator', 'admin'])]
   const adminOnly = [fastify.authenticate, fastify.requireRole(['admin'])]
-  const svc = new StagingPublishService(db)
+  // CHG-SN-8-FUP-WEBHOOK-IMPL-EP-A2 / ADR-146：注入 WebhookDispatcher 触发 video.batch.complete
+  const webhookDispatcher = new WebhookDispatcher(db, new AuditLogService(db))
+  const svc = new StagingPublishService(db, es, webhookDispatcher)
   const doubanSvc = new DoubanService(db)
   const moderationSvc = new ModerationService(db, es)
 
