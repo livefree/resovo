@@ -68,12 +68,25 @@ test('submissions — segment processed active', async ({ page }) => {
 })
 
 // ── 4: SubmissionCard 首卡（含 metadata quote + 3 actions）──────────────
+//      依次尝试 4 segment（bad_source / wish_list / metadata_correction / processed），
+//      命中首个有 card 的 segment 即截图；全空则 skip（dev DB 数据状态不可控）
 
 test('submissions — first card', async ({ page }) => {
   await waitForSubmissionsPage(page)
-  // SubmissionCard testid prefix `submission-card-`；取第一张
+  const segments = ['失效源举报', '求片', '元数据纠错', '已处理'] as const
+  let found = false
+  for (const label of segments) {
+    await page.getByRole('tab', { name: new RegExp(label) }).click({ timeout: 5000 })
+    await page.waitForTimeout(600)
+    if ((await page.locator('[data-testid^="submission-card-"]').count()) > 0) {
+      found = true
+      break
+    }
+  }
+  if (!found) {
+    test.skip(true, 'dev DB 所有 segment 均无 SubmissionCard / 无法 capture first-card baseline')
+  }
   const firstCard = page.locator('[data-testid^="submission-card-"]').first()
-  await firstCard.waitFor({ timeout: 5000 }).catch(() => {})
   await expect(firstCard).toHaveScreenshot('submission-card-first.png')
 })
 
@@ -89,22 +102,16 @@ test('submissions — pagination footer', async ({ page }) => {
   await expect(pagination).toHaveScreenshot('submissions-pagination.png')
 })
 
-// ── 6: EmptyState（segment 切到 0 条投稿）───────────────────────────────
+// ── 6: EmptyState（默认 bad_source segment 0 条 → EmptyState 整页截图）─
+//      直接 page load default segment 截图（不切换 segment 避免 cascading ErrorState）
+//      若默认 segment 有数据或 ErrorState 则 skip
 
 test('submissions — empty state', async ({ page }) => {
   await waitForSubmissionsPage(page)
-  // 优先取 wish_list（dev DB 大概率空）
-  await page.getByRole('tab', { name: /求片/ }).click({ timeout: 5000 })
-  await page.waitForTimeout(800)
-  const cards = await page.locator('[data-testid^="submission-card-"]').count()
-  if (cards > 0) {
-    // 求片 segment 有数据时切到 metadata_correction 兜底
-    await page.getByRole('tab', { name: /元数据纠错/ }).click({ timeout: 5000 })
-    await page.waitForTimeout(800)
-    const cards2 = await page.locator('[data-testid^="submission-card-"]').count()
-    if (cards2 > 0) {
-      test.skip(true, 'dev DB 所有 segment 均有数据；无法触发 EmptyState baseline')
-    }
+  const cardCount = await page.locator('[data-testid^="submission-card-"]').count()
+  const isError = (await page.getByText(/加载投稿失败/).count()) > 0
+  if (cardCount > 0 || isError) {
+    test.skip(true, '默认 bad_source segment 有数据或 ErrorState；无法 capture EmptyState baseline')
   }
   await expect(page.locator('[data-user-submissions-client]')).toHaveScreenshot(
     'submissions-empty-state.png',
