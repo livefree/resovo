@@ -2727,3 +2727,48 @@ Plan-Revision: 无
 
 Cleanup-Audit: #G-settings-webhook-impl 4/5 触发点 + 框架 100% ✅（剩 1 EP-A2.2 外部依赖）
 Plan-Revision: 无
+
+
+## [CHG-SN-8-FUP-SHELL-NOTIFICATIONS-ADR] ADR-147 起草 admin shell notification hub MVP (#G-shell-notifications ⚠️+🔄)
+
+- **完成时间**：2026-05-23
+- **记录时间**：2026-05-23 03:20
+- **执行模型**：claude-opus-4-7
+- **子代理**：arch-reviewer (claude-opus-4-7) — 1 轮 **A PASS**（最高级 / D-147-1..8 完整 / 14 测试 surface / 5 风险 / 4 N1）
+- **修改文件**（3 文档 / 零代码）：
+  - `docs/decisions.md` — 追加 ADR-147 完整 11 节正文（D-147-1..8 + 端点契约 + R-MID-1 零新增确认 + migration 草图（N1 预留）+ 14 测试 surface + 5 风险 R-147-N + 4 N1 follow-up + 验证清单 + 7 关联 ADR）
+  - `docs/manual/GAPS.md` — #G-shell-notifications ⬜/🔄 → ⚠️+🔄
+  - `docs/task-queue.md` SEQ-20260521-06 #55 ✅
+  - `docs/tasks.md` 清卡片
+- **新增依赖**：无
+- **数据库变更**：无（方案 A 选中 → 零 migration / 零新表；N1 升级路径预留 admin_notification_reads 表 schema 草图）
+- **关键决策（D-147-1..8）**：
+  - **D-147-1 数据源**：方案 A audit_log 子集映射（8 类白名单 actionType + level/href 映射）；零新表，最大复用现有 39 actionType 全覆盖能力
+  - **D-147-2 推送模型**：方案 A 前端 polling 60s（SWR refreshInterval）；零新依赖（admin <10 人，60s 延迟 OK）
+  - **D-147-3 tasks 数据源**：方案 C 有主次（CrawlerRun 主源 20 条 + bull queue active 副源 + Redis 降级 meta.degraded=true）
+  - **D-147-4 read 状态**：方案 A localStorage lastViewedAt（MVP 单人 admin OK；N1 升级 admin_notification_reads 表）
+  - **D-147-5 列表上限**：notifications 50 条 7 天窗口 / tasks 30 条 3 天窗口 / 均不分页
+  - **D-147-6 端点契约**：2 新端点 GET /admin/notifications + GET /admin/system/jobs（authenticate + requireRole admin/moderator + 401/403/503 错误码全复用）
+  - **D-147-7 R-MID-1**：零新增（纯读取无写操作）
+  - **D-147-8 关联 ADR**：ADR-103a / -109 / -118 / -121 / -139 / -145 / -146 共 7 条
+- **白名单 actionType 映射（首版 8 类）**：
+  - `system.webhook_send_failed` (danger) / `staging.batch_publish` (info) / `video.manual_add` (info) / `video.merge` (info) / `user_submission.action` (info) / `system.cache_clear` (warn) / `system.settings_update` (info) / `system.audit_rollback` (warn)
+- **MVP 范围控制 / 现有基础设施复用**：
+  - 零新表 / 零 migration / 零新依赖 / 零 R-MID-1 新增 / 零新 ErrorCode
+  - audit_log 数据源 + CrawlerRun + bull queue + requireRole/authenticate 守卫全复用
+  - polling 而非 SSE/WS（复杂度低 1 个数量级）
+  - localStorage 而非 DB per-user（避免新表）
+- **工时（拆 EP-A/EP-B）**：
+  - EP-A 后端核心 + 测试：~0.20w / 10 文件（NotificationService + TaskAggregator + 2 route + types + 14 单测）
+  - EP-B 前端接入：~0.10w / 4 文件（useAdminNotifications/useAdminTasks SWR hooks + admin-shell-client 改造 + shell-data.tsx 清理 mock）
+  - 总计：~0.30w
+- **验收**：
+  - typecheck PASS / lint PASS / 全 unit 4669/4670 PASS（pre-existing flaky 已隔离）
+  - verify:adr-contracts PASS（184 admin 路由对齐；2 新端点登记 ADR-147 待 EP-A 落地）
+- **价值**：
+  - **#G-shell-notifications P1 ⚠️+🔄**：mock badge 闭合路径明确 — ADR 一锤定音的 8 决策 + MVP 范围控制（不爆炸）+ 现有基础设施复用最大化
+  - **零基础设施债**：MVP 完全派生现有数据源，无新表/新 SDK/新 cron；N1 升级路径全部预留
+  - **解锁 EP 实施**：可立即启 EP-A 后端核心 + EP-B 前端接入两卡
+
+Cleanup-Audit: #G-shell-notifications ⬜/🔄 → ⚠️+🔄（ADR ✅ 2/3 / 实施 follow-up 待立）
+Plan-Revision: 无

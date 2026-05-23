@@ -84,9 +84,11 @@
 ### #G-shell-notifications · 侧栏 mock badge 未接真端点
 
 - **页面**：用户问题 #1
-- **状态**：🔄 已立 follow-up（CHG-SN-7-MISC-SHELL-NOTIFICATIONS）
+- **状态**：⚠️+🔄 ADR-147 起草 ✅（2026-05-23 / arch-reviewer A PASS）/ EP-A + EP-B 实施 follow-up 待
 - **优先级**：P1
-- **现象**：admin-shell-client.tsx:97-98 mockNotifications/mockTasks 仍是 stub；端点 `/admin/notifications` / `/admin/system/jobs` 不存在，需先通知 Hub MVP ADR
+- **现象**：admin-shell-client.tsx:124-130 mockNotifications/mockTasks 仍是 stub；端点 `/admin/notifications` / `/admin/system/jobs` 不存在
+- **ADR-147 决策**（commit 待 / 本卡）：方案 A audit_log 子集映射（8 类白名单 actionType + level/href 映射，零新表）+ 方案 A 前端 polling 60s（零 SSE/WS 依赖）+ 方案 C 有主次 tasks 数据源（CrawlerRun 主源 + bull queue active 副源 + Redis 不可用降级）+ 方案 A localStorage lastViewedAt read 状态（MVP 不实装 per-user DB read）+ 零 R-MID-1 新增 + 零新依赖 + 2 新端点（GET /admin/notifications + GET /admin/system/jobs）+ 4 类 N1 升级路径预留（DB read / KV 白名单可配 / SSE / tasks 进度增强）
+- **实施 follow-up**：拆 EP-A 后端核心 + 测试（~0.20w / 10 文件 / 14 单测）+ EP-B 前端 SWR 接入 + localStorage（~0.10w / 4 文件）；总工时 ~0.30w
 
 ### #G-dev-mode-3panels · 开发者模式 3 栏只做 1 栏
 

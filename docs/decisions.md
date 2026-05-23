@@ -11471,3 +11471,245 @@ TARGET_KINDS 不需改动（复用 `'system'` CHECK 13 种已含）。
 - **CHG-SN-8-FUP-WEBHOOK-IMPL-EP-A**：按本 ADR 后端实施（R-MID-1 4 真源 + WebhookDispatcher + ssrf-guard + 5 触发点接入 + POST /admin/webhook/test + 16 测试）
 - **CHG-SN-8-FUP-WEBHOOK-IMPL-EP-B**：前端 NotificationsTab 事件订阅 checkbox + 测试按钮接入
 
+
+
+## ADR-147 admin shell notification hub MVP（audit_log 派生 + bull queue 聚合 + 前端 polling 闭合 mock stub）
+
+**状态**：Accepted
+**日期**：2026-05-23
+**作者**：arch-reviewer (claude-opus-4-7) — 评级 **A PASS**
+**关联 GAP**：`#G-shell-notifications`（P1 — admin-shell-client.tsx mockNotifications/mockTasks stub 未接真端点）
+**关联任务**：CHG-SN-8-FUP-SHELL-NOTIFICATIONS-ADR（本卡 ADR 起草）
+**后续解锁卡**：CHG-SN-8-FUP-SHELL-NOTIFICATIONS-EP-A（后端 + 测试）/ CHG-SN-8-FUP-SHELL-NOTIFICATIONS-EP-B（前端接入）
+
+### 1. 背景与现状
+
+**admin shell mock stub 现状**：
+
+`apps/server-next/src/app/admin/admin-shell-client.tsx:124-130` 使用 `useState` 持有 `mockNotifications` + `mockTasks`（定义于 `apps/server-next/src/lib/shell-data.tsx:72-126`），共 3 条 mock 通知 + 3 条 mock 任务。badge 计数由前端 `.filter(n => !n.read).length` 本地计算。四个交互 callback（`onNotificationItemClick` / `onMarkAllNotificationsRead` / `onCancelTask` / `onRetryTask`）仅做 `setState` 乐观更新，无任何后端交互。
+
+**GAPS.md 登记**：`#G-shell-notifications`（P1，最高优先）— "端点 `/admin/notifications` / `/admin/system/jobs` 不存在，需先通知 Hub MVP ADR"。
+
+**受影响消费方**：
+1. `packages/admin-ui/src/shell/notification-drawer.tsx` — 消费 `NotificationItem[]` 渲染通知列表
+2. `packages/admin-ui/src/shell/task-drawer.tsx` — 消费 `TaskItem[]` 渲染任务列表
+3. `apps/server-next/src/app/admin/admin-shell-client.tsx` — 编排层，当前持有 mock 数据 + 4 个 callback
+4. `apps/server-next/src/lib/shell-data.tsx` — mock 数据定义（MVP 后可删除 mockNotifications / mockTasks 两个导出）
+
+**真源类型（已稳定，不需改动）**：
+- `NotificationItem`：`packages/admin-ui/src/shell/types.ts:104-114`（7 字段：id / title / body / level / createdAt / read / href）
+- `TaskItem`：`packages/admin-ui/src/shell/types.ts:118-130`（7 字段：id / title / status / progress / startedAt / finishedAt / errorMessage）
+
+**现有基础设施可复用**：
+1. `admin_audit_log` 表（ADR-109 + ADR-118）— 39 种 actionType，13 种 targetKind；已有 `idx_admin_audit_log_action_created` 索引
+2. `WebhookDispatcher`（ADR-146）— fire-and-forget 异步模式可复用范式
+3. bull queues（`apps/api/src/lib/queue.ts`）— 5 个队列 + `queue.getJobs()` / `getJobCounts()` API
+4. `maintenanceScheduler` + `GET /admin/system/scheduler-status`（CHG-408）— 6 个定时器状态
+5. `crawler_runs` 表 — 记录采集运行历史 + 7 种 status
+
+### 2. 决策要点
+
+#### D-147-1 notifications 数据源选型
+
+**选择：方案 A（audit_log 子集映射）**。notifications 数据 100% 来自 `admin_audit_log` 按白名单 actionType 过滤 + level 推断映射。
+
+理由：
+1. audit_log 已覆盖全部 admin 写操作（39 种 actionType）
+2. 零新表 / 零 migration / 零双写 — 最大化复用现有基础设施
+3. per-user read 状态 MVP 不需要（D-147-4 详述）
+
+**白名单 actionType 映射（首版 8 类）**：
+
+| # | actionType | level | title 模板 | href |
+|---|-----------|-------|-----------|------|
+| 1 | `system.webhook_send_failed` | `danger` | "Webhook 投递失败" | `/admin/settings` |
+| 2 | `staging.batch_publish` | `info` | "批量上架完成" | `/admin/videos` |
+| 3 | `video.manual_add` | `info` | "手动添加视频" | `/admin/videos` |
+| 4 | `video.merge` | `info` | "视频合并完成" | `/admin/merge` |
+| 5 | `user_submission.action` | `info` | "用户投稿处理" | `/admin/user-submissions` |
+| 6 | `system.cache_clear` | `warn` | "缓存已清除" | `/admin/settings` |
+| 7 | `system.settings_update` | `info` | "系统设置已更新" | `/admin/settings` |
+| 8 | `system.audit_rollback` | `warn` | "审计回滚执行" | `/admin/audit` |
+
+**N1 升级路径**：N1-A 独立 `admin_notifications` 表存 per-user read 指针；N1-B 白名单 KV 可配化
+
+#### D-147-2 notifications 推送模型
+
+**选择：方案 A（前端 polling 60s 间隔）**。SWR `refreshInterval: 60_000` 一行配置完成。
+
+理由：admin 同时在线 < 10 人；60s 延迟可接受；零新依赖。
+
+**N1 升级路径**：SSE（`GET /admin/notifications/stream`） — 同时在线 > 20 或亚秒需求时触发
+
+#### D-147-3 tasks 数据源
+
+**选择：方案 C 有主次**。主源 = CrawlerRun 表（最近 20 条 3 天内）+ 副源 = bull queue active jobs（maintenanceQueue + crawlerQueue active/waiting）。scheduler-status 不纳入（已有独立端点）。
+
+**字段映射**：CrawlerRun.status → TaskItem.status：`{queued→'pending', running→'running', success→'success', failed/partial_failed/cancelled→'failed', paused→'pending'}`；bull job 添加 `bull-${queueName}-${jobId}` id 前缀避免冲突。
+
+**合并去重**：CrawlerRun 优先（业务语义更丰富）。
+
+#### D-147-4 已读/未读状态
+
+**选择：方案 A（localStorage）**。MVP 用 localStorage 存 `admin_notification_lastViewedAt` ISO 时间戳。`read` 字段由前端计算：`notification.createdAt <= lastViewedAt → read=true`。后端统一返回 `read: false`。
+
+理由：admin 后台单人使用占多数；跨设备同步需求弱；零 migration / 零后端改动。
+
+**N1 升级路径**：`admin_notification_reads(user_id, source_type, source_id, read_at)` 表
+
+#### D-147-5 列表上限/分页
+
+- notifications：最近 50 条 + 7 天窗口 + 不分页（meta.total 告知前端）
+- tasks：CrawlerRun 20 条 + bull active 10 条上限 + 3 天窗口 + 不分页
+- badge：前端从两端点 response 各自计算（不设独立 badge 端点）
+
+#### D-147-6 端点契约
+
+**端点 1：`GET /admin/notifications`**
+- preHandler: `[authenticate, requireRole(['admin', 'moderator'])]`
+- query: `limit?` (default 50, max 100) / `since?` (ISO 8601, default -7d)
+- response 200: `{ data: NotificationItem[], meta: { total, limit, since } }`
+- 错误码：401 / 403（零新增）
+
+**端点 2：`GET /admin/system/jobs`**
+- preHandler: `[authenticate, requireRole(['admin', 'moderator'])]`
+- query: `limit?` (default 20, max 50) / `since?` (ISO 8601, default -3d)
+- response 200: `{ data: TaskItem[], meta: { total, limit, since, queueCounts: { crawler: {waiting, active}, maintenance: {waiting, active} } } }`
+- 错误码：401 / 403 / 503（Redis 不可用降级：仅返回 CrawlerRun 数据 + meta.degraded=true）
+
+#### D-147-7 R-MID-1 范式应用
+
+**方案 A 纯 audit_log 映射 → 零 R-MID-1 新增**。不新增 actionType / targetKind / migration。两个端点均为纯读取，无写操作。
+
+#### D-147-8 关联 ADR 引用
+
+| # | ADR | 关联 |
+|---|-----|------|
+| 1 | ADR-103a | admin-ui Shell SSOT — NotificationItem/TaskItem 类型契约 |
+| 2 | ADR-109 | admin_audit_log schema — notifications 数据源 |
+| 3 | ADR-118 | admin audit 视图协议 — ACTION_TYPES/TARGET_KINDS 真源 |
+| 4 | ADR-121 | R-MID-1 7 文件框架 — 本 ADR 零新增 |
+| 5 | ADR-146 | WebhookDispatcher — system.webhook_send_failed 白名单 |
+| 6 | ADR-145 | video.manual_add 白名单 |
+| 7 | ADR-139 | fastify.requireRole — 端点权限守卫 |
+
+### 3. 数据库 schema
+
+**方案 A 选中 → 零新 migration / 零新表**。
+
+notifications 完全派生自 `admin_audit_log`，tasks 完全派生自 `crawler_runs` + bull queue Redis API。
+
+**N1 schema 预留**（方案 B 启动时）：
+
+```sql
+-- 073_admin_notification_reads.sql (N1，仅参考)
+CREATE TABLE IF NOT EXISTS admin_notification_reads (
+  id           BIGSERIAL    PRIMARY KEY,
+  user_id      UUID         NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  source_type  TEXT         NOT NULL CHECK (source_type IN ('audit_log', 'custom')),
+  source_id    TEXT         NOT NULL,
+  read_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+  UNIQUE(user_id, source_type, source_id)
+);
+CREATE INDEX IF NOT EXISTS idx_notification_reads_user
+  ON admin_notification_reads(user_id, read_at DESC);
+```
+
+### 4. 端点契约
+
+| # | Method | Path | 权限 | Query | Response `data` | 新增 ErrorCode | ADR |
+|---|--------|------|------|-------|----------------|---------------|-----|
+| 1 | GET | `/admin/notifications` | admin, moderator | `limit?, since?` | `{ data: NotificationItem[], meta: { total, limit, since } }` (200) | 无 | ADR-147 |
+| 2 | GET | `/admin/system/jobs` | admin, moderator | `limit?, since?` | `{ data: TaskItem[], meta: { total, limit, since, queueCounts } }` (200) | 无 | ADR-147 |
+
+**side-effects**：两个端点均为纯读取，无写操作，不写 audit log。
+
+### 5. R-MID-1 checklist
+
+**方案 A 选中 → R-MID-1 零新增**。不修改任何 R-MID-1 真源文件。
+
+### 6. 测试 surface（14 条）
+
+文件：`tests/unit/api/notification-service.test.ts` + `tests/unit/api/task-aggregator.test.ts` + `tests/unit/api/notification-endpoint.test.ts` + `tests/unit/api/jobs-endpoint.test.ts`
+
+| # | 类别 | 用例 |
+|---|------|------|
+| 1 | 白名单过滤 | 白名单内 actionType → 返回对应 NotificationItem |
+| 2 | 白名单过滤 | 白名单外 actionType → 不出现在结果 |
+| 3 | level 映射 | system.webhook_send_failed → level: 'danger' |
+| 4 | level 映射 | staging.batch_publish → level: 'info' (默认) |
+| 5 | href 映射 | 各 actionType → 对应 href 路径 |
+| 6 | 时间窗口 | since 参数生效（8 天前数据不返回） |
+| 7 | limit 上限 | limit=5 只返回 5 条 / limit 超 100 截断 |
+| 8 | CrawlerRun 映射 | status=running → TaskItem.status='running' |
+| 9 | CrawlerRun 映射 | status=failed → TaskItem.status='failed' + errorMessage |
+| 10 | bull 降级 | Redis 不可用 → 仅 CrawlerRun + meta.degraded=true |
+| 11 | bull active job | active job → TaskItem 含 progress |
+| 12 | 端点 auth | 未登录 → 401 / 无权限 → 403 |
+| 13 | 端点 notifications | 正常请求 → 200 + data + meta.total |
+| 14 | 端点 jobs | 正常请求 → 200 + data + meta.queueCounts |
+
+### 7. 风险与缓解
+
+| # | 风险 | 严重度 | 缓解 |
+|---|------|--------|------|
+| R-147-1 | audit_log 白名单遗漏（新增 actionType 后忘记加入） | 中 | ReadonlySet 类型安全 + 头注释提示 + 测试 #1-2 覆盖 + N1 KV 可配化 |
+| R-147-2 | polling 频率 vs DB 负载 | 低 | admin < 10 人 + 60s 间隔 = 0.17 QPS/人 + idx 覆盖 + limit 50 |
+| R-147-3 | bull Redis 不可用 | 中 | try-catch 降级 + meta.degraded=true + 返回 CrawlerRun 数据 |
+| R-147-4 | CrawlerRun + bull job 去重不精确 | 低 | CrawlerRun 优先 + bull id 前缀 + 短暂重复对 UX 影响可忽略 |
+| R-147-5 | localStorage 已读状态丢失 | 低 | MVP 可接受 + N1 升级 DB per-user read |
+
+### 8. 工时估算
+
+**EP-A：后端核心 + 测试**（~0.20w / ~10 文件）
+
+| 子步骤 | 工时 |
+|--------|------|
+| NotificationService + 白名单 + 映射 | 30 min |
+| TaskAggregator + CrawlerRun 映射 + bull 降级 | 40 min |
+| 2 route（notifications / jobs）+ zod schema | 40 min |
+| types response 信封 | 10 min |
+| 14 单测（4 文件） | 65 min |
+| changelog + commit | 5 min |
+
+**EP-B：前端接入**（~0.10w / ~4 文件）
+
+| 子步骤 | 工时 |
+|--------|------|
+| useAdminNotifications SWR hook | 20 min |
+| useAdminTasks SWR hook | 20 min |
+| admin-shell-client.tsx 改造（mock → SWR + localStorage） | 25 min |
+| shell-data.tsx 清理 mock exports | 5 min |
+
+**总计**：~0.30w
+
+**拆卡建议**：EP-A + 测试合一卡（~10 文件 / ~2.5h，超 5 项但同质化属于"测试 + 实现"成对，不触发 PATCH 拆分）；EP-B 独立前端卡（~4 文件 / ~1h）。
+
+### 9. N1 follow-up
+
+- **N1-147-1（per-user read 状态 DB 化）**：admin 团队 3+ 人协作时触发；新建 `admin_notification_reads` 表 + 2 PATCH 端点 + R-MID-1 `notification.dismiss`/`notification.mark_all_read`
+- **N1-147-2（白名单 KV 可配化）**：admin 反馈触发；`notification_action_whitelist` KV + Settings 页 UI
+- **N1-147-3（SSE 实时推送）**：同时在线 > 20 时触发；`GET /admin/notifications/stream` + 前端 EventSource
+- **N1-147-4（tasks 进度增强）**：CrawlerRun progress 估算 + enrichmentQueue/imageHealthQueue 纳入
+
+### 10. 验证清单
+
+commit 时必跑：
+
+| # | 命令 | 门禁 |
+|---|------|------|
+| 1 | `npm run typecheck` | 零错误 |
+| 2 | `npm run lint` | 零错误 |
+| 3 | `npm run test -- --run` | 全部通过（含新增 14 用例） |
+| 4 | `npm run verify:adr-contracts` | PASS |
+| 5 | `npm run verify:endpoint-adr` | PASS（2 新端点登记 ADR-147） |
+
+EP-B 额外手动验证：admin shell 通知 Drawer 真数据 / badge 计数正确 / 任务 Drawer 展示 CrawlerRun
+
+### 11. 关联 ADR
+
+详见 D-147-8 表（7 条关联 ADR-103a / -109 / -118 / -121 / -139 / -145 / -146）。
+
+**自评：A PASS** — 8 条决策全部含 N1 升级路径；MVP 范围合理（零新表/零依赖/零 R-MID-1 新增）；现有基础设施复用最大化；14 条测试 surface 完整。无 BLOCKER。
+
+---
