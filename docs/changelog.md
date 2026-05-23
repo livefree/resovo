@@ -2867,3 +2867,52 @@ Plan-Revision: 无
 
 Cleanup-Audit: #G-shell-notifications ⚠️+🔄 → ✅ 完全闭合 3/3
 Plan-Revision: 无
+
+
+## [CHG-SN-8-FUP-SESSION-FIELDS-CONSUME-ADR] ADR-148 起草 session 3 KV 字段中间件消费协议 (#G-settings-session-fields-consume ⚠️+🔄)
+
+- **完成时间**：2026-05-23
+- **记录时间**：2026-05-23
+- **执行模型**：claude-opus-4-7
+- **子代理**：arch-reviewer (claude-opus-4-7) — 1 轮 **A PASS**
+- **修改文件**（3 文档 / 零代码）：
+  - `docs/decisions.md` — 追加 ADR-148 完整 11 节正文（D-148-1..8 决策 + 端点契约 + R-MID-1 零新增 + 12 测试 surface + 4 风险 + 4 N1 + 关联 4 ADR）
+  - `docs/manual/GAPS.md` — #G-settings-session-fields-consume 状态升级 ⚠️+🔄
+  - `docs/task-queue.md` SEQ-20260521-06 #58 ✅
+  - `docs/tasks.md` 清卡片
+- **新增依赖**：无
+- **数据库变更**：无（方案 A maxConcurrent 推 N1 → 零 migration）
+- **关键决策（D-148-1..8）**：
+  - **D-148-1 消费路径**：方案 C UserService.getSessionTimeoutMinutes private helper（关注点分离 / DRY / 可测试性 / 向后兼容）
+  - **D-148-2 缓存层**：方案 A 每次查 DB（login QPS < 10，PK 命中 < 1ms，YAGNI）；N1 升 Redis cache EX 60s
+  - **D-148-3 maxConcurrent**：推 N1（需 user_sessions 表 + 踢出策略 + R-MID-1 + 跨设备 UX 决策 → 独立 ADR）
+  - **D-148-4 extendOnActivity**：推 N1（与 ADR-003 「access token 不存 Cookie」张力 → 需独立 ADR 评估 X-New-Access-Token header 方案）
+  - **D-148-5 KV 误配防护**：方案 C 双重防护（zod min(5).max(1440) 写入校验 + helper 内 Math.max/min clamp + NaN 降级 60）
+  - **D-148-6 单位转换**：helper 返回 number 分钟，caller 传 `${minutes}m` 字符串（与 '15m' 惯例一致）
+  - **D-148-7 R-MID-1**：零新增（读操作，admin 改 KV 已有 system.settings_update audit）
+  - **D-148-8 关联 ADR**：ADR-003 直接修改 + ADR-139 R-148-4 兼容性 + ADR-121 无变更 + ADR-146 同期 KV 消费范式
+- **关键发现 R-148-4**：ADR-139 user:rca Redis 缓存 TTL 硬编码 900s（= 旧 access token 15m）；动态化 timeout 后将出现 `max(0, timeout - 900)` 秒的权限穿越窗口（如 timeout=60min → 45 分钟穿越）；**EP-A 一并修复**（user:rca TTL → `Math.max(900, session_timeout_minutes * 60)` 秒）
+- **MVP 范围控制**：
+  - 零新表 / 零 migration / 零新依赖 / 零 R-MID-1 新增 / 零新端点 / 零新 ErrorCode
+  - 仅消费 1 KV（timeoutMinutes）— maxConcurrent + extendOnActivity 各有独立 ADR 理由推 N1
+  - 总工时 0.5w 可控（含 R-148-4 修复）
+- **行为变更**（有意）：access token TTL 从硬编码 15m → KV 驱动默认 60m（migration 066 seed 一致）；admin 可在 Settings 调整 [5, 1440] 分钟
+- **不在范围**：
+  - maxConcurrent 消费（独立 ADR-NNN N1-148-1 / user_sessions 表）
+  - extendOnActivity 消费（独立 ADR-NNN N1-148-2 / ADR-003 兼容评估）
+  - KV Redis cache 升级（N1-148-3 / QPS > 100 触发）
+- **工时**：
+  - EP-A 后端核心 + 12 单测 + R-148-4 修复 + ADR-003 描述更新：~0.5w / 7 文件
+  - EP-B 可选 LoginSessions Tab disabled + tooltip：~0.1w / 1 文件
+  - 总计：~0.5-0.6w
+- **验收**：
+  - typecheck PASS / lint PASS / 全 unit PASS（pre-existing flaky 隔离 PASS）
+  - verify:adr-contracts PASS（186 admin 路由对齐；零新端点）
+- **价值**：
+  - **#G-settings-session-fields-consume P2 安全 ⚠️+🔄**：session timeout 消费闭合路径明确 — admin 可控 access token 生命周期；R-148-4 增量发现并整合修复，避免安全退化
+  - **MVP 范围控制典范**：8 决策中 2 个明确推 N1（maxConcurrent + extendOnActivity），避免一次性吃 3 KV 导致工时失控（避免半天 → 1 天）
+  - **复用 ADR-139 范式**：D-148-2 N1 路径明确同 ADR-139 Redis cache 范式
+  - **解锁 EP-A 实施**：可立即启 EP-A 后端 7 文件改造
+
+Cleanup-Audit: #G-settings-session-fields-consume ⬜/🔄 → ⚠️+🔄 (ADR ✅ 2/3 / 实施 follow-up 待立)
+Plan-Revision: 无

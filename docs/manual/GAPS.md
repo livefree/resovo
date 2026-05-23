@@ -151,9 +151,11 @@
 ### #G-settings-session-fields-consume · 登录会话 3 字段未被中间件消费
 
 - **页面**：P-settings §3.8
-- **状态**：🔄 已立 CHG-SN-7-MISC-SESSION-FIELDS-CONSUME
+- **状态**：⚠️+🔄 ADR-148 起草 ✅（2026-05-23 / arch-reviewer A PASS）/ EP-A 实施 follow-up 待
 - **优先级**：P2（安全）
 - **现象**：session_timeout_minutes / session_max_concurrent / session_extend_on_activity 仅存储未生效
+- **ADR-148 决策**（commit 待 / 本卡）：方案 C UserService.getSessionTimeoutMinutes private helper + 4 caller 复用 + 方案 A 每次查 DB（QPS < 10）+ maxConcurrent / extendOnActivity 推 N1（独立 ADR 评估）+ 方案 C 双重防护（zod + clamp + NaN 降级）+ 零 R-MID-1 新增 + 零新表 / 零新端点 + R-148-4 关键发现 ADR-139 user:rca Redis TTL 需同步 session_timeout_minutes（实施卡 EP-A 一并修复）
+- **实施 follow-up**：EP-A 后端核心（~0.5w / 7 文件：auth.ts 加可选 expiresIn + UserService helper + 4 caller 改造 + clamp 防护 + 12 单测 + R-148-4 user:rca TTL 同步修复 + ADR-003 描述更新）+ EP-B 可选（LoginSessions Tab disabled tooltip ~0.1w）；总工时 ~0.5-0.6w
 
 ### #G-settings-save-all · 「保存所有更改」全局按钮 — NEGATED（架构决策不实装）
 
