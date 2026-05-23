@@ -131,13 +131,13 @@
 ### #G-settings-webhook-impl · API·Webhook Tab 字段已存但回调未实装
 
 - **页面**：P-settings §3.7
-- **状态**：✅ **后端核心闭合**（2026-05-22 / ADR-146 + EP-A 全 PASS）；前端 NotificationsTab 事件订阅 checkbox + 测试按钮接入 + 5 触发点接入留独立 follow-up（按需启动）
+- **状态**：✅ **后端核心 + 前端 UI 闭合**（2026-05-23 / ADR-146 + EP-A + EP-B 全 PASS）；5 触发点接入留独立 follow-up CHG-SN-8-FUP-WEBHOOK-IMPL-EP-A2（按需启动）
 - **优先级**：P3
 - **现象（已核查）**：NotificationsTab webhookEnabled / webhookUrl / webhookSecret 写 KV；后端 apps/api/src/ + apps/worker/src/ 零发送逻辑
 - **消费层补齐**：CHG-SN-8-GAPS-WEBHOOK-NOT-IMPL — NotificationsTab warn banner 已加
 - **ADR-146 决策**：方案 B 事件 enum + 用户多选订阅（不引入多 webhook 端点表）+ 5 事件类型（crawler.run.failed / storage.r2.alert / moderation.pending.threshold / submission.created / video.batch.complete）+ 方案 A 修正版 fire-and-forget WebhookDispatcher（不用 bull 队列避免 Redis 依赖；与 AuditLogService 同模式）+ HMAC-SHA256 签名（X-Resovo-Signature: sha256= 前缀对齐 GitHub 惯例 + 4 自定义 header）+ retry [5s/15s/45s] + jitter 4 次尝试 + 30s 超时 + 5xx/超时重试 4xx 不重试 + R-MID-1 第 25 次（system.webhook_send_failed audit 仅记失败）+ SSRF 5 层防御独立模块 ssrf-guard（https only / RFC 1918 私有 IP / loopback / link-local / metadata hostname）+ 5 触发点接入 + 唯一新端点 POST /admin/webhook/test + 零新 ErrorCode / 零新依赖 / 零新 migration / 零新表
 - **后端实施 EP-A**（本卡 commit 待 / 2026-05-22）：CHG-SN-8-FUP-WEBHOOK-IMPL-EP-A — 4 R-MID-1 真源（types union + WebhookEventType + ACTION_TYPES + SystemSettingKey notification_webhook_events + 2 set-equal 测试）+ ssrf-guard 独立模块（5 层防御 isAllowedWebhookUrl）+ WebhookDispatcher 核心（enqueue + dispatch + HMAC + retry [5s/15s/45s] + audit failure + sendTest 单次不重试方法）+ POST /admin/webhook/test route（admin auth + ssrf + 422/200）+ server.ts 注册 + 16 单测（14 dispatcher + 2 endpoint）全 PASS；完整 unit 4661/4663 PASS（2 pre-existing flaky）
-- **前端实施 follow-up EP-B**：CHG-SN-8-FUP-WEBHOOK-IMPL-EP-B — NotificationsTab 5 事件订阅 checkbox（WebhookEventType enum 驱动）+ KV 读写 notification_webhook_events JSON 数组 + 「测试连通性」按钮调 POST /admin/webhook/test；工时 ~30 min
+- **前端实施 EP-B**（本卡 commit 待 / 2026-05-23）：CHG-SN-8-FUP-WEBHOOK-IMPL-EP-B — webhook-api lib（testWebhook + WEBHOOK_EVENT_TYPES enum + WEBHOOK_EVENT_LABELS map）+ NotificationsTab 5 事件订阅 checkbox（enum 驱动渲染）+ 「连通性测试」按钮（dirty 时 disabled / 调 POST /admin/webhook/test + success/failure toast）+ siteConfig zod schema 扩 notificationWebhookEvents enum array + saveSiteSettings mapper 写入 KV + queries/systemSettings 读 KV parseWebhookEvents 解析 + SiteSettings 类型扩字段 + apps/server v1 fixture 同步 + 4 新单测；全 unit 4667/4667 PASS
 - **触发点接入 follow-up EP-A2**：CHG-SN-8-FUP-WEBHOOK-IMPL-EP-A2 — 5 触发点 dispatcher.enqueue 调用（CrawlerRunService.handleRunFailed / UserSubmissionService.create / StagingPublishService.batchPublish / R2 quota cron / pending threshold cron）；工时 ~25 min
 
 ### #G-settings-session-fields-consume · 登录会话 3 字段未被中间件消费

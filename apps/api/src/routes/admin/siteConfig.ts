@@ -35,6 +35,11 @@ const SiteSettingsBodySchema = z.object({
   notificationWebhookEnabled: z.boolean().optional(),
   notificationWebhookUrl:     z.string().max(500).optional(),
   notificationWebhookSecret:  z.string().max(200).optional(),
+  // CHG-SN-8-FUP-WEBHOOK-IMPL-EP-B / ADR-146 D-146-1：事件订阅多选数组
+  notificationWebhookEvents:  z.array(z.enum([
+    'crawler.run.failed', 'storage.r2.alert', 'moderation.pending.threshold',
+    'submission.created', 'video.batch.complete',
+  ] as const)).max(20).optional(),
   sessionTimeoutMinutes:      z.number().int().min(5).max(1440).optional(),
   sessionMaxConcurrent:       z.number().int().min(1).max(50).optional(),
   sessionExtendOnActivity:    z.boolean().optional(),
@@ -123,6 +128,10 @@ export async function adminSiteConfigRoutes(fastify: FastifyInstance) {
       pairs.notification_webhook_url = d.notificationWebhookUrl
     }
     if (d.notificationWebhookSecret !== undefined)  pairs.notification_webhook_secret  = d.notificationWebhookSecret
+    // CHG-SN-8-FUP-WEBHOOK-IMPL-EP-B / ADR-146：事件订阅 JSON 数组（去重 + 限制 20 件）
+    if (d.notificationWebhookEvents !== undefined) {
+      pairs.notification_webhook_events = JSON.stringify(Array.from(new Set(d.notificationWebhookEvents)))
+    }
     if (d.sessionTimeoutMinutes !== undefined)       pairs.session_timeout_minutes       = String(d.sessionTimeoutMinutes)
     if (d.sessionMaxConcurrent !== undefined)        pairs.session_max_concurrent        = String(d.sessionMaxConcurrent)
     if (d.sessionExtendOnActivity !== undefined)     pairs.session_extend_on_activity    = String(d.sessionExtendOnActivity)

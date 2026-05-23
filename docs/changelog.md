@@ -16095,4 +16095,50 @@ Cleanup-Audit: #G-settings-webhook-impl 后端核心 ✅（触发点接入 + 前
 Plan-Revision: 无（按 ADR-146 既定决策实施）
 
 
+## [CHG-SN-8-FUP-WEBHOOK-IMPL-EP-B] ADR-146 前端实施 — NotificationsTab 5 事件订阅 + 连通性测试按钮 (#G-settings-webhook-impl 后端核心 + UI 闭合)
+
+- **完成时间**：2026-05-23
+- **记录时间**：2026-05-23 00:30
+- **执行模型**：claude-opus-4-7
+- **子代理**：无（按 ADR-146 既定决策实施 / 消费 EP-A 后端端点）
+- **修改文件**（8 文件 + 4 文档）：
+  - `apps/server-next/src/lib/system/webhook-api.ts`（新）— `testWebhook()` POST 端点封装 + WEBHOOK_EVENT_TYPES 5 值 enum + WEBHOOK_EVENT_LABELS 中文 map（命名规约 `<module>.<resource>.<verb>` 与 admin audit actionType 一致）
+  - `apps/server-next/src/app/admin/settings/_tabs/NotificationsTab.tsx`：
+    - NotifState 加 `webhookEvents: readonly string[]` 字段
+    - useEffect 初始化从 `res.notificationWebhookEvents ?? []` 注入
+    - handleSave 透传 notificationWebhookEvents 到 saveSiteSettings
+    - 新 toggleEvent handler（Set 去重 + dirty 标记）
+    - 新 testing state + handleTestWebhook handler（成功 success toast / 失败 danger toast）
+    - 「连通性测试」按钮（位 Webhook card 内 / 5 字段 grid 末尾 / dirty 或 URL 空时 disabled + tooltip 提示）
+    - 「事件订阅」card 改写为 5 checkbox grid（enum 驱动 + WEBHOOK_EVENT_LABELS 渲染 + disabled 跟 webhookEnabled）
+  - `apps/api/src/routes/admin/siteConfig.ts` — SiteSettingsBodySchema 加 notificationWebhookEvents zod enum array max 20 + saveSiteSettings mapper 写 KV（去重 Set + JSON.stringify）
+  - `apps/api/src/db/queries/systemSettings.ts` — mapSettings 加 notificationWebhookEvents 字段（新增 parseWebhookEvents helper 处理 JSON 解析失败降级 []）
+  - `packages/types/src/system.types.ts` — SiteSettings 接口扩 notificationWebhookEvents: string[]
+  - `apps/server/src/components/admin/system/site-settings/SiteSettings.tsx` — v1 fixture 同步加 notificationWebhookEvents: []（保持 typecheck PASS）
+  - `tests/unit/components/server-next/admin/system/NotificationsTab.test.tsx` — mock webhook-api（testWebhookMock + WEBHOOK_EVENT_TYPES + WEBHOOK_EVENT_LABELS）+ FIXTURE 加字段 + 4 新单测组（#8 5 checkbox 渲染 / #9 勾选 dirty + 保存透传 / #10 测试按钮 dirty 时 disabled / #11 click 调 testWebhook + success toast）
+  - `docs/manual/GAPS.md` — #G-settings-webhook-impl → ✅ 后端核心 + 前端 UI 闭合
+  - `docs/manual/20-pages/P-settings.md` — §3.7 状态更新
+  - `docs/task-queue.md` SEQ-20260521-06 #50 ✅
+  - `docs/tasks.md` 清卡片
+- **新增依赖**：无
+- **数据库变更**：无（复用 system_settings KV 表 / EP-A 已新增 1 key `notification_webhook_events`）
+- **设计亮点**：
+  - **enum 驱动渲染**：5 checkbox 自动从 WEBHOOK_EVENT_TYPES 数组生成，新增事件类型零 UI 改动（只需 enum 追加 + label 追加）
+  - **测试按钮 dirty 守卫**：dirty 时 disabled + tooltip「请先保存设置后再测试」，避免测试用过期 KV 配置导致结果误导
+  - **opt-in 安全语义**：空 events 数组不推送任何事件（与 EP-A WebhookDispatcher 一致）
+  - **KV mapper 去重**：siteConfig.ts 写入前 `Array.from(new Set(events))` 去重，避免 UI bug 导致重复
+- **验收**：
+  - typecheck PASS（含 SiteSettings 接口扩字段 + apps/server v1 fixture 同步）
+  - lint PASS / 全 unit 4667/4667 PASS（+4 新单测 / 0 失败 / 4 pre-existing 错误日志非测试失败）
+  - 4 新单测覆盖：5 checkbox 渲染 / 勾选 dirty + 保存透传 / 测试按钮 dirty disabled / click + success toast
+- **价值**：
+  - **#G-settings-webhook-impl P3 前端 UI 闭合**：admin 可视化勾选 5 事件订阅 + 一键测试连通性（KV 配置生效）
+  - **零新依赖 / 零新概念**：100% 消费 EP-A 后端端点 + WEBHOOK_EVENT_TYPES enum 真源
+  - **enum 驱动可扩展**：未来新增事件只需 enum + label 各加 1 行，UI 零改动
+- **下一步**：CHG-SN-8-FUP-WEBHOOK-IMPL-EP-A2 按需启动（5 触发点接入 ~25 min — 当前 admin 可手动测试 + 配置就绪，但事件触发逻辑仍未接入业务 Service）
+
+Cleanup-Audit: #G-settings-webhook-impl 后端核心 + 前端 UI ✅（5 触发点接入 follow-up 待）
+Plan-Revision: 无
+
+
 

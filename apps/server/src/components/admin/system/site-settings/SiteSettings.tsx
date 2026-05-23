@@ -32,6 +32,7 @@ const DEFAULT_SETTINGS: SiteSettings = {
   notificationWebhookEnabled:  false,
   notificationWebhookUrl:      '',
   notificationWebhookSecret:   '',
+  notificationWebhookEvents:   [],
   sessionTimeoutMinutes:       60,
   sessionMaxConcurrent:        5,
   sessionExtendOnActivity:     true,

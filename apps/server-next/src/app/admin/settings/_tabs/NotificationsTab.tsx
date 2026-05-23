@@ -22,6 +22,8 @@ import {
 } from '@resovo/admin-ui'
 import { getSiteSettings, saveSiteSettings } from '@/lib/system/api'
 import { ApiClientError } from '@/lib/api-client'
+// CHG-SN-8-FUP-WEBHOOK-IMPL-EP-B / ADR-146：测试端点 + 事件 enum 真源
+import { testWebhook, WEBHOOK_EVENT_TYPES, WEBHOOK_EVENT_LABELS, type WebhookEventType } from '@/lib/system/webhook-api'
 
 const SECTION_STYLE: CSSProperties = {
   display: 'flex',
@@ -83,6 +85,8 @@ interface NotifState {
   webhookEnabled: boolean
   webhookUrl: string
   webhookSecret: string
+  // CHG-SN-8-FUP-WEBHOOK-IMPL-EP-B / ADR-146：事件订阅
+  webhookEvents: readonly string[]
 }
 
 function describeError(err: unknown): { title: string; description: string } {
@@ -120,6 +124,7 @@ export function NotificationsTab() {
           webhookEnabled: res.notificationWebhookEnabled,
           webhookUrl: res.notificationWebhookUrl,
           webhookSecret: res.notificationWebhookSecret,
+          webhookEvents: res.notificationWebhookEvents ?? [],
         })
         setDirty(false)
       })
@@ -138,6 +143,43 @@ export function NotificationsTab() {
     setDirty(true)
   }, [])
 
+  // CHG-SN-8-FUP-WEBHOOK-IMPL-EP-B / ADR-146：事件订阅 toggle + 测试连通性
+  const toggleEvent = useCallback((event: WebhookEventType, checked: boolean) => {
+    setState((prev) => {
+      if (!prev) return prev
+      const next = new Set(prev.webhookEvents)
+      if (checked) next.add(event); else next.delete(event)
+      return { ...prev, webhookEvents: Array.from(next) }
+    })
+    setDirty(true)
+  }, [])
+
+  const [testing, setTesting] = useState(false)
+  const handleTestWebhook = useCallback(async () => {
+    setTesting(true)
+    try {
+      const result = await testWebhook()
+      if (result.success) {
+        toast.push({
+          title: '测试成功',
+          description: `HTTP ${result.httpStatus} · ${result.latencyMs}ms`,
+          level: 'success',
+        })
+      } else {
+        toast.push({
+          title: '测试失败',
+          description: result.error ?? `HTTP ${result.httpStatus ?? 'N/A'}`,
+          level: 'danger',
+        })
+      }
+    } catch (err: unknown) {
+      const { title, description } = describeError(err)
+      toast.push({ title, description, level: 'danger' })
+    } finally {
+      setTesting(false)
+    }
+  }, [toast])
+
   const handleSave = useCallback(async () => {
     if (!state) return
     setSaving(true)
@@ -148,6 +190,7 @@ export function NotificationsTab() {
         notificationWebhookEnabled: state.webhookEnabled,
         notificationWebhookUrl: state.webhookUrl,
         notificationWebhookSecret: state.webhookSecret,
+        notificationWebhookEvents: state.webhookEvents as string[],
       })
       toast.push({ title: '已保存', description: '通知设置已更新', level: 'success' })
       setDirty(false)
@@ -241,17 +284,43 @@ export function NotificationsTab() {
             data-testid="notif-webhook-secret"
             aria-label="签名密钥"
           />
+          {/* CHG-SN-8-FUP-WEBHOOK-IMPL-EP-B / ADR-146：测试连通性按钮（POST /admin/webhook/test 单次不重试 / 30s 超时）*/}
+          <label style={FIELD_LABEL_STYLE}>连通性测试</label>
+          <span>
+            <AdminButton
+              variant="default"
+              size="sm"
+              loading={testing}
+              disabled={!state.webhookEnabled || !state.webhookUrl || dirty}
+              onClick={() => void handleTestWebhook()}
+              data-testid="notif-webhook-test-btn"
+              title={dirty ? '请先保存设置后再测试' : !state.webhookUrl ? '请先配置 Webhook URL' : '发送一次测试请求（不重试 / 30s 超时）'}
+            >
+              发送测试请求
+            </AdminButton>
+          </span>
         </div>
       </AdminCard>
 
       <AdminCard
         surface="plain"
         padding="md"
-        header={{ title: '事件订阅', subtitle: '待 ADR-129 / M-SN-8+ 实装' }}
+        header={{ title: '事件订阅', subtitle: 'ADR-146 · 勾选要推送 webhook 的事件类型（opt-in 空数组不推送任何事件）' }}
         data-testid="notifications-card-events"
       >
-        <div style={ADVISORY_STYLE}>
-          计划支持：采集失败 · 存储告警 · 审核待处理超阈值 · 用户投稿新增（M-SN-8+ ADR-129）
+        <div style={FIELD_GRID_STYLE} data-testid="webhook-events-grid">
+          {WEBHOOK_EVENT_TYPES.map((event) => (
+            <React.Fragment key={event}>
+              <label style={FIELD_LABEL_STYLE} title={event}>{WEBHOOK_EVENT_LABELS[event]}</label>
+              <AdminCheckbox
+                label={event}
+                checked={state.webhookEvents.includes(event)}
+                onChange={(e) => toggleEvent(event, e.target.checked)}
+                disabled={!state.webhookEnabled}
+                data-testid={`notif-webhook-event-${event}`}
+              />
+            </React.Fragment>
+          ))}
         </div>
       </AdminCard>
 

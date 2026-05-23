@@ -67,6 +67,8 @@ export interface SiteSettings {
   notificationWebhookEnabled: boolean
   notificationWebhookUrl: string
   notificationWebhookSecret: string
+  // CHG-SN-8-FUP-WEBHOOK-IMPL-EP-B / ADR-146 D-146-1：事件订阅多选数组（默认 []）
+  notificationWebhookEvents: string[]
   sessionTimeoutMinutes: number
   sessionMaxConcurrent: number
   sessionExtendOnActivity: boolean

@@ -97,10 +97,23 @@ export function deserializeSiteSettings(raw: Record<string, string>): SiteSettin
     notificationWebhookEnabled: raw.notification_webhook_enabled === 'true',
     notificationWebhookUrl:     raw.notification_webhook_url ?? '',
     notificationWebhookSecret:  raw.notification_webhook_secret ?? '',
+    // CHG-SN-8-FUP-WEBHOOK-IMPL-EP-B / ADR-146：事件订阅 JSON 数组（解析失败降级 []）
+    notificationWebhookEvents:  parseWebhookEvents(raw.notification_webhook_events),
     sessionTimeoutMinutes:      Number(raw.session_timeout_minutes ?? 60),
     sessionMaxConcurrent:       Number(raw.session_max_concurrent ?? 5),
     sessionExtendOnActivity:    raw.session_extend_on_activity !== 'false',
   }
+}
+
+function parseWebhookEvents(raw: string | undefined): string[] {
+  if (!raw) return []
+  try {
+    const parsed = JSON.parse(raw)
+    if (Array.isArray(parsed)) return parsed.filter((x): x is string => typeof x === 'string')
+  } catch {
+    // ignore malformed JSON
+  }
+  return []
 }
 
 function parseDailyTime(input: string | undefined): string {

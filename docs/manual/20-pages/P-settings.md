@@ -76,7 +76,7 @@
 ### 3.7 API · Webhook（CHG-SN-7-REDO-03-C）
 
 - 外部回调地址 + secret + event filter
-- 实装状态：✅ **后端核心实装**（ADR-146 + EP-A 闭合 / 2026-05-22）：WebhookDispatcher + ssrf-guard + 测试端点 + R-MID-1 第 25 次系统化；前端事件订阅 UI + 5 触发点接入留 follow-up CHG-SN-8-FUP-WEBHOOK-IMPL-EP-B/-A2
+- 实装状态：✅ **后端核心 + 前端 UI 全实装**（ADR-146 + EP-A + EP-B 闭合 / 2026-05-23）：WebhookDispatcher + ssrf-guard + 测试端点 + R-MID-1 第 25 次 + NotificationsTab 事件订阅 5 checkbox + 连通性测试按钮；5 触发点接入留 follow-up CHG-SN-8-FUP-WEBHOOK-IMPL-EP-A2 ~25 min
 - **视觉警示**：Webhook card warn banner 已加（CHG-SN-8-GAPS-WEBHOOK-NOT-IMPL）
 - **ADR-146 决策核心**：
   - 事件订阅模型：方案 B（单 URL + 5 事件 enum 多选订阅，不引入多端点表）
