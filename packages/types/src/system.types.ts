@@ -42,6 +42,10 @@ export type SystemSettingKey =
   | 'notification_pending_threshold'
   // ADR-146 R-146-3：阈值类事件 1h debounce 上次告警时间戳（ms）
   | 'notification_pending_last_alert'
+  // CHG-SN-8-FUP-WEBHOOK-IMPL-EP-A2.4 / ADR-146 D-146-7 #2：R2 quota 软上限 bytes（默认 50 * 1024³ = 50 GB）
+  | 'notification_r2_quota_threshold_bytes'
+  // ADR-146 R-146-3：R2 quota 12h debounce 上次告警时间戳（ms）
+  | 'notification_r2_last_alert'
   | 'session_timeout_minutes'
   | 'session_max_concurrent'
   | 'session_extend_on_activity'

@@ -76,7 +76,7 @@
 ### 3.7 API · Webhook（CHG-SN-7-REDO-03-C）
 
 - 外部回调地址 + secret + event filter
-- 实装状态：✅ **后端 + UI + 3 触发点接入闭合**（ADR-146 + EP-A + EP-B + EP-A2 + EP-A2.1 + EP-A2.3 / 2026-05-23）：WebhookDispatcher + ssrf-guard + 测试端点 + R-MID-1 第 25 次 + NotificationsTab 5 checkbox + 测试按钮 + StagingPublishService batch.complete + CrawlerRun.failed + Pending threshold cron（1h tick + 1h debounce）；剩余 2 触发点（submission.created 等用户端 POST 实装 / R2 quota cron 需调研 R2 capacity API）留 follow-up EP-A2.2/.4
+- 实装状态：✅ **后端 + UI + 4/5 触发点接入闭合 + 框架 100%**（ADR-146 + EP-A + EP-B + EP-A2 + EP-A2.1 + EP-A2.3 + EP-A2.4 / 2026-05-23）：WebhookDispatcher + ssrf-guard + 测试端点 + R-MID-1 第 25 次 + NotificationsTab 5 checkbox + 测试按钮 + StagingPublishService batch.complete + CrawlerRun.failed + Pending threshold cron（1h tick + 1h debounce）+ R2 quota cron（ListObjectsV2 分页 / 6h tick + 12h debounce / 阈值 50 GB / > 80% 触发）；剩余 1 触发点 submission.created 阻塞于用户端 POST 实装（外部依赖，独立 follow-up EP-A2.2 按需启动）
 - **视觉警示**：Webhook card warn banner 已加（CHG-SN-8-GAPS-WEBHOOK-NOT-IMPL）
 - **ADR-146 决策核心**：
   - 事件订阅模型：方案 B（单 URL + 5 事件 enum 多选订阅，不引入多端点表）

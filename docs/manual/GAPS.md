@@ -131,7 +131,7 @@
 ### #G-settings-webhook-impl · API·Webhook Tab 字段已存但回调未实装
 
 - **页面**：P-settings §3.7
-- **状态**：✅ **后端 + UI + 3 触发点接入闭合**（2026-05-23 / ADR-146 + EP-A + EP-B + EP-A2 + EP-A2.1 + EP-A2.3 全 PASS）；剩余 2 触发点（submission.created + R2 quota cron）留独立 follow-up（按需启动）
+- **状态**：✅ **后端 + UI + 4/5 触发点接入闭合 + 框架 100%**（2026-05-23 / ADR-146 + EP-A + EP-B + EP-A2 + EP-A2.1 + EP-A2.3 + EP-A2.4 全 PASS）；剩余 1 触发点 submission.created 阻塞于用户端 POST 实装（外部依赖，独立 follow-up EP-A2.2 按需启动）
 - **优先级**：P3
 - **现象（已核查）**：NotificationsTab webhookEnabled / webhookUrl / webhookSecret 写 KV；后端 apps/api/src/ + apps/worker/src/ 零发送逻辑
 - **消费层补齐**：CHG-SN-8-GAPS-WEBHOOK-NOT-IMPL — NotificationsTab warn banner 已加
@@ -141,9 +141,9 @@
 - **触发点接入 EP-A2**（本卡 commit 待 / 2026-05-23）：CHG-SN-8-FUP-WEBHOOK-IMPL-EP-A2 — StagingPublishService 1 触发点接入（admin 手动批量发布完成 → video.batch.complete + 系统 Job 触发不发避免噪音）+ 注入 optional WebhookDispatcher + 3 单测验证 framework 集成正确；admin 现在可在「批量发布」操作后实际收到 webhook 通知
 - **CrawlerRun.failed 接入 EP-A2.1**（本卡 commit 待 / 2026-05-23）：CHG-SN-8-FUP-WEBHOOK-IMPL-EP-A2.1 — `syncRunStatusFromTasks` 加 RETURNING + 返回 SyncRunStatusResult { status, siteKey, summary }（8 处现有调用方 zero-impact，typecheck PASS）+ crawlerWorker.ts finally 块加 status=failed/partial_failed 判断 + dispatcher.enqueue('crawler.run.failed') 触发（actor=SYSTEM_ACTOR_ID）+ try/catch 兜底 webhook 触发不阻塞 worker 退出；最小侵入（只 1 处 worker 改动）覆盖所有 run 失败场景；零新单测（依赖现有 webhook-dispatcher.test 14 用例覆盖框架行为）
 - **moderation.pending.threshold cron 接入 EP-A2.3**（本卡 commit 待 / 2026-05-23）：CHG-SN-8-FUP-WEBHOOK-IMPL-EP-A2.3 — maintenanceScheduler 加 runPendingThresholdTick（1h 间隔 / SQL COUNT pending_review videos / KV `notification_pending_threshold` 阈值默认 50 / KV `notification_pending_last_alert` 1h debounce ADR-146 R-146-3 防风暴）+ types SystemSettingKey 扩 2 KV key + getSchedulerStatus 新增 pending-threshold-check 条目；不入 maintenanceQueue（轻量 SQL + KV 直接执行）；零新单测（依赖现有 webhook framework 17 用例 + scheduler runtime 验证）
-- **剩余触发点 follow-up**：
+- **R2 quota 接入 EP-A2.4**（commit 待 / 2026-05-23）：CHG-SN-8-FUP-WEBHOOK-IMPL-EP-A2.4 — maintenanceScheduler 加 runR2QuotaTick（6h 间隔 / @aws-sdk/client-s3 ListObjectsV2 分页累加 Size / bucket=R2_IMAGES_BUCKET / KV `notification_r2_quota_threshold_bytes` 阈值默认 50 GB / usagePercent > 80% 触发 / 12h debounce KV `notification_r2_last_alert` 防风暴 ADR-146 R-146-3）+ types SystemSettingKey 扩 2 KV key + getSchedulerStatus 加 r2-quota-check 条目 + 10 万 keys partial 上限保护；payload 对齐 ADR-146 D-146-7：`{ usagePercent, usageBytes, threshold, bucket, checkedAt }`；零新依赖（@aws-sdk/client-s3 已装）；零新单测（依赖现有 webhook framework 17 用例 + R2 SDK 行为）
+- **剩余触发点 follow-up**（外部依赖）：
   - **EP-A2.2**：submission.created → 当前无用户端 POST 创建端点，需先实装用户投稿前端流程或等待 user-facing API（external dependency）
-  - **EP-A2.4**：R2 quota cron → 需调研 R2 capacity API（S3 ListObjectsV2 + 累加 Content-Length 或专用 endpoint），独立 follow-up（工时 ~30 min）
 
 ### #G-settings-session-fields-consume · 登录会话 3 字段未被中间件消费
 

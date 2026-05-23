@@ -2672,3 +2672,58 @@ Plan-Revision: 无
 
 
 
+
+
+## [CHG-SN-8-FUP-WEBHOOK-IMPL-EP-A2.4] ADR-146 storage.r2.alert R2 quota cron 触发点接入 (#G-settings-webhook-impl 4/5 触发点闭合 + 框架 100%)
+
+- **完成时间**：2026-05-23
+- **记录时间**：2026-05-23 02:55
+- **执行模型**：claude-opus-4-7
+- **子代理**：无
+- **修改文件**（2 文件代码 + 4 文档）：
+  - `apps/api/src/workers/maintenanceScheduler.ts`：
+    - 新增 import S3Client + ListObjectsV2Command（复用 @aws-sdk/client-s3 已装 SDK）
+    - 新增常量 R2_QUOTA_TICK_MS = 6h / R2_QUOTA_DEBOUNCE_MS = 12h / R2_QUOTA_DEFAULT_THRESHOLD_BYTES = 50 GB / R2_QUOTA_ALERT_PERCENT = 80 / R2_LIST_MAX_ITERATIONS = 100
+    - 新增 r2QuotaTimer + r2QuotaTickRunning state
+    - 新增 `runR2QuotaTick()` 函数：
+      1. R2_ENDPOINT/ACCESS_KEY/SECRET_KEY 任一缺失 → 跳过（本地开发零噪音）
+      2. bucket 取 R2_IMAGES_BUCKET（图片是 R2 主用量）
+      3. 读 KV `notification_r2_quota_threshold_bytes`（默认 50 GB）
+      4. ListObjectsV2 分页循环累加 Size + 100 次迭代上限保护（10 万 keys 后 partial 数据告警）
+      5. usagePercent = usageBytes / threshold * 100；< 80% → 返回
+      6. 12h debounce check（KV `notification_r2_last_alert`）
+      7. dispatcher.enqueue('storage.r2.alert', { usagePercent, usageBytes, threshold, bucket, checkedAt }, SYSTEM_ACTOR_ID)
+      8. 更新 last_alert KV
+    - getSchedulerStatus 新增 r2-quota-check 条目
+    - registerMaintenanceScheduler 末端注册 setInterval
+  - `packages/types/src/system.types.ts` — SystemSettingKey 扩 2 KV key（`notification_r2_quota_threshold_bytes` / `notification_r2_last_alert`）
+  - `docs/manual/GAPS.md` — #G-settings-webhook-impl 3/5 → 4/5 触发点闭合 + 框架 100%
+  - `docs/manual/20-pages/P-settings.md` — §3.7 状态更新
+  - `docs/task-queue.md` SEQ-20260521-06 #54 ✅
+  - `docs/tasks.md` 清卡片
+- **新增依赖**：无（@aws-sdk/client-s3 ^3.717 复用 ImageStorageService 已装）
+- **数据库变更**：无（仅 KV 表新增 2 key 通过 SystemSettingKey 类型扩展）
+- **设计要点**：
+  - **方案 B ListObjectsV2 累加**（vs 方案 A Cloudflare GraphQL Analytics API）：避免新 token 依赖；用现有 R2_* env + S3 兼容 API；缺点 O(N) 但 6h tick 频率可接受
+  - **bucket 单一选择**：监控 R2_IMAGES_BUCKET（默认 resovo-images）— 图片是主用量；字幕 bucket 远小可忽略；future 可扩 multi-bucket
+  - **12h debounce**（R-146-3）：R2 list 较慢 + 用量增长较缓 → 比 pending threshold 的 1h 更宽
+  - **10 万 keys 上限**：超出 partial 数据告警；admin 仍能感知"用量大"信号（保守估计反而符合预警目的）；future 可加 Bucket Analytics endpoint
+  - **payload 对齐 ADR**：usagePercent + usageBytes + threshold + bucket + checkedAt（threshold 是 bytes 软上限；usagePercent 派生值便于 admin 快速识别）
+  - **80% 提前预警**：超 80% 软上限即告警，给 admin 留出处理时间避免硬撞 quota
+- **不在范围**：
+  - 单测：依赖现有 webhook framework 17 用例 + scheduler runtime + R2 SDK 行为已被 @aws-sdk 上游测试覆盖
+  - submission.created EP-A2.2（外部依赖：用户端 POST /submissions 端点未实装）
+  - 多 bucket 监控（subtitles + images 累加；future N1 可扩）
+  - usageBytes 历史趋势图表（admin UI 增强 / future）
+- **验收**：
+  - typecheck PASS / lint PASS
+  - 全 unit 4669/4670 PASS（1 pre-existing flaky `CrawlerClient.test.tsx:334` 隔离 62/62 PASS / 与本卡无关）
+  - verify:adr-contracts PASS（184 admin 路由全部对齐 61 ADR 端点）
+- **价值**：
+  - **#G-settings-webhook-impl 4/5 触发点闭合 + 框架 100%**：R2 用量软上限自动告警 — admin 可在外部告警平台收到 R2 quota 预警，避免 image 上传链路硬撞 quota 中断
+  - **零新依赖 + 零新基础设施**：复用 @aws-sdk/client-s3 + maintenanceScheduler 范式 + 现有 KV 表，最小侵入
+  - **debounce + 上限保护**：12h cooldown + 10 万 keys 上限 = 即使大 bucket / 高频用量增长也不会风暴或卡 scheduler
+  - **EP-A2 系列完整**：4 触发点全部接入（StagingPublishService / CrawlerRun.failed / Pending threshold cron / R2 quota cron）；剩 1 触发点 submission.created 阻塞外部依赖
+
+Cleanup-Audit: #G-settings-webhook-impl 4/5 触发点 + 框架 100% ✅（剩 1 EP-A2.2 外部依赖）
+Plan-Revision: 无

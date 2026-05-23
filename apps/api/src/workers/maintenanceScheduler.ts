@@ -15,6 +15,8 @@ import { baseLogger } from '@/api/lib/logger'
 // CHG-SN-8-FUP-WEBHOOK-IMPL-EP-A2.3 / ADR-146：审核积压超阈值 webhook
 import { WebhookDispatcher, SYSTEM_ACTOR_ID } from '@/api/services/WebhookDispatcher'
 import { AuditLogService } from '@/api/services/AuditLogService'
+// CHG-SN-8-FUP-WEBHOOK-IMPL-EP-A2.4 / ADR-146：R2 quota 软上限告警
+import { S3Client, ListObjectsV2Command } from '@aws-sdk/client-s3'
 
 const schedulerLog = baseLogger.child({ worker: 'maintenance-scheduler' })
 
@@ -24,17 +26,25 @@ const STAGING_VERIFY_TICK_MS = 8 * 3600_000  // 8 小时（verify-staging-source
 const RECONCILE_TICK_MS = 24 * 3600_000      // 24 小时（reconcile-search-index）
 const PENDING_THRESHOLD_TICK_MS = 60 * 60_000  // 1 小时（CHG-SN-8-FUP-WEBHOOK-IMPL-EP-A2.3 / ADR-146）
 const PENDING_THRESHOLD_DEBOUNCE_MS = 60 * 60_000  // 1 小时 debounce（防风暴 ADR-146 R-146-3）
+// CHG-SN-8-FUP-WEBHOOK-IMPL-EP-A2.4 / ADR-146 D-146-7 #2：R2 quota 软上限告警
+const R2_QUOTA_TICK_MS = 6 * 3600_000             // 6 小时（R2 list 较慢，频率低于 pending check）
+const R2_QUOTA_DEBOUNCE_MS = 12 * 3600_000        // 12 小时 debounce（防风暴 R-146-3）
+const R2_QUOTA_DEFAULT_THRESHOLD_BYTES = 50 * 1024 * 1024 * 1024  // 50 GB
+const R2_QUOTA_ALERT_PERCENT = 80                 // > 80% 软上限触发
+const R2_LIST_MAX_ITERATIONS = 100                // 10 万 key 上限保护；超出 partial 数据告警
 
 let schedulerTimer: NodeJS.Timeout | null = null
 let verifyTimer: NodeJS.Timeout | null = null
 let stagingVerifyTimer: NodeJS.Timeout | null = null
 let reconcileTimer: NodeJS.Timeout | null = null
 let pendingThresholdTimer: NodeJS.Timeout | null = null
+let r2QuotaTimer: NodeJS.Timeout | null = null
 let tickRunning = false
 let verifyTickRunning = false
 let stagingVerifyTickRunning = false
 let reconcileTickRunning = false
 let pendingThresholdTickRunning = false
+let r2QuotaTickRunning = false
 
 async function runMaintenanceTick(): Promise<void> {
   if (tickRunning) return
@@ -165,6 +175,77 @@ async function runPendingThresholdTick(): Promise<void> {
   }
 }
 
+/**
+ * CHG-SN-8-FUP-WEBHOOK-IMPL-EP-A2.4 / ADR-146 D-146-7 #2：R2 quota 软上限告警
+ * - ListObjectsV2 分页累加 Size（@aws-sdk/client-s3 已装，零新依赖）
+ * - bucket 取 R2_IMAGES_BUCKET（图片是主用量；字幕远小）；未配 R2_* env 跳过
+ * - 12h debounce KV `notification_r2_last_alert` 防风暴（R-146-3）
+ * - 阈值 KV `notification_r2_quota_threshold_bytes` 默认 50 GB；usagePercent > 80% 触发
+ * - payload 对齐 ADR-146 D-146-7：{ usagePercent, usageBytes, threshold, bucket, checkedAt }
+ */
+async function runR2QuotaTick(): Promise<void> {
+  if (r2QuotaTickRunning) return
+  r2QuotaTickRunning = true
+  try {
+    const { R2_ENDPOINT, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY } = process.env
+    if (!R2_ENDPOINT || !R2_ACCESS_KEY_ID || !R2_SECRET_ACCESS_KEY) return
+    const bucket = process.env.R2_IMAGES_BUCKET ?? 'resovo-images'
+
+    const thresholdRaw = await systemSettingsQueries.getSetting(db, 'notification_r2_quota_threshold_bytes')
+    const threshold = thresholdRaw ? Number.parseInt(thresholdRaw, 10) : R2_QUOTA_DEFAULT_THRESHOLD_BYTES
+    if (!Number.isFinite(threshold) || threshold <= 0) return
+
+    const client = new S3Client({
+      region: 'auto',
+      endpoint: R2_ENDPOINT,
+      credentials: { accessKeyId: R2_ACCESS_KEY_ID, secretAccessKey: R2_SECRET_ACCESS_KEY },
+    })
+    let usageBytes = 0
+    let continuationToken: string | undefined
+    let iterations = 0
+    let truncatedByLimit = false
+    do {
+      const res = await client.send(new ListObjectsV2Command({
+        Bucket: bucket,
+        ContinuationToken: continuationToken,
+      }))
+      for (const obj of res.Contents ?? []) {
+        usageBytes += obj.Size ?? 0
+      }
+      continuationToken = res.IsTruncated ? res.NextContinuationToken : undefined
+      iterations += 1
+      if (continuationToken && iterations >= R2_LIST_MAX_ITERATIONS) {
+        truncatedByLimit = true
+        break
+      }
+    } while (continuationToken)
+
+    const usagePercent = (usageBytes / threshold) * 100
+    if (usagePercent < R2_QUOTA_ALERT_PERCENT) return
+
+    const lastAlertRaw = await systemSettingsQueries.getSetting(db, 'notification_r2_last_alert')
+    if (lastAlertRaw) {
+      const lastAlertMs = Number.parseInt(lastAlertRaw, 10)
+      if (Number.isFinite(lastAlertMs) && Date.now() - lastAlertMs < R2_QUOTA_DEBOUNCE_MS) return
+    }
+
+    const dispatcher = new WebhookDispatcher(db, new AuditLogService(db))
+    dispatcher.enqueue('storage.r2.alert', {
+      usagePercent: Number(usagePercent.toFixed(2)),
+      usageBytes,
+      threshold,
+      bucket,
+      checkedAt: new Date().toISOString(),
+    }, SYSTEM_ACTOR_ID)
+    await systemSettingsQueries.setSetting(db, 'notification_r2_last_alert', String(Date.now()))
+    schedulerLog.info({ usageBytes, threshold, usagePercent, bucket, truncatedByLimit }, 'R2 quota webhook triggered')
+  } catch (err) {
+    schedulerLog.warn({ err, stage: 'r2-quota-check' }, 'tick failed')
+  } finally {
+    r2QuotaTickRunning = false
+  }
+}
+
 export interface SchedulerInfo {
   name: string
   enabled: boolean
@@ -180,6 +261,7 @@ export function getSchedulerStatus(): SchedulerInfo[] {
     { name: 'verify-staging-sources',   enabled: globalEnabled && stagingVerifyTimer != null,   intervalMs: STAGING_VERIFY_TICK_MS },
     { name: 'reconcile-search-index',   enabled: globalEnabled && reconcileTimer != null,       intervalMs: RECONCILE_TICK_MS },
     { name: 'pending-threshold-check',  enabled: globalEnabled && pendingThresholdTimer != null, intervalMs: PENDING_THRESHOLD_TICK_MS },
+    { name: 'r2-quota-check',           enabled: globalEnabled && r2QuotaTimer != null,           intervalMs: R2_QUOTA_TICK_MS },
   ]
 }
 
@@ -214,4 +296,11 @@ export function registerMaintenanceScheduler(): void {
     void runPendingThresholdTick()
   }, PENDING_THRESHOLD_TICK_MS)
   schedulerLog.info({ interval_ms: PENDING_THRESHOLD_TICK_MS, stage: 'pending-threshold-check' }, 'registered')
+
+  // CHG-SN-8-FUP-WEBHOOK-IMPL-EP-A2.4 / ADR-146：R2 quota 软上限定时检查
+  if (r2QuotaTimer) return
+  r2QuotaTimer = setInterval(() => {
+    void runR2QuotaTick()
+  }, R2_QUOTA_TICK_MS)
+  schedulerLog.info({ interval_ms: R2_QUOTA_TICK_MS, stage: 'r2-quota-check' }, 'registered')
 }
