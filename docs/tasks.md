@@ -6,4 +6,4 @@
 
 ## 进行中任务
 
-（空 — 上一任务 CHG-SN-8-CHORE-ADR-146-D-N-CLOSE 已完成 / SEQ-20260521-06 #62 ✅ / ADR-146 D-N 编号 6 条 + crawlerKpi.ts SQL alias advisory 双清零）
+（空 — 上一任务 CHG-SN-7-MISC-VISUAL-BATCH 已完成 / SEQ-20260521-06 #63 ✅ / REDO-01-J + REDO-02-F 视觉回归软门 spec 落地闭合 / capture 待用户 dev server 起后手动 `npm run test:visual:update`）

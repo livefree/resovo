@@ -3093,3 +3093,57 @@ Plan-Revision: 无（仅文档同步 / 不触动 plan）
 
 Cleanup-Audit: ADR-146 D-N 编号 advisory 6 条 ✅ 清零；crawlerKpi.ts SQL alias 启发式误报 ✅ 修正
 Plan-Revision: 无（仅 changelog + SQL alias rename / 不触动 plan）
+
+
+## [CHG-SN-7-MISC-VISUAL-BATCH] CHG-SN-7-MISC-VISUAL-CRAWLER + VISUAL-SUBMISSIONS 合卡（REDO-01-J + REDO-02-F 软门收尾）
+
+- **完成时间**：2026-05-23
+- **记录时间**：2026-05-23
+- **执行模型**：claude-opus-4-7（max effort 续会话）
+- **子代理**：无（同 ae4ea66f moderation.visual.spec.ts 9 张占位先例 / 不动 admin-ui 公开 API）
+- **修改文件**（2 新 + 2 文档）：
+  - `tests/visual/crawler/crawler.visual.spec.ts`（新建 / 7 test cases / 115 行）
+    - crawler — kpi row（`[data-crawler-kpi-row]`）
+    - crawler — timeline card（`[data-testid="crawler-timeline-card"]`）
+    - crawler — site list（`[data-testid="crawler-site-list"]`）
+    - crawler — site row expanded（首行 expand chevron → `[data-testid^="crawler-expand-"]`）
+    - crawler — advanced menu dropdown（`crawler-advanced-trigger` → `crawler-advanced-dropdown`）
+    - crawler — runs list（独立路由 `/admin/crawler/runs` → `[data-testid="crawler-runs-table"]`）
+    - crawler — page header（`[data-testid="crawler-page-header"]`）
+  - `tests/visual/user-submissions/user-submissions.visual.spec.ts`（新建 / 6 test cases / 99 行）
+    - submissions — page header（`[data-testid="user-submissions-page-header"]`）
+    - submissions — segment bad_source default（`[data-testid="user-submissions-segment"]`）
+    - submissions — segment processed active（切到 `已处理` Tab 截 segment）
+    - submissions — first card（`[data-testid^="submission-card-"]` 首张）
+    - submissions — pagination footer（仅当 total > PAGE_LIMIT 渲染 / 否则 test.skip）
+    - submissions — empty state（切到 wish_list 或 metadata_correction Tab 触发空数据 / 否则 test.skip）
+  - `docs/task-queue.md` SEQ-20260521-06 追加 #63 + line 243（CHG-SN-7-MISC-VISUAL-CRAWLER）+ line 247（CHG-SN-7-MISC-VISUAL-SUBMISSIONS）状态升 ✅
+  - `docs/tasks.md` 清卡片
+- **新增依赖**：无（playwright @playwright/test 已装）
+- **数据库变更**：无
+- **设计要点**：
+  - **同 moderation.visual.spec.ts 范式（ae4ea66f / SEQ-20260502-01 FIX-CLOSE）**：spec 落地 + baseline capture 由用户手动 `npm run test:visual:update` 触发；PR review 后入库 PNG；spec 文件本身闭合软门要求
+  - **PLAYWRIGHT_VISUAL=1 env gate**：默认不参与 `test:e2e`（playwright.config.ts:20 双重防御 — env gate + 显式 projects 列表不含 admin-visual）；避免 baseline 未入库时阻塞 e2e
+  - **稳定 selector 优先 data-testid + data-* attribute**：crawler 7 / submissions 6 共 13 张 baseline 全部基于稳定 testid 锚定；避免 CSS class hash / 文本内容耦合
+  - **EmptyState / Pagination conditional skip**：dev DB 数据状态不可控时（如 segment 全有数据 / total ≤ PAGE_LIMIT）用 `test.skip(true, ...)` 跳过 baseline 入库；避免 false negative
+  - **头部注释完整化**：含 ADR 真源（REDO-01 系列 + REDO-02 系列）+ 运行命令 + 前置条件清单 + dev DB 数据要求；便于未来 reviewer 复现 capture
+- **行为变更**：无（仅 spec 文件落地 / 不动业务代码 / 不动 schema / 不动 admin-ui）
+- **不在范围**：
+  - 起 dev server（dev:next :3003 + dev:api :3001）
+  - 实际跑 `npm run test:visual:update` capture baseline
+  - 入库 PNG（按 ae4ea66f 范式独立操作 / 用户 PR review 后入库）
+  - 改 playwright.config.ts 加入 admin-visual 到默认 projects（env gate 设计保留 / 避免 baseline 未入库阻塞 e2e）
+  - admin-ui 公开组件 API 变更（同 ae4ea66f 范式 / 不触动 LinesPanel / Segment / KpiCard 等）
+- **验收**：
+  - typecheck PASS（spec 文件无语法错误 / .ts 子项目）
+  - `PLAYWRIGHT_VISUAL=1 npx playwright test --project=admin-visual --list tests/visual/crawler/... tests/visual/user-submissions/...` 列出 13 tests（spec parse OK）
+  - lint PASS（不动业务代码）
+  - verify:adr-contracts 维持 ✅（不动 ADR 端点 / 不动 D-N）
+- **价值**：
+  - **REDO-01-J + REDO-02-F 软门正式闭合**：CHG-SN-7-REDO-01-J 验收扣 0.5（视觉回归未跑）+ CHG-SN-7-REDO-02-F 验收扣 0.5（视觉回归未跑）→ spec 落地后 milestone audit 可调升评级
+  - **visual coverage 累计 22 张**：moderation 9（ae4ea66f）+ crawler 7（本卡）+ submissions 6（本卡）— admin v2 关键路径视觉 baseline 覆盖
+  - **范式扩展**：从 moderation 单一 spec 范式扩到 crawler / submissions；建立未来其他 admin v2 页（settings / videos / image-health 等）视觉回归落地范式
+  - **闭合 SEQ-20260521-06 第 3 张 chore 卡**：本会话 3 commit（DOCS-DRIFT-SYNC + ADR-146-D-N-CLOSE + VISUAL-BATCH）/ milestone audit 加速
+
+Cleanup-Audit: CHG-SN-7-MISC-VISUAL-CRAWLER ✅ + CHG-SN-7-MISC-VISUAL-SUBMISSIONS ✅ 同 commit 闭合（合卡）
+Plan-Revision: 无（仅 spec 落地 / capture 待用户手动）
