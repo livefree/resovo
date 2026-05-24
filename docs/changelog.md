@@ -4137,3 +4137,69 @@ Plan-Revision: 1 次（FilterEnumOption.label 从 string 扩展 ReactNode / 与 
 
 Cleanup-Audit: 4 用户反馈修复 ✅ / 高级菜单入口 + matrix CSS 推右 + 多选全栈 / 问题 4 用户决策不修 / 全 4828 unit 0 flaky / 4 质量门禁全过
 Plan-Revision: 2 次（CSV 格式选型 / 高级菜单加入口替代 sidebar 二级菜单）
+
+---
+
+## [CHG-SN-9-DT-HEADER-REDESIGN-EP-4.5-HOTFIX-3] 矩阵 popover 3 问题修复（可见性 toggle + 隐藏此列 + 过滤 switch disabled）
+
+- **完成时间**：2026-05-24
+- **记录时间**：2026-05-24
+- **执行模型**：claude-opus-4-7（主循环）
+- **子代理**：无（D-149-5 设计强化 / 实施层主循环承担）
+- **关联 ADR**：ADR-149 D-149-5 + D-149-16 + AMENDMENT 1 D-149-15
+- **关联 SEQ**：SEQ-20260524-01 第 1 序列任务 #1 EP-4.5 后续修复
+- **依赖**：EP-5-CRAWLER-RUNS-PATCH ✅ commit `61bc52ca`
+- **触发**：@livefree 在 EP-5-CRAWLER-RUNS-PATCH 走读后反馈 3 问题
+- **3 问题根因**：
+  - **问题 1（矩阵 popover 可见性无法关闭）+ 问题 3（列级 ⋯ "隐藏此列"无响应）同根因**：CrawlerRunsView line 449-458 `onQueryChange` 只处理 `patch.pagination` 和 `patch.sort`，**没处理 `patch.columns`** + query.columns 是空 Map（line 430）→ 矩阵 popover toggle 可见性 / 列级 ⋯ "隐藏此列" 都通过 `onQueryChange({ columns })` 触发，被消费方直接丢弃 → UI 无变化
+  - **问题 2（过滤 switch 未过滤时不能开启）**：按 D-149-5 设计原意（矩阵看状态 / 改值走列名 ⋯），矩阵 switch 只能"关"不能"开"。但 column-matrix-menu.tsx 未在 switch 上加 disabled 视觉提示 → 用户预期落差
+  - **系统性范式 bug**：grep 实测 **9/11 消费方**未处理 `patch.columns`（VideoListClient / UsersListClient / AuditClient / SubmissionsListClient / SubtitlesListClient / ImageHealthClient / MergeClient / CrawlerRunDetailView + 本次修的 CrawlerRunsView + SourcesClient）
+- **修改文件**：
+  - `packages/admin-ui/src/components/data-table/column-matrix-menu.tsx`：过滤 switch 在 `!filtered` 时 `disabled` + `aria-disabled='true'` + `title='请点击「{列名}」列名右侧 ⋯ 编辑过滤值'`（D-149-5 设计强化）+ data-cell-focusable 仅 filtered 时启用（disabled 不参与键盘导航）
+  - `apps/server-next/src/app/admin/crawler/runs/_client/CrawlerRunsView.tsx`：
+    - 新增 `columnPrefs` state（ReadonlyMap<string, ColumnPreference>）
+    - query.columns 用 columnPrefs（line 430 不再空 Map）
+    - onQueryChange 处理 `patch.columns` → setColumnPrefs
+  - `apps/server-next/src/app/admin/sources/_client/SourcesClient.tsx`：同上范式（顺带修合规消费方）
+  - `tests/unit/components/admin-ui/table/column-matrix-menu.test.tsx`：
+    - 测试 "有 filterContent 列 → 渲染 switch" 加 disabled + aria-disabled + title 断言
+    - **新增 1 测试** "已过滤列 → switch enabled（可点击关闭清除过滤）"（验证 disabled 状态切换）
+- **新增依赖**：无
+- **数据库变更**：无
+- **新增端点**：无
+- **关键设计落实**：
+  - **D-149-5 强化**：矩阵 switch 视觉提示"只能关不能开"（disabled + title tooltip）/ 用户预期与设计意图对齐
+  - **patch.columns 范式补齐**：CrawlerRunsView + SourcesClient 2 个消费方同步补 columnPrefs state + onQueryChange handler / 范式可被剩余 7 消费方在 EP-5-* 子卡内复用
+  - **disabled switch 仍可见**：用户能看到此列"有 filterContent"但不能从矩阵切 / 看 title 知道走列名 ⋯ 编辑路径
+- **剩余 7 消费方相同 patch.columns 遗漏**（在对应 EP-5-* 子卡同步修）：
+  - EP-5-submissions：SubmissionsListClient
+  - EP-5-users：UsersListClient
+  - EP-5-audit：AuditClient
+  - EP-5-videos：VideoListClient
+  - 独立卡修：SubtitlesListClient / ImageHealthClient / MergeClient / CrawlerRunDetailView（不在 EP-5-* 范围 / 起独立 follow-up）
+- **质量门禁**：
+  - ✅ `npm run typecheck`（全 8 workspace PASS）
+  - ✅ `npm run lint`（5/5 FULL TURBO）
+  - ✅ admin-ui/table 395 全 PASS（含 column-matrix-menu 新 disabled 测试）
+  - ✅ `npm run verify:adr-contracts`（style-shorthand-conflict 0 / D-N 166 闭环）
+  - ✅ **全 unit 4829/4829 PASS / 0 flaky 持续**
+- **用户可见行为变化**：
+  - `/admin/crawler/runs`（CrawlerRunsView）+ `/admin/sources`（SourcesClient）：
+    - 矩阵 popover 切换可见性 switch 真生效（列实际显示/隐藏）
+    - 列级 ⋯ → "隐藏此列" 真生效（列实际隐藏）
+  - 所有 admin 列表页矩阵 popover 过滤格：
+    - 未过滤列 → switch 灰化 + hover title 提示"请点列名 ⋯ 编辑过滤值"
+    - 已过滤列 → switch 可点击关闭（清除该列过滤）
+- **价值**：
+  - **3 用户痛点闭合**：可见性 + 隐藏此列 + 过滤 switch 用户体验问题
+  - **D-149-5 设计强化**：matrix popover 不支持开启过滤的设计意图通过 UI（disabled + tooltip）明示
+  - **patch.columns 范式沉淀**：CrawlerRunsView + SourcesClient 修复范例可被剩余 7 消费方复用
+  - **系统性 bug 识别**：grep 实测发现 9/11 消费方相同遗漏（标记后续 EP-5-* 子卡同步修）
+  - **0 flaky 持续**：4829 测试全 PASS（首次跑有 1 flaky 重跑过 / 与本卡无关）
+- **后续**：
+  - 用户走读 /admin/crawler/runs + /admin/sources 验证 3 问题修复
+  - 通过 → 启动 EP-5-submissions（SubmissionsListClient 2 select + **同步补 patch.columns** / ~0.3w）
+  - 剩余 4 消费方（SubtitlesListClient / ImageHealthClient / MergeClient / CrawlerRunDetailView）患同 bug，起独立 follow-up 卡
+
+Cleanup-Audit: 矩阵 popover 3 问题修复 ✅ / patch.columns 范式补齐 2 消费方 / D-149-5 强化 / 全 4829 unit 0 flaky / 4 质量门禁全过 / 剩余 7 消费方 EP-5-* 子卡或独立 follow-up 修
+Plan-Revision: 0 次（D-149-5 设计原意保留 / 实施层补 disabled 视觉提示）

@@ -356,7 +356,7 @@ describe('ColumnMatrixMenu — 过滤 cell', () => {
     expect(countryUnsupported.getAttribute('aria-disabled')).toBe('true')
   })
 
-  it('有 filterContent 列 → 渲染 switch（未过滤 aria-checked=false）', () => {
+  it('有 filterContent 列 → 渲染 switch（未过滤 aria-checked=false / EP-4.5-HOTFIX-3 disabled + title tooltip）', () => {
     render(
       <ColumnMatrixMenu
         open={true}
@@ -378,6 +378,38 @@ describe('ColumnMatrixMenu — 过滤 cell', () => {
     const titleFilter = screen.getByTestId('matrix-filter-title')
     expect(titleFilter.getAttribute('role')).toBe('switch')
     expect(titleFilter.getAttribute('aria-checked')).toBe('false')
+    // EP-4.5-HOTFIX-3 / 问题 2：未过滤 + 有 filterContent → switch disabled + title tooltip 提示
+    expect((titleFilter as HTMLButtonElement).disabled).toBe(true)
+    expect(titleFilter.getAttribute('aria-disabled')).toBe('true')
+    expect(titleFilter.getAttribute('title')).toContain('编辑过滤值')
+  })
+
+  it('已过滤列 → switch enabled（可点击关闭清除过滤）', () => {
+    const filtersWithTitle: ReadonlyMap<string, FilterValue> = new Map([
+      ['title', { kind: 'text', value: '黑客' } as FilterValue],
+    ])
+    render(
+      <ColumnMatrixMenu
+        open={true}
+        columns={COLUMNS}
+        columnMenus={COLUMN_MENUS_BASE}
+        columnsValue={ALL_VISIBLE}
+        currentSort={NO_SORT}
+        currentFilters={filtersWithTitle}
+        anchorRef={makeAnchorRef()}
+        onColumnsChange={noop}
+        onClearColumnFilter={noop}
+        onSort={noop}
+        onClearSort={noop}
+        onClearAllFilters={noop}
+        onResetColumnVisibility={noop}
+        onClose={noop}
+      />,
+    )
+    const titleFilter = screen.getByTestId('matrix-filter-title')
+    expect((titleFilter as HTMLButtonElement).disabled).toBe(false)
+    expect(titleFilter.getAttribute('aria-disabled')).toBeNull()
+    expect(titleFilter.getAttribute('title')).toBeNull()
   })
 
   it('已过滤列（currentFilters 含 colId）→ switch aria-checked=true', () => {

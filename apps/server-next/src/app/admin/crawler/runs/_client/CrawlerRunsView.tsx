@@ -318,6 +318,8 @@ export function CrawlerRunsView() {
   // EP-5-crawler-runs-PATCH-B: 多选 state（空数组 = 未过滤）
   const [statusFilter, setStatusFilter] = useState<readonly CrawlerRunStatus[]>([])
   const [triggerTypeFilter, setTriggerTypeFilter] = useState<readonly CrawlerRunTriggerType[]>([])
+  // EP-4.5-HOTFIX-3 / 问题 1+3：列偏好 state（矩阵 popover 可见性 toggle / 列级 ⋯ 隐藏此列触发）
+  const [columnPrefs, setColumnPrefs] = useState<ReadonlyMap<string, { readonly visible: boolean; readonly width?: number }>>(new Map())
 
   useEffect(() => {
     let cancelled = false
@@ -427,10 +429,11 @@ export function CrawlerRunsView() {
       pagination: { page, pageSize },
       sort,
       filters: new Map(),
-      columns: new Map(),
+      // EP-4.5-HOTFIX-3 / 问题 1+3：columns 用 state 不再是空 Map（让矩阵 popover toggle 真生效）
+      columns: columnPrefs,
       selection: { selectedKeys: new Set<string>(), mode: 'page' as const },
     }),
-    [page, pageSize, sort],
+    [page, pageSize, sort, columnPrefs],
   )
 
   return (
@@ -455,6 +458,8 @@ export function CrawlerRunsView() {
                     }
                   }
                   if (patch.sort) setSort(patch.sort)
+                  // EP-4.5-HOTFIX-3 / 问题 1+3：消费 columns patch（矩阵 popover 可见性 toggle / 列级 ⋯ 隐藏此列）
+                  if (patch.columns) setColumnPrefs(patch.columns)
                 }}
                 totalRows={total}
                 loading={loading}

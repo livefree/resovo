@@ -460,16 +460,26 @@ export function ColumnMatrixMenu({
                       </span>
                     ) : (
                       <div data-matrix-filter-cell="true">
+                        {/* EP-4.5-HOTFIX-3 / 问题 2：未过滤 + 有 filterContent → switch disabled + title tooltip
+                          * D-149-5 设计原意：矩阵看状态 / 改值走列名 ⋯ inline；switch 只能"关"不能"开"
+                          * disabled 状态视觉灰化 + tooltip 提示用户去列名 ⋯ 编辑 */}
                         <button
                           type="button"
                           role="switch"
                           aria-checked={filtered}
+                          aria-disabled={!filtered ? 'true' : undefined}
                           aria-label={
                             filtered
                               ? `关闭并清除 ${typeof col.header === 'string' ? col.header : col.id} 过滤`
                               : `${typeof col.header === 'string' ? col.header : col.id} 未过滤；点击列名右侧 ⋯ 编辑过滤值`
                           }
-                          data-cell-focusable="true"
+                          title={
+                            filtered
+                              ? undefined
+                              : `请点击「${typeof col.header === 'string' ? col.header : col.id}」列名右侧 ⋯ 编辑过滤值`
+                          }
+                          disabled={!filtered}
+                          data-cell-focusable={filtered ? 'true' : undefined}
                           data-grid-row={rowIdx + 1}
                           data-grid-col={2}
                           data-testid={`matrix-filter-${col.id}`}

@@ -259,6 +259,8 @@ export function SourcesClient() {
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE)
   const [sort, setSort] = useState<TableSortState>({ field: undefined, direction: 'desc' })
+  // EP-4.5-HOTFIX-3 / 问题 1+3：列偏好 state（矩阵 popover 可见性 toggle / 列级 ⋯ 隐藏此列触发）
+  const [columnPrefs, setColumnPrefs] = useState<ReadonlyMap<string, { readonly visible: boolean; readonly width?: number }>>(new Map())
 
   const [stats, setStats] = useState<VideoGroupStats | null>(null)
   const [rows, setRows] = useState<readonly VideoGroupRow[]>([])
@@ -321,9 +323,10 @@ export function SourcesClient() {
     pagination: { page, pageSize },
     sort,
     filters: new Map(),
-    columns: new Map(),
+    // EP-4.5-HOTFIX-3 / 问题 1+3：columns 用 state（让矩阵 popover toggle / 列级 ⋯ 隐藏此列真生效）
+    columns: columnPrefs,
     selection: { selectedKeys, mode: 'page' as const },
-  }), [page, pageSize, sort, selectedKeys])
+  }), [page, pageSize, sort, columnPrefs, selectedKeys])
 
   const toolbarSearch = (
     <DataTableSearchInput
@@ -488,6 +491,8 @@ export function SourcesClient() {
                         }
                         if (patch.sort) setSort(patch.sort)
                         if (patch.selection) setSelectedKeys(patch.selection.selectedKeys)
+                        // EP-4.5-HOTFIX-3 / 问题 1+3：消费 columns patch
+                        if (patch.columns) setColumnPrefs(patch.columns)
                       }}
                       totalRows={total}
                       loading={loading}
