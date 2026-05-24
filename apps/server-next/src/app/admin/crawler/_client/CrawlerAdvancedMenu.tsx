@@ -15,6 +15,7 @@
  */
 
 import { useCallback, useState, type CSSProperties } from 'react'
+import { useRouter } from 'next/navigation'
 import { AdminButton, AdminDropdown, useToast, type AdminDropdownItem } from '@resovo/admin-ui'
 import { setCrawlerFreeze, stopAllCrawler, triggerReindex } from '@/lib/crawler/api'
 import type { CrawlerSystemStatus } from '@/lib/crawler/api'
@@ -54,9 +55,16 @@ export function CrawlerAdvancedMenu({
   runAllFullPending,
 }: CrawlerAdvancedMenuProps) {
   const toast = useToast()
+  const router = useRouter()
   const [open, setOpen] = useState(false)
   const [pendingKey, setPendingKey] = useState<string | null>(null)
   const close = useCallback(() => setOpen(false), [])
+
+  // EP-4.5-HOTFIX-2 / 问题 1：采集批次入口（采集结果次级路径）
+  const handleViewRuns = useCallback(() => {
+    close()
+    router.push('/admin/crawler/runs')
+  }, [close, router])
 
   const handleRunAllFull = useCallback(() => {
     close()
@@ -133,6 +141,11 @@ export function CrawlerAdvancedMenu({
   }, [close, frozen, onStatusUpdate, toast])
 
   const items: readonly AdminDropdownItem[] = [
+    {
+      key: 'view_runs',
+      label: '查看采集批次',
+      onClick: handleViewRuns,
+    },
     {
       key: 'run_all_full',
       label: runAllFullPending ? '全站全量采集 …' : '全站全量采集',

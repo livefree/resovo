@@ -111,6 +111,10 @@ const DT_CSS = `
  * 视觉与列级 ⋯ 完全隔离（thead 用 [data-th-menu-icon] / toolbar 用本规则）。
  * [data-active="true"] 表示矩阵 popover 已打开，accent 色高亮。 */
 [data-table-matrix-trigger] {
+  /* EP-4.5-HOTFIX-2 / 问题 2：margin-left: auto 把矩阵触发器推到 toolbar 最右
+   * （即使没 trailing 槽位 / toolbar.trailing wrapper 的 margin-left: auto 与本规则不冲突，
+   * flex 多 margin-left:auto 时第一个抢占剩余空间 / matrix-trigger 始终在最右）*/
+  margin-left: auto;
   min-width: 28px;
   height: 24px;
   padding: 0 6px;

@@ -211,8 +211,9 @@ export interface CrawlerRun {
 }
 
 export interface ListCrawlerRunsParams {
-  readonly status?: CrawlerRunStatus
-  readonly triggerType?: CrawlerRunTriggerType
+  // ADR-149 EP-5-crawler-runs-PATCH-A：支持多选过滤（单值 / 数组兼容 / CSV 传给后端）
+  readonly status?: CrawlerRunStatus | readonly CrawlerRunStatus[]
+  readonly triggerType?: CrawlerRunTriggerType | readonly CrawlerRunTriggerType[]
   readonly page?: number
   readonly limit?: number
 }
@@ -224,8 +225,14 @@ export interface ListCrawlerRunsResult {
 
 export async function listCrawlerRuns(params: ListCrawlerRunsParams = {}): Promise<ListCrawlerRunsResult> {
   const qs = new URLSearchParams()
-  if (params.status) qs.set('status', params.status)
-  if (params.triggerType) qs.set('triggerType', params.triggerType)
+  if (params.status !== undefined) {
+    const arr = Array.isArray(params.status) ? params.status : [params.status]
+    if (arr.length > 0) qs.set('status', arr.join(','))
+  }
+  if (params.triggerType !== undefined) {
+    const arr = Array.isArray(params.triggerType) ? params.triggerType : [params.triggerType]
+    if (arr.length > 0) qs.set('triggerType', arr.join(','))
+  }
   if (params.page != null) qs.set('page', String(params.page))
   if (params.limit != null) qs.set('limit', String(params.limit))
   const q = qs.toString()

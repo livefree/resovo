@@ -83,16 +83,26 @@ function optionLabelString(options: readonly AdminSelectOption[], value: string)
   return typeof found.label === 'string' ? found.label : value
 }
 
+// EP-5-crawler-runs-PATCH-B：多选 filterSummary 折叠（D-149-6 多值折叠规则）
+function multiFilterSummary(options: readonly AdminSelectOption[], values: readonly string[]): string | undefined {
+  if (values.length === 0) return undefined
+  const labels = values.map((v) => optionLabelString(options, v))
+  if (labels.length === 1) return labels[0]
+  if (labels.length === 2) return labels.join(', ')
+  return `${labels[0]}+${labels.length - 1} 项`
+}
+
 interface BuildColumnsOptions {
   readonly onCancel: (row: CrawlerRun) => void
   readonly onPause: (row: CrawlerRun) => void
   readonly onResume: (row: CrawlerRun) => void
   readonly pendingRunId: string | null
   // ADR-149 EP-5-crawler-runs: 业务 filter 桥接（D-149-15 / column.id 已对齐业务 key）
-  readonly statusFilter: CrawlerRunStatus | null
-  readonly triggerTypeFilter: CrawlerRunTriggerType | null
-  readonly onStatusChange: (next: CrawlerRunStatus | null) => void
-  readonly onTriggerTypeChange: (next: CrawlerRunTriggerType | null) => void
+  // EP-5-crawler-runs-PATCH-B：state 改数组（多选）/ 空数组 = 未过滤
+  readonly statusFilter: readonly CrawlerRunStatus[]
+  readonly triggerTypeFilter: readonly CrawlerRunTriggerType[]
+  readonly onStatusChange: (next: readonly CrawlerRunStatus[]) => void
+  readonly onTriggerTypeChange: (next: readonly CrawlerRunTriggerType[]) => void
 }
 
 function buildColumns({
@@ -135,23 +145,21 @@ function buildColumns({
       accessor: (r) => r.status,
       width: 110,
       defaultVisible: true,
-      // ADR-149 EP-5-crawler-runs: status 列 filterContent + D-149-15 桥接合约
+      // ADR-149 EP-5-crawler-runs / PATCH-B: status 列 filterContent（多选）+ D-149-15 桥接合约
       columnMenu: {
         filterContent: (
           <DataTableEnumFilter
             options={STATUS_OPTIONS}
-            value={statusFilter ?? undefined}
-            onChange={(v) => onStatusChange((v as CrawlerRunStatus | undefined) ?? null)}
-            placeholder="全部状态"
+            value={statusFilter as readonly string[]}
+            onChange={(next) => onStatusChange(next as readonly CrawlerRunStatus[])}
+            multi
             data-testid="crawler-runs-status-filter"
             aria-label="按状态筛选"
           />
         ),
-        isFiltered: statusFilter !== null,
-        onClearFilter: () => onStatusChange(null),
-        filterSummary: statusFilter
-          ? optionLabelString(STATUS_OPTIONS, statusFilter)
-          : undefined,
+        isFiltered: statusFilter.length > 0,
+        onClearFilter: () => onStatusChange([]),
+        filterSummary: multiFilterSummary(STATUS_OPTIONS, statusFilter),
       },
       cell: ({ row }) => {
         const cfg = STATUS_BADGE[row.status]
@@ -178,23 +186,21 @@ function buildColumns({
       accessor: (r) => r.triggerType,
       width: 100,
       defaultVisible: true,
-      // ADR-149 EP-5-crawler-runs: triggerType 列 filterContent + D-149-15 桥接合约
+      // ADR-149 EP-5-crawler-runs / PATCH-B: triggerType 列 filterContent（多选）+ D-149-15 桥接合约
       columnMenu: {
         filterContent: (
           <DataTableEnumFilter
             options={TRIGGER_TYPE_OPTIONS}
-            value={triggerTypeFilter ?? undefined}
-            onChange={(v) => onTriggerTypeChange((v as CrawlerRunTriggerType | undefined) ?? null)}
-            placeholder="全部触发"
+            value={triggerTypeFilter as readonly string[]}
+            onChange={(next) => onTriggerTypeChange(next as readonly CrawlerRunTriggerType[])}
+            multi
             data-testid="crawler-runs-trigger-filter"
             aria-label="按触发类型筛选"
           />
         ),
-        isFiltered: triggerTypeFilter !== null,
-        onClearFilter: () => onTriggerTypeChange(null),
-        filterSummary: triggerTypeFilter
-          ? optionLabelString(TRIGGER_TYPE_OPTIONS, triggerTypeFilter)
-          : undefined,
+        isFiltered: triggerTypeFilter.length > 0,
+        onClearFilter: () => onTriggerTypeChange([]),
+        filterSummary: multiFilterSummary(TRIGGER_TYPE_OPTIONS, triggerTypeFilter),
       },
       cell: ({ row }) => <CodeText value={row.triggerType} muted />,
     },
@@ -309,8 +315,9 @@ export function CrawlerRunsView() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<Error | null>(null)
   const [retryKey, setRetryKey] = useState(0)
-  const [statusFilter, setStatusFilter] = useState<CrawlerRunStatus | null>(null)
-  const [triggerTypeFilter, setTriggerTypeFilter] = useState<CrawlerRunTriggerType | null>(null)
+  // EP-5-crawler-runs-PATCH-B: 多选 state（空数组 = 未过滤）
+  const [statusFilter, setStatusFilter] = useState<readonly CrawlerRunStatus[]>([])
+  const [triggerTypeFilter, setTriggerTypeFilter] = useState<readonly CrawlerRunTriggerType[]>([])
 
   useEffect(() => {
     let cancelled = false
@@ -319,8 +326,8 @@ export function CrawlerRunsView() {
     listCrawlerRuns({
       page,
       limit: pageSize,
-      ...(statusFilter ? { status: statusFilter } : {}),
-      ...(triggerTypeFilter ? { triggerType: triggerTypeFilter } : {}),
+      ...(statusFilter.length > 0 ? { status: statusFilter } : {}),
+      ...(triggerTypeFilter.length > 0 ? { triggerType: triggerTypeFilter } : {}),
     }).then((res) => {
       if (cancelled) return
       setRows(res.data)
@@ -386,11 +393,11 @@ export function CrawlerRunsView() {
   }, [toast, refresh])
 
   // ADR-149 EP-5-crawler-runs: 业务 filter callback 封装（含 setPage(1) 副作用）
-  const handleStatusChange = useCallback((next: CrawlerRunStatus | null) => {
+  const handleStatusChange = useCallback((next: readonly CrawlerRunStatus[]) => {
     setStatusFilter(next)
     setPage(1)
   }, [])
-  const handleTriggerTypeChange = useCallback((next: CrawlerRunTriggerType | null) => {
+  const handleTriggerTypeChange = useCallback((next: readonly CrawlerRunTriggerType[]) => {
     setTriggerTypeFilter(next)
     setPage(1)
   }, [])

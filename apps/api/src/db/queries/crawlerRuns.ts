@@ -127,8 +127,9 @@ export async function getRunById(db: Pool, runId: string): Promise<CrawlerRun | 
 export async function listRuns(
   db: Pool,
   params: {
-    status?: CrawlerRunStatus
-    triggerType?: CrawlerRunTriggerType
+    // ADR-149 EP-5-crawler-runs-PATCH-A：支持多选过滤（单值 / 数组兼容）
+    status?: CrawlerRunStatus | readonly CrawlerRunStatus[]
+    triggerType?: CrawlerRunTriggerType | readonly CrawlerRunTriggerType[]
     limit?: number
     offset?: number
   } = {},
@@ -136,13 +137,19 @@ export async function listRuns(
   const conditions: string[] = []
   const values: unknown[] = []
   let idx = 1
-  if (params.status) {
-    conditions.push(`status = $${idx++}`)
-    values.push(params.status)
+  if (params.status !== undefined) {
+    const arr = Array.isArray(params.status) ? params.status : [params.status]
+    if (arr.length > 0) {
+      conditions.push(`status = ANY($${idx++}::text[])`)
+      values.push(arr)
+    }
   }
-  if (params.triggerType) {
-    conditions.push(`trigger_type = $${idx++}`)
-    values.push(params.triggerType)
+  if (params.triggerType !== undefined) {
+    const arr = Array.isArray(params.triggerType) ? params.triggerType : [params.triggerType]
+    if (arr.length > 0) {
+      conditions.push(`trigger_type = ANY($${idx++}::text[])`)
+      values.push(arr)
+    }
   }
   const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''
   const limit = params.limit ?? 20

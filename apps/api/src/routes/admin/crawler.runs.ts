@@ -89,10 +89,30 @@ export async function registerCrawlerRunRoutes(fastify: FastifyInstance) {
   })
 
   // ── GET /admin/crawler/runs ────────────────────────────────
+  // ADR-149 EP-5-crawler-runs-PATCH-A：status / triggerType 支持多选（CSV 字符串 → 数组）
   fastify.get('/admin/crawler/runs', { preHandler: auth }, async (request, reply) => {
+    const STATUS_VALUES = ['queued', 'running', 'paused', 'success', 'partial_failed', 'failed', 'cancelled'] as const
+    const TRIGGER_VALUES = ['single', 'batch', 'all', 'schedule'] as const
+    const StatusEnum = z.enum(STATUS_VALUES)
+    const TriggerEnum = z.enum(TRIGGER_VALUES)
+    // 接受 CSV 字符串（如 ?status=running,paused）→ 数组；空 / undefined → undefined
+    const csvToArray = <T extends string>(values: readonly T[]) =>
+      z.string().optional().transform((s, ctx) => {
+        if (!s) return undefined
+        const parts = s.split(',').map((p) => p.trim()).filter(Boolean)
+        if (parts.length === 0) return undefined
+        for (const p of parts) {
+          if (!values.includes(p as T)) {
+            ctx.addIssue({ code: z.ZodIssueCode.custom, message: `invalid value: ${p}` })
+            return z.NEVER
+          }
+        }
+        return parts as T[]
+      })
+
     const QuerySchema = z.object({
-      status: z.enum(['queued', 'running', 'paused', 'success', 'partial_failed', 'failed', 'cancelled']).optional(),
-      triggerType: z.enum(['single', 'batch', 'all', 'schedule']).optional(),
+      status: csvToArray(STATUS_VALUES),
+      triggerType: csvToArray(TRIGGER_VALUES),
       page: z.coerce.number().int().min(1).default(1),
       limit: z.coerce.number().int().min(1).max(100).default(20),
     })
@@ -101,6 +121,8 @@ export async function registerCrawlerRunRoutes(fastify: FastifyInstance) {
       return reply.code(422).send({ error: { code: 'VALIDATION_ERROR', message: '参数错误', status: 422 } })
     }
     const { status, triggerType, page, limit } = parsed.data
+    // 兼容：传 readonly 数组到 queries 层（queries 已支持 单值 / 数组）
+    void StatusEnum; void TriggerEnum  // referenced for tsc no-unused（保留 enum 引用便于未来扩展）
     const { rows, total } = await crawlerRunsQueries.listRuns(db, {
       status, triggerType, limit, offset: (page - 1) * limit,
     })
