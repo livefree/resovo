@@ -3798,3 +3798,57 @@ Plan-Revision: 2 次（DataTableSearchInput 用 latestValueRef 解决 closure st
 
 Cleanup-Audit: EP-4-HOTFIX DataTableSearchInput 半 uncontrolled ✅ / 5 focus persistence 单测 + 13 原 PASS / 全 4756 unit 0 flaky / 4 质量门禁全过 / 等用户 dev server 走读确认 + 启动 EP-4.5
 Plan-Revision: 1 次（半 uncontrolled 模式 / 内部 DOM 自管 value + manual sync + selection 保留）
+
+---
+
+## [CHG-SN-9-DT-HEADER-REDESIGN-ADR-AMEND-2] ADR-149 第 2 次 AMENDMENT — D-149-16 矩阵触发器接入 + EP-4.5 实施分步
+
+- **完成时间**：2026-05-24
+- **记录时间**：2026-05-24
+- **执行模型**：claude-opus-4-7（主循环）
+- **子代理**：arch-reviewer (claude-opus-4-7) — 独立评审 + ADR-149 AMENDMENT 2 草案撰写（评级 **B+ → A− CONDITIONAL PASS** / 10 修订建议含 2 BLOCKER 全消解）
+- **关联 ADR**：ADR-149 D-149-16（新增）+ §4 EP 序列重写（插入 EP-4.5）+ §7 测试 surface 调整
+- **关联 SEQ**：SEQ-20260524-01 第 1 序列任务 #1 AMENDMENT 2 卡
+- **触发**：EP-4-HOTFIX commit `4f080e09` 后 @livefree 提出"表格设置三点何时接入"
+- **背景**：深查发现 EP-1 ColumnMatrixMenu 原语已就位（39 单测全 PASS）+ headerMenuTriggerPosition prop 已声明，但 **DataTable 主组件 toolbar 完全没接入矩阵触发器**（无 button / 无 state / 无 anchorRef / 无 wiring）。原 ADR-149 + AMENDMENT 1 §4 EP 序列从未显式安排"接入到 DataTable 主组件 toolbar"步骤——这是与 D-149-10/11、D-149-13 同类的 ADR 实施 GAP
+- **修改文件**：
+  - `docs/decisions.md` — 追加 ADR-149 AMENDMENT 2 段（line ~12435 起 / 含 Context + D-149-16 9 子段 + EP-1..EP-4.5..EP-7 序列 + 测试 surface + N1 调整 + 兼容性矩阵 + 修订消解清单）
+  - `docs/audit/datatable-header-redesign-plan.md` — 追加 v5 修订章节
+  - `docs/task-queue.md` — SEQ-20260524-01 插入 EP-4.5 子卡 + AMENDMENT 2 卡
+- **新增依赖**：无
+- **数据库变更**：无
+- **新增端点**：无
+- **关键新增决策 D-149-16 9 个子段**：
+  - (1) 触发器渲染位置：toolbar 右端 / toolbar.hidden=true fallback 'thead-right'
+  - (2) 触发器始终渲染（即使 toolbar 三槽位全空）
+  - (3) 触发器 UI 独立 `[data-table-matrix-trigger]` 样式块（**禁止复用** `[data-th-menu-icon]` opacity:0）
+  - (4) ColumnMatrixMenu 6 callback wiring（state + anchorRef + columnMenus useMemo）
+  - (5) **BLOCKER 修订** onClearAllFilters：遍历 columns 优先调 `columnMenu.onClearFilter`（业务 key 桥接 / 否则 5 select 不会被清）
+  - (6) **R-AMEND-2-4 修订** onResetColumnVisibility：合并式 reset 保留 width（不丢消费方手工调整）
+  - (7) 无 confirm 显式声明（与 D-149-5 即时生效范式对齐）
+  - (8) a11y aria-haspopup="dialog" + 焦点回流（D-149-12 对接）
+  - (9) 与 D-149-2/3/12/14/15 契约一致性矩阵
+- **EP 序列重写**（7 段 → 8 段）：
+  - 在 EP-4-HOTFIX ✅ 之后、EP-5-shared 之前插入 **EP-4.5**（矩阵触发器接入）
+  - EP-4.5 范围：DataTable 主组件 toolbar-right + thead-right fallback + ColumnMatrixMenu wiring + 2 工具函数沉淀 + 14-16 单测（~0.3w）
+- **总工时调整**：5.2w → **5.5w**（+0.3w EP-4.5）
+- **arch-reviewer 10 修订建议全消解**（含 2 BLOCKER）：
+  - R-AMEND-2-1（高）：触发器始终渲染 / hasToolbarContent 重写
+  - R-AMEND-2-2（高）：独立 `[data-table-matrix-trigger]` 样式块
+  - **R-AMEND-2-3（BLOCKER）**：onClearAllFilters 业务 key 桥接（防 M-SN-8 假装实现复刻）
+  - R-AMEND-2-4（高）：合并式 resetColumnVisibility 保留 width
+  - R-AMEND-2-5..10（中-低）：无 confirm / fallback 规则 / 工时 / 测试 surface / 不触发 ADR-103 第 6 次 AMENDMENT / 自评含 M-SN-8 教训防御
+- **质量门禁**：纯文档（追加 ADR AMENDMENT + 方案文件 + task-queue），跳过 typecheck/lint/test
+- **EP-1/2/3/4 + EP-4-HOTFIX 已 commit 代码兼容性**：**零回退 / 零代码逻辑改动**。AMENDMENT 2 是纯 additive 决策扩展 + EP-4.5 新插入 + column-visibility.ts 2 工具函数沉淀 + dt-styles 1 样式块新增
+- **不触发 ADR-103 第 6 次 AMENDMENT**：EP-4.5 仅消费已声明的 ADR-103 第 5 次 AMENDMENT prop / 非新增公开 API
+- **价值**：
+  - **闭合 ADR-149 实施 GAP 第 3 轮**：与 D-149-10/11、D-149-13 同类 GAP 一并清；矩阵原语终于能被消费方访问到
+  - **业务 key 桥接合约延续到批量按钮**（D-149-15 → D-149-16）：onClearAllFilters 真正清除 5 消费方业务 filter
+  - **M-SN-8 教训第 3 次防御**："优先 columnMenu.onClearFilter" + "合并式 reset 保留 width" 两条 BLOCKER 修订显式防御"假装清除/丢失 width"
+  - **工具函数沉淀**：column-visibility.ts 新增 clearAllColumnFilters + resetColumnVisibility，未来可被其它矩阵 popover / saved views reset 等场景复用
+- **后续**：
+  - 用户审核 AMENDMENT 2（D-149-16 9 子段 + EP-4.5 设计 + 工时调整 + 2 BLOCKER 修订）
+  - 通过 → 启动 EP-4.5（DataTable 主组件接入 + 工具函数沉淀 / ~0.3w）
+
+Cleanup-Audit: ADR-149 AMENDMENT 2 ✅ / arch-reviewer B+ → A− PASS / 10 修订消解含 2 BLOCKER / EP-1..4 + HOTFIX 零回退 / 等用户审核启动 EP-4.5
+Plan-Revision: 1 次（onClearAllFilters 业务 key 桥接 + 合并式 resetColumnVisibility 两 BLOCKER 修订防 M-SN-8 复刻）
