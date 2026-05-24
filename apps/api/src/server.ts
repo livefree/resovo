@@ -52,6 +52,7 @@ import { adminMediaRoutes } from '@/api/routes/admin/media'
 import { adminHomeModulesRoutes } from '@/api/routes/admin/home-modules'
 import { adminVideoMergesRoutes } from '@/api/routes/admin/video-merges'
 import { adminSourcesMatrixRoutes } from '@/api/routes/admin/sources-matrix'
+import { registerDataTableRoutes } from '@/api/routes/admin/_datatable'
 import { adminUserSubmissionsRoutes } from '@/api/routes/admin/userSubmissions'
 import { adminAuditRoutes } from '@/api/routes/admin/audit'
 import { adminFilterPresetRoutes } from '@/api/routes/admin/filter-presets'
@@ -157,6 +158,7 @@ async function start() {
   await fastify.register(adminPerformanceRoutes, { prefix: '/v1' })
   await fastify.register(adminSiteConfigRoutes, { prefix: '/v1' })
   await fastify.register(adminCrawlerSitesRoutes, { prefix: '/v1' })
+  await fastify.register(registerDataTableRoutes, { prefix: '/v1' })
   await fastify.register(adminCrawlerDashboardRoutes, { prefix: '/v1' })
   await fastify.register(adminDashboardRoutes, { prefix: '/v1' })
   await fastify.register(adminStagingRoutes, { prefix: '/v1' })

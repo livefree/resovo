@@ -12891,21 +12891,27 @@ export type TableColumn<T> = TableColumnBase<T> & (
 
 #### 4.2 后端通用 distinct 端点
 
-- URL: `GET /admin/_dt/distinct`
 - 鉴权: `requireRole(['admin', 'moderator'])`
 - Query schema: 详 §3 D-150-3
-- 响应:
+- 白名单注册: `apps/api/src/services/datatable/distinct-whitelist.ts`
+
+### 端点契约
+
+| # | 方法 | 路径 | 用途 | Request | Response | 错误码 |
+|---|---|---|---|---|---|---|
+| 1 | GET | `/admin/_dt/distinct` | 通用 distinct 列值查询（D-150-3 v1 共用端点 / 6 表白名单 / 三重 SQL 注入防御） | Query: `table` (enum 白名单 6 表) / `col` (字符串 + 后置 lookup 403) / `q?` (≤ 64 字符 / ILIKE 模糊匹配) / `limit?=50` (≤ 200 强制) | 200 `{ data: { value: string, count: number }[] }` | 422 VALIDATION_ERROR / 403 COLUMN_NOT_WHITELISTED / 500 INTERNAL_ERROR |
+
+**响应 schema TS 类型**:
 ```typescript
 interface DistinctResponse {
   readonly data: readonly {
     readonly value: string
-    readonly label?: string  // 可选 i18n label（v1 不实装 / N1）
-    readonly count?: number  // 可选 distinct count（v1 不实装 / N1）
+    readonly label?: string  // 可选 i18n label（v1 不实装 / N1-150-4）
+    readonly count?: number  // distinct count（v1 已实装）
   }[]
-  readonly total?: number
+  readonly total?: number    // 可选总数（v1 不实装 / N1）
 }
 ```
-- 白名单注册: `apps/api/src/services/datatable/distinct-whitelist.ts`
 
 #### 4.3 统一过滤参数 schema
 

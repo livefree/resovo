@@ -53,6 +53,11 @@ export const ERRORS = {
   AUDIT_ROLLBACK_STALE:        { code: 'AUDIT_ROLLBACK_STALE',        message: '目标数据已被后续操作修改，无法安全回滚',     status: 409 },
   // before_jsonb 字段与当前 schema 白名单交集为空 / 字段已被 migration 删除
   AUDIT_ROLLBACK_SCHEMA_DRIFT: { code: 'AUDIT_ROLLBACK_SCHEMA_DRIFT', message: '审计记录字段与当前 schema 不兼容，无法自动回滚', status: 422 },
+
+  // ── DataTable 列固有自动过滤 1 码（ADR-150 D-150-3 / CHG-SN-9-DT-AUTOFILTER-EP-2）─────
+  // 通用 distinct 端点 /admin/_dt/distinct 表名 + 列名联合白名单 lookup miss 触发；
+  // 三重 SQL 注入防御之一（zod table enum + col 后置 lookup + drizzle column reference）
+  COLUMN_NOT_WHITELISTED: { code: 'COLUMN_NOT_WHITELISTED', message: '表或列名不在自动过滤白名单内', status: 403 },
 } as const satisfies Record<string, ApiErrorBody>
 
 export type ErrorCode = keyof typeof ERRORS
