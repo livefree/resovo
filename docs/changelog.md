@@ -4660,3 +4660,85 @@ Plan-Revision: 0 次（实施完全对齐任务卡 6 类反馈根因分析）
 
 Cleanup-Audit: 3 列 filterable 补齐 + 后端 SQL 5 新参数 + data-table.tsx pinned 列盲区一并修 / 5 实施 + 2 测试文件 +/- 净改动 / 4 质量门禁全过 / 28/28 + 8/8 + 1534/1534 + 219/219 单测全 PASS / 0 Props API 变更 / 0 ADR / 不需 R-MID-1
 Plan-Revision: 1 次（data-table.tsx pinned 列 filterable 盲区原预期"消费方 + 后端"范围 / 实测 case 26 报错触发主表头 showTrigger 判定补齐 / 顺手修复防 EP-3-B..G 后续消费方再次踩坑）
+
+---
+
+## [CHG-SN-9-DT-AUTOFILTER-EP-3-A sub 2] AuditClient toolbar 6 控件迁列内 filterable + filtersMap 派生
+
+- **完成时间**：2026-05-24
+- **记录时间**：2026-05-24
+- **执行模型**：claude-opus-4-7（主循环 / opus xhigh 续会话 / CLAUDE.md "主循环模型中途不可降级"严格遵循）
+- **子代理**：无（消费方 + UI 改造 / 不动 Props API 契约 / 不起 ADR / CLAUDE.md §模型路由 6 条强制 Opus 子代理条件均不命中）
+- **关联 ADR**：ADR-150（D-150-1 双轨范式 / D-150-4 业务 key 桥接 / D-150-5 union 守卫 / 无 AMENDMENT 必要）+ ADR-142（D-142-4 moderator self-scope UI gating 保留）
+- **关联 SEQ**：SEQ-20260524-01 第 1 序列 EP-3-A sub 2
+- **触发**：@livefree sub 1 EXTEND 走读 PASS（"过滤功能通过"）→ 启动 sub 2
+- **依赖**：sub 1 EXTEND ✅ commit `8fc42d6b`
+- **核心发现**（实施前评估）：
+  - **后端 listAdminAuditLogs API 已支持 6 filter**（actionType / targetKind / actorId / requestId / from / to）→ **不需后端改动**
+  - **distinct-whitelist AMENDMENT 不需要**：actionType + targetKind 用 GET /admin/audit/enums 端点静态注入 filterOptions 更可控（不走 /admin/_dt/distinct）/ actorId + requestId 是 UUID 不适合 distinct
+  - **createdAt 精度降级**：datetime-local（分钟级）→ DataTableAutoFilter date kind（日级）/ audit 业务按日过滤足够 / UX 视觉一致优先
+- **修改文件**（2 实施 + 1 测试 / 0 后端 / 0 ADR）：
+  - `apps/server-next/src/app/admin/audit/_client/AuditColumns.tsx`：buildAuditColumns 扩 3 options（actionTypeOptions / targetKindOptions / hideActorFilter）+ 5 列加 filterable
+    - createdAt → 'date' / filterFieldName 'createdAt'
+    - actor → 'text' / filterFieldName 'actorId'（moderator 模式分两版本显式返回 / 避免 D-150-5 union 守卫 spread 类型推断 `true|undefined` 报错）
+    - actionType → 'enum' / filterFieldName 'actionType' / filterOptions options.actionTypeOptions
+    - target → 'enum' / filterFieldName 'targetKind' / filterOptions options.targetKindOptions
+    - requestId → 'text' / filterFieldName 'requestId'
+  - `apps/server-next/src/app/admin/audit/_client/AuditClient.tsx`：
+    - 删 toolbar 6 控件（2 AdminSelect + 2 AdminInput + 2 datetime-local + 1 ghost clear button）
+    - 删 6 filter state + 2 debounced state + 2 debounce useEffect
+    - 新增 `filtersMap` state + 6 useMemo 派生（actionType / targetKind / actorId / requestId / createdAtFromIso / createdAtToIso）
+    - **createdAt date → ISO timestamptz 转换**：from 'YYYY-MM-DD' → `${from}T00:00:00.000Z` / to → `${to}T23:59:59.999Z`（含 to 当日 endOfDay / 保持后端 ISO 8601 闭区间兼容）
+    - fetch useEffect deps 改 filtersMap
+    - query.filters: `new Map()` → filtersMap
+    - onQueryChange 加 patch.filters 处理 + setPage(1)
+    - buildAuditColumns 调用注入 enums 静态选项 + hideActorFilter（isModerator）
+    - 删 AdminSelect / AdminInput / AdminSelectOption 3 import；加 DistinctOption / FilterValue 2 import
+  - `tests/unit/components/server-next/admin/audit/AuditClient.test.tsx`：补 5 case 16-20
+    - #16 actionType enum filter → fetch actionType
+    - #17 target enum filter (targetKind) → fetch targetKind
+    - #18 actor text filter (actorId) → fetch actorId trimmed
+    - #19 requestId text filter → fetch requestId
+    - #20 createdAt date-range filter → fetch ISO timestamptz from/to (含 endOfDay)
+- **新增依赖**：无
+- **数据库变更**：无
+- **新增端点**：无
+- **关键设计落实**：
+  - **D-150-1 双轨范式**：5 列走 D-150 列固有过滤（actionType / target / actor / requestId / createdAt）；payloadSummary / actions 不过滤（payloadSummary 长文本 / actions 行 action）
+  - **D-150-4 业务 key 桥接**：column.id 与 filterFieldName 不同名场景实证 — target 列（column.id='target' / filterFieldName='targetKind'）/ actor 列（column.id='actor' / filterFieldName='actorId'）
+  - **D-150-5 union 守卫触发实证**：actor 列原条件 spread 写法 `...(hideActorFilter ? {} : { filterable: true, ... })` 触发 TS 推断 `filterable: true | undefined` 与 union 类型不兼容；改为两版本显式返回（hideActorFilter true → 不带 filter 字段 / false → 完整 filter 字段）
+  - **ADR-142 D-142-4 moderator self-scope UI 保留**：buildAuditColumns hideActorFilter prop 控制 actor 列 filter 启用 / banner 仍显示 / fetch path 走 self-scope（actorId 自动限定）
+  - **debounce 解耦**：DataTableAutoFilter apply 提交触发模型避免按键即触发的 N+1 fetch 问题（原 actorId UUID 36 字符按键 36 次 → 改 debounce 300ms 单次；现在 DataTableAutoFilter "应用"按钮一次性 commit，无需 debounce）
+  - **createdAt UX 降级权衡**：datetime-local 分钟级 → date kind 日级；audit 业务按日过滤足够 / UX 视觉一致优先 / 用户反馈不满意再独立卡升级 DataTableAutoFilter filterKind 'datetime'（独立 follow-up）
+- **质量门禁**：
+  - ✅ typecheck（8 workspace PASS / D-150-5 union 守卫报错触发后已修）
+  - ✅ lint（5/5 FULL TURBO / 仅 pre-existing img 警告）
+  - ✅ verify:file-size-budget exit 0（与 EXTEND 后无变化 / 6 文件 pre-existing 与本卡无关）
+  - ✅ verify:adr-contracts exit 0（advisory pre-existing / 172 D-N 闭环 / SQL aligned / style 0 命中）
+  - ✅ admin-ui 全套 1534/1534 PASS（87 文件 / data-table.tsx 零回退）
+  - ✅ audit 后端 3 文件全 PASS（audit-self-scope + audit-rollback + auditLogService）
+  - ✅ AuditClient 20/20 PASS（含新 5 case 16-20）
+- **用户可见行为变化**（dev server 走读 sub 2）：
+  - **删除**：toolbar 6 个旧控件全消失（2 select + 2 input + 2 datetime-local + 1 clear button）
+  - **新增**：列名 ⋯ 触发 5 列 popover — actionType enum / target enum / actor text / requestId text / createdAt date-range
+  - **保留**：trailing CSV 导出按钮 + PageHeader 刷新按钮不变
+  - **保留**：moderator self-scope banner + isModerator 模式 actor 列无 filter（ADR-142 D-142-4 兜底）
+  - **降级**：createdAt 输入精度从分钟降为日（业务上接受）
+  - **改进**：actorId / requestId 不再有 300ms debounce 滞后（DataTableAutoFilter "应用"按钮一次性 commit）
+- **价值**：
+  - **EP-3-A sub 1+EXTEND+sub 2 三子卡范式 100% 一致**：filterable + filterFieldName + filterKind + filterOptions + filtersMap state + 6 useMemo 派生 + onQueryChange filters patch
+  - **moderator self-scope 保留**：列级条件 spread 经 union 守卫实测验证 / 两版本显式返回是 D-150-5 标准模式
+  - **不需后端改动**：listAdminAuditLogs 6 filter API 早已存在 / sub 2 纯前端 UX 收敛
+  - **不需 distinct-whitelist AMENDMENT**：actionType + targetKind 用 enums 静态选项可控 / actor_id + request_id UUID 不适合 distinct
+  - **debounce 解耦优势**：DataTableAutoFilter "应用"按钮一次性 commit 比 300ms debounce 更可控 / 不再有 fetch storm 风险
+- **不在范围**（独立后续）：
+  - DataTableAutoFilter filterKind 'datetime'（分钟级精度 / 用户反馈不满意再独立卡）
+  - sort 全栈打通（ADR-150 阶段 5 EP-4）
+  - distinct-whitelist admin_audit_log AMENDMENT（actor_id / request_id 是 UUID 不适合 distinct）
+  - EP-3-A 整体 spawn arch-reviewer Opus PR review（sub 2 完成后整体启动）
+- **后续**：
+  - **@livefree dev server 走读 sub 2**（toolbar 控件消失 / 5 列 popover / moderator 模式 actor 列无 filter / 多列组合）→ PASS
+  - **EP-3-A 整体 spawn arch-reviewer Opus PR review**（sub 1 + sub 1 HOTFIX + sub 1 EXTEND + sub 2 累计改动）→ PASS 启动 sub B（SubmissionsListClient + UsersListClient）
+
+Cleanup-Audit: AuditClient toolbar 6 控件 → 列内 5 filterable / 删 2 debounced state + 2 useEffect / filtersMap 派生 / 2 实施 + 1 测试文件 +/- 净改动 / D-150-5 union 守卫报错触发实证 / 4 质量门禁全过 / 20/20 + 1534/1534 + 3 audit 后端单测全 PASS / 0 Props API 变更 / 0 后端 / 0 ADR / 不需 distinct-whitelist AMENDMENT
+Plan-Revision: 1 次（actor 列原条件 spread 触发 D-150-5 union 守卫 TS 报错 / 改为两版本显式返回 / 任务卡范围"30 行扩"未覆盖此细节但属合理 ADR-150 union 守卫副作用）

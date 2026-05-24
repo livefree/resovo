@@ -292,4 +292,89 @@ describe('AuditClient', () => {
       createSpy.mockRestore()
     }
   })
+
+  // ── sub 2（2026-05-24）：toolbar 6 控件 → 列内 filterable / ADR-150 D-150-1 双轨 ──
+
+  it('16. sub 2: actionType 列 enum filter → fetch 带 actionType + page reset 1', async () => {
+    listAdminAuditLogsMock.mockResolvedValue(EMPTY_RES)
+    render(<AuditClient />)
+    await waitFor(() => screen.getByTestId('audit-table'))
+    // 等 enums 加载完 / actionType 列 filterOptions 注入
+    await waitFor(() => expect(getAdminAuditEnumsMock).toHaveBeenCalled())
+    fireEvent.click(screen.getByTestId('th-menu-trigger-actionType'))
+    expect(screen.queryByTestId('dt-autofilter-actionType')).not.toBeNull()
+    fireEvent.click(screen.getByTestId('dt-autofilter-actionType-opt-video.approve'))
+    fireEvent.click(screen.getByTestId('dt-autofilter-actionType-apply'))
+    await waitFor(() => {
+      expect(listAdminAuditLogsMock).toHaveBeenLastCalledWith(
+        expect.objectContaining({ actionType: 'video.approve', page: 1 }),
+      )
+    })
+  })
+
+  it('17. sub 2: target 列 enum filter (targetKind) → fetch 带 targetKind', async () => {
+    listAdminAuditLogsMock.mockResolvedValue(EMPTY_RES)
+    render(<AuditClient />)
+    await waitFor(() => screen.getByTestId('audit-table'))
+    await waitFor(() => expect(getAdminAuditEnumsMock).toHaveBeenCalled())
+    fireEvent.click(screen.getByTestId('th-menu-trigger-target'))
+    expect(screen.queryByTestId('dt-autofilter-target')).not.toBeNull()
+    fireEvent.click(screen.getByTestId('dt-autofilter-target-opt-video'))
+    fireEvent.click(screen.getByTestId('dt-autofilter-target-apply'))
+    await waitFor(() => {
+      expect(listAdminAuditLogsMock).toHaveBeenLastCalledWith(
+        expect.objectContaining({ targetKind: 'video', page: 1 }),
+      )
+    })
+  })
+
+  it('18. sub 2: actor 列 text filter (actorId UUID 前缀) → fetch 带 actorId trimmed', async () => {
+    listAdminAuditLogsMock.mockResolvedValue(EMPTY_RES)
+    render(<AuditClient />)
+    await waitFor(() => screen.getByTestId('audit-table'))
+    fireEvent.click(screen.getByTestId('th-menu-trigger-actor'))
+    expect(screen.queryByTestId('dt-autofilter-actor')).not.toBeNull()
+    fireEvent.change(screen.getByTestId('dt-autofilter-actor-text-input'), { target: { value: 'abc-1234' } })
+    fireEvent.click(screen.getByTestId('dt-autofilter-actor-apply'))
+    await waitFor(() => {
+      expect(listAdminAuditLogsMock).toHaveBeenLastCalledWith(
+        expect.objectContaining({ actorId: 'abc-1234', page: 1 }),
+      )
+    })
+  })
+
+  it('19. sub 2: requestId 列 text filter → fetch 带 requestId', async () => {
+    listAdminAuditLogsMock.mockResolvedValue(EMPTY_RES)
+    render(<AuditClient />)
+    await waitFor(() => screen.getByTestId('audit-table'))
+    fireEvent.click(screen.getByTestId('th-menu-trigger-requestId'))
+    expect(screen.queryByTestId('dt-autofilter-requestId')).not.toBeNull()
+    fireEvent.change(screen.getByTestId('dt-autofilter-requestId-text-input'), { target: { value: 'req-abc' } })
+    fireEvent.click(screen.getByTestId('dt-autofilter-requestId-apply'))
+    await waitFor(() => {
+      expect(listAdminAuditLogsMock).toHaveBeenLastCalledWith(
+        expect.objectContaining({ requestId: 'req-abc', page: 1 }),
+      )
+    })
+  })
+
+  it('20. sub 2: createdAt 列 date-range filter → fetch 带 ISO timestamptz from/to (含 endOfDay)', async () => {
+    listAdminAuditLogsMock.mockResolvedValue(EMPTY_RES)
+    render(<AuditClient />)
+    await waitFor(() => screen.getByTestId('audit-table'))
+    fireEvent.click(screen.getByTestId('th-menu-trigger-createdAt'))
+    expect(screen.queryByTestId('dt-autofilter-createdAt')).not.toBeNull()
+    fireEvent.change(screen.getByTestId('dt-autofilter-createdAt-date-from'), { target: { value: '2026-05-01' } })
+    fireEvent.change(screen.getByTestId('dt-autofilter-createdAt-date-to'), { target: { value: '2026-05-24' } })
+    fireEvent.click(screen.getByTestId('dt-autofilter-createdAt-apply'))
+    await waitFor(() => {
+      expect(listAdminAuditLogsMock).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          from: '2026-05-01T00:00:00.000Z',
+          to: '2026-05-24T23:59:59.999Z',
+          page: 1,
+        }),
+      )
+    })
+  })
 })

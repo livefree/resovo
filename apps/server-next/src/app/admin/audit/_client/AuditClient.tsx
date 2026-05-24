@@ -27,10 +27,9 @@ import {
   LoadingState,
   PageHeader,
   AdminButton,
-  AdminSelect,
-  AdminInput,
   useToast,
-  type AdminSelectOption,
+  type DistinctOption,
+  type FilterValue,
   type TableSortState,
 } from '@resovo/admin-ui'
 import type {
@@ -61,23 +60,7 @@ const PAGE_STYLE: CSSProperties = {
   padding: 'var(--page-padding-y) var(--page-padding-x) 0',
 }
 
-const TOOLBAR_LEFT_STYLE: CSSProperties = {
-  display: 'inline-flex',
-  alignItems: 'center',
-  gap: '8px',
-  flexWrap: 'wrap',
-}
-
-const DATETIME_INPUT_STYLE: CSSProperties = {
-  height: 'var(--control-h-sm, 28px)',
-  padding: '0 8px',
-  fontSize: 'var(--font-size-xs)',
-  fontFamily: 'inherit',
-  color: 'var(--fg-default)',
-  background: 'var(--bg-surface-raised)',
-  border: '1px solid var(--border-default)',
-  borderRadius: 'var(--radius-sm)',
-}
+// sub 2（2026-05-24）：toolbar 6 控件迁列内 filterable / TOOLBAR_LEFT_STYLE + DATETIME_INPUT_STYLE 已删
 
 // ── ADR-142 / CHG-SN-8-FUP-AUDIT-SELF-SCOPE-EP：moderator self-scope UI ──
 // 读 user_role cookie 推断当前 role；moderator 走 self-scope 视图（隐藏 actorId filter + 显 info banner）
@@ -117,33 +100,39 @@ export function AuditClient() {
   const [error, setError] = useState<Error | null>(null)
   const [retryKey, setRetryKey] = useState(0)
 
-  // ── 筛选状态 ──
-  const [actionType, setActionType] = useState<AdminAuditActionType | null>(null)
-  const [targetKind, setTargetKind] = useState<AdminAuditTargetKind | null>(null)
-  const [actorIdInput, setActorIdInput] = useState('')
-  const [requestIdInput, setRequestIdInput] = useState('')
-  const [from, setFrom] = useState('')
-  const [to, setTo] = useState('')
+  // ── 筛选状态（sub 2：6 独立 state + 2 debounced 已合并为 filtersMap 单一状态）──
+  // ADR-150 D-150-4 业务 key 桥接：column.filterFieldName 即 filtersMap key
+  //   actionType / targetKind / actorId / requestId / createdAt
+  // DataTableAutoFilter apply 提交时一次性触发 / 无需 debounce
+  const [filtersMap, setFiltersMap] = useState<ReadonlyMap<string, FilterValue>>(new Map())
 
-  // ── debounced filter（CHG-SN-6-AUDIT-DEBOUNCE-FIX / ultrareview P0-1）──
-  // UUID 36 字符按键即触发 36 次 API → 改为 300ms debounce 单次触发
-  // R-ADR-118-2 COUNT(*) p95 风险防前端放大
-  const [actorIdDebounced, setActorIdDebounced] = useState('')
-  const [requestIdDebounced, setRequestIdDebounced] = useState('')
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setActorIdDebounced(actorIdInput.trim())
-      setPage(1)
-    }, 300)
-    return () => clearTimeout(timer)
-  }, [actorIdInput])
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setRequestIdDebounced(requestIdInput.trim())
-      setPage(1)
-    }, 300)
-    return () => clearTimeout(timer)
-  }, [requestIdInput])
+  const actionTypeFilter = useMemo<AdminAuditActionType | undefined>(() => {
+    const v = filtersMap.get('actionType')
+    return v?.kind === 'enum' && v.value.length > 0 ? (v.value[0] as AdminAuditActionType) : undefined
+  }, [filtersMap])
+  const targetKindFilter = useMemo<AdminAuditTargetKind | undefined>(() => {
+    const v = filtersMap.get('targetKind')
+    return v?.kind === 'enum' && v.value.length > 0 ? (v.value[0] as AdminAuditTargetKind) : undefined
+  }, [filtersMap])
+  const actorIdFilter = useMemo<string | undefined>(() => {
+    const v = filtersMap.get('actorId')
+    return v?.kind === 'text' && v.value ? v.value.trim() : undefined
+  }, [filtersMap])
+  const requestIdFilter = useMemo<string | undefined>(() => {
+    const v = filtersMap.get('requestId')
+    return v?.kind === 'text' && v.value ? v.value.trim() : undefined
+  }, [filtersMap])
+  // sub 2：createdAt date kind → ISO 8601 timestamptz（含 to 当日 endOfDay 23:59:59.999）
+  const createdAtFromIso = useMemo<string | undefined>(() => {
+    const v = filtersMap.get('createdAt')
+    if (v?.kind !== 'date-range' || !v.from) return undefined
+    return `${v.from}T00:00:00.000Z`
+  }, [filtersMap])
+  const createdAtToIso = useMemo<string | undefined>(() => {
+    const v = filtersMap.get('createdAt')
+    if (v?.kind !== 'date-range' || !v.to) return undefined
+    return `${v.to}T23:59:59.999Z`
+  }, [filtersMap])
 
   // ── 枚举 + 详情 ──
   const [enums, setEnums] = useState<AdminAuditLogEnumsResult | null>(null)
@@ -160,7 +149,7 @@ export function AuditClient() {
     return () => { cancelled = true }
   }, [])
 
-  // 列表加载
+  // 列表加载（sub 2：deps 从 6 独立 state → filtersMap 单一）
   useEffect(() => {
     let cancelled = false
     setLoading(true)
@@ -168,12 +157,12 @@ export function AuditClient() {
     const params: ListAdminAuditLogsParams = {
       page,
       limit: pageSize,
-      ...(actionType ? { actionType } : {}),
-      ...(targetKind ? { targetKind } : {}),
-      ...(actorIdDebounced ? { actorId: actorIdDebounced } : {}),
-      ...(requestIdDebounced ? { requestId: requestIdDebounced } : {}),
-      ...(from ? { from } : {}),
-      ...(to ? { to } : {}),
+      ...(actionTypeFilter ? { actionType: actionTypeFilter } : {}),
+      ...(targetKindFilter ? { targetKind: targetKindFilter } : {}),
+      ...(actorIdFilter ? { actorId: actorIdFilter } : {}),
+      ...(requestIdFilter ? { requestId: requestIdFilter } : {}),
+      ...(createdAtFromIso ? { from: createdAtFromIso } : {}),
+      ...(createdAtToIso ? { to: createdAtToIso } : {}),
     }
     listAdminAuditLogs(params)
       .then((res) => {
@@ -189,7 +178,7 @@ export function AuditClient() {
         if (!cancelled) setLoading(false)
       })
     return () => { cancelled = true }
-  }, [page, pageSize, actionType, targetKind, actorIdDebounced, requestIdDebounced, from, to, retryKey])
+  }, [page, pageSize, filtersMap, retryKey])
 
   const refresh = useCallback(() => setRetryKey((k) => k + 1), [])
 
@@ -231,18 +220,25 @@ export function AuditClient() {
     [router, toast],
   )
 
-  const columns = useMemo(() => buildAuditColumns({ onRollback: handleRollback }), [handleRollback])
-
-  const actionTypeOptions = useMemo<readonly AdminSelectOption[]>(
+  // sub 2：filterOptions 注入 buildAuditColumns（GET /admin/audit/enums 静态选项 / 不走 distinct）
+  const actionTypeOptions = useMemo<readonly DistinctOption[]>(
     () => (enums?.actionTypes ?? []).map((t) => ({ value: t, label: t })),
     [enums],
   )
-  const targetKindOptions = useMemo<readonly AdminSelectOption[]>(
+  const targetKindOptions = useMemo<readonly DistinctOption[]>(
     () => (enums?.targetKinds ?? []).map((k) => ({ value: k, label: k })),
     [enums],
   )
 
-  const hasFilter = Boolean(actionType || targetKind || actorIdInput.trim() || requestIdInput.trim() || from || to)
+  const columns = useMemo(
+    () => buildAuditColumns({
+      onRollback: handleRollback,
+      actionTypeOptions,
+      targetKindOptions,
+      hideActorFilter: isModerator,
+    }),
+    [handleRollback, actionTypeOptions, targetKindOptions, isModerator],
+  )
 
   // CHG-SN-6-22：导出当前页 rows 为 CSV
   const handleExportCsv = () => {
@@ -272,88 +268,18 @@ export function AuditClient() {
     </AdminButton>
   )
 
-  const toolbarSearch = (
-    <span style={TOOLBAR_LEFT_STYLE} data-testid="audit-toolbar-filters">
-      <AdminSelect
-        options={actionTypeOptions}
-        value={actionType}
-        onChange={(next) => { setActionType(next as AdminAuditActionType | null); setPage(1) }}
-        placeholder="全部 action"
-        size="sm"
-        searchable
-        data-testid="audit-filter-action"
-        aria-label="按 action_type 筛选"
-      />
-      <AdminSelect
-        options={targetKindOptions}
-        value={targetKind}
-        onChange={(next) => { setTargetKind(next as AdminAuditTargetKind | null); setPage(1) }}
-        placeholder="全部 target_kind"
-        size="sm"
-        data-testid="audit-filter-target-kind"
-        aria-label="按 target_kind 筛选"
-      />
-      {!isModerator && (
-        <AdminInput
-          value={actorIdInput}
-          onChange={(e) => setActorIdInput(e.target.value)}
-          placeholder="actor_id (UUID)"
-          size="sm"
-          data-testid="audit-filter-actor"
-          aria-label="按 actor_id 筛选"
-        />
-      )}
-      <AdminInput
-        value={requestIdInput}
-        onChange={(e) => setRequestIdInput(e.target.value)}
-        placeholder="request_id"
-        size="sm"
-        data-testid="audit-filter-request"
-        aria-label="按 request_id 筛选"
-      />
-      <input
-        type="datetime-local"
-        value={from}
-        onChange={(e) => { setFrom(e.target.value); setPage(1) }}
-        style={DATETIME_INPUT_STYLE}
-        data-testid="audit-filter-from"
-        aria-label="起始时间"
-      />
-      <input
-        type="datetime-local"
-        value={to}
-        onChange={(e) => { setTo(e.target.value); setPage(1) }}
-        style={DATETIME_INPUT_STYLE}
-        data-testid="audit-filter-to"
-        aria-label="结束时间"
-      />
-      {hasFilter ? (
-        <AdminButton
-          variant="ghost"
-          size="sm"
-          onClick={() => {
-            setActionType(null); setTargetKind(null)
-            setActorIdInput(''); setRequestIdInput('')
-            setFrom(''); setTo('')
-            setPage(1)
-          }}
-          data-testid="audit-filter-clear"
-        >
-          清空筛选
-        </AdminButton>
-      ) : null}
-    </span>
-  )
+  // sub 2：toolbarSearch 6 控件已删（迁列内 filterable / 矩阵 popover 统一清空）
 
   const query = useMemo(
     () => ({
       pagination: { page, pageSize },
       sort,
-      filters: new Map(),
+      // sub 2：filters 用 filtersMap state（D-150-4 业务 key 统一）
+      filters: filtersMap,
       columns: new Map(),
       selection: { selectedKeys: new Set<string>(), mode: 'page' as const },
     }),
-    [page, pageSize, sort],
+    [page, pageSize, sort, filtersMap],
   )
 
   return (
@@ -400,6 +326,8 @@ export function AuditClient() {
                     }
                   }
                   if (patch.sort) setSort(patch.sort)
+                  // sub 2：filters patch（DataTableAutoFilter popover OK 触发 / 矩阵清空）
+                  if (patch.filters) { setFiltersMap(patch.filters); setPage(1) }
                 }}
                 totalRows={total}
                 loading={loading}
@@ -408,7 +336,6 @@ export function AuditClient() {
                 data-testid="audit-table"
                 enableHeaderMenu
                 toolbar={{
-                  search: toolbarSearch,
                   trailing: toolbarTrailing,
                   hideFilterChips: true,
                 }}
