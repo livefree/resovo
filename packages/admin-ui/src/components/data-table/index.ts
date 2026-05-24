@@ -76,6 +76,13 @@ export type {
   PaginationConfig,
   PaginationSummaryContext,
   FilterChipContext,
+  // ADR-150 阶段 2 / 列固有自动过滤
+  AutoFilterKind,
+  DistinctOption,
+  AutoFilterColumnFieldsActive,
+  AutoFilterColumnFieldsInactive,
+  AutoFilterColumnFields,
+  FilterableColumn,
 } from './types'
 
 // CHG-DESIGN-02 Step 7A — 工具与子组件（不在 DataTable 内部使用时也可独立消费）

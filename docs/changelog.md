@@ -4445,3 +4445,62 @@ Plan-Revision: 1 次（types.ts 主循环初版用平铺可选字段 → Opus PR
 
 Cleanup-Audit: 后端通用 distinct 端点 ✅ / Opus review PASS / 三重 SQL 注入防御完整 / 33 单测 + 5 质量门禁全过 / R-MID-1 + endpoint-adr 187/187
 Plan-Revision: 0 次（ADR-150 §端点契约表为顺手补充 / 无设计偏移）
+
+---
+
+## [CHG-SN-9-DT-AUTOFILTER-EP-3-A sub 1] CrawlerRunsView 迁 D-149-15 → D-150（ADR-150 阶段 4 首消费方）
+
+- **完成时间**：2026-05-24
+- **记录时间**：2026-05-24
+- **执行模型**：claude-opus-4-7（主循环）
+- **子代理**：无（首消费方迁移 / 范式简单 / 单元测试已覆盖 / PR review 在 sub 2 后整体 EP-3-A spawn Opus）
+- **关联 ADR**：ADR-150 🟢 Accepted（D-150-1/2/4/5/6 落实于本卡 / 首个消费方从 D-149-15 桥接合约切换到 D-150 列固有自动过滤）
+- **关联 SEQ**：SEQ-20260524-01 第 1 序列任务 #1 ADR-150 阶段 4 首子卡
+- **依赖**：EP-2 ✅ commit `e86035ea`
+- **范围**：CrawlerRunsView 1 消费方 + 2 列（status / triggerType）+ types.ts ColumnDescriptor 扩展 + matrix popover 识别 filterable + 5 单测更新
+- **修改文件**：
+  - `packages/admin-ui/src/components/data-table/types.ts`（ColumnDescriptor 加 `filterable?: boolean` + `filterFieldName?: string` / matrix popover 识别）
+  - `packages/admin-ui/src/components/data-table/column-matrix-menu.tsx`（hasFilterContent 判定 = `columnMenu?.filterContent !== undefined || col.filterable === true`）
+  - `packages/admin-ui/src/components/data-table/index.ts`（追加 6 export: AutoFilterKind / DistinctOption / AutoFilterColumnFieldsActive / AutoFilterColumnFieldsInactive / AutoFilterColumnFields / FilterableColumn）
+  - `apps/server-next/src/app/admin/crawler/runs/_client/CrawlerRunsView.tsx`：
+    - 删 `DataTableEnumFilter` import / 删 `optionLabelString` / `multiFilterSummary` helper
+    - 加 `DistinctOption` / `FilterValue` import
+    - 新 `STATUS_FILTER_OPTIONS` / `TRIGGER_TYPE_FILTER_OPTIONS` (DistinctOption[]) 静态选项
+    - 删 BuildColumnsOptions.statusFilter/triggerTypeFilter/onStatusChange/onTriggerTypeChange（4 props）
+    - 列 status: 删 `columnMenu.filterContent` / 加 `filterable: true` + `filterFieldName: 'status'` + `filterKind: 'enum'` + `filterOptions`
+    - 列 triggerType: 同上（filterFieldName: 'triggerType' 保持 column.id 一致）
+    - 删 `statusFilter` + `triggerTypeFilter` 独立 useState → 新 `filtersMap: ReadonlyMap<string, FilterValue>` useState + 2 useMemo 派生（向后兼容现有 fetch）
+    - 删 `handleStatusChange` / `handleTriggerTypeChange` callback（直接由 DataTable popover OK → onQueryChange 触发）
+    - query.filters: `new Map()` → `filtersMap`
+    - fetch useEffect deps `[..., statusFilter, triggerTypeFilter, ...]` → `[..., filtersMap, ...]`
+    - onQueryChange: 加 `if (patch.filters) { setFiltersMap(patch.filters); setPage(1) }`
+  - `tests/unit/components/server-next/admin/crawler/CrawlerRunsView.test.tsx`：5 单测从 DataTableEnumFilter testid (`crawler-runs-status-filter`) 改为 DataTableAutoFilter testid (`dt-autofilter-status` / `dt-autofilter-status-opt-running` / `dt-autofilter-status-apply`)
+- **新增依赖**：无
+- **数据库变更**：无
+- **新增端点**：无（fetch 仍走旧 listCrawlerRuns API / status 仍然驼峰命名 / DB 列 trigger_type 与 API 参数 triggerType 一致映射）
+- **关键设计落实**：
+  - **D-150-5 union 守卫生效**：CrawlerRunsView 2 列 filterable: true 同时 filterFieldName 编译期强制必填（实测 typecheck 阻挡漏写）
+  - **D-149-15 桥接逃生口保留 0 回退**：filterContent slot 仍是合法 API / 其它消费方（AuditClient sub 2 / 等阶段 4 后续）渐进迁移
+  - **matrix popover 双范式识别**：types.ts ColumnDescriptor 加 filterable 字段 / matrix popover hasFilterContent 判定加 `|| col.filterable === true` / D-149-5 状态指示语义保留
+  - **fetch 渐进迁移**：保留旧 listCrawlerRuns API（status[] / triggerType[] 参数）/ 前端从 filtersMap 派生 / 后端不改 / DtFiltersSchema 通用 schema 仅 audit 等复杂消费方使用
+- **质量门禁**：
+  - ✅ typecheck（8 workspace PASS）
+  - ✅ lint（5/5 FULL TURBO）
+  - ✅ CrawlerRunsView 25/25 全 PASS
+  - ✅ admin-ui/table 425/425（老 EP-1 单测零回退）
+  - ✅ verify:adr-contracts（style 0 / SQL aligned / D-N 172 闭环 / endpoint-adr 187/187）
+- **用户可见行为变化**：
+  - `/admin/crawler/runs` 首次看到 **Google Sheets 三段布局 popover**！
+  - 点列名 ⋯（status / triggerType）→ 弹三段（排序 / 过滤方式 radio / 值列表 + 取消/应用按钮）
+  - 选 enum 选项 → 应用 → 数据真正过滤（fetch 派生 status: ['running'] 调旧 API）
+  - 矩阵 popover 状态指示生效（已过滤列 ●─ + 摘要文本 / 未过滤列 ─● + "列名 ⋯ 编辑" hint）
+- **价值**：
+  - **D-150 首消费方落地**：用户可第一次走读 Google Sheets popover 实际效果
+  - **范式可复用**：sub 2 AuditClient + 其它消费方按相同范式迁移（filterable + filterFieldName + filterOptions + filtersMap state + onQueryChange 处理）
+  - **D-149-15 → D-150 切换 0 后端改动**：fetch API 不变 / 前端派生逻辑透明
+  - **matrix popover 双范式识别**：ColumnDescriptor 扩展支撑后续所有 D-150 消费方
+  - **共享层 export 完整**：AutoFilterColumnFields union + DistinctOption 等 6 类型 export，消费方迁移无需深入 import 路径
+- **后续**：sub 2 AuditClient 迁 toolbar 4 AdminSelect/AdminInput → 列内 filterable + 后端白名单 AMENDMENT（追加 audit actor_id / target_id 等）
+
+Cleanup-Audit: D-149-15 → D-150 首消费方迁移 ✅ / 用户首次走读 Google Sheets popover 实际效果 / 25 单测 + 4 质量门禁全过 / matrix popover 双范式识别完成
+Plan-Revision: 1 次（triggerType filterFieldName 'trigger_type' → 'triggerType' 保持 column.id === filterFieldName 一致 / matrix lookup 走 D-149-15 桥接合约保留）

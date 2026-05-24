@@ -354,36 +354,32 @@ describe('CrawlerRunsView', () => {
     }
   })
 
-  // ── EP-5-crawler-runs 桥接合约集成测试（ADR-149 D-149-15 + D-149-16）────
+  // ── EP-3-A sub 1 / ADR-150 阶段 4：D-149-15 桥接 → D-150 列固有自动过滤 ────
 
-  it('21. EP-5: status 列 ⋯ → popover 含 DataTableEnumFilter（filterContent 接入）', async () => {
+  it('21. ADR-150: status 列 ⋯ → DataTableAutoFilter popover (Google Sheets 三段布局)', async () => {
     listCrawlerRunsMock.mockResolvedValueOnce(EMPTY)
     render(<CrawlerRunsView />)
     await waitFor(() => screen.getByTestId('crawler-runs-table'))
-    // 点列名 ⋯ trigger → 打开 header menu popover
     fireEvent.click(screen.getByTestId('th-menu-trigger-status'))
-    // filterContent 渲染（含 STATUS_OPTIONS 全部选项 + "全部状态" placeholder）
-    expect(screen.queryByTestId('crawler-runs-status-filter')).not.toBeNull()
+    expect(screen.queryByTestId('dt-autofilter-status')).not.toBeNull()
+    expect(screen.queryByTestId('dt-autofilter-status-apply')).not.toBeNull()
   })
 
-  it('22. EP-5: triggerType 列 ⋯ → popover 含 DataTableEnumFilter（filterContent 接入）', async () => {
+  it('22. ADR-150: triggerType 列 ⋯ → DataTableAutoFilter popover', async () => {
     listCrawlerRunsMock.mockResolvedValueOnce(EMPTY)
     render(<CrawlerRunsView />)
     await waitFor(() => screen.getByTestId('crawler-runs-table'))
     fireEvent.click(screen.getByTestId('th-menu-trigger-triggerType'))
-    expect(screen.queryByTestId('crawler-runs-trigger-filter')).not.toBeNull()
+    expect(screen.queryByTestId('dt-autofilter-triggerType')).not.toBeNull()
   })
 
-  it('23. EP-5 PATCH-B: 列级 ⋯ filter checkbox → 触发业务 setState + setPage(1) + fetch 带 status 数组', async () => {
+  it('23. ADR-150: 勾选 "运行中" → 应用按钮 → fetch 带 status: [running] + setPage(1)', async () => {
     listCrawlerRunsMock.mockResolvedValue(EMPTY)
     render(<CrawlerRunsView />)
     await waitFor(() => screen.getByTestId('crawler-runs-table'))
-    // 点 status 列 ⋯ → 打开 popover
     fireEvent.click(screen.getByTestId('th-menu-trigger-status'))
-    // 在 DataTableEnumFilter (multi) 里勾选 "运行中" checkbox
-    const runningCheckbox = screen.getByLabelText('运行中') as HTMLInputElement
-    fireEvent.click(runningCheckbox)
-    // 业务 setState 触发 fetch 带 status: ['running']（PATCH-B 多选数组）
+    fireEvent.click(screen.getByTestId('dt-autofilter-status-opt-running'))
+    fireEvent.click(screen.getByTestId('dt-autofilter-status-apply'))
     await waitFor(() => {
       expect(listCrawlerRunsMock).toHaveBeenCalledWith(
         expect.objectContaining({ status: ['running'], page: 1 }),
@@ -391,36 +387,30 @@ describe('CrawlerRunsView', () => {
     })
   })
 
-  it('24. EP-5: 矩阵 popover 含 status / triggerType 过滤格（filterContent 桥接生效）', async () => {
+  it('24. ADR-150: 矩阵 popover 含 status / triggerType 过滤格 + 未过滤时 switch aria-checked=false', async () => {
     listCrawlerRunsMock.mockResolvedValueOnce(EMPTY)
     render(<CrawlerRunsView />)
     await waitFor(() => screen.getByTestId('crawler-runs-table'))
-    // 点 toolbar 矩阵触发器
     fireEvent.click(screen.getByTestId('matrix-trigger'))
-    // 矩阵 popover 内 status / triggerType 行存在
     expect(screen.queryByTestId('matrix-filter-status')).not.toBeNull()
     expect(screen.queryByTestId('matrix-filter-triggerType')).not.toBeNull()
-    // 未过滤时 switch aria-checked=false
     expect(screen.getByTestId('matrix-filter-status').getAttribute('aria-checked')).toBe('false')
   })
 
-  it('25. EP-5 PATCH-B: BLOCKER R-AMEND-2-3 "清除全部过滤" → 业务 key 桥接真清 status + triggerType', async () => {
+  it('25. ADR-150: 应用 status filter 后 矩阵清除全部 → fetch 不再带 status', async () => {
     listCrawlerRunsMock.mockResolvedValue(EMPTY)
     render(<CrawlerRunsView />)
     await waitFor(() => screen.getByTestId('crawler-runs-table'))
-    // 先勾选 status filter checkbox
     fireEvent.click(screen.getByTestId('th-menu-trigger-status'))
-    const runningCheckbox = screen.getByLabelText('运行中') as HTMLInputElement
-    fireEvent.click(runningCheckbox)
+    fireEvent.click(screen.getByTestId('dt-autofilter-status-opt-running'))
+    fireEvent.click(screen.getByTestId('dt-autofilter-status-apply'))
     await waitFor(() => {
       expect(listCrawlerRunsMock).toHaveBeenLastCalledWith(
         expect.objectContaining({ status: ['running'] }),
       )
     })
-    // 然后点矩阵触发器 → 清除全部过滤
     fireEvent.click(screen.getByTestId('matrix-trigger'))
     fireEvent.click(screen.getByTestId('matrix-foot-clear-filters'))
-    // 业务 key 桥接真清：fetch 不再带 status（统计为空数组 → 不传该参数）
     await waitFor(() => {
       const lastCall = listCrawlerRunsMock.mock.calls[listCrawlerRunsMock.mock.calls.length - 1]
       expect(lastCall[0]).not.toHaveProperty('status')

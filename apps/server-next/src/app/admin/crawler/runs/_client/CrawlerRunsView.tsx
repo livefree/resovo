@@ -18,7 +18,6 @@
 import React, { useState, useEffect, useMemo, useCallback, type CSSProperties } from 'react'
 import {
   DataTable,
-  DataTableEnumFilter,
   AdminButton,
   EmptyState,
   ErrorState,
@@ -26,6 +25,8 @@ import {
   CodeText,
   useToast,
   type AdminSelectOption,
+  type DistinctOption,
+  type FilterValue,
   type TableColumn,
   type TableSortState,
 } from '@resovo/admin-ui'
@@ -75,34 +76,22 @@ const STATUS_BADGE: Record<CrawlerRunStatus, { label: string; bg: string; color:
   cancelled:      { label: '已取消', bg: 'var(--bg-surface-sunken)', color: 'var(--fg-muted)' },
 }
 
-// ADR-149 EP-5-crawler-runs: 把 AdminSelectOption.label (ReactNode) 转 string 用于 filterSummary
-// （D-149-6 锁定 filterSummary: string / 富文本走 N1-149-6）
-function optionLabelString(options: readonly AdminSelectOption[], value: string): string {
-  const found = options.find((o) => o.value === value)
-  if (!found) return value
-  return typeof found.label === 'string' ? found.label : value
-}
-
-// EP-5-crawler-runs-PATCH-B：多选 filterSummary 折叠（D-149-6 多值折叠规则）
-function multiFilterSummary(options: readonly AdminSelectOption[], values: readonly string[]): string | undefined {
-  if (values.length === 0) return undefined
-  const labels = values.map((v) => optionLabelString(options, v))
-  if (labels.length === 1) return labels[0]
-  if (labels.length === 2) return labels.join(', ')
-  return `${labels[0]}+${labels.length - 1} 项`
-}
+// ADR-150 阶段 4 / EP-3-A sub 1：D-149-15 桥接 helper 已删（列固有 D-150 范式 / filterOptions 直接用）
+// 静态选项（D-150-1 双轨 / 优先静态 / 走后端 distinct API 留作其它列）
+const STATUS_FILTER_OPTIONS: readonly DistinctOption[] = STATUS_OPTIONS.map((o) => ({
+  value: o.value,
+  label: typeof o.label === 'string' ? o.label : o.value,
+}))
+const TRIGGER_TYPE_FILTER_OPTIONS: readonly DistinctOption[] = TRIGGER_TYPE_OPTIONS.map((o) => ({
+  value: o.value,
+  label: typeof o.label === 'string' ? o.label : o.value,
+}))
 
 interface BuildColumnsOptions {
   readonly onCancel: (row: CrawlerRun) => void
   readonly onPause: (row: CrawlerRun) => void
   readonly onResume: (row: CrawlerRun) => void
   readonly pendingRunId: string | null
-  // ADR-149 EP-5-crawler-runs: 业务 filter 桥接（D-149-15 / column.id 已对齐业务 key）
-  // EP-5-crawler-runs-PATCH-B：state 改数组（多选）/ 空数组 = 未过滤
-  readonly statusFilter: readonly CrawlerRunStatus[]
-  readonly triggerTypeFilter: readonly CrawlerRunTriggerType[]
-  readonly onStatusChange: (next: readonly CrawlerRunStatus[]) => void
-  readonly onTriggerTypeChange: (next: readonly CrawlerRunTriggerType[]) => void
 }
 
 function buildColumns({
@@ -110,10 +99,6 @@ function buildColumns({
   onPause,
   onResume,
   pendingRunId,
-  statusFilter,
-  triggerTypeFilter,
-  onStatusChange,
-  onTriggerTypeChange,
 }: BuildColumnsOptions): readonly TableColumn<CrawlerRun>[] {
   return [
     {
@@ -145,22 +130,11 @@ function buildColumns({
       accessor: (r) => r.status,
       width: 110,
       defaultVisible: true,
-      // ADR-149 EP-5-crawler-runs / PATCH-B: status 列 filterContent（多选）+ D-149-15 桥接合约
-      columnMenu: {
-        filterContent: (
-          <DataTableEnumFilter
-            options={STATUS_OPTIONS}
-            value={statusFilter as readonly string[]}
-            onChange={(next) => onStatusChange(next as readonly CrawlerRunStatus[])}
-            multi
-            data-testid="crawler-runs-status-filter"
-            aria-label="按状态筛选"
-          />
-        ),
-        isFiltered: statusFilter.length > 0,
-        onClearFilter: () => onStatusChange([]),
-        filterSummary: multiFilterSummary(STATUS_OPTIONS, statusFilter),
-      },
+      // ADR-150 阶段 4 / EP-3-A sub 1：D-149-15 桥接 → D-150 列固有自动过滤
+      filterable: true,
+      filterFieldName: 'status',
+      filterKind: 'enum',
+      filterOptions: STATUS_FILTER_OPTIONS,
       cell: ({ row }) => {
         const cfg = STATUS_BADGE[row.status]
         return (
@@ -186,22 +160,11 @@ function buildColumns({
       accessor: (r) => r.triggerType,
       width: 100,
       defaultVisible: true,
-      // ADR-149 EP-5-crawler-runs / PATCH-B: triggerType 列 filterContent（多选）+ D-149-15 桥接合约
-      columnMenu: {
-        filterContent: (
-          <DataTableEnumFilter
-            options={TRIGGER_TYPE_OPTIONS}
-            value={triggerTypeFilter as readonly string[]}
-            onChange={(next) => onTriggerTypeChange(next as readonly CrawlerRunTriggerType[])}
-            multi
-            data-testid="crawler-runs-trigger-filter"
-            aria-label="按触发类型筛选"
-          />
-        ),
-        isFiltered: triggerTypeFilter.length > 0,
-        onClearFilter: () => onTriggerTypeChange([]),
-        filterSummary: multiFilterSummary(TRIGGER_TYPE_OPTIONS, triggerTypeFilter),
-      },
+      // ADR-150 阶段 4 / EP-3-A sub 1：D-149-15 桥接 → D-150 列固有自动过滤
+      filterable: true,
+      filterFieldName: 'triggerType',
+      filterKind: 'enum',
+      filterOptions: TRIGGER_TYPE_FILTER_OPTIONS,
       cell: ({ row }) => <CodeText value={row.triggerType} muted />,
     },
     {
@@ -316,8 +279,17 @@ export function CrawlerRunsView() {
   const [error, setError] = useState<Error | null>(null)
   const [retryKey, setRetryKey] = useState(0)
   // EP-5-crawler-runs-PATCH-B: 多选 state（空数组 = 未过滤）
-  const [statusFilter, setStatusFilter] = useState<readonly CrawlerRunStatus[]>([])
-  const [triggerTypeFilter, setTriggerTypeFilter] = useState<readonly CrawlerRunTriggerType[]>([])
+  // ADR-150 阶段 4 / EP-3-A sub 1：filtersMap 统一管理所有列过滤（替代 statusFilter/triggerTypeFilter 独立 state）
+  // D-150-4 业务 filter key：'status' / 'trigger_type'（与 column.filterFieldName + 后端 FILTER_FIELDS 对齐）
+  const [filtersMap, setFiltersMap] = useState<ReadonlyMap<string, FilterValue>>(new Map())
+  const statusFilter = useMemo<readonly CrawlerRunStatus[]>(() => {
+    const v = filtersMap.get('status')
+    return v?.kind === 'enum' ? (v.value as readonly CrawlerRunStatus[]) : []
+  }, [filtersMap])
+  const triggerTypeFilter = useMemo<readonly CrawlerRunTriggerType[]>(() => {
+    const v = filtersMap.get('triggerType')
+    return v?.kind === 'enum' ? (v.value as readonly CrawlerRunTriggerType[]) : []
+  }, [filtersMap])
   // EP-4.5-HOTFIX-3 / 问题 1+3：列偏好 state（矩阵 popover 可见性 toggle / 列级 ⋯ 隐藏此列触发）
   const [columnPrefs, setColumnPrefs] = useState<ReadonlyMap<string, { readonly visible: boolean; readonly width?: number }>>(new Map())
 
@@ -341,7 +313,7 @@ export function CrawlerRunsView() {
       if (!cancelled) setLoading(false)
     })
     return () => { cancelled = true }
-  }, [page, pageSize, statusFilter, triggerTypeFilter, retryKey])
+  }, [page, pageSize, filtersMap, retryKey])
 
   const refresh = useCallback(() => setRetryKey((k) => k + 1), [])
 
@@ -394,15 +366,8 @@ export function CrawlerRunsView() {
     }
   }, [toast, refresh])
 
-  // ADR-149 EP-5-crawler-runs: 业务 filter callback 封装（含 setPage(1) 副作用）
-  const handleStatusChange = useCallback((next: readonly CrawlerRunStatus[]) => {
-    setStatusFilter(next)
-    setPage(1)
-  }, [])
-  const handleTriggerTypeChange = useCallback((next: readonly CrawlerRunTriggerType[]) => {
-    setTriggerTypeFilter(next)
-    setPage(1)
-  }, [])
+  // ADR-150 阶段 4 / EP-3-A sub 1：handleStatusChange/handleTriggerTypeChange 已删
+  // DataTable popover 应用 → onQueryChange({ filters: next }) → setFiltersMap → fetch deps 触发
 
   const columns = useMemo(
     () => buildColumns({
@@ -410,15 +375,8 @@ export function CrawlerRunsView() {
       onPause: handlePause,
       onResume: handleResume,
       pendingRunId,
-      statusFilter,
-      triggerTypeFilter,
-      onStatusChange: handleStatusChange,
-      onTriggerTypeChange: handleTriggerTypeChange,
     }),
-    [
-      handleCancel, handlePause, handleResume, pendingRunId,
-      statusFilter, triggerTypeFilter, handleStatusChange, handleTriggerTypeChange,
-    ],
+    [handleCancel, handlePause, handleResume, pendingRunId],
   )
 
   // ADR-149 EP-5-crawler-runs: toolbar.search 已删（业务 filter 迁移到列级 ⋯ + 矩阵 popover）
@@ -428,12 +386,13 @@ export function CrawlerRunsView() {
     () => ({
       pagination: { page, pageSize },
       sort,
-      filters: new Map(),
+      // ADR-150 阶段 4 / EP-3-A sub 1：filters 用 filtersMap state（D-150-4 业务 key 统一）
+      filters: filtersMap,
       // EP-4.5-HOTFIX-3 / 问题 1+3：columns 用 state 不再是空 Map（让矩阵 popover toggle 真生效）
       columns: columnPrefs,
       selection: { selectedKeys: new Set<string>(), mode: 'page' as const },
     }),
-    [page, pageSize, sort, columnPrefs],
+    [page, pageSize, sort, filtersMap, columnPrefs],
   )
 
   return (
@@ -460,6 +419,8 @@ export function CrawlerRunsView() {
                   if (patch.sort) setSort(patch.sort)
                   // EP-4.5-HOTFIX-3 / 问题 1+3：消费 columns patch（矩阵 popover 可见性 toggle / 列级 ⋯ 隐藏此列）
                   if (patch.columns) setColumnPrefs(patch.columns)
+                  // ADR-150 阶段 4 / EP-3-A sub 1：消费 filters patch（DataTableAutoFilter popover OK 触发）
+                  if (patch.filters) { setFiltersMap(patch.filters); setPage(1) }
                 }}
                 totalRows={total}
                 loading={loading}

@@ -350,6 +350,10 @@ export interface ColumnDescriptor {
   readonly defaultVisible?: boolean
   readonly pinned?: boolean
   readonly enableSorting?: boolean
+  /** ADR-150 阶段 4：列固有自动过滤标志（matrix popover 识别"有过滤"判定 / 与 filterContent 二选一） */
+  readonly filterable?: boolean
+  /** ADR-150 阶段 4：业务 filter key（matrix popover / filters Map lookup 与 column.id 桥接） */
+  readonly filterFieldName?: string
 }
 
 // ── useTableQuery（§4.2）──────────────────────────────────────────

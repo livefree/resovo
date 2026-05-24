@@ -403,7 +403,7 @@ export function ColumnMatrixMenu({
               const columnMenu = columnMenus.get(col.id)
               const visible = isColumnVisible(col, columnsValue)
               const pinned = col.pinned === true
-              const hasFilterContent = columnMenu?.filterContent !== undefined
+              const hasFilterContent = columnMenu?.filterContent !== undefined || col.filterable === true
               const filtered = isColumnFiltered(col, columnMenu, currentFilters)
               const sortable = col.enableSorting === true && columnMenu?.canSort !== false
               const isSortedAsc = currentSort.field === col.id && currentSort.direction === 'asc'
