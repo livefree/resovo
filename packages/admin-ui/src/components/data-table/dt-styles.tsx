@@ -99,92 +99,10 @@ const DT_CSS = `
   flex-shrink: 0;
 }
 
-/* ── 隐藏列 chip（CHG-DESIGN-02 Step 7A） ─────── */
-[data-table-toolbar-hidden-cols-chip] {
-  height: var(--row-h-compact, 24px);
-  padding: 0 10px;
-  border: 1px solid var(--border-default);
-  border-radius: 999px;
-  background: transparent;
-  color: var(--fg-muted);
-  font: inherit;
-  font-size: 12px;
-  line-height: 1;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  flex-shrink: 0;
-}
-[data-table-toolbar-hidden-cols-chip]:hover {
-  color: var(--fg-default);
-  border-color: var(--border-strong);
-}
-[data-table-toolbar-hidden-cols-chip][aria-expanded="true"] {
-  background: var(--admin-accent-soft);
-  color: var(--admin-accent-on-soft);
-  border-color: var(--admin-accent-border);
-}
-[data-table-toolbar-hidden-cols-chip] em {
-  font-style: normal;
-  font-weight: 700;
-  color: var(--admin-accent-on-soft);
-}
-
-/* ── filter chips slot（CHG-DESIGN-02 Step 7A，独立第二 flex row）─────── */
-[data-table-filter-chips] {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 6px;
-  padding: 8px var(--toolbar-padding-x);
-  border-bottom: 1px solid var(--border-default);
-  background: transparent;
-  flex-shrink: 0;
-}
-[data-table-filter-chip] {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  height: var(--row-h-compact, 24px);
-  padding: 0 4px 0 10px;
-  border: 1px solid var(--admin-accent-border);
-  border-radius: 999px;
-  background: var(--admin-accent-soft);
-  color: var(--admin-accent-on-soft);
-  font-size: 12px;
-  line-height: 1;
-  flex-shrink: 0;
-}
-[data-table-filter-chip-label] {
-  font-weight: 500;
-}
-[data-table-filter-chip-sep] {
-  color: var(--fg-muted);
-}
-[data-table-filter-chip-value] {
-  color: var(--fg-default);
-}
-[data-table-filter-chip-clear] {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
-  margin-left: 4px;
-  border: 0;
-  border-radius: 999px;
-  background: transparent;
-  color: var(--fg-muted);
-  font: inherit;
-  font-size: 14px;
-  line-height: 1;
-  cursor: pointer;
-}
-[data-table-filter-chip-clear]:hover {
-  background: var(--bg-surface);
-  color: var(--fg-default);
-}
+/* ── ADR-149 EP-3 删除：
+ *   [data-table-toolbar-hidden-cols-chip] 隐藏列 chip（功能迁移 column-matrix-menu 可见性 cell）
+ *   [data-table-filter-chips] + [data-table-filter-chip*] filter chips slot（功能迁移 column-matrix-menu 过滤格）
+ *   注：FilterChip / FilterChipBar 独立业务组件样式仍在 filter-chip.tsx 内 inline，未受影响。 */
 
 /* ── 表头行交互（CHG-UX-05d）─────── *
  * 表头是 sticky 元素 + 用户期望"文字高亮（非灰化背景）+ 三点 hover 显隐"；

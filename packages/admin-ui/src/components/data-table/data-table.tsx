@@ -21,9 +21,10 @@ import { HeaderMenu } from './header-menu'
 import { ViewsMenu } from './views-menu'
 import { useRenderableSlot } from './react-node-utils'
 import { PaginationFoot } from './pagination-foot'
-import { HiddenColumnsMenu } from './hidden-columns-menu'
-import { countHiddenColumns, setColumnVisibility } from './column-visibility'
-import { FilterChips } from './filter-chips'
+// ADR-149 EP-3：hidden-columns-menu / filter-chips 已废弃删除，功能整合到 column-matrix-menu
+// ADR-149 EP-3：countHiddenColumns 已不再使用（hidden-columns-chip 已删）；setColumnVisibility 保留（HeaderMenu onHide 用）
+import { setColumnVisibility } from './column-visibility'
+// ADR-149 EP-3：FilterChips 内部 slot 渲染器已删；FilterChipBar 独立组件保留（business 用）
 
 // ── client-mode data processing ──────────────────────────────────
 
@@ -195,8 +196,7 @@ export function DataTable<T>(props: DataTableProps<T>): React.ReactElement {
   // 提供时 ViewsMenu 始终渲染触发按钮（"视图 · {label} ▾"），故 viewsConfig 提供
   // 即视为有内容
   const hasViewsContent = toolbar?.viewsConfig !== undefined
-  // 注：showHiddenColumnsChip 在下方依赖 colMap 计算后才声明，故此处 toolbar 渲染门控
-  // 计算时不能直接引用；改为在 JSX 中根据 (... || showHiddenColumnsChip) 决定显式包裹。
+  // ADR-149 EP-3：showHiddenColumnsChip 已删；hasToolbarContent 现在直接判定 3 槽位
   const hasToolbarContent = (
     searchSlot.renderable || trailingSlot.renderable || hasViewsContent
   )
@@ -213,9 +213,7 @@ export function DataTable<T>(props: DataTableProps<T>): React.ReactElement {
   const [menuColId, setMenuColId] = useState<string | null>(null)
   const menuAnchorRef = useRef<HTMLElement | null>(null)
 
-  // CHG-DESIGN-02 Step 7A：隐藏列 chip popover 状态
-  const [hiddenColsOpen, setHiddenColsOpen] = useState(false)
-  const hiddenColsAnchorRef = useRef<HTMLButtonElement | null>(null)
+  // ADR-149 EP-3：隐藏列 chip + popover 已删除（功能迁移到 column-matrix-menu）
 
   const colMap = query.columns
 
@@ -282,20 +280,8 @@ export function DataTable<T>(props: DataTableProps<T>): React.ReactElement {
     onQueryChange({ columns: setColumnVisibility(colMap, colId, false) } satisfies TableQueryPatch)
   }, [colMap, onQueryChange])
 
-  // CHG-DESIGN-02 Step 7A：隐藏列 chip 渲染门控 + 计数
-  const hiddenColumnsCount = useMemo(
-    () => countHiddenColumns(columns, colMap),
-    [columns, colMap],
-  )
-  const showHiddenColumnsChip =
-    toolbar?.hideHiddenColumnsChip !== true && hiddenColumnsCount > 0
-
-  const handleHiddenColsChange = useCallback(
-    (next: ReadonlyMap<string, { readonly visible: boolean; readonly width?: number }>) => {
-      onQueryChange({ columns: next } satisfies TableQueryPatch)
-    },
-    [onQueryChange],
-  )
+  // ADR-149 EP-3：hiddenColumnsCount / showHiddenColumnsChip / handleHiddenColsChange 已删除
+  // 列可见性管理统一到 column-matrix-menu（EP-4-C 接入矩阵触发器后用户可见）
   const closeHeaderMenu = useCallback(() => {
     setMenuColId(null)
     menuAnchorRef.current = null
@@ -361,10 +347,11 @@ export function DataTable<T>(props: DataTableProps<T>): React.ReactElement {
       {/* CHG-DESIGN-02 Step 2/7：自包含 CSS 注入（framed surface + flash keyframe）
         * 模块级 flag 守卫，多个 DataTable 实例只注入一次 */}
       <DTStyles />
-      {/* CHG-DESIGN-02 Step 4 + Step 7A：内置 toolbar
-        * 槽位顺序：search → viewsMenu → 隐藏列 chip（Step 7A）→ trailing
-        * toolbar.hidden=true 显式抑制；否则只要任一槽位有内容就渲染 toolbar 容器 */}
-      {toolbar?.hidden !== true && (hasToolbarContent || showHiddenColumnsChip) && (
+      {/* CHG-DESIGN-02 Step 4 + ADR-149 EP-3：内置 toolbar
+        * 槽位顺序：search → viewsMenu → trailing
+        * ADR-149 EP-3 删除：隐藏列 chip + filter chips 第二行（统一到 column-matrix-menu）
+        * toolbar.hideHiddenColumnsChip / hideFilterChips props 保留 @deprecated noop（EP-4-B 删类型） */}
+      {toolbar?.hidden !== true && hasToolbarContent && (
         <div data-table-toolbar role="toolbar" aria-label="表格工具栏">
           {searchSlot.renderable && (
             <div data-table-toolbar-search>{searchSlot.node}</div>
@@ -372,38 +359,10 @@ export function DataTable<T>(props: DataTableProps<T>): React.ReactElement {
           {hasViewsContent && toolbar?.viewsConfig && (
             <ViewsMenu config={toolbar.viewsConfig} data-testid="views-trigger" />
           )}
-          {showHiddenColumnsChip && (
-            <button
-              ref={hiddenColsAnchorRef}
-              type="button"
-              data-table-toolbar-hidden-cols-chip
-              data-interactive="chip"
-              aria-haspopup="menu"
-              aria-expanded={hiddenColsOpen}
-              onClick={() => setHiddenColsOpen((o) => !o)}
-              data-testid="hidden-columns-chip"
-            >
-              已隐藏 <em>{hiddenColumnsCount}</em> 列
-            </button>
-          )}
           {trailingSlot.renderable && (
             <div data-table-toolbar-trailing>{trailingSlot.node}</div>
           )}
         </div>
-      )}
-      <HiddenColumnsMenu
-        open={hiddenColsOpen}
-        columns={columns}
-        columnsValue={colMap}
-        anchorRef={hiddenColsAnchorRef}
-        onColumnsChange={handleHiddenColsChange}
-        onClose={() => setHiddenColsOpen(false)}
-      />
-      {/* CHG-DESIGN-02 Step 7A：filter chips slot（独立第二 flex row，避开与 toolbar 同行 wrap 抖动）
-        * 自动从 query.filters + columns 配对渲染；6 种 FilterValue.kind 默认 formatter；
-        * column.renderFilterChip 完全接管逃生口；toolbar.hideFilterChips 兜底关闭。 */}
-      {toolbar?.hideFilterChips !== true && (
-        <FilterChips columns={columns} filters={query.filters} onChange={onQueryChange} />
       )}
       {/* CHG-DESIGN-02 Step 7B fix#2：单一 scrollport 容器
         * 横向 + 纵向滚动统一在 [data-table-scroll] 容器内发生，thead/body/bulk

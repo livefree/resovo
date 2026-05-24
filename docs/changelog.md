@@ -3558,3 +3558,69 @@ Plan-Revision: 1 次（FOOT_BTN_STYLE shorthand 冲突修复 / verify 命中 ）
 
 Cleanup-Audit: EP-2 列名 toggle 二态互斥 + ⋯ button stopPropagation + columnTriggerVisibility 三态 ✅ / 12 新单测 + 30 旧测试更新全 PASS / 4 质量门禁全过 / 等用户审核启动 EP-3
 Plan-Revision: 2 次（CSS fontSize→font-size 拼写修正 / 旧测试 21 处批量迁移到 th-menu-trigger）
+
+---
+
+## [CHG-SN-9-DT-HEADER-REDESIGN-EP-3] 删除旧入口：hidden-columns-menu + filter-chips（5 段渐进第 3 段）
+
+- **完成时间**：2026-05-23
+- **记录时间**：2026-05-23
+- **执行模型**：claude-opus-4-7（主循环）
+- **子代理**：无（D-149-1/10 决策已在 ADR-149 完成）
+- **关联 ADR**：ADR-149 D-149-1 / D-149-10（已修正 RemovedExports 矛盾）/ D-149-11
+- **关联 SEQ**：SEQ-20260524-01 第 1 序列任务 #1 第 EP-3 子卡
+- **依赖**：EP-2 ✅ 完成（commit aef7051e）
+- **D-149-10/11 矛盾修正**（实施时核查并修正）：
+  - **ADR-149 §3 D-149-10 RemovedExports 原列「filter-chip.tsx 整文件删」与 D-149-11「VideoListClient 保留 FilterChipBar」直接冲突**
+  - 实测：VideoListClient line 6 + components-demo line 11 + VideoFilterFields line 8 共 3 处 import `FilterChip` / `FilterChipBar` / `FilterChipProps`
+  - **决定**：**保留** `filter-chip.tsx`（FilterChip + FilterChipBar 独立业务组件）；**只删** `filter-chips.tsx`（DataTable 内部 chips slot 渲染器 `FilterChips<T>` + `formatFilterValue`）
+- **修改文件**：
+  - 删：`packages/admin-ui/src/components/data-table/hidden-columns-menu.tsx`（207 行）
+  - 删：`packages/admin-ui/src/components/data-table/filter-chips.tsx`（128 行）
+  - 改：`packages/admin-ui/src/components/data-table/data-table.tsx` — 移除 HiddenColumnsMenu + FilterChips imports + hiddenColsOpen/hiddenColsAnchorRef state + hiddenColumnsCount/showHiddenColumnsChip/handleHiddenColsChange callbacks + toolbar 内 hidden cols chip 渲染（30 行 JSX）+ HiddenColumnsMenu portal + filter chips 第二行渲染；保留 toolbar 三槽位（search/views/trailing）
+  - 改：`packages/admin-ui/src/components/data-table/dt-styles.tsx` — 删 [data-table-toolbar-hidden-cols-chip] + [data-table-filter-chips] + [data-table-filter-chip*] 系列样式（~90 行）
+  - 改：`packages/admin-ui/src/components/data-table/index.ts` — 移除 `formatFilterValue` export；保留 FilterChip / FilterChipBar / FilterChipProps / FilterChipBarProps exports
+  - 删：`tests/unit/components/admin-ui/table/step-7a-hidden-cols.test.tsx`（11 测试 / 测的是已删 chips slot）
+  - 删：`tests/unit/components/admin-ui/table/step-7a-filter-chips.test.tsx`（14 测试 / 同上）
+  - 新建：`tests/unit/components/admin-ui/table/step-ep3-removal.test.tsx`（11 集成单测 / 超过 10 目标）
+- **新增依赖**：无
+- **数据库变更**：无
+- **新增端点**：无
+- **关键行为变化**（用户立即可见）：
+  - DataTable 内部 chips slot **彻底不渲染**（即使 query.filters 非空）
+  - DataTable toolbar 内"已隐藏 N 列" chip **彻底不渲染**（即使有隐藏列）
+  - VideoListClient 外置 `<FilterChipBar>` 仍正常工作（D-149-11 / 业务 trailing 槽位）
+  - 6 个旧 `toolbar={{ hideFilterChips: true }}` 消费方仍 typecheck PASS（prop @deprecated 接受不读）
+  - 用户当前**无法**从 UI 看到过滤状态汇总（要等 EP-4 矩阵触发器接入；EP-3 完成时 UI 看起来"过滤入口消失"是正常中间态）
+- **质量门禁**：
+  - ✅ `npm run typecheck`（全 8 workspace PASS / 6 消费方 `hideFilterChips: true` 仍兼容）
+  - ✅ `npm run lint`（5/5 FULL TURBO）
+  - ✅ admin-ui/table 309 测试全 PASS（11 EP-3 新 + EP-1 39 + EP-2 12 + 旧保留 247 全过）
+  - ✅ `npm run verify:adr-contracts`（style-shorthand-conflict 0 命中 / D-N 162 闭环 / sql-schema 对齐）
+  - ⚠️ 全 unit 4737/4738 PASS（1 pre-existing flaky StagingTable.test.tsx 单跑全 13 PASS / 全套件并发时序冲突 / 与 EP-3 无关）
+- **11 EP-3 集成单测覆盖维度**：
+  - D-149-1 hidden-columns chip 完全删除（2 用例）：有隐藏列时 chip 不渲染 / hideHiddenColumnsChip prop @deprecated noop
+  - D-149-10 filter chips slot 完全删除（2 用例）：filters 非空时 chips 不渲染 / hideFilterChips prop @deprecated noop
+  - toolbar 三槽位仍工作（3 用例）：search / trailing / 空槽位 toolbar 不渲染
+  - D-149-11 FilterChip/FilterChipBar 独立组件保留（2 用例）：FilterChipBar 仍可 import 并渲染 / FilterChip 仍可 import
+  - column-visibility 4 函数仍 export（1 用例）：setColumnVisibility / isColumnVisible / getHidableColumns / countHiddenColumns
+  - formatFilterValue 已从 index.ts 移除（1 用例）
+- **关键设计点**（落实 ADR-149）：
+  - D-149-1 4 处入口废除：本 EP 完成 toolbar 内 2 处（hidden cols chip + filter chips slot）
+  - D-149-10/11 矛盾修正：filter-chip.tsx 保留独立组件 / filter-chips.tsx 删内部 slot；区分"业务级独立 chip 组件"与"DataTable 内部 chips slot 渲染器"
+  - typecheck 中间态保护持续生效（types.ts 不动 @deprecated props / EP-4-B 才真删类型）
+- **注意事项**：
+  - **EP-3 中间态**：用户从 UI 完全看不到过滤状态（chips 删了 / 矩阵触发器未挂）；这是 EP 序列设计意图（EP-4-A/B 接入矩阵后用户体验闭合）
+  - **6 消费方 typecheck 不破**：CrawlerRunsView / VideoListClient / UsersListClient / AuditClient / SubmissionsListClient / SourcesClient 仍传 `hideFilterChips: true` → prop 仍存在但 noop 忽略
+  - **保留 column-settings-panel.tsx + filter-chip.tsx**：均为业务可独立消费组件，本 EP 不动
+- **价值**：
+  - **代码净减 ~325 行业务代码 + 25 旧测试 + 11 新测试**（净减约 250 行）
+  - **D-149-10/11 ADR 矛盾首次实测发现并修正**：示范"ADR 落地时仍需 grep 实测，不能纯粹遵照决策文本"
+  - **toolbar 视觉简化**：search / views / trailing 三槽位回归"业务动作槽位"本意（D-149-11 trailing 职责约定的下半段）
+  - **为 EP-4 让路**：EP-4-A 加 IME search + 矩阵触发器后，用户体感闭合
+- **后续**：
+  - 用户审核 EP-3（代码删除完整性 / 测试覆盖 / 旧消费方兼容）
+  - 通过 → 启动 EP-4-A（新建 DataTableSearchInput + 5 高优消费方接入 + 12 单测 / ~0.4w）
+
+Cleanup-Audit: EP-3 删除旧入口 ✅ / 删 2 文件 + 11 新单测 + 删 25 旧测试 / 4 质量门禁全过 / 等用户审核启动 EP-4-A
+Plan-Revision: 1 次（D-149-10 RemovedExports 矛盾修正 — 保留 filter-chip.tsx）

@@ -9,6 +9,8 @@ export { Toolbar } from './toolbar'
 export { SelectionActionBar } from './selection-action-bar'
 export type { SelectionActionBarProps, SelectionAction } from './selection-action-bar'
 export type { ToolbarProps } from './toolbar'
+// ADR-149 EP-3 / D-149-11：FilterChip + FilterChipBar 保留为业务独立组件
+// （VideoListClient + components-demo 在用；矩阵 popover 不直接消费这两个组件）
 export { FilterChip, FilterChipBar } from './filter-chip'
 export type { FilterChipProps, FilterChipBarProps } from './filter-chip'
 export { ColumnSettingsPanel } from './column-settings-panel'
@@ -58,10 +60,11 @@ export type {
 } from './types'
 
 // CHG-DESIGN-02 Step 7A — 工具与子组件（不在 DataTable 内部使用时也可独立消费）
+// ADR-149 EP-3：formatFilterValue 已删（filter-chips.tsx 整文件删）；
+// column-visibility.ts 4 函数保留（column-matrix-menu 内部消费 + 外部业务可调）
 export {
   setColumnVisibility,
   isColumnVisible,
   getHidableColumns,
   countHiddenColumns,
 } from './column-visibility'
-export { formatFilterValue } from './filter-chips'
