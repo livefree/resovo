@@ -230,3 +230,45 @@
 - P-image-health：所有 actions / endpoints 实证已确认（CHG-SN-8-FUP-IMAGE 通过 grep 验证 4 actions + 6 endpoints 全在位）— 无 gap
 - P-crawler：CHG-SN-8-02-B 调度列已登记（不在本表，task-queue 直登记）
 - 后续 batch 2-4 manual 编写时新发现 gap 追加到本表
+
+---
+
+## 内部技术维护（2026-05-23 / CHG-SN-7-MISC-DOCS-CLEANUP-SESSION-CLOSE sub-task 2）
+
+> 以下条目为内部技术/工程维护项，非用户可见 GAP；登记便于团队成员追溯本会话技术债处理。
+
+### #INT-dev-db-migrate-check · dev DB schema 滞后防御机制 ✅
+
+- **状态**：✅ 已闭合（2026-05-23 / commit 12a0a37b + 25163216）
+- **触发**：CHG-SN-7-MISC-VISUAL-FOLLOWUP-2 实证 dev DB 落后 9 migration（064-072 / 跨 M-SN-3 ~ M-SN-7）致 wish_list 500 等 endpoint bug
+- **修复**：package.json 加 `predev` npm lifecycle hook 跑 `migrate:check --silent || true`；每次 `npm run dev` 启动前自动提醒 pending migration（不阻塞）
+- **与 preflight.sh 互补**：preflight 是 full check（重量级 / 每周或 PR 前跑）+ predev 是轻量级提醒（每次 dev 启动）
+
+### #INT-visual-baseline-coverage · visual baseline 累计 32 张完整入库 ✅
+
+- **状态**：✅ 阶段性完整（2026-05-23 / 本会话累计入库 32 张）
+- **覆盖**：admin-moderation 7 + moderation 8（player-idle 缺）+ admin-ui 5（含 line-health-drawer + reject-modal recapture）+ crawler 7 + submissions 6（pagination conditional skip）+ dashboard 11 旧
+- **基础设施修复**：CHG-SN-7-MISC-VISUAL-FOLLOWUP-BATCH（commit 5993feb0）发现 EP-B admin-shell-notifications hook polling 触发 401 致 admin-ui visual capture 截到登录页；api-client `getLoginRedirectPath` 加 `/admin/dev/visual` 豁免（与 middleware ADR-116 §2.3 对称）
+- **conditional skip 仍缺**：
+  - moderation player-idle（LinesPanel useEffect auto-select 阻止 idle state / NEGATED ADR）
+  - admin-ui 其他 3 spec 重 capture（bar-signal/decision-card/staff-note-bar pre-existing baseline 维持 / 按需 follow-up）
+
+### #INT-linespanel-autoselect-NEGATED · LinesPanel auto-select 重构 ADR 决策 ❌
+
+- **状态**：❌ NEGATED（2026-05-23 / CHG-SN-7-MISC-VISUAL-FOLLOWUP-2 评估）
+- **NEGATED 理由**：仅为 1 张 player-idle baseline 改 LinesPanel UX 决策（auto-select 第一条 active line 是审核员日常 UX 优化）ROI 极低；与「价值排序：正确性 + 边界 + 复用 + 一致性 > 最小改动」原则一致
+- **conditional skip 保留**：spec 文件维持 conditional skip 范式；未来 dev DB seed 无活跃线路视频时 spec 自动 capture（无需重新 enabled）
+
+### #INT-wish-list-500-root-cause · wish_list endpoint 500 根因记录 ✅
+
+- **状态**：✅ 已闭合（2026-05-23 / CHG-SN-7-MISC-VISUAL-FOLLOWUP-2）
+- **根因**：dev DB 落后 9 pending migration → user_submissions 表不存在 → service 层 `SELECT FROM user_submissions ... WHERE us.type = $1` 抛 PG ERROR → handler 兜底 500
+- **修复**：`npm run migrate` 应用 064-072 全 9 migration；user_submissions 表建立 + 索引就位 → 4 type endpoint 全恢复 HTTP 200
+- **预防**：#INT-dev-db-migrate-check predev hook 已加入未来防御链路
+
+### #INT-changelog-archive-cutoff · changelog.md 归档评估 🔄
+
+- **状态**：🔄 调查中（2026-05-23 / CHG-SN-7-MISC-DOCS-CLEANUP-SESSION-CLOSE sub-task 4）
+- **当前**：3345 行 / 已 2 archive 文件（M-SN-2 ~ M-SN-7 + m0-m6）
+- **评估方向**：是否需进一步归档 SEQ-20260521 系列 mv 到独立 archive
+- **决策**：sub-task 4 完成时定档
