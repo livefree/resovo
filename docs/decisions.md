@@ -12662,3 +12662,376 @@ export function resetColumnVisibility(
 **待 @livefree 人工审核**（status: 🟡 Proposed）
 
 ---
+
+## ADR-150 — DataTable 列固有自动过滤（Google Sheets 范式 / ADR-149 第 3 次 AMENDMENT 候选）
+
+**状态**：🟡 **Proposed**（待 @livefree 人工审核）
+**日期**：2026-05-24
+**作者**：arch-reviewer (claude-opus-4-7) — 评级 **A− CONDITIONAL PASS**（6 个决策点逐一论证，D-150-3 / D-150-5 已 REVISED）
+**起草模型**：claude-opus-4-7（主循环推荐方案）+ claude-opus-4-7（arch-reviewer 子代理评审）
+**关联 ADR**：ADR-149 主体 + AMENDMENT 1 + AMENDMENT 2（本 ADR 与 ADR-149 D-149-3/D-149-5/D-149-15 **并行兼容**，不取代）
+**关联用户反馈**：@livefree 在 EP-4.5-HOTFIX-4 走读后看 Google Sheets 列过滤截图反馈："我希望这是表格列的固有属性，实现后所有表格列都能自动提供这样的排序，过滤界面和功能。而不是根据内容逐个添加。"
+**关联 GAP**：#UR-B5（M-SN-N 候选 / 配置语义负担 — EP-5-* 个别迁移要消费方每列写 `filterContent: <JSX>` 反范式）
+**关联任务**：CHG-SN-9-DT-AUTOFILTER-ADR（本 ADR 起草卡）
+**后续解锁卡**：CHG-SN-9-DT-AUTOFILTER-EP-1 ~ EP-5（实施分步详 §5）
+
+### 1. 背景与现状
+
+ADR-149 + AMENDMENT 1/2 已落地"4 入口收敛 2 + 矩阵 popover + 列名 toggle 排序"; EP-5-shared 已沉淀 3 个共享原语（`DataTableEnumFilter` / `DataTableTextFilter` / `DataTableDateRangeFilter`），EP-5-crawler-runs 作为第一个消费方落地，验证了 D-149-15 业务 key 桥接合约可工作。
+
+但 @livefree 在 EP-4.5-HOTFIX-4 之后看 Google Sheets 截图（顶部排序 / 中部过滤类型 / 底部值列表 + 搜索 + OK）后明确反馈："过滤应是列的固有能力"。当前 EP-5-* 范式仍要求消费方**每列写一段 JSX**：
+
+```typescript
+columnMenu: {
+  filterContent: <DataTableEnumFilter options={STATUS_OPTIONS} value={statusFilter} onChange={setStatusFilter} multi searchable />,
+  isFiltered: statusFilter.length > 0,
+  onClearFilter: () => setStatusFilter([]),
+  filterSummary: multiFilterSummary(STATUS_OPTIONS, statusFilter),
+}
+```
+
+**实测散落量**：
+- 列内 `filterContent` 配了：**仅 CrawlerRunsView（status / triggerType 2 列）**
+- 其余 11 个 DataTable 消费方：**0 列**配 filterContent，过滤入口在 toolbar 上（旧 AdminSelect / AdminInput 集中）
+- 13 表 × 平均 4 列可过滤 = ~52 处 JSX 待迁移（每处 ~6-12 行声明 = ~3w 工时按当前 EP-5 范式）
+
+**后端契约碎片化**：每路由各写 zod query schema / DB query 层各写 WHERE / 无统一过滤参数 schema / 无通用 distinct 端点。
+
+**sources 排序断链**（M-SN-8 用户反馈）：types/api.ts/route/DB query/SourcesClient 5 层都不消费 sort —— 这是"全栈断链"的副作用。本 ADR-150 在 §5 阶段 5 顺手修复。
+
+**不解决的后果**：EP-5-* 6 子卡按当前范式工时 5.2w → 实际可能翻倍；UX 不一致 12 消费方 enum filter 各写各的语义；新模块继续繁殖散落范式。
+
+### 2. 改造目标
+
+**列固有自动过滤**：消费方只需在 column 声明上加一行 `filterable: true, filterFieldName: 'status'`，DataTable 自动从数据推导过滤类型 + 渲染 Google Sheets 范式 UI（排序 / 类型 / 值列表 / 搜索 / OK） + 后端通过统一 schema 接收过滤参数 + 后端 Service 层按白名单生成 WHERE。
+
+**UX 范式（Google Sheets 截图对标）**：列名 ⋯ 弹出 popover 统一三段布局：
+
+```
+┌──────────────────────────────────┐
+│  [排序区]                         │
+│  ↑ 升序  ↓ 降序  × 清除排序        │
+├──────────────────────────────────┤
+│  [过滤类型]                       │
+│  ◉ 按值  ○ 按条件（v2）  ○ 按颜色（v2）│
+├──────────────────────────────────┤
+│  [值列表]                         │
+│  🔍 搜索…                         │
+│  ☑ 全选                          │
+│  ☑ 选项 A                         │
+│  ☐ 选项 B                         │
+│  显示 N 项                        │
+├──────────────────────────────────┤
+│       [取消]      [应用 OK]       │
+└──────────────────────────────────┘
+```
+
+**保留**：ADR-149 矩阵 popover（D-149-5 状态指示 / 批量清除）+ 列名 toggle 排序（D-149-4）+ 列级 ⋯（D-149-3）+ 业务 key 桥接（D-149-15 作为逃生口）。
+
+### 3. 决策清单（6 个 D-150-×）
+
+#### D-150-1 enum 值来源：消费方静态 vs 后端 distinct 动态
+
+**选项**：A 100% 静态 / B 100% distinct API / C **双轨**
+
+**推荐：C**（PASS）
+
+**论证**：固定枚举（status / triggerType / role）走 `filterOptions` 静态（0 RTT）；开放枚举（actor / userId / sourceUrl）走 `filterDistinctEndpoint`（首次 popover fetch + SWR 60s 缓存 / top 200 / 必有索引 / 失败 fallback 提示）。分页大数据集"页内 distinct"显式不可用（只看当前页 100 条不能推 enum 全集）。
+
+#### D-150-2 过滤类型推导：自动 vs 显式
+
+**选项**：A 100% 显式 / B 100% 自动 / C **默认+覆盖**
+
+**推荐：C**（PASS）
+
+**论证**：自动推导规则（首行非空采样 30 行）：number → 'number' / boolean → 'enum' / 匹配 ISO 日期 → 'date' / distinct ≤ 20 → 'enum' / 其余 → 'text'。SSR 首屏 rows=0 fallback 'text' / hydration 后二次推导。消费方 `filterKind` 显式覆盖永远优先。测试 surface 必须含 5 种边界数据采样。
+
+#### D-150-3 后端通用 distinct 端点：单端点 vs 各路由 vs 两阶段
+
+**选项**：A 单端点白名单 / B 33 路由各写 / C **两阶段**（v1 通用 / v2 域路由 fallback）
+
+**推荐：C**（REVISED）
+
+**论证（REVISED 修订点）**：原推荐 A 风险：动态表名 + 列名经白名单仍是 SQL 注入高危区。降级为"v1 通用 `/admin/_dt/distinct` 单端点 + 强白名单注册（drizzle column reference）+ v2 复杂列走域路由"。
+
+**v1 通用端点三重防御**：
+- Route：zod `table` enum 白名单（不允许任意字符串）
+- Route：zod `col` string + 后置白名单 lookup（miss → 403）
+- Service：drizzle column reference object（**禁止 raw SQL** / 不允许 `sql.raw(col)`）
+- Service：`LIMIT 200` 强制
+- DB：注册的列必须有索引
+- 鉴权：preHandler `requireRole(['admin', 'moderator'])`
+
+```typescript
+// apps/api/src/routes/admin/_datatable.ts
+fastify.get('/admin/_dt/distinct', { preHandler: auth }, async (req, reply) => {
+  const QuerySchema = z.object({
+    table: z.enum(['crawler_runs', 'admin_audit_log', 'users', 'user_submissions', 'sources', 'videos']),
+    col: z.string().min(1).max(64),
+    q: z.string().max(64).optional(),
+    limit: z.number().int().min(1).max(200).default(50),
+  })
+  const parsed = QuerySchema.safeParse(req.query)
+  if (!parsed.success) return reply.code(422).send({ error: ... })
+  const allowed = DT_DISTINCT_WHITELIST[parsed.data.table]
+  if (!allowed?.includes(parsed.data.col)) {
+    return reply.code(403).send({ error: { code: 'COLUMN_NOT_WHITELISTED' } })
+  }
+  const colRef = DT_DISTINCT_COLUMN_REF[parsed.data.table][parsed.data.col]
+  const result = await datatableService.distinct(colRef, parsed.data.q, parsed.data.limit)
+  return reply.send({ data: result })
+})
+```
+
+**v2 fallback**：复杂列（join / 计算 / 多表 union）走域路由自定义 distinct，column 声明用 `filterDistinctEndpoint: '/admin/videos/_distinct/source-domain'` 显式指向。
+
+#### D-150-4 过滤 WHERE 子句契约：column.id vs 业务 key 映射 vs 前端转换
+
+**选项**：A column.id 直传 / B **filterFieldName 映射** / C 前端转换
+
+**推荐：B**（PASS）
+
+**论证**：A 反模式（column.id 是 DataTable 内部 namespace 与业务 key 解耦，强对齐破坏 URL stability + saved view）；C 反模式（转换分散到 12 消费方各自维护）。B 实现规约：
+
+```typescript
+{ id: 'video_type', filterable: true, filterFieldName: 'type', filterKind: 'enum', filterOptions: VIDEO_TYPE_OPTIONS }
+```
+
+DataTable URL 写入用 `filterFieldName` 作为 query param 名。后端 Service 接收 + 白名单消费 + WHERE 拼接（Service 层归属，route 不含业务逻辑）：
+
+```typescript
+class CrawlerRunListService {
+  private readonly FILTER_FIELDS = {
+    'status': crawlerRuns.status,
+    'trigger_type': crawlerRuns.triggerType,
+  } as const
+  async list(input: { filters?: Record<string, FilterValue>; ... }) {
+    let query = db.select().from(crawlerRuns).$dynamic()
+    for (const [key, value] of Object.entries(input.filters ?? {})) {
+      const col = this.FILTER_FIELDS[key as keyof typeof this.FILTER_FIELDS]
+      if (!col) continue
+      query = applyFilterValue(query, col, value)
+    }
+    return await query
+  }
+}
+```
+
+**与 D-149-15 桥接合约关系**：D-149-15 保留为复杂场景逃生口；D-150-4 是新增 happy path；filterable=true 和 columnMenu.filterContent 互斥（union 类型守卫）。
+
+#### D-150-5 未配置 filterable 默认：true vs false vs auto
+
+**选项**：A 默认 true / B **默认 false** / C 默认 'auto'
+
+**推荐：B**（REVISED / 与主循环推荐分歧）
+
+**论证（REVISED 修订点）**：
+
+主循环推荐 A（默认 true）。我**强烈反对**，理由：
+
+**M-SN-8 教训**："很多实现起来是需要做决策的，但开发过程都被跳过，要么没有实现，要么使用不可用的方式假装实现了。"
+
+默认 filterable=true 但消费方未传 filterFieldName 时：popover 渲染（看着可用）→ 用户选 → URL 写入 → 后端 Service FILTER_FIELDS 没有该 key → 静默忽略 → 数据没过滤 → 用户以为过滤了，实际看到全量。**典型"假装实现"反模式**。
+
+默认 false 一行声明开箱：
+```typescript
+{ id: 'status', filterable: true, filterFieldName: 'status', filterKind: 'enum', filterOptions: STATUS_OPTIONS }
+```
+
+与 ADR-149 D-149-3 `enableSorting: true` 显式声明范式完全对称。union 类型守卫：
+
+```typescript
+type FilterableColumn<T> = TableColumn<T> & {
+  readonly filterable: true
+  readonly filterFieldName: string   // 强制必填
+  readonly filterKind?: 'enum' | 'text' | 'number' | 'date'
+  readonly filterOptions?: readonly FilterEnumOption[]
+}
+type NonFilterableColumn<T> = TableColumn<T> & {
+  readonly filterable?: false | undefined
+}
+```
+
+C（auto）反模式：要求前后端共享 FILTER_FIELDS schema → 引入 codegen / 不值得。
+
+#### D-150-6 EP-5-shared 现有 3 原语：删除 vs 内化 vs **保留为逃生口**
+
+**推荐：B**（PASS / 保留为复杂自定义 filterContent 逃生口）
+
+**论证**：3 原语已落地 + 50 单测，删除会引发 EP-5-crawler-runs 倒退。逃生口典型场景：audit actor 字段（联想下拉 + 验证）/ video type 字段（联动效果 type=movie 启用 director 列）/ 复合过滤（date-range + 时区切换 + 业务 preset）。
+
+**渐进迁移**：新模块默认用 filterable + filterFieldName；老模块 EP-5 已迁移（crawler-runs）保持 D-149-15 桥接 / 老模块未迁移优先用 D-150。3 原语 JSDoc 标 "D-149-15 桥接合约的复杂场景逃生口"。类型互斥（filterable: true 与 columnMenu.filterContent 二选一）。
+
+### 4. API 契约（完整 TypeScript 类型）
+
+#### 4.1 前端 column 类型扩展
+
+```typescript
+// packages/admin-ui/src/components/data-table/types.ts
+export interface AutoFilterColumnFields {
+  readonly filterable: true
+  readonly filterFieldName: string
+  readonly filterKind?: 'enum' | 'text' | 'number' | 'date'
+  readonly filterOptions?: readonly FilterEnumOption[]
+  readonly filterDistinctEndpoint?: string
+  readonly filterDistinctTable?: string
+}
+export type TableColumn<T> = TableColumnBase<T> & (
+  | AutoFilterColumnFields
+  | { readonly filterable?: false | undefined }
+)
+```
+
+#### 4.2 后端通用 distinct 端点
+
+- URL: `GET /admin/_dt/distinct`
+- 鉴权: `requireRole(['admin', 'moderator'])`
+- Query schema: 详 §3 D-150-3
+- 响应:
+```typescript
+interface DistinctResponse {
+  readonly data: readonly {
+    readonly value: string
+    readonly label?: string  // 可选 i18n label（v1 不实装 / N1）
+    readonly count?: number  // 可选 distinct count（v1 不实装 / N1）
+  }[]
+  readonly total?: number
+}
+```
+- 白名单注册: `apps/api/src/services/datatable/distinct-whitelist.ts`
+
+#### 4.3 统一过滤参数 schema
+
+URL 写入：`?filters=<json-encoded>`
+
+```typescript
+// apps/api/src/services/datatable/filter-schema.ts
+export const FilterValueSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('text'), value: z.string().max(200) }),
+  z.object({ kind: z.literal('number'), value: z.number() }),
+  z.object({ kind: z.literal('bool'), value: z.boolean() }),
+  z.object({ kind: z.literal('enum'), value: z.array(z.string().max(64)).max(50) }),
+  z.object({ kind: z.literal('range'), min: z.number().optional(), max: z.number().optional() }),
+  z.object({ kind: z.literal('date-range'), from: z.string().datetime().optional(), to: z.string().datetime().optional() }),
+])
+export const DtFiltersSchema = z.string().transform((s, ctx) => { /* JSON.parse + per-key FilterValueSchema 验证 */ }).optional()
+
+function applyFilterValue<T>(query: T, col: AnyColumn, value: FilterValue): T {
+  switch (value.kind) {
+    case 'text': return query.where(ilike(col, `%${value.value}%`))
+    case 'number': return query.where(eq(col, value.value))
+    case 'enum': return query.where(inArray(col, [...value.value]))
+    case 'bool': return query.where(eq(col, value.value))
+    case 'range': return query.where(and(value.min !== undefined ? gte(col, value.min) : undefined, value.max !== undefined ? lte(col, value.max) : undefined))
+    case 'date-range': return query.where(and(value.from ? gte(col, new Date(value.from)) : undefined, value.to ? lte(col, new Date(value.to)) : undefined))
+  }
+}
+```
+
+### 5. 5 阶段实施计划
+
+| EP | 卡 ID | 范围 | 工时 | 依赖 |
+|---|---|---|---|---|
+| 阶段 1 | CHG-SN-9-DT-AUTOFILTER-ADR | ADR-150 评审 → @livefree PASS | — | 本卡 |
+| 阶段 2 | CHG-SN-9-DT-AUTOFILTER-EP-1 | 共享 DataTableAutoFilter（替代 header-menu filterContent slot） + 数据类型推导 hook + Google Sheets 三段布局 popover + types.ts AutoFilterColumnFields union + 35 单测 | 0.6w | 阶段 1 |
+| 阶段 3 | CHG-SN-9-DT-AUTOFILTER-EP-2 | 后端通用 distinct 端点 + distinct-whitelist.ts + filter-schema.ts + DtFiltersSchema 共享 zod + 6 表白名单注册 + 20 单测（SQL 注入 4 case） | 0.5w | 阶段 2 |
+| 阶段 4 | CHG-SN-9-DT-AUTOFILTER-EP-3-A ~ -G | 12 消费方批量迁移（**串行 7 子卡**）：crawler-runs（首迁 D-149-15 → D-150）/ audit / submissions / users / videos / staging / image-health / merge / subtitles / sources / crawler / dev demo | 0.3w × 7 = 2.1w | 阶段 3 |
+| 阶段 5 | CHG-SN-9-DT-AUTOFILTER-EP-4 | sources 排序全栈断链顺手修（5 层）+ EP-5-shared 3 原语 @逃生口 JSDoc + admin-module-template.md v2 双范式决策树 + @livefree 走读 5 代表页 + e2e smoke 3 case | 0.4w | 阶段 4 |
+
+**总工时：约 3.6w**
+
+**与 ADR-149 EP 序列关系**：本 ADR-150 阶段 2 ~ 阶段 5 是 **ADR-149 EP-5-* 序列的替代路径**。已规划的 EP-5-submissions / EP-5-users / EP-5-audit / EP-5-videos 4 子卡（合计 1.35w）可由本 ADR-150 阶段 4 子卡覆盖完成（工时省 ~50%）。EP-5-crawler-runs（已 commit）保留，迁移本 ADR-150 在阶段 4 子卡 A 内顺手做。
+
+### 6. 不在本 ADR 范围
+
+- 排序范式（ADR-149 D-149-4 已锁 / 阶段 5 仅修 sources bug）
+- 矩阵 popover 语义（ADR-149 D-149-5 + AMENDMENT 2 EP-4.5-HOTFIX-4 保留）
+- toolbar.search 槽位（ADR-149 D-149-13 保留）
+- 业务 key 桥接 D-149-15 保留为复杂场景逃生口
+- 多列过滤逻辑 AND/OR 嵌套（v1 硬编码 AND / N1-150-3）
+- "按条件" / "按颜色" 过滤类型（v2 / N1-150-1/2）
+
+### 7. 与 ADR-149 / EP-5-shared 关系
+
+| 维度 | ADR-149 | ADR-150 v1 |
+|---|---|---|
+| 列名 ⋯ 触发器（D-149-3） | 保留 | 保留（接入新 popover） |
+| 列名 toggle asc/desc（D-149-4） | 保留 | 保留 |
+| 矩阵 popover 状态指示（D-149-5） | 保留 | 保留 |
+| 列级 ⋯ filterContent slot（D-149-3） | 保留 | **降级为逃生口** |
+| 业务 key 桥接（D-149-15） | 保留 | **降级为逃生口** |
+| EP-5-shared 3 原语 | 主路径 | **逃生口路径**（JSDoc 标） |
+| toolbar 三槽位（D-149-11/13/14） | 保留 | 保留（自动过滤迁出 toolbar 到列内） |
+| 矩阵触发器接入（D-149-16） | 保留 | 保留 |
+
+**ADR-103 关系**：本 ADR-150 是 **ADR-103 第 6 次 AMENDMENT 候选**（追加 `TableColumn<T>.filterable` / `filterFieldName` / `filterKind` / `filterOptions` / `filterDistinctEndpoint` / `filterDistinctTable` 共 6 个公开 API Props）。本 ADR Opus 评审产出即为强制评审证据。
+
+### 8. R-MID-1 影响
+
+**新增 1 个 admin route**：`GET /admin/_dt/distinct`（v1 单端点 / 阶段 3 实施）。`npm run verify:endpoint-adr` 自动核验本 ADR-150 作为 ADR 证据。`COLUMN_NOT_WHITELISTED` 是新 error code（403），需登记到 `apps/api/src/lib/errors.ts` ErrorCode enum + R-MID-1 真源对照表。零 actionType / 零 targetKind 新增（distinct 端点不写审计）。
+
+### 9. 测试 surface（80-100 新增 / 现存全 PASS）
+
+| 模块 | 用例数 | 增量维度 |
+|---|---|---|
+| data-table-auto-filter.tsx | ~35 | 数据类型推导 5 边界 / Google Sheets 三段布局 / 排序+过滤+OK / enum 静态 vs distinct 双轨 / 多选+搜索+全选 / 取消恢复初值 / a11y / 键盘 5 语义 |
+| distinct-whitelist 单测 | ~8 | 白名单 miss → 403 / 表名 enum / 列名 lookup / drizzle column ref / SQL 注入 4 case |
+| filter-schema 单测 | ~10 | 6 种 FilterValue 解析 / JSON parse 失败 / URL encode/decode / FILTER_FIELDS miss 静默 |
+| `/admin/_dt/distinct` E2E | ~6 | 鉴权 401/403 / 白名单 404 / 模糊 q / limit 200 / 性能 SLA |
+| 7 消费方迁移单测 | ~30 | filterable + filterFieldName + FILTER_FIELDS 同步 / URL sync / saved view 兼容 |
+
+**用户走读硬约束**（阶段 5）：@livefree 走 5 代表页（crawler-runs / audit / users / videos / submissions）：列固有过滤 = 点列名 ⋯ → 三段布局正确 → 搜索 → 多选 → OK → URL 写入 → 数据真过滤（不假装）；videos 页 source-domain 列首次 fetch 200 项 / 二次缓存命中；video 页 type 列仍走 D-149-15 保留示例。
+
+### 10. 风险与缓解
+
+| # | 风险 | 严重度 | 缓解 |
+|---|------|------|------|
+| R-150-1 | `/admin/_dt/distinct` SQL 注入 | **高** | 三重防御（zod enum + lookup + drizzle column ref / 禁 raw SQL）+ 8 单测含 4 注入 case |
+| R-150-2 | 默认 filterable=false → 12 消费方逐列加（迁移工时） | 中 | 显式 opt-in + 一行声明 + union 守卫编译期防忘 filterFieldName |
+| R-150-3 | enum distinct 大表性能 | 中 | LIMIT 200 + 必须索引 + 无索引列禁注册 + SWR 60s 缓存 + 失败 fallback |
+| R-150-4 | SSR 首屏 rows=0 + mixed type 数据误判 | 中 | 显式 filterKind 覆盖 / 推导边界 5 单测 / SSR fallback 'text' |
+| R-150-5 | 双范式（自动 vs D-149-15 桥接）并存让模板规范复杂 | 中 | admin-module-template.md v2 双范式决策树 + JSDoc 显式 |
+| R-150-6 | 阶段 4 串行 7 子卡工时低估 | 中 | 每子卡独立 typecheck PASS + dev server 走读硬约束 + 30% 缓冲已加进 3.6w |
+| R-150-7 | URL `?filters=<json>` 长度爆炸 | 低 | FilterValueSchema.enum.value.max(50) / 长 URL 走 N1 POST body fallback |
+| R-150-8 | sources 排序断链 5 层超阶段 5 范围 | 低 | 阶段 5 拆 -A（前 4 层）/ -B（SourcesClient） |
+
+### 11. N1 follow-up
+
+- N1-150-1：自动过滤 v2 "按条件" 模式
+- N1-150-2：自动过滤 v2 "按颜色" 模式（Token 颜色系统对接）
+- N1-150-3：多列过滤逻辑 OR / 嵌套表达式（v1 硬编码 AND）
+- N1-150-4：distinct API distinct count + i18n label 返回
+- N1-150-5：long URL fallback POST body
+- N1-150-6：ESLint 自定义 rule "Service 注册 FILTER_FIELDS 但 column 未加 filterable 提示"
+- N1-150-7：EP-5-shared 3 原语与 AdminSelect/AdminInput 共享内部实现（DRY）
+- N1-150-8：filterFieldName 与 column.id 完全对齐时的语法糖
+
+### 12. 验证清单
+
+- [x] 6 个 D-150-× 全 PASS 或显式 REVISED（D-150-3 REVISED / D-150-5 REVISED / 其余 4 PASS）
+- [x] TypeScript 类型契约写完整（§4.1 union + §4.2/§4.3 后端 schema）
+- [x] 后端通用 distinct 端点 SQL 注入防御写明（§3 D-150-3 + §10 R-150-1 三重防御）
+- [x] 5 阶段实施计划 + 预算（§5 总 3.6w）
+- [x] 与 ADR-149 / EP-5-shared 关系明示（§7 对照表）
+- [ ] @livefree 人工审核 PASS → status 翻 Accepted
+- [ ] `npm run verify:adr-contracts` 阶段 3 前 PASS（含新 endpoint）
+- [ ] `npm run verify:endpoint-adr` 阶段 3 前 PASS（本 ADR 为新端点 ADR 证据）
+
+### 13. 评审自评
+
+**评级：A− CONDITIONAL PASS**
+
+- ✅ 6 个决策点逐一论证 + 2 处 REVISED（D-150-3 双阶段 + D-150-5 默认 false）
+- ✅ SQL 注入三重防御显式（zod enum + lookup + drizzle column ref）
+- ✅ M-SN-8 "假装实现" 教训显式防御（D-150-5 默认 false 反 noop）
+- ✅ 与 ADR-149 D-149-3/5/13/15 + EP-5-shared 关系明示（保留逃生口）
+- ✅ CLAUDE.md "Route → Service → DB queries 不得跨层" 严格遵循（D-150-4 论证）
+- ✅ 零 any / 零硬编码颜色 / 零空 catch
+- ⚠️ 阶段 4 串行 7 子卡工时 2.1w 仍可能低估（30% 缓冲已加进 3.6w）
+- ⚠️ D-150-5 REVISED 与主循环推荐组合分歧需 @livefree 仲裁
+
+**条件**：D-150-5 REVISED 需 @livefree 决断是否接受"默认 false + 一行声明"；若坚持默认 true 则需补充 noop 防御（运行时 console.warn + 后端静默忽略策略文档化）。
+
+**待 @livefree 人工审核**（status: 🟡 Proposed）
+
+---

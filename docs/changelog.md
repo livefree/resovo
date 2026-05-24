@@ -4259,3 +4259,64 @@ Plan-Revision: 0 次（D-149-5 设计原意保留 / 实施层补 disabled 视觉
 
 Cleanup-Audit: 可见 hint 补可发现性 ✅ / D-149-5 保留 / matrix 40 + table 395 全 PASS / 4 质量门禁全过
 Plan-Revision: 0 次（HOTFIX-3 → HOTFIX-4 增量补强 / 无设计反转）
+
+---
+
+## [CHG-SN-9-DT-AUTOFILTER-ADR] ADR-150 起草：DataTable 列固有自动过滤（Google Sheets 范式）
+
+- **完成时间**：2026-05-24
+- **记录时间**：2026-05-24
+- **执行模型**：claude-opus-4-7（主循环）
+- **子代理**：arch-reviewer (claude-opus-4-7) — Opus 子代理起草 + 评审 6 个 D-150-× 决策点 / 评级 A− CONDITIONAL PASS
+- **关联 ADR**：ADR-150（新起 / status 🟡 Proposed / ADR-149 第 3 次 AMENDMENT 候选）
+- **关联 SEQ**：SEQ-20260524-01 第 1 序列任务 #1 EP-5 后续替代
+- **依赖**：EP-4.5-HOTFIX-4 ✅ commit `e930411b`
+- **触发**：@livefree 在 EP-4.5-HOTFIX-4 走读后看 Google Sheets 列过滤截图（`docs/designs/screenshot/Screenshot 2026-05-24 at 03.48.18.png`）反馈："我希望这是表格列的固有属性，实现后所有表格列都能自动提供这样的排序，过滤界面和功能。而不是根据内容逐个添加。"
+- **核心架构变更**：废弃"消费方每列声明 columnMenu.filterContent JSX"范式 → 改为"列固有 filterable + 内置统一 UI + 后端通用 distinct API + 统一 filter schema"
+- **6 D-150-× 决策结论**：
+  - **D-150-1** enum 值来源 双轨（filterOptions 静态 / 后端 distinct API 动态）— PASS
+  - **D-150-2** 过滤类型推导 默认+覆盖（首行采样 30 行 / SSR fallback 'text' / 5 边界单测）— PASS
+  - **D-150-3** 后端 distinct 端点 **REVISED** 两阶段（v1 通用 `/admin/_dt/distinct` 白名单 / v2 域路由 fallback / drizzle column reference 防 SQL 注入 / 三重防御）
+  - **D-150-4** WHERE 子句契约 filterFieldName 业务 key 映射 + 后端 Service FILTER_FIELDS 白名单 — PASS
+  - **D-150-5** **REVISED** 默认 filterable=false + filterable: true → filterFieldName 必填 union 类型守卫（反 M-SN-8 "假装实现"陷阱 / 主循环原推荐 default true 被否）
+  - **D-150-6** EP-5-shared 3 原语保留为复杂场景逃生口（与 D-149-15 桥接合约同居 / 类型互斥）— PASS
+- **修改文件**：
+  - `docs/decisions.md` line 12664-13037（追加 ADR-150 13 章 + 6 D-150-× + API 契约 TS 类型 + 5 阶段计划 + R-150-1~8 风险 + N1-150-1~8）
+  - `docs/task-queue.md`（废弃原 EP-5-submissions/users/audit/videos/EP-6/EP-7 + EP-5-SOURCES-SORT-FULLSTACK / 追加 ADR-150 阶段 2-5 共 10 子卡 BLOCKED on ADR-150 PASS）
+- **新增依赖**：无
+- **数据库变更**：无（阶段 3 实施时可能加索引 / 本卡仅 ADR）
+- **新增端点**：无（阶段 3 实施 `GET /admin/_dt/distinct` 时新增 / 本 ADR 即为新端点的 ADR 证据）
+- **关键设计落实**：
+  - **API 契约**：TableColumn AutoFilterColumnFields union（6 个新 prop / 是 ADR-103 第 6 次 AMENDMENT 候选）+ 后端 DistinctResponse + FilterValueSchema discriminatedUnion 6 种类型
+  - **SQL 注入三重防御**：zod table enum 白名单 + col lookup + drizzle column reference object（禁 raw SQL）
+  - **Service 层归属**：route 仅 zod 验证 / Service 持白名单 + WHERE 拼接（CLAUDE.md "Route → Service → DB queries 不得跨层"）
+  - **M-SN-8 教训防御**：D-150-5 默认 false + union 守卫 / 防"popover 渲染但 noop"假装实现
+- **5 阶段实施计划**（写入 task-queue.md）：
+  - 阶段 1：本卡 ADR-150 起草 ← 已完成
+  - 阶段 2：共享 DataTableAutoFilter UI（0.6w）BLOCKED on PASS
+  - 阶段 3：后端通用 distinct 端点 + filter-schema（0.5w）
+  - 阶段 4：12 消费方批量迁移 7 子卡 EP-3-A~G（0.3w × 7 = 2.1w / 含 sources 排序全栈断链顺手修）
+  - 阶段 5：3 原语 @逃生口 JSDoc + admin-module-template v2 + @livefree 走读 + e2e smoke（0.4w）
+  - 总计 **3.6w**（vs 原 ADR-149 EP-5 序列 ~3.8w / 节省 ~0.2w + UX 强一致 + 长期收益）
+- **质量门禁**：
+  - ✅ `npm run verify:adr-contracts`（style-shorthand 0 / SQL aligned / 6 D-150-× advisory 是预期 / 阶段 2-5 实施时分批 changelog 闭环）
+  - ✅ ADR 13 章结构完整 + TypeScript 类型契约写完整 + SQL 注入防御三重显式
+  - 本卡仅 ADR + docs / 不跑 typecheck/lint/test（无代码改动）
+- **arch-reviewer Opus 子代理评审条件**：D-150-5 REVISED 需 @livefree 决断是否接受"默认 false + 一行声明"；若坚持默认 true 则补 noop 防御（运行时 console.warn + 后端静默忽略策略文档化）
+- **用户决策待办**（status: 🟡 Proposed → 翻 Accepted 前必决）：
+  1. D-150-5 默认值仲裁：接受 REVISED 默认 false / 还是坚持原 A 默认 true + noop 防御
+  2. ADR-150 整体 PASS / REVISED / FAIL
+  3. 阶段 4 串行 vs 并行（沿用 ADR-149 AMENDMENT 1 R-AMEND-1-5 严格串行约束 / 还是 7 子卡两两并行加速）
+- **价值**：
+  - **设计范式正本清源**：从"消费方逐列声明 JSX"转向"列固有属性 + DataTable 内置 UI"，UX 强一致（Google Sheets 范式）
+  - **后端契约统一**：33 个 admin 路由的散落过滤 zod schema 收敛为 1 个通用 DtFiltersSchema + 各 Service FILTER_FIELDS 白名单
+  - **工时省 ~0.2w**：ADR-150 3.6w vs ADR-149 EP-5+排序+EP-6+EP-7 3.8w
+  - **避免 12 消费方 ×52 处 ~3w JSX 重复**：消费方每列 6-12 行 → 1 行
+  - **逃生口保留**：EP-5-shared 3 原语 + D-149-15 桥接合约保留，复杂场景（actor 联想 / type 联动）不被强行收口
+  - **R-150-1 SQL 注入三重防御**：通用端点设计期就锁定 drizzle column reference 禁 raw SQL（避免未来碎片化）
+- **后续**：
+  - @livefree 人工审核 ADR-150 + 决断 D-150-5
+  - PASS → ADR-150 status 翻 Accepted → 启动阶段 2 实施（CHG-SN-9-DT-AUTOFILTER-EP-1 共享 UI）
+
+Cleanup-Audit: ADR-150 起草 ✅ / Opus 子代理评审 A− CONDITIONAL PASS / 2 REVISED 显式锁定 / 5 阶段计划入 task-queue / 0 代码改动 / verify-adr-contracts ✅
+Plan-Revision: 1 次（D-150-5 主循环原推荐 default true → Opus 子代理 REVISED 为 default false / union 守卫 / 反 M-SN-8 假装实现）

@@ -6,4 +6,4 @@
 
 ## 进行中任务
 
-（空 — 上一任务 CHG-SN-9-DT-HEADER-REDESIGN-EP-4.5-HOTFIX-4 已完成 / 未过滤 disabled switch 旁加可见 hint「列名 ⋯ 编辑」+ dt-styles 新增 CSS rule + 2 单测更新 / matrix 40 + table 395 全 PASS / 4 质量门禁全过 / 待 @livefree dev server 走读后启动 EP-5-SOURCES-SORT-FULLSTACK 修 sources 全栈排序断链）
+（空 — 上一任务 CHG-SN-9-DT-AUTOFILTER-ADR 已完成 / ADR-150 起草 + Opus 子代理评审 + 6 D-150-× 论证（D-150-3 + D-150-5 REVISED）+ 13 章 + 5 阶段实施计划 / 写入 decisions.md line 12664-13037 / 状态 🟡 Proposed 待 @livefree 人工审核 D-150-5 默认值仲裁 / verify-adr-contracts ✅ 含 6 advisory D-150-× / ADR-149 EP-5-submissions/users/audit/videos/EP-6/EP-7 + EP-5-SOURCES-SORT-FULLSTACK 全部废弃改走 ADR-150 阶段 2-5 / 在 @livefree PASS 前不启动阶段 2-5 实施）
