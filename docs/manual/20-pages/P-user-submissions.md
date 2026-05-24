@@ -108,6 +108,7 @@
 | 求片该如何「处理」 | 视具体诉求；可标 processed + reason 「已记录」/「需采集」 | 据情判断 |
 | metadata 字段空 | 投稿表单可能允许部分字段 | 看 ADR-124 D-124-3 schema |
 | 旧 `/admin/submissions` 还在 | deprecation banner（M-SN-9 退役）| 跳 `/admin/user-submissions` |
+| 页面显示「加载投稿失败 / 服务器内部错误」| dev DB 落后 migration 致 `user_submissions` 表不存在 | dev：`npm run migrate` 应用 pending；生产：检查部署 migration 是否完整。`npm run dev` 启动前会自动跑 `migrate:check` 提醒（CHG-SN-7-MISC-DEV-MIGRATE-CHECK predev hook） |
 
 ## 8. 与其他页面的关系
 
