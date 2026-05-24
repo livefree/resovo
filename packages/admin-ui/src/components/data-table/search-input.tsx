@@ -7,18 +7,29 @@
  *   - ADR-149 D-149-8 IME composition + debounce + Enter 立即提交
  *   - AMENDMENT 1 D-149-13 toolbar.search 槽位"仅 1 search input"白名单首选实装
  *   - #UR-B3 闭合：中文 IME 输入「黑客」全程不中断
+ *   - EP-4-HOTFIX：受控 → 半 uncontrolled，避免外部 re-render 让光标失焦
  *
  * 行为契约：
  *   - composition 期间暂停 onChange 传播（IME 拼音状态下用户字未上屏）
  *   - compositionEnd 时立即触发 onChange（不等 debounce）
  *   - 非 composition 时走 debounce（默认 300ms / 避免高频请求）
  *   - Enter 立即提交（绕过 debounce）
- *   - value 受控（消费方持有 state；外部 reset 时 input 同步）
- *   - SSR safe（无 useEffect 依赖 DOM API；mount 前无差异）
+ *   - **半 uncontrolled**：DOM 自管 value（defaultValue + ref），props.value 变化时手动 sync
+ *     避免受控 input 在外部 re-render 链路中触发的 focus / selection 丢失
+ *   - 公开 API 仍然是 value/onChange（保持受控合约 contract）
+ *   - SSR safe（mount 前 defaultValue 渲染初始值；ref 副作用在 mount 后）
  *
- * 范式：纯 controlled component / 无 portal / 无副作用（除 debounce timer）
+ * 范式：半 uncontrolled component（DOM 真源 + ref 同步） / 无 portal / 无副作用（除 debounce timer）
+ *
+ * EP-4-HOTFIX 修复点（vs 原 controlled 模式）：
+ *   - 删除 `<input value={localValue}>` 受控 binding
+ *   - 改为 `<input defaultValue={value} ref={inputRef}>`
+ *   - 外部 props.value 变化时 useEffect 手动 inputRef.current.value = value
+ *     并保留 selectionStart/End（用户输入时光标不跳到末尾）
+ *   - 删 localValue useState（不再需要 React 重 render input）
+ *   - latestValueRef 仍保留（Enter 触发用）
  */
-import React, { useCallback, useEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useRef } from 'react'
 
 export interface DataTableSearchInputProps {
   /** 受控值（消费方持有 state） */
@@ -76,10 +87,9 @@ export function DataTableSearchInput(props: DataTableSearchInputProps): React.Re
     disabled,
   } = props
 
-  // 本地缓冲值：IME composition 期间 / debounce 期间，外部 props.value 不一定同步
-  const [localValue, setLocalValue] = useState(value)
-  // 同步 ref 保留最新值（handleKeyDown Enter 必须读 ref 而非 closure-captured state
-  // 或 DOM value：受控 input 下 React re-render 会重置 DOM value 到 localValue state）
+  // input DOM ref（半 uncontrolled 模式：DOM 自管 value，避免 React re-render 让 focus/selection 丢失）
+  const inputRef = useRef<HTMLInputElement | null>(null)
+  // 同步 ref 保留最新值（handleKeyDown Enter 必须读 ref；同步事件链中可靠）
   const latestValueRef = useRef(value)
   const composingRef = useRef(false)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -88,10 +98,27 @@ export function DataTableSearchInput(props: DataTableSearchInputProps): React.Re
   const propsRef = useRef({ onChange, debounceMs })
   propsRef.current = { onChange, debounceMs }
 
-  // 外部 value 变化 → 同步 localValue + ref（reset / 受控重写场景）
+  // 外部 props.value 变化 → 手动同步 DOM value（保留 selectionStart/End / focus）
+  // EP-4-HOTFIX 核心：不用受控 binding 让 React 重 render input，而是手动 DOM 写入。
+  // composition 期间不同步（避免打断 IME 拼音输入）。
   useEffect(() => {
-    setLocalValue(value)
+    const input = inputRef.current
+    if (!input) return
+    if (composingRef.current) return
+    if (input.value === value) return
+    const isActive = typeof document !== 'undefined' && document.activeElement === input
+    const selStart = isActive ? input.selectionStart : null
+    const selEnd = isActive ? input.selectionEnd : null
+    input.value = value
     latestValueRef.current = value
+    // 保持 focus + selection（用户在输入过程中外部 reset 时不让光标跳）
+    if (isActive && selStart !== null) {
+      // 如果用户在中间编辑，selectionStart 可能超出新 value 长度 → clamp
+      const len = value.length
+      const safeStart = Math.min(selStart, len)
+      const safeEnd = Math.min(selEnd ?? safeStart, len)
+      input.setSelectionRange(safeStart, safeEnd)
+    }
   }, [value])
 
   // 卸载时清 debounce timer
@@ -130,7 +157,8 @@ export function DataTableSearchInput(props: DataTableSearchInputProps): React.Re
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const next = e.target.value
     latestValueRef.current = next  // 立即同步 ref（同步事件链可读 / Enter 触发时可靠）
-    setLocalValue(next)
+    // 半 uncontrolled：不调 setLocalValue / React 不重 render input
+    // DOM 自动持有 next 值（input 是 uncontrolled）
     if (composingRef.current) {
       // composition 期间不传播（避免拼音中触发请求）
       return
@@ -148,7 +176,6 @@ export function DataTableSearchInput(props: DataTableSearchInputProps): React.Re
     composingRef.current = false
     const next = (e.target as HTMLInputElement).value
     latestValueRef.current = next  // 同步 ref
-    setLocalValue(next)
     // composition 完成立即触发（不等 debounce / D-149-8 契约）
     fireImmediate(next)
   }
@@ -164,8 +191,9 @@ export function DataTableSearchInput(props: DataTableSearchInputProps): React.Re
 
   return (
     <input
+      ref={inputRef}
       type="search"
-      value={localValue}
+      defaultValue={value}
       placeholder={placeholder}
       onChange={handleChange}
       onCompositionStart={handleCompositionStart}

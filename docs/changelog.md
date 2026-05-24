@@ -3743,3 +3743,58 @@ Plan-Revision: 1 次（types.ts line 38/158/166/214 @deprecated 注释 "EP-4-B/E
 
 Cleanup-Audit: EP-4 DataTableSearchInput ✅ / IME + debounce + Enter 完整 / 2 合规消费方接入 / 13 单测 / SourcesClient lifecycle 修复 / 全 4751 unit 0 flaky / 4 质量门禁全过 / 等用户审核启动 EP-5-shared
 Plan-Revision: 2 次（DataTableSearchInput 用 latestValueRef 解决 closure stale + SourcesClient 条件渲染 unmount lifecycle 修复）
+
+---
+
+## [CHG-SN-9-DT-HEADER-REDESIGN-EP-4-HOTFIX] DataTableSearchInput 光标失焦修复（受控 → 半 uncontrolled）
+
+- **完成时间**：2026-05-24
+- **记录时间**：2026-05-24
+- **执行模型**：claude-opus-4-7（主循环）
+- **子代理**：无（pure bug fix / 不新增 prop / 不动 ADR 决策）
+- **关联 ADR**：ADR-149 D-149-8（IME + debounce 行为契约不变 / 公开 API 不变）
+- **关联 SEQ**：SEQ-20260524-01 第 1 序列任务 #1 EP-4 hotfix
+- **依赖**：EP-4 ✅ commit `e4ccccb3`
+- **触发**：@livefree 在 EP-4 审核 dev server 实测发现 DataTableSearchInput 触发刷新后光标消失，必须重新点击搜索框才能继续输入或修改内容
+- **根因**：原 EP-4 实装使用纯受控 input（`<input value={localValue}>`）。外部 props.value 变化触发 useEffect [value] → setLocalValue → React re-render input → React 内部 focus/selection 管理在某些复杂 re-render 链路下失效（特别是 SourcesClient fetch 完成后整链 setState）
+- **修复方案**：半 uncontrolled 模式
+  - `<input ref={inputRef} defaultValue={value} ... />` — DOM 自己管理 value
+  - props.value 变化时 useEffect 手动 `inputRef.current.value = value`
+  - 保留 selectionStart/End（用户输入过程中外部 setKeyword 不让光标跳到末尾）
+  - composition 期间不同步（避免打断 IME 拼音）
+  - 公开 API 契约不变（仍接 value/onChange）
+- **修改文件**：
+  - `packages/admin-ui/src/components/data-table/search-input.tsx` — 受控 → 半 uncontrolled（删 localValue useState + 加 inputRef ref + 改 useEffect [value] 手动 sync DOM value + 保 selection）
+  - `tests/unit/components/admin-ui/table/search-input.test.tsx` — 新增第 6 段「EP-4-HOTFIX focus persistence」5 单测
+- **新增依赖**：无
+- **数据库变更**：无
+- **新增端点**：无
+- **5 新 focus persistence 单测**：
+  - 外部 value 变化时 input 保持 focus
+  - 用户输入过程中外部 value 变化时光标位置保留（不跳末尾）
+  - selectionStart 超出新 value 长度时被 clamp 到末尾
+  - input 未 focus 时外部 value 变化不主动 focus
+  - composition 期间外部 value 变化不同步（避免打断 IME 拼音）
+- **质量门禁**：
+  - ✅ `npm run typecheck`（全 8 workspace PASS）
+  - ✅ `npm run lint`（5/5 FULL TURBO cached）
+  - ✅ admin-ui/table search-input 18 测试全 PASS（13 原 + 5 新 focus persistence）
+  - ✅ `npm run verify:adr-contracts`（style-shorthand-conflict 0 / D-N 165 闭环）
+  - ✅ **全 unit 4756/4756 PASS / 0 flaky**（持续 0 flaky）
+- **关键设计点**：
+  - 半 uncontrolled 范式：公开 API 仍是 value/onChange 受控合约（消费方零迁移）；内部 DOM 自管 value 避免 React re-render 副作用
+  - selectionStart/End clamp：防止外部 reset 让光标跳出新 value 边界
+  - composition 期间不 sync：保护 IME 输入不被外部 setKeyword 打断（用户体感优先于外部 state）
+  - SSR safe：defaultValue 渲染初始值；ref 副作用仅在 mount 后跑
+- **D-149-8 IME + debounce + Enter 行为契约**：完全不变（13 原测试全 PASS）
+- **价值**：
+  - **#UR-B3 + 用户走读反馈双闭合**：CrawlerSiteList + SourcesClient 中文 IME 输入"黑客"全程不刷新 + 光标不消失
+  - **半 uncontrolled 范式沉淀**：未来其它需要 IME 友好的 input 可参考此模式
+  - **0 flaky 持续**：4756 测试全 PASS（含 5 新 focus persistence）
+  - **公开 API 契约不变**：消费方零迁移（CrawlerSiteList / SourcesClient 无需任何改动）
+- **后续**：
+  - 用户 dev server 走读 /admin/crawler + /admin/sources 确认光标不失焦
+  - 通过 → 启动 EP-4.5（DataTable 主组件接入 toolbar 右端 ⋯ 矩阵触发器 / 需 ADR-149 AMENDMENT 2 补 GAP）
+
+Cleanup-Audit: EP-4-HOTFIX DataTableSearchInput 半 uncontrolled ✅ / 5 focus persistence 单测 + 13 原 PASS / 全 4756 unit 0 flaky / 4 质量门禁全过 / 等用户 dev server 走读确认 + 启动 EP-4.5
+Plan-Revision: 1 次（半 uncontrolled 模式 / 内部 DOM 自管 value + manual sync + selection 保留）

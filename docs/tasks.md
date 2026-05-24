@@ -6,4 +6,4 @@
 
 ## 进行中任务
 
-（空 — 上一任务 CHG-SN-9-DT-HEADER-REDESIGN-EP-4 已完成 / DataTableSearchInput 原语 + IME composition + debounce + Enter 立即 / 2 合规消费方接入（CrawlerSiteList + SourcesClient）/ 13 新单测 + SourcesClient 测试 修复（修 unmount/remount lifecycle）/ 全 4751 unit 0 flaky PASS / 4 质量门禁全过 / 待 @livefree 人工审核后启动 EP-5-shared）
+（空 — 上一任务 CHG-SN-9-DT-HEADER-REDESIGN-EP-4-HOTFIX 已完成 / DataTableSearchInput 受控 → 半 uncontrolled / 5 新 focus persistence 单测 + 原 13 PASS / 全 4756 unit 0 flaky / 4 质量门禁全过 / 待 @livefree dev server 走读确认 + 启动 EP-4.5 矩阵触发器接入）
