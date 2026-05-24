@@ -1,6 +1,6 @@
 # P-crawler · 采集控制
 
-> status: 🟢 §1/§2/§3.1/§4.1 已填写（CHG-SN-8-01）；§3.2 待 CHG-SN-8-02 / §3.3 待 CHG-SN-8-03
+> status: 🟢 完整定稿（CHG-SN-8-01/02/03 全闭合后定稿 2026-05-21 / CHG-SN-8-CLOSE-AUDIT-DRIFT-FIX 元信息同步）
 
 ## 0. 元信息
 

@@ -1,6 +1,6 @@
 # P-moderation · 内容审核
 
-> status: 🟡 §2 / §3.0 已部分填写（CHG-SN-8-03 RunInfoBanner 部分）；§3 主体待 CHG-SN-8-04/05/06 填写
+> status: 🟢 完整定稿（CHG-SN-8-MANUAL-BATCH-1..3 / CHG-SN-8-03/04/05/06 + ADR-137/144 闭合后定稿 2026-05-22 / CHG-SN-8-CLOSE-AUDIT-DRIFT-FIX 元信息同步）
 
 ## 0. 元信息
 

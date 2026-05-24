@@ -1,6 +1,6 @@
 # W1 · 采集 → 审核 → 上架（金票）
 
-> status: 🟡 骨架（M-SN-8-01..08 落地后定稿）
+> status: 🟢 完整定稿（CHG-SN-8-MANUAL-BATCH-3 / M-SN-8 金票 CHG-SN-8-01..08 全闭合后定稿 2026-05-23 / CHG-SN-8-CLOSE-AUDIT-DRIFT-FIX 元信息同步）
 > **这是 server-next 后台**最高频**的端到端业务流程，必须 100% 闭合。**
 
 ## 0. 元信息

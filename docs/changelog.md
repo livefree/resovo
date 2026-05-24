@@ -3343,3 +3343,33 @@ Plan-Revision: 建议独立 follow-up「dev 环境定期 migrate:check 巡检」
 
 Cleanup-Audit: predev hook ✅ / dev DB schema 滞后防御机制建立
 Plan-Revision: 无（轻量级 hook）
+
+---
+
+## [CHG-SN-8-CLOSE-AUDIT-DRIFT-FIX] M-SN-8 完结审计 + 元信息 drift 修复
+
+- **完成时间**：2026-05-23
+- **记录时间**：2026-05-23
+- **执行模型**：claude-opus-4-7（主循环）
+- **子代理**：3 × Explore（Phase 1 并行调查 / SN-8 任务定义 + 后台对齐 + 说明书定位 — 模型未单独 pin / 默认随主循环）；无 Opus / Haiku 子代理（纯标记修正不达升降级触发条件）
+- **关联**：M-SN-8 主体收尾 / 独立 ad-hoc 卡（不挂 SEQ）/ 用户审计 trigger
+- **修改文件**：
+  - `docs/manual/10-workflows/W1-crawl-to-publish.md` — L3 status header 由「🟡 骨架（M-SN-8-01..08 落地后定稿）」改为「🟢 完整定稿（CHG-SN-8-MANUAL-BATCH-3 / 金票 01..08 全闭合后定稿 2026-05-23 / CLOSE-AUDIT-DRIFT-FIX 元信息同步）」
+  - `docs/manual/20-pages/P-moderation.md` — L3 status header 由「🟡 §2/§3.0 已部分填写；§3 主体待 CHG-SN-8-04/05/06 填写」改为「🟢 完整定稿（CHG-SN-8-MANUAL-BATCH-1..3 / CHG-SN-8-03/04/05/06 + ADR-137/144 闭合后定稿 2026-05-22 / CLOSE-AUDIT-DRIFT-FIX 元信息同步）」
+  - `docs/manual/20-pages/P-crawler.md` — L3 status header 由「🟢 §1/§2/§3.1/§4.1 已填写；§3.2 待 CHG-SN-8-02 / §3.3 待 CHG-SN-8-03」改为「🟢 完整定稿（CHG-SN-8-01/02/03 全闭合后定稿 2026-05-21 / CLOSE-AUDIT-DRIFT-FIX 元信息同步）」
+  - `docs/tasks.md` — 卡片填写 → 完成后清空
+  - `docs/task-queue.md` — 末尾追加 ad-hoc 卡 ✅ 登记 + M-SN-8 主体完结声明
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - **本次审计判定 M-SN-8 主体 5 序列全闭合**（SEQ-20260521-01..06 / 47 commit / 12 ADR / 200+ 单测 / Manual 15 P-页 + 5 W-工作流 + 5 picker 全部实质完整 / ADR D-N 150/150 closed）
+  - **后续 GAPS-driven FUP 卡**（ADR-145 video-manual-add / ADR-146 webhook-impl / ADR-147 shell-notifications / ADR-148 session-fields-consume 等）走 SEQ-20260524 新容器追踪，不再算 SN-8 主任务范围
+  - **三处 drift 性质**：纯元信息标记与文件实际内容矛盾（内容已完整 / 标记未同步）；不涉及代码 / schema / API / 设计稿
+  - **跳过质量门禁的理由**：仅 docs/manual 元信息行修正，无 .ts/.tsx/.sql/.json 改动；typecheck/lint/test 无可校验对象
+- **价值**：
+  - **审计可读性**：消除"manual 是否完整"判读 ambiguity（先前 W1/P-moderation/P-crawler 状态头部与内容矛盾会让后来者 / `verify:manual-coverage` 误判）
+  - **元信息 drift 收尾范式**：本卡作为"主任务完结后元信息同步"参考模板（不动内容 / 不起新 ADR / 不动代码 / 单 commit 收口）
+  - **M-SN-8 主体官方完结**：从本次提交起，M-SN-8 主体审计 ✅；后续工作转 SEQ-20260524 FUP 序列容器
+
+Cleanup-Audit: M-SN-8 三层审计完毕（核心序列 ✅ / 后台对齐 ✅ / 说明书内容 ✅ + 标记同步 ✅）
+Plan-Revision: 无
