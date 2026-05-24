@@ -499,6 +499,14 @@ export function ColumnMatrixMenu({
                         {filtered && !columnMenu?.filterSummary && (
                           <span data-matrix-filter-summary="true">已过滤</span>
                         )}
+                        {!filtered && (
+                          <span
+                            data-matrix-filter-hint="true"
+                            data-testid={`matrix-filter-hint-${col.id}`}
+                          >
+                            列名 ⋯ 编辑
+                          </span>
+                        )}
                       </div>
                     )}
                   </td>

@@ -488,6 +488,13 @@ const DT_CSS = `
   color: var(--fg-muted);
   font-size: 12px;
 }
+[data-column-matrix-menu] [data-matrix-filter-hint="true"] {
+  display: inline-block;
+  color: var(--fg-muted);
+  font-size: 11px;
+  font-style: italic;
+  opacity: 0.75;
+}
 
 @media (prefers-reduced-motion: reduce) {
   [data-column-matrix-menu] [role="switch"] { transition: none; }

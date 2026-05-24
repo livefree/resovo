@@ -356,7 +356,7 @@ describe('ColumnMatrixMenu — 过滤 cell', () => {
     expect(countryUnsupported.getAttribute('aria-disabled')).toBe('true')
   })
 
-  it('有 filterContent 列 → 渲染 switch（未过滤 aria-checked=false / EP-4.5-HOTFIX-3 disabled + title tooltip）', () => {
+  it('有 filterContent 列 → 渲染 switch（未过滤 aria-checked=false / EP-4.5-HOTFIX-3 disabled + title tooltip / EP-4.5-HOTFIX-4 可见 hint）', () => {
     render(
       <ColumnMatrixMenu
         open={true}
@@ -382,9 +382,12 @@ describe('ColumnMatrixMenu — 过滤 cell', () => {
     expect((titleFilter as HTMLButtonElement).disabled).toBe(true)
     expect(titleFilter.getAttribute('aria-disabled')).toBe('true')
     expect(titleFilter.getAttribute('title')).toContain('编辑过滤值')
+    // EP-4.5-HOTFIX-4：未过滤 + 有 filterContent → 渲染可见 hint 文本（无需 hover）
+    const titleHint = screen.getByTestId('matrix-filter-hint-title')
+    expect(titleHint.textContent).toBe('列名 ⋯ 编辑')
   })
 
-  it('已过滤列 → switch enabled（可点击关闭清除过滤）', () => {
+  it('已过滤列 → switch enabled（可点击关闭清除过滤）/ 不渲染 hint', () => {
     const filtersWithTitle: ReadonlyMap<string, FilterValue> = new Map([
       ['title', { kind: 'text', value: '黑客' } as FilterValue],
     ])
@@ -410,6 +413,8 @@ describe('ColumnMatrixMenu — 过滤 cell', () => {
     expect((titleFilter as HTMLButtonElement).disabled).toBe(false)
     expect(titleFilter.getAttribute('aria-disabled')).toBeNull()
     expect(titleFilter.getAttribute('title')).toBeNull()
+    // EP-4.5-HOTFIX-4：已过滤列不渲染 hint（已有 ●─ + filterSummary 表明状态）
+    expect(screen.queryByTestId('matrix-filter-hint-title')).toBeNull()
   })
 
   it('已过滤列（currentFilters 含 colId）→ switch aria-checked=true', () => {
