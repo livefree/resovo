@@ -266,9 +266,13 @@
 - **修复**：`npm run migrate` 应用 064-072 全 9 migration；user_submissions 表建立 + 索引就位 → 4 type endpoint 全恢复 HTTP 200
 - **预防**：#INT-dev-db-migrate-check predev hook 已加入未来防御链路
 
-### #INT-changelog-archive-cutoff · changelog.md 归档评估 🔄
+### #INT-changelog-archive-cutoff · changelog.md 归档评估 ✅
 
-- **状态**：🔄 调查中（2026-05-23 / CHG-SN-7-MISC-DOCS-CLEANUP-SESSION-CLOSE sub-task 4）
-- **当前**：3345 行 / 已 2 archive 文件（M-SN-2 ~ M-SN-7 + m0-m6）
-- **评估方向**：是否需进一步归档 SEQ-20260521 系列 mv 到独立 archive
-- **决策**：sub-task 4 完成时定档
+- **状态**：✅ 已决策（2026-05-23 / CHG-SN-7-MISC-DOCS-CLEANUP-SESSION-CLOSE sub-task 4）
+- **决策**：**本次不归档**，保留 SEQ-20260521-02 ~ 当前会话内容（76 条 entry / 3380+ 行）
+- **理由**：
+  1. 现有 archive 范式按 milestone 维度划分（archive_m0-m6 / archive_M-SN-2-to-7）；SEQ 维度归档与范式不一致
+  2. SEQ-20260521 系列是「近期 1-3 周工作」，归档失去近期上下文（团队成员需高频反查）
+  3. 自然归档边界：**M-SN-8 milestone 关闭时**（类似 M-SN-7 archive cutoff 2026-05-23 时机）
+- **下次归档触发**：M-SN-8 milestone 关闭声明发布时，将 SEQ-20260521-* ~ M-SN-8 全期 entry mv 至 `changelog_M-SN-8_<date>.md`
+- **不在范围**：被动等待 milestone 关闭 / 不主动按 SEQ 切片
