@@ -3990,3 +3990,71 @@ Plan-Revision: 1 次（thead-right fallback 推 N1-149-11 / 0 消费方使用 to
 
 Cleanup-Audit: EP-5-shared 3 共享原语 ✅ / 50 新单测全 PASS / 全 4823 unit 0 flaky / 4 质量门禁全过 / 等用户审核启动 EP-5-crawler-runs
 Plan-Revision: 0 次（D-149-3 + D-149-15 决策已在 AMENDMENT 1 完成 / 实施零偏离）
+
+---
+
+## [CHG-SN-9-DT-HEADER-REDESIGN-EP-5-CRAWLER-RUNS] CrawlerRunsView 2 select 迁移到列级 ⋯ filterContent（EP-5 第 1/5 消费方）
+
+- **完成时间**：2026-05-24
+- **记录时间**：2026-05-24
+- **执行模型**：claude-opus-4-7（主循环）
+- **子代理**：无（D-149-3 + D-149-15 决策已完成 / EP-5-shared 原语已沉淀）
+- **关联 ADR**：ADR-149 D-149-3 + D-149-13 + D-149-15 + AMENDMENT 1 §4 EP-5 序列 + AMENDMENT 2 D-149-16
+- **关联 SEQ**：SEQ-20260524-01 第 1 序列任务 #1 第 EP-5-crawler-runs 子卡
+- **依赖**：EP-5-shared ✅ commit `4620f04c`（3 共享原语 + 50 单测）
+- **背景**：按 AMENDMENT 1 R-AMEND-1-5 复杂度递增执行（shared → crawler-runs → submissions → users → audit → videos）。EP-5-crawler-runs 是 5 消费方业务 filter 迁移序列首个 / 复杂度最低（仅 2 select）
+- **现状映射**：
+  - `CrawlerRunsView.tsx` line 347-378（旧）：toolbar.search 含 2 AdminSelect (status / triggerType) + 1 ghost button "清空筛选"
+  - column.id = 'status' / 'triggerType' **完全对齐**业务 filter key → 无需 D-149-15 复杂桥接（columnMenu 闭包内直接读写 statusFilter / triggerTypeFilter）
+- **修改文件**：
+  - `apps/server-next/src/app/admin/crawler/runs/_client/CrawlerRunsView.tsx`：
+    - import：AdminSelect → DataTableEnumFilter（admin-ui）
+    - 新增 helper `optionLabelString(options, value): string`（AdminSelectOption.label ReactNode → string 转换 / D-149-6 锁定 filterSummary string 适配）
+    - buildColumns 签名扩展：新增 statusFilter / triggerTypeFilter / onStatusChange / onTriggerTypeChange 4 props
+    - 'status' 列加 columnMenu（filterContent: DataTableEnumFilter + isFiltered + onClearFilter + filterSummary）
+    - 'triggerType' 列同上
+    - 新增 useCallback `handleStatusChange` / `handleTriggerTypeChange`（业务 setState + setPage(1) 副作用封装）
+    - columns useMemo 传入新 4 props
+    - 删 `toolbarSearch` JSX 块（2 AdminSelect + ghost button "清空筛选" / 约 30 行）
+    - 删 `TOOLBAR_STYLE` const（toolbarSearch 删后无用）
+    - 删 `hasFilter` 变量（toolbarSearch 删后无用）
+    - toolbar 配置改 `{ hideFilterChips: true }`（不传 search）
+  - `packages/admin-ui/src/components/data-table/filter-enum.tsx`：
+    - `FilterEnumOption.label` 类型从 `string` 改为 `React.ReactNode`（与 AdminSelectOption.label 对称 / 消费方零迁移 boilerplate）
+    - search 过滤逻辑：非 string label 跳过 label 比较，仅 value 比较
+    - 多选 checkbox aria-label：typeof opt.label === 'string' ? opt.label : opt.value
+  - `tests/unit/components/server-next/admin/crawler/CrawlerRunsView.test.tsx`：
+    - 测试 7 / 8 更新（旧 toolbar filter UI 删 → 新列级 ⋯ trigger 渲染验证）
+    - 新增 5 测试 21-25：filterContent 接入 / 触发 setState + fetch / 矩阵 popover 桥接 / **BLOCKER R-AMEND-2-3 验证**（清除全部过滤后业务 key 真清）
+- **新增依赖**：无
+- **数据库变更**：无
+- **新增端点**：无
+- **关键设计点**：
+  - **column.id 对齐业务 key**：crawler-runs 是 EP-5 5 消费方中**唯一对齐**的（其余 4 消费方 videos/users/audit/submissions 业务 key 与 column.id 不对齐 → 需走 D-149-15 桥接）。crawler-runs 直接 columnMenu 闭包消费业务 state，最简
+  - **AdminSelectOption.label 类型适配**：FilterEnumOption.label 改 ReactNode 后 5 消费方零迁移 boilerplate；search 过滤仅按 string label / 非 string 跳过；aria-label 用 value 兜底
+  - **D-149-15 桥接合约**：onClearFilter / isFiltered / filterSummary 通过闭包消费 statusFilter / triggerTypeFilter state（业务 key namespace 不外泄到 DataTable）
+  - **R-AMEND-2-3 BLOCKER 实证**：测试 25 显式验证矩阵 popover "清除全部过滤" 按钮**真清** crawler-runs status filter（业务 key 桥接 / 非假装清除）
+- **质量门禁**：
+  - ✅ `npm run typecheck`（全 8 workspace PASS / filter-enum.tsx label 类型扩展兼容）
+  - ✅ `npm run lint`（5/5 FULL TURBO cached）
+  - ✅ admin-ui/table 394 全 PASS（含 EP-5-shared 50 / 之前 344）
+  - ✅ CrawlerRunsView 25/25 PASS（含 5 EP-5 新集成测试）
+  - ✅ `npm run verify:adr-contracts`（style-shorthand-conflict 0 / D-N 166 闭环）
+  - ✅ **全 unit 4828/4828 PASS / 0 flaky**（持续 0 flaky）
+- **EP-5-crawler-runs 后用户可见行为变化**：
+  - `/admin/crawler/runs` toolbar 右侧不再有 2 select dropdown + "清空筛选" ghost button
+  - status / triggerType 过滤改走列级 ⋯ trigger → popover 含 DataTableEnumFilter
+  - 矩阵 popover (toolbar 右端 ⋯) 内 status / triggerType 行有 filterContent + filterSummary 显示
+  - 矩阵 popover "清除全部过滤" 按钮真清两 filter（business key 桥接验证通过）
+- **价值**：
+  - **首个 EP-5 消费方迁移完成**：验证 EP-5-shared 3 原语 + EP-4.5 矩阵触发器 + D-149-15 桥接合约全链工作
+  - **AdminSelectOption.label ReactNode 对称化**：剩余 4 消费方迁移零 boilerplate（不需要逐处做 String() 转换）
+  - **R-AMEND-2-3 BLOCKER 实证**：业务 key 桥接路径在 crawler-runs 真实生效（防 M-SN-8 假装清除）
+  - **0 flaky 持续**：4828 测试全 PASS（含 5 新 EP-5-crawler-runs 集成测试）
+  - **5 消费方迁移序列首段闭合**：crawler-runs 完成意味着 EP-5 流水线已通顺，剩余 4 消费方按同范式即可
+- **后续**：
+  - 用户审核 EP-5-crawler-runs（dev server 走读 /admin/crawler/runs + 测试覆盖）
+  - 通过 → 启动 EP-5-submissions（SubmissionsListClient 2 AdminSelect / ~0.25w）
+
+Cleanup-Audit: EP-5-crawler-runs 2 select 迁移 ✅ / FilterEnumOption.label ReactNode 适配 / D-149-15 桥接合约首落地 / R-AMEND-2-3 BLOCKER 实证 / 5 新单测 + 2 旧更新 / 全 4828 unit 0 flaky / 4 质量门禁全过
+Plan-Revision: 1 次（FilterEnumOption.label 从 string 扩展 ReactNode / 与 AdminSelectOption 对称 / 5 消费方零迁移 boilerplate）

@@ -168,21 +168,25 @@ describe('CrawlerRunsView', () => {
     })
   })
 
-  it('7. triggerType filter / status filter UI 渲染', async () => {
+  it('7. triggerType filter / status filter 迁移到列级 ⋯（EP-5-crawler-runs / D-149-15 桥接）', async () => {
     listCrawlerRunsMock.mockResolvedValueOnce(EMPTY)
     render(<CrawlerRunsView />)
-    await waitFor(() => {
-      expect(screen.getByTestId('crawler-runs-filters')).not.toBeNull()
-      expect(screen.getByTestId('crawler-runs-status-filter')).not.toBeNull()
-      expect(screen.getByTestId('crawler-runs-trigger-filter')).not.toBeNull()
-    })
+    await waitFor(() => screen.getByTestId('crawler-runs-table'))
+    // toolbar.search 旧 2 select + 1 ghost button 已删（EP-5-crawler-runs）
+    expect(screen.queryByTestId('crawler-runs-filters')).toBeNull()
+    // 列级 ⋯ trigger 存在（status / triggerType 都可排序或可过滤 → 默认 auto 显示 ⋯）
+    expect(screen.queryByTestId('th-menu-trigger-status')).not.toBeNull()
+    expect(screen.queryByTestId('th-menu-trigger-triggerType')).not.toBeNull()
   })
 
-  it('8. 清空筛选按钮：hasFilter=false 不显示', async () => {
+  it('8. 清空筛选按钮：旧 toolbar ghost button 已删（迁到矩阵 popover）', async () => {
     listCrawlerRunsMock.mockResolvedValueOnce(EMPTY)
     render(<CrawlerRunsView />)
-    await waitFor(() => screen.getByTestId('crawler-runs-filters'))
+    await waitFor(() => screen.getByTestId('crawler-runs-table'))
+    // 旧 toolbar.search 内 "清空筛选" ghost button 已删
     expect(screen.queryByTestId('crawler-runs-filter-clear')).toBeNull()
+    // 新路径：清空走 toolbar 矩阵触发器 → matrix popover "清除全部过滤" button
+    expect(screen.queryByTestId('matrix-trigger')).not.toBeNull()
   })
 
   it('9. Empty state 渲染', async () => {
@@ -348,5 +352,77 @@ describe('CrawlerRunsView', () => {
     } finally {
       confirmSpy.mockRestore()
     }
+  })
+
+  // ── EP-5-crawler-runs 桥接合约集成测试（ADR-149 D-149-15 + D-149-16）────
+
+  it('21. EP-5: status 列 ⋯ → popover 含 DataTableEnumFilter（filterContent 接入）', async () => {
+    listCrawlerRunsMock.mockResolvedValueOnce(EMPTY)
+    render(<CrawlerRunsView />)
+    await waitFor(() => screen.getByTestId('crawler-runs-table'))
+    // 点列名 ⋯ trigger → 打开 header menu popover
+    fireEvent.click(screen.getByTestId('th-menu-trigger-status'))
+    // filterContent 渲染（含 STATUS_OPTIONS 全部选项 + "全部状态" placeholder）
+    expect(screen.queryByTestId('crawler-runs-status-filter')).not.toBeNull()
+  })
+
+  it('22. EP-5: triggerType 列 ⋯ → popover 含 DataTableEnumFilter（filterContent 接入）', async () => {
+    listCrawlerRunsMock.mockResolvedValueOnce(EMPTY)
+    render(<CrawlerRunsView />)
+    await waitFor(() => screen.getByTestId('crawler-runs-table'))
+    fireEvent.click(screen.getByTestId('th-menu-trigger-triggerType'))
+    expect(screen.queryByTestId('crawler-runs-trigger-filter')).not.toBeNull()
+  })
+
+  it('23. EP-5: 列级 ⋯ filter 选项 → 触发业务 setState + setPage(1) + fetch 带 status 参数', async () => {
+    listCrawlerRunsMock.mockResolvedValue(EMPTY)
+    render(<CrawlerRunsView />)
+    await waitFor(() => screen.getByTestId('crawler-runs-table'))
+    // 点 status 列 ⋯ → 打开 popover
+    fireEvent.click(screen.getByTestId('th-menu-trigger-status'))
+    // 在 DataTableEnumFilter 里选 "运行中"
+    fireEvent.click(screen.getByTestId('crawler-runs-status-filter-option-running'))
+    // 业务 setState 触发 fetch 带 status: 'running'（D-149-15 桥接）
+    await waitFor(() => {
+      expect(listCrawlerRunsMock).toHaveBeenCalledWith(
+        expect.objectContaining({ status: 'running', page: 1 }),
+      )
+    })
+  })
+
+  it('24. EP-5: 矩阵 popover 含 status / triggerType 过滤格（filterContent 桥接生效）', async () => {
+    listCrawlerRunsMock.mockResolvedValueOnce(EMPTY)
+    render(<CrawlerRunsView />)
+    await waitFor(() => screen.getByTestId('crawler-runs-table'))
+    // 点 toolbar 矩阵触发器
+    fireEvent.click(screen.getByTestId('matrix-trigger'))
+    // 矩阵 popover 内 status / triggerType 行存在
+    expect(screen.queryByTestId('matrix-filter-status')).not.toBeNull()
+    expect(screen.queryByTestId('matrix-filter-triggerType')).not.toBeNull()
+    // 未过滤时 switch aria-checked=false
+    expect(screen.getByTestId('matrix-filter-status').getAttribute('aria-checked')).toBe('false')
+  })
+
+  it('25. EP-5: BLOCKER R-AMEND-2-3 "清除全部过滤" → 业务 key 桥接真清 status + triggerType', async () => {
+    // 初始就有 status='running' 在 URL state 触发的场景模拟
+    listCrawlerRunsMock.mockResolvedValue(EMPTY)
+    render(<CrawlerRunsView />)
+    await waitFor(() => screen.getByTestId('crawler-runs-table'))
+    // 先设置 status filter
+    fireEvent.click(screen.getByTestId('th-menu-trigger-status'))
+    fireEvent.click(screen.getByTestId('crawler-runs-status-filter-option-running'))
+    await waitFor(() => {
+      expect(listCrawlerRunsMock).toHaveBeenLastCalledWith(
+        expect.objectContaining({ status: 'running' }),
+      )
+    })
+    // 然后点矩阵触发器 → 清除全部过滤
+    fireEvent.click(screen.getByTestId('matrix-trigger'))
+    fireEvent.click(screen.getByTestId('matrix-foot-clear-filters'))
+    // 业务 key 桥接真清：fetch 不再带 status
+    await waitFor(() => {
+      const lastCall = listCrawlerRunsMock.mock.calls[listCrawlerRunsMock.mock.calls.length - 1]
+      expect(lastCall[0]).not.toHaveProperty('status')
+    })
   })
 })

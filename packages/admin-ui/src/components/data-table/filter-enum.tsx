@@ -23,7 +23,9 @@ import React, { useCallback, useMemo, useState } from 'react'
 
 export interface FilterEnumOption {
   readonly value: string
-  readonly label: string
+  /** label 类型与 AdminSelectOption.label 对称（接受 ReactNode）；search 过滤仅按
+   * typeof string label / 非 string label 在 search 时被跳过 */
+  readonly label: React.ReactNode
 }
 
 // 单选模式 props
@@ -85,9 +87,11 @@ export function DataTableEnumFilter(props: DataTableEnumFilterProps): React.Reac
   const filteredOptions = useMemo(() => {
     if (!searchable || !searchInput) return options
     const lower = searchInput.toLowerCase()
-    return options.filter(
-      (o) => o.label.toLowerCase().includes(lower) || o.value.toLowerCase().includes(lower),
-    )
+    return options.filter((o) => {
+      // 非 string label 不参与 search 匹配（仅按 value 比较）；string label 双匹配
+      const labelMatch = typeof o.label === 'string' && o.label.toLowerCase().includes(lower)
+      return labelMatch || o.value.toLowerCase().includes(lower)
+    })
   }, [options, searchInput, searchable])
 
   const handleSingleSelect = useCallback(
@@ -181,7 +185,7 @@ export function DataTableEnumFilter(props: DataTableEnumFilterProps): React.Reac
                   checked={checked}
                   disabled={disabled}
                   onChange={() => handleMultiToggle(opt.value)}
-                  aria-label={opt.label}
+                  aria-label={typeof opt.label === 'string' ? opt.label : opt.value}
                 />
                 <span>{opt.label}</span>
               </label>

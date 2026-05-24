@@ -18,7 +18,7 @@
 import React, { useState, useEffect, useMemo, useCallback, type CSSProperties } from 'react'
 import {
   DataTable,
-  AdminSelect,
+  DataTableEnumFilter,
   AdminButton,
   EmptyState,
   ErrorState,
@@ -46,12 +46,7 @@ const SECTION_STYLE: CSSProperties = {
   gap: '12px',
 }
 
-const TOOLBAR_STYLE: CSSProperties = {
-  display: 'inline-flex',
-  alignItems: 'center',
-  gap: '8px',
-  flexWrap: 'wrap',
-}
+// ADR-149 EP-5-crawler-runs: TOOLBAR_STYLE 已删（toolbarSearch 删除后无用）
 
 const STATUS_OPTIONS: readonly AdminSelectOption[] = [
   { value: 'queued', label: '排队中' },
@@ -80,14 +75,36 @@ const STATUS_BADGE: Record<CrawlerRunStatus, { label: string; bg: string; color:
   cancelled:      { label: '已取消', bg: 'var(--bg-surface-sunken)', color: 'var(--fg-muted)' },
 }
 
+// ADR-149 EP-5-crawler-runs: 把 AdminSelectOption.label (ReactNode) 转 string 用于 filterSummary
+// （D-149-6 锁定 filterSummary: string / 富文本走 N1-149-6）
+function optionLabelString(options: readonly AdminSelectOption[], value: string): string {
+  const found = options.find((o) => o.value === value)
+  if (!found) return value
+  return typeof found.label === 'string' ? found.label : value
+}
+
 interface BuildColumnsOptions {
   readonly onCancel: (row: CrawlerRun) => void
   readonly onPause: (row: CrawlerRun) => void
   readonly onResume: (row: CrawlerRun) => void
   readonly pendingRunId: string | null
+  // ADR-149 EP-5-crawler-runs: 业务 filter 桥接（D-149-15 / column.id 已对齐业务 key）
+  readonly statusFilter: CrawlerRunStatus | null
+  readonly triggerTypeFilter: CrawlerRunTriggerType | null
+  readonly onStatusChange: (next: CrawlerRunStatus | null) => void
+  readonly onTriggerTypeChange: (next: CrawlerRunTriggerType | null) => void
 }
 
-function buildColumns({ onCancel, onPause, onResume, pendingRunId }: BuildColumnsOptions): readonly TableColumn<CrawlerRun>[] {
+function buildColumns({
+  onCancel,
+  onPause,
+  onResume,
+  pendingRunId,
+  statusFilter,
+  triggerTypeFilter,
+  onStatusChange,
+  onTriggerTypeChange,
+}: BuildColumnsOptions): readonly TableColumn<CrawlerRun>[] {
   return [
     {
       id: 'id',
@@ -118,6 +135,24 @@ function buildColumns({ onCancel, onPause, onResume, pendingRunId }: BuildColumn
       accessor: (r) => r.status,
       width: 110,
       defaultVisible: true,
+      // ADR-149 EP-5-crawler-runs: status 列 filterContent + D-149-15 桥接合约
+      columnMenu: {
+        filterContent: (
+          <DataTableEnumFilter
+            options={STATUS_OPTIONS}
+            value={statusFilter ?? undefined}
+            onChange={(v) => onStatusChange((v as CrawlerRunStatus | undefined) ?? null)}
+            placeholder="全部状态"
+            data-testid="crawler-runs-status-filter"
+            aria-label="按状态筛选"
+          />
+        ),
+        isFiltered: statusFilter !== null,
+        onClearFilter: () => onStatusChange(null),
+        filterSummary: statusFilter
+          ? optionLabelString(STATUS_OPTIONS, statusFilter)
+          : undefined,
+      },
       cell: ({ row }) => {
         const cfg = STATUS_BADGE[row.status]
         return (
@@ -143,6 +178,24 @@ function buildColumns({ onCancel, onPause, onResume, pendingRunId }: BuildColumn
       accessor: (r) => r.triggerType,
       width: 100,
       defaultVisible: true,
+      // ADR-149 EP-5-crawler-runs: triggerType 列 filterContent + D-149-15 桥接合约
+      columnMenu: {
+        filterContent: (
+          <DataTableEnumFilter
+            options={TRIGGER_TYPE_OPTIONS}
+            value={triggerTypeFilter ?? undefined}
+            onChange={(v) => onTriggerTypeChange((v as CrawlerRunTriggerType | undefined) ?? null)}
+            placeholder="全部触发"
+            data-testid="crawler-runs-trigger-filter"
+            aria-label="按触发类型筛选"
+          />
+        ),
+        isFiltered: triggerTypeFilter !== null,
+        onClearFilter: () => onTriggerTypeChange(null),
+        filterSummary: triggerTypeFilter
+          ? optionLabelString(TRIGGER_TYPE_OPTIONS, triggerTypeFilter)
+          : undefined,
+      },
       cell: ({ row }) => <CodeText value={row.triggerType} muted />,
     },
     {
@@ -332,50 +385,35 @@ export function CrawlerRunsView() {
     }
   }, [toast, refresh])
 
+  // ADR-149 EP-5-crawler-runs: 业务 filter callback 封装（含 setPage(1) 副作用）
+  const handleStatusChange = useCallback((next: CrawlerRunStatus | null) => {
+    setStatusFilter(next)
+    setPage(1)
+  }, [])
+  const handleTriggerTypeChange = useCallback((next: CrawlerRunTriggerType | null) => {
+    setTriggerTypeFilter(next)
+    setPage(1)
+  }, [])
+
   const columns = useMemo(
     () => buildColumns({
       onCancel: handleCancel,
       onPause: handlePause,
       onResume: handleResume,
       pendingRunId,
+      statusFilter,
+      triggerTypeFilter,
+      onStatusChange: handleStatusChange,
+      onTriggerTypeChange: handleTriggerTypeChange,
     }),
-    [handleCancel, handlePause, handleResume, pendingRunId],
+    [
+      handleCancel, handlePause, handleResume, pendingRunId,
+      statusFilter, triggerTypeFilter, handleStatusChange, handleTriggerTypeChange,
+    ],
   )
 
-  const hasFilter = Boolean(statusFilter || triggerTypeFilter)
-
-  const toolbarSearch = (
-    <span style={TOOLBAR_STYLE} data-testid="crawler-runs-filters">
-      <AdminSelect
-        options={STATUS_OPTIONS}
-        value={statusFilter}
-        onChange={(v) => { setStatusFilter(v as CrawlerRunStatus | null); setPage(1) }}
-        placeholder="全部状态"
-        size="sm"
-        data-testid="crawler-runs-status-filter"
-        aria-label="按状态筛选"
-      />
-      <AdminSelect
-        options={TRIGGER_TYPE_OPTIONS}
-        value={triggerTypeFilter}
-        onChange={(v) => { setTriggerTypeFilter(v as CrawlerRunTriggerType | null); setPage(1) }}
-        placeholder="全部触发"
-        size="sm"
-        data-testid="crawler-runs-trigger-filter"
-        aria-label="按触发类型筛选"
-      />
-      {hasFilter ? (
-        <AdminButton
-          variant="ghost"
-          size="sm"
-          onClick={() => { setStatusFilter(null); setTriggerTypeFilter(null); setPage(1) }}
-          data-testid="crawler-runs-filter-clear"
-        >
-          清空筛选
-        </AdminButton>
-      ) : null}
-    </span>
-  )
+  // ADR-149 EP-5-crawler-runs: toolbar.search 已删（业务 filter 迁移到列级 ⋯ + 矩阵 popover）
+  // toolbar 仅剩矩阵触发器（EP-4.5 已实装永驻渲染）
 
   const query = useMemo(
     () => ({
@@ -417,7 +455,6 @@ export function CrawlerRunsView() {
                 data-testid="crawler-runs-table"
                 enableHeaderMenu
                 toolbar={{
-                  search: toolbarSearch,
                   hideFilterChips: true,
                 }}
                 pagination={{ pageSizeOptions: [10, 20, 50, 100] }}
