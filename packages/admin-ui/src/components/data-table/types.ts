@@ -35,7 +35,7 @@ export interface DataTableProps<T> {
    * @deprecated ADR-149 / CHG-SN-9-DT-HEADER-REDESIGN-EP-1（2026-05-23）
    * 此 prop 已废弃。新方案：点列名 → toggle asc/desc（互斥）+ 列名右侧 ⋯ 列级三点 +
    * toolbar 右端 ⋯ 统一矩阵 popover。本 prop 在 EP-1 阶段保留但 noop（不再触发任何效果），
-   * EP-4-B 将完全删除。消费方应在 EP-4-A/B 移除此 prop。详 ADR-149 §3 D-149-1/D-149-4。
+   * EP-6 将完全删除（AMENDMENT 1 序列调整）。消费方应在 EP-4..EP-5 完成后由 EP-6 统一删除。详 ADR-149 §3 D-149-1/D-149-4 + AMENDMENT 1。
    */
   readonly enableHeaderMenu?: boolean
 
@@ -155,7 +155,7 @@ export interface ToolbarConfig {
   /**
    * @deprecated ADR-149 / CHG-SN-9-DT-HEADER-REDESIGN-EP-1（2026-05-23）
    * 隐藏列 chip 在 ADR-149 中废弃，功能整合到 thead 右侧统一矩阵 popover。
-   * 本 prop 在 EP-1 阶段保留 noop（不再渲染 chip 也不再读取此 prop），EP-3 将完全删除。
+   * 本 prop 在 EP-1 阶段保留 noop（不再渲染 chip 也不再读取此 prop），EP-6 将完全删除（AMENDMENT 1 调整：EP-3 删文件+JSX / EP-6 删类型）。
    * 详 ADR-149 §3 D-149-1 / D-149-10。
    */
   readonly hideHiddenColumnsChip?: boolean
@@ -163,7 +163,7 @@ export interface ToolbarConfig {
    * @deprecated ADR-149 / CHG-SN-9-DT-HEADER-REDESIGN-EP-1（2026-05-23）
    * filter chips slot 在 ADR-149 中废弃。"已过滤状态"统一显示在矩阵 popover 过滤格；
    * trailing 槽位允许 read-only 业务摘要 chip（如 FilterChipBar，D-149-11 例外）。
-   * 本 prop 在 EP-1 阶段保留 noop，EP-3 将完全删除。详 ADR-149 §3 D-149-1 / D-149-10 / D-149-11。
+   * 本 prop 在 EP-1 阶段保留 noop，EP-6 将完全删除（AMENDMENT 1 调整：EP-3 删 JSX / EP-6 删类型）。详 ADR-149 §3 D-149-1 / D-149-10 / D-149-11。
    */
   readonly hideFilterChips?: boolean
 }
@@ -211,7 +211,7 @@ export interface TableColumn<T> {
    * @deprecated ADR-149 / CHG-SN-9-DT-HEADER-REDESIGN-EP-1（2026-05-23）
    * filter chips 整段废弃后本 prop 无消费方（Grep 实测 0 处使用）。
    * 自定义"已过滤状态摘要"应通过 `column.columnMenu.filterSummary: string` 提供。
-   * 本 prop 在 EP-1 阶段保留 noop，EP-3 将完全删除。详 ADR-149 §3 D-149-6 / D-149-10。
+   * 本 prop 在 EP-1 阶段保留 noop，EP-6 将完全删除（AMENDMENT 1 调整）。详 ADR-149 §3 D-149-6 / D-149-10。
    */
   readonly renderFilterChip?: (ctx: FilterChipContext) => ReactNode
 }

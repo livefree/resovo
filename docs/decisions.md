@@ -12233,3 +12233,200 @@ npm run dev:server-next      # EP-4-C 用户走读环境
 **@livefree 人工审核 PASS（2026-05-23）→ status 翻 Accepted → EP-1 启动**
 
 ---
+
+> **AMENDMENT 1 2026-05-24（CHG-SN-9-DT-HEADER-REDESIGN-ADR-AMEND-1）— D-149-13 toolbar.search 槽位职责约定 + EP-5 业务 filter 迁移**
+
+### Context（AMENDMENT 1）
+
+EP-3 commit `1d1f635e` 后 @livefree 在 dev server 实测视频库页 `/admin/videos` 时发现"表格头仍有过滤下拉菜单"。深查 7 个 server-next admin DataTable 消费方 toolbar.search 槽位实测占用情况：
+
+| 消费方 | toolbar.search 实际内容 | 合规性 |
+|---|---|---|
+| `VideoListClient.tsx:716` | VideoFilterBar（1 search input + 5 select） | ❌ 违规 |
+| `CrawlerRunsView.tsx:347-377` | 2 AdminSelect + 1 ghost button | ❌ 违规 |
+| `AuditClient.tsx:275-329` | 2 AdminSelect + 2 AdminInput + 2 datetime-local | ❌ 违规 |
+| `UsersListClient.tsx:351-395` | 1 search input + 2 AdminSelect + 1 ghost button | ❌ 违规 |
+| `SubmissionsListClient.tsx:327-360` | 2 AdminSelect + 1 ghost button | ❌ 违规 |
+| `CrawlerSiteList.tsx:187-198` | 1 AdminInput type=search | ✅ 合规 |
+| `SourcesClient.tsx:341-348` | 1 AdminInput type=search | ✅ 合规 |
+
+**根因**：原 ADR-149 D-149-11 只约束了 `toolbar.trailing` 槽位（"不允许编辑型 filter UI / 允许 read-only 摘要 chip"），但 **D-149-11 之外没有约束 toolbar.search 槽位**。导致 5/7 消费方继续把业务 filter UI（select / range / date-range 编辑）塞到 search 槽位。这是 #UR-B1 "表格头不一致"的**真实根源**，原 ADR-149 EP-1..EP-3 改造已让矩阵 popover 落地，但若 5 消费方继续在 search 槽位塞业务 filter UI，矩阵 popover 与 search 槽位将形成**第二轮散落**。
+
+**M-SN-8 教训重申**："很多实现起来是需要做决策的，但开发过程都被跳过"。本 AMENDMENT 1 在 EP-3 commit 后 24h 内启动，避免落入"假装实现"陷阱（矩阵 popover 已落 / search 槽位污染仍在）。
+
+### 新增决策
+
+#### D-149-13 toolbar.search 槽位职责约定（白名单 + 黑名单 + 桥接合约）
+
+**选项**：
+- A：松约束 — 允许多 input + 1 个 select（消费方自治）
+- B：严约束 — 仅 1 个全文搜索 input（其余全部走列级 ⋯）
+- C：分级约束 — 全文搜索 + 1 个"主过滤维度"select（半自治）
+- D：删除 search 槽位 — 全部 filter UI 走列级 ⋯，无任何 toolbar 入口
+
+**选择：B**（严约束）。
+
+**理由**：
+- A：与 EP-1..EP-3 改造目标（4 入口 → 2 入口）矛盾，散落继续
+- C：边界模糊（"主过滤维度"消费方自定义 → 范式仍散）
+- D：全文搜索是高频跨列需求（titel/email/url 字段 OR 模糊匹配），删除会让用户必须打开列级 ⋯ 找搜索框，UX 倒退
+- B：与 D-149-11 trailing 约束**对称**（trailing 允许业务动作 + read-only chip / 禁止编辑型 filter UI；search 允许 1 个全文搜索 / 禁止业务 filter UI）
+
+**白名单**（允许出现在 toolbar.search 槽位的元素）：
+- 1 个全文搜索 input（`<DataTableSearchInput>` / `<AdminInput type="search">` / 原生 `<input type="search">`）
+- 该 input 内嵌的视觉装饰（搜索 icon / clear 按钮 / loading spinner）
+
+**黑名单**（禁止出现在 toolbar.search 槽位的元素）：
+- 任何 `<select>` / `<AdminSelect>` / `<AdminDropdown>` / chip group / radio group
+- 任何额外的 form 控件（type=text / date / datetime-local / number / range / checkbox 等）
+- range slider / date-range picker / 任何复合过滤编辑组件
+- "清空筛选"按钮（这类按钮是"该槽位含多控件需要批量清空"的反证 — 单 search input 用户清空只需 backspace）
+
+**边界判定规则**：
+- 槽位内 ≥ 2 个交互式 form 控件 → 自动违规
+- 1 search input + 1 search icon button（如放大镜 / clear ×） → 合规
+- 1 search input + 1 read-only quick filter chip（无内嵌输入 + × 清除按钮） → 合规
+- 1 search input + 1 `<select>` → 违规
+- 1 input type=search + 1 input type=datetime-local → 违规
+
+**业务过滤 UI 唯一归属**：
+- 列级 ⋯ `columnMenu.filterContent`（D-149-3 + D-149-5 编辑入口）
+- 矩阵 popover 状态指示格（D-149-5 + D-149-6 状态/批量清除）
+- read-only 摘要 chip 可放 toolbar.trailing（D-149-11 例外）
+
+#### D-149-14 toolbar 三槽位职责完整闭合声明
+
+D-149-11 + D-149-13 联合定义 toolbar 三槽位（v1.0 闭合 / 严禁滥用为第 4 类）：
+
+| 槽位 | 职责 | 真源决策 |
+|---|---|---|
+| `viewsConfig` | saved views 切换 + 保存 | ADR-103 §4.4 |
+| `search` | 1 个全文搜索 input（其余全部禁止） | **D-149-13**（本 AMENDMENT） |
+| `trailing` | 业务动作（新建 / 导出 / 刷新 / 业务模式切换） + read-only 摘要 chip | **D-149-11**（R-149-5 修订） |
+
+**约束**：
+- 业务过滤编辑（select / range / date / multi-input） → 不能进任何 toolbar 槽位，必须走列级 ⋯
+- 业务过滤状态展示 → 矩阵 popover 过滤格（首选）+ toolbar.trailing read-only chip（例外，仅 column.id 不对齐场景）
+- 新模块新写 DataTable 消费 → 必须遵循三槽位职责矩阵，违反者 EP-5 拒收 PR
+
+#### D-149-15 业务 filter key 与 column.id 不对齐场景的桥接合约
+
+业务 filter key 命名空间（消费方业务语义）与 column.id 命名空间（DataTable 内部状态）**不对齐时**，使用既有 `ColumnMenuConfig` 四件套桥接（EP-1 已实装 / 零 admin-ui 改动）：
+
+| 字段 | 桥接职责 |
+|---|---|
+| `columnMenu.filterContent: ReactNode` | 列级 ⋯ inline 编辑 UI（消费方读写自己的业务 key） |
+| `columnMenu.isFiltered: boolean` | 该列对应业务 key 当前是否有过滤值（驱动矩阵过滤格开启状态） |
+| `columnMenu.onClearFilter: () => void` | 关闭矩阵过滤格 switch / 列级 ⋯ "清除过滤"时调用 |
+| `columnMenu.filterSummary: string` | 矩阵格右侧摘要文本（业务 key 当前值的人话） |
+
+**桥接实现示例**（VideoListClient EP-5-videos 落地）：
+
+```typescript
+// 在 column 定义中（业务 key 'type' 不对齐 column.id 'video_type'）
+{
+  id: 'video_type',
+  header: '类型',
+  accessor: (row) => row.type,
+  columnMenu: {
+    filterContent: <DataTableEnumFilter
+      options={VIDEO_TYPE_OPTIONS}
+      value={getEnumFirst(snapshot.filters, 'type')}    // 读业务 key
+      onChange={(v) => onPatch({ filters: setKey('type', v) })}  // 写业务 key
+    />,
+    isFiltered: snapshot.filters.has('type'),
+    onClearFilter: () => onPatch({ filters: deleteKey('type') }),
+    filterSummary: getEnumFirst(snapshot.filters, 'type')
+      ? `类型: ${VIDEO_TYPE_OPTIONS.find(o => o.value === ...)?.label}`
+      : undefined,
+  },
+}
+```
+
+**关键约束**：
+- DataTable 内部仅使用 column.id 作为 filterContent slot 渲染 key，**不读消费方业务 key 命名空间**
+- 桥接逻辑闭包在消费方 column 定义内（业务 key 命名空间不外泄）
+- 矩阵 popover 桥接路径已在 EP-1 `column-matrix-menu.tsx` 第 148-149 / 320-321 行实装（isFiltered 优先 / onClearFilter 优先调），无需任何 admin-ui 改动
+- N1-149-4（业务 key namespace 与 column.id 迁移）**保持 N1，不升级 EP**（理由：URL 兼容性 + 桥接已闭合 #UR-B1 用户体验）
+
+### 修订 §4 实施分步（重写为 7 EP 完整序列）
+
+| EP | 范围 | 工时 | 依赖 | 状态 |
+|---|---|---|---|---|
+| **EP-1** | types.ts deprecate + 矩阵原语 + a11y | 0.6w | ADR PASS | ✅ commit `e671f498` |
+| **EP-2** | 列级 ⋯ + 列名 toggle + stopPropagation | 0.5w | EP-1 | ✅ commit `aef7051e` |
+| **EP-3** | 删除旧入口（2 文件删 / D-149-10 矛盾修正） | 0.3w | EP-2 | ✅ commit `1d1f635e` |
+| **EP-4** | `DataTableSearchInput` 原语 + IME composition + debounce + 7 消费方 search 槽位接入 | 0.4w | EP-3 | 待启 |
+| **EP-5-shared** | `DataTableEnumFilter` / `DataTableTextFilter` / `DataTableDateRangeFilter` 共享原语 + 20 单测 | 0.3w | EP-4 | 待启 |
+| **EP-5-crawler-runs** | 2 select → 列级 ⋯ filterContent 迁移 + 桥接合约接入 | 0.25w | EP-5-shared | 待启 |
+| **EP-5-submissions** | 2 select → 列级 ⋯ filterContent 迁移 | 0.25w | EP-5-crawler-runs | 待启 |
+| **EP-5-users** | 1 search input 留 toolbar.search + 2 select → 列级 ⋯ filterContent 迁移 | 0.3w | EP-5-submissions | 待启 |
+| **EP-5-audit** | 2 select + 1 actor input + 1 request input + 2 datetime-local → 列级 ⋯ filterContent（date-range 复合）迁移 | 0.4w | EP-5-users | 待启 |
+| **EP-5-videos** | 5 select → 列级 ⋯ filterContent 迁移（业务 key 桥接合约最复杂场景）+ search input 迁移 + FilterChipBar 验证保留 | 0.4w | EP-5-audit | 待启 |
+| **EP-6** | types.ts 一次性删 4 个 @deprecated prop + 注释文案清理 + 视觉回归 | 0.2w | EP-5-videos | 待启 |
+| **EP-7** | @livefree 走读 5+10 代表页 + #UR-B1/B2/B3/B4 闭合验证 + 5 消费方一致性核查 + e2e smoke | 0.3w | EP-6 | 待启 |
+
+**总工时**：约 **5.2w**（原 ADR 2.5w 已含；AMENDMENT 1 增量 2.7w）
+
+**EP-5 执行约束**：
+- 6 子卡**严格串行**（避免共享原语 PR 与消费方 PR 交叉冲突）
+- 顺序按消费方**复杂度递增**：shared → crawler-runs → submissions → users → audit → videos
+- 每子卡完成需通过 dev server 走读 + 该消费方 testid 维度保留单测
+
+### 修订 §6 R-MID-1 影响
+
+零新增（无端点 / 无 actionType / 无 targetKind / 无 ErrorCode 变化），与原 ADR-149 §6 一致。`npm run verify:adr-contracts` + `npm run verify:endpoint-adr` 在 EP-4..EP-7 全程预期 PASS。
+
+### 修订 §7 测试 surface（原 60-80 → **160-180** 新增 / 现存 154 不破）
+
+| 模块 | 用例数（原 → 新） | 增量维度 |
+|---|---|---|
+| column-matrix-menu.tsx | 39（不变） | 已落 EP-1 |
+| header-menu.tsx + 集成 | 21（不变） | 已落 EP-2 |
+| step-ep3-removal.tsx | 11（不变） | 已落 EP-3 |
+| search-input.tsx | 12（不变） | EP-4 |
+| **DataTableEnumFilter** | **+ 20** | EP-5-shared / options / value / onChange / 多选 / 单选 / disabled / a11y |
+| **DataTableTextFilter** | **+ 15** | EP-5-shared / value / onChange / debounce / placeholder / a11y |
+| **DataTableDateRangeFilter** | **+ 15** | EP-5-shared / from-to 切换 / 快捷选项 / clear / a11y |
+| **5 消费方 column.columnMenu 桥接** | **+ 60**（每消费方 ~12） | EP-5-videos/audit/users/submissions/crawler-runs：isFiltered / onClearFilter / filterSummary 联动 + 业务 key 读写 + URL sync |
+| **toolbar.search 槽位合规验证** | **+ 5** | EP-7 / 5 违规消费方迁移后单一 input 单测 |
+| 现存 14 测试文件 | 154（不变） | 全 PASS |
+
+**视觉回归**：EP-5-videos 矩阵 popover with 业务 key 桥接 / EP-5-audit date-range filterContent / EP-6 deprecated prop 删除后 thead baseline
+
+**用户走读硬约束**（EP-7）：@livefree 走 10 代表页（原 5 + 5 EP-5 消费方），必走场景：
+- 5 消费方业务 filter 全部从列级 ⋯ inline 编辑 + 矩阵格状态正确
+- toolbar.search 槽位 5 消费方全部只剩 1 个 search input
+- 业务 key 桥接：URL 旧 saved view 兼容 + 新 URL 写入 + 矩阵格摘要正确
+
+### N1 follow-up 调整
+
+**保持 N1**：
+- **N1-149-4**：保持 N1（**不**升级 EP-5）。理由：业务 key 桥接合约（D-149-15）已让矩阵 popover + 列级 ⋯ + 摘要展示**完全工作**，#UR-B1 用户体验已闭合；强制 namespace 迁移会引发 saved view URL 兼容性问题；属于 cleanup 而非 MVP
+
+**新增 N1**：
+- **N1-149-9**：5 消费方 saved views 迁移期 URL 兼容（业务 key 旧 URL 解析容错 / 2 周兼容窗 → N1 评估）
+- **N1-149-10**：EP-5-shared 沉淀的 DataTableEnumFilter / TextFilter / DateRangeFilter 是否进一步与 admin-ui 既有 `<AdminSelect>` / `<AdminInput>` 共享内部实现（DRY 评估）
+
+### 与 EP-1/2/3 已 commit 代码的兼容性矩阵
+
+| 维度 | AMENDMENT 1 影响 |
+|---|---|
+| EP-1 `types.ts` 公开 Props 契约 | **零回退** — ColumnMenuConfig 4 件套桥接合约已实装 |
+| EP-1 `column-matrix-menu.tsx` 桥接路径 | **零回退** — isFiltered/onClearFilter 优先路径正是 D-149-15 桥接落点 |
+| EP-2 `header-menu.tsx` + 列名 toggle | **零回退** — D-149-13 仅约束 toolbar.search，不动 header / 列级 ⋯ |
+| EP-3 旧入口删除（2 文件） | **零回退** — D-149-13 是 search 槽位行为约束，不复活 filter-chips.tsx |
+| EP-1 `@deprecated` 注释中 "EP-4-B 将完全删除" | **文案微调** — 改为 "EP-6 将完全删除"（types.ts 4 处 @deprecated 注释）；纯注释 patch / 零代码逻辑改动 |
+| `apps/server-next` 5 违规消费方 | **由 EP-5-* 6 子卡修复** — AMENDMENT 1 不改任何消费方代码 |
+
+**结论**：AMENDMENT 1 是纯 additive 决策扩展 + EP 序列重排 + types.ts 4 处注释文案微调；EP-1/2/3 已 commit 代码**零回退 / 零代码逻辑改动**。
+
+### AMENDMENT 1 修订建议消解状态
+
+本 AMENDMENT 已在 D-149-13 / D-149-14 / D-149-15 + §4 EP-4..EP-7 序列 + §7 测试 surface + 兼容性矩阵 + N1 调整中消解 arch-reviewer R-AMEND-1-1 ~ R-AMEND-1-9 全部 9 条修订建议。
+
+**自评：A− CONDITIONAL PASS** — 9 修订建议已全部落实；D-149-13 与 D-149-11 对称化 / 三槽位职责闭合 / 业务 key 桥接合约清晰；与 EP-1/2/3 已 commit 代码零回退；M-SN-8 "假装实现" 教训在边界判定规则中显式防御。EP-7 用户走读 10 代表页为 CHG-SN-9-DT-HEADER-* 闭合硬前置。
+
+**待 @livefree 人工审核**（status: 🟡 Proposed）
+
+---
