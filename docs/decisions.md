@@ -3335,6 +3335,28 @@ DataTable v2 + useTableQuery 一次性收编。本 ADR 是 CHG-SN-2-13（DataTab
 >
 > **背书**：CHG-DESIGN-02 Step 7A 防御兜底落地 + Step 7B fix#2 单 scrollport 设计；arch-reviewer R-3 short data thead/foot 重叠保护
 
+> **AMENDMENT 2026-05-23（ADR-149 / CHG-SN-9-DT-HEADER-REDESIGN-ADR）— 第 5 次 AMENDMENT**：
+>
+> **表头入口重设计** — 4 处入口归 2 处入口 + 列名 toggle 排序。修订 §4.1（DataTableProps）+ §4.4（toolbar 槽位）+ §4.5（表头集成菜单）。
+>
+> **API 契约变更**：
+> - **删除**：`enableHeaderMenu` / `hideHiddenColumnsChip` / `hideFilterChips` / `renderFilterChip`（4 个 props）
+> - **新增**：`columnTriggerVisibility?: 'auto' | 'always' | 'never'`（默认 `'auto'`）/ `headerMenuTriggerPosition?: 'toolbar-right' | 'thead-right'`（默认 `'toolbar-right'`）/ `ColumnMenuConfig.filterSummary?: string`
+> - **保留**：行展开 props（`renderExpandedRow` / `expandedKeys`，2026-05-13 AMENDMENT）/ pagination / bulkActions / flashRowKeys / saved views / sticky scroll 两种模式
+>
+> **行为变更**：
+> - 列名点击：原 `none → asc → desc → none` 三态循环 → `asc ↔ desc` 二态互斥（不可回 none；清除排序走列级 ⋯ 或矩阵 ×）
+> - 表头入口：列内 popover（点列名）→ **列名右侧 ⋯ 列级三点 + toolbar 右端 ⋯ 统一矩阵 popover**
+> - filter chips（toolbar 第二行）+ 已隐藏 N 列 chip → 整段删除
+>
+> **文件改动**：`packages/admin-ui/src/components/data-table/` 删 3 文件（`filter-chips.tsx` / `filter-chip.tsx` / `hidden-columns-menu.tsx` 共 535 行）+ 新建 `column-matrix-menu.tsx`（~400 行）+ 新建 `search-input.tsx`（~80 行 IME composition）+ 改 `header-menu.tsx` / `data-table.tsx` / `types.ts` / `dt-styles.tsx`。
+>
+> **EP 拆 5 段**（typecheck 中间态保护）：EP-1 deprecate + 矩阵原语 → EP-2 列级 ⋯ + 列名 toggle → EP-3 删旧 → EP-4-A IME + 5 消费方 → EP-4-B 剩余消费方 + 删 deprecated → EP-4-C 用户走读
+>
+> **起源任务卡**：CHG-SN-9-DT-HEADER-REDESIGN-ADR（本 AMENDMENT 起草） → CHG-SN-9-DT-HEADER-REDESIGN-EP-1 ~ EP-4-C
+>
+> **背书**：arch-reviewer (claude-opus-4-7) 评级 A− CONDITIONAL PASS / 9 修订建议 R-149-1..9 在 ADR-149 内全部消解；@livefree 用户审核中（status: 🟡 Proposed）；详 ADR-149 §3 决策 D-149-1..12 + §4 EP 拆分 + §7 测试 surface。
+
 #### 4.1 DataTable v2 — 表格基座
 
 - **文件**：`packages/admin-ui/src/components/data-table/data-table.tsx`
@@ -11914,5 +11936,300 @@ npm run verify:adr-contracts # 零新端点；无偏离
 详 D-148-8 表 — ADR-003 / ADR-139 / ADR-121 / ADR-146 共 4 条。
 
 **自评：A PASS** — 8 决策完整；MVP 范围合理（仅 timeoutMinutes）；R-148-4 独立审查增量发现 ADR-139 TTL 不匹配并给出实施卡同步修复建议；12 测试 surface 完整可执行。无 BLOCKER。
+
+---
+
+## ADR-149 — DataTable 表格头入口重设计（列级 ⋯ + 统一矩阵 popover + 列名 toggle 排序 / ADR-103 第 5 次 AMENDMENT）
+
+**状态**：✅ **Accepted**（@livefree 人工审核 PASS 2026-05-23 → EP-1 启动）
+**日期**：2026-05-23
+**作者**：arch-reviewer (claude-opus-4-7) — 评级 **A− CONDITIONAL PASS**（9 修订建议 R-149-1..9 已在本 ADR 内消解，可直接落地 EP-1）
+**起草模型**：claude-opus-4-7（主循环）+ claude-opus-4-7（arch-reviewer 子代理评审与决策）
+**关联 GAP**：#UR-B1 / #UR-B2 / #UR-B3 / #UR-B4（docs/audit/user-review-2026-05-23.md — M-SN-8 用户复核 4 处表头痛点）
+**关联任务**：CHG-SN-9-DT-HEADER-REDESIGN-ADR（本 ADR 起草卡）
+**后续解锁卡**：CHG-SN-9-DT-HEADER-EP-1 ~ EP-4-C（实施分步详 §4）
+**ADR-103 关系**：第 5 次 AMENDMENT（修订 §4.1 / §4.4 / §4.5；保留 §4.2 useTableQuery / §4.3 selection / 4 次既有 AMENDMENT 全部保留）
+
+### 1. 背景与现状
+
+server-next 13 个 admin DataTable 消费方在 M-SN-8 用户复核中暴露 4 处分散的"过滤/列管理"入口（#UR-B1 / #UR-B2）：
+
+| # | 入口 | 文件 | 实际消费方数 | 用户痛点 |
+|---|---|---|---|---|
+| 1 | toolbar 第二行 filter chips | `filter-chips.tsx` (128 行) | 0 处（`hideFilterChips: true` 8 处显式关闭，5 处隐式不触发） | 仅展示 + 编辑双职责 / 与列内过滤入口重复 |
+| 2 | toolbar 内"已隐藏 N 列" chip | `hidden-columns-menu.tsx` (207 行) | 0 处显式关闭，触发条件"存在隐藏列" | 视线在 thead 时要回到 toolbar 找入口 |
+| 3 | 列名点击 popover | `header-menu.tsx` (299 行) | 9 处 `enableHeaderMenu: true` | "点列名应直接排序"违 Excel/Notion/Linear 业界范式 |
+| 4 | `column.renderFilterChip` prop | 消费方 column 配置 | 0 处使用（仅测试 + dev demo） | （未实际触发，作为逃生口已废） |
+
+**用户原话**（M-SN-8 复核反馈）：
+> "很多实现起来是需要做决策的，但开发过程都被跳过，要么没有实现，要么使用不可用的方式假装实现了。"
+
+**外置补丁现状**：
+- VideoListClient（`apps/server-next/src/app/admin/videos/_client/VideoListClient.tsx:594`）使用 `FilterChipBar` 外置组件塞 `toolbar.trailing` —— 业务 filter key（`q/type/status`）不与 column.id namespace 一致，无法走默认 chip 自动渲染。这是历史遗留补丁，本 ADR 决策 D-149-11 中专门处理。
+
+**不解决的后果**：
+- #UR-B1 持续：用户每次进入 admin 列表页都要在 4 处入口中找过滤/列管理
+- 新模块继续繁殖散落（无强约束 → 第 14、15 个消费方仍可写自己的 trailing chip）
+- a11y 焦点链分裂（4 处 popover + toolbar chip + 外置 FilterChipBar 至少 5 个焦点入口）
+
+### 2. 改造目标
+
+把 4 处入口收敛为 **2 处入口 + 列名 toggle 排序**：
+
+- **入口 1：列名右侧 ⋯（列级三点）** — 该列即时操作（升降序 / 过滤编辑 / 隐藏此列）
+- **入口 2：toolbar 右端 ⋯（统一矩阵 popover）** — 全表配置矩阵（一眼看全列 × 4 维：列名 / 可见性 / 过滤 / 排序 + 3 个批量按钮）
+- **行为变化：列名点击 → toggle asc ↔ desc 互斥**（不可回无序）
+
+trailing 槽位严格定义为业务动作槽位（详 D-149-11）；filter chips / 已隐藏 N 列 chip 整段删除（共 3 个文件 / 535 行）。
+
+### 3. 决策清单
+
+#### D-149-1 表格头 4 处入口废除
+
+**选项**：A 保留 4 处 + 切换 prop / B 废除 1→4 / C 分阶段废除
+
+**选择：B**。废除 4 处一致性最高，破坏面集中可控（typecheck 锁链由 D-149-9 EP 序列保护）。
+
+#### D-149-2 统一矩阵 popover 引入（位置 toolbar 右端）
+
+**选项**：A toolbar 右端 ⋯ / B thead 最右列右侧 ⋯ / C sidebar drawer
+
+**选择：A**，默认 `headerMenuTriggerPosition='toolbar-right'`。
+
+- A vs B：thead 列宽紧张时 ⋯ 触发器易被横向 scroll 推走；toolbar 右端固定可达性最高
+- A vs C：drawer 滑入耗时 250ms 打断"快速一览"主诉求
+- toolbar.hidden=true 时 prop 显式 fallback `'thead-right'`
+
+风险：
+- 小屏 < 1280px 矩阵 popover 拥挤 → max-width: 90vw + 横向滚动 + 列数 > 8 时列名折行
+- 列数 > 20 时纵向滚动性能 → max-height: 60vh + overflow-y: auto；虚拟化推 N1-149-3
+
+#### D-149-3 列名右侧 ⋯ 列级三点（默认 auto 显示策略）
+
+**选项**：A 默认 always / B 默认 auto / C 默认 hover
+
+**选择：B**，默认 `columnTriggerVisibility='auto'`。
+
+**判定时机（R-149-2 修订）**：static + dynamic 复合 — `enableSorting || columnMenu.filterContent || columnMenu.canHide !== false || columnMenu.isFiltered === true || query.sort.field === col.id`。任一为 true 即显示。
+
+**行为细节（R-149-6 修订）**：
+- 列名整体可点（cursor: pointer）→ 触发 toggle 排序
+- ⋯ 图标 onClick **必须 e.stopPropagation()**，防止冒泡触发列名 toggle 排序
+- ⋯ 图标 ARIA：`aria-haspopup="menu" aria-expanded="..." aria-label="{列名} 列操作"`
+
+#### D-149-4 点列名 toggle asc/desc 互斥
+
+**选项**：A 三态循环 `none → asc → desc → none` / B 二态互斥 `asc ↔ desc` / C 单态 sticky
+
+**选择：B**。
+
+理由：与 Excel / Notion / Linear / Airtable 一致（业界范式）；清除排序入口在列级 ⋯ + 矩阵双备份（不会 dead end）。
+
+破坏面：
+- 现有 154+ 单测中 sort cycle 部分需更新（~5-8 用例）
+- 键盘用户 muscle memory 调整：Tab 到列名 + Space → toggle，不再有"第三次 Space 回 none"
+
+#### D-149-5 矩阵 popover 语义（状态指示 + 批量清除 / 不直接编辑过滤值）
+
+**选项**：A 直接编辑过滤值 / B 仅状态指示 + 开关 + 批量清除 / C 每行展开二级编辑面板
+
+**选择：B**。清晰边界："矩阵看状态 / ⋯ 改值"。
+
+矩阵每格语义：
+
+| 格 | UI | 行为 | 不支持时 |
+|---|---|---|---|
+| **可见性** | switch（role="switch" aria-checked） | 切换列可见/隐藏 | pinned 列 disabled + 🔒 标签 + aria-label="该列已锁定" |
+| **过滤** | switch（关闭=立即清除过滤值 + 隐藏摘要）+ 旁边摘要文本 | 关闭：调 column.columnMenu.onClearFilter；开启：popover 关闭 + 引导用户点列名 ⋯ inline 编辑 | 无 filterContent 显 "—" 灰 + disabled + aria-label="该列不支持过滤" |
+| **排序** | ↑ ↓ × 三按钮（role="radiogroup" 三 radio + 互斥单列） | 点 ↑/↓ 设该列 asc/desc + 清除其他列排序；× 清除该列排序 | enableSorting=false 显 "—" 灰 + disabled |
+
+批量操作（popover 底部 3 个按钮）：清除全部过滤 / 清除排序 / 恢复默认列可见性。
+
+#### D-149-6 过滤格 UI（switch + 摘要 + 溢出处理）
+
+**选择：B** switch toggle + 摘要文本（关闭=即时清除）。
+
+摘要文本规约：
+- max-width: 200px / text-overflow: ellipsis / white-space: nowrap
+- hover 显示 native `title` 属性 tooltip 全文（**R-149-4 锁定**：当前 string；富文本走 N1-149-6）
+- 多值过滤折叠：enum 单选 `类型: 电影` / enum 多选 ≤ 2 `类型: 电影, 电视剧` / enum 多选 > 2 `类型: 电影+3 项…` / range `8.0-10.0` / date-range `近7天` 或 `2026-05-01~05-23` / text ≤ 30 字原值；> 30 截断 + tooltip 全文
+
+摘要 source：`ColumnMenuConfig.filterSummary?: string`（新增字段；消费方提供）。
+
+#### D-149-7 排序格 UI（↑↓× 互斥单列）
+
+**选择：B** 三按钮 radiogroup。`<div role="radiogroup" aria-label="{列名} 排序方向"><button role="radio" aria-checked="..."></button>×3</div>`。
+
+#### D-149-8 DataTableSearchInput IME composition + debounce（纳入本 ADR / 闭合 #UR-B3）
+
+**选择：B** 纳入本 ADR + EP-4 一并实施。
+
+签名：
+```typescript
+export interface DataTableSearchInputProps {
+  readonly value: string
+  readonly onChange: (next: string) => void
+  readonly placeholder?: string
+  readonly debounceMs?: number  // 默认 300
+  readonly 'aria-label'?: string
+  readonly 'data-testid'?: string
+}
+```
+
+行为：composition 期间暂停 onChange / compositionEnd 时恢复 + 立即触发一次 / 非 composition 时走 debounce / Enter 立即提交 / value 受控。
+
+#### D-149-9 EP 拆分粒度（5 段渐进 / typecheck 不破裂）
+
+**选择：B** 5 段 EP（**R-149-8 修订**）。详 §4。
+
+#### D-149-10 API 契约变更
+
+**删除（types.ts）**：
+- `DataTableProps.enableHeaderMenu?: boolean`
+- `ToolbarConfig.hideHiddenColumnsChip?: boolean`
+- `ToolbarConfig.hideFilterChips?: boolean`
+- `TableColumn.renderFilterChip?: (ctx) => ReactNode`
+
+**新增（types.ts）**：
+- `DataTableProps.columnTriggerVisibility?: 'auto' | 'always' | 'never'`（默认 `'auto'`）
+- `DataTableProps.headerMenuTriggerPosition?: 'toolbar-right' | 'thead-right'`（默认 `'toolbar-right'`；toolbar.hidden=true 时强制 fallback 到 `'thead-right'`）
+- `ColumnMenuConfig.filterSummary?: string`
+
+**RemovedExports**：`filter-chips.tsx` + `filter-chip.tsx` + `hidden-columns-menu.tsx` 整文件删；`index.ts` 更新 export。
+
+#### D-149-11 trailing 槽位职责约定（**R-149-5 修订**）
+
+**选择：B** 允许 read-only 摘要 chip + 业务动作。
+
+**判定规则**：
+- 允许：`<FilterChipBar items={chips} onClearAll={...} />`、业务 segment、刷新/导出/新建按钮
+- 不允许：内嵌 `<input>` / `<select>` / range slider 等编辑型 UI（这些走列级 ⋯ filterContent）
+
+**VideoListClient 处理**：保留外置 FilterChipBar 在 trailing（业务 key 摘要），矩阵 popover 不显示这些业务 filter（因 column.id 不对齐）；M-SN-N follow-up 评估将 video filter key 迁移到 column.id namespace（推 N1-149-4）。
+
+#### D-149-12 矩阵 popover a11y 强制约束（**R-149-7 修订新增**）
+
+**ARIA roles**：
+- 外层 portal panel：`role="dialog" aria-modal="false" aria-label="列设置"`
+- 内层 grid：`role="grid" aria-rowcount={cols + 2}`
+- header row：`role="row"` + 4 cells `role="columnheader"`
+- 每列行：`role="row"` + 列名 cell `role="rowheader"` + 其余 `role="gridcell"`
+- 可见性 switch：`role="switch" aria-checked aria-label="切换 {列名} 可见性"`
+- 过滤 switch：同上 + 不支持时 `aria-disabled="true" aria-label="该列不支持过滤"`
+- 排序按钮组：`role="radiogroup" aria-label="{列名} 排序方向"` 含 3 `role="radio"` + `aria-checked`
+
+**键盘语义**：
+- ArrowUp/Down：行间移动焦点（矩阵 grid pattern）
+- ArrowLeft/Right：列间移动焦点
+- Space：切换当前 cell 的 switch 或 radio
+- Esc：关闭 popover + 焦点回 ⋯ 触发器
+- Tab：跳出 grid 到底部批量按钮区；Shift+Tab 反向
+
+**焦点回流**：打开 popover 前保存 `document.activeElement` 为 previousFocus；关闭时 previousFocus.focus()。
+
+### 4. 实施分步（5 EP）
+
+| EP | 范围 | 工时 | 依赖 | typecheck 中间态 |
+|---|---|---|---|---|
+| **EP-1**：契约 deprecate + 矩阵原语 | types.ts 删 4 prop **改为标 @deprecated**（保 noop）+ 新增 3 prop + 新建 `column-matrix-menu.tsx` (~400 行 + a11y) + `dt-styles.tsx` 矩阵样式 + ColumnMenuConfig 扩 filterSummary + 35 矩阵单测 | 0.6w | ADR PASS | 全 PASS（旧 prop 仍工作） |
+| **EP-2**：列级 ⋯ + 列名 toggle | `header-menu.tsx` 改 anchor 从 `<th>` 整体到 `<span>` ⋯ + `data-table.tsx` 列名渲染加 ⋯ 图标（条件） + 列名 onClick 改 toggle 排序 + ⋯ stopPropagation + 10 单测 | 0.5w | EP-1 | 全 PASS |
+| **EP-3**：删除旧入口 | `data-table.tsx` 删 hidden cols chip + filter chips 渲染 + 删除 `hidden-columns-menu.tsx` + `filter-chips.tsx` + `filter-chip.tsx` + 改 `toolbar.tsx` 不动 + `index.ts` 更新 + 10 集成单测 | 0.3w | EP-2 | 全 PASS |
+| **EP-4-A**：DataTableSearchInput + 5 消费方接入 | 新建 `search-input.tsx` (~80 行 + IME composition + debounce + Enter 立即) + 12 单测 + 5 高优消费方接入（videos / users / audit / submissions / sources） | 0.4w | EP-3 | 全 PASS |
+| **EP-4-B**：剩余消费方删 deprecated prop | 9 处删 `enableHeaderMenu` + 8 处删 `hideFilterChips` + 类型 deprecated → 完全删除（types.ts 第二次改）+ 视觉走读 + e2e smoke | 0.4w | EP-4-A | 全 PASS（删 @deprecated 时旧 prop 消费方已全清） |
+| **EP-4-C**：用户走读 + 修复 | @livefree 走读 5 代表页（videos / sources / moderation / submissions / users）+ #UR-B1/B2/B3/B4 闭合验证 + 走读发现修复 | 0.3w | EP-4-B | 全 PASS |
+
+**总工时**：约 2.5w（含 ADR 起草 0.3w + arch-reviewer 评审已完成）
+
+**测试覆盖**：60-80 新增单测（详 §6）+ 现存 154 用例全 PASS；admin smoke e2e 加 2-3 case（推 N1）。
+
+### 5. 关联 ADR
+
+| # | ADR | 关联 | 影响 |
+|---|-----|------|------|
+| 1 | ADR-103 | **本 ADR 是第 5 次 AMENDMENT** — 修订 §4.1 / §4.4 / §4.5 | ADR-103 自身追加一行"5th AMENDMENT 2026-05-23 / ADR-149"指引 |
+| 2 | ADR-103a | admin-ui Shell API 契约 | 无影响（DataTable 不在 Shell 层） |
+| 3 | ADR-117 | sources matrix 行展开 D-117-5 `renderExpandedRow / expandedKeys` | **保持不变**，矩阵 popover 与行展开 panel 不冲突（前者在 toolbar 层 / 后者在 tbody 层） |
+| 4 | ADR-144 | FilterPreset 团队共享 | 无变更；本 ADR 不动持久化层；N1-149-4 评估协同 |
+| 5 | ADR-147 | admin notification hub | 无关 |
+| 6 | ADR-148 | session KV 消费 | 无关 |
+
+### 6. R-MID-1 影响
+
+**零新增**（无端点 / 无 actionType / 无 targetKind / 无 ErrorCode 变化）。
+
+本 ADR 仅 UI 层组件契约改造；不涉及后端 route / Service / audit。`npm run verify:adr-contracts` + `npm run verify:endpoint-adr` 在 EP-1 ~ EP-5 全程预期 PASS。
+
+### 7. 测试 surface（60-80 新增 / 现存 154 不破）
+
+| 模块 | 用例数 | 维度 |
+|---|---|---|
+| column-matrix-menu.tsx | ~35 | 矩阵渲染 / pinned 灰化 / 不支持过滤灰化 / 不支持排序灰化 / 各 cell switch 切换 / 排序 ↑↓× 互斥 / 批量按钮 3 个 / 摘要文本溢出 / 多值折叠 4 种 / a11y roles / 键盘 5 个语义 / focus 回流 / portal 渲染 / ESC 关闭 / 点外关闭 / window resize 重算 |
+| header-menu.tsx | ~10 | anchor 切换（列名整体 → ⋯ span）/ 列名整体点击 toggle 排序 / 列名 ⋯ stopPropagation / D-149-4 toggle 三态废除验证 / pinned 列名仍可 toggle 排序 |
+| data-table.tsx | ~10 | columnTriggerVisibility 三态 / headerMenuTriggerPosition 两态 / toolbar.hidden + fallback 'thead-right' 兼容 / 旧 @deprecated prop 在 EP-1 阶段仍工作 |
+| search-input.tsx | ~12 | composition start/end / debounce / Enter 立即 / value controlled / SSR safe / 空字符串短路 / 连续中文输入"黑客"全程不中断 |
+| 现存 14 测试文件 | 154 | 全 PASS（部分 sort-cycle 测试需小幅更新 ~5-8 用例） |
+
+**视觉回归**：EP-1 矩阵 popover baseline / EP-3 "已删旧入口" thead baseline / EP-4-C 用户走读补位
+
+**用户走读 + dev server 实测**（M-SN-8 教训硬约束）：
+- @livefree 在 EP-4-C 走 5 代表页：videos / sources / moderation / submissions / users
+- 必走场景：中文 IME "黑客" 全程不刷新 / 排序点列名循环 / 过滤从列级 ⋯ inline 编辑 / 矩阵一览状态 + 清除全部过滤 / 隐藏列 + 恢复默认 / a11y 键盘走 Tab + 方向键
+- 闭合检查清单：#UR-B1 / #UR-B2 / #UR-B3 / #UR-B4 四项必关
+
+### 8. 风险与缓解
+
+| # | 风险 | 严重度 | 缓解 |
+|---|------|--------|------|
+| R-149-RA | 13 消费方迁移工时低估 | 中 | EP-4 拆 4-A / 4-B / 4-C 三子卡；每子卡 typecheck PASS 后再开下一卡 |
+| R-149-RB | 矩阵 popover 小屏（< 1280px）拥挤 | 中 | max-width: 90vw + 横向滚动 + 列数 > 8 时列名折行；测试 surface 含 320px 移动端响应式用例 |
+| R-149-RC | 列数 > 20 矩阵纵向滚动性能 | 低 | max-height: 60vh + overflow-y: auto；虚拟化推 N1-149-3 |
+| R-149-RD | header-menu anchor 切换后 focus 丢失 | 中 | useLayoutEffect 重算 anchor / focus trap 范式保留；EP-2 单测覆盖 |
+| R-149-RE | VideoListClient FilterChipBar 与 §3.1a "trailing 不放过滤" 冲突 | 中 | D-149-11 显式允许 read-only 业务摘要 chip；N1-149-4 评估业务 filter key namespace 迁移 |
+| R-149-RF | EP-1 deprecate 中间态消费方继续用旧 prop 写新代码 | 低 | EP-1 同时改 `docs/rules/admin-module-template.md` + JSDoc `@deprecated` + ESLint 自定义 rule（可选 N1） |
+| R-149-RG | a11y 单测覆盖不足导致 SR 用户走读失败 | 中 | D-149-12 强制 ARIA / 键盘 / 焦点回流 单测覆盖；用户走读 EP-4-C 含键盘 Tab 走通验证 |
+
+### 9. N1 follow-up
+
+- **N1-149-1**：矩阵 popover 支持多列排序（`query.sort` 升级为数组 + 优先级指示）—— 需 ADR-103 §4.1 TableSortState 重构，独立 ADR 评估
+- **N1-149-2**：列设置持久化（user_table_preferences 表 DB-level vs localStorage / 与 ADR-144 filter-presets 协同 / 跨设备同步语义）
+- **N1-149-3**：矩阵 popover 列数 > 20 时虚拟化（react-virtual / @tanstack/virtual）
+- **N1-149-4**：video filter key namespace 与 column.id 对齐迁移（消除 FilterChipBar 外置补丁）
+- **N1-149-5**：admin smoke e2e 覆盖矩阵 popover + 列级 ⋯ + IME search 三大场景
+- **N1-149-6**：filterSummary 类型升 ReactNode（支持 chip 内嵌 icon / 颜色徽标 / 链接）
+- **N1-149-7**：列宽 resize（reference.md §4.4 提到的 `enableResizing` 未完整实装）
+- **N1-149-8**：column-matrix-menu 改 sidebar drawer 探索（小屏体验优化）
+
+### 10. 验证清单
+
+```bash
+npm run typecheck            # 各 EP 完成时必 PASS（含 EP-1 deprecate 中间态）
+npm run lint                 # 必 PASS
+npm run test -- --run        # 60-80 新增 + 现存 154 全 PASS
+npm run verify:adr-contracts # 零端点 / 零 actionType / 零偏离
+npm run verify:endpoint-adr  # 零新 admin route，本 ADR 零端点变化
+npm run dev:server-next      # EP-4-C 用户走读环境
+```
+
+**用户走读硬约束**：@livefree 必走 ≥ 1 次（详 §7 走读清单）；走读未通过 EP-4 不闭合，CHG-SN-9-DT-HEADER-* 不 commit。
+
+### 11. 修订建议消解状态
+
+本 ADR 已在 D-149-1 ~ D-149-12 + §4 EP 拆分 + §7 测试 surface + §8 风险表中消解 arch-reviewer R-149-1 ~ R-149-9 全部 9 条修订建议：
+
+| R-ID | 消解位置 |
+|------|---------|
+| R-149-1 | §1 现状表 + §3 D-149-1 / D-149-10 实测数据 |
+| R-149-2 | D-149-3 columnTriggerVisibility 判定时机 |
+| R-149-3 | D-149-2 toolbar.hidden fallback 矩阵 |
+| R-149-4 | D-149-6 filterSummary 锁定 string + N1-149-6 富文本 |
+| R-149-5 | D-149-11 trailing 允许 read-only 摘要 chip 判定规则 |
+| R-149-6 | D-149-3 ⋯ onClick e.stopPropagation |
+| R-149-7 | D-149-12 矩阵 popover a11y 强制约束 |
+| R-149-8 | D-149-9 + §4 EP 5 段拆分（含 deprecate 中间态保 typecheck） |
+| R-149-9 | §4 EP-4 拆 A/B/C 三子卡 + §7 测试 60-80 新增 |
+
+**自评：A− CONDITIONAL PASS** — 9 修订建议已全部落实到决策项 / EP 拆分 / 测试 surface / 风险表；架构方向（4 入口归 2 + 列名 toggle 排序）契合 #UR-B1/B2/B3/B4 用户复核；与 ADR-103 / ADR-117 关系明确；零 R-MID-1 / 零 endpoint-adr 影响。EP-4-C 用户走读 ≥ 1 次为 CHG-SN-9-DT-HEADER-* 闭合硬前置。
+
+**@livefree 人工审核 PASS（2026-05-23）→ status 翻 Accepted → EP-1 启动**
 
 ---

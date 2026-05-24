@@ -3373,3 +3373,70 @@ Plan-Revision: 无（轻量级 hook）
 
 Cleanup-Audit: M-SN-8 三层审计完毕（核心序列 ✅ / 后台对齐 ✅ / 说明书内容 ✅ + 标记同步 ✅）
 Plan-Revision: 无
+
+---
+
+## [CHG-SN-9-DT-HEADER-REDESIGN-ADR] DataTable 表格头入口重设计 — ADR-149 起草 + ADR-103 第 5 次 AMENDMENT
+
+- **完成时间**：2026-05-23
+- **记录时间**：2026-05-23
+- **执行模型**：claude-opus-4-7（主循环）
+- **子代理**：arch-reviewer (claude-opus-4-7) — 独立评审 + ADR-149 草案撰写（评级 **A− CONDITIONAL PASS** / 9 修订建议 R-149-1..9 全消解）
+- **关联 SEQ**：SEQ-20260524-01「M-SN-9 启动 — 用户复核反馈逐项修复」第 1 序列任务 #1
+- **关联 GAPS**：`docs/audit/user-review-2026-05-23.md` #UR-B1 / #UR-B2 / #UR-B3 / #UR-B4（M-SN-8 用户复核 4 处表头痛点）
+- **背景**：M-SN-8 主体声明完结（commit `991ab99b`）后，用户实测 server-next 发现表格头 4 处入口散落（filter chips / 已隐藏 N 列 chip / 列内 popover / column.renderFilterChip）+ 中文 IME 未处理 + 列覆盖不全。本卡为 M-SN-9 第 1 卡，统一表头入口设计。
+- **修改文件**：
+  - `docs/decisions.md` — 追加 ADR-149 正式文本（294 行 / D-149-1..12 决策 + 5 EP 拆分 + 60-80 测试 surface + 8 N1 follow-up + 7 风险表）；ADR-103 第 5 次 AMENDMENT 引用（line 3338 前）
+  - `docs/audit/datatable-header-redesign-plan.md` — 新建方案文件（433 行 / v1 → v2 用户审核 11/11 决策点 → v3 arch-reviewer R-149-1..9 消解）
+  - `docs/audit/user-review-2026-05-23.md` — 新建（15+ 项用户复核反馈登记 / M-SN-8 主体完结声明撤回标记 / 处理流程修订）
+  - `docs/tasks.md` — ADR 起草卡 → EP-1 卡切换
+  - `docs/task-queue.md` — 新建 SEQ-20260524-01 容器 + 第 1 卡 ✅ + EP-1 启动登记
+- **新增依赖**：无
+- **数据库变更**：无
+- **新增端点**：无（零 R-MID-1 / 零 endpoint-adr 影响）
+- **关键决策（D-149-1..12）**：
+  - D-149-1：表格头 4 处入口废除（filter chips / 已隐藏 N 列 chip / 列内 popover / renderFilterChip）
+  - D-149-2：统一矩阵 popover 引入 / 位置 toolbar 右端（默认 `headerMenuTriggerPosition='toolbar-right'`）
+  - D-149-3：列名右侧 ⋯ 列级三点 / 默认 `auto`（5 条件 OR 判定）/ onClick stopPropagation
+  - D-149-4：点列名 toggle asc/desc **互斥**（不可回 none / 业界 Excel/Notion/Linear 范式）
+  - D-149-5：矩阵 popover 语义 = 状态指示 + 批量清除（不直接编辑过滤值 / 改值走列名 ⋯）
+  - D-149-6：过滤格 = switch + 摘要文本 + 溢出处理（max-width 200px + ellipsis + tooltip + 多值折叠）
+  - D-149-7：排序格 = ↑↓× 互斥单列（radiogroup + 3 radio）
+  - D-149-8：DataTableSearchInput IME composition + debounce 300ms + Enter 立即（纳入本 ADR / 闭合 #UR-B3）
+  - D-149-9：EP 拆 5 段（含 deprecate 中间态保 typecheck）
+  - D-149-10：API 契约删 4（`enableHeaderMenu` / `hideHiddenColumnsChip` / `hideFilterChips` / `renderFilterChip`） + 新增 3（`columnTriggerVisibility` / `headerMenuTriggerPosition` / `ColumnMenuConfig.filterSummary`）
+  - D-149-11：trailing 槽位职责约定 = 允许 read-only 摘要 chip（VideoListClient FilterChipBar 保留）+ 不允许编辑型 filter UI
+  - D-149-12：矩阵 popover a11y 强制约束（ARIA roles + 5 键盘语义 + 焦点回流 + disabled aria-label）
+- **arch-reviewer 关键发现（事实校正）**：
+  - 消费方 Grep 实测：`enableHeaderMenu` 9 处（方案估 3-5）/ `hideFilterChips` 8 处（估 0-1）/ `renderFilterChip` 0 处（估 1-2）/ VideoListClient `FilterChipBar` 外置（方案完全遗漏）
+  - EP 序列循环依赖：直接删 prop 会破 typecheck → 改 deprecate 中间态 → 4 段 → **5 段**
+  - 总工时：1.8w → **~2.5w**（EP-4 拆 A/B/C）
+  - 测试 surface：~50 → **60-80**（含 a11y + 键盘 + 多值折叠 4 种 + 摘要溢出）
+- **N1 follow-up**（8 个 / 独立卡评估）：
+  - N1-149-1：多列排序（query.sort 升级数组 + 优先级指示 / 独立 ADR）
+  - N1-149-2：列设置 DB 持久化（user_table_preferences 表 / 与 ADR-144 协同）
+  - N1-149-3：矩阵 popover 列数 > 20 虚拟化
+  - N1-149-4：video filter key namespace 与 column.id 对齐迁移（消除 FilterChipBar 外置补丁）
+  - N1-149-5：admin smoke e2e 覆盖矩阵 + 列级 ⋯ + IME search
+  - N1-149-6：filterSummary 类型升 ReactNode（富文本支持）
+  - N1-149-7：列宽 resize（reference.md §4.4 未完整实装）
+  - N1-149-8：column-matrix-menu 改 sidebar drawer 探索
+- **后续 EP**（5 段渐进 / typecheck 不破裂）：
+  - **EP-1 进行中**：types.ts deprecate + column-matrix-menu.tsx + dt-styles 矩阵样式 + 35 单测（~0.6w）
+  - EP-2：header-menu anchor 切换 + 列名 toggle 排序 + ⋯ stopPropagation + 10 单测（~0.5w）
+  - EP-3：删 hidden-columns-menu / filter-chips / filter-chip 三文件（535 行）+ 10 单测（~0.3w）
+  - EP-4-A：DataTableSearchInput IME + 5 高优消费方接入 + 12 单测（~0.4w）
+  - EP-4-B：剩余 8+ 消费方删 deprecated prop + 类型完全删除（~0.4w）
+  - EP-4-C：@livefree 走读 5 代表页（videos / sources / moderation / submissions / users）+ #UR-B1/B2/B3/B4 闭合验证（~0.3w）
+- **注意事项**：
+  - **M-SN-9 工程流程修订（#UR-M03）**：ADR-149 强制"@livefree 用户走读 ≥ 1 次 + dev server 实测"为 EP-4-C 硬前置，CHG-SN-9-DT-HEADER-* 全 EP 完成才闭合；本 ADR 起草卡可独立 commit
+  - EP-1 完成后用户不可见任何变化（矩阵 popover 此时未挂触发器）；用户体感闭合需 EP-2/3/4 全部完成
+  - 五段 EP 任一中间态 typecheck/lint/test 必须 PASS（CLAUDE.md "测试未通过不得 commit"）
+- **价值**：
+  - **闭合 #UR-B1/B2/B3/B4 设计依据**：方案 → ADR → 5 EP 完整路径已铺通
+  - **M-SN-8 教训消化**："✅ 必须经过用户走读 ≥ 1 次"工程流程修订首次落地（ADR-149 §7 + EP-4-C 硬前置）
+  - **共享组件契约稳定性**：ADR-103 第 5 次 AMENDMENT 范式延续 / 兼容历史 4 次 AMENDMENT
+  - **arch-reviewer Opus 评审机制实证**：CLAUDE.md §模型路由 #1+#3 强制执行 / 9 条修订建议在 ADR 内消解 / 不形式化跳过
+
+Cleanup-Audit: ADR 起草 ✅ / @livefree 人工审核 PASS / EP-1 启动登记
+Plan-Revision: 1 次（arch-reviewer v2 → v3 / 9 修订消解）
