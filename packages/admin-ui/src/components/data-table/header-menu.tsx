@@ -216,6 +216,8 @@ export function HeaderMenu({
   const showSepBeforeHide = (sortable || showFilterSection) && hideable
 
   // ADR-150 阶段 2 / EP-1 Step 4：autoFilterContent 提供时整段替换三段松散结构
+  // sub 1 HOTFIX（2026-05-24）：PANEL_STYLE minWidth/maxWidth (180/260) 与 autofilter inner
+  // 期望 width:320 冲突 → 必须覆盖为 auto/none 让内层 [data-autofilter-popover] CSS 自管尺寸。
   if (autoFilterContent) {
     return createPortal(
       <div
@@ -223,7 +225,14 @@ export function HeaderMenu({
         role="menu"
         aria-label="列操作"
         tabIndex={-1}
-        style={{ ...PANEL_STYLE, top: pos.top, left: pos.left, padding: 0 }}
+        style={{
+          ...PANEL_STYLE,
+          top: pos.top,
+          left: pos.left,
+          padding: 0,
+          minWidth: 'auto',
+          maxWidth: 'none',
+        }}
         onKeyDown={handleKeyDown}
         data-header-menu
         data-autofilter="true"

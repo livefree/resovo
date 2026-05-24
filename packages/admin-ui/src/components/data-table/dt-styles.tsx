@@ -500,26 +500,31 @@ const DT_CSS = `
   [data-column-matrix-menu] [role="switch"] { transition: none; }
 }
 
-/* ADR-150 阶段 2 / DataTableAutoFilter Google Sheets 三段布局 */
+/* ADR-150 阶段 2 / DataTableAutoFilter Google Sheets 简化布局
+ * sub 1 HOTFIX 2026-05-24（@livefree 走读 6 类反馈）：
+ *   - popover 固定 width:320 / max-height:480（去 min/max 区间 + 收窄上限）
+ *   - section padding 8/12 → 10/14（更宽松）+ gap 4 → 6
+ *   - section-divider 颜色 --border-subtle → --border-default（视觉根区分更强）
+ *   - value-list max-height 280 → 240（弹窗不过大 / 多项时滚动条可见）
+ *   - actions 区按钮 padding 6/14 → 6/12（防溢出）
+ *   - 删除 [data-kind-radio]* 全部规则（kind radio section 已被组件删除） */
 [data-autofilter-popover] {
   width: 320px;
-  min-width: 280px;
-  max-width: 360px;
-  max-height: min(560px, calc(100vh - 80px));
+  max-height: 480px;
   display: flex;
   flex-direction: column;
   font-size: 13px;
   color: var(--fg-default);
 }
 [data-autofilter-popover] [data-section] {
-  padding: 8px 12px;
+  padding: 10px 14px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
 }
 [data-autofilter-popover] [data-section-divider] {
   height: 1px;
-  background: var(--border-subtle);
+  background: var(--border-default);
   margin: 0;
 }
 [data-autofilter-popover] [data-section="sort"] button,
@@ -535,8 +540,9 @@ const DT_CSS = `
   border-radius: 4px;
   text-align: left;
   font-size: 13px;
+  font-family: inherit;
 }
-[data-autofilter-popover] [data-section="sort"] button:hover,
+[data-autofilter-popover] [data-section="sort"] button:hover:not(:disabled),
 [data-autofilter-popover] [data-section="hide"] button:hover {
   background: var(--bg-surface-row);
 }
@@ -544,18 +550,11 @@ const DT_CSS = `
   background: var(--admin-accent-soft);
   color: var(--admin-accent-on-soft);
 }
-[data-autofilter-popover] [data-kind-radio] {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 6px;
-}
-[data-autofilter-popover] [data-kind-radio][aria-disabled="true"] {
-  opacity: 0.4;
+[data-autofilter-popover] [data-section="sort"] button:disabled,
+[data-autofilter-popover] [data-section="sort"] button[aria-disabled="true"] {
+  opacity: 0.45;
   cursor: not-allowed;
-}
-[data-autofilter-popover] [data-kind-radio][aria-disabled="true"] label {
-  cursor: not-allowed;
+  color: var(--fg-muted);
 }
 [data-autofilter-popover] [data-section="value"] {
   flex: 1 1 auto;
@@ -569,6 +568,7 @@ const DT_CSS = `
   font-size: 12px;
   background: var(--bg-surface);
   color: var(--fg-default);
+  font-family: inherit;
 }
 [data-autofilter-popover] [data-actions-row] {
   display: flex;
@@ -583,6 +583,7 @@ const DT_CSS = `
   border-radius: 3px;
   color: var(--fg-muted);
   cursor: pointer;
+  font-family: inherit;
 }
 [data-autofilter-popover] [data-status] {
   font-size: 11px;
@@ -596,7 +597,7 @@ const DT_CSS = `
   list-style: none;
   margin: 0;
   padding: 0;
-  max-height: 280px;
+  max-height: 240px;
   overflow-y: auto;
   border: 1px solid var(--border-subtle);
   border-radius: 4px;
@@ -632,6 +633,7 @@ const DT_CSS = `
   background: var(--bg-surface);
   color: var(--fg-default);
   font-size: 13px;
+  font-family: inherit;
 }
 [data-autofilter-popover] [data-number-range],
 [data-autofilter-popover] [data-date-range] {
@@ -649,26 +651,30 @@ const DT_CSS = `
   font-size: 12px;
   background: var(--bg-surface);
   color: var(--fg-default);
+  font-family: inherit;
 }
 [data-autofilter-popover] [data-actions] {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 12px;
-  border-top: 1px solid var(--border-subtle);
+  padding: 10px 14px;
+  border-top: 1px solid var(--border-default);
   background: var(--bg-surface);
+  flex-shrink: 0;
 }
 [data-autofilter-popover] [data-actions] [data-actions-spacer] {
   flex: 1 1 auto;
 }
 [data-autofilter-popover] [data-actions] button {
-  padding: 6px 14px;
+  padding: 6px 12px;
   border: 1px solid var(--border-default);
   border-radius: 4px;
   background: var(--bg-surface);
   color: var(--fg-default);
   cursor: pointer;
   font-size: 12px;
+  font-family: inherit;
+  flex-shrink: 0;
 }
 [data-autofilter-popover] [data-actions] button[data-primary="true"] {
   background: var(--admin-accent-soft);

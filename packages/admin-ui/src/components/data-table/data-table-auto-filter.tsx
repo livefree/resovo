@@ -4,12 +4,16 @@
  * 列固有自动过滤 Google Sheets 范式三段 popover 内容组件。
  * 由 header-menu.tsx 提供 popover 容器（createPortal + 定位）+ 本组件渲染内容。
  *
- * 三段布局（Opus 子代理设计 §4）：
- *   段 1：排序（升序 / 降序 / 清除）— enableSorting 门控 / 立即提交不关 popover
- *   段 2：过滤方式（按值 v1 / 按条件 v2 灰化 / 按颜色 v3 灰化）
- *   段 3：值列表 —— 按 filterKind 渲染 4 种控件（enum / text / number / date）
- *   段 4：隐藏此列（onHide 缺省不渲染）
+ * 三段布局（sub 1 HOTFIX 2026-05-24 简化 §4）：
+ *   段 1：排序（升序 / 降序 / 清除）— **始终渲染**；enableSorting !== true 时按钮 disabled + title
+ *   段 2：值列表 —— 按 filterKind 渲染 4 种控件（enum / text / number / date）
+ *   段 3：隐藏此列（onHide 缺省不渲染）
  *   按钮区：取消 / 应用 OK
+ *
+ * sub 1 HOTFIX 变更：
+ *   - 删除原"过滤方式 kind radio 3 选"段（按值/按条件 v2 灰/按颜色 v3 灰）：
+ *     v2/v3 灰化项徒增噪音；只有"按值过滤"可用，radio 形态对用户无意义。
+ *   - 排序段去 sortable 门控：始终渲染，enableSorting !== true 时按钮 disabled + tooltip。
  *
  * 关键约束：
  *   - column.filterable 必须为 true（FilterableColumn<T> narrow）
@@ -74,61 +78,55 @@ export function DataTableAutoFilter<T>(props: DataTableAutoFilterProps<T>): Reac
   const handleApply = useCallback(() => onApply(pending), [pending, onApply])
   const handleClear = useCallback(() => { setPending(undefined); onApply(undefined) }, [onApply])
 
+  // sub 1 HOTFIX：排序段始终渲染，enableSorting !== true 时按钮 disabled + tooltip
+  const sortDisabledTitle = sortable ? undefined : '本列不支持排序'
+
   return (
     <div data-autofilter-popover data-testid={testId} role="menu" aria-label={`列操作 - ${typeof column.header === 'string' ? column.header : column.id}`}>
-      {sortable && (
-        <div data-section="sort">
+      <div data-section="sort">
+        <button
+          type="button"
+          role="menuitemradio"
+          aria-checked={isSortedAsc}
+          aria-disabled={!sortable}
+          disabled={!sortable}
+          title={sortDisabledTitle}
+          data-active={isSortedAsc ? 'true' : undefined}
+          data-testid={`${testId}-sort-asc`}
+          onClick={() => onSort(column.id, 'asc')}
+        >
+          <span aria-hidden="true">↑</span>
+          <span>A → Z（升序）</span>
+        </button>
+        <button
+          type="button"
+          role="menuitemradio"
+          aria-checked={isSortedDesc}
+          aria-disabled={!sortable}
+          disabled={!sortable}
+          title={sortDisabledTitle}
+          data-active={isSortedDesc ? 'true' : undefined}
+          data-testid={`${testId}-sort-desc`}
+          onClick={() => onSort(column.id, 'desc')}
+        >
+          <span aria-hidden="true">↓</span>
+          <span>Z → A（降序）</span>
+        </button>
+        {sortable && isSorted && (
           <button
             type="button"
-            role="menuitemradio"
-            aria-checked={isSortedAsc}
-            data-active={isSortedAsc ? 'true' : undefined}
-            data-testid={`${testId}-sort-asc`}
-            onClick={() => onSort(column.id, 'asc')}
+            role="menuitem"
+            data-testid={`${testId}-sort-clear`}
+            onClick={onClearSort}
           >
-            <span aria-hidden="true">↑</span>
-            <span>A → Z（升序）</span>
+            <span aria-hidden="true">×</span>
+            <span>清除排序</span>
           </button>
-          <button
-            type="button"
-            role="menuitemradio"
-            aria-checked={isSortedDesc}
-            data-active={isSortedDesc ? 'true' : undefined}
-            data-testid={`${testId}-sort-desc`}
-            onClick={() => onSort(column.id, 'desc')}
-          >
-            <span aria-hidden="true">↓</span>
-            <span>Z → A（降序）</span>
-          </button>
-          {isSorted && (
-            <button
-              type="button"
-              role="menuitem"
-              data-testid={`${testId}-sort-clear`}
-              onClick={onClearSort}
-            >
-              <span aria-hidden="true">×</span>
-              <span>清除排序</span>
-            </button>
-          )}
-        </div>
-      )}
-      {sortable && <div data-section-divider />}
-      <div data-section="kind">
-        <div data-kind-radio data-active="true">
-          <input type="radio" checked readOnly id={`${testId}-kind-value`} />
-          <label htmlFor={`${testId}-kind-value`}>按值过滤</label>
-        </div>
-        <div data-kind-radio aria-disabled="true" title="v2 即将上线">
-          <input type="radio" disabled id={`${testId}-kind-cond`} />
-          <label htmlFor={`${testId}-kind-cond`}>按条件过滤</label>
-        </div>
-        <div data-kind-radio aria-disabled="true" title="v3 即将上线">
-          <input type="radio" disabled id={`${testId}-kind-color`} />
-          <label htmlFor={`${testId}-kind-color`}>按颜色过滤</label>
-        </div>
+        )}
       </div>
       <div data-section-divider />
+      {/* sub 1 HOTFIX：删除原 "data-section=kind" 三 radio（按值/按条件/按颜色）；
+       *  只有"按值过滤"可用，radio + v2/v3 灰化语义不清；直接显示值列表更清晰。 */}
       <div data-section="value">
         {filterKind === 'enum' && (
           <EnumValueList

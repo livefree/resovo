@@ -75,17 +75,26 @@ describe('DataTableAutoFilter (ADR-150 阶段 2)', () => {
     expect(screen.getByTestId('dt-autofilter-name-sort-desc')).toBeTruthy()
   })
 
-  it('#2 enableSorting=false → 段 1 不渲染', () => {
+  // sub 1 HOTFIX（2026-05-24）：排序段始终渲染；enableSorting !== true 时按钮 disabled + tooltip
+  it('#2 enableSorting=false → 段 1 渲染但按钮 disabled + tooltip', () => {
     render(<DataTableAutoFilter column={enumCol({ enableSorting: false })} {...baseProps} />)
-    expect(screen.queryByTestId('dt-autofilter-name-sort-asc')).toBeNull()
+    const asc = screen.getByTestId('dt-autofilter-name-sort-asc') as HTMLButtonElement
+    const desc = screen.getByTestId('dt-autofilter-name-sort-desc') as HTMLButtonElement
+    expect(asc).toBeTruthy()
+    expect(desc).toBeTruthy()
+    expect(asc.disabled).toBe(true)
+    expect(desc.disabled).toBe(true)
+    expect(asc.getAttribute('title')).toBe('本列不支持排序')
+    expect(desc.getAttribute('title')).toBe('本列不支持排序')
+    expect(asc.getAttribute('aria-disabled')).toBe('true')
   })
 
-  it('#3 段 2 过滤方式 radio 渲染（按值 active / 按条件按颜色 disabled）', () => {
+  // sub 1 HOTFIX（2026-05-24）：kind radio section 已删除（v2/v3 灰化噪音 + 只有按值可用）
+  it('#3 过滤方式 kind radio section 已删除', () => {
     render(<DataTableAutoFilter column={enumCol()} {...baseProps} />)
-    const condDiv = screen.getByText('按条件过滤').parentElement
-    expect(condDiv?.getAttribute('aria-disabled')).toBe('true')
-    const colorDiv = screen.getByText('按颜色过滤').parentElement
-    expect(colorDiv?.getAttribute('aria-disabled')).toBe('true')
+    expect(screen.queryByText('按条件过滤')).toBeNull()
+    expect(screen.queryByText('按颜色过滤')).toBeNull()
+    expect(screen.queryByText('按值过滤')).toBeNull()
   })
 
   it('#4 onHide 缺省 → 段 4 不渲染 / 提供 → 渲染', () => {
