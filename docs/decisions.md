@@ -12665,7 +12665,14 @@ export function resetColumnVisibility(
 
 ## ADR-150 — DataTable 列固有自动过滤（Google Sheets 范式 / ADR-149 第 3 次 AMENDMENT 候选）
 
-**状态**：🟡 **Proposed**（待 @livefree 人工审核）
+**状态**：🟢 **Accepted**（2026-05-24 @livefree 仲裁通过）
+
+**@livefree 仲裁记录（2026-05-24）**：
+1. **ADR-150 整体**：PASS / status 翻 Accepted
+2. **D-150-5 仲裁**：接受 Opus REVISED 默认 `filterable=false` + union 类型守卫 + filterable: true → filterFieldName 必填（反 M-SN-8 假装实现陷阱 / 主循环原推荐 default true 被否）
+3. **阶段 4 节奏仲裁**：严格串行 7 子卡（沿用 ADR-149 AMENDMENT 1 R-AMEND-1-5 / 每子卡独立 typecheck + dev server 走读 / 防跨子卡冲突 / 工时保持 2.1w）
+
+**原 Proposed 状态**：🟡 待 @livefree 人工审核
 **日期**：2026-05-24
 **作者**：arch-reviewer (claude-opus-4-7) — 评级 **A− CONDITIONAL PASS**（6 个决策点逐一论证，D-150-3 / D-150-5 已 REVISED）
 **起草模型**：claude-opus-4-7（主循环推荐方案）+ claude-opus-4-7（arch-reviewer 子代理评审）
