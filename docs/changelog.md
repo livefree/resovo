@@ -3852,3 +3852,85 @@ Plan-Revision: 1 次（半 uncontrolled 模式 / 内部 DOM 自管 value + manua
 
 Cleanup-Audit: ADR-149 AMENDMENT 2 ✅ / arch-reviewer B+ → A− PASS / 10 修订消解含 2 BLOCKER / EP-1..4 + HOTFIX 零回退 / 等用户审核启动 EP-4.5
 Plan-Revision: 1 次（onClearAllFilters 业务 key 桥接 + 合并式 resetColumnVisibility 两 BLOCKER 修订防 M-SN-8 复刻）
+
+---
+
+## [CHG-SN-9-DT-HEADER-REDESIGN-EP-4.5] 矩阵触发器接入 DataTable 主组件 toolbar（8 段序列第 4.5 段 / D-149-16 落地）
+
+- **完成时间**：2026-05-24
+- **记录时间**：2026-05-24
+- **执行模型**：claude-opus-4-7（主循环）
+- **子代理**：无（D-149-16 决策已在 AMENDMENT 2 完成）
+- **关联 ADR**：ADR-149 D-149-16（9 子段全部落实 / 2 BLOCKER 修订显式防御）+ AMENDMENT 2
+- **关联 SEQ**：SEQ-20260524-01 第 1 序列任务 #1 第 EP-4.5 子卡
+- **依赖**：AMENDMENT 2 ✅ commit `abdf5056`
+- **修改文件**：
+  - `packages/admin-ui/src/components/data-table/column-visibility.ts` — 新增 2 工具函数：
+    - `clearAllColumnFilters` — **BLOCKER R-AMEND-2-3**：遍历 columns 优先调 `columnMenu.onClearFilter`（业务 key 桥接 / 防 M-SN-8 假装实现），fallback 清空 query.filters
+    - `resetColumnVisibility` — **R-AMEND-2-4**：合并式 reset 保留 width（不丢消费方手工调整）
+  - `packages/admin-ui/src/components/data-table/dt-styles.tsx` — 新增 `[data-table-matrix-trigger]` 独立样式块（**R-AMEND-2-2** opacity:1 恒显 / **禁止复用** `[data-th-menu-icon]` 否则隐身）+ `[data-table-matrix-trigger-thead-slot]` 占位（thead-right N1 用）
+  - `packages/admin-ui/src/components/data-table/data-table.tsx` — 矩阵触发器接入：
+    - props 解构新增 `headerMenuTriggerPosition`（默认 'toolbar-right'）
+    - import column-visibility 2 工具 + ColumnMatrixMenu
+    - 新增 state `[matrixOpen, setMatrixOpen]` + ref `matrixAnchorRef`
+    - 新增 `columnMenus` useMemo（columns → Map）
+    - 新增 6 callback wiring（onColumnsChange / onClearColumnFilter / onSort 复用 / onClearSort 复用 / onClearAllFilters / onResetColumnVisibility / onClose）
+    - toolbar 渲染条件改为 `toolbar?.hidden !== true`（**R-AMEND-2-1** 永驻渲染 / 即使三槽位全空）
+    - toolbar 右端 ⋯ button（默认 'toolbar-right' / aria-haspopup="dialog" + aria-expanded 双向 / data-active 同步 matrixOpen）
+    - ColumnMatrixMenu portal 挂载（无 confirm / **R-AMEND-2-5**）
+  - `packages/admin-ui/src/components/data-table/data-table.tsx` types import 新增 `ColumnPreference`
+  - `tests/unit/components/admin-ui/table/step-ep4-5-matrix-trigger.test.tsx` — **新建 17 单测**（超过 14-16 目标 / 6 段分组）
+  - `tests/unit/components/admin-ui/table/toolbar-internal.test.tsx` — 13 旧测试更新反映新行为（toolbar 永驻渲染 / 矩阵触发器始终存在）
+  - `tests/unit/components/admin-ui/table/step-ep3-removal.test.tsx` — 1 旧测试更新（toolbar 永驻 + 矩阵触发器）
+- **新增依赖**：无
+- **数据库变更**：无
+- **新增端点**：无
+- **17 EP-4.5 单测覆盖维度**（6 段）：
+  - 触发器渲染 5 用例：默认位置 / ARIA / R-AMEND-2-1 永驻渲染 / R-AMEND-2-2 视觉与列级 ⋯ 独立 data attribute / toolbar.hidden=true 不渲染（thead-right 推 N1）
+  - 触发器点击 + popover 联动 2 用例：打开 + data-active=true / 再次点击关闭
+  - matrix popover wiring 3 用例：可见性 toggle 联动 query.columns / 排序联动 query.sort / 过滤 toggle 关闭联动 query.filters
+  - **BLOCKER R-AMEND-2-3 业务 key 桥接** 2 用例：优先调 columnMenu.onClearFilter（防 M-SN-8 假装）/ 同时清 column.id 命名空间
+  - **R-AMEND-2-4 不丢 column width** 1 用例：reset 保留 width 字段 + visible 回 defaultVisible
+  - column-visibility.ts 工具 4 用例：clearAllColumnFilters 业务 key 优先 / 空 filters Map 不调 onPatch / resetColumnVisibility 保留 width / colMap 空时正确生成
+- **关键修订执行**（落实 AMENDMENT 2 R-AMEND-2-1..10）：
+  - ✅ R-AMEND-2-1 触发器始终渲染（toolbar 容器永驻 / hasToolbarContent 守卫废除）
+  - ✅ R-AMEND-2-2 独立 `[data-table-matrix-trigger]` 样式块（opacity:1 恒显）
+  - ✅ **BLOCKER R-AMEND-2-3** clearAllColumnFilters 业务 key 桥接（columnMenu.onClearFilter 优先）
+  - ✅ R-AMEND-2-4 resetColumnVisibility 合并式 reset 保留 width
+  - ✅ R-AMEND-2-5 无 confirm（点击批量按钮即时生效）
+  - ⏳ R-AMEND-2-6 thead-right fallback：**推 N1-149-11**（grep 实测 0 消费方使用 toolbar.hidden=true，无需阻塞 EP-4.5）
+  - ✅ R-AMEND-2-7 工时 0.3w（实际接近）
+  - ✅ R-AMEND-2-8 测试 surface 17 新（超过 14-16 目标）
+  - ✅ R-AMEND-2-9 兼容性矩阵（types.ts 不改 / 不触发 ADR-103 第 6 次 AMENDMENT）
+  - ✅ R-AMEND-2-10 M-SN-8 假装实现防御（业务 key 桥接 + 不丢 width 双 BLOCKER 落实）
+- **质量门禁**：
+  - ✅ `npm run typecheck`（全 8 workspace PASS / EP-1 types.ts headerMenuTriggerPosition prop 仅消费 / 零类型变更）
+  - ✅ `npm run lint`（5/5 FULL TURBO cached）
+  - ✅ admin-ui/table 344 测试全 PASS（含 EP-1 39 + EP-2 12 + EP-3 11 + EP-4 13 + EP-4-HOTFIX 5 + **EP-4.5 17** + 旧保留 247）
+  - ✅ `npm run verify:adr-contracts`（style-shorthand-conflict 0 / D-N 166 闭环）
+  - ⚠️ 全 unit 4772/4773 PASS（1 pre-existing flaky StagingTable.test.tsx 单跑 13/13 PASS / 与 EP-4.5 无关）
+- **EP-1/2/3/4 + EP-4-HOTFIX 已 commit 代码兼容性**：**零回退 / 零代码逻辑改动**
+- **不触发 ADR-103 第 6 次 AMENDMENT**：仅消费已声明 headerMenuTriggerPosition prop / 非新增公开 API
+- **关键设计点**（落实 D-149-16）：
+  - 业务 key 桥接合约延续（D-149-15 → D-149-16 R-AMEND-2-3）：VideoListClient 等业务 filter UI 仍能被矩阵 popover "清除全部过滤" 真清
+  - 合并式 reset（R-AMEND-2-4）：消费方手工 column width 完整保留
+  - 独立 data attribute（R-AMEND-2-2）：`[data-table-matrix-trigger]` vs `[data-th-menu-icon]` 视觉与选择器完全隔离
+  - toolbar 永驻渲染（R-AMEND-2-1）：用户无论 toolbar 配置如何都能访问矩阵 popover
+- **N1 follow-up 调整**：
+  - **N1-149-11**：thead-right fallback 实装（toolbar.hidden=true 时矩阵触发器渲染规则 / 当前 0 消费方使用 / 真实需求触发再做）
+- **注意事项**：
+  - EP-4.5 完成后用户**实际可见**矩阵触发器（toolbar 右端 ⋯）：可点击打开 popover → 看全列状态矩阵 / toggle 可见性 / 改排序 / 清除过滤
+  - 业务 key 桥接消费方（VideoListClient 等）将在 EP-5-videos 接入 columnMenu.onClearFilter 后 "清除全部过滤" 真生效
+  - thead-right fallback 推 N1：toolbar.hidden=true 消费方目前 0 个，无需阻塞 EP-4.5；若未来出现该消费方再单独实装（grid template 追加 cell）
+- **价值**：
+  - **D-149-16 落地**：ADR-149 实施 GAP 第 3 轮闭合（与 D-149-10/11 / D-149-13 / D-149-15 同类 GAP 系统化清理）
+  - **矩阵原语首次被消费方访问到**：EP-1 column-matrix-menu.tsx (471 行) 终于挂上触发器，用户能用
+  - **业务 key 桥接合约第 3 次落地**（D-149-15 → D-149-16）：onClearAllFilters 真生效，不"假装清除"
+  - **工具函数沉淀**：column-visibility.ts 新增 clearAllColumnFilters / resetColumnVisibility 可被未来 saved views reset / 其它批量操作复用
+  - **M-SN-8 教训第 3 次防御**：两 BLOCKER 修订（业务 key 桥接 + 不丢 width）在测试层显式断言
+- **后续**：
+  - 用户 dev server 走读 /admin/crawler + /admin/sources 等 → 看 toolbar 右端 ⋯ → 点开矩阵 popover → 测可见性 toggle / 排序 / 清除全部
+  - 通过 → 启动 EP-5-shared（DataTableEnumFilter + TextFilter + DateRangeFilter 共享原语 + 50 单测 / ~0.3w）
+
+Cleanup-Audit: EP-4.5 矩阵触发器接入 ✅ / 17 新单测 + 13 旧更新 + 2 工具函数沉淀 + dt-styles 样式 / 全 4772 unit 1 flaky / 4 质量门禁全过 / 用户 dev server 走读后启动 EP-5-shared
+Plan-Revision: 1 次（thead-right fallback 推 N1-149-11 / 0 消费方使用 toolbar.hidden=true 无需阻塞 EP-4.5）

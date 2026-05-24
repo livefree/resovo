@@ -41,20 +41,22 @@ const baseProps = {
   onQueryChange: () => {},
 }
 
-describe('DataTable — 内置 toolbar 渲染门控', () => {
-  it('toolbar 缺省 → 不渲染 toolbar 容器', () => {
+describe('DataTable — 内置 toolbar 渲染门控（ADR-149 EP-4.5 R-AMEND-2-1：toolbar 永驻渲染承载矩阵触发器）', () => {
+  it('toolbar 缺省 → 仍渲染（承载矩阵触发器 / D-149-16 §(2)）', () => {
     render(<DataTable<Row> {...baseProps} />)
-    expect(document.querySelector('[data-table-toolbar]')).toBeNull()
+    expect(document.querySelector('[data-table-toolbar]')).toBeTruthy()
+    expect(document.querySelector('[data-table-matrix-trigger]')).toBeTruthy()
   })
 
-  it('toolbar={{ hidden: true }} → 不渲染', () => {
+  it('toolbar={{ hidden: true }} → 不渲染（矩阵触发器 fallback thead-right）', () => {
     render(<DataTable<Row> {...baseProps} toolbar={{ hidden: true, search: <input /> }} />)
     expect(document.querySelector('[data-table-toolbar]')).toBeNull()
   })
 
-  it('toolbar 配置全空（无 search/trailing/viewsConfig）→ 不渲染（避免空容器）', () => {
+  it('toolbar 配置全空 → 仍渲染（承载矩阵触发器）', () => {
     render(<DataTable<Row> {...baseProps} toolbar={{}} />)
-    expect(document.querySelector('[data-table-toolbar]')).toBeNull()
+    expect(document.querySelector('[data-table-toolbar]')).toBeTruthy()
+    expect(document.querySelector('[data-table-matrix-trigger]')).toBeTruthy()
   })
 
   it.each([
@@ -65,17 +67,21 @@ describe('DataTable — 内置 toolbar 渲染门控', () => {
     ['空数组', [] as React.ReactNode],
     ['全 null 数组', [null, false] as React.ReactNode],
     ['空 Set', new Set() as unknown as React.ReactNode],
-  ])('search=%s（合法但渲染为空 ReactNode）→ 不渲染 toolbar 容器', (_label, value) => {
+  ])('search=%s（合法但渲染为空 ReactNode）→ toolbar 容器仍渲染（含矩阵触发器）/ search wrapper 不渲染', (_label, value) => {
     render(<DataTable<Row> {...baseProps} toolbar={{ search: value as React.ReactNode }} />)
-    expect(document.querySelector('[data-table-toolbar]')).toBeNull()
+    expect(document.querySelector('[data-table-toolbar]')).toBeTruthy()
+    expect(document.querySelector('[data-table-toolbar-search]')).toBeNull()
+    expect(document.querySelector('[data-table-matrix-trigger]')).toBeTruthy()
   })
 
   it.each([
     ['null', null],
     ['空数组', [] as React.ReactNode],
-  ])('trailing=%s + 无 search/viewsConfig → 不渲染 toolbar 容器', (_label, value) => {
+  ])('trailing=%s + 无 search/viewsConfig → toolbar 容器仍渲染（含矩阵触发器）/ trailing wrapper 不渲染', (_label, value) => {
     render(<DataTable<Row> {...baseProps} toolbar={{ trailing: value as React.ReactNode }} />)
-    expect(document.querySelector('[data-table-toolbar]')).toBeNull()
+    expect(document.querySelector('[data-table-toolbar]')).toBeTruthy()
+    expect(document.querySelector('[data-table-toolbar-trailing]')).toBeNull()
+    expect(document.querySelector('[data-table-matrix-trigger]')).toBeTruthy()
   })
 
   it('search=null + trailing=有效内容 → 仅渲染 trailing 包裹（不渲染空 search wrapper）', () => {

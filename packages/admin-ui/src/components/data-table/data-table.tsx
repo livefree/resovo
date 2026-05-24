@@ -15,6 +15,7 @@ import type {
   FilterValue,
   TableQueryPatch,
   TableSortState,
+  ColumnPreference,
 } from './types'
 import { DTStyles } from './dt-styles'
 import { HeaderMenu } from './header-menu'
@@ -22,9 +23,9 @@ import { ViewsMenu } from './views-menu'
 import { useRenderableSlot } from './react-node-utils'
 import { PaginationFoot } from './pagination-foot'
 // ADR-149 EP-3：hidden-columns-menu / filter-chips 已废弃删除，功能整合到 column-matrix-menu
-// ADR-149 EP-3：countHiddenColumns 已不再使用（hidden-columns-chip 已删）；setColumnVisibility 保留（HeaderMenu onHide 用）
-import { setColumnVisibility } from './column-visibility'
-// ADR-149 EP-3：FilterChips 内部 slot 渲染器已删；FilterChipBar 独立组件保留（business 用）
+import { setColumnVisibility, clearAllColumnFilters, resetColumnVisibility } from './column-visibility'
+// ADR-149 EP-4.5 / D-149-16：矩阵触发器接入 DataTable 主组件
+import { ColumnMatrixMenu } from './column-matrix-menu'
 
 // ── client-mode data processing ──────────────────────────────────
 
@@ -178,6 +179,10 @@ export function DataTable<T>(props: DataTableProps<T>): React.ReactElement {
     // 列级 ⋯ 触发器由 columnTriggerVisibility 控制；EP-4-B 完全从类型中删除。
     // ADR-149 D-149-3：列级 ⋯ 触发器可见性（默认 'auto'：static + dynamic 5 条件 OR）
     columnTriggerVisibility = 'auto',
+    // ADR-149 D-149-2 / AMENDMENT 2 D-149-16：矩阵触发器位置（默认 'toolbar-right'）
+    // toolbar.hidden=true 时自动 fallback 到 'thead-right'（**当前 EP-4.5 仅实装 toolbar-right；
+    // thead-right 推 N1-149-11**：0 消费方实测使用 toolbar.hidden=true / 无需阻塞 EP-4.5）
+    headerMenuTriggerPosition = 'toolbar-right',
     toolbar,
     bulkActions,
     flashRowKeys,
@@ -214,6 +219,10 @@ export function DataTable<T>(props: DataTableProps<T>): React.ReactElement {
   const menuAnchorRef = useRef<HTMLElement | null>(null)
 
   // ADR-149 EP-3：隐藏列 chip + popover 已删除（功能迁移到 column-matrix-menu）
+
+  // ADR-149 EP-4.5 / D-149-16：矩阵触发器 popover 状态
+  const [matrixOpen, setMatrixOpen] = useState(false)
+  const matrixAnchorRef = useRef<HTMLButtonElement | null>(null)
 
   const colMap = query.columns
 
@@ -281,7 +290,50 @@ export function DataTable<T>(props: DataTableProps<T>): React.ReactElement {
   }, [colMap, onQueryChange])
 
   // ADR-149 EP-3：hiddenColumnsCount / showHiddenColumnsChip / handleHiddenColsChange 已删除
-  // 列可见性管理统一到 column-matrix-menu（EP-4-C 接入矩阵触发器后用户可见）
+  // 列可见性管理统一到 column-matrix-menu（EP-4.5 已接入矩阵触发器）
+
+  // ADR-149 EP-4.5 / D-149-16 §(4)：ColumnMatrixMenu wiring
+  // columnMenus map：从 columns 提取 columnMenu 配置（业务 key 桥接 D-149-15）
+  const columnMenus = useMemo(
+    () => new Map(columns.map((c) => [c.id, c.columnMenu ?? {}] as const)),
+    [columns],
+  )
+  const handleMatrixColumnsChange = useCallback(
+    (next: ReadonlyMap<string, ColumnPreference>) => {
+      onQueryChange({ columns: next } satisfies TableQueryPatch)
+    },
+    [onQueryChange],
+  )
+  const handleMatrixClearColumnFilter = useCallback(
+    (colId: string) => {
+      const next = new Map(query.filters)
+      next.delete(colId)
+      onQueryChange({ filters: next } satisfies TableQueryPatch)
+    },
+    [query.filters, onQueryChange],
+  )
+  // ADR-149 D-149-16 §(5) BLOCKER R-AMEND-2-3：业务 key 桥接 clearAllColumnFilters
+  // 优先调 columnMenu.onClearFilter（业务 key 自管），fallback 清空 column.id 命名空间
+  const handleMatrixClearAllFilters = useCallback(
+    () => {
+      clearAllColumnFilters(
+        columns,
+        query.filters,
+        (next) => onQueryChange({ filters: next } satisfies TableQueryPatch),
+      )
+    },
+    [columns, query.filters, onQueryChange],
+  )
+  // ADR-149 D-149-16 §(6) R-AMEND-2-4：合并式 reset 保留 width
+  const handleMatrixResetColumnVisibility = useCallback(
+    () => {
+      onQueryChange({
+        columns: resetColumnVisibility(columns, query.columns),
+      } satisfies TableQueryPatch)
+    },
+    [columns, query.columns, onQueryChange],
+  )
+  const handleMatrixClose = useCallback(() => setMatrixOpen(false), [])
   const closeHeaderMenu = useCallback(() => {
     setMenuColId(null)
     menuAnchorRef.current = null
@@ -347,11 +399,15 @@ export function DataTable<T>(props: DataTableProps<T>): React.ReactElement {
       {/* CHG-DESIGN-02 Step 2/7：自包含 CSS 注入（framed surface + flash keyframe）
         * 模块级 flag 守卫，多个 DataTable 实例只注入一次 */}
       <DTStyles />
-      {/* CHG-DESIGN-02 Step 4 + ADR-149 EP-3：内置 toolbar
-        * 槽位顺序：search → viewsMenu → trailing
-        * ADR-149 EP-3 删除：隐藏列 chip + filter chips 第二行（统一到 column-matrix-menu）
-        * toolbar.hideHiddenColumnsChip / hideFilterChips props 保留 @deprecated noop（EP-4-B 删类型） */}
-      {toolbar?.hidden !== true && hasToolbarContent && (
+      {/* CHG-DESIGN-02 Step 4 + ADR-149 EP-3/EP-4.5：内置 toolbar
+        * 槽位顺序：search → viewsMenu → trailing → 矩阵触发器
+        * ADR-149 D-149-14 三槽位职责闭合：viewsConfig + search + trailing
+        * AMENDMENT 2 D-149-16 §(1)/§(2)：矩阵触发器永远渲染 / toolbar 容器永驻
+        *   - 默认 headerMenuTriggerPosition='toolbar-right'：触发器渲染在 toolbar 内最右
+        *   - toolbar.hidden=true → 强制 fallback 到 'thead-right'（thead 最右列后）
+        * R-AMEND-2-1 修订：渲染条件改为 toolbar?.hidden !== true（不再 hasToolbarContent 守卫）
+        * toolbar.hideHiddenColumnsChip / hideFilterChips props 保留 @deprecated noop（EP-6 删类型） */}
+      {toolbar?.hidden !== true && (
         <div data-table-toolbar role="toolbar" aria-label="表格工具栏">
           {searchSlot.renderable && (
             <div data-table-toolbar-search>{searchSlot.node}</div>
@@ -361,6 +417,24 @@ export function DataTable<T>(props: DataTableProps<T>): React.ReactElement {
           )}
           {trailingSlot.renderable && (
             <div data-table-toolbar-trailing>{trailingSlot.node}</div>
+          )}
+          {/* ADR-149 D-149-16 §(3) R-AMEND-2-2：矩阵触发器（toolbar-right 默认）
+            * 独立 [data-table-matrix-trigger] data attribute + 独立样式块（opacity:1 恒显）
+            * 视觉与列级 ⋯ [data-th-menu-icon]（thead 内 opacity:0 hover 显隐）完全隔离 */}
+          {headerMenuTriggerPosition === 'toolbar-right' && (
+            <button
+              ref={matrixAnchorRef}
+              type="button"
+              data-table-matrix-trigger
+              data-active={matrixOpen ? 'true' : undefined}
+              aria-haspopup="dialog"
+              aria-expanded={matrixOpen}
+              aria-label="表格设置"
+              data-testid="matrix-trigger"
+              onClick={() => setMatrixOpen((o) => !o)}
+            >
+              ⋯
+            </button>
           )}
         </div>
       )}
@@ -574,6 +648,25 @@ export function DataTable<T>(props: DataTableProps<T>): React.ReactElement {
         onClearSort={handleHeaderMenuClearSort}
         onHide={handleHeaderMenuHide}
         onClose={closeHeaderMenu}
+      />
+      {/* ADR-149 EP-4.5 / D-149-16：矩阵 popover portal 挂载（无 confirm / 即时生效）
+        * wiring 完全对接 EP-1 ColumnMatrixMenu 14 个 props；业务 key 桥接走
+        * columnMenus map（D-149-15 / line 320-321 已实装） */}
+      <ColumnMatrixMenu
+        open={matrixOpen}
+        columns={columns}
+        columnMenus={columnMenus}
+        columnsValue={colMap}
+        currentSort={query.sort}
+        currentFilters={query.filters}
+        anchorRef={matrixAnchorRef}
+        onColumnsChange={handleMatrixColumnsChange}
+        onClearColumnFilter={handleMatrixClearColumnFilter}
+        onSort={handleHeaderMenuSort}
+        onClearSort={handleHeaderMenuClearSort}
+        onClearAllFilters={handleMatrixClearAllFilters}
+        onResetColumnVisibility={handleMatrixResetColumnVisibility}
+        onClose={handleMatrixClose}
       />
       {/* CHG-DESIGN-02 Step 7A + 7B fix#2/3：foot 在 [data-table-scroll] 之外，
         * frame 直接子层最末位，永远固定 frame 底部，不随 body 横向滚动漂移。 */}

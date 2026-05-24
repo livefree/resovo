@@ -104,6 +104,57 @@ const DT_CSS = `
  *   [data-table-filter-chips] + [data-table-filter-chip*] filter chips slot（功能迁移 column-matrix-menu 过滤格）
  *   注：FilterChip / FilterChipBar 独立业务组件样式仍在 filter-chip.tsx 内 inline，未受影响。 */
 
+/* ── ADR-149 AMENDMENT 2 D-149-16 §(3) / EP-4.5 矩阵触发器（R-AMEND-2-2 修订）─────── *
+ * 独立 [data-table-matrix-trigger] data attribute + 样式块，禁止复用 [data-th-menu-icon]
+ * （后者 opacity:0 hover 显隐 / toolbar 中将隐身）。本触发器 opacity:1 恒显。
+ *
+ * 视觉与列级 ⋯ 完全隔离（thead 用 [data-th-menu-icon] / toolbar 用本规则）。
+ * [data-active="true"] 表示矩阵 popover 已打开，accent 色高亮。 */
+[data-table-matrix-trigger] {
+  min-width: 28px;
+  height: 24px;
+  padding: 0 6px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  color: var(--fg-muted);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: var(--font-size-sm-tight);
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: color var(--duration-fast) var(--easing-ease-out),
+              background var(--duration-fast) var(--easing-ease-out),
+              border-color var(--duration-fast) var(--easing-ease-out);
+}
+[data-table-matrix-trigger]:hover {
+  color: var(--fg-default);
+  background: var(--bg-surface-row);
+  border-color: var(--border-default);
+}
+[data-table-matrix-trigger][data-active="true"] {
+  background: var(--admin-accent-soft);
+  color: var(--admin-accent-on-soft);
+  border-color: var(--admin-accent-border);
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-table-matrix-trigger] { transition: none; }
+}
+
+/* thead-right fallback 槽位（toolbar.hidden=true 时矩阵触发器渲染在 thead 末尾） */
+[data-table-matrix-trigger-thead-slot] {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--row-h-compact, 24px);
+  height: 100%;
+  padding: 0 4px;
+  flex-shrink: 0;
+}
+
 /* ── 表头行交互（CHG-UX-05d）─────── *
  * 表头是 sticky 元素 + 用户期望"文字高亮（非灰化背景）+ 三点 hover 显隐"；
  * 不归 [data-interactive="icon"] 通用类，单独维护本规则块。

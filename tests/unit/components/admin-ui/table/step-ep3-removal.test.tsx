@@ -168,7 +168,7 @@ describe('EP-3 — toolbar search / views / trailing 三槽位仍渲染', () => 
     expect(document.querySelector('[data-table-toolbar-trailing]')).toBeTruthy()
   })
 
-  it('toolbar 容器：所有槽位空时不渲染', () => {
+  it('toolbar 容器：所有槽位空时仍渲染（EP-4.5 R-AMEND-2-1 承载矩阵触发器）', () => {
     render(
       <DataTable<Row>
         rows={ROWS}
@@ -179,8 +179,9 @@ describe('EP-3 — toolbar search / views / trailing 三槽位仍渲染', () => 
         onQueryChange={() => {}}
       />,
     )
-    // 无 search / trailing / views → toolbar 不应渲染
-    expect(document.querySelector('[data-table-toolbar]')).toBeNull()
+    // EP-4.5 后 toolbar 永驻渲染（矩阵触发器位 / D-149-16 §(2)）
+    expect(document.querySelector('[data-table-toolbar]')).toBeTruthy()
+    expect(document.querySelector('[data-table-matrix-trigger]')).toBeTruthy()
   })
 })
 
