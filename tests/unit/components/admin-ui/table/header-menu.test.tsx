@@ -67,8 +67,8 @@ describe('DataTable — enableHeaderMenu=true 弹出 popover', () => {
         enableHeaderMenu
       />,
     )
-    const nameHeader = screen.getByRole('columnheader', { name: /Name/ })
-    fireEvent.click(nameHeader)
+    const menuTrigger = screen.getByTestId('th-menu-trigger-name')
+    fireEvent.click(menuTrigger)
     const menu = document.querySelector('[data-header-menu]')
     expect(menu).toBeTruthy()
     expect(screen.getByText('升序')).toBeTruthy()
@@ -89,7 +89,7 @@ describe('DataTable — enableHeaderMenu=true 弹出 popover', () => {
         enableHeaderMenu
       />,
     )
-    fireEvent.click(screen.getByRole('columnheader', { name: /Name/ }))
+    fireEvent.click(screen.getByTestId('th-menu-trigger-name'))
     fireEvent.click(screen.getByText('升序'))
     expect(onQueryChange).toHaveBeenCalledWith({ sort: { field: 'name', direction: 'asc' } })
     expect(document.querySelector('[data-header-menu]')).toBeNull()
@@ -108,7 +108,7 @@ describe('DataTable — enableHeaderMenu=true 弹出 popover', () => {
         enableHeaderMenu
       />,
     )
-    fireEvent.click(screen.getByRole('columnheader', { name: /Name/ }))
+    fireEvent.click(screen.getByTestId('th-menu-trigger-name'))
     const clearBtn = screen.getByText('清除排序')
     expect(clearBtn).toBeTruthy()
     fireEvent.click(clearBtn)
@@ -128,7 +128,7 @@ describe('DataTable — enableHeaderMenu=true 弹出 popover', () => {
         enableHeaderMenu
       />,
     )
-    fireEvent.click(screen.getByRole('columnheader', { name: /Name/ }))
+    fireEvent.click(screen.getByTestId('th-menu-trigger-name'))
     fireEvent.click(screen.getByText('隐藏此列'))
     expect(onQueryChange).toHaveBeenCalledTimes(1)
     const patch = onQueryChange.mock.calls[0]?.[0]
@@ -136,7 +136,7 @@ describe('DataTable — enableHeaderMenu=true 弹出 popover', () => {
     expect(patch?.columns?.get('name')?.visible).toBe(false)
   })
 
-  it('pinned 列不显示"隐藏此列"按钮', () => {
+  it('pinned 列不可排序/不可过滤/不可隐藏 → ⋯ trigger 不渲染（ADR-149 D-149-3 auto 减少视觉噪音）', () => {
     render(
       <DataTable<Row>
         rows={ROWS}
@@ -145,12 +145,10 @@ describe('DataTable — enableHeaderMenu=true 弹出 popover', () => {
         mode="client"
         query={makeSnapshot()}
         onQueryChange={() => {}}
-        enableHeaderMenu
       />,
     )
-    fireEvent.click(screen.getByRole('columnheader', { name: /Pinned/ }))
-    expect(document.querySelector('[data-header-menu]')).toBeTruthy()
-    expect(screen.queryByText('隐藏此列')).toBeNull()
+    // pinned 列（无 enableSorting / 无 filterContent / 不可隐藏）→ showTrigger=false
+    expect(screen.queryByTestId('th-menu-trigger-pinned')).toBeNull()
   })
 
   it('ESC 关闭 menu', () => {
@@ -165,7 +163,7 @@ describe('DataTable — enableHeaderMenu=true 弹出 popover', () => {
         enableHeaderMenu
       />,
     )
-    fireEvent.click(screen.getByRole('columnheader', { name: /Name/ }))
+    fireEvent.click(screen.getByTestId('th-menu-trigger-name'))
     expect(document.querySelector('[data-header-menu]')).toBeTruthy()
     fireEvent.keyDown(document, { key: 'Escape' })
     expect(document.querySelector('[data-header-menu]')).toBeNull()
@@ -195,7 +193,7 @@ describe('DataTable — enableHeaderMenu=true 弹出 popover', () => {
         enableHeaderMenu
       />,
     )
-    fireEvent.click(screen.getByRole('columnheader', { name: /Name/ }))
+    fireEvent.click(screen.getByTestId('th-menu-trigger-name'))
     expect(screen.getByTestId('filter-slot')).toBeTruthy()
   })
 })
@@ -222,7 +220,7 @@ describe('DataTable — HeaderMenu 遵守 ColumnMenuConfig 门控', () => {
         enableHeaderMenu
       />,
     )
-    fireEvent.click(screen.getByRole('columnheader', { name: /Name/ }))
+    fireEvent.click(screen.getByTestId('th-menu-trigger-name'))
     expect(document.querySelector('[data-header-menu]')).toBeTruthy()
     expect(screen.queryByText('升序')).toBeNull()
     expect(screen.queryByText('降序')).toBeNull()
@@ -249,7 +247,7 @@ describe('DataTable — HeaderMenu 遵守 ColumnMenuConfig 门控', () => {
         enableHeaderMenu
       />,
     )
-    fireEvent.click(screen.getByRole('columnheader', { name: /Name/ }))
+    fireEvent.click(screen.getByTestId('th-menu-trigger-name'))
     expect(document.querySelector('[data-header-menu]')).toBeTruthy()
     expect(screen.queryByText('隐藏此列')).toBeNull()
   })
@@ -275,7 +273,7 @@ describe('DataTable — HeaderMenu 遵守 ColumnMenuConfig 门控', () => {
         enableHeaderMenu
       />,
     )
-    fireEvent.click(screen.getByRole('columnheader', { name: /Name/ }))
+    fireEvent.click(screen.getByTestId('th-menu-trigger-name'))
     expect(document.querySelector('[data-header-menu-filter-active]')).toBeTruthy()
   })
 
@@ -301,7 +299,7 @@ describe('DataTable — HeaderMenu 遵守 ColumnMenuConfig 门控', () => {
         enableHeaderMenu
       />,
     )
-    fireEvent.click(screen.getByRole('columnheader', { name: /Name/ }))
+    fireEvent.click(screen.getByTestId('th-menu-trigger-name'))
     const clearBtn = screen.getByText('清除过滤')
     expect(clearBtn).toBeTruthy()
     fireEvent.click(clearBtn)
@@ -341,7 +339,7 @@ describe('DataTable — HeaderMenu 遵守 ColumnMenuConfig 门控', () => {
         enableHeaderMenu
       />,
     )
-    fireEvent.click(screen.getByRole('columnheader', { name: /Name/ }))
+    fireEvent.click(screen.getByTestId('th-menu-trigger-name'))
     expect(document.querySelector('[data-header-menu]')).toBeTruthy()
     // 过滤标签不存在（"过滤"作为 section label 仅在 section 可见时出现）
     expect(screen.queryByText('过滤')).toBeNull()
@@ -373,7 +371,7 @@ describe('DataTable — HeaderMenu 遵守 ColumnMenuConfig 门控', () => {
         enableHeaderMenu
       />,
     )
-    fireEvent.click(screen.getByRole('columnheader', { name: /Name/ }))
+    fireEvent.click(screen.getByTestId('th-menu-trigger-name'))
     expect(document.querySelector('[data-header-menu]')).toBeTruthy()
     expect(screen.queryByText('过滤')).toBeNull()
   })
@@ -406,13 +404,13 @@ describe('DataTable — HeaderMenu 遵守 ColumnMenuConfig 门控', () => {
       />,
     )
     // 第一次打开
-    fireEvent.click(screen.getByRole('columnheader', { name: /Name/ }))
+    fireEvent.click(screen.getByTestId('th-menu-trigger-name'))
     expect(screen.getByTestId('filter-stable')).toBeTruthy()
     // 关闭（ESC）
     fireEvent.keyDown(document, { key: 'Escape' })
     expect(document.querySelector('[data-header-menu]')).toBeNull()
     // 再次打开（同一 generator 引用）
-    fireEvent.click(screen.getByRole('columnheader', { name: /Name/ }))
+    fireEvent.click(screen.getByTestId('th-menu-trigger-name'))
     expect(screen.getByTestId('filter-stable')).toBeTruthy()
   })
 
@@ -442,7 +440,7 @@ describe('DataTable — HeaderMenu 遵守 ColumnMenuConfig 门控', () => {
         enableHeaderMenu
       />,
     )
-    fireEvent.click(screen.getByRole('columnheader', { name: /Name/ }))
+    fireEvent.click(screen.getByTestId('th-menu-trigger-name'))
     // section 可见 + 实际内容渲染（generator 物化为 array 后可重复迭代）
     expect(screen.getByText('过滤')).toBeTruthy()
     expect(screen.getByTestId('filter-gen-real')).toBeTruthy()
@@ -474,7 +472,7 @@ describe('DataTable — HeaderMenu 遵守 ColumnMenuConfig 门控', () => {
         enableHeaderMenu
       />,
     )
-    fireEvent.click(screen.getByRole('columnheader', { name: /Name/ }))
+    fireEvent.click(screen.getByTestId('th-menu-trigger-name'))
     expect(screen.getByText('过滤')).toBeTruthy()
   })
 
@@ -501,7 +499,7 @@ describe('DataTable — HeaderMenu 遵守 ColumnMenuConfig 门控', () => {
         enableHeaderMenu
       />,
     )
-    fireEvent.click(screen.getByRole('columnheader', { name: /Name/ }))
+    fireEvent.click(screen.getByTestId('th-menu-trigger-name'))
     expect(screen.getByText('过滤')).toBeTruthy()
     expect(screen.getByTestId('filter-real')).toBeTruthy()
   })
@@ -527,7 +525,7 @@ describe('DataTable — HeaderMenu 遵守 ColumnMenuConfig 门控', () => {
         enableHeaderMenu
       />,
     )
-    fireEvent.click(screen.getByRole('columnheader', { name: /Name/ }))
+    fireEvent.click(screen.getByTestId('th-menu-trigger-name'))
     // section 仍可见（isFiltered 触发）
     expect(screen.getByText('过滤')).toBeTruthy()
     expect(document.querySelector('[data-header-menu-filter-active]')).toBeTruthy()
@@ -554,7 +552,7 @@ describe('DataTable — HeaderMenu 遵守 ColumnMenuConfig 门控', () => {
         enableHeaderMenu
       />,
     )
-    fireEvent.click(screen.getByRole('columnheader', { name: /Name/ }))
+    fireEvent.click(screen.getByTestId('th-menu-trigger-name'))
     expect(screen.queryByText('清除过滤')).toBeNull()
   })
 })

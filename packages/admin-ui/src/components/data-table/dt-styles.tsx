@@ -202,13 +202,30 @@ const DT_CSS = `
      hover/active background !important 同一设计决策，CHG-UX-05c）*/
   color: var(--fg-default) !important;
 }
+/* ADR-149 D-149-3 / R-149-6：列级 ⋯ 真按钮触发器
+ *   - opacity:0 默认隐藏，hover 列 / 菜单展开 / 已排序已过滤 → opacity:1 恒显
+ *   - cursor: pointer / 自身 stopPropagation 在 data-table.tsx 内处理
+ *   - 基础按钮样式：透明背景 + muted 色 + fontSize 跟随表头 */
 [data-table] [role="columnheader"] [data-th-menu-icon] {
   opacity: 0;
   transition: opacity var(--duration-fast) var(--easing-ease-out);
+  margin-left: 4px;
+  background: transparent;
+  border: 0;
+  padding: 0 4px;
+  color: var(--fg-muted);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: var(--font-size-xs);
+  line-height: 1;
 }
 [data-table] [role="columnheader"]:hover [data-th-menu-icon],
-[data-table] [role="columnheader"] [data-th-menu-icon][data-open="true"] {
+[data-table] [role="columnheader"] [data-th-menu-icon][data-open="true"],
+[data-table] [role="columnheader"] [data-th-menu-icon][data-active="true"] {
   opacity: 1;
+}
+[data-table] [role="columnheader"] [data-th-menu-icon]:hover {
+  color: var(--fg-default);
 }
 @media (prefers-reduced-motion: reduce) {
   [data-table] [role="columnheader"][data-th-interactive="true"],

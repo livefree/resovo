@@ -172,7 +172,11 @@ export function DataTable<T>(props: DataTableProps<T>): React.ReactElement {
     onRowClick,
     density = 'comfortable',
     'data-testid': testId,
-    enableHeaderMenu = false,
+    // @deprecated ADR-149 D-149-1：enableHeaderMenu 已废弃（EP-2 起 noop ignored，
+    // 不从 props 解构中读取；消费方仍可传 true/false 不破 typecheck，多余 prop 被忽略）。
+    // 列级 ⋯ 触发器由 columnTriggerVisibility 控制；EP-4-B 完全从类型中删除。
+    // ADR-149 D-149-3：列级 ⋯ 触发器可见性（默认 'auto'：static + dynamic 5 条件 OR）
+    columnTriggerVisibility = 'auto',
     toolbar,
     bulkActions,
     flashRowKeys,
@@ -252,15 +256,16 @@ export function DataTable<T>(props: DataTableProps<T>): React.ReactElement {
   const hasSelection = selection !== undefined
   const gridTemplate = buildGridTemplate(columns, colMap, hasSelection)
 
-  // sort helpers
+  // sort helpers — ADR-149 D-149-4：列名点击二态互斥 asc ↔ desc（不可回 none / 业界范式）
+  // 清除排序入口移到列级 ⋯ popover 「清除排序」按钮 + 矩阵 popover × 按钮
   const handleHeaderClick = useCallback((colId: string) => {
     const current = query.sort
     let next: TableSortState
     if (current.field === colId) {
-      next = current.direction === 'asc'
-        ? { field: colId, direction: 'desc' }
-        : { field: undefined, direction: 'asc' }
+      // 同列再点 → asc ↔ desc 互斥切换（不可回 none）
+      next = { field: colId, direction: current.direction === 'asc' ? 'desc' : 'asc' }
     } else {
+      // 不同列 → 默认 asc
       next = { field: colId, direction: 'asc' }
     }
     onQueryChange({ sort: next } satisfies TableQueryPatch)
@@ -432,42 +437,61 @@ export function DataTable<T>(props: DataTableProps<T>): React.ReactElement {
           {visibleColumns.map((col) => {
             const isSorted = query.sort.field === col.id
             const sortDir = isSorted ? query.sort.direction : 'none'
-            const sortable = col.enableSorting
-            // enableHeaderMenu=true 时点击表头开 popover；否则保持原 sort-on-click
-            const interactive = enableHeaderMenu || sortable
-            const onHeaderActivate = (target: HTMLElement) => {
-              if (enableHeaderMenu) {
-                menuAnchorRef.current = target
-                setMenuColId(col.id)
-              } else if (sortable) {
-                handleHeaderClick(col.id)
-              }
-            }
+            const sortable = col.enableSorting === true
+            // ADR-149 D-149-3 R-149-2：列级 ⋯ 触发器可见性判定
+            // auto（默认）= static + dynamic 5 条件 OR：
+            //   可排序 OR 有 filterContent OR 可隐藏（非 pinned + canHide !== false）
+            //   OR 当前已过滤 OR 当前已排序
+            const hasFilter = col.columnMenu?.filterContent !== undefined
+            const hidable = col.pinned !== true && col.columnMenu?.canHide !== false
+            const isFiltered = col.columnMenu?.isFiltered === true || query.filters.has(col.id)
             const isMenuOpen = menuColId === col.id
+            const showTrigger =
+              columnTriggerVisibility === 'always' ? true :
+              columnTriggerVisibility === 'never' ? false :
+              sortable || hasFilter || hidable || isFiltered || isSorted
+            // 列名整体可点 → toggle 排序（如该列可排序）
+            const interactive = sortable
             return (
               <div
                 key={col.id}
                 role="columnheader"
                 aria-sort={isSorted ? (query.sort.direction === 'asc' ? 'ascending' : 'descending') : undefined}
-                aria-haspopup={enableHeaderMenu ? 'menu' : undefined}
-                aria-expanded={enableHeaderMenu ? isMenuOpen : undefined}
                 data-th-interactive={interactive ? 'true' : undefined}
                 style={{ ...TH_STYLE, cursor: interactive ? 'pointer' : 'default' }}
                 tabIndex={interactive ? 0 : undefined}
-                onClick={interactive ? (e) => onHeaderActivate(e.currentTarget) : undefined}
+                onClick={interactive ? () => handleHeaderClick(col.id) : undefined}
                 onKeyDown={interactive ? (e) => {
-                  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onHeaderActivate(e.currentTarget) }
+                  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleHeaderClick(col.id) }
                 } : undefined}
               >
                 {col.header}
                 {sortable && <SortIcon direction={sortDir} />}
-                {enableHeaderMenu && (
-                  <span
-                    aria-hidden="true"
+                {showTrigger && (
+                  <button
+                    type="button"
+                    aria-haspopup="menu"
+                    aria-expanded={isMenuOpen}
+                    aria-label={`${typeof col.header === 'string' ? col.header : col.id} 列操作`}
                     data-th-menu-icon
                     data-open={isMenuOpen ? 'true' : undefined}
-                    style={{ marginLeft: '4px', fontSize: 'var(--font-size-xs)', color: 'var(--fg-muted)' }}
-                  >⋯</span>
+                    data-active={isSorted || isFiltered ? 'true' : undefined}
+                    data-testid={`th-menu-trigger-${col.id}`}
+                    onClick={(e) => {
+                      // ADR-149 D-149-3 R-149-6：必须 stopPropagation 防冒泡到列名 toggle 排序
+                      e.stopPropagation()
+                      menuAnchorRef.current = e.currentTarget
+                      setMenuColId(col.id)
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.stopPropagation()
+                        e.preventDefault()
+                        menuAnchorRef.current = e.currentTarget
+                        setMenuColId(col.id)
+                      }
+                    }}
+                  >⋯</button>
                 )}
               </div>
             )
@@ -578,21 +602,20 @@ export function DataTable<T>(props: DataTableProps<T>): React.ReactElement {
           </button>
         </div>
       )}
-      {/* HeaderMenu portal — 渲染到 document.body，不参与 frame layout */}
-      {enableHeaderMenu && (
-        <HeaderMenu
-          open={menuColId !== null}
-          column={menuColumn}
-          columnMenu={menuColumn?.columnMenu}
-          anchorRef={menuAnchorRef}
-          currentSort={query.sort}
-          columnsValue={colMap}
-          onSort={handleHeaderMenuSort}
-          onClearSort={handleHeaderMenuClearSort}
-          onHide={handleHeaderMenuHide}
-          onClose={closeHeaderMenu}
-        />
-      )}
+      {/* HeaderMenu portal — 渲染到 document.body，不参与 frame layout
+       *  ADR-149 D-149-3：列级 ⋯ button 触发，anchor = ⋯ button（非 th div） */}
+      <HeaderMenu
+        open={menuColId !== null}
+        column={menuColumn}
+        columnMenu={menuColumn?.columnMenu}
+        anchorRef={menuAnchorRef}
+        currentSort={query.sort}
+        columnsValue={colMap}
+        onSort={handleHeaderMenuSort}
+        onClearSort={handleHeaderMenuClearSort}
+        onHide={handleHeaderMenuHide}
+        onClose={closeHeaderMenu}
+      />
       {/* CHG-DESIGN-02 Step 7A + 7B fix#2/3：foot 在 [data-table-scroll] 之外，
         * frame 直接子层最末位，永远固定 frame 底部，不随 body 横向滚动漂移。 */}
       <PaginationFoot

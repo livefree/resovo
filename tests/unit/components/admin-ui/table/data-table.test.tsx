@@ -160,7 +160,7 @@ describe('DataTable — client mode sort', () => {
     expect(patches[0].sort?.direction).toBe('desc')
   })
 
-  it('desc 再次点击：清除 sort（field=undefined）', () => {
+  it('desc 再次点击：toggle 回 asc（ADR-149 D-149-4 二态互斥废除三态循环）', () => {
     const patches: TableQueryPatch[] = []
     render(
       <DataTable
@@ -173,7 +173,9 @@ describe('DataTable — client mode sort', () => {
       />,
     )
     fireEvent.click(screen.getByText('Name'))
-    expect(patches[0].sort?.field).toBeUndefined()
+    // ADR-149 D-149-4：不再三态循环；desc 再点切到 asc 互斥（清除排序走列级 ⋯ 或矩阵 ×）
+    expect(patches[0].sort?.field).toBe('name')
+    expect(patches[0].sort?.direction).toBe('asc')
   })
 })
 

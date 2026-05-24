@@ -3499,3 +3499,62 @@ Plan-Revision: 1 次（arch-reviewer v2 → v3 / 9 修订消解）
 
 Cleanup-Audit: EP-1 矩阵原语 ✅ / 39 单测全 PASS / 4 质量门禁全过 / 等用户审核启动 EP-2
 Plan-Revision: 1 次（FOOT_BTN_STYLE shorthand 冲突修复 / verify 命中 ）
+
+---
+
+## [CHG-SN-9-DT-HEADER-REDESIGN-EP-2] 列级 ⋯ + 列名 toggle 排序（5 段渐进第 2 段）
+
+- **完成时间**：2026-05-23
+- **记录时间**：2026-05-23
+- **执行模型**：claude-opus-4-7（主循环）
+- **子代理**：无（D-149-3/4/12 决策已在 ADR-149 完成 / 实施层主循环承担）
+- **关联 ADR**：ADR-149 D-149-1 / D-149-3 / D-149-4 / D-149-12 / R-149-2 / R-149-6
+- **关联 SEQ**：SEQ-20260524-01 第 1 序列任务 #1 第 EP-2 子卡
+- **依赖**：EP-1 ✅ 完成（commit e671f498）
+- **修改文件**：
+  - `packages/admin-ui/src/components/data-table/data-table.tsx` — `handleHeaderClick` 三态循环 → **二态互斥** asc↔desc（D-149-4 业界范式）+ 列名 onClick 统一 toggle 排序（不再分支 `enableHeaderMenu`）+ ⋯ 装饰 span → 真按钮 `<button data-testid="th-menu-trigger-{colId}">` + onClick `e.stopPropagation()` 防冒泡（R-149-6）+ aria-haspopup/aria-expanded/aria-label 完整 + menuAnchorRef = ⋯ button + `columnTriggerVisibility` prop 引入（默认 `'auto'` / 5 条件 OR：sortable / hasFilter / hidable / isFiltered / isSorted）+ HeaderMenu 渲染条件由 `enableHeaderMenu &&` 改为常驻（D-149-1）
+  - `packages/admin-ui/src/components/data-table/dt-styles.tsx` — `[data-th-menu-icon]` 样式从装饰 span 改为真按钮（透明背景 + muted 色 + cursor: pointer + 修正 fontSize 拼写为 font-size）+ `data-active="true"` 已排序/已过滤恒显 + hover 高亮
+  - `tests/unit/components/admin-ui/table/header-menu.test.tsx` — 21 处 `fireEvent.click(getByRole('columnheader'))` → `fireEvent.click(getByTestId('th-menu-trigger-{colId}'))`（行为变更迁移）+ "pinned 列不显示隐藏此列" 测试改为 "pinned 列 ⋯ trigger 不渲染"（D-149-3 auto 范式）
+  - `tests/unit/components/admin-ui/table/data-table.test.tsx` — "desc 再次点击：清除 sort" → "desc 再次点击：toggle 回 asc"（D-149-4 二态互斥废除三态）
+  - `tests/unit/components/admin-ui/table/step-ep2-column-toggle.test.tsx` — **新建 12 单测**（超过 10 目标）
+- **新增依赖**：无
+- **数据库变更**：无
+- **新增端点**：无（零 R-MID-1 / 零 endpoint-adr 影响）
+- **关键行为变化**（用户首次可见！）：
+  - **旧**：点列名 → 三态循环 asc→desc→none（或 enableHeaderMenu=true 时弹 popover 含全部操作）
+  - **新**：点列名 → **二态 toggle asc↔desc 互斥**（不可回 none / 业界 Excel/Notion/Linear 范式）/ 点 ⋯ button → popover 含升降序+过滤+隐藏
+  - 9 个旧 `enableHeaderMenu={true}` 消费方 prop @deprecated noop 被忽略（typecheck 不破裂 / 行为按新设计走）
+- **质量门禁**：
+  - ✅ `npm run typecheck`（全 8 workspace PASS / 9 消费方 enableHeaderMenu={true} 仍可工作）
+  - ✅ `npm run lint`（5/5 FULL TURBO cached）
+  - ✅ `npm run test -- --run tests/unit/components/admin-ui/table/`（311/311 PASS / 含 EP-1 39 + EP-2 12 + 现有 154 + 其它）
+  - ✅ `npm run test -- --run tests/unit/components/admin-ui/table/step-ep2-column-toggle.test.tsx`（12/12 PASS）
+  - ✅ `npm run verify:adr-contracts`（style-shorthand-conflict 0 命中 / D-N 162 闭环 / sql-schema 对齐）
+  - ⚠️ 全 unit 4750/4752 PASS（2 pre-existing flaky：UserSubmissionsClient + CrawlerClient 单独跑均 PASS / 全套件并发时序冲突 / 与 EP-2 无关）
+- **12 EP-2 单测覆盖维度**：
+  - D-149-4 二态互斥（4 用例）：未排序点列名→asc / asc 点→desc / desc 点→asc 不回 none / 切换不同列→默认 asc
+  - D-149-3 列级 ⋯ + stopPropagation（2 用例）：点 ⋯ 开 popover + 不触发列名排序 / aria-haspopup + aria-expanded 同步
+  - R-149-2 columnTriggerVisibility 三态（5 用例）：auto / always / never / 当前已排序 data-active="true" / 当前已过滤 data-active="true"
+  - D-149-1 旧 enableHeaderMenu noop（1 用例）：传 true 不影响新行为
+- **关键设计点**（落实 ADR-149）：
+  - D-149-3 R-149-6 ⋯ button onClick **必须 e.stopPropagation()**（已实装 / EP-2 测试验证）
+  - R-149-2 'auto' 判定：`sortable || hasFilter || hidable || isFiltered || isSorted` 五条件 OR（pinned 列默认不显示 ⋯，除非可排序/可过滤/已排序/已过滤）
+  - D-149-1 旧 prop noop：从 props 解构中移除 `enableHeaderMenu`，多余 prop 被 React 忽略，消费方 typecheck 不破裂
+  - D-149-4 二态互斥：废除"第三次点回 none"循环；清除排序入口在列级 ⋯「清除排序」按钮 + 矩阵 popover × 按钮（双备份）
+- **注意事项**：
+  - **本卡是 EP 序列首个用户可见行为变化点**：13 admin 列表页用户体感"列名点击行为"立即变化（从三态 → 二态 + ⋯ button）
+  - **typecheck 中间态保护持续生效**：9 消费方 `enableHeaderMenu={true}` 不破，EP-4-B 才完全删除该 prop
+  - **header-menu.tsx 零改动**：anchor 位置计算（rect.bottom + 4 / rect.left）对 button 同样合理 / 点击外部检测 anchor?.contains 同样工作
+  - **EP-3 启动条件**：本卡 commit + 用户审核通过 → EP-3 删 hidden-columns-menu / filter-chips / filter-chip 三文件 535 行（彻底废除旧入口）
+  - **用户走读仍在 EP-4-C 综合做**：EP-2 完成后用户体验"列名 toggle + ⋯ button"已生效，但 IME search / 矩阵 popover 集成 / 消费方 trailing 清理等需等 EP-3/4 完成
+- **价值**：
+  - **行为变化首次落地**：用户点击列名直接 toggle asc/desc（业界范式），不再"误触第三次回 none"（M-SN-8 #UR-B2 痛点 1）
+  - **列级 ⋯ 真按钮 + a11y**：button + aria-haspopup + aria-expanded + aria-label + 键盘 Enter/Space 触发（替代原 span 仅 hover 装饰）
+  - **stopPropagation 强约束**：用代码层硬保证（不依赖文档约定）+ 12 测试覆盖 / 后续 EP-3/4 / EP-2 类似改造可复用此范式
+  - **9 消费方零迁移成本**：旧 prop 自动 noop / 业务页面用户立即获益新行为 / EP-4-B 清理 prop 时也是机械性
+- **后续**：
+  - 用户审核 EP-2（代码 + 测试覆盖 + ADR 决策落实度 + 用户体感行为）
+  - 通过 → 启动 EP-3（删 hidden-columns-menu + filter-chips + filter-chip 三文件 / 535 行 / 10 集成单测 / ~0.3w）
+
+Cleanup-Audit: EP-2 列名 toggle 二态互斥 + ⋯ button stopPropagation + columnTriggerVisibility 三态 ✅ / 12 新单测 + 30 旧测试更新全 PASS / 4 质量门禁全过 / 等用户审核启动 EP-3
+Plan-Revision: 2 次（CSS fontSize→font-size 拼写修正 / 旧测试 21 处批量迁移到 th-menu-trigger）
