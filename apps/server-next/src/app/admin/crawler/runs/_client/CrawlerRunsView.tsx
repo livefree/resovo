@@ -108,6 +108,10 @@ function buildColumns({
       width: 200,
       defaultVisible: true,
       pinned: true,
+      // sub1-EXTEND：UUID 前缀匹配（用户输入前 8 字符即可）
+      filterable: true,
+      filterFieldName: 'idPrefix',
+      filterKind: 'text',
       cell: ({ row }) => (
         <a
           href={`/admin/crawler/runs/${row.id}`}
@@ -170,9 +174,14 @@ function buildColumns({
     {
       id: 'siteCount',
       header: '站点数',
-      accessor: (r) => `${r.enqueuedSiteCount}/${r.requestedSiteCount}`,
+      // sub1-EXTEND：accessor 改为返回 enqueuedSiteCount 数字（filterKind 'number' 推断必备）
+      // cell 仍渲染拼字符串，accessor 用于 popover number range filter 数值参考
+      accessor: (r) => r.enqueuedSiteCount,
       width: 110,
       defaultVisible: true,
+      filterable: true,
+      filterFieldName: 'siteCount',
+      filterKind: 'number',
       cell: ({ row }) => (
         <span data-site-count style={{ fontSize: 'var(--font-size-xs)' }}>
           已入队 {row.enqueuedSiteCount} / 请求 {row.requestedSiteCount}
@@ -188,6 +197,9 @@ function buildColumns({
       accessor: (r) => r.createdAt,
       width: 170,
       defaultVisible: true,
+      filterable: true,
+      filterFieldName: 'createdAt',
+      filterKind: 'date',
       cell: ({ row }) => (
         <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--fg-muted)' }}>
           {new Date(row.createdAt).toLocaleString('zh-CN', { hour12: false })}
@@ -290,6 +302,21 @@ export function CrawlerRunsView() {
     const v = filtersMap.get('triggerType')
     return v?.kind === 'enum' ? (v.value as readonly CrawlerRunTriggerType[]) : []
   }, [filtersMap])
+  // sub1-EXTEND：3 列 filterable 派生（idPrefix / siteCount range / createdAt date range）
+  const idPrefixFilter = useMemo<string | undefined>(() => {
+    const v = filtersMap.get('idPrefix')
+    return v?.kind === 'text' && v.value ? v.value : undefined
+  }, [filtersMap])
+  const siteCountRange = useMemo<{ min?: number; max?: number }>(() => {
+    const v = filtersMap.get('siteCount')
+    if (v?.kind === 'range') return { min: v.min, max: v.max }
+    return {}
+  }, [filtersMap])
+  const createdAtRange = useMemo<{ from?: string; to?: string }>(() => {
+    const v = filtersMap.get('createdAt')
+    if (v?.kind === 'date-range') return { from: v.from, to: v.to }
+    return {}
+  }, [filtersMap])
   // EP-4.5-HOTFIX-3 / 问题 1+3：列偏好 state（矩阵 popover 可见性 toggle / 列级 ⋯ 隐藏此列触发）
   const [columnPrefs, setColumnPrefs] = useState<ReadonlyMap<string, { readonly visible: boolean; readonly width?: number }>>(new Map())
 
@@ -302,6 +329,12 @@ export function CrawlerRunsView() {
       limit: pageSize,
       ...(statusFilter.length > 0 ? { status: statusFilter } : {}),
       ...(triggerTypeFilter.length > 0 ? { triggerType: triggerTypeFilter } : {}),
+      // sub1-EXTEND：3 列 filterable 派生参数透传
+      ...(idPrefixFilter ? { idPrefix: idPrefixFilter } : {}),
+      ...(siteCountRange.min !== undefined ? { siteCountMin: siteCountRange.min } : {}),
+      ...(siteCountRange.max !== undefined ? { siteCountMax: siteCountRange.max } : {}),
+      ...(createdAtRange.from ? { createdAtFrom: createdAtRange.from } : {}),
+      ...(createdAtRange.to ? { createdAtTo: createdAtRange.to } : {}),
     }).then((res) => {
       if (cancelled) return
       setRows(res.data)

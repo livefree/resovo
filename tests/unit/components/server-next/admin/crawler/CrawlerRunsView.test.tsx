@@ -416,4 +416,53 @@ describe('CrawlerRunsView', () => {
       expect(lastCall[0]).not.toHaveProperty('status')
     })
   })
+
+  // ── sub1-EXTEND（2026-05-24）：3 列 filterable 补齐 + fetch 派生新增 5 参数 ────
+
+  it('26. sub1-EXTEND: id 列 text filter → fetch 带 idPrefix（lowercased / 前缀匹配）', async () => {
+    listCrawlerRunsMock.mockResolvedValue(EMPTY)
+    render(<CrawlerRunsView />)
+    await waitFor(() => screen.getByTestId('crawler-runs-table'))
+    fireEvent.click(screen.getByTestId('th-menu-trigger-id'))
+    expect(screen.queryByTestId('dt-autofilter-id')).not.toBeNull()
+    fireEvent.change(screen.getByTestId('dt-autofilter-id-text-input'), { target: { value: 'abc12345' } })
+    fireEvent.click(screen.getByTestId('dt-autofilter-id-apply'))
+    await waitFor(() => {
+      expect(listCrawlerRunsMock).toHaveBeenLastCalledWith(
+        expect.objectContaining({ idPrefix: 'abc12345', page: 1 }),
+      )
+    })
+  })
+
+  it('27. sub1-EXTEND: siteCount 列 number range filter → fetch 带 siteCountMin/Max', async () => {
+    listCrawlerRunsMock.mockResolvedValue(EMPTY)
+    render(<CrawlerRunsView />)
+    await waitFor(() => screen.getByTestId('crawler-runs-table'))
+    fireEvent.click(screen.getByTestId('th-menu-trigger-siteCount'))
+    expect(screen.queryByTestId('dt-autofilter-siteCount')).not.toBeNull()
+    fireEvent.change(screen.getByTestId('dt-autofilter-siteCount-number-min'), { target: { value: '5' } })
+    fireEvent.change(screen.getByTestId('dt-autofilter-siteCount-number-max'), { target: { value: '100' } })
+    fireEvent.click(screen.getByTestId('dt-autofilter-siteCount-apply'))
+    await waitFor(() => {
+      expect(listCrawlerRunsMock).toHaveBeenLastCalledWith(
+        expect.objectContaining({ siteCountMin: 5, siteCountMax: 100, page: 1 }),
+      )
+    })
+  })
+
+  it('28. sub1-EXTEND: createdAt 列 date-range filter → fetch 带 createdAtFrom/To', async () => {
+    listCrawlerRunsMock.mockResolvedValue(EMPTY)
+    render(<CrawlerRunsView />)
+    await waitFor(() => screen.getByTestId('crawler-runs-table'))
+    fireEvent.click(screen.getByTestId('th-menu-trigger-createdAt'))
+    expect(screen.queryByTestId('dt-autofilter-createdAt')).not.toBeNull()
+    fireEvent.change(screen.getByTestId('dt-autofilter-createdAt-date-from'), { target: { value: '2026-05-01' } })
+    fireEvent.change(screen.getByTestId('dt-autofilter-createdAt-date-to'), { target: { value: '2026-05-24' } })
+    fireEvent.click(screen.getByTestId('dt-autofilter-createdAt-apply'))
+    await waitFor(() => {
+      expect(listCrawlerRunsMock).toHaveBeenLastCalledWith(
+        expect.objectContaining({ createdAtFrom: '2026-05-01', createdAtTo: '2026-05-24', page: 1 }),
+      )
+    })
+  })
 })

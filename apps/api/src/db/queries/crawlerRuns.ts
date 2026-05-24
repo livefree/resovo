@@ -130,6 +130,12 @@ export async function listRuns(
     // ADR-149 EP-5-crawler-runs-PATCH-A：支持多选过滤（单值 / 数组兼容）
     status?: CrawlerRunStatus | readonly CrawlerRunStatus[]
     triggerType?: CrawlerRunTriggerType | readonly CrawlerRunTriggerType[]
+    // sub1-EXTEND（2026-05-24）：ADR-150 D-150-1 双轨补齐 — id text / siteCount number / createdAt date
+    idPrefix?: string
+    siteCountMin?: number
+    siteCountMax?: number
+    createdAtFrom?: string
+    createdAtTo?: string
     limit?: number
     offset?: number
   } = {},
@@ -150,6 +156,29 @@ export async function listRuns(
       conditions.push(`trigger_type = ANY($${idx++}::text[])`)
       values.push(arr)
     }
+  }
+  // sub1-EXTEND：id::text LIKE 前缀匹配（lowercase 一致化 / pg LIKE 大小写敏感）
+  if (params.idPrefix && params.idPrefix.length > 0) {
+    conditions.push(`id::text LIKE $${idx++}`)
+    values.push(`${params.idPrefix.toLowerCase()}%`)
+  }
+  // sub1-EXTEND：enqueued_site_count BETWEEN（双侧可选）
+  if (params.siteCountMin !== undefined) {
+    conditions.push(`enqueued_site_count >= $${idx++}`)
+    values.push(params.siteCountMin)
+  }
+  if (params.siteCountMax !== undefined) {
+    conditions.push(`enqueued_site_count <= $${idx++}`)
+    values.push(params.siteCountMax)
+  }
+  // sub1-EXTEND：created_at 范围（to 当作 endOfDay → 加 1 天用 < / 包含 to 当日全天）
+  if (params.createdAtFrom) {
+    conditions.push(`created_at >= $${idx++}::date`)
+    values.push(params.createdAtFrom)
+  }
+  if (params.createdAtTo) {
+    conditions.push(`created_at < ($${idx++}::date + INTERVAL '1 day')`)
+    values.push(params.createdAtTo)
   }
   const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''
   const limit = params.limit ?? 20

@@ -473,17 +473,19 @@ export function DataTable<T>(props: DataTableProps<T>): React.ReactElement {
             const sortDir = isSorted ? query.sort.direction : 'none'
             const sortable = col.enableSorting === true
             // ADR-149 D-149-3 R-149-2：列级 ⋯ 触发器可见性判定
-            // auto（默认）= static + dynamic 5 条件 OR：
-            //   可排序 OR 有 filterContent OR 可隐藏（非 pinned + canHide !== false）
-            //   OR 当前已过滤 OR 当前已排序
+            // auto（默认）= static + dynamic 6 条件 OR：
+            //   可排序 OR 有 filterContent（D-149-15 桥接逃生口）OR filterable（D-150 列固有自动过滤）
+            //   OR 可隐藏（非 pinned + canHide !== false）OR 当前已过滤 OR 当前已排序
+            // sub1-EXTEND（2026-05-24）：补 col.filterable 判定 / 修复 pinned 列（id）filterable: true 时不显触发器盲区
             const hasFilter = col.columnMenu?.filterContent !== undefined
+            const hasAutoFilter = col.filterable === true
             const hidable = col.pinned !== true && col.columnMenu?.canHide !== false
             const isFiltered = col.columnMenu?.isFiltered === true || query.filters.has(col.id)
             const isMenuOpen = menuColId === col.id
             const showTrigger =
               columnTriggerVisibility === 'always' ? true :
               columnTriggerVisibility === 'never' ? false :
-              sortable || hasFilter || hidable || isFiltered || isSorted
+              sortable || hasFilter || hasAutoFilter || hidable || isFiltered || isSorted
             // 列名整体可点 → toggle 排序（如该列可排序）
             const interactive = sortable
             return (

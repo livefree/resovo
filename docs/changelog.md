@@ -4579,3 +4579,84 @@ Plan-Revision: 1 次（triggerType filterFieldName 'trigger_type' → 'triggerTy
 
 Cleanup-Audit: popover 6 类走读反馈全消解 / 共因 PANEL_STYLE 修复一次性解决 4 反馈 / kind radio 段简化 + 排序段始终渲染 / 3 实施 + 1 测试文件 +27/-22 净改动 / 4 质量门禁全过 / 单测 20/20 + 25/25 + 1534/1534 全 PASS / 0 Props API 变更 / 0 后端 / 0 ADR
 Plan-Revision: 0 次（实施完全对齐任务卡 6 类反馈根因分析）
+
+---
+
+## [CHG-SN-9-DT-AUTOFILTER-EP-3-A sub 1 EXTEND] CrawlerRunsView 3 列 filterable 补齐 + 后端 listRuns 5 参数扩展
+
+- **完成时间**：2026-05-24
+- **记录时间**：2026-05-24
+- **执行模型**：claude-opus-4-7（主循环）
+- **子代理**：无（消费方扩 + 后端 SQL/zod 扩 / 不动 Props API 契约 / 不起 ADR / CLAUDE.md §模型路由 6 条强制 Opus 子代理条件均不命中）
+- **关联 ADR**：ADR-150（D-150-1 双轨范式补齐 / D-150-4 业务 key 桥接合约 / D-150-5 union 守卫 / 无 AMENDMENT 必要）
+- **关联 SEQ**：SEQ-20260524-01 第 1 序列 EP-3-A sub 1 EXTEND
+- **触发**：@livefree 走读 sub 1 HOTFIX 后追问"为什么 popover 只在两列显示？" → 用户决策路径 A：补齐有业务价值的列 filterable + 后端 API 参数扩展
+- **依赖**：sub 1 HOTFIX ✅ commit `b0371950`
+- **范围**：CrawlerRunsView 7 列中 3 列补齐 filterable（id / siteCount / createdAt）+ 后端 listRuns 5 新参数 + data-table.tsx pinned 列 filterable 盲区修复 + 2 文件单测（含新建 query layer test）
+- **修改文件**（5 实施 + 2 测试 / 不动 Props 契约 / 不起 ADR）：
+  - `apps/api/src/db/queries/crawlerRuns.ts`：listRuns 函数签名扩 5 参数（idPrefix / siteCountMin / siteCountMax / createdAtFrom / createdAtTo）+ SQL WHERE 5 新条件
+    - `id::text LIKE $X`（lowercased prefix + `%`）
+    - `enqueued_site_count >= $X` + `enqueued_site_count <= $X`
+    - `created_at >= $X::date`（from）
+    - `created_at < ($X::date + INTERVAL '1 day')`（to 含当日全天）
+  - `apps/api/src/routes/admin/crawler.runs.ts`：GET QuerySchema 扩 5 zod 字段 + handler 透传到 listRuns
+    - idPrefix: z.string().min(1).max(36).optional()
+    - siteCountMin / siteCountMax: z.coerce.number().int().min(0).max(10_000).optional()
+    - createdAtFrom / createdAtTo: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional()
+  - `apps/server-next/src/lib/crawler/api.ts`：ListCrawlerRunsParams 扩 5 readonly 字段类型 + listCrawlerRuns URLSearchParams 透传
+  - `apps/server-next/src/app/admin/crawler/runs/_client/CrawlerRunsView.tsx`：
+    - id 列加 `filterable: true` + `filterFieldName: 'idPrefix'` + `filterKind: 'text'`
+    - siteCount 列加 `filterable: true` + `filterFieldName: 'siteCount'` + `filterKind: 'number'`（**accessor 改为返回 enqueuedSiteCount 数字** / cell 仍渲染拼字符串）
+    - createdAt 列加 `filterable: true` + `filterFieldName: 'createdAt'` + `filterKind: 'date'`
+    - 增 3 useMemo 派生（idPrefixFilter / siteCountRange / createdAtRange）
+    - fetch useEffect 调 listCrawlerRuns 加 5 透传参数 + spread guard
+  - `packages/admin-ui/src/components/data-table/data-table.tsx`：**顺手修复 pinned 列 filterable 盲区**
+    - line 479 hasFilter 判定补齐：原 `col.columnMenu?.filterContent !== undefined` 不识别 D-150 列固有自动过滤
+    - 新增 `hasAutoFilter = col.filterable === true`
+    - showTrigger 5 条件 OR 扩为 6 条件（sortable OR hasFilter OR hasAutoFilter OR hidable OR isFiltered OR isSorted）
+    - 修复 sub 1 时盲区：pinned 列（hidable=false）+ 无 sort + 无 filterContent + filterable=true 时不显 ⋯ 触发器
+  - `tests/unit/api/crawler-runs-queries.test.ts`：**新建** / 8 case 覆盖 listRuns 5 类新参数 + 多参数组合 + 空参数 + idPrefix 空字符串 + SQL 占位符递增
+  - `tests/unit/components/server-next/admin/crawler/CrawlerRunsView.test.tsx`：补 3 case 26/27/28
+    - #26 id 列 text filter → fetch idPrefix（lowercased）+ page reset 1
+    - #27 siteCount 列 number range filter → fetch siteCountMin/Max + page reset 1
+    - #28 createdAt 列 date-range filter → fetch createdAtFrom/To + page reset 1
+- **新增依赖**：无
+- **数据库变更**：无（只扩 SQL 查询条件 / 已有索引：crawler_runs 主键 id + created_at 等已有覆盖）
+- **新增端点**：无（参数扩展现有 GET /admin/crawler/runs / plan §4.5 R7 MUST-8 仅针对新增 admin route 不覆盖参数扩展）
+- **关键设计落实**：
+  - **D-150-1 双轨范式补齐**：CrawlerRunsView 7 列中 5 列走 D-150 列固有过滤（id text + status enum + triggerType enum + siteCount number + createdAt date）；duration / ops 业务语义不该过滤保持原状
+  - **D-150-4 业务 key 桥接合约**：column.id 'id' / filterFieldName 'idPrefix' 不同名（列名 ⋯ vs API 参数 key 解耦）；其它 4 列 column.id === filterFieldName（自然映射）
+  - **data-table.tsx pinned 列盲区修复**：sub 1 时巧合（status/triggerType hidable=true）覆盖 showTrigger；id 列 pinned 暴露 hasAutoFilter 判定缺失 / EXTEND 一并修复 + 影响所有 D-150 消费方未来 pinned 列体验
+  - **SQL 日期范围"to 含当日全天"语义**：input type="date" 返回 ISO date 无时间部分；后端用 `< (to::date + INTERVAL '1 day')` 而非 `<= to::date` / 用户输入 to=2026-05-24 包含 24 日全天
+- **质量门禁**：
+  - ✅ typecheck（8 workspace PASS）
+  - ✅ lint（5/5 FULL TURBO / 仅 pre-existing img 警告）
+  - ✅ verify:file-size-budget exit 0（与 HOTFIX 后无变化 / 6 文件 pre-existing 与本卡无关）
+  - ✅ verify:adr-contracts exit 0（advisory pre-existing / 172 D-N 闭环 / SQL aligned / style 0 命中）
+  - ✅ admin-ui 全套 1534/1534 PASS（87 文件 / data-table.tsx 修订零回退）
+  - ✅ crawler 后端 219/219 PASS（18 文件 / 含新 crawler-runs-queries 8 case）
+  - ✅ CrawlerRunsView 28/28 PASS（含新 3 case 26/27/28）
+- **用户可见行为变化**（dev server 重走读 sub1-EXTEND）：
+  - **新增**：5 列 popover 完整可走读 — id (text 前缀) / status (enum) / triggerType (enum) / siteCount (number range) / createdAt (date range)
+  - **新增**：id 列（pinned）首次显示 ⋯ 触发器（data-table.tsx 盲区修复）
+  - **新增**：siteCount popover 数字范围（min/max）输入 → 后端 enqueued_site_count BETWEEN 过滤
+  - **新增**：createdAt popover 日期范围（from/to）输入 → 后端 created_at 范围过滤含 to 当日全天
+  - **不变**：duration / ops 列点 ⋯ 仍弹旧 HeaderMenu / 只显"隐藏此列"（duration 非 pinned 走 hidable 路径）/ 按设计如此
+  - **不变**：status / triggerType 列 enableSorting 仍未启用 / 排序段 disabled + tooltip（sort 全栈打通留 ADR-150 阶段 5 EP-4）
+- **价值**：
+  - **5/7 列 popover 一致体验**：用户期望"有业务价值的列都该有 popover"完整闭合 / ADR-150 D-150 双轨范式在 CrawlerRunsView 全面覆盖
+  - **pinned 列 filterable 盲区修复**：data-table.tsx showTrigger 判定补 hasAutoFilter / 影响所有 D-150 后续消费方未来的 pinned 列 popover 体验
+  - **后端 SQL 参数扩展范式**：5 新条件覆盖 text-prefix + number-range + date-range 3 大常见过滤范式；后续阶段 4 消费方（audit / users / videos 等）按相同模板复用
+  - **不动 Props API 契约**：5/7 文件改动均为消费方 + 数据层 / 共享层只动 data-table.tsx pinned 判定补齐 / 不破坏 Props 公开 API
+  - **GET 端点不需 R-MID-1**：ADR-121 §GET 简化版规定 GET 只读不写 audit / 本卡参数扩展无需 audit RETRO
+- **不在范围**（独立后续）：
+  - sort 全栈打通（status/triggerType/createdAt sort field → 后端 ORDER BY → fetch deps）→ ADR-150 阶段 5 EP-4 范围（与 sources 排序断链一并）
+  - duration 列过滤（派生计算字段 / 无 DB 列 / 业务语义不该过滤）
+  - ops 列过滤（行 action 按钮 / 不是数据列）
+  - ADR-150 §端点契约表 AMENDMENT（参数扩展不需 / listCrawlerRuns 是 v1 已存在端点）
+- **后续**：
+  - **@livefree dev server 重走读 sub 1 EXTEND**（5 列 popover 完整 + 多列组合 + duration/ops 旧菜单）→ PASS 启动 sub 2 AuditClient 迁移 + 后端白名单 AMENDMENT
+  - sub 2 (~0.15w) 完成后 EP-3-A 整体 (sub 1 + sub 1 HOTFIX + sub 1 EXTEND + sub 2) spawn arch-reviewer Opus PR review
+
+Cleanup-Audit: 3 列 filterable 补齐 + 后端 SQL 5 新参数 + data-table.tsx pinned 列盲区一并修 / 5 实施 + 2 测试文件 +/- 净改动 / 4 质量门禁全过 / 28/28 + 8/8 + 1534/1534 + 219/219 单测全 PASS / 0 Props API 变更 / 0 ADR / 不需 R-MID-1
+Plan-Revision: 1 次（data-table.tsx pinned 列 filterable 盲区原预期"消费方 + 后端"范围 / 实测 case 26 报错触发主表头 showTrigger 判定补齐 / 顺手修复防 EP-3-B..G 后续消费方再次踩坑）

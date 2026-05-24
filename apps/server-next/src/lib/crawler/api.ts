@@ -214,6 +214,12 @@ export interface ListCrawlerRunsParams {
   // ADR-149 EP-5-crawler-runs-PATCH-A：支持多选过滤（单值 / 数组兼容 / CSV 传给后端）
   readonly status?: CrawlerRunStatus | readonly CrawlerRunStatus[]
   readonly triggerType?: CrawlerRunTriggerType | readonly CrawlerRunTriggerType[]
+  // sub1-EXTEND（2026-05-24）：ADR-150 D-150-1 双轨补齐
+  readonly idPrefix?: string
+  readonly siteCountMin?: number
+  readonly siteCountMax?: number
+  readonly createdAtFrom?: string // ISO date YYYY-MM-DD
+  readonly createdAtTo?: string   // ISO date YYYY-MM-DD
   readonly page?: number
   readonly limit?: number
 }
@@ -233,6 +239,12 @@ export async function listCrawlerRuns(params: ListCrawlerRunsParams = {}): Promi
     const arr = Array.isArray(params.triggerType) ? params.triggerType : [params.triggerType]
     if (arr.length > 0) qs.set('triggerType', arr.join(','))
   }
+  // sub1-EXTEND：3 新过滤参数透传
+  if (params.idPrefix) qs.set('idPrefix', params.idPrefix)
+  if (params.siteCountMin !== undefined) qs.set('siteCountMin', String(params.siteCountMin))
+  if (params.siteCountMax !== undefined) qs.set('siteCountMax', String(params.siteCountMax))
+  if (params.createdAtFrom) qs.set('createdAtFrom', params.createdAtFrom)
+  if (params.createdAtTo) qs.set('createdAtTo', params.createdAtTo)
   if (params.page != null) qs.set('page', String(params.page))
   if (params.limit != null) qs.set('limit', String(params.limit))
   const q = qs.toString()

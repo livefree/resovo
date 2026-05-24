@@ -110,9 +110,16 @@ export async function registerCrawlerRunRoutes(fastify: FastifyInstance) {
         return parts as T[]
       })
 
+    // sub1-EXTEND（2026-05-24）：ADR-150 D-150-1 双轨补齐 — id text / siteCount number / createdAt date
+    const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/
     const QuerySchema = z.object({
       status: csvToArray(STATUS_VALUES),
       triggerType: csvToArray(TRIGGER_VALUES),
+      idPrefix: z.string().min(1).max(36).optional(),
+      siteCountMin: z.coerce.number().int().min(0).max(10_000).optional(),
+      siteCountMax: z.coerce.number().int().min(0).max(10_000).optional(),
+      createdAtFrom: z.string().regex(ISO_DATE_RE, 'createdAtFrom 必须是 YYYY-MM-DD 格式').optional(),
+      createdAtTo: z.string().regex(ISO_DATE_RE, 'createdAtTo 必须是 YYYY-MM-DD 格式').optional(),
       page: z.coerce.number().int().min(1).default(1),
       limit: z.coerce.number().int().min(1).max(100).default(20),
     })
@@ -120,11 +127,17 @@ export async function registerCrawlerRunRoutes(fastify: FastifyInstance) {
     if (!parsed.success) {
       return reply.code(422).send({ error: { code: 'VALIDATION_ERROR', message: '参数错误', status: 422 } })
     }
-    const { status, triggerType, page, limit } = parsed.data
+    const {
+      status, triggerType,
+      idPrefix, siteCountMin, siteCountMax, createdAtFrom, createdAtTo,
+      page, limit,
+    } = parsed.data
     // 兼容：传 readonly 数组到 queries 层（queries 已支持 单值 / 数组）
     void StatusEnum; void TriggerEnum  // referenced for tsc no-unused（保留 enum 引用便于未来扩展）
     const { rows, total } = await crawlerRunsQueries.listRuns(db, {
-      status, triggerType, limit, offset: (page - 1) * limit,
+      status, triggerType,
+      idPrefix, siteCountMin, siteCountMax, createdAtFrom, createdAtTo,
+      limit, offset: (page - 1) * limit,
     })
     return reply.send({ data: rows, pagination: { total, page, limit, hasNext: page * limit < total } })
   })
