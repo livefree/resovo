@@ -55,6 +55,10 @@ function getLoginRedirectPath(): string | null {
   const { pathname, search } = window.location
   if (pathname === '/login' || pathname === '/403') return null
   if (!pathname.startsWith('/admin')) return null
+  // ADR-116 §2.3 dev/visual 豁免（与 middleware 对称）：playwright visual capture
+  // 时 admin layout 装配 admin-shell-notifications hook polling /admin/notifications
+  // 触发 401 → handleUnauthorized → redirect /login 截到登录页（CHG-SN-7-MISC-VISUAL-FOLLOWUP-BATCH 实测）
+  if (pathname.startsWith('/admin/dev/visual')) return null
   const callback = sanitizeAdminRedirect(`${pathname}${search}`)
   return `/login?from=${encodeURIComponent(callback)}`
 }

@@ -3194,3 +3194,56 @@ Plan-Revision: 无（仅 spec 落地 / capture 待用户手动）
 
 Cleanup-Audit: moderation backlog 8/9 入库（player-idle 缺单独 follow-up）+ admin-moderation 7/7 ✅ / admin-ui 2 张错截 review 拦截 + restore + follow-up 登记
 Plan-Revision: 无（纯 baseline 入库 + review 拦截）
+
+
+## [CHG-SN-7-MISC-VISUAL-FOLLOWUP-BATCH] 3 follow-up 合卡：admin-ui recapture + moderation player-idle + user-submissions fixup
+
+- **完成时间**：2026-05-23
+- **记录时间**：2026-05-23
+- **执行模型**：claude-opus-4-7（max effort 续会话）
+- **子代理**：无
+- **修改文件**（1 code fix + 2 spec + 2 baseline + 2 docs）：
+  - `apps/server-next/src/lib/api-client.ts` — `getLoginRedirectPath` 加 `/admin/dev/visual` 豁免（与 middleware ADR-116 §2.3 对称 / 阻塞 admin-ui visual capture 的根因 fix）
+  - `tests/visual/moderation/moderation.visual.spec.ts` — player-idle test 改 conditional skip（LinesPanel useEffect auto-select 阻止 idle state 实测）
+  - `tests/visual/admin-ui/line-health-drawer.visual.spec.ts-snapshots/line-health-drawer-default-admin-visual-darwin.png` — recapture valid baseline（Drawer + 4 events）
+  - `tests/visual/admin-ui/reject-modal.visual.spec.ts-snapshots/reject-modal-default-admin-visual-darwin.png` — recapture valid baseline（Modal + 4 reason options）
+  - `docs/task-queue.md` SEQ-20260521-06 追加 #65
+  - `docs/tasks.md` 清卡片
+- **新增依赖**：无
+- **数据库变更**：无
+- **根因 fix 详解（api-client.ts）**：
+  - **现象**：本会话 admin-ui visual recapture 截到登录页（非 drawer/modal）
+  - **根因链**：CHG-SN-8-FUP-SHELL-NOTIFICATIONS-EP-B（commit 8ea8e4ec/dd71d1a2）admin layout 装配 admin-shell-notifications hook → 60s polling `apiClient.get('/admin/notifications')` → visual capture 时无 access token → 401 → `handleUnauthorized` → `window.location.assign('/login?from=...')` → 截到登录页
+  - **修复**：`getLoginRedirectPath` 第 4 行检查后加 `if (pathname.startsWith('/admin/dev/visual')) return null`，与 middleware.ts line 50 dev/visual 豁免对称（ADR-116 §2.3）
+  - **正确性**：dev/visual 路由是 mock 数据 demo 路由（OBS-2 强约束），永不应触发真 API；即使 API 调用 401 也不该 redirect /login（capture 流程破坏）
+- **conditional skip 详解**（baseline 无法 capture 的真因登记）：
+  - **moderation player-idle**：LinesPanel `lines-panel.tsx:69-88` useEffect fetch sources 成功后 auto-select 第一条 active line → AdminPlayer 默认 state=ready；触发 idle 需 dev DB seed 无活跃线路视频 / 或 LinesPanel 重构移除 auto-select
+  - **user-submissions first-card**：dev DB user_submissions 4 segment 全 0 条
+  - **user-submissions empty-state**：page session ErrorState cascading（wish_list segment pre-existing 500 bug 影响后续 segment）
+- **设计要点**：
+  - **根因 fix 范围扩展**：本卡原范围是 visual capture batch，但 capture 失败的根因在 api-client（EP-B 副作用）；按 CLAUDE.md「正确性优先 / 修复 bug 应识别根因」原则扩范围修 1 行 + commit message 明示根因
+  - **与 middleware 对称范式**：api-client 客户端豁免与 middleware 服务端豁免严格对称（同 ADR-116 §2.3 dev/visual 路由 mock 数据契约）
+  - **conditional skip 范式延伸**：发现技术约束（如 auto-select 阻止 idle / dev DB 数据不足）后立即改 spec 为 skip + 详细原因登记 + follow-up 路径明示；避免 spec 长期 fail
+- **行为变更**：
+  - api-client：admin/dev/visual 路由调用 admin API 401 时不再触发 /login redirect（保留 ApiClientError throw 让 caller catch）
+  - admin-ui visual capture 全 5 spec（bar-signal/decision-card/staff-note-bar/line-health-drawer/reject-modal）capture 流程恢复（可重新跑 update-snapshots）
+- **不在范围**：
+  - dev DB seed user_submissions 数据（独立 follow-up CHG-SN-7-MISC-VISUAL-SUBMISSIONS-SEED）
+  - wish_list endpoint 500 bug 修复（独立 issue / 阻塞 user-submissions empty-state baseline）
+  - LinesPanel 重构移除 auto-select（破坏现有 UX 决策 / 需独立 ADR 评审）
+  - admin-ui 其他 3 spec（bar-signal/decision-card/staff-note-bar）pre-existing baseline 维持（capture 修复后未来可重 capture 验证）
+- **验收**：
+  - typecheck PASS（api-client 改动单一 if return）
+  - lint PASS
+  - 全 unit 4698/4701 PASS（3 failed 隔离跑 74/74 PASS 确认 pre-existing flaky / CrawlerClient.test 2 + UserSubmissionsClient.test 1 / 与本卡修改文件 0 关联）
+  - verify:adr-contracts: verify-endpoint-adr ✅ / verify-adr-d-numbers ✅ 150/150 / verify-sql-schema-alignment ✅ / verify-style-shorthand-conflict ✅
+  - admin-ui 2 张 baseline visual review 确认 valid（drawer + 4 events / modal + 4 reason options）
+- **价值**：
+  - **修复 admin-ui visual capture 基础设施**：CHG-SN-8-FUP-SHELL-NOTIFICATIONS-EP-B 副作用 fix；admin-ui 5 spec 未来 capture 不再受影响
+  - **admin-ui 2 张 baseline 入库**：替换 git restore 的 pre-existing 为新 capture（visual coverage 实际值更新）
+  - **3 conditional skip 真因登记**：每张缺失 baseline 都有明确的 follow-up 路径（dev DB seed / wish_list bug 修 / LinesPanel 重构）
+  - **CLAUDE.md 范式实证**：发现 EP-B 副作用 + 根因 fix + 与 middleware 对称设计 → 体现「正确性 > 改动收敛」原则
+  - **SEQ-20260521-06 第 5 张 chore 卡完成**：本会话累计 6 commit（DOCS-DRIFT-SYNC + ADR-146-D-N-CLOSE + VISUAL-BATCH + VISUAL-BATCH capture + VISUAL-BACKLOG-COMMIT + VISUAL-FOLLOWUP-BATCH）
+
+Cleanup-Audit: admin-ui 2 ✅ recapture / player-idle + submissions 2 conditional skip 登记 follow-up / api-client EP-B 副作用根因 fix
+Plan-Revision: 无（仅 admin-ui visual capture 基础设施恢复 / 不动业务）
