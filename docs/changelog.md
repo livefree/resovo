@@ -3440,3 +3440,62 @@ Plan-Revision: 无
 
 Cleanup-Audit: ADR 起草 ✅ / @livefree 人工审核 PASS / EP-1 启动登记
 Plan-Revision: 1 次（arch-reviewer v2 → v3 / 9 修订消解）
+
+---
+
+## [CHG-SN-9-DT-HEADER-REDESIGN-EP-1] DataTable 矩阵原语 + Props 契约 deprecate（EP-1 / 5 段渐进首段）
+
+- **完成时间**：2026-05-23
+- **记录时间**：2026-05-23
+- **执行模型**：claude-opus-4-7（主循环）
+- **子代理**：无（API 契约决策已在 ADR-149 D-149-10 完成 / 实施层代码 + 单测主循环承担）
+- **关联 ADR**：ADR-149 D-149-1..12 / R-149-7 a11y / R-149-8 EP 序列 / R-149-9 测试 surface
+- **关联 SEQ**：SEQ-20260524-01 第 1 序列任务 #1 第 EP-1 子卡
+- **依赖**：ADR-149 ✅ Accepted（@livefree PASS 2026-05-23 / docs/decisions.md line 11942）
+- **修改文件**：
+  - `packages/admin-ui/src/components/data-table/types.ts` — 4 prop 标 @deprecated（保 noop，EP-3 删）+ 新增 3 prop（columnTriggerVisibility / headerMenuTriggerPosition / ColumnMenuConfig.filterSummary）+ 完整 JSDoc 引用 ADR-149 决策项
+  - `packages/admin-ui/src/components/data-table/column-matrix-menu.tsx` — **新建** 471 行 / portal + ESC + 点外关闭 + focus trap + 焦点回流 + ARIA dialog/grid/row/cell/switch/radiogroup roles + 5 键盘语义（ArrowUp/Down/Left/Right + Space + Esc + Tab）+ 不支持灰化（pinned / 无 filterContent / 无 enableSorting）+ 摘要文本溢出处理（max-width 200px + ellipsis + tooltip）+ 底部 3 批量按钮
+  - `packages/admin-ui/src/components/data-table/dt-styles.tsx` — 新增矩阵 popover 样式（grid sticky thead + switch toggle + radiogroup + radio button + 灰化态 + 摘要溢出 ellipsis + prefers-reduced-motion 兼容）
+  - `packages/admin-ui/src/components/data-table/index.ts` — export ColumnMatrixMenu + ColumnMatrixMenuProps
+  - `tests/unit/components/admin-ui/table/column-matrix-menu.test.tsx` — **新建 39 单测**（超过 35 目标）
+- **新增依赖**：无
+- **数据库变更**：无
+- **新增端点**：无（零 R-MID-1 / 零 endpoint-adr 影响）
+- **质量门禁**：
+  - ✅ `npm run typecheck`（全 8 workspace PASS / 9 @deprecated 消费方仍工作）
+  - ✅ `npm run lint`（5/5 FULL TURBO cached）
+  - ✅ `npm run test -- --run tests/unit/components/admin-ui/table/column-matrix-menu.test.tsx`（39/39 PASS）
+  - ✅ `npm run verify:adr-contracts`（verify-style-shorthand-conflict 0 命中 / verify-adr-d-numbers 162 闭环 / verify-sql-schema 对齐）
+  - ⚠️ 全 unit 套件 4739/4740 PASS（1 pre-existing flaky UserSubmissionsClient.test.tsx 单独跑 PASS / 与 EP-1 无关）
+- **39 单测覆盖维度**：
+  - 基础渲染（5 用例）：open=false 不渲染 / dialog+grid+header+foot 三段 / 行数 / 列名 rowheader / SSR
+  - 可见性 cell（5 用例）：非 pinned switch / pinned 🔒 锁定 / 点 switch onColumnsChange / toggle 恢复 / canHide=false disabled
+  - 过滤 cell（7 用例）：无 filterContent 灰化 / 有 filterContent switch / 已过滤 aria-checked / filterSummary 摘要 / "已过滤" 兜底 / 关闭 → onClearColumnFilter / columnMenu.onClearFilter 优先（业务 key 不对齐场景）
+  - 排序 cell（8 用例）：enableSorting=false 灰化 / radiogroup 3 按钮 / 点 ↑/↓ 触发 / 当前排序 aria-checked / 同方向再点 → onClearSort / × 清除 / 未排序 × disabled
+  - 底部批量操作（3 用例）：清除全部过滤 / 清除排序 / 恢复默认列可见性
+  - a11y（4 用例）：dialog ARIA / grid aria-rowcount + 4 columnheader / rowheader+3 gridcell / radiogroup 2 radio
+  - 键盘+焦点（3 用例）：ESC / 点击外部 / panel 内不关
+  - 关闭按钮（1 用例）：× 触发 onClose
+  - 摘要溢出（3 用例）：长文本不截断 DOM / 多列独立摘要 / 特殊字符不破坏 title
+- **关键设计点**（落实 ADR-149）：
+  - D-149-5 矩阵语义 = 状态指示 + 批量清除（不直接编辑过滤值；关闭过滤 switch = 即时清除）
+  - D-149-6 过滤格 switch + 摘要 + 溢出处理（max-width 200px + ellipsis + native title tooltip）
+  - D-149-7 排序格 ↑↓× 互斥单列（radiogroup 2 radio + 1 clear button）
+  - D-149-11 业务 key 不对齐时支持 `columnMenu.isFiltered` + `columnMenu.onClearFilter`（兼容 VideoListClient FilterChipBar 范式）
+  - D-149-12 a11y 强制约束完整（ARIA + 5 键盘语义 + 焦点回流 previousFocusRef 保存 + return cleanup focus 回触发器）
+- **注意事项**：
+  - **EP-1 完成 ≠ 用户可见任何变化**：矩阵 popover 此时未挂触发器（toolbar 仍是旧设计）；EP-2/3/4 渐进接入后才生效
+  - **typecheck 中间态保护**：4 prop 标 @deprecated 保 noop，9 消费方继续工作；EP-4-B 才完全删除
+  - **用户走读在 EP-4-C 综合做**：EP-1 仅代码层完成，无 UI 体感闭合
+  - **CSS shorthand 修复**：发现初版 FOOT_BTN_STYLE `font: 'inherit'` + `fontSize: '12px'` shorthand+longhand 冲突 → 改 `fontFamily: 'inherit'`（参 CHG-SN-6-06 修复范式）
+- **价值**：
+  - **EP 序列首段就位**：矩阵原语 + Props 契约稳定 / 5 段渐进路径打通 EP-2/3/4
+  - **a11y 范式首次完整落地**：dialog + grid + switch + radiogroup ARIA + 5 键盘语义 + 焦点回流，可作为后续 admin-ui popover 复用模板
+  - **业务 key 不对齐兼容**：通过 `columnMenu.isFiltered` + `columnMenu.onClearFilter` 优先级机制，VideoListClient 等历史外置 FilterChipBar 消费方在 EP-4 迁移时零业务破坏
+  - **deprecate 中间态实证**：9 消费方 typecheck 不破裂 / @deprecated JSDoc 完整 / EP 渐进可行
+- **后续**：
+  - 用户审核 EP-1（代码 + 测试覆盖 + ADR 决策落实度）
+  - 通过 → 启动 EP-2（header-menu anchor 切换 + 列名 toggle 排序 + ⋯ stopPropagation + 10 单测 / ~0.5w）
+
+Cleanup-Audit: EP-1 矩阵原语 ✅ / 39 单测全 PASS / 4 质量门禁全过 / 等用户审核启动 EP-2
+Plan-Revision: 1 次（FOOT_BTN_STYLE shorthand 冲突修复 / verify 命中 ）

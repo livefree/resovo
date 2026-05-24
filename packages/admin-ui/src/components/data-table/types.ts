@@ -32,11 +32,32 @@ export interface DataTableProps<T> {
   readonly 'data-testid'?: string
 
   /**
-   * 启用表头集成菜单：表头点击不再直接排序，而是弹出 popover；
-   * popover 内含升序/降序/清除排序/过滤/隐藏列。默认 false（保持现有 sort-on-click）。
-   * 与外置 ColumnSettingsPanel 暂时共存（reference.md §4.4 / arch-reviewer C-2）。
+   * @deprecated ADR-149 / CHG-SN-9-DT-HEADER-REDESIGN-EP-1（2026-05-23）
+   * 此 prop 已废弃。新方案：点列名 → toggle asc/desc（互斥）+ 列名右侧 ⋯ 列级三点 +
+   * toolbar 右端 ⋯ 统一矩阵 popover。本 prop 在 EP-1 阶段保留但 noop（不再触发任何效果），
+   * EP-4-B 将完全删除。消费方应在 EP-4-A/B 移除此 prop。详 ADR-149 §3 D-149-1/D-149-4。
    */
   readonly enableHeaderMenu?: boolean
+
+  /**
+   * 列名右侧 ⋯ 列级三点触发器的可见性策略（ADR-149 D-149-3）。
+   * - `auto`（默认）：static + dynamic 复合判定：列支持排序 OR 列有 filterContent OR
+   *   列可隐藏 OR 列当前已过滤 OR 列当前已排序 → 显示 ⋯
+   * - `always`：始终显示 ⋯（不可操作列点击 popover 内容全灰）
+   * - `never`：不显示 ⋯（仅靠 thead 统一矩阵 popover；适合所有列均无单列操作场景）
+   * 详 ADR-149 §3 D-149-3。
+   */
+  readonly columnTriggerVisibility?: 'auto' | 'always' | 'never'
+
+  /**
+   * 统一三点触发器（矩阵 popover 入口）的位置（ADR-149 D-149-2）。
+   * - `toolbar-right`（默认）：toolbar 右端，与 search / trailing 同行
+   * - `thead-right`：紧贴 thead 最后一列右侧；备选模式，仅在 toolbar.hidden=true 时建议
+   * 当 `toolbar.hidden===true && headerMenuTriggerPosition==='toolbar-right'` 时，
+   * 强制 fallback 到 `'thead-right'`（toolbar 不渲染时无处可挂）。
+   * 详 ADR-149 §3 D-149-2 + R-149-3。
+   */
+  readonly headerMenuTriggerPosition?: 'toolbar-right' | 'thead-right'
 
   /**
    * 内置 toolbar（CHG-DESIGN-02 Step 4）：framed surface 顶部 search / trailing /
@@ -132,14 +153,17 @@ export interface ToolbarConfig {
   /** 不渲染 toolbar 容器（嵌入式场景；消费方仍可外置 Toolbar） */
   readonly hidden?: boolean
   /**
-   * 关闭隐藏列 chip（CHG-DESIGN-02 Step 7A）。缺省启用：
-   * 当 query.columns 中存在不可见且 `pinned !== true` 的列时，
-   * toolbar 内自动渲染 `已隐藏 N 列` chip + 列可见性 popover。
+   * @deprecated ADR-149 / CHG-SN-9-DT-HEADER-REDESIGN-EP-1（2026-05-23）
+   * 隐藏列 chip 在 ADR-149 中废弃，功能整合到 thead 右侧统一矩阵 popover。
+   * 本 prop 在 EP-1 阶段保留 noop（不再渲染 chip 也不再读取此 prop），EP-3 将完全删除。
+   * 详 ADR-149 §3 D-149-1 / D-149-10。
    */
   readonly hideHiddenColumnsChip?: boolean
   /**
-   * 关闭 filter chips slot（CHG-DESIGN-02 Step 7A）。缺省启用：
-   * 当 query.filters 非空时，toolbar 第二行自动渲染 chips（每列 + × 清除）。
+   * @deprecated ADR-149 / CHG-SN-9-DT-HEADER-REDESIGN-EP-1（2026-05-23）
+   * filter chips slot 在 ADR-149 中废弃。"已过滤状态"统一显示在矩阵 popover 过滤格；
+   * trailing 槽位允许 read-only 业务摘要 chip（如 FilterChipBar，D-149-11 例外）。
+   * 本 prop 在 EP-1 阶段保留 noop，EP-3 将完全删除。详 ADR-149 §3 D-149-1 / D-149-10 / D-149-11。
    */
   readonly hideFilterChips?: boolean
 }
@@ -184,10 +208,10 @@ export interface TableColumn<T> {
   readonly pinned?: boolean
   readonly overflowVisible?: boolean
   /**
-   * 自定义 filter chip 渲染（CHG-DESIGN-02 Step 7A）。
-   * 缺省走 DataTable 内置分类型 formatter（覆盖 6 种 FilterValue.kind：
-   * text / number / bool / enum / range / date-range）。
-   * 仅在需要业务化 chip 形态时覆盖；返回 `null` 时不渲染该列 chip。
+   * @deprecated ADR-149 / CHG-SN-9-DT-HEADER-REDESIGN-EP-1（2026-05-23）
+   * filter chips 整段废弃后本 prop 无消费方（Grep 实测 0 处使用）。
+   * 自定义"已过滤状态摘要"应通过 `column.columnMenu.filterSummary: string` 提供。
+   * 本 prop 在 EP-1 阶段保留 noop，EP-3 将完全删除。详 ADR-149 §3 D-149-6 / D-149-10。
    */
   readonly renderFilterChip?: (ctx: FilterChipContext) => ReactNode
 }
@@ -225,6 +249,26 @@ export interface ColumnMenuConfig {
   readonly filterContent?: ReactNode
   readonly isFiltered?: boolean
   readonly onClearFilter?: () => void
+  /**
+   * 已过滤状态的摘要文本（ADR-149 D-149-6）。
+   * 由消费方提供，矩阵 popover 过滤格右侧显示。
+   * 缺省时矩阵格显示「已过滤」（无摘要详情）。
+   *
+   * 格式建议（消费方自行格式化）：
+   * - text：`<值>`，长度 > 30 字符建议截断
+   * - enum 单选：`类型: 电影`
+   * - enum 多选 ≤ 2 项：`类型: 电影, 电视剧`
+   * - enum 多选 > 2 项：`类型: 电影+3 项…`
+   * - range：`8.0-10.0`
+   * - date-range：`近7天` 或 `2026-05-01~05-23`
+   *
+   * 矩阵格 UI 处理：max-width: 200px / text-overflow: ellipsis / white-space: nowrap +
+   * hover 显示 native `title` tooltip 全文（DataTable 内部完成）。
+   *
+   * 本字段当前锁定 `string`（不接 ReactNode）；富文本（chip 内嵌 icon / 颜色徽标 / 链接）
+   * 走 N1-149-6 N1 follow-up 评估。详 ADR-149 §3 D-149-6 + R-149-4。
+   */
+  readonly filterSummary?: string
 }
 
 /**

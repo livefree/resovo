@@ -13,6 +13,9 @@ export { FilterChip, FilterChipBar } from './filter-chip'
 export type { FilterChipProps, FilterChipBarProps } from './filter-chip'
 export { ColumnSettingsPanel } from './column-settings-panel'
 export type { ColumnSettingsPanelProps } from './column-settings-panel'
+// ADR-149 / CHG-SN-9-DT-HEADER-REDESIGN-EP-1 — 统一矩阵 popover
+export { ColumnMatrixMenu } from './column-matrix-menu'
+export type { ColumnMatrixMenuProps } from './column-matrix-menu'
 
 // Hook
 export { useTableQuery } from './use-table-query'

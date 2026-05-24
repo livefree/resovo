@@ -361,6 +361,147 @@ const DT_CSS = `
   color: var(--fg-muted);
   user-select: none;
 }
+
+/* ── ColumnMatrixMenu（ADR-149 D-149-2/5/6/7/12） ─────── *
+ * 统一矩阵 popover：列 × [可见性/过滤/排序] grid + 不支持灰化 + a11y switch/radiogroup */
+[data-column-matrix-menu] {
+  font-size: var(--font-size-sm-tight);
+  color: var(--fg-default);
+  font-family: inherit;
+}
+[data-column-matrix-grid] {
+  width: 100%;
+  border-collapse: collapse;
+}
+[data-column-matrix-grid] thead th {
+  position: sticky;
+  top: 0;
+  background: var(--bg-surface-elevated);
+  z-index: 1;
+  padding: 6px 14px;
+  text-align: left;
+  font-size: var(--font-size-xxs);
+  font-weight: 600;
+  color: var(--fg-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-bottom: 1px solid var(--border-default);
+}
+[data-column-matrix-grid] tbody th[scope="row"] {
+  padding: 8px 14px;
+  text-align: left;
+  font-weight: 500;
+  color: var(--fg-default);
+  white-space: nowrap;
+  min-width: 140px;
+}
+[data-column-matrix-grid] tbody td {
+  padding: 8px 14px;
+  vertical-align: middle;
+}
+[data-column-matrix-grid] tbody tr {
+  border-bottom: 1px solid var(--border-subtle);
+}
+[data-column-matrix-grid] tbody tr:last-child {
+  border-bottom: none;
+}
+
+/* switch toggle（可见性 / 过滤 格内通用） */
+[data-column-matrix-menu] [role="switch"] {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  min-width: 40px;
+  padding: 0 8px;
+  border: 1px solid var(--border-default);
+  border-radius: 999px;
+  background: var(--bg-surface);
+  color: var(--fg-muted);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  transition: color var(--duration-fast) var(--easing-ease-out),
+              background var(--duration-fast) var(--easing-ease-out),
+              border-color var(--duration-fast) var(--easing-ease-out);
+}
+[data-column-matrix-menu] [role="switch"][aria-checked="true"] {
+  background: var(--admin-accent-soft);
+  color: var(--admin-accent-on-soft);
+  border-color: var(--admin-accent-border);
+}
+[data-column-matrix-menu] [role="switch"]:hover:not([disabled]):not([aria-disabled="true"]) {
+  border-color: var(--border-strong);
+}
+[data-column-matrix-menu] [role="switch"][disabled],
+[data-column-matrix-menu] [role="switch"][aria-disabled="true"] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* radiogroup（排序 ↑↓× 三按钮） */
+[data-column-matrix-menu] [role="radiogroup"] {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+[data-column-matrix-menu] [role="radiogroup"] button,
+[data-column-matrix-menu] [role="radiogroup"] [role="radio"] {
+  min-width: 24px;
+  height: 22px;
+  padding: 0 6px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--fg-muted);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+}
+[data-column-matrix-menu] [role="radiogroup"] [role="radio"]:hover:not([aria-checked="true"]) {
+  background: var(--bg-surface-row);
+  color: var(--fg-default);
+}
+[data-column-matrix-menu] [role="radiogroup"] [role="radio"][aria-checked="true"] {
+  background: var(--admin-accent-soft);
+  color: var(--admin-accent-on-soft);
+  border-color: var(--admin-accent-border);
+}
+[data-column-matrix-menu] [role="radiogroup"] button[disabled] {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* 不支持项灰化（pinned 可见性 / 无 filterContent 过滤 / 无 enableSorting 排序） */
+[data-column-matrix-menu] [data-locked="true"],
+[data-column-matrix-menu] [data-unsupported="true"] {
+  color: var(--fg-muted);
+  opacity: 0.6;
+  user-select: none;
+}
+
+/* 过滤格摘要文本溢出处理（D-149-6 / max-width 200px + ellipsis + tooltip） */
+[data-column-matrix-menu] [data-matrix-filter-cell="true"] {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+[data-column-matrix-menu] [data-matrix-filter-summary="true"] {
+  display: inline-block;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--fg-muted);
+  font-size: 12px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-column-matrix-menu] [role="switch"] { transition: none; }
+}
 ` as const
 
 let injected = false
