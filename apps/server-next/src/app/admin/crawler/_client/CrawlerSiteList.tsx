@@ -15,8 +15,8 @@
 
 import { useMemo, useState, type CSSProperties } from 'react'
 import {
-  AdminInput,
   DataTable,
+  DataTableSearchInput,
   EmptyState,
   ErrorState,
   LoadingState,
@@ -185,15 +185,16 @@ export function CrawlerSiteList({
         renderExpandedRow={renderExpandedRow}
         toolbar={{
           search: (
-            <AdminInput
+            <DataTableSearchInput
               size="sm"
               placeholder="搜索站点 key / 名称"
               value={search}
-              onChange={(e) => {
-                setSearch(e.target.value)
+              onChange={(next) => {
+                setSearch(next)
                 setPage(1)
               }}
               data-testid="crawler-site-search"
+              aria-label="搜索站点"
             />
           ),
         }}

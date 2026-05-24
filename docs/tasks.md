@@ -6,4 +6,4 @@
 
 ## 进行中任务
 
-（空 — 上一任务 CHG-SN-9-DT-HEADER-REDESIGN-ADR-AMEND-1 已完成 / ADR-149 第 1 次 AMENDMENT 落地 / arch-reviewer A− PASS / D-149-13+14+15 + EP 序列 4→7 段 + 工时 2.5w→5.2w / types.ts 4 处注释微调 / 等 @livefree 人工审核后启动 EP-4）
+（空 — 上一任务 CHG-SN-9-DT-HEADER-REDESIGN-EP-4 已完成 / DataTableSearchInput 原语 + IME composition + debounce + Enter 立即 / 2 合规消费方接入（CrawlerSiteList + SourcesClient）/ 13 新单测 + SourcesClient 测试 修复（修 unmount/remount lifecycle）/ 全 4751 unit 0 flaky PASS / 4 质量门禁全过 / 待 @livefree 人工审核后启动 EP-5-shared）

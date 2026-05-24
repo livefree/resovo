@@ -18,6 +18,9 @@ export type { ColumnSettingsPanelProps } from './column-settings-panel'
 // ADR-149 / CHG-SN-9-DT-HEADER-REDESIGN-EP-1 — 统一矩阵 popover
 export { ColumnMatrixMenu } from './column-matrix-menu'
 export type { ColumnMatrixMenuProps } from './column-matrix-menu'
+// ADR-149 D-149-8 + AMENDMENT 1 D-149-13 / CHG-SN-9-DT-HEADER-REDESIGN-EP-4 — search input 原语（IME + debounce + Enter 立即）
+export { DataTableSearchInput } from './search-input'
+export type { DataTableSearchInputProps } from './search-input'
 
 // Hook
 export { useTableQuery } from './use-table-query'

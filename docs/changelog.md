@@ -3680,3 +3680,66 @@ Plan-Revision: 1 次（D-149-10 RemovedExports 矛盾修正 — 保留 filter-ch
 
 Cleanup-Audit: ADR-149 AMENDMENT 1 起草 ✅ / arch-reviewer A− PASS / 9 修订消解 / EP-1/2/3 零回退 / types.ts 4 注释微调 / 等用户审核启动 EP-4
 Plan-Revision: 1 次（types.ts line 38/158/166/214 @deprecated 注释 "EP-4-B/EP-3" → "EP-6" 文案微调）
+
+---
+
+## [CHG-SN-9-DT-HEADER-REDESIGN-EP-4] DataTableSearchInput 原语 + IME composition + 2 合规消费方接入（7 段序列第 4 段）
+
+- **完成时间**：2026-05-24
+- **记录时间**：2026-05-24
+- **执行模型**：claude-opus-4-7（主循环）
+- **子代理**：无（D-149-8 + D-149-13 决策已在 ADR-149 + AMENDMENT 1 完成）
+- **关联 ADR**：ADR-149 D-149-8（IME + debounce + Enter）+ AMENDMENT 1 D-149-13（toolbar.search 槽位约定 / 边界判定）
+- **关联 SEQ**：SEQ-20260524-01 第 1 序列任务 #1 第 EP-4 子卡
+- **依赖**：AMENDMENT 1 ✅ commit `2a9809a3`
+- **范围调整**（vs AMENDMENT 1 §4 原 "7 消费方接入"）：
+  - 7 消费方实测分类：2 合规（CrawlerSiteList / SourcesClient）+ 2 违规含 search input（VideoListClient / UsersListClient）+ 3 违规无 search 维度（CrawlerRunsView / AuditClient / SubmissionsListClient）
+  - 4 违规消费方含 search 的 search input 接入 → **合并到对应 EP-5-* 子卡**（同 PR 修业务 filter 避免拆碎触发 D-149-13 违规中间态）
+  - 3 无 search 维度消费方 → EP-5-* 完成后 toolbar.search 槽位变空，本 EP-4 不动
+  - **本 EP-4 实际只接入 2 合规消费方**
+- **修改文件**：
+  - 新建：`packages/admin-ui/src/components/data-table/search-input.tsx`（~170 行 / DataTableSearchInput 原语 / IME composition + debounce + Enter 立即 + 受控 + SSR safe）
+  - 改：`packages/admin-ui/src/components/data-table/index.ts` — 加 export DataTableSearchInput + DataTableSearchInputProps
+  - 新建：`tests/unit/components/admin-ui/table/search-input.test.tsx`（13 单测 / 超过 12 目标）
+  - 改：`apps/server-next/src/app/admin/crawler/_client/CrawlerSiteList.tsx` — AdminInput → DataTableSearchInput
+  - 改：`apps/server-next/src/app/admin/sources/_client/SourcesClient.tsx` — AdminInput → DataTableSearchInput + 删 searchInput state + 删 useEffect debounce + 删 debounceRef + 删 useRef import + 删 LoadingState import + **修条件渲染 lifecycle**（删 `loading && rows.length === 0 → LoadingState` 分支让 DataTable 不 unmount，避免 DataTableSearchInput 内部 ref 丢失）
+- **新增依赖**：无
+- **数据库变更**：无
+- **新增端点**：无（零 R-MID-1 / 零 endpoint-adr 影响）
+- **D-149-8 行为契约（13 单测覆盖）**：
+  - composition 期间不传播 onChange（IME 拼音中字未上屏）
+  - compositionEnd 立即触发 onChange（不等 debounce）
+  - 非 composition 时走 debounce（默认 300ms）
+  - Enter 立即提交（绕过 debounce）
+  - value 受控（外部 reset 时 input 同步）
+  - SSR safe（renderToString 不 throw）
+  - 连续中文输入"黑客"全程不中断（#UR-B3 核心闭合）
+- **质量门禁**：
+  - ✅ `npm run typecheck`（全 8 workspace PASS）
+  - ✅ `npm run lint`（5/5 FULL TURBO）
+  - ✅ admin-ui/table 322 测试全 PASS（含 EP-1 39 + EP-2 12 + EP-3 11 + EP-4 13 + 旧 247）
+  - ✅ `npm run verify:adr-contracts`（style-shorthand-conflict 0 / D-N 165 闭环 / sql-schema 对齐）
+  - ✅ **全 unit 4751/4751 PASS** — 首次 0 flaky（含 SourcesClient.test.tsx 之前 pre-existing flaky 因 SourcesClient lifecycle 修复也一并解决）
+- **关键技术发现 + 修复**（实施时识别）：
+  - DataTableSearchInput Enter 触发用 `latestValueRef.current`（不能用 closure-captured `localValue` / DOM `e.currentTarget.value`）：受控 input 下 React batched setState 在同步事件链中可能未 flush，且 React re-render 会把 DOM value reset 到 controlled value
+  - SourcesClient line 469 `loading && rows.length === 0 → LoadingState` 条件渲染让 DataTable 反复 unmount/remount → DataTableSearchInput 内部 ref 丢失。修复：删该条件分支，让 DataTable 自带 loading prop 内部处理加载态。**这是消费方 lifecycle bug，EP-4 接入新原语顺带修复**
+- **关键设计点**（落实 ADR-149）：
+  - D-149-8 IME composition + debounce + Enter 立即提交完整契约
+  - D-149-13 边界判定示范：CrawlerSiteList + SourcesClient 单 search input 符合白名单
+  - SourcesClient 业务 keyword state 直接受 DataTableSearchInput onChange 触发（删除原 searchInput 中间 state + useEffect debounce + debounceRef → 净减约 15 行业务代码）
+- **注意事项**：
+  - **EP-4 完成 ≠ 5 违规消费方已修复**：CrawlerRunsView / AuditClient / UsersListClient / SubmissionsListClient / VideoListClient 仍含违规 toolbar.search（业务 filter UI）；EP-5-* 6 子卡才完整闭合
+  - **#UR-B3 仅在 2 合规消费方闭合**：剩余 4 含 search 消费方的 IME 修复在 EP-5-* 子卡内同步完成
+  - **SourcesClient lifecycle 修复**作为 EP-4 接入新原语的伴随修复（D-149-13 隐含约束："消费方传给 toolbar.search 的组件必须能在 fetch 期间存活"）
+- **价值**：
+  - **DataTableSearchInput 原语就位**：13 单测覆盖完整 IME / debounce / Enter / 受控行为；EP-5-* 5 消费方迁移可直接复用
+  - **2 合规消费方 #UR-B3 提前闭合**：CrawlerSiteList / SourcesClient 中文输入"黑客"全程不刷新
+  - **SourcesClient 净减 ~15 行业务代码**：删 searchInput state + useEffect debounce + debounceRef + 2 unused imports
+  - **0 flaky 实证**：SourcesClient lifecycle 修复消除之前 pre-existing flaky 测试（4751 测试 0 失败）
+  - **ref 替代 state 的范式沉淀**：受控 input + 同步事件链场景的可靠值读取模式
+- **后续**：
+  - 用户审核 EP-4（DataTableSearchInput 原语 + 2 合规消费方接入 + 13 单测覆盖）
+  - 通过 → 启动 EP-5-shared（DataTableEnumFilter + DataTableTextFilter + DataTableDateRangeFilter 共享原语 / ~0.3w）
+
+Cleanup-Audit: EP-4 DataTableSearchInput ✅ / IME + debounce + Enter 完整 / 2 合规消费方接入 / 13 单测 / SourcesClient lifecycle 修复 / 全 4751 unit 0 flaky / 4 质量门禁全过 / 等用户审核启动 EP-5-shared
+Plan-Revision: 2 次（DataTableSearchInput 用 latestValueRef 解决 closure stale + SourcesClient 条件渲染 unmount lifecycle 修复）

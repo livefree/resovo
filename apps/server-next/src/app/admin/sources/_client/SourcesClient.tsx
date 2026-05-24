@@ -11,17 +11,16 @@
  *           LoadingState / ErrorState / DataTable + useToast
  */
 
-import { useState, useEffect, useCallback, useRef, useMemo, type CSSProperties } from 'react'
+import { useState, useEffect, useCallback, useMemo, type CSSProperties } from 'react'
 import Image from 'next/image'
 import {
   PageHeader,
   AdminButton,
-  AdminInput,
   AdminCard,
   KpiCard,
-  LoadingState,
   ErrorState,
   DataTable,
+  DataTableSearchInput,
   Modal,
   useToast,
   type TableColumn,
@@ -255,7 +254,7 @@ export function SourcesClient() {
   const [segment, setSegment] = useState<SourceSegment>('grouped')
   // CHG-SN-8-FUP-SOURCES-DEAD-BTN：「一键替换最相似 URL」筹备中说明 Modal
   const [replaceTipOpen, setReplaceTipOpen] = useState(false)
-  const [searchInput, setSearchInput] = useState('')
+  // ADR-149 EP-4: 接入 DataTableSearchInput 原语（IME + debounce 内置） → 删 searchInput 中间 state
   const [keyword, setKeyword] = useState<string | undefined>()
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE)
@@ -273,24 +272,12 @@ export function SourcesClient() {
 
   const [activeTab, setActiveTab] = useState<'matrix' | 'aliases'>('matrix')
 
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // ADR-149 EP-4: 搜索 debounce + IME 已迁移到 DataTableSearchInput 原语；本组件无需维护 debounceRef
 
   // KPI stats（独立请求，只加载一次）
   useEffect(() => {
     getVideoGroupStats().then(setStats).catch(() => null)
   }, [])
-
-  // 搜索 debounce
-  useEffect(() => {
-    if (debounceRef.current) clearTimeout(debounceRef.current)
-    debounceRef.current = setTimeout(() => {
-      setKeyword(searchInput.trim() || undefined)
-      setPage(1)
-    }, 300)
-    return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current)
-    }
-  }, [searchInput])
 
   useEffect(() => {
     let cancelled = false
@@ -339,13 +326,16 @@ export function SourcesClient() {
   }), [page, pageSize, sort, selectedKeys])
 
   const toolbarSearch = (
-    <AdminInput
-      type="search"
+    <DataTableSearchInput
       placeholder="搜索视频名称…"
-      value={searchInput}
-      onChange={(e) => setSearchInput(e.target.value)}
+      value={keyword ?? ''}
+      onChange={(next) => {
+        setKeyword(next.trim() || undefined)
+        setPage(1)
+      }}
       size="sm"
       aria-label="搜索视频"
+      data-testid="sources-search-input"
     />
   )
 
@@ -473,13 +463,15 @@ export function SourcesClient() {
               </div>
             </div>
 
-            {/* DataTable 一体化（P1-5）— main 整页滚动模式（body 独立滚动留 M-SN-6 增强）*/}
+            {/* DataTable 一体化（P1-5）— main 整页滚动模式（body 独立滚动留 M-SN-6 增强）
+              * ADR-149 EP-4：删除 "loading && rows.length === 0 → LoadingState" 条件分支，
+              * 改为 DataTable 自带 loading prop 内部显示加载态。原条件渲染会让 DataTable
+              * 在 fetch 期间 unmount/remount，导致 DataTableSearchInput 的内部 ref 丢失，
+              * Enter 立即提交时读到 ""（不是用户已输入的 keyword）。 */}
             <div style={{ display: 'flex', flexDirection: 'column' }}>
-            {loading && rows.length === 0
-              ? <div style={{ padding: '16px' }}><LoadingState variant="skeleton" skeletonRows={8} /></div>
-              : error
-                ? <div style={{ padding: '16px' }}><ErrorState error={error} onRetry={refresh} /></div>
-                : (
+            {error
+              ? <div style={{ padding: '16px' }}><ErrorState error={error} onRetry={refresh} /></div>
+              : (
                     <DataTable<VideoGroupRow>
                       rows={rows}
                       columns={columns}
