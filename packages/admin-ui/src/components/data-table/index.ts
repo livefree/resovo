@@ -21,6 +21,22 @@ export type { ColumnMatrixMenuProps } from './column-matrix-menu'
 // ADR-149 D-149-8 + AMENDMENT 1 D-149-13 / CHG-SN-9-DT-HEADER-REDESIGN-EP-4 — search input 原语（IME + debounce + Enter 立即）
 export { DataTableSearchInput } from './search-input'
 export type { DataTableSearchInputProps } from './search-input'
+// ADR-149 D-149-3 + AMENDMENT 1 D-149-15 / CHG-SN-9-DT-HEADER-REDESIGN-EP-5-SHARED — 列级 ⋯ filterContent 共享原语
+export { DataTableEnumFilter } from './filter-enum'
+export type {
+  DataTableEnumFilterProps,
+  DataTableEnumFilterSingleProps,
+  DataTableEnumFilterMultiProps,
+  FilterEnumOption,
+} from './filter-enum'
+export { DataTableTextFilter } from './filter-text'
+export type { DataTableTextFilterProps } from './filter-text'
+export { DataTableDateRangeFilter } from './filter-date-range'
+export type {
+  DataTableDateRangeFilterProps,
+  DateRangeValue,
+  DateRangePreset,
+} from './filter-date-range'
 
 // Hook
 export { useTableQuery } from './use-table-query'

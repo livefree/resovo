@@ -3934,3 +3934,59 @@ Plan-Revision: 1 次（onClearAllFilters 业务 key 桥接 + 合并式 resetColu
 
 Cleanup-Audit: EP-4.5 矩阵触发器接入 ✅ / 17 新单测 + 13 旧更新 + 2 工具函数沉淀 + dt-styles 样式 / 全 4772 unit 1 flaky / 4 质量门禁全过 / 用户 dev server 走读后启动 EP-5-shared
 Plan-Revision: 1 次（thead-right fallback 推 N1-149-11 / 0 消费方使用 toolbar.hidden=true 无需阻塞 EP-4.5）
+
+---
+
+## [CHG-SN-9-DT-HEADER-REDESIGN-EP-5-SHARED] 列级 ⋯ filterContent 共享原语沉淀（8 段序列第 5-shared 段 / EP-5 之前置）
+
+- **完成时间**：2026-05-24
+- **记录时间**：2026-05-24
+- **执行模型**：claude-opus-4-7（主循环）
+- **子代理**：无（D-149-3 + D-149-15 桥接合约已在 ADR-149 + AMENDMENT 1 完成）
+- **关联 ADR**：ADR-149 D-149-3 + D-149-15 + AMENDMENT 1 R-AMEND-1-4（共享原语前置约束）
+- **关联 SEQ**：SEQ-20260524-01 第 1 序列任务 #1 第 EP-5-shared 子卡
+- **依赖**：EP-4.5 ✅ commit `11aff295`（用户走读视频库后严格按 AMENDMENT 1 §4 EP-5 序列执行）
+- **背景**：@livefree 走读视频库发现 VideoFilterBar 5 select 仍在 toolbar.search / 搜索 IME 失焦 / 视觉不一致。严格按 AMENDMENT 1 §4 EP-5 序列（先 shared → crawler-runs → submissions → users → audit → videos）执行。EP-5-shared 是必要前置 — 沉淀 3 共享原语避免 5 消费方各自重复 boilerplate（DRY / R-AMEND-1-4 MUST）
+- **新建文件**：
+  - `packages/admin-ui/src/components/data-table/filter-enum.tsx`（DataTableEnumFilter / 单+多选 union props / searchable / disabled / a11y role="listbox" + option aria-selected / SSR safe）
+  - `packages/admin-ui/src/components/data-table/filter-text.tsx`（DataTableTextFilter / **复用 DataTableSearchInput 半 uncontrolled 范式**：IME composition + debounce 300ms + Enter 立即 + selection 保留 / type="text"）
+  - `packages/admin-ui/src/components/data-table/filter-date-range.tsx`（DataTableDateRangeFilter / from-to 双 input + 可选 presets 快捷选项 + clear 按钮 / type date|datetime-local / a11y role="group"）
+  - `tests/unit/components/admin-ui/table/step-ep5-shared-filter-controls.test.tsx`（**50 新单测** / 超过 ADR §7 测试 surface 50 目标）
+- **修改文件**：
+  - `packages/admin-ui/src/components/data-table/index.ts` — export 3 原语 + 7 Props 类型（DataTableEnumFilter + Single + Multi + FilterEnumOption / DataTableTextFilter + Props / DataTableDateRangeFilter + Props + DateRangeValue + DateRangePreset）
+- **新增依赖**：无
+- **数据库变更**：无
+- **新增端点**：无
+- **50 单测覆盖维度**（3 原语 / 20+15+15）：
+  - **DataTableEnumFilter 20**：单选 10（渲染 / aria-selected / 自定义 placeholder / disabled / searchable filtered / 无匹配 / SSR）+ 多选 10（aria-multiselectable / checked 状态 / toggle add/remove / 清除按钮 / multi+searchable+disabled / SSR）
+  - **DataTableTextFilter 15**：基础 3（渲染 + SSR + disabled）+ debounce 3（不触发 / 触发 / 自定义 debounceMs）+ IME 3（不触发 / compositionEnd 立即 / Enter 不在 composition 期间触发）+ Enter 1（立即提交）+ 受控同步 1 + focus persistence 3（保持 focus / 光标位置保留 / composition 期间不打断）+ 中文"黑客"全程不中断 1
+  - **DataTableDateRangeFilter 15**：基础 8（渲染 + type / value 透传 / from/to onChange / clear / disabled / SSR）+ presets 7（渲染 + 点击 + 缺省 + hasValue 清除按钮 + 点清除 + disabled 透传）
+- **质量门禁**：
+  - ✅ `npm run typecheck`（全 8 workspace PASS）
+  - ✅ `npm run lint`（5/5 FULL TURBO cached）
+  - ✅ admin-ui/table 394 测试全 PASS（含 EP-1 39 + EP-2 12 + EP-3 11 + EP-4 13 + EP-4-HOTFIX 5 + EP-4.5 17 + **EP-5-shared 50** + 旧保留 247）
+  - ✅ `npm run verify:adr-contracts`（style-shorthand-conflict 0 / D-N 166 闭环 / sql-schema 对齐）
+  - ✅ **全 unit 4823/4823 PASS / 0 flaky**（持续 0 flaky）
+- **关键设计点**：
+  - **DataTableTextFilter 复用 DataTableSearchInput 范式**：避免 IME / debounce / selection 保留 逻辑两处实装漂移（半 uncontrolled + latestValueRef + selectionStart/End clamp）
+  - **DataTableEnumFilter union props 类型**：通过 `multi?: true | false` 区分 single / multi 模式，TypeScript 自动推断 value 类型（string vs readonly string[]）— 消费方 type-safe
+  - **DataTableDateRangeFilter from-to 双 input + presets**：消费方可选 presets（按业务时间段定制 / 如"近 7 天 / 近 30 天 / 本月"）
+  - 所有 3 原语均 SSR safe（无 useEffect 依赖 DOM API / mount 前渲染 ok）
+- **业务 key 桥接合约延续**（D-149-15）：3 原语都通过受控 value/onChange 与消费方业务 key namespace 对接 — 消费方在 onChange 闭包内读写自己的业务 filter key（如 VideoListClient 的 q/type/status）
+- **不动**：
+  - ❌ 消费方代码（EP-5-* 5 子卡才接入新原语）
+  - ❌ data-table.tsx 主组件（与原语沉淀无关）
+  - ❌ column-matrix-menu.tsx（已实装的 filterContent slot 渲染不变）
+- **价值**：
+  - **DRY 防御**：5 消费方迁移不再重复实装 select / input / date-range boilerplate
+  - **IME 与 selection 保留范式扩展**：DataTableTextFilter 让所有列级 text 过滤享受与 DataTableSearchInput 同等品质
+  - **3 原语就位**：EP-5-crawler-runs / EP-5-submissions / EP-5-users / EP-5-audit / EP-5-videos 5 子卡可直接 import 使用
+  - **0 flaky 持续**：4823 测试全 PASS（含 50 新 EP-5-shared）
+  - **D-149-15 桥接合约第 4 次落地**（D-149-15 → EP-4.5 D-149-16 → EP-5-shared 3 原语）
+- **后续**：
+  - 用户审核 EP-5-shared（3 原语 + 50 单测 + Props 设计）
+  - 通过 → 启动 EP-5-crawler-runs（CrawlerRunsView 2 select → 列级 ⋯ filterContent 迁移 + 桥接合约接入 / ~0.25w）
+  - 5 子卡严格串行（AMENDMENT 1 R-AMEND-1-5）：shared ✅ → crawler-runs → submissions → users → audit → videos（按复杂度递增）
+
+Cleanup-Audit: EP-5-shared 3 共享原语 ✅ / 50 新单测全 PASS / 全 4823 unit 0 flaky / 4 质量门禁全过 / 等用户审核启动 EP-5-crawler-runs
+Plan-Revision: 0 次（D-149-3 + D-149-15 决策已在 AMENDMENT 1 完成 / 实施零偏离）
