@@ -3247,3 +3247,59 @@ Plan-Revision: 无（纯 baseline 入库 + review 拦截）
 
 Cleanup-Audit: admin-ui 2 ✅ recapture / player-idle + submissions 2 conditional skip 登记 follow-up / api-client EP-B 副作用根因 fix
 Plan-Revision: 无（仅 admin-ui visual capture 基础设施恢复 / 不动业务）
+
+
+## [CHG-SN-7-MISC-VISUAL-FOLLOWUP-2] 3 follow-up 收口（dev DB migration sync + seed + LinesPanel ADR 评估）
+
+- **完成时间**：2026-05-23
+- **记录时间**：2026-05-23
+- **执行模型**：claude-opus-4-7（max effort 续会话）
+- **子代理**：无
+- **修改文件**（5 baseline + 2 docs）：
+  - `tests/visual/user-submissions/user-submissions.visual.spec.ts-snapshots/submission-card-first-admin-visual-darwin.png` — 新建（求片 card「建议补充黑人喜剧《富贵双生》」+ metadata quote year+title + 拒绝/处理 actions）
+  - `tests/visual/user-submissions/user-submissions.visual.spec.ts-snapshots/submissions-empty-state-admin-visual-darwin.png` — 新建（default bad_source segment EmptyState「暂无待处理投稿」）
+  - `tests/visual/user-submissions/user-submissions.visual.spec.ts-snapshots/submissions-page-header-admin-visual-darwin.png` — modified（副标题 0→2 条待处理）
+  - `tests/visual/user-submissions/user-submissions.visual.spec.ts-snapshots/submissions-segment-bad-src-admin-visual-darwin.png` — modified（求片 badge 0→2）
+  - `tests/visual/user-submissions/user-submissions.visual.spec.ts-snapshots/submissions-segment-processed-admin-visual-darwin.png` — modified（求片 badge 0→2）
+  - `docs/task-queue.md` SEQ-20260521-06 追加 #66
+  - `docs/tasks.md` 清卡片
+- **新增依赖**：无
+- **dev DB 变更（不入仓 / 仅 dev 环境）**：
+  - 跑 9 pending migration（064 crawler_site_category_maps / 065 user_submissions / 066 system_settings_seed / 067 users.role_changed_at / 068 users.display_name / 069 audit_log CHECK 6→13 / 070 admin_audit_log_created_index / 071 user_filter_presets / 072 audit_log CHECK +filter_preset）
+  - SQL INSERT 2 条 wish_list pending user_submissions（admin user / metadata_jsonb 含 title + year）
+- **3 follow-up 闭合详解**：
+  - **#1 wish_list 500 endpoint bug ✅ 修复**：根因是 dev DB 落后 9 pending migration 而非 endpoint 逻辑 bug；`npm run migrate` 全跑后 4 type 全恢复 HTTP 200；端点零代码改动
+  - **#2 dev DB seed user_submissions ✅ 落地**：2 条 wish_list 让 first-card spec 能 capture；submissions-empty-state default bad_source 仍 0 条（EmptyState 正确触发）
+  - **#3 LinesPanel auto-select ADR ❌ NEGATED**：评估 ROI — 仅为 1 张 player-idle baseline 改 LinesPanel UX 决策（auto-select 第一条 active line 是审核员日常 UX 优化）不值；spec conditional skip 保留 / 未来 dev DB seed 无活跃线路视频时自动 capture
+- **设计要点**：
+  - **dev DB schema sync 工程化**：本卡发现 dev DB 落后跨 M-SN-3 ~ M-SN-7 5 个里程碑 9 migration；建议 dev 环境定期 `npm run migrate:check` 巡检（独立 follow-up）
+  - **UX 决策守护**：LinesPanel ADR 评估体现 CLAUDE.md「价值排序」原则 — 1 张 baseline 不值得破坏每个审核员每次审核 UX；NEGATED 决策长期登记 backlog
+  - **conditional skip 自适应**：first-card spec 4 segment cycling 设计在 dev DB 数据变化时自动 capture（无需改 spec）
+  - **不动 spec / 不动 code**：本卡纯 dev DB 操作 + baseline 入库
+- **行为变更**：
+  - dev DB：user_submissions 表存在 + 2 条 seed 数据（影响 dev 环境 user-submissions 页面显示）
+  - dev DB：8 张表新建/扩字段（M-SN-3 ~ M-SN-7 累计 migration 应用）
+  - baseline：user-submissions 5 张 visual baseline 全 ✅ 入库（之前 4/6 → 现在 6/6 完整 / pagination 仍 conditional skip）
+- **不在范围**：
+  - 业务代码 / spec 修改（spec 之前已修 / 本卡不动）
+  - LinesPanel 重构（NEGATED 不动）
+  - admin-ui 其他 3 spec re-capture（bar-signal/decision-card/staff-note-bar pre-existing baseline 维持）
+  - moderation player-idle 仍缺（NEGATED 决策）
+  - migration 文件本身（已在仓内 / 仅 dev DB 操作）
+  - dev DB seed SQL（不入仓 / 独立 dev 数据）
+- **验收**：
+  - typecheck PASS / lint PASS
+  - 全 unit 4700/4701 PASS（1 failed: VideoImageSection.test 隔离 21/21 PASS / pre-existing flaky / 与本卡修改文件 0 关联 / 本卡仅改 baseline + docs / 不改 code）
+  - verify:adr-contracts: verify-endpoint-adr ✅ / verify-adr-d-numbers ✅ 150/150 / verify-sql-schema-alignment ✅ / verify-style-shorthand-conflict ✅
+  - baseline visual review 全 valid（5 张全部 OK）
+  - wish_list endpoint curl HTTP 200 验证（4 type 全恢复）
+- **价值**：
+  - **user-submissions visual coverage 6/6 完整入库**（page-header + segment-bad-src + segment-processed + first-card + empty-state + pagination conditional skip）
+  - **wish_list 500 bug 闭合**（用户报告问题溯源 → 根因发现 → 修复 → 验证）
+  - **dev DB schema sync**：M-SN-3 ~ M-SN-7 跨 5 milestone migration 全应用 / dev 环境与代码 schema 重新对齐
+  - **UX 决策守护实证**：CLAUDE.md「正确性 + 边界与复用 + 一致性 > 最小改动」体现 — 评估 ROI 后 NEGATED ADR
+  - **CLAUDE.md 工作流体现**：用户「次序闭合后续」请求 → 调研根因 → 用户裁定 migration 范围 → seed 数据 → 评估 ADR → NEGATED 报告
+  - **SEQ-20260521-06 第 6 张 chore 卡完成**：本会话累计 7 commit（DOCS-DRIFT-SYNC + ADR-146-D-N-CLOSE + VISUAL-BATCH + VISUAL-BATCH capture + VISUAL-BACKLOG-COMMIT + VISUAL-FOLLOWUP-BATCH + VISUAL-FOLLOWUP-2）
+
+Cleanup-Audit: wish_list 500 ✅ migration 修复 / user-submissions 6/6 baseline 入库 / LinesPanel ADR ❌ NEGATED（ROI 低 UX 守护）
+Plan-Revision: 建议独立 follow-up「dev 环境定期 migrate:check 巡检」+「LinesPanel auto-select 评估结果长期登记 backlog 不立 ADR」
