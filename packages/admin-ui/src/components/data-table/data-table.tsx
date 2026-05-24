@@ -19,6 +19,7 @@ import type {
 } from './types'
 import { DTStyles } from './dt-styles'
 import { HeaderMenu } from './header-menu'
+import { DataTableAutoFilter } from './data-table-auto-filter'
 import { ViewsMenu } from './views-menu'
 import { useRenderableSlot } from './react-node-utils'
 import { PaginationFoot } from './pagination-foot'
@@ -636,7 +637,9 @@ export function DataTable<T>(props: DataTableProps<T>): React.ReactElement {
         </div>
       )}
       {/* HeaderMenu portal — 渲染到 document.body，不参与 frame layout
-       *  ADR-149 D-149-3：列级 ⋯ button 触发，anchor = ⋯ button（非 th div） */}
+       *  ADR-149 D-149-3：列级 ⋯ button 触发，anchor = ⋯ button（非 th div）
+       *  ADR-150 阶段 2 / EP-1 Step 4：双范式 — menuColumn.filterable === true 时
+       *  注入 DataTableAutoFilter 整段替换；否则走原 sort + columnMenu.filterContent slot + hide */}
       <HeaderMenu
         open={menuColId !== null}
         column={menuColumn}
@@ -648,6 +651,30 @@ export function DataTable<T>(props: DataTableProps<T>): React.ReactElement {
         onClearSort={handleHeaderMenuClearSort}
         onHide={handleHeaderMenuHide}
         onClose={closeHeaderMenu}
+        autoFilterContent={(() => {
+          if (menuColumn === null || menuColumn.filterable !== true) return undefined
+          const col = menuColumn
+          const key = col.filterFieldName
+          const autoFilterRows = mode === 'client' ? processedRows : pageRows
+          return (
+            <DataTableAutoFilter
+              column={col}
+              rows={autoFilterRows}
+              currentFilter={query.filters.get(key)}
+              onApply={(value) => {
+                const next = new Map(query.filters)
+                if (value === undefined) next.delete(key); else next.set(key, value)
+                onQueryChange({ filters: next } satisfies TableQueryPatch)
+                closeHeaderMenu()
+              }}
+              onCancel={closeHeaderMenu}
+              currentSort={query.sort}
+              onSort={handleHeaderMenuSort}
+              onClearSort={handleHeaderMenuClearSort}
+              onHide={col.pinned === true ? undefined : () => { handleHeaderMenuHide(col.id); closeHeaderMenu() }}
+            />
+          )
+        })()}
       />
       {/* ADR-149 EP-4.5 / D-149-16：矩阵 popover portal 挂载（无 confirm / 即时生效）
         * wiring 完全对接 EP-1 ColumnMatrixMenu 14 个 props；业务 key 桥接走

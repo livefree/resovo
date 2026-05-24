@@ -194,7 +194,7 @@ export interface TableView {
 
 export type PersistedQuery = Omit<TableQuerySnapshot, 'selection'>
 
-export interface TableColumn<T> {
+interface TableColumnBase<T> {
   readonly id: string
   readonly header: ReactNode
   readonly accessor: (row: T) => unknown
@@ -215,6 +215,73 @@ export interface TableColumn<T> {
    */
   readonly renderFilterChip?: (ctx: FilterChipContext) => ReactNode
 }
+
+// ── ADR-150 阶段 2 / 列固有自动过滤 discriminated union（D-150-5）─────────
+
+/**
+ * 自动过滤控件类型（ADR-150 D-150-2）。
+ * 'enum' 多选 checkbox / 'text' input + IME / 'number' min-max range / 'date' from-to range。
+ */
+export type AutoFilterKind = 'enum' | 'text' | 'number' | 'date'
+
+/**
+ * distinct 选项（ADR-150 D-150-1 静态 filterOptions 或 D-150-3 distinct API 响应单元素）。
+ * label 缺省 = value；count 由后端 D-150-3 distinct API 可选返回（v1 不实装）。
+ */
+export interface DistinctOption {
+  readonly value: string
+  readonly label?: string
+  readonly count?: number
+}
+
+/**
+ * 自动过滤 column 字段 — Active arc（ADR-150 D-150-5 union 守卫）。
+ * filterable: true 时 filterFieldName **必填**（避免 M-SN-8 假装实现陷阱：
+ * popover 渲染但后端静默忽略，用户以为过滤了实际看全量）。
+ */
+export interface AutoFilterColumnFieldsActive {
+  readonly filterable: true
+  readonly filterFieldName: string
+  readonly filterKind?: AutoFilterKind
+  readonly filterOptions?: readonly DistinctOption[]
+  readonly filterDistinctEndpoint?: string
+  readonly filterDistinctTable?: string
+}
+
+/**
+ * 自动过滤 column 字段 — Inactive arc（ADR-150 D-150-5）。
+ * filterable 缺省 / false 时，5 个 filter* 字段必须为 undefined（discriminated union 守卫）。
+ */
+export interface AutoFilterColumnFieldsInactive {
+  readonly filterable?: false
+  readonly filterFieldName?: never
+  readonly filterKind?: never
+  readonly filterOptions?: never
+  readonly filterDistinctEndpoint?: never
+  readonly filterDistinctTable?: never
+}
+
+/**
+ * discriminated union — 编译期强制 filterable: true ↔ filterFieldName 必填配对。
+ * 老消费方（12 个）未传 filterable → 自动 narrow 到 Inactive arc / 0 破坏。
+ * 新消费方声明 filterable: true 强制必填 filterFieldName（D-150-5 守卫 / 反 M-SN-8 假装实现）。
+ *
+ * 互斥（运行时 dev warn）：filterable: true 时不应同时声明 columnMenu.filterContent。
+ */
+export type AutoFilterColumnFields =
+  | AutoFilterColumnFieldsActive
+  | AutoFilterColumnFieldsInactive
+
+/**
+ * TableColumn<T> — 列定义（ADR-150 阶段 2 起 = TableColumnBase + AutoFilterColumnFields union）。
+ */
+export type TableColumn<T> = TableColumnBase<T> & AutoFilterColumnFields
+
+/**
+ * FilterableColumn<T> — filterable: true 后的 narrow 类型（ADR-150 D-150-5 union 守卫）。
+ * 用途：DataTableAutoFilter 入口接收此类型，filterFieldName 必填 / 不必再做 undefined 守卫。
+ */
+export type FilterableColumn<T> = TableColumnBase<T> & AutoFilterColumnFieldsActive
 
 /**
  * filter chip 渲染上下文（CHG-DESIGN-02 Step 7A）。

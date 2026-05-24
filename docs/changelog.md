@@ -4320,3 +4320,67 @@ Plan-Revision: 0 次（HOTFIX-3 → HOTFIX-4 增量补强 / 无设计反转）
 
 Cleanup-Audit: ADR-150 起草 ✅ / Opus 子代理评审 A− CONDITIONAL PASS / 2 REVISED 显式锁定 / 5 阶段计划入 task-queue / 0 代码改动 / verify-adr-contracts ✅
 Plan-Revision: 1 次（D-150-5 主循环原推荐 default true → Opus 子代理 REVISED 为 default false / union 守卫 / 反 M-SN-8 假装实现）
+
+---
+
+## [CHG-SN-9-DT-AUTOFILTER-EP-1] 共享 DataTableAutoFilter UI（ADR-150 阶段 2）
+
+- **完成时间**：2026-05-24
+- **记录时间**：2026-05-24
+- **执行模型**：claude-opus-4-7（主循环）
+- **子代理**：
+  - **arch-reviewer (claude-opus-4-7)** 步骤 1 设计共享 API 契约（输出 5 步实施清单 + 35 单测设计 / 评级 A−）
+  - **arch-reviewer (claude-opus-4-7)** 步骤 6 commit 前 PR review（评级 REVISED / 4 fix 必修：1 BLOCKER + 2 HIGH + 1 MEDIUM）
+- **关联 ADR**：ADR-150 🟢 Accepted（D-150-1/2/3/4/5/6 全部落实于本卡 / ADR-103 第 6 次 AMENDMENT 候选）
+- **关联 SEQ**：SEQ-20260524-01 第 1 序列任务 #1 ADR-150 阶段 2
+- **依赖**：ADR-150 ✅ Accepted commit `1908ac39`
+- **6 步严格串行实施**：
+  - Step 1: Opus 设计共享 API 契约（输出 5 步清单 + 35 单测设计）
+  - Step 2: types.ts AutoFilterColumnFields discriminated union（Active arc filterFieldName **必填** / Inactive arc 5 字段 never / TableColumn 从 interface 重构为 type alias = TableColumnBase & union / FilterableColumn narrow）
+  - Step 3: use-filter-kind-inference hook 5 边界推导 + accessor throw 兜底 + 10 单测全 PASS
+  - Step 4: DataTableAutoFilter 主组件 Google Sheets 三段布局 + 4 filterKind 渲染（enum 列表+搜索+全选+反选+计数 / text input / number range / date range）+ dt-styles +185 行 `[data-autofilter-popover]` CSS + 20 单测全 PASS
+  - Step 5: header-menu autoFilterContent prop + 早返回分支双范式接入 + data-table.tsx wire（mode='client' 传 processedRows / mode='server' 传 pageRows / filterFieldName 必填零 ??）
+  - Step 6: 质量门禁 + Opus PR review REVISED → 4 fix 必修 → 再质量门禁全过 → commit
+- **Opus PR review 4 fix 落实**：
+  - **BLOCKER**：types.ts filterable + FilterableColumn 重构为 discriminated union + filterFieldName Active arc 必填（反 M-SN-8 假装实现陷阱 / 编译期阻挡"filterable: true 漏写 filterFieldName"反模式提交）
+  - **HIGH (CSS token)**：dt-styles 替换未声明 token / `--bg-hover` → `--bg-surface-row` (3 处) / `--admin-accent` → `--admin-accent-soft` / `--admin-accent-on` → `--admin-accent-on-soft`
+  - **MEDIUM 1 (rows source)**：data-table.tsx 双轨 `rows={mode === 'client' ? processedRows : pageRows}`（client 模式跨页 distinct 全集 / server 模式当前页）
+  - **MEDIUM 2 (filterContent dev warn)**：DataTableAutoFilter mount 时 warn `filterable: true + columnMenu.filterContent 同声明 → filterable 优先 (D-150-6 互斥)`
+- **修改文件**：
+  - `packages/admin-ui/src/components/data-table/types.ts`（TableColumn 改 type alias = TableColumnBase & AutoFilterColumnFields union / AutoFilterKind / DistinctOption / AutoFilterColumnFieldsActive (filterFieldName 必填) / AutoFilterColumnFieldsInactive (5 字段 never) / FilterableColumn narrow alias / +63 line / Opus 评审后再次重构）
+  - `packages/admin-ui/src/components/data-table/use-filter-kind-inference.ts`（新建 / 推导 hook 5 边界 + accessor throw 兜底 + SSR fallback / 80 line）
+  - `packages/admin-ui/src/components/data-table/data-table-auto-filter.tsx`（新建 / Google Sheets 三段布局 + 4 filterKind 子组件 + Opus 评审后增 filterContent dev warn / ~370 line）
+  - `packages/admin-ui/src/components/data-table/dt-styles.tsx`（+185 line `[data-autofilter-popover]` CSS + Opus 评审后替换 4 处未声明 token / 全 CSS variable / 零硬编码颜色）
+  - `packages/admin-ui/src/components/data-table/header-menu.tsx`（+27 line / 新增 autoFilterContent prop + 早返回分支整段替换原 sort+filter+hide 三段松散结构 / portal + 定位 + ESC + 焦点 + click-outside 全保留）
+  - `packages/admin-ui/src/components/data-table/data-table.tsx`（+28 line / 双范式 wire IIFE narrow / filterFieldName 必填零 `??` / mode 双轨 rows / closeHeaderMenu 时序）
+  - `tests/unit/components/admin-ui/table/use-filter-kind-inference.test.tsx`（新建 / 10 单测 / 8 设计 + 2 extra）
+  - `tests/unit/components/admin-ui/table/data-table-auto-filter.test.tsx`（新建 / 20 单测 / 三段结构 4 + enum 5 + text 2 + number 2 + date 2 + 取消应用排序 + currentFilter 同步 + filterable+filterContent 兼容 + 清空 = 20 关键用例）
+- **新增依赖**：无
+- **数据库变更**：无
+- **新增端点**：无（阶段 3 实施 `GET /admin/_dt/distinct` / 本卡仅前端共享层）
+- **关键设计落实**：
+  - **D-150-5 union 守卫**：filterable: true ↔ filterFieldName 必填 discriminated union 编译期强制配对（反 M-SN-8 假装实现陷阱 / Opus 评审 BLOCKER 修订强化）
+  - **D-150-2 推导算法**：5 边界全实装（number/boolean/ISO date/distinct ≤ 20/其余 → text / SSR fallback / accessor throw / mixed type fallback + dev warn）
+  - **D-150-1 双轨**：filterOptions 静态优先 / 缺省走 filterDistinctEndpoint（阶段 3 注入 fetcher）/ 阶段 2 fallback 当前 rows 页内派生
+  - **D-150-6 逃生口保留**：filterable + columnMenu.filterContent 兼容（dev warn 提示互斥 / 但运行时不阻断）/ EP-5-shared 3 原语 + D-149-15 桥接合约 0 删
+  - **header-menu 双范式 0 回退**：autoFilterContent 早返回分支 + portal 共用 / 老 filterContent slot 路径完全保留
+  - **mode 双轨 rows**：client 模式传 processedRows (跨页 distinct 全集) / server 模式传 pageRows (当前页 / Opus 评审 MEDIUM 修订)
+- **质量门禁**：
+  - ✅ `npm run typecheck`（全 8 workspace PASS）
+  - ✅ `npm run lint`（5/5 FULL TURBO）
+  - ✅ admin-ui/table 425 全 PASS（**+30 新 / 老 395 零回退**）
+  - ✅ `npm run verify:adr-contracts`（style-shorthand 0 / SQL aligned / D-N 172 全闭环 / D-150-1~6 advisory → 闭环）
+  - ✅ 全量 unit 425/425 全 PASS（全量后台跑确认 0 flaky）
+- **用户可见行为变化**：
+  - **本卡零 UX 变化**（仅共享层基础设施 / 阶段 4 EP-3-A 接入 /admin/crawler/runs 才有 Google Sheets popover 显形）
+  - 类型层：消费方声明 column.filterable: true 时编译期强制必填 filterFieldName（typecheck error）
+- **价值**：
+  - **共享 UI 基础设施完成**：Google Sheets 三段布局 + 4 filterKind 内置 + 5 边界数据类型推导 / 阶段 4 消费方迁移仅需声明 filterable + filterFieldName 一行
+  - **D-150-5 假装实现陷阱编译期防御**：filterable: true 漏写 filterFieldName 直接 typecheck error / 而非运行时 noop
+  - **Opus 双 review 保障**：设计 + PR review 双轮 Opus / 4 fix 全部反映"M-SN-8 教训显式防御"+"CSS token 真实存在"等关键约束
+  - **逃生口完整保留**：12 消费方 0 破坏 / D-149-15 桥接 + EP-5-shared 3 原语全保留 / 渐进迁移路径清晰
+  - **类型契约级共识沉淀**：AutoFilterColumnFields discriminated union 是 ADR-103 第 6 次 AMENDMENT 候选 / Opus 评审证据已在本 ADR-150 内
+- **后续**：阶段 3 CHG-SN-9-DT-AUTOFILTER-EP-2（后端通用 distinct 端点 `/admin/_dt/distinct` + DtFiltersSchema + 6 表白名单注册 + 20 单测 / ~0.5w / 含 SQL 注入 4 case）
+
+Cleanup-Audit: 共享 UI 基础设施 ✅ / Opus 双 review / 4 fix 全落实 / 425 单测 + 4 质量门禁全过 / 12 消费方 0 破坏
+Plan-Revision: 1 次（types.ts 主循环初版用平铺可选字段 → Opus PR review BLOCKER REVISED → 重构为 discriminated union + filterFieldName 必填）

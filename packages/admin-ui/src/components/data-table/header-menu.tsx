@@ -35,6 +35,13 @@ export interface HeaderMenuProps {
   readonly onClearSort: () => void
   readonly onHide: (field: string) => void
   readonly onClose: () => void
+  /**
+   * ADR-150 阶段 2 / EP-1 Step 4 双范式接入：
+   * 提供时整段替换内部 sort+filter+hide 三段松散结构，直接渲染传入的 DataTableAutoFilter 内容。
+   * 由 data-table.tsx 在 menuColumn.filterable === true 时计算并注入。
+   * 保留 portal + 定位 + ESC + 焦点 + click-outside 关闭。
+   */
+  readonly autoFilterContent?: React.ReactNode
 }
 
 interface Pos { top: number; left: number }
@@ -107,6 +114,7 @@ export function HeaderMenu({
   onClearSort,
   onHide,
   onClose,
+  autoFilterContent,
 }: HeaderMenuProps): React.ReactElement | null {
   const [mounted, setMounted] = useState(false)
   const [pos, setPos] = useState<Pos>(DEFAULT_POS)
@@ -206,6 +214,25 @@ export function HeaderMenu({
   // 分隔线条件
   const showSepBeforeFilter = sortable && showFilterSection
   const showSepBeforeHide = (sortable || showFilterSection) && hideable
+
+  // ADR-150 阶段 2 / EP-1 Step 4：autoFilterContent 提供时整段替换三段松散结构
+  if (autoFilterContent) {
+    return createPortal(
+      <div
+        ref={panelRef}
+        role="menu"
+        aria-label="列操作"
+        tabIndex={-1}
+        style={{ ...PANEL_STYLE, top: pos.top, left: pos.left, padding: 0 }}
+        onKeyDown={handleKeyDown}
+        data-header-menu
+        data-autofilter="true"
+      >
+        {autoFilterContent}
+      </div>,
+      document.body,
+    )
+  }
 
   return createPortal(
     <div

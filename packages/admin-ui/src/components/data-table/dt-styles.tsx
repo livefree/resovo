@@ -499,6 +499,191 @@ const DT_CSS = `
 @media (prefers-reduced-motion: reduce) {
   [data-column-matrix-menu] [role="switch"] { transition: none; }
 }
+
+/* ADR-150 阶段 2 / DataTableAutoFilter Google Sheets 三段布局 */
+[data-autofilter-popover] {
+  width: 320px;
+  min-width: 280px;
+  max-width: 360px;
+  max-height: min(560px, calc(100vh - 80px));
+  display: flex;
+  flex-direction: column;
+  font-size: 13px;
+  color: var(--fg-default);
+}
+[data-autofilter-popover] [data-section] {
+  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+[data-autofilter-popover] [data-section-divider] {
+  height: 1px;
+  background: var(--border-subtle);
+  margin: 0;
+}
+[data-autofilter-popover] [data-section="sort"] button,
+[data-autofilter-popover] [data-section="hide"] button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border: none;
+  background: transparent;
+  color: var(--fg-default);
+  cursor: pointer;
+  border-radius: 4px;
+  text-align: left;
+  font-size: 13px;
+}
+[data-autofilter-popover] [data-section="sort"] button:hover,
+[data-autofilter-popover] [data-section="hide"] button:hover {
+  background: var(--bg-surface-row);
+}
+[data-autofilter-popover] [data-section="sort"] button[data-active="true"] {
+  background: var(--admin-accent-soft);
+  color: var(--admin-accent-on-soft);
+}
+[data-autofilter-popover] [data-kind-radio] {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+}
+[data-autofilter-popover] [data-kind-radio][aria-disabled="true"] {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+[data-autofilter-popover] [data-kind-radio][aria-disabled="true"] label {
+  cursor: not-allowed;
+}
+[data-autofilter-popover] [data-section="value"] {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+[data-autofilter-popover] [data-search-box] input {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--border-default);
+  border-radius: 4px;
+  font-size: 12px;
+  background: var(--bg-surface);
+  color: var(--fg-default);
+}
+[data-autofilter-popover] [data-actions-row] {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+[data-autofilter-popover] [data-actions-row] button {
+  font-size: 11px;
+  padding: 2px 6px;
+  background: transparent;
+  border: 1px solid var(--border-subtle);
+  border-radius: 3px;
+  color: var(--fg-muted);
+  cursor: pointer;
+}
+[data-autofilter-popover] [data-status] {
+  font-size: 11px;
+  color: var(--fg-muted);
+  padding: 4px 0;
+}
+[data-autofilter-popover] [data-status][data-error="true"] {
+  color: var(--state-error-fg);
+}
+[data-autofilter-popover] [data-value-list] {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 280px;
+  overflow-y: auto;
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+}
+[data-autofilter-popover] [data-value-list] li {
+  padding: 0;
+}
+[data-autofilter-popover] [data-value-list] li label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  cursor: pointer;
+  font-size: 12px;
+}
+[data-autofilter-popover] [data-value-list] li label:hover {
+  background: var(--bg-surface-row);
+}
+[data-autofilter-popover] [data-value-list] [data-count] {
+  color: var(--fg-muted);
+  font-size: 11px;
+}
+[data-autofilter-popover] [data-count-tail] {
+  font-size: 11px;
+  color: var(--fg-muted);
+  margin-top: 4px;
+}
+[data-autofilter-popover] [data-text-input] {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--border-default);
+  border-radius: 4px;
+  background: var(--bg-surface);
+  color: var(--fg-default);
+  font-size: 13px;
+}
+[data-autofilter-popover] [data-number-range],
+[data-autofilter-popover] [data-date-range] {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+[data-autofilter-popover] [data-number-range] input,
+[data-autofilter-popover] [data-date-range] input {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--border-default);
+  border-radius: 4px;
+  font-size: 12px;
+  background: var(--bg-surface);
+  color: var(--fg-default);
+}
+[data-autofilter-popover] [data-actions] {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--border-subtle);
+  background: var(--bg-surface);
+}
+[data-autofilter-popover] [data-actions] [data-actions-spacer] {
+  flex: 1 1 auto;
+}
+[data-autofilter-popover] [data-actions] button {
+  padding: 6px 14px;
+  border: 1px solid var(--border-default);
+  border-radius: 4px;
+  background: var(--bg-surface);
+  color: var(--fg-default);
+  cursor: pointer;
+  font-size: 12px;
+}
+[data-autofilter-popover] [data-actions] button[data-primary="true"] {
+  background: var(--admin-accent-soft);
+  color: var(--admin-accent-on-soft);
+  border-color: var(--admin-accent-soft);
+}
+[data-autofilter-popover] [data-actions] button:hover {
+  background: var(--bg-surface-row);
+}
+[data-autofilter-popover] [data-actions] button[data-primary="true"]:hover {
+  filter: brightness(1.05);
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-autofilter-popover] button { transition: none; }
+}
 ` as const
 
 let injected = false
