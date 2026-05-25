@@ -57,8 +57,20 @@ function getTextValue(filters: ReadonlyMap<string, FilterValue>, key: string): s
   return v?.kind === 'text' && v.value ? v.value : undefined
 }
 
+// AMD2-PATCH-1（2026-05-24）：sort 白名单守卫（防 AMD2 默认 enableSorting=true 触发后端 422）
+// 后端 SORT_FIELDS 白名单（apps/api/src/routes/admin/videos.ts:90）：
+//   'created_at' | 'updated_at' | 'title' | 'year' | 'type'
+// 非白名单 sortField → undefined / 不透传 / 后端用默认 ORDER BY created_at DESC
+const VIDEO_SORT_FIELD_WHITELIST = ['created_at', 'updated_at', 'title', 'year', 'type'] as const
+type VideoSortField = (typeof VIDEO_SORT_FIELD_WHITELIST)[number]
+function isVideoSortField(s: string | undefined): s is VideoSortField {
+  return s !== undefined && (VIDEO_SORT_FIELD_WHITELIST as readonly string[]).includes(s)
+}
+
 export function buildVideoFilter(snapshot: TableQuerySnapshot): VideoListFilter {
   const { filters, sort, pagination } = snapshot
+  // AMD2-PATCH-1：sort.field 白名单守卫（与 CrawlerRunsView sub 2 EXTEND 一致范式）
+  const sortField = isVideoSortField(sort.field) ? sort.field : undefined
   return {
     q: getTextValue(filters, 'q'),
     type: getEnumFirst(filters, 'type') as VideoType | undefined,
@@ -66,8 +78,8 @@ export function buildVideoFilter(snapshot: TableQuerySnapshot): VideoListFilter 
     visibilityStatus: getEnumFirst(filters, 'visibilityStatus') as VisibilityStatus | undefined,
     reviewStatus: getEnumFirst(filters, 'reviewStatus') as ReviewStatus | undefined,
     site: getEnumFirst(filters, 'site'),
-    sortField: sort.field as VideoListFilter['sortField'],
-    sortDir: sort.direction,
+    sortField,
+    sortDir: sortField ? sort.direction : undefined,
     page: pagination.page,
     limit: pagination.pageSize,
   }

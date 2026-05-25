@@ -54,10 +54,10 @@ describe('buildVideoFilter — 空 snapshot', () => {
     expect(filter.limit).toBe(20)
   })
 
-  it('默认 sort → sortField=undefined, sortDir="asc"', () => {
+  it('默认 sort → sortField=undefined, sortDir=undefined（AMD2-PATCH-1 sortField 白名单守卫 / sortDir 同步）', () => {
     const filter = buildVideoFilter(makeSnapshot())
     expect(filter.sortField).toBeUndefined()
-    expect(filter.sortDir).toBe('asc')
+    expect(filter.sortDir).toBeUndefined()
   })
 })
 
