@@ -6,7 +6,7 @@
 
 ## 进行中任务
 
-（空 — 本会话累计 33 commit / ImageHealth missing 4 子查询列 sort 全栈打通 / **关键发现**："需 CTE 重写" 误判修正 / 实际 LATERAL JOIN evt.* 字段直接 ORDER BY 可用 / 工时 0.3-0.5w → 0.15w / PATCH-2 范式 5 消费方实证完整 / 待 @livefree dev server 走读 /admin/image-health missing 表 sort）
+（空 — 本会话累计 34 commit / sources sort+filter e2e smoke 3 case 落地 / ADR-150 阶段 5 EP-4 全闭环（5 sort 消费方 + e2e 收口）/ 待 @livefree dev server 起后 `npm run test:e2e` 触发 e2e 验收）
 
 ---
 
@@ -47,6 +47,7 @@
 28. `ec442527` **HOTFIX-PATCH-2B-FIX1** siteKey 列 cell 显站点 csv（hidden column 改 visible / 后端 STRING_AGG DISTINCT + Service+raw 透传 + 前端 cell hover title）
 29. `072d303c` **MERGE-SORT-FULLSTACK** Merge 候选表 sortField=score/videoCount/year/titleNormalized 全栈打通（Service 层 sort 4 字段白名单 / PATCH-2 范式复刻 / 5 文件 + 32 单测 +5 case）
 30. `b558e194` **CRAWLER-RUN-DETAIL-SORT-FULLSTACK** runs/:id/tasks sort 全栈打通（复用 TASK_SORT_COLUMNS 白名单 / 4 字段 site/status/startedAt/finishedAt / 前端 column.id → sortField 桥接 siteKey→site + duration→finishedAt / PATCH-2 范式复刻 / 4 文件 + 14 单测 +7 case + DetailView test fixture 更新）
-31. `<TBD>` **IMAGE-HEALTH-MISSING-SORT-FULLSTACK** ImageHealth missing 4 子查询列 sort 全栈打通（**注释 "需 CTE 重写" 误判修正** / 实际 LATERAL JOIN evt 字段直接 ORDER BY 可用 / MISSING_VIDEO_SORT_SQL 扩 4 字段 poster_source/broken_domain/occurrence_count/last_seen_broken_at / 前端 camelCase → snake_case 桥接 / 5 文件 + 9 新单测）
+31. `b7ca9aac` **IMAGE-HEALTH-MISSING-SORT-FULLSTACK** ImageHealth missing 4 子查询列 sort 全栈打通（**注释 "需 CTE 重写" 误判修正** / 实际 LATERAL JOIN evt 字段直接 ORDER BY 可用 / MISSING_VIDEO_SORT_SQL 扩 4 字段 poster_source/broken_domain/occurrence_count/last_seen_broken_at / 前端 camelCase → snake_case 桥接 / 5 文件 + 9 新单测）
+32. `<TBD>` **SOURCES-E2E-SMOKE** sources sort + filter e2e smoke 3 case（1 新 spec 文件 / 3 case：page-load + sort-click-video + filter-probe-status / Playwright route mock + capture URL params 验证 PATCH-2A §1-BUG-1 + §2-EXT-1 全栈 / admin-next-chromium project / siteKey distinct e2e 推 follow-up）
 
-总计 +5300+ lines / 124+ 新单测 / 0 回退 / ADR-150 AMENDMENT 2 范式完整 + sources 6 列 filter + Merge + CrawlerRunDetail + ImageHealth missing sort 全栈 / PATCH-2 范式 5 消费方实证 / 全质量门禁全过。
+总计 +5400+ lines / 124+ unit 新单测 + 3 e2e smoke / 0 回退 / ADR-150 阶段 5 EP-4 sort follow-up 全闭环（5 消费方 + e2e 收口）/ 全质量门禁全过。
