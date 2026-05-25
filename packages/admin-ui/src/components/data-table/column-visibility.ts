@@ -93,13 +93,19 @@ export function clearAllColumnFilters<T>(
   currentFilters: ReadonlyMap<string, FilterValue>,
   onPatch: (next: ReadonlyMap<string, FilterValue>) => void,
 ): void {
-  // 1. 业务 key 桥接：优先调消费方提供的 onClearFilter
+  // 1. 业务 key 桥接：优先调消费方提供的 onClearFilter（D-149-15 桥接合约消费方）
+  // sub 2 PATCH advisory Y-EP3A-3（2026-05-24）：D-150 列固有自动过滤范式消费方**不再提供
+  //   columnMenu.onClearFilter**（filtersMap 由 DataTable patch.filters 自管 / 不走 D-149-15 桥接 callback）
+  //   → 此循环在 D-150 消费方对应列无效（无 noop 副作用 / 安全 fallback）
+  //   → 步骤 2 `onPatch(new Map())` 整体清空 filtersMap 同时覆盖 D-149-15 + D-150 两种范式
   for (const col of columns) {
     if (col.columnMenu?.onClearFilter) {
       col.columnMenu.onClearFilter()
     }
   }
   // 2. column.id 命名空间过滤：仅在非空时清，避免无谓 onQueryChange 触发 re-render
+  // sub 2 PATCH advisory Y-EP3A-3：D-150 范式 filtersMap key 为 filterFieldName ?? col.id /
+  //   `new Map()` 整体清空覆盖所有 key 无关 column.id 还是 filterFieldName → fallback 路径 OK
   if (currentFilters.size > 0) {
     onPatch(new Map())
   }

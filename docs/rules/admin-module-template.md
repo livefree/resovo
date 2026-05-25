@@ -125,6 +125,35 @@ module/
 >
 > 详细判据 + 不变内容 + 已否决方案（`bodyScrollMode` prop）见 ADR-103 AMENDMENT 2026-05-14。
 
+> **2026-05-24 修订（ADR-150 D-150 双轨列固有自动过滤 / CHG-SN-9-DT-AUTOFILTER）**：
+>
+> server-next 新增 DataTable 消费方在列定义时显式选择**列固有过滤范式**（D-150-1 双轨）：
+>
+> 1. **D-150 新范式（推荐）**：列设 `filterable: true` + `filterFieldName: string` + `filterKind: 'text' | 'enum' | 'number' | 'date'`（+ enum 时 `filterOptions: DistinctOption[]`）→ 列名 ⋯ 触发 Google Sheets 三段 popover（排序 + 值列表 + 隐藏）/ 矩阵 popover 列固有过滤格 + 状态指示 ✓
+> 2. **D-149-15 桥接逃生口**：列设 `columnMenu.filterContent: ReactNode`（旧三段菜单 filter slot）→ 与 D-150 互斥（同列两者皆传时 dev warn / D-150 优先）
+>
+> **D-150-4 业务 key 桥接**（filtersMap key 由 filterFieldName 决定 / column.id 可不同名）：
+>
+> - 示例：`{ id: 'username', filterFieldName: 'q', filterKind: 'text' }` → filtersMap key='q' / column.id='username'
+> - 共享层 3 处用 `col.filterFieldName ?? col.id` 桥接（column-matrix-menu.tsx `isColumnFiltered` + `onClearColumnFilter` 路径 / data-table.tsx 列级 ⋯ `isFiltered`）
+> - 消费方派生：`filtersMap.get(filterFieldName)` 取 FilterValue / 单选场景取 `v.value[0]` / 多选场景取 `v.value as readonly T[]`
+>
+> **视觉行为提醒（Y-EP3A-2 / 沉淀自 arch-reviewer Opus 评审）**：data-table.tsx line 481 `showTrigger` 6 条件 OR 含 `hasAutoFilter = col.filterable === true`。**消费方一旦给某列加 `filterable: true`，列名 ⋯ 触发器立即可见**（不依赖 sortable / hidable / isFiltered 等其它条件）。
+>
+> - 若消费方在 D-150 范式下批量新增 filterable 列，未走读消费方在用户视角会观察到所有这些列首次显示 ⋯ — 这是设计内行为，**不是视觉惊讶**。
+> - 矩阵 popover（toolbar 右上 ⋯）会同步呈现新列的过滤格（switch + 状态指示）。
+>
+> **sort 全栈协议**（与 ADR-149 D-149-4 + 与 distinct-whitelist 同范式三重防御）：
+>
+> 1. route 层 zod enum 白名单：`sortField: z.enum(['createdAt', 'finishedAt']).optional()`（拒绝任意字符串 → 422）
+> 2. queries 层 const SQL 字符串映射：`SORT_FIELD_MAP` 业务 key → 真实列名（不来自外部输入）
+> 3. queries 层启动期 `SORT_IDENT_REGEX = /^(?:[a-z_]+\.)?[a-z_]+$/` 断言（同 `DT_DISTINCT_IDENT_REGEX` 范式 / 不进生产）
+> 4. queries 层非白名单 sortField → **throw Error**（反 M-SN-8 "假装实现"模式 / fail-fast 安全网）
+> 5. 前端消费方 fetch 前白名单守卫：`sortField === 'createdAt' || 'finishedAt' 才透传`（防 saved views 反序列化错误触发 422）
+> 6. 默认无 sortField → fallback `created_at DESC, id DESC`（id DESC 兜底稳定排序 / 同时间戳分页不错乱）
+>
+> 完整范式参考实证：`apps/api/src/db/queries/crawlerRuns.ts` + `apps/api/src/db/queries/auditLog.ts` + 前端 CrawlerRunsView / AuditClient。
+
 所有 **apps/server v1** 后台数据表格必须同时满足以下 6 项（每项均为硬约束，不允许部分完成却标记已完成）：
 
 | # | 规范项 | 要求 | 禁止 |

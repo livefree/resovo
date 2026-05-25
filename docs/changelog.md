@@ -4910,3 +4910,85 @@ Plan-Revision: 0 次（实施严格按 arch-reviewer 报告 R-EP3A-1/2 + Y-EP3A-
   - **RR-EP3A-2**：fastify 默认 500 设计权衡 OK（throw message 已含 `[crawlerRuns.listRuns]` / `[auditLog.listAdminAuditLog]` SOC 可识别前缀 / 合格）
 - **未升 A 理由**：audit fail-fast 单测缺位 + Y-EP3A-2/3 仍留 EP-3-B 入口（advisory 不阻塞 PR）
 - **PR ready**：EP-3-A 全闭环 6 子卡（sub 1 + HOTFIX + sub 1 EXTEND + sub 2 + sub 2 EXTEND + sub 2 PATCH）正式 PASS / 可合入
+
+---
+
+## [CHG-SN-9-DT-AUTOFILTER-EP-3-B sub B] UsersListClient toolbar 3 控件迁列内 filterable + advisory 3 项顺手
+
+- **完成时间**：2026-05-24
+- **记录时间**：2026-05-24
+- **执行模型**：claude-opus-4-7（主循环 / opus xhigh 续会话）
+- **子代理**：无（CLAUDE.md §模型路由 6 条强制 Opus 子代理条件均不命中 / 消费方迁移 + 文档备注 + 单测）
+- **关联 ADR**：ADR-150（D-150-1 双轨 / D-150-4 桥接 / D-150-5 union 守卫 / 无 AMENDMENT 必要）
+- **关联 SEQ**：SEQ-20260524-01 第 1 序列 EP-3-B sub B
+- **触发**：用户"按需启动后续任务"（EP-3-A 全闭环 A- 已 PR ready）
+- **依赖**：EP-3-A 全闭环 ✅（commit `ecb4b564` 收尾）
+- **核心范围调整**（实施前评估）：
+  - **SubmissionsListClient 不迁**（M-SN-7 REDO-02-D 已加 deprecation banner / M-SN-9 退役清理）
+  - **仅迁 UsersListClient** + 顺手 advisory 3 项（RR-EP3A-1 + Y-EP3A-2 + Y-EP3A-3）
+- **修改文件**（3 实施 + 2 测试 + 2 docs / 0 后端 / 0 ADR）：
+  - **前端消费方**（2 实施）：
+    - `apps/server-next/src/app/admin/users/_client/columns.tsx`：buildUserColumns 扩 2 options（roleOptions / bannedOptions）+ 3 列加 filterable
+      - username → 'text' / filterFieldName='q'（**D-150-4 业务 key 桥接实证**：column.id ≠ filterFieldName）
+      - role → 'enum' / filterFieldName='role' / filterOptions roleOptions（admin/moderator/user 静态）
+      - status → 'enum' / filterFieldName='banned' / filterOptions bannedOptions（true/false boolean string）
+    - `apps/server-next/src/app/admin/users/_client/UsersListClient.tsx`：
+      - 删 toolbarSearch 3 控件 + clear button + TOOLBAR_LEFT_STYLE / hasFilter 逻辑
+      - 删 4 filter state（searchInput / q / roleFilter / bannedFilter）+ debounceRef + debounce useEffect
+      - 删 AdminInput / AdminSelect / AdminSelectOption 3 import；加 DistinctOption / FilterValue 2 import
+      - 新增 filtersMap state + 3 useMemo 派生（q text → v.value.trim() / role enum → v.value[0] as UserRole / banned enum → v.value[0] as 'true' | 'false'）
+      - fetch useEffect deps 改 filtersMap
+      - query.filters: new Map() → filtersMap
+      - onQueryChange 加 patch.filters 处理 + setPage(1)
+      - buildUserColumns 调用注入 roleOptions / bannedOptions
+  - **共享层注释**（1 docs / Y-EP3A-3）：
+    - `packages/admin-ui/src/components/data-table/column-visibility.ts` clearAllColumnFilters 加注释说明 D-150 范式消费方不提供 columnMenu.onClearFilter 时 fallback OK 语义（步骤 2 `new Map()` 整体清空覆盖 column.id + filterFieldName 两种范式）
+  - **文档备注**（1 docs / Y-EP3A-2）：
+    - `docs/rules/admin-module-template.md` 加 "2026-05-24 修订（ADR-150 D-150 双轨）"段：D-150 新范式 vs D-149-15 桥接逃生口 / D-150-4 业务 key 桥接（filtersMap key 由 filterFieldName 决定）/ showTrigger 6 条件 OR 含 hasAutoFilter 视觉行为提醒 / sort 全栈协议三重防御 6 条
+  - **测试**（2 文件 / 4 新 case / RR-EP3A-1 + 3 列 filter）：
+    - `tests/unit/api/audit-log-queries.test.ts`：**新建** / 3 case 覆盖 listAdminAuditLog 非白名单 sortField rejects.toThrow / sortField=createdAt SQL ORDER BY al.created_at ASC / 无 sortField fallback / 弥补 RR-EP3A-1 audit fail-fast 单测缺位
+    - `tests/unit/components/server-next/admin/users/UsersListClient.test.tsx`：补 3 case 9/10/11
+      - #9 sub B: username 列（column.id='username' ≠ filterFieldName='q'）text filter → fetch q
+      - #10 sub B: role 列 enum filter → fetch role: 'moderator'
+      - #11 sub B: status 列 enum filter (banned='true') → fetch banned: 'true'
+- **新增依赖**：无
+- **数据库变更**：无
+- **新增端点**：无（listUsers API 已支持 q/role/banned + sortField/sortDir 全套参数）
+- **关键设计落实**：
+  - **D-150-1 双轨范式**：3 列走 D-150 列固有过滤（username text / role enum / status enum）；email / created_at / actions 不过滤（email 重复 username 数据 / created_at 后端 API 暂无 from/to / actions 行 action）
+  - **D-150-4 业务 key 桥接实证**：username 列 column.id='username' / filterFieldName='q' 后端语义不同名场景（与 sub 1 EXTEND id/idPrefix、sub 2 actor/actorId、target/targetKind 一致范式）
+  - **debounce 解耦**：原 searchInput → q debounce 300ms 删除（DataTableAutoFilter "应用"按钮一次性 commit）/ 单元测试无 debounce 等待开销
+  - **未启用 multi-select 派生**：role/banned 多选 UI 取 v.value[0] 单值（与 sub 1 EXTEND + sub 2 范式一致 / 后端 listUsers 仍单值 API）
+- **Advisory 顺手做（arch-reviewer Opus 二次评审建议）**：
+  - **RR-EP3A-1** ✅：audit fail-fast 单测补 3 case（新建 audit-log-queries.test.ts / 与 crawler-runs-queries 范式对齐）
+  - **Y-EP3A-2** ✅：admin-module-template.md 2026-05-24 修订段（hasAutoFilter 视觉行为 + D-150 双轨 + sort 全栈协议）
+  - **Y-EP3A-3** ✅：column-visibility.ts clearAllColumnFilters D-150 fallback 注释
+- **质量门禁**：
+  - ✅ typecheck（8 workspace PASS）
+  - ✅ lint（5/5 / pre-existing img 警告）
+  - ✅ verify:file-size-budget exit 0
+  - ✅ verify:adr-contracts exit 0（172 D-N 闭环 / SQL aligned / style 0）
+  - ✅ UsersListClient 11/11 PASS（含新 #9/10/11）
+  - ✅ audit-log-queries 3/3 PASS（新建）
+  - ✅ admin-ui standalone 1532+ PASS（platform-hooks 并发 worker 偶发 flaky pre-existing 与本卡无关 / 独立跑 5/5 PASS）
+- **用户可见行为变化**（dev server 走读 sub B）：
+  - **删除**：`/admin/users` toolbar 3 旧控件全消失（搜索 input / role select / banned select / clear button）→ 仅剩 trailing CSV 导出 + PageHeader 刷新/邀请/角色矩阵
+  - **新增**：列名 ⋯ 触发 3 列 popover — 用户名 (text / 搜 username+email) / 角色 (enum) / 状态 (enum)
+  - **改进**：搜索不再 300ms debounce 滞后（DataTableAutoFilter "应用"按钮一次性 commit）
+  - **保留**：username/email/role/status/created_at 列升降序段（enableSorting 已就位 / listUsers 后端 sortField+sortDir 支持）
+- **价值**：
+  - **EP-3-A → EP-3-B 范式一致**：filterable + filterFieldName + filterKind + filterOptions + filtersMap state + useMemo 派生 + onQueryChange filters patch / 与 CrawlerRunsView + AuditClient 完全对齐
+  - **D-150-4 桥接实证扩大**：sub B 引入 username/q 业务 key 不同名场景 / 累计 EP-3-A+B 4 实证（idPrefix / actorId / targetKind / q）
+  - **arch-reviewer Opus 评审反馈全消解**：RR-EP3A-1 单测缺位 + Y-EP3A-2/3 文档备注 一并落实 / EP-3-B 入口零债务承接
+  - **deprecation 决策避免浪费**：SubmissionsListClient 不迁 / 节省 ~0.2w 工时
+- **不在范围**（独立后续）：
+  - SubmissionsListClient 迁（M-SN-9 退役清理）
+  - EP-3-C/D/E/F/G 其它 8 表格的迁移（独立子卡 / ~1.5w）
+  - sources 排序断链全栈修（ADR-150 阶段 5 EP-4）
+  - DataTableAutoFilter filterKind 'datetime'（独立 follow-up）
+- **后续**：
+  - **@livefree dev server 走读 sub B**（/admin/users toolbar 控件消失 + 3 列 popover + 组合过滤 + 排序）→ PASS
+  - **EP-3-C 启动**（VideoListClient + StagingPageClient ~0.3w）
+
+Cleanup-Audit: UsersListClient toolbar 3 控件 → 列内 3 filterable / 顺手消解 arch-reviewer Opus 二次评审 3 advisory（RR-EP3A-1 + Y-EP3A-2/3）/ 3 实施 + 2 测试 + 2 docs / 4 新 case / 4 质量门禁全过 / 11/11 + 3/3 + 1532+/1535 单测全 PASS（flaky 1 case pre-existing 与本卡无关）/ 0 Props API 变更 / 0 后端 / 0 ADR
+Plan-Revision: 1 次（SubmissionsListClient 不迁 / 实施前评估发现 deprecation banner + M-SN-9 退役 / 范围由"2 表格"缩为"1 表格 + 3 advisory"）

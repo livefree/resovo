@@ -225,4 +225,51 @@ describe('UsersListClient — 批量封禁/解封 batch mode UI', () => {
       }))
     })
   })
+
+  // ── sub B（2026-05-24）：toolbar 3 控件 → 列内 filterable / ADR-150 D-150-1 双轨 ──
+
+  it('9. sub B: username 列（column.id ≠ filterFieldName=q）text filter → fetch 带 q + page reset 1', async () => {
+    listUsersMock.mockResolvedValue(EMPTY_RES)
+    render(<UsersListClient />)
+    await waitFor(() => screen.getByTestId('users-table'))
+    fireEvent.click(screen.getByTestId('th-menu-trigger-username'))
+    expect(screen.queryByTestId('dt-autofilter-username')).not.toBeNull()
+    fireEvent.change(screen.getByTestId('dt-autofilter-username-text-input'), { target: { value: 'alice' } })
+    fireEvent.click(screen.getByTestId('dt-autofilter-username-apply'))
+    await waitFor(() => {
+      expect(listUsersMock).toHaveBeenLastCalledWith(
+        expect.objectContaining({ q: 'alice', page: 1 }),
+      )
+    })
+  })
+
+  it('10. sub B: role 列 enum filter → fetch 带 role + page reset 1', async () => {
+    listUsersMock.mockResolvedValue(EMPTY_RES)
+    render(<UsersListClient />)
+    await waitFor(() => screen.getByTestId('users-table'))
+    fireEvent.click(screen.getByTestId('th-menu-trigger-role'))
+    expect(screen.queryByTestId('dt-autofilter-role')).not.toBeNull()
+    fireEvent.click(screen.getByTestId('dt-autofilter-role-opt-moderator'))
+    fireEvent.click(screen.getByTestId('dt-autofilter-role-apply'))
+    await waitFor(() => {
+      expect(listUsersMock).toHaveBeenLastCalledWith(
+        expect.objectContaining({ role: 'moderator', page: 1 }),
+      )
+    })
+  })
+
+  it('11. sub B: status 列 enum filter (banned=true) → fetch 带 banned + page reset 1', async () => {
+    listUsersMock.mockResolvedValue(EMPTY_RES)
+    render(<UsersListClient />)
+    await waitFor(() => screen.getByTestId('users-table'))
+    fireEvent.click(screen.getByTestId('th-menu-trigger-status'))
+    expect(screen.queryByTestId('dt-autofilter-status')).not.toBeNull()
+    fireEvent.click(screen.getByTestId('dt-autofilter-status-opt-true'))
+    fireEvent.click(screen.getByTestId('dt-autofilter-status-apply'))
+    await waitFor(() => {
+      expect(listUsersMock).toHaveBeenLastCalledWith(
+        expect.objectContaining({ banned: 'true', page: 1 }),
+      )
+    })
+  })
 })

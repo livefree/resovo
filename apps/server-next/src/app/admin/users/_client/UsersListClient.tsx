@@ -21,7 +21,7 @@
  *   - DataTable 一体化（不复用 ModernDataTable / 外置 PaginationV2 / 外置 SelectionActionBar）
  */
 
-import { useState, useEffect, useMemo, useCallback, useRef, type CSSProperties } from 'react'
+import { useState, useEffect, useMemo, useCallback, type CSSProperties } from 'react'
 import {
   DataTable,
   EmptyState,
@@ -29,11 +29,10 @@ import {
   LoadingState,
   PageHeader,
   AdminButton,
-  AdminInput,
-  AdminSelect,
   KpiCard,
   useToast,
-  type AdminSelectOption,
+  type DistinctOption,
+  type FilterValue,
   type TableSortState,
   type TableSelectionState,
 } from '@resovo/admin-ui'
@@ -59,13 +58,14 @@ import { EditProfileModal } from './EditProfileModal'
 
 const DEFAULT_PAGE_SIZE = 20
 
-const ROLE_OPTIONS: readonly AdminSelectOption[] = [
+// sub B（2026-05-24）：AdminSelectOption → DistinctOption（D-150-1 enum filter 静态选项注入）
+const ROLE_OPTIONS: readonly DistinctOption[] = [
   { value: 'user', label: '用户' },
   { value: 'moderator', label: '版主' },
   { value: 'admin', label: '管理员' },
 ]
 
-const BANNED_OPTIONS: readonly AdminSelectOption[] = [
+const BANNED_OPTIONS: readonly DistinctOption[] = [
   { value: 'false', label: '正常' },
   { value: 'true', label: '已封禁' },
 ]
@@ -104,10 +104,9 @@ export function UsersListClient() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<Error | undefined>()
   const [retryKey, setRetryKey] = useState(0)
-  const [searchInput, setSearchInput] = useState('')
-  const [q, setQ] = useState<string | undefined>()
-  const [roleFilter, setRoleFilter] = useState<string | null>(null)
-  const [bannedFilter, setBannedFilter] = useState<string | null>(null)
+  // sub B（2026-05-24）：4 filter state + 1 debounce 合并为 filtersMap
+  // ADR-150 D-150-4 业务 key 桥接：'q' (column.id=username) / 'role' / 'banned'
+  const [filtersMap, setFiltersMap] = useState<ReadonlyMap<string, FilterValue>>(new Map())
   const [pendingId, setPendingId] = useState<string | null>(null)
   const [stats, setStats] = useState<UserStats | null>(null)
   const [roleMatrixOpen, setRoleMatrixOpen] = useState(false)
@@ -118,7 +117,22 @@ export function UsersListClient() {
   // CHG-SN-8-FUP-USERS-BATCH-BAN-UI / ADR-143 消费侧 — DataTable 原生 selection 范式
   const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(new Set())
   const [batchPending, setBatchPending] = useState(false)
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // sub B：filtersMap 派生 3 参数（DataTableAutoFilter "应用"按钮一次性 commit / 无需 debounce）
+  const qFilter = useMemo<string | undefined>(() => {
+    const v = filtersMap.get('q')
+    return v?.kind === 'text' && v.value ? v.value.trim() : undefined
+  }, [filtersMap])
+  const roleFilter = useMemo<UserRole | undefined>(() => {
+    const v = filtersMap.get('role')
+    return v?.kind === 'enum' && v.value.length > 0 ? (v.value[0] as UserRole) : undefined
+  }, [filtersMap])
+  const bannedFilter = useMemo<'true' | 'false' | undefined>(() => {
+    const v = filtersMap.get('banned')
+    if (v?.kind !== 'enum' || v.value.length === 0) return undefined
+    const first = v.value[0]
+    return first === 'true' || first === 'false' ? first : undefined
+  }, [filtersMap])
 
   useEffect(() => {
     let cancelled = false
@@ -128,26 +142,16 @@ export function UsersListClient() {
     return () => { cancelled = true }
   }, [retryKey])
 
-  // 搜索 debounce
-  useEffect(() => {
-    if (debounceRef.current) clearTimeout(debounceRef.current)
-    debounceRef.current = setTimeout(() => {
-      setQ(searchInput.trim() || undefined)
-      setPage(1)
-    }, 300)
-    return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current)
-    }
-  }, [searchInput])
+  // sub B：删 debounce useEffect / DataTableAutoFilter 应用按钮一次性 commit
 
   useEffect(() => {
     let cancelled = false
     setLoading(true)
     setError(undefined)
     listUsers({
-      q,
-      role: roleFilter as UserRole | undefined,
-      banned: bannedFilter as 'true' | 'false' | undefined,
+      q: qFilter,
+      role: roleFilter,
+      banned: bannedFilter,
       page,
       limit: pageSize,
       sortField: sort.field,
@@ -164,7 +168,7 @@ export function UsersListClient() {
       })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [q, roleFilter, bannedFilter, page, pageSize, sort, retryKey])
+  }, [qFilter, roleFilter, bannedFilter, page, pageSize, sort, retryKey])
 
   const refresh = useCallback(() => {
     setRetryKey((k) => k + 1)
@@ -304,6 +308,9 @@ export function UsersListClient() {
       onEditEmail: handleEditEmail,
       onEditProfile: handleEditProfile,
       pendingId,
+      // sub B：filterOptions 静态注入（ADR-150 D-150-1 enum 列）
+      roleOptions: ROLE_OPTIONS,
+      bannedOptions: BANNED_OPTIONS,
     }),
     [handleBan, handleUnban, handleRoleChange, handleResetPassword, handleEditEmail, handleEditProfile, pendingId],
   )
@@ -312,14 +319,13 @@ export function UsersListClient() {
     () => ({
       pagination: { page, pageSize },
       sort,
-      filters: new Map(),
+      // sub B：filters 用 filtersMap state（D-150-4 业务 key 桥接）
+      filters: filtersMap,
       columns: new Map(),
       selection: { selectedKeys: new Set<string>(), mode: 'page' as const },
     }),
-    [page, pageSize, sort],
+    [page, pageSize, sort, filtersMap],
   )
-
-  const hasFilter = searchInput || roleFilter || bannedFilter
 
   // CHG-SN-6-23：导出当前页 rows 为 CSV
   const handleExportCsv = () => {
@@ -348,52 +354,8 @@ export function UsersListClient() {
     </AdminButton>
   )
 
-  const toolbarSearch = (
-    <span style={TOOLBAR_LEFT_STYLE} data-testid="users-toolbar-filters">
-      <AdminInput
-        type="search"
-        value={searchInput}
-        onChange={(e) => setSearchInput(e.target.value)}
-        placeholder="搜索用户名 / 邮箱"
-        size="sm"
-        data-testid="users-search-input"
-        aria-label="搜索用户"
-      />
-      <AdminSelect
-        options={ROLE_OPTIONS}
-        value={roleFilter}
-        onChange={(v) => { setRoleFilter(v); setPage(1) }}
-        placeholder="全部角色"
-        size="sm"
-        data-testid="users-filter-role"
-        aria-label="按角色筛选"
-      />
-      <AdminSelect
-        options={BANNED_OPTIONS}
-        value={bannedFilter}
-        onChange={(v) => { setBannedFilter(v); setPage(1) }}
-        placeholder="全部状态"
-        size="sm"
-        data-testid="users-filter-banned"
-        aria-label="按封禁状态筛选"
-      />
-      {hasFilter ? (
-        <AdminButton
-          variant="ghost"
-          size="sm"
-          onClick={() => {
-            setSearchInput('')
-            setRoleFilter(null)
-            setBannedFilter(null)
-            setPage(1)
-          }}
-          data-testid="users-filter-clear"
-        >
-          清空筛选
-        </AdminButton>
-      ) : null}
-    </span>
-  )
+  // sub B（2026-05-24）：toolbarSearch 3 控件 + clear button 全删 / 迁列内 filterable
+  // ADR-150 D-150-1 双轨：filtersMap 由 DataTable popover OK 触发 / 矩阵 popover 清空
 
   return (
     <>
@@ -510,6 +472,8 @@ export function UsersListClient() {
                     }
                   }
                   if (patch.sort) setSort(patch.sort)
+                  // sub B：filters patch（DataTableAutoFilter popover OK 触发 / 矩阵清空）
+                  if (patch.filters) { setFiltersMap(patch.filters); setPage(1) }
                 }}
                 totalRows={total}
                 loading={loading}
@@ -553,7 +517,6 @@ export function UsersListClient() {
                   </span>
                 }
                 toolbar={{
-                  search: toolbarSearch,
                   trailing: toolbarTrailing,
                   hideFilterChips: true,
                 }}

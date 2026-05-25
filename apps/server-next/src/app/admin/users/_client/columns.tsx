@@ -4,10 +4,17 @@
  * columns.tsx — `/admin/users` 列定义 + 行操作 cell（CHG-SN-5-03）
  *
  * 列结构：username（pinned）/ email / role / status / created_at / actions
+ *
+ * sub B（2026-05-24 / ADR-150 D-150-1 双轨补齐）：3 列加 filterable
+ *   - username → text / filterFieldName='q'（后端 q 参数搜索 username/email）
+ *   - role → enum / filterFieldName='role' / filterOptions roleOptions
+ *   - status → enum / filterFieldName='banned' / filterOptions bannedOptions（boolean string）
+ *
+ * D-150-4 业务 key 桥接示例：column.id 'username' / filterFieldName 'q' 不同名
  */
 
 import type { CSSProperties } from 'react'
-import { AdminButton, type TableColumn } from '@resovo/admin-ui'
+import { AdminButton, type DistinctOption, type TableColumn } from '@resovo/admin-ui'
 import type { UserRow, UserRole } from '@/lib/users/types'
 import { UserRolePopover } from './UserRolePopover'
 
@@ -93,6 +100,9 @@ export interface BuildColumnsOptions {
   readonly onEditEmail: (row: UserRow) => void
   readonly onEditProfile: (row: UserRow) => void
   readonly pendingId: string | null
+  /** sub B（2026-05-24）：ADR-150 D-150-1 列固有自动过滤 / 静态选项注入 */
+  readonly roleOptions?: readonly DistinctOption[]
+  readonly bannedOptions?: readonly DistinctOption[]
 }
 
 export function buildUserColumns({
@@ -103,6 +113,8 @@ export function buildUserColumns({
   onEditEmail,
   onEditProfile,
   pendingId,
+  roleOptions,
+  bannedOptions,
 }: BuildColumnsOptions): readonly TableColumn<UserRow>[] {
   return [
     {
@@ -114,6 +126,10 @@ export function buildUserColumns({
       enableSorting: true,
       defaultVisible: true,
       pinned: true,
+      // sub B：text filter / filterFieldName='q' 后端搜 username/email（D-150-4 业务 key 桥接示例 column.id≠filterFieldName）
+      filterable: true,
+      filterFieldName: 'q',
+      filterKind: 'text',
       cell: ({ row }) => (
         <div style={USERNAME_CELL_STYLE}>
           <span style={USERNAME_TEXT_STYLE} title={row.username}>{row.username}</span>
@@ -143,6 +159,11 @@ export function buildUserColumns({
       enableResizing: true,
       enableSorting: true,
       defaultVisible: true,
+      // sub B：enum filter / filterFieldName='role' / filterOptions 静态注入（消费方派生取 v.value[0] 单选）
+      filterable: true,
+      filterFieldName: 'role',
+      filterKind: 'enum',
+      filterOptions: roleOptions ?? [],
       cell: ({ row }) => (
         <span style={ROLE_BADGE[row.role]}>{ROLE_LABEL[row.role]}</span>
       ),
@@ -155,6 +176,11 @@ export function buildUserColumns({
       enableResizing: true,
       enableSorting: true,
       defaultVisible: true,
+      // sub B：enum filter / filterFieldName='banned' / boolean string('true'/'false')
+      filterable: true,
+      filterFieldName: 'banned',
+      filterKind: 'enum',
+      filterOptions: bannedOptions ?? [],
       cell: ({ row }) => (
         row.banned_at
           ? <span style={BANNED_BADGE}>已封禁</span>
