@@ -40,14 +40,36 @@ import { AppError } from '@/api/lib/errors'
 
 // ── Zod schema（ADR-117 §端点契约）──────────────────────────────────
 
+// HOTFIX-PATCH-2A §2-EXT-1/2（2026-05-25）：probe/render status 4 态枚举 + csvToArray 范式（参 crawler.runs.ts）
+const PROBE_STATUS_VALUES = ['pending', 'ok', 'partial', 'dead'] as const
+const RENDER_STATUS_VALUES = ['pending', 'ok', 'partial', 'dead'] as const
+const csvToStringArray = <T extends string>(values: readonly T[]) =>
+  z.string().optional().transform((s, ctx) => {
+    if (!s) return undefined
+    const parts = s.split(',').map((p) => p.trim()).filter(Boolean)
+    if (parts.length === 0) return undefined
+    for (const p of parts) {
+      if (!values.includes(p as T)) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: `invalid value: ${p}` })
+        return z.NEVER
+      }
+    }
+    return parts as T[]
+  })
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/
+
 export const VideoGroupsQuerySchema = z.object({
   page:          z.coerce.number().int().min(1).optional().default(1),
   limit:         z.coerce.number().int().min(1).max(100).optional().default(20),
   keyword:       z.string().optional(),
   segment:       z.enum(['grouped', 'dead', 'correction', 'orphan']).optional().default('grouped'),
   siteKey:       z.string().optional(),
-  probeStatus:   z.string().optional(),
-  renderStatus:  z.string().optional(),
+  // HOTFIX-PATCH-2A §2-EXT-1/2：CSV → enum 数组（参 crawler.runs.ts csvToArray）/ raw EXISTS ANY()
+  probeStatus:   csvToStringArray(PROBE_STATUS_VALUES),
+  renderStatus:  csvToStringArray(RENDER_STATUS_VALUES),
+  // HOTFIX-PATCH-2A §1-BUG-3：updatedAt 日期范围（YYYY-MM-DD）/ HAVING MAX(vs.updated_at) >= / <=
+  updatedAtFrom: z.string().regex(ISO_DATE_RE, 'updatedAtFrom 必须是 YYYY-MM-DD 格式').optional(),
+  updatedAtTo:   z.string().regex(ISO_DATE_RE, 'updatedAtTo 必须是 YYYY-MM-DD 格式').optional(),
   // ADR-150 阶段 5 EP-4（2026-05-24）：sort 全栈打通 / 4 字段白名单 zod enum
   sortField:     z.enum(['video', 'lineCount', 'sourceCount', 'updated_at']).optional(),
   sortDir:       z.enum(['asc', 'desc']).optional(),

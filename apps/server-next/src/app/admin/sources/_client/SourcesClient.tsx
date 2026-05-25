@@ -25,6 +25,8 @@ import {
   useToast,
   type TableColumn,
   type TableSortState,
+  type FilterValue,
+  type DistinctOption,
 } from '@resovo/admin-ui'
 import type { VideoGroupRow, VideoGroupStats, SourceSegment } from '@/lib/sources/types'
 import { listVideoGroups, getVideoGroupStats } from '@/lib/sources/api'
@@ -86,10 +88,25 @@ function tabStyle(active: boolean): CSSProperties {
 
 // ── 列定义 ────────────────────────────────────────────────────────
 
-// EP-3-E（2026-05-24）：AMD2 D-150-AMD2-2 kind: 'computed' opt-out
-//   - 5 列全 kind='computed' / 业务真实禁用 filter
-//   - lineCount/sourceCount 删除 pre-existing enableSorting: true (后端 listVideoGroups 无 sortField → 假装实现)
-//   - sort 全栈打通留 ADR-150 阶段 5 EP-4 (含 sources 排序断链顺手修)
+// HOTFIX-PATCH-2A §2-EXT-1/2（2026-05-25）：probeStatus / renderStatus 4 态静态 filterOptions（matrix popover 多选 enum）
+const PROBE_STATUS_OPTIONS: readonly DistinctOption[] = [
+  { value: 'ok',      label: 'OK' },
+  { value: 'partial', label: '部分' },
+  { value: 'dead',    label: '失效' },
+  { value: 'pending', label: '待测' },
+]
+const RENDER_STATUS_OPTIONS: readonly DistinctOption[] = [
+  { value: 'ok',      label: 'OK' },
+  { value: 'partial', label: '部分' },
+  { value: 'dead',    label: '失效' },
+  { value: 'pending', label: '待测' },
+]
+
+// HOTFIX-PATCH-2A（2026-05-25）：列 kind 规则（EP-3-E 漏改 actions + updatedAt 修订）
+//   - 5 列 video/lineCount/sourceCount/probeStatus/renderStatus → kind='computed'
+//   - probeStatus/renderStatus 加 filterable + filterOptions（4 态 enum / raw EXISTS ANY 语义）
+//   - updatedAt → kind='data' + filterable + filterKind='date'（HAVING MAX 范围）
+//   - actions → kind='action' opt-out（matrix popover 整行跳过）
 function buildColumns(
   expandedKeys: ReadonlySet<string>,
 ): readonly TableColumn<VideoGroupRow>[] {
@@ -180,6 +197,11 @@ function buildColumns(
       header: '探测',
       accessor: (r) => r.probeStatus,
       width: 100,
+      // HOTFIX-PATCH-2A §2-EXT-1：静态 4 态 enum filter / raw EXISTS ANY 语义
+      filterable: true,
+      filterFieldName: 'probeStatus',
+      filterKind: 'enum',
+      filterOptions: PROBE_STATUS_OPTIONS,
       cell: ({ row }) => <SignalPill status={row.probeStatus} />,
     },
     {
@@ -188,14 +210,24 @@ function buildColumns(
       header: '播放',
       accessor: (r) => r.renderStatus,
       width: 100,
+      // HOTFIX-PATCH-2A §2-EXT-2：静态 4 态 enum filter / raw EXISTS ANY 语义
+      filterable: true,
+      filterFieldName: 'renderStatus',
+      filterKind: 'enum',
+      filterOptions: RENDER_STATUS_OPTIONS,
       cell: ({ row }) => <SignalPill status={row.renderStatus} />,
     },
     {
       id: 'updatedAt',
+      // HOTFIX-PATCH-2A §1-BUG-3：updatedAt 真生效（kind=data + filterable + 后端 zod + HAVING）
+      kind: 'data',
       header: '更新',
       accessor: (r) => r.updatedAt,
       width: 80,
       enableSorting: true,
+      filterable: true,
+      filterFieldName: 'updatedAt',
+      filterKind: 'date',
       cell: ({ row }) => (
         <span style={{ fontSize: '11px', color: 'var(--fg-muted)' }}>
           {row.updatedAt ? new Date(row.updatedAt).toLocaleDateString('zh-CN') : '—'}
@@ -204,6 +236,8 @@ function buildColumns(
     },
     {
       id: 'actions',
+      // HOTFIX-PATCH-2A §1-BUG-2：actions kind='action' opt-out（EP-3-E 漏改回填）
+      kind: 'action',
       header: '操作',
       accessor: () => null,
       width: 100,
@@ -273,6 +307,21 @@ export function SourcesClient() {
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE)
   const [sort, setSort] = useState<TableSortState>({ field: undefined, direction: 'desc' })
+  // HOTFIX-PATCH-2A §2-EXT（2026-05-25）：filtersMap 统一管理（D-150-4 桥接 / column.filterFieldName 即 key）
+  const [filtersMap, setFiltersMap] = useState<ReadonlyMap<string, FilterValue>>(new Map())
+  const probeStatusFilter = useMemo<readonly string[]>(() => {
+    const v = filtersMap.get('probeStatus')
+    return v?.kind === 'enum' ? (v.value as readonly string[]) : []
+  }, [filtersMap])
+  const renderStatusFilter = useMemo<readonly string[]>(() => {
+    const v = filtersMap.get('renderStatus')
+    return v?.kind === 'enum' ? (v.value as readonly string[]) : []
+  }, [filtersMap])
+  const updatedAtRange = useMemo<{ from?: string; to?: string }>(() => {
+    const v = filtersMap.get('updatedAt')
+    if (v?.kind === 'date-range') return { from: v.from, to: v.to }
+    return {}
+  }, [filtersMap])
   // EP-4.5-HOTFIX-3 / 问题 1+3：列偏好 state（矩阵 popover 可见性 toggle / 列级 ⋯ 隐藏此列触发）
   const [columnPrefs, setColumnPrefs] = useState<ReadonlyMap<string, { readonly visible: boolean; readonly width?: number }>>(new Map())
 
@@ -307,6 +356,11 @@ export function SourcesClient() {
     listVideoGroups({
       page, limit: pageSize, keyword, segment,
       ...(sortFieldGuarded ? { sortField: sortFieldGuarded, sortDir: sort.direction } : {}),
+      // HOTFIX-PATCH-2A §2-EXT（2026-05-25）：filter spread 透传 enum + date-range
+      ...(probeStatusFilter.length > 0 ? { probeStatus: probeStatusFilter } : {}),
+      ...(renderStatusFilter.length > 0 ? { renderStatus: renderStatusFilter } : {}),
+      ...(updatedAtRange.from ? { updatedAtFrom: updatedAtRange.from } : {}),
+      ...(updatedAtRange.to ? { updatedAtTo: updatedAtRange.to } : {}),
     })
       .then((res) => {
         if (cancelled) return
@@ -319,7 +373,7 @@ export function SourcesClient() {
       })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [page, pageSize, keyword, segment, sort, retryKey])
+  }, [page, pageSize, keyword, segment, sort, filtersMap, retryKey])
 
   const refresh = useCallback(() => setRetryKey((k) => k + 1), [])
 
@@ -344,11 +398,12 @@ export function SourcesClient() {
   const query = useMemo(() => ({
     pagination: { page, pageSize },
     sort,
-    filters: new Map(),
+    // HOTFIX-PATCH-2A §2-EXT：filtersMap 注入 DataTable.query.filters（matrix popover + DataTableAutoFilter 消费）
+    filters: filtersMap,
     // EP-4.5-HOTFIX-3 / 问题 1+3：columns 用 state（让矩阵 popover toggle / 列级 ⋯ 隐藏此列真生效）
     columns: columnPrefs,
     selection: { selectedKeys, mode: 'page' as const },
-  }), [page, pageSize, sort, columnPrefs, selectedKeys])
+  }), [page, pageSize, sort, filtersMap, columnPrefs, selectedKeys])
 
   const toolbarSearch = (
     <DataTableSearchInput
@@ -515,6 +570,11 @@ export function SourcesClient() {
                         if (patch.selection) setSelectedKeys(patch.selection.selectedKeys)
                         // EP-4.5-HOTFIX-3 / 问题 1+3：消费 columns patch
                         if (patch.columns) setColumnPrefs(patch.columns)
+                        // HOTFIX-PATCH-2A §2-EXT：消费 filters patch（matrix popover + DataTableAutoFilter onChange）
+                        if (patch.filters) {
+                          setFiltersMap(patch.filters)
+                          setPage(1)
+                        }
                       }}
                       totalRows={total}
                       loading={loading}

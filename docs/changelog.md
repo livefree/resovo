@@ -5497,3 +5497,51 @@ Plan-Revision: 0 次（PATCH-2 范式直接复刻 / 设计哲学一致）
 
 Cleanup-Audit: 3 文件 PATCH 删除 / hint span + CSS 规则 + button title prop + aria-label 引导句段四元素同步清理 / 0 新组件 / 0 ADR / 0 后端 / 0 schema / 单测断言 3 处更新 / 矩阵 popover 与 DataTableAutoFilter 主路径范式彻底收敛
 Plan-Revision: 1 次（用户走读后追加"一起清理 aria-label / title"指令 / 同会话内追加实施 / 不起 follow-up 卡）
+
+## [2026-05-25] CHG-SN-9-DT-AUTOFILTER-EP-4-SOURCES-HOTFIX-PATCH-2A · sources sort BUG 回填 + 4 列 filter 全栈扩展
+
+- **触发**：@livefree dev server 走读 EP-4-SOURCES（commit 4df39524）+ HOTFIX-5（commit 4ef5b55c）后反馈两个问题：
+  - ①sort 段可点但点击不改变排序（3 列 video / lineCount / sourceCount）
+  - ②filter 段仅 2 列支持（actions + updatedAt 显假 switch / 点击 popover 实际不工作）
+- **根因 1（sort BUG）**：commit 4df39524 commit message 写"5 文件 PATCH-2 范式完整复刻"但 `git show --stat` 实际只改 4 实施文件 — `apps/server-next/src/lib/sources/api.ts#listVideoGroups` 漏改 URL 透传 → sortField / sortDir 永远不发到后端 → 后端永远走默认 `MAX(vs.updated_at) DESC` fallback → 前端 sort state 切换无视觉反馈
+- **根因 2（filter 假支持）**：CHG-SN-9-DT-AUTOFILTER-EP-3-E（commit 1bf423ba）沉淀 sources 列 kind 时遗漏 2 列：
+  - **actions 列** 应 `kind='action'` opt-out（与 EP-3-G StagingPageClient 范式一致）/ 误用 kind 默认 'data' → matrix popover 显假 switch
+  - **updatedAt 列** 应 `kind='data'` + filterable: true + filterFieldName + filterKind='date' 真生效 / 但后端 zod 当时也未提供 updatedAtFrom/To 字段
+- **用户决策**（AskUserQuestion 2026-05-25）：
+  - multiSelect 全 4 项（仅修 BUG + probeStatus + renderStatus + siteKey）
+  - Commit 粒度：1 commit 合并
+- **范围调整**：siteKey 推 **PATCH-2B follow-up**（理由：sources 在 `distinct-whitelist.ts` 已预留 site_key 列 / ADR-150 EP-2 已落地 / 但前端 distinctFetcher 注入是首次实证 / 单独成卡 ~0.15-0.2w）
+- **最终实施**（5 项 / 7 文件 / 1 commit）：
+  - **§1-BUG-1** `apps/server-next/src/lib/sources/api.ts` — `listVideoGroups` URL 加 sortField + sortDir + probeStatus csv + renderStatus csv + updatedAtFrom + updatedAtTo（4df39524 漏改回填）
+  - **§1-BUG-2** `SourcesClient.tsx` actions 列 `kind: 'action'` opt-out（matrix popover 整行跳过）
+  - **§1-BUG-3** updatedAt 全栈打通：前端 `kind: 'data'` + filterable + filterFieldName + filterKind='date' / 后端 zod `updatedAtFrom` + `updatedAtTo` z.string().regex(ISO_DATE_RE) / queries `HAVING MAX(vs.updated_at) >= $::DATE AND < ($::DATE + INTERVAL '1 day')` 含到日全天
+  - **§2-EXT-1** probeStatus enum filter 全栈：前端静态 `filterOptions: PROBE_STATUS_OPTIONS` (4 态) + filterKind='enum' / 后端 csvToStringArray(PROBE_STATUS_VALUES) + EXISTS ANY()
+  - **§2-EXT-2** renderStatus enum filter 全栈（同 §2-EXT-1 范式）
+- **count SQL 重构**：updatedAt range 用 HAVING 子句 / havingClauses 非空时 count SQL 改聚合子查询 `COUNT(*) FROM (SELECT v.id ... GROUP BY v.id HAVING ...) sub`；无 having 时保留原 `COUNT(DISTINCT v.id)` 性能优势路径
+- **types 扩展**：`VideoGroupListParams` 加 `probeStatus?: readonly string[]` / `renderStatus?: readonly string[]` / `updatedAtFrom?: string` / `updatedAtTo?: string`
+- **已知语义限制**：probeStatus / renderStatus filter 走 raw `vs.probe_status = ANY()` EXISTS 语义"含至少一条线路 status=X 的视频"，不严格对应 SignalPill 聚合显示（Service 层 aggregateSignal 派生 4 态）。若用户反馈不可接受 → PATCH-2C 起 ADR 评估 HAVING 子句或 migration 加 videos.render_check_status 视频级聚合列
+- **质量门禁**（全 PASS）：
+  - ✅ typecheck（8 workspace）
+  - ✅ lint（5/5 / FULL TURBO miss 重跑 35.8s）
+  - ✅ verify:adr-contracts（advisory pre-existing 与本卡无关 / D-N 178/178 闭环 / SQL alignment / shorthand 0 命中）
+  - ✅ sources-matrix.test 22/22（+9 新 case 覆盖 sortField + probeStatus + renderStatus + updatedAt HAVING + count SQL 双路径）
+  - ✅ sources-api-url.test 新建 7/7（URLSearchParams 透传断言）
+  - ✅ SourcesClient.test 10/10 零回退
+- **用户可见行为变化**：
+  - **修复**：`/admin/sources` 列名 ⋯ → 排序段点击真生效（video / lineCount / sourceCount 3 列）
+  - **修复**：actions 列不再出现在矩阵 popover（避免无意义 switch）
+  - **修复**：updatedAt 列 filter 真生效（datetime picker 选范围 → 后端 HAVING 过滤）
+  - **新增**：probeStatus / renderStatus 4 态多选 enum filter（matrix popover + 列内 ⋯ DataTableAutoFilter popover）
+  - **保留**：keyword + Segment + 12 消费方零回退
+- **价值**：
+  - **HOTFIX 自我修补**：上一 commit (4df39524) 漏改回填 + EP-3-E 遗漏列 kind 回填 / 范式收敛
+  - **enum filter 静态 filterOptions 范式扩展**：sources 是第 3 个消费方（CrawlerRunsView / AuditClient / SourcesClient）/ 共享层 column.filterOptions 路径再次实证
+  - **HAVING SQL 范式首次实证**：sources updatedAt 范围 filter 是 ADR-150 阶段 5 中首个用 HAVING 的 column（其他用 WHERE EXISTS）/ count SQL 嵌套子查询双路径范式为未来 RenderStatus 视频级聚合提供参考
+- **不在范围**（follow-up 跟踪）：
+  - siteKey enum filter（PATCH-2B / 首次 distinct 端点消费实证）
+  - probeStatus/renderStatus 聚合语义校正（PATCH-2C / 需 ADR）
+  - ImageHealth missing 4 子查询列 sort（独立卡 / 需 CTE 重写）
+  - Merge / CrawlerRunDetail 后续 sort 全栈打通
+
+Cleanup-Audit: 7 文件改 / 列 kind opt-out 2 项 + filterable 真生效 3 列 / 前端 filtersMap state 派生 3 项 / DataTable query.filters wire / 0 新组件 / 0 ADR / 0 migration / 后端 SQL 改 count 双路径 + WHERE EXISTS ANY + HAVING MAX range
+Plan-Revision: 1 次（multiSelect 4 项 → 范围审视后 siteKey 推 PATCH-2B 独立卡 / 主卡执行 5 项符合 PATCH 上限 + 范式正路）

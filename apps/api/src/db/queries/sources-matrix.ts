@@ -176,18 +176,55 @@ export async function listVideoGroups(
     paramValues.push(params.siteKey)
   }
 
+  // HOTFIX-PATCH-2A §2-EXT-1（2026-05-25）：probeStatus enum filter 多选 EXISTS ANY()
+  // 语义"含至少一条线路 probe_status=X 的视频"（raw / 不严格等同 SignalPill 聚合显示）
+  if (params.probeStatus && params.probeStatus.length > 0) {
+    conditions.push(
+      `EXISTS (SELECT 1 FROM video_sources vs3 WHERE vs3.video_id = v.id AND vs3.probe_status = ANY($${idx++}::TEXT[]) AND vs3.deleted_at IS NULL)`,
+    )
+    paramValues.push(params.probeStatus)
+  }
+
+  // HOTFIX-PATCH-2A §2-EXT-2（2026-05-25）：renderStatus enum filter 多选 EXISTS ANY()
+  if (params.renderStatus && params.renderStatus.length > 0) {
+    conditions.push(
+      `EXISTS (SELECT 1 FROM video_sources vs4 WHERE vs4.video_id = v.id AND vs4.render_status = ANY($${idx++}::TEXT[]) AND vs4.deleted_at IS NULL)`,
+    )
+    paramValues.push(params.renderStatus)
+  }
+
   const whereClause = conditions.map((c) => `(${c})`).join(' AND ')
+
+  // HOTFIX-PATCH-2A §1-BUG-3（2026-05-25）：updatedAt 日期范围（HAVING / GROUP BY 后过滤）
+  const havingClauses: string[] = []
+  if (params.updatedAtFrom) {
+    havingClauses.push(`MAX(vs.updated_at) >= $${idx++}::DATE`)
+    paramValues.push(params.updatedAtFrom)
+  }
+  if (params.updatedAtTo) {
+    // 含到日（+1 天 / < INTERVAL '1 day'）
+    havingClauses.push(`MAX(vs.updated_at) < ($${idx++}::DATE + INTERVAL '1 day')`)
+    paramValues.push(params.updatedAtTo)
+  }
+  const havingClause = havingClauses.length > 0 ? `HAVING ${havingClauses.join(' AND ')}` : ''
 
   // ADR-150 阶段 5 EP-4：sort 字段白名单 lookup / fallback MAX(vs.updated_at) DESC（默认行为不变）
   const sortCol = (params.sortField && SOURCES_SORT_FIELD_MAP[params.sortField]) ?? 'MAX(vs.updated_at)'
   const sortDir = params.sortDir === 'asc' ? 'ASC' : 'DESC'
 
-  const countResult = await db.query<{ cnt: string }>(
-    `SELECT COUNT(DISTINCT v.id)::TEXT AS cnt
-     FROM videos v
-     WHERE ${whereClause}`,
-    paramValues,
-  )
+  // HOTFIX-PATCH-2A §1-BUG-3：count SQL HAVING 支持（updatedAt range filter 时走聚合子查询）
+  // havingClauses 非空 → 嵌套子查询 COUNT(*) / 否则保留原 COUNT(DISTINCT v.id) 形态（性能优势）
+  const countSql = havingClauses.length > 0
+    ? `SELECT COUNT(*)::TEXT AS cnt FROM (
+         SELECT v.id FROM videos v
+         JOIN video_sources vs ON vs.video_id = v.id AND vs.deleted_at IS NULL
+         WHERE ${whereClause}
+         GROUP BY v.id
+         ${havingClause}
+       ) sub`
+    : `SELECT COUNT(DISTINCT v.id)::TEXT AS cnt FROM videos v WHERE ${whereClause}`
+
+  const countResult = await db.query<{ cnt: string }>(countSql, paramValues)
   const total = parseInt(countResult.rows[0]?.cnt ?? '0', 10)
 
   // CHG-SN-5-13-PATCH-2: year + cover_url 已 migration 029 迁移到 media_catalog；需 JOIN（参 videos.ts VIDEO_JOIN）
@@ -209,6 +246,7 @@ export async function listVideoGroups(
      JOIN video_sources vs ON vs.video_id = v.id AND vs.deleted_at IS NULL
      WHERE ${whereClause}
      GROUP BY v.id, mc.year, mc.cover_url
+     ${havingClause}
      ORDER BY ${sortCol} ${sortDir} NULLS LAST
      LIMIT $${idx++} OFFSET $${idx++}`,
     [...paramValues, limit, offset],

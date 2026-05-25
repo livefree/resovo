@@ -45,8 +45,18 @@ export interface VideoGroupListParams {
   readonly keyword?: string
   readonly segment?: SourceSegment
   readonly siteKey?: string
-  readonly probeStatus?: string
-  readonly renderStatus?: string
+  /**
+   * ADR-150 阶段 5 EP-4-HOTFIX-PATCH-2A（2026-05-25）：probeStatus / renderStatus enum filter 全栈
+   * 多选语义"含至少一条线路 status=X 的视频"（raw EXISTS ANY()）；不严格等同于 UI SignalPill 聚合显示
+   */
+  readonly probeStatus?: readonly string[]
+  readonly renderStatus?: readonly string[]
+  /**
+   * ADR-150 阶段 5 EP-4-HOTFIX-PATCH-2A（2026-05-25）：updatedAt 日期范围 filter（YYYY-MM-DD）
+   * 后端走 HAVING MAX(vs.updated_at) >= / <=（GROUP BY 后过滤）
+   */
+  readonly updatedAtFrom?: string
+  readonly updatedAtTo?: string
   /**
    * ADR-150 阶段 5 EP-4（2026-05-24）：sort 全栈打通 sources（含 sources 排序断链顺手修）
    * 白名单 4 字段 / column.id = 后端 sortField 命名一致（D-150-4 桥接 sort 版同范式）

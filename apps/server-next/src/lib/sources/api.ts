@@ -19,6 +19,14 @@ export async function listVideoGroups(params: VideoGroupListParams = {}): Promis
   if (params.keyword)         qs.set('keyword', params.keyword)
   if (params.segment)         qs.set('segment', params.segment)
   if (params.siteKey)         qs.set('siteKey', params.siteKey)
+  // HOTFIX-PATCH-2A §1-BUG-1（2026-05-25）：sortField / sortDir URL 透传（4df39524 漏改回填）
+  if (params.sortField)       qs.set('sortField', params.sortField)
+  if (params.sortDir)         qs.set('sortDir', params.sortDir)
+  // HOTFIX-PATCH-2A §2-EXT（2026-05-25）：probeStatus + renderStatus 多选 csv join + updatedAt 日期范围
+  if (params.probeStatus && params.probeStatus.length > 0)  qs.set('probeStatus', params.probeStatus.join(','))
+  if (params.renderStatus && params.renderStatus.length > 0) qs.set('renderStatus', params.renderStatus.join(','))
+  if (params.updatedAtFrom)   qs.set('updatedAtFrom', params.updatedAtFrom)
+  if (params.updatedAtTo)     qs.set('updatedAtTo', params.updatedAtTo)
   const q = qs.toString()
   return apiClient.get<VideoGroupListResult>(`/admin/sources/video-groups${q ? `?${q}` : ''}`)
 }

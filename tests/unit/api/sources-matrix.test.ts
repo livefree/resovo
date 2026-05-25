@@ -123,6 +123,82 @@ describe('listVideoGroups', () => {
     expect(result.total).toBe(0)
     expect(result.data).toHaveLength(0)
   })
+
+  // HOTFIX-PATCH-2A §1-BUG-1（2026-05-25）：sortField + sortDir SQL ORDER BY 透传单测
+  it('sortField=video sortDir=asc → ORDER BY v.title ASC', async () => {
+    const db = makePool([{ cnt: '0' }], [])
+    await listVideoGroups(db, { sortField: 'video', sortDir: 'asc' })
+    const dataCall = (db.query as ReturnType<typeof vi.fn>).mock.calls[1]
+    expect(dataCall[0]).toContain('ORDER BY v.title ASC')
+  })
+
+  it('sortField=lineCount sortDir=desc → ORDER BY line_count DESC', async () => {
+    const db = makePool([{ cnt: '0' }], [])
+    await listVideoGroups(db, { sortField: 'lineCount', sortDir: 'desc' })
+    const dataCall = (db.query as ReturnType<typeof vi.fn>).mock.calls[1]
+    expect(dataCall[0]).toContain('ORDER BY line_count DESC')
+  })
+
+  it('sortField=sourceCount → ORDER BY source_count', async () => {
+    const db = makePool([{ cnt: '0' }], [])
+    await listVideoGroups(db, { sortField: 'sourceCount', sortDir: 'asc' })
+    const dataCall = (db.query as ReturnType<typeof vi.fn>).mock.calls[1]
+    expect(dataCall[0]).toContain('ORDER BY source_count ASC')
+  })
+
+  it('未传 sortField → fallback ORDER BY MAX(vs.updated_at) DESC', async () => {
+    const db = makePool([{ cnt: '0' }], [])
+    await listVideoGroups(db, {})
+    const dataCall = (db.query as ReturnType<typeof vi.fn>).mock.calls[1]
+    expect(dataCall[0]).toContain('ORDER BY MAX(vs.updated_at) DESC')
+  })
+
+  // HOTFIX-PATCH-2A §2-EXT-1/2（2026-05-25）：probeStatus / renderStatus enum filter SQL 透传
+  it('probeStatus=[ok,dead] → 注入 EXISTS ANY($::TEXT[])', async () => {
+    const db = makePool([{ cnt: '0' }], [])
+    await listVideoGroups(db, { probeStatus: ['ok', 'dead'] })
+    const countCall = (db.query as ReturnType<typeof vi.fn>).mock.calls[0]
+    expect(countCall[0]).toContain('vs3.probe_status = ANY(')
+    expect(countCall[1]).toContainEqual(['ok', 'dead'])
+  })
+
+  it('renderStatus=[partial] → 注入 EXISTS ANY($::TEXT[])', async () => {
+    const db = makePool([{ cnt: '0' }], [])
+    await listVideoGroups(db, { renderStatus: ['partial'] })
+    const dataCall = (db.query as ReturnType<typeof vi.fn>).mock.calls[1]
+    expect(dataCall[0]).toContain('vs4.render_status = ANY(')
+    expect(dataCall[1]).toContainEqual(['partial'])
+  })
+
+  it('空数组 probeStatus → 不注入 WHERE', async () => {
+    const db = makePool([{ cnt: '0' }], [])
+    await listVideoGroups(db, { probeStatus: [] })
+    const dataCall = (db.query as ReturnType<typeof vi.fn>).mock.calls[1]
+    expect(dataCall[0]).not.toContain('vs3.probe_status')
+  })
+
+  // HOTFIX-PATCH-2A §1-BUG-3（2026-05-25）：updatedAt 日期范围 HAVING 子句
+  it('updatedAtFrom + updatedAtTo → HAVING MAX(vs.updated_at) 范围（含到日 +1 天）', async () => {
+    const db = makePool([{ cnt: '0' }], [])
+    await listVideoGroups(db, { updatedAtFrom: '2026-05-01', updatedAtTo: '2026-05-25' })
+    const countCall = (db.query as ReturnType<typeof vi.fn>).mock.calls[0]
+    // count 走嵌套子查询（HAVING 路径）
+    expect(countCall[0]).toContain('SELECT v.id FROM videos v')
+    expect(countCall[0]).toContain('HAVING')
+    expect(countCall[0]).toContain('MAX(vs.updated_at) >= $')
+    expect(countCall[0]).toContain("MAX(vs.updated_at) < ($")
+    expect(countCall[0]).toContain("INTERVAL '1 day'")
+    expect(countCall[1]).toContain('2026-05-01')
+    expect(countCall[1]).toContain('2026-05-25')
+  })
+
+  it('无 updatedAt range → count 保留 COUNT(DISTINCT v.id) 原路径（性能优势）', async () => {
+    const db = makePool([{ cnt: '0' }], [])
+    await listVideoGroups(db, {})
+    const countCall = (db.query as ReturnType<typeof vi.fn>).mock.calls[0]
+    expect(countCall[0]).toContain('SELECT COUNT(DISTINCT v.id)')
+    expect(countCall[0]).not.toContain('HAVING')
+  })
 })
 
 // ── getVideoMatrix ────────────────────────────────────────────────
