@@ -167,6 +167,8 @@ export class SourcesMatrixService {
       probeStatus: aggregateSignal(r.probeStatuses),
       renderStatus: aggregateSignal(r.renderStatuses),
       updatedAt: r.updatedAt,
+      // HOTFIX-PATCH-2B-FIX1（2026-05-25）：siteKeys 透传（DB 层 STRING_AGG DISTINCT 派生 / 升序）
+      siteKeys: r.siteKeys,
     }))
     return { data, total: raw.total, page: raw.page, limit: raw.limit }
   }

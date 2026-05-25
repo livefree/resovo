@@ -75,6 +75,8 @@ const VIDEO_GROUP_ROW = {
   probeStatus: 'ok' as const,
   renderStatus: 'partial' as const,
   updatedAt: '2026-01-01T00:00:00Z',
+  // HOTFIX-PATCH-2B-FIX1（2026-05-25）：cell 显示该行跨的站点列表
+  siteKeys: ['bilibili', 'youku'],
 }
 const ONE_GROUP_LIST = { data: [VIDEO_GROUP_ROW], total: 1, page: 1, limit: 20 }
 

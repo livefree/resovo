@@ -88,6 +88,8 @@ describe('SourcesMatrixService.listVideoGroups', () => {
         probeStatuses: ['ok', 'dead'],   // mixed → partial
         renderStatuses: ['ok', 'ok'],    // all ok → ok
         updatedAt: '2026-01-01T00:00:00Z',
+        // HOTFIX-PATCH-2B-FIX1（2026-05-25）：siteKeys 透传 raw → public（Service 不派生 / 直接转）
+        siteKeys: ['bilibili', 'youku'],
       }],
       total: 1,
       page: 1,
@@ -97,6 +99,7 @@ describe('SourcesMatrixService.listVideoGroups', () => {
     const result = await svc.listVideoGroups({})
     expect(result.data[0]?.probeStatus).toBe('partial')
     expect(result.data[0]?.renderStatus).toBe('ok')
+    expect(result.data[0]?.siteKeys).toEqual(['bilibili', 'youku'])
     expect(result.total).toBe(1)
   })
 

@@ -69,6 +69,8 @@ describe('listVideoGroups', () => {
     probe_status: 'ok,ok',
     render_status: 'partial',
     updated_at: '2026-01-01T00:00:00Z',
+    // HOTFIX-PATCH-2B-FIX1（2026-05-25）：cell 显示该行跨的站点列表
+    site_keys: 'bilibili,youku',
   }
 
   // CHG-SN-5-11-PATCH-2 P0-2：queries 层不再 aggregate，返回 raw status 数组；
@@ -214,6 +216,27 @@ describe('listVideoGroups', () => {
     await listVideoGroups(db, { siteKey: [] })
     const dataCall = (db.query as ReturnType<typeof vi.fn>).mock.calls[1]
     expect(dataCall[0]).not.toContain('vs2.source_site_key')
+  })
+
+  // HOTFIX-PATCH-2B-FIX1（2026-05-25）：siteKeys cell 显示字段派生
+  it('site_keys SQL STRING_AGG → siteKeys 数组派生（升序去重）', async () => {
+    const db = makePool([{ cnt: '1' }], [{ ...VIDEO_ROW, site_keys: 'bilibili,iqiyi,youku' }])
+    const result = await listVideoGroups(db, {})
+    expect(result.data[0].siteKeys).toEqual(['bilibili', 'iqiyi', 'youku'])
+  })
+
+  it('null site_keys → 空 siteKeys 数组', async () => {
+    const db = makePool([{ cnt: '1' }], [{ ...VIDEO_ROW, site_keys: null }])
+    const result = await listVideoGroups(db, {})
+    expect(result.data[0].siteKeys).toEqual([])
+  })
+
+  it('SQL SELECT 包含 STRING_AGG DISTINCT site_keys（含 COALESCE 双源）', async () => {
+    const db = makePool([{ cnt: '0' }], [])
+    await listVideoGroups(db, {})
+    const dataCall = (db.query as ReturnType<typeof vi.fn>).mock.calls[1]
+    expect(dataCall[0]).toContain('STRING_AGG(DISTINCT COALESCE(vs.source_site_key, v.site_key)')
+    expect(dataCall[0]).toContain('AS site_keys')
   })
 })
 

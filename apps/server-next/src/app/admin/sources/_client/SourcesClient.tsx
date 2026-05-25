@@ -235,19 +235,42 @@ function buildColumns(
       ),
     },
     {
-      // HOTFIX-PATCH-2B（2026-05-25）：siteKey hidden column / matrix popover 过滤入口 / distinct 端点
-      // arch-reviewer Opus A- D5：hidden column 需显式 filterKind='enum' + accessor=() => null + enableSorting: false
+      // HOTFIX-PATCH-2B（2026-05-25）+ FIX1（2026-05-25 走读后）：siteKey 可见列 / cell 显行跨站点 csv
+      // - filter 入口：matrix popover「站点」行 + 列内 ⋯ DataTableAutoFilter（走 distinct 端点）
+      // - filterFieldName='site_key' 与 distinct-whitelist sources 表白名单 col 名一致
+      // - cell 显 row.siteKeys csv（升序去重 / 后端 STRING_AGG DISTINCT 派生 / title 完整列表 hover）
       id: 'siteKey',
       kind: 'data',
       header: '站点',
-      defaultVisible: false,
-      accessor: () => null,
-      enableSorting: false,
+      accessor: (r) => r.siteKeys.join(','),
+      width: 140,
+      enableSorting: false, // 多值列 sort 业务无意义（多个 site 一行）
       filterable: true,
-      filterFieldName: 'site_key', // distinct-whitelist sources 表白名单 col 名
+      filterFieldName: 'site_key',
       filterKind: 'enum',
       filterDistinctTable: 'sources',
-      cell: () => null,
+      cell: ({ row }) => {
+        if (!row.siteKeys || row.siteKeys.length === 0) {
+          return <span style={{ color: 'var(--fg-muted)', fontSize: '11px' }}>—</span>
+        }
+        const text = row.siteKeys.join(', ')
+        return (
+          <span
+            style={{
+              fontSize: '11px',
+              color: 'var(--fg-muted)',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+              display: 'inline-block',
+              maxWidth: '120px',
+            }}
+            title={text}
+          >
+            {text}
+          </span>
+        )
+      },
     },
     {
       id: 'actions',

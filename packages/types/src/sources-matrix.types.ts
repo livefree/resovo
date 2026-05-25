@@ -30,6 +30,11 @@ export interface VideoGroupRow {
   /** 行级聚合 render 信号（Service 层 aggregateSignal 合成） */
   readonly renderStatus: DualSignalState
   readonly updatedAt: string
+  /**
+   * HOTFIX-PATCH-2B-FIX1（2026-05-25）：该视频跨的站点列表（去重 / 升序）
+   * SQL `STRING_AGG(DISTINCT vs.source_site_key, ',')` 派生 / 前端 siteKey 列 cell 显示
+   */
+  readonly siteKeys: readonly string[]
 }
 
 export interface VideoGroupListResult {

@@ -5603,3 +5603,48 @@ Plan-Revision: 1 次（multiSelect 4 项 → 范围审视后 siteKey 推 PATCH-2
 Cleanup-Audit: 8 文件改 / DataTableProps 公开 API 扩展 1 字段（Opus 评审通过）/ DataTable wire 透传 1 处 / 后端 siteKey 单值 → 数组 / 前端 hidden column + distinctFetcher 实现 / 0 ADR / 0 migration / 共 47 sources + admin-ui/table 426 单测零回退
 Plan-Revision: 0 次（Opus A- 评审一次通过 / 6 决策点全 ✅⚠️ / D5 警告点已在实施时严格遵循）
 Subagents: arch-reviewer (claude-opus-4-7) — 1 轮 A- PASS
+
+## [2026-05-25] CHG-SN-9-DT-AUTOFILTER-EP-4-SOURCES-HOTFIX-PATCH-2B-FIX1 · siteKey 列 cell 显示该行跨的站点列表
+
+- **触发**：@livefree dev server 走读 PATCH-2B 后反馈"「站点」行过滤内容含有 31 项，过滤看起来能用，但表格内该列无显示内容"
+- **诊断**：PATCH-2B 选用 D5 hidden column 形态（`defaultVisible: false` + `cell: () => null`）。但用户在 matrix popover 中可切换该列可见性 → 列显出来即空白，UX 不友好。**根本问题**：siteKey 列本身有业务价值（用户希望看视频跨哪些站点）/ "hidden filter slot" 形态不如填充 cell。
+- **用户决策**（AskUserQuestion 2026-05-25）：选项 A "填充 cell：显示该行跨的站点列表"（推荐 / 业务价值 / ~0.15w）
+- **范围**（6 文件 / 1 commit）：
+  1. `packages/types/src/sources-matrix.types.ts` `VideoGroupRow` 加 `siteKeys: readonly string[]` 字段
+  2. `apps/api/src/db/queries/sources-matrix.ts`:
+     - `DbVideoGroupRow.site_keys: string | null`
+     - SQL SELECT 加 `STRING_AGG(DISTINCT COALESCE(vs.source_site_key, v.site_key), ',' ORDER BY ...) AS site_keys`
+     - raw mapping 派生 `siteKeys: (row.site_keys ?? '').split(',').filter(Boolean)`
+  3. `apps/api/src/services/SourcesMatrixService.ts` listVideoGroups public mapping 透传 `siteKeys: r.siteKeys`
+  4. `apps/server-next/src/app/admin/sources/_client/SourcesClient.tsx` siteKey 列形态根本调整：
+     - 删除 `defaultVisible: false`（改为默认可见）
+     - 删除 `accessor: () => null`（改为 `r => r.siteKeys.join(',')`）
+     - 删除 `cell: () => null`（改为 csv text + `title` hover 完整列表 + ellipsis 截断）
+     - 保留 `kind: 'data'` + `enableSorting: false`（多值列 sort 业务无意义）
+     - 保留 `filterable: true` + `filterFieldName: 'site_key'` + `filterKind: 'enum'` + `filterDistinctTable: 'sources'`（filter 路径 PATCH-2B 不变）
+     - 宽度 140 / maxWidth 120 / fontSize 11 / color fg-muted
+  5. `tests/unit/api/sources-matrix.test.ts`:
+     - VIDEO_ROW fixture 补 `site_keys: 'bilibili,youku'`
+     - 加 3 新 case（siteKeys 数组派生升序去重 / null → 空数组 / SQL SELECT STRING_AGG DISTINCT COALESCE）
+  6. `tests/unit/api/sources-matrix-service.test.ts` raw fixture 补 `siteKeys: ['bilibili', 'youku']` + 断言 `result.data[0].siteKeys` 透传 / `tests/unit/components/server-next/admin/sources/SourcesClient.test.tsx` VIDEO_GROUP_ROW 补 `siteKeys`
+- **质量门禁全 PASS**：
+  - ✅ typecheck（8 workspace）
+  - ✅ lint（5/5 / 18s）
+  - ✅ verify:adr-contracts（D-N 178/178 闭环 / SQL alignment / shorthand 0 命中）
+  - ✅ sources 全套 62/62（sources-matrix +3 case / sources-matrix-service fixture 补 / SourcesClient 10/10 零回退 / sources-api-url 9/9）
+  - ✅ admin-ui/table **426/426 零回退**（DataTable/DataTableAutoFilter 公开 API 不变 / Props 已在 PATCH-2B 落地）
+- **用户可见行为变化**：
+  - **修复**：`/admin/sources` 表格 **"站点" 列现显示**每行视频跨的站点列表（升序去重 csv，如 "bilibili, youku"）
+  - **保留**：matrix popover「站点」行 + DataTableAutoFilter popover 多选 enum filter（PATCH-2B 不变）
+  - **新增**：hover 行 cell → OS 原生 tooltip 显完整站点列表（防止 ellipsis 截断后丢信息）
+- **价值**：
+  - **业务价值复出**：用户可一眼看到视频跨哪些站点 / 不需展开行 / 与 lineCount / sourceCount 信息互补
+  - **range 形态范式收敛**：hidden column "filter-only slot" 范式只在确实没数据可显时使用（如 type / country 跨多列派生）/ 普通列有数据应展示
+  - **PATCH-2B D5 警告闭环**：Opus 评审 D5 已警告 hidden column 视觉 UX 风险 / 实测验证 / FIX1 收口
+- **不在范围**（保留 follow-up）：
+  - distinctFetcher AbortSignal（DataTable API follow-up）
+  - probe/renderStatus 聚合语义校正 PATCH-2C（条件触发）
+  - siteKey chip 形态（当前 csv text / 未来美化可改 SignalPill 风格 chip 列表）
+
+Cleanup-Audit: 6 文件改 / 后端 SQL STRING_AGG DISTINCT 派生 + raw + Service + types 4 层透传 / 前端 cell 从空白改为 csv + title hover / 0 新组件 / 0 ADR / 0 migration / 0 API 公开字段（Service 输出 VideoGroupRow 加字段是 additive 后向兼容）/ 单测 62/62 零回退
+Plan-Revision: 0 次（用户走读反馈 → AskUserQuestion 一次决策 → 实施一次 PASS）

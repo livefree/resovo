@@ -68,6 +68,8 @@ interface DbVideoGroupRow {
   probe_status: string
   render_status: string
   updated_at: string
+  // HOTFIX-PATCH-2B-FIX1（2026-05-25）：cell 显示该行跨的站点列表（STRING_AGG DISTINCT csv）
+  site_keys: string | null
 }
 
 interface DbEpisodeCellRow {
@@ -241,7 +243,8 @@ export async function listVideoGroups(
        COUNT(vs.id)::TEXT AS source_count,
        STRING_AGG(DISTINCT vs.probe_status, ',') AS probe_status,
        STRING_AGG(DISTINCT vs.render_status, ',') AS render_status,
-       MAX(vs.updated_at)::TEXT AS updated_at
+       MAX(vs.updated_at)::TEXT AS updated_at,
+       STRING_AGG(DISTINCT COALESCE(vs.source_site_key, v.site_key), ',' ORDER BY COALESCE(vs.source_site_key, v.site_key)) AS site_keys
      FROM videos v
      JOIN media_catalog mc ON mc.id = v.catalog_id
      JOIN video_sources vs ON vs.video_id = v.id AND vs.deleted_at IS NULL
@@ -267,6 +270,8 @@ export async function listVideoGroups(
     probeStatuses: (row.probe_status ?? '').split(',').filter(Boolean),
     renderStatuses: (row.render_status ?? '').split(',').filter(Boolean),
     updatedAt: row.updated_at,
+    // HOTFIX-PATCH-2B-FIX1（2026-05-25）：站点列表派生（STRING_AGG csv → 数组 / 去重已 SQL 保证 / 升序）
+    siteKeys: (row.site_keys ?? '').split(',').filter(Boolean),
   }))
 
   return { data, total, page, limit }
