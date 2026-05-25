@@ -13047,4 +13047,186 @@ function applyFilterValue<T>(query: T, col: AnyColumn, value: FilterValue): T {
 
 **待 @livefree 人工审核**（status: 🟡 Proposed）
 
+> **2026-05-24 仲裁**：@livefree 仲裁 PASS / status 🟢 Accepted（commit `1908ac39`）
+> **2026-05-24 AMENDMENT 2**：D-150-5 union 守卫 NEGATED + 重构（详 ADR-150 AMENDMENT 2 §A2.2 D-150-AMD2-8 / 见下方章节）
+
+---
+
+## ADR-150 AMENDMENT 2 — DataTable 默认全列可过滤+可排序 / opt-out 范式 / column.kind marker（2026-05-24）
+
+- **日期**：2026-05-24
+- **状态**：🟢 Accepted（@livefree 仲裁 2 红线 R-A2-1 dev warn 足够 + R-A2-2 AMENDMENT 2 内一起实施 / 等同 PASS）
+- **作者**：arch-reviewer (claude-opus-4-7) 独立起草 / 主循环 claude-opus-4-7 落档
+- **触发**：阶段 4 EP-3-C sub C @livefree 根本性反问 + EP-3-A sub 1 EXTEND 同源反馈
+- **关联 commit**：`4997515c`（EP-3-A sub 1）/ `aa9140f8`（EP-3-C sub C）/ ADR-150 主体 commit `1908ac39`
+- **关联 GAP**：#UR-B5 升级 — 不仅"配置语义负担"，而是"opt-in 范式本身违反 DataTable 应作为通用基座的认知"
+
+### A2.1 @livefree 反问引用
+
+> "表格本身不能有通用的功能支持过滤，排序吗？Google spreadsheet 对数据的过滤排序支持是等表格创建之后，再逐个根据表格内容去实现功能的吗？"
+>
+> "列设置只是一个弹窗让用户自定义列的功能，而不是在开发时去觉得一个列是否支持排序，过滤。所有的列都是一样的，不应该区别对待，逐个开发实现专有的功能。表格最左侧的复选框也不应该作为一个列来对待，就像 Google spreadsheet 最左边一列显示行数的数字，不属于表格内容，而是用于表格操作交互的的。"
+
+**核心原则提炼**：（1）DataTable = 通用基座 / 过滤排序默认全开；（2）selection 非数据列（已 chrome / 但 actions 仍混入）；（3）列设置 popover = 用户自定义入口（visibility + width）/ 非 dev opt-in 开关；（4）业务 column 仅描述数据 / filter/sort 自动。
+
+### A2.2 AMENDMENT 2 决策点
+
+#### D-150-AMD2-1 — column 默认 filterable + enableSorting（取代 D-150-1 opt-in 起点）
+
+`TableColumn<T>` 在 `kind === 'data'`（或缺省）时：`filterable` 默认 `true` / `enableSorting` 默认 `true`。`filterKind` 默认由 `useFilterKindInference` 推断。消费方只需声明 `id / header / accessor`，过滤+排序立即可用。**REVISED**：取代 D-150-1 "双轨 opt-in" 默认起点（双轨内化为推断 + 静态覆盖二级语义）。
+
+#### D-150-AMD2-2 — column.kind marker（方案 A enum 入选）
+
+**方案 A 入选**：新增 `kind: 'data' | 'action' | 'media' | 'computed'` enum / 默认 `'data'`。
+
+**论证拒 B/C**：
+- 方案 B `isDataColumn: boolean` 信息量低 / 二元无法承载 `action` vs `media` 不同 chrome 行为
+- 方案 C 隐式推断（id==='actions' / cell 内容判定）违反 M-SN-8"假装实现"——隐式约定不可静态校验
+- 方案 A enum 显式 + 可扩展 + 编译期 narrow
+
+**默认值与语义**：
+
+| kind | 默认 filterable | 默认 enableSorting | 进矩阵 popover 数据格 | 进列设置 popover | 走 inference |
+|---|---|---|---|---|---|
+| `data`（缺省） | `true` | `true` | 是 | 是 | 是 |
+| `action` | `false`（type 层 `never`） | `false`（`never`） | 否 | 否（pinned right 默认） | 否 |
+| `media` | `false`（可显式 true） | `false`（可显式） | 否 | 是（width 可调） | 否 |
+| `computed` | `false`（可显式 + 必传 filterFieldName） | `false`（可显式） | 条件 | 是 | 否 |
+
+#### D-150-AMD2-3 — filterFieldName 默认 = column.id（D-150-4 保留 / 降级为覆盖语义）
+
+`data` kind column 缺省 `filterFieldName` 时，DataTable 内部 fallback 至 `column.id`。消费方仅在 column.id ≠ 业务 key 时显式覆盖（如 `id: 'username', filterFieldName: 'q'`）。D-150-4 桥接合约**保留**为"显式覆盖"语义。
+
+#### D-150-AMD2-4 — filterKind 默认走 inference（D-150-2 强化为默认运行）
+
+`use-filter-kind-inference.ts`（已实装 30 行采样 + 5 边界）从"D-150-2 默认+覆盖"升级为"data kind column 默认运行"。消费方 `filterKind` 显式声明永远优先（D-150-2 保留语义）。
+
+#### D-150-AMD2-5 — filterOptions enum 默认 rows distinct 派生（D-150-1 enum 静态二级化）
+
+`filterKind === 'enum'` 且未显式 `filterOptions` 且未显式 `filterDistinctEndpoint` 时，`EnumValueList` 已实装的"rows accessor 派生 fallback"（sub 2 EXTEND BUG 修复后）作为默认值来源。消费方显式静态选项优先（保 i18n label / 显示顺序控制 / 固定枚举 0 RTT）。
+
+#### D-150-AMD2-6 — mode="client" 100% 前端过滤+排序默认（保留 + 强化）
+
+`mode="client"` 时 DataTable 内部完成全部过滤+排序计算 / 零后端依赖 / 零 fetch deps 协调成本。
+
+#### D-150-AMD2-7 — mode="server" dev warn 兜底（@livefree 仲裁 R-A2-1: dev warn 足够）
+
+`mode="server"` 时：（1）消费方 column 未显式 `filterFieldName` → fallback `column.id` 写入 URL；（2）消费方 fetch hook 必须将 URL `filters` 参数透传到后端 query / Service 层 `FILTER_FIELDS` 白名单消费。
+
+**M-SN-8 防御三重**（@livefree R-A2-1 仲裁 dev warn 足够 / 不升 prod throw）：
+1. **dev warn**：DataTable 监测到 `mode==='server'` + column 缺省 filterFieldName + column.id 含非业务命名特征 → `console.warn`
+2. **opt-out review**：4 已迁消费方实施前 review server mode column.id 与后端 FILTER_FIELDS 对齐
+3. **E2E smoke 真过滤断言**：ADR-150 阶段 5 EP-4 走读 5 代表页时 fetch URL params 真过滤验证
+
+#### D-150-AMD2-8 — D-150-5 union 守卫重构（filterable: true + filterFieldName 必填 → NEGATED）
+
+D-150-5 原"filterable: true 时 filterFieldName 必填"**NEGATED**。新守卫（discriminated union by kind）：
+- `kind: 'data'`（缺省）时 `filterable` 默认 true / `filterFieldName` 默认 column.id / 均可显式覆盖
+- `kind: 'action'` 时 `filterable` / `filterFieldName` / `filterKind` / `filterOptions` / `filterDistinctEndpoint` 类型层强制 `never`
+- `kind: 'media' | 'computed'` 时 `filterable` 默认 false / 显式 true 时 `filterFieldName` 仍可 fallback column.id
+
+#### D-150-AMD2-9 — 列设置 popover 范围澄清
+
+| popover | 职责 | 不职责 |
+|---|---|---|
+| 列设置（矩阵 visibility 格） | visibility toggle / width 调整（v2） / pin（v2） | filter/sort 启用开关 |
+| 列名 ⋯ / 矩阵过滤格 | 排序 ↑↓× / 过滤值列表 + 搜索 + OK | 列是否"被允许"过滤（已永远允许） |
+| 矩阵 filter 格行 | 显示当前 data kind column 的已过滤状态摘要 | `action` / `media` 列不出现在此格 |
+
+### A2.3 与 D-150-1..6 关系对照
+
+| 决策点 | 状态 | 新语义 |
+|---|---|---|
+| D-150-1 enum 双轨 | **修订** | 默认起点从"消费方必选其一"→"零声明 distinct 派生" |
+| D-150-2 推断 | **保留 + 强化** | 从"默认+覆盖"→"data kind 默认运行" |
+| D-150-3 distinct 端点 | **保留** | 三重 SQL 注入防御不变 / 仅在消费方显式 `filterDistinctEndpoint` 时使用 |
+| D-150-4 业务 key 桥接 | **保留 + 降级语义** | 从"happy path"→"column.id ≠ 业务 key 时显式覆盖" |
+| D-150-5 union 守卫 | **NEGATED + 重构** | 见 D-150-AMD2-8 / discriminated union by kind |
+| D-150-6 互斥 | **保留** | columnMenu.filterContent 仍作复杂逃生口 / data kind + filterContent 仍 dev warn |
+
+### A2.4 核心 API 变化对照
+
+**旧 opt-in**（D-150-5 / sub C 前）：
+```ts
+{ id: 'status', accessor, header,
+  filterable: true, filterFieldName: 'status',
+  filterKind: 'enum', filterOptions: STATUS_OPTIONS }  // 4 行 filter props
+```
+
+**新 opt-out**（AMENDMENT 2 / data kind 缺省）：
+```ts
+{ id: 'status', accessor, header,
+  filterOptions: STATUS_OPTIONS }  // 仅静态 i18n label 覆盖
+```
+
+**actions 列**（非数据列 / kind marker）：
+```ts
+{ id: 'actions', kind: 'action', accessor: () => null, header: '',
+  cell: ({ row }) => <RowActions row={row} />, pinned: 'right' }
+```
+
+### A2.5 column.kind 类型设计（discriminated union）
+
+```ts
+type DataKindColumn<T> = TableColumnBase<T> & { readonly kind?: 'data' } & AutoFilterColumnFields
+type ActionKindColumn<T> = TableColumnBase<T> & { readonly kind: 'action' } & {
+  readonly filterable?: never; readonly filterFieldName?: never
+  readonly filterKind?: never; readonly filterOptions?: never; readonly filterDistinctEndpoint?: never
+}
+type MediaKindColumn<T> = TableColumnBase<T> & { readonly kind: 'media' } & Partial<AutoFilterColumnFields>
+type ComputedKindColumn<T> = TableColumnBase<T> & { readonly kind: 'computed' } & AutoFilterColumnFields
+export type TableColumn<T> = DataKindColumn<T> | ActionKindColumn<T> | MediaKindColumn<T> | ComputedKindColumn<T>
+```
+
+### A2.6 影响范围
+
+- **共享层**：types.ts union 改造 / DataTable.tsx 矩阵 popover 跳过 non-data kind / inference 触发条件改为 `kind === 'data'` 默认运行 / filterFieldName fallback column.id
+- **4 已迁消费方 opt-out review**（@livefree R-A2-2 仲裁 AMENDMENT 2 内一起实施）：
+  - CrawlerRunsView：`actions` 列加 `kind: 'action'`（如有）/ 其它 column 验证 data kind 默认
+  - AuditClient：`actions` 列加 `kind: 'action'` / target enum 保留显式 options
+  - UsersListClient：`actions` 列加 `kind: 'action'` / roleBadge 装饰列若有
+  - VideoListClient：`cover` 缩略图列 → `'media'` / `actions` → `'action'`
+- **EP-3-D/E/F/G 后续**：每表 column 定义减少 60%+ 行数
+
+### A2.7 实施路径（同卡内一起实施 / @livefree R-A2-2 仲裁）
+
+1. **共享层改造**（types.ts kind union + DataTable.tsx 内部 `kind === 'data'` filter + filter-chip kind 筛选 + dev warn）
+2. **inference 触发条件改**（useFilterKindInference 入口先判 `column.kind ?? 'data'`）
+3. **4 已迁消费方 review opt-out**
+4. **后续 EP-3-D/E/F/G 按新范式**（消费方 column 定义减负）
+5. **文档同步**（reference.md §4.4 + admin-module-template.md v2 决策树 + ADR-149/150 主体 cross-reference）
+
+### A2.8 风险与缓解
+
+| # | 风险 | 严重度 | 缓解 |
+|---|---|---|---|
+| RA2-1 | DataTable 默认值改属共享层公开 API 语义变化 | **高** | discriminated union 默认 kind = 'data' 不破坏现有类型；运行时行为变化由 4 消费方 opt-out review 兜底 |
+| RA2-2 | mode="server" filterFieldName fallback column.id 后端 FILTER_FIELDS 未注册 → 静默忽略 | **高** | dev warn + opt-out review + E2E smoke 三重防御（@livefree R-A2-1 仲裁 dev warn 足够） |
+| RA2-3 | inference 对非 string/number/boolean 数据推断错误 | 中 | 已有 5 边界单测覆盖 mixed type fallback 'text'；新增 Date 对象单测 |
+| RA2-4 | EnumValueList rows distinct 派生在 server mode 分页 100 条不能推 enum 全集 | 中 | 文档显式：server mode + 开放枚举 → 消费方必须显式 `filterDistinctEndpoint` |
+| RA2-5 | discriminated union 改造影响 21 admin-ui/table 单测 + 各消费方单测 | 中 | union narrow 默认 kind = 'data' 不破坏现有测试 |
+
+**回退路径**：types.ts kind 字段 + DataTable kind 判定回滚 commit revert + 4 消费方 opt-out commit 独立 revert。
+
+### A2.9 测试覆盖
+
+- **现有 21 admin-ui/table 单测**：union 默认 kind = 'data' 不破坏 / 全 PASS
+- **新增 ~20 单测**：column.kind 4 值 × 矩阵 popover 显隐 / inference 触发 / filterFieldName fallback / dev warn server mode noop / mixed kind columns 矩阵格筛选
+- **4 消费方单测 review**：opt-out 后 typecheck PASS + 行为断言
+- **E2E smoke 3 case**（留 ADR-150 阶段 5 EP-4）
+
+### A2.10 评级（arch-reviewer Opus 独立起草）
+
+**A− CONDITIONAL PASS → @livefree 仲裁后 ACCEPTED**
+
+### A2.11 ADR-151 vs AMENDMENT 2 决断
+
+**判定：AMENDMENT 2（不升 ADR-151）**
+
+论证：（1）核心范式延续；（2）D-150-1..6 5/6 决策点保留；（3）API 契约延续；（4）实施路径耦合阶段 4 EP-3-D/E/F/G；（5）历史范式对齐 ADR-149 AMENDMENT 1。
+
+反例排除：本 AMENDMENT 2 不触及（a）后端 FILTER_FIELDS schema 重构 / 或（b）DataTable mode 语义新增 / 或（c）矩阵 popover 数据模型重构 → 不升 ADR-151。
+
+**结论**：AMENDMENT 2 形式追加到 decisions.md ADR-150 末尾 / status 🟢 Accepted（主体 + AMENDMENT 2 经 @livefree 2 红线仲裁等同 PASS）
+
 ---

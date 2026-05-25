@@ -5070,3 +5070,55 @@ Plan-Revision: 1 次（SubmissionsListClient 不迁 / 实施前评估发现 depr
 
 Cleanup-Audit: VideoFilterBar 6 → 2 控件 / 4 列加 filterable / D-150-4 桥接 7 实证 / 2 实施 / 0 测试新增 / 4 质量门禁全过 / 21/21 单测零回退 / 0 Props API 变更 / 0 后端 / 0 ADR / StagingPageClient 跳过节省 0.15w
 Plan-Revision: 1 次（StagingPageClient 实施前评估发现 Segment 范式不适用 D-150 / 范围由"2 表格"缩为"1 表格 + filter 简化"）
+
+---
+
+## [CHG-SN-9-DT-AUTOFILTER-AMD2-ADR] ADR-150 AMENDMENT 2 起草 — DataTable 默认全列可过滤+可排序 / opt-out 范式 / column.kind marker
+
+- **完成时间**：2026-05-24
+- **记录时间**：2026-05-24
+- **执行模型**：claude-opus-4-7（主循环 / 落档 + tasks/queue 同步）
+- **子代理**：arch-reviewer (claude-opus-4-7) — 独立起草 ADR-150 AMENDMENT 2 完整章节 / 评级 A− CONDITIONAL PASS / 9 决策点 D-150-AMD2-1..9 / column.kind enum 方案 A 拒 B/C 论证
+- **关联 ADR**：ADR-150（主体保持 🟢 Accepted / AMENDMENT 2 🟢 Accepted via @livefree 仲裁）+ ADR-149（D-149-4 sort 协议）
+- **关联 SEQ**：SEQ-20260524-01 第 1 序列 ADR-150 AMENDMENT 2 起草
+- **触发**：@livefree EP-3-C sub C 走读后**根本性反问**：
+  > "表格本身不能有通用的功能支持过滤，排序吗？Google spreadsheet 对数据的过滤排序支持是等表格创建之后，再逐个根据表格内容去实现功能的吗？"
+  > "列设置只是一个弹窗让用户自定义列的功能，而不是在开发时去觉得一个列是否支持排序，过滤。所有的列都是一样的，不应该区别对待..."
+- **依赖**：sub C ✅ commit `aa9140f8` / EP-3-A 全闭环 A-
+- **核心决策**：
+  - **D-150-1 opt-in 起点 NEGATED**：D-150-AMD2-1 默认 filterable + enableSorting / 取代消费方"必选其一"
+  - **column.kind enum marker**：D-150-AMD2-2 `'data' | 'action' | 'media' | 'computed'` 默认 'data'（方案 A 拒 B isDataColumn boolean / 拒 C 隐式推断）
+  - **discriminated union by kind**：D-150-AMD2-8 重构 D-150-5 union 守卫 NEGATED（action kind filterable 等 5 字段 type 层 `never`）
+  - **filterFieldName 默认 column.id**：D-150-AMD2-3 D-150-4 桥接降级为"显式覆盖"语义
+  - **mode="server" dev warn 兜底**：D-150-AMD2-7 @livefree R-A2-1 仲裁 dev warn 足够（不升 prod throw / 保持向后兼容）
+  - **列设置 popover 范围澄清**：D-150-AMD2-9 visibility/width 用户自定义 / 非 filter/sort 开关
+- **2 红线 @livefree 仲裁**：
+  - **R-A2-1**：server mode FILTER_FIELDS 不对齐防御等级 → **dev warn 足够**（保持向后兼容 / 不升 prod throw）
+  - **R-A2-2**：4 消费方 opt-out review 工时归属 → **AMENDMENT 2 内一起实施**（同卡 ~0.7w / 避免范围分裂）
+- **D-150-1..6 关系对照**：
+  - D-150-1 修订（enum 双轨降级）/ D-150-2 保留+强化（默认运行）/ D-150-3 保留（distinct 端点）/ D-150-4 保留+降级（桥接为覆盖语义）/ D-150-5 NEGATED+重构 / D-150-6 保留（互斥 dev warn）
+- **ADR-151 vs AMENDMENT 2 决断**：**AMENDMENT 2**（D-150-5 NEGATED < 20% / 5/6 决策点保留 / API 契约延续 / 后端契约零变化 / 实施路径耦合阶段 4 EP-3-D/E/F/G / 历史范式对齐 ADR-149 AMENDMENT 1）
+- **修改文件**（1 docs + 3 tasks/queue/changelog 同步 / 0 代码）：
+  - `docs/decisions.md` ADR-150 末尾追加 AMENDMENT 2 完整章节（A2.1 反问引用 + A2.2 9 决策点 + A2.3 关系对照 + A2.4 API 变化 + A2.5 union 类型设计 + A2.6 影响范围 + A2.7 实施路径 + A2.8 风险与缓解 + A2.9 测试覆盖 + A2.10 评级 + A2.11 ADR-151 vs AMENDMENT 2 决断）
+  - `docs/decisions.md` ADR-150 §3 D-150-5 处加 cross-reference "见 AMENDMENT 2 D-150-AMD2-8 NEGATED"（实际 ADR-150 主体 D-150-5 章节为 13046 行附近 / 直接加注释段）
+  - ADR-150 主体"待 @livefree 人工审核（status: 🟡 Proposed）"后追加 2026-05-24 仲裁结果 + AMENDMENT 2 链接
+- **新增依赖**：无
+- **数据库变更**：无
+- **新增端点**：无
+- **关键 D 编号闭环**（verify-adr-d-numbers 守卫）：D-150-AMD2-1 + D-150-AMD2-2 + D-150-AMD2-3 + D-150-AMD2-4 + D-150-AMD2-5 + D-150-AMD2-6 + D-150-AMD2-7 + D-150-AMD2-8 + D-150-AMD2-9 = 9 新 D 编号
+- **质量门禁**：
+  - ✅ verify:adr-d-numbers（9 新 D-150-AMD2-N 编号在本 changelog 条目闭环）
+  - ✅ verify:adr-contracts（advisory）
+- **用户可见行为变化**（仅 ADR 起草 / 不动代码）：无 / 实施 commit 在后续 EP-AMD2 子卡
+- **价值**：
+  - **范式根本反转**：DataTable 从"opt-in 消费方负担"反转为"opt-out 通用基座"/ 兑现 Google Sheets 哲学
+  - **column.kind 显式 marker**：拒绝隐式推断（M-SN-8 反模式）/ 类型层强制 + 编译期 narrow + 可扩展（未来 'system' 'grouping' kind）
+  - **dev warn 三重防御**：R-A2-1 @livefree 仲裁保持向后兼容 + 不破坏 4 已迁消费方 / E2E smoke + opt-out review + dev warn
+  - **Opus 子代理决策链完整**：1 轮独立起草 / 评级 A- / @livefree 仲裁 2 红线 PASS / ADR-149 AMENDMENT 1 范式对齐
+- **后续**：
+  - **EP-AMD2 实施**（共享层 + 4 消费方 opt-out / @livefree R-A2-2 仲裁 AMENDMENT 2 内一起实施 / ~0.6w）
+  - **EP-3-D/E/F/G 后续表格按新范式**（消费方 column 定义减负 60%+）
+  - **文档同步**（reference.md §4.4 + admin-module-template.md v2 决策树）
+
+Cleanup-Audit: ADR-150 AMENDMENT 2 起草完成 / arch-reviewer Opus 独立 1 轮 / 9 决策点 D-150-AMD2-N / column.kind enum 方案 A / D-150-5 NEGATED + 重构 / @livefree 仲裁 2 红线 PASS / 0 代码改动（实施在后续 EP-AMD2 子卡）
+Plan-Revision: 0 次（实施严格按 Opus 起草 + @livefree 仲裁）
