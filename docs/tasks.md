@@ -6,7 +6,7 @@
 
 ## 进行中任务
 
-（空 — 本会话累计 36 commit / DataTableAutoFilter AbortSignal 4 层全栈打通 / DataTable Props.distinctFetcher signature 扩 signal? / Opus PATCH-2B 评审 D6 预批准 / +3 单测 case / 待 @livefree 走读）
+（空 — 本会话累计 37 commit / task-queue.md 6 处状态过时修订（SETTINGS-TABS ✅ / SHELL-NOTIFICATIONS 90% 完成描述更新 / CHG-SN-8-04 占位 ✅ / SEQ-20260521-04 容器 ✅ / ADR-150 D-150-5 Accepted via AMD2 / EP-3-D/E/F/G + EP-4 重复 BLOCKED 删除）/ 文档与实际状态一致）
 
 ---
 
@@ -50,6 +50,7 @@
 31. `b7ca9aac` **IMAGE-HEALTH-MISSING-SORT-FULLSTACK** ImageHealth missing 4 子查询列 sort 全栈打通（**注释 "需 CTE 重写" 误判修正** / 实际 LATERAL JOIN evt 字段直接 ORDER BY 可用 / MISSING_VIDEO_SORT_SQL 扩 4 字段 poster_source/broken_domain/occurrence_count/last_seen_broken_at / 前端 camelCase → snake_case 桥接 / 5 文件 + 9 新单测）
 32. `aa6e63ed` **SOURCES-E2E-SMOKE** sources sort + filter e2e smoke 3 case（1 新 spec 文件 / page-load + sort-click-video + filter-probe-status / Playwright route mock + capture URL params 验证 PATCH-2A §1-BUG-1 + §2-EXT-1 全栈）
 33. `fc741ddf` **SOURCES-E2E-SMOKE-FIX1** 加 case 4 siteKey distinct + case 2/3 testid refactor（4 case 总：PATCH-2B distinct 端点首消费 e2e 收口 / testid 范式增稳）
-34. `<TBD>` **DISTINCT-FETCHER-ABORT-SIGNAL** DataTableAutoFilter AbortController + signal 透传 4 层全栈（admin-ui Props 加 signal? / DataTableAutoFilter useEffect AbortController + AbortError 静默 / api-client RequestOptions.signal / sources/api.ts fetchDistinct signal 参数 / Opus PATCH-2B 评审 D6 预批准 / +3 单测 case）
+34. `406c8524` **DISTINCT-FETCHER-ABORT-SIGNAL** DataTableAutoFilter AbortController + signal 透传 4 层全栈（admin-ui Props 加 signal? / DataTableAutoFilter useEffect AbortController + AbortError 静默 / api-client RequestOptions.signal / sources/api.ts fetchDistinct signal 参数 / Opus PATCH-2B 评审 D6 预批准 / +3 单测 case）
+35. `<TBD>` **DOCS-CLEANUP-DEBT** task-queue.md 6 处状态过时修订（SETTINGS-TABS 标 ✅ / SHELL-NOTIFICATIONS 描述更新 90% 完成 / L511 CHG-SN-8-04 占位 → ✅ / SEQ-20260521-04 容器 → ✅ / ADR-150 D-150-5 仲裁过时 → Accepted via AMD2 / L854-858 EP-3-D/E/F/G + EP-4 重复 BLOCKED 占位删除）
 
-总计 +5600+ lines / 127+ unit 新单测 + 4 e2e smoke / 0 回退 / ADR-150 阶段 5 EP-4 全闭环 + distinctFetcher API 完整（含 cancel 路径）/ 全质量门禁全过。
+总计 +5650+ lines / 127+ unit 新单测 + 4 e2e smoke / 0 回退 / ADR-150 阶段 5 EP-4 全闭环 + distinctFetcher API 完整 + 文档同步债清理 / 全质量门禁全过。

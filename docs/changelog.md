@@ -5889,3 +5889,31 @@ Plan-Revision: 0 次（同会话 follow-up 扩展 / testid 范式直接复用 Da
 Cleanup-Audit: 4 文件改 + 3 新单测 / 共 24/24 data-table-auto-filter + 429/429 admin-ui/table + 21/21 sources 零回退 / 0 新组件 / 0 ADR / 0 migration / Opus PATCH-2B 评审 D6 预批准 follow-up 落地
 Plan-Revision: 0 次（Opus 评审已预批准 / 仅 optional 4 参数后向兼容扩展 / 不重新 spawn Opus 子代理）
 Subagents-Reference: arch-reviewer (claude-opus-4-7) — PATCH-2B 评审 commit 223b4867 / D6 段预批准
+
+## [2026-05-25] CHG-SN-7-DOCS-CLEANUP-DEBT · task-queue.md 6 处状态过时修订 / 文档与实际状态对齐
+
+- **触发**：DISTINCT-FETCHER-ABORT-SIGNAL 闭环后用户 "继续推 follow up" → 推 P2 跟踪卡时实证 SETTINGS-TABS + SHELL-NOTIFICATIONS 实际状态与卡片描述不符 → 用户 AskUserQuestion 选 "文档同步债清理 (Recommended)"
+- **背景**：本会话推进过程中识别 task-queue.md 多处状态过时（与实际代码 / commit history 不一致）。已识别 6 处需修订（CLAUDE.md "tasks.md 卡片 / task-queue.md 必须反映实际状态"约束）
+- **范围**（1 文件改 / 6 处修订）：
+  1. **L113 CHG-SN-7-MISC-SETTINGS-TABS** ✅ 标完成（由 **CHG-SN-7-REDO-03-B** 2026-05-19 完成 / SettingsContainer.tsx L42-50 实证 8 类 Tab 全 / 卡片描述更新指向 REDO-03-B 来源）
+  2. **L114 CHG-SN-7-MISC-SHELL-NOTIFICATIONS** 状态 ✅ 标 90% 完成 + 描述更新（mockNotifications + mockTasks 已 ADR-147 接入真端点 useAdminNotifications + useAdminTasks 60s polling / 剩 1 stub adminNavCountProviderStub 涉及新 ADR + 后端 nav-counts 端点 / 独立 follow-up CHG-SN-7-MISC-SHELL-NAV-COUNTS 按需立卡）
+  3. **L510-515 CHG-SN-8-04 占位卡** ⬜ → ✅ 标完成 / 重定向到 SEQ-20260521-03 拆 -ADR/-EP/-VIEW 3 子卡（commit 2026-05-21 完成 / W1 反例 #3 完全闭合）
+  4. **L650 SEQ-20260521-04 容器** 🔄 → ✅ 已完成（10/10 子卡全 ✅ / #3 OTHERS 条件触发未启用 / 容器状态遗漏未同步）
+  5. **L825 ADR-150 D-150-5 仲裁** 🟡 Proposed → ✅ Accepted via AMENDMENT 2（AMD2 commit `68571ceb` 已 NEGATED + REVISED D-150-5 / 不再 Proposed）
+  6. **L854-858 EP-3-D/E/F/G + EP-4 重复 BLOCKED 占位** → ⛔ 删除（实际已 ✅ 完成 / 上方 L838-842 各自有 ✅ 完成条目 / commits 0e625ac8 + 1bf423ba + 240e7109 + 05a6e802 / EP-4 由 ADR-150 阶段 5 EP-4 sources/Merge/CrawlerRunDetail/ImageHealth/e2e smoke/distinct-fetcher AbortSignal 7 个 follow-up 卡 全闭环完成）
+- **质量门禁全 PASS**：
+  - ✅ typecheck（8 workspace / 纯文档改）
+  - ✅ lint（5/5 FULL TURBO 缓存）
+  - ✅ verify:adr-contracts（D-N 178/178 闭环 / SQL alignment / shorthand 0 命中）
+- **价值**：
+  - **文档与实际状态对齐**：未来主循环开工时不再因 task-queue 占位卡误判已完成项 / "继续推进"指令准确选下一项
+  - **CHG-SN-7-MISC-SHELL-NAV-COUNTS 独立卡识别**：原 SHELL-NOTIFICATIONS 部分剩余（adminNavCountProviderStub）切出独立 follow-up（按 plan §4.5 ADR 前置 / 用户决定时机）
+  - **CLAUDE.md 「task-queue.md 真源」约束兑现**：未同步状态 = 隐藏 BLOCKER 风险 / 修订后 task-queue 重新成为可信入口
+- **不在范围**（保留 follow-up）：
+  - CHG-SN-7-MISC-SHELL-NAV-COUNTS（admin sidebar nav badge / 需 ADR + 后端 nav-counts 端点 / 工时 ~0.3w / 业务需求待 @livefree 复核优先级）
+  - CHG-SN-7-MISC-SESSION-FIELDS-CONSUME（需 ADR-128 + 会话中间件 / 工时 ~0.5w）
+  - score 物化（Merge 跨页稳定 / premature / 无业务驱动）
+  - PATCH-2C probe/renderStatus 聚合语义校正（premature / 等用户走读反馈）
+
+Cleanup-Audit: 1 文件改 / 6 处状态修订 / 0 业务代码改 / 0 新 ADR / 0 migration / typecheck + lint + verify 全过
+Plan-Revision: 0 次（用户 AskUserQuestion 一次确认 / 实施一次 PASS / 纯文档修订）
