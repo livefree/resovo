@@ -289,6 +289,7 @@ function buildStagingColumns(cbs: StagingColumnsCallbacks): readonly TableColumn
     },
     {
       id: 'actions',
+      kind: 'action',
       header: '操作',
       accessor: (row) => row.id,
       width: 160,

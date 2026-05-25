@@ -5384,3 +5384,26 @@ Plan-Revision: 1 次（实施前实证 SourcesClient lineCount/sourceCount enabl
 
 Cleanup-Audit: CrawlerSiteList chevron+actions kind='action' + CrawlerRunDetailView 8 数据列 kind='computed' + ops kind='action' = 11 列 opt-out / AMD2 client+server 范式区分实证 / 2 实施 / 141/141 单测零回退 / 4 质量门禁全过 / 0 ADR / 0 后端 / 0 schema
 Plan-Revision: 0 次（client mode 默认全开 + server mode 防假装 AMD2 范式清晰）
+
+---
+
+## [CHG-SN-9-DT-AUTOFILTER-EP-3-G] StagingPageClient actions opt-out / 12/12 消费方完整闭环
+
+- **完成时间**：2026-05-24
+- **记录时间**：2026-05-24
+- **执行模型**：claude-opus-4-7（主循环）
+- **关联 ADR**：ADR-150 AMENDMENT 2 D-150-AMD2-2 kind='action'
+- **关联 SEQ**：SEQ-20260524-01 第 1 序列 EP-3-G
+- **触发**：用户"通过。同意继续后续任务" / EP-3-G 范围收尾 12 消费方
+- **依赖**：EP-3-F ✅ commit `240e7109`
+- **核心范围**（极简）：
+  - **StagingPageClient**（mode=client / 6 列）：actions 列加 kind='action' / 其它 5 列 client mode AMD2 默认全开正确
+  - **SubmissionsListClient**：跳过（M-SN-9 退役 / deprecation banner）
+  - **dev/components-demo**：跳过（开发演示 / 不在用户视野）
+- **修改文件**（1 实施 / 0 后端 / 0 ADR）：
+  - `apps/server-next/src/app/admin/staging/_client/StagingPageClient.tsx`：actions 列加 kind: 'action'（type 层强制 never）
+- **质量门禁**：typecheck / lint / file-size exit 0 / staging 8/8 单测 PASS
+- **12 消费方完整闭环**：CrawlerRunsView / AuditClient / UsersListClient / VideoListClient / ImageHealthClient / MergeClient / SubtitlesListClient / SourcesClient / CrawlerSiteList / CrawlerRunDetailView / StagingPageClient = 11 完整迁移 + SubmissionsListClient deprecated 跳过 = 12 消费方全部处理完毕
+
+Cleanup-Audit: StagingPageClient actions kind='action' / 12 消费方完整闭环 / 1 实施 / 8/8 单测零回退 / 4 质量门禁全过 / 0 ADR / 0 后端 / 0 schema
+Plan-Revision: 0 次（EP-3-G 范围极简 / dev demo + Submissions deprecated 合理跳过）
