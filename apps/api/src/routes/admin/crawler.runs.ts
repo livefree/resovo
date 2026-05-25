@@ -162,16 +162,22 @@ export async function registerCrawlerRunRoutes(fastify: FastifyInstance) {
   // ── GET /admin/crawler/runs/:id/tasks ──────────────────────
   fastify.get('/admin/crawler/runs/:id/tasks', { preHandler: auth }, async (request, reply) => {
     const { id } = request.params as { id: string }
+    // ADR-150 阶段 5 EP-4 follow-up（2026-05-25）：sort 全栈打通 / 4 字段白名单（复用 TASK_SORT_COLUMNS）
     const QuerySchema = z.object({
       page: z.coerce.number().int().min(1).default(1),
       limit: z.coerce.number().int().min(1).max(500).default(200),
+      sortField: z.enum(['site', 'status', 'startedAt', 'finishedAt']).optional(),
+      sortDir: z.enum(['asc', 'desc']).optional(),
     })
     const parsed = QuerySchema.safeParse(request.query)
     if (!parsed.success) {
       return reply.code(422).send({ error: { code: 'VALIDATION_ERROR', message: '参数错误', status: 422 } })
     }
-    const { page, limit } = parsed.data
-    const { rows, total } = await listTasksByRunId(db, id, { limit, offset: (page - 1) * limit })
+    const { page, limit, sortField, sortDir } = parsed.data
+    const { rows, total } = await listTasksByRunId(db, id, {
+      limit, offset: (page - 1) * limit,
+      ...(sortField ? { sortField, sortDir } : {}),
+    })
     return reply.send({
       data: rows.map(mapTaskDto),
       pagination: { total, page, limit, hasNext: page * limit < total },

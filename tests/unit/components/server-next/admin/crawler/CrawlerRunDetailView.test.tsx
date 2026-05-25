@@ -242,12 +242,17 @@ describe('CrawlerRunDetailView', () => {
     })
   })
 
-  it('12. 默认 tasks page=1 limit=50 触发 API', async () => {
+  it('12. 默认 tasks page=1 limit=50 + sortField=startedAt desc 触发 API（ADR-150 阶段 5 EP-4 follow-up）', async () => {
     getCrawlerRunByIdMock.mockResolvedValueOnce(RUN_BASE)
     listCrawlerRunTasksMock.mockResolvedValueOnce(EMPTY_TASKS)
     render(<CrawlerRunDetailView runId={RUN_ID} />)
     await waitFor(() => {
-      expect(listCrawlerRunTasksMock).toHaveBeenCalledWith(RUN_ID, { page: 1, limit: 50 })
+      // sort state 默认 startedAt desc → 前端 column.id='startedAt' → sortField='startedAt'
+      expect(listCrawlerRunTasksMock).toHaveBeenCalledWith(RUN_ID, {
+        page: 1, limit: 50,
+        sortField: 'startedAt',
+        sortDir: 'desc',
+      })
     })
   })
 

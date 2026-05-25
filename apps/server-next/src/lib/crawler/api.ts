@@ -313,6 +313,9 @@ export interface CrawlerTaskDto {
 export interface ListRunTasksParams {
   readonly page?: number
   readonly limit?: number
+  // ADR-150 阶段 5 EP-4 follow-up（2026-05-25）：runs/:id/tasks sort 全栈 4 字段白名单
+  readonly sortField?: 'site' | 'status' | 'startedAt' | 'finishedAt'
+  readonly sortDir?: 'asc' | 'desc'
 }
 
 export interface ListRunTasksResult {
@@ -334,6 +337,9 @@ export async function listCrawlerRunTasks(
   const qs = new URLSearchParams()
   if (params.page != null) qs.set('page', String(params.page))
   if (params.limit != null) qs.set('limit', String(params.limit))
+  // ADR-150 阶段 5 EP-4 follow-up（2026-05-25）：sort 全栈 URL 透传
+  if (params.sortField) qs.set('sortField', params.sortField)
+  if (params.sortDir) qs.set('sortDir', params.sortDir)
   const q = qs.toString()
   return apiClient.get<ListRunTasksResult>(
     `/admin/crawler/runs/${encodeURIComponent(id)}/tasks${q ? `?${q}` : ''}`,

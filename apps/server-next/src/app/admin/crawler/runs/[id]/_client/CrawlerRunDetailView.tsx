@@ -103,11 +103,11 @@ interface BuildTaskColumnsOptions {
   readonly onViewLogs: (taskId: string) => void
 }
 
-// EP-3-F（2026-05-24）：AMD2 D-150-AMD2-2 kind='computed' opt-out
-//   - mode="server" 但 fetch listCrawlerRunTasks 不传 sort/filter → AMD2 默认全开会"假装"
-//   - 8 数据列 kind='computed' 业务真实禁用（防假装）
-//   - ops 列 kind='action'（type 层强制 never）
-//   - 真 sort/filter 全栈打通留 follow-up（后端 listCrawlerRunTasks 扩 sortField）
+// EP-3-F（2026-05-24）+ ADR-150 阶段 5 EP-4 follow-up（2026-05-25）：sort 全栈打通
+//   - 8 数据列保留 kind='computed'（filter 业务无意义）
+//   - 4 列显式 enableSorting: true（siteKey / status / startedAt / duration）/ 后端 SQL ORDER BY 白名单
+//   - duration sort 用 finishedAt 字段（duration = finished - started 派生 / finishedAt 是 reasonable proxy）
+//   - ops 列 kind='action'（type 层强制 never / 不进矩阵 popover）
 function buildTaskColumns({ onViewLogs }: BuildTaskColumnsOptions): readonly TableColumn<CrawlerTaskDto>[] {
   return [
   {
@@ -123,6 +123,7 @@ function buildTaskColumns({ onViewLogs }: BuildTaskColumnsOptions): readonly Tab
   {
     id: 'siteKey',
     kind: 'computed',
+    enableSorting: true, // ADR-150 阶段 5 EP-4 follow-up sort 全栈（前端 'siteKey' → 后端 'site' 桥接）
     header: '站点',
     accessor: (r) => r.siteKey,
     width: 140,
@@ -145,6 +146,7 @@ function buildTaskColumns({ onViewLogs }: BuildTaskColumnsOptions): readonly Tab
   {
     id: 'status',
     kind: 'computed',
+    enableSorting: true, // ADR-150 阶段 5 EP-4 follow-up sort 全栈（直接对齐白名单 'status'）
     header: '状态',
     accessor: (r) => r.status,
     width: 100,
@@ -183,6 +185,7 @@ function buildTaskColumns({ onViewLogs }: BuildTaskColumnsOptions): readonly Tab
   {
     id: 'startedAt',
     kind: 'computed',
+    enableSorting: true, // ADR-150 阶段 5 EP-4 follow-up sort 全栈（直接对齐白名单 'startedAt'）
     header: '开始时间',
     accessor: (r) => r.startedAt,
     width: 160,
@@ -196,6 +199,7 @@ function buildTaskColumns({ onViewLogs }: BuildTaskColumnsOptions): readonly Tab
   {
     id: 'duration',
     kind: 'computed',
+    enableSorting: true, // ADR-150 阶段 5 EP-4 follow-up sort 全栈（duration 派生 / 前端 'duration' → 后端 'finishedAt' proxy）
     header: '耗时',
     accessor: (r) => r.finishedAt,
     width: 100,
@@ -274,7 +278,18 @@ export function CrawlerRunDetailView({ runId }: CrawlerRunDetailViewProps) {
     let cancelled = false
     setTasksLoading(true)
     setTasksError(null)
-    listCrawlerRunTasks(runId, { page: tasksPage, limit: tasksPageSize })
+    // ADR-150 阶段 5 EP-4 follow-up（2026-05-25）：sort 白名单守卫 + 前端 column.id → 后端 sortField key 映射
+    // column 'siteKey' → 'site'（白名单 key 名）/ 'duration' → 'finishedAt'（duration 派生 sort proxy）
+    const sortFieldGuarded: 'site' | 'status' | 'startedAt' | 'finishedAt' | undefined =
+      tasksSort.field === 'siteKey' ? 'site' :
+      tasksSort.field === 'status' ? 'status' :
+      tasksSort.field === 'startedAt' ? 'startedAt' :
+      tasksSort.field === 'duration' ? 'finishedAt' :
+      undefined
+    listCrawlerRunTasks(runId, {
+      page: tasksPage, limit: tasksPageSize,
+      ...(sortFieldGuarded ? { sortField: sortFieldGuarded, sortDir: tasksSort.direction } : {}),
+    })
       .then((res) => {
         if (cancelled) return
         setTasks(res.data)
@@ -285,7 +300,7 @@ export function CrawlerRunDetailView({ runId }: CrawlerRunDetailViewProps) {
       })
       .finally(() => { if (!cancelled) setTasksLoading(false) })
     return () => { cancelled = true }
-  }, [runId, tasksPage, tasksPageSize, retryKey])
+  }, [runId, tasksPage, tasksPageSize, tasksSort, retryKey])
 
   const refresh = useCallback(() => setRetryKey((k) => k + 1), [])
 

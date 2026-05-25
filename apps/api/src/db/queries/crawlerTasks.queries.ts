@@ -98,16 +98,26 @@ export async function listTasks(
 export async function listTasksByRunId(
   db: Pool,
   runId: string,
-  params: { limit?: number; offset?: number } = {},
+  params: {
+    limit?: number
+    offset?: number
+    // ADR-150 阶段 5 EP-4 follow-up（2026-05-25）：sort 全栈打通 / 复用 TASK_SORT_COLUMNS 白名单
+    sortField?: string
+    sortDir?: 'asc' | 'desc'
+  } = {},
 ): Promise<{ rows: CrawlerTask[]; total: number }> {
   const limit = params.limit ?? 200
   const offset = params.offset ?? 0
+  const dbCol = params.sortField ? TASK_SORT_COLUMNS[params.sortField] : undefined
+  const orderBy = dbCol
+    ? `${dbCol} ${params.sortDir === 'asc' ? 'ASC' : 'DESC'} NULLS LAST`
+    : 'scheduled_at DESC'
   const [dataResult, countResult] = await Promise.all([
     db.query<DbCrawlerTaskRow>(
       `SELECT *
        FROM crawler_tasks
        WHERE run_id = $1
-       ORDER BY scheduled_at DESC
+       ORDER BY ${orderBy}
        LIMIT $2 OFFSET $3`,
       [runId, limit, offset],
     ),
