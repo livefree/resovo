@@ -296,10 +296,11 @@ function buildVideoColumns(
     },
     // ── sources 列：reference §6.1 dot + 数字 + 活跃/一般/稀少 文案 ──
     // CHG-UX2-03b 收窄 100 → 90（消除横滚 → frame 圆角完整）
-    // AMD2-PATCH-1：后端 SORT_FIELDS 白名单不含 / 显式 enableSorting: false
+    // AMD2-PATCH-2：后端 SORT_FIELDS 扩展 'source_health' → ORDER BY active_source_count
+    // 撤回 PATCH-1 错误"enableSorting: false"反范式（违反 AMD2 D-150-AMD2-1 默认全开）
     {
       id: 'source_health', header: '源活跃', accessor: (r) => r.active_source_count ?? r.source_count,
-      width: 90, minWidth: 80, enableResizing: true, enableSorting: false, defaultVisible: true,
+      width: 90, minWidth: 80, enableResizing: true, defaultVisible: true,
       cell: ({ row }) => {
         const active = parseInt(row.active_source_count ?? row.source_count ?? '0', 10)
         return (
@@ -314,7 +315,8 @@ function buildVideoColumns(
     // ── probe 列：reference §6.1 DualSignal 探测/播放双信号 ──
     // 后端暂未提供 probe / render 字段；先传 'unknown' / 'unknown' 占位（STATS-EXTEND-VIDEOS follow-up）
     // CHG-UX2-03b 收窄 140 → 110（消除横滚）
-    // AMD2-PATCH-1：后端不支持 / 显式 enableSorting: false
+    // AMD2-PATCH-2：保留 enableSorting: false — 后端 schema 真无 probe / render 字段（placeholder
+    //   accessor 返回固定字符串 / 排序无意义）/ 待 STATS-EXTEND-VIDEOS 补字段后启用
     {
       id: 'probe', header: '探测/播放', accessor: () => 'probe-render',
       width: 110, minWidth: 100, enableResizing: true, enableSorting: false, defaultVisible: true,
@@ -322,7 +324,9 @@ function buildVideoColumns(
     },
     // ── image 列：reference §6.1 P0 失效|活跃 Pill ──
     // CHG-UX2-03b 默认隐藏（消除横滚 → 用户可手动开）
-    // AMD2-PATCH-1：后端不支持 / 显式 enableSorting: false
+    // AMD2-PATCH-2：保留 enableSorting: false — image_health 是 poster_status + backdrop_status
+    //   复合派生（accessor 拼字符串）/ 后端无对应复合 SQL 排序字段 / 拆分排序 UX 不清晰
+    //   后续补 image_health enum 字段（如 'ok' / 'partial' / 'broken'）后端 ORDER BY 后启用
     {
       id: 'image_health', header: '图片', accessor: (r) => `${r.poster_status ?? '-'}/${r.backdrop_status ?? '-'}`,
       width: 100, minWidth: 90, enableResizing: true, enableSorting: false, defaultVisible: false,
@@ -337,10 +341,10 @@ function buildVideoColumns(
     },
     // ── visibility 列：reference §6.1 VisChip（visibility + review 复合）──
     // sub C：enum filter / filterFieldName='visibilityStatus'（D-150-4 业务 key 桥接 column.id ≠ filterFieldName）
-    // AMD2-PATCH-1：后端 SORT_FIELDS 白名单不含 / 显式 enableSorting: false
+    // AMD2-PATCH-2：后端 SORT_FIELDS 扩展 'visibility' → ORDER BY v.visibility_status
     {
       id: 'visibility', header: '可见性', accessor: (r) => r.visibility_status ?? '',
-      width: 120, minWidth: 110, enableResizing: true, enableSorting: false, defaultVisible: true,
+      width: 120, minWidth: 110, enableResizing: true, defaultVisible: true,
       filterable: true, filterFieldName: 'visibilityStatus', filterKind: 'enum', filterOptions: visibilityOptions,
       cell: ({ row }) => (row.visibility_status && row.review_status)
         ? <VisChip visibility={row.visibility_status} review={row.review_status} />
@@ -348,24 +352,24 @@ function buildVideoColumns(
     },
     // ── review 列：reference §6.1 单 review pill（不复用 VisChip，因 visibility 列已承担复合状态）──
     // sub C：enum filter / filterFieldName='reviewStatus'（D-150-4 业务 key 桥接）
-    // AMD2-PATCH-1：后端 SORT_FIELDS 白名单不含 / 显式 enableSorting: false
+    // AMD2-PATCH-2：后端 SORT_FIELDS 扩展 'review_status' → ORDER BY v.review_status
     {
       id: 'review_status', header: '审核', accessor: (r) => r.review_status ?? '',
-      width: 90, minWidth: 80, enableResizing: true, enableSorting: false, defaultVisible: true,
+      width: 90, minWidth: 80, enableResizing: true, defaultVisible: true,
       filterable: true, filterFieldName: 'reviewStatus', filterKind: 'enum', filterOptions: reviewOptions,
       cell: ({ row }) => row.review_status
         ? <Pill variant={reviewPillVariant(row.review_status)}>{reviewPillLabel(row.review_status)}</Pill>
         : null,
     },
-    // AMD2-PATCH-1：后端不支持 / 显式 enableSorting: false
+    // AMD2-PATCH-2：后端 SORT_FIELDS 扩展 'douban_status' → ORDER BY v.douban_status
     {
       id: 'douban_status', header: '豆瓣状态', accessor: (r) => r.douban_status ?? '',
-      width: 180, minWidth: 160, enableResizing: true, enableSorting: false, defaultVisible: false,
+      width: 180, minWidth: 160, enableResizing: true, defaultVisible: false,
     },
-    // AMD2-PATCH-1：后端不支持 / 显式 enableSorting: false
+    // AMD2-PATCH-2：后端 SORT_FIELDS 扩展 'meta_score' → ORDER BY v.meta_score
     {
       id: 'meta_score', header: '元数据完整度', accessor: (r) => r.meta_score ?? '',
-      width: 160, minWidth: 140, enableResizing: true, enableSorting: false, defaultVisible: false,
+      width: 160, minWidth: 140, enableResizing: true, defaultVisible: false,
     },
     {
       id: 'created_at', header: '创建时间', accessor: (r) => r.created_at,

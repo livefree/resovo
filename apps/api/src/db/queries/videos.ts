@@ -192,12 +192,21 @@ export async function listTrendingVideos(
 
 // ── Admin 查询（含未发布视频）────────────────────────────────────
 
+// AMD2-PATCH-2（2026-05-24）：扩展 SORT_FIELDS 白名单 / 兑现 ADR-150 AMD2 D-150-AMD2-1
+// "所有有数据的列默认可排序"原则 / 解决 R-A2-2 sort 422 / 前端禁用反范式
+// 字段命名约定：key = column.id（前端列 id）/ value = SQL 表达式（含表前缀或 SELECT alias）
 const SORT_FIELD_WHITELIST: Record<string, string> = {
   created_at: 'v.created_at',
   updated_at: 'v.updated_at',
   title: 'v.title',
-  year: 'mc.year',   // year 在 media_catalog
+  year: 'mc.year',                    // year 在 media_catalog
   type: 'v.type',
+  // AMD2-PATCH-2 新扩 5 字段：
+  source_health: 'active_source_count', // SELECT alias / 子查询计算 / 不带表前缀
+  visibility: 'v.visibility_status',    // column.id 'visibility' / SQL 'visibility_status'
+  review_status: 'v.review_status',
+  douban_status: 'v.douban_status',
+  meta_score: 'v.meta_score',
 }
 
 export interface AdminVideoListFilters {

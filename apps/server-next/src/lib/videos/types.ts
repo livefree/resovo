@@ -43,7 +43,9 @@ export interface VideoListFilter {
   visibilityStatus?: VisibilityStatus
   reviewStatus?: ReviewStatus
   site?: string
+  /** AMD2-PATCH-2（2026-05-24）：扩展 5 字段同步后端 SORT_FIELDS（apps/api/src/routes/admin/videos.ts:90） */
   sortField?: 'title' | 'type' | 'year' | 'created_at' | 'updated_at'
+    | 'source_health' | 'visibility' | 'review_status' | 'douban_status' | 'meta_score'
   sortDir?: 'asc' | 'desc'
   page?: number
   limit?: number

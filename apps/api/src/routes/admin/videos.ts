@@ -87,7 +87,13 @@ const ManualAddVideoSchema = VideoMetaSchema.required({ title: true, type: true 
   force: z.boolean().default(false),
 })
 
-const SORT_FIELDS = ['created_at', 'updated_at', 'title', 'year', 'type'] as const
+// AMD2-PATCH-2（2026-05-24）：扩展 SORT_FIELDS 白名单同步 queries SORT_FIELD_WHITELIST
+// 兑现 ADR-150 AMD2 D-150-AMD2-1 "所有有数据的列默认可排序"原则
+const SORT_FIELDS = [
+  'created_at', 'updated_at', 'title', 'year', 'type',
+  // 新扩 5 字段：
+  'source_health', 'visibility', 'review_status', 'douban_status', 'meta_score',
+] as const
 
 const ListQuerySchema = z.object({
   status: z.enum(['pending', 'published', 'unpublished', 'all']).optional().default('all'),

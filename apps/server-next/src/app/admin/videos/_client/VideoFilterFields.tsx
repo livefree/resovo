@@ -57,11 +57,13 @@ function getTextValue(filters: ReadonlyMap<string, FilterValue>, key: string): s
   return v?.kind === 'text' && v.value ? v.value : undefined
 }
 
-// AMD2-PATCH-1（2026-05-24）：sort 白名单守卫（防 AMD2 默认 enableSorting=true 触发后端 422）
-// 后端 SORT_FIELDS 白名单（apps/api/src/routes/admin/videos.ts:90）：
-//   'created_at' | 'updated_at' | 'title' | 'year' | 'type'
-// 非白名单 sortField → undefined / 不透传 / 后端用默认 ORDER BY created_at DESC
-const VIDEO_SORT_FIELD_WHITELIST = ['created_at', 'updated_at', 'title', 'year', 'type'] as const
+// AMD2-PATCH-1（2026-05-24）：sort 白名单守卫（防 saved views/URL 反序列化非法 sortField → 422）
+// AMD2-PATCH-2（2026-05-24）：白名单扩 5 字段同步后端 SORT_FIELDS 扩展（apps/api/src/routes/admin/videos.ts:90）
+// 兑现 ADR-150 AMD2 D-150-AMD2-1 "所有有数据的列默认可排序" / 不再用前端 enableSorting:false 反范式
+const VIDEO_SORT_FIELD_WHITELIST = [
+  'created_at', 'updated_at', 'title', 'year', 'type',
+  'source_health', 'visibility', 'review_status', 'douban_status', 'meta_score',
+] as const
 type VideoSortField = (typeof VIDEO_SORT_FIELD_WHITELIST)[number]
 function isVideoSortField(s: string | undefined): s is VideoSortField {
   return s !== undefined && (VIDEO_SORT_FIELD_WHITELIST as readonly string[]).includes(s)
