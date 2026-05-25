@@ -5203,3 +5203,72 @@ Plan-Revision: 0 次（实施严格按 Opus 起草 + @livefree 仲裁）
 
 Cleanup-Audit: ADR-150 AMENDMENT 2 实施完整 / 共享层 3 文件（types + data-table + column-matrix-menu）+ 4 消费方 opt-out + 3 测试 fixture 更新 / 7 实施 + 3 测试 / 0 ADR / 0 后端 / 0 schema / 4 质量门禁全过 / 426 + 605 单测全 PASS（admin-ui/table 15 → 0 fail 修复）/ AMD2-EP 全闭环
 Plan-Revision: 1 次（admin-ui/table 15 fixture fail 预期 / 修法 patch 显式 filterable: false 维持旧测试 / AMD2 新行为单测留 EP-3-D follow-up）
+
+---
+
+## [CHG-SN-9-DT-AUTOFILTER-AMD2-PATCH-1 + PATCH-2] /admin/videos sort 加载失败修复（PATCH-1 禁用反范式 → PATCH-2 后端扩展白名单）
+
+- **完成时间**：2026-05-24
+- **记录时间**：2026-05-24
+- **执行模型**：claude-opus-4-7（主循环 / opus xhigh 续会话）
+- **关联 ADR**：ADR-150 AMENDMENT 2 D-150-AMD2-1（默认全开）+ R-A2-2 风险实证触发
+- **关联 commit**：`9888f7ac` PATCH-1（错误禁用）+ `2c6e3cf8` PATCH-2（正确后端扩展）
+- **触发**：@livefree AMD2-EP 走读发现 `/admin/videos` 部分列排序"加载失败"
+- **PATCH-1 错误 + 修正**：
+  - PATCH-1 加 enableSorting: false 禁用前端 7 列 → @livefree 指出"为何因为错出就将排序禁用？这造成部分列丧失排序的功能"违反 AMD2 默认全开原则
+  - PATCH-2 撤回：后端 SORT_FIELDS 扩展 5 字段（visibility / review_status / douban_status / meta_score / source_health）+ SORT_FIELD_WHITELIST SQL 映射 + 前端 VIDEO_SORT_FIELD_WHITELIST 同步扩展 + 前端去 5 列 enableSorting: false
+  - 保留 2 列 enableSorting: false：probe（后端无 probe/render 字段 placeholder）+ image_health（复合派生 poster + backdrop / 后端无统一字段）/ 业务真实禁用 + 注释说明
+- **AMD2 范式落实**：兑现 D-150-AMD2-1 "所有有数据的列默认可排序" / 不再用前端禁用回避后端 422
+- **质量门禁**：typecheck / lint / file-size exit 0 / adr-contracts exit 0 / VideoListClient 21/21 PASS
+- **价值**：实证 AMD2 R-A2-2 风险触发 + 修复路径 + 反范式纠正 / 为 EP-3-D/E/F/G 后续表格树立"扩展后端 SORT_FIELDS 而非禁用前端"标杆
+
+---
+
+## [CHG-SN-9-DT-AUTOFILTER-EP-3-D] ImageHealth + Merge 9 列 kind='computed' opt-out
+
+- **完成时间**：2026-05-24
+- **记录时间**：2026-05-24
+- **执行模型**：claude-opus-4-7（主循环）
+- **子代理**：无（AMD2 范式直接应用）
+- **关联 ADR**：ADR-150 AMENDMENT 2 D-150-AMD2-2 kind: 'computed' enum marker
+- **关联 SEQ**：SEQ-20260524-01 第 1 序列 EP-3-D
+- **触发**：用户"继续下一步" / EP-3-D 范围 ImageHealthClient + MergeClient
+- **依赖**：AMD2-PATCH-2 ✅ commit `2c6e3cf8`
+- **核心范围调整**：
+  - **ImageHealth 域名表（mode="client"）**：不动 / AMD2 默认全开正确（前端 100% 过滤+排序）
+  - **ImageHealth 缺图视频表（mode="server"）**：6 列中 title + posterStatus 保留 enableSorting: true（后端 SORT_FIELDS 已支持 3 字段）/ 4 子查询派生列加 kind: 'computed'
+  - **MergeClient 候选表（mode="server"）**：3 列全 kind: 'computed'（业务 Segment 范式 / 后端 listMergeCandidates 完全无 sort/filter 参数）
+- **修改文件**（2 实施 / 0 后端 / 0 ADR）：
+  - `apps/server-next/src/app/admin/image-health/_client/ImageHealthColumns.tsx`：4 列加 kind: 'computed'（posterSource / brokenDomain / occurrenceCount / lastSeenBrokenAt）+ 删 occurrenceCount 旧 enableSorting: false 冗余（kind='computed' 默认 false）
+  - `apps/server-next/src/app/admin/merge/_client/MergeClient.tsx`：3 列加 kind: 'computed'（titleNormalized / videoCount / score）+ 注释说明（合并工作流 Segment 范式 / 非标准数据列表 / 后续 follow-up 后端扩 sortField=score 启用）
+- **新增依赖**：无
+- **数据库变更**：无
+- **新增端点**：无
+- **关键设计落实**：
+  - **AMD2 D-150-AMD2-2 kind='computed' 业务声明性禁用**：替代"为回避后端 422 加 enableSorting: false + filterable: false"反范式
+  - **kind enum 一字段表达 + 默认 false + false**：比双字段更简洁 + 与 AMD2 默认值表对齐
+  - **"业务真实禁用" vs "反范式禁用"区分**：dashboard / Segment 工具表非标准数据列表 → 业务真实禁用 OK；标准数据列表禁用 = 反范式
+- **质量门禁**：
+  - ✅ typecheck（8 workspace PASS）
+  - ✅ lint（5/5 / pre-existing img 警告）
+  - ✅ verify:file-size-budget exit 0
+  - ✅ verify:adr-contracts exit 0
+  - ✅ ImageHealth + Merge 53/53 单测全 PASS
+- **用户可见行为变化**（dev server 走读 EP-3-D 后）：
+  - **不变**：`/admin/image-health` 域名表（client mode）— 默认前端过滤+排序
+  - **不变**：`/admin/image-health` 缺图视频表 title + posterStatus 列 ⋯ trigger（后端 SORT_FIELDS 已支持）
+  - **新增**：`/admin/image-health` 缺图视频表 4 子查询列 → **无 ⋯ trigger**（kind='computed' opt-out / 业务真实禁用 / 子查询 SQL ORDER BY 复杂留 follow-up）
+  - **新增**：`/admin/merge` 候选表 3 列 → **无 ⋯ trigger**（kind='computed' / Segment 范式非数据列表 / 后续后端扩 sortField=score 启用）
+  - **不变**：4 已迁消费方（CrawlerRunsView/AuditClient/UsersListClient/VideoListClient）行为不变
+- **价值**：
+  - **AMD2 D-150-AMD2-2 kind='computed' 首业务应用**：实证 enum marker 比双字段更优雅
+  - **防 AMD2 假装实现风险**：mode="server" + 无 onQueryChange filters/sort 处理时业务声明性禁用
+  - **EP-3-D 范式提供 follow-up 边界**：ImageHealth missing 4 子查询列 + Merge 3 列待后端扩展 SQL 后启用
+- **不在范围**（独立后续）：
+  - ImageHealth missing 表 4 子查询列 sort 全栈（需 CTE 重写 SQL）
+  - MergeClient 候选表 sortField=score 全栈（后端 listMergeCandidates 加 sortField + queries ORDER BY score）
+  - 后端 listMergeCandidates filter 全栈（filter 业务需求待评估）
+  - EP-3-E/F/G 后续 4 表格（SubtitlesListClient / SourcesClient / CrawlerClient / CrawlerRunDetailView / dev demo）
+
+Cleanup-Audit: ImageHealth 4 子查询列 + Merge 3 列 = 7 列加 kind='computed' opt-out / AMD2 D-150-AMD2-2 首业务应用 / 2 实施 + 0 测试新增 / 53/53 单测零回退 / 4 质量门禁全过 / 0 ADR / 0 后端 / 0 schema
+Plan-Revision: 0 次（kind='computed' marker 一字段表达比 PATCH-1 双字段更简洁 / 业务声明性 vs 反范式区分清晰）

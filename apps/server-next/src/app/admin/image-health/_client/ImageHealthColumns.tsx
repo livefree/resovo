@@ -64,8 +64,12 @@ export function buildMissingVideoColumns(): readonly TableColumn<MissingVideoRow
       },
     },
     // CHG-SN-6-RETRO-3-B / ultrareview P2-7：列扩展（运维定位）
+    // EP-3-D（2026-05-24）：子查询派生字段 / 后端 SORT_FIELDS 不含 / 业务真实禁用
+    //   kind: 'computed' → AMD2 默认 filterable+enableSorting false / 不进矩阵 popover / 不显 ⋯ trigger
+    //   后续 follow-up：CTE 重写 listMissingVideos SQL 让子查询字段可 ORDER BY → 启用 sort
     {
       id: 'posterSource',
+      kind: 'computed',
       header: '海报来源',
       accessor: (r) => r.posterSource ?? '—',
       width: 110,
@@ -78,6 +82,7 @@ export function buildMissingVideoColumns(): readonly TableColumn<MissingVideoRow
     },
     {
       id: 'brokenDomain',
+      kind: 'computed',
       header: '破损域名',
       accessor: (r) => r.brokenDomain ?? '',
       minWidth: 200,
@@ -90,10 +95,10 @@ export function buildMissingVideoColumns(): readonly TableColumn<MissingVideoRow
     },
     {
       id: 'occurrenceCount',
+      kind: 'computed',
       header: '破损次数',
       accessor: (r) => r.occurrenceCount,
       width: 100,
-      enableSorting: false,
       defaultVisible: true,
       cell: ({ row }) => (
         <span
@@ -110,6 +115,7 @@ export function buildMissingVideoColumns(): readonly TableColumn<MissingVideoRow
     },
     {
       id: 'lastSeenBrokenAt',
+      kind: 'computed',
       header: '最近破损',
       accessor: (r) => r.lastSeenBrokenAt ?? '',
       width: 130,

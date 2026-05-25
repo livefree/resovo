@@ -329,9 +329,15 @@ function CandidatesSection() {
     [toast, load],
   )
 
+  // EP-3-D（2026-05-24）：3 列全 kind: 'computed' opt-out
+  //   - MergeClient 候选表是合并工作流（Segment 范式 / 非标准数据列表）
+  //   - 后端 listMergeCandidates 无 sort / filter 参数 / mode="server" onQueryChange 仅 pagination
+  //   - AMD2 默认全开会引入"假装实现"（用户能点 popover 但 fetch 不带 filters/sort）
+  //   - 后续 follow-up：后端扩 sortField=score + filter / 启用 sort
   const columns = useMemo<TableColumn<CandidateGroup>[]>(() => [
     {
       id: 'titleNormalized',
+      kind: 'computed',
       header: '作品',
       accessor: (g) => g.titleNormalized,
       cell: ({ row }) => (
@@ -343,12 +349,14 @@ function CandidatesSection() {
     },
     {
       id: 'videoCount',
+      kind: 'computed',
       header: '候选数',
       accessor: (g) => g.videos.length,
       cell: ({ row }) => <span>{row.videos.length} 条</span>,
     },
     {
       id: 'score',
+      kind: 'computed',
       header: '重合度',
       accessor: (g) => g.score,
       cell: ({ row }) => <span style={SCORE_BADGE_STYLE}>{(row.score * 100).toFixed(1)}%</span>,
