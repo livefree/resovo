@@ -119,18 +119,22 @@ export interface DataTableProps<T> {
    * 拉取 distinct 选项（替代静态 `filterOptions` 或 rows 派生）。失败时 popover 内显
    * 错误状态（已有 fetchError state + 重开 popover 即重新 fetch / 不内置 retry button）。
    *
-   * 签名：(table, field, q?) => Promise<DistinctOption[]>
+   * 签名：(table, field, q?, signal?) => Promise<DistinctOption[]>
    *   - table: column.filterDistinctTable（端点白名单 table 枚举）
    *   - field: column.filterFieldName ?? column.id（端点白名单 column 名）
    *   - q: DataTableAutoFilter 内部 search 输入（关键词模糊过滤 distinct 列表）
+   *   - signal: AbortSignal 可选（ADR-150 阶段 5 EP-4 follow-up / 2026-05-25 / Opus PATCH-2B D6 预批准）
+   *     - DataTableAutoFilter 内部 useEffect 创建 AbortController 并传 signal
+   *     - 消费方应透传 signal 到 fetch RequestInit / 防 search 快速切换 stale response 覆盖
+   *     - AbortError 由 DataTableAutoFilter 内部静默忽略（不触发 fetchError 状态）
    *
-   * v1 不支持 column 级 fetcher 覆盖（D3 YAGNI）/ 不内置缓存（D4 v1 简化）/ 无 AbortSignal
-   * （follow-up / 当前 setFetched 是 last-write-wins / enum 顺序无关正确性）。
+   * v1 不支持 column 级 fetcher 覆盖（D3 YAGNI）/ 不内置缓存（D4 v1 简化）。
    */
   readonly distinctFetcher?: (
     table: string,
     field: string,
     q?: string,
+    signal?: AbortSignal,
   ) => Promise<readonly DistinctOption[]>
 }
 

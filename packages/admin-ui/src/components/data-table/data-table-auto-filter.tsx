@@ -43,7 +43,7 @@ export interface DataTableAutoFilterProps<T> {
   readonly onSort: (field: string, direction: 'asc' | 'desc') => void
   readonly onClearSort: () => void
   readonly onHide?: () => void
-  readonly distinctFetcher?: (table: string, field: string, q?: string) => Promise<readonly DistinctOption[]>
+  readonly distinctFetcher?: (table: string, field: string, q?: string, signal?: AbortSignal) => Promise<readonly DistinctOption[]>
   readonly 'data-testid'?: string
 }
 
@@ -179,7 +179,7 @@ interface EnumValueListProps<T> {
   readonly rows: readonly T[]
   readonly pending: FilterValue | undefined
   readonly setPending: (v: FilterValue | undefined) => void
-  readonly distinctFetcher?: (table: string, field: string, q?: string) => Promise<readonly DistinctOption[]>
+  readonly distinctFetcher?: (table: string, field: string, q?: string, signal?: AbortSignal) => Promise<readonly DistinctOption[]>
   readonly testId: string
 }
 
@@ -210,12 +210,27 @@ function EnumValueList<T>(props: EnumValueListProps<T>): React.ReactElement {
   useEffect(() => {
     if (column.filterOptions || !distinctFetcher || !column.filterDistinctTable) return
     const field = column.filterFieldName ?? column.id
+    // ADR-150 阶段 5 EP-4 follow-up（2026-05-25）：AbortController 防 search 快速切换 stale response 覆盖
+    // Opus PATCH-2B 评审 D6 预批准 / AbortError 静默忽略（区分 vs real error）
+    const controller = new AbortController()
     setFetching(true)
     setFetchError(undefined)
-    distinctFetcher(column.filterDistinctTable, field, search || undefined)
-      .then((r) => setFetched(r))
-      .catch((e: unknown) => setFetchError(e instanceof Error ? e.message : '加载失败'))
-      .finally(() => setFetching(false))
+    distinctFetcher(column.filterDistinctTable, field, search || undefined, controller.signal)
+      .then((r) => {
+        if (controller.signal.aborted) return
+        setFetched(r)
+      })
+      .catch((e: unknown) => {
+        // AbortError 来自 cleanup abort / 静默忽略不触发 fetchError 状态
+        if (e instanceof DOMException && e.name === 'AbortError') return
+        if (controller.signal.aborted) return
+        setFetchError(e instanceof Error ? e.message : '加载失败')
+      })
+      .finally(() => {
+        if (controller.signal.aborted) return
+        setFetching(false)
+      })
+    return () => { controller.abort() }
   }, [column, distinctFetcher, search])
 
   const visibleOptions = useMemo(() => {

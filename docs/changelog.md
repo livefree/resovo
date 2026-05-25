@@ -5843,3 +5843,49 @@ Plan-Revision: 0 次（e2e spec 直接基于现有 videos.spec / moderation.spec
 
 Cleanup-Audit: 1 文件改 + 新 case 4 + 既有 case 2/3 testid refactor / Playwright `--list` 4 case 注册 / 触发方式：用户起 dev server 后 `npm run test:e2e`
 Plan-Revision: 0 次（同会话 follow-up 扩展 / testid 范式直接复用 DataTableAutoFilter 既有 data-testid 体系）
+
+## [2026-05-25] CHG-SN-9-DT-AUTOFILTER-EP-4-DISTINCT-FETCHER-ABORT-SIGNAL · DataTableAutoFilter AbortController 全栈
+
+- **触发**：SOURCES-E2E-SMOKE-FIX1 闭环 / 用户 AskUserQuestion 选 "distinctFetcher AbortSignal (Recommended)"
+- **Opus 评审来源**：PATCH-2B (commit `223b4867`) arch-reviewer Opus A- 评审 D6 段已**预批准**该 follow-up：
+  > "**AbortSignal**：当前 useEffect 无 cleanup abort。不加 signal 意味着快速切换 search 可能导致 stale response 覆盖。但 setFetched 是 last-write-wins，实际影响极小（enum 选项顺序不影响正确性）。**可作 follow-up 加 abort**，不阻塞 v1。"
+  
+  本卡是 Opus 评审已批准的 follow-up 落地（不再 spawn 新 Opus 子代理）/ 仅新增 optional 第 4 参数（后向兼容 / 非破坏性 / 不动既有签名）
+- **范围**（4 文件 / 1 commit / 4 层全栈）：
+  1. **admin-ui Props 扩展**（packages/admin-ui/src/components/data-table/types.ts）：DataTableProps.distinctFetcher signature 由 `(table, field, q?) => Promise<DistinctOption[]>` → `(table, field, q?, signal?: AbortSignal) => Promise<DistinctOption[]>` / JSDoc 新增 signal 注释（AbortController 创建 + cleanup + AbortError 静默 + Opus PATCH-2B D6 引用）
+  2. **admin-ui 实施**（packages/admin-ui/src/components/data-table/data-table-auto-filter.tsx）：
+     - DataTableAutoFilterProps + EnumValueListProps 内部 signal 签名同步
+     - useEffect 新增 AbortController 创建 / signal 传入 distinctFetcher 第 4 参数
+     - then/catch/finally 内 `if (controller.signal.aborted) return` 双检防 stale state set
+     - catch AbortError（DOMException name='AbortError'）静默忽略不触发 fetchError
+     - cleanup 函数 `return () => { controller.abort() }`
+  3. **api-client 扩展**（apps/server-next/src/lib/api-client.ts）：RequestOptions 加 `signal?: AbortSignal` optional / `request<T>` 解构 signal / `fetch()` RequestInit spread `...(signal ? { signal } : {})`
+  4. **消费方接入**（apps/server-next/src/lib/sources/api.ts）：fetchDistinct 加 signal? 参数 / `apiClient.get(path, signal ? { signal } : undefined)`
+- **单测**（+3 case / data-table-auto-filter.test.tsx）：
+  - **#6 修订**：fetcher 调用断言 `(t, field, undefined, expect.any(AbortSignal))`（4 参数）
+  - **#6a**：unmount 触发 `controller.abort()` / `capturedSignal.aborted === true` 验证 cleanup
+  - **#6b**：AbortError 静默忽略 / `[data-error="true"]` 不渲染
+  - **#6c**：真实 Error 仍触发 fetchError 状态 / `[data-error="true"]` 渲染 + message 显
+- **质量门禁全 PASS**：
+  - ✅ typecheck（8 workspace）
+  - ✅ lint（5/5 / 3s）
+  - ✅ verify:adr-contracts（D-N 178/178 闭环 / SQL alignment / shorthand 0 命中）
+  - ✅ data-table-auto-filter 24/24（+3 新 case）
+  - ✅ admin-ui/table **429/429 零回退**（pre-existing 26 specs / 旧 426 +3 新 case）
+  - ✅ sources 全套 21/21 零回退
+- **用户可见行为变化**：
+  - **改善**：DataTableAutoFilter 关闭 popover 时（或 search 快速切换）→ pending distinct fetch 立即 abort / 不再等响应回来覆盖最新状态
+  - **改善**：search 输入快速变化时 / 新 search 触发新 fetch 同时 abort 上一个 / 防 stale response 顺序错乱（虽然原 last-write-wins 实际影响极小 / 但 abort 更严谨）
+  - **保留**：fetchError 状态对非 AbortError 仍渲染（"加载失败" / "Network down" 类）
+- **价值**：
+  - **distinctFetcher API 完整闭环**：D6 follow-up 落地 / 现 signature `(table, field, q?, signal?)` 完整支持取消 / 范式可复用到未来其他 distinct 端点消费方
+  - **api-client signal 范式确立**：apiClient.get/post 等通用 RequestOptions 加 signal / 未来任何可取消请求（如长轮询 / search-as-you-type）都可走该范式
+  - **Opus 评审 follow-up 闭环范式**：PATCH-2B D6 预批准 → 当时不阻塞 v1 → follow-up 同会话落地 / 不再二次 spawn Opus（成本约束 / 但 commit trailer 显式引用 PATCH-2B 评审来源 / Subagents trailer 形态）
+  - **静默 AbortError + 真 error 区分**：DOMException name='AbortError' 检测 → 静默忽略 / 非该错误才设 fetchError → 用户体验流畅（不显假错）
+- **不在范围**（剩余 follow-up）：
+  - score 物化（Merge 跨页稳定 sort / 需 migration / 无业务驱动）
+  - PATCH-2C probe/renderStatus 聚合语义校正（需 ADR + 用户走读反馈触发）
+
+Cleanup-Audit: 4 文件改 + 3 新单测 / 共 24/24 data-table-auto-filter + 429/429 admin-ui/table + 21/21 sources 零回退 / 0 新组件 / 0 ADR / 0 migration / Opus PATCH-2B 评审 D6 预批准 follow-up 落地
+Plan-Revision: 0 次（Opus 评审已预批准 / 仅 optional 4 参数后向兼容扩展 / 不重新 spawn Opus 子代理）
+Subagents-Reference: arch-reviewer (claude-opus-4-7) — PATCH-2B 评审 commit 223b4867 / D6 段预批准

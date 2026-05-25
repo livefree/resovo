@@ -17,16 +17,21 @@ import type {
  *
  * 调 GET /admin/_dt/distinct?table=X&col=Y&q=Z&limit=50 → DistinctOption[]
  * sources 表白名单 3 列：site_key / probe_status / render_status（distinct-whitelist.ts）
+ *
+ * HOTFIX-PATCH-2B follow-up（2026-05-25）：signal 透传 fetch RequestInit（防 search 快速切换 stale）
+ * Opus PATCH-2B 评审 D6 预批准 / DataTableAutoFilter useEffect AbortController 创建 + cleanup abort
  */
 export async function fetchDistinct(
   table: string,
   field: string,
   q?: string,
+  signal?: AbortSignal,
 ): Promise<readonly { readonly value: string; readonly label?: string; readonly count?: number }[]> {
   const qs = new URLSearchParams({ table, col: field, limit: '50' })
   if (q) qs.set('q', q)
   const result = await apiClient.get<{ data: readonly { readonly value: string; readonly label?: string; readonly count?: number }[] }>(
     `/admin/_dt/distinct?${qs.toString()}`,
+    signal ? { signal } : undefined,
   )
   return result.data
 }

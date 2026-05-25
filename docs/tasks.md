@@ -6,7 +6,7 @@
 
 ## 进行中任务
 
-（空 — 本会话累计 35 commit / sources e2e 4 case 完整覆盖（含 PATCH-2B siteKey distinct 端点首消费）+ case 2/3 testid refactor / ADR-150 阶段 5 EP-4 全闭环 / 待 @livefree dev server 起后 `npm run test:e2e` 触发 e2e 验收）
+（空 — 本会话累计 36 commit / DataTableAutoFilter AbortSignal 4 层全栈打通 / DataTable Props.distinctFetcher signature 扩 signal? / Opus PATCH-2B 评审 D6 预批准 / +3 单测 case / 待 @livefree 走读）
 
 ---
 
@@ -49,6 +49,7 @@
 30. `b558e194` **CRAWLER-RUN-DETAIL-SORT-FULLSTACK** runs/:id/tasks sort 全栈打通（复用 TASK_SORT_COLUMNS 白名单 / 4 字段 site/status/startedAt/finishedAt / 前端 column.id → sortField 桥接 siteKey→site + duration→finishedAt / PATCH-2 范式复刻 / 4 文件 + 14 单测 +7 case + DetailView test fixture 更新）
 31. `b7ca9aac` **IMAGE-HEALTH-MISSING-SORT-FULLSTACK** ImageHealth missing 4 子查询列 sort 全栈打通（**注释 "需 CTE 重写" 误判修正** / 实际 LATERAL JOIN evt 字段直接 ORDER BY 可用 / MISSING_VIDEO_SORT_SQL 扩 4 字段 poster_source/broken_domain/occurrence_count/last_seen_broken_at / 前端 camelCase → snake_case 桥接 / 5 文件 + 9 新单测）
 32. `aa6e63ed` **SOURCES-E2E-SMOKE** sources sort + filter e2e smoke 3 case（1 新 spec 文件 / page-load + sort-click-video + filter-probe-status / Playwright route mock + capture URL params 验证 PATCH-2A §1-BUG-1 + §2-EXT-1 全栈）
-33. `<TBD>` **SOURCES-E2E-SMOKE-FIX1** 加 case 4 siteKey distinct + case 2/3 testid refactor（4 case 总：PATCH-2B distinct 端点首消费 e2e 收口 / testid 范式增稳）
+33. `fc741ddf` **SOURCES-E2E-SMOKE-FIX1** 加 case 4 siteKey distinct + case 2/3 testid refactor（4 case 总：PATCH-2B distinct 端点首消费 e2e 收口 / testid 范式增稳）
+34. `<TBD>` **DISTINCT-FETCHER-ABORT-SIGNAL** DataTableAutoFilter AbortController + signal 透传 4 层全栈（admin-ui Props 加 signal? / DataTableAutoFilter useEffect AbortController + AbortError 静默 / api-client RequestOptions.signal / sources/api.ts fetchDistinct signal 参数 / Opus PATCH-2B 评审 D6 预批准 / +3 单测 case）
 
-总计 +5500+ lines / 124+ unit 新单测 + 4 e2e smoke / 0 回退 / ADR-150 阶段 5 EP-4 全闭环（5 sort 消费方 + 4 e2e case 含 distinct 端点首消费）/ 全质量门禁全过。
+总计 +5600+ lines / 127+ unit 新单测 + 4 e2e smoke / 0 回退 / ADR-150 阶段 5 EP-4 全闭环 + distinctFetcher API 完整（含 cancel 路径）/ 全质量门禁全过。

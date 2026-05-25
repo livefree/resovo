@@ -117,14 +117,60 @@ describe('DataTableAutoFilter (ADR-150 阶段 2)', () => {
     expect(fetcher).not.toHaveBeenCalled()
   })
 
-  it('#6 缺 filterOptions + 有 distinctFetcher + filterDistinctTable → 调 fetcher', async () => {
+  it('#6 缺 filterOptions + 有 distinctFetcher + filterDistinctTable → 调 fetcher（含 AbortSignal）', async () => {
     const fetcher = vi.fn().mockResolvedValue([{ value: 'fetched' }])
     render(<DataTableAutoFilter
       column={enumCol({ filterDistinctEndpoint: '/x', filterDistinctTable: 't' })}
       {...baseProps}
       distinctFetcher={fetcher}
     />)
-    expect(fetcher).toHaveBeenCalledWith('t', 'name', undefined)
+    // ADR-150 阶段 5 EP-4 follow-up（2026-05-25）：signal 第 4 参数（AbortController 创建）
+    expect(fetcher).toHaveBeenCalledWith('t', 'name', undefined, expect.any(AbortSignal))
+  })
+
+  // ADR-150 阶段 5 EP-4 follow-up（2026-05-25）：AbortSignal 单测覆盖
+  it('#6a 组件 unmount → AbortController 调 abort（signal.aborted=true）', async () => {
+    let capturedSignal: AbortSignal | undefined
+    const fetcher = vi.fn((_t: string, _f: string, _q: string | undefined, signal?: AbortSignal) => {
+      capturedSignal = signal
+      return new Promise<readonly { value: string }[]>(() => { /* never resolve / pending */ })
+    })
+    const { unmount } = render(<DataTableAutoFilter
+      column={enumCol({ filterDistinctEndpoint: '/x', filterDistinctTable: 't' })}
+      {...baseProps}
+      distinctFetcher={fetcher}
+    />)
+    expect(capturedSignal).toBeDefined()
+    expect(capturedSignal!.aborted).toBe(false)
+    unmount()
+    expect(capturedSignal!.aborted).toBe(true)
+  })
+
+  it('#6b AbortError 静默忽略 → 不触发 fetchError 状态', async () => {
+    const abortError = new DOMException('Aborted', 'AbortError')
+    const fetcher = vi.fn().mockRejectedValue(abortError)
+    render(<DataTableAutoFilter
+      column={enumCol({ filterDistinctEndpoint: '/x', filterDistinctTable: 't' })}
+      {...baseProps}
+      distinctFetcher={fetcher}
+    />)
+    // 等 promise reject 完成（microtask flush）
+    await new Promise((r) => setTimeout(r, 10))
+    // fetchError 不应渲染（[data-error="true"]）
+    expect(document.querySelector('[data-error="true"]')).toBeNull()
+  })
+
+  it('#6c 非 AbortError → 渲染 fetchError 状态', async () => {
+    const fetcher = vi.fn().mockRejectedValue(new Error('Network down'))
+    render(<DataTableAutoFilter
+      column={enumCol({ filterDistinctEndpoint: '/x', filterDistinctTable: 't' })}
+      {...baseProps}
+      distinctFetcher={fetcher}
+    />)
+    await new Promise((r) => setTimeout(r, 10))
+    const errorEl = document.querySelector('[data-error="true"]')
+    expect(errorEl).toBeTruthy()
+    expect(errorEl?.textContent).toContain('Network down')
   })
 
   it('#7 enum 页内 distinct 回退 → 从 rows accessor 派生', () => {

@@ -43,6 +43,11 @@ interface RequestOptions {
   skipAuth?: boolean
   /** 是否为重试请求（内部使用，防无限循环） */
   _isRetry?: boolean
+  /**
+   * ADR-150 阶段 5 EP-4 follow-up（2026-05-25）：可取消请求（distinctFetcher search 快速切换防 stale）
+   * 透传到 fetch() 的 RequestInit.signal / AbortError 由调用方 catch（DataTableAutoFilter 内部忽略）
+   */
+  signal?: AbortSignal
 }
 
 interface RefreshResponse {
@@ -95,7 +100,7 @@ async function peekErrorCode(response: Response): Promise<string | undefined> {
 }
 
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const { method = 'GET', body, headers = {}, skipAuth = false, _isRetry = false } = options
+  const { method = 'GET', body, headers = {}, skipAuth = false, _isRetry = false, signal } = options
 
   const reqHeaders: Record<string, string> = {
     ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
@@ -107,11 +112,13 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     if (token) reqHeaders['Authorization'] = `Bearer ${token}`
   }
 
+  // ADR-150 阶段 5 EP-4 follow-up（2026-05-25）：signal 透传 fetch RequestInit（distinctFetcher 防 stale）
   const response = await fetch(`${BASE_URL}${path}`, {
     method,
     headers: reqHeaders,
     body: body !== undefined ? JSON.stringify(body) : undefined,
     credentials: 'include',
+    ...(signal ? { signal } : {}),
   })
 
   // 401 自动 refresh + retry
