@@ -86,12 +86,17 @@ function tabStyle(active: boolean): CSSProperties {
 
 // ── 列定义 ────────────────────────────────────────────────────────
 
+// EP-3-E（2026-05-24）：AMD2 D-150-AMD2-2 kind: 'computed' opt-out
+//   - 5 列全 kind='computed' / 业务真实禁用 filter
+//   - lineCount/sourceCount 删除 pre-existing enableSorting: true (后端 listVideoGroups 无 sortField → 假装实现)
+//   - sort 全栈打通留 ADR-150 阶段 5 EP-4 (含 sources 排序断链顺手修)
 function buildColumns(
   expandedKeys: ReadonlySet<string>,
 ): readonly TableColumn<VideoGroupRow>[] {
   return [
     {
       id: 'video',
+      kind: 'computed',
       header: '视频',
       accessor: (r) => r.title,
       minWidth: 200,
@@ -138,10 +143,12 @@ function buildColumns(
     },
     {
       id: 'lineCount',
+      kind: 'computed',
       header: '线路',
       accessor: (r) => r.lineCount,
       width: 80,
-      enableSorting: true,
+      // EP-3-E：删 pre-existing enableSorting: true（后端 listVideoGroups 无 sortField / 假装实现）
+      // 全栈打通留 ADR-150 阶段 5 EP-4
       cell: ({ row }) => (
         <span>
           <strong>{row.lineCount}</strong>{' '}
@@ -151,10 +158,11 @@ function buildColumns(
     },
     {
       id: 'sourceCount',
+      kind: 'computed',
       header: '集·源',
       accessor: (r) => r.sourceCount,
       width: 90,
-      enableSorting: true,
+      // EP-3-E：删 pre-existing enableSorting: true（同上）
       cell: ({ row }) => (
         <span>
           <strong>{row.sourceCount}</strong>{' '}
@@ -164,6 +172,7 @@ function buildColumns(
     },
     {
       id: 'probeStatus',
+      kind: 'computed',
       header: '探测',
       accessor: (r) => r.probeStatus,
       width: 100,
@@ -171,6 +180,7 @@ function buildColumns(
     },
     {
       id: 'renderStatus',
+      kind: 'computed',
       header: '播放',
       accessor: (r) => r.renderStatus,
       width: 100,

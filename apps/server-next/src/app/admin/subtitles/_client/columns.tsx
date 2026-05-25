@@ -59,8 +59,12 @@ export function buildSubtitleColumns({
   pendingId,
 }: BuildColumnsOptions): readonly TableColumn<SubtitleRow>[] {
   return [
+    // EP-3-E（2026-05-24）：AMD2 D-150-AMD2-2 kind: 'computed' opt-out
+    //   - filter 业务无意义（字幕审核工作流 / 非数据列表）→ filter 默认禁用
+    //   - sort 显式 enableSorting: true 保留（后端 SUBTITLE_SORT_FIELDS 5 字段已支持）
     {
       id: 'video',
+      kind: 'computed',
       header: '视频',
       accessor: (r) => r.video_title ?? r.video_id,
       minWidth: 200,
@@ -84,6 +88,7 @@ export function buildSubtitleColumns({
     },
     {
       id: 'language',
+      kind: 'computed',
       header: '语言',
       accessor: (r) => r.label || r.language,
       width: 130, minWidth: 100,
@@ -103,6 +108,7 @@ export function buildSubtitleColumns({
     },
     {
       id: 'format',
+      kind: 'computed',
       header: '格式',
       accessor: (r) => r.format,
       width: 90, minWidth: 80,
@@ -115,6 +121,7 @@ export function buildSubtitleColumns({
     },
     {
       id: 'created_at',
+      kind: 'computed',
       header: '时间',
       accessor: (r) => r.created_at,
       width: 100, minWidth: 90,
@@ -129,11 +136,11 @@ export function buildSubtitleColumns({
     },
     {
       id: 'actions',
+      kind: 'action',
       header: '操作',
       accessor: () => null,
       width: 140, minWidth: 130,
       enableResizing: false,
-      enableSorting: false,
       defaultVisible: true,
       overflowVisible: true,
       cell: ({ row }) => {
