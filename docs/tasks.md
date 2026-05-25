@@ -6,7 +6,7 @@
 
 ## 进行中任务
 
-（空 — 本会话累计 26+ commit / 12 消费方完整闭环 + sources sort 全栈打通 / ADR-150 AMENDMENT 2 范式根本反转 + PATCH-2 sort 范式标准化复刻 / 待 @livefree dev server 走读 sources sort）
+（空 — 本会话累计 27 commit / 12 消费方完整闭环 + sources sort 全栈打通 + HOTFIX-5 hint 文案移除 / 待 @livefree dev server 走读 sources sort + 矩阵 popover）
 
 ---
 
@@ -39,6 +39,7 @@
 21. `1bf423ba` **EP-3-E** SubtitlesListClient + SourcesClient 10 列 opt-out
 22. `240e7109` **EP-3-F** CrawlerSiteList + CrawlerRunDetailView 11 列
 23. `05a6e802` **EP-3-G** StagingPageClient / 12 消费方闭环
-24. `<TBD>` **AMD2-PHASE5-EP4-SOURCES** sources sort 全栈打通
+24. `4df39524` **AMD2-PHASE5-EP4-SOURCES** sources sort 全栈打通
+25. `<TBD>` **EP-4.5-HOTFIX-5** 矩阵 popover 未过滤列 hint 文案「列名 ⋯ 编辑」移除（@livefree 走读反馈 / ADR-150 新范式下旧引导过时）
 
 总计 +4500+ lines / 80+ 新单测 / 0 回退 / ADR-150 AMENDMENT 2 范式根本反转 + sources sort 真实施 / 全质量门禁全过。
