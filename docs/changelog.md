@@ -4825,3 +4825,75 @@ Plan-Revision: 1 次（actor 列原条件 spread 触发 D-150-5 union 守卫 TS 
 
 Cleanup-Audit: EnumValueList 空退化 BUG 一行修 + 2 端点 sort 全栈打通（zod 白名单 + const SQL 映射 + ORDER BY 动态 + id DESC 兜底 + 前端守卫）/ 11 实施 + 4 测试 + 2 docs / 7 新单测 case / 4 质量门禁全过 / 108 文件 1796 单测全 PASS / 0 回退 / 0 Props API 变更 / 0 ADR
 Plan-Revision: 0 次（实施完全对齐任务卡 2 BUG 根因 + sort 白名单 + 前端守卫范围）
+
+---
+
+## [CHG-SN-9-DT-AUTOFILTER-EP-3-A sub 2 PATCH] arch-reviewer 评审消解（2 红线 R-EP3A-1/2 + 1 黄线 Y-EP3A-1）
+
+- **完成时间**：2026-05-24
+- **记录时间**：2026-05-24
+- **执行模型**：claude-opus-4-7（主循环）
+- **子代理**：arch-reviewer (claude-opus-4-7) — EP-3-A 整体 5 子卡独立评审 / 评级 **B** / 2 红线必修
+- **关联 ADR**：ADR-150（D-150-4 业务 key 桥接补丁 / 共享层 3 处修复）
+- **依赖**：sub 2 EXTEND ✅ commit `68a8efe6`
+- **arch-reviewer Opus 评审结果**（EP-3-A 整体 5 commits 累计改动）：
+  - 评级 **B**（不及 A-）
+  - D-150-1/2/3/5/6 ✅ / **D-150-4 ⚠️ 系统性断链**
+  - 红线 2 项（R-EP3A-1 + R-EP3A-2）/ 黄线 3 项 / advisory 4 项
+- **本卡修复范围**（2 红线 + 1 黄线 / 其余黄线 + advisory 留 EP-3-B 入口顺手 / 不影响本卡 PASS）：
+  - **R-EP3A-1**（核心 / "假装实现"反模式）：矩阵 popover 系统性不识别 `filterFieldName` — 共享层 3 处用 `col.id` 而非 `col.filterFieldName ?? col.id`
+    - 实证 4 列受影响：CrawlerRunsView `id`（idPrefix）/ AuditColumns `actor`（actorId）/ `target`（targetKind）/ + 1 列
+    - 用户实际：勾过滤 fetch 正确 ✓ 但矩阵 popover 该列 switch 永显"未过滤" ✗ 矩阵清除按 col.id 删→ 删不掉 filtersMap 的 filterFieldName key
+  - **R-EP3A-2**（同 M-SN-8 教训）：sort 非白名单字段后端静默 fallback created_at → 改 throw fail-fast（前端守卫为第一道防御 / queries 层 throw 为安全网）
+  - **Y-EP3A-1**：sort `SORT_IDENT_REGEX` 启动期断言缺失 → 沉淀（与 distinct-whitelist DT_DISTINCT_IDENT_REGEX 同范式）
+- **修改文件**（4 实施 + 3 测试 / 共享层 + 后端 2 文件 / 0 Props API 变更 / 0 ADR）：
+  - **R-EP3A-1 共享层桥接**（2 文件）：
+    - `packages/admin-ui/src/components/data-table/column-matrix-menu.tsx`：
+      - `isColumnFiltered` line 150: `currentFilters.has(col.id)` → `currentFilters.has(col.filterFieldName ?? col.id)`
+      - line 323 `onClearColumnFilter(col.id)` → `onClearColumnFilter(col.filterFieldName ?? col.id)`（matrix popover switch off 调用路径）
+    - `packages/admin-ui/src/components/data-table/data-table.tsx` line 483:
+      - `isFiltered`: `query.filters.has(col.id)` → `query.filters.has(col.filterFieldName ?? col.id)`（列级 ⋯ trigger isFiltered 判定 / showTrigger / data-active）
+  - **R-EP3A-2 + Y-EP3A-1 后端 sort**（2 文件）：
+    - `apps/api/src/db/queries/crawlerRuns.ts`：
+      - 新增 `SORT_IDENT_REGEX = /^(?:[a-z_]+\.)?[a-z_]+$/` + 启动期 for-of 断言 CRAWLER_RUNS_SORT_FIELD_MAP 全值合规
+      - listRuns 内 `const sortCol = (params.sortField && MAP[...]) ?? 'created_at'` → 改 `let sortCol = 'created_at' ; if (sortField) { mapped = MAP[sortField]; if (!mapped) throw ... ; sortCol = mapped }`（fail-fast 防"假装实现"）
+    - `apps/api/src/db/queries/auditLog.ts`：同上模式 — SORT_IDENT_REGEX + 启动期断言 + listAdminAuditLog 内 throw
+  - **测试**（3 文件 / 3 新 case + 1 case 改 throw 断言）：
+    - `tests/unit/api/crawler-runs-queries.test.ts`：原 #12 `非白名单 fallback created_at` → 改为 `非白名单 throw（rejects.toThrow(/invalid sortField "status"/)`
+    - `tests/unit/components/server-next/admin/crawler/CrawlerRunsView.test.tsx`：补 #30 `id 列（column.id ≠ filterFieldName=idPrefix）过滤后矩阵 popover switch 显已过滤`（aria-checked='true' 验证 R-EP3A-1 修复）
+    - `tests/unit/components/server-next/admin/audit/AuditClient.test.tsx`：补 #22 `target 列（column.id ≠ filterFieldName=targetKind）过滤后矩阵 popover switch 显已过滤`（同上验证 R-EP3A-1 修复）
+- **修复不在范围**（其余黄线 + advisory 留 EP-3-B 入口顺手 / 不阻塞 sub 2 PATCH PASS）：
+  - **Y-EP3A-2**：data-table.tsx hasAutoFilter 加入后其它消费方加 filterable 立即显 ⋯ 触发器（行为正确但需文档备注 / 沉淀 admin-module-template.md 留 EP-3-B 入口）
+  - **Y-EP3A-3**：column-visibility.ts clearAllColumnFilters 对 D-150 fallback OK 但需注释（同上）
+  - **N-EP3A-1**：PANEL_STYLE 沉淀 const 更优（当前 inline 可接受）
+  - **N-EP3A-2**：EnumValueList 空退化副作用 dev warn（当前无消费方故意传空 / 不需）
+  - **N-EP3A-3**：EP-3-B 入口加前 5 表测试基准 + 矩阵 popover 兼容性回归（EP-3-B 入口卡）
+  - **N-EP3A-4**：R-MID-1 GET 简化版正确应用 / 合规
+- **关键设计落实**：
+  - **D-150-4 业务 key 桥接闭环**：共享层 3 处 `col.filterFieldName ?? col.id` 一致 / DataTableAutoFilter onApply 路径 / 矩阵 popover switch + clear / 列级 ⋯ isFiltered / 桥接合约全栈零断链
+  - **SQL 注入三重防御对齐 distinct-whitelist**：sort 现在也有 zod enum 白名单 + const SQL 映射 + 启动期 SORT_IDENT_REGEX 断言 / 与 EP-2 distinct 范式一致
+  - **反 M-SN-8 "假装实现"模式**：queries 层非白名单 throw / fail-fast / 不再静默 fallback / 保证前端 saved views 等场景反序列化错误时立即可见
+- **质量门禁**：
+  - ✅ typecheck（8 workspace PASS）
+  - ✅ lint（5/5 / pre-existing img 警告）
+  - ✅ verify:file-size-budget exit 0
+  - ✅ verify:adr-contracts exit 0
+  - ✅ admin-ui 全套 1535/1535 PASS（87 文件 / 比 sub 2 EXTEND 多 1 case）
+  - ✅ crawler 后端 12/12 PASS（含 #12 改 throw 断言）
+  - ✅ audit 后端 261/261 PASS（21 文件 / 含 audit-rollback / audit-self-scope / auditLogService）
+  - ✅ CrawlerRunsView 30/30 PASS（含新 #30）
+  - ✅ AuditClient 22/22 PASS（含新 #22）
+- **用户可见行为变化**（dev server / 不需额外走读 / R-EP3A-1 行为补齐属架构修复）：
+  - **修复**：勾选 `id`（CrawlerRunsView）或 `actor` / `target`（AuditClient）列过滤后 → **矩阵 popover 该列 switch 正确显示 ✓ 已过滤**（修复前永显 ✗ 未过滤）
+  - **修复**：矩阵 popover 关闭该列 switch → **正确清除 filtersMap 中的 filterFieldName key**（修复前删 col.id key 但 filtersMap 用 filterFieldName key / 删不掉）
+  - **修复**：非白名单 sortField → 后端 fail-fast 500 报错（修复前静默 fallback created_at / 假装实现）
+- **价值**：
+  - **共享层修复一次性 → 全 D-150 消费方受益**：D-150-4 桥接合约现在在矩阵 popover / 列级 ⋯ trigger / clear button 三处一致 / EP-3-B/C/D/E/F/G 后续消费方按相同范式实证零踩坑
+  - **反 M-SN-8 模式扎实**：sort fail-fast + SORT_IDENT_REGEX 启动期断言 / 与 distinct-whitelist 范式一致 / 长期防御提升
+  - **arch-reviewer Opus 闭环**：B → 评级目标 A-（待二次评审确认）/ EP-3-A 5 子卡全闭环正式 PASS
+- **后续**：
+  - **spawn arch-reviewer (claude-opus-4-7) 二次评审**（确认 2 红线全消解 + 1 黄线沉淀 / 目标评级 A-）
+  - 通过 → 启动 sub B（SubmissionsListClient + UsersListClient ~0.3w）+ EP-3-B 入口顺手做 Y-EP3A-2/3 文档备注
+
+Cleanup-Audit: 共享层 3 处 filterFieldName 桥接 + 后端 2 端点 sort fail-fast throw + SORT_IDENT_REGEX 启动期断言 / 4 实施 + 3 测试 / 4 case 补 + 1 case 改 / 4 质量门禁全过 / 30/30 + 22/22 + 12/12 + 1535/1535 + 261/261 全 PASS / 0 Props API 变更 / 0 ADR
+Plan-Revision: 0 次（实施严格按 arch-reviewer 报告 R-EP3A-1/2 + Y-EP3A-1 三项）

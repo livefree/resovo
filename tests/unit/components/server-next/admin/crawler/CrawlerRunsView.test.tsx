@@ -466,6 +466,26 @@ describe('CrawlerRunsView', () => {
     })
   })
 
+  // sub 2 PATCH R-EP3A-1（2026-05-24）：D-150-4 业务 key 桥接修复 —
+  // column.id=id / filterFieldName=idPrefix 过滤后矩阵 popover switch 应显 ✓
+  it('30. sub2-PATCH R-EP3A-1: id 列（column.id ≠ filterFieldName）过滤后矩阵 popover switch 显已过滤', async () => {
+    listCrawlerRunsMock.mockResolvedValue(EMPTY)
+    render(<CrawlerRunsView />)
+    await waitFor(() => screen.getByTestId('crawler-runs-table'))
+    // 应用 id 列 prefix 过滤（filterFieldName='idPrefix' 写入 filtersMap）
+    fireEvent.click(screen.getByTestId('th-menu-trigger-id'))
+    fireEvent.change(screen.getByTestId('dt-autofilter-id-text-input'), { target: { value: 'abc12345' } })
+    fireEvent.click(screen.getByTestId('dt-autofilter-id-apply'))
+    await waitFor(() => {
+      expect(listCrawlerRunsMock).toHaveBeenLastCalledWith(
+        expect.objectContaining({ idPrefix: 'abc12345' }),
+      )
+    })
+    // 打开矩阵 popover / id 列 switch 应 aria-checked='true'（R-EP3A-1 修复前为 'false' / 系统性断链）
+    fireEvent.click(screen.getByTestId('matrix-trigger'))
+    expect(screen.getByTestId('matrix-filter-id').getAttribute('aria-checked')).toBe('true')
+  })
+
   // sub 2 EXTEND（2026-05-24）：sort 全栈打通 / createdAt 列 enableSorting → 升序点击 → fetch 透传
   it('29. sub2-EXTEND: createdAt 列点击 ⋯ 升序 → fetch 带 sortField=createdAt + sortDirection=asc', async () => {
     listCrawlerRunsMock.mockResolvedValue(EMPTY)

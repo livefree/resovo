@@ -138,7 +138,9 @@ const FOOT_BTN_STYLE: React.CSSProperties = {
   cursor: 'pointer',
 }
 
-// ── 工具：判定该列是否已过滤（业务 key 与 column.id 对齐时直接读 currentFilters） ───
+// ── 工具：判定该列是否已过滤 ─────────────────────────────────────────────
+// sub 2 PATCH R-EP3A-1（2026-05-24）：D-150-4 业务 key 桥接 — filtersMap key 是
+// col.filterFieldName（D-150 范式）或 col.id（D-149-15 桥接），统一用 filterFieldName ?? id
 
 function isColumnFiltered(
   col: ColumnDescriptor,
@@ -147,7 +149,7 @@ function isColumnFiltered(
 ): boolean {
   // 优先消费方显式标记 columnMenu.isFiltered（适合业务 key 不与 column.id 对齐场景）
   if (columnMenu?.isFiltered === true) return true
-  return currentFilters.has(col.id)
+  return currentFilters.has(col.filterFieldName ?? col.id)
 }
 
 export function ColumnMatrixMenu({
@@ -320,7 +322,8 @@ export function ColumnMatrixMenu({
         if (columnMenu?.onClearFilter) {
           columnMenu.onClearFilter()
         } else {
-          onClearColumnFilter(col.id)
+          // sub 2 PATCH R-EP3A-1（2026-05-24）：D-150-4 桥接 — filtersMap key 是 filterFieldName ?? id
+          onClearColumnFilter(col.filterFieldName ?? col.id)
         }
       }
       // 开启分支：UI 提示（无操作；用户应去列名 ⋯ 编辑过滤值）

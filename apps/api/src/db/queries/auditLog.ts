@@ -132,8 +132,17 @@ export interface ListAdminAuditLogFilters {
 }
 
 // sub 2 EXTEND：sort 字段白名单（防 SQL 注入 / 与 distinct-whitelist 同范式）
+// sub 2 PATCH R-EP3A-2（2026-05-24）：非白名单 sortField throw（反 M-SN-8 "假装实现"模式）
 const AUDIT_LOG_SORT_FIELD_MAP: Record<string, string> = {
   createdAt: 'al.created_at',
+}
+
+// sub 2 PATCH Y-EP3A-1（2026-05-24）：SQL identifier 正则（与 crawlerRuns / distinct-whitelist 同范式）
+const SORT_IDENT_REGEX = /^(?:[a-z_]+\.)?[a-z_]+$/
+for (const [k, v] of Object.entries(AUDIT_LOG_SORT_FIELD_MAP)) {
+  if (!SORT_IDENT_REGEX.test(v)) {
+    throw new Error(`[auditLog] invalid SQL ident "${v}" for sortField=${k}`)
+  }
 }
 
 export interface AdminAuditLogDetailRow extends AdminAuditLogQueryRow {
@@ -185,8 +194,17 @@ export async function listAdminAuditLog(
   params.push(offset)
   const offsetIdx = params.length
 
-  // sub 2 EXTEND：sort 字段白名单 lookup + 方向 / fallback 默认 al.created_at DESC, al.id DESC
-  const sortCol = (filters.sortField && AUDIT_LOG_SORT_FIELD_MAP[filters.sortField]) ?? 'al.created_at'
+  // sub 2 EXTEND：sort 字段白名单 lookup + 方向 / 无 sortField → 默认 al.created_at DESC, al.id DESC
+  // sub 2 PATCH R-EP3A-2（2026-05-24）：非白名单 sortField throw（反 M-SN-8 "假装实现"模式 /
+  //   前端守卫为第一道防御 / 本层 throw 为 fail-fast 安全网）
+  let sortCol = 'al.created_at'
+  if (filters.sortField) {
+    const mapped = AUDIT_LOG_SORT_FIELD_MAP[filters.sortField]
+    if (!mapped) {
+      throw new Error(`[auditLog.listAdminAuditLog] invalid sortField "${filters.sortField}" (not in whitelist)`)
+    }
+    sortCol = mapped
+  }
   const sortDir = filters.sortDirection === 'asc' ? 'ASC' : 'DESC'
 
   const [rowsResult, countResult] = await Promise.all([

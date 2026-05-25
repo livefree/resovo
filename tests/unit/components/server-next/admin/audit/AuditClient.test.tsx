@@ -378,6 +378,27 @@ describe('AuditClient', () => {
     })
   })
 
+  // sub 2 PATCH R-EP3A-1（2026-05-24）：D-150-4 业务 key 桥接修复 —
+  // column.id=target / filterFieldName=targetKind 过滤后矩阵 popover switch 应显 ✓
+  it('22. sub2-PATCH R-EP3A-1: target 列（column.id ≠ filterFieldName）过滤后矩阵 popover switch 显已过滤', async () => {
+    listAdminAuditLogsMock.mockResolvedValue(EMPTY_RES)
+    render(<AuditClient />)
+    await waitFor(() => screen.getByTestId('audit-table'))
+    await waitFor(() => expect(getAdminAuditEnumsMock).toHaveBeenCalled())
+    // 应用 target 列 enum 过滤（filterFieldName='targetKind' 写入 filtersMap）
+    fireEvent.click(screen.getByTestId('th-menu-trigger-target'))
+    fireEvent.click(screen.getByTestId('dt-autofilter-target-opt-video'))
+    fireEvent.click(screen.getByTestId('dt-autofilter-target-apply'))
+    await waitFor(() => {
+      expect(listAdminAuditLogsMock).toHaveBeenLastCalledWith(
+        expect.objectContaining({ targetKind: 'video' }),
+      )
+    })
+    // 打开矩阵 popover / target 列 switch 应 aria-checked='true'（R-EP3A-1 修复前为 'false'）
+    fireEvent.click(screen.getByTestId('matrix-trigger'))
+    expect(screen.getByTestId('matrix-filter-target').getAttribute('aria-checked')).toBe('true')
+  })
+
   // sub 2 EXTEND（2026-05-24）：sort 全栈打通 / createdAt 列 enableSorting → 升序点击 → fetch 透传
   it('21. sub2-EXTEND: createdAt 列点击 ⋯ 升序 → fetch 带 sortField=createdAt + sortDirection=asc', async () => {
     listAdminAuditLogsMock.mockResolvedValue(EMPTY_RES)

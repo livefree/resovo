@@ -125,10 +125,21 @@ export async function getRunById(db: Pool, runId: string): Promise<CrawlerRun | 
 }
 
 // sub 2 EXTEND（2026-05-24）：sort 全栈白名单（防 SQL 注入 / 与 distinct-whitelist 同范式）
-// camelCase 业务 key → snake_case DB column 映射 / 白名单外字段忽略
+// camelCase 业务 key → snake_case DB column 映射 / 白名单外字段 throw（sub 2 PATCH R-EP3A-2 反"假装实现"）
 const CRAWLER_RUNS_SORT_FIELD_MAP: Record<string, string> = {
   createdAt: 'created_at',
   finishedAt: 'finished_at',
+}
+
+// sub 2 PATCH Y-EP3A-1（2026-05-24）：SQL identifier 正则（与 distinct-whitelist DT_DISTINCT_IDENT_REGEX 同范式 / 启动期断言）
+// 允许：col 或 table.col 形式（crawlerRuns 用 'created_at' / auditLog 用 'al.created_at'）
+const SORT_IDENT_REGEX = /^(?:[a-z_]+\.)?[a-z_]+$/
+
+// 启动期断言所有白名单 SQL ident 合规（不进生产）
+for (const [k, v] of Object.entries(CRAWLER_RUNS_SORT_FIELD_MAP)) {
+  if (!SORT_IDENT_REGEX.test(v)) {
+    throw new Error(`[crawlerRuns] invalid SQL ident "${v}" for sortField=${k}`)
+  }
 }
 
 export async function listRuns(
@@ -194,8 +205,17 @@ export async function listRuns(
   const limit = params.limit ?? 20
   const offset = params.offset ?? 0
 
-  // sub 2 EXTEND：sort 字段白名单 lookup + 方向 / fallback 默认 created_at DESC
-  const sortCol = (params.sortField && CRAWLER_RUNS_SORT_FIELD_MAP[params.sortField]) ?? 'created_at'
+  // sub 2 EXTEND：sort 字段白名单 lookup + 方向 / 无 sortField → 默认 created_at DESC
+  // sub 2 PATCH R-EP3A-2（2026-05-24）：非白名单 sortField throw（反 M-SN-8 "假装实现"模式 /
+  //   前端守卫为第一道防御 / 本层 throw 为 fail-fast 安全网 / fastify 500 显式报错）
+  let sortCol = 'created_at'
+  if (params.sortField) {
+    const mapped = CRAWLER_RUNS_SORT_FIELD_MAP[params.sortField]
+    if (!mapped) {
+      throw new Error(`[crawlerRuns.listRuns] invalid sortField "${params.sortField}" (not in whitelist)`)
+    }
+    sortCol = mapped
+  }
   const sortDir = params.sortDirection === 'asc' ? 'ASC' : 'DESC'
 
   const [dataResult, countResult] = await Promise.all([

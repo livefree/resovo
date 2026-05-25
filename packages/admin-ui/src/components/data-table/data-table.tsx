@@ -477,10 +477,11 @@ export function DataTable<T>(props: DataTableProps<T>): React.ReactElement {
             //   可排序 OR 有 filterContent（D-149-15 桥接逃生口）OR filterable（D-150 列固有自动过滤）
             //   OR 可隐藏（非 pinned + canHide !== false）OR 当前已过滤 OR 当前已排序
             // sub1-EXTEND（2026-05-24）：补 col.filterable 判定 / 修复 pinned 列（id）filterable: true 时不显触发器盲区
+            // sub 2 PATCH R-EP3A-1（2026-05-24）：D-150-4 桥接 — filtersMap key 用 filterFieldName ?? id
             const hasFilter = col.columnMenu?.filterContent !== undefined
             const hasAutoFilter = col.filterable === true
             const hidable = col.pinned !== true && col.columnMenu?.canHide !== false
-            const isFiltered = col.columnMenu?.isFiltered === true || query.filters.has(col.id)
+            const isFiltered = col.columnMenu?.isFiltered === true || query.filters.has(col.filterFieldName ?? col.id)
             const isMenuOpen = menuColId === col.id
             const showTrigger =
               columnTriggerVisibility === 'always' ? true :

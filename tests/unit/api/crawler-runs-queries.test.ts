@@ -116,9 +116,10 @@ describe('crawlerRuns.listRuns (sub1-EXTEND 5 类新参数)', () => {
     expect(dataSql).toContain('ORDER BY created_at DESC, id DESC')
   })
 
-  it('#12 sub2-EXTEND: sortField 非白名单字段（如 status）→ fallback 默认 created_at DESC', async () => {
-    await listRuns(mockPool, { sortField: 'status', sortDirection: 'asc' })
-    const [dataSql] = mockQuery.mock.calls[0]
-    expect(dataSql).toContain('ORDER BY created_at ASC, id DESC')
+  // sub 2 PATCH R-EP3A-2（2026-05-24）：非白名单 sortField 不再静默 fallback / 改 throw fail-fast
+  it('#12 sub2-PATCH: sortField 非白名单字段（如 status）→ throw（反 M-SN-8 假装实现模式）', async () => {
+    await expect(
+      listRuns(mockPool, { sortField: 'status', sortDirection: 'asc' }),
+    ).rejects.toThrow(/invalid sortField "status"/)
   })
 })
