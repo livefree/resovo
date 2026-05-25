@@ -12,6 +12,8 @@ import {
   listTasks,
   findTaskById,
   cancelAllActiveTasks,
+  cancelTaskById,
+  batchCancelTasks,
   findActiveTaskBySite,
   getLatestTaskBySite,
   getLatestTasksBySites,
@@ -19,6 +21,7 @@ import {
   countOrphanActiveTasks,
   type CrawlerTask,
 } from '@/api/db/queries/crawlerTasks'
+import { isAppError } from '@/api/lib/errors'
 import * as crawlerSitesQueries from '@/api/db/queries/crawlerSites'
 import * as crawlerRunsQueries from '@/api/db/queries/crawlerRuns'
 import { crawlerQueue } from '@/api/lib/queue'
@@ -431,6 +434,129 @@ export async function registerCrawlerTaskRoutes(fastify: FastifyInstance) {
 
     const tasks = await getLatestTasksBySites(db, siteKeys)
     return reply.send({ data: { tasks: tasks.map(mapTaskDto) } })
+  })
+
+  // ── POST /admin/crawler/tasks/:id/cancel ─────────────────────
+  // ADR-151 / CHG-SN-9-CW1-B-EP：task 级单点 cancel（含 R-151-2 幂等守卫）
+
+  fastify.post('/admin/crawler/tasks/:id/cancel', { preHandler: auth }, async (request, reply) => {
+    const ParamsSchema = z.object({ id: z.string().uuid() })
+    const parsed = ParamsSchema.safeParse(request.params)
+    if (!parsed.success) {
+      return reply.code(422).send({
+        error: { code: 'VALIDATION_ERROR', message: '参数错误', status: 422 },
+      })
+    }
+
+    try {
+      const result = await cancelTaskById(db, parsed.data.id)
+      if (!result) {
+        return reply.code(404).send({
+          error: { code: 'NOT_FOUND', message: '任务不存在', status: 404 },
+        })
+      }
+
+      // D-151-6：cancel 后立即触发 syncRun 同步父 run 状态（best-effort）
+      if (result.runId) {
+        try {
+          await crawlerRunsQueries.syncRunStatusFromTasks(db, result.runId)
+        } catch (err) {
+          fastify.log.warn({ err, runId: result.runId }, 'syncRunStatusFromTasks failed after task cancel')
+        }
+      }
+
+      // D-151-4 audit：crawler_task.cancel
+      auditSvc.write({
+        actorId: request.user!.userId,
+        actionType: 'crawler_task.cancel',
+        targetKind: 'crawler_task',
+        targetId: parsed.data.id,
+        beforeJsonb: {
+          status: result.task.status,
+          cancelRequested: !result.alreadyRequested,
+        },
+        afterJsonb: {
+          finalStatus: result.finalStatus,
+          alreadyRequested: result.alreadyRequested,
+          runId: result.runId,
+          reason: 'task_manual_cancel',
+        },
+        requestId: request.id,
+      })
+
+      return reply.send({
+        data: {
+          task: mapTaskDto(result.task),
+          runId: result.runId,
+          finalStatus: result.finalStatus,
+          ...(result.alreadyRequested ? { alreadyRequested: true } : {}),
+        },
+      })
+    } catch (err) {
+      if (isAppError(err, 'STATE_CONFLICT')) {
+        return reply.code(422).send({
+          error: { code: 'TASK_CANCEL_FORBIDDEN_TERMINAL', message: err.message, status: 422 },
+        })
+      }
+      throw err
+    }
+  })
+
+  // ── POST /admin/crawler/tasks/batch-cancel ───────────────────
+  // ADR-151 / CHG-SN-9-CW1-B-EP：task 级 batch cancel（summary 三元 + best-effort syncRun）
+
+  fastify.post('/admin/crawler/tasks/batch-cancel', { preHandler: auth }, async (request, reply) => {
+    const BodySchema = z.object({
+      ids: z.array(z.string().uuid()).min(1).max(100),
+    })
+    const parsed = BodySchema.safeParse(request.body)
+    if (!parsed.success) {
+      return reply.code(422).send({
+        error: { code: 'VALIDATION_ERROR', message: parsed.error.issues[0]?.message ?? '参数错误', status: 422 },
+      })
+    }
+
+    const result = await batchCancelTasks(db, parsed.data.ids)
+
+    if (result.failedRunSyncIds.length > 0) {
+      fastify.log.warn(
+        { failedRunSyncIds: result.failedRunSyncIds, count: result.failedRunSyncIds.length },
+        'batch task cancel: syncRunStatusFromTasks failed for some runs',
+      )
+    }
+
+    // D-151-4 audit：crawler_task.batch_cancel（Y-151-2：含 idsSample 输入快照）
+    auditSvc.write({
+      actorId: request.user!.userId,
+      actionType: 'crawler_task.batch_cancel',
+      targetKind: 'system',
+      targetId: 'batch_cancel',
+      beforeJsonb: {
+        count: parsed.data.ids.length,
+        idsSample: parsed.data.ids.slice(0, 5),
+      },
+      afterJsonb: {
+        summary: {
+          cancelled: result.summary.cancelled,
+          cancelRequested: result.summary.cancelRequested,
+          alreadyRequested: result.summary.alreadyRequested,
+          errorsCount: result.summary.errors.length,
+          errorsSample: result.summary.errors.slice(0, 10),
+        },
+        runIds: result.runIds.slice(0, 10),
+        failedRunSyncCount: result.failedRunSyncIds.length,
+      },
+      requestId: request.id,
+    })
+
+    return reply.send({
+      data: {
+        summary: result.summary,
+        runIds: result.runIds,
+        ...(result.failedRunSyncIds.length > 0 ? { failedRunSyncIds: result.failedRunSyncIds } : {}),
+      },
+      processed: parsed.data.ids.length,
+    })
   })
 
   // ── GET /admin/crawler/sites/:key/latest-task ──────────────

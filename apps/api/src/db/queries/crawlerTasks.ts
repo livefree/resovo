@@ -5,6 +5,8 @@
  */
 
 import type { Pool } from 'pg'
+import { AppError } from '@/api/lib/errors'
+import { syncRunStatusFromTasks } from './crawlerRuns'
 import {
   type DbCrawlerTaskRow,
   type CrawlerTaskStatus,
@@ -12,6 +14,8 @@ import {
   type CrawlerTask,
   mapTask,
 } from './crawlerTasks.types'
+
+import { getTaskById } from './crawlerTasks.queries'
 
 export type { CrawlerTaskStatus, CrawlerTaskType, CrawlerTask, CrawlerOverview } from './crawlerTasks.types'
 export {
@@ -122,6 +126,154 @@ export async function requestTaskCancel(db: Pool, id: string): Promise<void> {
      WHERE id = $1`,
     [id],
   )
+}
+
+// ── CW1-B-EP / ADR-151 §5.1 — task 级 cancel（单点）─────────────────
+
+export type CancelTaskErrorCode = 'NOT_FOUND' | 'STATE_CONFLICT'
+
+export interface CancelTaskResult {
+  readonly task: CrawlerTask
+  readonly runId: string | null
+  readonly finalStatus: 'cancelled' | 'cancel_requested'
+  readonly alreadyRequested: boolean
+}
+
+/**
+ * ADR-151 §5.1：task 级 cancel（含 R-151-2 幂等守卫）
+ *
+ * 状态机：
+ * - pending / paused → 直接 cancelled + finished_at=NOW() + cancel_requested=true
+ * - running 首次 cancel → cancel_requested=true（worker 15s 内响应）
+ * - running 已 cancel_requested → 幂等返回 alreadyRequested=true（不重写时间戳 / 不重复 audit）
+ * - terminal（done/failed/cancelled/timeout）→ throw STATE_CONFLICT
+ *
+ * 注：本函数不触发 syncRunStatusFromTasks，由调用方决定（单点 route / batch query 末段触发）
+ */
+export async function cancelTaskById(
+  db: Pool,
+  taskId: string,
+): Promise<CancelTaskResult | null> {
+  const existing = await getTaskById(db, taskId)
+  if (!existing) return null
+  if (['done', 'failed', 'cancelled', 'timeout'].includes(existing.status)) {
+    throw new AppError('STATE_CONFLICT', 'TASK_CANCEL_FORBIDDEN_TERMINAL', 422)
+  }
+  if (existing.status === 'running') {
+    if (existing.cancelRequested) {
+      return {
+        task: existing,
+        runId: existing.runId,
+        finalStatus: 'cancel_requested',
+        alreadyRequested: true,
+      }
+    }
+    await db.query(
+      `UPDATE crawler_tasks
+         SET cancel_requested = true,
+             result = COALESCE(result, '{}'::jsonb) || jsonb_build_object('cancelRequestedAt', NOW(), 'reason', 'task_manual_cancel')
+         WHERE id = $1`,
+      [taskId],
+    )
+    return {
+      task: { ...existing, cancelRequested: true },
+      runId: existing.runId,
+      finalStatus: 'cancel_requested',
+      alreadyRequested: false,
+    }
+  }
+  // pending / paused → 直接 cancelled
+  await db.query(
+    `UPDATE crawler_tasks
+       SET status = 'cancelled', finished_at = NOW(), cancel_requested = true,
+           result = COALESCE(result, '{}'::jsonb) || jsonb_build_object('reason', 'task_manual_cancel')
+       WHERE id = $1`,
+    [taskId],
+  )
+  const refreshed = await getTaskById(db, taskId)
+  if (!refreshed) return null
+  return {
+    task: refreshed,
+    runId: existing.runId,
+    finalStatus: 'cancelled',
+    alreadyRequested: false,
+  }
+}
+
+// ── CW1-B-EP / ADR-151 §5.2 — task 级 batch cancel ─────────────────
+
+export interface BatchCancelErrorEntry {
+  readonly id: string
+  readonly code: CancelTaskErrorCode
+  readonly reason: string
+}
+
+export interface BatchCancelSummary {
+  readonly cancelled: number
+  readonly cancelRequested: number
+  readonly alreadyRequested: number
+  readonly errors: readonly BatchCancelErrorEntry[]
+}
+
+export interface BatchCancelResult {
+  readonly summary: BatchCancelSummary
+  readonly runIds: readonly string[]
+  /** Y-151-1 best-effort：syncRunStatusFromTasks 失败的 run IDs */
+  readonly failedRunSyncIds: readonly string[]
+}
+
+/**
+ * ADR-151 §5.2：batch task 级 cancel
+ *
+ * 两阶段：
+ * 1. 逐个 cancelTaskById（部分失败累入 errors[]）
+ * 2. R-151-1：for-of 串行触发 syncRunStatusFromTasks（与现有 4 处历史范式对齐）
+ *    + Y-151-1 best-effort：单个 syncRun throw → 计入 failedRunSyncIds[] 不阻塞
+ */
+export async function batchCancelTasks(
+  db: Pool,
+  taskIds: readonly string[],
+): Promise<BatchCancelResult> {
+  const errors: BatchCancelErrorEntry[] = []
+  const cancelledRunIds = new Set<string>()
+  let cancelled = 0
+  let cancelRequested = 0
+  let alreadyRequested = 0
+
+  for (const id of taskIds) {
+    try {
+      const result = await cancelTaskById(db, id)
+      if (!result) {
+        errors.push({ id, code: 'NOT_FOUND', reason: 'task not found' })
+        continue
+      }
+      if (result.alreadyRequested) alreadyRequested++
+      else if (result.finalStatus === 'cancelled') cancelled++
+      else if (result.finalStatus === 'cancel_requested') cancelRequested++
+      if (result.runId) cancelledRunIds.add(result.runId)
+    } catch (err) {
+      if (err instanceof AppError && err.code === 'STATE_CONFLICT') {
+        errors.push({ id, code: 'STATE_CONFLICT', reason: err.message })
+        continue
+      }
+      throw err
+    }
+  }
+
+  const failedRunSyncIds: string[] = []
+  for (const runId of cancelledRunIds) {
+    try {
+      await syncRunStatusFromTasks(db, runId)
+    } catch {
+      failedRunSyncIds.push(runId)
+    }
+  }
+
+  return {
+    summary: { cancelled, cancelRequested, alreadyRequested, errors },
+    runIds: Array.from(cancelledRunIds),
+    failedRunSyncIds,
+  }
 }
 
 export async function cancelPendingTasksByRun(db: Pool, runId: string): Promise<number> {

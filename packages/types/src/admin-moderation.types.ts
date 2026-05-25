@@ -193,6 +193,10 @@ export type AdminAuditActionType =
   // CHG-SN-8-FUP-WEBHOOK-IMPL-EP-A / ADR-146：webhook 投递最终失败（R-MID-1 第 25 次系统化）
   | 'system.webhook_send_failed'  // WebhookDispatcher 4 次重试后最终失败（targetKind 复用 'system'）
 
+  // CHG-SN-9-CW1-B-EP / ADR-151：task 级 cancel + batch cancel audit（R-MID-1 第 26 次系统化）
+  | 'crawler_task.cancel'         // POST /admin/crawler/tasks/:id/cancel
+  | 'crawler_task.batch_cancel'   // POST /admin/crawler/tasks/batch-cancel（targetKind 复用 'system'）
+
 export type AdminAuditTargetKind =
   | 'video'
   | 'video_source'
@@ -207,6 +211,7 @@ export type AdminAuditTargetKind =
   | 'image_health'  // CHG-SN-7-MISC-IMAGE-1 / ADR-135：图片健康操作目标
   | 'user'  // CHG-SN-8-FUP-USERS-ROLE-INV-EP / ADR-139：admin 操作用户实体（role_change 等）
   | 'filter_preset'  // CHG-SN-8-FUP-PRESET-TEAM-EP-A / ADR-144：FilterPreset CRUD 目标（migration 072 CHECK 12→13）
+  | 'crawler_task'   // CHG-SN-9-CW1-B-EP / ADR-151：task 级 cancel 目标（单点 / batch 用 'system'）
 
 export interface AdminAuditLog {
   readonly id: string  // bigserial → string（避免 JS 大数精度）

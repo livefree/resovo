@@ -348,6 +348,52 @@ export async function listCrawlerRunTasks(
   )
 }
 
+// ── CW1-B-EP / ADR-151：task 级 cancel + batch cancel ─────────────
+
+export interface CancelTaskResponse {
+  readonly task: CrawlerTaskDto
+  readonly runId: string | null
+  readonly finalStatus: 'cancelled' | 'cancel_requested'
+  readonly alreadyRequested?: boolean
+}
+
+export interface BatchCancelTasksError {
+  readonly id: string
+  readonly code: 'NOT_FOUND' | 'STATE_CONFLICT'
+  readonly reason: string
+}
+
+export interface BatchCancelTasksSummary {
+  readonly cancelled: number
+  readonly cancelRequested: number
+  readonly alreadyRequested: number
+  readonly errors: readonly BatchCancelTasksError[]
+}
+
+export interface BatchCancelTasksResponse {
+  readonly summary: BatchCancelTasksSummary
+  readonly runIds: readonly string[]
+  readonly failedRunSyncIds?: readonly string[]
+}
+
+export async function cancelCrawlerTask(taskId: string): Promise<CancelTaskResponse> {
+  const res = await apiClient.post<{ data: CancelTaskResponse }>(
+    `/admin/crawler/tasks/${encodeURIComponent(taskId)}/cancel`,
+    {},
+  )
+  return res.data
+}
+
+export async function batchCancelCrawlerTasks(
+  taskIds: readonly string[],
+): Promise<BatchCancelTasksResponse> {
+  const res = await apiClient.post<{ data: BatchCancelTasksResponse; processed: number }>(
+    '/admin/crawler/tasks/batch-cancel',
+    { ids: Array.from(taskIds) },
+  )
+  return res.data
+}
+
 // ── Task Detail + Logs（CHG-SN-6-18）─────────────────────────────
 
 export interface CrawlerSiteBreakdown {

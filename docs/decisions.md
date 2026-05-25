@@ -13369,7 +13369,14 @@ if (task?.cancelRequested) { ... }
 
 **反例排除**：不触发 syncRun → CrawlerRunsView 列表页 run 状态滞后 60s（scheduler periodic sync） → 用户体验不对齐；UI 显示父 run 仍 running 但全 task 已 cancelled。
 
-### §4 端点契约表
+### 端点契约
+
+| # | 方法 | 路径 | 用途 | Request | Response | 鉴权 | 错误码 |
+|---|---|---|---|---|---|---|---|
+| 1 | POST | `/admin/crawler/tasks/:id/cancel` | task 级单点 cancel（含 R-151-2 幂等守卫） | Path: `id: uuid` / 空 body | 200 `{ data: { task: CrawlerTaskDto, runId, finalStatus, alreadyRequested } }` | admin | 404 NOT_FOUND / 422 TASK_CANCEL_FORBIDDEN_TERMINAL / 422 VALIDATION_ERROR |
+| 2 | POST | `/admin/crawler/tasks/batch-cancel` | task 级 batch cancel（summary 三元拆分 + best-effort syncRun） | Body: `{ ids: string[].min(1).max(100) }` | 200 `{ data: { summary, runIds, failedRunSyncIds }, processed }` | admin | 422 VALIDATION_ERROR（单 id 错失计入 summary.errors[]） |
+
+### §4 端点契约详表（按字段拆解）
 
 | 字段 | POST /admin/crawler/tasks/:id/cancel | POST /admin/crawler/tasks/batch-cancel |
 |------|--------------------------------------|----------------------------------------|

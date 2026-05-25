@@ -6047,3 +6047,72 @@ Plan-Revision: 1 次（实施中扩 tasks.md 文件范围加 CrawlerSiteList + c
 Subagents: arch-reviewer (claude-opus-4-7) — 1 轮独立评审 A− CONDITIONAL → 主循环修订后等同 A
 Cleanup-Audit: 1 文件改（decisions.md +250 行）/ 0 业务代码 / 0 migration / typecheck PASS / verify-adr-d-numbers D-151-1..6 闭环
 Plan-Revision: 1 次（评审反馈 R3+Y3+G1 修订 / 主决策 D-151-1/4/6 不回退 / status Proposed → Accepted）
+
+## [2026-05-25] CHG-SN-9-CW1-B-EP · Bug-A 任务级 cancel 实施（ADR-151 §10 6 步全闭环）
+
+- **触发**：ADR-151 已 Accepted（commit 943611eb）→ 用户 "续推 CW1-B-EP（Bug-A 实施）"
+- **范围**（7 源码 + 1 migration + admin-audit 类型扩展）：
+
+  ### Step 1: queries（apps/api/src/db/queries/crawlerTasks.ts）
+  - 新增 `cancelTaskById(db, taskId)` — 含 R-151-2 幂等守卫（已 cancelRequested 的 running task 返回 alreadyRequested=true 不重写时间戳）+ R-151-3 三态映射（pending/paused → cancelled / running → cancel_requested）+ AppError throw STATE_CONFLICT for terminal（done/failed/cancelled/timeout）
+  - 新增 `batchCancelTasks(db, taskIds)` — 两阶段（逐个 cancel + R-151-1 for-of 串行 syncRun + Y-151-1 best-effort failedRunSyncIds[]）+ summary 三元（cancelled / cancelRequested / alreadyRequested）+ errors[] 累入
+
+  ### Step 2: route（apps/api/src/routes/admin/crawler.tasks.ts）
+  - 新增 `POST /admin/crawler/tasks/:id/cancel` — UUID zod validation + cancelTaskById + 单 syncRun best-effort + audit `crawler_task.cancel` + STATE_CONFLICT 映射 422 `TASK_CANCEL_FORBIDDEN_TERMINAL`
+  - 新增 `POST /admin/crawler/tasks/batch-cancel` — `{ ids: string[].min(1).max(100) }` 校验 + batchCancelTasks + audit `crawler_task.batch_cancel`（Y-151-2 含 idsSample + errorsSample / runIds 截 10）
+
+  ### Step 3+4: 前端 ops 列 + bulk action bar（CrawlerRunDetailView.tsx）
+  - ops 列 width 90→140 加 [取消] 按钮（仅 queued/running/paused 可点 / pendingCancelTaskId state 防重复 / alreadyRequested 时 toast level=info / 终态 error 时 toast title='任务已是终态'）
+  - 表头多选 + sticky bulk action bar（selection state / bulkActions slot 仅在 selectedKeys.size>0 渲染 / "已选 N 个" badge + 「批量取消」按钮 / G-151-3 batch 50+ 弹 confirm）
+
+  ### Step 5: api client（apps/server-next/src/lib/crawler/api.ts）
+  - 新增 `cancelCrawlerTask(taskId)` 返回 CancelTaskResponse（含 alreadyRequested optional）
+  - 新增 `batchCancelCrawlerTasks(taskIds)` 返回 BatchCancelTasksResponse（含 summary 三元 + failedRunSyncIds optional）
+  - 4 新 interface（CancelTaskResponse / BatchCancelTasksError / BatchCancelTasksSummary / BatchCancelTasksResponse）
+
+  ### Step 6: worker 守卫扩展（apps/api/src/workers/crawlerWorker.ts:145）— **R-151-3 硬依赖**
+  - terminal status 短路（cancelled/done/failed/timeout）插入到 task?.cancelRequested 守卫之前
+  - 防 paused task 被 manual cancel 后 30s Bull delayed job 触发 worker 覆盖 finished_at + reason 漂移
+  - logTask 'worker.task.already_terminal' info 级别
+
+  ### admin-audit 类型扩展（packages/types/src/admin-moderation.types.ts）
+  - `AdminAuditActionType` 加 `crawler_task.cancel` + `crawler_task.batch_cancel`（R-MID-1 第 26 次系统化）
+  - `AdminAuditTargetKind` 加 `crawler_task`（单点；batch 复用 'system'）
+
+  ### Migration 073（apps/api/src/db/migrations/073_audit_log_extend_target_kind_crawler_task.sql）
+  - admin_audit_log.target_kind CHECK 13→14 种（与 migration 072 ADR-144 同范式）
+
+- **质量门禁**：
+  - ✅ typecheck（8 workspace 全过）
+  - ✅ lint（仅 pre-existing react-hooks 警告）
+  - ✅ test：154 crawler 相关测试全过（CrawlerClient 61 + 其它 93 单独跑无破坏）
+  - ✅ verify-endpoint-adr：2 新路由全部对齐 ADR-151 §端点契约
+  - ✅ verify-adr-d-numbers：184 全闭环
+  - ✅ verify-sql-schema-alignment + verify-style-shorthand-conflict 全过
+- **六问自检 PASS**：
+  1. **价值排序 1-4 对齐**：① 正确性（按 ADR-151 §10 完整 6 步落地 + R-151-3 硬依赖履行 / 不引入新状态机字段）/ ② 边界与复用（复用现有 getTaskById + syncRunStatusFromTasks + AuditLogService / 不新建 service 层）/ ③ 扩展性（CancelTaskResponse / BatchCancelTasksSummary interface 可扩展 / migration 073 与 072 同范式）/ ④ 一致性（与 ADR-117/-122 cancel 路由命名 + audit + error code 全部对齐 / for-of 串行与现有 4 处历史范式一致）
+  2. **是否应沉淀到共享层**：否（task 级 cancel 是 crawler 专属能力）
+  3. **类型 / 路由 / 配置可扩展性**：alreadyRequested + failedRunSyncIds 均 optional / summary 三元未来可扩 timeoutTask 等四元
+  4. **一致性**：与 ADR-117/-122 / crawler_run.* / crawler_site.* 命名 + audit + error code 全部对齐 / for-of syncRun 与历史 4 处对齐
+  5. **改动收敛**：7 源码 + 1 migration + 类型扩展 / 0 新组件 / 严格按 ADR §10 范围
+  6. **偏离检测**：无新 D-N 偏离（D-151-1..6 已在 -ADR commit 闭环）
+- **AI-CHECK 结论**：
+  - ✅ **PASS** — ADR-151 §10 6 步 全实施 + R-151-3 硬依赖履行
+  - **越界检测**：admin-audit 类型扩展 + migration 073 是 audit actionType 落地的必要副产物 / 在 tasks.md 卡片"文件范围"补充说明
+  - **回归风险**：低 / worker 守卫扩展 = 早 return 模式不影响现有路径 / 后端新端点为新增不破坏 / 前端 ops 列加按钮不变现有查看
+  - **未覆盖**：cancelTaskById + batchCancelTasks queries 7 case + crawler.tasks 路由 6 case 单测 → 留 CHG-SN-9-CW1-B-EP-TEST follow-up 子卡（已挂 task-queue.md）
+- **价值**：
+  - **Bug-A 修复闭环**：用户报告"采集任务出现'排队中'状态无法暂停或取消" → task 行级 + batch UI + 后端 2 端点 + worker 守卫扩展 全链路就位
+  - **R-151-3 审计漂移防护**：ADR 阶段 arch-reviewer Opus 拦下的"paused task + Bull delayed job 30s 后 worker 覆盖 finished_at 漂移"已通过 terminal status 短路修复 / EP 阶段未引入新审计漂移
+  - **R-MID-1 系统化第 26 次**：admin-audit actionType + targetKind 扩展 + migration 073 与 072 同范式
+  - **API 一致性**：cancel 与 ADR-117/-122 path / verb / audit / error code 命名硬对齐
+- **不在范围**（follow-up）：
+  - CHG-SN-9-CW1-B-EP-TEST 单测补齐（7 queries + 6 route + 4 UI case）
+  - e2e smoke（CrawlerRunDetailView task cancel 路径 / 推迟到 CW1-B-EP-E2E）
+  - R-MID-1 文档化（system.audit-log-coverage.md 第 26 次系统化条目 / 推迟）
+- **执行模型**：claude-opus-4-7（plan 模式延续）
+- **子代理调用**：无（按 ADR-151 §10 实施 / 路径已在 -ADR 阶段 Opus PASS）
+- **关联 ADR**：ADR-151（已 Accepted commit 943611eb）/ ADR-117 / ADR-122
+
+Cleanup-Audit: 7 源码 + 1 migration + 类型扩展 / 0 新组件 / typecheck + lint + 154 测试全过 / verify-endpoint-adr 184 全对齐
+Plan-Revision: 1 次（实施中扩 tasks.md 文件范围加 admin-moderation.types + migration 073 / audit actionType 落地必要副产物 / 仍属 CW1-B-EP 范围内 R-MID-1 第 26 次系统化）

@@ -23,17 +23,22 @@ import {
   LoadingState,
   CodeText,
   PageHeader,
+  useToast,
   type TableColumn,
   type TableSortState,
+  type TableSelectionState,
 } from '@resovo/admin-ui'
 import {
   getCrawlerRunById,
   listCrawlerRunTasks,
+  cancelCrawlerTask,
+  batchCancelCrawlerTasks,
   type CrawlerRun,
   type CrawlerRunStatus,
   type CrawlerTaskDto,
   type CrawlerTaskStatus,
 } from '@/lib/crawler/api'
+import { ApiClientError } from '@/lib/api-client'
 import { TaskLogsDrawer } from './TaskLogsDrawer'
 
 const SECTION_STYLE: CSSProperties = {
@@ -101,6 +106,8 @@ function formatDuration(startedAt: string | null, finishedAt: string | null): st
 
 interface BuildTaskColumnsOptions {
   readonly onViewLogs: (taskId: string) => void
+  readonly onCancelTask: (task: CrawlerTaskDto) => void
+  readonly pendingCancelTaskId: string | null
 }
 
 // EP-3-F（2026-05-24）+ ADR-150 阶段 5 EP-4 follow-up（2026-05-25）：sort 全栈打通
@@ -108,7 +115,7 @@ interface BuildTaskColumnsOptions {
 //   - 4 列显式 enableSorting: true（siteKey / status / startedAt / duration）/ 后端 SQL ORDER BY 白名单
 //   - duration sort 用 finishedAt 字段（duration = finished - started 派生 / finishedAt 是 reasonable proxy）
 //   - ops 列 kind='action'（type 层强制 never / 不进矩阵 popover）
-function buildTaskColumns({ onViewLogs }: BuildTaskColumnsOptions): readonly TableColumn<CrawlerTaskDto>[] {
+function buildTaskColumns({ onViewLogs, onCancelTask, pendingCancelTaskId }: BuildTaskColumnsOptions): readonly TableColumn<CrawlerTaskDto>[] {
   return [
   {
     id: 'id',
@@ -227,18 +234,37 @@ function buildTaskColumns({ onViewLogs }: BuildTaskColumnsOptions): readonly Tab
     kind: 'action',
     header: '操作',
     accessor: (r) => r.id,
-    width: 90,
+    width: 140,
     defaultVisible: true,
-    cell: ({ row }) => (
-      <AdminButton
-        variant="ghost"
-        size="sm"
-        onClick={() => onViewLogs(row.id)}
-        data-testid={`task-view-logs-${row.id}`}
-      >
-        查看
-      </AdminButton>
-    ),
+    cell: ({ row }) => {
+      // ADR-151 / CW1-B-EP：cancel 仅在 queued/running/paused 可点
+      const canCancel = row.status === 'queued' || row.status === 'running' || row.status === 'paused'
+      const cancelPending = pendingCancelTaskId === row.id
+      return (
+        <span style={{ display: 'inline-flex', gap: '4px' }}>
+          <AdminButton
+            variant="ghost"
+            size="sm"
+            onClick={() => onViewLogs(row.id)}
+            data-testid={`task-view-logs-${row.id}`}
+          >
+            查看
+          </AdminButton>
+          {canCancel ? (
+            <AdminButton
+              variant="ghost"
+              size="sm"
+              disabled={cancelPending}
+              loading={cancelPending}
+              onClick={() => onCancelTask(row)}
+              data-testid={`task-cancel-${row.id}`}
+            >
+              取消
+            </AdminButton>
+          ) : null}
+        </span>
+      )
+    },
   },
   ]
 }
@@ -304,11 +330,81 @@ export function CrawlerRunDetailView({ runId }: CrawlerRunDetailViewProps) {
 
   const refresh = useCallback(() => setRetryKey((k) => k + 1), [])
 
+  const toast = useToast()
   const [openTaskId, setOpenTaskId] = useState<string | null>(null)
 
+  // ADR-151 / CW1-B-EP：单 task cancel state
+  const [pendingCancelTaskId, setPendingCancelTaskId] = useState<string | null>(null)
+
+  const handleCancelTask = useCallback(async (task: CrawlerTaskDto) => {
+    setPendingCancelTaskId(task.id)
+    try {
+      const result = await cancelCrawlerTask(task.id)
+      if (result.alreadyRequested) {
+        toast.push({
+          title: '已请求取消',
+          description: `${task.siteKey} task 上次取消请求仍在等待 worker 响应（≤15s）`,
+          level: 'info',
+        })
+      } else if (result.finalStatus === 'cancelled') {
+        toast.push({
+          title: '已取消',
+          description: `${task.siteKey} task 已置为 cancelled`,
+          level: 'success',
+        })
+      } else {
+        toast.push({
+          title: '已请求取消',
+          description: `${task.siteKey} running task 已通知 worker（15s 内响应）`,
+          level: 'success',
+        })
+      }
+      refresh()
+    } catch (err) {
+      const msg = err instanceof ApiClientError ? err.message : (err instanceof Error ? err.message : '请重试')
+      const title = err instanceof ApiClientError && err.code === 'TASK_CANCEL_FORBIDDEN_TERMINAL'
+        ? '任务已是终态'
+        : '取消失败'
+      toast.push({ title, description: msg, level: 'danger' })
+    } finally {
+      setPendingCancelTaskId(null)
+    }
+  }, [refresh, toast])
+
+  // ADR-151 / CW1-B-EP：batch cancel state（G-151-3 约定：mode='page' / 0 选不渲染 / batch 50+ 弹 confirm）
+  const [selection, setSelection] = useState<TableSelectionState>({ selectedKeys: new Set<string>(), mode: 'page' })
+  const [batchCancelPending, setBatchCancelPending] = useState(false)
+
+  const handleBatchCancel = useCallback(async () => {
+    const ids = Array.from(selection.selectedKeys)
+    if (ids.length === 0) return
+    if (ids.length > 50 && !confirm(`确定批量取消 ${ids.length} 个 task？该操作不可撤销。`)) return
+    setBatchCancelPending(true)
+    try {
+      const result = await batchCancelCrawlerTasks(ids)
+      const { cancelled, cancelRequested, alreadyRequested, errors } = result.summary
+      toast.push({
+        title: '批量取消完成',
+        description: `已取消 ${cancelled} · 已请求 ${cancelRequested} · 已在等待 ${alreadyRequested}${errors.length > 0 ? ` · 失败 ${errors.length}` : ''}`,
+        level: errors.length === 0 ? 'success' : 'warn',
+      })
+      setSelection({ selectedKeys: new Set<string>(), mode: 'page' })
+      refresh()
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : '请重试'
+      toast.push({ title: '批量取消失败', description: msg, level: 'danger' })
+    } finally {
+      setBatchCancelPending(false)
+    }
+  }, [selection, refresh, toast])
+
   const taskColumns = useMemo(
-    () => buildTaskColumns({ onViewLogs: (id) => setOpenTaskId(id) }),
-    [],
+    () => buildTaskColumns({
+      onViewLogs: (id) => setOpenTaskId(id),
+      onCancelTask: handleCancelTask,
+      pendingCancelTaskId,
+    }),
+    [handleCancelTask, pendingCancelTaskId],
   )
 
   const tasksQuery = useMemo(
@@ -317,9 +413,9 @@ export function CrawlerRunDetailView({ runId }: CrawlerRunDetailViewProps) {
       sort: tasksSort,
       filters: new Map(),
       columns: new Map(),
-      selection: { selectedKeys: new Set<string>(), mode: 'page' as const },
+      selection,
     }),
-    [tasksPage, tasksPageSize, tasksSort],
+    [tasksPage, tasksPageSize, tasksSort, selection],
   )
 
   if (runLoading && !run) {
@@ -444,6 +540,27 @@ export function CrawlerRunDetailView({ runId }: CrawlerRunDetailViewProps) {
                   rowKey={(r) => r.id}
                   mode="server"
                   query={tasksQuery}
+                  selection={selection}
+                  onSelectionChange={setSelection}
+                  bulkActions={
+                    selection.selectedKeys.size > 0 ? (
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '12px' }}>
+                        <span style={{ fontSize: 'var(--font-size-sm)' }}>
+                          已选 {selection.selectedKeys.size} 个
+                        </span>
+                        <AdminButton
+                          variant="danger"
+                          size="sm"
+                          loading={batchCancelPending}
+                          disabled={batchCancelPending}
+                          onClick={() => void handleBatchCancel()}
+                          data-testid="task-batch-cancel-btn"
+                        >
+                          批量取消
+                        </AdminButton>
+                      </span>
+                    ) : null
+                  }
                   onQueryChange={(patch) => {
                     if (patch.pagination) {
                       if (patch.pagination.page !== undefined) setTasksPage(patch.pagination.page)

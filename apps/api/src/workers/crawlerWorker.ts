@@ -144,6 +144,15 @@ async function processCrawlJob(job: Bull.Job<CrawlJobData>): Promise<CrawlJobRes
 
   if (taskId) {
     const task = await crawlerTasksQueries.getTaskById(db, taskId)
+    // ADR-151 §D-151-5 R-151-3：terminal status 短路 — 防 paused task 被 manual cancel 后
+    // 30s Bull delayed job 触发 worker 覆盖 finished_at + reason 漂移
+    if (task && ['cancelled', 'done', 'failed', 'timeout'].includes(task.status)) {
+      await logTask('info', 'worker.task.already_terminal', '任务已是终态，跳过 worker 处理', {
+        status: task.status,
+      })
+      if (runId) await crawlerRunsQueries.syncRunStatusFromTasks(db, runId)
+      return { type, sites: siteKey ? [siteKey] : [], videosUpserted: 0, sourcesUpserted: 0, errors: 0, durationMs: 0 }
+    }
     if (task?.cancelRequested) {
       await crawlerTasksQueries.updateTaskStatus(db, taskId, 'cancelled', {
         reason: 'CANCEL_REQUESTED',
