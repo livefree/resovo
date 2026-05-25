@@ -200,6 +200,8 @@ function buildColumns({
       filterable: true,
       filterFieldName: 'createdAt',
       filterKind: 'date',
+      // sub 2 EXTEND（2026-05-24）：sort 全栈打通 / createdAt 列可点击升降序 / 后端 ORDER BY 白名单
+      enableSorting: true,
       cell: ({ row }) => (
         <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--fg-muted)' }}>
           {new Date(row.createdAt).toLocaleString('zh-CN', { hour12: false })}
@@ -324,6 +326,9 @@ export function CrawlerRunsView() {
     let cancelled = false
     setLoading(true)
     setError(null)
+    // sub 2 EXTEND（2026-05-24）：sort 白名单守卫（防 422 / 非白名单字段不发）
+    const sortFieldGuarded: 'createdAt' | 'finishedAt' | undefined =
+      sort.field === 'createdAt' || sort.field === 'finishedAt' ? sort.field : undefined
     listCrawlerRuns({
       page,
       limit: pageSize,
@@ -335,6 +340,8 @@ export function CrawlerRunsView() {
       ...(siteCountRange.max !== undefined ? { siteCountMax: siteCountRange.max } : {}),
       ...(createdAtRange.from ? { createdAtFrom: createdAtRange.from } : {}),
       ...(createdAtRange.to ? { createdAtTo: createdAtRange.to } : {}),
+      // sub 2 EXTEND：sort 字段透传（仅白名单字段）
+      ...(sortFieldGuarded ? { sortField: sortFieldGuarded, sortDirection: sort.direction } : {}),
     }).then((res) => {
       if (cancelled) return
       setRows(res.data)
@@ -346,7 +353,7 @@ export function CrawlerRunsView() {
       if (!cancelled) setLoading(false)
     })
     return () => { cancelled = true }
-  }, [page, pageSize, filtersMap, retryKey])
+  }, [page, pageSize, filtersMap, sort, retryKey])
 
   const refresh = useCallback(() => setRetryKey((k) => k + 1), [])
 

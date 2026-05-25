@@ -47,6 +47,12 @@ export interface ListAdminAuditLogsParams {
   readonly from?: string
   /** ISO 8601 timestamptz，闭区间 */
   readonly to?: string
+  /**
+   * sub 2 EXTEND（2026-05-24）：sort 字段白名单 enum + 方向
+   * 仅支持 'createdAt'（业务唯一按时间排序需求 / id desc 兜底稳定排序）
+   */
+  readonly sortField?: 'createdAt'
+  readonly sortDirection?: 'asc' | 'desc'
 }
 
 // ── 响应（ApiResponse 信封；ADR-118 D-118-7） ───────────────────────

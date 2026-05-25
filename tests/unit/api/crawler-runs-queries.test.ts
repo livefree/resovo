@@ -96,4 +96,29 @@ describe('crawlerRuns.listRuns (sub1-EXTEND 5 类新参数)', () => {
     const [dataSql] = mockQuery.mock.calls[0]
     expect(dataSql).not.toContain('id::text LIKE')
   })
+
+  // sub 2 EXTEND（2026-05-24）：sort 全栈打通 / ORDER BY 动态白名单
+  it('#9 sub2-EXTEND: sortField=createdAt + sortDirection=asc → SQL 含 ORDER BY created_at ASC', async () => {
+    await listRuns(mockPool, { sortField: 'createdAt', sortDirection: 'asc' })
+    const [dataSql] = mockQuery.mock.calls[0]
+    expect(dataSql).toContain('ORDER BY created_at ASC, id DESC')
+  })
+
+  it('#10 sub2-EXTEND: sortField=finishedAt + sortDirection=desc → SQL 含 ORDER BY finished_at DESC', async () => {
+    await listRuns(mockPool, { sortField: 'finishedAt', sortDirection: 'desc' })
+    const [dataSql] = mockQuery.mock.calls[0]
+    expect(dataSql).toContain('ORDER BY finished_at DESC, id DESC')
+  })
+
+  it('#11 sub2-EXTEND: 无 sortField → fallback 默认 created_at DESC', async () => {
+    await listRuns(mockPool, {})
+    const [dataSql] = mockQuery.mock.calls[0]
+    expect(dataSql).toContain('ORDER BY created_at DESC, id DESC')
+  })
+
+  it('#12 sub2-EXTEND: sortField 非白名单字段（如 status）→ fallback 默认 created_at DESC', async () => {
+    await listRuns(mockPool, { sortField: 'status', sortDirection: 'asc' })
+    const [dataSql] = mockQuery.mock.calls[0]
+    expect(dataSql).toContain('ORDER BY created_at ASC, id DESC')
+  })
 })

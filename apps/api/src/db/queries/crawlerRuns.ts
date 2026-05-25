@@ -124,6 +124,13 @@ export async function getRunById(db: Pool, runId: string): Promise<CrawlerRun | 
   return result.rows[0] ? mapRun(result.rows[0]) : null
 }
 
+// sub 2 EXTEND（2026-05-24）：sort 全栈白名单（防 SQL 注入 / 与 distinct-whitelist 同范式）
+// camelCase 业务 key → snake_case DB column 映射 / 白名单外字段忽略
+const CRAWLER_RUNS_SORT_FIELD_MAP: Record<string, string> = {
+  createdAt: 'created_at',
+  finishedAt: 'finished_at',
+}
+
 export async function listRuns(
   db: Pool,
   params: {
@@ -136,6 +143,9 @@ export async function listRuns(
     siteCountMax?: number
     createdAtFrom?: string
     createdAtTo?: string
+    // sub 2 EXTEND：sort 字段白名单（createdAt / finishedAt）+ 方向
+    sortField?: string
+    sortDirection?: 'asc' | 'desc'
     limit?: number
     offset?: number
   } = {},
@@ -184,10 +194,14 @@ export async function listRuns(
   const limit = params.limit ?? 20
   const offset = params.offset ?? 0
 
+  // sub 2 EXTEND：sort 字段白名单 lookup + 方向 / fallback 默认 created_at DESC
+  const sortCol = (params.sortField && CRAWLER_RUNS_SORT_FIELD_MAP[params.sortField]) ?? 'created_at'
+  const sortDir = params.sortDirection === 'asc' ? 'ASC' : 'DESC'
+
   const [dataResult, countResult] = await Promise.all([
     db.query<DbRunRow>(
       `SELECT * FROM crawler_runs ${where}
-       ORDER BY created_at DESC
+       ORDER BY ${sortCol} ${sortDir}, id DESC
        LIMIT $${idx++} OFFSET $${idx}`,
       [...values, limit, offset],
     ),

@@ -248,4 +248,16 @@ describe('DataTableAutoFilter (ADR-150 阶段 2)', () => {
     fireEvent.click(screen.getByTestId('dt-autofilter-name-clear'))
     expect(onApply).toHaveBeenCalledWith(undefined)
   })
+
+  // sub 2 EXTEND（2026-05-24）：BUG 修复 — filterOptions 空数组 truthy 不退化
+  it('#21 sub2-EXTEND: filterOptions=[] 空数组 → 退化为 rows accessor 派生（不显示空列表）', () => {
+    render(<DataTableAutoFilter
+      column={enumCol({ filterOptions: [] })}
+      {...baseProps}
+    />)
+    // 空 filterOptions 应退化为 rows 派生（与 #7 行为一致）→ alpha/beta/gamma 选项可见
+    expect(screen.getByTestId('dt-autofilter-name-opt-alpha')).toBeTruthy()
+    expect(screen.getByTestId('dt-autofilter-name-opt-beta')).toBeTruthy()
+    expect(screen.getByTestId('dt-autofilter-name-opt-gamma')).toBeTruthy()
+  })
 })

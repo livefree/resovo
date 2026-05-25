@@ -191,7 +191,10 @@ function EnumValueList<T>(props: EnumValueListProps<T>): React.ReactElement {
   const [fetchError, setFetchError] = useState<string | undefined>()
 
   const optionsFromRows = useMemo<readonly DistinctOption[]>(() => {
-    if (column.filterOptions) return column.filterOptions
+    // sub 2 EXTEND（2026-05-24）：filterOptions 空数组 truthy 不退化 BUG 修复
+    // 消费方 enums 异步未加载完时传 filterOptions: [] → 旧版直接返回 [] / value-list 空 / 看似"灰"
+    // 修复：length > 0 才采用 filterOptions / 否则退化到 fetched / rows 派生（与 distinctFetcher 路径一致）
+    if (column.filterOptions && column.filterOptions.length > 0) return column.filterOptions
     if (fetched) return fetched
     // 阶段 2：无 filterOptions + 无 distinctFetcher 时退化为当前 rows distinct（页内推导 / D-150-1 简化）
     const set = new Map<string, number>()

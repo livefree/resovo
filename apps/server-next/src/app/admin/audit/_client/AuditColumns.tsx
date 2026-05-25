@@ -44,6 +44,8 @@ export function buildAuditColumns(
       filterable: true,
       filterFieldName: 'createdAt',
       filterKind: 'date',
+      // sub 2 EXTEND（2026-05-24）：sort 全栈打通 / createdAt 列可点击升降序 / 后端 ORDER BY 白名单
+      enableSorting: true,
       cell: ({ row }) => new Date(row.createdAt).toLocaleString('zh-CN', { hour12: false }),
       // 时间格式化保留视图层（locale 是视图 concern，不下沉 admin-ui）
     },

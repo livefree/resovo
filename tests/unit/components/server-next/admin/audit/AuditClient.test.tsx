@@ -377,4 +377,19 @@ describe('AuditClient', () => {
       )
     })
   })
+
+  // sub 2 EXTEND（2026-05-24）：sort 全栈打通 / createdAt 列 enableSorting → 升序点击 → fetch 透传
+  it('21. sub2-EXTEND: createdAt 列点击 ⋯ 升序 → fetch 带 sortField=createdAt + sortDirection=asc', async () => {
+    listAdminAuditLogsMock.mockResolvedValue(EMPTY_RES)
+    render(<AuditClient />)
+    await waitFor(() => screen.getByTestId('audit-table'))
+    fireEvent.click(screen.getByTestId('th-menu-trigger-createdAt'))
+    expect(screen.queryByTestId('dt-autofilter-createdAt')).not.toBeNull()
+    fireEvent.click(screen.getByTestId('dt-autofilter-createdAt-sort-asc'))
+    await waitFor(() => {
+      expect(listAdminAuditLogsMock).toHaveBeenLastCalledWith(
+        expect.objectContaining({ sortField: 'createdAt', sortDirection: 'asc' }),
+      )
+    })
+  })
 })

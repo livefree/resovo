@@ -126,6 +126,14 @@ export interface ListAdminAuditLogFilters {
   from?: string
   /** ISO 8601 datetime（with offset） */
   to?: string
+  // sub 2 EXTEND（2026-05-24）：sort 字段白名单 + 方向
+  sortField?: 'createdAt'
+  sortDirection?: 'asc' | 'desc'
+}
+
+// sub 2 EXTEND：sort 字段白名单（防 SQL 注入 / 与 distinct-whitelist 同范式）
+const AUDIT_LOG_SORT_FIELD_MAP: Record<string, string> = {
+  createdAt: 'al.created_at',
 }
 
 export interface AdminAuditLogDetailRow extends AdminAuditLogQueryRow {
@@ -177,6 +185,10 @@ export async function listAdminAuditLog(
   params.push(offset)
   const offsetIdx = params.length
 
+  // sub 2 EXTEND：sort 字段白名单 lookup + 方向 / fallback 默认 al.created_at DESC, al.id DESC
+  const sortCol = (filters.sortField && AUDIT_LOG_SORT_FIELD_MAP[filters.sortField]) ?? 'al.created_at'
+  const sortDir = filters.sortDirection === 'asc' ? 'ASC' : 'DESC'
+
   const [rowsResult, countResult] = await Promise.all([
     db.query<AdminAuditLogQueryRow>(
       `SELECT al.id::text AS id,
@@ -192,7 +204,7 @@ export async function listAdminAuditLog(
          FROM admin_audit_log al
          LEFT JOIN users u ON u.id = al.actor_id
          ${whereSql}
-        ORDER BY al.created_at DESC, al.id DESC
+        ORDER BY ${sortCol} ${sortDir}, al.id DESC
         LIMIT $${limitIdx} OFFSET $${offsetIdx}`,
       params,
     ),

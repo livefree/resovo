@@ -465,4 +465,20 @@ describe('CrawlerRunsView', () => {
       )
     })
   })
+
+  // sub 2 EXTEND（2026-05-24）：sort 全栈打通 / createdAt 列 enableSorting → 升序点击 → fetch 透传
+  it('29. sub2-EXTEND: createdAt 列点击 ⋯ 升序 → fetch 带 sortField=createdAt + sortDirection=asc', async () => {
+    listCrawlerRunsMock.mockResolvedValue(EMPTY)
+    render(<CrawlerRunsView />)
+    await waitFor(() => screen.getByTestId('crawler-runs-table'))
+    fireEvent.click(screen.getByTestId('th-menu-trigger-createdAt'))
+    expect(screen.queryByTestId('dt-autofilter-createdAt')).not.toBeNull()
+    // 排序段始终渲染 / createdAt enableSorting=true → 升序按钮非 disabled
+    fireEvent.click(screen.getByTestId('dt-autofilter-createdAt-sort-asc'))
+    await waitFor(() => {
+      expect(listCrawlerRunsMock).toHaveBeenLastCalledWith(
+        expect.objectContaining({ sortField: 'createdAt', sortDirection: 'asc' }),
+      )
+    })
+  })
 })

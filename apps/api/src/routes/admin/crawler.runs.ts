@@ -120,6 +120,9 @@ export async function registerCrawlerRunRoutes(fastify: FastifyInstance) {
       siteCountMax: z.coerce.number().int().min(0).max(10_000).optional(),
       createdAtFrom: z.string().regex(ISO_DATE_RE, 'createdAtFrom 必须是 YYYY-MM-DD 格式').optional(),
       createdAtTo: z.string().regex(ISO_DATE_RE, 'createdAtTo 必须是 YYYY-MM-DD 格式').optional(),
+      // sub 2 EXTEND（2026-05-24）：sort 字段白名单 enum + 方向
+      sortField: z.enum(['createdAt', 'finishedAt']).optional(),
+      sortDirection: z.enum(['asc', 'desc']).optional(),
       page: z.coerce.number().int().min(1).default(1),
       limit: z.coerce.number().int().min(1).max(100).default(20),
     })
@@ -130,6 +133,7 @@ export async function registerCrawlerRunRoutes(fastify: FastifyInstance) {
     const {
       status, triggerType,
       idPrefix, siteCountMin, siteCountMax, createdAtFrom, createdAtTo,
+      sortField, sortDirection,
       page, limit,
     } = parsed.data
     // 兼容：传 readonly 数组到 queries 层（queries 已支持 单值 / 数组）
@@ -137,6 +141,7 @@ export async function registerCrawlerRunRoutes(fastify: FastifyInstance) {
     const { rows, total } = await crawlerRunsQueries.listRuns(db, {
       status, triggerType,
       idPrefix, siteCountMin, siteCountMax, createdAtFrom, createdAtTo,
+      sortField, sortDirection,
       limit, offset: (page - 1) * limit,
     })
     return reply.send({ data: rows, pagination: { total, page, limit, hasNext: page * limit < total } })

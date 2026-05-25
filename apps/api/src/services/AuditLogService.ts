@@ -137,6 +137,9 @@ export const ListAdminAuditLogsSchema = z
     requestId: z.string().max(200).optional(),
     from: z.string().datetime({ offset: true }).optional(),
     to: z.string().datetime({ offset: true }).optional(),
+    // sub 2 EXTEND（2026-05-24）：sort 字段白名单 enum + 方向
+    sortField: z.enum(['createdAt']).optional(),
+    sortDirection: z.enum(['asc', 'desc']).optional(),
   })
   .refine(v => !v.targetId || v.targetKind, {
     message: 'targetId 必须配合 targetKind 联用',
@@ -254,6 +257,9 @@ export class AuditLogService {
       requestId: params.requestId,
       from: params.from,
       to: params.to,
+      // sub 2 EXTEND（2026-05-24）：透传 sort 参数到 queries
+      sortField: params.sortField,
+      sortDirection: params.sortDirection,
     })
     return {
       rows: rows.map(toListRow),

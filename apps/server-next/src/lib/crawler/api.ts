@@ -220,6 +220,9 @@ export interface ListCrawlerRunsParams {
   readonly siteCountMax?: number
   readonly createdAtFrom?: string // ISO date YYYY-MM-DD
   readonly createdAtTo?: string   // ISO date YYYY-MM-DD
+  // sub 2 EXTEND（2026-05-24）：sort 字段白名单 + 方向
+  readonly sortField?: 'createdAt' | 'finishedAt'
+  readonly sortDirection?: 'asc' | 'desc'
   readonly page?: number
   readonly limit?: number
 }
@@ -245,6 +248,9 @@ export async function listCrawlerRuns(params: ListCrawlerRunsParams = {}): Promi
   if (params.siteCountMax !== undefined) qs.set('siteCountMax', String(params.siteCountMax))
   if (params.createdAtFrom) qs.set('createdAtFrom', params.createdAtFrom)
   if (params.createdAtTo) qs.set('createdAtTo', params.createdAtTo)
+  // sub 2 EXTEND：sort 字段透传
+  if (params.sortField) qs.set('sortField', params.sortField)
+  if (params.sortDirection) qs.set('sortDirection', params.sortDirection)
   if (params.page != null) qs.set('page', String(params.page))
   if (params.limit != null) qs.set('limit', String(params.limit))
   const q = qs.toString()

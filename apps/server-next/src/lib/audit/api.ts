@@ -35,6 +35,9 @@ export async function listAdminAuditLogs(
   if (params.requestId)          qs.set('requestId', params.requestId)
   if (params.from)               qs.set('from', params.from)
   if (params.to)                 qs.set('to', params.to)
+  // sub 2 EXTEND（2026-05-24）：sort 字段透传
+  if (params.sortField)          qs.set('sortField', params.sortField)
+  if (params.sortDirection)      qs.set('sortDirection', params.sortDirection)
   const q = qs.toString()
   return apiClient.get<ListAdminAuditLogsApiResult>(
     `/admin/audit/logs${q ? `?${q}` : ''}`,

@@ -154,6 +154,8 @@ export function AuditClient() {
     let cancelled = false
     setLoading(true)
     setError(null)
+    // sub 2 EXTEND（2026-05-24）：sort 白名单守卫（audit 仅支持 createdAt）
+    const sortFieldGuarded: 'createdAt' | undefined = sort.field === 'createdAt' ? 'createdAt' : undefined
     const params: ListAdminAuditLogsParams = {
       page,
       limit: pageSize,
@@ -163,6 +165,8 @@ export function AuditClient() {
       ...(requestIdFilter ? { requestId: requestIdFilter } : {}),
       ...(createdAtFromIso ? { from: createdAtFromIso } : {}),
       ...(createdAtToIso ? { to: createdAtToIso } : {}),
+      // sub 2 EXTEND：sort 字段透传（仅 createdAt）
+      ...(sortFieldGuarded ? { sortField: sortFieldGuarded, sortDirection: sort.direction } : {}),
     }
     listAdminAuditLogs(params)
       .then((res) => {
@@ -178,7 +182,7 @@ export function AuditClient() {
         if (!cancelled) setLoading(false)
       })
     return () => { cancelled = true }
-  }, [page, pageSize, filtersMap, retryKey])
+  }, [page, pageSize, filtersMap, sort, retryKey])
 
   const refresh = useCallback(() => setRetryKey((k) => k + 1), [])
 
