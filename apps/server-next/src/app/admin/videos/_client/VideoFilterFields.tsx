@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useCallback } from 'react'
+import { useCallback } from 'react'
 import type { CSSProperties } from 'react'
 import type {
   TableQuerySnapshot,
@@ -142,63 +142,32 @@ const WRAP_STYLE: CSSProperties = {
   flexWrap: 'wrap',
 }
 
+// sub C（2026-05-24）：VideoFilterBar 简化 6 → 2 控件
+//   - 删 q text input（→ title 列 ⋯ popover text filter / filterFieldName='q'）
+//   - 删 type / visibilityStatus / reviewStatus 3 enum select（→ 对应列 ⋯ popover）
+//   - 保留 status + site 2 enum select（外置 / 与 visibility+review 维度有重叠 / 无对应列承载）
+//   - debounceRef + handleSearch 一并删（DataTableAutoFilter "应用"按钮一次性 commit / 无 debounce）
 export function VideoFilterBar({ snapshot, sites, onPatch }: VideoFilterBarProps) {
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
-  const snapshotRef = useRef(snapshot)
-  snapshotRef.current = snapshot
-
   const setFilter = useCallback((key: string, value: string) => {
-    const next = new Map(snapshotRef.current.filters)
+    const next = new Map(snapshot.filters)
     if (value) {
-      if (key === 'q') next.set(key, { kind: 'text', value } as const)
-      else next.set(key, { kind: 'enum', value: [value] } as const)
+      next.set(key, { kind: 'enum', value: [value] } as const)
     } else {
       next.delete(key)
     }
     onPatch({ filters: next })
-  }, [onPatch])
-
-  const handleSearch = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value
-    if (debounceRef.current) clearTimeout(debounceRef.current)
-    debounceRef.current = setTimeout(() => setFilter('q', val), 300)
-  }, [setFilter])
+  }, [snapshot.filters, onPatch])
 
   const getEnum = (key: string): string => {
     const v = snapshot.filters.get(key)
     return v?.kind === 'enum' ? (v.value[0] ?? '') : ''
   }
 
-  const qValue = snapshot.filters.get('q')
-  const qText = qValue?.kind === 'text' ? qValue.value : ''
-
   return (
     <div data-video-filter-bar style={WRAP_STYLE}>
-      <input
-        type="search"
-        placeholder="搜索标题…"
-        defaultValue={qText}
-        onChange={handleSearch}
-        data-testid="filter-q"
-        data-interactive="trigger"
-        style={INPUT_STYLE}
-        aria-label="搜索视频"
-      />
-      <select value={getEnum('type')} onChange={(e) => setFilter('type', e.target.value)} data-testid="filter-type" data-interactive="trigger" style={SELECT_STYLE} aria-label="类型">
-        <option value="">全部类型</option>
-        {VIDEO_TYPE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-      </select>
       <select value={getEnum('status')} onChange={(e) => setFilter('status', e.target.value)} data-testid="filter-status" data-interactive="trigger" style={SELECT_STYLE} aria-label="上架状态">
         <option value="">全部状态</option>
         {VIDEO_STATUS_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-      </select>
-      <select value={getEnum('visibilityStatus')} onChange={(e) => setFilter('visibilityStatus', e.target.value)} data-testid="filter-visibility" data-interactive="trigger" style={SELECT_STYLE} aria-label="可见性">
-        <option value="">全部可见性</option>
-        {VISIBILITY_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-      </select>
-      <select value={getEnum('reviewStatus')} onChange={(e) => setFilter('reviewStatus', e.target.value)} data-testid="filter-review-status" data-interactive="trigger" style={SELECT_STYLE} aria-label="审核状态">
-        <option value="">全部审核状态</option>
-        {REVIEW_STATUS_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
       </select>
       {sites.length > 0 && (
         <select value={getEnum('site')} onChange={(e) => setFilter('site', e.target.value)} data-testid="filter-site" data-interactive="trigger" style={SELECT_STYLE} aria-label="来源站点">

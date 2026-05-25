@@ -18,7 +18,7 @@ import {
   loadPersonalViews, loadTeamViews, appendPersonalView, makePersonalView,
   DEFAULT_VIEWS,
 } from '@/lib/videos/saved-views'
-import { buildVideoFilter, buildFilterChips, VideoFilterBar } from './VideoFilterFields'
+import { buildVideoFilter, buildFilterChips, VideoFilterBar, VIDEO_TYPE_OPTIONS, VISIBILITY_OPTIONS, REVIEW_STATUS_OPTIONS } from './VideoFilterFields'
 import { VideoRowActions } from './VideoRowActions'
 import { VideoEditDrawer } from './VideoEditDrawer'
 
@@ -244,10 +244,16 @@ function reviewPillLabel(status: VideoAdminRow['review_status']): string {
   }
 }
 
+// sub C（2026-05-24）：ADR-150 D-150-1 双轨 — 4 列加 filterable
+//   title (text/q) / type (enum) / visibility (enum/visibilityStatus) / review_status (enum/reviewStatus)
+//   options 由消费方注入（VIDEO_TYPE_OPTIONS / VISIBILITY_OPTIONS / REVIEW_STATUS_OPTIONS）
 function buildVideoColumns(
   isAdmin: boolean,
   onRowUpdate: (id: string, patch: Partial<VideoAdminRow>) => void,
   onEditRequest: (id: string) => void,
+  typeOptions: readonly { value: string; label?: string }[] = [],
+  visibilityOptions: readonly { value: string; label?: string }[] = [],
+  reviewOptions: readonly { value: string; label?: string }[] = [],
 ): readonly TableColumn<VideoAdminRow>[] {
   return [
     // ── thumb 列：CHG-UX2-03 升级 poster-sm 32×48 → poster-md 48×72（解决"视频库列表过小"）──
@@ -261,9 +267,11 @@ function buildVideoColumns(
     // ── title 列：标题 + meta（shortId · year）──
     // CHG-UX2-03 改弹性：删 width 保留 minWidth → buildGridTemplate 走 minmax(220px, 1fr) 撑满，
     // 消除右侧空白 + 消除横向溢出（frame "圆角右直角"根因连锁修复）
+    // sub C：text filter / filterFieldName='q'（D-150-4 业务 key 桥接 / 后端搜 title）
     {
       id: 'title', header: '标题', accessor: (r) => r.title,
       minWidth: 220, enableResizing: true, enableSorting: true, defaultVisible: true, pinned: true,
+      filterable: true, filterFieldName: 'q', filterKind: 'text',
       cell: ({ row }) => (
         <div style={TITLE_CELL_STYLE}>
           <span style={TITLE_TEXT_STYLE}>{row.title}</span>
@@ -272,9 +280,11 @@ function buildVideoColumns(
       ),
     },
     // ── type 列：Pill neutral + 中文映射（reference §6.1 中性映射）──
+    // sub C：enum filter / filterFieldName='type'
     {
       id: 'type', header: '类型', accessor: (r) => r.type,
       width: 90, minWidth: 80, enableResizing: true, enableSorting: true, defaultVisible: true,
+      filterable: true, filterFieldName: 'type', filterKind: 'enum', filterOptions: typeOptions,
       cell: ({ row }) => (
         <Pill variant="neutral">{TYPE_LABELS[row.type] ?? row.type}</Pill>
       ),
@@ -323,17 +333,21 @@ function buildVideoColumns(
       },
     },
     // ── visibility 列：reference §6.1 VisChip（visibility + review 复合）──
+    // sub C：enum filter / filterFieldName='visibilityStatus'（D-150-4 业务 key 桥接 column.id ≠ filterFieldName）
     {
       id: 'visibility', header: '可见性', accessor: (r) => r.visibility_status ?? '',
       width: 120, minWidth: 110, enableResizing: true, defaultVisible: true,
+      filterable: true, filterFieldName: 'visibilityStatus', filterKind: 'enum', filterOptions: visibilityOptions,
       cell: ({ row }) => (row.visibility_status && row.review_status)
         ? <VisChip visibility={row.visibility_status} review={row.review_status} />
         : null,
     },
     // ── review 列：reference §6.1 单 review pill（不复用 VisChip，因 visibility 列已承担复合状态）──
+    // sub C：enum filter / filterFieldName='reviewStatus'（D-150-4 业务 key 桥接）
     {
       id: 'review_status', header: '审核', accessor: (r) => r.review_status ?? '',
       width: 90, minWidth: 80, enableResizing: true, defaultVisible: true,
+      filterable: true, filterFieldName: 'reviewStatus', filterKind: 'enum', filterOptions: reviewOptions,
       cell: ({ row }) => row.review_status
         ? <Pill variant={reviewPillVariant(row.review_status)}>{reviewPillLabel(row.review_status)}</Pill>
         : null,
@@ -507,8 +521,16 @@ export function VideoListClient() {
     setRetryKey((k) => k + 1)
   }, [clearSelection])
 
+  // sub C（2026-05-24）：注入 3 options（ADR-150 D-150-1 enum 列 filterOptions 静态注入）
   const columns = useMemo(
-    () => buildVideoColumns(isAdmin, handleRowUpdate, handleEditRequest),
+    () => buildVideoColumns(
+      isAdmin,
+      handleRowUpdate,
+      handleEditRequest,
+      VIDEO_TYPE_OPTIONS,
+      VISIBILITY_OPTIONS,
+      REVIEW_STATUS_OPTIONS,
+    ),
     [isAdmin, handleRowUpdate, handleEditRequest],
   )
 

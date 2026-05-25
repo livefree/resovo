@@ -4992,3 +4992,81 @@ Plan-Revision: 0 次（实施严格按 arch-reviewer 报告 R-EP3A-1/2 + Y-EP3A-
 
 Cleanup-Audit: UsersListClient toolbar 3 控件 → 列内 3 filterable / 顺手消解 arch-reviewer Opus 二次评审 3 advisory（RR-EP3A-1 + Y-EP3A-2/3）/ 3 实施 + 2 测试 + 2 docs / 4 新 case / 4 质量门禁全过 / 11/11 + 3/3 + 1532+/1535 单测全 PASS（flaky 1 case pre-existing 与本卡无关）/ 0 Props API 变更 / 0 后端 / 0 ADR
 Plan-Revision: 1 次（SubmissionsListClient 不迁 / 实施前评估发现 deprecation banner + M-SN-9 退役 / 范围由"2 表格"缩为"1 表格 + 3 advisory"）
+
+---
+
+## [CHG-SN-9-DT-AUTOFILTER-EP-3-C sub C] VideoListClient VideoFilterBar 4 控件迁列内 filterable + 简化外置 2 控件
+
+- **完成时间**：2026-05-24
+- **记录时间**：2026-05-24
+- **执行模型**：claude-opus-4-7（主循环 / opus xhigh 续会话）
+- **子代理**：无（消费方迁移 / 不动 Props 契约 / CLAUDE.md §模型路由 6 条均不命中）
+- **关联 ADR**：ADR-150（D-150-1 双轨 / D-150-4 业务 key 桥接）
+- **关联 SEQ**：SEQ-20260524-01 第 1 序列 EP-3-C sub C
+- **触发**：sub B 走读 PASS / 继续 EP-3-C
+- **依赖**：sub B ✅ commit `82c45425`
+- **核心范围调整**（实施前评估）：
+  - **StagingPageClient 跳过**（Segment + client mode / 无 toolbar filter / 无列 filter / 不适用 D-150）
+  - **VideoListClient 仅迁 4 列**（title/q + type + visibility/visibilityStatus + review_status/reviewStatus）
+  - **VideoFilterBar 简化** 6 → 2 控件（保留 status + site 外置 / 这 2 个与 visibility+review 维度重叠 / 无对应列承载 / 暂保留外置）
+- **修改文件**（2 实施 / 0 测试新增 / 0 后端 / 0 ADR）：
+  - `apps/server-next/src/app/admin/videos/_client/VideoListClient.tsx`：
+    - buildVideoColumns 签名扩 3 options（typeOptions/visibilityOptions/reviewOptions / 默认空数组 / `readonly { value: string; label?: string }[]` 与 DistinctOption 兼容）
+    - 4 列加 filterable + filterFieldName + filterKind + filterOptions：
+      - title → text / filterFieldName='q'（D-150-4 业务 key 桥接 / column.id ≠ filterFieldName）
+      - type → enum / filterFieldName='type' / 注入 VIDEO_TYPE_OPTIONS
+      - visibility → enum / filterFieldName='visibilityStatus'（D-150-4 业务 key 桥接 / column.id ≠ filterFieldName）/ 注入 VISIBILITY_OPTIONS
+      - review_status → enum / filterFieldName='reviewStatus'（D-150-4 / column.id 'review_status' vs filterFieldName 'reviewStatus' 驼峰差异）/ 注入 REVIEW_STATUS_OPTIONS
+    - VIDEO_TYPE_OPTIONS / VISIBILITY_OPTIONS / REVIEW_STATUS_OPTIONS 3 import 加（从 VideoFilterFields）
+    - buildVideoColumns callsite 注入 3 options
+  - `apps/server-next/src/app/admin/videos/_client/VideoFilterFields.tsx`：
+    - VideoFilterBar 删 q text input + type / visibilityStatus / reviewStatus 3 enum select（共 4 控件）
+    - 保留 status + site 2 enum select 外置（与 visibility+review 维度重叠 / 无对应列）
+    - 删 debounceRef + handleSearch（DataTableAutoFilter "应用"按钮一次性 commit 无 debounce）
+    - 删 useRef import / setFilter 简化（不再处理 'q' kind: 'text' 分支 / 只处理 enum）
+    - 文件行数 211 → ~130 行
+- **保持不变**：
+  - buildVideoFilter / buildFilterChips（snapshot.filters 范式 / D-150 列内 + 外置共用 filtersMap key 命名空间）
+  - VIDEO_TYPE_OPTIONS / VIDEO_STATUS_OPTIONS / VISIBILITY_OPTIONS / REVIEW_STATUS_OPTIONS 4 常量（被 buildFilterChips + 列内 filter 注入共用）
+  - 后端 listVideos API 不变（已支持 q/type/status/visibilityStatus/reviewStatus/site/sortField/sortDir）
+  - saved views handlers
+  - VideoListClient.test.tsx（测试的是 helper / 常量 / 不直接测 VideoFilterBar UI）
+  - filter chips slot（外置 FilterChipBar via toolbar.trailing / 与 D-149-15 桥接合约保留）
+- **新增依赖**：无
+- **数据库变更**：无
+- **新增端点**：无
+- **关键设计落实**：
+  - **D-150-4 业务 key 桥接实证扩大**：sub 1 EXTEND id/idPrefix + sub 2 actor/actorId, target/targetKind + sub B username/q + sub C visibility/visibilityStatus + review_status/reviewStatus + title/q = **7 实证 column.id ≠ filterFieldName 场景**（驼峰 vs 短化 / 不同名 / D-150-4 桥接合约对所有 D-150 消费方零踩坑）
+  - **filtersMap key 命名空间统一**：VideoFilterBar 外置 2 控件 + 列内 4 controls 共用 snapshot.filters Map（status / site 走外置 select / q / type / visibilityStatus / reviewStatus 走列内 popover / buildVideoFilter 统一从 filters.get(key) 取）
+  - **debounce 解耦**：原 q text input 300ms debounce 删除 / DataTableAutoFilter "应用"按钮一次性 commit / 与 sub B 一致
+  - **filter chips slot 兼容**：FilterChipBar 仍能渲染列内 q/type/visibilityStatus/reviewStatus chip（filtersMap 同 key 命名空间 / chips toClear 调 patch({ filters }) 同 onQueryChange 处理）
+- **质量门禁**：
+  - ✅ typecheck（8 workspace PASS）
+  - ✅ lint（5/5 / pre-existing img 警告）
+  - ✅ verify:file-size-budget exit 0（VideoFilterFields 211 → ~130 行 / VideoListClient 739 baseline 与本卡无关）
+  - ✅ verify:adr-contracts exit 0（172 D-N 闭环 / SQL aligned / style 0）
+  - ✅ VideoListClient 21/21 PASS（helpers + 常量测试零回退）
+- **用户可见行为变化**（dev server 走读 sub C）：
+  - **删除**：`/admin/videos` toolbar 4 旧 select 控件全消失（搜索 q / type / visibility / review_status）
+  - **保留**：toolbar status + site 2 外置 select（与 visibility+review 维度重叠 / 暂未迁列内）
+  - **新增**：列名 ⋯ 触发 4 列 popover — 标题 (text/q) / 类型 (enum) / 可见性 (enum) / 审核 (enum)
+  - **改进**：搜索不再 300ms debounce 滞后（DataTableAutoFilter "应用"按钮一次性 commit）
+  - **保留**：filter chips slot（外置 FilterChipBar via toolbar.trailing / D-149-15 桥接合约 / 显示当前所有 filter chip）
+  - **保留**：saved views + 排序 + 矩阵 popover 列固有过滤格 + 状态指示
+- **价值**：
+  - **EP-3-C 范式延续 EP-3-B**：filterable + filterFieldName + filterKind + filterOptions / D-150-4 业务 key 桥接 / 4 列 column.id ≠ filterFieldName 同时存在场景
+  - **filter UI 一致性提升**：列内 popover 取代 toolbar select / 与 CrawlerRunsView + AuditClient + UsersListClient 体验对齐
+  - **不动 Props API 契约**：所有改动均在消费方 / 0 共享层修改 / 0 ADR
+  - **deprecation 决策避免浪费**：StagingPageClient 不迁 / Segment 范式不适用 D-150 / 节省 ~0.15w
+- **不在范围**（独立后续）：
+  - StagingPageClient 迁（Segment + client mode / 不适用 D-150 / 不需要）
+  - status + site filter 列内化（需新增列 / status 与 visibility+review 重叠 / 暂保留外置）
+  - VideoListClient.test.tsx 补列内 filter UI case（VideoFilterFields helpers 测试已覆盖 buildFilterChips / 单测 21/21 PASS 不需补）
+  - tests/e2e/admin/videos.spec.ts:243 `filter-q` testid 引用更新（e2e 留 ADR-150 阶段 5 EP-4 走读 5 代表页统一覆盖）
+  - EP-3-D 其它 6 表格（独立子卡）
+- **后续**：
+  - **@livefree dev server 走读 sub C**（4 列 popover + saved views + filter chips + 矩阵 popover 桥接 ✓）→ PASS
+  - **EP-3-D 启动**（ImageHealthClient + MergeClient ~0.3w）
+
+Cleanup-Audit: VideoFilterBar 6 → 2 控件 / 4 列加 filterable / D-150-4 桥接 7 实证 / 2 实施 / 0 测试新增 / 4 质量门禁全过 / 21/21 单测零回退 / 0 Props API 变更 / 0 后端 / 0 ADR / StagingPageClient 跳过节省 0.15w
+Plan-Revision: 1 次（StagingPageClient 实施前评估发现 Segment 范式不适用 D-150 / 范围由"2 表格"缩为"1 表格 + filter 简化"）
