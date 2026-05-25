@@ -5983,3 +5983,67 @@ Plan-Revision: 0 次（用户 AskUserQuestion 一次确认 / 实施一次 PASS /
 
 Cleanup-Audit: 9 源码 + 1 测试 / 0 新组件 / 0 新 ADR / 0 migration / data-testid 不变保持 e2e 兼容 / CrawlerClient 净减 15 行
 Plan-Revision: 1 次（实施中扩 tasks.md 文件范围加 CrawlerSiteList + crawler-site-columns-v2 / 链路一致性必需 / 仍属 CW1-A 范围内 dead code 清理）
+
+## [2026-05-25] CHG-SN-9-CW1-B-ADR · ADR-151 task 级 cancel 端点协议起草 + Opus 评审 → Accepted
+
+- **触发**：CW1-A commit 后用户 "Commit 并开始 CW1-B-ADR" → 启动 Bug-A 任务级 cancel 端点 ADR 起草 / 触发 plan §4.5 R7 MUST-8（新增 admin route 须 ADR + Opus PASS）
+- **背景**：用户反馈 "采集任务出现'排队中'状态，无法暂停或取消"。代码验证根因 = CrawlerRunDetailView.tsx:226-242 task 表 ops 列只有「查看」按钮（文件头部 line 11 注释明确"tasks 行操作 cancel/retry 不在范围"）+ 后端无 task 级 cancel 路由（仅 run 级 cancel 间接命中）
+- **范围**（1 文件改 / 0 实施代码）：
+  - docs/decisions.md 追加 ADR-151（约 250 行 / 11 节正文 / 6 决策点 + 端点契约表 + SQL pseudo + R-MID-1 + 性能 baseline + 替代方案对比矩阵）
+- **6 决策点（D-151-1..6 全 PASS）**：
+  - **D-151-1**：端点 path `POST /admin/crawler/tasks/:id/cancel` + `POST /admin/crawler/tasks/batch-cancel` 2 路由（与 ADR-117/-122 单/批 cancel 范式硬对齐）
+  - **D-151-2**：不扩展状态机 / 复用 cancel_requested 字段 + 三态映射（pending/paused → 直接 cancelled / running → cancel_requested + worker 15s 响应）+ **R-151-2 修订**：running 已请求时幂等返回 alreadyRequested=true 避免审计漂移
+  - **D-151-3**：batch 逐个处理 + 部分失败响应 + summary 三元拆分 + **R-151-1 修订**：syncRun for-of 串行（与现有 4 处历史范式 crawler.tasks.ts:267 / crawlerScheduler.ts:68/83 / crawler.ts:155 对齐 / Promise.all 会让同 run 聚合 SQL race）+ Y-151-1 best-effort 容错 failedRunSyncIds[]
+  - **D-151-4**：audit actionType `crawler_task.cancel` + `crawler_task.batch_cancel`（与 crawler_run.* / crawler_site.* 同级 namespace）
+  - **D-151-5**：paused task 纳入 cancel 入口 + **R-151-3 修订**：worker 守卫前加 terminal status 短路（方案 A 推荐 / 不侵入 Bull）/ 防 paused task 30s Bull delayed job 触发 worker 覆盖 finished_at + reason 漂移 / **CW1-B-EP §10 step 6 硬依赖不可分卡实施**
+  - **D-151-6**：cancel 后立即触发 syncRunStatusFromTasks(runId) 同步父 run 状态
+- **arch-reviewer Opus 评审**：
+  - 1 轮独立评审 / 8 文件交叉核验全通过（ADR-151 §1-§11 + crawler.runs.ts + crawler.tasks.ts + crawlerTasks.ts + crawlerTasks.queries.ts + crawlerWorker.ts + crawlerScheduler.ts + CrawlerRunDetailView.tsx + verify-endpoint-adr.mjs）
+  - 评级 **A− CONDITIONAL PASS**：3 红线（R-151-1/2/3）+ 4 黄线（Y-151-1/2/3/4）+ 4 绿线（G-151-1/2/3/4）
+  - 替代方案对比矩阵 5 候选（A 当前 ADR-151 / B 单端点 body.ids[] / C PATCH 通用 / D ADR-122 内追加 / E queue.removeJobs 严密侵入）/ 综合评分 A 方案 8.3/10（修订后 8.8/10）
+- **主循环修订（R3+Y3+G1 全落盘）**：
+  - R-151-1 §D-151-3 + §5.2 Promise.all → for-of 串行
+  - R-151-2 §5.1 running 分支加 cancelRequested 幂等守卫 + 响应增 alreadyRequested 字段
+  - R-151-3 §D-151-5 + §10 step 6 worker 守卫前加 terminal status 短路（推荐方案 A / 硬依赖声明）
+  - Y-151-1 §D-151-3 + §5.2 syncRun best-effort 容错 + failedRunSyncIds[] 返回 + warn 日志
+  - Y-151-3 §7 性能 baseline 5s → 15s 实事求是 + 3 follow-up 选项明确（batch 上限 50 / advisory lock / 异步化 202 Accepted）
+  - Y-151-4 §D-151-3 + §4 batch 响应 summary 三元拆分（cancelled / cancelRequested / alreadyRequested）+ errors[] 独立
+  - G-151-2 §4 + §5.1 error code TASK_TERMINAL_STATE_CANCEL_FORBIDDEN → TASK_CANCEL_FORBIDDEN_TERMINAL（28→27 字符 / 与现有范式对齐）
+  - G-151-3 §10 step 3 sticky bulk action bar 行为约定（selection.mode='page' / 0 选不渲染 / batch 50+ 弹 confirm）
+  - 留 CW1-B-EP 实施时消化：Y-151-2 audit before/after schema / G-151-1/4
+- **质量门禁**：
+  - ✅ typecheck（8 workspace / 纯文档改 + 状态注释）
+  - ✅ verify:adr-d-numbers advisory（D-151-1..6 已通过本 changelog 条目闭环 / 178 + 6 = 184 闭环）
+  - ✅ verify:adr-contracts SQL alignment / shorthand 全过
+  - ⚠️ verify-endpoint-adr：当前路由代码未实施（CW1-B-EP 才实施）/ 实施时会自动核验
+  - ⚠️ verify-error-message advisory（与 ADR-151 无关 / pre-existing）
+- **六问自检 PASS**：
+  1. **价值排序 1-4 对齐**：① 正确性（task 级 cancel 是 Bug-A 修复 / 复用 cancel_requested 字段 / 不引入新状态机）/ ② 边界与复用（复用 ADR-117/-122 cancel 范式 / 现有 4 处串行 syncRun 范式硬对齐 / R-MID-1 简化为 2 文件框架与历史范式一致）/ ③ 扩展性（端点契约表 + 错误码 + audit actionType 均预留扩展）/ ④ 一致性（API path / verb / audit / error code 全部对齐已 Accepted ADR 范式）
+  2. **是否应沉淀到共享层**：否（task 级 cancel 是 crawler 专属能力 / 不涉及共享层 / sticky bulk action bar 是 DataTable v2 bulkActions prop 已存在范式）
+  3. **类型 / 路由 / 配置可扩展性**：ErrorEntry 接口预留 code/reason 扩展 / alreadyRequested optional 字段不破坏 / batch summary 三元未来可扩 timeoutTask 等四元
+  4. **一致性**：与 ADR-117/-122 / crawler_run.* / crawler_site.* 命名 + audit + error code 全部对齐
+  5. **改动收敛**：1 文件 ADR + 修订 R3+Y3+G1 全落盘 / 0 业务代码改
+  6. **偏离检测**：D-151-1..6 全编号 / 本 changelog 条目闭环（verify-adr-d-numbers PASS）
+- **AI-CHECK 结论**：
+  - ✅ **PASS** — ADR-151 §1-§11 完整覆盖端点契约 / SQL 设计 / R-MID-1 / 性能 / 替代方案 / 关联 ADR
+  - **越界检测**：本卡仅文档 / 无代码改动 / 严格 ADR 起草边界
+  - **回归风险**：低 / 文档独立 / 不影响生产路径 / CW1-B-EP 实施前不会触发任何运行时行为
+  - **未覆盖**：CW1-B-EP 实施时需消化 Y-151-2 / G-151-1 / G-151-4 三条黄绿线（已在 ADR §10 中标注）
+- **价值**：
+  - **Bug-A 修复路径明确**：task 级 cancel 协议落地 / UI 可达 / 审计完整 / 不引入新状态机
+  - **历史范式对齐**：syncRun 串行 + cancel_requested 三态映射 + R-MID-1 简化 = 与 ADR-117/-122 全对齐
+  - **R-151-3 硬依赖声明**：worker 守卫扩展声明为 CW1-B-EP §10 step 6 强约束 / 避免分卡实施导致审计漂移回归
+  - **5 替代方案对比矩阵**：未来若需 Bull queue 侵入式优化（方案 E）有完整对比依据
+- **不在范围**（→ CW1-B-EP 实施）：
+  - queries 实施（cancelTaskById + batchCancelTasks）
+  - 2 端点 route 实施 + audit + 单测
+  - 前端 CrawlerRunDetailView ops 列 [取消] + 表头多选 + sticky bulk action bar
+  - worker 守卫扩展（R-151-3 配套硬依赖）
+  - api client 2 函数 + e2e smoke
+- **执行模型**：claude-opus-4-7（plan 模式延续）
+- **子代理调用**：arch-reviewer (claude-opus-4-7) — 1 轮独立评审 / A− CONDITIONAL → 主循环修订后等同 A
+- **关联 ADR**：ADR-117（探测/重探协议）/ ADR-122（crawler 重做契约）/ ADR-150 AMENDMENT 2（kind='action' 列 opt-out）
+
+Subagents: arch-reviewer (claude-opus-4-7) — 1 轮独立评审 A− CONDITIONAL → 主循环修订后等同 A
+Cleanup-Audit: 1 文件改（decisions.md +250 行）/ 0 业务代码 / 0 migration / typecheck PASS / verify-adr-d-numbers D-151-1..6 闭环
+Plan-Revision: 1 次（评审反馈 R3+Y3+G1 修订 / 主决策 D-151-1/4/6 不回退 / status Proposed → Accepted）

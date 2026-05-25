@@ -13230,3 +13230,337 @@ export type TableColumn<T> = DataKindColumn<T> | ActionKindColumn<T> | MediaKind
 **结论**：AMENDMENT 2 形式追加到 decisions.md ADR-150 末尾 / status 🟢 Accepted（主体 + AMENDMENT 2 经 @livefree 2 红线仲裁等同 PASS）
 
 ---
+
+## ADR-151 — task 级 cancel 端点协议（CHG-SN-9-CW1-B-ADR / Bug-A 修复）
+
+> **Status**: 🟢 Accepted（2026-05-25 / arch-reviewer Opus A− CONDITIONAL → 主循环修订 R3+Y3+G1 后等同 A / 详见末段评审结论）
+> **触发**：用户反馈"采集任务出现'排队中'状态，无法暂停或取消" → CW1-B Bug-A 根因 = `CrawlerRunDetailView.tsx:226-242` task 表 ops 列只有「查看」按钮，文件头部注释明确"tasks 行操作 cancel/retry 不在范围"；后端无 task 级 cancel 端点，只能通过父 run cancel 间接命中。
+> **协议触发**：CLAUDE.md "❌ 新增 admin route 未先起独立 ADR + Opus PASS"（plan §4.5 R7 MUST-8 / `npm run verify:endpoint-adr` 自动核验）→ 本 ADR 是 CW1-B-EP 实施的硬前置。
+> **关联**：ADR-117（探测/重探协议 / task cancel 模式范式参考）、ADR-122（crawler 重做契约）、ADR-150 AMENDMENT 2（DataTable kind=action 列不进 popover 范式）
+
+### §1 决策摘要
+
+新增 2 个 task 级 cancel 端点 + 对应 2 个 DB query + 1 个 audit actionType + 前端 task 表 ops 列 [取消] 按钮 + 表头多选 batch。**复用现有 cancel_requested 字段 + worker 15s 控制响应链路**（`crawlerWorker.ts:168` controlCheckTimer 已实装），不引入新状态机字段。
+
+```
+端点契约：
+  POST /admin/crawler/tasks/:id/cancel          — 单 task 取消
+  POST /admin/crawler/tasks/batch-cancel        — 批量 task 取消（最多 100 个）
+
+行为契约：
+  task.status='pending' (UI 'queued')  →  直接置 'cancelled' + cancel_requested=true + finished_at=NOW()
+  task.status='running'                →  仅置 cancel_requested=true / 等 worker 15s 内响应（DB.status 由 worker 写）
+  task.status='paused'                 →  直接置 'cancelled' + cancel_requested=true + finished_at=NOW()
+  task.status='done|failed|cancelled|timeout'  →  返回 422 STATE_CONFLICT
+```
+
+### §2 背景与问题
+
+#### 2.1 当前现状
+
+- **task 级 UI**：`apps/server-next/src/app/admin/crawler/runs/[id]/_client/CrawlerRunDetailView.tsx:226-242` ops 列**只有「查看」按钮**（开 TaskLogsDrawer），无 cancel/pause。文件头部注释 line 11："tasks 行操作（cancel/retry）"列入"不在范围（独立卡）"。
+- **task 级后端**：`apps/api/src/routes/admin/crawler.tasks.ts` 完全无 task 级 cancel 路由。`apps/api/src/db/queries/crawlerTasks.ts` 已有 `requestTaskCancel(db, id)` 函数（line 118-125 / 仅置 cancel_requested=true），但**未被任何路由消费**。
+- **现有 cancel 路径**：
+  - `cancelPendingTasksByRun(db, runId)`（line 127-139）批量置 pending → cancelled
+  - `requestCancelRunningTasksByRun(db, runId)`（line 141-151）批量置 running task cancel_requested=true
+  - `cancelAllActiveTasks(db)`（line 153-186）三态（pending/paused/running）全停（stop_all 路径）
+  - 这三个函数**全部 run 维度**，无 task 维度入口
+
+#### 2.2 用户痛点
+
+- 一个 run 里 N 个 task / queued 状态有些已确认无需采集（如临时排错）→ 想单独取消某 1 个不影响其它 → 当前只能取消整个 run 或者等待
+- 一个 run 跑到 50% 时部分 task 已 cancelled / 部分 running / 剩余 N 个 queued → 想批量取消剩余 queued → 当前无入口
+- task 级 cancel UI 缺失 = 用户运维粒度被强制拉粗到 run 级
+
+#### 2.3 既有保护
+
+- worker 端 15s 控制响应（`crawlerWorker.ts:168` controlCheckTimer）已实装 → 一旦 cancel_requested=true，worker 在 15s 内主动 abort 当前 fetch
+- worker 全局 freeze 检查 / heartbeat watchdog 均独立于 cancel 路径
+- task 状态机 LEGAL_TRANSITIONS 由 `crawler_tasks.queries.ts:65-83` updateTaskStatus 函数管理（finished 三态: done/failed/cancelled/timeout 写入 finished_at）
+
+### §3 6 决策点
+
+#### D-151-1：端点 path 与 verb 设计
+
+**选项**：
+- A. POST /admin/crawler/tasks/:id/cancel + POST /admin/crawler/tasks/batch-cancel（独立 2 路由 / RESTful 单复数）
+- B. POST /admin/crawler/tasks/cancel（body 含 `ids: string[]` / 单复数统一）
+- C. PATCH /admin/crawler/tasks/:id（body `{status:'cancelled'}` / 通用 PATCH）
+
+**决策**：**A** —— 与 ADR-117 + ADR-122 单/批 cancel 范式一致（参 `crawler.runs.ts:188` `/runs/:id/cancel` + `crawler.tasks.ts:246` `/stop-all`）；batch-cancel 命名"批量"显式 + 限制 ≤100 个防滥用；REST 资源/动作清晰。
+
+**反例排除**：B 单端点 `ids` 数组隐藏单个语义 + 错误响应混乱；C 通用 PATCH 与现有 run cancel 范式（POST 动作端点）不一致。
+
+#### D-151-2：task 状态机扩展
+
+**决策**：**不扩展，复用 cancel_requested 字段 + 三态映射**
+- `status='pending'` → DB.status='cancelled' + cancel_requested=true + finished_at=NOW() + result.reason='task_manual_cancel'
+- `status='running'` → 仅 cancel_requested=true（DB.status 保持 running / worker 15s 内 abort + 更新 status='cancelled'）
+- `status='paused'` → 同 pending（直接 cancelled）
+- `status` ∈ {done, failed, cancelled, timeout} → 返回 422 STATE_CONFLICT 错误 "TASK_TERMINAL_STATE_CANCEL_FORBIDDEN"
+
+**反例排除**：不引入 `'cancelling'` 中间态 → run 级已有 controlStatus='cancelling' 概念（在 crawler_runs 表），task 级若加 controlStatus 字段需 migration / 与 run.controlStatus 语义混淆 / 复用 cancel_requested 已可达 worker 15s 响应。
+
+#### D-151-3：batch 原子性
+
+**决策**：**逐个处理 + 部分失败响应**（非事务）
+- 接收 ids: string[] (max 100, min 1)
+- 逐个调 cancelTaskById(taskId)；ID 不存在 / 终态 / 已请求 → 累加 errors 数组或 alreadyRequested 计数
+- 响应：`{ data: { summary: { cancelled: number, cancelRequested: number, alreadyRequested: number, errors: ErrorEntry[] }, runIds: string[] }, processed: number }` —— summary 三元拆分对齐单 cancel 的 finalStatus 概念（Y-151-4 修订）
+- runIds = unique 涉及的父 run IDs → **for-of 串行**触发 `syncRunStatusFromTasks(runId)` 同步状态；同 run 多 task cancel 不引发并发 race（**R-151-1 修订**：与现有 4 处历史范式 `crawler.tasks.ts:267-269 / crawlerScheduler.ts:68/83 / crawler.ts:155` 全部串行对齐）
+- syncRun best-effort 容错：单个 syncRun throw → warn 日志 + 计入 failedRunSyncIds[] 数组返回 / 不阻塞主响应（Y-151-1 修订）
+
+**反例排除**：
+- 事务式（全成功或全回滚）会因 1 个 ID 不存在导致 99 个有效 cancel 全部失效 → 运维使用不友好。
+- Promise.all 并发 syncRun：与现有 4 处串行范式硬冲突 + syncRunStatusFromTasks 内含 SUM/CASE 聚合 UPDATE 同 run 并发会 race（末次写入覆盖）。性能优化应作为 follow-up 在 syncRunStatusFromTasks 函数内引入 advisory lock，而不是在调用方加并发。
+
+#### D-151-4：audit actionType 命名
+
+**决策**：**`crawler_task.cancel` + `crawler_task.batch_cancel`**
+- 单点：actionType=`crawler_task.cancel` / targetKind=`crawler_task` / targetId=taskId（UUID）/ before={status, cancel_requested} / after={status:'cancelled' OR cancel_requested:true, reason:'manual', actorId}
+- 批量：actionType=`crawler_task.batch_cancel` / targetKind=`system` / targetId='batch_cancel' / before=null / after={count, ids[已截 ≤20 个含 ...], cancelled, errors[已截 ≤10 个], runIds[已截 ≤10 个]}
+
+**对齐**：与 `crawler_run.cancel`（ADR-122 沿用）+ `crawler_site.batch`（CHG-SN-6-14）命名范式一致；前缀 `crawler_task.` 与 `crawler_run.` / `crawler_site.` 同级 namespace。
+
+#### D-151-5：已 paused task 处理 + Bull queue 漂移收口
+
+**决策**：**纳入 cancel 入口 / 与 pending 同等处理（直接 cancelled）+ 配套 worker 守卫扩展**
+- paused task 实际是 worker 之前因父 run pause 而延迟重排队（30s）的任务
+- 父 run 后续 resume → paused task 自然进 running；但若用户**已不想恢复**且想 cancel → UI 应可达
+- 复用 `cancelAllActiveTasks` 已对 paused 三态全处理的范式（`crawler.tasks.ts:163`）
+
+**已知 Bull queue 漂移（R-151-3 修订）**：
+
+paused task 被 cancel 后 DB 已是 `status='cancelled' + finished_at=NOW() + cancel_requested=true`，但 Bull queue 里仍有 30s delayed job（`crawlerWorker.ts:139`）。30s 后 worker 拿到 job → 进入 `processCrawlJob:145-153` 守卫：
+```ts
+const task = await crawlerTasksQueries.getTaskById(db, taskId)
+if (task?.cancelRequested) {
+  await crawlerTasksQueries.updateTaskStatus(db, taskId, 'cancelled', { reason: 'CANCEL_REQUESTED' })
+  ...
+}
+```
+**该守卫只读 cancelRequested 字段不读 status**，会重新调用 `updateTaskStatus(..., 'cancelled', ...)`（`crawlerTasks.ts:65-83`）→ 重置 `finished_at=NOW()` 覆盖首次 manual cancel 时间戳 + result.reason 从 `'task_manual_cancel'` 被覆盖为 `'CANCEL_REQUESTED'` → **首次 manual cancel 痕迹完全丢失**。
+
+**修订方案（推荐方案 A）**：worker 守卫前加 terminal status 短路。在 `crawlerWorker.ts:145-153` 前插入：
+```ts
+if (task && ['cancelled', 'done', 'failed', 'timeout'].includes(task.status)) {
+  await logTask('info', 'worker.task.already_terminal', '任务已是终态，跳过 worker 处理', { status: task.status })
+  if (runId) await crawlerRunsQueries.syncRunStatusFromTasks(db, runId)
+  return { type, sites: siteKey ? [siteKey] : [], videosUpserted: 0, sourcesUpserted: 0, errors: 0, durationMs: 0 }
+}
+if (task?.cancelRequested) { ... }
+```
+
+**实施约束（→ CW1-B-EP §10 step 6 必跑）**：worker 守卫扩展是 ADR-151 落地的硬依赖，**不可与 cancel 端点分卡实施**，否则将引入审计漂移。
+
+**反例排除**：若不纳入 paused 维度，UI 只能让用户先 resume run → 等 task running → 再 cancel，多步骤；或者只能 stop-all 全停。
+
+**替代方案**（不采纳，留 follow-up）：
+- 方案 B：`updateTaskStatus` 函数加 `WHERE id=$4 AND status NOT IN ('cancelled','done','failed','timeout')` 守卫 — 影响面更广（所有 updateTaskStatus 调用点）/ 与现有"幂等更新"语义对齐难
+- 方案 C：cancelTaskById 对 paused 分支额外 `crawlerQueue.removeJobs(...)` 清理 delayed job — 侵入 Bull / 风险更高 / 若 Bull API 失败 cancel 整体失败 / 留作 Fix-N 后续优化
+
+#### D-151-6：cancel 与父 run 状态联动
+
+**决策**：**cancel 后立即触发 `syncRunStatusFromTasks(runId)`**
+- 单点 cancel：响应前同步触发该 run 的 syncRun
+- 批量 cancel：unique runIds 全部触发（Promise.all 并发）+ audit after.runIds 记录
+- syncRunStatusFromTasks 会根据 task 状态聚合判定 run 最终 status（success / partial_failed / failed / cancelled）
+- **副作用**：若 run 全部 task 被 cancel → run.status='cancelled'（与 stop-all 路径同效）；若部分 task cancelled + 其它 done → 可能进 partial_failed（按现有聚合规则）
+
+**反例排除**：不触发 syncRun → CrawlerRunsView 列表页 run 状态滞后 60s（scheduler periodic sync） → 用户体验不对齐；UI 显示父 run 仍 running 但全 task 已 cancelled。
+
+### §4 端点契约表
+
+| 字段 | POST /admin/crawler/tasks/:id/cancel | POST /admin/crawler/tasks/batch-cancel |
+|------|--------------------------------------|----------------------------------------|
+| Path Param | id (UUID) | — |
+| Body Schema | 无（空 body） | `{ ids: string[].min(1).max(100) }` |
+| Auth | admin only（fastify.requireRole(['admin'])） | 同 |
+| Success Status | 200 | 200 |
+| Response Body | `{ data: { task: CrawlerTaskDto, runId: string \| null, finalStatus: 'cancelled' \| 'cancel_requested' } }` | `{ data: { cancelled: number, errors: ErrorEntry[], runIds: string[] }, processed: number }` |
+| Error 404 | task 不存在 | 单个 id 错失计入 errors[]（响应仍 200） |
+| Error 422 STATE_CONFLICT | task 终态（done/failed/cancelled/timeout / code=TASK_CANCEL_FORBIDDEN_TERMINAL）| 同上单独计入 errors[] |
+| Error 422 VALIDATION_ERROR | id 不是 UUID | ids 为空 / 超 100 / 非 UUID |
+| Side Effect | cancelTaskById(taskId) → syncRunStatusFromTasks(runId) → audit `crawler_task.cancel` | batchCancelTasks(ids) → for-of 串行 syncRun for unique runIds → audit `crawler_task.batch_cancel` |
+| Worker 响应延迟 | running task 最大 15s（controlCheckTimer 间隔） | 同 |
+| 响应增强 | 单 cancel 含 `alreadyRequested?: boolean`（R-151-2 幂等守卫） | batch 含 `summary` 三元拆分 + `failedRunSyncIds[]`（Y-151-1/4） |
+
+ErrorEntry: `{ id: string, code: 'NOT_FOUND' \| 'STATE_CONFLICT', reason: string }`
+
+### §5 SQL 设计
+
+#### 5.1 cancelTaskById(db, taskId) — 新 query（R-151-2 修订：幂等守卫）
+
+```ts
+export async function cancelTaskById(
+  db: Pool,
+  taskId: string,
+): Promise<{
+  task: CrawlerTask
+  runId: string | null
+  finalStatus: 'cancelled' | 'cancel_requested'
+  alreadyRequested?: boolean
+} | null> {
+  const existing = await getTaskById(db, taskId)
+  if (!existing) return null
+  if (['done', 'failed', 'cancelled', 'timeout'].includes(existing.status)) {
+    throw new AppError('STATE_CONFLICT', 'TASK_CANCEL_FORBIDDEN_TERMINAL', 422)
+  }
+  if (existing.status === 'running') {
+    // R-151-2 修订：已请求未响应 → 幂等返回 200 + alreadyRequested=true
+    // 避免重复写 cancelRequestedAt 时间戳 + 避免重复 audit 噪声 + UI 不报 409
+    if (existing.cancelRequested) {
+      return {
+        task: existing,
+        runId: existing.runId,
+        finalStatus: 'cancel_requested',
+        alreadyRequested: true,
+      }
+    }
+    await db.query(
+      `UPDATE crawler_tasks
+         SET cancel_requested = true,
+             result = COALESCE(result, '{}'::jsonb) || jsonb_build_object('cancelRequestedAt', NOW(), 'reason', 'task_manual_cancel')
+         WHERE id = $1`,
+      [taskId],
+    )
+    return { task: { ...existing, cancelRequested: true }, runId: existing.runId, finalStatus: 'cancel_requested' }
+  }
+  // pending / paused → 直接 cancelled
+  await db.query(
+    `UPDATE crawler_tasks
+       SET status = 'cancelled', finished_at = NOW(), cancel_requested = true,
+           result = COALESCE(result, '{}'::jsonb) || jsonb_build_object('reason', 'task_manual_cancel')
+       WHERE id = $1`,
+    [taskId],
+  )
+  const refreshed = await getTaskById(db, taskId)
+  return { task: refreshed!, runId: existing.runId, finalStatus: 'cancelled' }
+}
+```
+
+#### 5.2 batchCancelTasks(db, taskIds) — 新 query（R-151-1 修订：syncRun for-of 串行）
+
+```ts
+export async function batchCancelTasks(
+  db: Pool,
+  taskIds: readonly string[],
+): Promise<{
+  summary: { cancelled: number; cancelRequested: number; alreadyRequested: number; errors: ErrorEntry[] }
+  runIds: string[]
+  failedRunSyncIds: string[]
+}> {
+  const errors: ErrorEntry[] = []
+  const cancelledRunIds = new Set<string>()
+  let cancelled = 0
+  let cancelRequested = 0
+  let alreadyRequested = 0
+
+  // 第一阶段：逐个 cancel（DB 写入）
+  for (const id of taskIds) {
+    try {
+      const result = await cancelTaskById(db, id)
+      if (!result) {
+        errors.push({ id, code: 'NOT_FOUND', reason: 'task not found' })
+        continue
+      }
+      if (result.alreadyRequested) alreadyRequested++
+      else if (result.finalStatus === 'cancelled') cancelled++
+      else if (result.finalStatus === 'cancel_requested') cancelRequested++
+      if (result.runId) cancelledRunIds.add(result.runId)
+    } catch (err) {
+      if (err instanceof AppError && err.code === 'STATE_CONFLICT') {
+        errors.push({ id, code: 'STATE_CONFLICT', reason: err.message })
+        continue
+      }
+      throw err
+    }
+  }
+
+  // 第二阶段：R-151-1 修订 — for-of 串行触发 syncRun（与现有 4 处历史范式对齐 / 同 run 并发会 race）
+  const failedRunSyncIds: string[] = []
+  for (const runId of cancelledRunIds) {
+    try {
+      await syncRunStatusFromTasks(db, runId)
+    } catch (err) {
+      // Y-151-1 修订：syncRun best-effort 容错 / 不阻塞主响应
+      failedRunSyncIds.push(runId)
+      // 调用方（route）会 warn 日志
+    }
+  }
+
+  return {
+    summary: { cancelled, cancelRequested, alreadyRequested, errors },
+    runIds: Array.from(cancelledRunIds),
+    failedRunSyncIds,
+  }
+}
+```
+
+### §6 R-MID-1 第 N 次系统化（4 文件框架核对）
+
+mutation 端点典型 4 文件框架：route + service + queries + types
+
+| 层 | 是否新建 | 复用情况 |
+|----|---------|---------|
+| route | ✅ 新增 2 路由 in `apps/api/src/routes/admin/crawler.tasks.ts` | 同文件复用 mapTaskDto / AuditLogService |
+| service | ❌ 不新建 | 简单 cancel 逻辑直接在 queries 层完成 / 无 cross-entity 业务逻辑 |
+| queries | ✅ 新建 2 函数 in `apps/api/src/db/queries/crawlerTasks.ts` | 复用 getTaskById / syncRunStatusFromTasks |
+| types | ❌ 不新建 | 响应 DTO 直接用 CrawlerTaskDto + 内联 ErrorEntry interface |
+
+**结论**：R-MID-1 简化为 2 文件框架（route + queries）/ 与 ADR-117 / ADR-122 R-MID-1 简化范式一致。
+
+### §7 性能 baseline（Y-151-3 修订）
+
+- 单 cancel：1 SELECT + 1 UPDATE + 1 SELECT + 1 syncRunStatusFromTasks（含父 run 聚合 SQL）≈ p95 ≤ 100ms
+- batch 100 cancel：第一阶段 100 × 单 cancel ≈ 10s；第二阶段 unique runIds × p95(syncRun ~30ms) ≈ 50–500ms（取决于 N） → 总 p95 ≤ **15s**
+- Fastify 默认 request timeout：本卡新端点需在 route options 显式声明 `bodyLimit + timeout` ≥ 20s（覆盖 batch 100 worst case），若运维实测 p95 > 15s 则考虑：(a) batch 上限改 50 / (b) syncRunStatusFromTasks 函数内引入 advisory lock 后并发 / (c) 异步化（202 Accepted + 轮询）—— 后两条留 follow-up
+- 并发：site-level 互斥（findActiveTaskBySite）+ task-level 无锁（cancel 是状态机标记 / 与 cancelPendingTasksByRun 已有的并发模式一致）
+
+### §8 分层约束 / 越层检测
+
+- route → queries 直接调用（service 跳过 / R-MID-1 简化）
+- route 含 audit + zod validation + STATE_CONFLICT 422 错误映射
+- queries 含 SQL + 状态机守卫（throw STATE_CONFLICT for terminal）
+- UI 层 onClick → apiClient.post → 路由 → queries
+
+### §9 关联 ADR
+
+- ADR-117（探测/重探协议）：cancel + reprobe 同属 task 控制平面范式
+- ADR-122（crawler 重做契约）：本 ADR 是 task 控制平面缺口的补齐
+- ADR-150 AMENDMENT 2（kind='action' 列不进 popover）：CrawlerRunDetailView task 表 ops 列已 opt-out kind='action'，本 ADR UI 在 ops 列内加按钮 + 表头多选不影响 popover 规则
+
+### §10 实施路径（→ CW1-B-EP 实施卡）
+
+1. queries：cancelTaskById + batchCancelTasks（+ 单测 7 case：terminal 状态 / running 首次 / running 已请求幂等 / pending / paused / not found / batch 部分失败 + failedRunSyncIds）
+2. route：2 端点 + audit + 单测 6 case（含 batch summary 三元 / errors[] 截断 / failedRunSyncIds 警告路径）
+3. 前端：CrawlerRunDetailView ops 列 [取消] 按钮（仅 queued/running/paused 可点 / pendingCancelId state 防重复 click / alreadyRequested 时 toast info 不报错）+ 表头多选 + sticky bulk action bar（**G-151-3 配套约定**：selection.mode='page'，bulk bar 仅在 selectedKeys.size > 0 渲染，无二次 confirm 但 batch 50+ 时弹 confirm）
+4. api client：cancelCrawlerTask + batchCancelCrawlerTasks
+5. e2e smoke：CrawlerRunDetailView 加 task cancel 路径（mock + URL 验证）
+6. **R-151-3 配套（硬依赖）**：`apps/api/src/workers/crawlerWorker.ts:145-153` 守卫前加 terminal status 短路 — 防 paused task 被 cancel 后 30s Bull delayed job 触发 worker 覆盖 finished_at + reason 漂移。**该步骤不可与 cancel 端点分卡实施**，否则将引入审计漂移回归
+
+### §11 已识别 follow-up（不阻塞本 ADR）
+
+- **N1（advisory）**：worker 端 cancel_requested 响应可补 metric `crawler_task_cancel_latency_seconds` histogram → 度量 15s 是否真满足；落 Fix-10 监控增强卡
+- **N2（advisory）**：UI 上 cancel 后 task badge 即时 → cancelled / 但实际 worker running task 是 cancel_requested → cancelled 异步；UI 可加"取消中"中间 badge 改善 UX；属 UX 增强 follow-up（非阻塞）
+
+---
+
+**评审结果**：arch-reviewer Opus 1 轮 → **A− CONDITIONAL PASS** → 主循环修订红线 3 + 黄线 4 + 绿线 1 后 → **🟢 Accepted**
+
+修订摘要（已落盘 ADR-151）：
+- ✅ R-151-1 §D-151-3 + §5.2：Promise.all → for-of 串行（与现有 4 处历史范式 crawler.tasks.ts:267 / crawlerScheduler.ts:68/83 / crawler.ts:155 对齐）
+- ✅ R-151-2 §5.1：running 分支加 cancelRequested 幂等守卫 + 响应增 alreadyRequested 字段（避免 audit 漂移）
+- ✅ R-151-3 §D-151-5 + §10 step 6：worker 守卫前加 terminal status 短路（方案 A 推荐 / 不侵入 Bull）+ 硬依赖声明
+- ✅ Y-151-1 §D-151-3 + §5.2：syncRun best-effort 容错 + failedRunSyncIds[] 返回 + warn 日志
+- ✅ Y-151-3 §7：性能 baseline 5s → 15s 实事求是 + 3 follow-up 选项明确
+- ✅ Y-151-4 §D-151-3 + §4：batch 响应 summary 三元拆分（cancelled / cancelRequested / alreadyRequested）+ errors[] 独立
+- ✅ G-151-2 §4 + §5.1：error code TASK_TERMINAL_STATE_CANCEL_FORBIDDEN → TASK_CANCEL_FORBIDDEN_TERMINAL（28→27 字符 / 与现有范式对齐）
+- ✅ G-151-3 §10 step 3：sticky bulk action bar 行为约定（selection.mode='page' / 0 选不渲染 / batch 50+ 弹 confirm）
+- ⏸ Y-151-2 audit before/after schema 完整化：留 CW1-B-EP 实施时按 ADR-122 范式补 idsSample 字段
+- ⏸ G-151-1 / G-151-4：绿线建议性，CW1-B-EP 实施时附带消化
+
+**最终结论**：ADR-151 status 🟢 Accepted via R3+Y3+G1 修订（2026-05-25 / arch-reviewer Opus 评级 A− → 主循环修订后等同 A）；CW1-B-EP 卡可启动；R-151-3 worker 守卫扩展是 CW1-B-EP §10 step 6 硬约束（**不可分卡** / 否则审计回归）。
+
+
+
