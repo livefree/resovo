@@ -4897,3 +4897,16 @@ Plan-Revision: 0 次（实施完全对齐任务卡 2 BUG 根因 + sort 白名单
 
 Cleanup-Audit: 共享层 3 处 filterFieldName 桥接 + 后端 2 端点 sort fail-fast throw + SORT_IDENT_REGEX 启动期断言 / 4 实施 + 3 测试 / 4 case 补 + 1 case 改 / 4 质量门禁全过 / 30/30 + 22/22 + 12/12 + 1535/1535 + 261/261 全 PASS / 0 Props API 变更 / 0 ADR
 Plan-Revision: 0 次（实施严格按 arch-reviewer 报告 R-EP3A-1/2 + Y-EP3A-1 三项）
+
+**arch-reviewer Opus 二次评审结果**（2026-05-24 / commit `b80c9e7c` 闭环）：
+- **评级 A-**（一次评审 B → 二次评审 A- 升级）
+- R-EP3A-1 桥接 3 处 ✅（column-matrix-menu.tsx:152 isColumnFiltered + :326 handleFilterToggle onClearColumnFilter + data-table.tsx:484 isFiltered 列级 ⋯ trigger / grep `filters.has` 无遗漏 / column-visibility.ts 仅可见性 col.id 正确无桥接需求）
+- R-EP3A-2 fail-fast ✅（crawlerRuns.ts + auditLog.ts 双方 throw 非白名单 sortField / route 层 zod enum 422 第一道 + queries throw 第二道 / 双层对齐合理）
+- Y-EP3A-1 IDENT_REGEX ✅（两文件顶层 SORT_IDENT_REGEX 启动期 for-of 断言 / 与 distinct DT_DISTINCT_IDENT_REGEX 范式对齐 / sort 比 distinct 宽松允许 col 或 table.col 形式合理）
+- **测试新增真验 aria-checked='true'**（CrawlerRunsView #30 + AuditClient #22）不是 fetch-only 假证
+- 与一次评审 B 比 → 系统性反 M-SN-8 "假装实现"风险已收敛
+- **新发现 advisory 2 项（非阻塞 PR）**：
+  - **RR-EP3A-1**：audit fail-fast 单测缺位（仅 crawlerRuns #12 有 rejects.toThrow / audit listAdminAuditLog throw 路径无直接单测覆盖）+ audit route zod enum 已收紧无需补（ListAdminAuditLogsSchema sortField: z.enum(['createdAt']) 已就位 / reviewer 关注错位）→ 建议 EP-3-B 入口补 1 audit query case
+  - **RR-EP3A-2**：fastify 默认 500 设计权衡 OK（throw message 已含 `[crawlerRuns.listRuns]` / `[auditLog.listAdminAuditLog]` SOC 可识别前缀 / 合格）
+- **未升 A 理由**：audit fail-fast 单测缺位 + Y-EP3A-2/3 仍留 EP-3-B 入口（advisory 不阻塞 PR）
+- **PR ready**：EP-3-A 全闭环 6 子卡（sub 1 + HOTFIX + sub 1 EXTEND + sub 2 + sub 2 EXTEND + sub 2 PATCH）正式 PASS / 可合入
