@@ -228,8 +228,12 @@ export function buildCrawlerSiteColumnsV2(
   } = callbacks
 
   return [
+    // EP-3-F（2026-05-24）：AMD2 D-150-AMD2-2 kind='action'
+    //   chevron 列是行展开按钮（非数据 / chrome 交互）/ type 层强制 never
+    //   其它 7 列 client mode 默认 data kind / AMD2 默认前端 100% 过滤+排序 ✓
     {
       id: 'chevron',
+      kind: 'action',
       header: '',
       accessor: () => null,
       width: 32,
@@ -389,14 +393,15 @@ export function buildCrawlerSiteColumnsV2(
         </span>
       ),
     },
+    // EP-3-F：AMD2 kind='action' 替代 columnMenu canSort/canHide false 双字段
     {
       id: 'actions',
+      kind: 'action',
       header: '操作',
       accessor: () => null,
       width: 200,
       defaultVisible: true,
       pinned: true,  // 操作列锁定右侧 / 不可隐藏
-      columnMenu: { canSort: false, canHide: false },
       cell: ({ row }) => (
         <span style={ACTIONS_CELL_STYLE} data-actions-cell onClick={(e) => e.stopPropagation()}>
           <AdminButton

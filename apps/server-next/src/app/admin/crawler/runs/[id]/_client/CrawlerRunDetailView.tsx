@@ -103,10 +103,16 @@ interface BuildTaskColumnsOptions {
   readonly onViewLogs: (taskId: string) => void
 }
 
+// EP-3-F（2026-05-24）：AMD2 D-150-AMD2-2 kind='computed' opt-out
+//   - mode="server" 但 fetch listCrawlerRunTasks 不传 sort/filter → AMD2 默认全开会"假装"
+//   - 8 数据列 kind='computed' 业务真实禁用（防假装）
+//   - ops 列 kind='action'（type 层强制 never）
+//   - 真 sort/filter 全栈打通留 follow-up（后端 listCrawlerRunTasks 扩 sortField）
 function buildTaskColumns({ onViewLogs }: BuildTaskColumnsOptions): readonly TableColumn<CrawlerTaskDto>[] {
   return [
   {
     id: 'id',
+    kind: 'computed',
     header: 'Task ID',
     accessor: (r) => r.id,
     width: 180,
@@ -116,6 +122,7 @@ function buildTaskColumns({ onViewLogs }: BuildTaskColumnsOptions): readonly Tab
   },
   {
     id: 'siteKey',
+    kind: 'computed',
     header: '站点',
     accessor: (r) => r.siteKey,
     width: 140,
@@ -124,6 +131,7 @@ function buildTaskColumns({ onViewLogs }: BuildTaskColumnsOptions): readonly Tab
   },
   {
     id: 'mode',
+    kind: 'computed',
     header: '模式',
     accessor: (r) => r.mode,
     width: 100,
@@ -136,6 +144,7 @@ function buildTaskColumns({ onViewLogs }: BuildTaskColumnsOptions): readonly Tab
   },
   {
     id: 'status',
+    kind: 'computed',
     header: '状态',
     accessor: (r) => r.status,
     width: 100,
@@ -161,6 +170,7 @@ function buildTaskColumns({ onViewLogs }: BuildTaskColumnsOptions): readonly Tab
   },
   {
     id: 'itemCount',
+    kind: 'computed',
     header: '产出',
     accessor: (r) => r.itemCount,
     width: 90,
@@ -172,6 +182,7 @@ function buildTaskColumns({ onViewLogs }: BuildTaskColumnsOptions): readonly Tab
   },
   {
     id: 'startedAt',
+    kind: 'computed',
     header: '开始时间',
     accessor: (r) => r.startedAt,
     width: 160,
@@ -184,6 +195,7 @@ function buildTaskColumns({ onViewLogs }: BuildTaskColumnsOptions): readonly Tab
   },
   {
     id: 'duration',
+    kind: 'computed',
     header: '耗时',
     accessor: (r) => r.finishedAt,
     width: 100,
@@ -196,6 +208,7 @@ function buildTaskColumns({ onViewLogs }: BuildTaskColumnsOptions): readonly Tab
   },
   {
     id: 'message',
+    kind: 'computed',
     header: '消息',
     accessor: (r) => r.message,
     width: 220,
@@ -207,6 +220,7 @@ function buildTaskColumns({ onViewLogs }: BuildTaskColumnsOptions): readonly Tab
   },
   {
     id: 'ops',
+    kind: 'action',
     header: '操作',
     accessor: (r) => r.id,
     width: 90,
