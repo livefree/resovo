@@ -29,7 +29,7 @@ import {
   type DistinctOption,
 } from '@resovo/admin-ui'
 import type { VideoGroupRow, VideoGroupStats, SourceSegment } from '@/lib/sources/types'
-import { listVideoGroups, getVideoGroupStats } from '@/lib/sources/api'
+import { listVideoGroups, getVideoGroupStats, fetchDistinct } from '@/lib/sources/api'
 import { SignalPill, MatrixExpand } from './SourceMatrixRow'
 import { SourceLineAliasPanel } from './SourceLineAliasPanel'
 
@@ -235,6 +235,21 @@ function buildColumns(
       ),
     },
     {
+      // HOTFIX-PATCH-2B（2026-05-25）：siteKey hidden column / matrix popover 过滤入口 / distinct 端点
+      // arch-reviewer Opus A- D5：hidden column 需显式 filterKind='enum' + accessor=() => null + enableSorting: false
+      id: 'siteKey',
+      kind: 'data',
+      header: '站点',
+      defaultVisible: false,
+      accessor: () => null,
+      enableSorting: false,
+      filterable: true,
+      filterFieldName: 'site_key', // distinct-whitelist sources 表白名单 col 名
+      filterKind: 'enum',
+      filterDistinctTable: 'sources',
+      cell: () => null,
+    },
+    {
       id: 'actions',
       // HOTFIX-PATCH-2A §1-BUG-2：actions kind='action' opt-out（EP-3-E 漏改回填）
       kind: 'action',
@@ -322,6 +337,11 @@ export function SourcesClient() {
     if (v?.kind === 'date-range') return { from: v.from, to: v.to }
     return {}
   }, [filtersMap])
+  // HOTFIX-PATCH-2B（2026-05-25）：siteKey enum filter 派生（distinct 端点首次消费实证 / filterFieldName='site_key' = filtersMap key）
+  const siteKeyFilter = useMemo<readonly string[]>(() => {
+    const v = filtersMap.get('site_key')
+    return v?.kind === 'enum' ? (v.value as readonly string[]) : []
+  }, [filtersMap])
   // EP-4.5-HOTFIX-3 / 问题 1+3：列偏好 state（矩阵 popover 可见性 toggle / 列级 ⋯ 隐藏此列触发）
   const [columnPrefs, setColumnPrefs] = useState<ReadonlyMap<string, { readonly visible: boolean; readonly width?: number }>>(new Map())
 
@@ -361,6 +381,8 @@ export function SourcesClient() {
       ...(renderStatusFilter.length > 0 ? { renderStatus: renderStatusFilter } : {}),
       ...(updatedAtRange.from ? { updatedAtFrom: updatedAtRange.from } : {}),
       ...(updatedAtRange.to ? { updatedAtTo: updatedAtRange.to } : {}),
+      // HOTFIX-PATCH-2B（2026-05-25）：siteKey 数组透传（distinct 端点 multi-select enum）
+      ...(siteKeyFilter.length > 0 ? { siteKey: siteKeyFilter } : {}),
     })
       .then((res) => {
         if (cancelled) return
@@ -596,6 +618,8 @@ export function SourcesClient() {
                       bulkActions={bulkActions}
                       pagination={{ pageSizeOptions: [20, 50, 100] }}
                       density="poster"
+                      // HOTFIX-PATCH-2B（2026-05-25）：distinctFetcher 注入（首次消费实证 / siteKey 列调用）
+                      distinctFetcher={fetchDistinct}
                     />
                   )
             }

@@ -169,9 +169,10 @@ export async function listVideoGroups(
     conditions.push(`v.source_check_status = 'all_dead' AND v.is_published = false`)
   }
 
-  if (params.siteKey) {
+  // HOTFIX-PATCH-2B（2026-05-25）：siteKey 数组 EXISTS ANY()（单值 → 多选 / distinct 端点首次消费实证）
+  if (params.siteKey && params.siteKey.length > 0) {
     conditions.push(
-      `EXISTS (SELECT 1 FROM video_sources vs2 WHERE vs2.video_id = v.id AND COALESCE(vs2.source_site_key, v.site_key) = $${idx++} AND vs2.deleted_at IS NULL)`,
+      `EXISTS (SELECT 1 FROM video_sources vs2 WHERE vs2.video_id = v.id AND COALESCE(vs2.source_site_key, v.site_key) = ANY($${idx++}::TEXT[]) AND vs2.deleted_at IS NULL)`,
     )
     paramValues.push(params.siteKey)
   }

@@ -111,6 +111,27 @@ export interface DataTableProps<T> {
    *   - `pagination={{ hidden: true }}` → **完全不渲染** foot（嵌入式兜底）。
    */
   readonly pagination?: PaginationConfig
+
+  /**
+   * ADR-150 阶段 5 EP-4-HOTFIX-PATCH-2B（2026-05-25）：distinct 端点首次消费实证 / arch-reviewer Opus A-。
+   *
+   * 当列声明 `filterDistinctTable` 时，DataTableAutoFilter 在 popover 打开时调用此函数
+   * 拉取 distinct 选项（替代静态 `filterOptions` 或 rows 派生）。失败时 popover 内显
+   * 错误状态（已有 fetchError state + 重开 popover 即重新 fetch / 不内置 retry button）。
+   *
+   * 签名：(table, field, q?) => Promise<DistinctOption[]>
+   *   - table: column.filterDistinctTable（端点白名单 table 枚举）
+   *   - field: column.filterFieldName ?? column.id（端点白名单 column 名）
+   *   - q: DataTableAutoFilter 内部 search 输入（关键词模糊过滤 distinct 列表）
+   *
+   * v1 不支持 column 级 fetcher 覆盖（D3 YAGNI）/ 不内置缓存（D4 v1 简化）/ 无 AbortSignal
+   * （follow-up / 当前 setFetched 是 last-write-wins / enum 顺序无关正确性）。
+   */
+  readonly distinctFetcher?: (
+    table: string,
+    field: string,
+    q?: string,
+  ) => Promise<readonly DistinctOption[]>
 }
 
 // ── Pagination（CHG-DESIGN-02 Step 7A）────────────────────────────

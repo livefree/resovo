@@ -44,7 +44,11 @@ export interface VideoGroupListParams {
   readonly limit?: number
   readonly keyword?: string
   readonly segment?: SourceSegment
-  readonly siteKey?: string
+  /**
+   * HOTFIX-PATCH-2B（2026-05-25）：siteKey 单值 → 数组（distinct 端点首次消费实证 / multi-select enum）
+   * 多选语义"含至少一条线路在指定站点中的视频"（raw EXISTS ANY()）
+   */
+  readonly siteKey?: readonly string[]
   /**
    * ADR-150 阶段 5 EP-4-HOTFIX-PATCH-2A（2026-05-25）：probeStatus / renderStatus enum filter 全栈
    * 多选语义"含至少一条线路 status=X 的视频"（raw EXISTS ANY()）；不严格等同于 UI SignalPill 聚合显示

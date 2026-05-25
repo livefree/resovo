@@ -697,6 +697,8 @@ export function DataTable<T>(props: DataTableProps<T>): React.ReactElement {
               onSort={handleHeaderMenuSort}
               onClearSort={handleHeaderMenuClearSort}
               onHide={col.pinned === true ? undefined : () => { handleHeaderMenuHide(col.id); closeHeaderMenu() }}
+              // HOTFIX-PATCH-2B（2026-05-25）：distinct 端点 fetcher 透传（arch-reviewer Opus A- D1）
+              distinctFetcher={props.distinctFetcher}
             />
           )
         })()}

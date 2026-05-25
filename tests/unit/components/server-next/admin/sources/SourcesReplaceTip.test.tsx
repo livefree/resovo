@@ -12,6 +12,8 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 vi.mock('../../../../../../apps/server-next/src/lib/sources/api', () => ({
   listVideoGroups: vi.fn(() => new Promise(() => {})),
   getVideoGroupStats: vi.fn(() => new Promise(() => {})),
+  // HOTFIX-PATCH-2B（2026-05-25）：distinct 端点 fetcher mock
+  fetchDistinct: vi.fn().mockResolvedValue([]),
 }))
 
 vi.mock('next/navigation', () => ({

@@ -199,6 +199,22 @@ describe('listVideoGroups', () => {
     expect(countCall[0]).toContain('SELECT COUNT(DISTINCT v.id)')
     expect(countCall[0]).not.toContain('HAVING')
   })
+
+  // HOTFIX-PATCH-2B（2026-05-25）：siteKey 数组 ANY() SQL 透传单测
+  it('siteKey=[bilibili,youku] → EXISTS ANY($::TEXT[])', async () => {
+    const db = makePool([{ cnt: '0' }], [])
+    await listVideoGroups(db, { siteKey: ['bilibili', 'youku'] })
+    const countCall = (db.query as ReturnType<typeof vi.fn>).mock.calls[0]
+    expect(countCall[0]).toContain('COALESCE(vs2.source_site_key, v.site_key) = ANY(')
+    expect(countCall[1]).toContainEqual(['bilibili', 'youku'])
+  })
+
+  it('空数组 siteKey → 不注入 EXISTS', async () => {
+    const db = makePool([{ cnt: '0' }], [])
+    await listVideoGroups(db, { siteKey: [] })
+    const dataCall = (db.query as ReturnType<typeof vi.fn>).mock.calls[1]
+    expect(dataCall[0]).not.toContain('vs2.source_site_key')
+  })
 })
 
 // ── getVideoMatrix ────────────────────────────────────────────────

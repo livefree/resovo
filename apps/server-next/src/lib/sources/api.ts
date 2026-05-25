@@ -12,13 +12,33 @@ import type {
   SourceRouteBySite,
 } from './types'
 
+/**
+ * HOTFIX-PATCH-2B（2026-05-25）：DataTable distinctFetcher 实现 / ADR-150 EP-2 通用 distinct 端点首次消费
+ *
+ * 调 GET /admin/_dt/distinct?table=X&col=Y&q=Z&limit=50 → DistinctOption[]
+ * sources 表白名单 3 列：site_key / probe_status / render_status（distinct-whitelist.ts）
+ */
+export async function fetchDistinct(
+  table: string,
+  field: string,
+  q?: string,
+): Promise<readonly { readonly value: string; readonly label?: string; readonly count?: number }[]> {
+  const qs = new URLSearchParams({ table, col: field, limit: '50' })
+  if (q) qs.set('q', q)
+  const result = await apiClient.get<{ data: readonly { readonly value: string; readonly label?: string; readonly count?: number }[] }>(
+    `/admin/_dt/distinct?${qs.toString()}`,
+  )
+  return result.data
+}
+
 export async function listVideoGroups(params: VideoGroupListParams = {}): Promise<VideoGroupListResult> {
   const qs = new URLSearchParams()
   if (params.page != null)    qs.set('page', String(params.page))
   if (params.limit != null)   qs.set('limit', String(params.limit))
   if (params.keyword)         qs.set('keyword', params.keyword)
   if (params.segment)         qs.set('segment', params.segment)
-  if (params.siteKey)         qs.set('siteKey', params.siteKey)
+  // HOTFIX-PATCH-2B（2026-05-25）：siteKey 数组 csv join（multi-select enum）
+  if (params.siteKey && params.siteKey.length > 0)  qs.set('siteKey', params.siteKey.join(','))
   // HOTFIX-PATCH-2A §1-BUG-1（2026-05-25）：sortField / sortDir URL 透传（4df39524 漏改回填）
   if (params.sortField)       qs.set('sortField', params.sortField)
   if (params.sortDir)         qs.set('sortDir', params.sortDir)

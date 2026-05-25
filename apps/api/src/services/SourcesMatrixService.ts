@@ -56,6 +56,20 @@ const csvToStringArray = <T extends string>(values: readonly T[]) =>
     }
     return parts as T[]
   })
+// HOTFIX-PATCH-2B（2026-05-25）：siteKey 动态值 csv → array（无 enum 约束 / 字符长度 1-64 安全约束）
+const csvToFreeStringArray = (maxLen = 64) =>
+  z.string().optional().transform((s, ctx) => {
+    if (!s) return undefined
+    const parts = s.split(',').map((p) => p.trim()).filter(Boolean)
+    if (parts.length === 0) return undefined
+    for (const p of parts) {
+      if (p.length > maxLen) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: `value too long: ${p}` })
+        return z.NEVER
+      }
+    }
+    return parts
+  })
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/
 
 export const VideoGroupsQuerySchema = z.object({
@@ -63,7 +77,8 @@ export const VideoGroupsQuerySchema = z.object({
   limit:         z.coerce.number().int().min(1).max(100).optional().default(20),
   keyword:       z.string().optional(),
   segment:       z.enum(['grouped', 'dead', 'correction', 'orphan']).optional().default('grouped'),
-  siteKey:       z.string().optional(),
+  // HOTFIX-PATCH-2B（2026-05-25）：siteKey 单值 → 数组（distinct 端点首次消费实证 / EXISTS ANY()）
+  siteKey:       csvToFreeStringArray(64),
   // HOTFIX-PATCH-2A §2-EXT-1/2：CSV → enum 数组（参 crawler.runs.ts csvToArray）/ raw EXISTS ANY()
   probeStatus:   csvToStringArray(PROBE_STATUS_VALUES),
   renderStatus:  csvToStringArray(RENDER_STATUS_VALUES),

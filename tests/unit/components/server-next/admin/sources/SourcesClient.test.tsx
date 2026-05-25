@@ -15,6 +15,8 @@ const getVideoGroupStatsMock = vi.fn()
 const getVideoMatrixMock = vi.fn()
 const listLineAliasesMock = vi.fn()
 const upsertLineAliasMock = vi.fn()
+// HOTFIX-PATCH-2B（2026-05-25）：distinct 端点 fetcher（DataTable distinctFetcher prop 消费）
+const fetchDistinctMock = vi.fn().mockResolvedValue([])
 const toastPushMock = vi.fn()
 
 vi.mock('../../../../../../apps/server-next/src/lib/sources/api', () => ({
@@ -23,6 +25,7 @@ vi.mock('../../../../../../apps/server-next/src/lib/sources/api', () => ({
   getVideoMatrix: (...args: unknown[]) => getVideoMatrixMock(...args),
   listLineAliases: (...args: unknown[]) => listLineAliasesMock(...args),
   upsertLineAlias: (...args: unknown[]) => upsertLineAliasMock(...args),
+  fetchDistinct: (...args: unknown[]) => fetchDistinctMock(...args),
 }))
 
 vi.mock('@resovo/admin-ui', async () => {

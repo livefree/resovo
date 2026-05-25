@@ -56,6 +56,18 @@ describe('listVideoGroups URL params', () => {
     expect(url).not.toContain('probeStatus=')
   })
 
+  it('§PATCH-2B: siteKey 多选 csv join', async () => {
+    await listVideoGroups({ siteKey: ['bilibili', 'youku'] })
+    const url = apiClientGetMock.mock.calls[0][0] as string
+    expect(url).toContain('siteKey=bilibili%2Cyouku')
+  })
+
+  it('§PATCH-2B: 空 siteKey 数组 → URL 不含该字段', async () => {
+    await listVideoGroups({ siteKey: [] })
+    const url = apiClientGetMock.mock.calls[0][0] as string
+    expect(url).not.toContain('siteKey=')
+  })
+
   it('§1-BUG-3: updatedAtFrom + updatedAtTo 透传', async () => {
     await listVideoGroups({ updatedAtFrom: '2026-05-01', updatedAtTo: '2026-05-25' })
     const url = apiClientGetMock.mock.calls[0][0] as string
@@ -69,7 +81,7 @@ describe('listVideoGroups URL params', () => {
       limit: 50,
       keyword: '黑客',
       segment: 'dead',
-      siteKey: 'bilibili',
+      siteKey: ['bilibili'],
       sortField: 'lineCount',
       sortDir: 'desc',
       probeStatus: ['ok'],

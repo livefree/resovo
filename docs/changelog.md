@@ -5545,3 +5545,61 @@ Plan-Revision: 1 次（用户走读后追加"一起清理 aria-label / title"指
 
 Cleanup-Audit: 7 文件改 / 列 kind opt-out 2 项 + filterable 真生效 3 列 / 前端 filtersMap state 派生 3 项 / DataTable query.filters wire / 0 新组件 / 0 ADR / 0 migration / 后端 SQL 改 count 双路径 + WHERE EXISTS ANY + HAVING MAX range
 Plan-Revision: 1 次（multiSelect 4 项 → 范围审视后 siteKey 推 PATCH-2B 独立卡 / 主卡执行 5 项符合 PATCH 上限 + 范式正路）
+
+## [2026-05-25] CHG-SN-9-DT-AUTOFILTER-EP-4-SOURCES-HOTFIX-PATCH-2B · siteKey enum filter 全栈 / distinct 端点首次消费实证
+
+- **触发**：HOTFIX-PATCH-2A 闭环后用户决策"直接跟 PATCH-2B"
+- **目标**：sources 表 siteKey 走 distinct 端点 multi-select enum filter 全栈打通；**distinct 端点首次消费实证**（CrawlerRunsView / AuditClient 都用静态 filterOptions / 未走 distinct 路径 / ADR-150 EP-2 `/admin/_dt/distinct` 端点已实装但 0 消费方）
+- **arch-reviewer Opus 评审**（强制 / D1 是 packages/admin-ui/types.ts 公开 Props 字段扩展）：
+  - **A- PASS** 6 决策点（D1-D6）全 ✅/⚠️：
+    - **D1** ✅ distinctFetcher 注入位置：DataTableProps 顶级 prop（与 toolbar / pagination 范式一致 / column 级覆盖 v1 不支持 YAGNI）
+    - **D2** ✅ 错误降级：DataTableAutoFilter 已有 fetchError state + UI 渲染（line 269-270 / 重开 popover 即重新 fetch / 不内置 retry button）
+    - **D3** ✅ 不支持 column 级 fetcher 覆盖（v1 YAGNI / 后向兼容 optional 字段可未来扩展）
+    - **D4** ✅ 不做前端缓存（popover 关闭即不再 fetch / 后端 Cache-Control 短缓存 / 列表 <50 项）
+    - **D5** ⚠️ hidden column 形态：需显式 `filterKind='enum'` + `accessor=() => null` + `enableSorting: false`（防止 inference 误触 / 空列表）
+    - **D6** ✅ 维持函数签名 `(table, field, q?) => Promise<DistinctOption[]>` / AbortSignal 推 follow-up
+- **范围**（8 文件 / 1 commit）：
+  - **共享层（admin-ui Props 扩展）**：
+    1. `packages/admin-ui/src/components/data-table/types.ts` DataTableProps 加 `distinctFetcher?: (table, field, q?) => Promise<readonly DistinctOption[]>` 字段（含完整 JSDoc / Opus D1+D3+D4+D6 决策摘要）
+    2. `packages/admin-ui/src/components/data-table/data-table.tsx` `<DataTableAutoFilter>` 渲染处加 `distinctFetcher={props.distinctFetcher}` 透传（line ~700）
+  - **后端全栈（siteKey 单值 → 数组）**：
+    3. `packages/types/src/sources-matrix.types.ts` `VideoGroupListParams.siteKey` 改 `readonly string[]`
+    4. `apps/api/src/services/SourcesMatrixService.ts` 新增 `csvToFreeStringArray(maxLen)` helper / `VideoGroupsQuerySchema.siteKey` 改 csvToFreeStringArray(64)
+    5. `apps/api/src/db/queries/sources-matrix.ts` siteKey WHERE 改 `COALESCE(vs2.source_site_key, v.site_key) = ANY($::TEXT[])`
+  - **前端**：
+    6. `apps/server-next/src/lib/sources/api.ts`:
+       - `listVideoGroups` siteKey URL csv join（`params.siteKey.join(',')`）
+       - 新建 `fetchDistinct(table, field, q?)` 函数调 `GET /admin/_dt/distinct?table=X&col=Y&q=Z&limit=50`
+    7. `apps/server-next/src/app/admin/sources/_client/SourcesClient.tsx`:
+       - 加 hidden siteKey column（D5 显式 4 项：`defaultVisible: false` + `filterKind: 'enum'` + `filterDistinctTable: 'sources'` + `accessor: () => null` + `enableSorting: false`）
+       - filtersMap siteKey 派生（`v?.kind === 'enum'` → readonly string[]）
+       - listVideoGroups spread `siteKey: siteKeyFilter`
+       - DataTable `distinctFetcher={fetchDistinct}` 注入
+  - **单测**（2 文件 / +4 case）：
+    8. `tests/unit/api/sources-matrix.test.ts` 加 siteKey 数组 ANY() SQL + 空数组不注入 2 case
+    8. `tests/unit/components/server-next/admin/sources/sources-api-url.test.ts` 加 siteKey csv join + 空数组不传 2 case
+- **mock 同步**：SourcesClient.test + SourcesReplaceTip.test 加 `fetchDistinct: vi.fn().mockResolvedValue([])` mock（10/10 + 2/2 零回退）
+- **质量门禁全 PASS**：
+  - ✅ typecheck（8 workspace）
+  - ✅ lint（5/5 / 缓存 miss 重跑 29s）
+  - ✅ verify:adr-contracts（D-N 178/178 闭环 / SQL alignment / shorthand 0 命中）
+  - ✅ sources-matrix 24/24（+2 新 case）
+  - ✅ sources-api-url 9/9（+2 新 case）
+  - ✅ SourcesClient 10/10 零回退（mock 补 fetchDistinct）
+  - ✅ admin-ui/table **426/426 零回退**（DataTable Props 扩展 + DataTableAutoFilter 透传 不破坏现有消费方）
+- **用户可见行为变化**：
+  - **新增**：`/admin/sources` 矩阵 popover 新增 "站点" 行（hidden column 形态 / 不在表格列展示 / 仅作 filter slot）
+  - **新增**：点击 "站点" filter switch → DataTableAutoFilter popover 打开 → 自动调 `/admin/_dt/distinct?table=sources&col=site_key` 拉取所有站点 → 多选 enum filter
+  - **新增**：选中后 → 后端 SQL `COALESCE(vs2.source_site_key, v.site_key) = ANY($)` → 显示"含至少一条线路在所选站点中的视频"
+  - **未变**：keyword + Segment + probeStatus / renderStatus / updatedAt 4 项 filter 已有
+- **价值**：
+  - **distinct 端点首次消费实证**：ADR-150 EP-2 `/admin/_dt/distinct` 端点 + `distinct-whitelist.ts` 白名单（6 表预留）首次有消费方实证；CrawlerRunsView / AuditClient 至今走静态 filterOptions / 现 sources 走 distinct 路径
+  - **DataTable distinctFetcher API 共享层范式确立**：未来任何消费方走 distinct 端点都走 `<DataTable distinctFetcher={fetchDistinct} />` 注入（D1 范式）/ column 级声明 `filterDistinctTable` 即可
+  - **hidden column 形态首次实证**：siteKey 不是 sources 展示列但要进 matrix popover / D5 hidden column + 4 显式声明范式可复用于未来类似"全局 filter"场景（如 type、country、genres 等跨多列派生）
+- **已知 follow-up**：
+  - distinctFetcher AbortSignal 支持（DataTable API follow-up / search 快速切换防 stale response / 当前 last-write-wins 实际影响极小）
+  - probe/renderStatus 聚合语义校正 PATCH-2C（条件触发 / 需 ADR）
+
+Cleanup-Audit: 8 文件改 / DataTableProps 公开 API 扩展 1 字段（Opus 评审通过）/ DataTable wire 透传 1 处 / 后端 siteKey 单值 → 数组 / 前端 hidden column + distinctFetcher 实现 / 0 ADR / 0 migration / 共 47 sources + admin-ui/table 426 单测零回退
+Plan-Revision: 0 次（Opus A- 评审一次通过 / 6 决策点全 ✅⚠️ / D5 警告点已在实施时严格遵循）
+Subagents: arch-reviewer (claude-opus-4-7) — 1 轮 A- PASS
