@@ -17,10 +17,12 @@ const ROWS: Row[] = [
   { id: '2', name: 'Beta', score: 70 },
 ]
 
+// AMD2（2026-05-24）：旧 fixture 假设"未声明 filterable=不支持"（D-150-1 opt-in 范式）
+// AMD2 后默认 filterable=true / 此 fixture 显式 filterable: false 维持旧行为预期
 const COLUMNS: TableColumn<Row>[] = [
-  { id: 'name', header: 'Name', accessor: (r) => r.name, enableSorting: true },
-  { id: 'score', header: 'Score', accessor: (r) => r.score, enableSorting: true },
-  { id: 'pinned', header: 'Pinned', accessor: () => '', pinned: true },
+  { id: 'name', header: 'Name', accessor: (r) => r.name, enableSorting: true, filterable: false },
+  { id: 'score', header: 'Score', accessor: (r) => r.score, enableSorting: true, filterable: false },
+  { id: 'pinned', header: 'Pinned', accessor: () => '', pinned: true, filterable: false, enableSorting: false },
 ]
 
 function makeSnapshot(overrides: Partial<TableQuerySnapshot> = {}): TableQuerySnapshot {
@@ -175,7 +177,7 @@ describe('DataTable — enableHeaderMenu=true 弹出 popover', () => {
         id: 'name',
         header: 'Name',
         accessor: (r) => r.name,
-        enableSorting: true,
+        enableSorting: true, filterable: false,
         columnMenu: { filterContent: <div data-testid="filter-slot">过滤插槽</div> },
       },
     ]
@@ -205,7 +207,7 @@ describe('DataTable — HeaderMenu 遵守 ColumnMenuConfig 门控', () => {
         id: 'name',
         header: 'Name',
         accessor: (r) => r.name,
-        enableSorting: true,
+        enableSorting: true, filterable: false,
         columnMenu: { canSort: false },
       },
     ]
@@ -232,7 +234,7 @@ describe('DataTable — HeaderMenu 遵守 ColumnMenuConfig 门控', () => {
         id: 'name',
         header: 'Name',
         accessor: (r) => r.name,
-        enableSorting: true,
+        enableSorting: true, filterable: false,
         columnMenu: { canHide: false },
       },
     ]
@@ -258,7 +260,7 @@ describe('DataTable — HeaderMenu 遵守 ColumnMenuConfig 门控', () => {
         id: 'name',
         header: 'Name',
         accessor: (r) => r.name,
-        enableSorting: true,
+        enableSorting: true, filterable: false,
         columnMenu: { isFiltered: true },
       },
     ]
@@ -284,7 +286,7 @@ describe('DataTable — HeaderMenu 遵守 ColumnMenuConfig 门控', () => {
         id: 'name',
         header: 'Name',
         accessor: (r) => r.name,
-        enableSorting: true,
+        enableSorting: true, filterable: false,
         columnMenu: { isFiltered: true, onClearFilter },
       },
     ]
@@ -323,7 +325,7 @@ describe('DataTable — HeaderMenu 遵守 ColumnMenuConfig 门控', () => {
         id: 'name',
         header: 'Name',
         accessor: (r) => r.name,
-        enableSorting: true,
+        enableSorting: true, filterable: false,
         // ReactNode 合法值，但渲染为空；不应触发过滤区块
         columnMenu: { filterContent: value as React.ReactNode },
       },
@@ -356,7 +358,7 @@ describe('DataTable — HeaderMenu 遵守 ColumnMenuConfig 门控', () => {
         id: 'name',
         header: 'Name',
         accessor: (r) => r.name,
-        enableSorting: true,
+        enableSorting: true, filterable: false,
         columnMenu: { filterContent: value as React.ReactNode },
       },
     ]
@@ -388,7 +390,7 @@ describe('DataTable — HeaderMenu 遵守 ColumnMenuConfig 门控', () => {
         id: 'name',
         header: 'Name',
         accessor: (r) => r.name,
-        enableSorting: true,
+        enableSorting: true, filterable: false,
         columnMenu: { filterContent: stableGen as unknown as React.ReactNode },
       },
     ]
@@ -425,7 +427,7 @@ describe('DataTable — HeaderMenu 遵守 ColumnMenuConfig 门控', () => {
         id: 'name',
         header: 'Name',
         accessor: (r) => r.name,
-        enableSorting: true,
+        enableSorting: true, filterable: false,
         columnMenu: { filterContent: gen() as unknown as React.ReactNode },
       },
     ]
@@ -452,7 +454,7 @@ describe('DataTable — HeaderMenu 遵守 ColumnMenuConfig 门控', () => {
         id: 'name',
         header: 'Name',
         accessor: (r) => r.name,
-        enableSorting: true,
+        enableSorting: true, filterable: false,
         columnMenu: {
           filterContent: new Set([
             null,
@@ -482,7 +484,7 @@ describe('DataTable — HeaderMenu 遵守 ColumnMenuConfig 门控', () => {
         id: 'name',
         header: 'Name',
         accessor: (r) => r.name,
-        enableSorting: true,
+        enableSorting: true, filterable: false,
         columnMenu: {
           filterContent: [null, false, <div key="real" data-testid="filter-real">真过滤</div>],
         },
@@ -510,7 +512,7 @@ describe('DataTable — HeaderMenu 遵守 ColumnMenuConfig 门控', () => {
         id: 'name',
         header: 'Name',
         accessor: (r) => r.name,
-        enableSorting: true,
+        enableSorting: true, filterable: false,
         columnMenu: { filterContent: null, isFiltered: true },
       },
     ]
@@ -537,7 +539,7 @@ describe('DataTable — HeaderMenu 遵守 ColumnMenuConfig 门控', () => {
         id: 'name',
         header: 'Name',
         accessor: (r) => r.name,
-        enableSorting: true,
+        enableSorting: true, filterable: false,
         columnMenu: { isFiltered: true },
       },
     ]

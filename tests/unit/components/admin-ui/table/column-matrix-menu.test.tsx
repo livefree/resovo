@@ -26,13 +26,15 @@ import type {
 
 // ── fixtures ─────────────────────────────────────────────────────
 
+// AMD2（2026-05-24）：旧 fixture 假设"未声明 filterable=不支持"（D-150-1 opt-in 范式）
+// AMD2 后默认 filterable=true 必须显式 false 才禁用 / 此 fixture 显式禁用维持原测试预期
 const COLUMNS: ColumnDescriptor[] = [
-  { id: 'id', header: 'ID', pinned: true },
-  { id: 'title', header: '标题', enableSorting: true },
-  { id: 'type', header: '类型', enableSorting: true },
-  { id: 'score', header: '评分', enableSorting: true },
-  { id: 'country', header: '国家' }, // 不可排序
-  { id: 'actions', header: '操作', pinned: true }, // pinned + 不可操作
+  { id: 'id', header: 'ID', pinned: true, filterable: false, enableSorting: false },
+  { id: 'title', header: '标题', enableSorting: true, filterable: false },
+  { id: 'type', header: '类型', enableSorting: true, filterable: false },
+  { id: 'score', header: '评分', enableSorting: true, filterable: false },
+  { id: 'country', header: '国家', filterable: false, enableSorting: false }, // 不可排序 / 不可过滤
+  { id: 'actions', header: '操作', pinned: true, filterable: false, enableSorting: false }, // pinned
 ]
 
 const ALL_VISIBLE: ReadonlyMap<string, ColumnPreference> = new Map([

@@ -27,16 +27,17 @@ const ROWS: Row[] = [
   { id: '2', name: 'Beta', score: 70 },
 ]
 
+// AMD2（2026-05-24）：旧 fixture 假设"未声明 filterable=不支持" / 显式 false 维持原预期
 const COLUMNS_BASIC: TableColumn<Row>[] = [
-  { id: 'name', header: 'Name', accessor: (r) => r.name, enableSorting: true },
-  { id: 'score', header: 'Score', accessor: (r) => r.score, enableSorting: true },
+  { id: 'name', header: 'Name', accessor: (r) => r.name, enableSorting: true, filterable: false },
+  { id: 'score', header: 'Score', accessor: (r) => r.score, enableSorting: true, filterable: false },
 ]
 
 const COLUMNS_RICH: TableColumn<Row>[] = [
-  { id: 'name', header: 'Name', accessor: (r) => r.name, enableSorting: true },
-  { id: 'score', header: 'Score', accessor: (r) => r.score }, // 不可排序
-  { id: 'note', header: 'Note', accessor: () => '', columnMenu: { filterContent: <input /> } }, // 有 filter
-  { id: 'pinned', header: 'Pinned', accessor: () => '', pinned: true }, // pinned 无操作
+  { id: 'name', header: 'Name', accessor: (r) => r.name, enableSorting: true, filterable: false },
+  { id: 'score', header: 'Score', accessor: (r) => r.score, enableSorting: false, filterable: false }, // 不可排序
+  { id: 'note', header: 'Note', accessor: () => '', enableSorting: false, filterable: false, columnMenu: { filterContent: <input /> } }, // 有 filter
+  { id: 'pinned', header: 'Pinned', accessor: () => '', pinned: true, enableSorting: false, filterable: false }, // pinned 无操作
 ]
 
 function makeSnapshot(overrides: Partial<TableQuerySnapshot> = {}): TableQuerySnapshot {

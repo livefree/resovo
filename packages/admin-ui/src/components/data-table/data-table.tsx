@@ -12,6 +12,7 @@ import React, { useState, useCallback, useMemo, useRef } from 'react'
 import type {
   DataTableProps,
   TableColumn,
+  FilterableColumn,
   FilterValue,
   TableQueryPatch,
   TableSortState,
@@ -469,21 +470,30 @@ export function DataTable<T>(props: DataTableProps<T>): React.ReactElement {
             </div>
           )}
           {visibleColumns.map((col) => {
+            // AMD2 D-150-AMD2-2：column.kind 默认值规则
+            // - data（缺省）：filterable + enableSorting 默认 true / 显式 false 禁用
+            // - action：filter 字段 type 层 never / 不显示 ⋯ 触发器
+            // - media / computed：默认 false / 显式 true 启用
+            const kind = col.kind ?? 'data'
+            const explicitSorting = (col as { enableSorting?: boolean }).enableSorting
+            const explicitFilterable = (col as { filterable?: boolean }).filterable
+            const sortable = kind === 'action' ? false
+              : kind === 'data' ? explicitSorting !== false
+              : explicitSorting === true
             const isSorted = query.sort.field === col.id
             const sortDir = isSorted ? query.sort.direction : 'none'
-            const sortable = col.enableSorting === true
             // ADR-149 D-149-3 R-149-2：列级 ⋯ 触发器可见性判定
-            // auto（默认）= static + dynamic 6 条件 OR：
-            //   可排序 OR 有 filterContent（D-149-15 桥接逃生口）OR filterable（D-150 列固有自动过滤）
-            //   OR 可隐藏（非 pinned + canHide !== false）OR 当前已过滤 OR 当前已排序
-            // sub1-EXTEND（2026-05-24）：补 col.filterable 判定 / 修复 pinned 列（id）filterable: true 时不显触发器盲区
-            // sub 2 PATCH R-EP3A-1（2026-05-24）：D-150-4 桥接 — filtersMap key 用 filterFieldName ?? id
+            // AMD2：kind === 'action' 时永远不显触发器 / 其它走 sub1-EXTEND 6 条件 OR
             const hasFilter = col.columnMenu?.filterContent !== undefined
-            const hasAutoFilter = col.filterable === true
-            const hidable = col.pinned !== true && col.columnMenu?.canHide !== false
-            const isFiltered = col.columnMenu?.isFiltered === true || query.filters.has(col.filterFieldName ?? col.id)
+            const hasAutoFilter = kind === 'action' ? false
+              : kind === 'data' ? explicitFilterable !== false
+              : explicitFilterable === true
+            const hidable = kind === 'action' ? false : (col.pinned !== true && col.columnMenu?.canHide !== false)
+            // sub 2 PATCH R-EP3A-1：D-150-4 桥接 / filterFieldName ?? id
+            const filterKey = (col as { filterFieldName?: string }).filterFieldName ?? col.id
+            const isFiltered = col.columnMenu?.isFiltered === true || query.filters.has(filterKey)
             const isMenuOpen = menuColId === col.id
-            const showTrigger =
+            const showTrigger = kind === 'action' ? false :
               columnTriggerVisibility === 'always' ? true :
               columnTriggerVisibility === 'never' ? false :
               sortable || hasFilter || hasAutoFilter || hidable || isFiltered || isSorted
@@ -655,13 +665,25 @@ export function DataTable<T>(props: DataTableProps<T>): React.ReactElement {
         onHide={handleHeaderMenuHide}
         onClose={closeHeaderMenu}
         autoFilterContent={(() => {
-          if (menuColumn === null || menuColumn.filterable !== true) return undefined
+          if (menuColumn === null) return undefined
+          // AMD2 D-150-AMD2-1/2/8：kind === 'action' 不弹 popover / 'data' 默认 filterable + 显式 false 可禁用
+          // / 'media' + 'computed' 默认 false / 显式 true 启用
+          const kind = menuColumn.kind ?? 'data'
+          if (kind === 'action') return undefined
+          const explicitFilterable = (menuColumn as { filterable?: boolean }).filterable
+          const effectiveFilterable = kind === 'data'
+            ? explicitFilterable !== false  // data 默认 true / 显式 false 禁用
+            : explicitFilterable === true   // media/computed 默认 false / 显式 true 启用
+          if (!effectiveFilterable) return undefined
           const col = menuColumn
-          const key = col.filterFieldName
+          // AMD2 D-150-AMD2-3：filterFieldName fallback column.id（D-150-4 桥接降级为覆盖语义）
+          const key = (col as { filterFieldName?: string }).filterFieldName ?? col.id
           const autoFilterRows = mode === 'client' ? processedRows : pageRows
+          // 显式 cast：AMD2 union narrow 后 filterable 仍为 boolean / FilterableColumn 入口需 filterable: true
+          const filterableCol = col as unknown as FilterableColumn<T>
           return (
             <DataTableAutoFilter
-              column={col}
+              column={filterableCol}
               rows={autoFilterRows}
               currentFilter={query.filters.get(key)}
               onApply={(value) => {

@@ -216,10 +216,12 @@ interface TableColumnBase<T> {
   readonly renderFilterChip?: (ctx: FilterChipContext) => ReactNode
 }
 
-// ── ADR-150 阶段 2 / 列固有自动过滤 discriminated union（D-150-5）─────────
+// ── ADR-150 AMENDMENT 2 / column.kind discriminated union（D-150-AMD2-2/8）─────────
+// AMENDMENT 2 改造：D-150-5 NEGATED（filterFieldName 必填强制 → 默认 fallback column.id）
+// + 新增 ColumnKind discriminated union（DataKindColumn / ActionKindColumn / MediaKindColumn / ComputedKindColumn）
 
 /**
- * 自动过滤控件类型（ADR-150 D-150-2）。
+ * 自动过滤控件类型（ADR-150 D-150-2 / AMD2-4 强化为默认运行）。
  * 'enum' 多选 checkbox / 'text' input + IME / 'number' min-max range / 'date' from-to range。
  */
 export type AutoFilterKind = 'enum' | 'text' | 'number' | 'date'
@@ -235,25 +237,55 @@ export interface DistinctOption {
 }
 
 /**
- * 自动过滤 column 字段 — Active arc（ADR-150 D-150-5 union 守卫）。
- * filterable: true 时 filterFieldName **必填**（避免 M-SN-8 假装实现陷阱：
- * popover 渲染但后端静默忽略，用户以为过滤了实际看全量）。
+ * 列类型（ADR-150 AMENDMENT 2 D-150-AMD2-2 / 方案 A enum）。
+ * - 'data'（缺省 / 隐含）— 数据列 / 默认 filterable + enableSorting / 进矩阵 popover / 走 inference
+ * - 'action' — 行操作列 / type 层 filter 字段全 `never` / 不进矩阵 popover / 不走 inference
+ * - 'media' — 媒体列（cover / thumbnail / avatar）/ 默认 false / 可显式 true / 不进矩阵 popover
+ * - 'computed' — 派生计算列 / 默认 false / 可显式 true + filterFieldName 桥接
  */
-export interface AutoFilterColumnFieldsActive {
-  readonly filterable: true
-  readonly filterFieldName: string
+export type ColumnKind = 'data' | 'action' | 'media' | 'computed'
+
+/**
+ * 共用自动过滤字段（D-150-AMD2-3 filterFieldName 默认 fallback column.id）。
+ * 在 DataKindColumn / MediaKindColumn / ComputedKindColumn 中复用。
+ */
+export interface AutoFilterColumnFields {
+  /**
+   * 是否启用列固有自动过滤。
+   * - DataKindColumn 默认 `true`（D-150-AMD2-1 / 显式 false 可禁用）
+   * - MediaKindColumn / ComputedKindColumn 默认 `false`（显式 true 启用）
+   */
+  readonly filterable?: boolean
+  /**
+   * 业务 filter key（D-150-4 桥接合约 / D-150-AMD2-3 默认 fallback column.id）。
+   * 仅在 column.id ≠ 后端业务 key 时显式覆盖（如 `id: 'username', filterFieldName: 'q'`）。
+   */
+  readonly filterFieldName?: string
+  /** filterKind 推断（D-150-2 / AMD2-4 默认运行 useFilterKindInference）；消费方显式优先 */
   readonly filterKind?: AutoFilterKind
+  /** enum 静态选项（D-150-1 / AMD2-5 降级为覆盖路径 / 默认 rows distinct 派生） */
   readonly filterOptions?: readonly DistinctOption[]
+  /** D-150-3 后端 distinct 端点（少数列需要 / 默认 rows 派生） */
   readonly filterDistinctEndpoint?: string
+  /** D-150-3 后端 distinct 表名 */
   readonly filterDistinctTable?: string
 }
 
 /**
- * 自动过滤 column 字段 — Inactive arc（ADR-150 D-150-5）。
- * filterable 缺省 / false 时，5 个 filter* 字段必须为 undefined（discriminated union 守卫）。
+ * DataKindColumn — 数据列（默认 / kind 缺省时）。
+ * D-150-AMD2-1：默认 filterable + enableSorting + 走 inference + 进矩阵 popover。
  */
-export interface AutoFilterColumnFieldsInactive {
-  readonly filterable?: false
+export type DataKindColumn<T> = TableColumnBase<T> & {
+  readonly kind?: 'data'
+} & AutoFilterColumnFields
+
+/**
+ * ActionKindColumn — 行操作列（D-150-AMD2-2/8）。
+ * type 层强制 filter 字段全 `never` / 不进矩阵 popover / 不走 inference。
+ */
+export type ActionKindColumn<T> = TableColumnBase<T> & {
+  readonly kind: 'action'
+  readonly filterable?: never
   readonly filterFieldName?: never
   readonly filterKind?: never
   readonly filterOptions?: never
@@ -262,26 +294,67 @@ export interface AutoFilterColumnFieldsInactive {
 }
 
 /**
- * discriminated union — 编译期强制 filterable: true ↔ filterFieldName 必填配对。
- * 老消费方（12 个）未传 filterable → 自动 narrow 到 Inactive arc / 0 破坏。
- * 新消费方声明 filterable: true 强制必填 filterFieldName（D-150-5 守卫 / 反 M-SN-8 假装实现）。
+ * MediaKindColumn — 媒体列（cover / thumbnail / avatar）。
+ * 默认 filterable=false / 可显式 true（如允许 URL text filter）。
+ */
+export type MediaKindColumn<T> = TableColumnBase<T> & {
+  readonly kind: 'media'
+} & AutoFilterColumnFields
+
+/**
+ * ComputedKindColumn — 派生计算列。
+ * accessor 返回派生值 / 默认 filterable=false / 可显式 true + filterFieldName 桥接业务 key。
+ */
+export type ComputedKindColumn<T> = TableColumnBase<T> & {
+  readonly kind: 'computed'
+} & AutoFilterColumnFields
+
+/**
+ * TableColumn<T> — 列定义 discriminated union by kind（ADR-150 AMENDMENT 2 D-150-AMD2-2/8）。
  *
- * 互斥（运行时 dev warn）：filterable: true 时不应同时声明 columnMenu.filterContent。
+ * 老消费方未传 kind → 自动 narrow 到 DataKindColumn / 默认 filterable + enableSorting
+ * （行为变化：之前默认 false / 之后默认 true）→ 4 已迁消费方需 opt-out review actions 列
+ *
+ * 互斥（运行时 dev warn）：data kind + columnMenu.filterContent 同传时 D-150-6 dev warn。
  */
-export type AutoFilterColumnFields =
-  | AutoFilterColumnFieldsActive
-  | AutoFilterColumnFieldsInactive
+export type TableColumn<T> =
+  | DataKindColumn<T>
+  | ActionKindColumn<T>
+  | MediaKindColumn<T>
+  | ComputedKindColumn<T>
 
 /**
- * TableColumn<T> — 列定义（ADR-150 阶段 2 起 = TableColumnBase + AutoFilterColumnFields union）。
+ * FilterableColumn<T> — DataTableAutoFilter 入口接收类型（D-150-AMD2-8 重构）。
+ * 仅 narrow filterable === true / filterFieldName 仍可缺省（fallback column.id 由 DataTable 处理）。
  */
-export type TableColumn<T> = TableColumnBase<T> & AutoFilterColumnFields
+export type FilterableColumn<T> = TableColumnBase<T> & {
+  readonly filterable: true
+  readonly filterFieldName?: string
+  readonly filterKind?: AutoFilterKind
+  readonly filterOptions?: readonly DistinctOption[]
+  readonly filterDistinctEndpoint?: string
+  readonly filterDistinctTable?: string
+}
 
-/**
- * FilterableColumn<T> — filterable: true 后的 narrow 类型（ADR-150 D-150-5 union 守卫）。
- * 用途：DataTableAutoFilter 入口接收此类型，filterFieldName 必填 / 不必再做 undefined 守卫。
- */
-export type FilterableColumn<T> = TableColumnBase<T> & AutoFilterColumnFieldsActive
+/** @deprecated AMD2 / D-150-5 NEGATED — 保留别名兼容旧 import 路径（FilterableColumn 替代） */
+export type AutoFilterColumnFieldsActive = {
+  readonly filterable: true
+  readonly filterFieldName?: string
+  readonly filterKind?: AutoFilterKind
+  readonly filterOptions?: readonly DistinctOption[]
+  readonly filterDistinctEndpoint?: string
+  readonly filterDistinctTable?: string
+}
+
+/** @deprecated AMD2 / D-150-5 NEGATED — 保留别名（DataKindColumn 替代） */
+export type AutoFilterColumnFieldsInactive = {
+  readonly filterable?: false
+  readonly filterFieldName?: never
+  readonly filterKind?: never
+  readonly filterOptions?: never
+  readonly filterDistinctEndpoint?: never
+  readonly filterDistinctTable?: never
+}
 
 /**
  * filter chip 渲染上下文（CHG-DESIGN-02 Step 7A）。
@@ -354,6 +427,8 @@ export interface ColumnDescriptor {
   readonly filterable?: boolean
   /** ADR-150 阶段 4：业务 filter key（matrix popover / filters Map lookup 与 column.id 桥接） */
   readonly filterFieldName?: string
+  /** ADR-150 AMENDMENT 2 D-150-AMD2-2：列类型 enum marker（default 'data'） */
+  readonly kind?: ColumnKind
 }
 
 // ── useTableQuery（§4.2）──────────────────────────────────────────

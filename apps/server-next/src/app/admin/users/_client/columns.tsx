@@ -203,11 +203,11 @@ export function buildUserColumns({
     },
     {
       id: 'actions',
+      kind: 'action',
       header: '操作',
       accessor: () => null,
       width: 340, minWidth: 290,
       enableResizing: false,
-      enableSorting: false,
       defaultVisible: true,
       overflowVisible: true,
       cell: ({ row }) => {

@@ -131,6 +131,7 @@ export function buildAuditColumns(
     },
     {
       id: 'actions',
+      kind: 'action',
       header: '操作',
       accessor: () => '',
       width: 100,

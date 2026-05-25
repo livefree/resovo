@@ -402,13 +402,20 @@ export function ColumnMatrixMenu({
             </tr>
           </thead>
           <tbody>
-            {columns.map((col, rowIdx) => {
+            {/* AMD2 D-150-AMD2-9：action kind 整行跳过（不进矩阵 popover）*/}
+            {columns.filter((col) => (col.kind ?? 'data') !== 'action').map((col, rowIdx) => {
+              // AMD2 D-150-AMD2-1/2：kind 默认值规则 / data 默认全开 / media+computed 默认 false
+              const kind = col.kind ?? 'data'
+              const explicitFilterable = (col as { filterable?: boolean }).filterable
+              const explicitSorting = (col as { enableSorting?: boolean }).enableSorting
               const columnMenu = columnMenus.get(col.id)
               const visible = isColumnVisible(col, columnsValue)
               const pinned = col.pinned === true
-              const hasFilterContent = columnMenu?.filterContent !== undefined || col.filterable === true
+              const hasAutoFilter = kind === 'data' ? explicitFilterable !== false : explicitFilterable === true
+              const hasFilterContent = columnMenu?.filterContent !== undefined || hasAutoFilter
               const filtered = isColumnFiltered(col, columnMenu, currentFilters)
-              const sortable = col.enableSorting === true && columnMenu?.canSort !== false
+              const baseSortable = kind === 'data' ? explicitSorting !== false : explicitSorting === true
+              const sortable = baseSortable && columnMenu?.canSort !== false
               const isSortedAsc = currentSort.field === col.id && currentSort.direction === 'asc'
               const isSortedDesc = currentSort.field === col.id && currentSort.direction === 'desc'
               const isSorted = isSortedAsc || isSortedDesc

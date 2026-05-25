@@ -226,6 +226,7 @@ function buildColumns({
     },
     {
       id: 'ops',
+      kind: 'action',
       header: '操作',
       accessor: (r) => r.status,
       width: 180,

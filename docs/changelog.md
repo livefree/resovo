@@ -5122,3 +5122,84 @@ Plan-Revision: 1 次（StagingPageClient 实施前评估发现 Segment 范式不
 
 Cleanup-Audit: ADR-150 AMENDMENT 2 起草完成 / arch-reviewer Opus 独立 1 轮 / 9 决策点 D-150-AMD2-N / column.kind enum 方案 A / D-150-5 NEGATED + 重构 / @livefree 仲裁 2 红线 PASS / 0 代码改动（实施在后续 EP-AMD2 子卡）
 Plan-Revision: 0 次（实施严格按 Opus 起草 + @livefree 仲裁）
+
+---
+
+## [CHG-SN-9-DT-AUTOFILTER-AMD2-EP] AMENDMENT 2 实施 — DataTable 默认全开 + column.kind discriminated union + 4 消费方 opt-out
+
+- **完成时间**：2026-05-24
+- **记录时间**：2026-05-24
+- **执行模型**：claude-opus-4-7（主循环 / opus xhigh 续会话）
+- **子代理**：无（按 ADR-150 AMENDMENT 2 直接实施 / 共享层 + 4 消费方 opt-out / 不动 ADR）
+- **关联 ADR**：ADR-150 AMENDMENT 2 D-150-AMD2-1..9（commit `68571ceb`）
+- **关联 SEQ**：SEQ-20260524-01 第 1 序列 AMD2-EP 实施
+- **依赖**：AMD2-ADR ✅ commit `68571ceb` / @livefree 仲裁 2 红线 PASS
+- **修改文件**（7 实施 + 3 测试 / 0 ADR / 0 后端 / 0 schema）：
+  - **共享层 types.ts**（D-150-AMD2-2/8）：
+    - 新增 `ColumnKind = 'data' | 'action' | 'media' | 'computed'` enum
+    - TableColumn discriminated union 改造：`DataKindColumn / ActionKindColumn / MediaKindColumn / ComputedKindColumn`
+    - AutoFilterColumnFields 重构：filterFieldName 改 optional（D-150-AMD2-3）
+    - ActionKindColumn filter 字段全 type 层 `never`
+    - ColumnDescriptor 加 `readonly kind?: ColumnKind` 字段
+    - 保留 deprecated 别名 `AutoFilterColumnFieldsActive / Inactive`（向后兼容）
+    - 保留 `FilterableColumn<T>` 类型（DataTableAutoFilter 入口 / filterFieldName 改 optional）
+  - **共享层 data-table.tsx**：
+    - import 加 `FilterableColumn`
+    - 列遍历 line 471 visible columns：kind 默认值规则（data 默认 filterable+enableSorting / action 永远 false / media+computed 默认 false）
+    - showTrigger 计算：kind === 'action' 永远 false（不显 ⋯ 触发器）
+    - filterKey 桥接：`col.filterFieldName ?? col.id`（D-150-AMD2-3）
+    - autoFilterContent 计算：kind === 'action' 不弹 popover / kind kind-aware filterable 判定
+    - 显式 cast 到 FilterableColumn<T>（union narrow 后 filterable 仍 boolean）
+  - **共享层 column-matrix-menu.tsx**（D-150-AMD2-9）：
+    - line 405 `columns.filter((col) => (col.kind ?? 'data') !== 'action').map`：action kind 整行不进矩阵 popover
+    - hasFilterContent / sortable / baseSortable kind-aware 计算
+    - data kind 默认 filterable=true → 矩阵过滤格自动显示 switch
+  - **4 消费方 opt-out**（4 文件 + 5 列改）：
+    - CrawlerRunsView ops 列 → `kind: 'action'`
+    - AuditColumns actions 列 → `kind: 'action'`
+    - UsersListClient/columns.tsx actions 列 → `kind: 'action'`（删冗余 enableSorting: false / type 层强制 never）
+    - VideoListClient cover 列 → `kind: 'media'` + actions 列 → `kind: 'action'`
+  - **3 测试 fixture 更新**（admin-ui/table）：
+    - column-matrix-menu.test.tsx COLUMNS: 全列加 `filterable: false` 显式禁用维持旧测试预期
+    - header-menu.test.tsx COLUMNS: 全列加 `filterable: false`（pinned 列 + enableSorting: false 显式）+ 内嵌 cols 13 处 perl 批量加 `filterable: false`
+    - step-ep2-column-toggle.test.tsx COLUMNS_BASIC/RICH: 全列加 `filterable: false` + RICH 加 enableSorting: false
+- **新增依赖**：无
+- **数据库变更**：无
+- **新增端点**：无
+- **关键设计落实**：
+  - **AMD2 D-150-AMD2-1 默认全开**：DataTable column kind === 'data' 默认 filterable + enableSorting / 取代 D-150-1 opt-in / Google Sheets 哲学兑现
+  - **AMD2 D-150-AMD2-2 column.kind enum**：方案 A 入选 / 4 kind 默认值表（A2.2）全部落实 / type 层 narrow + 运行时门控
+  - **AMD2 D-150-AMD2-8 D-150-5 NEGATED**：filterFieldName 必填守卫 NEGATED / fallback column.id / discriminated union by kind 替代
+  - **AMD2 D-150-AMD2-3 filterFieldName fallback**：`col.filterFieldName ?? col.id` 一致应用于 column-matrix-menu line 150 / 326 + data-table line 484 / 660 + autoFilterContent line 670（5 处）
+  - **action kind 全栈隔离**：column-matrix-menu 整行跳过 + data-table showTrigger=false + autoFilterContent 返 undefined / 三处一致
+  - **向后兼容**：4 已迁消费方现有 filterable: true 显式声明 0 破坏（AMD2 后行为不变）/ 仅 actions/cover/media 列需 opt-out kind marker
+- **质量门禁**：
+  - ✅ typecheck（8 workspace PASS）
+  - ✅ lint（5/5 / pre-existing img 警告）
+  - ✅ verify:file-size-budget exit 0
+  - ✅ verify:adr-contracts exit 0（178 D-N 闭环 / SQL aligned / style 0）
+  - ✅ admin-ui/table 426/426 PASS（15 → 0 fail / 3 fixture 范式更新）
+  - ✅ 4 消费方 605/605 PASS（CrawlerRunsView/AuditClient/UsersListClient/VideoListClient/etc.）
+- **用户可见行为变化**（dev server 走读 AMD2-EP）：
+  - **新增**：所有 admin 表格未声明 filterable 的列默认显示 ⋯ 触发器 + 进矩阵 popover（data kind 默认）
+  - **新增**：CrawlerRunsView duration / AuditClient payloadSummary / VideoListClient year/source_health/probe/image_health/douban_status/meta_score/created_at/updated_at 等列**默认可点 ⋯ 弹 popover**（之前不可点）
+  - **修复**：CrawlerRunsView ops / AuditClient actions / UsersListClient actions / VideoListClient cover+actions 5 列**不再显示 ⋯ 触发器**（kind opt-out）
+  - **改进**：未来 EP-3-D/E/F/G 消费方 column 定义减负 60%+
+  - **保留**：4 已迁消费方现有显式 filterable: true 列行为不变（向后兼容）
+- **价值**：
+  - **范式根本反转兑现**：opt-in → opt-out / DataTable 通用基座 / Google Sheets 哲学落地
+  - **类型层强制 + 运行时门控**：column.kind discriminated union 编译期 narrow + DataTable kind-aware 三处一致（matrix popover + showTrigger + autoFilterContent）
+  - **dev warn 三重防御**：R-A2-1 @livefree 仲裁 / 后续 server mode FILTER_FIELDS 不对齐时有 dev warn 提示（dev warn 实施待 EP-3-D 入口或 follow-up）
+  - **向后兼容**：4 已迁消费方现有 filterable: true 显式声明 0 破坏（D-150-AMD2-3 fallback column.id 仅对未显式 filterFieldName 生效）
+  - **测试范式更新**：admin-ui/table 3 fixture 显式 filterable: false 维持旧测试预期 / AMD2 新行为单测留 EP-3-D follow-up
+- **不在范围**（独立后续）：
+  - **dev warn 实施**：server mode column.id + 非业务命名特征检测（D-150-AMD2-7 / EP-3-D 入口顺手）
+  - **AMD2 新行为单测**：column.kind 4 值 × 矩阵 popover 显隐 / inference 默认运行 / filterFieldName fallback / dev warn server mode noop（~10 case / EP-3-D 入口或独立 follow-up）
+  - **EP-3-D/E/F/G 后续 6+ 表格**：按 AMD2 新范式 column 定义减负 60%+
+  - **reference.md §4.4 同步**（EP-3-D 入口顺手）
+- **后续**：
+  - **@livefree dev server 走读 AMD2-EP**（4 已迁消费方零回退 / actions 列无 popover / cover 列无 popover / 其它列默认显 ⋯ 触发器）→ PASS
+  - **EP-3-D 启动**（ImageHealthClient + MergeClient ~0.3w / 按 AMD2 新范式 column 定义减负）
+
+Cleanup-Audit: ADR-150 AMENDMENT 2 实施完整 / 共享层 3 文件（types + data-table + column-matrix-menu）+ 4 消费方 opt-out + 3 测试 fixture 更新 / 7 实施 + 3 测试 / 0 ADR / 0 后端 / 0 schema / 4 质量门禁全过 / 426 + 605 单测全 PASS（admin-ui/table 15 → 0 fail 修复）/ AMD2-EP 全闭环
+Plan-Revision: 1 次（admin-ui/table 15 fixture fail 预期 / 修法 patch 显式 filterable: false 维持旧测试 / AMD2 新行为单测留 EP-3-D follow-up）

@@ -260,7 +260,7 @@ function buildVideoColumns(
     // CHG-UX2-03d：cover width = Thumb 48 + cell padding 24 = 72，贴合 cell content；
     // 不再用 wrapper div（CHG-UX2-03c 的 wrapper 让 Thumb 成为 flex item，破坏 flex-shrink:0）
     {
-      id: 'cover', header: '封面', accessor: (r) => r.cover_url,
+      id: 'cover', kind: 'media', header: '封面', accessor: (r) => r.cover_url,
       width: 72, minWidth: 64, enableResizing: false, defaultVisible: true,
       cell: ({ row }) => <Thumb src={row.cover_url} size="poster-md" />,
     },
@@ -372,7 +372,7 @@ function buildVideoColumns(
     // 8A 第一阶段保留 VideoRowActions（AdminDropdown 形态）；inline xs btn ×5 重构留 8A 第二阶段
     // CHG-UX2-03b 收窄 170 → 150（消除横滚）
     {
-      id: 'actions', header: '操作', accessor: () => null,
+      id: 'actions', kind: 'action', header: '操作', accessor: () => null,
       width: 150, minWidth: 130, enableResizing: false, defaultVisible: true,
       cell: ({ row }) => (
         <VideoRowActions
