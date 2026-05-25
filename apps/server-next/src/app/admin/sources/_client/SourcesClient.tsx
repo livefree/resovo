@@ -94,9 +94,14 @@ function buildColumns(
   expandedKeys: ReadonlySet<string>,
 ): readonly TableColumn<VideoGroupRow>[] {
   return [
+    // ADR-150 阶段 5 EP-4（2026-05-24）：sources sort 全栈打通
+    //   - 3 列 video / lineCount / sourceCount 改回 enableSorting: true（后端 SORT_FIELDS 已扩展）
+    //   - 保留 kind: 'computed' filter 禁用（业务无意义 / Sources 已有 keyword + Segment）
+    //   - probeStatus / renderStatus 2 列 sort 业务无意义（STRING_AGG 派生 / 保留 kind='computed' default false）
     {
       id: 'video',
       kind: 'computed',
+      enableSorting: true,
       header: '视频',
       accessor: (r) => r.title,
       minWidth: 200,
@@ -144,11 +149,10 @@ function buildColumns(
     {
       id: 'lineCount',
       kind: 'computed',
+      enableSorting: true, // ADR-150 阶段 5 EP-4 sort 全栈打通后恢复（line_count SELECT alias）
       header: '线路',
       accessor: (r) => r.lineCount,
       width: 80,
-      // EP-3-E：删 pre-existing enableSorting: true（后端 listVideoGroups 无 sortField / 假装实现）
-      // 全栈打通留 ADR-150 阶段 5 EP-4
       cell: ({ row }) => (
         <span>
           <strong>{row.lineCount}</strong>{' '}
@@ -159,10 +163,10 @@ function buildColumns(
     {
       id: 'sourceCount',
       kind: 'computed',
+      enableSorting: true, // ADR-150 阶段 5 EP-4 sort 全栈打通后恢复（source_count SELECT alias）
       header: '集·源',
       accessor: (r) => r.sourceCount,
       width: 90,
-      // EP-3-E：删 pre-existing enableSorting: true（同上）
       cell: ({ row }) => (
         <span>
           <strong>{row.sourceCount}</strong>{' '}
@@ -295,7 +299,15 @@ export function SourcesClient() {
     let cancelled = false
     setLoading(true)
     setError(undefined)
-    listVideoGroups({ page, limit: pageSize, keyword, segment })
+    // ADR-150 阶段 5 EP-4（2026-05-24）：sort 白名单守卫（与 CrawlerRunsView/VideoListClient PATCH-2 范式一致）
+    const sortFieldGuarded: 'video' | 'lineCount' | 'sourceCount' | 'updated_at' | undefined =
+      sort.field === 'video' || sort.field === 'lineCount' || sort.field === 'sourceCount' || sort.field === 'updated_at'
+        ? sort.field
+        : undefined
+    listVideoGroups({
+      page, limit: pageSize, keyword, segment,
+      ...(sortFieldGuarded ? { sortField: sortFieldGuarded, sortDir: sort.direction } : {}),
+    })
       .then((res) => {
         if (cancelled) return
         setRows(res.data as VideoGroupRow[])
@@ -307,7 +319,7 @@ export function SourcesClient() {
       })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [page, pageSize, keyword, segment, retryKey])
+  }, [page, pageSize, keyword, segment, sort, retryKey])
 
   const refresh = useCallback(() => setRetryKey((k) => k + 1), [])
 

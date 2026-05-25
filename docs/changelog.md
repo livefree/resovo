@@ -5407,3 +5407,59 @@ Plan-Revision: 0 次（client mode 默认全开 + server mode 防假装 AMD2 范
 
 Cleanup-Audit: StagingPageClient actions kind='action' / 12 消费方完整闭环 / 1 实施 / 8/8 单测零回退 / 4 质量门禁全过 / 0 ADR / 0 后端 / 0 schema
 Plan-Revision: 0 次（EP-3-G 范围极简 / dev demo + Submissions deprecated 合理跳过）
+
+---
+
+## [CHG-SN-9-DT-AUTOFILTER-AMD2-PHASE5-EP4-SOURCES] ADR-150 阶段 5 EP-4 sources sort 全栈打通
+
+- **完成时间**：2026-05-24
+- **记录时间**：2026-05-24
+- **执行模型**：claude-opus-4-7（主循环）
+- **关联 ADR**：ADR-150 阶段 5 EP-4（"sources 排序断链顺手修"明文范围）+ AMENDMENT 2 D-150-AMD2-3 sort 桥接
+- **关联 SEQ**：SEQ-20260524-01 第 1 序列 阶段 5 EP-4
+- **触发**：用户"通过。同意继续后续任务" / 12 消费方完整闭环后启动 sort 全栈
+- **依赖**：EP-3-G ✅ commit `05a6e802` / EP-3-E SourcesClient 删 lineCount/sourceCount 假装 commit `1bf423ba`
+- **修改文件**（5 实施 / PATCH-2 范式 5 文件同步）：
+  - `packages/types/src/sources-matrix.types.ts` VideoGroupListParams 加 `sortField?: 'video' | 'lineCount' | 'sourceCount' | 'updated_at'` + `sortDir?`
+  - `apps/api/src/services/SourcesMatrixService.ts` VideoGroupsQuerySchema 加 sortField z.enum + sortDir + 4 字段白名单
+  - `apps/api/src/db/queries/sources-matrix.ts`：
+    - 新增 `SOURCES_SORT_FIELD_MAP` const（video→v.title / lineCount→line_count alias / sourceCount→source_count alias / updated_at→MAX(vs.updated_at)）
+    - 新增 `SOURCES_SORT_IDENT_REGEX` 启动期断言（允许 aggregate function / 与 SORT_IDENT_REGEX 范式扩展）
+    - listVideoGroups 内 ORDER BY 改为动态 `${sortCol} ${sortDir} NULLS LAST` + fallback `MAX(vs.updated_at) DESC`
+  - `apps/server-next/src/lib/sources/api.ts` listVideoGroups URLSearchParams 透传 sortField + sortDir
+  - `apps/server-next/src/app/admin/sources/_client/SourcesClient.tsx`：
+    - fetch deps 加 sort + sortFieldGuarded 白名单守卫（与 PATCH-2 范式一致）
+    - 3 列 video / lineCount / sourceCount 改回显式 `enableSorting: true`（保留 kind='computed' filter 禁用）
+    - probeStatus / renderStatus 保留 kind='computed' 默认（STRING_AGG 派生 sort 业务无意义）
+- **新增依赖**：无
+- **数据库变更**：无（ORDER BY 动态拼接 + 白名单防 SQL 注入）
+- **新增端点**：无
+- **关键设计落实**：
+  - **PATCH-2 范式完整复刻 sources**：types + zod enum + queries SORT_FIELD_MAP + queries SORT_IDENT_REGEX 启动期断言 + 前端透传 + 前端白名单守卫 = 5 层防御
+  - **kind='computed' + enableSorting: true 灵活组合实证**：filter 默认禁用（业务无意义）+ sort 显式启用（后端真支持）/ 与 EP-3-E SubtitlesListClient 同范式
+  - **D-150-AMD2-3 sort 桥接同 filter**：column.id ('video'/'lineCount'/'sourceCount') = 后端 sortField 命名一致 / SQL ORDER BY 表达式由 SOURCES_SORT_FIELD_MAP 桥接
+  - **撤回 EP-3-E lineCount/sourceCount 假装清理 → 真实施**：之前 EP-3-E 仅删 pre-existing 假装 / 本卡补齐后端 + 启用真排序
+- **质量门禁**：
+  - ✅ typecheck（8 workspace PASS）
+  - ✅ lint（5/5 / pre-existing img 警告）
+  - ✅ verify:file-size-budget exit 0
+  - ✅ verify:adr-contracts exit 0
+  - ✅ sources 12/12 单测全 PASS
+- **用户可见行为变化**（dev server 走读 EP-4 后）：
+  - **新增**：`/admin/sources` video / lineCount / sourceCount 3 列 ⋯ → 排序段可点 + fetch 真排序（不再假装）
+  - **不变**：filter 段 disabled + tooltip（kind='computed' 业务无意义）
+  - **保留**：keyword search + Segment 4 tabs 业务模式
+  - **保留**：probeStatus / renderStatus sort disabled（STRING_AGG 派生 / 业务真实禁用）
+- **价值**：
+  - **PATCH-2 范式标准化复刻**：第二个真 sort 全栈打通的消费方（VideoListClient PATCH-2 是第一个）/ 后续 ImageHealth missing CTE 重写 / Merge sortField=score / CrawlerRunDetail sort 可直接复刻
+  - **AMD2 阶段 5 EP-4 sources 部分闭环**：task-queue 明示 "含 sources 排序断链顺手修" 兑现
+  - **3 列真排序兑现 AMD2 D-150-AMD2-1**：默认全开 + 后端真支持 / 不再用前端禁用回避
+- **不在范围**（独立后续）：
+  - ImageHealth missing 4 子查询列 sort 全栈（CTE 重写 SQL）
+  - Merge 候选表 sortField=score 全栈
+  - CrawlerRunDetail sort 全栈
+  - sources filter 全栈（业务需求待评估 / 当前 keyword + Segment 已覆盖核心）
+  - e2e smoke 3 case + @livefree 走读 5 代表页（独立 follow-up）
+
+Cleanup-Audit: sources sort 全栈打通 PATCH-2 范式复刻 / 5 实施文件（types + svc + queries + lib + client）/ 4 字段 SORT_FIELD_MAP + SORT_IDENT_REGEX 启动期断言 / 12/12 单测零回退 / 4 质量门禁全过 / 0 ADR / 0 后端 schema / 0 migration / AMD2 D-150-AMD2-1 默认全开 + AMD2-3 sort 桥接 + AMD2-2 kind='computed' filter 禁用三元素灵活组合
+Plan-Revision: 0 次（PATCH-2 范式直接复刻 / 设计哲学一致）

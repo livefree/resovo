@@ -48,6 +48,9 @@ export const VideoGroupsQuerySchema = z.object({
   siteKey:       z.string().optional(),
   probeStatus:   z.string().optional(),
   renderStatus:  z.string().optional(),
+  // ADR-150 阶段 5 EP-4（2026-05-24）：sort 全栈打通 / 4 字段白名单 zod enum
+  sortField:     z.enum(['video', 'lineCount', 'sourceCount', 'updated_at']).optional(),
+  sortDir:       z.enum(['asc', 'desc']).optional(),
 })
 
 export const UpsertAliasSchema = z.object({

@@ -121,6 +121,24 @@ export async function getVideoGroupStats(db: Pool): Promise<VideoGroupStats> {
 
 // ── 查询：视频分组列表 ────────────────────────────────────────────
 
+// ADR-150 阶段 5 EP-4（2026-05-24）：sources sort 全栈白名单（与 PATCH-2 + distinct-whitelist 同范式）
+// 字段映射：column.id → SQL ORDER BY 表达式（含 SELECT alias / 表前缀 / aggregate function）
+const SOURCES_SORT_FIELD_MAP: Record<string, string> = {
+  video: 'v.title',              // column.id 'video' / cell 显示 title + cover 复合
+  lineCount: 'line_count',       // SELECT alias / COUNT(DISTINCT line_key)
+  sourceCount: 'source_count',   // SELECT alias / COUNT(vs.id)
+  updated_at: 'MAX(vs.updated_at)', // 默认 fallback / aggregate
+}
+
+// AMD2-PATCH-2 风格 SQL identifier 正则启动期断言（防 SQL 注入 / 与 SORT_IDENT_REGEX 同范式）
+// 允许：col / table.col / aggregate(...)（含括号空格）
+const SOURCES_SORT_IDENT_REGEX = /^(?:[A-Z_]+\([a-z_\.]+\)|[a-z_]+\.[a-z_]+|[a-z_]+)$/
+for (const [k, v] of Object.entries(SOURCES_SORT_FIELD_MAP)) {
+  if (!SOURCES_SORT_IDENT_REGEX.test(v)) {
+    throw new Error(`[sources-matrix] invalid SQL ident "${v}" for sortField=${k}`)
+  }
+}
+
 export async function listVideoGroups(
   db: Pool,
   params: VideoGroupListParams,
@@ -160,6 +178,10 @@ export async function listVideoGroups(
 
   const whereClause = conditions.map((c) => `(${c})`).join(' AND ')
 
+  // ADR-150 阶段 5 EP-4：sort 字段白名单 lookup / fallback MAX(vs.updated_at) DESC（默认行为不变）
+  const sortCol = (params.sortField && SOURCES_SORT_FIELD_MAP[params.sortField]) ?? 'MAX(vs.updated_at)'
+  const sortDir = params.sortDir === 'asc' ? 'ASC' : 'DESC'
+
   const countResult = await db.query<{ cnt: string }>(
     `SELECT COUNT(DISTINCT v.id)::TEXT AS cnt
      FROM videos v
@@ -187,7 +209,7 @@ export async function listVideoGroups(
      JOIN video_sources vs ON vs.video_id = v.id AND vs.deleted_at IS NULL
      WHERE ${whereClause}
      GROUP BY v.id, mc.year, mc.cover_url
-     ORDER BY MAX(vs.updated_at) DESC NULLS LAST
+     ORDER BY ${sortCol} ${sortDir} NULLS LAST
      LIMIT $${idx++} OFFSET $${idx++}`,
     [...paramValues, limit, offset],
   )

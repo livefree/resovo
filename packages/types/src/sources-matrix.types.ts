@@ -47,6 +47,12 @@ export interface VideoGroupListParams {
   readonly siteKey?: string
   readonly probeStatus?: string
   readonly renderStatus?: string
+  /**
+   * ADR-150 阶段 5 EP-4（2026-05-24）：sort 全栈打通 sources（含 sources 排序断链顺手修）
+   * 白名单 4 字段 / column.id = 后端 sortField 命名一致（D-150-4 桥接 sort 版同范式）
+   */
+  readonly sortField?: 'video' | 'lineCount' | 'sourceCount' | 'updated_at'
+  readonly sortDir?: 'asc' | 'desc'
 }
 
 export interface VideoGroupStats {
