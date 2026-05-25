@@ -258,13 +258,23 @@ export async function getTopBrokenDomains(
 }
 
 /** 未补图视频列表（后台治理优先排队） */
-export type MissingVideoSortField = 'created_at' | 'title' | 'poster_status'
+// ADR-150 阶段 5 EP-4 follow-up（2026-05-25）：sort 白名单扩展 4 子查询派生字段
+// 关键发现：LATERAL JOIN evt 字段（evt.url / evt.last_seen_at / evt.occurrence_count）
+// 可在主查询 ORDER BY 直接引用，无需 CTE 重写（注释 ImageHealthColumns.tsx L69 "需 CTE" 误判修正）
+export type MissingVideoSortField =
+  | 'created_at' | 'title' | 'poster_status'
+  | 'poster_source' | 'broken_domain' | 'occurrence_count' | 'last_seen_broken_at'
 export type SortDir = 'asc' | 'desc'
 
 const MISSING_VIDEO_SORT_SQL: Record<MissingVideoSortField, string> = {
-  created_at:   'v.created_at',
-  title:        'v.title',
-  poster_status: 'mc.poster_status',
+  created_at:           'v.created_at',
+  title:                'v.title',
+  poster_status:        'mc.poster_status',
+  // HOTFIX follow-up（2026-05-25）：4 子查询派生字段 ORDER BY 直接引用
+  poster_source:        'mc.poster_source',
+  broken_domain:        'evt.url',            // domain 提取在 JS / URL 排序近似域名（同主机邻近）
+  occurrence_count:     'evt.occurrence_count',
+  last_seen_broken_at:  'evt.last_seen_at',
 }
 
 export async function listMissingPosterVideos(
@@ -322,7 +332,7 @@ export async function listMissingPosterVideos(
      ) evt ON TRUE
      WHERE v.deleted_at IS NULL
        AND mc.poster_status IN ('missing','broken','pending_review')
-     ORDER BY ${orderCol} ${dir}
+     ORDER BY ${orderCol} ${dir} NULLS LAST
      LIMIT $1 OFFSET $2`,
     [limit, offset]
   )

@@ -101,10 +101,23 @@ export function ImageHealthClient() {
     Promise.allSettled([
       getImageHealthStats(),
       getTopBrokenDomains(20),
+      // ADR-150 阶段 5 EP-4 follow-up（2026-05-25）：sort 白名单守卫 + column.id → sortField 桥接
+      // column.id camelCase（'posterSource'）→ sortField snake_case（'poster_source'）映射
       listMissingVideos({
         page,
         limit: pageSize,
-        sortField: (sort.field === 'title' || sort.field === 'poster_status') ? sort.field : 'created_at',
+        sortField: (() => {
+          switch (sort.field) {
+            case 'title':              return 'title'
+            case 'posterStatus':       return 'poster_status'
+            case 'posterSource':       return 'poster_source'
+            case 'brokenDomain':       return 'broken_domain'
+            case 'occurrenceCount':    return 'occurrence_count'
+            case 'lastSeenBrokenAt':   return 'last_seen_broken_at'
+            case 'created_at':         return 'created_at'
+            default:                   return 'created_at'
+          }
+        })(),
         sortDir: sort.direction,
       }),
     ]).then(([statsRes, domainsRes, missingRes]) => {

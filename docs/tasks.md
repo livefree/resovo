@@ -6,7 +6,7 @@
 
 ## 进行中任务
 
-（空 — 本会话累计 32 commit / CrawlerRunDetailView runs/:id/tasks sort 全栈打通 PATCH-2 范式复刻 4 字段（site/status/startedAt/finishedAt）/ 复用现有 TASK_SORT_COLUMNS 白名单 / 前端 column.id 桥接 siteKey→site + duration→finishedAt / 待 @livefree dev server 走读 /admin/crawler/runs/:id task 表 sort）
+（空 — 本会话累计 33 commit / ImageHealth missing 4 子查询列 sort 全栈打通 / **关键发现**："需 CTE 重写" 误判修正 / 实际 LATERAL JOIN evt.* 字段直接 ORDER BY 可用 / 工时 0.3-0.5w → 0.15w / PATCH-2 范式 5 消费方实证完整 / 待 @livefree dev server 走读 /admin/image-health missing 表 sort）
 
 ---
 
@@ -46,6 +46,7 @@
 27. `223b4867` **HOTFIX-PATCH-2B** siteKey enum filter 全栈 / distinct 端点首次消费实证 / DataTableProps API 扩展 Opus A- 评审通过
 28. `ec442527` **HOTFIX-PATCH-2B-FIX1** siteKey 列 cell 显站点 csv（hidden column 改 visible / 后端 STRING_AGG DISTINCT + Service+raw 透传 + 前端 cell hover title）
 29. `072d303c` **MERGE-SORT-FULLSTACK** Merge 候选表 sortField=score/videoCount/year/titleNormalized 全栈打通（Service 层 sort 4 字段白名单 / PATCH-2 范式复刻 / 5 文件 + 32 单测 +5 case）
-30. `<TBD>` **CRAWLER-RUN-DETAIL-SORT-FULLSTACK** runs/:id/tasks sort 全栈打通（复用 TASK_SORT_COLUMNS 白名单 / 4 字段 site/status/startedAt/finishedAt / 前端 column.id → sortField 桥接 siteKey→site + duration→finishedAt / PATCH-2 范式复刻 / 4 文件 + 14 单测 +7 case + DetailView test fixture 更新）
+30. `b558e194` **CRAWLER-RUN-DETAIL-SORT-FULLSTACK** runs/:id/tasks sort 全栈打通（复用 TASK_SORT_COLUMNS 白名单 / 4 字段 site/status/startedAt/finishedAt / 前端 column.id → sortField 桥接 siteKey→site + duration→finishedAt / PATCH-2 范式复刻 / 4 文件 + 14 单测 +7 case + DetailView test fixture 更新）
+31. `<TBD>` **IMAGE-HEALTH-MISSING-SORT-FULLSTACK** ImageHealth missing 4 子查询列 sort 全栈打通（**注释 "需 CTE 重写" 误判修正** / 实际 LATERAL JOIN evt 字段直接 ORDER BY 可用 / MISSING_VIDEO_SORT_SQL 扩 4 字段 poster_source/broken_domain/occurrence_count/last_seen_broken_at / 前端 camelCase → snake_case 桥接 / 5 文件 + 9 新单测）
 
-总计 +5200+ lines / 115+ 新单测 / 0 回退 / ADR-150 AMENDMENT 2 范式完整 + sources 6 列 filter + Merge + CrawlerRunDetail sort 全栈 / 全质量门禁全过。
+总计 +5300+ lines / 124+ 新单测 / 0 回退 / ADR-150 AMENDMENT 2 范式完整 + sources 6 列 filter + Merge + CrawlerRunDetail + ImageHealth missing sort 全栈 / PATCH-2 范式 5 消费方实证 / 全质量门禁全过。

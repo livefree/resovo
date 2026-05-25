@@ -5737,3 +5737,47 @@ Plan-Revision: 0 次（PATCH-2 范式直接复刻 / 设计哲学一致 / Service
 
 Cleanup-Audit: 4 文件改 + 2 测试文件 +7 case + 1 fixture 更新 / 共 14/14 crawler-tasks + 567/567 全套零回退 / 0 新组件 / 0 ADR / 0 migration / 复用 TASK_SORT_COLUMNS 白名单 / PATCH-2 范式第 4 消费方
 Plan-Revision: 0 次（PATCH-2 范式直接复刻 + 利用现有白名单 / 设计哲学一致 / 桥接 helper 范式自然延伸）
+
+## [2026-05-25] CHG-SN-9-DT-AUTOFILTER-EP-4-IMAGE-HEALTH-MISSING-SORT-FULLSTACK · ImageHealth missing 4 子查询列 sort 全栈 / "需 CTE" 误判修正
+
+- **触发**：CRAWLER-RUN-DETAIL-SORT-FULLSTACK 通过 + 用户"继续" → 推 ImageHealth missing sort（最后一个 ADR-150 阶段 5 EP-4 sort follow-up）
+- **关键发现**：注释 `ImageHealthColumns.tsx` L69 写"后续 follow-up：CTE 重写 listMissingVideos SQL 让子查询字段可 ORDER BY"是**误判**。实际 `listMissingPosterVideos` 已用 LATERAL JOIN evt 子查询，evt.* 字段（`evt.url` / `evt.last_seen_at` / `evt.occurrence_count`）**直接可在主查询 ORDER BY 引用** / 无需 CTE 重写。工时从 0.3-0.5w 降到 0.15w。
+- **范围**（5 文件 / 1 commit / PATCH-2 范式直接复刻）：
+  1. `apps/api/src/db/queries/imageHealth.ts`:
+     - `MissingVideoSortField` type 扩 4 字段（'poster_source' / 'broken_domain' / 'occurrence_count' / 'last_seen_broken_at'）
+     - `MISSING_VIDEO_SORT_SQL` map 新加映射（`evt.url` / `evt.last_seen_at` / `evt.occurrence_count` / `mc.poster_source`）
+     - SQL ORDER BY 加 NULLS LAST（LEFT JOIN evt 可能 NULL）
+  2. `apps/api/src/routes/admin/image-health.ts` MissingVideosQuerySchema zod enum 扩 4 字段
+  3. `apps/server-next/src/lib/image-health/api.ts` ListMissingVideosParams sortField 扩 4 字段 union
+  4. `apps/server-next/src/app/admin/image-health/_client/ImageHealthClient.tsx` load() sort 桥接 switch（column.id camelCase → sortField snake_case：posterSource→poster_source / brokenDomain→broken_domain / occurrenceCount→occurrence_count / lastSeenBrokenAt→last_seen_broken_at + 兼容 created_at / title / posterStatus→poster_status fallback）
+  5. `apps/server-next/src/app/admin/image-health/_client/ImageHealthColumns.tsx` 4 列加 `enableSorting: true`（保留 kind='computed' / AMD2 灵活组合）+ 注释更新指向 LATERAL JOIN 直接 ORDER BY 范式
+- **单测**（1 新文件 / 9 case）：
+  - `tests/unit/api/image-health-missing-sort.test.ts` 新建 9 case：
+    - 既有 3 字段（created_at / title / poster_status）默认 + asc/desc
+    - 新 4 字段（poster_source / broken_domain / occurrence_count / last_seen_broken_at）asc + desc
+    - LATERAL JOIN evt 子查询持续注入断言
+    - LIMIT + OFFSET 参数始终注入
+- **质量门禁全 PASS**：
+  - ✅ typecheck（8 workspace）
+  - ✅ lint（5/5 / 10s）
+  - ✅ verify:adr-contracts（D-N 178/178 闭环 / SQL alignment / shorthand 0 命中）
+  - ✅ image-health-missing-sort 9/9（**全新文件**）
+  - ✅ image-health 全套
+  - ✅ admin-ui/table **426/426 零回退**
+  - ✅ 全套 25 test files / 466 tests
+- **用户可见行为变化**：
+  - **新增**：`/admin/image-health` 缺图视频表 6 列名 ⋯ → 排序段点击真切换（title / posterStatus / posterSource / brokenDomain / occurrenceCount / lastSeenBrokenAt）
+  - **保留**：默认 created_at DESC（与 pre-existing UX 一致）
+  - **保留**：filter 段 disabled（kind='computed' 业务无意义 / ImageHealth 已有 KPI + Segment 上下文）
+- **价值**：
+  - **PATCH-2 范式第 5 消费方实证**：VideoList → Sources → Merge → CrawlerRunDetail → **ImageHealth missing** / 范式完整闭环（5 个 sort 消费方零变种）
+  - **ADR-150 阶段 5 EP-4 sort follow-up 全部闭环**（Merge ✅ + CrawlerRunDetail ✅ + ImageHealth missing ✅）
+  - **误判修正**：列定义注释 "需 CTE" 实际 LATERAL JOIN 已支持 / 修正后免去高工时重构（~0.35w 节省）
+  - **column.id ↔ sortField 桥接范式标准化**：第 3 次清晰实证（sources 'siteKey'→'site_key' + crawler 'siteKey'→'site' + duration→finishedAt + ImageHealth camelCase→snake_case 4 字段）
+- **不在范围**（剩余 follow-up）：
+  - e2e smoke 3 case + @livefree 走读 5 代表页（独立卡）
+  - score 物化（Merge 跨页稳定 sort / 需 migration / 条件触发）
+  - distinctFetcher AbortSignal（DataTable API follow-up）
+
+Cleanup-Audit: 5 文件改 + 1 新测试文件 9 case / 共 466/466 全套零回退 / 0 新组件 / 0 ADR / 0 migration / 0 CTE 重写（误判修正）/ PATCH-2 范式第 5 消费方 / column.id ↔ sortField 桥接第 3 次实证
+Plan-Revision: 0 次（关键发现修正注释 "需 CTE" 误判 / PATCH-2 范式直接复刻 / 工时 0.3-0.5w → 实际 0.15w 节省 60%+）

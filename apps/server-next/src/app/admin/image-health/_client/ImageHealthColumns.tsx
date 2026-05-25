@@ -64,12 +64,14 @@ export function buildMissingVideoColumns(): readonly TableColumn<MissingVideoRow
       },
     },
     // CHG-SN-6-RETRO-3-B / ultrareview P2-7：列扩展（运维定位）
-    // EP-3-D（2026-05-24）：子查询派生字段 / 后端 SORT_FIELDS 不含 / 业务真实禁用
-    //   kind: 'computed' → AMD2 默认 filterable+enableSorting false / 不进矩阵 popover / 不显 ⋯ trigger
-    //   后续 follow-up：CTE 重写 listMissingVideos SQL 让子查询字段可 ORDER BY → 启用 sort
+    // EP-3-D（2026-05-24）+ ADR-150 阶段 5 EP-4 follow-up（2026-05-25）：sort 全栈打通
+    //   - 保留 kind: 'computed'（filter 业务无意义 / 矩阵 popover filter 段禁用）
+    //   - 4 列显式 enableSorting: true（LATERAL JOIN evt.* 字段直接可 ORDER BY / 无需 CTE 重写）
+    //   - 前端 column.id camelCase → 后端 sortField snake_case 桥接（ImageHealthClient load() switch）
     {
       id: 'posterSource',
       kind: 'computed',
+      enableSorting: true, // ADR-150 阶段 5 EP-4 follow-up sort 全栈（'posterSource' → 'poster_source'）
       header: '海报来源',
       accessor: (r) => r.posterSource ?? '—',
       width: 110,
@@ -83,6 +85,7 @@ export function buildMissingVideoColumns(): readonly TableColumn<MissingVideoRow
     {
       id: 'brokenDomain',
       kind: 'computed',
+      enableSorting: true, // ADR-150 阶段 5 EP-4 follow-up sort 全栈（'brokenDomain' → 'broken_domain' / evt.url 排序近似域名）
       header: '破损域名',
       accessor: (r) => r.brokenDomain ?? '',
       minWidth: 200,
@@ -96,6 +99,7 @@ export function buildMissingVideoColumns(): readonly TableColumn<MissingVideoRow
     {
       id: 'occurrenceCount',
       kind: 'computed',
+      enableSorting: true, // ADR-150 阶段 5 EP-4 follow-up sort 全栈（'occurrenceCount' → 'occurrence_count'）
       header: '破损次数',
       accessor: (r) => r.occurrenceCount,
       width: 100,
@@ -116,6 +120,7 @@ export function buildMissingVideoColumns(): readonly TableColumn<MissingVideoRow
     {
       id: 'lastSeenBrokenAt',
       kind: 'computed',
+      enableSorting: true, // ADR-150 阶段 5 EP-4 follow-up sort 全栈（'lastSeenBrokenAt' → 'last_seen_broken_at'）
       header: '最近破损',
       accessor: (r) => r.lastSeenBrokenAt ?? '',
       width: 130,

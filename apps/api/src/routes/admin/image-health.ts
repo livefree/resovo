@@ -32,7 +32,11 @@ const BrokenDomainsQuerySchema = z.object({
 const MissingVideosQuerySchema = z.object({
   page:      z.coerce.number().int().min(1).default(1),
   limit:     z.coerce.number().int().min(1).max(100).default(20),
-  sortField: z.enum(['created_at', 'title', 'poster_status']).default('created_at'),
+  // ADR-150 阶段 5 EP-4 follow-up（2026-05-25）：sort 白名单扩 4 子查询派生字段
+  sortField: z.enum([
+    'created_at', 'title', 'poster_status',
+    'poster_source', 'broken_domain', 'occurrence_count', 'last_seen_broken_at',
+  ]).default('created_at'),
   sortDir:   z.enum(['asc', 'desc']).default('desc'),
 })
 

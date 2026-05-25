@@ -41,7 +41,10 @@ export interface MissingVideoRow {
 export interface ListMissingVideosParams {
   readonly page?: number
   readonly limit?: number
-  readonly sortField?: 'created_at' | 'title' | 'poster_status'
+  // ADR-150 阶段 5 EP-4 follow-up（2026-05-25）：sort 白名单扩 4 子查询派生字段
+  readonly sortField?:
+    | 'created_at' | 'title' | 'poster_status'
+    | 'poster_source' | 'broken_domain' | 'occurrence_count' | 'last_seen_broken_at'
   readonly sortDir?: 'asc' | 'desc'
 }
 
