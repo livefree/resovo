@@ -52,7 +52,6 @@ export interface CrawlerSiteListProps {
   readonly onCopyKey?: (key: string) => void
   readonly onMarkAdult?: (site: CrawlerSite) => void
   readonly onMarkShortdrama?: (site: CrawlerSite) => void
-  readonly onDelete?: (site: CrawlerSite) => void
   // ── REDO-01-E 行展开 ──────────────────────────────────────────
   readonly expandedKeys?: ReadonlySet<string>
   readonly onToggleExpand?: (siteKey: string) => void
@@ -73,7 +72,6 @@ export function CrawlerSiteList({
   onCopyKey,
   onMarkAdult,
   onMarkShortdrama,
-  onDelete,
   expandedKeys,
   onToggleExpand,
   renderExpandedRow,
@@ -107,7 +105,6 @@ export function CrawlerSiteList({
       onCopyKey,
       onMarkAdult,
       onMarkShortdrama,
-      onDelete,
       expandedKeys,
       onToggleExpand,
     }),
@@ -120,7 +117,6 @@ export function CrawlerSiteList({
       onCopyKey,
       onMarkAdult,
       onMarkShortdrama,
-      onDelete,
       expandedKeys,
       onToggleExpand,
     ],

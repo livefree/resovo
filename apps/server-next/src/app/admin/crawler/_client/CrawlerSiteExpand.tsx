@@ -25,7 +25,6 @@ import {
   upsertLineAlias,
   testRoute,
   reprobeRoute,
-  deleteRoute,
 } from '@/lib/sources/api'
 import type { SourceRouteBySite } from '@/lib/sources/types'
 import { ApiClientError } from '@/lib/api-client'
@@ -236,28 +235,6 @@ export function CrawlerSiteExpand({ siteKey, siteName, currentRole = 'admin' }: 
     }
   }, [siteKey, toast])
 
-  const handleDelete = useCallback(async (sourceName: string) => {
-    if (!confirm(`确定删除线路「${sourceName}」？将软删除该线路下所有 video_source 行（可由后台数据恢复）。`)) {
-      return
-    }
-    setPendingAction(`delete:${sourceName}`)
-    try {
-      const result = await deleteRoute(siteKey, sourceName)
-      toast.push({
-        title: '已删除线路',
-        description: `${siteKey} / ${sourceName} · ${result.deletedCount} 行`,
-        level: 'success',
-      })
-      // 删除后从本地状态移除该行
-      setRows((prev) => (prev ? prev.filter((r) => r.sourceName !== sourceName) : prev))
-    } catch (err: unknown) {
-      const { title, description } = describeApiError(err)
-      toast.push({ title, description, level: 'danger' })
-    } finally {
-      setPendingAction(null)
-    }
-  }, [siteKey, toast])
-
   if (loading && !rows) {
     return (
       <div style={WRAPPER_STYLE} data-testid={`crawler-expand-loading-${siteKey}`}>
@@ -303,7 +280,7 @@ export function CrawlerSiteExpand({ siteKey, siteName, currentRole = 'admin' }: 
             <th style={{ ...TH_STYLE, width: 70 }}>探测</th>
             <th style={{ ...TH_STYLE, width: 70 }}>播放</th>
             <th style={{ ...TH_STYLE, width: 70 }}>延迟</th>
-            <th style={{ ...TH_STYLE, width: 110 }}>操作</th>
+            <th style={{ ...TH_STYLE, width: 80 }}>操作</th>
           </tr>
         </thead>
         <tbody>
@@ -316,7 +293,6 @@ export function CrawlerSiteExpand({ siteKey, siteName, currentRole = 'admin' }: 
               onAliasSave={handleAliasSave}
               onTest={handleTest}
               onReprobe={handleReprobe}
-              onDelete={handleDelete}
             />
           ))}
         </tbody>
@@ -335,7 +311,6 @@ function RouteRow({
   onAliasSave,
   onTest,
   onReprobe,
-  onDelete,
 }: {
   readonly row: SourceRouteBySite
   readonly isAdmin: boolean
@@ -343,7 +318,6 @@ function RouteRow({
   readonly onAliasSave: (sourceName: string, displayName: string) => Promise<void>
   readonly onTest: (sourceName: string) => void
   readonly onReprobe: (sourceName: string) => void
-  readonly onDelete: (sourceName: string) => void
 }) {
   const [draft, setDraft] = useState<string>(row.displayName ?? '')
   const [saving, setSaving] = useState(false)
@@ -371,8 +345,7 @@ function RouteRow({
   const adminGuardTitle = isAdmin ? undefined : '该操作需要管理员权限'
   const testPending = pendingAction === `test:${row.sourceName}`
   const reprobePending = pendingAction === `reprobe:${row.sourceName}`
-  const deletePending = pendingAction === `delete:${row.sourceName}`
-  const anyPending = testPending || reprobePending || deletePending
+  const anyPending = testPending || reprobePending
 
   return (
     <tr data-source-name={row.sourceName}>
@@ -431,18 +404,6 @@ function RouteRow({
             data-testid={`crawler-route-reprobe-${row.sourceName}`}
           >
             ↻
-          </AdminButton>
-          <AdminButton
-            size="sm"
-            variant="danger"
-            disabled={!isAdmin || anyPending}
-            loading={deletePending}
-            onClick={() => onDelete(row.sourceName)}
-            aria-label={`删除 ${row.sourceName}`}
-            title={adminGuardTitle}
-            data-testid={`crawler-route-delete-${row.sourceName}`}
-          >
-            🗑
           </AdminButton>
         </span>
       </td>

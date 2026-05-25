@@ -33,8 +33,6 @@ export interface CrawlerSiteColumnsCallbacks {
   readonly onMarkAdult?: (site: CrawlerSite) => void
   /** {more} dropdown 行项 — 标记短剧/标记 vod 切换 */
   readonly onMarkShortdrama?: (site: CrawlerSite) => void
-  /** {more} dropdown 行项 — 删除站点（fromConfig 时 dropdown 内 disabled）*/
-  readonly onDelete?: (site: CrawlerSite) => void
   /** 行展开状态读（REDO-01-E 实装：chevron 旋转 + 行点击 toggle） */
   readonly expandedKeys?: ReadonlySet<string>
   /** 行展开 toggle 回调（REDO-01-E）*/
@@ -224,7 +222,6 @@ export function buildCrawlerSiteColumnsV2(
     onCopyKey = NOOP_KEY,
     onMarkAdult = NOOP_SITE,
     onMarkShortdrama = NOOP_SITE,
-    onDelete = NOOP_SITE,
   } = callbacks
 
   return [
@@ -429,7 +426,6 @@ export function buildCrawlerSiteColumnsV2(
             onCopyKey={onCopyKey}
             onMarkAdult={onMarkAdult}
             onMarkShortdrama={onMarkShortdrama}
-            onDelete={onDelete}
           />
         </span>
       ),

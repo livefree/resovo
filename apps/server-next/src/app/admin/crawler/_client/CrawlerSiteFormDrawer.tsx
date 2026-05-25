@@ -20,7 +20,6 @@ import {
 import {
   validateCrawlerSite,
   type CreateCrawlerSiteInput,
-  type CrawlerSite,
 } from '@/lib/crawler/api'
 import { ApiClientError } from '@/lib/api-client'
 
@@ -64,10 +63,7 @@ export interface CrawlerSiteFormDrawerProps {
   readonly onFormChange: (next: CreateCrawlerSiteInput) => void
   readonly onClose: () => void
   readonly onSubmit: () => Promise<void> | void
-  readonly onDelete?: (site: CrawlerSite) => void
   readonly submitting: boolean
-  /** edit 模式删除按钮需要原 site 对象（fromConfig 判定） */
-  readonly editSite?: CrawlerSite
 }
 
 export function CrawlerSiteFormDrawer({
@@ -77,9 +73,7 @@ export function CrawlerSiteFormDrawer({
   onFormChange,
   onClose,
   onSubmit,
-  onDelete,
   submitting,
-  editSite,
 }: CrawlerSiteFormDrawerProps) {
   const toast = useToast()
   const [validating, setValidating] = useState(false)
@@ -190,19 +184,6 @@ export function CrawlerSiteFormDrawer({
         />
       </div>
       <div style={FORM_ACTIONS_STYLE}>
-        {mode.kind === 'edit' && editSite && onDelete ? (
-          <AdminButton
-            variant="danger"
-            size="sm"
-            onClick={() => {
-              onClose()
-              onDelete(editSite)
-            }}
-            data-testid="crawler-form-delete"
-          >
-            删除站点
-          </AdminButton>
-        ) : null}
         <AdminButton
           variant="ghost"
           size="sm"

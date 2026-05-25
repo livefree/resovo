@@ -33,7 +33,6 @@ import {
   runCrawlerSite,
   createCrawlerSite,
   updateCrawlerSite,
-  deleteCrawlerSite,
   type CrawlerSite,
   type CrawlerSiteStat,
   type CrawlerSystemStatus,
@@ -208,27 +207,6 @@ export function CrawlerClient() {
       setSubmitting(false)
     }
   }, [form, formMode, refresh, toast])
-
-  const handleDelete = useCallback(async (site: CrawlerSite) => {
-    if (site.fromConfig) {
-      toast.push({
-        title: '禁止删除',
-        description: 'config 文件来源站点不可删除；请在配置文件中移除后重新保存',
-        level: 'warn',
-      })
-      return
-    }
-    if (!confirm(`确定删除站点 ${site.key}（${site.name}）？`)) return
-    try {
-      await deleteCrawlerSite(site.key)
-      toast.push({ title: '已删除', description: site.key, level: 'success' })
-      setDrawerOpen(false)
-      refresh()
-    } catch (err: unknown) {
-      const { title, description } = describeApiError(err)
-      toast.push({ title, description, level: 'danger' })
-    }
-  }, [refresh, toast])
 
   // CHG-SN-8-03：W1 金票 ② 软深链 — toast action 跳 /admin/moderation?run_id=<id>
   const buildModerationDeepLinkAction = useCallback(
@@ -432,14 +410,24 @@ export function CrawlerClient() {
     ? new Map(kpi.siteStats.map((s) => [s.key, s]))
     : undefined
 
-  const editSite =
-    formMode.kind === 'edit' ? sites.find((s) => s.key === formMode.key) : undefined
+  // CW1-A 定时面板 1/3：subtitle 加 inline 「下次自动: MM-DD HH:mm」chip
+  const autoCrawlNext = status?.autoCrawlNext
+  const formatAutoCrawlChip = (iso: string | null | undefined): string => {
+    if (!iso) return '未启用'
+    const d = new Date(iso)
+    if (Number.isNaN(d.getTime())) return '未启用'
+    const mm = String(d.getMonth() + 1).padStart(2, '0')
+    const dd = String(d.getDate()).padStart(2, '0')
+    const hh = String(d.getHours()).padStart(2, '0')
+    const mi = String(d.getMinutes()).padStart(2, '0')
+    return `${mm}-${dd} ${hh}:${mi}`
+  }
 
   return (
     <div data-crawler-client style={PAGE_STYLE}>
       <PageHeader
         title="采集控制"
-        subtitle={`${sites.length} 个站点 · ${status?.freezeEnabled ? '全局冻结中' : '实时'} · MVP（REDO-01-C 骨架）`}
+        subtitle={`${sites.length} 个站点 · ${status?.freezeEnabled ? '采集已关闭' : '实时'} · 下次自动: ${formatAutoCrawlChip(autoCrawlNext)}`}
         actions={
           <span style={ACTIONS_STYLE}>
             <AdminButton
@@ -503,7 +491,6 @@ export function CrawlerClient() {
         onCopyKey={handleCopyKey}
         onMarkAdult={handleMarkAdult}
         onMarkShortdrama={handleMarkShortdrama}
-        onDelete={handleDelete}
         expandedKeys={expandedKeys}
         onToggleExpand={(siteKey) => {
           setExpandedKeys((prev) => {
@@ -525,9 +512,7 @@ export function CrawlerClient() {
         onFormChange={setForm}
         onClose={() => setDrawerOpen(false)}
         onSubmit={handleSubmit}
-        onDelete={handleDelete}
         submitting={submitting}
-        editSite={editSite}
       />
 
       {/* REDO-01-G 调度配置 drawer（CrawlerAdvancedMenu 触发） */}

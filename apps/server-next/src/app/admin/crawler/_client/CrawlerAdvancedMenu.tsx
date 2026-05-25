@@ -143,12 +143,12 @@ export function CrawlerAdvancedMenu({
   const items: readonly AdminDropdownItem[] = [
     {
       key: 'view_runs',
-      label: '查看采集批次',
+      label: '采集记录',
       onClick: handleViewRuns,
     },
     {
       key: 'run_all_full',
-      label: runAllFullPending ? '全站全量采集 …' : '全站全量采集',
+      label: runAllFullPending ? '全站全量 …' : '全站全量',
       danger: true,
       separator: true,
       disabled: runAllFullPending,
@@ -156,18 +156,18 @@ export function CrawlerAdvancedMenu({
     },
     {
       key: 'scheduler',
-      label: '调度配置',
+      label: '定时设置',
       onClick: handleScheduler,
     },
     {
       key: 'reindex',
-      label: pendingKey === 'reindex' ? '重建 ES 索引 …' : '重建 ES 索引',
+      label: pendingKey === 'reindex' ? '重建索引 …' : '重建索引',
       disabled: pendingKey === 'reindex',
       onClick: () => void handleReindex(),
     },
     {
       key: 'stop_all',
-      label: pendingKey === 'stop_all' ? '全局止血 …' : '全局止血',
+      label: pendingKey === 'stop_all' ? '一键停采 …' : '一键停采',
       danger: true,
       separator: true,
       disabled: pendingKey === 'stop_all',
@@ -175,9 +175,10 @@ export function CrawlerAdvancedMenu({
     },
     {
       key: 'freeze',
+      // freeze 语义 = "阻拦新任务接收"；开启 freeze == 关闭采集；关闭 freeze == 开启采集
       label: pendingKey === 'freeze'
-        ? (frozen ? '解除冻结 …' : '开启冻结 …')
-        : (frozen ? '解除冻结' : '开启冻结'),
+        ? (frozen ? '开启采集 …' : '关闭采集 …')
+        : (frozen ? '开启采集' : '关闭采集'),
       disabled: pendingKey === 'freeze',
       onClick: () => void handleToggleFreeze(),
     },

@@ -23,7 +23,6 @@ export interface CrawlerSiteRowActionsProps {
   readonly onCopyKey: (key: string) => void
   readonly onMarkAdult: (site: CrawlerSite) => void
   readonly onMarkShortdrama: (site: CrawlerSite) => void
-  readonly onDelete: (site: CrawlerSite) => void
 }
 
 const TRIGGER_STYLE: CSSProperties = {
@@ -44,7 +43,6 @@ export function CrawlerSiteRowActions({
   onCopyKey,
   onMarkAdult,
   onMarkShortdrama,
-  onDelete,
 }: CrawlerSiteRowActionsProps) {
   const [open, setOpen] = useState(false)
 
@@ -89,19 +87,6 @@ export function CrawlerSiteRowActions({
       onClick: () => {
         close()
         onMarkShortdrama(site)
-      },
-    },
-    {
-      key: 'delete',
-      // CHG-SN-7-MISC-CRAWLER-CONFIG-ORPHAN-DELETE：fromConfig=true 站点指引用户走配置文件路径
-      // 后端 POST /admin/system/config 已支持同步删除配置文件移除的孤儿站点
-      label: site.fromConfig ? '删除（请在「站点设置 → 高级配置」修改配置文件）' : '删除站点',
-      danger: true,
-      disabled: site.fromConfig,
-      separator: true,
-      onClick: () => {
-        close()
-        onDelete(site)
       },
     },
   ]

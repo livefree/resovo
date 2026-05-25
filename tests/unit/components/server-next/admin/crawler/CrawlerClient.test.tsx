@@ -355,7 +355,7 @@ describe('CrawlerClient (REDO-01-C 骨架)', () => {
     render(<CrawlerClient />)
     const trigger = await waitFor(() => screen.getByTestId('crawler-advanced-trigger'))
     fireEvent.click(trigger)
-    const fullItem = await waitFor(() => screen.getByText('全站全量采集'))
+    const fullItem = await waitFor(() => screen.getByText('全站全量'))
     fireEvent.click(fullItem)
 
     await waitFor(() => {
@@ -377,7 +377,7 @@ describe('CrawlerClient (REDO-01-C 骨架)', () => {
     render(<CrawlerClient />)
     const trigger = await waitFor(() => screen.getByTestId('crawler-advanced-trigger'))
     fireEvent.click(trigger)
-    const fullItem = await waitFor(() => screen.getByText('全站全量采集'))
+    const fullItem = await waitFor(() => screen.getByText('全站全量'))
     fireEvent.click(fullItem)
 
     await new Promise((r) => setTimeout(r, 0))
@@ -399,7 +399,7 @@ describe('CrawlerClient (REDO-01-C 骨架)', () => {
     render(<CrawlerClient />)
     const trigger = await waitFor(() => screen.getByTestId('crawler-advanced-trigger'))
     fireEvent.click(trigger)
-    const fullItem = await waitFor(() => screen.getByText('全站全量采集'))
+    const fullItem = await waitFor(() => screen.getByText('全站全量'))
     fireEvent.click(fullItem)
 
     await new Promise((r) => setTimeout(r, 0))
@@ -416,7 +416,7 @@ describe('CrawlerClient (REDO-01-C 骨架)', () => {
     render(<CrawlerClient />)
     const trigger = await waitFor(() => screen.getByTestId('crawler-advanced-trigger'))
     fireEvent.click(trigger)
-    const fullItem = await waitFor(() => screen.getByText('全站全量采集'))
+    const fullItem = await waitFor(() => screen.getByText('全站全量'))
     fireEvent.click(fullItem)
 
     await waitFor(() => {
@@ -548,13 +548,32 @@ describe('CrawlerClient (REDO-01-C 骨架)', () => {
     })
   })
 
-  it('16. PageHeader subtitle 包含站点计数 + 实时/冻结状态', async () => {
+  it('16. PageHeader subtitle 包含站点计数 + 采集已关闭状态 + 下次自动 chip [CW1-A]', async () => {
     listCrawlerSitesMock.mockResolvedValueOnce([SITE_1])
     getCrawlerSystemStatusMock.mockResolvedValue({ freezeEnabled: true })
     render(<CrawlerClient />)
     await waitFor(() => {
       expect(screen.getByText(/1 个站点/)).not.toBeNull()
-      expect(screen.getByText(/全局冻结中/)).not.toBeNull()
+      expect(screen.getByText(/采集已关闭/)).not.toBeNull()
+      // CW1-A 定时面板 1/3：autoCrawlNext 未注入时 → "下次自动: 未启用"
+      expect(screen.getByText(/下次自动: 未启用/)).not.toBeNull()
+    })
+  })
+
+  it('16b. PageHeader subtitle 下次自动 chip — autoCrawlNext ISO → MM-DD HH:mm 格式 [CW1-A]', async () => {
+    listCrawlerSitesMock.mockResolvedValueOnce([SITE_1])
+    // 用未来时间避免时区敏感（取一个固定 ISO）
+    const futureIso = '2030-06-15T08:30:00.000Z'
+    getCrawlerSystemStatusMock.mockResolvedValue({ autoCrawlNext: futureIso })
+    render(<CrawlerClient />)
+    await waitFor(() => {
+      // 本地时区渲染：用 new Date(iso).getHours()/getMinutes() 推断断言（避免硬编码时区）
+      const d = new Date(futureIso)
+      const mm = String(d.getMonth() + 1).padStart(2, '0')
+      const dd = String(d.getDate()).padStart(2, '0')
+      const hh = String(d.getHours()).padStart(2, '0')
+      const mi = String(d.getMinutes()).padStart(2, '0')
+      expect(screen.getByText(new RegExp(`下次自动: ${mm}-${dd} ${hh}:${mi}`))).not.toBeNull()
     })
   })
 })
@@ -624,7 +643,7 @@ describe('CrawlerClient (REDO-01-D 行级操作)', () => {
     })
   })
 
-  it('21. {more} dropdown：点击 trigger 展开菜单（6 项渲染）', async () => {
+  it('21. {more} dropdown：点击 trigger 展开菜单（5 项渲染 / CW1-A 撤 delete）', async () => {
     listCrawlerSitesMock.mockResolvedValueOnce([SITE_1])
     render(<CrawlerClient />)
     const trigger = await waitFor(() => screen.getByTestId('crawler-row-actions-trigger-jszyapi'))
@@ -635,7 +654,8 @@ describe('CrawlerClient (REDO-01-D 行级操作)', () => {
       expect(screen.getByText('复制 key')).not.toBeNull()
       expect(screen.getByText('标记成人')).not.toBeNull() // SITE_1.isAdult=false
       expect(screen.getByText('标记短剧')).not.toBeNull() // SITE_1.sourceType=vod
-      expect(screen.getByText('删除站点')).not.toBeNull() // SITE_1.fromConfig=false
+      // CW1-A：撤回 "删除站点" 入口（后端端点保留供运维脚本 + config 孤儿同步）
+      expect(screen.queryByText('删除站点')).toBeNull()
     })
   })
 
@@ -692,18 +712,6 @@ describe('CrawlerClient (REDO-01-D 行级操作)', () => {
     fireEvent.click(item)
     await waitFor(() => {
       expect(updateCrawlerSiteMock).toHaveBeenCalledWith('jszyapi', { sourceType: 'shortdrama' })
-    })
-  })
-
-  it('26. {more} → fromConfig=true 站点的删除项 disabled label + 指引用户走配置文件路径', async () => {
-    const SITE_CFG = { ...SITE_1, key: 'cfg', fromConfig: true }
-    listCrawlerSitesMock.mockResolvedValueOnce([SITE_CFG])
-    render(<CrawlerClient />)
-    const trigger = await waitFor(() => screen.getByTestId('crawler-row-actions-trigger-cfg'))
-    fireEvent.click(trigger)
-    // CHG-SN-7-MISC-CRAWLER-CONFIG-ORPHAN-DELETE：label 更新为指引用户走「站点设置 → 高级配置」路径
-    await waitFor(() => {
-      expect(screen.getByText(/删除（请在.*站点设置.*高级配置.*修改配置文件）/)).not.toBeNull()
     })
   })
 
@@ -923,35 +931,15 @@ describe('CrawlerClient (REDO-01-E2 行级 3 mutations + role 守卫)', () => {
     })
   })
 
-  it('40. delete 按钮：confirm 通过 → deleteRoute + 成功 toast + 行移除', async () => {
-    listCrawlerSitesMock.mockResolvedValueOnce([SITE_1])
-    listRoutesBySiteMock.mockResolvedValueOnce([ROUTE_1])
-    deleteRouteMock.mockResolvedValueOnce({ deletedCount: 5 })
-    render(<CrawlerClient />)
-    fireEvent.click(await waitFor(() => screen.getByTestId('crawler-row-expand-jszyapi')))
-    const btn = await waitFor(() => screen.getByTestId('crawler-route-delete-线路1'))
-    fireEvent.click(btn)
-    await waitFor(() => {
-      expect(deleteRouteMock).toHaveBeenCalledWith('jszyapi', '线路1')
-      expect(toastPushMock).toHaveBeenCalledWith(
-        expect.objectContaining({ level: 'success', title: '已删除线路' }),
-      )
-      // 删除后线路行从 sub-table 消失
-      expect(screen.queryByTestId('crawler-route-delete-线路1')).toBeNull()
-    })
-  })
-
-  it('41. delete 按钮：confirm 拒绝 → 不调 API', async () => {
-    confirmSpy.mockReset().mockReturnValue(false)
-    ;(globalThis as unknown as { confirm: typeof confirmSpy }).confirm = confirmSpy
+  it('40+41. CW1-A 撤回线路删除入口：crawler-route-delete-* testid 不再渲染', async () => {
     listCrawlerSitesMock.mockResolvedValueOnce([SITE_1])
     listRoutesBySiteMock.mockResolvedValueOnce([ROUTE_1])
     render(<CrawlerClient />)
     fireEvent.click(await waitFor(() => screen.getByTestId('crawler-row-expand-jszyapi')))
-    const btn = await waitFor(() => screen.getByTestId('crawler-route-delete-线路1'))
-    fireEvent.click(btn)
-    await new Promise((r) => setTimeout(r, 0))
-    expect(deleteRouteMock).not.toHaveBeenCalled()
+    // 行展开 + route 渲染后断言 delete 按钮缺失（test/reprobe 仍存在）
+    await waitFor(() => screen.getByTestId('crawler-route-test-线路1'))
+    expect(screen.queryByTestId('crawler-route-delete-线路1')).toBeNull()
+    expect(screen.getByTestId('crawler-route-reprobe-线路1')).not.toBeNull()
   })
 
   it('42. reprobe 失败 STATE_CONFLICT → 冻结 toast', async () => {
@@ -979,31 +967,33 @@ describe('CrawlerClient (REDO-01-G 高级 dropdown)', () => {
     expect(trigger.textContent).toContain('高级')
   })
 
-  it('44. 点击 trigger 展开 dropdown → 4 项渲染（调度 / 重建 / 止血 / 冻结）', async () => {
+  it('44. 点击 trigger 展开 dropdown → 4 项渲染（CW1-A 4 字命名：定时设置/重建索引/一键停采/关闭采集）', async () => {
     render(<CrawlerClient />)
     fireEvent.click(await waitFor(() => screen.getByTestId('crawler-advanced-trigger')))
     await waitFor(() => {
-      expect(screen.getByText('调度配置')).not.toBeNull()
-      expect(screen.getByText('重建 ES 索引')).not.toBeNull()
-      expect(screen.getByText('全局止血')).not.toBeNull()
-      expect(screen.getByText('开启冻结')).not.toBeNull()  // SYSTEM_STATUS 默认 freezeEnabled=undefined → false
+      expect(screen.getByText('定时设置')).not.toBeNull()
+      expect(screen.getByText('重建索引')).not.toBeNull()
+      expect(screen.getByText('一键停采')).not.toBeNull()
+      // SYSTEM_STATUS 默认 freezeEnabled=undefined → false → 显示"关闭采集"（点击会开启 freeze == 关闭采集）
+      expect(screen.getByText('关闭采集')).not.toBeNull()
     })
   })
 
-  it('45. frozen=true → 显示"解除冻结"动态 label', async () => {
+  it('45. frozen=true → 显示"开启采集"动态 label（CW1-A 命名反转）', async () => {
     getCrawlerSystemStatusMock.mockResolvedValue({ freezeEnabled: true })
     render(<CrawlerClient />)
     fireEvent.click(await waitFor(() => screen.getByTestId('crawler-advanced-trigger')))
     await waitFor(() => {
-      expect(screen.getByText('解除冻结')).not.toBeNull()
+      // freeze=true (采集已关闭) → 点击会解除 freeze == 开启采集
+      expect(screen.getByText('开启采集')).not.toBeNull()
     })
   })
 
-  it('46. 冻结切换：开启冻结 confirm 通过 → setCrawlerFreeze(true) + success toast', async () => {
+  it('46. 冻结切换：关闭采集 confirm 通过 → setCrawlerFreeze(true) + success toast', async () => {
     setCrawlerFreezeMock.mockResolvedValueOnce({ freezeEnabled: true, orphanTaskCount: 2 })
     render(<CrawlerClient />)
     fireEvent.click(await waitFor(() => screen.getByTestId('crawler-advanced-trigger')))
-    fireEvent.click(await waitFor(() => screen.getByText('开启冻结')))
+    fireEvent.click(await waitFor(() => screen.getByText('关闭采集')))
     await waitFor(() => {
       expect(setCrawlerFreezeMock).toHaveBeenCalledWith(true)
       expect(toastPushMock).toHaveBeenCalledWith(
@@ -1012,13 +1002,13 @@ describe('CrawlerClient (REDO-01-G 高级 dropdown)', () => {
     })
   })
 
-  it('47. 全局止血：双重 confirm 通过 → stopAllCrawler + status 合并 freezeEnabled=true', async () => {
+  it('47. 一键停采：双重 confirm 通过 → stopAllCrawler + status 合并 freezeEnabled=true', async () => {
     stopAllCrawlerMock.mockResolvedValueOnce({
       freezeEnabled: true, markedRuns: 2, pendingCancelled: 5, runningSignaled: 3,
     })
     render(<CrawlerClient />)
     fireEvent.click(await waitFor(() => screen.getByTestId('crawler-advanced-trigger')))
-    fireEvent.click(await waitFor(() => screen.getByText('全局止血')))
+    fireEvent.click(await waitFor(() => screen.getByText('一键停采')))
     await waitFor(() => {
       expect(stopAllCrawlerMock).toHaveBeenCalledWith({ freeze: true, removeRepeatableTick: true })
       expect(toastPushMock).toHaveBeenCalledWith(
@@ -1031,7 +1021,7 @@ describe('CrawlerClient (REDO-01-G 高级 dropdown)', () => {
     triggerReindexMock.mockResolvedValueOnce({ indexed: 1234, duration_ms: 5000 })
     render(<CrawlerClient />)
     fireEvent.click(await waitFor(() => screen.getByTestId('crawler-advanced-trigger')))
-    fireEvent.click(await waitFor(() => screen.getByText('重建 ES 索引')))
+    fireEvent.click(await waitFor(() => screen.getByText('重建索引')))
     await waitFor(() => {
       expect(triggerReindexMock).toHaveBeenCalledOnce()
       expect(toastPushMock).toHaveBeenCalledWith(
@@ -1040,23 +1030,22 @@ describe('CrawlerClient (REDO-01-G 高级 dropdown)', () => {
     })
   })
 
-  it('49. 调度配置：点击 → SchedulerConfigDrawer 渲染（drawer 打开）', async () => {
+  it('49. 定时设置：点击 → SchedulerConfigDrawer 渲染（drawer 打开）', async () => {
     render(<CrawlerClient />)
     fireEvent.click(await waitFor(() => screen.getByTestId('crawler-advanced-trigger')))
-    fireEvent.click(await waitFor(() => screen.getByText('调度配置')))
-    // SchedulerConfigDrawer 内 testId / 元素未知，断言 dropdown 关闭即可
+    fireEvent.click(await waitFor(() => screen.getByText('定时设置')))
     await waitFor(() => {
-      // 调度配置项点击后 dropdown 应关闭（onClick → close）
-      expect(screen.queryByText('全局止血')).toBeNull()
+      // 项点击后 dropdown 应关闭
+      expect(screen.queryByText('一键停采')).toBeNull()
     })
   })
 
-  it('50. confirm 拒绝（冻结）→ 不调 API', async () => {
+  it('50. confirm 拒绝（关闭采集）→ 不调 API', async () => {
     confirmSpy.mockReset().mockReturnValue(false)
     ;(globalThis as unknown as { confirm: typeof confirmSpy }).confirm = confirmSpy
     render(<CrawlerClient />)
     fireEvent.click(await waitFor(() => screen.getByTestId('crawler-advanced-trigger')))
-    fireEvent.click(await waitFor(() => screen.getByText('开启冻结')))
+    fireEvent.click(await waitFor(() => screen.getByText('关闭采集')))
     await new Promise((r) => setTimeout(r, 0))
     expect(setCrawlerFreezeMock).not.toHaveBeenCalled()
   })

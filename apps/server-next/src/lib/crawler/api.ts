@@ -67,6 +67,8 @@ export interface CrawlerSystemStatus {
   readonly orphanTaskCount?: number
   /** CHG-SN-6-20-B：env CRAWLER_SCHEDULER_ENABLED */
   readonly schedulerEnabled?: boolean
+  /** CW1-A 定时面板 1/3：下一次自动采集 ISO timestamp（globalEnabled=false 或无 schedule → null） */
+  readonly autoCrawlNext?: string | null
   readonly [key: string]: unknown
 }
 

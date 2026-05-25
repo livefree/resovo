@@ -222,7 +222,7 @@ export function SchedulerConfigDrawer({ open, onClose, onSaved }: SchedulerConfi
       onClose={onClose}
       placement="right"
       width={480}
-      title="调度配置"
+      title="定时设置"
       data-testid="scheduler-config-drawer"
     >
       {loading && !config ? (

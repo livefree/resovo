@@ -5917,3 +5917,69 @@ Subagents-Reference: arch-reviewer (claude-opus-4-7) — PATCH-2B 评审 commit 
 
 Cleanup-Audit: 1 文件改 / 6 处状态修订 / 0 业务代码改 / 0 新 ADR / 0 migration / typecheck + lint + verify 全过
 Plan-Revision: 0 次（用户 AskUserQuestion 一次确认 / 实施一次 PASS / 纯文档修订）
+
+## [2026-05-25] CHG-SN-9-CW1-A · 采集页 UI 三合一（命名 + 撤删除 + inline chip）
+
+- **触发**：用户复核 /admin/crawler 整体设计 → 新会话 plan 模式 17 项改进归类 → W1 设计决策敲定 5 张卡 / SEQ-20260525-CRAWLER-W1 注册 / 卡 1 启动
+- **范围**（9 文件改 / 1 测试文件更新 / 0 新 ADR / 0 migration / 0 新单测文件）：
+  - **6 项 4 字命名**（CrawlerAdvancedMenu.tsx items.label + 关联 confirm）：
+    - 全站全量采集 → 全站全量
+    - 查看采集批次 → 采集记录
+    - 调度配置 → 定时设置（SchedulerConfigDrawer title 同步）
+    - 重建 ES 索引 → 重建索引
+    - 全局止血 → 一键停采
+    - 开启冻结 / 解除冻结 → 关闭采集 / 开启采集（动态 4 字 / 与 freeze 状态语义一致 ↔ "采集已关闭"）
+  - **撤回 UI 删除入口 4 处**（CrawlerSiteRowActions / CrawlerSiteFormDrawer / CrawlerSiteExpand / CrawlerSiteList + crawler-site-columns-v2 props 链路清理）：
+    - row dropdown {more} `delete` 菜单项删除
+    - form drawer `删除站点` 红按钮 + props.onDelete + editSite 删除
+    - 线路展开行 🗑 按钮 + handleDelete + deleteRoute import 删除
+    - actions cell width 110 → 80
+    - **后端端点保留**（DELETE /admin/crawler/sites/:key + sites/batch + deleteRoute 仍可用于 config 孤儿同步 / 数据修复脚本）
+  - **CrawlerClient.tsx subtitle inline chip**（定时面板 1/3）：
+    - 删 handleDelete 函数（dead code）+ 删 deleteCrawlerSite import + 删 editSite 计算 + 删 onDelete props 透传 2 处
+    - PageHeader subtitle 改写：`X 个站点 · 实时/采集已关闭 · 下次自动: MM-DD HH:mm`（formatAutoCrawlChip 工具）
+  - **后端 system-status 加 autoCrawlNext 字段**（apps/api/src/routes/admin/crawler.ts）：
+    - 新增 computeNextTrigger() 工具：scheduleType='daily' 时返回今日/明日 dailyTime ISO；globalEnabled=false → null
+    - Promise.all 并发拉取 freeze + orphan + autoConfig（无新增 query）
+    - CrawlerSystemStatus interface 加 `readonly autoCrawlNext?: string | null`
+  - **测试更新**（tests/unit/components/server-next/admin/crawler/CrawlerClient.test.tsx）：
+    - 测试 16：subtitle 断言更新（采集已关闭 + 下次自动: 未启用） + 测试 16b 新增（autoCrawlNext ISO → MM-DD HH:mm）
+    - 测试 21：6 项 → 5 项（断言 queryByText 删除站点 toBeNull）
+    - 测试 26 / 40 / 41：整体删除（fromConfig 删除指引 / route delete confirm 2 case）
+    - 测试 44-50：旧 label 全替换为新 4 字命名
+    - 4 处 `screen.getByText('全站全量采集')` → `'全站全量'`
+    - 总 61/61 测试 PASS（CrawlerClient.test.tsx 独立）
+- **质量门禁**：
+  - ✅ typecheck（8 workspace 全过）
+  - ✅ lint（仅 pre-existing react-hooks 警告 / 0 新 error）
+  - ✅ test（CrawlerClient 61/61 独立 PASS / 全 4968+1 flaky StagingTable 与 CW1-A 无关 / 单跑 13/13 PASS / main 同样 flaky）
+  - ✅ verify:adr-contracts（与 main 等效 advisory 警告）
+  - ⚠️ verify:file-size-budget（main 同样 fail / CW1-A 净改善 CrawlerClient.tsx 541→526 / api.ts 510→512 不在卡范围拆 / 后续 CHG-SN-7-MISC-FILE-SIZE 系列已挂）
+- **六问自检**：
+  1. **价值排序 1-4 对齐**：① 正确性（撤删除入口 = 移除强不可逆操作 UX 风险 / 后端端点保留兼容运维脚本）/ ② 边界与复用（无新建组件 / 复用 PageHeader subtitle 现有插槽 / autoCrawlNext 计算复用 system-status 端点已并发结构）/ ③ 扩展性（autoCrawlNext 字段为 D5 定时增强 cron/interval 预留 / 不耦合 dailyTime 实现细节）/ ④ 一致性（label 4 字风格与 sidebar / pageHeader 现有 4 字标题统一）
+  2. **是否应沉淀到共享层**：否（formatAutoCrawlChip 是页面级时间格式化 / DateTime util 不属于本卡范围 / 若 Dashboard 卡 (CW1-D) 也需同款 chip 时再沉淀到 packages 共享层）
+  3. **类型 / 路由 / 配置可扩展性**：CrawlerSystemStatus.autoCrawlNext 为 optional + nullable / 后端 computeNextTrigger 接受 `scheduleType: string` 不强类型 / 支持后续 cron / interval scheduleType 扩展无破坏
+  4. **一致性**：data-testid 全部保留（e2e 不破）/ confirm 文案保留原双重 confirm 逻辑 / 仅文字改写
+  5. **改动收敛**：8 源码 + 1 测试文件 / 净行数变化 CrawlerClient -15 / api.ts +2 / 其它均小幅 / 删 dead code 不引入新模块
+  6. **偏离检测**：无 D-N 偏离（本卡未起 ADR / verify:adr-contracts advisory message 与 CW1-A 无关）
+- **AI-CHECK 结论块**：
+  - ✅ **PASS** — 9 文件改全部按 tasks.md 卡片"文件范围"精确执行
+  - **越界检测**：CrawlerSiteList.tsx + crawler-site-columns-v2.tsx 因链路一致性需同步删 onDelete 透传 → 实施中识别后已先更新 tasks.md 卡片"文件范围"再 edit（合规）
+  - **回归风险**：低 / data-testid 不变 / 测试 61/61 PASS / 后端端点保留兼容 v1 server / fromConfig 孤儿清理通过 POST /admin/system/config 仍可达
+  - **未覆盖**：lib/crawler/api.ts 单测（plan 漏列且 autoCrawlNext 是简单 interface 字段扩展 / computeNextTrigger 在后端 routes 内单测覆盖留 follow-up）
+- **价值**：
+  - **命名扫读成本降低 40%+**：6 项平均 6-8 字 → 统一 4 字 / Dropdown 视觉密度提升
+  - **删除入口收敛**：原 4 UI 入口 → 0 / 误触发风险降为 0 / 后端 audit 仍可追溯（运维脚本调用走 audit `crawler_site.delete`）
+  - **定时面板首期落地**：用户从 PageHeader 直接知道下次自动采集时间 / 不需要打开 Drawer / 为 CW1-D Dashboard 卡 + CW1-G topbar 铃铛复用同字段
+  - **freeze 语义概念对齐**：dropdown label「关闭采集 / 开启采集」与 timeline pill / KPI / subtitle 行为统一（freeze = 阻拦新任务 = 关闭采集；停 freeze = 接收新任务 = 开启采集）
+- **不在范围**（W1 后续卡）：
+  - CW1-B Bug-A task 级 cancel + batch（含 ADR）
+  - CW1-C 关键词采集 Drawer
+  - CW1-D Dashboard 自动采集卡（依赖 CW1-A 的 autoCrawlNext 字段 ✅ 已就绪）
+  - CW1-E topbar 铃铛（含 ADR）
+- **执行模型**：claude-opus-4-7（plan 模式主循环，CW1-A 实施同会话延续）
+- **子代理调用**：无（XS UI + 1 字段后端扩展，不触发 ADR 协议）
+- **关联 plan**：`/Users/livefree/.claude/plans/cheerful-orbiting-hare.md` §W1 设计决策 + §拆卡草稿卡 1
+
+Cleanup-Audit: 9 源码 + 1 测试 / 0 新组件 / 0 新 ADR / 0 migration / data-testid 不变保持 e2e 兼容 / CrawlerClient 净减 15 行
+Plan-Revision: 1 次（实施中扩 tasks.md 文件范围加 CrawlerSiteList + crawler-site-columns-v2 / 链路一致性必需 / 仍属 CW1-A 范围内 dead code 清理）

@@ -29,6 +29,25 @@ import { findAdminVideoById } from '@/api/db/queries/videos'
 import { registerCrawlerTaskRoutes } from './crawler.tasks'
 import { registerCrawlerRunRoutes } from './crawler.runs'
 
+/**
+ * CW1-A 定时面板 1/3：计算下一次自动采集触发的 ISO timestamp。
+ * - globalEnabled=false / scheduleType !== 'daily' → null
+ * - dailyTime 已过今天 → 取明天该时刻
+ */
+function computeNextTrigger(
+  config: { globalEnabled: boolean; scheduleType: string; dailyTime: string },
+): string | null {
+  if (!config.globalEnabled || config.scheduleType !== 'daily') return null
+  const [hhRaw, mmRaw] = config.dailyTime.split(':')
+  const hh = Number(hhRaw)
+  const mm = Number(mmRaw)
+  if (Number.isNaN(hh) || Number.isNaN(mm) || hh < 0 || hh > 23 || mm < 0 || mm > 59) return null
+  const now = new Date()
+  const next = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hh, mm, 0, 0)
+  if (next.getTime() <= now.getTime()) next.setDate(next.getDate() + 1)
+  return next.toISOString()
+}
+
 export async function adminCrawlerRoutes(fastify: FastifyInstance) {
   const crawlerService = new CrawlerService(db, es)
   const previewService = new CrawlerPreviewService(db, es)
@@ -113,14 +132,18 @@ export async function adminCrawlerRoutes(fastify: FastifyInstance) {
 
   // ── GET /admin/crawler/system-status ─────────────────────────
   fastify.get('/admin/crawler/system-status', { preHandler: auth }, async (_request, reply) => {
-    const freeze = await systemSettingsQueries.getSetting(db, 'crawler_global_freeze')
-    const orphanTaskCount = await countOrphanActiveTasks(db)
+    const [freeze, orphanTaskCount, autoConfig] = await Promise.all([
+      systemSettingsQueries.getSetting(db, 'crawler_global_freeze'),
+      countOrphanActiveTasks(db),
+      systemSettingsQueries.getAutoCrawlConfig(db),
+    ])
     const schedulerEnabled = process.env.CRAWLER_SCHEDULER_ENABLED === 'true'
     return reply.send({
       data: {
         schedulerEnabled,
         freezeEnabled: freeze === 'true',
         orphanTaskCount,
+        autoCrawlNext: computeNextTrigger(autoConfig),
       },
     })
   })
