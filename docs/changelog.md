@@ -5648,3 +5648,51 @@ Subagents: arch-reviewer (claude-opus-4-7) — 1 轮 A- PASS
 
 Cleanup-Audit: 6 文件改 / 后端 SQL STRING_AGG DISTINCT 派生 + raw + Service + types 4 层透传 / 前端 cell 从空白改为 csv + title hover / 0 新组件 / 0 ADR / 0 migration / 0 API 公开字段（Service 输出 VideoGroupRow 加字段是 additive 后向兼容）/ 单测 62/62 零回退
 Plan-Revision: 0 次（用户走读反馈 → AskUserQuestion 一次决策 → 实施一次 PASS）
+
+## [2026-05-25] CHG-SN-9-DT-AUTOFILTER-EP-4-MERGE-SORT-FULLSTACK · Merge 候选表 sort 全栈打通 / ADR-150 阶段 5 EP-4 follow-up
+
+- **触发**：用户 PATCH-2B-FIX1 走读 pass 后选下一步 "Merge 候选表 sortField=score 全栈打通（Recommended / PATCH-2 范式复刻）"
+- **目标**：MergeClient 候选表 3 列（作品 / 候选数 / 重合度）从"列名 ⋯ 显但 sort 不生效"假装实现 → sort 真切换
+- **设计抉择 - Service 层 sort vs DB 层 ORDER BY**：
+  - score 是 Service 层动态计算（`computeOverlapScore` source_overlap_ratio / DB 无该字段）
+  - DB 层 `fetchRawCandidateGroups` 按 `COUNT(*) DESC, title_normalized ASC` 分页（pre-existing）
+  - **选择 Service 层 sort**：4 字段白名单（score / videoCount / year / titleNormalized）在拉取页后重排
+  - **接受 pre-existing 设计局限**：跨页不严格稳定（DB 层切页固定 / Service 层重排 page-内 / score 物化需 migration）
+  - 默认 sortField='score' sortDir='desc' 保持向后兼容（L124 原逻辑等价）
+  - tiebreaker groupKey ASC（CHG-SN-5-10-PATCH P2 保留）
+- **范围**（5 文件 / 1 commit / PATCH-2 范式直接复刻）：
+  1. `packages/types/src/video-merge.types.ts` ListCandidatesParams 加 `sortField?: 'score' | 'videoCount' | 'year' | 'titleNormalized'` + `sortDir?: 'asc' | 'desc'`
+  2. `apps/api/src/services/VideoMergesService.schemas.ts` ListCandidatesSchema 加 `sortField` z.enum + `sortDir` z.enum
+  3. `apps/api/src/services/VideoMergesService.ts` listCandidates L124 sort 逻辑改为 switch 4 case + dirSign 切换 + tiebreaker groupKey ASC
+  4. `apps/server-next/src/lib/merge/api.ts` listCandidates URL 加 sortField + sortDir 透传
+  5. `apps/server-next/src/app/admin/merge/_client/MergeClient.tsx`:
+     - 加 sort state（TableSortState）+ load() 白名单守卫（与 sources/CrawlerRunsView/VideoListClient PATCH-2 范式一致）
+     - 3 列加 `enableSorting: true`（kind='computed' AMD2 默认 false / 显式 true 灵活组合）
+     - query.sort 改为真 state（删 hardcode `{ field: undefined, direction: 'desc' }`）
+     - DataTable onQueryChange wire `if (patch.sort) setSort(patch.sort)`
+- **单测**（1 文件 +5 case / 7 文件改未影响其他）：
+  - `tests/unit/api/video-merge-candidates.test.ts` 新建 describe('sort 全栈')：默认 score DESC / score ASC / videoCount DESC / year ASC / titleNormalized ASC
+- **质量门禁全 PASS**：
+  - ✅ typecheck（8 workspace）
+  - ✅ lint（5/5 / 5.1s）
+  - ✅ verify:adr-contracts（D-N 178/178 闭环 / SQL alignment / shorthand 0 命中）
+  - ✅ video-merge-candidates 32/32（+5 新 case）
+  - ✅ admin-ui/table **426/426 零回退**
+  - ✅ MergeCandidateBanner / merge banner 等 3/3 零回退
+  - ✅ 全套 25 test files / 448 tests
+- **用户可见行为变化**：
+  - **新增**：`/admin/merge` 列名 ⋯ → 排序段点击 → 真切换（3 列 score / videoCount / titleNormalized）
+  - **保留**：默认 score DESC（向后兼容 / 切 ASC 看低重合度候选）
+  - **保留**：filter 段 disabled（kind='computed' 业务无意义 / Merge 已有 Segment + minScore + type Segment 控件）
+- **价值**：
+  - **PATCH-2 范式第 3 个消费方实证**：VideoListClient（PATCH-2）→ SourcesClient（PATCH-2A）→ MergeClient（本卡）/ 范式标准化
+  - **Service 层 sort 范式首次实证**：之前 sources / crawler 都走 DB ORDER BY / Merge 是首个 Service 层 sort 消费方 / 为未来 ImageHealth missing（4 子查询派生列 / 需 CTE 或 Service 层 sort）提供范式参考
+  - **EP-3-D 注释 follow-up 闭环**："后续 follow-up：后端扩 sortField=score + filter / 启用 sort" 已兑现
+- **不在范围**（follow-up 保留）：
+  - score 物化（candidate 表预算 score / migration / 工时高 / score sort 跨页稳定方案）
+  - filter 扩展（Merge 业务现用 Segment + minScore + type / 列内 filter 当前无业务需求）
+  - ImageHealth missing 4 子查询列 sort（独立卡 / 需 CTE 重写 SQL ~0.3-0.5w）
+  - CrawlerRunDetail sort（独立卡 / ~0.15w）
+
+Cleanup-Audit: 5 文件改 + 1 测试文件 +5 case / 共 32/32 video-merge-candidates 单测 + 448/448 全套零回退 / 0 新组件 / 0 ADR / 0 migration / Service 层 sort switch 4 case 范式确立 / PATCH-2 范式第 3 消费方
+Plan-Revision: 0 次（PATCH-2 范式直接复刻 / 设计哲学一致 / Service 层 sort 接受 pre-existing 跨页不严格稳定局限）

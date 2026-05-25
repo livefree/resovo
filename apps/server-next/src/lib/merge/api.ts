@@ -27,6 +27,9 @@ export async function listCandidates(params: ListCandidatesParams): Promise<List
   qs.set('minScore', String(params.minScore))
   qs.set('limit', String(params.limit))
   qs.set('page', String(params.page))
+  // ADR-150 阶段 5 EP-4 follow-up（2026-05-25）：sort 全栈打通 URL 透传
+  if (params.sortField) qs.set('sortField', params.sortField)
+  if (params.sortDir)   qs.set('sortDir', params.sortDir)
   return apiClient.get<ListCandidatesResult>(`/admin/video-merges/candidates?${qs.toString()}`)
 }
 

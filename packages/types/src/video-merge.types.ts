@@ -42,6 +42,13 @@ export interface ListCandidatesParams {
   readonly minScore: number
   readonly limit: number
   readonly page: number
+  /**
+   * ADR-150 阶段 5 EP-4 follow-up（2026-05-25）：Merge 候选表 sort 全栈打通
+   * Service 层 sort 范式（score 是 Service 派生 / DB 无该字段）/ 跨页不严格稳定（pre-existing 设计局限）
+   * 白名单 4 字段（D-150 列固有自动过滤 sort 版）
+   */
+  readonly sortField?: 'score' | 'videoCount' | 'year' | 'titleNormalized'
+  readonly sortDir?: 'asc' | 'desc'
 }
 
 export interface ListCandidatesResult {

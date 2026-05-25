@@ -119,9 +119,33 @@ export class VideoMergesService {
       })
     }
 
-    // 按 score 降序 + groupKey 升序（tiebreaker，CHG-SN-5-10-PATCH P2）：
-    // 保证 score 相同时分页幂等，不依赖 V8 stable sort + DB 初排两层默认
-    groups.sort((a, b) => (b.score - a.score) || a.groupKey.localeCompare(b.groupKey))
+    // ADR-150 阶段 5 EP-4 follow-up（2026-05-25）：sort 全栈打通 / Service 层 4 字段白名单
+    // 默认 score DESC（保持向后兼容）/ tiebreaker groupKey ASC（CHG-SN-5-10-PATCH P2）
+    const sortField = params.sortField ?? 'score'
+    const sortDir = params.sortDir ?? 'desc'
+    const dirSign = sortDir === 'asc' ? 1 : -1
+    groups.sort((a, b) => {
+      let cmp: number
+      switch (sortField) {
+        case 'score':
+          cmp = a.score - b.score
+          break
+        case 'videoCount':
+          cmp = a.videos.length - b.videos.length
+          break
+        case 'year':
+          cmp = (a.year ?? 0) - (b.year ?? 0)
+          break
+        case 'titleNormalized':
+          cmp = a.titleNormalized.localeCompare(b.titleNormalized)
+          break
+        default:
+          cmp = a.score - b.score
+      }
+      if (cmp !== 0) return cmp * dirSign
+      // tiebreaker：groupKey 升序（分页幂等）
+      return a.groupKey.localeCompare(b.groupKey)
+    })
 
     return { data: groups, total, page, limit }
   }

@@ -21,6 +21,9 @@ export const ListCandidatesSchema = z.object({
   minScore: z.coerce.number().min(0).max(1).default(0.6),
   limit: z.coerce.number().int().min(1).max(100).default(20),
   page: z.coerce.number().int().min(1).default(1),
+  // ADR-150 阶段 5 EP-4 follow-up（2026-05-25）：sort 白名单 4 字段（Service 层 sort）
+  sortField: z.enum(['score', 'videoCount', 'year', 'titleNormalized']).optional(),
+  sortDir: z.enum(['asc', 'desc']).optional(),
 })
 
 export const MergeSchema = z.object({

@@ -236,6 +236,62 @@ describe('VideoMergesService.listCandidates', () => {
     expect(res.total).toBe(25)
   })
 
+  // ADR-150 阶段 5 EP-4 follow-up（2026-05-25）：Merge sort 全栈打通 / Service 层 sort 单测
+  describe('sort 全栈（ADR-150 阶段 5 EP-4 follow-up）', () => {
+    const mockTwoGroups = () => {
+      mockQuery
+        .mockResolvedValueOnce({ rows: [
+          { title_normalized: 'a-low', year: 2020, type: 'movie', video_ids: ['vid-1', 'vid-2'], video_count: '2' },
+          { title_normalized: 'b-high', year: 2024, type: 'movie', video_ids: ['vid-3', 'vid-4', 'vid-5'], video_count: '3' },
+        ] })
+        .mockResolvedValueOnce({ rows: [{ total: '2' }] })
+        .mockResolvedValueOnce({ rows: [
+          // group 1: low score（共享 0 / union 2）→ 0.0
+          makeVideoRow('vid-1', ['site-a'], 1),
+          makeVideoRow('vid-2', ['site-b'], 1),
+          // group 2: high score（共享 2 / union 2）→ 1.0
+          makeVideoRow('vid-3', ['site-x', 'site-y'], 2),
+          makeVideoRow('vid-4', ['site-x', 'site-y'], 2),
+          makeVideoRow('vid-5', ['site-x', 'site-y'], 2),
+        ] })
+    }
+
+    it('默认 sortField → score DESC（向后兼容 / CHG-SN-5-10-PATCH P2）', async () => {
+      mockTwoGroups()
+      const res = await svc.listCandidates({ type: undefined, minScore: 0, limit: 20, page: 1 })
+      expect(res.data[0]?.titleNormalized).toBe('b-high') // score=1.0 first
+      expect(res.data[1]?.titleNormalized).toBe('a-low')  // score=0 second
+    })
+
+    it('sortField=score sortDir=asc → score 升序', async () => {
+      mockTwoGroups()
+      const res = await svc.listCandidates({ type: undefined, minScore: 0, limit: 20, page: 1, sortField: 'score', sortDir: 'asc' })
+      expect(res.data[0]?.titleNormalized).toBe('a-low')  // score=0 first
+      expect(res.data[1]?.titleNormalized).toBe('b-high') // score=1.0 second
+    })
+
+    it('sortField=videoCount sortDir=desc → 候选数降序', async () => {
+      mockTwoGroups()
+      const res = await svc.listCandidates({ type: undefined, minScore: 0, limit: 20, page: 1, sortField: 'videoCount', sortDir: 'desc' })
+      expect(res.data[0]?.titleNormalized).toBe('b-high') // 3 videos
+      expect(res.data[1]?.titleNormalized).toBe('a-low')  // 2 videos
+    })
+
+    it('sortField=year sortDir=asc → 年份升序', async () => {
+      mockTwoGroups()
+      const res = await svc.listCandidates({ type: undefined, minScore: 0, limit: 20, page: 1, sortField: 'year', sortDir: 'asc' })
+      expect(res.data[0]?.year).toBe(2020)
+      expect(res.data[1]?.year).toBe(2024)
+    })
+
+    it('sortField=titleNormalized sortDir=asc → 作品名 localeCompare 升序', async () => {
+      mockTwoGroups()
+      const res = await svc.listCandidates({ type: undefined, minScore: 0, limit: 20, page: 1, sortField: 'titleNormalized', sortDir: 'asc' })
+      expect(res.data[0]?.titleNormalized).toBe('a-low')
+      expect(res.data[1]?.titleNormalized).toBe('b-high')
+    })
+  })
+
   it('sort tiebreaker：同 score 候选组按 groupKey 升序稳定（CHG-SN-5-10-PATCH P2）', async () => {
     // 两组同 score（都共享 1 个 site key / 2 总 key → 0.5），groupKey 不同
     const groupB = {

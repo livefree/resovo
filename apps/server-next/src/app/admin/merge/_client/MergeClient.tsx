@@ -35,6 +35,7 @@ import {
   VideoPicker,
   useToast,
   type TableColumn,
+  type TableSortState,
   type SegmentItem,
   type PickerVideoItem,
 } from '@resovo/admin-ui'
@@ -268,6 +269,8 @@ function CandidatesSection() {
   const [pendingMinScore, setPendingMinScore] = useState('0.6')
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
+  // ADR-150 阶段 5 EP-4 follow-up（2026-05-25）：Merge sort 全栈打通 / Service 层 sort
+  const [sort, setSort] = useState<TableSortState>({ field: undefined, direction: 'desc' })
   const [data, setData] = useState<readonly CandidateGroup[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -278,14 +281,22 @@ function CandidatesSection() {
   const load = useCallback(() => {
     setLoading(true)
     setError(null)
-    listCandidates({ minScore, limit: pageSize, page })
+    // ADR-150 阶段 5 EP-4 follow-up（2026-05-25）：sort 白名单守卫 + URL 透传
+    const sortFieldGuarded: 'score' | 'videoCount' | 'year' | 'titleNormalized' | undefined =
+      sort.field === 'score' || sort.field === 'videoCount' || sort.field === 'year' || sort.field === 'titleNormalized'
+        ? sort.field
+        : undefined
+    listCandidates({
+      minScore, limit: pageSize, page,
+      ...(sortFieldGuarded ? { sortField: sortFieldGuarded, sortDir: sort.direction } : {}),
+    })
       .then((res) => {
         setData(res.data)
         setTotal(res.total)
       })
       .catch((e: unknown) => setError(e instanceof Error ? e : new Error('加载失败')))
       .finally(() => setLoading(false))
-  }, [minScore, page, pageSize])
+  }, [minScore, page, pageSize, sort])
 
   useEffect(() => { load() }, [load])
 
@@ -329,15 +340,15 @@ function CandidatesSection() {
     [toast, load],
   )
 
-  // EP-3-D（2026-05-24）：3 列全 kind: 'computed' opt-out
-  //   - MergeClient 候选表是合并工作流（Segment 范式 / 非标准数据列表）
-  //   - 后端 listMergeCandidates 无 sort / filter 参数 / mode="server" onQueryChange 仅 pagination
-  //   - AMD2 默认全开会引入"假装实现"（用户能点 popover 但 fetch 不带 filters/sort）
-  //   - 后续 follow-up：后端扩 sortField=score + filter / 启用 sort
+  // EP-3-D（2026-05-24）+ ADR-150 阶段 5 EP-4 follow-up（2026-05-25）：3 列 sort 全栈打通
+  //   - 保留 kind: 'computed'（score/videoCount/title 都是 Service 派生 / 业务无 filter 意义）
+  //   - 显式 enableSorting: true（kind='computed' 默认 false / AMD2 D-150-AMD2-2 灵活组合）
+  //   - 后端 listCandidates 扩 sortField + sortDir 白名单 4 字段（Service 层 sort / 跨页不严格稳定）
   const columns = useMemo<TableColumn<CandidateGroup>[]>(() => [
     {
       id: 'titleNormalized',
       kind: 'computed',
+      enableSorting: true, // ADR-150 阶段 5 EP-4 follow-up sort 全栈打通
       header: '作品',
       accessor: (g) => g.titleNormalized,
       cell: ({ row }) => (
@@ -350,6 +361,7 @@ function CandidatesSection() {
     {
       id: 'videoCount',
       kind: 'computed',
+      enableSorting: true, // ADR-150 阶段 5 EP-4 follow-up sort 全栈打通
       header: '候选数',
       accessor: (g) => g.videos.length,
       cell: ({ row }) => <span>{row.videos.length} 条</span>,
@@ -357,6 +369,7 @@ function CandidatesSection() {
     {
       id: 'score',
       kind: 'computed',
+      enableSorting: true, // ADR-150 阶段 5 EP-4 follow-up sort 全栈打通（默认 score DESC / 切 ASC 看低重合度）
       header: '重合度',
       accessor: (g) => g.score,
       cell: ({ row }) => <span style={SCORE_BADGE_STYLE}>{(row.score * 100).toFixed(1)}%</span>,
@@ -365,11 +378,12 @@ function CandidatesSection() {
 
   const query = useMemo(() => ({
     pagination: { page, pageSize },
-    sort: { field: undefined, direction: 'desc' as const },
+    // ADR-150 阶段 5 EP-4 follow-up（2026-05-25）：sort 真 state 接通（非 hardcode）
+    sort,
     filters: new Map(),
     columns: new Map(),
     selection: { selectedKeys: new Set<string>(), mode: 'page' as const },
-  }), [page, pageSize])
+  }), [page, pageSize, sort])
 
   if (loading && data.length === 0) return <LoadingState variant="skeleton" skeletonRows={6} />
   if (error) return <ErrorState error={error} onRetry={load} />
@@ -423,6 +437,8 @@ function CandidatesSection() {
             if (patch.pagination.page !== undefined) setPage(patch.pagination.page)
             if (patch.pagination.pageSize !== undefined) { setPageSize(patch.pagination.pageSize); setPage(1) }
           }
+          // ADR-150 阶段 5 EP-4 follow-up（2026-05-25）：sort patch 接通
+          if (patch.sort) setSort(patch.sort)
         }}
         totalRows={total}
         loading={loading}
