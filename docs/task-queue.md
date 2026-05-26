@@ -1100,3 +1100,137 @@ B 序列 + C 序列可与 A 并行（A 无依赖）；B 与 C 之间无依赖（
 - **v1 server 不动**：全程不改 apps/server/ 任何文件
 - **每卡独立 commit + 独立 typecheck/lint/verify 验收**
 
+---
+
+## [SEQ-20260526-CRAWLER-W3-FIX] CRAWLER W3 — W1/W2 用户走读暴露的修复闭环
+
+- **状态**：🟡 规划中
+- **创建时间**：2026-05-26 02:00
+- **最后更新时间**：2026-05-26 02:00
+- **目标**：消化 @livefree 用户走读 W1/W2 暴露的 4 类缺陷 — ① CW1-B SQL `r.site_key` 不存在（P0 阻塞 cancel/pause/detail）② CW2-B Gantt SQL WHERE 误用 scheduled_at + status 缺 pending（任务刷新消失）+ 布局三处缺陷（"实时"挤两行 / 当前时间在最右 / 站点 limit 硬编码）③ CW2-C Drawer 内 AdminSelect 被 z-index 遮挡（所有下拉不可用）④ CW1-E topbar 第 3 个铃铛未复用 AdminShell 已有 notifications/tasks 数据流。
+- **范围**：先 HOTFIX 三个 P0 阻塞（纯修补，不动设计），再 REDESIGN 四处设计层重做（含 ADR AMENDMENT）。
+- **依赖**：W1（SEQ-20260525-CRAWLER-W1）+ W2（SEQ-20260525-CRAWLER-W2）全部 ✅
+- **真源**：本会话 2026-05-26 排查 4 项根因 + 用户提议（行内展开 / Gantt 三段窗 / 复用 topbar 图标）
+- **总估时**：~1.25w（HOTFIX-A 0.25w + REDESIGN-A 1.0w）
+
+### 任务列表（按执行顺序）
+
+1. **CHG-SN-9-CW1-CW2-HOTFIX-A** — W1/W2 三处 P0 + 1 处布局修补
+   - 状态：🟡 代码已落地 / 待 @livefree dev server 实测确认（typecheck + lint + test 5078/5078 + verify:adr-contracts 全过 / 22 新单测全过）
+   - 创建时间：2026-05-26 02:00
+   - 实际开始：2026-05-26 02:00
+   - 完成时间：—（实测 PASS 后回填）
+   - 执行模型：claude-opus-4-7（主循环延续；建议 sonnet 但本会话 opus 上下文复用避免新会话重读）
+   - 建议模型：sonnet（纯修补，无新决策）
+   - 范围（实际落地）：
+     - Step 1（CW1-B 根因）：`apps/api/src/db/queries/crawlerRuns.ts:362` SQL `RETURNING r.site_key` → 改用子查询 `(SELECT source_site FROM crawler_tasks WHERE run_id = r.id ORDER BY scheduled_at ASC LIMIT 1) AS site_key`。crawler_tasks 实际列名是 `source_site`，alias 仍是 `site_key` 保持调用方解析不变。涉及 commit `d2728a30` 引入的回归。
+     - Step 2（CW2-B 数据根因）：`apps/api/src/db/queries/crawlerTimeline.ts:97` WHERE 改为 `COALESCE(ct.finished_at, NOW()) >= NOW() - $1::interval`（不再用 scheduled_at 误切窗口内有可见时段的 task）；status 白名单加 `'pending'`（与 ADR-153 §5 决策对齐）。
+     - Step 3（CW2-C 根因 / 方案调整）：**原方案"改 z-admin-dropdown token 980→1050"调整为"改 AdminSelect 消费 z-admin-popover (1050)"** — 原方案会与已存在 z-admin-popover token 撞值导致语义混乱；新方案修 `packages/admin-ui/src/components/admin-select/admin-select.tsx:105` PANEL_STYLE.zIndex 单文件，token 不动。z-admin-popover 1050 本就为"Modal 内 popover 自然覆盖 Modal"设计（ADR-115 §2.5）。
+     - Step 4（CW2-B 布局顺手修补）：`apps/server-next/src/app/admin/crawler/_client/CrawlerTimelineCard.tsx` `PILL_BASE_STYLE` 加 `whiteSpace: 'nowrap'` + `flexShrink: 0`（"实时" pill 不再被压两行）。
+   - 验收要点：
+     - dev server 实测（必跑）：CrawlerRunsView 任意行点 暂停/取消 → toast success；点 run id 跳详情页 → meta + tasks 正常渲染；SchedulerConfigDrawer 打开 → scheduleType / defaultMode / conflictPolicy 三处 select 可正常展开选项；时间轴卡 "实时" pill 单行显示
+     - 新增单测：tests/unit/api/crawlerRuns.test.ts 加 `syncRunStatusFromTasks` 返回 siteKey 非空 case（mock crawler_tasks 含 1+ 行）；tests/unit/api/crawlerTimeline.test.ts 加 "pending task 在窗口内可见" + "scheduled 在窗口外但 finished 在窗口内的 task 可见" 2 case
+     - typecheck / lint / test / verify:adr-contracts 全过
+   - 文件范围（实际落地）：
+     - `apps/api/src/db/queries/crawlerRuns.ts`（Step 1）
+     - `apps/api/src/db/queries/crawlerTimeline.ts`（Step 2）
+     - `packages/admin-ui/src/components/admin-select/admin-select.tsx`（Step 3，方案调整 / token 不动）
+     - `apps/server-next/src/app/admin/crawler/_client/CrawlerTimelineCard.tsx`（Step 4）
+     - `tests/unit/api/crawler-runs-sync-status.test.ts`（新建，5 case）
+     - `tests/unit/api/crawlerTimeline.test.ts`（扩展 3 case：HOTFIX-A #1/#2/#3）
+   - 估时：0.25w
+   - 关键约束：
+     - **dev server 实测为硬前置**（W1/W2 全程绕过 ADR-149 §7 工程流程，本卡补上 — 至少跑一次"打开 crawler runs → 点 cancel → 看 toast success"完整流）
+     - **z-index token 改动需补 ADR-153 / ADR-154 §关联 ADR 中 AMENDMENT 备注**（HOTFIX-A 不起新 ADR，但需在 REDESIGN-A 起 ADR AMENDMENT 时一并记录）
+     - **不动设计层**：UI 布局 / 数据契约 / 路由结构 / 组件 API 一律不改；这些放 REDESIGN-A
+
+2. **CHG-SN-9-CW1-CW2-REDESIGN-A-ADR** — 四处设计层重做 ADR 起草（合并）
+   - 状态：⬜
+   - 创建时间：2026-05-26 02:00
+   - 实际开始：—
+   - 完成时间：—
+   - 建议模型：opus 主循环 + arch-reviewer (claude-opus-4-7)
+   - 范围：起草 1 份合并 ADR（暂定 ADR-155 «CW1/CW2 用户走读修订») 覆盖 4 个独立但相关的设计决策：
+     - **D-155-1（CW1-B 行内展开）**：`/admin/crawler/runs` list 行点击切换 expand panel（消费现有 `renderExpandedRow` + `expandedKeys` API），expand body 复用 `RunInlinePanel`（拆自 CrawlerRunDetailView 的 meta grid + tasks 子表 + TaskLogsDrawer）；独立路由 `/admin/crawler/runs/[id]` 保留为 deep link fallback（含 PageHeader 自渲）
+     - **D-155-2（CW1-E 复用 Topbar 图标）**：删除 BackgroundEventBell `position:fixed` 旁路叠加；BackgroundEventService 三源（autoCrawlNext + scheduler + 高危 audit）合并到 `useAdminNotifications` + `useAdminTasks` 现有数据流；扩展 `NotificationItem` discriminated union 加 background category（**触发 packages/admin-ui/src/**/types.ts 改动 → 强制 Opus arch-reviewer trailer**）
+     - **D-155-3（CW2-B Gantt 三段窗）**：时间窗从 `[NOW-range, NOW]` 改为 `[NOW-range×0.8, NOW+range×0.2]`；加 now-line 垂直指示线（width=1px, color=var(--accent-default)）；pending bar 显示在 `scheduled_at` 真实位置（不再 clamp 到 NOW），用虚线边框 + 半透明区分；range 选项加 `12h / 24h / 7d`；空窗口加"扩大范围"快捷
+     - **D-155-4（CW2-B 站点上限解锁）**：`limit` 从硬编码 8 改为 `range select` 旁边的可选项（8 / 20 / all），后端 `crawlerTimeline.ts` `safeLimit` 上限提到 50；超过 50 站给出"性能模式建议筛选站点"提示
+   - 文件范围：
+     - `docs/decisions.md`（追加 ADR-155 完整文本）
+     - 同 commit 标注 ADR-122 / ADR-152 / ADR-153 §关联 ADR AMENDMENT
+   - 估时：0.25w
+   - 关键约束：
+     - **强制 Opus 主循环 + arch-reviewer (Opus) 1 轮独立评审**（D-155-2 触发 admin-ui types 改动 → CLAUDE.md "共享组件 API 契约强制 Opus"）
+     - **触发 plan §4.5 R7 MUST-8 守门**：ADR PASS 才能起 -EP 实施卡（D-155-2 新增 NotificationItem 字段属共享组件 API 契约）
+     - **AMENDMENT 引用必填**：ADR-155 §关联 ADR 必须明列 ADR-122 / ADR-152 / ADR-153 三处 AMENDMENT 说明
+
+3. **CHG-SN-9-CW1-CW2-REDESIGN-A-EP-1** — D-155-1 + D-155-4 实施（CW1-B 行内展开 + CW2-B 站点上限解锁）
+   - 状态：⬜
+   - 创建时间：2026-05-26 02:00
+   - 建议模型：sonnet
+   - 依赖：CW1-CW2-REDESIGN-A-ADR PASS
+   - 范围：拆 CrawlerRunDetailView 为 RunInlinePanel + CrawlerRunsView 接 expand + timeline limit 解锁 + 后端 safeLimit 上限提到 50
+   - 文件范围：
+     - `apps/server-next/src/app/admin/crawler/runs/_client/CrawlerRunsView.tsx`（接 expandedKeys + renderExpandedRow + 改 Run ID 列 cell 为 toggle）
+     - `apps/server-next/src/app/admin/crawler/runs/[id]/_client/RunInlinePanel.tsx`（新建，拆自 CrawlerRunDetailView）
+     - `apps/server-next/src/app/admin/crawler/runs/[id]/_client/CrawlerRunDetailView.tsx`（瘦身：移 meta + tasks 到 RunInlinePanel，仅保留 PageHeader 包裹）
+     - `apps/server-next/src/app/admin/crawler/_client/CrawlerTimelineCard.tsx`（加 limit select）
+     - `apps/api/src/db/queries/crawlerTimeline.ts`（safeLimit 上限 20→50）
+     - 单测扩展（CrawlerRunsView.test 加 expand 行为 / RunInlinePanel.test 新建 / CrawlerTimelineCard.test 加 limit select）
+   - 验收要点：dev server 实测 — list 点 run id 行内展开 meta + tasks → 点 tasks 行 [查看] 弹 logs drawer → 关闭展开收起；timeline limit 选 "全部" → 显示真实站数；deep link `/admin/crawler/runs/[id]` 直接打开仍正常渲染
+   - 估时：0.3w
+
+4. **CHG-SN-9-CW1-CW2-REDESIGN-A-EP-2** — D-155-2 实施（CW1-E 合并到 AdminShell notifications/tasks）
+   - 状态：⬜
+   - 创建时间：2026-05-26 02:00
+   - 建议模型：sonnet
+   - 依赖：CW1-CW2-REDESIGN-A-ADR PASS
+   - 范围：扩展 NotificationItem discriminated union + 合并 BackgroundEventService 到 useAdminNotifications/useAdminTasks + 删除 BackgroundEventBell
+   - 文件范围：
+     - `packages/admin-ui/src/shell/types.ts`（扩展 NotificationItem 加 background category，**强制 Opus arch-reviewer trailer**）
+     - `apps/server-next/src/lib/admin-shell-notifications.ts`（合并 BackgroundEventService 三源到 useAdminNotifications + useAdminTasks）
+     - `apps/server-next/src/app/admin/admin-shell-client.tsx`（删除 BackgroundEventBell 引用 + 删除 useAdminBackgroundEvents）
+     - **删除文件**：`apps/server-next/src/components/admin-shell/BackgroundEventBell.tsx` + `apps/server-next/src/lib/admin-shell-background-events.ts`
+     - `apps/api/src/services/BackgroundEventService.ts`（保留：仍是端点真源，但调用方改为 NotificationService 内部）
+     - 单测扩展（admin-shell-notifications.test 加 background category case）
+   - 验收要点：dev server 实测 — topbar 仅有铃铛 + 闪电两图标；点铃铛弹 NotificationDrawer 显示 autoCrawlNext + 高危 audit 上方"即将"组 + 下方"近期完成/失败"组；点闪电弹 TaskDrawer 显示 active crawler_runs；写操作（立即采集）后两 drawer 同步刷新
+   - 估时：0.3w
+   - **commit trailer 必填**：`Subagents: arch-reviewer (claude-opus-4-7)`（CLAUDE.md ❌ 共享组件 API 契约强制 Opus）
+
+5. **CHG-SN-9-CW1-CW2-REDESIGN-A-EP-3** — D-155-3 实施（CW2-B Gantt 三段窗 + now-line + pending 真位）
+   - 状态：⬜
+   - 创建时间：2026-05-26 02:00
+   - 建议模型：sonnet
+   - 依赖：CW1-CW2-REDESIGN-A-ADR PASS + HOTFIX-A 完成（Step 2 SQL fix 是本卡前置）
+   - 范围：时间窗策略改造 + now-line 渲染 + pending bar 位置修正 + 12h/24h/7d range
+   - 文件范围：
+     - `apps/api/src/db/queries/crawlerTimeline.ts`（RANGE_TO_INTERVAL/MS 加 12h/24h/7d；rangeStart/rangeEnd 改为 `[NOW-range×0.8, NOW+range×0.2]`；pending task 不再 clamp started_at 到 NOW，保留 scheduled_at 真实值）
+     - `apps/api/src/routes/admin/crawler.ts`（timeline route range zod enum 加 12h/24h/7d）
+     - `apps/server-next/src/lib/crawler/api.ts`（CrawlerTimelineRange 类型扩展）
+     - `apps/server-next/src/app/admin/crawler/_client/CrawlerTimelineCard.tsx`（加 now-line 渲染 + pending bar 虚线样式 + range select 4→7 选项 + 空窗口"扩大范围"快捷）
+     - 单测扩展（crawlerTimeline.test 加 12h/24h/7d range case + pending bar 真位 case；CrawlerTimelineCard.test 加 now-line 渲染 + 7 range 选项 case）
+   - 验收要点：dev server 实测 — 时间轴 NOW 位置可见垂直 now-line；pending 任务 bar 在其 scheduled_at 真实位置（不再贴最右）；range 切到 24h 看到完整一天的历史；空窗口给出"扩大到 6h"按钮
+   - 估时：0.4w
+
+### W3-FIX 执行顺序 DAG
+
+```
+HOTFIX-A（独立，立即可启 / P0 阻塞用户操作）─────────────→ ⬜
+
+REDESIGN-A-ADR ──┬─→ REDESIGN-A-EP-1（CW1-B 行内 + CW2-B limit 解锁）→ ⬜
+                 ├─→ REDESIGN-A-EP-2（CW1-E 合并）→ ⬜
+                 └─→ REDESIGN-A-EP-3（CW2-B 三段窗）→ ⬜
+                            ↑ 依赖 HOTFIX-A Step 2 SQL fix
+```
+
+HOTFIX-A 必须先做（P0）；REDESIGN-A-ADR 可与 HOTFIX-A 并行起草；EP-1/2/3 互不依赖（可并行）但 EP-3 需 HOTFIX-A Step 2 完成（避免 SQL 双重改动 conflict）。
+
+### W3-FIX 关键约束
+
+- **dev server 实测为硬前置（绝不可省）**：W1/W2 全程绕过 ADR-149 §7 工程流程导致 3 个 P0 漏检；本 SEQ 每卡完成前必须人工走读 ≥ 1 次完整 UX 路径
+- **D-155-2 触发 admin-ui types 改动 → 强制 Opus arch-reviewer trailer**（CLAUDE.md 明禁条款）
+- **HOTFIX-A 与 REDESIGN-A-EP-3 时序协调**：避免 SQL 双重改动 conflict（EP-3 在 HOTFIX-A 完成后再启）
+- **ADR-155 AMENDMENT 引用必填**：ADR-122 / ADR-152 / ADR-153 三处 §关联 ADR 必须同 commit 标注
+- **v1 server 不动**：全程不改 apps/server/ 任何文件（沿用 W1/W2 约束）
+- **每卡独立 commit + 独立 typecheck/lint/verify 验收**
+

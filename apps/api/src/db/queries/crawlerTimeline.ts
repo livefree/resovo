@@ -94,8 +94,16 @@ WITH ranked_tasks AS (
   FROM crawler_tasks ct
   JOIN crawler_sites cs ON cs.key = ct.source_site
   WHERE ct.type IN ('full-crawl', 'incremental-crawl')
-    AND ct.scheduled_at >= NOW() - $1::interval
-    AND ct.status IN ('running', 'done', 'failed', 'paused', 'cancelled', 'timeout')
+    -- CHG-SN-9-CW1-CW2-HOTFIX-A Step 2：
+    --   原 WHERE 用 scheduled_at >= NOW() - $1::interval 会把"早于窗口左端 scheduled，
+    --   但在窗口内 finished/running 的 task"全砍掉（违反 ADR-153 §"显示窗口内有可见时段
+    --   的 task"语义）。改用 COALESCE(finished_at, NOW())：未结束的取 NOW（永远在窗口
+    --   右端可见），已结束的取 finished_at（在窗口内即可见）。
+    AND COALESCE(ct.finished_at, NOW()) >= NOW() - $1::interval
+    -- status 加 'pending'（与 ADR-153 §5 "pending 起点 GREATEST(COALESCE(started_at,
+    -- scheduled_at), ...)" 决策对齐；原代码漏了 pending 导致刚 enqueue 未启动的 task
+    -- 完全不显示，"刷新后任务消失"症状的核心成因之一）
+    AND ct.status IN ('pending', 'running', 'done', 'failed', 'paused', 'cancelled', 'timeout')
 ),
 site_rank AS (
   SELECT

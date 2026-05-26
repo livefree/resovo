@@ -102,7 +102,10 @@ const TRIGGER_BASE: React.CSSProperties = {
 
 const PANEL_STYLE: React.CSSProperties = {
   position: 'fixed',
-  zIndex: 'var(--z-admin-dropdown)' as React.CSSProperties['zIndex'],
+  // CHG-SN-9-CW1-CW2-HOTFIX-A Step 3：原 z-admin-dropdown=980 < z-modal=1000，
+  // 在 Drawer (1000) 内使用 AdminSelect 时 popover 被遮挡。改用 z-admin-popover (1050)
+  // 这个本就为 "Modal 内 popover 自然覆盖 Modal" 设计的 token（见 z-index.ts §admin-popover）。
+  zIndex: 'var(--z-admin-popover)' as React.CSSProperties['zIndex'],
   background: 'var(--bg-surface-elevated)',
   borderWidth: '1px',
   borderStyle: 'solid',

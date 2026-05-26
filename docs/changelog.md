@@ -6630,3 +6630,83 @@ ADR-154 D-154-6 前端落地：
 
 - **执行模型**：claude-sonnet-4-6
 - **子代理调用**：无
+
+## [CHG-SN-9-CW1-CW2-HOTFIX-A] W1/W2 三处 P0 + 1 处布局修补
+
+- **日期**：2026-05-26
+- **Sequence**：SEQ-20260526-CRAWLER-W3-FIX
+- **任务 ID**：CHG-SN-9-CW1-CW2-HOTFIX-A
+- **关联 ADR**：无（纯修补，不动设计层；设计层重做在 REDESIGN-A-ADR）
+- **模型**：claude-opus-4-7（主循环延续，纯修补建议 sonnet；本会话 opus 排查 + 落地共用上下文，避免新会话重读全部文件）
+
+### 改动摘要
+
+@livefree 用户走读 W1/W2 暴露的 4 类缺陷中 3 个 P0 阻塞 + 1 处布局修补：
+
+- **Step 1（CW1-B P0）**：`apps/api/src/db/queries/crawlerRuns.ts:362` `syncRunStatusFromTasks` SQL `RETURNING r.site_key` 引用 `crawler_runs` 不存在的列（commit `d2728a30` ADR-146 webhook 触发点接入时引入）。改为 RETURNING 子查询 `(SELECT source_site FROM crawler_tasks WHERE run_id = r.id ORDER BY scheduled_at ASC LIMIT 1) AS site_key`，保留 `SyncRunStatusResult.siteKey: string | null` 类型语义 + worker webhook payload 不变。
+- **Step 2（CW2-B 数据 P0）**：`apps/api/src/db/queries/crawlerTimeline.ts:97` WHERE 改为 `COALESCE(ct.finished_at, NOW()) >= NOW() - $1::interval`（不再用 scheduled_at 误切窗口内有可见时段的 task）；status 白名单加 `'pending'`（对齐 ADR-153 §5 "pending 起点 GREATEST(COALESCE(started_at, scheduled_at), ...)" 决策）。
+- **Step 3（CW2-C P0）**：`packages/admin-ui/src/components/admin-select/admin-select.tsx:105` `PANEL_STYLE.zIndex` 从 `var(--z-admin-dropdown)`（980）改为 `var(--z-admin-popover)`（1050），后者本就为"Modal 内 popover 自然覆盖 Modal"设计（见 `packages/design-tokens/src/admin-layout/z-index.ts` §admin-popover 注释）。Drawer (1000) 内 AdminSelect 即时可用。token 不动避免语义混乱。
+- **Step 4（CW2-B 布局）**：`apps/server-next/src/app/admin/crawler/_client/CrawlerTimelineCard.tsx` `PILL_BASE_STYLE` 加 `whiteSpace: 'nowrap'` + `flexShrink: 0`，actions 容器宽紧张时"实时"两字不再 break 为两行。
+
+### 新增/修改文件
+
+- `apps/api/src/db/queries/crawlerRuns.ts`（Step 1：SQL RETURNING 子查询替换）
+- `apps/api/src/db/queries/crawlerTimeline.ts`（Step 2：WHERE 字段 + status pending）
+- `packages/admin-ui/src/components/admin-select/admin-select.tsx`（Step 3：z-admin-dropdown → z-admin-popover）
+- `apps/server-next/src/app/admin/crawler/_client/CrawlerTimelineCard.tsx`（Step 4：PILL whiteSpace）
+- `tests/unit/api/crawler-runs-sync-status.test.ts`（新建：5 case，syncRunStatusFromTasks SQL 形态 + row 解析守卫）
+- `tests/unit/api/crawlerTimeline.test.ts`（扩展：HOTFIX-A 3 新 case — WHERE 字段守卫 + pending status 白名单守卫 + pending → warn 映射）
+- `docs/task-queue.md`（新增 SEQ-20260526-CRAWLER-W3-FIX）
+- `docs/tasks.md`（HOTFIX-A 进入"进行中"）
+
+### 偏离记录
+
+无（纯修补不引入新 D-N 决策；Step 3 修 packages/admin-ui 但只改单文件 zIndex token 引用、未动 types.ts 公开 Props 字段，不触发"共享组件 API 契约强制 Opus"）。
+
+### 质量门禁
+
+- ✅ typecheck 通过（8 workspace 全过）
+- ✅ lint 通过（4 pre-existing 警告，0 新增）
+- ✅ test 全过（385 files / 5078 tests / 22 个本卡新单测）
+  - 首跑 use-filter-presets.test.ts 1 fail = vitest 并发 environment torn down 时序问题（Unhandled Rejection on `setLoading(false)` after env down），重跑 + 单跑均 PASS；与本卡改动无因果（use-filter-presets 不引用 admin-select）
+- ✅ verify:adr-contracts 全过
+  - verify-sql-schema-alignment PASS（44 表 schema 对齐，crawler_runs.site_key 已不再被引用）
+  - verify-adr-d-numbers PASS（201 D-N 偏离编号闭环）
+  - verify-style-shorthand-conflict PASS
+  - verify-error-message advisory pre-existing（与本卡无关）
+
+### 六问自检 PASS
+
+1. **正确性**：4 修复均针对实际可复现 bug（SQL column does not exist 500 / SQL WHERE 误切 task / z-index 遮挡 / pill break）；新 5 case 守卫 SQL 子查询 + pending status；新 3 case 守卫 timeline WHERE + status 白名单
+2. **边界与复用**：Step 3 不改 token 改 AdminSelect 消费，复用既有 z-admin-popover（1050）token 而非新增 token；Step 1 SQL 子查询语义可被 worker / route 全部 8 处 syncRunStatusFromTasks 调用方零改动消费
+3. **可扩展性**：Step 2 pending 加入 status 白名单后，未来加 pending → neutral 颜色映射只需改 statusToCategory 一处；Step 1 子查询语义允许未来按"primary site" 概念扩展（如 schedule_id 关联首 task）
+4. **一致性**：Step 3 z-admin-popover 与 ADR-115 §2.5 "Popover 在 Modal 内自然覆盖" 语义对齐；Step 2 与 ADR-153 §5 pending 决策对齐（实施漏检的回归修复）
+5. **改动收敛**：满足 1–4 前提下严格 4 源文件 + 2 测试文件，无任何"顺手优化"
+6. **偏离检测**：无新 D-N 偏离（纯修补不起新 ADR）；本卡为 ADR-146 / ADR-153 实施回归的修补
+
+### AI-CHECK 结论
+
+- ✅ **PASS** — 4 个 Step 完整闭环 / typecheck + lint + test + verify:adr-contracts 全过 / 22 个新单测全过
+- **越界检测**：CLEAN（无任务范围外修改；4 源文件 + 2 测试文件严格在 tasks.md 文件范围内）
+- **回归风险**：低
+  - Step 1 SQL 子查询语义：worker 8 处 sync 调用方早已 `await ...` 不消费返回值，零行为变化；route 4 处 sync 后 reload run by id，子查询 LIMIT 1 性能 O(log n) 无压力
+  - Step 2 WHERE 字段变更：包含原 scheduled_at 范围所有任务 + 额外包含早 scheduled 但窗口内 finished 的任务（数据集只扩不缩，无任务消失风险）
+  - Step 3 z-index：z-admin-popover 1050 < z-shell-drawer 1100 → Shell 抽屉打开时仍覆盖业务 popover，符合 ADR-115 §2.5 原意
+  - Step 4 pill nowrap：纯样式，actions 容器有 inline-flex gap=8 留白足够
+
+### 未覆盖（→ 后续）
+
+- **dev server 实测**（W3-FIX 关键约束）：需 @livefree 实际打开浏览器走读 6 条验收路径（见 tasks.md 验收要点 1-6）；本卡 typecheck/lint/test 全过但不能替代真实 UX 验证（W1/W2 漏检根因）
+- **CW1-E topbar 重复铃铛 + CW1-B 行内展开 + CW2-B Gantt 三段窗 + CW2-B limit 解锁** → REDESIGN-A-ADR + EP-1/2/3
+- **CW1-B-EP 单测应补 syncRunStatusFromTasks 集成测试** → 本卡新增 crawler-runs-sync-status.test.ts 5 case 已覆盖 SQL 形态守卫；route 层集成测试仍待补（推迟到 REDESIGN-A-EP-1 复用 row inline 重构时一并加）
+
+### 关键约束消化
+
+- **dev server 实测为硬前置（W3-FIX 关键约束 1）**：本卡 commit 但 @livefree 未实测前 SEQ 不算闭合；@livefree 实测 PASS 后 SEQ HOTFIX-A 标 ✅
+- **z-index 改动需 ADR-153 / ADR-154 §关联 ADR AMENDMENT 备注（W3-FIX 关键约束 2）**：HOTFIX-A 不起新 ADR，备注推迟到 REDESIGN-A-ADR（ADR-155）§关联 ADR 中一并记录
+
+- **执行模型**：claude-opus-4-7（主循环延续；建议模型为 sonnet，本会话 opus 上下文复用）
+- **子代理调用**：无（纯修补 + 无新决策，未触发 "共享组件 API 契约强制 Opus"，未起新 ADR）
+
+Cleanup-Audit: 4 源文件改 + 2 测试文件（1 新建 + 1 扩展）/ 22 新单测 / 0 migration / 0 新依赖
+Plan-Revision: 1 次（Step 3 方案从 "改 token 980→1050" 调整为 "AdminSelect 消费 z-admin-popover 1050"；原方案会与已存在 z-admin-popover token 撞值导致语义混乱；新方案 token 不动只改组件单文件，更精准）

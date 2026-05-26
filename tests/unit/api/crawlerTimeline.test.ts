@@ -212,4 +212,45 @@ describe('crawlerTimeline.getCrawlerTimeline', () => {
     expect(result.rangeEnd).toMatch(/Z$/)
     expect(result.ticks.every((t) => t.endsWith('Z'))).toBe(true)
   })
+
+  // ── CHG-SN-9-CW1-CW2-HOTFIX-A Step 2：WHERE + status pending fix ─────────
+  it('HOTFIX-A #1 WHERE 字段改用 COALESCE(finished_at, NOW())：早于左端 scheduled 但窗口内 finished 的 task 可见', async () => {
+    const { getCrawlerTimeline } = await import('@/api/db/queries/crawlerTimeline')
+
+    mockQuery.mockResolvedValueOnce({ rows: [] })
+
+    await getCrawlerTimeline(mockDb as never, '1h')
+
+    const [sql] = mockQuery.mock.calls[0] as [string]
+    // 修复后 WHERE 不再用 scheduled_at >= NOW() - interval（会切掉早 scheduled 但仍在窗口的 task）
+    expect(sql).not.toMatch(/ct\.scheduled_at\s*>=\s*NOW\(\)\s*-\s*\$1::interval/i)
+    // 改用 COALESCE(finished_at, NOW()) >= NOW() - interval
+    expect(sql).toMatch(/COALESCE\(ct\.finished_at,\s*NOW\(\)\)\s*>=\s*NOW\(\)\s*-\s*\$1::interval/i)
+  })
+
+  it('HOTFIX-A #2 status 白名单含 pending：刚 enqueue 未启动的 task 可见（对齐 ADR-153 §5）', async () => {
+    const { getCrawlerTimeline } = await import('@/api/db/queries/crawlerTimeline')
+
+    mockQuery.mockResolvedValueOnce({ rows: [] })
+
+    await getCrawlerTimeline(mockDb as never, '1h')
+
+    const [sql] = mockQuery.mock.calls[0] as [string]
+    expect(sql).toContain("'pending'")
+    // status IN (...) 子句完整含 pending（防 status check 重写时漏掉）
+    expect(sql).toMatch(/status\s+IN\s*\([^)]*'pending'[^)]*\)/i)
+  })
+
+  it('HOTFIX-A #3 pending 状态 task → statusToCategory 归为 warn（既不 ok 也不 neutral）', async () => {
+    const { getCrawlerTimeline } = await import('@/api/db/queries/crawlerTimeline')
+
+    mockQuery.mockResolvedValueOnce({
+      rows: [makeRawRow({ status: 'pending', startedAgo: 60_000, finishedAgo: 30_000 })],
+    })
+
+    const result = await getCrawlerTimeline(mockDb as never, '1h')
+    // statusToCategory 当前对未列举的 raw status 默认归 warn（fallthrough 黄色），
+    // pending 视为"已排队等待执行"的中间态，呈黄色提示用户有积压
+    expect(result.rows[0].status).toBe('warn')
+  })
 })

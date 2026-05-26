@@ -48,6 +48,9 @@ const PILL_BASE_STYLE: CSSProperties = {
   borderRadius: 'var(--radius-pill, 12px)',
   fontSize: 'var(--font-size-xs)',
   fontWeight: 500,
+  // CHG-SN-9-CW1-CW2-HOTFIX-A Step 4：actions 容器宽紧张时防止中文字符 break 成两行
+  whiteSpace: 'nowrap',
+  flexShrink: 0,
 }
 
 const PILL_OK_STYLE: CSSProperties = {

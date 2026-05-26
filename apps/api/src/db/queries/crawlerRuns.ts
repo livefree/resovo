@@ -359,7 +359,10 @@ export async function syncRunStatusFromTasks(db: Pool, runId: string): Promise<S
          )
      FROM agg a
      WHERE r.id = $1
-     RETURNING r.status, r.site_key, r.summary`,
+     RETURNING
+       r.status,
+       (SELECT source_site FROM crawler_tasks WHERE run_id = r.id ORDER BY scheduled_at ASC LIMIT 1) AS site_key,
+       r.summary`,
     [runId],
   )
   const row = result.rows[0]
