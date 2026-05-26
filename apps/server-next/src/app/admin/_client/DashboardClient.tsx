@@ -34,6 +34,7 @@ import { MetricKpiCardRow } from '@/components/admin/dashboard/MetricKpiCardRow'
 import { RecentActivityCard } from '@/components/admin/dashboard/RecentActivityCard'
 import { SiteHealthCard } from '@/components/admin/dashboard/SiteHealthCard'
 import { AnalyticsView } from './AnalyticsView'
+import { AutoCrawlScheduleCard } from './AutoCrawlScheduleCard'
 
 // ── types ─────────────────────────────────────────────────────────
 
@@ -251,6 +252,11 @@ export function DashboardClient() {
               <div style={ROW3_STYLE} data-dashboard-row="3">
                 <RecentActivityCard items={dashboardStats.activities} dataSource={dashboardStats.activitiesDataSource} />
                 <SiteHealthCard sites={dashboardStats.sites} />
+              </div>
+
+              {/* CW1-D：自动采集状态卡（full width 单卡 row） */}
+              <div data-dashboard-row="4">
+                <AutoCrawlScheduleCard />
               </div>
             </>
           )}

@@ -22,7 +22,7 @@
  */
 
 import { useCallback, useEffect, useState, type CSSProperties } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { AdminButton, PageHeader, useToast } from '@resovo/admin-ui'
 import {
   listCrawlerSites,
@@ -92,6 +92,7 @@ function describeApiError(err: unknown): { title: string; description: string } 
 export function CrawlerClient() {
   const toast = useToast()
   const router = useRouter()
+  const searchParams = useSearchParams()
 
   // ── data ─────────────────────────────────────────────────────────
   const [sites, setSites] = useState<readonly CrawlerSite[]>([])
@@ -107,9 +108,23 @@ export function CrawlerClient() {
   // ── REDO-01-E 行展开状态 ─────────────────────────────────────────
   const [expandedKeys, setExpandedKeys] = useState<ReadonlySet<string>>(new Set())
   // ── REDO-01-G 高级菜单 / 调度抽屉状态 ────────────────────────────
-  const [schedulerOpen, setSchedulerOpen] = useState(false)
+  // CW1-D：?openDrawer=scheduler 自动打开 SchedulerConfigDrawer（Dashboard AutoCrawlScheduleCard 编辑入口）
+  const [schedulerOpen, setSchedulerOpen] = useState(
+    () => searchParams.get('openDrawer') === 'scheduler',
+  )
   // ── CW1-C 关键词采集 Drawer 状态 ─────────────────────────────────
   const [keywordDrawerOpen, setKeywordDrawerOpen] = useState(false)
+
+  // CW1-D：关闭 scheduler 时清掉 query param，避免刷新页面再次自动打开
+  const closeSchedulerDrawer = useCallback(() => {
+    setSchedulerOpen(false)
+    if (searchParams.get('openDrawer') === 'scheduler') {
+      const params = new URLSearchParams(searchParams.toString())
+      params.delete('openDrawer')
+      const query = params.toString()
+      router.replace(`/admin/crawler${query ? `?${query}` : ''}`)
+    }
+  }, [router, searchParams])
   const handleStatusUpdate = useCallback((next: Partial<CrawlerSystemStatus>) => {
     setStatus((prev) => ({ ...(prev ?? {}), ...next }))
   }, [])
@@ -519,10 +534,10 @@ export function CrawlerClient() {
         submitting={submitting}
       />
 
-      {/* REDO-01-G 调度配置 drawer（CrawlerAdvancedMenu 触发） */}
+      {/* REDO-01-G 调度配置 drawer（CrawlerAdvancedMenu + CW1-D Dashboard 编辑入口） */}
       <SchedulerConfigDrawer
         open={schedulerOpen}
-        onClose={() => setSchedulerOpen(false)}
+        onClose={closeSchedulerDrawer}
         onSaved={refresh}
       />
 

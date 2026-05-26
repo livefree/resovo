@@ -45,6 +45,9 @@ const toastPushMock = vi.fn()
 const confirmSpy = vi.fn().mockReturnValue(true)
 // CHG-SN-8-03：next/navigation router.push 用于 toast action 深链
 const routerPushMock = vi.fn()
+// CW1-D：SchedulerConfigDrawer mock 暴露引用 (默认 pending Promise / case 内可 mockResolvedValueOnce)
+const getAutoCrawlConfigMock = vi.fn(() => new Promise(() => {}))
+const setAutoCrawlConfigMock = vi.fn(() => new Promise(() => {}))
 
 vi.mock('../../../../../../apps/server-next/src/lib/crawler/api', () => ({
   listCrawlerSites: (...args: unknown[]) => listCrawlerSitesMock(...args),
@@ -60,9 +63,9 @@ vi.mock('../../../../../../apps/server-next/src/lib/crawler/api', () => ({
   setCrawlerFreeze: (...args: unknown[]) => setCrawlerFreezeMock(...args),
   stopAllCrawler: (...args: unknown[]) => stopAllCrawlerMock(...args),
   triggerReindex: (...args: unknown[]) => triggerReindexMock(...args),
-  // SchedulerConfigDrawer 依赖（关闭时不会调用）
-  getAutoCrawlConfig: vi.fn(() => new Promise(() => {})),
-  setAutoCrawlConfig: vi.fn(() => new Promise(() => {})),
+  // SchedulerConfigDrawer 依赖（关闭时不会调用 / CW1-D 测试 open 状态时 case 内 mockResolvedValueOnce）
+  getAutoCrawlConfig: (...args: unknown[]) => getAutoCrawlConfigMock(...args),
+  setAutoCrawlConfig: (...args: unknown[]) => setAutoCrawlConfigMock(...args),
 }))
 
 vi.mock('../../../../../../apps/server-next/src/lib/sources/api', () => ({
@@ -74,16 +77,19 @@ vi.mock('../../../../../../apps/server-next/src/lib/sources/api', () => ({
 }))
 
 // CHG-SN-8-03：mock next/navigation for router.push 验证（深链 toast action）
+// CW1-D：useSearchParams 改为可控 mock（默认空，case 内可 set openDrawer=scheduler）
+const routerReplaceMock = vi.fn()
+const mockCrawlerSearchParams = new URLSearchParams()
 vi.mock('next/navigation', () => ({
   useRouter: () => ({
     push: (...args: unknown[]) => routerPushMock(...args),
-    replace: vi.fn(),
+    replace: (...args: unknown[]) => routerReplaceMock(...args),
     back: vi.fn(),
     forward: vi.fn(),
     refresh: vi.fn(),
     prefetch: vi.fn(),
   }),
-  useSearchParams: () => new URLSearchParams(),
+  useSearchParams: () => mockCrawlerSearchParams,
   usePathname: () => '/admin/crawler',
 }))
 
@@ -191,8 +197,14 @@ beforeEach(() => {
   triggerReindexMock.mockReset()
   toastPushMock.mockReset()
   routerPushMock.mockReset()
+  routerReplaceMock.mockReset()
   confirmSpy.mockReset().mockReturnValue(true)
   ;(globalThis as unknown as { confirm: typeof confirmSpy }).confirm = confirmSpy
+
+  // CW1-D：清空 mock search params（避免 case 之间污染 openDrawer=scheduler）
+  for (const key of Array.from(mockCrawlerSearchParams.keys())) {
+    mockCrawlerSearchParams.delete(key)
+  }
 
   // 默认成功 mock，便于个别用例 override
   listCrawlerSitesMock.mockResolvedValue([])
@@ -328,7 +340,10 @@ describe('CrawlerClient (REDO-01-C 骨架)', () => {
   it('13. freezeEnabled=true → 全站增量被拦截（warn toast）[CHG-SN-8-01]', async () => {
     getCrawlerSystemStatusMock.mockResolvedValue({ freezeEnabled: true })
     render(<CrawlerClient />)
-    const btn = await waitFor(() => screen.getByTestId('crawler-run-all-incremental-btn'))
+    // CW1-D：先等 status load 完成（subtitle "采集已关闭" 出现）再 click，
+    // 避免 jsdom batch 跑时 button 早于 status setState 出现导致竞态。
+    await waitFor(() => expect(screen.getByText(/采集已关闭/)).not.toBeNull())
+    const btn = screen.getByTestId('crawler-run-all-incremental-btn')
     fireEvent.click(btn)
     await waitFor(() => {
       expect(toastPushMock).toHaveBeenCalledWith(
@@ -1084,5 +1099,43 @@ describe('CrawlerClient — CSV-EXPORT bug fixes (CHG-SN-7-MISC-CRAWLER-TIMELINE
     expect(toastPushMock).toHaveBeenCalledWith(
       expect.objectContaining({ level: 'warn', title: '无可导出数据' }),
     )
+  })
+})
+
+describe('CrawlerClient — CW1-D ?openDrawer=scheduler 自动开 SchedulerConfigDrawer', () => {
+  const CONFIG = {
+    globalEnabled: true,
+    scheduleType: 'daily' as const,
+    dailyTime: '03:30',
+    defaultMode: 'incremental' as const,
+    onlyEnabledSites: false,
+    conflictPolicy: 'skip_running' as const,
+    perSiteOverrides: {},
+  }
+
+  it('54. URL 含 openDrawer=scheduler → 首次渲染即 SchedulerConfigDrawer open', async () => {
+    mockCrawlerSearchParams.set('openDrawer', 'scheduler')
+    getAutoCrawlConfigMock.mockResolvedValueOnce(CONFIG)
+    render(<CrawlerClient />)
+    await waitFor(() => {
+      expect(screen.getByTestId('scheduler-config-drawer')).not.toBeNull()
+    })
+  })
+
+  it('55. URL 无 openDrawer → SchedulerConfigDrawer 不渲染', async () => {
+    render(<CrawlerClient />)
+    await waitFor(() => screen.getByTestId('crawler-export-btn'))
+    expect(screen.queryByTestId('scheduler-config-drawer')).toBeNull()
+  })
+
+  it('56. openDrawer=scheduler 触发的 Drawer 关闭 → router.replace 清掉 query param', async () => {
+    mockCrawlerSearchParams.set('openDrawer', 'scheduler')
+    getAutoCrawlConfigMock.mockResolvedValueOnce(CONFIG)
+    render(<CrawlerClient />)
+    const cancelBtn = await waitFor(() => screen.getByTestId('scheduler-cancel'))
+    fireEvent.click(cancelBtn)
+    await waitFor(() => {
+      expect(routerReplaceMock).toHaveBeenCalledWith('/admin/crawler')
+    })
   })
 })

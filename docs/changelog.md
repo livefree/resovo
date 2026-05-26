@@ -6170,3 +6170,57 @@ Plan-Revision: 1 次（实施中扩 tasks.md 文件范围加 admin-moderation.ty
 
 Cleanup-Audit: 4 源码 + 1 新 Drawer + 1 新单测 + 1 守卫补齐 / 4979 unit test 全过 / verify-endpoint-adr 189 全对齐 / R-MID-1 第 26 次系统化硬编码完成
 Plan-Revision: 1 次（CW1-B-EP follow-up audit-log-coverage 守卫补齐 / 文件范围扩 tests/unit/api/audit-log-coverage.test.ts / 必要修复以解锁本卡 commit）
+
+## [CHG-SN-9-CW1-D] Dashboard 自动采集卡
+- **完成时间**：2026-05-25
+- **记录时间**：2026-05-25 17:45
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：无
+- **修改文件**：
+  - `apps/server-next/src/app/admin/_client/AutoCrawlScheduleCard.tsx` — 新 218 行 / 5 状态卡（loading / disabled / countdown / failed / error）/ getAutoCrawlConfig + getCrawlerSystemStatus 双源聚合 / countdown 1 min interval refresh / 编辑链接 next/Link 跳 /admin/crawler?openDrawer=scheduler
+  - `apps/server-next/src/app/admin/_client/DashboardClient.tsx` — +5 行 / 加 row="4" 嵌入 AutoCrawlScheduleCard (位于 row3 之后 / regression gate 守门未破坏)
+  - `apps/server-next/src/app/admin/crawler/_client/CrawlerClient.tsx` — +18 行 / `useSearchParams` 接入 / `schedulerOpen` 初始化读 openDrawer=scheduler / `closeSchedulerDrawer` 关闭时 router.replace 清掉 query 避免刷新页面再次自动打开
+  - `tests/unit/components/server-next/admin/AutoCrawlScheduleCard.test.tsx` — 新 6 单测（5 状态 + 编辑链接 href 断言）
+  - `tests/unit/components/server-next/admin/dashboard/DashboardClient.test.tsx` — case A 第 1 测试加 row="4" + auto-crawl-schedule-card 断言 / vi.mock crawler/api 扩 getAutoCrawlConfig + getCrawlerSystemStatus / beforeEach 默认 disabled 状态
+  - `tests/unit/components/server-next/admin/crawler/CrawlerClient.test.tsx` — 新 3 单测（54/55/56：URL 含 openDrawer 自动开 / 无时不渲染 / 关闭时 router.replace 清 query）+ mock 重构（routerReplaceMock + mockCrawlerSearchParams + getAutoCrawlConfigMock + setAutoCrawlConfigMock 提引用）+ test #13 timing 稳健性补丁（先 waitFor 「采集已关闭」subtitle 再 click，避免 jsdom batch 跑时 status setState 竞态）
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - row="4" 紧贴 row3 后（不破坏 CHG-DESIGN-07 7C regression gate / 测试已含 row="4" 断言）
+  - AutoCrawlScheduleCard 使用 async/await 而非 .then().catch() 链以避免测试时序竞争（Promise.all 中 getAutoCrawlConfig 失败也能进 catch 块）
+  - countdown 1 分钟 interval 仅在 state='countdown' 时启用（避免 disabled/failed 状态浪费 timer）
+  - closeSchedulerDrawer 仅在 URL 含 openDrawer=scheduler 时 replace，避免普通 dropdown 关闭误触 router 调用
+  - SchedulerConfigDrawer onSaved 仍走 refresh，不影响 query param 清理（关闭路径独立处理）
+- **质量门禁**：
+  - ✅ typecheck（8 workspace 全过）
+  - ✅ lint（仅 pre-existing react-hooks + no-img 警告 / 0 新增）
+  - ✅ test：(待全量确认 — 局部 76 case 全过 / AutoCrawlScheduleCard 6 + DashboardClient 22 + CrawlerClient 64)
+  - ✅ verify-endpoint-adr：189 admin 路由全对齐（CW1-D 无新增 admin route）
+  - ✅ verify-adr-d-numbers：184 全闭环
+  - ✅ verify-sql-schema-alignment + verify-style-shorthand-conflict 全过
+- **六问自检 PASS**：
+  1. **价值排序 1-4 对齐**：① 正确性（5 状态完整覆盖 / disabled/countdown/failed 三态明确语义 / loading/error 兜底 / async/await 容错防 race）/ ② 边界与复用（复用 Pill + next/Link + getAutoCrawlConfig + getCrawlerSystemStatus 现有 API / 0 新组件抽象 / 0 新 admin route）/ ③ 扩展性（CardState union + AutoCrawlScheduleCardProps className 可扩 / countdown formatNextAt + formatCountdown 纯函数易测易扩）/ ④ 一致性（与 SchedulerConfigDrawer 命名 + onSaved 范式 + dt 颜色变量 + Pill variant 一致）
+  2. **是否应沉淀到共享层**：否（auto-crawl 状态卡是 crawler 域专属）
+  3. **类型 / 路由 / 配置可扩展性**：CardState union 易扩 ('paused' 等) / 编辑链接 href 集中字面量 / countdown 间隔 60_000 易调
+  4. **一致性**：与 CrawlerClient 的 autoCrawlNext 字段 + SchedulerConfigDrawer 6 字段编辑 + dashboard regression gate row 命名（data-dashboard-row=N）保持一致
+  5. **改动收敛**：3 源码改 + 1 新组件 + 3 测试 / 0 后端 / 0 新 admin route / 0 新 ADR
+  6. **偏离检测**：无新 D-N 偏离
+- **AI-CHECK 结论**：
+  - ✅ **PASS** — Dashboard 自动采集卡 5 状态完整 + URL deep-link 双向（编辑 + 关闭清 query）+ 单测 76 全过
+  - **越界检测**：扩展 DashboardClient.test 的 vi.mock 是新组件接入必要 / 与 CW1-D 文件范围 row="4" 接入一致
+  - **回归风险**：低 / row="4" 紧贴 row3 后不破坏现有布局 / CrawlerClient closeSchedulerDrawer 仅在 URL param 存在时 replace（防误触）
+  - **未覆盖**：e2e smoke（Dashboard → 编辑链接 → CrawlerClient drawer open → 关闭 → URL 清）→ 推迟到 CW1-D-E2E 子卡（如需）
+- **价值**：
+  - **Dashboard 闭环**：从 Dashboard 一眼可见自动采集状态 + 一键跳编辑 → 关闭后 URL 自动清理 / 单向 deep-link 完整化
+  - **状态可见性**：5 状态覆盖（loading/disabled/countdown/failed/error）/ user 不再需要去 /admin/crawler 才能知道下次自动时间
+  - **复用 autoCrawlNext**：CW1-A 已交付字段被首次有意义消费（PageHeader chip 是被动展示 / 本卡是主动卡片）
+  - **deep-link 双向**：URL ↔ Drawer 状态同步 / 编辑保存或取消都不留尾巴 query / 刷新页面不会再误开 drawer
+- **不在范围**（follow-up）：
+  - e2e smoke（Dashboard 自动采集卡 → 编辑跳转 → 关闭 query 清理）
+  - 倒计时低于 1 分钟时的秒级精度（v1 minutes-only / 满足"用户提前感知"足够）
+- **执行模型**：claude-sonnet-4-6
+- **子代理调用**：无（纯 UI / 0 新 ADR / 0 新 admin route）
+- **关联 ADR**：无新（沿用 ADR-117/-122 crawler-system-status autoCrawlNext + ADR-123 SchedulerConfig）
+
+Cleanup-Audit: 3 源码 + 1 新组件 + 3 测试扩展 / 0 admin route 新增 / 0 新依赖
+Plan-Revision: 1 次（CW1-D timing 抖动暴露 CrawlerClient.test #13 pre-existing race condition / 加 waitFor 「采集已关闭」subtitle 同步守护属测试稳健性补丁）
