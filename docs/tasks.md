@@ -6,10 +6,10 @@
 
 ## 进行中任务
 
-（无）
+（空）
 
 ---
 
 ## 下次会话恢复入口
 
-（见 task-queue.md CHG-SN-9 序列）
+（见 task-queue.md SEQ-20260525-CRAWLER-W2）

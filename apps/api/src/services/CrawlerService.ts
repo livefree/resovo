@@ -19,6 +19,15 @@ import { nanoid } from 'nanoid'
 import { config } from '@/api/lib/config'
 import { enrichmentQueue, imageHealthQueue } from '@/api/lib/queue'
 
+// ── 常量 ──────────────────────────────────────────────────────────
+
+/**
+ * Fix-2A (R3): 增量/关键词模式截断告警阈值。
+ * 若首页返回条数 >= 此值，说明站点活跃且很可能有后续页，
+ * 但当前仅取首页 → emit 'crawl.page.truncated' warn。
+ */
+const CRAWL_PAGE_MIN_FOR_TRUNCATION_WARN = 10
+
 // ── 资源站配置 ────────────────────────────────────────────────────
 
 export interface CrawlerSource {
@@ -151,7 +160,8 @@ export class CrawlerService {
   async upsertVideo(
     parsed: ReturnType<typeof parseVodItem>,
     ingestPolicy?: CrawlerSource['ingestPolicy'],
-    siteKey?: string
+    siteKey?: string,
+    emit?: (level: 'info' | 'warn' | 'error', stage: string, message: string, details?: Record<string, unknown>) => Promise<void>,
   ): Promise<{ videoId: string; sourcesUpserted: number; sourcesKept: number; sourcesRemoved: number }> {
     const { video, sources } = parsed
     const incomingMaxEpisode = sources.length > 0
@@ -269,6 +279,14 @@ export class CrawlerService {
       // 旧策略：仅追加，不移除旧源
       const count = await sourcesQueries.upsertSources(this.db, sourceMappings)
       sourcesAdded = count
+    } else if (sourceMappings.length === 0) {
+      // Fix-1 (R1): 解析后无可用播放源 → 跳过 replace，防误删现有源
+      // 上游接口偶发返回空 vod_play_url 时，视为"本次未携带源信息"而非"该站无源"
+      await emit?.('warn', 'crawl.upsert.empty_sources', '解析后无可用播放源，跳过 replace 防止误删现有源', {
+        videoId,
+        siteKey,
+        title: parsed.video.title,
+      })
     } else {
       // 全量替换策略：同站点内容全量替换
       const stats = await sourcesQueries.replaceSourcesForSite(this.db, videoId, siteKey, sourceMappings)
@@ -405,8 +423,24 @@ export class CrawlerService {
           if (stopReasonBeforeItem) {
             throw new Error('TASK_CANCELLED')
           }
+
+          // Fix-3 (R2): 前置过滤空 title — 避免 DB NOT NULL 报错堆积
+          if (!parsed.video.title) {
+            errors++
+            processed++
+            if (loggedUpsertErrors < 20) {
+              loggedUpsertErrors++
+              await emit('warn', 'crawl.skip.empty_title', '空 title 视频，跳过入库', {
+                page,
+                sourceVodId: parsed.video.sourceVodId,
+              })
+            }
+            await pushProgress()
+            continue
+          }
+
           try {
-            const { sourcesUpserted: s } = await this.upsertVideo(parsed, source.ingestPolicy, source.name)
+            const { sourcesUpserted: s } = await this.upsertVideo(parsed, source.ingestPolicy, source.name, emit)
             videosUpserted++
             sourcesUpserted += s
             processed++
@@ -433,7 +467,17 @@ export class CrawlerService {
         page++
         await pushProgress()
         // 增量模式和关键词模式均只取第一页
-        if (options.hoursAgo || options.keyword) break
+        if (options.hoursAgo || options.keyword) {
+          // Fix-2A (R3): 首页满载时 emit 截断告警，提示可能有后续页未采
+          if (items.length >= CRAWL_PAGE_MIN_FOR_TRUNCATION_WARN) {
+            await emit('warn', 'crawl.page.truncated', '本页已满，增量/关键词模式仅采首页，可能漏数据', {
+              page: page - 1,
+              items: items.length,
+              mode: options.hoursAgo ? 'incremental' : 'keyword',
+            })
+          }
+          break
+        }
       }
 
       await crawlerTasksQueries.updateTaskStatus(this.db, taskId, 'done', {

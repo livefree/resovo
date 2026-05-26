@@ -204,6 +204,13 @@ export async function replaceSourcesForSite(
   siteKey: string,
   newSources: UpsertSourceInput[]
 ): Promise<ReplaceSourcesStats> {
+  // Fix-1 (R1): 后端兜底 assertion — 禁止以空数组调用，防止误清空整站源
+  // 调用方在传入前应检查 newSources.length > 0（CrawlerService 已在 upsertVideo 守卫）
+  if (newSources.length === 0) {
+    throw new Error(
+      'replaceSourcesForSite called with empty newSources — refuse to wipe site sources for safety'
+    )
+  }
   const client = await (db as import('pg').Pool).connect()
   try {
     await client.query('BEGIN')

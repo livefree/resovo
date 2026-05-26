@@ -6397,3 +6397,38 @@ Cleanup-Audit: 8 新文件 + 8 文件改动 / 24 新单测 / 1 migration / 0 新
 
 - **执行模型**：claude-sonnet-4-6
 - **子代理调用**：无
+
+---
+
+## CHG-SN-9-CW2-A — P0 数据丢失三合一守卫
+
+- **任务 ID**：CHG-SN-9-CW2-A
+- **完成时间**：2026-05-25
+- **状态**：✅ 完成
+- **关联 ADR**：无（纯后端守卫，无 ADR，无 migration）
+- **模型**：claude-sonnet-4-6（主循环）
+
+### 变更摘要
+
+采集 pipeline 三处 P0 数据丢失风险修复：
+
+- **Fix-1 (R1)**：`CrawlerService.upsertVideo` Step 6 增加 empty sources 守卫 — `sourceMappings.length === 0` 时跳过 `replaceSourcesForSite`，emit `warn 'crawl.upsert.empty_sources'`，防止误软删现有源
+- **Fix-2A (R3)**：`crawl()` 增量/关键词模式首页满载（>= `CRAWL_PAGE_MIN_FOR_TRUNCATION_WARN = 10`）时 emit `warn 'crawl.page.truncated'`，提示可能有后续页未采
+- **Fix-3 (R2)**：`crawl()` for-loop 入口前置过滤空 title — `!parsed.video.title` → `errors++` + emit `warn 'crawl.skip.empty_title'` + continue，避免 DB NOT NULL 报错堆积
+- **assertion (R1 后端兜底)**：`replaceSourcesForSite` 入口添加 `if (newSources.length === 0) throw`，防止上层守卫失效时误清空站点源；同步更新 `crawlerSourceUpsert.test.ts` COALESCE 测试以适配新 assertion（改用非空 sources）
+
+同步修复 OOM bug：`crawler-service-data-guards.test.ts` test#4 spy 由 `mockResolvedValue` 改为 `mockResolvedValueOnce` 双次（空 title + 空页），防止 `crawl()` while 循环无限运行。
+
+### 新增/修改文件
+
+- `apps/api/src/services/CrawlerService.ts` — 4 处改动（常量 + emit 参数 + Fix-1 守卫 + Fix-3 前置过滤 + Fix-2A 截断告警）
+- `apps/api/src/db/queries/sources.maintenance.ts` — replaceSourcesForSite 入口 assertion
+- `tests/unit/api/crawler-service-data-guards.test.ts` — 新建，5 个 case（Fix-1/Fix-2A×2/Fix-3/Fix-1 完整性）
+- `tests/unit/api/crawlerSourceUpsert.test.ts` — COALESCE 测试改用非空 sources（+1 INSERT mock call）
+
+### 质量门禁
+
+- ✅ typecheck / lint / test（381 files / 5034 tests）/ verify:adr-contracts 全过
+
+- **执行模型**：claude-sonnet-4-6
+- **子代理调用**：无

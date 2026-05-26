@@ -142,16 +142,19 @@ describe('replaceSourcesForSite — 全量替换策略', () => {
   it('CRAWLER-05: SELECT 使用 COALESCE(source_site_key, v.site_key) 而非 source_name 匹配站点', async () => {
     const { replaceSourcesForSite } = await import('@/api/db/queries/sources')
 
+    // Fix-1 (R1) assertion: replaceSourcesForSite(empty) → throw，不得再以 [] 调用。
+    // 改为传入 1 条新源（SELECT existing 返回空 → 走 INSERT 路径），SQL 结构验证不变。
     mockClient.query
       .mockResolvedValueOnce({ rows: [] })                    // BEGIN
-      .mockResolvedValueOnce({ rows: [] })                    // SELECT existing
+      .mockResolvedValueOnce({ rows: [] })                    // SELECT existing（无旧源）
+      .mockResolvedValueOnce({ rowCount: 1, rows: [] })       // INSERT new source
       .mockResolvedValueOnce({ rows: [] })                    // COMMIT
 
     await replaceSourcesForSite(
       mockDb as unknown as import('pg').Pool,
       'vid-1',
       'bfzym3u8',
-      [],
+      [makeSrc('https://bfzym3u8.example/ep1.mp4', 1)],
     )
 
     const selectCall = mockClient.query.mock.calls.find(
