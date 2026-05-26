@@ -38,6 +38,18 @@ function makeMarkKey(dateStr: string, hhmm: string): string {
 }
 
 /**
+ * ADR-155 §7 风险 / W3-FIX HOTFIX-D：daily 模式 catch-up window
+ *
+ * 原 checkDaily 精确匹配当前 HH:MM；server 在 dailyTime 那一分钟未运行
+ * （部署 / 重启 / 慢启动）→ 该次触发永久错过到次日。CATCH_UP_WINDOW_MIN
+ * 给出容错窗口：过去 N 分钟内未触发即视为可补触发，marks 防重保证不重跑。
+ *
+ * 取值理由：tick 周期 60s × 5 = 5 分钟覆盖 4–5 次 tick 机会；超窗口不补
+ * （防止半夜重启误补昨夜 23:59 等远期 dailyTime）。
+ */
+const CATCH_UP_WINDOW_MIN = 5
+
+/**
  * ADR-155 D-155-6 / EP-1C-1b GC：清理 7 天前的旧 marks keys
  * key 格式 "YYYY-MM-DD HH:MM"，过滤 datePart < cutoff
  */
@@ -59,12 +71,21 @@ export function gcOldMarks(
 }
 
 /**
- * D-154-5 §checkDaily：daily 模式触发判定（ADR-155 D-155-6 EP-1C-1b 重构）
+ * D-154-5 §checkDaily：daily 模式触发判定
  *
- * 旧 API（dailyTime + lastTriggerDate string）→ 新 API（dailyTimes + marks Record）
- * - 兜底：dailyTimes 缺失时用 [dailyTime || '03:00']
- * - 防重：marks[date#HH:MM] 不存在才触发；相同 dailyTime 同日防重，不同 dailyTime 同日各触发一次
- * - 返回 matchedTime 供调用方写 marks 时识别 key
+ * 历史演进：
+ *   - ADR-154 D-154-5：旧 API（dailyTime + lastTriggerDate string + 精确匹配）
+ *   - ADR-155 D-155-6 EP-1C-1b：新 API（dailyTimes + marks Record）+ 多时间防重
+ *   - W3-FIX HOTFIX-D（本次）：catch-up window（5 分钟容错 / server 故障重启补触发）
+ *
+ * 判定逻辑：
+ *   1. times = dailyTimes（主）兜底 [dailyTime || '03:00']
+ *   2. 遍历 times，对每个 HH:MM 计算今天目标时刻
+ *   3. 0 ≤ now - target ≤ CATCH_UP_WINDOW_MIN × 60_000 → 在窗口内
+ *      - diff < 0：未到，跳过
+ *      - diff > 窗口：已过期，跳过（防跨午夜补昨夜 dailyTime）
+ *   4. marks[date#HH:MM] 不存在 → 触发；存在 → 防重跳过
+ *   5. 早匹配早返回（遍历顺序 = times 数组顺序 = UI chip 列表顺序）
  */
 export function checkDaily(
   config: Pick<AutoCrawlConfig, 'dailyTimes' | 'dailyTime'>,
@@ -75,17 +96,30 @@ export function checkDaily(
     ? config.dailyTimes
     : [config.dailyTime || '03:00']
 
-  const hh = String(now.getHours()).padStart(2, '0')
-  const mm = String(now.getMinutes()).padStart(2, '0')
-  const current = `${hh}:${mm}`
-
-  if (!times.includes(current)) return { shouldTrigger: false, matchedTime: null }
-
   const today = formatDateStr(now)
-  const markKey = makeMarkKey(today, current)
-  if (markKey in marks) return { shouldTrigger: false, matchedTime: null }
+  const windowMs = CATCH_UP_WINDOW_MIN * 60_000
 
-  return { shouldTrigger: true, matchedTime: current }
+  for (const time of times) {
+    if (!/^\d{2}:\d{2}$/.test(time)) continue
+    const [h, m] = time.split(':').map(Number)
+    if (!Number.isFinite(h) || !Number.isFinite(m)) continue
+    if (h < 0 || h > 23 || m < 0 || m > 59) continue
+
+    // 该 dailyTime 今天的目标时刻
+    const target = new Date(now)
+    target.setHours(h, m, 0, 0)
+
+    const diffMs = now.getTime() - target.getTime()
+    // 窗口判断：未来（diff < 0）/ 超窗口（diff > windowMs）跳过
+    if (diffMs < 0 || diffMs > windowMs) continue
+
+    // 防重：marks 已含 → 跳过
+    if (makeMarkKey(today, time) in marks) continue
+
+    return { shouldTrigger: true, matchedTime: time }
+  }
+
+  return { shouldTrigger: false, matchedTime: null }
 }
 
 /** D-154-5 §checkInterval：interval 模式触发判定 */

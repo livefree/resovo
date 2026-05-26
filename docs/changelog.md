@@ -7761,3 +7761,95 @@ PATCH 文件数：2 源 + 2 测试 = 4 项（≤ 5 硬约束 ✅）
 
 Cleanup-Audit: 2 源文件改 + 2 测试文件（均扩 2 case）/ 4 新单测 / 0 migration / 0 新依赖
 Plan-Revision: 0 次
+
+## [CHG-SN-9-CW1-CW2-HOTFIX-D] scheduler daily 模式 catch-up window
+
+- **日期**：2026-05-26
+- **Sequence**：SEQ-20260526-CRAWLER-W3-FIX
+- **任务 ID**：CHG-SN-9-CW1-CW2-HOTFIX-D
+- **关联 ADR**：ADR-155 §7 风险延伸（健壮性补丁 / 不起新 ADR / 不改设计契约）
+- **模型**：claude-opus-4-7（主循环延续；建议 sonnet）
+
+### 改动摘要
+
+@livefree 走读后追问 "若到时间未启动如何处理"，暴露 ADR-154 D-154-5 §checkDaily 精确匹配 HH:MM 的设计取舍：server 在 dailyTime 那一分钟未运行（部署 / 重启 / 慢启动）→ 该次触发永久错过到次日。interval 模式有 due-based catch-up，daily 模式不受保护。
+
+- **Step 1**（`apps/api/src/workers/crawlerScheduler.ts`）：
+  - 新增 `CATCH_UP_WINDOW_MIN = 5` 常量（容错窗口）
+  - `checkDaily` 重构：
+    - 旧逻辑：HH:MM 精确等于 current → 触发；否则跳过
+    - 新逻辑：遍历 dailyTimes，对每个 HH:MM 计算今天 target；`0 ≤ now - target ≤ 5min` 即视为窗口内 + marks 防重 → 触发
+  - 跨午夜边界：next-day target 在未来 → 不触发（防补昨日 23:59）
+  - 早匹配早返回（遍历顺序 = times 数组顺序 = UI chip 列表顺序）
+  - 加 HH:MM 正则 + 数值范围防御性校验
+
+- **Step 2**（`tests/unit/api/crawlerScheduler.test.ts`）：
+  - 改 #6 旧 "03:01 ≠ 03:00 → false" → 新 "03:01 catch-up window 内 → true + matchedTime='03:00'"
+  - 新增 #8a–g 共 7 case：
+    - #8a 精确匹配（diffMs=0）→ 触发
+    - #8b catch-up 1min（diffMs=60s）→ 触发
+    - #8c 边界 5min（diffMs=300s）→ 触发
+    - #8d 超界 5min+1s → 不触发
+    - #8e 未来（diffMs<0）→ 不触发
+    - #8f 跨午夜 dailyTime=23:59 / now=次日 00:05 → 不触发
+    - #8g 窗口内但 marks 已含 → 不重触发（防重叠加 catch-up）
+  - 总数 25 → 32 全过
+
+### 新增/修改文件
+
+- `apps/api/src/workers/crawlerScheduler.ts`（Step 1 catch-up window）
+- `tests/unit/api/crawlerScheduler.test.ts`（Step 2 改 1 + 扩 7 case）
+
+PATCH 文件数：1 源 + 1 测试 = 2 项（≤ 5 硬约束 ✅）
+
+### 偏离记录
+
+无新 D-N 偏离（catch-up 是 ADR-155 §7 风险章节"实施期评估"的范式延伸 / 不改设计契约）。
+
+### 质量门禁
+
+- ✅ typecheck PASS（8 workspace）
+- ✅ lint PASS（4 pre-existing 警告，0 新增）
+- ✅ test 5134/5134 PASS（crawlerScheduler.test 32/32 全过 / 本卡新 7 case + 改 1 case）
+- ✅ verify:adr-contracts PASS（207 D-N 闭环）
+
+### 六问自检 PASS
+
+1. **正确性**：CATCH_UP_WINDOW_MIN=5 给 4-5 次 tick 容错机会；marks 防重保证窗口内多 tick 不重触；跨午夜边界正确（不补昨夜）
+2. **边界与复用**：复用 `makeMarkKey` / `formatDateStr` helper；不引入新依赖；纯函数仍可独立单测（marks 参数传入）
+3. **可扩展性**：CATCH_UP_WINDOW_MIN 常量易调整（如改 10 / 15 分钟）；window 模式可扩 i18n 时区
+4. **一致性**：与 interval 模式 due-based 范式同源（catch-up = "可触发窗口"）；与 ADR-153 D-153-4 GREATEST clamp 思路一致（容错而非精确）
+5. **改动收敛**：满足 1–4 前提下严格 1 源 + 1 测试 = 2 项；无额外抽象
+6. **偏离检测**：无新 D-N（健壮性补丁 / 不动设计契约）
+
+### AI-CHECK 结论
+
+- ✅ **PASS** — 2 个 Step 完整闭环 / 7 新单测 + 改 1 case 全过 / 全栈门禁通过
+- **越界检测**：CLEAN（1 源 + 1 测试严格在 HOTFIX-D 文件范围内）
+- **回归风险**：低
+  - 行为兼容：03:00 精确匹配仍触发（diffMs=0 ∈ window）
+  - marks 防重不变：window 内多 tick 仍只触发一次（matchedTime → markKey）
+  - interval 模式零改动（仍 due-based）
+  - 跨午夜场景显式守卫（不补昨日 dailyTime）
+
+### 未覆盖（→ 后续视情况评估）
+
+- **用户实测验证**（@livefree）：
+  1. dailyTimes=["03:00"]，server 03:02 启动 → log 含 matched_time=03:00 立即触发
+  2. dailyTimes=["03:00"]，server 03:06 启动 → 不触发（超窗口）
+  3. dailyTimes=["03:00","04:00"]，server 03:01 启动 → 仅 03:00 触发；04:00 等到达再触发
+  4. server 03:00 正常运行 → 触发后同分钟下次 tick 不重触
+- **方案 B（启动时 missed-fire 扫描）**：catch-up window 实测后视频度评估；若 5min 窗口仍漏（如重启 > 5min），可加启动扫描遍历所有今日已过 dailyTime 补触发
+- **方案 C（错过报警）**：错过 30min+ 的 dailyTime emit warn → BackgroundEvent → 铃铛通知；推迟到 EP-2 后视情况
+
+### 关键约束消化
+
+- **CATCH_UP_WINDOW_MIN=5 取值**：tick 周期 60s × 5 = 5 分钟覆盖 4–5 次 tick 机会
+- **跨午夜不补**：防止 server 半夜重启误补昨夜 dailyTime（行为可预测性 > 完整性）
+- **marks 防重 + catch-up 共存**：window 内多 tick 仍只触发一次（marks 写入是 R-154-1 锚点时序保证）
+
+- **执行模型**：claude-opus-4-7（主循环延续；建议 sonnet）
+- **子代理调用**：无（健壮性补丁不触发 Opus reviewer）
+
+Cleanup-Audit: 1 源文件改 + 1 测试文件（改 1 + 扩 7 case）/ 7 新单测 + 改 1 case / 0 migration / 0 新依赖
+Plan-Revision: 0 次

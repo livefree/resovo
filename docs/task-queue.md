@@ -1172,6 +1172,17 @@ B 序列 + C 序列可与 A 并行（A 无依赖）；B 与 C 之间无依赖（
 
 3. **CHG-SN-9-CW1-CW2-HOTFIX-C** — schedulerEnabled UI 可见性警告
    - 状态：✅ 完成（2026-05-26 / @livefree 实测 3 路径 9/10/11 PASS / 11 = 3:26 dailyTime 触发 daily run 成功 / commit b1491aea）
+
+3b. **CHG-SN-9-CW1-CW2-HOTFIX-D** — scheduler daily 模式 catch-up window（5 分钟容错）
+   - 状态：🟡 代码已落地 / 待 @livefree dev 实测 4 路径
+   - 创建时间：2026-05-26 05:40
+   - 实际开始：2026-05-26 05:40
+   - 完成时间：—（实测 PASS 后回填）
+   - 执行模型：claude-opus-4-7
+   - 范围：crawlerScheduler.ts checkDaily catch-up window（5min）+ marks 防重 + 跨午夜不补 + 7 case 单测
+   - 文件范围：1 源 + 1 测试 = 2 项 ✅
+   - 触发：@livefree EP-1C-2b 实测后追问"若到时间未启动如何处理" → 暴露 ADR-154 D-154-5 §checkDaily 精确匹配的设计缺口
+   - 不起新 ADR（健壮性补丁 / ADR-155 §7 风险章节"实施期评估"范式延伸）
    - 创建时间：2026-05-26 03:00
    - 实际开始：2026-05-26 03:00
    - 完成时间：2026-05-26 03:30

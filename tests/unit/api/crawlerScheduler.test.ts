@@ -94,12 +94,13 @@ describe('checkDaily（ADR-155 D-155-6 EP-1C-1b 多 dailyTime + marks 防重）'
     })
   })
 
-  it('#6 current !== 任何 dailyTime → shouldTrigger=false', async () => {
+  it('#6 W3-FIX HOTFIX-D: current 在 dailyTime 后 1 分钟（catch-up window 内）→ 触发 + matchedTime 是原 dailyTime', async () => {
     const { checkDaily } = await import('@/api/workers/crawlerScheduler')
-    const now = new Date(2026, 4, 25, 3, 1, 0)  // 03:01
+    const now = new Date(2026, 4, 25, 3, 1, 0)  // 03:01（dailyTime=03:00 后 1 分钟）
+    // catch-up window 5 分钟内未触发 → 补触发；matchedTime 仍是原 dailyTime（写 marks 用）
     expect(checkDaily({ dailyTimes: ['03:00'] }, now, {})).toEqual({
-      shouldTrigger: false,
-      matchedTime: null,
+      shouldTrigger: true,
+      matchedTime: '03:00',
     })
   })
 
@@ -157,6 +158,66 @@ describe('checkDaily（ADR-155 D-155-6 EP-1C-1b 多 dailyTime + marks 防重）'
     const config = { dailyTimes: [], dailyTime: '05:30' }
     expect(checkDaily(config, new Date(2026, 4, 25, 5, 30, 0), {})).toEqual({
       shouldTrigger: true, matchedTime: '05:30',
+    })
+  })
+
+  // ── W3-FIX HOTFIX-D：catch-up window 边界 ──────────────────────
+  it('#8a HOTFIX-D: diffMs=0（精确匹配）→ 触发', async () => {
+    const { checkDaily } = await import('@/api/workers/crawlerScheduler')
+    const now = new Date(2026, 4, 25, 3, 0, 0)  // 03:00:00
+    expect(checkDaily({ dailyTimes: ['03:00'] }, now, {})).toEqual({
+      shouldTrigger: true, matchedTime: '03:00',
+    })
+  })
+
+  it('#8b HOTFIX-D: diffMs=60s（1 分钟 catch-up）→ 触发', async () => {
+    const { checkDaily } = await import('@/api/workers/crawlerScheduler')
+    const now = new Date(2026, 4, 25, 3, 1, 0)  // 03:01（dailyTime=03:00 后 1 分钟）
+    expect(checkDaily({ dailyTimes: ['03:00'] }, now, {})).toEqual({
+      shouldTrigger: true, matchedTime: '03:00',
+    })
+  })
+
+  it('#8c HOTFIX-D: diffMs=300s（5 分钟边界 / 仍在窗口内）→ 触发', async () => {
+    const { checkDaily } = await import('@/api/workers/crawlerScheduler')
+    const now = new Date(2026, 4, 25, 3, 5, 0)  // 03:05（dailyTime=03:00 后 5 分钟整）
+    expect(checkDaily({ dailyTimes: ['03:00'] }, now, {})).toEqual({
+      shouldTrigger: true, matchedTime: '03:00',
+    })
+  })
+
+  it('#8d HOTFIX-D: diffMs=301s（超 5 分钟边界）→ 不触发', async () => {
+    const { checkDaily } = await import('@/api/workers/crawlerScheduler')
+    const now = new Date(2026, 4, 25, 3, 5, 1)  // 03:05:01
+    expect(checkDaily({ dailyTimes: ['03:00'] }, now, {})).toEqual({
+      shouldTrigger: false, matchedTime: null,
+    })
+  })
+
+  it('#8e HOTFIX-D: diffMs<0（target 在未来 / now=02:59）→ 不触发', async () => {
+    const { checkDaily } = await import('@/api/workers/crawlerScheduler')
+    const now = new Date(2026, 4, 25, 2, 59, 0)  // 02:59（dailyTime=03:00 前 1 分钟）
+    expect(checkDaily({ dailyTimes: ['03:00'] }, now, {})).toEqual({
+      shouldTrigger: false, matchedTime: null,
+    })
+  })
+
+  it('#8f HOTFIX-D: 跨午夜不补昨日 dailyTime（now=00:05 / dailyTime=23:59）→ 不触发', async () => {
+    const { checkDaily } = await import('@/api/workers/crawlerScheduler')
+    const now = new Date(2026, 4, 26, 0, 5, 0)  // 00:05（次日凌晨）
+    // dailyTime=23:59 今天的 target=2026-05-26 23:59 → 在未来 → 不触发
+    // 这防止 server 跨午夜重启误补昨夜（旧行为）
+    expect(checkDaily({ dailyTimes: ['23:59'] }, now, {})).toEqual({
+      shouldTrigger: false, matchedTime: null,
+    })
+  })
+
+  it('#8g HOTFIX-D: catch-up 内但 marks 已含 → 不重触发（防重叠加 catch-up）', async () => {
+    const { checkDaily } = await import('@/api/workers/crawlerScheduler')
+    const now = new Date(2026, 4, 25, 3, 3, 0)  // 03:03（dailyTime=03:00 后 3 分钟 / 窗口内）
+    const marks = { '2026-05-25 03:00': '2026-05-25T03:00:00.000Z' }
+    expect(checkDaily({ dailyTimes: ['03:00'] }, now, marks)).toEqual({
+      shouldTrigger: false, matchedTime: null,
     })
   })
 })
