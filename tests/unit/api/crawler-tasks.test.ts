@@ -1,4 +1,19 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi, beforeEach } from 'vitest'
+
+// CW1-B-EP-TEST：cancelTaskById + batchCancelTasks 需要 mock 子模块
+const { getTaskByIdMock, syncRunStatusFromTasksMock } = vi.hoisted(() => ({
+  getTaskByIdMock: vi.fn(),
+  syncRunStatusFromTasksMock: vi.fn(),
+}))
+
+vi.mock('@/api/db/queries/crawlerTasks.queries', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/api/db/queries/crawlerTasks.queries')>()
+  return { ...actual, getTaskById: getTaskByIdMock }
+})
+vi.mock('@/api/db/queries/crawlerRuns', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/api/db/queries/crawlerRuns')>()
+  return { ...actual, syncRunStatusFromTasks: syncRunStatusFromTasksMock }
+})
 
 import {
   listTasks,
@@ -6,6 +21,8 @@ import {
   markStaleHeartbeatRunningTasksWithRunIds,
   markTimedOutRunningTasksWithRunIds,
   touchTaskHeartbeat,
+  cancelTaskById,
+  batchCancelTasks,
 } from '@/api/db/queries/crawlerTasks'
 
 const EMPTY_DB_RESULT = { rows: [], rowCount: 0 }
@@ -153,6 +170,135 @@ describe('crawlerTasks query helpers', () => {
 
     expect(result).toEqual({ count: 1, runIds: ['run-3'] })
     expect(query).toHaveBeenCalledWith(expect.stringContaining('staleMinutes'), [20])
+  })
+})
+
+// ── CW1-B-EP-TEST：cancelTaskById + batchCancelTasks ───────────────────────────
+
+function makeTask(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 'task-1',
+    type: 'incremental-crawl' as const,
+    sourceSite: 'site-a',
+    targetUrl: 'https://site-a.example/',
+    status: 'pending' as const,
+    retryCount: 0,
+    runId: 'run-1',
+    triggerType: 'batch' as const,
+    timeoutAt: null,
+    heartbeatAt: null,
+    cancelRequested: false,
+    result: null,
+    scheduledAt: new Date().toISOString(),
+    startedAt: null,
+    finishedAt: null,
+    ...overrides,
+  }
+}
+
+describe('cancelTaskById — CW1-B-EP-TEST（5 case）', () => {
+  const makeDb = () => ({ query: vi.fn().mockResolvedValue({ rowCount: 1, rows: [] }) })
+
+  beforeEach(() => {
+    getTaskByIdMock.mockReset()
+    syncRunStatusFromTasksMock.mockReset()
+  })
+
+  it('#1 task not found → returns null', async () => {
+    getTaskByIdMock.mockResolvedValueOnce(null)
+    const db = makeDb()
+    const result = await cancelTaskById(db as never, 'no-such-task')
+    expect(result).toBeNull()
+  })
+
+  it('#2 terminal status (cancelled) → throws STATE_CONFLICT AppError', async () => {
+    getTaskByIdMock.mockResolvedValueOnce(makeTask({ status: 'cancelled' }))
+    const db = makeDb()
+    await expect(cancelTaskById(db as never, 'task-1')).rejects.toThrow()
+    // AppError.code = 'STATE_CONFLICT'
+    await cancelTaskById(db as never, 'task-1').catch((err: unknown) => {
+      if (err && typeof err === 'object' && 'code' in err) {
+        expect((err as { code: string }).code).toBe('STATE_CONFLICT')
+      }
+    })
+  })
+
+  it('#3 running + not cancelRequested → cancel_requested status', async () => {
+    getTaskByIdMock.mockResolvedValueOnce(makeTask({ status: 'running', cancelRequested: false }))
+    const db = makeDb()
+    const result = await cancelTaskById(db as never, 'task-1')
+    expect(result).not.toBeNull()
+    expect(result?.finalStatus).toBe('cancel_requested')
+    expect(result?.alreadyRequested).toBe(false)
+    expect(result?.runId).toBe('run-1')
+    // UPDATE SQL 应被调用一次（设置 cancel_requested=true）
+    expect(db.query).toHaveBeenCalledOnce()
+    expect((db.query as ReturnType<typeof vi.fn>).mock.calls[0][0]).toContain('cancel_requested = true')
+  })
+
+  it('#4 running + already cancelRequested → idempotent（不重写 / alreadyRequested=true）', async () => {
+    getTaskByIdMock.mockResolvedValueOnce(makeTask({ status: 'running', cancelRequested: true }))
+    const db = makeDb()
+    const result = await cancelTaskById(db as never, 'task-1')
+    expect(result?.alreadyRequested).toBe(true)
+    expect(result?.finalStatus).toBe('cancel_requested')
+    // 幂等：无 UPDATE 调用
+    expect(db.query).not.toHaveBeenCalled()
+  })
+
+  it('#5 pending → 直接 cancelled + finishedAt', async () => {
+    const pendingTask = makeTask({ status: 'pending', cancelRequested: false })
+    const cancelledTask = makeTask({ status: 'cancelled', cancelRequested: true, finishedAt: new Date().toISOString() })
+    getTaskByIdMock
+      .mockResolvedValueOnce(pendingTask)   // 第 1 次（状态检查）
+      .mockResolvedValueOnce(cancelledTask)  // 第 2 次（refresh 读最新状态）
+    const db = makeDb()
+    const result = await cancelTaskById(db as never, 'task-1')
+    expect(result?.finalStatus).toBe('cancelled')
+    expect(result?.alreadyRequested).toBe(false)
+    expect(result?.task.status).toBe('cancelled')
+    // UPDATE SQL 包含 status = 'cancelled'
+    expect((db.query as ReturnType<typeof vi.fn>).mock.calls[0][0]).toContain("status = 'cancelled'")
+  })
+})
+
+describe('batchCancelTasks — CW1-B-EP-TEST（2 case）', () => {
+  beforeEach(() => {
+    getTaskByIdMock.mockReset()
+    syncRunStatusFromTasksMock.mockReset().mockResolvedValue(undefined)
+  })
+
+  it('#6 mixed tasks → summary 正确聚合（cancelled + cancel_requested）', async () => {
+    const pendingTask = makeTask({ id: 'task-p', status: 'pending', runId: 'run-A' })
+    const cancelledTask = makeTask({ id: 'task-p', status: 'cancelled', cancelRequested: true, finishedAt: new Date().toISOString(), runId: 'run-A' })
+    const runningTask = makeTask({ id: 'task-r', status: 'running', cancelRequested: false, runId: 'run-B' })
+    getTaskByIdMock
+      .mockResolvedValueOnce(pendingTask)   // task-p 第 1 次
+      .mockResolvedValueOnce(cancelledTask)  // task-p 第 2 次（refresh）
+      .mockResolvedValueOnce(runningTask)    // task-r
+    const db = { query: vi.fn().mockResolvedValue({ rowCount: 1, rows: [] }) }
+    const result = await batchCancelTasks(db as never, ['task-p', 'task-r'])
+    expect(result.summary.cancelled).toBe(1)
+    expect(result.summary.cancelRequested).toBe(1)
+    expect(result.summary.alreadyRequested).toBe(0)
+    expect(result.summary.errors).toHaveLength(0)
+    expect(result.runIds).toEqual(expect.arrayContaining(['run-A', 'run-B']))
+    expect(syncRunStatusFromTasksMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('#7 STATE_CONFLICT → errors[] 累入；其余 task 继续处理', async () => {
+    const terminalTask = makeTask({ id: 'task-done', status: 'done', runId: null })
+    const pendingTask = makeTask({ id: 'task-p', status: 'pending', runId: 'run-C' })
+    const cancelledTask = makeTask({ id: 'task-p', status: 'cancelled', cancelRequested: true, finishedAt: new Date().toISOString(), runId: 'run-C' })
+    getTaskByIdMock
+      .mockResolvedValueOnce(terminalTask) // task-done → STATE_CONFLICT throw
+      .mockResolvedValueOnce(pendingTask)  // task-p 第 1 次
+      .mockResolvedValueOnce(cancelledTask) // task-p refresh
+    const db = { query: vi.fn().mockResolvedValue({ rowCount: 1, rows: [] }) }
+    const result = await batchCancelTasks(db as never, ['task-done', 'task-p'])
+    expect(result.summary.errors).toHaveLength(1)
+    expect(result.summary.errors[0]?.code).toBe('STATE_CONFLICT')
+    expect(result.summary.cancelled).toBe(1) // task-p 成功
   })
 })
 
