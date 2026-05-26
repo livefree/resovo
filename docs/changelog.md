@@ -6795,3 +6795,100 @@ HOTFIX-A 落地后 @livefree dev 实测暴露 2 新缺陷：
 
 Cleanup-Audit: 2 源文件改 + 2 测试文件（均扩展）/ 5 新单测 / 0 migration / 0 新依赖
 Plan-Revision: 0 次
+
+## [CHG-SN-9-CW1-CW2-HOTFIX-C] schedulerEnabled UI 可见性警告
+
+- **日期**：2026-05-26
+- **Sequence**：SEQ-20260526-CRAWLER-W3-FIX
+- **任务 ID**：CHG-SN-9-CW1-CW2-HOTFIX-C
+- **关联 ADR**：无（纯 UI 可见性，无新决策；多 dailyTime D-155-6 已加入 REDESIGN-A-EP-1）
+- **模型**：claude-opus-4-7（主循环延续；HOTFIX-A/B 上下文复用）
+
+### 改动摘要
+
+HOTFIX-B 落地后 @livefree dev 实测发现 3am 定时未触发。排查根因：
+
+- `apps/api/src/server.ts:199` scheduler 是 **opt-in**（`CRAWLER_SCHEDULER_ENABLED === 'true'` 才注册）
+- 用户 `.env.local` 无此设置 → scheduler 进程从未启动 → fastify log: "disabled (set CRAWLER_SCHEDULER_ENABLED=true to enable)"
+- 后端 `/admin/crawler/system-status` 已暴露 `schedulerEnabled: boolean`（`crawler.ts:126,153`），前端 0 处消费 → UI 完全感知不到 scheduler 死活
+- 即使 scheduler 未启动，`AutoCrawlScheduleCard` 仍显 "下次自动: HH:MM" 倒计时 → 用户误以为定时已生效
+
+用户决定路径：**手动改 `.env.local` 重启**（不改 scheduler 默认 opt-out → opt-in 语义）。本卡只做 UI 可见性。
+
+- **Step 1（`apps/server-next/src/app/admin/_client/AutoCrawlScheduleCard.tsx`）**：
+  - `CardState` 加 `'scheduler-disabled'` 第 6 态（最高优先级，遮蔽 disabled/countdown/failed）
+  - load 函数：`status?.schedulerEnabled === false` 时优先设此态（兜底 `undefined` 不报警告，向后兼容旧版后端）
+  - 新 body 分支：渲染 danger Pill "调度器进程未启动" + 文案 "请联系 dev / 运维在环境变量设 `CRAWLER_SCHEDULER_ENABLED=true` 并重启 api server"
+  - `data-testid="auto-crawl-scheduler-disabled"` 便于单测定位
+
+- **Step 2（`apps/server-next/src/app/admin/crawler/_client/CrawlerClient.tsx:434`）**：
+  - 提取 `schedulerSegment` 常量替代 subtitle 模板内 `下次自动: ${...}` 直拼
+  - `schedulerEnabled === false` 时 chip 显 "🚨 调度器未启动" 替代倒计时
+  - subtitle 三段拼接：`${站点数} · ${freeze 态} · ${schedulerSegment}`
+
+- **Step 3（单测）**：
+  - `AutoCrawlScheduleCard.test.tsx` 扩 3 case：
+    - `#9 schedulerEnabled=false → 显警告卡 + 遮蔽 countdown + summary 不渲染`
+    - `#10 schedulerEnabled=true → 正常 countdown（防 #9 回归）`
+    - `#11 schedulerEnabled=undefined → 不显警告（向后兼容兜底）`
+
+### 新增/修改文件
+
+- `apps/server-next/src/app/admin/_client/AutoCrawlScheduleCard.tsx`（CardState 扩第 6 态 + load 函数优先判定 + body 新分支）
+- `apps/server-next/src/app/admin/crawler/_client/CrawlerClient.tsx`（schedulerSegment 常量 + subtitle 条件渲染）
+- `tests/unit/components/server-next/admin/AutoCrawlScheduleCard.test.tsx`（扩 3 case）
+- `docs/changelog.md`（本条）
+- `docs/task-queue.md`（HOTFIX-C 卡 + D-155-6 加入 REDESIGN-A 范围 + DAG 更新）
+- `docs/tasks.md`（HOTFIX-B 移除 / HOTFIX-C 进入"进行中"）
+
+### 偏离记录
+
+无（纯 UI 可见性，不引入新 D-N 决策；不改 scheduler 默认值；新增 6th CardState 仅消费侧前端，不动 packages/admin-ui 公开类型）。
+
+### 质量门禁
+
+- ✅ typecheck PASS（8 workspace 全过）
+- ✅ lint PASS（4 pre-existing 警告，0 新增）
+- ✅ test 5086/5086 PASS（本卡新 3 case 全过 / staging 2 flaky 与本卡改动无关 — 单跑 25/25 PASS / W1 changelog 已确认 pre-existing）
+- ✅ verify:adr-contracts PASS
+  - verify-sql-schema-alignment PASS
+  - verify-adr-d-numbers PASS
+  - verify-style-shorthand-conflict PASS
+
+### 六问自检 PASS
+
+1. **正确性**：scheduler-disabled 优先级最高（最早判定），undefined 兜底不误报；测试 #11 显式守卫兼容性
+2. **边界与复用**：复用现有 `CrawlerSystemStatus.schedulerEnabled` 字段（后端 8 个月前已暴露），不动后端契约；CardState type 在 AutoCrawlScheduleCard 内部定义，不污染共享层
+3. **可扩展性**：CardState 模式允许未来加 7 / 8 态（如 'freeze-blocked' 全局冻结时遮蔽）；schedulerSegment 提取后可承载更多 schedule 维度信息（D-155-6 多 dailyTime 时可加分隔符）
+4. **一致性**：与 HOTFIX-B Step 2 提取 scheduleSummary 常量范式一致；Pill variant=warn 与 4. failed 态视觉同源（属同类警告级别）
+5. **改动收敛**：满足 1–4 前提下严格 2 源文件 + 1 测试文件，无任何"顺手优化"
+6. **偏离检测**：无新 D-N（D-155-6 多 dailyTime 已在 task-queue REDESIGN-A-EP-1 范围内，本卡不实施）
+
+### AI-CHECK 结论
+
+- ✅ **PASS** — 3 个 Step 完整闭环 / 3 新单测全过 / 全栈门禁通过
+- **越界检测**：CLEAN（2 源文件 + 1 测试文件严格在 tasks.md 文件范围内；不动 scheduler 默认值符合用户决定路径）
+- **回归风险**：低
+  - Step 1 兜底 undefined 不报警告（保证旧版后端不显误报）
+  - Step 2 schedulerSegment 提取后保持原 subtitle 结构 + freeze 段不变
+  - Step 3 新 3 case 不修改现有 8 case，仅扩展
+
+### 未覆盖（→ 后续）
+
+- **用户实测验证**（@livefree）：
+  - 暂不改 `.env.local` 重启 api → 应看到红色警告卡 + PageHeader chip "🚨 调度器未启动"
+  - 加 `CRAWLER_SCHEDULER_ENABLED=true` 重启 api → 警告消失，countdown 显示恢复
+  - 下一个匹配 dailyTime 整分钟触发 daily run（出现在 `/admin/crawler/runs`）
+- **多 dailyTime（3am + 4am）**：D-155-6 已加入 REDESIGN-A-EP-1，待 ADR-155 PASS 后实施
+- **AutoCrawlSummaryCard 显式入口卡**：D-155-5 已加入 REDESIGN-A-EP-1
+
+### 关键约束消化
+
+- **不改 scheduler 默认值**（用户决定路径 = 手动 .env.local）：本卡只做 UI 可见性，不动 `apps/api/src/server.ts:199` `CRAWLER_SCHEDULER_ENABLED === 'true'` 判定
+- **schedulerEnabled=false 时禁止信任 autoCrawlNext**：Step 1 优先级遮蔽确保 countdown 完全不渲染，避免视觉残留误导
+
+- **执行模型**：claude-opus-4-7（主循环延续；建议 sonnet，本会话 opus 上下文复用）
+- **子代理调用**：无（纯 UI，未触发"共享组件 API 契约强制 Opus"，未起新 ADR）
+
+Cleanup-Audit: 2 源文件改 + 1 测试文件（扩展）/ 3 新单测 / 0 migration / 0 新依赖
+Plan-Revision: 0 次

@@ -1169,7 +1169,34 @@ B 序列 + C 序列可与 A 并行（A 无依赖）；B 与 C 之间无依赖（
      - **不动 control_status 写入逻辑**（只修 status 派生 case；control_status 由 route 层 updateRunControlStatus 写）
      - **worker 8 处 sync 调用方零行为变化**（worker job 永远先创 task，a.total > 0 永远不命中新 case）
 
-3. **CHG-SN-9-CW1-CW2-REDESIGN-A-ADR** — 五处设计层重做 ADR 起草（合并）
+3. **CHG-SN-9-CW1-CW2-HOTFIX-C** — schedulerEnabled UI 可见性警告
+   - 状态：🟡 代码已落地 / 待 @livefree dev server 实测确认（typecheck + lint + test 5086/5086 + verify:adr-contracts 全过 / 3 新单测全过）
+   - 创建时间：2026-05-26 03:00
+   - 实际开始：2026-05-26 03:00
+   - 完成时间：—（实测 PASS 后回填）
+   - 执行模型：claude-opus-4-7（主循环延续）
+   - 建议模型：sonnet（纯 UI 警告 + 单测，无新决策）
+   - 范围：HOTFIX-B 实测发现 — scheduler 是 opt-in (`CRAWLER_SCHEDULER_ENABLED === 'true'`)，用户 `.env.local` 无此设置导致 scheduler 进程从未注册，UI 完全无感知。后端 `/admin/crawler/system-status` 已暴露 `schedulerEnabled: boolean`，前端 0 消费。
+   - 决策约束：用户选择"手动改 .env.local"路径（不改 scheduler 默认 opt-out → opt-in 语义），本卡只做"可见性"。
+   - Step 1（UI 警告 / P1）：`AutoCrawlScheduleCard.tsx` 渲染前增加 `schedulerEnabled === false` 优先判定 → 渲染 danger 状态卡："调度器进程未启动 · 联系 dev 设 `CRAWLER_SCHEDULER_ENABLED=true` 并重启 api"（替代任何 countdown/disabled/failed/error 显示，因为没有 scheduler 进程时 autoCrawlNext 字段不可信）
+   - Step 2（PageHeader chip 警告 / P1）：`CrawlerClient.tsx:436` subtitle 在 `status?.schedulerEnabled === false` 时 chip 显 "🚨 调度器未启动"（红字 / cursor:help / title 提示）替代 "下次自动: HH:MM"
+   - Step 3（单测）：`AutoCrawlScheduleCard.test.tsx` 加 1 case（schedulerEnabled=false → danger 警告卡 + 不渲染 autoCrawlNext）；`CrawlerSystemStatus` 类型确认 `schedulerEnabled?: boolean` 已存在
+   - 验收要点：
+     - dev server 实测前置（用户）：暂不改 .env.local（保持 scheduler disabled）→ 重启 api → Dashboard AutoCrawlScheduleCard 显示红色警告卡 / PageHeader chip 显 "🚨 调度器未启动"
+     - dev server 实测验证（用户）：`.env.local` 加 `CRAWLER_SCHEDULER_ENABLED=true` 重启 api → 警告卡消失 / 回到 countdown 正常显示
+     - typecheck / lint / test / verify:adr-contracts 全过
+   - 文件范围：
+     - `apps/server-next/src/app/admin/_client/AutoCrawlScheduleCard.tsx`（Step 1：6 状态 → 7 状态，scheduler-disabled 优先）
+     - `apps/server-next/src/app/admin/crawler/_client/CrawlerClient.tsx`（Step 2：subtitle chip 条件渲染）
+     - `apps/server-next/src/lib/crawler/api.ts`（确认 `CrawlerSystemStatus.schedulerEnabled?: boolean` 已存在；如缺则补）
+     - `tests/unit/components/server-next/admin/AutoCrawlScheduleCard.test.tsx`（扩 1 case）
+   - 估时：0.1w
+   - 关键约束：
+     - **本卡不改 scheduler 默认值**（用户决定路径：手动 .env.local）
+     - **D-155-6 多 dailyTime 不在本卡范围**（已加入 REDESIGN-A-EP-1）
+     - **schedulerEnabled=false 时禁止信任 autoCrawlNext**（scheduler 进程不存在时该字段是过期数据 / 误导用户）
+
+4. **CHG-SN-9-CW1-CW2-REDESIGN-A-ADR** — 六处设计层重做 ADR 起草（合并）
    - 状态：⬜
    - 创建时间：2026-05-26 02:00
    - 最后更新：2026-05-26 02:30（D-155-5 追加）
@@ -1181,7 +1208,8 @@ B 序列 + C 序列可与 A 并行（A 无依赖）；B 与 C 之间无依赖（
      - **D-155-2（CW1-E 复用 Topbar 图标）**：删除 BackgroundEventBell `position:fixed` 旁路叠加；BackgroundEventService 三源（autoCrawlNext + scheduler + 高危 audit）合并到 `useAdminNotifications` + `useAdminTasks` 现有数据流；扩展 `NotificationItem` discriminated union 加 background category（**触发 packages/admin-ui/src/**/types.ts 改动 → 强制 Opus arch-reviewer trailer**）
      - **D-155-3（CW2-B Gantt 三段窗）**：时间窗从 `[NOW-range, NOW]` 改为 `[NOW-range×0.8, NOW+range×0.2]`；加 now-line 垂直指示线（width=1px, color=var(--accent-default)）；pending bar 显示在 `scheduled_at` 真实位置（不再 clamp 到 NOW），用虚线边框 + 半透明区分；range 选项加 `12h / 24h / 7d`；空窗口加"扩大范围"快捷
      - **D-155-4（CW2-B 站点上限解锁）**：`limit` 从硬编码 8 改为 `range select` 旁边的可选项（8 / 20 / all），后端 `crawlerTimeline.ts` `safeLimit` 上限提到 50；超过 50 站给出"性能模式建议筛选站点"提示
-     - **D-155-5（定时设置显式入口卡）**：`/admin/crawler` 顶部加 "AutoCrawlSummaryCard"（紧邻 PageHeader 下方）展示当前生效配置 — scheduleType label + 时间/间隔显示 + globalEnabled 状态 pill + [立即关闭] 快捷按钮（toggle globalEnabled=false 不弹 Drawer）+ [编辑] 按钮（打开 SchedulerConfigDrawer）。CW2-C 沿用单全局 KV 不引入多 schedule 概念（仍是 1 个 auto_crawl_config）；后续若需多 schedule 另起 ADR
+     - **D-155-5（定时设置显式入口卡）**：`/admin/crawler` 顶部加 "AutoCrawlSummaryCard"（紧邻 PageHeader 下方）展示当前生效配置 — scheduleType label + 时间/间隔显示 + globalEnabled 状态 pill + [立即关闭] 快捷按钮（toggle globalEnabled=false 不弹 Drawer）+ [编辑] 按钮（打开 SchedulerConfigDrawer）
+     - **D-155-6（多 dailyTime 支持）**：UI 改 `dailyTime` 为 `dailyTimes: string[]`（chip-based 时间列表，可加可删，至少 1 个）；后端 KV `auto_crawl_daily_time` 改 JSON 数组（向后兼容：单字符串旧值 → 解析为 [v]）；`checkDaily` 改"任一时间匹配则触发"；`auto_crawl_last_trigger_date` 加 dailyTime 维度（防同日同时间重复触发但允许同日不同时间多次触发） — 关键决策：相同 dailyTime 同日防重，不同 dailyTime 同日各自触发一次
    - 文件范围：
      - `docs/decisions.md`（追加 ADR-155 完整文本）
      - 同 commit 标注 ADR-122 / ADR-152 / ADR-153 §关联 ADR AMENDMENT
@@ -1191,25 +1219,32 @@ B 序列 + C 序列可与 A 并行（A 无依赖）；B 与 C 之间无依赖（
      - **触发 plan §4.5 R7 MUST-8 守门**：ADR PASS 才能起 -EP 实施卡（D-155-2 新增 NotificationItem 字段属共享组件 API 契约）
      - **AMENDMENT 引用必填**：ADR-155 §关联 ADR 必须明列 ADR-122 / ADR-152 / ADR-153 三处 AMENDMENT 说明
 
-4. **CHG-SN-9-CW1-CW2-REDESIGN-A-EP-1** — D-155-1 + D-155-4 + D-155-5 实施（CW1-B 行内展开 + CW2-B 站点上限解锁 + 定时设置显式入口卡）
+5. **CHG-SN-9-CW1-CW2-REDESIGN-A-EP-1** — D-155-1/4/5/6 实施（行内展开 + 站点 limit 解锁 + 定时入口卡 + 多 dailyTime）
    - 状态：⬜
    - 创建时间：2026-05-26 02:00
+   - 最后更新：2026-05-26 03:00（D-155-6 追加）
    - 建议模型：sonnet
    - 依赖：CW1-CW2-REDESIGN-A-ADR PASS
-   - 范围：拆 CrawlerRunDetailView 为 RunInlinePanel + CrawlerRunsView 接 expand + timeline limit 解锁 + 后端 safeLimit 上限提到 50 + 新建 AutoCrawlSummaryCard 顶部展示
+   - 范围：拆 CrawlerRunDetailView 为 RunInlinePanel + CrawlerRunsView 接 expand + timeline limit 解锁 + 后端 safeLimit 上限提到 50 + 新建 AutoCrawlSummaryCard 顶部展示 + 多 dailyTime 全栈
    - 文件范围：
      - `apps/server-next/src/app/admin/crawler/runs/_client/CrawlerRunsView.tsx`（接 expandedKeys + renderExpandedRow + 改 Run ID 列 cell 为 toggle）
      - `apps/server-next/src/app/admin/crawler/runs/[id]/_client/RunInlinePanel.tsx`（新建，拆自 CrawlerRunDetailView）
-     - `apps/server-next/src/app/admin/crawler/runs/[id]/_client/CrawlerRunDetailView.tsx`（瘦身：移 meta + tasks 到 RunInlinePanel，仅保留 PageHeader 包裹）
+     - `apps/server-next/src/app/admin/crawler/runs/[id]/_client/CrawlerRunDetailView.tsx`（瘦身）
      - `apps/server-next/src/app/admin/crawler/_client/CrawlerTimelineCard.tsx`（加 limit select）
      - `apps/api/src/db/queries/crawlerTimeline.ts`（safeLimit 上限 20→50）
-     - `apps/server-next/src/app/admin/crawler/_client/AutoCrawlSummaryCard.tsx`（新建 D-155-5：紧邻 PageHeader 展示当前 schedule 摘要 + [立即关闭] + [编辑] 按钮）
+     - `apps/server-next/src/app/admin/crawler/_client/AutoCrawlSummaryCard.tsx`（新建 D-155-5）
      - `apps/server-next/src/app/admin/crawler/_client/CrawlerClient.tsx`（嵌入 AutoCrawlSummaryCard）
-     - 单测扩展（CrawlerRunsView.test 加 expand 行为 / RunInlinePanel.test 新建 / CrawlerTimelineCard.test 加 limit select / AutoCrawlSummaryCard.test 新建）
-   - 验收要点：dev server 实测 — list 点 run id 行内展开 meta + tasks → 点 tasks 行 [查看] 弹 logs drawer → 关闭展开收起；timeline limit 选 "全部" → 显示真实站数；deep link `/admin/crawler/runs/[id]` 直接打开仍正常渲染；/admin/crawler 顶部可见 AutoCrawlSummaryCard，点 [立即关闭] 调 POST /auto-config（globalEnabled=false）无需打开 Drawer
-   - 估时：0.35w（D-155-5 加入 +0.05w）
+     - **D-155-6 多 dailyTime 全栈**：
+       - `packages/types/src/system.types.ts`（`AutoCrawlConfig.dailyTime: string` → `dailyTimes: string[]`；min 1 max 24）
+       - `apps/api/src/db/queries/systemSettings.ts`（serialize JSON array + deserialize 兼容旧单字符串）
+       - `apps/api/src/workers/crawlerScheduler.ts`（`checkDaily` 改 "任一 dailyTime 匹配触发" + `auto_crawl_last_trigger_date` 加时间维度 → `auto_crawl_last_trigger_marks: { 'YYYY-MM-DD HH:MM': true, ... }`）
+       - `apps/server-next/src/app/admin/crawler/_client/SchedulerConfigDrawer.tsx`（dailyTime 单 input → chip 列表 UI：可加可删，至少 1 个，最多 24 个）
+       - `apps/server-next/src/app/admin/_client/AutoCrawlScheduleCard.tsx` + 上面 D-155-5 卡（显示多时间："每日 03:00, 04:00"）
+     - 单测扩展（CrawlerRunsView / RunInlinePanel / CrawlerTimelineCard / AutoCrawlSummaryCard / SchedulerConfigDrawer 多 dailyTime UI / checkDaily 多时间匹配 / systemSettings 兼容旧单字符串）
+   - 验收要点：dev server 实测 — 行内展开 + timeline limit + AutoCrawlSummaryCard + SchedulerConfigDrawer 加 3 个 dailyTime chip 保存 → 当日 3 个时间各触发一次（相同 dailyTime 同日防重）
+   - 估时：0.55w（D-155-5 +0.05 + D-155-6 +0.2 = +0.25 over 原 0.3）
 
-5. **CHG-SN-9-CW1-CW2-REDESIGN-A-EP-2** — D-155-2 实施（CW1-E 合并到 AdminShell notifications/tasks）
+6. **CHG-SN-9-CW1-CW2-REDESIGN-A-EP-2** — D-155-2 实施（CW1-E 合并到 AdminShell notifications/tasks）
    - 状态：⬜
    - 创建时间：2026-05-26 02:00
    - 建议模型：sonnet
@@ -1226,7 +1261,7 @@ B 序列 + C 序列可与 A 并行（A 无依赖）；B 与 C 之间无依赖（
    - 估时：0.3w
    - **commit trailer 必填**：`Subagents: arch-reviewer (claude-opus-4-7)`（CLAUDE.md ❌ 共享组件 API 契约强制 Opus）
 
-6. **CHG-SN-9-CW1-CW2-REDESIGN-A-EP-3** — D-155-3 实施（CW2-B Gantt 三段窗 + now-line + pending 真位）
+7. **CHG-SN-9-CW1-CW2-REDESIGN-A-EP-3** — D-155-3 实施（CW2-B Gantt 三段窗 + now-line + pending 真位）
    - 状态：⬜
    - 创建时间：2026-05-26 02:00
    - 建议模型：sonnet
@@ -1244,17 +1279,19 @@ B 序列 + C 序列可与 A 并行（A 无依赖）；B 与 C 之间无依赖（
 ### W3-FIX 执行顺序 DAG
 
 ```
-HOTFIX-A（commit d79769cc / 待 dev 实测确认）─────────────→ 🟡
+HOTFIX-A（commit d79769cc / 待 dev 实测 1/2/3/5/6 ✅）──────→ 🟡（4 改入 D-155-3）
 
-HOTFIX-B（HOTFIX-A 实测发现新缺陷 / P0+P1）────────────────→ ⬜
+HOTFIX-B（commit 0a0cc4e8 / 待 dev 实测 7/8）─────────────→ 🟡
 
-REDESIGN-A-ADR ──┬─→ REDESIGN-A-EP-1（D-155-1/4/5）→ ⬜
+HOTFIX-C（schedulerEnabled UI 可见性 / HOTFIX-B 实测发现）→ ⬜
+
+REDESIGN-A-ADR ──┬─→ REDESIGN-A-EP-1（D-155-1/4/5/6）→ ⬜
                  ├─→ REDESIGN-A-EP-2（D-155-2）→ ⬜
                  └─→ REDESIGN-A-EP-3（D-155-3）→ ⬜
                             ↑ 依赖 HOTFIX-A Step 2 SQL fix
 ```
 
-HOTFIX-A → HOTFIX-B 顺序串行（B 在 A SQL fix 基础上扩 CASE）；REDESIGN-A-ADR 可与 HOTFIX-B 并行起草；EP-1/2/3 互不依赖（可并行）但 EP-3 需 HOTFIX-A Step 2 完成（避免 SQL 双重改动 conflict）。
+HOTFIX-A → B → C 顺序串行（B 在 A SQL fix 基础上扩 CASE / C 在 B 实测发现）；REDESIGN-A-ADR 可与 HOTFIX-C 并行起草；EP-1/2/3 互不依赖（可并行）但 EP-3 需 HOTFIX-A Step 2 完成。
 
 ### W3-FIX 关键约束
 

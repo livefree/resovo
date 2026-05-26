@@ -159,4 +159,48 @@ describe('AutoCrawlScheduleCard', () => {
     expect(summary).toContain('每日 03:30')
     expect(summary).not.toContain('每 ')   // 区分 interval "每 N 分钟"（有空格）
   })
+
+  // ── CHG-SN-9-CW1-CW2-HOTFIX-C Step 1：scheduler 未启动可见性 ──────────
+  it('9. schedulerEnabled=false → 显 scheduler-disabled 警告（遮蔽 countdown / config 完整）', async () => {
+    const future = new Date(Date.now() + 90 * 60_000).toISOString()
+    // 即使 config.globalEnabled=true + autoCrawlNext 有值，schedulerEnabled=false 必须优先遮蔽
+    mockGetAutoCrawlConfig.mockResolvedValueOnce(BASE_CONFIG)
+    mockGetCrawlerSystemStatus.mockResolvedValueOnce({ autoCrawlNext: future, schedulerEnabled: false })
+    render(<AutoCrawlScheduleCard />)
+    await waitFor(() => {
+      expect(screen.getByTestId('auto-crawl-scheduler-disabled')).not.toBeNull()
+    })
+    // 警告卡含 Pill "调度器进程未启动" + 环境变量提示
+    expect(screen.getByText('调度器进程未启动')).not.toBeNull()
+    expect(screen.getByText(/CRAWLER_SCHEDULER_ENABLED=true/)).not.toBeNull()
+    // countdown / schedule-summary 必须不渲染（scheduler 未启动时 autoCrawlNext 是 stale 数据）
+    expect(screen.queryByTestId('auto-crawl-countdown')).toBeNull()
+    expect(screen.queryByTestId('auto-crawl-schedule-summary')).toBeNull()
+    // card data-state 标 scheduler-disabled 便于断言
+    const card = screen.getByTestId('auto-crawl-schedule-card')
+    expect(card.getAttribute('data-card-state')).toBe('scheduler-disabled')
+  })
+
+  it('10. schedulerEnabled=true → 正常 countdown 不被遮蔽（防 #9 回归）', async () => {
+    const future = new Date(Date.now() + 90 * 60_000).toISOString()
+    mockGetAutoCrawlConfig.mockResolvedValueOnce(BASE_CONFIG)
+    mockGetCrawlerSystemStatus.mockResolvedValueOnce({ autoCrawlNext: future, schedulerEnabled: true })
+    render(<AutoCrawlScheduleCard />)
+    await waitFor(() => {
+      expect(screen.getByTestId('auto-crawl-countdown')).not.toBeNull()
+    })
+    expect(screen.queryByTestId('auto-crawl-scheduler-disabled')).toBeNull()
+  })
+
+  it('11. schedulerEnabled=undefined（缺字段兼容）→ 不显警告（兜底，避免误报）', async () => {
+    const future = new Date(Date.now() + 90 * 60_000).toISOString()
+    mockGetAutoCrawlConfig.mockResolvedValueOnce(BASE_CONFIG)
+    // 后端旧版未返回 schedulerEnabled 字段时不报警告（兼容性兜底）
+    mockGetCrawlerSystemStatus.mockResolvedValueOnce({ autoCrawlNext: future })
+    render(<AutoCrawlScheduleCard />)
+    await waitFor(() => {
+      expect(screen.getByTestId('auto-crawl-countdown')).not.toBeNull()
+    })
+    expect(screen.queryByTestId('auto-crawl-scheduler-disabled')).toBeNull()
+  })
 })

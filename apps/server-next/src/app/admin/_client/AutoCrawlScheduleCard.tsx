@@ -105,7 +105,9 @@ function formatCountdown(iso: string, now: number): string {
 
 // ── 视觉状态类型 ────────────────────────────────────────────────
 
-type CardState = 'loading' | 'disabled' | 'countdown' | 'failed' | 'error'
+// CHG-SN-9-CW1-CW2-HOTFIX-C Step 1：scheduler-disabled 优先态（高于其他业务态）
+// scheduler 未启动时 autoCrawlNext 字段是 stale 数据，必须用此态遮蔽 countdown 显示
+type CardState = 'loading' | 'scheduler-disabled' | 'disabled' | 'countdown' | 'failed' | 'error'
 
 interface CardData {
   readonly state: CardState
@@ -138,11 +140,17 @@ export function AutoCrawlScheduleCard({ className }: AutoCrawlScheduleCardProps)
         ])
         if (cancelled) return
         const nextAt = status?.autoCrawlNext ?? null
-        const state: CardState = !config.globalEnabled
-          ? 'disabled'
-          : nextAt
-            ? 'countdown'
-            : 'failed'
+        // CHG-SN-9-CW1-CW2-HOTFIX-C Step 1：scheduler-disabled 优先态（最高优先级）
+        // 当后端 schedulerEnabled === false 时，autoCrawlNext 是基于 config 推算的 stale 数据，
+        // 必须遮蔽 countdown / disabled / failed 等业务态，避免用户误以为定时已生效。
+        const schedulerEnabled = status?.schedulerEnabled
+        const state: CardState = schedulerEnabled === false
+          ? 'scheduler-disabled'
+          : !config.globalEnabled
+            ? 'disabled'
+            : nextAt
+              ? 'countdown'
+              : 'failed'
         setData({ state, config, nextAt })
       } catch (err: unknown) {
         if (cancelled) return
@@ -172,6 +180,8 @@ export function AutoCrawlScheduleCard({ className }: AutoCrawlScheduleCardProps)
   }, [data.state])
 
   const editHref = '/admin/crawler?openDrawer=scheduler'
+  // CHG-SN-9-CW1-CW2-HOTFIX-C Step 1：scheduler-disabled 时 "编辑设置" 仍可点（保留入口），
+  // 但提示文案区分 "进程未启动" 而非"配置问题"
   const editLabel = data.state === 'disabled' ? '配置定时' : '编辑设置'
 
   // ── render ──────────────────────────────────────────────────────
@@ -184,6 +194,18 @@ export function AutoCrawlScheduleCard({ className }: AutoCrawlScheduleCardProps)
         <span style={LOADING_STYLE} data-testid="auto-crawl-error">
           加载失败：{data.errorMessage}
         </span>
+      )
+    }
+    // CHG-SN-9-CW1-CW2-HOTFIX-C Step 1：scheduler 进程未启动（最高优先级遮蔽 disabled/countdown/failed）
+    if (data.state === 'scheduler-disabled') {
+      return (
+        <div style={META_ROW_STYLE} data-testid="auto-crawl-scheduler-disabled">
+          <Pill variant="warn">调度器进程未启动</Pill>
+          <span>
+            api server 启动时未注册 scheduler 进程；即使配置已保存，定时也不会触发。
+            请联系 dev / 运维在环境变量设 <code style={{ fontFamily: 'var(--font-mono, monospace)' }}>CRAWLER_SCHEDULER_ENABLED=true</code> 并重启 api server。
+          </span>
+        </div>
       )
     }
     if (data.state === 'disabled') {

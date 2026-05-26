@@ -429,11 +429,17 @@ export function CrawlerClient() {
     return `${mm}-${dd} ${hh}:${mi}`
   }
 
+  // CHG-SN-9-CW1-CW2-HOTFIX-C Step 2：scheduler 未启动时 subtitle chip 显警告而非倒计时
+  // scheduler 进程不存在时 autoCrawlNext 是基于 config 推算的 stale 数据，不代表"会被触发"
+  const schedulerSegment = status?.schedulerEnabled === false
+    ? '🚨 调度器未启动'
+    : `下次自动: ${formatAutoCrawlChip(autoCrawlNext)}`
+
   return (
     <div data-crawler-client style={PAGE_STYLE}>
       <PageHeader
         title="采集控制"
-        subtitle={`${sites.length} 个站点 · ${status?.freezeEnabled ? '采集已关闭' : '实时'} · 下次自动: ${formatAutoCrawlChip(autoCrawlNext)}`}
+        subtitle={`${sites.length} 个站点 · ${status?.freezeEnabled ? '采集已关闭' : '实时'} · ${schedulerSegment}`}
         actions={
           <span style={ACTIONS_STYLE}>
             <AdminButton
