@@ -13569,5 +13569,463 @@ mutation 端点典型 4 文件框架：route + service + queries + types
 
 **最终结论**：ADR-151 status 🟢 Accepted via R3+Y3+G1 修订（2026-05-25 / arch-reviewer Opus 评级 A− → 主循环修订后等同 A）；CW1-B-EP 卡可启动；R-151-3 worker 守卫扩展是 CW1-B-EP §10 step 6 硬约束（**不可分卡** / 否则审计回归）。
 
+---
+
+## ADR-152 — admin shell topbar 后台事件铃铛端点（CHG-SN-9-CW1-E-ADR / W1-g）
+
+> **Status**: 🟢 Accepted（2026-05-25 / arch-reviewer Opus A− CONDITIONAL → 主循环修订 R3+Y4+G3 后等同 A / 详见 §12 评审结论）
+> **触发**：W1 plan §卡 5 W1-g 设计意图——admin shell topbar 新增「后台事件铃铛」，点击 popover 列出「上方：即将发生」+「下方：近期完成/失败」两段；当前 admin-shell-client.tsx 已接入 `useAdminNotifications`（ADR-147 / audit_log 派生）+ `useAdminTasks`（ADR-147 / crawler_runs + bull active 派生），但**两个端点都不含"即将发生"维度**（autoCrawlNext / scheduler cron 等未来时间锚点缺失），CW1-E 需要补足。
+> **协议触发**：CLAUDE.md "❌ 新增 admin route 未先起独立 ADR + Opus PASS"（plan §4.5 R7 MUST-8 / `npm run verify:endpoint-adr` 自动核验）→ 本 ADR 是 CW1-E-EP 实施的硬前置。
+> **关联**：ADR-147（admin shell notification hub MVP / 范式直接参考）、ADR-137（GET 只读 R-MID-1 4 文件简化版范式）、ADR-122（crawler 重做契约 / autoCrawlNext + scheduler-status 数据源）、ADR-118（admin audit 视图协议）
+
+### §1 决策摘要
+
+新增 1 个 admin GET 端点 `GET /admin/system/background-events` 聚合三源：① upcoming（autoCrawlNext + maintenanceScheduler 6 个 setInterval timer 未来触发时间 / **R-152-2 修订：intervalMs 推算，无 cron-parser 依赖**）② active（crawler_runs status IN ('queued','running','paused') 最近活跃 / **R-152-3 修订：listRuns 谓词下推 status[]**）③ finished（crawler_runs 终态最近 N 小时 + admin_audit_log 高危事件白名单 1 类 / **Y-152-3 修订：与 NotificationBell 真互斥**）。统一映射到 `BackgroundEvent` discriminated union by lane（**Y-152-2 修订**）。前端 admin shell 新组件 `BackgroundEventBell.tsx` 60s polling + popover 渲染两段（上方 upcoming + 下方 finished/active）+ **Y-152-4 修订**：CrawlerClient 触发 createRun 后显式 `mutate('/admin/system/background-events')` invalidate（破除 30s max-age race）。
+
+```
+端点：GET /admin/system/background-events?limit=20&windowHours=6
+权限：admin + moderator（同 ADR-147 范式 / 复用 GET /admin/notifications 权限语义）
+聚合：3 源 → BackgroundEvent[] → 按 timestamp（upcoming=scheduledAt / active=startedAt / finished=finishedAt）DESC 排序
+轮询：前端 SWR refreshInterval 60_000ms（同 ADR-147 D-147-2）
+缓存：response 头 Cache-Control: private, max-age=30（短缓存 / 防重复打 DB）
+软降级：bull 不可用 → meta.degraded=true + 仅返回 crawler_runs + audit_log + autoCrawlNext（参 ADR-147 D-147-6 + R-147-3 范式）
+```
+
+### §2 背景与问题
+
+#### 2.1 当前现状
+
+- **admin shell topbar 现状**：`apps/server-next/src/app/admin/admin-shell-client.tsx:127-128` 已接入 `useAdminNotifications`（GET /admin/notifications）+ `useAdminTasks`（GET /admin/system/jobs），分别独立 Drawer 渲染 NotificationItem[] / TaskItem[]
+- **CW1-A 已就绪**：`computeNextTrigger(autoConfig)` 函数（`apps/api/src/routes/admin/crawler.ts:37-49`）+ `GET /admin/crawler/system-status` 已暴露 `autoCrawlNext` 字段
+- **CW1-D 已就绪**：Dashboard `AutoCrawlScheduleCard.tsx` 已消费 `autoCrawlNext` 渲染倒计时；说明字段语义稳定
+- **现有缺口**：
+  - **ADR-147 两个端点都是"已发生"视角**：notifications 派生自 audit_log（已写入）；tasks 派生自 crawler_runs 当前 + bull active（已启动）；**无 "未来触发时间" 维度**
+  - **autoCrawlNext 仅在 dashboard 卡 + crawler 页 PageHeader chip 暴露**，topbar 全局可见度缺失；用户痛点 "我在 /admin/videos 不知道下次自动采集啥时候触发"
+  - **scheduler 6 个定时器未暴露未来时间**：`maintenanceScheduler.getSchedulerStatus()` 当前仅返回 `name/enabled/intervalMs`（实证：`apps/api/src/workers/maintenanceScheduler.ts:252-264` `setInterval(fn, intervalMs)` 固定周期 / **非 cron 表达式**），**未返回 lastRunAt 与 nextRunAt**，CW1-E-EP 需补足。R-152-2 修订：**纯 intervalMs 推算 nextRunAt = lastRunAt + intervalMs**（不引入 cron-parser 新依赖）
+- **三源整合需求**：
+  - **upcoming（未来锚点）**：autoCrawlNext + maintenanceScheduler 6 个 setInterval timer（auto-publish-staging / verify-published-sources / verify-staging-sources / reconcile-search-index / pending-threshold-check / r2-quota-check）
+  - **active（进行中）**：crawler_runs status IN ('queued','running','paused') + bull crawlerQueue active jobs
+  - **finished（已完成/失败 + 高危）**：crawler_runs 最近 N 小时终态 + audit_log 高危子集（webhook_send_failed / cache_clear / audit_rollback / 等）
+
+#### 2.2 用户痛点
+
+- "我在哪个 admin 路由都希望看到下次自动采集触发时间" → topbar 全局铃铛
+- "我刚才点了全站全量，跑哪了？" → bell 红点 + popover 列出 active runs
+- "上一次自动采集成功 / 失败 / partial_failed 不知道" → finished 段集中展示
+- "Webhook 投递失败、cache 被清这些高危事件，希望在 bell 也能看到，而不是只在 audit 页或 settings Drawer" → finished 段含 audit_log 高危白名单
+
+#### 2.3 既有基础设施可复用
+
+1. **autoCrawlNext 函数**：`computeNextTrigger(autoConfig)` 已实装（`crawler.ts:37-49`）→ upcoming.auto_crawl 源
+2. **maintenanceScheduler**：`apps/api/src/workers/maintenanceScheduler.ts` `getSchedulerStatus()` 已暴露 6 个定时器 + `lastRunAt`；CW1-E-EP 时需补 `nextRunAt`（cron 解析）
+3. **listActiveRunIds + listRuns**：`crawlerRuns.ts:285 + 47` → active + finished 源
+4. **NotificationService 白名单范式**：`NotificationService.ts:17` ReadonlySet 8 actionType → 高危子集复用该集合 + 进一步收敛到 'danger' / 'warn' level
+5. **ADR-147 端点范式**：notifications.ts + system-jobs.ts 两套 GET 端点已建立"limit/since/meta.degraded"范式，可一对一复用
+
+### §3 5 决策点
+
+#### D-152-1：事件统一 schema 设计
+
+**选项**：
+- A. 复用 ADR-147 两套 schema（NotificationItem + TaskItem）+ 前端两段分别 fetch（保持类型解耦）
+- B. **新建统一 BackgroundEvent schema**（包含 kind/lane/status/scheduledAt?/startedAt?/finishedAt?/runId?/href? 等可选时间锚点）+ 单端点聚合返回
+- C. 后端不聚合 / 前端三 fetch 后 merge
+
+**决策**：**B —— 新建 BackgroundEvent 统一 schema（Y-152-2 修订：discriminated union by lane）**
+
+```ts
+type BackgroundEventLane = 'upcoming' | 'active' | 'finished'
+type BackgroundEventKind =
+  | 'auto_crawl'         // upcoming：定时自动采集（autoCrawlNext）
+  | 'scheduler_timer'    // upcoming：maintenanceScheduler 6 个 setInterval（R-152-2 实证）
+  | 'crawler_run'        // active/finished：crawler_runs 全维度
+  | 'audit_high_risk'    // finished：audit_log 高危白名单（Y-152-3 收敛后仅 crawler.freeze）
+
+// Y-152-2 修订：3 个 lane 分支 discriminated union → 前端 type narrowing 由 lane 字段触发，scheduledAt/startedAt/finishedAt 在各分支内强制必填
+interface UpcomingEvent {
+  lane: 'upcoming'
+  id: string
+  kind: 'auto_crawl' | 'scheduler_timer'
+  status: 'scheduled'
+  level: 'info'
+  title: string
+  description?: string
+  scheduledAt: string                 // upcoming 强制必填
+  href?: string
+}
+
+interface ActiveEvent {
+  lane: 'active'
+  id: string
+  kind: 'crawler_run'
+  status: 'queued' | 'running' | 'paused'
+  level: 'info'
+  title: string
+  description?: string
+  startedAt: string                   // active 强制必填
+  runId: string                       // active.crawler_run 必填（href 跳转用）
+  href: string
+}
+
+interface FinishedEvent {
+  lane: 'finished'
+  id: string
+  kind: 'crawler_run' | 'audit_high_risk'
+  status: 'success' | 'failed' | 'partial_failed' | 'cancelled' | 'timeout' | 'high_risk_audit'
+  level: 'info' | 'warn' | 'danger'
+  title: string
+  description?: string
+  startedAt?: string                  // crawler_run 必填 / audit_high_risk 不填
+  finishedAt: string                  // finished 强制必填（audit_high_risk 取 created_at）
+  runId?: string                      // crawler_run 必填
+  actorId?: string                    // audit_high_risk 可选
+  href?: string
+}
+
+type BackgroundEvent = UpcomingEvent | ActiveEvent | FinishedEvent
+```
+
+**G-152-3 id 拼接算法（避免跨源冲突）**：
+- A 源 autoCrawlNext：`auto_crawl:next`（单条 / 全局唯一）
+- B 源 scheduler timer：`scheduler_timer:${name}`（name 来自 6 个 timer 命名 / R-152-2 实证）
+- C 源 active run：`crawler_run:${runId}`
+- D 源 finished run：`crawler_run:${runId}`（与 C 不重叠：同一 run 在 active/finished 二选一 lane / DB 状态互斥）
+- E 源 audit_high_risk：`audit:${auditId}`
+- 跨源不重叠：源 A/B 用 fixed namespace / C+D 共享 namespace 但 lane 不同 / E 独立 namespace → 前端 React `key={event.id}` 直接用
+
+**理由**：
+1. upcoming + active + finished 三段共享时间锚点字段（at 三选一），统一 schema 让前端排序 / 渲染 / popover 集中
+2. 单端点 + 单 fetch 减少 admin shell 启动时 N+1 请求开销
+3. discriminated by `lane` 字段，前端 group + 渲染清晰
+4. 与 ADR-147 NotificationItem/TaskItem 解耦——不破坏现有 notifications/jobs Drawer 范式（topbar bell 是第 3 个 UI surface）
+
+**反例排除**：
+- A 复用 ADR-147：upcoming 维度无法表达（NotificationItem 含 createdAt 已发生 / TaskItem 含 startedAt 已启动）→ 强行映射到 NotificationItem.level='warn' + title='下次自动采集' 是字段误用
+- C 前端三 fetch merge：admin shell 启动时 3 次请求 + 客户端 merge 算法分散；后端做聚合更对单点修复（如修 sort 算法 / 加 active 源）
+
+#### D-152-2：三聚合源选型 + 边界界定
+
+**决策**：**三源固化 + 白名单约束 + 不重叠**
+
+| 源 | 数据来源 | lane | 上限 | 边界 |
+|---|---|---|---|---|
+| **A. autoCrawlNext** | `computeNextTrigger(autoConfig)`（已实装） | upcoming | 单条 | globalEnabled=false 或 scheduleType!='daily' → 跳过该源 |
+| **B. scheduler timer 未来触发** | `getSchedulerStatus()` 6 个 setInterval timer + 新增 `lastRunAt: string \| null` + `nextRunAt: string`（R-152-2：**intervalMs 推算** `nextRunAt = (lastRunAt ?? registeredAt) + intervalMs`） | upcoming | ≤ 6 条 | 仅返回 `enabled=true` 的 timer + `nextRunAt` 在 24h 内的；超 24h 不返回 |
+| **C. active crawler_runs** | `listRuns(db, { status: ['queued','running','paused'], sortField: 'createdAt', sortDirection: 'desc', limit: 10 })`（R-152-3：谓词下推 / 不在内存 filter） | active | ≤ 10 条 | DB 层 status = ANY($::text[]) 走 idx_crawler_runs_status |
+| **D. finished crawler_runs** | `listRuns(db, { status: ['success','failed','partial_failed','cancelled','timeout'], finishedAfter: NOW()-windowHours, sortField: 'finishedAt', sortDirection: 'desc', limit: Math.floor(limit/2) })`（R-152-3：谓词下推；listRuns 需补 `finishedAfter?: string` 参数 / 与 `createdAtFrom` 同范式） | finished | ≤ limit/2 | windowHours 默认 6h / 通过 query param 可调 1-24（CW1-E-EP step X 给 listRuns 加 finishedAfter） |
+| **E. audit_log 高危** | admin_audit_log filter actionType IN HIGH_RISK_AUDIT_WHITELIST + created_at >= NOW() - windowHours | finished | ≤ limit/4 | 白名单首版 1 类（Y-152-3 反向收敛）：`crawler.freeze`（R-152-1：枚举值核实） |
+
+**HIGH_RISK_AUDIT_WHITELIST（Y-152-3 修订后首版 1 类 / D-152-2 锁定 / 与 NOTIFICATION_ACTION_WHITELIST 真互斥）**：
+
+| # | actionType | level | title 模板 | href |
+|---|-----------|-------|-----------|------|
+| 1 | `crawler.freeze` | `warn` | "全局采集冻结切换" | `/admin/crawler` |
+
+> **R-152-1 修订**：实际枚举值是 `crawler.freeze`（`packages/types/src/admin-moderation.types.ts:151` / `apps/api/src/routes/admin/crawler.tasks.ts:333` 实证），非草案误写的 `crawler.global_freeze_set`
+>
+> **Y-152-3 修订（白名单与 ADR-147 真互斥）**：HIGH_RISK_AUDIT_WHITELIST **不再是** NOTIFICATION_ACTION_WHITELIST 的子集，而是其 **complement**——bell popover 仅收录 NotificationBell **未覆盖**的高危事件（即 `crawler.freeze`）；`system.webhook_send_failed` / `system.cache_clear` / `system.audit_rollback` 全部留给 NotificationBell + Drawer，不在 BackgroundEventBell 显现，避免 3 类事件在两个 UI surface 重复曝光。
+>
+> 后续若有新高危 actionType（如 `crawler.global_full_run` 等）且 NOTIFICATION_ACTION_WHITELIST 未覆盖时，应优先扩 NotificationBell；仅当语义上"运维事件需在 topbar 即时可见 + 又不属于 audit-log-style 通知"时才扩 HIGH_RISK_AUDIT_WHITELIST。
+
+**理由**：
+1. 三源边界互斥：A/B 仅未来锚点（upcoming）/ C 仅活跃（active）/ D/E 仅历史（finished）→ 无去重压力
+2. windowHours 参数化（默认 6h / max 24h）：admin 通常关心"近期"；超过 24h 应去 audit 页或 runs 列表查
+3. 白名单 ReadonlySet 类型安全（继承 ADR-147 R-147-1 范式）+ HIGH_RISK 子集 + 头注释提示
+4. 上限分级：limit 默认 20 / upcoming + active 各占小份 / finished 取剩余；防 finished 大量数据淹没 upcoming + active
+
+**反例排除**：
+- 不复用 GET /admin/system/jobs：jobs 是"active 全量+ bull queue"视角，不含 upcoming 锚点 + 不限定 windowHours；如硬扩 system/jobs 加 lane 字段 → ADR-147 端点契约破坏
+- 不聚合所有 audit_log：noise 太大；只取严格白名单 4 类（HIGH_RISK_AUDIT_WHITELIST）
+
+#### D-152-3：轮询 vs SSE 推送模型
+
+**选项**：
+- A. **前端 polling 60s**（SWR refreshInterval / 同 ADR-147 D-147-2 范式）
+- B. SSE 实时推送（`GET /admin/system/background-events/stream` + 后端 EventEmitter）
+- C. WebSocket 双向（重 / 当前栈无需）
+
+**决策**：**A —— polling 60s（v1 MVP）**
+
+**理由**：
+1. admin 同时在线 < 10 人（与 ADR-147 D-147-2 同一前提）；60s 延迟可接受
+2. 零新依赖 / 零后端长连接基础设施（Fastify 当前未配 SSE 中间件）
+3. autoCrawlNext + scheduler cron 都是 24h 内未来时间锚点，分钟级精度足够
+4. SWR `refreshInterval: 60_000` 一行配置；现有 useAdminNotifications + useAdminTasks 已是同范式
+
+**重评条件 / N1 升级路径**：
+- N1-152-1 同时在线 admin > 20（5 倍当前规模）→ 评估 SSE 单端点 + EventEmitter
+- N1-152-2 用户反馈 "我点全站全量但 bell 60s 后才出现，太慢" → 升频 30s 或 SSE
+- N1-152-3 有秒级业务事件需求（如 webhook 投递实时回执）→ 必须 SSE / WebSocket
+
+**反例排除**：
+- B SSE：admin 后台并发低 + Fastify SSE plugin 引入 + EventEmitter 跨进程同步复杂度 → 在当前规模下纯负担
+- C WebSocket：当前栈无需双向通讯（前端无 push 后端的需求）
+
+#### D-152-4：polling 频率 / 缓存 / dedupe 策略
+
+**决策**：**60s polling + 服务端 Cache-Control: private,max-age=30 + 前端 SWR dedupe**
+
+| 维度 | 策略 |
+|------|------|
+| 前端 refreshInterval | 60_000ms（SWR 默认 stale-while-revalidate） |
+| 前端 dedupe | SWR `dedupingInterval: 15_000ms`（同一 key 15s 内不重复请求 / 避免 mount 抖动） |
+| 服务端 response 头 | `Cache-Control: private, max-age=30`（per-user / 30s 内浏览器自动复用 / 容忍轻微滞后） |
+| 服务端 DB 缓存 | 不引入 Redis 缓存（v1 直接查 DB / max-age 已减半 DB QPS） |
+| 错误重试 | SWR 默认指数退避（5 次 / 1s/2s/4s/8s/16s）→ 配置 `errorRetryCount: 3`（admin 后台不需要激进） |
+| bull 不可用降级 | response.meta.degraded=true（同 ADR-147 R-147-3）/ 前端 bell badge 加 ⚠️ icon 提示 |
+| **Y-152-4 mutate invalidate** | CrawlerClient 触发 createRun / cancelRun / batch cancel **成功后**调 SWR `mutate('/admin/system/background-events')` 显式跳过 max-age 拉取最新；同范式：approveVideo 等用户触发的写操作均补 mutate |
+
+**性能估算**：admin 8 人 × 1QPS/60s = 0.133 QPS；max-age=30 再减半 = 0.067 QPS；DB 三源 query 复杂度 ≤ 50ms（C/D 走 listRuns + idx_crawler_runs_status + 新建 idx_crawler_runs_finished_at partial / E 走 idx_admin_audit_log_action_created；A computeNextTrigger 内存计算；B 6 个 timer intervalMs 推算 O(1)）→ 总 p95 ≤ 200ms（同 ADR-137 baseline）。
+
+**反例排除**：
+- 30s polling 太激进：admin 后台无秒级需求 / 加压 DB 4 倍
+- Redis 缓存 v1：admin 同时在线低 / DB 负载已极低 / 增运维复杂度
+
+#### D-152-5：权限 / role 控制
+
+**选项**：
+- A. admin only（最严格）
+- B. **admin + moderator**（同 ADR-147 范式 / GET /admin/notifications + /admin/system/jobs 已是该配置）
+- C. admin + moderator + viewer（开放给观察者）
+
+**决策**：**B —— admin + moderator**
+
+**理由**：
+1. 与 ADR-147 两个端点保持权限对称（notifications + system-jobs + background-events 三端点同 role gate）
+2. moderator 需要看到采集进行中 + 失败事件辅助审核排查（如某个 crawler_run 全失败 → moderator 可知"现在 pending 队列没有新增"）
+3. viewer 在 reference §1.x 内是只读角色，不应看到运维事件（audit_high_risk）
+
+**反例排除**：
+- A admin only：与现有 ADR-147 范式不一致 / moderator 用户体验割裂（notifications/jobs 可见但 background-events 不可见）
+- C 开放 viewer：高危 audit 事件含运维上下文，viewer 角色定位是"内容只读"不应看到
+
+**Drawer/cancel 写操作权限**：本 ADR 只覆盖 GET 端点；后续 N1（如 bell popover 内 cancel run 按钮）需 admin / 在 EP 卡内单独走 requireRole(['admin']) gate。
+
+### §端点契约
+
+| # | 方法 | 路径 | 用途 | Request | Response | 鉴权 | 错误码 |
+|---|---|---|---|---|---|---|---|
+| 1 | GET | `/admin/system/background-events` | 后台事件聚合（upcoming + active + finished 三 lane） | Query: `limit?` (default 20, max 50) / `windowHours?` (default 6, min 1, max 24) | 200 `{ data: BackgroundEvent[], meta: { total, limit, windowHours, generatedAt, degraded? } }` | admin + moderator | 401 / 403 / 422 VALIDATION_ERROR |
+
+### §4 端点契约详表（按字段拆解）
+
+| 字段 | GET /admin/system/background-events |
+|------|--------------------------------------|
+| Query Param | `limit?: number (1-50, default 20)` / `windowHours?: number (1-24, default 6)` |
+| Body | 无 |
+| Auth | admin + moderator（fastify.requireRole(['admin','moderator'])） |
+| Success Status | 200 |
+| Response Body | `{ data: BackgroundEvent[], meta: { total: number, limit: number, windowHours: number, generatedAt: string (ISO), degraded?: boolean } }` |
+| 排序 | 按 lane group：upcoming asc by scheduledAt → active asc by startedAt → finished desc by finishedAt（前端可按需 re-sort） |
+| Cache-Control | `private, max-age=30` |
+| Error 422 | limit/windowHours 越界 |
+| Side Effect | **零写入**（不写 audit log / 不调 syncRun / 三源纯 SELECT） |
+| 软降级 | bull 不可用 → meta.degraded=true + 仅返回 crawler_runs + audit_log + autoCrawlNext（D-152-2 源 A/C/D/E） |
+| 性能 baseline | p95 ≤ 200ms（D-152-4） |
+
+### §5 SQL 设计
+
+**核心**（R-152-2/3 修订后）：**2 个 listRuns 调用（谓词下推）+ 1 个 audit_log SELECT + 1 个 autoCrawlNext 函数调用 + 1 个 setInterval 推算**，全部 Promise.all 并发；无 JOIN，无聚合 UPDATE，无新依赖。
+
+#### 5.1 source C — active crawler_runs（R-152-3 修订：listRuns 谓词下推）
+
+```ts
+const { rows: activeRows } = await listRuns(db, {
+  status: ['queued', 'running', 'paused'],   // ADR-149 EP-5-crawler-runs-PATCH-A 已支持多选
+  sortField: 'createdAt',                     // 既有白名单
+  sortDirection: 'desc',
+  limit: 10,
+})
+// DB 层走 idx_crawler_runs_status (status, created_at DESC) 已覆盖
+```
+
+**反例排除**：原草案"v1 listRuns(limit=50).filter(r => ['queued','running','paused'].includes(r.status))"是**伪查询**——在 Service 层做内存二次过滤违 §8 分层（"Service 写 SQL = ❌" 的逻辑等价 "Service 内存伪查询 = ❌"），且绕开 idx_crawler_runs_status 索引。listRuns 现有 status 多选谓词已落地（`crawlerRuns.ts:149` ADR-149 EP-5-crawler-runs-PATCH-A）。
+
+#### 5.2 source D — finished crawler_runs（R-152-3 修订 + Y-152-1：补 finishedAfter 参数 + migration 索引）
+
+```ts
+const { rows: finishedRows } = await listRuns(db, {
+  status: ['success', 'failed', 'partial_failed', 'cancelled', 'timeout'],
+  finishedAfter: new Date(Date.now() - windowHours * 3600_000).toISOString(),  // CW1-E-EP step 1：listRuns 加 finishedAfter? 参数
+  sortField: 'finishedAt',                    // CRAWLER_RUNS_SORT_FIELD_MAP 已含
+  sortDirection: 'desc',
+  limit: Math.floor(limit / 2),
+})
+```
+
+**listRuns 扩展约束（CW1-E-EP step 1）**：
+- listRuns 当前已有 `createdAtFrom/createdAtTo`（`crawlerRuns.ts:155-156`），需补 `finishedAfter?: string` 同范式
+- WHERE 条件：`finished_at >= $::timestamptz`（非 ::date，因为 windowHours 是小时级精度）
+
+**Y-152-1 索引修订**：`idx_crawler_runs_finished_at` 当前**不存在**（migration 010 仅有 `idx_crawler_runs_created_at` + `idx_crawler_runs_status (status, created_at DESC)`），CW1-E-EP step 0.5 必须新建：
+
+```sql
+-- migration 074_crawler_runs_finished_at_idx.sql（CW1-E-EP step 0.5）
+CREATE INDEX IF NOT EXISTS idx_crawler_runs_finished_at
+  ON crawler_runs(finished_at DESC) WHERE finished_at IS NOT NULL;
+-- partial index：避免 NULL finished_at 行入索引（active runs 不写 finished_at）
+```
+
+**fallback**：若 step 0.5 migration 未跑（如 dev 环境）→ 走 `idx_crawler_runs_status (status, created_at DESC)` 联合索引 + 内存按 finished_at DESC 二次排序（性能可接受但不最优）
+
+#### 5.3 source E — audit_log 高危白名单（R-152-1 + Y-152-3 修订：1 类白名单）
+
+```ts
+const HIGH_RISK_AUDIT_WHITELIST = ['crawler.freeze'] as const   // Y-152-3 收敛：与 NOTIFICATION_ACTION_WHITELIST 真互斥
+
+const auditHighRisk = await db.query<AuditRow>(
+  `SELECT id::text, action_type, target_id, created_at, actor_id::text
+     FROM admin_audit_log
+    WHERE action_type = ANY($1::text[])
+      AND created_at >= NOW() - ($2 || ' hours')::interval
+    ORDER BY created_at DESC
+    LIMIT $3`,
+  [HIGH_RISK_AUDIT_WHITELIST, windowHours, Math.floor(limit / 4)],
+)
+```
+
+**索引**：复用 `idx_admin_audit_log_action_created`（ADR-118 已有）
+
+> **R-152-1 修订要点**：白名单 actionType 实际枚举值是 `crawler.freeze`（不是草案误写的 `crawler.global_freeze_set`），来自 `packages/types/src/admin-moderation.types.ts:151` + `apps/api/src/routes/admin/crawler.tasks.ts:333` 实证。
+
+#### 5.4 source A + B — upcoming（内存计算 / R-152-2 修订：intervalMs 推算）
+
+```ts
+// A — autoCrawlNext（复用 computeNextTrigger）
+const autoConfig = await systemSettingsQueries.getAutoCrawlConfig(db)
+const autoCrawlNext: string | null = computeNextTrigger(autoConfig)  // 已实装 / ISO 或 null
+
+// B — maintenanceScheduler timer 未来触发（R-152-2 修订：intervalMs 推算）
+// CW1-E-EP step 2：在 maintenanceScheduler.ts 内补 lastRunAt + nextRunAt 字段
+//   lastRunAt: setInterval 内执行前 lastRunAt = new Date().toISOString()
+//   nextRunAt: (lastRunAt ?? registeredAt) + intervalMs → ISO
+const schedulerStatuses = getSchedulerStatus()   // 返回 { name, enabled, intervalMs, lastRunAt, nextRunAt } × 6
+const upcoming24h = schedulerStatuses
+  .filter(s => s.enabled && s.nextRunAt && new Date(s.nextRunAt) <= new Date(Date.now() + 24 * 3600_000))
+  .map(s => ({ ...s, scheduledAt: s.nextRunAt }))
+```
+
+**R-152-2 修订要点**：原草案 §5.4 + §10 step 2 提及 `cron-parser` 包是**事实错误**——`maintenanceScheduler.ts:252-264` 全部用 `setInterval(fn, intervalMs)` 固定周期（auto-publish-staging / verify-published-sources / verify-staging-sources / reconcile-search-index / pending-threshold-check / r2-quota-check 6 个 timer），**完全没有 cron 表达式可解析**。intervalMs 推算 O(1)，零依赖，BLOCKER 流程随之取消。
+
+### §6 R-MID-1 第 N 次系统化（GET 简化版 4 文件框架）
+
+**类比 ADR-137 D-137-5**：GET 只读端点不写 audit → R-MID-1 降级 4 文件框架（vs 写端点 7 文件全套）。
+
+| # | 真源 | 本 ADR 修改 |
+|---|---|---|
+| 1 | `apps/api/src/services/admin/audit/actionTypes.ts` | **零新增**（不写新 actionType） |
+| 2 | `apps/api/src/services/admin/audit/targetKinds.ts` | **零新增**（不写新 targetKind） |
+| 3 | `packages/types/src/admin-audit.ts` 真源同步 | **零新增**（沿用 ADR-118 ACTION_TYPES / TARGET_KINDS） |
+| 4 | `tests/unit/api/audit-log-coverage.test.ts` REQUIRED_ACTION_TYPES | **零新增**（无新写入路径） |
+
+**额外要点**：
+- 复用 ADR-147 NOTIFICATION_ACTION_WHITELIST → HIGH_RISK_AUDIT_WHITELIST 是其严格子集（4 类 ⊂ 8 类）
+- 不引入新 ErrorCode（VALIDATION_ERROR / 401 / 403 全用现有）
+
+### §7 性能 baseline
+
+| 维度 | 目标 | 验证 |
+|------|------|------|
+| p95 端到端 | ≤ 200ms（同 ADR-137） | 3 query 并发（Promise.all source C/D/E + 内存 A/B）/ 索引齐全（含 step 0.5 新建 idx_crawler_runs_finished_at partial） |
+| QPS @ admin 8 人 | ≤ 0.07 QPS（Cache-Control max-age=30 减半） | 60s polling × 8 ÷ 2 = 0.067 QPS |
+| DB row 扫描上限 | source C ≤ 10 / source D ≤ limit/2 / source E ≤ limit/4 / 总 ≤ 30 行（谓词下推后） | LIMIT clause + listRuns 谓词 |
+| 内存计算上限 | source A computeNextTrigger O(1) + source B 6 timer intervalMs 推算 O(1) | 纯算术运算 |
+| bull 降级超时 | 1s（同 ADR-147 R-147-3） | TaskAggregator 范式参考 |
+
+**重评条件**：
+- admin 同时在线 > 20 → 评估 SSE（D-152-3 N1-152-1）
+- p95 > 200ms 持续 7 天 → 评估引入 Redis 缓存层（短 TTL 30s + 单一 lock 防 thundering herd）
+
+### §8 分层约束 / 越层检测
+
+| 层 | 文件 | 职责 |
+|---|---|---|
+| Route | `apps/api/src/routes/admin/systemBackgroundEvents.ts`（新） | zod schema + auth + 调 Service / 不含业务聚合 |
+| Service | `apps/api/src/services/BackgroundEventService.ts`（新） | 三源聚合 + 映射 BackgroundEvent / 调 queries + helper / 不含 SQL |
+| Queries | 复用 `crawlerRuns.listRuns` / 新建 `apps/api/src/db/queries/backgroundEvents.ts`（如需独立 audit_log 高危 query） | 纯 SQL |
+| Helper | 复用 `crawler.ts:37 computeNextTrigger` / `maintenanceScheduler.getSchedulerStatus` | 纯内存计算 |
+
+**违规检测**：
+- Route 含业务逻辑（如 lane 排序 / 三源 merge） → ❌
+- Service 写 SQL（应调 queries） → ❌
+- queries 调 Service → ❌
+
+**复用决策（G-152-1 明确路径）**：`computeNextTrigger` 当前在 `routes/admin/crawler.ts:37` 内（route 层 helper），CW1-E-EP step 1 必须提到 **`apps/api/src/lib/crawler-scheduling.ts`**（与既有 `apps/api/src/lib/*` 目录范式一致 / 非 services 因纯函数无 DB 依赖）→ 避免跨 route 文件复用 helper（违 CLAUDE.md "Route 层不含业务逻辑"）。本 ADR 列为实施 step 1。
+
+### §9 关联 ADR
+
+| # | ADR | 关联 |
+|---|---|------|
+| 1 | ADR-103a | admin-ui Shell SSOT — BackgroundEventBell 新组件契约（属 shell 新 surface / 待 EP 卡评估是否补 admin-ui 通用 Bell 原语 / v1 先 server-next 内自有组件） |
+| 2 | ADR-118 | admin audit 视图协议 — ACTION_TYPES / TARGET_KINDS 真源（HIGH_RISK_AUDIT_WHITELIST 取严格子集） |
+| 3 | ADR-122 | crawler 重做契约 — autoCrawlNext / system-status 数据源 |
+| 4 | ADR-137 | GET 只读 R-MID-1 4 文件简化版范式（本 ADR 复用） |
+| 5 | ADR-139 | fastify.requireRole — 端点权限守卫 |
+| 6 | ADR-146 | WebhookDispatcher — `system.webhook_send_failed` 事件源（Y-152-3 收敛后留给 NotificationBell / 本 ADR 不消费） |
+| 7 | ADR-147 | admin shell notification hub MVP — 端点结构范式（GET + meta.degraded + 60s polling）/ NOTIFICATION_ACTION_WHITELIST 范式 |
+| 8 | ADR-149 | listRuns 多选谓词扩展（EP-5-crawler-runs-PATCH-A）— 本 ADR §5.1/§5.2 复用 status[] + finishedAfter 谓词下推 |
+| 9 | ADR-151 | task 级 cancel — 同期 W1 CW1-B 端点协议 / sibling ADR |
+
+### §10 实施路径（→ CW1-E-EP 实施卡 / R-152-2 修订：删除 cron-parser BLOCKER + 加 migration step）
+
+| Step | 内容 | 文件 |
+|------|------|------|
+| 0.5 | **新建 migration 074 索引**（Y-152-1） | `apps/api/src/db/migrations/074_crawler_runs_finished_at_idx.sql`（CREATE INDEX IF NOT EXISTS idx_crawler_runs_finished_at ON crawler_runs(finished_at DESC) WHERE finished_at IS NOT NULL） |
+| 1 | **抽取 computeNextTrigger + listRuns 加 finishedAfter 参数**（R-152-3） | a. `apps/api/src/lib/crawler-scheduling.ts`（新 / move from `routes/admin/crawler.ts:37`） + crawler.ts import 修订；b. `apps/api/src/db/queries/crawlerRuns.ts` listRuns 加 `finishedAfter?: string` 参数（同 `createdAtFrom` 范式 / WHERE `finished_at >= $::timestamptz`） |
+| 2 | **maintenanceScheduler 补 lastRunAt + nextRunAt 字段**（R-152-2 修订：纯 intervalMs 推算） | `apps/api/src/workers/maintenanceScheduler.ts`：① 6 个 setInterval 内执行前赋值 `lastRunAt = new Date().toISOString()` ② `getSchedulerStatus()` 返回 `{ name, enabled, intervalMs, lastRunAt: string \| null, nextRunAt: string }` ③ nextRunAt 推算公式：`new Date(Date.parse(lastRunAt ?? registeredAt) + intervalMs).toISOString()` / **零新依赖** |
+| 3 | 新建 BackgroundEventService 三源聚合 | `apps/api/src/services/BackgroundEventService.ts`（~150 行 / Promise.all 3 source query + 内存 A/B + map to BackgroundEvent union） |
+| 4 | 新建 GET /admin/system/background-events 路由 | `apps/api/src/routes/admin/systemBackgroundEvents.ts`（~70 行 / 仿 notifications.ts + system-jobs.ts / response 头 `Cache-Control: private, max-age=30`） |
+| 5 | server.ts 注册路由 | `apps/api/src/server.ts` |
+| 6 | types 真源同步 BackgroundEvent | `packages/types/src/admin-shell.ts`（与 NotificationItem/TaskItem 同文件 / 仿 ADR-147 范式 / discriminated union 3 分支） |
+| 7 | 前端 lib 包装 | `apps/server-next/src/lib/admin-shell-background-events.ts`（~80 行 / 仿 admin-shell-notifications.ts SWR hook / `refreshInterval: 60_000` + `dedupingInterval: 15_000` + `errorRetryCount: 3`） |
+| 8 | 前端组件 BackgroundEventBell + **mutate 接入 CrawlerClient**（Y-152-4） | a. `apps/server-next/src/components/admin-shell/BackgroundEventBell.tsx`（~180 行 / popover 两段渲染 / `event.lane` discriminated union narrowing）；b. `apps/server-next/src/app/admin/crawler/_client/CrawlerClient.tsx` 已有的 runCrawlerAll / cancelRun handlers 成功后调 `mutate('/admin/system/background-events')`（破除 max-age race） |
+| 9 | admin-shell-client 集成 | `apps/server-next/src/app/admin/admin-shell-client.tsx`（topbar 加 BackgroundEventBell / 与现有 NotificationBell + TaskBell 共存） |
+| 10 | 单测（≥ 12 case）| `tests/unit/api/background-event-service.test.ts` + `tests/unit/api/routes/admin/background-events.test.ts` + `tests/unit/components/server-next/admin-shell/BackgroundEventBell.test.tsx` |
+| 11 | 全质量门禁 | typecheck + lint + verify:endpoint-adr（189 路由对齐 / 本 ADR 增 1 条）+ verify:adr-contracts + npm run migrate（step 0.5 migration 074） |
+
+**估时**：0.25w（同 task-queue.md CW1-E-EP 估算）
+
+**强制约束（R-152-2 修订后）**：
+- **零新依赖**：原草案 step 2 cron-parser BLOCKER 取消（事实上 maintenanceScheduler 用 setInterval 无 cron）→ intervalMs 推算 O(1) 内置
+- step 1a + 1b 是 ADR-152 落地的硬依赖（不可与 step 3 分卡 / 否则跨 route 复用 helper 违分层 / listRuns 不加 finishedAfter 则 source D 又退化为内存 filter）
+- step 0.5 migration 074 是 source D 走 partial index 的硬依赖（不跑会 fallback 慢扫 / 不阻塞但首发体验差）
+
+### §11 已识别 follow-up（不阻塞本 ADR）
+
+- **N1-152-1（SSE 升级）**：admin 同时在线 > 20 → SSE 推送（D-152-3）
+- **N1-152-2（提升轮询频率）**：用户反馈 60s 延迟太慢 → 30s 或 SSE
+- **N1-152-3（秒级事件需求）**：webhook 投递实时回执需求出现 → 必须 SSE / WebSocket
+- ~~**N1-152-4**~~：listRuns 谓词下推 → R-152-3 修订已合并到 §10 step 1 主路径（不再 follow-up / EP 卡内必须完成）
+- **N1-152-5（BackgroundEventBell admin-ui 原语化）**：第 3 个 Bell 复用模式出现时（如其它子产品需类似 topbar 事件聚合）→ 提到 packages/admin-ui/src/shell/event-bell.tsx
+- **N1-152-6（bell popover 内行级 cancel）**：active run 行加 cancel 按钮 → 复用 ADR-122 cancelRun 端点 / 但需 admin only role gate（本 ADR 不覆盖）
+- ~~**N1-152-7**~~：cron-parser 容错 → R-152-2 修订后无 cron-parser 依赖（移除）；intervalMs 推算异常处理（lastRunAt parse 失败）改为：单 timer skip + warn 日志 / 不阻塞主响应（仿 R-147-3）→ 直接落 §5.4 不再 follow-up
+- **N1-152-8（windowHours 上限重评）**：用户反馈"我要查 48h 之前的 finished" → 升 max 48 或引导去 audit 页
+- **N1-152-A（三 Bell 视觉层级）**：BackgroundEventBell + NotificationBell + TaskBell 三 Bell 共存于 topbar，admin shell 设计需评估是否合并 unread badge / 或弱化某 Bell 入口（建议 advisory：bell popover 内的 audit-high-risk 计 unreadCount 但 NotificationBell 已显示 / 用户体验需走读后确认）
+- **N1-152-B（tab visibility 暂停 polling）**：SWR `refreshWhenHidden: false` 让用户切到非 admin tab 时暂停 60s polling / 节省 admin 多 tab 场景 QPS（4-5 个 tab × 60s polling 累加）
+- **N1-152-C（windowHours upper bound 调整与 LIMIT 比例配对）**：N1-152-8 启动时同步评估 source D LIMIT/2 是否需重分配（若用户大幅扩 windowHours 而 LIMIT 不变 → finished 行覆盖率下降）
+
+---
+
+### §12 评审结论（2026-05-25）
+
+**arch-reviewer Opus 1 轮独立评审**：A− CONDITIONAL → 主循环修订红线 3 + 黄线 4 + 绿线 3 后 → 🟢 等同 A
+
+**修订摘要（已落盘 ADR-152）**：
+- ✅ R-152-1 §3 D-152-2 + §5.3：HIGH_RISK_AUDIT_WHITELIST actionType 由 `crawler.global_freeze_set` 全文修订为 `crawler.freeze`（packages/types/src/admin-moderation.types.ts:151 + crawler.tasks.ts:333 实证）
+- ✅ R-152-2 §1 + §2.3 + §3 D-152-2 + §5.4 + §7 + §10 step 2 + §11：删除 `cron-parser` 新依赖 + BLOCKER 流程；改为 intervalMs 推算 `nextRunAt = (lastRunAt ?? registeredAt) + intervalMs`（maintenanceScheduler.ts:252-264 setInterval 实证 / 6 个 timer 全部 intervalMs 固定周期）
+- ✅ R-152-3 §3 D-152-2 + §5.1 + §5.2 + §10 step 1 + §11：listRuns 谓词下推（status[] / finishedAfter）/ 删除内存 filter / 删除 N1-152-4 follow-up（合并主路径）/ listRuns 加 finishedAfter 参数纳入 step 1
+- ✅ Y-152-1 §5.2 + §10 step 0.5：新建 migration 074 idx_crawler_runs_finished_at partial index（WHERE finished_at IS NOT NULL）+ fallback 描述
+- ✅ Y-152-2 §3 D-152-1：BackgroundEvent 改 3 分支 discriminated union by lane（UpcomingEvent / ActiveEvent / FinishedEvent）/ scheduledAt/startedAt/finishedAt 各分支内强制必填
+- ✅ Y-152-3 §3 D-152-2 + §5.3：HIGH_RISK_AUDIT_WHITELIST 反向收敛为 NotificationBell 的 **complement**（首版 1 类 `crawler.freeze`）/ 真互斥 / 3 类 webhook+cache+audit_rollback 全归 NotificationBell
+- ✅ Y-152-4 §1 + §3 D-152-4 + §10 step 8：CrawlerClient runCrawlerAll/cancelRun 成功后显式 `mutate('/admin/system/background-events')` 跳 max-age race
+- ✅ G-152-1 §8：computeNextTrigger 提取目标路径锁定 `apps/api/src/lib/crawler-scheduling.ts`（非 services 因纯函数）
+- ✅ G-152-2 §9：补 ADR-149（listRuns 多选谓词扩展）入关联 ADR 表第 8 行
+- ✅ G-152-3 §3 D-152-1：id 字段 5 源拼接算法明确（auto_crawl:next / scheduler_timer:${name} / crawler_run:${runId} / audit:${auditId} / 跨源不重叠）
+- ⏸ N1-152-A/B/C：advisory follow-up，不阻塞本 ADR；EP 卡走读后用户反馈触发再立卡
+
+**最终结论**：ADR-152 status 🟢 Accepted via R3+Y4+G3 修订（2026-05-25 / arch-reviewer Opus 评级 A− → 主循环修订后等同 A）；CW1-E-EP 卡可启动；R-152-2 cron-parser BLOCKER 取消（事实纠错）/ R-152-3 listRuns 谓词下推是 §10 step 1 硬约束（**不可分卡** / 否则 source C/D 退化为内存伪查询）/ Y-152-4 mutate invalidate 是 §10 step 8 必修（破 max-age race）。
+
+---
+
 
 
