@@ -95,6 +95,9 @@ const REQUIRED_ACTION_TYPES = [
   'video.manual_add',
   // CHG-SN-8-FUP-WEBHOOK-IMPL-EP-A / ADR-146：webhook 投递最终失败（R-MID-1 第 25 次）
   'system.webhook_send_failed',
+  // CHG-SN-9-CW1-B-EP / ADR-151：task 级 cancel + batch（R-MID-1 第 26 次系统化）
+  'crawler_task.cancel',         // POST /admin/crawler/tasks/:id/cancel
+  'crawler_task.batch_cancel',   // POST /admin/crawler/tasks/batch-cancel
 ] as const
 
 const ACTION_TYPE_REGEX = /actionType:\s*['"]([a-z_.]+)['"]/g

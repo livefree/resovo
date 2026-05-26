@@ -537,6 +537,64 @@ export async function runCrawlerAll(
   return res.data
 }
 
+// ── CW1-C / CRAWLER-03：关键词采集预览 + 立即触发 ─────────────────
+
+export type KeywordPreviewSourceStatus = 'ok' | 'error' | 'timeout' | 'unknown'
+
+export interface KeywordPreviewItem {
+  readonly title: string
+  readonly year: number | null
+  readonly type: string | null
+  readonly sourceCount: number
+  readonly sourceStatus: KeywordPreviewSourceStatus
+  readonly siteKey: string
+}
+
+export interface KeywordPreviewResult {
+  readonly siteKey: string
+  readonly items: readonly KeywordPreviewItem[]
+  readonly error: string | null
+}
+
+/**
+ * 关键词搜索预览（CRAWLER-03 / POST /admin/crawler/keyword-preview）。
+ * 不写库，仅返回各站点匹配视频预览（含 source_url HEAD 探测结果）。
+ */
+export async function previewKeyword(
+  keyword: string,
+  siteKeys?: readonly string[],
+  type?: string,
+): Promise<readonly KeywordPreviewResult[]> {
+  const body: Record<string, unknown> = { keyword }
+  if (siteKeys && siteKeys.length > 0) body.siteKeys = Array.from(siteKeys)
+  if (type) body.type = type
+  const res = await apiClient.post<{
+    data: { keyword: string; results: readonly KeywordPreviewResult[] }
+  }>('/admin/crawler/keyword-preview', body)
+  return res.data.results
+}
+
+/**
+ * 关键词采集触发（沿用 POST /admin/crawler/runs / crawlMode='keyword' / triggerType='batch'）。
+ * 入参 siteKeys 不可为空（schema 要求 batch 必带 siteKeys）。
+ */
+export async function runCrawlerKeyword(
+  keyword: string,
+  siteKeys: readonly string[],
+): Promise<CrawlerRunCreateResult> {
+  const res = await apiClient.post<{ data: CrawlerRunCreateResult }>(
+    '/admin/crawler/runs',
+    {
+      triggerType: 'batch',
+      mode: 'incremental',
+      crawlMode: 'keyword',
+      keyword,
+      siteKeys: Array.from(siteKeys),
+    },
+  )
+  return res.data
+}
+
 // ── ADR-123 / CHG-SN-7-REDO-01-F：站点分类映射 GET / PUT ──────────
 
 export async function getCrawlerSiteCategoryMapping(siteKey: string): Promise<CategoryMappingRow[]> {

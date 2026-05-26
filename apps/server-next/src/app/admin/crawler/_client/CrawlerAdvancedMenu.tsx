@@ -29,6 +29,8 @@ export interface CrawlerAdvancedMenuProps {
   /** CHG-SN-8-01：全站全量采集委托回调（双重 confirm 在 client 内）；pending 由 client 管 */
   readonly onRunAllFull: () => void
   readonly runAllFullPending: boolean
+  /** CW1-C：关键词采集 Drawer 打开（由 CrawlerClient 持有 state） */
+  readonly onKeywordCrawl: () => void
 }
 
 const TRIGGER_STYLE: CSSProperties = {
@@ -53,6 +55,7 @@ export function CrawlerAdvancedMenu({
   onRefresh,
   onRunAllFull,
   runAllFullPending,
+  onKeywordCrawl,
 }: CrawlerAdvancedMenuProps) {
   const toast = useToast()
   const router = useRouter()
@@ -70,6 +73,12 @@ export function CrawlerAdvancedMenu({
     close()
     onRunAllFull()
   }, [close, onRunAllFull])
+
+  // CW1-C：关键词采集
+  const handleKeywordCrawl = useCallback(() => {
+    close()
+    onKeywordCrawl()
+  }, [close, onKeywordCrawl])
 
   const handleScheduler = useCallback(() => {
     close()
@@ -145,6 +154,11 @@ export function CrawlerAdvancedMenu({
       key: 'view_runs',
       label: '采集记录',
       onClick: handleViewRuns,
+    },
+    {
+      key: 'keyword_crawl',
+      label: '关键词采集',
+      onClick: handleKeywordCrawl,
     },
     {
       key: 'run_all_full',

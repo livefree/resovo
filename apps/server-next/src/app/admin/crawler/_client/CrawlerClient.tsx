@@ -49,6 +49,7 @@ import { CrawlerSiteList } from './CrawlerSiteList'
 import { CrawlerSiteExpand } from './CrawlerSiteExpand'
 import { CrawlerAdvancedMenu } from './CrawlerAdvancedMenu'
 import { SchedulerConfigDrawer } from './SchedulerConfigDrawer'
+import { KeywordCrawlDrawer } from './KeywordCrawlDrawer'
 import {
   CrawlerSiteFormDrawer,
   type CrawlerSiteFormMode,
@@ -107,6 +108,8 @@ export function CrawlerClient() {
   const [expandedKeys, setExpandedKeys] = useState<ReadonlySet<string>>(new Set())
   // ── REDO-01-G 高级菜单 / 调度抽屉状态 ────────────────────────────
   const [schedulerOpen, setSchedulerOpen] = useState(false)
+  // ── CW1-C 关键词采集 Drawer 状态 ─────────────────────────────────
+  const [keywordDrawerOpen, setKeywordDrawerOpen] = useState(false)
   const handleStatusUpdate = useCallback((next: Partial<CrawlerSystemStatus>) => {
     setStatus((prev) => ({ ...(prev ?? {}), ...next }))
   }, [])
@@ -462,6 +465,7 @@ export function CrawlerClient() {
               onRefresh={refresh}
               onRunAllFull={() => void handleRunAllFull()}
               runAllFullPending={runAllFullPending}
+              onKeywordCrawl={() => setKeywordDrawerOpen(true)}
             />
           </span>
         }
@@ -520,6 +524,13 @@ export function CrawlerClient() {
         open={schedulerOpen}
         onClose={() => setSchedulerOpen(false)}
         onSaved={refresh}
+      />
+
+      {/* CW1-C 关键词采集 drawer（CrawlerAdvancedMenu 触发） */}
+      <KeywordCrawlDrawer
+        open={keywordDrawerOpen}
+        onClose={() => setKeywordDrawerOpen(false)}
+        sites={sites}
       />
     </div>
   )
