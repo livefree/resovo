@@ -7007,3 +7007,91 @@ W1/W2 + HOTFIX-A/B/C 实测暴露 6 处设计层缺陷，起草 ADR-155 «CW1/CW
 
 Cleanup-Audit: 1 docs 文件改（decisions.md 追加 ADR-155 ~380 行）+ 1 audit JSON 副产物 / 0 源代码 / 0 测试 / 0 migration / 0 新依赖
 Plan-Revision: 1 次（D-155-5 + D-155-6 在评审前已加入 ADR 范围；评审消化后 EP-1 拆为 EP-1A/B/C-1/C-2 共 4 张子卡）
+
+## [CHG-SN-9-CW1-CW2-REDESIGN-A-EP-1A] D-155-1 CW1-B run 行内展开
+
+- **日期**：2026-05-26
+- **Sequence**：SEQ-20260526-CRAWLER-W3-FIX
+- **任务 ID**：CHG-SN-9-CW1-CW2-REDESIGN-A-EP-1A
+- **关联 ADR**：ADR-155 D-155-1（🟢 Accepted）+ ADR-150 expandedKeys 公约消费（不动 ADR-150 契约 / 无 AMENDMENT）
+- **模型**：claude-opus-4-7（主循环延续；建议 sonnet，本会话 opus 上下文复用避免新会话重读）
+
+### 改动摘要
+
+ADR-155 D-155-1 落地：CW1-B run 详情从独立路由跳转改为行内展开（消费 ADR-150 既有 DataTable `renderExpandedRow + expandedKeys` API）。
+
+- **Step 1（拆 RunInlinePanel）**：新建 `apps/server-next/src/app/admin/crawler/runs/[id]/_client/RunInlinePanel.tsx`（500 行），从 CrawlerRunDetailView 拆出 meta grid + tasks DataTable + TaskLogsDrawer + 行级 cancel + batch cancel；Props 仅 `runId: string`，内部完全自治；不含 PageHeader（行内展开场景无外层标题）；refresh 按钮放到 meta card header.actions。
+
+- **Step 2（瘦 CrawlerRunDetailView）**：`CrawlerRunDetailView.tsx` 简化为 PageHeader（静态 `批次 ${runId.slice(0,8)}…` + subtitle）+ `<RunInlinePanel runId={runId} />` 包裹；删除 600+ 行业务逻辑（已挪到 RunInlinePanel）。
+
+- **Step 3（CrawlerRunsView 接 expand）**：
+  - 加 `expandedKeys: ReadonlySet<string>` state + `handleToggleExpand` callback
+  - Run ID 列 cell：原 `<a>` 跳转改为 toggle expand 按钮 + `▸ / ▾` 折叠箭头前缀 + `aria-expanded` 同步状态；`onClick` 处理 `Cmd/Ctrl/中键` 时 fallback 到浏览器原生 deep link 新窗口（G-155-1 简化 / 无需额外副入口按钮）
+  - DataTable 加 `expandedKeys={expandedKeys}` + `renderExpandedRow={(run) => <RunInlinePanel runId={run.id} />}`
+  - `data-testid="run-link-${id}"` + `data-run-id` 保留用于 e2e 兼容
+
+### 新增/修改文件
+
+- `apps/server-next/src/app/admin/crawler/runs/[id]/_client/RunInlinePanel.tsx`（新建，500 行）
+- `apps/server-next/src/app/admin/crawler/runs/[id]/_client/CrawlerRunDetailView.tsx`（瘦身 / 590 → 42 行）
+- `apps/server-next/src/app/admin/crawler/runs/_client/CrawlerRunsView.tsx`（加 expandedKeys + 改 Run ID cell + import RunInlinePanel）
+- `tests/unit/components/server-next/admin/crawler/RunInlinePanel.test.tsx`（新建 4 case）
+- `tests/unit/components/server-next/admin/crawler/CrawlerRunsView.test.tsx`（扩 3 case：#30 toggle + #31 Cmd 新窗 + #32 aria-expanded a11y）
+- `tests/unit/components/server-next/admin/crawler/CrawlerRunDetailView.test.tsx` 现有 18 case 维持 PASS（间接覆盖 RunInlinePanel 全部业务行为）
+
+文件改动：3 源 + 2 测试 = 5 项（PATCH ≤ 5 ✅）
+
+### 偏离记录
+
+无新 D-N 偏离（D-155-1 已在 ADR-155 Accepted 内）；ADR-150 expandedKeys 公约消费不触发 Opus arch-reviewer。
+
+### 质量门禁
+
+- ✅ typecheck PASS（8 workspace）
+- ✅ lint PASS（4 pre-existing 警告，0 新增）
+- ✅ test 5093/5093 PASS（本卡新 7 case 全过：RunInlinePanel.test 4 + CrawlerRunsView.test 3）
+- ✅ verify:adr-contracts PASS（含 verify-adr-d-numbers 207 闭环）
+
+### 六问自检 PASS
+
+1. **正确性**：RunInlinePanel + CrawlerRunDetailView 双场景渲染逻辑完全一致（DRY / 通过 mount CrawlerRunDetailView 间接覆盖 RunInlinePanel）；Cmd 点击保留 deep link 新窗口浏览器原生行为
+2. **边界与复用**：消费 ADR-150 既有 `renderExpandedRow + expandedKeys` API；不引入新组件；不触发 Opus arch-reviewer
+3. **可扩展性**：RunInlinePanel 内部自治模式（仅依赖 runId）允许其它消费方（如 dashboard run 详情卡）即时复用
+4. **一致性**：与 CHG-DESIGN-02 Step 7A `renderExpandedRow` 范式对齐；与 sources matrix 行扩展（ADR-117 D-117-5）同模式
+5. **改动收敛**：严格 3 源 + 2 测试 = 5 项（PATCH 临界但精确符合 ≤ 5）；无任何"顺手优化"
+6. **偏离检测**：无新 D-N（D-155-1 已 ADR-155 Accepted）
+
+### AI-CHECK 结论
+
+- ✅ **PASS** — 3 个 Step 完整闭环 / 7 新单测全过 / 全栈门禁通过
+- **越界检测**：CLEAN（3 源 + 2 测试严格在 ADR-155 §5 EP-1A 文件范围内）
+- **回归风险**：低
+  - CrawlerRunDetailView.test.tsx 18 case 全过 → deep link `/admin/crawler/runs/[id]` 完整路径行为未变
+  - CrawlerRunsView.test.tsx 29 历史 case + 3 新 case 全过 → list 行为兼容
+  - RunInlinePanel 内部逻辑与原 CrawlerRunDetailView 完全一致（仅 PageHeader 移出 + meta 加 "触发·模式" 字段）
+
+### 未覆盖（→ 后续 EP）
+
+- **用户实测验证**（@livefree / ADR-155 §8 验收第 4 条）：
+  1. `/admin/crawler/runs` 点 Run ID 行内展开 meta + tasks 子表
+  2. tasks 行 [查看] 弹 TaskLogsDrawer
+  3. tasks 行 [取消] 行为不变（继承 ADR-151 / HOTFIX-A）
+  4. 再点 Run ID 收起
+  5. Cmd/Ctrl + 点击 Run ID → 新窗口打开 deep link 详情页
+  6. 直接打开 `/admin/crawler/runs/[id]` URL → PageHeader + 完整 RunInlinePanel
+- EP-1B（D-155-4 limit + D-155-5 summary 卡）
+- EP-1C-1 / EP-1C-2（D-155-6 多 dailyTime）
+- EP-2（D-155-2 topbar 合并 / 强制 Opus reviewer）
+- EP-3（D-155-3 Gantt 三段窗）
+
+### 关键约束消化
+
+- **ADR-150 expandedKeys 公约消费**：本卡是该 API 的二次消费方（首次 = ADR-117 sources matrix）；未来 3 处消费即可考虑沉淀"行内展开" helper hook
+- **Cmd 点击新窗口（G-155-1 简化）**：浏览器原生 `<a href>` + onClick 检测 metaKey/ctrlKey 退避，无需额外副入口按钮
+- **PATCH ≤ 5 项 ✅**：3 源 + 2 测试严格临界（CLAUDE.md "PATCH 范围 > 5 项 → 拆 -A/-B" 硬约束）
+
+- **执行模型**：claude-opus-4-7（主循环延续；建议 sonnet，本会话 opus 上下文复用）
+- **子代理调用**：无（消费 ADR-150 既有 API，不触发"共享组件 API 契约强制 Opus"）
+
+Cleanup-Audit: 3 源文件改 + 2 测试文件（1 新建 + 1 扩展 + CrawlerRunDetailView.test 0 改动间接覆盖）/ 7 新单测 / 0 migration / 0 新依赖
+Plan-Revision: 0 次

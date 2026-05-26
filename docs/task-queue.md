@@ -1221,12 +1221,23 @@ B 序列 + C 序列可与 A 并行（A 无依赖）；B 与 C 之间无依赖（
      - **触发 plan §4.5 R7 MUST-8 守门**：ADR PASS 才能起 -EP 实施卡（D-155-2 新增 NotificationItem 字段属共享组件 API 契约）
      - **AMENDMENT 引用必填**：ADR-155 §关联 ADR 必须明列 ADR-122 / ADR-152 / ADR-153 三处 AMENDMENT 说明
 
-5. **CHG-SN-9-CW1-CW2-REDESIGN-A-EP-1** — D-155-1/4/5/6 实施（行内展开 + 站点 limit 解锁 + 定时入口卡 + 多 dailyTime）
-   - 状态：⬜
+5. **CHG-SN-9-CW1-CW2-REDESIGN-A-EP-1** — D-155-1/4/5/6 实施（ADR-155 §5 拆为 5 个子卡 EP-1A/1B/1C-1/1C-2）
+   - 状态：🟡 EP-1A ✅ 完成 / EP-1B/1C-1/1C-2 ⬜ 待启动
    - 创建时间：2026-05-26 02:00
-   - 最后更新：2026-05-26 03:00（D-155-6 追加）
+   - 最后更新：2026-05-26 04:00（EP-1A commit）
    - 建议模型：sonnet
-   - 依赖：CW1-CW2-REDESIGN-A-ADR PASS
+   - 依赖：CW1-CW2-REDESIGN-A-ADR PASS ✅
+
+   **EP-1A（D-155-1 行内展开）✅ 完成**：
+   - 状态：🟡 代码已落地 / 待 @livefree dev server 实测确认（typecheck + lint + test 5093/5093 + verify:adr-contracts 全过 / 7 新单测全过 / commit 见 changelog）
+   - 实际开始：2026-05-26 04:00
+   - 完成时间：—（实测 PASS 后回填）
+   - 执行模型：claude-opus-4-7（主循环延续）
+   - 文件改动：3 源 + 2 测试 = 5 项（PATCH ≤ 5 ✅）
+
+   **EP-1B（D-155-4 limit + D-155-5 summary 卡）⬜ 待启动**
+   **EP-1C-1（D-155-6 后端契约 + scheduler）⬜ 待启动**
+   **EP-1C-2（D-155-6 前端 UI）⬜ 待启动 / 依赖 EP-1B + EP-1C-1**
    - 范围：拆 CrawlerRunDetailView 为 RunInlinePanel + CrawlerRunsView 接 expand + timeline limit 解锁 + 后端 safeLimit 上限提到 50 + 新建 AutoCrawlSummaryCard 顶部展示 + 多 dailyTime 全栈
    - 文件范围：
      - `apps/server-next/src/app/admin/crawler/runs/_client/CrawlerRunsView.tsx`（接 expandedKeys + renderExpandedRow + 改 Run ID 列 cell 为 toggle）

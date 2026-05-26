@@ -52,6 +52,15 @@ vi.mock('@resovo/admin-ui', async () => {
   }
 })
 
+// ADR-155 D-155-1 / EP-1A：mock RunInlinePanel（独立测试范围）
+// CrawlerRunsView.test 仅验证 expandedKeys + renderExpandedRow 接入；RunInlinePanel 内部行为
+// 在 CrawlerRunDetailView.test.tsx + RunInlinePanel.test.tsx 单独覆盖（避免双重 mock）
+vi.mock('../../../../../../apps/server-next/src/app/admin/crawler/runs/[id]/_client/RunInlinePanel', () => ({
+  RunInlinePanel: ({ runId }: { runId: string }) => (
+    <div data-testid={`run-inline-panel-${runId}`} data-mock-run-inline>{`mock RunInlinePanel runId=${runId}`}</div>
+  ),
+}))
+
 // REDO-01-H：CrawlerRunsView 已迁至 crawler/runs/_client/（独立路由 /admin/crawler/runs）
 import { CrawlerRunsView } from '../../../../../../apps/server-next/src/app/admin/crawler/runs/_client/CrawlerRunsView'
 
@@ -125,7 +134,8 @@ describe('CrawlerRunsView', () => {
     listCrawlerRunsMock.mockResolvedValueOnce(RESULT_3)
     const { container } = render(<CrawlerRunsView />)
     await waitFor(() => {
-      expect(screen.getByText('aaaaaaaa…')).not.toBeNull()
+      // ADR-155 D-155-1 / EP-1A：Run ID cell 加 ▸/▾ 前缀（折叠/展开状态），用 regex 匹配 ID 部分
+      expect(screen.getByText(/aaaaaaaa…/)).not.toBeNull()
       expect(container.querySelectorAll('[data-run-status]').length).toBe(3)
     })
   })
@@ -500,5 +510,55 @@ describe('CrawlerRunsView', () => {
         expect.objectContaining({ sortField: 'createdAt', sortDirection: 'asc' }),
       )
     })
+  })
+
+  // ── ADR-155 D-155-1 / EP-1A：行内展开 ──────────────────────────
+  it('30. EP-1A: 点击 Run ID → 行内展开 RunInlinePanel + 折叠箭头 ▾', async () => {
+    listCrawlerRunsMock.mockResolvedValueOnce({
+      data: [RUN_SUCCESS], pagination: { total: 1, page: 1, limit: 20, hasNext: false },
+    })
+    render(<CrawlerRunsView />)
+    // 初始 ▸ 折叠态，无 RunInlinePanel
+    const link = await waitFor(() => screen.getByTestId(`run-link-${RUN_SUCCESS.id}`))
+    expect(link.textContent).toMatch(/^▸\s/)
+    expect(screen.queryByTestId(`run-inline-panel-${RUN_SUCCESS.id}`)).toBeNull()
+    // 点击 → 展开 ▾ + RunInlinePanel 渲染
+    fireEvent.click(link)
+    await waitFor(() => {
+      expect(screen.getByTestId(`run-inline-panel-${RUN_SUCCESS.id}`)).not.toBeNull()
+      expect(link.textContent).toMatch(/^▾\s/)
+    })
+    // 再点击 → 折叠 ▸ + RunInlinePanel 消失
+    fireEvent.click(link)
+    await waitFor(() => {
+      expect(screen.queryByTestId(`run-inline-panel-${RUN_SUCCESS.id}`)).toBeNull()
+      expect(link.textContent).toMatch(/^▸\s/)
+    })
+  })
+
+  it('31. EP-1A: Cmd/Ctrl 点击 Run ID → 不触发 expand（浏览器原生新窗口打开 deep link）', async () => {
+    listCrawlerRunsMock.mockResolvedValueOnce({
+      data: [RUN_SUCCESS], pagination: { total: 1, page: 1, limit: 20, hasNext: false },
+    })
+    render(<CrawlerRunsView />)
+    const link = await waitFor(() => screen.getByTestId(`run-link-${RUN_SUCCESS.id}`))
+    // Cmd 点击：链接保持 href deep link 行为，不触发 expand toggle
+    fireEvent.click(link, { metaKey: true })
+    // expand 状态不变 / 仍是 ▸ 折叠
+    expect(link.textContent).toMatch(/^▸\s/)
+    expect(screen.queryByTestId(`run-inline-panel-${RUN_SUCCESS.id}`)).toBeNull()
+    // href 仍指向 deep link（浏览器原生处理新窗口）
+    expect(link.getAttribute('href')).toBe(`/admin/crawler/runs/${RUN_SUCCESS.id}`)
+  })
+
+  it('32. EP-1A: aria-expanded 属性同步 expand 状态（a11y）', async () => {
+    listCrawlerRunsMock.mockResolvedValueOnce({
+      data: [RUN_SUCCESS], pagination: { total: 1, page: 1, limit: 20, hasNext: false },
+    })
+    render(<CrawlerRunsView />)
+    const link = await waitFor(() => screen.getByTestId(`run-link-${RUN_SUCCESS.id}`))
+    expect(link.getAttribute('aria-expanded')).toBe('false')
+    fireEvent.click(link)
+    await waitFor(() => expect(link.getAttribute('aria-expanded')).toBe('true'))
   })
 })

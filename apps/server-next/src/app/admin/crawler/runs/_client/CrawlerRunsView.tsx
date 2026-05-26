@@ -40,6 +40,8 @@ import {
   type CrawlerRunTriggerType,
 } from '@/lib/crawler/api'
 import { ApiClientError } from '@/lib/api-client'
+// ADR-155 D-155-1 / EP-1A：行内展开复用 RunInlinePanel（与 deep link `/runs/[id]` 共享渲染逻辑）
+import { RunInlinePanel } from '../[id]/_client/RunInlinePanel'
 
 const SECTION_STYLE: CSSProperties = {
   display: 'flex',
@@ -91,14 +93,18 @@ interface BuildColumnsOptions {
   readonly onCancel: (row: CrawlerRun) => void
   readonly onPause: (row: CrawlerRun) => void
   readonly onResume: (row: CrawlerRun) => void
+  readonly onToggleExpand: (runId: string) => void
   readonly pendingRunId: string | null
+  readonly expandedKeys: ReadonlySet<string>
 }
 
 function buildColumns({
   onCancel,
   onPause,
   onResume,
+  onToggleExpand,
   pendingRunId,
+  expandedKeys,
 }: BuildColumnsOptions): readonly TableColumn<CrawlerRun>[] {
   return [
     {
@@ -112,21 +118,34 @@ function buildColumns({
       filterable: true,
       filterFieldName: 'idPrefix',
       filterKind: 'text',
-      cell: ({ row }) => (
-        <a
-          href={`/admin/crawler/runs/${row.id}`}
-          data-run-id={row.id}
-          data-testid={`run-link-${row.id}`}
-          style={{
-            fontFamily: 'var(--font-mono, ui-monospace, monospace)',
-            fontSize: 'var(--font-size-xs)',
-            color: 'var(--fg-link, var(--fg-default))',
-            textDecoration: 'underline',
-          }}
-        >
-          {row.id.slice(0, 8)}…
-        </a>
-      ),
+      // ADR-155 D-155-1 / EP-1A：Run ID 列从 <a> 跳转改为 toggle expand 按钮
+      // Cmd/Ctrl + 点击保留浏览器原生"新窗口打开" deep link 行为（无需额外 JS / G-155-1 简化）
+      cell: ({ row }) => {
+        const isExpanded = expandedKeys.has(row.id)
+        return (
+          <a
+            href={`/admin/crawler/runs/${row.id}`}
+            data-run-id={row.id}
+            data-testid={`run-link-${row.id}`}
+            aria-expanded={isExpanded}
+            onClick={(e) => {
+              // Cmd/Ctrl/中键 → 浏览器默认新窗口打开 deep link
+              if (e.metaKey || e.ctrlKey || e.button === 1) return
+              e.preventDefault()
+              onToggleExpand(row.id)
+            }}
+            style={{
+              fontFamily: 'var(--font-mono, ui-monospace, monospace)',
+              fontSize: 'var(--font-size-xs)',
+              color: 'var(--fg-link, var(--fg-default))',
+              textDecoration: 'underline',
+              cursor: 'pointer',
+            }}
+          >
+            {isExpanded ? '▾ ' : '▸ '}{row.id.slice(0, 8)}…
+          </a>
+        )
+      },
     },
     {
       id: 'status',
@@ -410,14 +429,27 @@ export function CrawlerRunsView() {
   // ADR-150 阶段 4 / EP-3-A sub 1：handleStatusChange/handleTriggerTypeChange 已删
   // DataTable popover 应用 → onQueryChange({ filters: next }) → setFiltersMap → fetch deps 触发
 
+  // ADR-155 D-155-1 / EP-1A：行内展开状态（DataTable expandedKeys + renderExpandedRow API）
+  const [expandedKeys, setExpandedKeys] = useState<ReadonlySet<string>>(new Set())
+  const handleToggleExpand = useCallback((runId: string) => {
+    setExpandedKeys((prev) => {
+      const next = new Set(prev)
+      if (next.has(runId)) next.delete(runId)
+      else next.add(runId)
+      return next
+    })
+  }, [])
+
   const columns = useMemo(
     () => buildColumns({
       onCancel: handleCancel,
       onPause: handlePause,
       onResume: handleResume,
+      onToggleExpand: handleToggleExpand,
       pendingRunId,
+      expandedKeys,
     }),
-    [handleCancel, handlePause, handleResume, pendingRunId],
+    [handleCancel, handlePause, handleResume, handleToggleExpand, pendingRunId, expandedKeys],
   )
 
   // ADR-149 EP-5-crawler-runs: toolbar.search 已删（业务 filter 迁移到列级 ⋯ + 矩阵 popover）
@@ -472,6 +504,9 @@ export function CrawlerRunsView() {
                   hideFilterChips: true,
                 }}
                 pagination={{ pageSizeOptions: [10, 20, 50, 100] }}
+                // ADR-155 D-155-1 / EP-1A：行内展开（消费 ADR-150 expandedKeys + renderExpandedRow API）
+                expandedKeys={expandedKeys}
+                renderExpandedRow={(run) => <RunInlinePanel runId={run.id} />}
               />
             )
       }
