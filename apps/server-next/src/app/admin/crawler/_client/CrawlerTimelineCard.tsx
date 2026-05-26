@@ -128,6 +128,15 @@ const RANGE_OPTIONS = [
   { value: '6h',  label: '6 小时' },
 ] as const
 
+// ADR-155 D-155-4：站点 limit 解锁（"全部" = 后端 safeLimit 50 上限）
+const LIMIT_OPTIONS = [
+  { value: '8',  label: '8 站' },
+  { value: '20', label: '20 站' },
+  { value: '50', label: '全部' },
+] as const
+
+const DEFAULT_LIMIT = 8
+
 export interface CrawlerTimelineCardProps {
   /** ADR-153 D-153-3：降级为可选 fallbackData（SWR 语义；Card 内部自治拉取） */
   readonly fallbackData?: CrawlerTimelineResponse | null
@@ -150,36 +159,46 @@ export function CrawlerTimelineCard({
 }: CrawlerTimelineCardProps) {
   // ── range 自治 state（ADR-153 D-153-3）─────────────────────────
   const [range, setRange] = useState<CrawlerTimelineRange>(defaultRange ?? '1h')
+  // ADR-155 D-155-4：limit 自治 state（站点上限 8/20/全部=50）
+  const [limit, setLimit] = useState<number>(DEFAULT_LIMIT)
   const [timelineData, setTimelineData] = useState<CrawlerTimelineResponse | null>(
     fallbackData ?? timeline ?? null,
   )
   const [timelineLoading, setTimelineLoading] = useState(false)
 
-  // ── range 变化时重新拉取 ─────────────────────────────────────────
+  // ── range / limit 变化时重新拉取 ─────────────────────────────────
   useEffect(() => {
     let cancelled = false
     setTimelineLoading(true)
-    getCrawlerTimeline({ range, limit: 8 })
+    getCrawlerTimeline({ range, limit })
       .then((data) => { if (!cancelled) setTimelineData(data) })
       .catch(() => { /* silent：时间轴是软实时数据，失败不打扰用户 */ })
       .finally(() => { if (!cancelled) setTimelineLoading(false) })
     return () => { cancelled = true }
-  }, [range])
+  }, [range, limit])
 
   // ── 自动刷新（5s；frozen / paused 时跳过）────────────────────────
   useEffect(() => {
     if (paused || frozen) return
     const tick = window.setInterval(() => {
-      getCrawlerTimeline({ range, limit: 8 })
+      getCrawlerTimeline({ range, limit })
         .then((data) => setTimelineData(data))
         .catch(() => { /* silent */ })
     }, 5_000)
     return () => window.clearInterval(tick)
-  }, [range, paused, frozen])
+  }, [range, limit, paused, frozen])
 
   const handleRangeChange = useCallback((next: string | null) => {
     if (next === '30m' || next === '1h' || next === '2h' || next === '6h') {
       setRange(next)
+    }
+  }, [])
+
+  // ADR-155 D-155-4：limit select 切换
+  const handleLimitChange = useCallback((next: string | null) => {
+    const n = Number(next)
+    if (Number.isFinite(n) && (n === 8 || n === 20 || n === 50)) {
+      setLimit(n)
     }
   }, [])
 
@@ -216,6 +235,15 @@ export function CrawlerTimelineCard({
               size="sm"
               aria-label="选择时间范围"
               data-testid="crawler-timeline-range-select"
+            />
+            {/* ADR-155 D-155-4：站点 limit 解锁 select（8/20/全部=50） */}
+            <AdminSelect
+              options={LIMIT_OPTIONS as unknown as { value: string; label: string }[]}
+              value={String(limit)}
+              onChange={handleLimitChange}
+              size="sm"
+              aria-label="站数上限"
+              data-testid="crawler-timeline-limit-select"
             />
             <span
               style={frozen ? PILL_WARN_STYLE : PILL_OK_STYLE}

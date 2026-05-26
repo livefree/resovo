@@ -1235,9 +1235,12 @@ B 序列 + C 序列可与 A 并行（A 无依赖）；B 与 C 之间无依赖（
    - 执行模型：claude-opus-4-7（主循环延续）
    - 文件改动：3 源 + 2 测试 = 5 项（PATCH ≤ 5 ✅）
 
-   **EP-1B（D-155-4 limit + D-155-5 summary 卡）⬜ 待启动**
+   **EP-1B 拆为 EP-1B1 + EP-1B2**（满足 PATCH ≤ 5 项硬约束 / 评审消化外的实施期 plan-revision）：
+   - **EP-1B1（D-155-4 站点 limit 解锁）🟡 代码已落地** / 待 @livefree dev 实测确认 3 路径 / commit 待提交 / 3 源 + 2 测试 = 5 项 ✅ / ADR-122 AMENDMENT 已落盘
+   - **EP-1B2（D-155-5 AutoCrawlSummaryCard）⬜ 待启动** / 3 文件（新建 + 嵌入 + 测试新建）/ ADR-152 AMENDMENT 待落盘
+
    **EP-1C-1（D-155-6 后端契约 + scheduler）⬜ 待启动**
-   **EP-1C-2（D-155-6 前端 UI）⬜ 待启动 / 依赖 EP-1B + EP-1C-1**
+   **EP-1C-2（D-155-6 前端 UI）⬜ 待启动 / 依赖 EP-1B2 + EP-1C-1**
    - 范围：拆 CrawlerRunDetailView 为 RunInlinePanel + CrawlerRunsView 接 expand + timeline limit 解锁 + 后端 safeLimit 上限提到 50 + 新建 AutoCrawlSummaryCard 顶部展示 + 多 dailyTime 全栈
    - 文件范围：
      - `apps/server-next/src/app/admin/crawler/runs/_client/CrawlerRunsView.tsx`（接 expandedKeys + renderExpandedRow + 改 Run ID 列 cell 为 toggle）

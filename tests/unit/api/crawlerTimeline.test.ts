@@ -253,4 +253,38 @@ describe('crawlerTimeline.getCrawlerTimeline', () => {
     // pending 视为"已排队等待执行"的中间态，呈黄色提示用户有积压
     expect(result.rows[0].status).toBe('warn')
   })
+
+  // ── ADR-155 D-155-4 / EP-1B1：站点 limit 解锁 ──────────────────
+  it('EP-1B1 #1 safeLimit 上限 50：limit=100 → params[1] cap 在 50', async () => {
+    const { getCrawlerTimeline } = await import('@/api/db/queries/crawlerTimeline')
+
+    mockQuery.mockResolvedValueOnce({ rows: [] })
+
+    await getCrawlerTimeline(mockDb as never, '1h', 100)
+
+    const [, params] = mockQuery.mock.calls[0] as [string, unknown[]]
+    expect(params[1]).toBe(50)
+  })
+
+  it('EP-1B1 #2 safeLimit 下限 1：limit=0 / 负数 → cap 在 1', async () => {
+    const { getCrawlerTimeline } = await import('@/api/db/queries/crawlerTimeline')
+
+    mockQuery.mockResolvedValueOnce({ rows: [] })
+
+    await getCrawlerTimeline(mockDb as never, '1h', 0)
+
+    const [, params] = mockQuery.mock.calls[0] as [string, unknown[]]
+    expect(params[1]).toBe(1)
+  })
+
+  it('EP-1B1 #3 safeLimit 中间值穿透：limit=20 → params[1] = 20', async () => {
+    const { getCrawlerTimeline } = await import('@/api/db/queries/crawlerTimeline')
+
+    mockQuery.mockResolvedValueOnce({ rows: [] })
+
+    await getCrawlerTimeline(mockDb as never, '1h', 20)
+
+    const [, params] = mockQuery.mock.calls[0] as [string, unknown[]]
+    expect(params[1]).toBe(20)
+  })
 })

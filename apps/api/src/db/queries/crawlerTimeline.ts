@@ -205,7 +205,9 @@ export async function getCrawlerTimeline(
 ): Promise<CrawlerTimelineResponse> {
   const interval = RANGE_TO_INTERVAL[range]
   const rangeMs = RANGE_TO_MS[range]
-  const safeLimit = Math.max(1, Math.min(20, Math.trunc(limit)))
+  // ADR-155 D-155-4：safeLimit 上限 20→50（站数上限解锁），单 SQL 查询每站最多 LANE_LIMIT=3 task
+  // = 最多 150 bar / 窗口；前端 UI 提供 8/20/全部 三档选择器，"全部" = 50 上限
+  const safeLimit = Math.max(1, Math.min(50, Math.trunc(limit)))
 
   const result = await db.query<TimelineRawRow>(TIMELINE_SQL_V2, [interval, safeLimit, LANE_LIMIT])
 

@@ -28,7 +28,8 @@ import { AuditLogService } from '@/api/services/AuditLogService'
 
 const TimelineQuerySchema = z.object({
   range: z.enum(['30m', '1h', '2h', '6h']).default('1h'),
-  limit: z.coerce.number().int().min(1).max(20).default(8),
+  // ADR-155 D-155-4：限制上限 20→50（前端 UI limit select 提供 8/20/全部 三档，"全部" = 50）
+  limit: z.coerce.number().int().min(1).max(50).default(8),
 })
 
 const RunModeSchema = z.object({

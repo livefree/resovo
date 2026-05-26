@@ -247,4 +247,21 @@ describe('CrawlerTimelineCard — ADR-153 §8', () => {
     fireEvent.click(btn)
     expect(onPauseToggle).toHaveBeenCalledTimes(1)
   })
+
+  // ── ADR-155 D-155-4 / EP-1B1：站点 limit 解锁 ──────────────────
+  it('EP-1B1 #1: limit select 可见 + 默认 8 站 → 初始 getCrawlerTimeline 带 limit=8', async () => {
+    getCrawlerTimelineMock.mockResolvedValue(makeTimeline())
+
+    await act(async () => {
+      render(<CrawlerTimelineCard {...DEFAULT_PROPS} />)
+      await vi.advanceTimersByTimeAsync(100)
+    })
+
+    // limit select 渲染
+    expect(screen.getByTestId('crawler-timeline-limit-select')).not.toBeNull()
+    // 初始 fetch limit=8（默认）
+    expect(getCrawlerTimelineMock).toHaveBeenCalledWith(
+      expect.objectContaining({ limit: 8 }),
+    )
+  })
 })

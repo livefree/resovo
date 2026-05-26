@@ -7095,3 +7095,92 @@ ADR-155 D-155-1 落地：CW1-B run 详情从独立路由跳转改为行内展开
 
 Cleanup-Audit: 3 源文件改 + 2 测试文件（1 新建 + 1 扩展 + CrawlerRunDetailView.test 0 改动间接覆盖）/ 7 新单测 / 0 migration / 0 新依赖
 Plan-Revision: 0 次
+
+## [CHG-SN-9-CW1-CW2-REDESIGN-A-EP-1B1] D-155-4 站点 limit 解锁
+
+- **日期**：2026-05-26
+- **Sequence**：SEQ-20260526-CRAWLER-W3-FIX
+- **任务 ID**：CHG-SN-9-CW1-CW2-REDESIGN-A-EP-1B1
+- **关联 ADR**：ADR-155 D-155-4（🟢 Accepted）+ ADR-122 §timeline 端点契约 AMENDMENT 落盘
+- **模型**：claude-opus-4-7（主循环延续；建议 sonnet，本会话 opus 上下文复用）
+- **拆分理由**：ADR-155 §5 原 EP-1B（D-155-4 + D-155-5）合计 4 源 + 2 测试 = 6 项触发 PATCH ≤ 5 硬约束。本卡仅做 D-155-4，D-155-5 拆到 EP-1B2。
+
+### 改动摘要
+
+ADR-155 D-155-4 落地：站点时间轴 limit 上限从 20 解锁到 50，UI 暴露 `8/20/全部` 三档选择器。
+
+- **Step 1**（`apps/api/src/db/queries/crawlerTimeline.ts:208`）：`safeLimit = Math.min(50, ...)`（原 20）
+- **Step 2**（`apps/api/src/routes/admin/crawlerDashboard.ts:31`）：zod `.max(50)`（原 20）
+- **Step 3**（`apps/server-next/src/app/admin/crawler/_client/CrawlerTimelineCard.tsx`）：
+  - 加 `LIMIT_OPTIONS = [{ value: '8', label: '8 站' }, { value: '20', label: '20 站' }, { value: '50', label: '全部' }]`
+  - `useState<number>` limit 自治（默认 8）
+  - range select 旁加第 2 个 AdminSelect（data-testid="crawler-timeline-limit-select" / aria-label="站数上限"）
+  - `getCrawlerTimeline({ range, limit })` 透传 limit（替代原硬编码 `limit: 8`）
+  - useEffect 依赖 + 5s 自动刷新 interval 同步 limit
+- **Step 4（单测）**：
+  - `tests/unit/api/crawlerTimeline.test.ts` 扩 3 case：safeLimit 50 cap（limit=100 → params[1]=50）+ 下限 1 cap（limit=0 → params[1]=1）+ 穿透（limit=20 → params[1]=20）
+  - `tests/unit/components/server-next/admin/crawler/CrawlerTimelineCard.test.tsx` 扩 1 case：limit select 渲染 + 初始 fetch limit=8
+- **Step 5（AMENDMENT 落盘 / ADR-155 §8 第 2 条）**：`docs/decisions.md` ADR-122 §结尾追加 AMENDMENT 块（D-155-4 / safeLimit 20→50 + UI limit select / 150 bar 显示密度 vs 性能折衷）
+
+### 新增/修改文件
+
+- `apps/api/src/db/queries/crawlerTimeline.ts`（Step 1）
+- `apps/api/src/routes/admin/crawlerDashboard.ts`（Step 2）
+- `apps/server-next/src/app/admin/crawler/_client/CrawlerTimelineCard.tsx`（Step 3）
+- `tests/unit/api/crawlerTimeline.test.ts`（Step 4a 扩 3 case）
+- `tests/unit/components/server-next/admin/crawler/CrawlerTimelineCard.test.tsx`（Step 4b 扩 1 case）
+- `docs/decisions.md`（Step 5 ADR-122 AMENDMENT 块；不计入 PATCH 5 项）
+
+PATCH 文件数：3 源 + 2 测试 = 5 项（≤ 5 硬约束 ✅）
+
+### 偏离记录
+
+无新 D-N 偏离（D-155-4 已在 ADR-155 Accepted 内）；ADR-122 AMENDMENT 已落盘到对应 §结尾。
+
+### 质量门禁
+
+- ✅ typecheck PASS（8 workspace）
+- ✅ lint PASS（4 pre-existing 警告，0 新增）
+- ✅ test 5097 总数 / 本卡新 4 case 全过（29 个 EP-1B1 测试覆盖 / 单跑 PASS）
+  - 全套首跑 2 fail = vitest 并发 flaky（CrawlerClient.test #14b 导出按钮 + UserSubmissionsClient.test #2 Segment）→ 单跑 76/76 全过；与本卡改动无因果（不引用 CrawlerTimelineCard.tsx / api.ts）
+- ✅ verify:adr-contracts PASS（含 verify-adr-d-numbers 207 闭环 / verify-sql-schema-alignment / verify-style-shorthand-conflict）
+
+### 六问自检 PASS
+
+1. **正确性**：safeLimit + zod 双层守卫确保上限严格 50；UI 3 档选择器 + 后端兼容（"全部" 对齐 safeLimit 上限）
+2. **边界与复用**：复用 AdminSelect 组件 + RANGE_OPTIONS 范式；不引入新组件
+3. **可扩展性**：LIMIT_OPTIONS 易扩第 4 档（如 100），后端 safeLimit 仅改一个常量
+4. **一致性**：与 RANGE_OPTIONS 同模式（as const + AdminSelect + useCallback handler + state 自治）
+5. **改动收敛**：满足 1–4 前提下严格 3 源 + 2 测试 = 5 项（PATCH ≤ 5 临界 ✅）
+6. **偏离检测**：无新 D-N
+
+### AI-CHECK 结论
+
+- ✅ **PASS** — 3 个 Step 完整闭环 / 4 新单测全过 / 全栈门禁通过 / ADR-122 AMENDMENT 落盘
+- **越界检测**：CLEAN（3 源 + 2 测试严格在 EP-1B1 文件范围内）
+- **回归风险**：低
+  - safeLimit 上下界数学守卫不变（只升 max）
+  - UI limit 默认值仍 8（向后兼容现有 UX）
+  - getCrawlerTimeline params shape 不变（仅传值变化）
+
+### 未覆盖（→ 后续 EP）
+
+- **用户实测验证**（@livefree / ADR-155 §8 验收第 4 条）：
+  1. `/admin/crawler` 时间轴卡 range select 旁可见新 limit select（8/20/全部）
+  2. 切到 "全部" → 时间轴显示真实站数（不再被 8 限制）
+  3. 站点数 > 50 时仍 cap 在 50
+- EP-1B2（D-155-5 AutoCrawlSummaryCard 显式入口卡）
+- EP-1C-1 / EP-1C-2（D-155-6 多 dailyTime）
+- EP-2（D-155-2 topbar 合并 / 强制 Opus reviewer）
+- EP-3（D-155-3 Gantt 三段窗）
+
+### 关键约束消化
+
+- **拆 EP-1B 为 -B1/-B2 满足 PATCH ≤ 5 项硬约束**（ADR-155 §5 原 EP-1B 4 源 + 2 测试 = 6 项触发拆分）
+- **ADR-122 AMENDMENT 同 commit 落盘**（ADR-155 §8 验收第 2 条）
+
+- **执行模型**：claude-opus-4-7（主循环延续；建议 sonnet，本会话 opus 上下文复用）
+- **子代理调用**：无（D-155-4 是 zod + safeLimit 数值调整 + UI 选择器，不触发"共享组件 API 契约强制 Opus"）
+
+Cleanup-Audit: 3 源文件改 + 2 测试文件（均扩展）+ 1 docs（ADR-122 AMENDMENT）/ 4 新单测 / 0 migration / 0 新依赖
+Plan-Revision: 1 次（ADR-155 §5 EP-1B 拆为 EP-1B1 + EP-1B2 满足 PATCH ≤ 5 项硬约束）
