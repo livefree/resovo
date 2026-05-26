@@ -478,7 +478,7 @@ export interface CrawlerTimelineRow {
   readonly widthPct: number
   readonly durationSeconds: number
   readonly videoCount: number
-  readonly status: 'ok' | 'warn' | 'danger'
+  readonly status: 'ok' | 'warn' | 'danger' | 'neutral'
   readonly last: string
 }
 

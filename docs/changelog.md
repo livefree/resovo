@@ -6467,3 +6467,49 @@ Opus 评级 A−（R-153-1/2/3 三条红线均已含入 §5 SQL 草案，等同 
 
 - **执行模型**：claude-sonnet-4-6
 - **子代理调用**：arch-reviewer (claude-opus-4-7)
+
+---
+
+## [CHG-SN-9-CW2-B-EP] Gantt 时间轴实施（ADR-153 落地）
+
+- **日期**：2026-05-25
+- **Sequence**：SEQ-20260525-CRAWLER-W2
+- **任务 ID**：CHG-SN-9-CW2-B-EP
+
+### 改动摘要
+
+ADR-153 全部 4 项落地（SQL V2 / status 4 态双侧 / range 自治 / multi-lane 渲染）：
+
+- **TIMELINE_SQL_V2**（ADR-153 §5）：
+  - ranked_tasks + site_rank + health_cte 三 CTE
+  - rn≤3（LANE_LIMIT=3）每站 multi-lane
+  - GREATEST(COALESCE(started_at, scheduled_at), NOW()-interval) pending 起点修正（D-153-4）
+  - site_ord <= $2 AND rn <= $3（R-153-2 LIMIT 语义改为站数）
+  - DENSE_RANK 站间排序 + rn ASC 站内排序（R-153-1）
+  - health 子查询 → CTE 消除 N+1（D-153-6）
+  - SQL WHERE 放开 paused/cancelled/timeout 状态
+- **statusToCategory 4 态**：timeout→danger（R-153-3 隐藏 bug 修复）；paused/cancelled→neutral
+- **前后端类型同步**：`CrawlerTimelineRow.status` 同 commit 扩为 `'ok' | 'warn' | 'danger' | 'neutral'`
+- **CrawlerTimelineCard range 自治**：Card 内 useState + useEffect（无 SWR 依赖）；`timeline` prop 降级为可选 `fallbackData`；移除 `loading`；新增 `defaultRange?`；AdminSelect 4 选项（30m/1h/2h/6h）；5s 自动刷新（paused/frozen 时停止）
+- **multi-lane 渲染**：rows 按 siteKey group（保 SQL 排序）；单 TRACK 容器内各 bar 绝对定位；BAR_H=6/LANE_GAP=2 命名常量；TRACK_STYLE.height 14→24
+- **CrawlerClient.tsx**：移除 timeline state + 初始 load getCrawlerTimeline + 15s 轮询 useEffect（Card 自治承接）
+
+### 新增/修改文件
+
+- `apps/api/src/db/queries/crawlerTimeline.ts` — TIMELINE_SQL_V2 + LANE_LIMIT + status 4 态
+- `apps/server-next/src/lib/crawler/api.ts` — status 加 `| 'neutral'`
+- `apps/server-next/src/app/admin/crawler/_client/CrawlerTimelineCard.tsx` — range 自治 + multi-lane
+- `apps/server-next/src/app/admin/crawler/_client/CrawlerClient.tsx` — 移除 timeline 重复轮询
+- `tests/unit/api/crawlerTimeline.test.ts` — 14 个新测试（SQL 结构 + status 4 态 + N+1 消除）
+- `tests/unit/components/server-next/admin/crawler/CrawlerTimelineCard.test.tsx` — 8 个新测试（multi-lane + neutral + range select + tick 时区）
+
+### 质量门禁
+
+- ✅ typecheck 通过（全 workspace）
+- ✅ lint 通过（无新告警）
+- ✅ 22 个新测试全通；全套 5056 测试通过
+- ✅ verify:adr-contracts 通过（无新违规）
+- ✅ ADR-153 红线全达：N0（UTC ISO）/ N0b（4 态同 commit）/ R-153-1（双层排序）/ R-153-2（LIMIT = 站数）/ R-153-3（timeout→danger）
+
+- **执行模型**：claude-sonnet-4-6
+- **子代理调用**：arch-reviewer (claude-opus-4-6) — CW2-B-ADR 阶段已完成

@@ -2,13 +2,16 @@
  * crawlerTimeline.ts — Crawler 重做实时任务时间轴聚合（CHG-SN-7-REDO-01-B / ADR-122）
  *
  * 真源：ADR-122 §"SQL 聚合策略 — /timeline SQL 草案"
+ *       ADR-153 §5（TIMELINE_SQL_V2）+ §4（status 4 态）
  *
  * 端点消费：GET /admin/crawler/timeline?range=1h&limit=8
  *
- * 数据语义：
- *   - 按 site_key 聚合最近时间窗口内 1 个 task（ROW_NUMBER 取最新）
- *   - status='running' 优先排序 + started_at DESC
- *   - 百分比（startPct / widthPct）Node.js 层算术（避免 SQL 层浮点精度）
+ * 数据语义（ADR-153 改动）：
+ *   - 每站最多 LANE_LIMIT=3 条 task（rn≤3，ROW_NUMBER 取最新）
+ *   - 双层排序：站间 DENSE_RANK (site_ord)，站内 rn ASC
+ *   - status 4 态：ok / warn / danger / neutral
+ *   - pending 起点：GREATEST(COALESCE(started_at, scheduled_at), NOW()-interval)
+ *   - health N+1 消除：CTE 一次扫描
  *
  * 性能预期：< 50ms（crawler_tasks 日 < 2000 行）
  * Fallback：若 benchmark > 200ms，降级为 `DISTINCT ON (source_site)` PG 扩展语法（ADR-122 D-122-4）
@@ -26,7 +29,7 @@ export interface CrawlerTimelineRow {
   readonly widthPct: number            // 0-1
   readonly durationSeconds: number
   readonly videoCount: number
-  readonly status: 'ok' | 'warn' | 'danger'
+  readonly status: 'ok' | 'warn' | 'danger' | 'neutral'
   readonly last: string                // ISO 8601
 }
 
@@ -40,6 +43,7 @@ export interface CrawlerTimelineResponse {
 interface TimelineRawRow {
   source_site: string
   site_name: string
+  scheduled_at: Date
   started_at: Date
   effective_end: Date
   status: string
@@ -62,49 +66,89 @@ const RANGE_TO_MS: Record<CrawlerTimelineRange, number> = {
   '6h':  6 * 60 * 60_000,
 }
 
-const TIMELINE_SQL = `
+/** D-153-1：每站最多显示的 lane 数（N=3） */
+const LANE_LIMIT = 3
+
+/**
+ * TIMELINE_SQL_V2 — ADR-153 §5 完整草案
+ *
+ * 参数：
+ *   $1 = range interval（如 '1 hour'）
+ *   $2 = 站数上限（safeLimit，默认 8）
+ *   $3 = 每站 lane 上限（LANE_LIMIT=3）
+ */
+const TIMELINE_SQL_V2 = `
 WITH ranked_tasks AS (
   SELECT
     ct.source_site,
     cs.name AS site_name,
+    ct.scheduled_at,
     ct.started_at,
     ct.finished_at,
     ct.status,
     ct.result,
-    ROW_NUMBER() OVER (PARTITION BY ct.source_site ORDER BY COALESCE(ct.started_at, ct.scheduled_at) DESC) AS rn
+    ROW_NUMBER() OVER (
+      PARTITION BY ct.source_site
+      ORDER BY COALESCE(ct.started_at, ct.scheduled_at) DESC
+    ) AS rn
   FROM crawler_tasks ct
   JOIN crawler_sites cs ON cs.key = ct.source_site
   WHERE ct.type IN ('full-crawl', 'incremental-crawl')
     AND ct.scheduled_at >= NOW() - $1::interval
-    AND ct.status IN ('running', 'done', 'failed')
+    AND ct.status IN ('running', 'done', 'failed', 'paused', 'cancelled', 'timeout')
+),
+site_rank AS (
+  SELECT
+    source_site,
+    DENSE_RANK() OVER (
+      ORDER BY
+        MAX(CASE WHEN status = 'running' THEN 0 ELSE 1 END),
+        MAX(COALESCE(started_at, scheduled_at)) DESC
+    ) AS site_ord
+  FROM ranked_tasks
+  GROUP BY source_site
+),
+health_cte AS (
+  SELECT
+    source_site,
+    ROUND(
+      100.0 * COUNT(*) FILTER (WHERE status = 'done' AND rn_h <= 5)
+            / NULLIF(COUNT(*) FILTER (WHERE rn_h <= 5), 0)
+    )::int AS health
+  FROM (
+    SELECT
+      source_site,
+      status,
+      ROW_NUMBER() OVER (PARTITION BY source_site ORDER BY scheduled_at DESC) AS rn_h
+    FROM crawler_tasks
+    WHERE type IN ('full-crawl', 'incremental-crawl')
+  ) h
+  GROUP BY source_site
 )
 SELECT
   rt.source_site,
   rt.site_name,
-  COALESCE(rt.started_at, NOW() - $1::interval) AS started_at,
-  COALESCE(rt.finished_at, NOW())               AS effective_end,
+  rt.scheduled_at,
+  GREATEST(COALESCE(rt.started_at, rt.scheduled_at), NOW() - $1::interval) AS started_at,
+  COALESCE(rt.finished_at, NOW()) AS effective_end,
   rt.status,
   rt.result,
-  COALESCE((
-    SELECT ROUND(100.0 * SUM(CASE WHEN status = 'done' THEN 1 ELSE 0 END) / NULLIF(COUNT(*), 0))::int
-    FROM (
-      SELECT status FROM crawler_tasks
-      WHERE source_site = rt.source_site
-        AND type IN ('full-crawl', 'incremental-crawl')
-      ORDER BY scheduled_at DESC LIMIT 5
-    ) recent
-  ), 0)::text AS health
+  COALESCE(h.health, 0)::text AS health
 FROM ranked_tasks rt
-WHERE rt.rn = 1
+JOIN site_rank sr ON sr.source_site = rt.source_site
+LEFT JOIN health_cte h ON h.source_site = rt.source_site
+WHERE sr.site_ord <= $2
+  AND rt.rn <= $3
 ORDER BY
-  CASE WHEN rt.status = 'running' THEN 0 ELSE 1 END,
-  rt.started_at DESC
-LIMIT $2
+  sr.site_ord ASC,
+  rt.rn ASC
 `
 
-function statusToCategory(raw: string): 'ok' | 'warn' | 'danger' {
+/** ADR-153 D-153-2：status 4 态映射（含 R-153-3 timeout→danger 修复） */
+function statusToCategory(raw: string): 'ok' | 'warn' | 'danger' | 'neutral' {
   if (raw === 'done' || raw === 'running') return 'ok'
-  if (raw === 'failed') return 'danger'
+  if (raw === 'failed' || raw === 'timeout') return 'danger'   // R-153-3：timeout 补归 danger
+  if (raw === 'paused' || raw === 'cancelled') return 'neutral'
   return 'warn'
 }
 
@@ -155,7 +199,7 @@ export async function getCrawlerTimeline(
   const rangeMs = RANGE_TO_MS[range]
   const safeLimit = Math.max(1, Math.min(20, Math.trunc(limit)))
 
-  const result = await db.query<TimelineRawRow>(TIMELINE_SQL, [interval, safeLimit])
+  const result = await db.query<TimelineRawRow>(TIMELINE_SQL_V2, [interval, safeLimit, LANE_LIMIT])
 
   const rangeEnd = new Date()
   const rangeStart = new Date(rangeEnd.getTime() - rangeMs)

@@ -6,16 +6,18 @@
  * 真源：M-SN-7-redo-01-contract.md §1.2 + reference.md §5.6
  * 数据：GET /admin/crawler/timeline?range=1h&limit=8（REDO-01-B / ADR-122 §3.2）
  *
- * 形态：AdminCard 容器 + card head（标题 + range select 占位 + 暂停按钮 + frozen pill）
- *      body = 时间轴 grid（左 site name 1fr / 右 时间窗 4fr 带 tick 标尺 + 状态 bar）
- *
- * 本卡（REDO-01-C）仅渲染框架 + 行 bar 基础形态；
- * 精细化样式（dot pulse / 状态色细调 / hover tooltip）留给 REDO-01-J 视觉对齐。
+ * ADR-153 改动（CW2-B-EP）：
+ *   - status 4 态：ok / warn / danger / neutral
+ *   - multi-lane 渲染：同站多 bar 绝对定位，BAR_H=6px / LANE_GAP=2px
+ *   - TRACK_STYLE.height 14→24
+ *   - range 自治：Card 内 useState + useEffect，不再依赖父层轮询
+ *   - Props：timeline 降级为可选 fallbackData；新增 defaultRange?；移除 loading
  */
 
-import { type CSSProperties } from 'react'
-import { AdminButton, AdminCard } from '@resovo/admin-ui'
+import { useCallback, useEffect, useState, type CSSProperties } from 'react'
+import { AdminButton, AdminCard, AdminSelect } from '@resovo/admin-ui'
 import type { CrawlerTimelineResponse, CrawlerTimelineRow } from '@/lib/crawler/api'
+import { getCrawlerTimeline, type CrawlerTimelineRange } from '@/lib/crawler/api'
 
 const HEAD_ACTIONS_STYLE: CSSProperties = {
   display: 'inline-flex',
@@ -24,7 +26,7 @@ const HEAD_ACTIONS_STYLE: CSSProperties = {
 }
 
 /**
- * 把 ISO 时间字符串格式化为本地 HH:MM（CHG-SN-7-MISC-CRAWLER-TIMELINE-BUG / 用户反馈本地时间）
+ * 把 ISO 时间字符串格式化为本地 HH:MM（ADR-153 D-153-5 确认正确架构）
  * 失败时回退 fallback（避免空字符串）。
  */
 function formatLocalHm(iso: string | null | undefined, fallback = '—'): string {
@@ -75,9 +77,10 @@ const TICK_ROW_STYLE: CSSProperties = {
   borderBottom: '1px dashed var(--border-subtle)',
 }
 
+/** ADR-153 D-153-1：rowHeight 14→24 */
 const TRACK_STYLE: CSSProperties = {
   position: 'relative',
-  height: '14px',
+  height: '24px',
   background: 'var(--bg-subtle, var(--bg-surface))',
   borderRadius: '3px',
   overflow: 'hidden',
@@ -103,29 +106,93 @@ const EMPTY_STYLE: CSSProperties = {
   color: 'var(--fg-muted)',
 }
 
+/** ADR-153 D-153-2：status 4 态颜色（neutral = --fg-muted） */
 const STATUS_COLOR: Record<CrawlerTimelineRow['status'], string> = {
   ok: 'var(--state-success-fg)',
   warn: 'var(--state-warning-fg)',
   danger: 'var(--state-danger-fg, var(--fg-danger))',
+  neutral: 'var(--fg-muted)',
 }
 
+/** ADR-153 D-153-1：bar 高度 + lane 间距命名常量 */
+const BAR_H = 6
+const LANE_GAP = 2
+
+const RANGE_OPTIONS = [
+  { value: '30m', label: '30 分钟' },
+  { value: '1h',  label: '1 小时' },
+  { value: '2h',  label: '2 小时' },
+  { value: '6h',  label: '6 小时' },
+] as const
+
 export interface CrawlerTimelineCardProps {
-  readonly timeline: CrawlerTimelineResponse | null
-  readonly loading: boolean
+  /** ADR-153 D-153-3：降级为可选 fallbackData（SWR 语义；Card 内部自治拉取） */
+  readonly fallbackData?: CrawlerTimelineResponse | null
+  /** @deprecated 兼容旧调用方，等同 fallbackData */
+  readonly timeline?: CrawlerTimelineResponse | null
   readonly frozen: boolean
   readonly paused: boolean
   readonly onPauseToggle: () => void
+  /** 默认时间范围，省略则用 '1h' */
+  readonly defaultRange?: CrawlerTimelineRange
 }
 
 export function CrawlerTimelineCard({
+  fallbackData,
   timeline,
-  loading,
   frozen,
   paused,
   onPauseToggle,
+  defaultRange,
 }: CrawlerTimelineCardProps) {
-  const ticks = timeline?.ticks ?? []
-  const rows = timeline?.rows ?? []
+  // ── range 自治 state（ADR-153 D-153-3）─────────────────────────
+  const [range, setRange] = useState<CrawlerTimelineRange>(defaultRange ?? '1h')
+  const [timelineData, setTimelineData] = useState<CrawlerTimelineResponse | null>(
+    fallbackData ?? timeline ?? null,
+  )
+  const [timelineLoading, setTimelineLoading] = useState(false)
+
+  // ── range 变化时重新拉取 ─────────────────────────────────────────
+  useEffect(() => {
+    let cancelled = false
+    setTimelineLoading(true)
+    getCrawlerTimeline({ range, limit: 8 })
+      .then((data) => { if (!cancelled) setTimelineData(data) })
+      .catch(() => { /* silent：时间轴是软实时数据，失败不打扰用户 */ })
+      .finally(() => { if (!cancelled) setTimelineLoading(false) })
+    return () => { cancelled = true }
+  }, [range])
+
+  // ── 自动刷新（5s；frozen / paused 时跳过）────────────────────────
+  useEffect(() => {
+    if (paused || frozen) return
+    const tick = window.setInterval(() => {
+      getCrawlerTimeline({ range, limit: 8 })
+        .then((data) => setTimelineData(data))
+        .catch(() => { /* silent */ })
+    }, 5_000)
+    return () => window.clearInterval(tick)
+  }, [range, paused, frozen])
+
+  const handleRangeChange = useCallback((next: string | null) => {
+    if (next === '30m' || next === '1h' || next === '2h' || next === '6h') {
+      setRange(next)
+    }
+  }, [])
+
+  const ticks = timelineData?.ticks ?? []
+  const rows = timelineData?.rows ?? []
+
+  // ── group rows by siteKey（保持 SQL 排序，不重排）────────────────
+  const siteOrder: string[] = []
+  const rowsBySite = new Map<string, CrawlerTimelineRow[]>()
+  for (const row of rows) {
+    if (!rowsBySite.has(row.siteKey)) {
+      siteOrder.push(row.siteKey)
+      rowsBySite.set(row.siteKey, [])
+    }
+    rowsBySite.get(row.siteKey)!.push(row)
+  }
 
   return (
     <AdminCard
@@ -134,11 +201,19 @@ export function CrawlerTimelineCard({
       data-testid="crawler-timeline-card"
       header={{
         title: '采集时间轴',
-        subtitle: timeline
-          ? `${rows.length} 站点 · ${formatLocalHm(timeline.rangeStart)}–${formatLocalHm(timeline.rangeEnd)}`
+        subtitle: timelineData
+          ? `${siteOrder.length} 站点 · ${formatLocalHm(timelineData.rangeStart)}–${formatLocalHm(timelineData.rangeEnd)}`
           : '加载中…',
         actions: (
           <span style={HEAD_ACTIONS_STYLE}>
+            <AdminSelect
+              options={RANGE_OPTIONS as unknown as { value: string; label: string }[]}
+              value={range}
+              onChange={handleRangeChange}
+              size="sm"
+              aria-label="选择时间范围"
+              data-testid="crawler-timeline-range-select"
+            />
             <span
               style={frozen ? PILL_WARN_STYLE : PILL_OK_STYLE}
               data-testid="crawler-timeline-status-pill"
@@ -158,11 +233,11 @@ export function CrawlerTimelineCard({
         ),
       }}
     >
-      {loading && !timeline ? (
+      {timelineLoading && !timelineData ? (
         <div style={EMPTY_STYLE} data-testid="crawler-timeline-loading">
           加载时间轴中…
         </div>
-      ) : rows.length === 0 ? (
+      ) : siteOrder.length === 0 ? (
         <div style={EMPTY_STYLE} data-testid="crawler-timeline-empty">
           当前时间窗内无采集活动
         </div>
@@ -186,42 +261,67 @@ export function CrawlerTimelineCard({
             ))}
           </div>
 
-          {rows.map((row) => (
-            <TimelineRow key={row.siteKey} row={row} />
-          ))}
+          {siteOrder.map((siteKey) => {
+            const siteBars = rowsBySite.get(siteKey)!
+            const primaryRow = siteBars[0]
+            return (
+              <SiteTimelineRow
+                key={siteKey}
+                primaryRow={primaryRow}
+                bars={siteBars}
+              />
+            )
+          })}
         </div>
       )}
     </AdminCard>
   )
 }
 
-function TimelineRow({ row }: { readonly row: CrawlerTimelineRow }) {
-  const left = Math.max(0, Math.min(1, row.startPct)) * 100
-  const width = Math.max(0, Math.min(1, row.widthPct)) * 100
-  const color = STATUS_COLOR[row.status]
-
+/**
+ * SiteTimelineRow — 单站点行（1 个 label + 1 个 TRACK 容器，内含多 bar 绝对定位）
+ * ADR-153 D-153-1 §6：各 bar top = laneIdx * (BAR_H + LANE_GAP)px
+ */
+function SiteTimelineRow({
+  primaryRow,
+  bars,
+}: {
+  readonly primaryRow: CrawlerTimelineRow
+  readonly bars: readonly CrawlerTimelineRow[]
+}) {
   return (
     <>
-      <div style={SITE_LABEL_STYLE} data-site-key={row.siteKey}>
-        <span>{row.siteName}</span>
+      <div style={SITE_LABEL_STYLE} data-site-key={primaryRow.siteKey}>
+        <span>{primaryRow.siteName}</span>
         <span style={SITE_META_STYLE}>
-          {row.videoCount} 视频 · 健康度 {row.health}
+          {primaryRow.videoCount} 视频 · 健康度 {primaryRow.health}
         </span>
       </div>
-      <div style={TRACK_STYLE} data-track>
-        <div
-          style={{
-            position: 'absolute',
-            left: `${left}%`,
-            width: `${Math.max(width, 1)}%`,
-            top: 2,
-            bottom: 2,
-            background: color,
-            borderRadius: '2px',
-          }}
-          data-bar-status={row.status}
-          aria-label={`${row.siteName} 时长 ${row.durationSeconds}s 状态 ${row.status}`}
-        />
+      <div style={TRACK_STYLE} data-track data-site-key={primaryRow.siteKey}>
+        {bars.map((bar, laneIdx) => {
+          const left = Math.max(0, Math.min(1, bar.startPct)) * 100
+          const width = Math.max(0, Math.min(1, bar.widthPct)) * 100
+          const color = STATUS_COLOR[bar.status]
+          const top = laneIdx * (BAR_H + LANE_GAP)
+
+          return (
+            <div
+              key={`${bar.siteKey}-${laneIdx}`}
+              style={{
+                position: 'absolute',
+                left: `${left}%`,
+                width: `${Math.max(width, 1)}%`,
+                top,
+                height: BAR_H,
+                background: color,
+                borderRadius: '2px',
+              }}
+              data-bar-status={bar.status}
+              data-bar-lane={laneIdx}
+              aria-label={`${bar.siteName} 时长 ${bar.durationSeconds}s 状态 ${bar.status}`}
+            />
+          )
+        })}
       </div>
     </>
   )

@@ -28,7 +28,6 @@ import {
   listCrawlerSites,
   getCrawlerSystemStatus,
   getCrawlerKpi,
-  getCrawlerTimeline,
   runCrawlerAll,
   runCrawlerSite,
   createCrawlerSite,
@@ -37,7 +36,6 @@ import {
   type CrawlerSiteStat,
   type CrawlerSystemStatus,
   type CrawlerKpiResponse,
-  type CrawlerTimelineResponse,
   type CreateCrawlerSiteInput,
   type CrawlerRunMode,
 } from '@/lib/crawler/api'
@@ -100,7 +98,6 @@ export function CrawlerClient() {
   const [sites, setSites] = useState<readonly CrawlerSite[]>([])
   const [status, setStatus] = useState<CrawlerSystemStatus | null>(null)
   const [kpi, setKpi] = useState<CrawlerKpiResponse | null>(null)
-  const [timeline, setTimeline] = useState<CrawlerTimelineResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<Error | null>(null)
   const [retryKey, setRetryKey] = useState(0)
@@ -146,14 +143,12 @@ export function CrawlerClient() {
       listCrawlerSites(),
       getCrawlerSystemStatus(),
       getCrawlerKpi(),
-      getCrawlerTimeline({ range: '1h', limit: 8 }),
-    ]).then(([sitesRes, statusRes, kpiRes, timelineRes]) => {
+    ]).then(([sitesRes, statusRes, kpiRes]) => {
       if (cancelled) return
       if (sitesRes.status === 'fulfilled') setSites(sitesRes.value)
       else setError(sitesRes.reason instanceof Error ? sitesRes.reason : new Error('站点加载失败'))
       if (statusRes.status === 'fulfilled') setStatus(statusRes.value)
       if (kpiRes.status === 'fulfilled') setKpi(kpiRes.value)
-      if (timelineRes.status === 'fulfilled') setTimeline(timelineRes.value)
     }).finally(() => {
       if (!cancelled) setLoading(false)
     })
@@ -161,19 +156,6 @@ export function CrawlerClient() {
       cancelled = true
     }
   }, [retryKey])
-
-  // ── timeline auto-refresh（15s；frozen / paused 时跳过） ─────────
-  useEffect(() => {
-    if (paused || status?.freezeEnabled) return
-    const tick = window.setInterval(() => {
-      getCrawlerTimeline({ range: '1h', limit: 8 })
-        .then((next) => setTimeline(next))
-        .catch(() => {
-          // silent；时间轴是软实时数据，刷新失败不打扰用户
-        })
-    }, 15_000)
-    return () => window.clearInterval(tick)
-  }, [paused, status?.freezeEnabled])
 
   const refresh = useCallback(() => setRetryKey((k) => k + 1), [])
 
@@ -496,8 +478,6 @@ export function CrawlerClient() {
       <CrawlerKpiRow kpi={kpi} />
 
       <CrawlerTimelineCard
-        timeline={timeline}
-        loading={loading && !timeline}
         frozen={status?.freezeEnabled ?? false}
         paused={paused}
         onPauseToggle={handlePauseToggle}
