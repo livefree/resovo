@@ -63,3 +63,83 @@ export interface AdminJobsListResponse {
     degraded?: boolean
   }
 }
+
+// ── BackgroundEvent discriminated union（ADR-152 / CW1-E-EP step 6）──────────────────
+
+/**
+ * upcoming lane：定时自动采集 / scheduler timer 未来触发时间
+ * D-152-1 Y-152-2 修订：discriminated union by lane
+ */
+export interface AdminBackgroundEventUpcoming {
+  readonly lane: 'upcoming'
+  readonly id: string
+  readonly kind: 'auto_crawl' | 'scheduler_timer'
+  readonly status: 'scheduled'
+  readonly level: 'info'
+  readonly title: string
+  readonly description?: string
+  /** upcoming 强制必填（ISO 8601） */
+  readonly scheduledAt: string
+  readonly href?: string
+}
+
+/**
+ * active lane：采集批次进行中
+ * D-152-1 Y-152-2 修订
+ */
+export interface AdminBackgroundEventActive {
+  readonly lane: 'active'
+  readonly id: string
+  readonly kind: 'crawler_run'
+  readonly status: 'queued' | 'running' | 'paused'
+  readonly level: 'info'
+  readonly title: string
+  readonly description?: string
+  /** active 强制必填（ISO 8601） */
+  readonly startedAt: string
+  /** active.crawler_run 必填（href 跳转用） */
+  readonly runId: string
+  readonly href: string
+}
+
+/**
+ * finished lane：近期完成/失败的批次 + 高危审计事件
+ * D-152-1 Y-152-2 修订
+ */
+export interface AdminBackgroundEventFinished {
+  readonly lane: 'finished'
+  readonly id: string
+  readonly kind: 'crawler_run' | 'audit_high_risk'
+  readonly status: 'success' | 'failed' | 'partial_failed' | 'cancelled' | 'timeout' | 'high_risk_audit'
+  readonly level: 'info' | 'warn' | 'danger'
+  readonly title: string
+  readonly description?: string
+  /** crawler_run 必填；audit_high_risk 不填 */
+  readonly startedAt?: string
+  /** finished 强制必填（audit_high_risk 取 created_at） */
+  readonly finishedAt: string
+  /** crawler_run 必填 */
+  readonly runId?: string
+  /** audit_high_risk 可选 */
+  readonly actorId?: string
+  readonly href?: string
+}
+
+/** ADR-152 BackgroundEvent discriminated union（3 lane） */
+export type AdminBackgroundEvent =
+  | AdminBackgroundEventUpcoming
+  | AdminBackgroundEventActive
+  | AdminBackgroundEventFinished
+
+/** GET /admin/system/background-events 响应信封（ADR-152 §端点契约） */
+export interface AdminBackgroundEventsResponse {
+  data: AdminBackgroundEvent[]
+  meta: {
+    total: number
+    limit: number
+    windowHours: number
+    generatedAt: string
+    /** bull 不可用降级时为 true */
+    degraded?: boolean
+  }
+}

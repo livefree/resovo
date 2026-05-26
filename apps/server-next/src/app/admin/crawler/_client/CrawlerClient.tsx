@@ -43,6 +43,8 @@ import {
 } from '@/lib/crawler/api'
 import { ApiClientError } from '@/lib/api-client'
 import { exportCrawlerSitesCsv } from '@/lib/crawler/csv-export'
+// CW1-E-EP step 8b / ADR-152 Y-152-4：写操作成功后显式 invalidate 跳过 max-age=30 缓存
+import { invalidateBackgroundEvents } from '@/lib/admin-shell-background-events'
 import { CrawlerKpiRow } from './CrawlerKpiRow'
 import { CrawlerTimelineCard } from './CrawlerTimelineCard'
 import { CrawlerSiteList } from './CrawlerSiteList'
@@ -257,6 +259,8 @@ export function CrawlerClient() {
         level: 'success',
         action: buildModerationDeepLinkAction(result.runId),
       })
+      // Y-152-4：写操作成功后 invalidate BackgroundEventBell（跳过 max-age=30 缓存）
+      void invalidateBackgroundEvents()
       refresh()
     } catch (err: unknown) {
       const { title, description } = describeApiError(err)
@@ -291,6 +295,8 @@ export function CrawlerClient() {
         level: 'success',
         action: buildModerationDeepLinkAction(result.runId),
       })
+      // Y-152-4：写操作成功后 invalidate BackgroundEventBell（跳过 max-age=30 缓存）
+      void invalidateBackgroundEvents()
       refresh()
     } catch (err: unknown) {
       const { title, description } = describeApiError(err)

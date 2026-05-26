@@ -20,6 +20,9 @@ import { AdminShell, inferBreadcrumbs, useToast } from '@resovo/admin-ui'
 import type { AdminNavSection, AdminShellUser, NotificationItem, UserMenuAction } from '@resovo/admin-ui'
 // CHG-SN-8-FUP-SHELL-NOTIFICATIONS-EP-B / ADR-147：admin shell 通知 + 任务真端点
 import { useAdminNotifications, useAdminTasks } from '@/lib/admin-shell-notifications'
+// CW1-E-EP / ADR-152：admin shell topbar 后台事件铃铛
+import { useAdminBackgroundEvents } from '@/lib/admin-shell-background-events'
+import { BackgroundEventBell } from '@/components/admin-shell/BackgroundEventBell'
 import { UserMenuActionModal, type UserMenuActionModalType } from './_client/UserMenuActionModal'
 import { ThemeContext } from '@/contexts/BrandProvider'
 import { ADMIN_NAV } from '@/lib/admin-nav'
@@ -126,6 +129,8 @@ export function AdminShellClient({ defaultCollapsed, initialTheme, initialRole, 
   // tasks：仅读，cancel/retry 端点 N1-147-4 待立（按需启动）
   const { items: notifications, markAllRead, markOneRead } = useAdminNotifications()
   const { items: tasks } = useAdminTasks()
+  // CW1-E-EP / ADR-152：后台事件铃铛 60s polling（三源聚合 upcoming + active + finished）
+  const { events: bgEvents, degraded: bgDegraded } = useAdminBackgroundEvents()
 
   const handleNotificationItemClick = useCallback((item: NotificationItem) => {
     markOneRead(item.id)
@@ -155,6 +160,7 @@ export function AdminShellClient({ defaultCollapsed, initialTheme, initialRole, 
   }, [toast])
 
   return (
+    <>
     <AdminShell
       nav={navForRole}
       activeHref={pathname}
@@ -186,5 +192,8 @@ export function AdminShellClient({ defaultCollapsed, initialTheme, initialRole, 
         onClose={() => setActionModalType(null)}
       />
     </AdminShell>
+    {/* CW1-E-EP / ADR-152：后台事件铃铛（position: fixed，叠于 topbar 右侧区域） */}
+    <BackgroundEventBell events={bgEvents} degraded={bgDegraded} />
+    </>
   )
 }

@@ -13801,7 +13801,7 @@ type BackgroundEvent = UpcomingEvent | ActiveEvent | FinishedEvent
 
 **Drawer/cancel 写操作权限**：本 ADR 只覆盖 GET 端点；后续 N1（如 bell popover 内 cancel run 按钮）需 admin / 在 EP 卡内单独走 requireRole(['admin']) gate。
 
-### §端点契约
+### 端点契约
 
 | # | 方法 | 路径 | 用途 | Request | Response | 鉴权 | 错误码 |
 |---|---|---|---|---|---|---|---|

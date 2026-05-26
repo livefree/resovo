@@ -154,6 +154,9 @@ export async function listRuns(
     siteCountMax?: number
     createdAtFrom?: string
     createdAtTo?: string
+    // CW1-E-EP step 1b / ADR-152 R-152-3：finishedAfter 谓词下推（与 createdAtFrom 同范式）
+    // WHERE finished_at >= $::timestamptz（小时级精度，非 ::date）
+    finishedAfter?: string
     // sub 2 EXTEND：sort 字段白名单（createdAt / finishedAt）+ 方向
     sortField?: string
     sortDirection?: 'asc' | 'desc'
@@ -200,6 +203,11 @@ export async function listRuns(
   if (params.createdAtTo) {
     conditions.push(`created_at < ($${idx++}::date + INTERVAL '1 day')`)
     values.push(params.createdAtTo)
+  }
+  // CW1-E-EP step 1b / ADR-152 R-152-3：finishedAfter 谓词下推
+  if (params.finishedAfter) {
+    conditions.push(`finished_at >= $${idx++}::timestamptz`)
+    values.push(params.finishedAfter)
   }
   const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''
   const limit = params.limit ?? 20

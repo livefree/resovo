@@ -46,9 +46,22 @@ let reconcileTickRunning = false
 let pendingThresholdTickRunning = false
 let r2QuotaTickRunning = false
 
+// CW1-E-EP step 2 / ADR-152 R-152-2：lastRunAt 记录（intervalMs 推算 nextRunAt 用）
+// 各 timer 在执行前赋值；registeredAt 作为 lastRunAt=null 时的回退基准
+const registeredAt = new Date().toISOString()
+const lastRunAt: Record<string, string | null> = {
+  'auto-publish-staging': null,
+  'verify-published-sources': null,
+  'verify-staging-sources': null,
+  'reconcile-search-index': null,
+  'pending-threshold-check': null,
+  'r2-quota-check': null,
+}
+
 async function runMaintenanceTick(): Promise<void> {
   if (tickRunning) return
   tickRunning = true
+  lastRunAt['auto-publish-staging'] = new Date().toISOString()
   try {
     const enabled = await systemSettingsQueries.getSetting(db, 'auto_publish_staging_enabled')
     // null（未初始化）视为已启用；只有显式设为 'false' 时才跳过
@@ -76,6 +89,7 @@ async function runMaintenanceTick(): Promise<void> {
 async function runVerifyTick(): Promise<void> {
   if (verifyTickRunning) return
   verifyTickRunning = true
+  lastRunAt['verify-published-sources'] = new Date().toISOString()
   try {
     const jobData: MaintenanceJobData = { type: 'verify-published-sources', batchLimit: 50 }
     await maintenanceQueue.add(jobData, {
@@ -94,6 +108,7 @@ async function runVerifyTick(): Promise<void> {
 async function runStagingVerifyTick(): Promise<void> {
   if (stagingVerifyTickRunning) return
   stagingVerifyTickRunning = true
+  lastRunAt['verify-staging-sources'] = new Date().toISOString()
   try {
     const jobData: MaintenanceJobData = { type: 'verify-staging-sources', stagingBatchLimit: 200 }
     await maintenanceQueue.add(jobData, {
@@ -112,6 +127,7 @@ async function runStagingVerifyTick(): Promise<void> {
 async function runReconcileTick(): Promise<void> {
   if (reconcileTickRunning) return
   reconcileTickRunning = true
+  lastRunAt['reconcile-search-index'] = new Date().toISOString()
   try {
     const jobData: MaintenanceJobData = { type: 'reconcile-search-index', reconcileBatchLimit: 100 }
     await maintenanceQueue.add(jobData, {
@@ -136,6 +152,7 @@ async function runReconcileTick(): Promise<void> {
 async function runPendingThresholdTick(): Promise<void> {
   if (pendingThresholdTickRunning) return
   pendingThresholdTickRunning = true
+  lastRunAt['pending-threshold-check'] = new Date().toISOString()
   try {
     // 1. 查 KV 阈值（默认 50）
     const thresholdRaw = await systemSettingsQueries.getSetting(db, 'notification_pending_threshold')
@@ -186,6 +203,7 @@ async function runPendingThresholdTick(): Promise<void> {
 async function runR2QuotaTick(): Promise<void> {
   if (r2QuotaTickRunning) return
   r2QuotaTickRunning = true
+  lastRunAt['r2-quota-check'] = new Date().toISOString()
   try {
     const { R2_ENDPOINT, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY } = process.env
     if (!R2_ENDPOINT || !R2_ACCESS_KEY_ID || !R2_SECRET_ACCESS_KEY) return
@@ -250,18 +268,36 @@ export interface SchedulerInfo {
   name: string
   enabled: boolean
   intervalMs: number
+  /** CW1-E-EP step 2 / ADR-152 R-152-2：上次执行时间（ISO） / null = 尚未执行过 */
+  lastRunAt: string | null
+  /** CW1-E-EP step 2 / ADR-152 R-152-2：下次预期执行时间（ISO）。
+   *  计算公式：(lastRunAt ?? registeredAt) + intervalMs
+   *  单 timer parse 失败时 skip + warn，不阻塞主响应。 */
+  nextRunAt: string
 }
 
-/** CHG-408: 返回各定时器当前状态，供 GET /admin/system/scheduler-status 使用 */
+/** CHG-408 / CW1-E-EP step 2: 返回各定时器当前状态（含 lastRunAt + nextRunAt） */
 export function getSchedulerStatus(): SchedulerInfo[] {
   const globalEnabled = process.env.MAINTENANCE_SCHEDULER_ENABLED !== 'false'
+
+  function computeNextRunAt(name: string, intervalMs: number): string {
+    const last = lastRunAt[name]
+    const base = last ?? registeredAt
+    try {
+      return new Date(Date.parse(base) + intervalMs).toISOString()
+    } catch {
+      schedulerLog.warn({ name, base }, '[getSchedulerStatus] failed to parse base time; using registeredAt fallback')
+      return new Date(Date.parse(registeredAt) + intervalMs).toISOString()
+    }
+  }
+
   return [
-    { name: 'auto-publish-staging',    enabled: globalEnabled && schedulerTimer != null,       intervalMs: TICK_MS },
-    { name: 'verify-published-sources', enabled: globalEnabled && verifyTimer != null,          intervalMs: VERIFY_TICK_MS },
-    { name: 'verify-staging-sources',   enabled: globalEnabled && stagingVerifyTimer != null,   intervalMs: STAGING_VERIFY_TICK_MS },
-    { name: 'reconcile-search-index',   enabled: globalEnabled && reconcileTimer != null,       intervalMs: RECONCILE_TICK_MS },
-    { name: 'pending-threshold-check',  enabled: globalEnabled && pendingThresholdTimer != null, intervalMs: PENDING_THRESHOLD_TICK_MS },
-    { name: 'r2-quota-check',           enabled: globalEnabled && r2QuotaTimer != null,           intervalMs: R2_QUOTA_TICK_MS },
+    { name: 'auto-publish-staging',     enabled: globalEnabled && schedulerTimer != null,        intervalMs: TICK_MS,                 lastRunAt: lastRunAt['auto-publish-staging'],     nextRunAt: computeNextRunAt('auto-publish-staging', TICK_MS) },
+    { name: 'verify-published-sources', enabled: globalEnabled && verifyTimer != null,            intervalMs: VERIFY_TICK_MS,          lastRunAt: lastRunAt['verify-published-sources'], nextRunAt: computeNextRunAt('verify-published-sources', VERIFY_TICK_MS) },
+    { name: 'verify-staging-sources',   enabled: globalEnabled && stagingVerifyTimer != null,     intervalMs: STAGING_VERIFY_TICK_MS,  lastRunAt: lastRunAt['verify-staging-sources'],   nextRunAt: computeNextRunAt('verify-staging-sources', STAGING_VERIFY_TICK_MS) },
+    { name: 'reconcile-search-index',   enabled: globalEnabled && reconcileTimer != null,         intervalMs: RECONCILE_TICK_MS,       lastRunAt: lastRunAt['reconcile-search-index'],   nextRunAt: computeNextRunAt('reconcile-search-index', RECONCILE_TICK_MS) },
+    { name: 'pending-threshold-check',  enabled: globalEnabled && pendingThresholdTimer != null,  intervalMs: PENDING_THRESHOLD_TICK_MS, lastRunAt: lastRunAt['pending-threshold-check'], nextRunAt: computeNextRunAt('pending-threshold-check', PENDING_THRESHOLD_TICK_MS) },
+    { name: 'r2-quota-check',           enabled: globalEnabled && r2QuotaTimer != null,           intervalMs: R2_QUOTA_TICK_MS,        lastRunAt: lastRunAt['r2-quota-check'],           nextRunAt: computeNextRunAt('r2-quota-check', R2_QUOTA_TICK_MS) },
   ]
 }
 

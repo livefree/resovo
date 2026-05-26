@@ -6297,3 +6297,76 @@ Plan-Revision: 1 次（CW1-D timing 抖动暴露 CrawlerClient.test #13 pre-exis
 
 Cleanup-Audit: 1 ADR 章节 280 行追加 / 0 代码 / 0 schema / 0 新依赖
 Plan-Revision: 1 次（R-152-2 事实纠错：cron-parser BLOCKER 取消 / maintenanceScheduler 实证 setInterval 非 cron）
+
+---
+
+## CHG-SN-9-CW1-E-EP — Topbar 铃铛实施
+
+- **任务 ID**：CHG-SN-9-CW1-E-EP
+- **日期**：2026-05-25
+- **状态**：✅ 完成
+- **TASK-ID**：CHG-SN-9-CW1-E-EP
+- **关联 ADR**：ADR-152（已 Accepted / arch-reviewer Opus A− → 等同 A）
+- **模型**：claude-sonnet-4-6（主循环）
+
+### 变更摘要
+
+ADR-152 CW1-E-EP 全量实施：新 GET 端点 + BackgroundEventService 三源聚合 + SWR hook + BackgroundEventBell 组件 + admin shell 集成 + 12+12 单测。
+
+### 新增文件
+
+- `apps/api/src/db/migrations/074_crawler_runs_finished_at_idx.sql` — partial index idx_crawler_runs_finished_at WHERE finished_at IS NOT NULL
+- `apps/api/src/lib/crawler-scheduling.ts` — computeNextTrigger 从 crawler.ts 提取（G-152-1）
+- `apps/api/src/services/BackgroundEventService.ts` — 三源聚合：autoCrawlNext + schedulerTimer + active/finished crawler_runs + audit_log 高危
+- `apps/api/src/routes/admin/systemBackgroundEvents.ts` — GET /admin/system/background-events（R-MID-1 4 文件简化版范式）
+- `apps/server-next/src/lib/admin-shell-background-events.ts` — useAdminBackgroundEvents hook + globalMutateRegistry + invalidateBackgroundEvents
+- `apps/server-next/src/components/admin-shell/BackgroundEventBell.tsx` — 铃铛按钮 + Popover（position:fixed 不修改 admin-ui types）
+- `tests/unit/api/background-event-service.test.ts` — 12 case（vi.hoisted 全修复）
+- `tests/unit/components/server-next/admin/admin-shell/BackgroundEventBell.test.tsx` — 12 case
+
+### 修改文件
+
+- `apps/api/src/routes/admin/crawler.ts` — 使用 import { computeNextTrigger } from lib/（删本地重复定义）
+- `apps/api/src/db/queries/crawlerRuns.ts` — listRuns 加 finishedAfter?: string 谓词下推（R-152-3 / Y-152-1）
+- `apps/api/src/workers/maintenanceScheduler.ts` — 补 registeredAt + lastRunAt[] + nextRunAt 推算（R-152-2 intervalMs 算术）
+- `apps/api/src/server.ts` — 注册 adminSystemBackgroundEventsRoutes
+- `packages/types/src/admin-shell.types.ts` — BackgroundEvent 3 分支 discriminated union（Y-152-2）+ AdminBackgroundEventsResponse
+- `apps/server-next/src/app/admin/admin-shell-client.tsx` — Fragment + BackgroundEventBell 集成 + useAdminBackgroundEvents
+- `apps/server-next/src/app/admin/crawler/_client/CrawlerClient.tsx` — handleRunAllIncremental/Full 成功后 void invalidateBackgroundEvents()（Y-152-4）
+- `docs/decisions.md` — ADR-152 §端点契约 标题从 `### §端点契约` 修正为 `### 端点契约`（verify-endpoint-adr 解析兼容）
+
+### 关键约束点
+
+- **N1-152-A（position:fixed 方案）**：BackgroundEventBell 独立于 AdminShell TopbarIcons 5 槽，使用 position:fixed 叠加；不修改 packages/admin-ui types（避免强制 Opus arch-reviewer trailer）
+- **Y-152-4（mutate invalidate）**：CrawlerClient 写后调 invalidateBackgroundEvents() 破 max-age=30 race
+- **R-152-2（intervalMs 推算）**：maintenanceScheduler 无 cron-parser，nextRunAt = (lastRunAt ?? registeredAt) + intervalMs
+- **R-152-3（谓词下推）**：listRuns finishedAfter DB 层下推，不做 Service 层内存过滤
+- **Y-152-3（高危白名单）**：HIGH_RISK_AUDIT_WHITELIST = ['crawler.freeze']，与 NotificationBell 真互斥
+
+### 质量门禁
+
+- ✅ typecheck（8 workspace 全过）
+- ✅ lint（仅 pre-existing 警告，0 新增）
+- ✅ test（379 test files / 5012 tests 全通过）
+- ✅ verify:endpoint-adr（190 admin 路由全对齐 / 含 GET /admin/system/background-events）
+- ✅ verify:adr-contracts（D-152-1..5 闭环 / verify-error-message advisory 0 新增）
+
+### 六问自检 PASS
+
+1. 正确性：discriminated union 类型安全；computeNextTrigger 纯函数；listRuns finishedAfter DB 谓词；vi.hoisted 全修复
+2. 边界与复用：computeNextTrigger 提取 lib/；listRuns 谓词复用；globalMutateRegistry 无 prop drilling
+3. 可扩展性：3 lane union 易扩；HIGH_RISK_AUDIT_WHITELIST ReadonlySet 易扩；limit/windowHours 参数化
+4. 一致性：与 ADR-147 60s polling + meta.degraded + role 范式一致
+5. 改动收敛：满足 1-4 前提下最小范围（N1-152-A 省去 admin-ui 改动）
+6. 偏离：D-152-1..5 全 commit 闭环；`'timeout'` 从 listRuns status 数组移除（CrawlerRunStatus 枚举不含 timeout）
+
+### AI-CHECK 结论
+
+- ✅ PASS — ADR-152 全量实施 / 24 单测全过 / verify:adr-contracts PASS
+- 越界检测：CLEAN（无任务范围外修改）
+- 回归风险：低（computeNextTrigger 提取有原 crawler.ts 测试覆盖；listRuns finishedAfter 加法不改已有行为）
+
+- **执行模型**：claude-sonnet-4-6
+- **子代理调用**：无（ADR-152 已由 arch-reviewer Opus A− 评审通过，EP 卡不需重复）
+
+Cleanup-Audit: 8 新文件 + 8 文件改动 / 24 新单测 / 1 migration / 0 新依赖
