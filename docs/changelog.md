@@ -7990,3 +7990,106 @@ PATCH 文件数：6 改 + 2 删 + 2 测试 = 10 项（**ADR-155 §5 EP-2 明示"
 
 Cleanup-Audit: 6 源文件改 + 2 删源 + 2 测试文件（1 改 + 1 反回归）+ 1 docs（ADR-152 AMENDMENT）/ 8 新单测 + 改 0 case / 0 migration / 0 新依赖
 Plan-Revision: 0 次
+
+## [CHG-SN-9-CW1-CW2-REDESIGN-A-EP-3a] D-155-3 后端 Gantt 三段窗 + range 扩展 + JS clamp 双字段
+
+- **日期**：2026-05-26
+- **Sequence**：SEQ-20260526-CRAWLER-W3-FIX
+- **任务 ID**：CHG-SN-9-CW1-CW2-REDESIGN-A-EP-3a
+- **关联 ADR**：ADR-155 D-155-3（🟢 Accepted）+ ADR-122 §timeline 端点契约 AMENDMENT + ADR-153 §pending clamp + range 自治 AMENDMENT
+- **模型**：claude-opus-4-7（主循环延续；建议 sonnet）
+- **拆分理由**：原 EP-3 范围 4 源 + 2 测试 = 6 项超 PATCH ≤ 5。本卡仅做后端 SQL + range + JS clamp；前端 now-line + 拖拽 pan 拆到 EP-3b。
+
+### 改动摘要
+
+ADR-155 D-155-3 后端实施：Gantt 时间窗从单段 `[NOW-range, NOW]` 升级为三段窗 `[NOW-range×0.7, NOW+range×0.3]`；range 选项从 4 扩为 7（加 12h/24h/7d 长历史回看）；移除 D-153-4 GREATEST 钳值 + JS 层 R-155-2 双字段语义 clamp（durationSeconds 真实 / startPct/widthPct 可视化）。
+
+- **Step 1**（`apps/api/src/db/queries/crawlerTimeline.ts`）：
+  - `CrawlerTimelineRange` 类型扩 7 选项：`'30m' | '1h' | '2h' | '6h' | '12h' | '24h' | '7d'`
+  - `RANGE_TO_MS` 加 12h / 24h / 7d
+  - 删除 `RANGE_TO_INTERVAL` 静态映射；改为动态 `Math.round(rangeMs × 0.7 / 1000) seconds`（SQL interval 精确取可视窗口左半部分数据 / 避免取多余过去数据）
+  - 三段窗：`historyMs = rangeMs × 0.7` + `futureMs = rangeMs × 0.3`；`rangeStart = NOW - historyMs` / `rangeEnd = NOW + futureMs`
+  - 命名常量 `HISTORY_RATIO = 0.7` + `FUTURE_RATIO = 0.3`
+  - **SQL 移除 GREATEST 钳值**（line 140）：`GREATEST(COALESCE(rt.started_at, rt.scheduled_at), NOW()-interval) AS started_at` → `COALESCE(rt.started_at, rt.scheduled_at) AS started_at`（保留 pending bar scheduled_at 真实值）
+  - **R-155-2 JS 双字段 clamp**（`rowToTimelineRow`）：
+    - `durationSeconds = Math.round((realEnd - realStart) / 1000)` — 真实业务值（hover tooltip）
+    - `visStart = Math.max(realStart, rangeStartMs)` / `visEnd = Math.min(realEnd, rangeEndMs)` — 可视化 clamp
+    - `startPct / widthPct` 基于 visStart/visEnd 计算（SVG bar 不溢出窗口）
+  - 第 1 参数 `_rangeStart: Date` 改 underscore（保留签名兼容，rowToTimelineRow 内部不再用 Date 对象）
+
+- **Step 2**（`apps/api/src/routes/admin/crawlerDashboard.ts:30`）：
+  - timeline route zod `range: z.enum(['30m','1h','2h','6h','12h','24h','7d']).default('1h')`
+
+- **Step 3（单测扩展）**（`tests/unit/api/crawlerTimeline.test.ts`）：扩 5 case（22 → 25 → 30 全过 / 含 EP-3a #1-5）：
+  - #EP-3a-1 三段窗 70/30 切分：`rangeStart < NOW` + `rangeEnd > NOW` + 历史:总长 ≈ 0.7
+  - #EP-3a-2 range 12h/24h/7d 接受 + 各自 rangeMs 正确（容忍 5s rounding）
+  - #EP-3a-3 SQL 不再含 GREATEST 钳值 + 改为 `COALESCE(rt.started_at, rt.scheduled_at) AS started_at`
+  - #EP-3a-4 双字段语义：pending task scheduled_at 3 天前 → `durationSeconds` ≈ 259200s 真实值 + `startPct=0` / `widthPct>0.6` 可视化裁剪
+  - #EP-3a-5 窗口内 done task：duration=20min / startPct≈0.2 / widthPct≈0.333（容忍 ms 漂移）
+
+- **Step 3.5（crawler-dashboard-audit.test 适配）**（`tests/unit/api/crawler-dashboard-audit.test.ts`）：
+  - 旧 "range=12h → 422" case 改为 "1y → 422 + 12h/24h/7d 接受"
+  - 旧 "limit > 20 → 422" 改为 "limit > 50 → 422"（EP-1B1 上限提升后）
+
+- **Step 4（AMENDMENT 落盘）**：
+  - ADR-122 §AMENDMENT 2026-05-26：三段窗策略 + range 扩展 + SQL interval 动态生成
+  - ADR-153 §AMENDMENT 2026-05-26：D-153-4 GREATEST 移除 + R-155-2 JS 双字段语义
+
+### 新增/修改文件
+
+- `apps/api/src/db/queries/crawlerTimeline.ts`（Step 1）
+- `apps/api/src/routes/admin/crawlerDashboard.ts`（Step 2 zod enum）
+- `tests/unit/api/crawlerTimeline.test.ts`（Step 3 扩 5 case）
+- `tests/unit/api/crawler-dashboard-audit.test.ts`（Step 3.5 适配 zod 改动）
+- `docs/decisions.md`（Step 4 ADR-122 + ADR-153 双 AMENDMENT；不计 PATCH）
+
+PATCH 文件数：2 源 + 2 测试 = 4 项（≤ 5 硬约束 ✅）
+
+### 偏离记录
+
+无新 D-N 偏离（D-155-3 已 ADR-155 Accepted）；ADR-122 + ADR-153 双 AMENDMENT 同 commit 落盘。
+
+### 质量门禁
+
+- ✅ typecheck PASS（8 workspace）
+- ✅ lint PASS（4 pre-existing 警告，0 新增）
+- ✅ test 5136/5136 PASS（本卡新 5 case + 改 2 case + crawler-dashboard-audit 19/19 + crawlerTimeline 25/25）
+- ✅ verify:adr-contracts PASS（207 D-N 闭环）
+
+### 六问自检 PASS
+
+1. **正确性**：三段窗 70/30 切分数学正确（容忍 5s rounding）；双字段语义 durationSeconds 真实 + startPct/widthPct 可视化两套独立计算；SQL 移除 GREATEST 不破坏 pending bar 真位（test #4 验证 3 天前 task 仍真实）；rounding 边界（容忍 5s）
+2. **边界与复用**：动态 SQL interval 生成（替代 4 项静态 RANGE_TO_INTERVAL）；HISTORY_RATIO / FUTURE_RATIO 命名常量可调；rowToTimelineRow 签名兼容旧调用方
+3. **可扩展性**：CrawlerTimelineRange 易扩第 8/9 选项（如 30d）；HISTORY_RATIO 可未来反转（如 50/50）；双字段语义模式适用其它"业务真实 vs 可视裁剪"场景
+4. **一致性**：与 ADR-153 D-153-5 UTC ISO 时间字符串规范一致；与 HOTFIX-A Step 2 WHERE `COALESCE(finished_at, NOW())` 范式一致
+5. **改动收敛**：2 源 + 2 测试 = 4 项（PATCH ≤ 5 ✅）；crawler-dashboard-audit.test 适配是 zod 改动副作用必要修复
+6. **偏离检测**：无新 D-N（D-155-3 已 ADR-155 Accepted）
+
+### AI-CHECK 结论
+
+- ✅ **PASS** — 4 个 Step 完整闭环 / 5 新单测 + 2 改 case 全过 / 全栈门禁通过 / ADR-122 + ADR-153 双 AMENDMENT 落盘
+- **越界检测**：CLEAN（2 源 + 2 测试严格在 EP-3a 文件范围内）
+- **回归风险**：低
+  - durationSeconds 业务字段语义不变（hover tooltip 仍显示真实持续时长）
+  - startPct/widthPct 数学与旧实现等价（旧用 clampedStart / 新用 visStart - rangeStartMs；旧调用方 SVG 渲染无差异）
+  - SQL interval 改动量等价（旧 '1 hour' = 3600s 新 Math.round(3600×0.7)=2520s / 取数据范围按可视窗口）
+  - range 扩展是后端 zod max 放宽（前端旧调用方 30m/1h/2h/6h 仍接受）
+
+### 未覆盖（→ EP-3b）
+
+- **用户实测验证**（@livefree / ADR-155 §8 验收第 4 条）：本卡纯后端，UI 改动在 EP-3b；后端单测已守护数学正确性
+- 前端 CrawlerTimelineCard now-line / 拖拽 pan / 防抖 300ms / viewport buffer / 30d 封顶 / pending 虚线 → EP-3b
+- 前端 lib `crawler/api.ts` CrawlerTimelineRange 类型同步 → EP-3b
+
+### 关键约束消化
+
+- **R-155-2 双字段语义**：durationSeconds 真实 vs startPct/widthPct 可视化，clamp 路径在 JS 层而非 SQL 层（ADR-153 D-153-4 撤销）
+- **ADR-122 + ADR-153 双 AMENDMENT 同 commit 落盘**（ADR-155 §8 验收第 2 条）
+- **PATCH ≤ 5 项**：2 源 + 2 测试 = 4 项 ✅
+- **range 扩展前后端协调**：本卡仅后端 zod 接受 7 选项；前端 select 仍 4 选项（EP-3b 才扩 UI / 兼容窗口期）
+
+- **执行模型**：claude-opus-4-7（主循环延续；建议 sonnet）
+- **子代理调用**：无（D-155-3 已 ADR-155 Accepted；后端实施不触发"共享组件 API 契约强制 Opus"）
+
+Cleanup-Audit: 2 源文件改 + 2 测试文件（1 扩 5 case + 1 改 2 case）+ 1 docs（ADR-122 + ADR-153 双 AMENDMENT）/ 5 新单测 + 改 2 case / 0 migration / 0 新依赖
+Plan-Revision: 1 次（ADR-155 §5 EP-3 拆为 EP-3a + EP-3b 满足 PATCH ≤ 5 项硬约束）

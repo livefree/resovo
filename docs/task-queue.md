@@ -1302,7 +1302,9 @@ B 序列 + C 序列可与 A 并行（A 无依赖）；B 与 C 之间无依赖（
    - 估时：0.3w
    - **commit trailer 必填**：`Subagents: arch-reviewer (claude-opus-4-7)`（CLAUDE.md ❌ 共享组件 API 契约强制 Opus）
 
-7. **CHG-SN-9-CW1-CW2-REDESIGN-A-EP-3** — D-155-3 实施（CW2-B Gantt 三段窗 + now-line + pending 真位）
+7. **CHG-SN-9-CW1-CW2-REDESIGN-A-EP-3 拆为 EP-3a + EP-3b**（满足 PATCH ≤ 5 项硬约束 / plan-revision）：
+   - **EP-3a（后端 Gantt 三段窗 + range 扩展 + JS clamp 双字段）🟡 代码已落地** / 2 源 + 2 测试 = 4 项 ✅ / 5136 PASS / ADR-122 + ADR-153 双 AMENDMENT 已落盘 / 待 @livefree 实测（本卡纯后端）
+   - **EP-3b（前端 CrawlerTimelineCard now-line + 拖拽 pan + range 4→7 + pending 虚线）⬜ 待启动**
    - 状态：⬜
    - 创建时间：2026-05-26 02:00
    - 建议模型：sonnet

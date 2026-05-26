@@ -27,7 +27,8 @@ import { CrawlerRunService } from '@/api/services/CrawlerRunService'
 import { AuditLogService } from '@/api/services/AuditLogService'
 
 const TimelineQuerySchema = z.object({
-  range: z.enum(['30m', '1h', '2h', '6h']).default('1h'),
+  // ADR-155 D-155-3 / EP-3a：range 选项扩展 4 → 7（加 12h / 24h / 7d 长历史回看）
+  range: z.enum(['30m', '1h', '2h', '6h', '12h', '24h', '7d']).default('1h'),
   // ADR-155 D-155-4：限制上限 20→50（前端 UI limit select 提供 8/20/全部 三档，"全部" = 50）
   limit: z.coerce.number().int().min(1).max(50).default(8),
 })

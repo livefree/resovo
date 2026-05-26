@@ -19,7 +19,8 @@
 
 import type { Pool } from 'pg'
 
-export type CrawlerTimelineRange = '30m' | '1h' | '2h' | '6h'
+// ADR-155 D-155-3 / EP-3a：range 选项扩展 4 → 7
+export type CrawlerTimelineRange = '30m' | '1h' | '2h' | '6h' | '12h' | '24h' | '7d'
 
 export interface CrawlerTimelineRow {
   readonly siteKey: string
@@ -52,19 +53,20 @@ interface TimelineRawRow {
   health: string
 }
 
-const RANGE_TO_INTERVAL: Record<CrawlerTimelineRange, string> = {
-  '30m': '30 minutes',
-  '1h':  '1 hour',
-  '2h':  '2 hours',
-  '6h':  '6 hours',
-}
-
+// ADR-155 D-155-3 / EP-3a：range 扩展到 7 选项
 const RANGE_TO_MS: Record<CrawlerTimelineRange, number> = {
   '30m': 30 * 60_000,
   '1h':  60 * 60_000,
   '2h':  2 * 60 * 60_000,
   '6h':  6 * 60 * 60_000,
+  '12h': 12 * 60 * 60_000,
+  '24h': 24 * 60 * 60_000,
+  '7d':  7 * 24 * 60 * 60_000,
 }
+
+// ADR-155 D-155-3 / EP-3a：三段窗历史:未来 = 70:30 比例
+const HISTORY_RATIO = 0.7
+const FUTURE_RATIO = 0.3
 
 /** D-153-1：每站最多显示的 lane 数（N=3） */
 const LANE_LIMIT = 3
@@ -137,7 +139,9 @@ SELECT
   rt.source_site,
   rt.site_name,
   rt.scheduled_at,
-  GREATEST(COALESCE(rt.started_at, rt.scheduled_at), NOW() - $1::interval) AS started_at,
+  -- ADR-155 D-155-3 / EP-3a R-155-2：移除 D-153-4 GREATEST 钳值；保留 started_at 真实值
+  -- JS 层 rowToTimelineRow 做双字段 clamp（durationSeconds 真实 + startPct/widthPct 可视化）
+  COALESCE(rt.started_at, rt.scheduled_at) AS started_at,
   COALESCE(rt.finished_at, NOW()) AS effective_end,
   rt.status,
   rt.result,
@@ -166,32 +170,47 @@ function computeTicks(rangeStart: Date, rangeEnd: Date, count = 6): string[] {
   return Array.from({ length: count }, (_, i) => new Date(rangeStart.getTime() + step * i).toISOString())
 }
 
+/**
+ * ADR-155 D-155-3 / EP-3a R-155-2 双字段语义：
+ *
+ * - `durationSeconds`（业务字段 / hover tooltip 显示）= **真实 task 持续时长**
+ *   `(realEnd - realStart) / 1000`，与窗口位置无关。即使 task 实际跨越窗口 3 倍，
+ *   tooltip 仍显示真实 "已运行 3 天" 等。
+ *
+ * - `startPct / widthPct`（可视化字段 / SVG 渲染位置）= **viewport 二次 clamp**：
+ *   `visStart = max(realStart, rangeStartMs)` + `visEnd = min(realEnd, rangeEndMs)`
+ *   保证 SVG bar 不溢出窗口；超出窗口的部分由 JS 层裁剪而非 SQL（D-153-4 GREATEST 已移除）。
+ */
 function rowToTimelineRow(
   row: TimelineRawRow,
-  rangeStart: Date,
+  _rangeStart: Date,  // 保留签名兼容（旧调用方）
   rangeEndMs: number,
   rangeStartMs: number,
 ): CrawlerTimelineRow {
-  const startMs = row.started_at.getTime()
-  const endMs = row.effective_end.getTime()
+  // 真实业务值（pending bar 的 scheduled_at 可能远早于窗口左侧）
+  const realStart = row.started_at.getTime()
+  const realEnd = row.effective_end.getTime()
+  const durationSeconds = Math.round((realEnd - realStart) / 1000)
+
+  // 可视化 clamp（JS 层 viewport 二次 clamp，替代 D-153-4 SQL GREATEST）
+  const visStart = Math.max(realStart, rangeStartMs)
+  const visEnd = Math.min(realEnd, rangeEndMs)
   const span = rangeEndMs - rangeStartMs
-  const clampedStart = Math.max(0, Math.min(1, (startMs - rangeStartMs) / span))
-  const clampedWidth = Math.max(0.01, Math.min(1 - clampedStart, (endMs - startMs) / span))
+  const startPct = Math.max(0, Math.min(1, (visStart - rangeStartMs) / span))
+  const widthPct = Math.max(0.01, Math.min(1 - startPct, (visEnd - visStart) / span))
 
   const videoCountRaw = row.result?.videosUpserted
   const videoCount = typeof videoCountRaw === 'number' ? videoCountRaw
     : typeof videoCountRaw === 'string' && /^[0-9]+$/.test(videoCountRaw) ? Number(videoCountRaw)
       : 0
 
-  const durationMs = endMs - startMs
-
   return {
     siteKey: row.source_site,
     siteName: row.site_name,
     health: Number(row.health),
-    startPct: clampedStart,
-    widthPct: clampedWidth,
-    durationSeconds: Math.round(durationMs / 1000),
+    startPct,
+    widthPct,
+    durationSeconds,
     videoCount,
     status: statusToCategory(row.status),
     last: row.effective_end.toISOString(),
@@ -203,16 +222,25 @@ export async function getCrawlerTimeline(
   range: CrawlerTimelineRange = '1h',
   limit = 8,
 ): Promise<CrawlerTimelineResponse> {
-  const interval = RANGE_TO_INTERVAL[range]
   const rangeMs = RANGE_TO_MS[range]
+  // ADR-155 D-155-3 / EP-3a：三段窗 [NOW - rangeMs×0.7, NOW + rangeMs×0.3]
+  // - 历史段 70%：已发生 task 占主要可视空间
+  // - 未来段 30%：留 buffer 给即将触发的 pending / scheduler nextRun（now-line 居中偏右 70%）
+  const historyMs = Math.round(rangeMs * HISTORY_RATIO)
+  const futureMs = Math.round(rangeMs * FUTURE_RATIO)
+  // SQL interval = historyMs / 1000 秒（精确取可视窗口左半部分数据，避免取多余的过去数据）
+  const intervalSeconds = Math.round(historyMs / 1000)
+  const interval = `${intervalSeconds} seconds`
+
   // ADR-155 D-155-4：safeLimit 上限 20→50（站数上限解锁），单 SQL 查询每站最多 LANE_LIMIT=3 task
   // = 最多 150 bar / 窗口；前端 UI 提供 8/20/全部 三档选择器，"全部" = 50 上限
   const safeLimit = Math.max(1, Math.min(50, Math.trunc(limit)))
 
   const result = await db.query<TimelineRawRow>(TIMELINE_SQL_V2, [interval, safeLimit, LANE_LIMIT])
 
-  const rangeEnd = new Date()
-  const rangeStart = new Date(rangeEnd.getTime() - rangeMs)
+  const now = new Date()
+  const rangeStart = new Date(now.getTime() - historyMs)
+  const rangeEnd = new Date(now.getTime() + futureMs)
   const rangeStartMs = rangeStart.getTime()
   const rangeEndMs = rangeEnd.getTime()
 

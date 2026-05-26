@@ -287,4 +287,114 @@ describe('crawlerTimeline.getCrawlerTimeline', () => {
     const [, params] = mockQuery.mock.calls[0] as [string, unknown[]]
     expect(params[1]).toBe(20)
   })
+
+  // ── ADR-155 D-155-3 / EP-3a：Gantt 三段窗 + range 扩展 + JS clamp 双字段 ──
+  it('EP-3a #1 三段窗：rangeEnd > NOW + rangeStart < NOW（70/30 切分）', async () => {
+    const { getCrawlerTimeline } = await import('@/api/db/queries/crawlerTimeline')
+    mockQuery.mockResolvedValueOnce({ rows: [] })
+
+    const before = Date.now()
+    const result = await getCrawlerTimeline(mockDb as never, '1h')
+    const after = Date.now()
+
+    const rangeStart = new Date(result.rangeStart).getTime()
+    const rangeEnd = new Date(result.rangeEnd).getTime()
+
+    // 1h = 3_600_000ms → history 2_520_000ms (0.7×) / future 1_080_000ms (0.3×)
+    // NOW 应在 rangeStart 与 rangeEnd 之间，且更接近 rangeEnd
+    expect(rangeStart).toBeLessThan(before)  // rangeStart 远早于 NOW
+    expect(rangeEnd).toBeGreaterThan(after)  // rangeEnd 远晚于 NOW（30% future buffer）
+    // 历史:未来比例约 70:30
+    const total = rangeEnd - rangeStart
+    const historyDuration = before - rangeStart
+    const ratio = historyDuration / total
+    expect(ratio).toBeGreaterThanOrEqual(0.69)
+    expect(ratio).toBeLessThanOrEqual(0.71)
+  })
+
+  it('EP-3a #2 range 12h/24h/7d 接受 + rangeMs 正确', async () => {
+    const { getCrawlerTimeline } = await import('@/api/db/queries/crawlerTimeline')
+
+    for (const r of ['12h', '24h', '7d'] as const) {
+      mockQuery.mockResolvedValueOnce({ rows: [] })
+      const result = await getCrawlerTimeline(mockDb as never, r)
+      const span = new Date(result.rangeEnd).getTime() - new Date(result.rangeStart).getTime()
+      const expectedMs = r === '12h' ? 12 * 60 * 60_000
+        : r === '24h' ? 24 * 60 * 60_000
+        : 7 * 24 * 60 * 60_000
+      expect(Math.abs(span - expectedMs)).toBeLessThan(5_000)  // 容忍 5s rounding（intervalSeconds Math.round）
+    }
+  })
+
+  it('EP-3a #3 R-155-2 移除 GREATEST：SQL 不再含 GREATEST(COALESCE(', async () => {
+    const { getCrawlerTimeline } = await import('@/api/db/queries/crawlerTimeline')
+    mockQuery.mockResolvedValueOnce({ rows: [] })
+    await getCrawlerTimeline(mockDb as never, '1h')
+    const [sql] = mockQuery.mock.calls[0] as [string]
+    // D-153-4 的 GREATEST 钳值已移除
+    expect(sql).not.toMatch(/GREATEST\(COALESCE\(rt\.started_at/)
+    // 改为直接 COALESCE 保留 started_at 真实值
+    expect(sql).toMatch(/COALESCE\(rt\.started_at, rt\.scheduled_at\) AS started_at/)
+  })
+
+  it('EP-3a #4 R-155-2 双字段语义：durationSeconds 真实业务值（远超窗口时仍真实）', async () => {
+    const { getCrawlerTimeline } = await import('@/api/db/queries/crawlerTimeline')
+    // 构造 task：scheduled 3 天前，pending 状态（finished_at=NOW）→ duration ~3 天
+    // 1h 窗口内 startPct 应 clamp 到 0，widthPct 应 clamp 到 1
+    const now = Date.now()
+    const threeDaysAgo = new Date(now - 3 * 24 * 60 * 60_000)
+    mockQuery.mockResolvedValueOnce({
+      rows: [{
+        source_site: 'site-a',
+        site_name: 'Site A',
+        scheduled_at: threeDaysAgo,
+        started_at: threeDaysAgo,  // pending 起点 = scheduled_at（移除 GREATEST 后真实值）
+        effective_end: new Date(now),  // pending → COALESCE(finished_at, NOW)
+        status: 'pending',
+        result: null,
+        health: '80',
+      }],
+    })
+
+    const result = await getCrawlerTimeline(mockDb as never, '1h')
+    const row = result.rows[0]
+    // durationSeconds 是真实业务值（~3 天 = 259200s）
+    expect(row.durationSeconds).toBeGreaterThan(3 * 24 * 60 * 60 - 60)  // 容忍 60s 时间漂
+    expect(row.durationSeconds).toBeLessThan(3 * 24 * 60 * 60 + 60)
+    // startPct/widthPct 可视化 clamp 到窗口可见部分
+    expect(row.startPct).toBe(0)  // realStart 远早于 rangeStart → visStart=rangeStart → startPct=0
+    expect(row.widthPct).toBeGreaterThan(0.6)  // 跨大部分窗口（70% 历史 + 30% 未来都覆盖）
+  })
+
+  it('EP-3a #5 R-155-2 双字段：窗口内正常 task → startPct/widthPct 与 durationSeconds 都正确', async () => {
+    const { getCrawlerTimeline } = await import('@/api/db/queries/crawlerTimeline')
+    // 构造 task：30 分钟前开始 + 10 分钟前结束 → 真实 duration=20min；
+    // 1h 窗口（rangeStart=NOW-42min, rangeEnd=NOW+18min, span=60min）；
+    // visStart=NOW-30min, visEnd=NOW-10min, startPct=(NOW-30min - (NOW-42min))/60min = 12/60 = 0.2
+    // widthPct = 20/60 = 0.333
+    const now = Date.now()
+    mockQuery.mockResolvedValueOnce({
+      rows: [{
+        source_site: 'site-b',
+        site_name: 'Site B',
+        scheduled_at: new Date(now - 30 * 60_000),
+        started_at: new Date(now - 30 * 60_000),
+        effective_end: new Date(now - 10 * 60_000),
+        status: 'done',
+        result: null,
+        health: '90',
+      }],
+    })
+
+    const result = await getCrawlerTimeline(mockDb as never, '1h')
+    const row = result.rows[0]
+    // durationSeconds = 20 分钟 = 1200s
+    expect(row.durationSeconds).toBeGreaterThan(1200 - 5)
+    expect(row.durationSeconds).toBeLessThan(1200 + 5)
+    // startPct ≈ 0.2，widthPct ≈ 0.333（容忍 ms 漂移）
+    expect(row.startPct).toBeGreaterThan(0.18)
+    expect(row.startPct).toBeLessThan(0.22)
+    expect(row.widthPct).toBeGreaterThan(0.31)
+    expect(row.widthPct).toBeLessThan(0.36)
+  })
 })

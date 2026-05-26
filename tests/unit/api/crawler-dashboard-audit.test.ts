@@ -166,17 +166,31 @@ describe('GET /admin/crawler/timeline', () => {
     expect(mockGetCrawlerTimeline).toHaveBeenCalledWith(expect.anything(), '30m', 20)
   })
 
-  it('range=invalid → 422', async () => {
+  it('range=invalid → 422（ADR-155 D-155-3 EP-3a 后 range 含 12h/24h/7d，用真正无效值如 1y）', async () => {
     const res = await app.inject({
       method: 'GET',
-      url: '/v1/admin/crawler/timeline?range=12h',
+      url: '/v1/admin/crawler/timeline?range=1y',
       headers: { authorization: await tokenFor('admin') },
     })
     expect(res.statusCode).toBe(422)
     expect(mockGetCrawlerTimeline).not.toHaveBeenCalled()
   })
 
-  it('limit > 20 → 422', async () => {
+  it('range=12h / 24h / 7d 接受 → 200（ADR-155 D-155-3 EP-3a 长历史回看）', async () => {
+    for (const r of ['12h', '24h', '7d']) {
+      mockGetCrawlerTimeline.mockResolvedValueOnce({
+        rangeStart: 'x', rangeEnd: 'y', ticks: [], rows: [],
+      })
+      const res = await app.inject({
+        method: 'GET',
+        url: `/v1/admin/crawler/timeline?range=${r}`,
+        headers: { authorization: await tokenFor('admin') },
+      })
+      expect(res.statusCode).toBe(200)
+    }
+  })
+
+  it('limit > 50 → 422（ADR-155 D-155-4 EP-1B1 后 max 改为 50）', async () => {
     const res = await app.inject({
       method: 'GET',
       url: '/v1/admin/crawler/timeline?limit=100',
