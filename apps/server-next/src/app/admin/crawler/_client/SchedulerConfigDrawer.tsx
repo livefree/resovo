@@ -30,6 +30,7 @@ import {
   type AutoCrawlConfig,
   type AutoCrawlMode,
   type AutoCrawlConflictPolicy,
+  type AutoCrawlScheduleType,
   type AutoCrawlSiteOverride,
   type CrawlerSite,
 } from '@/lib/crawler/api'
@@ -106,6 +107,11 @@ const OVERRIDE_EMPTY_STYLE: CSSProperties = {
   color: 'var(--fg-muted)',
   padding: '8px 2px',
 }
+
+const SCHEDULE_TYPE_OPTIONS: readonly AdminSelectOption[] = [
+  { value: 'daily',    label: '每日定时' },
+  { value: 'interval', label: '间隔触发' },
+]
 
 const MODE_OPTIONS: readonly AdminSelectOption[] = [
   { value: 'incremental', label: '增量' },
@@ -194,7 +200,10 @@ export function SchedulerConfigDrawer({ open, onClose, onSaved }: SchedulerConfi
     setSaving(true)
     try {
       await setAutoCrawlConfig(config)
-      toast.push({ title: '调度配置已更新', description: `定时 ${config.dailyTime} · 模式 ${config.defaultMode}`, level: 'success' })
+      const schedDesc = config.scheduleType === 'interval'
+        ? `每 ${config.intervalMinutes} 分钟`
+        : `每日 ${config.dailyTime}`
+      toast.push({ title: '调度配置已更新', description: `${schedDesc} · 模式 ${config.defaultMode}`, level: 'success' })
       onSaved?.()
       onClose()
     } catch (err: unknown) {
@@ -240,17 +249,53 @@ export function SchedulerConfigDrawer({ open, onClose, onSaved }: SchedulerConfi
             <span style={{ fontSize: 'var(--font-size-sm)' }}>全局开启自动调度</span>
           </div>
 
+          {/* ADR-154 D-154-1：scheduleType 两态选择 */}
           <div style={FIELD_STYLE}>
-            <span style={LABEL_STYLE}>每日触发时间（HH:MM）</span>
-            <AdminInput
-              value={config.dailyTime}
-              onChange={(e) => updateField('dailyTime', e.target.value)}
-              placeholder="HH:MM"
-              pattern="^\d{2}:\d{2}$"
-              data-testid="scheduler-dailyTime"
-              aria-label="每日触发时间"
+            <span style={LABEL_STYLE}>触发模式</span>
+            <AdminSelect
+              options={SCHEDULE_TYPE_OPTIONS}
+              value={config.scheduleType}
+              onChange={(v) => updateField('scheduleType', (v ?? 'daily') as AutoCrawlScheduleType)}
+              data-testid="scheduler-scheduleType"
+              aria-label="触发模式"
             />
           </div>
+
+          {/* ADR-154 D-154-1：daily → 每日时间；interval → 间隔分钟 */}
+          {config.scheduleType === 'daily' && (
+            <div style={FIELD_STYLE}>
+              <span style={LABEL_STYLE}>每日触发时间（HH:MM）</span>
+              <AdminInput
+                value={config.dailyTime}
+                onChange={(e) => updateField('dailyTime', e.target.value)}
+                placeholder="HH:MM"
+                pattern="^\d{2}:\d{2}$"
+                data-testid="scheduler-dailyTime"
+                aria-label="每日触发时间"
+              />
+            </div>
+          )}
+
+          {config.scheduleType === 'interval' && (
+            <div style={FIELD_STYLE}>
+              <span style={LABEL_STYLE}>触发间隔（分钟，5–1440）</span>
+              <AdminInput
+                type="number"
+                value={String(config.intervalMinutes)}
+                onChange={(e) => {
+                  const n = Number(e.target.value)
+                  if (Number.isFinite(n)) {
+                    updateField('intervalMinutes', Math.max(5, Math.min(1440, n)))
+                  }
+                }}
+                placeholder="60"
+                min={5}
+                max={1440}
+                data-testid="scheduler-intervalMinutes"
+                aria-label="触发间隔（分钟）"
+              />
+            </div>
+          )}
 
           <div style={FIELD_STYLE}>
             <span style={LABEL_STYLE}>默认采集模式</span>

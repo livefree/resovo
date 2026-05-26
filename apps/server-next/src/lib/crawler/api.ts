@@ -124,6 +124,8 @@ export async function setCrawlerFreeze(enabled: boolean): Promise<CrawlerSystemS
 
 export type AutoCrawlMode = 'incremental' | 'full'
 export type AutoCrawlConflictPolicy = 'skip_running' | 'queue_after_running'
+// ADR-154 D-154-1：scheduleType 两态
+export type AutoCrawlScheduleType = 'daily' | 'interval'
 
 export interface AutoCrawlSiteOverride {
   readonly enabled: boolean
@@ -132,7 +134,8 @@ export interface AutoCrawlSiteOverride {
 
 export interface AutoCrawlConfig {
   readonly globalEnabled: boolean
-  readonly scheduleType: 'daily'
+  readonly scheduleType: AutoCrawlScheduleType  // ADR-154 D-154-1
+  readonly intervalMinutes: number               // ADR-154 D-154-1（min=5，max=1440）
   readonly dailyTime: string
   readonly defaultMode: AutoCrawlMode
   readonly onlyEnabledSites: boolean

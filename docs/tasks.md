@@ -12,4 +12,4 @@
 
 ## 下次会话恢复入口
 
-（见 task-queue.md SEQ-20260525-CRAWLER-W2）
+（见 task-queue.md SEQ-20260525-CRAWLER-W2 — 已全部完成）

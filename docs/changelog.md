@@ -6589,3 +6589,44 @@ ADR-154 §5 后端落地（D-154-1 / D-154-5）：
 
 - **执行模型**：claude-sonnet-4-6
 - **子代理调用**：arch-reviewer (claude-opus-4-7)（CW2-C-ADR 阶段）
+
+## [CHG-SN-9-CW2-C-EP-B] Fix-D5 前端 UI（SchedulerConfigDrawer）
+
+- **日期**：2026-05-26
+- **Sequence**：SEQ-20260525-CRAWLER-W2
+- **任务 ID**：CHG-SN-9-CW2-C-EP-B
+
+### 改动摘要
+
+ADR-154 D-154-6 前端落地：
+
+- **api.ts 类型同步**：`AutoCrawlScheduleType = 'daily' | 'interval'`、`AutoCrawlConfig.scheduleType` 升为 `AutoCrawlScheduleType`、新增 `intervalMinutes: number`
+- **SchedulerConfigDrawer.tsx**：
+  - 新增 `SCHEDULE_TYPE_OPTIONS`（每日定时 / 间隔触发）
+  - scheduleType `AdminSelect` 字段（在 globalEnabled 下方）
+  - 条件渲染：`scheduleType === 'daily'` → `dailyTime` 输入；`scheduleType === 'interval'` → `intervalMinutes` 数字输入（min=5, max=1440，即时钳值）
+  - toast description 按 scheduleType 动态描述（`每日 HH:MM` / `每 N 分钟`）
+- **SchedulerConfigDrawer.test.tsx**：
+  - CONFIG 补录 `intervalMinutes: 60`，新增 `CONFIG_INTERVAL`（scheduleType=interval, intervalMinutes=30）
+  - 测试 #12：scheduleType=interval → intervalMinutes 显示 / dailyTime 隐藏
+  - 测试 #13：scheduleType=interval 提交 → intervalMinutes 包含在 payload
+  - 全部 13 测试通过
+
+### 偏离记录
+
+- D-154-6=A 落地（AdminSelect + 条件渲染，已 ADR Accepted）
+
+### 质量门禁
+
+- ✅ typecheck 通过
+- ✅ 13 单测全部通过（SchedulerConfigDrawer.test.tsx）
+- ✅ lint 通过
+
+### 新增/修改文件
+
+- `apps/server-next/src/lib/crawler/api.ts`（修改）
+- `apps/server-next/src/app/admin/crawler/_client/SchedulerConfigDrawer.tsx`（修改）
+- `tests/unit/components/server-next/admin/crawler/SchedulerConfigDrawer.test.tsx`（修改）
+
+- **执行模型**：claude-sonnet-4-6
+- **子代理调用**：无

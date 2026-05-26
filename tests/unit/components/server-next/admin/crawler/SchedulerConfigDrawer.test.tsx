@@ -1,18 +1,20 @@
 /**
  * SchedulerConfigDrawer.test.tsx — 调度配置 Drawer 单测（CHG-SN-6-27 / CHG-SN-7-MISC-PERSITE）
  *
- * 覆盖（≥ 11）：
+ * 覆盖（≥ 13）：
  *   1. 关闭时 → 不调 API
  *   2. 打开时 → 调 getAutoCrawlConfig
  *   3. 加载中 → LoadingState
  *   4. 加载失败 → ErrorState
- *   5. 6 字段渲染（globalEnabled / dailyTime / defaultMode / onlyEnabledSites / conflictPolicy）
+ *   5. 字段渲染（globalEnabled / scheduleType / dailyTime / defaultMode / onlyEnabledSites / conflictPolicy）
  *   6. 提交成功 → setAutoCrawlConfig 调用 + onSaved + onClose
  *   7. 提交失败 → toast danger
  *   8. 取消按钮 → onClose（未提交）
  *   9. perSiteOverrides 空 → 空提示渲染
  *  10. perSiteOverrides 有条目 → 覆盖行渲染
  *  11. 移除覆盖 → 行消失 + 提交时 perSiteOverrides 不含该站点
+ *  12. ADR-154 D-154-6：scheduleType=interval → intervalMinutes 显示 / dailyTime 隐藏
+ *  13. ADR-154 D-154-6：scheduleType=interval 提交 → intervalMinutes 包含在 payload
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
@@ -48,11 +50,18 @@ import { SchedulerConfigDrawer } from '@/app/admin/crawler/_client/SchedulerConf
 const CONFIG = {
   globalEnabled: true,
   scheduleType: 'daily' as const,
+  intervalMinutes: 60,              // ADR-154 D-154-1
   dailyTime: '03:30',
   defaultMode: 'incremental' as const,
   onlyEnabledSites: false,
   conflictPolicy: 'skip_running' as const,
   perSiteOverrides: {},
+}
+
+const CONFIG_INTERVAL = {
+  ...CONFIG,
+  scheduleType: 'interval' as const,
+  intervalMinutes: 30,
 }
 
 const CONFIG_WITH_OVERRIDE = {
@@ -229,6 +238,33 @@ describe('SchedulerConfigDrawer', () => {
     await waitFor(() => {
       expect(setAutoCrawlConfigMock).toHaveBeenCalledWith(
         expect.objectContaining({ perSiteOverrides: {} }),
+      )
+    })
+  })
+
+  it('12. ADR-154 D-154-6：scheduleType=interval → intervalMinutes 显示 / dailyTime 隐藏', async () => {
+    getAutoCrawlConfigMock.mockResolvedValueOnce(CONFIG_INTERVAL)
+    render(<SchedulerConfigDrawer open={true} onClose={() => {}} />)
+    await waitFor(() => {
+      // interval 模式：intervalMinutes 显示
+      expect(screen.getByTestId('scheduler-intervalMinutes')).not.toBeNull()
+      // daily 字段隐藏
+      expect(screen.queryByTestId('scheduler-dailyTime')).toBeNull()
+    })
+  })
+
+  it('13. ADR-154 D-154-6：scheduleType=interval 提交 → intervalMinutes 包含在 payload', async () => {
+    getAutoCrawlConfigMock.mockResolvedValueOnce(CONFIG_INTERVAL)
+    setAutoCrawlConfigMock.mockResolvedValueOnce(undefined)
+    render(<SchedulerConfigDrawer open={true} onClose={() => {}} />)
+    const submit = await waitFor(() => screen.getByTestId('scheduler-submit'))
+    fireEvent.click(submit)
+    await waitFor(() => {
+      expect(setAutoCrawlConfigMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          scheduleType: 'interval',
+          intervalMinutes: 30,
+        }),
       )
     })
   })
