@@ -18,6 +18,9 @@ export interface AdminNotificationItem {
   readonly createdAt: string
   readonly read: boolean
   readonly href?: string
+  /** ADR-155 D-155-2 / EP-2：双源镜像与 packages/admin-ui/shell/types.ts NotificationItem 严格同步。
+   *  category: 'general'（默认 / /admin/notifications）/ 'background'（background-events 合并） */
+  readonly category?: 'general' | 'background'
 }
 
 /** 后台任务抽屉单项（admin-ui SSOT 镜像） */
@@ -33,6 +36,9 @@ export interface AdminTaskItem {
   readonly finishedAt?: string
   /** 失败原因（status=failed 时提供） */
   readonly errorMessage?: string
+  /** ADR-155 D-155-2 / EP-2：双源镜像与 packages/admin-ui/shell/types.ts TaskItem 严格同步。
+   *  source: 'general'（默认 / /admin/system/jobs）/ 'crawler' / 'maintenance'（扩展位） */
+  readonly source?: 'crawler' | 'maintenance' | 'general'
 }
 
 /** GET /admin/notifications 响应信封（ADR-147 §4） */

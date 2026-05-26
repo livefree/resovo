@@ -1174,10 +1174,10 @@ B 序列 + C 序列可与 A 并行（A 无依赖）；B 与 C 之间无依赖（
    - 状态：✅ 完成（2026-05-26 / @livefree 实测 3 路径 9/10/11 PASS / 11 = 3:26 dailyTime 触发 daily run 成功 / commit b1491aea）
 
 3b. **CHG-SN-9-CW1-CW2-HOTFIX-D** — scheduler daily 模式 catch-up window（5 分钟容错）
-   - 状态：🟡 代码已落地 / 待 @livefree dev 实测 4 路径
+   - 状态：✅ 完成（2026-05-26 / @livefree 实测 PASS / commit 71fa00b9）
    - 创建时间：2026-05-26 05:40
    - 实际开始：2026-05-26 05:40
-   - 完成时间：—（实测 PASS 后回填）
+   - 完成时间：2026-05-26 06:00
    - 执行模型：claude-opus-4-7
    - 范围：crawlerScheduler.ts checkDaily catch-up window（5min）+ marks 防重 + 跨午夜不补 + 7 case 单测
    - 文件范围：1 源 + 1 测试 = 2 项 ✅
@@ -1240,7 +1240,7 @@ B 序列 + C 序列可与 A 并行（A 无依赖）；B 与 C 之间无依赖（
    - 依赖：CW1-CW2-REDESIGN-A-ADR PASS ✅
 
    **EP-1A（D-155-1 行内展开）✅ 完成**：
-   - 状态：🟡 代码已落地 / 待 @livefree dev server 实测确认（typecheck + lint + test 5093/5093 + verify:adr-contracts 全过 / 7 新单测全过 / commit 见 changelog）
+   - 状态：✅ 完成（2026-05-26 / @livefree 实测 6 路径 PASS / commit 3e0495fe）
    - 实际开始：2026-05-26 04:00
    - 完成时间：—（实测 PASS 后回填）
    - 执行模型：claude-opus-4-7（主循环延续）
@@ -1249,15 +1249,17 @@ B 序列 + C 序列可与 A 并行（A 无依赖）；B 与 C 之间无依赖（
    **EP-1B 拆为 EP-1B1 + EP-1B2**（满足 PATCH ≤ 5 项硬约束 / 评审消化外的实施期 plan-revision）：
    - **EP-1B1（D-155-4 站点 limit 解锁）✅ 完成**（2026-05-26 / commit 9302cf95 / @livefree 实测 3 路径 PASS）
    - **EP-1B2（D-155-5 AutoCrawlSummaryCard）✅ 完成**（2026-05-26 / commit cbdf2e42 / 实测 PASS）
-   - **EP-1B2-LAYOUT（D-155-5 实施期布局延伸 / plan-revision）🟡 代码已落地** / 概览容器可折叠 + SummaryCard 与 KpiRow 同行 / 5104/5104 PASS / 待 @livefree 实测 5 路径
+   - **EP-1B2-LAYOUT（D-155-5 实施期布局延伸 / plan-revision）✅ 完成**（2026-05-26 / @livefree 实测 5 路径 PASS / commit 031be4a6）
 
    **EP-1C-1 拆为 EP-1C-1a + EP-1C-1b**（满足 PATCH ≤ 5 项硬约束 / plan-revision）：
    - **EP-1C-1a（类型契约 + KV 3 路径兼容）✅ 完成**（2026-05-26 / commit c3d010f7）
-   - **EP-1C-1b（zod preprocess + scheduler checkDaily/marks/GC + ADR-154 AMENDMENT）🟡 代码已落地** / 2 源 + 2 测试 = 4 项 ✅ / 5117 PASS / ADR-154 AMENDMENT 已落盘 / 待 @livefree 实测 4 路径
+   - **EP-1C-1b（zod preprocess + scheduler checkDaily/marks/GC + ADR-154 AMENDMENT）✅ 完成**（2026-05-26 / @livefree 实测 PASS / commit 96f369f1）
 
    **EP-1C-2 拆为 EP-1C-2a + EP-1C-2b**（满足 PATCH ≤ 5 项硬约束 / plan-revision）：
-   - **EP-1C-2a（SchedulerConfigDrawer chip 列表）🟡 代码已落地** / 2 源 + 1 测试 = 3 项 ✅ / 5123 PASS / 待 @livefree 实测 7 路径
-   - **EP-1C-2b（AutoCrawlScheduleCard + AutoCrawlSummaryCard 多时间显示）🟡 代码已落地** / 2 源 + 2 测试 = 4 项 ✅ / 5127 PASS / 待 @livefree 实测多时间显示一致性**
+   - **EP-1C-2a（SchedulerConfigDrawer chip 列表）✅ 完成**（2026-05-26 / @livefree 实测 7 路径 PASS / commit fd02cbf9）
+   - **EP-1C-2b（AutoCrawlScheduleCard + AutoCrawlSummaryCard 多时间显示）✅ 完成**（2026-05-26 / @livefree 实测多时间显示一致性 PASS / commit 4c29d312）
+
+   **D-155-6 多 dailyTime + HOTFIX-D catch-up 全链路完成 ✅**（2026-05-26）**
    - 范围：拆 CrawlerRunDetailView 为 RunInlinePanel + CrawlerRunsView 接 expand + timeline limit 解锁 + 后端 safeLimit 上限提到 50 + 新建 AutoCrawlSummaryCard 顶部展示 + 多 dailyTime 全栈
    - 文件范围：
      - `apps/server-next/src/app/admin/crawler/runs/_client/CrawlerRunsView.tsx`（接 expandedKeys + renderExpandedRow + 改 Run ID 列 cell 为 toggle）
@@ -1277,7 +1279,13 @@ B 序列 + C 序列可与 A 并行（A 无依赖）；B 与 C 之间无依赖（
    - 验收要点：dev server 实测 — 行内展开 + timeline limit + AutoCrawlSummaryCard + SchedulerConfigDrawer 加 3 个 dailyTime chip 保存 → 当日 3 个时间各触发一次（相同 dailyTime 同日防重）
    - 估时：0.55w（D-155-5 +0.05 + D-155-6 +0.2 = +0.25 over 原 0.3）
 
-6. **CHG-SN-9-CW1-CW2-REDESIGN-A-EP-2** — D-155-2 实施（CW1-E 合并到 AdminShell notifications/tasks）
+6. **CHG-SN-9-CW1-CW2-REDESIGN-A-EP-2** — D-155-2 实施（CW1-E 合并到 AdminShell notifications/tasks）✅ 完成
+   - 状态：🟡 代码已落地 / arch-reviewer Opus A− CONDITIONAL → 消化 Y-EP2-1/3 + G-EP2-3 后等同 A / 待 @livefree dev 实测 4 路径
+   - 实际开始：2026-05-26 06:10
+   - 执行模型：claude-opus-4-7（主循环）+ arch-reviewer (claude-opus-4-7)（强制 Opus trailer）
+   - 文件改动：6 改 + 2 删 + 2 测试 = 10 项（ADR-155 §5 临界可接受 / 强制 Opus 弥补）
+   - 评审 agentId：a40172d3c90586584
+   - ADR-152 §AMENDMENT 2026-05-26 已落盘
    - 状态：⬜
    - 创建时间：2026-05-26 02:00
    - 建议模型：sonnet

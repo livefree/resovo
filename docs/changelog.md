@@ -7853,3 +7853,140 @@ PATCH 文件数：1 源 + 1 测试 = 2 项（≤ 5 硬约束 ✅）
 
 Cleanup-Audit: 1 源文件改 + 1 测试文件（改 1 + 扩 7 case）/ 7 新单测 + 改 1 case / 0 migration / 0 新依赖
 Plan-Revision: 0 次
+
+## [CHG-SN-9-CW1-CW2-REDESIGN-A-EP-2] D-155-2 Topbar 图标合并（撤销 BackgroundEventBell 旁路）
+
+- **日期**：2026-05-26
+- **Sequence**：SEQ-20260526-CRAWLER-W3-FIX
+- **任务 ID**：CHG-SN-9-CW1-CW2-REDESIGN-A-EP-2
+- **关联 ADR**：ADR-155 D-155-2（🟢 Accepted）+ ADR-152 §AMENDMENT 2026-05-26（同 commit 落盘 / 撤销 N1-152-A position:fixed 路径）
+- **模型**：claude-opus-4-7（主循环）+ **arch-reviewer (claude-opus-4-7)**（强制独立评审）
+- **子代理调用**：arch-reviewer (claude-opus-4-7) — 1 轮独立评审 A− CONDITIONAL（3 黄线 + 3 绿线 / agentId a40172d3c90586584）→ 主循环消化 Y-EP2-1 + Y-EP2-3 + G-EP2-3 后等同 A
+
+### 改动摘要
+
+CW1-E（ADR-152）实施时主循环采用 N1-152-A `position:fixed` 旁路方案规避 "共享组件 API 契约强制 Opus" 约束，BackgroundEventBell 作为第 3 个 topbar 图标叠加；@livefree 走读后 ADR-155 D-155-2 决策撤销旁路 + 双源类型镜像同步。本卡是 W3-FIX SEQ **唯一** 触发 `Subagents: arch-reviewer (claude-opus-4-7)` 的卡 + 关键洞察 #2 process 红线复发监测的实践。
+
+- **Step 1（R-155-1 双源类型镜像同步 / 关键约束）**：
+  - `packages/admin-ui/src/shell/types.ts`：`NotificationItem` 加 `category?: 'general' | 'background'`；`TaskItem` 加 `source?: 'crawler' | 'maintenance' | 'general'`
+  - `packages/types/src/admin-shell.types.ts`：`AdminNotificationItem` / `AdminTaskItem` **双源镜像**同步加 category + source（key 名 / type / optional 标记 / enum 字面顺序完全等价）
+  - 注释引用 ADR-155 D-155-2 + ADR-147 N1-147-5 终态 re-export 路径
+- **Step 2（Y-155-3 路径 A 前端 hook 合并 / 并发两 GET 短期方案）**：
+  - `apps/server-next/src/lib/admin-shell-notifications.ts`：
+    - `useAdminNotifications` 并发 GET `/admin/notifications` + `/admin/system/background-events`；主端点 items category='general'；background events upcoming/finished lane 映射 NotificationItem(category='background')；按 createdAt DESC 合并排序
+    - `useAdminTasks` 并发 GET `/admin/system/jobs` + background events；active lane 映射 TaskItem(source='crawler')；按 startedAt DESC 合并排序
+    - 注册 reload 到 `globalMutateRegistry` 让 CrawlerClient `invalidateBackgroundEvents()` 兼容触发（Y-152-4 路径不变）
+    - **Promise.allSettled 容错** + **Y-EP2-3 console.error 留痕**（避免空 catch 精神冲突）
+- **Step 3（admin-shell-background-events.ts 瘦身）**：
+  - 删除 `useAdminBackgroundEvents` hook（BackgroundEventBell 同 commit 删）
+  - 保留 `invalidateBackgroundEvents` + `globalMutateRegistry`（CrawlerClient 调用方零改动）
+- **Step 4-5（admin-shell-client 清理 + 文件删除）**：
+  - `apps/server-next/src/app/admin/admin-shell-client.tsx`：删除 `<BackgroundEventBell>` 渲染 + `useAdminBackgroundEvents` import + 调用
+  - **删除**：`apps/server-next/src/components/admin-shell/BackgroundEventBell.tsx`
+  - **删除**：`tests/unit/components/server-next/admin/admin-shell/BackgroundEventBell.test.tsx`
+  - CrawlerClient.tsx 注释更新（行为不变 / globalMutateRegistry 兼容）
+- **Step 6（单测扩展）**：
+  - `tests/unit/lib/admin-shell-notifications.test.ts` 扩 5 → 12 case：
+    - #1 mount fetch + category='general'
+    - #6 合并 background events upcoming + finished → category='background'
+    - #7 merge 按 createdAt DESC 排序
+    - #8 active lane → source='crawler'
+    - #9 merge 按 startedAt DESC 排序
+    - #10 background-events 端点失败 → general items 仍正常显示
+    - **#G-EP2-3a**：markOneRead 与 `bg-${id}` 交互
+    - **#G-EP2-3b**：lastViewedAt 对 background finished 自动 mark-read + upcoming 未来事件永不自动已读
+  - `tests/unit/components/server-next/admin/admin-shell-client.test.tsx`（**Y-EP2-1 反回归**）：加 case 验证 topbar 不再渲染 BackgroundEventBell（data-background-event-bell / testid 均不存在）
+- **Step 7（ADR-152 AMENDMENT 落盘）**：`docs/decisions.md` ADR-152 §12 评审结论后追加 AMENDMENT 2026-05-26（约 30 行 / 5 关键修订点 + 未来演化 ADR-156 + process 红线复发监测）
+
+### arch-reviewer Opus 评审结果
+
+**评级**：A− CONDITIONAL → 主循环消化后等同 A
+
+**评审报告关键数据**：
+- 5 关键决策点：双源镜像 ✅ / BackgroundEvent 映射 ✅ / invalidate 兼容 ⚠️(Y-EP2-2 N1) / 文件删除 ✅ / ADR-152 AMENDMENT ✅
+- 0 红线 + 3 黄线（Y-EP2-1/2/3）+ 3 绿线（G-EP2-1/2/3）+ 3 关键洞察
+- 关键洞察 #1：**process 红线本次未复发** — 主循环按 ADR 要求扩 types + 通过 Opus 评审；旁路彻底撤销
+- 关键洞察 #2：types.ts 双源仍是手工镜像（drift 风险 / 待 ADR-147 N1-147-5 re-export 终态）
+- 关键洞察 #3：BackgroundEventService cancelled level=danger 与 ADR-153 D-153-2 cancelled='neutral' 跨 ADR 分裂（非本卡 / 待 ADR-156）
+
+**3 黄线消化**：
+- ✅ Y-EP2-1：admin-shell-client.test 加反回归 case（topbar 不再渲染 BackgroundEventBell / data-background-event-bell 不存在）
+- ⚠️ Y-EP2-2：reload race + 双 hook 重复 GET `/admin/system/background-events`（N1-EP2-1 follow-up / 性能优化非阻塞 / 留待 ADR-156 端点合并自然消除）
+- ✅ Y-EP2-3：reload 4 处 rejected 分支补 `console.error` + `eslint-disable-next-line no-console` 注释（避免与 CLAUDE.md "空 catch" 精神冲突）
+
+**3 绿线消化**：
+- ✅ G-EP2-3：补 #G-EP2-3a + #G-EP2-3b 2 case（markOneRead bg-${id} 交互 + lastViewedAt 对 background items read 计算）
+- N1：G-EP2-1（paused 兜底 running 注释 ADR-156）+ G-EP2-2（upcoming.scheduledAt 未来事件永不自动已读注释）→ 已通过 #G-EP2-3b 测试守护
+
+### 新增/修改文件
+
+- `packages/admin-ui/src/shell/types.ts`（NotificationItem + TaskItem 扩展 / **Opus 评审范围**）
+- `packages/types/src/admin-shell.types.ts`（**双源镜像 R-155-1 必修**）
+- `apps/server-next/src/lib/admin-shell-notifications.ts`（并发两 GET + merge + register + Y-EP2-3 错误留痕）
+- `apps/server-next/src/lib/admin-shell-background-events.ts`（瘦身 / 删 hook 保留 invalidate）
+- `apps/server-next/src/app/admin/admin-shell-client.tsx`（删 BackgroundEventBell + useAdminBackgroundEvents）
+- `apps/server-next/src/app/admin/crawler/_client/CrawlerClient.tsx`（注释更新 / 行为不变）
+- **删除**：`apps/server-next/src/components/admin-shell/BackgroundEventBell.tsx`
+- **删除**：`tests/unit/components/server-next/admin/admin-shell/BackgroundEventBell.test.tsx`
+- `tests/unit/lib/admin-shell-notifications.test.ts`（扩 5 → 12 case）
+- `tests/unit/components/server-next/admin/admin-shell-client.test.tsx`（**Y-EP2-1 反回归 1 case**）
+- `docs/decisions.md`（ADR-152 §AMENDMENT 2026-05-26 落盘 / 不计 PATCH）
+
+PATCH 文件数：6 改 + 2 删 + 2 测试 = 10 项（**ADR-155 §5 EP-2 明示"临界但可接受 + 强制 Opus reviewer 弥补范围"**）
+
+### 偏离记录
+
+无新 D-N 偏离（D-155-2 已 ADR-155 Accepted）；ADR-152 §AMENDMENT 同 commit 落盘 + N1-152-A 旁路方案撤销记录。
+
+### 质量门禁
+
+- ✅ typecheck PASS（8 workspace）
+- ✅ lint PASS（4 pre-existing 警告 + 0 新增 / `eslint-disable-next-line no-console` 精确豁免 4 处）
+- ✅ test 5130/5130 PASS（本卡新 8 case + 改 0 case；staging 2 flaky 单跑通过 / W1 已知 pre-existing / 不引用本卡文件）
+- ✅ verify:adr-contracts PASS（207 D-N 闭环）
+- ✅ **arch-reviewer Opus A− CONDITIONAL → 消化后等同 A**
+
+### 六问自检 PASS
+
+1. **正确性**：双源类型字段字面对齐 + Promise.allSettled 容错 + bg-${id} 防冲突 + markOneRead 与 background items 交互 + lastViewedAt 对 finished 自动 mark-read（upcoming 未来事件永不已读符合 D-152-3 read 模型）
+2. **边界与复用**：复用 globalMutateRegistry 注册模式让 CrawlerClient 零改动；mapBackgroundEventToNotification/Task 是纯函数可独立单测
+3. **可扩展性**：category/source enum 易扩；NotificationItem discriminated union 模式允许未来扩 audit/system/cache 等 category；TaskItem source 扩 maintenance 已预留
+4. **一致性**：与 ADR-147 60s polling 一致；与 ADR-152 三 lane 数据流语义一致（upcoming/finished → 通知 / active → 任务）；与 ADR-146 parseWebhookEvents JSON 范式同源
+5. **改动收敛**：满足 1–4 前提下 6 改 + 2 删 + 2 测试 = 10 项（ADR-155 §5 EP-2 明示可接受）
+6. **偏离检测**：无新 D-N；3 个 follow-up 已登记（N1-EP2-1 reload 去重 / N1-EP2-2 cancelled level 跨 ADR / N1-EP2-3 verify drift 守卫脚本）
+
+### AI-CHECK 结论
+
+- ✅ **PASS** — 7 个 Step 完整闭环 / arch-reviewer Opus 评审 + 消化 / 8 新单测 + 反回归 case 全过 / 全栈门禁通过 / ADR-152 AMENDMENT 落盘 / **Subagents trailer 必填强制满足**
+- **越界检测**：CLEAN（6 改 + 2 删 + 2 测试严格在 EP-2 文件范围内 / CrawlerClient 注释更新是 D-155-2 副作用必要修复）
+- **回归风险**：低
+  - dailyTimes optional + dailyTime alias 保持向后兼容（EP-1C-1a 偏离仍在）
+  - BackgroundEventService 端点保留 + globalMutateRegistry 不动 → CrawlerClient 调用方零改动
+  - Promise.allSettled 容错 + console.error 留痕 → 任一端点失败仍可降级运行
+  - mapBackgroundEventToTask paused 兜底 running 保持任务可见性
+
+### 未覆盖（→ N1-EP2-N follow-up / 推迟）
+
+- **用户实测验证**（@livefree / ADR-155 §8 验收第 4 条）：
+  1. `/admin` 顶部仅有铃铛 + 闪电两图标（BackgroundEventBell 消失）
+  2. 点铃铛 → 含 background category 通知（upcoming + finished lane）
+  3. 点闪电 → 含 source='crawler' 任务（active lane）
+  4. CrawlerClient 立即采集 → 两 drawer 同步刷新（invalidate 兼容）
+- **N1-EP2-1**：globalMutateRegistry 共享去重（两 hook 重复 GET background-events 端点 / 性能优化非阻塞 / 待 ADR-156 自然消除）
+- **N1-EP2-2**：BackgroundEventService cancelled level=danger vs ADR-153 D-153-2 cancelled='neutral' 跨 ADR 语义分裂（待 ADR-156 端点合并统一）
+- **N1-EP2-3**：`scripts/verify-admin-shell-types-mirror.mjs` drift 守卫脚本（长期防 R-155-1 双源镜像 drift / 50 行脚本 / 可独立立卡）
+- **EP-3**：D-155-3 Gantt 三段窗 + 拖拽 pan + now-line（W3-FIX 最后一卡）
+- **EP-1C-CLEANUP**：dailyTimes 改 required + 删 dailyTime alias（EP-1C-2b 后已可做 / 推迟到 EP-3 后）
+
+### 关键约束消化
+
+- **R-155-1 双源镜像同步**：admin-ui + types 两份字段字面对齐 / arch-reviewer Opus 已审查确认
+- **关键洞察 #2 process 红线复发监测**：本次未复发 / N1-152-A 旁路彻底撤销 / Opus reviewer 强制 trailer 满足
+- **CLAUDE.md "共享组件 API 契约强制 Opus"**：commit trailer 必须含 `Subagents: arch-reviewer (claude-opus-4-7)` ✅
+- **PATCH 临界 10 项**：ADR-155 §5 EP-2 明示可接受（双源同步 + 删除是原子操作 + 强制 Opus reviewer 弥补范围）
+
+- **执行模型**：claude-opus-4-7（主循环；CLAUDE.md "撰写即将成为 ADR 的决策文档" + "共享组件 API 契约改动" 双重强制）
+- **子代理调用**：arch-reviewer (claude-opus-4-7) — 1 轮独立评审 A− CONDITIONAL → 等同 A / agentId a40172d3c90586584 / 显式审查双源镜像同步 + 关键洞察 #2 process 红线复发监测
+
+Cleanup-Audit: 6 源文件改 + 2 删源 + 2 测试文件（1 改 + 1 反回归）+ 1 docs（ADR-152 AMENDMENT）/ 8 新单测 + 改 0 case / 0 migration / 0 新依赖
+Plan-Revision: 0 次

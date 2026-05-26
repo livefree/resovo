@@ -85,3 +85,19 @@ describe('AdminShellClient — 系统管理组 role 过滤', () => {
     expect(hrefs).toContain('/admin/videos')
   })
 })
+
+// ── ADR-155 D-155-2 / EP-2：BackgroundEventBell 反回归 ──
+// Y-EP2-1 / 关键洞察 #2 process 红线复发监测：防止未来主循环再创建任何
+// "第 3 个 topbar 图标 position:fixed 旁路"组件
+describe('AdminShellClient — D-155-2 EP-2 BackgroundEventBell 反回归', () => {
+  const themeValue: ThemeContextValue = { theme: 'dark', resolvedTheme: 'dark', setTheme: vi.fn() }
+
+  it('topbar 不再渲染独立 BackgroundEventBell（仅铃铛 + 闪电两图标在 notifications/tasks 槽）', () => {
+    const { container } = renderClient(themeValue, { initialRole: 'admin' })
+    // BackgroundEventBell.tsx 文件已删除 / N1-152-A position:fixed 旁路撤销
+    // 确认 DOM 不含 data-background-event-bell 残留属性
+    expect(container.querySelector('[data-background-event-bell]')).toBeNull()
+    // 也不含 BackgroundEventBell 测试 testid 残留
+    expect(container.querySelector('[data-testid="background-event-bell"]')).toBeNull()
+  })
+})

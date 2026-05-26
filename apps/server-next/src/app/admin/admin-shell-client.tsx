@@ -19,10 +19,9 @@ import type { ReactNode } from 'react'
 import { AdminShell, inferBreadcrumbs, useToast } from '@resovo/admin-ui'
 import type { AdminNavSection, AdminShellUser, NotificationItem, UserMenuAction } from '@resovo/admin-ui'
 // CHG-SN-8-FUP-SHELL-NOTIFICATIONS-EP-B / ADR-147：admin shell 通知 + 任务真端点
+// ADR-155 D-155-2 / EP-2：useAdminNotifications + useAdminTasks 内部已合并 background events
+// （并发 GET /admin/notifications + /admin/system/background-events），不再需要独立 BackgroundEventBell
 import { useAdminNotifications, useAdminTasks } from '@/lib/admin-shell-notifications'
-// CW1-E-EP / ADR-152：admin shell topbar 后台事件铃铛
-import { useAdminBackgroundEvents } from '@/lib/admin-shell-background-events'
-import { BackgroundEventBell } from '@/components/admin-shell/BackgroundEventBell'
 import { UserMenuActionModal, type UserMenuActionModalType } from './_client/UserMenuActionModal'
 import { ThemeContext } from '@/contexts/BrandProvider'
 import { ADMIN_NAV } from '@/lib/admin-nav'
@@ -127,10 +126,11 @@ export function AdminShellClient({ defaultCollapsed, initialTheme, initialRole, 
   // CHG-SN-8-FUP-SHELL-NOTIFICATIONS-EP-B / ADR-147 D-147-2/4：60s polling + localStorage read
   // notifications：read 状态由 useAdminNotifications 内部用 lastViewedAt 计算
   // tasks：仅读，cancel/retry 端点 N1-147-4 待立（按需启动）
+  // ADR-155 D-155-2 / EP-2：notifications + tasks 数据流已合并 background events 三源
+  // （upcoming/finished → category='background' / active → source='crawler'），
+  // 无需独立 useAdminBackgroundEvents hook + BackgroundEventBell 旁路
   const { items: notifications, markAllRead, markOneRead } = useAdminNotifications()
   const { items: tasks } = useAdminTasks()
-  // CW1-E-EP / ADR-152：后台事件铃铛 60s polling（三源聚合 upcoming + active + finished）
-  const { events: bgEvents, degraded: bgDegraded } = useAdminBackgroundEvents()
 
   const handleNotificationItemClick = useCallback((item: NotificationItem) => {
     markOneRead(item.id)
@@ -192,8 +192,9 @@ export function AdminShellClient({ defaultCollapsed, initialTheme, initialRole, 
         onClose={() => setActionModalType(null)}
       />
     </AdminShell>
-    {/* CW1-E-EP / ADR-152：后台事件铃铛（position: fixed，叠于 topbar 右侧区域） */}
-    <BackgroundEventBell events={bgEvents} degraded={bgDegraded} />
+    {/* ADR-155 D-155-2 / EP-2：删除 BackgroundEventBell position:fixed 旁路（N1-152-A 撤销）；
+        background events 数据已通过 useAdminNotifications + useAdminTasks 合并到现有 topbar
+        铃铛 + 闪电两图标 */}
     </>
   )
 }

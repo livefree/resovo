@@ -14033,6 +14033,30 @@ const upcoming24h = schedulerStatuses
 - ✅ Y-152-4 §1 + §3 D-152-4 + §10 step 8：CrawlerClient runCrawlerAll/cancelRun 成功后显式 `mutate('/admin/system/background-events')` 跳 max-age race
 - ✅ G-152-1 §8：computeNextTrigger 提取目标路径锁定 `apps/api/src/lib/crawler-scheduling.ts`（非 services 因纯函数）
 - ✅ G-152-2 §9：补 ADR-149（listRuns 多选谓词扩展）入关联 ADR 表第 8 行
+
+### AMENDMENT 2026-05-26（ADR-155 §3 D-155-2 / EP-2）
+
+**触发**：@livefree W1 走读暴露 — ADR-152 实施时采用 N1-152-A `position:fixed` 旁路方案规避 "共享组件 API 契约强制 Opus" 约束，BackgroundEventBell 作为第 3 个 topbar 图标叠加，违反 AdminShell `notifications + tasks` 二图标范式。process 红线复发监测必修。
+
+**变更**：撤销 N1-152-A position:fixed BackgroundEventBell；将 BackgroundEventService 三 lane 数据合并到现有 AdminShell `notifications + tasks` 二图标数据流。
+
+**关键修订点**：
+- **删除文件**：`apps/server-next/src/components/admin-shell/BackgroundEventBell.tsx` + 测试 + `apps/server-next/src/app/admin/admin-shell-client.tsx` `<BackgroundEventBell>` 渲染
+- **保留端点 + service**：`apps/api/src/services/BackgroundEventService.ts` + `/admin/system/background-events` route 不动；继续作为 useAdminNotifications/useAdminTasks 第 2 GET 源
+- **双源类型镜像同步（R-155-1 关键约束）**：
+  - `packages/admin-ui/src/shell/types.ts` `NotificationItem` 加 `category?: 'general' | 'background'`；`TaskItem` 加 `source?: 'crawler' | 'maintenance' | 'general'`
+  - `packages/types/src/admin-shell.types.ts` `AdminNotificationItem` / `AdminTaskItem` 同步加 category + source 字段
+- **前端 hook 合并（Y-155-3 路径 A 短期方案 / 并发两 GET）**：
+  - `useAdminNotifications` 并发 GET `/admin/notifications` + `/admin/system/background-events`；upcoming + finished lane 映射 → category='background'；按 createdAt DESC 合并排序
+  - `useAdminTasks` 并发 GET `/admin/system/jobs` + background-events；active lane 映射 → source='crawler'；按 startedAt DESC 合并排序
+  - 注册 reload 到 `globalMutateRegistry` 让 `invalidateBackgroundEvents()` 触发（CrawlerClient 写操作后 Y-152-4 mutate 路径不变）
+- **admin-shell-background-events.ts 瘦身**：删除 `useAdminBackgroundEvents` hook；保留 `invalidateBackgroundEvents` + `globalMutateRegistry`（CrawlerClient 调用方零改动）
+
+**未来演化（ADR-156 候选 / 本卡不实施）**：若 60s 双端点轮询性能瓶颈，起 ADR-156 «notifications 端点扩展» 将 BackgroundEventService 内嵌到 `/admin/notifications` + `?include=background` 参数；同步 ADR-147 端点契约 AMENDMENT。
+
+**process 红线复发监测**：本 AMENDMENT commit 强制 `Subagents: arch-reviewer (claude-opus-4-7)` trailer + reviewer 显式审查双源镜像同步（R-155-1）+ 关键洞察 #2 process 红线复发监测。
+
+**关联**：ADR-155 §3 D-155-2 / EP-2 / R-155-1 双源镜像必修 / N1-152-A 旁路方案撤销
 - ✅ G-152-3 §3 D-152-1：id 字段 5 源拼接算法明确（auto_crawl:next / scheduler_timer:${name} / crawler_run:${runId} / audit:${auditId} / 跨源不重叠）
 - ⏸ N1-152-A/B/C：advisory follow-up，不阻塞本 ADR；EP 卡走读后用户反馈触发再立卡
 

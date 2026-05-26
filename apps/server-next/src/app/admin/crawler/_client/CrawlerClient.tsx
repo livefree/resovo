@@ -278,7 +278,8 @@ export function CrawlerClient() {
         level: 'success',
         action: buildModerationDeepLinkAction(result.runId),
       })
-      // Y-152-4：写操作成功后 invalidate BackgroundEventBell（跳过 max-age=30 缓存）
+      // Y-152-4：写操作成功后 invalidate notifications + tasks hook（ADR-155 D-155-2 / EP-2
+      // BackgroundEventBell 已删除 / globalMutateRegistry 兼容路径不变）
       void invalidateBackgroundEvents()
       refresh()
     } catch (err: unknown) {
@@ -314,7 +315,8 @@ export function CrawlerClient() {
         level: 'success',
         action: buildModerationDeepLinkAction(result.runId),
       })
-      // Y-152-4：写操作成功后 invalidate BackgroundEventBell（跳过 max-age=30 缓存）
+      // Y-152-4：写操作成功后 invalidate notifications + tasks hook（ADR-155 D-155-2 / EP-2
+      // BackgroundEventBell 已删除 / globalMutateRegistry 兼容路径不变）
       void invalidateBackgroundEvents()
       refresh()
     } catch (err: unknown) {

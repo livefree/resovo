@@ -111,6 +111,12 @@ export interface NotificationItem {
   readonly read: boolean
   /** 点击跳转目标；undefined 时仅触发 onItemClick 不导航 */
   readonly href?: string
+  /** ADR-155 D-155-2 / EP-2：通知来源类别（discriminated union 友好）
+   *  - 'general'（默认）：/admin/notifications 主端点（系统提醒、审核积压等）
+   *  - 'background'：/admin/system/background-events upcoming + finished lane
+   *    （autoCrawlNext / scheduler nextRun / 高危 audit / crawler_run 完成/失败）
+   *  消费侧可按 category 分组渲染 / 过滤 */
+  readonly category?: 'general' | 'background'
 }
 
 /** 后台任务抽屉单项（ADR-103a §4.1.5 / CHG-SN-2-10 SSOT 上提）
@@ -127,6 +133,11 @@ export interface TaskItem {
   readonly finishedAt?: string
   /** 失败原因（status='failed' 时提供）*/
   readonly errorMessage?: string
+  /** ADR-155 D-155-2 / EP-2：任务来源
+   *  - 'general'（默认）：/admin/system/jobs 主端点（bull queue 通用 job）
+   *  - 'crawler'：background-events active lane 映射的 crawler_run
+   *  - 'maintenance'：保留扩展位（如有 maintenance worker active 数据 / 未实现） */
+  readonly source?: 'crawler' | 'maintenance' | 'general'
 }
 
 /** CommandPalette 单条命令（ADR-103a §4.1.6 / CHG-SN-2-11 SSOT 上提）

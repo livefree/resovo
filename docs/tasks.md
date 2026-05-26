@@ -6,96 +6,100 @@
 
 ## 进行中任务
 
-### 🔄 CHG-SN-9-CW1-CW2-HOTFIX-D — scheduler daily 模式 catch-up window
+### 🔄 CHG-SN-9-CW1-CW2-REDESIGN-A-EP-2 — D-155-2 Topbar 图标合并（强制 Opus reviewer）
 
 - **SEQ**：SEQ-20260526-CRAWLER-W3-FIX
 - **状态**：🔄 进行中
-- **创建时间**：2026-05-26 05:40
-- **实际开始**：2026-05-26 05:40
-- **建议模型**：sonnet
+- **创建时间**：2026-05-26 06:10
+- **实际开始**：2026-05-26 06:10
+- **建议模型**：opus 主循环 + **强制 arch-reviewer (claude-opus-4-7)** 评审（CLAUDE.md "共享组件 API 契约强制 Opus" / W1 N1-152-A process 红线复发监测）
 - **执行模型**：claude-opus-4-7（本会话延续）
-- **关联 ADR**：ADR-155 §7 风险"D-155-3 拖拽 pan 性能" 的范式延伸（catch-up 是健壮性补丁 / 不起新 ADR / 不改设计契约）
+- **关联 ADR**：ADR-155 D-155-2（🟢 Accepted）+ ADR-152 §端点契约 + §N1-152-A 路径决策 AMENDMENT 落盘
 
 ### 问题理解
 
-@livefree 走读发现：scheduler daily 模式 `checkDaily` 精确匹配当前 HH:MM，server 在 dailyTime 那一分钟未运行（部署 / 重启 / 慢启动）→ 该次 daily 触发**永久错过**，直到次日同时间。interval 模式有 due-based catch-up 不受影响；本卡只补 daily 容错。
+CW1-E（ADR-152）实施时主循环采用 N1-152-A `position:fixed` 旁路方案规避 "共享组件 API 契约强制 Opus" 约束 — BackgroundEventBell 作为第 3 个 topbar 图标叠加，违反 AdminShell `notifications + tasks` 二图标范式。
 
 ### 根因判断
 
-ADR-155 D-155-6 EP-1C-1b 沿用 ADR-154 D-154-5 §checkDaily 的"分钟精确匹配"判定。该判定假设 server 永远在线（不切实际）。
+W1 期间为避免 Opus reviewer 流程，主循环刻意规避 packages/admin-ui types.ts 修改；走读暴露后 ADR-155 D-155-2 决策"删除旁路方案 + 扩展 NotificationItem discriminated union 双源同步"。
 
 ### 方案
 
-**Step 1**（`apps/api/src/workers/crawlerScheduler.ts`）：
+**Step 1（双源类型扩展 / R-155-1 必修）**：
+- `packages/admin-ui/src/shell/types.ts`：
+  - `NotificationItem` 加 `category?: 'general' | 'background'`（discriminated union 友好 / 向后兼容默认 'general'）
+  - `TaskItem` 加 `source?: 'crawler' | 'maintenance' | 'general'`
+- `packages/types/src/admin-shell.types.ts`（**双源镜像 / R-155-1 关键约束**）：同步加 category + source 字段；与 admin-ui SSOT 严格对齐
 
-`checkDaily` 重构为 catch-up window 判定（marks 防重保证不重触）：
+**Step 2（前端 hook 合并 / Y-155-3 路径 A：并发两 GET）**：
+- `apps/server-next/src/lib/admin-shell-notifications.ts`：
+  - `useAdminNotifications` 并发 GET `/admin/notifications` + `/admin/system/background-events`
+  - 主端点 items category='general'；background events `upcoming` + `finished` lane 映射为 NotificationItem + category='background'
+  - 合并后按 createdAt DESC 排序
+  - 注册到 `globalMutateRegistry`（让 CrawlerClient `invalidateBackgroundEvents()` 触发 reload）
+- `useAdminTasks` 并发 GET `/admin/system/jobs` + background events `active` lane
+  - active lane → TaskItem + source='crawler'
 
-```ts
-const CATCH_UP_WINDOW_MIN = 5  // catch-up 容错窗口（分钟）
+**Step 3（admin-shell-background-events.ts 瘦身）**：
+- 删除 `useAdminBackgroundEvents` hook 导出
+- 保留 `invalidateBackgroundEvents` + `globalMutateRegistry`（CrawlerClient 仍消费 Y-152-4 mutate invalidate）
 
-export function checkDaily(...): { shouldTrigger, matchedTime } {
-  const times = ...  // 兜底逻辑不变
-  const today = formatDateStr(now)
+**Step 4（admin-shell-client 清理）**：
+- `apps/server-next/src/app/admin/admin-shell-client.tsx`：
+  - 删除 `<BackgroundEventBell>` 渲染
+  - 删除 `useAdminBackgroundEvents` import + 调用
+  - 保留 `useAdminNotifications` + `useAdminTasks`（数据已合并）
 
-  // 遍历 dailyTimes，找过去 CATCH_UP_WINDOW_MIN 分钟内最近一个未触发
-  for (const time of times) {
-    const [h, m] = time.split(':').map(Number)
-    if (!Number.isFinite(h) || !Number.isFinite(m)) continue
+**Step 5（删除文件）**：
+- `apps/server-next/src/components/admin-shell/BackgroundEventBell.tsx`
+- `tests/unit/components/server-next/admin/admin-shell/BackgroundEventBell.test.tsx`
 
-    // 该 dailyTime 今天的目标时刻
-    const target = new Date(now)
-    target.setHours(h, m, 0, 0)
+**Step 6（单测扩展）**：
+- `tests/unit/lib/admin-shell-notifications.test.ts`：扩 category='background' merge case + globalMutateRegistry 注册 case
 
-    const diffMs = now.getTime() - target.getTime()
-    if (diffMs < 0 || diffMs > CATCH_UP_WINDOW_MIN * 60_000) continue  // 跳过未来 / 超窗口
-    if (makeMarkKey(today, time) in marks) continue  // 防重
+**Step 7（ADR-152 AMENDMENT 落盘）**：`docs/decisions.md` ADR-152 §N1-152-A path 后追加 AMENDMENT 块（撤销旁路方案 + 双源镜像同步路径声明）
 
-    return { shouldTrigger: true, matchedTime: time }
-  }
-  return { shouldTrigger: false, matchedTime: null }
-}
-```
-
-**关键设计**：
-- catch-up window = 5 分钟（4-5 次 tick 容错；可配常量）
-- diffMs ≥ 0 → 不补未来；≤ 5min → 不补昨日错过（防跨午夜补昨天 23:59）
-- marks 防重保证 catch-up 期间多次 tick 仍只触发一次
-- 遍历顺序按 times 数组顺序（与 UI chip 列表顺序一致）
-
-**Step 2**（`tests/unit/api/crawlerScheduler.test.ts`）：
-- 改 #6 期望（03:01 触发 → catch-up 内匹配 / matchedTime='03:00'）
-- 新增 catch-up 5 case：
-  - #8a diffMs=0（精确匹配）→ 触发
-  - #8b diffMs=60s（1 分钟内 catch-up）→ 触发
-  - #8c diffMs=300s（5 分钟边界）→ 触发
-  - #8d diffMs=301s（超 5 分钟边界）→ 不触发
-  - #8e diffMs<0（未来）→ 不触发
+**Step 8（arch-reviewer Opus 评审）**：spawn `arch-reviewer` subagent，model `opus`，独立评审：
+- 双源镜像同步完整性（packages/admin-ui + packages/types 字段一致）
+- BackgroundEvent → NotificationItem/TaskItem 映射的语义正确性（lane → category/source）
+- `invalidateBackgroundEvents` 兼容性（CrawlerClient 调用方零改动）
+- 是否有遗漏的消费方（grep）
+- ADR-152 AMENDMENT 描述准确性
 
 ### 涉及文件
 
-- `apps/api/src/workers/crawlerScheduler.ts`（Step 1 catch-up window）
-- `tests/unit/api/crawlerScheduler.test.ts`（Step 2 改 1 + 扩 5 case）
+- `packages/admin-ui/src/shell/types.ts`（NotificationItem + TaskItem 扩展 / **强制 Opus 评审**）
+- `packages/types/src/admin-shell.types.ts`（**双源镜像 R-155-1 必修**）
+- `apps/server-next/src/lib/admin-shell-notifications.ts`（并发两 GET + merge + register）
+- `apps/server-next/src/lib/admin-shell-background-events.ts`（删 hook / 保留 invalidate）
+- `apps/server-next/src/app/admin/admin-shell-client.tsx`（删 BackgroundEventBell 引用）
+- **删除**：`apps/server-next/src/components/admin-shell/BackgroundEventBell.tsx`
+- **删除**：`tests/unit/components/server-next/admin/admin-shell/BackgroundEventBell.test.tsx`
+- `tests/unit/lib/admin-shell-notifications.test.ts`（扩 category 合并 case）
+- `docs/decisions.md`（ADR-152 AMENDMENT；不计 PATCH）
 
-PATCH 文件数：1 源 + 1 测试 = 2 项（≤ 5 硬约束 ✅）
+PATCH 文件数：5 改 + 2 删 + 1 测试 = 8 项（ADR-155 §5 临界 / **强制 Opus reviewer 弥补**）
 
 ### 验收要点
 
-- **dev server 实测**（@livefree）：
-  1. dailyTimes=["03:00"]，server 在 03:02 启动 → 立即 catch-up 触发（log 含 matched_time=03:00）
-  2. dailyTimes=["03:00"]，server 在 03:06 启动 → 不触发（超窗口）
-  3. dailyTimes=["03:00","04:00"]，server 在 03:01 启动 → 仅触发 03:00；04:00 那一分钟到达再触发 04:00
-  4. server 在 03:00 正常运行 → 触发 03:00；同分钟下次 tick 不重触（marks 防重）
+- **dev server 实测**（@livefree / ADR-155 §8 验收第 4 条）：
+  1. `/admin` 顶部仅有铃铛 + 闪电两图标（BackgroundEventBell 消失）
+  2. 点铃铛 → NotificationDrawer 含 background 来源（upcoming/finished lane → 通知项 category='background'）
+  3. 点闪电 → TaskDrawer 含 crawler runs active lane source='crawler'
+  4. CrawlerClient 写操作（立即采集）→ invalidateBackgroundEvents → 两 drawer 同步刷新
 - typecheck / lint / test / verify:adr-contracts 全过
-- 新增 5 case 全过
+- arch-reviewer Opus 评级 ≥ A−
+- **commit trailer 必填**：`Subagents: arch-reviewer (claude-opus-4-7)` + Reviewer 显式声明审查双源镜像同步
 
-### 不在范围
+### 不在范围（→ ADR-156 候选 / 推迟）
 
-- 启动时 missed-fire 扫描（方案 B）→ 推迟到 catch-up window 实测后视情况评估
-- 错过 30min+ 的 dailyTime 报警通知（方案 C）→ 推迟（用户期望先简单方案）
-- interval 模式（已 catch-up）→ 不动
+- 后端端点合并（`/admin/notifications` 内嵌 background events）→ 起 ADR-156 后再做
+- BackgroundEventService deprecated 注释 → ADR-156 落地后再加
+- D-155-3 Gantt 三段窗 → EP-3
 
 ---
 
 ## 下次会话恢复入口
 
-HOTFIX-D 完成后回到 EP-2（D-155-2 topbar 图标合并 / 强制 Opus reviewer）。
+EP-2 完成后启 EP-3（D-155-3 Gantt 三段窗 + 拖拽 pan / 最后一卡）。
