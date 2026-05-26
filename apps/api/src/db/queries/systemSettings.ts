@@ -152,10 +152,18 @@ export function deserializeAutoCrawlConfig(raw: Record<string, string>): AutoCra
     ? 'queue_after_running'
     : 'skip_running'
 
+  // ADR-154 D-154-1：scheduleType 两态（向后兼容：无 / 'daily' → 'daily'）
+  const scheduleType: import('@/types').AutoCrawlScheduleType =
+    raw.auto_crawl_schedule_type === 'interval' ? 'interval' : 'daily'
+
+  // ADR-154 D-154-1：intervalMinutes 默认 60（向后兼容：无键 → 默认值）
+  const intervalMinutes = Math.max(5, Math.min(1440, Number(raw.auto_crawl_interval_minutes) || 60))
+
   return {
     globalEnabled: raw.auto_crawl_enabled === 'true',
-    scheduleType: 'daily',
+    scheduleType,
     dailyTime: parseDailyTime(raw.auto_crawl_daily_time),
+    intervalMinutes,
     defaultMode,
     onlyEnabledSites: raw.auto_crawl_only_enabled_sites !== 'false',
     conflictPolicy,
@@ -171,7 +179,8 @@ export async function getAutoCrawlConfig(db: Pool): Promise<AutoCrawlConfig> {
 export async function setAutoCrawlConfig(db: Pool, config: AutoCrawlConfig): Promise<void> {
   const pairs: Partial<Record<SystemSettingKey, string>> = {
     auto_crawl_enabled: String(config.globalEnabled),
-    auto_crawl_schedule_type: 'daily',
+    auto_crawl_schedule_type: config.scheduleType,                    // ADR-154 D-154-1：解除写死
+    auto_crawl_interval_minutes: String(config.intervalMinutes ?? 60), // ADR-154 D-154-1
     auto_crawl_daily_time: parseDailyTime(config.dailyTime),
     auto_crawl_default_mode: config.defaultMode,
     auto_crawl_only_enabled_sites: String(config.onlyEnabledSites),

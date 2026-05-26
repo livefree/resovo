@@ -6545,3 +6545,47 @@ ADR-154 起草（arch-reviewer Opus A− → 等同 A），决策备忘性质（
 
 - **执行模型**：claude-sonnet-4-6
 - **子代理调用**：arch-reviewer (claude-opus-4-7)（adfd22a2676a8052d）
+
+## [CHG-SN-9-CW2-C-EP-A] Fix-D5 后端契约 + 调度（ADR-154 落地后端）
+
+- **日期**：2026-05-26
+- **Sequence**：SEQ-20260525-CRAWLER-W2
+- **任务 ID**：CHG-SN-9-CW2-C-EP-A
+
+### 改动摘要
+
+ADR-154 §5 后端落地（D-154-1 / D-154-5）：
+
+- **类型层**：`packages/types/src/system.types.ts` 新增 `AutoCrawlScheduleType = 'daily' | 'interval'`、`AutoCrawlConfig.intervalMinutes: number`、两个新 SystemSettingKey
+- **Migration 075**：`auto_crawl_last_trigger_at` KV seed（空串占位，首次 interval 触发后 upsert）
+- **systemSettings.ts**：`deserializeAutoCrawlConfig` — scheduleType 两态 + intervalMinutes 钳值 [5, 1440]（向后兼容无键 → 默认 60）；`setAutoCrawlConfig` 解除写死（`auto_crawl_schedule_type` + `auto_crawl_interval_minutes` 写入）
+- **crawler.ts route**：`scheduleType: z.enum(['daily','interval']).default('daily')` + `intervalMinutes: z.number().int().min(5).max(1440).default(60)`
+- **crawlerScheduler.ts**：拆出纯函数 `checkDaily` / `checkInterval`（无 IO，可独立单测）；`runSchedulerTick` dispatch 模式；`persistTriggerMark` — R-154-1 锚点写入在 createRun 成功后
+- **12 单测**（`tests/unit/api/crawlerScheduler.test.ts`）：checkInterval 边界 × 4 + checkDaily × 3 + deserialize × 3 + setAutoCrawlConfig × 1，全部通过
+- **crawler-system-audit.test.ts** 补录 `intervalMinutes: 60` — BEFORE/AFTER_CONFIG 与 zod default 对齐
+
+### 偏离记录
+
+- D-154-1=B 落地（scheduleType 两态，已 ADR Accepted）
+- D-154-5=A 落地（纯函数 dispatch，R-154-1 锚点时序守卫）
+
+### 质量门禁
+
+- ✅ typecheck 通过
+- ✅ lint 通过（仅 pre-existing img 警告）
+- ✅ 12 新单测全部通过（crawlerScheduler.test.ts）
+- ✅ crawler-system-audit.test.ts 5/5 通过
+- ✅ verify:adr-contracts 全部 ✅（endpoint-adr / d-numbers / sql-schema / style）
+
+### 新增/修改文件
+
+- `packages/types/src/system.types.ts`（修改）
+- `apps/api/src/db/migrations/075_auto_crawl_schedule_extend.sql`（新建）
+- `apps/api/src/db/queries/systemSettings.ts`（修改）
+- `apps/api/src/routes/admin/crawler.ts`（修改）
+- `apps/api/src/workers/crawlerScheduler.ts`（修改）
+- `tests/unit/api/crawlerScheduler.test.ts`（新建）
+- `tests/unit/api/crawler-system-audit.test.ts`（修改）
+
+- **执行模型**：claude-sonnet-4-6
+- **子代理调用**：arch-reviewer (claude-opus-4-7)（CW2-C-ADR 阶段）

@@ -1,6 +1,6 @@
 # Resovo（流光） — 任务看板
 
-> last_reviewed: 2026-05-25
+> last_reviewed: 2026-05-26
 
 ---
 

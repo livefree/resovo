@@ -98,6 +98,7 @@ async function tokenFor(role: 'admin' = 'admin') {
 const BEFORE_CONFIG = {
   globalEnabled: false,
   scheduleType: 'daily' as const,
+  intervalMinutes: 60,              // ADR-154 D-154-1
   dailyTime: '03:00',
   defaultMode: 'incremental' as const,
   onlyEnabledSites: true,
@@ -108,6 +109,7 @@ const BEFORE_CONFIG = {
 const AFTER_CONFIG = {
   globalEnabled: true,
   scheduleType: 'daily' as const,
+  intervalMinutes: 60,              // ADR-154 D-154-1（zod default）
   dailyTime: '04:30',
   defaultMode: 'full' as const,
   onlyEnabledSites: false,

@@ -42,8 +42,11 @@ export async function adminCrawlerRoutes(fastify: FastifyInstance) {
 
   const AutoCrawlConfigSchema = z.object({
     globalEnabled: z.boolean(),
-    scheduleType: z.literal('daily').default('daily'),
+    // ADR-154 D-154-1：scheduleType 两态（向后兼容 default='daily'）
+    scheduleType: z.enum(['daily', 'interval']).default('daily'),
     dailyTime: z.string().regex(/^\d{2}:\d{2}$/),
+    // ADR-154 D-154-1：intervalMinutes min=5（< TICK_MS=60s 无意义），max=1440（1 天）
+    intervalMinutes: z.number().int().min(5).max(1440).default(60),
     defaultMode: z.enum(['incremental', 'full']),
     onlyEnabledSites: z.boolean(),
     conflictPolicy: z.enum(['skip_running', 'queue_after_running']),

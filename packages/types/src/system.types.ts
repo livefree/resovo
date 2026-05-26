@@ -24,7 +24,9 @@ export type SystemSettingKey =
   | 'auto_crawl_only_enabled_sites'
   | 'auto_crawl_conflict_policy'
   | 'auto_crawl_per_site_overrides'
-  | 'auto_crawl_last_trigger_date'
+  | 'auto_crawl_interval_minutes'        // ADR-154 D-154-1：interval 模式周期（分钟）
+  | 'auto_crawl_last_trigger_date'       // daily 模式天级防重（保留不删）
+  | 'auto_crawl_last_trigger_at'         // ADR-154 D-154-3：interval 模式触发时刻锚点（ISO8601 UTC）
   | 'crawler_global_freeze'
   | 'config_file'
   | 'config_file_url'
@@ -84,6 +86,8 @@ export interface SiteSettings {
 
 export type AutoCrawlMode = 'incremental' | 'full'
 export type AutoCrawlConflictPolicy = 'skip_running' | 'queue_after_running'
+/** ADR-154 D-154-1：scheduleType 两态（开放扩展位，cron 后续再议） */
+export type AutoCrawlScheduleType = 'daily' | 'interval'
 
 export interface AutoCrawlSiteOverride {
   enabled: boolean
@@ -92,8 +96,10 @@ export interface AutoCrawlSiteOverride {
 
 export interface AutoCrawlConfig {
   globalEnabled: boolean
-  scheduleType: 'daily'
+  scheduleType: AutoCrawlScheduleType
   dailyTime: string
+  /** ADR-154 D-154-1：interval 模式周期（分钟）；daily 模式下忽略但持久化保留；默认 60 */
+  intervalMinutes: number
   defaultMode: AutoCrawlMode
   onlyEnabledSites: boolean
   conflictPolicy: AutoCrawlConflictPolicy
