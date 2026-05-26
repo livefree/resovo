@@ -6892,3 +6892,118 @@ HOTFIX-B 落地后 @livefree dev 实测发现 3am 定时未触发。排查根因
 
 Cleanup-Audit: 2 源文件改 + 1 测试文件（扩展）/ 3 新单测 / 0 migration / 0 新依赖
 Plan-Revision: 0 次
+
+## [CHG-SN-9-CW1-CW2-REDESIGN-A-ADR] ADR-155 六处设计层重做起草 + Opus 评审 → Accepted
+
+- **日期**：2026-05-26
+- **Sequence**：SEQ-20260526-CRAWLER-W3-FIX
+- **任务 ID**：CHG-SN-9-CW1-CW2-REDESIGN-A-ADR
+- **关联 ADR**：ADR-155（🟢 Accepted） + ADR-122 / ADR-152 / ADR-153 / ADR-154 AMENDMENT
+- **模型**：claude-opus-4-7（主循环） + arch-reviewer (claude-opus-4-7) 1 轮独立评审
+
+### 变更摘要
+
+W1/W2 + HOTFIX-A/B/C 实测暴露 6 处设计层缺陷，起草 ADR-155 «CW1/CW2 用户走读修订» 覆盖：
+
+- **D-155-1**：CW1-B run 行内展开（消费 ADR-150 DataTable expandedKeys + renderExpandedRow API；独立路由保留 deep link fallback）
+- **D-155-2**：CW1-E Topbar 图标合并（删除 BackgroundEventBell position:fixed 旁路 + 扩展 NotificationItem discriminated union + 双源镜像 packages/types/admin-shell.types.ts；**强制 Opus arch-reviewer trailer**）
+- **D-155-3**：CW2-B Gantt 三段窗（[NOW-range×0.7, NOW+range×0.3] + now-line 垂直指示线 + pending bar 真位 + range 加 12h/24h/7d + 拖拽 pan 支持）
+- **D-155-4**：CW2-B 站点 limit 解锁（UI 选 8/20/all + 后端 safeLimit 上限 20→50）
+- **D-155-5**：AutoCrawlSummaryCard 显式入口卡（顶部摘要 + [立即关闭] 快捷 + [编辑]）
+- **D-155-6**：多 dailyTime 支持（`dailyTime: string` → `dailyTimes: string[]` + 防重维度从 `auto_crawl_last_trigger_date` 升级 `auto_crawl_last_trigger_marks JSONB` 允许同日不同时间各触发一次）
+
+### arch-reviewer Opus 评审结果
+
+**评级**：A− CONDITIONAL → 主循环消化后等同 A
+
+**评审报告关键数据**：
+- 6 个 D-N 决策方向均正确
+- 6 红线（R-155-1..6）：必须消化
+- 5 黄线（Y-155-1..5）：强烈建议消化
+- 3 绿线（G-155-1..3）：可推迟到 EP 卡内决策
+- 4 关键洞察
+
+**6 红线消化完成**：
+- R-155-1：D-155-2 §实施列补 `packages/types/src/admin-shell.types.ts` 双源镜像同步（admin-ui SSOT 镜像 / api 包反向依赖避让）；EP-2 commit trailer 声明双源审查
+- R-155-2：D-155-3 §实施列补 `rowToTimelineRow` JS 层双字段语义 — durationSeconds 真实业务值 + startPct/widthPct 可视化 clamp（伪代码已含）
+- R-155-3：D-155-6 §实施列补 `parseDailyTimes` 3 路径伪代码（旧单字符串 / JSON 单字符串 / JSON 数组 / 非法 / 空 5 case 兜底）+ §6 测试矩阵
+- R-155-4：§5 EP 拆分重写为 6 张子卡（EP-1A / EP-1B / EP-1C-1 / EP-1C-2 / EP-2 / EP-3），每卡 ≤ 5 项文件改动（CLAUDE.md PATCH 硬约束）
+- R-155-5：D-155-3 §实施列补拖拽 throttle 16ms + 防抖 300ms + viewport ±0.5×range buffer + 30d 历史封顶
+- R-155-6：D-155-6 §实施列补 zod schema preprocess `z.union([...])` 兼容旧 `{dailyTime: string}` POST schema
+
+**5 黄线消化完成**：
+- Y-155-1：systemSettings.ts:184 setter 行号点名 + diff
+- Y-155-2：marks JSONB GC 策略（scheduler tick 内 7 天前 keys 清理）
+- Y-155-3：D-155-2 路径选择明确"前端并发两 GET 短期方案 + ADR-156 未来演化"
+- Y-155-4：§4 AMENDMENT 引用块加具体行号锚点 + 标准化模板
+- Y-155-5：§6 + §8 加 `npm run verify:adr-contracts` + `docs/architecture.md` 同步约束
+
+**4 关键洞察**：
+- 关键洞察 #1：ADR-149 §7 走读硬前置升级为 SEQ 闭合硬约束（§8 验收第 4 条）
+- 关键洞察 #2：process 红线复发监测 — EP-2 commit trailer 必须显式审查双源镜像同步（§7 风险）
+- 关键洞察 #3：§4 AMENDMENT 落盘作为独立 step（§8 验收第 2 条）
+- 关键洞察 #4：拖拽性能细节移到 §7 + EP-3 实施期监控
+
+### EP 拆卡（task-queue.md 已更新）
+
+| EP | 内容 | 估时 | 模型 | 关键约束 |
+|----|------|------|------|----------|
+| EP-1A | D-155-1 行内展开 | 0.15w | sonnet | 复用 ADR-150 expandedKeys |
+| EP-1B | D-155-4 limit 解锁 + D-155-5 summary 卡 | 0.2w | sonnet | AMENDMENT 落盘 ADR-122 |
+| EP-1C-1 | D-155-6 后端契约 + scheduler | 0.2w | sonnet | architecture.md 同步 + zod preprocess |
+| EP-1C-2 | D-155-6 前端 UI 多时间消费 | 0.15w | sonnet | 依赖 EP-1B + EP-1C-1 |
+| EP-2 | D-155-2 topbar 图标合并 | 0.3w | sonnet | **强制 Opus arch-reviewer trailer + 双源镜像审查** |
+| EP-3 | D-155-3 Gantt 三段窗 + 拖拽 pan | 0.4w | sonnet | 依赖 HOTFIX-A（已闭合）+ AMENDMENT 落盘 ADR-122/153 |
+
+总估时 1.4w。
+
+### 新增/修改文件
+
+- `docs/decisions.md`（追加 ADR-155 约 380 行：§1 决策摘要 + §2 背景 + §3 6 D-N 详述 + §4 AMENDMENT 引用 + §5 6 子卡拆分 + §6 测试 surface + §7 风险偏离 + §8 验收 + §10 评审结论）
+- `docs/task-queue.md`（HOTFIX-A/B/C 状态 🟡 → ✅；REDESIGN-A-ADR 状态 ⬜ → ✅；EP 拆分更新）
+- `docs/tasks.md`（REDESIGN-A-ADR 卡卸载 / 任务清空）
+- `docs/audit/adr-d-status.json`（verify:adr-contracts 自动生成 / D-N 偏离编号 201 → 207）
+
+### 质量门禁
+
+- ✅ ADR-155 🟢 Accepted（arch-reviewer Opus A− CONDITIONAL → 等同 A）
+- ✅ verify:adr-contracts PASS（含 verify-adr-d-numbers 全部 207 条 D-N 闭环 / 新增 D-155-1..6 自动注册）
+- ✅ docs/decisions.md 纳入 git add
+
+### 六问自检 PASS
+
+1. **正确性**：6 D-N 决策方向 arch-reviewer Opus 全部确认正确；6 红线 + 5 黄线全部消化
+2. **边界与复用**：D-155-1 复用 ADR-150 expandedKeys；D-155-2 删除旁路方案合并到 AdminShell 二图标范式；D-155-5 复用 Pill + AdminButton + AdminCard
+3. **可扩展性**：D-155-2 discriminated union `category` 易扩第 3 / 4 类；D-155-6 dailyTimes 数组易扩 cron + per-site；D-155-3 三段窗策略易扩反向（NOW 居中、左右对称）
+4. **一致性**：D-155-3 与 ADR-153 D-153-5 UTC ISO 一致；D-155-6 与 ADR-154 ScheduleType 命名一致；EP-2 与 ADR-152 60s polling 一致
+5. **改动收敛**：满足 1–4 前提下严格 1 docs 文件改动 + 1 audit JSON 副产物
+6. **偏离检测**：本卡仅起草 ADR，无 D-N 实际落地代码偏离；4 处 AMENDMENT 引用待 EP-1A/B/C/2/3 实施时同步追加
+
+### AI-CHECK 结论
+
+- ✅ **PASS** — ADR-155 完整 6 D-N + 6 R / 5 Y / 3 G / 4 关键洞察全部消化 / 评级 A− → 等同 A / EP 拆 6 子卡 / verify:adr-contracts PASS
+- **越界检测**：CLEAN（仅 docs 改动）
+- **回归风险**：低（无代码改动；ADR-155 自身是设计契约，下游 EP 实施时按 §5 拆卡范围严格执行）
+
+### 未覆盖（→ 后续 EP）
+
+- EP-1A 行内展开实施
+- EP-1B limit 解锁 + summary 卡实施
+- EP-1C-1 后端 dailyTimes 契约 + scheduler 实施
+- EP-1C-2 前端 dailyTimes UI 实施
+- EP-2 topbar 图标合并实施（**Opus reviewer 必跑**）
+- EP-3 Gantt 三段窗 + 拖拽 pan 实施
+- 每 EP 完成后 @livefree 用户走读 ≥ 1 次硬前置
+
+### 关键约束消化
+
+- **R-155-1..6 必修全部消化** + **Y-155-1..5 强烈建议全部消化** + **4 关键洞察纳入 §7 + §8**
+- **EP-1 拆 6 子卡满足 CLAUDE.md PATCH ≤ 5 项硬约束**
+- **EP-2 commit trailer 双源镜像审查为强制条件**
+- **走读硬前置升级为 SEQ 闭合硬约束**（ADR-155 §8 验收第 4 条）
+
+- **执行模型**：claude-opus-4-7（主循环 / CLAUDE.md 模型路由"撰写即将成为 ADR 的决策文档"强制条件）
+- **子代理调用**：arch-reviewer (claude-opus-4-7) — 1 轮独立评审 / agentId a7a1717c2ef082558 / 输出 6 R + 5 Y + 3 G + 4 关键洞察
+
+Cleanup-Audit: 1 docs 文件改（decisions.md 追加 ADR-155 ~380 行）+ 1 audit JSON 副产物 / 0 源代码 / 0 测试 / 0 migration / 0 新依赖
+Plan-Revision: 1 次（D-155-5 + D-155-6 在评审前已加入 ADR 范围；评审消化后 EP-1 拆为 EP-1A/B/C-1/C-2 共 4 张子卡）

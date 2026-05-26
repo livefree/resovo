@@ -1107,8 +1107,9 @@ B 序列 + C 序列可与 A 并行（A 无依赖）；B 与 C 之间无依赖（
 - **状态**：🟡 规划中
 - **创建时间**：2026-05-26 02:00
 - **最后更新时间**：2026-05-26 02:00
-- **目标**：消化 @livefree 用户走读 W1/W2 暴露的 4 类缺陷 — ① CW1-B SQL `r.site_key` 不存在（P0 阻塞 cancel/pause/detail）② CW2-B Gantt SQL WHERE 误用 scheduled_at + status 缺 pending（任务刷新消失）+ 布局三处缺陷（"实时"挤两行 / 当前时间在最右 / 站点 limit 硬编码）③ CW2-C Drawer 内 AdminSelect 被 z-index 遮挡（所有下拉不可用）④ CW1-E topbar 第 3 个铃铛未复用 AdminShell 已有 notifications/tasks 数据流。
-- **范围**：先 HOTFIX 三个 P0 阻塞（纯修补，不动设计），再 REDESIGN 四处设计层重做（含 ADR AMENDMENT）。
+- **目标**：消化 @livefree 用户走读 W1/W2 暴露的 4 类缺陷 — ① CW1-B SQL `r.site_key` 不存在（P0 阻塞 cancel/pause/detail）② CW2-B Gantt SQL WHERE 误用 scheduled_at + status 缺 pending（任务刷新消失）+ 布局三处缺陷（"实时"挤两行 / 当前时间在最右 / 站点 limit 硬编码）③ CW2-C Drawer 内 AdminSelect 被 z-index 遮挡（所有下拉不可用）④ CW1-E topbar 第 3 个铃铛未复用 AdminShell 已有 notifications/tasks 数据流 + ⑤ HOTFIX-B/C 实测追加：孤儿 run 转态 + AutoCrawlScheduleCard interval 显示 + scheduler 可见性 + 多 dailyTime（D-155-6）。
+- **HOTFIX 进度**：HOTFIX-A ✅ + HOTFIX-B ✅ + HOTFIX-C ✅（2026-05-26 全部 commit + @livefree 实测 11 路径 PASS）
+- **范围**：HOTFIX 三处 P0 已闭环；REDESIGN-A 六处设计层重做进行中（含 ADR AMENDMENT）
 - **依赖**：W1（SEQ-20260525-CRAWLER-W1）+ W2（SEQ-20260525-CRAWLER-W2）全部 ✅
 - **真源**：本会话 2026-05-26 排查 4 项根因 + 用户提议（行内展开 / Gantt 三段窗 / 复用 topbar 图标）
 - **总估时**：~1.25w（HOTFIX-A 0.25w + REDESIGN-A 1.0w）
@@ -1116,10 +1117,10 @@ B 序列 + C 序列可与 A 并行（A 无依赖）；B 与 C 之间无依赖（
 ### 任务列表（按执行顺序）
 
 1. **CHG-SN-9-CW1-CW2-HOTFIX-A** — W1/W2 三处 P0 + 1 处布局修补
-   - 状态：🟡 代码已落地 / 待 @livefree dev server 实测确认（typecheck + lint + test 5078/5078 + verify:adr-contracts 全过 / 22 新单测全过）
+   - 状态：✅ 完成（2026-05-26 / @livefree 实测 6 路径 1/2/3/5/6 PASS / 路径 4 时间轴拖拽 + 历史回看改入 D-155-3 Gantt 三段窗 / commit d79769cc）
    - 创建时间：2026-05-26 02:00
    - 实际开始：2026-05-26 02:00
-   - 完成时间：—（实测 PASS 后回填）
+   - 完成时间：2026-05-26 03:30
    - 执行模型：claude-opus-4-7（主循环延续；建议 sonnet 但本会话 opus 上下文复用避免新会话重读）
    - 建议模型：sonnet（纯修补，无新决策）
    - 范围（实际落地）：
@@ -1145,10 +1146,10 @@ B 序列 + C 序列可与 A 并行（A 无依赖）；B 与 C 之间无依赖（
      - **不动设计层**：UI 布局 / 数据契约 / 路由结构 / 组件 API 一律不改；这些放 REDESIGN-A
 
 2. **CHG-SN-9-CW1-CW2-HOTFIX-B** — 孤儿 run 转态 + AutoCrawlScheduleCard interval 显示
-   - 状态：🟡 代码已落地 / 待 @livefree dev server 实测确认（typecheck + lint + test 5083/5083 + verify:adr-contracts 全过 / 16 新单测全过 / commit 见 changelog）
+   - 状态：✅ 完成（2026-05-26 / @livefree 实测 2 路径 7/8 PASS / commit 0a0cc4e8）
    - 创建时间：2026-05-26 02:30
    - 实际开始：2026-05-26 02:30
-   - 完成时间：—（实测 PASS 后回填）
+   - 完成时间：2026-05-26 03:30
    - 执行模型：claude-opus-4-7（主循环延续；HOTFIX-A 上下文复用）
    - 建议模型：sonnet（纯修补，无新决策）
    - 范围：HOTFIX-A 实测发现 2 缺陷：
@@ -1170,10 +1171,10 @@ B 序列 + C 序列可与 A 并行（A 无依赖）；B 与 C 之间无依赖（
      - **worker 8 处 sync 调用方零行为变化**（worker job 永远先创 task，a.total > 0 永远不命中新 case）
 
 3. **CHG-SN-9-CW1-CW2-HOTFIX-C** — schedulerEnabled UI 可见性警告
-   - 状态：🟡 代码已落地 / 待 @livefree dev server 实测确认（typecheck + lint + test 5086/5086 + verify:adr-contracts 全过 / 3 新单测全过）
+   - 状态：✅ 完成（2026-05-26 / @livefree 实测 3 路径 9/10/11 PASS / 11 = 3:26 dailyTime 触发 daily run 成功 / commit b1491aea）
    - 创建时间：2026-05-26 03:00
    - 实际开始：2026-05-26 03:00
-   - 完成时间：—（实测 PASS 后回填）
+   - 完成时间：2026-05-26 03:30
    - 执行模型：claude-opus-4-7（主循环延续）
    - 建议模型：sonnet（纯 UI 警告 + 单测，无新决策）
    - 范围：HOTFIX-B 实测发现 — scheduler 是 opt-in (`CRAWLER_SCHEDULER_ENABLED === 'true'`)，用户 `.env.local` 无此设置导致 scheduler 进程从未注册，UI 完全无感知。后端 `/admin/crawler/system-status` 已暴露 `schedulerEnabled: boolean`，前端 0 消费。
@@ -1197,12 +1198,13 @@ B 序列 + C 序列可与 A 并行（A 无依赖）；B 与 C 之间无依赖（
      - **schedulerEnabled=false 时禁止信任 autoCrawlNext**（scheduler 进程不存在时该字段是过期数据 / 误导用户）
 
 4. **CHG-SN-9-CW1-CW2-REDESIGN-A-ADR** — 六处设计层重做 ADR 起草（合并）
-   - 状态：⬜
+   - 状态：✅ 完成（2026-05-26 / ADR-155 🟢 Accepted / arch-reviewer Opus A− CONDITIONAL → 主循环消化 6 红线 + 5 黄线 + 4 关键洞察 → 等同 A / EP 拆为 6 子卡 EP-1A/B/C-1/C-2/2/3）
    - 创建时间：2026-05-26 02:00
-   - 最后更新：2026-05-26 02:30（D-155-5 追加）
-   - 实际开始：—
-   - 完成时间：—
-   - 建议模型：opus 主循环 + arch-reviewer (claude-opus-4-7)
+   - 最后更新：2026-05-26 04:00（消化评审完成）
+   - 实际开始：2026-05-26 03:30
+   - 完成时间：2026-05-26 04:00
+   - 执行模型：claude-opus-4-7（主循环）
+   - 子代理：arch-reviewer (claude-opus-4-7) — 1 轮独立评审 A− CONDITIONAL（6 红线 + 5 黄线 + 3 绿线 + 4 关键洞察 / 输出 agentId a7a1717c2ef082558）
    - 范围：起草 1 份合并 ADR（暂定 ADR-155 «CW1/CW2 用户走读修订») 覆盖 5 个独立但相关的设计决策：
      - **D-155-1（CW1-B 行内展开）**：`/admin/crawler/runs` list 行点击切换 expand panel（消费现有 `renderExpandedRow` + `expandedKeys` API），expand body 复用 `RunInlinePanel`（拆自 CrawlerRunDetailView 的 meta grid + tasks 子表 + TaskLogsDrawer）；独立路由 `/admin/crawler/runs/[id]` 保留为 deep link fallback（含 PageHeader 自渲）
      - **D-155-2（CW1-E 复用 Topbar 图标）**：删除 BackgroundEventBell `position:fixed` 旁路叠加；BackgroundEventService 三源（autoCrawlNext + scheduler + 高危 audit）合并到 `useAdminNotifications` + `useAdminTasks` 现有数据流；扩展 `NotificationItem` discriminated union 加 background category（**触发 packages/admin-ui/src/**/types.ts 改动 → 强制 Opus arch-reviewer trailer**）

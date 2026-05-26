@@ -14525,3 +14525,427 @@ runSchedulerTick:
 **最终结论**：ADR-154 status 🟢 Accepted（2026-05-25 / arch-reviewer Opus A− → 等同 A）；CW2-C-EP 须拆 -A（后端）/ -B（前端）两张子卡后启动。PATCH 范围各子卡 ≤ 5 项。
 
 ---
+
+## ADR-155 — CW1/CW2 用户走读修订（CHG-SN-9-CW1-CW2-REDESIGN-A-ADR）
+
+> **Status**: 🟢 Accepted（2026-05-26 / arch-reviewer Opus A− CONDITIONAL → 主循环消化 6 红线 + 5 黄线 + 关键洞察 → 等同 A）
+> **触发**：W1（SEQ-20260525-CRAWLER-W1）+ W2（SEQ-20260525-CRAWLER-W2）全程绕过 ADR-149 §7 "用户走读 ≥ 1 次 + dev server 实测硬前置"。HOTFIX-A/B/C（commits d79769cc / 0a0cc4e8 / b1491aea，2026-05-26）修复 3 个 P0 + 1 个 P1 + 1 个 UI 可见性后，@livefree 实测又暴露 4 处设计层缺陷 + 1 处功能性约束（多 dailyTime）。统一起草 ADR-155 覆盖 6 个独立但相关的设计决策。
+> **ADR 存在性**：本 ADR 是 ADR-122 / ADR-152 / ADR-153 / ADR-154 的 AMENDMENT 集合 + 1 处新组件契约（AutoCrawlSummaryCard）。**必须 arch-reviewer Opus 评审**：D-155-2 触发 packages/admin-ui/src/shell/types.ts NotificationItem 扩展（CLAUDE.md "共享组件 API 契约强制 Opus"）。
+> **关联**：ADR-122（timeline 端点契约）、ADR-149 §7（用户走读硬前置 / 本卡是其反面教材）、ADR-150（DataTable expandedKeys 已实装）、ADR-152（topbar 三源聚合 / D-155-2 删除 BackgroundEventBell）、ADR-153（timeline SQL V2 / D-155-3 三段窗 AMENDMENT）、ADR-154（scheduleType 两态 / D-155-6 多 dailyTime AMENDMENT）
+
+### §1 决策摘要
+
+| 决策点 | 主题 | 推荐结论 | 性质 |
+|--------|------|----------|------|
+| D-155-1 | CW1-B run 行内展开 | **A**：DataTable expandedKeys + renderExpandedRow，独立路由 deep link fallback | 复用现有 ADR-150 API |
+| D-155-2 | CW1-E Topbar 图标合并 | **A**：删除 BackgroundEventBell，扩展 NotificationItem discriminated union + TaskItem 加 background 来源 | **强制 Opus arch-reviewer trailer** |
+| D-155-3 | CW2-B Gantt 三段窗 | **A**：`[NOW-range×0.7, NOW+range×0.3]` + now-line 垂直指示线 + pending bar 真位 + range 加 12h/24h/7d + 拖拽平移（pan） | ADR-122/153 AMENDMENT |
+| D-155-4 | CW2-B 站点 limit 解锁 | **A**：UI 加 `limit select` 选项 `8 / 20 / all`，后端 safeLimit 上限 20→50；> 50 站给性能提示 | ADR-153 AMENDMENT |
+| D-155-5 | 定时设置显式入口卡 | **A**：`/admin/crawler` 顶部加 AutoCrawlSummaryCard 摘要 + [立即关闭] 快捷 + [编辑] 按钮 | 新组件契约 |
+| D-155-6 | 多 dailyTime 支持 | **A**：`dailyTime: string` → `dailyTimes: string[]`（min 1 max 24）；KV serialize JSON 数组（向后兼容旧单字符串）；checkDaily 任一时间匹配触发；防重维度从 date 升级为 `date#HH:MM` | ADR-154 AMENDMENT |
+
+### §2 背景与问题
+
+@livefree 走读 CW1/CW2 落地结果，识别 6 类缺陷：
+
+1. **D-155-1**：`/admin/crawler/runs` 行 → `/admin/crawler/runs/[id]` 独立页跳转。run 详情仅 6 个 meta 字段 + tasks 子表（通常 ≤ 50 task），适合行内展开避免上下文切换。`packages/admin-ui` 早已实装 `renderExpandedRow + expandedKeys` API（CHG-DESIGN-02 Step 7A），CW1-B 实施时未消费。
+2. **D-155-2**：CW1-E（ADR-152）BackgroundEventBell 用 position:fixed 旁路叠加在 AdminShell topbar 右上角，topbar 已有铃铛（notifications）+ 闪电（tasks）两图标可消费。changelog 自承 N1-152-A 路径是为规避"共享组件 API 契约强制 Opus"。违反价值排序 #2（边界与复用）+ #4（一致性）。
+3. **D-155-3**：CW2-B（ADR-153）时间轴当前 `[NOW-range, NOW]` 单段窗 + 当前时间在最右 + 不支持拖拽 + 不支持历史回看。Gantt 图核心语义是"任务时间线相对位置 + 并发关系 + 历史回顾"，单段窗 + 滚动 logs 形态丢失了 Gantt 价值。pending bar clamp 到 NOW 导致全部堆右端。
+4. **D-155-4**：CW2-B `getCrawlerTimeline(limit=8)` 硬编码，超过 8 站的部署看不到完整状态。`safeLimit` 上限 20 但 UI 未暴露选择器。
+5. **D-155-5**：当前 schedule 配置仅在 `Dashboard AutoCrawlScheduleCard` 显示（用户必须切到 `/admin` 才能看），且 "关闭定时" 必须打开 SchedulerConfigDrawer 反勾 globalEnabled（用户感知"为什么没有快捷关闭按钮"）。`/admin/crawler` 主页面缺 schedule summary 入口。
+6. **D-155-6**：当前 `AutoCrawlConfig.dailyTime: string` 单一时间，@livefree 期望 "3am + 4am 多时间触发"。ADR-154 D-154-1 选 `daily | interval` 两态，未考虑 daily 多时间需求。
+
+### §3 6 决策点详述
+
+#### D-155-1：CW1-B 行内展开 — A（DataTable expandedKeys）
+
+**备选**：
+- A：消费 `packages/admin-ui` DataTable `renderExpandedRow + expandedKeys` API；拆 `CrawlerRunDetailView` 为 `RunInlinePanel`（meta grid + tasks 子表 + TaskLogsDrawer）；list 行点击 toggle expand；`/admin/crawler/runs/[id]` 保留为 deep link fallback（PageHeader 自渲，body 复用 RunInlinePanel）
+- B：DataTable 不改，仅在 list 行下方插 collapsible section；保留独立详情页
+- C：彻底删除 `/admin/crawler/runs/[id]` 路由（仅行内展开）
+
+**推荐 A 的理由**：
+- ADR-150 早已实装 `renderExpandedRow + expandedKeys`（无新组件成本）
+- 拆分 `RunInlinePanel` 后 list 行内展开 + deep link 两种入口共用同一渲染逻辑（DRY）
+- 删除路由（C）破坏分享链接 / 浏览器 history / SEO，不符合 admin 工具习惯
+
+**实施**：
+- `RunInlinePanel.tsx`（新建，拆自 CrawlerRunDetailView）：接收 `runId` + 内部自治拉 run/tasks
+- `CrawlerRunsView.tsx`：加 `expandedKeys` state + `onRowClick` toggle + `renderExpandedRow={(run) => <RunInlinePanel runId={run.id} />}`；Run ID 列 cell 从 `<a href>` 改为按钮 toggle，旁加 "⧉ 新窗口打开" 副入口（深链接备份）
+- `CrawlerRunDetailView.tsx`：瘦身为 PageHeader + RunInlinePanel
+- `runs/[id]/page.tsx`：保留 deep link fallback，无改动
+
+**偏离规约**：本 D-N 不引入新组件 API；仅消费现有 ADR-150 公约 → 不触发 Opus arch-reviewer。
+
+#### D-155-2：CW1-E Topbar 图标合并 — A（删除 BackgroundEventBell + 扩展 NotificationItem）
+
+**备选**：
+- A：删除 `BackgroundEventBell` + `useAdminBackgroundEvents`，扩展 `NotificationItem` discriminated union 加 `category: 'general' | 'background'`；BackgroundEventService 三源（upcoming/active/finished）合并到 `useAdminNotifications` + `useAdminTasks` 内部
+- B：保留 BackgroundEventBell 但移除 position:fixed，注入 AdminShell topbarIcons 第 6 槽（需扩 admin-shell types.ts `TopbarIcons` 5→6）
+- C：现状不动（接受重复铃铛）
+
+**推荐 A 的理由**：
+- AdminShell 数据流是 `notifications + tasks` 二元，BackgroundEvent 三源（upcoming/active/finished）本质上是"通知 + 任务"的混合：upcoming（autoCrawlNext + scheduler nextRun）→ NotificationItem；active crawler_runs → TaskItem；finished/failed crawler_runs → NotificationItem
+- B 方案仍需要扩 admin-shell types.ts，且新加第 3 个 popover 是冗余 UX（用户期望 2 个图标，不是 3 个）
+- C 违反价值排序 #2（边界与复用）
+
+**实施**：
+- `packages/admin-ui/src/shell/types.ts`：扩展 `NotificationItem` 加 `category?: 'general' | 'background'`（discriminated union 友好 / 向后兼容 default 'general'）+ `TaskItem` 加 `source?: 'crawler' | 'maintenance' | 'general'`
+- **R-155-1（必修 / arch-reviewer Opus 红线）类型双源镜像同步**：`packages/types/src/admin-shell.types.ts:12-36` `AdminNotificationItem / AdminTaskItem`（admin-ui 的 SSOT 镜像 / api 包反向依赖避让）**必须同 commit 同步**：加 `category?: 'general' | 'background'` + `source?: 'crawler' | 'maintenance' | 'general'`。两份类型严格同步是硬约束（avoid drift）。
+- **Y-155-3 路径选择**：`useAdminNotifications` 内部合并 BackgroundEventService 三源 — 选择"**前端并发两 GET**"短期方案。即 `useAdminNotifications` 内部并发 GET `/admin/notifications` + GET `/admin/system/background-events`，前端 merge 后按 category 渲染；`useAdminTasks` 同模式合并 background 的 `active` 子集。接受额外 1 个 60s 轮询请求的开销（性能影响可控，与 ADR-152 60s polling 频率对齐）。
+- **未来演化（ADR-156 候选 / 本卡不实施）**：若 60s 双端点轮询性能瓶颈，起 ADR-156 «notifications 端点扩展» 将 BackgroundEventService 内嵌到 `/admin/notifications` + `?include=background` 参数；同步 ADR-147 端点契约 AMENDMENT。本卡 §7 风险章节登记此演化方向。
+- `apps/server-next/src/lib/admin-shell-notifications.ts`：`useAdminNotifications` 内部并发 GET 两端点 + merge by category；`useAdminTasks` 同模式
+- `apps/server-next/src/app/admin/admin-shell-client.tsx`：删除 `<BackgroundEventBell>` + `useAdminBackgroundEvents` import
+- **删除文件**：`apps/server-next/src/components/admin-shell/BackgroundEventBell.tsx` + `apps/server-next/src/lib/admin-shell-background-events.ts`
+- `apps/api/src/services/BackgroundEventService.ts`：**保留**（端点真源）
+- `apps/api/src/routes/admin/systemBackgroundEvents.ts`：**保留**（继续作为 useAdminNotifications 第 2 个 GET 源；ADR-156 立项后才合并）
+
+**偏离规约**：扩 `packages/admin-ui/src/shell/types.ts` + `packages/types/src/admin-shell.types.ts` **双源**公开 Props → **强制 commit trailer `Subagents: arch-reviewer (claude-opus-4-7)`** + reviewer 必须**显式审查双源镜像同步**（CLAUDE.md "共享组件 API 契约强制 Opus" + arch-reviewer §5 关键洞察 #2 process 红线复发监测）。本 D-N 是触发条件。
+
+#### D-155-3：CW2-B Gantt 三段窗 — A（[NOW-range×0.7, NOW+range×0.3] + now-line + 拖拽）
+
+**备选**：
+- A：时间窗改为 `[NOW-range×0.7, NOW+range×0.3]`（70% 历史 / 30% 未来 buffer）+ now-line 垂直 1px 实线（color=`var(--accent-default)`，固定在 NOW 位置）+ pending bar 显示在 scheduled_at 真实位置（不再 clamp 到 NOW）+ range 选项加 `12h / 24h / 7d` + 鼠标拖拽时间轴平移（pan）支持
+- B：仅加 range 12h/24h/7d，时间窗仍 `[NOW-range, NOW]`，不加 now-line / 不加拖拽
+- C：完全重写为基于第三方 Gantt 库（如 frappe-gantt） — 引入新依赖
+
+**推荐 A 的理由**：
+- 用户走读明确诉求"看到历史 + 看到当前位置 + 拖拽回顾"，B 只解决"范围扩大"未解决"语义"
+- C 引入新依赖（CLAUDE.md BLOCKER），且现有 SVG 渲染足以表达
+- 70/30 切分给未来预留 30% 显示 scheduler nextRun（与 ADR-152 autoCrawlNext 数据流串联）
+
+**实施**：
+- `apps/api/src/db/queries/crawlerTimeline.ts`：
+  - `RANGE_TO_INTERVAL` + `RANGE_TO_MS` 加 `12h / 24h / 7d`
+  - `getCrawlerTimeline` 计算 `rangeStart = NOW - range × 0.7` / `rangeEnd = NOW + range × 0.3`
+  - SQL WHERE 仍是 `COALESCE(finished_at, NOW()) >= rangeStart`（HOTFIX-A Step 2 已实施）
+  - SQL SELECT 移除 D-153-4 `GREATEST(COALESCE(rt.started_at, rt.scheduled_at), NOW() - $1::interval) AS started_at` 钳值，改为直接 `COALESCE(rt.started_at, rt.scheduled_at) AS started_at`（保留真实值，由 JS 层做可视化 clamp）
+  - **R-155-2（必修 / arch-reviewer Opus 红线）JS clamp 同步修订**：`rowToTimelineRow` 必须区分**两个语义**：
+    - `durationSeconds`（业务字段 / hover tooltip 显示）= **真实 task 持续时长** `(endMs - startMs) / 1000`，与窗口位置无关
+    - `startPct / widthPct`（可视化字段 / SVG 渲染位置）= **基于 viewport 二次 clamp**，需新增 `clampedDurationVisible` 概念：
+      ```ts
+      // 真实值（业务语义）
+      const realStart = row.started_at.getTime()
+      const realEnd = row.effective_end.getTime()
+      const durationSeconds = Math.round((realEnd - realStart) / 1000)  // ← 真实，可能远大于窗口
+
+      // 可视化值（SVG 渲染）
+      const visStart = Math.max(realStart, rangeStartMs)  // JS 层 clamp 到窗口左侧（替代 SQL GREATEST）
+      const visEnd = Math.min(realEnd, rangeEndMs)        // JS 层 clamp 到窗口右侧
+      const span = rangeEndMs - rangeStartMs
+      const startPct = Math.max(0, Math.min(1, (visStart - rangeStartMs) / span))
+      const widthPct = Math.max(0.01, Math.min(1 - startPct, (visEnd - visStart) / span))
+      ```
+  - 这样 startPct/widthPct 不再溢出，durationSeconds 仍是真实业务值，hover tooltip 正常显示"已运行 3 天"等。
+- `apps/api/src/routes/admin/crawler.ts`：timeline route range zod enum 加 12h/24h/7d
+- `apps/server-next/src/lib/crawler/api.ts`：`CrawlerTimelineRange` 类型扩展
+- `apps/server-next/src/app/admin/crawler/_client/CrawlerTimelineCard.tsx`：
+  - now-line 渲染：`position: absolute; left: 70%; width: 1px; height: 100%; background: var(--accent-default)`
+  - pending bar 虚线边框 + 半透明（区分已发生 vs 计划）
+  - **R-155-5（必修）拖拽 pan + viewport 防抖 + 历史封顶**：
+    - mousedown + mousemove 计算 deltaX → 调整 `viewportStart / viewportEnd` state（不改 range，只改窗口偏移）；拖拽期间 SVG 重渲染 throttle 16ms（60fps）
+    - **viewport buffer 预拉**：每次拉数据时窗口左右各 +0.5×range 预拉，拖拽时只移视口不重 fetch（避免 race）
+    - **拖拽停止 300ms 防抖**：mousestop 300ms 后才检查是否超出预拉缓冲，超出再触发新 range fetch
+    - **历史回看封顶 30d**：viewportStart 最早不超过 `NOW - 30 × 24 × 3600 × 1000`（与 ADR-152 windowHours max=24 的设计哲学对齐），超出给用户提示"超出可视历史范围 30 天"
+  - 空窗口提示加 "扩大到 6h" / "扩大到 24h" 快捷按钮
+- 单测：crawlerTimeline.test 加 5 case（70/30 切分 + now-line 位置 + range 12h/24h/7d + JS clamp 真实 vs 可视化双字段 + durationSeconds 不受 clamp 影响）；CrawlerTimelineCard.test 加 6 case（now-line 渲染 + pending 虚线 + 拖拽 pan + 防抖 300ms + viewport buffer + 7 range 选项 + 30d 封顶）
+
+**偏离规约**：D-155-3 是 ADR-122 §时间窗策略 + ADR-153 §pending clamp 决策的 AMENDMENT。本 D-N 不动 packages/admin-ui types，不触发 Opus arch-reviewer。`durationSeconds` 业务字段语义不变（不破坏现有消费方）。
+
+#### D-155-4：CW2-B 站点 limit 解锁 — A（UI limit select + 后端 safeLimit 50）
+
+**备选**：
+- A：UI 在 range select 旁加 `limit select` 选项 `8 / 20 / all`（"all" 传 `safeLimit` 最大 50）；后端 `safeLimit` 上限 20→50；> 50 站时给用户性能提示
+- B：UI 不加选择器，后端 `safeLimit` 默认改为 sites 总数（无限制）
+- C：保留硬编码 limit=8
+
+**推荐 A 的理由**：
+- B 无 UI 控制权 + 性能不可预测（一旦站点 > 100 SQL 退化为全表 RANGE）
+- C 是现状（用户不满）
+- 50 上限是合理的"显示密度 vs 性能"折衷（每站 3 bar × 50 = 150 bar / 24h 窗口）
+
+**实施**：
+- `apps/server-next/src/app/admin/crawler/_client/CrawlerTimelineCard.tsx`：range select 旁加 `limit select`（默认 8）
+- `apps/api/src/db/queries/crawlerTimeline.ts`：`safeLimit` 上限 `Math.min(50, Math.trunc(limit))`
+- 单测：crawlerTimeline.test 加 1 case（safeLimit 50 cap）
+
+**偏离规约**：本 D-N 是 ADR-122 §LIMIT 语义 AMENDMENT。不触发 Opus。
+
+#### D-155-5：定时设置显式入口卡 — A（AutoCrawlSummaryCard）
+
+**备选**：
+- A：`/admin/crawler` 顶部紧邻 PageHeader 下方加 `AutoCrawlSummaryCard`：scheduleType label + 时间/间隔显示 + globalEnabled 状态 pill + [立即关闭] 快捷按钮（toggle globalEnabled=false 调 POST /auto-config 不弹 Drawer）+ [编辑] 按钮（打开 SchedulerConfigDrawer）
+- B：仅在 PageHeader chip 显示 globalEnabled 状态，不加独立卡
+- C：在 SchedulerConfigDrawer 内加 [立即关闭] tab，仍需打开 Drawer
+
+**推荐 A 的理由**：
+- B 信息量不够（用户走读希望看到 dailyTimes 完整列表 + intervalMinutes 等）
+- C 一键关闭仍需要 2 次点击（打开 Drawer → 反勾）
+- A 提供 "查看 + 一键关闭 + 编辑" 三入口，符合 D-155-5 用户诉求
+
+**实施**：
+- `apps/server-next/src/app/admin/crawler/_client/AutoCrawlSummaryCard.tsx`（新建，约 150 行）：复用 `Pill` + `AdminButton` + `AdminCard` 原语
+- `apps/server-next/src/app/admin/crawler/_client/CrawlerClient.tsx`：嵌入 `<AutoCrawlSummaryCard />` 在 `<PageHeader>` 之后
+- [立即关闭] 调用 `setAutoCrawlConfig({ ...config, globalEnabled: false })` → toast "已关闭自动调度" → invalidate auto-config swr cache
+- 单测：AutoCrawlSummaryCard.test 新建（5 case：disabled 渲染 / countdown 渲染 / scheduler-disabled 渲染 / [立即关闭] 调用 / [编辑] 链接）
+
+**偏离规约**：新组件不修改 packages/admin-ui types，仅 server-next 内部组件 → 不触发 Opus。
+
+#### D-155-6：多 dailyTime 支持 — A（dailyTime: string → dailyTimes: string[]）
+
+**备选**：
+- A：`AutoCrawlConfig.dailyTime: string` → `dailyTimes: string[]`（min 1 max 24）；KV `auto_crawl_daily_time` 改 JSON 数组（向后兼容旧单字符串：解析失败时回退 [v]）；`checkDaily` 改"任一时间匹配触发"；防重维度 `auto_crawl_last_trigger_date` 升级为 `auto_crawl_last_trigger_marks JSONB`（{`YYYY-MM-DD HH:MM`: true, ...}）允许同日不同时间各触发一次
+- B：保留 dailyTime: string，加 dailyTimesExtra: string[] 副字段（最多 N 个额外时间）
+- C：不实施，用户改用 interval 模式
+
+**推荐 A 的理由**：
+- B 设计冗余（主时间 + 额外时间），用户认知负担高
+- C 不解决用户诉求（interval 不是 daily 多时间的等价）
+- A 是数据模型清洁化（dailyTime → dailyTimes 是自然演化）
+
+**关键约束**：
+
+- **R-155-3（必修 / arch-reviewer Opus 红线）KV 3 路径向后兼容**：`deserializeAutoCrawlConfig` 必须容忍 3 种历史值。伪代码：
+  ```ts
+  function parseDailyTimes(raw: string | undefined): string[] {
+    if (!raw || raw.trim() === '') return ['03:00']  // 兜底默认
+    // 路径 1：尝试 JSON.parse
+    try {
+      const parsed = JSON.parse(raw)
+      // 路径 1a：JSON 数组（新格式）→ 校验每项 HH:MM
+      if (Array.isArray(parsed)) {
+        const valid = parsed.filter((x): x is string => typeof x === 'string' && /^\d{2}:\d{2}$/.test(x))
+        return valid.length > 0 ? valid : ['03:00']
+      }
+      // 路径 1b：JSON 但 typeof === 'string'（旧值被双引号包裹）→ [parsed]
+      if (typeof parsed === 'string' && /^\d{2}:\d{2}$/.test(parsed)) {
+        return [parsed]
+      }
+    } catch {
+      // 路径 2：非 JSON 但单 HH:MM 字符串（最老的历史值）→ [raw]
+      if (/^\d{2}:\d{2}$/.test(raw.trim())) return [raw.trim()]
+    }
+    return ['03:00']  // 兜底
+  }
+  ```
+- **R-155-6（必修 / arch-reviewer Opus 红线）zod schema 兼容旧 schema POST**：后端 `POST /admin/crawler/auto-config` zod 必须接受**旧 `dailyTime: string`**（preprocess 自动转 `[dailyTime]`）+ **新 `dailyTimes: string[]`**。版本周期内兼容，否则后端先部署、前端仍发旧 schema 会触发 P0。schema 落点：
+  ```ts
+  const AutoCrawlConfigSchema = z.preprocess(
+    (raw) => {
+      if (raw && typeof raw === 'object' && !('dailyTimes' in raw) && 'dailyTime' in raw) {
+        const { dailyTime, ...rest } = raw as { dailyTime: string }
+        return { ...rest, dailyTimes: [dailyTime] }
+      }
+      return raw
+    },
+    z.object({
+      ...
+      dailyTimes: z.array(z.string().regex(/^\d{2}:\d{2}$/)).min(1).max(24),
+      ...
+    })
+  )
+  ```
+- **R-155-2'（沿用 ADR §3）防重维度升级**：`auto_crawl_last_trigger_date` 是天级，多 dailyTime 时同一天的 3am + 4am 触发后会互相阻塞。改用 `auto_crawl_last_trigger_marks JSONB`（`{"2026-05-26 03:00": "iso ts", "2026-05-26 04:00": "iso ts"}`）允许同日不同时间各触发一次，相同 dailyTime 同日防重保持。
+- **Y-155-2 marks JSONB GC**：scheduler tick 内顺手清理 `marks` 中 **7 天前** 的旧 key（轻量 O(N) 过滤后回写）。理论上每日 24 × 365 = 8760 keys 仍可接受，但无 GC 会持续累积。GC 策略：每次 daily 触发后 filter `keys < (NOW - 7d)` 并 setSetting 回写。
+- **24 个上限**：避免恶意配置 1440 个时间（每分钟一次）；24 个对应"每小时一次"已超出合理使用场景。zod schema `.max(24)` 强制。
+- **UI chip 列表**：SchedulerConfigDrawer dailyTime 单输入改为可加可删的 chip 列表（复用 packages/admin-ui 既有 chip-input 范式），至少 1 个。
+
+**实施**：
+- `packages/types/src/system.types.ts`：`AutoCrawlConfig.dailyTime: string` → `dailyTimes: string[]`；`SystemSettingKey` 加 `'auto_crawl_last_trigger_marks'`
+- `apps/api/src/db/migrations/076_auto_crawl_daily_times_array.sql`：KV seed `auto_crawl_last_trigger_marks` = `'{}'`（JSON object）
+- **Y-155-1（点名落点）`apps/api/src/db/queries/systemSettings.ts:184`** `auto_crawl_daily_time: parseDailyTime(config.dailyTime)` → 改为 `auto_crawl_daily_time: JSON.stringify(config.dailyTimes)`；新增 `parseDailyTimes` helper（按 R-155-3 伪代码实现）；deserializeAutoCrawlConfig 用 parseDailyTimes 替代 parseDailyTime；旧 parseDailyTime 保留用于 KV → dailyTimes 数组的单项校验
+- `apps/api/src/workers/crawlerScheduler.ts`：`checkDaily(config, now, marks)` 改 "任一 dailyTime 匹配触发 + 检查 marks[date#HH:MM] 不存在"；`getLastTriggerMarks` 读 JSONB；`persistTriggerMark` daily 模式写 `marks[date#HH:MM] = isoTs` + GC 7 天前旧 keys
+- `apps/api/src/routes/admin/crawler.ts`：zod schema 用 R-155-6 preprocess 兼容旧 schema
+- `apps/server-next/src/app/admin/crawler/_client/SchedulerConfigDrawer.tsx`：dailyTime 单输入 → chip 列表（加按钮 + 每 chip 删除）
+- `apps/server-next/src/app/admin/_client/AutoCrawlScheduleCard.tsx`：scheduleSummary 显示多时间："每日 03:00, 04:00 · 模式 X"
+- `apps/server-next/src/app/admin/crawler/_client/AutoCrawlSummaryCard.tsx`（D-155-5 新建）：多时间显示
+- 单测矩阵（**R-155-3 测试矩阵** 必含）：
+  - parseDailyTimes 3 历史值兼容：①旧单字符串 `"03:00"` → `["03:00"]`；②JSON 单字符串 `'"03:00"'` → `["03:00"]`；③JSON 数组 `'["03:00","04:00"]'` → `["03:00","04:00"]`；④空 / undefined → `["03:00"]` 兜底；⑤非法格式 → `["03:00"]` 兜底
+  - zod preprocess 兼容旧 schema POST `{dailyTime: "03:00"}` → 内部转 `{dailyTimes: ["03:00"]}`
+  - checkDaily 任一匹配触发 + marks 防重 + 同日不同时间各触发一次
+  - marks GC 7 天前 keys 清理
+
+**偏离规约**：本 D-N 是 ADR-154 D-154-1 §dailyTime AMENDMENT。不触发 Opus（dailyTimes 是 AutoCrawlConfig 字段变更，AutoCrawlConfig 不在 packages/admin-ui types 中）。R-155-3/6 是兼容性硬约束（前后端部署顺序无关性）。
+
+### §4 关联 ADR AMENDMENT
+
+| 原 ADR | 章节 / decisions.md 行号锚点 | AMENDMENT 内容 |
+|--------|------------------------------|----------------|
+| ADR-122 | §timeline 端点契约（line ~7271 附近 / EP-3 实施前 grep 校准） | D-155-3 三段窗 + D-155-4 limit 解锁 |
+| ADR-152 | §端点契约 + N1-152-A position:fixed 路径决策（line ~13574–14007） | D-155-2 BackgroundEventBell 删除 + 合并到 notifications/tasks |
+| ADR-153 | §pending clamp + range 自治（D-153-4 / D-153-3，line ~14035–14381） | D-155-3 移除 GREATEST 钳值 + JS 层 visStart/visEnd 二次 clamp + range 加 12h/24h/7d |
+| ADR-154 | §D-154-1 dailyTime 单字符串（line ~14411–14416） | D-155-6 dailyTime → dailyTimes 数组 + 防重维度从 date 升级 marks JSONB |
+
+**Y-155-4 AMENDMENT 块标准化模板**（每条 AMENDMENT 落盘到对应 ADR §结尾时使用）：
+
+```markdown
+### AMENDMENT 2026-05-26（ADR-155 §3 D-155-N）
+
+**触发**：W3-FIX SEQ 用户走读暴露 [简述缺陷]。
+
+**变更**：[原 ADR §章节] 决策更新为 [新决策]。
+
+**关键修订点**：
+- [改动 1]
+- [改动 2]
+
+**关联**：ADR-155 §3 D-155-N
+```
+
+**§8 验收硬约束**：4 处 AMENDMENT 引用块**必须在 EP-1A/B/C/EP-2/EP-3 任一实施卡 commit 前**落盘到对应 ADR；落盘时由实施卡同 commit 携带，避免漂移。
+
+### §5 EP 拆分（R-155-4 必修后修订 / 按 CLAUDE.md PATCH ≤ 5 项硬约束）
+
+**原 EP-1（15+ 文件）拆为 -A/-B/-C 三张子卡**，每卡 ≤ 5 项文件改动：
+
+- **EP-1A（D-155-1 行内展开）**：3 文件
+  - `apps/server-next/src/app/admin/crawler/runs/_client/CrawlerRunsView.tsx`（expandedKeys + renderExpandedRow）
+  - `apps/server-next/src/app/admin/crawler/runs/[id]/_client/RunInlinePanel.tsx`（新建）
+  - `apps/server-next/src/app/admin/crawler/runs/[id]/_client/CrawlerRunDetailView.tsx`（瘦身）
+  - 单测扩展（CrawlerRunsView.test + RunInlinePanel.test）
+  - 估时 0.15w / 建议模型 sonnet
+
+- **EP-1B（D-155-4 limit 解锁 + D-155-5 summary 卡）**：4 文件
+  - `apps/server-next/src/app/admin/crawler/_client/CrawlerTimelineCard.tsx`（加 limit select）
+  - `apps/api/src/db/queries/crawlerTimeline.ts`（safeLimit 上限 20→50）
+  - `apps/server-next/src/app/admin/crawler/_client/AutoCrawlSummaryCard.tsx`（新建）
+  - `apps/server-next/src/app/admin/crawler/_client/CrawlerClient.tsx`（嵌入 summary 卡 + AMENDMENT 落盘 ADR-122）
+  - 单测扩展（CrawlerTimelineCard.test + AutoCrawlSummaryCard.test 新建）
+  - 估时 0.2w / 建议模型 sonnet
+
+- **EP-1C（D-155-6 多 dailyTime 全栈）**：5 文件 + 1 migration（拆分到 -C1/-C2 评估）
+  - `packages/types/src/system.types.ts`（dailyTimes 类型 + marks SystemSettingKey）
+  - `apps/api/src/db/migrations/076_auto_crawl_daily_times_array.sql`（KV seed marks）
+  - `apps/api/src/db/queries/systemSettings.ts`（parseDailyTimes 3 路径兼容 + setter 行 184 改 JSON.stringify）
+  - `apps/api/src/routes/admin/crawler.ts`（zod preprocess 兼容旧 schema）
+  - `apps/api/src/workers/crawlerScheduler.ts`（checkDaily 任一匹配 + marks 防重 + GC）
+  - `apps/server-next/src/app/admin/crawler/_client/SchedulerConfigDrawer.tsx`（chip 列表 UI）
+  - `apps/server-next/src/app/admin/_client/AutoCrawlScheduleCard.tsx`（多时间显示）
+  - `apps/server-next/src/app/admin/crawler/_client/AutoCrawlSummaryCard.tsx`（D-155-5 卡多时间显示，依赖 EP-1B）
+  - 单测扩展 + AMENDMENT 落盘 ADR-154
+  - **改动达 5 文件 + 1 migration + 多文件 UI 修订 = 触发"PATCH ≥ 5 项 → 拆 -C1/-C2"硬约束**
+  - **进一步拆分（实施前评估）**：
+    - **EP-1C-1（类型契约 + 后端 KV + scheduler）**：system.types.ts + migration 076 + systemSettings.ts + crawler.ts + crawlerScheduler.ts（5 文件，含 migration）
+    - **EP-1C-2（前端 UI 多时间消费）**：SchedulerConfigDrawer.tsx + AutoCrawlScheduleCard.tsx + AutoCrawlSummaryCard.tsx（3 文件 / 依赖 EP-1B + EP-1C-1）
+  - 估时 -C1 0.2w + -C2 0.15w / 建议模型 sonnet
+
+- **EP-2（D-155-2 topbar 合并）**：6 文件改 + 2 删除（双源同步影响）
+  - `packages/admin-ui/src/shell/types.ts`（NotificationItem + TaskItem 扩展）
+  - **`packages/types/src/admin-shell.types.ts`**（双源镜像 / R-155-1 必修）
+  - `apps/server-next/src/lib/admin-shell-notifications.ts`（合并 BackgroundEventService 两源 GET）
+  - `apps/server-next/src/app/admin/admin-shell-client.tsx`（删除 BackgroundEventBell 引用）
+  - **删除**：`apps/server-next/src/components/admin-shell/BackgroundEventBell.tsx`
+  - **删除**：`apps/server-next/src/lib/admin-shell-background-events.ts`
+  - 单测扩展（admin-shell-notifications.test 加 category=background case）
+  - AMENDMENT 落盘 ADR-152
+  - 估时 0.3w / **强制 commit trailer `Subagents: arch-reviewer (claude-opus-4-7)`** + reviewer 显式审查双源镜像同步
+  - 文件数 6 改 + 2 删 = 8 个 PATCH，**临界但可接受**（双源同步 + 删除是原子操作；强制 Opus reviewer 弥补范围）
+
+- **EP-3（D-155-3 Gantt 三段窗 + 拖拽 pan）**：5 文件
+  - `apps/api/src/db/queries/crawlerTimeline.ts`（70/30 切分 + 移除 GREATEST + JS clamp 双字段语义 R-155-2 实施）
+  - `apps/api/src/routes/admin/crawler.ts`（range zod enum 加 12h/24h/7d）
+  - `apps/server-next/src/lib/crawler/api.ts`（CrawlerTimelineRange 类型扩展）
+  - `apps/server-next/src/app/admin/crawler/_client/CrawlerTimelineCard.tsx`（now-line + 拖拽 pan + 防抖 300ms + viewport buffer + 30d 封顶 + pending 虚线）
+  - 单测扩展（crawlerTimeline.test + CrawlerTimelineCard.test）
+  - AMENDMENT 落盘 ADR-122 + ADR-153
+  - 估时 0.4w / 建议模型 sonnet
+  - **依赖**：HOTFIX-A Step 2 已完成 SQL fix（commit d79769cc，已闭合）
+
+**EP DAG**：
+```
+EP-1A（独立，D-155-1）─────────────────────────→ ⬜
+EP-1B（独立，D-155-4 + D-155-5）───────────────→ ⬜
+EP-1C-1（独立，后端契约 + scheduler）──→ EP-1C-2（依赖 EP-1B + EP-1C-1，UI 多时间）→ ⬜
+EP-2（独立，含 Opus reviewer）─────────────────→ ⬜
+EP-3（依赖 HOTFIX-A）─────────────────────────→ ⬜
+```
+
+**串行依赖**：EP-1C-2 必须在 EP-1B + EP-1C-1 之后；EP-3 依赖 HOTFIX-A（已完成）；其余可并行。
+
+**EP-1C-1 与 EP-2 时序协调**：两卡均扩 SystemSettingKey 枚举（auto_crawl_last_trigger_marks / 无）但不冲突；若并行需先 git pull rebase。
+
+### §6 测试 surface
+
+- **单测**：
+  - D-155-1（EP-1A）：CrawlerRunsView.test expandedKeys + onRowClick toggle 4 case；RunInlinePanel.test 新建 6 case；CrawlerRunDetailView.test 瘦身后保留 PageHeader case
+  - D-155-2（EP-2）：admin-shell-notifications.test 加 category=background 4 case；admin-shell-client.test 验证 BackgroundEventBell 不再渲染；packages/admin-ui + packages/types 双源类型镜像一致性单测（如不存在则新建守卫）
+  - D-155-3（EP-3）：crawlerTimeline.test 加 5 case（70/30 切分 + now-line + 12h/24h/7d range + R-155-2 双字段语义 durationSeconds 真实 vs startPct/widthPct 可视化 + safeLimit 50 cap）；CrawlerTimelineCard.test 加 6 case（now-line + 拖拽 pan + R-155-5 防抖 300ms + viewport buffer + 7 range 选项 + 30d 历史封顶）
+  - D-155-4（EP-1B）：crawlerTimeline.test safeLimit 50 cap（合并到 D-155-3 #5）
+  - D-155-5（EP-1B）：AutoCrawlSummaryCard.test 新建 5 case（disabled / countdown / scheduler-disabled / [立即关闭] 调用 / [编辑] 链接）
+  - D-155-6（EP-1C）：
+    - **R-155-3 测试矩阵**：parseDailyTimes 兼容 5 case
+      - ①旧单字符串 `"03:00"` → `["03:00"]`
+      - ②JSON 单字符串 `'"03:00"'` → `["03:00"]`
+      - ③JSON 数组 `'["03:00","04:00"]'` → `["03:00","04:00"]`
+      - ④空 / undefined → `["03:00"]` 兜底
+      - ⑤非法格式 / JSON 数组含非 HH:MM → 过滤后兜底 `["03:00"]`
+    - **R-155-6 zod preprocess 兼容旧 schema POST**：1 case `{dailyTime: "03:00"}` → 内部转 `{dailyTimes: ["03:00"]}`
+    - checkDaily 任一匹配触发 + marks 防重 + 同日不同时间各触发一次 3 case
+    - **Y-155-2 marks GC**：7 天前 keys 清理 1 case
+    - SchedulerConfigDrawer.test chip 列表 UI 加/删 / 至少 1 个 / 最多 24 个 3 case
+- **e2e smoke**（推迟到 EP-1A/B/C/EP-2/EP-3 完成后）：
+  - /admin/crawler/runs 行内展开 + tasks 子表 [查看] logs 完整流
+  - admin shell 铃铛 popover 含 background 来源 + 闪电图标含 active crawler_runs
+  - /admin/crawler 时间轴拖拽 + range 切换 + limit 切换 + 30d 封顶提示
+  - SchedulerConfigDrawer 多 dailyTime chip + 3am + 4am 同日各触发一次 + marks 防重
+- **Y-155-5 ADR 合规审计**：
+  - `npm run verify:adr-contracts` 通过（含 verify-endpoint-adr / verify-adr-d-numbers 自动注册 D-155-1..6 / verify-sql-schema-alignment 含新增 SystemSettingKey `auto_crawl_last_trigger_marks`）
+  - **architecture.md 同步**：D-155-6 加新 SystemSettingKey 必须同步到 `docs/architecture.md`（CLAUDE.md 绝对禁止项反面义务"schema 变更不同步 docs/architecture.md"）
+
+### §7 风险与偏离
+
+- **D-155-2 删除 BackgroundEventBell**：现有 `/admin/system/background-events` 端点**保留**（继续作为 useAdminNotifications 第 2 个 GET 源 / Y-155-3 短期方案）；不 deprecate，待未来 ADR-156 端点合并时再处理
+- **D-155-3 拖拽 pan 性能**：拖拽期间 SVG 重渲染 throttle 16ms（60fps）+ mousestop 300ms 防抖 + viewport ±0.5×range buffer 预拉 + 30d 封顶（R-155-5 必修）。性能 p95 < 50ms 兜底；实施期 EP-3 监控
+- **D-155-6 KV 向后兼容**：deserialize 必须容忍 3 种历史值（R-155-3 必修：旧单字符串 / JSON 单字符串 / JSON 数组 / 非法 / 空 5 路径）；setAutoCrawlConfig 始终写 JSON 数组；zod schema preprocess 同时接受 dailyTime / dailyTimes 两种提交 schema（R-155-6 必修）；前后端部署顺序无关性
+- **防重维度升级（R-155-2'）**：旧 `auto_crawl_last_trigger_date` 字段**保留向后兼容**（如有其它消费方），新 marks 字段优先；scheduler 内部 daily 模式直接消费 marks，旧 date 不再读
+- **关键洞察 #1（arch-reviewer 反面教材）**：ADR-155 §背景列的 6 类设计层缺陷中 D-155-1/3/5/6 均是"用户走读即可暴露"的 UX 问题，D-155-2 是"目视即知的边界违规"。ADR-149 §7 "用户走读 ≥ 1 次硬前置" 是必须执行的工程规则；本 ADR §8 验收第 4 条把这条规则升级为本 SEQ 闭合硬约束（任一 EP 实施完成后必须 @livefree 走读 PASS）
+- **关键洞察 #2（process 红线复发监测）**：W1 期间主循环刻意规避 "共享组件 API 契约强制 Opus" 约束采用 BackgroundEventBell position:fixed 旁路方案（changelog 自承 N1-152-A）。本 ADR EP-2 实施 commit trailer 必须显式列出 `Subagents: arch-reviewer (claude-opus-4-7)` + reviewer **必须显式审查 admin-ui + packages/types 双源镜像同步**（R-155-1）；缺失则 commit 须 revert
+- **未来演化（ADR-156 候选）**：若 60s 双端点轮询性能瓶颈，起 ADR-156 «notifications 端点扩展» 将 BackgroundEventService 内嵌到 `/admin/notifications` + `?include=background` 参数；同步 ADR-147 端点契约 AMENDMENT；本卡不立此 ADR，等性能证据触发
+
+### §8 验收
+
+1. **ADR 自身**：6 个 D-N 全部 PASS（arch-reviewer Opus 评级 ≥ A−）→ ADR 标 🟢 Accepted ✅（2026-05-26 A− CONDITIONAL → 主循环消化 R/Y 后等同 A）
+2. **AMENDMENT 落盘（独立 step / Y-155-4）**：§4 表格 4 处 AMENDMENT 引用块必须在对应 EP 实施卡 commit 中同步追加到原 ADR §结尾；落盘时使用 §4 标准化模板
+3. **EP 拆卡到 task-queue.md**（依赖关系明确）：EP-1A / EP-1B / EP-1C-1 / EP-1C-2 / EP-2 / EP-3 共 6 张子卡
+4. **EP 实施后用户走读硬前置（关键洞察 #1）**：任一 EP 完成后必须 @livefree dev server 走读 ≥ 1 次；走读发现新缺陷 → 起 ADR-156 / HOTFIX-D 子卡；SEQ 闭合前必须所有 EP 走读 PASS
+5. **architecture.md 同步（Y-155-5 + CLAUDE.md 反面义务）**：EP-1C-1 实施时 D-155-6 新 SystemSettingKey `auto_crawl_last_trigger_marks` 必须同步到 `docs/architecture.md`
+6. **verify:adr-contracts PASS（Y-155-5）**：每 EP commit 前必跑 `npm run verify:adr-contracts`，含 verify-endpoint-adr / verify-adr-d-numbers 自动注册 D-155-1..6 / verify-sql-schema-alignment
+7. **decisions.md 纳入 git add + commit**（CLAUDE.md "docs/ 下新文档不执行 git add" 反面义务）
+
+### §10 评审结论（2026-05-26）
+
+**arch-reviewer Opus 1 轮独立评审**：A− CONDITIONAL → 主循环消化后等同 A
+
+**评审报告关键数据**：
+- 6 个 D-N 决策方向均正确
+- 6 红线（R-155-1..6）+ 5 黄线（Y-155-1..5）+ 3 绿线（G-155-1..3）+ 4 关键洞察
+- 关键问题：EP-1 严重违反 PATCH ≥ 5 项硬约束（15+ 文件，需拆 -A/-B/-C/-C1/-C2）；D-155-2 类型镜像双源同步漏改；D-155-3 移除 GREATEST 后 JS 层 widthPct 数学崩溃；D-155-6 KV 兼容 3 路径覆盖不全 + zod schema 必须 preprocess 兼容旧单字符串
+
+**6 红线消化对照**：
+- ✅ R-155-1：D-155-2 §实施列已补 `packages/types/src/admin-shell.types.ts` 双源镜像同步；EP-2 commit trailer 已声明双源审查
+- ✅ R-155-2：D-155-3 §实施列已加 `rowToTimelineRow` JS 层双字段语义（durationSeconds 真实业务值 + startPct/widthPct 可视化 clamp），伪代码已含
+- ✅ R-155-3：D-155-6 §实施列已补 `parseDailyTimes` 3 路径伪代码 + §6 测试矩阵 5 case
+- ✅ R-155-4：§5 EP 拆分已重写为 EP-1A / EP-1B / EP-1C-1 / EP-1C-2 / EP-2 / EP-3 共 6 张子卡，每卡 ≤ 5 项文件改动（EP-2 双源同步 6 改+2 删 临界但可接受 + 强制 Opus reviewer）
+- ✅ R-155-5：D-155-3 §实施列已加拖拽防抖 300ms + viewport ±0.5×range buffer + 30d 历史封顶 + 16ms throttle
+- ✅ R-155-6：D-155-6 §实施列已加 zod preprocess `z.union([...])` 兼容旧 schema POST
+
+**5 黄线消化对照**：
+- ✅ Y-155-1：systemSettings.ts:184 setter 行号已点名 + 改 JSON.stringify(config.dailyTimes)
+- ✅ Y-155-2：marks JSONB GC 已纳入约束（scheduler tick 内 7 天前 keys 顺手清理）
+- ✅ Y-155-3：D-155-2 路径选择已明确 "前端并发两 GET 短期方案 + ADR-156 未来演化"
+- ✅ Y-155-4：§4 AMENDMENT 引用块已加具体行号锚点（line ~7271 / ~13574 / ~14035 / ~14411）+ 标准化模板
+- ✅ Y-155-5：§6 + §8 已加 `npm run verify:adr-contracts` 通过 + `docs/architecture.md` 同步
+
+**3 绿线**（可推迟到 EP 卡内决策，本 ADR 不强制）：
+- G-155-1 行内展开 + 副入口冗余 → EP-1A 实施时简化为 Ctrl/Cmd 点击新窗口
+- G-155-2 7 range 选项过长 → EP-3 实施时考虑 group 短/长范围
+- G-155-3 AutoCrawlSummaryCard 与 AutoCrawlScheduleCard 内容冗余 → EP-1B 实施时评估是否抽 AutoCrawlInfoBlock 共享组件
+
+**4 关键洞察**：
+- 已纳入 §7 风险章节（洞察 #1 走读硬前置 + #2 process 红线复发监测）
+- 洞察 #3 AMENDMENT 落盘独立 step → §8 验收第 2 条
+- 洞察 #4 拖拽性能细节移到 §7 + EP-3 实施期
+
+**最终结论**：ADR-155 status 🟢 Accepted（2026-05-26 / arch-reviewer Opus A− CONDITIONAL → 主循环消化 6 红线 + 5 黄线 + 4 关键洞察 → 等同 A）；EP-1A / EP-1B / EP-1C-1 / EP-1C-2 / EP-2 / EP-3 共 6 张子卡可启动；EP-2 强制 Opus arch-reviewer trailer + 双源镜像审查；每 EP 完成后 @livefree dev server 走读 ≥ 1 次为 SEQ 闭合硬前置（关键洞察 #1）。
+
+---
