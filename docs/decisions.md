@@ -14379,3 +14379,149 @@ const result = await db.query<TimelineRawRow>(TIMELINE_SQL_V2, [interval, safeLi
 **最终结论**：ADR-153 status 🟢 Accepted via R3+Y3+G2 修订（2026-05-25 / arch-reviewer Opus 评级 A− → 主循环修订后等同 A）；CW2-B-EP 实施卡可启动；PATCH 范围 4 项（SQL 重写 / status 4 态双侧 / range 自治 / multi-lane 渲染）≤ 5 项，无需拆 -A/-B 子卡。
 
 ---
+## ADR-154 — Fix-D5 定时增强：间隔触发模式（CHG-SN-9-CW2-C-ADR）
+
+> **Status**: 🟢 Accepted（2026-05-25 / arch-reviewer Opus A− → 主循环修订后等同 A）
+> **触发**：W2 plan §Fix-D5——crawlerScheduler.ts 当前只支持"每日定时"（daily）一种模式；用户需要"每 N 小时采一次"（interval）场景，无需等待特定时刻。
+> **ADR 存在性澄清**（arch-reviewer Opus §0 核验结论）：本次不引入新依赖（D-154-2=B）、不新增 admin route（auto-config GET/POST 已存在）、per-site schedule 不扩展（D-154-4=B），原"BLOCKER 解锁"成文理由消失。本 ADR **降级为"决策备忘 + 设计记录"**，主要价值是记录"为何选 B 而非 A/C"，供 CW2-C-EP-A/-B 实施卡参考，避免实施期偏离。
+> **关联**：ADR-152（maintenanceScheduler interval 推算判例 / R-152-2 拒绝引入 cron-parser）、ADR-153（CW2-B-EP / 同期任务）
+
+### §1 决策摘要
+
+| 决策点 | 主题 | 最终结论 |
+|--------|------|----------|
+| D-154-1 | scheduleType enum | **B**：两态 `daily \| interval`（开放扩展位，cron 后续再议）|
+| D-154-2 | cron-parser 依赖 | **B**：不引入（与 ADR-152 R-152-2 判例一致，interval 覆盖验证需求） |
+| D-154-3 | last_trigger 精度 | **A**：新增 `auto_crawl_last_trigger_at`（ISO8601 UTC 语义键）；旧 DATE 键保留 |
+| D-154-4 | per-site schedule | **B**：不支持（无验证需求，防触发拆卡阈值）|
+| D-154-5 | dispatch 架构 | **A**：switch 分支 + 独立纯函数 `checkDaily` / `checkInterval` |
+| D-154-6 | UI 条件渲染 | **A**：AdminSelect + 条件渲染（复用现有 AdminSelect 范式） |
+
+### §2 背景与问题
+
+crawlerScheduler.ts 当前逻辑（TICK_MS=60s 进程内 ticker）：
+- HH:MM 与 config.dailyTime 精确匹配才触发
+- `auto_crawl_last_trigger_date DATE`（天级字符串）防当天重复触发
+- 单一触发模式，无法满足"每 N 小时采一次"
+
+W2 plan Fix-D5 目标：interval 模式——上次触发后 intervalMinutes 分钟内不重触，超出则触发。
+
+### §3 6 决策点详述
+
+#### D-154-1：scheduleType enum — B（两态）
+
+与 ADR-152 R-152-2"interval 推算优先"判例完全一致。interval 覆盖 100% 已验证需求（每 N 小时），cron 无已验证需求。enum 设计为开放联合类型（`'daily' | 'interval'`），后续若确需 cron，增量扩展无破坏性。
+
+`auto_crawl_schedule_type` 键已在 SystemSettingKey 枚举中（system.types.ts:21），setAutoCrawlConfig 写死 'daily' 须解锁改为动态写。
+
+#### D-154-2：cron-parser 依赖 — B（不引入）
+
+CLAUDE.md「引入技术栈以外新依赖 → BLOCKER」。interval 模式 next-run 判定是 `lastTriggerAt + intervalMinutes*60_000 <= now`，无需外部解析器。与 ADR-152 R-152-2 同域判例一致。如未来确需 cron，另起 ADR 专门论证引入价值。
+
+#### D-154-3：last_trigger 精度 — A（新增 TIMESTAMPTZ 语义键）
+
+interval 模式必须时间戳级锚点。system_settings 是 KV 表（value text），无 DDL 列类型变更——新增 `auto_crawl_last_trigger_at` 语义键，value 约定存 ISO8601 UTC 字符串（空串 = 从未触发）。旧 `auto_crawl_last_trigger_date` 保留，daily 模式继续使用。
+
+migration 075 SQL（KV seed，首次触发由 ticker upsert 写入）：
+```sql
+-- Migration 075: Fix-D5 interval 模式触发时刻锚点（ADR-154 D-154-3）
+-- auto_crawl_last_trigger_at：value = ISO8601 UTC 字符串（空串 = 从未触发）
+-- 旧 auto_crawl_last_trigger_date 保留（daily 模式继续使用）
+INSERT INTO system_settings (key, value, updated_at)
+VALUES ('auto_crawl_last_trigger_at', '', NOW())
+ON CONFLICT (key) DO NOTHING;
+
+-- ROLLBACK:
+-- DELETE FROM system_settings WHERE key = 'auto_crawl_last_trigger_at';
+```
+
+新增 SystemSettingKey：`'auto_crawl_interval_minutes'`、`'auto_crawl_last_trigger_at'`。
+
+#### D-154-4：per-site schedule — B（不支持）
+
+AutoCrawlSiteOverride 保持现状（enabled/mode），调度节奏属全局编排职责。per-site 扩展无已验证需求，且会触发 PATCH 卡 5 项阈值拆分。预留 A 形态扩展位（可选 `schedule?` 字段）供未来增量落地。
+
+#### D-154-5：dispatch 架构 — A（switch + 独立函数）
+
+CLAUDE.md「函数 > 80 行 / 多独立逻辑阶段 → 先拆分」。加入 interval 后单函数必触发，抽 `checkDaily` / `checkInterval` 为纯判定函数（无 IO，可单测）。
+
+关键约束（R-154-1）：**interval 锚点写入须在 createRun 成功之后**。createRun 抛错时锚点不前进，保证下次 tick 正确重试。daily 现有代码（setSetting 在 createAndEnqueueRun 之后）已是正确顺序，interval 必须沿用。
+
+```
+runSchedulerTick:
+  → freeze / globalEnabled 守卫
+  → config.scheduleType === 'interval' ? checkInterval(config, now, lastTriggerAt) : checkDaily(config, now, lastTriggerDate)
+  → if !decision.shouldTrigger: return
+  → createScheduledRun(config)  // 先建 run
+  → persistTriggerMark(db, scheduleType, now)  // 成功后才写锚点（R-154-1）
+```
+
+#### D-154-6：UI 条件渲染 — A（AdminSelect + 条件渲染）
+
+顶部加 `scheduleType` AdminSelect（`data-testid="scheduler-scheduleType"`），两选项：每日定时 / 间隔触发。dailyTime 行用 `{config.scheduleType === 'daily' && ...}` 包裹，新增 intervalMinutes number input 行用 `{config.scheduleType === 'interval' && ...}` 包裹。全部复用现有 FIELD_STYLE / LABEL_STYLE / AdminInput。
+
+### §4 类型变更合约
+
+**`packages/types/src/system.types.ts`**：
+```diff
+ export type SystemSettingKey =
++  | 'auto_crawl_interval_minutes'
+   | 'auto_crawl_last_trigger_date'
++  | 'auto_crawl_last_trigger_at'
+
++export type AutoCrawlScheduleType = 'daily' | 'interval'
+
+ export interface AutoCrawlConfig {
+   globalEnabled: boolean
+-  scheduleType: 'daily'
++  scheduleType: AutoCrawlScheduleType
+   dailyTime: string
++  intervalMinutes: number   // 默认 60；daily 模式忽略但持久化保留
+   defaultMode: AutoCrawlMode
+   ...
+ }
+```
+
+**`apps/api/src/routes/admin/crawler.ts`（zod schema 扩展）**：
+```diff
+-  scheduleType: z.literal('daily').default('daily'),
++  scheduleType: z.enum(['daily', 'interval']).default('daily'),
++  intervalMinutes: z.number().int().min(5).max(1440).default(60),
+```
+
+### §5 实施步骤（CW2-C-EP 参考）
+
+**拆分为 -A/-B 子卡（6 项改动 > 5 项阈值）**：
+
+**CW2-C-EP-A（后端契约 + 调度，自洽闭环）**：
+1. `packages/types/src/system.types.ts`：扩展 SystemSettingKey + AutoCrawlScheduleType + AutoCrawlConfig
+2. `apps/api/src/db/migrations/075_auto_crawl_schedule_extend.sql`：KV seed
+3. `apps/api/src/db/queries/systemSettings.ts`：deserialize + set 读写 intervalMinutes + scheduleType
+4. `apps/api/src/routes/admin/crawler.ts`：zod schema 扩展
+5. `apps/api/src/workers/crawlerScheduler.ts`：dispatch 重构 + checkInterval + persistTriggerMark
+6. 后端单测：checkInterval 边界 + deserialize 向后兼容 + R-154-1 锚点时序
+
+**CW2-C-EP-B（前端 UI）**：
+1. `apps/server-next/src/app/admin/crawler/_client/SchedulerConfigDrawer.tsx`：scheduleType select + 条件渲染
+2. UI 单测：scheduleType 切换 + 条件字段显示/隐藏
+
+### §6 注意事项
+
+- **architecture.md 同步**：migration 075 新增 system_settings 键须同步到 docs/architecture.md（CLAUDE.md 绝对禁止项反面义务）
+- **D-153-5 防回归**：crawlerScheduler 不涉及时区，但 `auto_crawl_last_trigger_at` 须存 UTC ISO 字符串（遵循 ADR-153 D-153-5 UTC 原则）
+
+### §10 评审结论（2026-05-25）
+
+**arch-reviewer Opus 1 轮独立评审**：A− → 主循环落实两条件后等同 A
+
+**关键修订已含入**：
+- ✅ ADR 存在性降级（§1 澄清：设计备忘，非 BLOCKER 解锁）
+- ✅ D-154-1=B：两态，与 ADR-152 R-152-2 判例一致
+- ✅ D-154-2=B：不引入 cron-parser
+- ✅ D-154-4=B：per-site schedule 不支持
+- ✅ R-154-1：锚点写入时序约束（createRun 成功后才写）
+- ✅ 6 项改动 > 5 项 → CW2-C-EP 必须拆 -A/-B 子卡
+
+**最终结论**：ADR-154 status 🟢 Accepted（2026-05-25 / arch-reviewer Opus A− → 等同 A）；CW2-C-EP 须拆 -A（后端）/ -B（前端）两张子卡后启动。PATCH 范围各子卡 ≤ 5 项。
+
+---

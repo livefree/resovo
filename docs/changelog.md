@@ -6513,3 +6513,35 @@ ADR-153 全部 4 项落地（SQL V2 / status 4 态双侧 / range 自治 / multi-
 
 - **执行模型**：claude-sonnet-4-6
 - **子代理调用**：arch-reviewer (claude-opus-4-6) — CW2-B-ADR 阶段已完成
+
+---
+
+## [CHG-SN-9-CW2-C-ADR] Fix-D5 定时增强 ADR-154 起草
+
+- **日期**：2026-05-25
+- **Sequence**：SEQ-20260525-CRAWLER-W2
+- **任务 ID**：CHG-SN-9-CW2-C-ADR
+
+### 改动摘要
+
+ADR-154 起草（arch-reviewer Opus A− → 等同 A），决策备忘性质（无新依赖/无新 route）：
+
+- D-154-1=B：scheduleType 两态 `daily | interval`（与 ADR-152 R-152-2 判例一致）
+- D-154-2=B：不引入 cron-parser（无验证需求，ADR BLOCKER 解锁理由消失）
+- D-154-3=A：新增 `auto_crawl_last_trigger_at`（ISO8601 UTC 语义键）；旧 DATE 键保留
+- D-154-4=B：per-site schedule 不支持
+- D-154-5=A：switch + 独立函数 checkDaily/checkInterval（R-154-1 锚点时序约束）
+- D-154-6=A：AdminSelect + 条件渲染
+- 6 项改动 > 5 项 → CW2-C-EP 拆为 -A（后端）/-B（前端）子卡
+
+### 新增/修改文件
+
+- `docs/decisions.md` — 追加 ADR-154
+
+### 质量门禁
+
+- ✅ ADR-154 🟢 Accepted（arch-reviewer Opus A− → 等同 A）
+- ✅ docs 文件 git add 纳入版本控制
+
+- **执行模型**：claude-sonnet-4-6
+- **子代理调用**：arch-reviewer (claude-opus-4-7)（adfd22a2676a8052d）
