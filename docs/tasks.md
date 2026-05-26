@@ -6,94 +6,81 @@
 
 ## 进行中任务
 
-### 🔄 CHG-SN-9-CW1-CW2-REDESIGN-A-EP-1B2-LAYOUT — D-155-5 实施期布局延伸（plan-revision）
+### 🔄 CHG-SN-9-CW1-CW2-REDESIGN-A-EP-1C-1a — D-155-6 类型契约 + KV 3 路径兼容
 
 - **SEQ**：SEQ-20260526-CRAWLER-W3-FIX
 - **状态**：🔄 进行中
-- **创建时间**：2026-05-26 04:50
-- **实际开始**：2026-05-26 04:50
+- **创建时间**：2026-05-26 04:55
+- **实际开始**：2026-05-26 04:55
 - **建议模型**：sonnet
 - **执行模型**：claude-opus-4-7（本会话延续）
-- **关联 ADR**：ADR-155 D-155-5（🟢 Accepted）；本卡是 EP-1B2 实施后用户走读暴露的布局优化需求，属 D-155-5 的延伸（plan-revision），不起新 ADR
-- **拆分理由**：EP-1B2 已 commit 闭合 D-155-5 核心组件契约；本卡是 layout 重组 + Collapsible 容器（UX 优化），改动多 3 个文件，避免 EP-1B2 commit 回滚
+- **关联 ADR**：ADR-155 D-155-6（🟢 Accepted）；ADR-154 §D-154-1 AMENDMENT 推迟到 EP-1C-1b 同 commit 落盘
+- **拆分理由**：原 EP-1C-1 范围 5 源 + 2 测试 = 7 项触发 PATCH ≤ 5 硬约束。本卡仅做"类型契约 + KV 兼容性"层（向后兼容窗口已打开），zod preprocess + scheduler checkDaily/marks/GC + ADR-154 AMENDMENT 拆到 EP-1C-1b。
 
 ### 问题理解
 
-@livefree EP-1B2 实测后反馈：
-1. AutoCrawlSummaryCard 单独占一行 + KpiRow 单独一行 → 信息密度低（4 行垂直滚动才能看到 SiteList）
-2. "自动采集 + KPI + 时间轴" 三块都是辅助/概览信息，主操作区是 SiteList；用户希望折叠概览区降低噪音
+ADR-155 D-155-6：当前 `AutoCrawlConfig.dailyTime: string` 单一时间不允许 "3am + 4am" 多时间触发。需扩为 `dailyTimes: string[]`，且后端 KV 必须兼容 3 种历史值（旧单字符串 / JSON 字符串 / JSON 数组）。
 
 ### 根因判断
 
-EP-1B2 嵌入 AutoCrawlSummaryCard 时直接放在 PageHeader 与 KpiRow 之间（独立行），未考虑信息密度 + 主次区分。`CrawlerKpiRow` 是 5 列 grid，没考虑被收窄到容器内时的 wrap 行为。
+ADR-154 D-154-1 选 `daily | interval` 两态时单 dailyTime 是合理简化，但用户走读暴露多时间需求（@livefree 设 3am + 4am 期望两者都生效，实际只剩第二个）。
 
 ### 方案
 
-**Step 1**（`apps/server-next/src/app/admin/crawler/_client/CrawlerKpiRow.tsx`）：
-- `gridTemplateColumns` 从 `repeat(5, 1fr)` 改为 `repeat(auto-fit, minmax(140px, 1fr))`
-- 让 KpiRow 在容器宽度收窄时自动 wrap 为 2-3 行，单独使用时仍是 1 行 5 列
+**Step 1**（`packages/types/src/system.types.ts`）：
+- `AutoCrawlConfig` 加 `dailyTimes: readonly string[]`（主字段；min 1 max 24）
+- `dailyTime: string` 标 `@deprecated`（向后兼容 alias = `dailyTimes[0]` ?? `'03:00'`）；EP-1C-2 前端切换后可删
+- `SystemSettingKey` 加 `'auto_crawl_last_trigger_marks'`（R-155-2' 防重维度升级 / EP-1C-1b 消费）
 
-**Step 2**（`apps/server-next/src/app/admin/crawler/_client/CrawlerClient.tsx`）：
-- 新增 `overviewOpen: boolean` state（默认 `true`，展开）
-- 重构 layout：
-  ```tsx
-  <PageHeader ... />
+**Step 2**（`apps/api/src/db/migrations/076_auto_crawl_daily_times_array.sql` 新建）：
+- KV seed `auto_crawl_last_trigger_marks = '{}'`（JSON object 容器，EP-1C-1b checkDaily 写入 `{date#HH:MM: isoTs}`）
+- ROLLBACK 注释
 
-  {/* 概览容器（可折叠） */}
-  <div data-overview-section>
-    <button data-testid="overview-toggle" aria-expanded={overviewOpen}
-      onClick={() => setOverviewOpen(!overviewOpen)}>
-      {overviewOpen ? '▾' : '▸'} 概览
-    </button>
-    {overviewOpen && (
-      <>
-        {/* 同一行：SummaryCard 360px + KpiRow flex:1 */}
-        <div style={{ display: 'grid', gridTemplateColumns: '360px 1fr', gap: '12px' }}>
-          <AutoCrawlSummaryCard onEditClick={() => setSchedulerOpen(true)} />
-          <CrawlerKpiRow kpi={kpi} />
-        </div>
-        <CrawlerTimelineCard ... />
-      </>
-    )}
-  </div>
+**Step 3**（`apps/api/src/db/queries/systemSettings.ts`）：
+- 新 `parseDailyTimes(input: string | undefined): readonly string[]` 函数 — R-155-3 3 路径完整覆盖：
+  - 空 / undefined → `['03:00']` 兜底
+  - JSON.parse 数组 → 过滤 HH:MM 合法项 + 兜底
+  - JSON.parse 单字符串 → `[parsed]`（若合法 HH:MM）
+  - 旧裸单字符串（非 JSON）→ `[raw.trim()]`（若合法 HH:MM）
+  - 非法格式 → `['03:00']` 兜底
+- `deserializeAutoCrawlConfig` 输出 `dailyTimes` 主字段 + `dailyTime = dailyTimes[0] ?? '03:00'` 兼容 alias
+- `setAutoCrawlConfig` line 184 改为 `auto_crawl_daily_time: JSON.stringify(config.dailyTimes ?? [config.dailyTime || '03:00'])`（永远写 JSON 数组；兼容旧调用方仅传 dailyTime）
 
-  {/* 主操作区 - 永久可见 */}
-  <CrawlerSiteList ... />
-  ```
-- 默认 `overviewOpen=true` 保持现有 UX 不变；折叠后只剩 SiteList 节省空间
-- toggle 按钮极简内联（border:none + bg:transparent + cursor:pointer + 小字体）
+**Step 4**（单测）：
+- `tests/unit/api/systemSettings.test.ts`（若不存在则新建）：
+  - parseDailyTimes 5 case：①旧单字符串 ②JSON 单字符串 ③JSON 数组 ④空 ⑤非法
+  - deserializeAutoCrawlConfig 输出 dailyTimes + dailyTime alias 一致性
+  - setAutoCrawlConfig 写 JSON.stringify(dailyTimes) 验证
 
-**Step 3**（`tests/unit/components/server-next/admin/crawler/CrawlerClient.test.tsx`）：
-- 加 2 case：overview 默认展开（点击前 SummaryCard 容器存在）；toggle 后折叠（SummaryCard 容器 + KpiRow + Timeline 不渲染，SiteList 仍渲染）
-- 由于 EP-1B2 已 mock AutoCrawlSummaryCard，本卡只需用 `data-testid="mock-auto-crawl-summary-card"` 判定渲染态
+**Step 5**（architecture.md 同步 / Y-155-5 + CLAUDE.md 反面义务）：
+- 在 system_settings 表章节追加 `auto_crawl_last_trigger_marks` 键（JSON object / R-155-2' 防重维度升级）
 
 ### 涉及文件
 
-- `apps/server-next/src/app/admin/crawler/_client/CrawlerKpiRow.tsx`（grid auto-fit）
-- `apps/server-next/src/app/admin/crawler/_client/CrawlerClient.tsx`（overviewOpen state + collapsible + grid 同行 + 移 TimelineCard 进容器）
-- `tests/unit/components/server-next/admin/crawler/CrawlerClient.test.tsx`（扩 2 case）
+- `packages/types/src/system.types.ts`（Step 1）
+- `apps/api/src/db/migrations/076_auto_crawl_daily_times_array.sql`（Step 2 新建）
+- `apps/api/src/db/queries/systemSettings.ts`（Step 3）
+- `tests/unit/api/systemSettings.test.ts`（Step 4 / 已存在则扩 / 否则新建）
+- `docs/architecture.md`（Step 5 同步 / 不计入 PATCH 5 项）
 
-PATCH 文件数：2 源 + 1 测试 = 3 项（≤ 5 硬约束 ✅）
+PATCH 文件数：3 源 + 1 测试 = 4 项（≤ 5 硬约束 ✅）
 
 ### 验收要点
 
-- **dev server 实测**（@livefree）：
-  1. `/admin/crawler` 默认 PageHeader 下方可见"▾ 概览"toggle + 展开的概览区
-  2. SummaryCard 与 KpiRow 同一行（左侧 360px 卡 + 右侧 5 KpiCard）
-  3. TimelineCard 在概览区内 full width
-  4. 点 "▾ 概览" → 折叠为 "▸ 概览"，SummaryCard + KpiRow + TimelineCard 全部隐藏，仅剩 PageHeader + toggle + SiteList
-  5. 浏览器窄屏（< 1200px）KpiRow auto-fit wrap 为 2-3 行不破坏布局
+- 下游消费方（apps/server-next 前端、crawlerScheduler、admin auto-config route）**无需任何改动**即可继续工作（dailyTime alias 保证向后兼容）
 - typecheck / lint / test / verify:adr-contracts 全过
-- 新增 2 case 全过
+- 新增单测 5 case 全过
+- architecture.md 含 auto_crawl_last_trigger_marks 描述
 
-### 不在范围
+### 不在范围（→ EP-1C-1b / EP-1C-2）
 
-- 折叠状态持久化（localStorage / cookie）→ 推迟到用户反馈"重打开仍想保持折叠"时再做
-- 概览区动画（slide / fade）→ 推迟（CSS height transition 易抖动，需 measure pattern；当前 instant toggle 足够）
-- AutoCrawlSummaryCard 内部 layout 优化（紧凑模式）→ 360px 宽度已经够展示六态文案
+- zod preprocess 兼容旧 `{dailyTime}` POST schema（R-155-6）→ EP-1C-1b
+- crawlerScheduler checkDaily 任一匹配 + marks 防重 + GC 7 天前 keys（Y-155-2）→ EP-1C-1b
+- ADR-154 AMENDMENT 落盘 → EP-1C-1b 同 commit
+- 前端 SchedulerConfigDrawer chip 列表 UI + AutoCrawlSummaryCard 多时间显示 → EP-1C-2
 
 ---
 
 ## 下次会话恢复入口
 
-EP-1B2-LAYOUT 完成后启 EP-1C-1（D-155-6 后端契约 + scheduler）。
+EP-1C-1a 完成后启 EP-1C-1b（zod + scheduler + ADR-154 AMENDMENT）。

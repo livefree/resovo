@@ -195,3 +195,117 @@ describe('setAutoCrawlConfig（ADR-154 D-154-1 写入解除写死）', () => {
     expect(intervalMinutesCall![1][1]).toBe('120')
   })
 })
+
+// ── Tests: parseDailyTimes 3 路径兼容（ADR-155 D-155-6 / EP-1C-1a R-155-3）──
+
+describe('parseDailyTimes（ADR-155 D-155-6 KV 3 路径兼容）', () => {
+  beforeEach(() => {
+    // 避免前序 describe 的 client.query mock 调用残留
+    vi.clearAllMocks()
+    mockQuery.mockResolvedValue({ rows: [], rowCount: 0 })
+    mockConnect.mockResolvedValue(mockClient)
+    mockClientQuery.mockResolvedValue({ rows: [], rowCount: 0 })
+    mockRelease.mockReturnValue(undefined)
+  })
+
+  it('#11 旧裸单字符串 "03:00" → ["03:00"]（最常见历史值）', async () => {
+    const { deserializeAutoCrawlConfig } = await import('@/api/db/queries/systemSettings')
+    const config = deserializeAutoCrawlConfig({
+      auto_crawl_enabled: 'true',
+      auto_crawl_daily_time: '03:00',
+    })
+    expect(config.dailyTimes).toEqual(['03:00'])
+    expect(config.dailyTime).toBe('03:00')  // alias 保持向后兼容
+  })
+
+  it('#12 JSON 字符串值 \'"03:00"\' → ["03:00"]', async () => {
+    const { deserializeAutoCrawlConfig } = await import('@/api/db/queries/systemSettings')
+    const config = deserializeAutoCrawlConfig({
+      auto_crawl_enabled: 'true',
+      auto_crawl_daily_time: '"03:00"',
+    })
+    expect(config.dailyTimes).toEqual(['03:00'])
+  })
+
+  it('#13 JSON 数组（新格式）\'["03:00","04:00"]\' → ["03:00","04:00"]', async () => {
+    const { deserializeAutoCrawlConfig } = await import('@/api/db/queries/systemSettings')
+    const config = deserializeAutoCrawlConfig({
+      auto_crawl_enabled: 'true',
+      auto_crawl_daily_time: '["03:00","04:00"]',
+    })
+    expect(config.dailyTimes).toEqual(['03:00', '04:00'])
+    expect(config.dailyTime).toBe('03:00')  // alias = dailyTimes[0]
+  })
+
+  it('#14 空 / undefined → ["03:00"] 兜底', async () => {
+    const { deserializeAutoCrawlConfig } = await import('@/api/db/queries/systemSettings')
+    const config = deserializeAutoCrawlConfig({
+      auto_crawl_enabled: 'true',
+      // 无 auto_crawl_daily_time 键
+    })
+    expect(config.dailyTimes).toEqual(['03:00'])
+  })
+
+  it('#15 非法格式 / 含非 HH:MM 项 → 过滤后兜底（["03:00"] 或合法子集）', async () => {
+    const { deserializeAutoCrawlConfig } = await import('@/api/db/queries/systemSettings')
+    // 数组含合法 + 非法混合 → 仅保留合法
+    const config = deserializeAutoCrawlConfig({
+      auto_crawl_enabled: 'true',
+      auto_crawl_daily_time: '["03:00","invalid","25:99","04:00"]',
+    })
+    expect(config.dailyTimes).toEqual(['03:00', '04:00'])
+    // 全非法 → 兜底
+    const config2 = deserializeAutoCrawlConfig({
+      auto_crawl_enabled: 'true',
+      auto_crawl_daily_time: 'not-a-time',
+    })
+    expect(config2.dailyTimes).toEqual(['03:00'])
+  })
+
+  it('#16 setAutoCrawlConfig 写入 → auto_crawl_daily_time = JSON.stringify(dailyTimes)（Y-155-1）', async () => {
+    const { setAutoCrawlConfig } = await import('@/api/db/queries/systemSettings')
+
+    const db = { query: mockQuery, connect: mockConnect } as never
+    await setAutoCrawlConfig(db, {
+      globalEnabled: true,
+      scheduleType: 'daily',
+      intervalMinutes: 60,
+      dailyTimes: ['03:00', '04:00'],  // 新主字段
+      dailyTime: '03:00',               // alias
+      defaultMode: 'incremental',
+      onlyEnabledSites: true,
+      conflictPolicy: 'skip_running',
+      perSiteOverrides: {},
+    })
+
+    const dailyTimeCall = mockClientQuery.mock.calls.find(
+      (c) => Array.isArray(c[1]) && c[1][0] === 'auto_crawl_daily_time'
+    )
+    expect(dailyTimeCall).toBeTruthy()
+    // 写入值是 JSON 数组字符串
+    expect(dailyTimeCall![1][1]).toBe('["03:00","04:00"]')
+  })
+
+  it('#17 setAutoCrawlConfig 兜底：仅传 dailyTime（dailyTimes undefined）→ 推 [dailyTime]', async () => {
+    const { setAutoCrawlConfig } = await import('@/api/db/queries/systemSettings')
+
+    const db = { query: mockQuery, connect: mockConnect } as never
+    await setAutoCrawlConfig(db, {
+      globalEnabled: true,
+      scheduleType: 'daily',
+      intervalMinutes: 60,
+      // dailyTimes 缺失（旧调用方）
+      dailyTime: '05:30',
+      defaultMode: 'incremental',
+      onlyEnabledSites: true,
+      conflictPolicy: 'skip_running',
+      perSiteOverrides: {},
+    })
+
+    const dailyTimeCall = mockClientQuery.mock.calls.find(
+      (c) => Array.isArray(c[1]) && c[1][0] === 'auto_crawl_daily_time'
+    )
+    expect(dailyTimeCall).toBeTruthy()
+    expect(dailyTimeCall![1][1]).toBe('["05:30"]')
+  })
+})

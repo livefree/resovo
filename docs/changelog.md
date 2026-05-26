@@ -7371,3 +7371,103 @@ PATCH 文件数：2 源 + 1 测试 = 3 项（≤ 5 硬约束 ✅）
 
 Cleanup-Audit: 2 源文件改 + 1 测试文件（扩 2 case）/ 2 新单测 / 0 migration / 0 新依赖
 Plan-Revision: 1 次（EP-1B2 实施期延伸 / @livefree 走读暴露 layout 优化需求 / 本卡是 D-155-5 的实施延续，不起新 ADR）
+
+## [CHG-SN-9-CW1-CW2-REDESIGN-A-EP-1C-1a] D-155-6 类型契约 + KV 3 路径兼容
+
+- **日期**：2026-05-26
+- **Sequence**：SEQ-20260526-CRAWLER-W3-FIX
+- **任务 ID**：CHG-SN-9-CW1-CW2-REDESIGN-A-EP-1C-1a
+- **关联 ADR**：ADR-155 D-155-6（🟢 Accepted）；ADR-154 §D-154-1 AMENDMENT 落盘推迟到 EP-1C-1b 同 commit
+- **模型**：claude-opus-4-7（主循环延续；建议 sonnet）
+- **拆分理由**：原 EP-1C-1 范围 5 源 + 2 测试 = 7 项触发 PATCH ≤ 5 硬约束。本卡仅做"类型契约 + KV 兼容性"层（向后兼容窗口打开）；zod preprocess + scheduler checkDaily/marks/GC + ADR-154 AMENDMENT 拆到 EP-1C-1b。
+
+### 改动摘要
+
+ADR-155 D-155-6 类型 + KV 兼容性层落地，打开多 dailyTime 向后兼容窗口（前端/scheduler 旧代码无需任何改动即可继续工作）。
+
+- **Step 1**（`packages/types/src/system.types.ts`）：
+  - `AutoCrawlConfig` 加 `dailyTimes?: readonly string[]`（主字段 / 可选避免 zod schema 旧调用方 breaking change / EP-1C-1b zod preprocess 后调用方应总是输出 dailyTimes）
+  - `dailyTime: string` 标 `@deprecated` alias = `dailyTimes[0] ?? '03:00'`（向后兼容；EP-1C-2 前端切换后可删）
+  - `SystemSettingKey` 加 `'auto_crawl_last_trigger_marks'`（R-155-2' 防重维度升级 / EP-1C-1b checkDaily 消费）
+
+- **Step 2**（`apps/api/src/db/migrations/076_auto_crawl_daily_times_array.sql` 新建）：
+  - KV seed `auto_crawl_last_trigger_marks = '{}'` JSON object 容器
+  - ROLLBACK 注释 + 关键约束说明（旧 `auto_crawl_last_trigger_date` 保留向后兼容）
+
+- **Step 3**（`apps/api/src/db/queries/systemSettings.ts`）：
+  - 新增 `parseDailyTimes(input): readonly string[]` 函数 — R-155-3 必修 3 路径完整覆盖：
+    - 路径 1a：JSON 数组（新格式）→ 过滤合法 HH:MM + 边界检查 + 兜底
+    - 路径 1b：JSON 字符串值 `'"03:00"'` → `[parsed]`
+    - 路径 2：旧裸单字符串 `"03:00"`（最常见历史值）→ `[parsed]`
+    - 空 / undefined / 非法 → `['03:00']` 兜底
+  - `deserializeAutoCrawlConfig` 输出 `dailyTimes`（主）+ `dailyTime = dailyTimes[0] ?? '03:00'`（alias）
+  - `setAutoCrawlConfig` 永远写 JSON 数组（Y-155-1 精确落点替换 line 184）；兜底 `[dailyTime]`（兼容仅传 dailyTime 的旧调用方）
+
+- **Step 4（单测扩展）**（`tests/unit/api/crawlerScheduler.test.ts`）扩 7 case：
+  - parseDailyTimes 5 路径（旧字符串 / JSON 字符串 / JSON 数组 / 空兜底 / 非法过滤）
+  - setAutoCrawlConfig 写 JSON.stringify（Y-155-1）
+  - 兜底：仅传 dailyTime（dailyTimes undefined）→ 推 [dailyTime]
+
+- **Step 5（architecture.md 同步 / Y-155-5 + CLAUDE.md 反面义务）**：追加 migration 076 条目 + system_settings 新增键说明（auto_crawl_last_trigger_marks JSON object / 多 dailyTime 防重）
+
+### 新增/修改文件
+
+- `packages/types/src/system.types.ts`（Step 1 类型扩展）
+- `apps/api/src/db/migrations/076_auto_crawl_daily_times_array.sql`（Step 2 新建）
+- `apps/api/src/db/queries/systemSettings.ts`（Step 3 parseDailyTimes + deserialize + setter）
+- `tests/unit/api/crawlerScheduler.test.ts`（Step 4 扩 7 case + 局部 beforeEach 隔离 mock）
+- `docs/architecture.md`（Step 5 同步 / 不计入 PATCH）
+
+PATCH 文件数：3 源 + 1 测试 = 4 项（≤ 5 硬约束 ✅）
+
+### 偏离记录
+
+- 无新 D-N 偏离（D-155-6 已在 ADR-155 Accepted 内）
+- `dailyTimes` 类型设为 optional（`readonly dailyTimes?: readonly string[]`）— 偏离 ADR-155 §3 D-155-6 §实施"必填"描述。理由：保留向后兼容窗口让 EP-1C-1a 与 EP-1C-1b 解耦（zod preprocess 在 EP-1C-1b 才落地，期间 route 旧代码不应被 typecheck 破坏）；deserialize 输出永远非空，使用方安全。
+
+### 质量门禁
+
+- ✅ typecheck PASS（8 workspace）
+- ✅ lint PASS（4 pre-existing 警告，0 新增）
+- ✅ test 5111 total / 本卡新 7 case 全过（crawlerScheduler.test 19/19 PASS）
+  - 全套首跑 1 fail = vitest 并发 flaky（StagingEditPanel #?）→ 单跑 12/12 全过；与本卡改动无因果（不引用 system.types.ts / systemSettings.ts）
+- ✅ verify:adr-contracts PASS（含 verify-adr-d-numbers 207 闭环 / verify-sql-schema-alignment 含新 KV `auto_crawl_last_trigger_marks`）
+
+### 六问自检 PASS
+
+1. **正确性**：parseDailyTimes 3 路径 + 兜底 + 边界检查（HH:MM 正则 + 数值范围）；deserialize 输出永远非空保证消费方安全；setter 双兜底（dailyTimes 优先 / dailyTime fallback）
+2. **边界与复用**：`parseDailyTime` 单项规范化复用；`SystemSettingKey` 枚举统一管理；不引入新工具函数
+3. **可扩展性**：parseDailyTimes 模式可承载未来 cron 等格式；JSON array 形态便于扩 metadata（如 timezone）
+4. **一致性**：与 ADR-154 D-154-1 KV 范式一致；与 ADR-146 `parseWebhookEvents` JSON 数组 deserialize 范式同源
+5. **改动收敛**：满足 1–4 前提下严格 3 源 + 1 测试 + 1 docs（architecture.md 不计 PATCH）= 4 项
+6. **偏离检测**：dailyTimes 临时可选偏离记录在 §偏离记录 + §未覆盖（EP-1C-1b zod preprocess 后调用方应总是传 dailyTimes）
+
+### AI-CHECK 结论
+
+- ✅ **PASS** — 5 个 Step 完整闭环 / 7 新单测全过 / 全栈门禁通过
+- **越界检测**：CLEAN（3 源 + 1 测试严格在 EP-1C-1a 文件范围内；architecture.md 同步是 CLAUDE.md 反面义务）
+- **回归风险**：低
+  - dailyTime alias 保证前端 SchedulerConfigDrawer + AutoCrawlScheduleCard + AutoCrawlSummaryCard 不破坏
+  - setter 兜底保证 zod schema 旧调用方（仅传 dailyTime）继续工作
+  - KV 历史 3 种形态全兼容（线上 stored "03:00" 值不需要数据迁移）
+
+### 未覆盖（→ EP-1C-1b / EP-1C-2）
+
+- **R-155-6 zod preprocess** 兼容旧 `{dailyTime}` POST schema → EP-1C-1b
+- **R-155-2' crawlerScheduler checkDaily 任一匹配触发 + marks 防重 + Y-155-2 GC 7 天前 keys** → EP-1C-1b
+- **ADR-154 AMENDMENT 落盘**（dailyTimes 替换 dailyTime 决策记录）→ EP-1C-1b 同 commit
+- **前端 SchedulerConfigDrawer chip 列表 UI + AutoCrawlSummaryCard 多时间显示** → EP-1C-2
+- **dailyTimes 类型从 optional 改回 required** → EP-1C-2 完成后清理
+
+### 关键约束消化
+
+- **PATCH ≤ 5 项**：3 源 + 1 测试 = 4 项 ✅（architecture.md 同步是反面义务 / 不计 PATCH）
+- **向后兼容窗口**：dailyTimes optional + dailyTime alias + setter 双兜底 → 前端 / route / scheduler 旧代码零改动
+- **architecture.md 同步**：追加 migration 076 + 新增 KV 键说明（CLAUDE.md "schema 变更不同步 docs/architecture.md" 反面义务）
+- **EP-1C-1b 依赖前置**：本卡是后续 zod preprocess + scheduler 重构的前置；dailyTimes 字段已暴露 + KV 历史值兼容已就绪
+
+- **执行模型**：claude-opus-4-7（主循环延续；建议 sonnet，本会话 opus 上下文复用）
+- **子代理调用**：无（D-155-6 已 ADR-155 Accepted；类型 + KV 兼容性不触发"共享组件 API 契约强制 Opus"）
+
+Cleanup-Audit: 3 源文件改 + 1 测试文件（扩 7 case + 1 beforeEach 隔离） + 1 docs（architecture.md 同步）/ 7 新单测 / 1 migration / 0 新依赖
+Plan-Revision: 1 次（ADR-155 §5 EP-1C-1 拆为 EP-1C-1a + EP-1C-1b 满足 PATCH ≤ 5 项硬约束；dailyTimes 临时 optional 偏离 §3 D-155-6 §实施"必填"描述，EP-1C-2 完成后清理）
