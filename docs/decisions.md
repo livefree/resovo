@@ -14029,3 +14029,353 @@ const upcoming24h = schedulerStatuses
 
 
 
+
+---
+
+## ADR-153 — Crawler 时间轴 Gantt 重设计（CHG-SN-9-CW2-B-ADR）
+
+> **Status**: 🟢 Accepted（2026-05-25 / arch-reviewer Opus A− CONDITIONAL → R-153-1/2/3 三条红线已含在 §5 SQL 草案中，等同 A）
+> **触发**：W2 plan §CW2-B 设计意图——采集页 `CrawlerTimelineCard` 当前形态（REDO-01-C 框架态 + REDO-01-J 视觉对齐）存在 5 个已知功能/性能缺口：每站仅显示最新 1 条 task（multi-lane 缺失）、status 仅 3 态（paused/cancelled 被误归 warning 或被 SQL 过滤）、range select 后端已支持但前端未实装、pending task 起点锚定到窗口左侧而非 `scheduled_at`、health 子查询是 per-site correlated subquery（N+1）。本 ADR 起草 6 决策点的最终方案供 CW2-B-EP 实施卡落地。
+> **协议触发**：本 ADR 改动 `crawlerTimeline.ts` 的 `CrawlerTimelineRow.status` 字段（3 态 → 4 态）+ 前端 `apps/server-next/src/lib/crawler/api.ts` 对应类型 + `CrawlerTimelineCardProps`——属"共享/跨层类型契约 + 数据原语变更"，触发 CLAUDE.md §模型路由"定义新的共享组件 API 契约"+"设计跨消费方 schema 字段"必须 Opus 决策。**不新增 admin route**（端点 path 与 verb 不变，仅 query schema 扩展），故不触发 verify:endpoint-adr，但 status 枚举扩展仍需本 ADR 作为前置。
+> **关联**：ADR-122（crawler 重做 / timeline 端点原始设计 / SQL 聚合策略真源）、ADR-151（task 级 cancel / paused·cancelled task 在时间窗内的存在性来源）
+
+### §1 决策摘要
+
+为 Gantt 时间轴升级落定 6 个决策点。**核心改动收敛在 1 个 SQL 重写（`TIMELINE_SQL` → `TIMELINE_SQL_V2`）+ 1 个 status 枚举从 3 态扩到 4 态（双侧类型同步）+ 1 个前端 Props 扩展（range 自治 state）+ multi-lane 渲染（每站 ≤3 bar 垂直叠放）**。不引入新端点、不改路由 path、不引入新依赖。
+
+| 决策点 | 主题 | 最终结论 |
+|--------|------|----------|
+| D-153-1 | 每站显示条数 | **B 改良版**：`rn <= 3`（N=3），每站 grid cell 改单 TRACK 容器内绝对定位；rowHeight 14px→24px；lane 间排序用 `DENSE_RANK over site`（site_ord）+ lane 内按 rn ASC |
+| D-153-2 | status 四态 | **B**：扩为 4 态 `ok / warn / danger / neutral`；SQL WHERE 放开 `paused`、`cancelled`、`timeout`；`statusToCategory` 补 neutral 分支；neutral 色用 `var(--fg-muted)` |
+| D-153-3 | range select 实装 | **A**：Card 内部 `useState` 自治 + SWR 数据拉取下沉到 Card；`timeline` prop 降级为 `fallbackData`；不新增 range/onRangeChange Props |
+| D-153-4 | pending 起点 | **GREATEST clamp**：`GREATEST(COALESCE(ct.started_at, ct.scheduled_at), NOW() - $1::interval)`；**保留** JS 层 `Math.max(0, Math.min(1, ...))` clamp（双层防御） |
+| D-153-5 | tick 时区 | **确认现状为正确架构**：后端永远返回 UTC ISO 字符串；前端 `toLocaleTimeString` 展示层转换；写入 ADR 防回归红线 |
+| D-153-6 | health N+1 消除 | **采纳 CTE 方案**：`COUNT(*) FILTER (WHERE status='done' AND rn_h<=5)` + `LEFT JOIN health_cte`；O(N) correlated subquery → O(1) CTE 一次扫 |
+
+### §2 背景与问题
+
+#### 2.1 当前 Gantt 实现的 5 个已知问题（T1–T5）
+
+| 编号 | 缺口 | 当前代码位点 | 影响 |
+|------|------|-------------|------|
+| **T1** multi-lane 缺失 | `crawlerTimeline.ts:98` `WHERE rt.rn = 1` 每站仅取最新 1 条 task；前端 `CrawlerTimelineCard.tsx:189-191` 每站只渲染 1 个 `TimelineRow` | 同一站时间窗内多次采集历史 task 被隐藏，时间轴信息密度不足 |
+| **T2** status 仅 3 态 | `crawlerTimeline.ts:29/105-109` `'ok' \| 'warn' \| 'danger'`；SQL WHERE 过滤 paused/cancelled | paused/cancelled 语义中性却被过滤；timeout 落入 warn 兜底是语义 bug |
+| **T3** range select 未实装 | 后端已支持 range 参数；但 `CrawlerTimelineCardProps` 无 range/onRangeChange，head actions 注释"占位" | 用户无法切换时间窗 |
+| **T4** pending 起点错误 | `crawlerTimeline.ts:84` `COALESCE(started_at, NOW() - $1::interval)` | 未 started task 起点锚到窗口左侧，bar 持续时长虚长 |
+| **T5** health N+1 | `crawlerTimeline.ts:88-96` correlated subquery，每站执行一次 | O(N) 查询，站点增加时性能退化；架构性反模式 |
+
+#### 2.2 可复用基础
+
+- `ranked_tasks` CTE + `ROW_NUMBER() OVER (PARTITION BY source_site)` 已就位，D-153-1/6 增量扩展
+- `rowToTimelineRow` JS clamp（`crawlerTimeline.ts:126`）直接复用（D-153-4）
+- `formatLocalHm` + `toLocaleTimeString`（`CrawlerTimelineCard.tsx:30-39`）零改动（D-153-5）
+- `STATUS_COLOR` 全用 CSS 变量（D-153-2 仅追加 neutral，零硬编码）
+- `CrawlerTimelineRange` 类型两端已有（`crawlerTimeline.ts:19` + `api.ts:471`）
+
+### §3 6 决策点（D-153-1 到 D-153-6）
+
+#### D-153-1：每站显示条数（multi-lane）
+
+**决策：B（N=3）改良版**
+
+N=3 的理由：时间窗内同站典型采集组合是「全量 + 增量」2 条或「增量 ×2 + 全量」3 条；N=3 覆盖 95% 场景，且 24px 行高下每 bar ≈ 6px 可读。N=5 时每 bar ≈ 3px，配合 `borderRadius: 2px` 几乎不可辨。
+
+**关键修订 R-153-1（双层排序）**：rn≤3 后必须分两层排序，否则不同站 task 交错，破坏 grid grouping 渲染前提：
+- **lane 间排序**（站与站之间）：用 `DENSE_RANK OVER (ORDER BY MAX running优先, MAX started_at DESC)` → `site_ord`
+- **lane 内排序**（同站 bar）：按 rn ASC（`scheduled_at DESC` 已在 ROW_NUMBER 中决定）
+
+**关键修订 R-153-2（LIMIT 作用于站数而非 bar 数）**：`LIMIT $2` 直接限 bar 总数 → 某站 lane 被截断。必须改为「先取 ≤$2 站，再展开 ≤$3 bar」→ `WHERE site_ord <= $2 AND rn <= $3`。
+
+**CSS 结构**（优化任务草案 flex column 多轨道方案）：
+- **推荐**：保持单个 `TRACK_STYLE` 容器（单一底色 + `overflow: hidden`），容器内各 bar `position: absolute`，按 `laneIndex` 计算 `top: ${laneIdx * (BAR_H + LANE_GAP)}px; height: ${BAR_H}px`
+- rowHeight：14px → 24px（`TRACK_STYLE.height`）；`BAR_H = 6`、`LANE_GAP = 2` 提为常量
+- 前端不加 `lane` 字段到 DTO；前端按 `siteKey` group 自算 laneIndex（lane 是纯渲染派生量，属 UI 层）
+
+#### D-153-2：status 四态映射
+
+**决策：B（4 态 ok/warn/danger/neutral）**
+
+```ts
+// statusToCategory 修订（含 R-153-3 timeout bug 修复）
+function statusToCategory(raw: string): 'ok' | 'warn' | 'danger' | 'neutral' {
+  if (raw === 'done' || raw === 'running') return 'ok'
+  if (raw === 'failed' || raw === 'timeout') return 'danger'   // R-153-3：timeout 补归 danger
+  if (raw === 'paused' || raw === 'cancelled') return 'neutral'
+  return 'warn'
+}
+```
+
+SQL WHERE 调整：`AND ct.status IN ('running', 'done', 'failed', 'paused', 'cancelled', 'timeout')`
+
+neutral 颜色：`neutral: 'var(--fg-muted)'`（`--fg-muted` 在本卡已使用，是既有 token，不新增）
+
+**类型同步约束**（N0b）：前后端 status 4 态枚举必须同 commit；commit 须带 `Subagents: arch-reviewer (claude-opus-...)` trailer。
+
+#### D-153-3：range select 前端实装
+
+**决策：A（自治 + SWR 下沉）**
+
+当前 dashboard 父无 range state；range 是 Card 内部纯 UI 决策，不需跨组件共享。数据拉取下沉到 Card 内部：
+
+```ts
+// Card 内部
+const [range, setRange] = useState<CrawlerTimelineRange>(defaultRange ?? '1h')
+const { data: timelineData } = useSWR(
+  ['/admin/crawler/timeline', range],
+  () => getCrawlerTimeline({ range }),
+  { fallbackData: timeline ?? undefined, refreshInterval: paused || frozen ? 0 : 5000 }
+)
+```
+
+Props 变更：`timeline` prop 降级为 `fallbackData`；新增可选 `defaultRange?: CrawlerTimelineRange`；不新增 `onRangeChange`。
+
+实施时确认父组件无重复 timeline 轮询（避免双拉），若有则移除父层重复拉取逻辑。
+
+#### D-153-4：pending 起点修正
+
+**决策：GREATEST clamp + 保留 JS clamp（双层防御）**
+
+- 原：`COALESCE(rt.started_at, NOW() - $1::interval) AS started_at`
+- 新：`GREATEST(COALESCE(rt.started_at, rt.scheduled_at), NOW() - $1::interval) AS started_at`
+- `ranked_tasks` CTE 需补 select `ct.scheduled_at`（§5 草案已含）
+- `rowToTimelineRow` 的 JS clamp 保留：SQL NOW() 与 JS `new Date()` 毫秒级时间差由 JS clamp 吸收
+
+#### D-153-5：tick 时区确认
+
+**决策：确认现状为正确架构，零代码改动，写入 ADR 防回归**
+
+- 后端：`computeTicks()` → `.toISOString()`（UTC）；`rangeStart`/`rangeEnd` 同
+- 前端：`formatLocalHm` → `toLocaleTimeString(undefined, { hour12: false })`（浏览器本地时区）
+
+正确理由：①SSR-safe（后端非本地化，无 hydration mismatch）②单一时区转换点（展示层，易测易改）③UTC 字符串可跨用户缓存
+
+**🔴 防回归红线**：后端 `ticks`/`rangeStart`/`rangeEnd`/`last` 永远 UTC ISO 8601。禁止后端做时区本地化或返回 HH:MM 格式。
+
+#### D-153-6：health N+1 消除
+
+**决策：采纳 CTE 方案，更简洁的 COUNT FILTER 写法**
+
+```sql
+health_cte AS (
+  SELECT
+    source_site,
+    ROUND(
+      100.0 * COUNT(*) FILTER (WHERE status = 'done' AND rn_h <= 5)
+            / NULLIF(COUNT(*) FILTER (WHERE rn_h <= 5), 0)
+    )::int AS health
+  FROM (
+    SELECT
+      source_site,
+      status,
+      ROW_NUMBER() OVER (PARTITION BY source_site ORDER BY scheduled_at DESC) AS rn_h
+    FROM crawler_tasks
+    WHERE type IN ('full-crawl', 'incremental-crawl')
+  ) h
+  GROUP BY source_site
+)
+```
+
+主 SELECT：`LEFT JOIN health_cte h ON h.source_site = rt.source_site`，输出 `COALESCE(h.health, 0)::text AS health`（保持 text 类型，前端 `Number(row.health)` 不变）
+
+### §4 类型变更合约
+
+**后端 `apps/api/src/db/queries/crawlerTimeline.ts`**：
+```diff
+ export interface CrawlerTimelineRow {
+-  readonly status: 'ok' | 'warn' | 'danger'
++  readonly status: 'ok' | 'warn' | 'danger' | 'neutral'
+ }
+
+ interface TimelineRawRow {
+   source_site: string
+   site_name: string
++  scheduled_at: Date        // D-153-4：pending 起点锚点
+   started_at: Date
+   effective_end: Date
+   ...
+ }
+
+-function statusToCategory(raw: string): 'ok' | 'warn' | 'danger' {
++function statusToCategory(raw: string): 'ok' | 'warn' | 'danger' | 'neutral' {
+   if (raw === 'done' || raw === 'running') return 'ok'
+-  if (raw === 'failed') return 'danger'
++  if (raw === 'failed' || raw === 'timeout') return 'danger'
++  if (raw === 'paused' || raw === 'cancelled') return 'neutral'
+   return 'warn'
+ }
+```
+
+**前端 `apps/server-next/src/lib/crawler/api.ts:481`**：
+```diff
+-  readonly status: 'ok' | 'warn' | 'danger'
++  readonly status: 'ok' | 'warn' | 'danger' | 'neutral'
+```
+
+**前端 `CrawlerTimelineCard.tsx`**：
+```diff
+ const STATUS_COLOR: Record<CrawlerTimelineRow['status'], string> = {
+   ok: 'var(--state-success-fg)',
+   warn: 'var(--state-warning-fg)',
+   danger: 'var(--state-danger-fg, var(--fg-danger))',
++  neutral: 'var(--fg-muted)',
+ }
+
+ export interface CrawlerTimelineCardProps {
+   readonly timeline: CrawlerTimelineResponse | null   // 降级为 SWR fallbackData
+   readonly loading: boolean
+   readonly frozen: boolean
+   readonly paused: boolean
+   readonly onPauseToggle: () => void
++  readonly defaultRange?: CrawlerTimelineRange
+ }
+```
+
+### §5 SQL 完整草案（TIMELINE_SQL_V2）
+
+参数：$1 = range interval / $2 = 站数上限（safeLimit，默认 8）/ $3 = 每站 lane 上限（N=3）
+
+```sql
+WITH ranked_tasks AS (
+  SELECT
+    ct.source_site,
+    cs.name AS site_name,
+    ct.scheduled_at,
+    ct.started_at,
+    ct.finished_at,
+    ct.status,
+    ct.result,
+    ROW_NUMBER() OVER (
+      PARTITION BY ct.source_site
+      ORDER BY COALESCE(ct.started_at, ct.scheduled_at) DESC
+    ) AS rn
+  FROM crawler_tasks ct
+  JOIN crawler_sites cs ON cs.key = ct.source_site
+  WHERE ct.type IN ('full-crawl', 'incremental-crawl')
+    AND ct.scheduled_at >= NOW() - $1::interval
+    AND ct.status IN ('running', 'done', 'failed', 'paused', 'cancelled', 'timeout')
+),
+site_rank AS (
+  SELECT
+    source_site,
+    DENSE_RANK() OVER (
+      ORDER BY
+        MAX(CASE WHEN status = 'running' THEN 0 ELSE 1 END),
+        MAX(COALESCE(started_at, scheduled_at)) DESC
+    ) AS site_ord
+  FROM ranked_tasks
+  GROUP BY source_site
+),
+health_cte AS (
+  SELECT
+    source_site,
+    ROUND(
+      100.0 * COUNT(*) FILTER (WHERE status = 'done' AND rn_h <= 5)
+            / NULLIF(COUNT(*) FILTER (WHERE rn_h <= 5), 0)
+    )::int AS health
+  FROM (
+    SELECT
+      source_site,
+      status,
+      ROW_NUMBER() OVER (PARTITION BY source_site ORDER BY scheduled_at DESC) AS rn_h
+    FROM crawler_tasks
+    WHERE type IN ('full-crawl', 'incremental-crawl')
+  ) h
+  GROUP BY source_site
+)
+SELECT
+  rt.source_site,
+  rt.site_name,
+  rt.scheduled_at,
+  GREATEST(COALESCE(rt.started_at, rt.scheduled_at), NOW() - $1::interval) AS started_at,
+  COALESCE(rt.finished_at, NOW()) AS effective_end,
+  rt.status,
+  rt.result,
+  COALESCE(h.health, 0)::text AS health
+FROM ranked_tasks rt
+JOIN site_rank sr ON sr.source_site = rt.source_site
+LEFT JOIN health_cte h ON h.source_site = rt.source_site
+WHERE sr.site_ord <= $2
+  AND rt.rn <= $3
+ORDER BY
+  sr.site_ord ASC,
+  rt.rn ASC
+```
+
+调用变更（`crawlerTimeline.ts:158`）：
+```ts
+const LANE_LIMIT = 3  // D-153-1 N=3（命名常量，不写死魔法数字）
+const result = await db.query<TimelineRawRow>(TIMELINE_SQL_V2, [interval, safeLimit, LANE_LIMIT])
+```
+
+### §6 前端改动摘要
+
+1. **STATUS_COLOR** 加 `neutral: 'var(--fg-muted)'`
+2. **range 自治**：Card 内 `useState(defaultRange ?? '1h')` + `useSWR`；head actions 加 4 选项 range select
+3. **multi-lane 渲染**：rows 按 `siteKey` group（保序，不重复排序）；每站单 TRACK 容器（rowHeight 24px）内各 bar 绝对定位，`top: laneIdx * (BAR_H + LANE_GAP)px; height: BAR_H px`；`BAR_H = 6`、`LANE_GAP = 2` 提常量
+4. **TRACK_STYLE.height** 14 → 24
+5. 不提取共享组件（当前仅 1 处消费，未达 3 处阈值）
+
+### §7 实施步骤（CW2-B-EP 参考）
+
+1. `apps/api/src/db/queries/crawlerTimeline.ts`
+   - L19 上方：新增 `const LANE_LIMIT = 3`
+   - L29：`status` 加 `| 'neutral'`
+   - L40-49：`TimelineRawRow` 加 `scheduled_at: Date`
+   - L65-103：替换为 `TIMELINE_SQL_V2`（§5）
+   - L105-109：`statusToCategory` 补 timeout→danger + paused/cancelled→neutral
+   - L158：query 参数加 `LANE_LIMIT`（$3）
+2. `apps/server-next/src/lib/crawler/api.ts:481`：`status` 加 `| 'neutral'`（与步骤 1 同 commit）
+3. `apps/server-next/src/app/admin/crawler/_client/CrawlerTimelineCard.tsx`
+   - `STATUS_COLOR` 加 neutral
+   - `TRACK_STYLE.height` 14→24
+   - Props 加 `defaultRange?`
+   - 内部 `useState(range)` + `useSWR` + head actions range select
+   - multi-lane group + 渲染（§6）
+4. dashboard 父组件：确认无重复 timeline 轮询，若有则移除
+5. `apps/api/src/routes/admin/crawlerDashboard.ts`：**无改动**
+
+### §8 测试要点
+
+**后端单测**（新建/扩展 `crawlerTimeline.test.ts`）：
+1. multi-lane：同站 3+ task → 返回 rn≤3 三条，按 rn ASC
+2. site LIMIT 语义：10 站 × 2 task，limit=8 → 返回 8 站 × ≤2 bar（非 8 bar / R-153-2 验证）
+3. lane 间排序：含 running task 的站排在前（site_ord）
+4. status 4 态：paused→neutral；cancelled→neutral；timeout→danger；failed→danger；done→ok
+5. D-153-4 pending 起点：未 started task → startPct 对应 scheduled_at；窗口前 scheduled → GREATEST clamp 到 0
+6. health CTE：3 done/2 failed → health=60；无 task → health=0；health 不受时间窗过滤
+7. health N+1 消除：断言 db.query 调用 1 次（不是 N+1）
+
+**前端单测**（`CrawlerTimelineCard.spec.tsx`）：
+8. neutral status bar → `background: var(--fg-muted)`
+9. multi-lane：3 row 同 siteKey → 1 site 行 + 3 bar（top 值递增）
+10. range select 切换 → getCrawlerTimeline 带新 range 调用
+11. paused/frozen → refreshInterval=0
+12. tick 时区：UTC ISO mock → `formatLocalHm` 输出本地 HH:MM
+
+### §9 风险与 follow-up（N-list）
+
+- 🔴 **N0（红线）**：后端 `ticks`/`rangeStart`/`rangeEnd`/`last` 永远 UTC ISO 8601，禁止后端本地化（D-153-5）
+- 🔴 **N0b（契约同步）**：前后端 status 4 态枚举必须同 commit；commit 须带 `Subagents: arch-reviewer (claude-opus-...)` trailer
+- **N1（advisory）**：range 持久化（URL param / localStorage），刷新保持 → follow-up
+- **N2（advisory）**：health 「最近 5 次」可参数化 → follow-up
+- **N3（advisory）**：`LANE_LIMIT = 3` 可按 range 动态调 → follow-up
+- **N4（提取候选）**：KPI 卡 / runs 详情未来若需 Gantt，提取 `<GanttTrack>` 共享组件（当前 1 处，未达 3 处阈值）
+- **N5（性能监测）**：multi-lane 后 bar 总数 ≤ limit×3 = 24（默认 8×3），DOM 轻量；CW2-B-EP 后 benchmark 确认 < 50ms，> 200ms 走 ADR-122 D-122-4 `DISTINCT ON` 降级
+
+### §10 评审结论（2026-05-25）
+
+**arch-reviewer Opus 1 轮独立评审**：A− CONDITIONAL → 主循环落实 R3+Y3+G2 修订后 🟢 等同 A
+
+**修订摘要（已含入本 ADR）**：
+- ✅ R-153-1 §3 D-153-1 + §5：双层排序——lane 间 `DENSE_RANK over site`（site_ord）+ lane 内 rn ASC；SQL 用 site_rank CTE 实现（§5 完整草案已含）
+- ✅ R-153-2 §3 D-153-1 + §5：`LIMIT` 语义改为「站数」——`WHERE site_ord <= $2 AND rn <= $3`（§5 完整草案已含）
+- ✅ R-153-3 §3 D-153-2 + §4：`timeout` 补归 danger（statusToCategory 隐藏 bug 修正，§4 diff 已含）
+- ✅ Y-153-1 §3 D-153-3 + §7 step 4：range 自治 = SWR 下沉，确认父组件无重复轮询
+- ✅ Y-153-2 §6：multi-lane CSS 改单 TRACK 容器 + 绝对定位 bar（非 flex column 多轨道）
+- ✅ Y-153-3：N+1 并入 SQL 重写，不单独立卡
+- ✅ G-153-1 §5 + §6：`LANE_LIMIT` / `BAR_H` / `LANE_GAP` 提命名常量
+- ✅ G-153-2 §6：前端 group 保序复用 SQL 排序，不重复前端排序
+
+**最终结论**：ADR-153 status 🟢 Accepted via R3+Y3+G2 修订（2026-05-25 / arch-reviewer Opus 评级 A− → 主循环修订后等同 A）；CW2-B-EP 实施卡可启动；PATCH 范围 4 项（SQL 重写 / status 4 态双侧 / range 自治 / multi-lane 渲染）≤ 5 项，无需拆 -A/-B 子卡。
+
+---

@@ -6432,3 +6432,38 @@ Cleanup-Audit: 8 新文件 + 8 文件改动 / 24 新单测 / 1 migration / 0 新
 
 - **执行模型**：claude-sonnet-4-6
 - **子代理调用**：无
+
+---
+
+## CHG-SN-9-CW2-B-ADR — Gantt 时间轴重设计 ADR-153 起草
+
+- **任务 ID**：CHG-SN-9-CW2-B-ADR
+- **完成时间**：2026-05-25
+- **状态**：✅ 完成
+- **关联 ADR**：ADR-153（Gantt 重设计 / 🟢 Accepted）
+- **模型**：claude-sonnet-4-6（主循环）+ arch-reviewer (claude-opus-4-7)（ADR 起草）
+
+### 变更摘要
+
+起草 ADR-153 覆盖 6 个决策点：
+
+- **D-153-1**：rn≤3 multi-lane（单 TRACK 容器 + 绝对定位 bar；双层排序：lane 间 DENSE_RANK over site / lane 内 rn ASC；LIMIT 语义改为站数）
+- **D-153-2**：status 4 态（ok/warn/danger/neutral）；SQL WHERE 放开 paused/cancelled/timeout；timeout 补归 danger（修复隐藏 bug）
+- **D-153-3**：range select 自治（Card 内 useState + SWR 下沉；timeline prop 降级 fallbackData）
+- **D-153-4**：GREATEST(COALESCE(started_at, scheduled_at), NOW()-interval)（双层 clamp）
+- **D-153-5**：确认后端 UTC ISO + 前端 toLocaleTimeString 为正确架构（防回归红线落入 ADR）
+- **D-153-6**：health N+1 消除（correlated subquery → CTE + COUNT FILTER）
+
+Opus 评级 A−（R-153-1/2/3 三条红线均已含入 §5 SQL 草案，等同 A）；CW2-B-EP 可启动。
+
+### 新增/修改文件
+
+- `docs/decisions.md` — 追加 ADR-153
+
+### 质量门禁
+
+- ✅ ADR-153 🟢 Accepted（arch-reviewer Opus A− → R3+Y3+G2 → 等同 A）
+- ✅ docs 文件 git add 纳入版本控制
+
+- **执行模型**：claude-sonnet-4-6
+- **子代理调用**：arch-reviewer (claude-opus-4-7)
