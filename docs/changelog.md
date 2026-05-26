@@ -7681,3 +7681,83 @@ PATCH 文件数：2 源 + 1 测试 = 3 项（≤ 5 硬约束 ✅）
 
 Cleanup-Audit: 2 源文件改 + 1 测试文件（改 2 + 扩 6 case）/ 6 新单测 + 改 2 case / 0 migration / 0 新依赖
 Plan-Revision: 1 次（ADR-155 §5 EP-1C-2 拆为 EP-1C-2a + EP-1C-2b 满足 PATCH ≤ 5 项硬约束）
+
+## [CHG-SN-9-CW1-CW2-REDESIGN-A-EP-1C-2b] D-155-6 两卡 scheduleSummary 多 dailyTime 显示
+
+- **日期**：2026-05-26
+- **Sequence**：SEQ-20260526-CRAWLER-W3-FIX
+- **任务 ID**：CHG-SN-9-CW1-CW2-REDESIGN-A-EP-1C-2b
+- **关联 ADR**：ADR-155 D-155-6（🟢 Accepted）
+- **模型**：claude-opus-4-7（主循环延续；建议 sonnet）
+
+### 改动摘要
+
+ADR-155 D-155-6 前端显示层完成：Dashboard `AutoCrawlScheduleCard` + `/admin/crawler` 顶部 `AutoCrawlSummaryCard` 两个 schedule 摘要卡均显示多 dailyTime 列表（"每日 03:00, 04:00 · 模式 X"）。
+
+- **Step 1**（两卡 scheduleSummary 改造）：
+  - `apps/server-next/src/app/admin/_client/AutoCrawlScheduleCard.tsx:230`：daily 分支 scheduleSummary 从 `· 每日 ${dailyTime} · 模式` 改为 `· 每日 ${dailyTimes.join(', ')} · 模式`；优先用 dailyTimes，dailyTime alias 兜底
+  - `apps/server-next/src/app/admin/crawler/_client/AutoCrawlSummaryCard.tsx:253`：同样改造
+  - 两个文件统一 `dailyTimesList` 派生范式（dailyTimes 优先 / dailyTime 兜底 / 默认 '03:00'）
+
+- **Step 2（单测扩展）**：
+  - `tests/unit/components/server-next/admin/AutoCrawlScheduleCard.test.tsx` 扩 2 case：#12 多时间显示 / #13 仅 dailyTime alias 单时间兜底
+  - `tests/unit/components/server-next/admin/crawler/AutoCrawlSummaryCard.test.tsx` 扩 2 case：#6 多时间显示 / #7 单时间兜底
+
+### 新增/修改文件
+
+- `apps/server-next/src/app/admin/_client/AutoCrawlScheduleCard.tsx`（dailyTimesList 派生 + scheduleSummary 多时间）
+- `apps/server-next/src/app/admin/crawler/_client/AutoCrawlSummaryCard.tsx`（同样）
+- `tests/unit/components/server-next/admin/AutoCrawlScheduleCard.test.tsx`（扩 2 case）
+- `tests/unit/components/server-next/admin/crawler/AutoCrawlSummaryCard.test.tsx`（扩 2 case）
+
+PATCH 文件数：2 源 + 2 测试 = 4 项（≤ 5 硬约束 ✅）
+
+### 偏离记录
+
+无新 D-N 偏离（D-155-6 已 ADR-155 Accepted）；EP-1C-1a 临时 `dailyTimes` optional 仍未清理（推迟到 EP-1C-CLEANUP）。
+
+### 质量门禁
+
+- ✅ typecheck PASS（8 workspace）
+- ✅ lint PASS（4 pre-existing 警告，0 新增）
+- ✅ test 5127/5127 PASS（本卡新 4 case 全过）
+- ✅ verify:adr-contracts PASS（207 D-N 闭环）
+
+### 六问自检 PASS
+
+1. **正确性**：dailyTimes 优先 + dailyTime alias 兜底 + '03:00' 默认 三层兜底；interval 分支不变
+2. **边界与复用**：两卡完全一致的 `dailyTimesList` 派生范式（G-155-3 推迟到第 3 处消费再抽 AutoCrawlInfoBlock）
+3. **可扩展性**：`dailyTimesList.join(', ')` 模式可扩 i18n 分隔符；未来多 schedule 类型扩展（如 cron）只需加分支
+4. **一致性**：与 SchedulerConfigDrawer `handleSubmit` toast 文案 "每日 03:30, 04:00" 完全一致（EP-1C-2a 同 commit 写入的范式）
+5. **改动收敛**：满足 1–4 前提下严格 2 源 + 2 测试 = 4 项；无任何"顺手优化"
+6. **偏离检测**：无新 D-N
+
+### AI-CHECK 结论
+
+- ✅ **PASS** — 2 个 Step 完整闭环 / 4 新单测全过 / 全栈门禁通过
+- **越界检测**：CLEAN（2 源 + 2 测试严格在 EP-1C-2b 文件范围内）
+- **回归风险**：低
+  - dailyTime alias 兜底保证旧数据（仅 dailyTime 单字符串）继续工作
+  - 默认 '03:00' 保证 config 缺失场景不崩
+  - interval 分支零改动
+
+### 未覆盖（→ EP-1C-CLEANUP / EP-2）
+
+- **用户实测验证**（@livefree）：
+  1. SchedulerConfigDrawer 保存 dailyTimes=["03:00","04:00"]
+  2. `/admin/crawler` 顶部 AutoCrawlSummaryCard 显示 "每日 03:00, 04:00 · 模式 X"
+  3. `/admin` Dashboard AutoCrawlScheduleCard 同样显示多时间
+  4. PageHeader chip 仍单 nextAt 显示（chip 设计简短）
+- **EP-1C-CLEANUP**：dailyTimes 改 required + 删 dailyTime alias（向后兼容窗口清理 / 推迟到所有消费方都用 dailyTimes 后）
+- **EP-2**：D-155-2 topbar 图标合并
+
+### 关键约束消化
+
+- **D-155-6 前端显示层完成**：SchedulerConfigDrawer 编辑 + 两 summary 卡显示 + scheduler 触发 全链路打通
+- **PATCH ≤ 5 项**：2 源 + 2 测试 = 4 项 ✅
+
+- **执行模型**：claude-opus-4-7（主循环延续；建议 sonnet）
+- **子代理调用**：无（D-155-6 已 ADR-155 Accepted；纯显示改动不触发 Opus reviewer）
+
+Cleanup-Audit: 2 源文件改 + 2 测试文件（均扩 2 case）/ 4 新单测 / 0 migration / 0 新依赖
+Plan-Revision: 0 次

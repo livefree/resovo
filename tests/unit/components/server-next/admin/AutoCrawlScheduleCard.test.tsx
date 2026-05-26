@@ -203,4 +203,37 @@ describe('AutoCrawlScheduleCard', () => {
     })
     expect(screen.queryByTestId('auto-crawl-scheduler-disabled')).toBeNull()
   })
+
+  // ── ADR-155 D-155-6 / EP-1C-2b：多 dailyTime 显示 ──
+  it('12. EP-1C-2b: dailyTimes=["03:00","04:00"] daily → scheduleSummary 显示多时间', async () => {
+    const future = new Date(Date.now() + 90 * 60_000).toISOString()
+    const CONFIG_MULTI = {
+      ...BASE_CONFIG,
+      dailyTime: '03:00',
+      dailyTimes: ['03:00', '04:00'] as readonly string[],
+    }
+    mockGetAutoCrawlConfig.mockResolvedValueOnce(CONFIG_MULTI)
+    mockGetCrawlerSystemStatus.mockResolvedValueOnce({ autoCrawlNext: future, schedulerEnabled: true })
+    render(<AutoCrawlScheduleCard />)
+    await waitFor(() => {
+      expect(screen.getByTestId('auto-crawl-countdown')).not.toBeNull()
+    })
+    const summary = screen.getByTestId('auto-crawl-schedule-summary').textContent ?? ''
+    expect(summary).toContain('每日 03:00, 04:00')
+    expect(summary).toContain('模式 增量')
+  })
+
+  it('13. EP-1C-2b: dailyTimes 缺失（仅 dailyTime alias）→ 兜底显示单时间', async () => {
+    const future = new Date(Date.now() + 90 * 60_000).toISOString()
+    // BASE_CONFIG 仅含 dailyTime: '03:30'，无 dailyTimes 字段
+    mockGetAutoCrawlConfig.mockResolvedValueOnce(BASE_CONFIG)
+    mockGetCrawlerSystemStatus.mockResolvedValueOnce({ autoCrawlNext: future, schedulerEnabled: true })
+    render(<AutoCrawlScheduleCard />)
+    await waitFor(() => {
+      expect(screen.getByTestId('auto-crawl-countdown')).not.toBeNull()
+    })
+    const summary = screen.getByTestId('auto-crawl-schedule-summary').textContent ?? ''
+    expect(summary).toContain('每日 03:30')
+    expect(summary).not.toContain(',')  // 仅一个时间
+  })
 })
