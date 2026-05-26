@@ -87,6 +87,44 @@ const OVERRIDE_LIST_STYLE: CSSProperties = {
   overflowY: 'auto',
 }
 
+// ADR-155 D-155-6 / EP-1C-2a：dailyTime chip 列表 UI 样式
+const CHIP_LIST_STYLE: CSSProperties = {
+  display: 'flex',
+  flexWrap: 'wrap',
+  gap: '6px',
+  alignItems: 'center',
+  marginBottom: '6px',
+}
+
+const CHIP_STYLE: CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: '4px',
+  padding: '2px 8px',
+  background: 'var(--accent-soft, var(--bg-surface))',
+  color: 'var(--accent-default)',
+  borderRadius: 'var(--radius-pill, 12px)',
+  fontSize: 'var(--font-size-xs)',
+  fontFamily: 'var(--font-mono, ui-monospace, monospace)',
+  whiteSpace: 'nowrap',
+}
+
+const CHIP_X_STYLE: CSSProperties = {
+  border: 'none',
+  background: 'transparent',
+  color: 'inherit',
+  cursor: 'pointer',
+  padding: '0 2px',
+  fontSize: 'var(--font-size-sm)',
+  lineHeight: 1,
+}
+
+const INPUT_ROW_STYLE: CSSProperties = {
+  display: 'flex',
+  gap: '6px',
+  alignItems: 'center',
+}
+
 const OVERRIDE_ROW_STYLE: CSSProperties = {
   display: 'grid',
   gridTemplateColumns: '1fr auto auto auto',
@@ -143,6 +181,8 @@ export function SchedulerConfigDrawer({ open, onClose, onSaved }: SchedulerConfi
   const [saving, setSaving] = useState(false)
   const [retryKey, setRetryKey] = useState(0)
   const [sites, setSites] = useState<readonly CrawlerSite[]>([])
+  // ADR-155 D-155-6 / EP-1C-2a：dailyTime chip 列表新增输入框 local state
+  const [dailyTimeInput, setDailyTimeInput] = useState('')
 
   useEffect(() => {
     if (!open) return
@@ -186,6 +226,39 @@ export function SchedulerConfigDrawer({ open, onClose, onSaved }: SchedulerConfi
     })
   }
 
+  // ADR-155 D-155-6 / EP-1C-2a：dailyTimes chip 列表增删
+  const getCurrentDailyTimes = (): string[] => {
+    if (!config) return ['03:00']
+    return config.dailyTimes && config.dailyTimes.length > 0
+      ? Array.from(config.dailyTimes)
+      : [config.dailyTime || '03:00']
+  }
+
+  const addDailyTime = () => {
+    if (!config) return
+    const v = dailyTimeInput.trim()
+    if (!/^\d{2}:\d{2}$/.test(v)) return
+    const [h, m] = v.split(':').map(Number)
+    if (h < 0 || h > 23 || m < 0 || m > 59) return
+    const current = getCurrentDailyTimes()
+    if (current.includes(v)) {
+      setDailyTimeInput('')
+      return
+    }
+    if (current.length >= 24) return
+    const updated = [...current, v]
+    setConfig((prev) => prev ? { ...prev, dailyTimes: updated, dailyTime: updated[0] } : prev)
+    setDailyTimeInput('')
+  }
+
+  const removeDailyTime = (idx: number) => {
+    if (!config) return
+    const current = getCurrentDailyTimes()
+    if (current.length <= 1) return  // min 1 守卫
+    const updated = current.filter((_, i) => i !== idx)
+    setConfig((prev) => prev ? { ...prev, dailyTimes: updated, dailyTime: updated[0] } : prev)
+  }
+
   const handleAddSite = (siteKey: string | null) => {
     if (!siteKey || !config) return
     if (siteKey in config.perSiteOverrides) return
@@ -200,9 +273,13 @@ export function SchedulerConfigDrawer({ open, onClose, onSaved }: SchedulerConfi
     setSaving(true)
     try {
       await setAutoCrawlConfig(config)
+      // ADR-155 D-155-6 / EP-1C-2a：toast 显示多时间列表
+      const dailyTimesList = config.dailyTimes && config.dailyTimes.length > 0
+        ? Array.from(config.dailyTimes)
+        : [config.dailyTime || '03:00']
       const schedDesc = config.scheduleType === 'interval'
         ? `每 ${config.intervalMinutes} 分钟`
-        : `每日 ${config.dailyTime}`
+        : `每日 ${dailyTimesList.join(', ')}`
       toast.push({ title: '调度配置已更新', description: `${schedDesc} · 模式 ${config.defaultMode}`, level: 'success' })
       onSaved?.()
       onClose()
@@ -261,20 +338,67 @@ export function SchedulerConfigDrawer({ open, onClose, onSaved }: SchedulerConfi
             />
           </div>
 
-          {/* ADR-154 D-154-1：daily → 每日时间；interval → 间隔分钟 */}
-          {config.scheduleType === 'daily' && (
-            <div style={FIELD_STYLE}>
-              <span style={LABEL_STYLE}>每日触发时间（HH:MM）</span>
-              <AdminInput
-                value={config.dailyTime}
-                onChange={(e) => updateField('dailyTime', e.target.value)}
-                placeholder="HH:MM"
-                pattern="^\d{2}:\d{2}$"
-                data-testid="scheduler-dailyTime"
-                aria-label="每日触发时间"
-              />
-            </div>
-          )}
+          {/* ADR-155 D-155-6 / EP-1C-2a：daily → 多 dailyTime chip 列表（min 1 max 24）
+              替代 ADR-154 D-154-1 原单 dailyTime input */}
+          {config.scheduleType === 'daily' && (() => {
+            const times = getCurrentDailyTimes()
+            const canAdd = times.length < 24 && /^\d{2}:\d{2}$/.test(dailyTimeInput.trim())
+            return (
+              <div style={FIELD_STYLE}>
+                <span style={LABEL_STYLE}>每日触发时间（HH:MM · 最多 24 个）</span>
+                <div style={CHIP_LIST_STYLE} data-testid="scheduler-dailyTime-chips">
+                  {times.map((time, idx) => (
+                    <span key={`${time}-${idx}`} style={CHIP_STYLE} data-testid={`scheduler-dailyTime-chip-${time}`}>
+                      {time}
+                      {times.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => removeDailyTime(idx)}
+                          aria-label={`删除 ${time}`}
+                          data-testid={`scheduler-dailyTime-remove-${time}`}
+                          style={CHIP_X_STYLE}
+                        >
+                          ×
+                        </button>
+                      )}
+                    </span>
+                  ))}
+                </div>
+                {times.length < 24 ? (
+                  <div style={INPUT_ROW_STYLE}>
+                    <AdminInput
+                      value={dailyTimeInput}
+                      onChange={(e) => setDailyTimeInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault()
+                          addDailyTime()
+                        }
+                      }}
+                      placeholder="HH:MM"
+                      pattern="^\d{2}:\d{2}$"
+                      data-testid="scheduler-dailyTime-input"
+                      aria-label="新增每日触发时间"
+                    />
+                    <AdminButton
+                      type="button"
+                      variant="default"
+                      size="sm"
+                      onClick={addDailyTime}
+                      disabled={!canAdd}
+                      data-testid="scheduler-dailyTime-add"
+                    >
+                      + 添加
+                    </AdminButton>
+                  </div>
+                ) : (
+                  <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--fg-muted)' }} data-testid="scheduler-dailyTime-max">
+                    已达上限 24 个触发时间
+                  </span>
+                )}
+              </div>
+            )
+          })()}
 
           {config.scheduleType === 'interval' && (
             <div style={FIELD_STYLE}>

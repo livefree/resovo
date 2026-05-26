@@ -134,20 +134,20 @@ describe('SchedulerConfigDrawer', () => {
     })
   })
 
-  it('5. 6 字段渲染 + 数据回填', async () => {
+  it('5. 6 字段渲染 + chip 列表回填（ADR-155 D-155-6 EP-1C-2a）', async () => {
     getAutoCrawlConfigMock.mockResolvedValueOnce(CONFIG)
     render(<SchedulerConfigDrawer open={true} onClose={() => {}} />)
     await waitFor(() => {
       expect(screen.getByTestId('scheduler-globalEnabled')).not.toBeNull()
-      expect(screen.getByTestId('scheduler-dailyTime')).not.toBeNull()
+      // ADR-155 D-155-6 EP-1C-2a：dailyTime 单 input → chip 列表
+      expect(screen.getByTestId('scheduler-dailyTime-chips')).not.toBeNull()
+      // CONFIG.dailyTime '03:30' 兜底渲染为 1 chip
+      expect(screen.getByTestId('scheduler-dailyTime-chip-03:30')).not.toBeNull()
+      expect(screen.getByTestId('scheduler-dailyTime-input')).not.toBeNull()
       expect(screen.getByTestId('scheduler-defaultMode')).not.toBeNull()
       expect(screen.getByTestId('scheduler-onlyEnabledSites')).not.toBeNull()
       expect(screen.getByTestId('scheduler-conflictPolicy')).not.toBeNull()
       expect(screen.getByTestId('scheduler-submit')).not.toBeNull()
-      // dailyTime value 回填
-      const wrapper = screen.getByTestId('scheduler-dailyTime')
-      const input = wrapper.querySelector('input') as HTMLInputElement
-      expect(input.value).toBe('03:30')
     })
   })
 
@@ -242,14 +242,15 @@ describe('SchedulerConfigDrawer', () => {
     })
   })
 
-  it('12. ADR-154 D-154-6：scheduleType=interval → intervalMinutes 显示 / dailyTime 隐藏', async () => {
+  it('12. ADR-154 D-154-6：scheduleType=interval → intervalMinutes 显示 / dailyTime chip 列表隐藏', async () => {
     getAutoCrawlConfigMock.mockResolvedValueOnce(CONFIG_INTERVAL)
     render(<SchedulerConfigDrawer open={true} onClose={() => {}} />)
     await waitFor(() => {
       // interval 模式：intervalMinutes 显示
       expect(screen.getByTestId('scheduler-intervalMinutes')).not.toBeNull()
-      // daily 字段隐藏
-      expect(screen.queryByTestId('scheduler-dailyTime')).toBeNull()
+      // daily chip 列表隐藏（ADR-155 D-155-6 EP-1C-2a）
+      expect(screen.queryByTestId('scheduler-dailyTime-chips')).toBeNull()
+      expect(screen.queryByTestId('scheduler-dailyTime-input')).toBeNull()
     })
   })
 
@@ -264,6 +265,94 @@ describe('SchedulerConfigDrawer', () => {
         expect.objectContaining({
           scheduleType: 'interval',
           intervalMinutes: 30,
+        }),
+      )
+    })
+  })
+
+  // ── ADR-155 D-155-6 / EP-1C-2a：chip 列表增删 + max/min 守卫 ──
+  it('14. EP-1C-2a: [+] 添加 chip → 列表新增 + state 更新', async () => {
+    getAutoCrawlConfigMock.mockResolvedValueOnce(CONFIG)
+    render(<SchedulerConfigDrawer open={true} onClose={() => {}} />)
+    await waitFor(() => screen.getByTestId('scheduler-dailyTime-chips'))
+    // 初始 1 chip: 03:30
+    expect(screen.getByTestId('scheduler-dailyTime-chip-03:30')).not.toBeNull()
+    expect(screen.queryByTestId('scheduler-dailyTime-chip-04:00')).toBeNull()
+    // 输入 04:00 + 点 [+]
+    const input = screen.getByTestId('scheduler-dailyTime-input').querySelector('input') as HTMLInputElement
+    fireEvent.change(input, { target: { value: '04:00' } })
+    const addBtn = screen.getByTestId('scheduler-dailyTime-add')
+    fireEvent.click(addBtn)
+    await waitFor(() => {
+      expect(screen.getByTestId('scheduler-dailyTime-chip-04:00')).not.toBeNull()
+    })
+  })
+
+  it('15. EP-1C-2a: chip × 删除 → 列表减项', async () => {
+    const CONFIG_TWO_TIMES = { ...CONFIG, dailyTimes: ['03:30', '04:00'] as readonly string[] }
+    getAutoCrawlConfigMock.mockResolvedValueOnce(CONFIG_TWO_TIMES)
+    render(<SchedulerConfigDrawer open={true} onClose={() => {}} />)
+    await waitFor(() => {
+      expect(screen.getByTestId('scheduler-dailyTime-chip-03:30')).not.toBeNull()
+      expect(screen.getByTestId('scheduler-dailyTime-chip-04:00')).not.toBeNull()
+    })
+    fireEvent.click(screen.getByTestId('scheduler-dailyTime-remove-04:00'))
+    await waitFor(() => {
+      expect(screen.queryByTestId('scheduler-dailyTime-chip-04:00')).toBeNull()
+      // 03:30 仍存在
+      expect(screen.getByTestId('scheduler-dailyTime-chip-03:30')).not.toBeNull()
+    })
+  })
+
+  it('16. EP-1C-2a: min 1 守卫（仅 1 chip 时无 × 按钮）', async () => {
+    getAutoCrawlConfigMock.mockResolvedValueOnce(CONFIG)
+    render(<SchedulerConfigDrawer open={true} onClose={() => {}} />)
+    await waitFor(() => screen.getByTestId('scheduler-dailyTime-chip-03:30'))
+    // 仅 1 chip 时，× 按钮不渲染（min 1 守卫）
+    expect(screen.queryByTestId('scheduler-dailyTime-remove-03:30')).toBeNull()
+  })
+
+  it('17. EP-1C-2a: 非法 HH:MM 输入 → [+] 按钮 disabled', async () => {
+    getAutoCrawlConfigMock.mockResolvedValueOnce(CONFIG)
+    render(<SchedulerConfigDrawer open={true} onClose={() => {}} />)
+    await waitFor(() => screen.getByTestId('scheduler-dailyTime-chips'))
+    const input = screen.getByTestId('scheduler-dailyTime-input').querySelector('input') as HTMLInputElement
+    fireEvent.change(input, { target: { value: '25:99' } })  // 非法 HH:MM（但正则匹配数字）
+    // 实际只校验正则；非法范围由 addDailyTime 内部 silent reject
+    fireEvent.change(input, { target: { value: 'invalid' } })
+    const addBtn = screen.getByTestId('scheduler-dailyTime-add') as HTMLButtonElement
+    expect(addBtn.disabled).toBe(true)
+  })
+
+  it('18. EP-1C-2a: 提交 payload 含 dailyTimes 数组', async () => {
+    const CONFIG_TWO_TIMES = { ...CONFIG, dailyTimes: ['03:30', '04:00'] as readonly string[] }
+    getAutoCrawlConfigMock.mockResolvedValueOnce(CONFIG_TWO_TIMES)
+    setAutoCrawlConfigMock.mockResolvedValueOnce(undefined)
+    render(<SchedulerConfigDrawer open={true} onClose={() => {}} />)
+    const submit = await waitFor(() => screen.getByTestId('scheduler-submit'))
+    fireEvent.click(submit)
+    await waitFor(() => {
+      expect(setAutoCrawlConfigMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          dailyTimes: ['03:30', '04:00'],
+          dailyTime: '03:30',  // alias = dailyTimes[0]
+        }),
+      )
+    })
+  })
+
+  it('19. EP-1C-2a: toast description 显示多 dailyTime', async () => {
+    const CONFIG_TWO_TIMES = { ...CONFIG, dailyTimes: ['03:30', '04:00'] as readonly string[] }
+    getAutoCrawlConfigMock.mockResolvedValueOnce(CONFIG_TWO_TIMES)
+    setAutoCrawlConfigMock.mockResolvedValueOnce(undefined)
+    render(<SchedulerConfigDrawer open={true} onClose={() => {}} />)
+    const submit = await waitFor(() => screen.getByTestId('scheduler-submit'))
+    fireEvent.click(submit)
+    await waitFor(() => {
+      expect(toastPushMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          level: 'success',
+          description: expect.stringContaining('每日 03:30, 04:00'),
         }),
       )
     })

@@ -1244,7 +1244,9 @@ B 序列 + C 序列可与 A 并行（A 无依赖）；B 与 C 之间无依赖（
    - **EP-1C-1a（类型契约 + KV 3 路径兼容）✅ 完成**（2026-05-26 / commit c3d010f7）
    - **EP-1C-1b（zod preprocess + scheduler checkDaily/marks/GC + ADR-154 AMENDMENT）🟡 代码已落地** / 2 源 + 2 测试 = 4 项 ✅ / 5117 PASS / ADR-154 AMENDMENT 已落盘 / 待 @livefree 实测 4 路径
 
-   **EP-1C-2（D-155-6 前端 UI / chip 列表）⬜ 待启动 / 依赖 EP-1C-1b**
+   **EP-1C-2 拆为 EP-1C-2a + EP-1C-2b**（满足 PATCH ≤ 5 项硬约束 / plan-revision）：
+   - **EP-1C-2a（SchedulerConfigDrawer chip 列表）🟡 代码已落地** / 2 源 + 1 测试 = 3 项 ✅ / 5123 PASS / 待 @livefree 实测 7 路径
+   - **EP-1C-2b（AutoCrawlScheduleCard + AutoCrawlSummaryCard 多时间显示）⬜ 待启动**
    - 范围：拆 CrawlerRunDetailView 为 RunInlinePanel + CrawlerRunsView 接 expand + timeline limit 解锁 + 后端 safeLimit 上限提到 50 + 新建 AutoCrawlSummaryCard 顶部展示 + 多 dailyTime 全栈
    - 文件范围：
      - `apps/server-next/src/app/admin/crawler/runs/_client/CrawlerRunsView.tsx`（接 expandedKeys + renderExpandedRow + 改 Run ID 列 cell 为 toggle）

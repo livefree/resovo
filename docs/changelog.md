@@ -7578,3 +7578,106 @@ PATCH 文件数：2 源 + 2 测试 = 4 项（≤ 5 硬约束 ✅）
 
 Cleanup-Audit: 2 源文件改 + 2 测试文件（改 + 扩） + 1 docs（ADR-154 AMENDMENT）/ 6 新单测 + 改 4 case / 0 migration / 0 新依赖
 Plan-Revision: 0 次
+
+## [CHG-SN-9-CW1-CW2-REDESIGN-A-EP-1C-2a] D-155-6 SchedulerConfigDrawer chip 列表
+
+- **日期**：2026-05-26
+- **Sequence**：SEQ-20260526-CRAWLER-W3-FIX
+- **任务 ID**：CHG-SN-9-CW1-CW2-REDESIGN-A-EP-1C-2a
+- **关联 ADR**：ADR-155 D-155-6（🟢 Accepted）
+- **模型**：claude-opus-4-7（主循环延续；建议 sonnet）
+- **拆分理由**：原 EP-1C-2 范围 5 源 + 3 测试 = 8 项超 PATCH ≤ 5。本卡仅做"前端类型同步 + SchedulerConfigDrawer chip UI"；AutoCrawlScheduleCard + SummaryCard 多时间显示拆到 EP-1C-2b；dailyTimes 改 required 拆到 EP-1C-CLEANUP。
+
+### 改动摘要
+
+ADR-155 D-155-6 前端核心 UX 落地：SchedulerConfigDrawer dailyTime 单 input → chip 列表（min 1 max 24）。用户终于可以配置"3am + 4am"多时间。
+
+- **Step 1**（`apps/server-next/src/lib/crawler/api.ts`）：
+  - `AutoCrawlConfig` 加 `readonly dailyTimes?: readonly string[]` 主字段（与 `packages/types` 一致）
+  - `dailyTime` 标 `@deprecated` alias 注释（暂保留 / EP-1C-CLEANUP 删）
+
+- **Step 2**（`apps/server-next/src/app/admin/crawler/_client/SchedulerConfigDrawer.tsx`）：
+  - 新增 4 CSSProperties：`CHIP_LIST_STYLE` + `CHIP_STYLE` + `CHIP_X_STYLE` + `INPUT_ROW_STYLE`
+  - 新增 `dailyTimeInput: string` local state（用户输入新 chip 缓冲）
+  - 新增 `getCurrentDailyTimes()` helper（兜底 `dailyTimes ?? [dailyTime || '03:00']`）
+  - 新增 `addDailyTime()` / `removeDailyTime(idx)` handlers：
+    - add：HH:MM 正则 + 数值范围 + 去重 + max 24 守卫；成功后清空 input
+    - remove：min 1 守卫（最后一个 chip 不可删）
+    - 两者都同步更新 `dailyTime` alias = `dailyTimes[0]`（向后兼容）
+  - daily 分支 UI 完全重构：chip 列表（每 chip = `HH:MM` + 条件渲染 × 删除按钮）+ 输入框 + [+ 添加] 按钮 + max 上限提示
+  - Enter 键支持快速添加
+  - `handleSubmit` toast description 显示多时间："每日 03:30, 04:00 · 模式 X"
+  - `data-testid` 完整：`scheduler-dailyTime-chips / -chip-${time} / -remove-${time} / -input / -add / -max`
+
+- **Step 3（单测改 + 扩）**（`tests/unit/components/server-next/admin/crawler/SchedulerConfigDrawer.test.tsx`）：
+  - 改 #5/#12 适配新 testid（旧 `scheduler-dailyTime` 单 input → `scheduler-dailyTime-chips`）
+  - 新增 #14–19 共 6 case：
+    - #14 [+] 添加 chip → 列表新增
+    - #15 chip × 删除 → 列表减项
+    - #16 min 1 守卫（仅 1 chip 时无 × 按钮）
+    - #17 非法 HH:MM → [+] disabled
+    - #18 提交 payload 含 `dailyTimes: [...]` + `dailyTime` alias
+    - #19 toast description "每日 03:30, 04:00"
+  - 总数 13 → 19 case 全过
+
+### 新增/修改文件
+
+- `apps/server-next/src/lib/crawler/api.ts`（Step 1 类型同步）
+- `apps/server-next/src/app/admin/crawler/_client/SchedulerConfigDrawer.tsx`（Step 2 chip UI 重构）
+- `tests/unit/components/server-next/admin/crawler/SchedulerConfigDrawer.test.tsx`（Step 3 改 2 + 扩 6 case）
+
+PATCH 文件数：2 源 + 1 测试 = 3 项（≤ 5 硬约束 ✅）
+
+### 偏离记录
+
+无新 D-N 偏离（D-155-6 已 ADR-155 Accepted）；EP-1C-1a 临时 `dailyTimes` optional 仍未清理（推迟到 EP-1C-CLEANUP）。
+
+### 质量门禁
+
+- ✅ typecheck PASS（8 workspace）
+- ✅ lint PASS（4 pre-existing 警告，0 新增）
+- ✅ test 5123/5123 PASS（本卡新 6 case + 改 2 case 全过）
+- ✅ verify:adr-contracts PASS（207 D-N 闭环）
+
+### 六问自检 PASS
+
+1. **正确性**：HH:MM 正则 + 数值范围双层校验；min 1 / max 24 守卫；去重保证 dailyTimes 不含重复；Enter 键 / [+] 按钮双路径添加
+2. **边界与复用**：复用 AdminInput / AdminButton / AdminCheckbox；chip 样式参考 AdminSelect.tsx 的 CHIP_STYLE 范式；data-testid 命名与 SchedulerConfigDrawer 现有前缀一致
+3. **可扩展性**：chip 模式可扩 timezone（如 `03:00 Asia/Shanghai`）；max 24 常量可参数化；可扩排序（点击 chip 重排）
+4. **一致性**：与 EP-1C-1a/b 后端契约对称（前端发 dailyTimes 主 + dailyTime alias）；与 KeywordCrawlDrawer chip-input 范式同源（如有）
+5. **改动收敛**：满足 1–4 前提下严格 2 源 + 1 测试 = 3 项
+6. **偏离检测**：无新 D-N
+
+### AI-CHECK 结论
+
+- ✅ **PASS** — 3 个 Step 完整闭环 / 6 新单测 + 改 2 case 全过 / 全栈门禁通过
+- **越界检测**：CLEAN（2 源 + 1 测试严格在 EP-1C-2a 文件范围内）
+- **回归风险**：低
+  - dailyTime alias 仍同步更新（向后兼容 Dashboard 卡 / SummaryCard 等旧消费）
+  - getAutoCrawlConfig 返回的 dailyTimes 由 EP-1C-1a 已实施 deserialize 保证非空
+  - 提交 payload 含双字段（dailyTimes 主 + dailyTime alias），后端 EP-1C-1b zod transform 双兼容
+
+### 未覆盖（→ EP-1C-2b / EP-1C-CLEANUP）
+
+- **用户实测验证**（@livefree）：
+  1. `/admin/crawler` → 高级菜单 → 定时设置 Drawer
+  2. scheduleType=daily → 看到 chip 列表（初始 1 chip）
+  3. 输入 "04:00" + 点 [+] 或 Enter → chip 新增
+  4. 点 chip × → 删除（最后一个 chip 不可删）
+  5. 加到 24 个 chip → [+] disabled + 上限提示
+  6. 保存 → 后端接受 + toast 显示多时间
+  7. 重新打开 Drawer → 展示所有保存的 chip
+- AutoCrawlScheduleCard + AutoCrawlSummaryCard 多时间显示 → EP-1C-2b
+- dailyTimes 类型从 optional 改回 required + 删 dailyTime alias → EP-1C-CLEANUP
+
+### 关键约束消化
+
+- **PATCH ≤ 5 项**：2 源 + 1 测试 = 3 项 ✅
+- **向后兼容窗口**：dailyTime alias 仍同步 = `dailyTimes[0]`（旧消费方继续工作）
+- **去重 + 守卫**：addDailyTime 内 `current.includes(v)` 防重 / `current.length >= 24` max 守卫 / `times.length > 1` min 守卫
+
+- **执行模型**：claude-opus-4-7（主循环延续；建议 sonnet）
+- **子代理调用**：无（D-155-6 已 ADR-155 Accepted；前端 UI 不触发 Opus reviewer）
+
+Cleanup-Audit: 2 源文件改 + 1 测试文件（改 2 + 扩 6 case）/ 6 新单测 + 改 2 case / 0 migration / 0 新依赖
+Plan-Revision: 1 次（ADR-155 §5 EP-1C-2 拆为 EP-1C-2a + EP-1C-2b 满足 PATCH ≤ 5 项硬约束）
