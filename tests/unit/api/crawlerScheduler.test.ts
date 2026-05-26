@@ -83,24 +83,116 @@ describe('checkInterval（ADR-154 D-154-5）', () => {
 
 // ── Tests: checkDaily（纯函数，无 IO）────────────────────────────
 
-describe('checkDaily（ADR-154 D-154-5）', () => {
-  it('#5 current === dailyTime 且今天未触发 → true', async () => {
+describe('checkDaily（ADR-155 D-155-6 EP-1C-1b 多 dailyTime + marks 防重）', () => {
+  it('#5 dailyTime alias 兼容 + 今天未触发 → shouldTrigger=true', async () => {
     const { checkDaily } = await import('@/api/workers/crawlerScheduler')
     const now = new Date(2026, 4, 25, 3, 0, 0)  // 03:00
-    expect(checkDaily({ dailyTime: '03:00' }, now, '2026-05-24')).toBe(true)  // 昨天
-    expect(checkDaily({ dailyTime: '03:00' }, now, null)).toBe(true)           // 从未触发
+    // 旧调用方仅传 dailyTime alias（兜底从 dailyTimes 推 [dailyTime]）
+    expect(checkDaily({ dailyTime: '03:00' }, now, {})).toEqual({
+      shouldTrigger: true,
+      matchedTime: '03:00',
+    })
   })
 
-  it('#6 current !== dailyTime → false', async () => {
+  it('#6 current !== 任何 dailyTime → shouldTrigger=false', async () => {
     const { checkDaily } = await import('@/api/workers/crawlerScheduler')
     const now = new Date(2026, 4, 25, 3, 1, 0)  // 03:01
-    expect(checkDaily({ dailyTime: '03:00' }, now, null)).toBe(false)
+    expect(checkDaily({ dailyTimes: ['03:00'] }, now, {})).toEqual({
+      shouldTrigger: false,
+      matchedTime: null,
+    })
   })
 
-  it('#7 已触发过今天 → false', async () => {
+  it('#7 marks 含今天该时间 → shouldTrigger=false（防重）', async () => {
     const { checkDaily } = await import('@/api/workers/crawlerScheduler')
     const now = new Date(2026, 4, 25, 3, 0, 0)  // 03:00
-    expect(checkDaily({ dailyTime: '03:00' }, now, '2026-05-25')).toBe(false)
+    const marks = { '2026-05-25 03:00': '2026-05-25T03:00:00.000Z' }
+    expect(checkDaily({ dailyTimes: ['03:00'] }, now, marks)).toEqual({
+      shouldTrigger: false,
+      matchedTime: null,
+    })
+  })
+
+  // ── ADR-155 D-155-6 EP-1C-1b 新增 case ──
+  it('#7b 多 dailyTime 任一匹配 → shouldTrigger=true + matchedTime 正确识别', async () => {
+    const { checkDaily } = await import('@/api/workers/crawlerScheduler')
+    const config = { dailyTimes: ['03:00', '04:00', '05:00'] }
+    // 03:00 匹配
+    expect(checkDaily(config, new Date(2026, 4, 25, 3, 0, 0), {})).toEqual({
+      shouldTrigger: true, matchedTime: '03:00',
+    })
+    // 04:00 匹配
+    expect(checkDaily(config, new Date(2026, 4, 25, 4, 0, 0), {})).toEqual({
+      shouldTrigger: true, matchedTime: '04:00',
+    })
+    // 03:30 不匹配
+    expect(checkDaily(config, new Date(2026, 4, 25, 3, 30, 0), {})).toEqual({
+      shouldTrigger: false, matchedTime: null,
+    })
+  })
+
+  it('#7c 同日不同 dailyTime 各触发一次（3am 已触发不阻塞 4am）', async () => {
+    const { checkDaily } = await import('@/api/workers/crawlerScheduler')
+    const config = { dailyTimes: ['03:00', '04:00'] }
+    // marks 仅含 03:00 → 04:00 仍可触发
+    const marks = { '2026-05-25 03:00': '2026-05-25T03:00:00.000Z' }
+    expect(checkDaily(config, new Date(2026, 4, 25, 4, 0, 0), marks)).toEqual({
+      shouldTrigger: true, matchedTime: '04:00',
+    })
+    // marks 同时含 03:00 + 04:00 → 都不触发
+    const marksBoth = {
+      '2026-05-25 03:00': '2026-05-25T03:00:00.000Z',
+      '2026-05-25 04:00': '2026-05-25T04:00:00.000Z',
+    }
+    expect(checkDaily(config, new Date(2026, 4, 25, 3, 0, 0), marksBoth)).toEqual({
+      shouldTrigger: false, matchedTime: null,
+    })
+    expect(checkDaily(config, new Date(2026, 4, 25, 4, 0, 0), marksBoth)).toEqual({
+      shouldTrigger: false, matchedTime: null,
+    })
+  })
+
+  it('#7d dailyTimes 空数组兜底用 dailyTime alias', async () => {
+    const { checkDaily } = await import('@/api/workers/crawlerScheduler')
+    const config = { dailyTimes: [], dailyTime: '05:30' }
+    expect(checkDaily(config, new Date(2026, 4, 25, 5, 30, 0), {})).toEqual({
+      shouldTrigger: true, matchedTime: '05:30',
+    })
+  })
+})
+
+describe('gcOldMarks（ADR-155 D-155-6 EP-1C-1b Y-155-2）', () => {
+  it('#7e 清理 7 天前的 keys（datePart < cutoff）', async () => {
+    const { gcOldMarks } = await import('@/api/workers/crawlerScheduler')
+    const now = new Date(2026, 4, 25, 12, 0, 0)  // 2026-05-25
+    // cutoff = 2026-05-18（now - 7d）
+    const marks = {
+      '2026-05-18 03:00': 'iso-1',  // 临界（保留）
+      '2026-05-17 03:00': 'iso-2',  // 7+ 天前（清理）
+      '2026-05-25 03:00': 'iso-3',  // 今天（保留）
+      '2026-05-10 04:00': 'iso-4',  // 远过期（清理）
+    }
+    const result = gcOldMarks(marks, now)
+    expect(result).toEqual({
+      '2026-05-18 03:00': 'iso-1',
+      '2026-05-25 03:00': 'iso-3',
+    })
+  })
+
+  it('#7f retentionDays 参数自定义（如 3 天）', async () => {
+    const { gcOldMarks } = await import('@/api/workers/crawlerScheduler')
+    const now = new Date(2026, 4, 25, 0, 0, 0)
+    const marks = {
+      '2026-05-22 03:00': 'iso-1',  // 3 天前临界（保留）
+      '2026-05-21 03:00': 'iso-2',  // 4 天前（清理）
+    }
+    const result = gcOldMarks(marks, now, 3)
+    expect(result).toEqual({ '2026-05-22 03:00': 'iso-1' })
+  })
+
+  it('#7g 空 marks → 空对象', async () => {
+    const { gcOldMarks } = await import('@/api/workers/crawlerScheduler')
+    expect(gcOldMarks({}, new Date())).toEqual({})
   })
 })
 

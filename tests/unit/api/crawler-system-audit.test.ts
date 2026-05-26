@@ -142,7 +142,12 @@ describe('POST /admin/crawler/auto-config — crawler.auto_config audit', () => 
     })
     await new Promise((r) => setImmediate(r))
     expect(res.statusCode).toBe(200)
-    expect(mockSetAutoCrawlConfig).toHaveBeenCalledWith({}, AFTER_CONFIG)
+    // ADR-155 D-155-6 / EP-1C-1b：zod transform 输出永远同时含 dailyTime + dailyTimes
+    // setAutoCrawlConfig 收到的 config 含 dailyTimes alias = [dailyTime]
+    expect(mockSetAutoCrawlConfig).toHaveBeenCalledWith(
+      {},
+      expect.objectContaining({ ...AFTER_CONFIG, dailyTimes: ['04:30'] }),
+    )
     expect(insertAuditLogMock).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
@@ -150,7 +155,7 @@ describe('POST /admin/crawler/auto-config — crawler.auto_config audit', () => 
         targetKind: 'system',
         targetId: 'auto_crawl_config',
         beforeJsonb: expect.objectContaining({ config: BEFORE_CONFIG }),
-        afterJsonb: expect.objectContaining({ config: AFTER_CONFIG }),
+        afterJsonb: expect.objectContaining({ config: expect.objectContaining({ ...AFTER_CONFIG, dailyTimes: ['04:30'] }) }),
       }),
     )
   })

@@ -7471,3 +7471,110 @@ PATCH 文件数：3 源 + 1 测试 = 4 项（≤ 5 硬约束 ✅）
 
 Cleanup-Audit: 3 源文件改 + 1 测试文件（扩 7 case + 1 beforeEach 隔离） + 1 docs（architecture.md 同步）/ 7 新单测 / 1 migration / 0 新依赖
 Plan-Revision: 1 次（ADR-155 §5 EP-1C-1 拆为 EP-1C-1a + EP-1C-1b 满足 PATCH ≤ 5 项硬约束；dailyTimes 临时 optional 偏离 §3 D-155-6 §实施"必填"描述，EP-1C-2 完成后清理）
+
+## [CHG-SN-9-CW1-CW2-REDESIGN-A-EP-1C-1b] D-155-6 zod preprocess + scheduler checkDaily/marks/GC + ADR-154 AMENDMENT
+
+- **日期**：2026-05-26
+- **Sequence**：SEQ-20260526-CRAWLER-W3-FIX
+- **任务 ID**：CHG-SN-9-CW1-CW2-REDESIGN-A-EP-1C-1b
+- **关联 ADR**：ADR-155 D-155-6（🟢 Accepted）+ ADR-154 §D-154-1 AMENDMENT 落盘
+- **模型**：claude-opus-4-7（主循环延续；建议 sonnet）
+
+### 改动摘要
+
+EP-1C-1a 已打开多 dailyTime 类型 + KV 兼容窗口；本卡完成消费侧（zod preprocess + scheduler 重构）+ ADR-154 AMENDMENT 落盘。
+
+- **Step 1**（`apps/api/src/routes/admin/crawler.ts` zod schema）：
+  - `dailyTime` + `dailyTimes` 都改 `optional()`
+  - `.refine` 保证至少一个存在
+  - `.transform` 输出永远同时含 `dailyTime + dailyTimes`（R-155-6 必修 / 前后端部署顺序无关）
+  - 旧前端 POST `{dailyTime: "03:00"}` + 新前端 POST `{dailyTimes: ["03:00","04:00"]}` 都接受
+
+- **Step 2**（`apps/api/src/workers/crawlerScheduler.ts`）：
+  - **新增 `gcOldMarks(marks, now, retentionDays=7)`** 纯函数（Y-155-2 / key 格式 `'YYYY-MM-DD HH:MM'` / 过滤 datePart < cutoff）
+  - **新增 `getLastTriggerMarks()`** 读 `auto_crawl_last_trigger_marks` JSONB / 解析失败 / 缺键 → `{}`
+  - **`checkDaily` 重构**：
+    - 旧签名 `(config: { dailyTime }, now, lastTriggerDate: string|null): boolean`
+    - 新签名 `(config: { dailyTimes | dailyTime }, now, marks: Record<string, string>): { shouldTrigger, matchedTime }`
+    - 兜底 `times = dailyTimes ?? [dailyTime || '03:00']`
+    - 多 dailyTime 任一匹配 + `marks[today#HH:MM]` 不存在 → 触发，返回 matchedTime
+  - **`runSchedulerTick` daily 分支重构**：先读 marks → `checkDaily` → 触发后 `gcOldMarks` 并写回 KV
+  - **`persistTriggerMark` daily 分支重构**：写 `marks[today#matchedTime] = isoTs` + GC；旧 `auto_crawl_last_trigger_date` 不再读不再写（向后兼容保留 SystemSettingKey 枚举）
+  - 删除未使用的 `getLastTriggerDate` 函数
+
+- **Step 3（测试改 + 扩）**（`tests/unit/api/crawlerScheduler.test.ts`）：
+  - 改 #5/#6/#7 适配新 API（dailyTimes + marks + 返回 object）
+  - 新增 case：#7b 多 dailyTime 任一匹配 / #7c 同日不同时间各触发 + 相同时间防重 / #7d dailyTimes 空数组兜底 dailyTime / #7e marks 7 天 GC 临界 + 远过期 + 保留 / #7f 自定义 retentionDays / #7g 空 marks
+  - 总数 19 → 25 case 全过
+
+- **Step 4（crawler-system-audit.test 适配）**（`tests/unit/api/crawler-system-audit.test.ts`）：
+  - zod transform 输出多 `dailyTimes` 字段 → `mockSetAutoCrawlConfig` 期望改用 `expect.objectContaining({ ...AFTER_CONFIG, dailyTimes: ['04:30'] })`
+
+- **Step 5（ADR-154 AMENDMENT 落盘）**（`docs/decisions.md`）：
+  - ADR-154 §10 评审结论后追加 AMENDMENT 块（约 30 行）
+  - 记录类型契约 / KV 序列化 / zod preprocess / scheduler checkDaily / persistTriggerMark daily 流 5 个修订点
+  - 关联 ADR-155 §3 D-155-6 + R-155-3/6 + Y-155-1/2
+
+### 新增/修改文件
+
+- `apps/api/src/routes/admin/crawler.ts`（Step 1 zod preprocess）
+- `apps/api/src/workers/crawlerScheduler.ts`（Step 2 gcOldMarks + getLastTriggerMarks + checkDaily 重构 + persistTriggerMark daily 流 + runSchedulerTick）
+- `tests/unit/api/crawlerScheduler.test.ts`（Step 3 改 3 + 扩 7 case）
+- `tests/unit/api/crawler-system-audit.test.ts`（Step 4 zod transform 适配）
+- `docs/decisions.md`（Step 5 ADR-154 AMENDMENT；不计入 PATCH）
+
+PATCH 文件数：2 源 + 2 测试 = 4 项（≤ 5 硬约束 ✅）
+
+### 偏离记录
+
+无新 D-N 偏离（D-155-6 已 ADR-155 Accepted / ADR-154 §D-154-1 AMENDMENT 已落盘）。
+
+### 质量门禁
+
+- ✅ typecheck PASS（8 workspace）
+- ✅ lint PASS（4 pre-existing 警告，0 新增）
+- ✅ test 5117/5117 PASS（本卡新 6 case + 改 3 case + 跨模块 1 case 改）
+- ✅ verify:adr-contracts PASS（含 verify-adr-d-numbers 207 闭环）
+
+### 六问自检 PASS
+
+1. **正确性**：zod preprocess refine+transform 保证双 schema POST + 输出对称；checkDaily 纯函数无 IO 可独立单测；gcOldMarks 7 天临界 + 远过期 + 自定义 retention 均验证；marks 防重保证同日相同时间不重触
+2. **边界与复用**：复用 `parseDailyTime` 单项规范化；marks JSONB 范式与 ADR-146 webhook events 一致；checkDaily 仍是纯函数（R-154-1 锚点时序范式不变）
+3. **可扩展性**：marks key 格式 `'YYYY-MM-DD HH:MM'` 可扩 timezone；gcOldMarks retentionDays 参数化；zod transform 可扩第 3 形态（如 cron）
+4. **一致性**：与 ADR-154 D-154-5 dispatch 模式一致；与 R-154-1 锚点写入时序（createRun 成功后才写）一致；与 ADR-146 parseWebhookEvents JSON 范式同源
+5. **改动收敛**：满足 1–4 前提下严格 2 源 + 2 测试 = 4 项；crawler-system-audit.test 适配是 zod transform 副作用必要修复（不算独立改动）
+6. **偏离检测**：无新 D-N；ADR-154 AMENDMENT 同 commit 落盘
+
+### AI-CHECK 结论
+
+- ✅ **PASS** — 5 个 Step 完整闭环 / 6 新单测 + 改 4 case 全过 / 全栈门禁通过 / ADR-154 AMENDMENT 落盘
+- **越界检测**：CLEAN（2 源 + 2 测试 + 1 docs AMENDMENT 严格在 EP-1C-1b 文件范围内）
+- **回归风险**：低
+  - 旧 daily run 数据：scheduler 启动时 marks 为空 → 首次 tick 触发（与 lastTriggerDate=null 首次触发等价行为）
+  - 旧 `auto_crawl_last_trigger_date` 字段保留 SystemSettingKey 枚举但不再读不再写（向后兼容 / 未来 cleanup 可删）
+  - 旧前端 POST `{dailyTime}` zod preprocess 自动转 `{dailyTime, dailyTimes: [dailyTime]}` 不破坏
+
+### 未覆盖（→ EP-1C-2）
+
+- **用户实测验证**（@livefree / ADR-155 §8 验收第 4 条）：
+  1. 旧 SchedulerConfigDrawer 提交 `{dailyTime: "03:00"}` 仍接受（前端不动）
+  2. dev server 凌晨 3am 触发 daily run + marks 写入 `{"2026-MM-DD 03:00": "iso"}`
+  3. 同日 3:00 重复 tick 不重触
+  4. scheduler 重启后 marks 持久化（KV 读取正确）
+- 前端 SchedulerConfigDrawer chip 列表 UI → EP-1C-2
+- AutoCrawlSummaryCard / AutoCrawlScheduleCard 多时间显示 → EP-1C-2
+- `dailyTimes` 类型从 optional 改回 required → EP-1C-2 完成后清理
+
+### 关键约束消化
+
+- **R-155-6 zod preprocess**：refine + transform 双轨保证前后端部署顺序无关性
+- **R-155-2' marks 防重**：天级 → date#HH:MM 升级 + 同日不同 dailyTime 各触发一次（用户走读核心诉求）
+- **Y-155-2 marks GC 7 天**：避免 marks JSONB 无界增长（每日 24 × 365 = 8760 keys 理论上界，实际 GC 后稳定 7 × 24 = 168 keys）
+- **R-154-1 锚点写入时序**：createRun 成功后才写 marks（沿用 ADR-154 范式）
+- **ADR-154 AMENDMENT 同 commit 落盘**（ADR-155 §8 验收第 2 条）
+
+- **执行模型**：claude-opus-4-7（主循环延续；建议 sonnet）
+- **子代理调用**：无（D-155-6 已 ADR-155 Accepted；本卡是后端实施，不触发 Opus reviewer）
+
+Cleanup-Audit: 2 源文件改 + 2 测试文件（改 + 扩） + 1 docs（ADR-154 AMENDMENT）/ 6 新单测 + 改 4 case / 0 migration / 0 新依赖
+Plan-Revision: 0 次

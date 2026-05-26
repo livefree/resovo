@@ -1241,8 +1241,8 @@ B 序列 + C 序列可与 A 并行（A 无依赖）；B 与 C 之间无依赖（
    - **EP-1B2-LAYOUT（D-155-5 实施期布局延伸 / plan-revision）🟡 代码已落地** / 概览容器可折叠 + SummaryCard 与 KpiRow 同行 / 5104/5104 PASS / 待 @livefree 实测 5 路径
 
    **EP-1C-1 拆为 EP-1C-1a + EP-1C-1b**（满足 PATCH ≤ 5 项硬约束 / plan-revision）：
-   - **EP-1C-1a（类型契约 + KV 3 路径兼容）🟡 代码已落地** / 3 源 + 1 测试 = 4 项 ✅ / 5111 PASS / 待 @livefree 实测（向后兼容窗口已打开 / 前端 + scheduler 旧代码无需改动）
-   - **EP-1C-1b（zod preprocess + scheduler checkDaily/marks/GC + ADR-154 AMENDMENT）⬜ 待启动**
+   - **EP-1C-1a（类型契约 + KV 3 路径兼容）✅ 完成**（2026-05-26 / commit c3d010f7）
+   - **EP-1C-1b（zod preprocess + scheduler checkDaily/marks/GC + ADR-154 AMENDMENT）🟡 代码已落地** / 2 源 + 2 测试 = 4 项 ✅ / 5117 PASS / ADR-154 AMENDMENT 已落盘 / 待 @livefree 实测 4 路径
 
    **EP-1C-2（D-155-6 前端 UI / chip 列表）⬜ 待启动 / 依赖 EP-1C-1b**
    - 范围：拆 CrawlerRunDetailView 为 RunInlinePanel + CrawlerRunsView 接 expand + timeline limit 解锁 + 后端 safeLimit 上限提到 50 + 新建 AutoCrawlSummaryCard 顶部展示 + 多 dailyTime 全栈

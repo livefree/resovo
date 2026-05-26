@@ -40,11 +40,17 @@ export async function adminCrawlerRoutes(fastify: FastifyInstance) {
   const auditSvc = new AuditLogService(db)
   const auth = [fastify.authenticate, fastify.requireRole(['admin'])]
 
+  // ADR-155 D-155-6 / EP-1C-1b R-155-6：兼容旧 {dailyTime} POST + 新 {dailyTimes} POST
+  // refine 保证至少一个字段存在；transform 输出永远同时含 dailyTime + dailyTimes
+  // 让 setAutoCrawlConfig 两条路径都安全（dailyTimes 主 + dailyTime alias）
+  const HHMM = /^\d{2}:\d{2}$/
   const AutoCrawlConfigSchema = z.object({
     globalEnabled: z.boolean(),
     // ADR-154 D-154-1：scheduleType 两态（向后兼容 default='daily'）
     scheduleType: z.enum(['daily', 'interval']).default('daily'),
-    dailyTime: z.string().regex(/^\d{2}:\d{2}$/),
+    // ADR-155 D-155-6：dailyTime（旧 alias / 单时间）+ dailyTimes（新主 / 多时间 min 1 max 24）
+    dailyTime: z.string().regex(HHMM).optional(),
+    dailyTimes: z.array(z.string().regex(HHMM)).min(1).max(24).optional(),
     // ADR-154 D-154-1：intervalMinutes min=5（< TICK_MS=60s 无意义），max=1440（1 天）
     intervalMinutes: z.number().int().min(5).max(1440).default(60),
     defaultMode: z.enum(['incremental', 'full']),
@@ -58,6 +64,19 @@ export async function adminCrawlerRoutes(fastify: FastifyInstance) {
       }),
     ).default({}),
   })
+    .refine(
+      (data) => data.dailyTime !== undefined || (data.dailyTimes !== undefined && data.dailyTimes.length > 0),
+      { message: '需提供 dailyTime 或 dailyTimes（至少一个）', path: ['dailyTimes'] },
+    )
+    .transform((data) => {
+      // ADR-155 D-155-6 R-155-6：输出永远同时含 dailyTime + dailyTimes，
+      // setAutoCrawlConfig 两路径均安全（dailyTimes 主，dailyTime alias = dailyTimes[0]）
+      const dailyTimes = data.dailyTimes && data.dailyTimes.length > 0
+        ? data.dailyTimes
+        : [data.dailyTime!]
+      const dailyTime = data.dailyTime ?? dailyTimes[0]
+      return { ...data, dailyTime, dailyTimes }
+    })
 
   // ── GET /admin/crawler/auto-config ─────────────────────────
   fastify.get('/admin/crawler/auto-config', { preHandler: auth }, async (_request, reply) => {

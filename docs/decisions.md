@@ -14537,6 +14537,21 @@ runSchedulerTick:
 
 **最终结论**：ADR-154 status 🟢 Accepted（2026-05-25 / arch-reviewer Opus A− → 等同 A）；CW2-C-EP 须拆 -A（后端）/ -B（前端）两张子卡后启动。PATCH 范围各子卡 ≤ 5 项。
 
+### AMENDMENT 2026-05-26（ADR-155 §3 D-155-6 / EP-1C-1a + EP-1C-1b）
+
+**触发**：@livefree 用户走读 EP-1B2 后反馈"3am + 4am 多 dailyTime 期望各触发一次，实际只剩第二个"。原 ADR-154 D-154-1 选 `daily | interval` 两态时单 dailyTime 是合理简化，但暴露多时间需求。
+
+**变更**：ADR-154 §D-154-1 dailyTime 决策从"单字符串 HH:MM"扩为"`dailyTimes: string[]` 数组（min 1 max 24）"；防重维度从"`auto_crawl_last_trigger_date` 天级"升级为"`auto_crawl_last_trigger_marks JSONB` `{YYYY-MM-DD HH:MM: isoTs}` 同日不同时间各触发一次"。
+
+**关键修订点**：
+- **类型契约**（EP-1C-1a / commit c3d010f7）：`AutoCrawlConfig.dailyTimes: readonly string[]` 主字段 + `dailyTime` 标 `@deprecated` alias = `dailyTimes[0] ?? '03:00'` 向后兼容；`SystemSettingKey` 加 `'auto_crawl_last_trigger_marks'`
+- **KV 序列化**（EP-1C-1a）：`auto_crawl_daily_time` value 从 `"03:00"` 改为 `'["03:00","04:00"]'` JSON 数组；新 `parseDailyTimes` 3 路径兼容旧 5 种历史值（JSON 数组 / JSON 字符串 / 旧裸单字符串 / 空兜底 / 非法过滤）；`setAutoCrawlConfig` 永远 `JSON.stringify(dailyTimes)`
+- **zod preprocess**（EP-1C-1b）：POST `/admin/crawler/auto-config` 同时接受 `{dailyTime}` 旧 schema 和 `{dailyTimes}` 新 schema，transform 输出永远同时含两字段；refine 保证至少一个存在
+- **scheduler checkDaily**（EP-1C-1b）：签名从 `(config, now, lastTriggerDate)` 改为 `(config, now, marks)`，返回 `{ shouldTrigger, matchedTime }`；多 dailyTime 任一匹配触发 + marks 防重维度从 date 升级到 `date#HH:MM`
+- **persistTriggerMark daily 流**（EP-1C-1b）：写 `marks[today#matchedTime] = isoTs` + Y-155-2 GC 7 天前 keys（cutoff = `now - 7d` / 防 marks 无界增长）；旧 `auto_crawl_last_trigger_date` 保留向后兼容但 scheduler 不再读不再写
+
+**关联**：ADR-155 §3 D-155-6（🟢 Accepted）/ EP-1C-1a 类型契约 + KV 兼容 / EP-1C-1b zod preprocess + scheduler 重构 / R-155-3 KV 3 路径 / R-155-6 zod preprocess / Y-155-1 setter 落点 / Y-155-2 marks GC
+
 ---
 
 ## ADR-155 — CW1/CW2 用户走读修订（CHG-SN-9-CW1-CW2-REDESIGN-A-ADR）

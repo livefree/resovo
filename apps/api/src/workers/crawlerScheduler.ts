@@ -28,21 +28,64 @@ let schedulerTickRunning = false
 
 // ── 纯判定函数（无 IO，可独立单测）──────────────────────────────
 
-/** D-154-5 §checkDaily：daily 模式触发判定 */
-export function checkDaily(
-  config: Pick<AutoCrawlConfig, 'dailyTime'>,
+/** ADR-155 D-155-6 / EP-1C-1b：marks key 格式辅助（"YYYY-MM-DD HH:MM"） */
+function formatDateStr(now: Date): string {
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+}
+
+function makeMarkKey(dateStr: string, hhmm: string): string {
+  return `${dateStr} ${hhmm}`
+}
+
+/**
+ * ADR-155 D-155-6 / EP-1C-1b GC：清理 7 天前的旧 marks keys
+ * key 格式 "YYYY-MM-DD HH:MM"，过滤 datePart < cutoff
+ */
+export function gcOldMarks(
+  marks: Record<string, string>,
   now: Date,
-  lastTriggerDate: string | null,
-): boolean {
+  retentionDays = 7,
+): Record<string, string> {
+  const cutoff = new Date(now.getTime() - retentionDays * 24 * 60 * 60 * 1000)
+  const cutoffDateStr = formatDateStr(cutoff)
+  const result: Record<string, string> = {}
+  for (const [key, value] of Object.entries(marks)) {
+    const datePart = key.split(' ')[0]
+    if (datePart && datePart >= cutoffDateStr) {
+      result[key] = value
+    }
+  }
+  return result
+}
+
+/**
+ * D-154-5 §checkDaily：daily 模式触发判定（ADR-155 D-155-6 EP-1C-1b 重构）
+ *
+ * 旧 API（dailyTime + lastTriggerDate string）→ 新 API（dailyTimes + marks Record）
+ * - 兜底：dailyTimes 缺失时用 [dailyTime || '03:00']
+ * - 防重：marks[date#HH:MM] 不存在才触发；相同 dailyTime 同日防重，不同 dailyTime 同日各触发一次
+ * - 返回 matchedTime 供调用方写 marks 时识别 key
+ */
+export function checkDaily(
+  config: Pick<AutoCrawlConfig, 'dailyTimes' | 'dailyTime'>,
+  now: Date,
+  marks: Record<string, string>,
+): { shouldTrigger: boolean; matchedTime: string | null } {
+  const times = config.dailyTimes && config.dailyTimes.length > 0
+    ? config.dailyTimes
+    : [config.dailyTime || '03:00']
+
   const hh = String(now.getHours()).padStart(2, '0')
   const mm = String(now.getMinutes()).padStart(2, '0')
   const current = `${hh}:${mm}`
-  if (current !== config.dailyTime) return false
 
-  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
-  if (lastTriggerDate === today) return false  // 天级防重不变
+  if (!times.includes(current)) return { shouldTrigger: false, matchedTime: null }
 
-  return true
+  const today = formatDateStr(now)
+  const markKey = makeMarkKey(today, current)
+  if (markKey in marks) return { shouldTrigger: false, matchedTime: null }
+
+  return { shouldTrigger: true, matchedTime: current }
 }
 
 /** D-154-5 §checkInterval：interval 模式触发判定 */
@@ -59,11 +102,6 @@ export function checkInterval(
 
 // ── DB 辅助（有 IO）────────────────────────────────────────────
 
-async function getLastTriggerDate(): Promise<string | null> {
-  const val = await systemSettingsQueries.getSetting(db, 'auto_crawl_last_trigger_date')
-  return val ?? null
-}
-
 async function getLastTriggerAt(): Promise<Date | null> {
   const val = await systemSettingsQueries.getSetting(db, 'auto_crawl_last_trigger_at')
   if (!val || val === '') return null
@@ -71,14 +109,52 @@ async function getLastTriggerAt(): Promise<Date | null> {
   return Number.isNaN(d.getTime()) ? null : d
 }
 
-/** R-154-1：必须在 createRun 成功后调用，防止 createRun 抛错时锚点前进 */
-async function persistTriggerMark(scheduleType: AutoCrawlConfig['scheduleType'], now: Date): Promise<void> {
+/**
+ * ADR-155 D-155-6 / EP-1C-1b R-155-2'：读取 marks JSONB
+ * key 格式 "YYYY-MM-DD HH:MM" / value isoTs；解析失败或缺键返回 {}
+ */
+async function getLastTriggerMarks(): Promise<Record<string, string>> {
+  const raw = await systemSettingsQueries.getSetting(db, 'auto_crawl_last_trigger_marks')
+  if (!raw || raw === '') return {}
+  try {
+    const parsed: unknown = JSON.parse(raw)
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      const result: Record<string, string> = {}
+      for (const [k, v] of Object.entries(parsed as Record<string, unknown>)) {
+        if (typeof v === 'string') result[k] = v
+      }
+      return result
+    }
+  } catch {
+    // ignore malformed JSON
+  }
+  return {}
+}
+
+/**
+ * R-154-1：必须在 createRun 成功后调用，防止 createRun 抛错时锚点前进
+ *
+ * ADR-155 D-155-6 / EP-1C-1b 重构：daily 模式从写 last_trigger_date（天级）改为写
+ * last_trigger_marks JSONB key="YYYY-MM-DD HH:MM"。matchedTime 由 checkDaily 返回，
+ * 必须由调用方传入；Y-155-2 GC 7 天前 keys 在同一写入 transaction 内完成。
+ */
+async function persistTriggerMark(
+  scheduleType: AutoCrawlConfig['scheduleType'],
+  now: Date,
+  matchedTime: string | null = null,
+): Promise<void> {
   if (scheduleType === 'interval') {
     await systemSettingsQueries.setSetting(db, 'auto_crawl_last_trigger_at', now.toISOString())
-  } else {
-    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
-    await systemSettingsQueries.setSetting(db, 'auto_crawl_last_trigger_date', today)
+    return
   }
+
+  // daily：写 marks + GC
+  if (!matchedTime) return  // checkDaily 未匹配时不应进入触发流；防御性 noop
+  const marks = await getLastTriggerMarks()
+  const today = formatDateStr(now)
+  const markKey = makeMarkKey(today, matchedTime)
+  const updated = gcOldMarks({ ...marks, [markKey]: now.toISOString() }, now)
+  await systemSettingsQueries.setSetting(db, 'auto_crawl_last_trigger_marks', JSON.stringify(updated))
 }
 
 // ── 主 tick ────────────────────────────────────────────────────
@@ -95,13 +171,16 @@ async function runSchedulerTick(): Promise<void> {
 
     const now = new Date()
 
-    // D-154-5：按 scheduleType dispatch 到纯判定函数
+    // D-154-5 / D-155-6 EP-1C-1b：按 scheduleType dispatch 到纯判定函数
     let shouldTrigger: boolean
+    let matchedTime: string | null = null  // daily 模式专用：写 marks 时识别 key
     if (config.scheduleType === 'interval') {
       shouldTrigger = checkInterval(config, now, await getLastTriggerAt())
     } else {
-      // 默认 daily（向后兼容）
-      shouldTrigger = checkDaily(config, now, await getLastTriggerDate())
+      // 默认 daily（向后兼容；EP-1C-1b 改用 marks JSONB 防重）
+      const result = checkDaily(config, now, await getLastTriggerMarks())
+      shouldTrigger = result.shouldTrigger
+      matchedTime = result.matchedTime
     }
 
     if (!shouldTrigger) return
@@ -119,9 +198,13 @@ async function runSchedulerTick(): Promise<void> {
     })
 
     // R-154-1：createRun 成功后才写锚点
-    await persistTriggerMark(config.scheduleType, now)
+    // D-155-6 EP-1C-1b：daily 模式写 marks[date#matchedTime]；interval 模式写 last_trigger_at
+    await persistTriggerMark(config.scheduleType, now, matchedTime)
 
-    schedulerLog.info({ type: config.scheduleType, mode, interval_minutes: config.intervalMinutes }, 'scheduled run created')
+    schedulerLog.info(
+      { type: config.scheduleType, mode, interval_minutes: config.intervalMinutes, matched_time: matchedTime },
+      'scheduled run created',
+    )
   } catch (err) {
     schedulerLog.warn({ err }, 'tick failed')
   } finally {
