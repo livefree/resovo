@@ -7184,3 +7184,105 @@ PATCH 文件数：3 源 + 2 测试 = 5 项（≤ 5 硬约束 ✅）
 
 Cleanup-Audit: 3 源文件改 + 2 测试文件（均扩展）+ 1 docs（ADR-122 AMENDMENT）/ 4 新单测 / 0 migration / 0 新依赖
 Plan-Revision: 1 次（ADR-155 §5 EP-1B 拆为 EP-1B1 + EP-1B2 满足 PATCH ≤ 5 项硬约束）
+
+## [CHG-SN-9-CW1-CW2-REDESIGN-A-EP-1B2] D-155-5 AutoCrawlSummaryCard 显式入口卡
+
+- **日期**：2026-05-26
+- **Sequence**：SEQ-20260526-CRAWLER-W3-FIX
+- **任务 ID**：CHG-SN-9-CW1-CW2-REDESIGN-A-EP-1B2
+- **关联 ADR**：ADR-155 D-155-5（🟢 Accepted / D-155-5 是新组件契约，无原 ADR §4 AMENDMENT 落盘要求）
+- **模型**：claude-opus-4-7（主循环延续；建议 sonnet，本会话 opus 上下文复用）
+
+### 改动摘要
+
+ADR-155 D-155-5 落地：`/admin/crawler` 顶部紧邻 PageHeader 下方新建 `AutoCrawlSummaryCard`，提供当前 schedule 摘要 + [立即关闭] 快捷按钮 + [编辑] 按钮三入口。
+
+- **Step 1**（`apps/server-next/src/app/admin/crawler/_client/AutoCrawlSummaryCard.tsx` 新建 ~300 行）：
+  - Props：`{ onEditClick: () => void }`（父层 CrawlerClient 已持有 SchedulerConfigDrawer state）
+  - 状态自治：`useState` 拉 `getAutoCrawlConfig + getCrawlerSystemStatus`（与 AutoCrawlScheduleCard 同范式）
+  - 渲染六态精简版（不复用 Dashboard AutoCrawlScheduleCard 完整 UI）：
+    - `loading` / `error` → 不渲染（避免页面闪烁）
+    - `scheduler-disabled`（HOTFIX-C 范式）→ danger 卡 "调度器进程未启动"
+    - `disabled`（globalEnabled=false）→ neutral 卡 + [配置定时] 按钮
+    - `failed`（globalEnabled=true + autoCrawlNext=null）→ warn 卡 + [立即关闭] + [编辑]
+    - `countdown` → ok 卡 "下次: MM-DD HH:MM · scheduleSummary · 模式 X" + [立即关闭] + [编辑]
+  - `handleClose`：`window.confirm` → `setAutoCrawlConfig({globalEnabled: false})` → success toast → reload
+  - `data-testid` 完整：`auto-crawl-summary-card / -close / -edit / -disabled / -countdown / -scheduler-disabled / -failed / -schedule`
+  - **G-155-3 决策**：评审建议抽 AutoCrawlInfoBlock 共享组件，但当前仅 2 处消费（Dashboard 卡 + 本卡），推迟到第 3 处时再抽
+
+- **Step 2**（`apps/server-next/src/app/admin/crawler/_client/CrawlerClient.tsx`）：
+  - import AutoCrawlSummaryCard
+  - 在 PageHeader 后紧邻插入 `<AutoCrawlSummaryCard onEditClick={() => setSchedulerOpen(true)} />`
+  - 复用现有 `schedulerOpen` state（CW1-D 已有）
+
+- **Step 3（单测 5 case + CrawlerClient.test mock 修复）**：
+  - `AutoCrawlSummaryCard.test.tsx` 新建 5 case：
+    - #1 disabled → 未启用 Pill + [编辑] + 无 [立即关闭]
+    - #2 countdown daily → 下次/每日 03:30/模式 增量 + [立即关闭] + [编辑]
+    - #3 schedulerEnabled=false → 调度器进程未启动 警告 + 遮蔽 countdown/disabled
+    - #4 [立即关闭] confirm 通过 → setAutoCrawlConfig({globalEnabled: false}) + success toast
+    - #5 [编辑] 按钮调 onEditClick props
+  - `CrawlerClient.test.tsx` 加 mock `AutoCrawlSummaryCard`（避免双重消耗 getAutoCrawlConfig mock 导致 SchedulerConfigDrawer 测试 fail，与 EP-1A RunInlinePanel mock 同范式）
+
+### 新增/修改文件
+
+- `apps/server-next/src/app/admin/crawler/_client/AutoCrawlSummaryCard.tsx`（新建）
+- `apps/server-next/src/app/admin/crawler/_client/CrawlerClient.tsx`（嵌入）
+- `tests/unit/components/server-next/admin/crawler/AutoCrawlSummaryCard.test.tsx`（新建 5 case）
+- `tests/unit/components/server-next/admin/crawler/CrawlerClient.test.tsx`（mock 修复）
+
+PATCH 文件数：2 源 + 2 测试 = 4 项（≤ 5 硬约束 ✅）
+
+### 偏离记录
+
+无新 D-N 偏离（D-155-5 已在 ADR-155 Accepted 内）；D-155-5 是新组件契约，§4 关联 ADR 表无 AMENDMENT 落盘要求。
+
+### 质量门禁
+
+- ✅ typecheck PASS（8 workspace）
+- ✅ lint PASS（4 pre-existing 警告，0 新增）
+- ✅ test 5102/5102 PASS（本卡新 5 case + CrawlerClient.test 64 case 全过）
+- ✅ verify:adr-contracts PASS（含 verify-adr-d-numbers 207 闭环）
+
+### 六问自检 PASS
+
+1. **正确性**：六态完整覆盖（loading/scheduler-disabled/disabled/countdown/failed/error）；schedulerEnabled 优先遮蔽（HOTFIX-C 范式一致）；[立即关闭] window.confirm 二次确认避免误触
+2. **边界与复用**：复用 AdminCard + AdminButton + Pill 原语；不引入新依赖；与 AutoCrawlScheduleCard 数据流一致
+3. **可扩展性**：CardState 模式易扩第 7 态（如 cron 模式）；scheduleSummary 计算逻辑与 EP-1C 多 dailyTime 兼容（当 dailyTimes 引入时只需扩展该常量）
+4. **一致性**：与 AutoCrawlScheduleCard scheduleSummary 文案一致（"每日 HH:MM" / "每 N 分钟"）；与 HOTFIX-C scheduler-disabled 警告范式一致；与 CrawlerTimelineCard actions header 模式一致
+5. **改动收敛**：满足 1–4 前提下严格 2 源 + 2 测试 = 4 项（PATCH ≤ 5 ✅）；CrawlerClient.test mock 修复是必要副产物（不算独立改动）
+6. **偏离检测**：无新 D-N；G-155-3 共享组件抽取推迟到第 3 处消费时
+
+### AI-CHECK 结论
+
+- ✅ **PASS** — 3 个 Step 完整闭环 / 5 新单测全过 / 全栈门禁通过
+- **越界检测**：CLEAN（2 源 + 2 测试 + mock 修复为 EP-1B2 必要范围）
+- **回归风险**：低
+  - AutoCrawlSummaryCard 完全新组件，不影响现有路径
+  - CrawlerClient 嵌入位置在 PageHeader 后 + KpiRow 前，不破坏现有布局顺序
+  - mock 范式与 EP-1A RunInlinePanel 一致（已验证有效）
+
+### 未覆盖（→ 后续 EP）
+
+- **用户实测验证**（@livefree / ADR-155 §8 验收第 4 条）：
+  1. `/admin/crawler` PageHeader 下方可见 AutoCrawlSummaryCard
+  2. 卡片显示当前 schedule 摘要（与 SchedulerConfigDrawer 一致）
+  3. 点 [立即关闭] → confirm 通过 → 卡片变 "未启用" 态 + 全局调度停止
+  4. 点 [编辑] → SchedulerConfigDrawer 弹出
+  5. scheduler 未启动时 → 卡片显红色警告
+- EP-1C-1（D-155-6 后端契约 + scheduler）
+- EP-1C-2（D-155-6 前端 UI / 依赖 EP-1B2 + EP-1C-1）
+- EP-2（D-155-2 topbar 合并 / 强制 Opus reviewer）
+- EP-3（D-155-3 Gantt 三段窗）
+
+### 关键约束消化
+
+- **D-155-5 是新组件契约，无原 ADR AMENDMENT 落盘**（ADR-155 §4 表格列出的 4 处 AMENDMENT 不含 D-155-5）
+- **G-155-3 共享组件抽取推迟**（当前仅 2 处消费，第 3 处出现时再抽 AutoCrawlInfoBlock）
+- **CrawlerClient.test mock AutoCrawlSummaryCard**（与 EP-1A RunInlinePanel mock 同范式 / 避免双重消耗 getAutoCrawlConfig mock）
+
+- **执行模型**：claude-opus-4-7（主循环延续；建议 sonnet，本会话 opus 上下文复用）
+- **子代理调用**：无（D-155-5 是新内部组件，不触发"共享组件 API 契约强制 Opus"）
+
+Cleanup-Audit: 2 源文件改 + 2 测试文件（2 新建 + 1 现有 mock 修复）/ 5 新单测 / 0 migration / 0 新依赖
+Plan-Revision: 0 次

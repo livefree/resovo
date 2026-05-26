@@ -49,6 +49,8 @@ import { CrawlerSiteList } from './CrawlerSiteList'
 import { CrawlerSiteExpand } from './CrawlerSiteExpand'
 import { CrawlerAdvancedMenu } from './CrawlerAdvancedMenu'
 import { SchedulerConfigDrawer } from './SchedulerConfigDrawer'
+// ADR-155 D-155-5 / EP-1B2：定时设置显式入口卡（顶部摘要 + [立即关闭] + [编辑]）
+import { AutoCrawlSummaryCard } from './AutoCrawlSummaryCard'
 import { KeywordCrawlDrawer } from './KeywordCrawlDrawer'
 import {
   CrawlerSiteFormDrawer,
@@ -480,6 +482,9 @@ export function CrawlerClient() {
         }
         data-testid="crawler-page-header"
       />
+
+      {/* ADR-155 D-155-5 / EP-1B2：定时设置显式入口卡（紧邻 PageHeader） */}
+      <AutoCrawlSummaryCard onEditClick={() => setSchedulerOpen(true)} />
 
       <CrawlerKpiRow kpi={kpi} />
 

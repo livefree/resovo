@@ -105,6 +105,13 @@ vi.mock('@resovo/admin-ui', async () => {
   }
 })
 
+// ADR-155 D-155-5 / EP-1B2：mock AutoCrawlSummaryCard（独立测试范围）
+// CrawlerClient.test 仅验证嵌入 + 不消耗 getAutoCrawlConfig mock；SummaryCard 内部行为
+// 在 AutoCrawlSummaryCard.test.tsx 单独覆盖（避免双重 mock）
+vi.mock('../../../../../../apps/server-next/src/app/admin/crawler/_client/AutoCrawlSummaryCard', () => ({
+  AutoCrawlSummaryCard: () => <div data-testid="mock-auto-crawl-summary-card" />,
+}))
+
 vi.mock('../../../../../../apps/server-next/src/lib/api-client', () => {
   class MockApiClientError extends Error {
     public readonly code: string
