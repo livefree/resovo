@@ -69,6 +69,36 @@ const ACTIONS_STYLE: CSSProperties = {
   gap: '8px',
 }
 
+// ADR-155 D-155-5 EP-1B2-LAYOUT：概览容器内部布局（紧贴的列方向 flex）
+const OVERVIEW_SECTION_STYLE: CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '12px',
+}
+
+// 概览第一行：SummaryCard 固定 360px + KpiRow flex:1
+const OVERVIEW_ROW_STYLE: CSSProperties = {
+  display: 'grid',
+  gridTemplateColumns: 'minmax(280px, 360px) 1fr',
+  gap: '12px',
+  alignItems: 'start',
+}
+
+const OVERVIEW_TOGGLE_STYLE: CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: '4px',
+  padding: '4px 8px',
+  border: '1px solid var(--border-subtle)',
+  borderRadius: 'var(--radius-sm)',
+  background: 'var(--bg-surface)',
+  color: 'var(--fg-default)',
+  fontSize: 'var(--font-size-xs)',
+  fontFamily: 'inherit',
+  cursor: 'pointer',
+  width: 'fit-content',
+}
+
 const EMPTY_FORM: CreateCrawlerSiteInput = {
   key: '',
   name: '',
@@ -115,6 +145,11 @@ export function CrawlerClient() {
   )
   // ── CW1-C 关键词采集 Drawer 状态 ─────────────────────────────────
   const [keywordDrawerOpen, setKeywordDrawerOpen] = useState(false)
+
+  // ── ADR-155 D-155-5 EP-1B2-LAYOUT：概览容器折叠状态（默认展开）──
+  // 折叠后：SummaryCard + KpiRow + TimelineCard 全部隐藏，仅保留 PageHeader
+  // + toggle 按钮 + 主操作区 SiteList，节省垂直空间专注主操作
+  const [overviewOpen, setOverviewOpen] = useState(true)
 
   // CW1-D：关闭 scheduler 时清掉 query param，避免刷新页面再次自动打开
   const closeSchedulerDrawer = useCallback(() => {
@@ -483,16 +518,34 @@ export function CrawlerClient() {
         data-testid="crawler-page-header"
       />
 
-      {/* ADR-155 D-155-5 / EP-1B2：定时设置显式入口卡（紧邻 PageHeader） */}
-      <AutoCrawlSummaryCard onEditClick={() => setSchedulerOpen(true)} />
-
-      <CrawlerKpiRow kpi={kpi} />
-
-      <CrawlerTimelineCard
-        frozen={status?.freezeEnabled ?? false}
-        paused={paused}
-        onPauseToggle={handlePauseToggle}
-      />
+      {/* ADR-155 D-155-5 EP-1B2-LAYOUT：概览容器（可展开/收起）
+          - 折叠态：仅 PageHeader + toggle + SiteList（主操作区永驻）
+          - 展开态：SummaryCard 与 KpiRow 同一行 + TimelineCard full width */}
+      <div data-overview-section style={OVERVIEW_SECTION_STYLE}>
+        <button
+          type="button"
+          onClick={() => setOverviewOpen((v) => !v)}
+          aria-expanded={overviewOpen}
+          aria-controls="crawler-overview-body"
+          style={OVERVIEW_TOGGLE_STYLE}
+          data-testid="crawler-overview-toggle"
+        >
+          {overviewOpen ? '▾' : '▸'} 概览
+        </button>
+        {overviewOpen && (
+          <div id="crawler-overview-body" data-testid="crawler-overview-body" style={OVERVIEW_SECTION_STYLE}>
+            <div style={OVERVIEW_ROW_STYLE}>
+              <AutoCrawlSummaryCard onEditClick={() => setSchedulerOpen(true)} />
+              <CrawlerKpiRow kpi={kpi} />
+            </div>
+            <CrawlerTimelineCard
+              frozen={status?.freezeEnabled ?? false}
+              paused={paused}
+              onPauseToggle={handlePauseToggle}
+            />
+          </div>
+        )}
+      </div>
 
       <CrawlerSiteList
         sites={sites}

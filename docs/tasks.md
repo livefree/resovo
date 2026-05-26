@@ -6,71 +6,94 @@
 
 ## 进行中任务
 
-### 🔄 CHG-SN-9-CW1-CW2-REDESIGN-A-EP-1B2 — D-155-5 AutoCrawlSummaryCard 显式入口卡
+### 🔄 CHG-SN-9-CW1-CW2-REDESIGN-A-EP-1B2-LAYOUT — D-155-5 实施期布局延伸（plan-revision）
 
 - **SEQ**：SEQ-20260526-CRAWLER-W3-FIX
 - **状态**：🔄 进行中
-- **创建时间**：2026-05-26 04:40
-- **实际开始**：2026-05-26 04:40
+- **创建时间**：2026-05-26 04:50
+- **实际开始**：2026-05-26 04:50
 - **建议模型**：sonnet
 - **执行模型**：claude-opus-4-7（本会话延续）
-- **关联 ADR**：ADR-155 D-155-5（🟢 Accepted）；D-155-5 是新组件契约（AutoCrawlSummaryCard 不修改原 ADR），无 §4 AMENDMENT 落盘要求
+- **关联 ADR**：ADR-155 D-155-5（🟢 Accepted）；本卡是 EP-1B2 实施后用户走读暴露的布局优化需求，属 D-155-5 的延伸（plan-revision），不起新 ADR
+- **拆分理由**：EP-1B2 已 commit 闭合 D-155-5 核心组件契约；本卡是 layout 重组 + Collapsible 容器（UX 优化），改动多 3 个文件，避免 EP-1B2 commit 回滚
 
 ### 问题理解
 
-当前 schedule 配置仅在 Dashboard `AutoCrawlScheduleCard` 显示（用户必须切到 `/admin` 才能看），且"关闭定时"必须打开 SchedulerConfigDrawer 反勾 globalEnabled。`/admin/crawler` 主页面缺 schedule summary 入口 + 一键关闭快捷。
+@livefree EP-1B2 实测后反馈：
+1. AutoCrawlSummaryCard 单独占一行 + KpiRow 单独一行 → 信息密度低（4 行垂直滚动才能看到 SiteList）
+2. "自动采集 + KPI + 时间轴" 三块都是辅助/概览信息，主操作区是 SiteList；用户希望折叠概览区降低噪音
 
 ### 根因判断
 
-CW1-D 实施 Dashboard 卡时未在 /admin/crawler 顶部对称建卡；CW1-A PageHeader inline chip 仅显示"下次自动 HH:MM" 简略信息，无 [立即关闭] / [编辑] 入口。
+EP-1B2 嵌入 AutoCrawlSummaryCard 时直接放在 PageHeader 与 KpiRow 之间（独立行），未考虑信息密度 + 主次区分。`CrawlerKpiRow` 是 5 列 grid，没考虑被收窄到容器内时的 wrap 行为。
 
 ### 方案
 
-**Step 1**（`apps/server-next/src/app/admin/crawler/_client/AutoCrawlSummaryCard.tsx` 新建，约 200 行）：
-
-- Props：`{ onEditClick: () => void }`（父层 CrawlerClient 已持有 SchedulerConfigDrawer state，本卡仅触发 open）
-- 状态自治：内部 `useState` 拉 `getAutoCrawlConfig + getCrawlerSystemStatus`（与 AutoCrawlScheduleCard 同范式 / G-155-3 评审建议抽 AutoCrawlInfoBlock 共享组件推迟到第 3 处消费时再抽，本卡仅 2 处接受短期重复）
-- 渲染三态（精简版，不复用 AutoCrawlScheduleCard 5 状态完整 UI）：
-  - `schedulerEnabled === false` → danger 卡 "调度器进程未启动"（与 AutoCrawlScheduleCard 一致）
-  - `!config.globalEnabled` → neutral 卡 "未启用 · 点击编辑配置"
-  - `globalEnabled` + countdown → ok 卡 显 `下次: MM-DD HH:MM · ${scheduleSummary} · 模式 X` + 右上角 `[立即关闭]` + `[编辑]`
-- `handleClose`：`window.confirm("确认关闭自动调度？已配置的定时任务将不再触发，重新打开后恢复。")` → `setAutoCrawlConfig({...config, globalEnabled: false})` → toast → reload；失败 toast danger
-- `data-testid="auto-crawl-summary-card"`、`auto-crawl-summary-close`、`auto-crawl-summary-edit`
+**Step 1**（`apps/server-next/src/app/admin/crawler/_client/CrawlerKpiRow.tsx`）：
+- `gridTemplateColumns` 从 `repeat(5, 1fr)` 改为 `repeat(auto-fit, minmax(140px, 1fr))`
+- 让 KpiRow 在容器宽度收窄时自动 wrap 为 2-3 行，单独使用时仍是 1 行 5 列
 
 **Step 2**（`apps/server-next/src/app/admin/crawler/_client/CrawlerClient.tsx`）：
+- 新增 `overviewOpen: boolean` state（默认 `true`，展开）
+- 重构 layout：
+  ```tsx
+  <PageHeader ... />
 
-- 在 `<PageHeader />` 后紧邻插入 `<AutoCrawlSummaryCard onEditClick={() => setSchedulerDrawerOpen(true)} />`
-- `setSchedulerDrawerOpen` 已存在（CW1-D query param 自动打开机制）
+  {/* 概览容器（可折叠） */}
+  <div data-overview-section>
+    <button data-testid="overview-toggle" aria-expanded={overviewOpen}
+      onClick={() => setOverviewOpen(!overviewOpen)}>
+      {overviewOpen ? '▾' : '▸'} 概览
+    </button>
+    {overviewOpen && (
+      <>
+        {/* 同一行：SummaryCard 360px + KpiRow flex:1 */}
+        <div style={{ display: 'grid', gridTemplateColumns: '360px 1fr', gap: '12px' }}>
+          <AutoCrawlSummaryCard onEditClick={() => setSchedulerOpen(true)} />
+          <CrawlerKpiRow kpi={kpi} />
+        </div>
+        <CrawlerTimelineCard ... />
+      </>
+    )}
+  </div>
 
-**Step 3（单测）**（`tests/unit/components/server-next/admin/crawler/AutoCrawlSummaryCard.test.tsx` 新建，5 case）：
-- #1 globalEnabled=false → neutral 卡 "未启用" + [编辑] 按钮
-- #2 globalEnabled=true + autoCrawlNext + scheduleType=daily → ok 卡 "下次: ... 每日 HH:MM · 模式 X"
-- #3 schedulerEnabled=false → danger 卡 "调度器进程未启动"
-- #4 [立即关闭] 调 setAutoCrawlConfig({globalEnabled: false}) + success toast
-- #5 [编辑] 按钮调 onEditClick props
+  {/* 主操作区 - 永久可见 */}
+  <CrawlerSiteList ... />
+  ```
+- 默认 `overviewOpen=true` 保持现有 UX 不变；折叠后只剩 SiteList 节省空间
+- toggle 按钮极简内联（border:none + bg:transparent + cursor:pointer + 小字体）
+
+**Step 3**（`tests/unit/components/server-next/admin/crawler/CrawlerClient.test.tsx`）：
+- 加 2 case：overview 默认展开（点击前 SummaryCard 容器存在）；toggle 后折叠（SummaryCard 容器 + KpiRow + Timeline 不渲染，SiteList 仍渲染）
+- 由于 EP-1B2 已 mock AutoCrawlSummaryCard，本卡只需用 `data-testid="mock-auto-crawl-summary-card"` 判定渲染态
 
 ### 涉及文件
 
-- `apps/server-next/src/app/admin/crawler/_client/AutoCrawlSummaryCard.tsx`（新建）
-- `apps/server-next/src/app/admin/crawler/_client/CrawlerClient.tsx`（嵌入）
-- `tests/unit/components/server-next/admin/crawler/AutoCrawlSummaryCard.test.tsx`（新建 5 case）
+- `apps/server-next/src/app/admin/crawler/_client/CrawlerKpiRow.tsx`（grid auto-fit）
+- `apps/server-next/src/app/admin/crawler/_client/CrawlerClient.tsx`（overviewOpen state + collapsible + grid 同行 + 移 TimelineCard 进容器）
+- `tests/unit/components/server-next/admin/crawler/CrawlerClient.test.tsx`（扩 2 case）
 
 PATCH 文件数：2 源 + 1 测试 = 3 项（≤ 5 硬约束 ✅）
 
 ### 验收要点
 
 - **dev server 实测**（@livefree）：
-  1. `/admin/crawler` PageHeader 下方可见 AutoCrawlSummaryCard
-  2. 卡片显示当前 schedule 摘要（与 SchedulerConfigDrawer 保存的配置一致）
-  3. 点 [立即关闭] → confirm 通过 → 卡片变 "未启用" 态 + 全局调度停止
-  4. 点 [编辑] → SchedulerConfigDrawer 弹出
-  5. scheduler 进程未启动时 → 卡片显红色警告
+  1. `/admin/crawler` 默认 PageHeader 下方可见"▾ 概览"toggle + 展开的概览区
+  2. SummaryCard 与 KpiRow 同一行（左侧 360px 卡 + 右侧 5 KpiCard）
+  3. TimelineCard 在概览区内 full width
+  4. 点 "▾ 概览" → 折叠为 "▸ 概览"，SummaryCard + KpiRow + TimelineCard 全部隐藏，仅剩 PageHeader + toggle + SiteList
+  5. 浏览器窄屏（< 1200px）KpiRow auto-fit wrap 为 2-3 行不破坏布局
 - typecheck / lint / test / verify:adr-contracts 全过
-- 新增 5 case 全过
+- 新增 2 case 全过
 
-### 不在范围（→ EP-1C / EP-2 / EP-3）
+### 不在范围
 
-- D-155-6 多 dailyTime（→ EP-1C-1/C-2）
-- D-155-2 topbar 合并（→ EP-2）
-- D-155-3 Gantt 三段窗（→ EP-3）
-- G-155-3 抽 AutoCrawlInfoBlock 共享组件（推迟到第 3 处消费时再抽）
+- 折叠状态持久化（localStorage / cookie）→ 推迟到用户反馈"重打开仍想保持折叠"时再做
+- 概览区动画（slide / fade）→ 推迟（CSS height transition 易抖动，需 measure pattern；当前 instant toggle 足够）
+- AutoCrawlSummaryCard 内部 layout 优化（紧凑模式）→ 360px 宽度已经够展示六态文案
+
+---
+
+## 下次会话恢复入口
+
+EP-1B2-LAYOUT 完成后启 EP-1C-1（D-155-6 后端契约 + scheduler）。

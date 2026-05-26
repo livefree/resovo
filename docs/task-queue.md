@@ -1237,7 +1237,8 @@ B 序列 + C 序列可与 A 并行（A 无依赖）；B 与 C 之间无依赖（
 
    **EP-1B 拆为 EP-1B1 + EP-1B2**（满足 PATCH ≤ 5 项硬约束 / 评审消化外的实施期 plan-revision）：
    - **EP-1B1（D-155-4 站点 limit 解锁）✅ 完成**（2026-05-26 / commit 9302cf95 / @livefree 实测 3 路径 PASS）
-   - **EP-1B2（D-155-5 AutoCrawlSummaryCard）✅ 完成**（2026-05-26 / commit 待提交 / 5102/5102 PASS / 待 @livefree 实测 5 路径）
+   - **EP-1B2（D-155-5 AutoCrawlSummaryCard）✅ 完成**（2026-05-26 / commit cbdf2e42 / 实测 PASS）
+   - **EP-1B2-LAYOUT（D-155-5 实施期布局延伸 / plan-revision）🟡 代码已落地** / 概览容器可折叠 + SummaryCard 与 KpiRow 同行 / 5104/5104 PASS / 待 @livefree 实测 5 路径
 
    **EP-1C-1（D-155-6 后端契约 + scheduler）⬜ 待启动**
    **EP-1C-2（D-155-6 前端 UI）⬜ 待启动 / 依赖 EP-1B2 + EP-1C-1**

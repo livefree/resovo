@@ -15,7 +15,11 @@ import type { CrawlerKpiResponse } from '@/lib/crawler/api'
 
 const ROW_STYLE: CSSProperties = {
   display: 'grid',
-  gridTemplateColumns: 'repeat(5, 1fr)',
+  // ADR-155 D-155-5 EP-1B2-LAYOUT：grid auto-fit 适应容器宽度自动 wrap
+  // - 独立使用时（容器宽 1200px+）：1 行 5 列（minmax 140 让单卡不会过窄）
+  // - 概览区窄宽（KpiRow 占 SummaryCard 右侧 flex:1 ≈ 720px）：wrap 为 3+2 两行
+  // - 浏览器窄屏（< 900px）：wrap 为 2+2+1
+  gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
   gap: '12px',
 }
 

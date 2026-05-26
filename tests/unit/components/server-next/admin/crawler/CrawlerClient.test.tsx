@@ -1145,4 +1145,33 @@ describe('CrawlerClient — CW1-D ?openDrawer=scheduler 自动开 SchedulerConfi
       expect(routerReplaceMock).toHaveBeenCalledWith('/admin/crawler')
     })
   })
+
+  // ── ADR-155 D-155-5 EP-1B2-LAYOUT：概览容器可折叠 ──────────────
+  it('57. EP-1B2-LAYOUT: 默认概览展开 → SummaryCard + KpiRow + Timeline 全渲染', async () => {
+    render(<CrawlerClient />)
+    await waitFor(() => screen.getByTestId('crawler-export-btn'))
+    // toggle 按钮可见且 aria-expanded=true
+    const toggle = screen.getByTestId('crawler-overview-toggle')
+    expect(toggle.getAttribute('aria-expanded')).toBe('true')
+    expect(toggle.textContent).toMatch(/^▾\s+概览$/)
+    // 展开态：3 块全渲染
+    expect(screen.getByTestId('crawler-overview-body')).not.toBeNull()
+    expect(screen.getByTestId('mock-auto-crawl-summary-card')).not.toBeNull()
+    expect(screen.getByTestId('crawler-timeline-card')).not.toBeNull()
+  })
+
+  it('58. EP-1B2-LAYOUT: 点击 toggle → 概览折叠 / 3 块隐藏 / SiteList 仍可见', async () => {
+    render(<CrawlerClient />)
+    const toggle = await waitFor(() => screen.getByTestId('crawler-overview-toggle'))
+    fireEvent.click(toggle)
+    await waitFor(() => {
+      expect(toggle.getAttribute('aria-expanded')).toBe('false')
+      expect(toggle.textContent).toMatch(/^▸\s+概览$/)
+      expect(screen.queryByTestId('crawler-overview-body')).toBeNull()
+      expect(screen.queryByTestId('mock-auto-crawl-summary-card')).toBeNull()
+      expect(screen.queryByTestId('crawler-timeline-card')).toBeNull()
+    })
+    // SiteList 主操作区永驻可见（折叠态下用户仍能操作站点）
+    expect(screen.getByTestId('crawler-export-btn')).not.toBeNull()
+  })
 })

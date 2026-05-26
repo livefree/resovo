@@ -7286,3 +7286,88 @@ PATCH 文件数：2 源 + 2 测试 = 4 项（≤ 5 硬约束 ✅）
 
 Cleanup-Audit: 2 源文件改 + 2 测试文件（2 新建 + 1 现有 mock 修复）/ 5 新单测 / 0 migration / 0 新依赖
 Plan-Revision: 0 次
+
+## [CHG-SN-9-CW1-CW2-REDESIGN-A-EP-1B2-LAYOUT] D-155-5 实施期布局延伸：概览折叠 + 同行排布
+
+- **日期**：2026-05-26
+- **Sequence**：SEQ-20260526-CRAWLER-W3-FIX
+- **任务 ID**：CHG-SN-9-CW1-CW2-REDESIGN-A-EP-1B2-LAYOUT
+- **关联 ADR**：ADR-155 D-155-5（🟢 Accepted / 实施期 plan-revision，不起新 ADR）
+- **模型**：claude-opus-4-7（主循环延续）
+
+### 改动摘要
+
+EP-1B2 实测后 @livefree 反馈：AutoCrawlSummaryCard + KpiRow 各占一行 → 信息密度低；用户主操作区是 SiteList，应折叠概览降低噪音。
+
+- **Step 1**（`CrawlerKpiRow.tsx`）：`gridTemplateColumns` 从 `repeat(5, 1fr)` 改为 `repeat(auto-fit, minmax(140px, 1fr))`，KpiRow 在被压窄的容器内自动 wrap，独立使用时仍 5 列 1 行
+- **Step 2**（`CrawlerClient.tsx`）：
+  - 新增 `overviewOpen` state（默认 `true`，展开）
+  - 重构 layout：`<div data-overview-section>` 包裹 toggle button + 可折叠 body
+  - 概览第一行用 grid `minmax(280px, 360px) 1fr`：SummaryCard 占左侧 360px、KpiRow 占右侧 flex:1（自动 wrap 适应空间）
+  - TimelineCard 移进概览容器 full width
+  - toggle 按钮极简（border subtle + bg surface + ▸/▾ icon）+ a11y `aria-expanded` + `aria-controls`
+  - 折叠态：仅 PageHeader + toggle + SiteList 主操作区永驻可见
+- **Step 3**（`CrawlerClient.test.tsx`）：扩 2 case
+  - #57 默认展开 → toggle aria-expanded=true + ▾ icon + body + 3 内容块全渲染
+  - #58 点击 toggle → 折叠 + aria-expanded=false + ▸ icon + body 隐藏 + SiteList 仍渲染
+
+### 新增/修改文件
+
+- `apps/server-next/src/app/admin/crawler/_client/CrawlerKpiRow.tsx`（grid auto-fit）
+- `apps/server-next/src/app/admin/crawler/_client/CrawlerClient.tsx`（overviewOpen state + collapsible + 同行 grid + TimelineCard 移入）
+- `tests/unit/components/server-next/admin/crawler/CrawlerClient.test.tsx`（扩 2 case）
+
+PATCH 文件数：2 源 + 1 测试 = 3 项（≤ 5 硬约束 ✅）
+
+### 偏离记录
+
+无新 D-N 偏离；本卡是 ADR-155 D-155-5 实施期 plan-revision（@livefree 走读发现 layout 优化需求），属 EP-1B2 的延伸 fix，不重起 ADR-156。
+
+### 质量门禁
+
+- ✅ typecheck PASS（8 workspace）
+- ✅ lint PASS（4 pre-existing 警告，0 新增）
+- ✅ test 5104/5104 PASS（CrawlerClient.test 66 case 全过 / 本卡新 2 case）
+- ✅ verify:adr-contracts PASS（含 verify-adr-d-numbers 207 闭环）
+
+### 六问自检 PASS
+
+1. **正确性**：默认 overviewOpen=true 保持 EP-1B2 已实测的 UX 不破坏；折叠后 SiteList 永驻可见保证主操作不丢；aria-expanded 同步语义
+2. **边界与复用**：KpiRow auto-fit 让组件适应任意宽度容器（也利于未来 dashboard widget 复用）；toggle 用原生 button + state，不引入新组件
+3. **可扩展性**：overviewOpen 模式易扩为多个 section（如 SiteList 内嵌区段也可折叠）；未来 localStorage 持久化只需 1 行
+4. **一致性**：与 ADR-117 D-117-5 sources matrix 行展开范式同源（state + aria-expanded + condition render）；与 EP-1A D-155-1 行内展开的 ▾/▸ icon 一致
+5. **改动收敛**：满足 1–4 前提下严格 2 源 + 1 测试 = 3 项；无任何"顺手优化"（如未抽 CollapsibleSection 组件）
+6. **偏离检测**：无新 D-N
+
+### AI-CHECK 结论
+
+- ✅ **PASS** — 3 个 Step 完整闭环 / 2 新单测全过 / 全栈门禁通过
+- **越界检测**：CLEAN（2 源 + 1 测试严格在 EP-1B2-LAYOUT 文件范围内）
+- **回归风险**：低
+  - KpiRow 独立使用场景（如 dashboard）仍 5 列（auto-fit 在宽度足够时不 wrap）
+  - overviewOpen 默认 true → EP-1B2 已实测的 UX 不变
+  - mock AutoCrawlSummaryCard 不受 layout 重构影响（EP-1B2 已建立）
+
+### 未覆盖（→ 后续）
+
+- **用户实测验证**（@livefree）：
+  1. `/admin/crawler` 默认 PageHeader 下方可见 "▾ 概览" toggle + 展开的概览区
+  2. SummaryCard 与 KpiRow 同一行（左侧 360px + 右侧 5 KpiCard）
+  3. TimelineCard 在概览区内 full width
+  4. 点 "▾ 概览" → 折叠 / SummaryCard + KpiRow + TimelineCard 隐藏 / 仅剩 PageHeader + toggle + SiteList
+  5. 浏览器窄屏（< 1200px）KpiRow auto-fit wrap 不破坏布局
+- 折叠状态持久化（localStorage）→ 推迟到用户反馈"重打开仍想保持折叠"时再做
+- 概览区动画（slide / fade）→ 推迟（instant toggle 足够）
+- 抽 CollapsibleSection 共享组件 → 第 3 处折叠需求出现时再抽
+
+### 关键约束消化
+
+- **plan-revision 不重起 ADR-156**（实施期 UX 微调，不改设计契约）
+- **默认展开保持 EP-1B2 实测 UX 不破坏**（避免连锁回归）
+- **a11y `aria-expanded` + `aria-controls`**（screen reader 友好）
+
+- **执行模型**：claude-opus-4-7（主循环延续；建议 sonnet）
+- **子代理调用**：无
+
+Cleanup-Audit: 2 源文件改 + 1 测试文件（扩 2 case）/ 2 新单测 / 0 migration / 0 新依赖
+Plan-Revision: 1 次（EP-1B2 实施期延伸 / @livefree 走读暴露 layout 优化需求 / 本卡是 D-155-5 的实施延续，不起新 ADR）
