@@ -205,15 +205,22 @@ export function AutoCrawlScheduleCard({ className }: AutoCrawlScheduleCardProps)
     // countdown
     const nextAt = data.nextAt!
     const modeLabel = data.config?.defaultMode === 'full' ? '全量' : '增量'
+    // CHG-SN-9-CW1-CW2-HOTFIX-B Step 2：按 scheduleType 切换显示（CW2-C-EP-A 引入两态后
+    // 本卡漏改的回归 — 原写死 "每日 ${dailyTime}" 在 interval 模式下无意义）
+    const scheduleSummary = data.config?.scheduleType === 'interval'
+      ? `· 每 ${data.config.intervalMinutes} 分钟 · 模式 ${modeLabel}`
+      : data.config
+        ? `· 每日 ${data.config.dailyTime} · 模式 ${modeLabel}`
+        : null
     return (
       <div style={META_ROW_STYLE} data-testid="auto-crawl-countdown">
         <Pill variant="ok">{`下次自动: ${formatNextAt(nextAt)}`}</Pill>
         <span style={META_INLINE_STYLE}>
           <span data-testid="auto-crawl-countdown-remaining">{formatCountdown(nextAt, now)}</span>
         </span>
-        {data.config && (
-          <span style={META_INLINE_STYLE}>
-            {`· 每日 ${data.config.dailyTime} · 模式 ${modeLabel}`}
+        {scheduleSummary && (
+          <span style={META_INLINE_STYLE} data-testid="auto-crawl-schedule-summary">
+            {scheduleSummary}
           </span>
         )}
       </div>

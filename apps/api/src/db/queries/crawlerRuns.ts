@@ -323,6 +323,15 @@ export async function syncRunStatusFromTasks(db: Pool, runId: string): Promise<S
      )
      UPDATE crawler_runs r
      SET status = CASE
+           -- CHG-SN-9-CW1-CW2-HOTFIX-B Step 1：孤儿 run（0 task）的 control_status
+           -- 已经过 cancel/pause 路由置位时，应立即终态化；否则历史 0-task run 的
+           -- status 永远保持 'queued'，前端点 [取消] 后看到 toast 成功但 UI 无变化、
+           -- 行又出现 [取消] 按钮（W1/W2 用户走读暴露的根因）。
+           -- CASE 短路：更精确条件优先，原 a.total = 0 兜底保留（control_status='active'
+           -- 时不变）。worker 8 处 sync 调用方零行为变化（worker job 必先创 task，
+           -- a.total > 0 永远不命中新 case）。
+           WHEN a.total = 0 AND r.control_status IN ('cancelling', 'cancelled') THEN 'cancelled'
+           WHEN a.total = 0 AND r.control_status IN ('pausing', 'paused') THEN 'paused'
            WHEN a.total = 0 THEN r.status
            WHEN r.control_status IN ('pausing', 'paused') AND a.running = 0 AND (a.pending > 0 OR a.paused > 0) THEN 'paused'
            WHEN a.running > 0 THEN 'running'

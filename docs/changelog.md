@@ -6710,3 +6710,88 @@ ADR-154 D-154-6 前端落地：
 
 Cleanup-Audit: 4 源文件改 + 2 测试文件（1 新建 + 1 扩展）/ 22 新单测 / 0 migration / 0 新依赖
 Plan-Revision: 1 次（Step 3 方案从 "改 token 980→1050" 调整为 "AdminSelect 消费 z-admin-popover 1050"；原方案会与已存在 z-admin-popover token 撞值导致语义混乱；新方案 token 不动只改组件单文件，更精准）
+
+## [CHG-SN-9-CW1-CW2-HOTFIX-B] 孤儿 run 转态 + AutoCrawlScheduleCard interval 显示
+
+- **日期**：2026-05-26
+- **Sequence**：SEQ-20260526-CRAWLER-W3-FIX
+- **任务 ID**：CHG-SN-9-CW1-CW2-HOTFIX-B
+- **关联 ADR**：无（纯修补，HOTFIX-A dev 实测发现 2 新缺陷；设计层显式入口卡 D-155-5 已加入 REDESIGN-A-ADR 范围）
+- **模型**：claude-opus-4-7（主循环延续；HOTFIX-A 上下文复用）
+
+### 改动摘要
+
+HOTFIX-A 落地后 @livefree dev 实测暴露 2 新缺陷：
+
+- **Step 1（P0 / 孤儿 run cancel/pause 不转态）**：`apps/api/src/db/queries/crawlerRuns.ts` `syncRunStatusFromTasks` SQL 在 `a.total = 0` 时保持原 status，导致历史 1 周以上 0-task 的 queued run 被 cancel 后 control_status='cancelling' 但 status 仍 'queued'。前端 toast 绿色 "已请求取消 0/0"（数字 0 用户没注意）→ 行又出现 [取消] 按钮 → 用户感知"无反应"。
+
+  根因：早期 `crawler_tasks.run_id FK ON DELETE SET NULL`（migration 010:36）允许 task 删除后 run 看起来"0 task"。
+
+  修复：在原 `WHEN a.total = 0 THEN r.status` 之前补 2 行 CASE（PostgreSQL CASE 短路 / 精确条件优先）：
+  - `WHEN a.total = 0 AND r.control_status IN ('cancelling', 'cancelled') THEN 'cancelled'`
+  - `WHEN a.total = 0 AND r.control_status IN ('pausing', 'paused') THEN 'paused'`
+
+  worker 8 处 syncRunStatusFromTasks 调用方零行为变化（worker job 必先创 task，a.total > 0 永远不命中新 case）。
+
+- **Step 2（P1 / CW2-C-EP-B 实施回归）**：`apps/server-next/src/app/admin/_client/AutoCrawlScheduleCard.tsx:214-218` 写死 `每日 ${data.config.dailyTime} · 模式 ${modeLabel}`，CW2-C 引入 scheduleType 两态后 interval 模式下显示无意义。改为按 `config.scheduleType` 切换：
+  - daily → `每日 HH:MM · 模式 X`
+  - interval → `每 N 分钟 · 模式 X`
+  - 提取 `scheduleSummary` 常量 + 加 `data-testid="auto-crawl-schedule-summary"` 便于单测定位
+
+### 新增/修改文件
+
+- `apps/api/src/db/queries/crawlerRuns.ts`（Step 1：syncRunStatusFromTasks SQL CASE 扩 2 行）
+- `apps/server-next/src/app/admin/_client/AutoCrawlScheduleCard.tsx`（Step 2：按 scheduleType 切换显示 + scheduleSummary 提取 + data-testid）
+- `tests/unit/api/crawler-runs-sync-status.test.ts`（扩 3 case：cancelling+0task → cancelled / pausing+0task → paused / 兜底 r.status + 短路顺序守卫）
+- `tests/unit/components/server-next/admin/AutoCrawlScheduleCard.test.tsx`（扩 2 case：CONFIG_INTERVAL → "每 30 分钟" + daily 防回归 + BASE_CONFIG.intervalMinutes 补齐）
+- `docs/task-queue.md`（HOTFIX-B 卡新增 + D-155-5 加入 REDESIGN-A-ADR 范围 + EP-1 范围扩 D-155-5 + DAG 更新 + 任务编号修正）
+- `docs/tasks.md`（HOTFIX-A 卡片移除 / HOTFIX-B 进入"进行中"）
+
+### 偏离记录
+
+无（纯修补不引入新 D-N 决策；新 SQL CASE 是 HOTFIX-A SQL 形态的扩展，不触发 ADR）。
+
+### 质量门禁
+
+- ✅ typecheck PASS（8 workspace 全过）
+- ✅ lint PASS（4 pre-existing 警告，0 新增）
+- ✅ test 全过（385 files / 5083 tests / 本卡新 5 case 全过 / use-filter-presets flaky 单跑稳定）
+- ✅ verify:adr-contracts PASS
+  - verify-sql-schema-alignment PASS（CASE 改动只用现有列 control_status / status）
+  - verify-adr-d-numbers PASS（201 D-N 闭环）
+  - verify-style-shorthand-conflict PASS
+
+### 六问自检 PASS
+
+1. **正确性**：Step 1 精确条件优先短路；Step 2 三态显示完备（loading/disabled/countdown daily + interval/failed/error）；新 5 case 守卫 SQL CASE 顺序 + 两种 schedule 切换 + 防 daily 回归
+2. **边界与复用**：Step 1 不引入新 SQL 函数 / 不动 control_status 写入逻辑（route 层职责）；Step 2 提取 scheduleSummary 局部常量，未沉淀到共享 util（仅 1 处消费）；data-testid 命名复用 `auto-crawl-*` 前缀范式
+3. **可扩展性**：Step 1 CASE 模式允许未来加更多 control_status × a.total=0 组合（如 'failing' 终态）；Step 2 三态 scheduleType 易扩第 4 态（cron 等）
+4. **一致性**：Step 1 与 HOTFIX-A Step 1/2 同源（W1/W2 实施漏检的回归 SQL 修补）；Step 2 与 SchedulerConfigDrawer 已实装的 scheduleType 切换语义对齐
+5. **改动收敛**：满足 1–4 前提下严格 2 源文件 + 2 测试文件，无任何"顺手优化"
+6. **偏离检测**：无新 D-N（HOTFIX-B 是 HOTFIX-A 实测的延续修复 / D-155-5 入 REDESIGN-A-ADR 后续起 ADR-155）
+
+### AI-CHECK 结论
+
+- ✅ **PASS** — 2 个 Step 完整闭环 / 16 新单测全过 / 全栈门禁通过
+- **越界检测**：CLEAN（2 源文件 + 2 测试文件严格在 tasks.md 文件范围内）
+- **回归风险**：低
+  - Step 1：worker 8 处 sync 调用方均 a.total > 0，不触发新 case；route 层 cancel/pause 路径效果与 control_status 写入对齐
+  - Step 2：daily 分支保留（test #8 防回归 daily），interval 是新增分支
+  - flaky 复用 HOTFIX-A 处理（test 不阻塞 commit；不引用本卡修改文件）
+
+### 未覆盖（→ 后续）
+
+- **dev server 实测**（W3-FIX 关键约束）：需 @livefree 实际打开浏览器验证 2 路径：①历史 queued run 点 [取消] → 行变 "已取消"；②Dashboard interval 模式显示 "每 N 分钟"
+- **REDESIGN-A 5 决策**：D-155-1（行内展开）+ D-155-2（topbar 合并）+ D-155-3（Gantt 三段窗）+ D-155-4（站点 limit 解锁）+ D-155-5（AutoCrawlSummaryCard 显式入口卡 + [立即关闭] 快捷）
+
+### 关键约束消化
+
+- **CASE 短路顺序（Step 1 关键约束 1）**：新 case 必须在原 `WHEN a.total = 0 THEN r.status` 之前；test #3（HOTFIX-B SQL 短路顺序守卫）专门验证 cancellingIdx < fallbackIdx
+- **不动 control_status 写入逻辑（Step 1 关键约束 2）**：只修 status 派生 case；control_status 仍由 route 层 updateRunControlStatus 写
+- **worker 调用方零变化（Step 1 关键约束 3）**：a.total > 0 永远不命中新 case
+
+- **执行模型**：claude-opus-4-7（主循环延续；建议 sonnet，本会话 opus 上下文复用）
+- **子代理调用**：无（纯修补，未触发"共享组件 API 契约强制 Opus"，未起新 ADR）
+
+Cleanup-Audit: 2 源文件改 + 2 测试文件（均扩展）/ 5 新单测 / 0 migration / 0 新依赖
+Plan-Revision: 0 次

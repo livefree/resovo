@@ -1144,17 +1144,44 @@ B 序列 + C 序列可与 A 并行（A 无依赖）；B 与 C 之间无依赖（
      - **z-index token 改动需补 ADR-153 / ADR-154 §关联 ADR 中 AMENDMENT 备注**（HOTFIX-A 不起新 ADR，但需在 REDESIGN-A 起 ADR AMENDMENT 时一并记录）
      - **不动设计层**：UI 布局 / 数据契约 / 路由结构 / 组件 API 一律不改；这些放 REDESIGN-A
 
-2. **CHG-SN-9-CW1-CW2-REDESIGN-A-ADR** — 四处设计层重做 ADR 起草（合并）
+2. **CHG-SN-9-CW1-CW2-HOTFIX-B** — 孤儿 run 转态 + AutoCrawlScheduleCard interval 显示
+   - 状态：🟡 代码已落地 / 待 @livefree dev server 实测确认（typecheck + lint + test 5083/5083 + verify:adr-contracts 全过 / 16 新单测全过 / commit 见 changelog）
+   - 创建时间：2026-05-26 02:30
+   - 实际开始：2026-05-26 02:30
+   - 完成时间：—（实测 PASS 后回填）
+   - 执行模型：claude-opus-4-7（主循环延续；HOTFIX-A 上下文复用）
+   - 建议模型：sonnet（纯修补，无新决策）
+   - 范围：HOTFIX-A 实测发现 2 缺陷：
+     - **Step 1（P0 / 孤儿 run cancel/pause 不转态）**：`apps/api/src/db/queries/crawlerRuns.ts` `syncRunStatusFromTasks` SQL 在 `a.total = 0` 时保持 r.status 不变，导致历史 1 周以上 0-task 的 queued run 被 cancel 后 control_status='cancelling' 但 status 仍 'queued'，前端 toast 绿色"已请求取消 0/0"但 UI 无视觉变化、行又出现 [取消] 按钮。补 2 个 case：`a.total = 0 AND control_status IN ('cancelling', 'cancelled') → 'cancelled'` + `a.total = 0 AND control_status IN ('pausing', 'paused') → 'paused'`；兜底保留原 `WHEN a.total = 0 THEN r.status`（control_status='active' 不变）
+     - **Step 2（P1 / CW2-C-EP-B 实施回归）**：`apps/server-next/src/app/admin/_client/AutoCrawlScheduleCard.tsx:216` 写死 `每日 ${data.config.dailyTime} · 模式 ${modeLabel}`，interval 模式下显示无意义。改为按 `config.scheduleType` 切换：daily → "每日 HH:MM"，interval → "每 N 分钟"
+   - 验收要点：
+     - dev server 实测：CrawlerRunsView 历史 queued run（1 周以上）点 [取消] → toast 成功 + 行状态变 "已取消"（不再保持 queued + 可再点）；Dashboard AutoCrawlScheduleCard interval 模式显示 "每 60 分钟" 不是 "每日 undefined"
+     - 新单测：`crawler-runs-sync-status.test.ts` 扩 3 case（control_status='cancelling' + 0 task → cancelled / control_status='paused' + 0 task → paused / control_status='active' + 0 task → 保持原 status）；`AutoCrawlScheduleCard.test.tsx` 加 1 case（CONFIG_INTERVAL → 渲染 "每 30 分钟"）
+     - typecheck / lint / test / verify:adr-contracts 全过
+   - 文件范围：
+     - `apps/api/src/db/queries/crawlerRuns.ts`（Step 1：SQL CASE 扩 2 行）
+     - `apps/server-next/src/app/admin/_client/AutoCrawlScheduleCard.tsx`（Step 2：按 scheduleType 切换显示）
+     - `tests/unit/api/crawler-runs-sync-status.test.ts`（扩 3 case）
+     - `tests/unit/components/server-next/admin/AutoCrawlScheduleCard.test.tsx`（扩 1 case；如不存在则新建）
+   - 估时：0.15w
+   - 关键约束：
+     - **Step 1 SQL CASE 必须放在原 `WHEN a.total = 0 THEN r.status` 之前**（PostgreSQL CASE 短路；新 case 更精确条件优先匹配）
+     - **不动 control_status 写入逻辑**（只修 status 派生 case；control_status 由 route 层 updateRunControlStatus 写）
+     - **worker 8 处 sync 调用方零行为变化**（worker job 永远先创 task，a.total > 0 永远不命中新 case）
+
+3. **CHG-SN-9-CW1-CW2-REDESIGN-A-ADR** — 五处设计层重做 ADR 起草（合并）
    - 状态：⬜
    - 创建时间：2026-05-26 02:00
+   - 最后更新：2026-05-26 02:30（D-155-5 追加）
    - 实际开始：—
    - 完成时间：—
    - 建议模型：opus 主循环 + arch-reviewer (claude-opus-4-7)
-   - 范围：起草 1 份合并 ADR（暂定 ADR-155 «CW1/CW2 用户走读修订») 覆盖 4 个独立但相关的设计决策：
+   - 范围：起草 1 份合并 ADR（暂定 ADR-155 «CW1/CW2 用户走读修订») 覆盖 5 个独立但相关的设计决策：
      - **D-155-1（CW1-B 行内展开）**：`/admin/crawler/runs` list 行点击切换 expand panel（消费现有 `renderExpandedRow` + `expandedKeys` API），expand body 复用 `RunInlinePanel`（拆自 CrawlerRunDetailView 的 meta grid + tasks 子表 + TaskLogsDrawer）；独立路由 `/admin/crawler/runs/[id]` 保留为 deep link fallback（含 PageHeader 自渲）
      - **D-155-2（CW1-E 复用 Topbar 图标）**：删除 BackgroundEventBell `position:fixed` 旁路叠加；BackgroundEventService 三源（autoCrawlNext + scheduler + 高危 audit）合并到 `useAdminNotifications` + `useAdminTasks` 现有数据流；扩展 `NotificationItem` discriminated union 加 background category（**触发 packages/admin-ui/src/**/types.ts 改动 → 强制 Opus arch-reviewer trailer**）
      - **D-155-3（CW2-B Gantt 三段窗）**：时间窗从 `[NOW-range, NOW]` 改为 `[NOW-range×0.8, NOW+range×0.2]`；加 now-line 垂直指示线（width=1px, color=var(--accent-default)）；pending bar 显示在 `scheduled_at` 真实位置（不再 clamp 到 NOW），用虚线边框 + 半透明区分；range 选项加 `12h / 24h / 7d`；空窗口加"扩大范围"快捷
      - **D-155-4（CW2-B 站点上限解锁）**：`limit` 从硬编码 8 改为 `range select` 旁边的可选项（8 / 20 / all），后端 `crawlerTimeline.ts` `safeLimit` 上限提到 50；超过 50 站给出"性能模式建议筛选站点"提示
+     - **D-155-5（定时设置显式入口卡）**：`/admin/crawler` 顶部加 "AutoCrawlSummaryCard"（紧邻 PageHeader 下方）展示当前生效配置 — scheduleType label + 时间/间隔显示 + globalEnabled 状态 pill + [立即关闭] 快捷按钮（toggle globalEnabled=false 不弹 Drawer）+ [编辑] 按钮（打开 SchedulerConfigDrawer）。CW2-C 沿用单全局 KV 不引入多 schedule 概念（仍是 1 个 auto_crawl_config）；后续若需多 schedule 另起 ADR
    - 文件范围：
      - `docs/decisions.md`（追加 ADR-155 完整文本）
      - 同 commit 标注 ADR-122 / ADR-152 / ADR-153 §关联 ADR AMENDMENT
@@ -1164,23 +1191,25 @@ B 序列 + C 序列可与 A 并行（A 无依赖）；B 与 C 之间无依赖（
      - **触发 plan §4.5 R7 MUST-8 守门**：ADR PASS 才能起 -EP 实施卡（D-155-2 新增 NotificationItem 字段属共享组件 API 契约）
      - **AMENDMENT 引用必填**：ADR-155 §关联 ADR 必须明列 ADR-122 / ADR-152 / ADR-153 三处 AMENDMENT 说明
 
-3. **CHG-SN-9-CW1-CW2-REDESIGN-A-EP-1** — D-155-1 + D-155-4 实施（CW1-B 行内展开 + CW2-B 站点上限解锁）
+4. **CHG-SN-9-CW1-CW2-REDESIGN-A-EP-1** — D-155-1 + D-155-4 + D-155-5 实施（CW1-B 行内展开 + CW2-B 站点上限解锁 + 定时设置显式入口卡）
    - 状态：⬜
    - 创建时间：2026-05-26 02:00
    - 建议模型：sonnet
    - 依赖：CW1-CW2-REDESIGN-A-ADR PASS
-   - 范围：拆 CrawlerRunDetailView 为 RunInlinePanel + CrawlerRunsView 接 expand + timeline limit 解锁 + 后端 safeLimit 上限提到 50
+   - 范围：拆 CrawlerRunDetailView 为 RunInlinePanel + CrawlerRunsView 接 expand + timeline limit 解锁 + 后端 safeLimit 上限提到 50 + 新建 AutoCrawlSummaryCard 顶部展示
    - 文件范围：
      - `apps/server-next/src/app/admin/crawler/runs/_client/CrawlerRunsView.tsx`（接 expandedKeys + renderExpandedRow + 改 Run ID 列 cell 为 toggle）
      - `apps/server-next/src/app/admin/crawler/runs/[id]/_client/RunInlinePanel.tsx`（新建，拆自 CrawlerRunDetailView）
      - `apps/server-next/src/app/admin/crawler/runs/[id]/_client/CrawlerRunDetailView.tsx`（瘦身：移 meta + tasks 到 RunInlinePanel，仅保留 PageHeader 包裹）
      - `apps/server-next/src/app/admin/crawler/_client/CrawlerTimelineCard.tsx`（加 limit select）
      - `apps/api/src/db/queries/crawlerTimeline.ts`（safeLimit 上限 20→50）
-     - 单测扩展（CrawlerRunsView.test 加 expand 行为 / RunInlinePanel.test 新建 / CrawlerTimelineCard.test 加 limit select）
-   - 验收要点：dev server 实测 — list 点 run id 行内展开 meta + tasks → 点 tasks 行 [查看] 弹 logs drawer → 关闭展开收起；timeline limit 选 "全部" → 显示真实站数；deep link `/admin/crawler/runs/[id]` 直接打开仍正常渲染
-   - 估时：0.3w
+     - `apps/server-next/src/app/admin/crawler/_client/AutoCrawlSummaryCard.tsx`（新建 D-155-5：紧邻 PageHeader 展示当前 schedule 摘要 + [立即关闭] + [编辑] 按钮）
+     - `apps/server-next/src/app/admin/crawler/_client/CrawlerClient.tsx`（嵌入 AutoCrawlSummaryCard）
+     - 单测扩展（CrawlerRunsView.test 加 expand 行为 / RunInlinePanel.test 新建 / CrawlerTimelineCard.test 加 limit select / AutoCrawlSummaryCard.test 新建）
+   - 验收要点：dev server 实测 — list 点 run id 行内展开 meta + tasks → 点 tasks 行 [查看] 弹 logs drawer → 关闭展开收起；timeline limit 选 "全部" → 显示真实站数；deep link `/admin/crawler/runs/[id]` 直接打开仍正常渲染；/admin/crawler 顶部可见 AutoCrawlSummaryCard，点 [立即关闭] 调 POST /auto-config（globalEnabled=false）无需打开 Drawer
+   - 估时：0.35w（D-155-5 加入 +0.05w）
 
-4. **CHG-SN-9-CW1-CW2-REDESIGN-A-EP-2** — D-155-2 实施（CW1-E 合并到 AdminShell notifications/tasks）
+5. **CHG-SN-9-CW1-CW2-REDESIGN-A-EP-2** — D-155-2 实施（CW1-E 合并到 AdminShell notifications/tasks）
    - 状态：⬜
    - 创建时间：2026-05-26 02:00
    - 建议模型：sonnet
@@ -1197,7 +1226,7 @@ B 序列 + C 序列可与 A 并行（A 无依赖）；B 与 C 之间无依赖（
    - 估时：0.3w
    - **commit trailer 必填**：`Subagents: arch-reviewer (claude-opus-4-7)`（CLAUDE.md ❌ 共享组件 API 契约强制 Opus）
 
-5. **CHG-SN-9-CW1-CW2-REDESIGN-A-EP-3** — D-155-3 实施（CW2-B Gantt 三段窗 + now-line + pending 真位）
+6. **CHG-SN-9-CW1-CW2-REDESIGN-A-EP-3** — D-155-3 实施（CW2-B Gantt 三段窗 + now-line + pending 真位）
    - 状态：⬜
    - 创建时间：2026-05-26 02:00
    - 建议模型：sonnet
@@ -1215,15 +1244,17 @@ B 序列 + C 序列可与 A 并行（A 无依赖）；B 与 C 之间无依赖（
 ### W3-FIX 执行顺序 DAG
 
 ```
-HOTFIX-A（独立，立即可启 / P0 阻塞用户操作）─────────────→ ⬜
+HOTFIX-A（commit d79769cc / 待 dev 实测确认）─────────────→ 🟡
 
-REDESIGN-A-ADR ──┬─→ REDESIGN-A-EP-1（CW1-B 行内 + CW2-B limit 解锁）→ ⬜
-                 ├─→ REDESIGN-A-EP-2（CW1-E 合并）→ ⬜
-                 └─→ REDESIGN-A-EP-3（CW2-B 三段窗）→ ⬜
+HOTFIX-B（HOTFIX-A 实测发现新缺陷 / P0+P1）────────────────→ ⬜
+
+REDESIGN-A-ADR ──┬─→ REDESIGN-A-EP-1（D-155-1/4/5）→ ⬜
+                 ├─→ REDESIGN-A-EP-2（D-155-2）→ ⬜
+                 └─→ REDESIGN-A-EP-3（D-155-3）→ ⬜
                             ↑ 依赖 HOTFIX-A Step 2 SQL fix
 ```
 
-HOTFIX-A 必须先做（P0）；REDESIGN-A-ADR 可与 HOTFIX-A 并行起草；EP-1/2/3 互不依赖（可并行）但 EP-3 需 HOTFIX-A Step 2 完成（避免 SQL 双重改动 conflict）。
+HOTFIX-A → HOTFIX-B 顺序串行（B 在 A SQL fix 基础上扩 CASE）；REDESIGN-A-ADR 可与 HOTFIX-B 并行起草；EP-1/2/3 互不依赖（可并行）但 EP-3 需 HOTFIX-A Step 2 完成（避免 SQL 双重改动 conflict）。
 
 ### W3-FIX 关键约束
 

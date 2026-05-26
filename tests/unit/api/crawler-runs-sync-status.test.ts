@@ -63,4 +63,33 @@ describe('crawlerRuns.syncRunStatusFromTasks — HOTFIX-A Step 1', () => {
     const result = await syncRunStatusFromTasks(mockPool, 'nonexistent-run-id')
     expect(result).toBeNull()
   })
+
+  // ── CHG-SN-9-CW1-CW2-HOTFIX-B Step 1：孤儿 run（0 task）转态 ────────
+  it('HOTFIX-B #1 SQL CASE 含 "a.total = 0 AND control_status IN (cancelling, cancelled)" → cancelled', async () => {
+    mockQuery.mockResolvedValueOnce({ rows: [] })
+    await syncRunStatusFromTasks(mockPool, 'orphan-run-1')
+    const [sql] = mockQuery.mock.calls[0] as [string]
+    // 修复后 SQL 必含针对 0-task + cancelling/cancelled 的提前终态化 case
+    expect(sql).toMatch(/WHEN\s+a\.total\s*=\s*0\s+AND\s+r\.control_status\s+IN\s*\(\s*'cancelling',\s*'cancelled'\s*\)\s+THEN\s+'cancelled'/i)
+  })
+
+  it('HOTFIX-B #2 SQL CASE 含 "a.total = 0 AND control_status IN (pausing, paused)" → paused', async () => {
+    mockQuery.mockResolvedValueOnce({ rows: [] })
+    await syncRunStatusFromTasks(mockPool, 'orphan-run-2')
+    const [sql] = mockQuery.mock.calls[0] as [string]
+    expect(sql).toMatch(/WHEN\s+a\.total\s*=\s*0\s+AND\s+r\.control_status\s+IN\s*\(\s*'pausing',\s*'paused'\s*\)\s+THEN\s+'paused'/i)
+  })
+
+  it('HOTFIX-B #3 SQL 保留兜底 "a.total = 0 THEN r.status"（control_status=active 不变）', async () => {
+    mockQuery.mockResolvedValueOnce({ rows: [] })
+    await syncRunStatusFromTasks(mockPool, 'orphan-run-3')
+    const [sql] = mockQuery.mock.calls[0] as [string]
+    // 兜底 case 必须保留（control_status='active' 时维持 r.status，避免误改非 cancel 路径上的 0-task run）
+    expect(sql).toMatch(/WHEN\s+a\.total\s*=\s*0\s+THEN\s+r\.status/i)
+    // 验证短路顺序：兜底 case 出现在精确 case 之后（PostgreSQL CASE 短路第一个 match）
+    const cancellingIdx = sql.search(/WHEN\s+a\.total\s*=\s*0\s+AND\s+r\.control_status\s+IN\s*\(\s*'cancelling'/i)
+    const fallbackIdx = sql.search(/WHEN\s+a\.total\s*=\s*0\s+THEN\s+r\.status/i)
+    expect(cancellingIdx).toBeGreaterThan(-1)
+    expect(fallbackIdx).toBeGreaterThan(cancellingIdx)
+  })
 })

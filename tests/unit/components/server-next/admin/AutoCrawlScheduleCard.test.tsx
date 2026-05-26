@@ -36,11 +36,19 @@ import { AutoCrawlScheduleCard } from '@/app/admin/_client/AutoCrawlScheduleCard
 const BASE_CONFIG = {
   globalEnabled: true,
   scheduleType: 'daily' as const,
+  intervalMinutes: 60,
   dailyTime: '03:30',
   defaultMode: 'incremental' as const,
   onlyEnabledSites: false,
   conflictPolicy: 'skip_running' as const,
   perSiteOverrides: {},
+}
+
+// CHG-SN-9-CW1-CW2-HOTFIX-B Step 2：interval 模式配置
+const CONFIG_INTERVAL = {
+  ...BASE_CONFIG,
+  scheduleType: 'interval' as const,
+  intervalMinutes: 30,
 }
 
 afterEach(() => {
@@ -122,5 +130,33 @@ describe('AutoCrawlScheduleCard', () => {
       const link = screen.getByTestId('auto-crawl-edit-link') as HTMLAnchorElement
       expect(link.getAttribute('href')).toBe('/admin/crawler?openDrawer=scheduler')
     })
+  })
+
+  // CHG-SN-9-CW1-CW2-HOTFIX-B Step 2：scheduleType 切换显示（CW2-C-EP-A 后回归修复）
+  it('7. countdown + interval 模式 → 渲染「每 N 分钟」而非「每日 HH:MM」', async () => {
+    const future = new Date(Date.now() + 90 * 60_000).toISOString()
+    mockGetAutoCrawlConfig.mockResolvedValueOnce(CONFIG_INTERVAL)
+    mockGetCrawlerSystemStatus.mockResolvedValueOnce({ autoCrawlNext: future })
+    render(<AutoCrawlScheduleCard />)
+    await waitFor(() => {
+      expect(screen.getByTestId('auto-crawl-countdown')).not.toBeNull()
+    })
+    const summary = screen.getByTestId('auto-crawl-schedule-summary').textContent ?? ''
+    expect(summary).toContain('每 30 分钟')
+    expect(summary).not.toContain('每日')
+    expect(summary).toContain('模式 增量')
+  })
+
+  it('8. countdown + daily 模式 → 渲染「每日 HH:MM」（防 Step 2 回归 daily 分支）', async () => {
+    const future = new Date(Date.now() + 90 * 60_000).toISOString()
+    mockGetAutoCrawlConfig.mockResolvedValueOnce(BASE_CONFIG) // scheduleType='daily'
+    mockGetCrawlerSystemStatus.mockResolvedValueOnce({ autoCrawlNext: future })
+    render(<AutoCrawlScheduleCard />)
+    await waitFor(() => {
+      expect(screen.getByTestId('auto-crawl-countdown')).not.toBeNull()
+    })
+    const summary = screen.getByTestId('auto-crawl-schedule-summary').textContent ?? ''
+    expect(summary).toContain('每日 03:30')
+    expect(summary).not.toContain('每 ')   // 区分 interval "每 N 分钟"（有空格）
   })
 })
