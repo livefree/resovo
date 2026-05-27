@@ -1113,6 +1113,7 @@ describe('CrawlerClient — CW1-D ?openDrawer=scheduler 自动开 SchedulerConfi
   const CONFIG = {
     globalEnabled: true,
     scheduleType: 'daily' as const,
+    dailyTimes: ['03:30'],         // ADR-155 D-155-6 / EP-1C-CLEANUP-B2：主字段
     dailyTime: '03:30',
     defaultMode: 'incremental' as const,
     onlyEnabledSites: false,

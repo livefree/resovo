@@ -8231,6 +8231,23 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
     - `tests/e2e/admin.spec.ts` — 2 处 playwright auto-config 响应 body 补 dailyTimes
   - **本 commit**（1 fixture + docs）：
     - `tests/unit/api/background-event-service.test.ts` — getAutoCrawlConfigMock 默认返回值补 dailyTimes（B1 收尾）
+
+## [CHG-SN-9-CW1-CW2-EP-1C-CLEANUP-B2] 前端 2 主路径 fixture 补 dailyTimes
+- **完成时间**：2026-05-26
+- **记录时间**：2026-05-26 19:30
+- **执行模型**：claude-opus-4-7（主循环延续）
+- **子代理**：无（测试 fixture 数据补全 / 不触发 Opus reviewer）
+- **修改文件**：
+  - `tests/unit/components/server-next/admin/crawler/CrawlerClient.test.tsx` — #54 CONFIG fixture 补 `dailyTimes: ['03:30']`（保留 dailyTime alias）
+  - `tests/unit/components/server-next/admin/dashboard/DashboardClient.test.tsx` — mockGetAutoCrawlConfig 默认返回值补 dailyTimes
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - **不动 alias-only fixture**（3 处）：BASE_CONFIG (AutoCrawlScheduleCard.test.tsx / AutoCrawlSummaryCard.test.tsx) + CONFIG (SchedulerConfigDrawer.test.tsx)。这些 fixture 是专门测试 dailyTime alias 兜底路径（#13 EP-1C-2b dailyTimes 缺失兜底 / #7 EP-1C-2b alias 兜底 / #5 chip 渲染兜底）；它们的测试意图 = fallback 路径正确性，不能补 dailyTimes 否则测试无意义
+  - 这些 alias-only fixture 在 Cleanup-B3 删 5 处消费方 fallback 时同步删除（fallback 不再存在 / 兜底 case 测试无意义）
+  - 测试覆盖：CrawlerClient 66/66 + DashboardClient 16/16 = 82/82 PASS
+- **PATCH 文件数**：2 测试 = 2 项（≪ 5 ✅）
+- **门禁**：typecheck ✅ / lint cached ✅ / test 82/82 ✅
 - **新增依赖**：无
 - **数据库变更**：无
 - **注意事项**：

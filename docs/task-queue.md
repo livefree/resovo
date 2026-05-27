@@ -1209,7 +1209,17 @@ B 序列 + C 序列可与 A 并行（A 无依赖）；B 与 C 之间无依赖（
    - 文件范围：4 测试 = 4 项（≤ 5 ✅）
    - 门禁：typecheck ✅ / lint 5/5 ✅ / test 5142/5142 ✅ / verify:adr-contracts ✅
 
-3h. **CHG-SN-9-CW1-CW2-EP-1C-CLEANUP-B2/-B3/-C**（推迟 / 已规划）
+3h. **CHG-SN-9-CW1-CW2-EP-1C-CLEANUP-B2** — 前端 2 主路径 fixture 补 dailyTimes
+   - 状态：✅ 完成（2026-05-26 19:30）
+   - 执行模型：claude-opus-4-7
+   - 范围：2 前端主路径 fixture 补 `dailyTimes: ['03:30']`：
+     - `tests/unit/components/server-next/admin/crawler/CrawlerClient.test.tsx` CONFIG（#54 SchedulerConfigDrawer 自开）
+     - `tests/unit/components/server-next/admin/dashboard/DashboardClient.test.tsx` mockGetAutoCrawlConfig 默认值
+   - **不动 alias-only fixture**（3 处）：BASE_CONFIG (AutoCrawlScheduleCard / AutoCrawlSummaryCard) + CONFIG (SchedulerConfigDrawer) — 这些专门测 dailyTime alias 兜底路径（#13 / #7 / #5 case）；Cleanup-B3 删 fallback 时同步删除（路径不再有意义）
+   - 文件范围：2 测试 = 2 项（≪ 5 ✅）
+   - 门禁：typecheck ✅ / test 82/82 ✅
+
+3i. **CHG-SN-9-CW1-CW2-EP-1C-CLEANUP-B3/-C**（推迟 / 已规划）
    - 范围：删 5 处 fallback (`config.dailyTimes && length > 0 ? ... : [config.dailyTime || '03:00']`) + 补 8 个 test fixture 显式提供 dailyTimes + 删 dailyTime alias 字段
    - 拆分：
      - Cleanup-B1：补 4 个 backend test fixture（crawlerScheduler / crawler-system-audit / background-event-service / e2e admin）
