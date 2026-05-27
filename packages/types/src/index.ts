@@ -14,6 +14,8 @@ export type * from './system.types'
 export type * from './external.types'
 
 export type * from './admin-moderation.types'
+// CHG-360-A / ADR-159：runtime helper（非 type-only）
+export { deriveAggregateState } from './admin-moderation.types'
 export type * from './video-merge.types'
 export type * from './sources-matrix.types'
 export type * from './admin-audit.types'

@@ -45,6 +45,22 @@ export type DualSignalState = 'pending' | 'ok' | 'partial' | 'dead'
 export type DualSignalDisplayState = DualSignalState | 'unknown'
 
 /**
+ * CHG-360 / ADR-159 D-159-7：聚合 state 派生 helper — 跨前后端复用纯函数
+ *
+ * 规则（D-159-4）：
+ *   total === 0          → 'pending'（占位 / 显示 "—" 灰色）
+ *   ok === total > 0     → 'ok'      （全可用 / 绿色）
+ *   ok === 0 && total > 0 → 'all_dead'（全失效 / 红色）
+ *   其他 0 < ok < total  → 'partial' （黄色 / 显示 "X/Y"）
+ */
+export function deriveAggregateState(ok: number, total: number): DualSignalAggregate['state'] {
+  if (total === 0) return 'pending'
+  if (ok === total) return 'ok'
+  if (ok === 0) return 'all_dead'
+  return 'partial'
+}
+
+/**
  * CHG-360 / ADR-159：双轨信号 X/Y 聚合类型 — 用于「线路（多 episode）」/「视频（多线路）」聚合显示
  *
  * **使用场景**：仅用于多元素聚合（line: probe 多 episode；video: 多线路）；

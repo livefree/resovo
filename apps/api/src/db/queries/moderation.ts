@@ -5,6 +5,7 @@
  */
 
 import type { Pool } from 'pg'
+import { deriveAggregateState } from '@resovo/types'
 
 export interface ModerationHistoryRow {
   id: string
@@ -117,6 +118,11 @@ interface DbPendingQueueRow {
   reviewedAt: string | null
   probe: string
   render: string
+  // CHG-360-B / ADR-159：line-level X/Y 聚合原料字段（SQL 投影直接产出，Service/query 层派生 state）
+  probeAggregateTotal: number | string  // pg 可能返回 string（DISTINCT COUNT）
+  probeAggregateOk: number | string
+  renderAggregateTotal: number | string
+  renderAggregateOk: number | string
   sourceCheckStatus: string
   metaScore: number
   needsManualReview: boolean
@@ -223,10 +229,6 @@ export async function listPendingQueue(
               v.reviewed_at AS "reviewedAt",
               COALESCE(
                 -- CHG-359: 去掉 is_active=true 限制 — inactive 但 dead 的 source 也应反映在 pill
-                -- 原因：disable-dead 后 source 是 is_active=false / probe_status=dead；
-                --       LinesPanel 显示所有非软删 source（含 inactive）；
-                --       pending-queue pill 应与 LinesPanel 状态 / sourceCheckStatus='all_dead' 一致
-                -- 用户实测：视频 2563b359 全 source dead+inactive → 旧 SQL 返回 pending（误导）
                 (SELECT probe_status FROM video_sources
                  WHERE video_id = v.id AND deleted_at IS NULL
                  ORDER BY CASE probe_status WHEN 'dead' THEN 0 WHEN 'partial' THEN 1
@@ -240,6 +242,44 @@ export async function listPendingQueue(
                            WHEN 'pending' THEN 2 ELSE 3 END LIMIT 1),
                 'pending'
               ) AS render,
+              -- CHG-360-B / ADR-159 D-159-2 + D-159-7：按 DISTINCT (siteKey, sourceName) 线路 count
+              -- 仅产 {total, ok} 原料 / state 由 mapPendingQueueRow 派生（deriveAggregateState helper）
+              COALESCE((
+                SELECT COUNT(DISTINCT (vs.source_site_key, vs.source_name))
+                FROM video_sources vs
+                WHERE vs.video_id = v.id AND vs.deleted_at IS NULL
+              ), 0) AS "probeAggregateTotal",
+              COALESCE((
+                SELECT COUNT(DISTINCT (vs.source_site_key, vs.source_name))
+                FROM video_sources vs
+                WHERE vs.video_id = v.id AND vs.deleted_at IS NULL
+                  AND EXISTS (
+                    SELECT 1 FROM video_sources vs2
+                    WHERE vs2.video_id = vs.video_id
+                      AND vs2.source_site_key IS NOT DISTINCT FROM vs.source_site_key
+                      AND vs2.source_name = vs.source_name
+                      AND vs2.probe_status = 'ok'
+                      AND vs2.deleted_at IS NULL
+                  )
+              ), 0) AS "probeAggregateOk",
+              COALESCE((
+                SELECT COUNT(DISTINCT (vs.source_site_key, vs.source_name))
+                FROM video_sources vs
+                WHERE vs.video_id = v.id AND vs.deleted_at IS NULL
+              ), 0) AS "renderAggregateTotal",
+              COALESCE((
+                SELECT COUNT(DISTINCT (vs.source_site_key, vs.source_name))
+                FROM video_sources vs
+                WHERE vs.video_id = v.id AND vs.deleted_at IS NULL
+                  AND EXISTS (
+                    SELECT 1 FROM video_sources vs2
+                    WHERE vs2.video_id = vs.video_id
+                      AND vs2.source_site_key IS NOT DISTINCT FROM vs.source_site_key
+                      AND vs2.source_name = vs.source_name
+                      AND vs2.render_status = 'ok'
+                      AND vs2.deleted_at IS NULL
+                  )
+              ), 0) AS "renderAggregateOk",
               v.source_check_status AS "sourceCheckStatus",
               v.meta_score AS "metaScore",
               v.needs_manual_review AS "needsManualReview",
@@ -274,7 +314,20 @@ export async function listPendingQueue(
   ])
 
   const hasNext = rows.rows.length > limit
-  const data = hasNext ? rows.rows.slice(0, limit) : rows.rows
+  const rawData = hasNext ? rows.rows.slice(0, limit) : rows.rows
+  // CHG-360-B / ADR-159 D-159-7：query 层 map raw count → DualSignalAggregate object
+  //   pg COUNT(*) 返回 string，需要 parseInt；deriveAggregateState 跨前后端复用 helper
+  const data = rawData.map((row) => {
+    const probeTotal = typeof row.probeAggregateTotal === 'string' ? parseInt(row.probeAggregateTotal, 10) : row.probeAggregateTotal
+    const probeOk = typeof row.probeAggregateOk === 'string' ? parseInt(row.probeAggregateOk, 10) : row.probeAggregateOk
+    const renderTotal = typeof row.renderAggregateTotal === 'string' ? parseInt(row.renderAggregateTotal, 10) : row.renderAggregateTotal
+    const renderOk = typeof row.renderAggregateOk === 'string' ? parseInt(row.renderAggregateOk, 10) : row.renderAggregateOk
+    return {
+      ...row,
+      probeAggregate: { total: probeTotal, ok: probeOk, state: deriveAggregateState(probeOk, probeTotal) },
+      renderAggregate: { total: renderTotal, ok: renderOk, state: deriveAggregateState(renderOk, renderTotal) },
+    }
+  })
   const last = data[data.length - 1]
   const nextCursor = hasNext && last
     ? encodeCursor({ createdAt: last.createdAt, id: last.id })

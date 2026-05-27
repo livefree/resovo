@@ -1,7 +1,7 @@
 'use client'
 
 import React from 'react'
-import { DualSignal, Thumb } from '@resovo/admin-ui'
+import { DualSignalCount, Thumb } from '@resovo/admin-ui'
 import type { VideoQueueRow } from '@resovo/types'
 
 interface ModListRowProps {
@@ -95,7 +95,8 @@ export function ModListRow({
           {it.type} · {it.year ?? '—'}
         </div>
         <div style={{ marginTop: 4, display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-          <DualSignal probe={it.probe} render={it.render} />
+          {/* CHG-360-C / ADR-159：X/Y 聚合显示 / 按 DISTINCT 线路 count / partial 黄色 */}
+          <DualSignalCount probe={it.probeAggregate} render={it.renderAggregate} />
           {it.badges.length > 0 && (
             <span style={{ fontSize: 'var(--font-size-2xs)', color: 'var(--state-warning-fg)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {it.badges[0]}

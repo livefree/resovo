@@ -9526,3 +9526,53 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
   - G2：sources-matrix VideoGroupRow.probeStatus 升级聚合
   - G3：videos.source_check_status 持久列与查询时聚合语义重叠观察
   - G4：DualSignalCount 视觉与 SignalChip 字号 padding 对齐核查
+
+## [CHG-360-B] aggregateXY SQL 投影改 + deriveAggregateState helper（line-level X/Y）
+- **完成时间**：2026-05-27
+- **执行模型**：claude-opus-4-7
+- **范围**：CHG-360 子卡 B / 依赖 -A 落地 / 后端 SQL + helper / 不动消费方
+- **改动文件**（4 项 ≤ 5 ✅）：
+  - `packages/types/src/admin-moderation.types.ts`（+`deriveAggregateState(ok, total)` 跨前后端复用 helper / ADR-159 D-159-7）
+  - `packages/types/src/index.ts`（export `deriveAggregateState` runtime helper）
+  - `apps/api/src/db/queries/moderation.ts`（DbPendingQueueRow 加 4 字段 + SQL 投影 line-level COUNT(DISTINCT (siteKey, sourceName)) + EXISTS 子查询 / query 层 map raw count → DualSignalAggregate via deriveAggregateState）
+  - `apps/api/src/db/queries/moderation.ts` import deriveAggregateState
+- **SQL 算法（D-159-2）**：
+  - `probeAggregateTotal` = `COUNT(DISTINCT (siteKey, sourceName))`（按线路 count / 非 source 行）
+  - `probeAggregateOk` = `COUNT DISTINCT line WHERE EXISTS (1 ok source)` (任一 episode probe='ok' 算可用线路)
+  - render 同模式
+- **门禁**：
+  - typecheck ✅（5 包全 PASS）
+  - lint ✅
+  - moderation 112/112 PASS（mock 不依赖新字段 / 行为兼容）
+- **闭环**：-B 后端契约 + helper 落地 / -C 可启动 UI 切换
+
+## [CHG-360-C] ModListRow 消费 DualSignalCount + 单测
+- **完成时间**：2026-05-27
+- **执行模型**：claude-opus-4-7
+- **范围**：CHG-360 子卡 C / 依赖 -B 落地 / UI 切换 + 测试
+- **改动文件**（2 项 ≤ 5 ✅）：
+  - `apps/server-next/src/app/admin/moderation/_client/ModListRow.tsx`（`<DualSignal>` → `<DualSignalCount probe={it.probeAggregate} render={it.renderAggregate}>`）
+  - `tests/unit/components/admin-ui/cell/dual-signal-count.test.tsx`（**新建** / 12 case：基础渲染 + 4 state 颜色 + X/Y zero-pad / total=0 / total>=10 / a11y aria-label 显式中文语义 / minPillWidth 透传）
+- **新增依赖**：无
+- **数据库变更**：无
+- **门禁**：
+  - typecheck ✅
+  - lint ✅
+  - dual-signal-count 12/12 PASS
+- **UX 修复对照**：
+  - 修复前：ModListRow 显示 "失效" 单值（用户原话"通常显示不准确"）
+  - 修复后：显示 "02/03" + 黄色 partial（3 线路 2 可用）/ 全 ok 绿 / 全 dead 红 / total=0 灰 "—"
+- **关键交付**：
+  - 用户原话 "对于视频队列表示 3 条线路，其中 2 条探测/试播可用" 完整实现
+  - 用户原话 "增加黄色标记标示部分失效" 完整实现
+  - 多消费方对齐：ModListRow `DualSignalCount` + LinesPanel 单源 `SignalChip` 各自独立 + DecisionCard 单值 `DualSignal` 兼容
+- **CHG-360 三子卡总览**：
+  - A (aa798407)：ADR-159 + types + DualSignalCount 组件（4 文件）
+  - B (本 commit 含)：deriveAggregateState helper + SQL 投影 + query 层 map（4 文件）
+  - C (本 commit 含)：ModListRow 切换 + 单测（2 文件）
+- **闭环**：用户原话需求完整交付 / Wave 2 候选 CHG-360 全闭合 / advisory G1-G4 跟踪未来卡
+- **后续 advisory**：
+  - G1：DecisionCard 评估迁移 + probe/render 单值 deprecate 移除（独立 FOLLOWUP 卡）
+  - G2：sources-matrix VideoGroupRow.probeStatus 升级聚合（如其他场景需要）
+  - G3：videos.source_check_status 持久列与查询时聚合一致性观察
+  - G4：DualSignalCount 视觉 padding 与 SignalChip 对齐核查（人工 + visual diff）
