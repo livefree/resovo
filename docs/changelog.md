@@ -9027,3 +9027,54 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
   - A4：lines-panel 按钮区接近视觉密集阈值 / ≥ 6 按钮时考虑 overflow menu
 - **闭环**：CHG-351-B 完成；plan §10.5 admin-ui 共享层契约扩展交付；Wave 1 进度 7/9 → 7-B/9（CHG-351 拆 -A/-B/-C 中第二张）
 - **后续**：CHG-351-C（server-next 消费方 / probeOneSource + renderCheckOneSource API 客户端 + LinesPanel props 接入 + docs/manual P-moderation §3.8）
+
+## [CHG-351-C] server-next 消费方 — probeOneSource + renderCheckOneSource + LinesPanel 接入 + docs/manual §3.8
+- **完成时间**：2026-05-27
+- **来源序列**：SEQ-20260527-MOD-WAVE1（Wave 1 / 卡 7-C / 9 / plan §10.5 / CHG-351 拆 -A/-B/-C 最后一张）
+- **执行模型**：claude-opus-4-7（主循环不切换 §16.5）
+- **子代理**：无（消费方实施 / 复用 CHG-351-A 后端契约 + CHG-351-B 已评审 Props）
+- **任务来源**：CHG-351 拆卡最终交付 — 前置 CHG-351-A (08538385 / ADR-158 后端 + audit RETRO) + CHG-351-B (ab9d2bec / admin-ui Props 扩展) 已闭环；本卡 -C 完成消费方接入 + 用户文档
+- **改动文件**（4 项 ≤ 5 ✅）：
+  - `apps/server-next/src/lib/moderation/api.ts`：
+    - 新增 `SingleSourceProbeResult` / `SingleSourceRenderCheckResult` interface（与 ADR-158 §端点契约 100% 对齐 / readonly 标注）
+    - 新增 `probeOneSource(sourceId)` / `renderCheckOneSource(sourceId)` API 客户端方法（apiClient.post + 端点路径 `/admin/sources/:id/probe` 与 `/render-check`）
+    - sourceId 用 encodeURIComponent 防特殊字符（与既有 fetchVideoSources 范式一致）
+  - `apps/server-next/src/app/admin/moderation/_client/LinesPanel.tsx`：
+    - 新增 `probingIds` + `renderCheckingIds` 双 useState<ReadonlySet<string>>（与既有 togglingIds 同范式 / arch-reviewer advisory A3 落实）
+    - 新增 `handleProbeEpisode` callback：try probeOneSource + catch 409 STATE_CONFLICT 显示 probeFrozen 文案 + 其他错误显示 probeFailed
+    - 新增 `handleRenderCheckEpisode` callback：try renderCheckOneSource + catch 通用 renderCheckFailed（不守 freeze / ADR-158 D-158-5）
+    - 双 callback finally 块清理 pending set（防永久 disabled / advisory A3 实施要点）
+    - 透传 4 个新 Props（onProbeEpisode + onRenderCheckEpisode + probingEpisodeIds + renderCheckingEpisodeIds）给 LinesPanelUI
+  - `apps/server-next/src/i18n/messages/zh-CN/moderation.ts`：M.lines +3 文案（probeFailed / renderCheckFailed / probeFrozen）
+  - `docs/manual/20-pages/P-moderation.md`：新增 §3.8 "线路检测 — 单源探测 / 试播"（CHG-351 / ADR-158）
+    - 位置 / 行为（含并发互斥 + 跨集独立 / 复用 arch-reviewer I2 + A1 决策说明）
+    - 后端契约（端点 + 响应 + 错误码）
+    - freeze 行为差异表（probe 守 / render-check 不守 / D-158-5 引用）
+    - 错误展示渠道（复用 actionError）
+    - 场景 + 当前限制（advisory A2/A4 继承）
+- **新增依赖**：无
+- **数据库变更**：无（纯前端 + 用户文档 / 复用 CHG-351-A 后端端点）
+- **门禁**：
+  - typecheck ✅（5 包全 PASS）
+  - lint ✅（turbo 4 cached + 1 新）
+  - moderation 范围 24 test files / 239 tests 全 PASS
+- **UX 决策**：
+  - 双独立 set 跟踪 probe/render-check pending（与 togglingIds 同范式 / arch-reviewer A1）
+  - I2 防 race 由 admin-ui LinesPanel 自动消化（消费方 useState 双 set 不需额外锁）
+  - 错误用既有 actionError 渠道（CHG-351-B Y2 advisory）
+  - 中文文案 probeFailed / renderCheckFailed / probeFrozen 进 i18n（与既有 toggleFailed/loadFailed 同 namespace）
+- **R-MID-1 / audit RETRO**：本卡纯消费方 / 0 actionType 新增 / 0 真源改动（4 真源已在 CHG-351-A 闭合）
+- **CHG-351 三子卡总览**（Wave 1 卡 7 完整闭环）：
+  - CHG-351-A (08538385)：ADR-158 后端 2 端点 + audit RETRO 7 文件框架 (9 文件)
+  - CHG-351-B (ab9d2bec)：admin-ui LinesPanel Props 扩展 + 探测/试播 inline 按钮 + 11 case 测试 (3 文件 + docs)
+  - CHG-351-C (本卡)：server-next 消费方 + i18n + docs/manual §3.8 (4 文件)
+  - 总计：~17 文件 / 3 commits / 1 ADR (158) + 2 arch-reviewer 评审通过
+- **plan §10.5 完整交付清单**：
+  - ✅ 后端端点（ADR-158 / CHG-351-A）
+  - ✅ admin-ui Props 契约（CHG-351-B）
+  - ✅ 消费方接入（本卡）
+  - ✅ 用户文档（docs/manual §3.8）
+  - ⏳ 真实 source-health worker 接入（PRE-PROBE-WORKER 后续卡 / advisory A2）
+  - ⏳ 真实 player-render-check worker 建设（PRE-RENDER-CHECK-WORKER 后续卡 / advisory A4）
+- **闭环**：CHG-351 PROBE-RENDER-INLINE 三子卡全部完成；plan §10.5 LinesPanel 单行探/播按钮全交付（含后端 + 共享层 + 消费方 + 用户文档）；Wave 1 进度 7-B/9 → 7/9
+- **后续**：CHG-352（route-labeling Phase 1 后端 effective_score 排序 / plan §17 / Sonnet 即可 / 可能 spawn arch-reviewer Opus 评算分公式合理性）→ CHG-353（route-labeling Phase 1 前台主题渲染）→ Wave 1 验收

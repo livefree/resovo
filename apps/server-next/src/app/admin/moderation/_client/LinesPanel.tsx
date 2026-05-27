@@ -63,6 +63,9 @@ export function LinesPanel({ videoId, selectedKey, onLineSelect }: LinesPanelPro
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [togglingIds, setTogglingIds] = useState<ReadonlySet<string>>(new Set())
+  // CHG-351-C / ADR-158 / arch-reviewer A1+I2 范式：双独立 set 跟踪 probe / render-check pending
+  const [probingIds, setProbingIds] = useState<ReadonlySet<string>>(new Set())
+  const [renderCheckingIds, setRenderCheckingIds] = useState<ReadonlySet<string>>(new Set())
   const [actionError, setActionError] = useState<string | null>(null)
   const [drawer, setDrawer] = useState<HealthDrawerState>(DRAWER_CLOSED)
 
@@ -158,6 +161,36 @@ export function LinesPanel({ videoId, selectedKey, onLineSelect }: LinesPanelPro
     try { await api.refetchSources(videoId) } catch { setActionError(M.lines.refetchFailed) }
   }, [videoId])
 
+  // CHG-351-C / ADR-158：单源 inline 探测（probe 守 freeze / 409 STATE_CONFLICT 抛 probeFrozen 提示）
+  const handleProbeEpisode = useCallback(async ({ episodeId }: { lineKey: string; episodeId: string }) => {
+    setProbingIds(s => new Set(s).add(episodeId))
+    setActionError(null)
+    try {
+      await api.probeOneSource(episodeId)
+    } catch (e: unknown) {
+      if (e instanceof ApiClientError && e.status === 409) {
+        setActionError(M.lines.probeFrozen)
+      } else {
+        setActionError(M.lines.probeFailed)
+      }
+    } finally {
+      setProbingIds(s => { const next = new Set(s); next.delete(episodeId); return next })
+    }
+  }, [])
+
+  // CHG-351-C / ADR-158 D-158-5：render-check 不守 freeze（diagnostic 可用性优先）
+  const handleRenderCheckEpisode = useCallback(async ({ episodeId }: { lineKey: string; episodeId: string }) => {
+    setRenderCheckingIds(s => new Set(s).add(episodeId))
+    setActionError(null)
+    try {
+      await api.renderCheckOneSource(episodeId)
+    } catch {
+      setActionError(M.lines.renderCheckFailed)
+    } finally {
+      setRenderCheckingIds(s => { const next = new Set(s); next.delete(episodeId); return next })
+    }
+  }, [])
+
   return (
     <>
       <LinesPanelUI
@@ -167,9 +200,13 @@ export function LinesPanel({ videoId, selectedKey, onLineSelect }: LinesPanelPro
         onDisableDead={handleDisableDead}
         onRefetch={handleRefetch}
         onHealthOpen={handleHealthOpen}
+        onProbeEpisode={handleProbeEpisode}
+        onRenderCheckEpisode={handleRenderCheckEpisode}
         selectedKey={selectedKey}
         onLineSelect={onLineSelect}
         toggling={togglingIds}
+        probingEpisodeIds={probingIds}
+        renderCheckingEpisodeIds={renderCheckingIds}
         loading={loading}
         error={error}
         actionError={actionError}

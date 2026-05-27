@@ -200,6 +200,31 @@
   - 修复前（bug）：切集仅 UI 高亮变化，播放器始终播第一活跃集
   - 修复后：切集 ↔ 切线路 ↔ 播放器三方联动，所见即所播
 
+### 3.8 线路检测 — 单源探测 / 试播（CHG-351 / Wave 1 #7 / plan §10.5 / ADR-158）
+
+> **用途**：审核员对**单条 episode 行**触发 inline 探测（probe）或试播（render-check），快速定位失效线路 / 渲染问题，不必整条线路批量重测。
+
+- **位置**：左栏 LinesPanel → 展开任意线路 → 每集行末右侧 4 个按钮顺序：`[启用/停用] [健康] [探测] [试播]`
+- **行为**：
+  - **探测**：点击 → 异步入队 source-health worker → audit 写入 `video_source.inline_action` action='probe'。按钮文案变 "探测…" + disabled 直至请求完成
+  - **试播**：点击 → 异步入队 player-render-check worker → audit 写入 `video_source.inline_action` action='render_check'。按钮文案变 "试播…" + disabled
+  - **并发互斥**：toggle 进行中（启用/停用 spinning）→ 探测/试播按钮也 disabled（防 toggle+probe 并发污染 audit / video_sources 状态）
+  - **跨集独立**：探测 ep1 期间 ep2 探测按钮仍可点（双独立 set 跟踪 epId / arch-reviewer A1 决策）
+- **后端契约（ADR-158）**：
+  - `POST /admin/sources/:id/probe` → 200 `{ data: { probeJobId, queued, sourceId } }` / 422（非 uuid）/ 404（source 不存在）/ 409（freeze）
+  - `POST /admin/sources/:id/render-check` → 200 `{ data: { renderJobId, queued, sourceId } }` / 422 / 404（freeze 不守 / diagnostic 可用性）
+- **freeze 行为差异**（D-158-5）：
+  - 探测：采集冻结时 409 → 前端 actionError 显示「采集已冻结，无法触发探测」
+  - 试播：freeze 不守 → freeze 期间仍可试播复核渲染（diagnostic 价值高）
+- **错误展示**：复用现有 `actionError` inline 红条（与启用/健康按钮失败同渠道）
+- **场景**：
+  - probe 单 episode：审核员发现 ep5 标记 dead 但实际可播 → 点"探测"重新检测，等待 source-health worker 更新 probe_status
+  - render-check 单 episode：审核员发现 ep3 播放卡顿 → 点"试播"触发 player 渲染检测，等待 render-check worker 更新 render_status
+  - freeze 状态下：试播仍可用排查渲染问题；探测被 freeze 拦截，提示用户先解冻
+- **当前限制**（advisory 继承 ADR-158 §A2/A4）：
+  - probeJobId / renderJobId 为占位字符串（PRE-PROBE-WORKER + PRE-RENDER-CHECK-WORKER 后续卡接真实 BullMQ jobId）
+  - renderJobId 当前**实际不被任何 worker 消费**（render-check worker 待 PRE-RENDER-CHECK-WORKER 卡建设）
+
 ## 4. 进阶操作
 
 ### 4.1 重开审核（rejected → pending）

@@ -1680,9 +1680,9 @@ HOTFIX-A → B → C 顺序串行（B 在 A SQL fix 基础上扩 CASE / C 在 B 
 
 ## [SEQ-20260527-MOD-WAVE1] server-next 内容审核台 Wave 1 — 消债 + 关键 bug 修复 + 搜索/探播实装 + route-labeling 接入
 
-- **状态**：🟡 进行中（7-B/9 完成 / 7-C 待开始 / 用户选方案 A）
+- **状态**：🟡 进行中（7/9 完成 / CHG-351 三子卡全闭环 / CHG-352/353 待开始）
 - **创建时间**：2026-05-27 13:00
-- **最后更新时间**：2026-05-27（CHG-351-A + CHG-351-B 双卡闭合 / 全自动模式）
+- **最后更新时间**：2026-05-27（CHG-351 三子卡 -A/-B/-C 全闭合 / 全自动模式）
 - **目标**：基于 `/Users/livefree/.claude/plans/fluffy-giggling-teapot.md` 完成审核台 P0/P1 消债 + 用户视角增强 + route-labeling Phase 1 落地
 - **范围**：`apps/server-next/src/app/admin/moderation/**` + `apps/api/src/routes/admin/moderation.ts` + `apps/api/src/services/SourceService.ts` + `apps/web-next/src/components/player/SourceBar.tsx` + `apps/web-next/src/lib/line-display-name.ts` + `docs/manual/`
 - **依赖**：无上游阻塞；审查报告见 fluffy-giggling-teapot.md §1-9 事实底板
@@ -1823,7 +1823,7 @@ HOTFIX-A → B → C 顺序串行（B 在 A SQL fix 基础上扩 CASE / C 在 B 
    - **commit trailer 必填**：`Subagents: arch-reviewer (claude-opus-4-7)`（CLAUDE.md 红线）
    - 验证：typecheck / lint / packages/admin-ui 单测 PASS
 
-7-C. **CHG-351-C** — server-next 消费方 + 单源 probe/render API 客户端 + 测试 + docs（状态：⬜ 未开始）
+7-C. **CHG-351-C** — server-next 消费方 + 单源 probe/render API 客户端 + 测试 + docs（状态：✅ 已完成 / 2026-05-27 / 执行模型 claude-opus-4-7 / 主循环不切换 §16.5 / 4 文件改动 / typecheck+lint+moderation 24/239 PASS / CHG-351 三子卡 -A/-B/-C 完整闭环 / Wave 1 卡 7-C/9 闭合）
    - 创建时间：2026-05-27 02:45
    - 建议主循环模型：`claude-opus-4-7`（主循环不切换 / 用户指定）
    - 子代理：无（消费方实施 / 复用已评审契约）

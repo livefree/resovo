@@ -184,6 +184,10 @@ export const M = {
     disableDeadFailed: '批量禁用失败',
     refetchFailed: '触发抓取失败',
     fullEpisode: '全集',
+    // CHG-351-C / ADR-158：单源 inline 诊断动作错误（actionError 渠道）
+    probeFailed: '探测失败，请重试',
+    renderCheckFailed: '试播失败，请重试',
+    probeFrozen: '采集已冻结，无法触发探测',
   },
   aria: {
     lineEnable: '启用线路',

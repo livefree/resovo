@@ -205,6 +205,38 @@ export async function refetchSources(videoId: string): Promise<void> {
   await apiClient.post<unknown>(`/admin/videos/${videoId}/refetch-sources`, {})
 }
 
+// ── 单源 inline 诊断动作（CHG-351-C / ADR-158）─────────────────────────
+// 与 toggleSource 等 video 维度操作分离 — 这两个端点按 sourceId 直接路由（无 videoId）
+// 响应类型与 ADR-158 §端点契约 100% 对齐 { probeJobId | renderJobId, queued, sourceId }
+
+export interface SingleSourceProbeResult {
+  readonly probeJobId: string
+  readonly queued: true
+  readonly sourceId: string
+}
+
+export interface SingleSourceRenderCheckResult {
+  readonly renderJobId: string
+  readonly queued: true
+  readonly sourceId: string
+}
+
+export async function probeOneSource(sourceId: string): Promise<SingleSourceProbeResult> {
+  const res = await apiClient.post<{ data: SingleSourceProbeResult }>(
+    `/admin/sources/${encodeURIComponent(sourceId)}/probe`,
+    {},
+  )
+  return res.data
+}
+
+export async function renderCheckOneSource(sourceId: string): Promise<SingleSourceRenderCheckResult> {
+  const res = await apiClient.post<{ data: SingleSourceRenderCheckResult }>(
+    `/admin/sources/${encodeURIComponent(sourceId)}/render-check`,
+    {},
+  )
+  return res.data
+}
+
 // ── 线路健康事件 ──────────────────────────────────────────────────────
 
 export async function fetchLineHealth(
