@@ -71,6 +71,18 @@ const TIMELINE_GRID_STYLE: CSSProperties = {
   rowGap: '6px',
   columnGap: '12px',
   fontSize: 'var(--font-size-xs)',
+  // ADR-155 D-155-3 / EP-3b-1：相对定位容器 / now-line overlay 绝对定位锚点
+  position: 'relative',
+}
+
+// ADR-155 D-155-3 / EP-3b-1：now-line overlay 覆盖右侧 1fr track column（跳过 180px label + 12px gap）
+const NOW_LINE_OVERLAY_STYLE: CSSProperties = {
+  position: 'absolute',
+  top: 0,
+  bottom: 0,
+  left: 'calc(180px + 12px)',
+  right: 0,
+  pointerEvents: 'none',
 }
 
 const TICK_ROW_STYLE: CSSProperties = {
@@ -121,12 +133,44 @@ const STATUS_COLOR: Record<CrawlerTimelineRow['status'], string> = {
 const BAR_H = 6
 const LANE_GAP = 2
 
+// ADR-155 D-155-3 / EP-3b-1：range 选项扩展 4 → 7（加 12h/24h/7d 长历史回看）
 const RANGE_OPTIONS = [
   { value: '30m', label: '30 分钟' },
   { value: '1h',  label: '1 小时' },
   { value: '2h',  label: '2 小时' },
   { value: '6h',  label: '6 小时' },
+  { value: '12h', label: '12 小时' },
+  { value: '24h', label: '24 小时' },
+  { value: '7d',  label: '7 天' },
 ] as const
+
+// ADR-155 D-155-3 / EP-3b-1：now-line 位置（与 EP-3a 后端 HISTORY_RATIO=0.7 对齐）
+const NOW_LINE_LEFT_PCT = 70
+
+const NOW_LINE_STYLE: CSSProperties = {
+  position: 'absolute',
+  left: `${NOW_LINE_LEFT_PCT}%`,
+  top: 0,
+  bottom: 0,
+  width: '1px',
+  background: 'var(--accent-default)',
+  pointerEvents: 'none',  // 不阻塞 hover / drag
+  zIndex: 2,  // 高于 bar 但不挡 tooltip
+}
+
+const NOW_LABEL_STYLE: CSSProperties = {
+  position: 'absolute',
+  left: `${NOW_LINE_LEFT_PCT}%`,
+  transform: 'translateX(-50%)',
+  top: 0,
+  fontSize: '10px',
+  color: 'var(--accent-default)',
+  background: 'var(--bg-surface)',
+  padding: '0 4px',
+  fontWeight: 600,
+  pointerEvents: 'none',
+  zIndex: 3,
+}
 
 // ADR-155 D-155-4：站点 limit 解锁（"全部" = 后端 safeLimit 50 上限）
 const LIMIT_OPTIONS = [
@@ -189,8 +233,10 @@ export function CrawlerTimelineCard({
   }, [range, limit, paused, frozen])
 
   const handleRangeChange = useCallback((next: string | null) => {
-    if (next === '30m' || next === '1h' || next === '2h' || next === '6h') {
-      setRange(next)
+    // ADR-155 D-155-3 / EP-3b-1：range 7 选项白名单
+    const validRanges: readonly CrawlerTimelineRange[] = ['30m', '1h', '2h', '6h', '12h', '24h', '7d']
+    if (next !== null && (validRanges as readonly string[]).includes(next)) {
+      setRange(next as CrawlerTimelineRange)
     }
   }, [])
 
@@ -303,6 +349,11 @@ export function CrawlerTimelineCard({
               />
             )
           })}
+          {/* ADR-155 D-155-3 / EP-3b-1：now-line overlay 标识 NOW 位置在 70% 处（三段窗历史:未来=70:30） */}
+          <div style={NOW_LINE_OVERLAY_STYLE} data-testid="crawler-timeline-now-overlay">
+            <div style={NOW_LINE_STYLE} data-testid="crawler-timeline-now-line" data-now-line />
+            <span style={NOW_LABEL_STYLE} data-testid="crawler-timeline-now-label">现在</span>
+          </div>
         </div>
       )}
     </AdminCard>
@@ -334,6 +385,10 @@ function SiteTimelineRow({
           const width = Math.max(0, Math.min(1, bar.widthPct)) * 100
           const color = STATUS_COLOR[bar.status]
           const top = laneIdx * (BAR_H + LANE_GAP)
+          // ADR-155 D-155-3 / EP-3b-1：pending (status='warn') bar 用虚线 + 半透明区分
+          //   - 已发生 (ok/danger/neutral)：实色填充
+          //   - 未来 / pending (warn)：虚线边框 + 透明背景 + 半透明 + accent border
+          const isPending = bar.status === 'warn'
 
           return (
             <div
@@ -344,10 +399,14 @@ function SiteTimelineRow({
                 width: `${Math.max(width, 1)}%`,
                 top,
                 height: BAR_H,
-                background: color,
+                background: isPending ? 'transparent' : color,
+                border: isPending ? `1px dashed ${color}` : 'none',
+                opacity: isPending ? 0.7 : 1,
                 borderRadius: '2px',
+                boxSizing: 'border-box',
               }}
               data-bar-status={bar.status}
+              data-bar-pending={isPending ? '' : undefined}
               data-bar-lane={laneIdx}
               aria-label={`${bar.siteName} 时长 ${bar.durationSeconds}s 状态 ${bar.status}`}
             />

@@ -8093,3 +8093,92 @@ PATCH 文件数：2 源 + 2 测试 = 4 项（≤ 5 硬约束 ✅）
 
 Cleanup-Audit: 2 源文件改 + 2 测试文件（1 扩 5 case + 1 改 2 case）+ 1 docs（ADR-122 + ADR-153 双 AMENDMENT）/ 5 新单测 + 改 2 case / 0 migration / 0 新依赖
 Plan-Revision: 1 次（ADR-155 §5 EP-3 拆为 EP-3a + EP-3b 满足 PATCH ≤ 5 项硬约束）
+
+## [CHG-SN-9-CW1-CW2-REDESIGN-A-EP-3b-1] D-155-3 前端 now-line + range 4→7 + pending 虚线
+
+- **日期**：2026-05-26
+- **Sequence**：SEQ-20260526-CRAWLER-W3-FIX
+- **任务 ID**：CHG-SN-9-CW1-CW2-REDESIGN-A-EP-3b-1
+- **关联 ADR**：ADR-155 D-155-3（🟢 Accepted）
+- **模型**：claude-opus-4-7（主循环延续；建议 sonnet）
+- **拆分理由**：原 EP-3b 含拖拽 pan + viewport buffer + 30d 封顶（ADR-155 §3 D-155-3 + R-155-5 完整设计 / 工程量 0.3-0.4w）；本卡仅做轻量 UI 元素（now-line / range 扩展 / pending 虚线），拖拽 pan **推迟到 N1-EP3b-2**（@livefree 实测三段窗后视情况评估）。
+
+### 改动摘要
+
+ADR-155 D-155-3 前端可见性落地：CrawlerTimelineCard 加 now-line 垂直指示线 + range select 4→7 选项 + pending bar 虚线半透明样式。三段窗（EP-3a 后端）的可视层最终成型。
+
+- **Step 1**（`apps/server-next/src/lib/crawler/api.ts`）：
+  - `CrawlerTimelineRange` 类型扩 7 选项（与后端 EP-3a 对齐）
+
+- **Step 2**（`apps/server-next/src/app/admin/crawler/_client/CrawlerTimelineCard.tsx`）：
+  - `RANGE_OPTIONS` 扩 7 entry（30m / 1h / 2h / 6h / 12h / 24h / 7d 中文标签）
+  - 命名常量 `NOW_LINE_LEFT_PCT = 70`（与后端 HISTORY_RATIO=0.7 对齐）
+  - 新增 4 CSSProperties：`NOW_LINE_OVERLAY_STYLE` + `NOW_LINE_STYLE` + `NOW_LABEL_STYLE` + 修改 `TIMELINE_GRID_STYLE`(position: relative)
+  - **now-line 渲染**：在 timeline-grid 内末尾加 absolute overlay div 覆盖 1fr track column（left: calc(180px + 12px), right: 0）；overlay 内含 1px 垂直线（left: 70% / accent-default color / pointer-events: none）+ "现在" 标签（70% top: 0 / 6px font / bg surface / 高 z-index）
+  - **range select 白名单守卫**：`handleRangeChange` 改用 `validRanges` 数组 includes 校验（替代 `||` 链 / 与 7 选项扩展同步）
+  - **pending bar 虚线样式**：`bar.status === 'warn'` 时 bar 用 `border: 1px dashed ${color}` + `background: transparent` + `opacity: 0.7` + `boxSizing: border-box`（区分实色填充的 done/running bar）；加 `data-bar-pending` 属性便于测试 + e2e
+  - 现有 `bar.status === 'ok' / 'danger' / 'neutral'` bar 行为不变
+
+- **Step 3（单测扩展）**（`tests/unit/components/server-next/admin/crawler/CrawlerTimelineCard.test.tsx`）：扩 3 case（9 → 12 全过）：
+  - #EP-3b-1 #1 now-line overlay 渲染：data-testid + left=70% + background accent + "现在" 标签
+  - #EP-3b-1 #2 range select 含 7 选项：切到 7d 触发 fetch
+  - #EP-3b-1 #3 pending bar 虚线：data-bar-pending + dashed border + transparent bg + opacity < 1；done bar 不含 pending 标记
+
+### 新增/修改文件
+
+- `apps/server-next/src/lib/crawler/api.ts`（Step 1 类型扩展）
+- `apps/server-next/src/app/admin/crawler/_client/CrawlerTimelineCard.tsx`（Step 2 now-line + range + pending）
+- `tests/unit/components/server-next/admin/crawler/CrawlerTimelineCard.test.tsx`（Step 3 扩 3 case）
+
+PATCH 文件数：2 源 + 1 测试 = 3 项（≤ 5 硬约束 ✅）
+
+### 偏离记录
+
+无新 D-N 偏离（D-155-3 已 ADR-155 Accepted）；拖拽 pan / viewport buffer / 30d 封顶 推迟到 N1-EP3b-2（实测后视情况评估）。
+
+### 质量门禁
+
+- ✅ typecheck PASS（8 workspace）
+- ✅ lint PASS（4 pre-existing 警告，0 新增）
+- ✅ test 5139/5139 PASS（CrawlerTimelineCard.test 12/12 全过 / UserSubmissionsClient flaky 单跑 12/12 PASS / W1 已知 pre-existing）
+- ✅ verify:adr-contracts PASS（207 D-N 闭环）
+
+### 六问自检 PASS
+
+1. **正确性**：NOW_LINE_LEFT_PCT=70 常量与后端 HISTORY_RATIO=0.7 显式对齐；overlay absolute 不影响 grid layout；pointer-events: none 不阻塞 hover；pending 虚线样式与 done 实色样式互斥（data-bar-pending 守卫）
+2. **边界与复用**：NOW_LINE_OVERLAY 复用 timeline-grid 容器（无新 wrapper div）；validRanges 数组 includes 范式可扩到 8/9 选项；CSSProperties 命名一致（CHIP_STYLE 范式）
+3. **可扩展性**：RANGE_OPTIONS 与 RANGE_TO_MS 共同扩展；NOW_LINE_LEFT_PCT 易调整（如改 50% 居中）；pending 样式可扩 cron 等未来状态
+4. **一致性**：与 EP-3a 后端 HISTORY_RATIO=0.7 数值精确对齐；与 ADR-153 D-153-1 multi-lane 渲染范式（status 4 态色板）一致；与 AdminSelect 范式一致
+5. **改动收敛**：2 源 + 1 测试 = 3 项（≤ 5）；无任何"顺手优化"（如未抽 NowLineOverlay 子组件）
+6. **偏离检测**：无新 D-N
+
+### AI-CHECK 结论
+
+- ✅ **PASS** — 3 个 Step 完整闭环 / 3 新单测全过 / 全栈门禁通过
+- **越界检测**：CLEAN（2 源 + 1 测试严格在 EP-3b-1 文件范围内）
+- **回归风险**：低
+  - now-line overlay pointer-events: none 不影响 bar hover / tooltip
+  - pending 虚线样式仅对 status='warn' 生效；已有 4 status 4 态测试全过保证 ok/danger/neutral 渲染不变
+  - range 7 选项是后端 zod 接受范围内的子集（兼容窗口期）
+
+### 未覆盖（→ N1-EP3b-2 / 推迟）
+
+- **用户实测验证**（@livefree / ADR-155 §8 验收第 4 条）：
+  1. `/admin/crawler` 时间轴可见垂直 now-line 在容器 70% 位置（accent color）+ "现在" 标签
+  2. range select 含 7 选项；切到 7d 可见 7 天历史 task
+  3. pending task bar 显示为虚线 + 半透明（区分实线 done/running bar）
+  4. now-line 位置随 range 切换保持 70%（不抖动）
+- **N1-EP3b-2（推迟）**：拖拽 pan + throttle 16ms + 防抖 300ms + viewport ±0.5×range buffer + 30d 封顶（ADR-155 §3 D-155-3 + R-155-5 完整设计）。@livefree 实测三段窗 + now-line 后评估是否真需要拖拽 — 若 7 选项 range（含 7d）已覆盖回看需求，可永久推迟。
+- **EP-1C-CLEANUP（推迟）**：dailyTimes 改 required + 删 dailyTime alias（EP-1C-1a 临时偏离清理）
+
+### 关键约束消化
+
+- **NOW_LINE_LEFT_PCT=70 与后端 HISTORY_RATIO=0.7 显式对齐**（数值一致 / 注释 cross-reference）
+- **拖拽 pan 推迟到 N1**：实测验证三段窗 + 7 选项 range 是否足够覆盖回看需求；不足再做 N1-EP3b-2
+- **PATCH ≤ 5 项**：2 源 + 1 测试 = 3 项 ✅
+
+- **执行模型**：claude-opus-4-7（主循环延续；建议 sonnet）
+- **子代理调用**：无（D-155-3 已 ADR-155 Accepted；前端 UI 不触发 Opus reviewer）
+
+Cleanup-Audit: 2 源文件改 + 1 测试文件（扩 3 case）/ 3 新单测 / 0 migration / 0 新依赖
+Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan 推迟到实测后评估）

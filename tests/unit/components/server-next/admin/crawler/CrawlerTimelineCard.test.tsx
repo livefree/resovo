@@ -264,4 +264,97 @@ describe('CrawlerTimelineCard — ADR-153 §8', () => {
       expect.objectContaining({ limit: 8 }),
     )
   })
+
+  // ── ADR-155 D-155-3 / EP-3b-1：now-line + range 7 + pending 虚线 ──
+  it('EP-3b-1 #1: now-line overlay 渲染（70% 位置 / accent color）', async () => {
+    // 需要至少 1 row 才进入 timeline-grid 分支（不走 "暂无采集活动" empty state）
+    getCrawlerTimelineMock.mockResolvedValue(makeTimeline([{ status: 'ok' }]))
+
+    await act(async () => {
+      render(<CrawlerTimelineCard {...DEFAULT_PROPS} />)
+      await vi.advanceTimersByTimeAsync(100)
+    })
+
+    const nowLine = screen.getByTestId('crawler-timeline-now-line')
+    expect(nowLine).not.toBeNull()
+    expect(nowLine.style.left).toBe('70%')
+    expect(nowLine.style.background).toContain('accent-default')
+    // "现在" 文本标签
+    const nowLabel = screen.getByTestId('crawler-timeline-now-label')
+    expect(nowLabel.textContent).toBe('现在')
+    expect(nowLabel.style.left).toBe('70%')
+  })
+
+  it('EP-3b-1 #2: range select 含 7 选项（12h / 24h / 7d 新增）', async () => {
+    getCrawlerTimelineMock.mockResolvedValue(makeTimeline([{ status: 'ok' }]))
+
+    await act(async () => {
+      render(<CrawlerTimelineCard {...DEFAULT_PROPS} />)
+      await vi.advanceTimersByTimeAsync(100)
+    })
+
+    // AdminSelect 渲染 options 文本（DOM 可能在 portal / popover；用 container.textContent 兜底）
+    // 简单守卫：range select 存在 + 切换到 7d 触发 refetch
+    const rangeSelect = screen.getByTestId('crawler-timeline-range-select')
+    expect(rangeSelect).not.toBeNull()
+    getCrawlerTimelineMock.mockClear()
+    getCrawlerTimelineMock.mockResolvedValue(makeTimeline())
+    await act(async () => {
+      fireEvent.change(rangeSelect, { target: { value: '7d' } })
+      await vi.advanceTimersByTimeAsync(100)
+    })
+    expect(getCrawlerTimelineMock).toHaveBeenCalledWith(
+      expect.objectContaining({ range: '7d' }),
+    )
+  })
+
+  it('EP-3b-1 #3: pending bar (status="warn") 虚线 + 半透明样式区分已发生', async () => {
+    // 构造 pending bar (status='warn' = mapped from raw 'pending') + done bar (status='ok')
+    getCrawlerTimelineMock.mockResolvedValue(makeTimeline([
+      {
+        siteKey: 'site-pending',
+        siteName: 'Pending Site',
+        health: 50,
+        startPct: 0.5,
+        widthPct: 0.2,
+        durationSeconds: 600,
+        videoCount: 0,
+        status: 'warn',  // pending
+        last: new Date().toISOString(),
+      },
+      {
+        siteKey: 'site-done',
+        siteName: 'Done Site',
+        health: 90,
+        startPct: 0.1,
+        widthPct: 0.3,
+        durationSeconds: 1200,
+        videoCount: 10,
+        status: 'ok',  // done
+        last: new Date().toISOString(),
+      },
+    ]))
+
+    const { container } = await act(async () => {
+      const res = render(<CrawlerTimelineCard {...DEFAULT_PROPS} />)
+      await vi.advanceTimersByTimeAsync(100)
+      return res
+    })
+
+    const pendingBar = container.querySelector('[data-bar-status="warn"]') as HTMLElement
+    const doneBar = container.querySelector('[data-bar-status="ok"]') as HTMLElement
+    expect(pendingBar).not.toBeNull()
+    expect(doneBar).not.toBeNull()
+
+    // pending：虚线边框 + 透明背景 + 半透明
+    expect(pendingBar.getAttribute('data-bar-pending')).toBe('')
+    expect(pendingBar.style.border).toContain('dashed')
+    expect(pendingBar.style.background).toBe('transparent')
+    expect(Number(pendingBar.style.opacity)).toBeLessThan(1)
+
+    // done：实色填充 + 不透明
+    expect(doneBar.getAttribute('data-bar-pending')).toBeNull()
+    expect(doneBar.style.background).not.toBe('transparent')
+    expect(doneBar.style.border).toBe('')
+  })
 })

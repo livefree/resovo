@@ -475,7 +475,8 @@ export interface CrawlerKpiResponse {
   readonly siteStats: readonly CrawlerSiteStat[]
 }
 
-export type CrawlerTimelineRange = '30m' | '1h' | '2h' | '6h'
+// ADR-155 D-155-3 / EP-3a + EP-3b-1：range 选项扩展 4 → 7（加 12h/24h/7d 长历史回看）
+export type CrawlerTimelineRange = '30m' | '1h' | '2h' | '6h' | '12h' | '24h' | '7d'
 
 export interface CrawlerTimelineRow {
   readonly siteKey: string

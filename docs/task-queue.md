@@ -1304,7 +1304,9 @@ B 序列 + C 序列可与 A 并行（A 无依赖）；B 与 C 之间无依赖（
 
 7. **CHG-SN-9-CW1-CW2-REDESIGN-A-EP-3 拆为 EP-3a + EP-3b**（满足 PATCH ≤ 5 项硬约束 / plan-revision）：
    - **EP-3a（后端 Gantt 三段窗 + range 扩展 + JS clamp 双字段）🟡 代码已落地** / 2 源 + 2 测试 = 4 项 ✅ / 5136 PASS / ADR-122 + ADR-153 双 AMENDMENT 已落盘 / 待 @livefree 实测（本卡纯后端）
-   - **EP-3b（前端 CrawlerTimelineCard now-line + 拖拽 pan + range 4→7 + pending 虚线）⬜ 待启动**
+   - **EP-3b 拆为 EP-3b-1 + N1-EP3b-2**（拖拽 pan 推迟到实测后评估 / plan-revision）：
+     - **EP-3b-1（now-line + range 4→7 + pending 虚线）🟡 代码已落地** / 2 源 + 1 测试 = 3 项 ✅ / 5139 PASS / 待 @livefree 实测 4 路径
+     - **N1-EP3b-2（拖拽 pan + viewport buffer + 30d 封顶）推迟** / @livefree 实测三段窗 + 7 选项 range 后评估是否真需要 / 若 7d 已覆盖回看可永久推迟
    - 状态：⬜
    - 创建时间：2026-05-26 02:00
    - 建议模型：sonnet
