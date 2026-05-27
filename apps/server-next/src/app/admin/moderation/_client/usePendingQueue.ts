@@ -109,15 +109,21 @@ export function usePendingQueue(
   // CHG-355 R1：空依赖 useCallback → 引用稳定 → 不再让 useEffect 因引用变化重跑
   //   内部用 filtersRef.current 读最新 filters（同步事件链可靠）
   const refetch = useCallback(async () => {
+    // eslint-disable-next-line no-console
+    console.log('[CHG-358 DEBUG] usePendingQueue.refetch called / filters=', filtersRef.current)
     setLoading(true)
     setError(null)
     try {
       const res = await api.fetchPendingQueue(filtersRef.current)
+      // eslint-disable-next-line no-console
+      console.log('[CHG-358 DEBUG] fetchPendingQueue returned', res.data.length, 'videos')
       setVideos(res.data as VideoQueueRow[])
       setNextCursor(res.nextCursor)
       setTotal(res.total)
       setTodayStats(res.todayStats)
-    } catch {
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.error('[CHG-358 DEBUG] fetchPendingQueue failed', e)
       setError(M.errors.loadFailed)
     } finally {
       setLoading(false)
