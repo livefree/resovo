@@ -1104,9 +1104,9 @@ B 序列 + C 序列可与 A 并行（A 无依赖）；B 与 C 之间无依赖（
 
 ## [SEQ-20260526-CRAWLER-W3-FIX] CRAWLER W3 — W1/W2 用户走读暴露的修复闭环
 
-- **状态**：🟡 规划中
+- **状态**：✅ 已完成（2026-05-26 / HOTFIX-A~G 7 卡 + REDESIGN-A-ADR + EP-1A/1B1/1B2/1B2-LAYOUT/1C-1a/1C-1b/1C-2a/1C-2b + EP-2 + EP-3a/3b-1 全部闭环 / @livefree 实测最后一项 HOTFIX-G 黄色 warning 通过）
 - **创建时间**：2026-05-26 02:00
-- **最后更新时间**：2026-05-26 02:00
+- **最后更新时间**：2026-05-26 18:00
 - **目标**：消化 @livefree 用户走读 W1/W2 暴露的 4 类缺陷 — ① CW1-B SQL `r.site_key` 不存在（P0 阻塞 cancel/pause/detail）② CW2-B Gantt SQL WHERE 误用 scheduled_at + status 缺 pending（任务刷新消失）+ 布局三处缺陷（"实时"挤两行 / 当前时间在最右 / 站点 limit 硬编码）③ CW2-C Drawer 内 AdminSelect 被 z-index 遮挡（所有下拉不可用）④ CW1-E topbar 第 3 个铃铛未复用 AdminShell 已有 notifications/tasks 数据流 + ⑤ HOTFIX-B/C 实测追加：孤儿 run 转态 + AutoCrawlScheduleCard interval 显示 + scheduler 可见性 + 多 dailyTime（D-155-6）。
 - **HOTFIX 进度**：HOTFIX-A ✅ + HOTFIX-B ✅ + HOTFIX-C ✅（2026-05-26 全部 commit + @livefree 实测 11 路径 PASS）
 - **范围**：HOTFIX 三处 P0 已闭环；REDESIGN-A 六处设计层重做进行中（含 ADR AMENDMENT）
