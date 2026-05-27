@@ -1678,11 +1678,42 @@ HOTFIX-A → B → C 顺序串行（B 在 A SQL fix 基础上扩 CASE / C 在 B 
 
 ---
 
+## 🚨 BLOCKER — CHG-351 PROBE-RENDER-INLINE 需要 ADR + Opus 评审决策
+
+- **触发时间**：2026-05-27 01:55
+- **触发卡**：CHG-351（SEQ-20260527-MOD-WAVE1 / Wave 1 卡 7/9）
+- **触发条件**（plan §16.5）：
+  - 需要新建 2 个 admin route：`POST /admin/sources/:id/probe` + `POST /admin/sources/:id/render-check`（单源粒度，现仅有 line-level `:siteKey/:sourceName/reprobe`）
+  - 需要修改 `packages/admin-ui/src/components/composite/lines-panel/lines-panel.types.ts` `LinesPanelProps` 公开 Props 字段（onProbeEpisode / onRenderCheckEpisode callback 扩展）→ **CLAUDE.md "共享组件 API 契约强制 Opus" + commit 必含 `Subagents: arch-reviewer (claude-opus-...)` trailer**
+  - 后端单源 render-check 涉及 headless puppeteer/playwright 队列编排（plan §10.5 提到 "需要 BullMQ 队列异步执行"）→ 跨 worker 改动
+- **范围估算**：
+  - ADR 起草 1 个：ADR-NNN-single-source-probe-render-endpoints
+  - 后端 routes/sources.ts 新增 2 端点 + zod schema + service 调用
+  - 后端 SourceService / SourceProbeService 单源 entry point 暴露
+  - worker（如需 render-check 异步）: BullMQ 任务定义 + 处理器
+  - packages/admin-ui LinesPanelProps 扩展（Opus 评审）
+  - server-next LinesPanel.tsx 消费方实施
+  - source_health_events 写入路径补齐（probe/render_status 实时更新）
+  - **预计文件范围**: 8-12 项（远超 PATCH ≤ 5 项硬约束）→ 必须拆 -A/-B/-C 子卡
+- **建议拆分**（待用户确认）：
+  - **CHG-351-A**: ADR-NNN 起草 + 后端 routes + service（≤ 5 项 / Opus 主循环 / 子代理评审）
+  - **CHG-351-B**: packages/admin-ui LinesPanelProps 扩展（≤ 3 项 / Opus 主循环 / arch-reviewer trailer 必含）
+  - **CHG-351-C**: server-next 消费方 + worker render-check job + 测试（≤ 5 项 / Sonnet 主循环）
+- **当前主循环状态**：Wave 1 已完成 6/9（CHG-346 / 345 / 347 / 348 / 349 / 350），剩余 3 卡（CHG-351/352/353）暂停
+- **可选并行路径**：
+  - CHG-352（route-labeling Phase 1 后端 effective_score）原 task-queue.md 写"依赖 CHG-351 数据真实化"，但实际公式可独立计算（pending 状态有默认权重）→ 可跳序先做 CHG-352 / CHG-353
+  - 但跳序违反 task-queue.md 原"执行序列建议"，需用户授权
+- **决策需要**：用户回复以下问题以解除 BLOCKER：
+  1. **方案 A**: 暂停 Wave 1，先起 CHG-351-A/-B/-C 三张子卡（含 ADR 起草），逐张执行；CHG-352/353 等 CHG-351 完成
+  2. **方案 B**: 跳序先做 CHG-352（不阻塞主流程）+ CHG-353，CHG-351 拆子卡后独立调度
+  3. **方案 C**: 缩减 CHG-351 范围（如：仅添加 admin-ui Props 字段 + UI 入口，后端 mock；后端 + worker 留 follow-up）→ 仍需 admin-ui Opus 评审
+  4. **方案 D**: Wave 1 提前在 6/9 进入验收（人工审核已完成的 6 张卡 + 截图归档），CHG-351/352/353 转入 Wave 2
+
 ## [SEQ-20260527-MOD-WAVE1] server-next 内容审核台 Wave 1 — 消债 + 关键 bug 修复 + 搜索/探播实装 + route-labeling 接入
 
-- **状态**：🟡 规划中
+- **状态**：🟡 进行中（6/9 完成 / CHG-351 BLOCKER）
 - **创建时间**：2026-05-27 13:00
-- **最后更新时间**：2026-05-27 13:00
+- **最后更新时间**：2026-05-27 01:55（BLOCKER on CHG-351）
 - **目标**：基于 `/Users/livefree/.claude/plans/fluffy-giggling-teapot.md` 完成审核台 P0/P1 消债 + 用户视角增强 + route-labeling Phase 1 落地
 - **范围**：`apps/server-next/src/app/admin/moderation/**` + `apps/api/src/routes/admin/moderation.ts` + `apps/api/src/services/SourceService.ts` + `apps/web-next/src/components/player/SourceBar.tsx` + `apps/web-next/src/lib/line-display-name.ts` + `docs/manual/`
 - **依赖**：无上游阻塞；审查报告见 fluffy-giggling-teapot.md §1-9 事实底板
