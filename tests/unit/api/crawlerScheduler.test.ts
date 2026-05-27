@@ -312,8 +312,7 @@ describe('setAutoCrawlConfig（ADR-154 D-154-1 写入解除写死）', () => {
       globalEnabled: true,
       scheduleType: 'interval',
       intervalMinutes: 120,
-      dailyTimes: ['03:00'],         // ADR-155 D-155-6 / EP-1C-CLEANUP-B1：主字段
-      dailyTime: '03:00',
+      dailyTimes: ['03:00'],         // ADR-155 D-155-6：主字段（CLEANUP-D1：dailyTime alias 残余已删）
       defaultMode: 'incremental',
       onlyEnabledSites: true,
       conflictPolicy: 'skip_running',
@@ -412,8 +411,7 @@ describe('parseDailyTimes（ADR-155 D-155-6 KV 3 路径兼容）', () => {
       globalEnabled: true,
       scheduleType: 'daily',
       intervalMinutes: 60,
-      dailyTimes: ['03:00', '04:00'],  // 新主字段
-      dailyTime: '03:00',               // alias
+      dailyTimes: ['03:00', '04:00'],  // ADR-155 D-155-6 主字段（CLEANUP-D1：dailyTime alias 残余已删）
       defaultMode: 'incremental',
       onlyEnabledSites: true,
       conflictPolicy: 'skip_running',

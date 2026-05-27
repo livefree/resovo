@@ -8303,3 +8303,27 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
   - 数据形态：`dailyTimes: ['HH:MM']`（D-155-6 主字段单时间形式 / 反映反序列化兜底数据）；alias 字段保留向后兼容
 - **PATCH 文件数**：4 测试 = 4 项（≤ 5 ✅）
 - **门禁**：typecheck ✅ / lint 5/5 ✅ / test 5142/5142 ✅ / verify:adr-contracts ✅
+
+## [CHG-SN-9-CW1-CW2-EP-1C-CLEANUP-D] 删 7 fixture 残余 dailyTime 字面量（D1 后端 + D2 前端）
+- **完成时间**：2026-05-26
+- **记录时间**：2026-05-26 20:00
+- **执行模型**：claude-opus-4-7（主循环延续）
+- **子代理**：无（fixture 字面量清理 / 不触发 Opus reviewer）
+- **修改文件**：
+  - **D1（后端 3 文件）**：
+    - `tests/unit/api/crawlerScheduler.test.ts` — #10 + #16 setAutoCrawlConfig fixture 删 `dailyTime: '03:00'` 残余（2 处）
+    - `tests/unit/api/background-event-service.test.ts` — getAutoCrawlConfigMock 默认返回值删 dailyTime 残余
+    - `tests/unit/components/server-next/admin/crawler/SchedulerConfigDrawer.test.tsx` — 注释更新 "CONFIG.dailyTime 兜底" → "CONFIG.dailyTimes=['03:30']"
+  - **D2（前端 4 文件）**：
+    - `AutoCrawlScheduleCard.test.tsx` — CONFIG_MULTI 删 dailyTime 残余
+    - `AutoCrawlSummaryCard.test.tsx` — BASE_CONFIG + CONFIG_MULTI 删 dailyTime 残余 + 修 #4 close 断言 `dailyTime: '03:30'` → `dailyTimes: ['03:30']`
+    - `CrawlerClient.test.tsx` — #54 CONFIG 删 dailyTime 残余
+    - `DashboardClient.test.tsx` — mockGetAutoCrawlConfig 默认返回值删 dailyTime 残余
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - Cleanup-C 已删类型 alias 字段，但 fixture object literal inferred type 不强约束 → 残余 `dailyTime` 字面量 typecheck 不报错；本卡纯文本清理 / 0 行为变化
+  - 全局 grep `dailyTime: 'HH:MM'` 剩余 1 处 `apps/server/.../AutoCrawlSettingsPanel.tsx`（v1 server 已冻结 / 不在范围 / v1 整体下线时统一清理）
+  - D-155-6 全栈 dailyTime → dailyTimes 迁移**完全闭环**（除 v1 冻结模块）
+- **PATCH 文件数**：7 测试（D1: 3 + D2: 4）
+- **门禁**：typecheck ✅ / lint cached ✅ / D1 test 60/60 + D2 test 102/102 ✅

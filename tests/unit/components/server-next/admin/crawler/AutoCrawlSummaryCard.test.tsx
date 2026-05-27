@@ -45,8 +45,7 @@ const BASE_CONFIG = {
   globalEnabled: true,
   scheduleType: 'daily' as const,
   intervalMinutes: 60,
-  dailyTimes: ['03:30'] as readonly string[],  // ADR-155 D-155-6 EP-1C-CLEANUP-B3b
-  dailyTime: '03:30',
+  dailyTimes: ['03:30'] as readonly string[],  // ADR-155 D-155-6（CLEANUP-D2：dailyTime alias 残余已删）
   defaultMode: 'incremental' as const,
   onlyEnabledSites: false,
   conflictPolicy: 'skip_running' as const,
@@ -123,7 +122,7 @@ describe('AutoCrawlSummaryCard (ADR-155 D-155-5 / EP-1B2)', () => {
       fireEvent.click(closeBtn)
       await waitFor(() => {
         expect(mockSetAutoCrawlConfig).toHaveBeenCalledWith(
-          expect.objectContaining({ globalEnabled: false, dailyTime: '03:30' }),
+          expect.objectContaining({ globalEnabled: false, dailyTimes: ['03:30'] }),
         )
         expect(toastPushMock).toHaveBeenCalledWith(
           expect.objectContaining({ level: 'success', title: '已关闭自动调度' }),
@@ -148,7 +147,6 @@ describe('AutoCrawlSummaryCard (ADR-155 D-155-5 / EP-1B2)', () => {
     const future = new Date(Date.now() + 90 * 60_000).toISOString()
     const CONFIG_MULTI = {
       ...BASE_CONFIG,
-      dailyTime: '03:00',
       dailyTimes: ['03:00', '04:00'] as readonly string[],
     }
     mockGetAutoCrawlConfig.mockResolvedValueOnce(CONFIG_MULTI)

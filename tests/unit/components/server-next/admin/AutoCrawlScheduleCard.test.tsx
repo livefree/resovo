@@ -209,7 +209,6 @@ describe('AutoCrawlScheduleCard', () => {
     const future = new Date(Date.now() + 90 * 60_000).toISOString()
     const CONFIG_MULTI = {
       ...BASE_CONFIG,
-      dailyTime: '03:00',
       dailyTimes: ['03:00', '04:00'] as readonly string[],
     }
     mockGetAutoCrawlConfig.mockResolvedValueOnce(CONFIG_MULTI)

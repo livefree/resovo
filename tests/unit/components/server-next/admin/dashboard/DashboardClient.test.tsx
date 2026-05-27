@@ -88,8 +88,7 @@ beforeEach(() => {
   mockGetAutoCrawlConfig.mockResolvedValue({
     globalEnabled: false,
     scheduleType: 'daily',
-    dailyTimes: ['03:30'],         // ADR-155 D-155-6 / EP-1C-CLEANUP-B2：主字段
-    dailyTime: '03:30',
+    dailyTimes: ['03:30'],         // ADR-155 D-155-6 / EP-1C-CLEANUP-D2：主字段（alias 残余已删）
     defaultMode: 'incremental',
     onlyEnabledSites: false,
     conflictPolicy: 'skip_running',

@@ -1236,9 +1236,25 @@ B 序列 + C 序列可与 A 并行（A 无依赖）；B 与 C 之间无依赖（
    - 文件范围：8 项（原子耦合，类型删除整批 typecheck 通过）
    - 门禁：typecheck ✅ / test 34/34 ✅
 
-3k. **CHG-SN-9-CW1-CW2-EP-1C-CLEANUP-C2**（待执行）
-   - 范围：删剩余 test fixture `dailyTime` 字段：`AutoCrawlScheduleCard.test.tsx`、`SchedulerConfigDrawer.test.tsx`、`tests/e2e/admin.spec.ts`
-   - 触发条件：下次 crawler 相关任务顺手清理（无阻塞风险，TypeScript 不报错因为 extra fields 兼容）
+3k. **CHG-SN-9-CW1-CW2-EP-1C-CLEANUP-C2** — 删 3 test fixture 残余 dailyTime + 修 #18 断言
+   - 状态：✅ 完成（2026-05-26 / commit 58222282）
+
+3l. **CHG-SN-9-CW1-CW2-EP-1C-CLEANUP-D** — 删 7 fixture + 1 注释残余 dailyTime 字面量（D1 后端 + D2 前端）
+   - 状态：✅ 完成（2026-05-26 20:00）
+   - 执行模型：claude-opus-4-7
+   - 范围：
+     - **D1（后端 3 文件）**：
+       - `tests/unit/api/crawlerScheduler.test.ts` 删 #10 + #16 setAutoCrawlConfig fixture 残余 `dailyTime` 字段（2 处）
+       - `tests/unit/api/background-event-service.test.ts` 删 getAutoCrawlConfigMock 残余 `dailyTime` 字段
+       - `tests/unit/components/server-next/admin/crawler/SchedulerConfigDrawer.test.tsx` 注释更新 "CONFIG.dailyTime 兜底" → "CONFIG.dailyTimes=['03:30']"
+     - **D2（前端 4 文件）**：
+       - `AutoCrawlScheduleCard.test.tsx` 删 CONFIG_MULTI 残余 `dailyTime`
+       - `AutoCrawlSummaryCard.test.tsx` 删 BASE_CONFIG + CONFIG_MULTI 残余 + 修 #4 close 断言 `dailyTime: '03:30'` → `dailyTimes: ['03:30']`
+       - `CrawlerClient.test.tsx` 删 #54 CONFIG 残余
+       - `DashboardClient.test.tsx` 删 mockGetAutoCrawlConfig 残余
+   - 剩余 1 处 `dailyTime: '03:00'` 在 v1 server `apps/server/.../AutoCrawlSettingsPanel.tsx`（已冻结 / 不在范围）
+   - 文件范围：D1（3）+ D2（4）= 7 测试 ≤ 5 → 分两次 commit（D1 + D2）或一次合并
+   - 门禁：typecheck ✅ / D1 60/60 ✅ / D2 102/102 ✅
    - 范围：删 5 处 fallback (`config.dailyTimes && length > 0 ? ... : [config.dailyTime || '03:00']`) + 补 8 个 test fixture 显式提供 dailyTimes + 删 dailyTime alias 字段
    - 拆分：
      - Cleanup-B1：补 4 个 backend test fixture（crawlerScheduler / crawler-system-audit / background-event-service / e2e admin）

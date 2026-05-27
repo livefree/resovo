@@ -89,7 +89,7 @@ beforeEach(() => {
   // 默认：空 active、空 finished、空 audit
   listRunsMock.mockResolvedValue({ rows: [], total: 0 })
   queryMock.mockResolvedValue({ rows: [] })
-  getAutoCrawlConfigMock.mockResolvedValue({ globalEnabled: false, scheduleType: 'daily', dailyTimes: ['02:00'], dailyTime: '02:00' })
+  getAutoCrawlConfigMock.mockResolvedValue({ globalEnabled: false, scheduleType: 'daily', dailyTimes: ['02:00'] })
   computeNextTriggerMock.mockReturnValue(null)
   getSchedulerStatusMock.mockReturnValue([])
 })

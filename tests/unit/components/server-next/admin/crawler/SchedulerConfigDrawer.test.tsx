@@ -141,7 +141,7 @@ describe('SchedulerConfigDrawer', () => {
       expect(screen.getByTestId('scheduler-globalEnabled')).not.toBeNull()
       // ADR-155 D-155-6 EP-1C-2a：dailyTime 单 input → chip 列表
       expect(screen.getByTestId('scheduler-dailyTime-chips')).not.toBeNull()
-      // CONFIG.dailyTime '03:30' 兜底渲染为 1 chip
+      // CONFIG.dailyTimes=['03:30'] 渲染为 1 chip（CLEANUP-D1：alias 兜底语义已删）
       expect(screen.getByTestId('scheduler-dailyTime-chip-03:30')).not.toBeNull()
       expect(screen.getByTestId('scheduler-dailyTime-input')).not.toBeNull()
       expect(screen.getByTestId('scheduler-defaultMode')).not.toBeNull()
