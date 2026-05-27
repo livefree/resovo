@@ -117,6 +117,15 @@ export function usePendingQueue(
       const res = await api.fetchPendingQueue(filtersRef.current)
       // eslint-disable-next-line no-console
       console.log('[CHG-358 DEBUG] fetchPendingQueue returned', res.data.length, 'videos')
+      // CHG-358-DEBUG2：dump 测试视频 2563b359 probe/render 实际值
+      const testVideo = res.data.find((v: { id: string }) => v.id?.startsWith('2563b359'))
+      if (testVideo) {
+        // eslint-disable-next-line no-console
+        console.log('[CHG-358 DEBUG2] test video 2563b359 probe/render:', JSON.stringify(testVideo))
+      } else {
+        // eslint-disable-next-line no-console
+        console.log('[CHG-358 DEBUG2] test video 2563b359 NOT in returned page / 30 video ids:', res.data.map((v: { id: string }) => v.id))
+      }
       setVideos(res.data as VideoQueueRow[])
       setNextCursor(res.nextCursor)
       setTotal(res.total)
