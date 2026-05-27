@@ -1607,7 +1607,7 @@ HOTFIX-A → B → C 顺序串行（B 在 A SQL fix 基础上扩 CASE / C 在 B 
    - **commit trailer 必填**：`Subagents: arch-reviewer (claude-opus-4-7)`
    - 验收要点：typecheck + lint + admin-ui 单测 PASS + arch-reviewer Opus 评审 PASS / CONDITIONAL → 主循环消化全红线后 PASS
 
-5. **CHG-340-B** — packages/admin-ui 4 P1 helpers（状态：⬜ 待开始 / **强制 Opus arch-reviewer**）
+5. **CHG-340-B** — packages/admin-ui 4 P1 helpers（状态：✅ 已完成 / 2026-05-26 23:40 / 执行模型 claude-opus-4-7 / 子代理 arch-reviewer agentId: ac43a8742ef38e1cd / A- → 黄线 Y1 译法歧义已消化 → 等同 A）
    - 创建时间：2026-05-26 22:00
    - 建议模型：opus（admin-ui 公开 helpers / 范式同 -A）
    - 文件范围（5 文件 / 4 PATCH 项）：4 个 enums/*.ts 新建（VisibilityStatus / ContentFormat / EpisodePattern / TrendingTag）+ enums/index.ts 增项

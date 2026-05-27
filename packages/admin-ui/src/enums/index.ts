@@ -14,7 +14,14 @@
 
 export type TFunction = (key: string) => string
 
+// P0
 export * from './videoTypeOptions'
 export * from './videoGenreOptions'
 export * from './videoStatusOptions'
 export * from './reviewStatusOptions'
+
+// P1 (CHG-340-B)
+export * from './visibilityStatusOptions'
+export * from './contentFormatOptions'
+export * from './episodePatternOptions'
+export * from './trendingTagOptions'

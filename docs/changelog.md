@@ -8519,3 +8519,18 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **门禁**：typecheck ✅ / lint ✅ / admin-ui 1538/1538 unit PASS ✅
 - **commit trailer 必填**：`Subagents: arch-reviewer (claude-opus-4-7)` ✅
 - **PATCH 文件数**：7（按口径 5 ≤ 5 ✅）
+
+## [CHG-340-B] packages/admin-ui 4 P1 helpers
+- **完成时间**：2026-05-26 23:40
+- **来源序列**：SEQ-20260527-ENUMS-SSOT-IMPL（ADR-157 D-157-2 P1 部分）
+- **执行模型**：claude-opus-4-7 / 子代理：arch-reviewer (claude-opus-4-7) agentId: ac43a8742ef38e1cd
+- **改动文件**（5 文件 / 4 PATCH 项 ≤ 5 ✅）：
+  - `packages/admin-ui/src/enums/visibilityStatusOptions.ts`（新建 / 3 项）
+  - `packages/admin-ui/src/enums/contentFormatOptions.ts`（新建 / 4 项）
+  - `packages/admin-ui/src/enums/episodePatternOptions.ts`（新建 / 4 项 / `ongoing="连载剧"` 形态语义）
+  - `packages/admin-ui/src/enums/trendingTagOptions.ts`（新建 / 4 项）
+  - `packages/admin-ui/src/enums/index.ts`（P0+P1 共 8 helper barrel）
+- **arch-reviewer 评审**：A- CONDITIONAL → 黄线 Y1 消化后等同 A
+  - Y1（消化）：`EpisodePattern.ongoing` 与 `VideoStatus.ongoing` 字面同含义不同 → `EpisodePattern.ongoing` 译法改"连载中"→"连载剧"（形态 vs 状态语义分离）
+- **闭环 D-N**：D-157-2 P1 部分；剩 P2 4 helpers 待 CHG-340-C
+- **门禁**：typecheck ✅
