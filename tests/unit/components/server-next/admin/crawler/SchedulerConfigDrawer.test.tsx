@@ -51,6 +51,7 @@ const CONFIG = {
   globalEnabled: true,
   scheduleType: 'daily' as const,
   intervalMinutes: 60,              // ADR-154 D-154-1
+  dailyTimes: ['03:30'] as readonly string[],  // ADR-155 D-155-6 EP-1C-CLEANUP-B2
   dailyTime: '03:30',
   defaultMode: 'incremental' as const,
   onlyEnabledSites: false,
@@ -162,7 +163,7 @@ describe('SchedulerConfigDrawer', () => {
     await waitFor(() => {
       expect(setAutoCrawlConfigMock).toHaveBeenCalledWith(expect.objectContaining({
         globalEnabled: true,
-        dailyTime: '03:30',
+        dailyTimes: ['03:30'],       // ADR-155 D-155-6 EP-1C-CLEANUP-B2：主字段
         defaultMode: 'incremental',
       }))
       expect(toastPushMock).toHaveBeenCalledWith(
