@@ -37,8 +37,7 @@ const BASE_CONFIG = {
   globalEnabled: true,
   scheduleType: 'daily' as const,
   intervalMinutes: 60,
-  dailyTimes: ['03:30'] as readonly string[],  // ADR-155 D-155-6 EP-1C-CLEANUP-B2
-  dailyTime: '03:30',
+  dailyTimes: ['03:30'] as readonly string[],  // ADR-155 D-155-6 EP-1C-CLEANUP-C2
   defaultMode: 'incremental' as const,
   onlyEnabledSites: false,
   conflictPolicy: 'skip_running' as const,

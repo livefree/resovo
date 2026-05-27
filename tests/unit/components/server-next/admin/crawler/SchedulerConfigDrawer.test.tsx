@@ -51,8 +51,7 @@ const CONFIG = {
   globalEnabled: true,
   scheduleType: 'daily' as const,
   intervalMinutes: 60,              // ADR-154 D-154-1
-  dailyTimes: ['03:30'] as readonly string[],  // ADR-155 D-155-6 EP-1C-CLEANUP-B2
-  dailyTime: '03:30',
+  dailyTimes: ['03:30'] as readonly string[],  // ADR-155 D-155-6 EP-1C-CLEANUP-C2
   defaultMode: 'incremental' as const,
   onlyEnabledSites: false,
   conflictPolicy: 'skip_running' as const,
@@ -336,7 +335,7 @@ describe('SchedulerConfigDrawer', () => {
       expect(setAutoCrawlConfigMock).toHaveBeenCalledWith(
         expect.objectContaining({
           dailyTimes: ['03:30', '04:00'],
-          dailyTime: '03:30',  // alias = dailyTimes[0]
+          // CLEANUP-C：dailyTime alias 已删，setAutoCrawlConfig 只收到 dailyTimes
         }),
       )
     })
