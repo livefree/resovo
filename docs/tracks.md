@@ -198,7 +198,8 @@
   - `apps/api/src/services/VideoService.ts`（改类型触发 enrich）
   - `apps/api/src/db/migrations/077_bangumi_metadata.sql`（新建）
   - `apps/api/src/db/queries/externalData.ts` + `mediaCatalog.ts`（扩展）
-  - `apps/api/src/routes/admin/moderation.bangumi.ts`（新建，依赖 ADR-159）
+  - `apps/api/src/routes/admin/moderation.bangumi.ts`（新建，依赖 ADR-159）+ `moderation.ts`（注册子路由 2 行）
+  - `packages/types/src/external.types.ts`（CHG-BNG-08：BangumiCandidate / BangumiGapRow，ADR-159 §端点契约锁定）
   - `apps/api/src/lib/config.ts` + `.env.example`
   - `scripts/import-bangumi-dump.ts`（修复）
   - `docs/decisions.md`（ADR-159）+ `docs/architecture.md`（migration 077 schema 同步）

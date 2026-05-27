@@ -289,6 +289,44 @@ export async function findBangumiById(
   return result.rows[0] ? mapBangumiEntryRow(result.rows[0]) : null
 }
 
+export interface BangumiSeedFilter {
+  /** 仅取排名 ≤ minRank 的高分条目（rank 越小越靠前；排除无排名/0）；省略则不按排名过滤 */
+  minRank?: number | null
+  year?: number | null
+  limit: number
+}
+
+/**
+ * 反向建库（ADR-159 决策 7）：按 rank/year 过滤列出 dump 条目供 BangumiSeedService 消费。
+ * 默认跳过 nsfw=true 条目（ADR-159 Y5：不自动建色情占位）。SQL 拼装收敛在 query 层（Service 不拼 SQL）。
+ */
+export async function listBangumiEntriesForSeed(
+  db: Pool,
+  filter: BangumiSeedFilter
+): Promise<BangumiEntryMatch[]> {
+  const conditions: string[] = ['nsfw = false']
+  const params: unknown[] = []
+  let idx = 1
+  if (filter.minRank != null) {
+    conditions.push(`rank IS NOT NULL AND rank > 0 AND rank <= $${idx++}`)
+    params.push(filter.minRank)
+  }
+  if (filter.year != null) {
+    conditions.push(`year = $${idx++}`)
+    params.push(filter.year)
+  }
+  params.push(filter.limit)
+  const result = await db.query<BangumiEntryRow>(
+    `SELECT ${BANGUMI_ENTRY_COLS}
+     FROM external_data.bangumi_entries
+     WHERE ${conditions.join(' AND ')}
+     ORDER BY rank ASC NULLS LAST, rating DESC NULLS LAST
+     LIMIT $${idx}`,
+    params
+  )
+  return result.rows.map(mapBangumiEntryRow)
+}
+
 // ── video_external_refs ───────────────────────────────────────────
 
 export type ExternalRefProvider = 'douban' | 'tmdb' | 'bangumi' | 'imdb'

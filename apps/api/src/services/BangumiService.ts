@@ -7,18 +7,26 @@
  */
 
 import type { Pool } from 'pg'
+import type { BangumiCandidate } from '@/types'
 import { MediaCatalogService } from './MediaCatalogService'
 import type { CatalogUpdateData } from './MediaCatalogService'
 import * as externalDataQueries from '@/api/db/queries/externalData'
 import type { BangumiEntryMatch } from '@/api/db/queries/externalData'
 import * as catalogEpisodeQueries from '@/api/db/queries/catalogEpisodes'
 import * as videosQueries from '@/api/db/queries/videos'
-import { getSubject, getEpisodes, isBangumiApiConfigured } from '@/api/lib/bangumi'
+import { getSubject, getEpisodes, searchSubjects, isBangumiApiConfigured } from '@/api/lib/bangumi'
+import { normalizeTitle } from './TitleNormalizer'
 import {
   computeLocalBangumiConfidence,
   mapSubjectToCatalogFields,
   mapEpisodes,
 } from './BangumiService.utils'
+
+function parseYear(date: string | null | undefined): number | null {
+  if (!date) return null
+  const m = date.match(/^(\d{4})/)
+  return m ? Number.parseInt(m[1], 10) : null
+}
 
 // ── 阈值（复用豆瓣范式）───────────────────────────────────────────
 const CONFIDENCE_AUTO_MATCH = 0.85
@@ -95,6 +103,51 @@ export class BangumiService {
       linkedBy: 'moderator',
     })
     return { updated: true }
+  }
+
+  /**
+   * 后台人工候选搜索（ADR-159 端点 2）。
+   * 本地 dump 召回（有置信度，毫秒级）为主；keyword 显式搜索时 REST 兜底（confidence=0 标识非本地召回）。
+   */
+  async searchCandidates(input: {
+    titleNorm: string
+    year: number | null
+    keyword?: string
+  }): Promise<BangumiCandidate[]> {
+    const out = new Map<number, BangumiCandidate>()
+
+    const localNorm = input.keyword ? normalizeTitle(input.keyword) : input.titleNorm
+    const locals = await externalDataQueries.findBangumiByTitleNorm(this.db, localNorm, input.year)
+    for (const e of locals) {
+      const { confidence } = computeLocalBangumiConfidence(e, input.year)
+      out.set(e.bangumiId, {
+        bangumiSubjectId: e.bangumiId,
+        nameCn: e.titleCn,
+        nameJp: e.titleJp,
+        year: e.year,
+        rating: e.rating,
+        coverUrl: e.coverUrl,
+        confidence,
+      })
+    }
+
+    if (input.keyword && isBangumiApiConfigured()) {
+      const items = await searchSubjects(input.keyword)
+      for (const it of items) {
+        if (out.has(it.id)) continue
+        out.set(it.id, {
+          bangumiSubjectId: it.id,
+          nameCn: it.name_cn?.trim() || null,
+          nameJp: it.name?.trim() || null,
+          year: parseYear(it.date),
+          rating: it.rating?.score ?? null,
+          coverUrl: it.images?.large ?? it.images?.common ?? null,
+          confidence: 0,
+        })
+      }
+    }
+
+    return [...out.values()].sort((a, b) => b.confidence - a.confidence)
   }
 
   // ── 内部 ─────────────────────────────────────────────────────────

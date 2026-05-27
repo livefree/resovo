@@ -14,11 +14,34 @@ docs 硬冲突域（adr / architecture）已在 tracks.md 声明持有。
 
 ## 进行中任务
 
-（空 — Phase 0 + Phase 1 已完成 ✅；Phase 2 反向建库 + admin 路由待启动）
+（空 — Phase 2 核心 CHG-BNG-07 + 08 已完成 ✅；CHG-BNG-09 可选 cron 延后）
 
 ---
 
 ## 已完成任务
+
+### ✅ CHG-BNG-07/08（Phase 2）— 反向建库占位 + 缺口查询 + 5 admin 端点
+
+- **状态**：✅ 完成（2026-05-27）
+- **执行模型**：claude-opus-4-7（主循环；ADR-159 端点契约/类型已由 Phase 0 arch-reviewer Opus PASS，无需再起 Opus）
+- **完成备注**：
+  - **CHG-BNG-07（Phase 2-A）**：
+    - `externalData.listBangumiEntriesForSeed`（按 rank/year 过滤 + 默认跳过 nsfw=true，SQL 收敛于 query 层）。
+    - `mediaCatalog.listBangumiGaps` + `countBangumiGaps`（有 bangumi_subject_id 但无 published video 的 catalog；LEFT JOIN bangumi_entries 取 rank 排序）。
+    - **MediaCatalogService.findOrCreate retry 补 bangumiId 分支（ADR-159 Y5）**——与 Step4 对称，修复并发 seed + enrich step3 写同一 subject 时 ON CONFLICT 跳过后查不回的缺口。
+    - 新建 `BangumiSeedService.seedPlaceholders`（仅本地 dump、零 REST 调用规避限流；type 固定 anime；created/matched 计数语义见服务注释，含 D-159-1 normalizedKey 失配归 matched）+ `listGaps`。
+    - 单测：bangumi-seed-service（6）+ mediaCatalogFindOrCreate Y5 retry（1）。
+  - **CHG-BNG-08（Phase 2-B）**：
+    - `packages/types/external.types.ts` 加 `BangumiCandidate` / `BangumiGapRow`（ADR-159 §端点契约 readonly 形状逐字落地）。
+    - `BangumiService.searchCandidates`（本地 dump 召回带置信度为主 + keyword 时 REST 兜底 confidence=0，按 confidence 降序去重）。
+    - 新建 `routes/admin/moderation.bangumi.ts` 5 端点（sync/candidates/confirm = moderator+admin；seed = admin only；gaps = moderator+admin），zod schema 逐字对齐 ADR-159；注册进 moderation.ts。
+    - sync 端点直接映射 matchAndEnrich 结果（auto→updated:true / candidate/none→updated:false+reason）；token 缺失走 Phase 1 既有 dump 降级（比 ADR 决策 9 字面 token_missing 更优，仍写入 dump 字段）。
+    - 单测：bangumiRoutes（11，含 403 admin-only / 422 边界）+ searchCandidates（3）。
+  - **门禁**：typecheck ✅（8 包全 PASS）/ test:run ✅ **5277 passed**（+25）/ verify:endpoint-adr ✅ 199 路由对齐 / verify:adr-contracts ✅（advisory：error-message + enum-ssot + D-159-1 均 pre-existing/非阻塞）。
+  - **lint**：嵌套 worktree（`.claude/worktrees/bangumi` 物理位于主仓内）导致 ESLint 同时解析 worktree 与父仓两份 `eslint-plugin-resovo` → 插件歧义，对任意文件均 fail（环境性，非本次代码问题）；改动文件 typecheck 干净。
+  - **D-159-1**：占位 normalizedKey 失配产生重复 catalog 已知限制，accept best-effort，按 ADR-159 待集成 PR 时在 changelog.md 闭环（活跃 Track 期不写共享 changelog 冲突域）。
+- **沉淀判断**：seed 服务 + 缺口查询 + 端点分层对标 douban，是；BangumiCandidate/GapRow 进 packages/types 共享层（ADR 锁定契约），是。
+- **CHG-BNG-09（Phase 2-C，可选 cron 归档同步）**：延后——涉及 apps/worker + GitHub 归档下载 + 调度，独立性强且 plan 标注"可选/后续"，不在本次 Phase 2 核心交付内；按需立卡。
 
 ### ✅ CHG-BNG-03/04/05/06（Phase 1）— REST 客户端 + 匹配增强
 
@@ -65,8 +88,8 @@ docs 硬冲突域（adr / architecture）已在 tracks.md 声明持有。
 - ⬜ CHG-BNG-04（Phase 1-B）：BangumiService + BangumiService.utils（infobox 解析）
 - ⬜ CHG-BNG-05（Phase 1-C）：重写 step3Bangumi 委托 BangumiService + 字段映射
 - ⬜ CHG-BNG-06（Phase 1-D）：VideoService.update 改类型为 anime 触发 enqueueEnrichJob
-- ⬜ CHG-BNG-07（Phase 2-A）：BangumiSeedService 占位条目 + 缺口清单查询
-- ⬜ CHG-BNG-08（Phase 2-B）：admin 路由 moderation.bangumi.ts（依赖 CHG-BNG-00 ADR PASS）
-- ⬜ CHG-BNG-09（Phase 2-C，可选）：cron 归档同步
+- ✅ CHG-BNG-07（Phase 2-A）：BangumiSeedService 占位条目 + 缺口清单查询（2026-05-27）
+- ✅ CHG-BNG-08（Phase 2-B）：admin 路由 moderation.bangumi.ts（5 端点，2026-05-27）
+- ⏸ CHG-BNG-09（Phase 2-C，可选）：cron 归档同步 — 延后（apps/worker + GitHub 归档下载 + 调度；plan 标注可选/后续）
 
 > PATCH 范围 > 5 项的卡须拆 -A/-B 子卡（workflow-rules §PATCH 软上限）。

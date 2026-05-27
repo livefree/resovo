@@ -133,10 +133,13 @@ export class MediaCatalogService {
       }
 
       // INSERT 被 ON CONFLICT 跳过（并发写入导致）→ 再次查询
+      // ADR-159 Y5：补 bangumiId 分支（与 Step4 对称），保证并发 seed + enrich step3
+      // 写同一 subject 时若因 bangumi_subject_id 唯一冲突被跳过仍能查回收敛。
       const retry =
         (input.imdbId ? await catalogQueries.findCatalogByImdbId(client, input.imdbId) : null) ??
         (input.tmdbId != null ? await catalogQueries.findCatalogByTmdbId(client, input.tmdbId) : null) ??
         (input.doubanId ? await catalogQueries.findCatalogByDoubanId(client, input.doubanId) : null) ??
+        (input.bangumiSubjectId != null ? await catalogQueries.findCatalogByBangumiId(client, input.bangumiSubjectId) : null) ??
         await catalogQueries.findCatalogByNormalizedKey(
           client,
           input.titleNormalized,

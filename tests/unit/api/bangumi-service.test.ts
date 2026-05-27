@@ -112,6 +112,7 @@ describe('mapEpisodes', () => {
 vi.mock('@/api/lib/bangumi', () => ({
   getSubject: vi.fn(),
   getEpisodes: vi.fn(),
+  searchSubjects: vi.fn(),
   isBangumiApiConfigured: vi.fn(),
 }))
 vi.mock('@/api/db/queries/externalData', () => ({
@@ -278,5 +279,45 @@ describe('BangumiService.confirmMatch', () => {
     expect(mUpsertRef).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
       provider: 'bangumi', matchStatus: 'manual_confirmed', isPrimary: true,
     }))
+  })
+})
+
+describe('BangumiService.searchCandidates', () => {
+  let svc: BangumiService
+  beforeEach(() => {
+    vi.clearAllMocks()
+    svc = new BangumiService({} as never)
+  })
+
+  it('本地 dump 召回 → 带置信度，按 confidence 降序', async () => {
+    mFindByTitle.mockResolvedValue([
+      entry({ bangumiId: 1, year: 2007 }),   // year 精确 → 0.92
+      entry({ bangumiId: 2, year: 2000 }),   // year 差远 → 0.70
+    ])
+    const r = await svc.searchCandidates({ titleNorm: 'clannad', year: 2007 })
+    expect(r.map((c) => c.bangumiSubjectId)).toEqual([1, 2])
+    expect(r[0].confidence).toBeCloseTo(0.92)
+    expect((bangumiLib.searchSubjects as ReturnType<typeof vi.fn>)).not.toHaveBeenCalled()
+  })
+
+  it('keyword + Token → REST 兜底（confidence=0），与本地去重合并', async () => {
+    mFindByTitle.mockResolvedValue([entry({ bangumiId: 1, year: 2007 })])
+    mConfigured.mockReturnValue(true)
+    ;(bangumiLib.searchSubjects as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { id: 1, name: 'dup', name_cn: 'dup-cn', date: '2007-01-01', images: null, rating: null }, // 与本地重复 → 跳过
+      { id: 5, name: 'New', name_cn: '新', date: '2010-04-01', images: { large: 'L' }, rating: { score: 7, total: 10, rank: 1 } },
+    ])
+    const r = await svc.searchCandidates({ titleNorm: 'clannad', year: 2007, keyword: 'clannad' })
+    expect(r.map((c) => c.bangumiSubjectId).sort()).toEqual([1, 5])
+    const rest = r.find((c) => c.bangumiSubjectId === 5)!
+    expect(rest).toMatchObject({ confidence: 0, year: 2010, rating: 7, coverUrl: 'L', nameCn: '新' })
+  })
+
+  it('keyword 但 Token 缺失 → 不调 REST，仅本地', async () => {
+    mFindByTitle.mockResolvedValue([])
+    mConfigured.mockReturnValue(false)
+    const r = await svc.searchCandidates({ titleNorm: 'x', year: null, keyword: 'foo' })
+    expect(r).toEqual([])
+    expect((bangumiLib.searchSubjects as ReturnType<typeof vi.fn>)).not.toHaveBeenCalled()
   })
 })
