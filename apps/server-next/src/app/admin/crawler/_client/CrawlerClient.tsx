@@ -77,9 +77,10 @@ const OVERVIEW_SECTION_STYLE: CSSProperties = {
 }
 
 // 概览第一行：SummaryCard 固定 360px + KpiRow flex:1
+// HOTFIX-F：1fr 列加 minmax(0, 1fr) + 子 KpiRow 内部 overflowX 让窗口变窄时横向滚动（不折叠）
 const OVERVIEW_ROW_STYLE: CSSProperties = {
   display: 'grid',
-  gridTemplateColumns: 'minmax(280px, 360px) 1fr',
+  gridTemplateColumns: 'minmax(280px, 360px) minmax(0, 1fr)',
   gap: '12px',
   alignItems: 'start',
 }

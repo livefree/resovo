@@ -133,8 +133,9 @@ const STATUS_COLOR: Record<CrawlerTimelineRow['status'], string> = {
 const BAR_H = 6
 const LANE_GAP = 2
 
-// ADR-155 D-155-3 / EP-3b-1：range 选项扩展 4 → 7（加 12h/24h/7d 长历史回看）
+// ADR-155 D-155-3 / EP-3b-1 + HOTFIX-F：range 选项扩展 4 → 8（加 '5m' 最小粒度 + 12h/24h/7d 长历史回看）
 const RANGE_OPTIONS = [
+  { value: '5m',  label: '5 分钟' },
   { value: '30m', label: '30 分钟' },
   { value: '1h',  label: '1 小时' },
   { value: '2h',  label: '2 小时' },
@@ -143,6 +144,9 @@ const RANGE_OPTIONS = [
   { value: '24h', label: '24 小时' },
   { value: '7d',  label: '7 天' },
 ] as const
+
+// HOTFIX-F：默认 range 兜底（@livefree 实测反馈 1h 刻度过大）
+const DEFAULT_RANGE: CrawlerTimelineRange = '5m'
 
 // ADR-155 D-155-3 / EP-3b-1：now-line 位置（与 EP-3a 后端 HISTORY_RATIO=0.7 对齐）
 const NOW_LINE_LEFT_PCT = 70
@@ -202,7 +206,8 @@ export function CrawlerTimelineCard({
   defaultRange,
 }: CrawlerTimelineCardProps) {
   // ── range 自治 state（ADR-153 D-153-3）─────────────────────────
-  const [range, setRange] = useState<CrawlerTimelineRange>(defaultRange ?? '1h')
+  // HOTFIX-F：默认从 '1h' 改为 DEFAULT_RANGE='5m'（@livefree 实测反馈刻度过大）
+  const [range, setRange] = useState<CrawlerTimelineRange>(defaultRange ?? DEFAULT_RANGE)
   // ADR-155 D-155-4：limit 自治 state（站点上限 8/20/全部=50）
   const [limit, setLimit] = useState<number>(DEFAULT_LIMIT)
   const [timelineData, setTimelineData] = useState<CrawlerTimelineResponse | null>(
@@ -233,8 +238,8 @@ export function CrawlerTimelineCard({
   }, [range, limit, paused, frozen])
 
   const handleRangeChange = useCallback((next: string | null) => {
-    // ADR-155 D-155-3 / EP-3b-1：range 7 选项白名单
-    const validRanges: readonly CrawlerTimelineRange[] = ['30m', '1h', '2h', '6h', '12h', '24h', '7d']
+    // ADR-155 D-155-3 / EP-3b-1 + HOTFIX-F：range 8 选项白名单
+    const validRanges: readonly CrawlerTimelineRange[] = ['5m', '30m', '1h', '2h', '6h', '12h', '24h', '7d']
     if (next !== null && (validRanges as readonly string[]).includes(next)) {
       setRange(next as CrawlerTimelineRange)
     }

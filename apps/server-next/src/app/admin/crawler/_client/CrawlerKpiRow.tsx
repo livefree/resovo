@@ -13,14 +13,22 @@ import { type CSSProperties } from 'react'
 import { KpiCard } from '@resovo/admin-ui'
 import type { CrawlerKpiResponse } from '@/lib/crawler/api'
 
+// W3-FIX HOTFIX-F：@livefree 实测反馈 — 窗口变窄时不要折叠为多行，改横向滚动保持单行 5 KpiCard
+const ROW_WRAPPER_STYLE: CSSProperties = {
+  // 容器横向滚动：宽度不够时显示滚动条而非 wrap
+  overflowX: 'auto',
+  minWidth: 0,  // 让外层 grid 1fr 真正可压缩到滚动
+}
+
 const ROW_STYLE: CSSProperties = {
   display: 'grid',
-  // ADR-155 D-155-5 EP-1B2-LAYOUT：grid auto-fit 适应容器宽度自动 wrap
-  // - 独立使用时（容器宽 1200px+）：1 行 5 列（minmax 140 让单卡不会过窄）
-  // - 概览区窄宽（KpiRow 占 SummaryCard 右侧 flex:1 ≈ 720px）：wrap 为 3+2 两行
-  // - 浏览器窄屏（< 900px）：wrap 为 2+2+1
-  gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+  // HOTFIX-F：固定 5 列（每列 minmax(140px, 1fr) / 总 minWidth ≈ 700px+gap）
+  // - 容器宽 ≥ 760px：5 列均分填满
+  // - 容器宽 < 760px：grid 不收缩到 < 5×140px=700px，外层 wrapper overflowX 触发横滚
+  gridTemplateColumns: 'repeat(5, minmax(140px, 1fr))',
   gap: '12px',
+  // 防 grid 列收缩到 0 让 KpiCard 内容裁掉
+  minWidth: 'min-content',
 }
 
 export interface CrawlerKpiRowProps {
@@ -46,6 +54,7 @@ export function CrawlerKpiRow({ kpi }: CrawlerKpiRowProps) {
   const live = kpi != null
 
   return (
+    <div style={ROW_WRAPPER_STYLE} data-crawler-kpi-row-wrapper>
     <div style={ROW_STYLE} data-crawler-kpi-row>
       <KpiCard
         label="站点"
@@ -94,6 +103,7 @@ export function CrawlerKpiRow({ kpi }: CrawlerKpiRowProps) {
         dataSource={dataSource}
         testId="crawler-kpi-avg-duration"
       />
+    </div>
     </div>
   )
 }
