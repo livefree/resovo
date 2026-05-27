@@ -150,7 +150,8 @@ describe('GET /admin/crawler/timeline', () => {
       headers: { authorization: await tokenFor('admin') },
     })
     expect(res.statusCode).toBe(200)
-    expect(mockGetCrawlerTimeline).toHaveBeenCalledWith(expect.anything(), '1h', 8)
+    // HOTFIX-E：默认 range 从 '1h' 改为 '5m'（@livefree 实测反馈刻度过大）
+    expect(mockGetCrawlerTimeline).toHaveBeenCalledWith(expect.anything(), '5m', 8)
   })
 
   it('range=30m limit=20 显式 → 200', async () => {
@@ -176,8 +177,8 @@ describe('GET /admin/crawler/timeline', () => {
     expect(mockGetCrawlerTimeline).not.toHaveBeenCalled()
   })
 
-  it('range=12h / 24h / 7d 接受 → 200（ADR-155 D-155-3 EP-3a 长历史回看）', async () => {
-    for (const r of ['12h', '24h', '7d']) {
+  it('range=5m / 12h / 24h / 7d 接受 → 200（ADR-155 D-155-3 EP-3a + HOTFIX-E 长历史 + 5m 细粒度）', async () => {
+    for (const r of ['5m', '12h', '24h', '7d']) {
       mockGetCrawlerTimeline.mockResolvedValueOnce({
         rangeStart: 'x', rangeEnd: 'y', ticks: [], rows: [],
       })
@@ -188,6 +189,20 @@ describe('GET /admin/crawler/timeline', () => {
       })
       expect(res.statusCode).toBe(200)
     }
+  })
+
+  it('HOTFIX-E 默认 range = "5m"（无 query 参数）', async () => {
+    mockGetCrawlerTimeline.mockResolvedValueOnce({
+      rangeStart: 'x', rangeEnd: 'y', ticks: [], rows: [],
+    })
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/admin/crawler/timeline',
+      headers: { authorization: await tokenFor('admin') },
+    })
+    expect(res.statusCode).toBe(200)
+    // route handler 把 parsed.data.range 传给 getCrawlerTimeline；zod default '5m' 透传
+    expect(mockGetCrawlerTimeline).toHaveBeenCalledWith(expect.anything(), '5m', 8)
   })
 
   it('limit > 50 → 422（ADR-155 D-155-4 EP-1B1 后 max 改为 50）', async () => {

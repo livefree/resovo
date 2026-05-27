@@ -19,8 +19,8 @@
 
 import type { Pool } from 'pg'
 
-// ADR-155 D-155-3 / EP-3a：range 选项扩展 4 → 7
-export type CrawlerTimelineRange = '30m' | '1h' | '2h' | '6h' | '12h' | '24h' | '7d'
+// ADR-155 D-155-3 / EP-3a + HOTFIX-E：range 选项扩展 4 → 8（加 '5m' 最小粒度 / @livefree 实测反馈）
+export type CrawlerTimelineRange = '5m' | '30m' | '1h' | '2h' | '6h' | '12h' | '24h' | '7d'
 
 export interface CrawlerTimelineRow {
   readonly siteKey: string
@@ -53,8 +53,9 @@ interface TimelineRawRow {
   health: string
 }
 
-// ADR-155 D-155-3 / EP-3a：range 扩展到 7 选项
+// ADR-155 D-155-3 / EP-3a + HOTFIX-E：range 扩展到 8 选项（5m 最小粒度）
 const RANGE_TO_MS: Record<CrawlerTimelineRange, number> = {
+  '5m':  5 * 60_000,
   '30m': 30 * 60_000,
   '1h':  60 * 60_000,
   '2h':  2 * 60 * 60_000,
@@ -219,7 +220,7 @@ function rowToTimelineRow(
 
 export async function getCrawlerTimeline(
   db: Pool,
-  range: CrawlerTimelineRange = '1h',
+  range: CrawlerTimelineRange = '5m',  // HOTFIX-E：默认从 '1h' 改为 '5m'（@livefree 实测反馈刻度过大）
   limit = 8,
 ): Promise<CrawlerTimelineResponse> {
   const rangeMs = RANGE_TO_MS[range]

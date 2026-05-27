@@ -366,6 +366,25 @@ describe('crawlerTimeline.getCrawlerTimeline', () => {
     expect(row.widthPct).toBeGreaterThan(0.6)  // 跨大部分窗口（70% 历史 + 30% 未来都覆盖）
   })
 
+  // ── W3-FIX HOTFIX-E：range 加 '5m' + 默认改 '5m' ─────────────
+  it('HOTFIX-E #1 range="5m" 接受 + rangeMs = 5 分钟', async () => {
+    const { getCrawlerTimeline } = await import('@/api/db/queries/crawlerTimeline')
+    mockQuery.mockResolvedValueOnce({ rows: [] })
+    const result = await getCrawlerTimeline(mockDb as never, '5m')
+    const span = new Date(result.rangeEnd).getTime() - new Date(result.rangeStart).getTime()
+    const expectedMs = 5 * 60_000
+    expect(Math.abs(span - expectedMs)).toBeLessThan(5_000)
+  })
+
+  it('HOTFIX-E #2 默认 range = "5m"（无显式参数）', async () => {
+    const { getCrawlerTimeline } = await import('@/api/db/queries/crawlerTimeline')
+    mockQuery.mockResolvedValueOnce({ rows: [] })
+    // 无显式 range 参数 → 默认 '5m' = 300_000ms 窗口
+    const result = await getCrawlerTimeline(mockDb as never)
+    const span = new Date(result.rangeEnd).getTime() - new Date(result.rangeStart).getTime()
+    expect(Math.abs(span - 5 * 60_000)).toBeLessThan(5_000)
+  })
+
   it('EP-3a #5 R-155-2 双字段：窗口内正常 task → startPct/widthPct 与 durationSeconds 都正确', async () => {
     const { getCrawlerTimeline } = await import('@/api/db/queries/crawlerTimeline')
     // 构造 task：30 分钟前开始 + 10 分钟前结束 → 真实 duration=20min；
