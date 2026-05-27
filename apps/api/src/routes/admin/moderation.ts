@@ -18,6 +18,7 @@ import * as videoQueries from '@/api/db/queries/videos'
 import * as moderationQueries from '@/api/db/queries/moderation'
 import * as provenanceQueries from '@/api/db/queries/metadataProvenance'
 import { listLineHealthEvents } from '@/api/db/queries/sourceHealthEvents'
+import { VIDEO_TYPES } from '@resovo/types'
 import { listAuditLogByTarget } from '@/api/db/queries/auditLog'
 import { registerModerationDoubanRoutes } from './moderation.douban'
 
@@ -62,7 +63,7 @@ const SimilarQueryParams = z.object({
 const MetaEditSchema = z.object({
   title: z.string().min(1).max(200).optional(),
   year: z.number().int().min(1900).max(2100).nullable().optional(),
-  type: z.enum(['movie', 'series', 'anime', 'variety', 'documentary', 'short', 'sports', 'music', 'news', 'kids', 'other']).optional(),
+  type: z.enum(VIDEO_TYPES).optional(),
   genres: z.array(z.string().min(1).max(50)).max(10).optional(),
 })
 

@@ -1536,3 +1536,141 @@ HOTFIX-A → B → C 顺序串行（B 在 A SQL fix 基础上扩 CASE / C 在 B 
 - **PATCH ≤ 5 项硬约束**：CHG-337 3 项 ✅ / CHG-338 1 项 ✅
 - **commit trailer**：CHG-337 主循环 opus 但无 Opus 强制项（仅常量收口）→ `Subagents: 无`；CHG-338 ADR 起草 → `Subagents: arch-reviewer (claude-opus-4-7)`
 
+
+---
+
+## [SEQ-20260527-ENUMS-SSOT-IMPL] 视频枚举值跨层 SSOT 实施（ADR-157 落地）
+
+- **状态**：🔄 执行中
+- **创建时间**：2026-05-26 22:00
+- **最后更新时间**：2026-05-26 22:00
+- **目标**：按 ADR-157 §5 实施分卡，将 12 个权威 enum 全部落地双形态 + admin-ui Option helpers + 守卫脚本；闭环 D-157-1 ~ D-157-6 共 6 条 D-N 偏离
+- **范围**：packages/types + packages/admin-ui + apps/api zod + apps/server-next 4 处独立常量 + apps/web-next P1/P2 + apps/server v1 Genre + scripts 守卫
+- **依赖**：CHG-337 ✅ + ADR-157 PASS ✅
+- **总估时**：0.7-1.0w
+
+### 任务列表（按 DAG 顺序）
+
+1. **CHG-339-A** — packages/types 4 P0 enum 双形态 + assertExhaustive 工具（状态：✅ 已完成）
+   - 创建时间：2026-05-26 22:00
+   - 实际开始：2026-05-26 22:05
+   - 完成时间：2026-05-26 22:25
+   - 建议模型：opus（packages/types 跨包契约改造 / API zod 联动 / 影响面大）
+   - 执行模型：claude-opus-4-7 / 子代理：无
+   - 文件范围（7 文件 / 5 PATCH 项）：
+     - `packages/types/src/video.types.ts`（VideoType / VideoGenre / VideoStatus / ReviewStatus 4 enum 双形态）
+     - `packages/types/src/utils/exhaustive.ts`（新建工具子目录 / assertExhaustive）
+     - `packages/types/src/index.ts`（const value re-export + utils re-export）
+     - `apps/api/src/routes/admin/videos.ts`（4 处 zod 替换：type ×2 + status ×1 + reviewStatus ×1）
+     - `apps/api/src/routes/admin/staging.ts`（2 处 zod 替换：type ×2）
+     - `apps/api/src/routes/admin/moderation.ts`（1 处 zod 替换：type ×1 / 不动 result 子集）
+     - `apps/api/src/routes/search.ts`（2 处 zod 替换：VideoTypeEnum const + 内联 StatusEnum）
+   - 完成备注：
+     - typecheck ✅ / lint ✅ / 单测 5139/5139 ✅ / verify:adr-contracts ✅
+     - 红线 R-157-1 ✅：API 层视频 enum 真实路由 zod 字面量为零（VideoType / VideoStatus / ReviewStatus grep 输出空）
+     - 例外（非本卡范围 / 备注）：`apps/api/src/templates/route.template.ts:19` 注释中示例（模板文件，不影响运行）+ `apps/api/src/services/UserSubmissionService.ts:48` `['movie','series','show']`（user submission 业务自定义 enum，含非 VideoType 值 `show`，不属 VideoType 联动）
+     - 偶发 flaky：StagingEditPanel.test.tsx 1 用例首跑 fail，单跑 + 重跑全套 PASS → test pollution（与本卡无关）
+   - 闭环 D-N：D-157-1 部分（VideoType / VideoGenre / VideoStatus / ReviewStatus 4 P0 双形态 + API zod 联动完成；剩 P1/P2 8 enum 待 339-B/-C）
+
+2. **CHG-339-B** — packages/types 4 P1 enum 双形态（状态：⬜ 待开始）
+   - 创建时间：2026-05-26 22:00
+   - 建议模型：sonnet（范式已建立 / 复制 -A 模板）
+   - 文件范围（≤ 5 文件 / 4 PATCH 项）：
+     - `packages/types/src/video.types.ts`（VisibilityStatus / ContentFormat / EpisodePattern / TrendingTag 4 enum 双形态）
+     - `packages/types/src/index.ts`（const value re-export 增项）
+     - apps/api zod 引用（如有，grep 后定位）
+   - 依赖：CHG-339-A ✅
+   - 验收要点：typecheck + lint + test 全 PASS
+
+3. **CHG-339-C** — packages/types 4 P2 enum 双形态（状态：⬜ 待开始）
+   - 创建时间：2026-05-26 22:00
+   - 建议模型：sonnet
+   - 文件范围（≤ 5 文件 / 4 PATCH 项）：
+     - `packages/types/src/video.types.ts`（DoubanStatus / SourceCheckStatus / VideoQuality / SourceType 4 enum 双形态）
+     - `packages/types/src/index.ts`
+     - apps/api zod 引用（如有）
+   - 依赖：CHG-339-B ✅
+   - 验收要点：typecheck + lint + test 全 PASS
+
+4. **CHG-340-A** — packages/admin-ui AdminSelectOption 泛型扩展 + 4 P0 helpers（状态：⬜ 待开始 / **强制 Opus arch-reviewer**）
+   - 创建时间：2026-05-26 22:00
+   - 建议模型：opus（packages/admin-ui 公开 Props 改 + helpers 新增 / CLAUDE.md ❌ 共享组件 API 契约强制 Opus）
+   - 文件范围（5 文件 / 5 PATCH 项）：
+     - `packages/admin-ui/src/components/admin-select/admin-select.tsx`（AdminSelectOption → AdminSelectOption<T extends string = string> 泛型扩展）
+     - `packages/admin-ui/src/enums/videoTypeOptions.ts`（新建）
+     - `packages/admin-ui/src/enums/videoGenreOptions.ts`（新建）
+     - `packages/admin-ui/src/enums/videoStatusOptions.ts`（新建）
+     - `packages/admin-ui/src/enums/reviewStatusOptions.ts`（新建）
+     - `packages/admin-ui/src/enums/index.ts`（barrel export，与 5 项不冲突 / 视为 helpers 配套）
+     - `packages/admin-ui/src/index.ts`（增 `export * from './enums'`）
+   - 依赖：CHG-339-A ✅
+   - **commit trailer 必填**：`Subagents: arch-reviewer (claude-opus-4-7)`
+   - 验收要点：typecheck + lint + admin-ui 单测 PASS + arch-reviewer Opus 评审 PASS / CONDITIONAL → 主循环消化全红线后 PASS
+
+5. **CHG-340-B** — packages/admin-ui 4 P1 helpers（状态：⬜ 待开始 / **强制 Opus arch-reviewer**）
+   - 创建时间：2026-05-26 22:00
+   - 建议模型：opus（admin-ui 公开 helpers / 范式同 -A）
+   - 文件范围（5 文件 / 4 PATCH 项）：4 个 enums/*.ts 新建（VisibilityStatus / ContentFormat / EpisodePattern / TrendingTag）+ enums/index.ts 增项
+   - 依赖：CHG-340-A ✅ + CHG-339-B ✅
+   - **commit trailer 必填**：`Subagents: arch-reviewer (claude-opus-4-7)`
+
+6. **CHG-340-C** — packages/admin-ui 4 P2 helpers（状态：⬜ 待开始 / **强制 Opus arch-reviewer**）
+   - 创建时间：2026-05-26 22:00
+   - 建议模型：opus
+   - 文件范围（5 文件 / 4 PATCH 项）：4 个 enums/*.ts 新建（DoubanStatus / SourceCheckStatus / VideoQuality / SourceType）+ enums/index.ts 增项
+   - 依赖：CHG-340-B ✅ + CHG-339-C ✅
+   - **commit trailer 必填**：`Subagents: arch-reviewer (claude-opus-4-7)`
+
+7. **CHG-341** — server-next 4 处独立常量替换（状态：⬜ 待开始）
+   - 创建时间：2026-05-26 22:00
+   - 建议模型：sonnet
+   - 文件范围（≤ 5 文件 / 4 PATCH 项）：
+     - `apps/server-next/src/app/admin/videos/_client/videoEnumOptions.ts`（重定向到 admin-ui helpers / 可考虑删除）
+     - `apps/server-next/src/app/admin/home/_client/HomeModuleDrawer.tsx`（删本地 → import getVideoTypeOptions）
+     - `apps/server-next/src/app/admin/submissions/_client/SubmissionsListClient.tsx`（删本地 → import getVideoTypeOptions / **同时修复 news/kids 缺项 P1**）
+     - server-next 其他 enum 消费（按需）
+   - 依赖：CHG-340-A ✅
+   - 验收要点：server-next 单测全 PASS + 视频编辑 / 列表 / 投稿 / home 4 处 type 下拉一致显示 11 项
+
+8. **CHG-342** — web-next P1/P2 修复（状态：⬜ 待开始）
+   - 创建时间：2026-05-26 22:00
+   - 建议模型：sonnet
+   - 文件范围（≤ 5 文件 / 4 PATCH 项）：
+     - `apps/web-next/src/app/[locale]/search/_components/SearchPage.tsx`（SearchTab union 4→11 / 派生自 VIDEO_TYPES）
+     - `apps/web-next/src/components/media/FallbackCover.tsx`（getTypeIcon switch 5→11 / 加 assertExhaustive 默认分支）
+     - `apps/web-next/src/components/video/VideoMeta.tsx`（label 改为 i18n key 使用 useTranslations / 删硬编码 VIDEO_TYPE_LABEL Record）
+     - `apps/web-next/src/lib/video-route.ts`（PRIMARY_DETAIL_TYPES 评估 / ADR-048 关联）
+     - `apps/web-next/messages/zh-CN.json` + `en.json` videoType namespace 检查（如有缺项补齐）
+   - 依赖：CHG-340-A ✅
+   - 同 commit 落 **ADR-048 AMENDMENT 块**（ADR-157 §6 验收第 8 条）
+   - 验收要点：web-next 单测 + e2e（SEARCH project）全 PASS
+
+9. **CHG-343** — apps/server v1 AdminVideoForm VideoGenre 15→20（状态：⬜ 待开始）
+   - 创建时间：2026-05-26 22:00
+   - 建议模型：sonnet
+   - 文件范围（1 文件 / 1 PATCH 项）：
+     - `apps/server/src/components/admin/AdminVideoForm.tsx`（GENRE_OPTIONS 补 adventure / disaster / musical / western / sport 5 项）
+   - 依赖：CHG-339-A ✅
+   - 同 commit 备注 "v1 维护期 bug 修复豁免重写期约束 ADR-035"
+   - 验收要点：apps/server typecheck + 该组件单测（如有）PASS
+
+10. **CHG-344** — scripts/verify-enum-ssot.mjs 守卫脚本 + 集成（状态：⬜ 待开始）
+    - 创建时间：2026-05-26 22:00
+    - 建议模型：sonnet
+    - 文件范围（5 文件 / 4 PATCH 项）：
+      - `scripts/verify-enum-ssot.mjs`（新建守卫脚本）
+      - `scripts/enum-ssot-baseline.json`（新建 baseline 例外清单 / 实施期允许 0 例外）
+      - `scripts/preflight.sh`（加 step）
+      - `package.json`（增 `npm run verify:enum-ssot`）
+      - `scripts/verify-adr-contracts.sh` 或对应入口（串联调用）
+    - 依赖：CHG-341 ✅ + CHG-342 ✅ + CHG-343 ✅（所有消费方迁移完后启动 / 守卫预期全 PASS）
+    - 验收要点：`npm run verify:enum-ssot` 输出 0 违规 + preflight + verify:adr-contracts 集成
+
+### ENUMS-SSOT-IMPL 关键约束
+
+- **DAG 串行依赖**：CHG-339-A → 339-B → 339-C / 339-A → 340-A → 341+342 / 343 独立 / 344 收尾
+- **PATCH ≤ 5 项硬约束**：每张子卡严格 ≤ 5 项（已按 ADR-157 §3 D-157-5 口径精算）
+- **强制 Opus 评审**：CHG-340-A/B/C 共 3 卡触发 packages/admin-ui 公开 API 改动，commit trailer 必含 `Subagents: arch-reviewer (claude-opus-...)`
+- **D-N 偏离闭环责任**：每张 CHG 完成时同步 changelog 标注闭环的 D-157-X（339-A 闭 D-157-1 部分 / 340-A 闭 D-157-2 部分 / 342 同 commit 闭 D-157-3 + ADR-048 AMENDMENT / 344 闭 D-157-4 / 全 SEQ 闭合时闭 D-157-5 + D-157-6）
+- **零回归**：每卡完成后 4018+ unit + typecheck + lint + verify:adr-contracts 全 PASS
+- **baseline 截止**：CHG-344 完成 + 2 月内 enum-ssot-baseline.json 必须清零（含月度评审 / 逾期升 P1）

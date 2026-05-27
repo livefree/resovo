@@ -11,12 +11,9 @@ import { z } from 'zod'
 
 import { es } from '@/api/lib/elasticsearch'
 import { SearchService } from '@/api/services/SearchService'
+import { VIDEO_TYPES, VIDEO_STATUSES } from '@resovo/types'
 
-const VideoTypeEnum = z.enum([
-  'movie', 'series', 'anime', 'variety',
-  'documentary', 'short', 'sports', 'music',
-  'news', 'kids', 'other',
-])
+const VideoTypeEnum = z.enum(VIDEO_TYPES)
 const SortEnum = z.enum(['relevance', 'rating', 'latest'])
 
 export async function searchRoutes(fastify: FastifyInstance) {
@@ -47,7 +44,7 @@ export async function searchRoutes(fastify: FastifyInstance) {
 
   // ── GET /search ──────────────────────────────────────────────
   fastify.get('/search', async (request, reply) => {
-    const StatusEnum = z.enum(['ongoing', 'completed'])
+    const StatusEnum = z.enum(VIDEO_STATUSES)
 
     const QuerySchema = z.object({
       q: z.string().max(200).optional(),

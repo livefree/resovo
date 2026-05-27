@@ -8438,3 +8438,33 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
   - **下一序列**：SEQ-20260527-ENUMS-SSOT-IMPL（10 张实施分卡，主循环按优先级 P0 → P2 推进）
 - **PATCH 文件数**：1 项（≪ 5 ✅）
 - **门禁**：verify:adr-contracts ✅（advisory verify-adr-d-numbers 6 条 D-157-N 待实施期闭环 / 已登记）
+
+## [CHG-339-A] packages/types 4 P0 enum 双形态 + assertExhaustive 工具
+- **完成时间**：2026-05-26 22:25
+- **来源序列**：SEQ-20260527-ENUMS-SSOT-IMPL（ADR-157 D-157-1 部分实施）
+- **执行模型**：claude-opus-4-7（主循环 Opus）
+- **子代理调用**：无（packages/types 非共享组件 API / 不触发强制 Opus 评审）
+- **背景**：ADR-157 D-157-1 落地 / 评审红线 R-157-1（API zod 联动缺失）必修。union 类型不可迭代 → 跨应用 12 处独立硬编码物理根因；API 层 zod 字面量是评审必修项。
+- **改动文件**（7 文件 / 5 PATCH 项 按 ADR §3 D-157-5 口径 "1 enum 双形态 + zod 引用更新 = 1 PATCH 项" ≤ 5 ✅）：
+  - `packages/types/src/video.types.ts`：4 enum 改双形态 — `VIDEO_TYPES`(11) / `VIDEO_GENRES`(20) / `VIDEO_STATUSES`(2) / `REVIEW_STATUSES`(3) 全部 `as const` + `type X = typeof X[number]` 派生（对齐既有 `SPEED_PRESETS` 范式）
+  - `packages/types/src/utils/exhaustive.ts`：**新建**工具子目录 / `assertExhaustive(value: never): never`
+  - `packages/types/src/index.ts`：加 `export { VIDEO_TYPES, VIDEO_GENRES, VIDEO_STATUSES, REVIEW_STATUSES } from './video.types'` + `export * from './utils/exhaustive'`
+  - `apps/api/src/routes/admin/videos.ts`：4 处 zod 替换（type ×2 / status ×1 / reviewStatus ×1 → `z.enum(VIDEO_TYPES)` 等）
+  - `apps/api/src/routes/admin/staging.ts`：2 处 zod 替换（type ×2）
+  - `apps/api/src/routes/admin/moderation.ts`：1 处 zod 替换（type ×1 / 不动 result 子集 `['approved','rejected']` 业务约束）
+  - `apps/api/src/routes/search.ts`：2 处替换（VideoTypeEnum const 改派生 + 内联 StatusEnum 改 `z.enum(VIDEO_STATUSES)`）
+- **新增依赖**：无（zod ≥3.22 已支持 `z.enum(readonly array)`，本项目 3.24.0 ✓）
+- **数据库变更**：无
+- **闭环 D-N 偏离**：D-157-1 部分（4 P0 enum 双形态 + API zod 联动）；剩 D-157-1 P1/P2 8 enum 待 CHG-339-B/-C
+- **门禁**：typecheck ✅ / lint ✅ / 单测 5139/5139 PASS ✅ / verify:adr-contracts ✅
+- **红线 R-157-1 验证**：
+  - VideoType API zod 字面量 `grep -rnE "z\.enum\(\[\s*'(movie|series|anime|variety|documentary)" apps/api/src` 输出 = 2 处例外
+    - `apps/api/src/templates/route.template.ts:19`：**注释中模板示例**（非运行时代码，不影响）
+    - `apps/api/src/services/UserSubmissionService.ts:48`：`['movie', 'series', 'show']` user submission 业务自定义 enum（含非 VideoType 值 `show`，不属 VideoType 联动范围）
+  - VideoStatus zod 字面量：空 ✅
+  - ReviewStatus zod 字面量：空 ✅
+- **PATCH 文件数**：7（按 PATCH 项口径 5 ≤ 5 ✅ / 实际文件数仅是引用面计数）
+- **注意事项**：
+  - 价值排序 #2「边界与复用」+ #3「可扩展性」直接驱动：后续新增 enum 项只需改 video.types.ts 一处 `VIDEO_TYPES` 数组，API zod 派生自动跟随
+  - **测试偶发 flaky 记录**：首跑全套 `StagingEditPanel.test.tsx:175 > 保存成功后调用 onUpdated` 1/5139 fail；单跑该测试 PASS；重跑全套 5139/5139 PASS → 判定为 pre-existing test pollution，与本卡改动无关；不阻塞 commit
+  - 后续 CHG-339-B/-C 沿用本卡范式（const 复数命名 + index.ts 增 export）；CHG-339-B 处理 4 P1 enum；CHG-339-C 处理 4 P2 enum

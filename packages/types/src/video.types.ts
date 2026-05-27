@@ -4,26 +4,33 @@
 
 // ── 枚举 ─────────────────────────────────────────────────────────
 
-export type VideoType =
-  | 'movie'       // 电影
-  | 'series'      // 连续剧 / 电视剧
-  | 'anime'       // 动画
-  | 'variety'     // 综艺（含游戏类综艺）
-  | 'documentary' // 纪录片
-  | 'short'       // 短剧 / 短片
-  | 'sports'      // 体育赛事
-  | 'music'       // 音乐节目
-  | 'news'        // 新闻 / 时事
-  | 'kids'        // 儿童内容
-  | 'other'       // 其他
+/** VideoType 全集（ADR-157 D-157-1：const + type 派生双形态 / 对齐 SPEED_PRESETS 范式） */
+export const VIDEO_TYPES = [
+  'movie',       // 电影
+  'series',      // 连续剧 / 电视剧
+  'anime',       // 动画
+  'variety',     // 综艺（含游戏类综艺）
+  'documentary', // 纪录片
+  'short',       // 短剧 / 短片
+  'sports',      // 体育赛事
+  'music',       // 音乐节目
+  'news',        // 新闻 / 时事
+  'kids',        // 儿童内容
+  'other',       // 其他
+] as const
+export type VideoType = typeof VIDEO_TYPES[number]
 
 export type ContentFormat = 'movie' | 'episodic' | 'collection' | 'clip'
 export type EpisodePattern = 'single' | 'multi' | 'ongoing' | 'unknown'
 
-export type VideoStatus   = 'ongoing' | 'completed'
+/** VideoStatus 全集（ADR-157 D-157-1） */
+export const VIDEO_STATUSES = ['ongoing', 'completed'] as const
+export type VideoStatus = typeof VIDEO_STATUSES[number]
 
 // ── 内容治理（Migration 016）────────────────────────────────────
-export type ReviewStatus     = 'pending_review' | 'approved' | 'rejected'
+/** ReviewStatus 全集（ADR-157 D-157-1） */
+export const REVIEW_STATUSES = ['pending_review', 'approved', 'rejected'] as const
+export type ReviewStatus = typeof REVIEW_STATUSES[number]
 export type VisibilityStatus = 'public' | 'internal' | 'hidden'
 
 // ── 榜单标签（Migration 051，ADR-052）────────────────────────────
@@ -42,27 +49,30 @@ export type SourceCheckStatus = 'pending' | 'ok' | 'partial' | 'all_dead'
  *   豆瓣"同性 / 情色"不纳入枚举，raw 保留至 source_category，审核区人工处理。
  *   详见 docs/video_type_genre_alignment_20260422.md
  */
-export type VideoGenre =
-  | 'action'       // 动作
-  | 'comedy'       // 喜剧
-  | 'romance'      // 爱情
-  | 'thriller'     // 惊悚
-  | 'horror'       // 恐怖
-  | 'sci_fi'       // 科幻
-  | 'fantasy'      // 奇幻 / 魔幻 / 玄幻
-  | 'history'      // 历史 / 古装
-  | 'crime'        // 犯罪
-  | 'mystery'      // 悬疑 / 黑色电影
-  | 'war'          // 战争
-  | 'family'       // 家庭 / 亲情
-  | 'biography'    // 传记 / 人物
-  | 'martial_arts' // 武侠 / 功夫（华语扩展）
-  | 'adventure'    // 冒险
-  | 'disaster'     // 灾难
-  | 'musical'      // 歌舞 / 音乐
-  | 'western'      // 西部
-  | 'sport'        // 运动（注意与 VideoType.sports 区分：前者为题材，后者为形式）
-  | 'other'        // 其他
+/** VideoGenre 全集（ADR-157 D-157-1） */
+export const VIDEO_GENRES = [
+  'action',       // 动作
+  'comedy',       // 喜剧
+  'romance',      // 爱情
+  'thriller',     // 惊悚
+  'horror',       // 恐怖
+  'sci_fi',       // 科幻
+  'fantasy',      // 奇幻 / 魔幻 / 玄幻
+  'history',      // 历史 / 古装
+  'crime',        // 犯罪
+  'mystery',      // 悬疑 / 黑色电影
+  'war',          // 战争
+  'family',       // 家庭 / 亲情
+  'biography',    // 传记 / 人物
+  'martial_arts', // 武侠 / 功夫（华语扩展）
+  'adventure',    // 冒险
+  'disaster',     // 灾难
+  'musical',      // 歌舞 / 音乐
+  'western',      // 西部
+  'sport',        // 运动（注意与 VideoType.sports 区分：前者为题材，后者为形式）
+  'other',        // 其他
+] as const
+export type VideoGenre = typeof VIDEO_GENRES[number]
 
 export type VideoQuality  = '4K' | '1080P' | '720P' | '480P' | '360P'
 export type SourceType    = 'hls' | 'mp4' | 'dash'

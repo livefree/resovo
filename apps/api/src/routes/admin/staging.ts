@@ -17,11 +17,12 @@ import { VideoService } from '@/api/services/VideoService'
 import { ModerationService } from '@/api/services/ModerationService'
 import { isAppError } from '@/api/lib/errors'
 import * as stagingQueries from '@/api/db/queries/staging'
+import { VIDEO_TYPES } from '@resovo/types'
 
 const ListQuerySchema = z.object({
   page: z.coerce.number().int().min(1).optional().default(1),
   limit: z.coerce.number().int().min(1).max(100).optional().default(20),
-  type: z.enum(['movie', 'series', 'anime', 'variety', 'documentary', 'short', 'sports', 'music', 'news', 'kids', 'other'] as const).optional(),
+  type: z.enum(VIDEO_TYPES).optional(),
   readiness: z.enum(['ready', 'warning', 'blocked']).optional(),
   siteKey: z.string().max(100).optional(),
 })
@@ -48,7 +49,7 @@ const RulesSchema = z.object({
 const MetaEditSchema = z.object({
   title: z.string().min(1).max(200).optional(),
   year: z.number().int().min(1900).max(2100).nullable().optional(),
-  type: z.enum(['movie', 'series', 'anime', 'variety', 'documentary', 'short', 'sports', 'music', 'news', 'kids', 'other'] as const).optional(),
+  type: z.enum(VIDEO_TYPES).optional(),
   genres: z.array(z.string().min(1).max(50)).max(10).optional(),
 })
 

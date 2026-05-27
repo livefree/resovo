@@ -21,3 +21,9 @@ export type * from './admin-shell.types'
 export type * from './dashboard'
 
 export { DEFAULT_INGEST_POLICY } from './system.types'
+
+// ── ADR-157 D-157-1 视频枚举值常量（双形态，4 P0 enum）─────────────
+export { VIDEO_TYPES, VIDEO_GENRES, VIDEO_STATUSES, REVIEW_STATUSES } from './video.types'
+
+// ── ADR-157 D-157-1 类型守卫工具 ────────────────────────────────
+export * from './utils/exhaustive'

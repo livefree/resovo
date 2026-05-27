@@ -20,6 +20,7 @@ import { ModerationService } from '@/api/services/ModerationService'
 import * as systemSettingsQueries from '@/api/db/queries/systemSettings'
 import { isAppError } from '@/api/lib/errors'
 import type { VisibilityStatus } from '@/types'
+import { VIDEO_TYPES, VIDEO_STATUSES, REVIEW_STATUSES } from '@resovo/types'
 
 // ── Zod Schema ────────────────────────────────────────────────────
 
@@ -64,12 +65,12 @@ const VideoMetaSchema = z.object({
   titleEn: z.string().max(200).optional().nullable(),
   description: z.string().max(5000).optional().nullable(),
   coverUrl: z.string().url().optional().nullable(),
-  type: z.enum(['movie', 'series', 'anime', 'variety', 'documentary', 'short', 'sports', 'music', 'news', 'kids', 'other'] as const).optional(),
+  type: z.enum(VIDEO_TYPES).optional(),
   genres: z.array(z.string().max(50)).optional(),
   year: z.number().int().min(1900).max(2100).optional().nullable(),
   country: z.string().max(10).optional().nullable(),
   episodeCount: z.number().int().min(0).optional(),
-  status: z.enum(['ongoing', 'completed'] as const).optional(),
+  status: z.enum(VIDEO_STATUSES).optional(),
   rating: z.number().min(0).max(10).optional().nullable(),
   director: z.array(z.string()).optional(),
   cast: z.array(z.string()).optional(),
@@ -97,9 +98,9 @@ const SORT_FIELDS = [
 
 const ListQuerySchema = z.object({
   status: z.enum(['pending', 'published', 'unpublished', 'all']).optional().default('all'),
-  type: z.enum(['movie', 'series', 'anime', 'variety', 'documentary', 'short', 'sports', 'music', 'news', 'kids', 'other'] as const).optional(),
+  type: z.enum(VIDEO_TYPES).optional(),
   visibilityStatus: z.enum(['public', 'internal', 'hidden'] as const).optional(),
-  reviewStatus: z.enum(['pending_review', 'approved', 'rejected'] as const).optional(),
+  reviewStatus: z.enum(REVIEW_STATUSES).optional(),
   page: z.coerce.number().int().min(1).optional().default(1),
   limit: z.coerce.number().int().min(1).max(100).optional().default(20),
   q: z.string().max(100).optional(),
