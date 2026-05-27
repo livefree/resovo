@@ -188,11 +188,9 @@ export const M = {
     probeFailed: '探测失败，请重试',
     renderCheckFailed: '试播失败，请重试',
     probeFrozen: '采集已冻结，无法触发探测',
-    // CHG-356 / ADR-158 AMENDMENT Y1：同步快探结果 toast 文案
-    probeOk: '探测完成：可访问',
-    probeDead: '探测完成：线路失效',
-    renderCheckOk: '试播完成：渲染正常',
-    renderCheckDead: '试播完成：渲染失败',
+    // CHG-356 / ADR-158 AMENDMENT Y1 + CHG-358 修订：仅 dead 反馈（ok 不弹 / pill 已是反馈）
+    probeDead: '探测：该线路失效',
+    renderCheckDead: '试播：该线路渲染失败',
     // CHG-357 / ADR-158 AMENDMENT 2 / Y4：批量探测/试播结果 toast 文案
     batchProbeDone: (ok: number, dead: number, total: number, failed: number) =>
       `已探测 ${ok + dead}/${total}${failed > 0 ? ` · 失败 ${failed}` : ''}`,

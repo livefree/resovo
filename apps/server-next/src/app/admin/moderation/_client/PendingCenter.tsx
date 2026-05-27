@@ -14,6 +14,8 @@ interface PendingCenterProps {
   readonly v: VideoQueueRow
   readonly onStaffNoteChange: (videoId: string, note: string | null) => void
   readonly onEditVideo: (videoId: string) => void
+  /** CHG-358：probe / render-check 完成后通知 PendingQueue refetch（左队列 ModListRow pill 联动）*/
+  readonly onSourceHealthChanged?: () => void
 }
 
 const BTN_SM: React.CSSProperties = {
@@ -33,7 +35,7 @@ const SECTION: React.CSSProperties = {
   marginBottom: 14,
 }
 
-export function PendingCenter({ v, onStaffNoteChange, onEditVideo }: PendingCenterProps): React.ReactElement {
+export function PendingCenter({ v, onStaffNoteChange, onEditVideo, onSourceHealthChanged }: PendingCenterProps): React.ReactElement {
   const [currentEp, setCurrentEp] = useState(1)
   const [noteEditing, setNoteEditing] = useState(false)
   const { selected, onLineSelect, clearSelection } = useSelectedLine(currentEp)
@@ -135,6 +137,7 @@ export function PendingCenter({ v, onStaffNoteChange, onEditVideo }: PendingCent
           videoId={v.id}
           selectedKey={selected?.lineKey ?? null}
           onLineSelect={onLineSelect}
+          onSourceHealthChanged={onSourceHealthChanged}
         />
       </div>
     </>

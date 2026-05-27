@@ -9389,3 +9389,48 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
   - **race 防御双层**：admin-ui useMemo（同进程 batch 期间 inline 按钮 disabled）+ server-next videoIdRef（user 切视频后 setLines 不污染新视频）
 - **闭环**：CHG-357 完成；用户原话"批量操作功能"+"验证视频所有线路"完整交付；ADR-158 AMENDMENT 1 G1 advisory 兑现；CHG-351 系列 + CHG-355/356/357 完整收敛
 - **后续 advisory**：G5 失败 source 列表（Modal）/ G6 SourceProbeService 进一步拆分（不强制）/ G7 VideoEditDrawer TabLines 补齐 batch 按钮消费（功能一致性 follow-up 卡）/ G8 视频 source > 50 普遍存在时引入 SSE 进度推送
+
+## [CHG-358] 探测/试播 UX 修订 — 左队列 pill 联动 + 成功反馈简化
+- **完成时间**：2026-05-27
+- **来源**：CHG-357 用户实测原话「左侧视频列表的 pill 没有立即更新，仅视频线路区域做到更新，但就地弹出反馈信息不符合规范（pill 若成功更新，简单的"已探测""已试播"的消息并没有价值）」
+- **执行模型**：claude-opus-4-7（主循环不切换 §16.5）
+- **子代理**：无（UX 修订 / 复用既有契约）
+- **根因**：
+  - **问题 1（左队列 pill 不联动）**：ModListRow 渲染 `<DualSignal probe render>` 的数据来自 pending-queue 端点后端聚合（SELECT MIN probe_status 投影 / moderation.ts:225-237）；probe/render-check 完成后只 setLines（LinesPanel 内 SignalChip）— pendingVideos state 未触发 refetch → 左侧不变
+  - **问题 2（成功 toast 无价值）**：actionError 红色横幅复用为成功 toast 是误用 — pill 变色已是首要反馈 / "已探测：可访问" 信息冗余
+- **修复方案**：
+  - **LinesPanel 加 `onSourceHealthChanged?: () => void` Prop** — 每次 single / batch probe 或 render-check 成功（含 dead）后触发 1 次
+  - **上游链路透传**：PendingCenter → PendingPaneController → ModerationConsole → 实参 `refetchQueue`（usePendingQueue.refetch / 既有方法）
+  - **反馈策略修订**：
+    - 单源：仅 `dead` 时 setActionError（probeDead / renderCheckDead）/ `ok` 不弹（pill 变色已反馈）
+    - 批量：仅 `dead > 0 || failed > 0` 时 setActionError / 全 ok 不弹
+    - 失败 / freeze 仍保留（用户需明示）
+  - **i18n 文案修订**：
+    - 删 `probeOk` + `renderCheckOk`（不再使用）
+    - 改 `probeDead`: "探测：该线路失效" / `renderCheckDead`: "试播：该线路渲染失败"（去"完成"语义 / 直陈失败结果）
+- **改动文件（5 项 ≤ 5 ✅）**：
+  - `apps/server-next/src/app/admin/moderation/_client/LinesPanel.tsx`（+ onSourceHealthChanged prop + 4 handler 修订成功路径 setActionError 条件 + 触发回调）
+  - `apps/server-next/src/app/admin/moderation/_client/PendingCenter.tsx`（+ onSourceHealthChanged prop 透传 LinesPanel）
+  - `apps/server-next/src/app/admin/moderation/_client/PendingPaneController.tsx`（+ onSourceHealthChanged prop 透传 PendingCenter）
+  - `apps/server-next/src/app/admin/moderation/_client/ModerationConsole.tsx`（实参 `onSourceHealthChanged={refetchQueue}` / usePendingQueue 既有 refetch）
+  - `apps/server-next/src/i18n/messages/zh-CN/moderation.ts`（删 probeOk + renderCheckOk / 修订 probeDead + renderCheckDead 文案）
+- **新增依赖**：无
+- **数据库变更**：无
+- **门禁**：
+  - typecheck ✅（5 包全 PASS）
+  - lint ✅
+  - video-source-batch-inline-action-audit 6/6 + video-source-inline-action-audit 5/5 PASS（零回归）
+- **UX 修复前 → 修复后**：
+  - **左队列 pill**：
+    - 修复前：probe 完成 → LinesPanel SignalChip 变色 / 左侧 ModListRow pill 不变
+    - 修复后：probe 完成 → SignalChip + 左侧 pill **同步变化**（自动 refetchQueue）
+  - **反馈消息**：
+    - 修复前：probe ok 弹"探测完成：可访问"（冗余）/ batch 全 ok 弹"已探测 X/Y"（冗余）
+    - 修复后：probe ok / batch 全 ok **静默**（pill 已反馈 + 左侧联动已反馈）/ dead / failed / freeze 仍提示
+- **关键沉淀**：
+  - **多源状态同步范式**：诊断操作（probe / render-check / 任何改 video_sources 状态）应通过 `onSourceHealthChanged` callback 通知 caller 重 fetch 上游聚合数据 / 避免组件间状态漂移
+  - **反馈策略修订原则**：成功路径如果有视觉反馈（pill 变色 / 列表更新）→ 不弹横幅；失败 / 部分失败 / 异常路径才弹（横幅是 actionError 性质）
+- **闭环**：CHG-357 用户实测 2 个 UX 问题完整修复；ADR-158 + 2 AMENDMENT + 3 follow-up（CHG-355 / 356 / 357 / 358）完整收敛
+- **后续 advisory**：
+  - 未来其他 source 状态写操作（如 toggle / disable-dead）也应触发 onSourceHealthChanged（当前仅 probe/render-check 触发 / 不影响功能，但语义不完整 / 独立 follow-up 卡）
+  - VideoEditDrawer TabLines 等其他 LinesPanel 消费方暂不联动（无 PendingQueue 上下文 / G7 advisory 未来扩展）

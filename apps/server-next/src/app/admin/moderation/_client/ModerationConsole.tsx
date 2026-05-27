@@ -529,6 +529,7 @@ export function ModerationConsole(): React.ReactElement {
             onRejectOpen={() => setRejectOpen(true)}
             onEditVideo={handleEditVideo}
             onStaffNoteChange={handleStaffNoteChange}
+            onSourceHealthChanged={refetchQueue}
             q={q}
             onQChange={handleQChange}
             currentFilters={currentFilters}

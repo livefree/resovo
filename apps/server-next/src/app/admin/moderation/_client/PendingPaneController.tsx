@@ -65,6 +65,8 @@ export interface PendingPaneControllerProps {
   readonly onRejectOpen: () => void
   readonly onEditVideo: (videoId: string) => void
   readonly onStaffNoteChange: (videoId: string, note: string | null) => void
+  /** CHG-358：probe / render-check 完成后通知 PendingQueue refetch（左队列 pill 联动）*/
+  readonly onSourceHealthChanged?: () => void
   // CHG-350：search + filterChips toolbar 注入
   readonly q: string
   readonly onQChange: (q: string) => void
@@ -88,6 +90,7 @@ export function PendingPaneController({
   onRejectOpen,
   onEditVideo,
   onStaffNoteChange,
+  onSourceHealthChanged,
   q,
   onQChange,
   currentFilters,
@@ -221,7 +224,7 @@ export function PendingPaneController({
           role: 'main',
           'aria-label': M.aria.consolePreviewPane,
           children: v ? (
-            <PendingCenter v={v} onStaffNoteChange={onStaffNoteChange} onEditVideo={onEditVideo} />
+            <PendingCenter v={v} onStaffNoteChange={onStaffNoteChange} onEditVideo={onEditVideo} onSourceHealthChanged={onSourceHealthChanged} />
           ) : (
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--fg-muted)', fontSize: 'var(--font-size-sm-tight)' }}>
               {M.pending.empty}

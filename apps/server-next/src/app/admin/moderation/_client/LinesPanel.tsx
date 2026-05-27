@@ -54,11 +54,17 @@ export interface LinesPanelProps {
     readonly line: LineAggregate
     readonly firstActiveUrl: string | null
   }) => void
+  /**
+   * CHG-358：probe / render-check 完成后通知上游（左队列 PendingQueue 聚合 pill 联动刷新）
+   * 调用方式：每次 single / batch probe 或 render-check 成功（含全 dead）后触发 1 次
+   * 上游通常调 usePendingQueue.refetch() 重 fetch 让 ModListRow.probe/render 投影刷新
+   */
+  readonly onSourceHealthChanged?: () => void
 }
 
 // ── Main ─────────────────────────────────────────────────────────────────────
 
-export function LinesPanel({ videoId, selectedKey, onLineSelect }: LinesPanelProps): React.ReactElement {
+export function LinesPanel({ videoId, selectedKey, onLineSelect, onSourceHealthChanged }: LinesPanelProps): React.ReactElement {
   const [lines, setLines] = useState<ContentSourceRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -167,22 +173,26 @@ export function LinesPanel({ videoId, selectedKey, onLineSelect }: LinesPanelPro
     try { await api.refetchSources(videoId) } catch { setActionError(M.lines.refetchFailed) }
   }, [videoId])
 
-  // CHG-351-C / ADR-158 + AMENDMENT (CHG-356)：单源 inline 探测
+  // CHG-351-C / ADR-158 + AMENDMENT (CHG-356) + CHG-358 UX 修订：单源 inline 探测
   //   AMENDMENT: 同步快探返回 newProbeStatus + latencyMs → setLines 立即 update → SignalChip 立即重渲
   //   probe 守 freeze / 409 STATE_CONFLICT 抛 probeFrozen 提示
+  //   CHG-358：actionError 仅 dead / 失败 / freeze 时设；成功（ok）不弹横幅（pill 变色已是反馈）
+  //          + onSourceHealthChanged 触发上游 PendingQueue refetch（左队列 ModListRow pill 联动）
   const handleProbeEpisode = useCallback(async ({ episodeId }: { lineKey: string; episodeId: string }) => {
     setProbingIds(s => new Set(s).add(episodeId))
     setActionError(null)
     try {
       const result = await api.probeOneSource(episodeId)
-      // CHG-356：立即 setLines update probe_status + latency_ms → aggregate.ts 自动重算 SignalChip
       setLines(prev => prev.map(l =>
         l.id === episodeId
           ? { ...l, probe_status: result.newProbeStatus, latency_ms: result.latencyMs }
           : l
       ))
-      // Y1 toast：明示结果（chip 颜色变化幅度小 / 用户可能没注意）
-      setActionError(result.newProbeStatus === 'ok' ? M.lines.probeOk : M.lines.probeDead)
+      // CHG-358：仅 dead 时显示（ok 不弹 / pill 已反馈）
+      if (result.newProbeStatus === 'dead') {
+        setActionError(M.lines.probeDead)
+      }
+      onSourceHealthChanged?.()  // 联动左队列聚合 pill
     } catch (e: unknown) {
       if (e instanceof ApiClientError && e.status === 409) {
         setActionError(M.lines.probeFrozen)
@@ -192,9 +202,8 @@ export function LinesPanel({ videoId, selectedKey, onLineSelect }: LinesPanelPro
     } finally {
       setProbingIds(s => { const next = new Set(s); next.delete(episodeId); return next })
     }
-  }, [])
+  }, [onSourceHealthChanged])
 
-  // CHG-351-C / ADR-158 D-158-5 + AMENDMENT (CHG-356)：render-check 不守 freeze
   const handleRenderCheckEpisode = useCallback(async ({ episodeId }: { lineKey: string; episodeId: string }) => {
     setRenderCheckingIds(s => new Set(s).add(episodeId))
     setActionError(null)
@@ -205,23 +214,27 @@ export function LinesPanel({ videoId, selectedKey, onLineSelect }: LinesPanelPro
           ? { ...l, render_status: result.newRenderStatus }
           : l
       ))
-      setActionError(result.newRenderStatus === 'ok' ? M.lines.renderCheckOk : M.lines.renderCheckDead)
+      if (result.newRenderStatus === 'dead') {
+        setActionError(M.lines.renderCheckDead)
+      }
+      onSourceHealthChanged?.()
     } catch {
       setActionError(M.lines.renderCheckFailed)
     } finally {
       setRenderCheckingIds(s => { const next = new Set(s); next.delete(episodeId); return next })
     }
-  }, [])
+  }, [onSourceHealthChanged])
 
   // CHG-357 / ADR-158 AMENDMENT 2：视频级 batch 探测/试播
   //   I4 race 防御：videoIdRef 防 user 切视频后 batch 仍 setLines 当前视频；I4 admin-ui useMemo 防 inline 按钮 race
+  // CHG-358：batch 完成反馈仅在 dead/failed > 0 时显示（全 ok 不弹 / pill 联动 + 左队列 refetch 已是反馈）
   const handleProbeAllSources = useCallback(async () => {
     setProbingAllSources(true)
     setActionError(null)
     const startedVideoId = videoId
     try {
       const result = await api.batchProbeVideo(videoId)
-      if (videoIdRef.current !== startedVideoId) return  // I4 user 已切视频 / 丢弃结果
+      if (videoIdRef.current !== startedVideoId) return
       setLines(prev => prev.map(l => {
         const r = result.results.find(x => x.sourceId === l.id)
         return r && !r.error
@@ -229,7 +242,10 @@ export function LinesPanel({ videoId, selectedKey, onLineSelect }: LinesPanelPro
           : l
       }))
       const { ok, dead, total, failed } = result.summary
-      setActionError(M.lines.batchProbeDone(ok, dead, total, failed))
+      if (dead > 0 || failed > 0) {
+        setActionError(M.lines.batchProbeDone(ok, dead, total, failed))
+      }
+      onSourceHealthChanged?.()
     } catch (e: unknown) {
       if (e instanceof ApiClientError && e.status === 409) {
         setActionError(M.lines.batchProbeFrozen)
@@ -239,7 +255,7 @@ export function LinesPanel({ videoId, selectedKey, onLineSelect }: LinesPanelPro
     } finally {
       setProbingAllSources(false)
     }
-  }, [videoId])
+  }, [videoId, onSourceHealthChanged])
 
   const handleRenderCheckAllSources = useCallback(async () => {
     setRenderCheckingAllSources(true)
@@ -255,13 +271,16 @@ export function LinesPanel({ videoId, selectedKey, onLineSelect }: LinesPanelPro
           : l
       }))
       const { ok, dead, total, failed } = result.summary
-      setActionError(M.lines.batchRenderCheckDone(ok, dead, total, failed))
+      if (dead > 0 || failed > 0) {
+        setActionError(M.lines.batchRenderCheckDone(ok, dead, total, failed))
+      }
+      onSourceHealthChanged?.()
     } catch {
       setActionError(M.lines.batchRenderCheckFailed)
     } finally {
       setRenderCheckingAllSources(false)
     }
-  }, [videoId])
+  }, [videoId, onSourceHealthChanged])
 
   return (
     <>
