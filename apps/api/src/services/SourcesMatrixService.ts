@@ -23,6 +23,7 @@ import {
   countRouteSources,
   softDeleteRouteBySite,
 } from '@/api/db/queries/sources-matrix'
+import { findVideoSourceById } from '@/api/db/queries/video_sources'
 import * as systemSettingsQueries from '@/api/db/queries/systemSettings'
 import type {
   DualSignalState,
@@ -105,6 +106,11 @@ export const RouteActionParamsSchema = z.object({
   sourceName: z.string().min(1).max(200),
 }).strict()
 
+// ADR-158 / CHG-351-A：单源 inline probe + render-check path 共享 schema（R2 / .uuid() 422 前置 vs 500 fallthrough）
+export const SingleSourceParamsSchema = z.object({
+  id: z.string().uuid(),
+}).strict()
+
 export interface RouteTestResult {
   readonly ok: boolean
   readonly latencyMs: number | null
@@ -118,6 +124,18 @@ export interface RouteReprobeResult {
 export interface RouteDeleteResult {
   readonly deletedCount: number
   readonly deletedIds: readonly string[]
+}
+
+// ADR-158 / CHG-351-A：单源 inline 操作结果（与 RouteReprobeResult 形态对称 / queued 字面 true 标识异步入队语义）
+export interface SingleSourceProbeResult {
+  readonly probeJobId: string
+  readonly queued: true
+  readonly sourceId: string
+}
+export interface SingleSourceRenderCheckResult {
+  readonly renderJobId: string
+  readonly queued: true
+  readonly sourceId: string
 }
 
 export type { VideoGroupListParams, VideoGroupListResult, VideoGroupStats, LineMatrixRow, SourceLineAlias, SourceRouteBySite }
@@ -353,6 +371,79 @@ export class SourcesMatrixService {
     })
 
     return { deletedCount, deletedIds }
+  }
+
+  // ── ADR-158 / CHG-351-A 单源 inline 操作 ──────────────────────────
+  //
+  // 与 row 7-9 line-level mutations 互补：
+  //   - 操作粒度：单 video_sources.id（vs siteKey+sourceName 复合键）
+  //   - 触发场景：审核台 LinesPanel inline 按钮（vs 后台 sources 管理批量运维）
+  //   - actionType: `video_source.inline_action`（与 video_source.toggle 单源域前缀对齐）
+  //   - targetKind 复用 `video_source`（零扩展 / TARGET_KINDS 已存在）
+  //   - freeze 守卫：probe ✅ 守 / render-check ❌ 不守（D-158-5 / Y1 diagnostic 可用性优先）
+  //   - 占位 jobId 命名空间 `probe-vs-` / `render-vs-`（D-158-6 / Y3 防与 row 7-9 前缀冲突）
+  //   - error path（404 / 409 / 422）不写 audit（D-158-7 / Y2 + ADR-121 D-121-4）
+
+  /**
+   * 单源 probe：入队 source-health worker 重探指定 video_sources.id（占位 jobId / advisory A2）
+   * - 404 sourceId 不存在或已软删除
+   * - 409 freeze=true（守 freeze / 与采集资源同源）
+   */
+  async probeOne(
+    sourceId: string,
+    actorId: string,
+    requestId?: string,
+  ): Promise<SingleSourceProbeResult> {
+    await this.assertNotFrozen()
+
+    const source = await findVideoSourceById(this.db, sourceId)
+    if (!source) {
+      throw new AppError('NOT_FOUND', `source ${sourceId} 不存在`, 404)
+    }
+
+    const probeJobId = `probe-vs-${sourceId}-${Date.now()}`
+
+    this.auditSvc.write({
+      actorId,
+      actionType: 'video_source.inline_action',
+      targetKind: 'video_source',
+      targetId: sourceId,
+      beforeJsonb: null,
+      afterJsonb: { action: 'probe', probeJobId, sourceId },
+      requestId: requestId ?? null,
+    })
+
+    return { probeJobId, queued: true as const, sourceId }
+  }
+
+  /**
+   * 单源 render-check：入队 player-render-check worker 检测指定 video_sources.id 渲染（占位 jobId / advisory A2+A4）
+   * - 404 sourceId 不存在或已软删除
+   * - 不守 freeze（D-158-5 / Y1 diagnostic 可用性 / render-check 不消采集资源）
+   */
+  async renderCheckOne(
+    sourceId: string,
+    actorId: string,
+    requestId?: string,
+  ): Promise<SingleSourceRenderCheckResult> {
+    const source = await findVideoSourceById(this.db, sourceId)
+    if (!source) {
+      throw new AppError('NOT_FOUND', `source ${sourceId} 不存在`, 404)
+    }
+
+    const renderJobId = `render-vs-${sourceId}-${Date.now()}`
+
+    this.auditSvc.write({
+      actorId,
+      actionType: 'video_source.inline_action',
+      targetKind: 'video_source',
+      targetId: sourceId,
+      beforeJsonb: null,
+      afterJsonb: { action: 'render_check', renderJobId, sourceId },
+      requestId: requestId ?? null,
+    })
+
+    return { renderJobId, queued: true as const, sourceId }
   }
 
   async upsertLineAlias(

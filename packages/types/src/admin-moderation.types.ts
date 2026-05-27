@@ -197,6 +197,9 @@ export type AdminAuditActionType =
   | 'crawler_task.cancel'         // POST /admin/crawler/tasks/:id/cancel
   | 'crawler_task.batch_cancel'   // POST /admin/crawler/tasks/batch-cancel（targetKind 复用 'system'）
 
+  // CHG-351-A / ADR-158：单源 inline probe + render-check 合并 actionType（R-MID-1 第 27 次系统化 / targetKind 复用 'video_source'）
+  | 'video_source.inline_action'  // POST /admin/sources/:id/{probe,render-check}（afterJsonb.action 区分 'probe' / 'render_check'）
+
 export type AdminAuditTargetKind =
   | 'video'
   | 'video_source'

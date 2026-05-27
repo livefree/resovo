@@ -15355,3 +15355,216 @@ CHG-341/342/343/344 互不依赖（可并行）；总实施估时 0.7-1.0w。
 **最终结论**：ADR-157 status 🟢 Accepted（2026-05-26 21:45 / arch-reviewer Opus A- CONDITIONAL → 主循环消化 1 红线 + 2 黄线 + 3 绿线 + 关键洞察 #3 → 等同 A）；CHG-339-A / 339-B / 339-C / 340-A / 340-B / 340-C / 341 / 342 / 343 / 344 共 10 张子卡可在下一个序列 `SEQ-20260527-ENUMS-SSOT-IMPL` 中立卡启动；CHG-340 系列强制 Opus arch-reviewer trailer；CHG-344 完成 + 2 月为 baseline 例外清零截止。
 
 ---
+
+## ADR-158 — admin 单源 inline probe + render-check 端点协议（CHG-351-A / Wave 1 #7-A）
+
+- **日期**：2026-05-27
+- **状态**：🟢 Accepted（arch-reviewer Opus A-CONDITIONAL 1 轮评审 → 主循环消化 3 红线 + 3 黄线 + 4 关键洞察 → 等同 A）
+- **决策者**：主循环 `claude-opus-4-7` + arch-reviewer (`claude-opus-4-7`) 子代理 1 轮独立评审
+- **关联**：ADR-100 §4.5 R7 MUST-8（admin route ADR 前置）/ ADR-110（错误码 14 码 / 零新增）/ ADR-117（sources-matrix 主 ADR）/ ADR-117 AMENDMENT 2（行级 3 mutations 同类先例 / `sources.route_action` 合并 actionType 范式）/ ADR-121（R-MID-1 audit RETRO 7 文件框架 / D-121-3 PATCH ≤ 5 豁免依据 / D-121-5 复用 actionType 模式）
+- **对应交付**：CHG-351-A（本卡）；下游 CHG-351-B（packages/admin-ui LinesPanel Props 扩展 / 强制 arch-reviewer trailer）+ CHG-351-C（server-next 消费方）
+- **触发**：CHG-351 PROBE-RENDER-INLINE（plan §10.5 LinesPanel 单 episode 行 inline 探/播按钮）触发 plan §16.5 BLOCKER 条件（新 ADR + admin-ui 公开 Props + PATCH > 5 项硬约束），用户选方案 A 拆 -A/-B/-C 三张子卡独立调度。本 ADR 服务 -A 后端 + ADR 阶段。
+
+### §1 决策摘要
+
+| 决策点 | 主题 | 推荐结论 | 性质 |
+|--------|------|---------|------|
+| D-158-1 | 端点路径范式 | `POST /admin/sources/:id/probe` + `POST /admin/sources/:id/render-check`；`:id` 为 `video_sources.id` uuid；与既有 line-level `/admin/sources/routes/by-site/:siteKey/:sourceName/reprobe` 命名空间互补（line 操作 vs 单源 inline 操作） | 核心契约 |
+| D-158-2 | actionType 命名 | **`video_source.inline_action`**（与既有 `video_source.toggle` / `.disable_dead_batch` 单源域前缀对齐）；合并 actionType 模式（D-121-5 / ADR-117 AMENDMENT 2 范式）+ `afterJsonb.action` 区分 `'probe'` / `'render_check'`；评审 R1 拒绝原草案 `sources.single_action`（"single" 是实施细节非业务语义） | audit 契约 / R1 |
+| D-158-3 | zod 路径校验 | `z.string().uuid()`（与既有 `video-groups/:videoId/matrix` 一致 / 非 uuid 路径 → 422 前置校验）；评审 R2 拒绝原草案 `.min(1)`（会让非 uuid 路径走 SQL 后落 500 INTERNAL_ERROR / 体验破碎） | 契约 / R2 |
+| D-158-4 | targetKind | 复用既有 **`'video_source'`**（TARGET_KINDS 数组已存在 / 零扩展 / 零 migration） | audit 契约 |
+| D-158-5 | freeze 守卫边界 | **`/probe` 守 freeze ✅ / `/render-check` 不守 ❌**；rationale：probe 入队 source-health worker 与采集资源同源；render-check 是 player 渲染检测，freeze 期间 diagnostic 价值高（评审 Y1） | 状态职责 / Y1 |
+| D-158-6 | 占位 jobId 前缀 | `probe-vs-${sourceId}-${Date.now()}` + `render-vs-${sourceId}-${Date.now()}`（`vs` = video_source 命名空间，与 row 7-9 `probe-${siteKey}-` 彻底分离）；评审 Y3 防 jobId 前缀冲突 | 实施细节 / Y3 |
+| D-158-7 | error path audit | 404 / 409 / 422 / 500 全部**不写 audit**（与 ADR-121 D-121-4 一致 / 评审 Y2 显式声明 + 测试覆盖） | 合规 / Y2 |
+| D-158-8 | actionType 边界 | `video_source.inline_action` 仅覆盖**纯诊断 / 不写 video_sources 状态**的单源操作（probe / render-check / 未来 quick-test / warm-cache）；状态写操作（disable / activate）**走既有 `video_source.toggle`**（评审 I1） | 扩展性 |
+| D-158-9 | 文件范围 / PATCH 豁免 | **9 文件**（RETRO 7 + decisions.md 单文件追加 + SourcesMatrixService.ts）；援引 ADR-121 D-121-3 RETRO 7 文件豁免 + 2 额外文件（decisions.md 章节追加 / service 物理实现 = RETRO 框架行 5 的实施位置） | 合规 / R3 |
+
+### §2 背景与问题
+
+**LinesPanel 单 episode 行 inline 按钮需求（plan §10.5）**：内容审核台 ModerationConsole 中部 PendingPaneController 三栏布局，右侧 LinesPanel 展示选中视频的线路 × 集数矩阵。每集行需要 inline 「🔍 探」+「▶ 播」xs 按钮，让审核员**针对单源（video_sources.id）** 触发：
+
+- **探（probe）**：异步入队 source-health worker 重新探测该单源的 HTTP 可达性 + latency + content-type
+- **播（render-check）**：异步入队 player 渲染检测，验证该单源 URL 是否能被前台 player 正确加载 + 播放
+
+**与既有 line-level reprobeRoute 的关系**：
+
+| 维度 | line-level（ADR-117 AMENDMENT 2 / row 7-9）| 单源 inline（本 ADR）|
+|------|------------------------------------|--------------|
+| 路径 | `/admin/sources/routes/by-site/:siteKey/:sourceName/{test,reprobe}` | `/admin/sources/:id/{probe,render-check}` |
+| 操作范围 | 同一 `(siteKey, sourceName)` 下**所有** episode | 单一 `video_sources.id`（1 行） |
+| 触发场景 | 后台 sources 管理（"重新探整条线路"） | 审核台 LinesPanel inline（"探这一集"） |
+| audit actionType | `sources.route_action` | `video_source.inline_action` |
+| targetKind | `source_route`（行操作 / 复合键）| `video_source`（单源 / id） |
+| 同步快探 | `testRoute` 有（HEAD 3s）| 暂无（D-158-1 收敛 / 全异步） |
+
+两组端点**互补不替代**：line-level 适合批量运维操作；单源 inline 适合审核流细粒度排查。
+
+**为何不复用 line-level**：审核台 LinesPanel 已有 `episodeId` 上下文（单源），强制审核员先反查 `(siteKey, sourceName)` 再调 line-level 会触发"重探全 episode"副作用 — 与"探这一集"用户意图不符。
+
+### 端点契约
+
+| # | 方法 | 路径 | 用途 | Request | Response | 鉴权 | 错误码 |
+|---|------|------|------|---------|----------|------|--------|
+| 1 | POST | `/admin/sources/:id/probe` | 单源全量 probe 入队（异步 / source-health worker） | Path: `id: z.string().uuid()` | 200 `{ data: { probeJobId, queued, sourceId } }` | admin | 422 / 404 NOT_FOUND（source 不存在/已软删除）/ 409 STATE_CONFLICT（freeze）/ 500 |
+| 2 | POST | `/admin/sources/:id/render-check` | 单源 render-check 入队（异步 / player-render-check worker / advisory A4） | Path: `id: z.string().uuid()` | 200 `{ data: { renderJobId, queued, sourceId } }` | admin | 422 / 404 NOT_FOUND / 500 |
+
+- **鉴权**：`requireRole(['admin'])`（与 row 5 alias upsert / row 7-9 mutations 100% 对齐）
+- **Path 校验**：`z.string().uuid()`（D-158-3 / R2 / 与 `video-groups/:videoId/matrix` 一致）
+- **错误码**：100% 复用 ADR-110 14 码 / 零新增
+- **freeze 守卫差异**（D-158-5 / Y1）：endpoint 1 守 freeze，endpoint 2 不守
+
+### §4 类型契约
+
+`packages/types/src/sources-matrix.types.ts` 已存在；本卡新增 2 interface（位置：service inline / 同 ADR-117 AMENDMENT 2 范式）：
+
+```ts
+export interface SingleSourceProbeResult {
+  readonly probeJobId: string
+  readonly queued: true
+  readonly sourceId: string
+}
+
+export interface SingleSourceRenderCheckResult {
+  readonly renderJobId: string
+  readonly queued: true
+  readonly sourceId: string
+}
+```
+
+### §5 zod request schema
+
+```ts
+export const SingleSourceParamsSchema = z.object({
+  id: z.string().uuid(),
+}).strict()
+```
+
+### §6 audit log 协议
+
+**新增 1 actionType / 零新 targetKind**（合并 actionType 模式 / D-121-5 + ADR-117 AMENDMENT 2 第 13 次系统化 → 第 N+1 次延续）：
+
+| 端点 | actionType | targetKind | targetId | beforeJsonb | afterJsonb |
+|------|-----------|------------|----------|-------------|------------|
+| POST `/probe` | `video_source.inline_action` | `video_source` | `sourceId` (uuid) | `null` | `{ action: 'probe', probeJobId, sourceId }` |
+| POST `/render-check` | `video_source.inline_action` | `video_source` | `sourceId` (uuid) | `null` | `{ action: 'render_check', renderJobId, sourceId }` |
+
+**error path 不写 audit（D-158-7 / Y2）**：404（source 不存在）/ 409（freeze / 仅 endpoint 1）/ 422（非 uuid path）/ 500 全部**不调** `auditSvc.write()`（ADR-121 D-121-4 一致）；测试断言 negative case。
+
+### §7 audit RETRO 7 文件框架（ADR-121 D-121-2 / R-MID-1 第 N+1 次系统化）
+
+| # | 文件 | 角色 | 改动 |
+|---|------|------|------|
+| 1 | `packages/types/src/admin-moderation.types.ts` | (1) Type union | `AdminAuditActionType` +1 `'video_source.inline_action'` |
+| 2 | `apps/api/src/services/AuditLogService.ts` | (2) Service constant | `ACTION_TYPES` 数组 +1 |
+| 3 | `tests/unit/api/audit-log-service-enums-set-equal.test.ts` | (3a) Service enums set-equal | `EXPECTED_ACTION_TYPES` +1 |
+| 4 | `tests/unit/api/audit-log-coverage.test.ts` | (3b) Coverage set-equal + (4) REQUIRED + PAYLOAD it.each | `REQUIRED_ACTION_TYPES` + `PAYLOAD_ASSERTION_REQUIRED` 各 +1 |
+| 5 | `apps/api/src/routes/admin/sources-matrix.ts` | route handlers | +2 端点 + handler + zod parse |
+| 6 | `tests/unit/api/video-source-inline-action-audit.test.ts` | payload 内容断言新测试（5 case） | 新建 |
+| 7 | `docs/changelog.md` | 完成备注（R-MID-1 第 N+1 次系统化） | 完成时追加 |
+
+**4 真源原子提交**（D-158-9 / I2 / D-121-3）：文件 1-4 必须**同一 commit** 提交（set-equal 测试任一未同步 fail）。
+
+**PATCH ≤ 5 豁免**：本 ADR 援引 ADR-121 D-121-3 RETRO 7 文件**已认证豁免依据**；额外 2 文件（decisions.md 章节追加 / SourcesMatrixService.ts 物理实现 = RETRO 框架行 5 的 service 拆分位置）属于"独立 ADR 起新豁免"范畴，本 ADR 即承担此豁免说明义务。
+
+### §8 freeze 守卫策略（D-158-5 / Y1）
+
+| 端点 | 守 freeze | 理由 |
+|------|----------|------|
+| `/probe` | ✅ | 入队 source-health worker / 与采集资源同源 / 与 `reprobeRoute` 同性质 |
+| `/render-check` | ❌ | 不消采集资源 / freeze 期间 diagnostic 价值高 / player 渲染检测与采集解耦 |
+
+实施：复用 `SourcesMatrixService.assertNotFrozen()` 私有方法（reads `crawler_global_freeze` setting → 抛 `AppError('STATE_CONFLICT', '采集已冻结，不可执行线路操作', 409)`）；`probeOne` 必查 / `renderCheckOne` 不查。
+
+### §9 占位 jobId 策略（D-158-6 / Y3）
+
+```ts
+const probeJobId  = `probe-vs-${sourceId}-${Date.now()}`   // vs = video_source 命名空间
+const renderJobId = `render-vs-${sourceId}-${Date.now()}`
+```
+
+与 row 7-9 既有 `probe-${siteKey}-${sourceName}-${Date.now()}` / `reprobe-${siteKey}-${sourceName}-${Date.now()}` 命名空间**彻底分离**（防 jobId 前缀解析冲突 / Y3）。
+
+**advisory A2（继承 ADR-117 AMENDMENT 2 §A2）**：本卡 jobId 为占位字符串；PRE-PROBE-WORKER + PRE-RENDER-CHECK-WORKER 后续卡承担：
+1. 真实 BullMQ jobId 接入 source-health / player-render-check worker
+2. single-source vs route-level 双触发器统一队列消费
+3. renderJobId 当前**实际不被任何 worker 消费**（与 probeJobId 走 source-health 不同 / 见 advisory A4）
+
+### §10 错误码
+
+100% 复用 ADR-110 14 码 / 零新增：
+
+- 422 VALIDATION_ERROR（非 uuid path / R2）
+- 404 NOT_FOUND（`video_sources.id` 不存在 / 已软删除 `deleted_at IS NOT NULL`）
+- 409 STATE_CONFLICT（仅 `/probe` / freeze=true）
+- 500 INTERNAL_ERROR（兜底）
+
+### §11 评审要点决策（arch-reviewer Opus 1 轮 A-CONDITIONAL → 主循环全采纳）
+
+- **R1**（红线）：actionType `sources.single_action` → **`video_source.inline_action`**（单源域前缀对齐 / 与 targetKind 'video_source' 自洽）→ **采纳**（D-158-2）
+- **R2**（红线）：zod `.min(1)` → **`.uuid()`**（422 前置 vs 500 fallthrough / 与 video-groups/:videoId/matrix 一致）→ **采纳**（D-158-3）
+- **R3**（红线）：文件范围 5 → 9（援引 D-121-3 RETRO 7 文件豁免 + 2 额外文件理由）→ **采纳**（D-158-9）
+- **Y1**（黄线）：`/render-check` 不守 freeze（diagnostic 可用性优先）→ **采纳**（D-158-5）
+- **Y2**（黄线）：error path 不写 audit 显式声明 + 测试覆盖 negative case → **采纳**（D-158-7 + §7 文件 6 / 5 case）
+- **Y3**（黄线）：jobId 前缀冲突修订 → `probe-vs-` / `render-vs-` → **采纳**（D-158-6）
+- **I1**（洞察）：`video_source.inline_action` 边界仅诊断 / 状态写走 `video_source.toggle` → **采纳**（D-158-8）
+- **I2**（洞察）：4 真源原子提交 → **采纳**（§7 显式声明）
+- **I3 / I4**（洞察）：基线 `audit-log-service-enums-set-equal` 4/4 + `audit-log-coverage` 109/109 全 PASS → **主循环核验确认**（评审 I3/I4 为误判 / 实际已对齐）
+
+### §12 红线 / 黄线 / advisory
+
+**红线（已遵守 / R1-R3 全采纳）**：
+- R1：actionType `video_source.inline_action` ✅
+- R2：zod `.uuid()` ✅
+- R3：9 文件援引 D-121-3 豁免 ✅
+
+**黄线（已遵守 / Y1-Y3 全采纳）**：
+- Y1：`/probe` 守 freeze / `/render-check` 不守 ✅
+- Y2：error path 不写 audit + 测试覆盖 ✅
+- Y3：jobId 前缀 `probe-vs-` / `render-vs-` ✅
+
+**advisory**：
+- A1：未来 `POST /admin/sources/:id/quick-test`（同步 HEAD 3s）→ 复用 `video_source.inline_action` + `afterJsonb.action='quick_test'` + 加 `ok / latencyMs`（合并 actionType 模式 / D-158-8 边界内）
+- A2：probeJobId / renderJobId 当前占位字符串；PRE-PROBE-WORKER + PRE-RENDER-CHECK-WORKER 后续卡对接真实 BullMQ jobId
+- A3：评审 I3/I4 漂移指控经主循环核验为误判（基线测试全 PASS）；advisory 记录用于未来类似评审快速核验
+- A4：`renderJobId` 当前**实际不被任何 worker 消费**（与 probeJobId 走 source-health worker 不同）；PRE-RENDER-CHECK-WORKER 后续卡 + ADR 落地真实消费方
+
+### §13 4 维度自评
+
+| 维度 | 评级 | 理由 |
+|---|---|---|
+| 命名 | A | actionType `video_source.inline_action` 与 `video_source.toggle` / `.disable_dead_batch` 100% 同前缀风格（R1 修订后）；端点路径 `/admin/sources/:id/{probe,render-check}` 与 row 7-9 line-level 命名空间分离清晰；jobId 前缀 `probe-vs-` / `render-vs-` 防冲突 |
+| 对称性 | A | 鉴权 admin only 与 row 5/7-9 100% 对齐；zod `.uuid()` + `.strict()` 与 video-groups/:videoId/matrix 一致；audit RETRO 7 文件框架严格延续 D-121-2；error path 不写 audit 与 ADR-121 D-121-4 一致 |
+| 状态职责 | A | 0 DB 写边界明确（仅 audit 写）；freeze 守卫边界明示（D-158-5）+ 表格化辩护；actionType `video_source.inline_action` 边界仅诊断（D-158-8 / I1）+ 状态写走既有 toggle 范式 |
+| 扩展性 | A | 合并 actionType + afterJsonb.action 模式支持未来 quick-test / warm-cache 等纯诊断动作（A1）；状态写动作显式排除（D-158-8）防 actionType 边界膨胀；占位 jobId advisory A2 + A4 显式记录 future-work 接入路径 |
+
+**综合**：**A**
+
+### §14 关联
+
+- ADR-117 §端点契约不变（既有 6 端点 + AMENDMENT 1 row 6 + AMENDMENT 2 row 7-9 全部保持）；本 ADR 端点位于不同命名空间（`/admin/sources/:id/...` vs ADR-117 `/admin/sources/{routes,video-groups,...}`）
+- ADR-110 response 信封 + 14 错误码 100% 复用；零新增码
+- ADR-121 R-MID-1 audit RETRO 7 文件框架严格延续（系统化第 N+1 次 / D-121-2 表格逐行对齐 / D-121-3 PATCH 豁免依据援引）
+- ADR-100 §4.5 R7 MUST-8 + `verify:endpoint-adr` 守门 ✅
+- migration 057 / 058a / 059 / 062 schema 完备；**无新 migration**
+- **关联代码（实施落地 / CHG-351-A 范围）**：
+  - `apps/api/src/routes/admin/sources-matrix.ts` 增 2 端点 + handler + `SingleSourceParamsSchema` parse
+  - `apps/api/src/services/SourcesMatrixService.ts` 增 `probeOne(sourceId, actorId, requestId?)` + `renderCheckOne(sourceId, actorId, requestId?)` + 2 interface（SingleSource{Probe,RenderCheck}Result）+ 复用 `findVideoSourceById` + `assertNotFrozen`
+  - `packages/types/src/admin-moderation.types.ts` `AdminAuditActionType` +1
+  - `apps/api/src/services/AuditLogService.ts` `ACTION_TYPES` +1
+  - `tests/unit/api/audit-log-service-enums-set-equal.test.ts` `EXPECTED_ACTION_TYPES` +1
+  - `tests/unit/api/audit-log-coverage.test.ts` `REQUIRED_ACTION_TYPES` + `PAYLOAD_ASSERTION_REQUIRED` +1
+  - `tests/unit/api/video-source-inline-action-audit.test.ts` 新建 5 case
+- **下游卡（CHG-351-B / CHG-351-C）契约对齐**：
+  - response 类型 `{ probeJobId | renderJobId, queued: true, sourceId }` 暴露给 `packages/admin-ui` LinesPanel Props `onProbeEpisode` / `onRenderCheckEpisode`（CHG-351-B）
+  - server-next `apps/server-next/src/lib/moderation/api.ts` 新增 `probeOneSource(sourceId)` / `renderCheckOneSource(sourceId)` 客户端方法（CHG-351-C）
+- **关联触发条件**：PRE-PROBE-WORKER（A2）/ PRE-RENDER-CHECK-WORKER（A4）
+
+### §15 关键发现
+
+1. **R3 触发"独立 ADR 起新豁免"机制**（ADR-121 D-121-3 后半段）：本 ADR 因同时承担 ADR 起草 + RETRO + 端点实施三合一职能，文件 9 项，是 ADR-121 D-121-3 RETRO 7 文件豁免**之外**首次援引"独立 ADR 起新豁免"机制；任务卡 7-A 原始声明 ≤ 5 项与实际 9 项严重不符，由本 ADR §1 D-158-9 显式援引豁免理由收敛。
+2. **actionType 命名风格的隐式约定**（评审 R1 暴露）：既有 ACTION_TYPES 53 项的"实体域 + 动作"双段命名（`video.*` / `crawler.*` / `video_source.*` / `sources.*`）是隐式约定，本 ADR 因评审拦截才显式化（D-158-2 + D-158-8）；未来新 actionType 命名应优先复用既有实体前缀（targetKind 同源），仅当确无既有前缀时才新建。
+3. **占位 jobId 前缀的命名空间设计**（评审 Y3 暴露）：占位 jobId 字符串看似"将被 worker 重写"，但**实际进入 audit log + 前端轮询接口**，前缀冲突风险真实存在；本 ADR 引入 `vs` namespace token 防冲突，未来类似占位 jobId 应继承此 token-based 命名空间设计。
+
+**最终结论**：ADR-158 status 🟢 Accepted（2026-05-27 / arch-reviewer Opus A-CONDITIONAL → 主循环消化 3 红线 + 3 黄线 + 4 关键洞察 → 等同 A）；CHG-351-A 9 文件原子实施（4 真源原子提交 + 5 测试 case + 2 service 方法 + 2 route 端点 + 1 ADR 章节 + 1 changelog 追加）；CHG-351-B / CHG-351-C 按本 ADR 契约接续。
+
+---

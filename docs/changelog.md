@@ -8914,3 +8914,58 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
   - moderation 范围 14 test files / 148 tests 全 PASS
 - **关于 crawler 同症状**：用户提到 crawler 搜索情况相同，但 crawler 已用 DataTableSearchInput（`CrawlerSiteList.tsx:184`）；如复用此组件后 ModerationConsole 仍丢焦，则需独立卡修 admin-ui 共享层 bug（触发 arch-reviewer Opus 评审）
 - **闭环**：CHG-350 用户视角焦点 bug 第二轮彻底修复
+
+## [CHG-351-A] ADR-158 起草 + 后端单源 probe + render-check 端点（R-MID-1 系统化第 27 次）
+- **完成时间**：2026-05-27
+- **来源序列**：SEQ-20260527-MOD-WAVE1（Wave 1 / 卡 7-A / 9 / plan §10.5 / CHG-351 拆 -A/-B/-C 子卡其一）
+- **执行模型**：claude-opus-4-7（主循环不切换 §16.5）
+- **子代理**：arch-reviewer (claude-opus-4-7) 1 轮独立评审 → **A-CONDITIONAL** → 主循环消化 3 红线 + 3 黄线 + 4 关键洞察 → 等同 A
+- **任务来源**：CHG-351 PROBE-RENDER-INLINE 触发 plan §16.5 BLOCKER（新 ADR + admin-ui 公开 Props + PATCH > 5），用户选方案 A 拆 3 子卡；本卡 -A 为后端 + ADR 阶段
+- **新增 ADR**：ADR-158 — admin 单源 inline probe + render-check 端点协议
+  - 决策点闭环：**D-158-1 / D-158-2 / D-158-3 / D-158-4 / D-158-5 / D-158-6 / D-158-7 / D-158-8 / D-158-9**（全 9 项落档 / arch-reviewer 评审消化完整对照）
+- **评审消化对照（3 红线 / 3 黄线 / 4 洞察全采纳）**：
+  - R1：actionType `sources.single_action` → **`video_source.inline_action`**（单源域前缀对齐 / 与 targetKind 'video_source' 自洽 / 与 `video_source.toggle` 等同前缀范式）
+  - R2：zod schema `id: z.string().min(1)` → **`.uuid()`**（422 前置 vs 500 fallthrough）
+  - R3：文件范围 5 → **9**（援引 ADR-121 D-121-3 RETRO 7 文件豁免 + 2 额外文件 / 不拆 -A1/-A2）
+  - Y1：`/probe` 守 freeze ✅ / `/render-check` 不守 freeze ❌（diagnostic 可用性优先）
+  - Y2：error path（404 / 409 / 422）不写 audit 显式声明 + 测试覆盖 negative case
+  - Y3：占位 jobId 前缀 `probe-vs-` / `render-vs-`（与 row 7-9 `probe-${siteKey}-` 命名空间分离）
+  - I1：`video_source.inline_action` 边界仅诊断 / 状态写走既有 `video_source.toggle`
+  - I2：4 真源（types / service / set-equal × 2）原子提交（同一 commit）
+  - I3/I4：基线 audit-log-service-enums-set-equal 4/4 + audit-log-coverage 109/109 → 111/111 全 PASS（评审 I3/I4 经主循环核验为误判 / 基线已对齐）
+- **改动文件**（9 项 / ADR-121 D-121-3 RETRO 7 文件豁免 + 2 额外文件援引）：
+  - `docs/decisions.md`（追加 `## ADR-158` 章节 / 15 节 + §端点契约 表格 verify-endpoint-adr 对齐）
+  - `packages/types/src/admin-moderation.types.ts`（`AdminAuditActionType` union +1 `'video_source.inline_action'` / 真源 1）
+  - `apps/api/src/services/AuditLogService.ts`（`ACTION_TYPES` 数组 +1 / 真源 2）
+  - `tests/unit/api/audit-log-service-enums-set-equal.test.ts`（`EXPECTED_ACTION_TYPES` +1 / 真源 3a）
+  - `tests/unit/api/audit-log-coverage.test.ts`（`REQUIRED_ACTION_TYPES` + `PAYLOAD_ASSERTION_REQUIRED` 各 +1 / 真源 3b + 4）
+  - `apps/api/src/services/SourcesMatrixService.ts`（+2 interface SingleSource{Probe,RenderCheck}Result + SingleSourceParamsSchema zod + probeOne / renderCheckOne 2 方法 / route 实现位置）
+  - `apps/api/src/routes/admin/sources-matrix.ts`（+2 端点 `POST /admin/sources/:id/probe` + `POST /admin/sources/:id/render-check` + handler）
+  - `tests/unit/api/video-source-inline-action-audit.test.ts`（**新建** / 5 case payload 内容断言）
+  - `docs/changelog.md`（本条目）
+- **新增依赖**：无
+- **数据库变更**：无（targetKind 复用既有 `'video_source'` / TARGET_KINDS 数组零扩展 / 零 migration）
+- **门禁**：
+  - typecheck ✅
+  - lint ✅（无新 warning）
+  - verify:adr-contracts ✅ verify-endpoint-adr 192 admin 路由对齐 70 ADR 端点（含 2 新端点）
+  - 单测全 PASS：video-source-inline-action-audit 5/5 + audit-log-coverage 111/111（原 109 + 2 新 it.each）+ audit-log-service-enums-set-equal 4/4
+  - 全量单测 5158/5159 PASS（1 flaky pre-existing `StagingTable.test.tsx:236` / 单跑 13/13 PASS / 与本卡无关 / v1 frozen / 类比 CrawlerClient 时区 flaky）
+- **后端实施关键决策（ADR-158 §1 D-158-N）**：
+  - 端点路径 `/admin/sources/:id/{probe,render-check}` 与 row 7-9 line-level 命名空间分离（`:id` 为 video_sources.id uuid）
+  - 占位 jobId `probe-vs-` / `render-vs-`（vs = video_source 命名空间 / Y3 防与 row 7-9 `probe-${siteKey}-` 前缀冲突）
+  - freeze 守卫差异：probe 守 / render-check 不守（Y1 / D-158-5）
+  - error path 不写 audit：404 / 409 / 422 / 500 全部不调 auditSvc.write（Y2 / D-158-7 / ADR-121 D-121-4 一致）
+  - 复用 findVideoSourceById helper（已存在 / 零新 query）
+  - 复用 assertNotFrozen 私有方法（已存在 / 零新逻辑 / 仅 probe 调用）
+- **R-MID-1 系统化进展**：第 27 次（第 26 次 = CHG-SN-9-CW1-B-EP / ADR-151 crawler_task.cancel / batch_cancel）
+- **下游契约**：
+  - CHG-351-B（packages/admin-ui LinesPanel Props 扩展 / 强制 arch-reviewer trailer）按本 ADR-158 §端点契约 response 类型 `{ probeJobId | renderJobId, queued, sourceId }` 设计 Props onProbeEpisode / onRenderCheckEpisode
+  - CHG-351-C（server-next 消费方）新增 `probeOneSource(sourceId)` / `renderCheckOneSource(sourceId)` 客户端方法消费本卡端点
+- **advisory**：
+  - A2：probeJobId / renderJobId 当前占位字符串；PRE-PROBE-WORKER + PRE-RENDER-CHECK-WORKER 后续卡对接真实 BullMQ jobId
+  - A3：评审 I3/I4 漂移指控为误判（基线全 PASS）
+  - A4：renderJobId 当前实际不被任何 worker 消费（与 probeJobId 走 source-health worker 不同）；PRE-RENDER-CHECK-WORKER 后续卡 + ADR 落地真实消费方
+  - 基线观察：本卡新建 audit-log-service-enums-set-equal EXPECTED_ACTION_TYPES 不含 `crawler_task.*` + `image_health.*` 4 项，但 admin-moderation.types.ts union 已含；coverage REQUIRED 也含。set-equal 守卫两边自洽 drift（test 自身 PASS），但 4 真源严格性的隐式违规 — 建议未来独立 follow-up 卡（不在本卡范围 / 与 CHG-351-A 解耦）
+- **闭环**：CHG-351-A 完成；plan §10.5 后端 + ADR 阶段交付；Wave 1 进度 6/9 → 7/9（CHG-351 拆 -A/-B/-C 中第一张）
+- **后续**：CHG-351-B（packages/admin-ui LinesPanel Props 扩展 / 强制 arch-reviewer trailer + Opus 主循环 / commit trailer 必含 Subagents: arch-reviewer）

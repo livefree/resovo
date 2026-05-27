@@ -90,6 +90,8 @@ const EXPECTED_ACTION_TYPES = [
   'video.manual_add',
   // CHG-SN-8-FUP-WEBHOOK-IMPL-EP-A / ADR-146 / R-MID-1 系统化第 25 次（webhook 投递最终失败）
   'system.webhook_send_failed',
+  // CHG-351-A / ADR-158 / R-MID-1 系统化第 27 次（单源 inline probe + render-check 合并 actionType / targetKind 复用 'video_source'）
+  'video_source.inline_action',
 ] as const
 
 const EXPECTED_TARGET_KINDS = [

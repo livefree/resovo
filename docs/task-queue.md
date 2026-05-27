@@ -1678,42 +1678,11 @@ HOTFIX-A → B → C 顺序串行（B 在 A SQL fix 基础上扩 CASE / C 在 B 
 
 ---
 
-## 🚨 BLOCKER — CHG-351 PROBE-RENDER-INLINE 需要 ADR + Opus 评审决策
-
-- **触发时间**：2026-05-27 01:55
-- **触发卡**：CHG-351（SEQ-20260527-MOD-WAVE1 / Wave 1 卡 7/9）
-- **触发条件**（plan §16.5）：
-  - 需要新建 2 个 admin route：`POST /admin/sources/:id/probe` + `POST /admin/sources/:id/render-check`（单源粒度，现仅有 line-level `:siteKey/:sourceName/reprobe`）
-  - 需要修改 `packages/admin-ui/src/components/composite/lines-panel/lines-panel.types.ts` `LinesPanelProps` 公开 Props 字段（onProbeEpisode / onRenderCheckEpisode callback 扩展）→ **CLAUDE.md "共享组件 API 契约强制 Opus" + commit 必含 `Subagents: arch-reviewer (claude-opus-...)` trailer**
-  - 后端单源 render-check 涉及 headless puppeteer/playwright 队列编排（plan §10.5 提到 "需要 BullMQ 队列异步执行"）→ 跨 worker 改动
-- **范围估算**：
-  - ADR 起草 1 个：ADR-NNN-single-source-probe-render-endpoints
-  - 后端 routes/sources.ts 新增 2 端点 + zod schema + service 调用
-  - 后端 SourceService / SourceProbeService 单源 entry point 暴露
-  - worker（如需 render-check 异步）: BullMQ 任务定义 + 处理器
-  - packages/admin-ui LinesPanelProps 扩展（Opus 评审）
-  - server-next LinesPanel.tsx 消费方实施
-  - source_health_events 写入路径补齐（probe/render_status 实时更新）
-  - **预计文件范围**: 8-12 项（远超 PATCH ≤ 5 项硬约束）→ 必须拆 -A/-B/-C 子卡
-- **建议拆分**（待用户确认）：
-  - **CHG-351-A**: ADR-NNN 起草 + 后端 routes + service（≤ 5 项 / Opus 主循环 / 子代理评审）
-  - **CHG-351-B**: packages/admin-ui LinesPanelProps 扩展（≤ 3 项 / Opus 主循环 / arch-reviewer trailer 必含）
-  - **CHG-351-C**: server-next 消费方 + worker render-check job + 测试（≤ 5 项 / Sonnet 主循环）
-- **当前主循环状态**：Wave 1 已完成 6/9（CHG-346 / 345 / 347 / 348 / 349 / 350），剩余 3 卡（CHG-351/352/353）暂停
-- **可选并行路径**：
-  - CHG-352（route-labeling Phase 1 后端 effective_score）原 task-queue.md 写"依赖 CHG-351 数据真实化"，但实际公式可独立计算（pending 状态有默认权重）→ 可跳序先做 CHG-352 / CHG-353
-  - 但跳序违反 task-queue.md 原"执行序列建议"，需用户授权
-- **决策需要**：用户回复以下问题以解除 BLOCKER：
-  1. **方案 A**: 暂停 Wave 1，先起 CHG-351-A/-B/-C 三张子卡（含 ADR 起草），逐张执行；CHG-352/353 等 CHG-351 完成
-  2. **方案 B**: 跳序先做 CHG-352（不阻塞主流程）+ CHG-353，CHG-351 拆子卡后独立调度
-  3. **方案 C**: 缩减 CHG-351 范围（如：仅添加 admin-ui Props 字段 + UI 入口，后端 mock；后端 + worker 留 follow-up）→ 仍需 admin-ui Opus 评审
-  4. **方案 D**: Wave 1 提前在 6/9 进入验收（人工审核已完成的 6 张卡 + 截图归档），CHG-351/352/353 转入 Wave 2
-
 ## [SEQ-20260527-MOD-WAVE1] server-next 内容审核台 Wave 1 — 消债 + 关键 bug 修复 + 搜索/探播实装 + route-labeling 接入
 
-- **状态**：🟡 进行中（6/9 完成 / CHG-351 BLOCKER）
+- **状态**：🟡 进行中（6/9 完成 / CHG-351-A 进行中 / 用户选方案 A）
 - **创建时间**：2026-05-27 13:00
-- **最后更新时间**：2026-05-27 01:55（BLOCKER on CHG-351）
+- **最后更新时间**：2026-05-27（CHG-351-A 启动 / 会话恢复 + docs 同步）
 - **目标**：基于 `/Users/livefree/.claude/plans/fluffy-giggling-teapot.md` 完成审核台 P0/P1 消债 + 用户视角增强 + route-labeling Phase 1 落地
 - **范围**：`apps/server-next/src/app/admin/moderation/**` + `apps/api/src/routes/admin/moderation.ts` + `apps/api/src/services/SourceService.ts` + `apps/web-next/src/components/player/SourceBar.tsx` + `apps/web-next/src/lib/line-display-name.ts` + `docs/manual/`
 - **依赖**：无上游阻塞；审查报告见 fluffy-giggling-teapot.md §1-9 事实底板
@@ -1788,18 +1757,90 @@ HOTFIX-A → B → C 顺序串行（B 在 A SQL fix 基础上扩 CASE / C 在 B 
    - **关键风险**：`q=` 是新端点参数,需核 ADR — 若 verify:endpoint-adr 报错需先起 ADR
    - 人工体验场景：输入 title 即时筛 / 清除筛选 / 与现有 filterChips 组合
 
-7. **CHG-351** — LinesPanel 单行探/播按钮(plan §10.5)（状态：⬜ 未开始）
+7. **CHG-351** — LinesPanel 单行探/播按钮(plan §10.5)（状态：📦 已拆 -A/-B/-C / 2026-05-27 02:45 / 用户选方案 A / 复合任务 ≥ 8 文件不再独立执行）
    - 创建时间：2026-05-27 13:00
+   - 拆分依据：plan §16.5 BLOCKER 触发 (新 ADR + admin-ui 公开 Props + PATCH > 5 项硬约束)
+   - 三张子卡详见下方 CHG-351-A / -B / -C
+
+7-A. **CHG-351-A** — ADR-158 起草 + 后端单源 probe + render-check 端点（状态：✅ 已完成 / 2026-05-27 / 执行模型 claude-opus-4-7 / 主循环不切换 §16.5 / arch-reviewer Opus A-CONDITIONAL 1 轮 → 主循环消化 3 红线+3 黄线+4 关键洞察等同 A / 9 文件改动 / R-MID-1 第 27 次系统化 / typecheck+lint+verify全 PASS / video-source-inline-action-audit 5/5 + audit-log-coverage 111/111 + set-equal 4/4 / 全量 5158/5159 unit PASS（1 flaky StagingTable pre-existing 单跑 PASS）/ verify-endpoint-adr 192 路由 70 ADR 端点对齐 / verify-adr-d-numbers 222 D-N 全闭环含 D-158-1..9 / Wave 1 卡 7-A/9 闭合）
+   - 创建时间：2026-05-27 02:45
+   - 实际开始：2026-05-27（API Overloaded 中断恢复 + /clear + docs 同步 + arch-reviewer 评审后启动实施）
+   - 建议主循环模型：`claude-opus-4-7`（主循环不切换 / 用户指定 / ADR 起草级工作）
+   - 子代理：✅ 已 spawn `arch-reviewer` (claude-opus-4-7) 1 轮独立评审 → **A-CONDITIONAL**（3 红线 + 3 黄线 + 4 关键洞察）
+   - **评审结论修订**（主循环采纳）：
+     - **R1**：actionType `sources.single_action` → **`video_source.inline_action`**（与既有 `video_source.toggle` / `.disable_dead_batch` 单源域前缀对齐 + targetKind `'video_source'` 命名空间自洽）
+     - **R2**：zod schema `id: z.string().min(1)` → **`id: z.string().uuid()`**（与既有 video-groups/:videoId/matrix 一致 / 422 前置 vs 500 fallthrough）
+     - **R3**：文件范围 5 项 → **10 项**（援引 ADR-121 D-121-3 RETRO 7 文件豁免 + 额外 3 文件：ADR 新文件 / decisions.md 索引 / SourcesMatrixService.ts；不拆 -A1/-A2）
+     - **Y1**：`/probe` 守 freeze ✅ / `/render-check` **不**守 freeze ❌（diagnostic 可用性优先 / freeze 期间常需 player 渲染复核）
+     - **Y2**：error path 不写 audit 显式声明 + 测试 6 case（probe happy + probe 404 + probe 409 + render happy + render 404；render 不守 freeze 故 5 case）
+     - **Y3**：占位 jobId 前缀冲突修订 → **`probe-vs-${sourceId}-${Date.now()}`** + **`render-vs-${sourceId}-${Date.now()}`**（`vs` = video_source 命名空间，与 row 7-9 `probe-${siteKey}-` 彻底分离）
+     - **I1**：`video_source.inline_action` 与 `video_source.toggle` 边界 — 前者仅覆盖纯诊断（不写状态），后者负责状态写
+     - **I2**：4 真源（types / service / set-equal × 2）必须**原子提交**（同一 commit）/ ADR-121 D-121-3
+     - **I3/I4**：基线 audit-log-service-enums-set-equal 4/4 + coverage 109/109 全 PASS（arch-reviewer 误判 / 实际已对齐）
+   - **ADR-158 起草**：`docs/decisions/ADR-158-single-source-probe-render-endpoints.md` 新建（按 ADR-157 / ADR-117 AMENDMENT 2 范式）
+     - 决策：暴露单源粒度 probe + render-check 端点，与 line-level reprobeRoute 互补
+     - 端点契约：`POST /admin/sources/:id/probe` + `POST /admin/sources/:id/render-check`
+     - 入参 zod：path param `id: z.string().uuid()`（R2）
+     - 返回：`{ probeJobId | renderJobId, queued: true, sourceId }`（异步队列模式）
+     - 权限：admin only（与 reprobeRoute 一致）
+     - audit：`actionType: 'video_source.inline_action'`（R1）+ `targetKind: 'video_source'`（既有）
+   - 后端实施：
+     - `apps/api/src/routes/admin/sources-matrix.ts` 加 2 端点 + zod
+     - `apps/api/src/services/SourcesMatrixService.ts` 加 `probeOne(sourceId, actorId)` + `renderCheckOne(sourceId, actorId)`（probe 守 freeze / render-check 不守 / Y1）
+   - audit RETRO 4 真源 + 1 新测试（ADR-121 D-121-2 第 13 次 系统化第 N+1 次）
+   - decisions.md 索引追加 ADR-158
+   - **文件范围（9 项 / ADR-121 D-121-3 RETRO 7 文件豁免 + 2 额外文件援引 / 项目 ADR 范式确认：所有 ADR 写在 decisions.md 单文件追加章节，无独立 `decisions/` 目录）**：
+     - **(RETRO 7 文件 / 原子提交 / 4 真源同步 D-121-2)**：
+       1. `packages/types/src/admin-moderation.types.ts`（+1 actionType `video_source.inline_action`）
+       2. `apps/api/src/services/AuditLogService.ts`（ACTION_TYPES +1）
+       3. `tests/unit/api/audit-log-service-enums-set-equal.test.ts`（EXPECTED_ACTION_TYPES +1）
+       4. `tests/unit/api/audit-log-coverage.test.ts`（REQUIRED_ACTION_TYPES + PAYLOAD_ASSERTION_REQUIRED +1）
+       5. `apps/api/src/routes/admin/sources-matrix.ts`（2 端点 + handler）
+       6. `tests/unit/api/video-source-inline-action-audit.test.ts`（新建 / 5 case payload 断言）
+       7. `docs/changelog.md`（完成时追加 / R-MID-1 第 N+1 次系统化）
+     - **(额外 2 文件 / 不可压缩)**：
+       8. `docs/decisions.md`（追加 `## ADR-158` 章节 + 索引引用 / verify-endpoint-adr 扫此文件）
+       9. `apps/api/src/services/SourcesMatrixService.ts`（probeOne + renderCheckOne 方法 / route 实现位置 / RETRO 框架文件 5 物理实现层）
+   - **commit trailer 推荐**（虽 task 原始定义不强制，但 ADR 起草级建议）：`Subagents: arch-reviewer (claude-opus-4-7)`
+   - 验证：typecheck / lint / verify:adr-contracts / verify:endpoint-adr / 单测全 PASS
+   - 人工体验场景：无（纯后端 + ADR）
+
+7-B. **CHG-351-B** — packages/admin-ui LinesPanel Props 扩展（onProbeEpisode + onRenderCheckEpisode）（状态：⬜ 未开始）
+   - 创建时间：2026-05-27 02:45
+   - 建议主循环模型：`claude-opus-4-7`（CLAUDE.md "共享组件 API 契约强制 Opus" / 主循环不切换）
+   - 子代理：**强制** spawn `arch-reviewer` (claude-opus-4-7) 评审 Props 契约 / commit trailer 必含 `Subagents: arch-reviewer (claude-opus-4-7)`
+   - 依赖：CHG-351-A 完成（后端端点已存在）
    - 验收要点：
-     - 每行 episode inline 加 `🔍 探` / `▶ 播` xs 按钮
-     - 后端如缺单源粒度 `POST /admin/sources/:id/probe` / `:id/render-check` 端点 → 先起 ADR
-     - 检测结果写 `source_health_events`,probe/render_status 实时更新
-     - LinesPanel toolbar 加"探所有"+"播所有"批量(对当前视频所有 source)
-     - 异步执行:UI 显示"排队中..." → 完成 toast
-     - `docs/manual/moderation-console.md` 新增"线路检测"章节
-   - 文件范围(≤ 5 项)：packages/admin-ui LinesPanel.tsx(prop 扩) / 后端 sources.ts route / SourceService.ts / docs/manual / server-next LinesPanel.tsx 消费
-   - **关键风险**：跨 packages 改动 + 后端新端点 → 触发 admin-ui API 契约 Opus 评审
-   - 人工体验场景：单行探/播触发 / 批量探/播 / 错误展示 / render-check 排队状态
+     - `LinesPanelProps` 扩 `onProbeEpisode?: (args: { episodeId: string }) => void | Promise<void>`
+     - `LinesPanelProps` 扩 `onRenderCheckEpisode?: (args: { episodeId: string }) => void | Promise<void>`
+     - 单 episode 行 inline 渲染 `🔍 探` + `▶ 播` xs 按钮（仅当对应 callback 提供时显示）
+     - `pending` set 透传（probing/rendering 中按钮 disabled）
+     - 单测/snapshot 验证按钮渲染条件 + onClick 触发
+   - 文件范围(≤ 3 项)：
+     - `packages/admin-ui/src/components/composite/lines-panel/lines-panel.types.ts`（Props 扩 2 callback）
+     - `packages/admin-ui/src/components/composite/lines-panel/lines-panel.tsx`（per-episode inline buttons 渲染）
+     - `packages/admin-ui/tests/lines-panel.test.tsx` 或现有测试（snapshot + 行为）
+   - **commit trailer 必填**：`Subagents: arch-reviewer (claude-opus-4-7)`（CLAUDE.md 红线）
+   - 验证：typecheck / lint / packages/admin-ui 单测 PASS
+
+7-C. **CHG-351-C** — server-next 消费方 + 单源 probe/render API 客户端 + 测试 + docs（状态：⬜ 未开始）
+   - 创建时间：2026-05-27 02:45
+   - 建议主循环模型：`claude-opus-4-7`（主循环不切换 / 用户指定）
+   - 子代理：无（消费方实施 / 复用已评审契约）
+   - 依赖：CHG-351-A + CHG-351-B 完成
+   - 验收要点：
+     - `apps/server-next/src/lib/moderation/api.ts` 加 `probeOneSource(sourceId)` + `renderCheckOneSource(sourceId)`
+     - `apps/server-next/src/app/admin/moderation/_client/LinesPanel.tsx` 接 onProbeEpisode + onRenderCheckEpisode props → 调 API
+     - probing/rendering 状态用 togglingIds 同模式管理（per-source pending Set）
+     - 错误用 actionError 显示（与 toggle 相同）
+     - `docs/manual/20-pages/P-moderation.md` 新增 §3.8 "线路检测（单源探/播）"章节
+   - 文件范围(≤ 5 项)：
+     - `apps/server-next/src/lib/moderation/api.ts`（2 API 函数）
+     - `apps/server-next/src/app/admin/moderation/_client/LinesPanel.tsx`（消费 props + state）
+     - `docs/manual/20-pages/P-moderation.md`（新章节）
+     - 单测（如有）
+   - 验证：typecheck / lint / moderation 范围测试全 PASS
+   - 人工体验场景：单 episode 探/播触发 / 排队状态 / 错误展示 / 跨多 line 同时触发
 
 8. **CHG-352** — route-labeling Phase 1 后端:`effective_score` 排序(plan §17)（状态：⬜ 未开始）
    - 创建时间：2026-05-27 13:00

@@ -105,6 +105,8 @@ export const ACTION_TYPES: readonly AdminAuditActionType[] = [
   'video.manual_add',
   // CHG-SN-8-FUP-WEBHOOK-IMPL-EP-A / ADR-146：webhook 投递最终失败（R-MID-1 第 25 次系统化）
   'system.webhook_send_failed',
+  // CHG-351-A / ADR-158：单源 inline probe + render-check 合并 actionType（R-MID-1 第 27 次系统化 / targetKind 复用 'video_source'）
+  'video_source.inline_action',
 ]
 export const TARGET_KINDS: readonly AdminAuditTargetKind[] = [
   'video',

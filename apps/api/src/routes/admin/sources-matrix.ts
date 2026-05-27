@@ -21,6 +21,7 @@ import {
   UpsertAliasSchema,
   RoutesBySiteParamsSchema,
   RouteActionParamsSchema,
+  SingleSourceParamsSchema,
 } from '@/api/services/SourcesMatrixService'
 import { isAppError } from '@/api/lib/errors'
 
@@ -193,6 +194,41 @@ export async function adminSourcesMatrixRoutes(fastify: FastifyInstance) {
       return reply.send({ data: result })
     } catch (err) {
       return handleRouteActionError(reply, err, '[admin/sources/routes/.../DELETE]', request.log)
+    }
+  })
+
+  // ── ADR-158 / CHG-351-A：单源 inline probe + render-check ────────
+  // 与 row 7-9 line-level 命名空间分离（`:id` 为 video_sources.id uuid）
+
+  // ── POST /admin/sources/:id/probe ────────────────────────────────
+  fastify.post('/admin/sources/:id/probe', { preHandler: adminOnly }, async (request, reply) => {
+    const parsed = SingleSourceParamsSchema.safeParse(request.params)
+    if (!parsed.success) {
+      return reply.code(422).send({
+        error: { code: 'VALIDATION_ERROR', message: parsed.error.issues[0]?.message ?? 'id 必须为 uuid', status: 422 },
+      })
+    }
+    try {
+      const result = await svc.probeOne(parsed.data.id, request.user!.userId, request.id)
+      return reply.send({ data: result })
+    } catch (err) {
+      return handleRouteActionError(reply, err, '[admin/sources/:id/probe]', request.log)
+    }
+  })
+
+  // ── POST /admin/sources/:id/render-check ─────────────────────────
+  fastify.post('/admin/sources/:id/render-check', { preHandler: adminOnly }, async (request, reply) => {
+    const parsed = SingleSourceParamsSchema.safeParse(request.params)
+    if (!parsed.success) {
+      return reply.code(422).send({
+        error: { code: 'VALIDATION_ERROR', message: parsed.error.issues[0]?.message ?? 'id 必须为 uuid', status: 422 },
+      })
+    }
+    try {
+      const result = await svc.renderCheckOne(parsed.data.id, request.user!.userId, request.id)
+      return reply.send({ data: result })
+    } catch (err) {
+      return handleRouteActionError(reply, err, '[admin/sources/:id/render-check]', request.log)
     }
   })
 }
