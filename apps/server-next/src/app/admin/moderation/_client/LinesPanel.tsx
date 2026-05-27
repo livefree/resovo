@@ -14,6 +14,7 @@ import {
   LinesPanel as LinesPanelUI,
   groupSourcesByLine,
   LineHealthDrawer,
+  useToast,
 } from '@resovo/admin-ui'
 import type { LineAggregate } from '@resovo/admin-ui'
 import type { SourceHealthEvent } from '@resovo/types'
@@ -80,6 +81,8 @@ export function LinesPanel({ videoId, selectedKey, onLineSelect, onSourceHealthC
   // CHG-357 / arch-reviewer I4：videoId race 防御 — batch 完成时 setLines 必须检查 videoId 仍是当前
   const videoIdRef = useRef(videoId)
   useEffect(() => { videoIdRef.current = videoId }, [videoId])
+  // CHG-358-FIX：使用 admin-ui useToast 浮层反馈（不改变页面布局 / 取代 inline actionError 红条）
+  const toast = useToast()
 
   useEffect(() => {
     setLoading(true)
@@ -173,14 +176,11 @@ export function LinesPanel({ videoId, selectedKey, onLineSelect, onSourceHealthC
     try { await api.refetchSources(videoId) } catch { setActionError(M.lines.refetchFailed) }
   }, [videoId])
 
-  // CHG-351-C / ADR-158 + AMENDMENT (CHG-356) + CHG-358 UX 修订：单源 inline 探测
-  //   AMENDMENT: 同步快探返回 newProbeStatus + latencyMs → setLines 立即 update → SignalChip 立即重渲
-  //   probe 守 freeze / 409 STATE_CONFLICT 抛 probeFrozen 提示
-  //   CHG-358：actionError 仅 dead / 失败 / freeze 时设；成功（ok）不弹横幅（pill 变色已是反馈）
-  //          + onSourceHealthChanged 触发上游 PendingQueue refetch（左队列 ModListRow pill 联动）
+  // CHG-358-FIX：4 handler 全用 useToast 浮层反馈（取代 setActionError inline 红条 / 不改变页面布局）
+  //   规则：成功（ok）静默 + pill 联动（pill 变色 + 左队列 refetch 是首要反馈）
+  //         dead / 失败 / freeze → toast.push level=warn/danger
   const handleProbeEpisode = useCallback(async ({ episodeId }: { lineKey: string; episodeId: string }) => {
     setProbingIds(s => new Set(s).add(episodeId))
-    setActionError(null)
     try {
       const result = await api.probeOneSource(episodeId)
       setLines(prev => prev.map(l =>
@@ -188,25 +188,24 @@ export function LinesPanel({ videoId, selectedKey, onLineSelect, onSourceHealthC
           ? { ...l, probe_status: result.newProbeStatus, latency_ms: result.latencyMs }
           : l
       ))
-      // CHG-358：仅 dead 时显示（ok 不弹 / pill 已反馈）
+      onSourceHealthChanged?.()
       if (result.newProbeStatus === 'dead') {
-        setActionError(M.lines.probeDead)
+        toast.push({ title: '探测', description: '该线路失效', level: 'warn' })
       }
-      onSourceHealthChanged?.()  // 联动左队列聚合 pill
     } catch (e: unknown) {
-      if (e instanceof ApiClientError && e.status === 409) {
-        setActionError(M.lines.probeFrozen)
-      } else {
-        setActionError(M.lines.probeFailed)
-      }
+      const isFreeze = e instanceof ApiClientError && e.status === 409
+      toast.push({
+        title: '探测失败',
+        description: isFreeze ? '采集已冻结，无法触发探测' : '请稍后重试',
+        level: 'danger',
+      })
     } finally {
       setProbingIds(s => { const next = new Set(s); next.delete(episodeId); return next })
     }
-  }, [onSourceHealthChanged])
+  }, [onSourceHealthChanged, toast])
 
   const handleRenderCheckEpisode = useCallback(async ({ episodeId }: { lineKey: string; episodeId: string }) => {
     setRenderCheckingIds(s => new Set(s).add(episodeId))
-    setActionError(null)
     try {
       const result = await api.renderCheckOneSource(episodeId)
       setLines(prev => prev.map(l =>
@@ -214,23 +213,25 @@ export function LinesPanel({ videoId, selectedKey, onLineSelect, onSourceHealthC
           ? { ...l, render_status: result.newRenderStatus }
           : l
       ))
-      if (result.newRenderStatus === 'dead') {
-        setActionError(M.lines.renderCheckDead)
-      }
       onSourceHealthChanged?.()
+      if (result.newRenderStatus === 'dead') {
+        toast.push({ title: '试播', description: '该线路渲染失败', level: 'warn' })
+      }
     } catch {
-      setActionError(M.lines.renderCheckFailed)
+      toast.push({ title: '试播失败', description: '请稍后重试', level: 'danger' })
     } finally {
       setRenderCheckingIds(s => { const next = new Set(s); next.delete(episodeId); return next })
     }
-  }, [onSourceHealthChanged])
+  }, [onSourceHealthChanged, toast])
 
   // CHG-357 / ADR-158 AMENDMENT 2：视频级 batch 探测/试播
   //   I4 race 防御：videoIdRef 防 user 切视频后 batch 仍 setLines 当前视频；I4 admin-ui useMemo 防 inline 按钮 race
-  // CHG-358：batch 完成反馈仅在 dead/failed > 0 时显示（全 ok 不弹 / pill 联动 + 左队列 refetch 已是反馈）
+  // CHG-358-FIX：batch 完成全用 toast.push 浮层（不改变页面布局）
+  //   全 ok → toast level=success（pill 已联动 / toast 短暂确认操作完成）
+  //   有 dead/failed → toast level=warn 含 X/Y · 失败 Z
+  //   freeze / 失败 → toast level=danger
   const handleProbeAllSources = useCallback(async () => {
     setProbingAllSources(true)
-    setActionError(null)
     const startedVideoId = videoId
     try {
       const result = await api.batchProbeVideo(videoId)
@@ -241,25 +242,31 @@ export function LinesPanel({ videoId, selectedKey, onLineSelect, onSourceHealthC
           ? { ...l, probe_status: r.newProbeStatus, latency_ms: r.latencyMs }
           : l
       }))
+      onSourceHealthChanged?.()
       const { ok, dead, total, failed } = result.summary
       if (dead > 0 || failed > 0) {
-        setActionError(M.lines.batchProbeDone(ok, dead, total, failed))
-      }
-      onSourceHealthChanged?.()
-    } catch (e: unknown) {
-      if (e instanceof ApiClientError && e.status === 409) {
-        setActionError(M.lines.batchProbeFrozen)
+        toast.push({
+          title: '全部探测完成',
+          description: `${ok}/${total} 可访问${dead > 0 ? ` · ${dead} 失效` : ''}${failed > 0 ? ` · ${failed} 异常` : ''}`,
+          level: 'warn',
+        })
       } else {
-        setActionError(M.lines.batchProbeFailed)
+        toast.push({ title: '全部探测完成', description: `${total} 条线路均可访问`, level: 'success' })
       }
+    } catch (e: unknown) {
+      const isFreeze = e instanceof ApiClientError && e.status === 409
+      toast.push({
+        title: '全部探测失败',
+        description: isFreeze ? '采集已冻结，无法批量探测' : '请稍后重试',
+        level: 'danger',
+      })
     } finally {
       setProbingAllSources(false)
     }
-  }, [videoId, onSourceHealthChanged])
+  }, [videoId, onSourceHealthChanged, toast])
 
   const handleRenderCheckAllSources = useCallback(async () => {
     setRenderCheckingAllSources(true)
-    setActionError(null)
     const startedVideoId = videoId
     try {
       const result = await api.batchRenderCheckVideo(videoId)
@@ -270,17 +277,23 @@ export function LinesPanel({ videoId, selectedKey, onLineSelect, onSourceHealthC
           ? { ...l, render_status: r.newRenderStatus }
           : l
       }))
+      onSourceHealthChanged?.()
       const { ok, dead, total, failed } = result.summary
       if (dead > 0 || failed > 0) {
-        setActionError(M.lines.batchRenderCheckDone(ok, dead, total, failed))
+        toast.push({
+          title: '全部试播完成',
+          description: `${ok}/${total} 渲染正常${dead > 0 ? ` · ${dead} 失败` : ''}${failed > 0 ? ` · ${failed} 异常` : ''}`,
+          level: 'warn',
+        })
+      } else {
+        toast.push({ title: '全部试播完成', description: `${total} 条线路渲染正常`, level: 'success' })
       }
-      onSourceHealthChanged?.()
     } catch {
-      setActionError(M.lines.batchRenderCheckFailed)
+      toast.push({ title: '全部试播失败', description: '请稍后重试', level: 'danger' })
     } finally {
       setRenderCheckingAllSources(false)
     }
-  }, [videoId, onSourceHealthChanged])
+  }, [videoId, onSourceHealthChanged, toast])
 
   return (
     <>

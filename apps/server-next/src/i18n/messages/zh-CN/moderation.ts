@@ -184,21 +184,8 @@ export const M = {
     disableDeadFailed: '批量禁用失败',
     refetchFailed: '触发抓取失败',
     fullEpisode: '全集',
-    // CHG-351-C / ADR-158：单源 inline 诊断动作错误（actionError 渠道）
-    probeFailed: '探测失败，请重试',
-    renderCheckFailed: '试播失败，请重试',
-    probeFrozen: '采集已冻结，无法触发探测',
-    // CHG-356 / ADR-158 AMENDMENT Y1 + CHG-358 修订：仅 dead 反馈（ok 不弹 / pill 已是反馈）
-    probeDead: '探测：该线路失效',
-    renderCheckDead: '试播：该线路渲染失败',
-    // CHG-357 / ADR-158 AMENDMENT 2 / Y4：批量探测/试播结果 toast 文案
-    batchProbeDone: (ok: number, dead: number, total: number, failed: number) =>
-      `已探测 ${ok + dead}/${total}${failed > 0 ? ` · 失败 ${failed}` : ''}`,
-    batchRenderCheckDone: (ok: number, dead: number, total: number, failed: number) =>
-      `已试播 ${ok + dead}/${total}${failed > 0 ? ` · 失败 ${failed}` : ''}`,
-    batchProbeFrozen: '采集已冻结，无法批量探测',
-    batchProbeFailed: '批量探测失败，请重试',
-    batchRenderCheckFailed: '批量试播失败，请重试',
+    // CHG-358-FIX：probe/render-check 反馈全改用 admin-ui useToast 浮层（不改变页面布局 / 取代 inline actionError 红条）
+    // 既有 toggleFailed / loadFailed / disableDeadFailed / refetchFailed 仍走 actionError（保留 / 不在本卡范围）
   },
   aria: {
     lineEnable: '启用线路',

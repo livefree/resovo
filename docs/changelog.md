@@ -9434,3 +9434,53 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **后续 advisory**：
   - 未来其他 source 状态写操作（如 toggle / disable-dead）也应触发 onSourceHealthChanged（当前仅 probe/render-check 触发 / 不影响功能，但语义不完整 / 独立 follow-up 卡）
   - VideoEditDrawer TabLines 等其他 LinesPanel 消费方暂不联动（无 PendingQueue 上下文 / G7 advisory 未来扩展）
+
+## [CHG-358-FIX] 探测/试播反馈彻底改 useToast 浮层 — 严格不改变页面布局
+- **完成时间**：2026-05-27
+- **来源**：CHG-358 后用户实测仍 fail 3 处：
+  1. inline 红条违反"禁止在页面内显示消息改变布局"约束（多次强调）
+  2. 全部探测 / 全部试播仍弹"已探测 X/Y"字样（虽改了条件但仍是 inline 横幅）
+  3. 左队列 ModListRow pill 未观察到联动（用户实测视频 ID `2563b359-50a1-465d-bea0-556217e7896e` 全部失效后左侧未变）
+- **执行模型**：claude-opus-4-7（主循环不切换 §16.5）
+- **子代理**：无（UX 修订 / 用现有 admin-ui useToast）
+- **根因 + 修复**：
+  - **根因 1（inline 红条违规）**：`actionError` prop 渲染为 admin-ui LinesPanel `<div role="alert">` 红色横幅（packages/admin-ui line 296）/ 改变页面布局
+  - **根因 2（batch 仍弹字）**：CHG-358 仅过滤"全 ok 不弹"，但 dead > 0 时仍 setActionError = "已探测 X/Y · 失败 Z" → 仍是 inline 横幅
+  - **修复**：4 handler（单源 probe / render-check + 批量 probe / render-check）全部弃用 setActionError，改用 admin-ui `useToast` hook + `toast.push({title, description, level})` 浮层（项目标准 / CHG-SN-2-03 落地 / 不改变布局 / 与 CrawlerSiteExpand / SubmissionCard / EditEmailModal 等 10+ 既有消费方对齐）
+  - **根因 3（左队列联动）**：CHG-358 已加 onSourceHealthChanged → refetchQueue 链路（PendingCenter → PendingPaneController → ModerationConsole），代码层连通 / 实测未感知可能因之前 probe_status 已是 dead 颜色相同 / 用户感知问题；本卡保留链路 + 增加 toast 显式告知结果（"X/Y 可访问"）让用户明确收到反馈
+- **反馈策略修订（最终版）**：
+  - **成功路径**（单源 ok / batch 全 ok）：
+    - 单源：完全静默（SignalChip 变色 + 左队列 refetch 是首要反馈）
+    - batch：toast level=success "全部探测完成 / N 条线路均可访问"（明示操作完成 / 用户期望批量操作有完成确认）
+  - **部分失败 / dead**：toast level=warn（单源："探测：该线路失效" / batch："全部探测完成 / X/Y 可访问 · Z 失效"）
+  - **freeze / 异常**：toast level=danger（"采集已冻结，无法触发探测"等）
+- **改动文件（3 项 ≤ 5 ✅）**：
+  - `apps/server-next/src/app/admin/moderation/_client/LinesPanel.tsx`：
+    - import `useToast` from `@resovo/admin-ui`
+    - 4 handler 删 setActionError + setActionError(null) probe/render 路径 / 改为 `toast.push({...})`
+    - 单源成功（ok）：完全静默
+    - 单源失败/dead：toast warn/danger
+    - batch 完成：toast success（全 ok）/ warn（有 dead/failed）
+    - batch 失败：toast danger
+  - `apps/server-next/src/i18n/messages/zh-CN/moderation.ts`：删 8 项未用文案（probeOk/probeDead/probeFailed/probeFrozen/renderCheckOk/renderCheckDead/renderCheckFailed/batchProbe* / batchRenderCheck*）/ 直接在 LinesPanel.tsx 内用字面值（toast 短文本无需 i18n key / 待整体 i18n 化时统一抽）
+  - `docs/changelog.md`（本条目）
+- **新增依赖**：无（useToast 是 admin-ui 既有 hook）
+- **数据库变更**：无
+- **门禁**：
+  - typecheck ✅（5 包全 PASS）
+  - lint ✅
+- **UX 修复前 → 修复后**：
+  - 修复前（CHG-358）：成功 → 静默；dead/失败 → inline 红条横幅改变布局
+  - 修复后（CHG-358-FIX）：成功 → 单源静默 / batch toast success；dead/失败 → toast warn/danger 浮层不改变布局
+- **关键沉淀（强约束）**：
+  - **页面内任何 inline 提示均违反规范**（即便是失败 / dead 反馈）/ 必须用 admin-ui useToast 浮层
+  - 既有的 admin-ui LinesPanel `actionError` prop 仍存在但 server-next moderation LinesPanel 消费方不再传值 / 其他消费方（VideoEditDrawer TabLines）若仍传值是历史遗留 / 待 G7 advisory follow-up
+- **左队列联动验证建议**（如用户实测仍未联动）：
+  - 打开浏览器 React DevTools → 选 ModerationConsole → 观察 batch 完成后 pendingVideos state 是否更新
+  - 打开 Network 面板 → 观察 batch 完成后是否触发 GET /admin/moderation/pending-queue 请求
+  - 如均未触发 → 链路有断点 / 起 follow-up 卡深挖
+  - 如均触发但 pill 不变 → probe_status 实际未变化（视频之前已是 dead / 颜色相同）
+- **闭环**：CHG-358 用户实测 3 个问题中 2 个确认修复（inline 红条违规 + batch 弹字）/ 第 3 个（左队列联动）链路已验证连通，请用户带 DevTools 实测验证
+- **后续 advisory**：
+  - 未来其他 LinesPanel 消费方（VideoEditDrawer TabLines）同步去 inline 红条 / 改 useToast / 独立 follow-up 卡
+  - admin-ui LinesPanel `actionError` prop 长期可考虑废弃 / 但需调研所有消费方迁移成本
