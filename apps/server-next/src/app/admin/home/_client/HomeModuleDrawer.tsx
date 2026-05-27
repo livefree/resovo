@@ -13,6 +13,7 @@ import {
   AdminInput,
   AdminSelect,
   ContentRefPicker,
+  getVideoTypeOptions,
   type AdminSelectOption,
 } from '@resovo/admin-ui'
 import { videoPickerFetcher } from '@/lib/videos/picker-fetcher'
@@ -54,19 +55,11 @@ const CONTENT_REF_TYPE_LABELS: Record<HomeModuleContentRefType, string> = {
 }
 
 // CHG-SN-8-FUP-HOME：注入给 ContentRefPicker 当 type='video_type' 时使用
-const VIDEO_TYPE_OPTIONS: readonly AdminSelectOption[] = [
-  { value: 'movie', label: '电影 (movie)' },
-  { value: 'series', label: '连续剧 (series)' },
-  { value: 'anime', label: '动画 (anime)' },
-  { value: 'variety', label: '综艺 (variety)' },
-  { value: 'documentary', label: '纪录片 (documentary)' },
-  { value: 'short', label: '短剧/短片 (short)' },
-  { value: 'sports', label: '体育 (sports)' },
-  { value: 'music', label: '音乐 (music)' },
-  { value: 'news', label: '新闻 (news)' },
-  { value: 'kids', label: '儿童 (kids)' },
-  { value: 'other', label: '其他 (other)' },
-]
+// CHG-341：从 admin-ui getVideoTypeOptions 派生；保留"label (value)" 风格（admin debug 场景看 raw value）
+const VIDEO_TYPE_OPTIONS: readonly AdminSelectOption[] = getVideoTypeOptions().map((o) => ({
+  value: o.value,
+  label: `${String(o.label)} (${o.value})`,
+}))
 
 const FORM_STYLE: CSSProperties = {
   display: 'flex',

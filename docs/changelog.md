@@ -8551,3 +8551,21 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **闭环 D-N**：**D-157-2 完整闭环** ✅（12 helpers 全部就位：P0(4)+P1(4)+P2(4) / admin-ui enums/ 完整覆盖）
 - **门禁**：typecheck ✅
 - **CHG-340 系列阶段汇总**：CHG-340-A（AdminSelectOption 泛型 + 4 P0）+ CHG-340-B（4 P1 + Y1 译法消化）+ CHG-340-C（4 P2 PASS 无线）= packages/admin-ui 12 enum helpers 全部就位 / 3 arch-reviewer Opus 评审全 PASS / 共享 TFunction + AdminSelectOption<T> 泛型契约成熟
+
+## [CHG-341] server-next 4 处独立常量替换 + SubmissionsListClient news/kids 修复
+- **完成时间**：2026-05-26 22:12
+- **来源序列**：SEQ-20260527-ENUMS-SSOT-IMPL（ADR-157 D-157-5 部分）
+- **执行模型**：claude-opus-4-7 / 子代理：无
+- **改动文件**（6 文件 / 3 PATCH 项 ≤ 5 ✅）：
+  - **删除** `apps/server-next/src/app/admin/videos/_client/videoEnumOptions.ts`（中间层 / 由 admin-ui helpers 完全替代）
+  - `apps/server-next/src/app/admin/videos/_client/_videoEdit/TabBasicInfo.tsx`：import 改 `getVideoTypeOptions` + map cast label string
+  - `apps/server-next/src/app/admin/videos/_client/VideoFilterFields.tsx`：import 改 `getVideoTypeOptions` + map cast label string（保留 VIDEO_TYPE_OPTIONS export 兼容 VideoListClient）
+  - `apps/server-next/src/app/admin/videos/_client/VideoListClient.tsx`：无改动（仍 import VIDEO_TYPE_OPTIONS from VideoFilterFields，兼容）
+  - `apps/server-next/src/app/admin/home/_client/HomeModuleDrawer.tsx`：删本地 11 项 → `getVideoTypeOptions().map(o => ({value: o.value, label: \`${label} (${value})\`}))` 保留 dev 风格 raw value
+  - `apps/server-next/src/app/admin/submissions/_client/SubmissionsListClient.tsx`：删本地 **9 项** → `getVideoTypeOptions()` 全 11 项 / **P1 news/kids 缺项闭环**
+- **闭环 D-N 偏离**：D-157-5 server-next 部分（4 处独立常量替换 + 1 P1 缺项修复）
+- **门禁**：typecheck ✅ / lint ✅ / 1661 targeted unit PASS ✅
+- **注意事项**：
+  - admin-ui helpers 返回 `AdminSelectOption<VideoType>` label 是 `ReactNode`（i18n 兼容）；server-next 消费方需 string label（native option / CSV 导出 / filter chip）→ 通过 `.map(o => ({...o, label: String(o.label)}))` 显式 cast
+  - HomeModuleDrawer 保留 "label (value)" dev/debug 风格（admin 看 raw value 便于排查 home_modules.content_ref_id）
+  - VideoListClient 零改动：通过 VideoFilterFields re-export 链 / 后续 CHG 可清理 re-export 一致化

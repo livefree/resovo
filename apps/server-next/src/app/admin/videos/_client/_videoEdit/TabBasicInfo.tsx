@@ -2,7 +2,10 @@
 
 import React from 'react'
 import type { FormState, VideoType, VideoStatus } from './types'
-import { VIDEO_TYPE_OPTIONS } from '../videoEnumOptions'
+import { getVideoTypeOptions } from '@resovo/admin-ui'
+
+const VIDEO_TYPE_OPTIONS: ReadonlyArray<{ value: VideoType; label: string }> =
+  getVideoTypeOptions().map((o) => ({ value: o.value, label: String(o.label) }))
 
 const INPUT: React.CSSProperties = {
   width: '100%', padding: '6px 8px',

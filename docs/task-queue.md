@@ -1621,7 +1621,7 @@ HOTFIX-A → B → C 顺序串行（B 在 A SQL fix 基础上扩 CASE / C 在 B 
    - 依赖：CHG-340-B ✅ + CHG-339-C ✅
    - **commit trailer 必填**：`Subagents: arch-reviewer (claude-opus-4-7)`
 
-7. **CHG-341** — server-next 4 处独立常量替换（状态：⬜ 待开始）
+7. **CHG-341** — server-next 4 处独立常量替换 + SubmissionsListClient news/kids 修复（状态：✅ 已完成 / 2026-05-26 22:12 / 执行模型 claude-opus-4-7 / 子代理 无 / videoEnumOptions.ts 已删 / 5 消费方迁移 admin-ui helpers / SubmissionsListClient 9→11 P1 闭环）
    - 创建时间：2026-05-26 22:00
    - 建议模型：sonnet
    - 文件范围（≤ 5 文件 / 4 PATCH 项）：

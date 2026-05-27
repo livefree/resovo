@@ -10,11 +10,17 @@ import type {
 } from '@resovo/admin-ui'
 import type { VideoListFilter, CrawlerSite } from '@/lib/videos'
 import type { VideoType, VisibilityStatus, ReviewStatus } from '@resovo/types'
-import { VIDEO_TYPE_OPTIONS } from './videoEnumOptions'
+import { getVideoTypeOptions } from '@resovo/admin-ui'
 
 // ── filter option constants ───────────────────────────────────────
 
-export { VIDEO_TYPE_OPTIONS }
+/**
+ * 本地 const 派生自 admin-ui SSOT；显式 label 为 string
+ * （helpers 类型 ReactNode 兼容 i18n / 此处不传 t，fallback 实际就是 string；
+ * CSV 导出 / filter chip 等场景需 string，避免每个调用点 cast）
+ */
+export const VIDEO_TYPE_OPTIONS: ReadonlyArray<{ value: VideoType; label: string }> =
+  getVideoTypeOptions().map((o) => ({ value: o.value, label: String(o.label) }))
 
 export const VIDEO_STATUS_OPTIONS: ReadonlyArray<{ value: 'published' | 'pending' | 'all'; label: string }> = [
   { value: 'published', label: '已上架' },
