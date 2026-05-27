@@ -8,6 +8,7 @@ import type { Pool } from 'pg'
 import { exportAllSources, type ExportedSource } from '@/api/db/queries/sources'
 import { upsertSource } from '@/api/db/queries/sources'
 import { findVideoIdByShortId } from '@/api/db/queries/videos'
+import { SOURCE_TYPES } from '@resovo/types'
 
 // ── 导入记录的 Zod Schema ──────────────────────────────────────────
 
@@ -16,7 +17,7 @@ export const ImportSourceRecordSchema = z.object({
   sourceName: z.string().min(1).max(200),
   sourceUrl: z.string().url().max(2000),
   isActive: z.boolean().optional().default(true),
-  type: z.enum(['hls', 'mp4', 'dash']).optional().default('hls'),
+  type: z.enum(SOURCE_TYPES).optional().default('hls'),
   episodeNumber: z.number().int().min(0).nullable().optional().default(null),
 })
 

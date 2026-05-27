@@ -20,7 +20,7 @@ import { ModerationService } from '@/api/services/ModerationService'
 import * as systemSettingsQueries from '@/api/db/queries/systemSettings'
 import { isAppError } from '@/api/lib/errors'
 import type { VisibilityStatus } from '@/types'
-import { VIDEO_TYPES, VIDEO_STATUSES, REVIEW_STATUSES, VISIBILITY_STATUSES } from '@resovo/types'
+import { VIDEO_TYPES, VIDEO_STATUSES, REVIEW_STATUSES, VISIBILITY_STATUSES, DOUBAN_STATUSES, SOURCE_CHECK_STATUSES } from '@resovo/types'
 
 // ── Zod Schema ────────────────────────────────────────────────────
 
@@ -431,8 +431,8 @@ export async function adminVideoRoutes(fastify: FastifyInstance) {
       q: z.string().max(100).optional(),
       siteKey: z.string().max(100).optional(),
       sourceState: z.enum(['all', 'active', 'missing']).optional(),
-      doubanStatus: z.enum(['pending', 'matched', 'candidate', 'unmatched']).optional(),
-      sourceCheckStatus: z.enum(['pending', 'ok', 'partial', 'all_dead']).optional(),
+      doubanStatus: z.enum(DOUBAN_STATUSES).optional(),
+      sourceCheckStatus: z.enum(SOURCE_CHECK_STATUSES).optional(),
     })
     const parsed = PendingQuerySchema.safeParse(request.query)
     if (!parsed.success) {

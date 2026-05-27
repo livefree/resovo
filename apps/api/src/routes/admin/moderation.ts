@@ -18,7 +18,7 @@ import * as videoQueries from '@/api/db/queries/videos'
 import * as moderationQueries from '@/api/db/queries/moderation'
 import * as provenanceQueries from '@/api/db/queries/metadataProvenance'
 import { listLineHealthEvents } from '@/api/db/queries/sourceHealthEvents'
-import { VIDEO_TYPES } from '@resovo/types'
+import { VIDEO_TYPES, DOUBAN_STATUSES, SOURCE_CHECK_STATUSES } from '@resovo/types'
 import { listAuditLogByTarget } from '@/api/db/queries/auditLog'
 import { registerModerationDoubanRoutes } from './moderation.douban'
 
@@ -26,8 +26,8 @@ const PendingQueueQuerySchema = z.object({
   cursor: z.string().optional(),
   limit: z.coerce.number().int().min(1).max(50).default(30),
   type: z.string().optional(),
-  sourceCheckStatus: z.enum(['pending', 'ok', 'partial', 'all_dead']).optional(),
-  doubanStatus: z.enum(['pending', 'matched', 'candidate', 'unmatched']).optional(),
+  sourceCheckStatus: z.enum(SOURCE_CHECK_STATUSES).optional(),
+  doubanStatus: z.enum(DOUBAN_STATUSES).optional(),
   hasStaffNote: z.coerce.boolean().optional(),
   needsManualReview: z.coerce.boolean().optional(),
 })

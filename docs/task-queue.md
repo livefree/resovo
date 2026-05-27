@@ -1582,7 +1582,7 @@ HOTFIX-A → B → C 顺序串行（B 在 A SQL fix 基础上扩 CASE / C 在 B 
    - 依赖：CHG-339-A ✅
    - 验收要点：typecheck + lint + test 全 PASS
 
-3. **CHG-339-C** — packages/types 4 P2 enum 双形态（状态：⬜ 待开始）
+3. **CHG-339-C** — packages/types 4 P2 enum 双形态（状态：✅ 已完成 / 2026-05-26 22:55 / 执行模型 claude-opus-4-7 / 子代理 无 / D-157-1 全部 12 enum 闭环 + DoubanStatus 2 + SourceCheckStatus 2 + SourceType 1 zod 联动 / VideoQuality 无 API zod 引用）
    - 创建时间：2026-05-26 22:00
    - 建议模型：sonnet
    - 文件范围（≤ 5 文件 / 4 PATCH 项）：

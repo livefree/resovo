@@ -22,10 +22,11 @@ export type * from './dashboard'
 
 export { DEFAULT_INGEST_POLICY } from './system.types'
 
-// ── ADR-157 D-157-1 视频枚举值常量（双形态，4 P0 + 4 P1 enum）──────
+// ── ADR-157 D-157-1 视频枚举值常量（双形态，12 enum 全集 P0/P1/P2）─
 export {
   VIDEO_TYPES, VIDEO_GENRES, VIDEO_STATUSES, REVIEW_STATUSES,
   VISIBILITY_STATUSES, CONTENT_FORMATS, EPISODE_PATTERNS, TRENDING_TAGS,
+  DOUBAN_STATUSES, SOURCE_CHECK_STATUSES, VIDEO_QUALITIES, SOURCE_TYPES,
 } from './video.types'
 
 // ── ADR-157 D-157-1 类型守卫工具 ────────────────────────────────

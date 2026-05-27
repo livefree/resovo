@@ -48,10 +48,13 @@ export const TRENDING_TAGS = ['hot', 'weekly_top', 'editors_pick', 'exclusive'] 
 export type TrendingTag = typeof TRENDING_TAGS[number]
 
 // ── 流水线辅助状态（Migration 032，Pipeline Overhaul）────────────
-/** 豆瓣匹配状态：自动丰富 Job 写入 */
-export type DoubanStatus = 'pending' | 'matched' | 'candidate' | 'unmatched'
-/** 源活性批量检验结果 */
-export type SourceCheckStatus = 'pending' | 'ok' | 'partial' | 'all_dead'
+/** 豆瓣匹配状态：自动丰富 Job 写入（ADR-157 D-157-1 双形态） */
+export const DOUBAN_STATUSES = ['pending', 'matched', 'candidate', 'unmatched'] as const
+export type DoubanStatus = typeof DOUBAN_STATUSES[number]
+
+/** 源活性批量检验结果（ADR-157 D-157-1 双形态） */
+export const SOURCE_CHECK_STATUSES = ['pending', 'ok', 'partial', 'all_dead'] as const
+export type SourceCheckStatus = typeof SOURCE_CHECK_STATUSES[number]
 /** VideoGenre — 内容题材（与 VideoType 内容形式严格正交）
  *
  * 对齐豆瓣视频分类（2026-04-22 META-10 对齐表）：
@@ -84,8 +87,13 @@ export const VIDEO_GENRES = [
 ] as const
 export type VideoGenre = typeof VIDEO_GENRES[number]
 
-export type VideoQuality  = '4K' | '1080P' | '720P' | '480P' | '360P'
-export type SourceType    = 'hls' | 'mp4' | 'dash'
+/** VideoQuality 全集（ADR-157 D-157-1 双形态） */
+export const VIDEO_QUALITIES = ['4K', '1080P', '720P', '480P', '360P'] as const
+export type VideoQuality = typeof VIDEO_QUALITIES[number]
+
+/** SourceType 全集（ADR-157 D-157-1 双形态） */
+export const SOURCE_TYPES = ['hls', 'mp4', 'dash'] as const
+export type SourceType = typeof SOURCE_TYPES[number]
 
 // ── 视频实体 ─────────────────────────────────────────────────────
 

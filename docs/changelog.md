@@ -8482,3 +8482,18 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **门禁**：typecheck ✅ / lint ✅ / 1702 targeted unit PASS ✅
 - **红线**：VisibilityStatus API zod 字面量 grep 输出空 ✅
 - **PATCH 文件数**：3（按 PATCH 项口径 4 ≤ 5 ✅）
+
+## [CHG-339-C] packages/types 4 P2 enum 双形态 — D-157-1 全闭环
+- **完成时间**：2026-05-26 22:55
+- **来源序列**：SEQ-20260527-ENUMS-SSOT-IMPL（ADR-157 D-157-1 P2 部分 / 12 enum 全闭环）
+- **执行模型**：claude-opus-4-7 / 子代理：无
+- **改动文件**（5 文件 / 4 PATCH 项 ≤ 5 ✅）：
+  - `packages/types/src/video.types.ts`：4 enum 双形态 — `DOUBAN_STATUSES`(4) / `SOURCE_CHECK_STATUSES`(4) / `VIDEO_QUALITIES`(5) / `SOURCE_TYPES`(3)
+  - `packages/types/src/index.ts`：加 4 const value export（累计 12 enum 全部 export）
+  - `apps/api/src/routes/admin/videos.ts`：2 处 zod 替换（DoubanStatus + SourceCheckStatus）
+  - `apps/api/src/routes/admin/moderation.ts`：2 处 zod 替换（同上）
+  - `apps/api/src/services/MigrationService.ts`：1 处 zod 替换（SourceType）
+- **闭环 D-N 偏离**：**D-157-1 完整闭环** ✅（12 enum 全部双形态 + 全部 API zod 联动完成）
+- **门禁**：typecheck ✅ / lint ✅ / 1643 targeted unit ✅
+- **红线**：DoubanStatus / SourceCheckStatus / SourceType API zod 字面量全部清零 ✅
+- **CHG-339 系列 阶段汇总**：CHG-339-A（4 P0 + assertExhaustive）+ CHG-339-B（4 P1 + VisibilityStatus zod）+ CHG-339-C（4 P2）= 12 enum 全部双形态 + 14 处 API zod 联动 + assertExhaustive 工具
