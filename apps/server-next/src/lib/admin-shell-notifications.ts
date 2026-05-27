@@ -163,9 +163,10 @@ export function useAdminNotifications(): UseAdminNotificationsResult {
     } else if (
       !(generalResult.reason instanceof ApiClientError && generalResult.reason.status === 401)
     ) {
-      // Y-EP2-3：非 401 错误显式 console.error（避免 CLAUDE.md 空 catch 精神冲突）；401 由 apiClient 自动处理
-      // eslint-disable-next-line no-console -- 客户端 hook 无 logger / 错误留痕到浏览器 devtools
-      console.error('[useAdminNotifications] /admin/notifications failed:', generalResult.reason)
+      // Y-EP2-3 + HOTFIX-G：非 401 错误降级留痕（warn 级而非 error / 避免 dev console 红色干扰用户）
+      // 401 由 apiClient 自动处理；这里是降级路径不是异常
+      // eslint-disable-next-line no-console -- 客户端 hook 无 logger / degraded mode 留痕到浏览器 devtools
+      console.warn('[useAdminNotifications] /admin/notifications failed (degraded mode):', generalResult.reason)
     }
     if (bgResult.status === 'fulfilled') {
       const mapped = bgResult.value.data
@@ -173,9 +174,9 @@ export function useAdminNotifications(): UseAdminNotificationsResult {
         .filter((x): x is NotificationItem => x !== null)
       setBackgroundItems(mapped)
     } else {
-      // Y-EP2-3：background-events 端点失败留痕（主端点已正常时不打扰用户 UX）
-      // eslint-disable-next-line no-console -- 客户端 hook 无 logger
-      console.error('[useAdminNotifications] /admin/system/background-events failed:', bgResult.reason)
+      // Y-EP2-3 + HOTFIX-G：background-events 端点失败降级留痕（warn 而非 error / 主端点已正常时不打扰用户 UX）
+      // eslint-disable-next-line no-console -- 客户端 hook 无 logger / degraded mode 留痕
+      console.warn('[useAdminNotifications] /admin/system/background-events failed (degraded mode):', bgResult.reason)
     }
   }, [])
 
@@ -243,9 +244,9 @@ export function useAdminTasks(): UseAdminTasksResult {
     } else if (
       !(jobsResult.reason instanceof ApiClientError && jobsResult.reason.status === 401)
     ) {
-      // Y-EP2-3：非 401 错误显式 console.error
-      // eslint-disable-next-line no-console -- 客户端 hook 无 logger
-      console.error('[useAdminTasks] /admin/system/jobs failed:', jobsResult.reason)
+      // Y-EP2-3 + HOTFIX-G：非 401 降级留痕（warn 而非 error）
+      // eslint-disable-next-line no-console -- 客户端 hook 无 logger / degraded mode 留痕
+      console.warn('[useAdminTasks] /admin/system/jobs failed (degraded mode):', jobsResult.reason)
     }
     if (bgResult.status === 'fulfilled') {
       const mapped = bgResult.value.data
@@ -253,8 +254,9 @@ export function useAdminTasks(): UseAdminTasksResult {
         .filter((x): x is TaskItem => x !== null)
       setBackgroundItems(mapped)
     } else {
-      // eslint-disable-next-line no-console -- 客户端 hook 无 logger
-      console.error('[useAdminTasks] /admin/system/background-events failed:', bgResult.reason)
+      // HOTFIX-G：降级留痕（warn 而非 error / 避免 dev console 红色干扰）
+      // eslint-disable-next-line no-console -- 客户端 hook 无 logger / degraded mode 留痕
+      console.warn('[useAdminTasks] /admin/system/background-events failed (degraded mode):', bgResult.reason)
     }
   }, [])
 

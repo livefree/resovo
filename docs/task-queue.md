@@ -1175,6 +1175,22 @@ B 序列 + C 序列可与 A 并行（A 无依赖）；B 与 C 之间无依赖（
 
 3b. **CHG-SN-9-CW1-CW2-HOTFIX-D** — scheduler daily 模式 catch-up window（5 分钟容错）
    - 状态：✅ 完成（2026-05-26 / @livefree 实测 PASS / commit 71fa00b9）
+
+3c. **CHG-SN-9-CW1-CW2-HOTFIX-E** — 时间轴默认 range 5m + 新增 5m option
+   - 状态：✅ 完成（2026-05-26 / commit 已 push）
+
+3d. **CHG-SN-9-CW1-CW2-HOTFIX-F** — KpiRow 横向滚动 + CrawlerClient OVERVIEW_ROW 弹性
+   - 状态：✅ 完成（2026-05-26 / @livefree 实测 PASS / commit c9d846e7）
+
+3e. **CHG-SN-9-CW1-CW2-HOTFIX-G** — admin-shell-notifications console.error → console.warn（4 处）
+   - 状态：✅ 完成（2026-05-26 17:55）
+   - 实际开始：2026-05-26 17:50
+   - 完成时间：2026-05-26 17:55
+   - 执行模型：claude-opus-4-7（主循环延续；HOTFIX-F 上下文复用）
+   - 触发：@livefree HOTFIX-F 实测后报 console 错误 "ApiClientError 请求失败，请稍后重试" / api-client.ts:31:5 — 根因为 Y-EP2-3 Promise.allSettled rejected 分支 `console.error` 把 ApiClientError 实例打印为浏览器 console 红色 stack（语义应为降级 warn 不是 error）
+   - 范围：4 处 `console.error('[...] failed:', reason)` → `console.warn('[...] failed (degraded mode):', reason)`（admin-shell-notifications.ts useAdminNotifications/useAdminTasks）
+   - 文件范围：1 源 = 1 项 PATCH（≪ 5 ✅）
+   - 门禁：typecheck ✅ / lint ✅ / test 12/12 ✅（stderr 已显示 "(degraded mode)" 文案生效）/ verify:adr-contracts ✅
    - 创建时间：2026-05-26 05:40
    - 实际开始：2026-05-26 05:40
    - 完成时间：2026-05-26 06:00

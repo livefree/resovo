@@ -8182,3 +8182,20 @@ PATCH 文件数：2 源 + 1 测试 = 3 项（≤ 5 硬约束 ✅）
 
 Cleanup-Audit: 2 源文件改 + 1 测试文件（扩 3 case）/ 3 新单测 / 0 migration / 0 新依赖
 Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan 推迟到实测后评估）
+
+## [CHG-SN-9-CW1-CW2-HOTFIX-G] admin-shell-notifications console.error → console.warn（4 处）
+- **完成时间**：2026-05-26
+- **记录时间**：2026-05-26 17:55
+- **执行模型**：claude-opus-4-7（主循环延续；HOTFIX-F 上下文复用）
+- **子代理**：无（日志级别调整 / 无新决策 / 不触发 Opus reviewer）
+- **修改文件**：
+  - `apps/server-next/src/lib/admin-shell-notifications.ts` — 4 处 `console.error('[...] failed:', reason)` → `console.warn('[...] failed (degraded mode):', reason)`（useAdminNotifications 内 2 处 + useAdminTasks 内 2 处 / Promise.allSettled rejected 分支）；注释明示 "degraded mode" 语义
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - 触发场景：@livefree HOTFIX-F 实测后报 console 错误 "ApiClientError 请求失败，请稍后重试" / api-client.ts:31:5 — 根因为 Y-EP2-3 评审建议留痕但 level 选错（rejected 分支是预期降级 / 不是异常 / `console.error` 让 dev console 红色 stack 干扰用户）
+  - 行为不变：Promise.allSettled 容错 / 401 由 apiClient 自动处理 / 端点恢复后下次 polling 自动重连；仅日志级别 error → warn（浏览器 dev console 黄色 warning 代替红色 error / 排查能力保留 / filter `warn` 仍可见）
+  - 测试影响：tests/unit/lib/admin-shell-notifications.test.ts 12/12 PASS（spy 不区分 error/warn 级别 / 文本变化 "(degraded mode)" 也匹配预期）
+  - 不在范围：Next.js dev overlay 配置（内置行为）/ 其他组件 console.error（与本反馈无关）
+- **PATCH 文件数**：1 源 = 1 项（≪ 5 硬约束 ✅）
+- **门禁**：typecheck ✅ / lint 5/5 ✅ / test 12/12 ✅ / verify:adr-contracts ✅
