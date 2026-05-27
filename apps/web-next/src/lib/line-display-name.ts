@@ -85,3 +85,149 @@ export function deduplicateLabels<T extends { label: string }>(items: T[]): T[] 
     return { ...it, label: `${it.label}-${n}` }
   })
 }
+
+// ── CHG-353 / route-labeling Phase 1 Layer C：主题标签系统 ────────────
+// 真源：docs/designs/route-labeling-system.md §Layer C / docs/manual/route-labeling.md
+// arch-reviewer (CHG-352 I3) advisory：pending 行加单独标记（"检测中"）防"未知>已知差"困惑
+
+export interface RouteTheme {
+  /** 主题标识（i18n key 或英文名）*/
+  readonly id: string
+  /** 主题展示名（i18n 当前语言）*/
+  readonly displayName: string
+  /** 标签列表（按线路索引 0..N 映射）*/
+  readonly labels: readonly string[]
+  /** dead 线路文案 */
+  readonly deadLabel: string
+  /** 超主题长度时 fallback 文案前缀（如 "线路" / "Route "）*/
+  readonly fallbackPrefix: string
+}
+
+// 5 主题常量（设计稿 §Layer C 预置主题）
+
+export const THEME_JIE_QI: RouteTheme = {
+  id: 'jie_qi',
+  displayName: '节气',
+  labels: [
+    '立春', '雨水', '惊蛰', '春分', '清明', '谷雨',
+    '立夏', '小满', '芒种', '夏至', '小暑', '大暑',
+    '立秋', '处暑', '白露', '秋分', '寒露', '霜降',
+    '立冬', '小雪', '大雪', '冬至', '小寒', '大寒',
+  ],
+  deadLabel: '已断',
+  fallbackPrefix: '线路',
+}
+
+export const THEME_NATO: RouteTheme = {
+  id: 'nato',
+  displayName: 'NATO Phonetic',
+  labels: [
+    'Alpha', 'Bravo', 'Charlie', 'Delta', 'Echo', 'Foxtrot',
+    'Golf', 'Hotel', 'India', 'Juliet', 'Kilo', 'Lima',
+    'Mike', 'November', 'Oscar', 'Papa', 'Quebec', 'Romeo',
+    'Sierra', 'Tango', 'Uniform', 'Victor', 'Whiskey', 'X-ray',
+    'Yankee', 'Zulu',
+  ],
+  deadLabel: 'Offline',
+  fallbackPrefix: 'Route ',
+}
+
+export const THEME_NUMBERS: RouteTheme = {
+  id: 'numbers',
+  displayName: '数字',
+  labels: ['一', '二', '三', '四', '五', '六', '七', '八', '九', '十'],
+  deadLabel: '断',
+  fallbackPrefix: '线路',
+}
+
+export const THEME_PLANETS: RouteTheme = {
+  id: 'planets',
+  displayName: 'Planets',
+  labels: ['Mercury', 'Venus', 'Mars', 'Jupiter', 'Saturn', 'Uranus', 'Neptune', 'Pluto'],
+  deadLabel: 'Dark',
+  fallbackPrefix: 'Route ',
+}
+
+export const THEME_COLORS: RouteTheme = {
+  id: 'colors',
+  displayName: 'Colors',
+  labels: ['Crimson', 'Amber', 'Jade', 'Azure', 'Indigo', 'Violet', 'Onyx', 'Pearl'],
+  deadLabel: 'Dim',
+  fallbackPrefix: 'Route ',
+}
+
+export const ALL_THEMES: readonly RouteTheme[] = [
+  THEME_JIE_QI, THEME_NATO, THEME_NUMBERS, THEME_PLANETS, THEME_COLORS,
+]
+
+/** 按 locale 选默认主题：zh-CN → 节气 / en + 其他 → NATO Phonetic */
+export function getDefaultTheme(locale: string): RouteTheme {
+  if (locale.toLowerCase().startsWith('zh')) return THEME_JIE_QI
+  return THEME_NATO
+}
+
+/**
+ * 应用主题标签到已排序的线路列表
+ *
+ * 规则（设计稿 §Layer C）：
+ *   - index < theme.labels.length → theme.labels[index]
+ *   - index >= theme.labels.length → `${fallbackPrefix}${index+1}` fallback
+ *   - effectiveScore 极低（< DEAD_THRESHOLD）→ deadLabel
+ *
+ * 边界（消费方 SourceBar 处理）：
+ *   - 0 条 → 不渲染（caller 处理）
+ *   - 1 条 → 不显标签（仅画质 / caller 处理）
+ *   - 全 dead → 所有按钮置灰 + deadLabel（本函数处理）
+ *
+ * @param routes 已按 effective_score 降序的线路列表（含 effectiveScore + quality）
+ * @param theme 主题
+ * @returns 含主题标签的线路数组（保持输入顺序）
+ */
+export interface ThemedRouteInput {
+  readonly effectiveScore?: number
+  readonly quality?: string | null
+}
+
+export interface ThemedRouteOutput {
+  /** 主题标签（含 dead / fallback 处理）*/
+  readonly themeLabel: string
+  /** 是否判定为 dead（应渲染置灰）*/
+  readonly isDead: boolean
+  /** 是否是 fallback（超主题长度）*/
+  readonly isFallback: boolean
+  /** 是否是 pending（中性状态，建议加"检测中"标记 / CHG-352 I3 advisory）*/
+  readonly isPending: boolean
+}
+
+/** dead 判定阈值（effectiveScore < 此值视为 dead）
+ *  数学校准：全 dead 线路最高分（dead+4K+fast）= 0.45 — 用 0.1 不会误判
+ *  全 dead+240P+slow = 0.030（min）— 0.1 阈值能覆盖
+ *  全 dead+1080P+200ms = 0 + 0.21 + 0.15 + 0 = 0.36 — 不被覆盖（advisory：Phase 2 暴露 isDead 字段）
+ *  Phase 1 简化：仅明显 dead 走此判定；后续 Phase 2 后端 SourceService 派生 isDead 字段更精准 */
+const DEAD_THRESHOLD = 0.1
+/** pending 判定阈值范围：中性 score ≈ 0.345（CHG-352 校准）
+ *  pending heuristic：0.30 ≤ effectiveScore < 0.40 → 视为中性 pending */
+const PENDING_MIN = 0.3
+const PENDING_MAX = 0.4
+
+export function applyThemeLabels(
+  routes: ReadonlyArray<ThemedRouteInput>,
+  theme: RouteTheme,
+): ThemedRouteOutput[] {
+  return routes.map((route, index) => {
+    const score = route.effectiveScore ?? 0
+    const isDead = score > 0 && score < DEAD_THRESHOLD
+    const isPending = score >= PENDING_MIN && score < PENDING_MAX
+    const isFallback = index >= theme.labels.length
+
+    if (isDead) {
+      return { themeLabel: theme.deadLabel, isDead: true, isFallback: false, isPending: false }
+    }
+
+    const themeLabel = isFallback
+      ? `${theme.fallbackPrefix}${index + 1}`
+      : theme.labels[index]
+
+    return { themeLabel, isDead: false, isFallback, isPending }
+  })
+}

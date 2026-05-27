@@ -1,0 +1,227 @@
+/**
+ * line-display-name-themes.test.ts — CHG-353 / route-labeling Phase 1 Layer C
+ *
+ * 主题标签 + applyThemeLabels 守卫。
+ * 覆盖：5 主题常量长度 + getDefaultTheme(locale) + applyThemeLabels 行为
+ *   含 dead / pending / fallback / 索引超长等边界
+ */
+
+import { describe, it, expect } from 'vitest'
+import {
+  applyThemeLabels,
+  getDefaultTheme,
+  THEME_JIE_QI,
+  THEME_NATO,
+  THEME_NUMBERS,
+  THEME_PLANETS,
+  THEME_COLORS,
+  ALL_THEMES,
+} from '../../../../apps/web-next/src/lib/line-display-name'
+
+// ── 主题常量 ────────────────────────────────────────────────────────────
+
+describe('主题常量长度对齐设计稿', () => {
+  it('节气 24 个', () => {
+    expect(THEME_JIE_QI.labels).toHaveLength(24)
+    expect(THEME_JIE_QI.labels[0]).toBe('立春')
+    expect(THEME_JIE_QI.labels[23]).toBe('大寒')
+    expect(THEME_JIE_QI.deadLabel).toBe('已断')
+  })
+
+  it('NATO Phonetic 26 个', () => {
+    expect(THEME_NATO.labels).toHaveLength(26)
+    expect(THEME_NATO.labels[0]).toBe('Alpha')
+    expect(THEME_NATO.labels[25]).toBe('Zulu')
+    expect(THEME_NATO.deadLabel).toBe('Offline')
+  })
+
+  it('数字 10 个 / Planets 8 个 / Colors 8 个', () => {
+    expect(THEME_NUMBERS.labels).toHaveLength(10)
+    expect(THEME_PLANETS.labels).toHaveLength(8)
+    expect(THEME_COLORS.labels).toHaveLength(8)
+  })
+
+  it('ALL_THEMES 含 5 主题', () => {
+    expect(ALL_THEMES).toHaveLength(5)
+    expect(ALL_THEMES.map(t => t.id)).toEqual(['jie_qi', 'nato', 'numbers', 'planets', 'colors'])
+  })
+})
+
+// ── getDefaultTheme(locale) ────────────────────────────────────────────
+
+describe('getDefaultTheme(locale) — 按语言选默认主题', () => {
+  it('zh-CN → 节气', () => {
+    expect(getDefaultTheme('zh-CN').id).toBe('jie_qi')
+    expect(getDefaultTheme('zh').id).toBe('jie_qi')
+    expect(getDefaultTheme('zh-TW').id).toBe('jie_qi')
+    expect(getDefaultTheme('ZH-cn').id).toBe('jie_qi')  // case insensitive
+  })
+
+  it('en + 其他 → NATO Phonetic', () => {
+    expect(getDefaultTheme('en').id).toBe('nato')
+    expect(getDefaultTheme('en-US').id).toBe('nato')
+    expect(getDefaultTheme('ja').id).toBe('nato')  // 其他语言 fallback NATO
+    expect(getDefaultTheme('').id).toBe('nato')
+  })
+})
+
+// ── applyThemeLabels — 基本行为 ──────────────────────────────────────
+
+describe('applyThemeLabels — 索引位置赋标签', () => {
+  it('索引 0..N 内 → 对应主题标签', () => {
+    const routes = [
+      { effectiveScore: 0.9, quality: '1080P' },
+      { effectiveScore: 0.7, quality: '720P' },
+      { effectiveScore: 0.5, quality: '480P' },
+    ]
+    const result = applyThemeLabels(routes, THEME_JIE_QI)
+    expect(result).toHaveLength(3)
+    expect(result[0].themeLabel).toBe('立春')
+    expect(result[1].themeLabel).toBe('雨水')
+    expect(result[2].themeLabel).toBe('惊蛰')
+    result.forEach(r => {
+      expect(r.isDead).toBe(false)
+      expect(r.isFallback).toBe(false)
+    })
+  })
+
+  it('NATO 主题对应索引位置', () => {
+    const routes = Array.from({ length: 5 }, (_, i) => ({ effectiveScore: 0.9 - i * 0.1, quality: '720P' }))
+    const result = applyThemeLabels(routes, THEME_NATO)
+    expect(result.map(r => r.themeLabel)).toEqual(['Alpha', 'Bravo', 'Charlie', 'Delta', 'Echo'])
+  })
+})
+
+// ── 边界：fallback（超主题长度）──────────────────────────────────────
+
+describe('applyThemeLabels — 超主题长度 fallback', () => {
+  it('Planets 8 → 第 9 条用 "Route 9" fallback', () => {
+    const routes = Array.from({ length: 9 }, (_, i) => ({ effectiveScore: 0.8 - i * 0.05, quality: '720P' }))
+    const result = applyThemeLabels(routes, THEME_PLANETS)
+    expect(result[7].themeLabel).toBe('Pluto')  // 第 8 条 (index 7) 是最后主题
+    expect(result[7].isFallback).toBe(false)
+    expect(result[8].themeLabel).toBe('Route 9')  // 第 9 条 fallback
+    expect(result[8].isFallback).toBe(true)
+  })
+
+  it('数字 10 → 第 11 条用 "线路 11" fallback', () => {
+    const routes = Array.from({ length: 11 }, (_, i) => ({ effectiveScore: 0.8 - i * 0.05, quality: '720P' }))
+    const result = applyThemeLabels(routes, THEME_NUMBERS)
+    expect(result[9].themeLabel).toBe('十')
+    expect(result[10].themeLabel).toBe('线路11')
+    expect(result[10].isFallback).toBe(true)
+  })
+})
+
+// ── 边界：dead（effectiveScore < DEAD_THRESHOLD 0.1）─────────────────
+
+describe('applyThemeLabels — dead 判定（score < 0.1）', () => {
+  it('effectiveScore 0.05 → deadLabel + isDead=true', () => {
+    const result = applyThemeLabels(
+      [{ effectiveScore: 0.05, quality: '240P' }],
+      THEME_JIE_QI,
+    )
+    expect(result[0].themeLabel).toBe('已断')
+    expect(result[0].isDead).toBe(true)
+  })
+
+  it('effectiveScore 0.03 (min) → deadLabel', () => {
+    const result = applyThemeLabels(
+      [{ effectiveScore: 0.03, quality: '240P' }],
+      THEME_NATO,
+    )
+    expect(result[0].themeLabel).toBe('Offline')
+    expect(result[0].isDead).toBe(true)
+  })
+
+  it('effectiveScore 0 → 视为未知（非 dead / 与未提供同语义）', () => {
+    // score = 0 可能是"未传字段"被默认为 0 / heuristic 安全：不视为 dead
+    const result = applyThemeLabels(
+      [{ effectiveScore: 0, quality: '720P' }],
+      THEME_JIE_QI,
+    )
+    expect(result[0].isDead).toBe(false)
+    expect(result[0].themeLabel).toBe('立春')
+  })
+
+  it('effectiveScore undefined → 视为未知（非 dead）', () => {
+    const result = applyThemeLabels(
+      [{ quality: '720P' }],
+      THEME_JIE_QI,
+    )
+    expect(result[0].isDead).toBe(false)
+    expect(result[0].themeLabel).toBe('立春')
+  })
+
+  it('effectiveScore 0.1 (上边界) → 非 dead', () => {
+    const result = applyThemeLabels(
+      [{ effectiveScore: 0.1, quality: '480P' }],
+      THEME_JIE_QI,
+    )
+    expect(result[0].isDead).toBe(false)
+  })
+})
+
+// ── 边界：pending（0.3 <= score < 0.4 / CHG-352 中性 0.345）──────────
+
+describe('applyThemeLabels — pending 判定（0.3 <= score < 0.4 / 中性 ≈ 0.345）', () => {
+  it('effectiveScore 0.345 (中性) → isPending=true', () => {
+    const result = applyThemeLabels(
+      [{ effectiveScore: 0.345, quality: null }],
+      THEME_JIE_QI,
+    )
+    expect(result[0].isPending).toBe(true)
+    expect(result[0].themeLabel).toBe('立春')  // 仍正常显示主题标签
+    expect(result[0].isDead).toBe(false)
+  })
+
+  it('effectiveScore 0.3 (下边界) → isPending=true', () => {
+    const result = applyThemeLabels([{ effectiveScore: 0.3, quality: '720P' }], THEME_JIE_QI)
+    expect(result[0].isPending).toBe(true)
+  })
+
+  it('effectiveScore 0.4 (上边界 / 排除) → 非 pending', () => {
+    const result = applyThemeLabels([{ effectiveScore: 0.4, quality: '720P' }], THEME_JIE_QI)
+    expect(result[0].isPending).toBe(false)
+  })
+
+  it('effectiveScore 0.5 → 非 pending', () => {
+    const result = applyThemeLabels([{ effectiveScore: 0.5, quality: '720P' }], THEME_JIE_QI)
+    expect(result[0].isPending).toBe(false)
+  })
+})
+
+// ── 边界：0 / 1 条线路 ────────────────────────────────────────────────
+
+describe('applyThemeLabels — 0/1 条线路边界', () => {
+  it('0 条 → 返回空数组', () => {
+    const result = applyThemeLabels([], THEME_JIE_QI)
+    expect(result).toEqual([])
+  })
+
+  it('1 条 → 单条带主题标签（caller SourceBar 判定单条不显标签）', () => {
+    const result = applyThemeLabels(
+      [{ effectiveScore: 0.9, quality: '1080P' }],
+      THEME_JIE_QI,
+    )
+    expect(result).toHaveLength(1)
+    expect(result[0].themeLabel).toBe('立春')
+  })
+})
+
+// ── 边界：全 dead ───────────────────────────────────────────────────
+
+describe('applyThemeLabels — 全 dead 线路（all isDead=true）', () => {
+  it('3 条 dead 线路 → 全部 deadLabel + isDead=true', () => {
+    const routes = [
+      { effectiveScore: 0.04, quality: '480P' },
+      { effectiveScore: 0.05, quality: '720P' },
+      { effectiveScore: 0.03, quality: '360P' },
+    ]
+    const result = applyThemeLabels(routes, THEME_JIE_QI)
+    result.forEach(r => {
+      expect(r.isDead).toBe(true)
+      expect(r.themeLabel).toBe('已断')
+    })
+  })
+})

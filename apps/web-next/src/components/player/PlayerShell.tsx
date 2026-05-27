@@ -9,7 +9,8 @@ import { usePlayerStore } from '@/stores/playerStore'
 import { apiClient } from '@/lib/api-client'
 import { extractShortId } from '@/lib/video-detail'
 import { getVideoDetailHref } from '@/lib/video-route'
-import { buildLineDisplayName, deduplicateLabels } from '@/lib/line-display-name'
+import { buildLineDisplayName, deduplicateLabels, applyThemeLabels, getDefaultTheme } from '@/lib/line-display-name'
+import { useLocale } from 'next-intl'
 import type { Video, VideoSource, ApiResponse, ApiListResponse } from '@resovo/types'
 import { SourceBar } from './SourceBar'
 import { ResumePrompt, saveProgress } from './ResumePrompt'
@@ -46,11 +47,15 @@ export function PlayerShell({ slug: slugProp, portalMode = false }: PlayerShellP
   } = usePlayerStore()
 
   const [video, setVideo] = useState<Video | null>(null)
-  const [sources, setSources] = useState<Array<{ src: string; type: string; label?: string }>>([])
+  const [sources, setSources] = useState<Array<{ src: string; type: string; label?: string; quality?: string | null; isDead?: boolean; isPending?: boolean }>>([])
   const [loading, setLoading] = useState(true)
   const [startTime, setStartTime] = useState<number | undefined>(undefined)
   const [playerVersion, setPlayerVersion] = useState(0)
   const [activePanelTab, setActivePanelTab] = useState<'episodes' | 'sources'>('episodes')
+
+  // CHG-353 / route-labeling Phase 1 Layer C：按 locale 选默认主题（zh-CN → 节气 / en → NATO）
+  const locale = useLocale()
+  const routeTheme = getDefaultTheme(locale)
 
   const shortId = extractShortId(slug)
 
@@ -76,16 +81,27 @@ export function PlayerShell({ slug: slugProp, portalMode = false }: PlayerShellP
             { skipAuth: true }
           )
           .then((r) => {
+            // CHG-353：按主题赋标签（后端已按 effective_score 排序 / CHG-352）
+            const themed = applyThemeLabels(
+              r.data.map((s) => ({ effectiveScore: s.effectiveScore, quality: s.quality })),
+              routeTheme,
+            )
             const newSources = deduplicateLabels(
               r.data.map((s, index) => ({
                 src: s.sourceUrl,
                 type: s.type,
-                label: buildLineDisplayName({
-                  rawName: s.sourceName,
-                  siteDisplayName: s.siteDisplayName,
-                  fallbackIndex: index,
-                  quality: s.quality,
-                }),
+                // 主题标签优先；若 effectiveScore 缺失（老后端兜底）→ fallback buildLineDisplayName
+                label: s.effectiveScore !== undefined
+                  ? themed[index].themeLabel
+                  : buildLineDisplayName({
+                      rawName: s.sourceName,
+                      siteDisplayName: s.siteDisplayName,
+                      fallbackIndex: index,
+                      quality: s.quality,
+                    }),
+                quality: s.quality,
+                isDead: themed[index].isDead,
+                isPending: themed[index].isPending,
               }))
             )
             setSources(newSources)
@@ -118,16 +134,26 @@ export function PlayerShell({ slug: slugProp, portalMode = false }: PlayerShellP
         { skipAuth: true }
       )
       .then((res) => {
+        // CHG-353：切集后重新按主题赋标签（保持与初始 fetch 一致）
+        const themed = applyThemeLabels(
+          res.data.map((s) => ({ effectiveScore: s.effectiveScore, quality: s.quality })),
+          routeTheme,
+        )
         const newSources = deduplicateLabels(
           res.data.map((s, index) => ({
             src: s.sourceUrl,
             type: s.type,
-            label: buildLineDisplayName({
-              rawName: s.sourceName,
-              siteDisplayName: s.siteDisplayName,
-              fallbackIndex: index,
-              quality: s.quality,
-            }),
+            label: s.effectiveScore !== undefined
+              ? themed[index].themeLabel
+              : buildLineDisplayName({
+                  rawName: s.sourceName,
+                  siteDisplayName: s.siteDisplayName,
+                  fallbackIndex: index,
+                  quality: s.quality,
+                }),
+            quality: s.quality,
+            isDead: themed[index].isDead,
+            isPending: themed[index].isPending,
           }))
         )
         setSources(newSources)

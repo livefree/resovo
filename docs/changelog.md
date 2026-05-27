@@ -9193,3 +9193,92 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
   - I3 关键洞察：CHG-353 主题渲染给 pending 行加"检测中"标记，避免用户困惑"未知 > 已知差"
 - **闭环**：CHG-352 完成；plan §17 Phase 1 Layer A 后端交付；Wave 1 进度 7/9 → 8/9
 - **后续**：CHG-353（route-labeling Phase 1 前台主题渲染 / line-display-name.ts 加 RouteTheme + 节气/NATO 常量 + applyThemeLabels + SourceBar.tsx 消费 effectiveScore）→ Wave 1 验收
+
+## [CHG-353] route-labeling Phase 1 前台主题渲染 — Wave 1 #9/9 收官
+- **完成时间**：2026-05-27
+- **来源序列**：SEQ-20260527-MOD-WAVE1（Wave 1 / 卡 9/9 / plan §17 / route-labeling-system.md §Layer C / 收官）
+- **执行模型**：claude-opus-4-7（主循环不切换 §16.5）
+- **子代理**：无（消费方实施 / 复用 CHG-352 ADR-158 后端契约）
+- **任务来源**：route-labeling-system.md Phase 1 Layer C 实施 — 前端按主题渲染线路标签，消费 CHG-352 后端排序结果
+- **改动文件**（4 项 ≤ 5 ✅）：
+  - `apps/web-next/src/lib/line-display-name.ts`：
+    - 新增 `RouteTheme` 接口（id / displayName / labels / deadLabel / fallbackPrefix）
+    - 新增 5 主题常量：THEME_JIE_QI (24 节气) / THEME_NATO (26 NATO Phonetic) / THEME_NUMBERS (10 数字) / THEME_PLANETS (8 Planets) / THEME_COLORS (8 Colors)
+    - 新增 `getDefaultTheme(locale)`：zh → 节气 / en + 其他 → NATO
+    - 新增 `applyThemeLabels(routes, theme)`：按索引赋标签 + dead/pending/fallback 边界处理
+    - DEAD_THRESHOLD = 0.1（heuristic / advisory：Phase 2 后端派生 isDead 字段更精准）
+    - PENDING_MIN/MAX = 0.3-0.4（覆盖 CHG-352 中性 0.345）
+  - `apps/web-next/src/components/player/SourceBar.tsx`：
+    - SourceItem 扩字段：quality / isDead / isPending
+    - isSingle (sources.length === 1) → 单条不显主题标签 / 仅画质 / 边界处理
+    - 主题模式渲染：`themeLabel · quality`
+    - dead 渲染：灰色 + 50% opacity + title "线路失效"
+    - pending 渲染：加省略号"…" + title "检测中" / 防"未知 > 已知差"困惑
+    - data-dead / data-pending 属性（便于 E2E + visual diff）
+  - `apps/web-next/src/components/player/PlayerShell.tsx`：
+    - import useLocale + applyThemeLabels + getDefaultTheme
+    - const routeTheme = getDefaultTheme(locale)
+    - 两个 useEffect fetch sources 后 → applyThemeLabels(routes, routeTheme) → 透传 themeLabel + quality + isDead + isPending 给 SourceItem
+    - effectiveScore undefined fallback：保留 buildLineDisplayName 兜底（老后端兼容 / 实际 CHG-352 后端已全暴露）
+    - sources state 类型扩字段：quality / isDead / isPending
+  - `docs/manual/route-labeling.md`：新增 §8 Layer C 章节（5 主题表 + 默认主题 + 边界处理 + dead heuristic + Phase 2 advisory + 文件清单）
+  - `tests/unit/web-next/lib/line-display-name-themes.test.ts`（**新建** / 22 case）：
+    - 5 主题常量长度对齐设计稿（24 / 26 / 10 / 8 / 8）
+    - ALL_THEMES 含 5 主题
+    - getDefaultTheme(locale): zh-* → 节气 / en + 其他 → NATO（case insensitive）
+    - applyThemeLabels: 索引位置赋标签（节气 + NATO）
+    - fallback：Planets 8 → 第 9 条 "Route 9" / 数字 10 → 第 11 条 "线路11"
+    - dead 判定：score 0.05/0.03 → dead / 0/undefined → 非 dead / 0.1 上边界
+    - pending 判定：score 0.345 / 0.3 上下边界 / 0.4 排除 / 0.5 排除
+    - 0/1 条边界
+    - 全 dead 集体处理
+- **新增依赖**：无
+- **数据库变更**：无（纯前端 + 文档）
+- **门禁**：
+  - typecheck ✅（5 包全 PASS / web-next + types + admin-ui + player-core + worker）
+  - lint ✅（turbo cache hit）
+  - line-display-name-themes 22/22 PASS
+- **UX 决策**：
+  - 默认主题按 locale：中文用户看节气 / 英文用户看 NATO（与设计稿 §Layer C "推荐默认"一致）
+  - dead 按钮灰色 + 50% opacity（不硬编码颜色 / 用 CSS 变量）
+  - pending 加省略号"…" + title 提示 / 不阻塞点击（用户可主动尝试）
+  - 1 条线路边界：单条不显主题标签 / 仅画质（设计稿 §Layer C "1 条线路：不渲染线路栏，只展示画质档位"）
+- **设计稿对齐（route-labeling-system.md §Layer C）**：
+  - ✅ 5 主题预置（节气 / 星宿被替换为 Colors 8 个，原设计稿"二十八宿"留待 Phase 2 主题切换 UX 落地）
+  - ✅ deadLabel + fallback prefix
+  - ✅ 0/1/全 dead/超主题长度 4 边界
+  - ✅ i18n locale 默认主题
+  - ⏳ 用户自定义主题（Phase 2 / localStorage / 不在本卡）
+  - ⏳ 跨设备同步（Phase 4 / users.preferences / 不在本卡）
+- **CHG-352 I3 advisory 落实**：
+  - 前端 SourceBar 给 pending 行加"检测中"标记（省略号"…" + title 提示）
+  - 用户不会困惑"未知线路（pending 0.345）排在已知差线路（dead 0.45）之前"
+- **遗留 advisory（Phase 2）**：
+  - dead 判定 heuristic 精度限制：全 dead+1080P+fast 线路（effectiveScore 0.36）不会被前端 0.1 阈值覆盖；Phase 2 后端 SourceService 派生 isDead 字段（health_score === 0 严格判定）替代
+  - 用户自定义主题（localStorage + 播放器设置面板）
+  - 跨设备同步（users.preferences）
+- **闭环**：CHG-353 完成；plan §17 Phase 1 Layer C 前台交付；**Wave 1 全部完成 9/9 ✅**
+- **后续**：Wave 1 用户验收 → Wave 2（详 plan §14 / 待用户人工走读 11 commits）
+
+## 🎉 [SEQ-20260527-MOD-WAVE1] Wave 1 全部完成
+
+- **完成时间**：2026-05-27
+- **创建时间**：2026-05-27 13:00
+- **总卡数**：9 主卡 + 3 bug fix（CHG-350-FIX/FIX-2/CHG-355）= **12 commits**
+- **总文件改动**：~50 文件（含后端 + admin-ui 共享层 + server-next 消费 + 前台播放器 + 测试 + 文档）
+- **新增测试**：~80 case（含 audit RETRO + score 公式 + 主题边界 + ADR-158 5 case）
+- **arch-reviewer Opus 评审次数**：4 次（CHG-351-A / CHG-351-B / CHG-355 / CHG-352）/ 全 A-CONDITIONAL → 等同 A
+- **新 ADR**：ADR-158（admin 单源 inline probe + render-check 端点协议 / D-158-1..9）
+- **R-MID-1 系统化**：第 27 次（CHG-351-A）
+- **plan §10/§17 完整交付**：
+  - §10.1 审核台左栏 search + filterChips（CHG-350 + 3 修复）
+  - §10.3 EpisodeSelector ↔ LinesPanel ↔ AdminPlayer 接通（CHG-345）
+  - §10.5 LinesPanel 单源探/播按钮（CHG-351 三子卡）
+  - §17 route-labeling Phase 1 后端 + 前台（CHG-352 + CHG-353）
+- **关键沉淀**：
+  - ADR-158 单源 inline 操作契约（actionType `video_source.inline_action` + targetKind `video_source` 复用）
+  - `packages/admin-ui` LinesPanel Props 扩展（onProbeEpisode + onRenderCheckEpisode + probingEpisodeIds + renderCheckingEpisodeIds）
+  - `apps/api/src/lib/route-scoring.ts` 公式纯模块（未来 worker / admin / SourcesMatrixService 可复用）
+  - `apps/web-next/src/lib/line-display-name.ts` 5 主题 + applyThemeLabels（未来 Phase 2 用户自定义可扩展）
+  - `packages/admin-ui` search-input.tsx 调用方契约注释（防 conditional unmount 焦点 bug 复发）
+- **Wave 2 候选**：plan §14 / route-labeling Phase 2 主题切换 UX / PRE-PROBE-WORKER 实施 / Phase 3 Migration 064 + Layer B 山名代号 / CHG-354 ModerationConsole ≤ 500 行 SPLIT-D

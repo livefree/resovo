@@ -194,3 +194,80 @@ A：拒。SQL CASE WHEN 写法易碎、难单测、公式变更需 migration。S
 
 **Q5：admin 后台为什么不同步排序？**
 A：Phase 1 严格控范围 ≤ 5 文件 + admin Props 契约改动需 arch-reviewer trailer + 整套 admin matrix 重排有可能颠覆运维心智模型。Phase 3 + Migration 064 落地后再独立卡（arch-reviewer E1 + G1 advisory）。
+
+---
+
+## 8. Layer C — 前台主题渲染（CHG-353 / Wave 1 #9）
+
+### 8.1 主题概念
+
+主题标签 **不与具体线路绑定**，仅代表"排序位置"。换主题 = 换"皮肤"，排序和可用性不变。
+
+实现位置：`apps/web-next/src/lib/line-display-name.ts`（`RouteTheme` 类型 + 5 主题常量 + `applyThemeLabels`）+ `apps/web-next/src/components/player/SourceBar.tsx`（消费）。
+
+### 8.2 5 预置主题
+
+| 主题 | 语言 | 标签数 | 示例 | deadLabel | fallback 前缀 |
+|------|------|--------|------|-----------|-------|
+| 节气（推荐 zh）| zh | 24 | 立春 雨水 惊蛰 春分 … 大寒 | 已断 | 线路 |
+| NATO Phonetic（推荐 en）| en | 26 | Alpha Bravo … Zulu | Offline | Route  |
+| 数字 | zh | 10 | 一 二 三 … 十 | 断 | 线路 |
+| Planets | en | 8 | Mercury Venus … Pluto | Dark | Route  |
+| Colors | en | 8 | Crimson Amber … Pearl | Dim | Route  |
+
+### 8.3 标签赋值规则
+
+```
+后端返回：已按 effective_score 排序的线路列表（CHG-352）
+
+前端 applyThemeLabels(routes, theme):
+  index 0 → theme.labels[0]                          // 最优线路
+  index n → theme.labels[n]                           // 主题长度内
+        ?? `${theme.fallbackPrefix}${n+1}`            // 超主题长度 fallback
+  effectiveScore < 0.1 → theme.deadLabel + isDead=true // dead 线路
+  0.3 <= effectiveScore < 0.4 → isPending=true        // 中性 pending（"检测中"标记）
+```
+
+### 8.4 默认主题（按 locale）
+
+| Locale | 默认主题 |
+|--------|---------|
+| zh-CN / zh-* | 节气 |
+| en + 其他 | NATO Phonetic |
+
+实现：`getDefaultTheme(locale)`。
+
+### 8.5 边界处理
+
+| 情况 | 处理 |
+|------|------|
+| **0 条线路** | SourceBar 不渲染（设计稿 §Layer C 极端情况）|
+| **1 条线路** | SourceBar 显示画质（quality）作为 label / 无主题标签（仅 1 条无需选择）|
+| **全部 dead** | 所有按钮 isDead=true + 灰色 + 50% opacity + deadLabel + title 提示"线路失效"|
+| **超主题长度** | `${fallbackPrefix}${n+1}` 数字兜底，永远不缺位 |
+| **pending（中性）** | label 正常显示 + 加省略号"…" + title "检测中" / CHG-352 I3 advisory 防"未知>已知差"困惑 |
+
+### 8.6 dead 判定 heuristic
+
+**Phase 1 简化**：用 `effectiveScore < 0.1` 阈值判定。
+
+**精度限制**（advisory）：
+- 全 dead+240P+slow = 0.030（min）— 0.1 阈值能覆盖 ✅
+- 全 dead+1080P+200ms = 0.36（health=0, quality=0.21, latency=0.15）— **不会被覆盖** ❌
+
+**Phase 2 优化方向**：后端 SourceService 派生 `isDead: boolean` 字段（health_score === 0 严格判定 / 暴露到 VideoSource）+ 前端直接消费 / 不再依赖 score 阈值。
+
+### 8.7 用户自定义主题（Phase 2 / 未来）
+
+> 当前 Phase 1 不实施。
+
+设计稿 §Layer C "用户自定义主题"：localStorage 存自定义 labels[] / 跨设备同步走 users.preferences。Phase 2 加入播放器设置面板 + 自定义入口。
+
+### 8.8 文件清单（CHG-353）
+
+| 文件 | 改动 |
+|------|------|
+| `apps/web-next/src/lib/line-display-name.ts` | 加 RouteTheme 类型 + 5 主题常量 + getDefaultTheme + applyThemeLabels |
+| `apps/web-next/src/components/player/SourceBar.tsx` | 接 themeLabel + quality + isDead + isPending props / 处理 1 条 / dead / pending 边界 |
+| `apps/web-next/src/components/player/PlayerShell.tsx` | useLocale + applyThemeLabels 调用 + SourceItem 透传新字段 |
+| `tests/unit/web-next/lib/line-display-name-themes.test.ts` | 新建 22 case：5 主题常量长度 + getDefaultTheme + applyThemeLabels 边界 |

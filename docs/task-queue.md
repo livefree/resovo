@@ -1680,7 +1680,7 @@ HOTFIX-A → B → C 顺序串行（B 在 A SQL fix 基础上扩 CASE / C 在 B 
 
 ## [SEQ-20260527-MOD-WAVE1] server-next 内容审核台 Wave 1 — 消债 + 关键 bug 修复 + 搜索/探播实装 + route-labeling 接入
 
-- **状态**：🟡 进行中（8/9 完成 / CHG-351 三子卡 + CHG-352 / CHG-353 待开始）
+- **状态**：✅ **全部完成（9/9）**（Wave 1 收官 / 待用户验收 → 进 Wave 2 / 2026-05-27）
 - **创建时间**：2026-05-27 13:00
 - **最后更新时间**：2026-05-27（CHG-351 三子卡 -A/-B/-C 全闭合 / 全自动模式）
 - **目标**：基于 `/Users/livefree/.claude/plans/fluffy-giggling-teapot.md` 完成审核台 P0/P1 消债 + 用户视角增强 + route-labeling Phase 1 落地
@@ -1855,7 +1855,7 @@ HOTFIX-A → B → C 顺序串行（B 在 A SQL fix 基础上扩 CASE / C 在 B 
    - **关键风险**：算分函数算"架构决策"等级 → 建议 spawn arch-reviewer Opus 子代理评审公式合理性
    - 人工体验场景：多线路视频排序前后对比 / 单线路 / 全 dead 边界
 
-9. **CHG-353** — route-labeling Phase 1 前台:主题渲染(plan §17)（状态：⬜ 未开始）
+9. **CHG-353** — route-labeling Phase 1 前台:主题渲染(plan §17)（状态：✅ 已完成 / 2026-05-27 / 执行模型 claude-opus-4-7 / 4 文件改动 / 22 case PASS / typecheck+lint 全绿 / Wave 1 卡 9/9 闭合 → **Wave 1 全部完成 ✅**）
    - 创建时间：2026-05-27 13:00
    - 验收要点（route-labeling-system.md Phase 1 + Layer C）：
      - `apps/web-next/src/lib/line-display-name.ts` 加 `RouteTheme` 类型 + 内置常量(节气 24 / NATO 26 / 数字 10 / Planets 8 / Colors 8)+ `applyThemeLabels(routes, theme)` 函数
