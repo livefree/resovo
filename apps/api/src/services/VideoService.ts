@@ -118,7 +118,12 @@ export class VideoService {
     }
   }
 
-  async findByShortId(shortId: string): Promise<Video | null> {
+  // ADR-160 D-160-4a：options.preview=true 时派发到 findVideoByShortIdAdminPreview
+  // 既有调用零影响（options 可选 / 默认走 public 路径）
+  async findByShortId(shortId: string, options?: { preview?: boolean }): Promise<Video | null> {
+    if (options?.preview) {
+      return videoQueries.findVideoByShortIdAdminPreview(this.db, shortId)
+    }
     return videoQueries.findVideoByShortId(this.db, shortId)
   }
 

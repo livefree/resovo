@@ -16286,4 +16286,52 @@ export { getVideoDetailHref } from '@resovo/types'
 
 **结论**：ADR-160 status 🟢 Accepted（2026-05-27 / arch-reviewer Opus A− CONDITIONAL → 主循环消化 3 红线 + 5 黄线 + 3 advisory + 4 关键洞察 → 等同 A）；CHG-361-A 4 文件基础落地（本 ADR + helper 沉淀）；CHG-361-B/C 按 §6 子卡顺序接续；prod 部署 gate by OPS 卡 CHG-OPS-COOKIE-SUBDOMAIN-1。
 
+## ADR-160 AMENDMENT 1 2026-05-27（CHG-361-B 实施前发现）— §6 子卡拆分细化
+
+**触发**：CHG-361-B 实施前实证发现：分层约束（CLAUDE.md "Route → Service → DB queries"）要求 apps/api 端必含 3 文件（`routes/videos.ts` + `services/VideoService.ts` + `db/queries/videos.ts`）；加 web-next 端 3 文件（`middleware.ts` + `admin-access-token.ts` 新建 + `video-detail.ts`）= **6 文件实施 / 超 PATCH ≤ 5 硬约束**（CLAUDE.md M-SN-5 数据观察"PATCH 范围 ≥ 5 项 → 完成度反比"红线）。原 §6 子卡定义未识别 VideoService 分层包装层。
+
+### 修订内容
+
+将 ADR-160 §6 子卡定义中的 **CHG-361-B（5 文件）** 拆为：
+
+| 子卡 | 阶段 | 范围 | 文件 |
+|------|------|------|------|
+| **CHG-361-B2**（先执行 / apps/api 后端）| API 端 preview 端点 + 分层包装 | apps/api preview query + Service 派发 + Route preview query schema + preHandler | 3 文件：①`apps/api/src/routes/videos.ts`（GET `/videos/:id` 增 `?preview=admin` query schema + admin/moderator preHandler 派发）②`apps/api/src/services/VideoService.ts`（`findByShortId(id, { preview?: boolean })` 签名扩展 + 内部派发）③`apps/api/src/db/queries/videos.ts`（新增 `findVideoByShortIdAdminPreview(shortId)` / SQL 显式 `AND v.deleted_at IS NULL`）+ 测试 1 文件 |
+| **CHG-361-B1**（后执行 / web-next 前端）| web-next preview 派发链 | middleware header 注入 + admin-access-token helper + fetchVideoMeta preview 派发 + cache `revalidate: 0` | 3 文件：①`apps/web-next/src/middleware.ts`（+`resolveAdminPreview` + `x-admin-preview` header 注入）②`apps/web-next/src/lib/admin-access-token.ts` 新建（D-160-4b 方案 ② / `getAdminAccessToken()` server-side 调 `/auth/refresh`）③`apps/web-next/src/lib/video-detail.ts`（preview 派发 + `revalidate: 0` 切换）|
+| **CHG-361-D**（独立 / 单 Props 极简）| watch 页 PlayerShell previewMode | 屏蔽 feedback hook | 1 文件：①`apps/web-next/src/components/player/PlayerShell.tsx`（+`previewMode` Props / 默认 false / 向后兼容）|
+
+**执行顺序**：B2（端点先存在 / 独立可测）→ B1（消费方 / 依赖 B2 端点）→ C（后台按钮 / 依赖 B2 端点 + B1 helper）→ D（PlayerShell / 独立 / 任意时机）
+
+**总卡数**：CHG-361 系列由原 3 子卡（A/B/C）扩为 **5 子卡（A/B1/B2/C/D）**；Wave 2 总卡数 15 → **17**。
+
+### Y5 verify gate 修订
+
+| 子卡 | verify gate |
+|------|------|
+| **CHG-361-A** ✅ | typecheck + lint + commit trailer（R3）|
+| **CHG-361-B2** | typecheck + lint + 5 case API 单测（preview happy / cookie 缺 401 / role user 403 / soft-deleted 404 / public 视频回归）|
+| **CHG-361-B1** | typecheck + lint + middleware unit test（preview header 注入 / role 鉴权派发）+ admin-access-token integration test（refresh 端点调用）|
+| **CHG-361-C** | typecheck + lint + e2e 1 case（PendingCenter 按钮点击跳 web-next preview URL）+ docs/manual/moderation-console.md 同步 |
+| **CHG-361-D** | typecheck + lint + PlayerShell snapshot test（previewMode true 时 feedback hook 不触发）|
+
+### D-160-4b 实施细节锁定（B2 范围）
+
+VideoService.findByShortId 签名修订（避免新增方法 / 内部派发）：
+
+```ts
+// apps/api/src/services/VideoService.ts
+async findByShortId(shortId: string, options?: { preview?: boolean }): Promise<Video | null> {
+  if (options?.preview) {
+    return findVideoByShortIdAdminPreview(this.db, shortId)
+  }
+  return findVideoByShortId(this.db, shortId)
+}
+```
+
+**理由**：Service 层是 thin wrapper / 不引入新方法 / 通过 options 派发 / 既有调用 0 影响（options 可选）。
+
+### 结论
+
+ADR-160 AMENDMENT 1 status 🟢 Accepted（2026-05-27 / 主循环 claude-opus-4-7 实施前发现 / 不需要 spawn Opus 第二轮 / 仅 §6 文件拆分细化 / 不改任何 D 决策点 / 不改契约）；CHG-361 系列正式扩为 5 子卡（A/B1/B2/C/D）；执行顺序 B2 → B1 → C → D。
+
 ---

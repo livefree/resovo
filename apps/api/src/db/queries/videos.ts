@@ -144,6 +144,25 @@ export async function findVideoByShortId(
   return result.rows[0] ? mapVideoRow(result.rows[0]) : null
 }
 
+// ── 查询：详情（admin preview / ADR-160 D-160-4a + Y2）────────────
+// 放行 visibility_status ∈ {public, internal, hidden} + review_status 全档
+// 永不放行 deleted_at IS NOT NULL（软删保护）
+export async function findVideoByShortIdAdminPreview(
+  db: Pool,
+  shortId: string
+): Promise<Video | null> {
+  const result = await db.query<DbVideoRow>(
+    `SELECT ${VIDEO_FULL_SELECT},
+      ${SOURCE_COUNT_SUBQUERY} AS source_count,
+      ${SUBTITLE_LANGS_SUBQUERY} AS subtitle_langs
+     ${VIDEO_JOIN}
+     WHERE v.short_id = $1
+       AND v.deleted_at IS NULL`,
+    [shortId]
+  )
+  return result.rows[0] ? mapVideoRow(result.rows[0]) : null
+}
+
 // ── 查询：Trending ───────────────────────────────────────────────
 
 export interface TrendingFilters {

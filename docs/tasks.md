@@ -6,7 +6,7 @@
 
 ## 进行中任务
 
-（空 — CHG-361-A ✅ 已完成 / ADR-160 落地 + getVideoDetailHref 沉淀 + arch-reviewer Opus A− → 等同 A / 待 -B/-C 启动）
+（空 — CHG-361-B2 ✅ 已完成 / apps/api 后端 preview 端点已就绪 / 待 -B1 启动）
 
 ---
 
@@ -25,6 +25,13 @@
 - ✅ CHG-353（route-labeling Phase 1 前台主题渲染 / 本卡 / 待 commit）
 
 **Wave 1 共 11 commits（含 3 张 bug fix / 修复 search 焦点 3 次复发）**
+
+---
+
+## Wave 2 进行中（SEQ-20260527-MOD-WAVE2 / 2/17）
+
+- ✅ CHG-361-A（ADR-160 起草 + getVideoDetailHref 沉淀 / 5f64e78d）
+- ✅ CHG-361-B2（apps/api 后端 3 文件 + 5 case 单测 + ADR-160 AMENDMENT 1）
 
 ---
 

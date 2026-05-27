@@ -77,6 +77,8 @@ export async function videoRoutes(fastify: FastifyInstance) {
   })
 
   // ── GET /videos/:id ──────────────────────────────────────────
+  // ADR-160 D-160-4a：?preview=admin 时走 admin preview 路径（放行 internal/hidden）
+  // 走 preview 时需 admin/moderator 鉴权（preHandler 在 handler 内按 query 派发 / 公开路径无鉴权）
   fastify.get('/videos/:id', async (request, reply) => {
     const { id } = request.params as { id: string }
 
@@ -87,7 +89,27 @@ export async function videoRoutes(fastify: FastifyInstance) {
       })
     }
 
-    const video = await videoService.findByShortId(id)
+    // preview query 解析（ADR-160 D-160-4a）
+    const PreviewQuerySchema = z.object({
+      preview: z.literal('admin').optional(),
+    })
+    const previewParsed = PreviewQuerySchema.safeParse(request.query)
+    if (!previewParsed.success) {
+      return reply.code(422).send({
+        error: { code: 'VALIDATION_ERROR', message: '参数错误', status: 422 },
+      })
+    }
+    const preview = previewParsed.data.preview === 'admin'
+
+    // preview 模式必须 admin/moderator 鉴权（ADR-160 D-160-1 双因素 + D-160-4b）
+    if (preview) {
+      await fastify.authenticate(request, reply)
+      if (reply.sent) return
+      await fastify.requireRole(['admin', 'moderator'])(request, reply)
+      if (reply.sent) return
+    }
+
+    const video = await videoService.findByShortId(id, preview ? { preview: true } : undefined)
     if (!video) {
       return reply.code(404).send({
         error: { code: 'NOT_FOUND', message: '视频不存在或已被删除', status: 404 },

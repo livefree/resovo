@@ -9624,3 +9624,38 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
   - PREVIEW-ADMIN 协议完整起草（双因素 + middleware header + visibility 放行 + access_token 跨 app 传递 + 写入禁令 + 不写 audit + URL 映射）
 - **commit trailer**：`Subagents: arch-reviewer (claude-opus-4-7)`（R3 红线 / CLAUDE.md §模型路由共享 API 契约强制 Opus）
 - **闭环**：CHG-361-A 完成（4 文件原子提交）/ Wave 2 卡 1/15 闭合 / Wave 2 序列正式启动
+
+---
+
+## [CHG-361-B2 / ADR-160 AMENDMENT 1] apps/api 后端 preview 端点实施（Wave 2 #8 子卡 / 3 文件 / D-160-4a）
+- **执行模型**：claude-opus-4-7（主循环 / 续会话）
+- **子代理调用**：无（按 ADR-160 8 D 决策点既定契约实施 / Opus 评审已在 CHG-361-A 闭环）
+- **范围**：apps/api 后端 preview 协议实施层 / ADR-160 AMENDMENT 1 拆 -B 为 -B2（后端 3 文件）+ -B1（前端 3 文件）
+- **来源**：ADR-160 §6 子卡定义初稿未识别 VideoService 分层包装 / 实施前实证发现 6 文件超 PATCH ≤ 5 / AMENDMENT 1 §6 修订拆 -B2/-B1/-D
+- **ADR-160 AMENDMENT 1 关键修订**：
+  - 原 -B 5 文件 → 拆 -B2（apps/api 3 文件）+ -B1（web-next 3 文件）+ -D（PlayerShell 1 文件）
+  - 总 CHG-361 子卡 3 → 5（A / B1 / B2 / C / D）/ Wave 2 卡数 15 → 17
+  - 执行顺序：B2 → B1 → C → D（B2 先存 API 端点便于独立可测）
+  - VideoService.findByShortId(shortId, options?) 签名扩展（不新增方法 / 内部派发 / 既有调用 0 影响）
+- **文件改动（3 文件实施 + 1 测试 / 严格 PATCH ≤ 5）**：
+  - `apps/api/src/db/queries/videos.ts`：新增 `findVideoByShortIdAdminPreview(db, shortId)` query（SQL `WHERE v.short_id = $1 AND v.deleted_at IS NULL` / 删除 `is_published=true` + `visibility_status='public'` / 保留软删守护 / Y2 红线消解）
+  - `apps/api/src/services/VideoService.ts`：`findByShortId(shortId, options?: { preview?: boolean })` 签名扩展 / options.preview=true → 派发 findVideoByShortIdAdminPreview / 既有 22 处调用 0 改动（options 可选）
+  - `apps/api/src/routes/videos.ts`：GET `/videos/:id` 内加 `PreviewQuerySchema = z.object({ preview: z.literal('admin').optional() })` + admin/moderator preHandler（运行时按 query 派发 / 走 fastify.authenticate + fastify.requireRole(['admin', 'moderator'])）+ service 透传 `preview ? { preview: true } : undefined`
+- **测试新增（1 文件 / 5 case 全 PASS）**：
+  - `tests/unit/api/video-preview-query.test.ts`（新建 / 5 case：①preview=admin + admin token 调 findVideoByShortIdAdminPreview ②preview=admin 无 token 401 不调任何 query ③preview=admin + user role 403 不调任何 query ④preview=admin + admin + 软删返回 null 触发 404 ⑤无 preview query 调 findVideoByShortId 公开路径向后兼容）
+- **D-160-4a 边界实证**：
+  - admin preview SQL 仅保留 `AND v.deleted_at IS NULL` → 放行 visibility ∈ {public, internal, hidden} + review_status 全档（含 rejected / 与 ADR-160 D-160-4a 表对齐）
+  - 软删视频任何身份永不放行（Y2 红线消解）
+  - 鉴权 401 / 403 错误码与 fastify.authenticate / fastify.requireRole 既有协议对齐（不新增错误码）
+- **质量门禁**：
+  - typecheck ✅ 8 workspace 全绿
+  - lint ✅（仅 pre-existing TabImages.tsx no-img-element 与本卡无关）
+  - 5 case 单测全 PASS（195ms / vitest run）
+  - verify:endpoint-adr ✅ 194 admin 路由 / 74 ADR 端点 / 0 新增端点（preview query 是 contract 扩展非新端点 / ADR-160 §4 已声明）
+  - verify:adr-contracts ✅ advisory（pre-existing VIDEO_QUALITY/SOURCE_TYPE / 与本卡无关）
+- **commit trailer**：无强制 Subagents（本卡仅后端实施 / 不动 packages/types 公开 API / CLAUDE.md §模型路由共享 API 契约强制 Opus 不适用）
+- **不在本卡范围**：
+  - ❌ web-next middleware + admin-access-token helper + fetchVideoMeta preview 派发 → CHG-361-B1
+  - ❌ 后台 PendingCenter 按钮改造 + moderation pending-queue contract 扩展 → CHG-361-C
+  - ❌ PlayerShell previewMode Props → CHG-361-D
+- **闭环**：CHG-361-B2 完成（3 文件实施 + 1 测试 / ADR-160 AMENDMENT 1 同 commit）/ Wave 2 卡 2/17 闭合 / -B1 启动条件就绪（API 端点已存在 + service 派发已就位）
