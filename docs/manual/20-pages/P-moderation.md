@@ -151,6 +151,28 @@
 - **退出批量模式**：toggle off → 清空选择 + 恢复 J/K 流
 - **组件抽取（CHG-348 / SPLIT-B）**：fixed-bottom 批量操作底栏抽至 `_client/BatchActionsBar.tsx`（Props 极简：`selectedCount` / `onApprove` / `onReject` / `onClear` / `pending`）；视觉零变化，便于复用 + 主文件降复杂度（plan §5 P1 第二步）
 
+### 3.7 标题搜索（CHG-350 / Wave 1 #6 / plan §10.1 方案 A）
+
+> **用途**：审核员在长队列中快速定位特定标题（如「我先找一下《X》在不在待审里」），无需 J/K 翻页或 fetch 重置。
+
+- **位置**：左队列上方 toolbar（pending tab 内 PendingPaneController 左 pane children 顶部）
+- **行为**：
+  - search input 输入即时显示（不阻塞 UI），300ms debounce 后触发 fetch
+  - URL `?q=<title>` 与本地 state 双向同步：刷新页面保留搜索词，跨设备/分享链接生效
+  - "清除"按钮（仅当 q 或 filter 任一非空显示）→ 清空 q + 全部 filter chips
+  - filter chips 显示当前 active filter（type / sourceCheckStatus / doubanStatus / hasStaffNote / needsManualReview）+ "结果 N" 计数
+- **后端契约**：`GET /admin/moderation/pending-queue?q=<title>` 新增 `q` query 参数
+  - zod schema：`q.max(200)`（超 200 字符 → 422 VALIDATION_ERROR）
+  - SQL 实现：`v.title ILIKE %escaped%`，trim 后空串不参与（不影响默认队列）
+  - **SQL 通配符防注入**：`%` / `_` / `\\` 三个字符做 LIKE escape，用户输入字面 `%` 不会变成通配符
+- **场景**：
+  - 输入 "天龙八部" → 队列实时筛选含该词的视频
+  - 与 filter chips 组合：q="天龙" + type=anime → 类型为 anime 且标题含"天龙"的视频
+  - 清空 q（保留 filter） / 清空全部（q + filter）
+- **限制**：
+  - title ILIKE 单维度（暂未支持 staff_note / staff_username 等跨字段搜索）
+  - 300ms debounce 平衡 UI 响应 vs 后端请求频率（高频打字时只触发一次 fetch）
+
 ### 3.5b 组件抽取概览（CHG-347/348/349 / Wave 1 SPLIT-A/B/C）
 
 > **说明**：以下信息供工程师/Reviewer 阅读；普通审核员可跳过。运营手册侧不影响。

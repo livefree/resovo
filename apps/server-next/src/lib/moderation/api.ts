@@ -89,6 +89,8 @@ export async function fetchPendingQueue(
     doubanStatus: string
     hasStaffNote: boolean
     needsManualReview: boolean
+    /** CHG-350：title ILIKE 模糊搜索（≤ 200 字符） */
+    q: string
   }> = {},
 ): Promise<PendingQueueResponse> {
   const params = new URLSearchParams()
@@ -99,6 +101,7 @@ export async function fetchPendingQueue(
   if (query.doubanStatus)                    params.set('doubanStatus', query.doubanStatus)
   if (query.hasStaffNote != null)            params.set('hasStaffNote', String(query.hasStaffNote))
   if (query.needsManualReview != null)       params.set('needsManualReview', String(query.needsManualReview))
+  if (query.q && query.q.trim())             params.set('q', query.q.trim())
   const qs = params.toString()
   return apiClient.get<PendingQueueResponse>(`/admin/moderation/pending-queue${qs ? `?${qs}` : ''}`)
 }

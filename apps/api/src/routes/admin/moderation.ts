@@ -30,6 +30,8 @@ const PendingQueueQuerySchema = z.object({
   doubanStatus: z.enum(DOUBAN_STATUSES).optional(),
   hasStaffNote: z.coerce.boolean().optional(),
   needsManualReview: z.coerce.boolean().optional(),
+  // CHG-350：title ILIKE 模糊搜索（≤ 200 字符）
+  q: z.string().max(200).optional(),
 })
 
 const RejectLabeledBodySchema = z.object({

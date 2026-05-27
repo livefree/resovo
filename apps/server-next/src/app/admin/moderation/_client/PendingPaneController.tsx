@@ -24,6 +24,8 @@ import type { VideoQueueRow } from '@resovo/types'
 import { ModListRow } from './ModListRow'
 import { PendingCenter } from './PendingCenter'
 import { RightPane } from './RightPane'
+import { PendingQueueToolbar } from './PendingQueueToolbar'
+import type { FilterPresetQuery } from '@/lib/moderation/use-filter-presets'
 import { M } from '@/i18n/messages/zh-CN/moderation'
 
 const BTN_SM: React.CSSProperties = {
@@ -55,6 +57,11 @@ export interface PendingPaneControllerProps {
   readonly onRejectOpen: () => void
   readonly onEditVideo: (videoId: string) => void
   readonly onStaffNoteChange: (videoId: string, note: string | null) => void
+  // CHG-350：search + filterChips toolbar 注入
+  readonly qInput: string
+  readonly onQInputChange: (q: string) => void
+  readonly currentFilters: FilterPresetQuery
+  readonly onClearAllFilters: () => void
 }
 
 export function PendingPaneController({
@@ -73,6 +80,10 @@ export function PendingPaneController({
   onRejectOpen,
   onEditVideo,
   onStaffNoteChange,
+  qInput,
+  onQInputChange,
+  currentFilters,
+  onClearAllFilters,
 }: PendingPaneControllerProps): React.ReactElement {
   const [rightOpen, setRightOpen] = useState(true)
 
@@ -136,6 +147,13 @@ export function PendingPaneController({
           'aria-label': M.aria.consoleQueuePane,
           children: (
             <div role="listbox" aria-label={M.aria.consoleQueuePane}>
+              <PendingQueueToolbar
+                q={qInput}
+                onQChange={onQInputChange}
+                filters={currentFilters}
+                onClearAll={onClearAllFilters}
+                resultCount={total}
+              />
               {videos.length === 0 ? (
                 <div style={{ padding: 24, textAlign: 'center', color: 'var(--fg-muted)', fontSize: 'var(--font-size-sm-tight)' }}>
                   {M.pending.empty}

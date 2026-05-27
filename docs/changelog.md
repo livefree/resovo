@@ -8810,3 +8810,39 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
   - **当前位置评估**：CHG-349 字面范围（"三栏编排 + 键盘流 + 列表加载"）已完整执行；行数子目标超出当前卡范围，符合 plan §16.5 "任务范围溢出 BLOCKER" 倒置情形，不阻塞继续推进
 - **闭环**：plan §5 P1 第三步字面范围完整闭环；fluffy-giggling-teapot.md §14 Wave 1 #5 完成
 - **遗留**：500 行红线消解 follow-up CHG-354 SPLIT-D（建议在 Wave 1 完成后立卡）
+
+## [CHG-350] server-next 审核台 左栏 search + filterChips（plan §10.1 方案 A）
+- **完成时间**：2026-05-27
+- **记录时间**：2026-05-27 01:54
+- **来源序列**：SEQ-20260527-MOD-WAVE1（Wave 1 / 卡 6/9 / plan §10.1）
+- **执行模型**：claude-opus-4-7（主循环不切换 §16.5）
+- **子代理**：无（现有端点扩参 / 不触发 verify:endpoint-adr / 不需新 ADR）
+- **改动文件**（6 项 / 概念 5 个 PATCH 单元 ✅）：
+  - `apps/api/src/routes/admin/moderation.ts`（PendingQueueQuerySchema 加 `q: z.string().max(200).optional()`）
+  - `apps/api/src/db/queries/moderation.ts`（PendingQueueFilters interface 加 q + listPendingQueue 加 ILIKE filter + 通配符 escape）
+  - `apps/server-next/src/lib/moderation/api.ts`（fetchPendingQueue 签名扩 q + trim 后非空才传）
+  - `apps/server-next/src/app/admin/moderation/_client/PendingQueueToolbar.tsx`（**新建** / 142 行 / search input + filter chips + 结果计数 + 清除按钮）
+  - `apps/server-next/src/app/admin/moderation/_client/usePendingQueue.ts`（filters 类型扩 q：新增 `PendingQueueFilters extends FilterPresetQuery`）
+  - `apps/server-next/src/app/admin/moderation/_client/ModerationConsole.tsx`（qInput / q 双 state + 300ms debounce useEffect + URL `?q=` 双向同步 + queueFilters useMemo 注入 hook + 传 toolbar props 给 PendingPaneController）
+  - `apps/server-next/src/app/admin/moderation/_client/PendingPaneController.tsx`（接 toolbar props + 在 children 顶部渲染 PendingQueueToolbar）
+  - `docs/manual/20-pages/P-moderation.md` 新增 §3.7 "标题搜索"
+- **新增依赖**：无
+- **数据库变更**：无（仅 SQL ILIKE filter；底层依赖现有 `videos.title` 索引）
+- **门禁**：
+  - typecheck ✅
+  - lint ✅
+  - moderation 范围 23 test files / 249 tests 全 PASS（含 moderationQueueRoutes.test.ts 新增 2 个 q 参数测试 / 17→19）
+  - verify:adr-contracts ✅
+- **SQL 安全**：
+  - LIKE 通配符 escape：`%` / `_` / `\\` 三字符前加 `\\`，防止用户输入 "%" 当通配符
+  - max 200 字符约束（zod schema）
+  - trim 后空串不参与查询（避免空 q 注入空 ILIKE）
+- **UX 决策**：
+  - 双 state（qInput / q）：qInput 即时响应输入，q 是 300ms debounce 后的查询值
+  - URL ?q= 与 q 双向同步：刷新保留 + 跨设备分享
+  - filter chips 复用现有 5 维度 active filter 可视化（type / sourceCheckStatus / doubanStatus / hasStaffNote / needsManualReview）
+  - 不污染 FilterPresetQuery 语义：q 是动态搜索词不进预设保存范围（预设是长期保存的筛选模式）
+- **测试覆盖**（CHG-350 新增 2 case）：
+  - moderationQueueRoutes.test.ts: q 参数传递 listPendingQueue / q 超 200 → 422
+- **闭环**：plan §10.1 方案 A 完整落地；fluffy-giggling-teapot.md §14 Wave 1 #6 完成
+- **后续**：CHG-351（LinesPanel 单行探/播按钮）

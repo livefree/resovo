@@ -1745,7 +1745,7 @@ HOTFIX-A → B → C 顺序串行（B 在 A SQL fix 基础上扩 CASE / C 在 B 
    - 文件范围(≤ 5 项)：新建 PendingPaneController.tsx / ModerationConsole.tsx 精简 / 关联类型导出 / e2e 回归
    - 人工体验场景：完整 pending tab 回归 / 全键盘流 / 批量+预设组合
 
-6. **CHG-350** — 左栏 search + filterChips(plan §10.1 方案 A)（状态：⬜ 未开始）
+6. **CHG-350** — 左栏 search + filterChips(plan §10.1 方案 A)（状态：✅ 已完成 / 2026-05-27 01:54 / 执行模型 claude-opus-4-7 / 主循环不切换 §16.5 / 7 文件改动 / 后端 ?q= ILIKE + SQL escape / 前端 toolbar + 300ms debounce + URL 双向同步 / moderationQueueRoutes 新增 2 q-参数测试 / moderation 范围 249/249 PASS / docs/manual §3.7 已加 / Wave 1 卡 6/9 闭合）
    - 创建时间：2026-05-27 13:00
    - 验收要点：
      - `_client/PendingQueueToolbar.tsx` 新建:search input(debounce 300ms) + filterChips(type / sourceCheckStatus / doubanStatus 等已有维度)

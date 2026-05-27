@@ -92,6 +92,8 @@ export interface PendingQueueFilters {
   doubanStatus?: string
   hasStaffNote?: boolean
   needsManualReview?: boolean
+  /** CHG-350：title ILIKE 模糊搜索 — trim 后 ≤ 200 字符 */
+  q?: string
 }
 
 // CHG-SN-4-09d hotfix（2026-05-02）：响应字段统一 camelCase（PG 双引号 alias 保留大小写）。
@@ -182,6 +184,15 @@ export async function listPendingQueue(
   }
   if (filters.needsManualReview === true) {
     conditions.push(`v.needs_manual_review = true`)
+  }
+  // CHG-350：title ILIKE 模糊搜索（trim 后非空才参与；% 用 LIKE escape 防 SQL 通配符注入）
+  if (filters.q) {
+    const trimmed = filters.q.trim()
+    if (trimmed) {
+      const escaped = trimmed.replace(/[\\%_]/g, ch => `\\${ch}`)
+      conditions.push(`v.title ILIKE $${idx++}`)
+      params.push(`%${escaped}%`)
+    }
   }
 
   let cursorCond = ''

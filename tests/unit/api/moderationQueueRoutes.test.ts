@@ -108,6 +108,30 @@ describe('GET /admin/moderation/pending-queue', () => {
       expect.any(String),
     )
   })
+
+  // CHG-350：title ILIKE 搜索参数 q
+  it('CHG-350：?q=<title> 传递给 listPendingQueue（title ILIKE 搜索）', async () => {
+    await app.inject({
+      method: 'GET',
+      url: '/v1/admin/moderation/pending-queue?q=%E5%A4%A9%E9%BE%99%E5%85%AB%E9%83%A8',
+      headers: { authorization: await tokenFor('moderator') },
+    })
+    expect(mockListPendingQueue).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ q: '天龙八部' }),
+      expect.any(String),
+    )
+  })
+
+  it('CHG-350：q 超 200 字符 → 422 VALIDATION_ERROR', async () => {
+    const longQ = 'a'.repeat(201)
+    const res = await app.inject({
+      method: 'GET',
+      url: `/v1/admin/moderation/pending-queue?q=${longQ}`,
+      headers: { authorization: await tokenFor('moderator') },
+    })
+    expect(res.statusCode).toBe(422)
+  })
 })
 
 describe('POST /admin/moderation/:id/reject-labeled', () => {

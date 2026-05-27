@@ -181,8 +181,32 @@ export function ModerationConsole(): React.ReactElement {
     try { sessionStorage.setItem('admin.moderation.approveAndPublishOn.v1', String(next)) } catch { /* ignore */ }
   }, [])
 
+  // CHG-350：q 搜索词（不进 FilterPresetQuery 语义，但参与 fetch 查询）
+  // qInput 是 input 即时值（UI 响应），q 是 debounce 后值（参与 fetch）
+  const [qInput, setQInput] = useState<string>(() => searchParams.get('q') ?? '')
+  const [q, setQ] = useState<string>(() => searchParams.get('q') ?? '')
+  // URL → qInput 单向同步（route 变化时）
+  useEffect(() => {
+    const urlQ = searchParams.get('q') ?? ''
+    setQInput(urlQ)
+    setQ(urlQ)
+  }, [searchParams])
+  // 300ms debounce：qInput → q + URL sync
+  useEffect(() => {
+    if (qInput === q) return
+    const handle = setTimeout(() => {
+      setQ(qInput)
+      const p = new URLSearchParams(searchParams.toString())
+      if (qInput.trim()) p.set('q', qInput.trim())
+      else p.delete('q')
+      router.replace(`?${p}`, { scroll: false })
+    }, 300)
+    return () => clearTimeout(handle)
+  }, [qInput, q, router, searchParams])
+
   // CHG-347 / SPLIT-A：pending 队列状态与方法抽到独立 hook
-  const queue = usePendingQueue(currentFilters, {
+  const queueFilters = React.useMemo(() => ({ ...currentFilters, q }), [currentFilters, q])
+  const queue = usePendingQueue(queueFilters, {
     tab,
     approveAndPublishOn,
     enabled: tab === 'pending',
@@ -512,6 +536,14 @@ export function ModerationConsole(): React.ReactElement {
             onRejectOpen={() => setRejectOpen(true)}
             onEditVideo={handleEditVideo}
             onStaffNoteChange={handleStaffNoteChange}
+            qInput={qInput}
+            onQInputChange={setQInput}
+            currentFilters={currentFilters}
+            onClearAllFilters={() => {
+              setQInput('')
+              setCurrentFilters({})
+              applyFiltersToUrl({})
+            }}
           />
         )}
         {tab === 'rejected' && <RejectedTabContent />}

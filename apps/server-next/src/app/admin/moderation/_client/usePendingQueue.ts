@@ -23,6 +23,11 @@ import * as api from '@/lib/moderation/api'
 import { M } from '@/i18n/messages/zh-CN/moderation'
 import type { FilterPresetQuery } from '@/lib/moderation/use-filter-presets'
 
+/** CHG-350：扩 FilterPresetQuery 加 q（title 搜索词；不进预设语义，只动态传给 fetch） */
+export interface PendingQueueFilters extends FilterPresetQuery {
+  readonly q?: string
+}
+
 export interface UsePendingQueueOptions {
   /** sessionStorage key 命名（'pending' / 'rejected' 等） */
   readonly tab: string
@@ -60,7 +65,7 @@ export interface UsePendingQueueResult {
 }
 
 export function usePendingQueue(
-  filters: FilterPresetQuery,
+  filters: PendingQueueFilters,
   options: UsePendingQueueOptions,
 ): UsePendingQueueResult {
   const { tab, approveAndPublishOn, enabled = true } = options
