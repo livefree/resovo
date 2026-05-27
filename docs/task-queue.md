@@ -1736,7 +1736,7 @@ HOTFIX-A → B → C 顺序串行（B 在 A SQL fix 基础上扩 CASE / C 在 B 
    - 文件范围(≤ 5 项)：新建 BatchActionsBar.tsx / ModerationConsole.tsx / docs/manual/moderation-console.md
    - 人工体验场景：批量通过 / 批量拒绝 / 清除选择
 
-5. **CHG-349** — 抽 PendingPaneController(SPLIT-C)（状态：⬜ 未开始）
+5. **CHG-349** — 抽 PendingPaneController(SPLIT-C)（状态：✅ 已完成 / 2026-05-27 01:45 / 执行模型 claude-opus-4-7 / 主循环不切换 §16.5 / 3 文件改动 / ModerationConsole 710 → 616 行 / 字面范围（三栏编排+键盘流）完整执行 / "≤ 250 行" 子目标未达（剩 616 行多在 page head / preset / toast / 独立模块）→ 立 follow-up CHG-354 SPLIT-D 在 Wave 末 / Wave 1 卡 5/9 闭合）
    - 创建时间：2026-05-27 13:00
    - 验收要点（plan §5 P1 第三步）：
      - 抽 `_client/PendingPaneController.tsx`:左 + 中 + 右 三栏编排 + 键盘流 + 列表加载

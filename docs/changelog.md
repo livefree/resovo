@@ -8768,3 +8768,45 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
   - disabled / pending label 切换行为不变（`处理中…` ↔ `✓ 批量通过 (N)`）
 - **累积进度**：ModerationConsole 829 → 749 (CHG-347) → 710 (CHG-348)；目标 ≤ 250 行（CHG-349 收尾）
 - **闭环**：plan §5 P1 第二步完整闭环；fluffy-giggling-teapot.md §14 Wave 1 #4 完成
+
+## [CHG-349] server-next 审核台 抽 PendingPaneController（SPLIT-C / P1 拆分第三步）
+- **完成时间**：2026-05-27
+- **记录时间**：2026-05-27 01:45
+- **来源序列**：SEQ-20260527-MOD-WAVE1（Wave 1 / 卡 5/9 / plan §5 P1 第三步）
+- **执行模型**：claude-opus-4-7（主循环不切换 §16.5）
+- **子代理**：无（组件抽取 / 内部 Props 契约）
+- **改动文件**（3 项 ≤ 5 ✅）：
+  - `apps/server-next/src/app/admin/moderation/_client/PendingPaneController.tsx`（**新建** / 212 行）
+    - SplitPane 三栏渲染（左队列 / 中预览 / 右详情）完整迁移
+    - 中部 toolbar：J/K kbd / counter / progress bar / R/S/A 按钮
+    - 键盘流 J/K/A/R/S（pending tab 专属 / 跳过 input 焦点 / cmd/ctrl 不触发）
+    - 内部 rightOpen state + responsive useEffect（>= 1280px 自动展开）
+    - loading 态显示 M.pending.loading
+    - 14 props 接收：videos / total / activeIdx / loading / loadingMore / nextCursor / setActiveIdx / loadMore / batchModeOn / selectedIds / onToggleSelect / onApprove / onRejectOpen / onEditVideo / onStaffNoteChange
+  - `apps/server-next/src/app/admin/moderation/_client/ModerationConsole.tsx`（**精简** 710 → 616 行 / -94 行）
+    - 删除 handleKey useCallback + useEffect
+    - 删除 SplitPane + ModListRow + PendingCenter + RightPane 三栏 JSX (~95 行)
+    - 替换为 `<PendingPaneController ... />` 单行 props 注入
+    - 删除 rightOpen state + responsive useEffect
+    - 删除 import：SplitPane / ModListRow / PendingCenter / RightPane / VideoQueueRow
+    - 新增 import：PendingPaneController
+  - `docs/manual/20-pages/P-moderation.md` 新增 §3.5b "组件抽取概览（CHG-347/348/349 / Wave 1 SPLIT-A/B/C）" — 工程师/Reviewer 视角的拆分链路 + ModerationConsole 行数演进表
+- **新增依赖**：无
+- **数据库变更**：无
+- **门禁**：
+  - typecheck ✅
+  - lint ✅
+  - moderation 范围 23 test files / 247 tests 全 PASS ✅（含 use-pending-queue 4/4）
+- **零回归**：
+  - SplitPane 三栏视觉与交互保持
+  - data-testid `moderation-split` 保留
+  - 键盘流 J/K/A/R/S 行为不变（pending tab 专属 + input 焦点豁免 + cmd/ctrl 不触发）
+  - rightOpen >= 1280px 响应行为不变
+  - 批量模式 ModListRow checkbox 渲染保持
+- **ModerationConsole 行数演进总览**：829（原始）→ 749（CHG-347）→ 710（CHG-348）→ 616（CHG-349）
+- **task-queue.md "≤ 250 行" 子目标未达成**：当前 616 行（CLAUDE.md "500 行红线"超 116 行）；
+  - **根因**：剩余 616 行多为 page head / FilterPresetPopover handlers / approve-publish toggle / batch mode toggle / Toast / Save preset modal / Error banner / RunInfoBanner 等"非三栏编排"独立模块
+  - **后续 follow-up**（**不阻塞 Wave 1 推进**）：建议新立 **CHG-354 SPLIT-D** 拆 PageHead + FilterPresetController + ToastController 至 ModerationConsole ≤ 500 行；如需再拆至 250 行，需 CHG-355+ 多卡
+  - **当前位置评估**：CHG-349 字面范围（"三栏编排 + 键盘流 + 列表加载"）已完整执行；行数子目标超出当前卡范围，符合 plan §16.5 "任务范围溢出 BLOCKER" 倒置情形，不阻塞继续推进
+- **闭环**：plan §5 P1 第三步字面范围完整闭环；fluffy-giggling-teapot.md §14 Wave 1 #5 完成
+- **遗留**：500 行红线消解 follow-up CHG-354 SPLIT-D（建议在 Wave 1 完成后立卡）

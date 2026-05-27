@@ -151,6 +151,15 @@
 - **退出批量模式**：toggle off → 清空选择 + 恢复 J/K 流
 - **组件抽取（CHG-348 / SPLIT-B）**：fixed-bottom 批量操作底栏抽至 `_client/BatchActionsBar.tsx`（Props 极简：`selectedCount` / `onApprove` / `onReject` / `onClear` / `pending`）；视觉零变化，便于复用 + 主文件降复杂度（plan §5 P1 第二步）
 
+### 3.5b 组件抽取概览（CHG-347/348/349 / Wave 1 SPLIT-A/B/C）
+
+> **说明**：以下信息供工程师/Reviewer 阅读；普通审核员可跳过。运营手册侧不影响。
+
+- **CHG-347 / SPLIT-A**：`usePendingQueue` hook（`_client/usePendingQueue.ts`）— pending 队列 fetch / loadMore / 乐观 approve/reject / 失败回滚 / sessionStorage activeIdx 持久化
+- **CHG-348 / SPLIT-B**：`BatchActionsBar` 组件（`_client/BatchActionsBar.tsx`）— fixed-bottom 批量操作底栏
+- **CHG-349 / SPLIT-C**：`PendingPaneController` 组件（`_client/PendingPaneController.tsx`）— pending tab 三栏 SplitPane + 中部 J/K/A/R/S 键盘流 + rightOpen responsive
+- **ModerationConsole.tsx 行数演进**：829（原始）→ 749（CHG-347）→ 710（CHG-348）→ 616（CHG-349）；目标 ≤ 500 行红线消解 — 仍超 116 行，follow-up SPLIT-D 拆 page head / filter preset / toast 等独立模块
+
 ### 3.6 选集切换 → 播放器自动换源（CHG-345 / Wave 1 修复）
 
 > **用途**：连载剧集（episodeCount > 1）审核时，切换不同集数直接预览对应源 URL。

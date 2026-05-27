@@ -2,19 +2,17 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
-import { SplitPane, RejectModal } from '@resovo/admin-ui'
+import { RejectModal } from '@resovo/admin-ui'
 import type { RejectModalSubmitPayload } from '@resovo/admin-ui'
-import type { VideoQueueRow, ReviewLabel } from '@resovo/types'
-import { ModListRow } from './ModListRow'
-import { PendingCenter } from './PendingCenter'
+import type { ReviewLabel } from '@resovo/types'
 import { RejectedTabContent } from './RejectedTabContent'
-import { RightPane } from './RightPane'
 import { RunInfoBanner } from './RunInfoBanner'
 import { FilterPresetPopover } from './FilterPresetPopover'
 import { SavePresetModal } from './SavePresetModal'
 import { VideoEditDrawer } from '../../videos/_client/VideoEditDrawer'
 import { usePendingQueue } from './usePendingQueue'
 import { BatchActionsBar } from './BatchActionsBar'
+import { PendingPaneController } from './PendingPaneController'
 import * as api from '@/lib/moderation/api'
 import { M } from '@/i18n/messages/zh-CN/moderation'
 import { useFilterPresets } from '@/lib/moderation/use-filter-presets'
@@ -110,8 +108,8 @@ export function ModerationConsole(): React.ReactElement {
   const [reviewLabels, setReviewLabels] = useState<ReviewLabel[]>([])
   const [rejectOpen, setRejectOpen] = useState(false)
   const [rejectSubmitting, setRejectSubmitting] = useState(false)
-  const [rightOpen, setRightOpen] = useState(true)
   const [editVideoId, setEditVideoId] = useState<string | null>(null)
+  // rightOpen state 已下沉至 PendingPaneController（CHG-349 / SPLIT-C）
 
   // CHG-SN-4-FIX-F：筛选预设
   const [currentFilters, setCurrentFilters] = useState<FilterPresetQuery>(() => readFiltersFromSearchParams(searchParams))
@@ -144,13 +142,7 @@ export function ModerationConsole(): React.ReactElement {
     router.replace(qs ? `?${qs}` : '?', { scroll: false })
   }, [router, searchParams])
 
-  // responsive right pane
-  useEffect(() => {
-    const update = () => setRightOpen(window.innerWidth >= 1280)
-    update()
-    window.addEventListener('resize', update)
-    return () => window.removeEventListener('resize', update)
-  }, [])
+  // responsive right pane 已下沉至 PendingPaneController（CHG-349 / SPLIT-C）
 
   // load review labels once
   useEffect(() => {
@@ -358,21 +350,7 @@ export function ModerationConsole(): React.ReactElement {
     }
   }, [savePreset, currentFilters])
 
-  const handleKey = useCallback((e: KeyboardEvent) => {
-    if (tab !== 'pending') return
-    if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
-    if (e.metaKey || e.ctrlKey) return
-    if (e.key === 'j' || e.key === 'J') setActiveIdx(i => Math.min(i + 1, pendingVideos.length - 1))
-    else if (e.key === 'k' || e.key === 'K') setActiveIdx(i => Math.max(i - 1, 0))
-    else if (e.key === 'a' || e.key === 'A') void handleApprove()
-    else if (e.key === 'r' || e.key === 'R') setRejectOpen(true)
-    else if (e.key === 's' || e.key === 'S') setActiveIdx(i => Math.min(i + 1, pendingVideos.length - 1))
-  }, [tab, pendingVideos.length, handleApprove, setActiveIdx])
-
-  useEffect(() => {
-    window.addEventListener('keydown', handleKey)
-    return () => window.removeEventListener('keydown', handleKey)
-  }, [handleKey])
+  // 键盘流 J/K/A/R/S 已下沉至 PendingPaneController（CHG-349 / SPLIT-C）
 
   const tabCounts = { pending: totalPending, rejected: 0 }
   const tabDefs: readonly { id: TabId; label: string; danger?: boolean }[] = [
@@ -515,98 +493,26 @@ export function ModerationConsole(): React.ReactElement {
         )}
       </div>
 
-      {/* Tab content */}
+      {/* Tab content (CHG-349 / SPLIT-C：pending SplitPane + 键盘流抽至 PendingPaneController) */}
       <div style={{ flex: 1, minHeight: 0 }}>
         {tab === 'pending' && (
-          loading ? (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--fg-muted)', fontSize: 'var(--font-size-sm-tight)' }}>{M.pending.loading}</div>
-          ) : (
-            <SplitPane
-              height="100%"
-              gap={12}
-              role="region"
-              aria-label={M.aria.consoleSplitRegion}
-              data-testid="moderation-split"
-              panes={[
-                {
-                  width: 280,
-                  minWidth: 200,
-                  header: (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--fg-muted)' }}>{M.totalCount(totalPending, 0)}</span>
-                      <span style={{ flex: 1 }} />
-                      <span style={{ fontSize: 'var(--font-size-xxs)', color: 'var(--state-success-fg)', display: 'flex', alignItems: 'center', gap: 4 }}>
-                        <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--state-success-fg)', display: 'inline-block' }} />
-                        {M.kbdFlowLabel}
-                      </span>
-                    </div>
-                  ),
-                  noPadding: true,
-                  role: 'complementary',
-                  'aria-label': M.aria.consoleQueuePane,
-                  children: (
-                    <div role="listbox" aria-label={M.aria.consoleQueuePane}>
-                      {pendingVideos.length === 0 ? (
-                        <div style={{ padding: 24, textAlign: 'center', color: 'var(--fg-muted)', fontSize: 'var(--font-size-sm-tight)' }}>{M.pending.empty}</div>
-                      ) : (
-                        <>
-                          {pendingVideos.map((it, i) => (
-                            <ModListRow
-                              key={it.id}
-                              it={it}
-                              active={i === activeIdx}
-                              onClick={() => setActiveIdx(i)}
-                              selectionMode={batchModeOn}
-                              selected={selectedIds.has(it.id)}
-                              onToggleSelect={() => toggleSelectId(it.id)}
-                            />
-                          ))}
-                          <div style={{ padding: 14, textAlign: 'center', color: 'var(--fg-muted)', fontSize: 'var(--font-size-xxs)' }}>
-                            {loadingMore ? M.pending.loadingMore : nextCursor ? (
-                              <button style={{ ...BTN_SM, fontSize: 'var(--font-size-xxs)' }} onClick={loadMore}>{M.pending.loadingMore}</button>
-                            ) : M.pending.noMore}
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  ),
-                },
-                {
-                  width: '1fr',
-                  minWidth: 400,
-                  header: v ? (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' as const }}>
-                      <span style={KBD}>J</span>
-                      <span style={KBD}>K</span>
-                      <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--fg-muted)' }}>{M.counter(activeIdx + 1, totalPending)}</span>
-                      <div style={{ flex: 1, height: 4, background: 'var(--bg-surface-raised)', borderRadius: 2, minWidth: 40 }}>
-                        <div style={{ height: '100%', width: `${Math.min(100, ((activeIdx + 1) / Math.max(1, totalPending)) * 100)}%`, background: 'var(--accent-default)', borderRadius: 2 }} />
-                      </div>
-                      <button style={BTN_DANGER} onClick={() => setRejectOpen(true)} aria-label={M.aria.consoleRejectVideo}>✕ {M.actions.reject} <span style={KBD}>R</span></button>
-                      <button style={BTN_SM} onClick={() => setActiveIdx(i => Math.min(i + 1, pendingVideos.length - 1))} aria-label={M.aria.consoleSkipVideo}>{M.actions.skip} <span style={KBD}>S</span></button>
-                      <button style={BTN_PRIMARY} onClick={() => void handleApprove()} aria-label={M.aria.consoleApproveVideo}>✓ {M.actions.approve} <span style={KBD}>A</span></button>
-                      <button style={BTN_SM} onClick={() => setRightOpen(o => !o)} aria-expanded={rightOpen}>{rightOpen ? '›' : '‹'} {M.actions.detail}</button>
-                    </div>
-                  ) : <span />,
-                  role: 'main',
-                  'aria-label': M.aria.consolePreviewPane,
-                  children: v ? (
-                    <PendingCenter v={v} onStaffNoteChange={handleStaffNoteChange} onEditVideo={handleEditVideo} />
-                  ) : (
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--fg-muted)', fontSize: 'var(--font-size-sm-tight)' }}>{M.pending.empty}</div>
-                  ),
-                },
-                {
-                  width: 300,
-                  minWidth: 260,
-                  hidden: !rightOpen,
-                  role: 'complementary',
-                  'aria-label': M.aria.consoleDetailPane,
-                  children: v ? <RightPane v={v} /> : null,
-                },
-              ]}
-            />
-          )
+          <PendingPaneController
+            videos={pendingVideos}
+            total={totalPending}
+            activeIdx={activeIdx}
+            loading={loading}
+            loadingMore={loadingMore}
+            nextCursor={nextCursor}
+            setActiveIdx={setActiveIdx}
+            loadMore={loadMore}
+            batchModeOn={batchModeOn}
+            selectedIds={selectedIds}
+            onToggleSelect={toggleSelectId}
+            onApprove={handleApprove}
+            onRejectOpen={() => setRejectOpen(true)}
+            onEditVideo={handleEditVideo}
+            onStaffNoteChange={handleStaffNoteChange}
+          />
         )}
         {tab === 'rejected' && <RejectedTabContent />}
       </div>
