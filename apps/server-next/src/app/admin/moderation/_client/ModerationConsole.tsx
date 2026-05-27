@@ -181,27 +181,21 @@ export function ModerationConsole(): React.ReactElement {
     try { sessionStorage.setItem('admin.moderation.approveAndPublishOn.v1', String(next)) } catch { /* ignore */ }
   }, [])
 
-  // CHG-350：q 搜索词（不进 FilterPresetQuery 语义，但参与 fetch 查询）
-  // qInput 是 input 即时值（UI 响应），q 是 debounce 后值（参与 fetch）
-  // CHG-350 BUG-FIX：仅 mount 时从 URL 读初始 q；之后不再 URL → qInput 回流
-  //   避免 router.replace 触发 searchParams 变化 → useEffect 重新 setQInput 覆盖用户输入 → 光标位置丢失
-  const [qInput, setQInput] = useState<string>(() => searchParams.get('q') ?? '')
+  // CHG-350 + BUG-FIX：q 搜索词
+  //   复用 admin-ui DataTableSearchInput（半 uncontrolled / IME 兼容 / 内置 300ms debounce）
+  //   onQChange 收到的是 debounce/composition end 后的最终值（不是按键级）
+  //   不再需要 qInput/q 双 state；不再需要 router.replace 回流 — 删除 useEffect debounce 链路
   const [q, setQ] = useState<string>(() => searchParams.get('q') ?? '')
-  // searchParams 用 ref 持有最新值，debounce useEffect 不依赖 searchParams（断开回流循环）
+  // searchParams 用 ref 持有最新值，onQChange 不依赖 searchParams（断开 useCallback 重建链路）
   const searchParamsRef = useRef(searchParams)
   useEffect(() => { searchParamsRef.current = searchParams }, [searchParams])
-  // 300ms debounce：qInput → q + URL sync（单向，URL 不再回流到 qInput）
-  useEffect(() => {
-    if (qInput === q) return
-    const handle = setTimeout(() => {
-      setQ(qInput)
-      const p = new URLSearchParams(searchParamsRef.current.toString())
-      if (qInput.trim()) p.set('q', qInput.trim())
-      else p.delete('q')
-      router.replace(`?${p}`, { scroll: false })
-    }, 300)
-    return () => clearTimeout(handle)
-  }, [qInput, q, router])
+  const handleQChange = useCallback((next: string) => {
+    setQ(next)
+    const p = new URLSearchParams(searchParamsRef.current.toString())
+    if (next.trim()) p.set('q', next.trim())
+    else p.delete('q')
+    router.replace(`?${p}`, { scroll: false })
+  }, [router])
 
   // CHG-347 / SPLIT-A：pending 队列状态与方法抽到独立 hook
   const queueFilters = React.useMemo(() => ({ ...currentFilters, q }), [currentFilters, q])
@@ -535,11 +529,11 @@ export function ModerationConsole(): React.ReactElement {
             onRejectOpen={() => setRejectOpen(true)}
             onEditVideo={handleEditVideo}
             onStaffNoteChange={handleStaffNoteChange}
-            qInput={qInput}
-            onQInputChange={setQInput}
+            q={q}
+            onQChange={handleQChange}
             currentFilters={currentFilters}
             onClearAllFilters={() => {
-              setQInput('')
+              handleQChange('')
               setCurrentFilters({})
               applyFiltersToUrl({})
             }}

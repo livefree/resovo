@@ -5,17 +5,18 @@
  *
  * 设计来源：plan §10.1 方案 A（保留 ModListRow 形态，顶部加 toolbar；不抽新原语）
  *
+ * 实施：复用 admin-ui `DataTableSearchInput`（半 uncontrolled / IME 兼容 / 内置 debounce）
+ *   修复用户实测 bug：原普通受控 input 在外部 re-render 链路中触发光标失焦
+ *   见 packages/admin-ui/src/components/data-table/search-input.tsx EP-4-HOTFIX 注释
+ *
  * 职责：
- *   - 受控 search input（caller 持 q 字符串 + debounce）
+ *   - search input（caller 通过 onQChange 接收 debounce/composition end 后的最终值）
  *   - 当前 active filters 可视化（来自 caller filters；本组件只显示，不修改 filters 维度）
  *   - "清除全部"按钮（重置 q + filter chips 全部）
- *
- * 不在职责：
- *   - debounce 实现（caller useEffect 或 useTransition 处理）
- *   - filter 维度（type / sourceCheckStatus 等）的修改（FilterPresetPopover 负责）
  */
 
 import React from 'react'
+import { DataTableSearchInput } from '@resovo/admin-ui'
 import type { FilterPresetQuery } from '@/lib/moderation/use-filter-presets'
 
 const TOOLBAR_STYLE: React.CSSProperties = {
@@ -38,16 +39,7 @@ const SEARCH_ROW_STYLE: React.CSSProperties = {
   gap: 6,
 }
 
-const SEARCH_INPUT_STYLE: React.CSSProperties = {
-  flex: 1,
-  padding: '5px 10px',
-  border: '1px solid var(--border-default)',
-  borderRadius: 'var(--radius-sm)',
-  background: 'var(--bg-surface)',
-  color: 'var(--fg-default)',
-  fontSize: 'var(--font-size-xs)',
-  outline: 'none',
-}
+// SEARCH_INPUT_STYLE 已删除 — 改用 DataTableSearchInput 自带样式
 
 const CLEAR_BTN_STYLE: React.CSSProperties = {
   padding: '4px 8px',
@@ -103,15 +95,16 @@ export function PendingQueueToolbar({
   return (
     <div style={TOOLBAR_STYLE} data-testid="pending-queue-toolbar">
       <div style={SEARCH_ROW_STYLE}>
-        <input
-          type="text"
-          value={q}
-          onChange={(e) => onQChange(e.target.value)}
-          placeholder="搜索标题…"
-          aria-label="搜索待审视频标题"
-          style={SEARCH_INPUT_STYLE}
-          data-testid="pending-queue-search-input"
-        />
+        <div style={{ flex: 1 }}>
+          <DataTableSearchInput
+            value={q}
+            onChange={onQChange}
+            placeholder="搜索标题…"
+            aria-label="搜索待审视频标题"
+            data-testid="pending-queue-search-input"
+            size="sm"
+          />
+        </div>
         {hasAnyFilter && (
           <button
             type="button"

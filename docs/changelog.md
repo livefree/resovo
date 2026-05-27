@@ -8877,4 +8877,40 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
   - Bug 1 修复后：URL 单向同步（mount 读 + qInput→URL 写），user 输入连续流畅
   - Bug 2 修复前：toolbar 在 listbox 内 → 列表滚动时 toolbar 一起滚走 → 长队列时搜索框消失
   - Bug 2 修复后：toolbar sticky 贴 pane body 顶部 → 列表任意滚动 toolbar 常驻可见
-- **闭环**：CHG-350 用户视角可用性 bug 修复
+- **闭环**：CHG-350 用户视角可用性 bug 修复（第一轮，未完全解决焦点问题）
+
+## [CHG-350-FIX-2] 审核台 search 焦点丢失彻底修复 — 改用 admin-ui DataTableSearchInput
+- **完成时间**：2026-05-27
+- **记录时间**：2026-05-27 02:43
+- **来源**：用户二次实测反馈"输入焦点问题没有修复，crawler 页面表格搜索情况相同"
+- **执行模型**：claude-opus-4-7（主循环不切换 §16.5）
+- **子代理**：无
+- **根因（第二轮深挖）**：
+  - 普通受控 `<input value={q} onChange={...}>` 在外部 re-render 链路中（router.replace 触发 searchParams 引用变化 + 多个 useEffect 重跑 + filter preset / defaultPreset / RSC reconcile）→ React 重新 reconcile controlled input → focus/selection 在某些 React 18 strict mode + commit cycle 中丢失
+  - admin-ui `DataTableSearchInput`（`packages/admin-ui/src/components/data-table/search-input.tsx`）早已解决此 bug，注释明示 EP-4-HOTFIX："受控 → 半 uncontrolled，避免外部 re-render 让光标失焦"
+- **修复策略**：复用 admin-ui 经验证的 `DataTableSearchInput`，同时获得：
+  1. 半 uncontrolled（DOM 自管 value + ref + 手动 sync selectionStart/End）→ 焦点稳定
+  2. IME 中文输入兼容（composition 期间不传播 onChange）
+  3. 内置 300ms debounce → 删除 ModerationConsole 双 state（qInput/q）+ debounce useEffect 链路
+  4. composition end / Enter 立即提交标准 UX
+- **改动文件**（3 项 ≤ 5 ✅）：
+  - `apps/server-next/src/app/admin/moderation/_client/PendingQueueToolbar.tsx`：
+    - 删除原生 `<input>` 元素 + 自定义 SEARCH_INPUT_STYLE
+    - 改用 `<DataTableSearchInput value={q} onChange={onQChange} size="sm" />` from `@resovo/admin-ui`
+  - `apps/server-next/src/app/admin/moderation/_client/ModerationConsole.tsx`：
+    - 删除 `qInput` state（只保留 `q` 单一 state）
+    - 删除 300ms debounce useEffect（DataTableSearchInput 内置）
+    - 改用 `handleQChange` useCallback 直接接收 debounce 后值 → setQ + URL 写入
+    - `searchParamsRef` 保留（避免 useCallback 重建链路）
+    - `onClearAllFilters` 改用 `handleQChange('')`
+  - `apps/server-next/src/app/admin/moderation/_client/PendingPaneController.tsx`：
+    - props 重命名 qInput → q / onQInputChange → onQChange（与新单 state 模式对齐）
+- **修复前 vs 修复后**：
+  - 修复前（CHG-350 + CHG-350-FIX）：连续输入仍丢焦点（React controlled input + 外部 re-render）
+  - 修复后：DataTableSearchInput 半 uncontrolled / 焦点稳定 / IME 兼容 / 内置 debounce
+- **门禁**：
+  - typecheck ✅
+  - lint ✅
+  - moderation 范围 14 test files / 148 tests 全 PASS
+- **关于 crawler 同症状**：用户提到 crawler 搜索情况相同，但 crawler 已用 DataTableSearchInput（`CrawlerSiteList.tsx:184`）；如复用此组件后 ModerationConsole 仍丢焦，则需独立卡修 admin-ui 共享层 bug（触发 arch-reviewer Opus 评审）
+- **闭环**：CHG-350 用户视角焦点 bug 第二轮彻底修复

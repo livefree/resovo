@@ -58,8 +58,8 @@ export interface PendingPaneControllerProps {
   readonly onEditVideo: (videoId: string) => void
   readonly onStaffNoteChange: (videoId: string, note: string | null) => void
   // CHG-350：search + filterChips toolbar 注入
-  readonly qInput: string
-  readonly onQInputChange: (q: string) => void
+  readonly q: string
+  readonly onQChange: (q: string) => void
   readonly currentFilters: FilterPresetQuery
   readonly onClearAllFilters: () => void
 }
@@ -80,8 +80,8 @@ export function PendingPaneController({
   onRejectOpen,
   onEditVideo,
   onStaffNoteChange,
-  qInput,
-  onQInputChange,
+  q,
+  onQChange,
   currentFilters,
   onClearAllFilters,
 }: PendingPaneControllerProps): React.ReactElement {
@@ -150,8 +150,8 @@ export function PendingPaneController({
             //   sticky positioning 让其贴 pane body 顶部，列表滚动时保持可见
             <>
               <PendingQueueToolbar
-                q={qInput}
-                onQChange={onQInputChange}
+                q={q}
+                onQChange={onQChange}
                 filters={currentFilters}
                 onClearAll={onClearAllFilters}
                 resultCount={total}
