@@ -222,15 +222,20 @@ export async function listPendingQueue(
               v.reviewed_by AS "reviewedBy",
               v.reviewed_at AS "reviewedAt",
               COALESCE(
+                -- CHG-359: 去掉 is_active=true 限制 — inactive 但 dead 的 source 也应反映在 pill
+                -- 原因：disable-dead 后 source 是 is_active=false / probe_status=dead；
+                --       LinesPanel 显示所有非软删 source（含 inactive）；
+                --       pending-queue pill 应与 LinesPanel 状态 / sourceCheckStatus='all_dead' 一致
+                -- 用户实测：视频 2563b359 全 source dead+inactive → 旧 SQL 返回 pending（误导）
                 (SELECT probe_status FROM video_sources
-                 WHERE video_id = v.id AND deleted_at IS NULL AND is_active = true
+                 WHERE video_id = v.id AND deleted_at IS NULL
                  ORDER BY CASE probe_status WHEN 'dead' THEN 0 WHEN 'partial' THEN 1
                            WHEN 'pending' THEN 2 ELSE 3 END LIMIT 1),
                 'pending'
               ) AS probe,
               COALESCE(
                 (SELECT render_status FROM video_sources
-                 WHERE video_id = v.id AND deleted_at IS NULL AND is_active = true
+                 WHERE video_id = v.id AND deleted_at IS NULL
                  ORDER BY CASE render_status WHEN 'dead' THEN 0 WHEN 'partial' THEN 1
                            WHEN 'pending' THEN 2 ELSE 3 END LIMIT 1),
                 'pending'

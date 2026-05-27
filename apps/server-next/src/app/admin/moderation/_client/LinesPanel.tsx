@@ -242,12 +242,7 @@ export function LinesPanel({ videoId, selectedKey, onLineSelect, onSourceHealthC
           ? { ...l, probe_status: r.newProbeStatus, latency_ms: r.latencyMs }
           : l
       }))
-      // CHG-358-DEBUG：诊断 onSourceHealthChanged 链路（用户实测未触发 GET pending-queue）
-      // eslint-disable-next-line no-console
-      console.log('[CHG-358 DEBUG] batch-probe done, onSourceHealthChanged:', typeof onSourceHealthChanged, onSourceHealthChanged)
       onSourceHealthChanged?.()
-      // eslint-disable-next-line no-console
-      console.log('[CHG-358 DEBUG] onSourceHealthChanged called')
       const { ok, dead, total, failed } = result.summary
       if (dead > 0 || failed > 0) {
         toast.push({

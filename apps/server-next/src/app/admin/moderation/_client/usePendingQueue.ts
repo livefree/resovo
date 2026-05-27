@@ -109,30 +109,15 @@ export function usePendingQueue(
   // CHG-355 R1：空依赖 useCallback → 引用稳定 → 不再让 useEffect 因引用变化重跑
   //   内部用 filtersRef.current 读最新 filters（同步事件链可靠）
   const refetch = useCallback(async () => {
-    // eslint-disable-next-line no-console
-    console.log('[CHG-358 DEBUG] usePendingQueue.refetch called / filters=', filtersRef.current)
     setLoading(true)
     setError(null)
     try {
       const res = await api.fetchPendingQueue(filtersRef.current)
-      // eslint-disable-next-line no-console
-      console.log('[CHG-358 DEBUG] fetchPendingQueue returned', res.data.length, 'videos')
-      // CHG-358-DEBUG2：dump 测试视频 2563b359 probe/render 实际值
-      const testVideo = res.data.find((v: { id: string }) => v.id?.startsWith('2563b359'))
-      if (testVideo) {
-        // eslint-disable-next-line no-console
-        console.log('[CHG-358 DEBUG2] test video 2563b359 probe/render:', JSON.stringify(testVideo))
-      } else {
-        // eslint-disable-next-line no-console
-        console.log('[CHG-358 DEBUG2] test video 2563b359 NOT in returned page / 30 video ids:', res.data.map((v: { id: string }) => v.id))
-      }
       setVideos(res.data as VideoQueueRow[])
       setNextCursor(res.nextCursor)
       setTotal(res.total)
       setTodayStats(res.todayStats)
-    } catch (e) {
-      // eslint-disable-next-line no-console
-      console.error('[CHG-358 DEBUG] fetchPendingQueue failed', e)
+    } catch {
       setError(M.errors.loadFailed)
     } finally {
       setLoading(false)
