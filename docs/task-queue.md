@@ -1239,6 +1239,12 @@ B 序列 + C 序列可与 A 并行（A 无依赖）；B 与 C 之间无依赖（
 3k. **CHG-SN-9-CW1-CW2-EP-1C-CLEANUP-C2** — 删 3 test fixture 残余 dailyTime + 修 #18 断言
    - 状态：✅ 完成（2026-05-26 / commit 58222282）
 
+3l-quad. **N1-EP2-2 推迟决策**（2026-05-26 / 主循环复核）
+   - 实际范围：useAdminNotifications + useAdminTasks 各自并发请求 `/admin/system/background-events` → 60s 内同端点重复 GET
+   - 不是设计冲突；EP-2 arch-reviewer 评审已建议 "留待 ADR-156 端点合并（`/admin/notifications?include=background`）自然消除"
+   - 短期方案（Y-155-3）：接受额外 60s 1 个轮询请求开销 / 性能影响可控
+   - 长期演化触发条件：60s 双端点轮询性能瓶颈出现 + ADR-156 «notifications 端点扩展» 起卡
+
 3l-tris. **CHG-SN-9-N1-EP2-1** — globalMutateRegistry Set → Map<id, fn> 强化去重
    - 状态：✅ 完成（2026-05-26 20:15）
    - 执行模型：claude-opus-4-7

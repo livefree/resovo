@@ -8370,3 +8370,16 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **PATCH 文件数**：2 源 = 2 项（≪ 5 ✅）
 - **门禁**：typecheck ✅ / test 12/12 ✅ / verify:adr-contracts ✅（含本卡涉及的 admin-shell mirror drift 守卫）
 - **关闭偏离**：ADR-155 EP-2 Y-EP2-1 N1 推迟项已闭环
+
+## [N1-EP2-2 推迟决策] reload race + 双 hook 重复 GET background-events 端点
+- **决策时间**：2026-05-26 20:18
+- **决策方**：claude-opus-4-7 主循环 + @livefree 确认
+- **决策内容**：N1-EP2-2 按 EP-2 arch-reviewer 评审建议推迟，**不在主循环范围**
+- **推迟理由**：
+  - 实际范围：useAdminNotifications + useAdminTasks 各自并发请求 `/admin/system/background-events` → 60s 内同端点重复 GET
+  - **不是设计冲突**（之前主循环对 N1-EP2-2 范围理解错误 / 误以为是 cancelled level 跨 ADR 分裂）
+  - 性能优化非阻塞 / 短期 Y-155-3 方案接受 60s 1 个额外请求开销
+  - 评审已指明长期演化路径：ADR-156 «notifications 端点扩展» 起卡时 `/admin/notifications?include=background` 端点合并自然消除
+- **不动文件**：本决策仅记录，0 代码改动
+- **触发 ADR-156 起卡条件**：60s 双端点轮询性能瓶颈实际出现（监控指标 / 用户实测反馈）
+- **关闭偏离**：ADR-155 EP-2 Y-EP2-2 N1 推迟项**正式标记推迟**（不闭环 / 等 ADR-156）
