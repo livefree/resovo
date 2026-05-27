@@ -228,12 +228,8 @@ export function AutoCrawlScheduleCard({ className }: AutoCrawlScheduleCardProps)
     const nextAt = data.nextAt!
     const modeLabel = data.config?.defaultMode === 'full' ? '全量' : '增量'
     // CHG-SN-9-CW1-CW2-HOTFIX-B Step 2：按 scheduleType 切换显示
-    // ADR-155 D-155-6 / EP-1C-2b：daily 分支显示多 dailyTime 列表（dailyTimes 优先，dailyTime alias 兜底）
-    const dailyTimesList = data.config?.dailyTimes && data.config.dailyTimes.length > 0
-      ? Array.from(data.config.dailyTimes)
-      : data.config?.dailyTime
-        ? [data.config.dailyTime]
-        : []
+    // ADR-155 D-155-6 / EP-1C-2b：daily 分支显示多 dailyTime 列表（CLEANUP-B3：dailyTimes required）
+    const dailyTimesList = data.config?.dailyTimes ? Array.from(data.config.dailyTimes) : []
     const scheduleSummary = data.config?.scheduleType === 'interval'
       ? `· 每 ${data.config.intervalMinutes} 分钟 · 模式 ${modeLabel}`
       : dailyTimesList.length > 0

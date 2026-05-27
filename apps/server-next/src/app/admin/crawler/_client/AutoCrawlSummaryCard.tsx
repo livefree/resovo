@@ -250,10 +250,8 @@ export function AutoCrawlSummaryCard({ onEditClick }: AutoCrawlSummaryCardProps)
   const config = data.config!
   const nextAt = data.nextAt!
   const modeLabel = config.defaultMode === 'full' ? '全量' : '增量'
-  // ADR-155 D-155-6 / EP-1C-2b：daily 分支显示多 dailyTime 列表
-  const dailyTimesList = config.dailyTimes && config.dailyTimes.length > 0
-    ? Array.from(config.dailyTimes)
-    : [config.dailyTime || '03:00']
+  // ADR-155 D-155-6 / EP-1C-2b：daily 分支显示多 dailyTime 列表（CLEANUP-B3：dailyTimes required）
+  const dailyTimesList = Array.from(config.dailyTimes)
   const scheduleSummary = config.scheduleType === 'interval'
     ? `每 ${config.intervalMinutes} 分钟`
     : `每日 ${dailyTimesList.join(', ')}`

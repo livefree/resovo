@@ -226,12 +226,10 @@ export function SchedulerConfigDrawer({ open, onClose, onSaved }: SchedulerConfi
     })
   }
 
-  // ADR-155 D-155-6 / EP-1C-2a：dailyTimes chip 列表增删
+  // ADR-155 D-155-6 / EP-1C-2a：dailyTimes chip 列表增删（CLEANUP-B3：dailyTimes required，无需 alias 兜底）
   const getCurrentDailyTimes = (): string[] => {
     if (!config) return ['03:00']
-    return config.dailyTimes && config.dailyTimes.length > 0
-      ? Array.from(config.dailyTimes)
-      : [config.dailyTime || '03:00']
+    return Array.from(config.dailyTimes)
   }
 
   const addDailyTime = () => {
