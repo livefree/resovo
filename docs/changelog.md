@@ -8497,3 +8497,25 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **门禁**：typecheck ✅ / lint ✅ / 1643 targeted unit ✅
 - **红线**：DoubanStatus / SourceCheckStatus / SourceType API zod 字面量全部清零 ✅
 - **CHG-339 系列 阶段汇总**：CHG-339-A（4 P0 + assertExhaustive）+ CHG-339-B（4 P1 + VisibilityStatus zod）+ CHG-339-C（4 P2）= 12 enum 全部双形态 + 14 处 API zod 联动 + assertExhaustive 工具
+
+## [CHG-340-A] packages/admin-ui AdminSelectOption 泛型扩展 + 4 P0 helpers
+- **完成时间**：2026-05-26 23:25
+- **来源序列**：SEQ-20260527-ENUMS-SSOT-IMPL（ADR-157 D-157-2 P0 部分）
+- **执行模型**：claude-opus-4-7（主循环）
+- **子代理调用**：arch-reviewer (claude-opus-4-7) / agentId: aef79a95ebb5b6fc2 / 评审 A- CONDITIONAL → 黄线消化后等同 A
+- **改动文件**（7 文件 / 5 PATCH 项 ≤ 5 ✅）：
+  - `packages/admin-ui/src/components/admin-select/admin-select.tsx`：`AdminSelectOption` → `AdminSelectOption<T extends string = string>` 泛型扩展（默认 T=string 保证 16+ 消费方零 break）
+  - `packages/admin-ui/src/enums/index.ts`：**新建** barrel + 共享 `TFunction = (key: string) => string`
+  - `packages/admin-ui/src/enums/videoTypeOptions.ts`：**新建** / `VIDEO_TYPE_FALLBACK_LABEL` + `getVideoTypeOptions(t?: TFunction)`
+  - `packages/admin-ui/src/enums/videoGenreOptions.ts`：**新建** / 20 项 fallback + helper
+  - `packages/admin-ui/src/enums/videoStatusOptions.ts`：**新建** / 2 项 + helper
+  - `packages/admin-ui/src/enums/reviewStatusOptions.ts`：**新建** / 3 项 + helper
+  - `packages/admin-ui/src/index.ts`：加 `export * from './enums'`
+- **arch-reviewer Opus 评审结论**：A- CONDITIONAL → 主循环消化黄线 Y-340-A-1 → 等同 A
+  - 1 黄线 Y-340-A-1 ✅ 消化：fallback label 与 i18n 漂移风险 → 4 helper 文件加 JSDoc 警告（"修改 fallback 必须同步检查 messages/<locale>.json"）
+  - 3 绿线（推迟到 CHG-340-B 顺手）：enums/ 目录拆分保持现状 ✓ / helpers 单测可后续补 / BaseProps 注释建议保留
+  - 关键洞察：泛型扩展协变兼容 ✅ / TFunction 与 next-intl 兼容 ✅ / 无循环依赖 ✅
+- **闭环 D-N 偏离**：D-157-2 P0 部分（4 P0 enum 的 Option helpers + AdminSelectOption 泛型扩展）；剩 D-157-2 P1/P2 8 helpers 待 CHG-340-B/-C
+- **门禁**：typecheck ✅ / lint ✅ / admin-ui 1538/1538 unit PASS ✅
+- **commit trailer 必填**：`Subagents: arch-reviewer (claude-opus-4-7)` ✅
+- **PATCH 文件数**：7（按口径 5 ≤ 5 ✅）

@@ -55,6 +55,9 @@ export * from './components/admin-card'
 // AdminSelect 后台选择器通用原语（CHG-SN-5-PRE-03-D）
 export * from './components/admin-select'
 
+// 视频枚举值 Option helpers（ADR-157 D-157-2 / CHG-340-A 起 4 P0，CHG-340-B/-C 扩 P1/P2）
+export * from './enums'
+
 // Popover 通用弹层原语（CHG-SN-5-PRE-03-F / SEQ-20260506-02 / ADR-115）
 export * from './components/popover'
 

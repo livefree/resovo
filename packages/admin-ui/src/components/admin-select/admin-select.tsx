@@ -30,8 +30,13 @@
 import React, { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 
-export interface AdminSelectOption {
-  readonly value: string
+/**
+ * AdminSelectOption — admin-ui 通用 select 选项类型
+ * ADR-157 D-157-2：泛型 T 默认 string，向后兼容（既有 16+ 消费方零 break）；
+ * 显式带 `<VideoType>` 等收紧类型，与 enums/ 下 helpers 返回值对齐。
+ */
+export interface AdminSelectOption<T extends string = string> {
+  readonly value: T
   readonly label: React.ReactNode
   readonly disabled?: boolean
 }

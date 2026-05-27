@@ -1592,7 +1592,7 @@ HOTFIX-A → B → C 顺序串行（B 在 A SQL fix 基础上扩 CASE / C 在 B 
    - 依赖：CHG-339-B ✅
    - 验收要点：typecheck + lint + test 全 PASS
 
-4. **CHG-340-A** — packages/admin-ui AdminSelectOption 泛型扩展 + 4 P0 helpers（状态：⬜ 待开始 / **强制 Opus arch-reviewer**）
+4. **CHG-340-A** — packages/admin-ui AdminSelectOption 泛型扩展 + 4 P0 helpers（状态：✅ 已完成 / 2026-05-26 23:25 / 执行模型 claude-opus-4-7 / 子代理 arch-reviewer (claude-opus-4-7) agentId: aef79a95ebb5b6fc2 / **A- CONDITIONAL → 黄线 Y-340-A-1 JSDoc 警告已消化 → 等同 A**）
    - 创建时间：2026-05-26 22:00
    - 建议模型：opus（packages/admin-ui 公开 Props 改 + helpers 新增 / CLAUDE.md ❌ 共享组件 API 契约强制 Opus）
    - 文件范围（5 文件 / 5 PATCH 项）：
