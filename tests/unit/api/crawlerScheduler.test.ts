@@ -324,6 +324,7 @@ describe('setAutoCrawlConfig（ADR-154 D-154-1 写入解除写死）', () => {
       globalEnabled: true,
       scheduleType: 'interval',
       intervalMinutes: 120,
+      dailyTimes: ['03:00'],         // ADR-155 D-155-6 / EP-1C-CLEANUP-B1：主字段
       dailyTime: '03:00',
       defaultMode: 'incremental',
       onlyEnabledSites: true,

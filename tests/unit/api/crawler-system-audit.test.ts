@@ -99,6 +99,7 @@ const BEFORE_CONFIG = {
   globalEnabled: false,
   scheduleType: 'daily' as const,
   intervalMinutes: 60,              // ADR-154 D-154-1
+  dailyTimes: ['03:00'],            // ADR-155 D-155-6 / EP-1C-CLEANUP-B1：主字段
   dailyTime: '03:00',
   defaultMode: 'incremental' as const,
   onlyEnabledSites: true,
@@ -110,6 +111,7 @@ const AFTER_CONFIG = {
   globalEnabled: true,
   scheduleType: 'daily' as const,
   intervalMinutes: 60,              // ADR-154 D-154-1（zod default）
+  dailyTimes: ['04:30'],            // ADR-155 D-155-6 / EP-1C-CLEANUP-B1：主字段
   dailyTime: '04:30',
   defaultMode: 'full' as const,
   onlyEnabledSites: false,

@@ -504,7 +504,7 @@ test('采集任务记录页为只读模式（无触发按钮）', async ({ conte
   await page.route(`${API_BASE}/admin/crawler/auto-config*`, (route) => {
     route.fulfill({
       contentType: 'application/json',
-      body: JSON.stringify({ data: { globalEnabled: false, scheduleType: 'daily', dailyTime: '03:00', defaultMode: 'incremental', onlyEnabledSites: true, conflictPolicy: 'skip_running', perSiteOverrides: {} } }),
+      body: JSON.stringify({ data: { globalEnabled: false, scheduleType: 'daily', dailyTimes: ['03:00'], dailyTime: '03:00', defaultMode: 'incremental', onlyEnabledSites: true, conflictPolicy: 'skip_running', perSiteOverrides: {} } }),
     })
   })
   await page.route(`${API_BASE}/admin/crawler/sites*`, (route) => {
@@ -551,7 +551,7 @@ test('采集控制台触发入口位于 sites tab', async ({ context, page }) =>
   await page.route(`${API_BASE}/admin/crawler/auto-config*`, (route) => {
     route.fulfill({
       contentType: 'application/json',
-      body: JSON.stringify({ data: { globalEnabled: false, scheduleType: 'daily', dailyTime: '03:00', defaultMode: 'incremental', onlyEnabledSites: true, conflictPolicy: 'skip_running', perSiteOverrides: {} } }),
+      body: JSON.stringify({ data: { globalEnabled: false, scheduleType: 'daily', dailyTimes: ['03:00'], dailyTime: '03:00', defaultMode: 'incremental', onlyEnabledSites: true, conflictPolicy: 'skip_running', perSiteOverrides: {} } }),
     })
   })
   await page.route(`${API_BASE}/admin/crawler/sites*`, (route) => {
