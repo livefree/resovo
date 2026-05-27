@@ -34,10 +34,20 @@ export class SourceService {
    * 获取视频播放源列表（按 effective_score 排序 / 最优线路排前）
    * ADR-001: 返回直链，不做代理
    * CHG-352: effectiveScore 字段透出供前台 SourceBar 消费（arch-reviewer R1 可选字段）
+   * ADR-160 AMENDMENT 2 D-160-AMD2-2: options.preview=true 时派发 admin preview 视频校验路径
+   *   - 内部派发：findVideoByShortIdAdminPreview（放行 internal/hidden / 保留 deleted_at IS NULL 守卫）
+   *   - sources query 自身按 video_id 查 / 无 visibility 过滤 / 同样工作
+   *   - 既有调用 0 影响（options 可选 / undefined 即走 public 路径）
    */
-  async listSources(videoShortId: string, episode?: number): Promise<VideoSource[]> {
-    // 先确认视频存在且已发布
-    const video = await videoQueries.findVideoByShortId(this.db, videoShortId)
+  async listSources(
+    videoShortId: string,
+    episode?: number,
+    options?: { preview?: boolean },
+  ): Promise<VideoSource[]> {
+    // 先确认视频存在且已发布（preview 模式走 admin preview 校验路径）
+    const video = options?.preview
+      ? await videoQueries.findVideoByShortIdAdminPreview(this.db, videoShortId)
+      : await videoQueries.findVideoByShortId(this.db, videoShortId)
     if (!video) throw new NotFoundError('视频不存在')
 
     // 取含信号字段的 raw rows（不污染 mapSource / arch-reviewer I1）

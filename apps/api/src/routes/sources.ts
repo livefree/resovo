@@ -25,11 +25,14 @@ export async function sourceRoutes(fastify: FastifyInstance) {
   const verifyService = new VerifyService(db)
 
   // ── GET /videos/:id/sources ──────────────────────────────────
+  // ADR-160 AMENDMENT 2 D-160-AMD2-2：?preview=admin 时走 admin preview 校验路径
+  // （视频存在判断派发 findVideoByShortIdAdminPreview / sources query 自身按 video_id 查 / 无 visibility 过滤）
   fastify.get('/videos/:id/sources', async (request, reply) => {
     const { id } = request.params as { id: string }
 
     const QuerySchema = z.object({
       episode: z.coerce.number().int().min(1).optional(),
+      preview: z.literal('admin').optional(),
     })
     const parsed = QuerySchema.safeParse(request.query)
     if (!parsed.success) {
@@ -37,9 +40,22 @@ export async function sourceRoutes(fastify: FastifyInstance) {
         error: { code: 'VALIDATION_ERROR', message: '参数错误', status: 422 },
       })
     }
+    const preview = parsed.data.preview === 'admin'
+
+    // preview 模式必须 admin/moderator 鉴权（与 GET /videos/:id 完全同 pattern / D-160-1 双因素 + D-160-4b）
+    if (preview) {
+      await fastify.authenticate(request, reply)
+      if (reply.sent) return
+      await fastify.requireRole(['admin', 'moderator'])(request, reply)
+      if (reply.sent) return
+    }
 
     try {
-      const sources = await sourceService.listSources(id, parsed.data.episode)
+      const sources = await sourceService.listSources(
+        id,
+        parsed.data.episode,
+        preview ? { preview: true } : undefined,
+      )
       return reply.send({ data: sources })
     } catch (error) {
       if (error instanceof NotFoundError) {

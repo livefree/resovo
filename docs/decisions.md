@@ -16334,4 +16334,80 @@ async findByShortId(shortId: string, options?: { preview?: boolean }): Promise<V
 
 ADR-160 AMENDMENT 1 status 🟢 Accepted（2026-05-27 / 主循环 claude-opus-4-7 实施前发现 / 不需要 spawn Opus 第二轮 / 仅 §6 文件拆分细化 / 不改任何 D 决策点 / 不改契约）；CHG-361 系列正式扩为 5 子卡（A/B1/B2/C/D）；执行顺序 B2 → B1 → C → D。
 
+## ADR-160 AMENDMENT 2 2026-05-27（5 子卡闭环后 Codex stop-time review 发现）— server-side hydration 补 detail+watch 页 preview 派发
+
+**触发**：CHG-361 A→B2→B1→C→D 5 子卡闭环后 Codex stop-time review 反馈："admin preview cannot render internal/hidden detail pages"。主循环实证审查发现 3 处 client-side fetch **完全绕过 middleware 注入的 `x-admin-preview` header**：
+
+1. `apps/web-next/src/components/video/VideoDetailClient.tsx:242-244` `apiClient.get(/videos/${shortId})` 在浏览器 fetch → 走 `findVideoByShortId` public SQL → internal/hidden 视频 404 → 渲染"视频不存在或已下线"（generateMetadata server-side 已通过 fetchVideoMeta 拿到 metadata / title 显示正确 / 但 page body 错误）
+2. `apps/api/src/services/SourceService.ts:38-67` listSources line 40 调 `videoQueries.findVideoByShortId` (public 路径) → internal 视频 sources 端点 404
+3. `apps/web-next/src/components/player/PlayerShell.tsx:73-82` 同样 client-side `apiClient.get` 调 `/videos/:id` + `/videos/:id/sources` → watch 页对 internal 视频同样 404
+
+**根因**：ADR-160 §3 D-160-3 设计"middleware → header → page.tsx / fetchVideoMeta 派发数据路径"时未识别 page body 由 client component 承担、client-side fetch 完全独立于 server-side header 派发链路这一事实。原设计仅 metadata 层接通,未覆盖 page body + sources。
+
+**arch-reviewer 评审**（claude-opus-4-7 子代理 1 轮独立评审）：A- CONDITIONAL PASS / 推荐方案 X(server-side hydration) / 拆 3 子卡 E1+E2+E3。
+
+### D 决策点（D-160-AMD2-1..3）
+
+| 决策点 | 主题 | 推荐结论 | 性质 |
+|--------|------|---------|------|
+| D-160-AMD2-1 | 派发链路扩展 | **server-side hydration** — D-160-3 派发链路从 metadata-only 扩到 page body + sources / 客户端组件接收 hydrated props 跳过初始 fetch / preview 凭据仍仅在 server side（D-160-4b 安全不变量保留）| 架构扩展（非新模式 / 扩既有 D-160-3 派发）|
+| D-160-AMD2-2 | sources 端点 preview 扩展 | `GET /videos/:id/sources` +`preview?: 'admin'` query + 双因素鉴权（与 B2 `GET /videos/:id` 同 pattern）；`SourceService.listSources(shortId, episode?, options?: { preview?: boolean })` 签名扩 / 内部派发 `findVideoByShortIdAdminPreview` 校验 video 存在 | contract 扩展（既有公开路由 +optional query / 非新 admin route / R7 MUST-8 不触发）|
+| D-160-AMD2-3 | hydration props | VideoDetailClient + PlayerShell 加 `initialVideo?: Video` + `initialSources?: VideoSource[]` 可选 Props / 有值时跳过初始 useEffect fetch / 公开访问路径完全向后兼容 | Props 扩展（optional / backward-compatible）|
+
+### 文件范围（§6 -E 三子卡拆分 / PATCH ≤ 5 红线）
+
+> arch-reviewer Opus 评审强制 R-AMD2-1：7 业务文件超 PATCH ≤ 5 → 必须拆 3 子卡
+
+| 子卡 | 范围 | 文件 | 依赖 | verify gate | 模型 |
+|------|------|------|------|------|------|
+| **CHG-361-E1**（API 层 / 镜像 B2 pattern）| sources 端点 preview query + SourceService preview 派发 | 2 文件：①`apps/api/src/routes/sources.ts`（+ `preview?: 'admin'` query schema + admin/moderator preHandler 派发）②`apps/api/src/services/SourceService.ts`（`listSources` 签名扩 options.preview / 内部派发 findVideoByShortIdAdminPreview）+ 1 测试 5 case | 独立（镜像 B2 已成熟 pattern）| typecheck + lint + 5 case 单测（preview admin / 无 token 401 / role user 403 / 软删 404 / public 视频回归）| sonnet 或 opus 续会话 |
+| **CHG-361-E2**（web-next detail 页 hydration）| detail-page-factory 服务端 fetch + VideoDetailClient initial Props | 3 文件：①`apps/web-next/src/app/[locale]/_lib/detail-page-factory.tsx`（createDetailPage server-side 调 fetchVideoDetail + fetchVideoSources / 拼 initial props）②`apps/web-next/src/components/video/VideoDetailClient.tsx`（Props +`initialVideo?` +`initialSources?` / 有 init 时 setVideo + setSources + skip 初始 fetch / Y-AMD2-1）③`apps/web-next/src/lib/video-detail.ts`（+`fetchVideoSources(slug, episode)` helper / 复用 buildPreviewFetchInit / Y-AMD2-3 preview 路径 `cache: 'no-store'`）| 依赖 E1（sources preview 端点）| typecheck + lint + VideoDetailClient initial 渲染单测 ≥ 3 case | sonnet 或 opus 续会话 |
+| **CHG-361-E3**（web-next watch 页 hydration）| watch page server-side fetch + PlayerShell initial Props | 2 文件：①`apps/web-next/src/app/[locale]/watch/[slug]/page.tsx`（server component / 调 fetchVideoDetail + fetchVideoSources / 拼 initial props 传 PlayerShell）②`apps/web-next/src/components/player/PlayerShell.tsx`（Props +`initialVideo?` +`initialSources?` / 有 init 时跳过初始 fetch / 既有 episode/source 切换 useEffect 不变 / Y-AMD2-2 限制声明）| 依赖 E1 + E2（共用 fetchVideoSources helper）| typecheck + lint + PlayerShell initial Props 单测 ≥ 3 case | sonnet 或 opus 续会话 |
+
+**总计**：7 业务 + 3 测试 / 拆 3 子卡 / 每卡 ≤ 3 业务文件 / PATCH ≤ 5 严格合规
+
+**执行顺序**：E1 → E2 → E3（E1 后端 contract 先存 / E2 detail 页消费 / E3 watch 页同 pattern 复用 E2 helper）
+
+### 红线（R-AMD2-1..2 / 实施前必消解）
+
+- **R-AMD2-1（PATCH ≤ 5 拆 3 子卡）**：上表拆分方案合规
+- **R-AMD2-2（serializable props）**：实施时验证 `mapSourceBase` 输出 JSON serializable（无 Date 对象 / 无函数 / 无 class 实例）；`created_at` 字段须 string 而非 Date
+
+### 黄线（Y-AMD2-1..3 / 实施时遵守）
+
+- **Y-AMD2-1（useEffect 条件 skip）**：有 initialVideo / initialSources 时早返回避免 stale closure；推荐 `if (initialVideo) { setVideo(initialVideo); return }` 早返回 pattern
+- **Y-AMD2-2（episode 切换 internal 视频限制）**：首集 server-side hydration / 后续 episode 切换 client-side fetch 仍走 public 路径 / internal 视频切换 episode 会 404 → 文档化为 known limitation / `?ep=N&preview=admin` reload 是 workaround / FOLLOWUP 卡（React Server Actions / RSC fetch）后续解决
+- **Y-AMD2-3（cache no-store）**：`fetchVideoSources` preview 路径必须 `cache: 'no-store'`（与 fetchVideoDetail 一致）
+
+### Advisory（A-AMD2-1..2 / 接受为已知限制）
+
+- **A-AMD2-1**：episode 切换 internal 视频 404 限制接受 → FOLLOWUP 卡（RSC fetch / Server Actions）后续解决；admin reload `?ep=N&preview=admin` 是 pragmatic workaround
+- **A-AMD2-2**：fetchVideoDetail 失败触发 Next.js notFound() page（替代 VideoDetailClient 客户端 "视频不存在或已下线" 内联错误）→ 更佳 UX / 不破坏既有 fallback / 行为变化记录
+
+### Q&A 速查（arch-reviewer 评审产出）
+
+| 问题 | 答 |
+|------|---|
+| VideoDetailClient initialVideo Props 是否触发 Opus 强制升？| ❌ 不触发 — apps/web-next 内部组件 / 非 packages 共享 / 加 optional Props 不属于"共享组件 API 契约" |
+| sources `?preview=admin` 是否触发 R-MID-1 audit RETRO？| ❌ 不触发 — GET 只读 / ADR-121 D-121-4 / 同 D-160-6 / 4 真源 +0 |
+| 是否新增 admin route？| ❌ 否 — 既有公开路由 +optional query / verify:endpoint-adr 不计新端点 / R7 MUST-8 不触发 |
+| E1/E2/E3 执行模型？| arch-reviewer 评审已覆盖架构决策 → 实施层 sonnet 主循环即可；opus-4-7 续会话也合规（CLAUDE.md "主循环不切换"原则）|
+
+### §6 子卡汇总修订（5 → 8 子卡）
+
+| 子卡 | 状态 | 范围 | commit |
+|------|------|------|------|
+| CHG-361-A | ✅ | ADR-160 起草 + getVideoDetailHref 沉淀 | 5f64e78d |
+| CHG-361-B2 | ✅ | apps/api preview 端点 + findVideoByShortIdAdminPreview | a3c1c9ed |
+| CHG-361-B1 | ✅ | web-next middleware + admin-access-token + video-detail.ts | 3b9c8fa9 |
+| CHG-361-C | ✅ | 后台按钮 + VideoQueueRow 扩 + e2e + manual | 34121022 |
+| CHG-361-D | ✅ | PlayerShell previewMode Props + isPlaybackFeedbackEnabled | a52141d9 |
+| CHG-361-E1 | ⬜ | sources 端点 preview query + SourceService 派发 | — |
+| CHG-361-E2 | ⬜ | detail-page-factory + VideoDetailClient hydration | — |
+| CHG-361-E3 | ⬜ | watch page + PlayerShell hydration | — |
+
+### 结论
+
+ADR-160 AMENDMENT 2 status 🟢 Accepted（2026-05-27 / 主循环 claude-opus-4-7 + arch-reviewer 子代理 (claude-opus-4-7) 1 轮独立评审 A- CONDITIONAL → 主循环消化 2 红线 + 3 黄线 + 2 advisory → 等同 A-）；CHG-361 系列正式扩为 8 子卡（A/B1/B2/C/D/E1/E2/E3）；执行顺序 E1 → E2 → E3；本 AMENDMENT 修订 D-160-3 派发链路覆盖范围 + 新增 D-160-AMD2-1..3 决策点 / 不改 D-160-1..7 既有决策。
+
 ---

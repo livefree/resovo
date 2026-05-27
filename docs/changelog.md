@@ -9778,3 +9778,31 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
   - ❌ watch 页 `/[locale]/watch/[slug]` 读 middleware `x-admin-preview` header 后传 previewMode={true} → 后续 FOLLOWUP 卡
   - ❌ usePlaybackFeedback hook 实装 → 后续 advisory A1 触发时新卡
 - **闭环**：CHG-361-D 完成（1 业务 + 1 测试 3 case）/ Wave 2 卡 5/17 闭合 / **CHG-361 PREVIEW-ADMIN 5 子卡序列全闭环（A → B2 → B1 → C → D）/ 跨 app preview 链路完整就绪 / 待 prod gate OPS 卡 CHG-OPS-COOKIE-SUBDOMAIN-1**
+
+---
+
+## [CHG-361-E1 / ADR-160 AMENDMENT 2 D-160-AMD2-2] sources 端点 preview query + SourceService 派发（Wave 2 #8 扩展子卡 / 2 业务 + 1 测试 5 case）
+- **执行模型**：claude-opus-4-7（主循环 / 续会话）
+- **子代理调用**：arch-reviewer (claude-opus-4-7) 评审 ADR-160 AMENDMENT 2 决策（A- CONDITIONAL PASS → 主循环消化 2 红线 + 3 黄线 + 2 advisory 等同 A-）
+- **触发**：CHG-361 5 子卡闭环后 Codex stop-time review 反馈 "admin preview cannot render internal/hidden detail pages" → 主循环实证审查发现 3 处 client-side fetch 完全绕过 middleware header（VideoDetailClient + SourceService + PlayerShell）
+- **来源**：ADR-160 AMENDMENT 2（decisions.md / D-160-AMD2-1..3）/ E1 是 3 子卡（E1/E2/E3）执行序列首张
+- **文件改动（2 业务 + 1 测试 / 严格 PATCH ≤ 5）**：
+  - `apps/api/src/routes/sources.ts`：GET `/videos/:id/sources` 加 `PreviewQuerySchema = z.object({ preview: z.literal('admin').optional() })` + admin/moderator preHandler 派发（与 B2 video 端点完全同 pattern / 镜像 a3c1c9ed）+ service 透传 `preview ? { preview: true } : undefined`
+  - `apps/api/src/services/SourceService.ts`：`listSources(videoShortId, episode?, options?: { preview?: boolean })` 签名扩 / 内部派发 `videoQueries.findVideoByShortIdAdminPreview` (preview) 或 `findVideoByShortId` (public) / sources query 自身按 video_id 查 / 无 visibility 过滤 / 既有 1 处调用 0 影响
+- **测试新增**（tests/unit/api/sources-preview-query.test.ts / 5 case 全 PASS / vitest run 359ms）：
+  - ① preview=admin + admin token → 走 admin preview path / findVideoByShortIdAdminPreview 被调
+  - ② preview=admin + 无 token → 401 UNAUTHORIZED（不调任何 query）
+  - ③ preview=admin + user role → 403 FORBIDDEN（不调任何 query）
+  - ④ preview=admin + admin + 软删 mock null → 404 NOT_FOUND
+  - ⑤ 无 preview query → 走 public path（findVideoByShortId 被调 / 向后兼容）
+- **D-160-AMD2-2 闭环**：sources 端点 preview 派发与 B2 video 端点完全同 pattern；GET 只读不写 audit（D-160-6 + D-121-4 / R-MID-1 不触发 / 4 真源 +0）；非新 admin route（既有公开路由 + optional query / R7 MUST-8 不触发 / verify:endpoint-adr 不计新端点）
+- **R-AMD2-2 serializable 验证**：sources query mapSourceBase 输出无 Date 对象 / 无函数 / 无 class 实例 / created_at 为 string（实施时实证 / 待 E2 RSC props 传递时再次确认）
+- **质量门禁**：
+  - typecheck ✅ 8 workspace 全绿
+  - lint ✅（仅 pre-existing 警告 / 与本卡无关）
+  - 5 case 单测全 PASS（vitest 359ms）
+- **commit trailer**：`Subagents: arch-reviewer (claude-opus-4-7)`（AMENDMENT 2 起草需 Opus 评审 / R3 红线对应）
+- **不在本卡范围**：
+  - ❌ detail page hydration → CHG-361-E2
+  - ❌ watch page hydration → CHG-361-E3
+- **闭环**：CHG-361-E1 完成（2 业务 + 1 测试 5 case PASS）/ Wave 2 卡 6/17 闭合（CHG-361 8 子卡序列 6/8）/ 执行序列 E1 ✅ → E2 → E3
