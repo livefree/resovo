@@ -9659,3 +9659,51 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
   - ❌ 后台 PendingCenter 按钮改造 + moderation pending-queue contract 扩展 → CHG-361-C
   - ❌ PlayerShell previewMode Props → CHG-361-D
 - **闭环**：CHG-361-B2 完成（3 文件实施 + 1 测试 / ADR-160 AMENDMENT 1 同 commit）/ Wave 2 卡 2/17 闭合 / -B1 启动条件就绪（API 端点已存在 + service 派发已就位）
+
+---
+
+## [CHG-361-B1 / ADR-160 D-160-3 + D-160-4b] web-next 前端 preview 派发链（Wave 2 #8 子卡 / 3 文件 + 2 测试）
+- **执行模型**：claude-opus-4-7（主循环 / 续会话）
+- **子代理调用**：无（ADR-160 + AMENDMENT 1 已锁契约 / B1 纯实施 / 不新建共享组件公开 API / CLAUDE.md §模型路由 Opus 强制升不触发）
+- **范围**：web-next 前端 admin preview 派发链 — middleware 双因素鉴权注入 header + admin-access-token 协议层 + video-detail preview 派发 / 衔接 B2 已就位的 apps/api preview 端点
+- **来源**：ADR-160 §6 子卡定义（AMENDMENT 1 修订后）/ 用户启动指令 "启动 -B1 web-next"
+- **文件改动（3 业务 + 2 测试 / 严格 PATCH ≤ 5）**：
+  - `apps/web-next/src/lib/admin-access-token.ts`（**新建** / 70 行）：admin-preview 协议层一站式入口
+    - 协议常量：`HEADER_ADMIN_PREVIEW='x-admin-preview'` / `COOKIE_USER_ROLE='user_role'` / `COOKIE_REFRESH_TOKEN='refresh_token'` / `PREVIEW_QUERY_KEY='preview'` / `PREVIEW_QUERY_VALUE='admin'`
+    - `isPreviewRole(role)` 纯函数：D-160-1 双因素之 role 判定（admin/moderator 通过 / 大小写不敏感 + 前后空白裁剪）
+    - `getAdminAccessToken(refreshToken)` server-side helper：D-160-4b 方案 ② 凭据交换（透传 refresh_token cookie 调 `POST ${API_BASE}/auth/refresh` / `cache: 'no-store'` / 失败 → null）
+    - 顶层零 server-only 依赖（不导入 `next/headers`）→ middleware Edge Runtime 可安全 import 常量层
+  - `apps/web-next/src/middleware.ts`（改 / +18 行）：`resolveAdminPreview(req)` helper + 注入 `x-admin-preview: 1` header（双因素 D-160-1：query=admin + cookie role∈{admin,moderator}）；既有 brand/theme 注入零破坏
+  - `apps/web-next/src/lib/video-detail.ts`（改 / 重写 / 102 行）：
+    - 新增内部 helper `shouldUsePreview()`（读 middleware header）+ `buildPreviewFetchInit()`（D-160-4b refresh 交换 + Authorization Bearer + cache no-store）+ `buildVideoFetchRequest(slug)`（preview 派发或公开 ISR 60s 二选一）
+    - `fetchVideoMeta` / `fetchVideoDetail` 复用 `buildVideoFetchRequest` 干净对称
+    - preview 派发失败（refresh 无效）自动降级 public 路径（D-160-4b 降级路径 / 管理员未登录或 refresh 失败仍可浏览）
+- **测试新增（2 文件 / 17 case 全 PASS / vitest run 1.5s）**：
+  - `tests/unit/web-next/lib/admin-access-token.test.ts`（新建 / 10 case）：
+    - ADR-160 协议常量值断言（与 apps/api auth.ts cookie name + B2 preview query 严格对齐）
+    - isPreviewRole 5 边界（admin/moderator pass / user/guest/owner reject / undefined/null/空串 reject / 大小写不敏感 / 前后空白裁剪）
+    - getAdminAccessToken 5 case（refresh_token 缺失不发起 fetch / refresh 200 happy + cookie 透传 + cache no-store / refresh 401 → null / 网络抛错 → null / response.json() 异常或 token 缺失 → null）
+  - `tests/unit/web-next/middleware-admin-preview.test.ts`（新建 / 7 case）：
+    - query=admin + cookie role=admin → 注入 x-admin-preview=1
+    - query=admin + cookie role=moderator → 注入
+    - query=admin + cookie role=user → 不注入（D-160-1 双因素之 role 拦截）
+    - query=admin + 无 user_role cookie → 不注入
+    - 无 preview query + admin cookie → 不注入（避免管理员浏览公开页污染 cache）
+    - 既有 brand/theme header 注入不被破坏（HEADER_BRAND/HEADER_THEME 共存）
+    - preview=draft 非约定值 → 不注入
+- **D-160-4a Y1 ISR 缓存污染防护**：
+  - preview 路径 `cache: 'no-store'` 强制（buildPreviewFetchInit 内）
+  - 公开路径维持 `next: { revalidate: 60 }`（ISR 60s 性能保留）
+  - middleware `headers()` 调用使页面成为 dynamic render，但 fetch ISR cache 仍按 revalidate 工作（性能影响可接受 / 未来如有性能需求起 FOLLOWUP 卡）
+- **质量门禁**：
+  - typecheck ✅ 8 workspace 全绿（@resovo + server + server-next + web-next + player-core + design-tokens + admin-ui + worker）
+  - lint ✅（仅 pre-existing `route-player-sync.tsx` + `VideoDetailClient.tsx` 2 处 react-hooks/exhaustive-deps 警告 / 与本卡无关）
+  - verify:adr-contracts ✅ advisory（pre-existing VIDEO_QUALITY / SOURCE_TYPE / 与本卡无关）
+  - 17 case 新单测全 PASS（vitest run 1.5s）
+  - 全量 5262 单测：5259 PASS / 3 FAIL（`ModerationBatch.test.tsx > ModListRow · selectionMode` / 干净 HEAD 上 stash 验证 3 FAIL 同样复现 → **100% pre-existing** / CHG-360-B/C 引入 DualSignalCount 后 fixture 缺 `probe.state` / 与本卡 0 关联 / 建议起 follow-up 跟踪卡补 fixture）
+- **commit trailer**：无强制 Subagents（本卡仅 web-next 前端实施 / 不动 packages/types 公开 API / CLAUDE.md §模型路由共享 API 契约强制 Opus 不适用 / Opus 评审在 -A 已闭环）
+- **不在本卡范围**：
+  - ❌ 后台 PendingCenter 按钮改造 + moderation pending-queue contract 扩展 → CHG-361-C
+  - ❌ PlayerShell previewMode Props → CHG-361-D
+  - ❌ ModerationBatch.test.tsx fixture 补丁 → 独立 follow-up（与 CHG-361 系列 0 关联）
+- **闭环**：CHG-361-B1 完成（3 文件实施 + 2 测试 / 17 case PASS）/ Wave 2 卡 3/17 闭合 / 执行序列 B2 → B1 ✅ → C 启动条件就绪
