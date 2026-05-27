@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react'
 import { VisChip, DecisionCard, StaffNoteBar, Thumb } from '@resovo/admin-ui'
-import type { VideoQueueRow } from '@resovo/types'
+import { getVideoDetailHref, type VideoQueueRow } from '@resovo/types'
 import { EpisodeSelector } from './EpisodeSelector'
 import { LinesPanel } from './LinesPanel'
 import { AdminPlayer } from './AdminPlayer'
@@ -16,6 +16,15 @@ interface PendingCenterProps {
   readonly onEditVideo: (videoId: string) => void
   /** CHG-358：probe / render-check 完成后通知 PendingQueue refetch（左队列 ModListRow pill 联动）*/
   readonly onSourceHealthChanged?: () => void
+}
+
+// ADR-160 D-160-7：跨 app preview URL 派生（getVideoDetailHref + 双因素 query=admin）
+// WEB_NEXT_ORIGIN 复用既有 NEXT_PUBLIC_APP_URL env（dev: http://localhost:3000 / prod: web-next 主域）
+const WEB_NEXT_ORIGIN = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
+
+function openAdminPreview(v: VideoQueueRow): void {
+  const href = getVideoDetailHref({ type: v.type, slug: v.slug, shortId: v.shortId })
+  window.open(`${WEB_NEXT_ORIGIN}${href}?preview=admin`, '_blank', 'noopener,noreferrer')
 }
 
 const BTN_SM: React.CSSProperties = {
@@ -119,7 +128,7 @@ export function PendingCenter({ v, onStaffNoteChange, onEditVideo, onSourceHealt
           )}
           <div style={{ marginTop: 10, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
             <button style={BTN_SM} onClick={() => onEditVideo(v.id)} aria-label={M.aria.editVideo}>✎ 编辑视频</button>
-            <button style={BTN_SM} onClick={() => window.open(`/video/${v.id}`, '_blank')} aria-label={M.aria.openFrontend}>↗ 前台</button>
+            <button style={BTN_SM} onClick={() => openAdminPreview(v)} aria-label={M.aria.openFrontend}>↗ 前台预览</button>
           </div>
         </div>
       </div>

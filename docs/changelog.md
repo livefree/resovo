@@ -9707,3 +9707,47 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
   - ❌ PlayerShell previewMode Props → CHG-361-D
   - ❌ ModerationBatch.test.tsx fixture 补丁 → 独立 follow-up（与 CHG-361 系列 0 关联）
 - **闭环**：CHG-361-B1 完成（3 文件实施 + 2 测试 / 17 case PASS）/ Wave 2 卡 3/17 闭合 / 执行序列 B2 → B1 ✅ → C 启动条件就绪
+
+---
+
+## [CHG-361-C / ADR-160 D-160-7] 后台 PendingCenter 按钮 + moderation pending-queue contract 扩展（Wave 2 #8 子卡 / 3 业务 + 1 e2e + 1 manual）
+- **执行模型**：claude-opus-4-7（主循环 / 续会话）
+- **子代理调用**：无（ADR-160 §5 类型契约在 -A 已由 Opus arch-reviewer 评审锁定 / 本卡为契约实施层）
+- **范围**：补齐 web-next preview 协议的"入口端" — 后台审核台 PendingCenter "↗ 前台" 按钮跨 app 跳转 + moderation pending-queue contract 扩 slug+shortId
+- **来源**：ADR-160 §6 子卡 -C / 用户继续启动 -C 指令
+- **PATCH 范围裁决**：原 ADR 5 业务文件含 env，本卡复用 NEXT_PUBLIC_APP_URL 裁掉 env 改动；3 业务 + 1 e2e + 1 manual + 1 e2e helper + changelog/tasks/queue 流程 → 业务文件 3 ≤ 5 合规
+- **文件改动**：
+  - `packages/types/src/admin-moderation.types.ts`：VideoQueueRow +`slug: string | null` +`shortId: string`（紧跟 id 字段 / 与 ADR-160 §5 类型契约 1:1 / StagingRow 自动继承）
+  - `apps/api/src/db/queries/moderation.ts`：
+    - DbPendingQueueRow interface +2 字段（slug + shortId）
+    - listPendingQueue SELECT 投影追加 `v.slug AS "slug"` + `v.short_id AS "shortId"`（camelCase alias 范式 / 与 CHG-SN-4-09d 一致）
+    - row spread `...row` 自动透传新字段到响应（无需额外 mapper）
+  - `apps/server-next/src/app/admin/moderation/_client/PendingCenter.tsx`：
+    - import `getVideoDetailHref` from `@resovo/types`（CHG-361-A 沉淀消费）
+    - 新增 `WEB_NEXT_ORIGIN = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'`（复用既有 env）
+    - 新增 `openAdminPreview(v)` helper：`window.open(\`${WEB_NEXT_ORIGIN}${getVideoDetailHref({type, slug, shortId})}?preview=admin\`, '_blank', 'noopener,noreferrer')`
+    - line 122 button 文案 "↗ 前台" → "↗ 前台预览"（i18n M.aria.openFrontend 已为 "在前台预览" 自动对齐）
+- **e2e 新增（tests/e2e/admin/moderation/admin-preview-redirect.spec.ts / 1 case）**：
+  - 黄金路径：moderator cookie + pending 视频 + addInitScript stub window.open → 点 "在前台预览" → 断言 window.open 调用 1 次 + URL 匹配 `/movie/attack-on-titan-aB3kR9x1\?preview=admin$` + target=_blank
+- **e2e helper 扩**（tests/e2e/admin/moderation/_helpers.ts）：MockQueueRow +`slug` +`shortId` + makeQueueRow 默认值（其他既有 spec 通过 makeQueueRow 默认值自动兼容 / 零破坏）
+- **docs/manual 同步**（docs/manual/20-pages/P-moderation.md）：§3.9 "在前台预览未公开视频"（CHG-361 / Wave 2 #8 / ADR-160）
+  - 双因素鉴权（D-160-1）+ 跨 app 调用链（D-160-3 + D-160-4b）+ visibility 放行表（D-160-4a）+ 写入禁令（D-160-5）+ 不写 audit（D-160-6）+ ISR cache 防护（D-160-4a Y1）+ prod gate（OPS 卡 CHG-OPS-COOKIE-SUBDOMAIN-1）+ 降级路径
+- **env 复用 NEXT_PUBLIC_APP_URL 实证修订**：ADR-160 §6 -C 文件范围原定新建 NEXT_PUBLIC_WEB_NEXT_ORIGIN env / 实施前发现 `.env.example` 已含 `NEXT_PUBLIC_APP_URL=http://localhost:3000`（既有 web-next origin）→ 复用避免冗余 env / 节省 1 文件改动 / 不触发 D 决策点变更
+- **D-160-7 闭环 7 步链路实证**：
+  1. PendingCenter button onClick → openAdminPreview(v)
+  2. getVideoDetailHref({type, slug, shortId}) 派生 `/movie/{slug}-{shortId}` 形式 URL
+  3. 拼接 `${WEB_NEXT_ORIGIN}${href}?preview=admin`
+  4. window.open 跨 origin 新 tab
+  5. web-next middleware 识别 `?preview=admin` + cookie user_role=moderator → 注入 `x-admin-preview: 1` header（CHG-361-B1）
+  6. fetchVideoMeta 读 header → 调 getAdminAccessToken → POST /auth/refresh → access_token Bearer 附带 → `/v1/videos/:shortId?preview=admin`（CHG-361-B1）
+  7. apps/api preHandler authenticate + requireRole + findVideoByShortIdAdminPreview 放行 internal/hidden（CHG-361-B2）
+- **质量门禁**：
+  - typecheck ✅ 8 workspace 全绿
+  - lint ✅（仅 pre-existing react-hooks/exhaustive-deps + no-img-element / 与本卡无关）
+  - verify:adr-contracts ✅ advisory（pre-existing VIDEO_QUALITY / SOURCE_TYPE / 与本卡无关）
+  - 全量 5262 unit：5259 PASS / 3 FAIL（ModerationBatch.test.tsx 同 -B1 commit 已记录 / 干净 HEAD stash 验证 100% pre-existing / 与本卡 0 关联）
+- **commit trailer**：无强制 Subagents（VideoQueueRow 是 @resovo/types 类型扩展但 ADR-160 §5 已 Opus 评审锁定 / 本卡纯实施 / CLAUDE.md §模型路由 packages/admin-ui Props 强制 Opus 不适用）
+- **不在本卡范围**：
+  - ❌ PlayerShell previewMode Props → CHG-361-D
+  - ❌ OPS 卡 cookie 跨子域升级 → CHG-OPS-COOKIE-SUBDOMAIN-1（独立 OPS 卡 / prod gate 前置）
+- **闭环**：CHG-361-C 完成（3 业务 + 1 e2e + 1 manual / 跨 app preview 链路全闭环）/ Wave 2 卡 4/17 闭合 / 执行序列 B2 → B1 ✅ → C ✅ → D 启动条件就绪

@@ -6,7 +6,9 @@
 
 ## 进行中任务
 
-（空 — CHG-361-B1 ✅ 已完成 / web-next preview 派发链就绪 / 待 -C 启动）
+（空 — CHG-361-C ✅ 已完成 / 跨 app preview 链路全闭环 / 待 -D 启动）
+
+---
 
 ---
 
@@ -28,11 +30,12 @@
 
 ---
 
-## Wave 2 进行中（SEQ-20260527-MOD-WAVE2 / 3/17）
+## Wave 2 进行中（SEQ-20260527-MOD-WAVE2 / 4/17）
 
 - ✅ CHG-361-A（ADR-160 起草 + getVideoDetailHref 沉淀 / 5f64e78d）
 - ✅ CHG-361-B2（apps/api 后端 3 文件 + 5 case 单测 + ADR-160 AMENDMENT 1 / a3c1c9ed）
-- ✅ CHG-361-B1（web-next 前端 3 文件 + 2 测试 17 case PASS / 本卡 / 待 commit）
+- ✅ CHG-361-B1（web-next 前端 3 文件 + 2 测试 17 case PASS / 3b9c8fa9）
+- ✅ CHG-361-C（后台按钮 + VideoQueueRow 扩 + e2e + manual / 本卡 / 待 commit）
 
 ---
 

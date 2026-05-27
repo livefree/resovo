@@ -290,6 +290,9 @@ export type ReviewSource = 'auto' | 'manual' | 'crawler'
 
 export interface VideoQueueRow {
   readonly id: string
+  // ADR-160 D-160-7：admin preview URL 映射依赖 slug + shortId；与 Video.slug / Video.shortId 同源
+  readonly slug: string | null
+  readonly shortId: string
   readonly title: string
   readonly type: VideoType
   readonly year: number | null

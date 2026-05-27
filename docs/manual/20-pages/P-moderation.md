@@ -225,6 +225,36 @@
   - probeJobId / renderJobId 为占位字符串（PRE-PROBE-WORKER + PRE-RENDER-CHECK-WORKER 后续卡接真实 BullMQ jobId）
   - renderJobId 当前**实际不被任何 worker 消费**（render-check worker 待 PRE-RENDER-CHECK-WORKER 卡建设）
 
+### 3.9 在前台预览未公开视频（CHG-361 / Wave 2 #8 / ADR-160）
+
+> **用途**：审核员发出最终通过前，以"用户视角"在 web-next 前台真实渲染查看 internal / hidden / pending_review 视频（含播放器、详情布局、推荐位等）。
+
+- **入口**：PendingCenter 中部 → 视频卡片右上角 `↗ 前台预览` 按钮（aria-label `在前台预览`）
+- **行为**：`window.open(\`${WEB_NEXT_ORIGIN}${getVideoDetailHref(v)}?preview=admin\`, '_blank')` → 新 tab 打开 web-next preview
+- **双因素鉴权（D-160-1）**：
+  - **query** `?preview=admin` 显式声明管理员意图
+  - **cookie** `user_role` ∈ `{admin, moderator}` 承担身份鉴权
+  - 缺一不放行 / 链接被分享方因无 cookie → 仍 404
+- **跨 app 调用链（D-160-3 + D-160-4b）**：
+  1. web-next middleware 识别双因素 → 注入 `x-admin-preview: 1` header
+  2. web-next server-side fetchVideoMeta 凭 `refresh_token` cookie 调 `POST /v1/auth/refresh` 拿短 TTL access_token（in-memory / URL 不带 token）
+  3. fetch `/v1/videos/:shortId?preview=admin` 附 `Authorization: Bearer` → apps/api `findVideoByShortIdAdminPreview` 放行 internal/hidden
+- **可见 / 不可见（D-160-4a）**：
+
+| 字段 | preview=on | preview=off |
+|---|---|---|
+| `visibility_status='public'` | ✅ | ✅ |
+| `visibility_status='internal' / 'hidden'` | ✅ | ❌ 404 |
+| `review_status='pending_review' / 'rejected'` | ✅ | ❌ 404 |
+| `is_published=false` | ✅ | ❌ 404 |
+| `deleted_at IS NOT NULL` | ❌ **永不** | ❌ 404 |
+
+- **写入禁令（D-160-5）**：preview 模式下 PlayerShell `previewMode={true}` 屏蔽 `usePlaybackFeedback` hook → 不上报 `/v1/feedback/playback`
+- **不写 audit（D-160-6）**：GET 只读 / ADR-121 §后果第 2 项 / R-MID-1 +0
+- **ISR cache 防护（D-160-4a Y1）**：preview 路径强制 `cache: 'no-store'`；公开路径维持 `revalidate: 60`（避免管理员预览的 internal 视频被 cache 后匿名用户命中）
+- **prod 部署 gate**：跨子域 cookie 协议升级 OPS 卡 CHG-OPS-COOKIE-SUBDOMAIN-1 完成前不开启 prod 链接（feature flag `ADMIN_PREVIEW_PROD_ENABLED=false`）
+- **降级路径**：管理员未登录或 refresh_token 过期 → web-next 自动降级 public 路径（仍可浏览公开内容，不报错）
+
 ## 4. 进阶操作
 
 ### 4.1 重开审核（rejected → pending）

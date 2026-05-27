@@ -47,6 +47,9 @@ export async function setModeratorCookies(context: BrowserContext) {
 
 export interface MockQueueRow {
   id: string
+  // ADR-160 D-160-7：admin preview URL 派生（getVideoDetailHref + ?preview=admin）
+  slug: string | null
+  shortId: string
   title: string
   type: 'movie' | 'tvshow'
   year: number | null
@@ -79,6 +82,8 @@ export interface MockQueueRow {
 export function makeQueueRow(overrides: Partial<MockQueueRow> = {}): MockQueueRow {
   return {
     id: 'vid-mod-01',
+    slug: 'shen-he-tai-e2e-shi-pin',
+    shortId: 'abcd1234',
     title: '审核台 e2e 测试视频',
     type: 'movie',
     year: 2026,

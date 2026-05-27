@@ -102,6 +102,9 @@ export interface PendingQueueFilters {
 //   运行时 undefined（同 09b/09c 同类前后端契约不一致）。
 interface DbPendingQueueRow {
   id: string
+  // ADR-160 D-160-7：admin preview URL 派生（getVideoDetailHref({ type, slug, shortId })）
+  slug: string | null
+  shortId: string
   title: string
   type: string
   year: number | null
@@ -216,7 +219,8 @@ export async function listPendingQueue(
   const [rows, countResult, todayResult] = await Promise.all([
     db.query<DbPendingQueueRow>(
       // CHG-SN-4-09d hotfix：snake_case → camelCase alias（前端 VideoQueueRow 契约）
-      `SELECT v.id, v.title, v.type, mc.year, mc.country,
+      `SELECT v.id, v.slug AS "slug", v.short_id AS "shortId",
+              v.title, v.type, mc.year, mc.country,
               v.episode_count AS "episodeCount",
               mc.cover_url AS "coverUrl",
               mc.rating,
