@@ -13,6 +13,7 @@ import { RunInfoBanner } from './RunInfoBanner'
 import { FilterPresetPopover } from './FilterPresetPopover'
 import { SavePresetModal } from './SavePresetModal'
 import { VideoEditDrawer } from '../../videos/_client/VideoEditDrawer'
+import { usePendingQueue } from './usePendingQueue'
 import * as api from '@/lib/moderation/api'
 import { M } from '@/i18n/messages/zh-CN/moderation'
 import { useFilterPresets } from '@/lib/moderation/use-filter-presets'
@@ -105,14 +106,6 @@ export function ModerationConsole(): React.ReactElement {
   }, [rawTab, router])
   const tab = (VALID_TABS as readonly string[]).includes(rawTab) ? (rawTab as TabId) : 'pending'
 
-  const [pendingVideos, setPendingVideos] = useState<VideoQueueRow[]>([])
-  const [nextCursor, setNextCursor] = useState<string | null>(null)
-  const [totalPending, setTotalPending] = useState(0)
-  const [todayStats, setTodayStats] = useState<{ reviewed: number; approveRate: number | null }>({ reviewed: 0, approveRate: null })
-  const [activeIdxRaw, setActiveIdxRaw] = useState(0)
-  const [loading, setLoading] = useState(false)
-  const [loadingMore, setLoadingMore] = useState(false)
-  const [error, setError] = useState<string | null>(null)
   const [reviewLabels, setReviewLabels] = useState<ReviewLabel[]>([])
   const [rejectOpen, setRejectOpen] = useState(false)
   const [rejectSubmitting, setRejectSubmitting] = useState(false)
@@ -135,9 +128,6 @@ export function ModerationConsole(): React.ReactElement {
     importLocalToServer: importLocalPresets,
   } = useFilterPresets(presetTab)
 
-  const tabRef = useRef<TabId>(tab)
-  useEffect(() => { tabRef.current = tab }, [tab])
-
   const setTab = useCallback((t: TabId) => {
     const p = new URLSearchParams(searchParams.toString())
     p.set('tab', t)
@@ -153,24 +143,6 @@ export function ModerationConsole(): React.ReactElement {
     router.replace(qs ? `?${qs}` : '?', { scroll: false })
   }, [router, searchParams])
 
-  const setActiveIdx = useCallback((updater: number | ((prev: number) => number)) => {
-    setActiveIdxRaw(prev => {
-      const next = typeof updater === 'function' ? updater(prev) : updater
-      try { sessionStorage.setItem(`admin.moderation.${tabRef.current}.activeIdx.v1`, String(next)) } catch { /* ignore */ }
-      return next
-    })
-  }, [])
-
-  const activeIdx = activeIdxRaw
-
-  // restore activeIdx from sessionStorage when tab changes
-  useEffect(() => {
-    try {
-      const stored = sessionStorage.getItem(`admin.moderation.${tab}.activeIdx.v1`)
-      setActiveIdxRaw(stored ? Math.max(0, parseInt(stored, 10)) : 0)
-    } catch { setActiveIdxRaw(0) }
-  }, [tab])
-
   // responsive right pane
   useEffect(() => {
     const update = () => setRightOpen(window.innerWidth >= 1280)
@@ -179,48 +151,10 @@ export function ModerationConsole(): React.ReactElement {
     return () => window.removeEventListener('resize', update)
   }, [])
 
-  // load pending queue (CHG-SN-4-FIX-F：传入 currentFilters)
-  useEffect(() => {
-    if (tab !== 'pending') return
-    setLoading(true)
-    setError(null)
-    api.fetchPendingQueue(currentFilters)
-      .then(res => {
-        setPendingVideos(res.data as VideoQueueRow[])
-        setNextCursor(res.nextCursor)
-        setTotalPending(res.total)
-        setTodayStats(res.todayStats)
-      })
-      .catch(() => setError(M.errors.loadFailed))
-      .finally(() => setLoading(false))
-  }, [tab, currentFilters])
-
   // load review labels once
   useEffect(() => {
     api.fetchReviewLabels().then(setReviewLabels).catch(() => { /* silent */ })
   }, [])
-
-  const loadMore = useCallback(() => {
-    if (!nextCursor || loadingMore) return
-    setLoadingMore(true)
-    api.fetchPendingQueue({ ...currentFilters, cursor: nextCursor })
-      .then(res => {
-        setPendingVideos(prev => [...prev, ...(res.data as VideoQueueRow[])])
-        setNextCursor(res.nextCursor)
-        setTotalPending(res.total)
-      })
-      .catch(() => { /* silent */ })
-      .finally(() => setLoadingMore(false))
-  }, [nextCursor, loadingMore, currentFilters])
-
-  // auto-load more when near end
-  useEffect(() => {
-    if (pendingVideos.length > 0 && activeIdx >= pendingVideos.length - 5 && nextCursor && !loadingMore) {
-      loadMore()
-    }
-  }, [activeIdx, pendingVideos.length, nextCursor, loadingMore, loadMore])
-
-  const v = pendingVideos[activeIdx] ?? null
 
   // CHG-SN-8-GAPS-MOD-BATCH：批量审核模式
   const [batchModeOn, setBatchModeOn] = useState(false)
@@ -254,104 +188,90 @@ export function ModerationConsole(): React.ReactElement {
     try { sessionStorage.setItem('admin.moderation.approveAndPublishOn.v1', String(next)) } catch { /* ignore */ }
   }, [])
 
-  const handleApprove = useCallback(async () => {
-    const current = pendingVideos[activeIdx]
-    if (!current) return
-    const savedV = current
-    const savedIdx = activeIdx
-    const newVideos = pendingVideos.filter((_, i) => i !== savedIdx)
-    setPendingVideos(newVideos)
-    setTotalPending(t => Math.max(0, t - 1))
-    setActiveIdx(Math.min(savedIdx, Math.max(0, newVideos.length - 1)))
-    try {
-      await api.approveVideo(savedV.id, approveAndPublishOn)
-    } catch {
-      setPendingVideos(prev => { const next = [...prev]; next.splice(savedIdx, 0, savedV); return next })
-      setTotalPending(t => t + 1)
-      setError(M.errors.approveFailed)
-    }
-  }, [pendingVideos, activeIdx, setActiveIdx, approveAndPublishOn])
+  // CHG-347 / SPLIT-A：pending 队列状态与方法抽到独立 hook
+  const queue = usePendingQueue(currentFilters, {
+    tab,
+    approveAndPublishOn,
+    enabled: tab === 'pending',
+  })
+  const {
+    videos: pendingVideos,
+    total: totalPending,
+    todayStats,
+    activeIdx,
+    loading,
+    loadingMore,
+    error,
+    nextCursor,
+    setActiveIdx,
+    loadMore,
+    approveAt,
+    rejectAt,
+    batchApprove,
+    batchReject,
+    updateStaffNoteLocal,
+    refetch: refetchQueue,
+    setError,
+  } = queue
 
-  // CHG-SN-8-GAPS-MOD-BATCH：批量通过 / 拒绝
+  const v = pendingVideos[activeIdx] ?? null
+
+  const handleApprove = useCallback(() => { void approveAt() }, [approveAt])
+
   const handleBatchApprove = useCallback(async () => {
     if (selectedIds.size === 0) return
     if (!confirm(`确定批量通过 ${selectedIds.size} 条视频？通过后视为「通过 → 暂存」（与 approveAndPublishOn 无关，批量端点固定 approve action）。`)) return
     setBatchPending(true)
-    const ids = [...selectedIds]
     try {
-      const result = await api.batchApproveVideos(ids)
-      // 乐观更新：移除已通过的 ids（保守按全部成功移除；后端可能部分失败但 result.ok 反映真实）
-      setPendingVideos(prev => prev.filter(v => !selectedIds.has(v.id)))
-      setTotalPending(t => Math.max(0, t - result.ok))
+      const result = await batchApprove([...selectedIds])
       clearSelection()
       setBatchModeOn(false)
-      toast?.message && undefined
-      setError(null)
-      // 用 setToast (existing) 显示反馈
       setToast({ message: `批量通过 ${result.ok} 条${result.failed > 0 ? `（失败 ${result.failed}）` : ''}`, key: Date.now() })
     } catch {
-      setError(M.errors.approveFailed)
+      // hook 内部已 setError，无需再处理
     } finally {
       setBatchPending(false)
     }
-  }, [selectedIds, clearSelection, toast])
+  }, [selectedIds, clearSelection, batchApprove])
 
   const handleBatchRejectSubmit = useCallback(async (payload: RejectModalSubmitPayload) => {
     if (selectedIds.size === 0) return
     setRejectSubmitting(true)
     try {
-      const result = await api.batchRejectVideos([...selectedIds], payload.reason ?? '批量拒绝', payload.labelKey)
-      setPendingVideos(prev => prev.filter(v => !selectedIds.has(v.id)))
-      setTotalPending(t => Math.max(0, t - result.ok))
+      const result = await batchReject([...selectedIds], payload)
       clearSelection()
       setBatchModeOn(false)
       setBatchRejectModalOpen(false)
       setToast({ message: `批量拒绝 ${result.ok} 条${result.failed > 0 ? `（失败 ${result.failed}）` : ''}`, key: Date.now() })
     } catch {
-      setError(M.errors.rejectFailed)
+      // hook 内部已 setError
     } finally {
       setRejectSubmitting(false)
     }
-  }, [selectedIds, clearSelection])
+  }, [selectedIds, clearSelection, batchReject])
 
   const handleRejectSubmit = useCallback(async (payload: RejectModalSubmitPayload) => {
-    const current = pendingVideos[activeIdx]
-    if (!current) return
     setRejectSubmitting(true)
     try {
-      await api.rejectVideo(current.id, payload, current.updatedAt)
+      await rejectAt(undefined, payload)
       setRejectOpen(false)
-      const newVideos = pendingVideos.filter(item => item.id !== current.id)
-      setPendingVideos(newVideos)
-      setTotalPending(t => Math.max(0, t - 1))
-      setActiveIdx(Math.min(activeIdx, Math.max(0, newVideos.length - 1)))
-    } catch {
-      setError(M.errors.rejectFailed)
-      throw new Error(M.errors.rejectFailed)
+    } catch (err) {
+      throw err
     } finally {
       setRejectSubmitting(false)
     }
-  }, [pendingVideos, activeIdx, setActiveIdx])
+  }, [rejectAt])
 
-  const handleStaffNoteChange = useCallback((videoId: string, note: string | null) => {
-    setPendingVideos(prev => prev.map(item => item.id === videoId ? { ...item, staffNote: note } : item))
-  }, [])
+  const handleStaffNoteChange = updateStaffNoteLocal
 
   const handleEditVideo = useCallback((videoId: string) => {
     setEditVideoId(videoId)
   }, [])
 
   const handleEditDrawerSaved = useCallback(() => {
-    // 编辑保存后刷新当前条目；保持 activeIdx 不变
     setEditVideoId(null)
-    api.fetchPendingQueue(currentFilters)
-      .then(res => {
-        setPendingVideos(res.data as VideoQueueRow[])
-        setNextCursor(res.nextCursor)
-        setTotalPending(res.total)
-      })
-      .catch(() => { /* silent — 用户仍可手动刷新 */ })
-  }, [currentFilters])
+    void refetchQueue()
+  }, [refetchQueue])
 
   // CHG-SN-4-FIX-F：URL → filters 单向同步（route 变化时）
   useEffect(() => {

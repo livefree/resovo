@@ -8692,3 +8692,49 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
   - hook 的 `currentEp` 默认值 1 是**有意保留**的向后兼容设计，意图：测试场景调用 `useSelectedLine()` 不报 TS 错误，且行为等同于"始终查找 ep=1 或 fallback firstActive"
   - LinesPanel 的 `onLineSelect.firstActiveUrl` 参数现已成为 hook **不消费**的冗余信息，但保留以维持 admin-ui Props 契约稳定（避免触发共享层 Opus 评审）；future cleanup 可在 admin-ui API 主重构时统一精简
 - **闭环**：plan §10.3 P0 真 bug 完整闭环；fluffy-giggling-teapot.md §14 Wave 1 #1 完成
+
+## [CHG-347] server-next 审核台 ModerationConsole 抽 usePendingQueue hook（SPLIT-A / P1 拆分第一步）
+- **完成时间**：2026-05-27
+- **记录时间**：2026-05-27 01:21
+- **来源序列**：SEQ-20260527-MOD-WAVE1（Wave 1 / 卡 3/9 / plan §5 P1 第一步）
+- **执行模型**：claude-opus-4-7（主循环不切换 §16.5）
+- **子代理**：无（hook 抽取重构 / 内部消费方 API / 无新架构决策）
+- **改动文件**（3 项 ≤ 5 ✅）：
+  - `apps/server-next/src/app/admin/moderation/_client/usePendingQueue.ts`（**新建** / 224 行）
+    - 内部状态：videos / nextCursor / total / todayStats / activeIdx / loading / loadingMore / error
+    - sessionStorage per-tab key 持久化 activeIdx
+    - 单条乐观 approve / reject + 失败 splice 回原位
+    - 批量 approve / reject 透传 { ok, failed, failedIds? }
+    - 本地 updateStaffNoteLocal（不调 API）
+    - auto-load more（near-end 检测）
+    - refetch + setError 暴露给 caller
+  - `apps/server-next/src/app/admin/moderation/_client/ModerationConsole.tsx`（**精简** 829 → 749 行 / -80 行）
+    - 删除 8 处 useState（pendingVideos / nextCursor / totalPending / todayStats / activeIdxRaw / loading / loadingMore / error）
+    - 删除 setActiveIdx useCallback + sessionStorage restore useEffect + load queue useEffect + loadMore useCallback + auto-load more useEffect
+    - 删除 5 个 handler（handleApprove / handleBatchApprove / handleBatchRejectSubmit / handleRejectSubmit / handleStaffNoteChange + handleEditDrawerSaved 简化）→ 改为消费 hook 方法
+    - 新增 `const queue = usePendingQueue(currentFilters, { tab, approveAndPublishOn, enabled: tab === 'pending' })` + 解构
+    - 修复开发遗留 noise：`toast?.message && undefined`（line 288 dead expression）已被移除
+  - `tests/unit/server-next/admin-moderation/use-pending-queue.test.ts`（**新建** / 4 场景）：
+    - #1 enabled=true 初始 fetch → videos 填充
+    - #2 approveAt 失败 → 视频 splice 回原位置 + error 显示
+    - #3 batchApprove 成功 → 批量从队列移除 + 清 error
+    - #4 refetch → fetchPendingQueue 再次触发并替换数据
+    - 测试技巧：filters 用 outer-scope STABLE_FILTERS 稳定引用避免 React 18 strict mode 双调用 + useEffect 死循环
+- **新增依赖**：无
+- **数据库变更**：无
+- **docs/manual 更新**：无（纯重构，无用户可见行为变化 / task-queue.md CHG-347 条目未要求）
+- **门禁**：
+  - typecheck ✅
+  - lint ✅
+  - moderation 范围 23 test files / 247 tests 全 PASS（含新增 use-pending-queue.test.ts 4/4）
+  - verify:adr-contracts ✅ (advisory only)
+- **回归保护**：
+  - 零行为变化（hook 内部逻辑严格等同迁移前）
+  - 键盘流 J/K/A/R/S 仍通过 setActiveIdx + approveAt + ModerationConsole.handleKey 联动
+  - 乐观更新失败回滚（splice 回 + setError）保留
+  - sessionStorage activeIdx 持久化保留（key 格式 `admin.moderation.<tab>.activeIdx.v1` 不变）
+  - 批量 approve/reject 后清 selectedIds + setBatchModeOn(false) + toast 反馈逻辑保留
+- **后续依赖**：
+  - **CHG-348 SPLIT-B**（下一卡）：将 fixed-bottom batch action bar JSX 抽至 `_client/BatchActionsBar.tsx`
+  - **CHG-349 SPLIT-C**（再下一卡）：将左 + 中 + 右编排 + 键盘流抽至 `_client/PendingPaneController.tsx`，使 ModerationConsole 最终主体 ≤ 250 行（CLAUDE.md 500 行红线消解）
+- **闭环**：plan §5 P1 第一步完整闭环；fluffy-giggling-teapot.md §14 Wave 1 #3 完成；ModerationConsole 829 → 749 行（仍超 500 行，SPLIT-B + SPLIT-C 后续消解）

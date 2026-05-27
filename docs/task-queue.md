@@ -1716,7 +1716,7 @@ HOTFIX-A → B → C 顺序串行（B 在 A SQL fix 基础上扩 CASE / C 在 B 
    - 文件范围(≤ 5 项)：2 个删除 + 可能影响的 e2e 注释清理 + dev/visual/_lib/mock-data.ts 注释更新
    - 建议主循环模型：`claude-haiku-4-5-20251001`(纯归档/删除工作)
 
-3. **CHG-347** — ModerationConsole 抽 usePendingQueue hook(SPLIT-A)（状态：⬜ 未开始）
+3. **CHG-347** — ModerationConsole 抽 usePendingQueue hook(SPLIT-A)（状态：✅ 已完成 / 2026-05-27 01:21 / 执行模型 claude-opus-4-7 / 主循环不切换 §16.5 / 3 文件改动 / ModerationConsole 829 → 749 行 / 新建 4 单测 / moderation 范围 247/247 PASS / Wave 1 卡 3/9 闭合）
    - 创建时间：2026-05-27 13:00
    - 验收要点（plan §5 P1 第一步）：
      - 抽出 `usePendingQueue(filters)` hook → `_client/usePendingQueue.ts`
