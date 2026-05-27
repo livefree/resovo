@@ -8630,3 +8630,21 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
   - CHG-340-C 同范式扩展：A PASS 无线
 - **覆盖原始用户反馈**：视频编辑表单类型下拉 4→11（CHG-337 P0 速修 + CHG-339-A/CHG-340-A/CHG-341 跨层 SSOT 根治）
 - **跨包 SSOT 协议成熟**：未来新增 enum 项只需改 video.types.ts 一处数组，API zod + admin-ui helpers + 后台 select + 前台 chip 全部自动同步
+
+## [CHG-346] server-next 审核台死代码清理 — StagingTabContent + mock-data
+- **完成时间**：2026-05-27
+- **记录时间**：2026-05-27 00:52
+- **来源序列**：SEQ-20260527-MOD-WAVE1（Wave 1 / 卡 1/9 / plan §5 P0）
+- **执行模型**：claude-opus-4-7（主循环不切换 / 用户明确指示 §16.5 自动化）
+- **子代理**：无（纯归档/删除工作 / 无业务逻辑）
+- **改动文件**（3 项 ≤ 5 ✅）：
+  - **删除** `apps/server-next/src/app/admin/moderation/_client/StagingTabContent.tsx`（220 行 / `ModerationConsole.tsx:103-105` 已 redirect `?tab=staging` → `/admin/staging` / 零业务 import）
+  - **删除** `apps/server-next/src/app/admin/moderation/_client/mock-data.ts`（仅 dev/visual 注释引用，无 runtime import）
+  - `apps/server-next/src/app/admin/dev/visual/_lib/mock-data.ts`：删除第 6 行对已删除文件的注释引用（"模式参 apps/server-next/.../mock-data.ts"）
+- **保留**：`tests/e2e/admin/moderation/pending-approve-staging-publish.spec.ts:41` 注释提及 i18n.staging.publishOne 文案，文案仍在生效（由 /admin/staging 页面消费），注释信息正确不需更新
+- **新增依赖**：无
+- **数据库变更**：无
+- **门禁**：typecheck ✅ / lint ✅ / moderation 范围 21 test files / 236 tests 全 PASS ✅ / verify:adr-contracts ✅ / verify:enum-ssot ✅ / verify:endpoint-adr ✅（190 admin 路由全对齐）
+- **flaky 测试说明**：完整套件中 `tests/unit/components/server-next/admin/crawler/CrawlerClient.test.tsx` 时区/HH:MM 断言 1 例 flaky（单独跑 66/66 PASS / stash 还原后整体跑同样 fail）→ pre-existing 全局 mock 残留导致，与本卡死代码清理零关联；不阻塞本卡 commit
+- **注意事项**：无（纯消债 / 零行为变化）
+- **闭环**：plan §5 P0 完整闭环；fluffy-giggling-teapot.md §14 Wave 1 #2 完成

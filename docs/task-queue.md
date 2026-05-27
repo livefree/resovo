@@ -1675,3 +1675,153 @@ HOTFIX-A → B → C 顺序串行（B 在 A SQL fix 基础上扩 CASE / C 在 B 
 - **D-N 偏离闭环责任**：每张 CHG 完成时同步 changelog 标注闭环的 D-157-X（339-A 闭 D-157-1 部分 / 340-A 闭 D-157-2 部分 / 342 同 commit 闭 D-157-3 + ADR-048 AMENDMENT / 344 闭 D-157-4 / 全 SEQ 闭合时闭 D-157-5 + D-157-6）
 - **零回归**：每卡完成后 4018+ unit + typecheck + lint + verify:adr-contracts 全 PASS
 - **baseline 截止**：CHG-344 完成 + 2 月内 enum-ssot-baseline.json 必须清零（含月度评审 / 逾期升 P1）
+
+---
+
+## [SEQ-20260527-MOD-WAVE1] server-next 内容审核台 Wave 1 — 消债 + 关键 bug 修复 + 搜索/探播实装 + route-labeling 接入
+
+- **状态**：🟡 规划中
+- **创建时间**：2026-05-27 13:00
+- **最后更新时间**：2026-05-27 13:00
+- **目标**：基于 `/Users/livefree/.claude/plans/fluffy-giggling-teapot.md` 完成审核台 P0/P1 消债 + 用户视角增强 + route-labeling Phase 1 落地
+- **范围**：`apps/server-next/src/app/admin/moderation/**` + `apps/api/src/routes/admin/moderation.ts` + `apps/api/src/services/SourceService.ts` + `apps/web-next/src/components/player/SourceBar.tsx` + `apps/web-next/src/lib/line-display-name.ts` + `docs/manual/`
+- **依赖**：无上游阻塞；审查报告见 fluffy-giggling-teapot.md §1-9 事实底板
+- **执行约束**（plan §16.1-16.5 必读）：
+  - **§16.1** UI/UX 谨慎:避免不必要布局改动,关键交互"点击次数"不得退化;新 UI 改动前先 ASCII 草图走步
+  - **§16.2** 人工体验集中 Wave 末:单卡自动 playwright 截图归档 `docs/manual/screenshots/`,Wave 末输出验收报告
+  - **§16.3** `docs/manual/moderation-console.md` + `docs/manual/route-labeling.md` 每卡同步更新,缺失即未闭环
+  - **§16.4** 集成 route-labeling-system.md(Phase 1 在本 Wave 落地)
+  - **§16.5** 主循环全自动:仅 typecheck/test/verify 失败 / 范围溢出 / 需新 ADR / schema 冲突 / Wave 验收未过才中断
+- **建议主循环模型**:`claude-sonnet-4-6`(全部 9 张均 Sonnet 卡;Opus 仅在 ROUTE-LABEL-A1 effective_score 公式如需架构评审时 spawn 子代理)
+
+### 任务列表(按执行顺序)
+
+1. **CHG-345** — server-next 审核台 EpisodeSelector ↔ LinesPanel ↔ AdminPlayer 接通修复（状态：⬜ 未开始）
+   - 创建时间：2026-05-27 13:00
+   - 验收要点（plan §10.3）：
+     - `currentEp` 从 PendingCenter 提升,LinesPanel 接收 `currentEp` prop
+     - useSelectedLine 扩 `selectEpisode(epNum)`,按 `episode_number === currentEp` 找匹配 source_url
+     - EpisodeSelector 切集 → AdminPlayer 自动切源(验证:多线路视频切集后 video src 变化)
+     - 边界:line A 有 1-12 集 / line B 有 1-6 集时,切 ep 10 → line B 自动 fallback 第一活跃集
+   - 文件范围(≤ 5 项)：`PendingCenter.tsx` / `LinesPanel.tsx`(server-next) / `use-selected-line.ts` / `EpisodeSelector.tsx` / `packages/admin-ui` LinesPanel 类型(如需扩 prop)
+   - 人工体验场景：切集 → 播放器换源 / 跨线路切集 / line 集数不齐边界
+
+2. **CHG-346** — 删除 StagingTabContent + mock-data 死代码（状态：✅ 已完成 / 2026-05-27 00:52 / 执行模型 claude-opus-4-7 / 主循环不切换 §16.5 / 3 文件改动 / typecheck + lint + moderation 范围测试 236/236 + 3 verify 全绿 / 完整套件 1 flaky pre-existing 与本卡无关 / Wave 1 卡 1/9 闭合）
+   - 创建时间：2026-05-27 13:00
+   - 验收要点（plan §5 P0）：
+     - 删 `apps/server-next/src/app/admin/moderation/_client/StagingTabContent.tsx`
+     - 删 `apps/server-next/src/app/admin/moderation/_client/mock-data.ts`
+     - grep 复核:无业务 import 残留(测试注释里的历史引用可保留)
+     - typecheck + lint 全绿
+   - 文件范围(≤ 5 项)：2 个删除 + 可能影响的 e2e 注释清理 + dev/visual/_lib/mock-data.ts 注释更新
+   - 建议主循环模型：`claude-haiku-4-5-20251001`(纯归档/删除工作)
+
+3. **CHG-347** — ModerationConsole 抽 usePendingQueue hook(SPLIT-A)（状态：⬜ 未开始）
+   - 创建时间：2026-05-27 13:00
+   - 验收要点（plan §5 P1 第一步）：
+     - 抽出 `usePendingQueue(filters)` hook → `_client/usePendingQueue.ts`
+     - 封装:fetch / loadMore / 乐观 approve / 乐观 reject / 失败回滚
+     - ModerationConsole 仅消费 hook,不直接持队列 state
+     - 无回归:键盘流 J/K/A/R/S + 滚动预取 + 错误 banner
+   - 文件范围(≤ 5 项)：新建 usePendingQueue.ts / ModerationConsole.tsx 精简 / 类型导出 / 单测新增
+   - 人工体验场景：队列加载 / loadMore 触发 / approve+失败回滚
+
+4. **CHG-348** — 抽 BatchActionsBar 组件(SPLIT-B)（状态：⬜ 未开始）
+   - 创建时间：2026-05-27 13:00
+   - 验收要点（plan §5 P1 第二步）：
+     - 抽 fixed-bottom bulk bar 至 `_client/BatchActionsBar.tsx`(目前 50 行行内 JSX)
+     - props 仅 selectedIds / onApprove / onRejectOpen / onClear / pending
+     - 视觉零变化(rem/spacing 对齐 admin-ui 原语)
+     - `docs/manual/moderation-console.md` 新增"批量审核"章节
+   - 文件范围(≤ 5 项)：新建 BatchActionsBar.tsx / ModerationConsole.tsx / docs/manual/moderation-console.md
+   - 人工体验场景：批量通过 / 批量拒绝 / 清除选择
+
+5. **CHG-349** — 抽 PendingPaneController(SPLIT-C)（状态：⬜ 未开始）
+   - 创建时间：2026-05-27 13:00
+   - 验收要点（plan §5 P1 第三步）：
+     - 抽 `_client/PendingPaneController.tsx`:左 + 中 + 右 三栏编排 + 键盘流 + 列表加载
+     - ModerationConsole.tsx **最终主体 ≤ 250 行**(CLAUDE.md 500 行红线消解)
+     - 无回归:Reject Modal × 2 / VideoEditDrawer / RunInfoBanner / Toast 全可用
+   - 文件范围(≤ 5 项)：新建 PendingPaneController.tsx / ModerationConsole.tsx 精简 / 关联类型导出 / e2e 回归
+   - 人工体验场景：完整 pending tab 回归 / 全键盘流 / 批量+预设组合
+
+6. **CHG-350** — 左栏 search + filterChips(plan §10.1 方案 A)（状态：⬜ 未开始）
+   - 创建时间：2026-05-27 13:00
+   - 验收要点：
+     - `_client/PendingQueueToolbar.tsx` 新建:search input(debounce 300ms) + filterChips(type / sourceCheckStatus / doubanStatus 等已有维度)
+     - 后端 `GET /admin/moderation/pending-queue?q=<title>` 新增 `q` 参数(ILIKE / trigram),若属于新端点需先起 ADR-NNN
+     - URL `?q=` 同步到现有 FILTER_KEYS 模式
+     - SWR-style 无闪烁刷新:fetch 期间保留旧数据,新数据 ready 后再替换(或 React 18 useTransition)
+     - `docs/manual/moderation-console.md` 新增"搜索"章节
+   - 文件范围(≤ 5 项)：新建 PendingQueueToolbar.tsx / `api.ts` 加 q / 后端 moderation.ts route / usePendingQueue.ts 接 q / docs/manual
+   - **关键风险**：`q=` 是新端点参数,需核 ADR — 若 verify:endpoint-adr 报错需先起 ADR
+   - 人工体验场景：输入 title 即时筛 / 清除筛选 / 与现有 filterChips 组合
+
+7. **CHG-351** — LinesPanel 单行探/播按钮(plan §10.5)（状态：⬜ 未开始）
+   - 创建时间：2026-05-27 13:00
+   - 验收要点：
+     - 每行 episode inline 加 `🔍 探` / `▶ 播` xs 按钮
+     - 后端如缺单源粒度 `POST /admin/sources/:id/probe` / `:id/render-check` 端点 → 先起 ADR
+     - 检测结果写 `source_health_events`,probe/render_status 实时更新
+     - LinesPanel toolbar 加"探所有"+"播所有"批量(对当前视频所有 source)
+     - 异步执行:UI 显示"排队中..." → 完成 toast
+     - `docs/manual/moderation-console.md` 新增"线路检测"章节
+   - 文件范围(≤ 5 项)：packages/admin-ui LinesPanel.tsx(prop 扩) / 后端 sources.ts route / SourceService.ts / docs/manual / server-next LinesPanel.tsx 消费
+   - **关键风险**：跨 packages 改动 + 后端新端点 → 触发 admin-ui API 契约 Opus 评审
+   - 人工体验场景：单行探/播触发 / 批量探/播 / 错误展示 / render-check 排队状态
+
+8. **CHG-352** — route-labeling Phase 1 后端:`effective_score` 排序(plan §17)（状态：⬜ 未开始）
+   - 创建时间：2026-05-27 13:00
+   - 验收要点（route-labeling-system.md Phase 1 + Layer A）：
+     - `SourceService.listSources()` 加 `effectiveScore` 计算:0.5×health + 0.3×quality + 0.15×latency + 0.05×priority
+     - 返回已排序列表(由后端定序)
+     - health_score:probe×0.4 + render×0.6,quality_score:4K/2K/.../NULL 档位,latency_score:≤200ms/.../>2000ms 档位
+     - priority_bonus:`source_line_aliases.priority`(若 Migration 064 未落地,默认 0)
+     - 单测:边界 case(全 NULL / probe ok+render dead / 0 latency)
+     - `docs/manual/route-labeling.md` 新建,记录公式 + 权重
+   - 文件范围(≤ 5 项)：SourceService.ts / sources-matrix.types.ts(扩 effectiveScore 字段) / 单测 / docs/manual/route-labeling.md / sources.ts route 透出字段
+   - **关键风险**：算分函数算"架构决策"等级 → 建议 spawn arch-reviewer Opus 子代理评审公式合理性
+   - 人工体验场景：多线路视频排序前后对比 / 单线路 / 全 dead 边界
+
+9. **CHG-353** — route-labeling Phase 1 前台:主题渲染(plan §17)（状态：⬜ 未开始）
+   - 创建时间：2026-05-27 13:00
+   - 验收要点（route-labeling-system.md Phase 1 + Layer C）：
+     - `apps/web-next/src/lib/line-display-name.ts` 加 `RouteTheme` 类型 + 内置常量(节气 24 / NATO 26 / 数字 10 / Planets 8 / Colors 8)+ `applyThemeLabels(routes, theme)` 函数
+     - `apps/web-next/src/components/player/SourceBar.tsx` 消费 applyThemeLabels → 渲染 `themeLabel · quality`
+     - 极端情况:0 条不渲染 / 1 条不显标签 / 全 dead 置灰 + deadLabel / 超主题长度 `线路{n}` fallback
+     - 默认主题:zh-CN → 节气,en → NATO Phonetic(根据 i18n locale)
+     - `docs/manual/route-labeling.md` 加"主题"章节
+   - 文件范围(≤ 5 项)：line-display-name.ts / SourceBar.tsx / 单测 / docs/manual / 必要时 i18n key
+   - 人工体验场景：节气主题 / NATO 主题切换 / deadLabel / fallback / 0 / 1 条边界
+
+### Wave 1 验收(全部完成后)
+
+- 主循环输出 Wave 1 验收报告:
+  - 全部截图聚合(`docs/manual/screenshots/wave-1/`)
+  - typecheck + lint + test + verify:adr-contracts + verify:endpoint-adr 全绿日志
+  - 9 张卡 changelog 条目链接
+  - "建议用户亲手验收的路径"(EPSEL 切集 / 搜索过滤 / 探播触发 / 排序前后对比)
+- 用户/reviewer 验收通过 → 进 Wave 2(参见 plan §14 Wave 2)
+
+### Wave 1 BLOCKER 触发清单(plan §16.5)
+
+- typecheck / lint / test / verify 报错 + 自动修复失败
+- 任务范围溢出(改动 > 卡片定义文件范围)
+- 发现需要新建 ADR 而无现成依据(尤其 CHG-350 ?q= 端点 / CHG-351 :id/probe + render-check 端点)
+- schema migration 冲突(本 Wave 不应触发,但若 ROUTE-LABEL-A1 需读 source_line_aliases 而 Migration 064 未落地需注意)
+- 人工已审核 Wave 报告未通过
+
+### 关键依赖图
+
+```
+CHG-345 (EPSEL-FIX, 独立)
+CHG-346 (CLEANUP, 独立)
+CHG-347 (SPLIT-A) → CHG-348 (SPLIT-B) → CHG-349 (SPLIT-C)
+CHG-350 (LIST-SEARCH) → 依赖 CHG-347 (usePendingQueue 已抽)
+CHG-351 (PROBE-RENDER, 独立, 但 effective_score 排序的数据底座)
+CHG-352 (ROUTE-LABEL-A1) → 依赖 CHG-351 数据真实化(可并行启动,合入 main 时确认数据)
+CHG-353 (ROUTE-LABEL-A2) → 依赖 CHG-352 后端返回排序数据
+```
+
+执行序列建议(主循环按此顺序取卡)：
+**CHG-346 → 345 → 347 → 348 → 349 → 350 → 351 → 352 → 353**

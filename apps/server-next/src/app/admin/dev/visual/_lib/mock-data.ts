@@ -3,7 +3,7 @@
  * 真源：ADR-116 §2.4（CHG-SN-5-PRE-01-E-1 / SEQ-20260506-02 / M-SN-5.5 A 段）
  *
  * 复杂 mock（SourceHealthEvent[] / ReviewLabel[] / DecisionCardVideo）独立持久化，
- * component-registry 仅 import 引用。模式参 apps/server-next/src/app/admin/moderation/_client/mock-data.ts。
+ * component-registry 仅 import 引用。
  *
  * 约束：
  *   - 纯静态数据，零服务端依赖（与 ADR-116 §2.3 OBS-2 强约束对齐）
