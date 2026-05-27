@@ -161,12 +161,22 @@ export function LinesPanel({ videoId, selectedKey, onLineSelect }: LinesPanelPro
     try { await api.refetchSources(videoId) } catch { setActionError(M.lines.refetchFailed) }
   }, [videoId])
 
-  // CHG-351-C / ADR-158：单源 inline 探测（probe 守 freeze / 409 STATE_CONFLICT 抛 probeFrozen 提示）
+  // CHG-351-C / ADR-158 + AMENDMENT (CHG-356)：单源 inline 探测
+  //   AMENDMENT: 同步快探返回 newProbeStatus + latencyMs → setLines 立即 update → SignalChip 立即重渲
+  //   probe 守 freeze / 409 STATE_CONFLICT 抛 probeFrozen 提示
   const handleProbeEpisode = useCallback(async ({ episodeId }: { lineKey: string; episodeId: string }) => {
     setProbingIds(s => new Set(s).add(episodeId))
     setActionError(null)
     try {
-      await api.probeOneSource(episodeId)
+      const result = await api.probeOneSource(episodeId)
+      // CHG-356：立即 setLines update probe_status + latency_ms → aggregate.ts 自动重算 SignalChip
+      setLines(prev => prev.map(l =>
+        l.id === episodeId
+          ? { ...l, probe_status: result.newProbeStatus, latency_ms: result.latencyMs }
+          : l
+      ))
+      // Y1 toast：明示结果（chip 颜色变化幅度小 / 用户可能没注意）
+      setActionError(result.newProbeStatus === 'ok' ? M.lines.probeOk : M.lines.probeDead)
     } catch (e: unknown) {
       if (e instanceof ApiClientError && e.status === 409) {
         setActionError(M.lines.probeFrozen)
@@ -178,12 +188,18 @@ export function LinesPanel({ videoId, selectedKey, onLineSelect }: LinesPanelPro
     }
   }, [])
 
-  // CHG-351-C / ADR-158 D-158-5：render-check 不守 freeze（diagnostic 可用性优先）
+  // CHG-351-C / ADR-158 D-158-5 + AMENDMENT (CHG-356)：render-check 不守 freeze
   const handleRenderCheckEpisode = useCallback(async ({ episodeId }: { lineKey: string; episodeId: string }) => {
     setRenderCheckingIds(s => new Set(s).add(episodeId))
     setActionError(null)
     try {
-      await api.renderCheckOneSource(episodeId)
+      const result = await api.renderCheckOneSource(episodeId)
+      setLines(prev => prev.map(l =>
+        l.id === episodeId
+          ? { ...l, render_status: result.newRenderStatus }
+          : l
+      ))
+      setActionError(result.newRenderStatus === 'ok' ? M.lines.renderCheckOk : M.lines.renderCheckDead)
     } catch {
       setActionError(M.lines.renderCheckFailed)
     } finally {

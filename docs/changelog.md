@@ -9282,3 +9282,53 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
   - `apps/web-next/src/lib/line-display-name.ts` 5 主题 + applyThemeLabels（未来 Phase 2 用户自定义可扩展）
   - `packages/admin-ui` search-input.tsx 调用方契约注释（防 conditional unmount 焦点 bug 复发）
 - **Wave 2 候选**：plan §14 / route-labeling Phase 2 主题切换 UX / PRE-PROBE-WORKER 实施 / Phase 3 Migration 064 + Layer B 山名代号 / CHG-354 ModerationConsole ≤ 500 行 SPLIT-D
+
+## [CHG-356] ADR-158 AMENDMENT — 同步快探 + UPDATE DB + UI 即时更新（修 CHG-351 用户实测 gap）
+- **完成时间**：2026-05-27
+- **来源**：CHG-351 三子卡闭环后用户实测发现「探测/试播按钮后 SignalChip pill 永不更新」
+- **执行模型**：claude-opus-4-7（主循环不切换 §16.5）
+- **子代理**：arch-reviewer (claude-opus-4-7) 1 轮独立评审 → **A-CONDITIONAL** → 主循环消化 3 红线 + 3 黄线 + 4 关键洞察 → 等同 A
+- **根因**：ADR-158 §9 占位 jobId 模式 + advisory A2/A4 → 后端不真实 UPDATE video_sources.probe_status/render_status → 前端 SignalChip 永远显示原状态
+- **修复策略（ADR-158 AMENDMENT BREAKING）**：
+  - 同步 HEAD 3s（仿 ADR-117 AMENDMENT 2 testRoute）→ ok/dead 二态
+  - UPDATE video_sources（probe_status/latency_ms/last_probed_at 或 render_status/last_rendered_at）
+  - 双写 source_health_events（R3 防 LineHealthDrawer 看不到历史轨迹的二次故障）
+  - 响应新增 newProbeStatus / newRenderStatus / latencyMs → 前端 setLines 立即 update
+  - actionType 不变（复用 video_source.inline_action / R1 否决新增 _sync 后缀）
+- **评审消化对照**：
+  - **R1**：actionType 不分（复用 video_source.inline_action / payload schema 演化 / 4 真源 +0 项）
+  - **R2**：抽 `probeUrlHead(url, contentTypeCheck)` 公共方法 / DRY
+  - **R3**：source_health_events 必写（origin=`manual_recheck`/`render_check` 已存在 / processed_at=NOW 防 feedback worker 误捞）
+  - **Y1**：前端 4 toast 文案 probeOk/probeDead/renderCheckOk/renderCheckDead（chip 颜色变化幅度小用户可能没注意）
+  - **Y2**：BREAKING 明示 / 直接破坏式升级（CHG-351-A/B/C 24h 内代码 / 无外部客户端）
+  - **Y3**：HEAD 405/403 已知限制写入 §同步语义边界（部分 CDN 防盗链）
+  - **I1**：latency_ms 失败路径必 NULL（防 aggregate.ts `computeMedian(activeLatencies)` 0 值污染）
+  - **I2**：UPDATE 失败 → throw → audit 不写（与 D-158-7 + ADR-121 D-121-4 一致）
+  - **I3**：render-check HEAD + Content-Type 是 reachability 强化版，**不是 playability**（真渲染需 playwright / G3 advisory 独立 ADR）
+  - **I4**：source_health_events.processed_at=NOW 防被 058a 部分索引 `idx_source_health_events_unprocessed` 误捞作"待处理"
+- **改动文件**（9 项 / R-MID-1 D-121-3 + ADR-158 §1 D-158-9 援引 RETRO 豁免延续）：
+  - `docs/decisions.md`：追加 ## ADR-158 AMENDMENT 章节（端点契约 + 类型 + audit + 同步语义 + I3 局限 + D-158-AMD-1..9）
+  - `apps/api/src/services/SourcesMatrixService.ts`：probeOne / renderCheckOne 改造 + `probeUrlHead` 公共方法 + UPDATE + insertHealthEvent
+  - `apps/api/src/db/queries/video_sources.ts`：+2 helper（updateSourceHealthAfterProbe / updateSourceHealthAfterRenderCheck）
+  - `apps/api/src/db/queries/sourceHealthEvents.ts`：既有 insertHealthEvent 复用 / 零改动
+  - `tests/unit/api/video-source-inline-action-audit.test.ts`：5 case payload 断言全更新（beforeJsonb 加 DB 读取字段 / afterJsonb 改 new* 字段）
+  - `apps/server-next/src/lib/moderation/api.ts`：响应类型 SingleSourceProbeResult / RenderCheckResult schema 修订
+  - `apps/server-next/src/app/admin/moderation/_client/LinesPanel.tsx`：handleProbeEpisode / handleRenderCheckEpisode 接 response 后 setLines update probe_status/render_status/latency_ms + Y1 toast
+  - `apps/server-next/src/i18n/messages/zh-CN/moderation.ts`：4 新 toast 文案
+  - `docs/changelog.md`（本条目）
+- **新增依赖**：无
+- **数据库变更**：无（复用 migration 054 信号字段 + 058a source_health_events）
+- **门禁**：
+  - typecheck ✅（5 包全 PASS）
+  - lint ✅
+  - video-source-inline-action-audit 5/5 PASS（payload 全更新）
+  - audit-log-coverage 111/111 + set-equal 4/4（4 真源零变化）
+  - sources-routes-mutations-audit 10/10（row 7-9 行级 mutations 零回归）
+  - verify:adr-contracts ✅（192 路由 / 72 ADR 端点 / 224 D-N 全闭环）
+- **UX 修复前 → 修复后**：
+  - 修复前：点击"探测"/"试播" → 按钮 disabled 后恢复 / SignalChip pill **永不更新**（占位 jobId）
+  - 修复后：点击 → HEAD 3s → ok/dead → SignalChip 立即变色 + toast"探测完成：可访问/线路失效" + LineHealthDrawer 可查历史轨迹
+- **关键发现 / future-proof**：
+  - **ADR 起草新约束**：任何 ADR 必须显式声明"此设计是否可独立交付价值，还是依赖 advisory 工人卡兜底"。ADR-158 v1 把"占位实现"上线后等用户实测发现 gap → 应拆 -A1（前置 worker 实施）+ -A2（端点协议）
+- **闭环**：CHG-351 用户实测 gap 完整修复；ADR-158 §9 占位 jobId 策略 SUPERSEDED；advisory A2/A4 撤销（同步快探已满足审核台需求 / worker 化按调度需求另起卡 / G2）；R3 source_health_events 双写 = LineHealthDrawer 历史轨迹回放兜底
+- **后续**：CHG-357（批量探测/试播按钮 / 已用户声明"先 356 后 357" / 推荐复用 probeOne+renderCheckOne 单源方法 + 端点 batch-probe / batch-render-check / 进度反馈 / 失败 source 列表）

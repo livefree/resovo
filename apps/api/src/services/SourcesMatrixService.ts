@@ -23,7 +23,12 @@ import {
   countRouteSources,
   softDeleteRouteBySite,
 } from '@/api/db/queries/sources-matrix'
-import { findVideoSourceById } from '@/api/db/queries/video_sources'
+import {
+  findVideoSourceById,
+  updateSourceHealthAfterProbe,
+  updateSourceHealthAfterRenderCheck,
+} from '@/api/db/queries/video_sources'
+import { insertHealthEvent } from '@/api/db/queries/sourceHealthEvents'
 import * as systemSettingsQueries from '@/api/db/queries/systemSettings'
 import type {
   DualSignalState,
@@ -126,17 +131,24 @@ export interface RouteDeleteResult {
   readonly deletedIds: readonly string[]
 }
 
-// ADR-158 / CHG-351-A：单源 inline 操作结果（与 RouteReprobeResult 形态对称 / queued 字面 true 标识异步入队语义）
+// ADR-158 AMENDMENT 2026-05-27 / CHG-356：BREAKING — 同步快探 + UPDATE DB
+// 旧异步占位 jobId 模式被取代（jobId 字段彻底移除 / 不保留为 null）
+// arch-reviewer Opus R1：actionType 不变（复用 video_source.inline_action）/ payload 字段 schema 演化
 export interface SingleSourceProbeResult {
-  readonly probeJobId: string
-  readonly queued: true
   readonly sourceId: string
+  readonly newProbeStatus: 'ok' | 'dead'
+  readonly latencyMs: number | null
+  readonly queued: false  // 反映同步语义（false 字面值便于前端类型守卫）
 }
 export interface SingleSourceRenderCheckResult {
-  readonly renderJobId: string
-  readonly queued: true
   readonly sourceId: string
+  readonly newRenderStatus: 'ok' | 'dead'
+  readonly queued: false
 }
+
+// I3 已知限制：HEAD + Content-Type 是 reachability 检测的强化版，不是 playability 检测
+//   真正 playability 需 PRE-RENDER-CHECK-WORKER + headless browser（advisory G3）
+const VIDEO_CONTENT_TYPE_RE = /video\/|application\/vnd\.apple\.mpegurl|application\/x-mpegurl/i
 
 export type { VideoGroupListParams, VideoGroupListResult, VideoGroupStats, LineMatrixRow, SourceLineAlias, SourceRouteBySite }
 
@@ -373,21 +385,58 @@ export class SourcesMatrixService {
     return { deletedCount, deletedIds }
   }
 
-  // ── ADR-158 / CHG-351-A 单源 inline 操作 ──────────────────────────
+  // ── ADR-158 / CHG-351-A + AMENDMENT 2026-05-27 (CHG-356) ──────────
   //
   // 与 row 7-9 line-level mutations 互补：
   //   - 操作粒度：单 video_sources.id（vs siteKey+sourceName 复合键）
   //   - 触发场景：审核台 LinesPanel inline 按钮（vs 后台 sources 管理批量运维）
-  //   - actionType: `video_source.inline_action`（与 video_source.toggle 单源域前缀对齐）
-  //   - targetKind 复用 `video_source`（零扩展 / TARGET_KINDS 已存在）
-  //   - freeze 守卫：probe ✅ 守 / render-check ❌ 不守（D-158-5 / Y1 diagnostic 可用性优先）
-  //   - 占位 jobId 命名空间 `probe-vs-` / `render-vs-`（D-158-6 / Y3 防与 row 7-9 前缀冲突）
-  //   - error path（404 / 409 / 422）不写 audit（D-158-7 / Y2 + ADR-121 D-121-4）
+  //   - actionType: `video_source.inline_action`（D-158-2 / arch-reviewer R1 复用不分）
+  //   - targetKind 复用 `video_source`（D-158-4 / TARGET_KINDS 已存在）
+  //   - freeze 守卫：probe ✅ 守 / render-check ❌ 不守（D-158-5 / diagnostic 可用性）
+  //   - error path（404 / 409 / 422）不写 audit（D-158-7 / ADR-121 D-121-4）
+  //
+  // AMENDMENT 2026-05-27（CHG-356）：BREAKING — 同步快探 + UPDATE DB
+  //   - 旧版异步占位 jobId 模式（ADR-158 §9 SUPERSEDED）
+  //   - 新版：HEAD 3s → ok/dead + UPDATE video_sources + insertHealthEvent
+  //   - UPDATE 失败 → throw → audit 不写（I2 / 与 D-158-7 一致）
 
   /**
-   * 单源 probe：入队 source-health worker 重探指定 video_sources.id（占位 jobId / advisory A2）
+   * 探测单个 source URL — R2 抽出公共方法
+   * @returns ok=true 时 latencyMs 是测量值；ok=false 时 latencyMs 必为 null（I1 防中位数污染）
+   * @param contentTypeCheck render-check 需要进一步验证 Content-Type 是视频流
+   */
+  private async probeUrlHead(
+    url: string,
+    contentTypeCheck: boolean,
+  ): Promise<{ ok: boolean; latencyMs: number | null; httpCode: number | null }> {
+    const start = performance.now()
+    try {
+      const res = await fetch(url, {
+        method: 'HEAD',
+        signal: AbortSignal.timeout(3000),
+      })
+      const httpStatusOk = res.ok && res.status < 400
+      if (!httpStatusOk) {
+        return { ok: false, latencyMs: null, httpCode: res.status }
+      }
+      if (contentTypeCheck) {
+        const contentType = res.headers.get('content-type') ?? ''
+        if (!VIDEO_CONTENT_TYPE_RE.test(contentType)) {
+          return { ok: false, latencyMs: null, httpCode: res.status }
+        }
+      }
+      return { ok: true, latencyMs: Math.round(performance.now() - start), httpCode: res.status }
+    } catch {
+      // timeout / 网络错误 / 405 / 403 (CDN 防盗链) → dead (Y3 已知限制)
+      return { ok: false, latencyMs: null, httpCode: null }
+    }
+  }
+
+  /**
+   * 单源 probe：同步 HEAD 3s + UPDATE probe_status/latency_ms/last_probed_at + insertHealthEvent
    * - 404 sourceId 不存在或已软删除
-   * - 409 freeze=true（守 freeze / 与采集资源同源）
+   * - 409 freeze=true
+   * - HEAD 失败 / timeout / 405 → newProbeStatus='dead' + latencyMs=null + 200 响应
    */
   async probeOne(
     sourceId: string,
@@ -401,25 +450,42 @@ export class SourcesMatrixService {
       throw new AppError('NOT_FOUND', `source ${sourceId} 不存在`, 404)
     }
 
-    const probeJobId = `probe-vs-${sourceId}-${Date.now()}`
+    const { ok, latencyMs, httpCode } = await this.probeUrlHead(source.sourceUrl, false)
+    const newProbeStatus: 'ok' | 'dead' = ok ? 'ok' : 'dead'
+
+    // UPDATE 失败 → throw → audit 不写（I2 / D-158-7）
+    await updateSourceHealthAfterProbe(this.db, sourceId, { probeStatus: newProbeStatus, latencyMs })
+
+    // R3：双写 source_health_events 让 LineHealthDrawer 看到历史轨迹（manual_recheck origin / processed_at NOW 防 worker 误捞 I4）
+    await insertHealthEvent(this.db, {
+      videoId: source.videoId,
+      sourceId,
+      origin: 'manual_recheck',
+      oldStatus: source.probeStatus,
+      newStatus: newProbeStatus,
+      triggeredBy: actorId,
+      httpCode,
+      latencyMs,
+      processedAt: new Date().toISOString(),
+    })
 
     this.auditSvc.write({
       actorId,
       actionType: 'video_source.inline_action',
       targetKind: 'video_source',
       targetId: sourceId,
-      beforeJsonb: null,
-      afterJsonb: { action: 'probe', probeJobId, sourceId },
+      beforeJsonb: { probeStatus: source.probeStatus, latencyMs: source.latencyMs },
+      afterJsonb: { action: 'probe', newProbeStatus, latencyMs, sourceId },
       requestId: requestId ?? null,
     })
 
-    return { probeJobId, queued: true as const, sourceId }
+    return { sourceId, newProbeStatus, latencyMs, queued: false as const }
   }
 
   /**
-   * 单源 render-check：入队 player-render-check worker 检测指定 video_sources.id 渲染（占位 jobId / advisory A2+A4）
-   * - 404 sourceId 不存在或已软删除
-   * - 不守 freeze（D-158-5 / Y1 diagnostic 可用性 / render-check 不消采集资源）
+   * 单源 render-check：同步 HEAD + Content-Type 检查 + UPDATE render_status/last_rendered_at + insertHealthEvent
+   * - 不守 freeze（D-158-5 / diagnostic 可用性）
+   * - I3 已知限制：HEAD 仅证明 manifest 可访问 + Content-Type 声明，不证明 segment URL 真实可播
    */
   async renderCheckOne(
     sourceId: string,
@@ -431,19 +497,33 @@ export class SourcesMatrixService {
       throw new AppError('NOT_FOUND', `source ${sourceId} 不存在`, 404)
     }
 
-    const renderJobId = `render-vs-${sourceId}-${Date.now()}`
+    const { ok, httpCode } = await this.probeUrlHead(source.sourceUrl, true)
+    const newRenderStatus: 'ok' | 'dead' = ok ? 'ok' : 'dead'
+
+    await updateSourceHealthAfterRenderCheck(this.db, sourceId, { renderStatus: newRenderStatus })
+
+    await insertHealthEvent(this.db, {
+      videoId: source.videoId,
+      sourceId,
+      origin: 'render_check',
+      oldStatus: source.renderStatus,
+      newStatus: newRenderStatus,
+      triggeredBy: actorId,
+      httpCode,
+      processedAt: new Date().toISOString(),
+    })
 
     this.auditSvc.write({
       actorId,
       actionType: 'video_source.inline_action',
       targetKind: 'video_source',
       targetId: sourceId,
-      beforeJsonb: null,
-      afterJsonb: { action: 'render_check', renderJobId, sourceId },
+      beforeJsonb: { renderStatus: source.renderStatus },
+      afterJsonb: { action: 'render_check', newRenderStatus, sourceId },
       requestId: requestId ?? null,
     })
 
-    return { renderJobId, queued: true as const, sourceId }
+    return { sourceId, newRenderStatus, queued: false as const }
   }
 
   async upsertLineAlias(

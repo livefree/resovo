@@ -203,3 +203,53 @@ export async function disableDeadSources(
     sourceIds: result.rows.map((r) => r.id),
   }
 }
+
+// ── CHG-356 / ADR-158 AMENDMENT：同步快探 + UPDATE DB helper ────────
+// 与 toggleVideoSource (is_active / last_checked) 职责分离：本组 helpers 仅写探测信号字段
+
+export interface UpdateSourceHealthAfterProbeInput {
+  readonly probeStatus: 'ok' | 'dead'
+  readonly latencyMs: number | null
+}
+
+/**
+ * CHG-356 / ADR-158 AMENDMENT R3：probeOne 同步 UPDATE 信号字段
+ * 字段：probe_status / latency_ms / last_probed_at
+ * 不动 last_checked（与 v1 toggleVideoSource 职责分离 / Y B2）
+ */
+export async function updateSourceHealthAfterProbe(
+  db: Pool,
+  sourceId: string,
+  input: UpdateSourceHealthAfterProbeInput,
+): Promise<void> {
+  await db.query(
+    `UPDATE video_sources
+        SET probe_status = $2,
+            latency_ms = $3,
+            last_probed_at = NOW()
+      WHERE id = $1 AND deleted_at IS NULL`,
+    [sourceId, input.probeStatus, input.latencyMs],
+  )
+}
+
+export interface UpdateSourceHealthAfterRenderCheckInput {
+  readonly renderStatus: 'ok' | 'dead'
+}
+
+/**
+ * CHG-356 / ADR-158 AMENDMENT R3：renderCheckOne 同步 UPDATE 信号字段
+ * 字段：render_status / last_rendered_at（不更新 latency_ms / Content-Type 检查不计时）
+ */
+export async function updateSourceHealthAfterRenderCheck(
+  db: Pool,
+  sourceId: string,
+  input: UpdateSourceHealthAfterRenderCheckInput,
+): Promise<void> {
+  await db.query(
+    `UPDATE video_sources
+        SET render_status = $2,
+            last_rendered_at = NOW()
+      WHERE id = $1 AND deleted_at IS NULL`,
+    [sourceId, input.renderStatus],
+  )
+}

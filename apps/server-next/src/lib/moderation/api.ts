@@ -205,20 +205,22 @@ export async function refetchSources(videoId: string): Promise<void> {
   await apiClient.post<unknown>(`/admin/videos/${videoId}/refetch-sources`, {})
 }
 
-// ── 单源 inline 诊断动作（CHG-351-C / ADR-158）─────────────────────────
-// 与 toggleSource 等 video 维度操作分离 — 这两个端点按 sourceId 直接路由（无 videoId）
-// 响应类型与 ADR-158 §端点契约 100% 对齐 { probeJobId | renderJobId, queued, sourceId }
+// ── 单源 inline 诊断动作（CHG-351-C + CHG-356 AMENDMENT）─────────────
+// AMENDMENT 2026-05-27（CHG-356）：BREAKING — 异步占位 jobId → 同步快探 + UPDATE DB
+//   旧 { probeJobId, queued: true } → 新 { newProbeStatus, latencyMs, queued: false }
+//   前端 LinesPanel 接 response 后立即 setLines update probe_status/render_status/latency_ms
 
 export interface SingleSourceProbeResult {
-  readonly probeJobId: string
-  readonly queued: true
   readonly sourceId: string
+  readonly newProbeStatus: 'ok' | 'dead'
+  readonly latencyMs: number | null
+  readonly queued: false
 }
 
 export interface SingleSourceRenderCheckResult {
-  readonly renderJobId: string
-  readonly queued: true
   readonly sourceId: string
+  readonly newRenderStatus: 'ok' | 'dead'
+  readonly queued: false
 }
 
 export async function probeOneSource(sourceId: string): Promise<SingleSourceProbeResult> {

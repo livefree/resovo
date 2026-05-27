@@ -188,6 +188,11 @@ export const M = {
     probeFailed: '探测失败，请重试',
     renderCheckFailed: '试播失败，请重试',
     probeFrozen: '采集已冻结，无法触发探测',
+    // CHG-356 / ADR-158 AMENDMENT Y1：同步快探结果 toast 文案
+    probeOk: '探测完成：可访问',
+    probeDead: '探测完成：线路失效',
+    renderCheckOk: '试播完成：渲染正常',
+    renderCheckDead: '试播完成：渲染失败',
   },
   aria: {
     lineEnable: '启用线路',

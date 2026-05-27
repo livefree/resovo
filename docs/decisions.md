@@ -15568,3 +15568,118 @@ const renderJobId = `render-vs-${sourceId}-${Date.now()}`
 **最终结论**：ADR-158 status 🟢 Accepted（2026-05-27 / arch-reviewer Opus A-CONDITIONAL → 主循环消化 3 红线 + 3 黄线 + 4 关键洞察 → 等同 A）；CHG-351-A 9 文件原子实施（4 真源原子提交 + 5 测试 case + 2 service 方法 + 2 route 端点 + 1 ADR 章节 + 1 changelog 追加）；CHG-351-B / CHG-351-C 按本 ADR 契约接续。
 
 ---
+
+## ADR-158 AMENDMENT 2026-05-27（CHG-356）— 同步快探 + UPDATE DB（取代异步占位 jobId）
+
+**触发**：CHG-351 三子卡（A/B/C）2026-05-27 全闭环后，用户实测发现 gap：「探测，试播后"探"，"播"两个 pill 显示无更新」。根因：ADR-158 §9 占位 jobId 模式 + advisory A2（PRE-PROBE-WORKER 后续卡）+ A4（renderJobId 实际不被任何 worker 消费）→ 后端不真实更新 `video_sources.probe_status / render_status` → 前端 SignalChip 永远显示原状态。
+
+**范围**：**BREAKING** — 取代 §3 端点契约的响应类型 + §4 类型契约 + §6 audit log 协议 + §9 占位 jobId 策略（§9 标记 SUPERSEDED）。actionType 不变（复用 `video_source.inline_action` / arch-reviewer R1）；端点路径不变；错误码不变（ADR-110 零新增）。
+
+**评审**：arch-reviewer (claude-opus-4-7) 1 轮 A-CONDITIONAL → 主循环消化 3 红线 + 3 黄线 + 4 关键洞察 → 等同 A。
+
+### 端点契约（修订 ADR-158 §3）
+
+| # | 方法 | 路径 | 用途 | Request | Response | 鉴权 | 错误码 |
+|---|------|------|------|---------|----------|------|--------|
+| 1 | POST | `/admin/sources/:id/probe` | 单源同步快探 HEAD 3s + UPDATE probe_status/latency_ms/last_probed_at + 写 source_health_events | Path: `id: z.string().uuid()` | 200 `{ data: { sourceId, newProbeStatus, latencyMs, queued } }` | admin | 422 / 404 / 409 STATE_CONFLICT (freeze) / 500 |
+| 2 | POST | `/admin/sources/:id/render-check` | 单源同步快探 HEAD + Content-Type 检查 + UPDATE render_status/last_rendered_at + 写 source_health_events | Path: `id: z.string().uuid()` | 200 `{ data: { sourceId, newRenderStatus, queued } }` | admin | 422 / 404 / 500 |
+
+### 类型契约（取代 ADR-158 §4）
+
+```ts
+// 旧（已 SUPERSEDED）：
+//   SingleSourceProbeResult       { probeJobId: string; queued: true; sourceId: string }
+//   SingleSourceRenderCheckResult { renderJobId: string; queued: true; sourceId: string }
+
+// 新（CHG-356 AMENDMENT）：
+export interface SingleSourceProbeResult {
+  readonly sourceId: string
+  readonly newProbeStatus: 'ok' | 'dead'
+  readonly latencyMs: number | null    // ok→测量值 / dead→null（I1 防中位数污染）
+  readonly queued: false               // 字面值 false 反映同步语义 / 前端类型守卫便利
+}
+export interface SingleSourceRenderCheckResult {
+  readonly sourceId: string
+  readonly newRenderStatus: 'ok' | 'dead'
+  readonly queued: false
+}
+```
+
+### audit log 协议（取代 §6）
+
+| 端点 | actionType（不变）| targetKind（不变）| beforeJsonb（**从 DB 读取** / R-MID-1 D-121-4）| afterJsonb |
+|------|-----------|------------|-------------|------------|
+| POST `/probe` | `video_source.inline_action` | `video_source` | `{ probeStatus, latencyMs }` (DB old) | `{ action: 'probe', newProbeStatus, latencyMs, sourceId }` |
+| POST `/render-check` | `video_source.inline_action` | `video_source` | `{ renderStatus }` (DB old) | `{ action: 'render_check', newRenderStatus, sourceId }` |
+
+**actionType 不分新旧**（arch-reviewer R1 否决新增 `_sync` 后缀）：复用 `video_source.inline_action`，仅 payload 字段 schema 演化；4 真源同步 +0 项（不构成 R-MID-1 第 N 次系统化）。
+
+### 同步语义边界（取代 §9 占位 jobId 策略 / SUPERSEDED）
+
+**§9 占位 jobId 策略已被本 AMENDMENT SUPERSEDED**。新模式：
+
+| 项 | 实现 |
+|---|---|
+| probe 方法 | HEAD `source_url` 3s timeout（仿 ADR-117 AMENDMENT 2 testRoute / 与 D-117-9 Y3 上限一致）|
+| render-check 方法 | HEAD + Content-Type 检查 `video/* \| application/vnd.apple.mpegurl \| application/x-mpegurl` |
+| timeout / 网络错误 / 405 / 403 | 视为 `dead`（不抛 5xx）/ Y3 已知限制（部分 CDN 防盗链仅支持 GET）|
+| latency_ms 失败路径 | 必为 `null`（I1 防 aggregate.ts `computeMedian(activeLatencies)` 0 值污染）|
+| UPDATE 失败 | throw → audit 不写（I2 / 与 D-158-7 + ADR-121 D-121-4 一致）|
+| source_health_events 写入 | **必写**（R3）/ origin=`'manual_recheck'`（probe）/ `'render_check'`（render-check）/ processed_at=NOW (I4 防 feedback worker 误捞)|
+
+### I3 已知局限（render-check）
+
+HEAD + Content-Type 是 **reachability** 检测的强化版，**不是 playability** 检测：
+- 仅证明 manifest 文件可访问 + Content-Type 声明合法
+- **不证明** m3u8 内 segment URL 真实可播
+- 真正 playability 需 playwright / headless browser（独立 ADR 评估 / CLAUDE.md §绝对禁止"技术栈以外新依赖触发 BLOCKER"硬约束）/ G3 advisory
+
+### 决策要点（AMENDMENT）
+
+| D-N | 决策 | 选择 |
+|---|---|---|
+| D-158-AMD-1 | actionType 命名 | **复用 `video_source.inline_action`**（不分 `_sync` 后缀 / arch-reviewer R1）|
+| D-158-AMD-2 | UPDATE 字段 | probe → `probe_status / latency_ms / last_probed_at`；render → `render_status / last_rendered_at`（不动 `last_checked` / Y B2 与 v1 toggle 职责分离）|
+| D-158-AMD-3 | source_health_events 双写 | **必写**（R3 / origin 复用 `manual_recheck` + `render_check` 已存在）/ processed_at=NOW（I4 防误捞）|
+| D-158-AMD-4 | 乐观锁 | **不加**（探测无并发竞争语义 / 再点一次覆盖即正确 / B4）|
+| D-158-AMD-5 | timeout 处理 | `dead`（不 pending / 与 testRoute 范式一致 / A3）|
+| D-158-AMD-6 | 响应升级 | **直接 BREAKING**（CHG-351-A/B/C 24h 内代码 / 无外部客户端 / E2）/ 不保留 jobId 字段 |
+| D-158-AMD-7 | 公共方法抽取 | `private probeUrlHead(url, contentTypeCheck)` 辅助方法供 probeOne / renderCheckOne 复用（R2 / DRY）|
+| D-158-AMD-8 | latency_ms 失败语义 | 必 NULL（I1 防中位数污染 / 与 aggregate.ts 隐式契约）|
+| D-158-AMD-9 | 错误码 | 100% 复用 ADR-110 14 码 / 零新增 |
+
+### 红线 / 黄线 / advisory
+
+**红线（已遵守 / R1+R2+R3 全采纳）**：
+- R1：actionType 复用 `video_source.inline_action` ✅
+- R2：抽 `probeUrlHead` 公共方法 ✅
+- R3：source_health_events 双写 ✅
+
+**黄线（全采纳）**：
+- Y1：前端 4 toast 文案 `probeOk / probeDead / renderCheckOk / renderCheckDead` ✅
+- Y2：BREAKING 明示（§端点契约 + §类型契约 + §9 SUPERSEDED）✅
+- Y3：HEAD 405 / 403 已知限制写入 §同步语义边界 ✅
+
+**advisory（继承 + 修订）**：
+- G1：CHG-357 批量按钮（用户已声明"先 356 后 357"）/ 复用 probeOne + renderCheckOne 单源方法（不重复 HEAD 逻辑）/ 端点 `POST /admin/videos/:videoId/sources/batch-probe` + `batch-render-check`（推荐）
+- G2：PRE-PROBE-WORKER + PRE-RENDER-CHECK-WORKER 原计划"真实 BullMQ jobId 接入"工作 — AMENDMENT 落地后这两张卡范围需重新评估（同步快探已满足审核台 LinesPanel 需求）
+- G3：render-check 真实"渲染验证"需要 playwright（CLAUDE.md §绝对禁止新依赖触发 BLOCKER）/ 独立 ADR 评估
+- G4：批量场景 `partial` 状态（部分成功）/ 当前同步路径仅 ok/dead 二态
+
+### 文件改动（9 项 / R-MID-1 D-121-3 + ADR-158 §1 D-158-9 援引 RETRO 豁免延续）
+
+1. `docs/decisions.md`（本章节 AMENDMENT 追加）
+2. `apps/api/src/services/SourcesMatrixService.ts`（probeOne + renderCheckOne 改造 + probeUrlHead 公共方法）
+3. `apps/api/src/db/queries/video_sources.ts`（+2 helper `updateSourceHealthAfterProbe` + `updateSourceHealthAfterRenderCheck`）
+4. `apps/api/src/db/queries/sourceHealthEvents.ts`（既有 insertHealthEvent 复用 / 零改动 / 零新建）
+5. `tests/unit/api/video-source-inline-action-audit.test.ts`（5 case payload 断言全更新）
+6. `apps/server-next/src/lib/moderation/api.ts`（响应类型 SingleSourceProbeResult / RenderCheckResult schema 修订）
+7. `apps/server-next/src/app/admin/moderation/_client/LinesPanel.tsx`（handleProbeEpisode / handleRenderCheckEpisode 接 response 后 setLines update + Y1 toast）
+8. `apps/server-next/src/i18n/messages/zh-CN/moderation.ts`（4 新 toast 文案）
+9. `docs/changelog.md`（CHG-356 完成备注）
+
+**关键发现**：CHG-356 暴露了 ADR-158 原始设计的「占位 jobId + 无 worker 消费」严重 gap — **未来 ADR 起草必须显式声明"此设计是否可独立交付价值，还是依赖 advisory 工人卡兜底"**。如不能独立交付价值，应拆 -A1（前置 worker 实施）+ -A2（端点协议）/ 不应像 ADR-158 v1 那样将"占位实现"上线后等用户实测发现 gap。
+
+**结论**：ADR-158 AMENDMENT status 🟢 Accepted（2026-05-27 / arch-reviewer Opus A-CONDITIONAL → 主循环消化 3 红线 + 3 黄线 + 4 关键洞察 → 等同 A）；CHG-351 系列 + CHG-355 收敛于本 AMENDMENT；§9 占位 jobId 策略章节 SUPERSEDED；advisory A2/A4 撤销（同步快探已满足审核台需求 / worker 化按调度需求另起卡）。
+
+---

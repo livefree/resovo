@@ -6,7 +6,7 @@
 
 ## 进行中任务
 
-（空 — Wave 1 全部完成 ✅ / 待用户验收 → 进 Wave 2）
+（空 — Wave 1 全部完成 ✅ + CHG-356 ADR-158 AMENDMENT 修复 CHG-351 用户实测 gap 已 commit / 待 CHG-357 批量功能）
 
 ---
 

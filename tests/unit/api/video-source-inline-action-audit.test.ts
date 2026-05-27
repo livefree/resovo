@@ -1,20 +1,21 @@
 /**
- * video-source-inline-action-audit.test.ts — CHG-351-A audit RETRO（R-MID-1 第 27 次系统化）
+ * video-source-inline-action-audit.test.ts — CHG-351-A + ADR-158 AMENDMENT (CHG-356)
  *
- * ADR-158 audit payload 内容断言守卫：验证 `video_source.inline_action` 在
- * probe / render-check 两个路径的 audit 写入语义（合并 actionType + afterJsonb.action 范式）。
+ * R-MID-1 第 27 次系统化 audit payload 内容断言守卫
+ * AMENDMENT (CHG-356) BREAKING：异步占位 jobId → 同步快探 + UPDATE DB + 新 status 字段
+ *   - probeJobId / renderJobId 字段移除
+ *   - beforeJsonb 从 DB 读取（R-MID-1 D-121-4）
+ *   - afterJsonb 加 newProbeStatus / newRenderStatus / latencyMs
  *
- * 覆盖（D-158-5 + D-158-7 + Y2 测试展开）：
- *   1. probeOne happy path → afterJsonb.action='probe' + probeJobId + sourceId
- *   2. probeOne 404 (source 不存在 / 软删除) → audit 不写
- *   3. probeOne 409 (freeze) → audit 不写
- *   4. renderCheckOne happy path → afterJsonb.action='render_check' + renderJobId + sourceId
- *   5. renderCheckOne 404 (source 不存在) → audit 不写
- *
- * 注：renderCheckOne 不守 freeze（D-158-5 / Y1 diagnostic 可用性优先），故无 freeze case。
+ * 覆盖 5 case：
+ *   1. probeOne happy path → afterJsonb.action='probe' + newProbeStatus='ok' + latencyMs
+ *   2. probeOne 404 → audit 不写
+ *   3. probeOne 409 freeze → audit 不写
+ *   4. renderCheckOne happy path → afterJsonb.action='render_check' + newRenderStatus='ok'
+ *   5. renderCheckOne 404 → audit 不写
  */
 
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type { Pool } from 'pg'
 import { SourcesMatrixService } from '@/api/services/SourcesMatrixService'
 
@@ -36,11 +37,12 @@ function spyAuditOnService(svc: SourcesMatrixService): ReturnType<typeof vi.fn> 
 }
 
 const TEST_SOURCE_ID = '00000000-0000-4000-8000-000000000001'
+const TEST_VIDEO_ID = '00000000-0000-4000-8000-000000000002'
 
 function makeSourceRow(): Record<string, unknown> {
   return {
     id: TEST_SOURCE_ID,
-    video_id: '00000000-0000-4000-8000-000000000002',
+    video_id: TEST_VIDEO_ID,
     episode_number: 1,
     source_url: 'https://example.com/play.m3u8',
     source_name: '线路1',
@@ -50,9 +52,9 @@ function makeSourceRow(): Record<string, unknown> {
     type: 'video',
     quality: null,
     is_active: true,
-    probe_status: 'ok',
-    render_status: 'ok',
-    latency_ms: 120,
+    probe_status: 'pending',
+    render_status: 'pending',
+    latency_ms: null,
     last_probed_at: null,
     last_rendered_at: null,
     quality_detected: null,
@@ -67,11 +69,22 @@ function makeSourceRow(): Record<string, unknown> {
   }
 }
 
-describe('SourcesMatrixService.probeOne audit + freeze 守卫（ADR-158 / CHG-351-A）', () => {
-  it('1. happy path → afterJsonb.action="probe" + probeJobId 含 probe-vs- 前缀 + sourceId', async () => {
+describe('SourcesMatrixService.probeOne audit + freeze 守卫 (ADR-158 AMENDMENT / CHG-356)', () => {
+  beforeEach(() => {
+    // 默认 mock fetch HEAD → ok
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: { get: () => 'video/mp4' },
+    }))
+  })
+
+  it('1. happy path → afterJsonb { action="probe", newProbeStatus, latencyMs } + beforeJsonb { probeStatus, latencyMs }', async () => {
     const pool = makePool((sql) => {
       if (sql.includes('system_settings')) return UNFROZEN_SETTING_RESULT
       if (sql.includes('WHERE vs.id = $1')) return { rows: [makeSourceRow()] }
+      if (sql.includes('UPDATE video_sources')) return { rows: [] }
+      if (sql.includes('INSERT INTO source_health_events')) return { rows: [{ id: 'evt-1' }] }
       return { rows: [] }
     })
     const svc = new SourcesMatrixService(pool)
@@ -79,20 +92,23 @@ describe('SourcesMatrixService.probeOne audit + freeze 守卫（ADR-158 / CHG-35
 
     const result = await svc.probeOne(TEST_SOURCE_ID, 'actor-1', 'req-1')
 
-    expect(result.queued).toBe(true)
+    expect(result.queued).toBe(false)
     expect(result.sourceId).toBe(TEST_SOURCE_ID)
-    expect(result.probeJobId).toMatch(/^probe-vs-00000000-0000-4000-8000-000000000001-/)
-    // R-MID-1 audit payload 内容断言（audit-log-coverage 守卫要求 expect.objectContaining 形式）
+    expect(result.newProbeStatus).toBe('ok')
+    expect(result.latencyMs).toBeGreaterThanOrEqual(0)
     expect(writeMock).toHaveBeenCalledWith(
       expect.objectContaining({
         actorId: 'actor-1',
         actionType: 'video_source.inline_action',
         targetKind: 'video_source',
         targetId: TEST_SOURCE_ID,
-        beforeJsonb: null,
+        beforeJsonb: expect.objectContaining({
+          probeStatus: 'pending',
+          latencyMs: null,
+        }),
         afterJsonb: expect.objectContaining({
           action: 'probe',
-          probeJobId: expect.stringMatching(/^probe-vs-/),
+          newProbeStatus: 'ok',
           sourceId: TEST_SOURCE_ID,
         }),
         requestId: 'req-1',
@@ -100,7 +116,7 @@ describe('SourcesMatrixService.probeOne audit + freeze 守卫（ADR-158 / CHG-35
     )
   })
 
-  it('2. 404 source 不存在 / 已软删除 → audit 不写', async () => {
+  it('2. 404 source 不存在 → audit 不写', async () => {
     const pool = makePool((sql) => {
       if (sql.includes('system_settings')) return UNFROZEN_SETTING_RESULT
       if (sql.includes('WHERE vs.id = $1')) return { rows: [] }
@@ -116,7 +132,7 @@ describe('SourcesMatrixService.probeOne audit + freeze 守卫（ADR-158 / CHG-35
     expect(writeMock).not.toHaveBeenCalled()
   })
 
-  it('3. freeze=true → STATE_CONFLICT 409 / audit 不写（D-158-5 / Y1 probe 守 freeze）', async () => {
+  it('3. freeze=true → STATE_CONFLICT 409 / audit 不写', async () => {
     const pool = makePool((sql) => {
       if (sql.includes('system_settings')) return FROZEN_SETTING_RESULT
       return { rows: [] }
@@ -132,10 +148,20 @@ describe('SourcesMatrixService.probeOne audit + freeze 守卫（ADR-158 / CHG-35
   })
 })
 
-describe('SourcesMatrixService.renderCheckOne audit + 不守 freeze（ADR-158 / D-158-5 Y1）', () => {
-  it('4. happy path → afterJsonb.action="render_check" + renderJobId 含 render-vs- 前缀 + sourceId', async () => {
+describe('SourcesMatrixService.renderCheckOne audit + 不守 freeze (ADR-158 AMENDMENT D-158-5)', () => {
+  beforeEach(() => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: { get: () => 'application/vnd.apple.mpegurl' },
+    }))
+  })
+
+  it('4. happy path → afterJsonb { action="render_check", newRenderStatus } + beforeJsonb { renderStatus }', async () => {
     const pool = makePool((sql) => {
       if (sql.includes('WHERE vs.id = $1')) return { rows: [makeSourceRow()] }
+      if (sql.includes('UPDATE video_sources')) return { rows: [] }
+      if (sql.includes('INSERT INTO source_health_events')) return { rows: [{ id: 'evt-2' }] }
       return { rows: [] }
     })
     const svc = new SourcesMatrixService(pool)
@@ -143,19 +169,21 @@ describe('SourcesMatrixService.renderCheckOne audit + 不守 freeze（ADR-158 / 
 
     const result = await svc.renderCheckOne(TEST_SOURCE_ID, 'actor-2', 'req-2')
 
-    expect(result.queued).toBe(true)
+    expect(result.queued).toBe(false)
     expect(result.sourceId).toBe(TEST_SOURCE_ID)
-    expect(result.renderJobId).toMatch(/^render-vs-00000000-0000-4000-8000-000000000001-/)
+    expect(result.newRenderStatus).toBe('ok')
     expect(writeMock).toHaveBeenCalledWith(
       expect.objectContaining({
         actorId: 'actor-2',
         actionType: 'video_source.inline_action',
         targetKind: 'video_source',
         targetId: TEST_SOURCE_ID,
-        beforeJsonb: null,
+        beforeJsonb: expect.objectContaining({
+          renderStatus: 'pending',
+        }),
         afterJsonb: expect.objectContaining({
           action: 'render_check',
-          renderJobId: expect.stringMatching(/^render-vs-/),
+          newRenderStatus: 'ok',
           sourceId: TEST_SOURCE_ID,
         }),
         requestId: 'req-2',
@@ -163,9 +191,8 @@ describe('SourcesMatrixService.renderCheckOne audit + 不守 freeze（ADR-158 / 
     )
   })
 
-  it('5. 404 source 不存在 → audit 不写（renderCheckOne 不查 freeze / D-158-5 Y1）', async () => {
+  it('5. 404 source 不存在 → audit 不写 (renderCheckOne 不查 freeze)', async () => {
     const pool = makePool((sql) => {
-      // 不返回 system_settings（renderCheckOne 不调 assertNotFrozen）
       if (sql.includes('WHERE vs.id = $1')) return { rows: [] }
       return { rows: [] }
     })
