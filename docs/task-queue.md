@@ -1645,7 +1645,7 @@ HOTFIX-A → B → C 顺序串行（B 在 A SQL fix 基础上扩 CASE / C 在 B 
    - 同 commit 落 **ADR-048 AMENDMENT 块**（ADR-157 §6 验收第 8 条）
    - 验收要点：web-next 单测 + e2e（SEARCH project）全 PASS
 
-9. **CHG-343** — apps/server v1 AdminVideoForm VideoGenre 15→20（状态：⬜ 待开始）
+9. **CHG-343** — apps/server v1 AdminVideoForm VideoGenre 15→20（状态：✅ 已完成 / 2026-05-26 22:18 / 执行模型 claude-opus-4-7 / 子代理 无 / v1 维护期 bug 修复豁免 / 派生自 VIDEO_GENRES SSOT / 5 项缺漏闭环）
    - 创建时间：2026-05-26 22:00
    - 建议模型：sonnet
    - 文件范围（1 文件 / 1 PATCH 项）：

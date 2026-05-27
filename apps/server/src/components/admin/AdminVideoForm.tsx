@@ -9,26 +9,38 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { apiClient } from '@/lib/api-client'
 import type { VideoType, VideoStatus, VideoGenre } from '@/types'
+import { VIDEO_GENRES } from '@resovo/types'
 import type { DoubanPreviewFound, DoubanPreviewMiss, DoubanPreview } from '@/types/contracts/v1/admin'
 import { VideoImageSection } from '@/components/admin/videos/VideoImageSection'
 
-const GENRE_OPTIONS: { value: VideoGenre; label: string }[] = [
-  { value: 'action',       label: '动作' },
-  { value: 'comedy',       label: '喜剧' },
-  { value: 'romance',      label: '爱情' },
-  { value: 'thriller',     label: '惊悚' },
-  { value: 'horror',       label: '恐怖' },
-  { value: 'sci_fi',       label: '科幻' },
-  { value: 'fantasy',      label: '奇幻/魔幻' },
-  { value: 'history',      label: '历史/古装' },
-  { value: 'crime',        label: '犯罪' },
-  { value: 'mystery',      label: '悬疑' },
-  { value: 'war',          label: '战争' },
-  { value: 'family',       label: '家庭/亲情' },
-  { value: 'biography',    label: '传记/人物' },
-  { value: 'martial_arts', label: '武侠/功夫' },
-  { value: 'other',        label: '其他' },
-]
+// CHG-343: 派生自 VIDEO_GENRES SSOT；v1 维护期 bug 修复（原 15 项缺 adventure/disaster/musical/western/sport 5 项）
+const GENRE_LABELS: Record<VideoGenre, string> = {
+  action: '动作',
+  comedy: '喜剧',
+  romance: '爱情',
+  thriller: '惊悚',
+  horror: '恐怖',
+  sci_fi: '科幻',
+  fantasy: '奇幻/魔幻',
+  history: '历史/古装',
+  crime: '犯罪',
+  mystery: '悬疑',
+  war: '战争',
+  family: '家庭/亲情',
+  biography: '传记/人物',
+  martial_arts: '武侠/功夫',
+  adventure: '冒险',
+  disaster: '灾难',
+  musical: '歌舞',
+  western: '西部',
+  sport: '运动',
+  other: '其他',
+}
+
+const GENRE_OPTIONS: { value: VideoGenre; label: string }[] = VIDEO_GENRES.map((value) => ({
+  value,
+  label: GENRE_LABELS[value],
+}))
 
 // ── 类型 ──────────────────────────────────────────────────────────
 

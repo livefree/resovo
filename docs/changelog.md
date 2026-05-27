@@ -8569,3 +8569,13 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
   - admin-ui helpers 返回 `AdminSelectOption<VideoType>` label 是 `ReactNode`（i18n 兼容）；server-next 消费方需 string label（native option / CSV 导出 / filter chip）→ 通过 `.map(o => ({...o, label: String(o.label)}))` 显式 cast
   - HomeModuleDrawer 保留 "label (value)" dev/debug 风格（admin 看 raw value 便于排查 home_modules.content_ref_id）
   - VideoListClient 零改动：通过 VideoFilterFields re-export 链 / 后续 CHG 可清理 re-export 一致化
+
+## [CHG-343] apps/server v1 AdminVideoForm VideoGenre 15→20 P1 修复
+- **完成时间**：2026-05-26 22:18
+- **来源序列**：SEQ-20260527-ENUMS-SSOT-IMPL（ADR-157 D-157-5 v1 部分）
+- **执行模型**：claude-opus-4-7 / 子代理：无
+- **改动文件**（1 文件 / 1 PATCH 项）：
+  - `apps/server/src/components/admin/AdminVideoForm.tsx`：删 GENRE_OPTIONS 硬编码 15 项 → `VIDEO_GENRES.map(...)` 派生 20 项 / 增 GENRE_LABELS Record
+- **v1 维护期豁免说明**：CLAUDE.md "禁止 apps/server/ 新增业务组件" 允许"维护期 bug 修复"豁免（参 ADR-035）；本卡是 P1 数据正确性修复（原 15/20 缺 adventure/disaster/musical/western/sport 5 项）
+- **闭环 D-N**：D-157-5 v1 部分
+- **门禁**：typecheck ✅ / admin/videos targeted 59/59 PASS ✅
