@@ -11,18 +11,23 @@ import type { AutoCrawlConfig } from '@resovo/types'
 /**
  * CW1-A 定时面板：计算下一次自动采集触发的 ISO timestamp。
  * - globalEnabled=false / scheduleType !== 'daily' → null
- * - dailyTime 已过今天 → 取明天该时刻
+ * - ADR-155 D-155-6 / CLEANUP-C：多 dailyTime 中取最近的下次触发（已过今天的取明天该时刻）
  */
 export function computeNextTrigger(
-  config: Pick<AutoCrawlConfig, 'globalEnabled' | 'scheduleType' | 'dailyTime'>,
+  config: Pick<AutoCrawlConfig, 'globalEnabled' | 'scheduleType' | 'dailyTimes'>,
 ): string | null {
   if (!config.globalEnabled || config.scheduleType !== 'daily') return null
-  const [hhRaw, mmRaw] = config.dailyTime.split(':')
-  const hh = Number(hhRaw)
-  const mm = Number(mmRaw)
-  if (Number.isNaN(hh) || Number.isNaN(mm) || hh < 0 || hh > 23 || mm < 0 || mm > 59) return null
   const now = new Date()
-  const next = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hh, mm, 0, 0)
-  if (next.getTime() <= now.getTime()) next.setDate(next.getDate() + 1)
-  return next.toISOString()
+  const candidates: number[] = []
+  for (const time of config.dailyTimes) {
+    const [hhRaw, mmRaw] = time.split(':')
+    const hh = Number(hhRaw)
+    const mm = Number(mmRaw)
+    if (Number.isNaN(hh) || Number.isNaN(mm) || hh < 0 || hh > 23 || mm < 0 || mm > 59) continue
+    const next = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hh, mm, 0, 0)
+    if (next.getTime() <= now.getTime()) next.setDate(next.getDate() + 1)
+    candidates.push(next.getTime())
+  }
+  if (candidates.length === 0) return null
+  return new Date(Math.min(...candidates)).toISOString()
 }

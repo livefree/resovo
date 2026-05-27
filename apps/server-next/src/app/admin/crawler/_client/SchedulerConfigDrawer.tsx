@@ -245,7 +245,7 @@ export function SchedulerConfigDrawer({ open, onClose, onSaved }: SchedulerConfi
     }
     if (current.length >= 24) return
     const updated = [...current, v]
-    setConfig((prev) => prev ? { ...prev, dailyTimes: updated, dailyTime: updated[0] } : prev)
+    setConfig((prev) => prev ? { ...prev, dailyTimes: updated } : prev)
     setDailyTimeInput('')
   }
 
@@ -254,7 +254,7 @@ export function SchedulerConfigDrawer({ open, onClose, onSaved }: SchedulerConfi
     const current = getCurrentDailyTimes()
     if (current.length <= 1) return  // min 1 守卫
     const updated = current.filter((_, i) => i !== idx)
-    setConfig((prev) => prev ? { ...prev, dailyTimes: updated, dailyTime: updated[0] } : prev)
+    setConfig((prev) => prev ? { ...prev, dailyTimes: updated } : prev)
   }
 
   const handleAddSite = (siteKey: string | null) => {
@@ -271,10 +271,8 @@ export function SchedulerConfigDrawer({ open, onClose, onSaved }: SchedulerConfi
     setSaving(true)
     try {
       await setAutoCrawlConfig(config)
-      // ADR-155 D-155-6 / EP-1C-2a：toast 显示多时间列表
-      const dailyTimesList = config.dailyTimes && config.dailyTimes.length > 0
-        ? Array.from(config.dailyTimes)
-        : [config.dailyTime || '03:00']
+      // ADR-155 D-155-6 / EP-1C-2a / CLEANUP-C：toast 显示多时间列表（dailyTimes required）
+      const dailyTimesList = Array.from(config.dailyTimes)
       const schedDesc = config.scheduleType === 'interval'
         ? `每 ${config.intervalMinutes} 分钟`
         : `每日 ${dailyTimesList.join(', ')}`

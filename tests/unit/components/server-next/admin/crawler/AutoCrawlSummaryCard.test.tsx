@@ -45,6 +45,7 @@ const BASE_CONFIG = {
   globalEnabled: true,
   scheduleType: 'daily' as const,
   intervalMinutes: 60,
+  dailyTimes: ['03:30'] as readonly string[],  // ADR-155 D-155-6 EP-1C-CLEANUP-B3b
   dailyTime: '03:30',
   defaultMode: 'incremental' as const,
   onlyEnabledSites: false,
@@ -161,9 +162,9 @@ describe('AutoCrawlSummaryCard (ADR-155 D-155-5 / EP-1B2)', () => {
     expect(summary).toContain('模式 增量')
   })
 
-  it('7. EP-1C-2b: dailyTimes 缺失（仅 dailyTime alias）→ 兜底显示单时间', async () => {
+  it('7. EP-1C-2b: dailyTimes=["03:30"]（单时间）→ schedule summary 显示单时间无逗号', async () => {
     const future = new Date(Date.now() + 90 * 60_000).toISOString()
-    // BASE_CONFIG 仅含 dailyTime '03:30'，无 dailyTimes 字段
+    // EP-1C-CLEANUP-B3b：BASE_CONFIG.dailyTimes=['03:30']（单元素数组）；alias 兜底语义已删除
     mockGetAutoCrawlConfig.mockResolvedValueOnce(BASE_CONFIG)
     mockGetCrawlerSystemStatus.mockResolvedValueOnce({ autoCrawlNext: future, schedulerEnabled: true })
     render(<AutoCrawlSummaryCard onEditClick={() => {}} />)

@@ -1219,7 +1219,26 @@ B 序列 + C 序列可与 A 并行（A 无依赖）；B 与 C 之间无依赖（
    - 文件范围：2 测试 = 2 项（≪ 5 ✅）
    - 门禁：typecheck ✅ / test 82/82 ✅
 
-3i. **CHG-SN-9-CW1-CW2-EP-1C-CLEANUP-B3/-C**（推迟 / 已规划）
+3i. **CHG-SN-9-CW1-CW2-EP-1C-CLEANUP-B3** — 删 5 fallback + 6 旧路径 case（B3a 后端 + B3b 前端合并）
+   - 状态：✅ 完成（2026-05-26 19:33 / @livefree 协作分支同改前端）
+   - 执行模型：claude-opus-4-7
+   - 范围：
+     - `apps/api/src/workers/crawlerScheduler.ts` checkDaily 删 fallback `[config.dailyTime || '03:00']` + Pick 删 dailyTime → 直接 `const times = config.dailyTimes`
+     - `apps/api/src/db/queries/systemSettings.ts` setAutoCrawlConfig 删 fallback → 直接 `config.dailyTimes.map(parseDailyTime)`
+     - `tests/unit/api/crawlerScheduler.test.ts` 删 #5 (alias 兼容) + #7d (空数组兜底) + #17 (仅传 dailyTime 兜底) — 这 3 case 测的是已删 fallback 路径
+   - 文件范围：2 源 + 1 测试 = 3 项（≪ 5 ✅）
+   - 门禁：typecheck ✅ / test 29/29 ✅（原 32 - 3 已删 case）
+
+3j. **CHG-SN-9-CW1-CW2-EP-1C-CLEANUP-C1** — 删 `AutoCrawlConfig.dailyTime` alias 类型声明（原子类型删除）
+   - 状态：✅ 完成（2026-05-26 19:43）
+   - 执行模型：claude-sonnet-4-6
+   - 范围：6 源（types + api.ts + systemSettings + crawler.ts route + crawler-scheduling + SchedulerConfigDrawer）+ 2 测试（crawlerScheduler + crawler-system-audit）
+   - 文件范围：8 项（原子耦合，类型删除整批 typecheck 通过）
+   - 门禁：typecheck ✅ / test 34/34 ✅
+
+3k. **CHG-SN-9-CW1-CW2-EP-1C-CLEANUP-C2**（待执行）
+   - 范围：删剩余 test fixture `dailyTime` 字段：`AutoCrawlScheduleCard.test.tsx`、`SchedulerConfigDrawer.test.tsx`、`tests/e2e/admin.spec.ts`
+   - 触发条件：下次 crawler 相关任务顺手清理（无阻塞风险，TypeScript 不报错因为 extra fields 兼容）
    - 范围：删 5 处 fallback (`config.dailyTimes && length > 0 ? ... : [config.dailyTime || '03:00']`) + 补 8 个 test fixture 显式提供 dailyTimes + 删 dailyTime alias 字段
    - 拆分：
      - Cleanup-B1：补 4 个 backend test fixture（crawlerScheduler / crawler-system-audit / background-event-service / e2e admin）

@@ -88,13 +88,13 @@ export function gcOldMarks(
  *   5. 早匹配早返回（遍历顺序 = times 数组顺序 = UI chip 列表顺序）
  */
 export function checkDaily(
-  config: Pick<AutoCrawlConfig, 'dailyTimes' | 'dailyTime'>,
+  config: Pick<AutoCrawlConfig, 'dailyTimes'>,
   now: Date,
   marks: Record<string, string>,
 ): { shouldTrigger: boolean; matchedTime: string | null } {
-  const times = config.dailyTimes && config.dailyTimes.length > 0
-    ? config.dailyTimes
-    : [config.dailyTime || '03:00']
+  // ADR-155 D-155-6 / EP-1C-CLEANUP-B3a：dailyTimes 类型 required + 反序列化兜底非空
+  // 信任上游（getAutoCrawlConfig → deserializeAutoCrawlConfig 永远输出非空 ['03:00']）
+  const times = config.dailyTimes
 
   const today = formatDateStr(now)
   const windowMs = CATCH_UP_WINDOW_MIN * 60_000

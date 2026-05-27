@@ -84,15 +84,8 @@ describe('checkInterval（ADR-154 D-154-5）', () => {
 // ── Tests: checkDaily（纯函数，无 IO）────────────────────────────
 
 describe('checkDaily（ADR-155 D-155-6 EP-1C-1b 多 dailyTime + marks 防重）', () => {
-  it('#5 dailyTime alias 兼容 + 今天未触发 → shouldTrigger=true', async () => {
-    const { checkDaily } = await import('@/api/workers/crawlerScheduler')
-    const now = new Date(2026, 4, 25, 3, 0, 0)  // 03:00
-    // 旧调用方仅传 dailyTime alias（兜底从 dailyTimes 推 [dailyTime]）
-    expect(checkDaily({ dailyTime: '03:00' }, now, {})).toEqual({
-      shouldTrigger: true,
-      matchedTime: '03:00',
-    })
-  })
+  // ADR-155 D-155-6 / EP-1C-CLEANUP-B3a：#5 dailyTime alias 兼容路径已随 checkDaily fallback 删除
+  // （fallback `[config.dailyTime || '03:00']` 不再存在 / 类型 required + 反序列化兜底非空保证）
 
   it('#6 W3-FIX HOTFIX-D: current 在 dailyTime 后 1 分钟（catch-up window 内）→ 触发 + matchedTime 是原 dailyTime', async () => {
     const { checkDaily } = await import('@/api/workers/crawlerScheduler')
@@ -153,13 +146,8 @@ describe('checkDaily（ADR-155 D-155-6 EP-1C-1b 多 dailyTime + marks 防重）'
     })
   })
 
-  it('#7d dailyTimes 空数组兜底用 dailyTime alias', async () => {
-    const { checkDaily } = await import('@/api/workers/crawlerScheduler')
-    const config = { dailyTimes: [], dailyTime: '05:30' }
-    expect(checkDaily(config, new Date(2026, 4, 25, 5, 30, 0), {})).toEqual({
-      shouldTrigger: true, matchedTime: '05:30',
-    })
-  })
+  // ADR-155 D-155-6 / EP-1C-CLEANUP-B3a：#7d dailyTimes 空数组兜底 case 已随 fallback 删除
+  // （类型 required + 反序列化兜底永远输出非空数组 / zod transform refine 守门）
 
   // ── W3-FIX HOTFIX-D：catch-up window 边界 ──────────────────────
   it('#8a HOTFIX-D: diffMs=0（精确匹配）→ 触发', async () => {
@@ -369,7 +357,7 @@ describe('parseDailyTimes（ADR-155 D-155-6 KV 3 路径兼容）', () => {
       auto_crawl_daily_time: '03:00',
     })
     expect(config.dailyTimes).toEqual(['03:00'])
-    expect(config.dailyTime).toBe('03:00')  // alias 保持向后兼容
+    // CLEANUP-C：dailyTime alias 已删，仅验证 dailyTimes
   })
 
   it('#12 JSON 字符串值 \'"03:00"\' → ["03:00"]', async () => {
@@ -388,7 +376,7 @@ describe('parseDailyTimes（ADR-155 D-155-6 KV 3 路径兼容）', () => {
       auto_crawl_daily_time: '["03:00","04:00"]',
     })
     expect(config.dailyTimes).toEqual(['03:00', '04:00'])
-    expect(config.dailyTime).toBe('03:00')  // alias = dailyTimes[0]
+    // CLEANUP-C：dailyTime alias 已删，仅验证 dailyTimes
   })
 
   it('#14 空 / undefined → ["03:00"] 兜底', async () => {
@@ -440,26 +428,6 @@ describe('parseDailyTimes（ADR-155 D-155-6 KV 3 路径兼容）', () => {
     expect(dailyTimeCall![1][1]).toBe('["03:00","04:00"]')
   })
 
-  it('#17 setAutoCrawlConfig 兜底：仅传 dailyTime（dailyTimes undefined）→ 推 [dailyTime]', async () => {
-    const { setAutoCrawlConfig } = await import('@/api/db/queries/systemSettings')
-
-    const db = { query: mockQuery, connect: mockConnect } as never
-    await setAutoCrawlConfig(db, {
-      globalEnabled: true,
-      scheduleType: 'daily',
-      intervalMinutes: 60,
-      // dailyTimes 缺失（旧调用方）
-      dailyTime: '05:30',
-      defaultMode: 'incremental',
-      onlyEnabledSites: true,
-      conflictPolicy: 'skip_running',
-      perSiteOverrides: {},
-    })
-
-    const dailyTimeCall = mockClientQuery.mock.calls.find(
-      (c) => Array.isArray(c[1]) && c[1][0] === 'auto_crawl_daily_time'
-    )
-    expect(dailyTimeCall).toBeTruthy()
-    expect(dailyTimeCall![1][1]).toBe('["05:30"]')
-  })
+  // ADR-155 D-155-6 / EP-1C-CLEANUP-B3a：#17 setAutoCrawlConfig 仅传 dailyTime 兜底 case 已删除
+  // （类型 required + zod transform refine 守门 / setAutoCrawlConfig 直接 config.dailyTimes.map(parseDailyTime)）
 })

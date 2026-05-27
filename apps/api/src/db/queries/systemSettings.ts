@@ -205,15 +205,13 @@ export function deserializeAutoCrawlConfig(raw: Record<string, string>): AutoCra
   // ADR-154 D-154-1：intervalMinutes 默认 60（向后兼容：无键 → 默认值）
   const intervalMinutes = Math.max(5, Math.min(1440, Number(raw.auto_crawl_interval_minutes) || 60))
 
-  // ADR-155 D-155-6：多 dailyTime（主字段）+ dailyTime alias 向后兼容
+  // ADR-155 D-155-6 / CLEANUP-C：多 dailyTime（主字段 dailyTimes）；dailyTime alias 已删
   const dailyTimes = parseDailyTimes(raw.auto_crawl_daily_time)
-  const dailyTime = dailyTimes[0] ?? '03:00'
 
   return {
     globalEnabled: raw.auto_crawl_enabled === 'true',
     scheduleType,
     dailyTimes,
-    dailyTime,
     intervalMinutes,
     defaultMode,
     onlyEnabledSites: raw.auto_crawl_only_enabled_sites !== 'false',
@@ -228,14 +226,9 @@ export async function getAutoCrawlConfig(db: Pool): Promise<AutoCrawlConfig> {
 }
 
 export async function setAutoCrawlConfig(db: Pool, config: AutoCrawlConfig): Promise<void> {
-  // ADR-155 D-155-6 / EP-1C-1a Y-155-1：dailyTime → dailyTimes 序列化升级
-  //   - 优先用 dailyTimes（新格式 / 多时间）；
-  //   - 兜底从 dailyTime alias 推 `[dailyTime]`（兼容仅传 dailyTime 的旧调用方 / EP-1C-1b zod preprocess 后会消失）；
-  //   - 每个 HH:MM 都通过 parseDailyTime 规范化（防御非法格式）。
-  const inputTimes = config.dailyTimes && config.dailyTimes.length > 0
-    ? config.dailyTimes
-    : [config.dailyTime || '03:00']
-  const normalizedTimes = inputTimes.map(parseDailyTime)
+  // ADR-155 D-155-6 / EP-1C-CLEANUP-B3a：dailyTimes 类型 required + zod transform 保证非空（refine 守门）
+  // 直接信任 config.dailyTimes，每个 HH:MM 经 parseDailyTime 规范化（防御非法格式）
+  const normalizedTimes = config.dailyTimes.map(parseDailyTime)
 
   const pairs: Partial<Record<SystemSettingKey, string>> = {
     auto_crawl_enabled: String(config.globalEnabled),

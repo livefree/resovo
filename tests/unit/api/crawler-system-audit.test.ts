@@ -99,8 +99,7 @@ const BEFORE_CONFIG = {
   globalEnabled: false,
   scheduleType: 'daily' as const,
   intervalMinutes: 60,              // ADR-154 D-154-1
-  dailyTimes: ['03:00'],            // ADR-155 D-155-6 / EP-1C-CLEANUP-B1：主字段
-  dailyTime: '03:00',
+  dailyTimes: ['03:00'] as readonly string[],  // ADR-155 D-155-6 / CLEANUP-C：dailyTime alias 已删
   defaultMode: 'incremental' as const,
   onlyEnabledSites: true,
   conflictPolicy: 'skip_running' as const,
@@ -111,8 +110,7 @@ const AFTER_CONFIG = {
   globalEnabled: true,
   scheduleType: 'daily' as const,
   intervalMinutes: 60,              // ADR-154 D-154-1（zod default）
-  dailyTimes: ['04:30'],            // ADR-155 D-155-6 / EP-1C-CLEANUP-B1：主字段
-  dailyTime: '04:30',
+  dailyTimes: ['04:30'] as readonly string[],  // ADR-155 D-155-6 / CLEANUP-C：dailyTime alias 已删
   defaultMode: 'full' as const,
   onlyEnabledSites: false,
   conflictPolicy: 'queue_after_running' as const,
@@ -144,11 +142,10 @@ describe('POST /admin/crawler/auto-config — crawler.auto_config audit', () => 
     })
     await new Promise((r) => setImmediate(r))
     expect(res.statusCode).toBe(200)
-    // ADR-155 D-155-6 / EP-1C-1b：zod transform 输出永远同时含 dailyTime + dailyTimes
-    // setAutoCrawlConfig 收到的 config 含 dailyTimes alias = [dailyTime]
+    // ADR-155 D-155-6 / CLEANUP-C：dailyTime alias 已删，setAutoCrawlConfig 只收到 dailyTimes
     expect(mockSetAutoCrawlConfig).toHaveBeenCalledWith(
       {},
-      expect.objectContaining({ ...AFTER_CONFIG, dailyTimes: ['04:30'] }),
+      expect.objectContaining({ ...AFTER_CONFIG }),
     )
     expect(insertAuditLogMock).toHaveBeenCalledWith(
       expect.anything(),
@@ -157,7 +154,7 @@ describe('POST /admin/crawler/auto-config — crawler.auto_config audit', () => 
         targetKind: 'system',
         targetId: 'auto_crawl_config',
         beforeJsonb: expect.objectContaining({ config: BEFORE_CONFIG }),
-        afterJsonb: expect.objectContaining({ config: expect.objectContaining({ ...AFTER_CONFIG, dailyTimes: ['04:30'] }) }),
+        afterJsonb: expect.objectContaining({ config: expect.objectContaining({ ...AFTER_CONFIG }) }),
       }),
     )
   })

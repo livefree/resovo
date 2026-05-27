@@ -8248,6 +8248,53 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
   - 测试覆盖：CrawlerClient 66/66 + DashboardClient 16/16 = 82/82 PASS
 - **PATCH 文件数**：2 测试 = 2 项（≪ 5 ✅）
 - **门禁**：typecheck ✅ / lint cached ✅ / test 82/82 ✅
+
+## [CHG-SN-9-CW1-CW2-EP-1C-CLEANUP-C1] 删 AutoCrawlConfig.dailyTime alias 类型声明（原子类型删除）
+- **完成时间**：2026-05-26
+- **记录时间**：2026-05-26 19:43
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：无（类型删除 / 不触发 Opus reviewer）
+- **修改文件**（6 源码 + 2 测试 / 原子耦合）：
+  - `packages/types/src/system.types.ts` — 删 `/** @deprecated */ dailyTime: string` 字段声明
+  - `apps/server-next/src/lib/crawler/api.ts` — 删前端镜像 `readonly dailyTime: string`
+  - `apps/api/src/db/queries/systemSettings.ts` — deserialize 删 `dailyTime` 推导 + return 字段；setAutoCrawlConfig 删 alias fallback
+  - `apps/api/src/routes/admin/crawler.ts` — 删 zod `dailyTime` optional + `.refine()` + `.transform()`；简化为纯 `dailyTimes: z.array(...).min(1).max(24)`
+  - `apps/api/src/lib/crawler-scheduling.ts` — `computeNextTrigger` 改为迭代 `config.dailyTimes`（Pick 改用 `dailyTimes`）
+  - `apps/server-next/src/app/admin/crawler/_client/SchedulerConfigDrawer.tsx` — 删 `setConfig` 里 `dailyTime: updated[0]` alias 写入；handleSubmit 直接 `Array.from(config.dailyTimes)`
+  - `tests/unit/api/crawlerScheduler.test.ts` — 删 `config.dailyTime` 断言（#11/#13）；保留 dailyTimes 断言
+  - `tests/unit/api/crawler-system-audit.test.ts` — 删 `BEFORE_CONFIG`/`AFTER_CONFIG` 里 `dailyTime` 字段
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - typecheck 通过即可确认无遗漏引用（dailyTime 类型删除后，任何残余引用都是编译错误）
+  - 测试 34/34 PASS（crawlerScheduler 29 + crawler-system-audit 5）
+  - C-2 后续：删剩余 test fixture 中的 `dailyTime` 字段（AutoCrawlScheduleCard / SchedulerConfigDrawer / e2e admin.spec.ts）
+- **PATCH 文件数**：6 源 + 2 测试 = 8 项（B3 后端遗留 crawlerScheduler + 本批 C-1，超 5 项因为原子耦合 / 类型删除要求整批通过 typecheck）
+- **门禁**：typecheck ✅ / lint ✅ / test 34/34 ✅
+
+## [CHG-SN-9-CW1-CW2-EP-1C-CLEANUP-B3] 删 5 fallback + 6 旧路径 case（B3a 后端 + B3b 前端协作合并）
+- **完成时间**：2026-05-26
+- **记录时间**：2026-05-26 19:30
+- **执行模型**：claude-opus-4-7（主循环延续）
+- **子代理**：无（fallback 清理 / 不触发 Opus reviewer）
+- **修改文件**（B3a 后端 by 主循环 + B3b 前端 by @livefree 协作）：
+  - `apps/api/src/workers/crawlerScheduler.ts` — checkDaily fallback 删：Pick 去掉 dailyTime → `const times = config.dailyTimes`
+  - `apps/api/src/db/queries/systemSettings.ts` — setAutoCrawlConfig fallback 删 → `config.dailyTimes.map(parseDailyTime)`
+  - `apps/server-next/src/app/admin/_client/AutoCrawlScheduleCard.tsx` — 删 dailyTime alias fallback 三元（user）
+  - `apps/server-next/src/app/admin/crawler/_client/AutoCrawlSummaryCard.tsx` — 删 fallback → `Array.from(config.dailyTimes)`（user）
+  - `apps/server-next/src/app/admin/crawler/_client/SchedulerConfigDrawer.tsx` — getCurrentDailyTimes 删 fallback（user）
+  - `tests/unit/api/crawlerScheduler.test.ts` — 删 3 case（#5 alias 兼容 / #7d dailyTimes=[] 兜底 / #17 setAutoCrawlConfig 仅传 dailyTime）
+  - `tests/unit/components/server-next/admin/AutoCrawlScheduleCard.test.tsx` — BASE_CONFIG 加 dailyTimes + #13 改写为 single-time 测试（user）
+  - `tests/unit/components/server-next/admin/crawler/AutoCrawlSummaryCard.test.tsx` — BASE_CONFIG 加 dailyTimes + #7 改写为 single-time 测试
+  - `tests/unit/components/server-next/admin/crawler/SchedulerConfigDrawer.test.tsx` — CONFIG 加 dailyTimes（user）
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - 信任链：getAutoCrawlConfig → deserializeAutoCrawlConfig 永远输出非空 `['03:00']`（parseDailyTimes 3 路径兜底）；POST /admin/crawler/auto-config zod transform 经 refine 守门保证非空 → setAutoCrawlConfig 收到的 dailyTimes 必非空
+  - 测试覆盖：crawlerScheduler.test.ts 29/29 PASS（原 32 - 3 已删 case）
+  - 后续：Cleanup-C 删 dailyTime alias 字段（拆 C1/C2/C3 因为 11 项超 PATCH 5）
+- **PATCH 文件数**：9 文件（5 源 + 4 测试）— 协作合并 commit 超出主循环单卡 5 项约束；user 已先在协作分支落地前端 fallback 删除 + 2 个前端测试 fixture 修复
+- **门禁**：typecheck ✅ / lint ✅ / test 5142/5142 ✅ / verify:adr-contracts ✅
 - **新增依赖**：无
 - **数据库变更**：无
 - **注意事项**：
