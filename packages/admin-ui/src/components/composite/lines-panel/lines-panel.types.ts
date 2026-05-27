@@ -98,6 +98,16 @@ export interface LinesPanelProps {
   readonly onRefetch: () => void | Promise<void>
   readonly onHealthOpen: (args: { readonly lineKey: string; readonly episodeId: string }) => void
 
+  // ── per-episode inline action callbacks（CHG-351-B / ADR-158）─────
+  // 单 episode 行 inline 诊断动作：仅当对应 callback 提供时按钮显示
+  // ADR-158 D-158-8 边界：仅诊断（不写 video_sources 状态）/ 状态写走 onToggleEpisode
+
+  /** 单 episode 探测回调（ADR-158 POST /admin/sources/:id/probe / 仅当提供时渲染按钮） */
+  readonly onProbeEpisode?: (args: { readonly lineKey: string; readonly episodeId: string }) => void | Promise<void>
+
+  /** 单 episode 试播渲染检测回调（ADR-158 POST /admin/sources/:id/render-check / 仅当提供时渲染按钮） */
+  readonly onRenderCheckEpisode?: (args: { readonly lineKey: string; readonly episodeId: string }) => void | Promise<void>
+
   /**
    * 受控选择（R1）：selectedKey + onLineSelect 必须同时出现或同时省略。
    * 省略 = 无选中态（VideoEditDrawer 用法）。
@@ -110,8 +120,17 @@ export interface LinesPanelProps {
     readonly firstActiveUrl: string | null
   }) => void
 
+  // ── per-episode pending state sets（CHG-351-B / ADR-158 / I2 防 race）──
+  // 所有 set 互独立；EpisodeRow disabled 计算需 OR 防 toggle+probe 并发污染
+
   /** 进行中的 episodeId 集（消费方 hook 持有，含乐观锁回滚状态） */
   readonly toggling?: ReadonlySet<string>
+
+  /** 进行中的 probe episodeId 集（ADR-158 /probe 按钮 disabled / 命名避免 React 'rendering' 语境歧义） */
+  readonly probingEpisodeIds?: ReadonlySet<string>
+
+  /** 进行中的 render-check episodeId 集（ADR-158 /render-check 按钮 disabled） */
+  readonly renderCheckingEpisodeIds?: ReadonlySet<string>
 
   readonly loading?: boolean
   readonly error?: string | null

@@ -8969,3 +8969,61 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
   - 基线观察：本卡新建 audit-log-service-enums-set-equal EXPECTED_ACTION_TYPES 不含 `crawler_task.*` + `image_health.*` 4 项，但 admin-moderation.types.ts union 已含；coverage REQUIRED 也含。set-equal 守卫两边自洽 drift（test 自身 PASS），但 4 真源严格性的隐式违规 — 建议未来独立 follow-up 卡（不在本卡范围 / 与 CHG-351-A 解耦）
 - **闭环**：CHG-351-A 完成；plan §10.5 后端 + ADR 阶段交付；Wave 1 进度 6/9 → 7/9（CHG-351 拆 -A/-B/-C 中第一张）
 - **后续**：CHG-351-B（packages/admin-ui LinesPanel Props 扩展 / 强制 arch-reviewer trailer + Opus 主循环 / commit trailer 必含 Subagents: arch-reviewer）
+
+## [CHG-351-B] admin-ui LinesPanel Props 扩展 — onProbeEpisode + onRenderCheckEpisode + 探测/试播 inline 按钮
+- **完成时间**：2026-05-27
+- **来源序列**：SEQ-20260527-MOD-WAVE1（Wave 1 / 卡 7-B / 9 / plan §10.5 / CHG-351 拆 -A/-B/-C 子卡其二）
+- **执行模型**：claude-opus-4-7（主循环不切换 §16.5）
+- **子代理**：arch-reviewer (claude-opus-4-7) 1 轮独立评审 → **A-CONDITIONAL** → 主循环消化 3 红线 + 2 黄线 + 4 关键洞察 → 等同 A
+- **任务来源**：CHG-351 PROBE-RENDER-INLINE Wave 1 子卡（CHG-351-A 已闭环 commit 08538385）；本卡是 admin-ui 共享层 Props 契约扩展 / CLAUDE.md "共享组件 API 契约强制 Opus" 触发
+- **commit trailer 红线触发**（CLAUDE.md §绝对禁止）：本卡修改 `packages/admin-ui/src/components/composite/lines-panel/lines-panel.types.ts` 公开 Props 字段 → commit 必含 `Subagents: arch-reviewer (claude-opus-4-7)` trailer（I3）
+- **评审消化对照（3 红线 / 2 黄线 / 4 洞察全采纳）**：
+  - **R1（B 决策）**：回调签名 `{ episodeId }` → **`{ lineKey, episodeId }`**（与 onHealthOpen 镜像 / Props 对称性 / 消费方可用 lineKey 做 audit/optimistic UI/batch 化）
+  - **R2（A 决策）**：pending set 命名 `probing` / `rendering` → **`probingEpisodeIds` / `renderCheckingEpisodeIds`**（避免 React 'rendering' 语境歧义 / 与 toggling 命名风格对齐）
+  - **R3（C+D 决策）**：按钮文案 `🔍 探` / `▶ 播` → **"探测" / "试播"**（无 emoji 双字 / 与 lines-panel 既有 6 个 ghost 按钮"启用/停用/健康/启用线路/停用线路/清除失效/刷新"中文风格统一）+ 位置 "健康"按钮**之后**（不破坏既有 muscle memory）
+  - **Y1（G 决策）**：测试路径 `tests/unit/components/admin-ui/composite/lines-panel/lines-panel.test.tsx`（不是 brief 给的 `packages/admin-ui/tests/`）+ snapshot 删除（admin-ui 零先例）+ case 9 既有功能 smoke + case 10 多 epId 并行不污染
+  - **Y2**：测试工厂复用 aggregate.test.ts 的 `'in' 检查` 范式（episodeNumber=null 合法值不能用 `??` 误转）
+  - **I1**：Props 物理位置按"per-episode actions group"+"per-episode pending state group"归类（types 文件内紧跟现有 toggling / onHealthOpen 之后）
+  - **I2 防 race**：EpisodeRow disabled 计算用 `disabled={probing || spinning}`（toggle 期间 probe/render-check 也 disabled / 防 toggle+probe 并发污染 audit/video_sources 状态）+ 测试 case 9 覆盖
+  - **I3**：commit trailer 强制 + 3 文件原子提交（types + tsx + test）/ 不拆 commit
+  - **I4**：R2 防腐验证 — admin-ui 不 import 任何 apps/server-next/** 类型 / 仅依赖 string 原语
+- **改动文件**（3 项 / 原子提交 / 符合 CHG-351 拆 -B 卡片"≤ 3 项"约束）：
+  - `packages/admin-ui/src/components/composite/lines-panel/lines-panel.types.ts`：LinesPanelProps 扩 2 callback（onProbeEpisode + onRenderCheckEpisode / 含 lineKey）+ 2 pending set（probingEpisodeIds + renderCheckingEpisodeIds）/ 按 I1 物理归类 + JSDoc 引用 ADR-158
+  - `packages/admin-ui/src/components/composite/lines-panel/lines-panel.tsx`：
+    - EpisodeRowProps + LineRowProps + LinesPanel 透传新 props
+    - EpisodeRow 加 2 ghost 按钮（"探测" / "试播"）渲染在"健康"按钮之后（C2）
+    - I2 防 race：disabled = probing || spinning（toggle 期间也 disabled）
+    - 文案变化：probing/rendering 中 "探测…" / "试播…"
+    - aria-label："探测第 X 集线路状态" / "试播第 X 集渲染检测"
+    - 复用现有 GHOST_BTN 样式（E1 / 一致性）
+  - `tests/unit/components/admin-ui/composite/lines-panel/lines-panel.test.tsx`（**新建** / 11 case）：
+    - Case 1-2：未提供 callback → 按钮不渲染
+    - Case 3-4：点击触发 → callback({ lineKey, episodeId })
+    - Case 5-6：pending set 含 ep.id → 按钮 disabled + 文案 "…"
+    - Case 7：a11y aria-label episodeNumber=null fallback "第 ? 集"
+    - Case 8：既有功能 smoke（启用/健康/选中态）不回归
+    - Case 9：I2 防 race + 并行不污染（3 子 case：toggling 防 race / probingEpisodeIds 跨 epId 独立 / 跨 set 独立）
+- **新增依赖**：无
+- **数据库变更**：无（admin-ui 共享层 / 纯前端 UI）
+- **门禁**：
+  - typecheck ✅
+  - lint ✅（无新 warning / turbo cache hit）
+  - lines-panel.test.tsx 11/11 PASS
+- **UX 决策**：
+  - 双字中文按钮（探测 / 试播）与既有 ghost 按钮风格统一
+  - aria-label 长描述（含 episodeNumber）与启用/健康按钮范式镜像
+  - I2 防 race：单源诊断动作触发期间也阻止 toggle / 防 audit 顺序混乱
+- **下游契约（CHG-351-C 消费要点）**：
+  - server-next `apps/server-next/src/lib/moderation/api.ts` 新增 `probeOneSource(sourceId)` / `renderCheckOneSource(sourceId)` 调 ADR-158 端点
+  - server-next `apps/server-next/src/app/admin/moderation/_client/LinesPanel.tsx` 接 props:
+    - `onProbeEpisode={({ episodeId }) => probeOneSource(episodeId)}`
+    - `onRenderCheckEpisode={({ episodeId }) => renderCheckOneSource(episodeId)}`
+    - `probingEpisodeIds + renderCheckingEpisodeIds` 用 `useState<ReadonlySet<string>>` 双 set 管理（advisory A3 范式）
+    - 错误用既有 `actionError` 显示（不需新 error prop）
+  - docs/manual/20-pages/P-moderation.md §3.8 "线路检测（单源探/播）"章节
+- **advisory（继承 ADR-158）**：
+  - A1：未来 inline 动作 ≥ 4 时重审 A4 方案（Map<string, Set<action>>）替代独立 Set 命名爆炸
+  - A2：admin-ui 当前无 i18n 层 / 未来 i18n 化时统一抽 key（裸中文不破坏既定约定）
+  - A4：lines-panel 按钮区接近视觉密集阈值 / ≥ 6 按钮时考虑 overflow menu
+- **闭环**：CHG-351-B 完成；plan §10.5 admin-ui 共享层契约扩展交付；Wave 1 进度 7/9 → 7-B/9（CHG-351 拆 -A/-B/-C 中第二张）
+- **后续**：CHG-351-C（server-next 消费方 / probeOneSource + renderCheckOneSource API 客户端 + LinesPanel props 接入 + docs/manual P-moderation §3.8）

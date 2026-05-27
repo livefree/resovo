@@ -1680,9 +1680,9 @@ HOTFIX-A → B → C 顺序串行（B 在 A SQL fix 基础上扩 CASE / C 在 B 
 
 ## [SEQ-20260527-MOD-WAVE1] server-next 内容审核台 Wave 1 — 消债 + 关键 bug 修复 + 搜索/探播实装 + route-labeling 接入
 
-- **状态**：🟡 进行中（6/9 完成 / CHG-351-A 进行中 / 用户选方案 A）
+- **状态**：🟡 进行中（7-B/9 完成 / 7-C 待开始 / 用户选方案 A）
 - **创建时间**：2026-05-27 13:00
-- **最后更新时间**：2026-05-27（CHG-351-A 启动 / 会话恢复 + docs 同步）
+- **最后更新时间**：2026-05-27（CHG-351-A + CHG-351-B 双卡闭合 / 全自动模式）
 - **目标**：基于 `/Users/livefree/.claude/plans/fluffy-giggling-teapot.md` 完成审核台 P0/P1 消债 + 用户视角增强 + route-labeling Phase 1 落地
 - **范围**：`apps/server-next/src/app/admin/moderation/**` + `apps/api/src/routes/admin/moderation.ts` + `apps/api/src/services/SourceService.ts` + `apps/web-next/src/components/player/SourceBar.tsx` + `apps/web-next/src/lib/line-display-name.ts` + `docs/manual/`
 - **依赖**：无上游阻塞；审查报告见 fluffy-giggling-teapot.md §1-9 事实底板
@@ -1805,7 +1805,7 @@ HOTFIX-A → B → C 顺序串行（B 在 A SQL fix 基础上扩 CASE / C 在 B 
    - 验证：typecheck / lint / verify:adr-contracts / verify:endpoint-adr / 单测全 PASS
    - 人工体验场景：无（纯后端 + ADR）
 
-7-B. **CHG-351-B** — packages/admin-ui LinesPanel Props 扩展（onProbeEpisode + onRenderCheckEpisode）（状态：⬜ 未开始）
+7-B. **CHG-351-B** — packages/admin-ui LinesPanel Props 扩展（onProbeEpisode + onRenderCheckEpisode）（状态：✅ 已完成 / 2026-05-27 / 执行模型 claude-opus-4-7 / arch-reviewer Opus A-CONDITIONAL 1 轮 → 主循环消化 3 红线 + 2 黄线 + 4 关键洞察 等同 A / 3 文件改动原子提交（types + tsx + test） / 11 case PASS / commit trailer 含 Subagents: arch-reviewer (claude-opus-4-7) / Wave 1 卡 7-B/9 闭合）
    - 创建时间：2026-05-27 02:45
    - 建议主循环模型：`claude-opus-4-7`（CLAUDE.md "共享组件 API 契约强制 Opus" / 主循环不切换）
    - 子代理：**强制** spawn `arch-reviewer` (claude-opus-4-7) 评审 Props 契约 / commit trailer 必含 `Subagents: arch-reviewer (claude-opus-4-7)`

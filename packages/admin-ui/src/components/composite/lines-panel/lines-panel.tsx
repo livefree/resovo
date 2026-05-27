@@ -73,12 +73,23 @@ interface EpisodeRowProps {
   readonly lineKey: string
   readonly density: LinesPanelDensity
   readonly toggling?: ReadonlySet<string>
+  readonly probingEpisodeIds?: ReadonlySet<string>
+  readonly renderCheckingEpisodeIds?: ReadonlySet<string>
   readonly onToggle: LinesPanelProps['onToggleEpisode']
   readonly onHealthOpen: LinesPanelProps['onHealthOpen']
+  readonly onProbeEpisode?: LinesPanelProps['onProbeEpisode']
+  readonly onRenderCheckEpisode?: LinesPanelProps['onRenderCheckEpisode']
 }
 
-function EpisodeRow({ ep, lineKey, density, toggling, onToggle, onHealthOpen }: EpisodeRowProps) {
+function EpisodeRow({
+  ep, lineKey, density,
+  toggling, probingEpisodeIds, renderCheckingEpisodeIds,
+  onToggle, onHealthOpen, onProbeEpisode, onRenderCheckEpisode,
+}: EpisodeRowProps) {
   const spinning = toggling?.has(ep.id) ?? false
+  // I2 防 race：probe/render-check 按钮在 toggle 进行时也 disabled（防 toggle+probe 并发污染 audit / video_sources 状态）
+  const probing = probingEpisodeIds?.has(ep.id) ?? false
+  const rendering = renderCheckingEpisodeIds?.has(ep.id) ?? false
   return (
     <div
       role="row"
@@ -121,6 +132,28 @@ function EpisodeRow({ ep, lineKey, density, toggling, onToggle, onHealthOpen }: 
       >
         健康
       </button>
+      {onProbeEpisode && (
+        <button
+          type="button"
+          aria-label={`探测第 ${ep.episodeNumber ?? '?'} 集线路状态`}
+          disabled={probing || spinning}
+          onClick={() => void onProbeEpisode({ lineKey, episodeId: ep.id })}
+          style={GHOST_BTN}
+        >
+          {probing ? '探测…' : '探测'}
+        </button>
+      )}
+      {onRenderCheckEpisode && (
+        <button
+          type="button"
+          aria-label={`试播第 ${ep.episodeNumber ?? '?'} 集渲染检测`}
+          disabled={rendering || spinning}
+          onClick={() => void onRenderCheckEpisode({ lineKey, episodeId: ep.id })}
+          style={GHOST_BTN}
+        >
+          {rendering ? '试播…' : '试播'}
+        </button>
+      )}
     </div>
   )
 }
@@ -134,16 +167,22 @@ interface LineRowProps {
   readonly isSelected: boolean
   readonly selectable: boolean
   readonly toggling?: ReadonlySet<string>
+  readonly probingEpisodeIds?: ReadonlySet<string>
+  readonly renderCheckingEpisodeIds?: ReadonlySet<string>
   readonly onToggle: LinesPanelProps['onToggleEpisode']
   readonly onToggleLine?: LinesPanelProps['onToggleLine']
   readonly onHealthOpen: LinesPanelProps['onHealthOpen']
+  readonly onProbeEpisode?: LinesPanelProps['onProbeEpisode']
+  readonly onRenderCheckEpisode?: LinesPanelProps['onRenderCheckEpisode']
   readonly onSelect?: (line: LineAggregate) => void
   readonly onExpand: (key: string) => void
 }
 
 function LineRow({
   line, density, isExpanded, isSelected, selectable,
-  toggling, onToggle, onToggleLine, onHealthOpen, onSelect, onExpand,
+  toggling, probingEpisodeIds, renderCheckingEpisodeIds,
+  onToggle, onToggleLine, onHealthOpen, onProbeEpisode, onRenderCheckEpisode,
+  onSelect, onExpand,
 }: LineRowProps) {
   const selectedBg: React.CSSProperties = isSelected
     ? { background: 'var(--admin-accent-soft)', outline: '1.5px solid var(--admin-accent-on-soft)', outlineOffset: '-1px' }
@@ -226,8 +265,12 @@ function LineRow({
               lineKey={line.key}
               density={density}
               toggling={toggling}
+              probingEpisodeIds={probingEpisodeIds}
+              renderCheckingEpisodeIds={renderCheckingEpisodeIds}
               onToggle={onToggle}
               onHealthOpen={onHealthOpen}
+              onProbeEpisode={onProbeEpisode}
+              onRenderCheckEpisode={onRenderCheckEpisode}
             />
           ))}
         </div>
@@ -246,9 +289,13 @@ export function LinesPanel({
   onDisableDead,
   onRefetch,
   onHealthOpen,
+  onProbeEpisode,
+  onRenderCheckEpisode,
   selectedKey,
   onLineSelect,
   toggling,
+  probingEpisodeIds,
+  renderCheckingEpisodeIds,
   loading,
   error,
   onErrorRetry,
@@ -331,9 +378,13 @@ export function LinesPanel({
               isSelected={selectable ? selectedKey === line.key : false}
               selectable={selectable}
               toggling={toggling}
+              probingEpisodeIds={probingEpisodeIds}
+              renderCheckingEpisodeIds={renderCheckingEpisodeIds}
               onToggle={onToggleEpisode}
               onToggleLine={onToggleLine}
               onHealthOpen={onHealthOpen}
+              onProbeEpisode={onProbeEpisode}
+              onRenderCheckEpisode={onRenderCheckEpisode}
               onSelect={selectable ? handleSelect : undefined}
               onExpand={toggleExpand}
             />
