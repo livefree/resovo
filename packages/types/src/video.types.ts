@@ -20,8 +20,13 @@ export const VIDEO_TYPES = [
 ] as const
 export type VideoType = typeof VIDEO_TYPES[number]
 
-export type ContentFormat = 'movie' | 'episodic' | 'collection' | 'clip'
-export type EpisodePattern = 'single' | 'multi' | 'ongoing' | 'unknown'
+/** ContentFormat 全集（ADR-157 D-157-1） */
+export const CONTENT_FORMATS = ['movie', 'episodic', 'collection', 'clip'] as const
+export type ContentFormat = typeof CONTENT_FORMATS[number]
+
+/** EpisodePattern 全集（ADR-157 D-157-1） */
+export const EPISODE_PATTERNS = ['single', 'multi', 'ongoing', 'unknown'] as const
+export type EpisodePattern = typeof EPISODE_PATTERNS[number]
 
 /** VideoStatus 全集（ADR-157 D-157-1） */
 export const VIDEO_STATUSES = ['ongoing', 'completed'] as const
@@ -31,11 +36,16 @@ export type VideoStatus = typeof VIDEO_STATUSES[number]
 /** ReviewStatus 全集（ADR-157 D-157-1） */
 export const REVIEW_STATUSES = ['pending_review', 'approved', 'rejected'] as const
 export type ReviewStatus = typeof REVIEW_STATUSES[number]
-export type VisibilityStatus = 'public' | 'internal' | 'hidden'
+
+/** VisibilityStatus 全集（ADR-157 D-157-1） */
+export const VISIBILITY_STATUSES = ['public', 'internal', 'hidden'] as const
+export type VisibilityStatus = typeof VISIBILITY_STATUSES[number]
 
 // ── 榜单标签（Migration 051，ADR-052）────────────────────────────
 /** 人工运营榜单标签，与 home_modules.top10 slot 配合使用；不与 period-based trending 混淆 */
-export type TrendingTag = 'hot' | 'weekly_top' | 'editors_pick' | 'exclusive'
+/** TrendingTag 全集（ADR-157 D-157-1） */
+export const TRENDING_TAGS = ['hot', 'weekly_top', 'editors_pick', 'exclusive'] as const
+export type TrendingTag = typeof TRENDING_TAGS[number]
 
 // ── 流水线辅助状态（Migration 032，Pipeline Overhaul）────────────
 /** 豆瓣匹配状态：自动丰富 Job 写入 */

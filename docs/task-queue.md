@@ -1572,7 +1572,7 @@ HOTFIX-A → B → C 顺序串行（B 在 A SQL fix 基础上扩 CASE / C 在 B 
      - 偶发 flaky：StagingEditPanel.test.tsx 1 用例首跑 fail，单跑 + 重跑全套 PASS → test pollution（与本卡无关）
    - 闭环 D-N：D-157-1 部分（VideoType / VideoGenre / VideoStatus / ReviewStatus 4 P0 双形态 + API zod 联动完成；剩 P1/P2 8 enum 待 339-B/-C）
 
-2. **CHG-339-B** — packages/types 4 P1 enum 双形态（状态：⬜ 待开始）
+2. **CHG-339-B** — packages/types 4 P1 enum 双形态（状态：✅ 已完成 / 2026-05-26 22:48 / 执行模型 claude-opus-4-7 / 子代理 无 / VisibilityStatus 2 zod 联动 + ContentFormat/EpisodePattern/TrendingTag 仅双形态无 API zod 引用）
    - 创建时间：2026-05-26 22:00
    - 建议模型：sonnet（范式已建立 / 复制 -A 模板）
    - 文件范围（≤ 5 文件 / 4 PATCH 项）：

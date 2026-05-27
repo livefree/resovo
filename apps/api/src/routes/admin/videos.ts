@@ -20,7 +20,7 @@ import { ModerationService } from '@/api/services/ModerationService'
 import * as systemSettingsQueries from '@/api/db/queries/systemSettings'
 import { isAppError } from '@/api/lib/errors'
 import type { VisibilityStatus } from '@/types'
-import { VIDEO_TYPES, VIDEO_STATUSES, REVIEW_STATUSES } from '@resovo/types'
+import { VIDEO_TYPES, VIDEO_STATUSES, REVIEW_STATUSES, VISIBILITY_STATUSES } from '@resovo/types'
 
 // ── Zod Schema ────────────────────────────────────────────────────
 
@@ -29,7 +29,7 @@ const PublishSchema = z.object({
 })
 
 const VisibilitySchema = z.object({
-  visibility: z.enum(['public', 'internal', 'hidden'] as const),
+  visibility: z.enum(VISIBILITY_STATUSES),
 })
 
 const ReviewSchema = z.object({
@@ -99,7 +99,7 @@ const SORT_FIELDS = [
 const ListQuerySchema = z.object({
   status: z.enum(['pending', 'published', 'unpublished', 'all']).optional().default('all'),
   type: z.enum(VIDEO_TYPES).optional(),
-  visibilityStatus: z.enum(['public', 'internal', 'hidden'] as const).optional(),
+  visibilityStatus: z.enum(VISIBILITY_STATUSES).optional(),
   reviewStatus: z.enum(REVIEW_STATUSES).optional(),
   page: z.coerce.number().int().min(1).optional().default(1),
   limit: z.coerce.number().int().min(1).max(100).optional().default(20),

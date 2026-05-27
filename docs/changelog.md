@@ -8468,3 +8468,17 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
   - 价值排序 #2「边界与复用」+ #3「可扩展性」直接驱动：后续新增 enum 项只需改 video.types.ts 一处 `VIDEO_TYPES` 数组，API zod 派生自动跟随
   - **测试偶发 flaky 记录**：首跑全套 `StagingEditPanel.test.tsx:175 > 保存成功后调用 onUpdated` 1/5139 fail；单跑该测试 PASS；重跑全套 5139/5139 PASS → 判定为 pre-existing test pollution，与本卡改动无关；不阻塞 commit
   - 后续 CHG-339-B/-C 沿用本卡范式（const 复数命名 + index.ts 增 export）；CHG-339-B 处理 4 P1 enum；CHG-339-C 处理 4 P2 enum
+
+## [CHG-339-B] packages/types 4 P1 enum 双形态
+- **完成时间**：2026-05-26 22:48
+- **来源序列**：SEQ-20260527-ENUMS-SSOT-IMPL（ADR-157 D-157-1 P1 部分）
+- **执行模型**：claude-opus-4-7（建议 sonnet / 偏离原因：本会话主循环 Opus 连续推进 SEQ）
+- **子代理调用**：无
+- **改动文件**（3 文件 / 4 PATCH 项 ≤ 5 ✅）：
+  - `packages/types/src/video.types.ts`：4 enum 双形态 — `CONTENT_FORMATS`(4) / `EPISODE_PATTERNS`(4) / `VISIBILITY_STATUSES`(3) / `TRENDING_TAGS`(4)
+  - `packages/types/src/index.ts`：加 4 const value export
+  - `apps/api/src/routes/admin/videos.ts`：2 处 `z.enum(VISIBILITY_STATUSES)` zod 替换；ContentFormat / EpisodePattern / TrendingTag 在 API 层无 zod 引用
+- **闭环 D-N 偏离**：D-157-1 继续（4 P1 enum 双形态完成 + VisibilityStatus API zod 联动）；剩 D-157-1 P2 4 enum 待 CHG-339-C
+- **门禁**：typecheck ✅ / lint ✅ / 1702 targeted unit PASS ✅
+- **红线**：VisibilityStatus API zod 字面量 grep 输出空 ✅
+- **PATCH 文件数**：3（按 PATCH 项口径 4 ≤ 5 ✅）
