@@ -9078,3 +9078,59 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
   - ⏳ 真实 player-render-check worker 建设（PRE-RENDER-CHECK-WORKER 后续卡 / advisory A4）
 - **闭环**：CHG-351 PROBE-RENDER-INLINE 三子卡全部完成；plan §10.5 LinesPanel 单行探/播按钮全交付（含后端 + 共享层 + 消费方 + 用户文档）；Wave 1 进度 7-B/9 → 7/9
 - **后续**：CHG-352（route-labeling Phase 1 后端 effective_score 排序 / plan §17 / Sonnet 即可 / 可能 spawn arch-reviewer Opus 评算分公式合理性）→ CHG-353（route-labeling Phase 1 前台主题渲染）→ Wave 1 验收
+
+## [CHG-355] 审核台 search 焦点 bug 第 3 次复发 — 根因修复（强制重构评估 / loading 不切组件根）
+- **完成时间**：2026-05-27
+- **来源**：用户实测「中文 IME 选词期间 OK，词之间会失焦；英文每字母都触发；刷新闪烁范围包括审核台三个区域」
+- **执行模型**：claude-opus-4-7（主循环不切换 §16.5）
+- **子代理**：arch-reviewer (claude-opus-4-7) 1 轮独立评审 → **PASS (A-CONDITIONAL)** → 主循环消化 3 红线 + 3 关键洞察
+- **触发条件**：CLAUDE.md "同一模块连续 3 次污染 streak → 强制重构评估" 红线
+  - CHG-350 (05283390 / 2026-05-27)：首次落地，原生 controlled input
+  - CHG-350-FIX (dc0af246 / 2026-05-27)：删除 URL→qInput 回流 + ref 断循环 + sticky
+  - CHG-350-FIX-2 (1108fd19 / 2026-05-27)：改用 admin-ui DataTableSearchInput（半 uncontrolled + IME 兼容）
+  - **第 3 次复发（本卡 / CHG-355）**：根因在调用方 loading early return，input 半 uncontrolled 救不了
+- **根因（arch-reviewer Opus 验证完整）**：
+  - `PendingPaneController.tsx:116-122` 原有 `if (loading) return <加载中>` early return
+  - 每次 q 变化链路：
+    1. setQ → ModerationConsole re-render
+    2. queueFilters useMemo 重算（依赖 q）→ usePendingQueue.refetch useCallback 引用变化（依赖 filters）
+    3. useEffect [enabled, refetch] 触发 → refetch() → setLoading(true)
+    4. PendingPaneController return type 切换：<SplitPane> → <div>加载中</div>
+    5. **SplitPane → PendingQueueToolbar → DataTableSearchInput 全部 unmount**
+    6. fetch 完成 → setLoading(false) → 重 mount 整个三栏
+    7. DataTableSearchInput defaultValue=value 重新挂载 → **焦点丢失**
+  - 前 3 次都在改 input 本身 → input 半 uncontrolled 救不了 **DOM unmount**
+  - arch-reviewer 补充 1 链路：router.replace 触发 Next.js searchParams 二阶 re-render → ModerationConsole useEffect[searchParams] → setCurrentFilters 新引用 → 二次 refetch 链
+  - arch-reviewer 加重因子：refetch useCallback 依赖整 filters 对象 → 每次 queueFilters useMemo 重算就重建 refetch（即便 q 没变）
+- **修复方案（arch-reviewer 评 PASS / 3 红线全采纳）**：
+  - **R1**：`usePendingQueue.ts` refetch 用 filtersRef + 空依赖 useCallback；useEffect 用 filtersKey (JSON.stringify) 控制触发（防引用变化误 fire）
+  - **R2**：`PendingPaneController.tsx` 删除 loading early return；改为始终渲染 SplitPane；左 pane listbox 内部用 `isFirstLoad = loading && videos.length === 0` 区分首次加载（显示文案）vs 增量 refetch（保留旧列表 SWR）；列表 footer loading 期间显示 M.pending.loading 轻提示
+  - **R3**：中/右 pane 不需 loading 分支 — usePendingQueue.refetch 不清空 videos，旧 v = videos[activeIdx] 在 loading 期间自然顶住（SWR 范式天然成立）
+- **关键洞察消化**：
+  - **I1**：admin-ui DataTable 真源范式天然 SWR — PendingPaneController.tsx 头部加注释引用
+  - **I2**：`packages/admin-ui/src/components/data-table/search-input.tsx` 头部加调用方契约注释（防下次再踩）："禁止在 search input 祖先链做 loading early return 或 conditional unmount"，引用 CHG-350 系列 3 次复发先例
+  - **I3**：commit trailer 必含 `Subagents: arch-reviewer (claude-opus-4-7)`（hook 行为契约调整）
+- **改动文件**（3 项 / 重构边界严格控制 / arch-reviewer A-4）：
+  - `apps/server-next/src/app/admin/moderation/_client/PendingPaneController.tsx`（删 early return + isFirstLoad 区分 + 文件头注释复盘）
+  - `apps/server-next/src/app/admin/moderation/_client/usePendingQueue.ts`（filtersRef + 空依赖 refetch + filtersKey useEffect / R1）
+  - `packages/admin-ui/src/components/data-table/search-input.tsx`（仅文档注释 / 调用方契约 / I2 防再次踩坑）
+- **新增依赖**：无
+- **数据库变更**：无（纯前端 + 注释）
+- **门禁**：
+  - typecheck ✅
+  - lint ✅
+  - usePendingQueue 4/4 PASS（R1 改动零回归）
+  - ModerationBatch 单跑 5/5 PASS（pre-existing flaky 与本卡无关 / 类比 CrawlerClient 时区 + StagingTable）
+- **不在范围**（arch-reviewer A-4 边界）：
+  - 不扩到 ModerationConsole.tsx 的 q / filters 重设计
+  - 不引入 PendingPaneController React.memo（A-1 advisory / 红线 1 解决后大部分 re-render 链断开）
+  - 不加 startTransition 包装（A-2 advisory / 非强制）
+- **UX 行为对比**：
+  - 修复前（3 次复发后仍有）：输入 → 三栏闪烁 unmount → 焦点丢
+  - 修复后：输入 → toolbar 永挂载 → 焦点稳定；左 pane 列表 SWR 保留旧数据；首次加载才显示加载文案
+- **预防未来再次踩坑**：
+  - search-input.tsx 头部注释明示"禁止 conditional unmount"
+  - PendingPaneController.tsx 头部注释明示 SWR 范式 + 历史复盘
+  - 未来 admin 模块用 search 时参考 packages/admin-ui DataTable 一体化（CHG-DESIGN-02 真源）避免手撸
+- **闭环**：CHG-350 焦点 bug 3 次复发根治；强制重构评估完成（arch-reviewer Opus PASS / 红线全采纳）；不会再有"焦点丢失" / 焦点稳定与 admin-ui DataTable 一体化对齐
+- **后续**：CHG-352 route-labeling Phase 1 后端（Wave 1 #8）

@@ -82,6 +82,14 @@ export function usePendingQueue(
   const tabRef = useRef(tab)
   useEffect(() => { tabRef.current = tab }, [tab])
 
+  // CHG-355 R1：filters 用 ref 持有最新值，refetch/loadMore 不依赖 filters 引用变化
+  //   防 ModerationConsole 每次 re-render 重算 queueFilters useMemo → 新引用 →
+  //   refetch useCallback 重建 → useEffect 重跑 → fetch 风暴 + setLoading(true) 风暴
+  //   触发 trigger 改用 filters 内容稳定 key（JSON.stringify）控制
+  const filtersRef = useRef(filters)
+  useEffect(() => { filtersRef.current = filters }, [filters])
+  const filtersKey = JSON.stringify(filters)
+
   const setActiveIdx = useCallback((updater: number | ((prev: number) => number)) => {
     setActiveIdxRaw(prev => {
       const next = typeof updater === 'function' ? updater(prev) : updater
@@ -98,11 +106,13 @@ export function usePendingQueue(
     } catch { setActiveIdxRaw(0) }
   }, [tab])
 
+  // CHG-355 R1：空依赖 useCallback → 引用稳定 → 不再让 useEffect 因引用变化重跑
+  //   内部用 filtersRef.current 读最新 filters（同步事件链可靠）
   const refetch = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
-      const res = await api.fetchPendingQueue(filters)
+      const res = await api.fetchPendingQueue(filtersRef.current)
       setVideos(res.data as VideoQueueRow[])
       setNextCursor(res.nextCursor)
       setTotal(res.total)
@@ -112,17 +122,19 @@ export function usePendingQueue(
     } finally {
       setLoading(false)
     }
-  }, [filters])
+  }, [])
 
+  // 仅在 enabled / filters 内容真变（按 JSON 序列化 key 比较）时触发 refetch
   useEffect(() => {
     if (!enabled) return
     void refetch()
-  }, [enabled, refetch])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enabled, filtersKey])
 
   const loadMore = useCallback(() => {
     if (!nextCursor || loadingMore) return
     setLoadingMore(true)
-    api.fetchPendingQueue({ ...filters, cursor: nextCursor })
+    api.fetchPendingQueue({ ...filtersRef.current, cursor: nextCursor })
       .then(res => {
         setVideos(prev => [...prev, ...(res.data as VideoQueueRow[])])
         setNextCursor(res.nextCursor)
@@ -130,7 +142,7 @@ export function usePendingQueue(
       })
       .catch(() => { /* silent */ })
       .finally(() => setLoadingMore(false))
-  }, [nextCursor, loadingMore, filters])
+  }, [nextCursor, loadingMore])
 
   // auto-load more when activeIdx near end
   useEffect(() => {

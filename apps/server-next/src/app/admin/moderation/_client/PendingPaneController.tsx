@@ -16,6 +16,14 @@
  *   - tab 切换 / segment tabs / toggles（ModerationConsole 保留）
  *   - Modal / Drawer / Toast 等全局组件（ModerationConsole 保留）
  *   - useFilterPresets / usePendingQueue 调用（ModerationConsole 持有 hook，传 props）
+ *
+ * CHG-355（2026-05-27 / 3 次复发后重构）：loading 不切换组件根（SWR 范式）
+ *   - 删除原 `if (loading) return <加载中>` early return（CHG-350/350-FIX/350-FIX-2 3 次失败根因）
+ *   - 始终渲染 SplitPane → toolbar → DataTableSearchInput 永挂载，焦点稳定
+ *   - usePendingQueue.refetch 不清空 videos，loading 期间旧 v 自然顶住（中/右 pane SWR）
+ *   - loading 状态仅影响左 pane listbox 内部：首次空白显示加载文案，否则保持旧列表
+ *   - arch-reviewer Opus 红线 R3：中/右 pane 不需 loading 分支（v 取上次值）
+ *   - 参考：packages/admin-ui DataTable 真源范式 / search-input.tsx EP-4-HOTFIX 调用方契约
  */
 
 import React, { useCallback, useEffect, useState } from 'react'
@@ -112,14 +120,8 @@ export function PendingPaneController({
   }, [handleKey])
 
   const v = videos[activeIdx] ?? null
-
-  if (loading) {
-    return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--fg-muted)', fontSize: 'var(--font-size-sm-tight)' }}>
-        {M.pending.loading}
-      </div>
-    )
-  }
+  // CHG-355 R2：首次加载（无任何旧数据 + 仍在 loading）才展示加载文案；否则保持旧列表 SWR
+  const isFirstLoad = loading && videos.length === 0
 
   return (
     <SplitPane
@@ -157,7 +159,12 @@ export function PendingPaneController({
                 resultCount={total}
               />
               <div role="listbox" aria-label={M.aria.consoleQueuePane}>
-                {videos.length === 0 ? (
+                {isFirstLoad ? (
+                  // R2：首次加载（无旧数据）才显示加载文案；toolbar 在上方保持挂载，焦点不丢
+                  <div style={{ padding: 24, textAlign: 'center', color: 'var(--fg-muted)', fontSize: 'var(--font-size-sm-tight)' }}>
+                    {M.pending.loading}
+                  </div>
+                ) : videos.length === 0 ? (
                   <div style={{ padding: 24, textAlign: 'center', color: 'var(--fg-muted)', fontSize: 'var(--font-size-sm-tight)' }}>
                     {M.pending.empty}
                   </div>
@@ -175,7 +182,8 @@ export function PendingPaneController({
                       />
                     ))}
                     <div style={{ padding: 14, textAlign: 'center', color: 'var(--fg-muted)', fontSize: 'var(--font-size-xxs)' }}>
-                      {loadingMore ? M.pending.loadingMore : nextCursor ? (
+                      {/* loading 期间已有旧列表 → footer 显示"刷新中"轻提示；loadingMore 显示加载更多 */}
+                      {loadingMore ? M.pending.loadingMore : loading ? M.pending.loading : nextCursor ? (
                         <button style={{ ...BTN_SM, fontSize: 'var(--font-size-xxs)' }} onClick={loadMore}>{M.pending.loadingMore}</button>
                       ) : M.pending.noMore}
                     </div>

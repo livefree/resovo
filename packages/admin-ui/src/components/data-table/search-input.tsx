@@ -28,6 +28,15 @@
  *     并保留 selectionStart/End（用户输入时光标不跳到末尾）
  *   - 删 localValue useState（不再需要 React 重 render input）
  *   - latestValueRef 仍保留（Enter 触发用）
+ *
+ * 调用方契约（CHG-355 复盘 / 2026-05-27 / arch-reviewer Opus 关键洞察 I2）：
+ *   本组件依赖 **DOM 持续挂载**才能保持焦点稳定。
+ *   **禁止** 在 search input 的祖先链上做 loading early return 或 conditional unmount
+ *   （`if (loading) return <X>; return <SplitPane><SearchInput/></SplitPane>` 这种模式）。
+ *   原因：DOM unmount 后 React 重建 input 节点 → 用户光标焦点丢失 / 半 uncontrolled 救不了。
+ *   推荐：loading 状态用 SWR 范式（保留旧数据 + 局部 loading 指示器），不切换组件根。
+ *   先例：CHG-350 / CHG-350-FIX / CHG-350-FIX-2 三次复发后 CHG-355 在 PendingPaneController.tsx
+ *         删除 `if (loading) return <加载中>` early return 根治焦点 bug。
  */
 import React, { useCallback, useEffect, useRef } from 'react'
 
