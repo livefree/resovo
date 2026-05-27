@@ -1,6 +1,6 @@
 import { cn } from '@/lib/utils'
 import type { FallbackCoverProps, FallbackVariant, MediaAspect } from './types'
-import type { VideoType } from '@resovo/types'
+import { type VideoType, assertExhaustive } from '@resovo/types'
 
 // ── 常量映射 ──────────────────────────────────────────────────────
 
@@ -26,7 +26,7 @@ const ARIA_LABELS: Record<FallbackVariant, string> = {
   generic: 'Image unavailable',
 }
 
-const TYPE_LABELS: Partial<Record<VideoType, string>> = {
+const TYPE_LABELS: Record<VideoType, string> = {
   movie:       '电影',
   series:      '剧集',
   anime:       '动漫',
@@ -37,6 +37,7 @@ const TYPE_LABELS: Partial<Record<VideoType, string>> = {
   music:       '音乐',
   news:        '新闻',
   kids:        '少儿',
+  other:       '其他',
 }
 
 // ── 工具函数 ──────────────────────────────────────────────────────
@@ -140,13 +141,22 @@ function AvatarIcon({ scale }: IconProps) {
 }
 
 function getTypeIcon(type: VideoType | undefined, scale: number) {
+  if (!type) return <FilmIcon scale={scale} />
   switch (type) {
     case 'movie':       return <FilmIcon scale={scale} />
     case 'series':      return <TVIcon scale={scale} />
     case 'anime':       return <AnimeIcon scale={scale} />
     case 'variety':     return <VarietyIcon scale={scale} />
     case 'documentary': return <DocumentaryIcon scale={scale} />
-    default:            return <FilmIcon scale={scale} />
+    /* CHG-342: 后续 6 类型沿用 FilmIcon 通用占位（与原 default fallback 行为一致 / 零视觉回归）；
+     * 类型守卫 assertExhaustive 保证未来 VideoType 扩展时强制更新此 switch */
+    case 'short':       return <FilmIcon scale={scale} />
+    case 'sports':      return <FilmIcon scale={scale} />
+    case 'music':       return <FilmIcon scale={scale} />
+    case 'news':        return <FilmIcon scale={scale} />
+    case 'kids':        return <FilmIcon scale={scale} />
+    case 'other':       return <FilmIcon scale={scale} />
+    default:            return assertExhaustive(type)
   }
 }
 

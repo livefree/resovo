@@ -1,23 +1,10 @@
 'use client'
 
 import { useState } from 'react'
+import { useTranslations } from 'next-intl'
 import { cn } from '@/lib/utils'
 import { MetaChip } from '@/components/search/MetaChip'
 import type { Video } from '@resovo/types'
-
-const VIDEO_TYPE_LABEL: Record<string, string> = {
-  movie:       '电影',
-  series:      '剧集',
-  anime:       '动漫',
-  variety:     '综艺',
-  documentary: '纪录片',
-  short:       '短剧',
-  sports:      '体育',
-  music:       '音乐',
-  news:        '新闻',
-  kids:        '少儿',
-  other:       '其他',
-}
 
 interface MetaRowProps {
   label: string
@@ -51,6 +38,7 @@ interface VideoMetaProps {
 }
 
 export function VideoMeta({ video, isLoggedIn = false, className }: VideoMetaProps) {
+  const tType = useTranslations('videoType')
   const [isFavorited, setIsFavorited] = useState(false)
   const [isTracking, setIsTracking] = useState(false)
 
@@ -72,7 +60,7 @@ export function VideoMeta({ video, isLoggedIn = false, className }: VideoMetaPro
     }
   }
 
-  const typeLabel = VIDEO_TYPE_LABEL[video.type] ?? video.type
+  const typeLabel = tType(video.type)
 
   return (
     <section

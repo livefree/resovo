@@ -31,17 +31,17 @@ import { SearchEmptyState } from '@/components/search/SearchEmptyState'
 import { parseHighlight } from '@/lib/parse-highlight'
 import { getVideoDetailHref } from '@/lib/video-route'
 import { VideoGrid } from '@/components/video/VideoGrid'
-import type { SearchResult, ApiListResponse } from '@resovo/types'
+import type { SearchResult, ApiListResponse, VideoType } from '@resovo/types'
+import { ALL_CATEGORIES } from '@/lib/categories'
 
 // ── 常量 ──────────────────────────────────────────────────────────────────────
 
-type SearchTab = 'all' | 'movie' | 'series' | 'anime'
+/** CHG-342: 4→12 (all + 11 VideoType) / 派生自 ALL_CATEGORIES (ADR-048 前台 SSOT) */
+type SearchTab = 'all' | VideoType
 
 const TABS: Array<{ key: SearchTab; navKey: string }> = [
-  { key: 'all',    navKey: 'catAll' },
-  { key: 'movie',  navKey: 'catMovie' },
-  { key: 'series', navKey: 'catSeries' },
-  { key: 'anime',  navKey: 'catAnime' },
+  { key: 'all', navKey: 'catAll' },
+  ...ALL_CATEGORIES.map((c) => ({ key: c.videoType as SearchTab, navKey: c.labelKey })),
 ]
 
 const PAGE_SIZE = 20

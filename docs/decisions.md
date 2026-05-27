@@ -1611,6 +1611,29 @@ safe-area-inset 的吸收遵循"单一责任"原则，避免重复叠加：
 
 **Arch-reviewer 审计**：PASS（claude-opus-4-6，2026-04-21）
 
+---
+
+### AMENDMENT 2026-05-26（CHG-342 / ADR-157 §6 验收第 8 条）
+
+**关联**：ADR-157「视频枚举值跨层 SSOT 协议」要求落地时同步声明本 ADR 与 `packages/admin-ui` enums helpers 的关系。
+
+**明确边界**：
+- `apps/web-next/src/lib/categories.ts` `ALL_CATEGORIES`（本 ADR §4 SSOT）：**前台导航/筛选/路由 SSOT**，含 `typeParam` (URL slug，如 `tvshow→variety` 映射) + `videoType` (API 参数) + `labelKey` (i18n key)。
+- `packages/admin-ui/src/enums/getVideoTypeOptions(t?)`（ADR-157 D-157-2）：**后台 Option SSOT**，跨包 helper 接受 i18n TFunction，返回 `AdminSelectOption<VideoType>[]`。
+
+**关系**：**并存，无替代关系**。前台导航/路由场景用 `ALL_CATEGORIES`（含 URL slug 映射特殊性）；后台/通用 Option 选择器场景用 admin-ui helpers（含 TFunction i18n 注入）。
+
+**消费方选择决策表**：
+
+| 场景 | 用 | 理由 |
+|------|----|------|
+| 前台路由 / nav 菜单 / 分类页 | `ALL_CATEGORIES` | 含 typeParam URL slug 映射 (tvshow→variety) |
+| 前台 SearchPage tab | `ALL_CATEGORIES` | CHG-342 已迁移 / 复用 labelKey i18n |
+| 后台 admin select 下拉 | `getVideoTypeOptions(t?)` | 通用 Option + TFunction 注入 |
+| 跨包 / packages/admin-ui 内 | `getVideoTypeOptions(t?)` | enums helpers SSOT |
+
+**禁止**：在 `apps/web-next` 路由 / nav 上下文中改用 admin-ui helpers（会丢失 URL slug 映射特殊性）。
+
 ## ADR-049 — Admin 有序列表组件选型（@dnd-kit）
 
 **日期**：2026-04-21

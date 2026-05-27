@@ -8579,3 +8579,18 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **v1 维护期豁免说明**：CLAUDE.md "禁止 apps/server/ 新增业务组件" 允许"维护期 bug 修复"豁免（参 ADR-035）；本卡是 P1 数据正确性修复（原 15/20 缺 adventure/disaster/musical/western/sport 5 项）
 - **闭环 D-N**：D-157-5 v1 部分
 - **门禁**：typecheck ✅ / admin/videos targeted 59/59 PASS ✅
+
+## [CHG-342] web-next P1/P2 修复 + ADR-048 AMENDMENT
+- **完成时间**：2026-05-26 22:25
+- **来源序列**：SEQ-20260527-ENUMS-SSOT-IMPL（ADR-157 D-157-3 + D-157-5 web-next + ADR-048 关联）
+- **执行模型**：claude-opus-4-7 / 子代理：无
+- **改动文件**（4 文件 / 4 PATCH 项 ≤ 5 ✅）：
+  - `apps/web-next/src/app/[locale]/search/_components/SearchPage.tsx`：SearchTab union `'all'|'movie'|'series'|'anime'` → `'all'|VideoType`（12 项 / 派生 `ALL_CATEGORIES` ADR-048 SSOT）；TABS 数组从 ALL_CATEGORIES.map(...) 派生
+  - `apps/web-next/src/components/media/FallbackCover.tsx`：`getTypeIcon` switch 5 case → 11 case 全覆盖 + `assertExhaustive(type)` 默认分支（类型安全防漂移 / 6 新类型沿用 FilmIcon 通用占位 / 零视觉回归）；TYPE_LABELS 由 `Partial<Record>` → `Record` 全 11 项（含 other）
+  - `apps/web-next/src/components/video/VideoMeta.tsx`：删硬编码 `VIDEO_TYPE_LABEL` Record 11 项 → `useTranslations('videoType')` 调用；`typeLabel = tType(video.type)` 完全 i18n 化
+  - `docs/decisions.md`：ADR-048 末尾追加 AMENDMENT 块（CHG-342 / ADR-157 §6 验收第 8 条）声明"ALL_CATEGORIES（前台 SSOT）与 packages/admin-ui helpers 并存无替代关系" + 消费方选择决策表
+- **video-route.ts 评估结论（不动）**：`PRIMARY_DETAIL_TYPES = ['movie','series','anime','variety']` 是 ADR-048 有意设计（4 主类型走专属路由 / 其他 7 走 /others fallback），不在本卡修改范围；AMENDMENT 已说明边界
+- **i18n messages**：zh-CN.json + en.json 已完整覆盖 11 项 videoType namespace ✓ 无需改动
+- **闭环 D-N 偏离**：D-157-3 部分（i18n key 跨应用复用 / web-next 端）+ D-157-5 web-next 部分 + ADR-048 AMENDMENT 落盘
+- **门禁**：typecheck ✅ / lint ✅ / web-next + media + admin/search targeted 50/50 PASS ✅ / verify:adr-contracts ✅
+- **e2e 跳过理由**：单测全 PASS / 改动 type-safe（union 扩展 + switch case 增加 + i18n hook 替换，无运行时行为变化）；待 @livefree dev 实测 SEARCH 页搜索 + 详情页 type label / e2e 后续按需 follow-up

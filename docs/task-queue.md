@@ -1632,7 +1632,7 @@ HOTFIX-A → B → C 顺序串行（B 在 A SQL fix 基础上扩 CASE / C 在 B 
    - 依赖：CHG-340-A ✅
    - 验收要点：server-next 单测全 PASS + 视频编辑 / 列表 / 投稿 / home 4 处 type 下拉一致显示 11 项
 
-8. **CHG-342** — web-next P1/P2 修复（状态：⬜ 待开始）
+8. **CHG-342** — web-next P1/P2 修复 + ADR-048 AMENDMENT（状态：✅ 已完成 / 2026-05-26 22:25 / 执行模型 claude-opus-4-7 / 子代理 无 / SearchPage tab 4→12 派生 ALL_CATEGORIES / FallbackCover icon 5→11+assertExhaustive / VideoMeta useTranslations / video-route 评估保留 ADR-048 设计 / ADR-048 AMENDMENT 已落盘）
    - 创建时间：2026-05-26 22:00
    - 建议模型：sonnet
    - 文件范围（≤ 5 文件 / 4 PATCH 项）：
