@@ -1503,15 +1503,31 @@ HOTFIX-A → B → C 顺序串行（B 在 A SQL fix 基础上扩 CASE / C 在 B 
        - apps/web-next `SearchPage` tab 4/11（P1）+ `FallbackCover` icon 5/11（P2）+ `VideoMeta` i18n 缺失（P2）+ `video-route` PRIMARY_DETAIL_TYPES 4/11（P2）
    - 验收要点：typecheck + lint + test 全 PASS ✅；视频编辑表单 type 下拉显示 11 项 / 待 @livefree dev server 实测确认
 
-2. **CHG-338** — 起草 ADR-157「视频枚举值跨层 SSOT 协议」（状态：⬜ 待开始）
+2. **CHG-338** — 起草 ADR-157「视频枚举值跨层 SSOT 协议」（状态：✅ 已完成）
    - 创建时间：2026-05-26 20:30
+   - 实际开始：2026-05-26 21:20
+   - 完成时间：2026-05-26 21:55
    - 建议模型：opus（撰写 ADR / 强制 spawn arch-reviewer Opus 评审）
-   - 文件范围：`docs/decisions.md`（追加 ADR-157，约 100-150 行）
-   - 验收要点：
-     - ADR-157 §1 决策摘要 / §2 现状审计（汇总 7 处硬编码点：TabBasicInfo / SearchPage / FallbackCover / video-route / VideoMeta / dev-fallback / AdminVideoForm Genre）/ §3 决策（packages/types 增 `as const` 数组 + 类型守卫 + packages/admin-ui Option helpers + grep 守卫脚本）/ §4 不做范围 / §5 实施分卡 / §6 风险
-     - arch-reviewer (claude-opus-4-7) 评审产出 PASS / CONDITIONAL；后者主循环消化全部红线后等同 PASS
-     - decisions.md 同步 ADR-156 占位关系（避免误占）
+   - 执行模型：claude-opus-4-7（主循环 Opus）
+   - 子代理调用：arch-reviewer (claude-opus-4-7) / agentId: ab9d05b03359abb45
+   - 文件范围：`docs/decisions.md`（追加 ADR-157 约 300 行 / 15035~15334）
+   - 完成备注：
+     - **arch-reviewer Opus 评审结论**：A- CONDITIONAL（1 红线 + 2 黄线 + 3 绿线 + 关键洞察 #3）
+     - **1 红线 R-157-1 已闭环**：API zod 层联动缺失 → §3 D-157-1 增 "API zod 层联动" 块 + §3 D-157-4 白名单删除 `apps/api/src/routes/admin/**` 全量豁免 + §6 增验收第 6 条
+     - **2 黄线全闭环**：Y-157-1（命名统一 VIDEO_TYPES 对齐 SPEED_PRESETS 范式）/ Y-157-2（删 EnumOption / 改扩展既有 `AdminSelectOption<T extends string = string>` 泛型）
+     - **3 绿线全纳入正文**（不推迟）：G-157-1 assertExhaustive 归属 `packages/types/src/utils/exhaustive.ts` / G-157-2 baseline 截止 +1月 → +2月 + 月度评审 / G-157-3 fallback 删除责任明示
+     - **关键洞察 #3 已闭环**：CHG-339 PATCH 项口径明示 "1 enum 双形态视为 1 项"；CHG-340 进一步拆 -A/-B/-C 三子卡确保每卡 ≤ 5
+     - **D-N 偏离登记**：D-157-1 ~ D-157-6 共 6 条全部"待 SEQ-20260527-ENUMS-SSOT-IMPL 实施期闭环"（advisory，不阻塞 CI）
+     - **共享层沉淀评估**：本卡只起 ADR，不实施；实施分卡 CHG-339-A/B/C + CHG-340-A/B/C + CHG-341 + CHG-342 + CHG-343 + CHG-344 共 10 卡列入下一序列
+     - typecheck / lint 无需跑（纯文档改动）/ verify:adr-contracts 通过（advisory D-N 偏离已登记）
+     - PATCH 项数 1（≪ 5 ✅）
    - 依赖：CHG-337 ✅ 完成（不需要等执行卡跟进，只需 ADR 编号确认）
+
+### SEQ-20260526-ENUMS-SSOT-01 序列状态
+
+- **序列状态**：✅ 已完成（CHG-337 + CHG-338 全闭环 / 2026-05-26 21:55）
+- **最后更新时间**：2026-05-26 21:55
+- **下一序列**：`SEQ-20260527-ENUMS-SSOT-IMPL`（10 张实施分卡 / 主循环可按优先级择 1 启动）
 
 ### ENUMS-SSOT 关键约束
 

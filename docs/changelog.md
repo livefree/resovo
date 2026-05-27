@@ -8407,3 +8407,34 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **PATCH 文件数**：1 新 + 2 改 = 3 项（≪ 5 ✅）
 - **门禁**：typecheck ✅ / lint ✅ / test 101/101 ✅（8 测试文件覆盖 VideoListClient / VideoFilters / ContentRefPicker / saved-views / SelectionActions / VideoRowActions / VideoListClient.client / VideoEditDrawer）/ verify:adr-contracts ✅
 - **后续**：CHG-338 起 ADR-157 决策；ADR-157 PASS 后另起 CHG-339+ 实施分卡（SubmissionsListClient news/kids 补齐 + AdminVideoForm Genre 5 项补齐 + apps/web-next P1/P2 修复 + 跨包 SSOT 实装）
+
+## [CHG-338] 起草 ADR-157「视频枚举值跨层 SSOT 协议」
+- **完成时间**：2026-05-26 21:55
+- **来源序列**：SEQ-20260526-ENUMS-SSOT-01
+- **执行模型**：claude-opus-4-7（主循环）
+- **子代理调用**：arch-reviewer (claude-opus-4-7) / agentId: ab9d05b03359abb45
+- **背景**：CHG-337 完成"视频编辑表单 VideoType 4→11"P0 速修后，调研显示 12 个权威 enum 在 `packages/types/src/video.types.ts` 仅以 union 类型暴露（不可迭代），导致跨应用 12+ 处独立硬编码 + 7 处实际不匹配。需起 ADR-157 沉淀跨包 SSOT 协议根治后续漂移。
+- **改动文件**（1 项 ≪ 5 ✅）：
+  - `docs/decisions.md`（追加 ADR-157 约 300 行 / 行 15035~15334 / §1 决策摘要 + §2 现状审计 + §3 6 决策详述 + §4 关联 ADR + §5 风险与回滚 + §6 验收清单 + §7 评审消化对照）
+- **arch-reviewer Opus 评审结论**：**A- CONDITIONAL** → 主循环消化全部反馈后 → **等同 A / Accepted**
+  - 1 红线 R-157-1（API zod 联动缺失）✅ 闭环
+  - 2 黄线（命名 VIDEO_TYPES 统一 / 用 AdminSelectOption 泛型扩展不另建 EnumOption）✅ 闭环
+  - 3 绿线全部纳入正文（assertExhaustive 路径 / baseline +2月 / fallback 删除责任）
+  - 关键洞察 #3（CHG-339 PATCH 项口径）✅ 闭环
+- **6 决策点摘要**：
+  - D-157-1：packages/types 12 enum 双形态（`VIDEO_TYPES` 复数集合 + `type X = typeof X[number]` 派生）+ API zod 层联动 + `assertExhaustive` 工具
+  - D-157-2：扩展既有 `AdminSelectOption<T extends string = string>` 泛型 + 12 个 `get*Options` helper
+  - D-157-3：复用 web-next `videoType` i18n namespace + server-next 接入 / fallback 删除责任
+  - D-157-4：grep 守卫 `scripts/verify-enum-ssot.mjs` + 白名单收紧（删 API 路由全量豁免）+ preflight + verify:adr-contracts 集成
+  - D-157-5：10 张实施分卡 DAG（CHG-339-A/B/C → CHG-340-A/B/C → CHG-341/342/343/344）
+  - D-157-6：不引 zod 替代 union / 不动 video.types.ts 外的 enum
+- **D-N 偏离登记**：D-157-1 ~ D-157-6 共 6 条全部"待 SEQ-20260527-ENUMS-SSOT-IMPL 实施期闭环"（advisory verify-adr-d-numbers，不阻塞 CI / 实施卡完成时各自闭环）
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - 价值排序 #2「边界与复用」+ #3「可扩展性」直接驱动：跨层 SSOT 协议建立后，新 enum 扩展（如未来加 VideoType 第 12 类）只需改一处 `VIDEO_TYPES` 数组，全项目 API zod / admin-ui helpers / 后台 select / 前台 chip 自动同步
+  - **ADR-156 编号未占用**：CHG-SN-9-CW1-CW2-REDESIGN-A 已预占给"notifications 端点扩展"（性能瓶颈触发时再起），本 ADR 用 157
+  - **ADR-048 关系**：前台 ALL_CATEGORIES（categories.ts）保留作为前台导航/筛选 SSOT，packages/admin-ui helpers 是后台 Option SSOT；并存无替代关系；CHG-342 实施时 ADR-048 同 commit 落 AMENDMENT 块明示
+  - **下一序列**：SEQ-20260527-ENUMS-SSOT-IMPL（10 张实施分卡，主循环按优先级 P0 → P2 推进）
+- **PATCH 文件数**：1 项（≪ 5 ✅）
+- **门禁**：verify:adr-contracts ✅（advisory verify-adr-d-numbers 6 条 D-157-N 待实施期闭环 / 已登记）
