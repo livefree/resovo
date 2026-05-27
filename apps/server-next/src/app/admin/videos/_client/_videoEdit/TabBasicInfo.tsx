@@ -2,13 +2,7 @@
 
 import React from 'react'
 import type { FormState, VideoType, VideoStatus } from './types'
-
-const VIDEO_TYPE_OPTIONS: ReadonlyArray<{ value: VideoType; label: string }> = [
-  { value: 'movie', label: '电影' },
-  { value: 'series', label: '剧集' },
-  { value: 'anime', label: '动漫' },
-  { value: 'variety', label: '综艺' },
-]
+import { VIDEO_TYPE_OPTIONS } from '../videoEnumOptions'
 
 const INPUT: React.CSSProperties = {
   width: '100%', padding: '6px 8px',

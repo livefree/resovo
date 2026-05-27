@@ -10,22 +10,11 @@ import type {
 } from '@resovo/admin-ui'
 import type { VideoListFilter, CrawlerSite } from '@/lib/videos'
 import type { VideoType, VisibilityStatus, ReviewStatus } from '@resovo/types'
+import { VIDEO_TYPE_OPTIONS } from './videoEnumOptions'
 
 // ── filter option constants ───────────────────────────────────────
 
-export const VIDEO_TYPE_OPTIONS: ReadonlyArray<{ value: VideoType; label: string }> = [
-  { value: 'movie', label: '电影' },
-  { value: 'series', label: '剧集' },
-  { value: 'anime', label: '动漫' },
-  { value: 'variety', label: '综艺' },
-  { value: 'documentary', label: '纪录片' },
-  { value: 'short', label: '短片' },
-  { value: 'sports', label: '体育' },
-  { value: 'music', label: '音乐' },
-  { value: 'news', label: '新闻' },
-  { value: 'kids', label: '少儿' },
-  { value: 'other', label: '其他' },
-]
+export { VIDEO_TYPE_OPTIONS }
 
 export const VIDEO_STATUS_OPTIONS: ReadonlyArray<{ value: 'published' | 'pending' | 'all'; label: string }> = [
   { value: 'published', label: '已上架' },

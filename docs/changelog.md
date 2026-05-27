@@ -8383,3 +8383,27 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **不动文件**：本决策仅记录，0 代码改动
 - **触发 ADR-156 起卡条件**：60s 双端点轮询性能瓶颈实际出现（监控指标 / 用户实测反馈）
 - **关闭偏离**：ADR-155 EP-2 Y-EP2-2 N1 推迟项**正式标记推迟**（不闭环 / 等 ADR-156）
+
+## [CHG-337] TabBasicInfo VideoType 4→11 + server-next 内 VIDEO_TYPE_OPTIONS 收口
+- **完成时间**：2026-05-26 21:15
+- **来源序列**：SEQ-20260526-ENUMS-SSOT-01
+- **执行模型**：claude-opus-4-7（建议 sonnet / 偏离原因：本会话主循环 Opus、用户直接驱动 P0 速修、无架构决策风险低）
+- **子代理调用**：无
+- **背景**：用户反馈"视频编辑表单类型下拉只有 4 种"，调研定位到 `apps/server-next/.../TabBasicInfo.tsx:6-11` 硬编码 4 项（movie/series/anime/variety），而权威 `VideoType`（packages/types/src/video.types.ts:7-18）共 11 项；同一后台 `VideoFilterFields.tsx:16-28` 已完整列 11 项 — 属同模块内常量未复用导致漂移。
+- **改动文件**（3 项 ≪ 5 ✅）：
+  - `apps/server-next/src/app/admin/videos/_client/videoEnumOptions.ts`（**新建** 15 行 / 导出 VIDEO_TYPE_OPTIONS 11 项 / label 沿用 VideoFilterFields 现有中文）
+  - `apps/server-next/src/app/admin/videos/_client/_videoEdit/TabBasicInfo.tsx`（删本地 4 项常量 → `import { VIDEO_TYPE_OPTIONS } from '../videoEnumOptions'`）
+  - `apps/server-next/src/app/admin/videos/_client/VideoFilterFields.tsx`（删本地 11 项常量 → `import { VIDEO_TYPE_OPTIONS } from './videoEnumOptions'` + `export { VIDEO_TYPE_OPTIONS }` 保持 VideoListClient.tsx 向后兼容）
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - 价值排序 #2「边界与复用」直接体现：消除 server-next 内 VIDEO_TYPE_OPTIONS 2 处独立定义；视频编辑表单 4→11 后管理员可把视频类型改为 documentary/short/sports/music/news/kids/other（数据库已存在这些值，由爬虫写入）
+  - **本卡未覆盖（转 ADR-157 §5 实施分卡）**：
+    - `HomeModuleDrawer.tsx:57` 独立 11 项常量 / label 风格漂移（"电影 (movie)" 含 raw 值）
+    - `SubmissionsListClient.tsx:59` 独立 **9 项**（**缺 news/kids / P1 缺陷**）
+    - apps/server v1 `AdminVideoForm.tsx:15` VideoGenre **15/20**（**缺 adventure/disaster/musical/western/sport / P1 缺陷**）
+    - apps/web-next SearchPage tab 4/11、FallbackCover icon 5/11、VideoMeta i18n 缺失、video-route PRIMARY_DETAIL_TYPES 4/11
+  - 共享层沉淀：建 server-next 内部 `videoEnumOptions.ts`；跨包真 SSOT（packages/types `as const` 数组 + admin-ui Option helpers + grep 守卫脚本）由 ADR-157 决策落盘后另起执行卡
+- **PATCH 文件数**：1 新 + 2 改 = 3 项（≪ 5 ✅）
+- **门禁**：typecheck ✅ / lint ✅ / test 101/101 ✅（8 测试文件覆盖 VideoListClient / VideoFilters / ContentRefPicker / saved-views / SelectionActions / VideoRowActions / VideoListClient.client / VideoEditDrawer）/ verify:adr-contracts ✅
+- **后续**：CHG-338 起 ADR-157 决策；ADR-157 PASS 后另起 CHG-339+ 实施分卡（SubmissionsListClient news/kids 补齐 + AdminVideoForm Genre 5 项补齐 + apps/web-next P1/P2 修复 + 跨包 SSOT 实装）

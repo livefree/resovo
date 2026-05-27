@@ -1467,3 +1467,56 @@ HOTFIX-A → B → C 顺序串行（B 在 A SQL fix 基础上扩 CASE / C 在 B 
 - **v1 server 不动**：全程不改 apps/server/ 任何文件（沿用 W1/W2 约束）
 - **每卡独立 commit + 独立 typecheck/lint/verify 验收**
 
+---
+
+## [SEQ-20260526-ENUMS-SSOT-01] 视频枚举值 SSOT 收口（用户反馈：编辑表单类型只 4 种）
+
+- **状态**：🔄 执行中
+- **创建时间**：2026-05-26 20:30
+- **最后更新时间**：2026-05-26 20:30
+- **目标**：修复 server-next 视频编辑表单 VideoType 下拉 4→11 项（用户反馈，权威 enum 11 项），并起 ADR-157 沉淀「视频枚举值跨层 SSOT 协议」根治后续漂移
+- **范围**：apps/server-next/src/app/admin/videos/_client/ 内常量整合 + docs/decisions.md 追加 ADR-157
+- **依赖**：无（独立序列）
+
+### 任务列表（按执行顺序）
+
+1. **CHG-337** — TabBasicInfo VideoType 4→11 + server-next 内 VIDEO_TYPE_OPTIONS 收口（状态：✅ 已完成）
+   - 创建时间：2026-05-26 20:30
+   - 计划开始：2026-05-26 20:30
+   - 实际开始：2026-05-26 20:30
+   - 完成时间：2026-05-26 21:15
+   - 建议模型：sonnet（轻量代码修复 / 3 文件 / 无 schema 变更）
+   - 执行模型：claude-opus-4-7（偏离：本会话主循环 Opus / 用户直接驱动 / 无架构决策风险低）
+   - 文件范围：
+     - `apps/server-next/src/app/admin/videos/_client/videoEnumOptions.ts`（新建 15 行：VIDEO_TYPE_OPTIONS 11 项）
+     - `apps/server-next/src/app/admin/videos/_client/_videoEdit/TabBasicInfo.tsx`（删本地 4 项常量 → import 共享）
+     - `apps/server-next/src/app/admin/videos/_client/VideoFilterFields.tsx`（删本地 11 项常量 → re-export 共享 / 保持 VideoListClient.tsx 向后兼容）
+   - 完成备注：
+     - 单测 101/101 PASS（含 VideoListClient / VideoFilters / ContentRefPicker / saved-views / SelectionActions / VideoRowActions / VideoListClient.client / VideoEditDrawer 共 8 文件 101 用例）
+     - typecheck + lint + verify:adr-contracts 全 PASS（lint 仅有预先存在 warnings 与本卡无关）
+     - PATCH 项数 3（≪ 5 ✅）
+     - 共享层沉淀评估：建 server-next 内部共享 videoEnumOptions.ts（消除 TabBasicInfo + VideoFilterFields 2 处独立）；跨包真 SSOT（packages/types `as const` 数组 + admin-ui Option helpers）留 ADR-157 决策后另起卡
+     - **本卡发现的扩范围 / 转入 ADR-157 §5 实施分卡**：
+       - `HomeModuleDrawer.tsx:57` — 独立 11 项常量（label 风格"电影 (movie)"含 raw 值 / 不缺项 / 仅风格漂移）
+       - `SubmissionsListClient.tsx:59` — 独立 **9 项**常量（**缺 news/kids 2 项 / P1 缺陷**）
+       - apps/server v1 `AdminVideoForm.tsx:15` — VideoGenre 15/20（**缺 5 项 / P1 缺陷**）
+       - apps/web-next `SearchPage` tab 4/11（P1）+ `FallbackCover` icon 5/11（P2）+ `VideoMeta` i18n 缺失（P2）+ `video-route` PRIMARY_DETAIL_TYPES 4/11（P2）
+   - 验收要点：typecheck + lint + test 全 PASS ✅；视频编辑表单 type 下拉显示 11 项 / 待 @livefree dev server 实测确认
+
+2. **CHG-338** — 起草 ADR-157「视频枚举值跨层 SSOT 协议」（状态：⬜ 待开始）
+   - 创建时间：2026-05-26 20:30
+   - 建议模型：opus（撰写 ADR / 强制 spawn arch-reviewer Opus 评审）
+   - 文件范围：`docs/decisions.md`（追加 ADR-157，约 100-150 行）
+   - 验收要点：
+     - ADR-157 §1 决策摘要 / §2 现状审计（汇总 7 处硬编码点：TabBasicInfo / SearchPage / FallbackCover / video-route / VideoMeta / dev-fallback / AdminVideoForm Genre）/ §3 决策（packages/types 增 `as const` 数组 + 类型守卫 + packages/admin-ui Option helpers + grep 守卫脚本）/ §4 不做范围 / §5 实施分卡 / §6 风险
+     - arch-reviewer (claude-opus-4-7) 评审产出 PASS / CONDITIONAL；后者主循环消化全部红线后等同 PASS
+     - decisions.md 同步 ADR-156 占位关系（避免误占）
+   - 依赖：CHG-337 ✅ 完成（不需要等执行卡跟进，只需 ADR 编号确认）
+
+### ENUMS-SSOT 关键约束
+
+- **本 SEQ 只做"server-next 内部收口 + ADR 决策"，不做跨包 SSOT 实装**：跨包真 SSOT（packages/types 数组 + admin-ui helpers + grep 守卫）由 ADR-157 落盘后另起执行卡列入下一序列
+- **VideoGenre / SearchPage / FallbackCover 等 P1/P2 缺陷不在本 SEQ**：依 ADR-157 §5 实施分卡列入后续序列；本 SEQ 仅闭合用户反馈的 P0 + 决策起草
+- **PATCH ≤ 5 项硬约束**：CHG-337 3 项 ✅ / CHG-338 1 项 ✅
+- **commit trailer**：CHG-337 主循环 opus 但无 Opus 强制项（仅常量收口）→ `Subagents: 无`；CHG-338 ADR 起草 → `Subagents: arch-reviewer (claude-opus-4-7)`
+
