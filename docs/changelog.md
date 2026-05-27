@@ -8534,3 +8534,20 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
   - Y1（消化）：`EpisodePattern.ongoing` 与 `VideoStatus.ongoing` 字面同含义不同 → `EpisodePattern.ongoing` 译法改"连载中"→"连载剧"（形态 vs 状态语义分离）
 - **闭环 D-N**：D-157-2 P1 部分；剩 P2 4 helpers 待 CHG-340-C
 - **门禁**：typecheck ✅
+
+## [CHG-340-C] packages/admin-ui 4 P2 helpers — D-157-2 全闭环
+- **完成时间**：2026-05-26 23:50
+- **来源序列**：SEQ-20260527-ENUMS-SSOT-IMPL（ADR-157 D-157-2 P2 + 全闭环）
+- **执行模型**：claude-opus-4-7 / 子代理：arch-reviewer (claude-opus-4-7) agentId: a5fff0441351a84c7 / **A PASS 无线**
+- **改动文件**（5 文件 / 4 PATCH 项 ≤ 5 ✅）：
+  - `packages/admin-ui/src/enums/doubanStatusOptions.ts`（新建 / 4 项）
+  - `packages/admin-ui/src/enums/sourceCheckStatusOptions.ts`（新建 / 4 项）
+  - `packages/admin-ui/src/enums/videoQualityOptions.ts`（新建 / 5 项 / 技术术语 fallback 与 value 同）
+  - `packages/admin-ui/src/enums/sourceTypeOptions.ts`（新建 / 3 项 / fallback 大写 HLS/MP4/DASH）
+  - `packages/admin-ui/src/enums/index.ts`（barrel 加 P2 + 标 "D-157-2 全闭环"）
+- **arch-reviewer 评审**：A PASS 无红/黄/绿线
+  - 范式一致性 / 类型 SSOT / FALLBACK JSDoc / barrel 标注 / 译法准确性 全部 PASS
+  - 评审确认 DoubanStatus.candidate vs pending 语义清晰 / VideoQuality 技术术语保留 / SourceType 大小写设计无冲突
+- **闭环 D-N**：**D-157-2 完整闭环** ✅（12 helpers 全部就位：P0(4)+P1(4)+P2(4) / admin-ui enums/ 完整覆盖）
+- **门禁**：typecheck ✅
+- **CHG-340 系列阶段汇总**：CHG-340-A（AdminSelectOption 泛型 + 4 P0）+ CHG-340-B（4 P1 + Y1 译法消化）+ CHG-340-C（4 P2 PASS 无线）= packages/admin-ui 12 enum helpers 全部就位 / 3 arch-reviewer Opus 评审全 PASS / 共享 TFunction + AdminSelectOption<T> 泛型契约成熟

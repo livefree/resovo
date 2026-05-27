@@ -25,3 +25,9 @@ export * from './visibilityStatusOptions'
 export * from './contentFormatOptions'
 export * from './episodePatternOptions'
 export * from './trendingTagOptions'
+
+// P2 (CHG-340-C) — D-157-2 全闭环
+export * from './doubanStatusOptions'
+export * from './sourceCheckStatusOptions'
+export * from './videoQualityOptions'
+export * from './sourceTypeOptions'

@@ -1614,7 +1614,7 @@ HOTFIX-A → B → C 顺序串行（B 在 A SQL fix 基础上扩 CASE / C 在 B 
    - 依赖：CHG-340-A ✅ + CHG-339-B ✅
    - **commit trailer 必填**：`Subagents: arch-reviewer (claude-opus-4-7)`
 
-6. **CHG-340-C** — packages/admin-ui 4 P2 helpers（状态：⬜ 待开始 / **强制 Opus arch-reviewer**）
+6. **CHG-340-C** — packages/admin-ui 4 P2 helpers（状态：✅ 已完成 / 2026-05-26 23:50 / 执行模型 claude-opus-4-7 / 子代理 arch-reviewer agentId: a5fff0441351a84c7 / **A PASS 无线 / D-157-2 全闭环 12 helpers**）
    - 创建时间：2026-05-26 22:00
    - 建议模型：opus
    - 文件范围（5 文件 / 4 PATCH 项）：4 个 enums/*.ts 新建（DoubanStatus / SourceCheckStatus / VideoQuality / SourceType）+ enums/index.ts 增项
