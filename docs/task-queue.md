@@ -1239,6 +1239,16 @@ B 序列 + C 序列可与 A 并行（A 无依赖）；B 与 C 之间无依赖（
 3k. **CHG-SN-9-CW1-CW2-EP-1C-CLEANUP-C2** — 删 3 test fixture 残余 dailyTime + 修 #18 断言
    - 状态：✅ 完成（2026-05-26 / commit 58222282）
 
+3l-bis. **CHG-SN-9-N1-EP2-3** — admin-shell types drift 守卫脚本（ADR-152 + ADR-155 D-155-2 EP-2）
+   - 状态：✅ 完成（2026-05-26 20:10）
+   - 执行模型：claude-opus-4-7
+   - 范围：
+     - 新建 `scripts/verify-admin-shell-types-mirror.mjs`（正则解析 interface 字段 + 名称/类型/可选性比对 / drift 检出退出 1 阻塞 CI）
+     - 守卫对象：`NotificationItem` ↔ `AdminNotificationItem` + `TaskItem` ↔ `AdminTaskItem`（packages/admin-ui SSOT vs packages/types API 镜像）
+     - `package.json` 加 npm script + 集成到 `verify:adr-contracts` 汇总链
+   - 验证：当前两源全部对齐 ✅ / 反向测试（改 progress → progressPct）检出 2 处 drift ✅
+   - 文件范围：1 新脚本 + 1 package.json + 2 docs = 4 项（≤ 5 ✅）
+
 3l. **CHG-SN-9-CW1-CW2-EP-1C-CLEANUP-D** — 删 7 fixture + 1 注释残余 dailyTime 字面量（D1 后端 + D2 前端）
    - 状态：✅ 完成（2026-05-26 20:00）
    - 执行模型：claude-opus-4-7

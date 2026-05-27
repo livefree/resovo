@@ -8327,3 +8327,27 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
   - D-155-6 全栈 dailyTime → dailyTimes 迁移**完全闭环**（除 v1 冻结模块）
 - **PATCH 文件数**：7 测试（D1: 3 + D2: 4）
 - **门禁**：typecheck ✅ / lint cached ✅ / D1 test 60/60 + D2 test 102/102 ✅
+
+## [CHG-SN-9-N1-EP2-3] admin-shell types drift 守卫脚本（ADR-152 + ADR-155 D-155-2 EP-2）
+- **完成时间**：2026-05-26
+- **记录时间**：2026-05-26 20:10
+- **执行模型**：claude-opus-4-7（主循环延续）
+- **子代理**：无（脚本机械实现 / 不触发 Opus reviewer）
+- **修改文件**：
+  - `scripts/verify-admin-shell-types-mirror.mjs`（新建）— 正则解析 interface 字段 + 名称/类型/可选性比对；drift 检出退出 1 阻塞 CI
+  - `package.json` — 加 `verify:admin-shell-types-mirror` script + 集成到 `verify:adr-contracts` 汇总链
+- **守卫对象**：
+  - `NotificationItem` ↔ `AdminNotificationItem`（packages/admin-ui SSOT vs packages/types API 镜像）
+  - `TaskItem` ↔ `AdminTaskItem`
+- **新增依赖**：无（纯 node:fs + 正则）
+- **数据库变更**：无
+- **注意事项**：
+  - 镜像规则：字段名 + 类型签名完全一致（差异仅在 interface 名前缀 'Admin'）
+  - 双源理由：admin-ui 是 UI Shell SSOT（消费方直接 import）；packages/types 是后端 API SSOT 镜像（避免后端反向依赖 admin-ui）
+  - 反向测试：临时改 progress → progressPct 检出 2 处 drift（"api 缺 progress?" + "ui 缺 progressPct?"）/ 还原后 ✅
+  - drift 表现：missing_in_api / missing_in_ui / type_mismatch 三类报告
+  - 局限性：正则 parser 非完整 TypeScript AST；多行复杂类型（如 union with `\n |`）需后续测试覆盖；目前 D-155-2 字段全部单行可处理
+  - 后续 evolutions：若需更 robust 解析，可升级到 ts-morph（引入新依赖 / 触发 BLOCKER 评估）
+- **PATCH 文件数**：1 新脚本 + 1 package.json + 2 docs = 4 项（≤ 5 ✅）
+- **门禁**：verify:adr-contracts 全过（含本新增脚本）/ 反向 drift 测试通过
+- **关闭偏离**：ADR-155 EP-2 Y-EP2-3 N1 推迟项已闭环
