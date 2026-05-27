@@ -6,7 +6,9 @@
 
 ## 进行中任务
 
-（空 — CHG-361-C ✅ 已完成 / 跨 app preview 链路全闭环 / 待 -D 启动）
+（空 — CHG-361 PREVIEW-ADMIN 5 子卡全闭环 ✅ / Wave 2 #8 序列完结 / 待 Wave 2 #9 CHG-362-A SPLIT-ADR 起草）
+
+---
 
 ---
 
@@ -30,12 +32,15 @@
 
 ---
 
-## Wave 2 进行中（SEQ-20260527-MOD-WAVE2 / 4/17）
+## Wave 2 进行中（SEQ-20260527-MOD-WAVE2 / 5/17）
 
 - ✅ CHG-361-A（ADR-160 起草 + getVideoDetailHref 沉淀 / 5f64e78d）
 - ✅ CHG-361-B2（apps/api 后端 3 文件 + 5 case 单测 + ADR-160 AMENDMENT 1 / a3c1c9ed）
 - ✅ CHG-361-B1（web-next 前端 3 文件 + 2 测试 17 case PASS / 3b9c8fa9）
-- ✅ CHG-361-C（后台按钮 + VideoQueueRow 扩 + e2e + manual / 本卡 / 待 commit）
+- ✅ CHG-361-C（后台按钮 + VideoQueueRow 扩 + e2e + manual / 34121022）
+- ✅ CHG-361-D（PlayerShell previewMode Props + 3 case PASS / 本卡 / 待 commit）
+
+**CHG-361 PREVIEW-ADMIN 5 子卡全闭环 ✅(A → B2 → B1 → C → D)/ 跨 app preview 链路完整就绪 / 待 prod gate OPS 卡 CHG-OPS-COOKIE-SUBDOMAIN-1**
 
 ---
 

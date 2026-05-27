@@ -1902,7 +1902,7 @@ CHG-353 (ROUTE-LABEL-A2) → 依赖 CHG-352 后端返回排序数据
 
 ## [SEQ-20260527-MOD-WAVE2] server-next 内容审核台 Wave 2 — 预览/拆分/合并/元数据/路线主题（plan §14 + §17.2）
 
-- **状态**：🔄 执行中（CHG-361-A ✅ + CHG-361-B2 ✅ + CHG-361-B1 ✅ + CHG-361-C ✅ / 4/17 / ADR-160 AMENDMENT 1 拆 -B 为 -B1/-B2/-D）
+- **状态**：🔄 执行中（CHG-361 PREVIEW-ADMIN 5 子卡全闭环 ✅ A+B2+B1+C+D / 5/17 / ADR-160 AMENDMENT 1 拆 -B 为 -B1/-B2/-D）
 - **创建时间**：2026-05-27
 - **最后更新时间**：2026-05-27
 - **目标**：基于 `/Users/livefree/.claude/plans/fluffy-giggling-teapot.md` §14 Wave 2 + §17.2 落地 9 张主卡（4 张需 ADR + Opus 决策）；继续 Wave 1 的自动推进节奏。
@@ -1920,7 +1920,7 @@ CHG-353 (ROUTE-LABEL-A2) → 依赖 CHG-352 后端返回排序数据
 | 1 | ✅ **CHG-361-A** 已完成（2026-05-27）| PREVIEW-ADMIN ADR-160 起草 + Opus 评审 / arch-reviewer Opus A− CONDITIONAL → 主循环消化 3 红线 + 5 黄线 + 3 advisory + 4 关键洞察 → 等同 A / 4 文件原子提交（ADR-160 §1-11 + getVideoDetailHref 沉淀 packages/types） | 是 ADR-160 ✅ Accepted | opus-4-7 + arch-reviewer Opus |
 | 2 | ✅ **CHG-361-B2** 已完成（2026-05-27）| PREVIEW-ADMIN apps/api 后端实施（3 文件 / ADR-160 AMENDMENT 1）+ 5 case 单测 | 否（contract 扩展非新端点）| opus-4-7 续会话 |
 | 2.5 | ✅ **CHG-361-B1** 已完成（2026-05-27）| PREVIEW-ADMIN web-next 前端实施（middleware + admin-access-token + video-detail / 3 文件 + 2 测试 / 17 case PASS）| 否 | opus-4-7 续会话 |
-| 2.8 | **CHG-361-D** | PlayerShell previewMode Props（屏蔽 feedback hook / 1 文件）| 否 | sonnet |
+| 2.8 | ✅ **CHG-361-D** 已完成（2026-05-27）| PlayerShell previewMode Props（屏蔽 feedback hook 挂点 / 1 业务 + 1 测试 3 case PASS）| 否 | opus-4-7 续会话 |
 | 3 | ✅ **CHG-361-C** 已完成（2026-05-27）| PREVIEW-ADMIN server-next 按钮 + VideoQueueRow contract 扩 + e2e + manual / 3 业务 + 1 e2e + 1 manual | 否 | opus-4-7 续会话 |
 | 4 | **CHG-362-A** | SPLIT-ADR ADR-161 起草（plan #9 / §10.2）— 视频拆分端点协议 | 是 ADR-161 | opus-4-7 + arch-reviewer Opus |
 | 5 | **CHG-362-B** | SPLIT 后端实施 — `POST /admin/videos/:id/split` + service + audit RETRO | 否 | sonnet |

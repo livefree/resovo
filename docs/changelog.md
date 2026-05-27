@@ -9751,3 +9751,30 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
   - ❌ PlayerShell previewMode Props → CHG-361-D
   - ❌ OPS 卡 cookie 跨子域升级 → CHG-OPS-COOKIE-SUBDOMAIN-1（独立 OPS 卡 / prod gate 前置）
 - **闭环**：CHG-361-C 完成（3 业务 + 1 e2e + 1 manual / 跨 app preview 链路全闭环）/ Wave 2 卡 4/17 闭合 / 执行序列 B2 → B1 ✅ → C ✅ → D 启动条件就绪
+
+---
+
+## [CHG-361-D / ADR-160 D-160-5] PlayerShell previewMode Props 极简占位（Wave 2 #8 末子卡 / 1 业务 + 1 测试）
+- **执行模型**：claude-opus-4-7（主循环 / 续会话）
+- **子代理调用**：无（极简 Props 加 / 不触发 Opus 强制升）
+- **范围**：PlayerShell `previewMode` Props（默认 false / 向后兼容）+ 同文件 export `isPlaybackFeedbackEnabled` 纯函数挂点
+- **来源**：ADR-160 AMENDMENT 1 §6 / Wave 2 #8 序列收口
+- **文件改动**：
+  - `apps/web-next/src/components/player/PlayerShell.tsx`：
+    - PlayerShellProps `+previewMode?: boolean`（JSDoc 详释 ADR-160 D-160-5 + 未来 feedback hook 挂点意图）
+    - 同文件导出 `isPlaybackFeedbackEnabled(previewMode)` 纯函数（`!previewMode` 派生）
+    - 函数签名 destructure `previewMode = false` + 内部 `const feedbackEnabled = isPlaybackFeedbackEnabled(previewMode)` + `void feedbackEnabled` 显式保留
+- **测试新增**（tests/unit/web-next/player-shell-preview-mode.test.ts / 3 case PASS / vitest run 4ms）：
+  - undefined → feedback 开启（默认）
+  - previewMode=false → feedback 开启
+  - previewMode=true → feedback 关闭（D-160-5 写入禁令）
+- **实证修订**：ADR-160 §3 D-160-5 实证审查描述"唯一写路径 `/v1/feedback/playback`"，本卡 grep web-next 该路径 0 命中 + `usePlaybackFeedback` hook 不存在 → 是**前瞻性 advisory A1**；本卡严格按 ADR 范围加 Props + helper 占位；watch 页消费方实装由后续 FOLLOWUP 卡接入
+- **质量门禁**：
+  - typecheck ✅ 8 workspace 全绿
+  - lint ✅（仅 pre-existing react-hooks/exhaustive-deps / 与本卡无关）
+  - 3 case 新单测 PASS（vitest run 4ms / 极快）
+- **commit trailer**：无强制 Subagents
+- **不在本卡范围**：
+  - ❌ watch 页 `/[locale]/watch/[slug]` 读 middleware `x-admin-preview` header 后传 previewMode={true} → 后续 FOLLOWUP 卡
+  - ❌ usePlaybackFeedback hook 实装 → 后续 advisory A1 触发时新卡
+- **闭环**：CHG-361-D 完成（1 业务 + 1 测试 3 case）/ Wave 2 卡 5/17 闭合 / **CHG-361 PREVIEW-ADMIN 5 子卡序列全闭环（A → B2 → B1 → C → D）/ 跨 app preview 链路完整就绪 / 待 prod gate OPS 卡 CHG-OPS-COOKIE-SUBDOMAIN-1**

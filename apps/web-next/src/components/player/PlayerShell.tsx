@@ -26,9 +26,31 @@ interface PlayerShellProps {
   slug?: string
   /** true 时抑制页面跳转，仅在 GlobalPlayerFullFrame 内使用 */
   portalMode?: boolean
+  /**
+   * ADR-160 D-160-5：admin preview 模式（管理员通过 PendingCenter "↗ 前台预览" 进入）
+   * - true: 屏蔽所有 feedback / audit / view_count 写入路径（GET 纯只读）
+   * - false（默认）: 公开访问，正常上报
+   * 当前实装：尚未接入 feedback hook（D-160-5 实证审查是前瞻性 advisory），
+   *           本 Props 为未来 watch 页接入 usePlaybackFeedback / view_count 写入时的统一屏蔽闸门。
+   *           调用方应通过 `isPlaybackFeedbackEnabled(previewMode)` 派生开关。
+   */
+  previewMode?: boolean
 }
 
-export function PlayerShell({ slug: slugProp, portalMode = false }: PlayerShellProps) {
+/**
+ * ADR-160 D-160-5 写入开关派生：preview 模式禁用 feedback / audit / view_count 等写入。
+ * 未来 web-next 接入 usePlaybackFeedback / 推荐写回时统一通过本 helper 决定是否启用。
+ */
+export function isPlaybackFeedbackEnabled(previewMode: boolean | undefined): boolean {
+  return !previewMode
+}
+
+export function PlayerShell({ slug: slugProp, portalMode = false, previewMode = false }: PlayerShellProps) {
+  // ADR-160 D-160-5：preview 模式禁用所有 feedback / audit 写入路径
+  // 当前 PlayerShell 唯一写路径是 saveProgress（localStorage / 客户端本地）— 不在 D-160-5 屏蔽范围
+  // 未来 feedback hook 接入时按本变量守卫
+  const feedbackEnabled = isPlaybackFeedbackEnabled(previewMode)
+  void feedbackEnabled  // 显式保留：未来 usePlaybackFeedback / view_count 写入引用
   const hostOriginSlug = usePlayerStore((s) => s.hostOrigin?.slug)
   const slug = slugProp ?? hostOriginSlug ?? ''
   const searchParams = useSearchParams()
