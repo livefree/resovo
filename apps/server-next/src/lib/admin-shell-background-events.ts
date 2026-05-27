@@ -16,11 +16,16 @@
 /**
  * 全局 mutate 注册表：让 CrawlerClient 无需 prop drilling 即可触发 invalidate
  *
- * useAdminNotifications / useAdminTasks 在 mount 时注册各自的 reload；
+ * useAdminNotifications / useAdminTasks 在 mount 时按唯一 id 注册各自的 reload；
  * CrawlerClient.handleRunAllIncremental 等写操作成功后调
  * invalidateBackgroundEvents() 触发两 hook 强制 refetch（跳过 60s polling 窗口）。
+ *
+ * N1-EP2-1（ADR-155 EP-2 推迟项 / 2026-05-26）：
+ *   Set<fn> → Map<id, fn> 强化去重 —— 同 id 重复注册只保留最新 fn（避免 React StrictMode
+ *   或 HMR 导致同一 hook 多 reload reference 残留在 Set 中 / 旧 reference 已捕获 stale state）。
+ *   注册 id 命名约定：`admin-notifications` / `admin-tasks` 等（语义化 / 与 hook 1:1）。
  */
-export const globalMutateRegistry = new Set<() => Promise<void>>()
+export const globalMutateRegistry = new Map<string, () => Promise<void>>()
 
 /**
  * ADR-152 Y-152-4：CrawlerClient 触发写操作后调此函数强制 refetch，跳过缓存。
@@ -30,5 +35,5 @@ export const globalMutateRegistry = new Set<() => Promise<void>>()
  * hook 而非已删除的 BackgroundEventBell。
  */
 export async function invalidateBackgroundEvents(): Promise<void> {
-  await Promise.allSettled([...globalMutateRegistry].map((fn) => fn()))
+  await Promise.allSettled([...globalMutateRegistry.values()].map((fn) => fn()))
 }

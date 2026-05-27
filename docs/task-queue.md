@@ -1239,6 +1239,16 @@ B 序列 + C 序列可与 A 并行（A 无依赖）；B 与 C 之间无依赖（
 3k. **CHG-SN-9-CW1-CW2-EP-1C-CLEANUP-C2** — 删 3 test fixture 残余 dailyTime + 修 #18 断言
    - 状态：✅ 完成（2026-05-26 / commit 58222282）
 
+3l-tris. **CHG-SN-9-N1-EP2-1** — globalMutateRegistry Set → Map<id, fn> 强化去重
+   - 状态：✅ 完成（2026-05-26 20:15）
+   - 执行模型：claude-opus-4-7
+   - 范围：
+     - `apps/server-next/src/lib/admin-shell-background-events.ts` Set → Map<string, () => Promise<void>> + invalidate 用 .values()
+     - `apps/server-next/src/lib/admin-shell-notifications.ts` 2 处 register 改 `.set(id, fn)` + `.delete(id)`（id='admin-notifications' / 'admin-tasks'）
+   - 价值：同 id 重复注册只保留最新 fn / 防 React StrictMode + HMR 导致 stale reference 残留
+   - 文件范围：2 源 = 2 项（≪ 5 ✅）
+   - 门禁：typecheck ✅ / test 12/12 ✅ / verify:adr-contracts ✅（含 mirror drift 守卫）
+
 3l-bis. **CHG-SN-9-N1-EP2-3** — admin-shell types drift 守卫脚本（ADR-152 + ADR-155 D-155-2 EP-2）
    - 状态：✅ 完成（2026-05-26 20:10）
    - 执行模型：claude-opus-4-7

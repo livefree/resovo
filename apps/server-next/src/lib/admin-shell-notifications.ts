@@ -186,10 +186,11 @@ export function useAdminNotifications(): UseAdminNotificationsResult {
     return () => clearInterval(timer)
   }, [reload])
 
-  // ADR-152 Y-152-4 / EP-2：注册到 globalMutateRegistry 让 CrawlerClient 触发刷新
+  // ADR-152 Y-152-4 / EP-2 / N1-EP2-1：注册到 globalMutateRegistry 让 CrawlerClient 触发刷新
+  // Map<id, fn>：同 id 重复注册只保留最新 fn（防 StrictMode/HMR stale reference）
   useEffect(() => {
-    globalMutateRegistry.add(reload)
-    return () => { globalMutateRegistry.delete(reload) }
+    globalMutateRegistry.set('admin-notifications', reload)
+    return () => { globalMutateRegistry.delete('admin-notifications') }
   }, [reload])
 
   const items = useMemo<readonly NotificationItem[]>(() => {
@@ -266,10 +267,10 @@ export function useAdminTasks(): UseAdminTasksResult {
     return () => clearInterval(timer)
   }, [reload])
 
-  // ADR-152 Y-152-4 / EP-2：注册到 globalMutateRegistry
+  // ADR-152 Y-152-4 / EP-2 / N1-EP2-1：注册到 globalMutateRegistry（Map<id, fn>）
   useEffect(() => {
-    globalMutateRegistry.add(reload)
-    return () => { globalMutateRegistry.delete(reload) }
+    globalMutateRegistry.set('admin-tasks', reload)
+    return () => { globalMutateRegistry.delete('admin-tasks') }
   }, [reload])
 
   const items = useMemo<readonly TaskItem[]>(() => {

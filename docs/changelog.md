@@ -8351,3 +8351,22 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **PATCH 文件数**：1 新脚本 + 1 package.json + 2 docs = 4 项（≤ 5 ✅）
 - **门禁**：verify:adr-contracts 全过（含本新增脚本）/ 反向 drift 测试通过
 - **关闭偏离**：ADR-155 EP-2 Y-EP2-3 N1 推迟项已闭环
+
+## [CHG-SN-9-N1-EP2-1] globalMutateRegistry Set → Map<id, fn> 强化去重
+- **完成时间**：2026-05-26
+- **记录时间**：2026-05-26 20:15
+- **执行模型**：claude-opus-4-7（主循环延续）
+- **子代理**：无（数据结构升级 / 不触发 Opus reviewer）
+- **修改文件**：
+  - `apps/server-next/src/lib/admin-shell-background-events.ts` — `globalMutateRegistry: Set<() => Promise<void>>` → `Map<string, () => Promise<void>>`；`invalidateBackgroundEvents` 用 `[...registry.values()]` 替代 `[...registry]`
+  - `apps/server-next/src/lib/admin-shell-notifications.ts` — useAdminNotifications useEffect 注册 `globalMutateRegistry.set('admin-notifications', reload)` + cleanup `.delete('admin-notifications')`；useAdminTasks 同理 id='admin-tasks'
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - 价值：同 id 重复注册只保留最新 fn / 防 React StrictMode（dev 双 effect）+ HMR 导致 stale reference 残留在 Set 中
+  - 命名约定：id 与 hook 1:1 语义化（'admin-notifications' / 'admin-tasks'）；后续新 hook 沿用此约定
+  - 行为变化：实际触发数从"原 Set 重复 add 都计数"→"按 id 去重后只触发一次"；预期回归 0（生产路径同 id 注册本就只有一次有效 reload）
+  - 测试覆盖：admin-shell-notifications.test.ts 12/12 PASS（spy 模式不区分 Set/Map / 行为契约一致）
+- **PATCH 文件数**：2 源 = 2 项（≪ 5 ✅）
+- **门禁**：typecheck ✅ / test 12/12 ✅ / verify:adr-contracts ✅（含本卡涉及的 admin-shell mirror drift 守卫）
+- **关闭偏离**：ADR-155 EP-2 Y-EP2-1 N1 推迟项已闭环
