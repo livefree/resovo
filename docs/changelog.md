@@ -8218,3 +8218,24 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **PATCH 文件数**：2 源 = 2 项（≪ 5 硬约束 ✅）
 - **门禁**：typecheck ✅ / lint 5/5 ✅ / test 5142/5142 ✅ / verify:adr-contracts ✅
 - **关闭偏离**：EP-1C-1a 临时偏离（`dailyTimes?:` optional）已闭合
+
+## [CHG-SN-9-CW1-CW2-EP-1C-CLEANUP-B1] 后端 4 fixture 补 dailyTimes 主字段
+- **完成时间**：2026-05-26
+- **记录时间**：2026-05-26 19:25
+- **执行模型**：claude-opus-4-7（主循环延续）
+- **子代理**：无（测试 fixture 数据补全 / 不触发 Opus reviewer）
+- **修改文件**（分两次 commit）：
+  - **commit e4a98f5e**（3 fixture）：
+    - `tests/unit/api/crawler-system-audit.test.ts` — BEFORE_CONFIG + AFTER_CONFIG 补 `dailyTimes: ['HH:MM']`（保留 dailyTime alias）
+    - `tests/unit/api/crawlerScheduler.test.ts` — #10 setAutoCrawlConfig interval fixture 补 dailyTimes
+    - `tests/e2e/admin.spec.ts` — 2 处 playwright auto-config 响应 body 补 dailyTimes
+  - **本 commit**（1 fixture + docs）：
+    - `tests/unit/api/background-event-service.test.ts` — getAutoCrawlConfigMock 默认返回值补 dailyTimes（B1 收尾）
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - **保留旧路径测试 fixture 不变**（#5 dailyTime alias 兼容 / #7d dailyTimes=[] 兜底 / #17 仅传 dailyTime 兜底）— 它们是测试 fallback 路径的 case，Cleanup-B3 删 fallback 时同步删除（不再有意义的旧路径 case）
+  - 为 Cleanup-B3（删 5 处消费方 fallback）铺路：所有"模拟真实数据"的 fixture 含 dailyTimes 后，runtime `Array.from(config.dailyTimes)` 不再触发 TypeError
+  - 数据形态：`dailyTimes: ['HH:MM']`（D-155-6 主字段单时间形式 / 反映反序列化兜底数据）；alias 字段保留向后兼容
+- **PATCH 文件数**：4 测试 = 4 项（≤ 5 ✅）
+- **门禁**：typecheck ✅ / lint 5/5 ✅ / test 5142/5142 ✅ / verify:adr-contracts ✅

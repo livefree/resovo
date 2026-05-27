@@ -1195,7 +1195,21 @@ B 序列 + C 序列可与 A 并行（A 无依赖）；B 与 C 之间无依赖（
    - 门禁：typecheck ✅ / lint ✅ / test 5142/5142 ✅ / verify:adr-contracts ✅
    - 0 cascade（消费方早已 `config.dailyTimes ?? [config.dailyTime]` 兼容）
 
-3g. **CHG-SN-9-CW1-CW2-EP-1C-CLEANUP-B/-C**（推迟 / 已规划）
+3g. **CHG-SN-9-CW1-CW2-EP-1C-CLEANUP-B1** — 后端 4 fixture 补 dailyTimes
+   - 状态：✅ 完成（2026-05-26 19:25）
+   - 实际开始：2026-05-26 19:18
+   - 完成时间：2026-05-26 19:25
+   - 执行模型：claude-opus-4-7
+   - 范围：4 个后端测试 fixture 补 `dailyTimes: ['HH:MM']` 主字段（保留 dailyTime alias）：
+     - `tests/unit/api/crawler-system-audit.test.ts` BEFORE_CONFIG + AFTER_CONFIG（2 处）
+     - `tests/unit/api/crawlerScheduler.test.ts` #10 setAutoCrawlConfig interval fixture（1 处）
+     - `tests/unit/api/background-event-service.test.ts` getAutoCrawlConfigMock 默认返回值（1 处）
+     - `tests/e2e/admin.spec.ts` 2 处 auto-config 响应 body（playwright e2e mock）
+   - **保留旧路径测试 fixture 不变**（#5 dailyTime alias 兼容 / #7d dailyTimes=[] 兜底 / #17 仅传 dailyTime 兜底）— 它们是测试 fallback 路径的 case，Cleanup-B3 删 fallback 时同步处理
+   - 文件范围：4 测试 = 4 项（≤ 5 ✅）
+   - 门禁：typecheck ✅ / lint 5/5 ✅ / test 5142/5142 ✅ / verify:adr-contracts ✅
+
+3h. **CHG-SN-9-CW1-CW2-EP-1C-CLEANUP-B2/-B3/-C**（推迟 / 已规划）
    - 范围：删 5 处 fallback (`config.dailyTimes && length > 0 ? ... : [config.dailyTime || '03:00']`) + 补 8 个 test fixture 显式提供 dailyTimes + 删 dailyTime alias 字段
    - 拆分：
      - Cleanup-B1：补 4 个 backend test fixture（crawlerScheduler / crawler-system-audit / background-event-service / e2e admin）
