@@ -1897,3 +1897,62 @@ CHG-353 (ROUTE-LABEL-A2) → 依赖 CHG-352 后端返回排序数据
 
 执行序列建议(主循环按此顺序取卡)：
 **CHG-346 → 345 → 347 → 348 → 349 → 350 → 351 → 352 → 353**
+
+---
+
+## [SEQ-20260527-MOD-WAVE2] server-next 内容审核台 Wave 2 — 预览/拆分/合并/元数据/路线主题（plan §14 + §17.2）
+
+- **状态**：🔄 执行中（CHG-361-A ✅ 已完成 / 1/15）
+- **创建时间**：2026-05-27
+- **最后更新时间**：2026-05-27
+- **目标**：基于 `/Users/livefree/.claude/plans/fluffy-giggling-teapot.md` §14 Wave 2 + §17.2 落地 9 张主卡（4 张需 ADR + Opus 决策）；继续 Wave 1 的自动推进节奏。
+- **范围**：web-next 前台预览模式 + audio/视频拆分/合并端点 + 元数据治理（豆瓣/国家/集数） + route-labeling Phase 2/3
+- **执行约束**：沿用 Wave 1 §16.1-16.5（UI/UX 谨慎 / 人工体验集中 Wave 末 / docs/manual 同步 / route-labeling 集成 / 主循环全自动 + BLOCKER 触发清单）
+- **建议主循环模型**：`claude-opus-4-7`（ADR 卡）+ `claude-sonnet-4-6`（无 ADR 卡）；主循环不切换 §16.5
+- **依赖**：Wave 1 全部完成 ✅（待用户验收 / 用户 2026-05-27 启动指令视为验收）
+
+### 任务列表（按 plan §14.2 顺序，前 6 张为 Wave 2 主线）
+
+> 命名沿用 `CHG-NNN` 数字编号（与 Wave 1 一致），plan §14 的 `CHG-SN-9-*` 命名作为子标题。下一个 CHG 编号从 **CHG-361** 起（CHG-359 未使用，沿用 357 → 358 → 358-FIX → 360-A/B/C 历史顺序）。
+
+| # | TASK-ID | 标题（plan 对应） | ADR | 建议模型 |
+|---|---|---|---|---|
+| 1 | ✅ **CHG-361-A** 已完成（2026-05-27）| PREVIEW-ADMIN ADR-160 起草 + Opus 评审 / arch-reviewer Opus A− CONDITIONAL → 主循环消化 3 红线 + 5 黄线 + 3 advisory + 4 关键洞察 → 等同 A / 4 文件原子提交（ADR-160 §1-11 + getVideoDetailHref 沉淀 packages/types） | 是 ADR-160 ✅ Accepted | opus-4-7 + arch-reviewer Opus |
+| 2 | **CHG-361-B** | PREVIEW-ADMIN web-next 实施（middleware + 6 page.tsx + visibility 放行） | 否 | sonnet 或 opus 续会话 |
+| 3 | **CHG-361-C** | PREVIEW-ADMIN server-next 按钮 + video.id→type/slug 映射 + 测试 | 否 | sonnet 或 opus 续会话 |
+| 4 | **CHG-362-A** | SPLIT-ADR ADR-161 起草（plan #9 / §10.2）— 视频拆分端点协议 | 是 ADR-161 | opus-4-7 + arch-reviewer Opus |
+| 5 | **CHG-362-B** | SPLIT 后端实施 — `POST /admin/videos/:id/split` + service + audit RETRO | 否 | sonnet |
+| 6 | **CHG-363** | SPLIT-UI（plan #10）— PendingCenter "拆分" 入口 + workspace | 否 | sonnet |
+| 7 | **CHG-364** | MERGE-INLINE（plan #11）— 批量栏 + 中部 "合并" 按钮（扩 merge URL ids） | 否（扩 contract）| sonnet |
+| 8 | **CHG-365-A** | META-DOUBAN-AUTO ADR-162 起草（plan #12 / §10.4.1）— MetadataNormalizationService | 是 ADR-162 | opus-4-7 + arch-reviewer Opus |
+| 9 | **CHG-365-B** | META-DOUBAN-AUTO 实施 — 采集 worker 自动豆瓣 + 拼音识别 | 否 | sonnet |
+| 10 | **CHG-366** | META-COUNTRY-DISPLAY（plan #13 / §10.4.3）— 国家代码 → 中英文 admin-ui 原语 | 否 | sonnet |
+| 11 | **CHG-367-A** | META-EPISODES ADR-163 起草（plan #14 / §10.4.4）— total/current_episodes schema + migration | 是 ADR-163 | opus-4-7 + arch-reviewer Opus |
+| 12 | **CHG-367-B** | META-EPISODES 实施 — schema migration + 显示 | 否 | sonnet |
+| 13 | **CHG-368-A** | ROUTE-LABEL-B ADR-164 起草（plan §17.2 #15）— Migration 064 codename/priority/retired_at | 是 ADR-164 | opus-4-7 + arch-reviewer Opus |
+| 14 | **CHG-368-B** | ROUTE-LABEL-B 实施 — admin UI `/admin/source-line-aliases` + 退役端点 | 否 | sonnet |
+| 15 | **CHG-369** | ROUTE-LABEL-C（plan §17.2 #16）— 播放器设置面板主题选择器 + localStorage | 否 | sonnet |
+
+### Wave 2 BLOCKER 触发清单（沿用 Wave 1 §16.5）
+
+- typecheck / lint / test / verify 报错 + 自动修复失败
+- 任务范围超出卡片定义（改动 > 卡片范围 5 项）
+- ADR 起草卡 Opus 评审 BLOCKER 红线未消解
+- schema migration 冲突（特别注意 ROUTE-LABEL-B Migration 064 与 META-EPISODES 顺序协调 / plan §17.3）
+- 人工已审核 Wave 报告未通过
+
+### 关键依赖图
+
+```
+CHG-361-A (ADR-160) → 361-B (前台) → 361-C (后台)
+CHG-362-A (ADR-161) → 362-B (后端 split) → 363 (SPLIT-UI)
+CHG-364 (MERGE-INLINE, 独立)
+CHG-365-A (ADR-162) → 365-B (worker 豆瓣)
+CHG-366 (国家显示, 独立)
+CHG-367-A (ADR-163 / migration) → 367-B (实施)  ─┐
+CHG-368-A (ADR-164 / migration 064) → 368-B (退役端点) ─┴── 注意 migration 顺序
+CHG-369 (前台主题选择器, 独立)
+```
+
+执行序列建议（主循环按此顺序取卡，**ADR 卡先于实施卡**）：
+**CHG-361-A → -B → -C → 362-A → -B → 363 → 364 → 365-A → -B → 366 → 367-A → -B → 368-A → -B → 369**

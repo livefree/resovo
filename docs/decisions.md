@@ -16027,3 +16027,263 @@ CHG-360 必须拆 -A/-B/-C 三子卡（PATCH ≤ 5 硬约束 / ADR-121 D-121-3 R
 **结论**：ADR-159 status 🟢 Accepted（2026-05-27 / arch-reviewer Opus A-CONDITIONAL → 主循环消化 5 红线 + 7 黄线 + 4 关键洞察 → 等同 A）；CHG-360-A 4 文件基础落地；CHG-360-B/C 按 §10 子卡顺序接续。
 
 ---
+
+## ADR-160 — Admin Preview 协议（未公开视频后台预览前台）（CHG-361 / Wave 2 #8）
+
+> status: 🟢 Accepted（2026-05-27 / arch-reviewer Opus A− CONDITIONAL → 主循环消化 3 红线 + 5 黄线 + 3 advisory + 4 关键洞察 → 等同 A）
+> created: 2026-05-27
+> 决策者：主循环 `claude-opus-4-7` + arch-reviewer (`claude-opus-4-7`) 子代理 1 轮独立评审
+> 关联：ADR-001（直链播放）/ ADR-002（Slug + 短 ID 混合 URL）/ ADR-003（refresh_token + user_role 双 cookie / sameSite 'strict'）/ ADR-010（admin 鉴权层级 canAccessAdmin）/ ADR-039（middleware brand 识别范式）/ ADR-100 §4.5 R7 MUST-8（admin route ADR 前置 / 本 ADR 不新增 admin route，仅扩 contract 字段）/ ADR-110（错误码 14 码 / 零新增）/ ADR-121（R-MID-1 audit RETRO / D-121-4 GET 只读不写 audit）/ ADR-157（VisibilityStatus / ReviewStatus 真源复用）/ ADR-158（端点契约 9 段范式）/ ADR-159（双轨信号 X/Y 聚合 / 当前 Wave 邻居）
+> 对应交付：CHG-361-A（本卡 / ADR 起草 + getVideoDetailHref 沉淀到 packages/types）/ CHG-361-B（前台 preview 实施 / web-next middleware + fetchVideoMeta + 5 detail page + watch page）/ CHG-361-C（后台按钮 + moderation pending-queue contract 扩展）
+
+### §1 背景与问题
+
+**plan §10.6 #8 假设错位**：Wave 2 首卡实装"管理员预览未公开视频"时，发现 plan 初稿假设 URL `/video/${v.id}` 与 web-next 实际路由架构完全错位：
+
+| 维度 | plan §10.6 假设 | web-next 实际 |
+|------|------|------|
+| URL 根 | `/video/:id` | `/[locale]/{movie\|series\|tvshow\|anime\|others\|watch}/[slug]` |
+| 路由分流 | 单一 | 按 `video.type` 5 类 + watch（播放器）|
+| URL 标识 | `videos.id` (uuid) | slug + shortId 复合（ADR-002）|
+| 工具函数 | 无 | `getVideoDetailHref({ type, slug, shortId })` 已存在（`apps/web-next/src/lib/video-route.ts`）|
+| visibility 处理 | 未声明 | `findVideoByShortId` SQL 强制 `visibility_status = 'public'` AND `is_published = true`（`apps/api/src/db/queries/videos.ts:139-141`）→ 未公开视频 100% 返回 null |
+
+**PendingCenter 按钮当前 100% 失效**：`PendingCenter.tsx:122` 硬编码 `window.open('/video/${v.id}', '_blank')` → 命中 web-next `/[locale]/[type]/page.tsx` 列表路由匹配失败 → 404。
+
+**跨 app cookie 协议挑战**：admin session cookie（`refresh_token` HttpOnly + `user_role` 非 HttpOnly）由 apps/api 通过 `Set-Cookie: SameSite=Strict` 下发（`apps/api/src/routes/auth.ts:25-40`，**未设 domain**）。dev 模式同 host 跨 port 共享；prod 子域分离需 cookie 协议升级 → R1 OPS 前置条件。
+
+### §2 决策摘要（D-160-1..7）
+
+| 决策点 | 主题 | 推荐结论 | 性质 |
+|--------|------|---------|------|
+| D-160-1 | 触发协议 | **query `?preview=admin` + admin cookie 双因素**（query 显式触发 / cookie 鉴权）| 安全契约 |
+| D-160-2 | cookie 复用 | **复用 `refresh_token` + `user_role` cookie**；**prod 落地硬前置条件 = OPS 卡 CHG-OPS-COOKIE-SUBDOMAIN-1**（cookie domain `.resovo.tv` + SameSite Lax）| 跨 app 协议 |
+| D-160-3 | middleware 接入点 | **web-next middleware 注入 `x-admin-preview: 1` header** / page.tsx + fetchVideoMeta 读 header 派发 | 分层守护 |
+| D-160-4a | visibility 放行边界 | **`internal\|hidden` 放行 / `deleted_at IS NOT NULL` 永不放行 / `review_status = 'rejected'` 放行** | 业务边界 |
+| D-160-4b | access_token 跨 app 传递 | **选方案 ② web-next middleware 调 apps/api `/auth/refresh` 用 refresh_token cookie 拿短 TTL access_token**（不引入 access_token 进 URL log）| 工程协议 |
+| D-160-5 | 写入禁令 | **PlayerShell `previewMode` Props 屏蔽 feedback hook**（实证：当前无 view_count / watch_history / 推荐写入路径；唯一写路径是 `/v1/feedback/playback`）| 收敛精简 |
+| D-160-6 | audit 协议 | **不写 audit**（ADR-121 §后果第 2 项 / D-121-4 / GET 只读不在 R-MID-1 范围 / 4 真源 +0）| 合规边界 |
+| D-160-7 | URL 映射 + contract 扩展 | **moderation pending-queue 投影扩 `slug` + `shortId`**；`getVideoDetailHref` **沉淀到 `packages/types/src/url-helpers.ts`** 跨 app 复用 | contract 扩展 |
+
+### §3 决策点详述
+
+#### D-160-1 触发协议：双因素
+
+`?preview=admin` query + admin/moderator cookie 鉴权。query 显式表达"管理员明确意图查看未公开"；cookie 承担身份鉴权；两者缺一 → 走 public 路径。攻击面对比：单因素 cookie 模式下 admin 浏览公开页也走 preview 路径 → cache 污染 + 误触面广。query 外泄不威胁内容安全（被分享方无 cookie → 仍 404）。
+
+#### D-160-2 cookie 复用 + prod OPS 硬前置（R1 修订）
+
+**采纳**：复用 `refresh_token` + `user_role` cookie / 不引入新 cookie。
+
+**dev 同源可行**：`localhost` 在不同 port 共享所有 host=localhost 的 cookie；`SameSite=Strict` 在同 host 跨 port top-level navigation 中按 RFC 6265bis 视为同站 / Chrome / Firefox 一致。
+
+**prod 必备条件（R1 红线 / 升级为硬前置）**：
+- web-next 部署主域（`resovo.tv`）+ server-next 部署 admin 子域（`admin.resovo.tv`）
+- cookie Domain attribute 显式设为 `.resovo.tv`（`apps/api/src/routes/auth.ts:25-40` 当前未设）
+- `SameSite` 由 `Strict` 降为 `Lax`（Strict 禁止 cross-site top-level navigation 携带）
+
+**prod 落地硬前置条件**：**OPS 卡 `CHG-OPS-COOKIE-SUBDOMAIN-1`** 必须先于 CHG-361 系列 prod 部署完成。ADR 起草 + dev 实施（CHG-361-A/-B/-C）不依赖此前提，可先合 main 在 dev 验证。**prod 部署 gate**：OPS 卡未完成 → CHG-361 系列不得部署 prod（feature flag `ADMIN_PREVIEW_PROD_ENABLED=false` 守门 / 实施细节在 CHG-361-B）。
+
+**如 OPS 拒绝 cookie 协议升级 → 切方案 C（signed token）**：apps/api 新增签发端点 `POST /admin/preview-tokens` 返回 5 min TTL HMAC token / web-next middleware 接 query `?preview_token=...` 替代 cookie 鉴权 — 工程成本高出 ~2x，作为兜底而非首选。
+
+#### D-160-3 middleware 接入点
+
+web-next `middleware.ts` 扩 1 helper：
+
+```ts
+const HEADER_ADMIN_PREVIEW = 'x-admin-preview'
+
+function resolveAdminPreview(req: NextRequest): boolean {
+  if (req.nextUrl.searchParams.get('preview') !== 'admin') return false
+  const role = parseUserRole(req.cookies.get(COOKIE_USER_ROLE)?.value)
+  return role === 'admin' || role === 'moderator'
+}
+```
+
+middleware → header → page.tsx / fetchVideoMeta 通过 `headers().get('x-admin-preview') === '1'` 派发数据路径。**禁止**散点 cookie 读取（与 ADR-039 brand 识别同构）。
+
+#### D-160-4a visibility 放行边界 + cache 策略（Y1 修订）
+
+复用 ADR-157 真源：`VISIBILITY_STATUSES = ['public', 'internal', 'hidden']` / `REVIEW_STATUSES = ['pending_review', 'approved', 'rejected']`。
+
+| 字段 | 状态 | preview=on | preview=off |
+|------|------|------|------|
+| `visibility_status` | `'public'` | 显示 | 显示 |
+| `visibility_status` | `'internal'` | **显示** | 404 |
+| `visibility_status` | `'hidden'` | **显示** | 404 |
+| `review_status` | `'pending_review'` | 显示 | 404 |
+| `review_status` | `'rejected'` | **显示**（advisory：未来 FOLLOWUP 卡可收紧）| 404 |
+| `is_published` | `false` | 显示 | 404 |
+| `deleted_at` | `IS NOT NULL` | **永不显示** ❌（**Y2**：SQL 必须显式 `AND v.deleted_at IS NULL` + 单测 1 case 断言 soft-deleted preview=admin 仍 404）| 永不显示 |
+
+**新增 query**：`apps/api/src/db/queries/videos.ts` 增 `findVideoByShortIdAdminPreview(shortId)` — 删除 `is_published = true` + `visibility_status = 'public'` 过滤，保留 `deleted_at IS NULL`。**禁止**修改既有 `findVideoByShortId`（向后兼容）。
+
+**cache 策略（Y1）**：preview 路径必须 `next: { revalidate: 0 }`（当前 `fetchVideoMeta` 是 `revalidate: 60`）/ 或 cache tag 加 preview flag。否则 admin 预览的 internal 视频会被 ISR cache 60s / 期间匿名用户**可能命中** cache → visibility=public 严重泄漏。CHG-361-B 实施时必须在 fetchVideoMeta 派发 preview header 时同步切 `revalidate: 0`。
+
+#### D-160-4b access_token 跨 app 传递（R2 修订 / 拆出独立决策点）
+
+**问题**：preview 模式下 web-next server-side fetch 调 apps/api 需附 `Authorization: Bearer <admin_access_token>` / access_token 按 ADR-003 不在 cookie 中。
+
+**方案对比**：
+| 方案 | 描述 | 优 | 劣 |
+|------|------|---|---|
+| ① server-next `window.open` 时 query 透传 access_token | URL 中带 access_token=eyJ... | 实施简单 | URL log 风险 / access_token 进浏览器历史 |
+| ② **（采纳）** web-next middleware 调 apps/api `/auth/refresh` 用 refresh_token cookie 拿短 TTL access_token | server-side 凭据交换 | 安全（access_token 不进 URL）/ 复用既有 refresh 端点 | 需 web-next 新增 server-side refresh 调用链（~30 行 / CHG-361-B 范围内）|
+
+**选 ②** 理由：URL log 安全风险大于工程成本差异。
+
+**实施细节（CHG-361-B 范围）**：
+- web-next `src/lib/admin-access-token.ts`（新建 / `getAdminAccessToken()` server-side helper）
+- 内部调 `POST ${API_BASE}/auth/refresh` + 透传 `refresh_token` cookie（`headers: { cookie: req.headers.cookie }`）
+- 响应里拿 5 min TTL access_token（in-memory / 不持久化）
+- `fetchVideoMeta(slug, { previewMode: true })` 内部调 `getAdminAccessToken()` + 附 `Authorization: Bearer ${accessToken}` header
+
+**降级路径**：apps/api `/auth/refresh` 失败（refresh_token 过期 / 无效）→ 不放行 preview / 走 public 路径 → internal 视频 404。
+
+#### D-160-5 写入禁令 + AdminPlayer 边界澄清（Y4 修订）
+
+**实证审查**（grep web-next 写路径）：
+- ❌ 无 `view_count` 写路径
+- ❌ 无 `watch_history` 写路径
+- ❌ 无前台推荐写回
+- ✅ 唯一写路径：`POST /v1/feedback/playback`（仅 watch 页 player 真实渲染后触发）
+
+**实施**：preview 模式 watch 页 PlayerShell 接 `previewMode={true}` Props → 屏蔽 `usePlaybackFeedback` hook。
+
+**AdminPlayer vs PlayerShell{previewMode} 职责边界（Y4）**：
+| 路径 | 入口 | 范围 | 是否写 audit |
+|------|------|------|------|
+| AdminPlayer | server-next 审核台 PendingCenter 中部 | 极简（播放/暂停/进度/集数 / 无字幕 / 无影院模式 / 无 GlobalPlayerHost）| 已存在 audit（feedback 上报）|
+| PlayerShell{previewMode} | web-next watch 页（审核员通过 PendingCenter "↗ 前台" 按钮跳转）| 完整 web-next 播放器（含字幕 / 影院模式 / GlobalPlayerHost）+ 屏蔽 feedback hook | preview 模式不写 audit / D-160-6 |
+
+两者职责**不重复**：AdminPlayer 提供"审核台 inline 快速试播"；PlayerShell{previewMode} 提供"审核员看真实前台渲染" — 后者是审核员最终交付前的"用户视角"验证步骤。未来 CHG-361-FOLLOWUP 可评估是否统一，本卡范围内并存。
+
+**advisory A1**：未来 web-next 增 view_count / watch_history 写入 → 必须同步 preview 屏蔽列表（独立 lint rule 或文档约束）。
+
+#### D-160-6 audit 协议
+
+**不写 audit**。ADR-121 §后果第 2 项硬性约束："6 文件固定框架不适用纯只读端点"。preview 是 GET 纯只读 / 不修改 DB 状态 / 不构成 R-MID-1 第 N 次系统化 / 4 真源 +0 / 7 文件 RETRO 不触发。
+
+**重启条件**：GDPR / 等保三级合规要求"管理员访问未公开视频必留痕" → 起独立 ADR-160a + R-MID-1 第 N+1 次系统化。
+
+#### D-160-7 URL 映射 + contract 扩展 + getVideoDetailHref 沉淀
+
+**实证**：`VideoQueueRow` 类型（`packages/types/src/admin-moderation.types.ts`）**无** `slug` / `shortId` 字段（grep 验证 ✅）；moderation.ts pending-queue SQL 投影**无** `v.slug` / `v.short_id`。
+
+**契约扩展（非新端点 / 不触发 R7 MUST-8）**：
+- `VideoQueueRow` 增 `readonly slug: string | null` + `readonly shortId: string`
+- moderation.ts SQL SELECT 追加 `v.slug AS slug` + `v.short_id AS "shortId"`
+- `StagingRow extends VideoQueueRow` 自动继承
+
+**`getVideoDetailHref` 跨 app 沉淀**：沉淀到 `packages/types/src/url-helpers.ts`（与 VIDEO_TYPES 真源同包 / 纯函数 / 无 React 依赖）；web-next `src/lib/video-route.ts` 改为 re-export。**触发 CLAUDE.md §模型路由"共享组件 API 契约强制 Opus"**：本 ADR 已是 arch-reviewer Opus 评审输出 / 满足前置条件 / CHG-361-A 实施 commit 必须挂 `Subagents: arch-reviewer (claude-opus-4-7)` trailer（R3 红线）。
+
+**advisory G1**：`apps/web-next/src/lib/rewrite-match.ts:73` `DETAIL_PREFIXES = ['/movie', '/series', '/anime', '/tvshow', '/others']` 与 helper segment 派生有重复 → 未来 FOLLOWUP 卡同沉淀。
+
+### §4 端点契约扩展（非新端点 / verify:endpoint-adr 0 项新增）
+
+| # | 方法 | 路径 | 变更 | zod | 错误码 | 权限 |
+|---|------|------|------|-----|--------|------|
+| 1 | GET | `/v1/videos/:shortId` | 增 query `preview?: 'admin'`；`preview === 'admin'` 时要求 `Authorization: Bearer <admin/moderator access_token>` preHandler；走 `findVideoByShortIdAdminPreview` 放行 internal/hidden | `preview: z.literal('admin').optional()` | 401 UNAUTHENTICATED / 403 PERMISSION_DENIED / 404 NOT_FOUND | preview=admin 时 admin/moderator only / 否则 public |
+| 2 | GET | `/admin/moderation/pending-queue` | 投影 SELECT 增 `v.slug`, `v.short_id`；`VideoQueueRow` 增 `slug: string \| null` + `shortId: string` | 入参不变 | 既有 | admin/moderator（既有）|
+
+**cache**：preview 路径 `revalidate: 0`（Y1）/ 公开路径维持 `revalidate: 60`。
+
+**错误码**：100% 复用 ADR-110 14 码 / 零新增。
+
+### §5 类型契约
+
+```ts
+// packages/types/src/admin-moderation.types.ts VideoQueueRow 扩
+export interface VideoQueueRow {
+  readonly id: string
+  readonly slug: string | null   // 新增 / 与 Video.slug 同源
+  readonly shortId: string        // 新增 / 与 Video.shortId 同源（NOT NULL）
+  readonly title: string
+  readonly type: VideoType
+  // ... 既有 31 字段不变
+}
+
+// packages/types/src/url-helpers.ts（新建 / D-160-7）
+import type { VideoType } from './video.types'
+const URL_SEGMENT_MAP: Partial<Record<VideoType, string>> = { variety: 'tvshow' }
+const PRIMARY_DETAIL_TYPES = new Set<VideoType>(['movie', 'series', 'anime', 'variety'])
+export function getVideoDetailHref(video: { type: VideoType; slug: string | null; shortId: string }): string {
+  const segment = PRIMARY_DETAIL_TYPES.has(video.type)
+    ? (URL_SEGMENT_MAP[video.type] ?? video.type)
+    : 'others'
+  const slugPart = video.slug ? `${video.slug}-${video.shortId}` : video.shortId
+  return `/${segment}/${slugPart}`
+}
+
+// apps/web-next/src/lib/video-route.ts：改为 re-export
+export { getVideoDetailHref } from '@resovo/types'
+```
+
+**关键不新增**：actionType / targetKind / SourceCheckStatus / VisibilityStatus / VideoType。
+
+### §6 文件范围（拆 -A / -B / -C 三子卡 / PATCH ≤ 5 硬约束）
+
+**红线 R1**：CHG-361 范围必须拆 3 子卡，每卡 ≤ 5 文件，不援引 ADR-121 D-121-3 RETRO 7 文件豁免（本 ADR 不触发 R-MID-1 / D-160-6）。
+
+| 子卡 | 范围 | 文件 | verify gate（Y5）|
+|------|------|------|------|
+| **CHG-361-A**（本卡 / ADR + helper 沉淀）| ADR-160 起草 + `getVideoDetailHref` 沉淀到 packages/types + web-next 改 re-export | 4 文件：①`docs/decisions.md` ADR-160 段 ②`packages/types/src/url-helpers.ts` 新建 ③`packages/types/src/index.ts` export ④`apps/web-next/src/lib/video-route.ts` 改 re-export | typecheck + lint 全绿 / **commit trailer 必含 `Subagents: arch-reviewer (claude-opus-4-7)`（R3）**|
+| **CHG-361-B**（依赖 A / 前台 preview 实施）| middleware header 注入 + admin-access-token helper + fetchVideoMeta preview 派发 + apps/api preview query + admin query 函数 + PlayerShell previewMode + cache revalidate 0 | 5 文件：①`apps/web-next/src/middleware.ts` ②`apps/web-next/src/lib/admin-access-token.ts` 新建（D-160-4b）③`apps/web-next/src/lib/video-detail.ts` +preview 派发 + revalidate 切换（Y1）④`apps/api/src/routes/videos.ts` +`?preview=admin` query + preHandler ⑤`apps/api/src/db/queries/videos.ts` +`findVideoByShortIdAdminPreview`（Y2 SQL `deleted_at IS NULL` + 单测）+ `apps/web-next/src/components/player/PlayerShell.tsx` +`previewMode` Props | typecheck + lint + 5 case API 单测（preview happy / cookie 缺 401 / role user 403 / soft-deleted 404 / public 视频回归）|
+| **CHG-361-C**（依赖 B / 后台按钮 + contract 扩展）| moderation pending-queue 投影扩 slug/shortId + VideoQueueRow 类型扩 + PendingCenter 按钮改 getVideoDetailHref + WEB_NEXT_ORIGIN env | 5 文件：①`packages/types/src/admin-moderation.types.ts` VideoQueueRow +2 字段 ②`apps/api/src/db/queries/moderation.ts` SELECT +slug/short_id ③`apps/server-next/src/app/admin/moderation/_client/PendingCenter.tsx:122` 改 getVideoDetailHref ④env 配置 `NEXT_PUBLIC_WEB_NEXT_ORIGIN` ⑤`docs/changelog.md` 完成备注 | typecheck + lint + e2e 1 case（PendingCenter 按钮点击跳 web-next preview URL）+ docs/manual/moderation-console.md 同步 |
+
+**每卡完成度门槛**：A 落地后才能开 B（getVideoDetailHref import path 变更）/ B 落地后才能开 C（preview 端点 + admin query 函数前置）/ A 内 helper 移动必须先跑 typecheck 全绿。
+
+### §7 风险与替代方案
+
+| 替代方案 | 描述 | 否决理由 |
+|---------|------|---------|
+| iframe 嵌入 | server-next admin 页面 iframe 嵌入 web-next 预览 | iframe cookie 跨 origin / sandbox 与 player 全屏冲突 / 体验降级 |
+| signed token 单因素 | apps/api 签发短 TTL JWT URL 参数 / 不依赖 cookie | 实现成本高（新签发端点 + 密钥管理 + token TTL）；双因素已满足；作为 prod 跨子域不可用时的兜底（OPS 拒绝 cookie 升级）|
+| packages/site-views 抽取 | web-next detail page 抽到独立 package / server-next 内嵌 | 远超本卡范围 / 引入新 package / 改动 30+ 文件 / 与价值排序冲突 |
+| dev-only / prod 不实装 | 仅 dev 环境 preview 按钮可点 | 不解决 prod 审核流需求 |
+
+**已知风险**：
+1. **R1 prod cookie 跨子域**：硬前置 OPS 卡 CHG-OPS-COOKIE-SUBDOMAIN-1 / prod 部署 gate by feature flag
+2. **R2 access_token 跨 app**：选方案 ② server-side refresh 调用链 / 不进 URL log
+3. **Y1 ISR 缓存污染**：preview 路径强制 `revalidate: 0`
+4. **G2 prod cookie 配置升级独立 OPS 卡**：CHG-OPS-COOKIE-SUBDOMAIN-1（cookie domain `.resovo.tv` + SameSite Lax / 不在 CHG-361 范围）
+5. **G3 audit 重启条件**：GDPR / 等保三级合规要求时起 ADR-160a
+
+### §8 RETRO 框架（不适用 / D-160-6）
+
+**不触发 R-MID-1**。理由：preview 是 GET 纯只读 / 不写 admin_audit_log / 不新增 actionType / 4 真源 +0 / ADR-121 §后果第 2 项 + D-121-4。
+
+未来重启条件见 §3 D-160-6 末段。
+
+### §9 结论 + 自评级
+
+| 维度 | 评级 | 理由 |
+|---|---|---|
+| 命名 | A | header `x-admin-preview` 与 `x-resovo-brand/theme` 同模式；query `?preview=admin` 显式语义；不引入新枚举 |
+| 对称性 | A | middleware → header → page.tsx 派发与 brand/theme 100% 同构；contract 扩展走"既有端点投影扩字段"非新端点 |
+| 状态职责 | A | 零写入 / 零 audit / preview helper 单点 / 派发单点 / DB 查询单点（既有 `findVideoByShortId` 不动）|
+| 扩展性 | A | preview 协议可扩 `?preview=staging/draft` 同模式；getVideoDetailHref 跨 app 沉淀；signed token 升级路径已声明（兜底）|
+
+**综合**：**A**（arch-reviewer Opus A− CONDITIONAL → 主循环消化 3 红线 + 5 黄线 + 3 advisory + 4 关键洞察后等同 A）
+
+### §10 关联代码（CHG-361-A 范围）
+
+- `docs/decisions.md`（本 ADR-160 段）
+- `packages/types/src/url-helpers.ts`（新建 / getVideoDetailHref 沉淀）
+- `packages/types/src/index.ts`（export getVideoDetailHref）
+- `apps/web-next/src/lib/video-route.ts`（改为 re-export）
+
+### §11 D 决策点闭环
+
+- **D-160-1**：触发协议双因素 ✅ closed
+- **D-160-2**：cookie 复用 + prod OPS 硬前置（R1 修订）✅ closed
+- **D-160-3**：middleware header 注入 ✅ closed
+- **D-160-4a**：visibility 放行 + cache 策略（Y1 修订）✅ closed
+- **D-160-4b**：access_token 跨 app 传递（R2 修订 / 选方案 ②）✅ closed
+- **D-160-5**：写入禁令 + AdminPlayer 边界（Y4 修订）✅ closed
+- **D-160-6**：不写 audit ✅ closed
+- **D-160-7**：URL 映射 + getVideoDetailHref 沉淀（R3 修订）✅ closed
+
+**结论**：ADR-160 status 🟢 Accepted（2026-05-27 / arch-reviewer Opus A− CONDITIONAL → 主循环消化 3 红线 + 5 黄线 + 3 advisory + 4 关键洞察 → 等同 A）；CHG-361-A 4 文件基础落地（本 ADR + helper 沉淀）；CHG-361-B/C 按 §6 子卡顺序接续；prod 部署 gate by OPS 卡 CHG-OPS-COOKIE-SUBDOMAIN-1。
+
+---

@@ -33,3 +33,6 @@ export {
 
 // ── ADR-157 D-157-1 类型守卫工具 ────────────────────────────────
 export * from './utils/exhaustive'
+
+// ── ADR-160 D-160-7 跨 app URL 派生 helper（CHG-361-A）──────────
+export { getVideoDetailHref } from './url-helpers'

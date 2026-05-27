@@ -1,18 +1,8 @@
-import type { VideoType } from '@resovo/types'
+/**
+ * video-route.ts — web-next URL 派生 re-export（ADR-160 D-160-7 / CHG-361-A）
+ *
+ * 实现已沉淀到 `packages/types/src/url-helpers.ts` 供跨 app 共享。
+ * 本文件保留作为 web-next 内的 import 入口（向后兼容 / 既有消费方无需改 import 路径）。
+ */
 
-const URL_SEGMENT_MAP: Partial<Record<VideoType, string>> = {
-  variety: 'tvshow',
-}
-
-const PRIMARY_DETAIL_TYPES = new Set<VideoType>(['movie', 'series', 'anime', 'variety'])
-
-function getDetailSegment(type: VideoType): string {
-  if (!PRIMARY_DETAIL_TYPES.has(type)) return 'others'
-  return URL_SEGMENT_MAP[type] ?? type
-}
-
-export function getVideoDetailHref(video: { type: VideoType; slug: string | null; shortId: string }): string {
-  const segment = getDetailSegment(video.type)
-  const slugPart = video.slug ? `${video.slug}-${video.shortId}` : video.shortId
-  return `/${segment}/${slugPart}`
-}
+export { getVideoDetailHref } from '@resovo/types'

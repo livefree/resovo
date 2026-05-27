@@ -6,7 +6,7 @@
 
 ## 进行中任务
 
-（空 — Wave 1 全部完成 ✅ + CHG-355/356/357 三张 follow-up bug fix + 增强已闭环 / 待用户实测验收）
+（空 — CHG-361-A ✅ 已完成 / ADR-160 落地 + getVideoDetailHref 沉淀 + arch-reviewer Opus A− → 等同 A / 待 -B/-C 启动）
 
 ---
 
