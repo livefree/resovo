@@ -47,6 +47,18 @@ interface DbSourceRow {
   created_at: string
 }
 
+/**
+ * CHG-352 / arch-reviewer I1：扩展行类型仅 SourceService 内部用
+ * 含 effective_score 计算所需 4 raw 字段（probe/render/latency/quality_detected）
+ * 不污染 mapSource / VideoSource 公共契约
+ */
+export interface DbSourceRowWithSignals extends DbSourceRow {
+  probe_status: string
+  render_status: string
+  latency_ms: number | null
+  quality_detected: string | null
+}
+
 function mapSource(row: DbSourceRow): VideoSource {
   return {
     id: row.id,
@@ -60,6 +72,14 @@ function mapSource(row: DbSourceRow): VideoSource {
     isActive: row.is_active,
     lastChecked: row.last_checked,
   }
+}
+
+/**
+ * CHG-352 / 含 4 信号字段的 raw mapping（Service 层用）
+ * Service 自行调 calculateEffectiveScore + sort 后合成 VideoSource
+ */
+export function mapSourceBase(row: DbSourceRow): VideoSource {
+  return mapSource(row)
 }
 
 // ── 查询：按 videoId + episode 获取活跃播放源 ─────────────────────
@@ -97,6 +117,46 @@ export async function findActiveSourcesByVideoId(
     params
   )
   return result.rows.map(mapSource)
+}
+
+/**
+ * CHG-352 / route-labeling Phase 1：含 4 信号字段的查询变体
+ * 返回 raw DbSourceRowWithSignals，由 SourceService 计算 effectiveScore + 排序
+ * arch-reviewer I1：不污染 mapSource / findActiveSourcesByVideoId 既有契约
+ */
+export async function findActiveSourcesWithSignalsByVideoId(
+  db: Pool,
+  videoId: string,
+  episode?: number
+): Promise<DbSourceRowWithSignals[]> {
+  const conditions = [
+    'video_id = $1',
+    'is_active = true',
+    'deleted_at IS NULL',
+  ]
+  const params: unknown[] = [videoId]
+  let idx = 2
+
+  if (episode !== undefined) {
+    conditions.push(`episode_number = $${idx++}`)
+    params.push(episode)
+  }
+
+  const result = await db.query<DbSourceRowWithSignals>(
+    `SELECT vs.id, vs.video_id, vs.season_number, vs.episode_number,
+            vs.source_url, vs.source_name, vs.quality, vs.type,
+            vs.is_active, vs.submitted_by, vs.last_checked,
+            vs.deleted_at, vs.created_at,
+            vs.probe_status, vs.render_status, vs.latency_ms, vs.quality_detected,
+            cs.display_name AS site_display_name
+     FROM video_sources vs
+     JOIN videos v ON v.id = vs.video_id
+     LEFT JOIN crawler_sites cs ON cs.key = COALESCE(vs.source_site_key, v.site_key)
+     WHERE ${conditions.map((c) => `vs.${c}`).join(' AND ')}
+     ORDER BY vs.created_at ASC`,
+    params
+  )
+  return result.rows
 }
 
 // ── 查询：按 videoId 获取所有源 ID（用于举报验证）─────────────────

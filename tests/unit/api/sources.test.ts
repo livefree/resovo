@@ -23,6 +23,19 @@ vi.mock('@/api/lib/postgres', () => ({ db: {} }))
 
 vi.mock('@/api/db/queries/sources', () => ({
   findActiveSourcesByVideoId: vi.fn(),
+  findActiveSourcesWithSignalsByVideoId: vi.fn(),
+  mapSourceBase: vi.fn((row: Record<string, unknown>) => ({
+    id: row.id,
+    videoId: row.video_id,
+    episodeNumber: row.episode_number,
+    sourceUrl: row.source_url,
+    sourceName: row.source_name,
+    siteDisplayName: row.site_display_name ?? null,
+    quality: row.quality ?? null,
+    type: row.type,
+    isActive: row.is_active,
+    lastChecked: row.last_checked ?? null,
+  })),
   findSourceById: vi.fn(),
   updateSourceActiveStatus: vi.fn(),
 }))
@@ -38,6 +51,7 @@ import * as videoQueries from '@/api/db/queries/videos'
 
 const mockSQ = sourceQueries as {
   findActiveSourcesByVideoId: ReturnType<typeof vi.fn>
+  findActiveSourcesWithSignalsByVideoId: ReturnType<typeof vi.fn>
   findSourceById: ReturnType<typeof vi.fn>
 }
 const mockVQ = videoQueries as {
@@ -66,6 +80,28 @@ const MOCK_SOURCE = {
   lastChecked: null,
 }
 
+// CHG-352: SourceService 现在调 findActiveSourcesWithSignalsByVideoId 返回 raw row (snake_case + 4 信号字段)
+const MOCK_RAW_ROW = {
+  id: 'source-uuid-1',
+  video_id: 'video-uuid-1',
+  season_number: 1,
+  episode_number: null,
+  source_url: 'https://cdn.example.com/video.m3u8',
+  source_name: '线路1',
+  site_display_name: null,
+  quality: '1080P',
+  type: 'hls',
+  is_active: true,
+  submitted_by: null,
+  last_checked: null,
+  deleted_at: null,
+  created_at: '2026-05-27T00:00:00Z',
+  probe_status: 'ok',
+  render_status: 'ok',
+  latency_ms: 100,
+  quality_detected: null,
+}
+
 // ── 辅助：测试 app ────────────────────────────────────────────────
 
 async function buildApp() {
@@ -88,7 +124,8 @@ describe('GET /v1/videos/:id/sources', () => {
   beforeEach(async () => {
     vi.clearAllMocks()
     mockVQ.findVideoByShortId.mockResolvedValue(MOCK_VIDEO)
-    mockSQ.findActiveSourcesByVideoId.mockResolvedValue([MOCK_SOURCE])
+    // CHG-352: SourceService 改用 findActiveSourcesWithSignalsByVideoId (返回 raw row)
+    mockSQ.findActiveSourcesWithSignalsByVideoId.mockResolvedValue([MOCK_RAW_ROW])
     app = await buildApp()
   })
   afterEach(() => app.close())
@@ -115,7 +152,8 @@ describe('GET /v1/videos/:id/sources', () => {
       url: '/v1/videos/abCD1234/sources?episode=1',
     })
     expect(res.statusCode).toBe(200)
-    const callArgs = mockSQ.findActiveSourcesByVideoId.mock.calls[0]
+    // CHG-352: SourceService 改用 findActiveSourcesWithSignalsByVideoId
+    const callArgs = mockSQ.findActiveSourcesWithSignalsByVideoId.mock.calls[0]
     expect(callArgs[2]).toBe(1) // episode 参数
   })
 
@@ -127,7 +165,7 @@ describe('GET /v1/videos/:id/sources', () => {
   })
 
   it('无播放源时返回空数组', async () => {
-    mockSQ.findActiveSourcesByVideoId.mockResolvedValue([])
+    mockSQ.findActiveSourcesWithSignalsByVideoId.mockResolvedValue([])
     const res = await app.inject({ method: 'GET', url: '/v1/videos/abCD1234/sources' })
     expect(res.statusCode).toBe(200)
     expect(res.json().data).toEqual([])

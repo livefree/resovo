@@ -180,6 +180,12 @@ export interface VideoSource {
   type: SourceType
   isActive: boolean
   lastChecked: string | null
+  /**
+   * CHG-352 / route-labeling Phase 1 Layer A：effective_score (0.0–1.0)
+   * 后端 SourceService.listSources 计算 + 排序；前台 SourceBar 按此分值渲染主题标签
+   * arch-reviewer (claude-opus-4-7) R1：可选字段（防破坏既有 5 处消费方 / mock factory）
+   */
+  effectiveScore?: number
 }
 
 // ── 字幕 ─────────────────────────────────────────────────────────

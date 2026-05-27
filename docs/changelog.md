@@ -9134,3 +9134,62 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
   - 未来 admin 模块用 search 时参考 packages/admin-ui DataTable 一体化（CHG-DESIGN-02 真源）避免手撸
 - **闭环**：CHG-350 焦点 bug 3 次复发根治；强制重构评估完成（arch-reviewer Opus PASS / 红线全采纳）；不会再有"焦点丢失" / 焦点稳定与 admin-ui DataTable 一体化对齐
 - **后续**：CHG-352 route-labeling Phase 1 后端（Wave 1 #8）
+
+## [CHG-352] route-labeling Phase 1 后端 effective_score 排序 — Wave 1 #8/9
+- **完成时间**：2026-05-27
+- **来源序列**：SEQ-20260527-MOD-WAVE1（Wave 1 / 卡 8/9 / plan §17 / route-labeling-system.md §Layer A）
+- **执行模型**：claude-opus-4-7（主循环不切换 §16.5）
+- **子代理**：arch-reviewer (claude-opus-4-7) 1 轮独立评审 → **A-CONDITIONAL** → 主循环消化 3 红线 + 4 黄线 + 4 关键洞察 → 等同 A
+- **任务来源**：route-labeling-system.md Phase 1 Layer A 实施 — 后端 SourceService 计算 effective_score + 排序，前台 SourceBar (CHG-353) 直接消费排序结果
+- **评审消化对照**：
+  - **R1**：VideoSource.effectiveScore **可选**字段（防破坏既有 5 处消费方 + factory）
+  - **R2**：单测 ≥ 10 case 含 fallback 链 + 排序稳定性 + 边界（实际 28 case）
+  - **R3**：公式抽到 `apps/api/src/lib/route-scoring.ts` 纯模块（不放 SourceService 私有 / 未来 worker 可复用）
+  - **A1**：Service 层 + JS sort（拒 SQL CASE WHEN / 拒 query 层污染业务逻辑）
+  - **B1**：effectiveScore 暴露在 VideoSource（前台 SourceBar 消费）
+  - **C1**：priority_bonus 默认 0（Migration 064 未落地）
+  - **D1**：dead 自然末尾排序（公式天然成立 / 不需特殊 CASE）
+  - **E1**：仅前台 SourceService 改 / admin SourcesMatrixService 不动（Phase 3 + Migration 064 再扩）
+  - **F3**：抽到 `apps/api/src/lib/route-scoring.ts`（拒 packages/types 也拒 SourceService 私有）
+  - **G**：toBeCloseTo(_, 3) 精度 / 拒 snapshot（admin-ui 零先例）
+  - **H**：主动跑全量 typecheck 验证（5 处 VideoSource 消费方零回归）
+  - **I1**：mapSource 不污染 — 新增 findActiveSourcesWithSignalsByVideoId + mapSourceBase（既有 findActiveSourcesByVideoId 契约不变）
+  - **I2**：factory 历史教训 — 可选字段 + factory 不动 = 0 风险
+  - **I3**：数学校准 max=1.00 / min=0.030 / 中性=0.345 / pending<dead+4K<ok+240P+slow（期望排序行为）
+  - **I4**：route response 增字段向后兼容 / 老客户端可忽略
+- **改动文件**（6 项 / docs 单算）：
+  - `apps/api/src/lib/route-scoring.ts`（**新建** / 纯函数模块 / WEIGHTS + 4 SCORE_MAP + 4 子函数 + calculateEffectiveScore 主函数）
+  - `apps/api/src/db/queries/sources.ts`（加 DbSourceRowWithSignals + findActiveSourcesWithSignalsByVideoId + mapSourceBase / 既有 mapSource 不动 / I1 防污染）
+  - `apps/api/src/services/SourceService.ts`（listSources 改用新 query + 调 calculateEffectiveScore + sort by score DESC + stable secondary key created_at ASC）
+  - `packages/types/src/video.types.ts`（VideoSource 加 effectiveScore?: number 可选字段 / R1）
+  - `tests/unit/api/source-effective-score.test.ts`（**新建** / 28 case：权重 + 4 子公式 + fallback 链 + 数学校准 + priority 默认 + 排序稳定性 / toBeCloseTo 精度）
+  - `tests/unit/api/sources.test.ts`（mock 更新 + MOCK_RAW_ROW）
+  - `docs/manual/route-labeling.md`（**新建** / Phase 1 公式 + 权重 + 档位 + 范围声明 + 数学校准表 + FAQ）
+- **新增依赖**：无
+- **数据库变更**：无（复用 migration 054/059 既有 4 信号字段 / priority Migration 064 Phase 3 再落）
+- **门禁**：
+  - typecheck ✅（5 包全 PASS / VideoSource 加字段零回归）
+  - lint ✅
+  - source-effective-score 28/28 PASS
+  - sources 9/9 PASS（mock 更新后零回归）
+  - verify:adr-contracts ✅（192 admin 路由 / 70 ADR 端点 / 222 D-N 全闭环）
+- **公式校准（数学验证）**：
+  - max = 1.00（全 ok + 4K + ≤200ms + priority=1）
+  - min = 0.030（全 dead + 240P + >2s + priority=0）
+  - 中性 = 0.345（全 NULL/pending）
+  - 期望排序：ok+240P+slow (0.53) > dead+4K+fast (0.45) > 中性 pending (0.345)
+- **范围限制（Phase 1）**：
+  - ✅ 前台 GET /videos/:shortId/sources 按 effective_score 排序
+  - ❌ admin 后台 SourcesMatrixService 不动（Phase 3 + Migration 064 后扩 / E1）
+  - ❌ LinesPanel EpisodeMini 不加 effectiveScore（避免 admin-ui Props 契约爆破）
+  - ❌ priority_bonus = 0（Migration 064 未落地）
+- **下游契约（CHG-353 消费）**：
+  - GET /videos/:shortId/sources 响应增字段 effectiveScore (0.0-1.0)
+  - 前台 SourceBar.tsx 按已排序列表渲染 + 用 effectiveScore 决定颜色编码
+  - 主题标签 applyThemeLabels(routes, theme) 按索引位置（最优在前）分配主题名
+- **advisory（待 Phase 3 / 后续卡）**：
+  - G1：Migration 064 落地后 admin SourcesMatrixService 同步消费 effectiveScore + LinesPanel 显示分值条
+  - G2：worker level1-probe/level2-render 写回 probe_status/render_status/latency_ms 后，复用 route-scoring.ts 做 health KPI 计算
+  - I3 关键洞察：CHG-353 主题渲染给 pending 行加"检测中"标记，避免用户困惑"未知 > 已知差"
+- **闭环**：CHG-352 完成；plan §17 Phase 1 Layer A 后端交付；Wave 1 进度 7/9 → 8/9
+- **后续**：CHG-353（route-labeling Phase 1 前台主题渲染 / line-display-name.ts 加 RouteTheme + 节气/NATO 常量 + applyThemeLabels + SourceBar.tsx 消费 effectiveScore）→ Wave 1 验收
