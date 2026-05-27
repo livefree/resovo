@@ -57,6 +57,8 @@ echo "  - verify:error-message                — ADR §错误码 message 模板
 echo "  - verify:adr-d-numbers                — ADR D-N 偏离清单完成度 (advisory)"
 echo "  - verify:sql-schema-alignment         — queries SQL 列引用 vs migration schema 核验 (advisory)"
 echo "  - verify:style-shorthand-conflict     — React inline style shorthand+longhand 冲突 (FAIL fast，CHG-SN-6-06 升级)"
+echo "  - verify:admin-shell-types-mirror     — packages/admin-ui shell types ↔ server-next 双源镜像"
+echo "  - verify:enum-ssot                    — ADR-157 D-157-4 视频枚举字面量守卫 (advisory / baseline 截止 2026-07-26)"
 npm run verify:adr-contracts
 
 echo "[6/6] 单元测试"

@@ -8594,3 +8594,39 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **闭环 D-N 偏离**：D-157-3 部分（i18n key 跨应用复用 / web-next 端）+ D-157-5 web-next 部分 + ADR-048 AMENDMENT 落盘
 - **门禁**：typecheck ✅ / lint ✅ / web-next + media + admin/search targeted 50/50 PASS ✅ / verify:adr-contracts ✅
 - **e2e 跳过理由**：单测全 PASS / 改动 type-safe（union 扩展 + switch case 增加 + i18n hook 替换，无运行时行为变化）；待 @livefree dev 实测 SEARCH 页搜索 + 详情页 type label / e2e 后续按需 follow-up
+
+## [CHG-344] scripts/verify-enum-ssot.mjs 守卫脚本 + 集成 — SEQ-20260527 闭合
+- **完成时间**：2026-05-26 22:35
+- **来源序列**：SEQ-20260527-ENUMS-SSOT-IMPL（最后一卡 / **SEQ 闭合**）
+- **执行模型**：claude-opus-4-7 / 子代理：无
+- **改动文件**（4 文件 / 4 PATCH 项 ≤ 5 ✅）：
+  - `scripts/verify-enum-ssot.mjs`（**新建** / grep 守卫脚本 / advisory 模式）：检测 12 enum 字面量硬编码 + 白名单（packages/types / packages/admin-ui/enums / categories.ts / messages / tests / scripts）+ baseline 例外清单加载；输出违规清单 + 文件:行号 + 4 步修复路径
+  - `scripts/enum-ssot-baseline.json`（**新建** / 实施期空 [] / 截止 2026-07-26 + 每月评审 / 逾期升 P1 跟进卡）
+  - `package.json`：增 `"verify:enum-ssot": "node scripts/verify-enum-ssot.mjs"` + 串入 `verify:adr-contracts` 末尾
+  - `scripts/preflight.sh`：第 5f 描述块加 `verify:admin-shell-types-mirror` + `verify:enum-ssot` 两行说明
+- **首跑结果**：检出 80 处 enum 字面量"违规"（advisory exit 0 不阻塞 CI）；分类：
+  - **类型注解 union 字面量**（合法用法 / 大部分）：如 `status?: 'ongoing' | 'completed'`、`type X = 'a' | 'b'`；未来脚本可优化 AST 级排除 type 上下文
+  - **真正业务硬编码**（少数）：apps/server v1 StagingTable / VideoRowActions PRIMARY_TYPES Set / API SourceParserService maps / dev/fallback-preview 等
+  - 后续 follow-up CHG 按 baseline 截止前消化真违规 + 改进脚本过滤精度
+- **闭环 D-N 偏离**：**D-157-4 完整闭环 + D-157-5 全卡完成 + D-157-6（不做范围声明已落 ADR）→ SEQ-20260527-ENUMS-SSOT-IMPL 闭合**
+- **门禁**：typecheck ✅ / lint ✅ / verify:adr-contracts 串联含 verify:enum-ssot 整体 exit 0 ✅
+
+## SEQ-20260527-ENUMS-SSOT-IMPL 闭合总结
+- **执行期**：2026-05-26 22:00 ~ 22:35
+- **完成卡数**：10 张（CHG-339-A/B/C + CHG-340-A/B/C + CHG-341/342/343/344）
+- **commits**：b7750d04 / 38915dfa / 6fbf9f15 / ada1ed97 / 79637e9b / deae7c11 / 7094ffe9 / 3b3fbe08 / 201b38b7 / +CHG-344
+- **架构产出**：
+  - packages/types：12 enum 双形态（VIDEO_TYPES/VIDEO_GENRES/.../SOURCE_TYPES）+ assertExhaustive 工具
+  - packages/admin-ui：AdminSelectOption<T> 泛型扩展 + 12 个 getXxxOptions(t?) helper + 共享 TFunction
+  - apps/api：14 处 zod 联动（z.enum(VIDEO_TYPES) 等派生）
+  - apps/server-next：5 处独立常量迁移 + SubmissionsListClient news/kids 修复（用户原 P0 反馈彻底闭环）
+  - apps/web-next：SearchPage tab 12 项 + FallbackCover icon 11 case + assertExhaustive + VideoMeta useTranslations + ADR-048 AMENDMENT
+  - apps/server v1：AdminVideoForm Genre 20 项（v1 维护期 P1）
+  - scripts/verify-enum-ssot.mjs：advisory 守卫 + baseline 截止 2026-07-26
+- **3 次 arch-reviewer Opus 评审全 PASS**：
+  - CHG-338 ADR-157 起草：A- CONDITIONAL → 1 红 + 2 黄 + 3 绿全闭环 → 等同 A
+  - CHG-340-A admin-ui 共享层：A- CONDITIONAL → 黄线 fallback 漂移 JSDoc 警告消化
+  - CHG-340-B 同范式扩展：A- CONDITIONAL → 黄线 EpisodePattern.ongoing 译法消化
+  - CHG-340-C 同范式扩展：A PASS 无线
+- **覆盖原始用户反馈**：视频编辑表单类型下拉 4→11（CHG-337 P0 速修 + CHG-339-A/CHG-340-A/CHG-341 跨层 SSOT 根治）
+- **跨包 SSOT 协议成熟**：未来新增 enum 项只需改 video.types.ts 一处数组，API zod + admin-ui helpers + 后台 select + 前台 chip 全部自动同步

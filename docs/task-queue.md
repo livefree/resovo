@@ -1541,9 +1541,10 @@ HOTFIX-A → B → C 顺序串行（B 在 A SQL fix 基础上扩 CASE / C 在 B 
 
 ## [SEQ-20260527-ENUMS-SSOT-IMPL] 视频枚举值跨层 SSOT 实施（ADR-157 落地）
 
-- **状态**：🔄 执行中
+- **状态**：✅ 已完成（全 10 卡闭合 / 2026-05-26 22:35）
 - **创建时间**：2026-05-26 22:00
-- **最后更新时间**：2026-05-26 22:00
+- **最后更新时间**：2026-05-26 22:35
+- **SEQ 闭合总结**：D-157-1 ~ D-157-6 共 6 条 D-N 偏离全部闭环；ADR-157 完整落地；12 enum 双形态 + 12 admin-ui helpers + API zod 联动 + 守卫脚本 + ADR-048 AMENDMENT 全套就位
 - **目标**：按 ADR-157 §5 实施分卡，将 12 个权威 enum 全部落地双形态 + admin-ui Option helpers + 守卫脚本；闭环 D-157-1 ~ D-157-6 共 6 条 D-N 偏离
 - **范围**：packages/types + packages/admin-ui + apps/api zod + apps/server-next 4 处独立常量 + apps/web-next P1/P2 + apps/server v1 Genre + scripts 守卫
 - **依赖**：CHG-337 ✅ + ADR-157 PASS ✅
@@ -1654,7 +1655,7 @@ HOTFIX-A → B → C 顺序串行（B 在 A SQL fix 基础上扩 CASE / C 在 B 
    - 同 commit 备注 "v1 维护期 bug 修复豁免重写期约束 ADR-035"
    - 验收要点：apps/server typecheck + 该组件单测（如有）PASS
 
-10. **CHG-344** — scripts/verify-enum-ssot.mjs 守卫脚本 + 集成（状态：⬜ 待开始）
+10. **CHG-344** — scripts/verify-enum-ssot.mjs 守卫脚本 + 集成（状态：✅ 已完成 / 2026-05-26 22:35 / 执行模型 claude-opus-4-7 / 子代理 无 / D-157-4 + 全 SEQ 闭合 / 首跑检出 80 处违规，advisory 不阻塞，baseline 截止 2026-07-26 + 每月评审）
     - 创建时间：2026-05-26 22:00
     - 建议模型：sonnet
     - 文件范围（5 文件 / 4 PATCH 项）：
