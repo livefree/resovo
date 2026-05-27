@@ -15961,7 +15961,7 @@ const BangumiGapsQuerySchema = z.object({
 | `rating.rank` | `external_data.bangumi_entries.rank` | 排名（dump 侧，过滤用） |
 | `tags[].name` | `media_catalog.tags` | |
 | `date` | `media_catalog.release_date` + 派生 `year` | |
-| `total_episodes`/`eps` | rich 侧（REST API getSubject）→ `videos.episode_count` 经 step3 专用 query（R2，见决策要点 6） | **archive subject dump 无 eps 字段**，dump 侧 `bangumi_entries.episode_count` 保持 null（实测 schema 确认） |
+| `eps`（本篇数，非 total_episodes）| rich 侧（REST API getSubject）→ `videos.episode_count` 经 step3 专用 query（R2，见决策要点 6） | **P1 修订**：用 wiki `eps`（本篇）或 `getEpisodes` 中 `type===0` 计数，**不用 `total_episodes`**（含 SP/OP/ED 章节会高估用户侧剧集数）。archive subject dump 无 eps，dump 侧 `episode_count` 保持 null |
 | `rank` | dump 侧 → `bangumi_entries.rank`（archive 顶层 `rank` 字段，实测存在） | seed 高分榜过滤用 |
 | `nsfw` | dump 侧 → `bangumi_entries.nsfw`（archive 顶层 `nsfw`，实测存在）。**信息信号，不自动写 content_rating**（Y5 修订：nsfw 与项目"色情"定义不等同，治理字段不越权自动写） | seed 默认跳过 nsfw 条目；后台视图给审核员标记 |
 | infobox 导演/脚本 | `media_catalog.director` / `writers` | utils 解析；解析失败返回 undefined 不写（A2） |

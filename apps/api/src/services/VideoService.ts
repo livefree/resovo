@@ -20,7 +20,7 @@ import { CACHE_PREFIXES } from '@/api/services/CacheService'
 import { AuditLogService } from '@/api/services/AuditLogService'
 import { normalizeTitle } from '@/api/services/TitleNormalizer'
 import { enrichmentQueue } from '@/api/lib/queue'
-import type { EnrichJobData } from '@/api/workers/enrichmentWorker'
+import type { EnrichJobData } from '@/api/services/MetadataEnrichService'
 
 // ── ADR-145 / CHG-SN-8-FUP-VIDEO-MANUAL-ADD-EP-A：admin 手动添加视频 ─────
 

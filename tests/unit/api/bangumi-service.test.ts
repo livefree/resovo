@@ -147,6 +147,7 @@ const mGetSubject = bangumiLib.getSubject as ReturnType<typeof vi.fn>
 const mGetEpisodes = bangumiLib.getEpisodes as ReturnType<typeof vi.fn>
 const mConfigured = bangumiLib.isBangumiApiConfigured as ReturnType<typeof vi.fn>
 const mFindByTitle = extQ.findBangumiByTitleNorm as ReturnType<typeof vi.fn>
+const mFindById = extQ.findBangumiById as ReturnType<typeof vi.fn>
 const mUpsertRef = extQ.upsertVideoExternalRef as ReturnType<typeof vi.fn>
 const mUpsertEps = epQ.upsertCatalogEpisodes as ReturnType<typeof vi.fn>
 const mUpdateEpCount = vQ.updateEpisodeCount as ReturnType<typeof vi.fn>
@@ -222,5 +223,60 @@ describe('BangumiService.matchAndEnrich', () => {
     const r = await svc.matchAndEnrich({ videoId: VID, catalogId: CID, titleNorm: 'x', year: 2007 })
     expect(r).toMatchObject({ matched: 'auto', degraded: true })
     expect(mUpdateCatalog).toHaveBeenCalled()
+  })
+
+  it('集数回填用 wiki eps（本篇），不用 total_episodes（P1）', async () => {
+    mFindByTitle.mockResolvedValue([entry({ year: 2007 })])
+    // total_episodes=26（含 SP/OP/ED）但 eps=24（本篇）→ 应回填 24
+    mGetSubject.mockResolvedValue(subject({ eps: 24, total_episodes: 26 }))
+    mGetEpisodes.mockResolvedValue([])
+    await svc.matchAndEnrich({ videoId: VID, catalogId: CID, titleNorm: 'x', year: 2007 })
+    expect(mUpdateEpCount).toHaveBeenCalledWith(expect.anything(), VID, 24)
+  })
+
+  it('eps 缺省时数 type===0 本篇集数回填（P1）', async () => {
+    mFindByTitle.mockResolvedValue([entry({ year: 2007 })])
+    mGetSubject.mockResolvedValue(subject({ eps: 0, total_episodes: 13 }))
+    mGetEpisodes.mockResolvedValue([
+      { id: 1, type: 0, name: '', name_cn: '', sort: 1, ep: 1, airdate: '', duration: '', duration_seconds: null, desc: '' },
+      { id: 2, type: 0, name: '', name_cn: '', sort: 2, ep: 2, airdate: '', duration: '', duration_seconds: null, desc: '' },
+      { id: 3, type: 1, name: 'SP', name_cn: '', sort: 3, ep: null, airdate: '', duration: '', duration_seconds: null, desc: '' },
+    ])
+    mUpsertEps.mockResolvedValue(3)
+    await svc.matchAndEnrich({ videoId: VID, catalogId: CID, titleNorm: 'x', year: 2007 })
+    expect(mUpdateEpCount).toHaveBeenCalledWith(expect.anything(), VID, 2)
+  })
+})
+
+describe('BangumiService.confirmMatch', () => {
+  let svc: BangumiService
+  beforeEach(() => {
+    vi.clearAllMocks()
+    svc = new BangumiService({} as never)
+    mFindCatalog.mockResolvedValue({ id: CID, metadataSource: 'crawler', lockedFields: [] })
+    mUpdateCatalog.mockResolvedValue({ id: CID, metadataSource: 'bangumi' })
+  })
+
+  it('subject 不在 dump 且无 Token → updated:false，不写 catalog/ref（P1）', async () => {
+    mConfigured.mockReturnValue(false)
+    mFindById.mockResolvedValue(null)
+    const r = await svc.confirmMatch(VID, CID, 99999)
+    expect(r).toEqual({ updated: false })
+    expect(mUpdateCatalog).not.toHaveBeenCalled()
+    expect(mUpsertRef).not.toHaveBeenCalled()
+  })
+
+  it('subject 不在 dump 但有 Token → 用显式 bangumiId 拉 rich，updated:true + 写 manual_confirmed ref（P1）', async () => {
+    mConfigured.mockReturnValue(true)
+    mFindById.mockResolvedValue(null)
+    mGetSubject.mockResolvedValue(subject({ id: 99999 }))
+    mGetEpisodes.mockResolvedValue([])
+    const r = await svc.confirmMatch(VID, CID, 99999)
+    expect(r).toEqual({ updated: true })
+    expect(mGetSubject).toHaveBeenCalledWith(99999)
+    expect(mUpdateCatalog).toHaveBeenCalled()
+    expect(mUpsertRef).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      provider: 'bangumi', matchStatus: 'manual_confirmed', isPrimary: true,
+    }))
   })
 })

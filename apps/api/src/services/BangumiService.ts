@@ -64,23 +64,26 @@ export class BangumiService {
       return { matched: 'candidate', bangumiSubjectId: best.bangumiId, confidence }
     }
 
-    // auto_matched → 写 catalog + 逐集
-    const episodes = await this.enrichCatalog(videoId, catalogId, best)
+    // auto_matched → 写 catalog + 逐集（显式传 bangumiId 走 rich 抓取）
+    const result = await this.enrichCatalog(videoId, catalogId, best.bangumiId, best)
     return {
       matched: 'auto',
       bangumiSubjectId: best.bangumiId,
       confidence,
-      episodes: episodes.count,
-      degraded: episodes.degraded,
+      episodes: result.episodes,
+      degraded: result.degraded,
     }
   }
 
   /**
-   * 后台人工确认：直接按 bangumiId 写 catalog（bangumi 源，不锁字段，ADR-159 Y2）+ 标记 ref manual_confirmed。
-   * 返回是否实际更新。
+   * 后台人工确认：按显式 bangumiId 走 rich 抓取写 catalog（bangumi 源，不锁字段，ADR-159 Y2）。
+   * 即使该 subject 不在本地 dump，也用 bangumiId 调 REST 详情；确实没写入任何内容时返回 updated:false，
+   * 并且只有写入成功才记 manual_confirmed ref（避免对不存在 subject 的"假成功"，ADR-159 P1 修订）。
    */
   async confirmMatch(videoId: string, catalogId: string, bangumiId: number): Promise<{ updated: boolean }> {
     const entry = await externalDataQueries.findBangumiById(this.db, bangumiId)
+    const result = await this.enrichCatalog(videoId, catalogId, bangumiId, entry)
+    if (!result.wrote) return { updated: false }
     await externalDataQueries.upsertVideoExternalRef(this.db, {
       videoId,
       provider: 'bangumi',
@@ -91,27 +94,27 @@ export class BangumiService {
       isPrimary: true,
       linkedBy: 'moderator',
     })
-    const result = await this.enrichCatalog(videoId, catalogId, entry)
-    return { updated: result.count >= 0 }
+    return { updated: true }
   }
 
   // ── 内部 ─────────────────────────────────────────────────────────
 
   /**
-   * 写 catalog（bangumi 源）+ 逐集。优先 REST rich 详情；Token 缺失/抓取失败则降级用本地 dump entry。
-   * 返回逐集写入数与是否降级。
+   * 写 catalog（bangumi 源）+ 逐集。优先用显式 bangumiId 调 REST rich 详情；
+   * Token 缺失/抓取失败时降级用本地 dump entry（entry 为 null 则无可写内容）。
+   * 返回逐集写入数、是否降级、是否实际写入（wrote=false 表示既无 rich 也无 dump 字段可写）。
    */
   private async enrichCatalog(
     videoId: string,
     catalogId: string,
+    bangumiId: number,
     entry: BangumiEntryMatch | null,
-  ): Promise<{ count: number; degraded: boolean }> {
-    const bangumiId = entry?.bangumiId
+  ): Promise<{ episodes: number; degraded: boolean; wrote: boolean }> {
     let fields: CatalogUpdateData | null = null
     let episodeCount = 0
     let degraded = true
 
-    if (bangumiId != null && isBangumiApiConfigured()) {
+    if (isBangumiApiConfigured()) {
       const subject = await getSubject(bangumiId)
       if (subject) {
         fields = mapSubjectToCatalogFields(subject)
@@ -120,12 +123,16 @@ export class BangumiService {
         if (eps.length > 0) {
           episodeCount = await catalogEpisodeQueries.upsertCatalogEpisodes(this.db, catalogId, mapEpisodes(eps))
         }
-        const total = subject.total_episodes || subject.eps || eps.length
-        if (total > 0) await videosQueries.updateEpisodeCount(this.db, videoId, total)
+        // 本篇集数（ADR-159 P1）：优先 wiki eps（本篇数）；否则数 type===0 本篇；
+        // 不用 total_episodes（含 SP/OP/ED 章节，会高估用户侧剧集数）
+        const mainCount = subject.eps && subject.eps > 0
+          ? subject.eps
+          : eps.filter((e) => e.type === 0).length
+        if (mainCount > 0) await videosQueries.updateEpisodeCount(this.db, videoId, mainCount)
       }
     }
 
-    // 降级：用本地 dump entry 拼最小字段集
+    // 降级：用本地 dump entry 拼最小字段集（entry 为 null 时无可写内容）
     if (!fields && entry) {
       fields = { bangumiSubjectId: entry.bangumiId }
       const title = entry.titleCn || entry.titleJp
@@ -136,13 +143,12 @@ export class BangumiService {
       if (entry.coverUrl) fields.coverUrl = entry.coverUrl
     }
 
-    if (fields) {
-      await this.catalogService.safeUpdate(catalogId, fields, 'bangumi', {
-        sourceRef: bangumiId != null ? String(bangumiId) : undefined,
-      })
-    }
+    if (!fields) return { episodes: 0, degraded, wrote: false }
 
-    return { count: episodeCount, degraded }
+    const { updated } = await this.catalogService.safeUpdate(catalogId, fields, 'bangumi', {
+      sourceRef: String(bangumiId),
+    })
+    return { episodes: episodeCount, degraded, wrote: updated !== null }
   }
 
   private async writeRef(
