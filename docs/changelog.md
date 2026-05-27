@@ -8846,3 +8846,35 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
   - moderationQueueRoutes.test.ts: q 参数传递 listPendingQueue / q 超 200 → 422
 - **闭环**：plan §10.1 方案 A 完整落地；fluffy-giggling-teapot.md §14 Wave 1 #6 完成
 - **后续**：CHG-351（LinesPanel 单行探/播按钮）
+
+## [CHG-350-FIX] 审核台 search bug 修复 — 输入焦点丢失 + toolbar 滚动消失
+- **完成时间**：2026-05-27
+- **记录时间**：2026-05-27 02:34
+- **来源**：用户实测反馈（CHG-350 后人工体验 2 处可用性 bug）
+- **执行模型**：claude-opus-4-7（主循环不切换 §16.5）
+- **子代理**：无
+- **改动文件**（2 项 ≤ 5 ✅）：
+  - `apps/server-next/src/app/admin/moderation/_client/ModerationConsole.tsx`：
+    - **Bug 1 修复（输入焦点丢失 / 指针消失）**：
+      - 根因：原 URL→qInput 单向同步 useEffect 在 `router.replace` 触发 searchParams 变化后回流，与 user 当前输入竞态
+      - 删除 URL→qInput 回流 useEffect（仅 mount 时从 URL 读初始 q）
+      - 改用 `searchParamsRef` 持有最新 searchParams，debounce useEffect deps 不再含 searchParams（断开循环）
+      - URL 仍单向写入（qInput → URL via debounce），保留深链能力
+  - `apps/server-next/src/app/admin/moderation/_client/PendingQueueToolbar.tsx`：
+    - **Bug 2 修复（toolbar 列表滚动消失）**：
+      - 根因：toolbar 在 listbox 内作为滚动内容，随 ModListRow 一起滚动
+      - 添加 `position: sticky; top: 0; zIndex: 2` — SplitPane pane body 是 overflow-y:auto 滚动容器，sticky 贴顶有效
+  - `apps/server-next/src/app/admin/moderation/_client/PendingPaneController.tsx`：
+    - 把 toolbar 从 `<div role="listbox">` 内移出，作为 pane body 直接子级（与 listbox 兄弟）
+    - sticky positioning 行为更干净
+- **门禁**：
+  - typecheck ✅
+  - lint ✅
+  - moderation 范围 14 test files / 148 tests 全 PASS（仅运行 admin-moderation + api/moderation + lib/moderation + server-next/admin-moderation 关键子集，server-next/videos 等无关 hook 测试未影响）
+  - moderationQueueRoutes 19/19（含 CHG-350 q 参数 2 case）
+- **修复前 vs 修复后**：
+  - Bug 1 修复前：user 输入 "天龙" 后 300ms debounce 触发 router.replace → searchParams 变化 → 第一个 useEffect 把 URL q 写回 qInput → input 元素被 setState 同值（但 React 18 strict mode 双调用 + re-render）→ input 光标位置丢失，连续输入受影响
+  - Bug 1 修复后：URL 单向同步（mount 读 + qInput→URL 写），user 输入连续流畅
+  - Bug 2 修复前：toolbar 在 listbox 内 → 列表滚动时 toolbar 一起滚走 → 长队列时搜索框消失
+  - Bug 2 修复后：toolbar sticky 贴 pane body 顶部 → 列表任意滚动 toolbar 常驻可见
+- **闭环**：CHG-350 用户视角可用性 bug 修复

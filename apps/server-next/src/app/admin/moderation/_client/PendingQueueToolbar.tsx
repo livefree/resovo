@@ -19,6 +19,10 @@ import React from 'react'
 import type { FilterPresetQuery } from '@/lib/moderation/use-filter-presets'
 
 const TOOLBAR_STYLE: React.CSSProperties = {
+  // CHG-350 BUG-FIX：sticky 贴 pane body 顶部，列表滚动时 toolbar 保持可见
+  position: 'sticky',
+  top: 0,
+  zIndex: 2,
   display: 'flex',
   flexDirection: 'column',
   gap: 6,

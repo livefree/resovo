@@ -146,7 +146,9 @@ export function PendingPaneController({
           role: 'complementary',
           'aria-label': M.aria.consoleQueuePane,
           children: (
-            <div role="listbox" aria-label={M.aria.consoleQueuePane}>
+            // CHG-350 BUG-FIX：toolbar 移出 listbox，作为 pane body 直接子级 +
+            //   sticky positioning 让其贴 pane body 顶部，列表滚动时保持可见
+            <>
               <PendingQueueToolbar
                 q={qInput}
                 onQChange={onQInputChange}
@@ -154,31 +156,33 @@ export function PendingPaneController({
                 onClearAll={onClearAllFilters}
                 resultCount={total}
               />
-              {videos.length === 0 ? (
-                <div style={{ padding: 24, textAlign: 'center', color: 'var(--fg-muted)', fontSize: 'var(--font-size-sm-tight)' }}>
-                  {M.pending.empty}
-                </div>
-              ) : (
-                <>
-                  {videos.map((it, i) => (
-                    <ModListRow
-                      key={it.id}
-                      it={it}
-                      active={i === activeIdx}
-                      onClick={() => setActiveIdx(i)}
-                      selectionMode={batchModeOn}
-                      selected={selectedIds.has(it.id)}
-                      onToggleSelect={() => onToggleSelect(it.id)}
-                    />
-                  ))}
-                  <div style={{ padding: 14, textAlign: 'center', color: 'var(--fg-muted)', fontSize: 'var(--font-size-xxs)' }}>
-                    {loadingMore ? M.pending.loadingMore : nextCursor ? (
-                      <button style={{ ...BTN_SM, fontSize: 'var(--font-size-xxs)' }} onClick={loadMore}>{M.pending.loadingMore}</button>
-                    ) : M.pending.noMore}
+              <div role="listbox" aria-label={M.aria.consoleQueuePane}>
+                {videos.length === 0 ? (
+                  <div style={{ padding: 24, textAlign: 'center', color: 'var(--fg-muted)', fontSize: 'var(--font-size-sm-tight)' }}>
+                    {M.pending.empty}
                   </div>
-                </>
-              )}
-            </div>
+                ) : (
+                  <>
+                    {videos.map((it, i) => (
+                      <ModListRow
+                        key={it.id}
+                        it={it}
+                        active={i === activeIdx}
+                        onClick={() => setActiveIdx(i)}
+                        selectionMode={batchModeOn}
+                        selected={selectedIds.has(it.id)}
+                        onToggleSelect={() => onToggleSelect(it.id)}
+                      />
+                    ))}
+                    <div style={{ padding: 14, textAlign: 'center', color: 'var(--fg-muted)', fontSize: 'var(--font-size-xxs)' }}>
+                      {loadingMore ? M.pending.loadingMore : nextCursor ? (
+                        <button style={{ ...BTN_SM, fontSize: 'var(--font-size-xxs)' }} onClick={loadMore}>{M.pending.loadingMore}</button>
+                      ) : M.pending.noMore}
+                    </div>
+                  </>
+                )}
+              </div>
+            </>
           ),
         },
         {

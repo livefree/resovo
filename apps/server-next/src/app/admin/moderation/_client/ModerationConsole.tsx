@@ -183,26 +183,25 @@ export function ModerationConsole(): React.ReactElement {
 
   // CHG-350：q 搜索词（不进 FilterPresetQuery 语义，但参与 fetch 查询）
   // qInput 是 input 即时值（UI 响应），q 是 debounce 后值（参与 fetch）
+  // CHG-350 BUG-FIX：仅 mount 时从 URL 读初始 q；之后不再 URL → qInput 回流
+  //   避免 router.replace 触发 searchParams 变化 → useEffect 重新 setQInput 覆盖用户输入 → 光标位置丢失
   const [qInput, setQInput] = useState<string>(() => searchParams.get('q') ?? '')
   const [q, setQ] = useState<string>(() => searchParams.get('q') ?? '')
-  // URL → qInput 单向同步（route 变化时）
-  useEffect(() => {
-    const urlQ = searchParams.get('q') ?? ''
-    setQInput(urlQ)
-    setQ(urlQ)
-  }, [searchParams])
-  // 300ms debounce：qInput → q + URL sync
+  // searchParams 用 ref 持有最新值，debounce useEffect 不依赖 searchParams（断开回流循环）
+  const searchParamsRef = useRef(searchParams)
+  useEffect(() => { searchParamsRef.current = searchParams }, [searchParams])
+  // 300ms debounce：qInput → q + URL sync（单向，URL 不再回流到 qInput）
   useEffect(() => {
     if (qInput === q) return
     const handle = setTimeout(() => {
       setQ(qInput)
-      const p = new URLSearchParams(searchParams.toString())
+      const p = new URLSearchParams(searchParamsRef.current.toString())
       if (qInput.trim()) p.set('q', qInput.trim())
       else p.delete('q')
       router.replace(`?${p}`, { scroll: false })
     }, 300)
     return () => clearTimeout(handle)
-  }, [qInput, q, router, searchParams])
+  }, [qInput, q, router])
 
   // CHG-347 / SPLIT-A：pending 队列状态与方法抽到独立 hook
   const queueFilters = React.useMemo(() => ({ ...currentFilters, q }), [currentFilters, q])
