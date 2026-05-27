@@ -14,11 +14,26 @@ docs 硬冲突域（adr / architecture）已在 tracks.md 声明持有。
 
 ## 进行中任务
 
-（空 — Phase 0 数据基建已完成 ✅；Phase 1 待启动）
+（空 — Phase 0 + Phase 1 已完成 ✅；Phase 2 反向建库 + admin 路由待启动）
 
 ---
 
 ## 已完成任务
+
+### ✅ CHG-BNG-03/04/05/06（Phase 1）— REST 客户端 + 匹配增强
+
+- **状态**：✅ 完成（2026-05-27）
+- **执行模型**：claude-opus-4-7（主循环）
+- **完成备注**：
+  - `lib/bangumi.ts`（CHG-BNG-03）：getSubject/getEpisodes（分页拉全，50 页上限）/searchSubjects/isBangumiApiConfigured；Bearer+UA；**直接读 process.env（对标 lib/queue，避免 config 单例启动期 fail-fast）**；失败降级 null/[]。
+  - `BangumiService` + `.utils`（CHG-BNG-04）：本地召回→置信度（复用豆瓣阈值 0.85/0.60）→ video_external_refs(provider=bangumi)→auto 拉 rich 详情+逐集 upsert+回填 episode_count；Token 缺失/抓取失败降级用 dump 字段。catalogService 可注入复用。infobox 解析导演/系列构成/动画制作（声优不在 infobox 故不写 cast）。
+  - `step3Bangumi` 重写委托 BangumiService（CHG-BNG-05），保留 type==='anime' 触发位与签名扩 videoId（R2）。
+  - `VideoService.update` 改类型→anime 经 enrichmentQueue.add 入队（CHG-BNG-06，对标 CrawlerService，避免引入 worker 的 db 单例）。
+  - 新查询：catalogEpisodes.upsertCatalogEpisodes / videos.updateEpisodeCount / externalData.findBangumiById + BangumiEntryMatch 扩 coverUrl/rank/nsfw。
+  - 测试：bangumi-lib.test.ts（9）+ bangumi-service.test.ts（15，含 utils）；回归修复 metadataEnrich（MediaCatalogService 单例注入）。
+  - **worktree 修复**：构建本地 file-dep `external-adapter/douban-adapter`（dist 缺失致 video-manual-add-audit 解析失败）。
+  - 全量单测套件 5252 passed（green）；root tsc --noEmit 通过。
+- **沉淀判断**：HTTP 客户端/服务分层对标 douban，是。
 
 ### ✅ CHG-BNG-01（Phase 0-A）— 提升 bangumi 优先级 + migration 077 + architecture.md 同步
 

@@ -43,7 +43,7 @@ export type {
 } from './videos.status'
 export {
   getModerationStats, listPendingReviewVideos,
-  updateVideoEnrichStatus, updateVideoSourceCheckStatus,
+  updateVideoEnrichStatus, updateVideoSourceCheckStatus, updateEpisodeCount,
   syncSourceCheckStatusFromSources, bulkSyncSourceCheckStatus,
   setVideoTrendingTag, clearVideoTrendingTag, listVideosByTrendingTag,
   listVideosByRatingDesc, listVideoCardsByIds, countVideosByType,
