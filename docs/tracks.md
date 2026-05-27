@@ -19,8 +19,9 @@
 | sn4-06-worker | ✅ 已集成 | `track/sn4-06-worker`（已删除）| `docs/archive/tasks/tasks-sn4-06-worker.md` | 无（已释放） | 2026-05-02 | 2026-05-02 |
 | sn4-07-fe-moderation | ✅ 已集成 | `track/sn4-07-fe-moderation`（已删除）| `docs/archive/tasks/tasks-sn4-07-fe-moderation.md` | 无（已释放） | 2026-05-02 | 2026-05-02 |
 | sn4-08-video-edit-drawer | ✅ 已集成 | `track/sn4-08-video-edit-drawer`（已删除）| `docs/archive/tasks/tasks-sn4-08-video-edit-drawer.md` | 无（已释放） | 2026-05-02 | 2026-05-02 |
+| bangumi | 🔄 活跃 | `track/bangumi` | `docs/tasks-bangumi.md` | adr / architecture | 2026-05-27 | — |
 
-**当前活跃 Track 数：0 / 3**（M-SN-4 阶段 C 双轨闭环；并行模式已关闭，恢复单轨工作台）
+**当前活跃 Track 数：1 / 3**（bangumi 单 Track 活跃；与 main 上 server-next WIP 并行，文件域 apps/api vs apps/server-next 零重叠）
 
 ---
 
@@ -180,3 +181,31 @@
 允许改的协调文件（append-only / per-track 区块）：
 - `docs/changelog.md`（尾部追加，每条带 Track ID）
 - `docs/tracks.md`（仅自己的命名区块）
+
+---
+
+## bangumi
+
+- **状态**：🔄 活跃
+- **分支**：`track/bangumi`（从 main HEAD `afa10184` 切出，独立 worktree `.claude/worktrees/bangumi`）
+- **任务文件**：`docs/tasks-bangumi.md`
+- **文件作用域**：
+  - `apps/api/src/lib/bangumi.ts`（新建 REST 客户端）
+  - `apps/api/src/services/BangumiService.ts` + `BangumiService.utils.ts`（新建）
+  - `apps/api/src/services/BangumiSeedService.ts`（新建）
+  - `apps/api/src/services/MetadataEnrichService.ts`（重写 step3Bangumi）
+  - `apps/api/src/services/MediaCatalogService.ts`（CATALOG_SOURCE_PRIORITY 调整）
+  - `apps/api/src/services/VideoService.ts`（改类型触发 enrich）
+  - `apps/api/src/db/migrations/077_bangumi_metadata.sql`（新建）
+  - `apps/api/src/db/queries/externalData.ts` + `mediaCatalog.ts`（扩展）
+  - `apps/api/src/routes/admin/moderation.bangumi.ts`（新建，依赖 ADR-159）
+  - `apps/api/src/lib/config.ts` + `.env.example`
+  - `scripts/import-bangumi-dump.ts`（修复）
+  - `docs/decisions.md`（ADR-159）+ `docs/architecture.md`（migration 077 schema 同步）
+- **持有冲突域**：`adr`（docs/decisions.md，ADR-159）、`architecture`（docs/architecture.md，077 schema）
+- **创建时间**：2026-05-27
+- **集成时间**：—（完成后填写）
+- **建议模型**：`claude-sonnet-4-6`（主体实现）；ADR / 跨消费方 schema 决策走 `claude-opus-4-7` arch-reviewer
+- **执行真源**：`~/.claude/plans/bangumi-tv-bangumi-https-bangumi-tv-dev-enumerated-cosmos.md`（已批准）
+- **说明**：Bangumi.tv 接入——REST 客户端 + dump 索引匹配增强 + 逐集表 + anime 下 Bangumi 优先 + 反向建库无源占位条目。文件域全在 apps/api + scripts，与 main 上 server-next（apps/server-next）WIP 零重叠。
+- **预留编号**：ADR-159、migration 077。
