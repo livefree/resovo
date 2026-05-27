@@ -14,6 +14,7 @@ import { FilterPresetPopover } from './FilterPresetPopover'
 import { SavePresetModal } from './SavePresetModal'
 import { VideoEditDrawer } from '../../videos/_client/VideoEditDrawer'
 import { usePendingQueue } from './usePendingQueue'
+import { BatchActionsBar } from './BatchActionsBar'
 import * as api from '@/lib/moderation/api'
 import { M } from '@/i18n/messages/zh-CN/moderation'
 import { useFilterPresets } from '@/lib/moderation/use-filter-presets'
@@ -630,55 +631,15 @@ export function ModerationConsole(): React.ReactElement {
         title={`批量拒绝 ${selectedIds.size} 条`}
       />
 
-      {/* CHG-SN-8-GAPS-MOD-BATCH：bulk action bar（fixed bottom）*/}
+      {/* CHG-SN-8-GAPS-MOD-BATCH：bulk action bar (CHG-348 / SPLIT-B 抽至 BatchActionsBar 组件) */}
       {batchModeOn && selectedIds.size > 0 && (
-        <div
-          style={{
-            position: 'fixed',
-            left: 0,
-            right: 0,
-            bottom: 0,
-            display: 'flex',
-            justifyContent: 'center',
-            gap: 12,
-            padding: '12px 16px',
-            background: 'var(--bg-surface-elevated)',
-            borderTop: '2px solid var(--accent-default)',
-            boxShadow: '0 -4px 12px rgba(0,0,0,0.15)',
-            zIndex: 50,
-          }}
-          data-testid="moderation-batch-bar"
-        >
-          <span style={{ alignSelf: 'center', fontSize: 'var(--font-size-sm)', color: 'var(--fg-muted)' }}>
-            已选 {selectedIds.size} 条
-          </span>
-          <button
-            type="button"
-            style={{ ...BTN_PRIMARY, fontSize: 'var(--font-size-sm-tight)' }}
-            disabled={batchPending}
-            onClick={() => void handleBatchApprove()}
-            data-testid="moderation-batch-approve"
-          >
-            {batchPending ? '处理中…' : `✓ 批量通过 (${selectedIds.size})`}
-          </button>
-          <button
-            type="button"
-            style={{ ...BTN_SM, color: 'var(--state-danger-fg)', borderColor: 'var(--state-danger-border)', fontSize: 'var(--font-size-sm-tight)' }}
-            disabled={batchPending}
-            onClick={() => setBatchRejectModalOpen(true)}
-            data-testid="moderation-batch-reject"
-          >
-            ✕ 批量拒绝 ({selectedIds.size})
-          </button>
-          <button
-            type="button"
-            style={{ ...BTN_SM, fontSize: 'var(--font-size-sm-tight)' }}
-            onClick={clearSelection}
-            data-testid="moderation-batch-clear"
-          >
-            清除选择
-          </button>
-        </div>
+        <BatchActionsBar
+          selectedCount={selectedIds.size}
+          onApprove={() => void handleBatchApprove()}
+          onReject={() => setBatchRejectModalOpen(true)}
+          onClear={clearSelection}
+          pending={batchPending}
+        />
       )}
 
       {/* Video edit drawer (CHG-SN-4-FIX-A · plan v1.6 §1 G1) */}

@@ -149,6 +149,7 @@
   - 「清除选择」：清空 selectedIds + 关 bulk bar
 - **后端约束**：每批 max 50 ids（端点 zod 限制）；部分失败 toast 显示「批量通过 X 条（失败 Y）」
 - **退出批量模式**：toggle off → 清空选择 + 恢复 J/K 流
+- **组件抽取（CHG-348 / SPLIT-B）**：fixed-bottom 批量操作底栏抽至 `_client/BatchActionsBar.tsx`（Props 极简：`selectedCount` / `onApprove` / `onReject` / `onClear` / `pending`）；视觉零变化，便于复用 + 主文件降复杂度（plan §5 P1 第二步）
 
 ### 3.6 选集切换 → 播放器自动换源（CHG-345 / Wave 1 修复）
 

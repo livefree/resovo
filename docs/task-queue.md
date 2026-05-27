@@ -1726,7 +1726,7 @@ HOTFIX-A → B → C 顺序串行（B 在 A SQL fix 基础上扩 CASE / C 在 B 
    - 文件范围(≤ 5 项)：新建 usePendingQueue.ts / ModerationConsole.tsx 精简 / 类型导出 / 单测新增
    - 人工体验场景：队列加载 / loadMore 触发 / approve+失败回滚
 
-4. **CHG-348** — 抽 BatchActionsBar 组件(SPLIT-B)（状态：⬜ 未开始）
+4. **CHG-348** — 抽 BatchActionsBar 组件(SPLIT-B)（状态：✅ 已完成 / 2026-05-27 01:29 / 执行模型 claude-opus-4-7 / 主循环不切换 §16.5 / 3 文件改动 / ModerationConsole 749 → 710 行 / 视觉零变化 / docs/manual P-moderation §3.5 已更新 / Wave 1 卡 4/9 闭合）
    - 创建时间：2026-05-27 13:00
    - 验收要点（plan §5 P1 第二步）：
      - 抽 fixed-bottom bulk bar 至 `_client/BatchActionsBar.tsx`(目前 50 行行内 JSX)

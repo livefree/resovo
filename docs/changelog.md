@@ -8738,3 +8738,33 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
   - **CHG-348 SPLIT-B**（下一卡）：将 fixed-bottom batch action bar JSX 抽至 `_client/BatchActionsBar.tsx`
   - **CHG-349 SPLIT-C**（再下一卡）：将左 + 中 + 右编排 + 键盘流抽至 `_client/PendingPaneController.tsx`，使 ModerationConsole 最终主体 ≤ 250 行（CLAUDE.md 500 行红线消解）
 - **闭环**：plan §5 P1 第一步完整闭环；fluffy-giggling-teapot.md §14 Wave 1 #3 完成；ModerationConsole 829 → 749 行（仍超 500 行，SPLIT-B + SPLIT-C 后续消解）
+
+## [CHG-348] server-next 审核台 抽 BatchActionsBar 组件（SPLIT-B / P1 拆分第二步）
+- **完成时间**：2026-05-27
+- **记录时间**：2026-05-27 01:29
+- **来源序列**：SEQ-20260527-MOD-WAVE1（Wave 1 / 卡 4/9 / plan §5 P1 第二步）
+- **执行模型**：claude-opus-4-7（主循环不切换 §16.5）
+- **子代理**：无（组件抽取 / 内部 Props 契约 / 视觉零变化）
+- **改动文件**（3 项 ≤ 5 ✅）：
+  - `apps/server-next/src/app/admin/moderation/_client/BatchActionsBar.tsx`（**新建** / 119 行）
+    - fixed-bottom bulk action bar 完整抽取
+    - Props 极简：`selectedCount` / `onApprove` / `onReject` / `onClear` / `pending`
+    - 视觉零变化（rem/spacing/border/shadow 完全 1:1 复刻）
+    - 行内样式对象提取为 const（BAR_STYLE / COUNT_STYLE / APPROVE_BTN_STYLE / REJECT_BTN_STYLE / CLEAR_BTN_STYLE）
+  - `apps/server-next/src/app/admin/moderation/_client/ModerationConsole.tsx`（**精简** 749 → 710 行 / -39 行）
+    - 删除 50 行 fixed-bottom JSX
+    - 替换为 `<BatchActionsBar selectedCount={...} onApprove={...} onReject={...} onClear={...} pending={batchPending} />`
+    - 新增 `import { BatchActionsBar } from './BatchActionsBar'`
+  - `docs/manual/20-pages/P-moderation.md`（§3.5 「批量审核」章节追加"组件抽取（CHG-348 / SPLIT-B）"说明）
+- **新增依赖**：无
+- **数据库变更**：无
+- **门禁**：
+  - typecheck ✅
+  - lint ✅
+  - moderation 关键范围测试 6 test files / 36 tests 全 PASS ✅（含 use-pending-queue.test.ts 4/4 / admin-player.test.tsx / use-selected-line / use-filter-presets / use-review-history）
+- **零回归**：
+  - 视觉、交互、data-testid（`moderation-batch-bar` / `moderation-batch-approve` / `moderation-batch-reject` / `moderation-batch-clear`）保留
+  - 批量通过 / 拒绝 / 清除选择行为不变
+  - disabled / pending label 切换行为不变（`处理中…` ↔ `✓ 批量通过 (N)`）
+- **累积进度**：ModerationConsole 829 → 749 (CHG-347) → 710 (CHG-348)；目标 ≤ 250 行（CHG-349 收尾）
+- **闭环**：plan §5 P1 第二步完整闭环；fluffy-giggling-teapot.md §14 Wave 1 #4 完成
