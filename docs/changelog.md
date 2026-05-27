@@ -9484,3 +9484,45 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **后续 advisory**：
   - 未来其他 LinesPanel 消费方（VideoEditDrawer TabLines）同步去 inline 红条 / 改 useToast / 独立 follow-up 卡
   - admin-ui LinesPanel `actionError` prop 长期可考虑废弃 / 但需调研所有消费方迁移成本
+
+## [CHG-360-A] ADR-159 + DualSignalAggregate types + DualSignalCount 组件（X/Y 聚合显示基础卡）
+- **完成时间**：2026-05-27
+- **来源**：用户原话「探测/试播分为单个源，线路（多 episode），视频（多线路）。"可用/失效"仅对单源准确。多集/多线路改 "02/03" 格式 + 黄色标记部分失效。」
+- **执行模型**：claude-opus-4-7（主循环不切换 §16.5）
+- **子代理**：arch-reviewer (claude-opus-4-7) 1 轮独立评审 → **A-CONDITIONAL** → 主循环消化 5 红线 + 7 黄线 + 4 关键洞察 → 等同 A
+- **范围**：CHG-360 拆 -A/-B/-C 三子卡之 -A（基础 types + 组件 + ADR）/ 不动 SQL 投影 / 不动消费方
+- **新 ADR**：ADR-159 双轨信号 X/Y 聚合显示协议 / D-159-1..7 全 7 决策点闭环
+- **D-N 决策点闭环**：D-159-1 / D-159-2 / D-159-3 / D-159-4 / D-159-5 / D-159-6 / D-159-7
+- **arch-reviewer 评审消化**：
+  - R1（DualSignalAggregate.state 复用 SourceCheckStatus 4 值 / 拒绝引入 'all_ok' 第三套同义枚举）✅
+  - R2（DualSignalCount 独立组件 / 拒绝 DualSignal 加 mode prop / 拒绝单组件双形态 Props）✅
+  - R3（拆 -A/-B/-C 三子卡 / PATCH ≤ 5 硬约束 / RETRO 豁免不适用）✅
+  - R4（起 ADR-159 + 7 D 决策点）✅
+  - R5（VideoQueueRow 双字段并行 / probe/render 单值 + probeAggregate/renderAggregate / 防 DecisionCard 间接 BREAKING）✅
+  - Y1-Y7 全采纳
+- **改动文件**（4 项 ≤ 5 ✅）：
+  - `packages/types/src/admin-moderation.types.ts`（+DualSignalAggregate interface / VideoQueueRow +probeAggregate/renderAggregate 双字段并行）
+  - `packages/admin-ui/src/components/cell/dual-signal-count.types.ts`（**新建** / DualSignalCountProps 契约 / Opus PASS）
+  - `packages/admin-ui/src/components/cell/dual-signal-count.tsx`（**新建** / X/Y 渲染 + 4 段颜色映射 + a11y）
+  - `packages/admin-ui/src/components/cell/index.ts`（export）
+  - `docs/decisions.md`（ADR-159 章节追加 / D-159-1..7）
+- **新增依赖**：无
+- **数据库变更**：无（types 层 + 组件层 / SQL 投影 + 消费方在 CHG-360-B/C）
+- **门禁**：
+  - typecheck ✅（5 包全 PASS）
+  - lint ✅
+  - verify-endpoint-adr ✅ 194 路由 74 ADR 端点（无新端点）
+  - verify-adr-d-numbers ✅（D-159-1..7 通过本 changelog 闭环）
+- **关键沉淀**：
+  - **3 组件按数据形分离**：SignalChip（单源 string）+ DualSignal（线路单值 string × 2）+ DualSignalCount（聚合对象 × 2）/ 既有消费方零破坏
+  - **state 字段类型同源**：DualSignalAggregate.state ≡ SourceCheckStatus ≡ videos.source_check_status 持久列字面量 / 跨 4 层类型一致
+  - **双字段兼容范式确立**：VideoQueueRow.probe 单值字段 @deprecated 但保留 / probeAggregate 新字段并行 / FOLLOWUP 卡逐步迁移 DecisionCard 等下游消费方
+- **下游待落地**（CHG-360-B/C）：
+  - **CHG-360-B**：aggregateXY helper（admin-ui aggregate.ts）+ SQL 投影改 line-level json_build_object（moderation.ts / staging.ts）+ SourceProbeService.aggregateXY export
+  - **CHG-360-C**：ModListRow 消费切换 + 测试矩阵 + 视情况扩展其他消费方
+- **闭环**：CHG-360-A 基础契约 + 组件落地 / 下游卡可启动 -B
+- **后续 advisory**（G1-G4）：
+  - G1：CHG-360-FOLLOWUP / DecisionCard 评估迁移 + probe/render 单值 deprecate 移除
+  - G2：sources-matrix VideoGroupRow.probeStatus 升级聚合
+  - G3：videos.source_check_status 持久列与查询时聚合语义重叠观察
+  - G4：DualSignalCount 视觉与 SignalChip 字号 padding 对齐核查

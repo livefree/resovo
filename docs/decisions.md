@@ -15843,3 +15843,187 @@ LinesPanel 主体内 `useMemo` 计算 `effectiveProbingIds` / `effectiveRenderCh
 **结论**：ADR-158 AMENDMENT 2 status 🟢 Accepted（2026-05-27 / arch-reviewer Opus A-CONDITIONAL → 主循环消化 3 红线 + 4 黄线 + 4 关键洞察 → 等同 A）；CHG-357 16 文件原子实施；ADR-158 advisory G1 已交付；下游 advisory G5/G6/G7/G8 跟踪未来卡。
 
 ---
+
+## ADR-159 — 双轨信号 X/Y 聚合显示协议（CHG-360）
+
+- **日期**：2026-05-27
+- **状态**：🟢 Accepted（arch-reviewer Opus A-CONDITIONAL → 主循环消化 5 红线 + 7 黄线 + 4 关键洞察 → 等同 A）
+- **决策者**：主循环 `claude-opus-4-7` + arch-reviewer (`claude-opus-4-7`) 子代理 1 轮独立评审
+- **关联**：ADR-117（sources-matrix line-level 聚合范式 / aggregateSignal 复用）/ ADR-158 + AMENDMENT 1/2（probe/render-check 端点契约）/ ADR-121（R-MID-1 audit RETRO）/ ADR-157（SourceCheckStatus 真源复用）
+- **对应交付**：CHG-360-A（types + 组件 / 本卡）+ CHG-360-B（aggregateXY + SQL 投影）+ CHG-360-C（消费方切换）
+
+### §1 触发
+
+用户原话：「探测/试播分为单个源，线路（含有至少1个播放源），视频（含有至少一条线路）。结果显"可用"，"失效"两种结果仅对单个源是准确的，对于含有多集，多条线路时，通常显示不准确，需要调整。建议对于多集将可用，失效改为下面示例："02/03"。对于线路表示3集中2集探测/试播可用，对于视频队列表示3条线路，其中2条探测/试播可用。增加黄色标记标示部分失效。」
+
+**现状缺陷**：
+- pending-queue ModListRow `<DualSignal probe={dead} render={dead}>` 显示"失效"单值
+- 用户看到 3 线路中 1 失效 / 2 可用 → 后端取最差 → 显示 dead → 误以为"全部失效"
+- LineRow（多 episode 聚合）+ 视频级（多线路聚合）都缺 X/Y 分子分母信息
+
+### §2 决策摘要
+
+| 决策点 | 主题 | 推荐结论 | 性质 |
+|--------|------|---------|------|
+| D-159-1 | DualSignalAggregate 字段命名 | 复用 SourceCheckStatus 4 值（`'pending' \| 'ok' \| 'partial' \| 'all_dead'`）作为 state；禁止引入第三套同义枚举 `'all_ok'` | 核心契约 / A+R1 |
+| D-159-2 | 视频聚合维度 | 按 **DISTINCT (siteKey, sourceName) 线路** count（非 source 行 count）；线路"可用"定义复用 `aggregateSignal` state ∈ {'ok','partial'} | 业务语义 / B3+C4 |
+| D-159-3 | 单 source 显示 | 保持 SignalChip 单值（"可用 / 失效"）；total=1 不强行 X/Y（类型污染） | 范围收敛 / E1 |
+| D-159-4 | partial 黄色阈值 | `0 < ok < total` → partial 黄色；映射 4 段（all_ok 绿 / partial 黄 / all_dead 红 / pending 灰） | UI 协议 / D1 |
+| D-159-5 | 共享组件分离 | **DualSignalCount 独立组件**（拒绝 DualSignal 加 mode prop / 拒绝单组件双形态 Props） | 类型契约红线 / G2+R2 |
+| D-159-6 | VideoQueueRow 兼容策略 | 双字段并行（probe/render 单值 + probeAggregate/renderAggregate 聚合）；DecisionCard 等单值消费方零破坏；FOLLOWUP 卡逐个迁移后 deprecate | BREAKING 防御 / J2+R5 |
+| D-159-7 | SQL 后端分层 | SQL 仅产 `{total, ok}` 原料；`state` 派生由 Service 层（与 ADR-117 sources-matrix aggregateSignal 100% 对称） | 分层守护 / F1 |
+
+### §3 数据契约（D-159-1）
+
+```ts
+// packages/types/src/admin-moderation.types.ts
+export interface DualSignalAggregate {
+  readonly total: number    // 聚合分母 Y（线路视图：episode 数；视频视图：线路数）
+  readonly ok: number       // 聚合分子 X（probe/render='ok' 的元素数）
+  readonly state: 'pending' | 'ok' | 'partial' | 'all_dead'  // 严格复用 SourceCheckStatus 4 值
+}
+```
+
+**复用理由**（A+R1）：`SourceCheckStatus = ['pending','ok','partial','all_dead']`（`packages/types/src/video.types.ts:56`）是 DB CHECK 约束 + worker 写回 + filter 已消费的真源。`DualSignalAggregate.state` 与 `videos.source_check_status` 持久列**类型同源**，避免引入第三套同义枚举（如主循环初稿提议的 `'all_ok'` 与 `'ok'` 同义）。
+
+### §4 视频聚合维度（D-159-2 / B3）
+
+**video 级 X/Y**：按 **DISTINCT (source_site_key, source_name) 线路** count，**非** source 行 count。
+
+```sql
+-- 视频聚合：按 DISTINCT line count
+SELECT
+  COUNT(DISTINCT (vs.source_site_key, vs.source_name)) AS total,
+  COUNT(DISTINCT (vs.source_site_key, vs.source_name))
+    FILTER (WHERE EXISTS (
+      SELECT 1 FROM video_sources vs2
+      WHERE vs2.video_id = vs.video_id
+        AND vs2.source_site_key IS NOT DISTINCT FROM vs.source_site_key
+        AND vs2.source_name = vs.source_name
+        AND vs2.probe_status = 'ok'
+        AND vs2.deleted_at IS NULL
+    )) AS ok
+FROM video_sources vs
+WHERE vs.video_id = v.id AND vs.deleted_at IS NULL
+```
+
+**rationale**：用户原话精确——"3 条线路其中 2 条"；按 source count 对 24 集 × 3 线路 = 72 行视频显示 "48/72" 无业务语义。
+
+### §5 线路 "可用" 判定（D-159-2 子项 / C4）
+
+**线路 "可用" = `aggregateSignal(episode probe_statuses)` state ∈ {'ok', 'partial'}**
+
+复用 `apps/api/src/services/SourcesMatrixService.ts:153-159 aggregateSignal` 现有 3 月生产范式 — 零新业务逻辑。`partial` 算可用的依据：partial 线路 ≥ 1 集可播 → 对终端用户"该视频可看"成立。
+
+### §6 共享组件分离（D-159-5 / G2 / 红线 R2）
+
+**禁止**给 `DualSignal` 加 `mode: 'single' | 'aggregate'` prop（运行时 Props 类型分支 = 类型契约红线 + CLAUDE.md 共享 Props Opus 强制评审）。
+
+**正确方案**：分离两个独立组件。
+
+| 组件 | 数据形 | 渲染 | 使用场景 |
+|------|--------|------|---------|
+| `<SignalChip>` | string `DualSignalDisplayState` | "可用 / 失效 / 部分 / 待测" 单 pill | 单 source（如 LinesPanel EpisodeRow）|
+| `<DualSignal>` | string × 2（probe / render） | 2 pill 单值（"探/可用" + "播/失效"）| 线路单值聚合 / 简单场景 |
+| `<DualSignalCount>`（**新增 / 本 ADR**）| `DualSignalAggregate` × 2 | 2 pill X/Y（"探/02/03" + "播/03/03"）+ 颜色 | line 聚合 / video 聚合 |
+
+3 组件按数据形/场景分离 / 既有消费方零破坏。
+
+### §7 兼容策略（D-159-6 / J2 / 红线 R5）
+
+```ts
+// VideoQueueRow 双字段并行：
+export interface VideoQueueRow {
+  // ...
+  /** @deprecated 待 FOLLOWUP 全消费方迁移完成后移除；使用 probeAggregate 替代 */
+  readonly probe: DualSignalState
+  /** @deprecated 同上 */
+  readonly render: DualSignalState
+  /** CHG-360 新增 X/Y 聚合 */
+  readonly probeAggregate: DualSignalAggregate
+  readonly renderAggregate: DualSignalAggregate
+}
+```
+
+**rationale**：
+1. `DecisionCard.decideTone(probe, render)` (`packages/admin-ui/.../decision-card.tsx:48`) 依赖 `DualSignalDisplayState` 单值；直接 BREAKING 会通过 DecisionCard 间接破坏 moderation + VideoEditDrawer 跨层下沉例外组件
+2. 与 CHG-356 / CHG-357 BREAKING 不可类比：那两次是 audit afterJsonb 内部字段；本卡是公开类型层 BREAKING（粒度更深）
+3. SQL 双产出成本极低（state 单值由 aggregate.state 直接派生 - 1 行 mapper）
+4. 过渡期 ≤ 2 sprint / FOLLOWUP 卡显式定义移除时间
+
+### §8 颜色 / 文案映射（D-159-4 / D1）
+
+| state | 颜色 token | dot 颜色 | 文本 |
+|-------|-----------|---------|------|
+| 'ok' | success | `var(--state-success-fg)` | "X/Y" |
+| 'partial' | warning | `var(--state-warning-fg)` | "X/Y" |
+| 'all_dead' | error | `var(--state-error-fg)` | "0/Y" |
+| 'pending' | muted | `var(--fg-muted)` | "—" |
+
+数字格式 zero-pad 到与 total 同位数（最少 2 位）：`String(n).padStart(Math.max(2, String(total).length), '0')` → "02/03" / "12/15"（Y4）。
+
+### §9 a11y 协议（Y7）
+
+aria-label 必须显式中文语义，禁止只读数字：
+- 'ok' / total=3: `"链接探测：3 项均可用"`
+- 'partial' / 2/3: `"链接探测：3 项中 2 项可用"`
+- 'all_dead' / 0/3: `"链接探测：3 项均失效"`
+- 'pending' / 0: `"链接探测：暂无数据"`
+
+### §10 子卡拆分（H / R3）
+
+CHG-360 必须拆 -A/-B/-C 三子卡（PATCH ≤ 5 硬约束 / ADR-121 D-121-3 RETRO 豁免不适用 / 设计阶段非追溯）：
+
+| 子卡 | 范围 | 文件 |
+|------|------|------|
+| **CHG-360-A**（本卡 / 基础）| types 扩展 + DualSignalCount 组件 + ADR-159 起草 + cell/index.ts export | 4 文件 |
+| **CHG-360-B**（依赖 A）| aggregateXY helper + moderation.ts SQL 投影改 + sources-matrix.ts 同步 + staging.ts 投影 | 4 文件 |
+| **CHG-360-C**（依赖 B）| ModListRow / 测试 / 视情况扩 StagingPageClient + SourceMatrixRow | 4-5 文件 |
+
+每卡 ≤ 5 项 / 满足硬约束 / 子卡 A 落地前不得开始 B/C。
+
+### §11 红线 / 黄线 / advisory（arch-reviewer 评审消化）
+
+**红线（全采纳）**：
+- R1 字段命名复用 SourceCheckStatus 4 值 ✅（D-159-1）
+- R2 DualSignalCount 独立组件 ✅（D-159-5）
+- R3 必须拆 -A/-B/-C 三子卡 ✅（§10）
+- R4 起 ADR-159 + 7 D 决策点 ✅（本章节）
+- R5 双字段并行 J2 ✅（D-159-6）
+
+**黄线（全采纳）**：
+- Y1 字段命名复用 SourceCheckStatus（同 R1） ✅
+- Y2 SQL `json_build_object` 子查询性能 — 视频量 > 10000 时 EXPLAIN ANALYZE / advisory
+- Y3 其他 6 消费方保持单值不动 — 仅 ModListRow / 用户原话明示场景切换 ✅
+- Y4 X/Y 格式 zero-pad 2 位 ✅（D-159-4）
+- Y5 partial 黄色与既有 `--state-warning-fg` token 一致 ✅
+- Y6 `aggregateXY` 测试矩阵 ≥ 6 case ✅（CHG-360-B 测试）
+- Y7 a11y aria-label 显式中文语义 ✅（§9）
+
+**advisory（未来卡）**：
+- G1：CHG-360-FOLLOWUP — DecisionCard 评估是否消费 aggregate + probe/render 单值字段 deprecate 移除
+- G2：sources-matrix VideoGroupRow.probeStatus 是否升级 aggregate（同协议 / 后续卡）
+- G3：videos.source_check_status 持久列与 SQL line-level 实时聚合的语义重叠观察（**查询时聚合优先 / 持久列仅用于 filter 索引**）
+- G4：DualSignalCount 视觉与 SignalChip 字号 padding 对齐核查
+
+### §12 4 维度自评
+
+| 维度 | 评级 | 理由 |
+|---|---|---|
+| 命名 | A | `DualSignalAggregate` 与既有 `DualSignalState/DisplayState` 命名空间清晰 / state 4 值复用 SourceCheckStatus 真源 |
+| 对称性 | A | 与 ADR-117 sources-matrix aggregate 范式 100% 对称 / Service 派生 state / SQL 仅产原料 |
+| 状态职责 | A | 单值（DualSignal）/ 聚合（DualSignalCount）/ 单源（SignalChip）三组件按数据形分离 / 数据双字段并行兼容既有消费方 |
+| 扩展性 | A | DualSignalAggregate 未来可加 partial 计数（dead/pending 子分类）/ DualSignalCount 可加 latency 显示 / Service 层 aggregateXY 可被 VideoGroupRow / StagingRow 等复用 |
+
+**综合**：**A**
+
+### §13 关联代码（CHG-360-A 范围）
+
+- `packages/types/src/admin-moderation.types.ts`（+DualSignalAggregate type / VideoQueueRow +probeAggregate/renderAggregate）
+- `packages/admin-ui/src/components/cell/dual-signal-count.types.ts`（新建 / Props 契约）
+- `packages/admin-ui/src/components/cell/dual-signal-count.tsx`（新建 / X/Y 渲染 + 颜色 + a11y）
+- `packages/admin-ui/src/components/cell/index.ts`（export）
+
+**结论**：ADR-159 status 🟢 Accepted（2026-05-27 / arch-reviewer Opus A-CONDITIONAL → 主循环消化 5 红线 + 7 黄线 + 4 关键洞察 → 等同 A）；CHG-360-A 4 文件基础落地；CHG-360-B/C 按 §10 子卡顺序接续。
+
+---

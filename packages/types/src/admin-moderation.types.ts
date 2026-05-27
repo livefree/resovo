@@ -44,6 +44,26 @@ export type DualSignalState = 'pending' | 'ok' | 'partial' | 'dead'
  */
 export type DualSignalDisplayState = DualSignalState | 'unknown'
 
+/**
+ * CHG-360 / ADR-159：双轨信号 X/Y 聚合类型 — 用于「线路（多 episode）」/「视频（多线路）」聚合显示
+ *
+ * **使用场景**：仅用于多元素聚合（line: probe 多 episode；video: 多线路）；
+ * 单 source 必须用 `DualSignalDisplayState` + `SignalChip`（X/Y 对 total=1 是类型污染）。
+ *
+ * 字段语义：
+ * - total：聚合分母（Y）— 线路视图：episode 数 / 视频视图：DISTINCT (siteKey, sourceName) 线路数
+ * - ok：聚合分子（X）— probe='ok' 或 render='ok' 的元素数（line 维度按 episode / video 维度按线路）
+ * - state：派生展示状态，**严格复用 SourceCheckStatus 4 值**（与 videos.source_check_status 持久列同源 / arch-reviewer R1+A 决策）
+ *
+ * 与 DualSignalDisplayState（单值）双形态并存：单源 / 单值消费方仍用 string；聚合消费方用本对象 + DualSignalCount 组件渲染。
+ */
+export interface DualSignalAggregate {
+  readonly total: number
+  readonly ok: number
+  /** 'pending' (total=0 或全 pending) | 'ok' (全 ok) | 'partial' (部分 ok) | 'all_dead' (全 dead) — 与 SourceCheckStatus 同源 */
+  readonly state: 'pending' | 'ok' | 'partial' | 'all_dead'
+}
+
 // ── review_labels（Migration 056）─────────────────────────────────────────────
 
 export type ReviewLabelAppliesTo = 'reject' | 'approve' | 'any'
@@ -270,6 +290,15 @@ export interface VideoQueueRow {
   readonly reviewedAt: string | null          // 016：reviewed_at TIMESTAMPTZ NULL
   readonly probe: DualSignalState             // 端点投影：JOIN video_sources 取最差 probe_status
   readonly render: DualSignalState            // 端点投影：JOIN video_sources 取最差 render_status
+  /**
+   * CHG-360 / ADR-159：line-level X/Y 聚合（按 DISTINCT siteKey/sourceName 线路计数）
+   *
+   * **双字段并行策略**（arch-reviewer J2/R5）：与 probe / render 单值字段共存
+   * - ModListRow / 新消费方：用 probeAggregate / renderAggregate + DualSignalCount 显示 "X/Y" + 黄色 partial
+   * - DecisionCard.decideTone() / 其他单值消费方：继续用 probe / render（向后兼容 / 待 FOLLOWUP 卡逐个迁移后 deprecate）
+   */
+  readonly probeAggregate: DualSignalAggregate
+  readonly renderAggregate: DualSignalAggregate
   readonly sourceCheckStatus: SourceCheckStatus // 032：CHECK + DEFAULT
   readonly metaScore: number                  // 032：meta_score SMALLINT NOT NULL DEFAULT 0 (0–100)
   readonly needsManualReview: boolean         // 016：needs_manual_review BOOLEAN NOT NULL DEFAULT false
