@@ -36,11 +36,12 @@ const SECTION: React.CSSProperties = {
 export function PendingCenter({ v, onStaffNoteChange, onEditVideo }: PendingCenterProps): React.ReactElement {
   const [currentEp, setCurrentEp] = useState(1)
   const [noteEditing, setNoteEditing] = useState(false)
-  const { selected, onLineSelect, clearSelection } = useSelectedLine()
+  const { selected, onLineSelect, clearSelection } = useSelectedLine(currentEp)
   const [noteSubmitting, setNoteSubmitting] = useState(false)
 
   useEffect(() => {
     clearSelection()
+    setCurrentEp(1)
   }, [v.id, clearSelection])
 
   const handleNoteSubmit = async (note: string | null) => {

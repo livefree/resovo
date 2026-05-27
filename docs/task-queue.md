@@ -1696,7 +1696,7 @@ HOTFIX-A → B → C 顺序串行（B 在 A SQL fix 基础上扩 CASE / C 在 B 
 
 ### 任务列表(按执行顺序)
 
-1. **CHG-345** — server-next 审核台 EpisodeSelector ↔ LinesPanel ↔ AdminPlayer 接通修复（状态：⬜ 未开始）
+1. **CHG-345** — server-next 审核台 EpisodeSelector ↔ LinesPanel ↔ AdminPlayer 接通修复（状态：✅ 已完成 / 2026-05-27 01:02 / 执行模型 claude-opus-4-7 / 主循环不切换 §16.5 / 4 文件改动 / hook currentEp 默认 1 向后兼容 / 新建 7 单测 + admin-player.test.tsx 8/8 零回归 / moderation 范围 243/243 / docs/manual P-moderation §3.6 已加 / Wave 1 卡 2/9 闭合）
    - 创建时间：2026-05-27 13:00
    - 验收要点（plan §10.3）：
      - `currentEp` 从 PendingCenter 提升,LinesPanel 接收 `currentEp` prop

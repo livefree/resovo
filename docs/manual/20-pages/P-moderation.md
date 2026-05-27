@@ -150,6 +150,24 @@
 - **后端约束**：每批 max 50 ids（端点 zod 限制）；部分失败 toast 显示「批量通过 X 条（失败 Y）」
 - **退出批量模式**：toggle off → 清空选择 + 恢复 J/K 流
 
+### 3.6 选集切换 → 播放器自动换源（CHG-345 / Wave 1 修复）
+
+> **用途**：连载剧集（episodeCount > 1）审核时，切换不同集数直接预览对应源 URL。
+
+- **位置**：中栏 PendingCenter，仅当 `v.episodeCount > 1` 显示 `EpisodeSelector`
+- **行为**：
+  - 点击数字格子（如「3」）→ EpisodeSelector 当前 ep 高亮 → AdminPlayer 自动切换到该集的 source_url
+  - 切线路（左侧 LinesPanel 选中其他 line）时，**保留** currentEp，按新 line 找匹配 episode
+  - **fallback 规则**：若当前选中 line 不含 currentEp 或该 ep 非 active → 播放器回退到该 line 的第一活跃集（避免黑屏）
+- **场景**：
+  - 多线路视频切集：line A 切 ep5 → 播放器播 line A ep5
+  - 跨 line 切集：从 line A ep5 切到 line B（line B 只有 1-6 集）→ 播放器播 line B ep5
+  - line B 仅有 1-3 集 → 在 line B 上切 ep10 → fallback 到 line B ep1（活跃）
+- **状态重置**：切换待审视频（v.id 改变）→ currentEp 重置为 1，sourceUrl 重新解析
+- **修复前 vs 修复后**：
+  - 修复前（bug）：切集仅 UI 高亮变化，播放器始终播第一活跃集
+  - 修复后：切集 ↔ 切线路 ↔ 播放器三方联动，所见即所播
+
 ## 4. 进阶操作
 
 ### 4.1 重开审核（rejected → pending）

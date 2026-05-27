@@ -8648,3 +8648,47 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **flaky 测试说明**：完整套件中 `tests/unit/components/server-next/admin/crawler/CrawlerClient.test.tsx` 时区/HH:MM 断言 1 例 flaky（单独跑 66/66 PASS / stash 还原后整体跑同样 fail）→ pre-existing 全局 mock 残留导致，与本卡死代码清理零关联；不阻塞本卡 commit
 - **注意事项**：无（纯消债 / 零行为变化）
 - **闭环**：plan §5 P0 完整闭环；fluffy-giggling-teapot.md §14 Wave 1 #2 完成
+
+## [CHG-345] server-next 审核台 EpisodeSelector ↔ LinesPanel ↔ AdminPlayer 接通修复（P0 真 bug）
+- **完成时间**：2026-05-27
+- **记录时间**：2026-05-27 01:02
+- **来源序列**：SEQ-20260527-MOD-WAVE1（Wave 1 / 卡 2/9 / plan §10.3）
+- **执行模型**：claude-opus-4-7（主循环不切换 / 用户明确指示 §16.5 自动化）
+- **子代理**：无（实现为主 / 共享层 Props 契约保持不变，无 Opus 评审触发）
+- **改动文件**（4 项 ≤ 5 ✅）：
+  - `apps/server-next/src/lib/moderation/use-selected-line.ts`（hook 改造）：
+    - 新增 `currentEp: number = 1` 参数（**默认 1 保持向后兼容**，旧 `useSelectedLine()` 调用不破坏）
+    - `selected` 从 `useState` 改为 `useMemo` 派生 from `(selectedLine, currentEp)`
+    - 新增 `findEpisode(line, currentEp)`：先精确匹配 `episodeNumber === currentEp && isActive`，找不到 fallback 第一活跃集
+    - `selected` shape **完全保持** `{ lineKey, sourceUrl, sourceId }` 不引入新字段（不破坏现有 admin-player.test.tsx Case 6 断言）
+  - `apps/server-next/src/app/admin/moderation/_client/PendingCenter.tsx`：
+    - `useSelectedLine()` → `useSelectedLine(currentEp)` 接通
+    - v.id 改变时同时 `setCurrentEp(1)`（与 clearSelection 同步重置）
+  - `tests/unit/lib/moderation/use-selected-line.test.ts`（**新建** / 7 场景）：
+    - #1 初始无选中 → null
+    - #2 onLineSelect 选中含 ep=1 active → sourceUrl 正确
+    - #3 currentEp 切换 1 → 3 → sourceUrl 跟随更新（**核心 bug 修复断言**）
+    - #4 currentEp=10 但 line 仅 1-3 集 → fallback 第一活跃集
+    - #5 全部 dead → null
+    - #6 clearSelection → null
+    - #7 切换不同 line + currentEp 联动
+  - `docs/manual/20-pages/P-moderation.md`：新增 §3.6 "选集切换 → 播放器自动换源" 章节（含 fallback 规则、场景示例、修复前后对比）
+- **保留不动**（admin-ui 共享层）：
+  - `packages/admin-ui/src/components/composite/lines-panel/lines-panel.types.ts` 的 `LinesPanelProps` 契约（`onLineSelect` 仍传 `{ lineKey, line, firstActiveUrl }` 三参，hook 现在忽略 firstActiveUrl 自己根据 currentEp 算 sourceUrl）
+  - `LinesPanel.tsx` (server-next) — 未做改动，初始 useEffect 自动选第一行行为保持
+  - `EpisodeSelector.tsx` — 未做改动，纯展示组件，状态全在父级 PendingCenter
+- **新增依赖**：无
+- **数据库变更**：无
+- **门禁**：
+  - typecheck ✅
+  - lint ✅
+  - 新增 use-selected-line.test.ts 7/7 PASS ✅
+  - moderation 范围 22 test files / 243 tests 全 PASS（含 admin-player.test.tsx 8/8 — 旧 Case 6/Case 7 useSelectedLine 测试无回归）
+  - verify:adr-contracts ✅ (advisory only)
+- **修复前 vs 修复后**：
+  - 修复前（plan §10.3 已核实根因）：`selected.sourceUrl` 永远等于该 line 第一活跃集 URL；切集仅 UI 高亮变化，AdminPlayer 不切源
+  - 修复后：切集 ↔ 切 line ↔ AdminPlayer 三方联动，所见即所播；跨 line 集数不齐有 fallback
+- **注意事项**：
+  - hook 的 `currentEp` 默认值 1 是**有意保留**的向后兼容设计，意图：测试场景调用 `useSelectedLine()` 不报 TS 错误，且行为等同于"始终查找 ep=1 或 fallback firstActive"
+  - LinesPanel 的 `onLineSelect.firstActiveUrl` 参数现已成为 hook **不消费**的冗余信息，但保留以维持 admin-ui Props 契约稳定（避免触发共享层 Opus 评审）；future cleanup 可在 admin-ui API 主重构时统一精简
+- **闭环**：plan §10.3 P0 真 bug 完整闭环；fluffy-giggling-teapot.md §14 Wave 1 #1 完成
