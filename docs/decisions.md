@@ -15683,3 +15683,163 @@ HEAD + Content-Type 是 **reachability** 检测的强化版，**不是 playabili
 **结论**：ADR-158 AMENDMENT status 🟢 Accepted（2026-05-27 / arch-reviewer Opus A-CONDITIONAL → 主循环消化 3 红线 + 3 黄线 + 4 关键洞察 → 等同 A）；CHG-351 系列 + CHG-355 收敛于本 AMENDMENT；§9 占位 jobId 策略章节 SUPERSEDED；advisory A2/A4 撤销（同步快探已满足审核台需求 / worker 化按调度需求另起卡）。
 
 ---
+
+## ADR-158 AMENDMENT 2 2026-05-27（CHG-357）— 视频级全线路批量诊断端点
+
+**触发**：CHG-356 单源同步快探闭环后，用户原话「另外预期提供这两个按钮的批量操作功能，验证视频所有线路」。CHG-356 AMENDMENT §advisory G1 已显式记录"CHG-357 批量按钮"未来卡 / 本 AMENDMENT 2 兑现。
+
+**范围**：在 ADR-158 既有 2 端点（单源 probe / render-check）+ AMENDMENT 1 同步快探协议基础上，新增 2 个 video-level batch 端点 + 新 actionType（R-MID-1 第 28 次系统化）+ admin-ui LinesPanel Props 扩展。
+
+**评审**：arch-reviewer (claude-opus-4-7) 1 轮 A-CONDITIONAL → 主循环消化 3 红线 + 4 黄线 + 4 关键洞察 → 等同 A。
+
+### 端点契约（追加 ADR-158 §3 row 3-4）
+
+| # | 方法 | 路径 | 用途 | Request | Response | 鉴权 | 错误码 |
+|---|------|------|------|---------|----------|------|--------|
+| 3 | POST | `/admin/videos/:videoId/sources/batch-probe` | 视频内全 active source 批量同步探测（复用 SourceProbeService.probeOneInternal / 分批 5 并发） | Path: `videoId: z.string().uuid()` | 200 `{ data: { videoId, results: [{ sourceId, newProbeStatus, latencyMs }], summary: { total, ok, dead, failed } } }` | admin | 422 / 404（视频无 active source）/ 409 STATE_CONFLICT（freeze）/ 500 |
+| 4 | POST | `/admin/videos/:videoId/sources/batch-render-check` | 视频内全 active source 批量同步试播 | Path: `videoId: z.string().uuid()` | 200 `{ data: { videoId, results: [{ sourceId, newRenderStatus }], summary: { total, ok, dead, failed } } }` | admin | 422 / 404 / 500 |
+
+- **路径范式（R1 方案 A）**：放在 `apps/api/src/routes/admin/videoSources.ts`（与 disable-dead / refetch-sources 同 video-level 批量命名空间对称），Service 仍在 `SourceProbeService`（跨文件 Route → Service 合法）
+- **freeze 守卫（J）**：batch-probe 入口预先查 1 次 freeze / batch-render-check 不查（继承 D-158-5）/ freeze=true → **整体 409 不部分执行**
+- **错误码**：100% 复用 ADR-110 14 码
+
+### 类型契约
+
+```ts
+export interface BatchProbeResultItem {
+  readonly sourceId: string
+  readonly newProbeStatus: 'ok' | 'dead'
+  readonly latencyMs: number | null    // ok→测量值 / dead→null（I1 继承）
+  readonly error?: string               // 调用层异常（罕见 / D1 与 dead 区分）
+}
+export interface BatchProbeResult {
+  readonly videoId: string
+  readonly results: ReadonlyArray<BatchProbeResultItem>
+  readonly summary: {
+    readonly total: number
+    readonly ok: number
+    readonly dead: number
+    readonly failed: number  // failed ≠ dead（dead 是 HEAD 失败 / failed 是基础设施失败 / D1）
+  }
+}
+// BatchRenderCheckResult 同模式（不含 latencyMs）
+```
+
+### audit log 协议（R-MID-1 第 28 次系统化）
+
+**新增 1 actionType / 零新 targetKind**（合并 actionType + afterJsonb.action 区分 / C2 修订版）：
+
+| 端点 | actionType（新增）| targetKind | targetId | beforeJsonb | afterJsonb |
+|------|-----------|------------|----------|-------------|------------|
+| POST `/batch-probe` | `video_source.batch_inline_action` | `video`（不是 video_source / batch 对象是 video） | `videoId` (uuid) | `null`（batch video-level 无单一前态 / 数据完整性靠 source_health_events 每源 1 条兜底）| `{ action: 'batch_probe', summary, sourceIds }` |
+| POST `/batch-render-check` | `video_source.batch_inline_action` | `video` | `videoId` | `null` | `{ action: 'batch_render_check', summary, sourceIds }` |
+
+**audit 范式（A2 修订版 / C2）**：
+- batch 入口写 **1 条 summary audit**（与既有 `video_source.disable_dead_batch` / `staging.batch_publish` / `crawler_task.batch_cancel` 3 范式对齐）
+- 子调用 `probeOneInternal({ skipAudit: true })` 不写单源 audit（避免 N 条 audit 膨胀 / 易筛选）
+- **每源仍写 source_health_events**（I3 数据完整性 / 与 R3 一致 / source-level 时间序列数据 ≠ admin-level 决策记录 / 边界清晰）
+
+### 同步语义边界
+
+| 项 | 实现 |
+|---|---|
+| 数据查询 | `listVideoSources(videoId)` 1 次（B2 / 避免 N 次 findVideoSourceById）|
+| freeze 检查 | 入口 1 次（B2 / 避免 N 次 systemSettings 查询）|
+| 并发控制 | `runInBatches` 分批 5 并发（F2 / 防大视频 100+ outbound HEAD 风暴 + CDN 防盗链 429 误判 / 无新依赖）|
+| 子调用 | `probeOneInternal({ skipAudit: true })` / `renderCheckOneInternal({ skipAudit: true })` |
+| failed 字段语义 | 调用层异常（DB UPDATE 失败 / 罕见）/ 与 `dead`（HEAD 失败业务结果）严格区分（D1）|
+| 部分成功 | results 数组逐项标识 / summary 汇总 / 不整体抛错（G4 advisory：未来加 `partial` summary 状态）|
+
+### probeOneInternal / renderCheckOneInternal 抽出（R2 / I1 file-size BLOCKER）
+
+**触发**：arch-reviewer I1 — `apps/api/src/services/SourcesMatrixService.ts` 当前 551 行已超 500 红线，CHG-357 新增 ~80 行会推至 ~630 行触发 file-size BLOCKER。
+
+**修订**：抽 `apps/api/src/services/SourceProbeService.ts` 新文件（392 行）承载：
+- `probeUrlHead(url, contentTypeCheck)` 私有公共方法（CHG-356 R2 抽出）
+- `probeOneInternal(source, actorId, opts)` / `renderCheckOneInternal(source, actorId, opts)` 接收已查 source + skipAudit + skipFreezeCheck（CHG-357 R2 修订）
+- 公开 `probeOne` / `renderCheckOne`（既有 ADR-158 + AMENDMENT 1 契约）/ 内部委托 `probeOneInternal({ skipAudit: false })`
+- 公开 `batchProbe` / `batchRenderCheck`（本 AMENDMENT 2 新增）
+
+`SourcesMatrixService.probeOne / renderCheckOne` 改为 `new SourceProbeService(this.db).probeOne(...)` 委托（向后兼容 / route 层 import 路径不变 / 文件减重 551→420 行 / 解 BLOCKER）。
+
+### admin-ui Props 扩展（CLAUDE.md "共享组件 API 契约强制 Opus" 红线）
+
+```ts
+// packages/admin-ui/src/components/composite/lines-panel/lines-panel.types.ts
+readonly onProbeAllSources?: () => void | Promise<void>           // toolbar 全局按钮
+readonly onRenderCheckAllSources?: () => void | Promise<void>
+readonly probingAllSources?: boolean                              // batch 进行中 / disable toolbar 按钮
+readonly renderCheckingAllSources?: boolean
+```
+
+**命名 rationale（H）**：
+- `Sources`（不是 `Episodes` / `Batch`）— 操作粒度是"视频内全 sources"（含跨多线路 × 多集 / `Episode` 在 EpisodeMini 类型中专指单集 / 命名混淆引导消费方误用）
+- `All` + 对象名（`Sources`）双语义明确（"批量什么"语义）
+- pending state 用 `boolean`（与既有 `probingEpisodeIds: ReadonlySet<string>` 命名区分清晰 / 单 episode 用 Set / 全局 batch 用 boolean）
+
+**Props 位置**：toolbar callbacks 区紧跟 `onRefetch`（与 `onDisableDead` 视觉/语义对齐）。
+
+### I4 race 防御（admin-ui useMemo）
+
+LinesPanel 主体内 `useMemo` 计算 `effectiveProbingIds` / `effectiveRenderCheckingIds`：batch 期间合并所有 ep.id 到 set → EpisodeRow 现有 `disabled={probing || spinning}` 自动正确（inline 单源按钮 batch 期间也 disabled）/ 无需 EpisodeRow 透传 batch props（避免 props 链路爆破）。
+
+### 决策要点（AMENDMENT 2）
+
+| D-N | 决策 | 选择 |
+|---|---|---|
+| D-158-AMD-10 | 端点路径范式 | **方案 A**：`apps/api/src/routes/admin/videoSources.ts`（与 disable-dead 邻居 / video-level 批量命名空间对称）/ Service 仍在 SourceProbeService（跨文件合法）|
+| D-158-AMD-11 | probeOne 复用 vs 抽 internal | **B2**：抽 `probeOneInternal` + `skipAudit` + `skipFreezeCheck` 参数（解 N 次 DB + N 条 audit 膨胀 / 联动 I1 file-size BLOCKER 修复）|
+| D-158-AMD-12 | actionType 命名 | **新增 1 项 `video_source.batch_inline_action`**（拒 C1 复用 inline_action / 拒 C2 双独立 actionType / 与既有 batch 范式 disable_dead_batch / batch_publish / batch_cancel 对齐）|
+| D-158-AMD-13 | targetKind | `'video'`（拒 `'video_source'` / batch 对象是 video 而非单源）|
+| D-158-AMD-14 | response summary | **D1**: `{ total, ok, dead, failed }` 4 项扁平 / failed ≠ dead 严格区分 |
+| D-158-AMD-15 | 并发控制 | **F2**：`Promise.all` + 分批 5 并发（runInBatches helper / 无新依赖）|
+| D-158-AMD-16 | freeze 守卫 | 入口 1 次查 / 整体 409 不部分执行（J）|
+| D-158-AMD-17 | SourceProbeService 抽出 | **必拆**（I1 file-size BLOCKER：SourcesMatrixService 551→420 行 / 新文件 392 行）|
+| D-158-AMD-18 | admin-ui Props 命名 | `onProbeAllSources` / `onRenderCheckAllSources` + `probingAllSources` / `renderCheckingAllSources` boolean（H）|
+
+### 红线 / 黄线 / advisory（AMENDMENT 2）
+
+**红线（全采纳）**：
+- R1：端点路径方案 A（videoSources.ts 邻居 / D-AMD-10）✅
+- R2：抽 probeOneInternal + skipAudit + skipFreezeCheck（解 N 次 DB + audit 膨胀 / D-AMD-11）✅
+- R3：actionType `video_source.batch_inline_action`（R-MID-1 第 28 次 / 4 真源 +1 / D-AMD-12）✅
+
+**黄线（全采纳）**：
+- Y1：`latencyMs: number | null` 明确（与单源对齐）✅
+- Y2：超时 budget — 分批 5 并发 × 30 批 × 3s = 90s worst case（接近 fastify 60s timeout / advisory：未来若实测超时需加 globalTimeoutMs 守卫）⚠️ 记录
+- Y3：error case audit 一致性（freeze 409 / 404 / 422 不写 audit / 与 D-158-7 一致）✅
+- Y4：前端 4 toast 文案 ✅
+
+**advisory（继承 + 新增）**：
+- G1（已交付 / AMENDMENT 1 G1）：本 AMENDMENT 2 兑现
+- G2 / G3 / G4（继承）
+- **G5（新增）**：失败 source 列表（E2）— toast 只显示 X/Y/失败 Z / 未列具体 lineKey / 未来若用户反馈需要可起独立卡（Modal 或 actionError 多行）
+- **G6（新增 / I1）**：CHG-357 文件改动后回溯校验 `SourceProbeService` 是否进一步拆（probeUrlHead → http-utils？/ batch 工具 → batch-helpers？）/ 当前 392 行健康范围 / 不强制
+- **G7（新增 / I2）**：admin-ui Props 扩展无 set-equal 守卫保护（CHG-351-B 起继承问题）/ VideoEditDrawer TabLines 等其他消费方需 follow-up 卡同步消费 batch 按钮（否则功能分裂）
+- **G8（新增）**：视频 source 数 > 50 普遍存在时考虑 SSE 进度推送（G2 决策被推翻条件）
+
+### 文件改动（16 项 / 援引 ADR-121 D-121-3 RETRO 7 文件豁免 + ADR-158 §1 D-158-9 + AMENDMENT 1 + 2 多重豁免延续）
+
+**RETRO 7 文件**（4 真源 + audit 5 文件 + audit test + changelog）：
+1. `packages/types/src/admin-moderation.types.ts`（AdminAuditActionType +1）
+2. `apps/api/src/services/AuditLogService.ts`（ACTION_TYPES +1）
+3. `tests/unit/api/audit-log-service-enums-set-equal.test.ts`（EXPECTED +1）
+4. `tests/unit/api/audit-log-coverage.test.ts`（REQUIRED + PAYLOAD +1）
+5. `apps/api/src/routes/admin/videoSources.ts`（+2 端点 batch-probe / batch-render-check）
+6. `tests/unit/api/video-source-batch-inline-action-audit.test.ts`（**新建** / 6 case）
+7. `docs/changelog.md`
+
+**额外 9 文件**：
+8. `apps/api/src/services/SourceProbeService.ts`（**新建** / 抽 probeUrlHead + probeOneInternal + renderCheckOneInternal + batchProbe + batchRenderCheck / I1 解 BLOCKER）
+9. `apps/api/src/services/SourcesMatrixService.ts`（probeOne / renderCheckOne 委托 / VIDEO_CONTENT_TYPE_RE 删除 / 551→420 行）
+10. `docs/decisions.md`（本 AMENDMENT 2 章节）
+11. `tests/unit/api/video-source-inline-action-audit.test.ts`（mock 主体 SourcesMatrixService → SourceProbeService 适配）
+12. `packages/admin-ui/.../lines-panel.types.ts`（4 新 Props）
+13. `packages/admin-ui/.../lines-panel.tsx`（toolbar 加 2 按钮 + useMemo I4 race 防御）
+14. `apps/server-next/src/lib/moderation/api.ts`（4 新 type + 2 client 函数）
+15. `apps/server-next/.../moderation/_client/LinesPanel.tsx`（handleProbeAllSources + handleRenderCheckAllSources + state + I4 race 防御）
+16. `apps/server-next/src/i18n/messages/zh-CN/moderation.ts`（5 新文案 / 含 2 模板函数）
+
+**结论**：ADR-158 AMENDMENT 2 status 🟢 Accepted（2026-05-27 / arch-reviewer Opus A-CONDITIONAL → 主循环消化 3 红线 + 4 黄线 + 4 关键洞察 → 等同 A）；CHG-357 16 文件原子实施；ADR-158 advisory G1 已交付；下游 advisory G5/G6/G7/G8 跟踪未来卡。
+
+---

@@ -108,6 +108,15 @@ export interface LinesPanelProps {
   /** 单 episode 试播渲染检测回调（ADR-158 POST /admin/sources/:id/render-check / 仅当提供时渲染按钮） */
   readonly onRenderCheckEpisode?: (args: { readonly lineKey: string; readonly episodeId: string }) => void | Promise<void>
 
+  // ── 视频级全线路批量回调（CHG-357 / ADR-158 AMENDMENT 2）─────────
+  // toolbar 全局动作 / 与 onDisableDead 同 video-level 批量语义
+
+  /** 全线路批量探测（POST /admin/videos/:videoId/sources/batch-probe / 仅当提供时显示 toolbar 按钮）*/
+  readonly onProbeAllSources?: () => void | Promise<void>
+
+  /** 全线路批量试播（POST /admin/videos/:videoId/sources/batch-render-check / 仅当提供时显示按钮）*/
+  readonly onRenderCheckAllSources?: () => void | Promise<void>
+
   /**
    * 受控选择（R1）：selectedKey + onLineSelect 必须同时出现或同时省略。
    * 省略 = 无选中态（VideoEditDrawer 用法）。
@@ -131,6 +140,12 @@ export interface LinesPanelProps {
 
   /** 进行中的 render-check episodeId 集（ADR-158 /render-check 按钮 disabled） */
   readonly renderCheckingEpisodeIds?: ReadonlySet<string>
+
+  /** CHG-357 视频级 batch_probe 进行中（toolbar "全部探测" 按钮 disabled / inline 单源按钮也禁用 / I4 防 race）*/
+  readonly probingAllSources?: boolean
+
+  /** CHG-357 视频级 batch_render_check 进行中（toolbar "全部试播" 按钮 disabled / inline 单源按钮也禁用）*/
+  readonly renderCheckingAllSources?: boolean
 
   readonly loading?: boolean
   readonly error?: string | null

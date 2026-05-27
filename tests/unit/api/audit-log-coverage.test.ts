@@ -100,6 +100,8 @@ const REQUIRED_ACTION_TYPES = [
   'crawler_task.batch_cancel',   // POST /admin/crawler/tasks/batch-cancel
   // CHG-351-A / ADR-158：单源 inline probe + render-check 合并 actionType（R-MID-1 第 27 次系统化 / targetKind 复用 'video_source'）
   'video_source.inline_action',  // POST /admin/sources/:id/{probe,render-check}（afterJsonb.action 区分 'probe' / 'render_check'）
+  // CHG-357 / ADR-158 AMENDMENT 2：视频级 batch（R-MID-1 第 28 次 / targetKind 'video'）
+  'video_source.batch_inline_action',  // POST /admin/videos/:videoId/sources/{batch-probe,batch-render-check}
 ] as const
 
 const ACTION_TYPE_REGEX = /actionType:\s*['"]([a-z_.]+)['"]/g
@@ -188,6 +190,8 @@ const PAYLOAD_ASSERTION_REQUIRED = [
   'system.webhook_send_failed',
   // CHG-351-A / ADR-158：单源 inline probe + render-check audit payload 内容断言（R-MID-1 第 27 次 / 5 case / tests/unit/api/video-source-inline-action-audit.test.ts）
   'video_source.inline_action',
+  // CHG-357 / ADR-158 AMENDMENT 2：视频级 batch audit payload 断言（R-MID-1 第 28 次 / tests/unit/api/video-source-batch-inline-action-audit.test.ts）
+  'video_source.batch_inline_action',
 ] as const
 
 // CHG-SN-6-10：plan v1.4 §3.0.5 M-SN-4 legacy 11 项已迁移至 PAYLOAD_ASSERTION_REQUIRED

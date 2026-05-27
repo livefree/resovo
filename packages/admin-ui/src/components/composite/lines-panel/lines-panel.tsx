@@ -12,7 +12,7 @@
  * WAI-ARIA：section[aria-label] > header > div[role=table] > LineRow[role=rowgroup] > EpisodeRow[role=row]
  * 颜色：仅消费 packages/design-tokens CSS 变量，零硬编码
  */
-import React, { useState } from 'react'
+import React, { useState, useMemo } from 'react'
 import type { LinesPanelProps, LineAggregate, EpisodeMini, LinesPanelDensity } from './lines-panel.types'
 import { DualSignal } from '../../cell/dual-signal'
 import { SignalChip } from '../../cell/signal-chip'
@@ -291,11 +291,15 @@ export function LinesPanel({
   onHealthOpen,
   onProbeEpisode,
   onRenderCheckEpisode,
+  onProbeAllSources,
+  onRenderCheckAllSources,
   selectedKey,
   onLineSelect,
   toggling,
   probingEpisodeIds,
   renderCheckingEpisodeIds,
+  probingAllSources,
+  renderCheckingAllSources,
   loading,
   error,
   onErrorRetry,
@@ -317,6 +321,22 @@ export function LinesPanel({
 
   const selectable = selectedKey !== undefined && onLineSelect !== undefined
 
+  // CHG-357 / arch-reviewer I4 防 race：batch 期间 EpisodeRow inline 按钮也 disabled
+  //   合并 batch 状态到 episode-level sets — batch=true 时所有 ep.id 视为 probing/rendering
+  //   这样 EpisodeRow 现有 `disabled={probing || spinning}` 自动正确，无需再透传 batch props
+  const effectiveProbingIds = useMemo<ReadonlySet<string>>(() => {
+    if (!probingAllSources) return probingEpisodeIds ?? new Set()
+    const all = new Set<string>(probingEpisodeIds ?? [])
+    for (const line of lines) for (const ep of line.episodes) all.add(ep.id)
+    return all
+  }, [probingAllSources, probingEpisodeIds, lines])
+  const effectiveRenderCheckingIds = useMemo<ReadonlySet<string>>(() => {
+    if (!renderCheckingAllSources) return renderCheckingEpisodeIds ?? new Set()
+    const all = new Set<string>(renderCheckingEpisodeIds ?? [])
+    for (const line of lines) for (const ep of line.episodes) all.add(ep.id)
+    return all
+  }, [renderCheckingAllSources, renderCheckingEpisodeIds, lines])
+
   function handleSelect(line: LineAggregate) {
     if (!onLineSelect) return
     const firstActiveUrl = line.episodes.find(e => e.isActive)?.sourceUrl ?? null
@@ -330,8 +350,30 @@ export function LinesPanel({
       aria-label={ariaLabel}
       style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 10px', borderBottom: '1px solid var(--border-subtle)', flexShrink: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 10px', borderBottom: '1px solid var(--border-subtle)', flexShrink: 0, flexWrap: 'wrap' }}>
         <span style={{ fontWeight: 600, fontSize: 'var(--font-size-sm)', flex: 1 }}>视频线路</span>
+        {onProbeAllSources && (
+          <button
+            type="button"
+            onClick={() => void onProbeAllSources()}
+            style={GHOST_BTN}
+            disabled={probingAllSources || renderCheckingAllSources}
+            aria-label="全部探测线路"
+          >
+            {probingAllSources ? '全部探测…' : '全部探测'}
+          </button>
+        )}
+        {onRenderCheckAllSources && (
+          <button
+            type="button"
+            onClick={() => void onRenderCheckAllSources()}
+            style={GHOST_BTN}
+            disabled={probingAllSources || renderCheckingAllSources}
+            aria-label="全部试播线路"
+          >
+            {renderCheckingAllSources ? '全部试播…' : '全部试播'}
+          </button>
+        )}
         <button type="button" onClick={() => void onDisableDead()} style={GHOST_BTN} aria-label="清除失效线路">
           清除失效
         </button>
@@ -378,8 +420,8 @@ export function LinesPanel({
               isSelected={selectable ? selectedKey === line.key : false}
               selectable={selectable}
               toggling={toggling}
-              probingEpisodeIds={probingEpisodeIds}
-              renderCheckingEpisodeIds={renderCheckingEpisodeIds}
+              probingEpisodeIds={effectiveProbingIds}
+              renderCheckingEpisodeIds={effectiveRenderCheckingIds}
               onToggle={onToggleEpisode}
               onToggleLine={onToggleLine}
               onHealthOpen={onHealthOpen}

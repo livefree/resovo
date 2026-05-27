@@ -239,6 +239,47 @@ export async function renderCheckOneSource(sourceId: string): Promise<SingleSour
   return res.data
 }
 
+// ── 视频级 batch 探测/试播（CHG-357 / ADR-158 AMENDMENT 2）────────
+
+export interface BatchProbeResultItem {
+  readonly sourceId: string
+  readonly newProbeStatus: 'ok' | 'dead'
+  readonly latencyMs: number | null
+  readonly error?: string
+}
+export interface BatchProbeResult {
+  readonly videoId: string
+  readonly results: ReadonlyArray<BatchProbeResultItem>
+  readonly summary: { readonly total: number; readonly ok: number; readonly dead: number; readonly failed: number }
+}
+
+export interface BatchRenderCheckResultItem {
+  readonly sourceId: string
+  readonly newRenderStatus: 'ok' | 'dead'
+  readonly error?: string
+}
+export interface BatchRenderCheckResult {
+  readonly videoId: string
+  readonly results: ReadonlyArray<BatchRenderCheckResultItem>
+  readonly summary: { readonly total: number; readonly ok: number; readonly dead: number; readonly failed: number }
+}
+
+export async function batchProbeVideo(videoId: string): Promise<BatchProbeResult> {
+  const res = await apiClient.post<{ data: BatchProbeResult }>(
+    `/admin/videos/${encodeURIComponent(videoId)}/sources/batch-probe`,
+    {},
+  )
+  return res.data
+}
+
+export async function batchRenderCheckVideo(videoId: string): Promise<BatchRenderCheckResult> {
+  const res = await apiClient.post<{ data: BatchRenderCheckResult }>(
+    `/admin/videos/${encodeURIComponent(videoId)}/sources/batch-render-check`,
+    {},
+  )
+  return res.data
+}
+
 // ── 线路健康事件 ──────────────────────────────────────────────────────
 
 export async function fetchLineHealth(

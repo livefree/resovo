@@ -9,7 +9,7 @@
  *   - 乐观锁（PRE-01-C）：onToggleEpisode.updatedAt 透传 toggleSource
  *   - LineHealthDrawer 保留本地（不进入共享组件）
  */
-import React, { useState, useEffect, useCallback, useMemo } from 'react'
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import {
   LinesPanel as LinesPanelUI,
   groupSourcesByLine,
@@ -66,8 +66,14 @@ export function LinesPanel({ videoId, selectedKey, onLineSelect }: LinesPanelPro
   // CHG-351-C / ADR-158 / arch-reviewer A1+I2 范式：双独立 set 跟踪 probe / render-check pending
   const [probingIds, setProbingIds] = useState<ReadonlySet<string>>(new Set())
   const [renderCheckingIds, setRenderCheckingIds] = useState<ReadonlySet<string>>(new Set())
+  // CHG-357 / ADR-158 AMENDMENT 2：视频级 batch 进行中标志
+  const [probingAllSources, setProbingAllSources] = useState(false)
+  const [renderCheckingAllSources, setRenderCheckingAllSources] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
   const [drawer, setDrawer] = useState<HealthDrawerState>(DRAWER_CLOSED)
+  // CHG-357 / arch-reviewer I4：videoId race 防御 — batch 完成时 setLines 必须检查 videoId 仍是当前
+  const videoIdRef = useRef(videoId)
+  useEffect(() => { videoIdRef.current = videoId }, [videoId])
 
   useEffect(() => {
     setLoading(true)
@@ -207,6 +213,56 @@ export function LinesPanel({ videoId, selectedKey, onLineSelect }: LinesPanelPro
     }
   }, [])
 
+  // CHG-357 / ADR-158 AMENDMENT 2：视频级 batch 探测/试播
+  //   I4 race 防御：videoIdRef 防 user 切视频后 batch 仍 setLines 当前视频；I4 admin-ui useMemo 防 inline 按钮 race
+  const handleProbeAllSources = useCallback(async () => {
+    setProbingAllSources(true)
+    setActionError(null)
+    const startedVideoId = videoId
+    try {
+      const result = await api.batchProbeVideo(videoId)
+      if (videoIdRef.current !== startedVideoId) return  // I4 user 已切视频 / 丢弃结果
+      setLines(prev => prev.map(l => {
+        const r = result.results.find(x => x.sourceId === l.id)
+        return r && !r.error
+          ? { ...l, probe_status: r.newProbeStatus, latency_ms: r.latencyMs }
+          : l
+      }))
+      const { ok, dead, total, failed } = result.summary
+      setActionError(M.lines.batchProbeDone(ok, dead, total, failed))
+    } catch (e: unknown) {
+      if (e instanceof ApiClientError && e.status === 409) {
+        setActionError(M.lines.batchProbeFrozen)
+      } else {
+        setActionError(M.lines.batchProbeFailed)
+      }
+    } finally {
+      setProbingAllSources(false)
+    }
+  }, [videoId])
+
+  const handleRenderCheckAllSources = useCallback(async () => {
+    setRenderCheckingAllSources(true)
+    setActionError(null)
+    const startedVideoId = videoId
+    try {
+      const result = await api.batchRenderCheckVideo(videoId)
+      if (videoIdRef.current !== startedVideoId) return
+      setLines(prev => prev.map(l => {
+        const r = result.results.find(x => x.sourceId === l.id)
+        return r && !r.error
+          ? { ...l, render_status: r.newRenderStatus }
+          : l
+      }))
+      const { ok, dead, total, failed } = result.summary
+      setActionError(M.lines.batchRenderCheckDone(ok, dead, total, failed))
+    } catch {
+      setActionError(M.lines.batchRenderCheckFailed)
+    } finally {
+      setRenderCheckingAllSources(false)
+    }
+  }, [videoId])
+
   return (
     <>
       <LinesPanelUI
@@ -218,11 +274,15 @@ export function LinesPanel({ videoId, selectedKey, onLineSelect }: LinesPanelPro
         onHealthOpen={handleHealthOpen}
         onProbeEpisode={handleProbeEpisode}
         onRenderCheckEpisode={handleRenderCheckEpisode}
+        onProbeAllSources={handleProbeAllSources}
+        onRenderCheckAllSources={handleRenderCheckAllSources}
         selectedKey={selectedKey}
         onLineSelect={onLineSelect}
         toggling={togglingIds}
         probingEpisodeIds={probingIds}
         renderCheckingEpisodeIds={renderCheckingIds}
+        probingAllSources={probingAllSources}
+        renderCheckingAllSources={renderCheckingAllSources}
         loading={loading}
         error={error}
         actionError={actionError}

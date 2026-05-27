@@ -17,7 +17,9 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type { Pool } from 'pg'
-import { SourcesMatrixService } from '@/api/services/SourcesMatrixService'
+// CHG-357: probeOne / renderCheckOne 已迁至 SourceProbeService（SourcesMatrixService 委托调用）
+//   audit spy 必须 spy 实际执行 audit 的 SourceProbeService 实例
+import { SourceProbeService } from '@/api/services/SourceProbeService'
 
 const FROZEN_SETTING_RESULT = { rows: [{ value: 'true' }] }
 const UNFROZEN_SETTING_RESULT = { rows: [{ value: 'false' }] }
@@ -30,7 +32,7 @@ function makePool(queryImpl: (sql: string, params: readonly unknown[]) => MockRe
   } as unknown as Pool
 }
 
-function spyAuditOnService(svc: SourcesMatrixService): ReturnType<typeof vi.fn> {
+function spyAuditOnService(svc: SourceProbeService): ReturnType<typeof vi.fn> {
   const writeMock = vi.fn()
   ;(svc as unknown as { auditSvc: { write: typeof writeMock } }).auditSvc = { write: writeMock }
   return writeMock
@@ -69,7 +71,7 @@ function makeSourceRow(): Record<string, unknown> {
   }
 }
 
-describe('SourcesMatrixService.probeOne audit + freeze 守卫 (ADR-158 AMENDMENT / CHG-356)', () => {
+describe('SourceProbeService.probeOne audit + freeze 守卫 (ADR-158 AMENDMENT / CHG-356)', () => {
   beforeEach(() => {
     // 默认 mock fetch HEAD → ok
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
@@ -87,7 +89,7 @@ describe('SourcesMatrixService.probeOne audit + freeze 守卫 (ADR-158 AMENDMENT
       if (sql.includes('INSERT INTO source_health_events')) return { rows: [{ id: 'evt-1' }] }
       return { rows: [] }
     })
-    const svc = new SourcesMatrixService(pool)
+    const svc = new SourceProbeService(pool)
     const writeMock = spyAuditOnService(svc)
 
     const result = await svc.probeOne(TEST_SOURCE_ID, 'actor-1', 'req-1')
@@ -122,7 +124,7 @@ describe('SourcesMatrixService.probeOne audit + freeze 守卫 (ADR-158 AMENDMENT
       if (sql.includes('WHERE vs.id = $1')) return { rows: [] }
       return { rows: [] }
     })
-    const svc = new SourcesMatrixService(pool)
+    const svc = new SourceProbeService(pool)
     const writeMock = spyAuditOnService(svc)
 
     await expect(svc.probeOne(TEST_SOURCE_ID, 'actor-1')).rejects.toMatchObject({
@@ -137,7 +139,7 @@ describe('SourcesMatrixService.probeOne audit + freeze 守卫 (ADR-158 AMENDMENT
       if (sql.includes('system_settings')) return FROZEN_SETTING_RESULT
       return { rows: [] }
     })
-    const svc = new SourcesMatrixService(pool)
+    const svc = new SourceProbeService(pool)
     const writeMock = spyAuditOnService(svc)
 
     await expect(svc.probeOne(TEST_SOURCE_ID, 'actor-1')).rejects.toMatchObject({
@@ -148,7 +150,7 @@ describe('SourcesMatrixService.probeOne audit + freeze 守卫 (ADR-158 AMENDMENT
   })
 })
 
-describe('SourcesMatrixService.renderCheckOne audit + 不守 freeze (ADR-158 AMENDMENT D-158-5)', () => {
+describe('SourceProbeService.renderCheckOne audit + 不守 freeze (ADR-158 AMENDMENT D-158-5)', () => {
   beforeEach(() => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       ok: true,
@@ -164,7 +166,7 @@ describe('SourcesMatrixService.renderCheckOne audit + 不守 freeze (ADR-158 AME
       if (sql.includes('INSERT INTO source_health_events')) return { rows: [{ id: 'evt-2' }] }
       return { rows: [] }
     })
-    const svc = new SourcesMatrixService(pool)
+    const svc = new SourceProbeService(pool)
     const writeMock = spyAuditOnService(svc)
 
     const result = await svc.renderCheckOne(TEST_SOURCE_ID, 'actor-2', 'req-2')
@@ -196,7 +198,7 @@ describe('SourcesMatrixService.renderCheckOne audit + 不守 freeze (ADR-158 AME
       if (sql.includes('WHERE vs.id = $1')) return { rows: [] }
       return { rows: [] }
     })
-    const svc = new SourcesMatrixService(pool)
+    const svc = new SourceProbeService(pool)
     const writeMock = spyAuditOnService(svc)
 
     await expect(svc.renderCheckOne(TEST_SOURCE_ID, 'actor-2')).rejects.toMatchObject({

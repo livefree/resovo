@@ -92,6 +92,8 @@ const EXPECTED_ACTION_TYPES = [
   'system.webhook_send_failed',
   // CHG-351-A / ADR-158 / R-MID-1 系统化第 27 次（单源 inline probe + render-check 合并 actionType / targetKind 复用 'video_source'）
   'video_source.inline_action',
+  // CHG-357 / ADR-158 AMENDMENT 2 / R-MID-1 系统化第 28 次（视频级 batch probe + render-check 合并 actionType / targetKind 'video'）
+  'video_source.batch_inline_action',
 ] as const
 
 const EXPECTED_TARGET_KINDS = [

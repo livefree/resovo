@@ -4,6 +4,8 @@
  * PATCH /admin/videos/:id/sources/:sourceId  线路 toggle
  * POST  /admin/videos/:id/sources/disable-dead  批量禁用 dead 线路
  * POST  /admin/videos/:id/refetch-sources  触发线路重新抓取
+ * POST  /admin/videos/:videoId/sources/batch-probe  视频级全线路批量探测（CHG-357 / ADR-158 AMENDMENT 2）
+ * POST  /admin/videos/:videoId/sources/batch-render-check  视频级全线路批量试播（CHG-357 / ADR-158 AMENDMENT 2）
  */
 
 import type { FastifyInstance } from 'fastify'
@@ -13,6 +15,7 @@ import { es } from '@/api/lib/elasticsearch'
 import { ModerationService } from '@/api/services/ModerationService'
 import { CrawlerRunService } from '@/api/services/CrawlerRunService'
 import { AuditLogService } from '@/api/services/AuditLogService'
+import { SourceProbeService } from '@/api/services/SourceProbeService'
 import { isAppError } from '@/api/lib/errors'
 import { findAdminVideoById } from '@/api/db/queries/videos'
 
@@ -22,11 +25,15 @@ const SourcePatchSchema = z.object({
   expectedUpdatedAt: z.string().datetime().optional(),
 })
 
+const BatchVideoIdSchema = z.object({ videoId: z.string().uuid() }).strict()
+
 export async function adminVideoSourcesRoutes(fastify: FastifyInstance) {
   const auth = [fastify.authenticate, fastify.requireRole(['moderator', 'admin'])]
+  const adminOnly = [fastify.authenticate, fastify.requireRole(['admin'])]
   const moderationSvc = new ModerationService(db, es)
   const runService = new CrawlerRunService(db)
   const auditSvc = new AuditLogService(db)  // CHG-SN-4-10-A2：refetch-sources 入队 audit
+  const probeSvc = new SourceProbeService(db)  // CHG-357 / ADR-158 AMENDMENT 2
 
   // ── PATCH /admin/videos/:id/sources/:sourceId — 线路 toggle（CHG-SN-4-05）──
   fastify.patch('/admin/videos/:id/sources/:sourceId', { preHandler: auth }, async (request, reply) => {
@@ -120,5 +127,52 @@ export async function adminVideoSourcesRoutes(fastify: FastifyInstance) {
       requestId: request.id,
     })
     return reply.code(202).send({ data: result })
+  })
+
+  // ── CHG-357 / ADR-158 AMENDMENT 2：视频级 batch 探测/试播 ───────
+  // 与 disable-dead 同 video-level 批量命名空间对称（arch-reviewer R1 方案 A）
+  // adminOnly 与 ADR-158 §端点契约 100% 对齐（与 row 5/7-9/AMENDMENT 1 单源端点一致）
+
+  // POST /admin/videos/:videoId/sources/batch-probe
+  fastify.post('/admin/videos/:videoId/sources/batch-probe', { preHandler: adminOnly }, async (request, reply) => {
+    const parsed = BatchVideoIdSchema.safeParse(request.params)
+    if (!parsed.success) {
+      return reply.code(422).send({
+        error: { code: 'VALIDATION_ERROR', message: 'videoId 必须为 uuid', status: 422 },
+      })
+    }
+    try {
+      const result = await probeSvc.batchProbe(parsed.data.videoId, request.user!.userId, request.id)
+      return reply.send({ data: result })
+    } catch (err) {
+      if (isAppError(err, 'NOT_FOUND')) {
+        return reply.code(404).send({ error: { code: 'NOT_FOUND', message: err.message, status: 404 } })
+      }
+      if (isAppError(err, 'STATE_CONFLICT')) {
+        return reply.code(409).send({ error: { code: 'STATE_CONFLICT', message: err.message, status: 409 } })
+      }
+      request.log.error({ err }, '[admin/videos/:videoId/sources/batch-probe] error')
+      return reply.code(500).send({ error: { code: 'INTERNAL_ERROR', message: '服务器内部错误', status: 500 } })
+    }
+  })
+
+  // POST /admin/videos/:videoId/sources/batch-render-check（不守 freeze / 继承 D-158-5）
+  fastify.post('/admin/videos/:videoId/sources/batch-render-check', { preHandler: adminOnly }, async (request, reply) => {
+    const parsed = BatchVideoIdSchema.safeParse(request.params)
+    if (!parsed.success) {
+      return reply.code(422).send({
+        error: { code: 'VALIDATION_ERROR', message: 'videoId 必须为 uuid', status: 422 },
+      })
+    }
+    try {
+      const result = await probeSvc.batchRenderCheck(parsed.data.videoId, request.user!.userId, request.id)
+      return reply.send({ data: result })
+    } catch (err) {
+      if (isAppError(err, 'NOT_FOUND')) {
+        return reply.code(404).send({ error: { code: 'NOT_FOUND', message: err.message, status: 404 } })
+      }
+      request.log.error({ err }, '[admin/videos/:videoId/sources/batch-render-check] error')
+      return reply.code(500).send({ error: { code: 'INTERNAL_ERROR', message: '服务器内部错误', status: 500 } })
+    }
   })
 }

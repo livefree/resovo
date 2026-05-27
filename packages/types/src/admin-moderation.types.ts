@@ -200,6 +200,9 @@ export type AdminAuditActionType =
   // CHG-351-A / ADR-158：单源 inline probe + render-check 合并 actionType（R-MID-1 第 27 次系统化 / targetKind 复用 'video_source'）
   | 'video_source.inline_action'  // POST /admin/sources/:id/{probe,render-check}（afterJsonb.action 区分 'probe' / 'render_check'）
 
+  // CHG-357 / ADR-158 AMENDMENT 2：视频级 batch probe + render-check 合并 actionType（R-MID-1 第 28 次 / targetKind 'video'）
+  | 'video_source.batch_inline_action'  // POST /admin/videos/:videoId/sources/{batch-probe,batch-render-check}（afterJsonb.action 区分）
+
 export type AdminAuditTargetKind =
   | 'video'
   | 'video_source'
