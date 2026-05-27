@@ -24,7 +24,10 @@ export { MediaCatalogRow, CatalogInsertData, CatalogUpdateData }
 export const CATALOG_SOURCE_PRIORITY: Record<string, number> = {
   manual:  5,
   tmdb:    4,
-  bangumi: 3,
+  // ADR-159 决策要点 2：anime 下 Bangumi 优先于豆瓣。bangumi 来源仅对 anime 写入
+  // （step3 与占位均 anime-only），全局提级至 4（> douban:3）即等价「anime Bangumi 优先」，
+  // 非 anime 不受影响；manual(5) 仍最高。同级（== tmdb:4）后写覆盖（当前无 tmdb anime 自动写入）。
+  bangumi: 4,
   douban:  3,
   crawler: 1,
 }

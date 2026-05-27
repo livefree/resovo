@@ -70,6 +70,8 @@ interface BangumiEntry {
   episodeCount: number | null
   summary: string | null
   coverUrl: string | null
+  rank: number | null
+  nsfw: boolean
 }
 
 async function flushBatch(db: Pool, batch: BangumiEntry[]): Promise<void> {
@@ -81,18 +83,20 @@ async function flushBatch(db: Pool, batch: BangumiEntry[]): Promise<void> {
       await client.query(
         `INSERT INTO external_data.bangumi_entries
            (bangumi_id, title_cn, title_jp, title_normalized, air_date, year,
-            rating, episode_count, summary, cover_url)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+            rating, episode_count, summary, cover_url, rank, nsfw)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
          ON CONFLICT (bangumi_id) DO UPDATE SET
            title_cn = EXCLUDED.title_cn, title_jp = EXCLUDED.title_jp,
            title_normalized = EXCLUDED.title_normalized,
            air_date = EXCLUDED.air_date, year = EXCLUDED.year,
            rating = EXCLUDED.rating, episode_count = EXCLUDED.episode_count,
            summary = EXCLUDED.summary, cover_url = EXCLUDED.cover_url,
+           rank = EXCLUDED.rank, nsfw = EXCLUDED.nsfw,
            updated_at = NOW()`,
         [
           row.bangumiId, row.titleCn, row.titleJp, row.titleNormalized,
           row.airDate, row.year, row.rating, row.episodeCount, row.summary, row.coverUrl,
+          row.rank, row.nsfw,
         ]
       )
     }
@@ -142,6 +146,10 @@ async function main(): Promise<void> {
 
       const airDate = typeof parsed.date === 'string' ? parsed.date || null : null
       const rating = typeof parsed.score === 'number' && parsed.score > 0 ? parsed.score : null
+      // ADR-159：archive subject.jsonlines 含 rank/nsfw，但无 eps/images → episode_count/cover_url
+      // 留 null，由 REST API getSubject 在匹配时写入 media_catalog/videos（见 ADR-159 字段映射）
+      const rank = typeof parsed.rank === 'number' && parsed.rank > 0 ? parsed.rank : null
+      const nsfw = parsed.nsfw === true
 
       batch.push({
         bangumiId: Number(parsed.id),
@@ -154,6 +162,8 @@ async function main(): Promise<void> {
         episodeCount: null,
         summary: typeof parsed.summary === 'string' ? parsed.summary || null : null,
         coverUrl: null,
+        rank,
+        nsfw,
       })
       total++
 

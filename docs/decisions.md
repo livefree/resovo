@@ -15958,8 +15958,9 @@ const BangumiGapsQuerySchema = z.object({
 | `rating.rank` | `external_data.bangumi_entries.rank` | 排名（dump 侧，过滤用） |
 | `tags[].name` | `media_catalog.tags` | |
 | `date` | `media_catalog.release_date` + 派生 `year` | |
-| `total_episodes`/`eps` | dump 侧 → `bangumi_entries.episode_count`（复用既有列，R1）；rich 侧 → `videos.episode_count` 经 step3 专用 query（R2，见决策要点 6） | |
-| `nsfw` | dump 侧 → `bangumi_entries.nsfw`；auto-match 命中 → `media_catalog`/`videos.content_rating='adult'`（Y5） | seed 默认跳过 nsfw 条目 |
+| `total_episodes`/`eps` | rich 侧（REST API getSubject）→ `videos.episode_count` 经 step3 专用 query（R2，见决策要点 6） | **archive subject dump 无 eps 字段**，dump 侧 `bangumi_entries.episode_count` 保持 null（实测 schema 确认） |
+| `rank` | dump 侧 → `bangumi_entries.rank`（archive 顶层 `rank` 字段，实测存在） | seed 高分榜过滤用 |
+| `nsfw` | dump 侧 → `bangumi_entries.nsfw`（archive 顶层 `nsfw`，实测存在）；auto-match 命中 → `videos.content_rating='adult'`（Y5） | seed 默认跳过 nsfw 条目 |
 | infobox 导演/脚本 | `media_catalog.director` / `writers` | utils 解析；解析失败返回 undefined 不写（A2） |
 | infobox 声优 | `media_catalog.cast` | utils 解析 |
 | infobox 动画制作公司 | `media_catalog.tags`（前缀 `制作:` 标注，A1） | 不新增列；不用 aliases（语义是别名非制作方） |

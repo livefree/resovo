@@ -14,23 +14,24 @@ docs 硬冲突域（adr / architecture）已在 tracks.md 声明持有。
 
 ## 进行中任务
 
-### 🔄 CHG-BNG-01（Phase 0-A）— 提升 bangumi 优先级 + migration 077 + architecture.md 同步
-
-- **状态**：🔄 进行中
-- **开始时间**：2026-05-27
-- **来源序列**：SEQ-BANGUMI-01 / Phase 0
-- **建议模型**：sonnet（schema 已由 ADR-159 锁定，机械落地）
-- **执行模型**：claude-opus-4-7（主循环，worktree 内连续推进）
-- **文件范围**：
-  - `apps/api/src/services/MediaCatalogService.ts`（CATALOG_SOURCE_PRIORITY.bangumi 3→4）
-  - `apps/api/src/db/migrations/077_bangumi_metadata.sql`（新建：扩 bangumi_entries + catalog_episodes）
-  - `docs/architecture.md`（持有 `architecture` 硬冲突域，077 schema 同步）
-- **任务目标**：按 ADR-159 锁定的 schema 落地 migration 077（不含 total_episodes，复用 episode_count）+ 提升 bangumi 优先级。
-- **完成判据**：migration 幂等可跑；architecture.md 同步；typecheck 通过。
+（空 — Phase 0 数据基建已完成 ✅；Phase 1 待启动）
 
 ---
 
 ## 已完成任务
+
+### ✅ CHG-BNG-01（Phase 0-A）— 提升 bangumi 优先级 + migration 077 + architecture.md 同步
+
+- **状态**：✅ 完成（2026-05-27）
+- **执行模型**：claude-opus-4-7（主循环）
+- **完成备注**：`CATALOG_SOURCE_PRIORITY.bangumi` 3→4（ADR-159 决策 2）；新建 `migration 077`（bangumi_entries 扩 rank/nsfw + 新建 catalog_episodes 逐集表，幂等含验证 DO block）；architecture.md §5.5/§5.6a/migration 列表同步。root `tsc --noEmit` 通过。
+
+### ✅ CHG-BNG-02（Phase 0-B）— config + .env.example + 修复 dump 导入
+
+- **状态**：✅ 完成（2026-05-27）
+- **执行模型**：claude-opus-4-7（主循环）
+- **完成备注**：config.ts 新增 BANGUMI_API_TOKEN/TIMEOUT_MS/USER_AGENT（Zod，Token optional 降级）；.env.example 同步。import-bangumi-dump.ts 回填 rank/nsfw。**实测 archive subject.jsonlines schema 修正**：含 rank(顶层)/nsfw，但无 eps/images → episode_count/cover_url 不来自 dump，改由 REST API getSubject 匹配时写入；ADR-159 字段映射 + architecture.md 同步修正。
+- **沉淀判断**：dump schema 实测发现已回写 ADR-159 字段映射表，是。
 
 ### ✅ CHG-BNG-00 — ADR-159 起草 + Opus arch-reviewer 评审
 

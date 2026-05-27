@@ -42,6 +42,11 @@ const configSchema = z.object({
   R2_ACCESS_KEY_ID: z.string().optional(),
   R2_SECRET_ACCESS_KEY: z.string().optional(),
   R2_BUCKET: z.string().optional(),
+
+  // Bangumi.tv（动漫元数据，ADR-159；Token 缺失时 REST 详情链路降级，仅本地 dump 可用）
+  BANGUMI_API_TOKEN: z.string().optional(),
+  BANGUMI_API_TIMEOUT_MS: z.coerce.number().int().min(1000).max(30000).default(8000),
+  BANGUMI_USER_AGENT: z.string().default('resovo/1.0 (+https://github.com/resovo)'),
 })
 
 // ── 解析并 fail-fast ──────────────────────────────────────────────
