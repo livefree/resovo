@@ -136,10 +136,9 @@ export interface AutoCrawlConfig {
   readonly globalEnabled: boolean
   readonly scheduleType: AutoCrawlScheduleType  // ADR-154 D-154-1
   readonly intervalMinutes: number               // ADR-154 D-154-1（min=5，max=1440）
-  /** ADR-155 D-155-6：多 dailyTime 支持（主字段 / min 1 max 24 / 各时间同日各触发一次）；
-   *  optional 是 EP-1C-1a 临时偏离（向后兼容窗口）；EP-1C-CLEANUP 完成后改 required */
-  readonly dailyTimes?: readonly string[]
-  /** @deprecated ADR-155 D-155-6：用 dailyTimes 替代；保留向后兼容 alias = dailyTimes[0] ?? '03:00' */
+  /** ADR-155 D-155-6 / EP-1C-CLEANUP-A：多 dailyTime 支持（主字段 / min 1 max 24 / 各时间同日各触发一次 / 反序列化永远非空 兜底 ['03:00']） */
+  readonly dailyTimes: readonly string[]
+  /** @deprecated ADR-155 D-155-6：用 dailyTimes 替代；保留向后兼容 alias = dailyTimes[0] ?? '03:00'；后续 cleanup 阶段删 */
   readonly dailyTime: string
   readonly defaultMode: AutoCrawlMode
   readonly onlyEnabledSites: boolean

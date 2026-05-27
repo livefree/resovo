@@ -98,12 +98,11 @@ export interface AutoCrawlSiteOverride {
 export interface AutoCrawlConfig {
   globalEnabled: boolean
   scheduleType: AutoCrawlScheduleType
-  /** ADR-155 D-155-6 / EP-1C-1a：多 dailyTime 支持（主字段 / min 1 max 24 / 各时间同日各触发一次 / 相同时间同日防重）。
+  /** ADR-155 D-155-6 / EP-1C-1a / EP-1C-CLEANUP-A：多 dailyTime 支持（主字段 / min 1 max 24 / 各时间同日各触发一次 / 相同时间同日防重）。
    *  KV 层 value 序列化为 JSON 数组（向后兼容 3 种历史值见 systemSettings.parseDailyTimes）。
-   *  类型上可选（向后兼容 zod schema 旧调用方仅传 dailyTime；EP-1C-1b zod preprocess 后调用方应总是输出 dailyTimes）；
-   *  反序列化输出永远非空（兜底 ['03:00']）。 */
-  readonly dailyTimes?: readonly string[]
-  /** @deprecated ADR-155 D-155-6：用 dailyTimes 替代；保留向后兼容 alias = dailyTimes[0] ?? '03:00'；EP-1C-2 前端切换后可删 */
+   *  反序列化输出永远非空（兜底 ['03:00']）；EP-1C-CLEANUP-A 改 required（消除 EP-1C-1a 临时偏离）。 */
+  readonly dailyTimes: readonly string[]
+  /** @deprecated ADR-155 D-155-6：用 dailyTimes 替代；保留向后兼容 alias = dailyTimes[0] ?? '03:00'；后续 cleanup 阶段删 */
   dailyTime: string
   /** ADR-154 D-154-1：interval 模式周期（分钟）；daily 模式下忽略但持久化保留；默认 60 */
   intervalMinutes: number

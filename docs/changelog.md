@@ -8199,3 +8199,22 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
   - 不在范围：Next.js dev overlay 配置（内置行为）/ 其他组件 console.error（与本反馈无关）
 - **PATCH 文件数**：1 源 = 1 项（≪ 5 硬约束 ✅）
 - **门禁**：typecheck ✅ / lint 5/5 ✅ / test 12/12 ✅ / verify:adr-contracts ✅
+
+## [CHG-SN-9-CW1-CW2-EP-1C-CLEANUP-A] dailyTimes 类型 required（消除 EP-1C-1a 临时偏离）
+- **完成时间**：2026-05-26
+- **记录时间**：2026-05-26 18:36
+- **执行模型**：claude-opus-4-7（主循环延续）
+- **子代理**：无（类型契约层最小改动 / 不触发 Opus reviewer / 0 cascade）
+- **修改文件**：
+  - `packages/types/src/system.types.ts` — `AutoCrawlConfig.dailyTimes?:` 删 `?` → `readonly dailyTimes: readonly string[]`；注释更新 "EP-1C-CLEANUP-A 改 required（消除 EP-1C-1a 临时偏离）"
+  - `apps/server-next/src/lib/crawler/api.ts` — 镜像同步 required；注释精简
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - 验证策略：先改 required 跑 typecheck → 0 cascade（消费方早已 `config.dailyTimes && length > 0 ? ... : [config.dailyTime || '03:00']` 兼容）→ 0 fixture 改动需求
+  - 范围收敛过程：尝试扩展删 5 处 fallback 但 8 个 test fixture 缺 dailyTimes 字段 → 运行时 `Array.from(undefined)` TypeError → 撤回到最小有意义改动（类型层）
+  - 后续债务：5 处消费方 fallback（3 前端 + 2 后端）+ dailyTime alias 字段删除 → 已拆 Cleanup-B1/-B2/-B3/-C 推迟卡（task-queue.md 3g）
+  - alias 字段保留意义：v1 server AutoCrawlSettingsPanel.tsx + 旧 e2e fixture 仍消费 dailyTime；删除时机：v1 server 完全废弃或下次 D-155-6 关联任务顺手
+- **PATCH 文件数**：2 源 = 2 项（≪ 5 硬约束 ✅）
+- **门禁**：typecheck ✅ / lint 5/5 ✅ / test 5142/5142 ✅ / verify:adr-contracts ✅
+- **关闭偏离**：EP-1C-1a 临时偏离（`dailyTimes?:` optional）已闭合

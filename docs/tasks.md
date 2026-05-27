@@ -12,12 +12,14 @@
 
 ## 下次会话恢复入口
 
-HOTFIX-G ✅ 已完成（2026-05-26 17:55 / commit 待 push）。可继续推迟项评估：
+EP-1C-CLEANUP-A ✅ 完成（dailyTimes 类型 required / 2 源 / 0 cascade）。剩余 cleanup 拆为：
 
-- N1-EP3b-2：拖拽 pan + viewport buffer + 30d 封顶（推迟评估）
-- EP-1C-CLEANUP：dailyTimes 改 required + 删 dailyTime alias
+- Cleanup-B1/-B2：补 8 个 test fixture 显式 dailyTimes 字段
+- Cleanup-B3：删 5 处消费方 fallback（3 前端 + 2 后端）
+- Cleanup-C：删 dailyTime alias 字段（双源类型 + zod schema + setConfig 写入清理）
+
+或其他推迟项：
+- N1-EP3b-2：拖拽 pan + viewport buffer + 30d 封顶
 - N1-EP2-1：globalMutateRegistry 共享去重
 - N1-EP2-2：cancelled level vs ADR-153 neutral 跨 ADR 分裂
 - N1-EP2-3：verify-admin-shell-types-mirror.mjs drift 守卫脚本
-
-或等 @livefree 实测 HOTFIX-G dev server 验证浏览器 console 黄色 warning（无红色 ApiClientError stack）。

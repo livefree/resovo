@@ -1183,7 +1183,26 @@ B 序列 + C 序列可与 A 并行（A 无依赖）；B 与 C 之间无依赖（
    - 状态：✅ 完成（2026-05-26 / @livefree 实测 PASS / commit c9d846e7）
 
 3e. **CHG-SN-9-CW1-CW2-HOTFIX-G** — admin-shell-notifications console.error → console.warn（4 处）
-   - 状态：✅ 完成（2026-05-26 17:55）
+   - 状态：✅ 完成（2026-05-26 17:55 / @livefree 实测黄色 warning PASS / commit b6620b5d）
+
+3f. **CHG-SN-9-CW1-CW2-EP-1C-CLEANUP-A** — dailyTimes 类型 required（消除 EP-1C-1a 临时偏离）
+   - 状态：✅ 完成（2026-05-26 18:36）
+   - 实际开始：2026-05-26 18:30
+   - 完成时间：2026-05-26 18:36
+   - 执行模型：claude-opus-4-7
+   - 范围：`packages/types/src/system.types.ts` + `apps/server-next/src/lib/crawler/api.ts` 删 `dailyTimes?:` 的 `?` 改 required；不动消费方 fallback（fallback 删除 + fixture 补全规模超 PATCH 5 → 拆到 Cleanup-B/-C）
+   - 文件范围：2 源 = 2 项（≪ 5 ✅）
+   - 门禁：typecheck ✅ / lint ✅ / test 5142/5142 ✅ / verify:adr-contracts ✅
+   - 0 cascade（消费方早已 `config.dailyTimes ?? [config.dailyTime]` 兼容）
+
+3g. **CHG-SN-9-CW1-CW2-EP-1C-CLEANUP-B/-C**（推迟 / 已规划）
+   - 范围：删 5 处 fallback (`config.dailyTimes && length > 0 ? ... : [config.dailyTime || '03:00']`) + 补 8 个 test fixture 显式提供 dailyTimes + 删 dailyTime alias 字段
+   - 拆分：
+     - Cleanup-B1：补 4 个 backend test fixture（crawlerScheduler / crawler-system-audit / background-event-service / e2e admin）
+     - Cleanup-B2：补 4 个 frontend test fixture（AutoCrawlScheduleCard / AutoCrawlSummaryCard / SchedulerConfigDrawer / CrawlerClient + DashboardClient）
+     - Cleanup-B3：删 3 处前端 + 2 处后端 fallback
+     - Cleanup-C：删 dailyTime alias 字段（双源类型 + 调用方 setConfig 写入 + zod schema 简化）
+   - 触发条件：D-155-6 多 dailyTime 功能稳定 1+ 周后；或下一个相关任务卡顺手清理
    - 实际开始：2026-05-26 17:50
    - 完成时间：2026-05-26 17:55
    - 执行模型：claude-opus-4-7（主循环延续；HOTFIX-F 上下文复用）
