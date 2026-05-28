@@ -9898,3 +9898,27 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
   - MergeClient `?split=:videoId` 深链支持（自动 setShowSplit + 传 initialVideoId 给 SplitSection）
   - MergeSplitSection `initialVideoId` Props + 自动加载
 - **闭环**：CHG-363-A 完成（1 业务 + 1 i18n + 1 测试 3 case PASS）/ Wave 2 卡 9/17 闭合 / 待 CHG-363-B 深链 + 自动加载
+
+---
+
+## [CHG-363-B] SPLIT-UI -B MergeClient `?split=:videoId` 深链 + MergeSplitSection initialVideoId 自动加载（Wave 2 #12 / Codex stop-time review 回归触发 / 2 业务 + 1 测试 4 case）
+- **完成时间**：2026-05-27
+- **记录时间**：2026-05-27
+- **执行模型**：claude-opus-4-7（主循环 / 续会话）
+- **子代理调用**：无（UI 任务）
+- **Codex stop-time review 触发**：CHG-363-A 单独 commit (264ab332) 后 Codex review 指出 "New split button opens a deep link the target page ignores" — PendingCenter 跳 `/admin/merge?split=:videoId` 但 MergeClient 完全未读 `?split` query，运营点按钮后看不到任何 split 上下文 → 拆分按钮等同假入口；按价值排序 1（正确性）必须一并修复，CHG-363-B 提前到本会话
+- **范围**（PATCH ≤ 5 严格 / 实际 3 项）：
+  - `apps/server-next/src/app/admin/merge/_client/MergeClient.tsx`：useSearchParams 读 `splitParam = searchParams.get('split')` / `showSplit` 初始值改为 `!!splitParam`（深链自动展开拆分工作台）/ `<SplitSection initialVideoId={splitParam ?? undefined} />` 传 prop
+  - `apps/server-next/src/app/admin/merge/_client/MergeSplitSection.tsx`：新增 `SplitSectionProps { initialVideoId?: string }` / `videoIdInput` useState 初始值取 `initialVideoId ?? ''` / `loadMatrix` 签名重构 `(videoId: string)` 接 arg（避免 closure 依赖 state）/ 新 useEffect 监听 `initialVideoId` 变化 → setVideoIdInput + loadMatrix；`autoLoadedRef` 防 re-render 重复触发；onClick/onRetry 调用点改为 `() => loadMatrix(videoIdInput)`
+  - `tests/unit/components/server-next/admin/merge/merge-split-deeplink.test.tsx`：新增 / 4 case
+- **测试覆盖**（4 case PASS / vitest 328ms）：
+  - 无 initialVideoId → 不自动加载 / getVideoMatrix 不被调
+  - 有 initialVideoId → 自动 setVideoIdInput + 调 getVideoMatrix(initialVideoId)
+  - initialVideoId 变更（rerender）→ 重新自动加载
+  - 同一 initialVideoId rerender → 不重复调（autoLoadedRef 防抖）
+- **质量门禁**：typecheck ✅ 8 workspace 全绿 / lint ✅ / 2 个 CHG-363 关联测试 7 case 全 PASS
+- **commit trailer**：无强制 Subagents
+- **不在本卡范围**：
+  - 进一步把"组数"、"分组 metas"等 split 状态写入 URL query（持久化深链 / 后续单独卡）
+  - MergeClient `?candidate_a=` 与 `?split=` 共存时的 UX 协调（当前两个 banner 互不冲突，但同时存在时可能视觉拥挤 / follow-up）
+- **闭环**：CHG-363-B 完成（2 业务 + 1 测试 4 case PASS）/ Wave 2 卡 10/17 闭合 / **CHG-363 SPLIT-UI 完整序列闭环（-A 入口 → -B 深链 + 自动加载）/ PendingCenter "✂ 拆分" → /admin/merge?split=:videoId → 自动展开拆分工作台 + 预填 videoId + 加载 sources matrix 端到端就绪**

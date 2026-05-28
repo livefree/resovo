@@ -6,7 +6,7 @@
 
 ## 进行中任务
 
-（空 — CHG-363-A 完成 ✅ / Wave 2 卡 9/17 / 待 CHG-363-B 深链 + 自动加载）
+（空 — CHG-363-B 完成 ✅ / Wave 2 卡 10/17 / CHG-363 SPLIT-UI 完整序列闭环 / 下一个 CHG-364 MERGE-INLINE）
 
 ---
 
@@ -32,7 +32,7 @@
 
 ---
 
-## Wave 2 进行中（SEQ-20260527-MOD-WAVE2 / 9/17）
+## Wave 2 进行中（SEQ-20260527-MOD-WAVE2 / 10/17）
 
 - ✅ CHG-361-A（ADR-160 起草 + getVideoDetailHref 沉淀 / 5f64e78d）
 - ✅ CHG-361-B2（apps/api 后端 3 文件 + 5 case 单测 + ADR-160 AMENDMENT 1 / a3c1c9ed）
@@ -43,11 +43,12 @@
 - ✅ CHG-361-E2（detail-page-factory + VideoDetailClient server-side hydration / b48913f0）
 - ✅ CHG-361-E3（watch page + PlayerShell server-side hydration / 6 case PASS + 3 个 Codex 回归 fix / ed43059e + 552656bc + 4360688f + a1bcc272 + e643998f）
 - ⛔ CHG-362-A/B SKIPPED（ADR-105 已覆盖 / 后端已实现 / 10d7a0df）
-- ✅ CHG-363-A（PendingCenter "✂ 拆分" 按钮入口 + 3 case PASS / 本卡 / 待 commit）
+- ✅ CHG-363-A（PendingCenter "✂ 拆分" 按钮入口 + 3 case PASS / 264ab332）
+- ✅ CHG-363-B（MergeClient `?split=:videoId` 深链 + MergeSplitSection initialVideoId 自动加载 + 4 case PASS / Codex stop-time review #4 触发 / 本卡 / 待 commit）
 
 **CHG-361 PREVIEW-ADMIN 8 子卡全闭环 ✅(A → B2 → B1 → C → D → E1 → E2 → E3)/ 跨 app preview 链路 + server-side hydration 修补完整就绪 + 4 类时序 bug 收敛 / 待 prod gate OPS 卡 CHG-OPS-COOKIE-SUBDOMAIN-1 / Y-AMD2-2 episode 切换 internal 视频限制独立 FOLLOWUP 卡**
 
-**SPLIT 系列：CHG-362-A/B SKIPPED → CHG-363-A 完成 / 待 CHG-363-B 深链 + 自动加载**
+**SPLIT 系列：CHG-362-A/B SKIPPED → CHG-363 SPLIT-UI 完整序列闭环 ✅（-A 入口 → -B 深链 + 自动加载）/ PendingCenter ✂ 拆分 → /admin/merge?split=:videoId 端到端就绪**
 
 ---
 

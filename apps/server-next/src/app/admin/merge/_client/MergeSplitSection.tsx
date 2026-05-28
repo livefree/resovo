@@ -4,7 +4,7 @@
  * MergeSplitSection.tsx — 拆分工作台子组件（从 MergeClient 提取，CHG-SN-7-MISC-MERGE-2）
  */
 
-import { useState, useCallback, type CSSProperties } from 'react'
+import { useState, useCallback, useEffect, useRef, type CSSProperties } from 'react'
 import {
   AdminInput,
   AdminButton,
@@ -46,8 +46,13 @@ const SELECT_STYLE: CSSProperties = {
   fontSize: 'var(--font-size-sm)',
 }
 
-export function SplitSection() {
-  const [videoIdInput, setVideoIdInput] = useState('')
+interface SplitSectionProps {
+  /** CHG-363-B：来自 MergeClient `?split=:videoId` 深链 / PendingCenter 拆分按钮 / 自动 setVideoIdInput + loadMatrix */
+  readonly initialVideoId?: string
+}
+
+export function SplitSection({ initialVideoId }: SplitSectionProps = {}) {
+  const [videoIdInput, setVideoIdInput] = useState(initialVideoId ?? '')
   const [activeVideoId, setActiveVideoId] = useState<string | null>(null)
   const [lines, setLines] = useState<LineMatrixRow[] | null>(null)
   const [loading, setLoading] = useState(false)
@@ -60,12 +65,15 @@ export function SplitSection() {
   ])
   const toast = useToast()
 
-  const loadMatrix = useCallback(() => {
-    if (!videoIdInput.trim()) return
+  // loadMatrix 接受 videoId 参数 / 避免 closure 依赖 videoIdInput state
+  // （initialVideoId 自动加载场景：state 还没更新到 input 值就需要触发）
+  const loadMatrix = useCallback((videoId: string) => {
+    const id = videoId.trim()
+    if (!id) return
     setLoading(true)
     setError(null)
-    setActiveVideoId(videoIdInput.trim())
-    getVideoMatrix(videoIdInput.trim())
+    setActiveVideoId(id)
+    getVideoMatrix(id)
       .then((data) => {
         setLines(data)
         const init: Record<string, number> = {}
@@ -76,7 +84,17 @@ export function SplitSection() {
       })
       .catch((e: unknown) => setError(e instanceof Error ? e : new Error('加载失败')))
       .finally(() => setLoading(false))
-  }, [videoIdInput])
+  }, [])
+
+  // CHG-363-B：initialVideoId 深链自动加载 / autoLoadedRef 防 re-render 重复触发
+  const autoLoadedRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (!initialVideoId) return
+    if (autoLoadedRef.current === initialVideoId) return
+    autoLoadedRef.current = initialVideoId
+    setVideoIdInput(initialVideoId)
+    loadMatrix(initialVideoId)
+  }, [initialVideoId, loadMatrix])
 
   const handleSplit = useCallback(async () => {
     if (!activeVideoId || !lines) return
@@ -139,7 +157,7 @@ export function SplitSection() {
           onChange={(e) => setVideoIdInput(e.target.value)}
           style={{ width: '320px' }}
         />
-        <AdminButton size="sm" variant="primary" onClick={loadMatrix} disabled={!videoIdInput.trim()}>
+        <AdminButton size="sm" variant="primary" onClick={() => loadMatrix(videoIdInput)} disabled={!videoIdInput.trim()}>
           加载 sources
         </AdminButton>
       </div>
@@ -147,7 +165,7 @@ export function SplitSection() {
       {loading ? (
         <LoadingState variant="skeleton" skeletonRows={6} />
       ) : error ? (
-        <ErrorState error={error} onRetry={loadMatrix} />
+        <ErrorState error={error} onRetry={() => loadMatrix(videoIdInput)} />
       ) : !lines ? (
         <EmptyState title="尚未加载" description="输入 videoId 后点击 '加载 sources'" />
       ) : lines.length === 0 ? (

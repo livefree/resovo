@@ -174,13 +174,17 @@ type SegmentTab = 'candidates' | 'merged' | 'split'
 
 export function MergeClient() {
   const [tab, setTab] = useState<SegmentTab>('candidates')
-  const [showSplit, setShowSplit] = useState(false)
 
   // CHG-SN-8-08：接收来自视频库的 ?candidate_a 深链
   const searchParams = useSearchParams()
   const router = useRouter()
   const candidateAParam = searchParams.get('candidate_a')
   const fromParam = searchParams.get('from')
+  // CHG-363-B：接收来自 PendingCenter 拆分按钮的 ?split=:videoId 深链
+  const splitParam = searchParams.get('split')
+
+  // showSplit 初始值：?split=:videoId 存在则自动展开 / 否则默认收起
+  const [showSplit, setShowSplit] = useState<boolean>(!!splitParam)
   const dismissCandidateBanner = useCallback(() => {
     const p = new URLSearchParams(searchParams.toString())
     p.delete('candidate_a')
@@ -236,7 +240,7 @@ export function MergeClient() {
       {showSplit && (
         <AdminCard style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}>
           <div style={{ padding: '16px' }}>
-            <SplitSection />
+            <SplitSection initialVideoId={splitParam ?? undefined} />
           </div>
         </AdminCard>
       )}
