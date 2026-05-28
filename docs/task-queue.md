@@ -1978,7 +1978,7 @@ CHG-369 (前台主题选择器, 独立)
 
 ## [SEQ-20260528-MOD-WAVE3] server-next 内容审核台 Wave 3 — Wave 2 长尾清理 + 架构 / 长期 P3 卡（plan §14 Wave 3 + §17.2 Wave 3 增补）
 
-- **状态**：🔄 进行中（4/10 完成 / 长尾清理 4/4 完毕 / 下一卡 CHG-SN-9-MOD-BUTTON-MIGRATE plan §14 主线启动）
+- **状态**：🚨 BLOCKER 暂停（4/10 完成 / 长尾清理 4/4 完毕 / 待用户决策 CHG-SN-9-MOD-BUTTON-MIGRATE 推进方案 A/B/C）
 - **创建时间**：2026-05-28
 - **目标**：按用户 2026-05-28 决策"长尾先清 + plan §14 主线"：先清 4 张 Wave 2 长尾 follow-up，再按 plan §14 / §17.2 Wave 3 入 6 张 P3 长期主线卡。
 - **执行约束**：沿用 Wave 1/2 §16.1-16.5（UI/UX 谨慎 / docs/manual 同步 / 主循环全自动 + BLOCKER 触发清单）
@@ -1993,7 +1993,7 @@ CHG-369 (前台主题选择器, 独立)
 | 2 | ✅ **CHG-369-B** 已完成（2026-05-28 / 主循环 claude-sonnet-4-6 / 子代理 无）| 自定义主题输入（plan §17.2）：CustomThemeData schema + 双 key localStorage 协议 + parseCustomTheme 严格校验 + CustomThemeDialog NEW（仿 ConfirmReplaceDialog 模式 / role=dialog aria-modal / 实时校验 + 字符计数 + Confirm/Cancel/Clear）+ RouteThemeSelector 扩 "自定义…" option + ✎ 编辑按钮 + PlayerShell wiring / 5 业务+测试 PATCH=5 严守 + 1 docs sync / 54/54 单测 PASS（route-theme-storage 20 + line-display-name-themes 34 既有零回归）/ typecheck + lint + verify:adr-contracts 全 PASS EXIT=0 / docs/manual §8.7 "未实装" → "已 ship 2026-05-28"完整规范化 | 否 | sonnet-4-6 |
 | 3 | ✅ **CHG-368-B-FOLLOWUP-CONTENT-SOURCE-ROW** 已完成（2026-05-28 / 主循环 claude-sonnet-4-6 / 子代理 无）| listAdminSources SELECT LEFT JOIN source_line_aliases + 返回 codename + retired_at + ContentSourceRow 类型扩 2 字段 / Layer B 数据通路打通 / 2 业务 + 1 测试 PATCH=3 / typecheck + lint + verify + 34/34 admin-sources 域测试 PASS / PRE-INDEX-DESIGN-RULES 4 步核验首次显式应用 | 否 | sonnet-4-6 |
 | 4 | ✅ **CHG-368-B-FOLLOWUP-AUTO-RETIRED-LABEL** 已完成（2026-05-28 / 主循环 claude-sonnet-4-6 / 子代理 arch-reviewer (claude-opus-4-7) agentId a8f0bb30cc856631f）| LinesPanel 退役标识区分"（已退役·自动）/（已退役·手动）" / LineAggregate 扩 autoRetired + Y-A-1 invariant JSDoc + Y-A-2 派生字段集注释升级 + 数据通路（SQL + ContentSourceRow + RawSourceRow + aggregate + UI 文案 + aria-label + data-line-retired-auto） / Opus A- CONDITIONAL → 0 红线 + Y-A-1/Y-A-2 全落升 A / PATCH=6 超 5 接受完成度风险（同源不变式原子提交） / 53/53 测试 PASS / typecheck + lint + verify 全 EXIT=0 / ADR-164 D-164-8 UI 兑现 | 否（ADR-164 advisory）| sonnet-4-6 + arch-reviewer (opus-4-7) |
-| 5 | ⬜ **CHG-SN-9-MOD-BUTTON-MIGRATE** 待开始 | plan §5 P2 / BTN_* → AdminButton 机械迁移（server-next 内剩余原始 button 收口）| 否 | sonnet-4-6 |
+| 5 | 🚨 **CHG-SN-9-MOD-BUTTON-MIGRATE** BLOCKER（2026-05-28 / 立 BLOCKER 暂停 Wave 3 等用户决策）| plan §5 P2 / BTN_* → AdminButton 机械迁移 / **实测范围 38 tsx 文件 + 100+ raw button**（moderation 11 / crawler 6 / videos 5 / dashboard 3 / 其他 16）/ 按 PATCH ≤ 5 软上限需拆 7-8 子卡 / 单 Wave 节奏会被此 P3 机械卡主导 / 建议独立 SEQ-FOLLOWUP-MIGRATE 长尾系列 或 用户决策 | 否 | sonnet-4-6 |
 | 6 | ⬜ **CHG-SN-9-REJECTED-ENHANCE** 待开始 | plan §5 P2 / RejectedTab 分页（cursor）+ SplitPane（左列表 / 右详情）| 否 | sonnet-4-6 |
 | 7 | ⬜ **CHG-SN-9-PLAYER-ERROR** 待开始 | plan §5 P3 / player-core onError 回调（接口扩展 → 强制 Opus 子代理 / CLAUDE.md §模型路由"重构播放器 core / shell 层的接口"）| 否（演进式接口扩展）| opus-4-7 + arch-reviewer |
 | 8 | ⬜ **CHG-SN-9-META-BANGUMI-A** 待开始 | plan §10.4.2 方案 A / Bangumi 实时 API 集成（BangumiService + secrets + ADR 起草 + 新依赖）| 是（新 ADR）| opus-4-7 + arch-reviewer |
@@ -2007,6 +2007,40 @@ CHG-369 (前台主题选择器, 独立)
 - ADR 起草卡 Opus 评审 BLOCKER 红线未消解
 - schema migration 冲突
 - 人工已审核 Wave 报告未通过
+
+### 🚨 BLOCKER（2026-05-28 / Wave 3 主循环暂停 / 等用户决策）
+
+**触发位置**：Wave 3 SEQ-20260528-MOD-WAVE3 #5 CHG-SN-9-MOD-BUTTON-MIGRATE 启动前
+**触发原因**：本卡范围远超 PATCH 5 软上限 / 需用户决策推进策略
+**主循环当前进度**：Wave 3 长尾清理 4/4 已收官（PRE-INDEX-DESIGN-RULES + CHG-369-B + 2 FOLLOWUP），plan §14 主线 0/6
+
+**情况说明**：
+- 实测 server-next 内 raw button 分布：38 tsx 文件 / 100+ button / BTN_* CSS 常量散布
+  - moderation 11 文件（最大）/ crawler 6 / videos 5 / dashboard 3 / 其他 16
+- 按 CLAUDE.md "PATCH > 5 必拆 -A/-B/-C 子卡"，需拆 7-8 个子卡才能符合阈值
+- 该卡定位为 P3 长期机械代码风格统一卡，无直接业务功能产出
+- 与 Wave 3 后续 5 张主线卡相比业务价值低：REJECTED-ENHANCE（UX）/ PLAYER-ERROR（player-core API）/ META-BANGUMI-A（新 ADR + 依赖）/ SITE-VIEWS-EXTRACT（架构重构）/ ROUTE-LABEL-D（schema + 跨设备同步）
+- 单 Wave 节奏会被此 P3 机械卡主导 7-8 commit 周期
+
+**3 个推进方案**（请用户选 1）：
+
+**方案 A**（推荐 / 务实）：跳过此卡转下一卡
+- CHG-SN-9-MOD-BUTTON-MIGRATE 在 task-queue.md 标记为 ⛔ DEFERRED → 独立 SEQ-FOLLOWUP-MIGRATE 长尾系列
+- 进入 Wave 3 #6 CHG-SN-9-REJECTED-ENHANCE（RejectedTab 分页 + SplitPane）
+- 优势：Wave 3 推进节奏不被机械卡占用 / P3 机械卡择期独立推进 / 后续 5 张主线卡按时完成
+- 劣势：button 统一化推迟
+
+**方案 B**：拆 -A/-B/-C 多子卡推进
+- 按域拆：-A1（moderation 5 / -A2（moderation 6）/ -B（crawler 6）/ -C（videos 5）/ -D（dashboard 3）/ -E（其他 11 / 拆 -E1/-E2）= 7 子卡
+- 优势：单卡 PATCH 严守 ≤ 5 / 完整 ship
+- 劣势：Wave 3 主循环耗 7-8 个 commit 周期专做机械迁移 / 业务推进慢
+
+**方案 C**：单卡强行推进（commit 含 Subagents trailer + changelog 标注"接受完成度风险"）
+- 38 文件单卡 / 接受 1 commit 内大范围风险
+- 优势：1 commit 收官
+- 劣势：违反 PATCH 5 软上限多倍 / 视觉回归风险高 / Opus trailer 评审难（38 文件批量改动评审成本极高）
+
+请用户在此 BLOCKER 下方写"选 A" / "选 B" / "选 C" / "其他"，解除 BLOCKER 后主循环继续。
 
 ### 关键依赖图
 

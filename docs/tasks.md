@@ -6,11 +6,17 @@
 
 ## 进行中任务
 
-（空）
+（空 / Wave 3 主循环 BLOCKER 暂停 / 详 task-queue.md 尾部 🚨 BLOCKER 段）
 
 ---
 
-## Wave 3 状态（SEQ-20260528-MOD-WAVE3 / 🔄 进行中 = 40% / 4/10）
+## 🚨 BLOCKER 暂停（2026-05-28）
+
+Wave 3 长尾清理 4/4 收官后 plan §14 主线启动卡 CHG-SN-9-MOD-BUTTON-MIGRATE 触发 BLOCKER：38 tsx 文件 / 100+ raw button 远超 PATCH 5 软上限。详细情况 + 3 推进方案（A/B/C）见 `docs/task-queue.md` 尾部 🚨 BLOCKER 段，等待用户决策后主循环继续。
+
+---
+
+## Wave 3 状态（SEQ-20260528-MOD-WAVE3 / 🚨 BLOCKER 暂停 = 40% / 4/10）
 
 - ✅ **PRE-INDEX-DESIGN-RULES** 索引设计 4 步核验 + 双 invariant + 四级范式 + 禁令 + Checklist 沉淀到 db-rules.md（2026-05-28 / sonnet-4-6 / 纯 docs / 零回归 / CHG-368-B-A1-FIX 1-5 经验首次完整规范化）
 - ✅ **CHG-369-B** 自定义主题输入（2026-05-28 / sonnet-4-6 / 5 业务+测试 PATCH=5 + 1 docs / CustomThemeData schema + 双 key localStorage + CustomThemeDialog NEW + RouteThemeSelector 扩 + PlayerShell wiring / 54/54 测试 PASS / docs/manual §8.7 "未实装" → "已 ship 2026-05-28"）
