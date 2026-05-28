@@ -10048,3 +10048,17 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **质量门禁**：typecheck ✅ / lint ✅ / verify:adr-contracts ✅ EXIT=0 / tests/unit/{types,components/admin-ui/cell,api} 2002/2002 PASS（146 文件）
 - **commit trailer**：无强制 Subagents
 - **闭环**：CHG-366 完成 / Wave 2 卡 15/17 闭合 / plan §10.4.3 国家显示治理就绪 / 显示层本地化 + ISO code 真源不变两个不变量同步落地 / architecture.md §5.1 country 字段补"显示层 helper"说明
+
+---
+
+## [CHG-366-FIX] DetailHero / VideoDetailHero 国家本地化补齐（Codex stop-time review #10）
+- **完成时间**：2026-05-27
+- **执行模型**：claude-opus-4-7（主循环 / 续会话）
+- **背景**：CHG-366 commit 0b4c74f8 完成备注中我自己标记的"P3 sweep follow-up" — 当时通过 MetaChip 内化达成 web-next "消费方零改"，但 DetailHero L221 / VideoDetailHero L213 不经 MetaChip，直接 `<span>{video.country}</span>` 渲染原 ISO code。Codex stop-time review 抓到："live detail hero still shows raw ISO country"。把治理 follow-up 推到 P3 是偷懒，前台 hero 是用户直接看到的国家显示。
+- **范围**（2 业务）：
+  - `apps/web-next/src/components/detail/DetailHero.tsx`：import formatCountryName / country 渲染段调用 helper + 挂 data-country-code + title 提示原 ISO（与 MetaChip / CountryName 同范式）
+  - `apps/web-next/src/components/video/VideoDetailHero.tsx`：同上（deprecated 文件 / 零消费方 / 但保持一致性避免后续 undeprecate / 重命名时复用回归）
+- **sweep 校验**：grep 全 web-next + server-next `{video.country}` / `{v.country}` 直接渲染 0 命中 / 所有 country 显示位置均经 formatCountryName / CountryName / MetaChip 包装
+- **质量门禁**：typecheck ✅ / lint ✅（FULL TURBO 4 cached）/ verify:adr-contracts ✅ EXIT=0
+- **commit trailer**：无强制 Subagents
+- **闭环**：Codex stop-time review #10 红线消解 / web-next 5 处 country 渲染位置（DetailHero + VideoDetailHero + VideoMeta + 后台 TabDetail + PendingCenter）全部一致经 helper / 真源 ISO code + 显示本地化两个不变量在全 app 落地

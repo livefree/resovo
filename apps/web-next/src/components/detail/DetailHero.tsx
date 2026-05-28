@@ -10,7 +10,7 @@ import { usePlayerStore } from '@/stores/playerStore'
 import { Skeleton } from '@/components/primitives/feedback/Skeleton'
 import { Breadcrumb } from '@/components/primitives/breadcrumb/Breadcrumb'
 import { ALL_CATEGORIES } from '@/lib/categories'
-import type { Video, VideoSource } from '@resovo/types'
+import { formatCountryName, type Video, type VideoSource } from '@resovo/types'
 
 const SharedElement = SharedElementBase as SharedElementComponent
 
@@ -218,12 +218,21 @@ export function DetailHero({ video, episode = 1, sources = [], activeSourceId, o
             style={{ color: 'var(--fg-muted)' }}
           >
             {video.year && <span>{video.year}</span>}
-            {video.country && (
-              <>
-                <span className="opacity-30">·</span>
-                <span>{video.country}</span>
-              </>
-            )}
+            {video.country && (() => {
+              const display = formatCountryName(video.country, 'zh-CN', video.country)
+              const showOriginalTitle = display !== video.country
+              return (
+                <>
+                  <span className="opacity-30">·</span>
+                  <span
+                    data-country-code={video.country}
+                    title={showOriginalTitle ? video.country : undefined}
+                  >
+                    {display}
+                  </span>
+                </>
+              )
+            })()}
             <span className="opacity-30">·</span>
             <span
               className="px-2 py-0.5 rounded text-xs font-bold"
