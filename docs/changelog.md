@@ -10208,3 +10208,26 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **commit trailer**：无强制 Subagents（ADR-163 已 Accepted / 规范驱动实施）
 - **不在本子卡范围（→ CHG-367-B-B）**：① DoubanService.confirmSubject / confirmFields manual 路径集成（'manual' 模式覆盖）② 审核台 TabDetail UI 三维显示 "已收 X / 已播 Y / 共 Z" ③ Y1 currentEpisodes > totalEpisodes 显示层防御 ④ Y2 DoubanService.confirmFields fields 数组扩 'episodes' 键名 ⑤ Y3 docs/architecture.md videos 字段表同步 meta_quality / total_episodes / current_episodes 三新列
 - **闭环**：CHG-367-B-A 完成 / Wave 2 卡 18/18（含 CHG-367-B-B 待排）/ ADR-163 §5 写入合约自动路径 100% 落地（step1 advisory + step2 + step3 全集成 + COALESCE 不覆盖语义）/ CHG-367-B-B 排期承接 manual + UI + 3 黄线 + architecture.md 同步
+
+---
+
+## [CHG-367-B-A-FIX] architecture.md 同步 + updateVideoEpisodes auto no-op contract（Codex stop-time review #15）
+- **完成时间**：2026-05-28
+- **执行模型**：claude-opus-4-7（主循环 / 续会话）
+- **背景**：CHG-367-B-A commit ba3e3e26 后 Codex 抓到双红线："schema docs sync and auto no-op contract need fixes"
+  - **红线 1（architecture.md 同步偷懒）**：我把 "Y3 architecture.md 同步" 标到 -B-B follow-up 是违反 CLAUDE.md 绝对禁止 "schema 变更不同步 docs/architecture.md"。schema migration 与 docs 同步是同卡必须，不可推后。
+  - **红线 2（updateVideoEpisodes auto no-op contract）**：原 'auto' 实现仅在 SET 用 COALESCE，target 列已非 NULL 时 PG 仍执行 UPDATE → ① 刷新 updated_at（虚假修改时间，违反 updated_at "实际变化才更新" 范式）② rowCount=1 误导调用方 "已写入"。
+- **范围**（2 业务 + 1 测试 / 净增）：
+  - `docs/architecture.md` §5.1 videos 字段表新增 3 行：episode_count（第 1 层 / 爬虫推算 GREATEST / 近似 activeEpisodes）+ total_episodes（第 2 层 / Migration 078 / NULL=未取到 / CHECK 正整数 + 部分索引）+ current_episodes（第 3 层 / 同 Migration 078）+ 写入路径说明 + Y1 数据异常防御 + admin-ui LineAggregate.totalEpisodes 同名不同层级声明
+  - `apps/api/src/db/queries/videos.status.ts` updateVideoEpisodes 重构：① auto 模式 SET 保持 COALESCE ② **WHERE 加守卫**：每个 auto-mode 列追加 `(<col> IS NULL AND $N::INT IS NOT NULL)` OR 子句，至少一列实际从 NULL → 非 NULL 才 touch 行 ③ manual 模式保持原行为（直接 SET + WHERE id + deleted_at）④ 全 SQL 路径 updated_at = NOW() 仅在守卫通过时生效 → rowCount 准确反映"是否真有写入"
+  - `tests/unit/api/updateVideoEpisodes.test.ts` 新建 6 case：① manual 直接 SET 无 COALESCE ② auto SET COALESCE + WHERE 守卫 ③ 两列同传守卫 OR 连接 ④ 空 input 不调 query 返回 false ⑤ PG rowCount=0 返回 false（守卫拒绝）⑥ updated_at 始终在 SET 内（守卫阻止时 SQL 不执行更新 → no-op）
+- **设计取舍**：① WHERE 守卫 vs RETURNING + 比较：选 WHERE 守卫（PG 单次 UPDATE / 原子性 / SQL 简单）/ RETURNING 方案需读后比较额外网络 RTT ② OR 守卫聚合（多列任一 NULL→非 NULL 触发）vs AND 严格（所有列都必须 NULL→非 NULL）：选 OR / 与"COALESCE 仅写 NULL"语义对齐（一列能写就写）③ `::INT` 显式 cast：PG `$N IS NOT NULL` 对 unknown 类型推断可能产生 warning；显式 cast 确保 plan 稳定 ④ DROP `if (sets.length === 0) return false` 防御保留：调用方传空 `{}` 仍走 no-op fast-path
+- **行为对照（fix 前 vs 后）**：
+  - 场景 A：target 列已 NULL → auto 写入 → 行为不变（守卫满足 / 写入 + updated_at 刷新 / 返回 true）
+  - 场景 B：target 列已非 NULL → auto 写入 → **fix 前**：UPDATE 执行 / updated_at 刷新 / rowCount=1 → 返回 true（误导）；**fix 后**：WHERE 守卫拒绝 / 0 行 touched / updated_at 不变 / 返回 false（准确）
+  - 场景 C：manual 写入 → 行为不变（直接覆盖 / 守卫不生效）
+- **测试**：tests/unit/api/updateVideoEpisodes 6/6 PASS + metadataEnrich 32/32 PASS 不回归
+- **质量门禁**：typecheck ✅ / lint ✅（FULL TURBO 4 cached）/ verify:adr-contracts ✅ EXIT=0
+- **commit trailer**：无强制 Subagents
+- **经验**：CHG-367-B-A 备注里把"Y3 architecture.md 同步"留 -B-B 是预见到的偷懒（CHG-369 FIX-4 经验已写过"Codex 不接受主动偷懒"）/ 第二次踩相同坑。**今后凡 schema migration 卡，architecture.md 同步必须同卡完成，不允许推后**。auto no-op contract 是新发现的 PG UPDATE 语义陷阱（COALESCE-only 不阻止 row touch）/ 形成新 invariant 知识 "auto 模式 mutation 必须用 WHERE 守卫"
+- **闭环**：Codex stop-time review #15 红线双消解 / architecture.md videos 字段三层集数语义完整同步 / updateVideoEpisodes auto/manual 双模式 SQL 契约精准（守卫 + rowCount + updated_at 三要素准确）/ 32 + 6 = 38 case PASS

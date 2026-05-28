@@ -306,7 +306,14 @@ export async function updateVideoSourceCheckStatus(
  *   - 'auto'：仅当目标列为 NULL 时写入（不覆盖已有值 / MetadataEnrichService 自动 enrich 路径）
  *   - 'manual'：始终覆盖（DoubanService.confirmSubject / confirmFields 人工路径优先级最高）
  *
- * 返回 true 表示至少一行被更新；false 表示视频不存在 / 已删除 / auto 模式下无 NULL 字段可写。
+ * 返回 true 表示至少一行被**实际更新**；false 表示视频不存在 / 已删除 / auto 模式下
+ * 无 NULL 字段可写（**no-op contract**：auto 模式下若目标列都已非 NULL，函数应：
+ *   ① 不触碰 updated_at（避免虚假修改时间）
+ *   ② 返回 false（rowCount 准确反映"是否真有写入"）
+ *
+ * Codex stop-time review #15 fix：原实现 'auto' 用 SET COALESCE，target 已非 NULL 时
+ * SQL 仍 UPDATE 行（rowCount=1）+ 刷新 updated_at → 违反 no-op contract。改用 WHERE 守
+ * 卫只在至少一列实际从 NULL 转非 NULL 时才 touch 行。
  */
 export async function updateVideoEpisodes(
   db: Pool,
@@ -317,10 +324,14 @@ export async function updateVideoEpisodes(
   const sets: string[] = []
   const params: unknown[] = []
   let idx = 1
+  // auto 模式的 WHERE 守卫条件（每列一个 OR 子句）；至少一列 NULL → 非 NULL 才 UPDATE
+  const autoGuards: string[] = []
 
   if (input.totalEpisodes !== undefined) {
     if (mode === 'auto') {
-      sets.push(`total_episodes = COALESCE(total_episodes, $${idx++})`)
+      const pIdx = idx++
+      sets.push(`total_episodes = COALESCE(total_episodes, $${pIdx})`)
+      autoGuards.push(`(total_episodes IS NULL AND $${pIdx}::INT IS NOT NULL)`)
     } else {
       sets.push(`total_episodes = $${idx++}`)
     }
@@ -328,7 +339,9 @@ export async function updateVideoEpisodes(
   }
   if (input.currentEpisodes !== undefined) {
     if (mode === 'auto') {
-      sets.push(`current_episodes = COALESCE(current_episodes, $${idx++})`)
+      const pIdx = idx++
+      sets.push(`current_episodes = COALESCE(current_episodes, $${pIdx})`)
+      autoGuards.push(`(current_episodes IS NULL AND $${pIdx}::INT IS NOT NULL)`)
     } else {
       sets.push(`current_episodes = $${idx++}`)
     }
@@ -339,9 +352,15 @@ export async function updateVideoEpisodes(
 
   sets.push(`updated_at = NOW()`)
   params.push(videoId)
+  const videoIdIdx = idx
+
+  // auto 模式：附加 WHERE 守卫（至少一列实际从 NULL 转非 NULL）/ manual 模式：直接 UPDATE
+  const where = mode === 'auto' && autoGuards.length > 0
+    ? `id = $${videoIdIdx} AND deleted_at IS NULL AND (${autoGuards.join(' OR ')})`
+    : `id = $${videoIdIdx} AND deleted_at IS NULL`
 
   const res = await db.query(
-    `UPDATE videos SET ${sets.join(', ')} WHERE id = $${idx} AND deleted_at IS NULL`,
+    `UPDATE videos SET ${sets.join(', ')} WHERE ${where}`,
     params,
   )
   return (res.rowCount ?? 0) > 0
