@@ -1902,7 +1902,7 @@ CHG-353 (ROUTE-LABEL-A2) → 依赖 CHG-352 后端返回排序数据
 
 ## [SEQ-20260527-MOD-WAVE2] server-next 内容审核台 Wave 2 — 预览/拆分/合并/元数据/路线主题（plan §14 + §17.2）
 
-- **状态**：🔄 执行中（CHG-361 ✅ + CHG-363 ✅ + CHG-364 ✅ + CHG-365 META ✅ + CHG-366 COUNTRY ✅ + CHG-367-A ✅ ADR-163 + CHG-369 THEME ✅ / 17/17 ADR / 待 CHG-367-B + CHG-368-A/-B PAUSED）
+- **状态**：🔄 执行中（CHG-367-A ✅ ADR-163 Accepted / **CHG-367-B-A ✅** schema + types + queries + auto enrich / CHG-367-B-B 排期承接 manual + UI + 3 黄线 / CHG-368 仍 PAUSED）
 - **创建时间**：2026-05-27
 - **最后更新时间**：2026-05-27
 - **目标**：基于 `/Users/livefree/.claude/plans/fluffy-giggling-teapot.md` §14 Wave 2 + §17.2 落地 9 张主卡（4 张需 ADR + Opus 决策）；继续 Wave 1 的自动推进节奏。
@@ -1937,7 +1937,8 @@ CHG-353 (ROUTE-LABEL-A2) → 依赖 CHG-352 后端返回排序数据
 | 9 | ⛔ **CHG-365-B** SKIPPED（2026-05-27 / 同步 A SKIPPED）| 采集 worker 自动豆瓣 / **已就绪**（CrawlerService:300 入库后自动 enrichmentQueue.add 触发 MetadataEnrichService.enrich）/ 拼音识别 → CHG-365-A1 / 本卡定义重复 | — | — |
 | 10 | ✅ **CHG-366** 已完成（2026-05-27）| META-COUNTRY-DISPLAY / formatCountryName helper（packages/types / Intl.DisplayNames 零依赖）+ CountryName 原语（admin-ui cell）+ TabDetail / PendingCenter / MetaChip 内化（web-next 3 处消费方零改）/ 7+3=10 case PASS / 5 业务 + 2 测试 + 1 docs | 否 | opus-4-7 续会话 |
 | 11 | ✅ **CHG-367-A** 已完成（2026-05-28）| META-EPISODES ADR-163 起草 / arch-reviewer Opus A- CONDITIONAL → 0 红线 升 Accepted / D-163-1..8 全闭环 / 3 黄线 + 3 advisory 由 CHG-367-B 承接 | 是 ADR-163 ✅ Accepted | opus-4-7 + arch-reviewer (opus-4-7) |
-| 12 | **CHG-367-B** | META-EPISODES 实施 — schema migration + 显示 | 否 | sonnet |
+| 12.1 | ✅ **CHG-367-B-A** 已完成（2026-05-28）| META-EPISODES 实施第 1 子卡：Migration 078 + types + queries + MetadataEnrichService 自动写入 / 32 case PASS（+6）/ PATCH=6 超阈值 1（schema-driven 必然耦合 / 接受）| 否（ADR-163 已 Accepted）| opus-4-7 续会话 |
+| 12.2 | **CHG-367-B-B** | META-EPISODES 实施第 2 子卡：DoubanService manual 路径 + TabDetail UI 三维显示 + Y1/Y2/Y3 黄线（current>total 防御 / fields 扩 episodes / architecture.md 同步）| 否 | sonnet |
 | 13 | ⏸️ **CHG-368-A** PAUSED（2026-05-27 / 同 CHG-367-A）| ROUTE-LABEL-B ADR-164 起草 / 用户拒绝 spawn Opus | 是 ADR-164 | opus-4-7 + arch-reviewer Opus |
 | 14 | **CHG-368-B** | ROUTE-LABEL-B 实施 — admin UI `/admin/source-line-aliases` + 退役端点 | 否 | sonnet |
 | 15 | ✅ **CHG-369** 已完成（2026-05-27）| ROUTE-LABEL-C / 5 内置主题选择器 + localStorage 持久化 / SSR safe / 8 case PASS / 3 业务 + 2 测试 + 1 docs / 自定义主题输入 → follow-up CHG-369-B | 否 | opus-4-7 续会话 |

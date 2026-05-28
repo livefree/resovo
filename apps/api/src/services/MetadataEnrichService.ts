@@ -67,11 +67,12 @@ export class MetadataEnrichService {
     const { videoId, catalogId, title, year, type } = data
     const titleNorm = normalizeTitle(title)
 
-    // 预取 catalog 以获取 imdbId 与 titleEn（供 step1 精确匹配 / 拼音判断），
-    // step5 仍独立查询以拿到更新后的数据
+    // 预取 catalog 以获取 imdbId / titleEn（供 step1 精确匹配 / 拼音判断）+ status
+    //（决定 episodes 写 total 还是 current / ADR-163 D-163-5）
     const catalogSnapshot = await catalogQueries.findCatalogById(this.db, catalogId)
     const imdbId = catalogSnapshot?.imdbId ?? null
     const titleEn = catalogSnapshot?.titleEn ?? null
+    const catalogStatus = catalogSnapshot?.status ?? null
 
     let doubanStatus: DoubanStatus = 'unmatched'
 
@@ -82,6 +83,8 @@ export class MetadataEnrichService {
     }
 
     // Step 1: 本地豆瓣多字段召回
+    // 注：DoubanEntryMatch 本地 dump 无 episodes 字段 / 不写 total/current_episodes
+    // （ADR-163 §11 A3 advisory / 留给 step2 网络搜索补 + step3 bangumi 补）
     const step1 = await this.step1LocalDouban(
       videoId, catalogId, titleNorm, title, year, imdbId, metaQuality,
     )
@@ -89,7 +92,9 @@ export class MetadataEnrichService {
       doubanStatus = step1
     } else {
       // Step 2: 本地无任何匹配，fallback 至网络搜索
-      const step2 = await this.step2NetworkSearch(videoId, catalogId, title, year, metaQuality)
+      const step2 = await this.step2NetworkSearch(
+        videoId, catalogId, title, year, metaQuality, catalogStatus,
+      )
       if (step2 !== null) doubanStatus = step2
     }
 
@@ -100,7 +105,7 @@ export class MetadataEnrichService {
 
     // Step 3: 动画类型补充 Bangumi 数据
     if (type === 'anime') {
-      await this.step3Bangumi(catalogId, titleNorm, year)
+      await this.step3Bangumi(videoId, catalogId, titleNorm, year, catalogStatus)
     }
 
     // Step 4: 源 HEAD 检验
@@ -202,6 +207,7 @@ export class MetadataEnrichService {
     title: string,
     year: number | null,
     metaQuality: VideoMetaQuality,
+    catalogStatus: string | null,
   ): Promise<DoubanStatus | null> {
     let candidates: Awaited<ReturnType<typeof searchDouban>>
     try {
@@ -235,6 +241,13 @@ export class MetadataEnrichService {
           videoId, detail.id, 'auto_matched',
           best.score, { network_score: best.score }, 'network'
         )
+        // ADR-163 D-163-5/6：豆瓣 detail.episodes 按 catalog.status 写入 total / current
+        // auto 模式：仅当目标列 NULL 时写入（不覆盖人工校正值）
+        if (typeof detail.episodes === 'number' && detail.episodes > 0) {
+          await videosQueries.updateVideoEpisodes(
+            this.db, videoId, episodesByStatus(catalogStatus, detail.episodes), 'auto',
+          )
+        }
         return 'matched'
       }
     }
@@ -253,9 +266,11 @@ export class MetadataEnrichService {
   // ── Step 3 ───────────────────────────────────────────────────────
 
   private async step3Bangumi(
+    videoId: string,
     catalogId: string,
     titleNorm: string,
     year: number | null,
+    catalogStatus: string | null,
   ): Promise<void> {
     const matches = await externalDataQueries.findBangumiByTitleNorm(this.db, titleNorm, year)
     if (matches.length === 0) return
@@ -266,6 +281,14 @@ export class MetadataEnrichService {
       description: best.summary ?? undefined,
       rating: best.rating ?? undefined,
     }, 'bangumi', { sourceRef: String(best.bangumiId) })
+
+    // ADR-163 D-163-5/6：bangumi episode_count 按 catalog.status 写 total / current
+    // auto 模式：仅补 NULL 字段（step2 已写则保留 / "豆瓣优先" / ADR §3 D-163-6）
+    if (best.episodeCount !== null && best.episodeCount > 0) {
+      await videosQueries.updateVideoEpisodes(
+        this.db, videoId, episodesByStatus(catalogStatus, best.episodeCount), 'auto',
+      )
+    }
   }
 
   // ── Step 4 ───────────────────────────────────────────────────────
@@ -357,6 +380,29 @@ export function recordDoubanSignal(
   metaQuality.douban_confidence = confidence
   metaQuality.douban_match_method = method
   metaQuality.douban_match_status = matchStatus
+}
+
+/**
+ * CHG-367-B-A / ADR-163 D-163-5：按 catalog.status 把外部 episodes 数派发到
+ * total_episodes（completed）或 current_episodes（ongoing / null）。
+ *
+ * 豆瓣 + bangumi 均不区分 total/current（单一 episodes 字段）→ 按 status 启发式判定。
+ * 完结剧集 episodes = total；连载中 episodes = current（持续更新）。这是 ADR-163
+ * §3 D-163-5 明确的可接受折衷（局限：标记 completed 但实际还在更新的剧集可能误判
+ * → 人工 confirmSubject 路径可覆盖）。
+ *
+ * @param status catalog.status（'ongoing' | 'completed' | null / 其它）
+ * @param episodes 外部源 episodes 数（应 > 0 / 调用方负责过滤）
+ */
+export function episodesByStatus(
+  status: string | null,
+  episodes: number,
+): { totalEpisodes?: number; currentEpisodes?: number } {
+  if (status === 'completed') {
+    return { totalEpisodes: episodes }
+  }
+  // ongoing / null / 其它 → 写 current（连载语义 / NULL 默认按连载处理）
+  return { currentEpisodes: episodes }
 }
 
 /**

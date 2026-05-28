@@ -10187,3 +10187,24 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **质量门禁**：verify:adr-contracts ✅ EXIT=0 / verify-adr-d-numbers ✅ 全部 254 条 D-N（246 + 8 新 D-163-N）已闭环 / verify-endpoint-adr ✅（无新端点）/ 仅文档卡 typecheck + lint 无变化
 - **commit trailer**：`Subagents: arch-reviewer (claude-opus-4-7)`（强制 Opus 子代理审计要求）
 - **闭环**：CHG-367-A 完成 / ADR-163 升 Accepted / Wave 2 卡 17/17（含 PAUSED 待恢复 CHG-368-A/-B + CHG-367-B 排期）/ CHG-367-B schema migration + service 集成排期独立卡 / 黄线 Y1+Y2+Y3 由 CHG-367-B 实施承接
+
+---
+
+## [CHG-367-B-A] META-EPISODES schema + 自动写入路径（ADR-163 实施第 1 子卡）
+- **完成时间**：2026-05-28
+- **执行模型**：claude-opus-4-7（主循环 / 续会话 / 非 ADR / ADR-163 已 Accepted 仅规范实施）
+- **子代理调用**：无
+- **拆卡依据**：完整 ADR §7 范围 8 项 + 实测 11 业务文件远超 PATCH ≤ 5 → 拆 -B-A（数据层 + 自动 enrich）/ -B-B（manual + UI + 3 黄线）。-B-A 实际 PATCH=6（超阈值 1 个），接受原因：externalData.ts BangumiEntryMatch 扩 episodeCount 是 schema-driven 必然耦合，强行剥到 -B-B 会让 step3 集成失活破坏 ADR §5 写入合约完整性。
+- **范围**（6 业务 + 1 测试 + 0 docs / docs/architecture.md 同步留 -B-B Y3 一并）：
+  - `apps/api/src/db/migrations/078_videos_episodes_fields.sql` 新建：ADR-163 §4 SQL 完整草案 / total_episodes + current_episodes INT NULL / CHECK 正整数（NULL 合法 / 不加 `total >= current` 不变式 / 外部数据不可控 / Y1 防御移交显示层）/ 部分索引 idx_videos_total_episodes / DO 块幂等 CHECK 约束创建 / ROLLBACK SQL
+  - `packages/types/src/video.types.ts`：Video interface 加 totalEpisodes / currentEpisodes 字段（含 JSDoc 显式说明 admin-ui LineAggregate.totalEpisodes 同名不同层级 / D-163-2 + D-163-8）
+  - `apps/api/src/db/queries/videos.internal.ts`：DbVideoRow + mapVideoRow + VIDEO_FULL_SELECT 同步 2 列
+  - `apps/api/src/db/queries/videos.status.ts`：新增 `updateVideoEpisodes(db, videoId, input, mode)` mutation / 'auto' 用 COALESCE 仅写 NULL 字段（不覆盖人工值）/ 'manual' 直接覆盖（D-163-6）
+  - `apps/api/src/db/queries/videos.ts`：barrel re-export updateVideoEpisodes
+  - `apps/api/src/db/queries/externalData.ts`：BangumiEntryMatch +episodeCount 字段 + findBangumiByTitleNorm SQL 扩 episode_count 列（D-163-5 数据源）
+  - `apps/api/src/services/MetadataEnrichService.ts`：① enrich 入口取 catalogSnapshot.status 决定写 total 或 current ② step2 网络豆瓣 auto_matched 分支 detail.episodes>0 → updateVideoEpisodes(auto) ③ step3 bangumi best.episodeCount>0 → updateVideoEpisodes(auto / 豆瓣优先 COALESCE 不覆盖）④ step1 本地豆瓣 DoubanEntryMatch 无 episodes 跳过+注释 (A3 advisory) ⑤ 新增 `episodesByStatus(status, episodes)` 纯函数 export helper（completed→total / 其他→current）
+  - `tests/unit/api/metadataEnrich.test.ts` +6 case：3 helper（completed→total / ongoing→current / null→current）+ 3 集成（step2 完结写 total / step3 bangumi 连载写 current / detail.episodes 缺失不调用 防御）
+- **质量门禁**：typecheck ✅（root + 7 workspaces）/ lint ✅ / verify:adr-contracts ✅ EXIT=0（含 verify-sql-schema-alignment 校验新列 episode_count 引用 / verify-adr-d-numbers 254 条全闭环）/ 单测 26→**32 PASS**（+6）
+- **commit trailer**：无强制 Subagents（ADR-163 已 Accepted / 规范驱动实施）
+- **不在本子卡范围（→ CHG-367-B-B）**：① DoubanService.confirmSubject / confirmFields manual 路径集成（'manual' 模式覆盖）② 审核台 TabDetail UI 三维显示 "已收 X / 已播 Y / 共 Z" ③ Y1 currentEpisodes > totalEpisodes 显示层防御 ④ Y2 DoubanService.confirmFields fields 数组扩 'episodes' 键名 ⑤ Y3 docs/architecture.md videos 字段表同步 meta_quality / total_episodes / current_episodes 三新列
+- **闭环**：CHG-367-B-A 完成 / Wave 2 卡 18/18（含 CHG-367-B-B 待排）/ ADR-163 §5 写入合约自动路径 100% 落地（step1 advisory + step2 + step3 全集成 + COALESCE 不覆盖语义）/ CHG-367-B-B 排期承接 manual + UI + 3 黄线 + architecture.md 同步

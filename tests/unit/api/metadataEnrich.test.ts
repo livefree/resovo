@@ -24,6 +24,7 @@ vi.mock('@/api/db/queries/externalData', () => ({
 vi.mock('@/api/db/queries/videos', () => ({
   updateVideoEnrichStatus: vi.fn().mockResolvedValue(undefined),
   updateVideoSourceCheckStatus: vi.fn().mockResolvedValue(undefined),
+  updateVideoEpisodes: vi.fn().mockResolvedValue(true),
 }))
 
 vi.mock('@/api/db/queries/sources', () => ({
@@ -366,6 +367,93 @@ describe('MetadataEnrichService.enrich()', () => {
       douban_match_method: 'title',
       douban_match_status: 'auto_matched',
     })
+  })
+})
+
+// ── episodesByStatus + step2/step3 集成（CHG-367-B-A / ADR-163 D-163-5/6）─────
+
+describe('episodesByStatus()', () => {
+  it('catalog.status="completed" → 写 totalEpisodes（连载终态）', async () => {
+    const { episodesByStatus } = await import('@/api/services/MetadataEnrichService')
+    expect(episodesByStatus('completed', 24)).toEqual({ totalEpisodes: 24 })
+  })
+
+  it('catalog.status="ongoing" → 写 currentEpisodes（连载进行中）', async () => {
+    const { episodesByStatus } = await import('@/api/services/MetadataEnrichService')
+    expect(episodesByStatus('ongoing', 12)).toEqual({ currentEpisodes: 12 })
+  })
+
+  it('catalog.status=null / "其他" → 默认按连载处理写 currentEpisodes（D-163-5 启发式）', async () => {
+    const { episodesByStatus } = await import('@/api/services/MetadataEnrichService')
+    expect(episodesByStatus(null, 8)).toEqual({ currentEpisodes: 8 })
+    expect(episodesByStatus('unknown', 8)).toEqual({ currentEpisodes: 8 })
+  })
+})
+
+describe('MetadataEnrichService.enrich → step2 网络搜索 + step3 bangumi 写 episodes', () => {
+  let service: MetadataEnrichService
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.mocked(externalDataQueries.findDoubanByTitleNorm).mockResolvedValue([])
+    vi.mocked(externalDataQueries.findDoubanByAlias).mockResolvedValue([])
+    vi.mocked(externalDataQueries.findBangumiByTitleNorm).mockResolvedValue([])
+    vi.mocked(sourcesQueries.listSourcesForBatchVerify).mockResolvedValue([])
+    vi.mocked(catalogQueries.findCatalogById).mockResolvedValue({
+      id: 'c1', title: '某剧集', year: 2024, type: 'series', status: 'completed',
+    } as Parameters<typeof catalogQueries.findCatalogById>[1] extends infer R ? R : never)
+    service = new MetadataEnrichService({} as import('pg').Pool)
+  })
+
+  it('step2 命中 + detail.episodes=24 + catalog.status="completed" → updateVideoEpisodes(auto, totalEpisodes: 24)', async () => {
+    const { updateVideoEpisodes } = await import('@/api/db/queries/videos')
+    vi.mocked(searchDouban).mockResolvedValue([
+      { id: 'db1', title: '某剧集', year: '2024', sub_title: '' },
+    ])
+    vi.mocked(getDoubanDetailRich).mockResolvedValue({
+      id: 'db1', rate: '8.0', plotSummary: '...', poster: 'p.jpg',
+      directors: [], cast: [], screenwriters: [], genres: [], countries: [],
+      episodes: 24,
+    } as Parameters<typeof getDoubanDetailRich>[1] extends infer R ? R : never)
+
+    await service.enrich({ videoId: 'v1', catalogId: 'c1', title: '某剧集', year: 2024, type: 'series' })
+
+    expect(updateVideoEpisodes).toHaveBeenCalledWith(
+      expect.anything(), 'v1', { totalEpisodes: 24 }, 'auto',
+    )
+  })
+
+  it('step3 bangumi 命中 + episodeCount=12 + catalog.status="ongoing" → updateVideoEpisodes(auto, currentEpisodes: 12)', async () => {
+    const { updateVideoEpisodes } = await import('@/api/db/queries/videos')
+    vi.mocked(catalogQueries.findCatalogById).mockResolvedValue({
+      id: 'c1', title: '某动画', year: 2024, type: 'anime', status: 'ongoing',
+    } as Parameters<typeof catalogQueries.findCatalogById>[1] extends infer R ? R : never)
+    vi.mocked(externalDataQueries.findBangumiByTitleNorm).mockResolvedValue([{
+      bangumiId: 99, titleCn: '某动画', titleJp: '', year: 2024, rating: 8.5,
+      summary: '...', airDate: '2024-01-01', episodeCount: 12,
+    }])
+
+    await service.enrich({ videoId: 'v1', catalogId: 'c1', title: '某动画', year: 2024, type: 'anime' })
+
+    expect(updateVideoEpisodes).toHaveBeenCalledWith(
+      expect.anything(), 'v1', { currentEpisodes: 12 }, 'auto',
+    )
+  })
+
+  it('detail.episodes 缺失（旧爬虫数据）→ 不调用 updateVideoEpisodes（防 NULL/0 写入）', async () => {
+    const { updateVideoEpisodes } = await import('@/api/db/queries/videos')
+    vi.mocked(searchDouban).mockResolvedValue([
+      { id: 'db1', title: '某剧集', year: '2024', sub_title: '' },
+    ])
+    vi.mocked(getDoubanDetailRich).mockResolvedValue({
+      id: 'db1', rate: '8.0', plotSummary: '...', poster: 'p.jpg',
+      directors: [], cast: [], screenwriters: [], genres: [], countries: [],
+      // 注：无 episodes 字段
+    } as Parameters<typeof getDoubanDetailRich>[1] extends infer R ? R : never)
+
+    await service.enrich({ videoId: 'v1', catalogId: 'c1', title: '某剧集', year: 2024, type: 'series' })
+
+    expect(updateVideoEpisodes).not.toHaveBeenCalled()
   })
 })
 

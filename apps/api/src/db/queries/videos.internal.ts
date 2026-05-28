@@ -46,6 +46,9 @@ export interface DbVideoRow {
   meta_score: number
   // Migration 077 — 元数据信号字典 jsonb（CHG-365-A2）
   meta_quality: VideoMetaQuality | null
+  // Migration 078 — META-EPISODES 三层集数语义（ADR-163 / CHG-367-B-A）
+  total_episodes: number | null
+  current_episodes: number | null
   // Migration 051 字段
   trending_tag: TrendingTag | null
   // Migration 055 — 审核台字段（CHG-SN-4-03）
@@ -128,6 +131,8 @@ export function mapVideoRow(row: DbVideoRow): Video {
     sourceCheckStatus: row.source_check_status ?? 'pending',
     metaScore: row.meta_score ?? 0,
     metaQuality: row.meta_quality ?? null,
+    totalEpisodes: row.total_episodes ?? null,
+    currentEpisodes: row.current_episodes ?? null,
     trendingTag: row.trending_tag ?? null,
     posterBlurhash: row.poster_blurhash ?? null,
     posterStatus: row.poster_status ?? null,
@@ -183,7 +188,8 @@ export const VIDEO_FULL_SELECT = `
   v.source_content_type, v.normalized_type, v.content_format, v.episode_pattern,
   v.review_status, v.visibility_status, v.needs_manual_review,
   v.content_rating, v.site_key, v.source_category,
-  v.douban_status, v.source_check_status, v.meta_score, v.meta_quality, v.trending_tag,
+  v.douban_status, v.source_check_status, v.meta_score, v.meta_quality,
+  v.total_episodes, v.current_episodes, v.trending_tag,
   v.staff_note, v.review_label_key, v.review_source,
   mc.title_en, mc.title_original, mc.description, mc.cover_url,
   mc.rating, mc.rating_votes, mc.runtime_minutes, mc.year, mc.country,

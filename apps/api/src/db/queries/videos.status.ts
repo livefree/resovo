@@ -295,6 +295,59 @@ export async function updateVideoSourceCheckStatus(
 }
 
 /**
+ * 写入视频集数三层语义中的外部 metadata 字段（ADR-163 / CHG-367-B-A）
+ *
+ * 字段语义（详 ADR-163 §3）：
+ *   - totalEpisodes：作品总集数（外部 metadata）
+ *   - currentEpisodes：当前已播集数（外部 metadata）
+ *   - 既有 episode_count 不受本函数影响（爬虫推算路径单独维护）
+ *
+ * mode 语义（详 ADR-163 D-163-6 / §5 写入合约）：
+ *   - 'auto'：仅当目标列为 NULL 时写入（不覆盖已有值 / MetadataEnrichService 自动 enrich 路径）
+ *   - 'manual'：始终覆盖（DoubanService.confirmSubject / confirmFields 人工路径优先级最高）
+ *
+ * 返回 true 表示至少一行被更新；false 表示视频不存在 / 已删除 / auto 模式下无 NULL 字段可写。
+ */
+export async function updateVideoEpisodes(
+  db: Pool,
+  videoId: string,
+  input: { totalEpisodes?: number | null; currentEpisodes?: number | null },
+  mode: 'auto' | 'manual',
+): Promise<boolean> {
+  const sets: string[] = []
+  const params: unknown[] = []
+  let idx = 1
+
+  if (input.totalEpisodes !== undefined) {
+    if (mode === 'auto') {
+      sets.push(`total_episodes = COALESCE(total_episodes, $${idx++})`)
+    } else {
+      sets.push(`total_episodes = $${idx++}`)
+    }
+    params.push(input.totalEpisodes)
+  }
+  if (input.currentEpisodes !== undefined) {
+    if (mode === 'auto') {
+      sets.push(`current_episodes = COALESCE(current_episodes, $${idx++})`)
+    } else {
+      sets.push(`current_episodes = $${idx++}`)
+    }
+    params.push(input.currentEpisodes)
+  }
+
+  if (sets.length === 0) return false  // 调用方传空对象 → no-op
+
+  sets.push(`updated_at = NOW()`)
+  params.push(videoId)
+
+  const res = await db.query(
+    `UPDATE videos SET ${sets.join(', ')} WHERE id = $${idx} AND deleted_at IS NULL`,
+    params,
+  )
+  return (res.rowCount ?? 0) > 0
+}
+
+/**
  * 从 video_sources.is_active 聚合并回写单条视频的 source_check_status。
  * 用于补源完成后即时更新状态（crawlerWorker source-refetch 成功路径）。
  */

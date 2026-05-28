@@ -197,6 +197,18 @@ export interface Video {
   metaScore: number
   /** 元数据信号字典（Migration 077，CHG-365-A2）— null 表示尚未 enrich */
   metaQuality: VideoMetaQuality | null
+  /**
+   * 作品总集数（Migration 078，ADR-163 / CHG-367-B-A）— 外部 metadata 真源
+   * NULL = 未从外部取到 / 电影类型保持 NULL。完结后定值；连载中可能 NULL 或预告值。
+   * 与 `episodeCount`（已收录最大集数）+ `currentEpisodes`（已播集数）三层语义。
+   * 注意：admin-ui LineAggregate.totalEpisodes 是行级（线路 episodes 行数），同名不同层级。
+   */
+  totalEpisodes: number | null
+  /**
+   * 当前已播集数（Migration 078，ADR-163 / CHG-367-B-A）— 外部 metadata 真源
+   * NULL = 未取到 / 连载中持续更新 / 完结后等于 totalEpisodes（或外部源独立提供）。
+   */
+  currentEpisodes: number | null
   // 榜单标签（Migration 051，ADR-052）
   trendingTag: TrendingTag | null
   // 图片治理字段（IMG-01，ADR-046）——前台渲染最小集，由 media_catalog JOIN 提供

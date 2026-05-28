@@ -43,6 +43,8 @@ export interface BangumiEntryMatch {
   rating: number | null
   summary: string | null
   airDate: string | null
+  /** bangumi 话数（ADR-163 D-163-5 / CHG-367-B-A）— NULL 表示 bangumi dump 未提供 */
+  episodeCount: number | null
 }
 
 // ── 豆瓣条目查询 ──────────────────────────────────────────────────
@@ -233,8 +235,9 @@ export async function findBangumiByTitleNorm(
   const result = await db.query<{
     bangumi_id: number; title_cn: string | null; title_jp: string | null
     year: number | null; rating: string | null; summary: string | null; air_date: string | null
+    episode_count: number | null
   }>(
-    `SELECT bangumi_id, title_cn, title_jp, year, rating, summary, air_date
+    `SELECT bangumi_id, title_cn, title_jp, year, rating, summary, air_date, episode_count
      FROM external_data.bangumi_entries
      WHERE title_normalized = $1
      ORDER BY
@@ -254,6 +257,7 @@ export async function findBangumiByTitleNorm(
     rating: r.rating ? Number(r.rating) : null,
     summary: r.summary,
     airDate: r.air_date,
+    episodeCount: r.episode_count,
   }))
 }
 
