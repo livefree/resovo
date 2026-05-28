@@ -16745,3 +16745,717 @@ async function updateVideoEpisodes(
 ADR-163 status 🟢 Accepted（2026-05-28 / arch-reviewer Opus A- CONDITIONAL → 无红线 → 等同 A-）；videos 表新增 `total_episodes` + `current_episodes` 双字段（NULL default / 正整数 CHECK / 部分索引）；既有 `episode_count` 保留不动；写入路径自动 NULL-only + manual 覆盖；不触发 R-MID-1 audit RETRO；3 黄线（current>total UI 防御 / confirmFields 键名扩 / architecture.md 同步）由 CHG-367-B 实施承接。
 
 ---
+
+## ADR-164 — ROUTE-LABEL-B：source_line_aliases 扩 codename + priority + retired_at（CHG-368-A / Wave 2 #13）
+
+> status: 🟢 Accepted（CONDITIONAL → 0 红线 / 5 黄线 / 4 advisory → 等同 A-，2026-05-28 / arch-reviewer Opus 1 轮独立起草 + 自审）
+> created: 2026-05-28
+> 决策者：主循环 `claude-opus-4-7` + arch-reviewer (`claude-opus-4-7`) 子代理 1 轮独立起草 + 自审
+> 关联：
+> - ADR-114-NEGATED（`video_sources (source_site_key, source_name)` 复合键约束 / 跨站不合并 — 本 ADR 的复合 PK 同源）
+> - ADR-117（sources-matrix / source-line-aliases admin API 协议 — 本 ADR 扩 §端点契约 + audit 扩枚举）
+> - ADR-117 AMENDMENT 1/2（GET routes by-site + 行级 3 mutations — 本 ADR 在同命名空间 `/admin/source-line-aliases` 与 `/admin/sources/*` 协议范式延续）
+> - ADR-121（R-MID-1 audit RETRO 协议 4 真源 + 7 文件框架 — 本 ADR **触发**：3 个新 admin 写端点）
+> - ADR-100 §4.5 R7 MUST-8（admin route ADR 前置 — 本 ADR 即新增 admin route 的前置 ADR）
+> - ADR-110（ApiResponse 信封 + 14 ErrorCode 真源 — 本 ADR 零新增错误码）
+> - CHG-352 / docs/manual/route-labeling.md（Layer A effective_score 公式 / `priority_bonus` 5% 权重通道 / Phase 1 已 ship priority=0 默认 / 本 ADR 是 Phase 3）
+> - ADR-163（META-EPISODES — Wave 2 同期 Migration 078 + 同构 11 段范式参考）
+> 对应交付：CHG-368-A（本卡 / ADR 起草）/ CHG-368-B（Migration 079 + queries + Service 扩 + admin routes + admin UI + audit 4 真源 7 文件 / 实施排期）
+
+### §1 背景与问题
+
+#### 1.1 三层路由命名体系（docs/designs/route-labeling-system.md / docs/manual/route-labeling.md）
+
+```
+┌─ Layer C（用户侧）─────┐  ┌─ Layer B（运维侧）─────┐  ┌─ Layer A（排序引擎）──┐
+│ 主题标签（位置映射）   │  │ 山名代号（永久绑定）   │  │ effective_score        │
+│ 节气 / NATO / Planets… │  │ 泰山 / 峨眉 / 昆仑…    │  │ health 0.5 + quality   │
+│ ✅ CHG-353（已 ship）  │  │ ⏳ 本 ADR / CHG-368-B  │  │ 0.3 + latency 0.15 +   │
+│                        │  │                        │  │ **priority 0.05**       │
+└────────────────────────┘  └────────────────────────┘  │ ✅ CHG-352（已 ship）  │
+                                                          └────────────────────────┘
+```
+
+- **Layer A** 已 ship（CHG-352）：`priority_bonus` 在 effective_score 公式中占 5% 权重通道；Phase 1 因 `source_line_aliases.priority` 字段尚未落 schema，按 0 默认（`route-scoring.ts` `priority ?? 0`）。本 ADR 落地后，公式立即对运维微调敏感（不破公式 / 不改权重 / 仅激活通道）。
+- **Layer B 缺失**：当前 `source_line_aliases` 表只有 `display_name`（"哔哩哔哩主线"这类后台可读别名），缺运维短码（"泰山-2" / "峨眉"）。运维日志、Slack 告警、跨团队沟通需要稳定短码。
+- **Layer C** 已 ship（CHG-353 / CHG-369），与本 ADR 正交（不依赖 Layer B 字段）。
+
+#### 1.2 缺失能力
+
+1. **运维短码（codename）**：日志/告警/沟通统一短码，永久绑定 (siteKey, sourceName)。
+2. **优先级（priority）**：Layer A effective_score 5% 通道激活；运维手动微调（如灰度推荐某线路）。
+3. **退役治理（retired_at）**：
+   - **手动退役**：运维主动操作（线路确认不可恢复）
+   - **自动退役**：plan §10.5 提案"全 dead（probe=dead + render=dead）持续 180 天 → 自动 retire"（worker 写回 / 不在本 ADR 范围实施，仅本 ADR 落地共用字段）
+   - **冷却期**：退役后 90 天内 codename 不复用（防止日志/书签混淆）
+4. **admin UI `/admin/source-line-aliases`**：当前 CHG-SN-5-11 仅有 `SourceLineAliasPanel`（侧栏式 display_name 编辑），无独立管理视图；本 ADR 锁定独立 IA 入口 + DataTable 一体化。
+
+#### 1.3 plan §17 Phase 3 范围
+
+route-labeling Phase 3 三件套：(1) schema 扩字段 (2) admin API + UI (3) effective_score 公式激活 priority 通道。本 ADR 锁定 (1) + (2)；(3) 在 CHG-368-B 实施期通过 `route-scoring.ts` 改 `priority ?? 0` → 真实读取（Phase 1 已留 hook，零改公式）。
+
+#### 1.4 与 ADR-117 边界
+
+ADR-117 锁定 `source_line_aliases` 表 5 端点（4 GET + 1 PUT upsert display_name）。本 ADR **不修订** ADR-117 既有 5 端点契约，仅：
+- 扩 PUT upsert 端点 body schema（可选 `codename` / `priority`）
+- 新增 3 端点（POST retire / PUT priority / GET codename-pool）
+- 扩 schema（3 列 + 1 唯一部分索引 + 1 CHECK 约束）
+
+ADR-117 的 audit actionType `source_line_alias.upsert` 既有；本 ADR 新增 2 个 actionType（retire + priority_update），目标 kind 复用 `source_line_alias`。
+
+### §2 决策摘要（D-164-1..D-164-12）
+
+| # | 决策点 | 推荐结论 | 性质 |
+|---|--------|---------|------|
+| D-164-1 | schema 字段位置 | **扩 `source_line_aliases` 同表**（非新表 `route_labels`） | 架构归属 |
+| D-164-2 | codename 与 display_name 关系 | **互补共存**：`display_name` = 后台可读全名 / `codename` = 运维短码（≤ 20 字符 / 唯一部分索引）；均 NULL 合法 | 语义边界 |
+| D-164-3 | priority 类型 + 范围 + NULL 处理 | **SMALLINT NOT NULL DEFAULT 0 / 0–100 / CHECK 约束**；route-scoring 归一化 priority/100；零 NULL（与 design 文档 SMALLINT DEFAULT 0 对齐 + 避免 fallback 分支） | 数据契约 |
+| D-164-4 | retired_at 软删 vs 硬删 | **TIMESTAMPTZ NULL 软删**（NULL=在役 / NOT NULL=退役时间）；不引入独立 `deleted_at` 列（无硬删需求） | 软删模型 |
+| D-164-5 | 端点设计 | **扩 ADR-117 PUT upsert + 新增 3 端点（POST retire / PUT priority / GET codename-pool）**；不另起 `/admin/route-labels/*` 命名空间 | API 设计 |
+| D-164-6 | 退役语义对 effective_score 的影响 | **排序时排除 `retired_at IS NOT NULL` 的别名行**（在 SourceService.listSources 的别名 JOIN WHERE 加 `sla.retired_at IS NULL`）；DB 行物理保留（codename 90 天冷却后才入"可用池"） | 业务规则 |
+| D-164-7 | audit RETRO 触发与否 | **触发 R-MID-1 7 文件 RETRO**：新增 2 actionType（`source_line_alias.retire` + `source_line_alias.priority_update`）+ 扩 1 actionType payload（`source_line_alias.upsert` afterJsonb 加 codename/priority 字段） | 合规边界 |
+| D-164-8 | 与 §10.5 全 dead 180 天自动退役关系 | **共用 `retired_at` 字段**（worker 写）+ **新增 `auto_retired BOOLEAN NOT NULL DEFAULT false`** 区分人工/自动；不引入独立 `auto_retired_at` 列 | 字段共用 |
+| D-164-9 | 唯一约束设计 | **`UNIQUE INDEX (codename) WHERE codename IS NOT NULL AND retired_at IS NULL`** 部分唯一索引；保证活跃 codename 全局唯一 + 退役 90 天后可复用 | 索引设计 |
+| D-164-10 | codename 字库治理 | **代码层维护 50 山名字库常量 `MOUNTAIN_CODENAMES`**（`packages/types/src/route-codenames.ts`）；GET `/admin/source-line-aliases/codename-pool` 返回 `{ available: string[], occupied: string[], cooling: string[] }`；DB 不存字库（避免 schema 膨胀） | 字库治理 |
+| D-164-11 | 90 天冷却期判定 | **应用层（SourceLineAliasService）实现**：query `retired_at < NOW() - INTERVAL '90 days'` 判定可复用；CHECK 约束**不**写 DB（运营可能要求紧急复用 / DB 不写硬性时序约束） | 冷却语义 |
+| D-164-12 | 类型层影响 + 回滚安全 | **SourceLineAlias interface 扩 4 字段（codename / priority / retiredAt / autoRetired）+ Video.effectiveScore 不变**；回滚 = DROP COLUMN + DROP INDEX，NULL default + SMALLINT DEFAULT 0 安全 | 兼容性 |
+
+### §3 决策点详述
+
+#### D-164-1 schema 字段位置：扩 source_line_aliases 同表
+
+**推荐**：3 个新字段（codename / priority / retired_at / auto_retired）全部加在 `source_line_aliases` 同表。
+
+**依据**：
+
+1. **数据归属同源**：codename / priority / retired_at 三者都是 (source_site_key, source_name) 复合键的属性，与 display_name 同层级。复合 PK 已对齐 ADR-114-NEGATED 跨站不合并语义。新表 `route_labels` 需重新引入同样的复合 FK，徒增 JOIN 开销。
+2. **查询路径同表**：现有 `sources-matrix.ts:listLineAliases / findLineAlias / upsertLineAlias` 全部 SELECT 同表；扩列后这 3 个 query 函数只需 SELECT 多 3 列 + UPDATE 多 3 列，零跨表 JOIN 新增。
+3. **JOIN 关系不变**：`getVideoMatrix / listRoutesBySite` 现有 `LEFT JOIN source_line_aliases sla` 仅消费 `display_name`；本 ADR 在 SQL SELECT 列表追加 `sla.codename / sla.priority / sla.retired_at`，JOIN 谓词不变。
+4. **设计稿对齐**：`docs/designs/route-labeling-system.md` §"待实施的 DB 变更（Phase 3 参考）" 已明示 `ALTER TABLE source_line_aliases ADD COLUMN codename / priority / retired_at` 同表方案。
+
+**替代方案否决**：
+
+- **新表 `route_labels`**：否决。复合 PK 重复定义 + JOIN 路径需重写 + admin-ui 类型 SourceLineAlias 需拆 + 设计稿明示否定。
+- **JSONB 字段 `meta`**：否决。priority 需 CHECK 数值范围 + codename 需唯一部分索引；JSONB 内部值无 DB 级类型校验 + 单 key UPDATE 需读改写整体（并发风险）。详 ADR-123 D-123-1 同模式否决依据。
+
+#### D-164-2 codename 与 display_name 关系：互补共存
+
+**推荐**：
+
+| 字段 | 语义 | 类型 | NULL | 唯一性 | 示例 |
+|------|------|------|------|--------|------|
+| `display_name` | 后台可读全名（运营/审核台显示） | TEXT | 既有 NOT NULL（不动） | 无（同站点可重名） | "哔哩哔哩主线" |
+| `codename` | 运维短码（日志/告警/沟通） | VARCHAR(20) | **NULL**（不强制每行有） | **活跃部分唯一**（D-164-9） | "泰山-2" / "峨眉" |
+
+**互补依据**：
+
+1. **使用场景不同**：display_name 面向审核台 + 后台运营（中文长名 / 可包含空格 / 重复也无碍）；codename 面向运维日志 + Slack 告警 + 跨团队 IM（短 / 全局唯一 / 可被人脑稳定识别）。
+2. **生命周期不同**：display_name 可随时改（业务命名调整）；codename 一旦分配**永不更改**，退役后 90 天才复用（运维心智模型稳定）。
+3. **NULL 合法（codename）**：不强制每行有 codename。新爬入库 / 运营暂未分配时 NULL；分配后 NOT NULL。display_name 仍 NOT NULL（既有约束不动）。
+
+**替代方案否决**：
+
+- **替换 display_name → codename**：否决。display_name 已有 5 端点（ADR-117）+ admin-ui 消费 + 50+ JOIN 路径；改类型/重命名爆炸半径太大（参 ADR-163 D-163-2 否决 episode_count 重命名同理）。
+- **弃用 display_name**：否决。审核台 / 后台运营仍需可读全名（codename 太短不适合首选显示）。
+
+#### D-164-3 priority 类型 + 范围 + NULL 处理
+
+**推荐**：
+
+```sql
+priority SMALLINT NOT NULL DEFAULT 0
+  CHECK (priority >= 0 AND priority <= 100)
+```
+
+**依据**：
+
+1. **类型 SMALLINT**：值域 [0, 100] 远小于 SMALLINT 上限（32767），存储 2 字节足够；与设计稿 `priority SMALLINT NOT NULL DEFAULT 0` 对齐。
+2. **NOT NULL DEFAULT 0**：避免 `priority IS NULL` fallback 分支 — Phase 1 `route-scoring.ts` 已用 `priority ?? 0`，本 ADR 落地后改为直接 `priority / 100`，移除可选语义。design-tokens 风格遵循"无 NULL 优于 NULL"原则（参 video.is_active 同模式）。
+3. **范围 [0, 100]**：UI 友好（百分比心智）+ Layer A 公式归一化简单（`priority / 100 → 0.0..1.0`）。CHECK 约束在 DB 层强制，防 admin UI bug 或越权 SQL 注入越界。
+4. **0 = 中性默认**：与 Phase 1 ship 行为完全一致（未分配 priority → 0 → priority_bonus = 0 → effective_score 不变）。Phase 3 落地后 admin 主动调高才生效。
+
+**替代方案否决**：
+
+- **INT 范围 [-100, 100]（允许负惩罚）**：否决。effective_score 公式不支持负 priority_bonus（健康分主导设计 / 运维不应通过负权重"惩罚"线路 / 不可播应走退役而非负权重）。
+- **NULL 表示"未设权重"**：否决。CHG-352 已用 `priority ?? 0`，本 ADR 落地后改 NOT NULL DEFAULT 0 等价行为且免 NULL 检查分支。
+
+#### D-164-4 retired_at 软删 vs 硬删
+
+**推荐**：`retired_at TIMESTAMPTZ NULL`（软删）；不引入独立 `deleted_at`。
+
+**依据**：
+
+1. **业务语义匹配**：退役不等于删除。codename "泰山-2" 退役后，日志/审计仍能追溯 90 天内的告警归属。硬删丢失追溯链。
+2. **冷却期可计算**：`retired_at IS NOT NULL AND retired_at < NOW() - INTERVAL '90 days'` → codename 入"可用池"。硬删后 90 天判定无法实现。
+3. **架构对齐**：ADR-117 R-ADR-117-2 已留口子"`source_line_aliases` 表无 TTL / 软删除，未来扩展时需起 PRE-ALIAS-SOFT-DELETE 卡决策"。本 ADR 提供该卡。
+4. **不需 deleted_at 双字段**：当前无"硬删别名行"需求；未来若需硬删独立起卡，届时新增 deleted_at 不冲突。
+
+**替代方案否决**：
+
+- **硬删 + 独立 `retired_codenames` 历史表**：否决。引入第二张表 + 数据迁移逻辑 + 冷却查询跨表 JOIN，复杂度爆炸；无业务收益。
+- **`deleted_at + retired_at` 双字段**：否决。引入冗余语义 + 增加 admin UI 状态机复杂度。
+
+#### D-164-5 端点设计：扩 ADR-117 PUT + 新增 3 端点
+
+**推荐端点矩阵**（详 §5 端点契约）：
+
+| # | 端点 | 关系 | audit |
+|---|------|------|-------|
+| 既有 1 | GET `/admin/source-line-aliases` | ADR-117 既有 | 无（读） |
+| 既有 2 | PUT `/admin/source-line-aliases/:siteKey/:sourceName` | **扩 body**（可选 codename / priority） | 既有 `source_line_alias.upsert` actionType / payload 扩字段 |
+| 新增 1 | POST `/admin/source-line-aliases/:siteKey/:sourceName/retire` | 退役端点 | **新增 actionType** `source_line_alias.retire` |
+| 新增 2 | PUT `/admin/source-line-aliases/:siteKey/:sourceName/priority` | 单字段更新（高频运营操作） | **新增 actionType** `source_line_alias.priority_update` |
+| 新增 3 | GET `/admin/source-line-aliases/codename-pool` | 字库可用性查询 | 无（读） |
+
+**依据**：
+
+1. **同命名空间 `/admin/source-line-aliases/*`**：与 ADR-117 路由文件 `apps/api/src/routes/admin/sources-matrix.ts` 同源；不另起新文件。
+2. **不扩 PUT upsert 承担退役**：退役是状态切换语义（in-service → retired），不是"upsert 一个新别名"。
+3. **专用 PUT priority**：priority 是高频微调字段（运维一天可能调多次），单独端点 + 单独 audit 便于追溯。
+4. **GET codename-pool 独立**：字库治理需要独立查询路径（admin UI"新建别名时显示可用 codename 下拉"）。
+
+**替代方案否决**：
+
+- **新起 `/admin/route-labels/*` 命名空间**：否决。表名仍是 `source_line_aliases`；URL 命名空间分裂 = 增加运维心智负担。
+- **PATCH 而非 PUT priority**：否决。PUT 单字段更新已是 ADR-117 PUT upsert 同范式。
+- **PUT retire 而非 POST**：否决。retire 是状态动作（非幂等资源替换 — 第二次 retire 已退役资源应 409 而非 200）；POST 是动词语义最佳。
+
+#### D-164-6 退役语义对 effective_score 的影响
+
+**推荐**：SourceService.listSources 的别名 JOIN WHERE 加 `sla.retired_at IS NULL`；DB 行物理保留。
+
+**依据**：
+
+1. **退役 = 不参与排序**：退役线路不应出现在前台 SourceBar 选项；运维退役 = 数据级隔离。
+2. **JOIN 谓词最简**：现有 `sources.ts findActiveSourcesWithSignalsByVideoId` 的 LEFT JOIN `source_line_aliases` 在 WHERE 子句加 `AND (sla.retired_at IS NULL OR sla.codename IS NULL)`。
+3. **数据物理保留**：codename 冷却期内（90 天）行保留；冷却后行仍保留（codename 字段可被新别名 UPDATE 覆盖 — 唯一部分索引允许复用）。审计追溯不丢。
+4. **可视化口子**：admin UI `/admin/source-line-aliases` 可显式切"包含已退役"tab 查看退役历史。
+
+**关键约束**：
+
+- 前台排序 SQL（CHG-352 ship）必须在 CHG-368-B 同步加 `sla.retired_at IS NULL` 谓词
+- 矩阵 SQL（`getVideoMatrix` / `listRoutesBySite`）display_name 显示需在退役后回退到 source_name 原值
+
+#### D-164-7 audit RETRO 触发与否
+
+**结论：触发 R-MID-1 7 文件 RETRO**（ADR-121 范式）。
+
+**触发依据**：
+
+1. **新增 admin 写端点**：本 ADR §5 新增 POST retire + PUT priority 共 2 个写端点 → 触发 ADR-100 R7 MUST-8 + ADR-121 R-MID-1 4 真源同步范式。
+2. **既有端点 payload 扩展**：PUT upsert（ADR-117 既有）body 扩 codename / priority → afterJsonb 字段扩充，audit-log-coverage.test.ts 的 PAYLOAD_ASSERTION_REQUIRED 测试需重新断言新字段。
+
+**新增 2 actionType + payload 协议**：
+
+| 端点 | actionType | targetKind | targetId | beforeJsonb | afterJsonb |
+|------|------------|------------|----------|-------------|------------|
+| PUT `/admin/source-line-aliases/:siteKey/:sourceName` | `source_line_alias.upsert`（既有 / payload 扩） | `source_line_alias`（既有） | `${siteKey}/${sourceName}` | 既有 SourceLineAlias 行（INSERT 时 null） | 新 SourceLineAlias 行（**扩 codename / priority / retiredAt 字段**） |
+| POST `/admin/source-line-aliases/:siteKey/:sourceName/retire` | **新增** `source_line_alias.retire` | `source_line_alias` | `${siteKey}/${sourceName}` | 退役前完整行（含 codename / priority） | 退役后行（retiredAt 非 NULL / autoRetired=false） |
+| PUT `/admin/source-line-aliases/:siteKey/:sourceName/priority` | **新增** `source_line_alias.priority_update` | `source_line_alias` | `${siteKey}/${sourceName}` | 旧行（含旧 priority） | 新行（仅 priority + updatedAt 改变） |
+
+**7 文件 RETRO 框架**（CHG-368-B 必走）：
+
+| # | 文件 | 角色 | 改动 |
+|---|------|------|------|
+| 1 | `packages/types/src/admin-moderation.types.ts` | (1) Type union | AdminAuditActionType 加 2 项（`source_line_alias.retire` / `source_line_alias.priority_update`） |
+| 2 | `apps/api/src/services/AuditLogService.ts` | (2) ACTION_TYPES | 数组追加 2 项（与 union 严格同序） |
+| 3 | `tests/unit/api/audit-log-service-enums-set-equal.test.ts` | (3a) Service enums set-equal | EXPECTED set 扩 2 项 |
+| 4 | `tests/unit/api/audit-log-coverage.test.ts` | (3b) Coverage set-equal + (4) REQUIRED + PAYLOAD it.each | EXPECTED / REQUIRED_ACTION_TYPES / PAYLOAD_ASSERTION_REQUIRED 三处同步扩 2 项 |
+| 5 | `apps/api/src/routes/admin/sources-matrix.ts` | 端点 route | 加 2 端点 + Service 层 `auditSvc.write({...})` 调用 |
+| 6 | `tests/unit/api/source-line-alias-retire-priority-audit.test.ts` | payload 内容断言新测试 | 覆盖 happy path + 422 校验失败不写 audit + retire 二次 409 不写 audit + payload before/after 内容断言（R-MID-1 守卫）|
+| 7 | `docs/changelog.md` | 完成备注 | CHG-368-B 条目含 R-MID-1 第 29 次系统化 |
+
+**PATCH ≤ 5 上限豁免**：ADR-121 D-121-3 锁定 RETRO 7 文件框架为已认证豁免，本 ADR 直接引用，无需额外协商。
+
+#### D-164-8 与 §10.5 全 dead 180 天自动退役关系
+
+**推荐**：共用 `retired_at` 字段 + 新增 `auto_retired BOOLEAN NOT NULL DEFAULT false` 区分人工/自动。
+
+**依据**：
+
+1. **统一退役语义**：人工和自动退役都是"line 退出排序池 + codename 进入 90 天冷却"，业务语义相同，无需双字段。
+2. **`auto_retired` 区分来源**：审计追溯需要知道"这条线路是运营手动 retire 还是 worker 触发"。`auto_retired = true` 时 admin UI 可显式标注"系统自动退役（180 天全 dead）"。
+3. **本 ADR 不实施 worker**：plan §10.5 自动退役逻辑（180 天检测 + worker 写回）由后续独立卡承担（建议 PRE-DEAD-LINE-AUTO-RETIRE-WORKER）。本 ADR 仅落 schema 字段（worker 可直接写）。
+4. **手动退役端点不支持 auto_retired = true**：POST retire 端点 Service 层固定 `auto_retired = false`；worker 走独立 DB query 函数 `autoRetireLineByDeadCheck()`（不暴露端点 / 不写 admin audit / 写 worker 日志）。
+
+**替代方案否决**：
+
+- **独立 `auto_retired_at` 列**：否决。引入 4 字段（`retired_at / auto_retired_at` + 各自判定逻辑），冷却期计算需 `COALESCE(retired_at, auto_retired_at)` 增加 SQL 复杂度。单字段 + 布尔区分更简洁。
+- **不区分人工/自动**：否决。审计追溯丢失关键信息。
+
+#### D-164-9 唯一约束设计
+
+**推荐**：
+
+```sql
+CREATE UNIQUE INDEX idx_source_line_aliases_codename_active
+  ON source_line_aliases (codename)
+  WHERE codename IS NOT NULL AND retired_at IS NULL;
+```
+
+**依据**：
+
+1. **活跃 codename 全局唯一**：同一时刻只有一个活跃别名行能用 "泰山-2"；保证日志/告警短码无歧义。
+2. **退役后可复用**：retired_at 非 NULL 后该 codename 不参与唯一约束；91 天后新别名 UPDATE codename = "泰山-2" 不违反索引。
+3. **NULL codename 不参与**：未分配 codename 的别名行（仅有 display_name）无需占用字库。
+4. **部分索引性能**：跨站全表唯一搜索性能 O(1)；查询 `codename = $1 AND retired_at IS NULL` 走索引扫描。
+
+**替代方案否决**：
+
+- **全表 UNIQUE (codename)**：否决。退役后 codename 永远占用，字库枯竭快（仅 50 山名）。
+- **应用层校验唯一性**：否决。并发 INSERT/UPDATE 时存在 race condition。DB 层约束唯一可靠。
+
+#### D-164-10 codename 字库治理
+
+**推荐**：
+
+- 代码常量真源：`packages/types/src/route-codenames.ts`（52 项 / 50 山名 + 2 占位）
+- GET `/admin/source-line-aliases/codename-pool` 端点返回 `{ available, occupied, cooling }` 三段：
+  - `occupied`：当前活跃使用中的 codename（retired_at IS NULL）
+  - `cooling`：退役且 < 90 天的 codename（仍占用）
+  - `available`：字库 \ occupied \ cooling（运营可用列表）
+- codename 支持后缀（如 "泰山-2"）：字库基础名 + 数字后缀允许扩容（同名 site 多线路场景）
+
+**依据**：
+
+1. **DB 不存字库**：字库是配置数据，代码常量 + Git 版本控制 + TS 编译期检查比 DB seed 表更可靠（参 ADR-017 VideoGenre union type 同模式）。
+2. **3 段返回**：admin UI 新建别名时 codename 下拉显式标注"可用 / 已占用 / 冷却中"，避免运营误选导致 422。
+3. **后缀扩展**：50 山名预期足够（20 站 × 平均 3 线 = 60），但 codename 支持任意 VARCHAR(20) 字符串（CHECK 仅长度 + 非空 + ASCII/中文范围），不强制必须来自字库。
+
+#### D-164-11 90 天冷却期判定
+
+**推荐**：应用层（SourceLineAliasService）实现 `isCodenameInCooling(codename: string): Promise<boolean>`；DB 不写 CHECK 约束。
+
+**依据**：
+
+1. **运营紧急复用口子**：如果 90 天冷却期写死 DB CHECK，运营遇到字库枯竭紧急场景无法绕过。应用层判定 + admin UI 警告"该 codename 冷却中，确认继续？"提供柔性。
+2. **时间约束不应写 DB**：DB CHECK 约束应是静态条件（参 ADR-163 D-163-4 "DB 层不强制业务不变式"）。`NOW() - INTERVAL '90 days'` 在 CHECK 中可行但语义脆。
+3. **Service 层一致**：sources-matrix.ts 已有 `findLineAlias` query；新增 `findCodenameAssignments(codename, includeCooling)` query + Service 层 `isCodenameInCooling()` 与 `findCodenameAssignments` 复用 SQL 路径。
+
+#### D-164-12 类型层影响 + 回滚安全
+
+**SourceLineAlias interface 扩展**（`packages/types/src/sources-matrix.types.ts`）：
+
+```ts
+export interface SourceLineAlias {
+  readonly sourceSiteKey: string
+  readonly sourceName: string
+  readonly displayName: string
+  readonly codename: string | null              // 新增（NULL = 未分配）
+  readonly priority: number                     // 新增（0–100 / NOT NULL DEFAULT 0）
+  readonly retiredAt: string | null             // 新增（ISO 8601 / NULL = 在役）
+  readonly autoRetired: boolean                 // 新增（true = worker 自动退役 / false = 人工）
+  readonly updatedAt: string
+}
+```
+
+**兼容性分析**：
+
+- 既有 `SourceLineAlias` 4 字段不变；新增 4 字段：3 个 NULL/默认值合法 + 1 boolean 默认 false → 既有消费方零代码改动可读取（仅 display_name）。
+- 既有 `SourceMatrixRow` / `LineMatrixRow` 不变。
+- 前台 web-next 不感知（codename 仅运维侧 / 前台仍走 effective_score 排序 + theme labels）。
+
+**回滚安全**：Migration 079 ROLLBACK 标准模式：
+
+```sql
+ALTER TABLE source_line_aliases DROP CONSTRAINT IF EXISTS chk_source_line_aliases_priority_range;
+DROP INDEX IF EXISTS idx_source_line_aliases_codename_active;
+ALTER TABLE source_line_aliases DROP COLUMN IF EXISTS auto_retired;
+ALTER TABLE source_line_aliases DROP COLUMN IF EXISTS retired_at;
+ALTER TABLE source_line_aliases DROP COLUMN IF EXISTS priority;
+ALTER TABLE source_line_aliases DROP COLUMN IF EXISTS codename;
+```
+
+- 4 列均 NULL default 或 DEFAULT 值 → DROP COLUMN 不破坏既有 5 端点
+- 唯一部分索引 DROP 不影响主键 PRIMARY KEY (source_site_key, source_name)
+- CHECK 约束 DROP 不影响数据
+
+### §4 schema 设计（Migration 079 SQL 完整草案 + ROLLBACK SQL + Migration 顺序声明）
+
+#### 4.1 Migration 079 SQL
+
+```sql
+-- Migration 079: source_line_aliases.codename / priority / retired_at / auto_retired
+-- ADR-164 / CHG-368-B / plan §17 route-labeling Phase 3
+--
+-- 背景：route-labeling Phase 3 — 山名代号 + 线路优先级 + 退役治理。
+-- 字段扩展：
+--   codename     VARCHAR(20)  NULL                       — 运维短码（"泰山-2"）
+--   priority     SMALLINT     NOT NULL DEFAULT 0         — Layer A effective_score 5% 通道
+--                CHECK 0–100
+--   retired_at   TIMESTAMPTZ  NULL                       — 软删时间戳（NULL=在役）
+--   auto_retired BOOLEAN      NOT NULL DEFAULT false     — true=worker 自动退役 / false=人工
+--
+-- 唯一约束：(codename) WHERE codename IS NOT NULL AND retired_at IS NULL
+--   活跃 codename 全局唯一 / 退役后可复用
+--
+-- 幂等：ADD COLUMN IF NOT EXISTS / ADD CONSTRAINT IF NOT EXISTS / CREATE UNIQUE INDEX IF NOT EXISTS
+
+BEGIN;
+
+-- ── 1. 列扩展 ─────────────────────────────────────────────────────
+
+ALTER TABLE source_line_aliases
+  ADD COLUMN IF NOT EXISTS codename     VARCHAR(20)  NULL,
+  ADD COLUMN IF NOT EXISTS priority     SMALLINT     NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS retired_at   TIMESTAMPTZ  NULL,
+  ADD COLUMN IF NOT EXISTS auto_retired BOOLEAN      NOT NULL DEFAULT false;
+
+COMMENT ON COLUMN source_line_aliases.codename
+  IS '运维短码（如 "泰山-2"）/ NULL = 未分配 / 活跃部分唯一（idx_source_line_aliases_codename_active）/ 永久绑定 (siteKey, sourceName)';
+COMMENT ON COLUMN source_line_aliases.priority
+  IS 'Layer A effective_score priority_bonus 通道 / 0-100 SMALLINT / NOT NULL DEFAULT 0 / route-scoring.ts 归一化 priority/100';
+COMMENT ON COLUMN source_line_aliases.retired_at
+  IS '退役时间戳 / NULL = 在役 / NOT NULL = 退役 + 90 天冷却后 codename 可被新别名复用 / 应用层判定冷却期';
+COMMENT ON COLUMN source_line_aliases.auto_retired
+  IS 'true = worker 自动退役（全 dead 180 天）/ false = 人工 POST retire 端点';
+
+-- ── 2. CHECK 约束（priority 范围）─────────────────────────────────
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.table_constraints
+    WHERE constraint_name = 'chk_source_line_aliases_priority_range'
+      AND table_name = 'source_line_aliases'
+  ) THEN
+    ALTER TABLE source_line_aliases
+      ADD CONSTRAINT chk_source_line_aliases_priority_range
+        CHECK (priority >= 0 AND priority <= 100);
+  END IF;
+END $$;
+
+-- ── 3. 唯一部分索引（活跃 codename）───────────────────────────────
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_source_line_aliases_codename_active
+  ON source_line_aliases (codename)
+  WHERE codename IS NOT NULL AND retired_at IS NULL;
+
+-- ── 4. 辅助索引（退役过滤）─────────────────────────────────────────
+-- 用于 SourceService.listSources 高频 JOIN 加 retired_at IS NULL 谓词
+
+CREATE INDEX IF NOT EXISTS idx_source_line_aliases_retired_at
+  ON source_line_aliases (retired_at)
+  WHERE retired_at IS NOT NULL;
+
+-- ── 5. 验证 ───────────────────────────────────────────────────────
+
+DO $$
+DECLARE
+  v_col_count INT;
+  v_idx_count INT;
+BEGIN
+  SELECT COUNT(*) INTO v_col_count
+    FROM information_schema.columns
+    WHERE table_name = 'source_line_aliases'
+      AND column_name IN ('codename', 'priority', 'retired_at', 'auto_retired');
+
+  IF v_col_count <> 4 THEN
+    RAISE EXCEPTION 'Migration 079: source_line_aliases 4 列添加失败，期望 4，实际 %', v_col_count;
+  END IF;
+
+  SELECT COUNT(*) INTO v_idx_count
+    FROM pg_indexes
+    WHERE tablename = 'source_line_aliases'
+      AND indexname IN ('idx_source_line_aliases_codename_active', 'idx_source_line_aliases_retired_at');
+
+  IF v_idx_count <> 2 THEN
+    RAISE EXCEPTION 'Migration 079: 2 索引添加失败，期望 2，实际 %', v_idx_count;
+  END IF;
+
+  RAISE NOTICE 'Migration 079 OK: source_line_aliases 4 列 + 2 索引 + 1 CHECK 添加完成';
+END $$;
+
+COMMIT;
+
+-- ROLLBACK:
+-- BEGIN;
+-- DROP INDEX IF EXISTS idx_source_line_aliases_retired_at;
+-- DROP INDEX IF EXISTS idx_source_line_aliases_codename_active;
+-- ALTER TABLE source_line_aliases DROP CONSTRAINT IF EXISTS chk_source_line_aliases_priority_range;
+-- ALTER TABLE source_line_aliases
+--   DROP COLUMN IF EXISTS auto_retired,
+--   DROP COLUMN IF EXISTS retired_at,
+--   DROP COLUMN IF EXISTS priority,
+--   DROP COLUMN IF EXISTS codename;
+-- COMMIT;
+```
+
+#### 4.2 Migration 顺序安全声明
+
+- **当前最高编号**：078（videos.total_episodes + current_episodes / ADR-163）
+- **本 Migration 编号**：079
+- **依赖**：063（source_line_aliases 建表 / ADR-117 关联）
+- **顺序冲突分析**：
+  - 与 078 无字段交叉（videos vs source_line_aliases 不同表）
+  - 与 063 单向扩展（ADD COLUMN / ADD INDEX 不修改既有列）
+  - 不冲突 plan §17.3 提到的"META-EPISODES 顺序协调"（078 已 ship + 079 落 source_line_aliases / 双 ADR 互不干扰）
+
+### §5 端点契约（R7 MUST-8 6 列范式）
+
+#### 5.1 既有端点扩展（PUT upsert / ADR-117 body 扩字段）
+
+| # | Method | Path | 用途 | Request | Response | 错误码 | RETRO 状态 |
+|---|--------|------|------|---------|----------|--------|------------|
+| 1 | PUT | `/admin/source-line-aliases/:siteKey/:sourceName` | upsert 别名（**扩 body**） | Path: `siteKey` / `sourceName`（URL encoded）; Body: `{ displayName: string(1..100), codename?: string(1..20) \| null, priority?: number(0..100) }`（最少含 displayName / 其他字段可选） | 200 `{ data: SourceLineAlias }`（含新 4 字段） | 422 VALIDATION_ERROR（codename 长度 / priority 越界 / displayName 必填） / 409 STATE_CONFLICT（codename 已被其他活跃行占用 / 部分唯一索引冲突） / 500 INTERNAL_ERROR | **既有 actionType `source_line_alias.upsert` payload 扩**（详 §6.audit） |
+
+#### 5.2 新增端点（3 项）
+
+| # | Method | Path | 用途 | Request | Response | 错误码 | RETRO 状态 |
+|---|--------|------|------|---------|----------|--------|------------|
+| 2 | POST | `/admin/source-line-aliases/:siteKey/:sourceName/retire` | 退役别名（手动 / autoRetired=false） | Path: `siteKey` / `sourceName`; Body: `{ reason?: string(0..200) }`（可选退役原因） | 200 `{ data: SourceLineAlias }`（retiredAt 非 NULL） | 404 NOT_FOUND（别名行不存在）/ 409 STATE_CONFLICT（已退役二次操作）/ 401 / 403 | **新增 actionType `source_line_alias.retire` / R-MID-1 第 29 次系统化** |
+| 3 | PUT | `/admin/source-line-aliases/:siteKey/:sourceName/priority` | 单字段更新 priority（高频运营操作） | Path: `siteKey` / `sourceName`; Body: `{ priority: number(0..100) }` | 200 `{ data: SourceLineAlias }`（仅 priority + updatedAt 变化） | 404 NOT_FOUND / 422 VALIDATION_ERROR / 401 / 403 | **新增 actionType `source_line_alias.priority_update` / R-MID-1 第 30 次系统化** |
+| 4 | GET | `/admin/source-line-aliases/codename-pool` | 字库可用性查询 | — | 200 `{ data: { available: string[], occupied: string[], cooling: string[] } }` | 401 / 403 | 无（读端点 / 不写 audit）|
+
+#### 5.3 鉴权矩阵
+
+- **既有读端点**（ADR-117 既有 4 GET）：`requireRole(['moderator', 'admin'])` 不动
+- **新增读端点**（codename-pool）：`requireRole(['moderator', 'admin'])`（与既有读端点一致）
+- **写端点**（PUT upsert / POST retire / PUT priority）：**admin only**（ADR-117 D-117-1 锁定原则）
+
+#### 5.4 zod schema 草案
+
+```ts
+const AliasParamsSchema = z.object({
+  siteKey:    z.string().min(1).max(100),
+  sourceName: z.string().min(1).max(200),
+}).strict()
+
+const UpsertAliasBodySchema = z.object({
+  displayName: z.string().min(1, '别名不能为空').max(100, '别名过长'),
+  codename:    z.string().min(1).max(20).regex(/^[一-龥A-Za-z0-9-]+$/, 'codename 仅允许中文/英文/数字/连字符').nullable().optional(),
+  priority:    z.coerce.number().int().min(0).max(100).optional(),
+}).strict()
+
+const RetireBodySchema = z.object({
+  reason: z.string().max(200).optional(),
+}).strict()
+
+const PriorityBodySchema = z.object({
+  priority: z.coerce.number().int().min(0).max(100),
+}).strict()
+```
+
+#### 5.5 错误码（ADR-110 14 码 / 零新增）
+
+| 场景 | code | status |
+|------|------|--------|
+| zod 校验失败 / codename 长度 / priority 越界 | VALIDATION_ERROR | 422 |
+| 别名行不存在（retire / priority 端点）| NOT_FOUND | 404 |
+| codename 已被其他活跃行占用（部分唯一索引冲突）| STATE_CONFLICT | 409 |
+| retire 端点对已退役行二次操作 | STATE_CONFLICT | 409 |
+| 非 admin role 调写端点 | FORBIDDEN | 403 |
+| 未登录 | UNAUTHORIZED | 401 |
+| DB 写异常 | INTERNAL_ERROR | 500 |
+
+#### 5.6 类型契约（`packages/types/src/sources-matrix.types.ts`）
+
+```ts
+export interface SourceLineAlias {
+  readonly sourceSiteKey: string
+  readonly sourceName: string
+  readonly displayName: string
+  readonly codename: string | null
+  readonly priority: number
+  readonly retiredAt: string | null
+  readonly autoRetired: boolean
+  readonly updatedAt: string
+}
+
+export interface CodenamePool {
+  readonly available: readonly string[]
+  readonly occupied: readonly string[]
+  readonly cooling: readonly string[]
+}
+
+export interface UpsertAliasInput {
+  readonly displayName: string
+  readonly codename?: string | null
+  readonly priority?: number
+}
+
+export interface RetireAliasInput {
+  readonly reason?: string
+}
+```
+
+#### 5.7 Service 层契约（`apps/api/src/services/SourcesMatrixService.ts`）
+
+**推荐**：在既有 `SourcesMatrixService.ts` 加方法，不新建独立 Service 文件。
+
+```ts
+class SourcesMatrixService {
+  async upsertLineAlias(params, input: UpsertAliasInput, actorId): Promise<SourceLineAlias>
+  async retireLineAlias(params, input: RetireAliasInput, actorId): Promise<SourceLineAlias>
+  async updateLineAliasPriority(params, priority: number, actorId): Promise<SourceLineAlias>
+  async getCodenamePool(): Promise<CodenamePool>
+}
+```
+
+#### 5.8 listSources / SourceService 改动（CHG-368-B 顺带）
+
+1. `apps/api/src/db/queries/sources.ts` 的 `findActiveSourcesWithSignalsByVideoId` LEFT JOIN 加 `AND (sla.retired_at IS NULL OR sla.codename IS NULL)` 谓词
+2. `apps/api/src/lib/route-scoring.ts` 的 `calculatePriorityBonus` 改为真实读取 `priority / 100`
+3. 矩阵 SQL 保留显示 display_name 不变
+
+### §6 显示规约（admin UI + Layer B 在审核台消费）
+
+#### 6.1 admin UI `/admin/source-line-aliases`（独立路径）
+
+**真源建议**：`apps/server-next/src/app/admin/source-line-aliases/page.tsx`
+
+消费 DataTable 一体化（packages/admin-ui）：列：siteKey / sourceName / displayName 内联编辑 / codename 下拉提示字库 / priority slider / retiredAt 状态显示 / updatedAt 只读。
+
+**Toolbar**：search / viewsConfig（全部/在役/已退役/字库冷却中）/ bulkActions（批量退役 + 批量调 priority）
+
+**filter chips slot**：`renderFilterChip` 覆盖 retiredAt 与 priority 区间
+
+#### 6.2 Layer B 在审核台 LinesPanel 消费
+
+- 当 `LineAggregate.codename` 非 NULL → 行尾显示小标签 "codename: 泰山-2"
+- 退役行（retiredAt 非 NULL）→ 整行 50% opacity + "已退役" 标识
+
+#### 6.3 TabDetail（审核台右栏）不消费
+
+当前不消费 codename（避免审核台主视图信息密度过高 / advisory A-164-3）。
+
+#### 6.4 前台 web-next 不感知
+
+- SourceBar 仍走 effective_score 排序 + theme labels
+- codename 不出现在前台 / 仅运维侧
+
+### §7 文件范围（CHG-368-B RETRO 7 文件框架 + 业务 + UI）
+
+#### 7.1 RETRO 7 文件（ADR-121 框架 / 必含）
+
+| # | 文件 | 角色 |
+|---|------|------|
+| 1 | `packages/types/src/admin-moderation.types.ts` | AdminAuditActionType union 加 2 项 |
+| 2 | `apps/api/src/services/AuditLogService.ts` | ACTION_TYPES 数组扩 2 项 |
+| 3 | `tests/unit/api/audit-log-service-enums-set-equal.test.ts` | EXPECTED set 扩 |
+| 4 | `tests/unit/api/audit-log-coverage.test.ts` | EXPECTED + REQUIRED + PAYLOAD it.each 扩 |
+| 5 | `apps/api/src/routes/admin/sources-matrix.ts` | route 加 3 端点 + 扩 PUT upsert body |
+| 6 | `tests/unit/api/source-line-alias-retire-priority-audit.test.ts` | payload 内容断言新测试文件 |
+| 7 | `docs/changelog.md` | CHG-368-B 完成条目（R-MID-1 第 29-30 次系统化）|
+
+#### 7.2 业务 + schema + 类型 + UI（追加文件 / RETRO 7 文件之外）
+
+| # | 文件 | 改动 |
+|---|------|------|
+| 8 | `apps/api/src/db/migrations/079_source_line_aliases_codename_priority_retired.sql` | 新建 Migration |
+| 9 | `apps/api/src/db/queries/sources-matrix.ts` | 扩 5 queries SELECT 列 + 新增 retire/priority/codename queries |
+| 10 | `apps/api/src/services/SourcesMatrixService.ts` | 扩 upsertLineAlias + 新增 3 方法 + 字库治理逻辑 |
+| 11 | `packages/types/src/sources-matrix.types.ts` | SourceLineAlias 扩 4 字段 / 新增 3 类型 |
+| 12 | `packages/types/src/route-codenames.ts` | **新建**：MOUNTAIN_CODENAMES 50 山名常量 |
+| 13 | `apps/api/src/lib/route-scoring.ts` | `calculatePriorityBonus` 真实读取 priority |
+| 14 | `apps/api/src/db/queries/sources.ts` | JOIN 加 retired_at IS NULL 谓词 + SELECT 扩 priority |
+| 15 | `apps/server-next/src/app/admin/source-line-aliases/page.tsx` | **新建** admin UI 独立路径 |
+| 16 | `apps/server-next/src/app/admin/source-line-aliases/_client/SourceLineAliasClient.tsx` | **新建** DataTable 一体化消费组件 |
+| 17 | `packages/admin-ui/src/components/composite/lines-panel/...` | LinesPanel 行级 codename 标签 + 退役行 opacity（advisory）|
+| 18 | `docs/architecture.md` §5.X | source_line_aliases schema 描述同步（CLAUDE.md 红线）|
+| 19 | `docs/manual/route-labeling.md` | 加 "§9 Layer B 实施记录" |
+
+#### 7.3 PATCH ≤ 5 上限豁免分析
+
+CHG-368-B 文件范围 = 7（RETRO）+ 12（业务/schema/UI）= 19 文件。
+
+- **RETRO 7 文件**：ADR-121 D-121-3 已认证豁免
+- **业务 12 文件**：超 PATCH ≤ 5 上限 → **必须拆 CHG-368-B-A / -B / -C 子卡**
+
+**子卡拆分建议**：
+
+| 子卡 | 范围 | 文件数 |
+|------|------|--------|
+| **CHG-368-B-A** | Migration 079 + queries + types + Service + route-scoring 集成 + RETRO 7 文件 | 14（业务+RETRO 一体提交 / RETRO 不可拆 / D-121-3 豁免）|
+| **CHG-368-B-B** | admin UI 独立路径 + DataTable 集成 | 3 |
+| **CHG-368-B-C** | LinesPanel 行级 codename 标签 + 文档同步（advisory）| 3 |
+
+CHG-368-B-A 的"14 文件"是 RETRO 框架豁免本身含业务 route 文件；剩余业务 7 文件超 5 → 实施期可再拆 -A1（types+migration+queries）/ -A2（Service+route+测试）= 严格 ≤5 拆法。具体由 CHG-368-B 拆卡时决定。
+
+#### 7.4 docs/architecture.md 同步红线（CLAUDE.md 强约束）
+
+CHG-368-B 实施期必须在 docs/architecture.md 同步 §5 数据模型 source_line_aliases schema 描述：加新 4 字段说明 + 唯一部分索引 + §17.X "Layer B 山名代号体系（ADR-164）" 概览引用。不同步 = 违反 CLAUDE.md 绝对禁止 → BLOCKER。
+
+### §8 替代方案对比
+
+#### 8.1 4 维度对比矩阵
+
+| 维度 | **方案 A（采纳）：扩 source_line_aliases 同表 + 3 端点扩 + RETRO 7 文件** | 方案 B：新表 route_labels + 跨表 JOIN | 方案 C：JSONB 字段 meta + 单端点全字段更新 | 方案 D：拆站点表 source_line_aliases_<key> 多表 |
+|------|--------|---------|---------|---------|
+| **schema 一致性** | 与既有 display_name 同表 / 复合 PK 同源 ADR-114-NEGATED | 复合 FK 重复 / 跨表 JOIN 路径污染 | JSONB 内部无 CHECK / 无唯一索引能力 | 表数膨胀（20+ 表）/ 跨站查询需 UNION |
+| **迁移成本** | 极低（4 ADD COLUMN + 1 CHECK + 2 INDEX / 幂等可重跑） | 高（新表 + 数据迁移 + 5 queries 改 LEFT JOIN） | 低（JSONB 字段加） | 极高（动态表名 / 不可幂等 migration） |
+| **查询性能** | 单表 + 部分唯一索引 + 部分索引 retired_at | LEFT JOIN 额外 nested-loop 开销 | JSONB 字段无 B-tree / 不能用索引查询 codename | 多表 UNION + 运行时表名解析 |
+| **类型层影响** | SourceLineAlias 扩 4 字段（既有消费方读 display_name 不变）| 拆 SourceLineAlias / SourceLineMeta 两类型 | SourceLineAlias.meta: JsonValue（类型层模糊）| 多类型实例化 / 静态类型不可表达 |
+| **唯一约束能力** | 部分唯一索引（活跃 codename 全局唯一 / 退役后可复用）✅ | 同 A（可实施）✅ | JSONB 内部值无唯一约束 ❌ | 跨表 codename 唯一不可保证 ❌ |
+| **audit 协议复杂度** | 复用 source_line_alias targetKind + 2 新 actionType / R-MID-1 7 文件框架 | 需扩 targetKind = 'route_label' / migration 052 CHECK 扩 | 单 actionType `meta.update` + payload 体积大 / before/after 全 JSONB diff 难审计 | 跨表 audit / targetId 多形态 |
+| **回滚安全** | 4 ADD COLUMN NULL/DEFAULT 反向 DROP 安全 | 新表 DROP + 数据丢失风险 | JSONB 字段 DROP 安全 / 但既有数据丢字段 | 多表 DROP 顺序敏感 / 高风险 |
+| **与设计稿对齐** | 100% 对齐 docs/designs/route-labeling-system.md §"Phase 3 参考" | 偏离设计稿 | 偏离 / 设计稿明示同表 | 严重偏离 |
+| **与 ADR-114-NEGATED 兼容** | 兼容（复合 PK 同源）| 需重新引入复合 FK | 兼容 | 复合 PK 不可跨表 |
+| **未来 worker auto-retire 集成** | 直接 UPDATE retired_at + auto_retired = true | 同 A | UPDATE JSONB 字段（并发风险）| worker 需知道表名（动态查询不友好）|
+
+#### 8.2 否决理由总结
+
+- **方案 B（新表）**：复合 PK 重复定义 + JOIN 路径污染 + 设计稿明示否定
+- **方案 C（JSONB）**：无 CHECK / 无唯一索引 / 并发写竞争（ADR-123 D-123-1 同模式否决）
+- **方案 D（拆站点表）**：表数膨胀 + 跨站查询不可行 + ADR-117 D-117-B 已锁定单表方案
+
+### §9 后果（正面 / 负面 + 风险）
+
+#### 9.1 正面
+
+1. **Layer B 完整闭环**：codename 永久绑定 + 字库治理 + 退役冷却 + audit 追溯 = 运维心智模型稳定
+2. **Layer A priority 通道激活**：effective_score 公式无改动 + Phase 1 hook 真实读取 = 零回归 + 立即生效
+3. **设计稿 100% 对齐**：docs/designs/route-labeling-system.md §"Phase 3 参考" SQL 完全落地
+4. **与 ADR-117 协议范式延续**：3 新端点鉴权 / Service 层 / audit 协议 / 错误码 / DataTable 一体化与 ADR-117 一致
+5. **plan §10.5 自动退役预留**：`auto_retired` 字段 + 共用 `retired_at` 让后续 PRE-DEAD-LINE-AUTO-RETIRE-WORKER 卡可零 schema 改动直接落 worker
+
+#### 9.2 负面 / 风险
+
+1. **N-164-1（admin UI 工程量）**：新增独立路径 + DataTable 一体化 + 字库下拉 + priority slider + bulkActions。CHG-368-B-B 子卡预估 3 文件 / 中等工程量。**缓解**：复用 packages/admin-ui DataTable + 既有 SourceLineAliasPanel 部分 hooks。
+2. **N-164-2（route-scoring 行为变化）**：CHG-368-B-A 实施 `priority / 100` 真实读取后，effective_score 公式对运维调高 priority 立即敏感。**风险**：运营首次使用可能"忘记 priority=0 默认"导致老线路被新线路压制。**缓解**：admin UI priority slider 默认 0 + tooltip 说明。
+3. **N-164-3（codename 唯一约束的运营摩擦）**：部分唯一索引可能因运营误填重复 codename 导致 409 STATE_CONFLICT。**缓解**：admin UI 内联编辑 codename 时 onBlur 预校验 + 错误信息明确。
+4. **N-164-4（90 天冷却期应用层判定脆弱）**：D-164-11 锁定应用层 + admin UI 警告但允许绕过。**缓解**：监控指标 R-164-2 触发独立卡评估是否升级为 DB CHECK 硬约束。
+5. **N-164-5（auto_retired 字段未实施 worker）**：本 ADR 落 `auto_retired BOOLEAN`，但 plan §10.5 worker 仍是占位。**缓解**：CHG-368-B 完成后立即创建 PRE-DEAD-LINE-AUTO-RETIRE-WORKER 占位卡 + admin UI tooltip "自动退役功能开发中"。
+
+### §10 监控与重评条件
+
+| 编号 | 触发条件 | 动作 |
+|------|---------|------|
+| R-164-1 | CHG-368-B 实施后 1 个月内，codename 唯一冲突 409 次数 > 50 | 评估 admin UI 内联编辑 onBlur 预校验是否落地 / 字库下拉是否引导效果不足 |
+| R-164-2 | 90 天冷却期被运营紧急绕过 > 3 次/月 | 评估是否升级 DB CHECK 硬约束 / 或改 admin UI 强制确认弹窗 |
+| R-164-3 | priority 通道真实读取后，前台 SourceBar 排序 p95 渲染时间 > +30ms | 评估 priority 是否需要单独索引 / 或 Service 层缓存 priority map |
+| R-164-4 | plan §10.5 worker 实施时发现 `retired_at + auto_retired` 字段语义不足 | 评估 D-164-8 共用字段决策是否需要拆 `auto_retired_at` 独立列 |
+| R-164-5 | 50 山名字库枯竭（occupied + cooling > 45） | 触发 PRE-ROUTE-CODENAME-LIBRARY-EXTEND 卡 / 评估扩字库或允许中文+数字后缀复用 |
+| R-164-6 | admin UI `/admin/source-line-aliases` 视图 p95 渲染时间 > 500ms（视频别名行 > 200）| 评估 listLineAliases 端点是否需引入分页 |
+| R-164-7 | ADR-121 RETRO audit-log-coverage.test.ts PAYLOAD_ASSERTION_REQUIRED 断言连续 2 次失败 | 评估 R-MID-1 范式是否退化 / 复评 ADR-121 D-121-1 4 真源协议 |
+
+### §11 自审评级
+
+**评级：A- CONDITIONAL → 升 Accepted（0 红线 / 5 黄线 / 4 advisory）**
+
+**红线（必须修正 / 阻塞 Accepted）**：**0 红线**。
+
+逐项核对结果：schema 变更同步 docs/architecture.md → §7.4 明示 CHG-368-B 实施期同步 / 不阻塞；越层调用 → §5.7 强制 Service 层；any 类型 → §5.6 类型契约全 readonly + 严格类型；空 catch → 实施期 RETRO 框架不涉及；硬编码颜色 → UI 仅文档级；测试未通过 commit → 实施期承接；新增 admin route 未先起 ADR → **本 ADR 即新 admin route 的前置 ADR** ✅；修改 packages/admin-ui types.ts 缺 arch-reviewer trailer → 实施期 CHG-368-B commit 需含 trailer；PATCH ≤ 5 上限 → §7.3 明示拆 -A/-B/-C 子卡。
+
+**黄线（建议修正 / 不阻塞 Accepted）**：**5 黄线**：
+
+1. **Y-164-1（codename 字库 50 山名硬编码）**：MOUNTAIN_CODENAMES 是 ts const 数组 / 扩展需改代码部署。**建议**：CHG-368-B 实施期评估是否未来需要 admin UI 字库管理（独立卡）。
+2. **Y-164-2（90 天冷却期硬编码常量）**：90 天数字硬编码在 SourceLineAliasService。**建议**：实施时抽 const + JSDoc 标注。
+3. **Y-164-3（admin UI bulkActions 批量 retire 失败处理）**：单行失败不阻塞其他行 / 但需 UI 显式 Toast 显示哪些行成功/失败。**建议**：CHG-368-B-B 实施期落地 Toast 聚合。
+4. **Y-164-4（LinesPanel 类型扩展）**：advisory A-164-2 提及 LineAggregate 需扩 codename / retired_at 字段。**建议**：CHG-368-B-C 子卡承接 admin-ui Props 契约扩展（commit 需 arch-reviewer trailer / CLAUDE.md §模型路由 共享组件 API 契约强制 Opus）。
+5. **Y-164-5（codename regex 字符集）**：§5.4 zod schema `/^[一-龥A-Za-z0-9-]+$/` 允许中文/英文/数字/连字符。**建议**：实施期 review 是否允许下划线 `_` / 点 `.` / 空格等；本 ADR 保守起步。
+
+**advisory（可不修）**：**4 advisory**：
+
+1. **A-164-1（worker 自动退役未实施）**：plan §10.5 占位 / 本 ADR 仅落字段
+2. **A-164-2（LinesPanel codename 显示可选）**：§6.2 非强制
+3. **A-164-3（TabDetail 不显示 codename）**：§6.3 选择不在审核台主视图显示
+4. **A-164-4（前台 web-next 不感知）**：§6.4 显式声明
+
+**红线/黄线/advisory 计数：0/5/4**。无红线 → 升 Accepted。
+
+### 结论
+
+ADR-164 status 🟢 Accepted（2026-05-28 / arch-reviewer Opus 1 轮独立起草 + 自审 0 红线 / 5 黄线 / 4 advisory → 等同 A-）。`source_line_aliases` 表扩 4 字段（codename / priority / retired_at / auto_retired）+ 部分唯一索引 + CHECK 约束 + 3 新 admin 写端点（POST retire / PUT priority / GET codename-pool）+ R-MID-1 audit RETRO 7 文件框架触发（2 新 actionType）+ codename 字库 50 山名常量 + 90 天冷却期应用层判定 + 与 plan §10.5 worker 共用 `retired_at + auto_retired` 字段；5 黄线 + 4 advisory 由 CHG-368-B（拆 -A/-B/-C 子卡）实施承接；CHG-368-B-A 含 RETRO 7 文件 + 14 文件需再拆 -A1/-A2 严格 ≤5。
+
+---

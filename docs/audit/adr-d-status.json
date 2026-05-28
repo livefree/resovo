@@ -1,7 +1,7 @@
 {
-  "generatedAt": "2026-05-28T08:54:15.468Z",
+  "generatedAt": "2026-05-28T09:24:16.845Z",
   "summary": {
-    "closedTotal": 254,
+    "closedTotal": 266,
     "pendingTotal": 0
   },
   "perAdr": [
@@ -237,6 +237,12 @@
       "adrId": "ADR-163",
       "total": 8,
       "closed": 8,
+      "pending": []
+    },
+    {
+      "adrId": "ADR-164",
+      "total": 12,
+      "closed": 12,
       "pending": []
     }
   ]

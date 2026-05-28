@@ -10279,3 +10279,43 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **设计取舍**：① manual 路径同时写 total + current（同一 detail.episodes 值）vs 走 episodesByStatus 派发：选前者，严格按 ADR-163 D-163-6 明文锁定合约不擅自偏离 / 若后续产品发现"完结/连载误判"问题再起 ADR-163 AMENDMENT 1 ② formatEpisodesTriad 内联 TabDetail vs 抽 admin-ui：内联（当前唯一消费方 / 避免过早抽象 / 待第二消费方出现时再沉淀）③ 本地 dump 路径 episodes=null 时跳过 vs 强制网络 fallback：跳过（避免额外网络 RTT / A3 advisory 明示）④ proposedEpisodes 局部变量 vs 扩 CandidateProposed interface：局部变量（CandidateProposed 是 catalog 字段对比的 9 字段 / episodes 走 videos 表独立路径不混入）
 - **commit trailer**：无强制 Subagents（ADR-163 已 Accepted / 共享 API 契约 -B-A 沉淀完毕 / 非新决策）
 - **闭环**：CHG-367-B-B 完成 / **ADR-163 全部实施收官**（A 起草 → B-A schema+auto → B-B manual+UI+黄线）/ Wave 2 主线 13/13 完成（去 SKIPPED 4 张 / 待 PAUSED CHG-368-A/-B 解锁）/ ADR-163 D-163-1..8 + Y1/Y2/Y3 + A1/A2/A3 全部闭档（advisory 不修明示）/ formatEpisodesTriad helper 内联 TabDetail 待第二消费方触发沉淀
+
+---
+
+## [CHG-368-A] ROUTE-LABEL-B ADR-164 起草 — Wave 2 #13（plan §17 Phase 3）
+- **完成时间**：2026-05-28
+- **执行模型**：claude-opus-4-7（主循环 / 续会话）
+- **子代理调用**：arch-reviewer (claude-opus-4-7) 1 轮独立起草 + 自审 A- CONDITIONAL → 0 红线 → 升 Accepted
+- **范围**（仅文档 / 2 业务 + 0 测试 + 0 schema）：
+  - `docs/decisions.md`：追加 ADR-164 完整 11 段（§1 背景 / §2 决策摘要 D-164-1..D-164-12 / §3 决策详述 / §4 Migration 079 SQL 草案 + ROLLBACK / §5 端点契约 R7 MUST-8 6 列范式 / §6 显示规约 / §7 文件范围 / §8 替代方案 / §9 后果 / §10 监控 / §11 自审）+ 结论段
+  - `docs/tasks.md` / `docs/task-queue.md` / `docs/changelog.md`：闭环
+- **12 个决策点 D-N 闭环引用**：
+  - **D-164-1** schema 字段位置 = 扩 source_line_aliases 同表（非新表 route_labels / 复合 PK ADR-114-NEGATED 同源 / 与设计稿 100% 对齐）
+  - **D-164-2** codename 与 display_name 关系 = 互补共存（display_name 后台可读全名 NOT NULL 不动 / codename 运维短码 VARCHAR(20) NULL 永久绑定 / 退役 90 天才复用）
+  - **D-164-3** priority 类型 = SMALLINT NOT NULL DEFAULT 0 / CHECK 0-100 / route-scoring 归一化 priority/100（与 design 文档对齐 + 避免 NULL fallback 分支）
+  - **D-164-4** retired_at 软删 = TIMESTAMPTZ NULL（NULL=在役 / NOT NULL=退役时间）；不引入独立 deleted_at（无硬删需求 + 审计追溯保留）
+  - **D-164-5** 端点设计 = 扩 ADR-117 PUT upsert body + 新增 3 端点（POST retire / PUT priority / GET codename-pool / 同命名空间不分裂 URL）
+  - **D-164-6** 退役语义 = SourceService.listSources JOIN 加 `sla.retired_at IS NULL` 谓词；DB 行物理保留（审计追溯不丢 / 部分唯一索引允许 codename 复用）
+  - **D-164-7** audit RETRO = 触发 R-MID-1 7 文件 RETRO（2 新 actionType `source_line_alias.retire` + `source_line_alias.priority_update` / 既有 `source_line_alias.upsert` payload 扩 codename/priority 字段 / R-MID-1 第 29-30 次系统化）
+  - **D-164-8** 与 plan §10.5 全 dead 180 天自动退役关系 = 共用 retired_at 字段 + 新增 auto_retired BOOLEAN（区分人工/自动）；不引入独立 auto_retired_at 列
+  - **D-164-9** 唯一约束 = `UNIQUE INDEX (codename) WHERE codename IS NOT NULL AND retired_at IS NULL` 部分唯一索引（活跃全局唯一 / 退役后可复用 / NULL codename 不参与）
+  - **D-164-10** codename 字库治理 = 代码常量 50 山名 MOUNTAIN_CODENAMES（packages/types/src/route-codenames.ts 新建）+ GET codename-pool 端点返回 available/occupied/cooling 三段；DB 不存字库（与 ADR-017 VideoGenre union type 同模式）
+  - **D-164-11** 90 天冷却期判定 = 应用层（SourceLineAliasService）实现；DB 不写 CHECK 约束（运营紧急复用口子 / 时间约束不应写 DB / 与 ADR-163 D-163-4 "DB 层不强制业务不变式" 同模式）
+  - **D-164-12** 类型层影响 = SourceLineAlias interface 扩 4 字段（codename string|null / priority number / retiredAt string|null / autoRetired boolean）；既有 5 端点 + 50+ JOIN 路径零代码改动；回滚 = DROP COLUMN + DROP INDEX 安全
+- **自审 5 黄线（CHG-368-B 实施承接）**：
+  - **Y-164-1** codename 字库 50 山名硬编码（未来扩字库需改代码部署 / 评估独立 admin UI 字库管理卡）
+  - **Y-164-2** 90 天冷却期硬编码常量（实施期抽 const + JSDoc 标注）
+  - **Y-164-3** admin UI bulkActions 批量 retire Toast 聚合（单行失败显示 / CHG-368-B-B 落地）
+  - **Y-164-4** LinesPanel 类型扩展（LineAggregate.codename + retiredAt / CHG-368-B-C 子卡 / commit 需 arch-reviewer trailer）
+  - **Y-164-5** codename regex 字符集（中文/英文/数字/连字符 / 实施期 review 是否允许下划线等）
+- **自审 4 advisory（可不修）**：
+  - **A-164-1** plan §10.5 worker 自动退役未实施（本 ADR 仅落 auto_retired 字段 / 留 PRE-DEAD-LINE-AUTO-RETIRE-WORKER 占位卡）
+  - **A-164-2** LinesPanel codename 显示可选（advisory）
+  - **A-164-3** TabDetail 不显示 codename（避免审核台主视图信息密度过高）
+  - **A-164-4** 前台 web-next 不感知（codename 仅运维侧）
+- **替代方案否决**：方案 B (新表 route_labels) / 方案 C (JSONB meta) / 方案 D (拆站点表) 均否决（详 ADR §8 4 维度 10 列对比）
+- **CHG-368-B 实施期范围**：19 文件总计 → 拆 -A（schema + queries + Service + route-scoring + RETRO 7 文件 = 14）/ -B（admin UI 独立路径 + DataTable = 3）/ -C（LinesPanel + 文档同步 = 3）三子卡；CHG-368-B-A 业务 7 文件超 5 需再拆 -A1/-A2
+- **不动**：schema migration / queries / types / service / 任何 admin route（CHG-368-B 主卡承担）
+- **质量门禁**：verify:adr-contracts ✅ EXIT=0 / verify-adr-d-numbers ✅ 266 条 D-N（254 + 12 新 D-164-N）全闭环（本 changelog 引用闭环）/ verify-endpoint-adr ✅（无新端点 / 设计稿描述 4 端点由 CHG-368-B route 落地后再扫）/ 仅文档卡 typecheck + lint 无变化
+- **commit trailer**：`Subagents: arch-reviewer (claude-opus-4-7)`（强制 Opus 子代理审计要求 / CLAUDE.md §模型路由 #3 撰写即将成为 ADR 的决策文档）
+- **闭环**：CHG-368-A 完成 / ADR-164 升 Accepted（A-）/ Wave 2 ADR 卡 2/2 全 Accepted（ADR-163 + ADR-164）/ Wave 2 主线 13/13 完成 + ADR 卡 2/2（去 SKIPPED 4 张 / 待 CHG-368-B 实施 / Wave 2 全部范围闭环）/ ADR-164 D-164-1..12 + Y1-Y5 + A1-A4 + R-164-1..7 全部就位 / 实施期拆 -A/-B/-C 子卡范式锁定
