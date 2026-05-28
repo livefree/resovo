@@ -99,29 +99,48 @@ describe('PinyinDetector.isPinyin', () => {
     })
   })
 
-  describe('严格 false-positive 防御（Codex stop-time review #6）', () => {
-    // 这些英文 / 外语词全是基础拼音音节（无 zh/ch/sh/q/x/j 声母或复韵母）
-    // 新增 distinctive feature 门槛后应被正确判 false
+  describe('严格 false-positive 防御', () => {
+    // 多词且全是基础拼音音节（无 zh/ch/sh/q/x/j 声母或复韵母）
+    // distinctive feature 门槛（Codex stop-time review #6）
     it('"Ma Ma" → false（英文重叠词 / 仅基础音节）', () => {
       expect(isPinyin('Ma Ma')).toBe(false)
-    })
-
-    it('"Sushi" → false（日语 / 但能分解 su + shi）', () => {
-      // sushi 含 sh distinctive → 实际会判 true / 这是已知 limit case
-      // 此 case 保留作 documentation：拼音 helper 无法区分日语罗马音 vs 中文拼音
-      expect(isPinyin('Sushi')).toBe(true)
     })
 
     it('"Naomi" → false（英文名 / 仅基础音节 na+o+mi 无 distinctive）', () => {
       expect(isPinyin('Naomi')).toBe(false)
     })
 
-    it('"Bao" → false（单词 + 仅基础音节 / 防短词误判）', () => {
+    it('"Wo Bei" → false（仅基础音节 / 无 distinctive / 保守判定）', () => {
+      expect(isPinyin('Wo Bei')).toBe(false)
+    })
+
+    // 单词输入 ≥ 2 词门槛（Codex stop-time review #7）
+    // 单词 + distinctive feature 是英文姓名 false-positive 主要来源
+    it('"Long" → false（英文常见词 + ong distinctive / 单词不可靠）', () => {
+      expect(isPinyin('Long')).toBe(false)
+    })
+
+    it('"Chang" → false（英文姓 + ch+ang / 单词不可靠）', () => {
+      expect(isPinyin('Chang')).toBe(false)
+    })
+
+    it('"Sheng" → false（英文姓 + sh+eng / 单词不可靠）', () => {
+      expect(isPinyin('Sheng')).toBe(false)
+    })
+
+    it('"Sushi" → false（单词 / 即使含 sh distinctive 也保守判 false）', () => {
+      expect(isPinyin('Sushi')).toBe(false)
+    })
+
+    it('"Bao" → false（单词 + 仅基础音节 / 双重防御）', () => {
       expect(isPinyin('Bao')).toBe(false)
     })
 
-    it('"Wo Bei" → false（仅基础音节 / 无 distinctive / 保守判定）', () => {
-      expect(isPinyin('Wo Bei')).toBe(false)
+    // 已知 limit case：多词英文姓名 "Long Wang" 仍可能 false-positive
+    // 业务接受：title_en 实际典型形态是 ≥ 3 词的完整标题（"Wo Bei Quan Wang Da Bao"）
+    it('"Long Wang" 已知 limit case → true（多词英文姓名 / heuristic 接受 / 配合人工校对）', () => {
+      // 这是个文档化的 limit case：2 词姓名场景 helper 无法判断 / 人工校对兜底
+      expect(isPinyin('Long Wang')).toBe(true)
     })
   })
 })

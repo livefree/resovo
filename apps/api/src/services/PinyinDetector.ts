@@ -138,17 +138,20 @@ function hasDistinctivePinyinFeature(words: readonly string[]): boolean {
 /**
  * 判断输入字符串是否实际是中文拼音（而非真英文标题）。
  *
- * 判定规则：
+ * 判定规则（保守）：
  *   - 空 / 全空白 / 含数字 / 含非 ASCII → false
- *   - 拆词后所有词必须能完全分解为合法拼音音节序列
+ *   - 至少 2 个词（单词输入太不可靠 / "Long" / "Chang" / "Sheng" 等英文姓名都能分解为
+ *     合法拼音音节且含 distinctive feature → 词数 ≥ 2 大幅降低 false-positive）
+ *   - 所有词必须能完全分解为合法拼音音节序列
  *   - 至少 1 词含拼音 distinctive feature（zh/ch/sh/q/x/j 声母 或 ang/eng/ong/iao/iong/iang/uang/üe 复韵母）
- *     → 防"Ma Ma" / "Sushi" / "Naomi" 等英文词全是基础拼音音节的 false-positive
+ *     → 防"Ma Ma" / "Naomi" 等英文词全是基础拼音音节的 false-positive
  *
  * @example
- *   isPinyin('Wo Bei Quan Wang Da Bao') // true（含 Quan q-、Wang ang）
- *   isPinyin('Da Hua Xi You')            // true（含 Xi x-）
+ *   isPinyin('Wo Bei Quan Wang Da Bao') // true（≥2 词 + 含 Quan q-、Wang ang）
+ *   isPinyin('Da Hua Xi You')            // true（≥2 词 + 含 Xi x-）
  *   isPinyin('The Avengers')             // false（不能分解）
- *   isPinyin('Sushi')                    // false（基础音节 / 无 distinctive）
+ *   isPinyin('Long')                     // false（单词输入 / 即使含 distinctive 也保守判 false）
+ *   isPinyin('Sushi')                    // false（单词输入 / 保守）
  *   isPinyin('Wo Bei')                   // false（基础音节 / 无 distinctive / 保守判定）
  *   isPinyin('')                         // false
  */
@@ -169,13 +172,15 @@ export function isPinyin(input: string | null | undefined): boolean {
     .map((w) => w.replace(/^[^a-zA-Z]+|[^a-zA-Z]+$/g, ''))
     .filter((w) => w.length > 0)
 
-  if (words.length === 0) return false
+  // 至少 2 个词（单词输入：英文姓名 "Long" / "Chang" / "Sheng" 都能分解 + 含 distinctive
+  // → 单词模式不可靠 / Codex stop-time review #7 修复 / 多词标题才是拼音 title_en 的典型形态）
+  if (words.length < 2) return false
 
-  // 1. 所有词必须能分解为合法拼音音节
+  // 所有词必须能分解为合法拼音音节
   if (!words.every((w) => canDecomposeAsPinyin(w))) return false
 
-  // 2. 至少 1 词含 distinctive pinyin feature（zh/ch/sh/q/x/j 声母 或 复韵母）
-  // → 防"Ma Ma" / "Sushi" / "Naomi" 等英文词被误判（Codex stop-time review #6 修复）
+  // 至少 1 词含 distinctive pinyin feature（zh/ch/sh/q/x/j 声母 或 复韵母）
+  // → 防"Ma Ma" / "Naomi" 等英文词被误判（Codex stop-time review #6 修复）
   if (!hasDistinctivePinyinFeature(words)) return false
 
   return true
