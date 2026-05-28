@@ -10231,3 +10231,21 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **commit trailer**：无强制 Subagents
 - **经验**：CHG-367-B-A 备注里把"Y3 architecture.md 同步"留 -B-B 是预见到的偷懒（CHG-369 FIX-4 经验已写过"Codex 不接受主动偷懒"）/ 第二次踩相同坑。**今后凡 schema migration 卡，architecture.md 同步必须同卡完成，不允许推后**。auto no-op contract 是新发现的 PG UPDATE 语义陷阱（COALESCE-only 不阻止 row touch）/ 形成新 invariant 知识 "auto 模式 mutation 必须用 WHERE 守卫"
 - **闭环**：Codex stop-time review #15 红线双消解 / architecture.md videos 字段三层集数语义完整同步 / updateVideoEpisodes auto/manual 双模式 SQL 契约精准（守卫 + rowCount + updated_at 三要素准确）/ 32 + 6 = 38 case PASS
+
+---
+
+## [CHG-367-B-A-FIX-2] architecture.md docs 领先 ship 描述未实现路径（Codex stop-time review #16）
+- **完成时间**：2026-05-28
+- **执行模型**：claude-opus-4-7（主循环 / 续会话）
+- **背景**：CHG-367-B-A-FIX commit e639c444 同步 architecture.md 时把"DoubanService.confirmSubject/confirmFields 手动覆盖（CHG-367-B-B 落地）"以平等地位列入"写入路径"清单。Codex 抓到："docs 领先 ship 代码描述未实现路径，reader 会误以为 manual 路径已可用"。同理审核台 TabDetail 三维显示也未 ship。
+- **根因**：上一卡为了"一次性"描述 ADR-163 完整意图，把未 ship 的 manual + UI 路径作为既成事实写入 docs。**docs 应只描述当前 ship 状态**，未 ship 部分须用"forward-reference"明确标注。
+- **范围**（1 业务 / 净增）：
+  - `docs/architecture.md` §5.1 videos 表 `current_episodes` 段：拆分为三个子段
+    - **"已 ship 写入路径"（CHG-367-B-A）**：MetadataEnrichService step2/step3 auto enrich + step1 本地 dump 无 episodes 不写入（A3 advisory）
+    - **"未 ship 写入路径"（→ CHG-367-B-B 排期）**：DoubanService 手动确认 `'manual'` 模式覆盖；明示 mutation 已就绪 + ADR §5 合约已锁定但 DoubanService 集成调用点未接入
+    - **"未 ship 显示规约"（→ CHG-367-B-B 排期）**：TabDetail 三维显示 + Y1 防御
+- **设计取舍**：① "未 ship" 段保留而非删除：① 给 reader 完整路径地图（避免误以为缺设计）② Forward-reference CHG-367-B-B 减小 -B-B 落地时再补 docs 的工作量 ③ 与 ADR-163 §5 写入合约的 docs 闭环（合约 != 实施 / 两者明确分离） ② 子段标题用 "**已 ship**" / "**未 ship**" 粗体显式：vs 把"待落地" 字样夹在描述中，标题级声明 reader 第一眼即可识别
+- **质量门禁**：verify:adr-contracts ✅ EXIT=0（仅 docs 改动 / typecheck / lint / test 无回归 / unaffected）
+- **commit trailer**：无强制 Subagents
+- **经验**：CHG-367-B-A 主备注 + FIX 备注两次描述 schema docs 同步时都默认"完整 ADR 意图 = 当前 docs 状态"，缺少"docs 反映 ship 不反映计划"这个 invariant。**今后 docs/architecture.md schema 同步时必须显式区分：① 当前 ship ② 未 ship forward-reference 排期**。这与 CHG-369 系列 4 个 stop-time fix 的"渐进式偷懒"反思形成同一脉络——预见到的未 ship 必须 forward-reference 而非平等并列。
+- **闭环**：Codex stop-time review #16 红线消解 / architecture.md §5.1 写入路径清晰分层（已 ship vs forward-reference）/ docs 与 ship 代码状态严格对齐 / CHG-367-B-B 落地时仅需把"未 ship"段升级为"已 ship"即可，减小重复改动
