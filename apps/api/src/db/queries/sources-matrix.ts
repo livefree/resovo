@@ -88,7 +88,26 @@ interface DbAliasRow {
   source_site_key: string
   source_name: string
   display_name: string
+  // Migration 079 / ADR-164 D-164-2..D-164-8 新增 4 列
+  codename: string | null
+  priority: number
+  retired_at: string | null
+  auto_retired: boolean
   updated_at: string
+}
+
+/** ADR-164 D-164-12 / CHG-368-B-A1：DbAliasRow → SourceLineAlias 映射 helper（复用 4 SELECT 路径）*/
+function mapAliasRow(r: DbAliasRow): SourceLineAlias {
+  return {
+    sourceSiteKey: r.source_site_key,
+    sourceName: r.source_name,
+    displayName: r.display_name,
+    codename: r.codename,
+    priority: r.priority,
+    retiredAt: r.retired_at,
+    autoRetired: r.auto_retired,
+    updatedAt: r.updated_at,
+  }
 }
 
 // ── 查询：视频分组 KPI 统计 ───────────────────────────────────────
@@ -345,16 +364,13 @@ export async function getVideoMatrix(
 
 export async function listLineAliases(db: Pool): Promise<SourceLineAlias[]> {
   const result = await db.query<DbAliasRow>(
-    `SELECT source_site_key, source_name, display_name, updated_at
+    `SELECT source_site_key, source_name, display_name,
+            codename, priority, retired_at, auto_retired,
+            updated_at
      FROM source_line_aliases
      ORDER BY source_site_key, source_name`,
   )
-  return result.rows.map((r) => ({
-    sourceSiteKey: r.source_site_key,
-    sourceName: r.source_name,
-    displayName: r.display_name,
-    updatedAt: r.updated_at,
-  }))
+  return result.rows.map(mapAliasRow)
 }
 
 // ── 查询：单条别名（Service 层 audit before 状态）────────────────────
@@ -365,19 +381,16 @@ export async function findLineAlias(
   sourceName: string,
 ): Promise<SourceLineAlias | null> {
   const result = await db.query<DbAliasRow>(
-    `SELECT source_site_key, source_name, display_name, updated_at
+    `SELECT source_site_key, source_name, display_name,
+            codename, priority, retired_at, auto_retired,
+            updated_at
      FROM source_line_aliases
      WHERE source_site_key = $1 AND source_name = $2`,
     [sourceSiteKey, sourceName],
   )
   const r = result.rows[0]
   if (!r) return null
-  return {
-    sourceSiteKey: r.source_site_key,
-    sourceName: r.source_name,
-    displayName: r.display_name,
-    updatedAt: r.updated_at,
-  }
+  return mapAliasRow(r)
 }
 
 // ── 写操作：upsert 别名 ───────────────────────────────────────────
@@ -396,16 +409,16 @@ export async function upsertLineAlias(
      DO UPDATE SET display_name = EXCLUDED.display_name,
                    updated_by   = EXCLUDED.updated_by,
                    updated_at   = NOW()
-     RETURNING source_site_key, source_name, display_name, updated_at`,
+     RETURNING source_site_key, source_name, display_name,
+               codename, priority, retired_at, auto_retired,
+               updated_at`,
     [sourceSiteKey, sourceName, displayName, updatedBy],
   )
   const r = result.rows[0]
-  return {
-    sourceSiteKey: r.source_site_key,
-    sourceName: r.source_name,
-    displayName: r.display_name,
-    updatedAt: r.updated_at,
+  if (!r) {
+    throw new Error('upsertLineAlias: RETURNING 0 rows (unexpected)')
   }
+  return mapAliasRow(r)
 }
 
 // ── 查询：按 siteKey 聚合线路明细（ADR-117 AMENDMENT 2026-05-19）─────

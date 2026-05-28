@@ -18,6 +18,8 @@ export type * from './admin-moderation.types'
 export { deriveAggregateState } from './admin-moderation.types'
 export type * from './video-merge.types'
 export type * from './sources-matrix.types'
+// CHG-368-B-A1 / ADR-164 D-164-10：codename 字库 50 山名常量（runtime export / 非 type-only）
+export { MOUNTAIN_CODENAMES, MOUNTAIN_CODENAMES_COUNT } from './route-codenames'
 export type * from './admin-audit.types'
 export type * from './admin-shell.types'
 export type * from './dashboard'

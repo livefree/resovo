@@ -10319,3 +10319,37 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **质量门禁**：verify:adr-contracts ✅ EXIT=0 / verify-adr-d-numbers ✅ 266 条 D-N（254 + 12 新 D-164-N）全闭环（本 changelog 引用闭环）/ verify-endpoint-adr ✅（无新端点 / 设计稿描述 4 端点由 CHG-368-B route 落地后再扫）/ 仅文档卡 typecheck + lint 无变化
 - **commit trailer**：`Subagents: arch-reviewer (claude-opus-4-7)`（强制 Opus 子代理审计要求 / CLAUDE.md §模型路由 #3 撰写即将成为 ADR 的决策文档）
 - **闭环**：CHG-368-A 完成 / ADR-164 升 Accepted（A-）/ Wave 2 ADR 卡 2/2 全 Accepted（ADR-163 + ADR-164）/ Wave 2 主线 13/13 完成 + ADR 卡 2/2（去 SKIPPED 4 张 / 待 CHG-368-B 实施 / Wave 2 全部范围闭环）/ ADR-164 D-164-1..12 + Y1-Y5 + A1-A4 + R-164-1..7 全部就位 / 实施期拆 -A/-B/-C 子卡范式锁定
+
+---
+
+## [CHG-368-B-A1] ROUTE-LABEL-B 实施第 1 子卡 — Migration 079 + types + queries SELECT 扩列（ADR-164 落地）
+- **完成时间**：2026-05-28
+- **执行模型**：claude-opus-4-7（主循环 / 续会话 / schema-driven）
+- **子代理调用**：无（ADR-164 已 Accepted / 本卡规范驱动实施 / packages/types 扩字段是兼容性扩展不破坏既有接口）
+- **拆卡承接**：CHG-368-A ADR-164 Accepted（commit 21f25078 / D-164-1..12 全闭环）；CHG-368-B 总范围 19 文件需拆 -A/-B/-C 三子卡，-A 业务 7 文件超 PATCH ≤ 5 再拆 -A1/-A2/-A3。本卡（-A1）是数据层最小子卡。
+- **范围**（4 业务 + 0 测试 + 0 docs / PATCH=4 严守阈值 / 零业务行为变化）：
+  - `apps/api/src/db/migrations/079_source_line_aliases_codename_priority_retired.sql` NEW（完全对齐 ADR-164 §4 草案）：4 ADD COLUMN IF NOT EXISTS（codename VARCHAR(20) NULL / priority SMALLINT NOT NULL DEFAULT 0 / retired_at TIMESTAMPTZ NULL / auto_retired BOOLEAN NOT NULL DEFAULT false）+ DO 块幂等 CHECK 约束（priority 0-100）+ 部分唯一索引 idx_source_line_aliases_codename_active（codename WHERE codename IS NOT NULL AND retired_at IS NULL）+ 部分索引 idx_source_line_aliases_retired_at（WHERE retired_at IS NOT NULL）+ DO 块验证 4 列 + 2 索引 + 完整 ROLLBACK SQL
+  - `packages/types/src/sources-matrix.types.ts`：SourceLineAlias 扩 4 字段（codename string|null / priority number / retiredAt string|null / autoRetired boolean）含 JSDoc Migration 079 + ADR-164 D-N 引用 + plan §10.5 共用语义说明；新增 3 interfaces（CodenamePool / UpsertAliasInput / RetireAliasInput / 全 readonly / ADR-164 §5.6）
+  - `packages/types/src/route-codenames.ts` NEW：MOUNTAIN_CODENAMES `readonly string[]` 52 项常量（50 山名按 7 地域分组：五岳 5 + 道教 8 + 西部 8 + 华东 8 + 华北 7 + 华南 8 + 其他 8 + 占位 2）+ MOUNTAIN_CODENAMES_COUNT helper（R-164-5 字库枯竭重评触发条件 / D-164-10）
+  - `packages/types/src/index.ts`：runtime export MOUNTAIN_CODENAMES + MOUNTAIN_CODENAMES_COUNT（非 type-only / 与 deriveAggregateState 同范式）
+  - `apps/api/src/db/queries/sources-matrix.ts`：DbAliasRow 扩 4 列 + 新增 `mapAliasRow(r)` helper（DRY / 4 路径复用 / 1 inline + 2 next-line 重复 map 代码消除）+ listLineAliases / findLineAlias / upsertLineAlias 3 SELECT/RETURNING 子句同步扩 4 列 + map 切换 helper + upsertLineAlias 加 null 守卫防 RETURNING 0 行 edge case（既有调用方零改 / 签名不变 / 行为不变）
+
+  *注：tasks.md 描述为 "4 业务" / 实际是 5 文件，因 index.ts runtime export 改动是 route-codenames.ts 新建的必然耦合（runtime export 需在 index.ts 注册才能被消费方 import）。PATCH=5 仍严守阈值。*
+- **零业务行为变化保证**：
+  - types 扩字段是兼容性扩展（既有 50+ 消费方读 displayName 不变 / readonly 字段不破坏）
+  - queries SELECT 扩列对应字段为 NULL/默认值（Migration 079 ADD COLUMN DEFAULT）→ map 路径返回字段也是合法默认值
+  - upsertLineAlias 行为完全保留（INSERT/UPDATE 只改 display_name + updated_by + updated_at / RETURNING 扩列只为 map 完整）
+  - 没有新增 query / Service / route / UI
+- **留待 -A2/-A3/-B/-C 范围**：
+  - -A2：新增 retire / priority / codename queries + SourcesMatrixService 3 方法 + 3 admin 写端点 + R-MID-1 RETRO 7 文件框架（D-164-7 / 2 新 actionType）
+  - -A3：route-scoring priority 通道激活（priority/100 替代 Phase 1 默认 0）+ sources.ts findActiveSourcesWithSignalsByVideoId JOIN 加 retired_at IS NULL 谓词
+  - -B：admin UI 独立路径 `/admin/source-line-aliases` + DataTable 一体化（packages/admin-ui）
+  - -C：LinesPanel codename 标签 + 退役行 opacity + docs/architecture.md + docs/manual/route-labeling.md 同步（advisory / commit 需 arch-reviewer trailer）
+- **质量门禁**：
+  - typecheck ✅（root + 7 workspaces）
+  - lint ✅（FULL TURBO / 0 error 0 warning）
+  - verify:adr-contracts ✅ EXIT=0（verify-sql-schema-alignment ✅ 新 4 列对齐 / verify-adr-d-numbers ✅ 266 条全闭环 / verify-endpoint-adr ✅ 无新端点）
+  - 单测 sources-matrix 41/41 PASS（既有 SourceLineAlias 消费方零回归 / 27 queries + 14 service）
+  - 全量单测：仅 pre-existing failure（useTableSettings jsdom env + ModerationBatch fixture）/ 本卡相关测试全 PASS
+- **commit trailer**：无强制 Subagents（ADR-164 已 Accepted / 本卡规范驱动实施 / packages/types/src/sources-matrix.types.ts 扩字段是兼容性扩展不破坏既有接口 / 不触发 CLAUDE.md §模型路由"共享组件 API 契约强制 Opus"红线）
+- **闭环**：CHG-368-B-A1 完成 / Migration 079 + types + queries SELECT 同步落地 / mapAliasRow helper + MOUNTAIN_CODENAMES 共享层沉淀 / -A2/-A3/-B/-C 实施基础就绪 / Wave 2 范围未完全闭环（剩 -A2/-A3/-B/-C 排期）

@@ -1902,7 +1902,7 @@ CHG-353 (ROUTE-LABEL-A2) → 依赖 CHG-352 后端返回排序数据
 
 ## [SEQ-20260527-MOD-WAVE2] server-next 内容审核台 Wave 2 — 预览/拆分/合并/元数据/路线主题（plan §14 + §17.2）
 
-- **状态**：🔄 执行中（CHG-367 系列全部完成 / **CHG-368-A ✅** ADR-164 Accepted（A-）/ CHG-368-B 排期承接（拆 -A/-B/-C 三子卡 / 实施期 19 文件 / RETRO 7 文件 D-121-3 豁免））
+- **状态**：🔄 执行中（CHG-367 系列全部完成 / CHG-368-A ✅ ADR-164 Accepted / **CHG-368-B-A1 ✅** Migration 079 + types + queries SELECT 扩列（5 业务 + 0 测试 / 41/41 sources-matrix PASS / 零业务行为变化）/ CHG-368-B-A2/-A3/-B/-C 后续承接）
 - **最后更新时间**：2026-05-28
 - **创建时间**：2026-05-27
 - **目标**：基于 `/Users/livefree/.claude/plans/fluffy-giggling-teapot.md` §14 Wave 2 + §17.2 落地 9 张主卡（4 张需 ADR + Opus 决策）；继续 Wave 1 的自动推进节奏。
@@ -1940,7 +1940,8 @@ CHG-353 (ROUTE-LABEL-A2) → 依赖 CHG-352 后端返回排序数据
 | 12.1 | ✅ **CHG-367-B-A** 已完成（2026-05-28）| META-EPISODES 实施第 1 子卡：Migration 078 + types + queries + MetadataEnrichService 自动写入 / 32 case PASS（+6）/ PATCH=6 超阈值 1（schema-driven 必然耦合 / 接受）| 否（ADR-163 已 Accepted）| opus-4-7 续会话 |
 | 12.2 | ✅ **CHG-367-B-B** 已完成（2026-05-28）| META-EPISODES 实施第 2 子卡：DoubanService.confirmSubject/confirmFields manual 写入 + TabDetail.formatEpisodesTriad 三维显示 + 3 黄线全闭档（Y1 current>total UI 防御 / Y2 confirmFields fields 扩 'episodes' / Y3 architecture.md §5.1 同步）/ 58 case PASS（douban 12 + metadataEnrich 32 + doubanService-manual 5 + TabDetailReprobe 4 + TabDetailEpisodes 5）/ 5 业务 + 2 测试 + 1 docs / PATCH=5 严守阈值 | 否（ADR-163 已 Accepted）| opus-4-7 续会话 |
 | 13 | ✅ **CHG-368-A** 已完成（2026-05-28）| ROUTE-LABEL-B ADR-164 起草 / arch-reviewer Opus 1 轮 A- CONDITIONAL → 0 红线 升 Accepted / D-164-1..12 全闭环 / 5 黄线 + 4 advisory + 7 重评条件 / Migration 079 SQL 草案完整 / 3 新端点 R7 MUST-8 6 列契约 / R-MID-1 RETRO 触发 7 文件框架 + 2 新 actionType / 实施期 19 文件 → 拆 -A/-B/-C | 是 ADR-164 ✅ Accepted | opus-4-7 + arch-reviewer (opus-4-7) |
-| 14 | **CHG-368-B** | ROUTE-LABEL-B 实施 — admin UI `/admin/source-line-aliases` + 退役端点 | 否 | sonnet |
+| 14 | **CHG-368-B**（拆 -A1/-A2/-A3/-B/-C 子卡 / ADR-164 §7 锁定）| ROUTE-LABEL-B 实施总卡 — Migration 079 + queries + Service + 3 admin 写端点 + R-MID-1 RETRO + admin UI + LinesPanel + docs（19 文件 / 拆 5 子卡）| 否（ADR-164 已 Accepted）| opus-4-7（-A1/-A2 schema/RETRO）+ sonnet（-A3/-B/-C）|
+| 14.1 | ✅ **CHG-368-B-A1** 已完成（2026-05-28）| ROUTE-LABEL-B 实施第 1 子卡 — Migration 079（4 字段 + CHECK + 2 部分索引）+ SourceLineAlias 类型扩 4 字段 + 3 新 input/output interfaces + route-codenames.ts MOUNTAIN_CODENAMES 52 项常量 + sources-matrix queries SELECT 列扩 + mapAliasRow helper 沉淀 / 5 业务 + 0 测试 / 零业务行为变化 / typecheck + verify:adr-contracts + sources-matrix 41/41 单测全 PASS | 否（ADR-164 已 Accepted）| opus-4-7 续会话 |
 | 15 | ✅ **CHG-369** 已完成（2026-05-27）| ROUTE-LABEL-C / 5 内置主题选择器 + localStorage 持久化 / SSR safe / 8 case PASS / 3 业务 + 2 测试 + 1 docs / 自定义主题输入 → follow-up CHG-369-B | 否 | opus-4-7 续会话 |
 
 ### Wave 2 BLOCKER 触发清单（沿用 Wave 1 §16.5）

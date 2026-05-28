@@ -101,7 +101,55 @@ export interface SourceLineAlias {
   readonly sourceSiteKey: string
   readonly sourceName: string
   readonly displayName: string
+  /**
+   * 运维短码（如 "泰山-2"）/ NULL = 未分配 / 永久绑定 (siteKey, sourceName)
+   * Migration 079 / ADR-164 D-164-2 / 活跃部分唯一（idx_source_line_aliases_codename_active）/ 退役 90 天后可复用
+   */
+  readonly codename: string | null
+  /**
+   * Layer A effective_score priority_bonus 通道（0-100 / SMALLINT NOT NULL DEFAULT 0）
+   * Migration 079 / ADR-164 D-164-3 / route-scoring.ts 归一化 priority/100
+   */
+  readonly priority: number
+  /**
+   * 软删时间戳 / NULL = 在役 / NOT NULL = 退役时间
+   * Migration 079 / ADR-164 D-164-4 / 应用层判定 90 天冷却期
+   */
+  readonly retiredAt: string | null
+  /**
+   * true = worker 自动退役（全 dead 180 天 / plan §10.5）/ false = 人工 POST retire 端点
+   * Migration 079 / ADR-164 D-164-8 / 区分人工/自动退役来源
+   */
+  readonly autoRetired: boolean
   readonly updatedAt: string
+}
+
+/**
+ * codename 字库可用性查询响应（ADR-164 §5.6 / GET /admin/source-line-aliases/codename-pool）
+ * 三段：available（运营可用列表）/ occupied（活跃使用中）/ cooling（退役 < 90 天）
+ */
+export interface CodenamePool {
+  readonly available: readonly string[]
+  readonly occupied: readonly string[]
+  readonly cooling: readonly string[]
+}
+
+/**
+ * upsert 别名 input（ADR-117 既有 PUT body 扩 codename + priority 可选字段 / ADR-164 §5.6）
+ * displayName 必填（既有 NOT NULL 约束保留）/ codename + priority 可选（NULL/默认值合法）
+ */
+export interface UpsertAliasInput {
+  readonly displayName: string
+  readonly codename?: string | null
+  readonly priority?: number
+}
+
+/**
+ * 退役 input（ADR-164 §5.6 / POST /admin/source-line-aliases/:siteKey/:sourceName/retire）
+ * reason 可选退役原因（≤ 200 字符 / audit payload 记录）
+ */
+export interface RetireAliasInput {
+  readonly reason?: string
 }
 
 /**
