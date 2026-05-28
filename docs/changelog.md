@@ -10099,3 +10099,25 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **commit trailer**：无强制 Subagents
 - **经验**：CHG-369 主卡只测了 selector + storage 两层（用户输入 → state），漏测"state 派发到下游 effect 链"。下次涉及"状态对已派生数据的反向影响"时，必须显式列出 invariant（如本卡的"主题变 → sources label 必变 / src 不变"）+ 单测覆盖。
 - **闭环**：Codex stop-time review #11 红线消解 / 主题选择器三层协议完整（用户切换 → routeTheme state → sources label 同步 relabel）/ buildThemedSources helper 抽出沉淀 + 单测可见 / SourceBar 渲染主题切换效果实证
+
+---
+
+## [CHG-369-FIX-2] fetch then 中 routeTheme stale closure 覆盖最新主题（Codex stop-time review #12）
+- **完成时间**：2026-05-28
+- **执行模型**：claude-opus-4-7（主循环 / 续会话）
+- **背景**：CHG-369-FIX commit 34f67c2b 后 Codex 抓到 "stale `routeTheme` closures can overwrite relabeled sources"。bug 时序：
+  - tick 1：fetch 发起 / closure 捕获 routeTheme = JIE_QI
+  - tick 2：用户切主题 → setTheme(NATO) → re-render → routeTheme=NATO
+  - tick 2：relabel effect 触发，但 rawSourcesRef.current 仍空（fetch 未返回）→ effect 提前 return
+  - tick 3：fetch 完成 → then 回调读 **closure 旧值 JIE_QI** → setSources(JIE_QI labels) → 覆盖用户已选的 NATO ❌
+- **范围**（1 业务 / 净增）：
+  - `apps/web-next/src/components/player/PlayerShell.tsx`：
+    - 新增 `routeThemeRef = useRef(routeTheme)` 并在 **render body 直接同步赋值** `routeThemeRef.current = routeTheme`（无副作用 / 严格模式安全 / 避免 useEffect 同步 ref 与 fetch.then 微任务的时序竞态：useEffect 在 commit 后 next macrotask 才执行，fetch.then microtask 可能在 effect 之前执行）
+    - 初始 fetch then + 集数切换 fetch then 两处 `buildThemedSources(..., routeTheme)` → `buildThemedSources(..., routeThemeRef.current)`
+- **设计取舍**：① render body 同步赋值 vs useEffect 同步 ref：选前者，避免 microtask vs effect 顺序的非确定性 ② ref 而非 closure 不会破坏 React 严格模式（赋值 ref 不是副作用 / 与 useState 不同 / 无重渲染） ③ relabel effect 自身保持 closure capture：effect 依赖 [routeTheme] 已保证拿到最新闭包值 / 与 fetch then 异步路径互补
+- **invariant 验证（行为单测在 #11 fix 已覆盖）**：buildThemedSources 给定任何 theme 都输出对应 labels（line-display-name-themes 26/26）；fetch then 用 ref 当前值后，与 relabel effect 始终拿同一最新值 → 双路径收敛同一结果
+- **测试 verify**：tests/unit/web-next/lib/line-display-name-themes 26/26 + route-theme-storage 5/5 + route-theme-selector 3/3 = **34/34 PASS**（无回归）
+- **质量门禁**：typecheck ✅ / lint ✅（FULL TURBO 4 cached）/ verify:adr-contracts ✅ EXIT=0
+- **commit trailer**：无强制 Subagents
+- **经验**：CHG-369-FIX 修了"主题切换 → sources 重 relabel"但漏了"fetch 进行中切主题"的并发场景。下次涉及"异步回调 + state 切换"组合时，必须显式分析：① closure capture 的 stale state ② effect 顺序（commit → microtask → useEffect）③ ref 同步赋值优于 useEffect 同步（仅当 ref 用于异步回调读取时）
+- **闭环**：Codex stop-time review #12 红线消解 / 切主题在 fetch 进行中也能正确生效 / fetch then + relabel effect 双路径都用最新 routeTheme / ref pattern 防 closure 时序竞态

@@ -93,6 +93,13 @@ export function PlayerShell({ slug: slugProp, portalMode = false, previewMode = 
   // CHG-353 默认主题（zh-CN → 节气 / en → NATO）+ CHG-369 localStorage 持久化（用户选择优先）
   const locale = useLocale()
   const { theme: routeTheme, setTheme: setRouteTheme } = useRouteTheme(locale)
+  // CHG-369 Codex stop-time review #12：fetch then 读 ref 而非 closure capture，
+  // 防止 fetch 进行中用户切主题 → fetch 完成时用旧主题覆盖最新选择。
+  // 直接在 render body 同步赋值（无副作用 / 严格模式安全），避免 useEffect 同步
+  // ref 与 fetch.then 微任务的时序竞态（commit phase 后 effect 在 next macrotask 才执行，
+  // 而 fetch.then microtask 可能在 effect 之前执行 → ref 仍是旧值）
+  const routeThemeRef = useRef(routeTheme)
+  routeThemeRef.current = routeTheme
 
   const shortId = extractShortId(slug)
 
@@ -145,8 +152,10 @@ export function PlayerShell({ slug: slugProp, portalMode = false, previewMode = 
             }
             // CHG-353：按主题赋标签（后端已按 effective_score 排序 / CHG-352）
             // CHG-369 Codex #11：原始 sources 同步写入 ref，使主题切换可重新 relabel
+            // CHG-369 Codex #12：用 routeThemeRef.current 而非 closure capture，
+            // 防 fetch 进行中用户切主题 → fetch 完成时用旧主题覆盖最新选择
             rawSourcesRef.current = r.data
-            const newSources = buildThemedSources(r.data, routeTheme)
+            const newSources = buildThemedSources(r.data, routeThemeRef.current)
             setSources(newSources)
             // Restore source index from snapshot (initPlayer already zeroed it)
             setActiveSourceIndex(priorSourceIndex < newSources.length ? priorSourceIndex : 0)
@@ -196,8 +205,9 @@ export function PlayerShell({ slug: slugProp, portalMode = false, previewMode = 
         if (targetEp !== usePlayerStore.getState().currentEpisode) return
         // CHG-353：切集后重新按主题赋标签（保持与初始 fetch 一致）
         // CHG-369 Codex #11：同步写入 ref，使主题切换可重新 relabel
+        // CHG-369 Codex #12：用 routeThemeRef.current 而非 closure capture（同初始 fetch）
         rawSourcesRef.current = res.data
-        const newSources = buildThemedSources(res.data, routeTheme)
+        const newSources = buildThemedSources(res.data, routeThemeRef.current)
         setSources(newSources)
         const prevLabel = sources[activeSourceIndex]?.label
         const matched = prevLabel ? newSources.findIndex((s) => s.label === prevLabel) : -1
