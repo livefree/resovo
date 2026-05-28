@@ -9834,3 +9834,31 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
   - ❌ watch page hydration → CHG-361-E3
   - ❌ episode 切换 internal 视频 404 限制 → 独立 FOLLOWUP 卡
 - **闭环**：CHG-361-E2 完成（3 业务 + 1 测试 5 case PASS）/ Wave 2 卡 7/17 闭合（CHG-361 8 子卡序列 7/8）/ 执行序列 E1 ✅ → E2 ✅ → E3
+
+---
+
+## [CHG-361-E3 / ADR-160 AMENDMENT 2 D-160-AMD2-1+3] watch page + PlayerShell server-side hydration（Wave 2 #8 扩展子卡 / 2 业务 + 1 测试 4 case）
+- **完成时间**：2026-05-27
+- **记录时间**：2026-05-27
+- **执行模型**：claude-opus-4-7（主循环 / 续会话）
+- **子代理调用**：无（AMENDMENT 2 在 E1 已 Opus 评审 / E3 是 pattern apply 实施层）
+- **范围**：web-next watch 页 server-side hydration / 派发链路扩到 PlayerShell（D-160-AMD2-1）+ PlayerShell initialVideo/initialSources Props（D-160-AMD2-3）+ episode-switch effect 跳过首次挂载（修复"双拉" sources 旁路）
+- **修改文件（2 业务 + 1 测试 / PATCH ≤ 5 严格合规）**：
+  - `apps/web-next/src/app/[locale]/watch/[slug]/page.tsx`：server component `await fetchVideoDetail(slug)` + `await fetchVideoSources(slug, 1)` → 传入 `<PlayerShell initialVideo initialSources />` Props
+  - `apps/web-next/src/components/player/PlayerShell.tsx`：Props +`initialVideo?: Video` + `initialSources?: VideoSource[]` / state init `useState(initialVideo ?? null)` / useEffect 1 派发 video fetch（initialVideo 走 `Promise.resolve` 否则 apiClient.get）+ sources fetch（initialSources && ep===1 走 `Promise.resolve` 否则 apiClient.get）/ episode-switch useEffect 加 `episodeSwitchInitRef` 跳过首次挂载（避免初始 + episode-switch effect 双拉 sources）
+- **测试新增**（tests/unit/web-next/player-shell-hydration.test.tsx / 4 case 全 PASS / vitest run 621ms）：
+  - 有 initialVideo + initialSources → 完全跳过 client fetch（apiClient.get 不调）
+  - 无 initialVideo → 走 client video fetch（apiClient.get 至少调 1 次）
+  - 有 initialVideo + 无 initialSources → 跳过 video fetch / sources 仍走 client
+  - 有 initialVideo + initialSources + url ep=2 → sources 走 client fetch（Y-AMD2-2 episode 切换限制实证）
+- **Vitest hoisting 修复**：`vi.mock('@/stores/playerStore', ...)` 工厂引用外部 `initPlayerMock` 触发 `Cannot access 'initPlayerMock' before initialization` → 改用 `vi.hoisted(() => ({ initPlayerMock, apiGetMock }))` 在 vi.mock hoist 前初始化
+- **Y-AMD2-2 episode-switch 隐性 bug 顺手修复**：原 episode-switch useEffect 首次挂载也会触发（依赖数组首次执行行为）→ 与初始 fetch useEffect 双拉 sources / 加 `episodeSwitchInitRef` 后仅在用户真实切集时触发 / 既解决 hydration 完全跳过期望 又顺手修一个 pre-existing 双拉 bug（非"最小改动"绕过架构约束 / 是质量门禁价值排序 1 正确性的延伸）
+- **质量门禁**：
+  - typecheck ✅ 8 workspace 全绿
+  - lint ✅（无新 warning）
+  - 4 case 单测 PASS（621ms）
+- **commit trailer**：无强制 Subagents（E3 是 AMENDMENT 2 pattern apply 实施 / 不重新触发 Opus 评审）
+- **不在本卡范围**：
+  - ❌ episode 切换 internal 视频 404 限制 → 独立 FOLLOWUP 卡（RSC fetch / Server Actions）
+  - ❌ prod gate cookie subdomain → CHG-OPS-COOKIE-SUBDOMAIN-1
+- **闭环**：CHG-361-E3 完成（2 业务 + 1 测试 4 case PASS）/ Wave 2 卡 8/17 闭合 / **CHG-361 PREVIEW-ADMIN 8 子卡序列全闭环（A → B2 → B1 → C → D → E1 → E2 → E3）/ ADR-160 + AMENDMENT 1 + AMENDMENT 2 跨 app preview 链路 + server-side hydration 修补完整就绪 / 待 prod gate OPS 卡 CHG-OPS-COOKIE-SUBDOMAIN-1**

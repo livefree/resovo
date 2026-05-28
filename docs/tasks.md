@@ -6,7 +6,7 @@
 
 ## 进行中任务
 
-（空 — CHG-361 PREVIEW-ADMIN 5 子卡全闭环 ✅ / Wave 2 #8 序列完结 / 待 Wave 2 #9 CHG-362-A SPLIT-ADR 起草）
+（空 — CHG-361 PREVIEW-ADMIN 8 子卡全闭环 ✅ / Wave 2 #8 + AMENDMENT 2 序列完结 / 待 Wave 2 #9 CHG-362-A SPLIT-ADR 起草）
 
 ---
 
@@ -32,15 +32,18 @@
 
 ---
 
-## Wave 2 进行中（SEQ-20260527-MOD-WAVE2 / 5/17）
+## Wave 2 进行中（SEQ-20260527-MOD-WAVE2 / 8/17）
 
 - ✅ CHG-361-A（ADR-160 起草 + getVideoDetailHref 沉淀 / 5f64e78d）
 - ✅ CHG-361-B2（apps/api 后端 3 文件 + 5 case 单测 + ADR-160 AMENDMENT 1 / a3c1c9ed）
 - ✅ CHG-361-B1（web-next 前端 3 文件 + 2 测试 17 case PASS / 3b9c8fa9）
 - ✅ CHG-361-C（后台按钮 + VideoQueueRow 扩 + e2e + manual / 34121022）
-- ✅ CHG-361-D（PlayerShell previewMode Props + 3 case PASS / 本卡 / 待 commit）
+- ✅ CHG-361-D（PlayerShell previewMode Props + 3 case PASS / a52141d9）
+- ✅ CHG-361-E1（sources 端点 preview query + SourceService 派发 / ADR-160 AMENDMENT 2 / 285c4fb4）
+- ✅ CHG-361-E2（detail-page-factory + VideoDetailClient server-side hydration / b48913f0）
+- ✅ CHG-361-E3（watch page + PlayerShell server-side hydration / 4 case PASS / 本卡 / 待 commit）
 
-**CHG-361 PREVIEW-ADMIN 5 子卡全闭环 ✅(A → B2 → B1 → C → D)/ 跨 app preview 链路完整就绪 / 待 prod gate OPS 卡 CHG-OPS-COOKIE-SUBDOMAIN-1**
+**CHG-361 PREVIEW-ADMIN 8 子卡全闭环 ✅(A → B2 → B1 → C → D → E1 → E2 → E3)/ 跨 app preview 链路 + server-side hydration 修补完整就绪 / 待 prod gate OPS 卡 CHG-OPS-COOKIE-SUBDOMAIN-1 / Y-AMD2-2 episode 切换 internal 视频限制独立 FOLLOWUP 卡**
 
 ---
 

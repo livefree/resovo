@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import dynamic from 'next/dynamic'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
@@ -35,6 +35,14 @@ interface PlayerShellProps {
    *           调用方应通过 `isPlaybackFeedbackEnabled(previewMode)` 派生开关。
    */
   previewMode?: boolean
+  /**
+   * ADR-160 AMENDMENT 2 D-160-AMD2-3：server-side hydration
+   * watch page server component 预取的视频数据 / 有值时 useEffect 跳过 client video fetch
+   * （Y-AMD2-1 早返回 pattern）
+   */
+  initialVideo?: Video
+  /** server-side 预取的第 1 集 raw sources（仍走 client themed pipeline / 仅替换 fetch 源 / Y-AMD2-2 episode 切换限制） */
+  initialSources?: VideoSource[]
 }
 
 /**
@@ -45,7 +53,7 @@ export function isPlaybackFeedbackEnabled(previewMode: boolean | undefined): boo
   return !previewMode
 }
 
-export function PlayerShell({ slug: slugProp, portalMode = false, previewMode = false }: PlayerShellProps) {
+export function PlayerShell({ slug: slugProp, portalMode = false, previewMode = false, initialVideo, initialSources }: PlayerShellProps) {
   // ADR-160 D-160-5：preview 模式禁用所有 feedback / audit 写入路径
   // 当前 PlayerShell 唯一写路径是 saveProgress（localStorage / 客户端本地）— 不在 D-160-5 屏蔽范围
   // 未来 feedback hook 接入时按本变量守卫
@@ -68,7 +76,9 @@ export function PlayerShell({ slug: slugProp, portalMode = false, previewMode = 
     setActiveSourceIndex,
   } = usePlayerStore()
 
-  const [video, setVideo] = useState<Video | null>(null)
+  // ADR-160 AMENDMENT 2 D-160-AMD2-3：state init 用 server-side hydrated video
+  // sources 仍走 client themed pipeline（applyThemeLabels 依赖 useLocale）→ state init 用 []
+  const [video, setVideo] = useState<Video | null>(initialVideo ?? null)
   const [sources, setSources] = useState<Array<{ src: string; type: string; label?: string; quality?: string | null; isDead?: boolean; isPending?: boolean }>>([])
   const [loading, setLoading] = useState(true)
   const [startTime, setStartTime] = useState<number | undefined>(undefined)
@@ -92,16 +102,24 @@ export function PlayerShell({ slug: slugProp, portalMode = false, previewMode = 
     const priorTime = isSameVideo ? snap.currentTime : 0
     const priorSourceIndex = isSameVideo ? snap.activeSourceIndex : 0
     setLoading(true)
-    apiClient
-      .get<ApiResponse<Video>>(`/videos/${shortId}`, { skipAuth: true })
+    // ADR-160 AMENDMENT 2 Y-AMD2-1：派发 video fetch 源 — server-side hydrated 或 client fetch
+    const videoPromise = initialVideo
+      ? Promise.resolve<ApiResponse<Video>>({ data: initialVideo })
+      : apiClient.get<ApiResponse<Video>>(`/videos/${shortId}`, { skipAuth: true })
+    // sources 仅当 ep === 第 1 集 + 有 initialSources 时复用（Y-AMD2-2 episode 切换走 client）
+    const useInitialSources = !!initialSources && ep === 1
+    videoPromise
       .then((res) => {
         setVideo(res.data)
         initPlayer(shortId, ep)
-        apiClient
-          .get<ApiListResponse<VideoSource>>(
-            `/videos/${shortId}/sources?episode=${ep}`,
-            { skipAuth: true }
-          )
+        // Promise.resolve 用宽松 shape（{ data }）匹配 ApiListResponse 子集；then 仅消费 r.data
+        const sourcesPromise: Promise<{ data: VideoSource[] }> = useInitialSources
+          ? Promise.resolve({ data: initialSources! })
+          : apiClient.get<ApiListResponse<VideoSource>>(
+              `/videos/${shortId}/sources?episode=${ep}`,
+              { skipAuth: true }
+            )
+        sourcesPromise
           .then((r) => {
             // CHG-353：按主题赋标签（后端已按 effective_score 排序 / CHG-352）
             const themed = applyThemeLabels(
@@ -147,8 +165,15 @@ export function PlayerShell({ slug: slugProp, portalMode = false, previewMode = 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shortId])
 
+  // ADR-160 AMENDMENT 2 D-160-AMD2-3：跳过首次挂载，避免与初始 fetch effect "双拉" sources；
+  // 仅在用户主动切集（currentEpisode 真实变化）时触发
+  const episodeSwitchInitRef = useRef(false)
   useEffect(() => {
     if (!shortId || !video) return
+    if (!episodeSwitchInitRef.current) {
+      episodeSwitchInitRef.current = true
+      return
+    }
     setStartTime(undefined)
     apiClient
       .get<ApiListResponse<VideoSource>>(
