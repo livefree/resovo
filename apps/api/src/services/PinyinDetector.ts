@@ -93,6 +93,17 @@ const PINYIN_SYLLABLES: ReadonlySet<string> = new Set([
 const MIN_WORD_LEN = 2
 
 /**
+ * 拼音特征模式：含这些声母 / 韵母的单词极少在英文中出现完整匹配。
+ * - 声母 zh / ch / sh / q / x / j（英文 "qi" "xi" "ji" 几乎不存在 / 卷舌音节)
+ * - 复韵母 ang / eng / ong / iao / iong / iang / uang / üe（中文特征韵尾）
+ *
+ * 用于 title_en 质量门禁：所有基础音节（"ma" "ba" "na" 等）在英文中常见 →
+ * 仅靠"能分解为拼音音节"会过度判定（"Ma Ma" / "Sushi" / "Naomi"
+ * false-positive）。至少 1 个词含 distinctive feature 才判为拼音。
+ */
+const DISTINCTIVE_PINYIN_PATTERN = /(zh|ch|sh|q|x|j)|(ang|eng|ong|iao|iong|iang|uang|üe|ue|iu|ui|er)/
+
+/**
  * 尝试把单词按贪心 longest-match 分解为拼音音节序列。
  * 返回 true 表示能完全分解；false 表示有残留字符不在音节集合中。
  */
@@ -119,18 +130,26 @@ function canDecomposeAsPinyin(word: string): boolean {
   return true
 }
 
+/** 至少 1 个词含拼音 distinctive feature → 防英文 false-positive */
+function hasDistinctivePinyinFeature(words: readonly string[]): boolean {
+  return words.some((w) => DISTINCTIVE_PINYIN_PATTERN.test(w.toLowerCase()))
+}
+
 /**
  * 判断输入字符串是否实际是中文拼音（而非真英文标题）。
  *
  * 判定规则：
- *   - 空 / 全空白 / 含非 ASCII → false
- *   - 拆词后，所有词必须能完全分解为合法拼音音节序列
- *   - 至少有 1 个有效词
+ *   - 空 / 全空白 / 含数字 / 含非 ASCII → false
+ *   - 拆词后所有词必须能完全分解为合法拼音音节序列
+ *   - 至少 1 词含拼音 distinctive feature（zh/ch/sh/q/x/j 声母 或 ang/eng/ong/iao/iong/iang/uang/üe 复韵母）
+ *     → 防"Ma Ma" / "Sushi" / "Naomi" 等英文词全是基础拼音音节的 false-positive
  *
  * @example
- *   isPinyin('Wo Bei Quan Wang Da Bao') // true
- *   isPinyin('The Avengers')             // false ('the' 不在音节集合)
- *   isPinyin('Da Hua Xi You')            // true
+ *   isPinyin('Wo Bei Quan Wang Da Bao') // true（含 Quan q-、Wang ang）
+ *   isPinyin('Da Hua Xi You')            // true（含 Xi x-）
+ *   isPinyin('The Avengers')             // false（不能分解）
+ *   isPinyin('Sushi')                    // false（基础音节 / 无 distinctive）
+ *   isPinyin('Wo Bei')                   // false（基础音节 / 无 distinctive / 保守判定）
  *   isPinyin('')                         // false
  */
 export function isPinyin(input: string | null | undefined): boolean {
@@ -152,5 +171,12 @@ export function isPinyin(input: string | null | undefined): boolean {
 
   if (words.length === 0) return false
 
-  return words.every((w) => canDecomposeAsPinyin(w))
+  // 1. 所有词必须能分解为合法拼音音节
+  if (!words.every((w) => canDecomposeAsPinyin(w))) return false
+
+  // 2. 至少 1 词含 distinctive pinyin feature（zh/ch/sh/q/x/j 声母 或 复韵母）
+  // → 防"Ma Ma" / "Sushi" / "Naomi" 等英文词被误判（Codex stop-time review #6 修复）
+  if (!hasDistinctivePinyinFeature(words)) return false
+
+  return true
 }

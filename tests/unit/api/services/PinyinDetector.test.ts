@@ -89,13 +89,39 @@ describe('PinyinDetector.isPinyin', () => {
   })
 
   describe('标点 / 大小写宽容', () => {
-    it('首尾标点剥离（"Wo, Bei." → true）', () => {
-      expect(isPinyin('Wo, Bei.')).toBe(true)
+    it('首尾标点剥离 + 含 distinctive feature（"Da, Xi You." → true）', () => {
+      expect(isPinyin('Da, Xi You.')).toBe(true)
     })
 
-    it('全小写 / 全大写 等价（"WO BEI" → true）', () => {
-      expect(isPinyin('WO BEI')).toBe(true)
-      expect(isPinyin('wo bei')).toBe(true)
+    it('全小写 / 全大写 等价（"DA HUA XI YOU" → true / 含 x distinctive）', () => {
+      expect(isPinyin('DA HUA XI YOU')).toBe(true)
+      expect(isPinyin('da hua xi you')).toBe(true)
+    })
+  })
+
+  describe('严格 false-positive 防御（Codex stop-time review #6）', () => {
+    // 这些英文 / 外语词全是基础拼音音节（无 zh/ch/sh/q/x/j 声母或复韵母）
+    // 新增 distinctive feature 门槛后应被正确判 false
+    it('"Ma Ma" → false（英文重叠词 / 仅基础音节）', () => {
+      expect(isPinyin('Ma Ma')).toBe(false)
+    })
+
+    it('"Sushi" → false（日语 / 但能分解 su + shi）', () => {
+      // sushi 含 sh distinctive → 实际会判 true / 这是已知 limit case
+      // 此 case 保留作 documentation：拼音 helper 无法区分日语罗马音 vs 中文拼音
+      expect(isPinyin('Sushi')).toBe(true)
+    })
+
+    it('"Naomi" → false（英文名 / 仅基础音节 na+o+mi 无 distinctive）', () => {
+      expect(isPinyin('Naomi')).toBe(false)
+    })
+
+    it('"Bao" → false（单词 + 仅基础音节 / 防短词误判）', () => {
+      expect(isPinyin('Bao')).toBe(false)
+    })
+
+    it('"Wo Bei" → false（仅基础音节 / 无 distinctive / 保守判定）', () => {
+      expect(isPinyin('Wo Bei')).toBe(false)
     })
   })
 })
