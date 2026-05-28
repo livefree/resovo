@@ -93,10 +93,12 @@ export function PlayerShell({ slug: slugProp, portalMode = false, previewMode = 
 
   // CHG-353 默认主题（zh-CN → 节气 / en → NATO）+ CHG-369 localStorage 持久化（用户选择优先）
   // CHG-369-B：自定义主题 state + dialog 开关
+  // ADR-165 / CHG-SN-9-ROUTE-LABEL-D-A2：跨设备同步 syncing 状态透到 RouteThemeSelector disable 切换器
   const locale = useLocale()
   const {
     theme: routeTheme,
     customTheme,
+    syncing: routeThemeSyncing,
     setTheme: setRouteTheme,
     setCustomTheme,
     clearCustomTheme,
@@ -403,10 +405,11 @@ export function PlayerShell({ slug: slugProp, portalMode = false, previewMode = 
 
         {hasSources && activePanelTab === 'sources' ? (
           <div className="p-2">
-            {/* CHG-369 / plan §17.2 #16：主题选择器 + localStorage 持久化 + CHG-369-B 自定义主题 */}
+            {/* CHG-369 / plan §17.2 #16：主题选择器 + localStorage 持久化 + CHG-369-B 自定义主题 + ADR-165 跨设备同步 syncing disable */}
             <RouteThemeSelector
               currentTheme={routeTheme}
               customTheme={customTheme}
+              syncing={routeThemeSyncing}
               onThemeChange={setRouteTheme}
               onOpenCustomDialog={() => setCustomDialogOpen(true)}
             />

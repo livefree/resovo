@@ -18,8 +18,14 @@
  *   - CHG-SN-9-ROUTE-LABEL-D：users.preferences 跨设备同步
  */
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
+import {
+  CUSTOM_THEME_CONSTRAINTS as TYPES_CUSTOM_THEME_CONSTRAINTS,
+  type CustomThemeData as TypesCustomThemeData,
+  type RouteThemePreference,
+} from '@resovo/types'
 import { ALL_THEMES, getDefaultTheme, type RouteTheme } from './line-display-name'
+import { useUserPreferencesSync } from './use-user-preferences-sync'
 
 const STORAGE_KEY = 'resovo:route-theme'
 const CUSTOM_STORAGE_KEY = 'resovo:route-theme:custom'
@@ -27,24 +33,22 @@ const CUSTOM_STORAGE_KEY = 'resovo:route-theme:custom'
 /** 自定义主题 id（特殊值 / 与 ALL_THEMES.id 互斥） */
 export const CUSTOM_THEME_ID = 'custom'
 
-/** 自定义主题存储 shape（设计稿 §Layer C "用户自定义主题"） */
-export interface CustomThemeData {
-  /** 主题展示名（≤ 10 字符 / 用户给的"主题名"） */
-  readonly displayName: string
-  /** 标签列表（1-30 个 / 每个 ≤ 10 字符） */
-  readonly labels: readonly string[]
-  /** dead 线路文案（可选 / 默认 '已断'） */
-  readonly deadLabel?: string
-}
+/**
+ * 自定义主题存储 shape（设计稿 §Layer C "用户自定义主题"）。
+ *
+ * ADR-165 Y-165-3 修订：真源在 packages/types/src/user.types.ts
+ * （CustomThemeData / CustomThemeDataSchema）/ 本文件 re-export 为本地类型别名
+ * 防消费方 import 路径迁移波及。
+ */
+export type CustomThemeData = TypesCustomThemeData
 
-/** CustomThemeData 字段约束（设计稿 §Layer C / docs/manual §8.4a） */
-export const CUSTOM_THEME_CONSTRAINTS = {
-  displayNameMaxChars: 10,
-  labelMaxChars: 10,
-  labelsMinCount: 1,
-  labelsMaxCount: 30,
-  deadLabelMaxChars: 10,
-} as const
+/**
+ * CustomThemeData 字段约束（设计稿 §Layer C / docs/manual §8.4a）。
+ *
+ * ADR-165 Y-165-3 修订：真源迁移到 packages/types/src/user.types.ts
+ * （CUSTOM_THEME_CONSTRAINTS）/ 本文件 re-export 防 web-next 既有消费方批量改 import。
+ */
+export const CUSTOM_THEME_CONSTRAINTS = TYPES_CUSTOM_THEME_CONSTRAINTS
 
 /** 从 localStorage 读 themeId，未命中或无效返回 null（SSR safe） */
 export function readStoredThemeId(): string | null {
@@ -167,23 +171,28 @@ export function customThemeToRouteTheme(data: CustomThemeData): RouteTheme {
 }
 
 /**
- * useRouteTheme — 播放器主题 hook（含 localStorage 持久化 + 自定义主题支持）
+ * useRouteTheme — 播放器主题 hook（含 localStorage 持久化 + 自定义主题支持 + ADR-165 跨设备同步）
  *
  * 行为：
  *   - 首次 render（SSR / client 初次 mount）：返回 `getDefaultTheme(locale)`，避免
  *     SSR ↔ client mismatch（localStorage 仅 client 可读）。
  *   - mount 后第一次 effect：读 themeId + customTheme → 命中则切到存储的主题。
- *   - 用户调 `setTheme(theme)` → setState + 写 themeId。
- *   - 用户调 `setCustomTheme(data)` → 写 customTheme + setState 切到自定义 + 写 themeId='custom'。
+ *   - ADR-165 同步 hook（useUserPreferencesSync）：mount 试探性 GET server → 登录态
+ *     server 有值优先 / server 空 + 本地非空 → 登录迁移 PUT / 失败 / 401 静默降级。
+ *   - 用户调 `setTheme(theme)` → setState + 写 themeId + debounce PUT server。
+ *   - 用户调 `setCustomTheme(data)` → 写双 key + setState + debounce PUT server。
+ *   - 用户调 `clearCustomTheme()` → 清 customTheme + 回 default + debounce PUT server。
  *
  * 返回字段：
- *   - theme: 当前 RouteTheme（内置或自定义派发）
- *   - customTheme: 当前 CustomThemeData | null（用于编辑回显 / 选择器显示自定义 displayName）
- *   - setTheme / setCustomTheme / clearCustomTheme: 切换 / 写入 / 清除
+ *   - theme: 当前 RouteTheme
+ *   - customTheme: 当前 CustomThemeData | null
+ *   - syncing: ADR-165 R-165-2 / D-165-11 → mount GET 进行中时 UI 应 disable 切换器（防 FOUC）
+ *   - setTheme / setCustomTheme / clearCustomTheme: 切换 / 写入 / 清除（含 server 同步）
  */
 export function useRouteTheme(locale: string): {
   theme: RouteTheme
   customTheme: CustomThemeData | null
+  syncing: boolean
   setTheme: (theme: RouteTheme) => void
   setCustomTheme: (data: CustomThemeData) => void
   clearCustomTheme: () => void
@@ -211,9 +220,41 @@ export function useRouteTheme(locale: string): {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // ADR-165 / D-165-11：server 返回时单次受控 re-paint + 写双 key localStorage 同步
+  const handleRemoteValue = useCallback((remote: RouteThemePreference) => {
+    const remoteThemeId = remote.themeId
+    if (remoteThemeId === CUSTOM_THEME_ID) {
+      const remoteCustom = remote.customTheme
+      if (remoteCustom) {
+        setCustomThemeState(remoteCustom)
+        writeStoredCustomTheme(remoteCustom)
+        setThemeState(customThemeToRouteTheme(remoteCustom))
+        writeStoredThemeId(CUSTOM_THEME_ID)
+      }
+      return
+    }
+    const stored = findThemeById(remoteThemeId)
+    if (stored) {
+      setThemeState(stored)
+      writeStoredThemeId(stored.id)
+    }
+  }, [])
+
+  // 本地当前 RouteThemePreference（用于登录迁移协议 D-165-5）
+  const localPreference: RouteThemePreference | null = theme.id === CUSTOM_THEME_ID && customTheme
+    ? { themeId: CUSTOM_THEME_ID, customTheme }
+    : { themeId: theme.id }
+
+  const { syncing, putValue } = useUserPreferencesSync<RouteThemePreference>({
+    sectionKey: 'routeTheme',
+    localValue: localPreference,
+    onRemoteValue: handleRemoteValue,
+  })
+
   function setTheme(next: RouteTheme): void {
     setThemeState(next)
     writeStoredThemeId(next.id)
+    putValue({ themeId: next.id })
   }
 
   function setCustomTheme(data: CustomThemeData): void {
@@ -221,6 +262,7 @@ export function useRouteTheme(locale: string): {
     writeStoredCustomTheme(data)
     setThemeState(customThemeToRouteTheme(data))
     writeStoredThemeId(CUSTOM_THEME_ID)
+    putValue({ themeId: CUSTOM_THEME_ID, customTheme: data })
   }
 
   function clearCustomTheme(): void {
@@ -231,8 +273,12 @@ export function useRouteTheme(locale: string): {
       const fallback = getDefaultTheme(locale)
       setThemeState(fallback)
       writeStoredThemeId(fallback.id)
+      putValue({ themeId: fallback.id })
+    } else {
+      // 仅清除 customTheme / themeId 不变 → server 仅更新 customTheme 缺省
+      putValue({ themeId: theme.id })
     }
   }
 
-  return { theme, customTheme, setTheme, setCustomTheme, clearCustomTheme }
+  return { theme, customTheme, syncing, setTheme, setCustomTheme, clearCustomTheme }
 }

@@ -23,6 +23,12 @@ import {
 interface RouteThemeSelectorProps {
   readonly currentTheme: RouteTheme
   readonly customTheme: CustomThemeData | null
+  /**
+   * ADR-165 / D-165-11 / R-165-2 FOUC 防御：
+   * true 时 disable 切换器与编辑按钮（mount GET server 进行中 / 避免用户在不一致期手动切，
+   * 触发 PUT 覆盖 server 已有较新值）。默认 false 保持 CHG-369 / CHG-369-B 既有行为。
+   */
+  readonly syncing?: boolean
   readonly onThemeChange: (theme: RouteTheme) => void
   readonly onOpenCustomDialog: () => void
   readonly className?: string
@@ -31,6 +37,7 @@ interface RouteThemeSelectorProps {
 export function RouteThemeSelector({
   currentTheme,
   customTheme,
+  syncing = false,
   onThemeChange,
   onOpenCustomDialog,
   className,
@@ -71,6 +78,8 @@ export function RouteThemeSelector({
         data-testid="route-theme-select"
         value={currentTheme.id}
         onChange={handleChange}
+        disabled={syncing}
+        title={syncing ? '正在同步偏好…' : undefined}
         style={{
           background: 'var(--bg-surface)',
           color: 'var(--fg-default)',
@@ -78,6 +87,8 @@ export function RouteThemeSelector({
           borderRadius: 4,
           padding: '2px 6px',
           fontSize: 'var(--font-size-xs)',
+          opacity: syncing ? 0.6 : 1,
+          cursor: syncing ? 'wait' : 'pointer',
         }}
       >
         {ALL_THEMES.map((t) => (
@@ -93,7 +104,8 @@ export function RouteThemeSelector({
         type="button"
         data-testid="route-theme-edit-custom"
         onClick={onOpenCustomDialog}
-        title={customTheme ? '编辑自定义主题' : '新建自定义主题'}
+        disabled={syncing}
+        title={syncing ? '正在同步偏好…' : (customTheme ? '编辑自定义主题' : '新建自定义主题')}
         aria-label={customTheme ? '编辑自定义主题' : '新建自定义主题'}
         style={{
           background: 'transparent',
@@ -102,7 +114,8 @@ export function RouteThemeSelector({
           borderRadius: 4,
           padding: '2px 6px',
           fontSize: 'var(--font-size-xs)',
-          cursor: 'pointer',
+          cursor: syncing ? 'wait' : 'pointer',
+          opacity: syncing ? 0.6 : 1,
         }}
       >
         ✎

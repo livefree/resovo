@@ -237,17 +237,52 @@ A：Phase 1 严格控范围 ≤ 5 文件 + admin Props 契约改动需 arch-revi
 
 实现：`getDefaultTheme(locale)`。
 
-### 8.4a 主题选择 + localStorage 持久化（CHG-369 / Phase 2）
+### 8.4a 主题选择 + localStorage 持久化（CHG-369 / Phase 2） + 跨设备同步（CHG-SN-9-ROUTE-LABEL-D / Phase 4 提前 Wave 3）
 
-用户可在播放器 sources tab 顶部下拉切换 5 内置主题；选择立即生效并持久化到 localStorage `resovo:route-theme`。
+用户可在播放器 sources tab 顶部下拉切换 5 内置主题；选择立即生效并持久化到 localStorage `resovo:route-theme`，登录用户额外同步到 server `users.preferences.routeTheme` 跨设备生效。
 
 - **首次访问**：使用 `getDefaultTheme(locale)`（zh→节气 / en→NATO）
 - **后续访问**：localStorage 命中合法 themeId → 应用；非法 / 已删除主题 → 静默回退 default
 - **SSR 安全**：服务端 render 总是返回 default（避免 hydration mismatch）；client mount 后第一次 effect 切换到 localStorage 值
-- **自定义主题输入**：本期未实装（labels ≤ 30 / name ≤ 10 字符 / follow-up CHG-369-B）
-- **跨设备同步**：本期未实装（→ Wave 3 ROUTE-LABEL-D / `users.preferences`）
+- **自定义主题输入**：已 ship 2026-05-28（labels ≤ 30 / name ≤ 10 字符 / 详 §8.7）
+- **跨设备同步**：已 ship 2026-05-28（ADR-165 / 见下方）
 
-实现位置：`apps/web-next/src/lib/route-theme-storage.ts`（`useRouteTheme` hook + `readStoredThemeId` / `writeStoredThemeId` 纯函数）+ `apps/web-next/src/components/player/RouteThemeSelector.tsx`（下拉组件）。
+#### 跨设备同步协议（ADR-165 / CHG-SN-9-ROUTE-LABEL-D / Wave 3）
+
+登录用户的 `routeTheme`（themeId + 可选 customTheme）通过 `users.preferences` JSONB 字段在 PC / 手机 / 平板等多设备间保持一致；未登录用户仅 localStorage 单设备持久化（与 CHG-369 + CHG-369-B 完全兼容 / 零回归）。
+
+**未登录态（场景 A）**：完全走 localStorage 既有路径 / 无任何 API 调用 / 零网络依赖。
+
+**已登录态（场景 B）**：
+1. **mount 双阶段同步**（D-165-11 防 FOUC）：
+   - 第 1 阶段（即时 SSR-safe）：读 localStorage → setState 立即应用 + RouteThemeSelector disable 切换器（syncing=true）
+   - 第 2 阶段（异步 effect）：GET `/users/me/preferences` → 200 + server.routeTheme 非空 → 单次受控 re-paint 切到 server 值 + 写 localStorage 双 key 同步；server 空 + 本地非空 → 登录迁移 PUT 本地值到 server；401 / 网络错 → 静默降级 localStorage
+   - 第 3 阶段（解锁）：syncing=false / 用户可正常操作
+2. **用户操作触发同步**：setTheme / setCustomTheme / clearCustomTheme → 立即写双 key localStorage + setState（用户感知零延迟）+ debounce 500ms 后 PUT `/users/me/preferences { routeTheme: {...} }` 到 server
+3. **顶层模块 PATCH 语义**（D-165-7 / R-165-3）：PUT body shape `{ routeTheme: RouteThemePreference | null }` / null = 删除该顶层 key / undefined = 不改 / 跨模块零冲突
+4. **错误降级**（D-165-8）：PUT 失败 → 静默（localStorage 已成功）+ 写 sessionStorage `resovo:prefs-sync-failed-at` 时间戳 / 下次操作时 < 5 分钟则静默重试一次
+
+**跨设备同步（场景 C）**：PC 改主题 → debounce 500ms → PUT server / 手机用户刷新或重新打开 → useRouteTheme mount 第 2 阶段 GET → server 值 !== local → 单次受控 re-paint + syncing 期 disable 切换器防覆盖。
+
+#### 数据契约
+
+- **后端 schema**：Migration 080 `users.preferences JSONB NOT NULL DEFAULT '{}'::jsonb CHECK (jsonb_typeof = 'object')`
+- **类型真源**：`packages/types/src/user.types.ts` 5 zod schema（CustomThemeDataSchema / RouteThemePreferenceSchema / UserPreferencesSchema passthrough / UserPreferencesStrictSchema / UserPreferencesPatchSchema passthrough+nullable）+ CUSTOM_THEME_CONSTRAINTS 常量真源
+- **端点**：GET / PUT `/users/me/preferences` / preHandler `[fastify.authenticate]` 强制登录 / Service userId 来自 JWT 解析（防 body IDOR）/ ADR-110 既有 14 码 401/404/422
+- **安全**：当前 routeTheme 无 PII / admin 域 listAdminUsers 不拉 preferences（洞察 5 RBAC 副作用规避）/ 跨用户分享必须独立 schema（§2 范围外明示）
+
+#### 实现位置
+
+- **后端**：
+  - `apps/api/src/db/migrations/080_users_preferences.sql`（schema）
+  - `apps/api/src/db/queries/userPreferences.ts`（getUserPreferences / updateUserPreferences JSONB merge + delete 事务）
+  - `apps/api/src/services/UserPreferencesService.ts`（业务层 zod 校验）
+  - `apps/api/src/routes/users.ts`（2 端点 GET / PUT `/users/me/preferences`）
+- **前端**：
+  - `apps/web-next/src/lib/use-user-preferences-sync.ts` NEW（独立 hook / mount GET + debounce 500ms PUT + 错误降级）
+  - `apps/web-next/src/lib/route-theme-storage.ts`（useRouteTheme 接入 hook + CUSTOM_THEME_CONSTRAINTS import packages/types）
+  - `apps/web-next/src/components/player/RouteThemeSelector.tsx`（syncing prop / select + ✎ disable）
+  - `apps/web-next/src/components/player/PlayerShell.tsx`（透传 syncing）
 
 ### 8.5 边界处理
 

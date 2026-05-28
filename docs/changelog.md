@@ -40,6 +40,37 @@
 
 ---
 
+## [CHG-SN-9-ROUTE-LABEL-D-A2] ADR-165 前端实施 useUserPreferencesSync NEW + useRouteTheme 接入 + UI syncing（Wave 3 #10.2 / plan §14 主线 5/6 / 跨设备主题同步前端层 ship / Wave 3 主线收官）
+- **完成时间**：2026-05-28
+- **执行模型**：claude-sonnet-4-6（主循环 / 不切换 §16.5 / ADR-165 已 Accepted 规范驱动实施）
+- **子代理调用**：无（ADR-165 已 Accepted / 不改 packages/admin-ui Props / 不起新 ADR / 非 player-core 接口 / 非 3+ 消费方）
+- **拆卡承接**：CHG-SN-9-ROUTE-LABEL-D-A1（后端层 ship / commit 8c2d1b1b）→ 本卡 -A2 完成前端层 / ADR-165 全链路就绪
+- **范围**（5 业务 + 1 测试 + 1 docs / PATCH=6 / 超 5 软上限 1 项接受完成度风险）：
+  - `apps/web-next/src/lib/use-user-preferences-sync.ts` NEW（Y-165-1 独立 hook / 与 useRouteTheme 解耦 / 与 ADR-037 BrandProvider 双 hook 范式对称 / 含 mount 试探性 GET + debounce 500ms PUT + 401 静默降级 + sessionStorage retry 协议 + syncing 状态暴露）
+  - `apps/web-next/src/lib/route-theme-storage.ts` 改造：CUSTOM_THEME_CONSTRAINTS 真源迁移自 packages/types（Y-165-3）+ CustomThemeData re-export 类型别名 + useRouteTheme 调用 useUserPreferencesSync 接入 + handleRemoteValue 派发 + setTheme/setCustomTheme/clearCustomTheme 触发 putValue + 返回值新增 syncing 字段
+  - `apps/web-next/src/components/player/RouteThemeSelector.tsx` 扩 syncing prop（默认 false）+ select / ✎ disabled + opacity 0.6 + cursor wait + tooltip "正在同步偏好…"（R-165-2 + D-165-11 防 FOUC + 防覆盖 server）
+  - `apps/web-next/src/components/player/PlayerShell.tsx` wiring：useRouteTheme 解构扩 syncing 别名 routeThemeSyncing + 透传 prop 给 RouteThemeSelector
+  - `tests/unit/web-next/use-user-preferences-sync.test.ts` NEW 7 case：mount GET 200 + 有值 → onRemoteValue / mount GET 200 + 空 + 本地非空 → 登录迁移 PUT / mount GET 401 → 静默 / putValue → debounce 500ms / 多次快速 putValue → 仅最后 fire / PUT 失败 → sessionStorage 失败标记 / syncing mount=true 完成=false
+  - `docs/manual/route-labeling.md` §8.4a 升级"已 ship 2026-05-28"完整规范（CHG-SN-9-ROUTE-LABEL-D 跨设备同步协议 / 3 场景 A/B/C / 数据契约 / 实现位置 / 后端 4 文件 + 前端 4 文件清单）
+- **不触发 architecture.md sync**（schema 由 -A1 已同步 §5.14）
+- **范围超 5 项接受完成度风险**（workflow-rules.md "PATCH 软上限"）：6 业务+测试文件 / 1 项超阈值 / 同源原子提交理由：useUserPreferencesSync NEW + useRouteTheme 接入 + RouteThemeSelector syncing + PlayerShell wiring + 测试 5 业务+测试组件必须原子 ship（拆分会让 UI 看到 syncing 但 PlayerShell 未透传 / 或 useRouteTheme 接入 hook 但 UI 未消费 syncing 形成中间状态）。接受完成度风险换取数据通路 + UI 联动原子性。
+- **设计取舍**：① 独立 hook 与 useRouteTheme 解耦（Y-165-1） / ② 试探性 GET 401 静默降级（不预设登录态）/ ③ debounce 500ms timer useRef 持有 + unmount 清理 / ④ sessionStorage 失败标记非 localStorage（防污染双 key 协议）/ ⑤ syncing 默认 false 零回归 / ⑥ localPreference 派生在 useRouteTheme 内（hook 不感知主题语义）/ ⑦ docs/manual §8.4a 总述 + §8.7 自定义主题细节 / 不重复
+- **质量门禁**：typecheck ✅ EXIT=0 / lint ✅ EXIT=0 / verify:adr-contracts ✅ EXIT=0 / use-user-preferences-sync 7/7 PASS / 既有 route-theme-storage 20/20 + line-display-name-themes 34/34 共 54/54 零回归
+- **commit trailer**：无强制 Subagents（ADR-165 已 Accepted / 不改 packages/admin-ui Props / 不起新 ADR / 不重构 player-core / 范围超 5 软上限不触发 Opus trailer 因不叠加 admin-ui Props 红线）
+- **六问自检**：
+  - Q1 沉淀共享层？✅ useUserPreferencesSync 独立 hook 沉淀 / sectionKey 泛型设计支撑未来 playerSettings / homeLayout 复用
+  - Q2 引入回归？✅ 401 静默降级保持 CHG-369 + CHG-369-B 既有行为 / 7+54=61 测试零回归 / 全门禁 EXIT=0
+  - Q3 越层？✅ web-next 内同层
+  - Q4 硬编码 / any？✅ 无 any（unknown 守卫 / 泛型 T）/ 常量集中
+  - Q5 布局变化？✅ syncing 期视觉降级（opacity + cursor wait + tooltip）/ 解锁零残留
+  - Q6 文件范围？✅ 6 业务+测试 + 1 docs（PATCH=6 / 超 5 接受 / 同源原子提交理由）
+- **偏离检测**：无（按 ADR-165 §11 -A2 范围执行 / 6 业务+测试 + 1 docs 全命中）
+- **D-N 编号闭环（完整）**：D-165-4 同步协议 / D-165-5 登录迁移 / D-165-6 未登录态零回归 / D-165-7 顶层 PATCH / D-165-8 错误降级 + sessionStorage retry / D-165-11 hydration 双阶段 + syncing UI disable → -A2 前端层全闭。**ADR-165 全 11 D-N 决策点闭环**（-A1: D-165-1/-2/-3/-9 + -A2: D-165-4/-5/-6/-7/-8/-11 / D-165-10 D-N 编号闭环本身）。
+- **[AI-CHECK] 结论**：PASS（ADR-165 前端层完整 ship / 跨设备主题同步功能完整可用 / Wave 3 主线推进收官）
+- **闭环**：CHG-SN-9-ROUTE-LABEL-D-A2 完成 / ADR-165 全链路 ship（后端 -A1 + 前端 -A2 / 11 D-N 全闭环）/ Wave 3 plan §14 主线 5/6 完成（剩 1/6 是 BANGUMI-A DEFERRED / 实际全主线推进完毕）/ Wave 3 SEQ 整体 9/10 完成 + 3 DEFERRED / 主循环 Wave 3 实施期收官 / 建议进入 Wave 3 验收期
+
+---
+
 ## [CHG-SN-9-ROUTE-LABEL-D-A1] ADR-165 后端实施（Wave 3 #10.1 / plan §14 主线 4/6 / Migration 080 + types + queries + Service + 路由）
 - **完成时间**：2026-05-28
 - **执行模型**：claude-sonnet-4-6（主循环 / 不切换 §16.5 / ADR-165 已 Accepted 规范驱动实施）
