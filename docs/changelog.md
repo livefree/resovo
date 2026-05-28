@@ -10005,3 +10005,23 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **质量门禁**：typecheck ✅（root + 7 workspaces）/ lint ✅（仅 pre-existing react-hooks + img warning）/ verify:adr-contracts ✅ EXIT=0（7 子检 PASS / 仅 pre-existing advisory）/ tests/unit/api/ 1728/1728 PASS（132 文件 / 含 MetadataEnrichService 23/23 含 3 新增 case）/ 全量 167 失败均为 pre-existing localStorage flaky（stash 验证 main 同样 fail / 与本卡零关联）
 - **commit trailer**：无强制 Subagents
 - **闭环**：CHG-365-A2 完成 / Wave 2 卡 14/17 闭合 / **CHG-365 META-DOUBAN-AUTO 完整序列闭环（A1 PinyinDetector helper → A2 schema + 集成持久化）/ 采集 worker 自动豆瓣匹配 + 拼音识别 + meta_quality 信号字典端到端就绪 / 审核台 TabDetail "重新匹配"提示与质量门禁观察数据底座完整**
+
+---
+
+## [CHG-365-A2-FIX] meta_quality stale 防回归 — 手动豆瓣路径同步信号（Codex stop-time review #8）
+- **完成时间**：2026-05-27
+- **执行模型**：claude-opus-4-7（主循环 / 续会话）
+- **背景**：Codex stop-time review 在 CHG-365-A2 commit 后发现 3 处手动豆瓣操作（confirmSubject / confirmFields / douban-ignore）只更新 `douban_status` 不写 `meta_quality` → 形成 `douban_status='matched'` 与 `meta_quality.douban_match_status='candidate'` 不一致 / `title_en_is_pinyin` 等 enrich 信号在 manual confirm 后仍是旧值
+- **范围**（PATCH ≤ 5 / 实际 5 项）：
+  - `packages/types/src/video.types.ts`：`DOUBAN_MATCH_METHODS` 扩 `'manual' | 'manual_fields'`（6 值）+ 新增 `DOUBAN_MATCH_STATUSES = ['auto_matched','candidate','manual_confirmed','unmatched']` const SSOT + `DoubanMatchQualityStatus` 类型 + VideoMetaQuality jsdoc 补三处写入路径说明
+  - `packages/types/src/index.ts`：barrel 加 `DOUBAN_MATCH_STATUSES`
+  - `apps/api/src/services/MetadataEnrichService.ts`：新增 `buildManualMetaQuality(prev, patch)` export helper / 接受 prev jsonb + status/method/confidence patch / confidence=null 时清零 method+confidence / 总是刷新 enriched_at
+  - `apps/api/src/services/DoubanService.ts`：confirmSubject 调 buildManualMetaQuality({status:'manual_confirmed', method:'manual', confidence:1.0}) / confirmFields 同上 method='manual_fields' / 透传 metaQuality 给 updateVideoEnrichStatus
+  - `apps/api/src/routes/admin/moderation.douban.ts`：douban-ignore route 调 buildManualMetaQuality({status:'unmatched', method:null, confidence:null}) 透传
+- **测试**（+4 case / 共 37 PASS）：
+  - `tests/unit/api/metadataEnrich.test.ts` +3 case：manual confirm 保留 title_en_is_pinyin / manual ignore 清零 method+confidence / prev=null 起步
+  - `tests/unit/api/stagingDouban.test.ts` +1 case：confirmSubject 传 metaQuality 字段正确（method='manual'/confidence=1/status='manual_confirmed'/保留旧 pinyin）
+- **设计取舍**：① buildManualMetaQuality 抽 helper 而非 inline：3 处共用 + 单测易于隔离 ② confidence/method 分别支持"清零"和"保留"语义：ignore 路径 confidence=null 时同步清 method（避免显示 "confidence 不存在但 method='alias'" 矛盾）/ confirm 路径 confidence=1.0 总写 ③ title_en_is_pinyin 必须保留：拼音判断由 enrich 阶段一次性产出，手动豆瓣操作不应清零这个独立信号 ④ DOUBAN_MATCH_STATUSES 拆 const SSOT：与 video_external_refs.match_status 4 真源对齐（ADR-157 双形态 + 多 4 'unmatched' 表示"无候选"语义）
+- **质量门禁**：typecheck ✅ / lint ✅ / verify:adr-contracts ✅ EXIT=0 / metadataEnrich 26/26 + stagingDouban 11/11 = 37 PASS
+- **commit trailer**：无强制 Subagents
+- **闭环**：Codex stop-time review #8 红线消解 / meta_quality 三路径写入语义闭环（auto enrich + manual confirm + manual ignore）/ architecture.md §5.1 同步说明三处写入路径与 buildManualMetaQuality merge 语义

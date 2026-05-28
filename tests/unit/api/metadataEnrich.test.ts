@@ -369,6 +369,62 @@ describe('MetadataEnrichService.enrich()', () => {
   })
 })
 
+// ── buildManualMetaQuality（Codex stop-time review #8）─────────────
+
+describe('buildManualMetaQuality()', () => {
+  it('manual confirm 保留旧 title_en_is_pinyin + 写入 method/confidence/status + enriched_at', async () => {
+    const { buildManualMetaQuality } = await import('@/api/services/MetadataEnrichService')
+    const prev = {
+      title_en_is_pinyin: true,
+      douban_confidence: 0.65,
+      douban_match_method: 'alias' as const,
+      douban_match_status: 'candidate' as const,
+      enriched_at: '2026-05-26T00:00:00.000Z',
+    }
+    const next = buildManualMetaQuality(prev, {
+      status: 'manual_confirmed', method: 'manual', confidence: 1.0,
+    })
+    expect(next.title_en_is_pinyin).toBe(true)
+    expect(next.douban_confidence).toBe(1.0)
+    expect(next.douban_match_method).toBe('manual')
+    expect(next.douban_match_status).toBe('manual_confirmed')
+    // enriched_at 必须刷新
+    expect(next.enriched_at).not.toBe('2026-05-26T00:00:00.000Z')
+    expect(typeof next.enriched_at).toBe('string')
+  })
+
+  it('manual ignore 清零 method + confidence / 保留 pinyin / status=unmatched', async () => {
+    const { buildManualMetaQuality } = await import('@/api/services/MetadataEnrichService')
+    const prev = {
+      title_en_is_pinyin: false,
+      douban_confidence: 0.92,
+      douban_match_method: 'title' as const,
+      douban_match_status: 'auto_matched' as const,
+    }
+    const next = buildManualMetaQuality(prev, {
+      status: 'unmatched', method: null, confidence: null,
+    })
+    expect(next.title_en_is_pinyin).toBe(false)
+    expect(next.douban_match_status).toBe('unmatched')
+    // confidence + method 被清零（delete 走 jsonb 不写入）
+    expect('douban_confidence' in next).toBe(false)
+    expect('douban_match_method' in next).toBe(false)
+  })
+
+  it('prev=null 起步 → 仅写入新字段 + enriched_at', async () => {
+    const { buildManualMetaQuality } = await import('@/api/services/MetadataEnrichService')
+    const next = buildManualMetaQuality(null, {
+      status: 'manual_confirmed', method: 'manual_fields', confidence: 1.0,
+    })
+    expect(next).toEqual({
+      douban_match_status: 'manual_confirmed',
+      douban_match_method: 'manual_fields',
+      douban_confidence: 1.0,
+      enriched_at: expect.any(String),
+    })
+  })
+})
+
 // ── computeLocalDoubanConfidence ──────────────────────────────────
 
 describe('computeLocalDoubanConfidence()', () => {

@@ -9,6 +9,7 @@ import { db } from '@/api/lib/postgres'
 import { es } from '@/api/lib/elasticsearch'
 import { DoubanService } from '@/api/services/DoubanService'
 import { VideoIndexSyncService } from '@/api/services/VideoIndexSyncService'
+import { buildManualMetaQuality } from '@/api/services/MetadataEnrichService'
 import * as videoQueries from '@/api/db/queries/videos'
 
 const DoubanSearchSchema = z.object({
@@ -98,9 +99,16 @@ export async function registerModerationDoubanRoutes(fastify: FastifyInstance) {
       return reply.code(422).send({ error: { code: 'NOT_PENDING', message: '仅待审核视频可操作', status: 422 } })
     }
     try {
+      // Codex stop-time review #8: 同步 meta_quality 防 stale（method/confidence 清零 / status=unmatched）
+      const metaQuality = buildManualMetaQuality(video.meta_quality ?? null, {
+        status: 'unmatched',
+        method: null,
+        confidence: null,
+      })
       await videoQueries.updateVideoEnrichStatus(db, id, {
         doubanStatus: 'unmatched',
         metaScore: video.meta_score ?? 0,
+        metaQuality,
       })
       return reply.send({ data: { id, ignored: true } })
     } catch (err) {

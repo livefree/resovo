@@ -56,27 +56,54 @@ export type DoubanStatus = typeof DOUBAN_STATUSES[number]
 export const SOURCE_CHECK_STATUSES = ['pending', 'ok', 'partial', 'all_dead'] as const
 export type SourceCheckStatus = typeof SOURCE_CHECK_STATUSES[number]
 
-/** 豆瓣匹配方式：MetadataEnrichService 写入 meta_quality.douban_match_method */
-export const DOUBAN_MATCH_METHODS = ['imdb_id', 'title', 'alias', 'network'] as const
+/**
+ * 豆瓣匹配方式：MetadataEnrichService 自动写入（4 自动方式）+ DoubanService 手动确认（2 手动方式）。
+ *
+ * 自动：imdb_id / title (title_norm 精确) / alias (alias 精确) / network (Step2 搜索)
+ * 手动：manual (整条目确认 confirmSubject) / manual_fields (字段级确认 confirmFields)
+ *
+ * 与 `video_external_refs.match_method` 自由字符串生态保持同义（Migration 041 注释规约：
+ * title_year_type / imdb_id / alias_year / manual）。
+ */
+export const DOUBAN_MATCH_METHODS = [
+  'imdb_id', 'title', 'alias', 'network',
+  'manual', 'manual_fields',
+] as const
 export type DoubanMatchMethod = typeof DOUBAN_MATCH_METHODS[number]
+
+/**
+ * 豆瓣匹配状态（meta_quality.douban_match_status）：4 真源对齐
+ * `video_external_refs.match_status` (`'auto_matched' | 'manual_confirmed' | 'candidate' | 'rejected'`)
+ * + 增 `'unmatched'` 表示"enrich 时无候选"（refs 表对应不存在记录而非 rejected）。
+ */
+export const DOUBAN_MATCH_STATUSES = [
+  'auto_matched', 'candidate', 'manual_confirmed', 'unmatched',
+] as const
+export type DoubanMatchQualityStatus = typeof DOUBAN_MATCH_STATUSES[number]
 
 /**
  * VideoMetaQuality — videos.meta_quality jsonb 信号字典（Migration 077，CHG-365-A2）
  *
- * 由 MetadataEnrichService 写入，集中存放 enrich 阶段产生的可观测信号；前端只读，
- * 审核台 TabDetail 用于驱动"重新匹配"提示。所有字段可选（jsonb 局部更新 / 信号缺
- * 失允许）。
+ * 由 MetadataEnrichService（自动 enrich）+ DoubanService（手动 confirm/ignore）写入，
+ * 集中存放可观测信号；前端只读，审核台 TabDetail 用于驱动"重新匹配"提示。
+ *
+ * 写入路径（必须同步更新，避免 stale / Codex stop-time review #8 回归）：
+ *   - 自动：MetadataEnrichService.enrich （写完整信号）
+ *   - 手动确认：DoubanService.confirmSubject / confirmFields（manual / manual_fields + confidence=1）
+ *   - 手动忽略：moderation.douban-ignore route（status=unmatched 且 confidence/method 清零）
+ *
+ * 所有字段可选（jsonb 局部更新 / 信号缺失允许 / 前端必须容忍）。
  */
 export interface VideoMetaQuality {
   /** PinyinDetector (CHG-365-A1) 判断 media_catalog.title_en 是否实际为中文拼音 */
   title_en_is_pinyin?: boolean
-  /** 豆瓣命中置信度 0..1（Step1 / Step2 写入） */
+  /** 豆瓣命中置信度 0..1（auto 算分 / manual confirm = 1.0 / manual ignore 清零为 undefined） */
   douban_confidence?: number
-  /** 豆瓣匹配方式：imdb 精确 / title_norm 精确 / alias 精确 / 网络搜索 */
+  /** 豆瓣匹配方式（自动 4 / 手动 2） */
   douban_match_method?: DoubanMatchMethod
-  /** 豆瓣匹配状态：与 video_external_refs.match_status 对齐 */
-  douban_match_status?: 'auto_matched' | 'candidate' | 'unmatched'
-  /** Service 写入时刻（ISO 8601 / 用于"上次丰富时间"显示与重跑判断） */
+  /** 豆瓣匹配状态 */
+  douban_match_status?: DoubanMatchQualityStatus
+  /** Service 写入时刻（ISO 8601 / 用于"上次丰富时间"显示与重跑判断 / 任何写入路径都更新） */
   enriched_at?: string
 }
 /** VideoGenre — 内容题材（与 VideoType 内容形式严格正交）

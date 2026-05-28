@@ -20,6 +20,7 @@ import { MediaCatalogService } from './MediaCatalogService'
 import { enrichmentQueue } from '@/api/lib/queue'
 import type { DoubanPreviewFound, DoubanPreviewMiss, DoubanPreview } from '@/types/contracts/v1/admin'
 import type { EnrichJobData } from './MetadataEnrichService'
+import { buildManualMetaQuality } from './MetadataEnrichService'
 
 // ── 类型 ──────────────────────────────────────────────────────────
 
@@ -209,7 +210,16 @@ export class DoubanService {
     const catalog = await catalogQueries.findCatalogById(this.db, video.catalog_id)
     const metaScore = calcMetaScore(catalog)
 
-    await videoQueries.updateVideoEnrichStatus(this.db, videoId, { doubanStatus: 'matched', metaScore })
+    // Codex stop-time review #8: 同步 meta_quality 防 stale（method='manual', confidence=1.0）
+    const metaQuality = buildManualMetaQuality(video.meta_quality, {
+      status: 'manual_confirmed',
+      method: 'manual',
+      confidence: 1.0,
+    })
+
+    await videoQueries.updateVideoEnrichStatus(this.db, videoId, {
+      doubanStatus: 'matched', metaScore, metaQuality,
+    })
     return { updated: true }
   }
 
@@ -365,7 +375,17 @@ export class DoubanService {
 
     const catalog = await catalogQueries.findCatalogById(this.db, video.catalog_id)
     const metaScore = calcMetaScore(catalog)
-    await videoQueries.updateVideoEnrichStatus(this.db, videoId, { doubanStatus: 'matched', metaScore })
+
+    // Codex stop-time review #8: 同步 meta_quality 防 stale（method='manual_fields', confidence=1.0）
+    const metaQuality = buildManualMetaQuality(video.meta_quality, {
+      status: 'manual_confirmed',
+      method: 'manual_fields',
+      confidence: 1.0,
+    })
+
+    await videoQueries.updateVideoEnrichStatus(this.db, videoId, {
+      doubanStatus: 'matched', metaScore, metaQuality,
+    })
     return { updated: true }
   }
 

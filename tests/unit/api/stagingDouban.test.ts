@@ -233,4 +233,30 @@ describe('DoubanService.confirmSubject()', () => {
     expect(result).toEqual({ updated: false, reason: 'catalog_update_rejected' })
     expect(videoQueries.updateVideoEnrichStatus).not.toHaveBeenCalled()
   })
+
+  // Codex stop-time review #8 fix：手动确认必须同步 meta_quality 防 stale
+  it('confirmSubject 调 updateVideoEnrichStatus 时传 metaQuality（method=manual / confidence=1 / status=manual_confirmed / 保留旧 pinyin）', async () => {
+    const prev = {
+      title_en_is_pinyin: true,
+      douban_confidence: 0.65, douban_match_method: 'alias',
+      douban_match_status: 'candidate', enriched_at: '2026-05-26T00:00:00.000Z',
+    }
+    vi.mocked(videoQueries.findAdminVideoById).mockResolvedValue(
+      { ...makeVideo(), meta_quality: prev } as never
+    )
+    vi.mocked(getDoubanDetailRich).mockResolvedValue(makeDetail() as never)
+    vi.mocked(catalogQueries.findCatalogById).mockResolvedValue(makeCatalog() as never)
+
+    await service.confirmSubject('v1', 'db123')
+
+    const call = vi.mocked(videoQueries.updateVideoEnrichStatus).mock.calls[0]
+    const meta = call[2].metaQuality!
+    expect(meta).toMatchObject({
+      title_en_is_pinyin: true,            // 保留旧 enrich 信号
+      douban_confidence: 1.0,
+      douban_match_method: 'manual',
+      douban_match_status: 'manual_confirmed',
+    })
+    expect(meta.enriched_at).not.toBe('2026-05-26T00:00:00.000Z')
+  })
 })

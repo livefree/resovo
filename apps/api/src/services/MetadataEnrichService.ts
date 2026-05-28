@@ -342,7 +342,7 @@ export class MetadataEnrichService {
 // ── 纯函数工具 ─────────────────────────────────────────────────────
 
 /**
- * CHG-365-A2: 把豆瓣命中信号写入 meta_quality 累计对象。
+ * CHG-365-A2: 把豆瓣命中信号写入 meta_quality 累计对象（auto enrich 内部用）。
  *
  * 后写覆盖前写：单次 enrich 内 step1 imdb → step1 title/alias → step2 network 至多
  * 命中其一；若不同 step 都命中（理论不可能因为 step1 命中后 step2 不执行），后写
@@ -357,6 +357,42 @@ export function recordDoubanSignal(
   metaQuality.douban_confidence = confidence
   metaQuality.douban_match_method = method
   metaQuality.douban_match_status = matchStatus
+}
+
+/**
+ * CHG-365-A2 / Codex stop-time review #8 fix: 手动豆瓣操作时合并新信号到既有
+ * meta_quality，避免 auto enrich 写入的 title_en_is_pinyin 等字段被清零。
+ *
+ * 三个手动入口：
+ *   - DoubanService.confirmSubject  → method='manual',        confidence=1.0,  status='manual_confirmed'
+ *   - DoubanService.confirmFields   → method='manual_fields', confidence=1.0,  status='manual_confirmed'
+ *   - moderation.douban-ignore      → method=undefined,       confidence=null, status='unmatched'（清零）
+ *
+ * confidence 传 `null` 表示清零（如 ignore），传 number 表示写入；method 传
+ * `null` 表示保留旧值（避免清零）。enriched_at 总是更新为当前时刻。
+ */
+export function buildManualMetaQuality(
+  prev: VideoMetaQuality | null,
+  patch: {
+    status: 'manual_confirmed' | 'unmatched'
+    method: DoubanMatchMethod | null
+    confidence: number | null
+  },
+): VideoMetaQuality {
+  const next: VideoMetaQuality = { ...(prev ?? {}) }
+  next.douban_match_status = patch.status
+  if (patch.method !== null) {
+    next.douban_match_method = patch.method
+  }
+  if (patch.confidence === null) {
+    // ignore 路径：清零 confidence + method（status 已置 unmatched）
+    delete next.douban_confidence
+    delete next.douban_match_method
+  } else {
+    next.douban_confidence = patch.confidence
+  }
+  next.enriched_at = new Date().toISOString()
+  return next
 }
 
 /**
