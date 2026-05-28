@@ -4,6 +4,7 @@ import { config } from './config'
 import { jobLogger, baseLogger } from './observability/logger'
 import { runSourceHealthLevel1, runSourceHealthLevel2 } from './jobs/source-health'
 import { runFeedbackDrivenRecheck } from './jobs/feedback-driven-recheck'
+import { runBangumiDumpRefresh } from './jobs/bangumi-dump-refresh'
 
 const log = baseLogger
 
@@ -37,6 +38,12 @@ const feedbackTask = cron.schedule(
   { scheduled: false },
 )
 
+const bangumiDumpTask = cron.schedule(
+  config.cron.bangumiDumpRefresh,
+  () => runWithLogger('bangumi-dump-refresh', () => runBangumiDumpRefresh(db, jobLogger('bangumi-dump-refresh'), config.bangumiDumpPath)),
+  { scheduled: false },
+)
+
 async function startup(): Promise<void> {
   log.info({ instanceId: config.workerInstanceId }, 'worker starting')
 
@@ -46,11 +53,13 @@ async function startup(): Promise<void> {
   level1Task.start()
   level2Task.start()
   feedbackTask.start()
+  bangumiDumpTask.start()
   log.info(
     {
       level1_cron: config.cron.level1Probe,
       level2_cron: config.cron.level2Render,
       feedback_cron: config.cron.feedbackDriven,
+      bangumi_dump_cron: config.cron.bangumiDumpRefresh,
     },
     'cron tasks started',
   )
@@ -65,6 +74,7 @@ async function shutdown(signal: string): Promise<void> {
   level1Task.stop()
   level2Task.stop()
   feedbackTask.stop()
+  bangumiDumpTask.stop()
   await db.end()
   log.info('worker stopped')
   process.exit(0)

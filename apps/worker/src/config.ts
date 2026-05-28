@@ -3,7 +3,12 @@ export const config = {
     level1Probe: process.env.WORKER_CRON_LEVEL1 ?? '0 */6 * * *',
     level2Render: process.env.WORKER_CRON_LEVEL2 ?? '0 */2 * * *',
     feedbackDriven: process.env.WORKER_CRON_FEEDBACK ?? '*/1 * * * *',
+    // CHG-BNG-09：本地 dump 定时重导 bangumi_entries（默认每周日 04:00）
+    bangumiDumpRefresh: process.env.WORKER_CRON_BANGUMI_DUMP ?? '0 4 * * 0',
   },
+  // ops 维护的 Bangumi dump 文件路径（subject.jsonlines）；缺失则跳过重导
+  bangumiDumpPath:
+    process.env.BANGUMI_DUMP_PATH ?? 'external-db/bangumi/Bangumi-dump-2025-06-24.210345Z/subject.jsonlines',
   rateLimit: {
     level1Global: 20,
     level1PerSite: 5,

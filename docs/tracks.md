@@ -202,6 +202,7 @@
   - `packages/types/src/external.types.ts`（CHG-BNG-08：BangumiCandidate / BangumiGapRow，ADR-159 §端点契约锁定）
   - `apps/api/src/lib/config.ts` + `.env.example`
   - `scripts/import-bangumi-dump.ts`（修复）
+  - `apps/worker/src/jobs/bangumi-dump-refresh.ts`（新建）+ `config.ts` + `index.ts`（CHG-BNG-09 cron 本地 dump 定时重导）
   - `docs/decisions.md`（ADR-159）+ `docs/architecture.md`（migration 077 schema 同步）
 - **持有冲突域**：`adr`（docs/decisions.md，ADR-159）、`architecture`（docs/architecture.md，077 schema）
 - **创建时间**：2026-05-27

@@ -14,11 +14,27 @@ docs 硬冲突域（adr / architecture）已在 tracks.md 声明持有。
 
 ## 进行中任务
 
-（空 — Phase 2 核心 CHG-BNG-07 + 08 已完成 ✅；CHG-BNG-09 可选 cron 延后）
+（空 — Phase 0/1/2 全部完成 ✅，含 CHG-BNG-09 cron；Track 可进入集成 PR 准备）
 
 ---
 
 ## 已完成任务
+
+### ✅ CHG-BNG-09（Phase 2-C）— worker cron 本地 dump 定时重导
+
+- **状态**：✅ 完成（2026-05-27）
+- **执行模型**：claude-opus-4-7（主循环）
+- **用户决策**：方案「本地 dump 定时重导」（零新依赖，避开 GitHub 归档 ZIP 解压需引入新依赖的 BLOCKER；不自动下载，dump 由 ops provision）。
+- **完成备注**：
+  - 新建 `apps/worker/src/jobs/bangumi-dump-refresh.ts`：`parseBangumiLine`（纯函数，type=2 过滤 / 标题回退 / 年份 / rank>0 / nsfw / 归一化）+ `upsertBatch`（与 scripts 同列 ON CONFLICT）+ `runBangumiDumpRefresh(pool, log, filePath)`（流式批量；文件缺失 warn+返回不崩 cron）。
+  - `config.ts` 加 `cron.bangumiDumpRefresh`（env `WORKER_CRON_BANGUMI_DUMP`，默认每周日 04:00）+ `bangumiDumpPath`（env `BANGUMI_DUMP_PATH`）。
+  - `index.ts` 接线 `bangumiDumpTask`（start/stop/启动日志；**不 boot 跑**，重活只按 schedule）。
+  - `.env.example` 文档化两个新 env。`docs/tracks.md` 扩 apps/worker 文件域。
+  - **复用决策**：worker 与 scripts/ 分属独立部署包，跨包运行时 import repo-root 脚本在 prod 易断 → 自包含 job，注释交叉引用 scripts/import-bangumi-dump.ts + ADR-159 + migration 077 保持同步（正确性/稳定性 #1 > 去重 #2）。
+  - 单测：bangumi-dump-refresh（7，parseBangumiLine 全分支）。
+  - **门禁**：typecheck ✅（8 包全 PASS）/ verify:adr-contracts ✅（无新端点 / 199 路由对齐 / SQL schema 对齐）/ `npm run test -- --run`：**5286 passed（399 文件全通过）**。
+  - **已知（pre-existing，非本卡引入）**：全量跑 exit code 非 0 源于 `tests/unit/server-next/admin-moderation/use-filter-presets.test.ts` 的 flaky post-teardown unhandled rejection（`window is not defined`——该测试路径 `server-next/admin-moderation/**` 不匹配 jsdom globs `admin-moderation/**` → node 环境跑，异步 setLoading 在并行 teardown 后触发）；**隔离单跑 exit 0 / 0 错误**，与 apps/worker 改动无关。属 server-next 测试卫生 + environmentMatchGlobs 覆盖缺口，**超出 bangumi Track 文件域**，建议 server-next owner 跟进。
+- **沉淀判断**：cron 接入对标既有 source-health/feedback 任务范式，自包含 job 边界清晰；parse 规则与 import 脚本交叉引用约束同步，是。
 
 ### ✅ CHG-BNG-07/08（Phase 2）— 反向建库占位 + 缺口查询 + 5 admin 端点
 
@@ -94,6 +110,6 @@ docs 硬冲突域（adr / architecture）已在 tracks.md 声明持有。
 - ⬜ CHG-BNG-06（Phase 1-D）：VideoService.update 改类型为 anime 触发 enqueueEnrichJob
 - ✅ CHG-BNG-07（Phase 2-A）：BangumiSeedService 占位条目 + 缺口清单查询（2026-05-27）
 - ✅ CHG-BNG-08（Phase 2-B）：admin 路由 moderation.bangumi.ts（5 端点，2026-05-27）
-- ⏸ CHG-BNG-09（Phase 2-C，可选）：cron 归档同步 — 延后（apps/worker + GitHub 归档下载 + 调度；plan 标注可选/后续）
+- ✅ CHG-BNG-09（Phase 2-C）：worker cron 本地 dump 定时重导（2026-05-27；用户决策方案「本地 dump 定时重导」，零新依赖）
 
 > PATCH 范围 > 5 项的卡须拆 -A/-B 子卡（workflow-rules §PATCH 软上限）。
