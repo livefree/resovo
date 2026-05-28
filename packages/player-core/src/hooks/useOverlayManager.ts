@@ -53,6 +53,12 @@ type UseOverlayManagerParams = {
   showTouchSeekIndicator: boolean;
   showUnmute: boolean;
   showBezel: boolean;
+  /**
+   * CHG-SN-9-PLAYER-ERROR / Opus R-N-2：抑制默认 error overlay。
+   * true 时即使 `error !== null` 也不入栈 error entry，消费方接管错误 UI。
+   * 默认 false 保持既有行为。
+   */
+  suppressDefaultErrorUI?: boolean;
 };
 
 const OVERLAY_PRIORITY: Record<OverlayKind, number> = {
@@ -77,6 +83,7 @@ export function buildOverlayEntries({
   showTouchSeekIndicator,
   showUnmute,
   showBezel,
+  suppressDefaultErrorUI = false,
 }: UseOverlayManagerParams): OverlayEntry[] {
   return [
     {
@@ -87,8 +94,10 @@ export function buildOverlayEntries({
       blocksGestures: false,
     },
     {
+      // CHG-SN-9-PLAYER-ERROR / Opus R-N-2：suppressDefaultErrorUI=true 时 error entry 不可见
+      // （即使 setError 已写本地 state / 消费方接管错误 UI）
       kind: "error",
-      visible: !!error,
+      visible: !!error && !suppressDefaultErrorUI,
       interactive: true,
       priority: OVERLAY_PRIORITY.error,
       blocksGestures: true,

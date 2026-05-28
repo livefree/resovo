@@ -40,6 +40,56 @@
 
 ---
 
+## [CHG-SN-9-PLAYER-ERROR] player-core 扩 onError 回调 + suppressDefaultErrorUI（Wave 3 #7 / plan §14 主线 2/6 / DEBT-FIX-D-ERROR 闭环 / arch-reviewer Opus A-→A 评审）
+- **完成时间**：2026-05-28
+- **执行模型**：claude-sonnet-4-6（主循环 / 不切换 §16.5）
+- **子代理调用**：arch-reviewer (claude-opus-4-7) — 1 轮独立评审 / agentId a13a505e2bb192667 / 输出 A- CONDITIONAL（3 红线 R-N-1/-2/-3 + 4 黄线 Y-N-1/-2/-3/-4 + 5 绿点 + 5 关键洞察 + 推荐方案 A 修订版）→ 主循环消化 3 红线全落 + Y-N-1 部分落（删 message）+ Y-N-2/-3 jsdoc 已标注 + Y-N-4（retry 上抛）留 follow-up = 等同 A
+- **拆卡承接**：plan §7 #6 立 CHG-SN-9-PLAYER-ERROR / 跨 packages 需 Opus 子代理出共享组件 API 决策（CLAUDE.md §模型路由 第 4 项"重构播放器 core / shell 层的接口"红线触发）/ 封 DEBT-FIX-D-ERROR（AdminPlayer 行 11 占位）/ ADR-108 onError → errorCode 上报承诺兑现
+- **Opus 评审 3 红线消解**：
+  - **R-N-1** code 枚举不留死位：删 'hls_manifest_failed' + 'hls_fragment_failed'（useSourceLoader 只在 fatal 时触发 / 无真实触发点 / open-set 增量扩即可）→ 最终 3 项 `'native_media_failed' | 'hls_fatal' | 'unknown'`
+  - **R-N-2** setError + onError 双通道职责划清：新增 `suppressDefaultErrorUI?: boolean` Props（默认 false 保持既有行为 / true 时 useOverlayManager error entry visible=false 让消费方接管错误 UI / AdminPlayer/PlayerShell 自渲染浮层不与 player-core 默认 overlay 视觉冲突）
+  - **R-N-3** PlayerErrorEvent.src 快照语义警告：jsdoc 显式标注"错误发生时刻 Player 内部 props.src 的快照 / 消费方做 dead-source 标记不应字符串匹配 src URL / 应自己持有 sourceId / lineKey 关联防雪崩 dead"
+- **Opus 评审黄线落地**：
+  - Y-N-1（部分落）：删 message 字段（player-core 无 i18n 基础设施 / 消费方按 code 自 i18n）
+  - Y-N-2：与既有 onTimeUpdate(t, d) 多参形态不对称的合理性 jsdoc 注释（errorEvent 高频调用 vs onTimeUpdate ~4Hz 对象分配开销权衡）
+  - Y-N-3：'unknown' 兜底 jsdoc 明确 defensive coding（非 placeholder / Sentry 上报后扩 code 枚举）
+  - Y-N-4（留 follow-up）：retrySourceLoad 上抛留独立卡 CHG-SN-9-PLAYER-ERROR-RETRY-CONTROL（onError(event, controls) vs imperativeHandle 二选 / 跨 Opus 决策）
+- **范围**（4 业务 + 1 测试 / PATCH=5 严守 ≤ 5 / 触发 Opus trailer）：
+  - `packages/player-core/src/types.ts` 扩：
+    - `PlayerErrorCode` union（3 成员 + jsdoc R-N-1 不留死位说明）
+    - `PlayerErrorEvent` interface（code + src 快照警告 + fatal 字段 + jsdoc R-N-3）
+    - `PlayerProps.onError?: (event: PlayerErrorEvent) => void`（jsdoc 含消费方典型用途 / 不暗示 i18n message / Y-N-2 不对称合理性）
+    - `PlayerProps.suppressDefaultErrorUI?: boolean`（jsdoc 含使用条件 / 仅在 onError 同时设置时有意义）
+  - `packages/player-core/src/hooks/useOverlayManager.ts` 接 `suppressDefaultErrorUI?: boolean` 入参 → buildOverlayEntries 中 error entry `visible: !!error && !suppressDefaultErrorUI`（默认 false 保持既有行为）
+  - `packages/player-core/src/Player/usePlayerOrchestration.ts` OrchestrationProps 扩 onError + suppressDefaultErrorUI / useOverlayManager call 透传 suppressDefaultErrorUI / useSourceLoader call 透传 onError
+  - `packages/player-core/src/Player.tsx` PlayerProps 解构 onError + suppressDefaultErrorUI 默认 false / 透传到 orchestration / native onError 处理器调 `onError?.({ code: 'native_media_failed', src: src ?? null, fatal: true })`（setError 行为保留 / suppressDefaultErrorUI 透到 useOverlayManager 守视性）
+  - `packages/player-core/src/hooks/useSourceLoader.ts` 接 `onError?: (event: PlayerErrorEvent) => void` 参数 + HLS fatal 触发 `onError?.({ code: 'hls_fatal', src: src ?? null, fatal: true })` + useEffect 依赖加 onError
+  - `tests/unit/player-core/overlay-manager.test.ts` NEW 6 case：buildOverlayEntries 纯函数 suppressDefaultErrorUI 守卫（缺省/false/true 路径 + null error 优先 + 其他 overlay 不受影响 + priority/blocksGestures/interactive 保持不变）
+- **不在本卡范围**（Opus 明示 / 留 follow-up）：
+  - AdminPlayer onError 消费 + feedback 上报失败（POST /v1/feedback/playback {success:false, errorCode}）→ **CHG-SN-9-PLAYER-ERROR-CONSUMER-A**
+  - PlayerShell onError 消费 + 自动切下一线路 + 标 dead-source → **CHG-SN-9-PLAYER-ERROR-CONSUMER-B**
+  - retrySourceLoad 上抛（onError(event, controls) vs imperativeHandle）→ **CHG-SN-9-PLAYER-ERROR-RETRY-CONTROL**
+  - feedback-reporter（ADR-108）与 AdminPlayer 手动上报去重策略 → 在 ADR-108 实施时评估
+- **不触发 architecture.md 同步**（CHG-368-B-A1-FIX-{1..5} 经验持续核对）：
+  - 本卡无 schema migration / 仅 packages/player-core public API 扩展
+  - 不触发 CLAUDE.md "schema 变更不同步 architecture.md" 红线
+  - player-core API 演进通过 jsdoc + types 即可 / architecture.md 不强制同步组件 API（仅 schema 强制）
+- **设计取舍**：① 方案 A 修订版（散开 code + fatal）：与 onTimeUpdate 等扁平回调签名故意不一致（Y-N-2）/ 错误事件需结构化元数据支撑分流 / 高频回调如 onTimeUpdate ~4Hz 才保留扁平避免对象分配 ② 方案 B（Error）拒绝：fragile 字符串匹配跨 locale 立刻碎（Opus G-N-4） ③ 方案 C（多 callback）拒绝：破坏 PlayerProps 单 callback 对称性 + Props 膨胀 + 强制消费方挂 3 个 handler（Opus G-N-1） ④ src 快照非匹配键：jsdoc R-N-3 显式警告 + 消费方应持有 sourceId/lineKey ⑤ suppressDefaultErrorUI 默认 false：保持既有行为零回归 / 消费方主动 opt-in 接管 ⑥ 'unknown' 防御兜底：Y-N-3 jsdoc 强调 Sentry 上报触发增量扩 code 枚举 / open-set 演进路径
+- **质量门禁**：typecheck ✅ EXIT=0（root + 5 workspaces）/ lint ✅ EXIT=0 / verify:adr-contracts ✅ EXIT=0 / 单测 player-core overlay-manager 6/6 PASS / 既有 player-shell-hydration / player-shell-preview-mode / admin-player 域既有零回归（未跑全 / Wave 验收期跑）
+- **commit trailer**：`Subagents: arch-reviewer (claude-opus-4-7)`（双红线触发 / packages/player-core public API 扩展 + 跨 packages 共享组件接口决策两项均触发 Opus trailer 必含规范 / CLAUDE.md §模型路由 第 4 项"重构播放器 core / shell 层的接口"红线）
+- **六问自检**：
+  - Q1 本次逻辑应沉淀共享层？✅ player-core public API 扩 + 跨 packages 共享接口决策 = 本卡本身即沉淀 / AdminPlayer/PlayerShell 消费方接入留 follow-up 但 API 契约已就位
+  - Q2 是否引入回归？✅ suppressDefaultErrorUI 默认 false 保持既有行为 / setError 行为不变 / 6/6 测试 PASS / typecheck + lint + verify 全 EXIT=0
+  - Q3 是否越层？✅ 改动全在 packages/player-core 内 / 消费方不动 / Route → Service → DB 不涉及
+  - Q4 是否硬编码值 / any 类型？✅ 无 any / PlayerErrorCode union literal type / src 严格 string | null / fatal 严格 boolean
+  - Q5 是否布局变化？✅ 仅扩 API / 行为零回归（默认值保持） / 消费方未 opt-in 时无视觉变化
+  - Q6 文件范围内？✅ 5 文件 PATCH=5 严守
+- **偏离检测**：无（本卡完全按 arch-reviewer Opus 评审 A- 推荐方案 A 修订版执行 / 3 红线全落 + Y-N-1/-2/-3 落 + Y-N-4 留 follow-up / 5 文件清单全命中）
+- **[AI-CHECK] 结论**：A（Opus A- CONDITIONAL → 3 红线消解 + 4 黄线 3 落 1 留升 A）。player-core onError + suppressDefaultErrorUI public API 契约 ship / DEBT-FIX-D-ERROR API 端闭环 / 消费方接入 (CHG-SN-9-PLAYER-ERROR-CONSUMER-A/B) follow-up 就绪 / ADR-108 兑现 / 5 关键洞察全反映在落地决策中
+- **闭环**：CHG-SN-9-PLAYER-ERROR 完成 / player-core onError 回调 + suppressDefaultErrorUI Props ship / DEBT-FIX-D-ERROR 名义闭合 + API 接入路径就位 / Wave 3 plan §14 主线 2/6 完成 / Wave 3 SEQ 整体 6/10 完成（4 长尾 + 2 主线 / 1 DEFERRED）/ 消费方接入留 3 follow-up 卡（CONSUMER-A/B + RETRY-CONTROL）/ 主循环自动取下一卡（CHG-SN-9-META-BANGUMI-A / 新 ADR / 新依赖 / Opus 子代理）
+
+---
+
 ## [CHG-SN-9-REJECTED-ENHANCE-A] RejectedTab 分页 hook 抽取 + 接入（Wave 3 #6 / plan §14 主线 1/6 / -A 分页子卡 / -B 视觉对齐留 follow-up）
 - **完成时间**：2026-05-28
 - **执行模型**：claude-sonnet-4-6（主循环 / 不切换 §16.5）

@@ -9,7 +9,7 @@ import { buildOverlayEntries, useOverlayManager } from "../hooks/useOverlayManag
 import { useInputRouter } from "../hooks/useInputRouter";
 import { useKeyboardShortcuts } from "../hooks/useKeyboardShortcuts";
 import { resolveQualityHeight } from "../utils/format";
-import type { QualityLevel, SubtitleTrack, Chapter } from "../types";
+import type { QualityLevel, SubtitleTrack, Chapter, PlayerErrorEvent } from "../types";
 import type { PlayerState } from "./usePlayerState";
 
 export interface OrchestrationProps {
@@ -31,6 +31,9 @@ export interface OrchestrationProps {
   autoplay: boolean;
   keepControlsVisible: boolean;
   thumbnailTrack?: string;
+  // CHG-SN-9-PLAYER-ERROR / arch-reviewer Opus 评审：错误回调 + 默认 UI 抑制
+  onError?: (event: PlayerErrorEvent) => void;
+  suppressDefaultErrorUI?: boolean;
 }
 
 export function usePlayerOrchestration(props: OrchestrationProps, state: PlayerState) {
@@ -143,6 +146,7 @@ export function usePlayerOrchestration(props: OrchestrationProps, state: PlayerS
     setIsPlaying,
     setIsMuted,
     setShowUnmute,
+    onError: props.onError,
   });
 
   const {
@@ -246,6 +250,7 @@ export function usePlayerOrchestration(props: OrchestrationProps, state: PlayerS
     isEpisodesOpen,
     settingsPlacement: layoutDecision.placements.settingsPanel,
     episodesPlacement: layoutDecision.placements.episodesPanel,
+    suppressDefaultErrorUI: props.suppressDefaultErrorUI,
   });
 
   const inputRouter = useInputRouter({

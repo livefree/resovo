@@ -1978,7 +1978,7 @@ CHG-369 (前台主题选择器, 独立)
 
 ## [SEQ-20260528-MOD-WAVE3] server-next 内容审核台 Wave 3 — Wave 2 长尾清理 + 架构 / 长期 P3 卡（plan §14 Wave 3 + §17.2 Wave 3 增补）
 
-- **状态**：🔄 进行中（5/10 完成 + 1 DEFERRED / 长尾 4/4 + 主线 1/6 / 下一卡 CHG-SN-9-PLAYER-ERROR / Opus 子代理）
+- **状态**：🔄 进行中（6/10 完成 + 1 DEFERRED / 长尾 4/4 + 主线 2/6 / 下一卡 CHG-SN-9-META-BANGUMI-A / 新 ADR + 新依赖 / Opus 子代理）
 - **创建时间**：2026-05-28
 - **目标**：按用户 2026-05-28 决策"长尾先清 + plan §14 主线"：先清 4 张 Wave 2 长尾 follow-up，再按 plan §14 / §17.2 Wave 3 入 6 张 P3 长期主线卡。
 - **执行约束**：沿用 Wave 1/2 §16.1-16.5（UI/UX 谨慎 / docs/manual 同步 / 主循环全自动 + BLOCKER 触发清单）
@@ -1995,7 +1995,7 @@ CHG-369 (前台主题选择器, 独立)
 | 4 | ✅ **CHG-368-B-FOLLOWUP-AUTO-RETIRED-LABEL** 已完成（2026-05-28 / 主循环 claude-sonnet-4-6 / 子代理 arch-reviewer (claude-opus-4-7) agentId a8f0bb30cc856631f）| LinesPanel 退役标识区分"（已退役·自动）/（已退役·手动）" / LineAggregate 扩 autoRetired + Y-A-1 invariant JSDoc + Y-A-2 派生字段集注释升级 + 数据通路（SQL + ContentSourceRow + RawSourceRow + aggregate + UI 文案 + aria-label + data-line-retired-auto） / Opus A- CONDITIONAL → 0 红线 + Y-A-1/Y-A-2 全落升 A / PATCH=6 超 5 接受完成度风险（同源不变式原子提交） / 53/53 测试 PASS / typecheck + lint + verify 全 EXIT=0 / ADR-164 D-164-8 UI 兑现 | 否（ADR-164 advisory）| sonnet-4-6 + arch-reviewer (opus-4-7) |
 | 5 | ⛔ **CHG-SN-9-MOD-BUTTON-MIGRATE** DEFERRED（2026-05-28 / 用户决策方案 A）| plan §5 P2 / BTN_* → AdminButton 机械迁移 / 实测 38 tsx 文件 / 100+ raw button 远超 PATCH 5 软上限 / 独立 SEQ-FOLLOWUP-MIGRATE 长尾系列择期推进 / 非 Wave 3 节奏 | 否 | (deferred) |
 | 6 | ✅ **CHG-SN-9-REJECTED-ENHANCE-A** 已完成（2026-05-28 / 主循环 claude-sonnet-4-6 / 子代理 无）| plan §5 P2 拆 -A 分页 / useRejectedQueue.ts NEW 152 行（仿 usePendingQueue 精简 / page+limit + activeIdx near-end loadMore + sessionStorage 持久化 + length > 5 守卫修 spurious bug）+ RejectedTabContent 接入 hook + listHeader 升级 + 加载更多 UI / 3 业务 + 1 测试 + 1 i18n PATCH=5 严守 / 8/8 useRejectedQueue 测试 PASS / typecheck + lint + verify 全 EXIT=0（含 verify-style-shorthand-conflict 1 处 LOAD_MORE_BTN border 冲突修复）/ -B 视觉对齐留 follow-up | 否 | sonnet-4-6 |
-| 7 | ⬜ **CHG-SN-9-PLAYER-ERROR** 待开始 | plan §5 P3 / player-core onError 回调（接口扩展 → 强制 Opus 子代理 / CLAUDE.md §模型路由"重构播放器 core / shell 层的接口"）| 否（演进式接口扩展）| opus-4-7 + arch-reviewer |
+| 7 | ✅ **CHG-SN-9-PLAYER-ERROR** 已完成（2026-05-28 / 主循环 claude-sonnet-4-6 / 子代理 arch-reviewer (claude-opus-4-7) agentId a13a505e2bb192667）| plan §5 P3 / player-core onError + suppressDefaultErrorUI public API / Opus A- CONDITIONAL → 3 红线 R-N-1/-2/-3 全落 + 4 黄线 3 落 1 留 RETRY-CONTROL follow-up / 升 A / PATCH=5 严守 (types + Player + orchestration + overlay + sourceLoader 4 业务 + 1 测试) / 6/6 buildOverlayEntries 测试 PASS / typecheck + lint + verify 全 EXIT=0 / DEBT-FIX-D-ERROR API 端闭环 / ADR-108 兑现 / 消费方接入留 3 follow-up 卡（CONSUMER-A/B + RETRY-CONTROL）| 否（演进式接口扩展）| sonnet-4-6 + arch-reviewer (opus-4-7) |
 | 8 | ⬜ **CHG-SN-9-META-BANGUMI-A** 待开始 | plan §10.4.2 方案 A / Bangumi 实时 API 集成（BangumiService + secrets + ADR 起草 + 新依赖）| 是（新 ADR）| opus-4-7 + arch-reviewer |
 | 9 | ⬜ **CHG-SN-9-SITE-VIEWS-EXTRACT** 待开始 | plan §10.6 方案 C / 抽 `packages/site-views`（跨 app 重构 / 共享层沉淀 / 大型）| 是（架构 ADR）| opus-4-7 + arch-reviewer |
 | 10 | ⬜ **CHG-SN-9-ROUTE-LABEL-D** 待开始 | plan §17.2 Wave 3 / `users.preferences` schema + 跨设备主题同步 + 端点（schema migration + ADR）| 是（schema ADR）| opus-4-7 + arch-reviewer |

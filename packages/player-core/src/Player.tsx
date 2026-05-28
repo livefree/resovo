@@ -51,6 +51,8 @@ export function Player({
   style,
   keepControlsVisible = false,
   thumbnailTrack,
+  onError,
+  suppressDefaultErrorUI = false,
 }: PlayerProps) {
   const state = usePlayerState({
     initialVolume,
@@ -67,6 +69,7 @@ export function Player({
       subtitles, title, author, poster, chapters, onNext,
       episodes, activeEpisodeIndex, onEpisodeChange, onTheaterChange,
       startTime, autoplay, keepControlsVisible, thumbnailTrack,
+      onError, suppressDefaultErrorUI,
     },
     state,
   );
@@ -273,6 +276,9 @@ export function Player({
             if (isManagedHlsSource) return;
             setError("Video failed to load. Please try again.");
             setLoadingState("idle");
+            // CHG-SN-9-PLAYER-ERROR / Opus 评审：native onError 触发外部 onError
+            // src 为错误发生时刻快照（消费方不应字符串匹配做 dead 标记 / 见 PlayerErrorEvent.src jsdoc）
+            onError?.({ code: "native_media_failed", src: src ?? null, fatal: true });
           }}
           onEnded={() => {
             setIsPlaying(false);

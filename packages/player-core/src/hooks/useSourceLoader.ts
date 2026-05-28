@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef } from "react";
+import type { PlayerErrorEvent } from "../types";
 
 interface UseSourceLoaderParams {
   videoRef: React.RefObject<HTMLVideoElement | null>;
@@ -16,6 +17,8 @@ interface UseSourceLoaderParams {
   setIsPlaying: React.Dispatch<React.SetStateAction<boolean>>;
   setIsMuted: React.Dispatch<React.SetStateAction<boolean>>;
   setShowUnmute: React.Dispatch<React.SetStateAction<boolean>>;
+  /** CHG-SN-9-PLAYER-ERROR / Opus 评审：HLS fatal 错误时回调（与外部 PlayerProps.onError 同源） */
+  onError?: (event: PlayerErrorEvent) => void;
 }
 
 export function useSourceLoader({
@@ -32,6 +35,7 @@ export function useSourceLoader({
   setIsPlaying,
   setIsMuted,
   setShowUnmute,
+  onError,
 }: UseSourceLoaderParams) {
   const hlsRef = useRef<import("hls.js").default | null>(null);
 
@@ -130,6 +134,9 @@ export function useSourceLoader({
             if (disposed || !data.fatal) return;
             setLoadingState("idle");
             setError("视频加载失败，请检查网络或刷新重试");
+            // CHG-SN-9-PLAYER-ERROR / Opus 评审：HLS fatal 触发外部 onError
+            // src 为错误发生时刻快照（消费方不应字符串匹配做 dead 标记 / 见 PlayerErrorEvent.src jsdoc）
+            onError?.({ code: "hls_fatal", src: src ?? null, fatal: true });
           });
         })
         .catch(() => {
@@ -159,6 +166,7 @@ export function useSourceLoader({
     src,
     startTime,
     videoRef,
+    onError,
   ]);
 
   const retrySourceLoad = useCallback(() => {
