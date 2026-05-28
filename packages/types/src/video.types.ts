@@ -55,6 +55,30 @@ export type DoubanStatus = typeof DOUBAN_STATUSES[number]
 /** 源活性批量检验结果（ADR-157 D-157-1 双形态） */
 export const SOURCE_CHECK_STATUSES = ['pending', 'ok', 'partial', 'all_dead'] as const
 export type SourceCheckStatus = typeof SOURCE_CHECK_STATUSES[number]
+
+/** 豆瓣匹配方式：MetadataEnrichService 写入 meta_quality.douban_match_method */
+export const DOUBAN_MATCH_METHODS = ['imdb_id', 'title', 'alias', 'network'] as const
+export type DoubanMatchMethod = typeof DOUBAN_MATCH_METHODS[number]
+
+/**
+ * VideoMetaQuality — videos.meta_quality jsonb 信号字典（Migration 077，CHG-365-A2）
+ *
+ * 由 MetadataEnrichService 写入，集中存放 enrich 阶段产生的可观测信号；前端只读，
+ * 审核台 TabDetail 用于驱动"重新匹配"提示。所有字段可选（jsonb 局部更新 / 信号缺
+ * 失允许）。
+ */
+export interface VideoMetaQuality {
+  /** PinyinDetector (CHG-365-A1) 判断 media_catalog.title_en 是否实际为中文拼音 */
+  title_en_is_pinyin?: boolean
+  /** 豆瓣命中置信度 0..1（Step1 / Step2 写入） */
+  douban_confidence?: number
+  /** 豆瓣匹配方式：imdb 精确 / title_norm 精确 / alias 精确 / 网络搜索 */
+  douban_match_method?: DoubanMatchMethod
+  /** 豆瓣匹配状态：与 video_external_refs.match_status 对齐 */
+  douban_match_status?: 'auto_matched' | 'candidate' | 'unmatched'
+  /** Service 写入时刻（ISO 8601 / 用于"上次丰富时间"显示与重跑判断） */
+  enriched_at?: string
+}
 /** VideoGenre — 内容题材（与 VideoType 内容形式严格正交）
  *
  * 对齐豆瓣视频分类（2026-04-22 META-10 对齐表）：
@@ -144,6 +168,8 @@ export interface Video {
   sourceCheckStatus: SourceCheckStatus
   /** 元数据完整度评分 0-100 */
   metaScore: number
+  /** 元数据信号字典（Migration 077，CHG-365-A2）— null 表示尚未 enrich */
+  metaQuality: VideoMetaQuality | null
   // 榜单标签（Migration 051，ADR-052）
   trendingTag: TrendingTag | null
   // 图片治理字段（IMG-01，ADR-046）——前台渲染最小集，由 media_catalog JOIN 提供

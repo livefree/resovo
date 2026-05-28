@@ -14,12 +14,13 @@
  */
 
 import type { Pool } from 'pg'
-import type { DoubanStatus, SourceCheckStatus } from '@/types'
+import type { DoubanStatus, DoubanMatchMethod, SourceCheckStatus, VideoMetaQuality } from '@/types'
 import { searchDouban } from '@/api/lib/douban'
 import { getDoubanDetailRich } from '@/api/lib/doubanAdapter'
 import { mapDoubanGenres } from '@/api/lib/genreMapper'
 import { MediaCatalogService } from './MediaCatalogService'
 import { normalizeTitle } from './TitleNormalizer'
+import { isPinyin } from './PinyinDetector'
 import * as externalDataQueries from '@/api/db/queries/externalData'
 import * as sourcesQueries from '@/api/db/queries/sources'
 import * as videosQueries from '@/api/db/queries/videos'
@@ -66,20 +67,35 @@ export class MetadataEnrichService {
     const { videoId, catalogId, title, year, type } = data
     const titleNorm = normalizeTitle(title)
 
-    // 预取 catalog 以获取 imdbId（供 step1 精确匹配），step5 仍独立查询以拿到更新后的数据
+    // 预取 catalog 以获取 imdbId 与 titleEn（供 step1 精确匹配 / 拼音判断），
+    // step5 仍独立查询以拿到更新后的数据
     const catalogSnapshot = await catalogQueries.findCatalogById(this.db, catalogId)
     const imdbId = catalogSnapshot?.imdbId ?? null
+    const titleEn = catalogSnapshot?.titleEn ?? null
 
     let doubanStatus: DoubanStatus = 'unmatched'
 
+    // CHG-365-A2: meta_quality 信号字典累计器；step1/step2 写入豆瓣置信度，
+    // enrich 入口直接判 title_en 是否拼音（PinyinDetector / CHG-365-A1）
+    const metaQuality: VideoMetaQuality = {
+      title_en_is_pinyin: isPinyin(titleEn),
+    }
+
     // Step 1: 本地豆瓣多字段召回
-    const step1 = await this.step1LocalDouban(videoId, catalogId, titleNorm, title, year, imdbId)
+    const step1 = await this.step1LocalDouban(
+      videoId, catalogId, titleNorm, title, year, imdbId, metaQuality,
+    )
     if (step1 !== null) {
       doubanStatus = step1
     } else {
       // Step 2: 本地无任何匹配，fallback 至网络搜索
-      const step2 = await this.step2NetworkSearch(videoId, catalogId, title, year)
+      const step2 = await this.step2NetworkSearch(videoId, catalogId, title, year, metaQuality)
       if (step2 !== null) doubanStatus = step2
+    }
+
+    // 豆瓣未命中（Step1/Step2 均未写信号）→ 显式标记 unmatched 便于审核台筛选
+    if (metaQuality.douban_match_status === undefined) {
+      metaQuality.douban_match_status = 'unmatched'
     }
 
     // Step 3: 动画类型补充 Bangumi 数据
@@ -93,7 +109,11 @@ export class MetadataEnrichService {
     // Step 5: 计算 meta_score
     const metaScore = await this.step5MetaScore(catalogId)
 
-    await videosQueries.updateVideoEnrichStatus(this.db, videoId, { doubanStatus, metaScore })
+    metaQuality.enriched_at = new Date().toISOString()
+
+    await videosQueries.updateVideoEnrichStatus(this.db, videoId, {
+      doubanStatus, metaScore, metaQuality,
+    })
     await videosQueries.updateVideoSourceCheckStatus(this.db, videoId, sourceStatus)
   }
 
@@ -106,11 +126,13 @@ export class MetadataEnrichService {
     originalTitle: string,
     year: number | null,
     imdbId: string | null,
+    metaQuality: VideoMetaQuality,
   ): Promise<DoubanStatus | null> {
     // 1a: imdb_id 精确匹配（最高置信度，直接 auto_matched）
     if (imdbId) {
       const imdbMatch = await externalDataQueries.findDoubanByImdbId(this.db, imdbId)
       if (imdbMatch) {
+        recordDoubanSignal(metaQuality, 1.0, 'imdb_id', 'auto_matched')
         await this.writeExternalRef(videoId, imdbMatch.doubanId, 'auto_matched', 1.0, { imdb_id: 1.0 }, 'imdb_id')
         await this.catalogService.safeUpdate(catalogId, {
           doubanId: imdbMatch.doubanId,
@@ -147,6 +169,8 @@ export class MetadataEnrichService {
 
     const matchStatus = confidence >= CONFIDENCE_AUTO_MATCH ? 'auto_matched' : 'candidate'
 
+    recordDoubanSignal(metaQuality, confidence, matchBy, matchStatus)
+
     // 写 video_external_refs（无论 auto_matched 还是 candidate）
     await this.writeExternalRef(videoId, best.doubanId, matchStatus, confidence, breakdown, matchBy)
 
@@ -177,6 +201,7 @@ export class MetadataEnrichService {
     catalogId: string,
     title: string,
     year: number | null,
+    metaQuality: VideoMetaQuality,
   ): Promise<DoubanStatus | null> {
     let candidates: Awaited<ReturnType<typeof searchDouban>>
     try {
@@ -193,6 +218,7 @@ export class MetadataEnrichService {
       const detail = await getDoubanDetailRich(best.id)
       if (detail) {
         const ratingNum = detail.rate ? parseFloat(detail.rate) : NaN
+        recordDoubanSignal(metaQuality, best.score, 'network', 'auto_matched')
         await this.catalogService.safeUpdate(catalogId, {
           doubanId: detail.id,
           rating: !isNaN(ratingNum) ? ratingNum : undefined,
@@ -215,6 +241,7 @@ export class MetadataEnrichService {
 
     const status = best.score >= CANDIDATE_THRESHOLD ? 'candidate' : 'unmatched'
     if (status === 'candidate') {
+      recordDoubanSignal(metaQuality, best.score, 'network', 'candidate')
       await this.writeExternalRef(
         videoId, best.id, 'candidate',
         best.score, { network_score: best.score }, 'network'
@@ -313,6 +340,24 @@ export class MetadataEnrichService {
 }
 
 // ── 纯函数工具 ─────────────────────────────────────────────────────
+
+/**
+ * CHG-365-A2: 把豆瓣命中信号写入 meta_quality 累计对象。
+ *
+ * 后写覆盖前写：单次 enrich 内 step1 imdb → step1 title/alias → step2 network 至多
+ * 命中其一；若不同 step 都命中（理论不可能因为 step1 命中后 step2 不执行），后写
+ * 覆盖前写代表"最终生效的匹配信号"。
+ */
+export function recordDoubanSignal(
+  metaQuality: VideoMetaQuality,
+  confidence: number,
+  method: DoubanMatchMethod,
+  matchStatus: 'auto_matched' | 'candidate',
+): void {
+  metaQuality.douban_confidence = confidence
+  metaQuality.douban_match_method = method
+  metaQuality.douban_match_status = matchStatus
+}
 
 /**
  * META-05: 计算本地 dump 条目的置信度

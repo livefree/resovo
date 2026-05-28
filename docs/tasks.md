@@ -6,7 +6,7 @@
 
 ## 进行中任务
 
-（空 — CHG-365-A1 完成 ✅ / Wave 2 卡 13/17 / CHG-365-A/B SKIPPED + 拆 A1/A2 / 下一个 CHG-365-A2 meta_quality schema + 集成持久化）
+（空 — CHG-365-A2 完成 ✅ / Wave 2 卡 14/17 / CHG-365 META-DOUBAN-AUTO 完整序列闭环 / 下一个 CHG-366 META-COUNTRY-DISPLAY）
 
 ---
 
@@ -18,7 +18,7 @@
 
 - ✅ CHG-345（EpisodeSelector ↔ LinesPanel ↔ AdminPlayer / 84ccf041）
 - ✅ CHG-346（StagingTabContent 死代码清理 / 43105c35）
-- ✅ CHG-347（SPLIT-A usePendingQueue hook / f032f737）
+- ✅ CHG-347(SPLIT-A usePendingQueue hook / f032f737)
 - ✅ CHG-348（SPLIT-B BatchActionsBar / 93572682）
 - ✅ CHG-349（SPLIT-C PendingPaneController / 02926ac2）
 - ✅ CHG-350（左栏 search + filterChips / 05283390 + CHG-350-FIX/FIX-2 + CHG-355 第 3 次复发根治）
@@ -32,7 +32,7 @@
 
 ---
 
-## Wave 2 进行中（SEQ-20260527-MOD-WAVE2 / 13/17）
+## Wave 2 进行中（SEQ-20260527-MOD-WAVE2 / 14/17）
 
 - ✅ CHG-361-A（ADR-160 起草 + getVideoDetailHref 沉淀 / 5f64e78d）
 - ✅ CHG-361-B2（apps/api 后端 3 文件 + 5 case 单测 + ADR-160 AMENDMENT 1 / a3c1c9ed）
@@ -52,10 +52,13 @@
 
 **MERGE 系列：CHG-364 MERGE-INLINE 完整序列闭环 ✅（-A BatchActionsBar 合并按钮 → -B MergeClient ?ids 深链 + BatchMergeWorkspace 选 target + 提交 mergeVideos）/ 审核台批量选 ≥2 条 → ↔ 合并 → /admin/merge?ids=<csv> 端到端就绪**
 
+**META 系列：CHG-365 META-DOUBAN-AUTO 完整序列闭环 ✅（A1 PinyinDetector helper → A2 schema + 集成持久化）/ Migration 077 + VideoMetaQuality + MetadataEnrichService 写入豆瓣 confidence/method/status + 拼音判断 + enriched_at / 审核台 TabDetail "重新匹配"提示与质量门禁观察数据底座完整**
+
 - ✅ CHG-364-A（BatchActionsBar "↔ 合并" 按钮入口 + 4 case PASS / 4662de12）
 - ✅ CHG-364-B（MergeClient ?ids query + BatchMergeWorkspace + 6 case PASS / 595e68ec + 0f02cf96）
 - ⛔ CHG-365-A/B SKIPPED（MetadataEnrichService 已实施 80% / BLOCKER #2 / 3da17c74）
-- ✅ CHG-365-A1（PinyinDetector helper + 18 case PASS / 本卡 / 待 commit）
+- ✅ CHG-365-A1（PinyinDetector helper + 18 case PASS / 8926bcfd + 07545f93 + 9c9fa2e8）
+- ✅ CHG-365-A2（Migration 077 + VideoMetaQuality + MetadataEnrichService 集成 + 23 case PASS（+3）/ 本卡 / 待 commit）
 
 ---
 
@@ -69,3 +72,5 @@
 - **audit 4 真源 advisory follow-up**：crawler_task.* + image_health.* 4 项 actionType 在 union (1) + REQUIRED (4) 已含，但 AuditLogService.ACTION_TYPES (2) + EXPECTED_ACTION_TYPES (3a) 未同步（set-equal 守卫两边自洽 drift 而 PASS）；隐式违反 4 真源严格性；建议独立 follow-up 卡修复
 - **Phase 2 route-labeling 优化**：后端 SourceService 派生 `isDead: boolean` 字段（health_score === 0 严格判定）替代前端 effectiveScore < 0.1 heuristic / 暴露到 VideoSource
 - **PRE-PROBE-WORKER / PRE-RENDER-CHECK-WORKER**：source-health worker + player-render-check worker 真实写回 probe_status / render_status / latency_ms（advisory ADR-158 A2 + A4 / 当前都是占位 jobId）
+- **localStorage 全量测试 flaky**：CHG-365-A2 全量测试发现 167 个测试在 jsdom 环境下 `localStorage.clear is not a function` / main 分支同样 fail（pre-existing / 与本卡零关联）/ vitest jsdom 环境 setup 缺 localStorage stub / 独立 follow-up 卡 CHG-INFRA-VITEST-LOCALSTORAGE 修复
+- **meta_quality 消费方**：CHG-365-A2 仅落 schema + service 写入 / 审核台 TabDetail "重新匹配" UI 提示尚未消费 meta_quality.douban_confidence + douban_match_method 字段（plan §10.4.1 治理路径"重新匹配"+ "手动指定豆瓣 URL/ID" 按钮 / 独立 follow-up 卡承接）

@@ -278,6 +278,7 @@ resovo/
 - `douban_status`：`pending | matched | candidate | unmatched`（Migration 032，自动丰富 Job 写入）
 - `source_check_status`：`pending | ok | partial | all_dead`（Migration 032，源活性批量检验结果）
 - `meta_score`：`SMALLINT 0-100`（Migration 032，元数据完整度评分）
+- `meta_quality`：`JSONB NOT NULL DEFAULT '{}'`（Migration 077，CHG-365-A2 / plan §10.4.1）。MetadataEnrichService 写入的"信号字典"，字段约定 `title_en_is_pinyin / douban_confidence / douban_match_method (imdb_id|title|alias|network) / douban_match_status (auto_matched|candidate|unmatched) / enriched_at`，详 `packages/types/src/video.types.ts#VideoMetaQuality`；部分索引 `idx_videos_meta_quality_pinyin` 加速审核台"疑似拼音"筛选。
 
 注意：历史文档中的 `blocked` 状态已不在当前 schema 中。
 

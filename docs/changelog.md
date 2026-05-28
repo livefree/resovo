@@ -9985,3 +9985,23 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
   - MetadataEnrichService 集成调用 PinyinDetector（依赖 meta_quality schema 持久化）
   - meta_quality jsonb 字段 / migration 077 / queries 扩 / architecture.md 同步
 - **闭环**：CHG-365-A1 完成（helper 独立就绪可被 A2 集成）/ Wave 2 卡 13/17 / 待 CHG-365-A2 schema + 集成持久化
+
+---
+
+## [CHG-365-A2] META-DOUBAN-AUTO meta_quality jsonb 持久化 + MetadataEnrichService 集成（Wave 2 #16 / plan §10.4.1）
+- **完成时间**：2026-05-27
+- **执行模型**：claude-opus-4-7（主循环 / 续会话）
+- **子代理调用**：无（schema 扩展非 ADR-needed / 复用 Migration 032 douban_status + meta_score 模式）
+- **范围**（PATCH ≤ 5：6 业务 + 1 测试 + 1 docs / 数据持久化层 1:1 计划）：
+  - `apps/api/src/db/migrations/077_videos_meta_quality.sql` 新建：`ALTER TABLE videos ADD COLUMN meta_quality JSONB NOT NULL DEFAULT '{}'::jsonb CHECK (jsonb_typeof(meta_quality) = 'object')` + 部分索引 `idx_videos_meta_quality_pinyin ON ((meta_quality ->> 'title_en_is_pinyin')) WHERE meta_quality ? 'title_en_is_pinyin'`（沿用 Migration 048 stills_meta 范式）+ DO $$ 验证块
+  - `packages/types/src/video.types.ts`：新增 `DOUBAN_MATCH_METHODS = ['imdb_id','title','alias','network']` const SSOT + `DoubanMatchMethod` 类型（ADR-157 双形态）/ 新增 `VideoMetaQuality` interface（5 可选字段：title_en_is_pinyin / douban_confidence 0..1 / douban_match_method / douban_match_status / enriched_at）/ `Video.metaQuality: VideoMetaQuality | null` 实体扩展
+  - `packages/types/src/index.ts`：`DOUBAN_MATCH_METHODS` barrel export
+  - `apps/api/src/db/queries/videos.internal.ts`：`DbVideoRow.meta_quality` + `mapVideoRow.metaQuality` + `VIDEO_FULL_SELECT` 同步
+  - `apps/api/src/db/queries/videos.status.ts`：`updateVideoEnrichStatus` 新增可选 `metaQuality?: VideoMetaQuality` 参数 / 省略时 jsonb 列保留原值 / 显式传入时 `meta_quality = $3::jsonb` 整体覆盖
+  - `apps/api/src/services/MetadataEnrichService.ts`：import `isPinyin` (CHG-365-A1) / enrich 入口预取 catalog.titleEn 后 `metaQuality.title_en_is_pinyin = isPinyin(titleEn)` / step1LocalDouban + step2NetworkSearch 加 `metaQuality` 参数 / 抽 `recordDoubanSignal(metaQuality, confidence, method, matchStatus)` helper / imdb(1.0,'imdb_id') + title/alias(computeLocalDoubanConfidence + matchBy) + network step2(best.score, 'network') 4 分支写入 / 未命中显式 `douban_match_status = 'unmatched'` / 最终 `enriched_at = new Date().toISOString()` 后整对象传 updateVideoEnrichStatus
+  - `tests/unit/api/metadataEnrich.test.ts` +3 case：拼音 title_en → true + unmatched + enriched_at / 真英文 title_en → false / Step1 title_norm 命中 → confidence ≈ 0.92 + match_method='title' + match_status='auto_matched'
+  - `docs/architecture.md` §5.1 videos 字段表新增 meta_quality 行（jsonb 字段约定 + VideoMetaQuality 类型链接 + Migration 077 引用 + 索引说明）
+- **设计取舍**：① jsonb 信号字典 vs 多独立列：plan §10.4.1 明确 jsonb / 信号会增长（未来 bangumi_confidence / source_check_method 等），独立列每个新信号 ALTER TABLE 不可取 ② DoubanMatchMethod 拆 const SSOT 避开 verify-enum-ssot advisory ③ VideoMetaQuality 字段命名 snake_case 与 jsonb 原始键对齐避免 driver 转 camelCase 歧义 ④ updateVideoEnrichStatus 双分支 SQL：省略 metaQuality 时保留原值（向后兼容现有调用方）/ 显式 jsonb 整体覆盖避免局部更新合并冲突
+- **质量门禁**：typecheck ✅（root + 7 workspaces）/ lint ✅（仅 pre-existing react-hooks + img warning）/ verify:adr-contracts ✅ EXIT=0（7 子检 PASS / 仅 pre-existing advisory）/ tests/unit/api/ 1728/1728 PASS（132 文件 / 含 MetadataEnrichService 23/23 含 3 新增 case）/ 全量 167 失败均为 pre-existing localStorage flaky（stash 验证 main 同样 fail / 与本卡零关联）
+- **commit trailer**：无强制 Subagents
+- **闭环**：CHG-365-A2 完成 / Wave 2 卡 14/17 闭合 / **CHG-365 META-DOUBAN-AUTO 完整序列闭环（A1 PinyinDetector helper → A2 schema + 集成持久化）/ 采集 worker 自动豆瓣匹配 + 拼音识别 + meta_quality 信号字典端到端就绪 / 审核台 TabDetail "重新匹配"提示与质量门禁观察数据底座完整**

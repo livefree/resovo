@@ -4,7 +4,7 @@
  */
 
 import type { Pool } from 'pg'
-import type { VideoCard, VideoType, DoubanStatus, SourceCheckStatus, TrendingTag } from '@/types'
+import type { VideoCard, VideoType, DoubanStatus, SourceCheckStatus, TrendingTag, VideoMetaQuality } from '@/types'
 import type { DbVideoRow } from './videos.internal'
 import {
   VIDEO_FULL_SELECT, VIDEO_JOIN,
@@ -247,16 +247,37 @@ export async function listPendingReviewVideos(
 
 // ── 丰富流水线状态更新 ────────────────────────────────────────────
 
-/** 写入豆瓣匹配状态和元数据完整度评分（MetadataEnrichService 调用） */
+/**
+ * 写入豆瓣匹配状态、元数据完整度评分与 meta_quality 信号字典
+ * （MetadataEnrichService 调用 / CHG-365-A2）
+ *
+ * `metaQuality` 省略时 jsonb 列保持原值；显式传入时整体覆盖（service 端做累计合并）。
+ */
 export async function updateVideoEnrichStatus(
   db: Pool,
   videoId: string,
-  { doubanStatus, metaScore }: { doubanStatus: DoubanStatus; metaScore: number }
+  {
+    doubanStatus,
+    metaScore,
+    metaQuality,
+  }: { doubanStatus: DoubanStatus; metaScore: number; metaQuality?: VideoMetaQuality }
 ): Promise<void> {
+  if (metaQuality === undefined) {
+    await db.query(
+      `UPDATE videos SET douban_status = $1, meta_score = $2, updated_at = NOW()
+       WHERE id = $3 AND deleted_at IS NULL`,
+      [doubanStatus, metaScore, videoId]
+    )
+    return
+  }
   await db.query(
-    `UPDATE videos SET douban_status = $1, meta_score = $2, updated_at = NOW()
-     WHERE id = $3 AND deleted_at IS NULL`,
-    [doubanStatus, metaScore, videoId]
+    `UPDATE videos
+       SET douban_status = $1,
+           meta_score = $2,
+           meta_quality = $3::jsonb,
+           updated_at = NOW()
+       WHERE id = $4 AND deleted_at IS NULL`,
+    [doubanStatus, metaScore, JSON.stringify(metaQuality), videoId]
   )
 }
 

@@ -7,7 +7,7 @@
 import type {
   Video, VideoCard, VideoType, VideoStatus, VideoGenre,
   ContentFormat, EpisodePattern, ReviewStatus, VisibilityStatus,
-  DoubanStatus, SourceCheckStatus, TrendingTag,
+  DoubanStatus, SourceCheckStatus, TrendingTag, VideoMetaQuality,
 } from '@/types'
 
 // ── 内部 DB 行类型 ────────────────────────────────────────────────
@@ -44,6 +44,8 @@ export interface DbVideoRow {
   douban_status: DoubanStatus
   source_check_status: SourceCheckStatus
   meta_score: number
+  // Migration 077 — 元数据信号字典 jsonb（CHG-365-A2）
+  meta_quality: VideoMetaQuality | null
   // Migration 051 字段
   trending_tag: TrendingTag | null
   // Migration 055 — 审核台字段（CHG-SN-4-03）
@@ -125,6 +127,7 @@ export function mapVideoRow(row: DbVideoRow): Video {
     doubanStatus: row.douban_status ?? 'pending',
     sourceCheckStatus: row.source_check_status ?? 'pending',
     metaScore: row.meta_score ?? 0,
+    metaQuality: row.meta_quality ?? null,
     trendingTag: row.trending_tag ?? null,
     posterBlurhash: row.poster_blurhash ?? null,
     posterStatus: row.poster_status ?? null,
@@ -180,7 +183,7 @@ export const VIDEO_FULL_SELECT = `
   v.source_content_type, v.normalized_type, v.content_format, v.episode_pattern,
   v.review_status, v.visibility_status, v.needs_manual_review,
   v.content_rating, v.site_key, v.source_category,
-  v.douban_status, v.source_check_status, v.meta_score, v.trending_tag,
+  v.douban_status, v.source_check_status, v.meta_score, v.meta_quality, v.trending_tag,
   v.staff_note, v.review_label_key, v.review_source,
   mc.title_en, mc.title_original, mc.description, mc.cover_url,
   mc.rating, mc.rating_votes, mc.runtime_minutes, mc.year, mc.country,

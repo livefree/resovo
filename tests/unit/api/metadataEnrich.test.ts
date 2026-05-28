@@ -321,6 +321,52 @@ describe('MetadataEnrichService.enrich()', () => {
     const call = vi.mocked(videosQueries.updateVideoEnrichStatus).mock.calls[0]
     expect(call[2].metaScore).toBe(100)
   })
+
+  // ── meta_quality 信号字典（CHG-365-A2 / Migration 077）─────────────
+
+  it('meta_quality: title_en 为拼音 → title_en_is_pinyin=true', async () => {
+    vi.mocked(catalogQueries.findCatalogById).mockResolvedValue({
+      id: 'c1', title: '我被全王打爆', titleEn: 'Wo Bei Quan Wang Da Bao',
+      year: 2023, type: 'movie',
+    } as Parameters<typeof catalogQueries.findCatalogById>[1] extends infer R ? R : never)
+    vi.mocked(searchDouban).mockResolvedValue([])
+
+    await service.enrich(makeJobData({ title: '我被全王打爆', year: 2023, type: 'movie' }))
+
+    const call = vi.mocked(videosQueries.updateVideoEnrichStatus).mock.calls[0]
+    expect(call[2].metaQuality).toMatchObject({
+      title_en_is_pinyin: true,
+      douban_match_status: 'unmatched',
+    })
+    expect(typeof call[2].metaQuality?.enriched_at).toBe('string')
+  })
+
+  it('meta_quality: title_en 为真英文 → title_en_is_pinyin=false', async () => {
+    vi.mocked(catalogQueries.findCatalogById).mockResolvedValue({
+      id: 'c1', title: '复仇者联盟', titleEn: 'The Avengers',
+      year: 2012, type: 'movie',
+    } as Parameters<typeof catalogQueries.findCatalogById>[1] extends infer R ? R : never)
+    vi.mocked(searchDouban).mockResolvedValue([])
+
+    await service.enrich(makeJobData({ title: '复仇者联盟', year: 2012, type: 'movie' }))
+
+    const call = vi.mocked(videosQueries.updateVideoEnrichStatus).mock.calls[0]
+    expect(call[2].metaQuality?.title_en_is_pinyin).toBe(false)
+  })
+
+  it('meta_quality: Step1 title_norm 命中 → 写入豆瓣置信度 + match_method=title', async () => {
+    vi.mocked(externalDataQueries.findDoubanByTitleNorm).mockResolvedValue([makeDoubanMatch()])
+
+    await service.enrich(makeJobData())
+
+    const call = vi.mocked(videosQueries.updateVideoEnrichStatus).mock.calls[0]
+    // confidence = 0.70 (title) + 0.22 (year exact) = 0.92 ≥ 0.85
+    expect(call[2].metaQuality).toMatchObject({
+      douban_confidence: expect.closeTo(0.92, 5),
+      douban_match_method: 'title',
+      douban_match_status: 'auto_matched',
+    })
+  })
 })
 
 // ── computeLocalDoubanConfidence ──────────────────────────────────
