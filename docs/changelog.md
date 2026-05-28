@@ -9922,3 +9922,34 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
   - 进一步把"组数"、"分组 metas"等 split 状态写入 URL query（持久化深链 / 后续单独卡）
   - MergeClient `?candidate_a=` 与 `?split=` 共存时的 UX 协调（当前两个 banner 互不冲突，但同时存在时可能视觉拥挤 / follow-up）
 - **闭环**：CHG-363-B 完成（2 业务 + 1 测试 4 case PASS）/ Wave 2 卡 10/17 闭合 / **CHG-363 SPLIT-UI 完整序列闭环（-A 入口 → -B 深链 + 自动加载）/ PendingCenter "✂ 拆分" → /admin/merge?split=:videoId → 自动展开拆分工作台 + 预填 videoId + 加载 sources matrix 端到端就绪**
+
+---
+
+## [CHG-364-A] MERGE-INLINE BatchActionsBar "↔ 合并" 按钮入口（Wave 2 #13 / 2 业务 + 1 测试 4 case）
+- **完成时间**：2026-05-27
+- **执行模型**：claude-opus-4-7（主循环 / 续会话）
+- **子代理调用**：无
+- **范围**（PATCH ≤ 5 / 实际 3 项）：
+  - `apps/server-next/src/app/admin/moderation/_client/BatchActionsBar.tsx`：新增 `onMerge?: () => void` prop + "↔ 合并" 按钮（条件 `selectedCount >= 2 && onMerge` 才显示 / merge 协议至少 1 source + 1 target）+ data-testid="moderation-batch-merge"
+  - `apps/server-next/src/app/admin/moderation/_client/ModerationConsole.tsx`：实装 `onMerge` 回调 / Array.from(selectedIds).join(',') → `window.open(/admin/merge?ids=<csv>&from=moderation-batch, _blank, noopener,noreferrer)`
+  - `tests/unit/components/server-next/admin/moderation/batch-actions-bar-merge-button.test.tsx`：4 case PASS（selectedCount >= 2 显示 / === 1 不显示 / onMerge 未提供不显示向后兼容 / 点击调用回调）
+- **质量门禁**：typecheck ✅ / lint ✅ / 4 case PASS（vitest 564ms）
+- **闭环**：CHG-364-A 完成 / Wave 2 卡 11/17 / 待 -B MergeClient ?ids query + BatchMergeWorkspace（吸取 CHG-363-A 教训：本会话 -A + -B 一起做避免 Codex deep link 回归）
+
+---
+
+## [CHG-364-B] MERGE-INLINE MergeClient `?ids=<csv>` 深链 + BatchMergeWorkspace（Wave 2 #14 / 2 业务 + 1 测试 4 case）
+- **完成时间**：2026-05-27
+- **执行模型**：claude-opus-4-7（主循环 / 续会话）
+- **子代理调用**：无
+- **范围**（PATCH ≤ 5 / 实际 3 项）：
+  - `apps/server-next/src/app/admin/merge/_client/MergeClient.tsx`：useSearchParams 读 `?ids=<csv>` → `batchIds = idsParam.split(',').map(trim).filter(Boolean)` / `<BatchMergeWorkspace ids={batchIds} onMergeSuccess={dismissBatchIdsBanner} />` 渲染（仅 batchIds.length > 0 时）/ `dismissBatchIdsBanner` 清 URL ?ids + ?from
+  - `apps/server-next/src/app/admin/merge/_client/BatchMergeWorkspace.tsx`：新建 / Props `{ ids, onMergeSuccess? }` / 去重 + uuid 校验后剩 validIds / 默认第 1 个为 target / 用 radio 让运营选 target / reason input ≤ 500 字符 / 提交 → mergeVideos({ sourceVideoIds: validIds 除 target / targetVideoId, reason }) → toast 显示成功 + 撤销 action（unmergeVideos）/ validIds < 2 渲染 "需至少 2 个" 提示
+  - `tests/unit/components/server-next/admin/merge/batch-merge-workspace.test.tsx`：4 case PASS（ids < 2 提示 / ids >= 2 workspace 渲染 / 选 target 后提交 mergeVideos 参数正确 / 非 uuid + 重复去重）
+- **设计取舍**：最简化 UX 仅展示 uuid 短码 + 完整 uuid / 不显示 title/cover（依赖后端 listVideos by-ids 端点扩展 / 留 follow-up 卡）/ 运营从审核台来本来就知道 id 对应内容
+- **质量门禁**：typecheck ✅ / lint ✅ / 4 个 SPLIT-UI + MERGE-INLINE 关联测试 15 case 全 PASS
+- **commit trailer**：无强制 Subagents
+- **不在本卡范围**：
+  - 后端 listVideos by-ids 批量 fetch 端点（→ follow-up 卡 / 改 apps/api 触发跨应用 PATCH）
+  - BatchMergeWorkspace 显示 video title/cover（依赖上述端点）
+- **闭环**：CHG-364-B 完成（2 业务 + 1 测试 4 case PASS）/ Wave 2 卡 12/17 闭合 / **CHG-364 MERGE-INLINE 完整序列闭环（-A 入口 → -B 深链 + workspace）/ 审核台批量选 ≥2 条 → ↔ 合并 → /admin/merge?ids=<csv> → BatchMergeWorkspace 选 target + 提交 mergeVideos 端到端就绪**

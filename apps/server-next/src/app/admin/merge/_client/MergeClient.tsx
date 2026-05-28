@@ -45,6 +45,7 @@ import { videoPickerFetcher } from '@/lib/videos/picker-fetcher'
 import { ApiClientError } from '@/lib/api-client'
 import { SplitSection } from './MergeSplitSection'
 import { AuditSection } from './MergeAuditSection'
+import { BatchMergeWorkspace } from './BatchMergeWorkspace'
 
 // ── 错误码差异化 description（ADR-105 §错误码 + CHG-SN-5-12-PATCH P0/P2-1）─────
 
@@ -182,9 +183,20 @@ export function MergeClient() {
   const fromParam = searchParams.get('from')
   // CHG-363-B：接收来自 PendingCenter 拆分按钮的 ?split=:videoId 深链
   const splitParam = searchParams.get('split')
+  // CHG-364-B：接收来自 BatchActionsBar 合并按钮的 ?ids=<csv> 深链
+  const idsParam = searchParams.get('ids')
+  const batchIds = idsParam ? idsParam.split(',').map((s) => s.trim()).filter(Boolean) : []
 
   // showSplit 初始值：?split=:videoId 存在则自动展开 / 否则默认收起
   const [showSplit, setShowSplit] = useState<boolean>(!!splitParam)
+
+  const dismissBatchIdsBanner = useCallback(() => {
+    const p = new URLSearchParams(searchParams.toString())
+    p.delete('ids')
+    p.delete('from')
+    const qs = p.toString()
+    router.replace(qs ? `?${qs}` : '?', { scroll: false })
+  }, [router, searchParams])
   const dismissCandidateBanner = useCallback(() => {
     const p = new URLSearchParams(searchParams.toString())
     p.delete('candidate_a')
@@ -235,6 +247,11 @@ export function MergeClient() {
           candidateBIdFromUrl={searchParams.get('candidate_b')}
           onMergeSuccess={dismissCandidateBanner}
         />
+      )}
+
+      {/* CHG-364-B：来自审核台批量栏 ?ids=<csv> 深链 → BatchMergeWorkspace（列 ids 选 target + 提交 merge） */}
+      {batchIds.length > 0 && (
+        <BatchMergeWorkspace ids={batchIds} onMergeSuccess={dismissBatchIdsBanner} />
       )}
 
       {showSplit && (

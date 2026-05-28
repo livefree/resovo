@@ -6,7 +6,7 @@
 
 ## 进行中任务
 
-（空 — CHG-363-B 完成 ✅ / Wave 2 卡 10/17 / CHG-363 SPLIT-UI 完整序列闭环 / 下一个 CHG-364 MERGE-INLINE）
+（空 — CHG-364-B 完成 ✅ / Wave 2 卡 12/17 / CHG-364 MERGE-INLINE 完整序列闭环 / 下一个 CHG-365-A META-DOUBAN-AUTO ADR-162 起草）
 
 ---
 
@@ -32,7 +32,7 @@
 
 ---
 
-## Wave 2 进行中（SEQ-20260527-MOD-WAVE2 / 10/17）
+## Wave 2 进行中（SEQ-20260527-MOD-WAVE2 / 12/17）
 
 - ✅ CHG-361-A（ADR-160 起草 + getVideoDetailHref 沉淀 / 5f64e78d）
 - ✅ CHG-361-B2（apps/api 后端 3 文件 + 5 case 单测 + ADR-160 AMENDMENT 1 / a3c1c9ed）
@@ -49,6 +49,11 @@
 **CHG-361 PREVIEW-ADMIN 8 子卡全闭环 ✅(A → B2 → B1 → C → D → E1 → E2 → E3)/ 跨 app preview 链路 + server-side hydration 修补完整就绪 + 4 类时序 bug 收敛 / 待 prod gate OPS 卡 CHG-OPS-COOKIE-SUBDOMAIN-1 / Y-AMD2-2 episode 切换 internal 视频限制独立 FOLLOWUP 卡**
 
 **SPLIT 系列：CHG-362-A/B SKIPPED → CHG-363 SPLIT-UI 完整序列闭环 ✅（-A 入口 → -B 深链 + 自动加载）/ PendingCenter ✂ 拆分 → /admin/merge?split=:videoId 端到端就绪**
+
+**MERGE 系列：CHG-364 MERGE-INLINE 完整序列闭环 ✅（-A BatchActionsBar 合并按钮 → -B MergeClient ?ids 深链 + BatchMergeWorkspace 选 target + 提交 mergeVideos）/ 审核台批量选 ≥2 条 → ↔ 合并 → /admin/merge?ids=<csv> 端到端就绪**
+
+- ✅ CHG-364-A（BatchActionsBar "↔ 合并" 按钮入口 + 4 case PASS / 本卡 / 待 commit）
+- ✅ CHG-364-B（MergeClient ?ids query + BatchMergeWorkspace + 4 case PASS / 本卡 / 待 commit）
 
 ---
 
