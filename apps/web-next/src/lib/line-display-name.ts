@@ -257,6 +257,28 @@ export interface RawSourceForTheme {
 }
 
 /**
+ * 跨集数稳定匹配 activeSourceIndex（CHG-369 / Codex stop-time review #13）
+ *
+ * 集数切换时保持"同一线路"语义；用 raw source 的 `sourceName` 字段而非 label 匹配
+ * （label 是主题派生不稳定 — 主题切换会改写 / 闭包会 stale）。
+ *
+ * @param prevRawSources 上一集的原始 sources 数组
+ * @param prevIndex 上一集的 activeSourceIndex
+ * @param newRawSources 新集数的原始 sources 数组
+ * @returns 匹配到的 newRawSources 中的位置；找不到时 0（fallback 第一条）
+ */
+export function matchActiveSourceIndex(
+  prevRawSources: ReadonlyArray<RawSourceForTheme>,
+  prevIndex: number,
+  newRawSources: ReadonlyArray<RawSourceForTheme>,
+): number {
+  const prevSourceName = prevRawSources[prevIndex]?.sourceName ?? null
+  if (!prevSourceName) return 0
+  const matched = newRawSources.findIndex((s) => s.sourceName === prevSourceName)
+  return matched >= 0 ? matched : 0
+}
+
+/**
  * 把原始 sources 数组按当前主题派生为 ThemedSource[]
  * - effectiveScore 存在 → applyThemeLabels 输出主题标签
  * - effectiveScore 缺失（老后端兜底）→ buildLineDisplayName fallback

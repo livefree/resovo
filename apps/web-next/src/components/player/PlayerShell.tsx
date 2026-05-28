@@ -9,7 +9,7 @@ import { usePlayerStore } from '@/stores/playerStore'
 import { apiClient } from '@/lib/api-client'
 import { extractShortId } from '@/lib/video-detail'
 import { getVideoDetailHref } from '@/lib/video-route'
-import { buildThemedSources } from '@/lib/line-display-name'
+import { buildThemedSources, matchActiveSourceIndex } from '@/lib/line-display-name'
 import { useRouteTheme } from '@/lib/route-theme-storage'
 import { RouteThemeSelector } from './RouteThemeSelector'
 import { useLocale } from 'next-intl'
@@ -206,12 +206,15 @@ export function PlayerShell({ slug: slugProp, portalMode = false, previewMode = 
         // CHG-353：切集后重新按主题赋标签（保持与初始 fetch 一致）
         // CHG-369 Codex #11：同步写入 ref，使主题切换可重新 relabel
         // CHG-369 Codex #12：用 routeThemeRef.current 而非 closure capture（同初始 fetch）
+        // CHG-369 Codex #13：用 raw sourceName 跨集数稳定匹配，替代 label（label 是主题派生
+        // 不稳定 — 若用户在 fetch 期间切主题 → relabel effect 改写 sources label →
+        // closure 中读 sources[i]?.label 与新数组 label 都失配 → 重置为 0 ❌）
+        // matchActiveSourceIndex 必须在覆盖 ref 前调用（用上一集 raw sources 做 prev key）
+        const matched = matchActiveSourceIndex(rawSourcesRef.current, activeSourceIndex, res.data)
         rawSourcesRef.current = res.data
         const newSources = buildThemedSources(res.data, routeThemeRef.current)
         setSources(newSources)
-        const prevLabel = sources[activeSourceIndex]?.label
-        const matched = prevLabel ? newSources.findIndex((s) => s.label === prevLabel) : -1
-        setActiveSourceIndex(matched >= 0 ? matched : 0)
+        setActiveSourceIndex(matched)
       })
       .catch(() => {
         // stale 时不能复位 ref（已被后续 effect 占用）；否则会让用户切回该 ep 时无法重拉

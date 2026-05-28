@@ -10121,3 +10121,24 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **commit trailer**：无强制 Subagents
 - **经验**：CHG-369-FIX 修了"主题切换 → sources 重 relabel"但漏了"fetch 进行中切主题"的并发场景。下次涉及"异步回调 + state 切换"组合时，必须显式分析：① closure capture 的 stale state ② effect 顺序（commit → microtask → useEffect）③ ref 同步赋值优于 useEffect 同步（仅当 ref 用于异步回调读取时）
 - **闭环**：Codex stop-time review #12 红线消解 / 切主题在 fetch 进行中也能正确生效 / fetch then + relabel effect 双路径都用最新 routeTheme / ref pattern 防 closure 时序竞态
+
+---
+
+## [CHG-369-FIX-3] 集数切换 fetch 期间切主题 → active source 重置（Codex stop-time review #13）
+- **完成时间**：2026-05-28
+- **执行模型**：claude-opus-4-7（主循环 / 续会话）
+- **背景**：CHG-369-FIX-2 commit 2ee340bd 后 Codex 抓到 "active source can reset after in-flight theme change"。bug 时序：
+  - tick 1：集数切换 fetch 发起 / closure capture `sources[activeSourceIndex]?.label = "立春"`（JIE_QI）
+  - tick 2：用户切到 NATO → relabel effect 触发 setSources(NATO labels) → sources state 现在是 `[{label:'Alpha',...},...]`
+  - tick 3：集数 fetch 完成 → then 中 `prevLabel = sources[activeSourceIndex]?.label` 拿到的是 **新 sources state 的 "Alpha"**（React state 已 batched 更新）或闭包旧值 "立春" → 在新数组 NATO labels 中 `findIndex(s => s.label === prevLabel)` 都失配 → setActiveSourceIndex(0) → **重置正在播放的线路** ❌
+- **根因**：用 `label` 做"集数切换跨集稳定匹配"是脆弱的 — `label` 是主题派生的不稳定字符串，主题切换会改写。应改用 raw source 的稳定 key。
+- **范围**（2 业务 + 1 测试 / 净增）：
+  - `apps/web-next/src/lib/line-display-name.ts`：新增 `matchActiveSourceIndex(prevRaw, prevIndex, newRaw)` 纯函数 helper / 用 `sourceName` 字段跨集数匹配（raw API 字段 / 主题无关 / 跨集稳定）/ 找不到 fallback 0
+  - `apps/web-next/src/components/player/PlayerShell.tsx`：集数切换 fetch then 改用 helper（**必须在覆盖 rawSourcesRef 前调用** / 用上一集 raw sources 做 prev key）
+  - `tests/unit/web-next/lib/line-display-name-themes.test.ts` +4 case：①跨集数位置漂移仍按 sourceName 正确匹配 ②sourceName 不在新数组 fallback 0 ③prevIndex 越界 / prev 空 fallback 0 ④核心 invariant 验证：label 不参与判定 / 仅依赖 sourceName 稳定 key（这是 #13 fix 防回归的关键断言）
+- **设计取舍**：① `sourceName` vs `siteDisplayName` vs `(siteKey, sourceName)` 复合：选 sourceName 单字段（lines-panel 聚合键已有此前例 / 同站点同 sourceName 跨集数稳定）/ 复合 key 留 follow-up 如果发现 cross-site 同名 line 问题 ② helper 抽到 lib 而非 inline：① 防 PlayerShell 测试 mock 重 ② 让 invariant"label 不参与位置判定"可被独立断言 ③ helper 在覆盖 ref 前调用：覆盖后 prev sources 丢失 / 调用顺序敏感（注释明示）
+- **测试**：tests/unit/web-next/lib/line-display-name-themes 26→**30 PASS**（+4 case / 含核心 invariant 断言）
+- **质量门禁**：typecheck ✅ / lint ✅（FULL TURBO 4 cached）/ verify:adr-contracts ✅ EXIT=0
+- **commit trailer**：无强制 Subagents
+- **经验**：CHG-369 + FIX + FIX-2 三连击修了主题切换主路径，但漏了"跨集稳定匹配依赖 label" 这个隐藏耦合。下次涉及"派生字段 + 跨场景稳定匹配"必须显式：① 列出"稳定 key 不应依赖派生字段"原则 ② grep 所有 label match 模式 ③ helper 抽出让 invariant 可单测
+- **闭环**：Codex stop-time review #13 红线消解 / 集数切换跨主题完全稳定（fetch 期间切主题不会重置 active source）/ matchActiveSourceIndex helper 沉淀 + 单测可见 / label 与稳定 key 解耦的架构 invariant 落地

@@ -290,3 +290,46 @@ describe('buildThemedSources — 主题切换重新 relabel', () => {
     expect(new Set(labels).size).toBe(ALL_THEMES.length)
   })
 })
+
+// ── matchActiveSourceIndex（CHG-369 Codex stop-time review #13）─────
+
+import { matchActiveSourceIndex } from '../../../../apps/web-next/src/lib/line-display-name'
+
+describe('matchActiveSourceIndex — 集数切换跨主题稳定保持 active source', () => {
+  const prev = [
+    makeRaw({ id: 1, sourceName: 'siteA' }),
+    makeRaw({ id: 2, sourceName: 'siteB' }),
+    makeRaw({ id: 3, sourceName: 'siteC' }),
+  ]
+
+  it('新集数包含相同 sourceName → 返回新位置（即便位置变了 / 按 effective_score 重排）', () => {
+    // 新集数把 siteC 排到第 0 位（effective_score 不同）
+    const next = [
+      makeRaw({ id: 30, sourceName: 'siteC' }),
+      makeRaw({ id: 10, sourceName: 'siteA' }),
+      makeRaw({ id: 20, sourceName: 'siteB' }),
+    ]
+    expect(matchActiveSourceIndex(prev, 0, next)).toBe(1)   // siteA → 新位置 1
+    expect(matchActiveSourceIndex(prev, 1, next)).toBe(2)   // siteB → 新位置 2
+    expect(matchActiveSourceIndex(prev, 2, next)).toBe(0)   // siteC → 新位置 0
+  })
+
+  it('新集数不含 prev sourceName → fallback 0', () => {
+    const next = [makeRaw({ id: 99, sourceName: 'siteX' })]
+    expect(matchActiveSourceIndex(prev, 1, next)).toBe(0)
+  })
+
+  it('prevIndex 越界 / prev 为空 → fallback 0', () => {
+    expect(matchActiveSourceIndex(prev, 99, prev)).toBe(0)
+    expect(matchActiveSourceIndex([], 0, prev)).toBe(0)
+  })
+
+  it('核心 invariant：跨主题稳定（label 不参与判定 / 只看 sourceName 稳定 key）', () => {
+    // 这是 Codex #13 fix 的核心证明：label 派生自主题不稳定，但 sourceName 是 raw API 字段稳定
+    // → matchActiveSourceIndex 完全不依赖 label，避免主题切换时位置漂移
+    const next = [
+      makeRaw({ id: 1, sourceName: 'siteB' }),  // 同 prev[1] 的 sourceName
+    ]
+    expect(matchActiveSourceIndex(prev, 1, next)).toBe(0)
+  })
+})
