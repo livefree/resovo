@@ -167,6 +167,10 @@ export const M = {
   rejected: {
     title: '已拒绝',
     listHeader: (count: number) => `${count} 条已拒绝`,
+    listHeaderWithTotal: (loaded: number, total: number) => `${loaded} / ${total} 条已拒绝`,
+    loadMore: '加载更多',
+    loadingMore: '加载中…',
+    allLoaded: '已显示全部',
     reopen: '↻ 重新审核',
     rejectedLabel: '拒绝标签',
     noLabel: '—',

@@ -40,6 +40,57 @@
 
 ---
 
+## [CHG-SN-9-REJECTED-ENHANCE-A] RejectedTab 分页 hook 抽取 + 接入（Wave 3 #6 / plan §14 主线 1/6 / -A 分页子卡 / -B 视觉对齐留 follow-up）
+- **完成时间**：2026-05-28
+- **执行模型**：claude-sonnet-4-6（主循环 / 不切换 §16.5）
+- **子代理调用**：无（hook 模式与 usePendingQueue 一致 / 非新共享 API / 不修改 packages/admin-ui Props / 不起新 ADR / 非 player-core 接口扩展 / 非 3+ 消费方）
+- **拆卡承接**：Wave 3 #5 CHG-SN-9-MOD-BUTTON-MIGRATE 因 38 文件超 PATCH 5 软上限触发 BLOCKER → 用户决策方案 A（DEFERRED 独立 SEQ-FOLLOWUP-MIGRATE 长尾系列）→ Wave 3 跳到 #6 CHG-SN-9-REJECTED-ENHANCE。本卡按 plan §7 拆分意图聚焦 -A 分页 / -B 视觉对齐（BTN_SM → AdminButton + SplitPane 复用 + 批量 reopen + 跳转回 pending 提示）留 follow-up。
+- **范围**（3 业务 + 1 测试 + 1 i18n / PATCH=5 严守 ≤ 5）：
+  - `apps/server-next/src/app/admin/moderation/_client/useRejectedQueue.ts` NEW 152 行（仿 usePendingQueue 精简版）：
+    - `state: { videos, page, total, hasMore, activeIdx, loading, loadingMore, error }`
+    - `loadMore()`：pageRef.current + 1 / fetch + append / silent 失败防中断
+    - `reopenAt(idx?)`：调 api.reopenVideo + 本地 splice + 失败 setError + throw
+    - `setActiveIdx` + sessionStorage `admin.moderation.rejected.activeIdx.v1` 持久化（与 pending 范式一致）
+    - **near-end 预取**：activeIdx >= length - 5 && hasMore && !loadingMore && **length > NEAR_END_THRESHOLD 守卫**（防短列表 length≤5 时 length-5≤0 导致 activeIdx=0 即触发 spurious loadMore / usePendingQueue 因 cursor=null 不触发本 bug）
+    - `hasMore`：videos.length < total（page+limit 模式 / 与 pending cursor 模式有别）
+    - 业务面比 usePendingQueue 小：无 todayStats / 无 approve / 无 batchApprove/reject / 无 staffNote / 无 filters
+  - `apps/server-next/src/app/admin/moderation/_client/RejectedTabContent.tsx` 接入：
+    - 删 useEffect/fetchRejectedVideos 内联逻辑 + 删 useState videos/loading/error/activeIdx/reopening 状态（全部从 hook 拿）
+    - 添加列表底部 "加载更多" 按钮（hasMore 时显 / loadingMore 时 disabled）/ 全部加载完显 "已显示全部"
+    - listHeader 升级：total > loaded 显 "loaded / total 条已拒绝" / 否则显 "loaded 条已拒绝"
+    - 删 import `import * as api`（业务全走 hook / 无残留 dead import）
+    - LOAD_MORE_BTN 样式拆 4 longhand（borderTopWidth/Style/Color + Right/Bottom/Left Width=0）防 verify-style-shorthand-conflict（`border: 'none'` + `borderTop` 冲突已抓）
+    - 不动 BTN_SM → AdminButton 迁移（同 SEQ-FOLLOWUP-MIGRATE 长尾策略 / -B 子卡承接）
+  - `apps/server-next/src/i18n/messages/zh-CN/moderation.ts` 扩 3 i18n key（rejected.listHeaderWithTotal / loadMore / loadingMore / allLoaded）
+  - `tests/unit/server-next/admin-moderation/use-rejected-queue.test.ts` NEW 8 case：
+    - #1 初始 fetch → videos 填充 + total 正确
+    - #2 loadMore → page+1 + 追加新行 + total 更新
+    - #3 hasMore 推导：videos.length < total / 全部加载完后 hasMore=false
+    - #4 reopenAt 成功 → 本地 splice 移除 + total - 1
+    - #5 reopenAt 失败 → setError + throw（waitFor 解 act 错误捕获后状态可见）
+    - #6 near-end 自动 loadMore：length>5 + activeIdx 到末尾-4 → 触发
+    - #7 refetch → 重置 page=1 + 替换 videos
+    - #8 enabled=false → 不自动 fetch
+- **不触发 architecture.md 同步**（CHG-368-B-A1-FIX-{1..5} 经验持续核对）：
+  - 本卡无 schema migration / 新表 / 新列 / 新约束 / 新索引
+  - 仅前端 hook 抽取 + 接入 + i18n + 测试
+  - 不触发 CLAUDE.md "schema 变更不同步 architecture.md" 红线
+- **设计取舍**：① page+limit 模式而非 cursor：后端 `/admin/videos?reviewStatus=rejected&page=N&limit=M` 既有契约 / 无需后端改 / rejected 数据集相对稳定（不像 pending 集合每秒变化）/ page 模式更直观 ② length > NEAR_END_THRESHOLD 守卫：防短列表 spurious loadMore 边界（usePendingQueue 因 cursor=null 不触发本 bug / 本卡总数模式必须守卫）③ silent loadMore 失败：用户可重试 / 不弹错防中断浏览（usePendingQueue 同范式） ④ 不动 BTN_SM → AdminButton：留 -B 子卡 + 与 SEQ-FOLLOWUP-MIGRATE 同长尾策略对齐 ⑤ LOAD_MORE_BTN 4 longhand 拆分：verify-style-shorthand-conflict FAIL fast 强制（border:'none'+borderTop 冲突）/ 参 RETRO-4 范式 ⑥ #5 测试 act 内 catch + waitFor：React 18 strict mode 下 act 异步 throw 时 result.current 快照可能滞后 / waitFor 等状态沉淀
+- **质量门禁**：typecheck ✅ EXIT=0 / lint ✅ EXIT=0 / verify:adr-contracts ✅ EXIT=0（含 verify-style-shorthand-conflict / 1 处冲突已修）/ 单测 useRejectedQueue 8/8 PASS / moderation 域 use-pending-queue / use-filter-presets / use-review-history 等既有零回归（未跑全 / 后续 Wave 验收期跑）
+- **commit trailer**：无强制 Subagents（不修改 packages/admin-ui Props / 不起新 ADR / 不重构 player-core / 非 3+ 消费方 schema / 不触发"共享组件 API 契约强制 Opus"红线）
+- **六问自检**：
+  - Q1 本次逻辑应沉淀共享层？✅ useRejectedQueue 作为 server-next 内部 hook 沉淀已合理 / 与 usePendingQueue 同层级 / 不抽到 admin-ui（前后台共用 hook 边界未到）
+  - Q2 是否引入回归？✅ 8/8 测试 PASS / typecheck + lint + verify 全 EXIT=0 / 用户视觉/交互零变化（仅加分页 + 列表底部"加载更多"按钮）
+  - Q3 是否越层？✅ Hook 层在 _client 内 / api 调用全走 lib/moderation/api 既有接口 / Route → Service → DB 严格分层
+  - Q4 是否硬编码值 / any 类型？✅ 无 any / 颜色全 CSS 变量 / PAGE_LIMIT + NEAR_END_THRESHOLD + TAB_KEY 模块常量集中管理
+  - Q5 是否布局变化？✅ 左列表底部新增 "加载更多" / "已显示全部" 提示行（仅占 1 行高度 / 总布局不变 / 视觉权重微增）/ 列表 header 文案从 "N 条已拒绝" → "loaded / total 条已拒绝"（信息量增 / 用户感知更准）
+  - Q6 文件范围内？✅ 5 文件 PATCH=5 严守
+- **偏离检测**：无（本卡完全按 tasks.md 卡片定义执行 / 3 业务 + 1 测试 + 1 i18n 清单全命中 / 未引入卡片外改动）
+- **[AI-CHECK] 结论**：PASS（plan §5 P2 rejected list 写死 30 条问题闭环 / useRejectedQueue 抽取与 usePendingQueue 范式一致 / near-end 守卫修复 spurious loadMore 边界 bug / -B 视觉对齐留 follow-up 与 SEQ-FOLLOWUP-MIGRATE 同长尾策略）
+- **闭环**：CHG-SN-9-REJECTED-ENHANCE-A 完成 / RejectedTab 分页 ship / useRejectedQueue hook 沉淀 / Wave 3 plan §14 主线 1/6 完成 / Wave 3 SEQ 整体 5/10 完成（4 长尾清理 + 1 主线）/ MOD-BUTTON-MIGRATE DEFERRED / 主循环自动取下一卡（CHG-SN-9-PLAYER-ERROR / 触发 Opus 子代理 / player-core 接口扩展）
+
+---
+
 ## [CHG-368-B-FOLLOWUP-AUTO-RETIRED-LABEL] LinesPanel 退役标识区分自动/手动（Wave 3 #4 / 长尾清理 4/4 / ADR-164 D-164-8 闭环最后一公里）
 - **完成时间**：2026-05-28
 - **执行模型**：claude-sonnet-4-6（主循环 / 不切换 §16.5）
