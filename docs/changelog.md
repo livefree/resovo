@@ -9953,3 +9953,35 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
   - 后端 listVideos by-ids 批量 fetch 端点（→ follow-up 卡 / 改 apps/api 触发跨应用 PATCH）
   - BatchMergeWorkspace 显示 video title/cover（依赖上述端点）
 - **闭环**：CHG-364-B 完成（2 业务 + 1 测试 4 case PASS）/ Wave 2 卡 12/17 闭合 / **CHG-364 MERGE-INLINE 完整序列闭环（-A 入口 → -B 深链 + workspace）/ 审核台批量选 ≥2 条 → ↔ 合并 → /admin/merge?ids=<csv> → BatchMergeWorkspace 选 target + 提交 mergeVideos 端到端就绪**
+
+---
+
+## [CHG-365-A/B SKIPPED + BLOCKER #2] META-DOUBAN-AUTO ADR-162 起草跳过（MetadataEnrichService 已实施 80%）
+- **完成时间**：2026-05-27
+- **执行模型**：claude-opus-4-7（主循环 / 续会话）
+- **背景**：主循环启动 CHG-365-A 时调研发现 MetadataEnrichService (CHG-385 Phase 3) 已完整实施 plan §10.4.1 核心需求（Step1-5 流程 / 置信度 0.85/0.60 / Bangumi anime / CrawlerService:300 自动入队列）/ plan §10.4.1 撰写时漏查 → 无需新 ADR-162
+- **真实缺口仅 2 项**：拼音识别（plan §10.4.1.1）+ meta_quality jsonb 字段（plan §10.4.1.3）
+- **决策**：CHG-365-A/B SKIPPED / 拆 CHG-365-A1 + CHG-365-A2 实施卡（第二次 plan vs 现状 mismatch / 前次为 CHG-362-A/B 重复 ADR-105）
+- **commit**：3da17c74
+
+---
+
+## [CHG-365-A1] PinyinDetector 拼音识别 helper（Wave 2 #15 / plan §10.4.1.1 / 1 业务 + 1 测试 18 case）
+- **完成时间**：2026-05-27
+- **执行模型**：claude-opus-4-7（主循环 / 续会话）
+- **子代理调用**：无（pure algorithm helper / 非 ADR / 非共享 API）
+- **范围**（PATCH ≤ 5 / 实际 2 项）：
+  - `apps/api/src/services/PinyinDetector.ts` 新建：`isPinyin(input): boolean` / 算法贪心 longest-match 拼音音节分解（约 410 个标准音节常量） / 严防数字 + 非 ASCII 字符 + 最小词长 2
+  - `tests/unit/api/services/PinyinDetector.test.ts` 新建：18 case PASS
+- **测试覆盖**：
+  - 典型拼音 4 case（"Wo Bei Quan Wang Da Bao" / "Da Hua Xi You" / "Hong Lou Meng" / "Zhuang Yuan Mei" 复音节）
+  - 真英文 4 case（"The Avengers" / "Inception" / "Star Wars" / "Forrest Gump"）
+  - 边界 5 case（空 / null / undefined / 纯空白 / 单字符）
+  - 非法字符 3 case（中文 / 重音 / 数字）
+  - 标点 / 大小写宽容 2 case
+- **设计取舍**：纯算法 helper 不依赖 db / 不引入新 npm 依赖（手写音节常量集 ReadonlySet<string>）/ 已知 false-positive（"ma" / "ban" 在英文中也是合法拼音音节）/ 配合人工校对（审核台 TabDetail manual 修正）作为 heuristic 使用
+- **质量门禁**：typecheck ✅ / lint ✅ / 18 case PASS（vitest 6ms）
+- **不在本卡范围（→ CHG-365-A2）**：
+  - MetadataEnrichService 集成调用 PinyinDetector（依赖 meta_quality schema 持久化）
+  - meta_quality jsonb 字段 / migration 077 / queries 扩 / architecture.md 同步
+- **闭环**：CHG-365-A1 完成（helper 独立就绪可被 A2 集成）/ Wave 2 卡 13/17 / 待 CHG-365-A2 schema + 集成持久化

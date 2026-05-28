@@ -1902,7 +1902,7 @@ CHG-353 (ROUTE-LABEL-A2) → 依赖 CHG-352 后端返回排序数据
 
 ## [SEQ-20260527-MOD-WAVE2] server-next 内容审核台 Wave 2 — 预览/拆分/合并/元数据/路线主题（plan §14 + §17.2）
 
-- **状态**：🔄 执行中（CHG-361 PREVIEW-ADMIN 8 子卡 ✅ + CHG-363 SPLIT-UI ✅ + CHG-364 MERGE-INLINE ✅ / 12/17 / ADR-160 AMENDMENT 1/2 / CHG-362-A+B SKIPPED ADR-105 已覆盖 / CHG-365-A+B SKIPPED MetadataEnrichService 已实施 80% / 拆 CHG-365-A1 拼音识别 + CHG-365-A2 meta_quality 实施卡 / 下一个 CHG-365-A1）
+- **状态**：🔄 执行中（CHG-361 ✅ + CHG-363 ✅ + CHG-364 ✅ + CHG-365-A1 PinyinDetector ✅ / 13/17 / ADR-160 AMENDMENT 1/2 / CHG-362-A+B SKIPPED ADR-105 / CHG-365-A+B SKIPPED MetadataEnrichService 80% / 下一个 CHG-365-A2 meta_quality schema + 集成持久化）
 - **创建时间**：2026-05-27
 - **最后更新时间**：2026-05-27
 - **目标**：基于 `/Users/livefree/.claude/plans/fluffy-giggling-teapot.md` §14 Wave 2 + §17.2 落地 9 张主卡（4 张需 ADR + Opus 决策）；继续 Wave 1 的自动推进节奏。
@@ -1932,7 +1932,7 @@ CHG-353 (ROUTE-LABEL-A2) → 依赖 CHG-352 后端返回排序数据
 | 7 | ✅ **CHG-364-A** 已完成（2026-05-27）| MERGE-INLINE -A BatchActionsBar "↔ 合并" 按钮（selectedCount ≥ 2）+ 跳 `/admin/merge?ids=<csv>` / 2 业务 + 1 测试 4 case PASS | 否 | opus-4-7 续会话 |
 | 7.5 | ✅ **CHG-364-B** 已完成（2026-05-27）| MERGE-INLINE -B MergeClient `?ids=<csv>` 深链 + BatchMergeWorkspace（选 target + mergeVideos）/ 2 业务 + 1 测试 4 case PASS | 否（扩 URL contract）| opus-4-7 续会话 |
 | 8 | ⛔ **CHG-365-A** SKIPPED（2026-05-27 / BLOCKER #2）| META-DOUBAN-AUTO ADR-162 起草 / **MetadataEnrichService 已实施 80% 需求**（CHG-385 Phase 3 已落地 / Step1 本地豆瓣多字段召回 + 置信度 0.85/0.60 / Step2 网络搜索 / Step3 anime 走 bangumi / Step4 源 HEAD / Step5 meta_score / CrawlerService:300 入库后 5 分钟自动入队列）/ plan §10.4.1 撰写时漏查 / 真实缺口仅 2 项 → 拆 -A1/-A2 实施卡 | — | — |
-| 8.1 | **CHG-365-A1** | PinyinDetector helper + MetadataEnrichService 集成 / 正则 + ngram 判断 title_en 是否拼音 / 1 业务 + 1 测试 | 否 | sonnet (opus-4-7 可代) |
+| 8.1 | ✅ **CHG-365-A1** 已完成（2026-05-27）| PinyinDetector helper 独立实施（贪心 longest-match 拼音音节分解 / 约 410 个音节常量 / 严防数字 + 非 ASCII + 最小词长）/ 1 业务 + 1 测试 18 case PASS / MetadataEnrichService 集成延后到 -A2 一并做（依赖 meta_quality schema） | 否 | opus-4-7 续会话 |
 | 8.2 | **CHG-365-A2** | meta_quality jsonb schema migration + types + queries + MetadataEnrichService 写入持久化（豆瓣置信度 + 拼音判断 + ...）+ architecture.md 同步 | 否（schema 扩展非 ADR-needed / 复用既有 douban_status / meta_score 模式） | sonnet (opus-4-7 可代) |
 | 9 | ⛔ **CHG-365-B** SKIPPED（2026-05-27 / 同步 A SKIPPED）| 采集 worker 自动豆瓣 / **已就绪**（CrawlerService:300 入库后自动 enrichmentQueue.add 触发 MetadataEnrichService.enrich）/ 拼音识别 → CHG-365-A1 / 本卡定义重复 | — | — |
 | 10 | **CHG-366** | META-COUNTRY-DISPLAY（plan #13 / §10.4.3）— 国家代码 → 中英文 admin-ui 原语 | 否 | sonnet |

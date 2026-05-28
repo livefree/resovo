@@ -6,7 +6,7 @@
 
 ## 进行中任务
 
-（空 — CHG-364-B 完成 ✅ / Wave 2 卡 12/17 / CHG-364 MERGE-INLINE 完整序列闭环 / 下一个 CHG-365-A META-DOUBAN-AUTO ADR-162 起草）
+（空 — CHG-365-A1 完成 ✅ / Wave 2 卡 13/17 / CHG-365-A/B SKIPPED + 拆 A1/A2 / 下一个 CHG-365-A2 meta_quality schema + 集成持久化）
 
 ---
 
@@ -32,7 +32,7 @@
 
 ---
 
-## Wave 2 进行中（SEQ-20260527-MOD-WAVE2 / 12/17）
+## Wave 2 进行中（SEQ-20260527-MOD-WAVE2 / 13/17）
 
 - ✅ CHG-361-A（ADR-160 起草 + getVideoDetailHref 沉淀 / 5f64e78d）
 - ✅ CHG-361-B2（apps/api 后端 3 文件 + 5 case 单测 + ADR-160 AMENDMENT 1 / a3c1c9ed）
@@ -52,8 +52,10 @@
 
 **MERGE 系列：CHG-364 MERGE-INLINE 完整序列闭环 ✅（-A BatchActionsBar 合并按钮 → -B MergeClient ?ids 深链 + BatchMergeWorkspace 选 target + 提交 mergeVideos）/ 审核台批量选 ≥2 条 → ↔ 合并 → /admin/merge?ids=<csv> 端到端就绪**
 
-- ✅ CHG-364-A（BatchActionsBar "↔ 合并" 按钮入口 + 4 case PASS / 本卡 / 待 commit）
-- ✅ CHG-364-B（MergeClient ?ids query + BatchMergeWorkspace + 4 case PASS / 本卡 / 待 commit）
+- ✅ CHG-364-A（BatchActionsBar "↔ 合并" 按钮入口 + 4 case PASS / 4662de12）
+- ✅ CHG-364-B（MergeClient ?ids query + BatchMergeWorkspace + 6 case PASS / 595e68ec + 0f02cf96）
+- ⛔ CHG-365-A/B SKIPPED（MetadataEnrichService 已实施 80% / BLOCKER #2 / 3da17c74）
+- ✅ CHG-365-A1（PinyinDetector helper + 18 case PASS / 本卡 / 待 commit）
 
 ---
 
