@@ -84,6 +84,69 @@ export async function upsertLineAlias(
 }
 
 /**
+ * CHG-368-B-B / ADR-164 §端点契约：扩字段 upsert（含 codename + priority）
+ *   body 含 codename / priority 任一时走扩字段路径（后端双签名派发）
+ */
+export async function upsertLineAliasWithFields(
+  siteKey: string,
+  sourceName: string,
+  input: { displayName: string; codename?: string | null; priority?: number },
+): Promise<SourceLineAlias> {
+  const result = await apiClient.put<{ data: SourceLineAlias }>(
+    `/admin/source-line-aliases/${encodeURIComponent(siteKey)}/${encodeURIComponent(sourceName)}`,
+    input,
+  )
+  return result.data
+}
+
+/**
+ * CHG-368-B-B / ADR-164 §端点契约：手动退役别名（autoRetired=false）
+ *   404：行不存在 / 409：已退役 / 200：成功
+ */
+export async function retireLineAlias(
+  siteKey: string,
+  sourceName: string,
+  reason?: string,
+): Promise<SourceLineAlias> {
+  const result = await apiClient.post<{ data: SourceLineAlias }>(
+    `/admin/source-line-aliases/${encodeURIComponent(siteKey)}/${encodeURIComponent(sourceName)}/retire`,
+    reason ? { reason } : {},
+  )
+  return result.data
+}
+
+/**
+ * CHG-368-B-B / ADR-164 §端点契约：单字段更新 priority（高频运营操作）
+ *   404：行不存在 / 422：priority 越界 / 200：成功
+ */
+export async function updateLineAliasPriority(
+  siteKey: string,
+  sourceName: string,
+  priority: number,
+): Promise<SourceLineAlias> {
+  const result = await apiClient.put<{ data: SourceLineAlias }>(
+    `/admin/source-line-aliases/${encodeURIComponent(siteKey)}/${encodeURIComponent(sourceName)}/priority`,
+    { priority },
+  )
+  return result.data
+}
+
+/**
+ * CHG-368-B-B / ADR-164 §端点契约 + D-164-10：codename 字库可用性查询
+ *   返回 { available, occupied, cooling } 三段（admin UI 下拉源数据）
+ */
+export async function getCodenamePool(): Promise<{
+  readonly available: readonly string[]
+  readonly occupied: readonly string[]
+  readonly cooling: readonly string[]
+}> {
+  const result = await apiClient.get<{ data: { available: string[]; occupied: string[]; cooling: string[] } }>(
+    '/admin/source-line-aliases/codename-pool',
+  )
+  return result.data
+}
+
+/**
  * 按 siteKey 聚合查线路明细（ADR-117 AMENDMENT 2026-05-19 / CHG-SN-7-REDO-01-E）。
  * 由 crawler 模块 CrawlerSiteExpand 跨域消费 — 前端 fn 真源单一入口在 sources/api.ts。
  */

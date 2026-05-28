@@ -74,6 +74,8 @@ export const ADMIN_NAV: readonly AdminNavSection[] = [
     items: [
       { label: '视频库', href: '/admin/videos', icon: <Film />, shortcut: 'mod+3' },
       { label: '播放线路', href: '/admin/sources', icon: <Link2 />, count: 1939, badge: 'danger' },
+      // CHG-368-B-B / ADR-164：Layer B 山名代号体系（codename / priority / 退役治理）
+      { label: '线路别名', href: '/admin/source-line-aliases', icon: <Link2 /> },
       { label: '合并拆分', href: '/admin/merge', icon: <Merge />, count: 6, badge: 'warn' },
       { label: '字幕管理', href: '/admin/subtitles', icon: <FileText />, shortcut: 'mod+4' },
       { label: '图片健康', href: '/admin/image-health', icon: <ImageIcon />, count: 597, badge: 'warn' },

@@ -10626,3 +10626,47 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **设计取舍**：① 双条件 WHERE 守卫 `(sla.retired_at IS NULL OR sla.source_site_key IS NULL)`：LEFT JOIN miss 时 sla.* 全 NULL → 第二条件 source_site_key IS NULL 守卫保留行（避免误丢无 sla 行的 video_sources）/ ② priority/100 归一化在 Service 层而非 SQL 层：route-scoring 接口约定 priorityBonus 0-1 / Service 层归一化与 quality_score / health_score 同层抽象 / SQL 不污染业务语义 ③ alias_priority null fallback 0 vs Phase 1 隐式 0：显式 null check + 注释标注 fallback 含义 / 防回归
 - **commit trailer**：无强制 Subagents（ADR-164 已 Accepted / 规范驱动实施 / 不修改 packages/admin-ui 公开 Props）
 - **闭环**：CHG-368-B-A3 完成 / route-scoring priority 通道真实激活 / listSources JOIN 已退役行排除 / Wave 2 实施 4/5 子卡完成（-A1 / -A2a / -A2b / -A3）/ admin 通过 PUT priority 端点调高某线路 → 该线路 SourceBar 排序立即上升 / 运营 POST retire 端点退役 → 该线路从前台 SourceBar 消失（双数据通道完整 ship）/ 留待 -B + -C
+
+---
+
+## [CHG-368-B-B] ROUTE-LABEL-B 实施第 4 子卡 — admin UI 独立路径 /admin/source-line-aliases + DataTable 一体化（ADR-164 §6 显示规约）
+- **完成时间**：2026-05-28
+- **执行模型**：claude-opus-4-7（主循环 / 续会话）
+- **子代理调用**：无（ADR-164 已 Accepted / 不修改 packages/admin-ui 公开 Props）
+- **拆卡承接**：CHG-368-B-A1/-A2a/-A2b/-A3 数据+业务+API+排序通道全部 ship 后，本卡（-B）承接 ADR-164 §6 admin UI 独立路径。
+- **范围**（3 业务 + 1 NEW 测试 + 1 lib 扩 = 4 业务 + 1 测试 / PATCH=5 严守阈值 / 不触发 architecture sync）：
+  - `apps/server-next/src/lib/sources/api.ts` 扩 4 函数：
+    - `upsertLineAliasWithFields(siteKey, name, {displayName, codename?, priority?})` 双签名 PUT upsert（后端 -A2b 已落双签名派发）
+    - `retireLineAlias(siteKey, name, reason?)` POST retire
+    - `updateLineAliasPriority(siteKey, name, priority)` PUT priority
+    - `getCodenamePool()` GET codename-pool → {available, occupied, cooling}
+  - `apps/server-next/src/lib/admin-nav.tsx` 新增 sidebar 入口"线路别名" `/admin/source-line-aliases`（位于内容资产组 / 紧随播放线路）
+  - `apps/server-next/src/app/admin/source-line-aliases/page.tsx` NEW (16 行 / dynamic = 'force-dynamic' / 委派 Client)
+  - `apps/server-next/src/app/admin/source-line-aliases/_client/SourceLineAliasesClient.tsx` NEW (~350 行 / DataTable 一体化消费组件)
+  - `tests/unit/components/server-next/admin/source-line-aliases/SourceLineAliasesClient.test.tsx` NEW (6 case)
+- **SourceLineAliasesClient 实施**：
+  - **原语消费**：PageHeader（page__head 统一壳）+ DataTable 一体化（mode='client' / 数据 <200 / 无 pagination）+ AdminCard（codename 池摘要）+ Modal + AdminInput + AdminButton（编辑行 Modal）+ ErrorState + EmptyState + LoadingState + useToast
+  - **CLAUDE.md 强约束遵守**：✅ 不复用 ModernDataTable / 外置 PaginationV2 / 外置 SelectionActionBar / ✅ 零 admin-ui 通用组件 props 反向扩展 / ✅ 零本地新建 admin-ui 通用组件
+  - **列结构**（TableColumn<SourceLineAlias>[]）：siteKey + sourceName + displayName + codename + priority + status（computed）+ actions（kind: 'action'）
+  - **codename 池摘要**：3-grid 显示可用/已占用/冷却中的 count（GET codename-pool 真源 / 应用层 90 天判定 D-164-11）
+  - **状态列**：在役（fg-success）/ 已退役（手动/自动 / fg-warning）
+  - **操作列**：编辑（打开 Modal）+ 退役（已退役行不渲染 / 双重 confirm + 90 天冷却警告）
+  - **编辑 Modal**：3 字段（displayName 必填 1-100 / codename 可选 1-20 / priority 0-100 number input）+ 客户端预校验 + 调 upsertLineAliasWithFields
+- **测试 6 case**：
+  - 渲染基础（PageHeader title + DataTable）
+  - codename 池摘要渲染（3 段 count 正确）
+  - 已退役行 retire 按钮不渲染（D-164-4 软删语义）
+  - 编辑按钮 → Modal 打开 + displayName 字段初始化
+  - retire 按钮 → confirm true → API + 成功 toast
+  - retire confirm false → 不调 API
+- **既有 SourceLineAliasPanel 关系**：
+  - 既有 `apps/server-next/src/app/admin/sources/_client/SourceLineAliasPanel.tsx`（侧栏式 / 仅 display_name）暂保留（ADR-117 时期最小可用实施）
+  - 本独立路径承接 ADR-164 §6 完整 Layer B 视图（codename / priority / 退役 / 字库）
+  - 未来考虑：既有 Panel 迁移至本独立路径 / 单一真源
+- **不触发 architecture.md 同步**（CHG-368-B-A1-FIX-{1..5} 经验持续核对）：
+  - 本卡纯 admin UI 前端工作 / 无 schema / 无 query / 无 service / 无 route 改动
+  - lib/sources/api.ts 扩展是消费侧 API client / 不影响后端 schema 或 docs/architecture.md
+- **设计取舍**：① mode='client' 而非 'server'：数据量 <200 / DataTable v2 client 模式原生支持 sort + filter / 减少 backend listLineAliases 改造范围 / ② 单一编辑 Modal vs 内联编辑：Modal 更适合多字段（3 字段）/ 内联编辑会让单行交互复杂 / ③ retire 操作用 window.confirm 而非 Modal：低频操作（单次确认 + 90 天冷却警告即足够）/ 节省组件复杂度 / ④ codename 字库摘要顶部展示 vs 编辑 Modal 内联：顶部展示给运营全局上下文 / 编辑时仍可用（不限制用户输入字库内 codename）/ ⑤ 列结构含 sourceSiteKey/sourceName 复合 PK 显式列出而非合并：admin 视图调试 + 日志追溯友好 / 复合 PK 是 ADR-114-NEGATED 锁定语义
+- **质量门禁**：typecheck ✅ / lint ✅ / verify:adr-contracts ✅ EXIT=0（验证 -B-B 引入 0 新端点 / 197 路由 80 ADR 端点对齐保持）/ 单测 source-line-aliases 域 6/6 PASS（新建）+ 其他既有零回归
+- **commit trailer**：无强制 Subagents（不修改 packages/admin-ui 公开 Props / 不触发"共享组件 API 契约强制 Opus"红线）
+- **闭环**：CHG-368-B-B 完成 / admin UI 独立路径 ship / Layer B 完整管理视图（列表 + 编辑 + 退役 + 字库摘要）/ Wave 2 实施 5/5 子卡完成（除 -C advisory）/ 留待 -C（LinesPanel codename 标签 + docs/manual 同步 / advisory 可选 / commit 需 arch-reviewer trailer）
