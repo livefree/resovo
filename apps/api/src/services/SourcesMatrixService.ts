@@ -17,12 +17,17 @@ import {
   getVideoMatrix,
   listLineAliases,
   upsertLineAlias,
+  upsertLineAliasFull,
+  retireLineAlias as retireLineAliasQuery,
+  updateLineAliasPriority as updateLineAliasPriorityQuery,
+  findCodenameAssignments,
   findLineAlias,
   listRoutesBySite as listRoutesBySiteRaw,
   selectRouteSampleSource,
   countRouteSources,
   softDeleteRouteBySite,
 } from '@/api/db/queries/sources-matrix'
+import { MOUNTAIN_CODENAMES } from '@resovo/types'
 // CHG-357 / arch-reviewer I1：probeOne / renderCheckOne 迁至 SourceProbeService
 //   解 file-size BLOCKER (551→<400 行) + 配合 batch internal 抽取
 import {
@@ -43,6 +48,9 @@ import type {
   LineMatrixRow,
   SourceLineAlias,
   SourceRouteBySite,
+  CodenamePool,
+  UpsertAliasInput,
+  RetireAliasInput,
 } from '@resovo/types'
 import { fetchVideosByIds } from '@/api/db/queries/video-merge-mutations'
 import { AuditLogService } from '@/api/services/AuditLogService'
@@ -395,6 +403,12 @@ export class SourcesMatrixService {
     return probeSvc.renderCheckOne(sourceId, actorId, requestId)
   }
 
+  /**
+   * CHG-368-B-A2a / ADR-164 §5.7：upsert 别名（input 对象签名 / 兼容既有调用方）
+   *   既有 `upsertLineAlias(siteKey, name, displayName, actorId, requestId?)` 仍可用
+   *   新签名 `upsertLineAliasWithFields(...., input: UpsertAliasInput, actorId, requestId?)`
+   *   route -A2b 切换到新签名 / 当前 route 暂走旧签名（零回归）
+   */
   async upsertLineAlias(
     sourceSiteKey: string,
     sourceName: string,
@@ -416,5 +430,105 @@ export class SourcesMatrixService {
     })
 
     return alias
+  }
+
+  /**
+   * CHG-368-B-A2a / ADR-164 §5.7：扩字段 upsert（input 对象 / 接 codename + priority）
+   *   route -A2b 落地后切换到此签名 / 当前仅 sources 域内部消费
+   *   audit 写入留 -A2b（与新签名 route 一体提交 / 避免 service 层与 route 双写）
+   */
+  async upsertLineAliasWithFields(
+    sourceSiteKey: string,
+    sourceName: string,
+    input: UpsertAliasInput,
+    actorId: string,
+    _requestId?: string,
+  ): Promise<SourceLineAlias> {
+    return upsertLineAliasFull(this.db, sourceSiteKey, sourceName, input, actorId)
+  }
+
+  /**
+   * CHG-368-B-A2a / ADR-164 §5.7：手动退役别名（autoRetired=false）
+   *   404：行不存在（before fetch 返回 null）
+   *   409：行已退役（before fetch 返回 retiredAt 非 NULL）
+   *   成功：UPDATE 守卫 retired_at IS NULL / rowCount=1 / 返回新行
+   *   audit 写入留 -A2b
+   *
+   * 注：input.reason 当前仅保留接口参数 / -A2b route 层将 reason 写入 audit payload
+   */
+  async retireLineAlias(
+    sourceSiteKey: string,
+    sourceName: string,
+    _input: RetireAliasInput,
+    _actorId: string,
+    _requestId?: string,
+  ): Promise<SourceLineAlias> {
+    const before = await findLineAlias(this.db, sourceSiteKey, sourceName)
+    if (!before) {
+      throw new AppError('NOT_FOUND', '别名行不存在', 404)
+    }
+    if (before.retiredAt !== null) {
+      throw new AppError('STATE_CONFLICT', '该别名已退役', 409)
+    }
+    const alias = await retireLineAliasQuery(this.db, sourceSiteKey, sourceName)
+    if (!alias) {
+      // 罕见竞态：before fetch 后被并发 retire / 视为 409
+      throw new AppError('STATE_CONFLICT', '该别名已被并发退役', 409)
+    }
+    return alias
+  }
+
+  /**
+   * CHG-368-B-A2a / ADR-164 §5.7：单字段更新 priority（高频运营 / 单端点单 audit）
+   *   404：行不存在 / 422：priority 越界（DB CHECK 23514 / Service 层不再次校验 / route 层 zod 兜底）
+   *   audit 写入留 -A2b
+   */
+  async updateLineAliasPriority(
+    sourceSiteKey: string,
+    sourceName: string,
+    priority: number,
+    _actorId: string,
+    _requestId?: string,
+  ): Promise<SourceLineAlias> {
+    const alias = await updateLineAliasPriorityQuery(this.db, sourceSiteKey, sourceName, priority)
+    if (!alias) {
+      throw new AppError('NOT_FOUND', '别名行不存在', 404)
+    }
+    return alias
+  }
+
+  /**
+   * CHG-368-B-A2a / ADR-164 D-164-10 + D-164-11：codename 字库可用性查询
+   *   occupied = 当前活跃使用中（retired_at IS NULL）
+   *   cooling  = 退役 < 90 天（retired_at IS NOT NULL AND retired_at >= NOW() - 90 days）
+   *   available = MOUNTAIN_CODENAMES \ occupied \ cooling
+   *
+   *   90 天冷却期应用层判定（D-164-11 / 运营紧急复用口子 / 不写 DB CHECK）
+   *   字库基础名 + 数字后缀（如 "泰山-2"）当前仅按基础名比对（前缀剥离留 -A2b 评估）
+   */
+  async getCodenamePool(): Promise<CodenamePool> {
+    const assignments = await findCodenameAssignments(this.db)
+    const COOLING_MS = 90 * 24 * 60 * 60 * 1000
+    const now = Date.now()
+    const occupied = new Set<string>()
+    const cooling = new Set<string>()
+    for (const a of assignments) {
+      if (a.retiredAt === null) {
+        occupied.add(a.codename)
+        continue
+      }
+      const retiredTs = Date.parse(a.retiredAt)
+      if (!Number.isNaN(retiredTs) && now - retiredTs < COOLING_MS) {
+        cooling.add(a.codename)
+      }
+    }
+    const available = MOUNTAIN_CODENAMES.filter(
+      (c) => !occupied.has(c) && !cooling.has(c),
+    )
+    return {
+      available,
+      occupied: [...occupied].sort(),
+      cooling: [...cooling].sort(),
+    }
   }
 }

@@ -10505,3 +10505,36 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
     3. 候选查询的 driving 谓词是什么列（与索引键比对）
     4. 索引键 vs driving 列匹配 + 部分 WHERE 子句不与查询谓词方向相反 → 才能列入"候选路径"
 - **闭环**：Codex stop-time review #21 红线消解 / 5 次连续修订形成"索引设计 4 步核验"完整规范 / Migration 079 + architecture.md + decisions.md 3 真源双索引声明对齐物理行为 / listSources / matrix JOIN PK 索引承担路径明示 / cooling lookup by codename 无适用索引承认 / 应在 docs/rules/db-rules.md 落地"索引设计 4 步核验" + 四级范式 + 双 invariant 完整规范
+
+---
+
+## [CHG-368-B-A2a] ROUTE-LABEL-B 实施第 2a 子卡 — queries + Service 新增 mutations / 方法（ADR-164 §5.7 业务层）
+- **完成时间**：2026-05-28
+- **执行模型**：claude-opus-4-7（主循环 / 续会话 / 业务最重）
+- **子代理调用**：无（ADR-164 已 Accepted / 共享 API 契约由 -A1 沉淀完毕）
+- **拆卡承接**：CHG-368-B-A1 数据层（commit 734e7249 + 5 次 FIX）+ ADR-164 §7.2 业务 7 文件超 PATCH ≤ 5 → 拆 -A2a / -A2b。本卡（-A2a）落 queries mutations + Service 方法，不含 route + R-MID-1 RETRO 7 文件（→ -A2b 一体提交 / D-121-3 豁免）。
+- **范围**（3 业务 + 1 测试 + 1 测试调整 / PATCH=5 严守阈值 / 零 route 改动 / 不触发 architecture sync）：
+  - `apps/api/src/db/queries/sources-matrix.ts` 新增 4 mutations + 重构 1：
+    - `upsertLineAliasFull(db, siteKey, name, input: UpsertAliasInput, updatedBy)` INSERT ON CONFLICT 扩 codename + priority / CASE WHEN $::BOOLEAN 双 flag 路径（UPDATE 仅当 input 字段非 undefined 时覆盖）
+    - `upsertLineAlias(...)` 重构为 wrapper 委派 `upsertLineAliasFull({displayName})` / **零签名变更** / 既有 50+ 调用方零改 / 兼容性保证
+    - `retireLineAlias(db, siteKey, name)` UPDATE retired_at=NOW() + auto_retired=false + WHERE 守卫 `retired_at IS NULL` → rowCount=0 表示 NOT_FOUND 或 STATE_CONFLICT（由 Service 层 before fetch 区分）
+    - `updateLineAliasPriority(db, siteKey, name, priority)` UPDATE priority SMALLINT cast + DB CHECK 强制 0-100 / 不强制 retired_at IS NULL（已退役行可调 priority）
+    - `findCodenameAssignments(db)` SELECT codename + retired_at WHERE codename IS NOT NULL / 用于 getCodenamePool / **JSDoc 附"索引设计 4 步核验"评估 + 留实测 EXPLAIN ANALYZE**（不再像 -A1 五次 FIX 虚假声明）
+  - `apps/api/src/services/SourcesMatrixService.ts` 新增 3 方法 + 扩 1：
+    - `upsertLineAliasWithFields(siteKey, name, input, actorId, requestId?)` 委派 upsertLineAliasFull / audit 留 -A2b
+    - `retireLineAlias(siteKey, name, input, actorId, requestId?)` before fetch（404 行不存在 / 409 已退役）+ UPDATE 守卫（并发 409）+ audit 留 -A2b / input.reason 当前保留接口参数（-A2b 写入 audit payload）
+    - `updateLineAliasPriority(siteKey, name, priority, actorId, requestId?)` UPDATE（404 / DB CHECK 422 由 zod + DB 双重保护）+ audit 留 -A2b
+    - `getCodenamePool()` 应用层 90 天冷却期判定（`COOLING_MS = 90 * 24 * 60 * 60 * 1000` Y-164-2 实施期硬编码 / -A2b 评估抽 const）+ MOUNTAIN_CODENAMES 字库对比 + 三段分类（available / occupied / cooling / 字典序排序）
+    - 既有 `upsertLineAlias(siteKey, name, displayName, ...)` 签名零改 / 内部走 wrapper / 既有 audit `source_line_alias.upsert` 不动 / **零回归**
+  - `tests/unit/api/source-line-alias-mutations.test.ts` NEW（200 行 / 11 case）：retire 4（404 / 409 已退役 / happy / 并发竞态 rowCount=0 STATE_CONFLICT）+ updatePriority 2（404 / happy）+ getCodenamePool 4（空 / 在役 occupied / 退役 < 90 天 cooling / 退役 > 90 天回 available）+ upsertLineAliasWithFields 1（codename + priority 传透 queries）
+  - `tests/unit/api/sources-matrix.test.ts` 既有 upsertLineAlias 测试 params 顺序更新（[siteKey,name,displayName,codename,priority,updatedBy,codenameProvided,priorityProvided]）+ returnRow 补 4 新字段（codename / priority / retired_at / auto_retired）/ wrapper 行为不变（result 字段断言全 PASS）
+- **不触发 architecture.md 同步**（CHG-368-B-A1-FIX-{1..5} 经验主动核对）：
+  - 本卡无 schema migration / 新表 / 新列 / 新约束 / 新索引
+  - 仅 queries function + Service 方法 = 应用层逻辑
+  - 不触发 CLAUDE.md 绝对禁止"schema 变更不同步 architecture.md"红线
+  - 已显式核对 5 次 FIX 经验后落实成 checklist 行为
+- **设计取舍**：① audit 写入留 -A2b 不在 -A2a 落（与 ADR-117 既有 upsertLineAlias 范式略偏差 / 选当前方案：-A2a 仅落 business logic / -A2b 一体提交 route + audit + RETRO / payload 内容断言依赖端点 happy path 测试 / 不能在无端点时测）② upsertLineAlias 保留 wrapper 不直接重构所有调用方：兼容性优先 / 减少回归面 / 既有 ADR-117 audit 路径不动 ③ `findCodenameAssignments` 仅返回 codename + retired_at 两列：IO 优化 / 完整行查询留独立 query 函数 ④ `getCodenamePool` 全应用层判定 + 字典序排序：避免 SQL ORDER BY 多字段复杂度 / 字典序对 admin UI 下拉友好
+- **留待 -A2b 范围**：route 3 新端点（POST retire / PUT priority / GET codename-pool）+ PUT upsert body schema 扩 codename + priority 可选字段 + AuditLogService ACTION_TYPES +2 + AdminAuditActionType union +2 + audit-log-{enums-set-equal,coverage} EXPECTED set 扩 + source-line-alias-retire-priority-audit.test.ts payload 内容断言 R-MID-1 新文件 + Service 3 方法 audit 写入路径接入
+- **质量门禁**：typecheck ✅（root + 7 workspaces）/ lint ✅（0 error 0 warning）/ verify:adr-contracts ✅ EXIT=0（verify-sql-schema-alignment + verify-adr-d-numbers 266 条 + verify-endpoint-adr 194 路由 全 PASS）/ 单测 sources-matrix 域 52/52 PASS（既有 27+14 零回归 + 11 新 case）
+- **commit trailer**：无强制 Subagents（ADR-164 已 Accepted / 规范驱动实施 / 不修改 packages/admin-ui 公开 Props / 不触发"共享组件 API 契约强制 Opus"红线）
+- **闭环**：CHG-368-B-A2a 完成 / queries 4 mutations + Service 4 方法落地 / -A2b 业务基础就绪（route + audit + RETRO 一体提交）/ Wave 2 实施 2/5 子卡完成（-A1 / -A2a）/ FIX-{1..5} 经验主动核对落地（不触发 architecture sync 红线）/ "索引设计 4 步核验"应用于新 query JSDoc

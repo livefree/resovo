@@ -1902,7 +1902,7 @@ CHG-353 (ROUTE-LABEL-A2) → 依赖 CHG-352 后端返回排序数据
 
 ## [SEQ-20260527-MOD-WAVE2] server-next 内容审核台 Wave 2 — 预览/拆分/合并/元数据/路线主题（plan §14 + §17.2）
 
-- **状态**：🔄 执行中（CHG-367 系列全部完成 / CHG-368-A ✅ ADR-164 Accepted / **CHG-368-B-A1 ✅** Migration 079 + types + queries SELECT 扩列（5 业务 + 0 测试 / 41/41 sources-matrix PASS / 零业务行为变化）/ CHG-368-B-A2/-A3/-B/-C 后续承接）
+- **状态**：🔄 执行中（CHG-367 系列全部完成 / CHG-368-A ✅ ADR-164 Accepted / CHG-368-B-A1 ✅ 数据层（+ 5 次 FIX 沉淀索引设计 4 步核验规范）/ **CHG-368-B-A2a ✅** queries + Service 业务层（3 业务 + 1 测试 + 1 测试调整 / 52/52 sources-matrix PASS / 零 route 改动）/ CHG-368-B-A2b/-A3/-B/-C 后续承接）
 - **最后更新时间**：2026-05-28
 - **创建时间**：2026-05-27
 - **目标**：基于 `/Users/livefree/.claude/plans/fluffy-giggling-teapot.md` §14 Wave 2 + §17.2 落地 9 张主卡（4 张需 ADR + Opus 决策）；继续 Wave 1 的自动推进节奏。
@@ -1942,6 +1942,7 @@ CHG-353 (ROUTE-LABEL-A2) → 依赖 CHG-352 后端返回排序数据
 | 13 | ✅ **CHG-368-A** 已完成（2026-05-28）| ROUTE-LABEL-B ADR-164 起草 / arch-reviewer Opus 1 轮 A- CONDITIONAL → 0 红线 升 Accepted / D-164-1..12 全闭环 / 5 黄线 + 4 advisory + 7 重评条件 / Migration 079 SQL 草案完整 / 3 新端点 R7 MUST-8 6 列契约 / R-MID-1 RETRO 触发 7 文件框架 + 2 新 actionType / 实施期 19 文件 → 拆 -A/-B/-C | 是 ADR-164 ✅ Accepted | opus-4-7 + arch-reviewer (opus-4-7) |
 | 14 | **CHG-368-B**（拆 -A1/-A2/-A3/-B/-C 子卡 / ADR-164 §7 锁定）| ROUTE-LABEL-B 实施总卡 — Migration 079 + queries + Service + 3 admin 写端点 + R-MID-1 RETRO + admin UI + LinesPanel + docs（19 文件 / 拆 5 子卡）| 否（ADR-164 已 Accepted）| opus-4-7（-A1/-A2 schema/RETRO）+ sonnet（-A3/-B/-C）|
 | 14.1 | ✅ **CHG-368-B-A1** 已完成（2026-05-28）| ROUTE-LABEL-B 实施第 1 子卡 — Migration 079（4 字段 + CHECK + 2 部分索引）+ SourceLineAlias 类型扩 4 字段 + 3 新 input/output interfaces + route-codenames.ts MOUNTAIN_CODENAMES 52 项常量 + sources-matrix queries SELECT 列扩 + mapAliasRow helper 沉淀 / 5 业务 + 0 测试 / 零业务行为变化 / typecheck + verify:adr-contracts + sources-matrix 41/41 单测全 PASS | 否（ADR-164 已 Accepted）| opus-4-7 续会话 |
+| 14.2a | ✅ **CHG-368-B-A2a** 已完成（2026-05-28）| ROUTE-LABEL-B 实施第 2a 子卡 — queries 新增 4 mutations（upsertLineAliasFull / retireLineAlias / updateLineAliasPriority / findCodenameAssignments）+ SourcesMatrixService 新增 3 方法 + 扩 1（upsertLineAliasWithFields / retireLineAlias / updateLineAliasPriority / getCodenamePool）/ 3 业务 + 1 测试 + 1 测试调整（PATCH=5 严守）/ 零 route 改动 / audit 留 -A2b 一体提交 / 52/52 单测全 PASS / **不触发 architecture sync**（FIX-{1..5} 经验主动核对落地）| 否 | opus-4-7 续会话 |
 | 15 | ✅ **CHG-369** 已完成（2026-05-27）| ROUTE-LABEL-C / 5 内置主题选择器 + localStorage 持久化 / SSR safe / 8 case PASS / 3 业务 + 2 测试 + 1 docs / 自定义主题输入 → follow-up CHG-369-B | 否 | opus-4-7 续会话 |
 
 ### Wave 2 BLOCKER 触发清单（沿用 Wave 1 §16.5）

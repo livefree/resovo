@@ -393,7 +393,7 @@ export async function findLineAlias(
   return mapAliasRow(r)
 }
 
-// ── 写操作：upsert 别名 ───────────────────────────────────────────
+// ── 写操作：upsert 别名（既有签名 / 后兼容 wrapper）───────────────
 
 export async function upsertLineAlias(
   db: Pool,
@@ -402,23 +402,131 @@ export async function upsertLineAlias(
   displayName: string,
   updatedBy: string,
 ): Promise<SourceLineAlias> {
+  return upsertLineAliasFull(db, sourceSiteKey, sourceName, { displayName }, updatedBy)
+}
+
+/**
+ * CHG-368-B-A2a / ADR-164 §5.7：扩 upsert 接 codename + priority 可选字段。
+ *   INSERT 路径：codename / priority 取 input 值（priority 缺省走 DB DEFAULT 0）
+ *   UPDATE 路径：仅当 input 字段非 undefined 时覆盖（避免误清空既有值）
+ *   既有 retired_at + auto_retired 不在 upsert 路径修改（→ retireLineAlias 专用端点）
+ */
+export async function upsertLineAliasFull(
+  db: Pool,
+  sourceSiteKey: string,
+  sourceName: string,
+  input: import('@resovo/types').UpsertAliasInput,
+  updatedBy: string,
+): Promise<SourceLineAlias> {
+  const codenameProvided = input.codename !== undefined
+  const priorityProvided = input.priority !== undefined
+
   const result = await db.query<DbAliasRow>(
-    `INSERT INTO source_line_aliases (source_site_key, source_name, display_name, updated_by, updated_at)
-     VALUES ($1, $2, $3, $4, NOW())
+    `INSERT INTO source_line_aliases
+       (source_site_key, source_name, display_name, codename, priority, updated_by, updated_at)
+     VALUES ($1, $2, $3, $4, COALESCE($5::SMALLINT, 0), $6, NOW())
      ON CONFLICT (source_site_key, source_name)
-     DO UPDATE SET display_name = EXCLUDED.display_name,
-                   updated_by   = EXCLUDED.updated_by,
-                   updated_at   = NOW()
+     DO UPDATE SET
+       display_name = EXCLUDED.display_name,
+       codename     = CASE WHEN $7::BOOLEAN THEN EXCLUDED.codename ELSE source_line_aliases.codename END,
+       priority     = CASE WHEN $8::BOOLEAN THEN EXCLUDED.priority ELSE source_line_aliases.priority END,
+       updated_by   = EXCLUDED.updated_by,
+       updated_at   = NOW()
      RETURNING source_site_key, source_name, display_name,
                codename, priority, retired_at, auto_retired,
                updated_at`,
-    [sourceSiteKey, sourceName, displayName, updatedBy],
+    [
+      sourceSiteKey, sourceName, input.displayName,
+      codenameProvided ? input.codename : null,
+      priorityProvided ? input.priority : null,
+      updatedBy,
+      codenameProvided,
+      priorityProvided,
+    ],
   )
   const r = result.rows[0]
   if (!r) {
-    throw new Error('upsertLineAlias: RETURNING 0 rows (unexpected)')
+    throw new Error('upsertLineAliasFull: RETURNING 0 rows (unexpected)')
   }
   return mapAliasRow(r)
+}
+
+/**
+ * CHG-368-B-A2a / ADR-164 §5.7：手动退役别名。
+ *   UPDATE retired_at = NOW(), auto_retired = false / WHERE 守卫：行存在 AND retired_at IS NULL
+ *   返回 rowCount > 0 表示退役成功 / 否则调用方根据 before fetch 区分 404 vs 409
+ *   不影响 codename 字段（保留追溯 / 冷却期满后由新 upsert 复用）
+ */
+export async function retireLineAlias(
+  db: Pool,
+  sourceSiteKey: string,
+  sourceName: string,
+): Promise<SourceLineAlias | null> {
+  const result = await db.query<DbAliasRow>(
+    `UPDATE source_line_aliases
+       SET retired_at   = NOW(),
+           auto_retired = false,
+           updated_at   = NOW()
+     WHERE source_site_key = $1
+       AND source_name     = $2
+       AND retired_at IS NULL
+     RETURNING source_site_key, source_name, display_name,
+               codename, priority, retired_at, auto_retired,
+               updated_at`,
+    [sourceSiteKey, sourceName],
+  )
+  const r = result.rows[0]
+  return r ? mapAliasRow(r) : null
+}
+
+/**
+ * CHG-368-B-A2a / ADR-164 §5.7：单字段更新 priority（高频运营操作）。
+ *   priority 范围 0-100 由 DB CHECK 强制（违反抛 23514）
+ *   WHERE 守卫：行存在（rowCount=0 → 调用方抛 NOT_FOUND）
+ *   不要求 retired_at IS NULL（已退役行也允许调 priority / 数据完整性 / Service 层可加业务规则限制）
+ */
+export async function updateLineAliasPriority(
+  db: Pool,
+  sourceSiteKey: string,
+  sourceName: string,
+  priority: number,
+): Promise<SourceLineAlias | null> {
+  const result = await db.query<DbAliasRow>(
+    `UPDATE source_line_aliases
+       SET priority   = $3::SMALLINT,
+           updated_at = NOW()
+     WHERE source_site_key = $1
+       AND source_name     = $2
+     RETURNING source_site_key, source_name, display_name,
+               codename, priority, retired_at, auto_retired,
+               updated_at`,
+    [sourceSiteKey, sourceName, priority],
+  )
+  const r = result.rows[0]
+  return r ? mapAliasRow(r) : null
+}
+
+/**
+ * CHG-368-B-A2a / ADR-164 D-164-10 + D-164-11：查所有 codename 非 NULL 行（含已退役）。
+ *   用途：① GET codename-pool occupied / cooling 分段判定 ② isCodenameInCooling 应用层判定
+ *   返回 codename + retired_at 两列（其他字段不需要 / 减少 IO）
+ *
+ *   access path 评估（按"索引设计 4 步核验"）：
+ *     - 索引键：idx_codename_active = codename / 部分 WHERE = codename IS NOT NULL AND retired_at IS NULL
+ *     - 查询 driving 谓词：codename IS NOT NULL（含已退役 / retired_at 不约束）
+ *     - 匹配性：本查询 driving 谓词只匹配 `idx_codename_active` 的 codename 列 + WHERE 子句**部分覆盖**（在役行覆盖 / 已退役行不在索引中）
+ *     - 结论：在役行可走索引 / 已退役行需补全表扫 → 规划器实际选择视数据 selectivity（可能直接表扫一遍简单）。留 EXPLAIN ANALYZE 实测。
+ *     - 不在 hot path（codename-pool 端点低频）/ 即使全表扫成本可接受
+ */
+export async function findCodenameAssignments(
+  db: Pool,
+): Promise<readonly { codename: string; retiredAt: string | null }[]> {
+  const result = await db.query<{ codename: string; retired_at: string | null }>(
+    `SELECT codename, retired_at
+       FROM source_line_aliases
+      WHERE codename IS NOT NULL`,
+  )
+  return result.rows.map((r) => ({ codename: r.codename, retiredAt: r.retired_at }))
 }
 
 // ── 查询：按 siteKey 聚合线路明细（ADR-117 AMENDMENT 2026-05-19）─────

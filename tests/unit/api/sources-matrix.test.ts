@@ -325,11 +325,15 @@ describe('listLineAliases', () => {
 // ── upsertLineAlias ───────────────────────────────────────────────
 
 describe('upsertLineAlias', () => {
-  it('executes upsert and returns saved alias', async () => {
+  it('executes upsert and returns saved alias (CHG-368-B-A2a: wrapper 委派到 upsertLineAliasFull / params 顺序变更)', async () => {
     const returnRow = {
       source_site_key: 'bilibili',
       source_name: '线路1',
       display_name: '哔哩哔哩主线',
+      codename: null,
+      priority: 0,
+      retired_at: null,
+      auto_retired: false,
       updated_at: '2026-05-12T00:00:00Z',
     }
     const db = makePool([returnRow])
@@ -342,9 +346,14 @@ describe('upsertLineAlias', () => {
     const mockQuery = db.query as ReturnType<typeof vi.fn>
     const [sql, params] = mockQuery.mock.calls[0] as [string, unknown[]]
     expect(sql).toContain('ON CONFLICT')
+    // -A2a 新 params 顺序：[siteKey, name, displayName, codename, priority, updatedBy, codenameProvided, priorityProvided]
     expect(params[0]).toBe('bilibili')
     expect(params[1]).toBe('线路1')
     expect(params[2]).toBe('哔哩哔哩主线')
-    expect(params[3]).toBe('actor-uuid')
+    expect(params[3]).toBeNull()           // codename 未提供
+    expect(params[4]).toBeNull()           // priority 未提供
+    expect(params[5]).toBe('actor-uuid')   // updatedBy 位置变更
+    expect(params[6]).toBe(false)          // codenameProvided flag
+    expect(params[7]).toBe(false)          // priorityProvided flag
   })
 })
