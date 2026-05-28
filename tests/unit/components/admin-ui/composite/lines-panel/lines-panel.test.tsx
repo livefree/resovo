@@ -55,9 +55,11 @@ function makeLine(overrides: Partial<LineAggregate> & { key: string; episodes: R
     latencyMedianMs: 'latencyMedianMs' in overrides ? overrides.latencyMedianMs ?? null : null,
     qualityHighest: 'qualityHighest' in overrides ? overrides.qualityHighest ?? null : null,
     episodes: overrides.episodes,
-    // CHG-368-B-C-UI / ADR-164：codename / retiredAt 默认 null（既有 fixture 兼容）
+    // CHG-368-B-C-UI + CHG-368-B-FOLLOWUP-AUTO-RETIRED-LABEL / ADR-164：
+    // alias 派生字段集 3 字段默认值（既有 fixture 兼容）
     codename: 'codename' in overrides ? overrides.codename ?? null : null,
     retiredAt: 'retiredAt' in overrides ? overrides.retiredAt ?? null : null,
+    autoRetired: 'autoRetired' in overrides ? overrides.autoRetired ?? false : false,
   }
 }
 
@@ -346,10 +348,11 @@ describe('CHG-368-B-C-UI — codename badge + 退役标识（ADR-164 §6）', ()
     expect(container.querySelector('[data-line-codename]')).toBeNull()
   })
 
-  it('line.retiredAt 非 NULL → 行 data-retired=true + 渲染"（已退役）"标识 + aria-label "线路已退役"', () => {
+  it('line.retiredAt 非 NULL + autoRetired=false → 渲染"（已退役·手动）"标识 + aria-label "线路手动退役"', () => {
     const line = makeLine({
       key: 'site_a|LineA',
       retiredAt: '2026-04-01T00:00:00Z',
+      autoRetired: false,
       episodes: [makeEp({ id: 'ep1' })],
     })
     const { container } = render(<LinesPanel {...baseProps({ lines: [line] })} />)
@@ -357,14 +360,31 @@ describe('CHG-368-B-C-UI — codename badge + 退役标识（ADR-164 §6）', ()
     expect(row?.getAttribute('data-retired')).toBe('true')
     const retiredLabel = container.querySelector('[data-line-retired-label]')
     expect(retiredLabel).not.toBeNull()
-    expect(retiredLabel?.textContent).toBe('（已退役）')
-    expect(retiredLabel?.getAttribute('aria-label')).toBe('线路已退役')
+    expect(retiredLabel?.textContent).toBe('（已退役·手动）')
+    expect(retiredLabel?.getAttribute('aria-label')).toBe('线路手动退役')
+    // data-line-retired-auto 仅 true 时存在（boolean attribute 范式）
+    expect(retiredLabel?.getAttribute('data-line-retired-auto')).toBeNull()
   })
 
-  it('line.retiredAt = NULL → 行无 data-retired 标记 / 无退役标识', () => {
+  it('line.retiredAt 非 NULL + autoRetired=true → 渲染"（已退役·自动）"标识 + aria-label "线路自动退役" + data-line-retired-auto', () => {
+    const line = makeLine({
+      key: 'site_a|LineA',
+      retiredAt: '2026-04-02T00:00:00Z',
+      autoRetired: true,
+      episodes: [makeEp({ id: 'ep1' })],
+    })
+    const { container } = render(<LinesPanel {...baseProps({ lines: [line] })} />)
+    const retiredLabel = container.querySelector('[data-line-retired-label]')
+    expect(retiredLabel?.textContent).toBe('（已退役·自动）')
+    expect(retiredLabel?.getAttribute('aria-label')).toBe('线路自动退役')
+    expect(retiredLabel?.getAttribute('data-line-retired-auto')).toBe('true')
+  })
+
+  it('line.retiredAt = NULL → 行无 data-retired 标记 / 无退役标识（autoRetired 字段无 UI 意义）', () => {
     const line = makeLine({
       key: 'site_a|LineA',
       retiredAt: null,
+      autoRetired: false,
       episodes: [makeEp({ id: 'ep1' })],
     })
     const { container } = render(<LinesPanel {...baseProps({ lines: [line] })} />)

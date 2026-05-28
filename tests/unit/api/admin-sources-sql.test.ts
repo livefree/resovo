@@ -104,9 +104,10 @@ describe('listAdminSources — ADMIN-13 行级站点字段切换', () => {
     const rowsSql = rowsCall![0] as string
     // LEFT JOIN 复合 PK 匹配（避免笛卡尔积 / 索引设计 4 步核验步 3-4 driving 列 = (site_key, source_name) PK）
     expect(rowsSql).toMatch(/LEFT JOIN source_line_aliases sla[\s\S]*?ON s\.source_site_key = sla\.source_site_key[\s\S]*?AND s\.source_name = sla\.source_name/)
-    // SELECT 返回 codename + retired_at（让 ContentSourceRow 携带 Layer B 字段到 LinesPanel）
+    // SELECT 返回 codename + retired_at + auto_retired（让 ContentSourceRow 携带 ADR-164 alias 派生 3 字段集到 LinesPanel）
     expect(rowsSql).toContain('sla.codename AS codename')
     expect(rowsSql).toContain('sla.retired_at AS retired_at')
+    expect(rowsSql).toContain('sla.auto_retired AS auto_retired')
   })
 
   it('LEFT JOIN source_line_aliases 不加 retired_at IS NULL 谓词（需透传 retired 状态到 UI / 不能过滤已退役行）', async () => {

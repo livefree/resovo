@@ -40,6 +40,52 @@
 
 ---
 
+## [CHG-368-B-FOLLOWUP-AUTO-RETIRED-LABEL] LinesPanel 退役标识区分自动/手动（Wave 3 #4 / 长尾清理 4/4 / ADR-164 D-164-8 闭环最后一公里）
+- **完成时间**：2026-05-28
+- **执行模型**：claude-sonnet-4-6（主循环 / 不切换 §16.5）
+- **子代理调用**：arch-reviewer (claude-opus-4-7) — 1 轮独立评审 / agentId a8f0bb30cc856631f / 输出 A- CONDITIONAL（0 红线 / 2 黄线 Y-A-1 invariant JSDoc + Y-A-2 派生字段集注释升级 / 4 绿点 / 8 关键洞察 / 推荐方案 A 拒绝方案 B 嵌套 union + 方案 C 注入回调）→ 主循环消化 0 红线 + Y-A-1/Y-A-2 全落 = 等同 A
+- **拆卡承接**：tasks.md "下次会话恢复入口" advisory follow-up（"LinesPanel 退役标识区分自动/手动 / 需扩 LineAggregate 第 12 字段（再触发 Opus trailer）"）。CHG-368-B-FOLLOWUP-CONTENT-SOURCE-ROW（前一卡）打通 codename + retired_at 数据通路后，本卡是 ADR-164 D-164-8 在 UI 层的兑现（不做这区分，D-164-8 在 UI 端等同浪费 schema 空间）。
+- **范围**（4 业务 + 1 测试 + 1 docs / PATCH=6 超 5 软上限 1 项接受完成度风险 / 双红线触发：packages/admin-ui Props + PATCH > 5）：
+  - `packages/admin-ui/src/components/composite/lines-panel/lines-panel.types.ts`
+    - LineAggregate 新增 `readonly autoRetired: boolean` 字段 + 完整 JSDoc（**Y-A-1 修订**）：
+      - 描述：worker 自动 vs 人工手动 admin 触发
+      - **invariant**：仅当 retiredAt !== null 时携带语义；retiredAt === null 时此字段恒为 false（DB DEFAULT 同语义 / aggregate.ts `?? false` 兜底）。消费方不得用此字段预测"未来是否自动退役"
+      - 真源：Migration 079 `auto_retired BOOLEAN NOT NULL DEFAULT false` + `@resovo/types` `SourceLineAlias.autoRetired`（R5 真源 1:1 对齐 / 与 SourceLineAlias 字段名同步）
+    - RawSourceRow 注释升级为"ADR-164 alias 派生字段集"+ 列出 codename / retired_at / auto_retired 三字段同源不变式（**Y-A-2 修订**）：要么同时 undefined / 要么同时定义 / 消费方不能单独提供其中之一
+    - 新增 `readonly auto_retired?: boolean`（与既有 codename + retired_at 同 optional 范式）
+  - `packages/admin-ui/src/components/composite/lines-panel/aggregate.ts`
+    - 取首行 `autoRetired: firstRow.auto_retired ?? false`（DB DEFAULT false 语义同构）
+    - 注释升级三字段同源不变式（codename / retired_at / auto_retired 取首行）
+  - `packages/admin-ui/src/components/composite/lines-panel/lines-panel.tsx` 渲染区分（关键洞察 6 / 复用 data-line-retired-label 不增新 selector）：
+    - 内部文本 `（已退役·{line.autoRetired ? '自动' : '手动'}）`
+    - aria-label 两条独立字符串 `'线路自动退役' / '线路手动退役'`（关键洞察 4 / 屏幕阅读器避读全角分隔符）
+    - 新增 `data-line-retired-auto={line.autoRetired || undefined}` boolean attribute（仅 true 时存在 / e2e 选择器范式）
+  - `apps/api/src/db/queries/sources.ts` listAdminSources SELECT 加 `sla.auto_retired AS auto_retired`（注释升级 ADR-164 alias 派生 3 字段集 + 沿用 PRE-INDEX-DESIGN-RULES 4 步核验）
+  - `apps/server-next/src/lib/moderation/api.ts` ContentSourceRow 扩 `readonly auto_retired: boolean`（D-164-8 / 注释升级 3 字段集 + 数据通路）
+  - `tests/unit/components/admin-ui/composite/lines-panel/aggregate.test.ts` 扩 5 case：autoRetired=true/false 透传 / 无字段默认 false / 多行同 PK 取首行 / 在役行 (retiredAt=null + autoRetired=false) Y-A-1 invariant 遵守
+  - `tests/unit/components/admin-ui/composite/lines-panel/lines-panel.test.tsx` 升级 + 扩 3 case：手动退役 "（已退役·手动）"+ aria-label "线路手动退役" + data-line-retired-auto null；自动退役 "（已退役·自动）"+ aria-label "线路自动退役" + data-line-retired-auto true；在役行无标识
+  - `tests/unit/api/admin-sources-sql.test.ts` 扩 1 断言：SELECT 含 `sla.auto_retired AS auto_retired`
+- **范围超 5 项接受完成度风险**（workflow-rules.md §"PATCH 卡范围软上限"）：本卡 6 文件，超 5 项软上限 1 项。理由：ADR-164 alias 派生字段集 3 字段属"同源不变式"（Opus 关键洞察 4 / R2 单向依赖必然代价），强行拆 -A/-B 会破坏 3 字段同源原子提交、产生数据通路中途断层（如 -A 只补 SQL/ContentSourceRow / -B 补 LineAggregate/aggregate/lines-panel 则 -A → -B 之间 LineAggregate 永显 autoRetired=false 而 SQL 已透传 auto_retired 形成"数据有/UI 无"的中间状态）。接受完成度风险换取数据通路原子性 + Opus 评审 1 轮闭环。
+- **不触发 architecture.md 同步**（CHG-368-B-A1-FIX-{1..5} 经验持续核对）：
+  - 本卡无 schema migration / 新表 / 新列 / 新约束 / 新索引
+  - 仅 SELECT 列扩 + 类型字段扩 = 数据透传层
+  - 不触发 CLAUDE.md "schema 变更不同步 architecture.md" 红线
+- **设计取舍**：① 方案 A（散开字段）拒绝方案 B（discriminated union RetirementInfo）：B 破坏 LineAggregate 13 字段平铺透传契约 / 需 aggregate 装配逻辑 / 真源 SourceLineAlias 平铺 → B 命名分裂 / Opus 关键洞察 1 ② 拒绝方案 C（getRetirementReason 回调）：违反"同 UI 模式 3 处复用"反向条件 / 数据真源已存在不应"消费方反向猜测" / Opus 关键洞察 2 ③ 字段散开 vs 嵌套：散开胜 / 与真源平铺一致 / nullability 风格一致 (T | null) / YAGNI 演进式扩展 / Opus 关键洞察 3 ④ `data-line-retired-auto={true | undefined}` boolean attribute：与 `data-retired` 同模式 / 仅 true 时存在 / e2e 友好 ⑤ aria-label 两条独立字符串：屏幕阅读器避读全角"·"分隔符 / 与既有 `aria-label="线路已退役"` 短句状态范式一致
+- **质量门禁**：typecheck ✅ EXIT=0（root + 5 workspaces）/ lint ✅ EXIT=0（仅 2 pre-existing react-hooks/exhaustive-deps warning 与本卡无关）/ verify:adr-contracts ✅ EXIT=0（SELECT 列扩非 schema 变更 / verify-sql-schema-alignment 不受影响）/ 单测 lines-panel + aggregate + admin-sources-sql 域 53/53 PASS（aggregate 32/32 含 5 新 / lines-panel 16/16 含 3 升级 + 0 新 / admin-sources-sql 5/5 含 1 断言扩）
+- **commit trailer**：`Subagents: arch-reviewer (claude-opus-4-7)`（双红线触发 / packages/admin-ui Props 改动 + PATCH > 5 软上限均触发 Opus trailer 必含规范）
+- **六问自检**：
+  - Q1 本次逻辑应沉淀共享层？✅ 本卡本身就是把 ADR-164 D-164-8 "自动 vs 手动退役区分" 沉淀到 packages/admin-ui LineAggregate 共享层 / 派生字段集 3 字段同源不变式文档化 / 未来 retiredBy / retirementReason 扩展可复用 Y-A-2 注释路径
+  - Q2 是否引入回归？✅ LineAggregate.autoRetired 新增字段（非破坏）+ DB 默认值兜底 + aggregate.ts `?? false` 双重保险 / 53/53 测试 PASS / typecheck + lint + verify 全 EXIT=0
+  - Q3 是否越层？✅ 数据源 query + API 类型 + 共享层 + UI 渲染 = 数据通路同层补字段
+  - Q4 是否硬编码值 / any 类型？✅ 无 any（boolean 严格 / undefined 与 false 语义清晰）/ 无 magic value（auto_retired 直接 sla 列 / DB DEFAULT 与 ?? false 同构）/ 颜色继续 var(--state-warning-fg)
+  - Q5 是否布局变化？✅ 退役行内容文案从"（已退役）" → "（已退役·自动）/（已退役·手动）"（仅文案长度增加 4-6 字符 / data-line-retired-label selector 复用 / 视觉权重不变 / 总宽度可控）/ data-line-retired-auto boolean attribute 不增 DOM 节点
+  - Q6 文件范围内？✅ 6 文件 PATCH=6（超 5 软上限 1 项接受 / 同源不变式原子提交理由充分）
+- **偏离检测**：无（本卡完全按 arch-reviewer Opus 评审 A- 推荐方案 A 执行 / Y-A-1 + Y-A-2 全落 / 6 文件清单全命中 / 未引入卡片外改动）
+- **[AI-CHECK] 结论**：A（Opus A- CONDITIONAL → Y-A-1/Y-A-2 全落升 A）。ADR-164 D-164-8 UI 层闭环 / Layer B 数据通路完整：listAdminSources SQL → ContentSourceRow → RawSourceRow（同源不变式 3 字段）→ LineAggregate（autoRetired Y-A-1 invariant）→ LinesPanel 渲染（文案 + aria-label + data attribute）/ 全链 ship
+- **闭环**：CHG-368-B-FOLLOWUP-AUTO-RETIRED-LABEL 完成 / ADR-164 D-164-8 UI 兑现 / LinesPanel 退役标识自动/手动区分 ship / Layer B 完整 alias 派生 3 字段集（codename + retired_at + auto_retired）数据通路 + UI 显示全打通 / Wave 3 长尾清理 4/4 完成（PRE-INDEX-DESIGN-RULES + CHG-369-B + -FOLLOWUP-CONTENT-SOURCE-ROW + -FOLLOWUP-AUTO-RETIRED-LABEL）/ Wave 3 SEQ 整体 4/10 完成 / 主循环自动取下一卡（CHG-SN-9-MOD-BUTTON-MIGRATE / plan §14 主线 1/6）
+
+---
+
 ## [CHG-368-B-FOLLOWUP-CONTENT-SOURCE-ROW] server-next ContentSourceRow + listAdminSources SQL 扩 codename/retired_at（Wave 3 #3 / 长尾清理 3/4）
 - **完成时间**：2026-05-28
 - **执行模型**：claude-sonnet-4-6（主循环 / 不触发 Opus：仅 SQL JOIN 扩 + 类型 2 字段 / 非 packages/admin-ui Props / 非 player-core 接口扩展 / 非 3+ 消费方 schema）

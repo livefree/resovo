@@ -43,15 +43,29 @@ export interface LineAggregate {
   readonly qualityHighest: ResolutionTier | null    // 复用 @resovo/types 真源（R5）
   readonly episodes: ReadonlyArray<EpisodeMini>     // 已按 episodeNumber asc 排序
 
-  // ── CHG-368-B-C-UI / ADR-164 D-164-2 + D-164-4 + D-164-12（Migration 079）─────
+  // ── CHG-368-B-C-UI + CHG-368-B-FOLLOWUP-CONTENT-SOURCE-ROW + CHG-368-B-FOLLOWUP-AUTO-RETIRED-LABEL ──
+  // ADR-164 D-164-2 + D-164-4 + D-164-8 + D-164-12（Migration 079）展示派生区
   // 同 (siteKey, sourceName) 复合 PK 下 source_line_aliases 1:N 反向 join 单一行
-  // 提供，取首行即可（全行一致）；server-next API 层 ContentSourceRow 同步扩字段
-  // 是后续衔接卡范围，当前 LineAggregate 暂可永显 null（不破坏显示）。
+  // 提供，取首行即可（全行一致 / aggregate.ts 取首行 invariant 见 aggregate.ts 注释）。
+  // server-next API 层 ContentSourceRow 已同步扩 3 字段。
 
   /** 运维短码（"泰山-2" / NULL = 未分配 / D-164-2） */
   readonly codename: string | null
   /** 软删时间戳（NULL = 在役 / NOT NULL = 已退役 / D-164-4） */
   readonly retiredAt: string | null
+  /**
+   * 退役方式区分（D-164-8 闭环 UI 落地）：
+   * - `true` = worker 自动退役（plan §10.5 全 dead 180 天 PRE-DEAD-LINE-AUTO-RETIRE-WORKER）
+   * - `false` = 人工 admin POST /admin/source-line-aliases/:siteKey/:name/retire
+   *
+   * **invariant**（arch-reviewer Opus Y-A-1）：仅当 `retiredAt !== null` 时携带语义；
+   * `retiredAt === null` 时此字段恒为 `false`（DB DEFAULT 同语义 / aggregate.ts `?? false` 兜底）。
+   * 消费方不得用此字段预测"未来是否自动退役"。
+   *
+   * 真源：Migration 079 `auto_retired BOOLEAN NOT NULL DEFAULT false` +
+   *       `@resovo/types` `SourceLineAlias.autoRetired`（R5 真源 1:1 对齐）。
+   */
+  readonly autoRetired: boolean
 }
 
 // ── 聚合输入（aggregate.ts 专用） ──────────────────────────────────────
@@ -74,10 +88,17 @@ export interface RawSourceRow {
   readonly updated_at: string
   readonly quality_detected?: string | null
   readonly hostname?: string | null
-  // CHG-368-B-C-UI / ADR-164：codename + retiredAt 展示派生区（Migration 079 落地后
-  // server-next API 层 ContentSourceRow 同步扩字段 / 当前可永 undefined 兼容）
+  // ── ADR-164 alias 派生字段集（Migration 079 / arch-reviewer Opus Y-A-2 升级）─────
+  // **同源不变式**：以下 3 字段同来自 `source_line_aliases` LEFT JOIN 同一别名行，
+  // 要么同时为 `undefined`（无 alias 行 / 历史数据兼容）/ 要么同时定义（有 alias 行）。
+  // 消费方不要单独提供其中之一（行为未定义）。
+  // server-next API 层 ContentSourceRow 已同步扩 3 字段（CHG-368-B-FOLLOWUP-* 系列 ship）。
+  /** 运维短码（D-164-2 / 派生自 sla.codename） */
   readonly codename?: string | null
+  /** 软删时间戳（D-164-4 / 派生自 sla.retired_at） */
   readonly retired_at?: string | null
+  /** 退役方式（D-164-8 / 派生自 sla.auto_retired / true=worker 自动 / false=人工） */
+  readonly auto_retired?: boolean
 }
 
 export interface GroupSourcesOptions {

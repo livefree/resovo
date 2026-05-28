@@ -157,9 +157,12 @@ export function groupSourcesByLine(
 
     const hostname = (firstRow.hostname ?? null) || parseHostname(firstRow.source_url)
 
-    // CHG-368-B-C-UI / ADR-164 D-164-2 + D-164-4：codename / retired_at 取首行。
-    // 同 (siteKey, sourceName) 复合 PK 下 source_line_aliases 1:N 反向 join 出的
-    // codename / retired_at 必然来自同一别名行（行间一致），取首行即可。
+    // CHG-368-B-C-UI / CHG-368-B-FOLLOWUP-AUTO-RETIRED-LABEL ─────────────────
+    // ADR-164 alias 派生字段集 3 字段同源（D-164-2 + D-164-4 + D-164-8）：
+    //   同 (siteKey, sourceName) 复合 PK 下 source_line_aliases 1:N 反向 join 出的
+    //   codename / retired_at / auto_retired 必然来自同一别名行（行间一致），取首行即可。
+    // autoRetired ?? false 与 Migration 079 DB DEFAULT false 语义同构
+    //   （无 alias 行 = "未自动退役" = false）。
     lines.push({
       key,
       siteKey,
@@ -174,6 +177,7 @@ export function groupSourcesByLine(
       episodes,
       codename: firstRow.codename ?? null,
       retiredAt: firstRow.retired_at ?? null,
+      autoRetired: firstRow.auto_retired ?? false,
     })
   }
 

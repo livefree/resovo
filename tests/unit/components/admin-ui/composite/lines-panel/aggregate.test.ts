@@ -23,9 +23,11 @@ function row(overrides: Partial<RawSourceRow> & { id: string }): RawSourceRow {
     updated_at: overrides.updated_at ?? '2026-01-01T00:00:00Z',
     quality_detected: 'quality_detected' in overrides ? overrides.quality_detected : null,
     hostname: 'hostname' in overrides ? overrides.hostname : null,
-    // CHG-368-B-C-UI / ADR-164：codename / retired_at 透传（optional / 未传时不放入）
+    // CHG-368-B-C-UI + CHG-368-B-FOLLOWUP-AUTO-RETIRED-LABEL / ADR-164：
+    // alias 派生字段集 3 字段透传（optional / 未传时不放入 / 同源不变式）
     ...('codename' in overrides ? { codename: overrides.codename } : {}),
     ...('retired_at' in overrides ? { retired_at: overrides.retired_at } : {}),
+    ...('auto_retired' in overrides ? { auto_retired: overrides.auto_retired } : {}),
   }
 }
 
@@ -306,5 +308,60 @@ describe('CHG-368-B-C-UI — codename + retiredAt 透传（ADR-164）', () => {
     const result = groupSourcesByLine([row({ id: 'legacy' })])
     expect(result[0].codename).toBeNull()
     expect(result[0].retiredAt).toBeNull()
+  })
+})
+
+
+// ── CHG-368-B-FOLLOWUP-AUTO-RETIRED-LABEL / ADR-164 D-164-8：autoRetired 透传 ─
+
+describe('CHG-368-B-FOLLOWUP-AUTO-RETIRED-LABEL — autoRetired 透传（D-164-8）', () => {
+  it('单行含 auto_retired=true → LineAggregate.autoRetired=true（自动退役）', () => {
+    const result = groupSourcesByLine([
+      row({
+        id: 'r1',
+        codename: '雁山',
+        retired_at: '2026-04-01T00:00:00Z',
+        auto_retired: true,
+      }),
+    ])
+    expect(result[0].autoRetired).toBe(true)
+    expect(result[0].retiredAt).toBe('2026-04-01T00:00:00Z')
+  })
+
+  it('单行含 auto_retired=false → LineAggregate.autoRetired=false（手动退役）', () => {
+    const result = groupSourcesByLine([
+      row({
+        id: 'r2',
+        codename: '昆仑',
+        retired_at: '2026-04-02T00:00:00Z',
+        auto_retired: false,
+      }),
+    ])
+    expect(result[0].autoRetired).toBe(false)
+  })
+
+  it('无 auto_retired 字段（RawSourceRow optional 默认 undefined）→ LineAggregate.autoRetired=false（DB DEFAULT 同语义）', () => {
+    // aggregate.ts `firstRow.auto_retired ?? false` 与 Migration 079 DB DEFAULT false 语义同构
+    const result = groupSourcesByLine([row({ id: 'legacy' })])
+    expect(result[0].autoRetired).toBe(false)
+  })
+
+  it('多行同 (siteKey, sourceName) → 取首行 autoRetired（同源不变式 / 即使后续行不同也以首行为准）', () => {
+    // DB invariant 保证同 PK 下 sla.auto_retired 一致；fixture 故意破坏验证 aggregate 取首行
+    const result = groupSourcesByLine([
+      row({ id: 'a', codename: '泰山', retired_at: '2026-04-01T00:00:00Z', auto_retired: true }),
+      row({ id: 'b', codename: '泰山', retired_at: '2026-04-01T00:00:00Z', auto_retired: false, episode_number: 2 }),
+    ])
+    expect(result).toHaveLength(1)
+    expect(result[0].autoRetired).toBe(true)  // 首行
+  })
+
+  it('在役行 (retired_at = null) + auto_retired = false → 字段携带但 UI 无意义（Y-A-1 invariant 遵守）', () => {
+    // LineAggregate.autoRetired 在 retiredAt = null 时恒为 false（数据级 / 不阻断 UI 渲染）
+    const result = groupSourcesByLine([
+      row({ id: 'r3', codename: '青城', retired_at: null, auto_retired: false }),
+    ])
+    expect(result[0].retiredAt).toBeNull()
+    expect(result[0].autoRetired).toBe(false)
   })
 })

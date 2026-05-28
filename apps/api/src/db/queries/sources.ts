@@ -396,8 +396,9 @@ export async function listAdminSources(
   const [rows, countResult] = await Promise.all([
     db.query(
       // ADMIN-13: 返回字段 site_key 改为行级 COALESCE（跨站聚合视频显示各行实际站点）
-      // CHG-368-B-FOLLOWUP-CONTENT-SOURCE-ROW：LEFT JOIN source_line_aliases 透传 codename + retired_at
-      //   到 ContentSourceRow → LinesPanel codename badge + 退役行 opacity 显示
+      // CHG-368-B-FOLLOWUP-CONTENT-SOURCE-ROW + CHG-368-B-FOLLOWUP-AUTO-RETIRED-LABEL：
+      // LEFT JOIN source_line_aliases 透传 codename + retired_at + auto_retired（ADR-164 alias 派生 3 字段集）
+      //   到 ContentSourceRow → LinesPanel codename badge + 退役行 opacity + 自动/手动文案区分
       // 索引设计 4 步核验（db-rules.md §"索引设计 4 步核验"）：
       //   1. 索引键: source_line_aliases (source_site_key, source_name) 复合 PK
       //   2. 部分索引 WHERE: N/A（PK 全表）
@@ -407,7 +408,8 @@ export async function listAdminSources(
       `SELECT s.*, v.title AS video_title,
               COALESCE(s.source_site_key, v.site_key) AS site_key,
               sla.codename AS codename,
-              sla.retired_at AS retired_at
+              sla.retired_at AS retired_at,
+              sla.auto_retired AS auto_retired
        FROM video_sources s
        LEFT JOIN videos v ON s.video_id = v.id
        LEFT JOIN source_line_aliases sla

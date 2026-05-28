@@ -253,17 +253,20 @@ function LineRow({
             </span>
           )}
           {isRetired && (
-            // CHG-368-B-C-UI / ADR-164 D-164-4：已退役标识（warning 色 / 屏幕阅读器友好）
+            // CHG-368-B-C-UI / CHG-368-B-FOLLOWUP-AUTO-RETIRED-LABEL
+            // ADR-164 D-164-4 + D-164-8：已退役标识 + 自动/手动区分（warning 色 / 屏幕阅读器友好）
+            // data-line-retired-auto boolean attribute（仅 true 时存在）— e2e 选择器范式
             <span
               data-line-retired-label
-              aria-label="线路已退役"
+              data-line-retired-auto={line.autoRetired || undefined}
+              aria-label={line.autoRetired ? '线路自动退役' : '线路手动退役'}
               style={{
                 fontSize: 'var(--font-size-2xs)',
                 color: 'var(--state-warning-fg)',
                 whiteSpace: 'nowrap',
               }}
             >
-              （已退役）
+              （已退役·{line.autoRetired ? '自动' : '手动'}）
             </span>
           )}
         </span>
