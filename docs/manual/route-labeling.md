@@ -269,11 +269,56 @@ A：Phase 1 严格控范围 ≤ 5 文件 + admin Props 契约改动需 arch-revi
 
 **Phase 2 优化方向**：后端 SourceService 派生 `isDead: boolean` 字段（health_score === 0 严格判定 / 暴露到 VideoSource）+ 前端直接消费 / 不再依赖 score 阈值。
 
-### 8.7 用户自定义主题（Phase 2 / 未来）
+### 8.7 用户自定义主题（CHG-369-B / 已 ship 2026-05-28）
 
-> 当前 Phase 1 不实施。
+设计稿 §Layer C "用户自定义主题"已实装。播放器 sources tab 主题下拉末尾新增"自定义…"选项 + 紧邻"✎"编辑按钮 → 打开 `CustomThemeDialog` 表单。
 
-设计稿 §Layer C "用户自定义主题"：localStorage 存自定义 labels[] / 跨设备同步走 users.preferences。Phase 2 加入播放器设置面板 + 自定义入口。
+**存储协议**：
+
+- `resovo:route-theme`：themeId（'jie_qi' / 'nato' / 'numbers' / 'planets' / 'colors' / **'custom'**）
+- `resovo:route-theme:custom`：CustomThemeData JSON（与 themeId 解耦 / 仅在 themeId='custom' 时消费）
+
+**CustomThemeData shape**：
+
+```ts
+{
+  displayName: string         // 主题展示名（trim 后 1-10 字符）
+  labels: string[]            // 标签列表（1-30 个 / 每个 trim 后 1-10 字符）
+  deadLabel?: string          // 已断文案（可选 / trim 后 1-10 字符 / 默认 '已断'）
+}
+```
+
+**约束**：
+
+- displayName：≥ 1 字符 / ≤ 10 字符
+- labels：≥ 1 个 / ≤ 30 个 / 每个 ≤ 10 字符
+- deadLabel：可选 / ≤ 10 字符（超长默认丢弃 / 不阻断保存）
+- 任一硬约束不满足 → Dialog 保存按钮 disabled + 错误就近显示
+- 脏数据（localStorage 被直接改）→ `parseCustomTheme` 静默回 null / `useRouteTheme` 自动回退 default
+
+**UI 流程**：
+
+1. 用户点 sources tab → 顶部 RouteThemeSelector 下拉
+2. 选 "自定义…"（无自定义时）→ 触发 `onOpenCustomDialog` → 打开 CustomThemeDialog
+3. 选 "自定义：&lt;displayName&gt;"（已有自定义时）→ 立即应用 / 不打开 dialog
+4. 点 "✎" 编辑按钮（任意时刻）→ 打开 CustomThemeDialog（如已有自定义则回显 / 否则新建）
+5. Dialog 内点 "保存并应用" → 写 localStorage + setState + 关闭 dialog
+6. Dialog 内点 "清除自定义主题"（仅已存在时）→ 删 localStorage + 当前若用自定义则回退到 default
+
+**跨设备同步**：本期未实装（→ Wave 3 ROUTE-LABEL-D / `users.preferences`）。
+
+### 8.8 文件清单（CHG-353 / CHG-369 / CHG-369-B）
+
+| 文件 | 改动 |
+|------|------|
+| `apps/web-next/src/lib/line-display-name.ts` | 加 RouteTheme 类型 + 5 主题常量 + getDefaultTheme + applyThemeLabels（CHG-353）|
+| `apps/web-next/src/lib/route-theme-storage.ts` | useRouteTheme + read/writeStoredThemeId（CHG-369）+ CustomThemeData + parseCustomTheme + read/write/clearStoredCustomTheme + customThemeToRouteTheme + useRouteTheme 扩 customTheme / setCustomTheme / clearCustomTheme（CHG-369-B）|
+| `apps/web-next/src/components/player/SourceBar.tsx` | 接 themeLabel + quality + isDead + isPending props / 处理 1 条 / dead / pending 边界（CHG-353）|
+| `apps/web-next/src/components/player/PlayerShell.tsx` | useLocale + applyThemeLabels 调用 + SourceItem 透传新字段（CHG-353）+ 装载 RouteThemeSelector（CHG-369）+ CustomThemeDialog + customDialogOpen state（CHG-369-B）|
+| `apps/web-next/src/components/player/RouteThemeSelector.tsx` | 5 内置下拉（CHG-369）+ 自定义 option + 编辑按钮 + onOpenCustomDialog prop（CHG-369-B）|
+| `apps/web-next/src/components/player/CustomThemeDialog.tsx` | NEW 自定义主题表单 dialog（仿 ConfirmReplaceDialog 模式 / role=dialog aria-modal / 实时校验 / 字符计数 / 保存 + 取消 + 清除）（CHG-369-B）|
+| `tests/unit/web-next/lib/line-display-name-themes.test.ts` | 34 case：5 主题常量长度 + getDefaultTheme + applyThemeLabels 边界（CHG-353）|
+| `tests/unit/web-next/route-theme-storage.test.ts` | 20 case：localStorage helper + parseCustomTheme 边界 + roundtrip + customThemeToRouteTheme（CHG-369 + CHG-369-B）|
 
 ### 8.8 文件清单（CHG-353）
 

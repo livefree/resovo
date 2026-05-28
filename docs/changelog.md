@@ -40,6 +40,63 @@
 
 ---
 
+## [CHG-369-B] 自定义主题输入（Wave 3 #2 / plan §17.2 / 长尾清理 2/4）
+- **完成时间**：2026-05-28
+- **执行模型**：claude-sonnet-4-6（主循环 / 不触发 Opus 红线：不改 packages/admin-ui Props / 无新 ADR / 非 player-core 接口扩展 / 非 3+ 消费方 schema）
+- **子代理调用**：无（CHG-369 + 设计稿 §Layer C + docs/manual §8.4a 三处既有规范覆盖 / 不起新 ADR）
+- **拆卡承接**：CHG-369 设计取舍 ⑤ 推迟 follow-up（"自定义主题输入涉及 schema 校验 + JSON.stringify 序列化复杂度 / Phase 1 简化"）+ tasks.md "下次会话恢复入口" follow-up。本卡完整实施。
+- **范围**（4 业务 + 1 测试 + 1 docs / 5 业务+测试 PATCH=5 严守软上限 / docs/manual sync 沿用 CHG-369 范式不计入 5 上限）：
+  - `apps/web-next/src/lib/route-theme-storage.ts` 扩 ~150 行：
+    - 新增 `CustomThemeData` interface（displayName / labels[] / deadLabel? 字段）
+    - 新增 `CUSTOM_THEME_ID = 'custom'` 常量 + `CUSTOM_THEME_CONSTRAINTS`（displayNameMaxChars=10 / labelMaxChars=10 / labelsMinCount=1 / labelsMaxCount=30 / deadLabelMaxChars=10）
+    - 新增 `parseCustomTheme(raw)` 严格 schema 校验（trim / 长度 / 数组 / 单项类型校验 / 失败回 null / 不抛）
+    - 新增 `readStoredCustomTheme` / `writeStoredCustomTheme` / `clearStoredCustomTheme` 三函数（独立 key `resovo:route-theme:custom` / SSR safe / 静默失败）
+    - 新增 `customThemeToRouteTheme(data)` 运行时派发为 RouteTheme（id=custom / fallbackPrefix='线路' / deadLabel 默认 '已断'）
+    - `readStoredThemeId` 扩 'custom' 白名单（防 ALL_THEMES 校验误删）
+    - `useRouteTheme` hook 扩返回 customTheme + setCustomTheme + clearCustomTheme（自定义命中时 mount effect 自动派发 / setCustomTheme 写双 key + setState + setThemeId='custom' / clearCustomTheme 当前若用自定义则回退 default）
+  - `apps/web-next/src/components/player/CustomThemeDialog.tsx` NEW（仿 ConfirmReplaceDialog 模式 / role=dialog aria-modal / 240 行）：
+    - 三字段表单（name input + labels textarea 每行一条 + deadLabel optional）
+    - 实时校验（validateForm useMemo）+ 字符计数（n / max）+ 错误就近显示 role="alert"
+    - 保存按钮 disabled 直到通过 / 点击外部 backdrop 关闭 / 已存在时显示"清除"按钮
+    - 字符长度宽松超限 maxLength（C+2）允许粘贴溢出后实时报错而非吞输入
+    - 零 admin-ui 依赖 / 纯 CSS / CSS 变量（var(--bg-surface) 等）
+  - `apps/web-next/src/components/player/RouteThemeSelector.tsx` 扩：
+    - 接 customTheme + onOpenCustomDialog 两 props
+    - select 末尾新增"自定义…"option（无 customTheme）/"自定义：&lt;displayName&gt;"option（有）
+    - 切到 custom + 有数据 → 立即应用；切到 custom + 无数据 → 触发 onOpenCustomDialog
+    - 紧邻"✎"编辑按钮（任意时刻打开 dialog / aria-label 区分新建 vs 编辑）
+  - `apps/web-next/src/components/player/PlayerShell.tsx` wiring：
+    - useRouteTheme 解构扩 customTheme / setCustomTheme / clearCustomTheme
+    - 新增 customDialogOpen state
+    - 透传 customTheme + onOpenCustomDialog 给 RouteThemeSelector
+    - 组件根尾部条件渲染 CustomThemeDialog（onConfirm 写 + 关 / onCancel 关 / onClear 清+关 / 仅 customTheme 存在时透传 onClear）
+  - `tests/unit/web-next/route-theme-storage.test.ts` 扩 ~120 行 / 15 新 case（共 20 case）：
+    - themeId='custom' 是合法值（防 ALL_THEMES 白名单误删）
+    - parseCustomTheme 12 个边界（合法 / displayName 空 / displayName 超长 / labels 空 / labels 超 30 / 单个 label 超长被过滤 / labels 非数组 / 非 JSON / 非对象 / null / deadLabel 缺省 undefined / deadLabel 超长当未提供）
+    - read/write/clearStoredCustomTheme 完整 roundtrip
+    - 脏 JSON 防御（localStorage 含 '{bad json' → null）
+    - customThemeToRouteTheme（id=custom / 字段透传 / deadLabel 默认 + 用户给值透传）
+  - `docs/manual/route-labeling.md` §8.7 升级"未实装" → "已 ship 2026-05-28"完整规范（存储协议 + shape + 约束 + UI 流程 5 步 + 文件清单升级含 CHG-369-B 7 项）
+- **不触发 architecture.md 同步**（CHG-368-B-A1-FIX-{1..5} 经验持续核对）：
+  - 本卡无 schema migration / 新表 / 新列 / 新约束 / 新索引
+  - 仅前端业务层 + 测试 + docs/manual 改动
+  - 不触发 CLAUDE.md "schema 变更不同步 architecture.md" 红线
+- **设计取舍**：① 双 key 存储（resovo:route-theme + resovo:route-theme:custom）：解耦 themeId 与 customData / 避免 'custom' themeId 必须捆绑 data / 用户切回内置主题时 customData 保留（下次切回继续用）② Dialog 仿 ConfirmReplaceDialog 而非引入 admin-ui Modal：web-next 既有 dialog 模式自洽 / 不引入新依赖 / 不触发 packages/admin-ui Props 红线 ③ labels textarea 每行一条而非 chip 输入：键盘流畅 + 视觉直观 / 30 行内可见 / 复杂度低 ④ 单个 label 超 10 字符 → 过滤而非阻断保存（设计稿 §Layer C "labels.length <= 30, 每个 <= 10" 隐含可裁剪）/ 错误以"标签'xxx'超过 10 字符"展示提示用户精修 ⑤ deadLabel 超长不阻断整体 / 当作未提供（容错）⑥ id 固定 'custom'：不支持多套自定义（设计稿 MVP 仅单套）/ Phase 3 ROUTE-LABEL-D 跨设备同步时再评估 multi-slot ⑦ fallbackPrefix 默认 '线路'（中文优先 / 与 THEME_JIE_QI 一致 / 不让用户输入此字段）
+- **质量门禁**：typecheck ✅（root + 5 workspaces）/ lint ✅ EXIT=0（仅 2 pre-existing react-hooks/exhaustive-deps warning 与本卡无关）/ verify:adr-contracts ✅ EXIT=0（与本卡纯前端改动无关联）/ 单测 route-theme-storage 20 case PASS（+15 新）+ line-display-name-themes 34 case PASS（既有零回归）= 54/54 PASS
+- **commit trailer**：无强制 Subagents（不修改 packages/admin-ui 公开 Props / 不起新 ADR / 不重构 player-core / 非 3+ 消费方 schema / 不触发"共享组件 API 契约强制 Opus"红线 / RouteThemeSelector Props 新增 customTheme + onOpenCustomDialog 但属 web-next 内部组件非 admin-ui 公开层）
+- **六问自检**：
+  - Q1 本次逻辑应沉淀共享层？✅ 本卡是把"自定义主题输入"功能补全到 web-next 玩家主题选择器；schema 校验 + storage 协议沉淀在 lib/route-theme-storage.ts 内 / Dialog 组件可独立测 / 后续 ROUTE-LABEL-D 跨设备同步时 CustomThemeData shape 已就绪
+  - Q2 是否引入回归？✅ 既有 5 内置主题流程零改动（select 仅追加 option / 编辑按钮独立 / Dialog 仅在 open 时挂载）/ 54/54 测试 PASS / typecheck + lint + verify 全 EXIT=0
+  - Q3 是否越层？✅ 全在 web-next 前端层 / 无后端 / 无 DB / 无 schema
+  - Q4 是否硬编码值 / any 类型？✅ 无 any（unknown → Record<string, unknown> 类型守卫 / RouteTheme 等接口透传）/ 颜色全用 CSS 变量（var(--bg-surface) / var(--fg-default) / var(--accent-default) / var(--fg-danger) 等）/ 字符约束常量 CUSTOM_THEME_CONSTRAINTS 集中管理（DRY / 测试可引用 / Dialog UI 显示从常量派发）
+  - Q5 是否布局变化？✅ RouteThemeSelector：原 [label][select] 增加 [label][select][✎ button] / 视觉权重微增 / 总宽度增长约 24px / 不挤压 sources tab 其他元素 / 设计同 ConfirmReplaceDialog 模式 / Dialog 模态遮罩居中显示无额外路径
+  - Q6 文件范围内？✅ 5 业务+测试 PATCH=5 严守 + 1 docs sync（沿用 CHG-369 范式不计 5 上限）
+- **偏离检测**：无（本卡完全按 tasks.md 卡片定义执行 / 5 文件清单全命中 / docs/manual sync 是 plan §16.3 强制要求一并完成 / 未引入卡片外改动）
+- **[AI-CHECK] 结论**：PASS（自定义主题输入功能完整 ship / 存储协议 + schema 校验 + UI Dialog + 接入入口 + 测试 + docs sync 5 大块齐备 / CHG-369 设计取舍 ⑤ 推迟项闭档 / 设计稿 §Layer C "用户自定义主题"实装 / 跨设备同步留 ROUTE-LABEL-D Wave 3 末卡承接）
+- **闭环**：CHG-369-B 完成 / 自定义主题输入功能 ship / 双 key localStorage 协议 + parseCustomTheme schema 校验 + CustomThemeDialog 表单 + RouteThemeSelector 入口 + PlayerShell wiring 完整 / docs/manual §8.7 由"未实装"升级为"已 ship 2026-05-28" / Wave 3 长尾清理 2/4 完成（PRE-INDEX-DESIGN-RULES + CHG-369-B）/ Wave 3 SEQ 整体 2/10 完成 / 主循环自动取下一卡（CHG-368-B-FOLLOWUP-CONTENT-SOURCE-ROW）
+
+---
+
 ## [PRE-INDEX-DESIGN-RULES] 索引设计规范沉淀到 db-rules.md（Wave 3 首卡 / CHG-368-B-A1-FIX 系列 1-5 经验落地）
 - **完成时间**：2026-05-28
 - **执行模型**：claude-sonnet-4-6（主循环 / 纯 docs / Wave 3 启动）

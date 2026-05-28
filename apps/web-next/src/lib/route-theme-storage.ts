@@ -1,16 +1,20 @@
 /**
- * route-theme-storage.ts — 播放器主题持久化（CHG-369 / plan §17.2 #16）
+ * route-theme-storage.ts — 播放器主题持久化（CHG-369 / plan §17.2 #16 + CHG-369-B 自定义主题）
  *
  * 真源：5 主题常量 + getDefaultTheme(locale) 在 `apps/web-next/src/lib/line-display-name.ts`（CHG-353）。
  *
  * 协议：
- *   - 读：首次 mount 从 localStorage 读 themeId → 校验 ∈ ALL_THEMES → 命中则返回；
+ *   - themeId 读：首次 mount 从 localStorage 读 themeId → 校验 ∈ ALL_THEMES ∪ {'custom'} → 命中则返回；
  *     未命中（首次访问 / 无效 / SSR）→ fallback getDefaultTheme(locale)
- *   - 写：用户切换主题 → 写 localStorage（同时 setState 触发 re-render）
+ *   - themeId 写：用户切换主题 → 写 localStorage（同时 setState 触发 re-render）
  *   - SSR safe：typeof window === 'undefined' 时直接返回 default 不触读
  *
+ * 自定义主题（CHG-369-B）：
+ *   - 单独 key `resovo:route-theme:custom` 存 CustomThemeData JSON（与 themeId 解耦）
+ *   - themeId === 'custom' 时消费 customTheme；其他 themeId 时 customTheme 仅存储 / 不消费
+ *   - parseCustomTheme 严格 schema 校验（trim / 长度 / 数组）失败返 null（脏数据防御）
+ *
  * 后续扩展：
- *   - CHG-369-B：自定义主题输入（labels ≤ 30 / name ≤ 10 字符 / JSON.stringify 存储 + schema 校验）
  *   - CHG-SN-9-ROUTE-LABEL-D：users.preferences 跨设备同步
  */
 
@@ -18,6 +22,29 @@ import { useEffect, useState } from 'react'
 import { ALL_THEMES, getDefaultTheme, type RouteTheme } from './line-display-name'
 
 const STORAGE_KEY = 'resovo:route-theme'
+const CUSTOM_STORAGE_KEY = 'resovo:route-theme:custom'
+
+/** 自定义主题 id（特殊值 / 与 ALL_THEMES.id 互斥） */
+export const CUSTOM_THEME_ID = 'custom'
+
+/** 自定义主题存储 shape（设计稿 §Layer C "用户自定义主题"） */
+export interface CustomThemeData {
+  /** 主题展示名（≤ 10 字符 / 用户给的"主题名"） */
+  readonly displayName: string
+  /** 标签列表（1-30 个 / 每个 ≤ 10 字符） */
+  readonly labels: readonly string[]
+  /** dead 线路文案（可选 / 默认 '已断'） */
+  readonly deadLabel?: string
+}
+
+/** CustomThemeData 字段约束（设计稿 §Layer C / docs/manual §8.4a） */
+export const CUSTOM_THEME_CONSTRAINTS = {
+  displayNameMaxChars: 10,
+  labelMaxChars: 10,
+  labelsMinCount: 1,
+  labelsMaxCount: 30,
+  deadLabelMaxChars: 10,
+} as const
 
 /** 从 localStorage 读 themeId，未命中或无效返回 null（SSR safe） */
 export function readStoredThemeId(): string | null {
@@ -25,7 +52,8 @@ export function readStoredThemeId(): string | null {
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY)
     if (!raw) return null
-    // 严格校验：themeId 必须 ∈ ALL_THEMES（防 localStorage 被脏数据污染）
+    // 校验：themeId 必须 ∈ ALL_THEMES ∪ {CUSTOM_THEME_ID}（防 localStorage 被脏数据污染）
+    if (raw === CUSTOM_THEME_ID) return CUSTOM_THEME_ID
     const matched = ALL_THEMES.find((t) => t.id === raw)
     return matched ? matched.id : null
   } catch {
@@ -44,29 +72,136 @@ export function writeStoredThemeId(themeId: string): void {
   }
 }
 
-/** 通过 themeId 查找 RouteTheme 实例（未命中返回 null） */
+/** 通过 themeId 查找 RouteTheme 实例（未命中返回 null / 'custom' 不在此处理 / 由调用方读 customTheme） */
 export function findThemeById(themeId: string): RouteTheme | null {
   return ALL_THEMES.find((t) => t.id === themeId) ?? null
 }
 
 /**
- * useRouteTheme — 播放器主题 hook（含 localStorage 持久化）
+ * parseCustomTheme — JSON 字符串 → CustomThemeData 严格校验
+ *
+ * 校验规则（设计稿 §Layer C 约束）：
+ *   - displayName: trim 后非空 + 长度 ≤ 10
+ *   - labels: 数组 / 元素全为字符串 / trim 后每个非空 + ≤ 10 字符 / 总数 1-30
+ *   - deadLabel: 可选 / trim 后非空 + ≤ 10
+ *
+ * 任一规则失败 → 返 null（脏数据静默回退 / 不抛异常 / 由消费方走 default）
+ */
+export function parseCustomTheme(raw: string): CustomThemeData | null {
+  try {
+    const obj = JSON.parse(raw) as unknown
+    if (!obj || typeof obj !== 'object') return null
+    const o = obj as Record<string, unknown>
+    const C = CUSTOM_THEME_CONSTRAINTS
+
+    const displayName = typeof o.displayName === 'string' ? o.displayName.trim() : ''
+    if (displayName.length === 0 || displayName.length > C.displayNameMaxChars) return null
+
+    if (!Array.isArray(o.labels)) return null
+    const labels = o.labels
+      .filter((l): l is string => typeof l === 'string')
+      .map((l) => l.trim())
+      .filter((l) => l.length > 0 && l.length <= C.labelMaxChars)
+    if (labels.length < C.labelsMinCount || labels.length > C.labelsMaxCount) return null
+
+    let deadLabel: string | undefined
+    if (typeof o.deadLabel === 'string') {
+      const trimmed = o.deadLabel.trim()
+      if (trimmed.length > 0 && trimmed.length <= C.deadLabelMaxChars) {
+        deadLabel = trimmed
+      }
+    }
+
+    return { displayName, labels, deadLabel }
+  } catch {
+    return null
+  }
+}
+
+/** 从 localStorage 读自定义主题数据（SSR safe / 校验失败回 null） */
+export function readStoredCustomTheme(): CustomThemeData | null {
+  if (typeof window === 'undefined') return null
+  try {
+    const raw = window.localStorage.getItem(CUSTOM_STORAGE_KEY)
+    if (!raw) return null
+    return parseCustomTheme(raw)
+  } catch {
+    return null
+  }
+}
+
+/** 写自定义主题数据到 localStorage（SSR safe / 静默失败） */
+export function writeStoredCustomTheme(data: CustomThemeData): void {
+  if (typeof window === 'undefined') return
+  try {
+    window.localStorage.setItem(CUSTOM_STORAGE_KEY, JSON.stringify(data))
+  } catch {
+    // localStorage 不可写 → 仅本会话生效
+  }
+}
+
+/** 清除自定义主题数据（SSR safe / 静默失败） */
+export function clearStoredCustomTheme(): void {
+  if (typeof window === 'undefined') return
+  try {
+    window.localStorage.removeItem(CUSTOM_STORAGE_KEY)
+  } catch {
+    // 失败则等下次写覆盖
+  }
+}
+
+/**
+ * CustomThemeData → RouteTheme 运行时派发
+ *
+ * 复用既有 RouteTheme 接口（applyThemeLabels / buildThemedSources 消费 RouteTheme.labels 等字段）。
+ * id 固定为 CUSTOM_THEME_ID / fallbackPrefix 默认 '线路'（中文优先 / 与 THEME_JIE_QI 一致）。
+ */
+export function customThemeToRouteTheme(data: CustomThemeData): RouteTheme {
+  return {
+    id: CUSTOM_THEME_ID,
+    displayName: data.displayName,
+    labels: data.labels,
+    deadLabel: data.deadLabel ?? '已断',
+    fallbackPrefix: '线路',
+  }
+}
+
+/**
+ * useRouteTheme — 播放器主题 hook（含 localStorage 持久化 + 自定义主题支持）
  *
  * 行为：
  *   - 首次 render（SSR / client 初次 mount）：返回 `getDefaultTheme(locale)`，避免
  *     SSR ↔ client mismatch（localStorage 仅 client 可读）。
- *   - mount 后第一次 effect：读 localStorage → 命中则切到存储的主题（用户感知"自动应用上次选择"）。
- *   - 用户调 `setTheme(theme)` → setState + 写 localStorage。
+ *   - mount 后第一次 effect：读 themeId + customTheme → 命中则切到存储的主题。
+ *   - 用户调 `setTheme(theme)` → setState + 写 themeId。
+ *   - 用户调 `setCustomTheme(data)` → 写 customTheme + setState 切到自定义 + 写 themeId='custom'。
+ *
+ * 返回字段：
+ *   - theme: 当前 RouteTheme（内置或自定义派发）
+ *   - customTheme: 当前 CustomThemeData | null（用于编辑回显 / 选择器显示自定义 displayName）
+ *   - setTheme / setCustomTheme / clearCustomTheme: 切换 / 写入 / 清除
  */
 export function useRouteTheme(locale: string): {
   theme: RouteTheme
+  customTheme: CustomThemeData | null
   setTheme: (theme: RouteTheme) => void
+  setCustomTheme: (data: CustomThemeData) => void
+  clearCustomTheme: () => void
 } {
   const [theme, setThemeState] = useState<RouteTheme>(() => getDefaultTheme(locale))
+  const [customTheme, setCustomThemeState] = useState<CustomThemeData | null>(null)
 
   useEffect(() => {
+    const storedCustom = readStoredCustomTheme()
+    if (storedCustom) setCustomThemeState(storedCustom)
+
     const storedId = readStoredThemeId()
-    if (storedId) {
+    if (storedId === CUSTOM_THEME_ID) {
+      // 自定义主题命中：仅当 storedCustom 也存在时才切（否则保留 default 防空主题）
+      if (storedCustom) {
+        setThemeState(customThemeToRouteTheme(storedCustom))
+      }
+    } else if (storedId) {
       const stored = findThemeById(storedId)
       if (stored && stored.id !== theme.id) {
         setThemeState(stored)
@@ -81,5 +216,23 @@ export function useRouteTheme(locale: string): {
     writeStoredThemeId(next.id)
   }
 
-  return { theme, setTheme }
+  function setCustomTheme(data: CustomThemeData): void {
+    setCustomThemeState(data)
+    writeStoredCustomTheme(data)
+    setThemeState(customThemeToRouteTheme(data))
+    writeStoredThemeId(CUSTOM_THEME_ID)
+  }
+
+  function clearCustomTheme(): void {
+    setCustomThemeState(null)
+    clearStoredCustomTheme()
+    // 当前若正用自定义主题 → 回退到 default
+    if (theme.id === CUSTOM_THEME_ID) {
+      const fallback = getDefaultTheme(locale)
+      setThemeState(fallback)
+      writeStoredThemeId(fallback.id)
+    }
+  }
+
+  return { theme, customTheme, setTheme, setCustomTheme, clearCustomTheme }
 }

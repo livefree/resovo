@@ -12,6 +12,7 @@ import { getVideoDetailHref } from '@/lib/video-route'
 import { buildThemedSources, matchActiveSourceIndex } from '@/lib/line-display-name'
 import { useRouteTheme } from '@/lib/route-theme-storage'
 import { RouteThemeSelector } from './RouteThemeSelector'
+import { CustomThemeDialog } from './CustomThemeDialog'
 import { useLocale } from 'next-intl'
 import type { Video, VideoSource, ApiResponse, ApiListResponse } from '@resovo/types'
 import { SourceBar } from './SourceBar'
@@ -91,8 +92,16 @@ export function PlayerShell({ slug: slugProp, portalMode = false, previewMode = 
   const [activePanelTab, setActivePanelTab] = useState<'episodes' | 'sources'>('episodes')
 
   // CHG-353 默认主题（zh-CN → 节气 / en → NATO）+ CHG-369 localStorage 持久化（用户选择优先）
+  // CHG-369-B：自定义主题 state + dialog 开关
   const locale = useLocale()
-  const { theme: routeTheme, setTheme: setRouteTheme } = useRouteTheme(locale)
+  const {
+    theme: routeTheme,
+    customTheme,
+    setTheme: setRouteTheme,
+    setCustomTheme,
+    clearCustomTheme,
+  } = useRouteTheme(locale)
+  const [customDialogOpen, setCustomDialogOpen] = useState(false)
   // CHG-369 Codex stop-time review #12：fetch then 读 ref 而非 closure capture，
   // 防止 fetch 进行中用户切主题 → fetch 完成时用旧主题覆盖最新选择。
   // 直接在 render body 同步赋值（无副作用 / 严格模式安全），避免 useEffect 同步
@@ -394,8 +403,13 @@ export function PlayerShell({ slug: slugProp, portalMode = false, previewMode = 
 
         {hasSources && activePanelTab === 'sources' ? (
           <div className="p-2">
-            {/* CHG-369 / plan §17.2 #16：主题选择器 + localStorage 持久化 */}
-            <RouteThemeSelector currentTheme={routeTheme} onThemeChange={setRouteTheme} />
+            {/* CHG-369 / plan §17.2 #16：主题选择器 + localStorage 持久化 + CHG-369-B 自定义主题 */}
+            <RouteThemeSelector
+              currentTheme={routeTheme}
+              customTheme={customTheme}
+              onThemeChange={setRouteTheme}
+              onOpenCustomDialog={() => setCustomDialogOpen(true)}
+            />
             <div className="rounded-md overflow-hidden" style={{ background: 'var(--bg-surface-sunken)' }}>
               <SourceBar
                 sources={sources}
@@ -551,6 +565,24 @@ export function PlayerShell({ slug: slugProp, portalMode = false, previewMode = 
           </div>
         </div>
       </div>
+      {customDialogOpen && (
+        <CustomThemeDialog
+          initial={customTheme}
+          onConfirm={(data) => {
+            setCustomTheme(data)
+            setCustomDialogOpen(false)
+          }}
+          onCancel={() => setCustomDialogOpen(false)}
+          onClear={
+            customTheme
+              ? () => {
+                  clearCustomTheme()
+                  setCustomDialogOpen(false)
+                }
+              : undefined
+          }
+        />
+      )}
     </div>
   )
 }
