@@ -10025,3 +10025,26 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **质量门禁**：typecheck ✅ / lint ✅ / verify:adr-contracts ✅ EXIT=0 / metadataEnrich 26/26 + stagingDouban 11/11 = 37 PASS
 - **commit trailer**：无强制 Subagents
 - **闭环**：Codex stop-time review #8 红线消解 / meta_quality 三路径写入语义闭环（auto enrich + manual confirm + manual ignore）/ architecture.md §5.1 同步说明三处写入路径与 buildManualMetaQuality merge 语义
+
+---
+
+## [CHG-366] META-COUNTRY-DISPLAY 国家代码 → 中英文显示（Wave 2 #17 / plan §10.4.3 / 5 业务 + 2 测试 + 1 docs）
+- **完成时间**：2026-05-27
+- **执行模型**：claude-opus-4-7（主循环 / 续会话）
+- **子代理调用**：无（admin-ui cell 原语属轻量 / 沿用 vis-chip / signal-chip 范式 / 非新共享 API 契约 / 非新 ADR）
+- **范围**：
+  - `packages/types/src/format-country-name.ts` 新建：纯函数 `formatCountryName(code, locale, fallback)` / Node 16+ 内置 `Intl.DisplayNames` 零依赖 / LRU-1 缓存按 locale 维度（防列表场景重复构造）/ 严格 ISO `^[A-Z]{2}$` 校验 / 无效 region 降级原 code
+  - `packages/types/src/index.ts`：barrel 加 formatCountryName 导出
+  - `packages/admin-ui/src/components/cell/country-name.tsx + .types.ts` 新建：React 组件 wrapper / Props {code, locale='zh-CN', fallback='—', muted, testId, className} / 显示与原 code 不同时挂 title 提示原 ISO（运营对账）/ data-country-code 属性 / 颜色 token 化（fg-default / fg-muted）/ 与 cell/code-text.tsx 同范式
+  - `packages/admin-ui/src/components/cell/index.ts`：barrel 加 CountryName + CountryNameProps 导出
+  - `apps/server-next/.../RightPane/TabDetail.tsx`：DetailRow value: string → React.ReactNode（兼容性扩展）/ country 行 `<CountryName code={v.country} />`
+  - `apps/server-next/.../PendingCenter.tsx`：inline 小字密集场景用 `formatCountryName(v.country, 'zh-CN', '—')` string
+  - `apps/web-next/src/components/search/MetaChip.tsx`：type='country' 时显示本地化名称 / URL query 仍传原 ISO（search 后端按 ISO 索引 / 显示本地化不污染真源）/ VideoDetailHero / VideoMeta / DetailHero 三处消费方零改
+- **设计取舍**：① Intl.DisplayNames vs i18n-iso-countries 包：实测 Node 25 + 浏览器原生支持，零依赖路径 + 与 CLAUDE.md "禁止技术栈外新依赖" 对齐 ② helper 在 packages/types 而非新建 packages/i18n-utils：避免新建 workspace 包 / packages/types/url-helpers.ts 已有"helper + types 混合"先例 ③ MetaChip 内化 type='country' 处理：让 web-next 3 处消费方零改，URL query 真源不变 ④ TabDetail DetailRow value 改 ReactNode：兼容旧 string 调用 + 允许 cell 原语作为 value（更通用）⑤ data-country-code 属性挂载：自动化测试钩子 + 运营 inspect 元素直接看 ISO
+- **测试**：
+  - `tests/unit/types/format-country-name.test.ts` 7 case（US/CN/JP 三国 + 小写规范化 + null/undefined/空串 + 非法格式 USA/U1/U + 无效 region XX）
+  - `tests/unit/components/admin-ui/cell/country-name.test.tsx` 3 case（合法 + locale=en + null fallback）
+  - **10/10 PASS**（含 jsdom 环境）
+- **质量门禁**：typecheck ✅ / lint ✅ / verify:adr-contracts ✅ EXIT=0 / tests/unit/{types,components/admin-ui/cell,api} 2002/2002 PASS（146 文件）
+- **commit trailer**：无强制 Subagents
+- **闭环**：CHG-366 完成 / Wave 2 卡 15/17 闭合 / plan §10.4.3 国家显示治理就绪 / 显示层本地化 + ISO code 真源不变两个不变量同步落地 / architecture.md §5.1 country 字段补"显示层 helper"说明

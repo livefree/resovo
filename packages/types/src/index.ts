@@ -37,3 +37,6 @@ export * from './utils/exhaustive'
 
 // ── ADR-160 D-160-7 跨 app URL 派生 helper（CHG-361-A）──────────
 export { getVideoDetailHref } from './url-helpers'
+
+// ── plan §10.4.3 国家代码显示 helper（CHG-366 META-COUNTRY-DISPLAY）─
+export { formatCountryName } from './format-country-name'

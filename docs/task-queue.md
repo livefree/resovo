@@ -1902,7 +1902,7 @@ CHG-353 (ROUTE-LABEL-A2) → 依赖 CHG-352 后端返回排序数据
 
 ## [SEQ-20260527-MOD-WAVE2] server-next 内容审核台 Wave 2 — 预览/拆分/合并/元数据/路线主题（plan §14 + §17.2）
 
-- **状态**：🔄 执行中（CHG-361 ✅ + CHG-363 ✅ + CHG-364 ✅ + CHG-365-A1 PinyinDetector ✅ + CHG-365-A2 meta_quality ✅ / 14/17 / ADR-160 AMENDMENT 1/2 / CHG-362-A+B SKIPPED ADR-105 / CHG-365-A+B SKIPPED MetadataEnrichService 80% / 下一个 CHG-366 META-COUNTRY-DISPLAY）
+- **状态**：🔄 执行中（CHG-361 ✅ + CHG-363 ✅ + CHG-364 ✅ + CHG-365 META ✅ + CHG-366 COUNTRY ✅ / 15/17 / ADR-160 AMENDMENT 1/2 / CHG-362-A+B SKIPPED ADR-105 / CHG-365-A+B SKIPPED MetadataEnrichService 80% / 下一个 CHG-367-A META-EPISODES ADR-163）
 - **创建时间**：2026-05-27
 - **最后更新时间**：2026-05-27
 - **目标**：基于 `/Users/livefree/.claude/plans/fluffy-giggling-teapot.md` §14 Wave 2 + §17.2 落地 9 张主卡（4 张需 ADR + Opus 决策）；继续 Wave 1 的自动推进节奏。
@@ -1935,7 +1935,7 @@ CHG-353 (ROUTE-LABEL-A2) → 依赖 CHG-352 后端返回排序数据
 | 8.1 | ✅ **CHG-365-A1** 已完成（2026-05-27）| PinyinDetector helper 独立实施（贪心 longest-match 拼音音节分解 / 约 410 个音节常量 / 严防数字 + 非 ASCII + 最小词长）/ 1 业务 + 1 测试 18 case PASS / MetadataEnrichService 集成延后到 -A2 一并做（依赖 meta_quality schema） | 否 | opus-4-7 续会话 |
 | 8.2 | ✅ **CHG-365-A2** 已完成（2026-05-27）| Migration 077 + VideoMetaQuality types + queries 扩 + MetadataEnrichService 写入持久化（豆瓣 confidence/method/status + 拼音 isPinyin + enriched_at）+ architecture.md §5.1 同步 / 23/23 case PASS（+3）/ 6 业务 + 1 测试 + 1 docs | 否（schema 扩展非 ADR-needed / 复用 Migration 032 模式） | opus-4-7 续会话 |
 | 9 | ⛔ **CHG-365-B** SKIPPED（2026-05-27 / 同步 A SKIPPED）| 采集 worker 自动豆瓣 / **已就绪**（CrawlerService:300 入库后自动 enrichmentQueue.add 触发 MetadataEnrichService.enrich）/ 拼音识别 → CHG-365-A1 / 本卡定义重复 | — | — |
-| 10 | **CHG-366** | META-COUNTRY-DISPLAY（plan #13 / §10.4.3）— 国家代码 → 中英文 admin-ui 原语 | 否 | sonnet |
+| 10 | ✅ **CHG-366** 已完成（2026-05-27）| META-COUNTRY-DISPLAY / formatCountryName helper（packages/types / Intl.DisplayNames 零依赖）+ CountryName 原语（admin-ui cell）+ TabDetail / PendingCenter / MetaChip 内化（web-next 3 处消费方零改）/ 7+3=10 case PASS / 5 业务 + 2 测试 + 1 docs | 否 | opus-4-7 续会话 |
 | 11 | **CHG-367-A** | META-EPISODES ADR-163 起草（plan #14 / §10.4.4）— total/current_episodes schema + migration | 是 ADR-163 | opus-4-7 + arch-reviewer Opus |
 | 12 | **CHG-367-B** | META-EPISODES 实施 — schema migration + 显示 | 否 | sonnet |
 | 13 | **CHG-368-A** | ROUTE-LABEL-B ADR-164 起草（plan §17.2 #15）— Migration 064 codename/priority/retired_at | 是 ADR-164 | opus-4-7 + arch-reviewer Opus |

@@ -6,7 +6,7 @@
 
 ## 进行中任务
 
-（空 — CHG-365-A2 完成 ✅ / Wave 2 卡 14/17 / CHG-365 META-DOUBAN-AUTO 完整序列闭环 / 下一个 CHG-366 META-COUNTRY-DISPLAY）
+（空 — CHG-366 完成 ✅ / Wave 2 卡 15/17 / 下一个 CHG-367-A META-EPISODES ADR-163 起草）
 
 ---
 
@@ -32,7 +32,7 @@
 
 ---
 
-## Wave 2 进行中（SEQ-20260527-MOD-WAVE2 / 14/17）
+## Wave 2 进行中（SEQ-20260527-MOD-WAVE2 / 15/17）
 
 - ✅ CHG-361-A（ADR-160 起草 + getVideoDetailHref 沉淀 / 5f64e78d）
 - ✅ CHG-361-B2（apps/api 后端 3 文件 + 5 case 单测 + ADR-160 AMENDMENT 1 / a3c1c9ed）
@@ -41,24 +41,22 @@
 - ✅ CHG-361-D（PlayerShell previewMode Props + 3 case PASS / a52141d9）
 - ✅ CHG-361-E1（sources 端点 preview query + SourceService 派发 / ADR-160 AMENDMENT 2 / 285c4fb4）
 - ✅ CHG-361-E2（detail-page-factory + VideoDetailClient server-side hydration / b48913f0）
-- ✅ CHG-361-E3（watch page + PlayerShell server-side hydration / 6 case PASS + 3 个 Codex 回归 fix / ed43059e + 552656bc + 4360688f + a1bcc272 + e643998f）
-- ⛔ CHG-362-A/B SKIPPED（ADR-105 已覆盖 / 后端已实现 / 10d7a0df）
-- ✅ CHG-363-A（PendingCenter "✂ 拆分" 按钮入口 + 3 case PASS / 264ab332）
-- ✅ CHG-363-B（MergeClient `?split=:videoId` 深链 + MergeSplitSection initialVideoId 自动加载 + 4 case PASS / Codex stop-time review #4 触发 / 本卡 / 待 commit）
-
-**CHG-361 PREVIEW-ADMIN 8 子卡全闭环 ✅(A → B2 → B1 → C → D → E1 → E2 → E3)/ 跨 app preview 链路 + server-side hydration 修补完整就绪 + 4 类时序 bug 收敛 / 待 prod gate OPS 卡 CHG-OPS-COOKIE-SUBDOMAIN-1 / Y-AMD2-2 episode 切换 internal 视频限制独立 FOLLOWUP 卡**
-
-**SPLIT 系列：CHG-362-A/B SKIPPED → CHG-363 SPLIT-UI 完整序列闭环 ✅（-A 入口 → -B 深链 + 自动加载）/ PendingCenter ✂ 拆分 → /admin/merge?split=:videoId 端到端就绪**
-
-**MERGE 系列：CHG-364 MERGE-INLINE 完整序列闭环 ✅（-A BatchActionsBar 合并按钮 → -B MergeClient ?ids 深链 + BatchMergeWorkspace 选 target + 提交 mergeVideos）/ 审核台批量选 ≥2 条 → ↔ 合并 → /admin/merge?ids=<csv> 端到端就绪**
-
-**META 系列：CHG-365 META-DOUBAN-AUTO 完整序列闭环 ✅（A1 PinyinDetector helper → A2 schema + 集成持久化）/ Migration 077 + VideoMetaQuality + MetadataEnrichService 写入豆瓣 confidence/method/status + 拼音判断 + enriched_at / 审核台 TabDetail "重新匹配"提示与质量门禁观察数据底座完整**
-
-- ✅ CHG-364-A（BatchActionsBar "↔ 合并" 按钮入口 + 4 case PASS / 4662de12）
-- ✅ CHG-364-B（MergeClient ?ids query + BatchMergeWorkspace + 6 case PASS / 595e68ec + 0f02cf96）
+- ✅ CHG-361-E3（watch page + PlayerShell server-side hydration / 6 case PASS + 3 个 Codex 回归 fix）
+- ⛔ CHG-362-A/B SKIPPED（ADR-105 已覆盖 / 10d7a0df）
+- ✅ CHG-363-A（PendingCenter "✂ 拆分" 按钮入口 / 264ab332）
+- ✅ CHG-363-B（MergeClient `?split=:videoId` 深链 + MergeSplitSection 自动加载 / Codex stop-time review #4 触发）
+- ✅ CHG-364-A（BatchActionsBar "↔ 合并" 按钮 / 4662de12）
+- ✅ CHG-364-B（MergeClient ?ids query + BatchMergeWorkspace / 595e68ec + 0f02cf96）
 - ⛔ CHG-365-A/B SKIPPED（MetadataEnrichService 已实施 80% / BLOCKER #2 / 3da17c74）
 - ✅ CHG-365-A1（PinyinDetector helper + 18 case PASS / 8926bcfd + 07545f93 + 9c9fa2e8）
-- ✅ CHG-365-A2（Migration 077 + VideoMetaQuality + MetadataEnrichService 集成 + 23 case PASS（+3）/ 本卡 / 待 commit）
+- ✅ CHG-365-A2（Migration 077 + VideoMetaQuality + MetadataEnrichService 集成 + 23 case PASS / 6d7c3da4）
+- ✅ CHG-365-A2-FIX（Codex stop-time review #8 manual paths stale fix / 37 case PASS / 81c6e24d + bc033c77）
+- ✅ CHG-366（META-COUNTRY-DISPLAY formatCountryName + CountryName 原语 + 4 消费方迁移 / 10 case PASS / 本卡 / 待 commit）
+
+**CHG-361 PREVIEW-ADMIN 8 子卡全闭环 ✅**
+**SPLIT 系列：CHG-362-A/B SKIPPED → CHG-363 SPLIT-UI 完整序列闭环 ✅**
+**MERGE 系列：CHG-364 MERGE-INLINE 完整序列闭环 ✅**
+**META 系列：CHG-365 META-DOUBAN-AUTO 完整序列闭环 ✅（含 stop-time stale fix）/ CHG-366 META-COUNTRY-DISPLAY ✅**
 
 ---
 
@@ -74,3 +72,4 @@
 - **PRE-PROBE-WORKER / PRE-RENDER-CHECK-WORKER**：source-health worker + player-render-check worker 真实写回 probe_status / render_status / latency_ms（advisory ADR-158 A2 + A4 / 当前都是占位 jobId）
 - **localStorage 全量测试 flaky**：CHG-365-A2 全量测试发现 167 个测试在 jsdom 环境下 `localStorage.clear is not a function` / main 分支同样 fail（pre-existing / 与本卡零关联）/ vitest jsdom 环境 setup 缺 localStorage stub / 独立 follow-up 卡 CHG-INFRA-VITEST-LOCALSTORAGE 修复
 - **meta_quality 消费方**：CHG-365-A2 仅落 schema + service 写入 / 审核台 TabDetail "重新匹配" UI 提示尚未消费 meta_quality.douban_confidence + douban_match_method 字段（plan §10.4.1 治理路径"重新匹配"+ "手动指定豆瓣 URL/ID" 按钮 / 独立 follow-up 卡承接）
+- **CountryName web-next 三处消费方实测**：CHG-366 通过 MetaChip 内化达成"消费方零改"，但 VideoDetailHero L213 / DetailHero L221 直接渲染 `<span>{video.country}</span>` 不经 MetaChip，仍是原 ISO code。可独立 follow-up 卡或留作 P3 sweep 任务

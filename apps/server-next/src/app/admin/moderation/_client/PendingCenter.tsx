@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react'
 import { VisChip, DecisionCard, StaffNoteBar, Thumb } from '@resovo/admin-ui'
-import { getVideoDetailHref, type VideoQueueRow } from '@resovo/types'
+import { formatCountryName, getVideoDetailHref, type VideoQueueRow } from '@resovo/types'
 import { EpisodeSelector } from './EpisodeSelector'
 import { LinesPanel } from './LinesPanel'
 import { AdminPlayer } from './AdminPlayer'
@@ -120,7 +120,7 @@ export function PendingCenter({ v, onStaffNoteChange, onEditVideo, onSourceHealt
             <VisChip visibility={v.visibilityStatus} review={v.reviewStatus} />
           </div>
           <div style={{ marginTop: 4, fontSize: 'var(--font-size-xs)', color: 'var(--fg-muted)' }}>
-            {v.type} · {v.episodeCount} 集 · {v.country ?? '—'} · ⭐ {v.rating ?? '—'} · ID <code style={{ fontFamily: 'monospace', fontSize: 'var(--font-size-xxs)' }}>{v.id}</code>
+            {v.type} · {v.episodeCount} 集 · {formatCountryName(v.country, 'zh-CN', '—')} · ⭐ {v.rating ?? '—'} · ID <code style={{ fontFamily: 'monospace', fontSize: 'var(--font-size-xxs)' }}>{v.id}</code>
           </div>
           {v.badges.length > 0 && (
             <div style={{ marginTop: 8, display: 'flex', gap: 6, flexWrap: 'wrap' }}>

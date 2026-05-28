@@ -278,6 +278,7 @@ resovo/
 - `douban_status`：`pending | matched | candidate | unmatched`（Migration 032，自动丰富 Job 写入）
 - `source_check_status`：`pending | ok | partial | all_dead`（Migration 032，源活性批量检验结果）
 - `meta_score`：`SMALLINT 0-100`（Migration 032，元数据完整度评分）
+- `country`：ISO 3166-1 alpha-2（'US' / 'CN' / 'JP' / ...）；显示层经 `formatCountryName(code, locale)` 本地化（CHG-366 / plan §10.4.3 / `packages/types/src/format-country-name.ts`），admin-ui 提供 `<CountryName>` React 组件 wrapper（cell 原语）。`videos.country` 与 `media_catalog.country` 字段统一以 ISO code 存储；search query 也以 ISO code 检索（显示本地化不污染 URL 真源）。
 - `meta_quality`：`JSONB NOT NULL DEFAULT '{}'`（Migration 077，CHG-365-A2 / plan §10.4.1）。三处写入路径——MetadataEnrichService（auto enrich）+ DoubanService.confirmSubject/confirmFields（manual confirm）+ moderation.douban-ignore route（manual ignore）——共同维护"信号字典"，字段约定 `title_en_is_pinyin / douban_confidence / douban_match_method (imdb_id|title|alias|network|manual|manual_fields) / douban_match_status (auto_matched|candidate|manual_confirmed|unmatched) / enriched_at`，详 `packages/types/src/video.types.ts#VideoMetaQuality`；手动路径通过 `buildManualMetaQuality` helper merge 旧值保留 `title_en_is_pinyin` 等 enrich 信号（Codex stop-time review #8 防 stale 回归）；部分索引 `idx_videos_meta_quality_pinyin` 加速审核台"疑似拼音"筛选。
 
 注意：历史文档中的 `blocked` 状态已不在当前 schema 中。

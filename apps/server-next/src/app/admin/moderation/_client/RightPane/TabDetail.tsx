@@ -11,7 +11,7 @@
  * 信息密度对齐设计稿：DetailRow 单行 < 28px，紧凑（label 等宽字符 + value 右对齐）。
  */
 import React, { useCallback, useState } from 'react'
-import { AdminButton, useToast } from '@resovo/admin-ui'
+import { AdminButton, CountryName, useToast } from '@resovo/admin-ui'
 import type { VideoQueueRow } from '@resovo/types'
 import { listVideoSources } from '@/lib/videos/api'
 import { reprobeRoute } from '@/lib/sources/api'
@@ -42,7 +42,8 @@ const SECTION_HEADER_STYLE: React.CSSProperties = {
 
 interface DetailRowProps {
   label: string
-  value: string
+  /** ReactNode 兼容旧 string 调用；CHG-366 允许 `<CountryName>` 等 cell 原语作为 value */
+  value: React.ReactNode
   ok?: boolean
 }
 
@@ -141,7 +142,7 @@ export function TabDetail({ v }: TabDetailProps): React.ReactElement {
       <div style={{ ...SECTION_HEADER_STYLE, marginTop: 12 }}>信息</div>
       <DetailRow label="type" value={v.type} />
       <DetailRow label="year" value={String(v.year ?? '—')} />
-      <DetailRow label="country" value={v.country ?? '—'} />
+      <DetailRow label="country" value={<CountryName code={v.country} />} />
       <DetailRow label="episodeCount" value={String(v.episodeCount)} />
       <DetailRow label="meta_score" value={String(v.metaScore)} />
       <DetailRow label="source_check" value={v.sourceCheckStatus} />

@@ -114,3 +114,9 @@ export type {
   SignalChipVariant,
   SignalChipSize,
 } from './signal-chip.types'
+
+// ── CountryName（CHG-366 / plan §10.4.3）─────────────────────────
+// ISO 3166-1 alpha-2 → 本地化显示；纯函数 helper 在 `@resovo/types#formatCountryName`
+
+export { CountryName } from './country-name'
+export type { CountryNameProps } from './country-name.types'
