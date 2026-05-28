@@ -91,6 +91,11 @@ export function PlayerShell({ slug: slugProp, portalMode = false, previewMode = 
 
   const shortId = extractShortId(slug)
 
+  // ADR-160 AMENDMENT 2 D-160-AMD2-3：episode-switch effect 跳过首次挂载，避免与初始 fetch effect "双拉" sources；
+  // ref 由初始 fetch useEffect 在 sources 处理完成后设 true（不是由 episode-switch effect 自身设 / 否则
+  // video 为 null 时 episode-switch effect 直接 return，ref 永远是 false，导致用户首次切集被错误跳过）
+  const episodeSwitchInitRef = useRef(false)
+
   useEffect(() => {
     // Snapshot all mini player state BEFORE initPlayer resets them to defaults
     const snap = usePlayerStore.getState()
@@ -157,23 +162,27 @@ export function PlayerShell({ slug: slugProp, portalMode = false, previewMode = 
             }
           })
           .catch(() => setSources([]))
+          .finally(() => {
+            // 初始 sources 已处理（成功 or 失败）→ 解锁 episode-switch effect
+            episodeSwitchInitRef.current = true
+          })
       })
-      .catch(() => setVideo(null))
+      .catch(() => {
+        setVideo(null)
+        // video fetch 失败也要解锁，否则用户后续重试 / 路由切换后 episode-switch 永远跳过
+        episodeSwitchInitRef.current = true
+      })
       .finally(() => setLoading(false))
     // 技术债(NEW-P0-B)：依赖故意收敛到 shortId，initPlayer/searchParams 等引用稳定引用
     // 修复方案：提取 fetchVideoAndSources(shortId, ep) 为 useCallback 后移除此 disable
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shortId])
 
-  // ADR-160 AMENDMENT 2 D-160-AMD2-3：跳过首次挂载，避免与初始 fetch effect "双拉" sources；
-  // 仅在用户主动切集（currentEpisode 真实变化）时触发
-  const episodeSwitchInitRef = useRef(false)
   useEffect(() => {
     if (!shortId || !video) return
-    if (!episodeSwitchInitRef.current) {
-      episodeSwitchInitRef.current = true
-      return
-    }
+    // episodeSwitchInitRef 由初始 fetch useEffect 在 sources 处理完成后设 true；
+    // 在此之前直接 return（避免与初始 fetch 重复拉 sources）
+    if (!episodeSwitchInitRef.current) return
     setStartTime(undefined)
     apiClient
       .get<ApiListResponse<VideoSource>>(

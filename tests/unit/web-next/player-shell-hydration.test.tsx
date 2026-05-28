@@ -26,12 +26,8 @@ vi.mock('next-intl', () => ({
 }))
 
 // playerStore + apiClient mock — vi.hoisted 保证在 vi.mock 工厂之前初始化
-const { initPlayerMock, apiGetMock } = vi.hoisted(() => ({
-  initPlayerMock: vi.fn(),
-  apiGetMock: vi.fn(),
-}))
-
-vi.mock('@/stores/playerStore', () => {
+// mockState 暴露为可变，模拟切集时由测试代码改写 currentEpisode + rerender 触发 episode-switch effect
+const { initPlayerMock, apiGetMock, mockState } = vi.hoisted(() => {
   const state = {
     mode: 'default',
     currentEpisode: 1,
@@ -39,7 +35,7 @@ vi.mock('@/stores/playerStore', () => {
     shortId: '',
     currentTime: 0,
     setMode: vi.fn(),
-    initPlayer: initPlayerMock,
+    initPlayer: vi.fn(),
     setEpisode: vi.fn(),
     setPlaying: vi.fn(),
     setCurrentTime: vi.fn(),
@@ -47,9 +43,17 @@ vi.mock('@/stores/playerStore', () => {
     setActiveSourceIndex: vi.fn(),
     hostOrigin: null,
   }
-  const usePlayerStore = (selector?: (s: typeof state) => unknown) =>
-    selector ? selector(state) : state
-  ;(usePlayerStore as unknown as { getState: () => typeof state }).getState = () => state
+  return {
+    initPlayerMock: state.initPlayer,
+    apiGetMock: vi.fn(),
+    mockState: state,
+  }
+})
+
+vi.mock('@/stores/playerStore', () => {
+  const usePlayerStore = (selector?: (s: typeof mockState) => unknown) =>
+    selector ? selector(mockState) : mockState
+  ;(usePlayerStore as unknown as { getState: () => typeof mockState }).getState = () => mockState
   return { usePlayerStore }
 })
 
@@ -139,6 +143,7 @@ describe('PlayerShell server-side hydration (ADR-160 AMENDMENT 2 D-160-AMD2-3)',
     vi.clearAllMocks()
     initPlayerMock.mockReset()
     apiGetMock.mockReset()
+    mockState.currentEpisode = 1 // 每个 case 复位 episode
   })
 
   afterEach(() => {
@@ -159,15 +164,17 @@ describe('PlayerShell server-side hydration (ADR-160 AMENDMENT 2 D-160-AMD2-3)',
     expect(calls.some((url) => url.includes('/videos/aB3kR9x1') && !url.includes('/sources'))).toBe(true)
   })
 
-  it('有 initialVideo + 无 initialSources → 跳过 video fetch / sources 仍走 client', async () => {
+  it('有 initialVideo + 无 initialSources → 跳过 video fetch / sources 仅 1 次 client（防止双拉回归）', async () => {
     apiGetMock.mockResolvedValue({ data: [MOCK_SOURCE] })
     render(<PlayerShell slug="test-aB3kR9x1" initialVideo={MOCK_VIDEO} />)
-    await waitFor(() => expect(initPlayerMock).toHaveBeenCalled())
+    await waitFor(() => expect(apiGetMock).toHaveBeenCalled())
     const calls = apiGetMock.mock.calls.map((c) => c[0] as string)
     // video fetch 不调（无 /sources 后缀的 video URL）
     expect(calls.some((url) => url.endsWith('/videos/aB3kR9x1'))).toBe(false)
-    // sources fetch 调（含 /sources?episode=）
+    // sources fetch 调（含 /sources?episode=1）
     expect(calls.some((url) => url.includes('/sources?episode=1'))).toBe(true)
+    // 仅初始 fetch effect 拉一次，episode-switch effect 跳过首次挂载 → 共 1 次 sources fetch
+    expect(calls.filter((url) => url.includes('/sources?episode=')).length).toBe(1)
   })
 
   it('有 initialVideo + initialSources + url ep=2 → sources 走 client fetch（Y-AMD2-2 episode 切换限制）', async () => {
@@ -179,5 +186,31 @@ describe('PlayerShell server-side hydration (ADR-160 AMENDMENT 2 D-160-AMD2-3)',
     // ep=2 → 不复用 initialSources（仅 ep=1 时复用）
     expect(calls.some((url) => url.includes('/sources?episode=2'))).toBe(true)
     searchParamsGet.mockReturnValue(null) // 复位
+  })
+
+  it('非 hydrated + 首次切集 → episode-switch effect 正常 fetch（Codex stop-time review 回归防御）', async () => {
+    // 场景：用户公开访问 watch 页（无 initialVideo / initialSources）→ useEffect 1 完成
+    // 后用户切到 ep=2 → episode-switch effect 应触发 sources fetch（修复前 ref 错误时序
+    // 会让首次切集被跳过；修复后 ref 在 useEffect 1 sources 处理完成后设 true，确保首次切集正常）
+    apiGetMock.mockImplementation((url: string) =>
+      url.includes('/sources')
+        ? Promise.resolve({ data: [MOCK_SOURCE] })
+        : Promise.resolve({ data: MOCK_VIDEO })
+    )
+    const { rerender } = render(<PlayerShell slug="test-aB3kR9x1" />)
+    // 等待初始 fetch 完成（video + sources 都拉过）
+    await waitFor(() => {
+      const calls = apiGetMock.mock.calls.map((c) => c[0] as string)
+      expect(calls.some((url) => url.includes('/sources?episode=1'))).toBe(true)
+    })
+    apiGetMock.mockClear()
+    // 模拟用户切集：改 store currentEpisode → rerender PlayerShell 触发 useEffect 2
+    mockState.currentEpisode = 2
+    rerender(<PlayerShell slug="test-aB3kR9x1" />)
+    // 首次切集不应被跳过 → 应看到 ep=2 的 sources fetch
+    await waitFor(() => {
+      const calls = apiGetMock.mock.calls.map((c) => c[0] as string)
+      expect(calls.some((url) => url.includes('/sources?episode=2'))).toBe(true)
+    })
   })
 })
