@@ -1978,7 +1978,7 @@ CHG-369 (前台主题选择器, 独立)
 
 ## [SEQ-20260528-MOD-WAVE3] server-next 内容审核台 Wave 3 — Wave 2 长尾清理 + 架构 / 长期 P3 卡（plan §14 Wave 3 + §17.2 Wave 3 增补）
 
-- **状态**：🚨 BLOCKER #2 暂停（6/10 完成 + 1 DEFERRED / 长尾 4/4 + 主线 2/6 / 待用户决策剩余 3 卡 BANGUMI-A / SITE-VIEWS-EXTRACT / ROUTE-LABEL-D 推进策略组合 X/Y/Z）
+- **状态**：🔄 进行中（7/10 完成 + 3 DEFERRED / 长尾 4/4 + 主线 3/6 ADR Accepted / 剩余 -A1 后端 + -A2 前端实施子卡）
 - **创建时间**：2026-05-28
 - **目标**：按用户 2026-05-28 决策"长尾先清 + plan §14 主线"：先清 4 张 Wave 2 长尾 follow-up，再按 plan §14 / §17.2 Wave 3 入 6 张 P3 长期主线卡。
 - **执行约束**：沿用 Wave 1/2 §16.1-16.5（UI/UX 谨慎 / docs/manual 同步 / 主循环全自动 + BLOCKER 触发清单）
@@ -1996,9 +1996,11 @@ CHG-369 (前台主题选择器, 独立)
 | 5 | ⛔ **CHG-SN-9-MOD-BUTTON-MIGRATE** DEFERRED（2026-05-28 / 用户决策方案 A）| plan §5 P2 / BTN_* → AdminButton 机械迁移 / 实测 38 tsx 文件 / 100+ raw button 远超 PATCH 5 软上限 / 独立 SEQ-FOLLOWUP-MIGRATE 长尾系列择期推进 / 非 Wave 3 节奏 | 否 | (deferred) |
 | 6 | ✅ **CHG-SN-9-REJECTED-ENHANCE-A** 已完成（2026-05-28 / 主循环 claude-sonnet-4-6 / 子代理 无）| plan §5 P2 拆 -A 分页 / useRejectedQueue.ts NEW 152 行（仿 usePendingQueue 精简 / page+limit + activeIdx near-end loadMore + sessionStorage 持久化 + length > 5 守卫修 spurious bug）+ RejectedTabContent 接入 hook + listHeader 升级 + 加载更多 UI / 3 业务 + 1 测试 + 1 i18n PATCH=5 严守 / 8/8 useRejectedQueue 测试 PASS / typecheck + lint + verify 全 EXIT=0（含 verify-style-shorthand-conflict 1 处 LOAD_MORE_BTN border 冲突修复）/ -B 视觉对齐留 follow-up | 否 | sonnet-4-6 |
 | 7 | ✅ **CHG-SN-9-PLAYER-ERROR** 已完成（2026-05-28 / 主循环 claude-sonnet-4-6 / 子代理 arch-reviewer (claude-opus-4-7) agentId a13a505e2bb192667）| plan §5 P3 / player-core onError + suppressDefaultErrorUI public API / Opus A- CONDITIONAL → 3 红线 R-N-1/-2/-3 全落 + 4 黄线 3 落 1 留 RETRY-CONTROL follow-up / 升 A / PATCH=5 严守 (types + Player + orchestration + overlay + sourceLoader 4 业务 + 1 测试) / 6/6 buildOverlayEntries 测试 PASS / typecheck + lint + verify 全 EXIT=0 / DEBT-FIX-D-ERROR API 端闭环 / ADR-108 兑现 / 消费方接入留 3 follow-up 卡（CONSUMER-A/B + RETRY-CONTROL）| 否（演进式接口扩展）| sonnet-4-6 + arch-reviewer (opus-4-7) |
-| 8 | ⬜ **CHG-SN-9-META-BANGUMI-A** 待开始 | plan §10.4.2 方案 A / Bangumi 实时 API 集成（BangumiService + secrets + ADR 起草 + 新依赖）| 是（新 ADR）| opus-4-7 + arch-reviewer |
-| 9 | ⬜ **CHG-SN-9-SITE-VIEWS-EXTRACT** 待开始 | plan §10.6 方案 C / 抽 `packages/site-views`（跨 app 重构 / 共享层沉淀 / 大型）| 是（架构 ADR）| opus-4-7 + arch-reviewer |
-| 10 | ⬜ **CHG-SN-9-ROUTE-LABEL-D** 待开始 | plan §17.2 Wave 3 / `users.preferences` schema + 跨设备主题同步 + 端点（schema migration + ADR）| 是（schema ADR）| opus-4-7 + arch-reviewer |
+| 8 | ⛔ **CHG-SN-9-META-BANGUMI-A** DEFERRED（2026-05-28 / 用户决策组合 X / 与 plan §13 "Bangumi 暂缓 / 留下一轮迭代" 一致）| plan §10.4.2 方案 A / Bangumi 实时 API 集成（BangumiService + secrets + ADR 起草 + 新依赖）/ 下次会话恢复入口 | 是（新 ADR）| (deferred) |
+| 9 | ⛔ **CHG-SN-9-SITE-VIEWS-EXTRACT** DEFERRED（2026-05-28 / 用户决策组合 X / 独立 SEQ-FOLLOWUP-ARCH 长尾架构系列择期推进 / 非 Wave 节奏）| plan §10.6 方案 C / 抽 `packages/site-views`（跨 app 重构 / 共享层沉淀 / 大型）/ CLAUDE.md §16.5 "跨 app 影响范围扩大" BLOCKER 触发已规避 | 是（架构 ADR）| (deferred) |
+| 10 | ✅ **CHG-SN-9-ROUTE-LABEL-D-ADR** 已完成（2026-05-28 / 主循环 claude-sonnet-4-6 / 子代理 arch-reviewer (claude-opus-4-7) agentId a6c323d228d26d12d）| plan §17.2 Wave 3 / `users.preferences` schema + 跨设备主题同步 + 端点 / ADR-165 起草 + Opus A- CONDITIONAL → 5 红线 + 4 P1 黄线 + 2 关键洞察全消化 → 升 Accepted / 1 docs PATCH=1 / 实施由 -A1（后端）+ -A2（前端）2 子卡承接 各 PATCH≤5 / 双红线触发 Subagents trailer | 是（ADR-165 ✅ Accepted）| sonnet-4-6 + arch-reviewer (opus-4-7) |
+| 10.1 | ⬜ **CHG-SN-9-ROUTE-LABEL-D-A1** 待开始 | ADR-165 §11 后端实施：Migration 080 + packages/types/src/user.types.ts 扩 + apps/api/src/db/queries/userPreferences.ts NEW + UserPreferencesService NEW + users.ts 2 端点 + 测试 / PATCH≤5 严守 | 否（ADR-165 已 Accepted）| sonnet-4-6 |
+| 10.2 | ⬜ **CHG-SN-9-ROUTE-LABEL-D-A2** 待开始 | ADR-165 §11 前端实施：useUserPreferencesSync NEW + route-theme-storage 改造 + RouteThemeSelector syncing + 测试 + docs/manual sync / PATCH≤5 严守 | 否（ADR-165 已 Accepted）| sonnet-4-6 |
 
 ### Wave 3 BLOCKER 触发清单（沿用 Wave 1/2 §16.5）
 
@@ -2016,7 +2018,13 @@ CHG-369 (前台主题选择器, 独立)
 
 ---
 
-### 🚨 BLOCKER #2（2026-05-28 / Wave 3 主循环再次暂停 / 等用户决策剩余 3 卡推进策略）
+### ✅ BLOCKER #2 已解除（2026-05-28 / 用户决策组合 X）
+
+**原 BLOCKER 触发**：Wave 3 剩余 3 卡 BANGUMI-A / SITE-VIEWS-EXTRACT / ROUTE-LABEL-D 推进策略待决策。
+**用户决策（2026-05-28）**：组合 X（推荐 / 务实）—— BANGUMI-A 跳过（与 plan §13 用户既有"暂缓"决策一致）+ SITE-VIEWS-EXTRACT DEFERRED（独立 SEQ-FOLLOWUP-ARCH 长尾架构系列）+ ROUTE-LABEL-D 推进（起 ADR + Opus 评审 + 实施）→ Wave 3 收官 7/10 + 2 DEFERRED + 1 MOD-BUTTON-MIGRATE DEFERRED（共 3 DEFERRED）。
+**主循环恢复**：从 CHG-SN-9-ROUTE-LABEL-D-ADR（ADR-165 起草卡 / Opus 评审）继续。
+
+### 🗃️ 原 BLOCKER #2 内容（归档 / 已决策）
 
 **触发位置**：Wave 3 SEQ-20260528-MOD-WAVE3 #8 CHG-SN-9-META-BANGUMI-A 启动前
 **触发原因**：剩余 3 卡（BANGUMI-A / SITE-VIEWS-EXTRACT / ROUTE-LABEL-D）需用户决策推进策略 + plan §13 已有相关决策线索

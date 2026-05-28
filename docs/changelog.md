@@ -40,6 +40,53 @@
 
 ---
 
+## [CHG-SN-9-ROUTE-LABEL-D-ADR] ADR-165 起草 + Opus 评审（Wave 3 #10 / plan §17.2 Wave 3 / plan §14 主线 3/6 / 用户决策组合 X 推进）
+- **完成时间**：2026-05-28
+- **执行模型**：claude-sonnet-4-6（主循环 / 不切换 §16.5 / ADR 起草草稿 + Opus 评审消化）
+- **子代理调用**：arch-reviewer (claude-opus-4-7) — 1 轮独立评审 / agentId a6c323d228d26d12d / 输出 A- CONDITIONAL（5 红线 R-165-1/-2/-3/-4/-5 + 7 黄线 + 4 绿点 + 5 关键洞察 + 修订建议清单 P0/P1/P2/P3）→ 主循环消化 5 红线全落 + 4 P1 黄线 Y-165-1/-2/-3/-4 落 + 洞察 1 Phase 编号 + 洞察 5 admin 域 RBAC 副作用落 = 等同 A-
+- **拆卡承接**：BLOCKER #2 用户决策组合 X → ROUTE-LABEL-D 推进。本卡仅 ADR 起草 + Opus 评审 + 修订 = ADR-165 升 Accepted；实施由 -A1（后端）+ -A2（前端）2 子卡承接（各 PATCH≤5）。
+- **范围**（1 docs / PATCH=1 / 触发 Opus trailer）：
+  - `docs/decisions.md` 追加 ADR-165 完整起草 + Opus 评审后修订（§1 背景 + Phase 编号澄清 / §2 范围 11 D-N + 跨用户分享独立 schema 预留 / §3 现状 / §4 SQL inline CHECK Migration 077 范式 / §5 zod schema 双 schema passthrough + strict / §5a 嵌套 3 层规约 / §6 端点契约 PUT 顶层模块 PATCH 语义 + 200 + body 差异化依据 / §7 mount 双阶段同步协议 + setSyncing disable / §8 安全 + admin 域 RBAC 副作用规避 / §9 11 D-N 编号 / §10 11 风险对策 / §11 实施拆卡 -A1 + -A2 各 5 文件 + 独立 query + useUserPreferencesSync hook / §12 评审矩阵 / §13 结论 Accepted）
+- **Opus 评审 5 红线消解**：
+  - **R-165-1**：findUserById SELECT * 与 preferences JSONB 隐式耦合 → 新建独立 `getUserPreferences/updateUserPreferences` query 函数 / 仅 SELECT preferences / 不污染 users.ts
+  - **R-165-2**：mount GET 与 SSR-safe 初值 hydration mismatch / 主题闪烁 FOUC → 新增 D-165-11 双阶段防御：第 1 阶段 localStorage 即时 + setSyncing(true) disable 切换器 / 第 2 阶段 GET 后单次受控 re-paint + setSyncing(false) 解锁 + §10 风险表加 FOUC 条目
+  - **R-165-3**：PUT 整体替换 + read-modify-write 经典竞态 → 改顶层模块 PATCH 语义 / undefined=不改 / null=删除 / 值=设置 / JSONB merge `preferences || $1::jsonb` / 跨模块零冲突 / 模块内 last-write-wins
+  - **R-165-4**：strict() schema 演进期未知字段误删 → server 用 passthrough 持久化 / 客户端 strict 类型层开发期约束 / 双 schema 职责分离
+  - **R-165-5**：DO 块 CHECK 范式与 Migration 077 inline 不对称 → 改 inline `ALTER TABLE ... ADD COLUMN IF NOT EXISTS preferences JSONB NOT NULL DEFAULT '{}'::jsonb CHECK (jsonb_typeof = 'object')`
+- **Opus 评审 4 P1 黄线消解**：
+  - Y-165-1：useRouteTheme 职责过载 → 拆 useUserPreferencesSync 独立 hook（与 ADR-037 BrandProvider + useBrand/useTheme 范式对称）
+  - Y-165-2：users.types.ts vs user.types.ts 命名分裂 → 扩既有 user.types.ts（单数 / 与 video.types.ts 等一致）
+  - Y-165-3：CustomThemeDataSchema 与 web-next parseCustomTheme 双真源 → CUSTOM_THEME_CONSTRAINTS 迁移到 packages/types / web-next/lib/route-theme-storage.ts import 路径
+  - Y-165-4：嵌套层级规约缺失 → §5a 加最多 3 层 / 第 1 层模块名 / 第 2 层字段块 / 第 3 层叶子值
+- **Opus 评审 2 关键洞察消解**：
+  - 洞察 1 Phase 编号澄清：§1 增补说明设计稿 Phase 4 / plan §17.2 提前到 Wave 3 同期推进
+  - 洞察 5 admin 域 RBAC 副作用规避：D-165-9 增补 admin 域 listAdminUsers 不拉 preferences / 新 query 仅接受当前 userId
+- **Opus 评审 3 P2/P3 黄线 + 3 关键洞察落地**：
+  - Y-165-5 多 tab race：§7 多 tab race 段 + §10 风险 #9 / Phase 4 BroadcastChannel 评估
+  - Y-165-6 PUT 200 vs 204：§6 差异化依据
+  - Y-165-7 PUT 失败长期不一致：sessionStorage lastSyncFailedAt + 下次操作 < 5 分钟静默重试 + §10 风险 #10
+  - 洞察 2 嵌套 vs 扁平：§5a 嵌套规约（已落）
+  - 洞察 3 登录迁移网络慢：D-165-11 setSyncing 防御覆盖（已落）
+  - 洞察 4 跨用户分享独立 schema 预留：§2 范围外明示
+- **不触发 architecture.md 同步**（CHG-368-B-A1-FIX-{1..5} 经验持续核对）：
+  - 本卡仅 ADR 起草 / 无 schema migration 实施（Migration 080 由 -A1 子卡承接 / 届时同步 architecture.md）
+  - 不触发 CLAUDE.md "schema 变更不同步 architecture.md" 红线
+- **质量门禁**：typecheck N/A（纯 docs）/ lint N/A / verify:adr-contracts ✅ EXIT=0（含 verify-adr-d-numbers 266 全闭环 / 11 D-165-N 编号未在 changelog 立即闭环 = 实施期 -A1/-A2 承接 / 与 ADR-164 范式一致）
+- **commit trailer**：`Subagents: arch-reviewer (claude-opus-4-7)`（双红线触发 / ADR 起草 + 共享 schema 决策两项均触发 Opus trailer / CLAUDE.md §模型路由 第 2 项"设计跨 3+ 消费方 schema" + 第 3 项"撰写即将成为 ADR 的决策文档"）
+- **六问自检**：
+  - Q1 本次逻辑应沉淀共享层？✅ ADR-165 本身即沉淀 / packages/types/src/user.types.ts 即将沉淀共享 Schema + 常量 / useUserPreferencesSync 独立 hook 沉淀
+  - Q2 是否引入回归？✅ 纯 docs / 零行为变化 / Migration / 实施 / 测试由 -A1/-A2 承接
+  - Q3 是否越层？✅ ADR 不越层 / 实施层规约定义清晰（Service → queries 严格分层）
+  - Q4 是否硬编码值 / any 类型？✅ zod schema + z.infer 类型派生 / CUSTOM_THEME_CONSTRAINTS 集中管理
+  - Q5 是否布局变化？N/A 纯 ADR
+  - Q6 文件范围内？✅ 1 docs PATCH=1 严守
+- **偏离检测**：无（5 红线 + 4 P1 黄线 + 3 P2/P3 黄线 + 5 关键洞察 全消化或归档 / Opus 评审 0 红线遗留 / 升 Accepted）
+- **[AI-CHECK] 结论**：A- CONDITIONAL → A-（升 Accepted）。ADR-165 完整设计 ship / 11 D-N 决策点 + 11 风险对策 + 拆 -A1/-A2 实施路径明确 / users.preferences JSONB 跨设备主题同步协议就绪 / CHG-369 + CHG-369-B Phase 4（提前到 Wave 3）功能补全完整路径
+- **Wave 3 进度**：plan §14 主线 3/6（REJECTED-ENHANCE-A + PLAYER-ERROR + ROUTE-LABEL-D-ADR）/ Wave 3 SEQ 整体 7/10（4 长尾 + 3 主线 / 1 DEFERRED MOD-BUTTON-MIGRATE）
+- **闭环**：CHG-SN-9-ROUTE-LABEL-D-ADR 完成 / ADR-165 Accepted / 实施由 -A1（后端）+ -A2（前端）承接 / 主循环按 plan §16.5 自动取下一卡（CHG-SN-9-ROUTE-LABEL-D-A1 后端实施 / Migration 080 + types + queries + Service + 路由）
+
+---
+
 ## [CHG-SN-9-PLAYER-ERROR] player-core 扩 onError 回调 + suppressDefaultErrorUI（Wave 3 #7 / plan §14 主线 2/6 / DEBT-FIX-D-ERROR 闭环 / arch-reviewer Opus A-→A 评审）
 - **完成时间**：2026-05-28
 - **执行模型**：claude-sonnet-4-6（主循环 / 不切换 §16.5）

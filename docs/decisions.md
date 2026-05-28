@@ -17484,3 +17484,359 @@ CHG-368-B 实施期必须在 docs/architecture.md 同步 §5 数据模型 source
 ADR-164 status 🟢 Accepted（2026-05-28 / arch-reviewer Opus 1 轮独立起草 + 自审 0 红线 / 5 黄线 / 4 advisory → 等同 A-）。`source_line_aliases` 表扩 4 字段（codename / priority / retired_at / auto_retired）+ 部分唯一索引 + CHECK 约束 + 3 新 admin 写端点（POST retire / PUT priority / GET codename-pool）+ R-MID-1 audit RETRO 7 文件框架触发（2 新 actionType）+ codename 字库 50 山名常量 + 90 天冷却期应用层判定 + 与 plan §10.5 worker 共用 `retired_at + auto_retired` 字段；5 黄线 + 4 advisory 由 CHG-368-B（拆 -A/-B/-C 子卡）实施承接；CHG-368-B-A 含 RETRO 7 文件 + 14 文件需再拆 -A1/-A2 严格 ≤5。
 
 ---
+
+## ADR-165 — ROUTE-LABEL-D：users.preferences 跨设备主题同步（CHG-SN-9-ROUTE-LABEL-D-ADR / Wave 3 #10）
+
+> status: 🟢 Accepted（2026-05-28 / arch-reviewer Opus A- CONDITIONAL → 主循环消化 5 红线全落 + Y-165-1/-2/-3/-4 落 + 洞察 1 + 洞察 5 落 = 等同 A-）
+> proposer: claude-sonnet-4-6（主循环 / 不切换 §16.5）
+> reviewer: arch-reviewer (claude-opus-4-7) — agentId a6c323d228d26d12d / 1 轮独立评审
+> related: ADR-164（Layer B / 与本 ADR 共用 schema 演进范式）/ ADR-159（双轨信号 / 与本 ADR 共用 JSONB 结构化字段范式）/ CHG-369 + CHG-369-B（本 ADR 前置工作 / 5 内置主题 + 自定义主题 + 双 key localStorage）
+> last_reviewed: 2026-05-28
+
+### §1 背景与动机
+
+CHG-369（2026-05-27 ship / commit b54388f8）落地 5 内置主题（节气 / NATO / 数字 / Planets / Colors）+ localStorage 持久化（`resovo:route-theme`）+ SSR 安全。CHG-369-B（2026-05-28 ship / commit 1e1fb61f）落地自定义主题输入（双 key 存储 / `resovo:route-theme:custom` JSON + CustomThemeDialog 表单 + parseCustomTheme schema 校验）。
+
+设计稿 `docs/designs/route-labeling-system.md` 行 278 明示演进路径："**进阶（后期可选）**：登录用户的自定义主题同步至 `users.preferences` JSON 字段，跨设备生效"。docs/manual/route-labeling.md §8.4a + §8.7 多处标 "跨设备同步：本期未实装（→ Wave 3 ROUTE-LABEL-D / users.preferences）"。
+
+**Phase 编号澄清（Opus 评审洞察 1 / 2026-05-28）**：设计稿 §Layer C 行 322-324 把"users.preferences 跨设备同步"归为 **Phase 4 / 可选 / 后期**；设计稿的 Phase 3 实际是 codename / priority / retired_at（ADR-164 / 已 ship）。plan §17.2 Wave 3 增补把设计稿"Phase 4 跨设备同步"提前到 Wave 3 同期推进 / 与 plan §14 Wave 3 长期 P3 节奏一致 / 本 ADR 沿用 plan §17.2 "Wave 3" 称呼但显式标注实际为设计稿 Phase 4 提前。
+
+本 ADR 决策 Phase 4（提前到 Wave 3）跨设备同步落地：登录用户的 `themeId` + `customTheme` 通过 `users.preferences` JSONB 字段在 PC / 手机 / 平板等多设备间保持一致；未登录用户仅 localStorage 单设备持久化（与 CHG-369 + CHG-369-B 完全兼容 / 零回归）。
+
+### §2 决策范围
+
+本 ADR 覆盖 11 决策点（D-165-1 ~ D-165-11 / 详 §9）：
+- D-165-1 schema（Migration 077 inline 范式 / R-165-5）
+- D-165-2 preferences shape（嵌套 + server passthrough + 客户端 strict 双 schema / R-165-4 + Y-165-2 + Y-165-3）
+- D-165-2a 嵌套层级规约（最多 3 层 / Y-165-4）
+- D-165-3 端点契约（preHandler auth / PUT 200 + body / Y-165-6）
+- D-165-4 同步协议（mount 双阶段 GET + debounce 500ms PUT / 未登录仅 localStorage）
+- D-165-5 登录迁移（server 空 → localStorage 迁移 / 非空 → server 优先 / R-165-2 受控 re-paint）
+- D-165-6 未登录态降级（CHG-369 + CHG-369-B 零回归）
+- D-165-7 顶层模块 PATCH + 模块内 last-write-wins（R-165-3）
+- D-165-8 错误处理 + sessionStorage lastSyncFailedAt 静默重试（Y-165-7）
+- D-165-9 CLAUDE.md "未登录访问 users 表" 红线规避 + admin 域 RBAC 副作用规避（洞察 5）
+- D-165-10 D-N 编号闭环
+- D-165-11 hydration mismatch 防御 / setSyncing disable 切换器（R-165-2 新增）
+
+不在本 ADR 范围（→ 独立 follow-up ADR / 卡片）：
+- 跨用户偏好分享（**洞察 4 强调：分享场景必须独立 schema / shared_custom_themes 表 / 不得通过 preferences 字段间接实现**）/ 收藏 / 历史（已有 watch_history 表 / 不掺合）
+- preferences 加密 / DLP（当前 routeTheme 无 PII）
+- preferences 版本控制 + 字段迁移（Phase 4 字段数 ≥ 3 个时评估加 `version: number`）
+- 离线同步队列 / 冲突解决（顶层 PATCH 语义跨模块零冲突已足够 Phase 3）
+- BroadcastChannel 跨 tab 协议（Phase 4 评估 / Y-165-5）
+- admin 域读其他用户 preferences（独立 ADR 评估隐私边界 / 洞察 5）
+
+### §3 现状
+
+- **users 表 schema**（Migration 001 + 067 role_changed_at + 068 display_name）：无 preferences 字段
+- **users.ts queries**：findUserById / findUserByEmail / 等 CRUD（无 preferences 相关）
+- **路由模式**：apps/api/src/routes/users.ts 用 `fastify.get('/users/me', { preHandler: [fastify.authenticate] })` 已有用户私有路径范式
+- **错误格式**：`{ error: { code, message, status } }` JSON 嵌套（与 ADR-104/-110 既有 14 码模板表延续）
+- **Migration 最新编号**：079（next: 080）
+- **CHG-369-B 双 key localStorage**：`resovo:route-theme` 存 themeId / `resovo:route-theme:custom` 存 CustomThemeData JSON
+- **useRouteTheme hook**：mount 时读 localStorage / setTheme / setCustomTheme / clearCustomTheme（apps/web-next/src/lib/route-theme-storage.ts）
+
+### §4 SQL 草案（Migration 080 / R-165-5 修订：与 Migration 077 inline CHECK 范式对齐）
+
+```sql
+-- 080_users_preferences.sql
+-- 描述：users 表加 preferences JSONB 字段（ADR-165 跨设备主题同步）
+-- 日期：2026-05-28
+-- 幂等：是（IF NOT EXISTS）
+-- 索引设计 4 步核验（db-rules.md §"索引设计 4 步核验"）：
+--   1. 索引键：N/A（不加索引 / 应用层按 users.id PK 命中 / 单行 lookup）
+--   2. 部分索引 WHERE：N/A
+--   3. 候选 driving 谓词：GET /users/me/preferences 走 `WHERE id = $1` PK / 已有 users_pkey
+--   4. 匹配判定：PK 完整覆盖 / 不需新索引（实测留 EXPLAIN ANALYZE）
+
+-- R-165-5 修订：inline ADD COLUMN ... CHECK（与 Migration 077 meta_quality 范式对齐 / 简洁幂等）
+ALTER TABLE users
+  ADD COLUMN IF NOT EXISTS preferences JSONB NOT NULL DEFAULT '{}'::jsonb
+    CHECK (jsonb_typeof(preferences) = 'object');
+
+-- DO 块验证：列存在 + CHECK 约束存在
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'users' AND column_name = 'preferences'
+  ) THEN
+    RAISE EXCEPTION 'Migration 080 failed: users.preferences column not created';
+  END IF;
+END$$;
+
+-- ROLLBACK SQL（向后兼容性 / 应用层降级到 localStorage）：
+-- ALTER TABLE users DROP COLUMN IF EXISTS preferences;
+-- （CHECK 约束随列一起删除 / 不需独立 DROP）
+```
+
+**与 ADR-159 + ADR-163 + ADR-164 + Migration 077 JSONB 字段范式对齐**（R-165-5）：DEFAULT '{}'::jsonb + inline jsonb_typeof CHECK + 不强制 schema（应用层 zod 校验）。Migration 077 行 25-26 范式：`ADD COLUMN IF NOT EXISTS meta_quality JSONB NOT NULL DEFAULT '{}'::jsonb CHECK (jsonb_typeof(meta_quality) = 'object')`，本 ADR 完全同构。
+
+### §5 preferences shape（应用层 zod schema / R-165-4 + Y-165-2 + Y-165-3 修订）
+
+**文件位置（Y-165-2 修订）**：扩**既有** `packages/types/src/user.types.ts`（单数 / 与既有 video.types.ts / banner.types.ts 命名一致），**不**新建 users.types.ts。User interface 加可选 `preferences?: UserPreferences`（与 displayName?: string | null 同范式）。
+
+**约束常量真源（Y-165-3 修订）**：CHG-369-B 已在 `apps/web-next/src/lib/route-theme-storage.ts:41-47` 定义 `CUSTOM_THEME_CONSTRAINTS`。本 ADR 实施期把该常量**迁移到 packages/types/src/user.types.ts**（共享层），web-next/lib/route-theme-storage.ts 改 import 路径（防双真源）。
+
+```ts
+// packages/types/src/user.types.ts（扩既有文件）
+import { z } from 'zod'
+
+// CHG-369-B 迁移过来（原 web-next/lib/route-theme-storage.ts）
+export const CUSTOM_THEME_CONSTRAINTS = {
+  displayNameMaxChars: 10,
+  labelMaxChars: 10,
+  labelsMinCount: 1,
+  labelsMaxCount: 30,
+  deadLabelMaxChars: 10,
+} as const
+
+const C = CUSTOM_THEME_CONSTRAINTS
+
+export const CustomThemeDataSchema = z.object({
+  displayName: z.string().trim().min(1).max(C.displayNameMaxChars),
+  labels: z.array(z.string().trim().min(1).max(C.labelMaxChars))
+    .min(C.labelsMinCount).max(C.labelsMaxCount),
+  deadLabel: z.string().trim().min(1).max(C.deadLabelMaxChars).optional(),
+})
+
+export const RouteThemePreferenceSchema = z.object({
+  themeId: z.string().min(1),  // 'jie_qi' | 'nato' | 'numbers' | 'planets' | 'colors' | 'custom'
+  customTheme: CustomThemeDataSchema.optional(),  // 仅 themeId='custom' 时携带
+})
+
+// R-165-4 修订：双 schema 区分类型契约 vs 持久化契约
+// - UserPreferencesSchema（passthrough）：server 持久化路径 / 未知字段保留（防 Phase 4 加字段时旧客户端误删 server 已有数据）
+// - UserPreferencesStrictSchema（strict）：客户端类型层开发期约束 / 拒绝拼写错误
+export const UserPreferencesSchema = z.object({
+  routeTheme: RouteThemePreferenceSchema.optional(),
+  // 未来扩字段：playerSettings? / homeLayout? / 等
+}).passthrough()  // server 持久化 / 旧客户端不删未知字段
+
+export const UserPreferencesStrictSchema = UserPreferencesSchema.strict()  // 客户端类型层
+
+export type UserPreferences = z.infer<typeof UserPreferencesSchema>
+export type RouteThemePreference = z.infer<typeof RouteThemePreferenceSchema>
+export type CustomThemeData = z.infer<typeof CustomThemeDataSchema>
+```
+
+**字段约束严格性来源**：CHG-369-B CUSTOM_THEME_CONSTRAINTS（迁移到 packages/types）+ docs/designs/route-labeling-system.md §Layer C 设计稿约束。
+
+### §5a preferences shape 嵌套层级规约（Y-165-4 新增）
+
+为避免未来字段膨胀时嵌套层级失控，规定：
+
+- **第 1 层 = 模块名**：`routeTheme` / `playerSettings` / `homeLayout` 等 / 每个模块独立同步策略
+- **第 2 层 = 模块内可独立同步的字段块**：如 routeTheme 下的 themeId / customTheme
+- **第 3 层 = 字段本身**（叶子值或紧凑对象）：如 customTheme 内的 displayName / labels / deadLabel
+- **最多 3 层**：超过 3 层必须独立 Schema + 独立同步策略（独立 ADR 评估 / 独立 zod schema 顶层）
+- **顶层模块加字段** = 兼容（passthrough 防误删）
+- **既有模块内字段变更** = 破坏性变更（需独立 ADR 评估 + 兼容期）
+
+### §6 端点契约（R7 MUST-8 6 列范式 / R-165-3 修订：字段级 PATCH 语义）
+
+| 列 | GET /users/me/preferences | PUT /users/me/preferences |
+|---|---|---|
+| 鉴权 | preHandler: [fastify.authenticate] | preHandler: [fastify.authenticate] |
+| 请求 | （空） | Body: 部分 UserPreferences（顶层模块级 PATCH） |
+| 响应 200 | `{ data: UserPreferences }` | `{ data: UserPreferences }`（返回 merge 后完整最新值 / 便于消费方刷新 state） |
+| 错误码 | 401（INVALID_TOKEN）/ 404（NOT_FOUND）| 401 / 404 / 422（VALIDATION_ERROR）|
+| 幂等 | 是（纯 GET）| 是（同 body 重复 PUT 结果一致）|
+| 副作用 | 无 | UPDATE users.preferences（顶层 key JSONB merge） |
+
+**PUT body 设计：顶层模块级 PATCH（R-165-3 方案 A）**：
+
+放弃原"整体替换 + 客户端 read-modify-write"方案（read-modify-write 经典竞态：tab1 改 routeTheme + tab2 改 playerSettings → 后 PUT 覆盖前 PUT）。改为**顶层模块级 PATCH**：
+
+- body shape：`{ routeTheme?: RouteThemePreference | null }`（未来扩 `{ playerSettings?: ... | null }`）
+- **undefined** = 不改该字段
+- **null** = 清除该字段（从 server preferences 中删除该顶层 key）
+- **值** = 设置该字段（完整覆盖该顶层 key 内容）
+- SQL 用 JSONB merge：`UPDATE users SET preferences = preferences || $1::jsonb WHERE id = $2`（仅传入的顶层 key 被合并）
+- 删除字段：`UPDATE users SET preferences = preferences - 'routeTheme' WHERE id = $1`
+
+**优势 vs 既有 updateUserProfile 范式对称**（users.ts:255-289 用相同"仅传入字段才更新"语义）：
+- 客户端无需 read-modify-write
+- tab1 改 routeTheme 与 tab2 改 playerSettings 互不影响（JSONB merge 顶层 key 不冲突）
+- last-write-wins 仅限同一顶层 key 内（D-165-7 缩窄到模块内 / 跨模块零冲突）
+
+**错误码（ADR-110 既有 14 码无新增 / 复用）**：
+- 401 INVALID_TOKEN — 既有 / 未登录 / token 失效
+- 404 NOT_FOUND — user.deleted_at IS NOT NULL（极少触发 / 鉴权后理论上 user 存在）
+- 422 VALIDATION_ERROR — body zod 校验失败 / 复用既有 message "参数错误"
+
+**`/v1/` 前缀**：apps/api/src/routes/users.ts 既有路径 `/users/me/*` 不带 v1 前缀（与 ADR-012 一致）。本 ADR 沿用相同前缀模式 `/users/me/preferences`。
+
+**响应 200 + 完整 body 选择依据（Y-165-6 修订）**：与既有 POST /users/me/history 返 204 范式有别。本 ADR 选 200 + body 因：① 主题切换用户立即可感知 / 需 server 权威值刷新前端 state ② 跨设备同步场景需 server 权威 ③ 防客户端 stale 显示。POST /users/me/history 返 204 因纯写入 / 消费方不需立即刷新。两种范式差异化设计合理。
+
+### §7 同步协议（流程图 / R-165-2 + D-165-11 修订：mount hydration mismatch 防御）
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ 场景 A: 用户未登录（CHG-369 + CHG-369-B 既有行为完全不变）  │
+├─────────────────────────────────────────────────────────────┤
+│ useRouteTheme mount → 读 localStorage → 应用                │
+│ setTheme(t) → setState + 写 localStorage                    │
+│ setCustomTheme(d) → setState + 写双 key localStorage        │
+│ （无任何 API 调用 / 零网络依赖）                            │
+└─────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────┐
+│ 场景 B: 用户已登录（ADR-165 新增 / R-165-2 hydration 修订） │
+├─────────────────────────────────────────────────────────────┤
+│ Step 1 mount 同步（R-165-2 hydration mismatch 防御）:       │
+│   useRouteTheme mount:                                      │
+│     第 1 阶段 (即时 / SSR-safe):                            │
+│       → 读 localStorage → setState (本地立即应用)           │
+│       → setSyncing(true) (RouteThemeSelector disable 切换器)│
+│     第 2 阶段 (异步 / mount 后 effect):                     │
+│       → GET /users/me/preferences                           │
+│       → 200 + routeTheme 非空:                              │
+│           if (server.themeId !== local.themeId               │
+│               || server.customTheme !== local.customTheme): │
+│             setState (server 优先 / 单次受控 re-paint)      │
+│             write localStorage (双 key 同步)                │
+│           else: 一致 / 不 re-paint                          │
+│       → 200 + routeTheme 空 (D-165-5 登录迁移):             │
+│           if (local 有 themeId): PUT 把 local 迁移到 server │
+│             (仅首次 / server 已有则不覆盖)                  │
+│       → 失败 / 401 / 网络错: 仅 localStorage / 静默         │
+│       → 完成 / setSyncing(false) (解锁切换器)               │
+│                                                              │
+│ Step 2 用户操作（仅 syncing=false 时切换器可点）:           │
+│   setTheme(t):                                              │
+│     setState + 写 localStorage（即时 / 不等 server）        │
+│     debounce 500ms → PUT { routeTheme: { themeId } }        │
+│   setCustomTheme(d):                                        │
+│     setState + 写双 key localStorage（即时）                │
+│     debounce 500ms → PUT { routeTheme: { themeId, custom } }│
+│   clearCustomTheme:                                         │
+│     setState + 清 localStorage（即时）                      │
+│     debounce 500ms → PUT { routeTheme: { themeId } }        │
+│       (themeId 回 default / customTheme 字段省略 = 删除)    │
+│                                                              │
+│ Step 3 网络失败处理（D-165-8 增补）:                        │
+│   PUT 失败 → 静默（localStorage 已成功）                    │
+│   → 写 sessionStorage `lastSyncFailedAt` 时间戳             │
+│   → 下次 setTheme/setCustomTheme 时检测 < 5 分钟 → 静默重试│
+│   → 不显示 toast（防干扰 / 与 CHG-369 设计取舍一致）        │
+└─────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────┐
+│ 场景 C: 跨设备同步（PC 改 → 手机自动应用）                  │
+├─────────────────────────────────────────────────────────────┤
+│ PC: setTheme('nato') → debounce 500ms → PUT { routeTheme }  │
+│ 手机: 用户刷新 / 重新打开 → useRouteTheme mount             │
+│   → Step 1 第 2 阶段 → GET preferences                      │
+│   → routeTheme.themeId='nato' !== local 'jie_qi' → 切      │
+│   → 单次 re-paint + 切换器在 syncing 期 disable             │
+│ （手机不主动 polling / 仅 mount 时拉 / 简化协议）           │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**debounce 500ms 设计依据**：
+- 用户快速切换主题（如对比 5 内置主题）→ 500ms 内不触发多次 PUT
+- 太短（< 200ms）→ 高频 PUT 浪费带宽 + 数据库写
+- 太长（> 1s）→ 用户体感"同步慢"
+- 500ms 与既有 web-next CHG-350 search 300ms 同范式（user input 防抖）
+
+**多 tab race（Y-165-5 增补 / §10 风险 #8 详）**：
+- 单 tab：useRef 持 timer / clearTimeout 覆盖（已设计）
+- 多 tab：每 tab 独立 debounce 队列 + 顶层 PATCH 语义（仅同一顶层 key 才冲突）+ last-write-wins 兜底
+- Phase 4 evaluation：BroadcastChannel API 跨 tab 同步触发 PUT（与 ADR-037 brand 同范式）/ 当前 v1 不引入
+
+### §8 安全 + 隐私
+
+- **RBAC**：所有路径 `preHandler: [fastify.authenticate]` 强制登录 / Service 层 `userId = request.user.userId` 直接用 JWT 解析的 userId（不接受 body userId 防 IDOR）
+- **PII 风险**：当前 routeTheme 仅含 themeId（枚举值）+ customTheme（用户给的主题名 + 标签）/ 无 PII / 无敏感字段 / 不需加密
+- **JSONB CHECK**：`jsonb_typeof = 'object'` 防 NULL / 数组 / 标量污染
+- **应用层 zod 双 schema 校验（R-165-4）**：server 用 UserPreferencesSchema (passthrough) 持久化 / 客户端 UserPreferencesStrictSchema (strict) 类型层开发期约束 / 两者职责分离
+- **CLAUDE.md "未登录请求路径访问 users 表" 红线**：本 ADR 端点全部 `preHandler: auth` / 不在 admin/* 域 / 不绕过鉴权 / **零违反**
+- **admin 域 RBAC 副作用规避（Opus 评审洞察 5）**：新增 query `getUserPreferences / updateUserPreferences` **仅接受当前请求 userId** / 不暴露 admin 全量列表 / admin 域 listAdminUsers 等仍按既有显式列清单 SELECT（不拉 preferences）/ admin 域如需读 preferences 必须独立起 ADR + 评估隐私边界
+
+### §9 D-N 偏离编号
+
+- **D-165-1** schema：users + preferences JSONB / 不加新索引（PK 覆盖足够）/ Migration 077 inline CHECK 范式（R-165-5 修订）
+- **D-165-2** preferences shape：`{ routeTheme?: { themeId, customTheme? } }` 嵌套 + 顶层模块扁平兄弟字段未来扩 / **server passthrough + 客户端 strict 双 schema**（R-165-4 修订）/ 文件位置扩既有 user.types.ts（Y-165-2 修订）
+- **D-165-2a** 嵌套层级规约：最多 3 层 / 第 1 层模块名 / 第 2 层字段块 / 第 3 层叶子值（§5a / Y-165-4 新增）
+- **D-165-3** 端点：GET / PUT `/users/me/preferences` / `preHandler: [fastify.authenticate]` / PUT 200 + 完整 body（Y-165-6 差异化依据）
+- **D-165-4** 同步协议：mount 时 GET / setTheme/setCustomTheme 时 debounce 500ms PUT / 未登录仅 localStorage
+- **D-165-5** 登录迁移：首次登录后 server 空 → localStorage 优先 PUT 到 server / server 非空 → server 优先 + 客户端比对后单次受控 re-paint（R-165-2 修订）
+- **D-165-6** 未登录态降级：CHG-369 + CHG-369-B 既有 localStorage 路径完全保留 / 零回归
+- **D-165-7** 并发：**顶层模块 PATCH 语义 + 模块内 last-write-wins**（R-165-3 修订 / 不引入版本号 / Phase 4 评估）
+- **D-165-8** 错误处理：网络 / 401 / 422 全降级 localStorage / 不显示 toast / sessionStorage `lastSyncFailedAt` 时间戳 + 下次操作时静默重试（Y-165-7 增补）
+- **D-165-9** CLAUDE.md "未登录请求路径访问 users 表" 红线规避：preHandler auth 强制 + admin 域 RBAC 副作用规避（洞察 5 增补）
+- **D-165-10** D-N 偏离编号闭环：实施期 changelog 同步关闭
+- **D-165-11** hydration mismatch 防御（R-165-2 新增）：mount 第 1 阶段读 localStorage 即时应用 + setSyncing(true) disable 切换器 / 第 2 阶段 GET server 完成后 setSyncing(false) 解锁 / server 与 local 不一致时单次受控 re-paint + 写双 key localStorage 同步
+
+### §10 风险与对策（Opus 评审后增补 / R-165-2 + R-165-4 + 洞察 5 + Y-165-5/-6/-7 修订）
+
+| 风险 | 影响 | 概率 | 对策 |
+|---|---|---|---|
+| **CLAUDE.md 未登录访问 users 表红线** | 高 | 低 | preHandler: auth 强制 + Service 层断言 + verify-endpoint-adr 脚本核验 |
+| **跨设备 last-write-wins 数据覆盖** | 中 | 低（缩窄 / R-165-3） | 顶层模块 PATCH 语义 → 跨模块零冲突 / 模块内 last-write-wins / Phase 4 评估加 updated_at + If-Match 头 |
+| **debounce 500ms 内多次 PUT 排队** | 低 | 低 | 客户端 useRef 持有 timer / 新操作 clearTimeout 覆盖 / 仅最后一次 fire |
+| **localStorage 与 server 不一致（旧设备 / 跨设备 stale）** | 低 | 中 | 每次 mount 第 2 阶段 GET / D-165-11 比对后单次受控 re-paint + 双 key localStorage 同步 |
+| **JSONB 演进破坏旧客户端（R-165-4 修订）** | 高 → 低 | 低 | server 用 passthrough 持久化（旧客户端不删未知字段）/ 客户端 strict 类型层 / Phase 4 评估加版本字段 |
+| **登录迁移协议覆盖 server 已有值** | 中 | 低 | D-165-5 明示：server 空时才迁移 / server 非空 → server 优先 |
+| **PUT 整体替换误删未知字段** | 高 → **消除（R-165-3）** | — | **R-165-3 修订：PUT 改顶层模块 PATCH 语义 / undefined=不改 / null=删除 / 值=设置 / JSONB merge 保留其他模块** |
+| **mount hydration mismatch / FOUC（R-165-2 新增）** | 中 | 中 | D-165-11 防御：第 1 阶段 localStorage 即时 + setSyncing disable 切换器 / 第 2 阶段 GET 完成后单次 re-paint + 解锁 |
+| **多 tab 并发 PUT 时序竞态（Y-165-5 增补）** | 中 | 低 | 顶层 PATCH 语义跨模块零冲突 / 同模块 last-write-wins / Phase 4 评估 BroadcastChannel 跨 tab 协议 |
+| **PUT 失败长期不一致 / 用户感知缺失（Y-165-7 增补）** | 中 | 中 | sessionStorage `lastSyncFailedAt` 时间戳 / 下次操作时 < 5 分钟 → 静默重试 / Phase 4 评估 sync status indicator |
+| **admin 域 RBAC 副作用泄露其他用户 preferences（洞察 5 新增）** | 中 | 低 | 新 query 仅接受当前 userId / admin 域 listAdminUsers 不拉 preferences / 需求出现时独立 ADR 评估 |
+
+### §11 实施拆卡建议（CHG-SN-9-ROUTE-LABEL-D-A / R-165-1 + Y-165-1 + Y-165-3 修订）
+
+**R-165-1 修订**：新增独立 query 函数 `getUserPreferences(db, userId)` 仅 `SELECT preferences FROM users WHERE id = $1 AND deleted_at IS NULL`（不复用 findUserById 防 SELECT * 拉 JSONB 性能债）。`updateUserPreferences(db, userId, patch)` 接受顶层 PATCH 对象 + 用 `preferences || $1::jsonb` JSONB merge SQL。
+**Y-165-1 修订**：拆 `useUserPreferencesSync(isLoggedIn, sectionKey, localValue, onRemoteValue)` 独立 hook / 负责 mount GET / debounce PUT / 错误降级。`useRouteTheme` 仅调用此 hook 接口 / 不感知网络层（与 ADR-037 BrandProvider + useBrand/useTheme 双 hook 拆分范式对称）。
+**Y-165-3 修订**：CUSTOM_THEME_CONSTRAINTS 迁移到 packages/types/src/user.types.ts（共享层）/ web-next/lib/route-theme-storage.ts 改 import 路径（防双真源）。
+
+**实施期范围（拟拆 -A1 后端 / -A2 前端 / 各 ≤ 5 PATCH）**：
+
+**CHG-SN-9-ROUTE-LABEL-D-A1（后端数据 + 路由 / PATCH≤5）**：
+1. **Migration 080**：users.preferences JSONB inline CHECK（与 077 范式对齐）
+2. **packages/types/src/user.types.ts**（扩既有）：CUSTOM_THEME_CONSTRAINTS（迁移）+ CustomThemeDataSchema + RouteThemePreferenceSchema + UserPreferencesSchema (passthrough) + UserPreferencesStrictSchema + 类型导出 + User interface 加 preferences?: UserPreferences
+3. **apps/api/src/db/queries/userPreferences.ts** NEW：getUserPreferences + updateUserPreferences（独立 query 文件 / 不污染 users.ts）
+4. **apps/api/src/services/UserPreferencesService.ts** NEW：业务层 zod 校验 + 调 queries
+5. **apps/api/src/routes/users.ts** + 测试：扩 2 端点（GET / PUT `/users/me/preferences`）+ 单元测试
+
+**CHG-SN-9-ROUTE-LABEL-D-A2（前端集成 / PATCH≤5）**：
+1. **apps/web-next/src/lib/use-user-preferences-sync.ts** NEW（Y-165-1 / 独立 hook）：mount GET + debounce PUT + 错误降级 + sessionStorage lastSyncFailedAt
+2. **apps/web-next/src/lib/route-theme-storage.ts** 改造：useRouteTheme 调用 useUserPreferencesSync / CUSTOM_THEME_CONSTRAINTS import packages/types（Y-165-3 / 删本地常量）
+3. **apps/web-next/src/components/player/RouteThemeSelector.tsx**：syncing 状态 disable 切换器（R-165-2 / D-165-11）
+4. **tests/unit/web-next/use-user-preferences-sync.test.ts** NEW：hook 行为测试
+5. **docs/manual/route-labeling.md** §8.4a + §8.7 升级"未实装" → "已 ship Wave 3 / 跨设备同步协议详 ADR-165 §7"
+
+### §12 评审矩阵预填（待 arch-reviewer Opus 评审）
+
+| 维度 | 自审结论（待 Opus 复核） |
+|---|---|
+| **命名** | preferences vs userPreferences vs settings / routeTheme 嵌套 vs 扁平 / 路径 /users/me/preferences vs /user/preferences |
+| **对称性** | 与 ADR-159 / -163 / -164 JSONB 字段范式对齐 / 与 ADR-012 users 路径前缀对齐 |
+| **状态职责** | 同步协议 client-driven vs server-driven / debounce 时机 / 迁移协议幂等性 |
+| **扩展性** | strict() vs passthrough() / Phase 4 版本控制 / 跨用户分享预留 |
+| **安全** | preHandler auth 强制 / PII 评估 / JSONB CHECK / zod strict |
+
+### §13 结论（Opus 评审后修订）
+
+ADR-165 status 🟢 **Accepted**（2026-05-28 / arch-reviewer Opus A- CONDITIONAL 1 轮独立评审 → 主循环消化全部 5 红线 R-165-1/-2/-3/-4/-5 + 4 P1 黄线 Y-165-1/-2/-3/-4 + 洞察 1 Phase 编号 + 洞察 5 admin 域 RBAC 副作用 = 等同 A-）。
+
+**核心契约**：
+- `users.preferences` JSONB inline CHECK（Migration 080 / R-165-5 与 077 范式对齐）
+- 2 端点 GET / PUT `/users/me/preferences`（preHandler auth 强制 / 顶层模块 PATCH 语义 R-165-3）
+- mount 双阶段同步协议 + setSyncing disable 切换器 防 FOUC（R-165-2 / D-165-11）
+- server passthrough + 客户端 strict 双 zod schema（R-165-4 / 防演进期未知字段误删）
+- 独立 query 函数 getUserPreferences / updateUserPreferences（R-165-1 / 不复用 findUserById SELECT *）
+- useUserPreferencesSync 独立 hook 与 useRouteTheme 拆分（Y-165-1 / 与 ADR-037 范式对称）
+- CUSTOM_THEME_CONSTRAINTS 真源迁移 packages/types（Y-165-3 / 防双真源）
+
+**实施承接**：CHG-SN-9-ROUTE-LABEL-D-A1（后端 / PATCH≤5）+ CHG-SN-9-ROUTE-LABEL-D-A2（前端 / PATCH≤5）2 子卡 / 共 10 文件改动。
+
+**11 风险**：CLAUDE.md "未登录访问 users 表" 红线 / 跨设备 last-write-wins / debounce / localStorage stale / 演进期破坏 / 登录迁移覆盖 / PUT 误删未知字段（消除）/ FOUC（新）/ 多 tab race（新）/ PUT 失败长期不一致（新）/ admin 域 RBAC 副作用（新）= 全部对策。
+
+**Opus 评审 7 P2/P3 黄线**（Y-165-5/-6/-7 + 洞察 4 / 跨用户分享）：本 ADR 已落 Y-165-5/-6/-7（§7/§10）/ 洞察 4 跨用户分享独立 schema 预留（§2 范围外明示"分享场景必须独立 schema 不得通过 preferences 间接实现"），未塞冗余设计 / 留 Phase 4 / Phase 5 演进。
+
+**0 红线 / 0 P1 黄线 / 0 关键洞察 遗留** → 升 Accepted / 实施期开始。
+
+---

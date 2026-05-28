@@ -6,33 +6,24 @@
 
 ## 进行中任务
 
-（空 / Wave 3 主循环 BLOCKER #2 暂停 / 详 task-queue.md 尾部 🚨 BLOCKER #2 段）
+（空 / Wave 3 ROUTE-LABEL-D-ADR 闭环 / 下一卡 -A1 后端实施待启动）
 
 ---
 
-## 🚨 BLOCKER #2 暂停（2026-05-28）
+## Wave 3 状态（SEQ-20260528-MOD-WAVE3 / 🔄 进行中 = 70% / 7/10 + 1 DEFERRED + 2 DEFERRED 组合 X）
 
-Wave 3 主线 2/6 后剩余 3 卡（CHG-SN-9-META-BANGUMI-A / SITE-VIEWS-EXTRACT / ROUTE-LABEL-D）需用户决策推进策略：
+- ✅ **PRE-INDEX-DESIGN-RULES**（2026-05-28 / sonnet-4-6 / 纯 docs / 4 步核验 + 双 invariant + 四级范式沉淀 db-rules.md）
+- ✅ **CHG-369-B**（2026-05-28 / sonnet-4-6 / 5+1 / CustomThemeDialog NEW + 双 key localStorage）
+- ✅ **CHG-368-B-FOLLOWUP-CONTENT-SOURCE-ROW**（2026-05-28 / sonnet-4-6 / 3 / listAdminSources JOIN + ContentSourceRow 扩）
+- ✅ **CHG-368-B-FOLLOWUP-AUTO-RETIRED-LABEL**（2026-05-28 / sonnet-4-6 + Opus 4-7 / 6 接受完成度风险 / ADR-164 D-164-8 UI 兑现）
+- ⛔ **CHG-SN-9-MOD-BUTTON-MIGRATE** DEFERRED（2026-05-28 / 用户决策方案 A / 独立 SEQ-FOLLOWUP-MIGRATE）
+- ✅ **CHG-SN-9-REJECTED-ENHANCE-A**（2026-05-28 / sonnet-4-6 / 5 / useRejectedQueue hook + 分页）
+- ✅ **CHG-SN-9-PLAYER-ERROR**（2026-05-28 / sonnet-4-6 + Opus 4-7 / 5 / player-core onError + suppressDefaultErrorUI public API）
+- ⛔ **CHG-SN-9-META-BANGUMI-A** DEFERRED（2026-05-28 / 用户决策组合 X / plan §13 既有"Bangumi 暂缓"一致）
+- ⛔ **CHG-SN-9-SITE-VIEWS-EXTRACT** DEFERRED（2026-05-28 / 用户决策组合 X / 独立 SEQ-FOLLOWUP-ARCH）
+- ✅ **CHG-SN-9-ROUTE-LABEL-D-ADR**（2026-05-28 / sonnet-4-6 + arch-reviewer Opus 4-7 / 1 docs PATCH=1 / Opus A- CONDITIONAL → 5 红线 + 4 P1 黄线 + 2 关键洞察全消化 → 升 Accepted / 实施由 -A1/-A2 承接）
 
-- **BANGUMI-A**：plan §13 用户既有决策"暂缓"与 §14 Wave 3 列入相冲突
-- **SITE-VIEWS-EXTRACT**：架构级跨 app 重构 / CLAUDE.md §16.5 "跨 app 影响范围扩大" BLOCKER 触发
-- **ROUTE-LABEL-D**：需新 ADR + schema migration + Opus 评审
-
-推荐组合 X（务实）/ Y（激进）/ Z（保守）见 `docs/task-queue.md` 尾部 🚨 BLOCKER #2 段。等待用户选择后主循环继续。
-
----
-
-## Wave 3 状态（SEQ-20260528-MOD-WAVE3 / 🚨 BLOCKER #2 暂停 = 60% / 6/10 + 1 DEFERRED）
-
-- ✅ **PRE-INDEX-DESIGN-RULES** 索引设计 4 步核验 + 双 invariant + 四级范式 + 禁令 + Checklist 沉淀到 db-rules.md（2026-05-28 / sonnet-4-6 / 纯 docs / 零回归 / CHG-368-B-A1-FIX 1-5 经验首次完整规范化）
-- ✅ **CHG-369-B** 自定义主题输入（2026-05-28 / sonnet-4-6 / 5 业务+测试 PATCH=5 + 1 docs / CustomThemeData schema + 双 key localStorage + CustomThemeDialog NEW + RouteThemeSelector 扩 + PlayerShell wiring / 54/54 测试 PASS / docs/manual §8.7 "未实装" → "已 ship 2026-05-28"）
-- ✅ **CHG-368-B-FOLLOWUP-CONTENT-SOURCE-ROW** Layer B codename + retired_at 数据通路打通（2026-05-28 / sonnet-4-6 / 2 业务 + 1 测试 PATCH=3 / listAdminSources LEFT JOIN source_line_aliases + SELECT 扩 2 列 / ContentSourceRow 扩 2 字段 / 34/34 admin-sources 域测试 PASS / PRE-INDEX-DESIGN-RULES 4 步核验首次显式应用）
-- ✅ **CHG-368-B-FOLLOWUP-AUTO-RETIRED-LABEL** LinesPanel 退役标识自动/手动区分（2026-05-28 / sonnet-4-6 + arch-reviewer Opus 4-7 / Opus A- CONDITIONAL → Y-A-1/Y-A-2 全落升 A / 4 业务 + 1 测试 + 1 docs PATCH=6 超 5 接受完成度风险 / ADR-164 D-164-8 UI 兑现 / 53/53 测试 PASS / 双红线触发 Subagents trailer）
-- ⛔ **CHG-SN-9-MOD-BUTTON-MIGRATE** DEFERRED（2026-05-28 / 用户决策方案 A / 38 文件 100+ button 远超 PATCH 5 软上限 / 独立 SEQ-FOLLOWUP-MIGRATE 长尾系列择期推进）
-- ✅ **CHG-SN-9-REJECTED-ENHANCE-A** RejectedTab 分页 hook 抽取 + 接入（2026-05-28 / sonnet-4-6 / 3 业务 + 1 测试 + 1 i18n PATCH=5 严守 / useRejectedQueue.ts NEW 152 行 + RejectedTabContent 接入 + listHeaderWithTotal/loadMore/loadingMore/allLoaded i18n 扩 / 8/8 hook 测试 PASS / plan §5 P2 rejected 写死 30 条 bug 闭环 / -B 视觉对齐留 follow-up）
-- ✅ **CHG-SN-9-PLAYER-ERROR** player-core onError + suppressDefaultErrorUI public API（2026-05-28 / sonnet-4-6 + arch-reviewer Opus 4-7 / Opus A- CONDITIONAL → 3 红线 R-N-1/-2/-3 全落 + 4 黄线 3 落 1 留升 A / 4 业务 + 1 测试 PATCH=5 / DEBT-FIX-D-ERROR API 闭环 / ADR-108 兑现 / 6/6 buildOverlayEntries 测试 PASS / 双红线触发 Subagents trailer）
-
-剩余 3 张卡（按执行序列）：CHG-SN-9-META-BANGUMI-A → CHG-SN-9-SITE-VIEWS-EXTRACT → CHG-SN-9-ROUTE-LABEL-D
+剩余 2 张实施子卡（按执行序列）：CHG-SN-9-ROUTE-LABEL-D-A1（后端 / Migration 080 + types + queries + Service + 路由 / PATCH≤5）→ CHG-SN-9-ROUTE-LABEL-D-A2（前端 / useUserPreferencesSync hook + route-theme-storage 改造 + RouteThemeSelector syncing + 测试 + docs/manual / PATCH≤5）
 
 ---
 
@@ -50,17 +41,20 @@ Wave 3 主线 2/6 后剩余 3 卡（CHG-SN-9-META-BANGUMI-A / SITE-VIEWS-EXTRACT
 - ✅ CHG-368-B-C-DOCS docs/architecture.md "已 ship" 升级 + docs/manual/route-labeling.md §9 Layer B 实施记录
 - ✅ CHG-368-B-C-UI LinesPanel codename badge + 退役行 opacity（arch-reviewer Opus A）
 
-**Wave 2 完整收官**：主线 13/13 + ADR 2/2 全 Accepted + 实施 6/6 + docs sync + Opus 评审全部完成。Layer B 山名代号体系完整 ship（schema + 业务 + audit + UI + 字库 + 退役治理 + LinesPanel 显示 + Wave 3 衔接补丁 codename/retired_at/auto_retired 三字段全通）/ ADR-164 5 黄线 + 4 advisory 全部闭档。
+**Wave 2 完整收官**：主线 13/13 + ADR 2/2 全 Accepted + 实施 6/6 + docs sync + Opus 评审全部完成。
 
 ---
 
 ## 下次会话恢复入口
 
-- **SEQ-FOLLOWUP-MIGRATE**（Wave 3 用户决策方案 A 抽出）：BTN_* → AdminButton 38 tsx 文件 / 100+ raw button 长尾迁移 / 按域拆 7-8 子卡 / 独立 SEQ 择期推进 / 非 Wave 节奏
+- **CHG-SN-9-ROUTE-LABEL-D-A1**：ADR-165 §11 后端实施（Migration 080 + packages/types/src/user.types.ts 扩 + apps/api queries + Service + 路由 + 单测 / PATCH≤5）
+- **CHG-SN-9-ROUTE-LABEL-D-A2**：ADR-165 §11 前端实施（useUserPreferencesSync NEW + route-theme-storage 改造 + RouteThemeSelector syncing + 测试 + docs/manual / PATCH≤5）
+- **SEQ-FOLLOWUP-MIGRATE**（用户决策方案 A 抽出）：BTN_* → AdminButton 38 tsx / 100+ button 长尾迁移 / 按域拆 7-8 子卡
+- **SEQ-FOLLOWUP-ARCH**（用户决策组合 X 抽出）：CHG-SN-9-SITE-VIEWS-EXTRACT plan §10.6 方案 C 抽 packages/site-views / 大型架构重构
+- **CHG-SN-9-META-BANGUMI-A** DEFERRED（用户决策组合 X / plan §13 暂缓 / 下一轮迭代）
 - **CHG-SN-9-REJECTED-ENHANCE-B** 视觉对齐（plan §7 拆 -B）：BTN_SM → AdminButton + 复用 SplitPane + 批量 reopen + 跳转回 pending 提示
-- **CHG-SN-9-PLAYER-ERROR-CONSUMER-A** AdminPlayer onError 消费 + feedback 上报失败（POST /v1/feedback/playback {success:false, errorCode}）
+- **CHG-SN-9-PLAYER-ERROR-CONSUMER-A** AdminPlayer onError 消费 + feedback 上报失败
 - **CHG-SN-9-PLAYER-ERROR-CONSUMER-B** PlayerShell onError 消费 + 自动切下一线路 + 标 dead-source
-- **CHG-SN-9-PLAYER-ERROR-RETRY-CONTROL** retrySourceLoad 上抛（onError(event, controls) vs imperativeHandle 二选 / 跨 Opus 决策）
-- **CHG-SN-9-ROUTE-LABEL-D 跨设备主题同步**（plan §17.2 Wave 3）：users.preferences schema
-- **PRE-DEAD-LINE-AUTO-RETIRE-WORKER**（A-164-1 占位）：plan §10.5 全 dead 180 天自动退役 worker（写 retired_at + auto_retired=true）
+- **CHG-SN-9-PLAYER-ERROR-RETRY-CONTROL** retrySourceLoad 上抛（onError(event, controls) vs imperativeHandle 二选）
+- **PRE-DEAD-LINE-AUTO-RETIRE-WORKER**（A-164-1 占位）：plan §10.5 全 dead 180 天自动退役 worker
 - 其他 pre-existing 长尾 / **CHG-354 SPLIT-D** / **audit 4 真源 advisory** / **PRE-PROBE-WORKER 占位 jobId** / **meta_quality TabDetail UI 消费** 等
