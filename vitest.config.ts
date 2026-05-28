@@ -1,6 +1,16 @@
-import { defineConfig } from 'vitest/config'
+import { defineConfig, configDefaults } from 'vitest/config'
 import path from 'path'
 import fs from 'fs'
+
+// jsdom 环境的测试目录（组件 / hook / web-next / 审核台）。node 项目需排除这些，
+// 避免同一文件在两个项目重复运行（且 node 环境无 window/localStorage 会失败）。
+const JSDOM_GLOBS = [
+  'tests/unit/components/**/*.{test,spec}.{ts,tsx}',
+  'tests/unit/hooks/**/*.{test,spec}.{ts,tsx}',
+  'tests/unit/web-next/**/*.{test,spec}.{ts,tsx}',
+  'tests/unit/admin-moderation/**/*.{test,spec}.{ts,tsx}',
+]
+const ALL_UNIT_GLOBS = ['tests/unit/**/*.{test,spec}.{ts,tsx}']
 
 function resolveWithExtensions(base: string): string | undefined {
   const candidates = [
@@ -17,15 +27,28 @@ function resolveWithExtensions(base: string): string | undefined {
 export default defineConfig({
   test: {
     globals: true,
-    include: ['tests/unit/**/*.{test,spec}.{ts,tsx}'],  // 只运行 unit 测试，排除 e2e
-    environment: 'node',          // API 测试用 node 环境
-    environmentMatchGlobs: [
-      ['tests/unit/components/**', 'jsdom'],       // 组件测试用 jsdom
-      ['tests/unit/hooks/**', 'jsdom'],             // hook 测试用 jsdom（依赖 window/sessionStorage）
-      ['tests/unit/web-next/**', 'jsdom'],         // web-next 组件测试
-      ['tests/unit/admin-moderation/**', 'jsdom'], // 审核台组件/hook 测试（FIX-D+）
-    ],
     setupFiles: ['./tests/helpers/setup.ts'],
+    // environmentMatchGlobs（vitest 3.x deprecated）→ test.projects（按目录切环境）。
+    // 两个项目均 extends: true 继承根的 resolve.alias / esbuild / setupFiles / globals / 超时。
+    projects: [
+      {
+        extends: true,
+        test: {
+          name: 'node',                // API / 后端 / 纯逻辑测试（node 环境）
+          environment: 'node',
+          include: ALL_UNIT_GLOBS,
+          exclude: [...configDefaults.exclude, ...JSDOM_GLOBS],
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: 'jsdom',               // 组件 / hook / web-next / 审核台（jsdom：window/localStorage）
+          environment: 'jsdom',
+          include: JSDOM_GLOBS,
+        },
+      },
+    ],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
