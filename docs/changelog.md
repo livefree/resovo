@@ -10701,3 +10701,40 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **质量门禁**：verify:adr-contracts ✅ EXIT=0（仅 docs 改动 / typecheck + lint + test unaffected）
 - **commit trailer**：无强制 Subagents（纯 docs / 不修改 packages/admin-ui 公开 Props / 不触发任何红线）
 - **闭环**：CHG-368-B-C-DOCS 完成 / docs/architecture.md "未 ship" → "已 ship" 升级 / docs/manual/route-labeling.md §9 Layer B 实施记录完整落地（9 子段 / 5 子卡文件清单 / cross-link ADR-164）/ Wave 2 主线全 ship + ADR 全 Accepted + 实施 5/5 + docs sync 全成 / 仅 advisory CHG-368-B-C-UI（LinesPanel codename 标签）独立留作 follow-up / Wave 2 范围**实质性 ship 完毕**
+
+---
+
+## [CHG-368-B-C-UI] ROUTE-LABEL-B Layer B advisory UI — LinesPanel codename 标签 + 退役行 opacity（Wave 2 完整收官）
+- **完成时间**：2026-05-28
+- **执行模型**：claude-opus-4-7（主循环 / 续会话）
+- **子代理调用**：arch-reviewer (claude-opus-4-7) 1 轮轻量 review A / 0 红线 / 2 黄线（Y1 类型注释 / Y2 opacity 不施加于 button）
+- **拆卡承接**：CHG-368-B-A1..C-DOCS 六子卡完成后（实施 5/5 + docs sync），本卡（-C-UI）承接 ADR-164 advisory A-164-2：admin-ui composite/lines-panel 行级 codename 标签 + 退役行视觉降级。**触发 CLAUDE.md "修改 packages/admin-ui/**/types.ts 公开 Props 字段必须 Opus trailer" 红线** → spawn arch-reviewer (claude-opus-4-7) 轻量 review PASS → 落地。
+- **范围**（4 业务 + 2 测试调整 / PATCH=6 / RETRO 框架除外（本卡非新 admin route / 不触发 R-MID-1）/ 共享组件 API 契约扩展 / 不触发 architecture sync）：
+  - `packages/admin-ui/src/components/composite/lines-panel/lines-panel.types.ts`：
+    - `LineAggregate` 接口扩 2 readonly 字段（`codename: string | null` / `retiredAt: string | null`）含 ADR-164 D-164-2/D-164-4/D-164-12 引用 + "同复合 PK 取首行 / server-next API 衔接后续卡" 注释
+    - `RawSourceRow` 接口扩 2 optional 字段（`codename?: string | null` / `retired_at?: string | null`）"展示派生区" 段落注释
+  - `packages/admin-ui/src/components/composite/lines-panel/aggregate.ts`：
+    - `groupSourcesByLine` 函数 `lines.push({...})` 块尾追加 `codename: firstRow.codename ?? null, retiredAt: firstRow.retired_at ?? null`
+    - 注释附"同 (siteKey, sourceName) 复合 PK 取首行 = 全行一致 invariant"
+  - `packages/admin-ui/src/components/composite/lines-panel/lines-panel.tsx`：
+    - `LineRow` 内派生 `isRetired = line.retiredAt !== null` + `retiredDimStyle = isRetired ? { opacity: 0.5 } : {}`
+    - row 容器追加 `data-retired={isRetired || undefined}` 供 e2e + 视觉回归识别
+    - lineName 旁追加 codename badge（`data-line-codename` / `aria-label "运维代号 X"` / 浅色背景 + 圆角 / 小号字 / 非 button 语义 / span 即可）
+    - lineName 后追加"（已退役）"标识（`data-line-retired-label` / `aria-label "线路已退役"` / warning 色）
+    - opacity 仅施加于"数据展示区"（lineName + hostname + 集数 + 延迟 + 质量 span 各自 ...retiredDimStyle）/ **不施加于行内 button**（保持 WCAG 对比度 / Y-164-2 / arch-reviewer Y2 修订）
+  - `tests/unit/components/admin-ui/composite/lines-panel/aggregate.test.ts` 扩 4 case：① 单行 codename 透传 ② 单行 retired_at 透传 ③ 多行取首行（行间一致 invariant 守卫）④ legacy raw row（无新 2 optional 字段）→ LineAggregate null
+  - `tests/unit/components/admin-ui/composite/lines-panel/lines-panel.test.tsx` 扩 4 case：① codename 非 NULL → badge 渲染 + aria-label ② codename NULL → 无 badge ③ retiredAt 非 NULL → data-retired + 退役标识 ④ retiredAt NULL → 无标记
+- **arch-reviewer Opus 评审过程**：
+  - 主循环 spawn 子代理 1 轮 / 范围限定为"类型层扩字段 + 显示规约"轻量 review（≤ 300 字产出 / 不重 ADR 范式）
+  - 子代理评级 **A**（0 红线）+ 2 黄线 + 4 实施建议 + 6 真源核读
+  - **黄线 Y1**（类型注释补充）：types.ts L65-67 RawSourceRow optional 字段段加注释说明 server-next API 层 ContentSourceRow 同步扩字段是后续衔接卡范围 → ✅ 已落（types.ts 注释段）
+  - **黄线 Y2**（opacity 不施加于 button）：WCAG 对比度跌破风险 → ✅ 已落（opacity 仅 span / button 保留 1.0）
+  - 4 实施建议：① 字段顺序放末尾（保持既有 diff 简洁）② aggregate 取首行 + 注释 invariant ③ 显示层零新 prop ④ commit trailer 必含
+- **设计取舍**：① 取首行 vs DB 强制约束：取首行（同复合 PK invariant / 不需 ADR advisory / 注释明示）② codename badge 用 `<span>` 而非 `<button>`：纯展示 / 无交互 / 减少组件复杂度 / 无 i18n key 因 codename 是字面短码 ③ 退役行 opacity 仅 span：保持 button 可读性 / arch-reviewer Y2 / WCAG ④ 不扩 priority / autoRetired 至 LineAggregate：D-164-12 类型层影响表"前台不感知"边界 / autoRetired 文案可走"已退役（自动）/（手动）"由数据派生但本卡仅落"（已退役）"简单文案（如未来需区分独立卡承接）
+- **不触发 architecture.md 同步**（CHG-368-B-A1-FIX-{1..5} 经验持续核对）：
+  - 本卡纯类型层 + UI 显示 / 无 schema / 无 query / 无 service / 无 route 改动
+  - architecture.md "已 ship UI" 段已在 CHG-368-B-C-DOCS 升级 / 本卡 LineAggregate 扩字段是 advisory 实施 / 不再需 docs sync
+- **不触发 R-MID-1 RETRO**：本卡无新 admin 写端点（D-164-7 RETRO 已在 -A2b ship 完毕 / 本卡是 UI 显示层）
+- **质量门禁**：typecheck ✅（root + 7 workspaces）/ lint ✅（0 error 0 warning）/ verify:adr-contracts ✅ EXIT=0（197 路由 80 ADR 端点对齐保持 / 266 D-N 全闭环）/ 单测 lines-panel 域 42/42 PASS（aggregate 27 + lines-panel 15 / 既有 31 + 新 11）
+- **commit trailer**：`Subagents: arch-reviewer (claude-opus-4-7)` （CLAUDE.md "修改 packages/admin-ui/**/types.ts 公开 Props 字段" 红线触发 / 本卡轻量 review 即满足）
+- **闭环**：CHG-368-B-C-UI 完成 / **Wave 2 (SEQ-20260527-MOD-WAVE2) 全部 ship 完毕** / 主线 13/13 + ADR 2/2 + 实施 6/6（-A1/-A2a/-A2b/-A3/-B/-C-UI）+ docs sync（-C-DOCS）+ Opus 评审（CHG-368-A + 本卡）全部就位 / Layer B 山名代号体系完整 ship（schema + 业务 + audit + UI + 字库 + 退役治理 + admin UI + LinesPanel 显示）/ ADR-164 5 黄线 + 4 advisory 全部闭档 / **Wave 2 完成度 = 100%**

@@ -157,6 +157,9 @@ export function groupSourcesByLine(
 
     const hostname = (firstRow.hostname ?? null) || parseHostname(firstRow.source_url)
 
+    // CHG-368-B-C-UI / ADR-164 D-164-2 + D-164-4：codename / retired_at 取首行。
+    // 同 (siteKey, sourceName) 复合 PK 下 source_line_aliases 1:N 反向 join 出的
+    // codename / retired_at 必然来自同一别名行（行间一致），取首行即可。
     lines.push({
       key,
       siteKey,
@@ -169,6 +172,8 @@ export function groupSourcesByLine(
       latencyMedianMs,
       qualityHighest,
       episodes,
+      codename: firstRow.codename ?? null,
+      retiredAt: firstRow.retired_at ?? null,
     })
   }
 

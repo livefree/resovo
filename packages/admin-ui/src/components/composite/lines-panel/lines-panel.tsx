@@ -188,8 +188,14 @@ function LineRow({
     ? { background: 'var(--admin-accent-soft)', outline: '1.5px solid var(--admin-accent-on-soft)', outlineOffset: '-1px' }
     : {}
 
+  // CHG-368-B-C-UI / ADR-164：已退役行显示 — opacity 仅施加于"数据展示区"（lineName +
+  // hostname + 集数 + 延迟 + 质量），不施加于行内 button（保持 WCAG 对比度 / Y-164-2）。
+  // 行级 data-retired 属性供 e2e + 视觉回归 baseline 识别。
+  const isRetired = line.retiredAt !== null
+  const retiredDimStyle: React.CSSProperties = isRetired ? { opacity: 0.5 } : {}
+
   return (
-    <div role="rowgroup" data-line-row data-line-key={line.key} data-selected={isSelected || undefined}>
+    <div role="rowgroup" data-line-row data-line-key={line.key} data-selected={isSelected || undefined} data-retired={isRetired || undefined}>
       <div
         role="row"
         tabIndex={selectable ? 0 : undefined}
@@ -220,27 +226,58 @@ function LineRow({
 
         <DualSignal probe={line.probeAggregate} render={line.renderAggregate} />
 
-        <span style={{ flex: 1, overflow: 'hidden', display: 'flex', alignItems: 'baseline', gap: 4 }}>
+        <span style={{ flex: 1, overflow: 'hidden', display: 'flex', alignItems: 'baseline', gap: 4, ...retiredDimStyle }}>
           <span style={{ fontWeight: 500, fontSize: 'var(--font-size-sm)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {line.lineName}
           </span>
+          {line.codename && (
+            // CHG-368-B-C-UI / ADR-164 D-164-2：运维短码 badge（小标签 / muted color / 圆角）
+            <span
+              data-line-codename
+              aria-label={`运维代号 ${line.codename}`}
+              style={{
+                fontSize: 'var(--font-size-2xs)',
+                color: 'var(--fg-muted)',
+                background: 'var(--bg-surface-raised)',
+                borderRadius: 4,
+                padding: '1px 6px',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {line.codename}
+            </span>
+          )}
           {line.hostname && (
             <span style={{ color: 'var(--fg-muted)', fontSize: 'var(--font-size-xs)', whiteSpace: 'nowrap' }}>
               {line.hostname}
             </span>
           )}
+          {isRetired && (
+            // CHG-368-B-C-UI / ADR-164 D-164-4：已退役标识（warning 色 / 屏幕阅读器友好）
+            <span
+              data-line-retired-label
+              aria-label="线路已退役"
+              style={{
+                fontSize: 'var(--font-size-2xs)',
+                color: 'var(--state-warning-fg)',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              （已退役）
+            </span>
+          )}
         </span>
 
-        <span style={{ color: 'var(--fg-muted)', fontSize: 'var(--font-size-xs)', whiteSpace: 'nowrap', flexShrink: 0 }}>
+        <span style={{ color: 'var(--fg-muted)', fontSize: 'var(--font-size-xs)', whiteSpace: 'nowrap', flexShrink: 0, ...retiredDimStyle }}>
           {line.activeCount}/{line.totalEpisodes}集
         </span>
         {line.latencyMedianMs != null && (
-          <span style={{ color: 'var(--fg-muted)', fontSize: 'var(--font-size-xs)', whiteSpace: 'nowrap', flexShrink: 0 }}>
+          <span style={{ color: 'var(--fg-muted)', fontSize: 'var(--font-size-xs)', whiteSpace: 'nowrap', flexShrink: 0, ...retiredDimStyle }}>
             ≈{line.latencyMedianMs}ms
           </span>
         )}
         {line.qualityHighest && (
-          <span style={{ color: 'var(--fg-muted)', fontSize: 'var(--font-size-xs)', flexShrink: 0 }}>
+          <span style={{ color: 'var(--fg-muted)', fontSize: 'var(--font-size-xs)', flexShrink: 0, ...retiredDimStyle }}>
             {line.qualityHighest}
           </span>
         )}

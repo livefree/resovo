@@ -42,6 +42,16 @@ export interface LineAggregate {
   readonly latencyMedianMs: number | null
   readonly qualityHighest: ResolutionTier | null    // 复用 @resovo/types 真源（R5）
   readonly episodes: ReadonlyArray<EpisodeMini>     // 已按 episodeNumber asc 排序
+
+  // ── CHG-368-B-C-UI / ADR-164 D-164-2 + D-164-4 + D-164-12（Migration 079）─────
+  // 同 (siteKey, sourceName) 复合 PK 下 source_line_aliases 1:N 反向 join 单一行
+  // 提供，取首行即可（全行一致）；server-next API 层 ContentSourceRow 同步扩字段
+  // 是后续衔接卡范围，当前 LineAggregate 暂可永显 null（不破坏显示）。
+
+  /** 运维短码（"泰山-2" / NULL = 未分配 / D-164-2） */
+  readonly codename: string | null
+  /** 软删时间戳（NULL = 在役 / NOT NULL = 已退役 / D-164-4） */
+  readonly retiredAt: string | null
 }
 
 // ── 聚合输入（aggregate.ts 专用） ──────────────────────────────────────
@@ -64,6 +74,10 @@ export interface RawSourceRow {
   readonly updated_at: string
   readonly quality_detected?: string | null
   readonly hostname?: string | null
+  // CHG-368-B-C-UI / ADR-164：codename + retiredAt 展示派生区（Migration 079 落地后
+  // server-next API 层 ContentSourceRow 同步扩字段 / 当前可永 undefined 兼容）
+  readonly codename?: string | null
+  readonly retired_at?: string | null
 }
 
 export interface GroupSourcesOptions {

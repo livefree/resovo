@@ -55,6 +55,9 @@ function makeLine(overrides: Partial<LineAggregate> & { key: string; episodes: R
     latencyMedianMs: 'latencyMedianMs' in overrides ? overrides.latencyMedianMs ?? null : null,
     qualityHighest: 'qualityHighest' in overrides ? overrides.qualityHighest ?? null : null,
     episodes: overrides.episodes,
+    // CHG-368-B-C-UI / ADR-164：codename / retiredAt 默认 null（既有 fixture 兼容）
+    codename: 'codename' in overrides ? overrides.codename ?? null : null,
+    retiredAt: 'retiredAt' in overrides ? overrides.retiredAt ?? null : null,
   }
 }
 
@@ -314,5 +317,59 @@ describe('Case 9 — I2 防 race + 并行不污染', () => {
     expect(renderBtn.disabled).toBe(false)
     fireEvent.click(renderBtn)
     expect(onRenderCheckEpisode).toHaveBeenCalledOnce()
+  })
+})
+
+// ── CHG-368-B-C-UI / ADR-164 D-164-2 + D-164-4：codename badge + 退役标识 ──
+
+describe('CHG-368-B-C-UI — codename badge + 退役标识（ADR-164 §6）', () => {
+  it('line.codename 非 NULL → 渲染 codename badge（data-line-codename / aria-label "运维代号"）', () => {
+    const line = makeLine({
+      key: 'site_a|LineA',
+      codename: '泰山-2',
+      episodes: [makeEp({ id: 'ep1' })],
+    })
+    const { container } = render(<LinesPanel {...baseProps({ lines: [line] })} />)
+    const badge = container.querySelector('[data-line-codename]')
+    expect(badge).not.toBeNull()
+    expect(badge?.textContent).toBe('泰山-2')
+    expect(badge?.getAttribute('aria-label')).toBe('运维代号 泰山-2')
+  })
+
+  it('line.codename = NULL → 不渲染 codename badge', () => {
+    const line = makeLine({
+      key: 'site_a|LineA',
+      codename: null,
+      episodes: [makeEp({ id: 'ep1' })],
+    })
+    const { container } = render(<LinesPanel {...baseProps({ lines: [line] })} />)
+    expect(container.querySelector('[data-line-codename]')).toBeNull()
+  })
+
+  it('line.retiredAt 非 NULL → 行 data-retired=true + 渲染"（已退役）"标识 + aria-label "线路已退役"', () => {
+    const line = makeLine({
+      key: 'site_a|LineA',
+      retiredAt: '2026-04-01T00:00:00Z',
+      episodes: [makeEp({ id: 'ep1' })],
+    })
+    const { container } = render(<LinesPanel {...baseProps({ lines: [line] })} />)
+    const row = container.querySelector('[data-line-row]')
+    expect(row?.getAttribute('data-retired')).toBe('true')
+    const retiredLabel = container.querySelector('[data-line-retired-label]')
+    expect(retiredLabel).not.toBeNull()
+    expect(retiredLabel?.textContent).toBe('（已退役）')
+    expect(retiredLabel?.getAttribute('aria-label')).toBe('线路已退役')
+  })
+
+  it('line.retiredAt = NULL → 行无 data-retired 标记 / 无退役标识', () => {
+    const line = makeLine({
+      key: 'site_a|LineA',
+      retiredAt: null,
+      episodes: [makeEp({ id: 'ep1' })],
+    })
+    const { container } = render(<LinesPanel {...baseProps({ lines: [line] })} />)
+    const row = container.querySelector('[data-line-row]')
+    expect(row?.getAttribute('data-retired')).toBeNull()
+    expect(container.querySelector('[data-line-retired-label]')).toBeNull()
   })
 })

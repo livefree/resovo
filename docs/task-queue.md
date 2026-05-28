@@ -1902,7 +1902,7 @@ CHG-353 (ROUTE-LABEL-A2) → 依赖 CHG-352 后端返回排序数据
 
 ## [SEQ-20260527-MOD-WAVE2] server-next 内容审核台 Wave 2 — 预览/拆分/合并/元数据/路线主题（plan §14 + §17.2）
 
-- **状态**：✅ **Wave 2 实质性 ship 完毕**（CHG-367 全部完成 / CHG-368-A ADR-164 Accepted / CHG-368-B-A1..B 五子卡 ship / CHG-368-B-C-DOCS ✅ docs 同步 / 仅 CHG-368-B-C-UI advisory（LinesPanel codename 标签 / 需 Opus）独立 follow-up 卡）
+- **状态**：✅ **Wave 2 完全收官（100%）**（CHG-367 全部 / CHG-368-A ADR-164 Accepted / CHG-368-B-A1..C-UI 全实施 / CHG-368-B-C-DOCS docs sync / Layer B 山名代号体系完整 ship：schema + 业务 + audit + UI + 字库 + 退役治理 + LinesPanel codename badge + 退役行 opacity）
 - **最后更新时间**：2026-05-28
 - **创建时间**：2026-05-27
 - **目标**：基于 `/Users/livefree/.claude/plans/fluffy-giggling-teapot.md` §14 Wave 2 + §17.2 落地 9 张主卡（4 张需 ADR + Opus 决策）；继续 Wave 1 的自动推进节奏。
@@ -1947,7 +1947,7 @@ CHG-353 (ROUTE-LABEL-A2) → 依赖 CHG-352 后端返回排序数据
 | 14.3 | ✅ **CHG-368-B-A3** 已完成（2026-05-28）| ROUTE-LABEL-B 实施第 3 子卡 — route-scoring priority 通道激活 (priority/100 替代 Phase 1 默认 0) + sources.ts findActiveSourcesWithSignalsByVideoId JOIN 加 source_line_aliases LEFT JOIN + 双条件 WHERE 守卫 (sla.retired_at IS NULL OR sla.source_site_key IS NULL) / 2 业务 + 1 测试调整 / PATCH=3 严守 / 零回归 (null fallback 与 Phase 1 数学一致) / 84/84 单测 PASS | 否 | opus-4-7 续会话 |
 | 14.4 | ✅ **CHG-368-B-B** 已完成（2026-05-28）| ROUTE-LABEL-B 实施第 4 子卡 — admin UI 独立路径 /admin/source-line-aliases + DataTable 一体化（PageHeader + AdminCard codename 池摘要 + Modal 编辑行 + 行级 retire 操作 + 6 列定义）+ lib/sources/api.ts 扩 4 函数 + admin-nav.tsx 新增 sidebar 入口 / 4 业务 + 1 测试 / PATCH=5 严守 / 不触发 architecture sync / 6/6 单测 PASS | 否（ADR-164 已 Accepted）| opus-4-7 续会话 |
 | 14.5-DOCS | ✅ **CHG-368-B-C-DOCS** 已完成（2026-05-28）| ROUTE-LABEL-B docs 同步 — docs/architecture.md "未 ship" → "已 ship" 升级（业务路径 + admin UI 详列）+ docs/manual/route-labeling.md 追加 §9 Layer B 实施记录（9 子段：schema/字库/冷却/端点/admin UI/priority/退役/黄线/文件清单）/ 2 docs / PATCH=2 / 纯 docs 不触发任何红线 | 否 | opus-4-7 续会话 |
-| 14.5-UI | ⏸️ **CHG-368-B-C-UI**（advisory / 待 Opus）| ROUTE-LABEL-B advisory UI — packages/admin-ui composite/lines-panel 扩 LineAggregate codename + retiredAt 字段 + 行级 codename 标签 + 退役行 opacity（修改 packages/admin-ui types.ts 公开 Props / CLAUDE.md "共享组件 API 契约强制 Opus" 触发 / commit 需 trailer）/ ~3 文件 / 估时 ~0.2w | 否（advisory）| opus-4-7 + arch-reviewer Opus |
+| 14.5-UI | ✅ **CHG-368-B-C-UI** 已完成（2026-05-28）| ROUTE-LABEL-B advisory UI — LineAggregate / RawSourceRow 扩 codename + retiredAt 字段 + aggregate.ts 取首行透传 + LinesPanel LineRow codename badge + 退役行 opacity（仅 span / button 保留 1.0 / WCAG 守卫）+ 4 业务 + 2 测试调整 / arch-reviewer Opus 轻量 review A / 0 红线 / 2 黄线全落 / 42/42 单测 PASS | 否（ADR-164 advisory A-164-2）| opus-4-7 + arch-reviewer (opus-4-7) |
 | 15 | ✅ **CHG-369** 已完成（2026-05-27）| ROUTE-LABEL-C / 5 内置主题选择器 + localStorage 持久化 / SSR safe / 8 case PASS / 3 业务 + 2 测试 + 1 docs / 自定义主题输入 → follow-up CHG-369-B | 否 | opus-4-7 续会话 |
 
 ### Wave 2 BLOCKER 触发清单（沿用 Wave 1 §16.5）

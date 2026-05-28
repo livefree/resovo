@@ -23,6 +23,9 @@ function row(overrides: Partial<RawSourceRow> & { id: string }): RawSourceRow {
     updated_at: overrides.updated_at ?? '2026-01-01T00:00:00Z',
     quality_detected: 'quality_detected' in overrides ? overrides.quality_detected : null,
     hostname: 'hostname' in overrides ? overrides.hostname : null,
+    // CHG-368-B-C-UI / ADR-164：codename / retired_at 透传（optional / 未传时不放入）
+    ...('codename' in overrides ? { codename: overrides.codename } : {}),
+    ...('retired_at' in overrides ? { retired_at: overrides.retired_at } : {}),
   }
 }
 
@@ -255,5 +258,53 @@ describe('Case 10 — 自定义 sortLines', () => {
     )
     expect(result[0].lineName).toBe('LineB')
     expect(result[1].lineName).toBe('LineA')
+  })
+})
+
+
+// ── CHG-368-B-C-UI / ADR-164 D-164-2 + D-164-4：codename + retiredAt 透传 ──
+
+describe('CHG-368-B-C-UI — codename + retiredAt 透传（ADR-164）', () => {
+  it('单行含 codename + retired_at → LineAggregate.codename / retiredAt 正确映射', () => {
+    const result = groupSourcesByLine([
+      row({
+        id: 'a1',
+        codename: '泰山-2',
+        retired_at: null,
+      }),
+    ])
+    expect(result[0].codename).toBe('泰山-2')
+    expect(result[0].retiredAt).toBeNull()
+  })
+
+  it('单行 retired_at 非 NULL → LineAggregate.retiredAt 透传时间戳', () => {
+    const result = groupSourcesByLine([
+      row({
+        id: 'r1',
+        codename: '华山',
+        retired_at: '2026-04-01T00:00:00Z',
+      }),
+    ])
+    expect(result[0].codename).toBe('华山')
+    expect(result[0].retiredAt).toBe('2026-04-01T00:00:00Z')
+  })
+
+  it('多行同 (siteKey, sourceName) → 取首行 codename / retiredAt（行间一致 invariant）', () => {
+    // 同 (site_a, LineA) 复合 PK 下 source_line_aliases 1:N 反向 join 出
+    // 行 a/b 必然有相同 codename / retired_at（DB invariant）。即使测试 fixture 故意
+    // 让 b 行 codename 不同，groupSourcesByLine 应取首行（a）。
+    const result = groupSourcesByLine([
+      row({ id: 'a', codename: '泰山', retired_at: null }),
+      row({ id: 'b', codename: '峨眉', retired_at: null, episode_number: 2 }),
+    ])
+    expect(result).toHaveLength(1)
+    expect(result[0].codename).toBe('泰山')  // 首行
+  })
+
+  it('无 codename / retired_at 字段（RawSourceRow optional 默认 undefined）→ LineAggregate null', () => {
+    // 既有 11 字段 raw row（无新 2 optional）→ LineAggregate codename / retiredAt = null
+    const result = groupSourcesByLine([row({ id: 'legacy' })])
+    expect(result[0].codename).toBeNull()
+    expect(result[0].retiredAt).toBeNull()
   })
 })
