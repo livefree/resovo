@@ -257,25 +257,43 @@ export interface RawSourceForTheme {
 }
 
 /**
- * 跨集数稳定匹配 activeSourceIndex（CHG-369 / Codex stop-time review #13）
+ * 跨集数稳定匹配 activeSourceIndex（CHG-369 / Codex stop-time review #13 + #14）
  *
- * 集数切换时保持"同一线路"语义；用 raw source 的 `sourceName` 字段而非 label 匹配
+ * 集数切换时保持"同一线路"语义；用 raw source 的稳定 key 而非 label 匹配
  * （label 是主题派生不稳定 — 主题切换会改写 / 闭包会 stale）。
+ *
+ * 匹配优先级（Codex #14：sourceName-only 在多站点同名时可能切错源 → 升级复合匹配）：
+ *   1. `(siteDisplayName, sourceName)` 复合精确命中
+ *   2. siteDisplayName 缺失 / 复合无命中时 → 单 sourceName 兜底（兼容历史 null siteDisplayName）
+ *   3. 找不到 → fallback 0（第一条）
  *
  * @param prevRawSources 上一集的原始 sources 数组
  * @param prevIndex 上一集的 activeSourceIndex
  * @param newRawSources 新集数的原始 sources 数组
- * @returns 匹配到的 newRawSources 中的位置；找不到时 0（fallback 第一条）
+ * @returns 匹配到的 newRawSources 中的位置；找不到时 0
  */
 export function matchActiveSourceIndex(
   prevRawSources: ReadonlyArray<RawSourceForTheme>,
   prevIndex: number,
   newRawSources: ReadonlyArray<RawSourceForTheme>,
 ): number {
-  const prevSourceName = prevRawSources[prevIndex]?.sourceName ?? null
-  if (!prevSourceName) return 0
-  const matched = newRawSources.findIndex((s) => s.sourceName === prevSourceName)
-  return matched >= 0 ? matched : 0
+  const prev = prevRawSources[prevIndex]
+  if (!prev) return 0
+  const prevName = prev.sourceName
+  const prevSite = prev.siteDisplayName
+  if (!prevName) return 0
+
+  // 优先级 1：复合 (siteDisplayName, sourceName) 命中（防多站点同名误切）
+  if (prevSite !== null) {
+    const exact = newRawSources.findIndex(
+      (s) => s.siteDisplayName === prevSite && s.sourceName === prevName,
+    )
+    if (exact >= 0) return exact
+  }
+
+  // 优先级 2：单 sourceName 兜底（兼容历史 siteDisplayName=null / 新数组未配 site_display_name）
+  const byName = newRawSources.findIndex((s) => s.sourceName === prevName)
+  return byName >= 0 ? byName : 0
 }
 
 /**

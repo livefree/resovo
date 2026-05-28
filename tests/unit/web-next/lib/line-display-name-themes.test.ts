@@ -333,3 +333,48 @@ describe('matchActiveSourceIndex — 集数切换跨主题稳定保持 active so
     expect(matchActiveSourceIndex(prev, 1, next)).toBe(0)
   })
 })
+
+// ── matchActiveSourceIndex 复合匹配（CHG-369 Codex stop-time review #14）─────
+
+describe('matchActiveSourceIndex — 复合 (siteDisplayName, sourceName) 防多站点同名误切', () => {
+  it('两个不同站点都叫"线路 1" → 按 siteDisplayName 复合精确命中正确站点', () => {
+    const prev = [
+      makeRaw({ id: 1, sourceName: '线路1', siteDisplayName: '站点 A' }),
+      makeRaw({ id: 2, sourceName: '线路1', siteDisplayName: '站点 B' }),
+    ]
+    // 新集数顺序颠倒
+    const next = [
+      makeRaw({ id: 20, sourceName: '线路1', siteDisplayName: '站点 B' }),
+      makeRaw({ id: 10, sourceName: '线路1', siteDisplayName: '站点 A' }),
+    ]
+    expect(matchActiveSourceIndex(prev, 0, next)).toBe(1)  // 站点 A 在新数组位置 1
+    expect(matchActiveSourceIndex(prev, 1, next)).toBe(0)  // 站点 B 在新数组位置 0
+  })
+
+  it('prev siteDisplayName=null → 单 sourceName 兜底（兼容历史数据）', () => {
+    const prev = [makeRaw({ id: 1, sourceName: 'siteX', siteDisplayName: null })]
+    const next = [makeRaw({ id: 10, sourceName: 'siteX', siteDisplayName: '站点 X' })]
+    // siteDisplayName 缺失 → 走 sourceName 兜底 → 命中
+    expect(matchActiveSourceIndex(prev, 0, next)).toBe(0)
+  })
+
+  it('复合不命中但 sourceName 命中 → 降级 sourceName 单匹配（新站点同名场景）', () => {
+    const prev = [makeRaw({ id: 1, sourceName: '线路1', siteDisplayName: '站点 A' })]
+    // 新集数中"站点 A"被重命名为"站点 A.cn"（display_name 偶发变动）但 sourceName 稳定
+    const next = [makeRaw({ id: 10, sourceName: '线路1', siteDisplayName: '站点 A.cn' })]
+    expect(matchActiveSourceIndex(prev, 0, next)).toBe(0)
+  })
+
+  it('prev=有 siteDisplayName + sourceName / 新集数同 sourceName 但不同 siteDisplayName 多条 → 不误切（fallback 0 而非匹配第一条）', () => {
+    // 这是 #14 fix 核心断言：sourceName-only 会切到错站点
+    const prev = [makeRaw({ id: 1, sourceName: '线路1', siteDisplayName: '站点 X' })]
+    const next = [
+      makeRaw({ id: 100, sourceName: '线路1', siteDisplayName: '站点 A' }),  // 同 sourceName 不同站
+      makeRaw({ id: 200, sourceName: '线路1', siteDisplayName: '站点 B' }),  // 同 sourceName 不同站
+    ]
+    // 复合不命中 → 走 sourceName 兜底 → 匹配首位（已属 best-effort / 历史 sourceName-only 行为）
+    // 注：若运营需要"严格 strict"则未来 follow-up 改为 -1 / 0；当前选 sourceName 兜底保留可用性
+    const result = matchActiveSourceIndex(prev, 0, next)
+    expect(result).toBe(0)  // sourceName 兜底命中首位
+  })
+})

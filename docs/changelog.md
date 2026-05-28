@@ -10142,3 +10142,22 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **commit trailer**：无强制 Subagents
 - **经验**：CHG-369 + FIX + FIX-2 三连击修了主题切换主路径，但漏了"跨集稳定匹配依赖 label" 这个隐藏耦合。下次涉及"派生字段 + 跨场景稳定匹配"必须显式：① 列出"稳定 key 不应依赖派生字段"原则 ② grep 所有 label match 模式 ③ helper 抽出让 invariant 可单测
 - **闭环**：Codex stop-time review #13 红线消解 / 集数切换跨主题完全稳定（fetch 期间切主题不会重置 active source）/ matchActiveSourceIndex helper 沉淀 + 单测可见 / label 与稳定 key 解耦的架构 invariant 落地
+
+---
+
+## [CHG-369-FIX-4] sourceName-only 匹配多站点同名误切（Codex stop-time review #14）
+- **完成时间**：2026-05-28
+- **执行模型**：claude-opus-4-7（主循环 / 续会话）
+- **背景**：CHG-369-FIX-3 commit 62e0548f 完成备注里我自己标记的 "follow-up if cross-site 同名 line 问题" — Codex 抓到偷懒。多站点同 sourceName（如多个采集源都叫"线路 1"）时，单 sourceName findIndex 返回首位 → 集数切换时切到错站点。
+- **范围**（1 业务 + 1 测试 / 净增）：
+  - `apps/web-next/src/lib/line-display-name.ts` `matchActiveSourceIndex` 升级：
+    - 优先级 1：`(siteDisplayName, sourceName)` 复合精确命中（防多站点同名误切）
+    - 优先级 2：siteDisplayName 缺失 / 复合无命中 → 单 sourceName 兜底（兼容历史 null siteDisplayName / display_name 变更等场景）
+    - 优先级 3：找不到 → fallback 0
+  - `tests/unit/web-next/lib/line-display-name-themes.test.ts` +4 case：①两站点同名"线路 1" 按 siteDisplayName 精确命中正确站点 ②prev siteDisplayName=null 走 sourceName 兜底 ③siteDisplayName 偶发变动（display_name rename）走 sourceName 降级 ④多新站点同 sourceName 时 sourceName 兜底命中首位（best-effort / 注释明示 trade-off）
+- **设计取舍**：① 单一 sourceName vs (siteKey, sourceName) vs (siteDisplayName, sourceName)：VideoSource raw 字段无 siteKey / 只有 siteDisplayName（来自 crawler_sites.display_name）选 (siteDisplayName, sourceName) ② siteDisplayName null 兜底而非 reject：兼容历史数据（null 是合法值 / 早期 crawler_sites 未配 display_name）③ 多新站点同 sourceName 时仍 fallback 首位：保留可用性 / 严格模式留 follow-up（若实测产生用户投诉再升级）
+- **测试**：tests/unit/web-next/lib/line-display-name-themes 30→**34 PASS**（+4 case / 含复合匹配核心 invariant）
+- **质量门禁**：typecheck ✅ / lint ✅（FULL TURBO 4 cached）/ verify:adr-contracts ✅ EXIT=0
+- **commit trailer**：无强制 Subagents
+- **经验**：CHG-369-FIX-3 设计取舍备注里标 "follow-up 复合 key" 是预见到了风险但偷懒留待"实测发现问题再改"。**Codex 不接受这种主动偷懒** — 预见到的风险必须立即修。下次类似措辞要么 expand 范围一并修 / 要么明确写出"为何当前 trade-off 可接受"（用户数据 / 性能 / scope 等具体论据）
+- **闭环**：Codex stop-time review #14 红线消解 / matchActiveSourceIndex 三层优先级（复合精确 → sourceName 兜底 → 0）完整 / 多站点同名误切场景闭合 / CHG-369 主卡 + 4 个 stop-time fix 收敛 = 5 commit 形成完整治理链
