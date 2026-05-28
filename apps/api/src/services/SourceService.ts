@@ -62,7 +62,10 @@ export class SourceService {
         latencyMs: row.latency_ms,
         quality: (row.quality as RouteQuality) ?? null,
         qualityDetected: (row.quality_detected as RouteQuality) ?? null,
-        // priorityBonus 默认 0（Migration 064 未落地 / arch-reviewer C1）
+        // CHG-368-B-A3 / ADR-164 D-164-3：Migration 079 落地后激活 priority 通道
+        //   sla.priority 范围 0-100（DB CHECK 强制 / Migration 079）→ route-scoring 归一化 / 100
+        //   LEFT JOIN miss 时 alias_priority 为 null → fallback 0（与 Phase 1 行为一致 / 无回归）
+        priorityBonus: row.alias_priority !== null ? row.alias_priority / 100 : 0,
       }),
       createdAt: row.created_at,
     }))

@@ -10588,3 +10588,41 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
   - 真源 7（本 changelog 条目记录）✅
 - **commit trailer**：无强制 Subagents
 - **闭环**：CHG-368-B-A2b 完成 / route 3 端点 + R-MID-1 7 文件框架一体提交 / Service audit 写入接入（retire + priority_update / before/after JSONB payload 完整）/ Wave 2 实施 3/5 子卡完成（-A1 / -A2a / -A2b）/ ADR-164 端点契约表 markdown 标题对齐既有 ADR 范式 / verify-endpoint-adr 197 路由 80 ADR 端点全对齐 / R-MID-1 系统化第 29-30 次落地 / 留待 -A3 + -B + -C
+
+---
+
+## [CHG-368-B-A3] ROUTE-LABEL-B 实施第 3 子卡 — route-scoring priority 通道激活 + listSources JOIN retired_at IS NULL 谓词
+- **完成时间**：2026-05-28
+- **执行模型**：claude-opus-4-7（主循环 / 续会话）
+- **子代理调用**：无（ADR-164 已 Accepted / 共享 API 契约 -A1/-A2a/-A2b 沉淀 / route-scoring 公式 Phase 1 已 ship hook）
+- **拆卡承接**：CHG-368-B-A1/-A2a/-A2b（数据层 + 业务层 + route/RETRO）落地后，本卡（-A3）承接 ADR-164 §文件范围 #13 + #14：route-scoring.ts priority 通道激活 + sources.ts listSources JOIN 加 retired_at IS NULL 谓词。Phase 1 已留 `priority ?? 0` hook（CHG-352 / arch-reviewer C1），本卡仅将 hook 接入真实读取。
+- **范围**（2 业务 + 1 测试调整 + 0 新测试文件 = PATCH=3 严守阈值 / 不触发 architecture sync）：
+  - `apps/api/src/db/queries/sources.ts` 扩 `findActiveSourcesWithSignalsByVideoId`：
+    - DbSourceRowWithSignals 接口扩 `alias_priority: number | null`（source_line_aliases.priority LEFT JOIN / NULL 仅当 sla 行不存在）
+    - SQL SELECT 扩 `sla.priority AS alias_priority` + LEFT JOIN source_line_aliases sla ON (复合键)
+    - **WHERE 加 `AND (sla.retired_at IS NULL OR sla.source_site_key IS NULL)`** 双条件守卫（ADR-164 D-164-6）：① 已退役行不出现 ② LEFT JOIN miss（无 sla 行）保留 video_sources 行
+  - `apps/api/src/services/SourceService.ts` listSources 接入：
+    - `effectiveScore` 派发：原 `// priorityBonus 默认 0` 改为 `priorityBonus: row.alias_priority !== null ? row.alias_priority / 100 : 0`
+    - 注释更新 CHG-368-B-A3 + ADR-164 D-164-3 / Migration 079 落地后激活
+    - LEFT JOIN miss fallback 0 → 与 Phase 1 ship 行为一致 / 既有调用方零回归
+  - `tests/unit/api/sources.test.ts`：
+    - MOCK_RAW_ROW 扩 `alias_priority: null` 字段（既有 9 case 全 PASS / 行为 = Phase 1 ship 数学）
+    - 加 3 新 case：① alias_priority=80 → effectiveScore baseline +0.04（priority/100 × 0.05 weight）② alias_priority=null fallback effectiveScore=baseline（与 Phase 1 一致）③ 高 priority (90) vs 低 priority (10) 排序：priority 主导 effective_score DESC 排序
+- **零业务行为变化保证（priority=null fallback）**：
+  - LEFT JOIN miss（无 sla 行 / source_line_aliases 行不存在）→ alias_priority = null → fallback 0 → 公式 priority_bonus = 0 → 与 Phase 1 ship effectiveScore 数学完全一致
+  - 既有 9 test case 全 PASS / 既有 SourceBar 排序行为零回归
+- **行为变化（priority 真实读取）**：
+  - LEFT JOIN hit（sla 行存在 / 在役 + 有 priority）→ alias_priority 0-100 → fallback priority/100（DB CHECK 强制范围）→ priority_bonus 通道激活
+  - 已退役行（retired_at IS NOT NULL）→ WHERE 守卫排除 → 不出现在 SourceBar 排序池 / D-164-6 退役语义落地
+  - 运营调高 priority → 该线路 effective_score 立即上升 → SourceBar 默认排序前移
+- **质量门禁**：
+  - typecheck ✅（root + 7 workspaces）/ lint ✅（0 error 0 warning）
+  - verify:adr-contracts ✅ EXIT=0（含 verify-sql-schema-alignment 校验 sla.priority + sla.retired_at JOIN 字段 / 197 admin 路由 80 ADR 端点全对齐 / 266 D-N 全闭环）
+  - 单测 84/84 PASS（sources 12 + source-effective-score N + sources-matrix 27 + source-line-alias-* 17 + ... / 零回归）
+- **不触发 architecture.md 同步**（CHG-368-B-A1-FIX-{1..5} 经验持续核对）：
+  - 本卡无 schema migration / 新表 / 新列 / 新约束 / 新索引
+  - 仅 queries SQL 修订（扩 SELECT + JOIN + WHERE）+ Service 派发（应用层逻辑）
+  - LEFT JOIN 引入是消费侧改动 / 不属于 schema 变更
+- **设计取舍**：① 双条件 WHERE 守卫 `(sla.retired_at IS NULL OR sla.source_site_key IS NULL)`：LEFT JOIN miss 时 sla.* 全 NULL → 第二条件 source_site_key IS NULL 守卫保留行（避免误丢无 sla 行的 video_sources）/ ② priority/100 归一化在 Service 层而非 SQL 层：route-scoring 接口约定 priorityBonus 0-1 / Service 层归一化与 quality_score / health_score 同层抽象 / SQL 不污染业务语义 ③ alias_priority null fallback 0 vs Phase 1 隐式 0：显式 null check + 注释标注 fallback 含义 / 防回归
+- **commit trailer**：无强制 Subagents（ADR-164 已 Accepted / 规范驱动实施 / 不修改 packages/admin-ui 公开 Props）
+- **闭环**：CHG-368-B-A3 完成 / route-scoring priority 通道真实激活 / listSources JOIN 已退役行排除 / Wave 2 实施 4/5 子卡完成（-A1 / -A2a / -A2b / -A3）/ admin 通过 PUT priority 端点调高某线路 → 该线路 SourceBar 排序立即上升 / 运营 POST retire 端点退役 → 该线路从前台 SourceBar 消失（双数据通道完整 ship）/ 留待 -B + -C

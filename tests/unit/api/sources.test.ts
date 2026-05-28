@@ -81,6 +81,7 @@ const MOCK_SOURCE = {
 }
 
 // CHG-352: SourceService 现在调 findActiveSourcesWithSignalsByVideoId 返回 raw row (snake_case + 4 信号字段)
+// CHG-368-B-A3: 扩 alias_priority 字段（source_line_aliases.priority LEFT JOIN）
 const MOCK_RAW_ROW = {
   id: 'source-uuid-1',
   video_id: 'video-uuid-1',
@@ -100,6 +101,7 @@ const MOCK_RAW_ROW = {
   render_status: 'ok',
   latency_ms: 100,
   quality_detected: null,
+  alias_priority: null,  // CHG-368-B-A3: LEFT JOIN miss / fallback 0（与 Phase 1 行为一致）
 }
 
 // ── 辅助：测试 app ────────────────────────────────────────────────
@@ -169,6 +171,46 @@ describe('GET /v1/videos/:id/sources', () => {
     const res = await app.inject({ method: 'GET', url: '/v1/videos/abCD1234/sources' })
     expect(res.statusCode).toBe(200)
     expect(res.json().data).toEqual([])
+  })
+
+  // ── CHG-368-B-A3 / ADR-164 D-164-3：priority 通道激活 ──────────────
+
+  it('CHG-368-B-A3: alias_priority=80 → effectiveScore 包含 priority_bonus (priority/100 × 0.05 = 0.04)', async () => {
+    // 全 ok + 1080P + 100ms + priority=80（test 间接证：priority=80 比 priority=0 多 0.04 / 0.05 weight × 0.80）
+    mockSQ.findActiveSourcesWithSignalsByVideoId.mockResolvedValue([{
+      ...MOCK_RAW_ROW,
+      alias_priority: 80,
+    }])
+    const res = await app.inject({ method: 'GET', url: '/v1/videos/abCD1234/sources' })
+    expect(res.statusCode).toBe(200)
+    const body = res.json()
+    expect(body.data).toHaveLength(1)
+    // effectiveScore = 0.86 (priority=0 baseline) + 0.04 (priority/100 × 0.05) = 0.90
+    expect(body.data[0].effectiveScore).toBeCloseTo(0.90, 3)
+  })
+
+  it('CHG-368-B-A3: alias_priority=null (LEFT JOIN miss) → priority_bonus=0 fallback (与 Phase 1 行为一致)', async () => {
+    mockSQ.findActiveSourcesWithSignalsByVideoId.mockResolvedValue([{
+      ...MOCK_RAW_ROW,
+      alias_priority: null,
+    }])
+    const res = await app.inject({ method: 'GET', url: '/v1/videos/abCD1234/sources' })
+    expect(res.statusCode).toBe(200)
+    // effectiveScore baseline (priority=0)：与 Phase 1 ship 数学一致
+    expect(res.json().data[0].effectiveScore).toBeCloseTo(0.86, 3)
+  })
+
+  it('CHG-368-B-A3: 高 priority (90) 排前 / 低 priority (10) 排后 (effective_score DESC)', async () => {
+    // 两条线路：除 priority 外完全相同 → priority 主导排序
+    mockSQ.findActiveSourcesWithSignalsByVideoId.mockResolvedValue([
+      { ...MOCK_RAW_ROW, id: 'low-priority-src', source_name: '线路低', alias_priority: 10 },
+      { ...MOCK_RAW_ROW, id: 'high-priority-src', source_name: '线路高', alias_priority: 90 },
+    ])
+    const res = await app.inject({ method: 'GET', url: '/v1/videos/abCD1234/sources' })
+    const body = res.json()
+    expect(body.data).toHaveLength(2)
+    expect(body.data[0].id).toBe('high-priority-src')
+    expect(body.data[1].id).toBe('low-priority-src')
   })
 })
 
