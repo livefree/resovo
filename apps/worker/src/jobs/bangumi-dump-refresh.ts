@@ -11,6 +11,7 @@
 
 import { existsSync, createReadStream } from 'node:fs'
 import { createInterface } from 'node:readline'
+import { resolve as resolvePath } from 'node:path'
 import type { Pool } from 'pg'
 import type pino from 'pino'
 
@@ -125,16 +126,25 @@ async function upsertBatch(pool: Pool, batch: BangumiDumpEntry[]): Promise<void>
 }
 
 /**
- * 定时重导入口（cron 调用）。文件不存在 → warn + 返回（不抛，不崩 cron）。
+ * 定时重导入口（cron 调用）。
+ * - filePath 未配置（BANGUMI_DUMP_PATH 缺省）→ info + 返回（dump 由 ops provision，未配即不跑，预期态）。
+ * - 文件不存在 → warn（含解析后的绝对路径，便于排查）+ 返回（不抛，不崩 cron）。
+ * 路径解析为绝对：worker CWD=apps/worker，相对路径会按该目录解析，故 log 绝对路径使误配可见。
  */
-export async function runBangumiDumpRefresh(pool: Pool, log: pino.Logger, filePath: string): Promise<void> {
-  if (!existsSync(filePath)) {
-    log.warn({ filePath }, 'bangumi dump file not found; skipping refresh')
+export async function runBangumiDumpRefresh(pool: Pool, log: pino.Logger, filePath: string | null): Promise<void> {
+  if (!filePath) {
+    log.info('BANGUMI_DUMP_PATH not configured; skipping bangumi dump refresh')
     return
   }
 
-  log.info({ filePath }, 'bangumi dump refresh started')
-  const rl = createInterface({ input: createReadStream(filePath, { encoding: 'utf8' }), crlfDelay: Infinity })
+  const resolved = resolvePath(filePath)
+  if (!existsSync(resolved)) {
+    log.warn({ filePath: resolved }, 'bangumi dump file not found; skipping refresh')
+    return
+  }
+
+  log.info({ filePath: resolved }, 'bangumi dump refresh started')
+  const rl = createInterface({ input: createReadStream(resolved, { encoding: 'utf8' }), crlfDelay: Infinity })
 
   let batch: BangumiDumpEntry[] = []
   let upserted = 0

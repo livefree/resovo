@@ -3,8 +3,10 @@
  * 校验 type 过滤 / 标题回退 / 年份提取 / rank>0 / nsfw / 归一化，与 import 脚本规则一致。
  */
 
-import { describe, it, expect } from 'vitest'
-import { parseBangumiLine, normalizeTitle } from '@resovo/worker/jobs/bangumi-dump-refresh'
+import { describe, it, expect, vi } from 'vitest'
+import { parseBangumiLine, normalizeTitle, runBangumiDumpRefresh } from '@resovo/worker/jobs/bangumi-dump-refresh'
+import type { Pool } from 'pg'
+import type pino from 'pino'
 
 function line(obj: Record<string, unknown>): string {
   return JSON.stringify(obj)
@@ -55,5 +57,31 @@ describe('parseBangumiLine', () => {
     expect(r?.nsfw).toBe(true)
     expect(r?.year).toBeNull()
     expect(r?.airDate).toBeNull()
+  })
+})
+
+describe('runBangumiDumpRefresh — 跳过分支（不触碰 DB）', () => {
+  function mocks() {
+    const connect = vi.fn()
+    const pool = { connect } as unknown as Pool
+    const log = { info: vi.fn(), warn: vi.fn() } as unknown as pino.Logger
+    return { pool, log, connect }
+  }
+
+  it('路径未配置（null）→ info 跳过，不连 DB', async () => {
+    const { pool, log, connect } = mocks()
+    await runBangumiDumpRefresh(pool, log, null)
+    expect(log.info).toHaveBeenCalledWith(expect.stringContaining('not configured'))
+    expect(connect).not.toHaveBeenCalled()
+  })
+
+  it('文件不存在 → warn（含解析后绝对路径）跳过，不连 DB', async () => {
+    const { pool, log, connect } = mocks()
+    await runBangumiDumpRefresh(pool, log, '/nonexistent/bangumi/subject.jsonlines')
+    expect(log.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ filePath: '/nonexistent/bangumi/subject.jsonlines' }),
+      expect.stringContaining('not found'),
+    )
+    expect(connect).not.toHaveBeenCalled()
   })
 })

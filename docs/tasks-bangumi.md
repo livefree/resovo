@@ -31,8 +31,9 @@ docs 硬冲突域（adr / architecture）已在 tracks.md 声明持有。
   - `index.ts` 接线 `bangumiDumpTask`（start/stop/启动日志；**不 boot 跑**，重活只按 schedule）。
   - `.env.example` 文档化两个新 env。`docs/tracks.md` 扩 apps/worker 文件域。
   - **复用决策**：worker 与 scripts/ 分属独立部署包，跨包运行时 import repo-root 脚本在 prod 易断 → 自包含 job，注释交叉引用 scripts/import-bangumi-dump.ts + ADR-159 + migration 077 保持同步（正确性/稳定性 #1 > 去重 #2）。
-  - 单测：bangumi-dump-refresh（7，parseBangumiLine 全分支）。
-  - **门禁**：typecheck ✅（8 包全 PASS）/ verify:adr-contracts ✅（无新端点 / 199 路由对齐 / SQL schema 对齐）/ `npm run test -- --run`：**5286 passed（399 文件全通过）**。
+  - **stop-hook 审阅修订（Codex，2026-05-27）**：原 `bangumiDumpPath` 默认是**相对路径**，而 worker 标准启动 CWD=apps/worker（`npm --workspace @resovo/worker run start`），相对路径解析不到 → cron 每次静默 no-op；且 `external-db/` 为 gitignore 本地产物（dump 从不入库）。修订：① 去掉误导性相对默认值 → `BANGUMI_DUMP_PATH?.trim() || null`，未配置时 job 打 **info「not configured; skipping」** 显式跳过（dump 由 ops provision，未配即预期不跑）；② 配置后 `path.resolve` 成绝对路径并在日志输出，文件缺失 warn 含绝对路径使误配可见；③ .env.example 改绝对路径示例 + 说明。新增 2 跳过分支单测（null / 文件不存在均不连 DB）。
+  - 单测：bangumi-dump-refresh（9，parseBangumiLine 全分支 + 2 跳过分支）。
+  - **门禁**：typecheck ✅（8 包全 PASS）/ verify:adr-contracts ✅（无新端点 / 199 路由对齐 / SQL schema 对齐）/ `npm run test -- --run`：**5287 passed / 1 flaky（5288 总）**，flaky 为 StagingEditPanel（apps/server v1，隔离单跑 12/12 PASS），与本卡 apps/worker 改动无关。
   - **已知（pre-existing，非本卡引入）**：全量跑 exit code 非 0 源于 `tests/unit/server-next/admin-moderation/use-filter-presets.test.ts` 的 flaky post-teardown unhandled rejection（`window is not defined`——该测试路径 `server-next/admin-moderation/**` 不匹配 jsdom globs `admin-moderation/**` → node 环境跑，异步 setLoading 在并行 teardown 后触发）；**隔离单跑 exit 0 / 0 错误**，与 apps/worker 改动无关。属 server-next 测试卫生 + environmentMatchGlobs 覆盖缺口，**超出 bangumi Track 文件域**，建议 server-next owner 跟进。
 - **沉淀判断**：cron 接入对标既有 source-health/feedback 任务范式，自包含 job 边界清晰；parse 规则与 import 脚本交叉引用约束同步，是。
 
