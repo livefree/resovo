@@ -188,6 +188,42 @@ describe('PlayerShell server-side hydration (ADR-160 AMENDMENT 2 D-160-AMD2-3)',
     searchParamsGet.mockReturnValue(null) // 复位
   })
 
+  it('初始 sources fetch 期间用户切集 → 切集不被吞掉（Codex stop-time review #2 回归防御）', async () => {
+    // 场景：用户公开访问 watch 页 → useEffect 1 启动 sources fetch for ep=1
+    // 在 sources promise resolve 之前，用户切到 ep=2 → useEffect 2 应触发 fetch for ep=2
+    // 修复前：fetchedEpisodeRef 在 sources 完成后才设 / 此期间 useEffect 2 看 ref=null 但
+    //         也不会因 sources 完成而重跑（依赖未变）→ 用户切集被吞掉
+    // 修复后：ref 在 useEffect 1 入口同步 claim = initial ep / useEffect 2 依赖 [currentEpisode, video] /
+    //         切集时 ref ≠ currentEpisode → fetch + claim 新 ep / 初始 sources stale check 丢弃旧响应
+    let resolveSources!: (val: unknown) => void
+    const sourcesPromise = new Promise((resolve) => {
+      resolveSources = resolve
+    })
+    apiGetMock.mockImplementation((url: string) =>
+      url.includes('/sources') ? sourcesPromise : Promise.resolve({ data: MOCK_VIDEO })
+    )
+
+    const { rerender } = render(<PlayerShell slug="test-aB3kR9x1" />)
+    // 等到 video fetch 完成（initPlayer 调用，sources fetch 已发起但未 resolve）
+    await waitFor(() => expect(initPlayerMock).toHaveBeenCalled())
+    await waitFor(() => {
+      const calls = apiGetMock.mock.calls.map((c) => c[0] as string)
+      expect(calls.some((url) => url.includes('/sources?episode=1'))).toBe(true)
+    })
+    apiGetMock.mockClear()
+    // 用户在 sources fetch 期间切到 ep=2
+    mockState.currentEpisode = 2
+    apiGetMock.mockImplementation(() => Promise.resolve({ data: [MOCK_SOURCE] }))
+    rerender(<PlayerShell slug="test-aB3kR9x1" />)
+    // 切集应触发 ep=2 fetch（不被吞掉）
+    await waitFor(() => {
+      const calls = apiGetMock.mock.calls.map((c) => c[0] as string)
+      expect(calls.some((url) => url.includes('/sources?episode=2'))).toBe(true)
+    })
+    // 旧的 ep=1 sources 现在 resolve → stale check 丢弃（不覆盖 ep=2 状态）
+    resolveSources({ data: [MOCK_SOURCE] })
+  })
+
   it('非 hydrated + 首次切集 → episode-switch effect 正常 fetch（Codex stop-time review 回归防御）', async () => {
     // 场景：用户公开访问 watch 页（无 initialVideo / initialSources）→ useEffect 1 完成
     // 后用户切到 ep=2 → episode-switch effect 应触发 sources fetch（修复前 ref 错误时序

@@ -91,10 +91,12 @@ export function PlayerShell({ slug: slugProp, portalMode = false, previewMode = 
 
   const shortId = extractShortId(slug)
 
-  // ADR-160 AMENDMENT 2 D-160-AMD2-3：episode-switch effect 跳过首次挂载，避免与初始 fetch effect "双拉" sources；
-  // ref 由初始 fetch useEffect 在 sources 处理完成后设 true（不是由 episode-switch effect 自身设 / 否则
-  // video 为 null 时 episode-switch effect 直接 return，ref 永远是 false，导致用户首次切集被错误跳过）
-  const episodeSwitchInitRef = useRef(false)
+  // ADR-160 AMENDMENT 2 D-160-AMD2-3：fetchedEpisodeRef 记录"已 fetch / 正在 fetch 的 episode"
+  // - 初始 fetch useEffect 在 setVideo 同时 claim ref = initial ep（不等 sources 完成 / 防 episode-switch 双拉）
+  // - 初始 sources 完成时做 stale check：ep ≠ store.currentEpisode → 不 setSources（用户在 fetch 期间切集 / 让 episode-switch 接手最新 ep）
+  // - episode-switch useEffect 依赖 [currentEpisode, video]：video 变化后重跑兜住 "在 sources fetch 期间切集" 时序；
+  //   基于 ref 判定避免重复 fetch（claim before fetch）
+  const fetchedEpisodeRef = useRef<number | null>(null)
 
   useEffect(() => {
     // Snapshot all mini player state BEFORE initPlayer resets them to defaults
@@ -107,6 +109,9 @@ export function PlayerShell({ slug: slugProp, portalMode = false, previewMode = 
     const priorTime = isSameVideo ? snap.currentTime : 0
     const priorSourceIndex = isSameVideo ? snap.activeSourceIndex : 0
     setLoading(true)
+    // 同步 claim ref = initial ep / 在 videoPromise 异步链之前就标记 / 避免 episode-switch effect
+    // 在 useEffect 1 异步链解析前先发起 fetch 造成双拉（initialVideo 场景 video 已非 null）
+    fetchedEpisodeRef.current = ep
     // ADR-160 AMENDMENT 2 Y-AMD2-1：派发 video fetch 源 — server-side hydrated 或 client fetch
     const videoPromise = initialVideo
       ? Promise.resolve<ApiResponse<Video>>({ data: initialVideo })
@@ -126,6 +131,11 @@ export function PlayerShell({ slug: slugProp, portalMode = false, previewMode = 
             )
         sourcesPromise
           .then((r) => {
+            // stale check：用户在 fetch 期间切集 → episode 不再是 initial ep → 丢弃响应，让 episode-switch effect 拉最新 ep
+            if (ep !== usePlayerStore.getState().currentEpisode) {
+              fetchedEpisodeRef.current = null
+              return
+            }
             // CHG-353：按主题赋标签（后端已按 effective_score 排序 / CHG-352）
             const themed = applyThemeLabels(
               r.data.map((s) => ({ effectiveScore: s.effectiveScore, quality: s.quality })),
@@ -161,17 +171,16 @@ export function PlayerShell({ slug: slugProp, portalMode = false, previewMode = 
               setPlayerVersion((v) => v + 1)
             }
           })
-          .catch(() => setSources([]))
-          .finally(() => {
-            // 初始 sources 已处理（成功 or 失败）→ 解锁 episode-switch effect
-            episodeSwitchInitRef.current = true
+          .catch(() => {
+            // sources 失败的 stale check 同 then 分支
+            if (ep !== usePlayerStore.getState().currentEpisode) {
+              fetchedEpisodeRef.current = null
+              return
+            }
+            setSources([])
           })
       })
-      .catch(() => {
-        setVideo(null)
-        // video fetch 失败也要解锁，否则用户后续重试 / 路由切换后 episode-switch 永远跳过
-        episodeSwitchInitRef.current = true
-      })
+      .catch(() => setVideo(null))
       .finally(() => setLoading(false))
     // 技术债(NEW-P0-B)：依赖故意收敛到 shortId，initPlayer/searchParams 等引用稳定引用
     // 修复方案：提取 fetchVideoAndSources(shortId, ep) 为 useCallback 后移除此 disable
@@ -180,16 +189,20 @@ export function PlayerShell({ slug: slugProp, portalMode = false, previewMode = 
 
   useEffect(() => {
     if (!shortId || !video) return
-    // episodeSwitchInitRef 由初始 fetch useEffect 在 sources 处理完成后设 true；
-    // 在此之前直接 return（避免与初始 fetch 重复拉 sources）
-    if (!episodeSwitchInitRef.current) return
+    // fetchedEpisodeRef === currentEpisode → 已 fetch / 正在 fetch（初始 useEffect 已 claim）→ 跳过避免双拉；
+    // 不等 → 用户切集（或在初始 fetch 期间已切但被 stale 丢弃），claim 当前 ep 再 fetch
+    if (fetchedEpisodeRef.current === currentEpisode) return
+    fetchedEpisodeRef.current = currentEpisode
     setStartTime(undefined)
+    const targetEp = currentEpisode
     apiClient
       .get<ApiListResponse<VideoSource>>(
-        `/videos/${shortId}/sources?episode=${currentEpisode}`,
+        `/videos/${shortId}/sources?episode=${targetEp}`,
         { skipAuth: true }
       )
       .then((res) => {
+        // stale check：fetch 期间用户又切集 → 丢弃响应让下次 effect 接手
+        if (targetEp !== usePlayerStore.getState().currentEpisode) return
         // CHG-353：切集后重新按主题赋标签（保持与初始 fetch 一致）
         const themed = applyThemeLabels(
           res.data.map((s) => ({ effectiveScore: s.effectiveScore, quality: s.quality })),
@@ -217,11 +230,17 @@ export function PlayerShell({ slug: slugProp, portalMode = false, previewMode = 
         const matched = prevLabel ? newSources.findIndex((s) => s.label === prevLabel) : -1
         setActiveSourceIndex(matched >= 0 ? matched : 0)
       })
-      .catch(() => {/* 无源时保留已有源 */})
-    // 技术债(NEW-P0-B)：依赖收敛到 currentEpisode；sources/activeSourceIndex 通过闭包读取快照
+      .catch(() => {
+        // stale 时不能复位 ref（已被后续 effect 占用）；否则会让用户切回该 ep 时无法重拉
+        if (targetEp === usePlayerStore.getState().currentEpisode) {
+          fetchedEpisodeRef.current = null
+        }
+      })
+    // 技术债(NEW-P0-B)：依赖收敛到 currentEpisode + video；sources/activeSourceIndex 通过闭包读取快照
+    // video 加入依赖：兜住 "在初始 sources fetch 期间切集" 时序（video 变化触发 effect 重跑 → ref 判定 fetch 最新 ep）
     // 修复方案：改用 useRef(sources)/useRef(activeSourceIndex) 读取最新值，移除此 disable
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentEpisode])
+  }, [currentEpisode, video])
 
   const handleTimeUpdate = useCallback(
     (t: number, d: number) => {
