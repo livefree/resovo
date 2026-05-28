@@ -10401,3 +10401,36 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **commit trailer**：无强制 Subagents
 - **经验**：本红线源头是 ADR-164 §4 SQL 草案的"加速 listSources JOIN"注释——arch-reviewer Opus 子代理在 1 轮独立起草中未充分检查"部分索引 WHERE 条件方向" vs "查询谓词方向"的匹配性。**今后部分索引设计必须显式核对：部分索引 `WHERE <条件>` 仅对带相同 `<条件>` 的查询谓词有效；反向 `<NOT 条件>` 查询无法用该索引**。这是 PG 部分索引规划器底层语义 invariant，应该写入 docs/rules/db-rules.md 索引设计 checklist。
 - **闭环**：Codex stop-time review #18 红线消解 / Migration 079 + architecture.md + decisions.md 3 真源索引用途声明完整对齐物理行为 / `idx_source_line_aliases_retired_at` 部分索引保留服务真实路径（冷却期 + admin UI 已退役 tab）/ listSources 主路径加速来源明确指向 `idx_source_line_aliases_codename_active` 部分唯一索引
+
+---
+
+## [CHG-368-B-A1-FIX-3] idx_source_line_aliases_retired_at 替换声明仍虚假修正（Codex stop-time review #19）
+- **完成时间**：2026-05-28
+- **执行模型**：claude-opus-4-7（主循环 / 续会话）
+- **背景**：CHG-368-B-A1-FIX-2 commit 3e90eb20 后 Codex 再次抓到红线："replacement index-purpose claim is still false"。
+- **根因**：FIX-2 把虚假声明从"加速 listSources JOIN" 改为"加速 ① SourceLineAliasService 90 天冷却期判定 ② admin UI 已退役 tab"。但 ① 仍然是错误声明：
+  - `isCodenameInCooling(codename: string)` 典型查询是 `WHERE codename = $1 AND retired_at >= NOW() - INTERVAL '90 days'`
+  - driving 字段是 codename（高选择性单值匹配）→ 规划器会走 codename 索引（`idx_source_line_aliases_codename_active` 部分唯一索引）
+  - `idx_source_line_aliases_retired_at` 索引按 retired_at 排序 / 单 codename 查询不会走该索引
+  - 把"按 codename 查询冷却期判定"说成"由 retired_at 索引加速"= 错误的 access path 声明
+- **第二次错误模式**：FIX-2 修正的方向是对的（剔除"加速 listSources"），但替换文案仍然把索引绑定到不适用的调用方（cooling 判定 by codename）。Codex 抓到我"修了一个虚假声明又引入另一个虚假声明"的模式。
+- **3 处声明再次修正（更严谨表述）**：
+  - 不再绑定具体 Service 方法名（避免再次方向错配）
+  - 拆 "候选未来路径" + "不适用路径" 双向声明
+  - 显式承认"规划器选用取决于实际数据 selectivity / 留 CHG-368-B-B 上线后 EXPLAIN ANALYZE 验证"——即"候选" 不等于"保证走该索引"
+  - 真实候选：① admin UI "已退役" tab `WHERE retired_at IS NOT NULL ORDER BY retired_at DESC`（部分索引谓词 + 排序列双重匹配）② GET codename-pool cooling 段 `WHERE retired_at >= NOW() - 90 days` 范围扫描（按 retired_at 范围 / 不按 codename 单值）
+  - 显式声明不适用：listSources `IS NULL` 反向条件 + `isCodenameInCooling(codename)` 按 codename 查询
+- **3 真源同步修正**：
+  - `apps/api/src/db/migrations/079_*.sql` 注释 L57-67：候选 + 不适用双向声明
+  - `docs/architecture.md` §5 索引段：候选 + 不适用双向声明 + 留 EXPLAIN ANALYZE 验证
+  - `docs/decisions.md` ADR-164 §4 SQL 草案：候选 + 不适用双向 + CHG-368-B-A1-FIX-3 溯源标注（既有 FIX-2 溯源链接保留 / 二代修订递进）
+- **方法论变化**：原本"绑定调用方"的描述策略改为"路径分类 + 数据 selectivity 承认"。索引描述新范式：
+  - ✅ 索引覆盖：物理事实陈述（"覆盖已退役行 retired_at 列排序结构"）
+  - ✅ 候选路径：列出可能的 SQL 模式（不绑定具体调用方 / 不承诺规划器选择）
+  - ✅ 不适用路径：显式排除（避免读者错配）
+  - ✅ 验证承诺：留实测 EXPLAIN ANALYZE
+  - ❌ 不再写"加速某 Service 方法"形式（绑定调用方易出错）
+- **质量门禁**：verify:adr-contracts ✅ EXIT=0 / 仅注释 + docs 改动 / typecheck + lint + test unaffected
+- **commit trailer**：无强制 Subagents
+- **经验**：本次连续 2 次 stop-time review #18 + #19 修同一索引声明 = "**修正中引入新错误**"模式。根因是把索引用途绑定到具体 Service 方法名 + 假设规划器一定走该索引，没有先建立"索引覆盖 → 候选查询模式 → 不适用排除 → 实测验证"四级表述范式。**今后所有索引设计文档（migration 注释 + architecture.md + ADR）必须按此四级范式书写，禁止"加速某 Service 方法"形式的绑定式声明**。该范式应作为 docs/rules/db-rules.md 新增章节落地（连同上次 FIX-2 提议的"部分索引方向 invariant"checklist 一并）。
+- **闭环**：Codex stop-time review #19 红线消解 / 3 真源声明全面去除"绑定调用方"形式 / 替换为"候选未来路径 + 不适用排除 + EXPLAIN ANALYZE 验证留置"四级范式 / 索引物理保留（admin UI 已退役 tab + GET codename-pool cooling 范围扫描两候选路径在 CHG-368-B-A2/-B 落地后实测验证）

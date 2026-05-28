@@ -17131,13 +17131,17 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_source_line_aliases_codename_active
   ON source_line_aliases (codename)
   WHERE codename IS NOT NULL AND retired_at IS NULL;
 
--- ── 4. 辅助索引（已退役行查询）─────────────────────────────────────
--- 加速「已退役行」路径：① SourceLineAliasService 90 天冷却期判定
--- ② admin UI "已退役" tab 视图。listSources 主路径谓词 `retired_at IS NULL`
--- 反而由 idx_source_line_aliases_codename_active 部分唯一索引 WHERE 条件覆盖。
--- （注：本 SQL 注释经 CHG-368-B-A1-FIX-2 / Codex stop-time review #18 修订；
--- ADR-164 §4 原注释 "用于 listSources JOIN" 是描述错误，部分索引谓词方向
--- 与 listSources `IS NULL` 不匹配 / 部分索引 `IS NOT NULL` 仅对反向查询有效）
+-- ── 4. 辅助索引（已退役行集合 / 候选未来路径）─────────────────────
+-- 索引覆盖已退役行 retired_at 列排序结构。候选查询路径（规划器实际
+-- 选用取决于数据 selectivity，留实测 EXPLAIN ANALYZE 验证）：
+--   ① admin UI "已退役" tab（CHG-368-B-B）：retired_at IS NOT NULL ORDER BY DESC
+--   ② GET codename-pool cooling 段（CHG-368-B-A2）：retired_at >= NOW() - 90 days 范围扫描
+-- 不适用：listSources 主路径 retired_at IS NULL（反向条件 / 由
+--   idx_source_line_aliases_codename_active 覆盖）/ isCodenameInCooling 按
+--   codename 查询（codename 索引覆盖）。
+-- （注：本注释经 CHG-368-B-A1-FIX-3 / Codex stop-time review #19 修订；
+-- 原注释 "加速 listSources JOIN" 与 "加速 SourceLineAliasService 90 天冷却期判定"
+-- 均为描述错误，前者方向相反 / 后者按 codename 查应走 codename 索引）
 
 CREATE INDEX IF NOT EXISTS idx_source_line_aliases_retired_at
   ON source_line_aliases (retired_at)
