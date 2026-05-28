@@ -283,3 +283,96 @@ A：Phase 1 严格控范围 ≤ 5 文件 + admin Props 契约改动需 arch-revi
 | `apps/web-next/src/components/player/SourceBar.tsx` | 接 themeLabel + quality + isDead + isPending props / 处理 1 条 / dead / pending 边界 |
 | `apps/web-next/src/components/player/PlayerShell.tsx` | useLocale + applyThemeLabels 调用 + SourceItem 透传新字段 |
 | `tests/unit/web-next/lib/line-display-name-themes.test.ts` | 新建 22 case：5 主题常量长度 + getDefaultTheme + applyThemeLabels 边界 |
+
+
+---
+
+## §9 Layer B 实施记录（CHG-368-B / ADR-164）
+
+> 真源：ADR-164（accepted 2026-05-28）+ Migration 079 + CHG-368-B-A1/-A2a/-A2b/-A3/-B 五子卡。
+
+### 9.1 schema 扩展（Migration 079 / 2026-05-28）
+
+`source_line_aliases` 扩 4 字段：
+
+| 字段 | 类型 | 语义 | 引用 |
+|---|---|---|---|
+| `codename` | VARCHAR(20) NULL | 山名代号（"泰山-2"）/ 永久绑定 (siteKey, sourceName)/ 退役 90 天后可复用 | D-164-2 |
+| `priority` | SMALLINT NOT NULL DEFAULT 0 CHECK 0-100 | Layer A `priority_bonus` 通道（route-scoring.ts 归一化 priority/100）| D-164-3 |
+| `retired_at` | TIMESTAMPTZ NULL | 软删时间戳（NULL=在役 / NOT NULL=退役 + 90 天冷却）| D-164-4 |
+| `auto_retired` | BOOLEAN NOT NULL DEFAULT false | true=worker 自动退役（plan §10.5 / 180 天全 dead）/ false=人工 POST retire | D-164-8 |
+
+索引：
+- `UNIQUE (codename) WHERE codename IS NOT NULL AND retired_at IS NULL` — 活跃 codename 全局唯一（部分唯一索引 / D-164-9）
+- `(retired_at) WHERE retired_at IS NOT NULL` — 已退役行集合（候选路径 admin UI "已退役" tab + cooling 范围扫描 / 实测 EXPLAIN ANALYZE 验证）
+
+### 9.2 字库治理（D-164-10）
+
+代码常量真源：`packages/types/src/route-codenames.ts`
+
+```ts
+export const MOUNTAIN_CODENAMES: readonly string[] = [
+  // 五岳（5）+ 道教（8）+ 西部（8）+ 华东（8）+ 华北（7）+ 华南（8）+ 其他（8）+ 占位（2）= 52 项
+]
+```
+
+- DB 不存字库（参 ADR-017 VideoGenre union type 同模式）
+- 字库支持后缀扩容（如 "泰山-2"）/ 不强制必须来自常量
+- GET `/admin/source-line-aliases/codename-pool` 返回 `{ available, occupied, cooling }`
+
+**字库枯竭重评条件**（R-164-5）：`occupied + cooling > 45` 触发 `PRE-ROUTE-CODENAME-LIBRARY-EXTEND` 卡（扩字库 / 允许英文 NATO / 元素周期表等）。
+
+### 9.3 90 天冷却期判定（D-164-11 应用层）
+
+`SourcesMatrixService.getCodenamePool()` 应用层判定：
+
+```ts
+const COOLING_MS = 90 * 24 * 60 * 60 * 1000
+const now = Date.now()
+const isCooling = (retiredAt !== null) && (now - Date.parse(retiredAt)) < COOLING_MS
+```
+
+DB 不写 CHECK 约束（D-164-11 / 运营紧急复用口子 / 时间约束不应写 DB / 与 ADR-163 D-163-4 "DB 层不强制业务不变式" 同模式）。
+
+### 9.4 端点契约（R-MID-1 第 29-30 次系统化 / D-164-7）
+
+| Method | Path | 鉴权 | actionType | RETRO |
+|---|---|---|---|---|
+| GET | `/admin/source-line-aliases` | moderator+ | — | — |
+| GET | `/admin/source-line-aliases/codename-pool` | moderator+ | — | — |
+| PUT | `/admin/source-line-aliases/:siteKey/:sourceName` | admin | `source_line_alias.upsert`（既有 / payload 扩 codename/priority）| 既有 |
+| POST | `/admin/source-line-aliases/:siteKey/:sourceName/retire` | admin | `source_line_alias.retire`（新增）| 第 29 次 |
+| PUT | `/admin/source-line-aliases/:siteKey/:sourceName/priority` | admin | `source_line_alias.priority_update`（新增）| 第 30 次 |
+
+### 9.5 admin UI（CHG-368-B-B）
+
+- 独立路径：`/admin/source-line-aliases`
+- 真源：`apps/server-next/src/app/admin/source-line-aliases/_client/SourceLineAliasesClient.tsx`
+- 组件：PageHeader + AdminCard codename 池摘要 + DataTable 一体化（mode='client' / 6 列）+ Modal 编辑行 + 行级退役
+- 列：siteKey + sourceName + displayName + codename + priority + status (computed) + actions (kind: 'action')
+
+### 9.6 priority 通道激活（CHG-368-B-A3）
+
+- 改动：`SourceService.listSources` 内 `priorityBonus: row.alias_priority !== null ? row.alias_priority / 100 : 0`
+- 公式（CHG-352 ship / 本卡未改）：`effective_score = 0.5×health + 0.3×quality + 0.15×latency + 0.05×(priority/100)`
+- 行为：admin 通过 PUT priority 端点调高某线路 → 该线路 effective_score 立即上升 → SourceBar 排序前移
+
+### 9.7 退役治理（D-164-4 + D-164-6）
+
+- 手动退役：admin 通过 POST retire 端点 / `auto_retired=false` / 写 audit `source_line_alias.retire`
+- 自动退役（plan §10.5 / 未实施）：worker 检测全 dead 180 天 → 写 `retired_at=NOW()` + `auto_retired=true` / 留 PRE-DEAD-LINE-AUTO-RETIRE-WORKER 占位卡（A-164-1）
+- 退役语义对 effective_score 的影响：`SourceService.listSources` JOIN 加 `sla.retired_at IS NULL` 谓词 → 已退役行不出现在 SourceBar 排序池
+
+### 9.8 5 黄线 + 4 advisory + 7 重评条件
+
+详 ADR-164 §11 自审。CHG-368-B 五子卡（-A1/-A2a/-A2b/-A3/-B）已 ship 全部主线 + 大部分黄线（Y-164-3 admin UI bulkActions Toast 聚合留 advisory）。advisory A-164-2（LinesPanel codename 标签）→ CHG-368-B-C 待。
+
+### 9.9 文件清单（CHG-368-B / 累计 5 子卡）
+
+| 子卡 | 主要文件 |
+|---|---|
+| -A1 | `migrations/079_*.sql` + `packages/types/{sources-matrix.types,route-codenames}.ts` + `queries/sources-matrix.ts` |
+| -A2a | `queries/sources-matrix.ts` (4 mutations) + `services/SourcesMatrixService.ts` (4 方法) |
+| -A2b | `routes/admin/sources-matrix.ts` (3 端点) + RETRO 7 文件框架（types union + ACTION_TYPES + 双 audit 测试 + payload 测试）|
+| -A3 | `queries/sources.ts` (JOIN + WHERE 谓词) + `services/SourceService.ts` (priority/100 派发) |
+| -B | `app/admin/source-line-aliases/{page,_client/SourceLineAliasesClient}.tsx` + `lib/sources/api.ts` (4 函数) + `lib/admin-nav.tsx` sidebar 入口 |

@@ -10670,3 +10670,34 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **质量门禁**：typecheck ✅ / lint ✅ / verify:adr-contracts ✅ EXIT=0（验证 -B-B 引入 0 新端点 / 197 路由 80 ADR 端点对齐保持）/ 单测 source-line-aliases 域 6/6 PASS（新建）+ 其他既有零回归
 - **commit trailer**：无强制 Subagents（不修改 packages/admin-ui 公开 Props / 不触发"共享组件 API 契约强制 Opus"红线）
 - **闭环**：CHG-368-B-B 完成 / admin UI 独立路径 ship / Layer B 完整管理视图（列表 + 编辑 + 退役 + 字库摘要）/ Wave 2 实施 5/5 子卡完成（除 -C advisory）/ 留待 -C（LinesPanel codename 标签 + docs/manual 同步 / advisory 可选 / commit 需 arch-reviewer trailer）
+
+---
+
+## [CHG-368-B-C-DOCS] ROUTE-LABEL-B docs 同步（架构 + manual / -C 卡 docs 部分 / LinesPanel UI 留独立卡）
+- **完成时间**：2026-05-28
+- **执行模型**：claude-opus-4-7（主循环 / 续会话）
+- **子代理调用**：无（仅 docs 同步 / 不修改 packages/admin-ui 公开 Props / 不触发 CLAUDE.md "共享组件 API 契约强制 Opus" 红线）
+- **拆卡承接**：CHG-368-B-A1..B 五子卡（实施 5/5）完成后，本卡（-C-DOCS）承接 ADR-164 §6 docs 同步部分（不含 LinesPanel UI 标签）。LinesPanel codename 标签因涉及 packages/admin-ui composite/lines-panel/lines-panel.types.ts 公开 Props 扩展（CLAUDE.md "共享组件 API 契约强制 Opus" 红线触发），独立拆 `CHG-368-B-C-UI` 卡 / 需 spawn arch-reviewer Opus / 留后续会话承接。
+- **范围**（2 docs / PATCH=2 / 不触发任何红线）：
+  - `docs/architecture.md` §5 source_line_aliases 段：
+    - "未 ship 业务路径" → "**已 ship 业务路径（CHG-368-B-A2a/-A2b/-A3）**"：详列 3 admin 端点 + Service 4 方法 + R-MID-1 RETRO 第 29-30 次系统化 + route-scoring priority 通道激活 + JOIN 双条件守卫
+    - 新增 "**已 ship admin UI（CHG-368-B-B）**" 段：独立路径 `/admin/source-line-aliases` + DataTable 一体化 + 6 列结构 + AdminCard codename 池摘要 + Modal 编辑行 + 行级退役
+    - "未 ship UI（→ -C 排期）" 缩窄为 LinesPanel codename 标签 + docs/manual sync（本卡 docs 部分完成 / LinesPanel UI 仍 advisory）
+  - `docs/manual/route-labeling.md` 追加完整 §9 "Layer B 实施记录"（9 子段）：
+    - §9.1 schema 扩展（Migration 079 / 4 字段表）
+    - §9.2 字库治理（D-164-10 / MOUNTAIN_CODENAMES 52 项 / R-164-5 重评）
+    - §9.3 90 天冷却期判定（D-164-11 应用层 / COOLING_MS 常量）
+    - §9.4 端点契约（R-MID-1 第 29-30 次系统化 / 5 行表）
+    - §9.5 admin UI（CHG-368-B-B / 真源 + 组件 + 列）
+    - §9.6 priority 通道激活（CHG-368-B-A3 / 公式 + 行为）
+    - §9.7 退役治理（D-164-4 + D-164-6 / 手动 + 自动 + 排除语义）
+    - §9.8 5 黄线 + 4 advisory + 7 重评条件 cross-link ADR-164 §11
+    - §9.9 累计 5 子卡文件清单
+- **留待 CHG-368-B-C-UI（advisory / 后续会话 / 需 spawn Opus）**：
+  - `packages/admin-ui/src/components/composite/lines-panel/lines-panel.types.ts` LineAggregate 扩 codename + retiredAt 字段（CLAUDE.md 强制 Opus 触发：修改 packages/admin-ui types.ts 公开 Props 字段 / commit 需 `Subagents: arch-reviewer (claude-opus-...)` trailer）
+  - `packages/admin-ui/src/components/composite/lines-panel/lines-panel.tsx` 行级显示 codename 小标签
+  - 退役行 opacity 50% + "已退役" 标识
+  - 测试更新（lines-panel.test 加 codename 显示 case）
+- **质量门禁**：verify:adr-contracts ✅ EXIT=0（仅 docs 改动 / typecheck + lint + test unaffected）
+- **commit trailer**：无强制 Subagents（纯 docs / 不修改 packages/admin-ui 公开 Props / 不触发任何红线）
+- **闭环**：CHG-368-B-C-DOCS 完成 / docs/architecture.md "未 ship" → "已 ship" 升级 / docs/manual/route-labeling.md §9 Layer B 实施记录完整落地（9 子段 / 5 子卡文件清单 / cross-link ADR-164）/ Wave 2 主线全 ship + ADR 全 Accepted + 实施 5/5 + docs sync 全成 / 仅 advisory CHG-368-B-C-UI（LinesPanel codename 标签）独立留作 follow-up / Wave 2 范围**实质性 ship 完毕**
