@@ -9,7 +9,9 @@ import { usePlayerStore } from '@/stores/playerStore'
 import { apiClient } from '@/lib/api-client'
 import { extractShortId } from '@/lib/video-detail'
 import { getVideoDetailHref } from '@/lib/video-route'
-import { buildLineDisplayName, deduplicateLabels, applyThemeLabels, getDefaultTheme } from '@/lib/line-display-name'
+import { buildLineDisplayName, deduplicateLabels, applyThemeLabels } from '@/lib/line-display-name'
+import { useRouteTheme } from '@/lib/route-theme-storage'
+import { RouteThemeSelector } from './RouteThemeSelector'
 import { useLocale } from 'next-intl'
 import type { Video, VideoSource, ApiResponse, ApiListResponse } from '@resovo/types'
 import { SourceBar } from './SourceBar'
@@ -85,9 +87,9 @@ export function PlayerShell({ slug: slugProp, portalMode = false, previewMode = 
   const [playerVersion, setPlayerVersion] = useState(0)
   const [activePanelTab, setActivePanelTab] = useState<'episodes' | 'sources'>('episodes')
 
-  // CHG-353 / route-labeling Phase 1 Layer C：按 locale 选默认主题（zh-CN → 节气 / en → NATO）
+  // CHG-353 默认主题（zh-CN → 节气 / en → NATO）+ CHG-369 localStorage 持久化（用户选择优先）
   const locale = useLocale()
-  const routeTheme = getDefaultTheme(locale)
+  const { theme: routeTheme, setTheme: setRouteTheme } = useRouteTheme(locale)
 
   const shortId = extractShortId(slug)
 
@@ -405,6 +407,8 @@ export function PlayerShell({ slug: slugProp, portalMode = false, previewMode = 
 
         {hasSources && activePanelTab === 'sources' ? (
           <div className="p-2">
+            {/* CHG-369 / plan §17.2 #16：主题选择器 + localStorage 持久化 */}
+            <RouteThemeSelector currentTheme={routeTheme} onThemeChange={setRouteTheme} />
             <div className="rounded-md overflow-hidden" style={{ background: 'var(--bg-surface-sunken)' }}>
               <SourceBar
                 sources={sources}

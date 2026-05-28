@@ -1902,7 +1902,7 @@ CHG-353 (ROUTE-LABEL-A2) → 依赖 CHG-352 后端返回排序数据
 
 ## [SEQ-20260527-MOD-WAVE2] server-next 内容审核台 Wave 2 — 预览/拆分/合并/元数据/路线主题（plan §14 + §17.2）
 
-- **状态**：🔄 执行中（CHG-361 ✅ + CHG-363 ✅ + CHG-364 ✅ + CHG-365 META ✅ + CHG-366 COUNTRY ✅ / 15/17 / ADR-160 AMENDMENT 1/2 / CHG-362-A+B SKIPPED ADR-105 / CHG-365-A+B SKIPPED MetadataEnrichService 80% / 下一个 CHG-367-A META-EPISODES ADR-163）
+- **状态**：🔄 执行中（CHG-361 ✅ + CHG-363 ✅ + CHG-364 ✅ + CHG-365 META ✅ + CHG-366 COUNTRY ✅ + CHG-369 THEME ✅ / 16/17 / CHG-367-A/-B + CHG-368-A/-B PAUSED 用户拒绝 spawn Opus / Wave 2 ADR 卡之外全部完成）
 - **创建时间**：2026-05-27
 - **最后更新时间**：2026-05-27
 - **目标**：基于 `/Users/livefree/.claude/plans/fluffy-giggling-teapot.md` §14 Wave 2 + §17.2 落地 9 张主卡（4 张需 ADR + Opus 决策）；继续 Wave 1 的自动推进节奏。
@@ -1936,11 +1936,11 @@ CHG-353 (ROUTE-LABEL-A2) → 依赖 CHG-352 后端返回排序数据
 | 8.2 | ✅ **CHG-365-A2** 已完成（2026-05-27）| Migration 077 + VideoMetaQuality types + queries 扩 + MetadataEnrichService 写入持久化（豆瓣 confidence/method/status + 拼音 isPinyin + enriched_at）+ architecture.md §5.1 同步 / 23/23 case PASS（+3）/ 6 业务 + 1 测试 + 1 docs | 否（schema 扩展非 ADR-needed / 复用 Migration 032 模式） | opus-4-7 续会话 |
 | 9 | ⛔ **CHG-365-B** SKIPPED（2026-05-27 / 同步 A SKIPPED）| 采集 worker 自动豆瓣 / **已就绪**（CrawlerService:300 入库后自动 enrichmentQueue.add 触发 MetadataEnrichService.enrich）/ 拼音识别 → CHG-365-A1 / 本卡定义重复 | — | — |
 | 10 | ✅ **CHG-366** 已完成（2026-05-27）| META-COUNTRY-DISPLAY / formatCountryName helper（packages/types / Intl.DisplayNames 零依赖）+ CountryName 原语（admin-ui cell）+ TabDetail / PendingCenter / MetaChip 内化（web-next 3 处消费方零改）/ 7+3=10 case PASS / 5 业务 + 2 测试 + 1 docs | 否 | opus-4-7 续会话 |
-| 11 | **CHG-367-A** | META-EPISODES ADR-163 起草（plan #14 / §10.4.4）— total/current_episodes schema + migration | 是 ADR-163 | opus-4-7 + arch-reviewer Opus |
+| 11 | ⏸️ **CHG-367-A** PAUSED（2026-05-27）| META-EPISODES ADR-163 起草 / 用户拒绝 spawn arch-reviewer Opus 子代理 → 卡片暂停 / 待用户明确允许 spawn 或改用 Sonnet 主循环直起 ADR | 是 ADR-163 | opus-4-7 + arch-reviewer (opus-4-7) |
 | 12 | **CHG-367-B** | META-EPISODES 实施 — schema migration + 显示 | 否 | sonnet |
-| 13 | **CHG-368-A** | ROUTE-LABEL-B ADR-164 起草（plan §17.2 #15）— Migration 064 codename/priority/retired_at | 是 ADR-164 | opus-4-7 + arch-reviewer Opus |
+| 13 | ⏸️ **CHG-368-A** PAUSED（2026-05-27 / 同 CHG-367-A）| ROUTE-LABEL-B ADR-164 起草 / 用户拒绝 spawn Opus | 是 ADR-164 | opus-4-7 + arch-reviewer Opus |
 | 14 | **CHG-368-B** | ROUTE-LABEL-B 实施 — admin UI `/admin/source-line-aliases` + 退役端点 | 否 | sonnet |
-| 15 | **CHG-369** | ROUTE-LABEL-C（plan §17.2 #16）— 播放器设置面板主题选择器 + localStorage | 否 | sonnet |
+| 15 | ✅ **CHG-369** 已完成（2026-05-27）| ROUTE-LABEL-C / 5 内置主题选择器 + localStorage 持久化 / SSR safe / 8 case PASS / 3 业务 + 2 测试 + 1 docs / 自定义主题输入 → follow-up CHG-369-B | 否 | opus-4-7 续会话 |
 
 ### Wave 2 BLOCKER 触发清单（沿用 Wave 1 §16.5）
 

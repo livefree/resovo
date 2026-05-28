@@ -237,6 +237,18 @@ A：Phase 1 严格控范围 ≤ 5 文件 + admin Props 契约改动需 arch-revi
 
 实现：`getDefaultTheme(locale)`。
 
+### 8.4a 主题选择 + localStorage 持久化（CHG-369 / Phase 2）
+
+用户可在播放器 sources tab 顶部下拉切换 5 内置主题；选择立即生效并持久化到 localStorage `resovo:route-theme`。
+
+- **首次访问**：使用 `getDefaultTheme(locale)`（zh→节气 / en→NATO）
+- **后续访问**：localStorage 命中合法 themeId → 应用；非法 / 已删除主题 → 静默回退 default
+- **SSR 安全**：服务端 render 总是返回 default（避免 hydration mismatch）；client mount 后第一次 effect 切换到 localStorage 值
+- **自定义主题输入**：本期未实装（labels ≤ 30 / name ≤ 10 字符 / follow-up CHG-369-B）
+- **跨设备同步**：本期未实装（→ Wave 3 ROUTE-LABEL-D / `users.preferences`）
+
+实现位置：`apps/web-next/src/lib/route-theme-storage.ts`（`useRouteTheme` hook + `readStoredThemeId` / `writeStoredThemeId` 纯函数）+ `apps/web-next/src/components/player/RouteThemeSelector.tsx`（下拉组件）。
+
 ### 8.5 边界处理
 
 | 情况 | 处理 |

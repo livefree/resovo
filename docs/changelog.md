@@ -10062,3 +10062,22 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **质量门禁**：typecheck ✅ / lint ✅（FULL TURBO 4 cached）/ verify:adr-contracts ✅ EXIT=0
 - **commit trailer**：无强制 Subagents
 - **闭环**：Codex stop-time review #10 红线消解 / web-next 5 处 country 渲染位置（DetailHero + VideoDetailHero + VideoMeta + 后台 TabDetail + PendingCenter）全部一致经 helper / 真源 ISO code + 显示本地化两个不变量在全 app 落地
+
+---
+
+## [CHG-369] ROUTE-LABEL-C 播放器主题选择器 + localStorage 持久化（Wave 2 #18 / plan §17.2 #16 / 3 业务 + 2 测试 + 1 docs）
+- **完成时间**：2026-05-27
+- **执行模型**：claude-opus-4-7（主循环 / 续会话 / 用户拒绝 spawn Opus 后跳过 ADR 卡 CHG-367-A/-B + CHG-368-A/-B PAUSED → 本卡）
+- **子代理调用**：无（非 ADR / 非新共享 API 契约 / 沿用 CHG-353 既有 5 主题常量）
+- **范围**：
+  - `apps/web-next/src/lib/route-theme-storage.ts` 新建：`readStoredThemeId / writeStoredThemeId` 纯函数（SSR safe / 校验 themeId ∈ ALL_THEMES 防 localStorage 脏数据污染）+ `findThemeById` 查找 + `useRouteTheme(locale)` hook（首次 render 用 default 避免 SSR mismatch / mount 后第一次 effect 读 localStorage → setTheme 时同步写）
+  - `apps/web-next/src/components/player/RouteThemeSelector.tsx` 新建：`<select>` 下拉 / 渲染 ALL_THEMES 5 选项 / value 绑定 currentTheme.id / onChange 经 findThemeById 派发匹配的 RouteTheme 实例（非法值静默忽略）/ token 化色与 admin-input 同范式
+  - `apps/web-next/src/components/player/PlayerShell.tsx`：`getDefaultTheme(locale)` → `useRouteTheme(locale)` + sources tab 顶部挂 `<RouteThemeSelector>`（与 SourceBar 同 panel）
+  - `tests/unit/web-next/route-theme-storage.test.ts` 5 case（roundtrip / 无写入 null / 非法值 null / findThemeById 命中 + 未命中 / ALL_THEMES 5 主题全 roundtrip）
+  - `tests/unit/web-next/route-theme-selector.test.tsx` 3 case（5 选项渲染 + 默认选中 / onChange 派发 RouteTheme 实例 / 非法 value 不触发）
+  - `docs/manual/route-labeling.md` §8.4a 新章节：主题选择 + localStorage 协议 / SSR 安全 / follow-up CHG-369-B 自定义主题 + Wave 3 跨设备同步说明
+- **设计取舍**：① jsdom localStorage flaky pre-existing（main 分支同样 fail）→ 测试用 `vi.stubGlobal('localStorage', ...)` 装 in-memory Storage stub 规避 / 不依赖环境 ② SSR 安全策略：useState 初始值用 `getDefaultTheme(locale)` 而非 localStorage 读取（避免 hydration mismatch / 仅 mount 后 effect 切换 localStorage 值）③ ALL_THEMES 校验防脏数据：localStorage 可能被用户直接修改 / 校验后回退 default 而非崩溃 ④ writeStoredThemeId 静默 try/catch：localStorage 可能被禁用（私密模式 / quota）/ 失败时仅本会话生效 ⑤ 自定义主题输入推迟到 follow-up CHG-369-B：本期范围 PATCH ≤ 5 严守 / 自定义涉及 schema 校验 + JSON.stringify 序列化复杂度
+- **测试**：tests/unit/web-next/route-theme-storage 5/5 + route-theme-selector 3/3 = **8/8 PASS**
+- **质量门禁**：typecheck ✅ / lint ✅（FULL TURBO 4 cached）/ verify:adr-contracts ✅ EXIT=0
+- **commit trailer**：无强制 Subagents
+- **闭环**：CHG-369 完成 / Wave 2 卡 16/17 闭合 / CHG-353 Phase 1 默认主题 → CHG-369 用户主动切换 + localStorage 持久化 完整路径就绪 / Phase 2 自定义主题输入（CHG-369-B）+ Phase 3 跨设备同步（ROUTE-LABEL-D）已记入下次会话恢复入口 follow-up / docs/manual/route-labeling.md §8.4a 同步
