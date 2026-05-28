@@ -297,7 +297,18 @@ export interface VideoQueueRow {
   readonly type: VideoType
   readonly year: number | null
   readonly country: string | null
-  readonly episodeCount: number               // DB: episode_count INT NOT NULL DEFAULT 1
+  readonly episodeCount: number               // DB: episode_count INT NOT NULL DEFAULT 1（三层集数语义第 1 层 / 爬虫推算 / ADR-163 §3 D-163-2）
+  /**
+   * 三层集数语义第 2 层：作品总集数（外部 metadata 真源 / NULL=未取到或电影类型）
+   * DB: videos.total_episodes INT NULL（Migration 078 / ADR-163 / CHG-367-B-A）
+   * 写入路径：MetadataEnrichService 自动 enrich + DoubanService manual confirm（CHG-367-B-B）
+   */
+  readonly totalEpisodes: number | null
+  /**
+   * 三层集数语义第 3 层：当前已播集数（外部 metadata 真源 / NULL=未取到 / 连载中持续更新）
+   * DB: videos.current_episodes INT NULL（Migration 078 / ADR-163 / CHG-367-B-A）
+   */
+  readonly currentEpisodes: number | null
   readonly coverUrl: string | null            // DB: cover_url TEXT NULL
   readonly rating: number | null              // DB: rating FLOAT NULL（0–10）
   readonly category: string | null            // DB: category TEXT NULL

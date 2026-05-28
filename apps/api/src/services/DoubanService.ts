@@ -21,6 +21,7 @@ import { enrichmentQueue } from '@/api/lib/queue'
 import type { DoubanPreviewFound, DoubanPreviewMiss, DoubanPreview } from '@/types/contracts/v1/admin'
 import type { EnrichJobData } from './MetadataEnrichService'
 import { buildManualMetaQuality } from './MetadataEnrichService'
+import { updateVideoEpisodes } from '@/api/db/queries/videos'
 
 // ── 类型 ──────────────────────────────────────────────────────────
 
@@ -220,6 +221,18 @@ export class DoubanService {
     await videoQueries.updateVideoEnrichStatus(this.db, videoId, {
       doubanStatus: 'matched', metaScore, metaQuality,
     })
+
+    // CHG-367-B-B / ADR-163 D-163-6 manual 写入合约：
+    //   人工 confirm 优先级最高 / 同时写 total_episodes + current_episodes / 覆盖既有值
+    //   detail.episodes 来自豆瓣 subject 详情（豆瓣不区分 total/current，单一数字）
+    if (detail.episodes && detail.episodes > 0) {
+      await updateVideoEpisodes(
+        this.db,
+        videoId,
+        { totalEpisodes: detail.episodes, currentEpisodes: detail.episodes },
+        'manual',
+      )
+    }
     return { updated: true }
   }
 
@@ -318,6 +331,9 @@ export class DoubanService {
     // 获取候选数据（优先本地 dump）
     const localEntry = await externalDataQueries.findDoubanEntryById(this.db, subjectId)
     let proposed: CandidateProposed | null = null
+    // CHG-367-B-B / ADR-163 §11 A3 + Y2：本地 dump 无 episodes 字段（DoubanEntryMatch 不含）；
+    //   仅网络 fallback 的 detail.episodes 可作为 episodes 真源。
+    let proposedEpisodes: number | null = null
     if (localEntry) {
       proposed = {
         title: localEntry.title, year: localEntry.year, rating: localEntry.rating,
@@ -336,6 +352,7 @@ export class DoubanService {
         directors: detail.directors, cast: detail.cast,
         genres: detail.genres, country: detail.countries[0] ?? null,
       }
+      proposedEpisodes = detail.episodes ?? null
     }
 
     const FIELD_TO_CATALOG: Record<string, keyof import('@/api/db/queries/mediaCatalog').CatalogUpdateData> = {
@@ -386,6 +403,18 @@ export class DoubanService {
     await videoQueries.updateVideoEnrichStatus(this.db, videoId, {
       doubanStatus: 'matched', metaScore, metaQuality,
     })
+
+    // CHG-367-B-B / ADR-163 D-163-6 + Y2 黄线：fields 含 'episodes' 时走 manual 写入合约（覆盖）。
+    //   episodes 不在 FIELD_TO_CATALOG 映射（catalog 无此字段）；走 videos 表独立路径。
+    //   本地 dump 路径无 episodes 真源（A3 advisory）→ proposedEpisodes 为 null 时跳过。
+    if (fields.includes('episodes') && proposedEpisodes && proposedEpisodes > 0) {
+      await updateVideoEpisodes(
+        this.db,
+        videoId,
+        { totalEpisodes: proposedEpisodes, currentEpisodes: proposedEpisodes },
+        'manual',
+      )
+    }
     return { updated: true }
   }
 

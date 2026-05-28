@@ -10249,3 +10249,33 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **commit trailer**：无强制 Subagents
 - **经验**：CHG-367-B-A 主备注 + FIX 备注两次描述 schema docs 同步时都默认"完整 ADR 意图 = 当前 docs 状态"，缺少"docs 反映 ship 不反映计划"这个 invariant。**今后 docs/architecture.md schema 同步时必须显式区分：① 当前 ship ② 未 ship forward-reference 排期**。这与 CHG-369 系列 4 个 stop-time fix 的"渐进式偷懒"反思形成同一脉络——预见到的未 ship 必须 forward-reference 而非平等并列。
 - **闭环**：Codex stop-time review #16 红线消解 / architecture.md §5.1 写入路径清晰分层（已 ship vs forward-reference）/ docs 与 ship 代码状态严格对齐 / CHG-367-B-B 落地时仅需把"未 ship"段升级为"已 ship"即可，减小重复改动
+
+---
+
+## [CHG-367-B-B] META-EPISODES manual 写入 + TabDetail 三维显示 + 3 黄线全闭档（ADR-163 实施第 2 子卡）
+- **完成时间**：2026-05-28
+- **执行模型**：claude-opus-4-7（主循环 / 续会话 / 非 ADR / ADR-163 已 Accepted）
+- **子代理调用**：无（共享 API 契约由 -B-A 沉淀完毕 / 本卡是规范驱动实施）
+- **拆卡承接**：CHG-367-B-A 已完成 schema + types + queries + auto enrich；本卡承接 manual + UI + 3 黄线（Y1/Y2/Y3）。-B-A 沉淀的 `updateVideoEpisodes(manual)` mutation 直接复用，0 新决策。
+- **范围**（5 业务 + 2 测试 + 1 docs / PATCH=5 严守阈值 / 相对 -B-A PATCH=6 改进 1 个）：
+  - `packages/types/src/admin-moderation.types.ts`：`VideoQueueRow` 加 `totalEpisodes: number | null` + `currentEpisodes: number | null`（JSDoc 标注 ADR-163 §3 D-163-2 三层语义层级 / readonly 不破坏既有消费方）
+  - `apps/api/src/db/queries/moderation.ts`：`DbPendingQueueRow` 同步 2 字段 + listPendingQueue SQL SELECT 投影扩 `v.total_episodes AS "totalEpisodes"` / `v.current_episodes AS "currentEpisodes"`（snake_case→camelCase alias 沿用 CHG-SN-4-09d 范式）
+  - `apps/api/src/services/DoubanService.ts`：
+    - import `updateVideoEpisodes` from queries/videos barrel
+    - `confirmSubject` 末尾追加 manual 写入（`detail.episodes > 0` → `updateVideoEpisodes(manual)` 同时写 total + current / D-163-6 manual 优先级最高 / 严格按 ADR 锁定"同时写"合约）
+    - `confirmFields` 抽 `proposedEpisodes` 局部变量（仅网络 fallback 路径有值 / 本地 dump 路径 NULL / A3 advisory）+ for loop 后追加 `fields.includes('episodes')` 分支 → manual 写入（**Y2 黄线**扩展键名）
+  - `apps/server-next/src/app/admin/moderation/_client/RightPane/TabDetail.tsx`：
+    - `DetailRow label="episodeCount" value={String(v.episodeCount)}` 单维行替换为 `<DetailRow label={M.detail.episodesTriad} value={formatEpisodesTriad(v)} />` 三维显示
+    - 新增 `formatEpisodesTriad(v)` helper：按字段 NULL 状态降级渲染（all → "已收 8 / 已播 12 / 共 24" / current=null → "已收 / 共" / total=null → "已收 / 已播" / both null → "已收"）/ type='movie' 短路（仅"已收"）/ **Y1 防御**：`current > total` → 仅显示 "已收 X / 已播 Y" + `<span style={{color: 'var(--state-warning-fg)'}}>(数据异常)</span>` + 隐藏 total
+  - `apps/server-next/src/i18n/messages/zh-CN/moderation.ts`：`M.detail` 加 5 个标签（`episodesTriad: '集数'` / `received: '已收'` / `aired: '已播'` / `total: '共'` / `anomaly: '数据异常'`）
+  - `tests/unit/api/doubanService-manual.test.ts` 新建（156 行 / 5 case）：confirmSubject manual 写入有 episodes / 缺 episodes 跳过 / confirmFields fields 含 episodes（网络 fallback 命中）/ fields 不含 episodes 仅 catalog / 本地 dump 路径跳过（A3 advisory / 不触网络 fallback）
+  - `tests/unit/components/server-next/admin/moderation/TabDetailEpisodes.test.tsx` 新建（75 行 / 5 case）：三字段全有 / total+episodeCount 缺 current / 仅 episodeCount fallback / movie 类型短路 / **Y1 防御** current>total 渲染异常标记 + 隐藏 total（核心 invariant）
+  - `docs/architecture.md` §5.1 videos：`current_episodes` 段「未 ship 写入路径」→「已 ship（manual / CHG-367-B-B）」+ formatEpisodesTriad helper 真源引用 + 显示规约升级 ship 描述（**Y3 黄线**闭档）
+- **3 黄线全闭档**：
+  - ✅ **Y1**（current>total UI 防御）：formatEpisodesTriad 优先级判断 + TabDetailEpisodes 第 5 case 单测覆盖（`var(--state-warning-fg)` 颜色 token / 零硬编码）
+  - ✅ **Y2**（confirmFields fields 扩 'episodes' 键名）：DoubanService.confirmFields proposedEpisodes 变量 + fields.includes('episodes') 独立分支 + doubanService-manual.test.ts 中段 3 case 覆盖
+  - ✅ **Y3**（architecture.md 同步）：videos 5.1 段第 285-286 行「未 ship」→「已 ship」/ formatEpisodesTriad 真源引用
+- **质量门禁**：typecheck ✅（root + 7 workspaces）/ lint ✅（仅 pre-existing 4 项 React Hook deps warning + 1 img element warning / 与本卡无关）/ verify:adr-contracts ✅ EXIT=0（6/7 验证脚本全 PASS / verify-error-message advisory 168 条 + verify-enum-ssot advisory 均不阻塞 CI）/ 单测全量 5212/5379 PASS（167 fail 全部 pre-existing：useTableSettings localStorage.clear jsdom env 164 + ModerationBatch fixture 缺 probeAggregate 3 / 用 git stash 验证 confirmed pre-existing 与本卡无关）/ 本卡相关 58 case 全 PASS（douban 12 + metadataEnrich 32 + doubanService-manual 5 + TabDetailReprobe 4 + TabDetailEpisodes 5）
+- **设计取舍**：① manual 路径同时写 total + current（同一 detail.episodes 值）vs 走 episodesByStatus 派发：选前者，严格按 ADR-163 D-163-6 明文锁定合约不擅自偏离 / 若后续产品发现"完结/连载误判"问题再起 ADR-163 AMENDMENT 1 ② formatEpisodesTriad 内联 TabDetail vs 抽 admin-ui：内联（当前唯一消费方 / 避免过早抽象 / 待第二消费方出现时再沉淀）③ 本地 dump 路径 episodes=null 时跳过 vs 强制网络 fallback：跳过（避免额外网络 RTT / A3 advisory 明示）④ proposedEpisodes 局部变量 vs 扩 CandidateProposed interface：局部变量（CandidateProposed 是 catalog 字段对比的 9 字段 / episodes 走 videos 表独立路径不混入）
+- **commit trailer**：无强制 Subagents（ADR-163 已 Accepted / 共享 API 契约 -B-A 沉淀完毕 / 非新决策）
+- **闭环**：CHG-367-B-B 完成 / **ADR-163 全部实施收官**（A 起草 → B-A schema+auto → B-B manual+UI+黄线）/ Wave 2 主线 13/13 完成（去 SKIPPED 4 张 / 待 PAUSED CHG-368-A/-B 解锁）/ ADR-163 D-163-1..8 + Y1/Y2/Y3 + A1/A2/A3 全部闭档（advisory 不修明示）/ formatEpisodesTriad helper 内联 TabDetail 待第二消费方触发沉淀

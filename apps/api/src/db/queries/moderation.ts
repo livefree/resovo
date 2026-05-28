@@ -110,6 +110,8 @@ interface DbPendingQueueRow {
   year: number | null
   country: string | null
   episodeCount: number
+  totalEpisodes: number | null    // Migration 078 / ADR-163 / CHG-367-B-A（作品总集数 / NULL=未取到）
+  currentEpisodes: number | null  // Migration 078 / ADR-163 / CHG-367-B-A（已播集数 / NULL=未取到）
   coverUrl: string | null
   rating: number | null
   category: string | null
@@ -222,6 +224,8 @@ export async function listPendingQueue(
       `SELECT v.id, v.slug AS "slug", v.short_id AS "shortId",
               v.title, v.type, mc.year, mc.country,
               v.episode_count AS "episodeCount",
+              v.total_episodes AS "totalEpisodes",
+              v.current_episodes AS "currentEpisodes",
               mc.cover_url AS "coverUrl",
               mc.rating,
               v.source_category AS category,

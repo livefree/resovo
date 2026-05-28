@@ -143,9 +143,45 @@ export function TabDetail({ v }: TabDetailProps): React.ReactElement {
       <DetailRow label="type" value={v.type} />
       <DetailRow label="year" value={String(v.year ?? '—')} />
       <DetailRow label="country" value={<CountryName code={v.country} />} />
-      <DetailRow label="episodeCount" value={String(v.episodeCount)} />
+      <DetailRow label={M.detail.episodesTriad} value={formatEpisodesTriad(v)} />
       <DetailRow label="meta_score" value={String(v.metaScore)} />
       <DetailRow label="source_check" value={v.sourceCheckStatus} />
     </div>
   )
+}
+
+/**
+ * CHG-367-B-B / ADR-163 §6 显示规约 + Y1 防御：
+ *   三层集数语义渲染 "已收 X / 已播 Y / 共 Z"，按字段 NULL 状态降级。
+ *   Y1：currentEpisodes > totalEpisodes 时仅显示 currentEpisodes + 数据异常标记
+ *       （DB 层不强制 total >= current 不变式 / 外部源时序不一致可能触发）。
+ *   movie 类型仅显示"已收"维度（电影无 total/current 语义 / D-163-3）。
+ */
+function formatEpisodesTriad(v: {
+  type: string
+  episodeCount: number
+  totalEpisodes: number | null
+  currentEpisodes: number | null
+}): React.ReactNode {
+  const received = `${M.detail.received} ${v.episodeCount}`
+  // 电影类型不显示 total/current（NULL 语义 + 单一来源）
+  if (v.type === 'movie') return received
+
+  const current = v.currentEpisodes
+  const total = v.totalEpisodes
+  const aired = current != null ? `${M.detail.aired} ${current}` : null
+  const totalText = total != null ? `${M.detail.total} ${total}` : null
+
+  // Y1 防御：current > total → 仅显示 current + 数据异常标记
+  if (current != null && total != null && current > total) {
+    return (
+      <>
+        {received} / {aired}{' '}
+        <span style={{ color: 'var(--state-warning-fg)' }}>({M.detail.anomaly})</span>
+      </>
+    )
+  }
+
+  const parts = [received, aired, totalText].filter((p): p is string => p != null)
+  return parts.join(' / ')
 }

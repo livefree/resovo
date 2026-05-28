@@ -129,6 +129,12 @@ export const M = {
     pending: '待匹配',
     unmatched: '无匹配',
     candidate: '候选',
+    // CHG-367-B-B / ADR-163 §6：episodes 三维显示标签（"已收 X / 已播 Y / 共 Z"）
+    episodesTriad: '集数',
+    received: '已收',  // episode_count（爬虫推算 / 已收录最大集数）
+    aired: '已播',     // current_episodes（外部 metadata / 已播集数）
+    total: '共',       // total_episodes（外部 metadata / 总集数）
+    anomaly: '数据异常',  // Y1 防御：currentEpisodes > totalEpisodes 时标记
   },
   staging: {
     title: '发布预检',
