@@ -9861,4 +9861,9 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **不在本卡范围**：
   - ❌ episode 切换 internal 视频 404 限制 → 独立 FOLLOWUP 卡（RSC fetch / Server Actions）
   - ❌ prod gate cookie subdomain → CHG-OPS-COOKIE-SUBDOMAIN-1
-- **闭环**：CHG-361-E3 完成（2 业务 + 1 测试 4 case PASS）/ Wave 2 卡 8/17 闭合 / **CHG-361 PREVIEW-ADMIN 8 子卡序列全闭环（A → B2 → B1 → C → D → E1 → E2 → E3）/ ADR-160 + AMENDMENT 1 + AMENDMENT 2 跨 app preview 链路 + server-side hydration 修补完整就绪 / 待 prod gate OPS 卡 CHG-OPS-COOKIE-SUBDOMAIN-1**
+- **Codex stop-time review 3 次回归修复**（feat 后追加 3 个 fix commit / E3 卡内连续修复 / 不独立成卡）：
+  - **fix #1（552656bc）"episode-switch ref 时序修复"**：原 episodeSwitchInitRef 由 episode-switch effect 内部设 true / video=null 时 effect 直接 return 不设 ref → 用户首次切集 ref 仍 false 被跳过；修复改为 ref 由初始 fetch useEffect 在 sources 处理完成后统一设
+  - **fix #2（4360688f）"初始 sources fetch 期间切集不再被吞掉"**：重设计 ref 语义 / fetchedEpisodeRef 替代 episodeSwitchInitRef 记录"已 fetch / 正在 fetch 的 episode" / 在 useEffect 1 入口同步 claim（不等异步链）/ 初始 sources then/catch 做 stale check / episode-switch useEffect 依赖扩为 [currentEpisode, video] / 新增"初始 sources fetch 期间切集"回归 case
+  - **fix #3（a1bcc272）"hydrated mount + URL ep 不再触发 stale/重复 fetch"**：initPlayer 同步化（从 videoPromise.then 提前到 useEffect 1 同步部分 / store.currentEpisode 立即对齐）+ useEffect 2 内用 `usePlayerStore.getState()` 实时读最新 currentEpisode（避免 closure capture 的 stale 值 / mock store 非 reactive 时尤其明显）+ 测试基建修复（mockClear 替代 mockReset 保留 initPlayer impl / 完整复位 mockState / searchParamsGet 复位）/ 新增"仅 1 次 ep=2 fetch / 无 stale ep=1"回归 case
+- **测试演进**：E3 feat 提交 4 case → fix #1 后 5 case → fix #2 后 6 case → fix #3 增强 case 4 / 仍是 6 case 但断言更严格（5 个 CHG-361 关联测试合计 31 case）
+- **闭环**：CHG-361-E3 完成（2 业务 + 1 测试 6 case PASS / + 3 个回归修复）/ Wave 2 卡 8/17 闭合 / **CHG-361 PREVIEW-ADMIN 8 子卡序列全闭环（A → B2 → B1 → C → D → E1 → E2 → E3）/ ADR-160 + AMENDMENT 1 + AMENDMENT 2 跨 app preview 链路 + server-side hydration 修补完整就绪 + 4 类时序 bug 收敛 / 待 prod gate OPS 卡 CHG-OPS-COOKIE-SUBDOMAIN-1**
