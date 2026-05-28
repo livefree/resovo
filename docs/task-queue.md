@@ -1978,7 +1978,7 @@ CHG-369 (前台主题选择器, 独立)
 
 ## [SEQ-20260528-MOD-WAVE3] server-next 内容审核台 Wave 3 — Wave 2 长尾清理 + 架构 / 长期 P3 卡（plan §14 Wave 3 + §17.2 Wave 3 增补）
 
-- **状态**：🔄 进行中（6/10 完成 + 1 DEFERRED / 长尾 4/4 + 主线 2/6 / 下一卡 CHG-SN-9-META-BANGUMI-A / 新 ADR + 新依赖 / Opus 子代理）
+- **状态**：🚨 BLOCKER #2 暂停（6/10 完成 + 1 DEFERRED / 长尾 4/4 + 主线 2/6 / 待用户决策剩余 3 卡 BANGUMI-A / SITE-VIEWS-EXTRACT / ROUTE-LABEL-D 推进策略组合 X/Y/Z）
 - **创建时间**：2026-05-28
 - **目标**：按用户 2026-05-28 决策"长尾先清 + plan §14 主线"：先清 4 张 Wave 2 长尾 follow-up，再按 plan §14 / §17.2 Wave 3 入 6 张 P3 长期主线卡。
 - **执行约束**：沿用 Wave 1/2 §16.1-16.5（UI/UX 谨慎 / docs/manual 同步 / 主循环全自动 + BLOCKER 触发清单）
@@ -2013,6 +2013,52 @@ CHG-369 (前台主题选择器, 独立)
 **原 BLOCKER 触发**：CHG-SN-9-MOD-BUTTON-MIGRATE 范围 38 tsx 文件 / 100+ button 远超 PATCH 5 软上限。
 **用户决策（2026-05-28）**：方案 A（推荐 / 务实）—— 跳过本卡转 CHG-SN-9-REJECTED-ENHANCE-A / MOD-BUTTON-MIGRATE 独立 SEQ-FOLLOWUP-MIGRATE 长尾系列择期推进 / 非 Wave 3 节奏。
 **主循环恢复**：从 CHG-SN-9-REJECTED-ENHANCE-A（plan §7 -A 分页子卡）继续。CHG-SN-9-REJECTED-ENHANCE-B（视觉对齐）留 follow-up。
+
+---
+
+### 🚨 BLOCKER #2（2026-05-28 / Wave 3 主循环再次暂停 / 等用户决策剩余 3 卡推进策略）
+
+**触发位置**：Wave 3 SEQ-20260528-MOD-WAVE3 #8 CHG-SN-9-META-BANGUMI-A 启动前
+**触发原因**：剩余 3 卡（BANGUMI-A / SITE-VIEWS-EXTRACT / ROUTE-LABEL-D）需用户决策推进策略 + plan §13 已有相关决策线索
+**主循环当前进度**：Wave 3 SEQ 6/10 完成 + 1 DEFERRED（PRE-INDEX-DESIGN-RULES + CHG-369-B + 2 FOLLOWUP + REJECTED-ENHANCE-A + PLAYER-ERROR / MOD-BUTTON-MIGRATE DEFERRED）
+
+**剩余 3 卡推进策略待决策**：
+
+#### 卡 #8 CHG-SN-9-META-BANGUMI-A
+
+- **plan §10.4.2 + §14 Wave 3 卡片**：Bangumi 实时 API 集成 / BangumiService + secrets / 新依赖 / Opus 决策
+- **plan §13 用户既有决策**："§10.4.2 Bangumi - D. 暂缓 - **本轮不集成 Bangumi** - 留下一轮迭代"
+- **冲突点**：Wave 3 §14 仍列入此卡（plan 侧"长期可做"），但 plan §13 用户决策已标"暂缓"
+- **推进选项**：
+  - **方案 A**（默认 / 与 plan §13 一致）：跳过此卡转 #9 SITE-VIEWS-EXTRACT / META-BANGUMI-A 标 DEFERRED 入"下次会话恢复入口"
+  - **方案 B**：撤销 plan §13 暂缓决策 / 推进此卡 / 起 ADR 草稿 + Opus 评审
+
+#### 卡 #9 CHG-SN-9-SITE-VIEWS-EXTRACT
+
+- **plan §10.6 方案 C + §14 Wave 3**：抽 `packages/site-views` / **架构级大型重构** / 跨 app 影响范围扩大
+- **CLAUDE.md §16.5 BLOCKER 触发**："跨 app 影响范围扩大" 是 BLOCKER 触发清单项 → 本卡本质即需用户确认
+- **范围预估**（基于 plan §10.6 方案 C）：抽前台 web-next/_lib/player + admin server-next/_client/PendingCenter 共享 view 层 → 新 package + 跨 3 个 app 配置 + 大量类型迁移
+- **风险**：单 Wave 内推进会主导节奏；可能产生 3-5 commit 周期；视觉/类型回归风险高
+- **推进选项**：
+  - **方案 A**（推荐 / 务实）：DEFERRED → 独立 SEQ-FOLLOWUP-ARCH 长尾系列 / 非 Wave 3 节奏
+  - **方案 B**：推进 / 起 ADR 草稿 + Opus 跨 app 评审 + 拆 -A/-B/-C 子卡
+
+#### 卡 #10 CHG-SN-9-ROUTE-LABEL-D
+
+- **plan §17.2 Wave 3 增补 + §14 Wave 3**：`users.preferences` schema + 跨设备主题同步端点
+- **依赖**：CHG-369（5 内置主题）+ CHG-369-B（自定义主题输入）已 ship → 跨设备同步是 Phase 3 / 自然延续
+- **范围预估**：Migration NNN（users.preferences JSONB schema）+ 端点 GET/PUT preferences + web-next useRouteTheme hook 改造支持登录态同步 + ADR
+- **风险**：需新 ADR 起草 + Opus 评审 + schema migration + users 表写入路径（CLAUDE.md "未登录请求路径中访问 users 表"红线 / 需注意）
+- **推进选项**：
+  - **方案 A**（推荐）：推进 / 起 ADR 草稿 + Opus 评审 + 实施
+  - **方案 B**：DEFERRED → 入"下次会话恢复入口" / 等用户主动决策（CHG-369 设计取舍 ⑤ 已标 "Wave 3 跨设备同步" 预期）
+
+**推荐组合**：
+- **组合 X**（推荐 / 最务实）：BANGUMI-A 跳过（A）+ SITE-VIEWS-EXTRACT DEFERRED（A）+ ROUTE-LABEL-D 推进（A）= Wave 3 收官（7/10 + 2 DEFERRED + 1 推进）
+- **组合 Y**（激进）：BANGUMI-A 推进（B）+ SITE-VIEWS-EXTRACT 推进（B）+ ROUTE-LABEL-D 推进（A）= Wave 3 完整 9/10 + 1 DEFERRED / 但工作量极大 / 多个 Opus 子代理
+- **组合 Z**（保守）：全部 DEFERRED → Wave 3 6/10 + 4 DEFERRED 直接收官
+
+请用户在此 BLOCKER 下方写组合选择（X / Y / Z / 自定义），解除 BLOCKER 后主循环继续。
 
 ### 关键依赖图
 

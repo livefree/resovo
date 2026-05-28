@@ -6,11 +6,23 @@
 
 ## 进行中任务
 
-（空）
+（空 / Wave 3 主循环 BLOCKER #2 暂停 / 详 task-queue.md 尾部 🚨 BLOCKER #2 段）
 
 ---
 
-## Wave 3 状态（SEQ-20260528-MOD-WAVE3 / 🔄 进行中 = 60% / 6/10 + 1 DEFERRED）
+## 🚨 BLOCKER #2 暂停（2026-05-28）
+
+Wave 3 主线 2/6 后剩余 3 卡（CHG-SN-9-META-BANGUMI-A / SITE-VIEWS-EXTRACT / ROUTE-LABEL-D）需用户决策推进策略：
+
+- **BANGUMI-A**：plan §13 用户既有决策"暂缓"与 §14 Wave 3 列入相冲突
+- **SITE-VIEWS-EXTRACT**：架构级跨 app 重构 / CLAUDE.md §16.5 "跨 app 影响范围扩大" BLOCKER 触发
+- **ROUTE-LABEL-D**：需新 ADR + schema migration + Opus 评审
+
+推荐组合 X（务实）/ Y（激进）/ Z（保守）见 `docs/task-queue.md` 尾部 🚨 BLOCKER #2 段。等待用户选择后主循环继续。
+
+---
+
+## Wave 3 状态（SEQ-20260528-MOD-WAVE3 / 🚨 BLOCKER #2 暂停 = 60% / 6/10 + 1 DEFERRED）
 
 - ✅ **PRE-INDEX-DESIGN-RULES** 索引设计 4 步核验 + 双 invariant + 四级范式 + 禁令 + Checklist 沉淀到 db-rules.md（2026-05-28 / sonnet-4-6 / 纯 docs / 零回归 / CHG-368-B-A1-FIX 1-5 经验首次完整规范化）
 - ✅ **CHG-369-B** 自定义主题输入（2026-05-28 / sonnet-4-6 / 5 业务+测试 PATCH=5 + 1 docs / CustomThemeData schema + 双 key localStorage + CustomThemeDialog NEW + RouteThemeSelector 扩 + PlayerShell wiring / 54/54 测试 PASS / docs/manual §8.7 "未实装" → "已 ship 2026-05-28"）
