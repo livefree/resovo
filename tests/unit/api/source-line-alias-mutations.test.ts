@@ -114,13 +114,15 @@ describe('SourcesMatrixService.retireLineAlias', () => {
 // ── updateLineAliasPriority ──────────────────────────────────────
 
 describe('SourcesMatrixService.updateLineAliasPriority', () => {
-  it('404：行不存在 → AppError NOT_FOUND', async () => {
-    vi.mocked(queries.updateLineAliasPriority).mockResolvedValueOnce(null)
+  it('404：行不存在（before fetch null）→ AppError NOT_FOUND', async () => {
+    vi.mocked(queries.findLineAlias).mockResolvedValueOnce(null)
     const svc = new SourcesMatrixService(mockPool)
     await expect(svc.updateLineAliasPriority('bilibili', '线路1', 80, ACTOR_ID)).rejects.toBeInstanceOf(AppError)
+    expect(queries.updateLineAliasPriority).not.toHaveBeenCalled()
   })
 
   it('happy path：返回新 priority', async () => {
+    vi.mocked(queries.findLineAlias).mockResolvedValueOnce(SAMPLE_ALIAS)
     vi.mocked(queries.updateLineAliasPriority).mockResolvedValueOnce({
       ...SAMPLE_ALIAS,
       priority: 80,

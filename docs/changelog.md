@@ -10538,3 +10538,53 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **质量门禁**：typecheck ✅（root + 7 workspaces）/ lint ✅（0 error 0 warning）/ verify:adr-contracts ✅ EXIT=0（verify-sql-schema-alignment + verify-adr-d-numbers 266 条 + verify-endpoint-adr 194 路由 全 PASS）/ 单测 sources-matrix 域 52/52 PASS（既有 27+14 零回归 + 11 新 case）
 - **commit trailer**：无强制 Subagents（ADR-164 已 Accepted / 规范驱动实施 / 不修改 packages/admin-ui 公开 Props / 不触发"共享组件 API 契约强制 Opus"红线）
 - **闭环**：CHG-368-B-A2a 完成 / queries 4 mutations + Service 4 方法落地 / -A2b 业务基础就绪（route + audit + RETRO 一体提交）/ Wave 2 实施 2/5 子卡完成（-A1 / -A2a）/ FIX-{1..5} 经验主动核对落地（不触发 architecture sync 红线）/ "索引设计 4 步核验"应用于新 query JSDoc
+
+---
+
+## [CHG-368-B-A2b] ROUTE-LABEL-B 实施第 2b 子卡 — route 3 端点 + R-MID-1 RETRO 7 文件（ADR-164 §端点契约 + D-164-7 落地）
+- **完成时间**：2026-05-28
+- **执行模型**：claude-opus-4-7（主循环 / 续会话）
+- **子代理调用**：无（ADR-164 已 Accepted / 共享 API 契约 -A1 沉淀 / R-MID-1 范式 ADR-121 已建立）
+- **拆卡承接**：CHG-368-B-A2a queries + Service 业务层落地后（commit 950a97d2）+ ADR-164 §端点契约 + §文件范围 §7.1 RETRO 框架 → 本卡（-A2b）一体提交 route + RETRO 7 文件 + Service audit 写入接入 + payload 内容断言新测试。R-MID-1 第 29-30 次系统化。
+- **范围**（5 业务 + 2 测试调整 + 1 NEW 测试 = 8 文件 / RETRO 框架 ADR-121 D-121-3 豁免 PATCH ≤ 5）：
+  - **RETRO 7 文件核心框架**（D-121-3 豁免）：
+    1. `packages/types/src/admin-moderation.types.ts` AdminAuditActionType union +2（`source_line_alias.retire` + `source_line_alias.priority_update`）
+    2. `apps/api/src/services/AuditLogService.ts` ACTION_TYPES 数组 +2（与 union 严格同序）
+    3. `tests/unit/api/audit-log-service-enums-set-equal.test.ts` EXPECTED_ACTION_TYPES 数组 +2
+    4. `tests/unit/api/audit-log-coverage.test.ts` REQUIRED_ACTION_TYPES + PAYLOAD_ASSERTION_REQUIRED 双数组 +2
+    5. `apps/api/src/routes/admin/sources-matrix.ts` 加 3 端点 + 扩 PUT upsert 双签名派发（codename/priority 任一非 undefined → svc.upsertLineAliasWithFields / 否则 → svc.upsertLineAlias 既有 audit）
+    6. `tests/unit/api/source-line-alias-retire-priority-audit.test.ts` NEW（6 case / payload 内容显式断言）：retire 4（404/409 不写 audit / happy 写 actionType + targetId + before/after + reason / reason 缺省 = null）+ priority_update 2（404 不写 / happy 写 before/after priority 字段不同）
+    7. `docs/changelog.md` 本条目 R-MID-1 第 29-30 次系统化记录
+  - **业务接入**（与 RETRO 7 文件一体提交）：
+    - `apps/api/src/services/SourcesMatrixService.ts` 扩 3 方法：
+      - `retireLineAlias` 接入 `auditSvc.write({actionType: 'source_line_alias.retire', targetKind: 'source_line_alias', targetId: 'siteKey/sourceName', beforeJsonb: 退役前完整行, afterJsonb: {...退役后行, reason: input.reason ?? null}, requestId})`
+      - `updateLineAliasPriority` 加 before fetch + audit 写入（actionType `source_line_alias.priority_update` / before/after priority 字段差异）
+      - 新增 `UpsertAliasSchema` 扩 `codename` (regex 中文/英文/数字/连字符 / 长度 ≤ 20 / nullable optional) + `priority` (z.coerce.number int 0-100 optional) + `.strict()`
+      - 新增 `RetireAliasSchema` 含可选 `reason` ≤ 200 字符
+      - 新增 `UpdatePriorityAliasSchema` 含必填 `priority` 0-100
+  - **route 3 新端点**：
+    - `GET /admin/source-line-aliases/codename-pool` (readAuth / moderator+)：调 `svc.getCodenamePool()` 返回 `{available, occupied, cooling}` 三段（admin UI 下拉真源 / 字库 52 项 - 占用 - 冷却 = 可用）
+    - `POST /admin/source-line-aliases/:siteKey/:sourceName/retire` (adminOnly)：zod 校验 reason + Service retire / 错误 AppError → reply.code(err.httpStatus).send({error: {code, message, status}}) 范式
+    - `PUT /admin/source-line-aliases/:siteKey/:sourceName/priority` (adminOnly)：同范式
+  - **既有 PUT upsert 端点扩 body**：双签名派发（codename/priority 任一非 undefined → svc.upsertLineAliasWithFields；否则降级 svc.upsertLineAlias 既有 audit）/ 兼容旧调用方零回归
+- **错误码（ADR-110 14 码 / 零新增）**：VALIDATION_ERROR 422 / NOT_FOUND 404 / STATE_CONFLICT 409 / FORBIDDEN 403 / UNAUTHORIZED 401 / INTERNAL_ERROR 500
+- **ADR-164 §端点契约表 markdown 标题修订**（verify-endpoint-adr 解析需求）：
+  - 原 `### §5 端点契约（R7 MUST-8 6 列范式）` → 改为 `### 端点契约（R7 MUST-8 6 列范式 / 原 ADR-164 §5）`
+  - 根因：`scripts/lib/adr-parser.mjs` findSubsection 正则 `^###\\s+端点契约(?:\\s|$|（)` 不支持 §N 前缀（与既有 ADR-104/-105/-117 等同范式）
+  - 决策：直接修订 ADR-164 §5 标题对齐既有范式 / 内容不动 / 章节内容仍可追溯（标题保留 `/ 原 ADR-164 §5` 引用）
+- **CHG-368-B-A2a 测试微调**：
+  - `tests/unit/api/source-line-alias-mutations.test.ts` updateLineAliasPriority 2 case 同步加 before fetch mock（404 case mock findLineAlias = null / happy path mock findLineAlias = SAMPLE_ALIAS）/ Service 加 before fetch 后这两 case 测试 mock 也跟上
+- **质量门禁**：
+  - typecheck ✅（root + 7 workspaces）/ lint ✅（0 error 0 warning）
+  - verify:adr-contracts ✅ EXIT=0（**verify-endpoint-adr ✅ 197 admin 路由对齐 80 ADR 端点**（80 = 既有 77 + 本卡 3 新端点 GET codename-pool + POST retire + PUT priority）/ verify-adr-d-numbers ✅ 266 条全闭环 / verify-sql-schema-alignment ✅）
+  - 单测 7 文件 182/182 PASS（既有 sources-matrix 域 52 + audit-log-coverage 117 + audit-log-service-enums-set-equal 4 + source-line-alias-mutations 11 + sources-matrix-service 14 + source-line-alias-retire-priority-audit 6 + sources-matrix 27 部分 / 零回归）
+- **R-MID-1 第 29-30 次系统化（CHG-368-B-A2b）**：4 真源同步范式严格执行
+  - 真源 1（types union）+2 项 ✅
+  - 真源 2（Service ACTION_TYPES 数组）+2 项（与 union 同序）✅
+  - 真源 3a/3b（audit-log 双测试 EXPECTED set-equal）✅
+  - 真源 4（REQUIRED + PAYLOAD it.each）✅
+  - 真源 5（route auditSvc.write 写入位点）✅
+  - 真源 6（payload 内容断言独立测试）✅ tests/unit/api/source-line-alias-retire-priority-audit.test.ts 6 case
+  - 真源 7（本 changelog 条目记录）✅
+- **commit trailer**：无强制 Subagents
+- **闭环**：CHG-368-B-A2b 完成 / route 3 端点 + R-MID-1 7 文件框架一体提交 / Service audit 写入接入（retire + priority_update / before/after JSONB payload 完整）/ Wave 2 实施 3/5 子卡完成（-A1 / -A2a / -A2b）/ ADR-164 端点契约表 markdown 标题对齐既有 ADR 范式 / verify-endpoint-adr 197 路由 80 ADR 端点全对齐 / R-MID-1 系统化第 29-30 次落地 / 留待 -A3 + -B + -C

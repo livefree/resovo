@@ -239,6 +239,10 @@ export type AdminAuditActionType =
   // CHG-357 / ADR-158 AMENDMENT 2：视频级 batch probe + render-check 合并 actionType（R-MID-1 第 28 次 / targetKind 'video'）
   | 'video_source.batch_inline_action'  // POST /admin/videos/:videoId/sources/{batch-probe,batch-render-check}（afterJsonb.action 区分）
 
+  // CHG-368-B-A2b / ADR-164 D-164-7：线路别名退役 + 优先级更新（R-MID-1 第 29-30 次系统化 / targetKind 复用 'source_line_alias'）
+  | 'source_line_alias.retire'           // POST /admin/source-line-aliases/:siteKey/:sourceName/retire
+  | 'source_line_alias.priority_update'  // PUT  /admin/source-line-aliases/:siteKey/:sourceName/priority
+
 export type AdminAuditTargetKind =
   | 'video'
   | 'video_source'

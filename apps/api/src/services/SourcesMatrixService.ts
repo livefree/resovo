@@ -110,7 +110,22 @@ export const VideoGroupsQuerySchema = z.object({
 
 export const UpsertAliasSchema = z.object({
   displayName: z.string().min(1, '别名不能为空').max(100, '别名过长'),
-})
+  // CHG-368-B-A2b / ADR-164 §5.4：扩 codename + priority 可选字段
+  codename: z.string().min(1).max(20)
+    .regex(/^[一-龥A-Za-z0-9-]+$/, 'codename 仅允许中文/英文/数字/连字符')
+    .nullable().optional(),
+  priority: z.coerce.number().int().min(0, 'priority ≥ 0').max(100, 'priority ≤ 100').optional(),
+}).strict()
+
+/** CHG-368-B-A2b / ADR-164 §5.4：POST retire body */
+export const RetireAliasSchema = z.object({
+  reason: z.string().max(200, '退役原因 ≤ 200 字符').optional(),
+}).strict()
+
+/** CHG-368-B-A2b / ADR-164 §5.4：PUT priority body */
+export const UpdatePriorityAliasSchema = z.object({
+  priority: z.coerce.number().int().min(0, 'priority ≥ 0').max(100, 'priority ≤ 100'),
+}).strict()
 
 // ADR-117 AMENDMENT 2026-05-19：path 校验同 UpsertAliasParamsSchema siteKey 字段
 export const RoutesBySiteParamsSchema = z.object({
@@ -448,20 +463,17 @@ export class SourcesMatrixService {
   }
 
   /**
-   * CHG-368-B-A2a / ADR-164 §5.7：手动退役别名（autoRetired=false）
-   *   404：行不存在（before fetch 返回 null）
-   *   409：行已退役（before fetch 返回 retiredAt 非 NULL）
-   *   成功：UPDATE 守卫 retired_at IS NULL / rowCount=1 / 返回新行
-   *   audit 写入留 -A2b
-   *
-   * 注：input.reason 当前仅保留接口参数 / -A2b route 层将 reason 写入 audit payload
+   * CHG-368-B-A2a + -A2b / ADR-164 §5.7 / D-164-7：手动退役别名（autoRetired=false）
+   *   404：行不存在 / 409：已退役 / 并发竞态：UPDATE rowCount=0 → STATE_CONFLICT
+   *   audit `source_line_alias.retire`：beforeJsonb = 退役前完整行 / afterJsonb = 退役后行 + reason（如有）
+   *   R-MID-1 第 29 次系统化（CHG-368-B-A2b 实施）
    */
   async retireLineAlias(
     sourceSiteKey: string,
     sourceName: string,
-    _input: RetireAliasInput,
-    _actorId: string,
-    _requestId?: string,
+    input: RetireAliasInput,
+    actorId: string,
+    requestId?: string,
   ): Promise<SourceLineAlias> {
     const before = await findLineAlias(this.db, sourceSiteKey, sourceName)
     if (!before) {
@@ -472,28 +484,57 @@ export class SourcesMatrixService {
     }
     const alias = await retireLineAliasQuery(this.db, sourceSiteKey, sourceName)
     if (!alias) {
-      // 罕见竞态：before fetch 后被并发 retire / 视为 409
       throw new AppError('STATE_CONFLICT', '该别名已被并发退役', 409)
     }
+
+    this.auditSvc.write({
+      actorId,
+      actionType: 'source_line_alias.retire',
+      targetKind: 'source_line_alias',
+      targetId: `${sourceSiteKey}/${sourceName}`,
+      beforeJsonb: before as unknown as Record<string, unknown>,
+      afterJsonb: {
+        ...alias,
+        reason: input.reason ?? null,
+      } as unknown as Record<string, unknown>,
+      requestId: requestId ?? null,
+    })
+
     return alias
   }
 
   /**
-   * CHG-368-B-A2a / ADR-164 §5.7：单字段更新 priority（高频运营 / 单端点单 audit）
-   *   404：行不存在 / 422：priority 越界（DB CHECK 23514 / Service 层不再次校验 / route 层 zod 兜底）
-   *   audit 写入留 -A2b
+   * CHG-368-B-A2a + -A2b / ADR-164 §5.7 / D-164-7：单字段更新 priority
+   *   404：行不存在 / 422：priority 越界（DB CHECK 23514 / route 层 zod 兜底）
+   *   audit `source_line_alias.priority_update`：beforeJsonb = 旧行 / afterJsonb = 新行
+   *   R-MID-1 第 30 次系统化
    */
   async updateLineAliasPriority(
     sourceSiteKey: string,
     sourceName: string,
     priority: number,
-    _actorId: string,
-    _requestId?: string,
+    actorId: string,
+    requestId?: string,
   ): Promise<SourceLineAlias> {
+    const before = await findLineAlias(this.db, sourceSiteKey, sourceName)
+    if (!before) {
+      throw new AppError('NOT_FOUND', '别名行不存在', 404)
+    }
     const alias = await updateLineAliasPriorityQuery(this.db, sourceSiteKey, sourceName, priority)
     if (!alias) {
       throw new AppError('NOT_FOUND', '别名行不存在', 404)
     }
+
+    this.auditSvc.write({
+      actorId,
+      actionType: 'source_line_alias.priority_update',
+      targetKind: 'source_line_alias',
+      targetId: `${sourceSiteKey}/${sourceName}`,
+      beforeJsonb: before as unknown as Record<string, unknown>,
+      afterJsonb: alias as unknown as Record<string, unknown>,
+      requestId: requestId ?? null,
+    })
+
     return alias
   }
 

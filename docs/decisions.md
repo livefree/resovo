@@ -17216,7 +17216,7 @@ COMMIT;
   - 与 063 单向扩展（ADD COLUMN / ADD INDEX 不修改既有列）
   - 不冲突 plan §17.3 提到的"META-EPISODES 顺序协调"（078 已 ship + 079 落 source_line_aliases / 双 ADR 互不干扰）
 
-### §5 端点契约（R7 MUST-8 6 列范式）
+### 端点契约（R7 MUST-8 6 列范式 / 原 ADR-164 §5）
 
 #### 5.1 既有端点扩展（PUT upsert / ADR-117 body 扩字段）
 

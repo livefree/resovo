@@ -10,7 +10,7 @@
 
 ---
 
-## Wave 2 状态（SEQ-20260527-MOD-WAVE2 / 主线 13/13 + ADR 2/2 + 实施 2/5 子卡）
+## Wave 2 状态（SEQ-20260527-MOD-WAVE2 / 主线 13/13 + ADR 2/2 + 实施 3/5 子卡）
 
 - ✅ CHG-361 ~ CHG-366 / CHG-369（详 changelog）
 - ⛔ CHG-362-A/B + CHG-365-A/B SKIPPED
@@ -18,14 +18,14 @@
 - ✅ CHG-368-A ADR-164 起草（Accepted A-）
 - ✅ CHG-368-B-A1 数据层（+ 5 次 FIX 沉淀索引设计 4 步核验规范）
 - ✅ CHG-368-B-A2a queries + Service 业务层
-- ⏸️ CHG-368-B-A2b / -A3 / -B / -C 排期承接
+- ✅ CHG-368-B-A2b route 3 端点 + R-MID-1 RETRO 7 文件 + Service audit 接入（R-MID-1 第 29-30 次系统化）
+- ⏸️ CHG-368-B-A3 / -B / -C 排期承接
 
 ---
 
 ## 下次会话恢复入口
 
-- **CHG-368-B-A2b**（依赖 -A2a PASS）：route 3 新端点 + R-MID-1 RETRO 7 文件（D-121-3 豁免）+ payload 内容断言新单测 + Service 3 方法 audit 写入路径接入 / 估时 ~0.3w / 建议 opus-4-7
-- **CHG-368-B-A3**：route-scoring priority 激活 + sources.ts JOIN retired_at IS NULL 谓词 / 2 文件 + 测试 / 估时 ~0.2w / 建议 sonnet
-- **CHG-368-B-B**：admin UI 独立路径 + DataTable 一体化 / 3 文件 / 建议 sonnet
-- **CHG-368-B-C**（advisory）：LinesPanel codename 标签 + docs 同步 / commit 需 arch-reviewer trailer
-- **CHG-369-B** / **CHG-SN-9-ROUTE-LABEL-D** / **PRE-DEAD-LINE-AUTO-RETIRE-WORKER** / **PRE-INDEX-DESIGN-RULES**（5 次 FIX 经验落 db-rules.md）等
+- **CHG-368-B-A3**（最简 / 优先推荐）：route-scoring.ts priority 通道激活（priority/100 替代 Phase 1 默认 0）+ sources.ts findActiveSourcesWithSignalsByVideoId JOIN 加 retired_at IS NULL 谓词 / 2 业务 + 测试 / 估时 ~0.2w / 建议 sonnet
+- **CHG-368-B-B**：admin UI 独立路径 `/admin/source-line-aliases` + DataTable 一体化（packages/admin-ui） / 3 文件 / 估时 ~0.4w / 建议 sonnet
+- **CHG-368-B-C**（advisory）：LinesPanel codename 标签 + docs/architecture.md + docs/manual/route-labeling.md 同步 / 3 文件 / commit 需 arch-reviewer trailer（packages/admin-ui 公开 Props 改动）
+- **CHG-369-B** / **CHG-SN-9-ROUTE-LABEL-D** / **PRE-DEAD-LINE-AUTO-RETIRE-WORKER** / **PRE-INDEX-DESIGN-RULES** 等

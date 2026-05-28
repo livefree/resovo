@@ -19,11 +19,13 @@ import {
   SourcesMatrixService,
   VideoGroupsQuerySchema,
   UpsertAliasSchema,
+  RetireAliasSchema,
+  UpdatePriorityAliasSchema,
   RoutesBySiteParamsSchema,
   RouteActionParamsSchema,
   SingleSourceParamsSchema,
 } from '@/api/services/SourcesMatrixService'
-import { isAppError } from '@/api/lib/errors'
+import { AppError, isAppError } from '@/api/lib/errors'
 
 export async function adminSourcesMatrixRoutes(fastify: FastifyInstance) {
   const svc = new SourcesMatrixService(db)
@@ -85,6 +87,14 @@ export async function adminSourcesMatrixRoutes(fastify: FastifyInstance) {
     return reply.send({ data: aliases })
   })
 
+  // ── GET /admin/source-line-aliases/codename-pool ─────────────────
+  // CHG-368-B-A2b / ADR-164 §5.4：codename 字库可用性查询（admin UI 下拉源数据）
+
+  fastify.get('/admin/source-line-aliases/codename-pool', { preHandler: readAuth }, async (_request, reply) => {
+    const pool = await svc.getCodenamePool()
+    return reply.send({ data: pool })
+  })
+
   // ── PUT /admin/source-line-aliases/:siteKey/:sourceName ──────────
 
   fastify.put('/admin/source-line-aliases/:siteKey/:sourceName', { preHandler: adminOnly }, async (request, reply) => {
@@ -96,9 +106,23 @@ export async function adminSourcesMatrixRoutes(fastify: FastifyInstance) {
       })
     }
     try {
+      const decodedSiteKey = decodeURIComponent(siteKey)
+      const decodedSourceName = decodeURIComponent(sourceName)
+      // CHG-368-B-A2b / ADR-164 §5.4：body 含 codename / priority 时走扩字段路径
+      //   否则降级旧 upsertLineAlias（既有 audit `source_line_alias.upsert` 写入）
+      if (parsed.data.codename !== undefined || parsed.data.priority !== undefined) {
+        const alias = await svc.upsertLineAliasWithFields(
+          decodedSiteKey,
+          decodedSourceName,
+          parsed.data,
+          request.user!.userId,
+          request.id,
+        )
+        return reply.send({ data: alias })
+      }
       const alias = await svc.upsertLineAlias(
-        decodeURIComponent(siteKey),
-        decodeURIComponent(sourceName),
+        decodedSiteKey,
+        decodedSourceName,
         parsed.data.displayName,
         request.user!.userId,
         request.id,
@@ -109,6 +133,76 @@ export async function adminSourcesMatrixRoutes(fastify: FastifyInstance) {
       return reply.code(500).send({ error: { code: 'INTERNAL_ERROR', message: '服务器内部错误', status: 500 } })
     }
   })
+
+  // ── POST /admin/source-line-aliases/:siteKey/:sourceName/retire ──
+  // CHG-368-B-A2b / ADR-164 §5.4 / D-164-4：手动退役（autoRetired=false）
+
+  fastify.post(
+    '/admin/source-line-aliases/:siteKey/:sourceName/retire',
+    { preHandler: adminOnly },
+    async (request, reply) => {
+      const { siteKey, sourceName } = request.params as { siteKey: string; sourceName: string }
+      const parsed = RetireAliasSchema.safeParse(request.body ?? {})
+      if (!parsed.success) {
+        return reply.code(422).send({
+          error: { code: 'VALIDATION_ERROR', message: parsed.error.issues[0]?.message ?? '参数错误', status: 422 },
+        })
+      }
+      try {
+        const alias = await svc.retireLineAlias(
+          decodeURIComponent(siteKey),
+          decodeURIComponent(sourceName),
+          parsed.data,
+          request.user!.userId,
+          request.id,
+        )
+        return reply.send({ data: alias })
+      } catch (err) {
+        if (err instanceof AppError) {
+          return reply.code(err.httpStatus).send({
+            error: { code: err.code, message: err.message, status: err.httpStatus },
+          })
+        }
+        request.log.error({ err }, '[admin/source-line-aliases] retire error')
+        return reply.code(500).send({ error: { code: 'INTERNAL_ERROR', message: '服务器内部错误', status: 500 } })
+      }
+    },
+  )
+
+  // ── PUT /admin/source-line-aliases/:siteKey/:sourceName/priority ──
+  // CHG-368-B-A2b / ADR-164 §5.4 / D-164-3：单字段更新 priority（高频运营）
+
+  fastify.put(
+    '/admin/source-line-aliases/:siteKey/:sourceName/priority',
+    { preHandler: adminOnly },
+    async (request, reply) => {
+      const { siteKey, sourceName } = request.params as { siteKey: string; sourceName: string }
+      const parsed = UpdatePriorityAliasSchema.safeParse(request.body)
+      if (!parsed.success) {
+        return reply.code(422).send({
+          error: { code: 'VALIDATION_ERROR', message: parsed.error.issues[0]?.message ?? '参数错误', status: 422 },
+        })
+      }
+      try {
+        const alias = await svc.updateLineAliasPriority(
+          decodeURIComponent(siteKey),
+          decodeURIComponent(sourceName),
+          parsed.data.priority,
+          request.user!.userId,
+          request.id,
+        )
+        return reply.send({ data: alias })
+      } catch (err) {
+        if (err instanceof AppError) {
+          return reply.code(err.httpStatus).send({
+            error: { code: err.code, message: err.message, status: err.httpStatus },
+          })
+        }
+        request.log.error({ err }, '[admin/source-line-aliases] priority error')
+        return reply.code(500).send({ error: { code: 'INTERNAL_ERROR', message: '服务器内部错误', status: 500 } })
+      }
+    },
+  )
 
   // ── GET /admin/sources/routes/by-site/:siteKey ──────────────────
   // ADR-117 AMENDMENT 2026-05-19 / CHG-SN-7-REDO-01-E

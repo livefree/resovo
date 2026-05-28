@@ -94,6 +94,9 @@ const EXPECTED_ACTION_TYPES = [
   'video_source.inline_action',
   // CHG-357 / ADR-158 AMENDMENT 2 / R-MID-1 系统化第 28 次（视频级 batch probe + render-check 合并 actionType / targetKind 'video'）
   'video_source.batch_inline_action',
+  // CHG-368-B-A2b / ADR-164 D-164-7 / R-MID-1 系统化第 29-30 次（线路别名退役 + 优先级更新 / targetKind 复用 'source_line_alias'）
+  'source_line_alias.retire',
+  'source_line_alias.priority_update',
 ] as const
 
 const EXPECTED_TARGET_KINDS = [

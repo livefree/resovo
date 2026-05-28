@@ -102,6 +102,9 @@ const REQUIRED_ACTION_TYPES = [
   'video_source.inline_action',  // POST /admin/sources/:id/{probe,render-check}（afterJsonb.action 区分 'probe' / 'render_check'）
   // CHG-357 / ADR-158 AMENDMENT 2：视频级 batch（R-MID-1 第 28 次 / targetKind 'video'）
   'video_source.batch_inline_action',  // POST /admin/videos/:videoId/sources/{batch-probe,batch-render-check}
+  // CHG-368-B-A2b / ADR-164 D-164-7：线路别名退役 + 优先级更新（R-MID-1 第 29-30 次系统化）
+  'source_line_alias.retire',           // POST /admin/source-line-aliases/:siteKey/:sourceName/retire
+  'source_line_alias.priority_update',  // PUT  /admin/source-line-aliases/:siteKey/:sourceName/priority
 ] as const
 
 const ACTION_TYPE_REGEX = /actionType:\s*['"]([a-z_.]+)['"]/g
@@ -192,6 +195,9 @@ const PAYLOAD_ASSERTION_REQUIRED = [
   'video_source.inline_action',
   // CHG-357 / ADR-158 AMENDMENT 2：视频级 batch audit payload 断言（R-MID-1 第 28 次 / tests/unit/api/video-source-batch-inline-action-audit.test.ts）
   'video_source.batch_inline_action',
+  // CHG-368-B-A2b / ADR-164 D-164-7：线路别名退役 + 优先级更新 audit payload 内容断言（R-MID-1 第 29-30 次 / tests/unit/api/source-line-alias-retire-priority-audit.test.ts）
+  'source_line_alias.retire',
+  'source_line_alias.priority_update',
 ] as const
 
 // CHG-SN-6-10：plan v1.4 §3.0.5 M-SN-4 legacy 11 项已迁移至 PAYLOAD_ASSERTION_REQUIRED

@@ -59,6 +59,9 @@ export const ACTION_TYPES: readonly AdminAuditActionType[] = [
   'video.unmerge',
   'video.split',
   'source_line_alias.upsert',
+  // CHG-368-B-A2b / ADR-164 D-164-7：线路别名退役 + 优先级更新（R-MID-1 第 29-30 次系统化）
+  'source_line_alias.retire',
+  'source_line_alias.priority_update',
   // CHG-SN-6-RETRO-3-A：v1 写端点 audit 补齐
   'system.cache_clear',
   'system.settings_update',
