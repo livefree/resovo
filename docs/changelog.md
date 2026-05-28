@@ -10464,3 +10464,44 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
   - 把部分索引误当作全表索引（忽视 WHERE 子句限制覆盖范围）
   - **每次修正引入新错误**（FIX-2 引入 cooling 由 codename 索引覆盖错配 / FIX-3 引入"走 codename 索引"错配）
 - **闭环**：Codex stop-time review #20 红线消解 / Migration 079 + architecture.md + decisions.md 3 真源双索引声明完整对齐物理行为 / cooling lookup by codename 真相（无适用索引 / 全表扫描或经 retired_at 范围扫 + 应用层过滤）公开承认 / 四级范式 + 双 invariant（部分索引方向核验 + 驱动列 vs 索引列核验）形成完整索引设计文档书写规范 / 应在 db-rules.md 落地
+
+---
+
+## [CHG-368-B-A1-FIX-5] idx_codename_active listSources 候选路径仍虚假修正（Codex stop-time review #21）
+- **完成时间**：2026-05-28
+- **执行模型**：claude-opus-4-7（主循环 / 续会话）
+- **背景**：CHG-368-B-A1-FIX-4 commit 934a65e0 后 Codex 第 5 次抓到红线："active codename partial index is still falsely documented as a listSources candidate path"。
+- **根因**：FIX-4 我把 `idx_codename_active` 的"候选路径"列了"listSources JOIN 主路径 `retired_at IS NULL` 谓词（部分索引 WHERE 子句包含同条件 / 规划器可能消费）"——但实测代码（`apps/api/src/db/queries/sources-matrix.ts:300-301 / 462-465`）显示 listSources 与 matrix 的 JOIN 是按 **`(source_site_key, source_name)` 复合 PK 匹配**：
+  - `LEFT JOIN source_line_aliases sla ON sla.source_site_key = vs.source_site_key AND sla.source_name = vs.source_name`
+  - JOIN driving 字段是复合键 (source_site_key, source_name) → 走 source_line_aliases 表的 PRIMARY KEY 唯一索引（PG 自动建立的 B-tree）
+  - codename 列索引（`idx_codename_active`）键是 codename / 不是 PK / 不参与此 JOIN access path
+  - "部分索引 WHERE 含 `retired_at IS NULL`" 与 listSources 谓词匹配是真，但**索引键 codename ≠ JOIN driving 复合键** → 规划器不会用 codename 索引 driving 该 JOIN
+- **第 5 次连续修正模式**：5 次错配都围绕同一假设"看起来匹配的索引一定能加速对应查询"，每次都跳过"索引键 vs 查询 driving 列"基础核对：
+  - FIX-2: 反向条件错（IS NULL vs IS NOT NULL）
+  - FIX-3: 调用方错配（cooling by codename 不走 retired_at 索引）
+  - FIX-4: 部分索引方向错（codename 索引 WHERE retired_at IS NULL 不能服务 cooling IS NOT NULL）
+  - **FIX-5: 索引键 vs JOIN driving 列错配（codename 索引不能 driving PK lookup JOIN）**
+- **真相承认**：`idx_codename_active` 的真实用途仅有 2 项：
+  - ① **唯一性约束物理保证**（DB 强制 / 违反抛 23505 unique_violation）
+  - ② **按 codename driving 单值查询活跃别名**（GET codename-pool occupied 段 / 未来 codename 反查站点+线路）
+  - listSources / matrix JOIN 路径完全由 PRIMARY KEY 复合索引承担，与 codename 索引无关
+- **3 真源同步修正**：
+  - `apps/api/src/db/migrations/079_*.sql` 第 3 节注释（idx_codename_active）：候选路径剔除 listSources / 新增"PRIMARY KEY 不依赖任何 codename / retired_at 索引"显式说明；第 4 节注释（idx_retired_at）"不适用" listSources 段补充"PRIMARY KEY 索引承担" 而非"由 idx_codename_active 覆盖"
+  - `docs/architecture.md` §5 索引段：双索引声明全面修正 + 追加段落显式标注 "listSources / matrix JOIN 主路径走表的 PRIMARY KEY `(source_site_key, source_name)` 复合唯一索引（PG 自动建立 / B-tree），不依赖 codename 或 retired_at 任何部分索引"
+  - `docs/decisions.md` ADR-164 §4 SQL 草案：双索引同步 + FIX-{1..5} 五次修订溯源链（再次延长 / 透明记录 5 次错配）
+- **方法论再深化（第 3 条 invariant）**：除四级范式 + 部分索引方向核验 + 驱动列 vs 索引列核验，再补一条**索引键 vs 查询 driving 列匹配性核验**：
+  - 复合主键 JOIN 由 PRIMARY KEY 索引承担 / 单列部分索引无法替代 PK lookup
+  - 部分索引能否加速一个查询，**必要条件之一是该索引的键列出现在查询的 driving 谓词中**（不只是 WHERE 子句任意位置）
+  - 例：listSources JOIN driving 谓词是 `sla.source_site_key = ... AND sla.source_name = ...`（按 PK 复合键），即使 SQL 中含 `sla.retired_at IS NULL` 过滤，规划器也不会用 codename 部分索引 driving 这个 JOIN
+- **质量门禁**：verify:adr-contracts ✅ EXIT=0 / 仅注释 + docs 改动 / typecheck + lint + test unaffected
+- **commit trailer**：无强制 Subagents
+- **经验总结（CHG-368-B-A1-FIX 系列 1-5 整体复盘 / 第 5 次延长）**：
+  - 第 1 次 FIX：架构同步缺失（机械性遗漏 / 经验未落实成 checklist）
+  - 第 2-5 次 FIX：索引用途声明 4 次递进修正 / 每次都引入新错配（FIX-2 反向 → FIX-3 调用方 → FIX-4 部分索引方向 → FIX-5 索引键 vs JOIN driving 列）
+  - **元根因**：把索引用途描述视为"看起来匹配就能用"的直觉判断 / 而不是"严格核对索引键、部分索引 WHERE 子句、查询 driving 谓词三者匹配性"的形式化推理
+  - **改进**：今后所有索引设计文档必须按"索引设计 4 步核验" 流程书写：
+    1. 索引键是什么列（不要省略 / 不要简化）
+    2. 部分索引 WHERE 子句覆盖哪些行（含反向条件 invariant）
+    3. 候选查询的 driving 谓词是什么列（与索引键比对）
+    4. 索引键 vs driving 列匹配 + 部分 WHERE 子句不与查询谓词方向相反 → 才能列入"候选路径"
+- **闭环**：Codex stop-time review #21 红线消解 / 5 次连续修订形成"索引设计 4 步核验"完整规范 / Migration 079 + architecture.md + decisions.md 3 真源双索引声明对齐物理行为 / listSources / matrix JOIN PK 索引承担路径明示 / cooling lookup by codename 无适用索引承认 / 应在 docs/rules/db-rules.md 落地"索引设计 4 步核验" + 四级范式 + 双 invariant 完整规范

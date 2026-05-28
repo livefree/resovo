@@ -50,16 +50,25 @@ BEGIN
 END $$;
 
 -- ── 3. 唯一部分索引（在役 codename / D-164-9）─────────────────────────
--- 索引覆盖：仅"在役行"（codename IS NOT NULL AND retired_at IS NULL）的
--- codename 列唯一性约束 + 排序结构。
--- 候选查询路径：
---   ① 在役 codename 唯一性约束（PUT upsert 冲突检测 / DB 强制全局唯一）
---   ② listSources 主路径 JOIN 谓词 `retired_at IS NULL`（部分索引 WHERE
---      子句包含同条件 / 规划器可能消费）
+-- 索引键：codename。部分索引 WHERE = codename IS NOT NULL AND retired_at IS NULL
+-- （只索引在役行）。
+--
+-- 真实用途：
+--   ① **唯一性约束物理保证**（DB 强制：同一时刻只有一个活跃行能占用同一 codename
+--      / INSERT/UPDATE codename 时违反唯一性会抛 23505 unique_violation）
+--   ② 按 codename driving 查询活跃别名（如 GET codename-pool occupied 段：
+--      `WHERE codename IS NOT NULL AND retired_at IS NULL GROUP BY codename`；
+--      或未来"按 codename 反查站点+线路"路径）
+--
 -- 不适用：
---   ① cooling lookup（cooling 查 `retired_at IS NOT NULL` 的 codename / 部分
---      索引谓词方向相反 / 不可用）
---   ② 已退役行查询（同上反向条件）
+--   ① listSources / matrix JOIN：JOIN 谓词是
+--      `sla.source_site_key = vs.source_site_key AND sla.source_name = vs.source_name`
+--      （按 (source_site_key, source_name) 复合 PK 匹配）→ 走 source_line_aliases
+--      表的 PRIMARY KEY 唯一索引，不走 codename 列索引。codename 索引不参与
+--      此 JOIN access path。
+--   ② cooling lookup（查 `retired_at IS NOT NULL` 的 codename / 部分索引谓词
+--      方向相反 / 不可用 / 该路径当前 schema 无适用索引 → 见第 4 节注释）
+--   ③ 已退役行查询（同上反向条件）
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_source_line_aliases_codename_active
   ON source_line_aliases (codename)
@@ -72,7 +81,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_source_line_aliases_codename_active
 --   ② GET codename-pool cooling 段（CHG-368-B-A2）：`WHERE retired_at >= NOW() - 90 days`
 --      列出全部 cooling codename（按 retired_at 范围扫描 / 不按 codename 单值）
 -- 不适用：
---   ① listSources 主路径 `retired_at IS NULL`（反向条件 / 由 idx_codename_active 覆盖）
+--   ① listSources / matrix JOIN：JOIN 按 (source_site_key, source_name) 复合 PK
+--      匹配 → 走 PRIMARY KEY 索引（不依赖任何 codename / retired_at 索引）
 --   ② 按 codename 查询 cooling（如 isCodenameInCooling(codename) `WHERE codename = $1
 --      AND retired_at IS NOT NULL`）：**当前 schema 无适用索引**，access path =
 --      全表扫描或先按 retired_at 范围扫再过滤 codename。规划器视实际数据

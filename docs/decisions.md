@@ -17126,11 +17126,15 @@ BEGIN
 END $$;
 
 -- ── 3. 唯一部分索引（在役 codename）───────────────────────────────
--- 索引覆盖：仅在役行 codename 列唯一性 + 排序结构。
--- 候选路径：① PUT upsert 在役 codename 唯一性约束 ② listSources JOIN
--- 主路径 retired_at IS NULL 谓词（部分索引 WHERE 含同条件）。
--- 不适用：cooling lookup（retired_at IS NOT NULL 反向 / 不可用）/
--- 已退役行查询（同上反向）。
+-- 索引键: codename / 部分索引 WHERE = codename IS NOT NULL AND retired_at IS NULL
+-- 真实用途:
+--   ① 唯一性约束物理保证（DB 强制 / INSERT/UPDATE codename 违反抛 23505）
+--   ② 按 codename driving 查询活跃别名（GET codename-pool occupied / codename 反查）
+-- 不适用:
+--   ① listSources / matrix JOIN: JOIN 按 (source_site_key, source_name) 复合 PK 匹配
+--     → 走 PRIMARY KEY 索引 / 与 codename 索引无关
+--   ② cooling lookup（反向 retired_at IS NOT NULL / 不可用）
+--   ③ 已退役行查询
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_source_line_aliases_codename_active
   ON source_line_aliases (codename)
@@ -17142,17 +17146,18 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_source_line_aliases_codename_active
 --   ① admin UI "已退役" tab（CHG-368-B-B）：retired_at IS NOT NULL ORDER BY DESC
 --   ② GET codename-pool cooling 段（CHG-368-B-A2）：retired_at >= NOW() - 90 days
 --      范围扫描（按 retired_at 范围 / 不按 codename 单值）
--- 不适用：① listSources 主路径 retired_at IS NULL（反向 / 由
---   idx_source_line_aliases_codename_active 覆盖）② 按 codename 查询 cooling
---   （WHERE codename = $1 AND retired_at IS NOT NULL）：当前 schema 无适用
---   索引 / 全表扫描或 retired_at 范围扫后应用层过滤 codename / 未来热路径
+-- 不适用：① listSources / matrix JOIN：按 (source_site_key, source_name)
+--   复合 PK 匹配 → 走 PRIMARY KEY 索引（不依赖 retired_at 索引）② 按 codename
+--   查询 cooling（WHERE codename = $1 AND retired_at IS NOT NULL）：当前 schema
+--   无适用索引 / 全表扫描或 retired_at 范围扫后应用层过滤 codename / 未来热路径
 --   可独立加 (codename) WHERE retired_at IS NOT NULL 部分索引（CHG-368-B-A2
 --   实施时评估）。
--- （注：本节注释经 CHG-368-B-A1-FIX-{1,2,3,4} 四次修订：原 "加速 listSources JOIN"
--- 方向错（FIX-2 修）→ 替换 "加速 cooling 判定 by codename" 仍错（FIX-3 修，因
--- 走 codename 索引假设）→ "走 codename 索引" 也错（FIX-4 修，因 codename 部分
--- 索引 WHERE retired_at IS NULL 与 cooling IS NOT NULL 方向相反 / Codex
--- stop-time review #20）。最终四级范式：覆盖 / 候选 / 不适用 / 实测留置。）
+-- （注：本节注释经 CHG-368-B-A1-FIX-{1,2,3,4,5} 五次修订：原 "加速 listSources JOIN"
+-- 方向错（FIX-2）→ "加速 cooling 判定 by codename" 仍错（FIX-3 / 调用方错配）
+-- → "走 codename 索引" 也错（FIX-4 / codename 部分索引方向反）→ 第 3 节
+-- "listSources 由 codename 索引覆盖" 同模式错（FIX-5 / Codex stop-time review #21 /
+-- listSources JOIN 实际走 PRIMARY KEY 不走 codename 索引）。最终四级范式：
+-- 覆盖 / 真实用途 / 不适用 / 实测留置。）
 
 CREATE INDEX IF NOT EXISTS idx_source_line_aliases_retired_at
   ON source_line_aliases (retired_at)
