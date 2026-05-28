@@ -40,6 +40,48 @@
 
 ---
 
+## [CHG-368-B-FOLLOWUP-CONTENT-SOURCE-ROW] server-next ContentSourceRow + listAdminSources SQL 扩 codename/retired_at（Wave 3 #3 / 长尾清理 3/4）
+- **完成时间**：2026-05-28
+- **执行模型**：claude-sonnet-4-6（主循环 / 不触发 Opus：仅 SQL JOIN 扩 + 类型 2 字段 / 非 packages/admin-ui Props / 非 player-core 接口扩展 / 非 3+ 消费方 schema）
+- **子代理调用**：无（ADR-164 既有规范覆盖 / Layer B 字段在 ContentSourceRow 透传是 Layer B 设计的衔接卡）
+- **拆卡承接**：CHG-368-B-C-UI（commit bc24718e）已让 LinesPanel codename badge + 退役行 opacity UI 落地，aggregate.ts 已透传 codename + retiredAt 字段；但本卡未做时 server-next API 层 ContentSourceRow + apps/api listAdminSources SELECT 都不含两字段 → LinesPanel UI 实际永显 null。本卡补上"数据通路"让 UI 见到真实 codename 与退役状态。
+- **范围**（2 业务 + 1 测试 / PATCH=3 严守 ≤ 5 阈值 / 不触发 architecture sync / 不触发 Opus 红线）：
+  - `apps/api/src/db/queries/sources.ts` listAdminSources SELECT 改造：
+    - 新增 `LEFT JOIN source_line_aliases sla ON s.source_site_key = sla.source_site_key AND s.source_name = sla.source_name`（不加 sla.retired_at IS NULL 守卫 / 需透传 retired 状态到 UI）
+    - SELECT 加 `sla.codename AS codename, sla.retired_at AS retired_at`
+    - 注释嵌入 db-rules.md §"索引设计 4 步核验"（PRE-INDEX-DESIGN-RULES 落地后**首次显式应用**该规范）：
+      - 步 1：索引键 = source_line_aliases (source_site_key, source_name) 复合 PK
+      - 步 2：部分索引 WHERE = N/A（PK 全表索引）
+      - 步 3：候选 driving 谓词 = JOIN ON (sla.source_site_key, sla.source_name) 复合
+      - 步 4：driving 列 = 索引键 ✅ 完整复合 PK 命中（实测留 EXPLAIN ANALYZE）
+    - 与 sources-matrix.ts findActiveSourcesWithSignalsByVideoId 路径设计目的不同：该路径过滤"在役行"用于 effective_score 排序（需 sla.retired_at IS NULL）；本 listAdminSources 用于后台审核 UI 展示退役状态（不能过滤）
+  - `apps/server-next/src/lib/moderation/api.ts` ContentSourceRow interface 扩 2 字段：
+    - `readonly codename: string | null`（D-164-2）
+    - `readonly retired_at: string | null`（D-164-4）
+    - 注释说明数据通路：listAdminSources LEFT JOIN → ContentSourceRow → RawSourceRow（lines-panel.types.ts:79-80 已 optional 兼容）→ aggregate 取首行 → LineAggregate.codename / retiredAt → LinesPanel codename badge + 退役行 opacity 显示
+  - `tests/unit/api/admin-sources-sql.test.ts` 扩 2 case：
+    - SELECT LEFT JOIN source_line_aliases (source_site_key, source_name) PK 复合匹配 + 返回 codename + retired_at AS retired_at
+    - JOIN ON 子句不含 sla.retired_at IS NULL（防"按 retired_at 过滤"模式被无意引入）
+- **不触发 architecture.md 同步**（CHG-368-B-A1-FIX-{1..5} 经验持续核对）：
+  - 本卡无 schema migration / 新表 / 新列 / 新约束 / 新索引
+  - 仅 SELECT 列扩 + LEFT JOIN 添加 = query 改造层
+  - 不触发 CLAUDE.md "schema 变更不同步 architecture.md" 红线
+- **设计取舍**：① JOIN 不加 retired_at IS NULL 守卫：本路径需要透传 retired 状态到 UI（LinesPanel 退役行 opacity）/ 加守卫会导致已退役 alias 永显 null codename 与 retired_at / 与 UI 真实需求相反 ② 注释嵌入 4 步核验：PRE-INDEX-DESIGN-RULES 落地后首次显式应用 / 防未来同类查询继续靠"直觉"判断 ③ ContentSourceRow 字段非 optional（string | null 而非 string | null | undefined）：JOIN 即使无匹配 sla 行也返回 NULL（不返回 undefined）/ 类型与 SQL 物理事实严格对齐 ④ 单元测试仅断言 SQL 字符串 patterns 而非真 PG / 沿用既有 ADMIN-13 SQL 测试范式 ⑤ 不动 RawSourceRow（packages/admin-ui）：CHG-368-B-C-UI 已让其 optional 兼容 / 本卡只需 server-next 一端补字段
+- **质量门禁**：typecheck ✅ EXIT=0（root + 5 workspaces）/ lint ✅ EXIT=0（仅 2 pre-existing react-hooks/exhaustive-deps warning 与本卡无关）/ verify:adr-contracts ✅ EXIT=0（SQL JOIN 改造非 schema 变更 / verify-sql-schema-alignment 不受影响）/ 单测 admin-sources 域 34/34 PASS（admin-sources-sql 5/5 含 2 新 + 既有 3 零回归 / admin-sources-query 14/14 / admin-sources-status 5/5 / content-sort 10/10）
+- **commit trailer**：无强制 Subagents（不修改 packages/admin-ui Props / 不起新 ADR / 不重构 player-core / 非 3+ 消费方 schema / 不触发"共享组件 API 契约强制 Opus"红线）
+- **六问自检**：
+  - Q1 本次逻辑应沉淀共享层？✅ ADR-164 Layer B 字段透传由 aggregate.ts（admin-ui 共享层）+ ContentSourceRow（server-next 消费方）+ listAdminSources（apps/api 数据源）三层分别承接；本卡补 ContentSourceRow + 数据源即完整链路就绪
+  - Q2 是否引入回归？✅ LEFT JOIN 不影响 video_sources 主行数 + COUNT query 未变 + 既有 SELECT 字段全保留 + 34/34 测试 PASS
+  - Q3 是否越层？✅ 数据源 query + API 层类型 = 数据通路同层补字段
+  - Q4 是否硬编码值 / any 类型？✅ 无 any / 无 magic value（codename + retired_at 直接来自 sla 列）/ 颜色 N/A
+  - Q5 是否布局变化？N/A（无 UI 改动 / LinesPanel 已存在）
+  - Q6 文件范围内？✅ 3 文件 PATCH=3
+- **偏离检测**：无（本卡完全按 tasks.md 卡片定义执行 / 3 文件清单全命中 / 未引入卡片外改动）
+- **[AI-CHECK] 结论**：PASS（Layer B codename + retired_at 数据通路完整打通 / listAdminSources → ContentSourceRow → RawSourceRow → LineAggregate → LinesPanel codename badge + 退役行 opacity 全链 ship / PRE-INDEX-DESIGN-RULES 4 步核验首次显式应用 / 注释中嵌入步骤说明）
+- **闭环**：CHG-368-B-FOLLOWUP-CONTENT-SOURCE-ROW 完成 / Layer B 字段真实可见（不再永显 null）/ LinesPanel UI 终于看到真实数据 / Wave 3 长尾清理 3/4 完成（PRE-INDEX-DESIGN-RULES + CHG-369-B + 本卡）/ Wave 3 SEQ 整体 3/10 完成 / 主循环自动取下一卡（CHG-368-B-FOLLOWUP-AUTO-RETIRED-LABEL / 触发 Opus trailer）
+
+---
+
 ## [CHG-369-B] 自定义主题输入（Wave 3 #2 / plan §17.2 / 长尾清理 2/4）
 - **完成时间**：2026-05-28
 - **执行模型**：claude-sonnet-4-6（主循环 / 不触发 Opus 红线：不改 packages/admin-ui Props / 无新 ADR / 非 player-core 接口扩展 / 非 3+ 消费方 schema）

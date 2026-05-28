@@ -23,6 +23,13 @@ export interface ContentSourceRow {
   readonly video_title: string | null
   /** Migration 061 行级乐观锁版本字段（CHG-SN-5-PRE-01-C） */
   readonly updated_at: string
+  // ── CHG-368-B-FOLLOWUP-CONTENT-SOURCE-ROW / ADR-164 Layer B 透传 ──────
+  // listAdminSources LEFT JOIN source_line_aliases (source_site_key, source_name) PK 匹配
+  // 透传到 LinesPanel codename badge + 退役行 opacity 显示（aggregate.ts 取首行）
+  /** 运维短码（"泰山-2" / 未分配 → null / D-164-2） */
+  readonly codename: string | null
+  /** 软删时间戳（在役 → null / 已退役 → ISO timestamp / D-164-4） */
+  readonly retired_at: string | null
 }
 
 export interface LineHealthPage {

@@ -1978,7 +1978,7 @@ CHG-369 (前台主题选择器, 独立)
 
 ## [SEQ-20260528-MOD-WAVE3] server-next 内容审核台 Wave 3 — Wave 2 长尾清理 + 架构 / 长期 P3 卡（plan §14 Wave 3 + §17.2 Wave 3 增补）
 
-- **状态**：🔄 进行中（2/10 完成 / 下一卡 CHG-368-B-FOLLOWUP-CONTENT-SOURCE-ROW）
+- **状态**：🔄 进行中（3/10 完成 / 下一卡 CHG-368-B-FOLLOWUP-AUTO-RETIRED-LABEL）
 - **创建时间**：2026-05-28
 - **目标**：按用户 2026-05-28 决策"长尾先清 + plan §14 主线"：先清 4 张 Wave 2 长尾 follow-up，再按 plan §14 / §17.2 Wave 3 入 6 张 P3 长期主线卡。
 - **执行约束**：沿用 Wave 1/2 §16.1-16.5（UI/UX 谨慎 / docs/manual 同步 / 主循环全自动 + BLOCKER 触发清单）
@@ -1991,7 +1991,7 @@ CHG-369 (前台主题选择器, 独立)
 |---|---|---|---|---|
 | 1 | ✅ **PRE-INDEX-DESIGN-RULES** 已完成（2026-05-28 / 主循环 claude-sonnet-4-6 / 子代理 无）| 沉淀"索引设计 4 步核验 + 双 invariant（部分索引方向 / 驱动列 vs 索引列匹配性）+ 四级范式（覆盖→候选→不适用→实测）+ 4 类禁令 + 6 项 Checklist"到 `docs/rules/db-rules.md`（CHG-368-B-A1-FIX-{1..5} 5 次 stop-time review 经验首次完整规范化 / 2 docs / PATCH=2 / typecheck + lint + verify:adr-contracts 全 PASS / 单测 24/167 pre-existing 失败 stash 前后一致零回归）| 否 | sonnet-4-6 |
 | 2 | ✅ **CHG-369-B** 已完成（2026-05-28 / 主循环 claude-sonnet-4-6 / 子代理 无）| 自定义主题输入（plan §17.2）：CustomThemeData schema + 双 key localStorage 协议 + parseCustomTheme 严格校验 + CustomThemeDialog NEW（仿 ConfirmReplaceDialog 模式 / role=dialog aria-modal / 实时校验 + 字符计数 + Confirm/Cancel/Clear）+ RouteThemeSelector 扩 "自定义…" option + ✎ 编辑按钮 + PlayerShell wiring / 5 业务+测试 PATCH=5 严守 + 1 docs sync / 54/54 单测 PASS（route-theme-storage 20 + line-display-name-themes 34 既有零回归）/ typecheck + lint + verify:adr-contracts 全 PASS EXIT=0 / docs/manual §8.7 "未实装" → "已 ship 2026-05-28"完整规范化 | 否 | sonnet-4-6 |
-| 3 | ⬜ **CHG-368-B-FOLLOWUP-CONTENT-SOURCE-ROW** 待开始 | server-next API 层 ContentSourceRow / VideoSource 类型同步扩 codename + retired_at 字段（让 LinesPanel 实际看到数据 / 当前永显 null） | 否 | sonnet-4-6 |
+| 3 | ✅ **CHG-368-B-FOLLOWUP-CONTENT-SOURCE-ROW** 已完成（2026-05-28 / 主循环 claude-sonnet-4-6 / 子代理 无）| listAdminSources SELECT LEFT JOIN source_line_aliases + 返回 codename + retired_at + ContentSourceRow 类型扩 2 字段 / Layer B 数据通路打通 / 2 业务 + 1 测试 PATCH=3 / typecheck + lint + verify + 34/34 admin-sources 域测试 PASS / PRE-INDEX-DESIGN-RULES 4 步核验首次显式应用 | 否 | sonnet-4-6 |
 | 4 | ⬜ **CHG-368-B-FOLLOWUP-AUTO-RETIRED-LABEL** 待开始 | LinesPanel 退役标识区分"（已退役·自动）/（已退役·手动）"基于 autoRetired 字段 / 需扩 LineAggregate 第 12 字段（触发 Opus trailer）| 否（ADR-164 advisory）| opus-4-7 + arch-reviewer |
 | 5 | ⬜ **CHG-SN-9-MOD-BUTTON-MIGRATE** 待开始 | plan §5 P2 / BTN_* → AdminButton 机械迁移（server-next 内剩余原始 button 收口）| 否 | sonnet-4-6 |
 | 6 | ⬜ **CHG-SN-9-REJECTED-ENHANCE** 待开始 | plan §5 P2 / RejectedTab 分页（cursor）+ SplitPane（左列表 / 右详情）| 否 | sonnet-4-6 |
