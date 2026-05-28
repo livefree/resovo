@@ -571,6 +571,16 @@ export function ModerationConsole(): React.ReactElement {
           onReject={() => setBatchRejectModalOpen(true)}
           onClear={clearSelection}
           pending={batchPending}
+          onMerge={() => {
+            // CHG-364-A：批量合并入口 / 跳 /admin/merge?ids=<csv>&from=moderation-batch
+            // CHG-364-B 卡补 MergeClient 接 ?ids query + BatchMergeWorkspace（列 ids 选 target + 提交 merge）
+            const ids = Array.from(selectedIds).join(',')
+            window.open(
+              `/admin/merge?ids=${encodeURIComponent(ids)}&from=moderation-batch`,
+              '_blank',
+              'noopener,noreferrer',
+            )
+          }}
         />
       )}
 

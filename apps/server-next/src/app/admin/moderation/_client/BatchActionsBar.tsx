@@ -76,6 +76,8 @@ export interface BatchActionsBarProps {
   readonly onReject: () => void
   readonly onClear: () => void
   readonly pending: boolean
+  /** CHG-364-A：批量合并按钮回调 / 条件 selectedCount >= 2 才显示（merge 协议至少 1 source + 1 target） */
+  readonly onMerge?: () => void
 }
 
 export function BatchActionsBar({
@@ -84,6 +86,7 @@ export function BatchActionsBar({
   onReject,
   onClear,
   pending,
+  onMerge,
 }: BatchActionsBarProps): React.ReactElement {
   return (
     <div style={BAR_STYLE} data-testid="moderation-batch-bar">
@@ -106,6 +109,17 @@ export function BatchActionsBar({
       >
         ✕ 批量拒绝 ({selectedCount})
       </button>
+      {/* CHG-364-A：合并入口 / 至少 2 条才有合并语义（ADR-105 MergeSchema sourceVideoIds + targetVideoId） */}
+      {onMerge && selectedCount >= 2 && (
+        <button
+          type="button"
+          style={CLEAR_BTN_STYLE}
+          onClick={onMerge}
+          data-testid="moderation-batch-merge"
+        >
+          ↔ 合并 ({selectedCount})
+        </button>
+      )}
       <button
         type="button"
         style={CLEAR_BTN_STYLE}
