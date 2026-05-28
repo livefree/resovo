@@ -55,8 +55,15 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_source_line_aliases_codename_active
   ON source_line_aliases (codename)
   WHERE codename IS NOT NULL AND retired_at IS NULL;
 
--- ── 4. 辅助索引（退役过滤 / D-164-6）──────────────────────────────────
--- 用于 SourceService.listSources 高频 JOIN 加 retired_at IS NULL 谓词
+-- ── 4. 辅助索引（已退役行查询 / D-164-6）───────────────────────────────
+-- 加速"已退役行"路径：① SourceLineAliasService 90 天冷却期判定
+-- （`retired_at < NOW() - INTERVAL '90 days'`）② admin UI "已退役" tab
+-- 视图筛选（CHG-368-B-B）。
+--
+-- 注：listSources 主路径谓词是 `sla.retired_at IS NULL`（在役行），
+-- 该谓词反而由 idx_source_line_aliases_codename_active 部分唯一索引
+-- 的 WHERE 条件覆盖（codename IS NOT NULL AND retired_at IS NULL），
+-- 不依赖本索引。
 
 CREATE INDEX IF NOT EXISTS idx_source_line_aliases_retired_at
   ON source_line_aliases (retired_at)

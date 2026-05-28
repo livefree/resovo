@@ -17131,8 +17131,13 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_source_line_aliases_codename_active
   ON source_line_aliases (codename)
   WHERE codename IS NOT NULL AND retired_at IS NULL;
 
--- ── 4. 辅助索引（退役过滤）─────────────────────────────────────────
--- 用于 SourceService.listSources 高频 JOIN 加 retired_at IS NULL 谓词
+-- ── 4. 辅助索引（已退役行查询）─────────────────────────────────────
+-- 加速「已退役行」路径：① SourceLineAliasService 90 天冷却期判定
+-- ② admin UI "已退役" tab 视图。listSources 主路径谓词 `retired_at IS NULL`
+-- 反而由 idx_source_line_aliases_codename_active 部分唯一索引 WHERE 条件覆盖。
+-- （注：本 SQL 注释经 CHG-368-B-A1-FIX-2 / Codex stop-time review #18 修订；
+-- ADR-164 §4 原注释 "用于 listSources JOIN" 是描述错误，部分索引谓词方向
+-- 与 listSources `IS NULL` 不匹配 / 部分索引 `IS NOT NULL` 仅对反向查询有效）
 
 CREATE INDEX IF NOT EXISTS idx_source_line_aliases_retired_at
   ON source_line_aliases (retired_at)

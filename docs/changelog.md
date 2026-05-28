@@ -10376,3 +10376,28 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **commit trailer**：无强制 Subagents
 - **经验**：CHG-367-B-A-FIX-2（commit a07a727c）已经记录过"docs/architecture.md schema 同步必须显式区分已 ship / 未 ship forward-reference"经验，本卡相隔 3 个 commit 立即重蹈覆辙（commit bc0ae9c8 → fix 本 commit）。**这是模式化偷懒的最严重表现** — 上次 fix 教训未在执行层面落实成 checklist。**今后凡 schema migration 卡（含 ADD COLUMN / 新建表 / DROP COLUMN）必须强制执行 docs/architecture.md 同步作为完成前 checklist 的硬条件**，违者按 BLOCKER 阻断 git commit（应该考虑写入 pre-commit hook / verify-migration-architecture-sync.mjs 守卫）。
 - **闭环**：Codex stop-time review #17 红线消解 / architecture.md §5 source_line_aliases 字段表 4 新列 + 2 新索引完整同步 / 已 ship / 未 ship forward-reference 与 ADR-163 同范式 / docs 与 CHG-368-B-A1 ship 代码状态严格对齐 / CHG-368-B-A2/-A3/-B/-C 落地时仅需把"未 ship"段升级为"已 ship"即可
+
+---
+
+## [CHG-368-B-A1-FIX-2] idx_source_line_aliases_retired_at 索引用途虚假声明修正（Codex stop-time review #18）
+- **完成时间**：2026-05-28
+- **执行模型**：claude-opus-4-7（主循环 / 续会话）
+- **背景**：CHG-368-B-A1-FIX commit 418df0cc 后 Codex 抓到红线："architecture sync adds a false index-purpose claim"。
+- **根因**：上一卡 architecture.md 沿用 Migration 079 SQL 注释 + ADR-164 §4 SQL 草案中的描述："`(retired_at) WHERE retired_at IS NOT NULL` 加速 SourceService.listSources JOIN 加 `sla.retired_at IS NULL` 谓词"——**这是错误的索引方向声明**：
+  - 部分索引 `WHERE retired_at IS NOT NULL` 只索引"已退役行"
+  - listSources 主路径谓词 `sla.retired_at IS NULL` 指向"在役行"（与部分索引 WHERE 条件相反）
+  - PG 查询规划器对 `IS NULL` 谓词使用部分索引 `WHERE IS NOT NULL` 时无法用索引（条件方向相反）→ 该索引对 listSources 主路径零加速
+  - 真正加速 listSources 主路径 `IS NULL` 谓词的是 `idx_source_line_aliases_codename_active` 部分唯一索引（其 WHERE 条件含 `retired_at IS NULL`，能被 listSources 复用）
+- **3 处虚假声明全部修正**：
+  - `apps/api/src/db/migrations/079_source_line_aliases_codename_priority_retired.sql` 注释 L57-66：注释改为"加速『已退役行查询』路径：① SourceLineAliasService 90 天冷却期判定 ② admin UI '已退役' tab 视图筛选"+ 显式说明 listSources 主路径不依赖本索引
+  - `docs/architecture.md` §5 source_line_aliases 索引段：描述同步修正 + 显式指出 listSources 主路径由 `idx_source_line_aliases_codename_active` 覆盖
+  - `docs/decisions.md` ADR-164 §4 SQL 草案：注释同样修正 + 追加"经 CHG-368-B-A1-FIX-2 修订（部分索引谓词方向与 listSources `IS NULL` 不匹配）"溯源标注
+- **设计取舍**：① ADR-164 §4 是 Accepted 历史决策 / 一般不修订 vs 本次直接修订注释（非决策本体）：选直接修订 + 溯源标注 — 因为这是"描述错误"非"决策错误"（部分索引本身仍有合法用途 / 仅原注释对其用途描述偏离）/ 改注释不破坏 ADR 任何 D-N 决策点 / 比起 AMENDMENT 段成本低 ② 索引保留不删除：部分索引 `WHERE retired_at IS NOT NULL` 对真正的"已退役行查询"路径（cooling 判定 + admin UI 已退役 tab）有效，不应删除
+- **行为对照（fix 前 vs 后）**：
+  - 索引物理本身：未改（DDL 未动 / Migration 079 已 ship）
+  - 索引用途声明：从虚假"加速 listSources `IS NULL`" → 真实"加速 SourceLineAliasService 冷却期 + admin UI 已退役 tab"
+  - listSources 主路径 SQL 谓词 `sla.retired_at IS NULL` 实际加速来源：明确指向 `idx_source_line_aliases_codename_active` 部分唯一索引 WHERE 条件
+- **质量门禁**：verify:adr-contracts ✅ EXIT=0 / 仅注释 + docs 改动 / typecheck + lint + test 不变（unaffected）
+- **commit trailer**：无强制 Subagents
+- **经验**：本红线源头是 ADR-164 §4 SQL 草案的"加速 listSources JOIN"注释——arch-reviewer Opus 子代理在 1 轮独立起草中未充分检查"部分索引 WHERE 条件方向" vs "查询谓词方向"的匹配性。**今后部分索引设计必须显式核对：部分索引 `WHERE <条件>` 仅对带相同 `<条件>` 的查询谓词有效；反向 `<NOT 条件>` 查询无法用该索引**。这是 PG 部分索引规划器底层语义 invariant，应该写入 docs/rules/db-rules.md 索引设计 checklist。
+- **闭环**：Codex stop-time review #18 红线消解 / Migration 079 + architecture.md + decisions.md 3 真源索引用途声明完整对齐物理行为 / `idx_source_line_aliases_retired_at` 部分索引保留服务真实路径（冷却期 + admin UI 已退役 tab）/ listSources 主路径加速来源明确指向 `idx_source_line_aliases_codename_active` 部分唯一索引
