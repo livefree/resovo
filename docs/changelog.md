@@ -10353,3 +10353,26 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
   - 全量单测：仅 pre-existing failure（useTableSettings jsdom env + ModerationBatch fixture）/ 本卡相关测试全 PASS
 - **commit trailer**：无强制 Subagents（ADR-164 已 Accepted / 本卡规范驱动实施 / packages/types/src/sources-matrix.types.ts 扩字段是兼容性扩展不破坏既有接口 / 不触发 CLAUDE.md §模型路由"共享组件 API 契约强制 Opus"红线）
 - **闭环**：CHG-368-B-A1 完成 / Migration 079 + types + queries SELECT 同步落地 / mapAliasRow helper + MOUNTAIN_CODENAMES 共享层沉淀 / -A2/-A3/-B/-C 实施基础就绪 / Wave 2 范围未完全闭环（剩 -A2/-A3/-B/-C 排期）
+
+---
+
+## [CHG-368-B-A1-FIX] docs/architecture.md source_line_aliases 同步 Migration 079 4 新字段（Codex stop-time review #17）
+- **完成时间**：2026-05-28
+- **执行模型**：claude-opus-4-7（主循环 / 续会话）
+- **背景**：CHG-368-B-A1 commit bc0ae9c8 后 Codex 抓到红线："schema migration shipped without required architecture sync"。CLAUDE.md 绝对禁止 "schema 变更不同步 docs/architecture.md"。
+- **根因**：与 CHG-367-B-A-FIX 完全相同的重复错误 — 上一个 Codex stop-time review #16（commit a07a727c）已经写过"今后凡 schema migration 卡，architecture.md 同步必须同卡完成，不允许推后"的经验，但本卡（-B-A1）落了 Migration 079 后只更新了 changelog 没同步 architecture.md。模式化偷懒 + 经验未落实 = 红线复现。
+- **范围**（1 业务 / 净增）：
+  - `docs/architecture.md` §5 数据模型 source_line_aliases 段：
+    - 标题 "Migration 063" → "Migration 063 / 079"
+    - 字段表新增 4 行：codename / priority / retired_at / auto_retired（每行含字段类型 + Migration 引用 + ADR-164 D-N 引用 + 业务语义说明）
+    - 索引说明拆为列表：既有 (source_site_key) + Migration 079 新增 UNIQUE codename active + retired_at 部分索引
+    - 新增 3 段 ship 状态明确分层：
+      - **已 ship 数据层（CHG-368-B-A1）**：Migration 079 + types + queries SELECT + MOUNTAIN_CODENAMES 字库 + mapAliasRow helper
+      - **未 ship 业务路径（→ -A2/-A3）**：3 新 admin 写端点 + Service + R-MID-1 RETRO + route-scoring priority 激活 + listSources JOIN
+      - **未 ship UI（→ -B/-C）**：admin UI 独立路径 + LinesPanel + manual docs
+    - 用途说明扩展：明确 Layer A priority 通道 + Layer B codename 运维短码语义
+- **设计取舍**：① "未 ship" 段保留 forward-reference vs 删除：保留（参 CHG-367-B-A-FIX-2 教训 / 给 reader 完整路径地图 + ADR-164 合约 docs 闭环 + 减小 -A2/-A3/-B/-C 落地时再补 docs 工作量）② 子段标题用 "**已 ship**" / "**未 ship**" 粗体显式：vs 把"待落地"字样夹在描述中 — 与 ADR-163 同范式 / reader 第一眼可识别 / docs 与 ship 代码状态严格对齐
+- **质量门禁**：verify:adr-contracts ✅ EXIT=0（6/7 全 PASS / verify-error-message + verify-enum-ssot advisory 与本卡无关）/ 仅文档卡 typecheck + lint + test 无变化（unaffected）
+- **commit trailer**：无强制 Subagents
+- **经验**：CHG-367-B-A-FIX-2（commit a07a727c）已经记录过"docs/architecture.md schema 同步必须显式区分已 ship / 未 ship forward-reference"经验，本卡相隔 3 个 commit 立即重蹈覆辙（commit bc0ae9c8 → fix 本 commit）。**这是模式化偷懒的最严重表现** — 上次 fix 教训未在执行层面落实成 checklist。**今后凡 schema migration 卡（含 ADD COLUMN / 新建表 / DROP COLUMN）必须强制执行 docs/architecture.md 同步作为完成前 checklist 的硬条件**，违者按 BLOCKER 阻断 git commit（应该考虑写入 pre-commit hook / verify-migration-architecture-sync.mjs 守卫）。
+- **闭环**：Codex stop-time review #17 红线消解 / architecture.md §5 source_line_aliases 字段表 4 新列 + 2 新索引完整同步 / 已 ship / 未 ship forward-reference 与 ADR-163 同范式 / docs 与 CHG-368-B-A1 ship 代码状态严格对齐 / CHG-368-B-A2/-A3/-B/-C 落地时仅需把"未 ship"段升级为"已 ship"即可
