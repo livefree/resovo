@@ -18,6 +18,7 @@ import { BangumiService } from '@/api/services/BangumiService'
 import { BangumiSeedService } from '@/api/services/BangumiSeedService'
 import * as videoQueries from '@/api/db/queries/videos'
 
+const VideoIdParamsSchema = z.object({ id: z.string().uuid() }).strict()
 const BangumiCandidatesQuerySchema = z.object({ keyword: z.string().min(1).max(200).optional() }).strict()
 const BangumiConfirmBodySchema = z.object({ bangumiSubjectId: z.number().int().positive() }).strict()
 const BangumiSeedBodySchema = z.object({
@@ -42,7 +43,9 @@ export async function registerModerationBangumiRoutes(fastify: FastifyInstance) 
 
   // ── 1. POST /admin/videos/:id/bangumi-sync ───────────────────
   fastify.post('/admin/videos/:id/bangumi-sync', { preHandler: auth }, async (request, reply) => {
-    const { id } = request.params as { id: string }
+    const parsedParams = VideoIdParamsSchema.safeParse(request.params)
+    if (!parsedParams.success) return reply.code(422).send(VALIDATION)
+    const { id } = parsedParams.data
     const video = await videoQueries.findAdminVideoById(db, id)
     if (!video) return reply.code(404).send(NOT_FOUND)
     try {
@@ -67,7 +70,9 @@ export async function registerModerationBangumiRoutes(fastify: FastifyInstance) 
 
   // ── 2. GET /admin/videos/:id/bangumi-candidates ──────────────
   fastify.get('/admin/videos/:id/bangumi-candidates', { preHandler: auth }, async (request, reply) => {
-    const { id } = request.params as { id: string }
+    const parsedParams = VideoIdParamsSchema.safeParse(request.params)
+    if (!parsedParams.success) return reply.code(422).send(VALIDATION)
+    const { id } = parsedParams.data
     const parsed = BangumiCandidatesQuerySchema.safeParse(request.query)
     if (!parsed.success) return reply.code(422).send(VALIDATION)
     const video = await videoQueries.findAdminVideoById(db, id)
@@ -87,7 +92,9 @@ export async function registerModerationBangumiRoutes(fastify: FastifyInstance) 
 
   // ── 3. POST /admin/videos/:id/bangumi-confirm ────────────────
   fastify.post('/admin/videos/:id/bangumi-confirm', { preHandler: auth }, async (request, reply) => {
-    const { id } = request.params as { id: string }
+    const parsedParams = VideoIdParamsSchema.safeParse(request.params)
+    if (!parsedParams.success) return reply.code(422).send(VALIDATION)
+    const { id } = parsedParams.data
     const parsed = BangumiConfirmBodySchema.safeParse(request.body)
     if (!parsed.success) return reply.code(422).send(VALIDATION)
     const video = await videoQueries.findAdminVideoById(db, id)

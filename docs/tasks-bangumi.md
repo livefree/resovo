@@ -29,15 +29,19 @@ docs 硬冲突域（adr / architecture）已在 tracks.md 声明持有。
     - `externalData.listBangumiEntriesForSeed`（按 rank/year 过滤 + 默认跳过 nsfw=true，SQL 收敛于 query 层）。
     - `mediaCatalog.listBangumiGaps` + `countBangumiGaps`（有 bangumi_subject_id 但无 published video 的 catalog；LEFT JOIN bangumi_entries 取 rank 排序）。
     - **MediaCatalogService.findOrCreate retry 补 bangumiId 分支（ADR-159 Y5）**——与 Step4 对称，修复并发 seed + enrich step3 写同一 subject 时 ON CONFLICT 跳过后查不回的缺口。
-    - 新建 `BangumiSeedService.seedPlaceholders`（仅本地 dump、零 REST 调用规避限流；type 固定 anime；created/matched 计数语义见服务注释，含 D-159-1 normalizedKey 失配归 matched）+ `listGaps`。
-    - 单测：bangumi-seed-service（6）+ mediaCatalogFindOrCreate Y5 retry（1）。
+    - 新建 `BangumiSeedService.seedPlaceholders`（仅本地 dump、零 REST 调用规避限流；type 固定 anime）+ `listGaps`。
+    - 单测：bangumi-seed-service（7）+ mediaCatalogFindOrCreate Y5 retry（1）。
   - **CHG-BNG-08（Phase 2-B）**：
     - `packages/types/external.types.ts` 加 `BangumiCandidate` / `BangumiGapRow`（ADR-159 §端点契约 readonly 形状逐字落地）。
     - `BangumiService.searchCandidates`（本地 dump 召回带置信度为主 + keyword 时 REST 兜底 confidence=0，按 confidence 降序去重）。
     - 新建 `routes/admin/moderation.bangumi.ts` 5 端点（sync/candidates/confirm = moderator+admin；seed = admin only；gaps = moderator+admin），zod schema 逐字对齐 ADR-159；注册进 moderation.ts。
     - sync 端点直接映射 matchAndEnrich 结果（auto→updated:true / candidate/none→updated:false+reason）；token 缺失走 Phase 1 既有 dump 降级（比 ADR 决策 9 字面 token_missing 更优，仍写入 dump 字段）。
-    - 单测：bangumiRoutes（11，含 403 admin-only / 422 边界）+ searchCandidates（3）。
-  - **门禁**：typecheck ✅（8 包全 PASS）/ test:run ✅ **5277 passed**（+25）/ verify:endpoint-adr ✅ 199 路由对齐 / verify:adr-contracts ✅（advisory：error-message + enum-ssot + D-159-1 均 pre-existing/非阻塞）。
+    - 单测：bangumiRoutes（12，含 403 admin-only / 422 边界 / 非法 UUID → 422）+ searchCandidates（3）。
+  - **审阅修订（Codex review gate，2026-05-27）**：
+    - **P1（已修）**：三视频端点（sync/candidates/confirm）补 `VideoIdParamsSchema = z.object({ id: z.string().uuid() }).strict()`（ADR-159 §zod 逐字），非法 id 现返回 422 VALIDATION_ERROR 而非走查库返 404；路由测试 fixture 改真实 UUID + 新增非法 UUID→422 用例。
+    - **P2（已修）**：seed created/matched 计数改为精确——不复用 `findOrCreate`（返回行无法区分本次插入 vs 并发命中），改为 `findCatalogByBangumiId` + `findCatalogByNormalizedKey` 双 precheck（后者必需：`uq_catalog_title_year_type` 是 *部分* 唯一索引，仅全外部 ID 为 NULL 时生效，带 bangumi_id 的占位 INSERT 不受约束，须显式 SELECT 防重复占位）+ `insertCatalog` 的 `row|null` 返回值作唯一可靠"是否本次插入"信号（null=唯一冲突并发竞态→matched）；新增并发竞态用例。findOrCreate Y5 修订保留（crawler 路径仍需）。
+    - **P3（已核实）**：reviewer 报 `npm run test -- --run` 164 个 localStorage 失败**在本 worktree 不可复现**——同命令实测 0 个 localStorage 失败。根因：`vitest.config.ts` 用 `environmentMatchGlobs`（vitest 3.2.4 **已 deprecated**，每次运行告警）按 glob 切 jsdom 环境提供 localStorage；reviewer 环境（不同 vitest/jsdom/node）未应用该映射 → 组件测试回落 node 环境。属 pre-existing 测试基建脆弱性，非 Bangumi（apps/api）引入。
+  - **门禁（最终）**：typecheck ✅（8 包全 PASS）/ verify:endpoint-adr ✅ 199 路由对齐 / verify:adr-contracts ✅（advisory：error-message + enum-ssot + D-159-1 均 pre-existing/非阻塞）/ `npm run test -- --run`：**5278 passed / 1 failed**，唯一失败为 `CrawlerClient.test.tsx` 14b（server-next CSV/toast，tasks.md 既载 flaky；单跑 **66/66 PASS**），与 Bangumi 无关。
   - **lint**：嵌套 worktree（`.claude/worktrees/bangumi` 物理位于主仓内）导致 ESLint 同时解析 worktree 与父仓两份 `eslint-plugin-resovo` → 插件歧义，对任意文件均 fail（环境性，非本次代码问题）；改动文件 typecheck 干净。
   - **D-159-1**：占位 normalizedKey 失配产生重复 catalog 已知限制，accept best-effort，按 ADR-159 待集成 PR 时在 changelog.md 闭环（活跃 Track 期不写共享 changelog 冲突域）。
 - **沉淀判断**：seed 服务 + 缺口查询 + 端点分层对标 douban，是；BangumiCandidate/GapRow 进 packages/types 共享层（ADR 锁定契约），是。

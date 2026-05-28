@@ -48,8 +48,11 @@ vi.mock('@/api/services/BangumiSeedService', () => ({
   },
 }))
 
+const VID = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee'
+const CID = 'cccccccc-dddd-4eee-8fff-111111111111'
+
 function makeVideo(overrides: Record<string, unknown> = {}) {
-  return { id: 'vid-1', catalog_id: 'cat-1', title_normalized: 'clannad', year: 2007, ...overrides }
+  return { id: VID, catalog_id: CID, title_normalized: 'clannad', year: 2007, ...overrides }
 }
 
 async function buildApp() {
@@ -82,36 +85,43 @@ describe('moderation.bangumi routes', () => {
   // ── 1. bangumi-sync ───────────────────────────────────────────
   it('sync auto → 200 { updated:true, bangumiSubjectId, episodes }', async () => {
     mMatchAndEnrich.mockResolvedValue({ matched: 'auto', bangumiSubjectId: 51, confidence: 0.92, episodes: 24, degraded: false })
-    const res = await app.inject({ method: 'POST', url: '/v1/admin/videos/vid-1/bangumi-sync', headers: { authorization: mod } })
+    const res = await app.inject({ method: 'POST', url: `/v1/admin/videos/${VID}/bangumi-sync`, headers: { authorization: mod } })
     expect(res.statusCode).toBe(200)
     expect(res.json().data).toEqual({ updated: true, bangumiSubjectId: 51, episodes: 24 })
-    expect(mMatchAndEnrich).toHaveBeenCalledWith({ videoId: 'vid-1', catalogId: 'cat-1', titleNorm: 'clannad', year: 2007 })
+    expect(mMatchAndEnrich).toHaveBeenCalledWith({ videoId: VID, catalogId: CID, titleNorm: 'clannad', year: 2007 })
   })
 
   it('sync none → 200 { updated:false, reason }', async () => {
     mMatchAndEnrich.mockResolvedValue({ matched: 'none', reason: 'no_local_match' })
-    const res = await app.inject({ method: 'POST', url: '/v1/admin/videos/vid-1/bangumi-sync', headers: { authorization: mod } })
+    const res = await app.inject({ method: 'POST', url: `/v1/admin/videos/${VID}/bangumi-sync`, headers: { authorization: mod } })
     expect(res.statusCode).toBe(200)
     expect(res.json().data).toEqual({ updated: false, reason: 'no_local_match' })
   })
 
-  it('sync 视频不存在 → 404', async () => {
+  it('sync 视频不存在（合法 UUID）→ 404', async () => {
     mockFindAdminVideoById.mockResolvedValue(null)
-    const res = await app.inject({ method: 'POST', url: '/v1/admin/videos/x/bangumi-sync', headers: { authorization: mod } })
+    const res = await app.inject({ method: 'POST', url: '/v1/admin/videos/bbbbbbbb-cccc-4ddd-8eee-ffffffffffff/bangumi-sync', headers: { authorization: mod } })
     expect(res.statusCode).toBe(404)
+  })
+
+  it('sync 非法 UUID path → 422 VALIDATION_ERROR（ADR-159 VideoIdParamsSchema）', async () => {
+    const res = await app.inject({ method: 'POST', url: '/v1/admin/videos/not-a-uuid/bangumi-sync', headers: { authorization: mod } })
+    expect(res.statusCode).toBe(422)
+    expect(res.json().error.code).toBe('VALIDATION_ERROR')
+    expect(mockFindAdminVideoById).not.toHaveBeenCalled()
   })
 
   // ── 2. bangumi-candidates ─────────────────────────────────────
   it('candidates → 200 + keyword 透传', async () => {
     mSearchCandidates.mockResolvedValue([{ bangumiSubjectId: 51, nameCn: 'A', nameJp: 'B', year: 2007, rating: 8.5, coverUrl: null, confidence: 0.92 }])
-    const res = await app.inject({ method: 'GET', url: '/v1/admin/videos/vid-1/bangumi-candidates?keyword=clannad', headers: { authorization: mod } })
+    const res = await app.inject({ method: 'GET', url: `/v1/admin/videos/${VID}/bangumi-candidates?keyword=clannad`, headers: { authorization: mod } })
     expect(res.statusCode).toBe(200)
     expect(res.json().data.candidates).toHaveLength(1)
     expect(mSearchCandidates).toHaveBeenCalledWith({ titleNorm: 'clannad', year: 2007, keyword: 'clannad' })
   })
 
   it('candidates keyword 超长 → 422', async () => {
-    const res = await app.inject({ method: 'GET', url: `/v1/admin/videos/vid-1/bangumi-candidates?keyword=${'x'.repeat(201)}`, headers: { authorization: mod } })
+    const res = await app.inject({ method: 'GET', url: `/v1/admin/videos/${VID}/bangumi-candidates?keyword=${'x'.repeat(201)}`, headers: { authorization: mod } })
     expect(res.statusCode).toBe(422)
   })
 
@@ -119,18 +129,18 @@ describe('moderation.bangumi routes', () => {
   it('confirm → 200 { updated, bangumiSubjectId }', async () => {
     mConfirmMatch.mockResolvedValue({ updated: true })
     const res = await app.inject({
-      method: 'POST', url: '/v1/admin/videos/vid-1/bangumi-confirm',
+      method: 'POST', url: `/v1/admin/videos/${VID}/bangumi-confirm`,
       headers: { authorization: mod, 'content-type': 'application/json' },
       body: JSON.stringify({ bangumiSubjectId: 51 }),
     })
     expect(res.statusCode).toBe(200)
     expect(res.json().data).toEqual({ updated: true, bangumiSubjectId: 51 })
-    expect(mConfirmMatch).toHaveBeenCalledWith('vid-1', 'cat-1', 51)
+    expect(mConfirmMatch).toHaveBeenCalledWith(VID, CID, 51)
   })
 
   it('confirm 非正整数 subjectId → 422', async () => {
     const res = await app.inject({
-      method: 'POST', url: '/v1/admin/videos/vid-1/bangumi-confirm',
+      method: 'POST', url: `/v1/admin/videos/${VID}/bangumi-confirm`,
       headers: { authorization: mod, 'content-type': 'application/json' },
       body: JSON.stringify({ bangumiSubjectId: -1 }),
     })

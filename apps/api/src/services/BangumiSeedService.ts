@@ -5,10 +5,16 @@
  *       等采集器后续按 title_norm+year+type 命中挂接填充。
  * 约束：批量场景仅走本地 dump（不打 REST API，规避 Bangumi 限流，ADR-159 决策 1）。
  *       不直连 SQL（经 db/queries）；占位 type 固定 'anime'（Y4）；默认跳过 nsfw（Y5，由 query 层过滤）。
+ *
+ * created/matched 计数精确性：不复用 MediaCatalogService.findOrCreate（其返回行无法区分
+ * "本次插入" vs "并发/冲突命中既有行"）。本服务自行做两段去重 precheck（bangumi_id 精确 +
+ * title_normalized+year+type 三元组——后者必需：媒体库 uq_catalog_title_year_type 是 *部分* 唯一
+ * 索引，仅当全部外部 ID 为 NULL 时生效，带 bangumi_subject_id 的占位 INSERT 不受其约束，
+ * 故须显式 SELECT 去重以免对既有采集 catalog 产生重复占位），再用 insertCatalog 的
+ * `row | null` 返回值作为唯一可靠的"是否本次插入"信号（null = bangumi_subject_id 唯一冲突的并发竞态）。
  */
 
 import type { Pool } from 'pg'
-import { MediaCatalogService } from './MediaCatalogService'
 import * as externalDataQueries from '@/api/db/queries/externalData'
 import * as catalogQueries from '@/api/db/queries/mediaCatalog'
 import type { BangumiGapQueryRow } from '@/api/db/queries/mediaCatalog'
@@ -32,17 +38,12 @@ export interface ListGapsResult {
 }
 
 export class BangumiSeedService {
-  private catalogService: MediaCatalogService
-
-  constructor(private db: Pool, catalogService?: MediaCatalogService) {
-    this.catalogService = catalogService ?? new MediaCatalogService(db)
-  }
+  constructor(private db: Pool) {}
 
   /**
-   * 批量建无源占位 catalog。遍历过滤后的 dump 条目，对每条 findOrCreate。
-   * 计数语义：
-   * - matched：已存在（先按 bangumi_id 命中，或 findOrCreate 经 normalizedKey 命中既有 catalog 未 link bangumi_id，D-159-1）。
-   * - created：新建占位。
+   * 批量建无源占位 catalog。遍历过滤后的 dump 条目，去重后插入。
+   * - matched：已存在（bangumi_id 命中 / 三元组命中既有 catalog / INSERT 唯一冲突的并发竞态）。
+   * - created：本次 INSERT 实际写入（insertCatalog 返回非 null）。
    */
   async seedPlaceholders(input: SeedPlaceholdersInput): Promise<SeedResult> {
     const entries = await externalDataQueries.listBangumiEntriesForSeed(this.db, {
@@ -58,16 +59,25 @@ export class BangumiSeedService {
       const title = entry.titleCn || entry.titleJp
       if (!title) continue // 无标题无法建占位
 
-      // 先按 bangumi_id 精确判存（避免把已 link 的条目误计为 created）
-      const existing = await catalogQueries.findCatalogByBangumiId(this.db, entry.bangumiId)
-      if (existing) {
+      // ① bangumi_id 精确去重
+      const byBangumi = await catalogQueries.findCatalogByBangumiId(this.db, entry.bangumiId)
+      if (byBangumi) {
         matched++
         continue
       }
 
-      const row = await this.catalogService.findOrCreate({
+      // ② 三元组去重（部分唯一索引不覆盖带 bangumi_id 的 INSERT，须显式 SELECT 防重复占位）
+      const titleNormalized = normalizeTitle(title)
+      const byNorm = await catalogQueries.findCatalogByNormalizedKey(this.db, titleNormalized, entry.year, 'anime')
+      if (byNorm) {
+        matched++
+        continue
+      }
+
+      // ③ 插入；row=本次写入 / null=bangumi_id 唯一冲突的并发竞态（既有行，计 matched）
+      const inserted = await catalogQueries.insertCatalog(this.db, {
         title,
-        titleNormalized: normalizeTitle(title),
+        titleNormalized,
         titleOriginal: entry.titleJp ?? undefined,
         type: 'anime',
         year: entry.year,
@@ -77,10 +87,7 @@ export class BangumiSeedService {
         coverUrl: entry.coverUrl ?? undefined,
         rating: entry.rating ?? undefined,
       })
-
-      // 新建占位的 bangumi_subject_id 必等于 entry；否则系经 normalizedKey 命中既有 catalog
-      // （未 link bangumi_id，D-159-1 已知失配），计为 matched。
-      if (row.bangumiSubjectId === entry.bangumiId) created++
+      if (inserted) created++
       else matched++
     }
 
