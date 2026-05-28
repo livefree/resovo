@@ -9,7 +9,7 @@ import { usePlayerStore } from '@/stores/playerStore'
 import { apiClient } from '@/lib/api-client'
 import { extractShortId } from '@/lib/video-detail'
 import { getVideoDetailHref } from '@/lib/video-route'
-import { buildLineDisplayName, deduplicateLabels, applyThemeLabels } from '@/lib/line-display-name'
+import { buildThemedSources } from '@/lib/line-display-name'
 import { useRouteTheme } from '@/lib/route-theme-storage'
 import { RouteThemeSelector } from './RouteThemeSelector'
 import { useLocale } from 'next-intl'
@@ -82,6 +82,9 @@ export function PlayerShell({ slug: slugProp, portalMode = false, previewMode = 
   // sources 仍走 client themed pipeline（applyThemeLabels 依赖 useLocale）→ state init 用 []
   const [video, setVideo] = useState<Video | null>(initialVideo ?? null)
   const [sources, setSources] = useState<Array<{ src: string; type: string; label?: string; quality?: string | null; isDead?: boolean; isPending?: boolean }>>([])
+  // CHG-369 Codex stop-time review #11：原始 sources 留 ref，使主题切换可重新 relabel
+  // 不放 state（避免重渲染 / 切主题时由 useEffect 触发 setSources 即可）
+  const rawSourcesRef = useRef<VideoSource[]>([])
   const [loading, setLoading] = useState(true)
   const [startTime, setStartTime] = useState<number | undefined>(undefined)
   const [playerVersion, setPlayerVersion] = useState(0)
@@ -141,28 +144,9 @@ export function PlayerShell({ slug: slugProp, portalMode = false, previewMode = 
               return
             }
             // CHG-353：按主题赋标签（后端已按 effective_score 排序 / CHG-352）
-            const themed = applyThemeLabels(
-              r.data.map((s) => ({ effectiveScore: s.effectiveScore, quality: s.quality })),
-              routeTheme,
-            )
-            const newSources = deduplicateLabels(
-              r.data.map((s, index) => ({
-                src: s.sourceUrl,
-                type: s.type,
-                // 主题标签优先；若 effectiveScore 缺失（老后端兜底）→ fallback buildLineDisplayName
-                label: s.effectiveScore !== undefined
-                  ? themed[index].themeLabel
-                  : buildLineDisplayName({
-                      rawName: s.sourceName,
-                      siteDisplayName: s.siteDisplayName,
-                      fallbackIndex: index,
-                      quality: s.quality,
-                    }),
-                quality: s.quality,
-                isDead: themed[index].isDead,
-                isPending: themed[index].isPending,
-              }))
-            )
+            // CHG-369 Codex #11：原始 sources 同步写入 ref，使主题切换可重新 relabel
+            rawSourcesRef.current = r.data
+            const newSources = buildThemedSources(r.data, routeTheme)
             setSources(newSources)
             // Restore source index from snapshot (initPlayer already zeroed it)
             setActiveSourceIndex(priorSourceIndex < newSources.length ? priorSourceIndex : 0)
@@ -211,27 +195,9 @@ export function PlayerShell({ slug: slugProp, portalMode = false, previewMode = 
         // stale check：fetch 期间用户又切集 → 丢弃响应让下次 effect 接手
         if (targetEp !== usePlayerStore.getState().currentEpisode) return
         // CHG-353：切集后重新按主题赋标签（保持与初始 fetch 一致）
-        const themed = applyThemeLabels(
-          res.data.map((s) => ({ effectiveScore: s.effectiveScore, quality: s.quality })),
-          routeTheme,
-        )
-        const newSources = deduplicateLabels(
-          res.data.map((s, index) => ({
-            src: s.sourceUrl,
-            type: s.type,
-            label: s.effectiveScore !== undefined
-              ? themed[index].themeLabel
-              : buildLineDisplayName({
-                  rawName: s.sourceName,
-                  siteDisplayName: s.siteDisplayName,
-                  fallbackIndex: index,
-                  quality: s.quality,
-                }),
-            quality: s.quality,
-            isDead: themed[index].isDead,
-            isPending: themed[index].isPending,
-          }))
-        )
+        // CHG-369 Codex #11：同步写入 ref，使主题切换可重新 relabel
+        rawSourcesRef.current = res.data
+        const newSources = buildThemedSources(res.data, routeTheme)
         setSources(newSources)
         const prevLabel = sources[activeSourceIndex]?.label
         const matched = prevLabel ? newSources.findIndex((s) => s.label === prevLabel) : -1
@@ -248,6 +214,14 @@ export function PlayerShell({ slug: slugProp, portalMode = false, previewMode = 
     // 修复方案：改用 useRef(sources)/useRef(activeSourceIndex) 读取最新值，移除此 disable
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentEpisode, video])
+
+  // CHG-369 Codex stop-time review #11：主题切换后重新 relabel 已加载的 sources
+  // 不重新 fetch（rawSourcesRef 已存最新原始数据 / 仅 label / isDead / isPending 重算）
+  // activeSourceIndex 保持不变（用户切主题不应改变正在播放的线路）
+  useEffect(() => {
+    if (rawSourcesRef.current.length === 0) return
+    setSources(buildThemedSources(rawSourcesRef.current, routeTheme))
+  }, [routeTheme])
 
   const handleTimeUpdate = useCallback(
     (t: number, d: number) => {

@@ -225,3 +225,68 @@ describe('applyThemeLabels — 全 dead 线路（all isDead=true）', () => {
     })
   })
 })
+
+// ── buildThemedSources（CHG-369 Codex stop-time review #11）─────────
+
+import { buildThemedSources, type RawSourceForTheme } from '../../../../apps/web-next/src/lib/line-display-name'
+
+function makeRaw(overrides: Partial<RawSourceForTheme> & { id: number }): RawSourceForTheme {
+  return {
+    sourceUrl: `https://example.com/${overrides.id}.m3u8`,
+    type: 'hls',
+    sourceName: `line${overrides.id}`,
+    siteDisplayName: null,
+    quality: '1080P',
+    effectiveScore: 0.8,
+    ...overrides,
+  }
+}
+
+describe('buildThemedSources — 主题切换重新 relabel', () => {
+  it('同一份原始数据用不同主题派生 → label 改变 / src 与 quality 不变', () => {
+    const raw = [makeRaw({ id: 1 }), makeRaw({ id: 2 }), makeRaw({ id: 3 })]
+
+    const jieQi = buildThemedSources(raw, THEME_JIE_QI)
+    const nato = buildThemedSources(raw, THEME_NATO)
+
+    expect(jieQi[0].label).toBe('立春')
+    expect(jieQi[1].label).toBe('雨水')
+    expect(jieQi[2].label).toBe('惊蛰')
+
+    expect(nato[0].label).toBe('Alpha')
+    expect(nato[1].label).toBe('Bravo')
+    expect(nato[2].label).toBe('Charlie')
+
+    // 非主题维度的字段保持稳定
+    for (let i = 0; i < 3; i++) {
+      expect(jieQi[i].src).toBe(nato[i].src)
+      expect(jieQi[i].quality).toBe(nato[i].quality)
+      expect(jieQi[i].type).toBe(nato[i].type)
+    }
+  })
+
+  it('effectiveScore 缺失（老后端 fallback）→ 走 buildLineDisplayName 而非主题标签', () => {
+    const raw = [
+      makeRaw({ id: 1, effectiveScore: undefined, sourceName: 'TestSite' }),
+    ]
+    const result = buildThemedSources(raw, THEME_JIE_QI)
+    expect(result[0].label).not.toBe('立春')
+    expect(result[0].label).toContain('TestSite')
+  })
+
+  it('dead 线路（effectiveScore < 0.1）→ themeLabel = deadLabel + isDead=true', () => {
+    const raw = [makeRaw({ id: 1, effectiveScore: 0.05 })]
+    const jieQi = buildThemedSources(raw, THEME_JIE_QI)
+    const nato = buildThemedSources(raw, THEME_NATO)
+    expect(jieQi[0].label).toBe('已断')
+    expect(jieQi[0].isDead).toBe(true)
+    expect(nato[0].label).toBe('Offline')
+    expect(nato[0].isDead).toBe(true)
+  })
+
+  it('5 主题全部各派生一份 → 全 label 互不相同（核心 invariant）', () => {
+    const raw = [makeRaw({ id: 1 })]
+    const labels = ALL_THEMES.map((t) => buildThemedSources(raw, t)[0].label)
+    expect(new Set(labels).size).toBe(ALL_THEMES.length)
+  })
+})

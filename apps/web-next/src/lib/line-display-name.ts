@@ -231,3 +231,60 @@ export function applyThemeLabels(
     return { themeLabel, isDead: false, isFallback, isPending }
   })
 }
+
+// ── CHG-369 / Codex stop-time review #11：原始 VideoSource → themed sources 派生 ──
+// 抽自 PlayerShell.tsx 内联 helper，目的是支持主题切换时对已加载 sources 重新 relabel
+// （详 CHG-369 commit + Codex #11 fix）。三处复用：初始 fetch / 集数切换 fetch / 主题切换 effect。
+
+/** ThemedSource — 渲染层 source 形态（PlayerShell sources state element） */
+export interface ThemedSource {
+  readonly src: string
+  readonly type: string
+  readonly label?: string
+  readonly quality?: string | null
+  readonly isDead?: boolean
+  readonly isPending?: boolean
+}
+
+/** RawSourceForTheme — buildThemedSources 输入需要的 VideoSource 字段子集 */
+export interface RawSourceForTheme {
+  readonly sourceUrl: string
+  readonly type: string
+  readonly sourceName: string
+  readonly siteDisplayName: string | null
+  readonly quality: string | null
+  readonly effectiveScore?: number
+}
+
+/**
+ * 把原始 sources 数组按当前主题派生为 ThemedSource[]
+ * - effectiveScore 存在 → applyThemeLabels 输出主题标签
+ * - effectiveScore 缺失（老后端兜底）→ buildLineDisplayName fallback
+ * - 输出经 deduplicateLabels 去重（同名加 -1/-2 后缀）
+ */
+export function buildThemedSources(
+  raw: ReadonlyArray<RawSourceForTheme>,
+  theme: RouteTheme,
+): ThemedSource[] {
+  const themed = applyThemeLabels(
+    raw.map((s) => ({ effectiveScore: s.effectiveScore, quality: s.quality })),
+    theme,
+  )
+  return deduplicateLabels(
+    raw.map((s, index) => ({
+      src: s.sourceUrl,
+      type: s.type,
+      label: s.effectiveScore !== undefined
+        ? themed[index].themeLabel
+        : buildLineDisplayName({
+            rawName: s.sourceName,
+            siteDisplayName: s.siteDisplayName,
+            fallbackIndex: index,
+            quality: s.quality,
+          }),
+      quality: s.quality,
+      isDead: themed[index].isDead,
+      isPending: themed[index].isPending,
+    })),
+  )
+}

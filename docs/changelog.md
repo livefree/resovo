@@ -10081,3 +10081,21 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **质量门禁**：typecheck ✅ / lint ✅（FULL TURBO 4 cached）/ verify:adr-contracts ✅ EXIT=0
 - **commit trailer**：无强制 Subagents
 - **闭环**：CHG-369 完成 / Wave 2 卡 16/17 闭合 / CHG-353 Phase 1 默认主题 → CHG-369 用户主动切换 + localStorage 持久化 完整路径就绪 / Phase 2 自定义主题输入（CHG-369-B）+ Phase 3 跨设备同步（ROUTE-LABEL-D）已记入下次会话恢复入口 follow-up / docs/manual/route-labeling.md §8.4a 同步
+
+---
+
+## [CHG-369-FIX] 主题切换不 relabel 已加载 sources（Codex stop-time review #11）
+- **完成时间**：2026-05-28
+- **执行模型**：claude-opus-4-7（主循环 / 续会话）
+- **背景**：CHG-369 commit b54388f8 后 Codex 抓到："theme selection state does not relabel loaded sources"。RouteThemeSelector 切换主题 → routeTheme state 变了，但 sources state 已是"已派生 themed 数据"（label 已替换为旧主题字符串）→ 用户看到下拉切到"NATO"但 SourceBar 仍显示"立春/雨水/惊蛰"。
+- **根因**：sources state 存"派生后形态"而非原始 VideoSource 数组，主题变化无法回溯重算 label。
+- **范围**（2 业务 + 1 测试 / 净增）：
+  - `apps/web-next/src/lib/line-display-name.ts`：抽 `buildThemedSources(raw, theme)` helper + 导出 `RawSourceForTheme` / `ThemedSource` interface（沉淀自 PlayerShell 内联逻辑 / 三处复用）
+  - `apps/web-next/src/components/player/PlayerShell.tsx`：① 新增 `rawSourcesRef` 存 API 原始数据 ② 初始 fetch + 集数切换 fetch 两处 then 改写 `rawSourcesRef.current = res.data; setSources(buildThemedSources(...))` ③ 新增 useEffect 监听 `routeTheme` → 从 ref 重新派生 setSources（不重 fetch / activeSourceIndex 不变）④ 移除冗余直接 import（applyThemeLabels / deduplicateLabels / buildLineDisplayName / RouteTheme 已封装进 buildThemedSources）
+  - `tests/unit/web-next/lib/line-display-name-themes.test.ts` +4 case：①两主题派生 label 不同 + src/quality 稳定 ②effectiveScore 缺失走 buildLineDisplayName fallback ③dead 线路 themeLabel = deadLabel ④5 主题派生 label 全互不相同（核心 invariant）
+- **设计取舍**：① ref vs state for rawSources：选 ref（不触发重渲染 / setSources 已是单一 state 变更通道 / 主题切换 effect 主动驱动 setSources）② 抽 helper 到 lib 而非保留 PlayerShell 内联：让 helper 可独立单测 / 防止 Codex 回归（PR 评审者无需 mount PlayerShell 验证主题切换逻辑）③ activeSourceIndex 不重定位：用户切主题不应改变正在播放的线路（与集数切换的 prevLabel match 逻辑解耦）④ useEffect 依赖仅 [routeTheme]：buildThemedSources 是 lib 纯函数 / rawSourcesRef 是 ref 不进依赖
+- **测试**：tests/unit/web-next/lib/line-display-name-themes 22→**26 PASS**（+4 新 case / 含 5 主题全 invariant）
+- **质量门禁**：typecheck ✅ / lint ✅（FULL TURBO 4 cached）/ verify:adr-contracts ✅ EXIT=0
+- **commit trailer**：无强制 Subagents
+- **经验**：CHG-369 主卡只测了 selector + storage 两层（用户输入 → state），漏测"state 派发到下游 effect 链"。下次涉及"状态对已派生数据的反向影响"时，必须显式列出 invariant（如本卡的"主题变 → sources label 必变 / src 不变"）+ 单测覆盖。
+- **闭环**：Codex stop-time review #11 红线消解 / 主题选择器三层协议完整（用户切换 → routeTheme state → sources label 同步 relabel）/ buildThemedSources helper 抽出沉淀 + 单测可见 / SourceBar 渲染主题切换效果实证
