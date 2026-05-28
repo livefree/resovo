@@ -9806,3 +9806,31 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
   - ❌ detail page hydration → CHG-361-E2
   - ❌ watch page hydration → CHG-361-E3
 - **闭环**：CHG-361-E1 完成（2 业务 + 1 测试 5 case PASS）/ Wave 2 卡 6/17 闭合（CHG-361 8 子卡序列 6/8）/ 执行序列 E1 ✅ → E2 → E3
+
+---
+
+## [CHG-361-E2 / ADR-160 AMENDMENT 2 D-160-AMD2-1+3] detail-page-factory + VideoDetailClient server-side hydration（Wave 2 #8 扩展子卡 / 3 业务 + 1 测试 5 case）
+- **执行模型**：claude-opus-4-7（主循环 / 续会话）
+- **子代理调用**：无（AMENDMENT 2 在 E1 已 Opus 评审 / E2 是 pattern apply 实施层）
+- **范围**：web-next detail 页 server-side hydration / 派发链路从 metadata-only 扩到 page body（D-160-AMD2-1）+ VideoDetailClient initialVideo/initialSources Props（D-160-AMD2-3）
+- **文件改动（3 业务 + 1 测试 / PATCH ≤ 5 严格合规）**：
+  - `apps/web-next/src/lib/video-detail.ts`：+`fetchVideoSources(slug, episode)` helper / 复用 buildPreviewFetchInit（D-160-4b refresh 交换）/ preview 路径附 `&preview=admin` + `cache: 'no-store'`（Y-AMD2-3）/ 公开路径 `revalidate: 60` / 失败返回空数组（不抛错 / VideoDetailClient 渲染 "暂无可用播放源" 占位）
+  - `apps/web-next/src/app/[locale]/_lib/detail-page-factory.tsx`：`createDetailPage` server-side 调 `fetchVideoDetail(slug)` + `fetchVideoSources(slug, 1)` 拿 initial 数据 → 传给 VideoDetailClient initialVideo/initialSources Props
+  - `apps/web-next/src/components/video/VideoDetailClient.tsx`：Props +`initialVideo?: Video` + `initialSources?: VideoSource[]` / state 初始值用 initial Props / Y-AMD2-1 早返回 pattern：`if (initialVideo) return` + `if (initialSources && activeEpisode === 1) return` 跳过初始 useEffect fetch
+- **测试新增**（tests/unit/web-next/lib/video-detail-fetch-sources.test.ts / 5 case 全 PASS / vitest run 9ms）：
+  - 无 preview header → public path（URL 无 preview / revalidate 60）
+  - preview header + refresh OK → admin preview path（URL `&preview=admin` + Authorization Bearer + cache: no-store）
+  - preview header + refresh 失败 → 自动降级 public path
+  - fetch 404 → 返回空数组
+  - fetch 抛错 → 返回空数组
+- **A-AMD2-2 实证**：`fetchVideoDetail` 在 404 时 `notFound()` → Next.js not-found page（替代 VideoDetailClient 内联 "视频不存在或已下线" 错误状态 / UX 改进）
+- **Y-AMD2-2 限制实证**：episode 切换 internal 视频时 client useEffect 仍跑 public path / 接受为已知限制 + `?ep=N&preview=admin` reload workaround / FOLLOWUP 卡（RSC fetch / Server Actions）后续解决
+- **质量门禁**：
+  - typecheck ✅ 8 workspace 全绿
+  - lint ✅（VideoDetailClient.tsx line 278 react-hooks/exhaustive-deps 缺 video 依赖 / 改动前 line 264 已有 / 与本卡 0 关联 / pre-existing）
+  - 5 case 单测 PASS（9ms）
+- **commit trailer**：无强制 Subagents（E2 是 AMENDMENT 2 pattern apply 实施 / 不重新触发 Opus 评审）
+- **不在本卡范围**：
+  - ❌ watch page hydration → CHG-361-E3
+  - ❌ episode 切换 internal 视频 404 限制 → 独立 FOLLOWUP 卡
+- **闭环**：CHG-361-E2 完成（3 业务 + 1 测试 5 case PASS）/ Wave 2 卡 7/17 闭合（CHG-361 8 子卡序列 7/8）/ 执行序列 E1 ✅ → E2 ✅ → E3

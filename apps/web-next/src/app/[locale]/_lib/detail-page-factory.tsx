@@ -1,7 +1,7 @@
 import { Suspense } from 'react'
 import type { Metadata } from 'next'
 import { VideoDetailClient, VideoDetailClientSkeleton } from '@/components/video/VideoDetailClient'
-import { fetchVideoMeta } from '@/lib/video-detail'
+import { fetchVideoMeta, fetchVideoDetail, fetchVideoSources } from '@/lib/video-detail'
 import { DEFAULT_BRAND_NAME } from '@/lib/brand-detection'
 
 interface PageProps {
@@ -27,9 +27,20 @@ export async function detailGenerateMetadata({ params }: PageProps): Promise<Met
 export function createDetailPage(showEpisodes: boolean) {
   return async function DetailPage({ params }: PageProps) {
     const { slug } = await params
+    // ADR-160 AMENDMENT 2 D-160-AMD2-1：server-side hydration / 派发链路从 metadata-only 扩到 page body
+    // - fetchVideoDetail 触发 notFound() on 404（A-AMD2-2 / 替代 client 内联错误状态）
+    // - fetchVideoSources 失败返回空数组（VideoDetailClient 渲染"暂无可用播放源"占位）
+    // - preview 模式下两个 fetch 都走 admin preview 派发链路（middleware header → Bearer → cache:no-store）
+    const initialVideo = await fetchVideoDetail(slug)
+    const initialSources = await fetchVideoSources(slug, 1)
     return (
       <Suspense fallback={<VideoDetailClientSkeleton />}>
-        <VideoDetailClient slug={slug} showEpisodes={showEpisodes} />
+        <VideoDetailClient
+          slug={slug}
+          showEpisodes={showEpisodes}
+          initialVideo={initialVideo}
+          initialSources={initialSources}
+        />
       </Suspense>
     )
   }

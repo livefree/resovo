@@ -214,6 +214,13 @@ function CastBlock({ director, cast }: CastBlockProps) {
 interface Props {
   slug: string
   showEpisodes?: boolean
+  /**
+   * ADR-160 AMENDMENT 2 D-160-AMD2-3：server-side hydration
+   * 服务端预取的视频数据 / 有值时跳过初始 client-side fetch（Y-AMD2-1 早返回 pattern）
+   */
+  initialVideo?: Video
+  /** server-side 预取的第 1 集 sources（episode 切换仍走 client fetch / Y-AMD2-2 限制声明） */
+  initialSources?: VideoSource[]
 }
 
 export function VideoDetailClientSkeleton() {
@@ -226,27 +233,34 @@ export function VideoDetailClientSkeleton() {
   )
 }
 
-export function VideoDetailClient({ slug, showEpisodes }: Props) {
+export function VideoDetailClient({ slug, showEpisodes, initialVideo, initialSources }: Props) {
   const searchParams = useSearchParams()
-  const [video, setVideo] = useState<Video | null>(null)
+  const [video, setVideo] = useState<Video | null>(initialVideo ?? null)
   const [notFound, setNotFound] = useState(false)
   const [activeEpisode, setActiveEpisode] = useState(() => {
     const ep = Number(searchParams.get('ep'))
     return ep >= 1 ? ep : 1
   })
-  const [sources, setSources] = useState<VideoSource[]>([])
-  const [activeSourceId, setActiveSourceId] = useState<string | null>(null)
+  // ADR-160 AMENDMENT 2 D-160-AMD2-3：initial sources 过滤 isActive（与既有 client fetch 行为一致）
+  const initialActiveSources = (initialSources ?? []).filter((s) => s.isActive)
+  const [sources, setSources] = useState<VideoSource[]>(initialActiveSources)
+  const [activeSourceId, setActiveSourceId] = useState<string | null>(initialActiveSources[0]?.id ?? null)
 
   useEffect(() => {
+    // ADR-160 AMENDMENT 2 Y-AMD2-1：server-side hydration 已注入 initialVideo → 跳过初始 client fetch
+    if (initialVideo) return
     const shortId = extractShortId(slug)
     apiClient
       .get<ApiResponse<Video>>(`/videos/${shortId}`)
       .then((res) => setVideo(res.data))
       .catch(() => setNotFound(true))
-  }, [slug])
+  }, [slug, initialVideo])
 
   useEffect(() => {
     if (!video) return
+    // ADR-160 AMENDMENT 2 Y-AMD2-1：第 1 集 + 有 initialSources → 跳过初始 client fetch
+    // 切到其他集 → 走 client fetch（Y-AMD2-2 internal 视频此处可能 404 / 接受为已知限制）
+    if (initialSources && activeEpisode === 1) return
     apiClient
       .get<ApiListResponse<VideoSource>>(
         `/videos/${video.shortId}/sources?episode=${activeEpisode}`,
@@ -261,7 +275,7 @@ export function VideoDetailClient({ slug, showEpisodes }: Props) {
         })
       })
       .catch(() => setSources([]))
-  }, [video?.shortId, activeEpisode])
+  }, [video?.shortId, activeEpisode, initialSources])
 
   if (notFound) {
     return (
