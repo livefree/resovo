@@ -10,7 +10,7 @@
  * 丰富信息（title/cover）等留 follow-up（依赖后端 listVideos by-ids 端点扩展）。
  */
 
-import { useState, useCallback, type CSSProperties } from 'react'
+import { useState, useEffect, useCallback, type CSSProperties } from 'react'
 import { AdminCard, AdminButton, AdminInput, useToast } from '@resovo/admin-ui'
 import { mergeVideos, unmergeVideos } from '@/lib/merge/api'
 import { describeError } from './MergeClient'
@@ -52,8 +52,33 @@ export function BatchMergeWorkspace({ ids, onMergeSuccess }: BatchMergeWorkspace
   const [submitting, setSubmitting] = useState(false)
   const toast = useToast()
 
+  // 当 ids prop 变化（运营在同一会话切到新 batch URL）时同步 targetId：
+  // - validIds 空 → targetId=null
+  // - 旧 targetId 不在新 validIds 中 → 重置到第 1 个 / 防止"提交批次外 target"漏洞（Codex stop-time review）
+  // 用 join('|') 做依赖 key 避免 array 引用每次 render 都变
+  const validIdsKey = validIds.join('|')
+  useEffect(() => {
+    if (validIds.length === 0) {
+      if (targetId !== null) setTargetId(null)
+      return
+    }
+    if (targetId === null || !validIds.includes(targetId)) {
+      setTargetId(validIds[0])
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [validIdsKey])
+
   const handleMerge = useCallback(async () => {
     if (!targetId) return
+    // 双重防御：提交前再校验 targetId 仍在当前 validIds 中（防 useEffect 时序漏洞 / 并发 state 不同步）
+    if (!validIds.includes(targetId)) {
+      toast.push({
+        level: 'warn',
+        title: 'target 不在当前批次',
+        description: '当前批次已变化，请重新选择 target',
+      })
+      return
+    }
     const sourceVideoIds = validIds.filter((id) => id !== targetId)
     if (sourceVideoIds.length === 0) {
       toast.push({ level: 'warn', title: '需至少 1 个 source', description: '请选不同于 target 的 N-1 个视频作为 source' })
