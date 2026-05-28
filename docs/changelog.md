@@ -40,6 +40,42 @@
 
 ---
 
+## [PRE-INDEX-DESIGN-RULES] 索引设计规范沉淀到 db-rules.md（Wave 3 首卡 / CHG-368-B-A1-FIX 系列 1-5 经验落地）
+- **完成时间**：2026-05-28
+- **执行模型**：claude-sonnet-4-6（主循环 / 纯 docs / Wave 3 启动）
+- **子代理调用**：无（纯 docs / 不触发 Opus 红线 / 不改 packages/admin-ui Props / 不起新 ADR / 不重构 player-core 接口）
+- **拆卡承接**：tasks.md "下次会话恢复入口" 长尾 + Wave 3 SEQ-20260528-MOD-WAVE3 启动卡 1/10。CHG-368-B-A1-FIX-{1..5} 当日（2026-05-28）由 Codex stop-time review 连续 5 次抓出 `idx_source_line_aliases_codename_active` / `idx_source_line_aliases_retired_at` 部分索引虚假用途声明（changelog 行 10359-10510）。FIX-5 复盘明示"应在 docs/rules/db-rules.md 落地'索引设计 4 步核验' + 四级范式 + 双 invariant 完整规范"——本卡执行该明示。
+- **范围**（2 docs / PATCH=2 严守 ≤ 5 阈值 / 不触发任何红线）：
+  - `docs/rules/db-rules.md` 新增章节"索引设计 4 步核验（CHG-368-B-A1-FIX 系列 1-5 沉淀 / 2026-05-28）"插入于"索引使用规范"段后 / "软删除规范"段前，含 8 段：
+    - **背景**：5 次 stop-time review 溯源 + 元根因（直觉判断 vs 形式化推理）
+    - **4 步核验流程**：步 1 索引键完整列名 / 步 2 部分索引 WHERE 子句反向 invariant / 步 3 候选查询 driving 谓词 / 步 4 匹配判定 + 不适用排除（每步带正反例）
+    - **双 invariant**：I1 部分索引方向 invariant（带 3 行对照表 + FIX-2 反例引用）+ I2 驱动列 vs 索引列匹配性 invariant（带 3 行 JOIN 对照表 + FIX-5 反例引用）
+    - **四级范式**：索引覆盖 / 候选查询模式 / 不适用排除 / 实测验证（EXPLAIN ANALYZE 留位允许 TODO）四段强制结构（缺一 = 文档不完整）+ 5 FIX 反例引用
+    - **书写禁令**：4 类禁令（绑定式声明 / 方向遗漏 / driving 列遗漏 / 实测假设）+ 修订路径表
+    - **与既有"索引使用规范"段的关系**：既有段 = 查询侧（写查询时怎么用索引）/ 新增段 = 设计侧（设计 + 文档化索引时怎么避免虚假声明）互补不重叠
+    - **Checklist**：6 项勾选清单（设计或评审任一索引时强制走）
+  - `docs/changelog.md` 追加本条目 + Wave 3 启动记录
+- **不触发 architecture.md 同步**（CHG-368-B-A1-FIX-{1..5} 经验首次显式应用）：
+  - 本卡无 schema migration / 新表 / 新列 / 新约束 / 新索引
+  - 仅 docs/rules/ + docs/changelog.md 改动 = 规范沉淀
+  - 不触发 CLAUDE.md 绝对禁止"schema 变更不同步 architecture.md"红线
+- **设计取舍**：① 章节位置：插入既有"索引使用规范"段后，"软删除规范"段前——形成"查询侧 → 设计侧 → 软删除"自然递进 ② 不抽 ADR：5 次 FIX 经验已属"规范沉淀"性质，非新决策，不需新起 ADR；现有 ADR-164 §4 SQL 草案已应用该范式（CHG-368-B-A1-FIX-{1..5} 5 次 trailer 修订） ③ Checklist 段独立摆放在章节尾部：便于评审时直接对照勾选 ④ 引用 FIX 反例时仅引 FIX-2 / FIX-5（最有教学价值的 2 个），避免冗长
+- **质量门禁**：typecheck ✅（5 workspaces 全过）/ lint ✅（0 error 0 warning / 既有 2 react-hooks/exhaustive-deps warning 与本卡无关 pre-existing）/ verify:adr-contracts ✅ EXIT=0（187 路由 + 80 ADR + 266 D-N + SQL schema alignment 全 PASS / 与本卡纯 docs 改动无关联）/ 单测 24 文件 167 失败均 pre-existing（jsdom `localStorage.clear is not a function` 环境问题 / git stash 前后失败计数完全一致：24/167 / 本卡零回归）
+- **commit trailer**：无强制 Subagents（纯 docs / 不修改 packages/admin-ui 公开 Props / 不起新 ADR / 不重构 player-core 接口 / 不触发 3+ 消费方 schema / 不触发"共享组件 API 契约强制 Opus"红线）
+- **六问自检**：
+  - Q1 本次逻辑应沉淀共享层？✅ 本卡本身就是沉淀 5 FIX 经验到共享规范层
+  - Q2 是否引入回归？✅ 纯 docs / 零业务行为 / 单测计数 stash 前后一致
+  - Q3 是否越层？✅ 仅 docs/rules + docs/changelog / 不触代码
+  - Q4 是否硬编码值 / any 类型？N/A 纯 docs
+  - Q5 是否布局变化？N/A 非 UI
+  - Q6 文件范围内？✅ 2 文件 PATCH=2
+- **偏离检测**：无（本卡完全按 tasks.md 卡片定义执行 / 范围 docs/rules + docs/changelog / 严守 ≤ 5）
+- **[AI-CHECK] 结论**：PASS（纯 docs 经验沉淀 / 5 次 FIX 完整规范化 / 4 步核验 + 双 invariant + 四级范式 + 禁令 + Checklist 5 大块完整 / 与既有"索引使用规范"段互补 / 零回归）
+- **Wave 3 启动记录**：SEQ-20260528-MOD-WAVE3 立案（task-queue.md 行 1977-2026）含 10 张卡（4 长尾清理 + 5 plan §14 主线 + 1 §17.2 ROUTE-LABEL-D）。用户 2026-05-28 决策："长尾先清 + plan §14 主线"。执行序列：PRE-INDEX-DESIGN-RULES（本卡 / 1/10）→ CHG-369-B → -FOLLOWUP-CONTENT-SOURCE-ROW → -FOLLOWUP-AUTO-RETIRED-LABEL → MOD-BUTTON-MIGRATE → REJECTED-ENHANCE → PLAYER-ERROR → META-BANGUMI-A → SITE-VIEWS-EXTRACT → ROUTE-LABEL-D。
+- **闭环**：PRE-INDEX-DESIGN-RULES 完成 / docs/rules/db-rules.md 新增"索引设计 4 步核验"章节落地 / CHG-368-B-A1-FIX 系列 1-5 5 次 FIX 经验首次完整规范化 / 今后所有 migration 注释 / architecture.md 索引说明 / ADR §SQL 草案 / queries JSDoc 4 类载体必须按 4 步 + 四级范式书写 / Wave 3 长尾清理 1/4 完成 / Wave 3 SEQ 整体 1/10 完成 / 主循环自动取下一卡（CHG-369-B 自定义主题输入）
+
+---
+
 ## [CHG-SN-8-01] Crawler「全站全量」改非主操作 + 双重确认（W1 金票反例 #1 修复）
 
 - **完成时间**：2026-05-21

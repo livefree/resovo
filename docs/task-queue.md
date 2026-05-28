@@ -1973,3 +1973,53 @@ CHG-369 (前台主题选择器, 独立)
 
 执行序列建议（主循环按此顺序取卡，**ADR 卡先于实施卡**）：
 **CHG-361-A → -B → -C → 362-A → -B → 363 → 364 → 365-A → -B → 366 → 367-A → -B → 368-A → -B → 369**
+
+---
+
+## [SEQ-20260528-MOD-WAVE3] server-next 内容审核台 Wave 3 — Wave 2 长尾清理 + 架构 / 长期 P3 卡（plan §14 Wave 3 + §17.2 Wave 3 增补）
+
+- **状态**：🔄 进行中（1/10 完成 / 下一卡 CHG-369-B 自定义主题输入）
+- **创建时间**：2026-05-28
+- **目标**：按用户 2026-05-28 决策"长尾先清 + plan §14 主线"：先清 4 张 Wave 2 长尾 follow-up，再按 plan §14 / §17.2 Wave 3 入 6 张 P3 长期主线卡。
+- **执行约束**：沿用 Wave 1/2 §16.1-16.5（UI/UX 谨慎 / docs/manual 同步 / 主循环全自动 + BLOCKER 触发清单）
+- **建议主循环模型**：`claude-sonnet-4-6`（多数 docs / 机械迁移卡）+ `claude-opus-4-7`（ADR / 共享 API / 大型重构卡）；主循环不切换 §16.5
+- **依赖**：Wave 2 全部完成 ✅（2026-05-28 用户启动指令视为验收）
+
+### 任务列表
+
+| # | TASK-ID | 标题 | ADR | 建议模型 |
+|---|---|---|---|---|
+| 1 | ✅ **PRE-INDEX-DESIGN-RULES** 已完成（2026-05-28 / 主循环 claude-sonnet-4-6 / 子代理 无）| 沉淀"索引设计 4 步核验 + 双 invariant（部分索引方向 / 驱动列 vs 索引列匹配性）+ 四级范式（覆盖→候选→不适用→实测）+ 4 类禁令 + 6 项 Checklist"到 `docs/rules/db-rules.md`（CHG-368-B-A1-FIX-{1..5} 5 次 stop-time review 经验首次完整规范化 / 2 docs / PATCH=2 / typecheck + lint + verify:adr-contracts 全 PASS / 单测 24/167 pre-existing 失败 stash 前后一致零回归）| 否 | sonnet-4-6 |
+| 2 | ⬜ **CHG-369-B** 待开始 | 自定义主题输入（plan §17.2）：labels ≤ 30 / name ≤ 10 字符 / schema 校验 + JSON serialize / web-next 玩家设置面板 | 否 | sonnet-4-6 |
+| 3 | ⬜ **CHG-368-B-FOLLOWUP-CONTENT-SOURCE-ROW** 待开始 | server-next API 层 ContentSourceRow / VideoSource 类型同步扩 codename + retired_at 字段（让 LinesPanel 实际看到数据 / 当前永显 null） | 否 | sonnet-4-6 |
+| 4 | ⬜ **CHG-368-B-FOLLOWUP-AUTO-RETIRED-LABEL** 待开始 | LinesPanel 退役标识区分"（已退役·自动）/（已退役·手动）"基于 autoRetired 字段 / 需扩 LineAggregate 第 12 字段（触发 Opus trailer）| 否（ADR-164 advisory）| opus-4-7 + arch-reviewer |
+| 5 | ⬜ **CHG-SN-9-MOD-BUTTON-MIGRATE** 待开始 | plan §5 P2 / BTN_* → AdminButton 机械迁移（server-next 内剩余原始 button 收口）| 否 | sonnet-4-6 |
+| 6 | ⬜ **CHG-SN-9-REJECTED-ENHANCE** 待开始 | plan §5 P2 / RejectedTab 分页（cursor）+ SplitPane（左列表 / 右详情）| 否 | sonnet-4-6 |
+| 7 | ⬜ **CHG-SN-9-PLAYER-ERROR** 待开始 | plan §5 P3 / player-core onError 回调（接口扩展 → 强制 Opus 子代理 / CLAUDE.md §模型路由"重构播放器 core / shell 层的接口"）| 否（演进式接口扩展）| opus-4-7 + arch-reviewer |
+| 8 | ⬜ **CHG-SN-9-META-BANGUMI-A** 待开始 | plan §10.4.2 方案 A / Bangumi 实时 API 集成（BangumiService + secrets + ADR 起草 + 新依赖）| 是（新 ADR）| opus-4-7 + arch-reviewer |
+| 9 | ⬜ **CHG-SN-9-SITE-VIEWS-EXTRACT** 待开始 | plan §10.6 方案 C / 抽 `packages/site-views`（跨 app 重构 / 共享层沉淀 / 大型）| 是（架构 ADR）| opus-4-7 + arch-reviewer |
+| 10 | ⬜ **CHG-SN-9-ROUTE-LABEL-D** 待开始 | plan §17.2 Wave 3 / `users.preferences` schema + 跨设备主题同步 + 端点（schema migration + ADR）| 是（schema ADR）| opus-4-7 + arch-reviewer |
+
+### Wave 3 BLOCKER 触发清单（沿用 Wave 1/2 §16.5）
+
+- typecheck / lint / test / verify 报错 + 自动修复失败
+- 任务范围超出卡片定义（改动 > 卡片范围 5 项）
+- ADR 起草卡 Opus 评审 BLOCKER 红线未消解
+- schema migration 冲突
+- 人工已审核 Wave 报告未通过
+
+### 关键依赖图
+
+```
+长尾清理：PRE-INDEX-DESIGN-RULES（独立 docs） → CHG-369-B（独立 UI）
+                                              → CHG-368-B-FOLLOWUP-CONTENT-SOURCE-ROW（独立类型）
+                                              → CHG-368-B-FOLLOWUP-AUTO-RETIRED-LABEL（依赖 -CONTENT-SOURCE-ROW）
+
+Wave 3 主线：MOD-BUTTON-MIGRATE → REJECTED-ENHANCE（独立 UX）
+            PLAYER-ERROR（player-core API 扩展 / Opus）
+            META-BANGUMI-A（新 ADR / 新依赖 / Opus）
+            SITE-VIEWS-EXTRACT（架构 ADR / 大型 / Opus）
+            ROUTE-LABEL-D（schema ADR / 后端 + 前端同步 / Opus）
+```
+
+执行序列建议：**PRE-INDEX-DESIGN-RULES → CHG-369-B → -FOLLOWUP-CONTENT-SOURCE-ROW → -FOLLOWUP-AUTO-RETIRED-LABEL → MOD-BUTTON-MIGRATE → REJECTED-ENHANCE → PLAYER-ERROR → META-BANGUMI-A → SITE-VIEWS-EXTRACT → ROUTE-LABEL-D**

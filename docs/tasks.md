@@ -10,6 +10,14 @@
 
 ---
 
+## Wave 3 状态（SEQ-20260528-MOD-WAVE3 / 🔄 进行中 = 10% / 1/10）
+
+- ✅ **PRE-INDEX-DESIGN-RULES** 索引设计 4 步核验 + 双 invariant + 四级范式 + 禁令 + Checklist 沉淀到 db-rules.md（2026-05-28 / sonnet-4-6 / 纯 docs / 零回归 / CHG-368-B-A1-FIX 1-5 经验首次完整规范化）
+
+剩余 9 张卡（按执行序列）：CHG-369-B → -FOLLOWUP-CONTENT-SOURCE-ROW → -FOLLOWUP-AUTO-RETIRED-LABEL → MOD-BUTTON-MIGRATE → REJECTED-ENHANCE → PLAYER-ERROR → META-BANGUMI-A → SITE-VIEWS-EXTRACT → ROUTE-LABEL-D
+
+---
+
 ## Wave 2 状态（SEQ-20260527-MOD-WAVE2 / ✅ **完全收官 = 100%**）
 
 - ✅ CHG-361 ~ CHG-366 / CHG-369（详 changelog）
