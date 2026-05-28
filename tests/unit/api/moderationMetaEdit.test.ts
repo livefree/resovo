@@ -238,7 +238,7 @@ describe('POST /v1/admin/moderation/:id/douban-ignore', () => {
 
   afterEach(() => app.close())
 
-  it('候选视频忽略成功 → 200 { id, ignored: true }', async () => {
+  it('候选视频忽略成功 → 200 { id, ignored: true } + meta_quality 同步（CHG-365-A2-FIX）', async () => {
     const res = await app.inject({
       method: 'POST',
       url: '/v1/admin/moderation/vid-1/douban-ignore',
@@ -246,11 +246,22 @@ describe('POST /v1/admin/moderation/:id/douban-ignore', () => {
     })
     expect(res.statusCode).toBe(200)
     expect(res.json().data).toEqual({ id: 'vid-1', ignored: true })
-    expect(mockUpdateVideoEnrichStatus).toHaveBeenCalledWith(
-      expect.anything(),
-      'vid-1',
-      { doubanStatus: 'unmatched', metaScore: 75 }
-    )
+    // Codex stop-time review #8 fix：ignore 路径必须同步 meta_quality 防 stale
+    expect(mockUpdateVideoEnrichStatus).toHaveBeenCalledTimes(1)
+    const [, vid, payload] = mockUpdateVideoEnrichStatus.mock.calls[0] as [unknown, string, {
+      doubanStatus: string; metaScore: number
+      metaQuality: { douban_match_status: string; enriched_at: string; douban_confidence?: number; douban_match_method?: string }
+    }]
+    expect(vid).toBe('vid-1')
+    expect(payload).toMatchObject({
+      doubanStatus: 'unmatched',
+      metaScore: 75,
+      metaQuality: { douban_match_status: 'unmatched' },
+    })
+    // confidence / method 必须清零（不存在）— buildManualMetaQuality(null, {status:'unmatched', method:null, confidence:null})
+    expect('douban_confidence' in payload.metaQuality).toBe(false)
+    expect('douban_match_method' in payload.metaQuality).toBe(false)
+    expect(typeof payload.metaQuality.enriched_at).toBe('string')
   })
 
   it('视频不存在 → 404', async () => {
