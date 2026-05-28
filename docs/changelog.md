@@ -10161,3 +10161,29 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **commit trailer**：无强制 Subagents
 - **经验**：CHG-369-FIX-3 设计取舍备注里标 "follow-up 复合 key" 是预见到了风险但偷懒留待"实测发现问题再改"。**Codex 不接受这种主动偷懒** — 预见到的风险必须立即修。下次类似措辞要么 expand 范围一并修 / 要么明确写出"为何当前 trade-off 可接受"（用户数据 / 性能 / scope 等具体论据）
 - **闭环**：Codex stop-time review #14 红线消解 / matchActiveSourceIndex 三层优先级（复合精确 → sourceName 兜底 → 0）完整 / 多站点同名误切场景闭合 / CHG-369 主卡 + 4 个 stop-time fix 收敛 = 5 commit 形成完整治理链
+
+---
+
+## [CHG-367-A] META-EPISODES ADR-163 起草 — Wave 2 #11（plan §10.4.4）
+- **完成时间**：2026-05-28
+- **执行模型**：claude-opus-4-7（主循环 / 续会话）
+- **子代理调用**：arch-reviewer (claude-opus-4-7) 1 轮独立起草 + 自审 A- CONDITIONAL → 0 红线 → 升 Accepted
+- **范围**（仅文档 / 2 业务 + 0 测试 + 0 schema）：
+  - `docs/decisions.md`：追加 ADR-163 完整 11 段（§1 背景 / §2 决策摘要 D-163-1..D-163-8 / §3 决策详述 / §4 Migration 078 SQL 草案 + ROLLBACK / §5 写入路径合约 / §6 显示规约 / §7 文件范围 / §8 替代方案 / §9 后果 / §10 监控与重评 / §11 自审）+ 结论段
+  - `docs/tasks.md` / `docs/task-queue.md` / `docs/changelog.md`：闭环
+- **8 个决策点 D-N 闭环引用**：
+  - **D-163-1** schema 位置 = videos 表（非 media_catalog；catalog 是静态元数据范式 / episode 时变不符）
+  - **D-163-2** 字段命名 = total_episodes + current_episodes 新增；既有 episode_count 保留不动（避免 30+ 文件 / 61+ 引用点大爆炸重命名）
+  - **D-163-3** NULL 语义 = "未从外部 metadata 取到"；0 不使用；电影类型保持 NULL
+  - **D-163-4** 完结态联动 = DB 层不做自动联动；显示层处理（status='completed' + total_episodes IS NULL + current_episodes IS NOT NULL → UI 推断"共 X 集 (推断)"）
+  - **D-163-5** 外部映射 = 豆瓣 DoubanSubjectDetails.episodes + bangumi external_data.bangumi_entries.episode_count；按 status 判断写入位置（completed→total / ongoing→current）
+  - **D-163-6** 写入路径 = MetadataEnrichService step1/step2/step3（auto 仅写 NULL 字段）+ DoubanService.confirmSubject/confirmFields（manual 覆盖）；爬虫 bumpEpisodeCountIfHigher 不动新字段
+  - **D-163-7** audit RETRO = 不触发 R-MID-1（无新 admin 写端点 / ADR-121 D-121-4 scope 外）
+  - **D-163-8** 类型层 = Video interface 加 2 个 optional 字段（totalEpisodes / currentEpisodes: number | null）；VideoCard Pick 子集不含；ES mapping 不动；回滚 = DROP COLUMN NULL default 安全
+- **自审 3 黄线（CHG-367-B 实施承接）**：①Y1 currentEpisodes > totalEpisodes 显示层防御（不显示"已播 13 / 共 12"，仅 current + 数据异常标记）②Y2 confirmFields fields 数组扩 'episodes' 合法键 ③Y3 architecture.md videos 字段表同步
+- **自审 3 advisory（可不修）**：①A1 ES mapping 暂不扩（无 total_episodes 搜索/排序需求）②A2 前台 VideoCard 暂不扩（无前台展示需求）③A3 bangumi dump 静态快照可能滞后（豆瓣网络搜索 step2 补充 + "仅写 NULL"策略避免滞后数据覆盖）
+- **替代方案否决**：方案 B (media_catalog) / 方案 C (rename episode_count → active_episodes) / 方案 D (JSONB) 均否定（详 ADR §8 对比）
+- **不动**：schema migration / queries / types / service / 任何 admin route（CHG-367-B 主卡承担）
+- **质量门禁**：verify:adr-contracts ✅ EXIT=0 / verify-adr-d-numbers ✅ 全部 254 条 D-N（246 + 8 新 D-163-N）已闭环 / verify-endpoint-adr ✅（无新端点）/ 仅文档卡 typecheck + lint 无变化
+- **commit trailer**：`Subagents: arch-reviewer (claude-opus-4-7)`（强制 Opus 子代理审计要求）
+- **闭环**：CHG-367-A 完成 / ADR-163 升 Accepted / Wave 2 卡 17/17（含 PAUSED 待恢复 CHG-368-A/-B + CHG-367-B 排期）/ CHG-367-B schema migration + service 集成排期独立卡 / 黄线 Y1+Y2+Y3 由 CHG-367-B 实施承接

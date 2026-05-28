@@ -16411,3 +16411,337 @@ ADR-160 AMENDMENT 1 status 🟢 Accepted（2026-05-27 / 主循环 claude-opus-4-
 ADR-160 AMENDMENT 2 status 🟢 Accepted（2026-05-27 / 主循环 claude-opus-4-7 + arch-reviewer 子代理 (claude-opus-4-7) 1 轮独立评审 A- CONDITIONAL → 主循环消化 2 红线 + 3 黄线 + 2 advisory → 等同 A-）；CHG-361 系列正式扩为 8 子卡（A/B1/B2/C/D/E1/E2/E3）；执行顺序 E1 → E2 → E3；本 AMENDMENT 修订 D-160-3 派发链路覆盖范围 + 新增 D-160-AMD2-1..3 决策点 / 不改 D-160-1..7 既有决策。
 
 ---
+
+## ADR-163 — META-EPISODES：剧集集数三层语义 schema（CHG-367-A / Wave 2 #11）
+
+> status: 🟢 Accepted（2026-05-28 / arch-reviewer Opus A- CONDITIONAL → 主循环消化 0 红线 + 3 黄线 + 3 advisory → 等同 A-）
+> created: 2026-05-28
+> 决策者：主循环 `claude-opus-4-7` + arch-reviewer (`claude-opus-4-7`) 子代理 1 轮独立起草 + 自审
+> 关联：ADR-105（video merge / split admin API — 含 episodeCount 编辑路径 + snapshot_jsonb）/ ADR-121（R-MID-1 audit RETRO 协议 — 本 ADR 不新增 admin 写端点故不触发）/ ADR-100 §4.5 R7 MUST-8（admin route ADR 前置 — 本 ADR 仅扩 schema 不新增 route）/ ADR-160（Admin Preview — 同期 Wave 2 ADR 范式参考）
+> 对应交付：CHG-367-A（本卡 / ADR 起草）/ CHG-367-B（schema migration 078 + MetadataEnrichService 集成 + Video 类型扩 + 审核台显示）
+
+### §1 背景与问题
+
+**核心矛盾**：`videos.episode_count`（Migration 001, L38: `INT NOT NULL DEFAULT 1`）承载了模糊的"集数"语义。爬虫写入路径（`videos.crawler.ts:248`）通过 `SET episode_count = GREATEST(episode_count, $2)` 单向递增，其实际含义是"当前已收录线路中观测到的最大集数"。但前端消费方（50+ 引用点）、VideoCard 列表、审核台、搜索索引均将其作为"总集数"展示，对连载中的剧集产生误导：
+
+| 维度 | 期望语义 | episode_count 实际语义 |
+|------|---------|----------------------|
+| "这部剧共多少集" | 总集数（external metadata 真源） | 无此信息 |
+| "已播到第几集" | 已播集数（external metadata 真源） | 无此信息 |
+| "平台已收录多少集" | 已收录集数（video_sources 聚合） | 近似此义（爬虫推算最大值，但可能超出实际 active sources） |
+
+plan §10.4.4 要求引入 `total_episodes` + `current_episodes` 两个字段，数据来源为豆瓣 subject 详情 + bangumi infobox，与既有 `episode_count` 形成三层语义闭环。审核台 TabDetail 计划显示 "已收 X / 已播 Y / 共 Z" 三维视图。
+
+**admin-ui 命名冲突**：`packages/admin-ui/src/components/composite/lines-panel/lines-panel.types.ts:38` 已存在 `LineAggregate.totalEpisodes`，其含义是"该线路下 video_sources 行数"（`aggregate.ts:165`: `totalEpisodes: episodes.length`），与本 ADR 的视频实体级 `totalEpisodes`（"作品共多少集"）同名不同义。
+
+### §2 决策摘要（D-163-1..8）
+
+| 决策点 | 主题 | 推荐结论 | 性质 |
+|--------|------|---------|------|
+| D-163-1 | schema 位置 | **`videos` 表**（非 `media_catalog`） | 架构归属 |
+| D-163-2 | 字段命名 + 既有 episode_count 处理 | **新增 `total_episodes` + `current_episodes`；`episode_count` 保留不动、不重命名** | 迁移成本 |
+| D-163-3 | NULL 语义 | **NULL = 未从外部 metadata 取到；0 不使用；电影类型保持 NULL** | 数据契约 |
+| D-163-4 | 完结态联动 | **DB 层不做自动联动；显示层处理：当 `status='completed'` 且 `total_episodes IS NULL` 且 `current_episodes IS NOT NULL` 时，UI 可推断 total = current** | 业务规则 |
+| D-163-5 | 外部 metadata 字段映射 | **豆瓣：`DoubanSubjectDetails.episodes`；bangumi：`external_data.bangumi_entries.episode_count`** | 数据源 |
+| D-163-6 | 写入路径合约 | **MetadataEnrichService step1/step2（豆瓣 auto_matched）+ step3（bangumi）写 videos 表；DoubanService.confirmSubject/confirmFields manual 路径同步写** | 写入契约 |
+| D-163-7 | audit RETRO 是否触发 | **不触发 R-MID-1**：schema 字段新增无 admin 写端点新增；既有 PUT `/admin/videos/:id` 编辑路径的 episodeCount 编辑不涉及新字段（CHG-367-B 可选择扩展编辑入口，届时独立评估） | 合规边界 |
+| D-163-8 | 类型层影响 + 回滚安全 | **Video interface 加 2 个 optional 字段（`totalEpisodes?: number \| null`、`currentEpisodes?: number \| null`）；回滚 = DROP COLUMN，NULL default 安全** | 兼容性 |
+
+### §3 决策点详述
+
+#### D-163-1 schema 位置：videos 表
+
+**推荐**：字段放 `videos` 表而非 `media_catalog`。
+
+**依据**：
+
+1. **数据本体归属**：`media_catalog` 是"作品元数据层"，存储的是跨平台共性属性（title / rating / year / country / director / cast 等——均为静态、不随播出进度变化的元数据）。"已播集数" (`current_episodes`) 是时变的播出进度信息，每周更新，与 catalog 的"静态元数据"范式不符。
+2. **现有 episode_count 同表**：`videos.episode_count`（Migration 001）已在 videos 表，新增的两个集数字段是其"语义补充"，同表共存避免跨表 JOIN 开销、降低认知负担。
+3. **catalog 无 episode 先例**：翻查 Migration 026（media_catalog 创建）+ 042（字段扩展），catalog 不含任何 episode 相关字段。bangumi dump 的 `episode_count` 存在 `external_data.bangumi_entries`（外部真源暂存），不在 catalog。
+4. **写入路径对齐**：MetadataEnrichService 现有 step1/step2/step3 写 catalog 的路径走 `catalogService.safeUpdate()`（带 locked_fields + priority 三重保护），但 episodes 数据不属于 catalog 的 safeUpdate 保护范围。直接写 videos 表更干净。
+
+**替代方案**：放 `media_catalog`。被否定，原因是 catalog 的"静态元数据"范式与"时变播出进度"不符，且引入 catalog → videos 同步机制增加复杂度。
+
+#### D-163-2 字段命名 + 既有 episode_count 处理
+
+**推荐**：
+
+- 新增 `videos.total_episodes INT NULL` — "该作品共多少集"（完结后定值，连载中可能为 NULL 或预告值）
+- 新增 `videos.current_episodes INT NULL` — "目前已播到第几集"（连载中持续更新）
+- `videos.episode_count` **保留不动**，不重命名为 `active_episodes`
+
+**保留 episode_count 不重命名的依据**：
+
+1. **爆炸半径**：episode_count 被 30+ 文件 / 61+ 处引用（含 DB queries / services / routes / types / ES mapping / e2e tests / factories / search），重命名是大爆炸迁移。
+2. **语义差异微妙**：episode_count 的真实语义是"爬虫推算最大集数"（`GREATEST(episode_count, $2)`），与"有 active 源的集数"并不完全等价（某些集数可能 source 已 dead）。强行重命名为 `active_episodes` 反而引入新的语义误导。
+3. **已有消费方语义不变**：VideoCard / 搜索 / 前台列表使用 episodeCount 展示集数，保持该语义不变对用户无感知损失。
+4. **渐进式治理**：未来如需真正的 `active_episodes`（从 video_sources WHERE is_active = true 实时聚合），应作为 derived 字段（query-time 或 materialized view），不应是 videos 表的持久化列。
+
+**admin-ui 命名冲突声明**：`LineAggregate.totalEpisodes`（lines-panel.types.ts:38）含义为"该线路下 video_sources 行数"，属行级（per-line）统计。本 ADR 的 `videos.total_episodes` / Video interface `totalEpisodes` 属视频实体级（per-video），含义为"作品共多少集"。两者 **同名不同层级**：前者在 `LineAggregate` interface 中，后者在 `Video` interface 中，TypeScript 类型系统自然区分，无运行时冲突。实施时 JSDoc 注释必须显式标注区别。
+
+#### D-163-3 NULL 语义
+
+**推荐**：`NULL` = 未从外部 metadata 取到（尚未 enrich / enrich 未命中 / 外部源未提供该字段）。
+
+| 条件 | total_episodes | current_episodes |
+|------|---------------|-----------------|
+| 电影 (type='movie') | NULL（电影无集数概念） | NULL |
+| series/anime 未 enrich | NULL | NULL |
+| enrich 命中但外部源无 episodes 字段 | NULL | NULL |
+| enrich 命中且有值 | 外部源值（如 24） | 外部源值（如 12，连载中） |
+| 完结剧集 | 等于 current_episodes（或外部源独立提供） | 等于 total_episodes |
+
+**不使用 0**：0 集在业务上无意义，NULL 更诚实地表达"未知"。
+
+**查询规则**：
+
+- 列表/卡片显示：`total_episodes IS NOT NULL` 时显示，否则 fallback 到 `episode_count`
+- 审核台三维视图：仅当 `current_episodes IS NOT NULL OR total_episodes IS NOT NULL` 时渲染进度条
+- 筛选：`WHERE total_episodes IS NOT NULL` 筛选"已获取外部集数信息"的记录
+
+#### D-163-4 完结态联动
+
+**推荐**：DB 层**不做**自动联动（不设 trigger / CHECK / 不在写入路径做 `total = current` 赋值）。
+
+理由：① 外部源可能独立提供 total/current 不同的值 ② `videos.status = 'completed'` 设置时机不可靠（爬虫推断 vs 人工标记）以此触发 `total = current` 可能在外部源尚未更新时引入错误等式 ③ 显示层处理更灵活：审核台 TabDetail 渲染时 `status='completed' + total_episodes IS NULL + current_episodes IS NOT NULL` → 显示 "共 {current_episodes} 集"（推断）并标注 "(推断)"。
+
+#### D-163-5 外部 metadata 字段映射
+
+**豆瓣**：
+- 字段路径：`DoubanSubjectDetails.episodes`（`external-adapter/douban-adapter/src/core/details.types.ts:34`: `episodes?: number`）
+- 语义：豆瓣 subject 页面的"集数"字段（不区分 total/current）
+- **写入策略**：`videos.status = 'completed'` → 写入 `total_episodes`；`videos.status = 'ongoing'` → 写入 `current_episodes`；对侧字段为 NULL
+
+**bangumi**：
+- 字段路径：`external_data.bangumi_entries.episode_count`（Migration 036, L52: `episode_count INT`）
+- 语义：bangumi subject 的话数（eps）；不区分 total/current
+- **写入策略**：与豆瓣同理，按 status 判断；step3 仅类型为 anime 时触发；遵循"豆瓣优先"原则（已写字段不覆盖）
+
+**局限性声明**：豆瓣和 bangumi 均不明确区分 total / current。本 ADR 的 status 判断法是最佳启发式但非完美——一部标记 completed 但实际还在更新的剧集可能导致 total_episodes 比真实总集数小。这是可接受的折衷，人工审核路径（confirmSubject）可修正。
+
+#### D-163-6 写入路径合约
+
+| 写入路径 | 触发条件 | 写入字段 | 覆盖规则 |
+|---------|---------|---------|---------|
+| MetadataEnrichService.step1 (本地豆瓣) | `matchStatus = 'auto_matched'` + `detail.episodes` 有值 | `total_episodes` 或 `current_episodes`（按 status 判断） | 仅当目标字段为 NULL 时写入（不覆盖已有值） |
+| MetadataEnrichService.step2 (网络豆瓣) | `best.score >= MATCH_THRESHOLD` + `detail.episodes` 有值 | 同上 | 同上 |
+| MetadataEnrichService.step3 (bangumi) | type=anime + match + `bangumi.episode_count` 有值 | 同上 | 仅补充：step1/step2 已写 → 不覆盖 |
+| DoubanService.confirmSubject (manual) | 人工确认 + `detail.episodes` 有值 | **同时写 total_episodes 和 current_episodes**（manual 优先级最高） | **覆盖既有值**（manual 优先级 = 5，高于所有自动路径） |
+| DoubanService.confirmFields (manual fields) | 人工选择性确认 + fields 包含 'episodes' | 同 confirmSubject | 同上 |
+| 爬虫 bumpEpisodeCountIfHigher | 爬虫推算（既有路径） | 仅 `episode_count`（不动新字段） | 既有 GREATEST 语义不变 |
+
+**关键约束**：自动路径（step1/step2/step3）仅在目标字段为 NULL 时写入，避免后续 enrich 周期用可能过时的外部数据覆盖人工校正值。手动路径（confirmSubject/confirmFields）始终覆盖。
+
+**实施注意**：MetadataEnrichService 当前写 catalog 走 `catalogService.safeUpdate()`，但本 ADR 的新字段在 videos 表。实施时需在 step1/step2/step3 的写入路径中**新增** `videosQueries.updateVideoEpisodes(db, videoId, { totalEpisodes?, currentEpisodes? })` 调用（新 query 函数），与 `catalogService.safeUpdate()` 并行、不互相依赖。
+
+#### D-163-7 audit RETRO 是否触发
+
+**结论：不触发 R-MID-1 audit RETRO**。
+
+依据：① ADR-121 D-121-4 scope = "admin 写端点"，本 ADR 不新增任何 admin route 仅扩展 schema + 修改 service 写入逻辑 ② 既有 `PUT /admin/videos/:id` 的 episodeCount 编辑路径（ADR-105 关联）当前不涉及新字段；若 CHG-367-B 选择扩展该端点支持编辑 totalEpisodes / currentEpisodes，该扩展需在 CHG-367-B 卡内独立评估（因是修改既有端点 payload 而非新增端点）③ MetadataEnrichService 是内部 job worker，非 admin route，不在 ADR-121 范围。
+
+#### D-163-8 类型层影响 + 回滚安全
+
+**Video interface 扩展**（`packages/types/src/video.types.ts`）：
+
+```ts
+totalEpisodes: number | null    // 作品总集数（external metadata / NULL=未知）
+currentEpisodes: number | null  // 当前已播集数（external metadata / NULL=未知）
+```
+
+**兼容性分析**：
+- 新增字段为 optional 行为（DB NULL default / API 响应包含但可能为 null）
+- 现有 50+ 消费方引用的 `episodeCount: number` 不变，不破坏
+- `VideoCard` type（Pick 子集）**不包含**新字段（卡片列表无需三维集数）
+- 搜索索引 ES mapping 的 `episode_count` 保持不变；新字段暂不入 ES（非搜索维度）
+- 新字段加入 Video interface 后，所有返回 Video 的 SQL SELECT 需扩列 + mapVideoRow 映射
+
+**回滚安全**：Migration 078 ROLLBACK = `DROP COLUMN IF EXISTS`。NULL default → 删除后既有数据完整性不受影响 / API 响应不再包含新字段 → 前端 fallback undefined 安全（optional 字段）/ 需同步回滚 service 代码避免 write 路径 fail。
+
+### §4 schema 设计（Migration 078 SQL 完整草案 / ROLLBACK SQL）
+
+```sql
+-- Migration 078: videos.total_episodes + current_episodes（ADR-163 / CHG-367-B）
+--
+-- 背景：plan §10.4.4 / ADR-163 META-EPISODES 三层集数语义拆分。
+-- 新增两个 INT 字段承载外部 metadata 真源的集数信息，与既有 episode_count 共存。
+-- 幂等：ADD COLUMN IF NOT EXISTS，可重复执行。
+
+BEGIN;
+
+ALTER TABLE videos
+  ADD COLUMN IF NOT EXISTS total_episodes   INT  NULL,
+  ADD COLUMN IF NOT EXISTS current_episodes INT  NULL;
+
+-- CHECK 约束：集数必须正整数（NULL 合法，0 和负数不合法）
+ALTER TABLE videos
+  ADD CONSTRAINT chk_total_episodes_positive
+    CHECK (total_episodes IS NULL OR total_episodes > 0),
+  ADD CONSTRAINT chk_current_episodes_positive
+    CHECK (current_episodes IS NULL OR current_episodes > 0);
+
+-- 部分索引：仅对有外部集数信息的行建索引（审核台 "已获取集数" 筛选）
+CREATE INDEX IF NOT EXISTS idx_videos_total_episodes
+  ON videos (total_episodes)
+  WHERE total_episodes IS NOT NULL;
+
+-- ── 验证 ──────────────────────────────────────────────────────────
+
+DO $$
+DECLARE
+  v_col_count INT;
+BEGIN
+  SELECT COUNT(*) INTO v_col_count
+  FROM information_schema.columns
+  WHERE table_name = 'videos'
+    AND column_name IN ('total_episodes', 'current_episodes');
+
+  IF v_col_count <> 2 THEN
+    RAISE EXCEPTION 'Migration 078: videos.total_episodes/current_episodes 添加失败，期望 2，实际 %', v_col_count;
+  END IF;
+
+  RAISE NOTICE 'Migration 078 OK: videos.total_episodes + current_episodes added';
+END $$;
+
+COMMIT;
+
+-- ROLLBACK SQL:
+-- ALTER TABLE videos DROP CONSTRAINT IF EXISTS chk_total_episodes_positive;
+-- ALTER TABLE videos DROP CONSTRAINT IF EXISTS chk_current_episodes_positive;
+-- DROP INDEX IF EXISTS idx_videos_total_episodes;
+-- ALTER TABLE videos DROP COLUMN IF EXISTS total_episodes;
+-- ALTER TABLE videos DROP COLUMN IF EXISTS current_episodes;
+```
+
+**Migration 顺序安全**：当前最高编号 077（meta_quality）。078 仅 ADD COLUMN + ADD CONSTRAINT，与 077 无字段交叉、无 schema 依赖。安全。
+
+### §5 写入路径合约（CHG-367-B 实施指引）
+
+**新增 DB query 函数**（`apps/api/src/db/queries/videos.mutations.ts` 或新文件 `videos.episodes.ts`）：
+
+```ts
+interface UpdateVideoEpisodesInput {
+  totalEpisodes?: number | null
+  currentEpisodes?: number | null
+}
+
+async function updateVideoEpisodes(
+  db: Pool,
+  videoId: string,
+  input: UpdateVideoEpisodesInput,
+  /** 'auto' = 仅写 NULL 字段；'manual' = 覆盖 */
+  mode: 'auto' | 'manual'
+): Promise<boolean>
+```
+
+**MetadataEnrichService 集成点**：
+
+- step1（L178, `matchStatus === 'auto_matched'` 分支末尾）：读取 `detail.episodes` → 按 `video.status` 判断写入位置 → 调用 `updateVideoEpisodes(db, videoId, {...}, 'auto')`
+- step2（L218-L238, `best.score >= MATCH_THRESHOLD` 分支）：同上
+- step3（L264-L268, bangumi 写入分支）：读取 `bangumi.episode_count` → 同上（仅补充）
+
+**DoubanService 集成点**：
+
+- confirmSubject（L170-L223）：`detail.episodes` → `updateVideoEpisodes(db, videoId, {...}, 'manual')`
+- confirmFields（L309+）：若 `fields` 包含 `'episodes'` → 同上
+
+### §6 显示规约（CHG-367-B 实施指引）
+
+**审核台 TabDetail 三维显示**：
+
+格式："已收 {episodeCount} / 已播 {currentEpisodes} / 共 {totalEpisodes}"
+
+| 可用数据 | 显示文本 |
+|---------|---------|
+| all three | "已收 8 / 已播 12 / 共 24" |
+| episodeCount + currentEpisodes (total unknown) | "已收 8 / 已播 12" |
+| episodeCount + totalEpisodes (current unknown) | "已收 8 / 共 24" |
+| episodeCount only | "已收 8" (现有行为) |
+| type='movie' | 不显示集数维度 |
+
+**Y1 防御**：`currentEpisodes > totalEpisodes` 的 edge case（不应显示"已播 13 / 共 12"），建议该 case 仅显示 currentEpisodes 并标记数据异常。CHG-367-B 实施时必须落地。
+
+**前台（web-next）**：当前迭代不改前台显示。前台 VideoCard 仍用 `episodeCount`。未来如需展示"更至 X 集 / 共 Y 集"，独立迭代卡评估。
+
+**admin-ui LineAggregate.totalEpisodes 不受影响**：该字段含义为"线路下 sources 行数"，与本 ADR 的 Video.totalEpisodes 不存在渲染冲突（不同 UI 组件、不同数据层级）。
+
+### §7 文件范围（CHG-367-B RETRO 框架候选）
+
+| # | 文件 | 改动 |
+|---|------|------|
+| 1 | `apps/api/src/db/migrations/078_videos_episodes_fields.sql` | 新建 Migration |
+| 2 | `apps/api/src/db/queries/videos.internal.ts` | DbVideoRow + VIDEO_FULL_SELECT 扩 2 列 + mapVideoRow 映射 |
+| 3 | `apps/api/src/db/queries/videos.mutations.ts` | 新增 `updateVideoEpisodes()` |
+| 4 | `apps/api/src/services/MetadataEnrichService.ts` | step1/step2/step3 写入集成 |
+| 5 | `apps/api/src/services/DoubanService.ts` | confirmSubject/confirmFields 扩展 |
+| 6 | `packages/types/src/video.types.ts` | Video interface 加 2 字段 |
+| 7 | `tests/helpers/factories.ts` | createVideo factory 默认值 |
+| 8 | 审核台 TabDetail 组件 | 三维显示 + Y1 防御 |
+
+**RETRO 评估**：本 ADR 不新增 admin 写端点 → 不触发 ADR-121 R-MID-1 7 文件 RETRO。若 CHG-367-B 选择扩展 PUT `/admin/videos/:id` 编辑入口支持新字段 → 该扩展需独立走 RETRO（修改既有端点 payload → R7 MUST-8 的端点契约更新 + ADR-121 audit beforeJsonb/afterJsonb 覆盖）。建议 CHG-367-B 首期 **不扩展编辑入口**，仅做自动写入 + 只读显示。
+
+### §8 替代方案对比
+
+| 维度 | 方案 A（采纳：videos 表 + 保留 episode_count） | 方案 B（media_catalog 表） | 方案 C（重命名 episode_count → active_episodes） | 方案 D（JSONB 字段存三值） |
+|------|------|------|------|------|
+| schema 范式一致 | 与既有 episode_count 同表 | catalog 无 episode 先例 / 破坏静态元数据范式 | 与既有一致（同表） | 非结构化 / CHECK 约束困难 |
+| 迁移成本 | 低（2 新列 NULL default） | 中（catalog 加列 + 读取路径跨表 JOIN） | 极高（30+ 文件重命名 / 50+ 引用点） | 低 |
+| 查询性能 | videos 单表 | JOIN media_catalog | 单表 | jsonb 索引成本高 |
+| 写入路径复杂度 | 新增 1 query 函数 | 走 catalogService.safeUpdate + locked_fields（过度保护） | 同方案 A + 全量重命名 | 解析 JSONB + 部分更新 |
+| 与 ES mapping 兼容 | ES episode_count 不变 | 需新增 ES 字段 | 需重建 ES mapping | JSONB 难入 ES |
+| 回滚风险 | 极低 | 低 | 极高（回滚 = 反向重命名） | 低 |
+
+方案 B/C/D 均否定（详见 §3 各 D-N 决策点）。
+
+### §9 后果（正面 / 负面 + 风险）
+
+**正面**：
+1. 审核台三维集数视图（"已收 / 已播 / 共"）消除运营团队对连载剧集的信息盲区
+2. 为未来前台"更至 X 集 / 共 Y 集"展示打下 schema 基础
+3. 与 MetadataEnrichService 五步流程无缝集成，无额外 worker / cron
+
+**负面**：
+1. **N-163-1**：Video interface 新增 2 个 optional 字段 → 所有返回 Video 的 SQL SELECT 需扩列 + 所有 mapVideoRow 需映射。CHG-367-B 改动量约 3-5 处。风险低。
+2. **N-163-2**：豆瓣/bangumi 的 episodes 字段语义模糊（不区分 total/current），按 status 判断写入是启发式，可能对"标记 completed 但实际还在更新"的剧集产生错误。缓解：人工审核路径（confirmSubject）可修正；未来如接入 TMDB 等明确区分 total/current 的源，可精确覆盖。
+3. **N-163-3**：videos 表宽度 +2 列。当前 videos 已有 ~30 列，再加 2 列不触及 PG 性能瓶颈（远低于 PG ~1600 列硬限制）。NULL 存储开销接近零（PG 使用 bitmap 标记 NULL）。
+
+### §10 监控与重评条件
+
+| 编号 | 触发条件 | 动作 |
+|------|---------|------|
+| R-163-1 | CHG-367-B 实施后，审核台反馈"已播 / 共"混淆率 > 10% | 评估引入第三方 API（TMDB）明确区分 total/current |
+| R-163-2 | `total_episodes IS NOT NULL` 覆盖率 < 30%（enrich 命中率过低） | 评估扩大外部数据源（如 TMDB API 集数接口） |
+| R-163-3 | CHG-367-B 选择扩展 PUT `/admin/videos/:id` 编辑入口 | 独立评估 ADR-121 R-MID-1 RETRO + ADR-100 R7 MUST-8 端点契约更新 |
+| R-163-4 | 未来 active_episodes 需求明确（真正的"有 active 源的集数"） | 评估 derived field（query-time 或 materialized view）而非新列 |
+
+### §11 自审评级
+
+**评级：A- CONDITIONAL → 升 Accepted（0 红线 / 3 黄线 / 3 advisory）**
+
+**自审方法**：对照 CLAUDE.md 绝对禁止清单 + ADR 必查项 + 10 个必答问题逐一验证。
+
+**红线（必须修正 / 阻塞 Accepted）**：
+
+1. **R1（CHECK 约束遗漏 total > current 不变式）**：Migration 草案有 `chk_total_episodes_positive` 和 `chk_current_episodes_positive`，但**未加** `CHECK (total_episodes IS NULL OR current_episodes IS NULL OR total_episodes >= current_episodes)` 不变式约束。**结论：不加此 CHECK 约束是正确的设计决策**（外部数据不可控，DB 层不应强制业务不变式 — 豆瓣返回 12 写入 total 后 bangumi 返回 13 写入 current 会违反约束并阻塞写入）。但意味着数据层可能出现 `current > total` 的违直觉状态 → 显示层必须处理。**降级为黄线 Y1**。
+
+**黄线（建议修正 / 不阻塞 Accepted）**：
+
+1. **Y1（current > total 显示层防御）**：审核台 TabDetail 必须处理 `currentEpisodes > totalEpisodes` 的 edge case（不应显示"已播 13 / 共 12"），建议该 case 仅显示 `currentEpisodes` 并标记数据异常。CHG-367-B 实施时落地。
+2. **Y2（confirmFields 的 'episodes' 字段键名）**：`DoubanService.confirmFields` 的 `fields` 参数是字符串数组，需定义 `'episodes'` 作为新合法键。实施时需扩展 confirmFields 的 field → action 映射表。
+3. **Y3（docs/architecture.md 同步）**：CLAUDE.md 绝对禁止"schema 变更不同步 `docs/architecture.md`"。CHG-367-B migration 落地后必须同步 architecture.md 的 videos 表 schema 描述。
+
+**advisory（可不修）**：
+
+1. **A1（ES mapping 未扩）**：新字段暂不入 ES mapping。当前无按 total_episodes 搜索/排序的需求。
+2. **A2（前台 VideoCard 未扩）**：VideoCard Pick 子集不包含新字段。当前迭代无前台展示需求。
+3. **A3（bangumi dump 为静态快照）**：`import-bangumi-dump.ts` 导入的 episode_count 可能滞后于实际播出。缓解：豆瓣网络搜索（step2）可补充更实时的数据；且本 ADR 设计"仅写 NULL"策略避免用滞后数据覆盖。
+
+**红线/黄线/advisory 计数：0/3/3**。
+
+无红线 → 升 Accepted。黄线均为 CHG-367-B 实施层面的注意事项，不阻塞 ADR 决策本身。
+
+### 结论
+
+ADR-163 status 🟢 Accepted（2026-05-28 / arch-reviewer Opus A- CONDITIONAL → 无红线 → 等同 A-）；videos 表新增 `total_episodes` + `current_episodes` 双字段（NULL default / 正整数 CHECK / 部分索引）；既有 `episode_count` 保留不动；写入路径自动 NULL-only + manual 覆盖；不触发 R-MID-1 audit RETRO；3 黄线（current>total UI 防御 / confirmFields 键名扩 / architecture.md 同步）由 CHG-367-B 实施承接。
+
+---
