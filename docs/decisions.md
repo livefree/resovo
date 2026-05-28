@@ -17125,23 +17125,34 @@ BEGIN
   END IF;
 END $$;
 
--- ── 3. 唯一部分索引（活跃 codename）───────────────────────────────
+-- ── 3. 唯一部分索引（在役 codename）───────────────────────────────
+-- 索引覆盖：仅在役行 codename 列唯一性 + 排序结构。
+-- 候选路径：① PUT upsert 在役 codename 唯一性约束 ② listSources JOIN
+-- 主路径 retired_at IS NULL 谓词（部分索引 WHERE 含同条件）。
+-- 不适用：cooling lookup（retired_at IS NOT NULL 反向 / 不可用）/
+-- 已退役行查询（同上反向）。
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_source_line_aliases_codename_active
   ON source_line_aliases (codename)
   WHERE codename IS NOT NULL AND retired_at IS NULL;
 
 -- ── 4. 辅助索引（已退役行集合 / 候选未来路径）─────────────────────
--- 索引覆盖已退役行 retired_at 列排序结构。候选查询路径（规划器实际
--- 选用取决于数据 selectivity，留实测 EXPLAIN ANALYZE 验证）：
+-- 索引覆盖已退役行 retired_at 列排序结构。
+-- 候选查询路径（规划器实际选用取决于数据 selectivity / 留 EXPLAIN ANALYZE 验证）：
 --   ① admin UI "已退役" tab（CHG-368-B-B）：retired_at IS NOT NULL ORDER BY DESC
---   ② GET codename-pool cooling 段（CHG-368-B-A2）：retired_at >= NOW() - 90 days 范围扫描
--- 不适用：listSources 主路径 retired_at IS NULL（反向条件 / 由
---   idx_source_line_aliases_codename_active 覆盖）/ isCodenameInCooling 按
---   codename 查询（codename 索引覆盖）。
--- （注：本注释经 CHG-368-B-A1-FIX-3 / Codex stop-time review #19 修订；
--- 原注释 "加速 listSources JOIN" 与 "加速 SourceLineAliasService 90 天冷却期判定"
--- 均为描述错误，前者方向相反 / 后者按 codename 查应走 codename 索引）
+--   ② GET codename-pool cooling 段（CHG-368-B-A2）：retired_at >= NOW() - 90 days
+--      范围扫描（按 retired_at 范围 / 不按 codename 单值）
+-- 不适用：① listSources 主路径 retired_at IS NULL（反向 / 由
+--   idx_source_line_aliases_codename_active 覆盖）② 按 codename 查询 cooling
+--   （WHERE codename = $1 AND retired_at IS NOT NULL）：当前 schema 无适用
+--   索引 / 全表扫描或 retired_at 范围扫后应用层过滤 codename / 未来热路径
+--   可独立加 (codename) WHERE retired_at IS NOT NULL 部分索引（CHG-368-B-A2
+--   实施时评估）。
+-- （注：本节注释经 CHG-368-B-A1-FIX-{1,2,3,4} 四次修订：原 "加速 listSources JOIN"
+-- 方向错（FIX-2 修）→ 替换 "加速 cooling 判定 by codename" 仍错（FIX-3 修，因
+-- 走 codename 索引假设）→ "走 codename 索引" 也错（FIX-4 修，因 codename 部分
+-- 索引 WHERE retired_at IS NULL 与 cooling IS NOT NULL 方向相反 / Codex
+-- stop-time review #20）。最终四级范式：覆盖 / 候选 / 不适用 / 实测留置。）
 
 CREATE INDEX IF NOT EXISTS idx_source_line_aliases_retired_at
   ON source_line_aliases (retired_at)

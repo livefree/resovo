@@ -10434,3 +10434,33 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **commit trailer**：无强制 Subagents
 - **经验**：本次连续 2 次 stop-time review #18 + #19 修同一索引声明 = "**修正中引入新错误**"模式。根因是把索引用途绑定到具体 Service 方法名 + 假设规划器一定走该索引，没有先建立"索引覆盖 → 候选查询模式 → 不适用排除 → 实测验证"四级表述范式。**今后所有索引设计文档（migration 注释 + architecture.md + ADR）必须按此四级范式书写，禁止"加速某 Service 方法"形式的绑定式声明**。该范式应作为 docs/rules/db-rules.md 新增章节落地（连同上次 FIX-2 提议的"部分索引方向 invariant"checklist 一并）。
 - **闭环**：Codex stop-time review #19 红线消解 / 3 真源声明全面去除"绑定调用方"形式 / 替换为"候选未来路径 + 不适用排除 + EXPLAIN ANALYZE 验证留置"四级范式 / 索引物理保留（admin UI 已退役 tab + GET codename-pool cooling 范围扫描两候选路径在 CHG-368-B-A2/-B 落地后实测验证）
+
+---
+
+## [CHG-368-B-A1-FIX-4] idx_codename_active 部分索引方向错配 + cooling lookup by codename 无索引承认（Codex stop-time review #20）
+- **完成时间**：2026-05-28
+- **执行模型**：claude-opus-4-7（主循环 / 续会话）
+- **背景**：CHG-368-B-A1-FIX-3 commit 75634c28 后 Codex 第 4 次抓到红线："active codename partial index is still falsely claimed to cover cooling lookup"。
+- **根因**：FIX-3 不适用段写"`isCodenameInCooling(codename)` 按 codename 查询走 codename 索引覆盖"——但 `idx_codename_active` 部分索引的 WHERE 子句是 **`codename IS NOT NULL AND retired_at IS NULL`**（只索引在役行），而 cooling lookup 查 `WHERE codename = $1 AND retired_at IS NOT NULL`（找已退役行）— **方向相反 / 部分索引不可用**。这是 FIX-2 → FIX-3 → FIX-4 第 3 次同模式错误：连续假设"按 codename 查询一定能用 codename 索引"，未核对部分索引 WHERE 子句方向。
+- **真相承认**：cooling lookup by codename 在当前 schema 下**无适用索引**。access path 选项：
+  - 全表扫描 + filter（已退役行预期较少 / 成本可接受）
+  - 先用 `idx_source_line_aliases_retired_at` 范围扫描得 cooling 列表 → 应用层 filter codename
+  - 规划器视实际数据 selectivity 选用
+- **第 4 次连续修正模式**：原"加速 listSources" → FIX-2 "加速 cooling 判定 by codename" → FIX-3 "cooling 判定 by codename 走 codename 索引" → 本卡 FIX-4 真相 "cooling lookup by codename **无适用索引**"。同一查询模式 4 次错配 ⇒ 把"按 codename 查询"想当然认为是"用 codename 索引"，未考虑部分索引 WHERE 子句方向。
+- **3 真源同步修正（覆盖 codename 索引 + retired_at 索引双段）**：
+  - `apps/api/src/db/migrations/079_*.sql`：
+    - 第 3 节 `idx_codename_active` 注释扩为完整四级范式（覆盖/候选/不适用），显式声明 cooling lookup 不可用（反向）
+    - 第 4 节 `idx_retired_at` 注释扩 cooling lookup by codename **无适用索引**承认 + 未来热路径如需独立加 `(codename) WHERE retired_at IS NOT NULL` 部分索引（CHG-368-B-A2 实施时评估）
+  - `docs/architecture.md` §5 source_line_aliases 索引段：双索引同步扩四级范式 + 显式承认 cooling lookup by codename 无索引 access path
+  - `docs/decisions.md` ADR-164 §4 SQL 草案：双索引同步扩四级范式 + 追加 CHG-368-B-A1-FIX-{1..4} 四次修订溯源链（透明记录连续犯错路径）
+- **方法论再深化**：除了上次 FIX-3 提出的"覆盖/候选/不适用/实测"四级范式，再补一条 **invariant**：
+  - **部分索引 WHERE 条件方向核验**：所有部分索引声明的"候选路径"必须显式核对查询谓词与索引 WHERE 子句的**逻辑方向一致性**（IS NULL vs IS NOT NULL / `> v` vs `<= v` 等）。反向条件 = 部分索引不可用。
+  - **驱动列 vs 索引列错配核验**：连续 4 次踩坑的元根因是把"按 X 查询"想当然认为"X 索引覆盖"，忽视索引可能是部分索引（按 X 但只覆盖部分行）。今后 access path 评估必须答 3 问：① 索引覆盖哪些行（含部分索引 WHERE 子句）② 查询谓词命中哪些行 ③ ① 与 ② 是否有重叠（无重叠 → 索引不可用 / 必须诚实承认）
+- **质量门禁**：verify:adr-contracts ✅ EXIT=0 / 仅注释 + docs 改动 / typecheck + lint + test unaffected
+- **commit trailer**：无强制 Subagents
+- **经验总结（CHG-368-B-A1-FIX 系列 1-4 整体复盘）**：4 次 stop-time review 围绕同一索引声明递进修正 = 经验吸收最严重的失败案例。元根因：
+  - 索引设计描述跳过"覆盖 vs 查询命中"严格核对
+  - 假设规划器一定走"看起来匹配"的索引
+  - 把部分索引误当作全表索引（忽视 WHERE 子句限制覆盖范围）
+  - **每次修正引入新错误**（FIX-2 引入 cooling 由 codename 索引覆盖错配 / FIX-3 引入"走 codename 索引"错配）
+- **闭环**：Codex stop-time review #20 红线消解 / Migration 079 + architecture.md + decisions.md 3 真源双索引声明完整对齐物理行为 / cooling lookup by codename 真相（无适用索引 / 全表扫描或经 retired_at 范围扫 + 应用层过滤）公开承认 / 四级范式 + 双 invariant（部分索引方向核验 + 驱动列 vs 索引列核验）形成完整索引设计文档书写规范 / 应在 db-rules.md 落地

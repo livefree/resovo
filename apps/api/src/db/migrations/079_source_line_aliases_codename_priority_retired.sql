@@ -49,7 +49,17 @@ BEGIN
   END IF;
 END $$;
 
--- ── 3. 唯一部分索引（活跃 codename / D-164-9）────────────────────────
+-- ── 3. 唯一部分索引（在役 codename / D-164-9）─────────────────────────
+-- 索引覆盖：仅"在役行"（codename IS NOT NULL AND retired_at IS NULL）的
+-- codename 列唯一性约束 + 排序结构。
+-- 候选查询路径：
+--   ① 在役 codename 唯一性约束（PUT upsert 冲突检测 / DB 强制全局唯一）
+--   ② listSources 主路径 JOIN 谓词 `retired_at IS NULL`（部分索引 WHERE
+--      子句包含同条件 / 规划器可能消费）
+-- 不适用：
+--   ① cooling lookup（cooling 查 `retired_at IS NOT NULL` 的 codename / 部分
+--      索引谓词方向相反 / 不可用）
+--   ② 已退役行查询（同上反向条件）
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_source_line_aliases_codename_active
   ON source_line_aliases (codename)
@@ -59,13 +69,15 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_source_line_aliases_codename_active
 -- 索引覆盖：仅"已退役行"（retired_at IS NOT NULL）的 retired_at 列排序结构。
 -- 候选未来查询路径（实际规划器选用取决于数据 selectivity / 实测 EXPLAIN ANALYZE）：
 --   ① admin UI "已退役" tab（CHG-368-B-B）：`WHERE retired_at IS NOT NULL ORDER BY retired_at DESC`
---   ② GET codename-pool cooling 段（CHG-368-B-A2）：`WHERE codename IS NOT NULL
---      AND retired_at >= NOW() - INTERVAL '90 days'` 范围扫描
---
--- 不适用：① listSources 主路径谓词 `retired_at IS NULL`（反向条件 / 由
--- idx_source_line_aliases_codename_active 部分唯一索引 WHERE 条件覆盖）
--- ② SourceLineAliasService.isCodenameInCooling(codename) 按 codename 查询
--- （由 codename 部分唯一索引覆盖 / 不走 retired_at 索引）
+--   ② GET codename-pool cooling 段（CHG-368-B-A2）：`WHERE retired_at >= NOW() - 90 days`
+--      列出全部 cooling codename（按 retired_at 范围扫描 / 不按 codename 单值）
+-- 不适用：
+--   ① listSources 主路径 `retired_at IS NULL`（反向条件 / 由 idx_codename_active 覆盖）
+--   ② 按 codename 查询 cooling（如 isCodenameInCooling(codename) `WHERE codename = $1
+--      AND retired_at IS NOT NULL`）：**当前 schema 无适用索引**，access path =
+--      全表扫描或先按 retired_at 范围扫再过滤 codename。规划器视实际数据
+--      selectivity 选用。如未来 cooling lookup by codename 成为热路径，CHG-368-B-A2
+--      可独立评估增设 `(codename) WHERE retired_at IS NOT NULL` 部分索引。
 
 CREATE INDEX IF NOT EXISTS idx_source_line_aliases_retired_at
   ON source_line_aliases (retired_at)
