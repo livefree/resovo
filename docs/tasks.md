@@ -6,11 +6,11 @@
 
 ## 进行中任务
 
-（空 / Wave 3 ROUTE-LABEL-D-ADR 闭环 / 下一卡 -A1 后端实施待启动）
+（空 / Wave 3 -A1 后端实施闭环 / 下一卡 -A2 前端实施待启动）
 
 ---
 
-## Wave 3 状态（SEQ-20260528-MOD-WAVE3 / 🔄 进行中 = 70% / 7/10 + 1 DEFERRED + 2 DEFERRED 组合 X）
+## Wave 3 状态（SEQ-20260528-MOD-WAVE3 / 🔄 进行中 = 80% / 8/10 + 3 DEFERRED）
 
 - ✅ **PRE-INDEX-DESIGN-RULES**（2026-05-28 / sonnet-4-6 / 纯 docs / 4 步核验 + 双 invariant + 四级范式沉淀 db-rules.md）
 - ✅ **CHG-369-B**（2026-05-28 / sonnet-4-6 / 5+1 / CustomThemeDialog NEW + 双 key localStorage）
@@ -21,9 +21,10 @@
 - ✅ **CHG-SN-9-PLAYER-ERROR**（2026-05-28 / sonnet-4-6 + Opus 4-7 / 5 / player-core onError + suppressDefaultErrorUI public API）
 - ⛔ **CHG-SN-9-META-BANGUMI-A** DEFERRED（2026-05-28 / 用户决策组合 X / plan §13 既有"Bangumi 暂缓"一致）
 - ⛔ **CHG-SN-9-SITE-VIEWS-EXTRACT** DEFERRED（2026-05-28 / 用户决策组合 X / 独立 SEQ-FOLLOWUP-ARCH）
-- ✅ **CHG-SN-9-ROUTE-LABEL-D-ADR**（2026-05-28 / sonnet-4-6 + arch-reviewer Opus 4-7 / 1 docs PATCH=1 / Opus A- CONDITIONAL → 5 红线 + 4 P1 黄线 + 2 关键洞察全消化 → 升 Accepted / 实施由 -A1/-A2 承接）
+- ✅ **CHG-SN-9-ROUTE-LABEL-D-ADR**（2026-05-28 / sonnet-4-6 + arch-reviewer Opus 4-7 / 1 docs / Opus A- CONDITIONAL → 5 红线 + 4 P1 黄线 + 2 关键洞察全消化 → 升 Accepted）
+- ✅ **CHG-SN-9-ROUTE-LABEL-D-A1**（2026-05-28 / sonnet-4-6 / 4 业务 + 1 测试 PATCH=5 + 1 architecture.md sync / Migration 080 + types runtime exports + queries + Service + 路由 2 端点 / 8/8 测试 PASS / D-165-1/-2/-3/-9 后端层闭环）
 
-剩余 2 张实施子卡（按执行序列）：CHG-SN-9-ROUTE-LABEL-D-A1（后端 / Migration 080 + types + queries + Service + 路由 / PATCH≤5）→ CHG-SN-9-ROUTE-LABEL-D-A2（前端 / useUserPreferencesSync hook + route-theme-storage 改造 + RouteThemeSelector syncing + 测试 + docs/manual / PATCH≤5）
+剩余 1 张实施子卡：CHG-SN-9-ROUTE-LABEL-D-A2（前端 / useUserPreferencesSync hook + route-theme-storage 改造 + RouteThemeSelector syncing + 测试 + docs/manual / PATCH≤5）
 
 ---
 
@@ -47,14 +48,13 @@
 
 ## 下次会话恢复入口
 
-- **CHG-SN-9-ROUTE-LABEL-D-A1**：ADR-165 §11 后端实施（Migration 080 + packages/types/src/user.types.ts 扩 + apps/api queries + Service + 路由 + 单测 / PATCH≤5）
 - **CHG-SN-9-ROUTE-LABEL-D-A2**：ADR-165 §11 前端实施（useUserPreferencesSync NEW + route-theme-storage 改造 + RouteThemeSelector syncing + 测试 + docs/manual / PATCH≤5）
-- **SEQ-FOLLOWUP-MIGRATE**（用户决策方案 A 抽出）：BTN_* → AdminButton 38 tsx / 100+ button 长尾迁移 / 按域拆 7-8 子卡
-- **SEQ-FOLLOWUP-ARCH**（用户决策组合 X 抽出）：CHG-SN-9-SITE-VIEWS-EXTRACT plan §10.6 方案 C 抽 packages/site-views / 大型架构重构
+- **SEQ-FOLLOWUP-MIGRATE**（用户决策方案 A 抽出）：BTN_* → AdminButton 38 tsx / 100+ button 长尾迁移
+- **SEQ-FOLLOWUP-ARCH**（用户决策组合 X 抽出）：CHG-SN-9-SITE-VIEWS-EXTRACT plan §10.6 方案 C 抽 packages/site-views
 - **CHG-SN-9-META-BANGUMI-A** DEFERRED（用户决策组合 X / plan §13 暂缓 / 下一轮迭代）
 - **CHG-SN-9-REJECTED-ENHANCE-B** 视觉对齐（plan §7 拆 -B）：BTN_SM → AdminButton + 复用 SplitPane + 批量 reopen + 跳转回 pending 提示
 - **CHG-SN-9-PLAYER-ERROR-CONSUMER-A** AdminPlayer onError 消费 + feedback 上报失败
 - **CHG-SN-9-PLAYER-ERROR-CONSUMER-B** PlayerShell onError 消费 + 自动切下一线路 + 标 dead-source
-- **CHG-SN-9-PLAYER-ERROR-RETRY-CONTROL** retrySourceLoad 上抛（onError(event, controls) vs imperativeHandle 二选）
+- **CHG-SN-9-PLAYER-ERROR-RETRY-CONTROL** retrySourceLoad 上抛
 - **PRE-DEAD-LINE-AUTO-RETIRE-WORKER**（A-164-1 占位）：plan §10.5 全 dead 180 天自动退役 worker
 - 其他 pre-existing 长尾 / **CHG-354 SPLIT-D** / **audit 4 真源 advisory** / **PRE-PROBE-WORKER 占位 jobId** / **meta_quality TabDetail UI 消费** 等

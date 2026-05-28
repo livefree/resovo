@@ -4,6 +4,18 @@ export type * from './banner.types'
 export type * from './home-module.types'
 export type * from './home.types'
 export type * from './user.types'
+// ADR-165 / CHG-SN-9-ROUTE-LABEL-D-A1：runtime exports（zod schema + 常量 + helper）
+export {
+  CUSTOM_THEME_CONSTRAINTS,
+  CustomThemeDataSchema,
+  RouteThemePreferenceSchema,
+  UserPreferencesSchema,
+  UserPreferencesStrictSchema,
+  UserPreferencesPatchSchema,
+  canAccessAdmin,
+  canManageSystem,
+  canModerate,
+} from './user.types'
 export type * from './video.types'
 export type * from './search.types'
 export type * from './list.types'

@@ -1,10 +1,12 @@
 /**
  * users.ts — 用户个人接口
- * ADR-012
+ * ADR-012 + ADR-165（跨设备主题同步）
  *
- * GET  /users/me           — 获取当前用户信息（需登录）
- * POST /users/me/history   — 上报/更新播放进度（需登录）
- * GET  /users/me/history   — 获取观看历史（需登录，分页）
+ * GET  /users/me                  — 获取当前用户信息（需登录）
+ * POST /users/me/history          — 上报/更新播放进度（需登录）
+ * GET  /users/me/history          — 获取观看历史（需登录，分页）
+ * GET  /users/me/preferences      — ADR-165 拉取用户偏好（需登录）
+ * PUT  /users/me/preferences      — ADR-165 顶层模块 PATCH 更新偏好（需登录）
  */
 
 import type { FastifyInstance } from 'fastify'
@@ -12,6 +14,7 @@ import { z } from 'zod'
 import { db } from '@/api/lib/postgres'
 import { findUserById } from '@/api/db/queries/users'
 import { upsertWatchHistory, getUserHistory } from '@/api/db/queries/watchHistory'
+import { UserPreferencesService } from '@/api/services/UserPreferencesService'
 
 export async function userRoutes(fastify: FastifyInstance) {
   const auth = [fastify.authenticate]
@@ -92,5 +95,43 @@ export async function userRoutes(fastify: FastifyInstance) {
       page,
       limit,
     })
+  })
+
+  // ── ADR-165 / CHG-SN-9-ROUTE-LABEL-D-A1 用户偏好同步 ────────────
+
+  const preferencesService = new UserPreferencesService(db)
+
+  // GET /users/me/preferences — D-165-3 / 拉取当前用户偏好
+  fastify.get('/users/me/preferences', { preHandler: auth }, async (request, reply) => {
+    const userId = request.user!.userId
+    const preferences = await preferencesService.get(userId)
+    if (preferences === null) {
+      return reply.code(404).send({
+        error: { code: 'NOT_FOUND', message: '用户不存在', status: 404 },
+      })
+    }
+    return reply.send({ data: preferences })
+  })
+
+  // PUT /users/me/preferences — D-165-3 / R-165-3 顶层模块 PATCH 语义
+  fastify.put('/users/me/preferences', { preHandler: auth }, async (request, reply) => {
+    const userId = request.user!.userId
+    try {
+      const preferences = await preferencesService.update(userId, request.body)
+      if (preferences === null) {
+        return reply.code(404).send({
+          error: { code: 'NOT_FOUND', message: '用户不存在', status: 404 },
+        })
+      }
+      return reply.send({ data: preferences })
+    } catch (error) {
+      const code = (error as { code?: string }).code
+      if (code === 'VALIDATION_ERROR') {
+        return reply.code(422).send({
+          error: { code: 'VALIDATION_ERROR', message: '参数错误', status: 422 },
+        })
+      }
+      throw error
+    }
   })
 }

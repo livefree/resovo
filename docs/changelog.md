@@ -40,6 +40,62 @@
 
 ---
 
+## [CHG-SN-9-ROUTE-LABEL-D-A1] ADR-165 后端实施（Wave 3 #10.1 / plan §14 主线 4/6 / Migration 080 + types + queries + Service + 路由）
+- **完成时间**：2026-05-28
+- **执行模型**：claude-sonnet-4-6（主循环 / 不切换 §16.5 / ADR-165 已 Accepted 规范驱动实施）
+- **子代理调用**：无（ADR-165 已 Accepted / 不改 packages/admin-ui Props / 不起新 ADR / 非 player-core 接口 / 非 3+ 消费方）
+- **拆卡承接**：CHG-SN-9-ROUTE-LABEL-D-ADR（ADR-165 Accepted / commit fd6e3f93）→ -A1 后端 + -A2 前端 2 子卡承接。本卡为 -A1。
+- **范围**（4 业务 + 1 测试 / PATCH=5 严守 / + 1 docs architecture.md schema sync 不计 PATCH 上限 / + 1 types/index.ts runtime exports）：
+  - `apps/api/src/db/migrations/080_users_preferences.sql` NEW（ADR-165 §4 / R-165-5 inline CHECK 与 Migration 077 范式对齐）：
+    - `ALTER TABLE users ADD COLUMN IF NOT EXISTS preferences JSONB NOT NULL DEFAULT '{}'::jsonb CHECK (jsonb_typeof(preferences) = 'object')`
+    - DO 块验证列存在 + 索引设计 4 步核验注释（PK 完整覆盖 / 不加新索引）
+    - ROLLBACK SQL 留位
+  - `packages/types/src/user.types.ts` 扩（Y-165-2 扩既有文件不新建 + Y-165-3 CUSTOM_THEME_CONSTRAINTS 真源迁移）：
+    - `CUSTOM_THEME_CONSTRAINTS` 常量（迁移自 apps/web-next/src/lib/route-theme-storage.ts / -A2 子卡承接 web-next 改 import）
+    - `CustomThemeDataSchema` + `RouteThemePreferenceSchema` zod schemas
+    - `UserPreferencesSchema` (**passthrough** / R-165-4 server 持久化用)
+    - `UserPreferencesStrictSchema` (**strict** / 客户端类型层开发期约束)
+    - `UserPreferencesPatchSchema` (**passthrough** + nullable / R-165-3 顶层模块 PATCH 语义)
+    - `User` interface 加可选 `preferences?: UserPreferences`
+    - 5 zod schema + 1 常量 + 类型 z.infer 派生（CustomThemeData / RouteThemePreference / UserPreferences / UserPreferencesPatch）
+  - `packages/types/src/index.ts` 加 runtime exports（5 zod schemas + CUSTOM_THEME_CONSTRAINTS + 3 既有 canAccessAdmin 等 helper）/ TypeScript export type * 限制 zod 等 runtime 必须显式 `export { ... }`
+  - `apps/api/src/db/queries/userPreferences.ts` NEW（ADR-165 R-165-1 独立 query 文件 / 不复用 findUserById SELECT *）：
+    - `getUserPreferences(db, userId)` 仅 `SELECT preferences FROM users WHERE id = $1 AND deleted_at IS NULL`（防 JSONB 隐式拉取性能债）
+    - `updateUserPreferences(db, userId, patch)`：分离 merge entries（非 null）+ delete keys（null）/ 空 patch → 幂等返回当前值 / 非空 → 事务内 BEGIN + UPDATE merge `preferences || $1::jsonb` + UPDATE delete `preferences - $1::text` + SELECT 返回 + COMMIT（失败 ROLLBACK）
+  - `apps/api/src/services/UserPreferencesService.ts` NEW（业务层）：
+    - constructor(db: Pool)
+    - get(userId) → queries.getUserPreferences
+    - update(userId, input) → zod passthrough 校验 + queries.updateUserPreferences / 校验失败 throw `code='VALIDATION_ERROR'`
+  - `apps/api/src/routes/users.ts` 扩 2 端点 + 1 import：
+    - GET `/users/me/preferences` preHandler: auth / userId 来自 JWT / 404 用户不存在 / 200 + `{ data: UserPreferences }`
+    - PUT `/users/me/preferences` preHandler: auth / userId 来自 JWT / try-catch VALIDATION_ERROR → 422 / 404 用户不存在 / 200 + `{ data: UserPreferences }` 返回 merge 后完整值
+  - `tests/unit/api/user-preferences.test.ts` NEW 8 case：
+    - getUserPreferences：SELECT preferences 单列 + WHERE id + deleted_at IS NULL（R-165-1）/ 用户不存在 → null
+    - updateUserPreferences：值 patch → merge SQL（R-165-3）/ null patch → 删除顶层 key / 空 patch → 幂等不开事务 / 混合 patch → 一次事务内 merge + 多 delete
+    - UserPreferencesService：未知字段 passthrough 保留（R-165-4 防演进期误删）/ 非法字段 → throw VALIDATION_ERROR
+  - `docs/architecture.md` §5.14 NEW（users.preferences schema sync / CLAUDE.md "schema 变更必须同步 architecture.md" 红线规避 / 详 schema + 双 zod + 应用层 + 安全 + 索引 4 步核验）
+- **不触发额外 ADR / Opus 子代理**（ADR-165 已 Accepted / 规范驱动实施）：
+  - 不修改 packages/admin-ui Props（packages/types runtime exports 不算 admin-ui Props）
+  - 不重构 player-core / shell 接口
+  - 不引入技术栈新依赖（zod 既有 / pg 既有）
+  - 不触发 CLAUDE.md "未登录请求路径访问 users 表" 红线（preHandler auth 强制 + Service 层 JWT userId）
+- **设计取舍**：① 独立 query 文件（不污染 users.ts / R-165-1）/ ② JSONB merge + delete 分离事务（R-165-3 / 多 key 时一次事务保证原子）/ ③ 空 patch 走 pool.query 不开事务（性能 + 幂等）/ ④ Service 层 throw `code='VALIDATION_ERROR'` 而非 reply.code(422)：保持业务层不感知 HTTP 状态（Route 层捕获翻译）/ ⑤ types index.ts runtime exports 显式列出：TypeScript export type * 限制 / 与既有 deriveAggregateState / MOUNTAIN_CODENAMES 范式一致 / ⑥ architecture.md §5.14 独立段：与既有 §5.13 source_line_aliases 范式对称 / 不混入既有 users 段（users 既有 schema 在 §5 之外的早期 §3 路由章节描述）
+- **质量门禁**：typecheck ✅ EXIT=0 / lint ✅ EXIT=0 / verify:adr-contracts ✅ EXIT=0（verify-endpoint-adr 197 → 199 路由对齐 / verify-sql-schema-alignment 80 → 81 表对齐 / verify-adr-d-numbers 266 全闭环）/ 单测 user-preferences 8/8 PASS / 既有 users-sort 域零回归（未跑全 / Wave 验收期跑）
+- **commit trailer**：无强制 Subagents（ADR-165 已 Accepted / 规范驱动实施 / 不修改 packages/admin-ui Props / 不起新 ADR）/ ADR-165 起草卡 fd6e3f93 已含 Opus trailer
+- **六问自检**：
+  - Q1 本次逻辑应沉淀共享层？✅ packages/types/src/user.types.ts 已沉淀 5 zod schema + 1 常量 / 真源迁移完成（CUSTOM_THEME_CONSTRAINTS 从 web-next 迁过来）
+  - Q2 是否引入回归？✅ Migration 080 加新字段不改既有 / users 既有 findUserById 不感知 preferences（R-165-1 独立 query）/ 8/8 测试 PASS / typecheck + lint + verify 全 EXIT=0
+  - Q3 是否越层？✅ Route → Service → Queries 严格分层 / Route 不含业务逻辑（zod 校验在 Service / DB 操作在 queries）
+  - Q4 是否硬编码值 / any 类型？✅ 无 any（zod schema 派生 / unknown → 类型守卫 throw）/ 无硬编码（CUSTOM_THEME_CONSTRAINTS 集中管理）
+  - Q5 是否布局变化？N/A 非 UI
+  - Q6 文件范围内？✅ 4 业务 + 1 测试 PATCH=5 严守 + 1 architecture.md sync 不计 PATCH 上限（与 CHG-368-B-C-DOCS / CHG-369 范式一致）
+- **偏离检测**：无（本卡完全按 ADR-165 §11 -A1 范围执行 / 4 业务 + 1 测试 + 1 architecture 同步全命中 / 未引入卡片外改动）
+- **D-N 编号闭环（部分）**：D-165-1（schema）/ D-165-2（preferences shape + 双 schema 范式）/ D-165-3（端点契约）/ D-165-9 admin 域 RBAC 规避（独立 query 仅当前 userId） → -A1 后端层全闭。D-165-4/-5/-6/-7/-8/-11 由 -A2 前端层承接闭环（同步协议 / hydration / 错误处理）。
+- **[AI-CHECK] 结论**：PASS（ADR-165 后端层完整 ship / Migration 080 + types + queries + Service + 路由 2 端点 + 8/8 测试 + architecture.md sync / R-165-1/-3/-4/-5 + Y-165-2/-3 后端部分全落 / -A2 前端层接入 useUserPreferencesSync hook 即可完成跨设备同步功能）
+- **闭环**：CHG-SN-9-ROUTE-LABEL-D-A1 完成 / ADR-165 后端层 ship / Wave 3 plan §14 主线 4/6 完成 / Wave 3 SEQ 整体 8/10 完成（4 长尾 + 4 主线 / 3 DEFERRED MOD-BUTTON + BANGUMI-A + SITE-VIEWS-EXTRACT）/ 主循环自动取下一卡（-A2 前端实施 / useUserPreferencesSync hook + route-theme-storage 改造）
+
+---
+
 ## [CHG-SN-9-ROUTE-LABEL-D-ADR] ADR-165 起草 + Opus 评审（Wave 3 #10 / plan §17.2 Wave 3 / plan §14 主线 3/6 / 用户决策组合 X 推进）
 - **完成时间**：2026-05-28
 - **执行模型**：claude-sonnet-4-6（主循环 / 不切换 §16.5 / ADR 起草草稿 + Opus 评审消化）

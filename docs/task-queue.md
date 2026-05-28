@@ -1978,7 +1978,7 @@ CHG-369 (前台主题选择器, 独立)
 
 ## [SEQ-20260528-MOD-WAVE3] server-next 内容审核台 Wave 3 — Wave 2 长尾清理 + 架构 / 长期 P3 卡（plan §14 Wave 3 + §17.2 Wave 3 增补）
 
-- **状态**：🔄 进行中（7/10 完成 + 3 DEFERRED / 长尾 4/4 + 主线 3/6 ADR Accepted / 剩余 -A1 后端 + -A2 前端实施子卡）
+- **状态**：🔄 进行中（8/10 完成 + 3 DEFERRED / 长尾 4/4 + 主线 4/6 / 剩余 -A2 前端实施子卡）
 - **创建时间**：2026-05-28
 - **目标**：按用户 2026-05-28 决策"长尾先清 + plan §14 主线"：先清 4 张 Wave 2 长尾 follow-up，再按 plan §14 / §17.2 Wave 3 入 6 张 P3 长期主线卡。
 - **执行约束**：沿用 Wave 1/2 §16.1-16.5（UI/UX 谨慎 / docs/manual 同步 / 主循环全自动 + BLOCKER 触发清单）
@@ -1999,7 +1999,7 @@ CHG-369 (前台主题选择器, 独立)
 | 8 | ⛔ **CHG-SN-9-META-BANGUMI-A** DEFERRED（2026-05-28 / 用户决策组合 X / 与 plan §13 "Bangumi 暂缓 / 留下一轮迭代" 一致）| plan §10.4.2 方案 A / Bangumi 实时 API 集成（BangumiService + secrets + ADR 起草 + 新依赖）/ 下次会话恢复入口 | 是（新 ADR）| (deferred) |
 | 9 | ⛔ **CHG-SN-9-SITE-VIEWS-EXTRACT** DEFERRED（2026-05-28 / 用户决策组合 X / 独立 SEQ-FOLLOWUP-ARCH 长尾架构系列择期推进 / 非 Wave 节奏）| plan §10.6 方案 C / 抽 `packages/site-views`（跨 app 重构 / 共享层沉淀 / 大型）/ CLAUDE.md §16.5 "跨 app 影响范围扩大" BLOCKER 触发已规避 | 是（架构 ADR）| (deferred) |
 | 10 | ✅ **CHG-SN-9-ROUTE-LABEL-D-ADR** 已完成（2026-05-28 / 主循环 claude-sonnet-4-6 / 子代理 arch-reviewer (claude-opus-4-7) agentId a6c323d228d26d12d）| plan §17.2 Wave 3 / `users.preferences` schema + 跨设备主题同步 + 端点 / ADR-165 起草 + Opus A- CONDITIONAL → 5 红线 + 4 P1 黄线 + 2 关键洞察全消化 → 升 Accepted / 1 docs PATCH=1 / 实施由 -A1（后端）+ -A2（前端）2 子卡承接 各 PATCH≤5 / 双红线触发 Subagents trailer | 是（ADR-165 ✅ Accepted）| sonnet-4-6 + arch-reviewer (opus-4-7) |
-| 10.1 | ⬜ **CHG-SN-9-ROUTE-LABEL-D-A1** 待开始 | ADR-165 §11 后端实施：Migration 080 + packages/types/src/user.types.ts 扩 + apps/api/src/db/queries/userPreferences.ts NEW + UserPreferencesService NEW + users.ts 2 端点 + 测试 / PATCH≤5 严守 | 否（ADR-165 已 Accepted）| sonnet-4-6 |
+| 10.1 | ✅ **CHG-SN-9-ROUTE-LABEL-D-A1** 已完成（2026-05-28 / 主循环 claude-sonnet-4-6 / 子代理 无）| ADR-165 §11 后端实施：Migration 080 inline CHECK + user.types.ts 5 zod schema + CUSTOM_THEME_CONSTRAINTS 迁移 + types/index.ts runtime exports + userPreferences queries NEW + UserPreferencesService NEW + users.ts 2 端点 / 4 业务 + 1 测试 PATCH=5 + 1 architecture.md §5.14 sync / 8/8 测试 PASS / typecheck + lint + verify 全 EXIT=0 / D-165-1/-2/-3/-9 后端层闭环 | 否（ADR-165 已 Accepted）| sonnet-4-6 |
 | 10.2 | ⬜ **CHG-SN-9-ROUTE-LABEL-D-A2** 待开始 | ADR-165 §11 前端实施：useUserPreferencesSync NEW + route-theme-storage 改造 + RouteThemeSelector syncing + 测试 + docs/manual sync / PATCH≤5 严守 | 否（ADR-165 已 Accepted）| sonnet-4-6 |
 
 ### Wave 3 BLOCKER 触发清单（沿用 Wave 1/2 §16.5）
