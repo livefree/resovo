@@ -27,6 +27,8 @@ vi.mock('next-intl', () => ({
 
 // playerStore + apiClient mock — vi.hoisted 保证在 vi.mock 工厂之前初始化
 // mockState 暴露为可变，模拟切集时由测试代码改写 currentEpisode + rerender 触发 episode-switch effect
+// initPlayer mock 真实改 mockState.{shortId,currentEpisode}（模拟生产 store action 语义 / 否则
+// 测试看不到 store.currentEpisode 对齐到 URL ep / Codex stop-time review #3 必需）
 const { initPlayerMock, apiGetMock, mockState } = vi.hoisted(() => {
   const state = {
     mode: 'default',
@@ -35,12 +37,21 @@ const { initPlayerMock, apiGetMock, mockState } = vi.hoisted(() => {
     shortId: '',
     currentTime: 0,
     setMode: vi.fn(),
-    initPlayer: vi.fn(),
-    setEpisode: vi.fn(),
+    initPlayer: vi.fn((shortId: string, ep: number) => {
+      state.shortId = shortId
+      state.currentEpisode = ep
+      state.currentTime = 0
+      state.activeSourceIndex = 0
+    }),
+    setEpisode: vi.fn((ep: number) => {
+      state.currentEpisode = ep
+    }),
     setPlaying: vi.fn(),
     setCurrentTime: vi.fn(),
     setDuration: vi.fn(),
-    setActiveSourceIndex: vi.fn(),
+    setActiveSourceIndex: vi.fn((i: number) => {
+      state.activeSourceIndex = i
+    }),
     hostOrigin: null,
   }
   return {
@@ -140,10 +151,19 @@ const MOCK_SOURCE: VideoSource = {
 
 describe('PlayerShell server-side hydration (ADR-160 AMENDMENT 2 D-160-AMD2-3)', () => {
   beforeEach(() => {
-    vi.clearAllMocks()
-    initPlayerMock.mockReset()
-    apiGetMock.mockReset()
-    mockState.currentEpisode = 1 // 每个 case 复位 episode
+    // 用 mockClear（仅清 calls）避免清掉 initPlayer/setEpisode/setActiveSourceIndex 的 implementation；
+    // 这些 mock 持有真实修改 mockState 的 fn，被 mockReset 会让 store action 失效
+    initPlayerMock.mockClear()
+    apiGetMock.mockClear()
+    apiGetMock.mockReset() // apiGetMock 没有持久 implementation / 安全 reset
+    searchParamsGet.mockReset()
+    searchParamsGet.mockReturnValue(null)
+    // 完整复位 mockState（避免 case 间 shortId/episode 污染）
+    mockState.mode = 'default'
+    mockState.currentEpisode = 1
+    mockState.activeSourceIndex = 0
+    mockState.shortId = ''
+    mockState.currentTime = 0
   })
 
   afterEach(() => {
@@ -177,15 +197,23 @@ describe('PlayerShell server-side hydration (ADR-160 AMENDMENT 2 D-160-AMD2-3)',
     expect(calls.filter((url) => url.includes('/sources?episode=')).length).toBe(1)
   })
 
-  it('有 initialVideo + initialSources + url ep=2 → sources 走 client fetch（Y-AMD2-2 episode 切换限制）', async () => {
+  it('有 initialVideo + initialSources + url ep=2 → 仅 1 次 ep=2 fetch / 无 stale ep=1（Codex stop-time review #3 回归防御）', async () => {
     apiGetMock.mockResolvedValue({ data: [MOCK_SOURCE] })
     searchParamsGet.mockImplementation((key: string) => (key === 'ep' ? '2' : null))
     render(<PlayerShell slug="test-aB3kR9x1" initialVideo={MOCK_VIDEO} initialSources={[MOCK_SOURCE]} />)
     await waitFor(() => expect(initPlayerMock).toHaveBeenCalled())
+    await waitFor(() => {
+      const calls = apiGetMock.mock.calls.map((c) => c[0] as string)
+      expect(calls.some((url) => url.includes('/sources?episode=2'))).toBe(true)
+    })
     const calls = apiGetMock.mock.calls.map((c) => c[0] as string)
     // ep=2 → 不复用 initialSources（仅 ep=1 时复用）
     expect(calls.some((url) => url.includes('/sources?episode=2'))).toBe(true)
-    searchParamsGet.mockReturnValue(null) // 复位
+    // 无 stale ep=1 fetch（修复前 initPlayer 在 .then 内 / useEffect 2 mount 时
+    // store.currentEpisode=stale 1 ≠ ref=2 → 错误 fetch ep=1）
+    expect(calls.some((url) => url.includes('/sources?episode=1'))).toBe(false)
+    // 整体 sources fetch 仅 1 次（mount 流程不应触发重复/stale fetch）
+    expect(calls.filter((url) => url.includes('/sources?episode=')).length).toBe(1)
   })
 
   it('初始 sources fetch 期间用户切集 → 切集不被吞掉（Codex stop-time review #2 回归防御）', async () => {

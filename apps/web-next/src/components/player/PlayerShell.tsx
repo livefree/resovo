@@ -112,6 +112,9 @@ export function PlayerShell({ slug: slugProp, portalMode = false, previewMode = 
     // 同步 claim ref = initial ep / 在 videoPromise 异步链之前就标记 / 避免 episode-switch effect
     // 在 useEffect 1 异步链解析前先发起 fetch 造成双拉（initialVideo 场景 video 已非 null）
     fetchedEpisodeRef.current = ep
+    // 同步 initPlayer 让 store.currentEpisode 立即对齐 URL ep（urlEp ≠ store default 1 时尤为重要 /
+    // 否则 useEffect 2 在 mount 时看到 store.currentEpisode=stale → ref ≠ currentEpisode → fetch stale ep）
+    initPlayer(shortId, ep)
     // ADR-160 AMENDMENT 2 Y-AMD2-1：派发 video fetch 源 — server-side hydrated 或 client fetch
     const videoPromise = initialVideo
       ? Promise.resolve<ApiResponse<Video>>({ data: initialVideo })
@@ -121,7 +124,6 @@ export function PlayerShell({ slug: slugProp, portalMode = false, previewMode = 
     videoPromise
       .then((res) => {
         setVideo(res.data)
-        initPlayer(shortId, ep)
         // Promise.resolve 用宽松 shape（{ data }）匹配 ApiListResponse 子集；then 仅消费 r.data
         const sourcesPromise: Promise<{ data: VideoSource[] }> = useInitialSources
           ? Promise.resolve({ data: initialSources! })
@@ -189,12 +191,15 @@ export function PlayerShell({ slug: slugProp, portalMode = false, previewMode = 
 
   useEffect(() => {
     if (!shortId || !video) return
-    // fetchedEpisodeRef === currentEpisode → 已 fetch / 正在 fetch（初始 useEffect 已 claim）→ 跳过避免双拉；
+    // 直接读 store 最新 currentEpisode / 避免 closure capture 的 stale 值（useEffect 1 同步 initPlayer
+    // 改 store 不会触发 re-render → effect closure 仍是 mount render 时的旧 ep / 会触发 stale fetch）
+    const latestEpisode = usePlayerStore.getState().currentEpisode
+    // fetchedEpisodeRef === latestEpisode → 已 fetch / 正在 fetch（初始 useEffect 已 claim）→ 跳过避免双拉；
     // 不等 → 用户切集（或在初始 fetch 期间已切但被 stale 丢弃），claim 当前 ep 再 fetch
-    if (fetchedEpisodeRef.current === currentEpisode) return
-    fetchedEpisodeRef.current = currentEpisode
+    if (fetchedEpisodeRef.current === latestEpisode) return
+    fetchedEpisodeRef.current = latestEpisode
     setStartTime(undefined)
-    const targetEp = currentEpisode
+    const targetEp = latestEpisode
     apiClient
       .get<ApiListResponse<VideoSource>>(
         `/videos/${shortId}/sources?episode=${targetEp}`,
