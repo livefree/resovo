@@ -9867,3 +9867,34 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
   - **fix #3（a1bcc272）"hydrated mount + URL ep 不再触发 stale/重复 fetch"**：initPlayer 同步化（从 videoPromise.then 提前到 useEffect 1 同步部分 / store.currentEpisode 立即对齐）+ useEffect 2 内用 `usePlayerStore.getState()` 实时读最新 currentEpisode（避免 closure capture 的 stale 值 / mock store 非 reactive 时尤其明显）+ 测试基建修复（mockClear 替代 mockReset 保留 initPlayer impl / 完整复位 mockState / searchParamsGet 复位）/ 新增"仅 1 次 ep=2 fetch / 无 stale ep=1"回归 case
 - **测试演进**：E3 feat 提交 4 case → fix #1 后 5 case → fix #2 后 6 case → fix #3 增强 case 4 / 仍是 6 case 但断言更严格（5 个 CHG-361 关联测试合计 31 case）
 - **闭环**：CHG-361-E3 完成（2 业务 + 1 测试 6 case PASS / + 3 个回归修复）/ Wave 2 卡 8/17 闭合 / **CHG-361 PREVIEW-ADMIN 8 子卡序列全闭环（A → B2 → B1 → C → D → E1 → E2 → E3）/ ADR-160 + AMENDMENT 1 + AMENDMENT 2 跨 app preview 链路 + server-side hydration 修补完整就绪 + 4 类时序 bug 收敛 / 待 prod gate OPS 卡 CHG-OPS-COOKIE-SUBDOMAIN-1**
+
+---
+
+## [CHG-362-A/B] SPLIT-ADR / SPLIT-后端 SKIPPED — ADR-105 已覆盖 + 后端已实现（Wave 2 #9-10 撤销）
+- **完成时间**：2026-05-27
+- **记录时间**：2026-05-27
+- **执行模型**：claude-opus-4-7（主循环 / 续会话）
+- **子代理调用**：无（仅核查 / 不实施）
+- **背景**：主循环启动 CHG-362-A 时核查发现 ADR-105 (Accepted, 2026-05-12) 已完整设计 `POST /admin/videos/:id/split` (端点 #4 + SplitSchema + 错误码 + audit + 事务) / apps/api/src/routes/admin/video-merges.ts:95 后端已落地 / plan §10.2 (2026-05-27 撰写) 漏查 ADR-105 + 实施现状
+- **决策**：按 CLAUDE.md 价值排序 1 (正确性) + 2 (边界与复用 / 不重复实现) → 跳过 CHG-362-A + CHG-362-B / Wave 2 顺序顺势调整为 CHG-363 SPLIT-UI（PendingCenter + workspace）
+- **task-queue 状态变更**：CHG-362-A/B 标记 ⛔ SKIPPED 并附 ADR-105 + 后端文件锚点
+- **commit**：10d7a0df
+
+---
+
+## [CHG-363-A] SPLIT-UI -A PendingCenter "✂ 拆分" 按钮入口（Wave 2 #11 / 1 业务 + 1 i18n + 1 测试 3 case）
+- **完成时间**：2026-05-27
+- **记录时间**：2026-05-27
+- **执行模型**：claude-opus-4-7（主循环 / 续会话）
+- **子代理调用**：无（UI 任务 / 非 ADR / 非共享组件 API）
+- **背景**：CHG-363 原 plan 描述 "PendingCenter 拆分入口 + workspace"，核查发现 `/admin/merge` PageHeader 已有"拆分工作台"按钮 + `MergeSplitSection` 已实施完整拆分子组件（手动输入 videoId 模式）→ 真实缺口仅 PendingCenter 中部按钮区"拆分"快捷入口；按 PATCH ≤ 5 拆 -A/-B：本 -A 仅按钮入口 + 跳转 URL / -B 留 MergeClient `?split=:videoId` 深链支持
+- **范围**（PATCH ≤ 5 严格 / 实际 3 项）：
+  - `apps/server-next/src/app/admin/moderation/_client/PendingCenter.tsx`：按钮区由 2 列 grid 扩为条件 3 列（`episodeCount > 1` 时）/ 新增 `openSplitWorkspace(videoId)` helper / 跳 `/admin/merge?split=:videoId` 同窗口 `_blank` / aria-label 用 i18n M.aria.splitVideo / data-testid="pending-center-split-button" 供 e2e + 单测稳定锚定
+  - `apps/server-next/src/i18n/messages/zh-CN/moderation.ts`：M.aria.splitVideo 新增 '打开拆分工作台'
+  - `tests/unit/components/server-next/admin/moderation/pending-center-split-button.test.tsx`：新增 / 3 case（episodeCount > 1 显示 / === 1 不显示 / 点击跳转 URL）/ window.open vi.stubGlobal + Object.defineProperty 双保险
+- **质量门禁**：typecheck ✅ 8 workspace 全绿 / lint ✅（无新 warning / SourcesClient + TabImages pre-existing warning 无关）/ 3 case PASS（vitest 193ms）
+- **commit trailer**：无强制 Subagents（UI 任务 / 不触发 Opus 评审）
+- **不在本卡范围（→ CHG-363-B）**：
+  - MergeClient `?split=:videoId` 深链支持（自动 setShowSplit + 传 initialVideoId 给 SplitSection）
+  - MergeSplitSection `initialVideoId` Props + 自动加载
+- **闭环**：CHG-363-A 完成（1 业务 + 1 i18n + 1 测试 3 case PASS）/ Wave 2 卡 9/17 闭合 / 待 CHG-363-B 深链 + 自动加载

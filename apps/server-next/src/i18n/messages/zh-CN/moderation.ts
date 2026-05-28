@@ -206,5 +206,6 @@ export const M = {
     consoleDetailPane: '视频详情',
     editVideo: '打开视频编辑',
     openFrontend: '在前台预览',
+    splitVideo: '打开拆分工作台',
   },
 } as const

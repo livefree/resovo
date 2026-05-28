@@ -27,6 +27,11 @@ function openAdminPreview(v: VideoQueueRow): void {
   window.open(`${WEB_NEXT_ORIGIN}${href}?preview=admin`, '_blank', 'noopener,noreferrer')
 }
 
+// CHG-363-A：跳 `/admin/merge?split=:videoId` 深链 / -B 卡补 MergeClient 接收 query 自动展开拆分 tab + 预填 videoId
+function openSplitWorkspace(videoId: string): void {
+  window.open(`/admin/merge?split=${encodeURIComponent(videoId)}`, '_blank', 'noopener,noreferrer')
+}
+
 const BTN_SM: React.CSSProperties = {
   padding: '5px 10px',
   border: '1px solid var(--border-default)',
@@ -126,9 +131,27 @@ export function PendingCenter({ v, onStaffNoteChange, onEditVideo, onSourceHealt
               ))}
             </div>
           )}
-          <div style={{ marginTop: 10, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+          <div
+            style={{
+              marginTop: 10,
+              display: 'grid',
+              gridTemplateColumns: v.episodeCount > 1 ? '1fr 1fr 1fr' : '1fr 1fr',
+              gap: 6,
+            }}
+          >
             <button style={BTN_SM} onClick={() => onEditVideo(v.id)} aria-label={M.aria.editVideo}>✎ 编辑视频</button>
             <button style={BTN_SM} onClick={() => openAdminPreview(v)} aria-label={M.aria.openFrontend}>↗ 前台预览</button>
+            {/* CHG-363-A：拆分入口 / 条件 episodeCount > 1（plan §10.2 / 单集视频无拆分语义） */}
+            {v.episodeCount > 1 && (
+              <button
+                style={BTN_SM}
+                onClick={() => openSplitWorkspace(v.id)}
+                aria-label={M.aria.splitVideo}
+                data-testid="pending-center-split-button"
+              >
+                ✂ 拆分
+              </button>
+            )}
           </div>
         </div>
       </div>
