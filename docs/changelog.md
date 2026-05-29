@@ -40,6 +40,57 @@
 
 ---
 
+## [CHG-PRE-DEAD-LINE-AUTO-RETIRE-WORKER-A-FIX-2] unlock 失败时 client.release(err) destroy connection（Codex stop-time review 第 4 轮 / 防 lock 泄漏 pool）
+- **完成时间**：2026-05-28
+- **记录时间**：2026-05-28
+- **执行模型**：claude-opus-4-7（主循环 / Codex stop-time review 第 4 轮反馈触发）
+- **子代理**：无（FIX 级别 / 沿用 arch-reviewer 评审 + Wave 4 #5-A FIX-1 链）
+- **触发**：Codex stop-time review 命中："unlock failure can still leak the session-level advisory lock"。FIX-1 修复了 lock + unlock 同 client，但漏处理 unlock 抛错路径：
+  - 拿到锁 + 段 1+2/3 SQL 成功 + unlock SQL 抛错（如 connection reset 或 transient error）
+  - 当前 catch 块仅 `log.warn` 后 fall-through 到 `client.release()`（无参数）
+  - **pg pool 行为**：`client.release()` 无参数 → client 被复用回 pool
+  - **lock 仍在原 session 上**（unlock 实际未执行成功）
+  - 下次任意 worker 拿到该 client → session 仍持锁 → `pg_try_advisory_lock` 永久失败 → auto-retire-line 工作流死锁
+  - 主循环 FIX-1 注释错误："锁会随 connection 关闭自动释放"——实际 connection 没关闭只是回 pool
+- **修改文件**（3 项 / PATCH=3 ≤ 5 ✅）：
+  - `apps/api/src/db/queries/auto-retire-line.ts` — finally 段重写：
+    - `let unlockFailed = false` 标志位
+    - unlock catch 块除 log.warn 外 set `unlockFailed = true`
+    - log.warn 文案改 "destroying connection to force lock release"（明示对应动作）
+    - finally 末尾：`if (unlockFailed) client.release(new Error('advisory_unlock failed; connection destroyed to release session-level lock')) else client.release()`
+    - pg 文档行为：`client.release(truthy)` → pool destroy connection（不 reuse） → session 终结 → PG 自动释放 advisory lock
+    - R-DEAD-3 jsdoc 补 "+ unlock 失败时 client.release(err) destroy connection"
+    - 工作流 jsdoc 段 finally 改 3 分支说明（unlock 成功/未拿锁 → release() / unlock 失败 → release(err)）
+  - `tests/unit/api/auto-retire-line-queries.test.ts` — 新 2 case：
+    - **T11**：unlock SQL throw → autoRetireLineByDeadCheck 不抛错 / release 调 1 次且参数 truthy（Error 实例）/ log.warn 含 'destroying connection'
+    - **T12**：unlock 成功 → release 调 1 次且参数 undefined（正常回 pool / 防 destroy 误打）
+  - `docs/manual/auto-retire-line-worker.md` §5 — unlock + release 段加 FIX-2 详释：
+    - unlock 失败 → `client.release(err)` 强制 destroy（明示 "不能仅 release() 否则锁泄漏 / pool 销毁 connection → session 终结 → PG 自动释放"）
+    - unlock 成功 → `client.release()` 正常回 pool
+    - 拿不到锁 → release() 无参数
+- **新增依赖**：无
+- **数据库变更**：无（纯应用层 connection 处理修复）
+- **设计取舍**：
+  - **client.release(err) vs 手动 client.end() vs 不处理**：
+    - 不处理（FIX-1 现状）→ lock 永久泄漏到 pool / 别的 worker 死锁
+    - 手动 client.end() → pg PoolClient 没暴露 .end() 给消费方 / 必须走 pool.release(err) API
+    - client.release(err) ✅ pg 官方 API / 明确语义 / 与既有 video_sources.ts toggleVideoSource ROLLBACK 范式同模
+  - **传 Error 实例 vs true vs 任意 truthy**：pg 文档说 "any truthy value" / 传 Error 提供调试信息（pg 内部记 destroyed_due_to_error）/ 与 finally 错误链路一致
+  - **不区分"transient unlock fail"和"connection dead"**：从 client.query 抛错无法判断 / 都按 destroy 处理是安全降级 / connection 本身已坏的话 destroy 也是正确动作
+- **不触发**：
+  - architecture.md sync：纯应用层修复
+  - R-MID-1 RETRO / 新 ADR / Opus 评审：FIX 级别
+- **质量门禁**：typecheck ✅ EXIT=0 / lint ✅ 0 error 0 warning / verify:adr-contracts ✅ EXIT=0 / auto-retire-line-queries 10/10 PASS（既有 8 + 新 T11/T12）
+- **Codex stop-time review 4 轮闭环回顾**：
+  - FIX-1（Wave 4 #4 player-error）：controls.retry active 双层守卫（onError 生命周期）
+  - FIX-2（Wave 4 #4-EP player-error）：watchdog currentEpisode cleanup
+  - FIX-3（Wave 4 #4-EP player-error）：watchdog shortId cleanup
+  - **#5-A-FIX-1**：advisory lock 同 client session + SQL deleted_at 过滤
+  - **#5-A-FIX-2（本卡）**：unlock 失败 client.release(err) destroy connection 防 lock 泄漏 pool
+  - 5 轮 Codex 反馈全部消化 / ADR-166 + ADR-164 D-164-8 实施完整 + 4 边界 + 1 connection 处理
+
+---
+
 ## [CHG-PRE-DEAD-LINE-AUTO-RETIRE-WORKER-A-FIX-1] advisory lock 同 client session 守卫 + SQL 软删过滤（Codex stop-time review 双 bug）
 - **完成时间**：2026-05-28
 - **记录时间**：2026-05-28

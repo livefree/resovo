@@ -16,7 +16,7 @@
  * 红线吸收：
  *   - R-DEAD-1：段 2/段 3 拆两条独立 SQL 语句（NOW() 同事务等值风险规避）
  *   - R-DEAD-2：CTE LEFT JOIN + 'orphan' 状态显式清 NULL + WHERE vs.deleted_at IS NULL（孤儿 alias 处理 + 软删过滤 / Codex stop-time review FIX-1）
- *   - R-DEAD-3：pg_try_advisory_lock 非阻塞 + finally unlock + **pool.connect() 同 client** 保证 lock/unlock 同 session（Codex stop-time review FIX-1 / session-level lock 必须同 connection / 不能用 pool.query() 因为可能拿到不同 client 导致 unlock 在错误 connection 失败 / lock 永久泄漏）
+ *   - R-DEAD-3：pg_try_advisory_lock 非阻塞 + finally unlock + **pool.connect() 同 client** 保证 lock/unlock 同 session（Codex stop-time review FIX-1 / session-level lock 必须同 connection / 不能用 pool.query() 因为可能拿到不同 client 导致 unlock 在错误 connection 失败 / lock 永久泄漏）+ **unlock 失败时 client.release(err) destroy connection**（Codex stop-time review FIX-2 / 否则 client 回 pool / session 仍持锁 / 别的 worker 取该 client 时 pg_try_advisory_lock 永久失败）
  *   - R-DEAD-4：RETURNING 段 3 退役清单 + 调用方结构化日志（worker job 文件 -B 子卡承接）
  */
 
@@ -60,7 +60,9 @@ export interface RetiredAliasRow {
  *     WHERE retired_at IS NULL AND dead_since < NOW() - 180 days
  *     + 子查询 ORDER BY dead_since ASC LIMIT 50
  *     RETURNING 退役清单
- *   段 finally：client.query pg_advisory_unlock + client.release()
+ *   段 finally：client.query pg_advisory_unlock（仅 acquired=true 时调）+
+ *     - unlock 成功 / 未拿锁 → client.release()（正常回 pool）
+ *     - unlock 失败 → client.release(err) → pg pool destroy connection（session 终结 → PG 自动释放 advisory lock）
  *
  * @returns 本次 run 退役的 alias 清单（可能为空数组）
  */
@@ -98,17 +100,29 @@ export async function autoRetireLineByDeadCheck(
     ])
     return result.rows
   } finally {
-    // R-DEAD-3：仅在拿到锁时调 unlock（拿不到锁就 unlock 是无意义且产生 PG NOTICE 噪音）
+    // R-DEAD-3：unlock + release 处理（Codex stop-time review FIX-2 / 防 unlock 失败时 lock 泄漏到 pool）
+    let unlockFailed = false
+    // 仅在拿到锁时调 unlock（拿不到锁就 unlock 会产 PG WARNING "you don't own a lock of type" 噪音）
     if (acquired) {
       try {
         await client.query(`SELECT pg_advisory_unlock(hashtext($1))`, [ADVISORY_LOCK_KEY])
       } catch (err) {
-        // unlock 失败极罕见（连接已断 / connection reset）→ 不抛错 / 不阻塞 release / 锁会随 connection 关闭自动释放
-        log.warn({ err, lock_key: ADVISORY_LOCK_KEY }, 'auto-retire-line: advisory_unlock failed (lock will auto-release on connection close)')
+        unlockFailed = true
+        log.warn(
+          { err, lock_key: ADVISORY_LOCK_KEY },
+          'auto-retire-line: advisory_unlock failed; destroying connection to force lock release',
+        )
       }
     }
-    // 始终 release client（防 PoolClient 泄漏）
-    client.release()
+    // Codex FIX-2 关键：unlock 失败时 client.release(err) 传 truthy 参数 → pg pool destroy connection
+    // 而非 reuse（session 终结 → PG 自动释放 advisory lock）
+    // 否则 client 被放回 pool / 别的 worker 取该 client 时 session 仍持锁 / 下次 pg_try_advisory_lock 永久失败
+    // 拿到锁但 unlock 成功 / 或根本没拿到锁 → release() 无参数 → 正常回 pool
+    if (unlockFailed) {
+      client.release(new Error('auto-retire-line: advisory_unlock failed; connection destroyed to release session-level lock'))
+    } else {
+      client.release()
+    }
   }
 }
 

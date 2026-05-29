@@ -15,6 +15,8 @@
  *   T8 — advisory unlock 必在 finally 调用（防泄漏 / R-DEAD-3 unlock 不漏）
  *   T9 — 所有 query 调用必在同一 PoolClient 上（Codex FIX-1 / session-level lock 关键）
  *   T10 — CTE LEFT JOIN 必含 vs.deleted_at IS NULL 守卫（Codex FIX-1 / 软删过滤）
+ *   T11 — unlock 失败 → client.release(err) 传 truthy 强制 destroy connection（Codex FIX-2 / 防 lock 泄漏 pool）
+ *   T12 — unlock 成功 → client.release() 无参数（正常回 pool）
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
@@ -96,6 +98,62 @@ describe('autoRetireLineByDeadCheck — query 层（CHG-PRE-DEAD-LINE-AUTO-RETIR
     expect(unlockCalled).toBe(false)
     // 但 client 仍 release（防 PoolClient 泄漏）
     expect(harness.release).toHaveBeenCalledTimes(1)
+  })
+
+  it('T11 unlock 失败 → client.release(err) 传 truthy 强制 destroy connection（Codex FIX-2）', async () => {
+    // 拿到锁但 unlock 失败（如 connection reset）→ pool 不应 reuse 该 client（lock 仍在 session 上）
+    // 必须 client.release(err) 传 truthy 让 pg pool destroy connection → session 终结 → PG 自动释放 advisory lock
+    const calls: QueryCall[] = []
+    const clientQuery = vi.fn(async (sql: string): Promise<QueryResponse> => {
+      calls.push({ text: sql })
+      if (sql.includes('pg_try_advisory_lock')) {
+        return { rows: [{ acquired: true }], rowCount: 1 }
+      }
+      if (sql.includes('pg_advisory_unlock')) {
+        throw new Error('connection reset')
+      }
+      if (sql.includes('WITH alias_dead_status')) {
+        return { rows: [], rowCount: 0 }
+      }
+      if (sql.startsWith('\nUPDATE source_line_aliases')) {
+        return { rows: [], rowCount: 0 }
+      }
+      return { rows: [], rowCount: 0 }
+    })
+    const release = vi.fn()
+    const client = { query: clientQuery, release } as unknown as import('pg').PoolClient
+    const pool = {
+      connect: vi.fn().mockResolvedValue(client),
+      query: vi.fn().mockRejectedValue(new Error('should not be called')),
+    } as unknown as import('pg').Pool
+    const log = makeLog()
+
+    // unlock 失败不应抛错 / 仍正常返回（段 3 RETURNING 行）
+    const result = await autoRetireLineByDeadCheck(pool, log)
+    expect(result).toEqual([])
+
+    // 关键：release 必调 1 次且参数 truthy（错误对象）→ pg pool destroy connection
+    expect(release).toHaveBeenCalledTimes(1)
+    const releaseArg = release.mock.calls[0]?.[0]
+    expect(releaseArg).toBeTruthy()
+    expect(releaseArg).toBeInstanceOf(Error)
+
+    // log.warn 必带 lock_key + 提示 "destroying connection"
+    expect(log.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ lock_key: expect.stringContaining('worker:auto-retire-line') }),
+      expect.stringContaining('destroying connection'),
+    )
+  })
+
+  it('T12 unlock 成功 → client.release() 无参数（正常回 pool）', async () => {
+    const harness = makePoolAndClient({ retiredRows: [] })
+    const log = makeLog()
+    await autoRetireLineByDeadCheck(harness.pool, log)
+
+    expect(harness.release).toHaveBeenCalledTimes(1)
+    // 正常路径 release 无参数（undefined）让 pg pool 复用 client
+    const releaseArg = harness.release.mock.calls[0]?.[0]
+    expect(releaseArg).toBeUndefined()
   })
 
   it('T8 advisory unlock + release 必在 finally（即使段 1+2 SQL 抛错也调）', async () => {

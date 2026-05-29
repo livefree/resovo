@@ -60,8 +60,11 @@ UI 端 `LinesPanel` 已支持 `auto_retired = true` 显示"已退役·自动"标
   - 实施时使用 `pool.connect()` 获取专用 `PoolClient`，所有 4 段 query 通过 `client.query()` 调用
   - **禁止 `pool.query()`**：每次调用可能拿到不同 client → unlock 在错误 connection 执行（静默成功 / 实际 lock 仍在原 client 上 / 下次 worker run 永久拿不到锁）
 - **unlock + release**：`finally` 块保证调用 / 即便段 1+2 SQL 抛错也 unlock + release client
-  - unlock 失败极罕见（connection 已断）→ 不抛错 / 不阻塞 release / 锁会随 connection 关闭自动释放
-  - 拿不到锁时不调 unlock（防 PG NOTICE 噪音 / 但仍调 release）
+  - **unlock 失败（极罕见 / connection reset 等）→ `client.release(err)` 传 truthy 强制 pg pool destroy connection**（Codex stop-time review FIX-2）
+    - **不能**仅 `client.release()` 无参数：client 会被放回 pool / session 仍持锁 / 别的 worker 取该 client 时 pg_try_advisory_lock 永久失败 → 锁泄漏
+    - `client.release(err)` 让 pool 销毁连接 → session 终结 → PG 自动释放 advisory lock（pg 文档行为）
+  - unlock 成功 → `client.release()` 无参数（正常回 pool）
+  - 拿不到锁时不调 unlock（防 PG NOTICE 噪音 / 但仍调 release() 无参数）
 
 ## 6. 工作流（5 段 / Codex FIX-1 加段 -1）
 
