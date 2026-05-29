@@ -87,6 +87,16 @@ export async function adminSourcesMatrixRoutes(fastify: FastifyInstance) {
     return reply.send({ data: aliases })
   })
 
+  // ── GET /admin/source-line-aliases/all ───────────────────────────
+  // CHG-SN-9-LINES-VIEW-UNIFY（Wave 3 验收期补丁 / 2026-05-28）：全线路视图（含未分配别名）
+  //   - listLineAliases 仅返回 source_line_aliases 行（已分配）
+  //   - 本端点返回 video_sources DISTINCT (site_key, source_name) LEFT JOIN sla
+  //   - 管理面板统一显示 → unassigned 行可直接编辑触发 upsert 创建 sla
+  fastify.get('/admin/source-line-aliases/all', { preHandler: readAuth }, async (_request, reply) => {
+    const lines = await svc.listAllSourceLines()
+    return reply.send({ data: lines })
+  })
+
   // ── GET /admin/source-line-aliases/codename-pool ─────────────────
   // CHG-368-B-A2b / ADR-164 §5.4：codename 字库可用性查询（admin UI 下拉源数据）
 

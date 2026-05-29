@@ -9,6 +9,7 @@ import type {
   VideoGroupStats,
   LineMatrixRow,
   SourceLineAlias,
+  SourceLineRow,
   SourceRouteBySite,
 } from './types'
 
@@ -68,6 +69,16 @@ export async function getVideoMatrix(videoId: string): Promise<LineMatrixRow[]> 
 
 export async function listLineAliases(): Promise<SourceLineAlias[]> {
   const result = await apiClient.get<{ data: SourceLineAlias[] }>('/admin/source-line-aliases')
+  return result.data
+}
+
+/**
+ * CHG-SN-9-LINES-VIEW-UNIFY（Wave 3 验收期补丁 / 2026-05-28）：全线路视图
+ * 返回 video_sources 派生的所有 (siteKey, sourceName) 复合键，含 unassigned 行。
+ * 管理面板用此 fetch 替代 listLineAliases / unassigned 行 UI 显示 "未分配别名"。
+ */
+export async function listAllSourceLines(): Promise<SourceLineRow[]> {
+  const result = await apiClient.get<{ data: SourceLineRow[] }>('/admin/source-line-aliases/all')
   return result.data
 }
 

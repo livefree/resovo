@@ -13,6 +13,7 @@
 
 import { useState, useEffect, useCallback, useMemo, type CSSProperties } from 'react'
 import Image from 'next/image'
+import Link from 'next/link'
 import {
   PageHeader,
   AdminButton,
@@ -21,7 +22,6 @@ import {
   ErrorState,
   DataTable,
   DataTableSearchInput,
-  Modal,
   useToast,
   type TableColumn,
   type TableSortState,
@@ -338,8 +338,7 @@ function buildColumns(
 export function SourcesClient() {
   const toast = useToast()
   const [segment, setSegment] = useState<SourceSegment>('grouped')
-  // CHG-SN-8-FUP-SOURCES-DEAD-BTN：「一键替换最相似 URL」筹备中说明 Modal
-  const [replaceTipOpen, setReplaceTipOpen] = useState(false)
+  // CHG-SN-9-LINES-VIEW-UNIFY 后：旧 CHG-SN-8-FUP-SOURCES-DEAD-BTN replaceTipOpen state 已删
   // ADR-149 EP-4: 接入 DataTableSearchInput 原语（IME + debounce 内置） → 删 searchInput 中间 state
   const [keyword, setKeyword] = useState<string | undefined>()
   const [page, setPage] = useState(1)
@@ -477,55 +476,23 @@ export function SourcesClient() {
   return (
     <div style={PAGE_STYLE}>
       {/* 顶栏 */}
+      {/* CHG-SN-9-LINES-VIEW-UNIFY（Wave 3 验收期补丁 / 2026-05-28）：
+          原 "一键替换最相似 URL" 按钮长期为筹备中占位 Modal（CHG-SN-8-FUP-SOURCES-DEAD-BTN）→
+          替换为 "线路别名管理" 链接 / 跳 /admin/source-line-aliases / 统一视图含 unassigned 行 */}
       <PageHeader
         title="播放线路"
         actions={
-          <AdminButton
-            size="sm"
-            variant="primary"
-            onClick={() => setReplaceTipOpen(true)}
-            data-testid="sources-replace-similar-btn"
-          >
-            一键替换最相似 URL
-          </AdminButton>
+          <Link href="/admin/source-line-aliases" passHref legacyBehavior>
+            <AdminButton
+              size="sm"
+              variant="primary"
+              data-testid="sources-line-aliases-link"
+            >
+              线路别名管理
+            </AdminButton>
+          </Link>
         }
       />
-
-      {/* CHG-SN-8-FUP-SOURCES-DEAD-BTN：功能筹备中提示 + 替代路径 */}
-      <Modal
-        open={replaceTipOpen}
-        onClose={() => setReplaceTipOpen(false)}
-        title="批量一键替换 URL · 筹备中"
-        size="sm"
-        data-testid="sources-replace-tip-modal"
-      >
-        <div style={{ fontSize: 'var(--font-size-sm)', color: 'var(--fg-default)', lineHeight: 1.6 }}>
-          <p style={{ marginTop: 0 }}>
-            该功能的预期行为：扫描全部失效线路 → 在同一视频内寻找与失效 URL <strong>最相似</strong>的活跃 URL → 自动替换。
-          </p>
-          <p>
-            <strong>当前未实装</strong>（涉及 URL 相似度算法 + 批量改写 + audit + 回滚；在 M-SN-N 安排实施 ADR 起草）。
-          </p>
-          <p style={{ marginBottom: 0 }}>
-            <strong>当前替代路径</strong>：
-          </p>
-          <ul style={{ margin: '6px 0 0 0', paddingLeft: 20 }}>
-            <li>在「按视频分组」segment 选某视频 → 展开行 → 「线路矩阵」逐条线路操作（重测 / 替换 / 删除）</li>
-            <li>失效线路批量处理 → 行级「全失效」筛选 + 批量删除（如有该 segment）</li>
-            <li>若需要算法替换：登记需求至 follow-up CHG-SN-8-FUP-SOURCES-REPLACE-ADR</li>
-          </ul>
-        </div>
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16, paddingTop: 12, borderTop: '1px solid var(--border-subtle)' }}>
-          <AdminButton
-            size="sm"
-            variant="primary"
-            onClick={() => setReplaceTipOpen(false)}
-            data-testid="sources-replace-tip-dismiss"
-          >
-            我知道了
-          </AdminButton>
-        </div>
-      </Modal>
 
       {/* KPI 卡片（P1-6：orphan KPI label 统一为"孤岛"，ADR-117 §7）*/}
       <div style={KPI_GRID_STYLE}>

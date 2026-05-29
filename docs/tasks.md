@@ -6,7 +6,13 @@
 
 ## 进行中任务
 
-（空 / Wave 3 进入验收期 / 主循环等待用户走完验收路径签字）
+（空 / Wave 3 验收期补丁 CHG-SN-9-LINES-VIEW-UNIFY 完成 / 主循环等待用户继续验收）
+
+---
+
+## Wave 3 验收期补丁记录
+
+- ✅ **CHG-SN-9-LINES-VIEW-UNIFY**（2026-05-28 / sonnet-4-6 / 7 业务+测试 PATCH=7 接受完成度风险 + 1 ADR AMENDMENT / listAllSourceLines query NEW + 端点 NEW + SourceLineRow type NEW + 管理页改造 unassigned 行可分配 + SourcesClient 按钮 "一键替换最相似 URL" → "线路别名管理" 链接 / 7/7 测试 PASS / typecheck + lint + verify 全 EXIT=0）
 
 ---
 

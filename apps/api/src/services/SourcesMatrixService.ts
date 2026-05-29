@@ -16,6 +16,8 @@ import {
   getVideoGroupStats,
   getVideoMatrix,
   listLineAliases,
+  listAllSourceLines,
+  type SourceLineRow,
   upsertLineAlias,
   upsertLineAliasFull,
   retireLineAlias as retireLineAliasQuery,
@@ -233,6 +235,15 @@ export class SourcesMatrixService {
 
   listLineAliases(): Promise<SourceLineAlias[]> {
     return listLineAliases(this.db)
+  }
+
+  /**
+   * CHG-SN-9-LINES-VIEW-UNIFY：全线路视图（含未分配别名）。
+   * video_sources DISTINCT (site_key, source_name) LEFT JOIN source_line_aliases
+   * → 统一管理面板显示 / unassigned 行可直接编辑触发 upsert 创建 sla
+   */
+  listAllSourceLines(): Promise<SourceLineRow[]> {
+    return listAllSourceLines(this.db)
   }
 
   /**

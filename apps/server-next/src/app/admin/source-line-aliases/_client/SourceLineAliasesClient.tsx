@@ -33,9 +33,9 @@ import {
   type TableSortState,
   type FilterValue,
 } from '@resovo/admin-ui'
-import type { SourceLineAlias } from '@/lib/sources/types'
+import type { SourceLineRow } from '@/lib/sources/types'
 import {
-  listLineAliases,
+  listAllSourceLines,
   upsertLineAliasWithFields,
   retireLineAlias,
   getCodenamePool,
@@ -44,7 +44,7 @@ import {
 // ── 类型 ───────────────────────────────────────────────────────────
 
 interface EditingState {
-  readonly alias: SourceLineAlias
+  readonly row: SourceLineRow
   displayName: string
   codename: string
   priority: number
@@ -105,7 +105,7 @@ const LABEL_STYLE: CSSProperties = {
 
 export function SourceLineAliasesClient() {
   const toast = useToast()
-  const [rows, setRows] = useState<readonly SourceLineAlias[]>([])
+  const [rows, setRows] = useState<readonly SourceLineRow[]>([])
   const [pool, setPool] = useState<CodenamePoolView | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<unknown>(null)
@@ -130,7 +130,8 @@ export function SourceLineAliasesClient() {
     setLoading(true)
     setError(null)
     try {
-      const [list, codenamePool] = await Promise.all([listLineAliases(), getCodenamePool()])
+      // CHG-SN-9-LINES-VIEW-UNIFY：换用 listAllSourceLines（含未分配别名 unassigned 行）
+      const [list, codenamePool] = await Promise.all([listAllSourceLines(), getCodenamePool()])
       setRows(list)
       setPool(codenamePool)
     } catch (err) {
@@ -144,12 +145,13 @@ export function SourceLineAliasesClient() {
     void refresh()
   }, [refresh])
 
-  const handleEdit = (alias: SourceLineAlias) => {
+  const handleEdit = (row: SourceLineRow) => {
     setEditing({
-      alias,
-      displayName: alias.displayName,
-      codename: alias.codename ?? '',
-      priority: alias.priority,
+      row,
+      // 未分配行：displayName 已 fallback 到 source_name；用户编辑保存 = 首次分配 upsert
+      displayName: row.displayName,
+      codename: row.codename ?? '',
+      priority: row.priority,
     })
   }
 
@@ -166,15 +168,18 @@ export function SourceLineAliasesClient() {
     setSaving(true)
     try {
       await upsertLineAliasWithFields(
-        editing.alias.sourceSiteKey,
-        editing.alias.sourceName,
+        editing.row.sourceSiteKey,
+        editing.row.sourceName,
         {
           displayName: editing.displayName.trim(),
           codename: editing.codename.trim() || null,
           priority: editing.priority,
         },
       )
-      toast.push({ title: '已保存', level: 'success' })
+      toast.push({
+        title: editing.row.assignedAt === null ? '已分配别名' : '已保存',
+        level: 'success',
+      })
       setEditing(null)
       await refresh()
     } catch (err) {
@@ -185,17 +190,17 @@ export function SourceLineAliasesClient() {
     }
   }
 
-  const handleRetire = async (alias: SourceLineAlias) => {
-    const codenameLabel = alias.codename ?? '（未分配）'
+  const handleRetire = async (row: SourceLineRow) => {
+    const codenameLabel = row.codename ?? '（未分配）'
     const ok = window.confirm(
-      `确认退役 ${alias.sourceSiteKey} / ${alias.sourceName}？\n\n` +
+      `确认退役 ${row.sourceSiteKey} / ${row.sourceName}？\n\n` +
       `codename ${codenameLabel} 将进入 90 天冷却期，期间不可被新别名复用。`,
     )
     if (!ok) return
-    const key = `${alias.sourceSiteKey}/${alias.sourceName}`
+    const key = `${row.sourceSiteKey}/${row.sourceName}`
     setRetiring(key)
     try {
-      await retireLineAlias(alias.sourceSiteKey, alias.sourceName)
+      await retireLineAlias(row.sourceSiteKey, row.sourceName)
       toast.push({ title: '已退役', level: 'success' })
       await refresh()
     } catch (err) {
@@ -206,7 +211,7 @@ export function SourceLineAliasesClient() {
     }
   }
 
-  const columns: readonly TableColumn<SourceLineAlias>[] = [
+  const columns: readonly TableColumn<SourceLineRow>[] = [
     {
       id: 'sourceSiteKey',
       header: 'site_key',
@@ -227,6 +232,14 @@ export function SourceLineAliasesClient() {
       id: 'displayName',
       header: '别名',
       accessor: (r) => r.displayName,
+      cell: ({ row }) =>
+        row.assignedAt === null ? (
+          <span style={{ color: 'var(--fg-muted)', fontStyle: 'italic' }}>
+            {row.displayName}（未分配）
+          </span>
+        ) : (
+          <span style={{ color: 'var(--fg-default)' }}>{row.displayName}</span>
+        ),
     },
     {
       id: 'codename',
@@ -248,8 +261,18 @@ export function SourceLineAliasesClient() {
       id: 'status',
       header: '状态',
       kind: 'computed',
-      accessor: (r) => (r.retiredAt === null ? 'active' : r.autoRetired ? 'auto_retired' : 'retired'),
+      accessor: (r) =>
+        r.assignedAt === null
+          ? 'unassigned'
+          : r.retiredAt === null
+            ? 'active'
+            : r.autoRetired
+              ? 'auto_retired'
+              : 'retired',
       cell: ({ row }) => {
+        if (row.assignedAt === null) {
+          return <span style={{ color: 'var(--fg-muted)' }}>未分配</span>
+        }
         if (row.retiredAt === null) {
           return <span style={{ color: 'var(--state-success-fg)' }}>在役</span>
         }
@@ -261,18 +284,30 @@ export function SourceLineAliasesClient() {
       },
     },
     {
+      id: 'usage',
+      header: '使用',
+      accessor: (r) => r.videoCount,
+      cell: ({ row }) => (
+        <span style={{ color: 'var(--fg-muted)', fontSize: 'var(--font-size-xs)' }}>
+          {row.videoCount} 视频 · {row.activeCount}/{row.episodeCount} 集
+        </span>
+      ),
+    },
+    {
       id: 'actions',
       header: '操作',
       kind: 'action',
       accessor: () => null,
       cell: ({ row }) => {
         const key = `${row.sourceSiteKey}/${row.sourceName}`
+        const isAssigned = row.assignedAt !== null
+        const isActive = isAssigned && row.retiredAt === null
         return (
           <div style={{ display: 'flex', gap: 4 }}>
             <AdminButton size="sm" variant="ghost" onClick={() => handleEdit(row)}>
-              编辑
+              {isAssigned ? '编辑' : '分配'}
             </AdminButton>
-            {row.retiredAt === null && (
+            {isActive && (
               <AdminButton
                 size="sm"
                 variant="danger"
@@ -293,7 +328,7 @@ export function SourceLineAliasesClient() {
     <div style={PAGE_STYLE}>
       <PageHeader
         title="线路别名管理"
-        subtitle="Layer B 山名代号体系（codename / priority / 退役治理）"
+        subtitle="所有线路（含未分配别名）/ Layer B 山名代号 / 退役治理"
       />
 
       {pool && (
@@ -324,7 +359,7 @@ export function SourceLineAliasesClient() {
           onRetry={refresh}
         />
       ) : (
-        <DataTable<SourceLineAlias>
+        <DataTable<SourceLineRow>
           rows={rows}
           columns={columns}
           rowKey={(r) => `${r.sourceSiteKey}/${r.sourceName}`}
@@ -343,7 +378,7 @@ export function SourceLineAliasesClient() {
         <Modal
           open={true}
           onClose={() => !saving && setEditing(null)}
-          title={`编辑别名：${editing.alias.sourceSiteKey} / ${editing.alias.sourceName}`}
+          title={`${editing.row.assignedAt === null ? '分配别名' : '编辑别名'}：${editing.row.sourceSiteKey} / ${editing.row.sourceName}`}
           size="sm"
         >
           <div style={{ padding: 16 }}>

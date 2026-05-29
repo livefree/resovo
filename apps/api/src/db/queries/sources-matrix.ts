@@ -19,6 +19,7 @@ import type {
   EpisodeCell,
   LineMatrixRow,
   SourceLineAlias,
+  SourceLineRow,
   SourceRouteBySite,
 } from '@resovo/types'
 
@@ -33,6 +34,7 @@ export type {
   EpisodeCell,
   LineMatrixRow,
   SourceLineAlias,
+  SourceLineRow,
   SourceRouteBySite,
 }
 
@@ -371,6 +373,76 @@ export async function listLineAliases(db: Pool): Promise<SourceLineAlias[]> {
      ORDER BY source_site_key, source_name`,
   )
   return result.rows.map(mapAliasRow)
+}
+
+// ── 查询：全线路视图（CHG-SN-9-LINES-VIEW-UNIFY / 验收期补丁）──────
+// video_sources DISTINCT (site_key, source_name) LEFT JOIN source_line_aliases
+// → 统一显示所有线路（含未分配别名的 unassigned 行 + 已分配的 sla 行）
+// 索引设计 4 步核验（db-rules.md §"索引设计 4 步核验"）：
+//   1. 索引键：source_line_aliases (source_site_key, source_name) 复合 PK
+//   2. 部分索引 WHERE：N/A
+//   3. 候选 driving 谓词：LEFT JOIN ON (sla.source_site_key, sla.source_name) PK 复合
+//   4. 匹配判定：driving 列 = 索引键 ✅（实测留 EXPLAIN ANALYZE）
+//
+// **核心区别 vs listLineAliases**：
+//   - listLineAliases 仅返回 source_line_aliases 行（已分配的别名）
+//   - listAllSourceLines 返回 video_sources 派生的所有 (site_key, source_name)
+//     即使 source_line_aliases 还没分配 → assignedAt=null / displayName fallback 到 source_name
+// **不在路径中过滤 retired_at**：管理面板需展示所有线路（含已退役）/ UI 决定显示策略
+
+export async function listAllSourceLines(db: Pool): Promise<SourceLineRow[]> {
+  const result = await db.query<{
+    source_site_key: string
+    source_name: string
+    display_name: string | null
+    codename: string | null
+    priority: number | null
+    retired_at: string | null
+    auto_retired: boolean | null
+    sla_updated_at: string | null
+    video_count: string
+    active_count: string
+    episode_count: string
+  }>(
+    `SELECT
+       vs.source_site_key,
+       vs.source_name,
+       sla.display_name,
+       sla.codename,
+       sla.priority,
+       sla.retired_at,
+       sla.auto_retired,
+       sla.updated_at AS sla_updated_at,
+       COUNT(DISTINCT vs.video_id)::TEXT AS video_count,
+       COUNT(*) FILTER (WHERE vs.is_active = true)::TEXT AS active_count,
+       COUNT(*)::TEXT AS episode_count
+     FROM video_sources vs
+     LEFT JOIN source_line_aliases sla
+       ON vs.source_site_key = sla.source_site_key
+      AND vs.source_name = sla.source_name
+     WHERE vs.deleted_at IS NULL
+       AND vs.source_site_key IS NOT NULL
+     GROUP BY vs.source_site_key, vs.source_name,
+              sla.display_name, sla.codename, sla.priority,
+              sla.retired_at, sla.auto_retired, sla.updated_at
+     ORDER BY vs.source_site_key, vs.source_name`,
+  )
+
+  return result.rows.map((r) => ({
+    sourceSiteKey: r.source_site_key,
+    sourceName: r.source_name,
+    // 未分配时 displayName fallback 到 source_name（UI 可见 "未分配别名" 状态）
+    displayName: r.display_name ?? r.source_name,
+    codename: r.codename,
+    // sla.priority 为 NULL（未分配）→ 0（与 sla DEFAULT 一致）
+    priority: r.priority ?? 0,
+    retiredAt: r.retired_at,
+    autoRetired: r.auto_retired ?? false,
+    assignedAt: r.sla_updated_at,
+    videoCount: parseInt(r.video_count, 10),
+    activeCount: parseInt(r.active_count, 10),
+    episodeCount: parseInt(r.episode_count, 10),
+  }))
 }
 
 // ── 查询：单条别名（Service 层 audit before 状态）────────────────────

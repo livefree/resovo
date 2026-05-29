@@ -17231,6 +17231,7 @@ COMMIT;
 | 2 | POST | `/admin/source-line-aliases/:siteKey/:sourceName/retire` | 退役别名（手动 / autoRetired=false） | Path: `siteKey` / `sourceName`; Body: `{ reason?: string(0..200) }`（可选退役原因） | 200 `{ data: SourceLineAlias }`（retiredAt 非 NULL） | 404 NOT_FOUND（别名行不存在）/ 409 STATE_CONFLICT（已退役二次操作）/ 401 / 403 | **新增 actionType `source_line_alias.retire` / R-MID-1 第 29 次系统化** |
 | 3 | PUT | `/admin/source-line-aliases/:siteKey/:sourceName/priority` | 单字段更新 priority（高频运营操作） | Path: `siteKey` / `sourceName`; Body: `{ priority: number(0..100) }` | 200 `{ data: SourceLineAlias }`（仅 priority + updatedAt 变化） | 404 NOT_FOUND / 422 VALIDATION_ERROR / 401 / 403 | **新增 actionType `source_line_alias.priority_update` / R-MID-1 第 30 次系统化** |
 | 4 | GET | `/admin/source-line-aliases/codename-pool` | 字库可用性查询 | — | 200 `{ data: { available: string[], occupied: string[], cooling: string[] } }` | 401 / 403 | 无（读端点 / 不写 audit）|
+| 5 | GET | `/admin/source-line-aliases/all` | **全线路视图**（含未分配别名 / Wave 3 验收期补丁 / CHG-SN-9-LINES-VIEW-UNIFY） | — | 200 `{ data: SourceLineRow[] }`（含 displayName / codename / priority / retiredAt / autoRetired / assignedAt / videoCount / activeCount / episodeCount 字段；assignedAt=null 时表示该 (siteKey, sourceName) 尚未在 source_line_aliases 表分配过别名） | 401 / 403 | 无（读端点 / 不写 audit）|
 
 #### 5.3 鉴权矩阵
 

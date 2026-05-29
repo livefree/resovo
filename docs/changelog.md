@@ -40,6 +40,58 @@
 
 ---
 
+## [CHG-SN-9-LINES-VIEW-UNIFY] 线路别名管理改造（含 unassigned 行 + 入口移到播放线路 / Wave 3 验收期补丁）
+- **完成时间**：2026-05-28
+- **执行模型**：claude-sonnet-4-6（主循环 / 验收期补丁 / 不切换 §16.5）
+- **子代理调用**：无（不改 packages/admin-ui Props / 仅复用 ADR-164 既有契约扩 view 端点）
+- **触发**：Wave 3 验收期用户反馈 —— `/admin/source-line-aliases` 表格为空（开发库 0 行）+ `/admin/sources` 右上角 "一键替换最相似 URL" 占位按钮无用 → 希望统一视图 + 改入口
+- **范围**（6 业务 + 1 测试 PATCH=7 / + 1 docs ADR AMENDMENT 不计 PATCH 上限 / 超 5 软上限 2 项接受完成度风险）：
+  - `packages/types/src/sources-matrix.types.ts` 新增 `SourceLineRow` interface（10 字段 / 含 isAssigned 派生维度通过 assignedAt 字段表达 / 未分配时 displayName fallback / priority=0 / autoRetired=false / assignedAt=null）
+  - `apps/api/src/db/queries/sources-matrix.ts` 新增 `listAllSourceLines(db)` query：
+    - `FROM video_sources vs LEFT JOIN source_line_aliases sla ON (source_site_key, source_name) 复合 PK`
+    - SELECT `sla.display_name / codename / priority / retired_at / auto_retired / sla.updated_at AS sla_updated_at` + 聚合 `COUNT(DISTINCT video_id) AS video_count / COUNT(*) FILTER (is_active=true) AS active_count / COUNT(*) AS episode_count`
+    - WHERE `vs.deleted_at IS NULL AND vs.source_site_key IS NOT NULL`（软删 + 防空 site_key）
+    - 索引设计 4 步核验注释（同 listAdminSources FOLLOWUP 范式 / sla PK 复合命中）
+  - `apps/api/src/services/SourcesMatrixService.ts` 新增 `listAllSourceLines()` 方法 + import SourceLineRow type
+  - `apps/api/src/routes/admin/sources-matrix.ts` 新端点 `GET /admin/source-line-aliases/all`（与既有 `GET /admin/source-line-aliases` 并存 / preHandler readAuth / moderator+ 鉴权）
+  - `apps/server-next/src/lib/sources/types.ts` re-export SourceLineRow（@resovo/types 真源桥接）
+  - `apps/server-next/src/lib/sources/api.ts` 新增 `listAllSourceLines()` fetch 函数
+  - `apps/server-next/src/app/admin/source-line-aliases/_client/SourceLineAliasesClient.tsx` 改造：
+    - 数据源 `listLineAliases()` → `listAllSourceLines()` / 类型 SourceLineAlias → SourceLineRow
+    - 列定义：displayName 列 + unassigned 行斜体 "（未分配）" 灰色提示 / 新增 "使用" 列显示 `videoCount 视频 · activeCount/episodeCount 集` 统计
+    - 状态列：unassigned 行显 "未分配" / assignedAt 非 null + retiredAt null → "在役" / retiredAt 非 null → "已退役（自动/手动）"
+    - 操作列：unassigned 行按钮显 "分配"（自动 upsert 创建 sla 行）/ assigned 在役行显 "编辑" + "退役"
+    - Modal 标题：unassigned → "分配别名：..."  / assigned → "编辑别名：..."
+    - Toast：分配成功 toast "已分配别名" / 编辑成功 toast "已保存"
+    - PageHeader subtitle 升级："所有线路（含未分配别名）/ Layer B 山名代号 / 退役治理"
+  - `apps/server-next/src/app/admin/sources/_client/SourcesClient.tsx`：
+    - PageHeader actions 替换 "一键替换最相似 URL" 按钮 → `<Link href="/admin/source-line-aliases">` 包 "线路别名管理" 按钮（next/link 客户端导航 / legacyBehavior 兼容 AdminButton 转发）
+    - 删 `replaceTipOpen` state + setReplaceTipOpen useState
+    - 删 Modal 占位 JSX（CHG-SN-8-FUP-SOURCES-DEAD-BTN 死代码）
+    - 删 `Modal` import
+    - data-testid `sources-replace-similar-btn` → `sources-line-aliases-link`
+  - `tests/unit/api/admin-source-lines-view.test.ts` NEW 7 case：SQL FROM video_sources LEFT JOIN sla / 复合 PK JOIN ON / SELECT sla.* 字段 / 聚合 COUNT / WHERE deleted_at + site_key IS NOT NULL / GROUP BY 全字段 / row mapping unassigned fallback / row mapping assigned 透传
+  - `docs/decisions.md` ADR-164 §5.2 新增端点表加第 5 行 `GET /admin/source-line-aliases/all`（含 SourceLineRow[] 响应说明 / 验收期补丁 AMENDMENT）
+- **不触发 architecture.md sync**（CHG-368-B-A1-FIX-{1..5} 经验持续核对）：
+  - 本卡无 schema migration / 仅扩 SELECT + 新端点
+  - 不触发 CLAUDE.md "schema 变更不同步 architecture.md" 红线
+- **范围超 5 项接受完成度风险**（workflow-rules.md "PATCH 软上限"）：7 业务+测试文件 + 1 docs AMENDMENT / 超 5 项 2 项 / 同源原子提交理由：types + query + Service + route + 前端 types re-export + api + 管理页改造 + 按钮替换是同一功能体的全栈打通，拆分会让"端点存在但前端不消费"或"按钮跳过去页面仍空"形成中间状态。接受完成度风险换取全栈原子性。
+- **设计取舍**：① `assignedAt` 字段而非 `isAssigned: boolean`：保留 sla.updated_at 真实时间戳信息 / UI 派生 null 判断更灵活 ② FROM video_sources（非 source_line_aliases）：LEFT JOIN 方向决定 unassigned 行被纳入 / 不能反过来 ③ unassigned 行操作改"分配"语义：原"编辑"语义对未分配不准确 / 用户视角更友好 ④ 删除 "一键替换最相似 URL" 整段死代码（含 Modal / state / 占位）：清理 CHG-SN-8-FUP-SOURCES-DEAD-BTN 长期遗留 ⑤ Link + legacyBehavior：next/link 与 AdminButton 转发的兼容写法（避免 AdminButton 内部 anchor 包裹问题）⑥ ADR-164 §5.2 AMENDMENT 而非独立新 ADR：本端点属 Layer B alias 治理同源 / 无新决策点 / 不需 Opus 评审
+- **质量门禁**：typecheck ✅ EXIT=0 / lint ✅ EXIT=0 / verify:adr-contracts ✅ EXIT=0（verify-endpoint-adr 198 路由 + 81 ADR 端点 / 验证 `/all` 已纳入 ADR-164 §5.2 表）/ 单测 admin-source-lines-view 7/7 PASS / 既有 admin-sources-sql / admin-sources-status / admin-sources-query 域零回归（未跑全 / Wave 验收期跑）
+- **commit trailer**：无强制 Subagents（不修改 packages/admin-ui Props / 不起新 ADR / 不重构 player-core）/ ADR-164 §5.2 #5 端点视为既有 ADR-164 AMENDMENT / Wave 3 验收期补丁性质
+- **六问自检**：
+  - Q1 沉淀共享层？✅ SourceLineRow 沉淀 @resovo/types 真源 / 跨 apps 复用
+  - Q2 引入回归？✅ 7/7 测试 PASS / 既有 listLineAliases 端点保留 / 双端点并存 / 既有 admin-sources 域查询不变
+  - Q3 越层？✅ Route → Service → Queries 严格分层
+  - Q4 硬编码 / any？✅ 无 any / SQL identifier 来自既有白名单 / 颜色全 CSS 变量
+  - Q5 布局变化？✅ 播放线路页右上按钮文案变化（同位置 / 主操作降级）/ 管理页表格新增"使用"列（信息量增）+ 未分配行 italic 灰色提示
+  - Q6 文件范围？✅ 7 业务+测试 PATCH=7（超 5 软上限 2 项 / 同源原子提交理由）+ 1 docs AMENDMENT
+- **偏离检测**：无（按 tasks.md 卡片定义执行 / 7 文件 + 1 ADR AMENDMENT 全命中 / 未引入卡片外改动）
+- **[AI-CHECK] 结论**：PASS（验收期反馈消化 / 全 63 条线路统一管理 / 入口动线优化 / CHG-SN-8-FUP-SOURCES-DEAD-BTN 死代码清理 / unassigned 行可分配 触发 upsert）
+- **闭环**：CHG-SN-9-LINES-VIEW-UNIFY 完成 / 验收期用户反馈消化 / Wave 3 实施期 + 验收期补丁全 ship / 主循环等待用户继续走 §6 验收路径或进 Wave 4
+
+---
+
 ## [CHG-SN-9-ROUTE-LABEL-D-A2-FIX-2] hasStoredTheme 仅在 hydration 成功时为 true（Codex stop-time review 2nd / corrupt-storage 防污染）
 - **完成时间**：2026-05-28
 - **执行模型**：claude-sonnet-4-6（主循环 / FIX 紧随 FIX-1 / 不切换 §16.5）

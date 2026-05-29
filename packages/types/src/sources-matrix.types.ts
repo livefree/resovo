@@ -125,6 +125,39 @@ export interface SourceLineAlias {
 }
 
 /**
+ * 全线路视图行（CHG-SN-9-LINES-VIEW-UNIFY / ADR-164 §5.2 #5 / Wave 3 验收期补丁）
+ *
+ * 派生自 `video_sources DISTINCT (source_site_key, source_name) LEFT JOIN source_line_aliases`：
+ * - **已分配**（source_line_aliases 有行）：displayName/codename/priority/retiredAt/autoRetired 取自 sla / assignedAt = sla.updated_at
+ * - **未分配**（source_line_aliases 无行）：displayName fallback = source_name / codename=null / priority=0 / retiredAt=null / autoRetired=false / assignedAt=null
+ *
+ * 与 SourceLineAlias 区别：本类型保证全量返回 video_sources 派生的所有线路（含 unassigned），
+ * 而 SourceLineAlias 仅描述 source_line_aliases 表内一行（已分配）。
+ */
+export interface SourceLineRow {
+  readonly sourceSiteKey: string
+  readonly sourceName: string
+  /** 别名展示名 / 未分配时 = source_name */
+  readonly displayName: string
+  /** Layer B 山名代号 / 未分配时 null */
+  readonly codename: string | null
+  /** 0-100 / 未分配时 0 */
+  readonly priority: number
+  /** 软删时间戳 / 在役 → null */
+  readonly retiredAt: string | null
+  /** true = worker 自动退役 / false = 人工 / 默认 false */
+  readonly autoRetired: boolean
+  /** sla.updated_at / 未分配时 null（UI 区分"已分配 / 未分配"标识） */
+  readonly assignedAt: string | null
+  /** 视频数（DISTINCT video_id 命中该线路）*/
+  readonly videoCount: number
+  /** 活跃 episode 数 */
+  readonly activeCount: number
+  /** 总 episode 数（含 inactive） */
+  readonly episodeCount: number
+}
+
+/**
  * codename 字库可用性查询响应（ADR-164 §5.6 / GET /admin/source-line-aliases/codename-pool）
  * 三段：available（运营可用列表）/ occupied（活跃使用中）/ cooling（退役 < 90 天）
  */
