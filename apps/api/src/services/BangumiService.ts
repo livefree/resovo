@@ -76,21 +76,26 @@ export class BangumiService {
     if (confidence < CONFIDENCE_CANDIDATE) return { matched: 'none', reason: 'low_confidence' }
 
     const status = confidence >= CONFIDENCE_AUTO_MATCH ? 'auto_matched' : 'candidate'
-    await this.writeRef(videoId, best.bangumiId, status, confidence, breakdown)
 
     if (status === 'candidate') {
+      // candidate：仅记 ref（无 catalog 写入 → 无脏态风险，沿用 best-effort writeRef）
+      await this.writeRef(videoId, best.bangumiId, 'candidate', confidence, breakdown)
       return { matched: 'candidate', bangumiSubjectId: best.bangumiId, confidence }
     }
 
-    // auto_matched → gather REST 字段 + 写 catalog/episodes（异步 job 路径，无事务；
-    // upsert 全幂等 + 上层 enrichmentQueue 重试，partial state 自然收敛）
+    // auto_matched：Phase 1 REST（无 DB 锁）→ Phase 2 catalog/episodes/episode_count + ref
+    // 原子事务（与 confirmMatch 同构 / Codex stop-time review：防 catalog 写失败遗留
+    // 已提交的 auto_matched/primary ref 脏态）。REST 已在 gatherEnrichmentData 完成，事务内无网络等待；
+    // job 失败时整体 ROLLBACK，由上层 enrichmentQueue 重试（幂等收敛，但不留孤儿 ref）。
     const data = await this.gatherEnrichmentData(best.bangumiId, best)
-    const result = await this.applyEnrichmentDb(this.db, videoId, catalogId, best.bangumiId, data)
+    const episodesWritten = await this.applyAutoMatchAtomic(
+      videoId, catalogId, best.bangumiId, confidence, breakdown, data,
+    )
     return {
       matched: 'auto',
       bangumiSubjectId: best.bangumiId,
       confidence,
-      episodes: result.episodes,
+      episodes: episodesWritten,
       degraded: data.degraded,
     }
   }
@@ -261,6 +266,46 @@ export class BangumiService {
       db: isClient ? (db as PoolClient) : undefined,
     })
     return { episodes: episodesWritten, wrote: updated !== null }
+  }
+
+  /**
+   * auto_matched Phase 2（DB tx）：BEGIN → applyEnrichmentDb（catalog + 逐集 + episode_count）
+   * → upsert ref(auto_matched, primary) → COMMIT；任一步骤失败 ROLLBACK 并抛出。
+   * 防 catalog 写失败时遗留已提交的 auto_matched/primary ref 脏态（Codex stop-time review）。
+   * REST 已在 Phase 1（gatherEnrichmentData）完成，事务内无网络等待（不占 idle-in-transaction）。
+   * 返回逐集写入数。
+   */
+  private async applyAutoMatchAtomic(
+    videoId: string,
+    catalogId: string,
+    bangumiId: number,
+    confidence: number,
+    breakdown: Record<string, number>,
+    data: EnrichmentData,
+  ): Promise<number> {
+    const client = await this.db.connect()
+    try {
+      await client.query('BEGIN')
+      const result = await this.applyEnrichmentDb(client, videoId, catalogId, bangumiId, data)
+      await externalDataQueries.upsertVideoExternalRef(client, {
+        videoId,
+        provider: 'bangumi',
+        externalId: String(bangumiId),
+        matchStatus: 'auto_matched',
+        matchMethod: 'title_norm',
+        confidence,
+        isPrimary: true,
+        linkedBy: 'auto',
+        notes: JSON.stringify(breakdown),
+      })
+      await client.query('COMMIT')
+      return result.episodes
+    } catch (err) {
+      try { await client.query('ROLLBACK') } catch { /* connection may already be lost */ }
+      throw err
+    } finally {
+      client.release()
+    }
   }
 
   private async writeRef(

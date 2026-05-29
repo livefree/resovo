@@ -25,6 +25,8 @@ vi.mock('@/api/db/queries/videos', () => ({
   updateVideoEnrichStatus: vi.fn().mockResolvedValue(undefined),
   updateVideoSourceCheckStatus: vi.fn().mockResolvedValue(undefined),
   updateVideoEpisodes: vi.fn().mockResolvedValue(true),
+  // ADR-161：BangumiService.applyEnrichmentDb 经 updateEpisodeCount 回填 bangumi 本篇集数
+  updateEpisodeCount: vi.fn().mockResolvedValue(undefined),
 }))
 
 vi.mock('@/api/db/queries/sources', () => ({
@@ -96,6 +98,18 @@ function makeDoubanMatch(overrides: Partial<DoubanEntryMatch> = {}): DoubanEntry
   }
 }
 
+// auto-match Phase 2 已事务化（BangumiService Codex stop-time review FIX）：
+// service 内部 BangumiService.matchAndEnrich 的 auto 路径走 db.connect() 事务，
+// 故测试 Pool 需提供 connect() 返回带 query/release 的 client（BEGIN/COMMIT 用）。
+function makeMockPool(): import('pg').Pool {
+  return {
+    connect: vi.fn(async () => ({
+      query: vi.fn().mockResolvedValue({ rows: [], rowCount: 0 }),
+      release: vi.fn(),
+    })),
+  } as unknown as import('pg').Pool
+}
+
 // ── 测试 ────────────────────────────────────────────────────────────
 
 describe('MetadataEnrichService.enrich()', () => {
@@ -113,7 +127,7 @@ describe('MetadataEnrichService.enrich()', () => {
       coverUrl: 'https://img.example.com/cover.jpg', description: '故事介绍',
       genres: ['动作', '剧情'],
     } as Parameters<typeof catalogQueries.findCatalogById>[1] extends infer R ? R : never)
-    service = new MetadataEnrichService({} as import('pg').Pool)
+    service = new MetadataEnrichService(makeMockPool())
     mockSafeUpdate = (MediaCatalogService as ReturnType<typeof vi.fn>).mock.results.at(-1)?.value.safeUpdate
   })
 
@@ -402,7 +416,7 @@ describe('MetadataEnrichService.enrich → step2 网络搜索 + step3 bangumi �
     vi.mocked(catalogQueries.findCatalogById).mockResolvedValue({
       id: 'c1', title: '某剧集', year: 2024, type: 'series', status: 'completed',
     } as Parameters<typeof catalogQueries.findCatalogById>[1] extends infer R ? R : never)
-    service = new MetadataEnrichService({} as import('pg').Pool)
+    service = new MetadataEnrichService(makeMockPool())
   })
 
   it('step2 命中 + detail.episodes=24 + catalog.status="completed" → updateVideoEpisodes(auto, totalEpisodes: 24)', async () => {

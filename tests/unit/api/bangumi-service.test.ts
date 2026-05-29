@@ -160,9 +160,26 @@ const CID = 'cccccccc-dddd-eeee-ffff-111111111111'
 
 describe('BangumiService.matchAndEnrich', () => {
   let svc: BangumiService
+  // auto 路径 Phase 2 已事务化（Codex stop-time review）：mock Pool.connect 返回 client，
+  // 记录 query 序列以断言 BEGIN/COMMIT/ROLLBACK 原子性
+  let clientQueries: string[]
+  let clientReleased: boolean
+  let mockClient: { query: ReturnType<typeof vi.fn>; release: ReturnType<typeof vi.fn> }
+  let mockPool: { connect: ReturnType<typeof vi.fn> }
+
   beforeEach(() => {
     vi.clearAllMocks()
-    svc = new BangumiService({} as never)
+    clientQueries = []
+    clientReleased = false
+    mockClient = {
+      query: vi.fn(async (sql: string) => {
+        clientQueries.push(sql)
+        return { rows: [], rowCount: 0 }
+      }),
+      release: vi.fn(() => { clientReleased = true }),
+    }
+    mockPool = { connect: vi.fn(async () => mockClient) }
+    svc = new BangumiService(mockPool as never)
     mFindCatalog.mockResolvedValue({ id: CID, metadataSource: 'crawler', lockedFields: [] })
     mUpdateCatalog.mockResolvedValue({ id: CID, metadataSource: 'bangumi' })
     mConfigured.mockReturnValue(true)
@@ -246,6 +263,40 @@ describe('BangumiService.matchAndEnrich', () => {
     mUpsertEps.mockResolvedValue(3)
     await svc.matchAndEnrich({ videoId: VID, catalogId: CID, titleNorm: 'x', year: 2007 })
     expect(mUpdateEpCount).toHaveBeenCalledWith(expect.anything(), VID, 2)
+  })
+
+  // ── Codex stop-time review FIX：auto 路径原子性回归 ──────────────────
+  it('auto 成功 → BEGIN … COMMIT 原子提交 catalog + auto_matched ref', async () => {
+    mFindByTitle.mockResolvedValue([entry({ year: 2007 })])
+    mGetSubject.mockResolvedValue(subject())
+    mGetEpisodes.mockResolvedValue([])
+
+    await svc.matchAndEnrich({ videoId: VID, catalogId: CID, titleNorm: 'x', year: 2007 })
+
+    expect(clientQueries[0]).toBe('BEGIN')
+    expect(clientQueries[clientQueries.length - 1]).toBe('COMMIT')
+    expect(mUpsertRef).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      provider: 'bangumi', matchStatus: 'auto_matched', isPrimary: true,
+    }))
+    expect(clientReleased).toBe(true)
+  })
+
+  it('auto + catalog 写失败 → ROLLBACK + 抛错，不留已提交的 auto_matched ref（脏态防护）', async () => {
+    mFindByTitle.mockResolvedValue([entry({ year: 2007 })])
+    mGetSubject.mockResolvedValue(subject())
+    mGetEpisodes.mockResolvedValue([])
+    mUpdateCatalog.mockRejectedValueOnce(new Error('catalog write failure'))
+
+    await expect(
+      svc.matchAndEnrich({ videoId: VID, catalogId: CID, titleNorm: 'x', year: 2007 }),
+    ).rejects.toThrow('catalog write failure')
+
+    expect(clientQueries).toContain('BEGIN')
+    expect(clientQueries).toContain('ROLLBACK')
+    expect(clientQueries).not.toContain('COMMIT')
+    // ref 在 catalog 写入之后才写 → catalog 失败时根本未触达 ref upsert（无孤儿 auto_matched ref）
+    expect(mUpsertRef).not.toHaveBeenCalled()
+    expect(clientReleased).toBe(true)
   })
 })
 
