@@ -13,6 +13,7 @@ import type { CatalogUpdateData } from './MediaCatalogService'
 import * as externalDataQueries from '@/api/db/queries/externalData'
 import type { BangumiEntryMatch } from '@/api/db/queries/externalData'
 import * as catalogEpisodeQueries from '@/api/db/queries/catalogEpisodes'
+import type { CatalogEpisodeInput } from '@/api/db/queries/catalogEpisodes'
 import * as videosQueries from '@/api/db/queries/videos'
 import { getSubject, getEpisodes, searchSubjects, isBangumiApiConfigured } from '@/api/lib/bangumi'
 import { normalizeTitle } from './TitleNormalizer'
@@ -45,6 +46,15 @@ export interface MatchAndEnrichInput {
   year: number | null
 }
 
+// gather/apply 两段拆分（Codex stop-time review FIX）：REST 收集在 Phase 1（无 DB 锁），
+// catalog/episodes/episode_count + ref 写入在 Phase 2（事务内）。
+interface EnrichmentData {
+  fields: CatalogUpdateData | null
+  episodes: CatalogEpisodeInput[]
+  mainEpisodeCount: number
+  degraded: boolean
+}
+
 export class BangumiService {
   private catalogService: MediaCatalogService
 
@@ -72,14 +82,16 @@ export class BangumiService {
       return { matched: 'candidate', bangumiSubjectId: best.bangumiId, confidence }
     }
 
-    // auto_matched → 写 catalog + 逐集（显式传 bangumiId 走 rich 抓取）
-    const result = await this.enrichCatalog(videoId, catalogId, best.bangumiId, best)
+    // auto_matched → gather REST 字段 + 写 catalog/episodes（异步 job 路径，无事务；
+    // upsert 全幂等 + 上层 enrichmentQueue 重试，partial state 自然收敛）
+    const data = await this.gatherEnrichmentData(best.bangumiId, best)
+    const result = await this.applyEnrichmentDb(this.db, videoId, catalogId, best.bangumiId, data)
     return {
       matched: 'auto',
       bangumiSubjectId: best.bangumiId,
       confidence,
       episodes: result.episodes,
-      degraded: result.degraded,
+      degraded: data.degraded,
     }
   }
 
@@ -88,16 +100,23 @@ export class BangumiService {
    * 即使该 subject 不在本地 dump，也用 bangumiId 调 REST 详情；确实没写入任何内容时返回 updated:false，
    * 并且只有写入成功才记 manual_confirmed ref（避免对不存在 subject 的"假成功"，ADR-161 P1 修订）。
    *
-   * 原子性（Codex stop-time review FIX）：catalog/episodes/episode_count + manual_confirmed ref
-   * 全部在同一事务内完成。任一步骤失败 → ROLLBACK，DB 不会留下"catalog 已带 bangumi 数据
-   * 但 ref 仍是 auto_matched/不存在"的脏态。REST 抓取在事务外，仅 DB 写入持锁。
+   * 原子性（Codex stop-time review FIX）：
+   * - Phase 1 (REST, no DB lock)：gatherEnrichmentData → 拉 REST 详情/逐集，与 dump 降级合并字段
+   * - Phase 2 (DB tx)：BEGIN → applyEnrichmentDb（catalog+episodes+episode_count）→ ref(manual_confirmed) → COMMIT
+   *   任一失败 ROLLBACK；DB 不会留下"catalog 已带 bangumi 数据但 ref 仍是 auto_matched/不存在"的脏态。
+   * REST 全程在事务外，不会持事务空闲等网络（Codex FIX-1：避免 idle-in-transaction 占满 pool）。
    */
   async confirmMatch(videoId: string, catalogId: string, bangumiId: number): Promise<{ updated: boolean }> {
     const entry = await externalDataQueries.findBangumiById(this.db, bangumiId)
+    // Phase 1：REST 在事务外，避免长持锁
+    const data = await this.gatherEnrichmentData(bangumiId, entry)
+    if (!data.fields) return { updated: false }
+
+    // Phase 2：DB 写入原子事务
     const client = await this.db.connect()
     try {
       await client.query('BEGIN')
-      const result = await this.enrichCatalog(videoId, catalogId, bangumiId, entry, client)
+      const result = await this.applyEnrichmentDb(client, videoId, catalogId, bangumiId, data)
       if (!result.wrote) {
         await client.query('ROLLBACK')
         return { updated: false }
@@ -170,24 +189,17 @@ export class BangumiService {
   // ── 内部 ─────────────────────────────────────────────────────────
 
   /**
-   * 写 catalog（bangumi 源）+ 逐集。优先用显式 bangumiId 调 REST rich 详情；
-   * Token 缺失/抓取失败时降级用本地 dump entry（entry 为 null 则无可写内容）。
-   * 返回逐集写入数、是否降级、是否实际写入（wrote=false 表示既无 rich 也无 dump 字段可写）。
-   *
-   * 可选 client（confirmMatch FIX）：传入 PoolClient 时所有 DB 写入复用该连接，由调用方
-   * 持有事务；不传则各 query 走自己的连接（matchAndEnrich 后台 job 使用）。REST 调用始终
-   * 在事务外，避免长持锁。
+   * Phase 1（无 DB 写入）：纯 REST + dump 字段聚合。
+   * 优先按 bangumiId 调 REST rich 详情；Token 缺失/抓取失败时降级用本地 dump entry
+   * （entry 为 null 则无可写内容）。供 confirmMatch 在 BEGIN 前调用，避免事务空闲等网络。
    */
-  private async enrichCatalog(
-    videoId: string,
-    catalogId: string,
+  private async gatherEnrichmentData(
     bangumiId: number,
     entry: BangumiEntryMatch | null,
-    client?: PoolClient,
-  ): Promise<{ episodes: number; degraded: boolean; wrote: boolean }> {
-    const db = client ?? this.db
+  ): Promise<EnrichmentData> {
     let fields: CatalogUpdateData | null = null
-    let episodeCount = 0
+    let episodes: CatalogEpisodeInput[] = []
+    let mainEpisodeCount = 0
     let degraded = true
 
     if (isBangumiApiConfigured()) {
@@ -196,15 +208,12 @@ export class BangumiService {
         fields = mapSubjectToCatalogFields(subject)
         degraded = false
         const eps = await getEpisodes(bangumiId)
-        if (eps.length > 0) {
-          episodeCount = await catalogEpisodeQueries.upsertCatalogEpisodes(db, catalogId, mapEpisodes(eps))
-        }
+        if (eps.length > 0) episodes = mapEpisodes(eps)
         // 本篇集数（ADR-161 P1）：优先 wiki eps（本篇数）；否则数 type===0 本篇；
         // 不用 total_episodes（含 SP/OP/ED 章节，会高估用户侧剧集数）
-        const mainCount = subject.eps && subject.eps > 0
+        mainEpisodeCount = subject.eps && subject.eps > 0
           ? subject.eps
           : eps.filter((e) => e.type === 0).length
-        if (mainCount > 0) await videosQueries.updateEpisodeCount(db, videoId, mainCount)
       }
     }
 
@@ -219,13 +228,39 @@ export class BangumiService {
       if (entry.coverUrl) fields.coverUrl = entry.coverUrl
     }
 
-    if (!fields) return { episodes: 0, degraded, wrote: false }
+    return { fields, episodes, mainEpisodeCount, degraded }
+  }
 
-    const { updated } = await this.catalogService.safeUpdate(catalogId, fields, 'bangumi', {
+  /**
+   * Phase 2（纯 DB 写入）：把 gatherEnrichmentData 收集的字段写到 catalog + 逐集 + 集数回填。
+   * - 传 PoolClient：所有写入复用该连接（confirmMatch 原子事务场景）
+   * - 传 Pool：每个 query 各自管连接（matchAndEnrich 后台 job，eventually consistent + idempotent）
+   * 返回逐集写入数与是否实际写入 catalog。
+   */
+  private async applyEnrichmentDb(
+    db: Pool | PoolClient,
+    videoId: string,
+    catalogId: string,
+    bangumiId: number,
+    data: EnrichmentData,
+  ): Promise<{ episodes: number; wrote: boolean }> {
+    if (!data.fields) return { episodes: 0, wrote: false }
+
+    const episodesWritten = data.episodes.length > 0
+      ? await catalogEpisodeQueries.upsertCatalogEpisodes(db, catalogId, data.episodes)
+      : 0
+
+    if (data.mainEpisodeCount > 0) {
+      await videosQueries.updateEpisodeCount(db, videoId, data.mainEpisodeCount)
+    }
+
+    // safeUpdate 接受 PoolClient（共享事务）或不传（走 service 自带 this.db）
+    const isClient = 'release' in db && typeof (db as PoolClient).release === 'function'
+    const { updated } = await this.catalogService.safeUpdate(catalogId, data.fields, 'bangumi', {
       sourceRef: String(bangumiId),
-      db: client,
+      db: isClient ? (db as PoolClient) : undefined,
     })
-    return { episodes: episodeCount, degraded, wrote: updated !== null }
+    return { episodes: episodesWritten, wrote: updated !== null }
   }
 
   private async writeRef(

@@ -282,9 +282,10 @@ describe('BangumiService.confirmMatch', () => {
     expect(r).toEqual({ updated: false })
     expect(mUpdateCatalog).not.toHaveBeenCalled()
     expect(mUpsertRef).not.toHaveBeenCalled()
-    // 事务必须 ROLLBACK 且释放 client（不留连接泄漏）
-    expect(clientQueries).toEqual(['BEGIN', 'ROLLBACK'])
-    expect(clientReleased).toBe(true)
+    // gather 返回 null fields → 不开事务（不浪费连接）
+    expect(mockPool.connect).not.toHaveBeenCalled()
+    expect(clientQueries).toEqual([])
+    expect(clientReleased).toBe(false)
   })
 
   it('subject 不在 dump 但有 Token → 用显式 bangumiId 拉 rich，updated:true + 写 manual_confirmed ref（P1）', async () => {
@@ -303,6 +304,43 @@ describe('BangumiService.confirmMatch', () => {
     expect(clientQueries[0]).toBe('BEGIN')
     expect(clientQueries[clientQueries.length - 1]).toBe('COMMIT')
     expect(clientReleased).toBe(true)
+  })
+
+  // ── Codex stop-time review FIX-1（P2）：REST 必须在 BEGIN 前，防 idle-in-transaction ──
+  it('REST (getSubject/getEpisodes) 在 pool.connect()/BEGIN 之前完成，避免事务持锁等网络', async () => {
+    mConfigured.mockReturnValue(true)
+    mFindById.mockResolvedValue(null)
+
+    const callOrder: string[] = []
+    mGetSubject.mockImplementation(async () => {
+      callOrder.push('getSubject')
+      return subject({ id: 99999 })
+    })
+    mGetEpisodes.mockImplementation(async () => {
+      callOrder.push('getEpisodes')
+      return []
+    })
+    mockPool.connect = vi.fn(async () => {
+      callOrder.push('pool.connect')
+      return mockClient
+    })
+    mockClient.query = vi.fn(async (sql: string) => {
+      callOrder.push(`query:${sql}`)
+      clientQueries.push(sql)
+      return { rows: [], rowCount: 0 }
+    })
+
+    await svc.confirmMatch(VID, CID, 99999)
+
+    const idxGetSubject = callOrder.indexOf('getSubject')
+    const idxGetEpisodes = callOrder.indexOf('getEpisodes')
+    const idxConnect = callOrder.indexOf('pool.connect')
+    const idxBegin = callOrder.indexOf('query:BEGIN')
+
+    expect(idxGetSubject).toBeGreaterThanOrEqual(0)
+    expect(idxGetEpisodes).toBeGreaterThan(idxGetSubject)
+    expect(idxConnect).toBeGreaterThan(idxGetEpisodes)
+    expect(idxBegin).toBeGreaterThan(idxConnect)
   })
 
   // ── Codex stop-time review FIX：原子性回归 ────────────────────────

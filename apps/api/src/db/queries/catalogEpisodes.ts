@@ -22,6 +22,10 @@ export interface CatalogEpisodeInput {
  * 批量 upsert 逐集元数据。externalEpisodeId 必填（保证唯一键命中、幂等）。返回写入条数。
  * - 传 Pool：自管 BEGIN/COMMIT/ROLLBACK + connect/release
  * - 传 PoolClient：复用调用方事务，不自管 BEGIN/COMMIT（confirmMatch 原子化场景）
+ *
+ * 鉴别器（Codex stop-time review FIX-2）：`'release' in db` 而非 `typeof db.connect === 'function'`——
+ * pg 的 PoolClient 继承 ClientBase 同样暴露 connect()，旧检查会对已连接的 client 再调 connect
+ * 触发 `Client has already been connected` 失败；release 仅存在于 PoolClient 才稳定鉴别。
  */
 export async function upsertCatalogEpisodes(
   db: Pool | PoolClient,
@@ -31,10 +35,10 @@ export async function upsertCatalogEpisodes(
   const valid = episodes.filter((e) => e.externalEpisodeId)
   if (valid.length === 0) return 0
 
-  const isPool = typeof (db as Pool).connect === 'function'
-  const client = isPool ? await (db as Pool).connect() : (db as PoolClient)
+  const isPoolClient = 'release' in db && typeof (db as PoolClient).release === 'function'
+  const client = isPoolClient ? (db as PoolClient) : await (db as Pool).connect()
   try {
-    if (isPool) await client.query('BEGIN')
+    if (!isPoolClient) await client.query('BEGIN')
     for (const e of valid) {
       await client.query(
         `INSERT INTO catalog_episodes
@@ -52,12 +56,12 @@ export async function upsertCatalogEpisodes(
         ],
       )
     }
-    if (isPool) await client.query('COMMIT')
+    if (!isPoolClient) await client.query('COMMIT')
     return valid.length
   } catch (err) {
-    if (isPool) await client.query('ROLLBACK')
+    if (!isPoolClient) await client.query('ROLLBACK')
     throw err
   } finally {
-    if (isPool) (client as PoolClient).release()
+    if (!isPoolClient) (client as PoolClient).release()
   }
 }
