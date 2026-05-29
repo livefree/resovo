@@ -46,7 +46,7 @@ function makePoolAndClient(plan: {
       if (plan.unlockThrows) throw new Error('connection reset')
       return { rows: [{ pg_advisory_unlock: true }], rowCount: 1 }
     }
-    if (sql.includes('WITH alias_dead_status')) {
+    if (sql.includes('alias_dead_status AS')) {
       if (plan.maintainThrows) throw new Error('段 1+2 SQL 故障')
       return { rows: [], rowCount: 3 }
     }
@@ -100,7 +100,7 @@ describe('runAutoRetireLine — worker 自包含（CHG-PRE-DEAD-LINE-AUTO-RETIRE
     const sqlSeq = harness.calls.map((c) => {
       if (c.text.includes('pg_try_advisory_lock')) return 'lock'
       if (c.text.includes('pg_advisory_unlock')) return 'unlock'
-      if (c.text.includes('WITH alias_dead_status')) return 'maintain'
+      if (c.text.includes('alias_dead_status AS')) return 'maintain'
       if (c.text.includes('UPDATE source_line_aliases') && c.text.includes('retired_at') && c.text.includes('auto_retired')) return 'retire'
       return 'other'
     })
@@ -114,10 +114,11 @@ describe('runAutoRetireLine — worker 自包含（CHG-PRE-DEAD-LINE-AUTO-RETIRE
     const log = makeLog()
     await runAutoRetireLine(harness.pool, log)
 
-    const sql = harness.calls.find((c) => c.text.includes('WITH alias_dead_status'))!.text
-    expect(sql).toMatch(/LEFT JOIN video_sources/)
-    expect(sql).toMatch(/AND\s+vs\.deleted_at\s+IS\s+NULL/)
-    expect(sql).toMatch(/AND\s+vs\.is_active\s+=\s+true/)
+    const sql = harness.calls.find((c) => c.text.includes('alias_dead_status AS'))!.text
+    // FIX-4 升级：从 LEFT JOIN video_sources → LEFT JOIN effective_sources（CTE 预计算 / 防 LEFT JOIN 退化）
+    expect(sql).toMatch(/LEFT JOIN effective_sources/)
+    expect(sql).toMatch(/FROM video_sources vs/)
+    expect(sql).toMatch(/WHERE vs\.is_active = true AND vs\.deleted_at IS NULL/)
     expect(sql).toContain(`'all_dead'`)
     expect(sql).toContain(`'has_alive'`)
     expect(sql).toContain(`'orphan'`)
@@ -127,15 +128,18 @@ describe('runAutoRetireLine — worker 自包含（CHG-PRE-DEAD-LINE-AUTO-RETIRE
 
   // ── WAVE4-VALIDATION-FIX-1 P1 + P1/P2（worker SQL 与 apps/api byte-identical 同步）──
 
-  it('T11 段 1+2 必含 COALESCE(vs.source_site_key, v.site_key) fallback + LEFT JOIN videos（P1）', async () => {
+  it('T11 段 1+2 必用 effective_sources CTE + site_key 比对在 ON 子句（P1 + FIX-4 防 LEFT JOIN 退化）', async () => {
     const harness = makePoolAndClient({ retiredRows: [] })
     const log = makeLog()
     await runAutoRetireLine(harness.pool, log)
 
-    const sql = harness.calls.find((c) => c.text.includes('WITH alias_dead_status'))!.text
+    const sql = harness.calls.find((c) => c.text.includes('alias_dead_status AS'))!.text
+    // FIX-4：用 effective_sources CTE 防 LEFT JOIN 退化（同 apps/api SQL byte-identical 同步）
+    expect(sql).toMatch(/WITH effective_sources AS/)
+    expect(sql).toMatch(/COALESCE\(vs\.source_site_key,\s*v\.site_key\)\s+AS effective_site_key/)
     expect(sql).toMatch(/LEFT JOIN videos v\s+ON v\.id = vs\.video_id/)
-    expect(sql).toMatch(/COALESCE\(vs\.source_site_key,\s*v\.site_key\)\s*=\s*sla\.source_site_key/)
-    expect(sql).toMatch(/vs\.id IS NULL\s+OR\s+COALESCE/)
+    expect(sql).toMatch(/LEFT JOIN effective_sources es[\s\S]+ON\s+es\.source_name\s+=\s+sla\.source_name[\s\S]+AND\s+es\.effective_site_key\s+=\s+sla\.source_site_key/)
+    expect(sql).not.toMatch(/vs\.id IS NULL\s+OR\s+COALESCE/)
   })
 
   it('T12 段 3 必含 NOT EXISTS alive source + EXISTS active source 二次确认（P1/P2 防恢复后误退役）', async () => {

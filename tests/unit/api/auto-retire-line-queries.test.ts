@@ -47,7 +47,7 @@ function makePoolAndClient(plan: {
     if (sql.includes('pg_advisory_unlock')) {
       return { rows: [{ pg_advisory_unlock: true }], rowCount: 1 }
     }
-    if (sql.includes('WITH alias_dead_status')) {
+    if (sql.includes('alias_dead_status AS')) {
       return { rows: [], rowCount: 3 }
     }
     if (sql.startsWith('\nUPDATE source_line_aliases')) {
@@ -112,7 +112,7 @@ describe('autoRetireLineByDeadCheck — query 层（CHG-PRE-DEAD-LINE-AUTO-RETIR
       if (sql.includes('pg_advisory_unlock')) {
         throw new Error('connection reset')
       }
-      if (sql.includes('WITH alias_dead_status')) {
+      if (sql.includes('alias_dead_status AS')) {
         return { rows: [], rowCount: 0 }
       }
       if (sql.startsWith('\nUPDATE source_line_aliases')) {
@@ -205,7 +205,7 @@ describe('autoRetireLineByDeadCheck — query 层（CHG-PRE-DEAD-LINE-AUTO-RETIR
     const log = makeLog()
     await autoRetireLineByDeadCheck(harness.pool, log)
 
-    const maintainCall = harness.calls.find((c) => c.text.includes('WITH alias_dead_status'))
+    const maintainCall = harness.calls.find((c) => c.text.includes('alias_dead_status AS'))
     expect(maintainCall).toBeDefined()
     const sql = maintainCall!.text
     // T1 上升沿守卫
@@ -218,38 +218,43 @@ describe('autoRetireLineByDeadCheck — query 层（CHG-PRE-DEAD-LINE-AUTO-RETIR
     expect(sql).toMatch(/orphan'\s+AND\s+sla\.dead_since\s+IS\s+NOT\s+NULL/)
     // T7 retired_at IS NULL 过滤
     expect(sql).toMatch(/WHERE sla\.retired_at IS NULL/)
-    // R-DEAD-2 必须 LEFT JOIN
-    expect(sql).toMatch(/LEFT JOIN video_sources/)
+    // R-DEAD-2 必须 LEFT JOIN（effective_sources CTE 后 alias_dead_status 用 LEFT JOIN）
+    // FIX-4 升级：从 LEFT JOIN video_sources → LEFT JOIN effective_sources（CTE 预计算）
+    expect(sql).toMatch(/LEFT JOIN effective_sources/)
+    // 原始 video_sources 表在 effective_sources CTE 内 FROM
+    expect(sql).toMatch(/FROM video_sources vs/)
   })
 
-  it('T10 CTE LEFT JOIN 必含 vs.deleted_at IS NULL 守卫（Codex FIX-1 / 软删过滤）', async () => {
+  it('T10 effective_sources CTE 必含 vs.deleted_at IS NULL + is_active 守卫（Codex FIX-1 / 软删过滤）', async () => {
     const harness = makePoolAndClient({ retiredRows: [] })
     const log = makeLog()
     await autoRetireLineByDeadCheck(harness.pool, log)
 
-    const maintainCall = harness.calls.find((c) => c.text.includes('WITH alias_dead_status'))
+    const maintainCall = harness.calls.find((c) => c.text.includes('alias_dead_status AS'))
     expect(maintainCall).toBeDefined()
     const sql = maintainCall!.text
+    // FIX-4 升级：vs 过滤位置从主 LEFT JOIN ON 移到 effective_sources CTE WHERE 子句
     // 软删 source 必须排除（否则 dead_count + source_count 含已弃用 source / 误判 state）
-    expect(sql).toMatch(/AND\s+vs\.deleted_at\s+IS\s+NULL/)
-    // 与 is_active = true 共存
-    expect(sql).toMatch(/AND\s+vs\.is_active\s+=\s+true/)
+    expect(sql).toMatch(/WHERE vs\.is_active = true AND vs\.deleted_at IS NULL/)
   })
 
   // ── WAVE4-VALIDATION-FIX-1 P1 + P1/P2 ────────────────────────
 
-  it('T13 段 1+2 CTE 必含 COALESCE(vs.source_site_key, v.site_key) fallback + LEFT JOIN videos（P1）', async () => {
+  it('T13 段 1+2 必用 effective_sources CTE + site_key 比对在 ON 子句（P1 + FIX-4 防 LEFT JOIN 退化）', async () => {
     const harness = makePoolAndClient({ retiredRows: [] })
     const log = makeLog()
     await autoRetireLineByDeadCheck(harness.pool, log)
 
-    const sql = harness.calls.find((c) => c.text.includes('WITH alias_dead_status'))!.text
-    // P1 修复：必须 LEFT JOIN videos 提供 v.site_key 作 fallback
+    const sql = harness.calls.find((c) => c.text.includes('alias_dead_status AS'))!.text
+    // FIX-4：必用 effective_sources CTE 预计算 effective_site_key（防 WHERE post-join 过滤让 LEFT JOIN 退化）
+    expect(sql).toMatch(/WITH effective_sources AS/)
+    // effective_sources CTE 内 LEFT JOIN videos + COALESCE fallback
+    expect(sql).toMatch(/COALESCE\(vs\.source_site_key,\s*v\.site_key\)\s+AS effective_site_key/)
     expect(sql).toMatch(/LEFT JOIN videos v\s+ON v\.id = vs\.video_id/)
-    // COALESCE(vs.source_site_key, v.site_key) = sla.source_site_key
-    expect(sql).toMatch(/COALESCE\(vs\.source_site_key,\s*v\.site_key\)\s*=\s*sla\.source_site_key/)
-    // 孤儿守卫：vs.id IS NULL OR COALESCE(...)
-    expect(sql).toMatch(/vs\.id IS NULL\s+OR\s+COALESCE/)
+    // 主 JOIN 用复合键 ON（不是 WHERE post-join）
+    expect(sql).toMatch(/LEFT JOIN effective_sources es[\s\S]+ON\s+es\.source_name\s+=\s+sla\.source_name[\s\S]+AND\s+es\.effective_site_key\s+=\s+sla\.source_site_key/)
+    // 旧实现的 WHERE 子句 "vs.id IS NULL OR COALESCE" 已撤（防 LEFT JOIN 退化为 INNER JOIN）
+    expect(sql).not.toMatch(/vs\.id IS NULL\s+OR\s+COALESCE/)
   })
 
   it('T14 段 3 必含 NOT EXISTS alive source + EXISTS active source 二次确认（P1/P2 防恢复后误退役）', async () => {
@@ -330,7 +335,7 @@ describe('autoRetireLineByDeadCheck — query 层（CHG-PRE-DEAD-LINE-AUTO-RETIR
     const sqlSeq = harness.calls.map((c) => {
       if (c.text.includes('pg_try_advisory_lock')) return 'lock'
       if (c.text.includes('pg_advisory_unlock')) return 'unlock'
-      if (c.text.includes('WITH alias_dead_status')) return 'maintain'
+      if (c.text.includes('alias_dead_status AS')) return 'maintain'
       if (c.text.includes('UPDATE source_line_aliases') && c.text.includes('retired_at') && c.text.includes('auto_retired')) return 'retire'
       return 'other'
     })

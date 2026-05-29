@@ -49,27 +49,43 @@ interface RetiredAliasRow {
  * **SQL 真源对照**：apps/api/src/db/queries/auto-retire-line.ts SQL_MAINTAIN_DEAD_SINCE
  *   - 必须 byte-identical / 跨包同步改 / Codex FIX-1 vs.deleted_at IS NULL 已落地
  */
+/**
+ * SQL 段 1+2 / WAVE4-VALIDATION-FIX-4 P1 升级（同 apps/api 真源对照）：
+ *
+ * 旧实现 site_key 比对在 WHERE 是 post-join 过滤 → LEFT JOIN 退化为 INNER JOIN 语义
+ * 反例：alias_A (siteA, '线路1') 孤儿 + video_sources 含 (siteB, '线路1', ok) 同名其他站
+ * → LEFT JOIN match 后 WHERE 过滤 → alias_A 整行消失 → 不参与 classified 'orphan' → dead_since 永远不清理
+ *
+ * 修复：用 effective_sources CTE 预计算 effective_site_key + 把 site_key 比对放 LEFT JOIN ON 子句
+ * SQL 真源对照 apps/api/src/db/queries/auto-retire-line.ts SQL_MAINTAIN_DEAD_SINCE（byte-identical）
+ */
 const SQL_MAINTAIN_DEAD_SINCE = `
-WITH alias_dead_status AS (
+WITH effective_sources AS (
+  -- 预计算 effective_site_key（COALESCE fallback）+ 过滤 is_active / deleted_at
+  SELECT
+    vs.id,
+    vs.source_name,
+    vs.probe_status,
+    vs.render_status,
+    COALESCE(vs.source_site_key, v.site_key) AS effective_site_key
+  FROM video_sources vs
+  LEFT JOIN videos v ON v.id = vs.video_id
+  WHERE vs.is_active = true AND vs.deleted_at IS NULL
+),
+alias_dead_status AS (
   SELECT
     sla.source_site_key,
     sla.source_name,
     sla.dead_since AS prev_dead_since,
-    COUNT(vs.id)                                                AS source_count,
+    COUNT(es.id)                                                AS source_count,
     COUNT(*) FILTER (
-      WHERE vs.probe_status = 'dead' AND vs.render_status = 'dead'
+      WHERE es.probe_status = 'dead' AND es.render_status = 'dead'
     )                                                            AS dead_count
   FROM source_line_aliases sla
-  LEFT JOIN video_sources vs
-    ON vs.source_name = sla.source_name
-   AND vs.is_active   = true
-   AND vs.deleted_at  IS NULL
-  LEFT JOIN videos v
-    ON v.id = vs.video_id
+  LEFT JOIN effective_sources es
+    ON es.source_name        = sla.source_name
+   AND es.effective_site_key = sla.source_site_key
   WHERE sla.retired_at IS NULL
-    -- WAVE4-VALIDATION-FIX-1 P1：源站标识 fallback（同 sources.ts:161 既有范式）
-    -- Migration 046 backfill 后 video_sources.source_site_key 仍可能 NULL
-    AND (vs.id IS NULL OR COALESCE(vs.source_site_key, v.site_key) = sla.source_site_key)
   GROUP BY sla.source_site_key, sla.source_name, sla.dead_since
 ),
 classified AS (
