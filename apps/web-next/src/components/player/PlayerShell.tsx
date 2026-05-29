@@ -274,26 +274,33 @@ export function PlayerShell({ slug: slugProp, portalMode = false, previewMode = 
     [setEpisode]
   )
 
-  // CHG-SN-9-PLAYER-ERROR-CONSUMER-B / Wave 4 #3：
-  //  - 标当前 source isDead 让 SourceBar 视觉提示
-  //  - 环形扫描下一非 dead source，setActiveSourceIndex + bump playerVersion 触发 VideoPlayer 重 mount
+  // CHG-SN-9-PLAYER-ERROR-CONSUMER-B / Wave 4 #3 + RETRY-CONTROL-EP / Wave 4 #4-EP / ADR-166 Y-166-3：
   //  - 失败上报 /v1/feedback/playback (受 isPlaybackFeedbackEnabled(previewMode) 守卫)
-  //  - per-(activeSourceIndex, errorCode) 去抖 防 fatal 反复触发刷流量 + redis fb:fail:* 干扰
-  //  - R-N-3 警告闭环：不使用 event.src 做匹配键 (Player unmount/remount 会让 src 快照过期 + 切线雪崩)；
-  //    用 activeSourceIndex 关联外部 React state (VideoPlayer key 含 activeSourceIndex / 当前索引稳定)
+  //  - per-(sourceId, errorCode) 去抖 防 fatal 反复触发刷流量 + redis fb:fail:* 干扰
+  //  - R-N-3 警告闭环：不使用 event.src 做匹配键；用 activeSourceIndex 关联外部 React state
+  //
+  //  ADR-166 §6.4 / Y-166-3 retry 策略（Wave 4 #4-EP）：
+  //    - 首次 fatal：同 tick 调 controls.retry() + retryAttemptedSetRef 记 failedIdx + 启动 3s watchdog
+  //    - watchdog 内 onPlay 成功 → cancel + 清 retryAttemptedSet → 视为本地 retry 修好
+  //    - watchdog 内再 fatal → cancel watchdog + 立即切线（标 dead + 环形扫 + 上报）
+  //    - watchdog 超时（3s 无 onPlay 无 fatal）→ 视为 retry 卡死 → 主动切线
+  const retryAttemptedSetRef = useRef<Set<number>>(new Set())
+  const watchdogTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const errorReportedRef = useRef<Set<string>>(new Set())
-  const handlePlayerError = useCallback(
-    (event: PlayerErrorPayload) => {
-      const failedIdx = activeSourceIndex
-      const failedRawSource = rawSourcesRef.current[failedIdx]
 
-      // 1. 标当前 source 为 dead（SourceBar 已支持 isDead 视觉）
+  const clearWatchdog = useCallback(() => {
+    if (watchdogTimerRef.current !== null) {
+      clearTimeout(watchdogTimerRef.current)
+      watchdogTimerRef.current = null
+    }
+  }, [])
+
+  // 切线 + 标 dead + feedback POST（提到 handlePlayerError 外便于 watchdog 复用）
+  const switchAwayFromFailedSource = useCallback(
+    (failedIdx: number, failedRawSourceId: string | null, errorCode: string) => {
       setSources(prev =>
         prev.map((s, i) => (i === failedIdx ? { ...s, isDead: true } : s)),
       )
-
-      // 2. 环形扫描下一非 dead source；用当前 sources 快照（state 闭包）+ failedIdx 当作"新 dead"
-      //    避免 setSources 异步未生效时 next 仍指向 failedIdx
       const total = sources.length
       let next: number | null = null
       for (let step = 1; step < total; step++) {
@@ -306,30 +313,70 @@ export function PlayerShell({ slug: slugProp, portalMode = false, previewMode = 
       }
       if (next !== null) {
         setActiveSourceIndex(next)
-        // bump playerVersion 让 VideoPlayer key 变化 → 重 mount → 重新触发 useSourceLoader
-        // （activeSourceIndex 已在 key 中 / 但 bump version 防御 next === failedIdx 极端边界 + 与 ResumePrompt 流一致）
         setPlayerVersion(v => v + 1)
       }
-
-      // 3. feedback 上报 — 受 previewMode 守卫 + per-(idx, code) 去抖 + 需要 sourceId
+      // feedback 上报 — 受 previewMode 守卫 + per-(sourceId, errorCode) 去抖 + 需要 sourceId
       if (!isPlaybackFeedbackEnabled(previewMode)) return
-      if (!video || !failedRawSource) return
-      const dedupeKey = `${failedRawSource.id}|${event.code}`
+      if (!video || !failedRawSourceId) return
+      const dedupeKey = `${failedRawSourceId}|${errorCode}`
       if (errorReportedRef.current.has(dedupeKey)) return
       errorReportedRef.current.add(dedupeKey)
       void apiClient
         .post('/feedback/playback', {
           videoId: video.id,
-          sourceId: failedRawSource.id,
+          sourceId: failedRawSourceId,
           success: false,
-          errorCode: event.code,
+          errorCode,
         })
         .catch(() => {
           // fire-and-forget；后端 5xx 不阻断切线
         })
     },
-    [activeSourceIndex, sources, video, previewMode, setActiveSourceIndex],
+    [sources, video, previewMode, setActiveSourceIndex],
   )
+
+  const handlePlayerError = useCallback(
+    (event: PlayerErrorPayload, controls?: { retry: () => void }) => {
+      const failedIdx = activeSourceIndex
+      const failedRawSource = rawSourcesRef.current[failedIdx]
+      const failedRawSourceId = failedRawSource?.id ?? null
+
+      // 首次 fatal → 调 controls.retry 在 onError 同 tick（ADR-166 R-166-2 active 守卫合法窗口）+ 启动 watchdog
+      if (controls && !retryAttemptedSetRef.current.has(failedIdx)) {
+        retryAttemptedSetRef.current.add(failedIdx)
+        controls.retry()
+        clearWatchdog()
+        watchdogTimerRef.current = setTimeout(() => {
+          // 3s 无 onPlay 也无 fatal → retry 卡死 → 主动切线
+          watchdogTimerRef.current = null
+          switchAwayFromFailedSource(failedIdx, failedRawSourceId, event.code)
+        }, 3000)
+        return
+      }
+
+      // 第二次 fatal（或无 controls 边界）→ cancel watchdog + 立即切线
+      clearWatchdog()
+      switchAwayFromFailedSource(failedIdx, failedRawSourceId, event.code)
+    },
+    [activeSourceIndex, clearWatchdog, switchAwayFromFailedSource],
+  )
+
+  // onPlay 成功 → cancel watchdog + 清 retry 计数 / 视为本地 retry 修好
+  const handlePlaySuccess = useCallback(() => {
+    setPlaying(true)
+    clearWatchdog()
+    retryAttemptedSetRef.current.delete(activeSourceIndex)
+  }, [setPlaying, clearWatchdog, activeSourceIndex])
+
+  // activeSourceIndex 变化（切线 / 用户手动选）→ cancel 任何 pending watchdog 防 stale 触发
+  useEffect(() => {
+    return () => clearWatchdog()
+  }, [activeSourceIndex, clearWatchdog])
+
+  // unmount cleanup
+  useEffect(() => {
+    return () => clearWatchdog()
+  }, [clearWatchdog])
 
   // hasEpisodes / hasSources 必须在 useEffect 前声明，避免 TDZ 风险并确保依赖数组可直接引用
   const isTheater = mode === 'theater'
@@ -569,7 +616,7 @@ export function PlayerShell({ slug: slugProp, portalMode = false, previewMode = 
                     onEpisodeChange={inlineEpisodes ? handleEpisodeChange : undefined}
                     onNext={hasNext ? () => setEpisode(currentEpisode + 1) : undefined}
                     onTimeUpdate={handleTimeUpdate}
-                    onPlay={() => setPlaying(true)}
+                    onPlay={handlePlaySuccess}
                     onPause={() => setPlaying(false)}
                     onEnded={() => setPlaying(false)}
                     onTheaterChange={handleTheaterChange}

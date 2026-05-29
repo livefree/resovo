@@ -9,8 +9,12 @@ import React from 'react'
 // ── Mock @resovo/player-core ──────────────────────────────────────────────────
 // Player 组件用 <video> 需要完整 DOM；测试层替换为 stub
 
+// 暴露 Player mock 调用计数让 -EP "key bump remount" 测试可断言（vi.hoisted 保证 vi.mock 工厂前初始化）
+const { playerMountSpy } = vi.hoisted(() => ({ playerMountSpy: vi.fn() }))
+
 vi.mock('@resovo/player-core', () => ({
   // CHG-SN-9-PLAYER-ERROR-CONSUMER-A：扩 onError 透传，让 fail 按钮触发 PlayerErrorEvent
+  // Wave 4 #4-EP / Y-166-6：每次 React mount 调一次 playerMountSpy，让 key bump remount 测试断言
   Player: vi.fn(
     ({
       src,
@@ -20,25 +24,28 @@ vi.mock('@resovo/player-core', () => ({
       src?: string
       onPlay?: () => void
       onError?: (event: { code: string; src: string | null; fatal: boolean }) => void
-    }) => (
-      <div data-mock-player data-src={src ?? ''}>
-        <button type="button" data-mock-play onClick={onPlay}>play</button>
-        <button
-          type="button"
-          data-mock-fail-native
-          onClick={() => onError?.({ code: 'native_media_failed', src: src ?? null, fatal: true })}
-        >
-          fail-native
-        </button>
-        <button
-          type="button"
-          data-mock-fail-hls
-          onClick={() => onError?.({ code: 'hls_fatal', src: src ?? null, fatal: true })}
-        >
-          fail-hls
-        </button>
-      </div>
-    ),
+    }) => {
+      playerMountSpy()
+      return (
+        <div data-mock-player data-src={src ?? ''}>
+          <button type="button" data-mock-play onClick={onPlay}>play</button>
+          <button
+            type="button"
+            data-mock-fail-native
+            onClick={() => onError?.({ code: 'native_media_failed', src: src ?? null, fatal: true })}
+          >
+            fail-native
+          </button>
+          <button
+            type="button"
+            data-mock-fail-hls
+            onClick={() => onError?.({ code: 'hls_fatal', src: src ?? null, fatal: true })}
+          >
+            fail-hls
+          </button>
+        </div>
+      )
+    },
   ),
 }))
 
@@ -225,6 +232,49 @@ describe('AdminPlayer — Case 5c: 同 sourceId 失败上报去抖', () => {
     fireEvent.click(container.querySelector('[data-mock-fail-native]')!)
     expect(postMock).toHaveBeenCalledTimes(2)
     expect(postMock).toHaveBeenLastCalledWith('/feedback/playback', expect.objectContaining({ success: false, errorCode: 'native_media_failed' }))
+  })
+})
+
+// ── CHG-SN-9-PLAYER-ERROR-RETRY-CONTROL-EP / Wave 4 #4-EP / Y-166-6 ─────────
+
+describe('AdminPlayer — Case 5d: 手动重试此线路（Y-166-6 key bump remount）', () => {
+  it('点击重试按钮 → Player 重 mount（sourceLoadVersion bump 触发 key 变化）', () => {
+    playerMountSpy.mockClear()
+    const { container, getByTestId } = render(
+      <AdminPlayer videoId="vid-1" sourceUrl="https://cdn.example.com/v.m3u8" sourceId="src-1" />,
+    )
+    const initialMountCount = playerMountSpy.mock.calls.length
+    expect(initialMountCount).toBeGreaterThan(0)
+
+    const retryBtn = getByTestId('admin-player-retry-btn')
+    fireEvent.click(retryBtn)
+
+    // key 变化 → Player remount → playerMountSpy 调用次数增加
+    expect(playerMountSpy.mock.calls.length).toBeGreaterThan(initialMountCount)
+    expect(container.querySelector('[data-mock-player]')).toBeTruthy()
+  })
+
+  it('点击重试后 errorReportedRef 清空 → 同 sourceId 再 onError 允许重新上报', () => {
+    const { container, getByTestId } = render(
+      <AdminPlayer videoId="vid-1" sourceUrl="https://cdn.example.com/v.m3u8" sourceId="src-1" />,
+    )
+    fireEvent.click(container.querySelector('[data-mock-fail-native]')!)
+    expect(postMock).toHaveBeenCalledTimes(1)
+
+    // 同 sourceId 第二次 fatal 被 errorReportedRef 去抖（CHG-SN-9-PLAYER-ERROR-CONSUMER-A 既有行为）
+    fireEvent.click(container.querySelector('[data-mock-fail-native]')!)
+    expect(postMock).toHaveBeenCalledTimes(1)
+
+    // 用户点击重试 → errorReportedRef 清空 / 同 sourceId 再次 fatal 允许上报
+    fireEvent.click(getByTestId('admin-player-retry-btn'))
+    // remount 后 mock player 重新挂载 / 重新拿到 fail 按钮
+    fireEvent.click(container.querySelector('[data-mock-fail-native]')!)
+    expect(postMock).toHaveBeenCalledTimes(2)
+    expect(postMock).toHaveBeenLastCalledWith('/feedback/playback', expect.objectContaining({
+      sourceId: 'src-1',
+      success: false,
+      errorCode: 'native_media_failed',
+    }))
   })
 })
 

@@ -40,6 +40,54 @@
 
 ---
 
+## [CHG-SN-9-PLAYER-ERROR-RETRY-CONTROL-EP] 消费方接入 ADR-166（AdminPlayer key-bump + PlayerShell retry watchdog 3s / Wave 4 #4-EP）
+- **完成时间**：2026-05-28
+- **记录时间**：2026-05-28
+- **执行模型**：claude-opus-4-7（启动会话偏离卡片建议 sonnet-4-6 / 卡片范围消费方接入 / 偏离不阻断）
+- **子代理**：无（ADR-166 Opus 评审已 PASS / -EP 实施不需二次评审）
+- **承接 ADR-166 黄线**：
+  - **Y-166-6**（AdminPlayer 边界）：手动重试按钮用 key bump 强制 Player remount / 不用 controls.retry（生命周期窗口在 onError 同 tick / 用户事件路径调 controls.retry 会被 active 守卫拦截）
+  - **Y-166-3**（PlayerShell 策略）：首次 fatal 同 tick 调 controls.retry + 3s watchdog setTimeout / watchdog 内仍 fatal 才走切线 / 属 shell 层职责
+- **修改文件**（4 项 / PATCH=4 ≤ 5 ✅）：
+  - `apps/server-next/src/app/admin/moderation/_client/AdminPlayer.tsx` —
+    - + `sourceLoadVersion` useState + handleRetry useCallback（清 errorReportedRef + sourceLoadVersion bump）
+    - + 重试按钮 UI（绝对定位右上角 / aria-label "重试此线路" / data-testid "admin-player-retry-btn"）+ RETRY_BTN_STYLE 仅 var(--*) tokens
+    - 容器加 `position: relative` 支持绝对定位按钮
+    - Player key 改 `${sourceId ?? 'none'}-${sourceLoadVersion}` 双因子 / 用户切线（sourceId 变）+ 手动重试（version bump）都触发 remount
+  - `apps/web-next/src/components/player/PlayerShell.tsx` —
+    - + `retryAttemptedSetRef: useRef<Set<number>>` per-idx 计数 retry 已尝试
+    - + `watchdogTimerRef: useRef<ReturnType<typeof setTimeout> | null>` 3s 超时 timer 引用
+    - + `clearWatchdog` useCallback / 安全 cleanup
+    - + `switchAwayFromFailedSource(failedIdx, sourceId, code)` useCallback 抽出"标 dead + 环形扫 + POST feedback"逻辑 / 供 watchdog 超时 + 第二次 fatal 共用
+    - 重写 `handlePlayerError(event, controls?)` 第 2 参可选（控防 controls undefined 边界）/ 首次 fatal: retryAttemptedSetRef.add + controls.retry() + setTimeout 3s watchdog（超时调 switchAway）/ 第二次 fatal: clearWatchdog + 立即 switchAway
+    - + `handlePlaySuccess` useCallback 替换 inline `onPlay={() => setPlaying(true)}` / 触发时 clearWatchdog + retryAttemptedSetRef.delete(activeSourceIndex)
+    - + 2 个 useEffect cleanup：activeSourceIndex 变化时清 watchdog 防 stale + unmount 时清 watchdog 防 leak
+  - `tests/unit/admin-moderation/admin-player.test.tsx` —
+    - + `playerMountSpy` vi.hoisted / Player factory 每次调用增 spy 计数（让 key bump remount 测试可断言）
+    - 新 Case 5d 2 case：① 点击重试按钮 → playerMountSpy 调用次数增加（remount 触发）② 点击重试 → errorReportedRef 清空 / 同 sourceId 再 fatal 允许 POST
+  - `tests/unit/web-next/player-shell-on-error.test.tsx` —
+    - + `makeControls()` helper 构造 { retry: vi.fn() }
+    - 重写全部 6 case / 用 `vi.useFakeTimers()` 推进 watchdog 时间（render 在 fakeTimers 启用前完成 / 避免 waitFor 内 setTimeout 被冻结）/ fake timers 段内用 sync expect 替代 waitFor
+    - 测试覆盖：① 首次 fatal → retry + 3s 超时后切线 ② 首次 fatal + 1s 内第二次 → 立即切线 + cancel watchdog ③ previewMode 仍切线但不 POST ④ dedupe ⑤ 切线后新闭包 sourceId=src-2 ⑥ retry 后 onPlay 成功 → cancel + 重置计数 / 下一次 fatal 仍允许 retry
+- **新增依赖**：无
+- **数据库变更**：无
+- **设计取舍**：
+  - **watchdog 3s vs 5s vs 立即**：选 3s — hls.startLoad 通常 < 1.5s 完成 / 网络弱时 3s 给 buffer 但不让用户感知卡死；常量在 PlayerShell 内 / 未来可改 prop
+  - **AdminPlayer key 双因子 `${sourceId}-${sourceLoadVersion}` vs 单 version**：双因子 — 用户切线（sourceId 变）也应 remount / 单 version 在切线时 key 不变会导致 Player 继承旧 source state；双因子让两种触发解耦
+  - **switchAwayFromFailedSource 抽 useCallback vs inline**：抽出 — watchdog 超时 + 第二次 fatal 两处调用 / inline 复制 50 行违反 DRY / useCallback 让 deps 收敛清晰
+  - **handlePlaySuccess 替换 inline onPlay vs 加 useEffect 监听 isPlaying**：替换 inline — onPlay 触发是真实"播放开始"信号 / useEffect 监听 isPlaying state 反而引入间接性；inline `() => setPlaying(true)` 简单但缺 retry watchdog cleanup 钩子
+  - **retryAttemptedSet 用 Set<number>(idx) vs Map<sourceId, attempts>**：Set<idx> — activeSourceIndex 是 stable per-mount-cycle 关联键；sourceId 在 sources 重排（罕见）时键漂移
+  - **fake timers 启用时序**：render + waitFor mount Player 完成后再 `vi.useFakeTimers()` / 否则 mount 内 useEffect 的 setTimeout 被冻结 → mount 卡死
+- **不触发**：
+  - architecture.md sync：无 schema / migration
+  - R-MID-1 RETRO：无新 admin 写端点
+  - 新 ADR：本卡完全在 ADR-166 §6.4 实施承接范围内 / 不构成新决策
+  - Opus 评审：ADR-166 §11 已确认 -EP 不需 Opus
+- **质量门禁**：typecheck ✅ EXIT=0 / lint ✅ 0 error 0 warning / verify:adr-contracts ✅ EXIT=0（198 路由 81 ADR 端点 / 277 D-N 全闭环）/ admin-player 15/15 + player-shell-on-error 6/6 + retry-control 7/7 = 28/28 PASS
+- **Wave 4 进度**：#1 ✅ → #2 ✅ → #3 ✅ → #4-ADR ✅ → #4-ADR-FIX-1 ✅ → #4-EP ✅ ship / **ADR-166 完整闭环（API 端 + admin 端 + 前台端）** / 下一卡 #5 PRE-DEAD-LINE-AUTO-RETIRE-WORKER（apps/worker 全 dead 180 天自动检测 / opus-4-7 + arch-reviewer 评估 worker 新依赖）
+
+---
+
 ## [CHG-SN-9-PLAYER-ERROR-RETRY-CONTROL-ADR-FIX-1] controls.retry 生命周期外溢守卫（Codex stop-time review / active 双层守卫）
 - **完成时间**：2026-05-28
 - **记录时间**：2026-05-28

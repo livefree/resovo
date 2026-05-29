@@ -6,7 +6,7 @@
 
 ## 进行中任务
 
-（空 / Wave 4 #4-ADR 已 ship / ADR-166 Accepted / 下一卡 -EP 实施卡 主循环自动启动）
+（空 / Wave 4 #4-EP 已 ship / ADR-166 闭环 / 下一卡 #5 PRE-DEAD-LINE-AUTO-RETIRE-WORKER 主循环自动启动）
 
 ---
 

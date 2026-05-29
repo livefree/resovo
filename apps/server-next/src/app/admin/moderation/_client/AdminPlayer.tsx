@@ -1,18 +1,23 @@
 'use client'
 
 /**
- * AdminPlayer.tsx — 审核台极简播放器（FIX-D / CHG-SN-9-PLAYER-ERROR-CONSUMER-A）
+ * AdminPlayer.tsx — 审核台极简播放器（FIX-D / CHG-SN-9-PLAYER-ERROR-CONSUMER-A + RETRY-CONTROL-EP / Y-166-6）
  *
- * 极简范围：播放/暂停/进度/源切换/错误降级占位。
+ * 极简范围：播放/暂停/进度/源切换/错误降级占位 + 手动重试此线路。
  * 不接入 GlobalPlayerHost；独立 admin-only 播放器。
  *
  * feedback 上报（D-17 + DEBT-FIX-D-ERROR 闭环 / Wave 4 #2）：
  *   - 首次播放成功（onPlay）→ POST /v1/feedback/playback {success:true}（fire-and-forget / per-sourceId 去抖）
  *   - 播放失败（onError）→ POST /v1/feedback/playback {success:false, errorCode: event.code}（per-sourceId 去抖防 fatal 循环刷流量）
  *
+ * 手动重试此线路（ADR-166 §6.4 / Y-166-6 / Wave 4 #4-EP）：
+ *   - "重试此线路"按钮 → sourceLoadVersion++ → Player key bump 触发 remount 重载 source
+ *   - **不**用 controls.retry：controls 生命周期仅 onError 同 tick / 用户事件路径调 controls.retry 会被 active 守卫拦截
+ *   - errorReportedRef 在用户点击重试时清空（同 sourceId 重新允许失败上报 / "用户主动验证后失败" 是新信号）
+ *
  * 颜色：仅消费 packages/design-tokens CSS 变量，零硬编码
  */
-import React, { useRef } from 'react'
+import React, { useCallback, useRef, useState } from 'react'
 import { Player, type PlayerProps } from '@resovo/player-core'
 import { apiClient } from '@/lib/api-client'
 
@@ -61,6 +66,23 @@ const HINT_STYLE: React.CSSProperties = {
 
 // ── AdminPlayer ───────────────────────────────────────────────────────────────
 
+// ── Retry button style ────────────────────────────────────────────────────────
+
+const RETRY_BTN_STYLE: React.CSSProperties = {
+  position: 'absolute',
+  top: 8,
+  right: 8,
+  zIndex: 10,
+  padding: '4px 10px',
+  background: 'var(--bg-surface-elevated)',
+  color: 'var(--fg-default)',
+  border: '1px solid var(--border-default)',
+  borderRadius: 'var(--radius-sm)',
+  cursor: 'pointer',
+  fontSize: 'var(--font-size-xs)',
+  opacity: 0.85,
+}
+
 export function AdminPlayer({
   videoId,
   sourceUrl,
@@ -73,6 +95,15 @@ export function AdminPlayer({
   // 失败上报独立 ref：与成功上报互斥 —— 防 fatal 反复触发刷流量 / 后端 redis fail count 干扰；
   // 同 sourceId 上报成功后再 onError 仍允许上报（成功→失败语义切换是有用信号 / reportedRef 不阻塞 errorReportedRef）
   const errorReportedRef = useRef<string | null>(null)
+
+  // ADR-166 Y-166-6 / Wave 4 #4-EP：手动重试此线路 / Player key 含 version 触发 remount
+  const [sourceLoadVersion, setSourceLoadVersion] = useState(0)
+
+  const handleRetry = useCallback(() => {
+    // 清 errorReportedRef 让"用户主动验证后失败"被视为新信号 / 允许 onError 再次上报
+    errorReportedRef.current = null
+    setSourceLoadVersion(v => v + 1)
+  }, [])
 
   const handlePlay = () => {
     if (!sourceId || reportedRef.current === sourceId) return
@@ -122,9 +153,21 @@ export function AdminPlayer({
       data-admin-player
       data-state="ready"
       data-testid={testId}
-      style={{ borderRadius: 6, overflow: 'hidden', aspectRatio: '16/9' }}
+      style={{ position: 'relative', borderRadius: 6, overflow: 'hidden', aspectRatio: '16/9' }}
     >
+      <button
+        type="button"
+        onClick={handleRetry}
+        style={RETRY_BTN_STYLE}
+        aria-label="重试此线路"
+        data-testid="admin-player-retry-btn"
+      >
+        ↻ 重试此线路
+      </button>
       <Player
+        // Y-166-6：key 含 sourceLoadVersion / 点击重试 → version++ → key 变化 → Player remount 重载 source
+        // sourceId 变化（用户切线）自然 remount / 与重试解耦但 key 双因子
+        key={`${sourceId ?? 'none'}-${sourceLoadVersion}`}
         src={sourceUrl}
         title={title}
         autoplay
