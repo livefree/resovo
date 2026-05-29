@@ -75,6 +75,9 @@ export function useRejectedQueue(enabled = true): UseRejectedQueueResult {
   const [loading, setLoading] = useState(false)
   const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // -B 批量勾选 + 批量 reopen 状态（上移到 reopenAt 之前 / WAVE4-VALIDATION-FIX-2 让 reopenAt 能引用 setSelectedIds 清 phantom）
+  const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(() => new Set())
+  const [batchPending, setBatchPending] = useState(false)
 
   const hasMore = videos.length < total
 
@@ -158,6 +161,15 @@ export function useRejectedQueue(enabled = true): UseRejectedQueueResult {
       setVideos(newVideos)
       setTotal(t => Math.max(0, t - 1))
       setActiveIdx(Math.min(targetIdx, Math.max(0, newVideos.length - 1)))
+      // WAVE4-VALIDATION-FIX-2 / 用户验收 P2：单条 reopen 必须同步清 selectedIds
+      // 否则用户先勾选一条 + 再点单条"重新开审" → 视频被移除但 selectedIds 仍含其 id
+      //   → 底部批量栏显示 phantom selection / 后续 batchReopen 对已移除 id 再请求一次
+      setSelectedIds(prev => {
+        if (!prev.has(current.id)) return prev
+        const next = new Set(prev)
+        next.delete(current.id)
+        return next
+      })
     } catch {
       setError(M.rejected.errors.reopenFailed)
       throw new Error(M.rejected.errors.reopenFailed)
@@ -165,9 +177,7 @@ export function useRejectedQueue(enabled = true): UseRejectedQueueResult {
   }, [videos, activeIdxRaw, setActiveIdx])
 
   // ── -B 批量勾选 + 批量 reopen ────────────────────────────────────
-  const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(() => new Set())
-  const [batchPending, setBatchPending] = useState(false)
-
+  // state 已上移到 useState 区（WAVE4-VALIDATION-FIX-2 / 让 reopenAt 能引用 setSelectedIds）
   const toggleSelect = useCallback((id: string) => {
     setSelectedIds(prev => {
       const next = new Set(prev)

@@ -244,6 +244,34 @@ describe('useRejectedQueue — CHG-SN-9-REJECTED-ENHANCE-A 分页 hook', () => {
     expect(mockReopen).toHaveBeenCalledTimes(2)
   })
 
+  it('#10b WAVE4-VALIDATION-FIX-2 P2：单条 reopenAt 成功 → 同步从 selectedIds 删除（防 phantom selection）', async () => {
+    const rows = [makeRejectedRow('r-1'), makeRejectedRow('r-2'), makeRejectedRow('r-3')]
+    mockFetch.mockResolvedValue(makeApiResponse(rows, 3))
+    mockReopen.mockResolvedValue(undefined)
+
+    const { result } = renderHook(() => useRejectedQueue(true))
+    await waitFor(() => expect(result.current.videos.length).toBe(3))
+
+    // 用户勾选 r-1 + r-2
+    act(() => {
+      result.current.toggleSelect('r-1')
+      result.current.toggleSelect('r-2')
+    })
+    expect(result.current.selectedIds.size).toBe(2)
+
+    // 单条 reopenAt 移除 r-1（之前会留 phantom: selectedIds 仍含 r-1）
+    await act(async () => {
+      await result.current.reopenAt(0) // r-1
+    })
+
+    expect(result.current.videos.map(v => v.id)).toEqual(['r-2', 'r-3'])
+    // P2 修复：selectedIds 必须同步删除 r-1（防 phantom + 后续 batchReopen 对已移除 id 再请求）
+    expect(result.current.selectedIds.has('r-1')).toBe(false)
+    // r-2 仍勾选（不动其他）
+    expect(result.current.selectedIds.has('r-2')).toBe(true)
+    expect(result.current.selectedIds.size).toBe(1)
+  })
+
   it('#11 batchReopen 部分失败 → 仅成功项移除 / failed 保留勾选 / 不抛错', async () => {
     const rows = [makeRejectedRow('r-1'), makeRejectedRow('r-2')]
     mockFetch.mockResolvedValue(makeApiResponse(rows, 2))
