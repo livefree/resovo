@@ -40,6 +40,38 @@
 
 ---
 
+## [CHG-SN-9-LINES-VIEW-UNIFY-FIX-4] SourceLineAliasesClient.test.tsx mock 同步 listAllSourceLines（Codex stop-time review 4th / stale mock 防 silent test pass）
+- **完成时间**：2026-05-28
+- **执行模型**：claude-sonnet-4-6（主循环 / FIX 紧随 CODENAME-MATRIX / 不切换 §16.5）
+- **子代理调用**：无（纯 test fixture 同步）
+- **触发**：Codex stop-time review 4th 反馈 "stale component test mock breaks unit coverage"
+- **背景**：CHG-SN-9-LINES-VIEW-UNIFY（commit 959fdfbe）SourceLineAliasesClient 数据源从 `listLineAliases()` 改为 `listAllSourceLines()`；CHG-SN-9-CODENAME-MATRIX（commit 801bd454）又删除了 `getCodenamePool()` fetch。但 `tests/unit/components/server-next/admin/source-line-aliases/SourceLineAliasesClient.test.tsx` 仍 mock 旧 `listLineAliases` + `getCodenamePool` → 组件实际调用的 `listAllSourceLines` 未 mock → 真发 API 请求 → 数据永远不渲染 → 6 case 全 fail（被 `localStorage.clear` pre-existing flaky 噪声淹没未被立即察觉 / Codex 抓到）
+- **根因**：测试 mock 与组件实际依赖的 API 函数不同步，组件演进改造后未更新对应测试 fixture 与 mock。
+- **修复**（1 测试 PATCH=1 严守）：
+  - `tests/unit/components/server-next/admin/source-line-aliases/SourceLineAliasesClient.test.tsx` 同步：
+    - Mock：`listAllSourceLines` 替代 `listLineAliases` + 删 `getCodenamePool` mock（不再被组件调用）
+    - Fixture：`ROW_ACTIVE` / `ROW_RETIRED` 用 SourceLineRow 形态（含 `assignedAt` / `videoCount` / `activeCount` / `episodeCount` / 去 `updatedAt`）替代旧 SourceLineAlias 形态
+    - case 1 断言：`screen.getAllByText('泰山').length >= 1`（codename 现在显示在单元格 button + 字库 grid + Picker grid 多处）
+    - case 2 断言：`/可用基础名/` + `已占用 slots` + `/冷却中/`（CHG-SN-9-CODENAME-MATRIX KPI 标签）替代旧 `'可用 codename' + '3'` 数字断言
+    - case 4 操作列断言：assigned 行显 `按钮 name '编辑'`（unassigned 显 '分配' / 既有 LINES-VIEW-UNIFY 行为）
+    - case 3 + 5 + 6：保留既有 retire 按钮 testid 路径 / 行为不变
+    - 注释更新：列演进的 4 阶段卡片（CHG-368-B-B → LINES-VIEW-UNIFY → CODENAME-MATRIX → FIX-4）
+- **不触发额外 Opus / ADR**：纯 test fixture 同步 / 组件契约不变
+- **质量门禁**：typecheck ✅ EXIT=0 / lint ✅ EXIT=0 / verify:adr-contracts ✅ EXIT=0 / SourceLineAliasesClient 6/6 PASS（FIX-4 后恢复）+ codename-utils 12/12 + admin-source-lines-view 7/7 共 25/25 PASS
+- **设计取舍**：① 删 getCodenamePool mock（不再 mock 已删 fetch）/ 简化 mock 维护面 ② SourceLineRow fixture 加新字段（assignedAt + 统计 3）/ 与生产 listAllSourceLines 返回值对齐 ③ case 1 改 getAllByText：codename 现在出现在多处（单元格 + 字库 grid + Picker）→ 用断言数量 ≥ 1 更鲁棒 / 不依赖具体出现次数 ④ case 4 按钮 name 不变（'编辑'）：assigned 行操作列文案保留 / LINES-VIEW-UNIFY 仅对 unassigned 行改 '分配' 文案
+- **六问自检**：
+  - Q1 沉淀共享层？✅ N/A 测试本地
+  - Q2 引入回归？✅ 25/25 PASS / 测试与组件契约对齐
+  - Q3 越层？✅ 仅 tests 内
+  - Q4 硬编码 / any？✅ 无
+  - Q5 布局变化？N/A
+  - Q6 文件范围？✅ 1 文件 PATCH=1 严守
+- **偏离检测**：无（FIX-4 严格 = test mock 同步 + fixture 更新）
+- **[AI-CHECK] 结论**：PASS（Codex 抓的 stale mock bug 已闭 / 6 既有 case 行为对齐当前组件实现 / 测试覆盖率恢复）
+- **闭环**：CHG-SN-9-LINES-VIEW-UNIFY-FIX-4 完成 / Codex stop-time review 4th 反馈已消化 / Wave 3 验收期累计 FIX：A2-FIX + A2-FIX-2 + LINES-VIEW-FIX-3 + LINES-VIEW-FIX-4 = 4 次 Codex 反馈全闭环 / 主循环等用户继续验收
+
+---
+
 ## [CHG-SN-9-CODENAME-MATRIX] 字库 52 山名预览表 + 单元格内联代号分配 + 重复使用建议（Wave 3 验收期补丁）
 - **完成时间**：2026-05-28
 - **执行模型**：claude-sonnet-4-6（主循环 / 验收期补丁延续 LINES-VIEW-UNIFY / 不切换 §16.5）

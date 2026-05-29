@@ -1,11 +1,15 @@
 /**
  * SourceLineAliasesClient.test.tsx — `/admin/source-line-aliases` 主视图单测
  *
- * 任务卡：CHG-368-B-B / ADR-164 §6
+ * 任务卡演进：
+ *   - CHG-368-B-B / ADR-164 §6：初始视图（仅 source_line_aliases）
+ *   - CHG-SN-9-LINES-VIEW-UNIFY：数据源换 listAllSourceLines（含 unassigned + alias-only 孤儿）
+ *   - CHG-SN-9-CODENAME-MATRIX：codename 单元格内联点击 + 52 山名预览 grid
+ *   - CHG-SN-9-LINES-VIEW-UNIFY-FIX-4（本次 Codex 4th 反馈消化）：stale mock 同步 / SourceLineRow fixture
  *
  * 覆盖 6 case：
  *   1. 渲染基础（PageHeader + DataTable）
- *   2. codename 池摘要渲染（available / occupied / cooling 三段）
+ *   2. 字库 KPI 渲染（可用基础名 / 已占用 slots / 冷却中）
  *   3. 已退役行 retire 按钮不渲染（D-164-4 软删语义）
  *   4. 编辑按钮 onClick → Modal 打开 + 字段初始化
  *   5. retire 按钮 → confirm 后调用 API + toast
@@ -15,17 +19,16 @@
 import { beforeEach, describe, it, expect, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 
-const listLineAliasesMock = vi.fn()
-const getCodenamePoolMock = vi.fn()
+// CHG-SN-9-LINES-VIEW-UNIFY-FIX-4：mock listAllSourceLines（替代旧 listLineAliases / getCodenamePool）
+const listAllSourceLinesMock = vi.fn()
 const upsertLineAliasWithFieldsMock = vi.fn()
 const retireLineAliasMock = vi.fn()
 const toastPushMock = vi.fn()
 
 vi.mock('../../../../../../apps/server-next/src/lib/sources/api', () => ({
-  listLineAliases: (...args: unknown[]) => listLineAliasesMock(...args),
+  listAllSourceLines: (...args: unknown[]) => listAllSourceLinesMock(...args),
   upsertLineAliasWithFields: (...args: unknown[]) => upsertLineAliasWithFieldsMock(...args),
   retireLineAlias: (...args: unknown[]) => retireLineAliasMock(...args),
-  getCodenamePool: (...args: unknown[]) => getCodenamePoolMock(...args),
 }))
 
 vi.mock('@resovo/admin-ui', async () => {
@@ -42,7 +45,8 @@ vi.mock('@resovo/admin-ui', async () => {
 
 import { SourceLineAliasesClient } from '../../../../../../apps/server-next/src/app/admin/source-line-aliases/_client/SourceLineAliasesClient'
 
-const ALIAS_ACTIVE = {
+// CHG-SN-9-LINES-VIEW-UNIFY-FIX-4：SourceLineRow fixture（替代旧 SourceLineAlias / 含 assignedAt + 统计字段）
+const ROW_ACTIVE = {
   sourceSiteKey: 'bilibili',
   sourceName: '线路1',
   displayName: '哔哩哔哩主线',
@@ -50,54 +54,48 @@ const ALIAS_ACTIVE = {
   priority: 50,
   retiredAt: null,
   autoRetired: false,
-  updatedAt: '2026-05-28T00:00:00Z',
+  assignedAt: '2026-05-28T00:00:00Z',
+  videoCount: 10,
+  activeCount: 20,
+  episodeCount: 25,
 } as const
 
-const ALIAS_RETIRED = {
-  ...ALIAS_ACTIVE,
+const ROW_RETIRED = {
+  ...ROW_ACTIVE,
   sourceName: '线路2',
-  displayName: '哔哩哔哩备用线',  // 与 ALIAS_ACTIVE.displayName 区分，避免 getByText 多元素
+  displayName: '哔哩哔哩备用线',  // 与 ROW_ACTIVE.displayName 区分，避免 getByText 多元素
   codename: '华山',
   retiredAt: '2026-04-01T00:00:00Z',
   autoRetired: false,
+  assignedAt: '2026-04-01T00:00:00Z',
 } as const
 
-const POOL = {
-  available: ['衡山', '嵩山', '恒山'],
-  occupied: ['泰山'],
-  cooling: ['华山'],
-}
-
 beforeEach(() => {
-  listLineAliasesMock.mockReset()
-  getCodenamePoolMock.mockReset()
+  listAllSourceLinesMock.mockReset()
   upsertLineAliasWithFieldsMock.mockReset()
   retireLineAliasMock.mockReset()
   toastPushMock.mockReset()
-  listLineAliasesMock.mockResolvedValue([ALIAS_ACTIVE, ALIAS_RETIRED])
-  getCodenamePoolMock.mockResolvedValue(POOL)
+  listAllSourceLinesMock.mockResolvedValue([ROW_ACTIVE, ROW_RETIRED])
 })
 
-describe('SourceLineAliasesClient (CHG-368-B-B / ADR-164 §6)', () => {
+describe('SourceLineAliasesClient (CHG-368-B-B → LINES-VIEW-UNIFY → CODENAME-MATRIX)', () => {
   it('1. 渲染基础：PageHeader title + DataTable + 至少 2 行', async () => {
     render(<SourceLineAliasesClient />)
     await waitFor(() => {
       expect(screen.getByText('线路别名管理')).not.toBeNull()
     })
     expect(screen.getByText('哔哩哔哩主线')).not.toBeNull()
-    expect(screen.getByText('泰山')).not.toBeNull()
+    // codename "泰山" 现在显示在单元格 button 内 + 字库 grid 内，会有多个匹配
+    expect(screen.getAllByText('泰山').length).toBeGreaterThanOrEqual(1)
   })
 
-  it('2. codename 池摘要渲染（available 3 / occupied 1 / cooling 1）', async () => {
+  it('2. 字库 KPI 渲染（可用基础名 / 已占用 slots / 冷却中）', async () => {
     render(<SourceLineAliasesClient />)
     await waitFor(() => {
-      expect(screen.getByText('可用 codename')).not.toBeNull()
+      expect(screen.getByText(/可用基础名/)).not.toBeNull()
     })
-    // 3 个 count 数字应该显示
-    expect(screen.getByText('3')).not.toBeNull()  // available
-    // 多个 1 可能匹配（occupied + cooling）—— 改用 getAllByText
-    const ones = screen.getAllByText('1')
-    expect(ones.length).toBeGreaterThanOrEqual(2)
+    expect(screen.getByText('已占用 slots')).not.toBeNull()
+    expect(screen.getByText(/冷却中/)).not.toBeNull()
   })
 
   it('3. 已退役行 retire 按钮不渲染（D-164-4 软删语义）', async () => {
@@ -116,21 +114,19 @@ describe('SourceLineAliasesClient (CHG-368-B-B / ADR-164 §6)', () => {
     await waitFor(() => {
       expect(screen.getByText('哔哩哔哩主线')).not.toBeNull()
     })
-    // 找第一个"编辑"按钮（在役行）
+    // assigned 行操作列显 "编辑"（CHG-SN-9-LINES-VIEW-UNIFY 行为 / unassigned 行显 "分配"）
     const editButtons = screen.getAllByRole('button', { name: '编辑' })
     fireEvent.click(editButtons[0]!)
-    // Modal title 应含 siteKey/sourceName
     await waitFor(() => {
       expect(screen.getByText(/编辑别名/)).not.toBeNull()
     })
-    // 别名输入框初始化为当前 displayName
     const input = screen.getByLabelText(/别名（必填/) as HTMLInputElement
     expect(input.value).toBe('哔哩哔哩主线')
   })
 
   it('5. retire 按钮 → confirm 后调用 API + 成功 toast', async () => {
     const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
-    retireLineAliasMock.mockResolvedValueOnce({ ...ALIAS_ACTIVE, retiredAt: '2026-05-28T00:00:00Z' })
+    retireLineAliasMock.mockResolvedValueOnce({ ...ROW_ACTIVE, retiredAt: '2026-05-28T00:00:00Z' })
     render(<SourceLineAliasesClient />)
     await waitFor(() => {
       expect(screen.getByText('哔哩哔哩主线')).not.toBeNull()
