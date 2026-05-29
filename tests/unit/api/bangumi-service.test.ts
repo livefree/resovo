@@ -251,9 +251,26 @@ describe('BangumiService.matchAndEnrich', () => {
 
 describe('BangumiService.confirmMatch', () => {
   let svc: BangumiService
+  // ── 事务化 confirmMatch（Codex stop-time review FIX）：mock Pool.connect 返回 client
+  //    记录 query 调用序列，便于断言 BEGIN/COMMIT/ROLLBACK 顺序与原子性 ──────────
+  let clientQueries: string[]
+  let clientReleased: boolean
+  let mockClient: { query: ReturnType<typeof vi.fn>; release: ReturnType<typeof vi.fn> }
+  let mockPool: { connect: ReturnType<typeof vi.fn> }
+
   beforeEach(() => {
     vi.clearAllMocks()
-    svc = new BangumiService({} as never)
+    clientQueries = []
+    clientReleased = false
+    mockClient = {
+      query: vi.fn(async (sql: string) => {
+        clientQueries.push(sql)
+        return { rows: [], rowCount: 0 }
+      }),
+      release: vi.fn(() => { clientReleased = true }),
+    }
+    mockPool = { connect: vi.fn(async () => mockClient) }
+    svc = new BangumiService(mockPool as never)
     mFindCatalog.mockResolvedValue({ id: CID, metadataSource: 'crawler', lockedFields: [] })
     mUpdateCatalog.mockResolvedValue({ id: CID, metadataSource: 'bangumi' })
   })
@@ -265,6 +282,9 @@ describe('BangumiService.confirmMatch', () => {
     expect(r).toEqual({ updated: false })
     expect(mUpdateCatalog).not.toHaveBeenCalled()
     expect(mUpsertRef).not.toHaveBeenCalled()
+    // 事务必须 ROLLBACK 且释放 client（不留连接泄漏）
+    expect(clientQueries).toEqual(['BEGIN', 'ROLLBACK'])
+    expect(clientReleased).toBe(true)
   })
 
   it('subject 不在 dump 但有 Token → 用显式 bangumiId 拉 rich，updated:true + 写 manual_confirmed ref（P1）', async () => {
@@ -279,6 +299,43 @@ describe('BangumiService.confirmMatch', () => {
     expect(mUpsertRef).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
       provider: 'bangumi', matchStatus: 'manual_confirmed', isPrimary: true,
     }))
+    // BEGIN ... COMMIT；client 释放
+    expect(clientQueries[0]).toBe('BEGIN')
+    expect(clientQueries[clientQueries.length - 1]).toBe('COMMIT')
+    expect(clientReleased).toBe(true)
+  })
+
+  // ── Codex stop-time review FIX：原子性回归 ────────────────────────
+  it('ref 写入抛错 → ROLLBACK + 错误抛出，不留 catalog 已改但 ref 未写的脏态', async () => {
+    mConfigured.mockReturnValue(true)
+    mFindById.mockResolvedValue(null)
+    mGetSubject.mockResolvedValue(subject({ id: 99999 }))
+    mGetEpisodes.mockResolvedValue([])
+    mUpsertRef.mockRejectedValueOnce(new Error('simulated ref write failure'))
+
+    await expect(svc.confirmMatch(VID, CID, 99999)).rejects.toThrow('simulated ref write failure')
+    // enrichCatalog 已调用 updateCatalogFields（共享 client），但事务 ROLLBACK
+    expect(mUpdateCatalog).toHaveBeenCalled()
+    expect(mUpsertRef).toHaveBeenCalled()
+    expect(clientQueries).toContain('BEGIN')
+    expect(clientQueries).toContain('ROLLBACK')
+    expect(clientQueries).not.toContain('COMMIT')
+    expect(clientReleased).toBe(true)
+  })
+
+  it('enrichCatalog 内部抛错（updateCatalogFields fail）→ ROLLBACK + 错误抛出', async () => {
+    mConfigured.mockReturnValue(true)
+    mFindById.mockResolvedValue(null)
+    mGetSubject.mockResolvedValue(subject({ id: 99999 }))
+    mGetEpisodes.mockResolvedValue([])
+    mUpdateCatalog.mockRejectedValueOnce(new Error('catalog write failure'))
+
+    await expect(svc.confirmMatch(VID, CID, 99999)).rejects.toThrow('catalog write failure')
+    expect(mUpsertRef).not.toHaveBeenCalled()
+    expect(clientQueries).toContain('BEGIN')
+    expect(clientQueries).toContain('ROLLBACK')
+    expect(clientQueries).not.toContain('COMMIT')
+    expect(clientReleased).toBe(true)
   })
 })
 

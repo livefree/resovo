@@ -3,7 +3,7 @@
  * 从 videos.ts 拆出（CHG-SN-7-MISC-API-QUERIES-SIZE）
  */
 
-import type { Pool } from 'pg'
+import type { Pool, PoolClient } from 'pg'
 import type { VideoCard, VideoType, DoubanStatus, SourceCheckStatus, TrendingTag } from '@/types'
 import type { DbVideoRow } from './videos.internal'
 import {
@@ -265,7 +265,7 @@ export async function updateVideoEnrichStatus(
  * 仅当当前 episode_count 缺省/为 0 时回填，避免覆盖已有更准确的集数。
  */
 export async function updateEpisodeCount(
-  db: Pool,
+  db: Pool | PoolClient,
   videoId: string,
   episodeCount: number
 ): Promise<void> {

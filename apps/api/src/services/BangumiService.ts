@@ -6,7 +6,7 @@
  * 不含 HTTP 细节（在 lib/bangumi.ts）；不直连 SQL（经 db/queries）。
  */
 
-import type { Pool } from 'pg'
+import type { Pool, PoolClient } from 'pg'
 import type { BangumiCandidate } from '@/types'
 import { MediaCatalogService } from './MediaCatalogService'
 import type { CatalogUpdateData } from './MediaCatalogService'
@@ -87,22 +87,39 @@ export class BangumiService {
    * 后台人工确认：按显式 bangumiId 走 rich 抓取写 catalog（bangumi 源，不锁字段，ADR-161 Y2）。
    * 即使该 subject 不在本地 dump，也用 bangumiId 调 REST 详情；确实没写入任何内容时返回 updated:false，
    * 并且只有写入成功才记 manual_confirmed ref（避免对不存在 subject 的"假成功"，ADR-161 P1 修订）。
+   *
+   * 原子性（Codex stop-time review FIX）：catalog/episodes/episode_count + manual_confirmed ref
+   * 全部在同一事务内完成。任一步骤失败 → ROLLBACK，DB 不会留下"catalog 已带 bangumi 数据
+   * 但 ref 仍是 auto_matched/不存在"的脏态。REST 抓取在事务外，仅 DB 写入持锁。
    */
   async confirmMatch(videoId: string, catalogId: string, bangumiId: number): Promise<{ updated: boolean }> {
     const entry = await externalDataQueries.findBangumiById(this.db, bangumiId)
-    const result = await this.enrichCatalog(videoId, catalogId, bangumiId, entry)
-    if (!result.wrote) return { updated: false }
-    await externalDataQueries.upsertVideoExternalRef(this.db, {
-      videoId,
-      provider: 'bangumi',
-      externalId: String(bangumiId),
-      matchStatus: 'manual_confirmed',
-      matchMethod: 'manual',
-      confidence: 1,
-      isPrimary: true,
-      linkedBy: 'moderator',
-    })
-    return { updated: true }
+    const client = await this.db.connect()
+    try {
+      await client.query('BEGIN')
+      const result = await this.enrichCatalog(videoId, catalogId, bangumiId, entry, client)
+      if (!result.wrote) {
+        await client.query('ROLLBACK')
+        return { updated: false }
+      }
+      await externalDataQueries.upsertVideoExternalRef(client, {
+        videoId,
+        provider: 'bangumi',
+        externalId: String(bangumiId),
+        matchStatus: 'manual_confirmed',
+        matchMethod: 'manual',
+        confidence: 1,
+        isPrimary: true,
+        linkedBy: 'moderator',
+      })
+      await client.query('COMMIT')
+      return { updated: true }
+    } catch (err) {
+      try { await client.query('ROLLBACK') } catch { /* connection may already be lost */ }
+      throw err
+    } finally {
+      client.release()
+    }
   }
 
   /**
@@ -156,13 +173,19 @@ export class BangumiService {
    * 写 catalog（bangumi 源）+ 逐集。优先用显式 bangumiId 调 REST rich 详情；
    * Token 缺失/抓取失败时降级用本地 dump entry（entry 为 null 则无可写内容）。
    * 返回逐集写入数、是否降级、是否实际写入（wrote=false 表示既无 rich 也无 dump 字段可写）。
+   *
+   * 可选 client（confirmMatch FIX）：传入 PoolClient 时所有 DB 写入复用该连接，由调用方
+   * 持有事务；不传则各 query 走自己的连接（matchAndEnrich 后台 job 使用）。REST 调用始终
+   * 在事务外，避免长持锁。
    */
   private async enrichCatalog(
     videoId: string,
     catalogId: string,
     bangumiId: number,
     entry: BangumiEntryMatch | null,
+    client?: PoolClient,
   ): Promise<{ episodes: number; degraded: boolean; wrote: boolean }> {
+    const db = client ?? this.db
     let fields: CatalogUpdateData | null = null
     let episodeCount = 0
     let degraded = true
@@ -174,14 +197,14 @@ export class BangumiService {
         degraded = false
         const eps = await getEpisodes(bangumiId)
         if (eps.length > 0) {
-          episodeCount = await catalogEpisodeQueries.upsertCatalogEpisodes(this.db, catalogId, mapEpisodes(eps))
+          episodeCount = await catalogEpisodeQueries.upsertCatalogEpisodes(db, catalogId, mapEpisodes(eps))
         }
         // 本篇集数（ADR-161 P1）：优先 wiki eps（本篇数）；否则数 type===0 本篇；
         // 不用 total_episodes（含 SP/OP/ED 章节，会高估用户侧剧集数）
         const mainCount = subject.eps && subject.eps > 0
           ? subject.eps
           : eps.filter((e) => e.type === 0).length
-        if (mainCount > 0) await videosQueries.updateEpisodeCount(this.db, videoId, mainCount)
+        if (mainCount > 0) await videosQueries.updateEpisodeCount(db, videoId, mainCount)
       }
     }
 
@@ -200,6 +223,7 @@ export class BangumiService {
 
     const { updated } = await this.catalogService.safeUpdate(catalogId, fields, 'bangumi', {
       sourceRef: String(bangumiId),
+      db: client,
     })
     return { episodes: episodeCount, degraded, wrote: updated !== null }
   }
