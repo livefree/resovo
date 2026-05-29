@@ -142,4 +142,65 @@ describe('MediaCatalogService.safeUpdate — ADMIN-14 规则', () => {
 
     expect(result).toEqual({ updated: null, skippedFields: [] })
   })
+
+  // ── CHORE-11 FIX-FIX (Codex round 9)：undefined value 不污染 provenance ───
+  it('undefined value 整段 skip → 不进 filteredFields / 不进 skippedFields / provenance 不记', async () => {
+    vi.mocked(catalogQueries.findCatalogById).mockResolvedValue(
+      makeCatalog({ metadataSource: 'crawler' }) as never,
+    )
+    vi.mocked(provenanceQueries.getHardLockedFields).mockResolvedValue([])
+    vi.mocked(catalogQueries.updateCatalogFields).mockResolvedValue({
+      id: 'cat-1', metadataSource: 'douban',
+    } as never)
+
+    const svc = new MediaCatalogService(mockDb)
+    const result = await svc.safeUpdate(
+      'cat-1',
+      // 模拟 MetadataEnrichService step1LocalDouban 等 caller 用 `?? undefined` 模式：
+      // 部分字段是 undefined（未传），部分是有效值
+      { doubanId: 'sub-123', rating: undefined, description: 'real desc', writers: undefined } as never,
+      'douban',
+      { sourceRef: 'sub-123' },
+    )
+
+    // 1. skippedFields 不包含 undefined 字段（语义：不是被锁阻挡，是没传值）
+    expect(result.skippedFields).toEqual([])
+
+    // 2. updateCatalogFields 只收到有效字段
+    const writtenArg = vi.mocked(catalogQueries.updateCatalogFields).mock.calls[0][2] as Record<string, unknown>
+    expect(writtenArg).not.toHaveProperty('rating')
+    expect(writtenArg).not.toHaveProperty('writers')
+    expect(writtenArg).toHaveProperty('doubanId')
+    expect(writtenArg).toHaveProperty('description')
+
+    // 3. provenance 写入的字段名清单不含 undefined 字段（关键：provenance 不被污染）
+    expect(provenanceQueries.batchUpsertFieldProvenance).toHaveBeenCalledWith(
+      expect.anything(), 'cat-1',
+      expect.arrayContaining(['doubanId', 'description']),
+      'douban', 'sub-123', 3,
+    )
+    const provArg = vi.mocked(provenanceQueries.batchUpsertFieldProvenance).mock.calls[0][2]
+    expect(provArg).not.toContain('rating')
+    expect(provArg).not.toContain('writers')
+  })
+
+  it('全部 value 都是 undefined → filteredFields 空 → 不调 updateCatalogFields / 不调 batchUpsertFieldProvenance', async () => {
+    vi.mocked(catalogQueries.findCatalogById).mockResolvedValue(
+      makeCatalog({ metadataSource: 'crawler' }) as never,
+    )
+    vi.mocked(provenanceQueries.getHardLockedFields).mockResolvedValue([])
+
+    const svc = new MediaCatalogService(mockDb)
+    const result = await svc.safeUpdate(
+      'cat-1',
+      { rating: undefined, description: undefined, writers: undefined } as never,
+      'douban',
+      { sourceRef: 'sub-123' },
+    )
+
+    expect(result.skippedFields).toEqual([])
+    expect(result.updated).toMatchObject({ id: 'cat-1' })
+    expect(catalogQueries.updateCatalogFields).not.toHaveBeenCalled()
+    expect(provenanceQueries.batchUpsertFieldProvenance).not.toHaveBeenCalled()
+  })
 })
