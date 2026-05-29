@@ -1978,7 +1978,7 @@ CHG-369 (前台主题选择器, 独立)
 
 ## [SEQ-20260528-MOD-WAVE3] server-next 内容审核台 Wave 3 — Wave 2 长尾清理 + 架构 / 长期 P3 卡（plan §14 Wave 3 + §17.2 Wave 3 增补）
 
-- **状态**：✅ **实施期完成 = 90% / 9/10 完成 + 3 DEFERRED**（长尾 4/4 + 主线 5/6 完毕含 ADR-165 全链 ship / 仅 BANGUMI-A DEFERRED 占第 10 位 / 建议进入 Wave 3 验收期 plan §16.2）
+- **状态**：⏳ **验收期（2026-05-28 启动）**（实施期 9/10 + 3 DEFERRED 完成 / 验收报告 docs/manual/wave-3-acceptance.md / 等用户走完 §6 5 条验收路径签字 → 主循环自动取 Wave 4 首卡）
 - **创建时间**：2026-05-28
 - **目标**：按用户 2026-05-28 决策"长尾先清 + plan §14 主线"：先清 4 张 Wave 2 长尾 follow-up，再按 plan §14 / §17.2 Wave 3 入 6 张 P3 长期主线卡。
 - **执行约束**：沿用 Wave 1/2 §16.1-16.5（UI/UX 谨慎 / docs/manual 同步 / 主循环全自动 + BLOCKER 触发清单）
