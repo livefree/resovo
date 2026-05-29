@@ -157,11 +157,16 @@ WITH alias_dead_status AS (
     )                                                            AS dead_count
   FROM source_line_aliases sla
   LEFT JOIN video_sources vs
-    ON vs.source_site_key = sla.source_site_key
-   AND vs.source_name     = sla.source_name
-   AND vs.is_active       = true
-   AND vs.deleted_at      IS NULL
+    ON vs.source_name = sla.source_name
+   AND vs.is_active   = true
+   AND vs.deleted_at  IS NULL
+  LEFT JOIN videos v
+    ON v.id = vs.video_id
   WHERE sla.retired_at IS NULL
+    -- WAVE4-VALIDATION-FIX-1 P1：源站标识 fallback（同 sources.ts:161 既有范式）
+    -- Migration 046 backfill 后 video_sources.source_site_key 仍可能 NULL
+    -- → 不加 fallback 这类源会被 LEFT JOIN 当作"site_key 不匹配" / dead_since 卡死或孤儿误判
+    AND (vs.id IS NULL OR COALESCE(vs.source_site_key, v.site_key) = sla.source_site_key)
   GROUP BY sla.source_site_key, sla.source_name, sla.dead_since
 ),
 classified AS (
@@ -201,15 +206,27 @@ WHERE sla.source_site_key = c.source_site_key
  * 外层 UPDATE 用 (source_site_key, source_name) IN (...) 元组语法 / PostgreSQL 原生
  * RETURNING 行供 worker 调用方结构化日志（R-DEAD-4）
  */
+/**
+ * WAVE4-VALIDATION-FIX-1 P1/P2：段 3 加二次确认「当前仍全 dead」
+ *
+ * 段 1+2 写完 dead_since 后到段 3 之间，probe/render/feedback 写回不共享 advisory lock
+ * （level1-probe.ts / level2-render.ts / feedback.ts 各自走 pool.query 无锁）
+ * → 若状态在此间隙恢复（probe_status 转 ok），段 3 仍按旧 dead_since 退役 → 误退役活跃源
+ *
+ * 修复：段 3 outer UPDATE WHERE 加双子查询
+ *   - NOT EXISTS (alive source) — 防恢复后误退役
+ *   - EXISTS (still has active source) — 防孤儿（无 source）误退役
+ *   - 两个子查询同样含 COALESCE(vs.source_site_key, v.site_key) source_site_key fallback（P1）
+ */
 const SQL_RETIRE_DEAD_LINES = `
-UPDATE source_line_aliases
+UPDATE source_line_aliases sla_out
 SET retired_at   = NOW(),
     auto_retired = true,
     updated_at   = NOW()
-WHERE retired_at IS NULL
-  AND dead_since IS NOT NULL
-  AND dead_since < NOW() - ($1 || ' days')::INTERVAL
-  AND (source_site_key, source_name) IN (
+WHERE sla_out.retired_at IS NULL
+  AND sla_out.dead_since IS NOT NULL
+  AND sla_out.dead_since < NOW() - ($1 || ' days')::INTERVAL
+  AND (sla_out.source_site_key, sla_out.source_name) IN (
     SELECT source_site_key, source_name
     FROM source_line_aliases
     WHERE retired_at IS NULL
@@ -218,5 +235,25 @@ WHERE retired_at IS NULL
     ORDER BY dead_since ASC
     LIMIT $2
   )
-RETURNING source_site_key, source_name, dead_since
+  -- WAVE4-VALIDATION-FIX-1 P1/P2：二次确认仍全 dead（防段 1+2 → 段 3 间隙恢复误退役）
+  AND NOT EXISTS (
+    SELECT 1
+    FROM video_sources vs
+    LEFT JOIN videos v ON v.id = vs.video_id
+    WHERE vs.source_name = sla_out.source_name
+      AND vs.is_active   = true
+      AND vs.deleted_at  IS NULL
+      AND COALESCE(vs.source_site_key, v.site_key) = sla_out.source_site_key
+      AND NOT (vs.probe_status = 'dead' AND vs.render_status = 'dead')
+  )
+  AND EXISTS (
+    SELECT 1
+    FROM video_sources vs
+    LEFT JOIN videos v ON v.id = vs.video_id
+    WHERE vs.source_name = sla_out.source_name
+      AND vs.is_active   = true
+      AND vs.deleted_at  IS NULL
+      AND COALESCE(vs.source_site_key, v.site_key) = sla_out.source_site_key
+  )
+RETURNING sla_out.source_site_key, sla_out.source_name, sla_out.dead_since
 ` as const

@@ -236,6 +236,48 @@ describe('autoRetireLineByDeadCheck — query 层（CHG-PRE-DEAD-LINE-AUTO-RETIR
     expect(sql).toMatch(/AND\s+vs\.is_active\s+=\s+true/)
   })
 
+  // ── WAVE4-VALIDATION-FIX-1 P1 + P1/P2 ────────────────────────
+
+  it('T13 段 1+2 CTE 必含 COALESCE(vs.source_site_key, v.site_key) fallback + LEFT JOIN videos（P1）', async () => {
+    const harness = makePoolAndClient({ retiredRows: [] })
+    const log = makeLog()
+    await autoRetireLineByDeadCheck(harness.pool, log)
+
+    const sql = harness.calls.find((c) => c.text.includes('WITH alias_dead_status'))!.text
+    // P1 修复：必须 LEFT JOIN videos 提供 v.site_key 作 fallback
+    expect(sql).toMatch(/LEFT JOIN videos v\s+ON v\.id = vs\.video_id/)
+    // COALESCE(vs.source_site_key, v.site_key) = sla.source_site_key
+    expect(sql).toMatch(/COALESCE\(vs\.source_site_key,\s*v\.site_key\)\s*=\s*sla\.source_site_key/)
+    // 孤儿守卫：vs.id IS NULL OR COALESCE(...)
+    expect(sql).toMatch(/vs\.id IS NULL\s+OR\s+COALESCE/)
+  })
+
+  it('T14 段 3 必含 NOT EXISTS alive source + EXISTS active source 二次确认（P1/P2 防恢复后误退役）', async () => {
+    const harness = makePoolAndClient({ retiredRows: [] })
+    const log = makeLog()
+    await autoRetireLineByDeadCheck(harness.pool, log)
+
+    const retireCall = harness.calls.find((c) =>
+      c.text.includes('UPDATE source_line_aliases') &&
+      c.text.includes('retired_at') &&
+      c.text.includes('auto_retired'),
+    )!
+    const sql = retireCall.text
+    // P1/P2：必须用 alias sla_out 让 RETURNING 引用清晰
+    expect(sql).toMatch(/UPDATE source_line_aliases sla_out/)
+    // NOT EXISTS (alive source) — 防恢复后误退役
+    expect(sql).toMatch(/NOT EXISTS \(/)
+    expect(sql).toMatch(/NOT \(vs\.probe_status = 'dead' AND vs\.render_status = 'dead'\)/)
+    // EXISTS (still has active source) — 防孤儿误退役
+    expect(sql).toMatch(/AND EXISTS \(/)
+    // 两个子查询都含 COALESCE source_site_key fallback
+    const coalesceMatches = sql.match(/COALESCE\(vs\.source_site_key,\s*v\.site_key\)/g) ?? []
+    expect(coalesceMatches.length).toBeGreaterThanOrEqual(2)
+    // 两个子查询都 LEFT JOIN videos
+    const videoJoins = sql.match(/LEFT JOIN videos v ON v\.id = vs\.video_id/g) ?? []
+    expect(videoJoins.length).toBeGreaterThanOrEqual(2)
+  })
+
   // ── 段 3 检测 + 退役 ────────────────────────────────────────────
 
   it('T4 段 3 检测到 dead_since < NOW() - 180 days → UPDATE + RETURNING 行', async () => {
@@ -257,7 +299,8 @@ describe('autoRetireLineByDeadCheck — query 层（CHG-PRE-DEAD-LINE-AUTO-RETIR
     expect(retireCall!.values).toEqual([DEAD_THRESHOLD_DAYS, RETIRE_BATCH_LIMIT])
     expect(retireCall!.text).toMatch(/SET retired_at\s+=\s+NOW\(\)/)
     expect(retireCall!.text).toMatch(/auto_retired\s+=\s+true/)
-    expect(retireCall!.text).toContain('RETURNING source_site_key, source_name, dead_since')
+    // P1/P2 后 RETURNING 用 sla_out 别名（防 UPDATE 表别名歧义）
+    expect(retireCall!.text).toMatch(/RETURNING sla_out\.source_site_key,\s*sla_out\.source_name,\s*sla_out\.dead_since/)
   })
 
   it('T5 batch limit + ORDER BY dead_since ASC（防雪崩 + 优先退役最老）', async () => {

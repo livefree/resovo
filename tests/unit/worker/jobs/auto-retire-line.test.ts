@@ -125,6 +125,40 @@ describe('runAutoRetireLine — worker 自包含（CHG-PRE-DEAD-LINE-AUTO-RETIRE
     expect(sql).toMatch(/WHERE sla\.retired_at IS NULL/)
   })
 
+  // ── WAVE4-VALIDATION-FIX-1 P1 + P1/P2（worker SQL 与 apps/api byte-identical 同步）──
+
+  it('T11 段 1+2 必含 COALESCE(vs.source_site_key, v.site_key) fallback + LEFT JOIN videos（P1）', async () => {
+    const harness = makePoolAndClient({ retiredRows: [] })
+    const log = makeLog()
+    await runAutoRetireLine(harness.pool, log)
+
+    const sql = harness.calls.find((c) => c.text.includes('WITH alias_dead_status'))!.text
+    expect(sql).toMatch(/LEFT JOIN videos v\s+ON v\.id = vs\.video_id/)
+    expect(sql).toMatch(/COALESCE\(vs\.source_site_key,\s*v\.site_key\)\s*=\s*sla\.source_site_key/)
+    expect(sql).toMatch(/vs\.id IS NULL\s+OR\s+COALESCE/)
+  })
+
+  it('T12 段 3 必含 NOT EXISTS alive source + EXISTS active source 二次确认（P1/P2 防恢复后误退役）', async () => {
+    const harness = makePoolAndClient({ retiredRows: [] })
+    const log = makeLog()
+    await runAutoRetireLine(harness.pool, log)
+
+    const retireCall = harness.calls.find((c) =>
+      c.text.includes('UPDATE source_line_aliases') &&
+      c.text.includes('retired_at') &&
+      c.text.includes('auto_retired'),
+    )!
+    const sql = retireCall.text
+    expect(sql).toMatch(/UPDATE source_line_aliases sla_out/)
+    expect(sql).toMatch(/NOT EXISTS \(/)
+    expect(sql).toMatch(/NOT \(vs\.probe_status = 'dead' AND vs\.render_status = 'dead'\)/)
+    expect(sql).toMatch(/AND EXISTS \(/)
+    const coalesceMatches = sql.match(/COALESCE\(vs\.source_site_key,\s*v\.site_key\)/g) ?? []
+    expect(coalesceMatches.length).toBeGreaterThanOrEqual(2)
+    const videoJoins = sql.match(/LEFT JOIN videos v ON v\.id = vs\.video_id/g) ?? []
+    expect(videoJoins.length).toBeGreaterThanOrEqual(2)
+  })
+
   it('T4 段 3 SQL 含 batch limit + ORDER BY dead_since ASC + RETURNING', async () => {
     const harness = makePoolAndClient({ retiredRows: [] })
     const log = makeLog()
@@ -139,7 +173,8 @@ describe('runAutoRetireLine — worker 自包含（CHG-PRE-DEAD-LINE-AUTO-RETIRE
     expect(retireCall.text).toMatch(/SET retired_at\s+=\s+NOW\(\)/)
     expect(retireCall.text).toMatch(/auto_retired\s+=\s+true/)
     expect(retireCall.text).toMatch(/ORDER BY dead_since ASC\s+LIMIT \$2/)
-    expect(retireCall.text).toContain('RETURNING source_site_key, source_name, dead_since')
+    // P1/P2 后 RETURNING 用 sla_out 别名
+    expect(retireCall.text).toMatch(/RETURNING sla_out\.source_site_key,\s*sla_out\.source_name,\s*sla_out\.dead_since/)
   })
 
   // ── advisory lock 边界 ───────────────────────────────────────────
