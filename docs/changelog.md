@@ -40,6 +40,56 @@
 
 ---
 
+## [CHG-SN-9-CODENAME-MATRIX] 字库 52 山名预览表 + 单元格内联代号分配 + 重复使用建议（Wave 3 验收期补丁）
+- **完成时间**：2026-05-28
+- **执行模型**：claude-sonnet-4-6（主循环 / 验收期补丁延续 LINES-VIEW-UNIFY / 不切换 §16.5）
+- **子代理调用**：无（不改 packages/admin-ui Props / 复用 admin-ui Modal + AdminButton 原语）
+- **拆卡承接**：用户验收期反馈 —— ① 希望在"线路别名"页面看到 52 字库预览 ② codename 分配从"打开 Modal 全字段编辑" → 单元格点击直接选 ③ 系统应该提示代号重复使用解决方案
+- **范围**（3 业务 + 1 测试 + 1 docs（changelog）PATCH=5 严守）：
+  - `apps/server-next/src/lib/sources/codename-utils.ts` NEW（前端纯函数 / 无网络依赖 / 消费既有 `listAllSourceLines()` 数据）：
+    - `parseCodename(value)` / `joinCodename(base, suffix)` 解析 "基础名" 与 "基础名-N" 格式
+    - `buildCodenameMatrix(rows, now?)` 计算 52 MountainSlot[]（每山的 slots[] 含 base + 后缀变种 + status + assignedTo + coolingDaysLeft + suggestedNext 后缀建议）
+    - 后缀建议算法：base 被占时从 1 开始递增找第一个未使用的后缀（防"-1 -2 -3"递增式）
+    - 90 天冷却期判定与后端 SourcesMatrixService.getCodenamePool 算法等价（退役 ≥ 90 天 → 视为 available 不进 byBase）
+    - `computeMatrixStats(matrix)` 聚合统计：mountainTotal / mountainAvailable / slotsOccupied / slotsCooling
+  - `apps/server-next/src/app/admin/source-line-aliases/_client/CodenameMatrixPicker.tsx` NEW（消费 admin-ui Modal + AdminButton 原语 / 240 行）：
+    - 顶部 KPI 行：字库总数 + 可用基础名 + 已占用 slots + 冷却中 slots
+    - 中部 52 山名 grid：每山一个 button card / 状态色（success/raised/warning）+ 状态 badge "可用/占用/冷却" / 后缀变种 chip 列表（"-1 -2" 显示在卡片底部）
+    - 交互：点 available → onPick 立即写入 / 点 occupied → 弹"已被占用 / 建议使用 X-2" 确认浮层 / 点 cooling → disabled + tooltip 剩余天数
+    - 底部 "清除代号" + "取消" 操作行
+  - `apps/server-next/src/app/admin/source-line-aliases/_client/SourceLineAliasesClient.tsx` 改造：
+    - codename 列 cell：从纯文本 → button + 虚线边框 + "＋ 分配代号"（未分配）/ 代号字符串（已分配）+ data-testid 区分行
+    - 新增 `handlePickCodename(codename | null)`：复用 upsertLineAliasWithFields（仅改 codename 字段 / 沿用既有 displayName + priority）/ toast 区分"已分配代号 X" vs "已清除代号"
+    - 顶部 AdminCard 升级：原 3 数字 KPI → 加 52 山名预览 grid（每山小色块 + "+N" 后缀计数）
+    - 删除 getCodenamePool fetch（matrix 直接从 rows 派生 / 减少 API 调用 / 字库状态实时与表格数据一致）
+    - 删 CodenamePoolView interface（未用）+ pool state + setPool（unused）
+  - `tests/unit/server-next/codename-utils.test.ts` NEW 12 case：
+    - parseCodename / joinCodename 往返（基础名 / "-N" 后缀 / 非法格式）
+    - buildCodenameMatrix：无 sla 全 available / base 占用 + assignedTo 透传 / base 占用建议 base-1 / base+base-2 同时占用建议 base-1（最小空缺）/ base+base-1+base-2 全占建议 base-3 / cooling < 90 天 + coolingDaysLeft 计算 / cooling ≥ 90 天回 available / 非字库山名不影响 52 项
+    - computeMatrixStats：mountainAvailable + slotsOccupied + slotsCooling 聚合
+- **不触发 ADR sync**（getCodenamePool 端点保留 / 仅前端不再消费 / 不破坏既有契约）
+- **不触发 architecture.md sync**：无 schema 改动 / 仅前端工具沉淀
+- **设计取舍**：① 前端纯函数派发字库状态（消费既有 listAllSourceLines 数据）而非新加后端端点：减少 API 调用 + 数据一致性（rows 改动时 matrix 自动同步）/ 既有 getCodenamePool 端点保留兼容性 ② 后缀建议从 1 开始递增（非 base-2 跳过 base-1）：填补空缺优先 / 防字库扩容浪费 ③ 占用确认浮层而非直接 disabled：用户即使误点也能一键采纳建议（UX 友好 / 避免再次浏览）④ codename 单元格 button + 虚线边框：视觉上区分"可点交互区"vs 纯文本 ⑤ 删除 getCodenamePool fetch：避免双数据源（matrix 实时派生 vs server polling）/ rows 更新即 matrix 更新 ⑥ 测试 import 用相对路径而非 @/：vitest.config @/ alias context-aware / tests/unit/server-next/ 不在 isServerNext match 路径里 / 相对路径避开 alias 复杂度
+- **重复使用解决方案**（用户核心需求）：
+  - **同名再用**：用户在 grid 中点已占用的"泰山" → 弹层显示"已被 site_x/lineX 占用 / 是否使用建议的扩容编号 泰山-2"
+  - **后缀算法**：base + base-2 已用 → 建议 base-1（最小空缺）/ base + base-1 + base-2 全用 → 建议 base-3 / 防"递增式" 浪费
+  - **冷却期可视化**：退役 < 90 天 → grid 卡显 cooling 黄色 + tooltip "剩 X 天可复用" / disabled 点击
+  - **后缀变种 chip**：每山卡底部显示 "-1" "-2" 等已分配后缀 / hover 显示具体占用方
+- **质量门禁**：typecheck ✅ EXIT=0 / lint ✅ EXIT=0 / verify:adr-contracts ✅ EXIT=0 / codename-utils 12/12 PASS（覆盖核心算法 + 边界）
+- **commit trailer**：无强制 Subagents（不修改 packages/admin-ui Props / 不起新 ADR / 不重构 player-core）
+- **六问自检**：
+  - Q1 沉淀共享层？✅ codename-utils 沉淀 server-next/lib/sources/ 共享层 / 未来 SourcesClient 等模块复用
+  - Q2 引入回归？✅ getCodenamePool 端点保留 / 编辑 Modal 路径保留 / 12/12 测试 PASS / typecheck + lint + verify EXIT=0
+  - Q3 越层？✅ 前端工具层 + UI 组件层 / 无后端改动
+  - Q4 硬编码 / any？✅ 无 any / 颜色全 CSS 变量（state-success / state-warning / bg-surface-raised）/ 后缀正则 + 90 天常量集中
+  - Q5 布局变化？✅ codename 单元格视觉升级（虚线 button） + 顶部 AdminCard 加 52 山名预览 grid（信息密度增 / 总布局不变）+ 新 Modal 弹层 / 主线表格不变
+  - Q6 文件范围？✅ 3 业务 + 1 测试 + 1 docs PATCH=5 严守
+- **偏离检测**：无（4 文件清单全命中 / 测试覆盖核心算法）
+- **[AI-CHECK] 结论**：PASS（字库 52 山名预览 ship / 单元格内联代号操作 ship / 后缀建议算法 + 占用确认浮层 / 冷却期可视化 / 重复使用问题完整闭环）
+- **闭环**：CHG-SN-9-CODENAME-MATRIX 完成 / Wave 3 验收期补丁累计：LINES-VIEW-UNIFY + FIX-3 + CODENAME-MATRIX / 代号分配 UX 从 "Modal 全字段编辑" → "单元格 → 矩阵 → 一键选择" / 重复使用解决方案完整 / 主循环等用户继续验收
+
+---
+
 ## [CHG-SN-9-LINES-VIEW-UNIFY-FIX-3] SQL FULL OUTER JOIN 范式包含 alias-only 孤儿行（Codex stop-time review 3rd / cooling/retired 行防失踪）
 - **完成时间**：2026-05-28
 - **执行模型**：claude-sonnet-4-6（主循环 / FIX 紧随 LINES-VIEW-UNIFY / 不切换 §16.5）

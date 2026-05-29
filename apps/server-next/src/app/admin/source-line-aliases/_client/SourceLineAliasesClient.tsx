@@ -38,8 +38,9 @@ import {
   listAllSourceLines,
   upsertLineAliasWithFields,
   retireLineAlias,
-  getCodenamePool,
 } from '@/lib/sources/api'
+import { buildCodenameMatrix, computeMatrixStats } from '@/lib/sources/codename-utils'
+import { CodenameMatrixPicker } from './CodenameMatrixPicker'
 
 // ── 类型 ───────────────────────────────────────────────────────────
 
@@ -48,12 +49,6 @@ interface EditingState {
   displayName: string
   codename: string
   priority: number
-}
-
-interface CodenamePoolView {
-  readonly available: readonly string[]
-  readonly occupied: readonly string[]
-  readonly cooling: readonly string[]
 }
 
 // ── 样式 ───────────────────────────────────────────────────────────
@@ -106,13 +101,15 @@ const LABEL_STYLE: CSSProperties = {
 export function SourceLineAliasesClient() {
   const toast = useToast()
   const [rows, setRows] = useState<readonly SourceLineRow[]>([])
-  const [pool, setPool] = useState<CodenamePoolView | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<unknown>(null)
   const [editing, setEditing] = useState<EditingState | null>(null)
   const [saving, setSaving] = useState(false)
   const [retiring, setRetiring] = useState<string | null>(null)
   const [sort, setSort] = useState<TableSortState>({ field: undefined, direction: 'asc' })
+  // CHG-SN-9-CODENAME-MATRIX：codename 单元格点击触发的矩阵选择弹层
+  const [pickerForRow, setPickerForRow] = useState<SourceLineRow | null>(null)
+  const [pickerSaving, setPickerSaving] = useState(false)
 
   // DataTable v2 query state（mode='client' / 数据量 <200 / 无 pagination / 仅 sort）
   const query = useMemo(
@@ -131,9 +128,9 @@ export function SourceLineAliasesClient() {
     setError(null)
     try {
       // CHG-SN-9-LINES-VIEW-UNIFY：换用 listAllSourceLines（含未分配别名 unassigned 行）
-      const [list, codenamePool] = await Promise.all([listAllSourceLines(), getCodenamePool()])
+      // CHG-SN-9-CODENAME-MATRIX：字库状态由 buildCodenameMatrix(rows) 派生（不再 fetch getCodenamePool）
+      const list = await listAllSourceLines()
       setRows(list)
-      setPool(codenamePool)
     } catch (err) {
       setError(err)
     } finally {
@@ -190,6 +187,38 @@ export function SourceLineAliasesClient() {
     }
   }
 
+  // CHG-SN-9-CODENAME-MATRIX：inline codename 选择 → 直接 upsert（仅改 codename）
+  const handlePickCodename = useCallback(
+    async (codename: string | null) => {
+      if (!pickerForRow) return
+      setPickerSaving(true)
+      try {
+        await upsertLineAliasWithFields(
+          pickerForRow.sourceSiteKey,
+          pickerForRow.sourceName,
+          {
+            // displayName 必填 → 沿用既有 displayName（unassigned 时 fallback 已是 source_name）
+            displayName: pickerForRow.displayName,
+            codename,
+            priority: pickerForRow.priority,
+          },
+        )
+        toast.push({
+          title: codename === null ? '已清除代号' : `已分配代号 ${codename}`,
+          level: 'success',
+        })
+        setPickerForRow(null)
+        await refresh()
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : '保存失败'
+        toast.push({ title: '保存失败', description: msg, level: 'danger' })
+      } finally {
+        setPickerSaving(false)
+      }
+    },
+    [pickerForRow, refresh, toast],
+  )
+
   const handleRetire = async (row: SourceLineRow) => {
     const codenameLabel = row.codename ?? '（未分配）'
     const ok = window.confirm(
@@ -245,12 +274,29 @@ export function SourceLineAliasesClient() {
       id: 'codename',
       header: '代号 (Layer B)',
       accessor: (r) => r.codename ?? '—',
-      cell: ({ row }) =>
-        row.codename ? (
-          <span style={{ color: 'var(--fg-default)' }}>{row.codename}</span>
-        ) : (
-          <span style={{ color: 'var(--fg-muted)' }}>—</span>
-        ),
+      // CHG-SN-9-CODENAME-MATRIX：单元格内联点击 → 弹矩阵选择器
+      cell: ({ row }) => (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation()
+            setPickerForRow(row)
+          }}
+          style={{
+            background: 'transparent',
+            border: '1px dashed var(--border-subtle)',
+            borderRadius: 4,
+            padding: '2px 8px',
+            cursor: 'pointer',
+            color: row.codename ? 'var(--fg-default)' : 'var(--fg-muted)',
+            fontSize: 'var(--font-size-xs)',
+          }}
+          title="点击打开代号矩阵选择"
+          data-testid={`codename-cell-${row.sourceSiteKey}-${row.sourceName}`}
+        >
+          {row.codename ?? '＋ 分配代号'}
+        </button>
+      ),
     },
     {
       id: 'priority',
@@ -342,24 +388,88 @@ export function SourceLineAliasesClient() {
         subtitle="所有线路（含未分配别名）/ Layer B 山名代号 / 退役治理"
       />
 
-      {pool && (
-        <AdminCard>
-          <div style={POOL_GRID_STYLE}>
-            <div style={POOL_CELL_STYLE}>
-              <span style={POOL_COUNT_STYLE}>{pool.available.length}</span>
-              <span style={POOL_LABEL_STYLE}>可用 codename</span>
+      {/* CHG-SN-9-CODENAME-MATRIX：字库 52 山名预览（mini grid）+ KPI */}
+      {(() => {
+        const matrix = buildCodenameMatrix(rows)
+        const matrixStats = computeMatrixStats(matrix)
+        return (
+          <AdminCard>
+            <div style={POOL_GRID_STYLE}>
+              <div style={POOL_CELL_STYLE}>
+                <span style={POOL_COUNT_STYLE}>{matrixStats.mountainAvailable}</span>
+                <span style={POOL_LABEL_STYLE}>
+                  可用基础名 / 共 {matrixStats.mountainTotal}
+                </span>
+              </div>
+              <div style={POOL_CELL_STYLE}>
+                <span style={POOL_COUNT_STYLE}>{matrixStats.slotsOccupied}</span>
+                <span style={POOL_LABEL_STYLE}>已占用 slots</span>
+              </div>
+              <div style={POOL_CELL_STYLE}>
+                <span style={POOL_COUNT_STYLE}>{matrixStats.slotsCooling}</span>
+                <span style={POOL_LABEL_STYLE}>冷却中（&lt; 90 天）</span>
+              </div>
             </div>
-            <div style={POOL_CELL_STYLE}>
-              <span style={POOL_COUNT_STYLE}>{pool.occupied.length}</span>
-              <span style={POOL_LABEL_STYLE}>已占用</span>
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(60px, 1fr))',
+                gap: 4,
+                marginTop: 12,
+              }}
+              data-testid="codename-library-preview"
+            >
+              {matrix.map((m) => {
+                const baseSlot = m.slots[0]
+                const bg =
+                  baseSlot.status === 'available'
+                    ? 'var(--state-success-bg)'
+                    : baseSlot.status === 'cooling'
+                      ? 'var(--state-warning-bg)'
+                      : 'var(--bg-surface-raised)'
+                const fg =
+                  baseSlot.status === 'available'
+                    ? 'var(--state-success-fg)'
+                    : baseSlot.status === 'cooling'
+                      ? 'var(--state-warning-fg)'
+                      : 'var(--fg-muted)'
+                const suffixCount = m.slots.filter((s) => s.status === 'occupied').length - (baseSlot.status === 'occupied' ? 1 : 0)
+                return (
+                  <span
+                    key={m.base}
+                    title={
+                      baseSlot.status === 'occupied' && baseSlot.assignedTo
+                        ? `${m.base} 已被 ${baseSlot.assignedTo.sourceSiteKey} / ${baseSlot.assignedTo.sourceName} 占用` +
+                          (suffixCount > 0 ? ` (+${suffixCount} 后缀变种占用)` : '')
+                        : baseSlot.status === 'cooling' && baseSlot.coolingDaysLeft !== undefined
+                          ? `${m.base} 冷却中 / 剩 ${baseSlot.coolingDaysLeft} 天`
+                          : `${m.base} 可用`
+                    }
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      padding: '4px 6px',
+                      borderRadius: 4,
+                      background: bg,
+                      color: fg,
+                      fontSize: 'var(--font-size-xs)',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {m.base}
+                    {suffixCount > 0 && (
+                      <sup style={{ marginLeft: 2, fontSize: 'var(--font-size-2xs)' }}>
+                        +{suffixCount}
+                      </sup>
+                    )}
+                  </span>
+                )
+              })}
             </div>
-            <div style={POOL_CELL_STYLE}>
-              <span style={POOL_COUNT_STYLE}>{pool.cooling.length}</span>
-              <span style={POOL_LABEL_STYLE}>冷却中（&lt; 90 天）</span>
-            </div>
-          </div>
-        </AdminCard>
-      )}
+          </AdminCard>
+        )
+      })()}
 
       {loading && rows.length === 0 ? (
         <LoadingState variant="skeleton" />
@@ -384,6 +494,18 @@ export function SourceLineAliasesClient() {
           enableHeaderMenu
         />
       )}
+
+      {/* CHG-SN-9-CODENAME-MATRIX：单元格内联 codename 选择弹层 */}
+      <CodenameMatrixPicker
+        open={pickerForRow !== null}
+        currentRow={pickerForRow}
+        allRows={rows}
+        onPick={(codename) => void handlePickCodename(codename)}
+        onClear={() => void handlePickCodename(null)}
+        onClose={() => {
+          if (!pickerSaving) setPickerForRow(null)
+        }}
+      />
 
       {editing && (
         <Modal
