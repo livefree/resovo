@@ -40,6 +40,48 @@
 
 ---
 
+## [CHG-SN-9-PLAYER-ERROR-RETRY-CONTROL-EP-FIX-3] PlayerShell 切视频同集时 stale watchdog 清理（Codex stop-time review FIX-3）
+- **完成时间**：2026-05-28
+- **记录时间**：2026-05-28
+- **执行模型**：claude-opus-4-7（主循环 / Codex stop-time review 第 3 轮反馈触发）
+- **子代理**：无（FIX 级别 / 沿用 ADR-166 评审 + #4-EP 设计取舍）
+- **触发**：Codex stop-time review 命中："watchdog cleanup misses same-episode video changes"。FIX-2 仅监听 `currentEpisode` 漏了"切视频但同一集 idx"场景：
+  - 用户在 video A 上 fatal → 启 3s watchdog（闭包持有 A 的 failedIdx + failedRawSourceId）
+  - 1s 后用户导航到 video B（slug 变 / shortId 变 / currentEpisode 仍是 1）
+  - FIX-2 useEffect deps `[currentEpisode]` 未变 → cleanup 未触发 → watchdog 仍 pending
+  - 3s 到 → watchdog 在 video B 的 sources 上 fire：
+    - ① 误标 dead（A 的 idx=0 映射到 B 的 sources[0] / 完全无关 source）
+    - ② 误切线（环形扫 B 的 sources / 破坏 B 的初始选择）
+    - ③ stale POST：B 的 sourceId 被 POST 但 errorCode 关联 A 的失败
+- **修改文件**（2 项 / PATCH=2 ≤ 5 ✅）：
+  - `apps/web-next/src/components/player/PlayerShell.tsx` —
+    - 单 useEffect deps 扩为 `[currentEpisode, shortId, clearWatchdog]`
+    - cleanup 在 currentEpisode 或 shortId **任一**变化时触发 → clearWatchdog + retryAttemptedSetRef.clear()
+    - jsdoc 标 FIX-2 / FIX-3 双覆盖：切集（同视频不同集）+ 切视频（同一集索引不同视频）
+    - 为何 shortId 优于 video?.id：shortId 同步从 slug prop `extractShortId` 派生 / 切视频时立即变化；video.id 是 state 由 useEffect-1 fetch 完成后才填，存在 fetch 期 stale 窗口
+  - `tests/unit/web-next/player-shell-on-error.test.tsx` 新 case `#5c`：
+    - render slug="test-aB3kR9x1" → 触发 fatal 启 3s watchdog
+    - 1s 后 rerender 用 slug="other-zzzzNEW1" → shortId 改变 / currentEpisode 保持 1
+    - 推进 5s → 断言 activeSourceIndex 仍 0 / apiPostMock 调用次数不变（无 stale POST）
+    - 新视频同 idx 再 fatal → controls.retry 被调（retryAttemptedSetRef 已清空）
+- **新增依赖**：无
+- **数据库变更**：无
+- **设计取舍**：
+  - **shortId vs video?.id 作为 dep**：shortId — slug prop 同步派生 / 切视频瞬间反映 / 不依赖 fetch 完成；video.id 异步、存在窗口期 cleanup 滞后
+  - **单 useEffect 合并 deps vs 拆 2 effect**：合并 — cleanup 逻辑完全一致（clearWatchdog + retryAttemptedSet.clear）/ 合并避免 React 双 effect 调度开销 + jsdoc 集中说明
+  - **不监听 video state**：video.id 由 shortId 触发 fetch 后 setState 填入；监听它会引入"shortId 已变但 video.id 还没变"的 race window — shortId 更早触发 cleanup 更安全
+  - **测试 rerender 用 slug 改 vs 直接改 mockState.shortId**：rerender 改 slug — 模拟生产路径（用户路由导航触发 slug prop 变化）/ mockState.shortId 是 initPlayer 副作用的状态副本 / 不是真源
+- **不触发**：
+  - architecture.md sync / R-MID-1 RETRO / 新 ADR / Opus 评审（FIX 级别主循环消化）
+- **质量门禁**：typecheck ✅ EXIT=0 / lint ✅ 0 error 0 warning / verify:adr-contracts ✅ EXIT=0（198 路由 81 ADR 端点 / 277 D-N 全闭环）/ player-shell-on-error 8/8 PASS（既有 7 + 新 #5c）/ admin-player 15/15 + retry-control 7/7 = 30/30 PASS（无回归）
+- **闭环关系**：Codex stop-time review 3 轮反馈全部消化
+  - FIX-1：controls.retry 生命周期边界（active 双层守卫 / 防 onError 同步窗口外调用）
+  - FIX-2：watchdog 同集切换边界（currentEpisode cleanup）
+  - FIX-3：watchdog 跨视频边界（shortId cleanup）
+  ADR-166 §5 触发时序契约 + #4-EP retry 策略实现 + 3 FIX 边界守卫 = 完整闭环
+
+---
+
 ## [CHG-SN-9-PLAYER-ERROR-RETRY-CONTROL-EP-FIX-2] PlayerShell 切集时 stale watchdog 清理（Codex stop-time review FIX-2）
 - **完成时间**：2026-05-28
 - **记录时间**：2026-05-28

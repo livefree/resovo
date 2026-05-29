@@ -373,18 +373,21 @@ export function PlayerShell({ slug: slugProp, portalMode = false, previewMode = 
     return () => clearWatchdog()
   }, [activeSourceIndex, clearWatchdog])
 
-  // currentEpisode 变化（用户切集）→ cancel watchdog + 清空 retry 计数（Codex stop-time review FIX-2）
-  // 否则旧集的 watchdog 闭包持有 failedIdx + failedRawSourceId / 3s 后会在新集 sources 上：
+  // currentEpisode / shortId 变化（用户切集 OR 切视频）→ cancel watchdog + 清空 retry 计数
+  //   - FIX-2：currentEpisode 变化（切集 / 同视频不同集）
+  //   - FIX-3：shortId 变化（切视频 / 即"同一集索引但不同视频"场景 / Codex stop-time review 2nd）
+  // 否则旧上下文 watchdog 闭包持有 failedIdx + failedRawSourceId / 3s 后会在新集/新视频 sources 上：
   //   ① 误标 dead（旧 idx 映射到新 sources 数组指向无关 source）
-  //   ② 误切线（环形扫新 sources / 用户选集本意被破坏）
-  //   ③ 用 stale failedRawSourceId POST feedback（旧集 source 的失败被错记到当前会话）
-  // retryAttemptedSetRef 同步清空：新集的 idx 应允许新一轮独立 retry 不继承旧集"已尝试"状态
+  //   ② 误切线（环形扫新 sources / 用户选择本意被破坏）
+  //   ③ 用 stale failedRawSourceId POST feedback（旧视频 source 的失败被错记到当前会话）
+  // shortId 优于 video?.id：shortId 同步从 slug prop 派生 / 切视频时立即变化；video.id 要等 fetch 完成
+  // retryAttemptedSetRef 同步清空：新上下文的 idx 应允许新一轮独立 retry 不继承旧上下文"已尝试"状态
   useEffect(() => {
     return () => {
       clearWatchdog()
       retryAttemptedSetRef.current.clear()
     }
-  }, [currentEpisode, clearWatchdog])
+  }, [currentEpisode, shortId, clearWatchdog])
 
   // unmount cleanup
   useEffect(() => {

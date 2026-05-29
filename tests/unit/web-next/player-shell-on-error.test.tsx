@@ -461,6 +461,66 @@ describe('PlayerShell onError — CHG-SN-9-PLAYER-ERROR-CONSUMER-B / Wave 4 #3 +
     }
   })
 
+  it('#5c 切视频但同集（shortId 变化 / currentEpisode 不变）→ stale watchdog 被取消（Codex FIX-3）', async () => {
+    // FIX-2 仅守 currentEpisode 漏了"切视频同一集 idx"场景 — shortId 是从 slug prop 同步派生的视频标识
+    apiGetMock.mockResolvedValue({ data: MOCK_SOURCES })
+    const { rerender } = await (async () => {
+      const view = render(
+        <PlayerShell
+          slug="test-aB3kR9x1"
+          initialVideo={MOCK_VIDEO}
+          initialSources={MOCK_SOURCES}
+        />,
+      )
+      await waitFor(() => {
+        expect(testCapturedProps.onError).toBeTypeOf('function')
+      })
+      return view
+    })()
+    vi.useFakeTimers()
+    try {
+      const onError = testCapturedProps.onError as (e: unknown, c: unknown) => void
+      const c1 = makeControls()
+      // 在 video A 上触发 fatal → 启 3s watchdog
+      await act(async () => {
+        onError({ code: 'hls_fatal', src: null, fatal: true }, c1)
+      })
+      expect(c1.retry).toHaveBeenCalledTimes(1)
+      const postCountBefore = apiPostMock.mock.calls.length
+
+      // 1s 后用户切到新视频（同一集 idx 不变）/ slug 改 → shortId 改
+      // mockState.currentEpisode 保持 1（同集）
+      vi.advanceTimersByTime(1000)
+      await act(async () => {
+        rerender(
+          <PlayerShell
+            slug="other-zzzzNEW1"
+            initialVideo={MOCK_VIDEO}
+            initialSources={MOCK_SOURCES}
+          />,
+        )
+        await Promise.resolve()
+      })
+
+      // 推进时间到原 watchdog 应触发的点 → stale watchdog 已被取消
+      vi.advanceTimersByTime(5000)
+      await act(async () => { await Promise.resolve() })
+
+      expect(mockState.activeSourceIndex).toBe(0)
+      // 不应有 stale POST 用旧视频 sourceId
+      expect(apiPostMock.mock.calls.length).toBe(postCountBefore)
+
+      // 新视频上同 idx fatal → 允许 retry（计数已清空）
+      const c2 = makeControls()
+      await act(async () => {
+        onError({ code: 'hls_fatal', src: null, fatal: true }, c2)
+      })
+      expect(c2.retry).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('#5 retry 后 onPlay 成功 → cancel watchdog + 重置 retry 计数 / 下一次 fatal 仍允许 retry', async () => {
     await renderShellAndWaitForPlayer()
     vi.useFakeTimers()
