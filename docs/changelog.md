@@ -40,6 +40,49 @@
 
 ---
 
+## [CHG-SN-9-PLAYER-ERROR-CONSUMER-B] PlayerShell onError 接入 + 自动切下一线路 + 标 dead-source + 失败上报（Wave 4 #3 / R-N-3 警告闭环）
+- **完成时间**：2026-05-28
+- **记录时间**：2026-05-28
+- **执行模型**：claude-opus-4-7（启动会话偏离卡片建议 sonnet-4-6 / 仅消费方接入既有 public API / 偏离不阻断）
+- **子代理**：无
+- **修改文件**（2 项 / PATCH=2 ≤ 5 ✅）：
+  - `apps/web-next/src/components/player/PlayerShell.tsx` —
+    - import `PlayerProps` + `type PlayerErrorPayload = Parameters<NonNullable<PlayerProps['onError']>>[0]`（避免 packages/player-core/src/index.ts re-export PlayerErrorEvent 触发 Opus 强制项 / 同 Wave 4 #2 范式）
+    - 新增 `errorReportedRef = useRef<Set<string>>(new Set())` 记 `${sourceId}|${errorCode}` 去抖键
+    - 新增 `handlePlayerError = useCallback((event) => {...}, [activeSourceIndex, sources, video, previewMode, setActiveSourceIndex])`：
+      1. **标 dead**：`setSources(prev => prev.map((s, i) => i === failedIdx ? {...s, isDead: true} : s))` — SourceBar 视觉立即响应
+      2. **环形扫描下一非 dead/pending**：`for (let step = 1; step < total; step++) { const candidate = (failedIdx + step) % total; ... }` — 找到 → `setActiveSourceIndex(next)` + `setPlayerVersion(v=>v+1)` 触发 Player 重 mount；找不到 → 保持原 idx + Player 显示 dead 占位
+      3. **feedback 上报**：受 `isPlaybackFeedbackEnabled(previewMode)` 守卫（D-160-5）+ `errorReportedRef.has(key)` 去抖（防 fatal 反复刷流量 + redis fb:fail:* 干扰）+ `rawSourcesRef.current[failedIdx]?.id` 用作 sourceId（VideoSource UUID 与 admin 同源）+ `event.code` 作 errorCode + fire-and-forget catch
+    - VideoPlayer JSX 加 `onError={handlePlayerError}` prop（VideoPlayer 内部 spread 到 Player 透传 onError）
+  - `tests/unit/web-next/player-shell-on-error.test.tsx` — NEW / 4 case：
+    - `#1` onError 触发 → activeSourceIndex 0 → 1 + feedback POST 含 sourceId=src-1 + errorCode=hls_fatal
+    - `#2` previewMode=true → 仍标 dead + 仍自动切线 + 不 POST feedback（D-160-5 守卫）
+    - `#3` 同 (sourceId, errorCode) 第二次 onError 不重复 POST（去抖）
+    - `#4` 切线后捕获新闭包 `onError2` → 第二次失败 POST sourceId=src-2 errorCode=hls_fatal（R-N-3 闭环：activeSourceIndex 关联始终为最新）
+    - 测试构造：mock `next/dynamic` 返回 stub MockVideoPlayer 暴露 props 到 `testCapturedProps` / mock `apiClient.{get,post}` + playerStore 全套 state hoist mock / mock `useRouteTheme` 用稳定单例引用避免 useEffect 依赖循环 OOM
+- **新增依赖**：无
+- **数据库变更**：无
+- **设计取舍**：
+  - **环形扫描 vs 顺序扫描**：环形 — 用户在最后一条线路失败时仍可切回前面（线路状态 stale 时容错）；找到第一个非 dead/pending 立即停止
+  - **bump playerVersion vs 仅 setActiveSourceIndex**：双管齐下 — VideoPlayer key 已含 activeSourceIndex 应足够，但 bump playerVersion 防御 next === failedIdx 极端边界（环形扫描 step=0 不入循环 / 但理论上 length=1 时可能落到自身）+ 与 ResumePrompt 流一致
+  - **per-(sourceId, errorCode) 去抖键 vs per-sourceId**：(id, code) — 同 source 不同 code 是有用信号（如 hls_fatal → native_media_failed 切换）；同 (id, code) 重复才视为 fatal 刷流量
+  - **R-N-3 警告闭环**：`event.src` 在 Player unmount/remount 间不可信（切线雪崩风险）；改用 React 外部 `activeSourceIndex` state + `rawSourcesRef.current[idx].id` 关联 / VideoPlayer key 含 activeSourceIndex 保证 Player 实例与 idx 一一对应 / onError 触发时 closure 中的 activeSourceIndex 就是失败 source 的 idx（因 useCallback deps 含 activeSourceIndex）
+  - **不沉淀 sources slice helper**：scanForNextAlive 逻辑 < 10 行 + 单消费方 + 未达 3 处抽提阈值 / 未来 mini-player 接入再抽
+- **不触发**：
+  - Opus 强制项：未改 packages/player-core / 不起 ADR / 不改 admin-ui Props / 非 3+ 消费方
+  - architecture.md sync：无 schema / migration
+  - R-MID-1 RETRO：feedback 是前台路由 + Wave 3 已 ship errorCode 字段
+- **质量门禁**：typecheck ✅ EXIT=0 / lint ✅ 0 error 0 warning / verify:adr-contracts ✅ EXIT=0（198 路由 81 ADR 端点 / 277 D-N 全闭环 / verify-style-shorthand-conflict 0 命中）/ player-shell-on-error 4/4 PASS
+- **预存基线失败**（不阻断 / 与本卡无关 / git stash 验证 stash 前后均失败）：
+  - `tests/unit/web-next/player-shell-hydration.test.tsx` #1 fail（`apps/web-next/src/lib/use-user-preferences-sync.ts:95` `apiClient.get('/users/me/preferences')` mock 未返回 promise / pre-existing 自 CHG-SN-9-ROUTE-LABEL-D-A2 ship useUserPreferencesSync 后未补该 mock）→ 建议 MAINT 卡承接补 mock `apiGetMock.mockImplementation(url => url.includes('/preferences') ? Promise.resolve({data:null}) : ...)`
+- **DEBT-FIX-D-ERROR 完整闭环**：
+  - Wave 3 #7 API 端：player-core onError public API + suppressDefaultErrorUI + PlayerErrorEvent {code, src, fatal}
+  - Wave 4 #2 admin 端：AdminPlayer 接入 + per-sourceId 失败上报
+  - Wave 4 #3 前台端（本卡）：PlayerShell 接入 + 自动切线 + 标 dead + per-(id, code) 失败上报 + previewMode 守卫
+- **Wave 4 进度**：#1 ✅ ship → #2 ✅ ship → #3 ✅ ship / 下一卡 CHG-SN-9-PLAYER-ERROR-RETRY-CONTROL（retrySourceLoad 上抛设计 / 需起 ADR-166 + arch-reviewer Opus 评审 / 当前主循环 opus-4-7 满足建议但仍需独立 subagent 出具决策方案）
+
+---
+
 ## [CHG-SN-9-PLAYER-ERROR-CONSUMER-A] AdminPlayer 接入 player-core onError + POST feedback 上报失败（Wave 4 #2 / SEQ-20260528-MOD-WAVE4 / DEBT-FIX-D-ERROR 真正闭环）
 - **完成时间**：2026-05-28
 - **记录时间**：2026-05-28

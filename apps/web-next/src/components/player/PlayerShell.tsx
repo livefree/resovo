@@ -15,6 +15,10 @@ import { RouteThemeSelector } from './RouteThemeSelector'
 import { CustomThemeDialog } from './CustomThemeDialog'
 import { useLocale } from 'next-intl'
 import type { Video, VideoSource, ApiResponse, ApiListResponse } from '@resovo/types'
+import type { PlayerProps } from '@resovo/player-core'
+// PlayerErrorEvent 是 player-core 内部类型 / 顶层 index.ts 未 re-export（不动 player-core 公共 API 防触发 Opus 强制项）
+// 通过 PlayerProps['onError'] 反推参数类型 / 升级时自动跟随
+type PlayerErrorPayload = Parameters<NonNullable<PlayerProps['onError']>>[0]
 import { SourceBar } from './SourceBar'
 import { ResumePrompt, saveProgress } from './ResumePrompt'
 import { getInlineEpisodes, getPlayerLayoutClass, getSidePanelClass } from './playerShell.layout'
@@ -270,6 +274,63 @@ export function PlayerShell({ slug: slugProp, portalMode = false, previewMode = 
     [setEpisode]
   )
 
+  // CHG-SN-9-PLAYER-ERROR-CONSUMER-B / Wave 4 #3：
+  //  - 标当前 source isDead 让 SourceBar 视觉提示
+  //  - 环形扫描下一非 dead source，setActiveSourceIndex + bump playerVersion 触发 VideoPlayer 重 mount
+  //  - 失败上报 /v1/feedback/playback (受 isPlaybackFeedbackEnabled(previewMode) 守卫)
+  //  - per-(activeSourceIndex, errorCode) 去抖 防 fatal 反复触发刷流量 + redis fb:fail:* 干扰
+  //  - R-N-3 警告闭环：不使用 event.src 做匹配键 (Player unmount/remount 会让 src 快照过期 + 切线雪崩)；
+  //    用 activeSourceIndex 关联外部 React state (VideoPlayer key 含 activeSourceIndex / 当前索引稳定)
+  const errorReportedRef = useRef<Set<string>>(new Set())
+  const handlePlayerError = useCallback(
+    (event: PlayerErrorPayload) => {
+      const failedIdx = activeSourceIndex
+      const failedRawSource = rawSourcesRef.current[failedIdx]
+
+      // 1. 标当前 source 为 dead（SourceBar 已支持 isDead 视觉）
+      setSources(prev =>
+        prev.map((s, i) => (i === failedIdx ? { ...s, isDead: true } : s)),
+      )
+
+      // 2. 环形扫描下一非 dead source；用当前 sources 快照（state 闭包）+ failedIdx 当作"新 dead"
+      //    避免 setSources 异步未生效时 next 仍指向 failedIdx
+      const total = sources.length
+      let next: number | null = null
+      for (let step = 1; step < total; step++) {
+        const candidate = (failedIdx + step) % total
+        const candidateSource = sources[candidate]
+        if (candidateSource && !candidateSource.isDead && !candidateSource.isPending) {
+          next = candidate
+          break
+        }
+      }
+      if (next !== null) {
+        setActiveSourceIndex(next)
+        // bump playerVersion 让 VideoPlayer key 变化 → 重 mount → 重新触发 useSourceLoader
+        // （activeSourceIndex 已在 key 中 / 但 bump version 防御 next === failedIdx 极端边界 + 与 ResumePrompt 流一致）
+        setPlayerVersion(v => v + 1)
+      }
+
+      // 3. feedback 上报 — 受 previewMode 守卫 + per-(idx, code) 去抖 + 需要 sourceId
+      if (!isPlaybackFeedbackEnabled(previewMode)) return
+      if (!video || !failedRawSource) return
+      const dedupeKey = `${failedRawSource.id}|${event.code}`
+      if (errorReportedRef.current.has(dedupeKey)) return
+      errorReportedRef.current.add(dedupeKey)
+      void apiClient
+        .post('/feedback/playback', {
+          videoId: video.id,
+          sourceId: failedRawSource.id,
+          success: false,
+          errorCode: event.code,
+        })
+        .catch(() => {
+          // fire-and-forget；后端 5xx 不阻断切线
+        })
+    },
+    [activeSourceIndex, sources, video, previewMode, setActiveSourceIndex],
+  )
+
   // hasEpisodes / hasSources 必须在 useEffect 前声明，避免 TDZ 风险并确保依赖数组可直接引用
   const isTheater = mode === 'theater'
   const activeSrc = sources[activeSourceIndex]?.src ?? ''
@@ -512,6 +573,7 @@ export function PlayerShell({ slug: slugProp, portalMode = false, previewMode = 
                     onPause={() => setPlaying(false)}
                     onEnded={() => setPlaying(false)}
                     onTheaterChange={handleTheaterChange}
+                    onError={handlePlayerError}
                     startTime={startTime}
                     className="absolute inset-0"
                   />
