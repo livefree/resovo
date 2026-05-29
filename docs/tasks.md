@@ -6,7 +6,7 @@
 
 ## 进行中任务
 
-（空 / Wave 4 #1 已 ship / 等下一卡 CHG-SN-9-PLAYER-ERROR-CONSUMER-A 主循环自动启动）
+（空 / Wave 4 #2 已 ship / 等下一卡 CHG-SN-9-PLAYER-ERROR-CONSUMER-B 主循环自动启动）
 
 ---
 

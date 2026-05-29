@@ -40,6 +40,31 @@
 
 ---
 
+## [CHG-SN-9-PLAYER-ERROR-CONSUMER-A] AdminPlayer 接入 player-core onError + POST feedback 上报失败（Wave 4 #2 / SEQ-20260528-MOD-WAVE4 / DEBT-FIX-D-ERROR 真正闭环）
+- **完成时间**：2026-05-28
+- **记录时间**：2026-05-28
+- **执行模型**：claude-opus-4-7（启动会话偏离卡片建议 sonnet-4-6；卡片范围仅消费方接入既有 public API / 偏离不阻断）
+- **子代理**：无
+- **修改文件**（2 项 / PATCH=2 ≤ 5 ✅）：
+  - `apps/server-next/src/app/admin/moderation/_client/AdminPlayer.tsx` — 接入 player-core `onError` 公共 API（Wave 3 #7 ship）/ 新增 `handleError` POST `/v1/feedback/playback` `{videoId, sourceId, success:false, errorCode: event.code}` / 新增独立 `errorReportedRef` per-sourceId 去抖（防 fatal 反复刷流量 + redis 失败计数干扰）/ `errorReportedRef` 与既有成功上报 `reportedRef` 互斥独立 → 同 sourceId 上报成功后再 onError 仍允许上报（"成功→失败"语义切换是有用信号）/ 不设 `suppressDefaultErrorUI` 保留 player-core 默认 overlay（用户可见"加载失败，请重试" / 此卡仅负责上报）/ 类型反推用 `Parameters<NonNullable<PlayerProps['onError']>>[0]`（避免向 packages/player-core/src/index.ts re-export `PlayerErrorEvent` → 不触发 CLAUDE.md "重构播放器 core / shell 层的接口" Opus 强制项 / 类型与 onError public API 同源 / player-core 升级自动跟随）
+  - `tests/unit/admin-moderation/admin-player.test.tsx` — Player mock 扩 onError 透传 + 2 个失败按钮（native_media_failed / hls_fatal）/ 新增 5 case：① onError → POST success:false + errorCode='native_media_failed' ② hls_fatal 透传 errorCode='hls_fatal' ③ 同 sourceId 第二次 onError 不重复 POST（去抖）④ sourceId 变更 → errorReportedRef 复位 + 新 source 失败再次上报 ⑤ 成功上报后再 onError → 失败上报独立 ref 不被阻塞（"成功→失败"切换语义）
+- **新增依赖**：无
+- **数据库变更**：无
+- **设计取舍**：
+  - **错误类型反推 vs re-export PlayerErrorEvent**：选反推 — 改 player-core/src/index.ts 公开类型 = 修改 player-core 公共 API 表面 → CLAUDE.md "重构播放器 core / shell 层的接口" → Opus 强制项；反推让 player-core 升级 PlayerErrorEvent 字段时 AdminPlayer 自动跟随，零类型漂移。
+  - **errorReportedRef 独立 vs 复用 reportedRef**：独立 — 成功后失败、失败后再成功都是有效语义切换；若复用，"播放成功 X 次 → 突然 fatal" 这类信号会丢。
+  - **保留 player-core 默认 overlay vs 接管 UI**：保留 — 此卡仅负责上报后端 / UI 接管是 #3 CONSUMER-B（PlayerShell 自动切下一线路 / 用户可见性更重要）/ AdminPlayer 是审核台单视频上下文不需要"自动切线"逻辑。
+  - **success 后再 fail 仍上报 vs 全程一上报**：仍上报 — 后端 feedback 端点已支持 success: boolean 双向，并发去抖在后端 redis fb:rl:* + fb:fail:* 双键，前端 ref 仅防 client-side 抖动循环。
+- **不触发**：
+  - Opus 强制项：未改 packages/player-core / 不起 ADR / 不改 admin-ui Props / 非 3+ 消费方
+  - architecture.md sync：无 schema / migration
+  - R-MID-1 RETRO：无新 admin 写端点（feedback 是前台路由 / Wave 3 已 ship 接收 errorCode 字段）
+- **质量门禁**：typecheck ✅ EXIT=0 / lint ✅ 0 error 0 warning / verify:adr-contracts ✅ EXIT=0（198 路由 81 ADR 端点对齐 / 277 D-N 全闭环）/ admin-player 13/13 PASS（既有 8 + 新 5）
+- **DEBT-FIX-D-ERROR 闭环**：Wave 3 #7 ship player-core onError public API + suppressDefaultErrorUI（API 端）→ 本卡 Wave 4 #2 AdminPlayer 接入消费方（UI 端）→ DEBT 注释"FIX-CLOSE 时评估"完全兑现
+- **Wave 4 进度**：#1 ✅ ship → #2 ✅ ship / 下一卡 CHG-SN-9-PLAYER-ERROR-CONSUMER-B（PlayerShell onError + 自动切下一线路 + 标 dead-source / sonnet-4-6）
+
+---
+
 ## [CHG-SN-9-REJECTED-ENHANCE-B] RejectedTabContent 视觉对齐 BTN_SM → AdminButton + SplitPane + 批量 reopen + 跳回 pending 提示（Wave 4 #1 / SEQ-20260528-MOD-WAVE4）
 - **完成时间**：2026-05-28
 - **记录时间**：2026-05-28

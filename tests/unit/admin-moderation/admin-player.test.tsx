@@ -10,11 +10,36 @@ import React from 'react'
 // Player 组件用 <video> 需要完整 DOM；测试层替换为 stub
 
 vi.mock('@resovo/player-core', () => ({
-  Player: vi.fn(({ src, onPlay }: { src?: string; onPlay?: () => void }) => (
-    <div data-mock-player data-src={src ?? ''}>
-      <button type="button" data-mock-play onClick={onPlay}>play</button>
-    </div>
-  )),
+  // CHG-SN-9-PLAYER-ERROR-CONSUMER-A：扩 onError 透传，让 fail 按钮触发 PlayerErrorEvent
+  Player: vi.fn(
+    ({
+      src,
+      onPlay,
+      onError,
+    }: {
+      src?: string
+      onPlay?: () => void
+      onError?: (event: { code: string; src: string | null; fatal: boolean }) => void
+    }) => (
+      <div data-mock-player data-src={src ?? ''}>
+        <button type="button" data-mock-play onClick={onPlay}>play</button>
+        <button
+          type="button"
+          data-mock-fail-native
+          onClick={() => onError?.({ code: 'native_media_failed', src: src ?? null, fatal: true })}
+        >
+          fail-native
+        </button>
+        <button
+          type="button"
+          data-mock-fail-hls
+          onClick={() => onError?.({ code: 'hls_fatal', src: src ?? null, fatal: true })}
+        >
+          fail-hls
+        </button>
+      </div>
+    ),
+  ),
 }))
 
 // ── Mock api-client ───────────────────────────────────────────────────────────
@@ -122,6 +147,84 @@ describe('AdminPlayer — Case 5: sourceId 变更重置 feedback ref', () => {
       sourceId: 'src-2',
       success: true,
     })
+  })
+})
+
+// ── CHG-SN-9-PLAYER-ERROR-CONSUMER-A / Wave 4 #2 ────────────────────────────
+
+describe('AdminPlayer — Case 5b: onError → POST feedback {success:false, errorCode}', () => {
+  it('Player 触发 onError → apiClient.post 携带 success:false + errorCode=event.code', () => {
+    const { container } = render(
+      <AdminPlayer videoId="vid-abc" sourceUrl="https://cdn.example.com/v.m3u8" sourceId="src-xyz" />,
+    )
+    fireEvent.click(container.querySelector('[data-mock-fail-native]')!)
+    expect(postMock).toHaveBeenCalledTimes(1)
+    expect(postMock).toHaveBeenCalledWith('/feedback/playback', {
+      videoId: 'vid-abc',
+      sourceId: 'src-xyz',
+      success: false,
+      errorCode: 'native_media_failed',
+    })
+  })
+
+  it('hls_fatal 也透传 → errorCode=hls_fatal', () => {
+    const { container } = render(
+      <AdminPlayer videoId="vid-1" sourceUrl="https://cdn.example.com/v.m3u8" sourceId="src-1" />,
+    )
+    fireEvent.click(container.querySelector('[data-mock-fail-hls]')!)
+    expect(postMock).toHaveBeenLastCalledWith('/feedback/playback', {
+      videoId: 'vid-1',
+      sourceId: 'src-1',
+      success: false,
+      errorCode: 'hls_fatal',
+    })
+  })
+})
+
+describe('AdminPlayer — Case 5c: 同 sourceId 失败上报去抖', () => {
+  it('同 sourceId 第二次 onError 不再 POST（防 fatal 循环刷流量）', () => {
+    const { container } = render(
+      <AdminPlayer videoId="vid-1" sourceUrl="https://cdn.example.com/v.m3u8" sourceId="src-1" />,
+    )
+    const failBtn = container.querySelector('[data-mock-fail-native]')!
+    fireEvent.click(failBtn)
+    fireEvent.click(failBtn)
+    fireEvent.click(failBtn)
+    expect(postMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('sourceId 变更 → 失败上报 ref 复位，新 source 失败再次上报', () => {
+    const { container, rerender } = render(
+      <AdminPlayer videoId="vid-1" sourceUrl="https://cdn.example.com/v1.m3u8" sourceId="src-1" />,
+    )
+    fireEvent.click(container.querySelector('[data-mock-fail-native]')!)
+    expect(postMock).toHaveBeenCalledTimes(1)
+
+    rerender(
+      <AdminPlayer videoId="vid-1" sourceUrl="https://cdn.example.com/v2.m3u8" sourceId="src-2" />,
+    )
+    fireEvent.click(container.querySelector('[data-mock-fail-native]')!)
+    expect(postMock).toHaveBeenCalledTimes(2)
+    expect(postMock).toHaveBeenLastCalledWith('/feedback/playback', {
+      videoId: 'vid-1',
+      sourceId: 'src-2',
+      success: false,
+      errorCode: 'native_media_failed',
+    })
+  })
+
+  it('成功上报后再 onError → 失败上报独立 ref / 仍允许上报（成功→失败语义切换是有用信号）', () => {
+    const { container } = render(
+      <AdminPlayer videoId="vid-1" sourceUrl="https://cdn.example.com/v.m3u8" sourceId="src-1" />,
+    )
+    // 1. 先播放成功
+    fireEvent.click(container.querySelector('[data-mock-play]')!)
+    expect(postMock).toHaveBeenCalledTimes(1)
+    expect(postMock).toHaveBeenLastCalledWith('/feedback/playback', expect.objectContaining({ success: true }))
+    // 2. 同 sourceId 再 onError → 仍上报失败（reportedRef 不阻塞 errorReportedRef）
+    fireEvent.click(container.querySelector('[data-mock-fail-native]')!)
+    expect(postMock).toHaveBeenCalledTimes(2)
+    expect(postMock).toHaveBeenLastCalledWith('/feedback/playback', expect.objectContaining({ success: false, errorCode: 'native_media_failed' }))
   })
 })
 
