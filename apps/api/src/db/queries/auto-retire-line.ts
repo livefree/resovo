@@ -15,12 +15,12 @@
  *
  * 红线吸收：
  *   - R-DEAD-1：段 2/段 3 拆两条独立 SQL 语句（NOW() 同事务等值风险规避）
- *   - R-DEAD-2：CTE LEFT JOIN + 'orphan' 状态显式清 NULL（孤儿 alias 处理）
- *   - R-DEAD-3：pg_try_advisory_lock 非阻塞 + finally unlock
+ *   - R-DEAD-2：CTE LEFT JOIN + 'orphan' 状态显式清 NULL + WHERE vs.deleted_at IS NULL（孤儿 alias 处理 + 软删过滤 / Codex stop-time review FIX-1）
+ *   - R-DEAD-3：pg_try_advisory_lock 非阻塞 + finally unlock + **pool.connect() 同 client** 保证 lock/unlock 同 session（Codex stop-time review FIX-1 / session-level lock 必须同 connection / 不能用 pool.query() 因为可能拿到不同 client 导致 unlock 在错误 connection 失败 / lock 永久泄漏）
  *   - R-DEAD-4：RETURNING 段 3 退役清单 + 调用方结构化日志（worker job 文件 -B 子卡承接）
  */
 
-import type { Pool } from 'pg'
+import type { Pool, PoolClient } from 'pg'
 import type pino from 'pino'
 
 /** ADR-164 plan §10.5：全 dead 持续 180 天阈值 */
@@ -44,21 +44,23 @@ export interface RetiredAliasRow {
 /**
  * autoRetireLineByDeadCheck — 全 dead 持续 180 天检测 + 自动退役
  *
- * 工作流（4 段 / R-DEAD-1 段 2 段 3 必须独立语句）：
- *   段 0：pg_try_advisory_lock(hashtext($1)) 非阻塞获取 → 拿不到锁 → return [] + log info
- *   段 1+2（单 SQL 内 CTE → UPDATE）：
- *     - alias_dead_status：LEFT JOIN video_sources 计算每条在役 alias 的 source_count + dead_count
+ * 工作流（5 段 / R-DEAD-1 段 2 段 3 必须独立语句 / R-DEAD-3 全部段在同一 PoolClient）：
+ *   段 -1：pool.connect() 获取专用 client（Codex FIX-1 / 防 pool.query() 跨 client 导致 unlock 失败）
+ *   段 0：client.query pg_try_advisory_lock(hashtext($1)) 非阻塞获取 → 拿不到锁 → return [] + log info
+ *   段 1+2（client.query 单 SQL 内 CTE → UPDATE）：
+ *     - alias_dead_status：LEFT JOIN video_sources（WHERE vs.deleted_at IS NULL + vs.is_active = true）
+ *       计算每条在役 alias 的 source_count + dead_count（Codex FIX-1 deleted_at 过滤）
  *     - classified：CASE WHEN source_count=0 → 'orphan' / dead_count=source_count → 'all_dead' / 'has_alive'
  *     - UPDATE dead_since：
  *       上升沿 'all_dead' AND dead_since IS NULL → SET NOW()
  *       下降沿 'has_alive' → SET NULL
  *       孤儿  'orphan' AND dead_since IS NOT NULL → SET NULL（R-DEAD-2 显式清）
  *       否则保持
- *   段 3（独立 SQL）：UPDATE source_line_aliases SET retired_at, auto_retired
+ *   段 3（独立 client.query SQL）：UPDATE source_line_aliases SET retired_at, auto_retired
  *     WHERE retired_at IS NULL AND dead_since < NOW() - 180 days
  *     + 子查询 ORDER BY dead_since ASC LIMIT 50
  *     RETURNING 退役清单
- *   段 finally：pg_advisory_unlock
+ *   段 finally：client.query pg_advisory_unlock + client.release()
  *
  * @returns 本次 run 退役的 alias 清单（可能为空数组）
  */
@@ -66,33 +68,47 @@ export async function autoRetireLineByDeadCheck(
   pool: Pool,
   log: pino.Logger,
 ): Promise<RetiredAliasRow[]> {
-  // 段 0：advisory lock 非阻塞获取（R-DEAD-3）
-  const lockResult = await pool.query<{ acquired: boolean }>(
-    `SELECT pg_try_advisory_lock(hashtext($1)) AS acquired`,
-    [ADVISORY_LOCK_KEY],
-  )
-  const acquired = lockResult.rows[0]?.acquired === true
-  if (!acquired) {
-    log.info(
-      { lock_key: ADVISORY_LOCK_KEY },
-      'auto-retire-line: another instance holds advisory lock, skipping',
-    )
-    return []
-  }
-
+  // 段 -1：从 pool 获取专用 PoolClient（R-DEAD-3 FIX-1 关键）
+  // session-level pg_advisory_lock 要求 lock 与 unlock 在同一 connection
+  // 若用 pool.query() 每次调用拿到不同 client → unlock 在错误 connection 上执行（静默成功 / 实际 lock 仍在原 client 上 / 下次 worker run 永久拿不到锁）
+  const client: PoolClient = await pool.connect()
+  let acquired = false
   try {
-    // 段 1+2：维护 dead_since 状态机（R-DEAD-2 LEFT JOIN + 'orphan' 显式清）
-    await pool.query(SQL_MAINTAIN_DEAD_SINCE)
+    // 段 0：advisory lock 非阻塞获取（R-DEAD-3）
+    const lockResult = await client.query<{ acquired: boolean }>(
+      `SELECT pg_try_advisory_lock(hashtext($1)) AS acquired`,
+      [ADVISORY_LOCK_KEY],
+    )
+    acquired = lockResult.rows[0]?.acquired === true
+    if (!acquired) {
+      log.info(
+        { lock_key: ADVISORY_LOCK_KEY },
+        'auto-retire-line: another instance holds advisory lock, skipping',
+      )
+      return []
+    }
+
+    // 段 1+2：维护 dead_since 状态机（R-DEAD-2 LEFT JOIN + deleted_at + 'orphan' 显式清）
+    await client.query(SQL_MAINTAIN_DEAD_SINCE)
 
     // 段 3：检测 + 退役（R-DEAD-4 RETURNING + ORDER BY dead_since ASC LIMIT 50）
-    const result = await pool.query<RetiredAliasRow>(SQL_RETIRE_DEAD_LINES, [
+    const result = await client.query<RetiredAliasRow>(SQL_RETIRE_DEAD_LINES, [
       DEAD_THRESHOLD_DAYS,
       RETIRE_BATCH_LIMIT,
     ])
     return result.rows
   } finally {
-    // R-DEAD-3 必须 unlock 防 lock 泄漏
-    await pool.query(`SELECT pg_advisory_unlock(hashtext($1))`, [ADVISORY_LOCK_KEY])
+    // R-DEAD-3：仅在拿到锁时调 unlock（拿不到锁就 unlock 是无意义且产生 PG NOTICE 噪音）
+    if (acquired) {
+      try {
+        await client.query(`SELECT pg_advisory_unlock(hashtext($1))`, [ADVISORY_LOCK_KEY])
+      } catch (err) {
+        // unlock 失败极罕见（连接已断 / connection reset）→ 不抛错 / 不阻塞 release / 锁会随 connection 关闭自动释放
+        log.warn({ err, lock_key: ADVISORY_LOCK_KEY }, 'auto-retire-line: advisory_unlock failed (lock will auto-release on connection close)')
+      }
+    }
+    // 始终 release client（防 PoolClient 泄漏）
+    client.release()
   }
 }
 
@@ -100,8 +116,13 @@ export async function autoRetireLineByDeadCheck(
  * SQL 段 1+2：维护 dead_since 状态机
  *
  * CTE 链：
- *   alias_dead_status：LEFT JOIN video_sources（仅 is_active=true / deleted_at IS NULL）
+ *   alias_dead_status：LEFT JOIN video_sources（仅 is_active=true AND deleted_at IS NULL）
  *     → 每条在役 alias 的 source_count + dead_count
+ *     **Codex stop-time review FIX-1**：必须含 vs.deleted_at IS NULL 守卫
+ *       否则软删除 source（deleted_at NOT NULL / 业务已弃用）仍参与 source_count + dead_count
+ *       计算 → 错误判定 'all_dead' / 'has_alive' / 'orphan' 状态
+ *       例：alias 实际只有 1 个活跃 source（dead），但有 5 个软删的非 dead source
+ *           → 无 deleted_at 守卫 → dead_count(1) != source_count(6) → 误判 has_alive → dead_since 清 NULL
  *   classified：CASE 分类 'orphan' / 'all_dead' / 'has_alive'
  *
  * UPDATE：
@@ -125,6 +146,7 @@ WITH alias_dead_status AS (
     ON vs.source_site_key = sla.source_site_key
    AND vs.source_name     = sla.source_name
    AND vs.is_active       = true
+   AND vs.deleted_at      IS NULL
   WHERE sla.retired_at IS NULL
   GROUP BY sla.source_site_key, sla.source_name, sla.dead_since
 ),

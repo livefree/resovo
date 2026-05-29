@@ -50,21 +50,28 @@ UI 端 `LinesPanel` 已支持 `auto_retired = true` 显示"已退役·自动"标
 - **优先级**：`ORDER BY dead_since ASC`（最老 dead alias 先退役 / 防雪崩）
 - **未处理项**：保留到下一次 cron / 自然漏斗
 
-## 5. advisory lock
+## 5. advisory lock + 同 client session 守卫（Codex stop-time review FIX-1）
 
 - **键**：`pg_try_advisory_lock(hashtext('worker:auto-retire-line'))`
 - **行为**：非阻塞 / 拿不到锁直接 `return []` + `log.info({lock_key}, 'another instance holds')`
 - **多 worker 实例并发**：同一时刻只有 1 个实例执行段 1+2 / 段 3
-- **unlock**：`finally` 块保证调用（防泄漏 / 即便段 1+2 SQL 抛错也 unlock）
+- **session 守卫（关键 / Codex FIX-1）**：
+  - PostgreSQL `pg_advisory_lock` 是 **session-level 锁** — lock 和 unlock 必须在**同一 connection** 上执行
+  - 实施时使用 `pool.connect()` 获取专用 `PoolClient`，所有 4 段 query 通过 `client.query()` 调用
+  - **禁止 `pool.query()`**：每次调用可能拿到不同 client → unlock 在错误 connection 执行（静默成功 / 实际 lock 仍在原 client 上 / 下次 worker run 永久拿不到锁）
+- **unlock + release**：`finally` 块保证调用 / 即便段 1+2 SQL 抛错也 unlock + release client
+  - unlock 失败极罕见（connection 已断）→ 不抛错 / 不阻塞 release / 锁会随 connection 关闭自动释放
+  - 拿不到锁时不调 unlock（防 PG NOTICE 噪音 / 但仍调 release）
 
-## 6. 工作流（4 段）
+## 6. 工作流（5 段 / Codex FIX-1 加段 -1）
 
 | 段 | 内容 | SQL 类型 |
 |---|---|---|
-| 0 | `pg_try_advisory_lock` 非阻塞获取 | SELECT |
-| 1+2 | CTE 识别"当前全 dead"集 + UPDATE 维护 `dead_since`（上升沿/下降沿/孤儿三态守卫）| 单 UPDATE |
-| 3 | 检测 `dead_since < NOW() - 180 days` + batch limit ORDER BY dead_since ASC LIMIT 50 → UPDATE `retired_at, auto_retired` + RETURNING 行 | 单 UPDATE |
-| finally | `pg_advisory_unlock` | SELECT |
+| -1 | `pool.connect()` 获取专用 PoolClient（lock + unlock 同 session 守卫） | — |
+| 0 | `client.query` pg_try_advisory_lock 非阻塞获取 | SELECT |
+| 1+2 | `client.query` CTE 识别"当前全 dead"集（LEFT JOIN vs.deleted_at IS NULL + is_active=true）+ UPDATE 维护 `dead_since`（上升沿/下降沿/孤儿三态守卫）| 单 UPDATE |
+| 3 | `client.query` 检测 `dead_since < NOW() - 180 days` + batch limit ORDER BY dead_since ASC LIMIT 50 → UPDATE `retired_at, auto_retired` + RETURNING 行 | 单 UPDATE |
+| finally | `client.query` pg_advisory_unlock（仅 acquired=true 时调）+ `client.release()` | SELECT + release |
 
 **R-DEAD-1**：段 2 与 段 3 必须是**两条独立 SQL 语句**（不可合并 CTE）。否则同事务内 `NOW()` 等值，"刚写 dead_since=NOW()"可能被立即判 `< NOW()-180 days`（虽然实际差 0 ms，但 PostgreSQL `NOW()` 文档行为是"事务开始时刻"，跨语句仍是同一值）。
 

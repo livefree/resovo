@@ -40,6 +40,48 @@
 
 ---
 
+## [CHG-PRE-DEAD-LINE-AUTO-RETIRE-WORKER-A-FIX-1] advisory lock 同 client session 守卫 + SQL 软删过滤（Codex stop-time review 双 bug）
+- **完成时间**：2026-05-28
+- **记录时间**：2026-05-28
+- **执行模型**：claude-opus-4-7（主循环 / Codex stop-time review 反馈触发）
+- **子代理**：无（FIX 级别 / 沿用 arch-reviewer 评审结论 + Wave 4 #5-A 设计取舍）
+- **触发**：Codex stop-time review 命中两个真 bug：
+  - **Bug 1 — advisory lock/session 不安全**：`pg_advisory_lock` 是 **session-level 锁**，要求 lock 与 unlock 在**同一 connection** 上。Wave 4 #5-A 初版用 `pool.query()` 每次调用可能拿到不同 client → unlock 在错误 connection 上执行（静默成功 / 实际 lock 仍在原 client 上 / **下次 worker run 永久拿不到锁 / lock 泄漏直到原 connection 关闭**）
+  - **Bug 2 — SQL 漏 deleted_at 过滤**：CTE LEFT JOIN 没有 `vs.deleted_at IS NULL` 守卫 → 软删除 source 仍被计入 `source_count + dead_count` → 误判 alias 的 'orphan' / 'all_dead' / 'has_alive' 状态。arch-reviewer 评审建议 SQL 本含此条件，主循环实施时漏抄（评审报告 §2.2 line "AND vs.deleted_at IS NULL"）
+- **修改文件**（3 项 / PATCH=3 ≤ 5 ✅）：
+  - `apps/api/src/db/queries/auto-retire-line.ts` —
+    - **Bug 1 修复**：import 加 `PoolClient` / 改用 `const client: PoolClient = await pool.connect()` 在函数入口 / 所有 4 段 query 改 `client.query()`（不再 `pool.query()`） / finally 仅在 `acquired=true` 时 unlock + try/catch 防 unlock 失败抛错 / **始终 `client.release()`** 防 PoolClient 泄漏
+    - **Bug 2 修复**：CTE 段 1+2 SQL `LEFT JOIN video_sources vs` ON 条件加 `AND vs.deleted_at IS NULL` 与既有 `vs.is_active = true` 并列
+    - jsdoc 同步：工作流从 4 段改 5 段（加段 -1 pool.connect）/ R-DEAD-2 jsdoc 补"+ vs.deleted_at IS NULL"/ R-DEAD-3 jsdoc 补"pool.connect() 同 client" 关键说明
+  - `tests/unit/api/auto-retire-line-queries.test.ts` —
+    - 重写 `makePoolAndClient()` mock：pool.connect 返回 client / client.query 走原 query 工厂 / pool.query 默认 reject 防误用 / release vi.fn 监控
+    - 新 case **T9**：所有 query 必在同一 client（poolConnect 1 次 / poolQuery 0 次 / clientQuery ≥ 4 次 / release 1 次）— Codex FIX-1 session 守卫断言
+    - 新 case **T10**：CTE SQL 必含 `AND\s+vs\.deleted_at\s+IS\s+NULL` 正则匹配 + 同时含 `vs.is_active = true`
+    - T6 拿不到锁场景：补"不调 unlock"（防 PG NOTICE 噪音）+ 仍调 release 断言
+    - T8 finally 抛错场景：补 release 必调 1 次断言
+  - `docs/manual/auto-retire-line-worker.md` —
+    - §5 advisory lock 改名"advisory lock + 同 client session 守卫"+ 详释 session-level lock 必须同 connection 原因 + 禁止 pool.query() / 必须 pool.connect() + client.query() 范式 + unlock 失败容错 + 拿不到锁时不 unlock 但仍 release
+    - §6 工作流表从 4 段改 5 段（加段 -1 pool.connect）+ 全部段标注 client.query / finally 补 release
+- **新增依赖**：无
+- **数据库变更**：无（SQL 改 ON 条件 + 函数级 connection 处理 / 不动 schema）
+- **设计取舍**：
+  - **pool.connect() vs pg_advisory_xact_lock + BEGIN/COMMIT 替代**：pool.connect() — 当前已是非事务 SQL 流（两条 UPDATE 各自隐式 commit）/ 改 xact_lock 要把段 1+2 + 段 3 放同一 transaction → 段 3 RETURNING 在事务内不会立即被外部读到 / 改动面更大 / pool.connect 更对齐既有 video_sources.ts `toggleVideoSource` 范式
+  - **拿不到锁时不 unlock**：调 pg_advisory_unlock 无对应 lock 会产 PG WARNING "you don't own a lock of type" / 噪音污染日志 / 只在 acquired=true 时 unlock 更干净
+  - **unlock 失败 try/catch 不抛错**：unlock 极罕见失败（connection reset）/ 锁会随 connection 关闭自动释放 / 抛错会阻塞 release 导致 PoolClient 真泄漏 / 容错 + log.warn 兼顾可观测
+  - **始终 release**：finally 块外的 release 不属 try 范围 / 用 try-finally 包 release 是过度防御 / pg pool 内部对重复 release 有守卫
+- **不触发**：
+  - architecture.md sync：本 FIX 不动 schema（dead_since 列与索引已 ship）/ §5 schema 表无变化
+  - R-MID-1 RETRO：worker 范畴 / D-164-8 真源不适用
+  - 新 ADR：本 FIX 是 -A 子卡实施侧 cleanup 补强 / 不构成新决策 / 评审报告 §5 触发时序 + Q3 advisory lock 描述已包含同 session 隐含语义（评审报告 R-DEAD-3 节 try {  } finally { unlock }）/ 主循环实施时漏将 finally 同 client / 本 FIX 落实
+  - Opus 二次评审：FIX 级别主循环直接消化 Codex 反馈
+- **质量门禁**：typecheck ✅ EXIT=0 / lint ✅ 0 error 0 warning / verify:adr-contracts ✅ EXIT=0（198 路由 81 ADR 端点 / 277 D-N 全闭环）/ auto-retire-line-queries 8/8 PASS（既有 6 + 新 T9/T10）/ 既有 video_sources_queries 6/6 PASS（无回归 / 验证 pool.connect 范式同既有 toggleVideoSource）
+- **闭环关系**：
+  - **arch-reviewer 评审 §2.2 SQL 草案含 `vs.deleted_at IS NULL`** → 主循环实施漏抄 → FIX 落实
+  - **评审 R-DEAD-3 "try {  } finally { unlock }"** → 主循环理解为 pool.query 即可 → 实际 session-level lock 要求同 connection → FIX 落实 pool.connect() + client.query() 全段同 client
+  - **ADR-164 D-164-8 + 评审报告 + Wave 4 #5-A + FIX-1 = 完整闭环**
+
+---
+
 ## [CHG-PRE-DEAD-LINE-AUTO-RETIRE-WORKER-A] Migration 081 + auto-retire-line queries + docs（Wave 4 #5-A / ADR-164 D-164-8 闭环 / arch-reviewer Opus A- CONDITIONAL）
 - **完成时间**：2026-05-28
 - **记录时间**：2026-05-28
