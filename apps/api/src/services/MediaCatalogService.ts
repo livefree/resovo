@@ -24,7 +24,7 @@ export { MediaCatalogRow, CatalogInsertData, CatalogUpdateData }
 export const CATALOG_SOURCE_PRIORITY: Record<string, number> = {
   manual:  5,
   tmdb:    4,
-  // ADR-159 决策要点 2：anime 下 Bangumi 优先于豆瓣。bangumi 来源仅对 anime 写入
+  // ADR-161 决策要点 2：anime 下 Bangumi 优先于豆瓣。bangumi 来源仅对 anime 写入
   // （step3 与占位均 anime-only），全局提级至 4（> douban:3）即等价「anime Bangumi 优先」，
   // 非 anime 不受影响；manual(5) 仍最高。同级（== tmdb:4）后写覆盖（当前无 tmdb anime 自动写入）。
   bangumi: 4,
@@ -133,7 +133,7 @@ export class MediaCatalogService {
       }
 
       // INSERT 被 ON CONFLICT 跳过（并发写入导致）→ 再次查询
-      // ADR-159 Y5：补 bangumiId 分支（与 Step4 对称），保证并发 seed + enrich step3
+      // ADR-161 Y5：补 bangumiId 分支（与 Step4 对称），保证并发 seed + enrich step3
       // 写同一 subject 时若因 bangumi_subject_id 唯一冲突被跳过仍能查回收敛。
       const retry =
         (input.imdbId ? await catalogQueries.findCatalogByImdbId(client, input.imdbId) : null) ??

@@ -198,16 +198,16 @@
   - `apps/api/src/services/VideoService.ts`（改类型触发 enrich）
   - `apps/api/src/db/migrations/077_bangumi_metadata.sql`（新建）
   - `apps/api/src/db/queries/externalData.ts` + `mediaCatalog.ts`（扩展）
-  - `apps/api/src/routes/admin/moderation.bangumi.ts`（新建，依赖 ADR-159）+ `moderation.ts`（注册子路由 2 行）
-  - `packages/types/src/external.types.ts`（CHG-BNG-08：BangumiCandidate / BangumiGapRow，ADR-159 §端点契约锁定）
+  - `apps/api/src/routes/admin/moderation.bangumi.ts`（新建，依赖 ADR-161）+ `moderation.ts`（注册子路由 2 行）
+  - `packages/types/src/external.types.ts`（CHG-BNG-08：BangumiCandidate / BangumiGapRow，ADR-161 §端点契约锁定）
   - `apps/api/src/lib/config.ts` + `.env.example`
   - `scripts/import-bangumi-dump.ts`（修复）
   - `apps/worker/src/jobs/bangumi-dump-refresh.ts`（新建）+ `config.ts` + `index.ts`（CHG-BNG-09 cron 本地 dump 定时重导）
-  - `docs/decisions.md`（ADR-159）+ `docs/architecture.md`（migration 077 schema 同步）
-- **持有冲突域**：`adr`（docs/decisions.md，ADR-159）、`architecture`（docs/architecture.md，077 schema）
+  - `docs/decisions.md`（ADR-161）+ `docs/architecture.md`（migration 077 schema 同步）
+- **持有冲突域**：`adr`（docs/decisions.md，ADR-161）、`architecture`（docs/architecture.md，077 schema）
 - **创建时间**：2026-05-27
 - **集成时间**：—（完成后填写）
 - **建议模型**：`claude-sonnet-4-6`（主体实现）；ADR / 跨消费方 schema 决策走 `claude-opus-4-7` arch-reviewer
 - **执行真源**：`~/.claude/plans/bangumi-tv-bangumi-https-bangumi-tv-dev-enumerated-cosmos.md`（已批准）
 - **说明**：Bangumi.tv 接入——REST 客户端 + dump 索引匹配增强 + 逐集表 + anime 下 Bangumi 优先 + 反向建库无源占位条目。文件域全在 apps/api + scripts，与 main 上 server-next（apps/server-next）WIP 零重叠。
-- **预留编号**：ADR-159、migration 077。
+- **预留编号**：ADR-161、migration 077。

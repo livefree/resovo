@@ -1,8 +1,8 @@
 /**
- * moderation.bangumi.ts — Bangumi 元数据操作 + 反向建库路由（ADR-159 端点 1–5）
+ * moderation.bangumi.ts — Bangumi 元数据操作 + 反向建库路由（ADR-161 端点 1–5）
  * 从 moderation.ts 拆出。Route 仅做鉴权 + zod 校验 + Service 委托，不含业务逻辑。
  *
- * 端点（ADR-159 §端点契约）：
+ * 端点（ADR-161 §端点契约）：
  *   1 POST /admin/videos/:id/bangumi-sync        moderator+admin   触发匹配 + rich + 逐集
  *   2 GET  /admin/videos/:id/bangumi-candidates  moderator+admin   候选搜索（本地召回 + REST 兜底）
  *   3 POST /admin/videos/:id/bangumi-confirm     moderator+admin   人工确认 subject

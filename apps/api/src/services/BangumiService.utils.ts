@@ -1,5 +1,5 @@
 /**
- * BangumiService.utils.ts — Bangumi 纯函数工具（ADR-159）
+ * BangumiService.utils.ts — Bangumi 纯函数工具（ADR-161）
  * 对标 DoubanService.utils.ts：置信度评分 / infobox 解析 / 字段映射
  */
 
@@ -55,7 +55,7 @@ export interface ParsedInfobox {
  * 解析 anime infobox 的制作信息。
  * 仅取可靠存在的键：导演 / 脚本·系列构成 / 动画制作。
  * 声优（CV）不在 infobox 中（属 /characters），故不解析 cast，避免写错。
- * 解析失败的键降级为空（不抛、不写空串，ADR-159 A2）。
+ * 解析失败的键降级为空（不抛、不写空串，ADR-161 A2）。
  */
 export function parseInfobox(infobox: BangumiInfoboxItem[] | undefined | null): ParsedInfobox {
   const result: ParsedInfobox = { directors: [], writers: [], studios: [] }
@@ -117,7 +117,7 @@ export function mapSubjectToCatalogFields(subject: BangumiSubject): CatalogUpdat
   if (info.directors.length > 0) fields.director = info.directors
   if (info.writers.length > 0) fields.writers = info.writers
 
-  // tags：作品标签 top N + 动画制作公司（前缀 制作:，ADR-159 A1，不入 aliases）
+  // tags：作品标签 top N + 动画制作公司（前缀 制作:，ADR-161 A1，不入 aliases）
   const tagNames = Array.isArray(subject.tags)
     ? subject.tags.filter((t) => t?.name).slice(0, MAX_TAGS).map((t) => t.name)
     : []

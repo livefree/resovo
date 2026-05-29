@@ -261,7 +261,7 @@ export async function updateVideoEnrichStatus(
 }
 
 /**
- * 回填集数（ADR-159 R2：Bangumi 来源经 step3 写入，source-neutral，不走 manual 锁路径）。
+ * 回填集数（ADR-161 R2：Bangumi 来源经 step3 写入，source-neutral，不走 manual 锁路径）。
  * 仅当当前 episode_count 缺省/为 0 时回填，避免覆盖已有更准确的集数。
  */
 export async function updateEpisodeCount(

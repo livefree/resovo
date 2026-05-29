@@ -43,7 +43,7 @@ export interface BangumiEntryMatch {
   rating: number | null
   summary: string | null
   airDate: string | null
-  // ADR-159 Y3：候选/缺口展示 + seed 过滤
+  // ADR-161 Y3：候选/缺口展示 + seed 过滤
   coverUrl: string | null
   rank: number | null
   nsfw: boolean
@@ -297,8 +297,8 @@ export interface BangumiSeedFilter {
 }
 
 /**
- * 反向建库（ADR-159 决策 7）：按 rank/year 过滤列出 dump 条目供 BangumiSeedService 消费。
- * 默认跳过 nsfw=true 条目（ADR-159 Y5：不自动建色情占位）。SQL 拼装收敛在 query 层（Service 不拼 SQL）。
+ * 反向建库（ADR-161 决策 7）：按 rank/year 过滤列出 dump 条目供 BangumiSeedService 消费。
+ * 默认跳过 nsfw=true 条目（ADR-161 Y5：不自动建色情占位）。SQL 拼装收敛在 query 层（Service 不拼 SQL）。
  */
 export async function listBangumiEntriesForSeed(
   db: Pool,

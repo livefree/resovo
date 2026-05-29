@@ -15844,7 +15844,7 @@ LinesPanel 主体内 `useMemo` 计算 `effectiveProbingIds` / `effectiveRenderCh
 
 ---
 
-## ADR-159：Bangumi.tv REST API + GitHub 归档 dump 集成协议（SEQ-BANGUMI-01 / Track bangumi）
+## ADR-161：Bangumi.tv REST API + GitHub 归档 dump 集成协议（SEQ-BANGUMI-01 / Track bangumi）
 
 - **日期**：2026-05-27
 - **状态**：**Accepted**（arch-reviewer claude-opus-4-7 × 1 轮 CONDITIONAL：红线 R1（bangumi_entries 重复列 total_episodes）+ R2（step3 写 videos.episode_count 路径断裂）+ 黄线 Y1–Y5 + advisory A1–A4，全部已在本 ADR 内消化修订）

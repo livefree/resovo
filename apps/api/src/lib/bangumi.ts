@@ -1,5 +1,5 @@
 /**
- * bangumi.ts — Bangumi.tv v0 REST API 客户端（ADR-159）
+ * bangumi.ts — Bangumi.tv v0 REST API 客户端（ADR-161）
  *
  * 约束（对标 lib/douban.ts 降级哲学）：
  * - Bearer Token 鉴权（config.BANGUMI_API_TOKEN）；Token 缺失时仍可访问公开数据，
@@ -124,7 +124,7 @@ export async function getSubject(id: number): Promise<BangumiSubject | null> {
 }
 
 /**
- * GET /v0/episodes — 拉取某作品全部本篇逐集（分页，单页 100，上限 50 页防无界，ADR-159 A4）。
+ * GET /v0/episodes — 拉取某作品全部本篇逐集（分页，单页 100，上限 50 页防无界，ADR-161 A4）。
  * 失败/无数据返回 []。
  */
 export async function getEpisodes(subjectId: number): Promise<BangumiEpisode[]> {

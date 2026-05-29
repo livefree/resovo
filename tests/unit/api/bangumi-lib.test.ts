@@ -1,5 +1,5 @@
 /**
- * tests/unit/api/bangumi-lib.test.ts — lib/bangumi.ts REST 客户端（ADR-159 / CHG-BNG-03）
+ * tests/unit/api/bangumi-lib.test.ts — lib/bangumi.ts REST 客户端（ADR-161 / CHG-BNG-03）
  * mock config（提供 Token）+ 全局 fetch；验证鉴权头、降级、分页、搜索。
  */
 

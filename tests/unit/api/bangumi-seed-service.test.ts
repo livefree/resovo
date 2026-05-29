@@ -1,5 +1,5 @@
 /**
- * tests/unit/api/bangumi-seed-service.test.ts — BangumiSeedService（ADR-159 决策 7 / CHG-BNG-07）
+ * tests/unit/api/bangumi-seed-service.test.ts — BangumiSeedService（ADR-161 决策 7 / CHG-BNG-07）
  * 反向建库无源占位 + 缺口清单。mock queries（精确计数走 insertCatalog row|null 信号）。
  */
 

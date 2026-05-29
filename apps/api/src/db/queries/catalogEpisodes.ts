@@ -1,5 +1,5 @@
 /**
- * catalogEpisodes.ts — catalog_episodes 逐集元数据查询（ADR-159 / Migration 077）
+ * catalogEpisodes.ts — catalog_episodes 逐集元数据查询（ADR-161 / Migration 077）
  * 按 catalog_id + source 设计，唯一键 (catalog_id, source, external_episode_id)
  */
 

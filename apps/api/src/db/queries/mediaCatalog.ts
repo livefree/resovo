@@ -72,7 +72,7 @@ export async function findCatalogByBangumiId(
   return result.rows[0] ? mapCatalogRow(result.rows[0]) : null
 }
 
-// ── 缺口清单（ADR-159 端点 5）─────────────────────────────────────
+// ── 缺口清单（ADR-161 端点 5）─────────────────────────────────────
 
 export interface BangumiGapQueryRow {
   catalogId: string

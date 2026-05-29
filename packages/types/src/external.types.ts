@@ -18,7 +18,7 @@ export interface ExternalRecommendation {
 }
 
 /**
- * Bangumi 候选条目（ADR-159 端点 2 bangumi-candidates）。
+ * Bangumi 候选条目（ADR-161 端点 2 bangumi-candidates）。
  * confidence：本地 dump 召回时为 computeLocalBangumiConfidence 结果；REST 搜索兜底为 0。
  */
 export interface BangumiCandidate {
@@ -31,7 +31,7 @@ export interface BangumiCandidate {
   readonly confidence: number
 }
 
-/** Bangumi 缺口清单行（ADR-159 端点 5 gaps：有 bangumi_subject_id 但无 published video 的 catalog）。 */
+/** Bangumi 缺口清单行（ADR-161 端点 5 gaps：有 bangumi_subject_id 但无 published video 的 catalog）。 */
 export interface BangumiGapRow {
   readonly catalogId: string
   readonly bangumiSubjectId: number

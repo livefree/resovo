@@ -1,9 +1,9 @@
 /**
- * BangumiSeedService.ts — 反向建库：无源占位条目（ADR-159 决策 7）
+ * BangumiSeedService.ts — 反向建库：无源占位条目（ADR-161 决策 7）
  *
  * 职责：用 Bangumi dump 全量数据建「无源占位 media_catalog」（无 videos 行），
  *       等采集器后续按 title_norm+year+type 命中挂接填充。
- * 约束：批量场景仅走本地 dump（不打 REST API，规避 Bangumi 限流，ADR-159 决策 1）。
+ * 约束：批量场景仅走本地 dump（不打 REST API，规避 Bangumi 限流，ADR-161 决策 1）。
  *       不直连 SQL（经 db/queries）；占位 type 固定 'anime'（Y4）；默认跳过 nsfw（Y5，由 query 层过滤）。
  *
  * created/matched 计数精确性：不复用 MediaCatalogService.findOrCreate（其返回行无法区分
@@ -94,7 +94,7 @@ export class BangumiSeedService {
     return { scanned: entries.length, created, matched }
   }
 
-  /** 缺口清单分页（ADR-159 端点 5）。 */
+  /** 缺口清单分页（ADR-161 端点 5）。 */
   async listGaps(opts: { page: number; limit: number }): Promise<ListGapsResult> {
     const offset = (opts.page - 1) * opts.limit
     const [rows, total] = await Promise.all([

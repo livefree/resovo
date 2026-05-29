@@ -1,5 +1,5 @@
 -- 077_bangumi_metadata.sql
--- ADR-159 / SEQ-BANGUMI-01 / CHG-BNG-01
+-- ADR-161 / SEQ-BANGUMI-01 / CHG-BNG-01
 --
 -- Bangumi.tv 接入数据基建：
 --   (a) 扩展本地匹配索引表 external_data.bangumi_entries：新增 rank / nsfw

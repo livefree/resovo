@@ -322,7 +322,7 @@ export class VideoService {
     const row = await videoQueries.updateVideoMeta(this.db, id, adaptedInput)
     if (row) void this.indexSync?.syncVideo(id)
 
-    // ADR-159 决策要点 6：改类型为 anime（原非 anime）时入队 Bangumi 丰富（去重 jobId，延迟 5min）
+    // ADR-161 决策要点 6：改类型为 anime（原非 anime）时入队 Bangumi 丰富（去重 jobId，延迟 5min）
     // 经 enrichmentQueue 直接入队（与 CrawlerService 同模式），避免引入 worker 模块的 db 单例
     if (input.type === 'anime' && video.type !== 'anime') {
       const jobData: EnrichJobData = {

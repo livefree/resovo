@@ -1,5 +1,5 @@
 /**
- * BangumiService.ts — Bangumi 匹配 + 元数据丰富业务编排（ADR-159）
+ * BangumiService.ts — Bangumi 匹配 + 元数据丰富业务编排（ADR-161）
  *
  * 职责：本地 dump 召回 → 置信度评分 → 写 video_external_refs → auto 命中拉 REST 详情 + 逐集
  *       → safeUpdate(catalog, 'bangumi') + upsert catalog_episodes + 回填 videos.episode_count
@@ -84,9 +84,9 @@ export class BangumiService {
   }
 
   /**
-   * 后台人工确认：按显式 bangumiId 走 rich 抓取写 catalog（bangumi 源，不锁字段，ADR-159 Y2）。
+   * 后台人工确认：按显式 bangumiId 走 rich 抓取写 catalog（bangumi 源，不锁字段，ADR-161 Y2）。
    * 即使该 subject 不在本地 dump，也用 bangumiId 调 REST 详情；确实没写入任何内容时返回 updated:false，
-   * 并且只有写入成功才记 manual_confirmed ref（避免对不存在 subject 的"假成功"，ADR-159 P1 修订）。
+   * 并且只有写入成功才记 manual_confirmed ref（避免对不存在 subject 的"假成功"，ADR-161 P1 修订）。
    */
   async confirmMatch(videoId: string, catalogId: string, bangumiId: number): Promise<{ updated: boolean }> {
     const entry = await externalDataQueries.findBangumiById(this.db, bangumiId)
@@ -106,7 +106,7 @@ export class BangumiService {
   }
 
   /**
-   * 后台人工候选搜索（ADR-159 端点 2）。
+   * 后台人工候选搜索（ADR-161 端点 2）。
    * 本地 dump 召回（有置信度，毫秒级）为主；keyword 显式搜索时 REST 兜底（confidence=0 标识非本地召回）。
    */
   async searchCandidates(input: {
@@ -176,7 +176,7 @@ export class BangumiService {
         if (eps.length > 0) {
           episodeCount = await catalogEpisodeQueries.upsertCatalogEpisodes(this.db, catalogId, mapEpisodes(eps))
         }
-        // 本篇集数（ADR-159 P1）：优先 wiki eps（本篇数）；否则数 type===0 本篇；
+        // 本篇集数（ADR-161 P1）：优先 wiki eps（本篇数）；否则数 type===0 本篇；
         // 不用 total_episodes（含 SP/OP/ED 章节，会高估用户侧剧集数）
         const mainCount = subject.eps && subject.eps > 0
           ? subject.eps

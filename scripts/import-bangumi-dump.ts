@@ -146,8 +146,8 @@ async function main(): Promise<void> {
 
       const airDate = typeof parsed.date === 'string' ? parsed.date || null : null
       const rating = typeof parsed.score === 'number' && parsed.score > 0 ? parsed.score : null
-      // ADR-159：archive subject.jsonlines 含 rank/nsfw，但无 eps/images → episode_count/cover_url
-      // 留 null，由 REST API getSubject 在匹配时写入 media_catalog/videos（见 ADR-159 字段映射）
+      // ADR-161：archive subject.jsonlines 含 rank/nsfw，但无 eps/images → episode_count/cover_url
+      // 留 null，由 REST API getSubject 在匹配时写入 media_catalog/videos（见 ADR-161 字段映射）
       const rank = typeof parsed.rank === 'number' && parsed.rank > 0 ? parsed.rank : null
       const nsfw = parsed.nsfw === true
 

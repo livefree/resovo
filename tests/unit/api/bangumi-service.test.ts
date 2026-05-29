@@ -1,5 +1,5 @@
 /**
- * tests/unit/api/bangumi-service.test.ts — BangumiService + utils（ADR-159 / CHG-BNG-04/05）
+ * tests/unit/api/bangumi-service.test.ts — BangumiService + utils（ADR-161 / CHG-BNG-04/05）
  * 纯函数 utils 直接测；Service 走真实逻辑 + mock 依赖（lib/bangumi + queries）。
  */
 

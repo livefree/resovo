@@ -30,7 +30,7 @@ docs 硬冲突域（adr / architecture）已在 tracks.md 声明持有。
   - `config.ts` 加 `cron.bangumiDumpRefresh`（env `WORKER_CRON_BANGUMI_DUMP`，默认每周日 04:00）+ `bangumiDumpPath`（env `BANGUMI_DUMP_PATH`）。
   - `index.ts` 接线 `bangumiDumpTask`（start/stop/启动日志；**不 boot 跑**，重活只按 schedule）。
   - `.env.example` 文档化两个新 env。`docs/tracks.md` 扩 apps/worker 文件域。
-  - **复用决策**：worker 与 scripts/ 分属独立部署包，跨包运行时 import repo-root 脚本在 prod 易断 → 自包含 job，注释交叉引用 scripts/import-bangumi-dump.ts + ADR-159 + migration 077 保持同步（正确性/稳定性 #1 > 去重 #2）。
+  - **复用决策**：worker 与 scripts/ 分属独立部署包，跨包运行时 import repo-root 脚本在 prod 易断 → 自包含 job，注释交叉引用 scripts/import-bangumi-dump.ts + ADR-161 + migration 077 保持同步（正确性/稳定性 #1 > 去重 #2）。
   - **stop-hook 审阅修订（Codex，2026-05-27）**：原 `bangumiDumpPath` 默认是**相对路径**，而 worker 标准启动 CWD=apps/worker（`npm --workspace @resovo/worker run start`），相对路径解析不到 → cron 每次静默 no-op；且 `external-db/` 为 gitignore 本地产物（dump 从不入库）。修订：① 去掉误导性相对默认值 → `BANGUMI_DUMP_PATH?.trim() || null`，未配置时 job 打 **info「not configured; skipping」** 显式跳过（dump 由 ops provision，未配即预期不跑）；② 配置后 `path.resolve` 成绝对路径并在日志输出，文件缺失 warn 含绝对路径使误配可见；③ .env.example 改绝对路径示例 + 说明。新增 2 跳过分支单测（null / 文件不存在均不连 DB）。
   - 单测：bangumi-dump-refresh（9，parseBangumiLine 全分支 + 2 跳过分支）。
   - **门禁**：typecheck ✅（8 包全 PASS）/ verify:adr-contracts ✅（无新端点 / 199 路由对齐 / SQL schema 对齐）/ `npm run test -- --run`：**5287 passed / 1 flaky（5288 总）**，flaky 为 StagingEditPanel（apps/server v1，隔离单跑 12/12 PASS），与本卡 apps/worker 改动无关。
@@ -40,27 +40,27 @@ docs 硬冲突域（adr / architecture）已在 tracks.md 声明持有。
 ### ✅ CHG-BNG-07/08（Phase 2）— 反向建库占位 + 缺口查询 + 5 admin 端点
 
 - **状态**：✅ 完成（2026-05-27）
-- **执行模型**：claude-opus-4-7（主循环；ADR-159 端点契约/类型已由 Phase 0 arch-reviewer Opus PASS，无需再起 Opus）
+- **执行模型**：claude-opus-4-7（主循环；ADR-161 端点契约/类型已由 Phase 0 arch-reviewer Opus PASS，无需再起 Opus）
 - **完成备注**：
   - **CHG-BNG-07（Phase 2-A）**：
     - `externalData.listBangumiEntriesForSeed`（按 rank/year 过滤 + 默认跳过 nsfw=true，SQL 收敛于 query 层）。
     - `mediaCatalog.listBangumiGaps` + `countBangumiGaps`（有 bangumi_subject_id 但无 published video 的 catalog；LEFT JOIN bangumi_entries 取 rank 排序）。
-    - **MediaCatalogService.findOrCreate retry 补 bangumiId 分支（ADR-159 Y5）**——与 Step4 对称，修复并发 seed + enrich step3 写同一 subject 时 ON CONFLICT 跳过后查不回的缺口。
+    - **MediaCatalogService.findOrCreate retry 补 bangumiId 分支（ADR-161 Y5）**——与 Step4 对称，修复并发 seed + enrich step3 写同一 subject 时 ON CONFLICT 跳过后查不回的缺口。
     - 新建 `BangumiSeedService.seedPlaceholders`（仅本地 dump、零 REST 调用规避限流；type 固定 anime）+ `listGaps`。
     - 单测：bangumi-seed-service（7）+ mediaCatalogFindOrCreate Y5 retry（1）。
   - **CHG-BNG-08（Phase 2-B）**：
-    - `packages/types/external.types.ts` 加 `BangumiCandidate` / `BangumiGapRow`（ADR-159 §端点契约 readonly 形状逐字落地）。
+    - `packages/types/external.types.ts` 加 `BangumiCandidate` / `BangumiGapRow`（ADR-161 §端点契约 readonly 形状逐字落地）。
     - `BangumiService.searchCandidates`（本地 dump 召回带置信度为主 + keyword 时 REST 兜底 confidence=0，按 confidence 降序去重）。
-    - 新建 `routes/admin/moderation.bangumi.ts` 5 端点（sync/candidates/confirm = moderator+admin；seed = admin only；gaps = moderator+admin），zod schema 逐字对齐 ADR-159；注册进 moderation.ts。
+    - 新建 `routes/admin/moderation.bangumi.ts` 5 端点（sync/candidates/confirm = moderator+admin；seed = admin only；gaps = moderator+admin），zod schema 逐字对齐 ADR-161；注册进 moderation.ts。
     - sync 端点直接映射 matchAndEnrich 结果（auto→updated:true / candidate/none→updated:false+reason）；token 缺失走 Phase 1 既有 dump 降级（比 ADR 决策 9 字面 token_missing 更优，仍写入 dump 字段）。
     - 单测：bangumiRoutes（12，含 403 admin-only / 422 边界 / 非法 UUID → 422）+ searchCandidates（3）。
   - **审阅修订（Codex review gate，2026-05-27）**：
-    - **P1（已修）**：三视频端点（sync/candidates/confirm）补 `VideoIdParamsSchema = z.object({ id: z.string().uuid() }).strict()`（ADR-159 §zod 逐字），非法 id 现返回 422 VALIDATION_ERROR 而非走查库返 404；路由测试 fixture 改真实 UUID + 新增非法 UUID→422 用例。
+    - **P1（已修）**：三视频端点（sync/candidates/confirm）补 `VideoIdParamsSchema = z.object({ id: z.string().uuid() }).strict()`（ADR-161 §zod 逐字），非法 id 现返回 422 VALIDATION_ERROR 而非走查库返 404；路由测试 fixture 改真实 UUID + 新增非法 UUID→422 用例。
     - **P2（已修）**：seed created/matched 计数改为精确——不复用 `findOrCreate`（返回行无法区分本次插入 vs 并发命中），改为 `findCatalogByBangumiId` + `findCatalogByNormalizedKey` 双 precheck（后者必需：`uq_catalog_title_year_type` 是 *部分* 唯一索引，仅全外部 ID 为 NULL 时生效，带 bangumi_id 的占位 INSERT 不受约束，须显式 SELECT 防重复占位）+ `insertCatalog` 的 `row|null` 返回值作唯一可靠"是否本次插入"信号（null=唯一冲突并发竞态→matched）；新增并发竞态用例。findOrCreate Y5 修订保留（crawler 路径仍需）。
     - **P3（已核实）**：reviewer 报 `npm run test -- --run` 164 个 localStorage 失败**在本 worktree 不可复现**——同命令实测 0 个 localStorage 失败。根因：`vitest.config.ts` 用 `environmentMatchGlobs`（vitest 3.2.4 **已 deprecated**，每次运行告警）按 glob 切 jsdom 环境提供 localStorage；reviewer 环境（不同 vitest/jsdom/node）未应用该映射 → 组件测试回落 node 环境。属 pre-existing 测试基建脆弱性，非 Bangumi（apps/api）引入。
   - **门禁（最终）**：typecheck ✅（8 包全 PASS）/ verify:endpoint-adr ✅ 199 路由对齐 / verify:adr-contracts ✅（advisory：error-message + enum-ssot + D-159-1 均 pre-existing/非阻塞）/ `npm run test -- --run`：**5278 passed / 1 failed**，唯一失败为 `CrawlerClient.test.tsx` 14b（server-next CSV/toast，tasks.md 既载 flaky；单跑 **66/66 PASS**），与 Bangumi 无关。
   - **lint**：嵌套 worktree（`.claude/worktrees/bangumi` 物理位于主仓内）导致 ESLint 同时解析 worktree 与父仓两份 `eslint-plugin-resovo` → 插件歧义，对任意文件均 fail（环境性，非本次代码问题）；改动文件 typecheck 干净。
-  - **D-159-1**：占位 normalizedKey 失配产生重复 catalog 已知限制，accept best-effort，按 ADR-159 待集成 PR 时在 changelog.md 闭环（活跃 Track 期不写共享 changelog 冲突域）。
+  - **D-159-1**：占位 normalizedKey 失配产生重复 catalog 已知限制，accept best-effort，按 ADR-161 待集成 PR 时在 changelog.md 闭环（活跃 Track 期不写共享 changelog 冲突域）。
 - **沉淀判断**：seed 服务 + 缺口查询 + 端点分层对标 douban，是；BangumiCandidate/GapRow 进 packages/types 共享层（ADR 锁定契约），是。
 - **CHG-BNG-09（Phase 2-C，可选 cron 归档同步）**：延后——涉及 apps/worker + GitHub 归档下载 + 调度，独立性强且 plan 标注"可选/后续"，不在本次 Phase 2 核心交付内；按需立卡。
 
@@ -83,22 +83,22 @@ docs 硬冲突域（adr / architecture）已在 tracks.md 声明持有。
 
 - **状态**：✅ 完成（2026-05-27）
 - **执行模型**：claude-opus-4-7（主循环）
-- **完成备注**：`CATALOG_SOURCE_PRIORITY.bangumi` 3→4（ADR-159 决策 2）；新建 `migration 077`（bangumi_entries 扩 rank/nsfw + 新建 catalog_episodes 逐集表，幂等含验证 DO block）；architecture.md §5.5/§5.6a/migration 列表同步。root `tsc --noEmit` 通过。
+- **完成备注**：`CATALOG_SOURCE_PRIORITY.bangumi` 3→4（ADR-161 决策 2）；新建 `migration 077`（bangumi_entries 扩 rank/nsfw + 新建 catalog_episodes 逐集表，幂等含验证 DO block）；architecture.md §5.5/§5.6a/migration 列表同步。root `tsc --noEmit` 通过。
 
 ### ✅ CHG-BNG-02（Phase 0-B）— config + .env.example + 修复 dump 导入
 
 - **状态**：✅ 完成（2026-05-27）
 - **执行模型**：claude-opus-4-7（主循环）
-- **完成备注**：config.ts 新增 BANGUMI_API_TOKEN/TIMEOUT_MS/USER_AGENT（Zod，Token optional 降级）；.env.example 同步。import-bangumi-dump.ts 回填 rank/nsfw。**实测 archive subject.jsonlines schema 修正**：含 rank(顶层)/nsfw，但无 eps/images → episode_count/cover_url 不来自 dump，改由 REST API getSubject 匹配时写入；ADR-159 字段映射 + architecture.md 同步修正。
-- **沉淀判断**：dump schema 实测发现已回写 ADR-159 字段映射表，是。
+- **完成备注**：config.ts 新增 BANGUMI_API_TOKEN/TIMEOUT_MS/USER_AGENT（Zod，Token optional 降级）；.env.example 同步。import-bangumi-dump.ts 回填 rank/nsfw。**实测 archive subject.jsonlines schema 修正**：含 rank(顶层)/nsfw，但无 eps/images → episode_count/cover_url 不来自 dump，改由 REST API getSubject 匹配时写入；ADR-161 字段映射 + architecture.md 同步修正。
+- **沉淀判断**：dump schema 实测发现已回写 ADR-161 字段映射表，是。
 
-### ✅ CHG-BNG-00 — ADR-159 起草 + Opus arch-reviewer 评审
+### ✅ CHG-BNG-00 — ADR-161 起草 + Opus arch-reviewer 评审
 
 - **状态**：✅ 完成（2026-05-27）
 - **执行模型**：claude-opus-4-7（主循环）
 - **子代理调用**：arch-reviewer（claude-opus-4-7）× 1 轮 — CONDITIONAL（2 红 R1/R2 + 5 黄 Y1–Y5 + 4 advisory A1–A4），全部已消化进 ADR → 改 Accepted
-- **完成备注**：ADR-159 写入 decisions.md（端点契约 5 端点 + 字段映射 + migration 077 schema + 优先级决策 + D-159-1 偏离）。红线消化：R1 去除重复列 total_episodes 改复用 episode_count；R2 明确 step3 签名扩 videoId + episode_count 经专用 query 写入不越层。verify-endpoint-adr 通过（194 路由对齐）。D-159-1 待集成时在 changelog 闭环。
-- **沉淀判断**：协议沉淀到 ADR-159，是。
+- **完成备注**：ADR-161 写入 decisions.md（端点契约 5 端点 + 字段映射 + migration 077 schema + 优先级决策 + D-159-1 偏离）。红线消化：R1 去除重复列 total_episodes 改复用 episode_count；R2 明确 step3 签名扩 videoId + episode_count 经专用 query 写入不越层。verify-endpoint-adr 通过（194 路由对齐）。D-159-1 待集成时在 changelog 闭环。
+- **沉淀判断**：协议沉淀到 ADR-161，是。
 
 ---
 

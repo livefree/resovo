@@ -85,7 +85,7 @@ export class MetadataEnrichService {
       if (step2 !== null) doubanStatus = step2
     }
 
-    // Step 3: 动画类型补充 Bangumi 数据（ADR-159：委托 BangumiService，含置信度 + ref + rich 详情 + 逐集）
+    // Step 3: 动画类型补充 Bangumi 数据（ADR-161：委托 BangumiService，含置信度 + ref + rich 详情 + 逐集）
     if (type === 'anime') {
       await this.step3Bangumi(videoId, catalogId, titleNorm, year)
     }
@@ -234,7 +234,7 @@ export class MetadataEnrichService {
     titleNorm: string,
     year: number | null,
   ): Promise<void> {
-    // ADR-159：置信度评分 + video_external_refs(provider='bangumi') + auto 命中拉 REST rich 详情 + 逐集
+    // ADR-161：置信度评分 + video_external_refs(provider='bangumi') + auto 命中拉 REST rich 详情 + 逐集
     await this.bangumiService.matchAndEnrich({ videoId, catalogId, titleNorm, year })
   }
 

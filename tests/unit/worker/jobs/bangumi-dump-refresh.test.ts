@@ -1,5 +1,5 @@
 /**
- * bangumi-dump-refresh.test.ts — parseBangumiLine 纯函数（CHG-BNG-09 / ADR-159 C4）
+ * bangumi-dump-refresh.test.ts — parseBangumiLine 纯函数（CHG-BNG-09 / ADR-161 C4）
  * 校验 type 过滤 / 标题回退 / 年份提取 / rank>0 / nsfw / 归一化，与 import 脚本规则一致。
  */
 

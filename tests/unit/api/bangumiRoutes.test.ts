@@ -1,5 +1,5 @@
 /**
- * bangumiRoutes.test.ts — moderation.bangumi.ts 5 端点（ADR-159 / CHG-BNG-08）
+ * bangumiRoutes.test.ts — moderation.bangumi.ts 5 端点（ADR-161 / CHG-BNG-08）
  * 鉴权 + zod 校验 + Service 委托。mock BangumiService / BangumiSeedService / videos 查询。
  */
 
@@ -104,7 +104,7 @@ describe('moderation.bangumi routes', () => {
     expect(res.statusCode).toBe(404)
   })
 
-  it('sync 非法 UUID path → 422 VALIDATION_ERROR（ADR-159 VideoIdParamsSchema）', async () => {
+  it('sync 非法 UUID path → 422 VALIDATION_ERROR（ADR-161 VideoIdParamsSchema）', async () => {
     const res = await app.inject({ method: 'POST', url: '/v1/admin/videos/not-a-uuid/bangumi-sync', headers: { authorization: mod } })
     expect(res.statusCode).toBe(422)
     expect(res.json().error.code).toBe('VALIDATION_ERROR')
