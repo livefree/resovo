@@ -6,7 +6,9 @@
 
 ## 进行中任务
 
-（空 / Wave 4 #3 已 ship / 等下一卡 CHG-SN-9-PLAYER-ERROR-RETRY-CONTROL 主循环自动启动；该卡建议 opus + arch-reviewer + 起 ADR-166 / 当前主循环已是 opus-4-7 满足建议）
+（空 / Wave 4 #4-ADR 已 ship / ADR-166 Accepted / 下一卡 -EP 实施卡 主循环自动启动）
+
+---
 
 ---
 

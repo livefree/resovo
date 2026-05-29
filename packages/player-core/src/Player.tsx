@@ -13,9 +13,9 @@
  *   9  gradient-bottom + chrome-bottom  progress-bar + controls
  */
 
-import { useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import s from "./Player.module.css";
-import { type PlayerProps } from "./types";
+import { type PlayerProps, type PlayerErrorEvent, type PlayerErrorControls } from "./types";
 import { resolveQualityHeight } from "./utils/format";
 import { usePlayerState } from "./Player/usePlayerState";
 import { usePlayerEffects } from "./Player/usePlayerEffects";
@@ -63,13 +63,37 @@ export function Player({
     thumbnailTrack,
   });
 
+  // ── CHG-SN-9-PLAYER-ERROR-RETRY-CONTROL / ADR-166 ──────────────────────
+  // wrappedOnError 拦截 player-core 内部 onError 调用（原生 video / HLS fatal），
+  // 把 controls (PlayerErrorControls) 注入第 2 参后转发到外部 props.onError。
+  //
+  // 实现策略：
+  //   - srcRef 实时反映 props.src，让 controls.retry 的"调用时刻 src 仍是触发错误的 src"守卫可读最新值
+  //   - retryAttemptRef 计数 per-mount-cycle 重试次数（src 变化重置 0）/ data-retry-attempt 暴露给消费方观测（Y-166-2）
+  //   - retrySourceLoadRef 延迟绑定：useSourceLoader 返回 retrySourceLoad 后由 useEffect 同步 ref / 避免 wrappedOnError ↔ orch 循环依赖
+  //   - wrappedOnErrorRef.current 由 useEffect 同步：保持 wrappedOnError 闭包始终引用最新 onError / src / retrySourceLoad，
+  //     再传给 orch 一个稳定 stub `(e) => wrappedOnErrorRef.current(e)` / OrchestrationProps.onError 签名保持不变
+  //   - useSourceLoader.ts / usePlayerOrchestration.ts 类型保持不变（onError: (event) => void）→ PATCH ≤ 5 收敛
+  const srcRef = useRef<string | null>(src ?? null);
+  useEffect(() => { srcRef.current = src ?? null; }, [src]);
+
+  const retryAttemptRef = useRef(0);
+  useEffect(() => { retryAttemptRef.current = 0; }, [src]);
+
+  const retrySourceLoadRef = useRef<() => void>(() => {});
+  const wrappedOnErrorRef = useRef<(event: PlayerErrorEvent) => void>(() => {});
+
+  const wrappedOnErrorStub = useCallback((event: PlayerErrorEvent) => {
+    wrappedOnErrorRef.current(event);
+  }, []);
+
   const orch = usePlayerOrchestration(
     {
       src, qualities, activeQualityId, onQualityChange,
       subtitles, title, author, poster, chapters, onNext,
       episodes, activeEpisodeIndex, onEpisodeChange, onTheaterChange,
       startTime, autoplay, keepControlsVisible, thumbnailTrack,
-      onError, suppressDefaultErrorUI,
+      onError: wrappedOnErrorStub, suppressDefaultErrorUI,
     },
     state,
   );
@@ -113,6 +137,36 @@ export function Player({
     touchSeekDelta, handleTouchStart, handleTouchMove, handleTouchEnd, handleGestureClick,
     blocksGestures, overlayLayout, topOverlay, isOverlayVisible, inputRouter,
   } = orch;
+
+  // ── CHG-SN-9-PLAYER-ERROR-RETRY-CONTROL / ADR-166 ──────────────────────
+  // 同步 retrySourceLoadRef + wrappedOnError 闭包 / 替代 useSourceLoader / orch 类型扩展
+  useEffect(() => { retrySourceLoadRef.current = retrySourceLoad; }, [retrySourceLoad]);
+
+  useEffect(() => {
+    wrappedOnErrorRef.current = (event: PlayerErrorEvent) => {
+      // snapshotSrc = onError 触发时刻的 src（与 event.src 一致 / 显式声明便于守卫读）
+      const snapshotSrc = event.src;
+      const controls: PlayerErrorControls = Object.freeze({
+        retry: () => {
+          // R-166-2 守卫：调用时刻 srcRef.current 若已变 → 静默 no-op + dev warn / 防作用于新 src
+          if (srcRef.current !== snapshotSrc) {
+            if (process.env.NODE_ENV !== "production") {
+              // eslint-disable-next-line no-console
+              console.warn("[player-core] controls.retry() called after src changed; no-op");
+            }
+            return;
+          }
+          // Y-166-2：retry 计数自增 + data-retry-attempt 属性暴露给消费方观测
+          retryAttemptRef.current += 1;
+          const v = videoRef.current;
+          if (v) v.setAttribute("data-retry-attempt", String(retryAttemptRef.current));
+          // R-166-3 fire-and-forget：retrySourceLoad 自身 void / 不抛错
+          retrySourceLoadRef.current();
+        },
+      });
+      onError?.(event, controls);
+    };
+  }, [onError, videoRef]);
 
   const activeQualityLabel = qualities.find((q) => q.id === activeQualityId)?.label ?? null;
   const resolvedQualityHeight = resolveQualityHeight(activeQualityLabel, videoHeight);
@@ -277,8 +331,9 @@ export function Player({
             setError("Video failed to load. Please try again.");
             setLoadingState("idle");
             // CHG-SN-9-PLAYER-ERROR / Opus 评审：native onError 触发外部 onError
-            // src 为错误发生时刻快照（消费方不应字符串匹配做 dead 标记 / 见 PlayerErrorEvent.src jsdoc）
-            onError?.({ code: "native_media_failed", src: src ?? null, fatal: true });
+            // ADR-166 / Wave 4 #4：走 wrappedOnError stub 转发 / controls 由 wrappedOnErrorRef 同 tick 构造注入
+            // src 为错误发生时刻快照（消费方不应字符串匹配做 dead 标记 / 见 PlayerErrorEvent.src jsdoc / R-N-3）
+            wrappedOnErrorStub({ code: "native_media_failed", src: src ?? null, fatal: true });
           }}
           onEnded={() => {
             setIsPlaying(false);

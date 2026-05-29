@@ -40,6 +40,38 @@
 
 ---
 
+## [CHG-SN-9-PLAYER-ERROR-RETRY-CONTROL-ADR] ADR-166 起草 + player-core onError(event, controls) 接口落地（Wave 4 #4-ADR / arch-reviewer Opus A- CONDITIONAL）
+- **完成时间**：2026-05-28
+- **记录时间**：2026-05-28
+- **执行模型**：claude-opus-4-7（主循环 / 符合卡片建议 opus）
+- **子代理**：arch-reviewer (claude-opus-4-7) — 1 轮独立评审 / A- CONDITIONAL / 3 红线 R-166-1/-2/-3 + 6 黄线 Y-166-1/-2/-3/-4/-5/-6 / 主循环消化全部红线 + 5 P1 黄线（Y-166-3/-6 留 -EP 卡明示承接）
+- **修改文件**（4 项 / PATCH=4 ≤ 5 ✅）：
+  - `packages/player-core/src/types.ts` — 新 `PlayerErrorControls` interface（含 R-166-2 时序合法性 + R-166-3 fire-and-forget + Y-166-1 freeze 全文 jsdoc）；改 `PlayerProps.onError` 签名为 `(event, controls) => void`（非破坏性扩 / 消费方旧解构 `(event) => {...}` 完全向后兼容 / TypeScript 函数 contravariant 允许少传参）+ 补 Y-166-4 jsdoc（retry 失败仍触发 onError）+ Y-166-5 jsdoc（默认 overlay retry 按钮与 controls.retry 同源 retrySourceLoad / 共存）
+  - `packages/player-core/src/Player.tsx` — import + useCallback/useEffect/useRef；新增 srcRef + retryAttemptRef（src 变化 useEffect 重置 0 / Y-166-2）+ retrySourceLoadRef + wrappedOnErrorRef + wrappedOnErrorStub useCallback；orch 解构后 useEffect 同步 retrySourceLoadRef + wrappedOnErrorRef.current（构造 frozen controls + snapshotSrc 守卫 + setAttribute data-retry-attempt + 转发外部 onError 双参）；line 275 原生 onError 改调 wrappedOnErrorStub 透传到 wrappedOnError；**wrap 策略让 useSourceLoader.ts + usePlayerOrchestration.ts 类型签名零改动**（HLS fatal `onError?.({code:'hls_fatal',...})` 自动走 wrappedOnError 注入 controls / OrchestrationProps.onError 保持单参 / PATCH 收敛 4 文件 ≤ 5 的关键设计）
+  - `docs/decisions.md` — 追加 ADR-166（§1 背景 + §2 候选评估 8 维度对比 + 否决方案 B 3 条理由 / §3 决策摘要 / §4 API 契约 / §5 触发时序 / §6 实施落地含 -ADR / -EP 拆卡 + 单测 ≥ 5 case / §7 不在范围内 / §8 红线全消化 / §9 黄线 P1 落地 P2-3 留 -EP / §10 评级 A- CONDITIONAL / §11 CLAUDE.md 模型路由对齐 / §12 Accepted 结论 + 实施承接）
+  - `tests/unit/player-core/retry-control.test.tsx` NEW — 5 case：① 同步合法 retry → frozen controls + video.load 被调（loadDirectSource 路径）② 异步守卫 → await + setState 切 src 后调 retry → dev `console.warn('called after src changed')` + 守卫 no-op（R-166-2）③ 连续 fatal → 第 2 次拿到**新** frozen controls（不复用旧引用）④ data-retry-attempt 0 → retry 1 次 → '1' → retry 2 次 → '2'（Y-166-2）⑤ src 变化 → retryAttemptRef 重置 0 / 下一次 retry 仍从 1 开始（Y-166-2 mount 周期独立）；test 头部 polyfill matchMedia / ResizeObserver / IntersectionObserver 让 useViewportSignals 通过 + mock hls.js Hls.isSupported=false 强制走 loadDirectSource native 路径
+- **新增依赖**：无（hls.js 已有 / Object.freeze 是 ES 内置）
+- **数据库变更**：无
+- **设计取舍**（详 ADR-166 §2-§9）：
+  - **方案 A' 否决方案 B**：player-core 既有 7 个 public 回调全部声明式 / 零 ref / time-to-impact 时序对断网恢复 first-class / API 扩展性悖论翻转（错误恢复语义增长 vs pause/seek 命令面铺开）
+  - **R-166-1**：删 `suppressDefault()` 仅保留 `retry()` / 既有 `suppressDefaultErrorUI` prop 静态等价 / 避免双套机制 overlay 闪烁
+  - **R-166-2**：snapshotSrc 闭包 + srcRef.current 比对 / dev `console.warn` no-op / 防异步调用作用于新 src 语义污染
+  - **R-166-3**：retry void / 不抛错 / 不返回 Promise / fire-and-forget jsdoc 明示
+  - **Y-166-1**：`Object.freeze({ retry })` 防 monkey-patch
+  - **Y-166-2**：retryAttemptRef + setAttribute 'data-retry-attempt' / src 变化 useEffect 重置 / 测试可断言
+  - **Y-166-4**：jsdoc 显式声明 retry 失败仍触发 onError 含新 controls 实例 / 消费方需自计数防死循环
+  - **Y-166-5**：默认 overlay Retry 按钮与 controls.retry 同源底层 retrySourceLoad / suppressDefaultErrorUI=false 时共存 / jsdoc 注明
+  - **wrap 策略边界最小化**：useSourceLoader / usePlayerOrchestration 类型不动 / wrappedOnError 在 Player.tsx 闭包内同 tick 注入 controls / OrchestrationProps.onError 保持 `(event) => void` 单参签名 / 这是 PATCH 4 文件 ≤ 5 的关键
+- **不触发**：
+  - architecture.md sync：无 schema / migration / SQL 改动
+  - R-MID-1 RETRO：无新 admin 写端点 / 纯 player-core 公共 API 演进
+  - admin-ui Props 改动：未触 packages/admin-ui
+- **质量门禁**：typecheck ✅ EXIT=0（root + 7 workspaces）/ lint ✅ 0 error 0 warning / verify:adr-contracts ✅ EXIT=0（198 路由 81 ADR 端点 / 278 D-N 全闭环 含新 11 个 R-166 + Y-166）/ retry-control 5/5 PASS / 既有消费方 admin-player 13/13 + player-shell-on-error 4/4 = 17/17 PASS（非破坏性变更确认）
+- **commit trailer**：`Subagents: arch-reviewer (claude-opus-4-7)` + `ADR: ADR-166`（CLAUDE.md "重构播放器 core / shell 层的接口" Opus 强制项）
+- **Wave 4 进度**：#1 ✅ ship → #2 ✅ ship → #3 ✅ ship → #4-ADR ✅ ship / 下一卡 #4-EP CHG-SN-9-PLAYER-ERROR-RETRY-CONTROL-EP（消费方接入 AdminPlayer key-bump remount + PlayerShell retry watchdog 3s / sonnet-4-6 / 不再需 Opus 评审 / Y-166-3 + Y-166-6 承接）
+
+---
+
 ## [CHG-SN-9-PLAYER-ERROR-CONSUMER-B] PlayerShell onError 接入 + 自动切下一线路 + 标 dead-source + 失败上报（Wave 4 #3 / R-N-3 警告闭环）
 - **完成时间**：2026-05-28
 - **记录时间**：2026-05-28

@@ -83,7 +83,7 @@ export interface PlayerProps {
    */
   thumbnailTrack?: string;
   /**
-   * 错误回调（CHG-SN-9-PLAYER-ERROR / arch-reviewer Opus 评审）。
+   * 错误回调（CHG-SN-9-PLAYER-ERROR / ADR-166 扩 controls / arch-reviewer Opus 评审）。
    *
    * 触发位置：原生 video onError / useSourceLoader HLS fatal。
    * 触发后 player-core 内部 `setError(...)` 仍写本地 state 并默认渲染 error overlay；
@@ -92,8 +92,17 @@ export interface PlayerProps {
    * 消费方典型用途：
    *   - AdminPlayer：POST /v1/feedback/playback {success:false, errorCode} 上报失败
    *   - PlayerShell：标 dead-source + 自动切下一线路（注意 R-N-3 不能用 event.src 做匹配键）
+   *   - ADR-166 / Wave 4 #4：通过 controls.retry() 在 onError 同 tick 内程序化触发当前 src 重载
+   *
+   * controls 参数（ADR-166 非破坏性扩展）：
+   *   - 既有消费方解构 `(event) => {...}` 不感知第 2 参 / 完全向后兼容
+   *   - controls 是 `Object.freeze` 冻结对象 / 字段不得 monkey-patch（Y-166-1）
+   *   - 生命周期与本次 onError 调用同 tick；保留外部 ref 异步使用会触发守卫 no-op + dev warn（R-166-2）
+   *   - retry() 失败仍会再次触发 onError（含新 controls 实例）；消费方需自行计数防死循环（Y-166-4）
+   *   - 默认 overlay 的 Retry 按钮（PlayerOverlays.tsx）与 controls.retry 是同源底层 retrySourceLoad；
+   *     suppressDefaultErrorUI=false 时两条路径共存 / 消费方调一次即可（Y-166-5）
    */
-  onError?: (event: PlayerErrorEvent) => void;
+  onError?: (event: PlayerErrorEvent, controls: PlayerErrorControls) => void;
   /**
    * 抑制 player-core 默认错误 overlay（CHG-SN-9-PLAYER-ERROR / Opus R-N-2）。
    *
@@ -128,6 +137,38 @@ export type PlayerErrorCode = "native_media_failed" | "hls_fatal" | "unknown";
  * 错误事件需要携带结构化元数据（code / fatal / src）以支撑消费方分流决策，
  * 而 onTimeUpdate ~4Hz 高频调用避免对象分配开销保留扁平签名。
  */
+/**
+ * 错误恢复命令面（CHG-SN-9-PLAYER-ERROR-RETRY-CONTROL / ADR-166 / Wave 4 #4 / arch-reviewer Opus 评审）。
+ *
+ * 仅在 `onError` 回调第 2 参提供；生命周期与本次 onError 调用同 tick。
+ * 对象被 `Object.freeze`；消费方不得修改其字段（Y-166-1）。
+ *
+ * 设计判据（vs 方案 B useImperativeHandle ref，详 ADR-166 §3 评估表）：
+ *   - 与 player-core 既有 7 个声明式回调（onPlay/onPause/onTimeUpdate/onEnded/onTheaterChange/onNext/onError）范式同构
+ *   - 不破坏 React 单向数据流 / 不引入命令式 ref 入口污染 mental model
+ *   - time-to-impact：与 onError 触发同 tick 同步可调（断网恢复 first-class 需求）
+ *   - 扩展性：随错误恢复语义增长（如未来 reloadFromKeyframe）/ 不与 pause/seek/setVolume 命令面混淆
+ */
+export interface PlayerErrorControls {
+  /**
+   * 重新加载触发此次错误的 source（hls.startLoad(-1) / video.load()）。
+   *
+   * 时序合法性（ADR-166 R-166-2 守卫）：
+   *   - **合法**：在 onError 回调体内**同步**调用 = 必然作用于触发错误的 src
+   *   - **可能 no-op**：onError 内 `await xxx` 跨 tick 再调 retry()，若 props.src 已变（消费方已切线）
+   *     则 retry 静默忽略 + dev `console.warn`（防作用于新 src 的语义污染）
+   *   - **非法时机**：onError 回调返回后保留 controls 引用继续调用 / `setTimeout` 内调用 = 同上 no-op
+   *
+   * 失败再次触发 onError（Y-166-4）：retry 后若再次 fatal，onError 会再次调用并携带**新** controls 实例；
+   * 消费方需自行计数防死循环（建议 ≤ 1 次本地 retry 后切线 / 见 PlayerShell -EP 子卡实施）。
+   *
+   * 签名约束（ADR-166 R-166-3 fire-and-forget）：
+   *   - 返回 `void` / 不抛错 / 不返回 Promise
+   *   - 消费方不应 await retry() 或将其链入 Promise 链
+   */
+  readonly retry: () => void;
+}
+
 export interface PlayerErrorEvent {
   /** 错误分类（见 PlayerErrorCode） */
   readonly code: PlayerErrorCode;

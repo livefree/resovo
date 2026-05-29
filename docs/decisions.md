@@ -17841,3 +17841,210 @@ ADR-165 status 🟢 **Accepted**（2026-05-28 / arch-reviewer Opus A- CONDITIONA
 **0 红线 / 0 P1 黄线 / 0 关键洞察 遗留** → 升 Accepted / 实施期开始。
 
 ---
+
+## ADR-166 — RETRY-CONTROL：player-core onError 扩 PlayerErrorControls + retry 命令面（CHG-SN-9-PLAYER-ERROR-RETRY-CONTROL / Wave 4 #4）
+
+> status: 🟢 Accepted
+> created: 2026-05-28
+> related: ADR-N（onError public API / Wave 3 #7 / CHG-SN-9-PLAYER-ERROR 隐式契约）/ Wave 4 #2 CHG-SN-9-PLAYER-ERROR-CONSUMER-A（AdminPlayer 接入 onError）/ Wave 4 #3 CHG-SN-9-PLAYER-ERROR-CONSUMER-B（PlayerShell 接入 onError + 自动切线）
+> evaluator: arch-reviewer (claude-opus-4-7) — 1 轮独立评审 / A- CONDITIONAL / 3 红线 R-166-1/-2/-3 + 6 黄线 Y-166-1/-2/-3/-4/-5/-6 + 主循环消化建议
+> implementor: 主循环 (claude-opus-4-7) + 后续 -EP 实施卡 (claude-sonnet-4-6)
+
+### §1 背景
+
+Wave 3 #7 (CHG-SN-9-PLAYER-ERROR) ship 了 player-core `onError` public API + `suppressDefaultErrorUI` 抑制默认 overlay，让消费方接管错误 UI。Wave 4 #2/#3 完成消费方接入：AdminPlayer POST feedback 上报失败 / PlayerShell "标 dead + 自动切下一线路"。
+
+但 player-core 内部 `retrySourceLoad`（packages/player-core/src/hooks/useSourceLoader.ts:172-184）**外部消费方无法程序化触发**：PlayerOverlays.tsx:196 默认 Retry 按钮是唯一入口；当消费方设 `suppressDefaultErrorUI=true` 接管 UI 时，重试能力消失。
+
+**业务诉求**：
+- AdminPlayer：审核员"重试此线路"按钮（断网恢复后用）
+- PlayerShell：自动切下一线路前先尝试 1 次本地 retry（hls.js fragment 偶发失败常见 / 不必立即标 dead）
+
+### §2 候选方案与评估
+
+#### 方案 A（推荐）— onError(event, controls)：扩 onError 签名注入命令面
+
+消费方写法：
+```tsx
+<Player onError={(event, { retry }) => {
+  if (canRetryLocally(event)) retry();
+  else autoSwitchLine();
+}} />
+```
+
+#### 方案 B（否决）— useImperativeHandle：Player 暴露 ref API
+
+```tsx
+const playerRef = useRef<PlayerHandle>(null);
+<Player ref={playerRef} onError={(event) => {
+  if (canRetryLocally(event)) playerRef.current?.retry();
+}} />
+```
+
+#### 评估对比表（arch-reviewer 8 维度）
+
+| 维度 | 方案 A | 方案 B | 说明 |
+|---|---|---|---|
+| 1. 类型契约清晰度 | **+** | 0 | A: "重试只能在 onError 上下文触发"在签名上自证；B: retry 句柄全生命周期裸露 |
+| 2. 扩展性 | + | **+** | 平手 / A 受错误恢复语义约束、B 易过度暴露 core 内部 |
+| 3. React 范式正交性 | **+** | − | A: 单向数据流；B: 引入命令式入口，破坏既有范式 |
+| 4. player-core 内部一致性 | **+** | − | A 与 onPlay/onPause/onTheaterChange 同构；B 唯一一处 ref API 污染 mental model |
+| 5. time-to-impact 时序 | **+** | − | A: 同 tick 同步可调；B: 经 ref commit + effect 异步，stale closure 风险 |
+| 6. 消费方实现复杂度 | **+** | 0 | A: AdminPlayer 0 行额外 / PlayerShell +1 if；B: 两端 +useRef + forwardRef |
+| 7. 测试可达性 | **+** | 0 | A: vi.fn() 捕获 controls 即可；B: 必须 mount + act + ref |
+| 8. 未来废弃迁移 | 0 | − | A: 加 controls 字段为非破坏性；B: 移除 ref API 是 SemVer major |
+
+**A 完胜 6 项 / 平手 2 项 / 输 0 项。** 选 A（收敛版 A'）。
+
+#### 关键否决依据
+
+1. **player-core 范式一致性压倒一切**：core 当前 7 个 public 回调全部声明式 / 零 ref。一旦引入 useImperativeHandle 就开了"core 暴露命令式入口"的口子，与 CLAUDE.md "core 层不写业务逻辑、shell 层负责编排"边界耦合度上升一个量级。
+2. **time-to-impact 时序对断网恢复是 first-class 需求**：onError 触发瞬间消费方拿到 retry 同步句柄；ref 路径在 React commit-after-render 时序窗口 + `useImperativeHandle` deps 切源瞬间有 stale closure 风险。
+3. **API 扩展性悖论翻转**：player-core 的扩展方向是错误**事件细分**（hls_manifest_failed / hls_fragment_failed / stall_recovered）而非命令面铺开（pause/seek 等消费方可直接绕 core）。把命令面绑死在 onError 的 controls 上是**作用域极小化的扩展**。
+
+### §3 决策摘要
+
+CHG-SN-9-PLAYER-ERROR-RETRY-CONTROL 在 player-core 现有 `onError(event)` 单参签名基础上**非破坏性扩**为 `onError(event, controls)` 双参，`controls` 是冻结的最小命令面，仅包含 `retry(): void`。消费方（AdminPlayer / PlayerShell）通过 controls 在错误事件回调内程序化触发当前 source 的重新加载（hls.startLoad / video.load），不切源、不破坏 React 单向数据流、与 player-core 既有 7 个声明式回调范式同构。**否决方案 B（useImperativeHandle）**。
+
+### §4 API 契约（最终类型定义）
+
+```ts
+// packages/player-core/src/types.ts
+
+/**
+ * 错误恢复命令面（ADR-166 / Wave 4 #4 / arch-reviewer Opus 评审）。
+ * 仅在 onError 回调第 2 参提供；生命周期与本次 onError 调用同 tick。
+ * 对象被 Object.freeze；消费方不得修改其字段（Y-166-1）。
+ */
+export interface PlayerErrorControls {
+  /**
+   * 重新加载触发此次错误的 source（hls.startLoad(-1) / video.load()）。
+   *
+   * 时序合法性（R-166-2 守卫）：
+   *   - 合法：在 onError 回调体内同步调用 = 必然作用于触发错误的 src
+   *   - 可能 no-op：onError 内 await xxx 跨 tick 再调 retry()，若 props.src 已变（消费方已切线）
+   *     则 retry 静默忽略 + dev console.warn（防作用于新 src 的语义污染）
+   *   - 非法时机：onError 回调返回后保留 controls 引用继续调用 / setTimeout 内调用 = 同上 no-op
+   *
+   * 失败再次触发 onError（Y-166-4）：retry 后若再次 fatal，onError 会再次调用并携带新 controls 实例；
+   * 消费方需自行计数防死循环（建议 ≤ 1 次本地 retry 后切线 / 见 -EP 实施卡 PlayerShell）。
+   *
+   * 签名约束（R-166-3 fire-and-forget）：返回 void / 不抛错 / 不返回 Promise。
+   */
+  readonly retry: () => void;
+}
+
+// PlayerProps.onError 签名扩展（非破坏性 / 消费方不解构第 2 参完全向后兼容）
+onError?: (event: PlayerErrorEvent, controls: PlayerErrorControls) => void;
+```
+
+### §5 触发时序（合法 vs 非法）
+
+**合法时机**：
+- onError 回调体内同步调用 `controls.retry()`
+- onError 回调体内同步调用 `setState` 后**同 tick** 调用 `controls.retry()`
+
+**非法时机（player-core 防御为 no-op + dev warn）**：
+- `await fetch(...).then(() => controls.retry())` 在 await 跨过 props.src 变化时
+- 把 `controls` 存进外部 ref，onError 返回后再调用
+- onError 回调内 setTimeout 后调用
+
+**防御实现**（Player.tsx wrappedOnError 闭包）：
+- `srcRef.current` 实时反映 props.src（useEffect 同步）
+- `snapshotSrc = event.src` 闭包捕获
+- retry 调用时比对 `srcRef.current !== snapshotSrc` → no-op + dev warn
+
+### §6 实施落地（本 ADR 含 -ADR 子卡完成）
+
+#### 6.1 修改文件（4 项 ≤ 5 ✅）
+
+| 文件 | 修改 |
+|---|---|
+| `packages/player-core/src/types.ts` | + `PlayerErrorControls` interface（含 R-166-1/-2/-3 + Y-166-1/-4/-5 全文 jsdoc）；改 `PlayerProps.onError` 签名为 `(event, controls) => void` + 长 jsdoc |
+| `packages/player-core/src/Player.tsx` | + srcRef + retryAttemptRef（src 变化重置 / Y-166-2）+ retrySourceLoadRef + wrappedOnErrorRef + wrappedOnErrorStub useCallback；在 orch 解构后 useEffect 同步 retrySourceLoadRef 和 wrappedOnErrorRef.current（构造 frozen controls + snapshotSrc 守卫 + data-retry-attempt setAttribute + 转发到外部 onError）；line 275 原生 onError 改调 wrappedOnErrorStub |
+| `packages/player-core/src/hooks/useSourceLoader.ts` | **不动**（HLS fatal 处 onError?({code:'hls_fatal',...}) 自动走 wrappedOnError stub / OrchestrationProps.onError 签名保持单参 → useSourceLoader.ts 类型签名零改动）|
+| `packages/player-core/src/Player/usePlayerOrchestration.ts` | **不动**（同上 / wrap 策略保留 OrchestrationProps 旧签名 / 边界最小化）|
+| `tests/unit/components/player/retry-control.test.tsx` | NEW / 5 case 覆盖 R-166-2/3 + Y-166-2 |
+| `docs/decisions.md` | + ADR-166（本段）|
+
+#### 6.2 单测覆盖（≥ 5 case / -ADR 子卡范围）
+
+1. **#1 同步合法 retry**：触发 native onError → 断言 controls 是 frozen 对象 + 调用 retry 触发 retrySourceLoad（video.load 被调）
+2. **#2 异步 retry 守卫**：触发 onError，回调内 await Promise.resolve 后调 retry → 断言 dev `console.warn` + retrySourceLoad **不**被调（R-166-2）
+3. **#3 同 tick setState 切 src 后 retry**：onError 内 setState 切 src='B' 同 tick 调 retry → 断言守卫触发 no-op（R-166-2 边界）
+4. **#4 连续 fatal 拿新 controls 实例**：第一次 retry → 第二次 onError 携带**新**控制对象（不复用旧引用 / 不共享冻结状态）
+5. **#5 data-retry-attempt 计数**：0 → retry 1 次 → 1 → retry 2 次 → 2 / src 变化后重置为 0（Y-166-2 / src 变化 video 上属性被清除或重置）
+
+#### 6.3 commit trailer 要求（本 -ADR 子卡 + -EP 实施卡均含）
+
+```
+Subagents: arch-reviewer (claude-opus-4-7)
+ADR: ADR-166
+```
+
+#### 6.4 -EP 实施卡承接（不在本 ADR 范围）
+
+- **AdminPlayer**（CHG-SN-9-PLAYER-ERROR-RETRY-CONTROL-EP）：手动重试按钮**不**用 controls.retry（生命周期边界 / Y-166-6）→ 改用 `key={sourceId}` bump 强制 Player remount 重载 source。controls.retry 仅服务"onError 回调内同步决策"语义。
+- **PlayerShell**（同上 -EP 卡）：handlePlayerError 首次 fatal 调 `controls.retry()` 跳过切线 + retryAttemptRef per-sourceIdx 计数（≤ 1 次本地 retry / 第二次 fatal 才走 "标 dead + 环形切线"路径）+ 3s 超时 watchdog（Y-166-3 shell 层约束）。
+- 测试更新：admin-player.test.tsx + player-shell-on-error.test.tsx（mock Player onError 第 2 参 controls）。
+
+### §7 不在范围内（明确边界 / 留 follow-up）
+
+- ❌ **pause / seekTo / setVolume 等命令式 API**：本 ADR 仅暴露错误恢复语义；其它命令式入口需独立 ADR。
+- ❌ **PlayerShell 自动 retry 策略本身**（次数 / 超时 / 与切线优先级）：属 shell 层职责，由 -EP 实施卡承接，不写进 ADR-166 契约。
+- ❌ **默认 overlay retry 按钮的废弃**：保持现状（PlayerOverlays.tsx:196）/ 与 controls.retry 同源底层但 UI 共存（Y-166-5 jsdoc 注明）。
+- ❌ **PlayerErrorEvent / PlayerErrorCode 的扩成员**：未来 hls_manifest_failed / hls_fragment_failed 加入是另一个 ADR。
+- ❌ **顶层 `index.ts` re-export `PlayerErrorControls` / `PlayerErrorEvent`**：保持当前"通过 `PlayerProps['onError']` 反推参数类型"范式（AdminPlayer / PlayerShell 已采用），减少公共 API 表面。
+
+### §8 红线（R-166-N）— 已全部消化
+
+- **R-166-1**：`controls` 不得含 `suppressDefault()`，仅保留 `retry()` — 已存在 `suppressDefaultErrorUI` prop 静态等价能力。**消化**：草案 API 仅 retry: void。
+- **R-166-2**：`retry()` 必须捕获快照 src + 调用时比对守卫（异步调用 + 切线场景）。**消化**：wrappedOnError 闭包 srcRef + snapshotSrc 守卫 + dev warn。
+- **R-166-3**：`retry()` 必须是 fire-and-forget（void / no Promise / no throw）。**消化**：jsdoc 明示 + retrySourceLoad 本身 void。
+
+### §9 黄线（Y-166-N）— P1 黄线已落地 / P2-P3 留 -EP 卡
+
+- **Y-166-1**：controls 必须 Object.freeze 防 monkey-patch。**消化**：wrappedOnError 构造时 `Object.freeze({ retry })`。
+- **Y-166-2**：retry 调用有可观测信号 — data-retry-attempt 计数。**消化**：retryAttemptRef + setAttribute；src 变化 useEffect 重置 0。
+- **Y-166-3**：PlayerShell "先 retry 后切线"双倍 loading 时长风险 — 需 retry 超时上限。**留 -EP 卡**：shell 层 3s watchdog。
+- **Y-166-4**：retry 失败仍触发 onError。**消化**：types.ts jsdoc 显式声明 + 消费方计数防死循环建议。
+- **Y-166-5**：默认 overlay retry 按钮 + controls.retry 共存。**消化**：jsdoc 注明同源底层 / 调一次即可。
+- **Y-166-6**：AdminPlayer 手动重试 ≠ controls.retry（生命周期边界）。**留 -EP 卡**：AdminPlayer 用 key bump remount。
+
+### §10 评级 + AUDIT RESULT
+
+**评级：A- CONDITIONAL → 主循环消化全部 3 红线 R-166-1/-2/-3 + 5 P1 黄线 Y-166-1/-2/-4/-5（Y-166-3/6 留 -EP 卡明示）= 等同 A-**
+
+**AUDIT RESULT: PASS（草案吸收红线 / 实施 4 文件 ≤ 5 / -EP 实施卡不再需 Opus 二次评审）**
+
+### §11 与 CLAUDE.md 模型路由规则对齐
+
+确认本决策属"强制升 Opus 子代理 第 4 项：重构播放器 core / shell 层的接口"。`PlayerProps.onError` 是 player-core 公共 API 表面字段，签名变更属重构 core 层接口。
+
+**起独立 ADR-166 必要性**：
+1. 影响 player-core 公共 API 签名（即便非破坏性），是契约层级演进，与 ADR-165 + 隐式 onError ADR 同等量级。
+2. 引入"命令面 vs 事件面" trade-off 决策点（否决方案 B），未来若有人再提议 "Player 暴露 ref handle"，需要本 ADR 作为否决先例锚点。
+3. R-166-2（异步守卫）+ R-166-3（fire-and-forget 约束）+ Y-166-6（AdminPlayer 用例边界）属于不写进 ADR 就一定有人踩的隐式约束，必须落档。
+
+**双卡范式（同 ADR-163/164/165）**：先 -ADR 子卡 ship 草案 + player-core 落地 + 单测；再 -EP 实施卡 ship 消费方接入（AdminPlayer + PlayerShell + 测试更新）。
+
+### §12 结论
+
+ADR-166 status 🟢 **Accepted**（2026-05-28 / arch-reviewer Opus A- CONDITIONAL 1 轮独立评审 → 主循环消化全部 3 红线 + 5 P1 黄线 / Y-166-3/-6 -EP 实施卡承接 = 等同 A-）。
+
+**核心契约**：
+- player-core `onError(event, controls)` 双参签名（非破坏性扩 / 消费方旧解构兼容）
+- `PlayerErrorControls = { retry: () => void }` frozen 单方法命令面（R-166-1）
+- snapshotSrc 闭包守卫 + 调用时刻 srcRef 比对 → 异步/切线后调用 no-op + dev warn（R-166-2）
+- fire-and-forget 约束（R-166-3 / void / no Promise / no throw）
+- data-retry-attempt 计数 per-mount-cycle / src 变化重置 0（Y-166-2 可观测信号）
+- 默认 overlay Retry 按钮与 controls.retry 同源 retrySourceLoad（Y-166-5 共存）
+- retry 失败再次触发 onError 含新 controls 实例（Y-166-4 防死循环）
+
+**实施承接**：
+- 本 -ADR 子卡：types.ts + Player.tsx + decisions.md + retry-control.test.tsx 4 文件 ≤ 5
+- -EP 实施卡（CHG-SN-9-PLAYER-ERROR-RETRY-CONTROL-EP / sonnet-4-6 / 不再需 Opus）：AdminPlayer key-bump remount + PlayerShell retry watchdog 3s + 测试更新（Y-166-3 + Y-166-6）
+
+**0 红线 / 5 P1 黄线已落 / 1 P2 黄线 + 1 边界澄清 留 -EP** → 升 Accepted / -ADR 子卡 ship / -EP 实施卡进入 task-queue。
+
+---
