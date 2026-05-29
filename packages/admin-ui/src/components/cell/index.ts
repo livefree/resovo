@@ -57,6 +57,13 @@ export type {
 export { DualSignal } from './dual-signal'
 export type { DualSignalProps } from './dual-signal.types'
 
+// ── DualSignalCount（CHG-360-A / ADR-159）─────────────────────────
+// X/Y 聚合显示 / partial 黄色 / 用于 line（多 episode）+ video（多线路）聚合上下文
+// 单 source 仍用 SignalChip（"可用 / 失效"）— 不混用
+
+export { DualSignalCount } from './dual-signal-count'
+export type { DualSignalCountProps } from './dual-signal-count.types'
+
 // ── VisChip ─────────────────────────────────────────────────────
 
 export { VisChip } from './vis-chip'

@@ -68,7 +68,7 @@ describe('BangumiSeedService.seedPlaceholders', () => {
     expect(mInsert).not.toHaveBeenCalled()
   })
 
-  it('三元组命中既有 catalog（无 bangumi_id，D-159-1 防重复占位）→ matched，不插入', async () => {
+  it('三元组命中既有 catalog（无 bangumi_id，D-161-1 防重复占位）→ matched，不插入', async () => {
     mListSeed.mockResolvedValue([entry({ bangumiId: 9 })])
     mFindByNorm.mockResolvedValue({ id: 'c-x', bangumiSubjectId: null })
 

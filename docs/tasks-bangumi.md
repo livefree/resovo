@@ -58,9 +58,9 @@ docs 硬冲突域（adr / architecture）已在 tracks.md 声明持有。
     - **P1（已修）**：三视频端点（sync/candidates/confirm）补 `VideoIdParamsSchema = z.object({ id: z.string().uuid() }).strict()`（ADR-161 §zod 逐字），非法 id 现返回 422 VALIDATION_ERROR 而非走查库返 404；路由测试 fixture 改真实 UUID + 新增非法 UUID→422 用例。
     - **P2（已修）**：seed created/matched 计数改为精确——不复用 `findOrCreate`（返回行无法区分本次插入 vs 并发命中），改为 `findCatalogByBangumiId` + `findCatalogByNormalizedKey` 双 precheck（后者必需：`uq_catalog_title_year_type` 是 *部分* 唯一索引，仅全外部 ID 为 NULL 时生效，带 bangumi_id 的占位 INSERT 不受约束，须显式 SELECT 防重复占位）+ `insertCatalog` 的 `row|null` 返回值作唯一可靠"是否本次插入"信号（null=唯一冲突并发竞态→matched）；新增并发竞态用例。findOrCreate Y5 修订保留（crawler 路径仍需）。
     - **P3（已核实）**：reviewer 报 `npm run test -- --run` 164 个 localStorage 失败**在本 worktree 不可复现**——同命令实测 0 个 localStorage 失败。根因：`vitest.config.ts` 用 `environmentMatchGlobs`（vitest 3.2.4 **已 deprecated**，每次运行告警）按 glob 切 jsdom 环境提供 localStorage；reviewer 环境（不同 vitest/jsdom/node）未应用该映射 → 组件测试回落 node 环境。属 pre-existing 测试基建脆弱性，非 Bangumi（apps/api）引入。
-  - **门禁（最终）**：typecheck ✅（8 包全 PASS）/ verify:endpoint-adr ✅ 199 路由对齐 / verify:adr-contracts ✅（advisory：error-message + enum-ssot + D-159-1 均 pre-existing/非阻塞）/ `npm run test -- --run`：**5278 passed / 1 failed**，唯一失败为 `CrawlerClient.test.tsx` 14b（server-next CSV/toast，tasks.md 既载 flaky；单跑 **66/66 PASS**），与 Bangumi 无关。
+  - **门禁（最终）**：typecheck ✅（8 包全 PASS）/ verify:endpoint-adr ✅ 199 路由对齐 / verify:adr-contracts ✅（advisory：error-message + enum-ssot + D-161-1 均 pre-existing/非阻塞）/ `npm run test -- --run`：**5278 passed / 1 failed**，唯一失败为 `CrawlerClient.test.tsx` 14b（server-next CSV/toast，tasks.md 既载 flaky；单跑 **66/66 PASS**），与 Bangumi 无关。
   - **lint**：嵌套 worktree（`.claude/worktrees/bangumi` 物理位于主仓内）导致 ESLint 同时解析 worktree 与父仓两份 `eslint-plugin-resovo` → 插件歧义，对任意文件均 fail（环境性，非本次代码问题）；改动文件 typecheck 干净。
-  - **D-159-1**：占位 normalizedKey 失配产生重复 catalog 已知限制，accept best-effort，按 ADR-161 待集成 PR 时在 changelog.md 闭环（活跃 Track 期不写共享 changelog 冲突域）。
+  - **D-161-1**：占位 normalizedKey 失配产生重复 catalog 已知限制，accept best-effort，按 ADR-161 待集成 PR 时在 changelog.md 闭环（活跃 Track 期不写共享 changelog 冲突域）。
 - **沉淀判断**：seed 服务 + 缺口查询 + 端点分层对标 douban，是；BangumiCandidate/GapRow 进 packages/types 共享层（ADR 锁定契约），是。
 - **CHG-BNG-09（Phase 2-C，可选 cron 归档同步）**：延后——涉及 apps/worker + GitHub 归档下载 + 调度，独立性强且 plan 标注"可选/后续"，不在本次 Phase 2 核心交付内；按需立卡。
 
@@ -97,7 +97,7 @@ docs 硬冲突域（adr / architecture）已在 tracks.md 声明持有。
 - **状态**：✅ 完成（2026-05-27）
 - **执行模型**：claude-opus-4-7（主循环）
 - **子代理调用**：arch-reviewer（claude-opus-4-7）× 1 轮 — CONDITIONAL（2 红 R1/R2 + 5 黄 Y1–Y5 + 4 advisory A1–A4），全部已消化进 ADR → 改 Accepted
-- **完成备注**：ADR-161 写入 decisions.md（端点契约 5 端点 + 字段映射 + migration 077 schema + 优先级决策 + D-159-1 偏离）。红线消化：R1 去除重复列 total_episodes 改复用 episode_count；R2 明确 step3 签名扩 videoId + episode_count 经专用 query 写入不越层。verify-endpoint-adr 通过（194 路由对齐）。D-159-1 待集成时在 changelog 闭环。
+- **完成备注**：ADR-161 写入 decisions.md（端点契约 5 端点 + 字段映射 + migration 077 schema + 优先级决策 + D-161-1 偏离）。红线消化：R1 去除重复列 total_episodes 改复用 episode_count；R2 明确 step3 签名扩 videoId + episode_count 经专用 query 写入不越层。verify-endpoint-adr 通过（194 路由对齐）。D-161-1 待集成时在 changelog 闭环。
 - **沉淀判断**：协议沉淀到 ADR-161，是。
 
 ---
