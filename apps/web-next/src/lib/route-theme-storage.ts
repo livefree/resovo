@@ -209,20 +209,32 @@ export function useRouteTheme(locale: string): {
     if (storedCustom) setCustomThemeState(storedCustom)
 
     const storedId = readStoredThemeId()
-    if (storedId || storedCustom) {
-      setHasStoredTheme(true)  // 仅当 localStorage 真有用户存过的值时标记
-    }
+    // CHG-SN-9-ROUTE-LABEL-D-A2-FIX-2 (Codex stop-time review 2nd)：
+    // hasStoredTheme 仅在 mount 真正 hydrate state 成功时为 true。
+    // 防 corrupt/partial 场景：localStorage 有 themeId='custom' 但 customTheme 数据缺失/损坏
+    // → storedCustom=null → state 保留 default theme jie_qi → 旧逻辑会让 hasStoredTheme=true +
+    // localPreference={themeId:'jie_qi'} → 触发 PUT 默认值污染 server。
+    // 修复：hydrated 只在 state 真切到 stored 值时为 true / 否则保持 false 阻止 PUT。
+    let hydrated = false
 
     if (storedId === CUSTOM_THEME_ID) {
       // 自定义主题命中：仅当 storedCustom 也存在时才切（否则保留 default 防空主题）
       if (storedCustom) {
         setThemeState(customThemeToRouteTheme(storedCustom))
+        hydrated = true
       }
+      // else: themeId='custom' 但 customTheme 损坏 → hydration 失败 → hasStoredTheme=false
     } else if (storedId) {
       const stored = findThemeById(storedId)
-      if (stored && stored.id !== theme.id) {
-        setThemeState(stored)
+      if (stored) {
+        if (stored.id !== theme.id) setThemeState(stored)
+        hydrated = true
       }
+      // else: themeId 是脏数据（findThemeById 返 null）→ hydration 失败 → hasStoredTheme=false
+    }
+
+    if (hydrated) {
+      setHasStoredTheme(true)
     }
     // 仅 mount 时同步一次 localStorage → state；后续 setTheme 路径直接写
     // eslint-disable-next-line react-hooks/exhaustive-deps

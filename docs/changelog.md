@@ -40,6 +40,53 @@
 
 ---
 
+## [CHG-SN-9-ROUTE-LABEL-D-A2-FIX-2] hasStoredTheme 仅在 hydration 成功时为 true（Codex stop-time review 2nd / corrupt-storage 防污染）
+- **完成时间**：2026-05-28
+- **执行模型**：claude-sonnet-4-6（主循环 / FIX 紧随 FIX-1 / 不切换 §16.5）
+- **子代理调用**：无（纯 bug fix / 不改 API 契约 / 不动 ADR-165 D-N）
+- **触发**：Codex stop-time review 2nd 反馈 "custom-theme corrupt/partial storage can still PUT a derived default theme"
+- **背景**：CHG-SN-9-ROUTE-LABEL-D-A2-FIX（commit ba7cbcbb）虽阻止"完全无 localStorage → PUT 默认值"路径，但仍存在 corrupt/partial 漏洞：
+  - 场景：用户曾设过 custom theme（写 themeId='custom' + customTheme JSON），但 customTheme JSON 被清理/损坏（浏览器存储清理 / 用户手改 localStorage / 跨域 sync 中断）
+  - FIX-1 旧逻辑：`if (storedId || storedCustom)` → storedId='custom' 非空 → setHasStoredTheme(true)
+  - 但 state 切换：`if (storedCustom)` 守卫 → 不切（保留 default theme jie_qi 防空主题）
+  - 结果：theme.id=jie_qi（默认）+ hasStoredTheme=true → localPreference = `{ themeId: 'jie_qi' }` → 触发 PUT 把"用户真实选 custom 但数据丢"误传为"默认主题 jie_qi" → server 被污染
+- **根因**：FIX-1 把 hasStoredTheme 仅看"localStorage 有没有 themeId key"，没看 state 是否真正 hydrate 成功。
+- **修复**（1 业务 + 1 测试扩 PATCH=2 严守）：
+  - `apps/web-next/src/lib/route-theme-storage.ts` useRouteTheme mount effect 改造：
+    - 新增 `let hydrated = false` 本地变量
+    - `storedId === CUSTOM_THEME_ID` 分支：仅当 storedCustom 也存在 → setThemeState + hydrated=true
+    - `else if (storedId)` 分支：findThemeById 找到才 hydrated=true（防脏 themeId）
+    - 最后 `if (hydrated) setHasStoredTheme(true)`
+    - localPreference 派生不变（仍依赖 hasStoredTheme）→ corrupt 情况下 hasStoredTheme=false → localValue=null → 不 PUT
+  - `tests/unit/web-next/use-route-theme-sync-fix.test.tsx` 扩 3 case：
+    - #5 themeId='custom' 但 customTheme 数据缺失 → localValue=null（不 PUT 默认值）
+    - #6 themeId='custom' + customTheme JSON 损坏（非法 schema：displayName 为空）→ localValue=null（parseCustomTheme 返 null）
+    - #7 themeId='custom' + customTheme = "{}"（空对象）→ localValue=null（parseCustomTheme 拒绝）
+- **覆盖场景汇总**（FIX-1 + FIX-2 联合）：
+  - 首次访问无 localStorage → ✅ localValue=null
+  - localStorage 有 valid themeId → ✅ localValue 非 null
+  - localStorage 有 valid themeId='custom' + customTheme → ✅ localValue 含 customTheme
+  - themeId='custom' + customTheme 缺失 → ✅ localValue=null（FIX-2）
+  - themeId='custom' + customTheme JSON 损坏 → ✅ localValue=null（FIX-2）
+  - setTheme 后 → ✅ localValue 非 null
+  - handleRemoteValue 应用后 → ✅ localValue 非 null
+- **不触发额外 Opus / ADR**：纯 bug fix 进阶（FIX-1 后发现的 edge case）/ ADR-165 D-165-5 语义不变
+- **质量门禁**：typecheck ✅ EXIT=0 / lint ✅ EXIT=0 / verify:adr-contracts ✅ EXIT=0 / use-route-theme-sync-fix 7/7 PASS（4 既有 + 3 FIX-2 新）+ use-user-preferences-sync 7/7 + route-theme-storage 20/20 + line-display-name-themes 34/34 共 68/68 PASS
+- **设计取舍**：① hydrated 本地变量而非额外 state：简洁性 + 不污染 state 流（仅 effect 内一次性赋值）② findThemeById 找不到也算 hydration 失败：readStoredThemeId 已校验过白名单，理论上 stored 总返回 valid，但额外守卫防御未来 ALL_THEMES 缩减场景 ③ 不清理 corrupt localStorage：本 FIX 仅阻止 PUT 污染 / 数据修复留独立维护卡（用户后续 setTheme 时 writeStoredThemeId 会覆盖脏数据）
+- **六问自检**：
+  - Q1 沉淀共享层？✅ FIX 在 useRouteTheme 内 / 不需独立沉淀
+  - Q2 引入回归？✅ 68/68 测试 PASS / FIX-1 测试 4/4 仍全 PASS（hydrated 在 valid 路径下仍 true）
+  - Q3 越层？✅ 仅 route-theme-storage 内修
+  - Q4 硬编码 / any？✅ 无
+  - Q5 布局变化？N/A
+  - Q6 文件范围？✅ 2 文件 PATCH=2 严守
+- **偏离检测**：无（FIX-2 范围严格 = hydrated 守卫 + 3 corrupt 场景测试）
+- **D-N 编号**：D-165-5 登录迁移协议实现修订进阶（FIX-1 阻断"无数据 PUT 默认" + FIX-2 阻断"corrupt 数据 PUT 派生默认"）
+- **[AI-CHECK] 结论**：PASS（Codex 抓的 corrupt-storage 漏洞已闭 / 7 路径完整覆盖 / ADR-165 D-165-5 实现严格对齐文本协议）
+- **闭环**：CHG-SN-9-ROUTE-LABEL-D-A2-FIX-2 完成 / Codex stop-time review 2nd 反馈已消化 / FIX-1 + FIX-2 联合覆盖 7 关键路径 / Wave 3 实施期保持 9/10（FIX 不增 SEQ 计数 / 视为 -A2 修订进阶）/ ADR-165 全 11 D-N 闭环不变
+
+---
+
 ## [CHG-SN-9-ROUTE-LABEL-D-A2-FIX] useRouteTheme 加 hasStoredTheme 区分"用户存过" vs 默认派生（Codex stop-time review）
 - **完成时间**：2026-05-28
 - **执行模型**：claude-sonnet-4-6（主循环 / FIX 紧随 -A2 / 不切换 §16.5）

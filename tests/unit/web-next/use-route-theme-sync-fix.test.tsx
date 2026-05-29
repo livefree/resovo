@@ -105,4 +105,37 @@ describe('useRouteTheme sync FIX — 区分用户存过 vs 默认派生', () => 
 
     expect(getLatestLocalValue()).toEqual({ themeId: 'nato' })
   })
+
+  // ── FIX-2 (Codex stop-time review 2nd): corrupt/partial localStorage 不污染 ────
+
+  it('#5 themeId="custom" 但 customTheme 数据缺失 → localValue=null（不 PUT 默认值）', async () => {
+    // 用户曾设过 custom theme 但 customTheme JSON 被清理 / 损坏
+    window.localStorage.setItem('resovo:route-theme', 'custom')
+    // 不写 'resovo:route-theme:custom' (模拟数据损失)
+    renderHook(() => useRouteTheme('zh-CN'))
+    await act(async () => { await Promise.resolve() })
+
+    // FIX-2：hydration 失败（state 保留 default theme）→ localValue=null
+    // 旧逻辑：hasStoredTheme=true + state 是 default jie_qi → 错误 PUT { themeId: 'jie_qi' } 污染 server
+    expect(getLatestLocalValue()).toBeNull()
+  })
+
+  it('#6 themeId="custom" + customTheme JSON 损坏（非法 schema）→ localValue=null', async () => {
+    window.localStorage.setItem('resovo:route-theme', 'custom')
+    // 写一段非法 JSON / 不符合 CustomThemeData schema（displayName 为空）
+    window.localStorage.setItem('resovo:route-theme:custom', '{"displayName":"","labels":[]}')
+    renderHook(() => useRouteTheme('zh-CN'))
+    await act(async () => { await Promise.resolve() })
+
+    expect(getLatestLocalValue()).toBeNull()
+  })
+
+  it('#7 themeId="custom" + customTheme JSON 是 plain "{}"  → localValue=null（parseCustomTheme 拒绝）', async () => {
+    window.localStorage.setItem('resovo:route-theme', 'custom')
+    window.localStorage.setItem('resovo:route-theme:custom', '{}')
+    renderHook(() => useRouteTheme('zh-CN'))
+    await act(async () => { await Promise.resolve() })
+
+    expect(getLatestLocalValue()).toBeNull()
+  })
 })
