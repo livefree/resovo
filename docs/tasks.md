@@ -6,7 +6,7 @@
 
 ## 进行中任务
 
-（空 / Wave 4 #5-B 已 ship / ADR-164 D-164-8 完整闭环 / 下一卡 #6 CODENAME-MATRIX-E2E 最终收尾）
+（空 / Wave 4 全部 6 卡 ship 完毕 / 等用户验收）
 
 ---
 

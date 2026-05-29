@@ -40,6 +40,58 @@
 
 ---
 
+## [CHG-SN-9-WAVE3-FOLLOWUP-CODENAME-MATRIX-E2E] Wave 3 验收期补丁 CODENAME-MATRIX 的 e2e 补全 + docs/manual sync（Wave 4 #6 / Wave 4 最终收尾）
+- **完成时间**：2026-05-28
+- **记录时间**：2026-05-28
+- **执行模型**：claude-opus-4-7（启动会话偏离卡片建议 sonnet-4-6 / e2e 测试补全 / 偏离不阻断）
+- **子代理**：无
+- **背景**：Wave 3 验收期补丁 CHG-SN-9-CODENAME-MATRIX（commit 801bd454）ship 了 52 山名预览 + 单元格内联代号分配 + 重复使用建议 + 12 单测（codename-utils），但 e2e + docs/manual 欠账。本卡补齐 + Wave 4 最终收尾。
+- **修改文件**（2 项 / PATCH=2 ≤ 5 ✅）：
+  - `tests/e2e/admin/sources/codename-matrix-picker.spec.ts` NEW — playwright 4 case（admin-next-chromium project 注入 baseURL localhost:3003 / API mock page.route 拦截 localhost:4000/v1）：
+    - **#1 page-load**：进入 `/admin/source-line-aliases` → 表格行渲染（"哔哩主线" + "优酷默认"）+ 点击 `codename-cell-youku-默认` → `codename-matrix-picker` modal 打开 + 5 山名 testid 可见（泰山/华山/昆仑/衡山/嵩山）
+    - **#2 available-pick**：点击 `codename-slot-昆仑` → PUT `/admin/source-line-aliases/youku/默认` body `codename:'昆仑'` + modal close
+    - **#3 occupied-suggest**：点击 `codename-slot-泰山`（mock 已被 bilibili/线路A 占用）→ `codename-suggest-modal` 弹 + 文案含 "泰山-N" + 点击 "使用 泰山-N" button → PUT body 含 `codename:/^泰山-\d+$/`
+    - **#4 cooling-disabled**：mock retired_at 30 天前（< 90 天冷却）的 `衡山` → `codename-slot-衡山` button `disabled=true` + `title` 含"冷却"/"剩 X 天" + 强点 `{force:true}` 后 500ms wait 验证 PUT 未触发 + modal 仍打开
+    - mock 数据 4 行 SourceLineRow：占用泰山 (bilibili/线路A) / 占用华山-1 (bilibili/线路B) / 未分配 (youku/默认) / 退役 30 天前衡山 (iqiyi/老线路) — 覆盖 3 状态 + suggested next 算法
+    - endpoint mock：GET `/admin/source-line-aliases/all` 返 ROWS / PUT `/admin/source-line-aliases/{siteKey}/{sourceName}` 捕获 method/url/body → upsertCalls 数组验证 / auth refresh + me 兜底 / 其他 404 隔离
+    - admin cookies: refresh_token + user_role=admin（同 sources-sort-filter-smoke.spec.ts 范式）
+  - `docs/manual/route-labeling.md` EDIT — §9 Layer B 实施记录追加 2 节：
+    - **§9.10 CODENAME-MATRIX-PICKER**：单元格内联代号分配 jsx 范式 + 3 态状态机表（available/occupied/cooling）+ 后缀建议算法（从 1 递增找空缺 / 防递增浪费 / 例 "泰山+泰山-1+泰山-3" 已占 → 建议 "泰山-2"）+ 3 用户交互 Flow（A 分配新 / B 接受建议 / C 冷却禁用）
+    - **§9.11 e2e 测试**：4 case 验证点映射表 + 真源指向新 spec 文件
+- **新增依赖**：无
+- **数据库变更**：无
+- **设计取舍**：
+  - **测试位置 `tests/e2e/admin/sources/` vs 新建 `aliases/`**：复用既有 sources/ 目录（与 sources-sort-filter-smoke.spec.ts 同模 / source-line-aliases 是 sources 子域）/ 不新建子目录减目录碎片
+  - **mock 4 行覆盖 3 态**：泰山占用 / 华山-1 后缀变种已占 / youku 未分配 / 衡山 cooling — 一组 mock 数据完成所有 case / 减重复 setup 代码
+  - **suggested next 测正则匹配 `/^泰山-\d+$/`**：codename-utils 算法可能因占用模式不同建议 -1 或 -2 / 测试不锁定具体数字 / 仅验证后缀格式 + base 一致
+  - **cooling 测 force click + 短 wait**：playwright `button.disabled=true` 默认拒绝 click / force:true 绕过模拟用户尝试 + 500ms wait 验证异步未触发 / 防 timing flake
+  - **docs/manual 加 §9.10/§9.11 vs 新文件**：route-labeling.md §9 已是 Layer B 真源 / 追加内聚 / 不另建文件避免索引散布
+- **不触发**：
+  - architecture.md sync：无 schema / migration / SQL
+  - R-MID-1 RETRO：无新 admin 写端点
+  - 新 ADR：本卡是 Wave 3 补丁的 e2e 补全 / 不构成新决策
+  - Opus 评审：纯测试 + docs / 非 ADR / 非共享原语 / 非 3+ 消费方
+- **质量门禁**：typecheck ✅ EXIT=0 / lint ✅ 0 error 0 warning / verify:adr-contracts ✅ EXIT=0 / playwright --list 4/4 spec 注册（admin-next-chromium project）/ e2e 实际跑由用户起 dev server 后 `npm run test:e2e` 触发
+- **Wave 4 完整总结**：
+  - **6 主卡 ship**（含 2 拆卡 = 5-A/5-B / 总 8 commits 含主卡 + 6 Codex FIX）：
+    - #1 REJECTED-ENHANCE-B（4dbcf94b）：RejectedTab 视觉对齐 AdminButton+SplitPane+批量 reopen+跳回 pending toast
+    - #2 PLAYER-ERROR-CONSUMER-A（7ddd641f）：AdminPlayer onError + feedback 上报 / DEBT-FIX-D-ERROR 闭环
+    - #3 PLAYER-ERROR-CONSUMER-B（34797db8）：PlayerShell onError + 自动切线 + R-N-3 闭环
+    - #4-ADR PLAYER-ERROR-RETRY-CONTROL-ADR（f33a0fde +FIX-1 63711ff4）：ADR-166 起草 + player-core onError(event, controls) + active 双层守卫
+    - #4-EP PLAYER-ERROR-RETRY-CONTROL-EP（d13c9eab +FIX-2 5f2bc15e +FIX-3 67f46812）：AdminPlayer key-bump + PlayerShell retry watchdog 3s + currentEpisode/shortId cleanup
+    - #5-A PRE-DEAD-LINE-AUTO-RETIRE-WORKER-A（b4184f8e +FIX-1 0b391152 +FIX-2 a9f6b9e3）：Migration 081 + auto-retire-line queries + advisory lock 同 client + deleted_at 过滤 + unlock release(err)
+    - #5-B PRE-DEAD-LINE-AUTO-RETIRE-WORKER-B（c08d1909 +FIX-3 7f301dda）：worker cron + ADR-107 §4 内联 SQL
+    - #6 CODENAME-MATRIX-E2E（本卡）：playwright 4 case + docs/manual §9.10/9.11
+  - **6 Codex stop-time review 反馈全消化**：active 双层守卫 / currentEpisode cleanup / shortId cleanup / advisory lock 同 client + deleted_at / unlock release(err) / ADR-107 §4 内联 SQL
+  - **2 ADR 起草并 Accepted**：ADR-166（PlayerErrorControls onError 双参 / A- CONDITIONAL → 等同 A-）
+  - **1 ADR 完整闭环**：ADR-164 D-164-8 全链路（schema → query → worker → UI 显示"已退役·自动"）
+  - **测试增量**：retry-control 7 + admin-player +5 + player-shell-on-error 8 + auto-retire-line-queries 10 + auto-retire-line worker 10 + codename-matrix-e2e 4 + 重写 admin-player 既有 → 总 ~44 case 新增
+  - **质量门禁**：每卡 typecheck/lint/verify 全 EXIT=0 / 无回归
+  - **arch-reviewer Opus 2 次评审**：ADR-166（CHG-SN-9-PLAYER-ERROR-RETRY-CONTROL）+ PRE-DEAD-LINE-WORKER（CHG-PRE-DEAD-LINE-AUTO-RETIRE-WORKER-A）/ 均 A- CONDITIONAL / 红线全消化
+- **Wave 4 完成度 = 100%** / 等用户验收 / 建议起 Wave 5 立案
+
+---
+
 ## [CHG-PRE-DEAD-LINE-AUTO-RETIRE-WORKER-B-FIX-3] worker 撤回 apps/api 跨 app import / 内联 SQL（Codex stop-time review 第 6 轮 / ADR-107 §4 硬约束）
 - **完成时间**：2026-05-28
 - **记录时间**：2026-05-28
