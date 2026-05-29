@@ -74,8 +74,8 @@ export const ADMIN_NAV: readonly AdminNavSection[] = [
     items: [
       { label: '视频库', href: '/admin/videos', icon: <Film />, shortcut: 'mod+3' },
       { label: '播放线路', href: '/admin/sources', icon: <Link2 />, count: 1939, badge: 'danger' },
-      // CHG-368-B-B / ADR-164：Layer B 山名代号体系（codename / priority / 退役治理）
-      { label: '线路别名', href: '/admin/source-line-aliases', icon: <Link2 /> },
+      // CHG-SN-9-LINES-VIEW-UNIFY（2026-05-28）：「线路别名管理」入口收口到「播放线路」页面右上角
+      //   原侧边栏入口已移除 / 用户从 /admin/sources → 右上角 "线路别名管理" 按钮进入
       { label: '合并拆分', href: '/admin/merge', icon: <Merge />, count: 6, badge: 'warn' },
       { label: '字幕管理', href: '/admin/subtitles', icon: <FileText />, shortcut: 'mod+4' },
       { label: '图片健康', href: '/admin/image-health', icon: <ImageIcon />, count: 597, badge: 'warn' },
