@@ -373,6 +373,19 @@ export function PlayerShell({ slug: slugProp, portalMode = false, previewMode = 
     return () => clearWatchdog()
   }, [activeSourceIndex, clearWatchdog])
 
+  // currentEpisode 变化（用户切集）→ cancel watchdog + 清空 retry 计数（Codex stop-time review FIX-2）
+  // 否则旧集的 watchdog 闭包持有 failedIdx + failedRawSourceId / 3s 后会在新集 sources 上：
+  //   ① 误标 dead（旧 idx 映射到新 sources 数组指向无关 source）
+  //   ② 误切线（环形扫新 sources / 用户选集本意被破坏）
+  //   ③ 用 stale failedRawSourceId POST feedback（旧集 source 的失败被错记到当前会话）
+  // retryAttemptedSetRef 同步清空：新集的 idx 应允许新一轮独立 retry 不继承旧集"已尝试"状态
+  useEffect(() => {
+    return () => {
+      clearWatchdog()
+      retryAttemptedSetRef.current.clear()
+    }
+  }, [currentEpisode, clearWatchdog])
+
   // unmount cleanup
   useEffect(() => {
     return () => clearWatchdog()

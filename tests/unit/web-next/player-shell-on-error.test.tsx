@@ -399,6 +399,68 @@ describe('PlayerShell onError — CHG-SN-9-PLAYER-ERROR-CONSUMER-B / Wave 4 #3 +
     }
   })
 
+  it('#5b 切集（currentEpisode 变化）→ stale watchdog 被取消 / retry 计数清空（Codex FIX-2）', async () => {
+    // 切集会触发 episode-switch useEffect 调 apiClient.get / mock 返回空 sources Promise 避免 undefined.then crash
+    apiGetMock.mockResolvedValue({ data: MOCK_SOURCES })
+    const { rerender } = await (async () => {
+      const view = render(
+        <PlayerShell
+          slug="test-aB3kR9x1"
+          initialVideo={MOCK_VIDEO}
+          initialSources={MOCK_SOURCES}
+        />,
+      )
+      await waitFor(() => {
+        expect(testCapturedProps.onError).toBeTypeOf('function')
+      })
+      return view
+    })()
+    vi.useFakeTimers()
+    try {
+      const onError = testCapturedProps.onError as (e: unknown, c: unknown) => void
+      const c1 = makeControls()
+      // 在 ep=1 上触发 fatal → 启 3s watchdog
+      await act(async () => {
+        onError({ code: 'hls_fatal', src: null, fatal: true }, c1)
+      })
+      expect(c1.retry).toHaveBeenCalledTimes(1)
+      expect(mockState.activeSourceIndex).toBe(0)
+      const postCountBefore = apiPostMock.mock.calls.length
+
+      // 1s 后用户切到 ep=2 / mockState 同步 + rerender 触发 useEffect deps 检测
+      vi.advanceTimersByTime(1000)
+      mockState.currentEpisode = 2
+      await act(async () => {
+        rerender(
+          <PlayerShell
+            slug="test-aB3kR9x1"
+            initialVideo={MOCK_VIDEO}
+            initialSources={MOCK_SOURCES}
+          />,
+        )
+        await Promise.resolve()
+      })
+
+      // 推进时间到原 watchdog 应触发的点 → stale watchdog 已被取消 / 不切线 / 不 POST
+      vi.advanceTimersByTime(5000)
+      await act(async () => { await Promise.resolve() })
+
+      // activeSourceIndex 仍为 0（切集不改 idx / 也不被 stale watchdog 错切）
+      expect(mockState.activeSourceIndex).toBe(0)
+      // 不应有 stale POST 用旧集 sourceId
+      expect(apiPostMock.mock.calls.length).toBe(postCountBefore)
+
+      // retry 计数清空 → 新集上同 idx 再 fatal 仍允许 retry（不是被旧集 retryAttemptedSet 拦截）
+      const c2 = makeControls()
+      await act(async () => {
+        onError({ code: 'hls_fatal', src: null, fatal: true }, c2)
+      })
+      expect(c2.retry).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('#5 retry 后 onPlay 成功 → cancel watchdog + 重置 retry 计数 / 下一次 fatal 仍允许 retry', async () => {
     await renderShellAndWaitForPlayer()
     vi.useFakeTimers()
