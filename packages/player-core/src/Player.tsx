@@ -146,9 +146,26 @@ export function Player({
     wrappedOnErrorRef.current = (event: PlayerErrorEvent) => {
       // snapshotSrc = onError 触发时刻的 src（与 event.src 一致 / 显式声明便于守卫读）
       const snapshotSrc = event.src;
+      // R-166-2 active 标志（Codex stop-time review FIX-1 / 双层守卫第 1 层）：
+      // controls.retry 必须在 onError 同步调用窗口内触发；
+      // 一旦 onError 同步返回（含 async 回调返回 Promise 那一刻），active=false，
+      // 后续保留 controls 引用调用 = 静默 no-op + dev warn。
+      // 否则即便 src 未变，async/setTimeout/外部 ref 持有调用都能绕过 srcRef 守卫破缺契约。
+      let active = true;
       const controls: PlayerErrorControls = Object.freeze({
         retry: () => {
-          // R-166-2 守卫：调用时刻 srcRef.current 若已变 → 静默 no-op + dev warn / 防作用于新 src
+          // 双层守卫第 1 层：onError 同步窗口外调用 → no-op + dev warn
+          if (!active) {
+            if (process.env.NODE_ENV !== "production") {
+              // eslint-disable-next-line no-console
+              console.warn(
+                "[player-core] controls.retry() called outside onError tick; no-op " +
+                "(controls 生命周期仅 onError 同 tick / ADR-166 §5)",
+              );
+            }
+            return;
+          }
+          // 双层守卫第 2 层：src 已变 → no-op + dev warn / 防作用于新 src（异步切线竞态兜底）
           if (srcRef.current !== snapshotSrc) {
             if (process.env.NODE_ENV !== "production") {
               // eslint-disable-next-line no-console
@@ -164,7 +181,13 @@ export function Player({
           retrySourceLoadRef.current();
         },
       });
-      onError?.(event, controls);
+      try {
+        onError?.(event, controls);
+      } finally {
+        // onError 同步返回后立即 close window；async 回调也在返回 Promise 瞬间 close
+        // （Promise.then 内的 retry 调用走 active=false 路径 + 可能叠加 srcRef 守卫）
+        active = false;
+      }
     };
   }, [onError, videoRef]);
 

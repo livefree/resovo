@@ -40,6 +40,44 @@
 
 ---
 
+## [CHG-SN-9-PLAYER-ERROR-RETRY-CONTROL-ADR-FIX-1] controls.retry 生命周期外溢守卫（Codex stop-time review / active 双层守卫）
+- **完成时间**：2026-05-28
+- **记录时间**：2026-05-28
+- **执行模型**：claude-opus-4-7（主循环 / Codex stop-time review 主动反馈触发）
+- **子代理**：无（FIX 级别不需 Opus 二次评审 / 沿用 ADR-166 评审结论补强）
+- **触发**：Codex stop-time review 命中："controls.retry 可以 outlive onError，违反新公共契约"。ADR-166 §5 触发时序明确"非法时机：onError 回调返回后保留 controls 引用继续调用 = no-op"，但初版 Player.tsx wrappedOnError 仅靠 `srcRef.current !== snapshotSrc` 单层守卫，**消费方持有 controls 引用 + src 未变**这一**合法路径但语义违约**场景会绕过守卫破缺契约。
+- **修改文件**（4 项 / PATCH=4 ≤ 5 ✅）：
+  - `packages/player-core/src/Player.tsx` — wrappedOnError 闭包内：
+    - `let active = true` 在 controls 构造前声明
+    - `try { onError?.(event, controls); } finally { active = false; }` 同步窗口结束后立即关闭
+    - retry 函数体首层判断 `if (!active) { dev console.warn('called outside onError tick'); return; }`
+    - srcRef 守卫保留作为第 2 层兜底（覆盖极少数 onError 同步窗口内 setState 切 src 后 retry 边界）
+  - `packages/player-core/src/types.ts` — `PlayerErrorControls.retry` jsdoc 改 R-166-2 "守卫" → "双层守卫" / 显式列出第 1 层 active 标志 + 第 2 层 srcRef 比对 / 说明为何需要双层（"持有 controls 外溢调用 + src 未变" 单层 srcRef 无法识别）
+  - `docs/decisions.md` — ADR-166 §5 触发时序改"防御实现"段 / 列双层守卫详细机制 + "为何需要双层而非单层 srcRef 守卫"段落 / 标 Codex stop-time review FIX-1 修订
+  - `tests/unit/player-core/retry-control.test.tsx` — 新增 2 case + 重写 4 case：
+    - 新 `#5b` 持有 controls 引用 onError 返回后调用 → no-op + dev warn / src 未变也拒（Codex FIX-1 直接命中场景）
+    - 新 `#6` setTimeout 内调用 controls.retry → no-op + dev warn（覆盖 setTimeout 路径）
+    - 重写 `#1` 同步合法 retry：retry 改放 onError 回调**内**调用（契约要求）/ 否则 active 守卫拦截
+    - 重写 `#2` 异步 retry 守卫：assert "outside onError tick" 取代 "called after src changed"（FIX-1 后 active 守卫优先级 > srcRef）
+    - 重写 `#3` 连续 fatal 新 controls：retry 改放 onError 内 / 用 seen 数组捕获 controls 实例做比对
+    - 重写 `#4` data-retry-attempt 计数 / `#7` src 变化重置：onError 内调 retry / 不再外部调
+- **新增依赖**：无
+- **数据库变更**：无
+- **设计取舍**：
+  - **active 标志在 finally 块置 false vs await 后**：选 finally — onError 同步返回的瞬间（含 async onError 返回 Promise 那一刻）就关闭窗口 / 符合"controls 生命周期 = onError 同 tick"契约；不延迟到任何 await 后避免 timing window 含糊
+  - **保留 srcRef 第 2 层守卫 vs 删除**：保留 — active 已 cover 绝大多数路径，但"同 tick setState 切 src 后调 retry"（onError 同步窗口内）仍存在边界，srcRef 兜底防作用于新 src（双层防御纵深）
+  - **dev warn 文案区分两层**："outside onError tick" vs "called after src changed" — 消费方排查时能快速定位是 lifecycle violation 还是 race condition
+  - **测试 retry 调用从外部移到回调内**：契约真源是 ADR-166 §5 "同步窗口"；测试如实反映契约 / 旧测试调用模式被 active 守卫正确拦截 = 守卫工作正常 = 测试需求方变 = 重写测试是契约执行的副作用
+- **不触发**：
+  - architecture.md sync：无 schema / migration
+  - R-MID-1 RETRO：无 admin 写端点
+  - 新独立 ADR：FIX-1 是 ADR-166 §5 触发时序的实施侧补强 / 契约表述保持一致 / 仅守卫强度从单层升双层 / 不构成新决策
+  - Opus 二次评审：ADR-166 §11 已确认 "草案产出后不需要再次 Opus 评审 / 主循环 Sonnet 可直接实施" / FIX-1 由主循环 Opus 直接消化 Codex 反馈
+- **质量门禁**：typecheck ✅ EXIT=0 / lint ✅ 0 error 0 warning / verify:adr-contracts ✅ EXIT=0（198 路由 81 ADR 端点 / 277 D-N 全闭环）/ retry-control 7/7 PASS（既有 5 重写 + 新 2）/ 既有消费方 admin-player 13/13 + player-shell-on-error 4/4 = 17/17 PASS
+- **闭环关系**：ADR-166 §5 触发时序契约 + FIX-1 双层守卫实现 = R-166-2 真正闭环 / Codex stop-time review 反馈消化 / 契约和实施一致性达到 PASS 标准
+
+---
+
 ## [CHG-SN-9-PLAYER-ERROR-RETRY-CONTROL-ADR] ADR-166 起草 + player-core onError(event, controls) 接口落地（Wave 4 #4-ADR / arch-reviewer Opus A- CONDITIONAL）
 - **完成时间**：2026-05-28
 - **记录时间**：2026-05-28

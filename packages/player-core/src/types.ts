@@ -153,11 +153,13 @@ export interface PlayerErrorControls {
   /**
    * 重新加载触发此次错误的 source（hls.startLoad(-1) / video.load()）。
    *
-   * 时序合法性（ADR-166 R-166-2 守卫）：
+   * 时序合法性（ADR-166 R-166-2 / Codex stop-time review FIX-1 双层守卫）：
    *   - **合法**：在 onError 回调体内**同步**调用 = 必然作用于触发错误的 src
-   *   - **可能 no-op**：onError 内 `await xxx` 跨 tick 再调 retry()，若 props.src 已变（消费方已切线）
-   *     则 retry 静默忽略 + dev `console.warn`（防作用于新 src 的语义污染）
-   *   - **非法时机**：onError 回调返回后保留 controls 引用继续调用 / `setTimeout` 内调用 = 同上 no-op
+   *   - **第 1 层守卫 active 标志**：onError 同步返回后（含 async onError 返回 Promise 那一刻）
+   *     controls 进入冻结期；后续任何调用（`await` 后 / `setTimeout` 后 / 外部 ref 持有）
+   *     = 静默 no-op + dev `console.warn`（防 controls.retry 生命周期外溢破缺契约）
+   *   - **第 2 层守卫 srcRef 比对**：即便理论上仍 active，若 props.src 已变（极少数同 tick
+   *     setState 同步切 src 场景）= 同上 no-op + dev warn（异步切线竞态兜底）
    *
    * 失败再次触发 onError（Y-166-4）：retry 后若再次 fatal，onError 会再次调用并携带**新** controls 实例；
    * 消费方需自行计数防死循环（建议 ≤ 1 次本地 retry 后切线 / 见 PlayerShell -EP 子卡实施）。

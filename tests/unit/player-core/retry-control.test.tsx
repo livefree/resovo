@@ -86,8 +86,16 @@ function triggerNativeError(container: HTMLElement): HTMLVideoElement {
 }
 
 describe('player-core onError(event, controls) — ADR-166 / Wave 4 #4-ADR', () => {
-  it('#1 同步合法 retry：onError 回调内 controls.retry() → video.load 被调（retrySourceLoad 执行）', () => {
-    const onError = vi.fn()
+  it('#1 同步合法 retry：onError 回调**内**同步 controls.retry() → video.load 被调（retrySourceLoad 执行）', () => {
+    // Codex FIX-1：retry 必须在 onError 同步窗口内调用 / 否则 active 守卫拦截 / 测试如实反映契约
+    let capturedEvent: unknown = null
+    let capturedControls: { retry: () => void } | null = null
+    const onError = vi.fn((event, controls) => {
+      capturedEvent = event
+      capturedControls = controls
+      // 在 onError 同步窗口内调 retry / active=true / 守卫放行
+      controls.retry()
+    })
     const { container } = render(<Player src={MP4_SRC_A} onError={onError} />)
     const video = container.querySelector('video') as HTMLVideoElement
     const loadSpy = vi.spyOn(video, 'load')
@@ -95,84 +103,114 @@ describe('player-core onError(event, controls) — ADR-166 / Wave 4 #4-ADR', () 
     fireEvent.error(video)
 
     expect(onError).toHaveBeenCalledTimes(1)
-    const [event, controls] = onError.mock.calls[0]
-    // controls 是 frozen 对象（Y-166-1）
-    expect(Object.isFrozen(controls)).toBe(true)
-    // event 是 PlayerErrorEvent
-    expect(event).toEqual({ code: 'native_media_failed', src: MP4_SRC_A, fatal: true })
-    // 同步调用 retry → video.load 被调（loadDirectSource 内 video.load）
-    act(() => { controls.retry() })
+    expect(Object.isFrozen(capturedControls)).toBe(true)
+    expect(capturedEvent).toEqual({ code: 'native_media_failed', src: MP4_SRC_A, fatal: true })
     expect(loadSpy).toHaveBeenCalled()
   })
 
-  it('#2 异步 retry 守卫：await 后 src 已变 → dev warn + video.load 不被调（R-166-2）', async () => {
+  it('#2 异步 retry 守卫：await 后调 retry → active 守卫拦截 + dev warn (R-166-2 / Codex FIX-1)', async () => {
+    // FIX-1 后 active 守卫优先级 > srcRef 守卫；await 后 onError 同步窗口早已关闭
+    // 即便 src 后续是否变化都拦截在 active 层（语义清晰：controls 生命周期 = onError 同 tick）
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const onError = vi.fn()
-    function Wrapper() {
-      const [src, setSrc] = useState(MP4_SRC_A)
-      return (
-        <>
-          <button data-testid="switch-src" onClick={() => setSrc(MP4_SRC_B)}>switch</button>
-          <Player src={src} onError={onError} />
-        </>
-      )
-    }
-    const { container, getByTestId } = render(<Wrapper />)
+    let leakedControls: { retry: () => void } | null = null
+    const onError = vi.fn((_event: unknown, controls: { retry: () => void }) => {
+      leakedControls = controls
+    })
+    const { container } = render(<Player src={MP4_SRC_A} onError={onError} />)
     const video = container.querySelector('video') as HTMLVideoElement
     const loadSpy = vi.spyOn(video, 'load')
 
     fireEvent.error(video)
-    const [, controls] = onError.mock.calls[0]
 
-    // 模拟 await：等下个 tick 后切 src
-    await act(async () => { await Promise.resolve() })
-    fireEvent.click(getByTestId('switch-src'))
-    // 再等 effect 同步 srcRef
+    // 模拟 await：等下个 tick
     await act(async () => { await Promise.resolve() })
 
-    // 现在调 retry：srcRef.current = MP4_SRC_B，snapshotSrc = MP4_SRC_A → 守卫 no-op
-    act(() => { controls.retry() })
-    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('called after src changed'))
-    // video.load 不应被调（注意：切 src 本身可能触发 video.load / 我们关心的是 controls.retry 不额外调一次）
-    // 用断言"warn 触发"已足以确认守卫路径 → 不强断 loadSpy 调用次数
+    // active=false 已生效 / 即便 src 未变，调用 retry → no-op + dev warn
+    act(() => { leakedControls!.retry() })
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('outside onError tick'))
+    expect(loadSpy).not.toHaveBeenCalled()
     warnSpy.mockRestore()
   })
 
   it('#3 retry 后第二次 fatal → 拿到新 controls 实例（不复用旧引用 / 不共享冻结状态）', () => {
-    const onError = vi.fn()
+    const seen: Array<{ retry: () => void }> = []
+    const onError = vi.fn((_event, controls) => {
+      seen.push(controls)
+      controls.retry()
+    })
     const { container } = render(<Player src={MP4_SRC_A} onError={onError} />)
     const video = container.querySelector('video') as HTMLVideoElement
 
     fireEvent.error(video)
-    const [, controls1] = onError.mock.calls[0]
-    act(() => { controls1.retry() })
-
     fireEvent.error(video)
-    const [, controls2] = onError.mock.calls[1]
 
-    expect(controls2).not.toBe(controls1)
-    expect(Object.isFrozen(controls2)).toBe(true)
+    expect(seen.length).toBe(2)
+    expect(seen[1]).not.toBe(seen[0])
+    expect(Object.isFrozen(seen[1])).toBe(true)
   })
 
   it('#4 data-retry-attempt 计数：retry 2 次 → 属性=2（Y-166-2）', () => {
-    const onError = vi.fn()
+    // retry 必须在 onError 同步窗口内调用 / 否则 active 守卫拦截
+    const onError = vi.fn((_event, controls) => { controls.retry() })
     const { container } = render(<Player src={MP4_SRC_A} onError={onError} />)
     const video = container.querySelector('video') as HTMLVideoElement
     expect(video.getAttribute('data-retry-attempt')).toBeNull()
 
     fireEvent.error(video)
-    const [, controls1] = onError.mock.calls[0]
-    act(() => { controls1.retry() })
     expect(video.getAttribute('data-retry-attempt')).toBe('1')
 
     fireEvent.error(video)
-    const [, controls2] = onError.mock.calls[1]
-    act(() => { controls2.retry() })
     expect(video.getAttribute('data-retry-attempt')).toBe('2')
   })
 
-  it('#5 src 变化 → retryAttemptRef 重置 0（Y-166-2 / 下一轮 mount 周期独立计数）', async () => {
-    const onError = vi.fn()
+  it('#5b 持有 controls 引用 onError 返回后调用 → no-op + dev warn（Codex FIX-1 / active 守卫 / src 未变也拒）', () => {
+    // Codex stop-time review 命中：仅靠 srcRef 守卫无法识别"消费方持有 controls 外溢调用 + src 未变"
+    // 这一合法路径但语义违约场景；active 标志在 onError 同步返回瞬间关闭契约窗口
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    let leakedControls: { retry: () => void } | null = null
+    const onError = vi.fn((_event: unknown, controls: { retry: () => void }) => {
+      leakedControls = controls
+    })
+    const { container } = render(<Player src={MP4_SRC_A} onError={onError} />)
+    const video = container.querySelector('video') as HTMLVideoElement
+    const loadSpy = vi.spyOn(video, 'load')
+
+    fireEvent.error(video)
+    expect(leakedControls).not.toBeNull()
+
+    // onError 已同步返回 → active=false；src 未变 → srcRef 守卫不会触发
+    // 仅靠 srcRef 单层守卫的初版会**放行**这次调用 → 契约破缺
+    // FIX-1 active 守卫拦截
+    act(() => { leakedControls!.retry() })
+
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('outside onError tick'))
+    expect(loadSpy).not.toHaveBeenCalled()
+    warnSpy.mockRestore()
+  })
+
+  it('#6 setTimeout 内调用 controls.retry → no-op + dev warn（Codex FIX-1 / active 守卫覆盖 setTimeout 路径）', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    let leakedControls: { retry: () => void } | null = null
+    const onError = vi.fn((_event: unknown, controls: { retry: () => void }) => {
+      leakedControls = controls
+    })
+    const { container } = render(<Player src={MP4_SRC_A} onError={onError} />)
+    const video = container.querySelector('video') as HTMLVideoElement
+    const loadSpy = vi.spyOn(video, 'load')
+
+    fireEvent.error(video)
+
+    // 模拟 setTimeout 后调用
+    await new Promise(resolve => setTimeout(resolve, 0))
+    act(() => { leakedControls!.retry() })
+
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('outside onError tick'))
+    expect(loadSpy).not.toHaveBeenCalled()
+    warnSpy.mockRestore()
+  })
+
+  it('#7 src 变化 → retryAttemptRef 重置 0（Y-166-2 / 下一轮 mount 周期独立计数）', async () => {
+    const onError = vi.fn((_event, controls) => { controls.retry() })
     function Wrapper() {
       const [src, setSrc] = useState(MP4_SRC_A)
       return (
@@ -186,8 +224,6 @@ describe('player-core onError(event, controls) — ADR-166 / Wave 4 #4-ADR', () 
     const video = container.querySelector('video') as HTMLVideoElement
 
     fireEvent.error(video)
-    const [, controls1] = onError.mock.calls[0]
-    act(() => { controls1.retry() })
     expect(video.getAttribute('data-retry-attempt')).toBe('1')
 
     // 切 src 后 retryAttemptRef 重置 0；video 仍是同一元素 / setAttribute 不会被自动清除
@@ -196,9 +232,6 @@ describe('player-core onError(event, controls) — ADR-166 / Wave 4 #4-ADR', () 
     await act(async () => { await Promise.resolve() })
 
     fireEvent.error(video)
-    const calls = onError.mock.calls
-    const [, controls2] = calls[calls.length - 1]
-    act(() => { controls2.retry() })
     // 计数从 0 开始 → 1（而不是 2）
     expect(video.getAttribute('data-retry-attempt')).toBe('1')
   })

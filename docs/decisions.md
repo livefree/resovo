@@ -17938,21 +17938,32 @@ export interface PlayerErrorControls {
 onError?: (event: PlayerErrorEvent, controls: PlayerErrorControls) => void;
 ```
 
-### §5 触发时序（合法 vs 非法）
+### §5 触发时序（合法 vs 非法 / 双层守卫 / Codex stop-time review FIX-1 修订）
 
 **合法时机**：
-- onError 回调体内同步调用 `controls.retry()`
+- onError 回调体内**同步**调用 `controls.retry()`
 - onError 回调体内同步调用 `setState` 后**同 tick** 调用 `controls.retry()`
 
 **非法时机（player-core 防御为 no-op + dev warn）**：
-- `await fetch(...).then(() => controls.retry())` 在 await 跨过 props.src 变化时
-- 把 `controls` 存进外部 ref，onError 返回后再调用
-- onError 回调内 setTimeout 后调用
+- `await fetch(...).then(() => controls.retry())` — await 跨 tick 后调用
+- 把 `controls` 存进外部 ref，onError 返回后再调用（**Codex stop-time review 命中**：仅靠 srcRef 守卫不够 / src 未变时此路径会绕过初版单层守卫破缺契约）
+- onError 回调内 `setTimeout` 后调用
+- async onError 函数返回 Promise 那一刻起 controls 进入冻结期
 
-**防御实现**（Player.tsx wrappedOnError 闭包）：
-- `srcRef.current` 实时反映 props.src（useEffect 同步）
-- `snapshotSrc = event.src` 闭包捕获
-- retry 调用时比对 `srcRef.current !== snapshotSrc` → no-op + dev warn
+**防御实现 — 双层守卫**（Player.tsx wrappedOnErrorRef.current 闭包）：
+
+1. **第 1 层：active 标志**（FIX-1 新增 / 主守卫）
+   - `let active = true` 在 controls 构造前声明
+   - `try { onError?.(event, controls); } finally { active = false; }` 同步窗口结束后立即关闭
+   - retry 调用首先检查 `if (!active) → no-op + dev warn`
+   - 覆盖**所有** onError 同步窗口外调用（async / setTimeout / 外部 ref / Promise 链）
+
+2. **第 2 层：srcRef.current !== snapshotSrc 比对**（保留 / 兜底）
+   - `srcRef.current` 实时反映 props.src（useEffect 同步）
+   - `snapshotSrc = event.src` 闭包捕获
+   - 覆盖极少数"onError 同步窗口内 setState 切 src 后调 retry"的同 tick 边界
+
+**为何需要双层而非单层 srcRef 守卫**：初版仅靠 srcRef 守卫无法识别"消费方持有 controls 外溢调用 + src 未变"这一**合法路径但语义违约**的场景。active 标志在 onError 返回的瞬间收紧契约边界，无论 src 是否变化都拒绝调用，符合 ADR-166 §5 "controls 生命周期与本次 onError 同步调用同 tick" 的契约本意。
 
 ### §6 实施落地（本 ADR 含 -ADR 子卡完成）
 
