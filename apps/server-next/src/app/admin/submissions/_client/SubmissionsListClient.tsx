@@ -21,7 +21,7 @@
  *   - DataTable 一体化（不复用 ModernDataTable / 外置 PaginationV2 / 外置 SelectionActionBar 三件套）
  */
 
-import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { useState, useEffect, useMemo, useCallback, type CSSProperties } from 'react'
 import {
   AdminCard,
@@ -141,6 +141,7 @@ const TOOLBAR_LEFT_STYLE: CSSProperties = {
 }
 
 export function SubmissionsListClient() {
+  const router = useRouter()
   const [rows, setRows] = useState<readonly SubmissionRow[]>([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
@@ -412,15 +413,14 @@ export function SubmissionsListClient() {
               新页面支持完整 4 类投稿（失效源举报 / 求片 / 元数据纠错 / 已处理）。本页仅服务历史「失效源举报」读写视图，将在 M-SN-9 退役。
             </div>
           </div>
-          <Link href="/admin/user-submissions" passHref legacyBehavior>
-            <AdminButton
-              variant="primary"
-              size="sm"
-              data-testid="submissions-deprecation-redirect"
-            >
-              切换到新页面 →
-            </AdminButton>
-          </Link>
+          <AdminButton
+            variant="primary"
+            size="sm"
+            data-testid="submissions-deprecation-redirect"
+            onClick={() => router.push('/admin/user-submissions')}
+          >
+            切换到新页面 →
+          </AdminButton>
         </div>
       </AdminCard>
 

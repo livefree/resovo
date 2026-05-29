@@ -13,7 +13,7 @@
 
 import { useState, useEffect, useCallback, useMemo, type CSSProperties } from 'react'
 import Image from 'next/image'
-import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import {
   PageHeader,
   AdminButton,
@@ -336,6 +336,7 @@ function buildColumns(
 // ── 主组件 ────────────────────────────────────────────────────────
 
 export function SourcesClient() {
+  const router = useRouter()
   const toast = useToast()
   const [segment, setSegment] = useState<SourceSegment>('grouped')
   // CHG-SN-9-LINES-VIEW-UNIFY 后：旧 CHG-SN-8-FUP-SOURCES-DEAD-BTN replaceTipOpen state 已删
@@ -482,15 +483,14 @@ export function SourcesClient() {
       <PageHeader
         title="播放线路"
         actions={
-          <Link href="/admin/source-line-aliases" passHref legacyBehavior>
-            <AdminButton
-              size="sm"
-              variant="primary"
-              data-testid="sources-line-aliases-link"
-            >
-              线路别名管理
-            </AdminButton>
-          </Link>
+          <AdminButton
+            size="sm"
+            variant="primary"
+            data-testid="sources-line-aliases-link"
+            onClick={() => router.push('/admin/source-line-aliases')}
+          >
+            线路别名管理
+          </AdminButton>
         }
       />
 
