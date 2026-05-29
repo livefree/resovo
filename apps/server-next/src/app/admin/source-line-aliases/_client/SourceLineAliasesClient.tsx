@@ -287,11 +287,22 @@ export function SourceLineAliasesClient() {
       id: 'usage',
       header: '使用',
       accessor: (r) => r.videoCount,
-      cell: ({ row }) => (
-        <span style={{ color: 'var(--fg-muted)', fontSize: 'var(--font-size-xs)' }}>
-          {row.videoCount} 视频 · {row.activeCount}/{row.episodeCount} 集
-        </span>
-      ),
+      cell: ({ row }) => {
+        // FIX-3: alias-only 孤儿行（已分配别名但 video_sources 全软删 / 不存在）
+        // 仍需在 UI 显示让运维监控冷却期 codename 占用
+        if (row.assignedAt !== null && row.videoCount === 0) {
+          return (
+            <span style={{ color: 'var(--state-warning-fg)', fontSize: 'var(--font-size-xs)' }} title="此别名行无关联 video_sources / 可能仅存在于冷却期或历史归档">
+              无关联视频
+            </span>
+          )
+        }
+        return (
+          <span style={{ color: 'var(--fg-muted)', fontSize: 'var(--font-size-xs)' }}>
+            {row.videoCount} 视频 · {row.activeCount}/{row.episodeCount} 集
+          </span>
+        )
+      },
     },
     {
       id: 'actions',

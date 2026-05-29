@@ -40,6 +40,50 @@
 
 ---
 
+## [CHG-SN-9-LINES-VIEW-UNIFY-FIX-3] SQL FULL OUTER JOIN 范式包含 alias-only 孤儿行（Codex stop-time review 3rd / cooling/retired 行防失踪）
+- **完成时间**：2026-05-28
+- **执行模型**：claude-sonnet-4-6（主循环 / FIX 紧随 LINES-VIEW-UNIFY / 不切换 §16.5）
+- **子代理调用**：无（纯 bug fix / 不改 API 契约 / 不动 ADR-164 §端点契约）
+- **触发**：Codex stop-time review 3rd 反馈 "alias-only retired/cooling rows disappear from the management UI"
+- **背景**：CHG-SN-9-LINES-VIEW-UNIFY（commit 959fdfbe）SQL 用 `FROM video_sources vs LEFT JOIN source_line_aliases sla`：
+  - 场景：sla 表有退役/cooling 别名行（如 codename='泰山-2' / retired_at NOT NULL / 90 天冷却期内）
+  - 但对应 video_sources 行被软删 / 或站点废弃后 vs 行被清理 → vs 无匹配
+  - LEFT JOIN 方向是 `vs LEFT JOIN sla` → vs 无 = 行不进入结果 → **alias-only 孤儿行从管理 UI 消失**
+  - 运维无法监控冷却期 codename 占用 / 无法防止提前复用 codename
+- **根因**：LEFT JOIN 方向决定哪一侧的孤儿行被纳入。`vs LEFT JOIN sla` 仅保 vs 侧孤儿（unassigned）/ 丢 sla 侧孤儿（alias-only）。
+- **修复**（1 业务 + 1 测试扩 PATCH=2 严守 + 1 业务 UI 提示）：
+  - `apps/api/src/db/queries/sources-matrix.ts` listAllSourceLines SQL 重构：
+    - `FROM (SELECT source_site_key, source_name, COUNT(...) FROM video_sources WHERE ... GROUP BY ...) vs_agg FULL OUTER JOIN source_line_aliases sla ON 复合 PK`
+    - SELECT 用 `COALESCE(vs_agg.source_site_key, sla.source_site_key)` / `COALESCE(vs_agg.video_count, '0')` 处理两侧孤儿
+    - 注释更新：明示 3 类 row 分布（unassigned-only / alias-only 孤儿 / 正常）+ FIX-3 修复 bug 描述
+  - `tests/unit/api/admin-source-lines-view.test.ts` 重构 SQL 断言：
+    - 删除原 `FROM video_sources vs LEFT JOIN` 断言（FIX-3 改 SQL 范式）
+    - 新增 FULL OUTER JOIN + vs_agg subquery + COALESCE 断言（防回归到旧 LEFT JOIN 范式）
+    - 新增 row mapping 测试：alias-only 孤儿行（vs_agg.* 全 NULL → videoCount=0 + assignedAt 非 null + codename + retiredAt 保留）
+  - `apps/server-next/src/app/admin/source-line-aliases/_client/SourceLineAliasesClient.tsx` "使用" 列 cell：
+    - 检测 `row.assignedAt !== null && row.videoCount === 0` → 显 "无关联视频"（state-warning-fg 色 + title 提示"可能仅存在于冷却期或历史归档"）
+    - 其他情况保留原 `{videoCount} 视频 · {activeCount}/{episodeCount} 集` 显示
+- **3 类 row 分布**（修复后）：
+  - **unassigned-only**：vs 有 + sla 无 → assignedAt=null + videoCount > 0（UI："（未分配）" 斜体灰色）
+  - **alias-only 孤儿（FIX-3 新覆盖）**：vs 无 + sla 有 → assignedAt 非 null + videoCount=0（UI："无关联视频" warning 提示）
+  - **正常 assigned**：vs 有 + sla 有 → assignedAt 非 null + videoCount > 0
+- **不触发额外 Opus / ADR**：纯 SQL 改写 / ADR-164 §5.2 #5 端点契约语义不变（仍返回 SourceLineRow[] / 仅覆盖更多 row）
+- **质量门禁**：typecheck ✅ EXIT=0 / lint ✅ EXIT=0 / verify:adr-contracts ✅ EXIT=0 / admin-source-lines-view 7/7 PASS（含 FIX-3 新增 alias-only mapping case）
+- **设计取舍**：① FULL OUTER JOIN vs UNION CTE：FULL OUTER JOIN 更简洁 + 一次 scan / UNION CTE 需 2 次 scan + DISTINCT 开销 ② vs_agg 内联 subquery 而非 view：保持 query 模块自包含 / 与既有 query 范式一致 ③ COALESCE source_site_key / source_name：两侧任一非 null 即取（FULL JOIN 不会两侧同时 NULL）④ UI "无关联视频" 而非"已归档"：保留中性描述 / 不预判用户操作 / title 提示具体含义 ⑤ 不在 SQL 层过滤 alias-only：管理面板需展示所有 / UI 决定视觉策略
+- **六问自检**：
+  - Q1 沉淀共享层？✅ SQL FULL OUTER JOIN 范式可作未来类似"双侧孤儿"场景的参考
+  - Q2 引入回归？✅ 7/7 测试 PASS / 原 video_sources 派生行行为完全不变（COALESCE vs_agg.video_count 在有匹配时仍取 subquery 真值）
+  - Q3 越层？✅ 仅 query + 测试 + UI 显示派生
+  - Q4 硬编码 / any？✅ 无
+  - Q5 布局变化？✅ "使用" 列在 alias-only 行显 warning 文本（仅 1 行高度 / 视觉权重微增）
+  - Q6 文件范围？✅ 2 业务 + 1 测试 PATCH=3 严守 ≤ 5
+- **偏离检测**：无（FIX-3 范围严格 = SQL JOIN 范式 + 1 UI 显示派生 + 测试覆盖）
+- **D-N 编号**：N/A（ADR-164 §5.2 #5 端点契约语义不变 / 不动 D-N）
+- **[AI-CHECK] 结论**：PASS（Codex 抓的 alias-only 孤儿行消失 bug 已闭 / 3 类 row 完整覆盖 / 冷却期 codename 治理路径完整）
+- **闭环**：CHG-SN-9-LINES-VIEW-UNIFY-FIX-3 完成 / Codex stop-time review 3rd 反馈已消化 / 管理 UI 现完整覆盖 unassigned-only + alias-only + 正常 3 类 row / Wave 3 验收期补丁 + FIX-3 累计 / 主循环等用户继续验收
+
+---
+
 ## [CHG-SN-9-LINES-VIEW-UNIFY] 线路别名管理改造（含 unassigned 行 + 入口移到播放线路 / Wave 3 验收期补丁）
 - **完成时间**：2026-05-28
 - **执行模型**：claude-sonnet-4-6（主循环 / 验收期补丁 / 不切换 §16.5）

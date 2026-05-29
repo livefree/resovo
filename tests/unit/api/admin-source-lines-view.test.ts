@@ -19,7 +19,9 @@ describe('listAllSourceLines — CHG-SN-9-LINES-VIEW-UNIFY SQL contract', () => 
     return { query } as unknown as import('pg').Pool
   }
 
-  it('SQL FROM video_sources LEFT JOIN source_line_aliases（含 unassigned 行）', async () => {
+  // FIX-3：FULL OUTER JOIN 范式（防 alias-only 孤儿行消失）
+
+  it('SQL FULL OUTER JOIN：vs_agg subquery + source_line_aliases（保 alias-only 行 / Codex 3rd FIX）', async () => {
     const { listAllSourceLines } = await import('@/api/db/queries/sources-matrix')
     const db = makeMockDb()
     await listAllSourceLines(db)
@@ -27,11 +29,25 @@ describe('listAllSourceLines — CHG-SN-9-LINES-VIEW-UNIFY SQL contract', () => 
     const query = (db as unknown as { query: ReturnType<typeof vi.fn> }).query
     const sql = query.mock.calls[0][0] as string
 
-    expect(sql).toMatch(/FROM video_sources vs/)
-    expect(sql).toMatch(/LEFT JOIN source_line_aliases sla/)
-    // JOIN ON 复合 PK
-    expect(sql).toMatch(/ON vs\.source_site_key = sla\.source_site_key/)
-    expect(sql).toMatch(/AND vs\.source_name = sla\.source_name/)
+    expect(sql).toMatch(/FROM\s*\([\s\S]*?\)\s*vs_agg/)  // subquery aliased vs_agg
+    expect(sql).toMatch(/FULL OUTER JOIN source_line_aliases sla/)
+    expect(sql).toMatch(/ON vs_agg\.source_site_key = sla\.source_site_key/)
+    expect(sql).toMatch(/AND vs_agg\.source_name = sla\.source_name/)
+    // 防回归到旧 LEFT JOIN 范式
+    expect(sql).not.toMatch(/FROM video_sources vs\s+LEFT JOIN source_line_aliases/)
+  })
+
+  it('SELECT COALESCE 处理 alias-only 行的 site_key/source_name + 0 默认值', async () => {
+    const { listAllSourceLines } = await import('@/api/db/queries/sources-matrix')
+    const db = makeMockDb()
+    await listAllSourceLines(db)
+
+    const sql = (db as unknown as { query: ReturnType<typeof vi.fn> }).query.mock.calls[0][0] as string
+    expect(sql).toMatch(/COALESCE\(vs_agg\.source_site_key, sla\.source_site_key\) AS source_site_key/)
+    expect(sql).toMatch(/COALESCE\(vs_agg\.source_name, sla\.source_name\) AS source_name/)
+    expect(sql).toMatch(/COALESCE\(vs_agg\.video_count, '0'\) AS video_count/)
+    expect(sql).toMatch(/COALESCE\(vs_agg\.active_count, '0'\) AS active_count/)
+    expect(sql).toMatch(/COALESCE\(vs_agg\.episode_count, '0'\) AS episode_count/)
   })
 
   it('SELECT 含 sla.* alias 字段（display_name / codename / priority / retired_at / auto_retired / updated_at）', async () => {
@@ -48,38 +64,17 @@ describe('listAllSourceLines — CHG-SN-9-LINES-VIEW-UNIFY SQL contract', () => 
     expect(sql).toContain('sla.updated_at AS sla_updated_at')
   })
 
-  it('SELECT 含聚合 video_count / active_count / episode_count', async () => {
+  it('vs_agg subquery 含聚合 video_count / active_count / episode_count + WHERE deleted_at + site_key IS NOT NULL', async () => {
     const { listAllSourceLines } = await import('@/api/db/queries/sources-matrix')
     const db = makeMockDb()
     await listAllSourceLines(db)
 
     const sql = (db as unknown as { query: ReturnType<typeof vi.fn> }).query.mock.calls[0][0] as string
-    expect(sql).toMatch(/COUNT\(DISTINCT vs\.video_id\)::TEXT AS video_count/)
-    expect(sql).toMatch(/COUNT\(\*\) FILTER \(WHERE vs\.is_active = true\)::TEXT AS active_count/)
+    expect(sql).toMatch(/COUNT\(DISTINCT video_id\)::TEXT AS video_count/)
+    expect(sql).toMatch(/COUNT\(\*\) FILTER \(WHERE is_active = true\)::TEXT AS active_count/)
     expect(sql).toMatch(/COUNT\(\*\)::TEXT AS episode_count/)
-  })
-
-  it('WHERE vs.deleted_at IS NULL + source_site_key IS NOT NULL（软删 + 防空 site_key 行）', async () => {
-    const { listAllSourceLines } = await import('@/api/db/queries/sources-matrix')
-    const db = makeMockDb()
-    await listAllSourceLines(db)
-
-    const sql = (db as unknown as { query: ReturnType<typeof vi.fn> }).query.mock.calls[0][0] as string
-    expect(sql).toContain('vs.deleted_at IS NULL')
-    expect(sql).toContain('vs.source_site_key IS NOT NULL')
-  })
-
-  it('GROUP BY 含 vs.source_site_key + vs.source_name + sla.* 全字段', async () => {
-    const { listAllSourceLines } = await import('@/api/db/queries/sources-matrix')
-    const db = makeMockDb()
-    await listAllSourceLines(db)
-
-    const sql = (db as unknown as { query: ReturnType<typeof vi.fn> }).query.mock.calls[0][0] as string
-    expect(sql).toMatch(/GROUP BY[\s\S]*vs\.source_site_key/)
-    expect(sql).toMatch(/GROUP BY[\s\S]*vs\.source_name/)
-    expect(sql).toMatch(/GROUP BY[\s\S]*sla\.display_name/)
-    expect(sql).toMatch(/GROUP BY[\s\S]*sla\.codename/)
-    expect(sql).toMatch(/GROUP BY[\s\S]*sla\.retired_at/)
+    expect(sql).toContain('deleted_at IS NULL')
+    expect(sql).toContain('source_site_key IS NOT NULL')
   })
 
   it('row mapping：未分配行 displayName fallback 到 source_name / priority=0 / autoRetired=false / assignedAt=null', async () => {
@@ -119,6 +114,45 @@ describe('listAllSourceLines — CHG-SN-9-LINES-VIEW-UNIFY SQL contract', () => 
       videoCount: 5,
       activeCount: 12,
       episodeCount: 15,
+    })
+  })
+
+  it('row mapping：alias-only 孤儿行（FIX-3 / 退役 / cooling）→ videoCount=0 + assignedAt 非 null（Codex 3rd FIX）', async () => {
+    const { listAllSourceLines } = await import('@/api/db/queries/sources-matrix')
+    const db = {
+      query: vi.fn().mockResolvedValue({
+        rows: [
+          {
+            // alias-only 行：vs_agg.* 全 null（COALESCE 兜底）+ sla 退役行存在
+            source_site_key: 'site_b',
+            source_name: 'lineB-retired',
+            display_name: '已退役线路',
+            codename: '泰山-2',
+            priority: 50,
+            retired_at: '2026-04-01T00:00:00Z',
+            auto_retired: false,
+            sla_updated_at: '2026-04-01T00:00:00Z',
+            video_count: '0',
+            active_count: '0',
+            episode_count: '0',
+          },
+        ],
+      }),
+    } as unknown as import('pg').Pool
+
+    const result = await listAllSourceLines(db)
+    expect(result[0]).toEqual({
+      sourceSiteKey: 'site_b',
+      sourceName: 'lineB-retired',
+      displayName: '已退役线路',
+      codename: '泰山-2',
+      priority: 50,
+      retiredAt: '2026-04-01T00:00:00Z',
+      autoRetired: false,
+      assignedAt: '2026-04-01T00:00:00Z',
+      videoCount: 0,    // 孤儿 / 无关联视频
+      activeCount: 0,
+      episodeCount: 0,
     })
   })
 

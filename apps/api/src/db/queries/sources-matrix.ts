@@ -375,20 +375,27 @@ export async function listLineAliases(db: Pool): Promise<SourceLineAlias[]> {
   return result.rows.map(mapAliasRow)
 }
 
-// ── 查询：全线路视图（CHG-SN-9-LINES-VIEW-UNIFY / 验收期补丁）──────
-// video_sources DISTINCT (site_key, source_name) LEFT JOIN source_line_aliases
-// → 统一显示所有线路（含未分配别名的 unassigned 行 + 已分配的 sla 行）
+// ── 查询：全线路视图（CHG-SN-9-LINES-VIEW-UNIFY + FIX-3）─────────
+// FULL OUTER JOIN 范式（FIX-3 / Codex stop-time review 3rd）：
+//   - 左侧：video_sources 聚合 subquery → 拿到 (site_key, source_name, video_count, active_count, episode_count)
+//   - 右侧：source_line_aliases → 别名 4 字段 + assignedAt
+//   - FULL OUTER JOIN → 包含两边并集 / 不丢任何一侧的孤儿行
+//
+// **修复的 bug（FIX-3）**：原 `FROM video_sources LEFT JOIN sla` 写法会丢失 **alias-only 孤儿行**：
+//   - 例：sla 表有 codename='泰山-2' 退役行（retired_at NOT NULL / 90 天冷却期内）
+//   - 但对应 video_sources 全被软删 / 或站点废弃后 vs 行被清理
+//   - 管理 UI 应仍显示该行让运维监控冷却期 + 防 codename 提前复用
+//
+// 三类 row 分布：
+//   - **unassigned-only**：vs 有 + sla 无 → assignedAt=null + videoCount > 0
+//   - **alias-only 孤儿**：vs 无 + sla 有 → assignedAt 非 null + videoCount=0（FIX-3 新覆盖）
+//   - **正常**：vs 有 + sla 有 → assignedAt 非 null + videoCount > 0
+//
 // 索引设计 4 步核验（db-rules.md §"索引设计 4 步核验"）：
 //   1. 索引键：source_line_aliases (source_site_key, source_name) 复合 PK
 //   2. 部分索引 WHERE：N/A
-//   3. 候选 driving 谓词：LEFT JOIN ON (sla.source_site_key, sla.source_name) PK 复合
-//   4. 匹配判定：driving 列 = 索引键 ✅（实测留 EXPLAIN ANALYZE）
-//
-// **核心区别 vs listLineAliases**：
-//   - listLineAliases 仅返回 source_line_aliases 行（已分配的别名）
-//   - listAllSourceLines 返回 video_sources 派生的所有 (site_key, source_name)
-//     即使 source_line_aliases 还没分配 → assignedAt=null / displayName fallback 到 source_name
-// **不在路径中过滤 retired_at**：管理面板需展示所有线路（含已退役）/ UI 决定显示策略
+//   3. 候选 driving 谓词：FULL OUTER JOIN ON 复合
+//   4. 匹配判定：driving = 索引键 ✅（实测留 EXPLAIN ANALYZE）
 
 export async function listAllSourceLines(db: Pool): Promise<SourceLineRow[]> {
   const result = await db.query<{
@@ -405,36 +412,41 @@ export async function listAllSourceLines(db: Pool): Promise<SourceLineRow[]> {
     episode_count: string
   }>(
     `SELECT
-       vs.source_site_key,
-       vs.source_name,
+       COALESCE(vs_agg.source_site_key, sla.source_site_key) AS source_site_key,
+       COALESCE(vs_agg.source_name, sla.source_name) AS source_name,
        sla.display_name,
        sla.codename,
        sla.priority,
        sla.retired_at,
        sla.auto_retired,
        sla.updated_at AS sla_updated_at,
-       COUNT(DISTINCT vs.video_id)::TEXT AS video_count,
-       COUNT(*) FILTER (WHERE vs.is_active = true)::TEXT AS active_count,
-       COUNT(*)::TEXT AS episode_count
-     FROM video_sources vs
-     LEFT JOIN source_line_aliases sla
-       ON vs.source_site_key = sla.source_site_key
-      AND vs.source_name = sla.source_name
-     WHERE vs.deleted_at IS NULL
-       AND vs.source_site_key IS NOT NULL
-     GROUP BY vs.source_site_key, vs.source_name,
-              sla.display_name, sla.codename, sla.priority,
-              sla.retired_at, sla.auto_retired, sla.updated_at
-     ORDER BY vs.source_site_key, vs.source_name`,
+       COALESCE(vs_agg.video_count, '0') AS video_count,
+       COALESCE(vs_agg.active_count, '0') AS active_count,
+       COALESCE(vs_agg.episode_count, '0') AS episode_count
+     FROM (
+       SELECT
+         source_site_key,
+         source_name,
+         COUNT(DISTINCT video_id)::TEXT AS video_count,
+         COUNT(*) FILTER (WHERE is_active = true)::TEXT AS active_count,
+         COUNT(*)::TEXT AS episode_count
+       FROM video_sources
+       WHERE deleted_at IS NULL
+         AND source_site_key IS NOT NULL
+       GROUP BY source_site_key, source_name
+     ) vs_agg
+     FULL OUTER JOIN source_line_aliases sla
+       ON vs_agg.source_site_key = sla.source_site_key
+      AND vs_agg.source_name = sla.source_name
+     ORDER BY 1, 2`,
   )
 
   return result.rows.map((r) => ({
     sourceSiteKey: r.source_site_key,
     sourceName: r.source_name,
-    // 未分配时 displayName fallback 到 source_name（UI 可见 "未分配别名" 状态）
+    // 未分配 alias 时 fallback 到 source_name；alias-only 孤儿行 sla.display_name 必非空
     displayName: r.display_name ?? r.source_name,
     codename: r.codename,
-    // sla.priority 为 NULL（未分配）→ 0（与 sla DEFAULT 一致）
     priority: r.priority ?? 0,
     retiredAt: r.retired_at,
     autoRetired: r.auto_retired ?? false,
