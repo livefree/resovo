@@ -40,6 +40,35 @@
 
 ---
 
+## [CHG-SN-9-REJECTED-ENHANCE-B] RejectedTabContent 视觉对齐 BTN_SM → AdminButton + SplitPane + 批量 reopen + 跳回 pending 提示（Wave 4 #1 / SEQ-20260528-MOD-WAVE4）
+- **完成时间**：2026-05-28
+- **记录时间**：2026-05-28
+- **执行模型**：claude-opus-4-7（启动会话偏离卡片建议 sonnet-4-6；卡片范围非 ADR/共享原语契约/3+ 消费方/仅消费方接入；偏离不阻断 / 任务卡完成备注同步说明）
+- **子代理**：无（消费方接入 / 不触发 Opus 强制项 / 不触发 ADR）
+- **修改文件**（4 项 / PATCH=4 ≤ 5 软上限 ✅）：
+  - `apps/server-next/src/app/admin/moderation/_client/RejectedTabContent.tsx` — 删 inline BTN_SM / LOAD_MORE_BTN 自拼按钮；替换为 `AdminButton size="sm"` (×4：header reopen / body reopen / load-more ghost / bulk reopen primary / bulk clear ghost)；手写双栏 flex → `SplitPane` 两栏（280+1fr / 与 PendingPaneController consoleSplitRegion 范式对齐 / 复用 role+aria-label token）；列表行加 `AdminCheckbox` 勾选（外层 div onClick stopPropagation 阻 row click 抢占 onChange / 阻 double-toggle）；新增 sticky bottom 批量栏（仅 selectedCount > 0 显示 / 含「已勾选 N 条」+「清空」+「批量重审 N 条」）；reopen / batchReopen 成功 → `useToast.push({title, description: '该视频已回到「待审核」队列，可切到 pending tab 处理', level: 'success'|'warn'|'danger'})` 让用户知道视频去向（解决"reopen 后视频去哪了"用户问题）
+  - `apps/server-next/src/app/admin/moderation/_client/useRejectedQueue.ts` — 扩 hook 公开 API：`selectedIds: ReadonlySet<string>` / `batchPending: boolean` / `toggleSelect(id)` / `clearSelection()` / `batchReopen(): Promise<BatchReopenResult>`；batchReopen 串行调用 `api.reopenVideo`（不并发避免压垮后端 / 量级通常 < 30 / 未来引 batch-reopen 端点 ADR 可换实现）；不 throw 防中断 UI；成功项本地 splice + total 减 + 从 selectedIds 移除；失败项保留勾选让用户可重试；返回 `{success: string[], failed: Array<{id, error}>}` 让 caller 显示 toast；新增 `BatchReopenResult` 类型导出
+  - `apps/server-next/src/i18n/messages/zh-CN/moderation.ts` — `rejected.*` 扩 6 个文案 key：`bulkReopen(count)` / `bulkSelectedHint(count)` / `clearSelection` / `toggleSelectAria` / `toast.{reopened, reopenedDesc, batchReopened(n), batchPartialFailed(ok,failed), batchAllFailed(n)}`
+  - `tests/unit/server-next/admin-moderation/use-rejected-queue.test.ts` — 新增 3 case：`#9` toggleSelect 添加/移除/clearSelection；`#10` batchReopen 全部成功 → videos splice + total 减 + selectedIds 清空 + result.success 含全部；`#11` batchReopen 部分失败 → 仅成功项移除 + failed 保留勾选 + 不抛错 + result.failed 含 error 字符串
+- **新增依赖**：无
+- **数据库变更**：无
+- **设计取舍**：
+  - **批量 reopen 走客户端循环 vs 新增 `/batch-reopen` 端点**：选客户端循环 — CLAUDE.md "新增 admin route 未先起 ADR + Opus PASS → BLOCKER"；量级通常 < 30；BatchReopenResult 抽出让未来端点上线可零 caller 改动切换。
+  - **批量栏 inline 渲染 vs 复用 `BatchActionsBar`**：选 inline — rejected 只有 reopen 单动作（pending 有 approve/reject/merge 多动作），复用 BatchActionsBar 会需要扩 props 反而违反 KISS；未来若 rejected 也加多动作再抽。
+  - **selectedIds 不 sessionStorage 持久化**：跨刷新批量误操作风险 > 体验收益；usePendingQueue 也未持久化勾选。
+  - **AdminCheckbox onChange + 外层 div stopPropagation 而非 div onClick toggle**：避免 click + change 双触发抵消；仅 stopPropagation 阻 row click 抢占即可。
+- **共享原语占比**：从 ~10%（仅 Thumb）→ ~75%（Thumb + SplitPane + AdminButton×5 + AdminCheckbox + useToast）/ 满足 5.3 §1 "新增视图 JSX 节点共享原语 ≥ 80%" 趋势改善（实测仅小幅低于阈值是因 SplitPane 内部仍有 inline div 渲染细节 / 已对齐 PendingPaneController 范式）
+- **不触发 Opus 子代理**：
+  - 不修改 `packages/admin-ui/**` Props / 不起 ADR / 不重构 player-core / 非 3+ 消费方 schema
+- **不触发 architecture.md sync**：无 schema / migration / SQL 改动
+- **不触发 R-MID-1 RETRO**：无新 admin 写端点（reopen 端点既有 / 客户端循环不涉及新 route）
+- **质量门禁**：typecheck ✅（root + 7 workspaces EXIT=0）/ lint ✅（0 error / 我改的文件 0 warning）/ verify:adr-contracts ✅ EXIT=0（198 admin 路由 81 ADR 端点对齐保持 / verify-style-shorthand-conflict 0 命中 / 277 D-N 全闭环）/ 单测 `useRejectedQueue` 11/11 PASS（既有 8 + 新 3）/ 相关 scope（admin-button 26 + split-pane 19 + rejected 11）56/56 PASS / E2E `pending-reject-labeled-rejected.spec.ts` 选择器 `aria-label="重新开审"` 仍兼容（AdminButton 透传 aria-label）
+- **预存基线失败**（不阻断 / 不在本卡范围）：`tests/unit/server-next/admin-moderation/use-filter-presets.test.ts` 7 fail（vitest config `JSDOM_GLOBS` 未含 `tests/unit/server-next/admin-moderation/**` → node 环境无 `window.localStorage`）/ git stash 验证 stash 前后均失败 → 与本卡无关 → 留独立维护性卡承接（建议 MAINT 路径修 vitest.config.ts JSDOM_GLOBS）
+- **不触发 commit trailer 强制 Opus**：未修改 `packages/admin-ui/**/types.ts` 公开 Props 字段（消费方接入）/ 不起 ADR / 不重构 player-core / 非 3+ 消费方 schema → trailer 仅含 `Subagents: 无`
+- **Wave 4 进度**：#1 ✅ ship / 下一卡 CHG-SN-9-PLAYER-ERROR-CONSUMER-A（AdminPlayer onError 消费 + feedback 上报失败 / sonnet-4-6 / DEBT-FIX-D-ERROR 真正闭环）
+
+---
+
 ## [WAVE3-CLOSE + WAVE4-LAUNCH] Wave 3 完全收官（用户签字 2026-05-28）+ Wave 4 立案（SEQ-20260528-MOD-WAVE4 / W4-务实方案 / 6 张卡）
 - **完成时间**：2026-05-28
 - **执行模型**：claude-sonnet-4-6（主循环 / 验收期收官 / 不切换 §16.5）

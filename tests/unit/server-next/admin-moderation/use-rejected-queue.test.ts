@@ -191,4 +191,89 @@ describe('useRejectedQueue — CHG-SN-9-REJECTED-ENHANCE-A 分页 hook', () => {
     expect(result.current.videos.length).toBe(0)
     expect(result.current.loading).toBe(false)
   })
+
+  // ── CHG-SN-9-REJECTED-ENHANCE-B / Wave 4 #1 ────────────────────
+  it('#9 toggleSelect → selectedIds 添加 / 再次切换 → 移除', async () => {
+    const rows = [makeRejectedRow('r-1'), makeRejectedRow('r-2')]
+    mockFetch.mockResolvedValue(makeApiResponse(rows, 2))
+
+    const { result } = renderHook(() => useRejectedQueue(true))
+    await waitFor(() => expect(result.current.videos.length).toBe(2))
+
+    act(() => result.current.toggleSelect('r-1'))
+    expect(result.current.selectedIds.has('r-1')).toBe(true)
+    expect(result.current.selectedIds.size).toBe(1)
+
+    act(() => result.current.toggleSelect('r-2'))
+    expect(result.current.selectedIds.size).toBe(2)
+
+    act(() => result.current.toggleSelect('r-1'))
+    expect(result.current.selectedIds.has('r-1')).toBe(false)
+    expect(result.current.selectedIds.size).toBe(1)
+
+    act(() => result.current.clearSelection())
+    expect(result.current.selectedIds.size).toBe(0)
+  })
+
+  it('#10 batchReopen 全部成功 → videos splice + total 减 + selectedIds 清空 + result.success 含全部', async () => {
+    const rows = [makeRejectedRow('r-1'), makeRejectedRow('r-2'), makeRejectedRow('r-3')]
+    mockFetch.mockResolvedValue(makeApiResponse(rows, 3))
+    mockReopen.mockResolvedValue(undefined)
+
+    const { result } = renderHook(() => useRejectedQueue(true))
+    await waitFor(() => expect(result.current.videos.length).toBe(3))
+
+    act(() => {
+      result.current.toggleSelect('r-1')
+      result.current.toggleSelect('r-2')
+    })
+    expect(result.current.selectedIds.size).toBe(2)
+
+    let batchResult: { success: ReadonlyArray<string>; failed: ReadonlyArray<{ id: string; error: string }> } = { success: [], failed: [] }
+    await act(async () => {
+      batchResult = await result.current.batchReopen()
+    })
+
+    expect(batchResult.success).toEqual(expect.arrayContaining(['r-1', 'r-2']))
+    expect(batchResult.success.length).toBe(2)
+    expect(batchResult.failed).toEqual([])
+    expect(result.current.videos.map(v => v.id)).toEqual(['r-3'])
+    expect(result.current.total).toBe(1)
+    expect(result.current.selectedIds.size).toBe(0)
+    expect(result.current.batchPending).toBe(false)
+    expect(mockReopen).toHaveBeenCalledTimes(2)
+  })
+
+  it('#11 batchReopen 部分失败 → 仅成功项移除 / failed 保留勾选 / 不抛错', async () => {
+    const rows = [makeRejectedRow('r-1'), makeRejectedRow('r-2')]
+    mockFetch.mockResolvedValue(makeApiResponse(rows, 2))
+    // r-1 成功 / r-2 失败（按 Set 迭代顺序 = 插入顺序）
+    mockReopen
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error('boom'))
+
+    const { result } = renderHook(() => useRejectedQueue(true))
+    await waitFor(() => expect(result.current.videos.length).toBe(2))
+
+    act(() => {
+      result.current.toggleSelect('r-1')
+      result.current.toggleSelect('r-2')
+    })
+
+    let batchResult: { success: ReadonlyArray<string>; failed: ReadonlyArray<{ id: string; error: string }> } = { success: [], failed: [] }
+    await act(async () => {
+      batchResult = await result.current.batchReopen()
+    })
+
+    expect(batchResult.success).toEqual(['r-1'])
+    expect(batchResult.failed.length).toBe(1)
+    expect(batchResult.failed[0].id).toBe('r-2')
+    expect(batchResult.failed[0].error).toBe('boom')
+    expect(result.current.videos.map(v => v.id)).toEqual(['r-2'])
+    expect(result.current.total).toBe(1)
+    // 成功项从勾选中移除 / 失败项仍勾选让用户可重试
+    expect(result.current.selectedIds.has('r-1')).toBe(false)
+    expect(result.current.selectedIds.has('r-2')).toBe(true)
+    expect(result.current.batchPending).toBe(false)
+  })
 })

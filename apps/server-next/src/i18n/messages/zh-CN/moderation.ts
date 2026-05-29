@@ -176,6 +176,18 @@ export const M = {
     noLabel: '—',
     empty: '暂无已拒绝视频',
     loading: '加载中…',
+    // CHG-SN-9-REJECTED-ENHANCE-B / Wave 4 #1：批量勾选 + reopen toast 文案
+    bulkReopen: (count: number) => `↻ 批量重审 ${count} 条`,
+    bulkSelectedHint: (count: number) => `已勾选 ${count} 条`,
+    clearSelection: '清空',
+    toggleSelectAria: '勾选该视频',
+    toast: {
+      reopened: '已跳回待审核',
+      reopenedDesc: '该视频已回到「待审核」队列，可切到 pending tab 处理',
+      batchReopened: (n: number) => `已跳回待审核 ${n} 条`,
+      batchPartialFailed: (ok: number, failed: number) => `已跳回 ${ok} 条 · ${failed} 条失败`,
+      batchAllFailed: (n: number) => `${n} 条全部失败，请重试`,
+    },
     errors: {
       loadFailed: '加载已拒绝列表失败',
       reopenFailed: '重新开审失败，请重试',

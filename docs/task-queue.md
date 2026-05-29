@@ -2100,7 +2100,7 @@ Wave 3 主线：MOD-BUTTON-MIGRATE → REJECTED-ENHANCE（独立 UX）
 
 | # | TASK-ID | 标题 | ADR | 建议模型 |
 |---|---|---|---|---|
-| 1 | ⬜ **CHG-SN-9-REJECTED-ENHANCE-B** 待开始 | Wave 3 #6 follow-up / plan §7 拆 -B 视觉对齐：BTN_SM → AdminButton + 复用 admin-ui SplitPane + 批量 reopen UI + 跳回 pending 提示 / 估 4 业务 + 1 测试 + 1 docs | 否 | sonnet-4-6 |
+| 1 | ✅ **CHG-SN-9-REJECTED-ENHANCE-B** 已完成（2026-05-28 / 执行模型 claude-opus-4-7 偏离建议 sonnet-4-6 / 子代理 无）| Wave 3 #6 follow-up / plan §7 拆 -B 视觉对齐：BTN_SM → AdminButton(×5) + SplitPane 两栏 + AdminCheckbox 行勾选 + sticky 批量栏 + 客户端循环 batchReopen + useToast 跳回 pending 提示 / 共享原语占比 ~10% → ~75% / PATCH=4 ≤ 5 / useRejectedQueue 11/11 PASS（既有 8 + 新 3 toggle/batchAllSuccess/batchPartialFail）/ typecheck+lint+verify 全 EXIT=0 / E2E `重新开审` 选择器仍兼容（AdminButton 透传 aria-label）/ 预存基线失败 use-filter-presets 与本卡无关 | 否 | sonnet-4-6 |
 | 2 | ⬜ **CHG-SN-9-PLAYER-ERROR-CONSUMER-A** 待开始 | Wave 3 #7 follow-up / AdminPlayer onError 消费 + POST /v1/feedback/playback {success:false, errorCode} 上报失败 + DEBT-FIX-D-ERROR 真正闭环（API 端 Wave 3 已 ship / 此卡接入消费方）/ 估 3 业务 + 1 测试 + 1 docs | 否 | sonnet-4-6 |
 | 3 | ⬜ **CHG-SN-9-PLAYER-ERROR-CONSUMER-B** 待开始 | Wave 3 #7 follow-up / PlayerShell onError 消费 + 自动切下一线路 + 标 dead-source（注意 R-N-3 src 快照非匹配键 / 用 sourceId 关联 state）/ 估 4 业务 + 1 测试 + 1 docs | 否 | sonnet-4-6 |
 | 4 | ⬜ **CHG-SN-9-PLAYER-ERROR-RETRY-CONTROL** 待开始 | Wave 3 #7 follow-up / retrySourceLoad 上抛设计：方案 A onError(event, controls) vs 方案 B useImperativeHandle / 需 Opus 评审 / 起独立 ADR-166 起草卡（如评审决定 useImperativeHandle）/ 估 ADR 1 docs + 实施 4 业务 + 1 测试 | **是 ADR-166** | opus-4-7 + arch-reviewer |

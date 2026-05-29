@@ -1,17 +1,19 @@
 'use client'
 
 /**
- * useRejectedQueue.ts — 审核台 rejected 队列 hook（CHG-SN-9-REJECTED-ENHANCE-A / plan §5 P2 / plan §7 拆 -A 分页）
+ * useRejectedQueue.ts — 审核台 rejected 队列 hook
  *
- * 职责（仿 usePendingQueue 精简版 / 业务面更小 / 不含 approve/reject/批量）：
+ * CHG-SN-9-REJECTED-ENHANCE-A / plan §5 P2 / plan §7 拆 -A 分页
  *   - 拉取 rejected 队列 + page+limit 分页 loadMore + 自动预取（near-end）
  *   - activeIdx sessionStorage per-tab 持久化（'rejected' tab）
  *   - 单条 reopen + 本地 splice + 失败 throw（caller 显示错误）
- *   - error 暴露 + setError 让 caller 显示批量动作错误
+ *   - error 暴露 + setError 让 caller 显示动作错误
  *
- * 不在职责内：
- *   - filters / selectedIds / batchMode（rejected 当前无批量 reopen / -B 子卡承接）
- *   - 视觉对齐（BTN_SM → AdminButton / SplitPane 复用） → CHG-SN-9-REJECTED-ENHANCE-B follow-up
+ * CHG-SN-9-REJECTED-ENHANCE-B / plan §7 拆 -B 视觉对齐 / Wave 4 #1
+ *   - selectedIds + toggleSelect + clearSelection（per-id 勾选 / sessionStorage 不持久化避免跨刷新批量误操作）
+ *   - batchReopen 客户端循环 api.reopenVideo（无后端 batch-reopen 端点 / 防新 admin route 触发 ADR）
+ *     - 返回 {success, failed} 让 caller 显示 toast / 不 throw
+ *     - 全部成功 → 本地批量 splice + total 减 / 部分失败 → 仅成功项 splice + caller 显示 failed
  *
  * 与 usePendingQueue 差异：
  *   - 用 page+limit 模式（后端 /admin/videos?reviewStatus=rejected&page=N&limit=M 既有契约）
@@ -23,6 +25,11 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import type { RejectedVideoRow } from '@/lib/moderation/api'
 import * as api from '@/lib/moderation/api'
 import { M } from '@/i18n/messages/zh-CN/moderation'
+
+export interface BatchReopenResult {
+  readonly success: ReadonlyArray<string>
+  readonly failed: ReadonlyArray<{ id: string; error: string }>
+}
 
 const TAB_KEY = 'rejected'
 const PAGE_LIMIT = 30
@@ -37,6 +44,10 @@ export interface UseRejectedQueueResult {
   readonly loading: boolean
   readonly loadingMore: boolean
   readonly error: string | null
+  /** -B 批量勾选 ID 集（不跨 mount 持久化 / 防误操作） */
+  readonly selectedIds: ReadonlySet<string>
+  /** -B 批量提交进行中（禁用按钮 + spinner） */
+  readonly batchPending: boolean
 
   readonly setActiveIdx: (updater: number | ((prev: number) => number)) => void
   readonly loadMore: () => void
@@ -45,6 +56,15 @@ export interface UseRejectedQueueResult {
   /** 手动刷新（reset 到 page=1） */
   readonly refetch: () => Promise<void>
   readonly setError: (msg: string | null) => void
+  /** -B 切换单 id 勾选态 */
+  readonly toggleSelect: (id: string) => void
+  /** -B 清空勾选 */
+  readonly clearSelection: () => void
+  /**
+   * -B 批量 reopen：循环 api.reopenVideo / 成功项本地 splice + total 减 / 失败项不动；
+   * 返回结果让 caller 显示 toast；不 throw 防中断 UI 流。
+   */
+  readonly batchReopen: () => Promise<BatchReopenResult>
 }
 
 export function useRejectedQueue(enabled = true): UseRejectedQueueResult {
@@ -144,6 +164,52 @@ export function useRejectedQueue(enabled = true): UseRejectedQueueResult {
     }
   }, [videos, activeIdxRaw, setActiveIdx])
 
+  // ── -B 批量勾选 + 批量 reopen ────────────────────────────────────
+  const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(() => new Set())
+  const [batchPending, setBatchPending] = useState(false)
+
+  const toggleSelect = useCallback((id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }, [])
+
+  const clearSelection = useCallback(() => {
+    setSelectedIds(new Set())
+  }, [])
+
+  const batchReopen = useCallback(async (): Promise<BatchReopenResult> => {
+    if (selectedIds.size === 0) return { success: [], failed: [] }
+    setBatchPending(true)
+    const success: string[] = []
+    const failed: Array<{ id: string; error: string }> = []
+    // 串行调用避免压垮后端（rejected 批量量级通常 < 30）；并发可在后续 batch-reopen 端点 ADR 中切换
+    for (const id of selectedIds) {
+      try {
+        await api.reopenVideo(id)
+        success.push(id)
+      } catch (e) {
+        failed.push({ id, error: e instanceof Error ? e.message : String(e) })
+      }
+    }
+    if (success.length > 0) {
+      const successSet = new Set(success)
+      setVideos(prev => prev.filter(v => !successSet.has(v.id)))
+      setTotal(t => Math.max(0, t - success.length))
+      setActiveIdx(prev => Math.max(0, Math.min(prev, videos.length - success.length - 1)))
+    }
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      success.forEach(id => next.delete(id))
+      return next
+    })
+    setBatchPending(false)
+    return { success, failed }
+  }, [selectedIds, videos.length, setActiveIdx])
+
   return {
     videos,
     page,
@@ -153,10 +219,15 @@ export function useRejectedQueue(enabled = true): UseRejectedQueueResult {
     loading,
     loadingMore,
     error,
+    selectedIds,
+    batchPending,
     setActiveIdx,
     loadMore,
     reopenAt,
     refetch,
     setError,
+    toggleSelect,
+    clearSelection,
+    batchReopen,
   }
 }
