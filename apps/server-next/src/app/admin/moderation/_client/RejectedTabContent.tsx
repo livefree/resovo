@@ -297,7 +297,8 @@ export function RejectedTabContent(): React.ReactElement {
             display: 'flex',
             alignItems: 'center',
             gap: 12,
-            boxShadow: '0 -2px 8px rgba(0,0,0,0.05)',
+            // WAVE4-VALIDATION-FIX-3 P3：rgba(0,0,0,0.05) → CSS token / 同 admin-ui SelectionActionBar BAR_STYLE_BASE 范式（var(--shadow-md)）
+            boxShadow: 'var(--shadow-md)',
           }}
         >
           <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--fg-default)', fontWeight: 600 }}>

@@ -59,7 +59,8 @@ const ICON_WRAP_STYLE: React.CSSProperties = {
 
 const HINT_STYLE: React.CSSProperties = {
   position: 'absolute', bottom: 8,
-  fontSize: 'var(--font-size-2xs)', color: 'white',
+  // WAVE4-VALIDATION-FIX-3 P3：'white' → CSS token / 同 player-core PlayerOverlays / 既有 var(--player-full-controls-fg) 是 player overlay fg 语义 token
+  fontSize: 'var(--font-size-2xs)', color: 'var(--player-full-controls-fg)',
   background: 'var(--player-mini-overlay)',
   padding: '2px 8px', borderRadius: 4, margin: 0,
 }
@@ -141,7 +142,8 @@ export function AdminPlayer({
         aria-label="播放器 — 请从下方线路列表选择一条线路"
       >
         <div style={ICON_WRAP_STYLE}>
-          <span style={{ color: 'white', fontSize: 'var(--font-size-lg)' }} aria-hidden="true">▶</span>
+          {/* WAVE4-VALIDATION-FIX-3 P3：'white' → player overlay fg 语义 token */}
+          <span style={{ color: 'var(--player-full-controls-fg)', fontSize: 'var(--font-size-lg)' }} aria-hidden="true">▶</span>
         </div>
         <p style={HINT_STYLE}>选择线路以播放</p>
       </div>

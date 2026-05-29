@@ -6,27 +6,7 @@
 
 ## 进行中任务
 
-### WAVE4-VALIDATION-FIX — 用户验收期返工（4 项 finding / 拆 3 FIX 卡按序推进）
-- **状态**：🔄 进行中（2026-05-29 用户验收期返工）
-- **来源**：Wave 4 验收反馈（用户 2026-05-29 验收 / 4 项 finding）
-- **建议模型**：opus
-- **执行模型**：claude-opus-4-7
-- **拆 3 FIX 子卡**（按 P 级别 + 范围 ≤ 5）：
-  - **FIX-1**（P1 + P1/P2 自动退役 SQL 双 bug）：
-    - P1：`vs.source_site_key = sla.source_site_key` 漏 NULL fallback（Migration 046 backfill 后仍有 NULL 行 / sources.ts:161 既有 COALESCE 范式）→ 改 `COALESCE(vs.source_site_key, v.site_key)` + LEFT JOIN videos
-    - P1/P2：段 3 没有二次确认「当前仍全 dead」/ probe/render/feedback 写回不共享 advisory lock → 段 3 WHERE 加 NOT EXISTS (alive source) + EXISTS (still has active source) 双子查询
-    - 4 文件：apps/api/src/db/queries/auto-retire-line.ts + apps/worker/src/jobs/auto-retire-line.ts + 2 tests
-  - **FIX-2**（P2 单条 reopen 不清 selectedIds）：
-    - reopenAt 成功路径加 `setSelectedIds(prev => { delete id })` 防 phantom selection + 后续 batchReopen 对已移除 id 再请求
-    - 2 文件：useRejectedQueue.ts + 既有 test 加 case
-  - **FIX-3**（P3 硬编码颜色 3 处）：
-    - AdminPlayer.tsx:62 HINT_STYLE `color: 'white'` → `var(--player-full-controls-fg)`
-    - AdminPlayer.tsx:144 占位区 `color: 'white'` → `var(--player-full-controls-fg)`
-    - RejectedTabContent.tsx:300 sticky bar `boxShadow: '0 -2px 8px rgba(0,0,0,0.05)'` → `var(--shadow-md)`（同 admin-ui SelectionActionBar 范式）
-    - 2 文件
-- **完成备注**：_（每 FIX 单独 commit + 全部 ship 后更新 wave-4-acceptance.md §9 签字栏前置）_
-
----
+（空 / Wave 4 验收返工 3 FIX 全 ship `f4cd032d` `3e9de605` + FIX-3 / 等用户复验 wave-4-acceptance.md §9）
 
 ---
 

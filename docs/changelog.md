@@ -40,6 +40,60 @@
 
 ---
 
+## [WAVE4-VALIDATION-FIX-1/2/3] Wave 4 用户验收返工 4 项 finding 全消化（2026-05-29 / 3 FIX commits）
+- **完成时间**：2026-05-29
+- **记录时间**：2026-05-29
+- **执行模型**：claude-opus-4-7（验收反馈处理）
+- **子代理**：无（FIX 级别 / 沿用 #5-A arch-reviewer 评审 + Wave 4 卡设计取舍）
+- **触发**：用户 2026-05-29 验收反馈 4 项 finding（不建议直接验收 Wave 4 / 拆 3 FIX 按 P 级别 + ≤ 5 文件推进）
+- **FIX-1**（commit `f4cd032d` / P1 + P1/P2 / 6 文件）：
+  - **P1 source_site_key 漏 NULL fallback**：Migration 046 backfill 后 video_sources.source_site_key 仍可能 NULL → 须 fallback v.site_key（既有 sources.ts:161 范式）/ auto-retire-line.ts 漏 fallback → NULL 行被 LEFT JOIN 当不匹配 → dead_since 卡死或孤儿误判 / **修复**：apps/api + apps/worker 双源 SQL 段 1+2 加 LEFT JOIN videos + WHERE COALESCE(vs.source_site_key, v.site_key) = sla.source_site_key + vs.id IS NULL 孤儿守卫
+  - **P1/P2 段 3 无二次确认仍全 dead**：段 1+2 → 段 3 间隙 probe/render/feedback 写回不共享 advisory lock / 状态恢复后段 3 仍按旧 dead_since 退役 → 误退役活跃源 / **修复**：段 3 outer UPDATE WHERE 加双子查询：NOT EXISTS (alive source / 防恢复后误退役) + EXISTS (still has active source / 防孤儿误退役) / 两个子查询同含 COALESCE source_site_key fallback + LEFT JOIN videos
+  - SQL alias 改用 `UPDATE source_line_aliases sla_out` + RETURNING sla_out.*（PostgreSQL UPDATE 表别名 / 让 NOT EXISTS / EXISTS 子查询 outer 引用清晰）
+  - 测试新 4 case：T13/T14（apps/api 含 COALESCE + LEFT JOIN videos + 双子查询断言）+ worker T11/T12 同模 + 修 T4 RETURNING 断言
+- **FIX-2**（commit `3e9de605` / P2 / 2 文件）：
+  - **单条 reopen 不清 selectedIds → phantom selection**：用户先勾选 + 再点单条"重新开审" → 视频移除但 selectedIds 仍含其 id → 底部批量栏 phantom 显示 + 后续 batchReopen 对已移除 id 重复请求
+  - **修复**：useRejectedQueue.reopenAt 成功路径加 setSelectedIds 同步删除 / 早返回 if (!has) 防不必要 setState
+  - state 上移到 useState 集中区（让 reopenAt 能引用 setSelectedIds / 不能下移否则 TDZ）
+  - 测试新 #10b：勾选 r-1+r-2 → reopenAt r-1 → selectedIds 仅含 r-2 + size=1
+- **FIX-3**（本提交 / P3 / 2 文件 / 3 处颜色）：
+  - **AdminPlayer.tsx:62 HINT_STYLE `color: 'white'`** → `var(--player-full-controls-fg)`（player overlay fg 语义 token）
+  - **AdminPlayer.tsx:145 占位区 ▶ icon `color: 'white'`** → 同上
+  - **RejectedTabContent.tsx:300 sticky bar `boxShadow: '0 -2px 8px rgba(0,0,0,0.05)'`** → `var(--shadow-md)`（同 admin-ui SelectionActionBar BAR_STYLE_BASE:43 范式）
+  - CLAUDE.md §"绝对禁止" "硬编码颜色值（必须用 CSS 变量）" 闭环
+- **修改文件累计**（3 FIX 合计 10 文件 / 跨 commit 分散）：
+  - apps/api/src/db/queries/auto-retire-line.ts（FIX-1 SQL）
+  - apps/worker/src/jobs/auto-retire-line.ts（FIX-1 SQL 同步）
+  - apps/server-next/src/app/admin/moderation/_client/useRejectedQueue.ts（FIX-2）
+  - apps/server-next/src/app/admin/moderation/_client/AdminPlayer.tsx（FIX-3 ×2 处）
+  - apps/server-next/src/app/admin/moderation/_client/RejectedTabContent.tsx（FIX-3）
+  - tests/unit/api/auto-retire-line-queries.test.ts（FIX-1 T13/T14 + T4 修订）
+  - tests/unit/worker/jobs/auto-retire-line.test.ts（FIX-1 T11/T12 + T4 修订）
+  - tests/unit/server-next/admin-moderation/use-rejected-queue.test.ts（FIX-2 #10b）
+  - docs/tasks.md（验收返工卡 → 完成）
+  - 本 changelog 条目
+- **新增依赖**：无
+- **数据库变更**：无（纯 SQL 字面量 + UI 修复）
+- **设计取舍**：
+  - **拆 3 FIX 卡 vs 单卡**：拆 — FIX-1 涉及 6 文件 / FIX-2 + FIX-3 各 2 文件 / 单 commit 10 文件超 PATCH ≤ 5 软上限 / 拆按 P 级别 + 范围 ≤ 5 / git blame 清晰
+  - **FIX-1 段 3 二次确认 vs 缩短段 1+2 → 段 3 间隙**：选二次确认 — 缩短间隙无法消除 race（probe/render/feedback 独立 worker / 各自 pool.query 不可能共享 advisory lock）/ outer UPDATE WHERE 加 NOT EXISTS / EXISTS 是 PostgreSQL idempotent 范式
+  - **FIX-1 UPDATE 表别名 sla_out**：PostgreSQL UPDATE 表别名是必须的 / 否则 NOT EXISTS / EXISTS 子查询 outer 引用 source_line_aliases.X 会与 video_sources LEFT JOIN videos 子查询同表自引用歧义
+  - **FIX-1 性能**：段 3 candidate ≤ 50 条 (LIMIT) × NOT EXISTS / EXISTS 各扫一遍 video_sources（按 (source_site_key, source_name) 索引）= 100 子查询 / 可接受
+  - **FIX-2 state 上移 vs forward ref**：上移更简洁 / useState 在函数顶部是 React 既有范式
+  - **FIX-3 `--player-full-controls-fg` vs `--fg-on-accent`**：选前者 — 语义对齐 player overlay 而非 button accent / 既有 PlayerOverlays 同 token 范式
+- **不触发**：
+  - architecture.md sync：无 schema 改动
+  - R-MID-1 RETRO：worker / UI 范畴
+  - 新 ADR / Opus 评审：FIX 级别 / 既有 ADR-164 D-164-8 + arch-reviewer 评审延续
+- **质量门禁（3 FIX 累计）**：typecheck ✅ EXIT=0 / lint ✅ 0 error 0 warning / verify:adr-contracts ✅ EXIT=0（198 路由 81 ADR 端点 / 277 D-N 全闭环）/ 51/51 PASS（auto-retire-line-queries 12 + worker 12 + use-rejected-queue 12 + admin-player 15）/ 全相关测试零回归
+- **Codex stop-time review + 用户验收反馈累计**：
+  - Codex 7 轮（player-error 3 + auto-retire 3 + WAVE4-CLOSE 1）
+  - **用户验收反馈 1 轮（4 finding / 3 FIX 全消化 / 本卡）**
+  - Wave 4 实施期 + 验收返工 = 完整闭环
+- **下一步**：用户复验 `docs/manual/wave-4-acceptance.md` §6 各路径 → §9 签字 → Wave 5 立案
+
+---
+
 ## [CHG-SN-9-WAVE3-FOLLOWUP-CODENAME-MATRIX-E2E] Wave 3 验收期补丁 CODENAME-MATRIX 的 e2e 补全 + docs/manual sync（Wave 4 #6 / Wave 4 最终收尾）
 - **完成时间**：2026-05-28
 - **记录时间**：2026-05-28
