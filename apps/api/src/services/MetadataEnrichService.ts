@@ -19,6 +19,7 @@ import { searchDouban } from '@/api/lib/douban'
 import { getDoubanDetailRich } from '@/api/lib/doubanAdapter'
 import { mapDoubanGenres } from '@/api/lib/genreMapper'
 import { MediaCatalogService } from './MediaCatalogService'
+import { BangumiService } from './BangumiService'
 import { normalizeTitle } from './TitleNormalizer'
 import * as externalDataQueries from '@/api/db/queries/externalData'
 import * as sourcesQueries from '@/api/db/queries/sources'
@@ -57,9 +58,11 @@ const SOURCE_CHECK_LIMIT = 20
 
 export class MetadataEnrichService {
   private catalogService: MediaCatalogService
+  private bangumiService: BangumiService
 
   constructor(private db: Pool) {
     this.catalogService = new MediaCatalogService(db)
+    this.bangumiService = new BangumiService(db, this.catalogService)
   }
 
   async enrich(data: EnrichJobData): Promise<void> {
@@ -82,9 +85,9 @@ export class MetadataEnrichService {
       if (step2 !== null) doubanStatus = step2
     }
 
-    // Step 3: 动画类型补充 Bangumi 数据
+    // Step 3: 动画类型补充 Bangumi 数据（ADR-161：委托 BangumiService，含置信度 + ref + rich 详情 + 逐集）
     if (type === 'anime') {
-      await this.step3Bangumi(catalogId, titleNorm, year)
+      await this.step3Bangumi(videoId, catalogId, titleNorm, year)
     }
 
     // Step 4: 源 HEAD 检验
@@ -226,19 +229,13 @@ export class MetadataEnrichService {
   // ── Step 3 ───────────────────────────────────────────────────────
 
   private async step3Bangumi(
+    videoId: string,
     catalogId: string,
     titleNorm: string,
     year: number | null,
   ): Promise<void> {
-    const matches = await externalDataQueries.findBangumiByTitleNorm(this.db, titleNorm, year)
-    if (matches.length === 0) return
-
-    const best = matches[0]
-    await this.catalogService.safeUpdate(catalogId, {
-      bangumiSubjectId: best.bangumiId,
-      description: best.summary ?? undefined,
-      rating: best.rating ?? undefined,
-    }, 'bangumi', { sourceRef: String(best.bangumiId) })
+    // ADR-161：置信度评分 + video_external_refs(provider='bangumi') + auto 命中拉 REST rich 详情 + 逐集
+    await this.bangumiService.matchAndEnrich({ videoId, catalogId, titleNorm, year })
   }
 
   // ── Step 4 ───────────────────────────────────────────────────────

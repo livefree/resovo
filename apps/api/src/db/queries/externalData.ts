@@ -43,6 +43,10 @@ export interface BangumiEntryMatch {
   rating: number | null
   summary: string | null
   airDate: string | null
+  // ADR-161 Y3：候选/缺口展示 + seed 过滤
+  coverUrl: string | null
+  rank: number | null
+  nsfw: boolean
 }
 
 // ── 豆瓣条目查询 ──────────────────────────────────────────────────
@@ -225,16 +229,37 @@ export async function findDoubanByImdbId(
  * 按 title_normalized 匹配 Bangumi 动画条目
  * 最多返回 3 条
  */
+type BangumiEntryRow = {
+  bangumi_id: number; title_cn: string | null; title_jp: string | null
+  year: number | null; rating: string | null; summary: string | null; air_date: string | null
+  cover_url: string | null; rank: number | null; nsfw: boolean
+}
+
+const BANGUMI_ENTRY_COLS =
+  'bangumi_id, title_cn, title_jp, year, rating, summary, air_date, cover_url, rank, nsfw'
+
+function mapBangumiEntryRow(r: BangumiEntryRow): BangumiEntryMatch {
+  return {
+    bangumiId: r.bangumi_id,
+    titleCn: r.title_cn,
+    titleJp: r.title_jp,
+    year: r.year,
+    rating: r.rating ? Number(r.rating) : null,
+    summary: r.summary,
+    airDate: r.air_date,
+    coverUrl: r.cover_url,
+    rank: r.rank,
+    nsfw: r.nsfw,
+  }
+}
+
 export async function findBangumiByTitleNorm(
   db: Pool,
   titleNorm: string,
   year: number | null
 ): Promise<BangumiEntryMatch[]> {
-  const result = await db.query<{
-    bangumi_id: number; title_cn: string | null; title_jp: string | null
-    year: number | null; rating: string | null; summary: string | null; air_date: string | null
-  }>(
-    `SELECT bangumi_id, title_cn, title_jp, year, rating, summary, air_date
+  const result = await db.query<BangumiEntryRow>(
+    `SELECT ${BANGUMI_ENTRY_COLS}
      FROM external_data.bangumi_entries
      WHERE title_normalized = $1
      ORDER BY
@@ -246,15 +271,60 @@ export async function findBangumiByTitleNorm(
      LIMIT 3`,
     [titleNorm, year]
   )
-  return result.rows.map((r) => ({
-    bangumiId: r.bangumi_id,
-    titleCn: r.title_cn,
-    titleJp: r.title_jp,
-    year: r.year,
-    rating: r.rating ? Number(r.rating) : null,
-    summary: r.summary,
-    airDate: r.air_date,
-  }))
+  return result.rows.map(mapBangumiEntryRow)
+}
+
+/** 按 bangumi_id 精确查单条（人工确认 / 详情兜底用） */
+export async function findBangumiById(
+  db: Pool,
+  bangumiId: number
+): Promise<BangumiEntryMatch | null> {
+  const result = await db.query<BangumiEntryRow>(
+    `SELECT ${BANGUMI_ENTRY_COLS}
+     FROM external_data.bangumi_entries
+     WHERE bangumi_id = $1
+     LIMIT 1`,
+    [bangumiId]
+  )
+  return result.rows[0] ? mapBangumiEntryRow(result.rows[0]) : null
+}
+
+export interface BangumiSeedFilter {
+  /** 仅取排名 ≤ minRank 的高分条目（rank 越小越靠前；排除无排名/0）；省略则不按排名过滤 */
+  minRank?: number | null
+  year?: number | null
+  limit: number
+}
+
+/**
+ * 反向建库（ADR-161 决策 7）：按 rank/year 过滤列出 dump 条目供 BangumiSeedService 消费。
+ * 默认跳过 nsfw=true 条目（ADR-161 Y5：不自动建色情占位）。SQL 拼装收敛在 query 层（Service 不拼 SQL）。
+ */
+export async function listBangumiEntriesForSeed(
+  db: Pool,
+  filter: BangumiSeedFilter
+): Promise<BangumiEntryMatch[]> {
+  const conditions: string[] = ['nsfw = false']
+  const params: unknown[] = []
+  let idx = 1
+  if (filter.minRank != null) {
+    conditions.push(`rank IS NOT NULL AND rank > 0 AND rank <= $${idx++}`)
+    params.push(filter.minRank)
+  }
+  if (filter.year != null) {
+    conditions.push(`year = $${idx++}`)
+    params.push(filter.year)
+  }
+  params.push(filter.limit)
+  const result = await db.query<BangumiEntryRow>(
+    `SELECT ${BANGUMI_ENTRY_COLS}
+     FROM external_data.bangumi_entries
+     WHERE ${conditions.join(' AND ')}
+     ORDER BY rank ASC NULLS LAST, rating DESC NULLS LAST
+     LIMIT $${idx}`,
+    params
+  )
+  return result.rows.map(mapBangumiEntryRow)
 }
 
 // ── video_external_refs ───────────────────────────────────────────

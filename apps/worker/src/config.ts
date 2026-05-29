@@ -3,7 +3,12 @@ export const config = {
     level1Probe: process.env.WORKER_CRON_LEVEL1 ?? '0 */6 * * *',
     level2Render: process.env.WORKER_CRON_LEVEL2 ?? '0 */2 * * *',
     feedbackDriven: process.env.WORKER_CRON_FEEDBACK ?? '*/1 * * * *',
+    // CHG-BNG-09：本地 dump 定时重导 bangumi_entries（默认每周日 04:00）
+    bangumiDumpRefresh: process.env.WORKER_CRON_BANGUMI_DUMP ?? '0 4 * * 0',
   },
+  // ops 维护的 Bangumi dump 文件路径（subject.jsonlines），应为绝对路径（worker CWD=apps/worker）。
+  // 未配置 → cron 跳过（不设误导性相对默认值，避免标准启动下静默 no-op）。external-db/ 为 gitignore 本地产物。
+  bangumiDumpPath: process.env.BANGUMI_DUMP_PATH?.trim() || null,
   rateLimit: {
     level1Global: 20,
     level1PerSite: 5,

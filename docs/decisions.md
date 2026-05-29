@@ -16027,3 +16027,183 @@ CHG-360 必须拆 -A/-B/-C 三子卡（PATCH ≤ 5 硬约束 / ADR-121 D-121-3 R
 **结论**：ADR-159 status 🟢 Accepted（2026-05-27 / arch-reviewer Opus A-CONDITIONAL → 主循环消化 5 红线 + 7 黄线 + 4 关键洞察 → 等同 A）；CHG-360-A 4 文件基础落地；CHG-360-B/C 按 §10 子卡顺序接续。
 
 ---
+
+## ADR-161：Bangumi.tv REST API + GitHub 归档 dump 集成协议（SEQ-BANGUMI-01 / Track bangumi）
+
+- **日期**：2026-05-27
+- **状态**：**Accepted**（arch-reviewer claude-opus-4-7 × 1 轮 CONDITIONAL：红线 R1（bangumi_entries 重复列 total_episodes）+ R2（step3 写 videos.episode_count 路径断裂）+ 黄线 Y1–Y5 + advisory A1–A4，全部已在本 ADR 内消化修订）
+- **决策者**：主循环 claude-opus-4-7 / arch-reviewer (claude-opus-4-7) × 1 轮
+- **关联**：ADR-110（ApiResponse 信封 + ErrorCode 真源，本 ADR 零新增错误码）/ ADR-117（admin API 协议同模式：端点契约 + 分级鉴权 + Service 强制）/ CHG-385（MetadataEnrichService 五步 + douban dump 范式）/ META-05/06/09（video_external_refs + media_catalog 扩展 + provenance/locks）/ ADR-114-NEGATED（catalog 不跨源强合并，本 ADR 占位失配同源理由）
+- **执行真源**：`~/.claude/plans/bangumi-tv-bangumi-https-bangumi-tv-dev-enumerated-cosmos.md`（已批准）
+- **触发**：动漫元数据现状缺口 —— `MetadataEnrichService.step3Bangumi` 仅按 title_norm 取第一条、只写 3 字段、无置信度/候选/external_ref；无 Bangumi REST 客户端，已申请 Access Token 未用；dump 导入丢失 episode_count/cover_url；无逐集表。本 ADR 固化 Bangumi 接入协议（含新增 5 admin 端点 + migration 077 + 优先级调整），满足 plan §4.5 R7 MUST-8「新增 admin route 先起 ADR」硬约束。
+
+### 背景
+
+Bangumi.tv（番组计划）是动漫领域权威数据源，相比豆瓣提供：中日双标题（`name`/`name_cn`）、infobox 结构化制作信息（导演/脚本/音乐/声优/动画制作/放送星期）、逐集放送数据（episodes：sort/ep/airdate/duration）、评分排名（`rating.rank`）、标签（`tags`）、平台（TV/剧场版/OVA/WEB）。官方提供 v0 REST API（Bearer Token 鉴权）+ GitHub 不定期公共归档 dump。
+
+项目已埋半成品基建但未用上 Token：`media_catalog.bangumi_subject_id`（Migration 026）、`external_data.bangumi_entries`（Migration 036）、`scripts/import-bangumi-dump.ts`（仅 type=2，约 1 万条）、`MetadataEnrichService.step3Bangumi`（极简）、`video_external_refs` 已支持 `provider='bangumi'`、`MediaCatalogService.findOrCreate` Step4 已按 bangumiId 匹配。
+
+### 决策要点
+
+1. **数据来源分工（dump 索引 + API 详情）**：GitHub 归档 dump 导入 `external_data.bangumi_entries` 做**全量本地匹配索引**（毫秒级、无限流）；命中后调 REST API 拉**按需 rich 详情**（subject + 逐集）写 `media_catalog` + `catalog_episodes`。批量场景（反向建库）只走本地 dump，不打 API，规避官方限流。
+
+2. **anime 下 Bangumi 优先于豆瓣**：`CATALOG_SOURCE_PRIORITY.bangumi` 由 `3` 提升至 `4`（高于 `douban:3`、与 `tmdb:4` 同级、低于 `manual:5`）。理由：bangumi 来源仅对 anime 写入（step3 与占位均 anime-only），全局提级即等价于「anime 下 Bangumi 优先」，无需按类型分支。`enrich()` 中豆瓣 Step1/2 先跑、Bangumi 后跑，提级后 Bangumi 可覆盖重叠字段，后续豆瓣自动匹配（3<4）被 `safeUpdate` 拦截；manual（5）编辑仍最高优先且自动加 locked_fields，不被 Bangumi 覆盖。非 anime 完全不受影响。
+
+   **同级覆盖语义（Y1）**：`safeUpdate` 仅在 `incomingPriority < currentPriority` 时跳过，同级（`==`）允许覆盖（后写赢）。bangumi 与 tmdb 同为 4，若 anime 同时被 tmdb 与 bangumi 写入则后写者覆盖前者。当前 enrich 主链路无 tmdb 自动写入（仅 douban+bangumi），故无实际争用；若未来引入 tmdb anime 自动写入，需重新评估 bangumi vs tmdb 字段仲裁。
+
+3. **匹配置信度复用豆瓣范式**：本地 dump 召回后复用 `MetadataEnrichService.computeLocalDoubanConfidence` 同款阈值（≥0.85 auto_matched 写 catalog；[0.60,0.85) candidate 仅写 refs；<0.60 丢弃）。auto_matched 与 candidate 均写 `video_external_refs(provider='bangumi')`（复用 `upsertVideoExternalRef`）。
+
+   **人工确认（端点 3 bangumi-confirm）的 source 语义（Y2）**：confirm 用 `source='bangumi'` 写 catalog（**非 manual**，与 `DoubanService` confirm 用 'douban' 源一致），不触发 locked_fields 自动加锁；人工确认状态记在 `video_external_refs.match_status='manual_confirmed'`。理由：保持「真正的人工权威路径是 manual 编辑（会加锁）」与「确认外部匹配（提级 ref + 拉详情）」两件事分离，避免 confirm 即冻结字段、与 douban-confirm 行为分裂。故端点 3 不返回 skippedFields（bangumi 源 + 字段未锁时为空）。
+
+4. **Service 层强制（CLAUDE.md 后端分层红线）**：所有端点经 `BangumiService` / `BangumiSeedService`，不在 Route 直连 db/queries。HTTP 细节封装于 `apps/api/src/lib/bangumi.ts`（对标 `lib/douban.ts`：Bearer Token + 描述性 UA + 超时 + 错误降级返回 null/[]，不抛）。infobox 解析归 `BangumiService.utils.ts`（对标 `DoubanService.utils.ts`）。
+
+5. **响应包络 + 错误码零新增（对齐 ADR-110）**：复用既有错误码 `VALIDATION_ERROR 422` / `NOT_FOUND 404` / `FORBIDDEN 403` / `UNAUTHORIZED 401` / `INTERNAL_ERROR 500`。Bangumi 搜索/抓取失败（网络/限流/无候选）**不作错误码**，沿用 `DoubanService.syncVideo` 的 `{ updated: false, reason }` 结果模型，端点返回 200 + `{ data: { updated, reason } }`，由前端区分语义（与既有 douban-sync 端点一致）。
+
+6. **逐集表 catalog_episodes（按 catalog_id 设计）**：逐集元数据按 `catalog_id` 而非 bangumi_id 建表，附 `source` 列，便于将来 TMDB 等同样写入；与 media_catalog（作品元数据层）同源归属。唯一约束 `(catalog_id, source, external_episode_id)`。
+
+   **step3 签名 + episode_count 写入路径（R2）**：`step3Bangumi` 重写后签名扩为 `(videoId, catalogId, titleNorm, year)`——`enrich()` 在 `MetadataEnrichService.ts:87` 调用处已持有 `videoId`，同步传入。`videos.episode_count` 的写入**不复用** `VideoService.update`（那是 manual 源人工编辑路径，会触发字段锁，语义不符），而是经新增的 `videosQueries.updateEpisodeCount(db, videoId, n)` 轻量 query 写入（source-neutral，仅当 Bangumi `total_episodes/eps` 有值且当前 episode_count 缺省/为 0 时回填），不越层、不破坏分层。**「VideoService.update 改类型触发」是独立机制**（决策要点见下方端点 1 + Phase 1-D：改类型为 anime 时 `enqueueEnrichJob`），与 episode_count 写入无关，两者不可混淆。
+
+7. **反向建库 = 无源占位条目**：`BangumiSeedService.seedPlaceholders` 遍历 `bangumi_entries`（按 rank/year 过滤）→ `MediaCatalogService.findOrCreate({ ..., type:'anime', bangumiSubjectId, metadataSource:'bangumi' })` 仅建 `media_catalog`（无 videos 行）。后续 `CrawlerService.upsertVideo` 的 findOrCreate 按 `title_normalized+year+type` 命中占位 catalog 自动 link，crawler（优先级1）不污染 bangumi（优先级4）字段。**挂接逻辑零改动**。
+
+   **占位 type 固定为 'anime'（Y4）**：dump 全为 type=2 动画，占位 catalog 的 `type` 一律写 `'anime'`，与 step3/seed anime-only 自洽。
+
+   **nsfw 处置（Y5，CHG-BNG 审阅修订 2026-05-27）**：经语义核对，Bangumi `nsfw`（R18 粗粒度，含强 ecchi/猎奇/暴力等非色情内容）与项目 `content_rating='adult'`（`ADULT_CATEGORIES` 露骨色情，且联动 `visibility_status='hidden'`，属治理字段）**不等同**。故：
+   - **不自动映射 `nsfw → content_rating`**（避免误隐藏 + 越权写治理字段）；`content_rating` 仍由现有审核流 / 采集 source_category 路径决定。
+   - nsfw 仅作**信息信号**：存 `bangumi_entries.nsfw`，后台候选/缺口视图给审核员标记，由人工决定是否调整治理状态。
+   - seed 仍**默认跳过 `nsfw=true` 条目**（不自动建色情占位，可经 seed 参数显式放开，本期不放）。
+
+   **唯一约束 + 并发 + findOrCreate retry（Y5）**：依赖 `media_catalog.bangumi_subject_id` UNIQUE（Migration 026）。`MediaCatalogService.findOrCreate` 现有 retry 分支（`MediaCatalogService.ts:133-142`）**缺 bangumiSubjectId 一路**——若 INSERT 因 bangumi_subject_id 唯一冲突被 ON CONFLICT 跳过，retry 查不回来会抛错。CHG-BNG-07 实现时**必须给 retry 补 `findCatalogByBangumiId` 分支**（与 Step4 对称），保证并发 seed + enrich step3 写同一 subject 时幂等收敛。
+
+   **BangumiEntryMatch 扩展 + seed 查询（Y3）**：`externalData.ts` 的 `BangumiEntryMatch`（:38-46）需扩 `coverUrl/rank/nsfw`（供端点 2 候选 + 端点 5 缺口展示）；新增按 rank/year 范围的 seed 查询函数（供 `BangumiSeedService` 消费，Service 不直接拼 SQL）。
+
+8. **已知限制（D-161-1）**：占位挂接失配 → 采集另建 catalog（产生重复）。失配成因有二：(a) Bangumi 标题（中/日）与采集源中文发行名 `title_normalized` 不一致；(b) type 三元组不等（如某番剧场版被 crawler 识别为 `'movie'` 而占位为 `'anime'`，Y4 补充）。这是 best-effort，符合 ADR-114-NEGATED「不跨源强合并」精神。后续可由 video 上 step3（bangumiId 命中）辅助归并；catalog 去重合并不在本期范围。
+
+9. **Token 缺失降级（A3）**：`BANGUMI_API_TOKEN` 未配置时，REST 详情链路（端点 1/2/3 的 rich 抓取）走 `null` 降级、仅本地 dump 索引可用（seed/gaps 不受影响）；端点 1 返回 `{ updated:false, reason:'token_missing' }`，不静默 500。infobox 解析失败的字段降级为 undefined 不写、不抛、不写空串（A2），与 `lib/bangumi.ts` 降级哲学一致。
+
+10. **每日放送（calendar）暂缓**：本期数据深度 = 元数据 + 逐集表；前台「每日放送」展示页暂不做。数据层 `bangumi_entries.air_date` 已留出，后续接 `/calendar` API 时增量扩展，不影响本 ADR 协议。
+
+### 端点契约
+
+| # | 方法 | 路径 | 用途 | Request | Response | 鉴权 | 错误码 |
+|---|---|---|---|---|---|---|---|
+| 1 | POST | `/admin/videos/:id/bangumi-sync` | 对单视频触发 Bangumi 匹配 + rich 详情 + 逐集补全（对标 douban-sync） | Path: `id: uuid` | 200 `{ data: { updated: boolean, reason?: string, bangumiSubjectId?: number, episodes?: number } }` | moderator+admin | 422 VALIDATION_ERROR / 404 NOT_FOUND（video 不存在） |
+| 2 | GET | `/admin/videos/:id/bangumi-candidates` | 搜索 Bangumi 候选（人工挑选用，对标 douban-preview） | Path: `id: uuid`；Query: `keyword?: string(1..200)` | 200 `{ data: { candidates: BangumiCandidate[] } }` | moderator+admin | 422 VALIDATION_ERROR / 404 NOT_FOUND |
+| 3 | POST | `/admin/videos/:id/bangumi-confirm` | 人工确认指定 subject 匹配（bangumi 源写 catalog + manual_confirmed ref，Y2） | Path: `id: uuid`；Body: `{ bangumiSubjectId: number }` | 200 `{ data: { updated: boolean, bangumiSubjectId: number } }` | moderator+admin | 422 VALIDATION_ERROR / 404 NOT_FOUND |
+| 4 | POST | `/admin/bangumi/seed` | 批量建无源占位条目（反向建库） | Body: `{ minRank?: number, year?: number, limit?: number(1..1000) }` | 200 `{ data: { created: number, matched: number, scanned: number } }` | **admin only** | 422 VALIDATION_ERROR |
+| 5 | GET | `/admin/bangumi/gaps` | 缺口清单（有 bangumi_subject_id 但无 published video 的 catalog） | Query: `page?=1` / `limit?=20(1..100)` | 200 `{ data: BangumiGapRow[], total, page, limit }` | moderator+admin | 422 VALIDATION_ERROR |
+
+**类型契约（packages/types/src/ 扩展，CHG-BNG-08 落地）**：
+
+```ts
+export interface BangumiCandidate {
+  readonly bangumiSubjectId: number
+  readonly nameCn: string | null
+  readonly nameJp: string | null
+  readonly year: number | null
+  readonly rating: number | null
+  readonly coverUrl: string | null
+  readonly confidence: number          // 0..1（本地 dump 召回时）
+}
+
+export interface BangumiGapRow {
+  readonly catalogId: string
+  readonly bangumiSubjectId: number
+  readonly title: string
+  readonly year: number | null
+  readonly rank: number | null
+  readonly coverUrl: string | null
+}
+```
+
+**zod request schema（Service + Route 共享）**：
+
+```ts
+const VideoIdParamsSchema = z.object({ id: z.string().uuid() }).strict()
+const BangumiCandidatesQuerySchema = z.object({ keyword: z.string().min(1).max(200).optional() }).strict()
+const BangumiConfirmBodySchema = z.object({ bangumiSubjectId: z.number().int().positive() }).strict()
+const BangumiSeedBodySchema = z.object({
+  minRank: z.coerce.number().int().positive().optional(),
+  year:    z.coerce.number().int().min(1900).max(2100).optional(),
+  limit:   z.coerce.number().int().min(1).max(1000).default(200),
+}).strict()
+const BangumiGapsQuerySchema = z.object({
+  page:  z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+}).strict()
+```
+
+### 字段映射（Bangumi → media_catalog / catalog_episodes / videos）
+
+| Bangumi subject 字段 | 目标 | 备注 |
+|---|---|---|
+| `name` | `media_catalog.title_original` | 原始（多为日文） |
+| `name_cn`（回退 `name`） | `media_catalog.title` | 中文标准名 |
+| `summary` | `media_catalog.description` | |
+| `images.large` | `media_catalog.cover_url` | |
+| `rating.score` | `media_catalog.rating` | 0..10 |
+| `rating.total` | `media_catalog.rating_votes` | |
+| `rating.rank` | `external_data.bangumi_entries.rank` | 排名（dump 侧，过滤用） |
+| `tags[].name` | `media_catalog.tags` | |
+| `date` | `media_catalog.release_date` + 派生 `year` | |
+| `eps`（本篇数，非 total_episodes）| rich 侧（REST API getSubject）→ `videos.episode_count` 经 step3 专用 query（R2，见决策要点 6） | **P1 修订**：用 wiki `eps`（本篇）或 `getEpisodes` 中 `type===0` 计数，**不用 `total_episodes`**（含 SP/OP/ED 章节会高估用户侧剧集数）。archive subject dump 无 eps，dump 侧 `episode_count` 保持 null |
+| `rank` | dump 侧 → `bangumi_entries.rank`（archive 顶层 `rank` 字段，实测存在） | seed 高分榜过滤用 |
+| `nsfw` | dump 侧 → `bangumi_entries.nsfw`（archive 顶层 `nsfw`，实测存在）。**信息信号，不自动写 content_rating**（Y5 修订：nsfw 与项目"色情"定义不等同，治理字段不越权自动写） | seed 默认跳过 nsfw 条目；后台视图给审核员标记 |
+| infobox 导演/脚本 | `media_catalog.director` / `writers` | utils 解析；解析失败返回 undefined 不写（A2） |
+| infobox 声优 | `media_catalog.cast` | utils 解析 |
+| infobox 动画制作公司 | `media_catalog.tags`（前缀 `制作:` 标注，A1） | 不新增列；不用 aliases（语义是别名非制作方） |
+| episode `sort`/`ep`/`name`/`name_cn`/`airdate`/`duration_seconds`/`desc` | `catalog_episodes.*` | 逐集 upsert；`/v0/episodes` 分页拉全，单页 limit=100，最多 50 页防无界（A4） |
+
+### Migration 077 schema（CHG-BNG-01 落地，本 ADR 锁定，需同步 docs/architecture.md）
+
+```sql
+-- 077_bangumi_metadata.sql（幂等 IF NOT EXISTS）
+
+-- (a) 扩展本地匹配索引表（保持轻量，rich 字段不堆此）
+-- R1 修订：不新增 total_episodes（与 036 既有 episode_count 重复）；复用 episode_count，
+--          由 import-bangumi-dump.ts 回填 dump 的 eps/total_episodes 字段到 episode_count。
+ALTER TABLE external_data.bangumi_entries
+  ADD COLUMN IF NOT EXISTS rank INT,
+  ADD COLUMN IF NOT EXISTS nsfw BOOLEAN NOT NULL DEFAULT false;
+
+-- (b) 新建逐集元数据表（按 catalog_id 设计，附 source 便于将来扩源）
+CREATE TABLE IF NOT EXISTS catalog_episodes (
+  id                  UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  catalog_id          UUID        NOT NULL REFERENCES media_catalog(id) ON DELETE CASCADE,
+  source              TEXT        NOT NULL DEFAULT 'bangumi',
+  external_episode_id TEXT,
+  ep_type             SMALLINT    NOT NULL DEFAULT 0,   -- 0 本篇 / 1 SP / 2 OP / 3 ED
+  sort                NUMERIC,
+  ep                  INT,
+  name                TEXT,
+  name_cn             TEXT,
+  airdate             DATE,
+  duration_seconds    INT,
+  description         TEXT,
+  updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_catalog_episodes_src_ext
+  ON catalog_episodes (catalog_id, source, external_episode_id);
+CREATE INDEX IF NOT EXISTS idx_catalog_episodes_catalog_type_sort
+  ON catalog_episodes (catalog_id, ep_type, sort);
+```
+
+### 配置（CHG-BNG-02 落地，apps/api/src/lib/config.ts Zod 扩展）
+
+```ts
+BANGUMI_API_TOKEN:      z.string().optional(),
+BANGUMI_API_TIMEOUT_MS: z.coerce.number().int().min(1000).max(30000).default(8000),
+BANGUMI_USER_AGENT:     z.string().default('resovo/1.0 (https://github.com/...)'),  // Bangumi 要求描述性 UA
+```
+
+### 影响文件
+
+- 新建：`apps/api/src/lib/bangumi.ts` / `services/BangumiService.ts` / `services/BangumiService.utils.ts` / `services/BangumiSeedService.ts` / `routes/admin/moderation.bangumi.ts` / `db/migrations/077_bangumi_metadata.sql`
+- 修改：`services/MetadataEnrichService.ts`（step3 重写）/ `services/MediaCatalogService.ts`（优先级）/ `services/VideoService.ts`（改类型触发）/ `db/queries/externalData.ts` + `mediaCatalog.ts`（扩展）/ `lib/config.ts` / `.env.example` / `scripts/import-bangumi-dump.ts`
+- 文档：`docs/architecture.md`（077 schema 同步）
+
+### 偏离登记
+
+- **D-161-1**：占位条目标题失配可能产生重复 catalog（见决策要点 8）。处置：accept（best-effort），不在本期闭环；未来归并卡触发条件 = 重复 catalog（同 bangumi_subject_id 多条 / 同名多条）> 5% 时起 PRE-MERGE-CATALOG 卡。
+
+---

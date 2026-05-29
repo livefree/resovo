@@ -260,6 +260,24 @@ export async function updateVideoEnrichStatus(
   )
 }
 
+/**
+ * 回填集数（ADR-161 R2：Bangumi 来源经 step3 写入，source-neutral，不走 manual 锁路径）。
+ * 仅当当前 episode_count 缺省/为 0 时回填，避免覆盖已有更准确的集数。
+ */
+export async function updateEpisodeCount(
+  db: Pool,
+  videoId: string,
+  episodeCount: number
+): Promise<void> {
+  if (!Number.isFinite(episodeCount) || episodeCount <= 0) return
+  await db.query(
+    `UPDATE videos SET episode_count = $1, updated_at = NOW()
+     WHERE id = $2 AND deleted_at IS NULL
+       AND (episode_count IS NULL OR episode_count = 0)`,
+    [episodeCount, videoId]
+  )
+}
+
 /** 写入源活性检验聚合结果（MetadataEnrichService 调用） */
 export async function updateVideoSourceCheckStatus(
   db: Pool,
