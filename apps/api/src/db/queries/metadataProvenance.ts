@@ -73,7 +73,15 @@ function mapLock(row: DbLockRow): LockRow {
 
 // ── Provenance 查询 ───────────────────────────────────────────────
 
-/** 批量 upsert 字段来源（写入后调用） */
+/**
+ * 批量 upsert 字段来源（写入后调用）。
+ *
+ * CHORE-10 (2026-05-29) — INSERT 列删 updated_at（原 6 列 vs 5 占位符 → Postgres
+ *   `INSERT has more target columns than expressions` 抛错，调用方 void.catch(stderr)
+ *   静默吞，自 META-06 引入至今所有 provenance 写入实际未落地）。
+ *   schema `updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()` 在 INSERT 路径走默认值；
+ *   ON CONFLICT UPDATE 路径仍显式 `updated_at = NOW()`（UPDATE 不触 column DEFAULT）。
+ */
 export async function batchUpsertFieldProvenance(
   db: Pool | PoolClient,
   catalogId: string,
@@ -92,7 +100,7 @@ export async function batchUpsertFieldProvenance(
   }
   await db.query(
     `INSERT INTO video_metadata_provenance
-       (catalog_id, field_name, source_kind, source_ref, source_priority, updated_at)
+       (catalog_id, field_name, source_kind, source_ref, source_priority)
      VALUES ${values.join(', ')}
      ON CONFLICT (catalog_id, field_name) DO UPDATE SET
        source_kind = EXCLUDED.source_kind,

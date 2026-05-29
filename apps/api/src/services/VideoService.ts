@@ -19,6 +19,8 @@ import { VideoIndexSyncService } from '@/api/services/VideoIndexSyncService'
 import { CACHE_PREFIXES } from '@/api/services/CacheService'
 import { AuditLogService } from '@/api/services/AuditLogService'
 import { normalizeTitle } from '@/api/services/TitleNormalizer'
+import { enrichmentQueue } from '@/api/lib/queue'
+import type { EnrichJobData } from '@/api/services/MetadataEnrichService'
 
 // ── ADR-145 / CHG-SN-8-FUP-VIDEO-MANUAL-ADD-EP-A：admin 手动添加视频 ─────
 
@@ -324,6 +326,25 @@ export class VideoService {
     }
     const row = await videoQueries.updateVideoMeta(this.db, id, adaptedInput)
     if (row) void this.indexSync?.syncVideo(id)
+
+    // ADR-161 决策要点 6：改类型为 anime（原非 anime）时入队 Bangumi 丰富（去重 jobId，延迟 5min）
+    // 经 enrichmentQueue 直接入队（与 CrawlerService 同模式），避免引入 worker 模块的 db 单例
+    if (input.type === 'anime' && video.type !== 'anime') {
+      const jobData: EnrichJobData = {
+        videoId: id,
+        catalogId: video.catalog_id,
+        title: input.title !== undefined ? String(input.title) : video.title,
+        year: input.year !== undefined ? (input.year as number | null) : video.year,
+        type: 'anime',
+      }
+      void enrichmentQueue
+        .add(jobData, { delay: 300_000, jobId: `enrich-${id}` })
+        .catch((err: unknown) => {
+          const msg = err instanceof Error ? err.message : String(err)
+          process.stderr.write(`[VideoService] enqueue enrich (type→anime) failed for ${id}: ${msg}\n`)
+        })
+    }
+
     return {
       data: row ?? { id, updated_at: new Date().toISOString() },
       skippedFields,

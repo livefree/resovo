@@ -19,6 +19,7 @@ import { searchDouban } from '@/api/lib/douban'
 import { getDoubanDetailRich } from '@/api/lib/doubanAdapter'
 import { mapDoubanGenres } from '@/api/lib/genreMapper'
 import { MediaCatalogService } from './MediaCatalogService'
+import { BangumiService } from './BangumiService'
 import { normalizeTitle } from './TitleNormalizer'
 import { isPinyin } from './PinyinDetector'
 import * as externalDataQueries from '@/api/db/queries/externalData'
@@ -58,9 +59,11 @@ const SOURCE_CHECK_LIMIT = 20
 
 export class MetadataEnrichService {
   private catalogService: MediaCatalogService
+  private bangumiService: BangumiService
 
   constructor(private db: Pool) {
     this.catalogService = new MediaCatalogService(db)
+    this.bangumiService = new BangumiService(db, this.catalogService)
   }
 
   async enrich(data: EnrichJobData): Promise<void> {
@@ -103,9 +106,9 @@ export class MetadataEnrichService {
       metaQuality.douban_match_status = 'unmatched'
     }
 
-    // Step 3: 动画类型补充 Bangumi 数据
+    // Step 3: 动画类型补充 Bangumi 数据（ADR-161：委托 BangumiService，含置信度 + ref + rich 详情 + 逐集）
     if (type === 'anime') {
-      await this.step3Bangumi(videoId, catalogId, titleNorm, year, catalogStatus)
+      await this.step3Bangumi(videoId, catalogId, titleNorm, year)
     }
 
     // Step 4: 源 HEAD 检验
@@ -223,20 +226,31 @@ export class MetadataEnrichService {
     if (best.score >= MATCH_THRESHOLD) {
       const detail = await getDoubanDetailRich(best.id)
       if (detail) {
+        // CHORE-11 (2026-05-29) — 改条件赋值范式（同 step1 imdb / step1b title_norm /
+        //   DoubanService 既有正确模式），消除 step2 之前用三元 `: undefined` 模式：
+        //   `{writers: undefined}` 在 JS 中 property 真实存在 → safeUpdate/updateCatalogFields
+        //   无 undefined skip → `undefined ?? null` → SQL `writers = null` → 违反
+        //   `writers TEXT[] NOT NULL` 等 5 列约束。详 docs/decisions.md ADR-167 (TBD) /
+        //   PR #4 SEQ-20260529-01 / 修法 (b) updateCatalogFields 同 commit 加 undefined skip 防御
         const ratingNum = detail.rate ? parseFloat(detail.rate) : NaN
         recordDoubanSignal(metaQuality, best.score, 'network', 'auto_matched')
-        await this.catalogService.safeUpdate(catalogId, {
+        const updateFields: import('@/api/db/queries/mediaCatalog').CatalogUpdateData = {
           doubanId: detail.id,
-          rating: !isNaN(ratingNum) ? ratingNum : undefined,
-          description: detail.plotSummary ?? undefined,
-          coverUrl: detail.poster ?? undefined,
-          director: detail.directors.length > 0 ? detail.directors : undefined,
-          cast: detail.cast.length > 0 ? detail.cast : undefined,
-          writers: detail.screenwriters.length > 0 ? detail.screenwriters : undefined,
-          genres: detail.genres.length > 0 ? mapDoubanGenres(detail.genres) : undefined,
-          genresRaw: detail.genres.length > 0 ? detail.genres : undefined,
-          country: detail.countries[0] ?? undefined,
-        }, 'douban', { sourceRef: detail.id })
+        }
+        if (!isNaN(ratingNum)) updateFields.rating = ratingNum
+        if (detail.plotSummary) updateFields.description = detail.plotSummary
+        if (detail.poster) updateFields.coverUrl = detail.poster
+        if (detail.directors.length > 0) updateFields.director = detail.directors
+        if (detail.cast.length > 0) updateFields.cast = detail.cast
+        if (detail.screenwriters.length > 0) updateFields.writers = detail.screenwriters
+        if (detail.genres.length > 0) {
+          updateFields.genresRaw = detail.genres
+          const mapped = mapDoubanGenres(detail.genres)
+          if (mapped.length > 0) updateFields.genres = mapped
+        }
+        if (detail.countries[0]) updateFields.country = detail.countries[0]
+
+        await this.catalogService.safeUpdate(catalogId, updateFields, 'douban', { sourceRef: detail.id })
         await this.writeExternalRef(
           videoId, detail.id, 'auto_matched',
           best.score, { network_score: best.score }, 'network'
@@ -270,25 +284,9 @@ export class MetadataEnrichService {
     catalogId: string,
     titleNorm: string,
     year: number | null,
-    catalogStatus: string | null,
   ): Promise<void> {
-    const matches = await externalDataQueries.findBangumiByTitleNorm(this.db, titleNorm, year)
-    if (matches.length === 0) return
-
-    const best = matches[0]
-    await this.catalogService.safeUpdate(catalogId, {
-      bangumiSubjectId: best.bangumiId,
-      description: best.summary ?? undefined,
-      rating: best.rating ?? undefined,
-    }, 'bangumi', { sourceRef: String(best.bangumiId) })
-
-    // ADR-163 D-163-5/6：bangumi episode_count 按 catalog.status 写 total / current
-    // auto 模式：仅补 NULL 字段（step2 已写则保留 / "豆瓣优先" / ADR §3 D-163-6）
-    if (best.episodeCount !== null && best.episodeCount > 0) {
-      await videosQueries.updateVideoEpisodes(
-        this.db, videoId, episodesByStatus(catalogStatus, best.episodeCount), 'auto',
-      )
-    }
+    // ADR-161：置信度评分 + video_external_refs(provider='bangumi') + auto 命中拉 REST rich 详情 + 逐集
+    await this.bangumiService.matchAndEnrich({ videoId, catalogId, titleNorm, year })
   }
 
   // ── Step 4 ───────────────────────────────────────────────────────

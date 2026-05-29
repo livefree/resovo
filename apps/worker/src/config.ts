@@ -6,7 +6,12 @@ export const config = {
     // CHG-PRE-DEAD-LINE-AUTO-RETIRE-WORKER-B / Wave 4 #5-B / arch-reviewer Q2 推荐
     // 每日 03:30 UTC：避开 level1 整点波峰（0/6/12/18）+ 180 天阈值粒度允许 daily + 误报 24h 内可发现
     autoRetireLine: process.env.WORKER_CRON_AUTO_RETIRE_LINE ?? '30 3 * * *',
+    // CHG-BNG-09：本地 dump 定时重导 bangumi_entries（默认每周日 04:00）
+    bangumiDumpRefresh: process.env.WORKER_CRON_BANGUMI_DUMP ?? '0 4 * * 0',
   },
+  // ops 维护的 Bangumi dump 文件路径（subject.jsonlines），应为绝对路径（worker CWD=apps/worker）。
+  // 未配置 → cron 跳过（不设误导性相对默认值，避免标准启动下静默 no-op）。external-db/ 为 gitignore 本地产物。
+  bangumiDumpPath: process.env.BANGUMI_DUMP_PATH?.trim() || null,
   rateLimit: {
     level1Global: 20,
     level1PerSite: 5,

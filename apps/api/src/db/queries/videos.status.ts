@@ -3,7 +3,7 @@
  * 从 videos.ts 拆出（CHG-SN-7-MISC-API-QUERIES-SIZE）
  */
 
-import type { Pool } from 'pg'
+import type { Pool, PoolClient } from 'pg'
 import type { VideoCard, VideoType, DoubanStatus, SourceCheckStatus, TrendingTag, VideoMetaQuality } from '@/types'
 import type { DbVideoRow } from './videos.internal'
 import {
@@ -278,6 +278,24 @@ export async function updateVideoEnrichStatus(
            updated_at = NOW()
        WHERE id = $4 AND deleted_at IS NULL`,
     [doubanStatus, metaScore, JSON.stringify(metaQuality), videoId]
+  )
+}
+
+/**
+ * 回填集数（ADR-161 R2：Bangumi 来源经 step3 写入，source-neutral，不走 manual 锁路径）。
+ * 仅当当前 episode_count 缺省/为 0 时回填，避免覆盖已有更准确的集数。
+ */
+export async function updateEpisodeCount(
+  db: Pool | PoolClient,
+  videoId: string,
+  episodeCount: number
+): Promise<void> {
+  if (!Number.isFinite(episodeCount) || episodeCount <= 0) return
+  await db.query(
+    `UPDATE videos SET episode_count = $1, updated_at = NOW()
+     WHERE id = $2 AND deleted_at IS NULL
+       AND (episode_count IS NULL OR episode_count = 0)`,
+    [episodeCount, videoId]
   )
 }
 

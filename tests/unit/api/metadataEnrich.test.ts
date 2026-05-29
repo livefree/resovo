@@ -423,22 +423,10 @@ describe('MetadataEnrichService.enrich → step2 网络搜索 + step3 bangumi �
     )
   })
 
-  it('step3 bangumi 命中 + episodeCount=12 + catalog.status="ongoing" → updateVideoEpisodes(auto, currentEpisodes: 12)', async () => {
-    const { updateVideoEpisodes } = await import('@/api/db/queries/videos')
-    vi.mocked(catalogQueries.findCatalogById).mockResolvedValue({
-      id: 'c1', title: '某动画', year: 2024, type: 'anime', status: 'ongoing',
-    } as Parameters<typeof catalogQueries.findCatalogById>[1] extends infer R ? R : never)
-    vi.mocked(externalDataQueries.findBangumiByTitleNorm).mockResolvedValue([{
-      bangumiId: 99, titleCn: '某动画', titleJp: '', year: 2024, rating: 8.5,
-      summary: '...', airDate: '2024-01-01', episodeCount: 12,
-    }])
-
-    await service.enrich({ videoId: 'v1', catalogId: 'c1', title: '某动画', year: 2024, type: 'anime' })
-
-    expect(updateVideoEpisodes).toHaveBeenCalledWith(
-      expect.anything(), 'v1', { currentEpisodes: 12 }, 'auto',
-    )
-  })
+  // 注：原 ADR-163「step3 bangumi 命中 → updateVideoEpisodes(dump episodeCount)」用例已移除。
+  // main↔track/bangumi 合并采用 ADR-161：step3Bangumi 委托 BangumiService.matchAndEnrich
+  // （REST + 置信度 + 逐集，经 updateEpisodeCount 写入），不再走本地 dump episode_count 路径。
+  // bangumi 集数富集行为现归 BangumiService 自身测试覆盖（tests/unit/api/bangumiRoutes.test.ts 等）。
 
   it('detail.episodes 缺失（旧爬虫数据）→ 不调用 updateVideoEpisodes（防 NULL/0 写入）', async () => {
     const { updateVideoEpisodes } = await import('@/api/db/queries/videos')

@@ -24,7 +24,10 @@ export { MediaCatalogRow, CatalogInsertData, CatalogUpdateData }
 export const CATALOG_SOURCE_PRIORITY: Record<string, number> = {
   manual:  5,
   tmdb:    4,
-  bangumi: 3,
+  // ADR-161 决策要点 2：anime 下 Bangumi 优先于豆瓣。bangumi 来源仅对 anime 写入
+  // （step3 与占位均 anime-only），全局提级至 4（> douban:3）即等价「anime Bangumi 优先」，
+  // 非 anime 不受影响；manual(5) 仍最高。同级（== tmdb:4）后写覆盖（当前无 tmdb anime 自动写入）。
+  bangumi: 4,
   douban:  3,
   crawler: 1,
 }
@@ -130,10 +133,13 @@ export class MediaCatalogService {
       }
 
       // INSERT 被 ON CONFLICT 跳过（并发写入导致）→ 再次查询
+      // ADR-161 Y5：补 bangumiId 分支（与 Step4 对称），保证并发 seed + enrich step3
+      // 写同一 subject 时若因 bangumi_subject_id 唯一冲突被跳过仍能查回收敛。
       const retry =
         (input.imdbId ? await catalogQueries.findCatalogByImdbId(client, input.imdbId) : null) ??
         (input.tmdbId != null ? await catalogQueries.findCatalogByTmdbId(client, input.tmdbId) : null) ??
         (input.doubanId ? await catalogQueries.findCatalogByDoubanId(client, input.doubanId) : null) ??
+        (input.bangumiSubjectId != null ? await catalogQueries.findCatalogByBangumiId(client, input.bangumiSubjectId) : null) ??
         await catalogQueries.findCatalogByNormalizedKey(
           client,
           input.titleNormalized,
@@ -175,11 +181,14 @@ export class MediaCatalogService {
     catalogId: string,
     fields: CatalogUpdateData,
     source: CatalogMetadataSource,
-    provenanceCtx?: { sourceRef?: string }
+    provenanceCtx?: { sourceRef?: string; db?: Pool | PoolClient }
   ): Promise<{ updated: MediaCatalogRow | null; skippedFields: string[] }> {
+    // 可选 db：调用方在外部事务（如 BangumiService.confirmMatch）时传入 PoolClient
+    // 共享同一连接确保原子性；默认走 this.db 与现有调用方零兼容性破坏
+    const db = provenanceCtx?.db ?? this.db
     const [current, hardLocked] = await Promise.all([
-      catalogQueries.findCatalogById(this.db, catalogId),
-      provenanceQueries.getHardLockedFields(this.db, catalogId),
+      catalogQueries.findCatalogById(db, catalogId),
+      provenanceQueries.getHardLockedFields(db, catalogId),
     ])
     if (!current) return { updated: null, skippedFields: [] }
 
@@ -197,6 +206,11 @@ export class MediaCatalogService {
     const skippedFields: string[] = []
 
     for (const [key, value] of Object.entries(fields) as [keyof CatalogUpdateData, unknown][]) {
+      // CHORE-11 (2026-05-29) FIX-FIX：value === undefined 直接 skip 整段（含 provenance 计算），
+      //   避免 caller 用 `field: X ?? undefined` 模式时 provenance 误记"写入"了该字段。
+      //   此处不计入 skippedFields（语义：不是"被锁阻挡"的 skipped，是"没传值"）。
+      //   updateCatalogFields 兜底层也有 undefined skip，双层保护；本层修是为了 provenance 准确性。
+      if (value === undefined) continue
       // 硬锁：任何来源都阻挡
       if (hardLockedSet.has(key as string)) {
         skippedFields.push(key as string)
@@ -221,10 +235,10 @@ export class MediaCatalogService {
         ...Object.keys(filteredFields),
       ]
       const uniqueLocked = [...new Set(newLockedFields)]
-      await catalogQueries.setLockedFields(this.db, catalogId, uniqueLocked)
+      await catalogQueries.setLockedFields(db, catalogId, uniqueLocked)
     }
 
-    const updated = await catalogQueries.updateCatalogFields(this.db, catalogId, {
+    const updated = await catalogQueries.updateCatalogFields(db, catalogId, {
       ...filteredFields,
       metadataSource: source,
     })
@@ -233,7 +247,7 @@ export class MediaCatalogService {
     if (provenanceCtx !== undefined) {
       const writtenFields = Object.keys(filteredFields).filter((k) => k !== 'metadataSource')
       void provenanceQueries.batchUpsertFieldProvenance(
-        this.db,
+        db,
         catalogId,
         writtenFields,
         source,

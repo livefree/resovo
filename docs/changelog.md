@@ -12141,3 +12141,51 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **质量门禁**：typecheck ✅（root + 7 workspaces）/ lint ✅（0 error 0 warning）/ verify:adr-contracts ✅ EXIT=0（197 路由 80 ADR 端点对齐保持 / 266 D-N 全闭环）/ 单测 lines-panel 域 42/42 PASS（aggregate 27 + lines-panel 15 / 既有 31 + 新 11）
 - **commit trailer**：`Subagents: arch-reviewer (claude-opus-4-7)` （CLAUDE.md "修改 packages/admin-ui/**/types.ts 公开 Props 字段" 红线触发 / 本卡轻量 review 即满足）
 - **闭环**：CHG-368-B-C-UI 完成 / **Wave 2 (SEQ-20260527-MOD-WAVE2) 全部 ship 完毕** / 主线 13/13 + ADR 2/2 + 实施 6/6（-A1/-A2a/-A2b/-A3/-B/-C-UI）+ docs sync（-C-DOCS）+ Opus 评审（CHG-368-A + 本卡）全部就位 / Layer B 山名代号体系完整 ship（schema + 业务 + audit + UI + 字库 + 退役治理 + admin UI + LinesPanel 显示）/ ADR-164 5 黄线 + 4 advisory 全部闭档 / **Wave 2 完成度 = 100%**
+
+---
+
+## 2026-05-29 / SEQ-20260529-01 双卡收尾 — CHORE-10 + CHORE-11
+
+- **SEQ**：SEQ-20260529-01 — Bangumi PR follow-up（PR #1/#2/#3 merge 后用户决策的 pre-existing P2 双卡）
+- **TASK-ID**：CHORE-10 + CHORE-11
+- **状态**：✅ 已完成 / 同 PR 双修
+- **执行模型**：claude-opus-4-7（主循环 / 偏离建议 sonnet-4-6 因深查 trace + 跨 5 文件改动）
+- **子代理调用**：无
+
+### CHORE-10 — metadataProvenance.ts SQL INSERT 列数不匹配修复
+
+- **历史 bug 闭环**：META-06 引入至今（约 1 月+）所有 `safeUpdate` 路径调用的 `batchUpsertFieldProvenance` 实际**从未成功写入**任何字段来源 provenance 记录——原 SQL `INSERT INTO video_metadata_provenance (catalog_id, field_name, source_kind, source_ref, source_priority, updated_at) VALUES ($1, $2, $3, $4, $5)` 6 列 vs 5 占位符 → Postgres `INSERT has more target columns than expressions` 抛错 → `MediaCatalogService.safeUpdate` 用 `void ... .catch(stderr)` 静默吞错（catalog 主写入不阻塞）。
+- **修法**：(b) INSERT 列删 `updated_at`，schema `TIMESTAMPTZ NOT NULL DEFAULT NOW()` 自动生效；ON CONFLICT UPDATE 路径仍显式 `updated_at = NOW()`（UPDATE 不触 column DEFAULT）。
+- **修改文件**：
+  - `apps/api/src/db/queries/metadataProvenance.ts`（93-104）：INSERT 5 列 / values 5 占位符匹配
+  - `tests/unit/api/metadataProvenanceQueries.test.ts`（新建）：4 用例覆盖单字段/N=3 多字段/null sourceRef/空数组早返回
+
+### CHORE-11 — MetadataEnrichService step2 三元 undefined → 5 列 NOT NULL 违规修复
+
+- **真 bug 验证（用户复审深查 trace 后确认）**：PR #1 Known Issues #3（DoubanAdapter writers:null）原描述路径错误（DoubanService.ts:112 安全），实际路径在 `MetadataEnrichService.step2NetworkSearch:199-210`。
+- **JS undefined 链路**：`{writers: detail.screenwriters.length > 0 ? detail.screenwriters : undefined}` → `'writers' in obj` = true（property 真实存在）→ `Object.entries` 包含 `['writers', undefined]` → safeUpdate 无 undefined skip → updateCatalogFields `data['writers'] ?? null` = null → SQL `writers = null` → 违反 schema `writers TEXT[] NOT NULL DEFAULT '{}'`。
+- **触发频率**：mobile-api fallback（`mobile-api.ts:180` 写死 `screenwriters: []` / challenge_page bypass 失败 / HTTP 429 / 302 / 301）+ html-parser 无 writer match → 大量真实场景必发。
+- **影响面 5 列**：director / cast / writers / genres / genres_raw 全是 `TEXT[] NOT NULL DEFAULT '{}'`（migration 026 + 031）。
+- **修法**：双修（不互斥）
+  - **(a) 主修**：`MetadataEnrichService.ts:195-228` step2 改条件赋值范式（同 step1 imdb / step1b title_norm / DoubanService 既有正确模式），消除三元 `: undefined` 模式
+  - **(b) 防御兜底**：`mediaCatalog.mutations.ts:155-165` `updateCatalogFields` 加 undefined skip `if (key in data && data[key] !== undefined)`，同时去掉 `?? null`（显式 null 仍正常写入支持 nullable 列清空语义）
+- **修改文件**：
+  - `apps/api/src/services/MetadataEnrichService.ts`（195-228）：条件赋值范式 + 注释 CHORE-11 路径标注
+  - `apps/api/src/db/queries/mediaCatalog.mutations.ts`（155-165）：undefined skip 防御兜底 + 注释
+  - `tests/unit/api/mediaCatalogMutationsUndefinedSkip.test.ts`（新建）：6 用例覆盖 writers undefined skip / 5 列全 undefined skip / 显式 null / 混合 / 空数组 [] / 全 undefined 早返回 SELECT
+
+### 门禁
+
+- typecheck ✅ 8 包全 PASS
+- npm test -- --run tests/unit/api ✅ **1756/1756** across 137 文件（+10 vs 修前：6 mutations + 4 provenance）
+- 关联测试无回归：mediaCatalogSafeUpdate.test.ts 5/5 / metadataEnrich.test.ts 20/20
+
+### Codex stop-time review
+
+- 第 4 轮误判 CHORE-11 不可复现（只看 DoubanService.ts:112） → 用户复审「需要更多信息」推主循环深查 MetadataEnrichService step2 路径 → 确认真 bug + 影响 5 列 → 重立 CHORE-11
+- 详细迭代记录见 SEQ-20260529-01 PR #4 body 8 轮迭代表 + 本 commit "Codex stop-time review" section
+
+### 关联 PR
+
+- PR #4（merged `43476d3218e447c5041fd9efcec0f3557b5b9647`）— SEQ-20260529-01 双卡立卡
+- 本 PR（待开）— CHORE-10 + CHORE-11 同 PR 双修

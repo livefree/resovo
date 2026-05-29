@@ -2141,3 +2141,81 @@ CODENAME-MATRIX-E2E (依赖 Wave 3 验收期补丁 CODENAME-MATRIX ✅)
 - **跨用户分享自定义主题**（ADR-165 §2 范围外）：远期 Phase 5 / 独立 schema / 独立 ADR
 - **preferences 字段版本控制**（Y-165-3 + §10 风险 5）：字段数 ≥ 3 触发 / 当前 1 字段不需
 - **BroadcastChannel 跨 tab preferences**（Y-165-5）：Phase 4 评估 / 当前 last-write-wins 兜底
+
+---
+
+## [SEQ-20260529-01] Bangumi PR follow-up — metadataProvenance SQL 列数 bug + step2 三元 undefined NOT NULL 违规
+
+- **状态**：✅ 已完成（2026-05-29 04:59 / 同 PR 双卡实施 + arch 防御兜底）
+- **创建时间**：2026-05-29 04:09
+- **最后更新时间**：2026-05-29 04:59
+- **目标**：收口 Bangumi PR #1/#3 merge 后用户决策的两张 pre-existing P2 follow-up 卡 — (1) `batchUpsertFieldProvenance` SQL 列数 / 占位符不匹配（META-06 引入至今 provenance 静默失败）；(2) `MetadataEnrichService.step2NetworkSearch` 三元 `: undefined` 模式 + safeUpdate/updateCatalogFields 无 undefined skip → 5 个 NOT NULL TEXT[] 列写 null 违规
+- **范围**：apps/api/src/db/queries/metadataProvenance.ts + apps/api/src/services/MetadataEnrichService.ts + 单测/集成测试
+- **依赖**：无（PR #1/#2/#3 已 merge；两卡互相独立可并行）
+- **建议主循环模型**：`claude-sonnet-4-6`（机械性 bug 修复，无架构决策）
+- **来源**：PR #1（Bangumi.tv 接入 / merged `279889d7`）+ PR #2/#3（confirmMatch 事务化 + Codex 第 2 轮修订 / merged `ceff35d2` / `744d4c4a`）；Codex 第 4 轮 review 误判 CHORE-11 不可复现，主循环深查 trace 后**确认 PR #1 Known Issues #3 是真 bug**（详情见 CHORE-11 验收要点）
+
+### 任务列表（按执行顺序）
+
+1. **CHORE-10** — 修 `metadataProvenance.ts:94-96` SQL INSERT 列数 / 占位符不匹配（状态：✅ 已完成）
+   - 创建时间：2026-05-29 04:09
+   - 计划开始：（待主循环按优先级排程）
+   - 实际开始：2026-05-29 04:35
+   - 完成时间：2026-05-29 04:55
+   - 修法：(b) INSERT 列删 `updated_at`（schema `TIMESTAMPTZ NOT NULL DEFAULT NOW()` 自动生效）；ON CONFLICT UPDATE 仍显式 `updated_at = NOW()`
+   - 测试：tests/unit/api/metadataProvenanceQueries.test.ts 新建 4 用例（单字段 5 占位符 / 多字段 N=3 占位符 (3×5=15) / sourceRef=null / 空数组早返回）
+   - 验收要点：
+     - INSERT 列出 6 列 `(catalog_id, field_name, source_kind, source_ref, source_priority, updated_at)` 但 values 数组每行只生成 5 个占位符 `($1..$5)`，未追加 `NOW()`。Postgres 报 `INSERT has more target columns than expressions`，整个 `batchUpsertFieldProvenance` 抛错。caller `MediaCatalogService.safeUpdate:235-251` 用 `void ... .catch(stderr)` 静默失败，所以 catalog 主写入不阻塞，但 **所有 provenance 写入从未真正落地**（META-06 引入至今）
+     - 修法二选一：(a) values 末尾补 `NOW()` 第 6 占位符；(b) INSERT 列去掉 `updated_at` 让 DB 默认值生效
+     - 补单测覆盖 `batchUpsertFieldProvenance` 多行写入后 SELECT 验真有数据（既有测试只 mock query 未验集成）
+     - changelog.md 顺便标记"META-06 引入至今所有 provenance 写入实际未落地"历史 bug 闭环
+   - 优先级：P2 / 建议模型：sonnet-4-6
+
+2. **CHORE-11** — 修 `MetadataEnrichService.ts:199-210` step2 三元 `: undefined` 模式 → 5 个 NOT NULL TEXT[] 列写 null 违规（状态：✅ 已完成）
+   - 创建时间：2026-05-29 04:30
+   - 计划开始：（待主循环排程；与 CHORE-10 可并行）
+   - 实际开始：2026-05-29 04:40
+   - 完成时间：2026-05-29 04:58
+   - 修法：双修 (a)+(b)：
+     - (a) **主修**：MetadataEnrichService.ts:199-228 step2 改条件赋值范式（同 step1 imdb / step1b title_norm / DoubanService.ts:104-118 既有正确模式），消除三元 `: undefined`
+     - (b) **防御兜底**：mediaCatalog.mutations.ts:155-160 `updateCatalogFields` 加 undefined skip：`if (key in data && data[key] !== undefined)`，同时去掉 `?? null`（显式 null 仍正常写入支持 nullable 列清空语义）
+   - 测试：tests/unit/api/mediaCatalogMutationsUndefinedSkip.test.ts 新建 6 用例（writers undefined skip / 5 列全 undefined skip / 显式 null 写入 / 混合 undefined+有效值 / 空数组 [] 合法 / 全 undefined 走早返回 SELECT）
+   - 验收要点：
+     - **真 bug 验证（深查 trace 后确认 PR #1 Known Issues #3 是真，但描述需校正）**：
+       - 路径：`MetadataEnrichService.step2NetworkSearch:199-210` （不是 DoubanService.ts:104-118 / 后者用条件赋值风格安全）
+       - 触发：`getDoubanDetailRich` 返回的 `detail.directors/cast/screenwriters/genres` 任一为 `[]` 时；mobile-api fallback（`mobile-api.ts:180`）写死 `screenwriters: []` 是高频触发器（challenge_page bypass 失败 / HTTP 429 / 302 / 301 都走 fallback）
+       - 链路：`{writers: detail.screenwriters.length > 0 ? detail.screenwriters : undefined}` → JS object literal 中 `writers` property 存在且 value 为 undefined → safeUpdate Object.entries 包含 ['writers', undefined] → 无 undefined skip → updateCatalogFields `'writers' in data` = true → `data.writers ?? null` = null → `UPDATE ... SET writers = null` → schema `writers TEXT[] NOT NULL DEFAULT '{}'` 违反
+       - **影响面 5 列**（不只是 writers）：director / cast / writers / genres / genres_raw 全是 `TEXT[] NOT NULL DEFAULT '{}'`（migration 026 + 031）
+     - 修法两选一（建议 a + b 并行；不互斥）：
+       - (a) **主修**：MetadataEnrichService.ts:199-210 改条件赋值风格（同 step1 imdb path / step1b normalized path / DoubanService 三处既有正确范式），消除三元 `: undefined` 模式
+       - (b) **防御兜底**：`updateCatalogFields` 内 `if (key in data)` 改为 `if (key in data && data[key] !== undefined)`，或 `safeUpdate` filter 阶段 skip undefined value——任选其一防未来 caller 同样误用
+     - 补集成测试：mock mobile-api fallback 路径 → 验 step2NetworkSearch 端到端不污染 catalog；补单测覆盖 updateCatalogFields 收到 `{writers: undefined}` 应 skip 而非写 null
+     - 修后跑一遍 `MetadataEnrichService.enrich` 完整链路（豆瓣→Bangumi 优先级覆盖）补齐 PR #1 Phase 1 因此 bug 跳过的验收
+   - 优先级：P2 / 建议模型：sonnet-4-6
+
+### 关键约束
+
+- 两卡互相**无依赖**，可同 worktree 顺序或独立 worktree 并行
+- **不引入新依赖**（违反 CLAUDE.md 触发 BLOCKER）
+- CHORE-10/-11 都不动 schema / migration（DB 层面零变更）
+- 修后必须跑 CLAUDE.md §必跑命令全集 `npm run typecheck` + `npm run lint` + `npm run test -- --run` + `npm run verify:adr-contracts` 全绿（test 必须**全量套件**，不得窄化到 tests/unit/api 子集——避免非 API 模块回归被遗漏）
+- 完成后顺序：填写完成备注 → 更新本卡状态 + 时间戳 → 更新本序列「最后更新时间」→ 删除 tasks.md 卡片 → 追加 changelog → git commit
+
+### 编号校验
+
+- **SEQ-20260529-01**：当前无 SEQ-20260529-* 占用（`grep -rohE 'SEQ-20260529-[0-9]+' docs/` 全树 0 命中）
+- **CHORE-10/-11**：既有 CHORE 占用 CHORE-01..09（CHORE-01..08 in `docs/archive/task-queue/task-queue_archive_20260427.md` / CHORE-09 in `docs/archive/changelog/changelog_m0-m6.md`）；按"同前缀最大编号递增"取 10、11
+
+### Codex stop-time review 关联
+
+本 SEQ 经 8 轮 Codex stop-time review + 用户深查迭代收敛：
+1. 第 1 轮 抓 CHORE-01/02 复用 archive 占用编号 → 改 CHORE-10/11
+2. 第 2 轮 抓 task-queue invariants 违规（SEQ ID 格式 / 缺时间戳 / 时间格式） → 全部修正
+3. 第 3 轮 抓 `计划开始` 字段时间格式 → 改非日期占位
+4. 第 4 轮 误判 **CHORE-11 描述不可复现**（只看 DoubanService.ts:112 + mobile-api `screenwriters: []` + `length > 0` 守卫，结论"无 null 路径"）+ checks 列表缺 `npm run lint` → 当时配合删 CHORE-11 + 补 lint
+5. 第 5 轮 抓 `⬜ 待启动` 非 canonical → 改 `⬜ 待开始`
+6. 第 6 轮 抓 test 命令窄化到 api 子集 → 改全量
+7. 第 7 轮 ✅ No actionable issue found
+8. **用户复审**：要求更多信息判断"关键发现"。主循环深查 trace：MetadataEnrichService.ts:199-210 step2NetworkSearch 用三元 `: undefined` 模式而非条件赋值，`{writers: undefined}` 经 safeUpdate（无 undefined skip）→ updateCatalogFields（`undefined ?? null` = null）→ SQL `writers = null` → 违反 `writers TEXT[] NOT NULL` → **PR #1 Known Issues #3 是真 bug**，影响 5 列（director/cast/writers/genres/genres_raw），第 4 轮 Codex + 主循环当时漏看了 MetadataEnrichService 路径 → **重立 CHORE-11**
+
+原始 review thread：`019e7344-a3b1-7c13-8c80-d38f34073c45`（PR #3 评审）。
