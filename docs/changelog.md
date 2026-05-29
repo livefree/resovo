@@ -40,6 +40,51 @@
 
 ---
 
+## [CHG-PRE-DEAD-LINE-AUTO-RETIRE-WORKER-B-FIX-3] worker 撤回 apps/api 跨 app import / 内联 SQL（Codex stop-time review 第 6 轮 / ADR-107 §4 硬约束）
+- **完成时间**：2026-05-28
+- **记录时间**：2026-05-28
+- **执行模型**：claude-opus-4-7（主循环 / Codex stop-time review 第 6 轮反馈触发）
+- **子代理**：无（FIX 级别 / ADR-107 §4 真源已存在）
+- **触发**：Codex stop-time review 命中："worker now imports apps/api internals despite ADR-107 ban"。Wave 4 #5-B 实施时为了"复用 -A 单点真源"用了 `import { autoRetireLineByDeadCheck } from '../../../api/src/db/queries/auto-retire-line'`，**直接违反 ADR-107 §4 真源**：
+  > "**禁止** import `apps/api` 内部任何文件，零跨 workspace 代码耦合"
+  既有 worker job（level1-probe / level2-render / feedback-driven）全部内联 SQL 是 ADR-107 §4 范式 / -B 主循环实施时误判"跨 app import 是合理优化"
+- **修改文件**（2 项 / PATCH=2 ≤ 5 ✅）：
+  - `apps/worker/src/jobs/auto-retire-line.ts` — 重写为 worker 自包含：
+    - 删除 `import { autoRetireLineByDeadCheck, type RetiredAliasRow } from '../../../api/src/db/queries/auto-retire-line'`
+    - 内联 `SQL_MAINTAIN_DEAD_SINCE` + `SQL_RETIRE_DEAD_LINES` 常量（与 apps/api -A 版本 **byte-identical** / Codex FIX-1 `vs.deleted_at IS NULL` 已落地）
+    - 内联 `runAutoRetireLine` 完整 4 段工作流（pool.connect / 段 0 lock / 段 1+2 maintain / 段 3 retire / finally unlock + release）
+    - 内联 Codex FIX-2 unlock 失败 → `client.release(err)` destroy connection 防 lock 泄漏
+    - 文件头 jsdoc 标注 "SQL 真源对照 apps/api/src/db/queries/auto-retire-line.ts / 跨包同步约束"
+    - `RetiredAliasRow` 改本地 interface（不再 export，是 worker 内部类型）
+    - 既有 worker job 范式同模：feedback-driven-recheck.ts 也是 worker 内联 SQL（参考 line 22 / 31 / 41）
+  - `tests/unit/worker/jobs/auto-retire-line.test.ts` — 重写：
+    - 删除 vi.mock apps/api 路径
+    - 直接测 worker 内联实现 / mock pool.connect 返回 client / 验证 SQL 字面量 + 工作流序列 + 错误路径
+    - 10 case：T1 connect+release / T2 SQL 顺序 lock→maintain→retire→unlock / T3 段 1+2 SQL 字面量验证（含 vs.deleted_at IS NULL）/ T4 段 3 SQL + batch limit + RETURNING / T5 拿不到锁路径 / T6 N 行日志 / T7 空数组 batch_total=0 / T8 段 1+2 抛错 finally 仍 unlock+release / T9 unlock 失败 release(err) / T10 retired_at 共享 ISO
+- **新增依赖**：无（pg + pino 既有）
+- **数据库变更**：无（SQL 字面量从 apps/api 复制 / Migration 081 已 ship）
+- **设计取舍**：
+  - **内联 vs 抽到 packages/ 共享层**：内联 — ADR-107 §4 明示 "零跨 workspace 代码耦合"；抽到 packages/ 是另一个范式重构（新包 / 工程改动 / 超 FIX 范围）/ 内联是 ADR-107 既定范式
+  - **SQL 字面量跨包同步约束**：双源 SQL 必须 byte-identical；维护时双侧同步改 / changelog jsdoc 双侧标注 / arch-reviewer §2.2 §6 为共同源头
+  - **apps/api/src/db/queries/auto-retire-line.ts 不删**：该文件 10/10 单测覆盖（含 Codex FIX-1/FIX-2）+ 文档真源 / 作为"SQL 字面量参考实现"保留 / 也供未来 admin API 端点调（如 POST `/admin/source-line-aliases/auto-retire/run-now` 手动触发 / Y-DEAD-3 unretire 端点 follow-up 卡）
+  - **重写测试 vs 复用 -A 测试**：-A queries 测试是 apps/api 范畴；-B worker 测试必须直测 worker 内联实现 / 否则跨 app 测试覆盖虚假
+- **不触发**：
+  - architecture.md sync：无 schema 改动
+  - R-MID-1 RETRO：worker 范畴
+  - 新 ADR：本 FIX 是 -B 实施时违反 ADR-107 §4 的修正 / 不构成新决策
+  - Opus 评审：FIX 级别 / ADR-107 真源既有
+- **质量门禁**：typecheck ✅ EXIT=0（含 worker tsconfig 内联实现验证）/ lint ✅ 0 error 0 warning / verify:adr-contracts ✅ EXIT=0 / worker auto-retire-line 10/10 PASS（重写 5 → 10 case / SQL 字面量验证 + 错误路径全覆盖）+ apps/api -A queries 10/10 PASS = 20/20 PASS
+- **Codex stop-time review 6 轮闭环回顾**：
+  - FIX-1（Wave 4 #4 player-error）：controls.retry active 双层守卫
+  - FIX-2（Wave 4 #4-EP player-error）：watchdog currentEpisode cleanup
+  - FIX-3（Wave 4 #4-EP player-error）：watchdog shortId cleanup
+  - #5-A-FIX-1：advisory lock 同 client session + SQL deleted_at 过滤
+  - #5-A-FIX-2：unlock 失败 client.release(err) destroy connection
+  - **#5-B-FIX-3（本卡）**：撤回 apps/api 跨 app import / worker 内联 SQL / ADR-107 §4 硬约束
+  - 6 轮 Codex 反馈全部消化 / ADR-166 + ADR-164 D-164-8 + ADR-107 §4 实施完整闭环
+
+---
+
 ## [CHG-PRE-DEAD-LINE-AUTO-RETIRE-WORKER-B] worker 层接入 auto-retire-line cron job（Wave 4 #5-B / ADR-164 D-164-8 完整闭环）
 - **完成时间**：2026-05-28
 - **记录时间**：2026-05-28
