@@ -40,6 +40,48 @@
 
 ---
 
+## [CHG-SN-9-ROUTE-LABEL-D-A2-FIX] useRouteTheme 加 hasStoredTheme 区分"用户存过" vs 默认派生（Codex stop-time review）
+- **完成时间**：2026-05-28
+- **执行模型**：claude-sonnet-4-6（主循环 / FIX 紧随 -A2 / 不切换 §16.5）
+- **子代理调用**：无（纯 bug fix / 不改 API 契约 / 不动 ADR-165 D-N）
+- **触发**：Codex stop-time review 反馈 "route theme sync runs on logged-out/default paths incorrectly"
+- **背景**：CHG-SN-9-ROUTE-LABEL-D-A2（commit 87f20537）useRouteTheme 内 localPreference 直接从 `theme.id` 派生：
+  ```ts
+  const localPreference: RouteThemePreference | null =
+    theme.id === CUSTOM_THEME_ID && customTheme
+      ? { themeId: CUSTOM_THEME_ID, customTheme }
+      : { themeId: theme.id }
+  ```
+  theme.id 在初始 mount 时是 default theme（如 jie_qi from getDefaultTheme）→ 即使 localStorage 为空、用户从未操作过，localPreference 仍非 null → useUserPreferencesSync 在 GET 200 + server.routeTheme 空时会触发"登录迁移 PUT 默认主题"到 server → **用户从未操作就被自动登记默认偏好** + 跨设备同步传染默认值。
+- **根因**：localPreference 派生未区分"用户真正存过主题" vs "默认派生主题"。D-165-5 登录迁移协议预期 server 空 + localStorage 真有用户存值时迁移，但实现把"任何 themeId"当作"用户存过"。
+- **修复**（1 业务 + 1 测试 PATCH=2 严守）：
+  - `apps/web-next/src/lib/route-theme-storage.ts` useRouteTheme 加 `hasStoredTheme` state：
+    - mount effect 读 readStoredThemeId() / readStoredCustomTheme() → 任一非空 → setHasStoredTheme(true)
+    - localPreference 派生加守卫：`hasStoredTheme ? {...} : null`（仅用户真正存过才参与登录迁移）
+    - setTheme / setCustomTheme / clearCustomTheme（写 localStorage 路径）均 setHasStoredTheme(true)
+    - handleRemoteValue（server 应用路径 / 内部 writeStoredThemeId）也 setHasStoredTheme(true)
+  - `tests/unit/web-next/use-route-theme-sync-fix.test.tsx` NEW 4 case（mock useUserPreferencesSync 拦截 localValue 透传验证）：
+    - #1 首次访问 + 无 localStorage → localValue=null（不触发登录迁移 PUT 默认值）
+    - #2 localStorage 有 themeId → localValue 非 null（触发登录迁移 PUT 用户存的值）
+    - #3 localStorage 有 customTheme 数据 → localValue 含 customTheme
+    - #4 setTheme 后 → 后续 render localValue 非 null
+- **不触发额外 Opus / ADR**：纯 bug fix / ADR-165 D-165-5 语义不变（仅修复实现偏离）
+- **质量门禁**：typecheck ✅ EXIT=0 / lint ✅ EXIT=0 / verify:adr-contracts ✅ EXIT=0 / use-route-theme-sync-fix 4/4 PASS + use-user-preferences-sync 7/7 + route-theme-storage 20/20 + line-display-name-themes 34/34 共 65/65 PASS
+- **设计取舍**：① 用 state（hasStoredTheme）而非每 render 读 localStorage：性能 + 复用 React state 同步机制 ② handleRemoteValue 也 set true：server 应用后视为"用户已有偏好"（下次 mount 直接 localStorage hydrate 不需再 server 同步）③ clearCustomTheme 仅在 customId 路径下 setHasStoredTheme(true)（已是 true 时不重设 / writeStoredThemeId fallback.id 仍写）④ 未登录 GET 仍跑（ADR-165 §7 设计 / 401 静默 / 廉价响应）/ 本 FIX 仅阻止"PUT 默认值"污染
+- **六问自检**：
+  - Q1 沉淀共享层？✅ FIX 在 useRouteTheme 内 / 不需独立沉淀
+  - Q2 引入回归？✅ 65/65 测试 PASS / 既有 setTheme/setCustomTheme/clearCustomTheme 行为不变
+  - Q3 越层？✅ 仅 route-theme-storage 内修
+  - Q4 硬编码 / any？✅ 无
+  - Q5 布局变化？N/A
+  - Q6 文件范围？✅ 2 文件 PATCH=2 严守
+- **偏离检测**：无（FIX 范围严格 = useRouteTheme localPreference 派生 + 测试）
+- **D-N 编号**：D-165-5 登录迁移协议实现修订（原协议描述不变 / 实现修偏离）
+- **[AI-CHECK] 结论**：PASS（Codex 抓的 default-path 污染 bug 已闭 / 测试覆盖 4 关键路径 / ADR-165 D-165-5 语义如期落地）
+- **闭环**：CHG-SN-9-ROUTE-LABEL-D-A2-FIX 完成 / Codex stop-time review 反馈已消化 / Wave 3 实施期保持 9/10 完成（FIX 不增 SEQ 计数 / 视为 -A2 修订）/ ADR-165 全 11 D-N 闭环不变 / 跨设备主题同步功能现严格按 D-165-5 行为（仅用户真正存过的偏好才参与同步）
+
+---
+
 ## [CHG-SN-9-ROUTE-LABEL-D-A2] ADR-165 前端实施 useUserPreferencesSync NEW + useRouteTheme 接入 + UI syncing（Wave 3 #10.2 / plan §14 主线 5/6 / 跨设备主题同步前端层 ship / Wave 3 主线收官）
 - **完成时间**：2026-05-28
 - **执行模型**：claude-sonnet-4-6（主循环 / 不切换 §16.5 / ADR-165 已 Accepted 规范驱动实施）

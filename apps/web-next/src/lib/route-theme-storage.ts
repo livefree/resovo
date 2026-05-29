@@ -199,12 +199,20 @@ export function useRouteTheme(locale: string): {
 } {
   const [theme, setThemeState] = useState<RouteTheme>(() => getDefaultTheme(locale))
   const [customTheme, setCustomThemeState] = useState<CustomThemeData | null>(null)
+  // CHG-SN-9-ROUTE-LABEL-D-A2-FIX (Codex stop-time review)：区分"用户真正存过主题" vs "默认派生主题"
+  // 仅当 hasStoredTheme=true 时 useUserPreferencesSync 才接收非 null localValue → 仅用户真正
+  // 设过的偏好才参与登录迁移 PUT；默认 theme（getDefaultTheme 派生）不会污染 server
+  const [hasStoredTheme, setHasStoredTheme] = useState(false)
 
   useEffect(() => {
     const storedCustom = readStoredCustomTheme()
     if (storedCustom) setCustomThemeState(storedCustom)
 
     const storedId = readStoredThemeId()
+    if (storedId || storedCustom) {
+      setHasStoredTheme(true)  // 仅当 localStorage 真有用户存过的值时标记
+    }
+
     if (storedId === CUSTOM_THEME_ID) {
       // 自定义主题命中：仅当 storedCustom 也存在时才切（否则保留 default 防空主题）
       if (storedCustom) {
@@ -230,6 +238,7 @@ export function useRouteTheme(locale: string): {
         writeStoredCustomTheme(remoteCustom)
         setThemeState(customThemeToRouteTheme(remoteCustom))
         writeStoredThemeId(CUSTOM_THEME_ID)
+        setHasStoredTheme(true)
       }
       return
     }
@@ -237,13 +246,17 @@ export function useRouteTheme(locale: string): {
     if (stored) {
       setThemeState(stored)
       writeStoredThemeId(stored.id)
+      setHasStoredTheme(true)
     }
   }, [])
 
   // 本地当前 RouteThemePreference（用于登录迁移协议 D-165-5）
-  const localPreference: RouteThemePreference | null = theme.id === CUSTOM_THEME_ID && customTheme
-    ? { themeId: CUSTOM_THEME_ID, customTheme }
-    : { themeId: theme.id }
+  // CHG-SN-9-ROUTE-LABEL-D-A2-FIX：仅 hasStoredTheme=true 时非 null（防默认值污染 server）
+  const localPreference: RouteThemePreference | null = hasStoredTheme
+    ? (theme.id === CUSTOM_THEME_ID && customTheme
+        ? { themeId: CUSTOM_THEME_ID, customTheme }
+        : { themeId: theme.id })
+    : null
 
   const { syncing, putValue } = useUserPreferencesSync<RouteThemePreference>({
     sectionKey: 'routeTheme',
@@ -254,6 +267,7 @@ export function useRouteTheme(locale: string): {
   function setTheme(next: RouteTheme): void {
     setThemeState(next)
     writeStoredThemeId(next.id)
+    setHasStoredTheme(true)
     putValue({ themeId: next.id })
   }
 
@@ -262,6 +276,7 @@ export function useRouteTheme(locale: string): {
     writeStoredCustomTheme(data)
     setThemeState(customThemeToRouteTheme(data))
     writeStoredThemeId(CUSTOM_THEME_ID)
+    setHasStoredTheme(true)
     putValue({ themeId: CUSTOM_THEME_ID, customTheme: data })
   }
 
@@ -273,9 +288,11 @@ export function useRouteTheme(locale: string): {
       const fallback = getDefaultTheme(locale)
       setThemeState(fallback)
       writeStoredThemeId(fallback.id)
+      setHasStoredTheme(true)
       putValue({ themeId: fallback.id })
     } else {
       // 仅清除 customTheme / themeId 不变 → server 仅更新 customTheme 缺省
+      // hasStoredTheme 已 true 不重设
       putValue({ themeId: theme.id })
     }
   }
