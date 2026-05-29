@@ -181,11 +181,14 @@ export class MediaCatalogService {
     catalogId: string,
     fields: CatalogUpdateData,
     source: CatalogMetadataSource,
-    provenanceCtx?: { sourceRef?: string }
+    provenanceCtx?: { sourceRef?: string; db?: Pool | PoolClient }
   ): Promise<{ updated: MediaCatalogRow | null; skippedFields: string[] }> {
+    // 可选 db：调用方在外部事务（如 BangumiService.confirmMatch）时传入 PoolClient
+    // 共享同一连接确保原子性；默认走 this.db 与现有调用方零兼容性破坏
+    const db = provenanceCtx?.db ?? this.db
     const [current, hardLocked] = await Promise.all([
-      catalogQueries.findCatalogById(this.db, catalogId),
-      provenanceQueries.getHardLockedFields(this.db, catalogId),
+      catalogQueries.findCatalogById(db, catalogId),
+      provenanceQueries.getHardLockedFields(db, catalogId),
     ])
     if (!current) return { updated: null, skippedFields: [] }
 
@@ -227,10 +230,10 @@ export class MediaCatalogService {
         ...Object.keys(filteredFields),
       ]
       const uniqueLocked = [...new Set(newLockedFields)]
-      await catalogQueries.setLockedFields(this.db, catalogId, uniqueLocked)
+      await catalogQueries.setLockedFields(db, catalogId, uniqueLocked)
     }
 
-    const updated = await catalogQueries.updateCatalogFields(this.db, catalogId, {
+    const updated = await catalogQueries.updateCatalogFields(db, catalogId, {
       ...filteredFields,
       metadataSource: source,
     })
@@ -239,7 +242,7 @@ export class MediaCatalogService {
     if (provenanceCtx !== undefined) {
       const writtenFields = Object.keys(filteredFields).filter((k) => k !== 'metadataSource')
       void provenanceQueries.batchUpsertFieldProvenance(
-        this.db,
+        db,
         catalogId,
         writtenFields,
         source,

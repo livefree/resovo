@@ -3,7 +3,7 @@
  * 按 catalog_id + source 设计，唯一键 (catalog_id, source, external_episode_id)
  */
 
-import type { Pool } from 'pg'
+import type { Pool, PoolClient } from 'pg'
 
 export interface CatalogEpisodeInput {
   source: string
@@ -19,19 +19,22 @@ export interface CatalogEpisodeInput {
 }
 
 /**
- * 批量 upsert 逐集元数据（单事务）。externalEpisodeId 必填（保证唯一键命中、幂等）。
- * 返回写入条数。
+ * 批量 upsert 逐集元数据。externalEpisodeId 必填（保证唯一键命中、幂等）。返回写入条数。
+ * - 传 Pool：自管 BEGIN/COMMIT/ROLLBACK + connect/release
+ * - 传 PoolClient：复用调用方事务，不自管 BEGIN/COMMIT（confirmMatch 原子化场景）
  */
 export async function upsertCatalogEpisodes(
-  db: Pool,
+  db: Pool | PoolClient,
   catalogId: string,
   episodes: CatalogEpisodeInput[],
 ): Promise<number> {
   const valid = episodes.filter((e) => e.externalEpisodeId)
   if (valid.length === 0) return 0
-  const client = await db.connect()
+
+  const isPool = typeof (db as Pool).connect === 'function'
+  const client = isPool ? await (db as Pool).connect() : (db as PoolClient)
   try {
-    await client.query('BEGIN')
+    if (isPool) await client.query('BEGIN')
     for (const e of valid) {
       await client.query(
         `INSERT INTO catalog_episodes
@@ -49,12 +52,12 @@ export async function upsertCatalogEpisodes(
         ],
       )
     }
-    await client.query('COMMIT')
+    if (isPool) await client.query('COMMIT')
     return valid.length
   } catch (err) {
-    await client.query('ROLLBACK')
+    if (isPool) await client.query('ROLLBACK')
     throw err
   } finally {
-    client.release()
+    if (isPool) (client as PoolClient).release()
   }
 }

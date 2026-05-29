@@ -5,7 +5,7 @@
  * META-04: DoubanEntryMatch 扩展 META-01 新字段，供 externalCandidateMappers 消费
  */
 
-import type { Pool } from 'pg'
+import type { Pool, PoolClient } from 'pg'
 
 // ── 类型 ──────────────────────────────────────────────────────────
 
@@ -364,7 +364,7 @@ export interface UpsertVideoExternalRefInput {
  * 若 isPrimary=true，需要调用方确保该 video+provider 没有其他 primary（由 DB 唯一索引保证）。
  */
 export async function upsertVideoExternalRef(
-  db: Pool,
+  db: Pool | PoolClient,
   input: UpsertVideoExternalRefInput,
 ): Promise<VideoExternalRef> {
   const result = await db.query<{
