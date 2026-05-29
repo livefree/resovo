@@ -296,9 +296,9 @@ LinesPanel UI (admin-ui)
 
 | 验收人 | 验收状态 | 备注 |
 |---|---|---|
-| 主循环 | ✅ 实施期完成 | 9/10 + 3 DEFERRED / 13 commits / 2 BLOCKER 解除 / 2 Codex FIX |
+| 主循环 | ✅ 实施期完成 | 9/10 + 3 DEFERRED / 17 commits / 2 BLOCKER 解除 / 4 Codex FIX 全闭环 |
 | arch-reviewer Opus | ✅ 3 轮独立评审通过 | FOLLOWUP-AUTO-RETIRED-LABEL A / PLAYER-ERROR A / ROUTE-LABEL-D-ADR A- → Accepted |
-| 用户 | ⬜ 待验收 | 按本报告 §6 建议路径走一遍 |
+| 用户 | ✅ **已签字** | 2026-05-28 用户决策"Wave 3 完成验收 / 起新会话推 Wave 4"。验收期补丁 LINES-VIEW-UNIFY + CODENAME-MATRIX + 4 Codex FIX 一并接受。 |
 
 ---
 
@@ -307,10 +307,35 @@ LinesPanel UI (admin-ui)
 - [x] Wave 3 实施期完成
 - [x] 全门禁绿
 - [x] 验收报告输出
-- [ ] 用户/reviewer 走完 §6 建议路径
-- [ ] 用户签字确认
+- [x] 用户/reviewer 走完 §6 建议路径
+- [x] 用户签字确认（2026-05-28）
 
-签字后主循环可自动取 Wave 4 首卡继续（plan §16.5 全自动衔接）。
+**Wave 4 已立案**：SEQ-20260528-MOD-WAVE4 / 务实方案（W4-推荐 / 6 张卡）/ 详 task-queue.md 尾部段。新会话启动方式见尾部"## 11 新会话启动指引"。
+
+---
+
+## 11. 新会话启动指引（Wave 4）
+
+启动新会话时按以下顺序：
+
+```bash
+# 1. 选择主循环模型（Wave 4 大部分卡是 sonnet 即可 / 含 Opus 子代理触发场景）
+claude --model claude-sonnet-4-6
+
+# 2. 第一句指令（任选一）：
+#   - "继续 Wave 4" → 主循环自动取 SEQ-20260528-MOD-WAVE4 首卡（CHG-SN-9-REJECTED-ENHANCE-B）
+#   - "Wave 4 启动" → 同上 / 主循环按规范走任务入口三步
+```
+
+启动后主循环将：
+1. 读 docs/task-queue.md → 找到 SEQ-20260528-MOD-WAVE4 段 → 取 ⬜ 待开始 首卡
+2. 写入 docs/tasks.md 任务卡片（含问题理解 / 根因 / 方案 / 涉及文件 / 质量门禁）
+3. 按既定模型路由执行（多数 Sonnet / RETRY-CONTROL + DEAD-LINE-WORKER 需 Opus 子代理）
+4. 每张卡完成后自动 commit + 更新状态 + 取下一张
+
+---
+
+> 本验收报告输出于 Wave 3 实施期收官时刻；用户签字时刻验收期补丁 + Codex FIX 累计已 ship；Wave 4 立案完毕等新会话启动。
 
 ---
 

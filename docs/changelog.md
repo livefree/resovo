@@ -40,6 +40,47 @@
 
 ---
 
+## [WAVE3-CLOSE + WAVE4-LAUNCH] Wave 3 完全收官（用户签字 2026-05-28）+ Wave 4 立案（SEQ-20260528-MOD-WAVE4 / W4-务实方案 / 6 张卡）
+- **完成时间**：2026-05-28
+- **执行模型**：claude-sonnet-4-6（主循环 / 验收期收官 / 不切换 §16.5）
+- **子代理调用**：无（验收收官 + 立案 / 不涉及实施）
+- **触发**：用户验收期反馈"Wave 3 完成验收 / 起新会话推 Wave 4"
+- **范围**（3 docs / PATCH=3 严守）：
+  - `docs/manual/wave-3-acceptance.md` §9 用户签字状态 ⬜ → ✅（2026-05-28）/ §10 进入 Wave 4 前置条件全部勾选 / 新增 §11 新会话启动指引（`claude --model claude-sonnet-4-6` + 首句指令）
+  - `docs/task-queue.md` 尾部追加 SEQ-20260528-MOD-WAVE4 段（W4-务实方案 6 张卡 + BLOCKER 触发清单 + 依赖图 + 范围外明确清单）
+  - `docs/tasks.md` Wave 3 状态 → ✅ 完全收官 / Wave 4 ⬜ 待启动表（6 卡概览）+ 新会话启动指引
+- **W4-务实方案**（6 张卡 / ~1-2 周）：
+  - #1 **CHG-SN-9-REJECTED-ENHANCE-B**（Wave 3 #6 -B follow-up）：视觉对齐 BTN_SM → AdminButton + SplitPane + 批量 reopen + 跳回 pending / sonnet
+  - #2 **CHG-SN-9-PLAYER-ERROR-CONSUMER-A**（Wave 3 #7 follow-up）：AdminPlayer onError 消费 + POST feedback {success:false} 上报失败 / DEBT-FIX-D-ERROR 真正闭环 / sonnet
+  - #3 **CHG-SN-9-PLAYER-ERROR-CONSUMER-B**（Wave 3 #7 follow-up）：PlayerShell onError + 自动切下一线路 + 标 dead-source（R-N-3 src 快照非匹配键）/ sonnet
+  - #4 **CHG-SN-9-PLAYER-ERROR-RETRY-CONTROL**（Wave 3 #7 follow-up / 跨 Opus）：retrySourceLoad 上抛设计 onError(event, controls) vs useImperativeHandle / 起 ADR-166 / Opus 评审 / opus
+  - #5 **PRE-DEAD-LINE-AUTO-RETIRE-WORKER**（plan §10.5 / ADR-164 A-164-1）：apps/worker 全 dead 180 天检测 → UPDATE source_line_aliases SET retired_at=NOW(), auto_retired=true / 触发 R-MID-1 audit RETRO / opus + arch-reviewer（worker 新依赖评估）
+  - #6 **CHG-SN-9-WAVE3-FOLLOWUP-CODENAME-MATRIX-E2E**（验收期补丁 follow-up）：playwright e2e 矩阵选择 + 占用建议 + 冷却 disabled / sonnet
+- **范围外明确清单**（Wave 4 不纳入）：
+  - SEQ-FOLLOWUP-MIGRATE（BTN_* 38 文件长尾 / 方案 A 决策）→ 独立 SEQ 择期推进
+  - SITE-VIEWS-EXTRACT（plan §10.6 架构 / 组合 X 决策）→ SEQ-FOLLOWUP-ARCH
+  - META-BANGUMI-A（plan §13 暂缓 / 下一轮迭代）
+  - 跨用户分享自定义主题（ADR-165 §2 范围外 / Phase 5）
+  - preferences 版本控制（字段数 ≥ 3 触发 / 当前 1 字段）
+  - BroadcastChannel 跨 tab（Y-165-5 / Phase 4 评估）
+- **Wave 3 → Wave 4 衔接** key facts：
+  - 4 Codex stop-time review 反馈全闭环（A2-FIX / A2-FIX-2 / LINES-VIEW-FIX-3 / LINES-VIEW-FIX-4）
+  - 17 Wave 3 commits（67bf693a 启动 → a8d2959d 收官 FIX-4 → 本卡 docs WAVE3-CLOSE）
+  - 3 轮 arch-reviewer Opus 评审通过（FOLLOWUP-AUTO-RETIRED-LABEL A / PLAYER-ERROR A / ROUTE-LABEL-D-ADR A-）
+  - 1 新 ADR Accepted（ADR-165 / 11 D-N 闭环）+ ADR-164 §5.2 #5 端点 AMENDMENT（LINES-VIEW-UNIFY）
+  - Migration 080（users.preferences）+ Migration 079（source_line_aliases auto_retired）覆盖到 UI 直接联动
+- **新会话启动方式**：
+  ```bash
+  claude --model claude-sonnet-4-6
+  # 第一句任选: "继续 Wave 4" / "Wave 4 启动" / "继续按规范，自动推进 Wave 4"
+  ```
+  主循环将自动按 task-queue.md SEQ-20260528-MOD-WAVE4 段取 ⬜ 首卡（CHG-SN-9-REJECTED-ENHANCE-B）→ tasks.md 写入卡片 → 按既定序列执行（sonnet 多数 / opus 在 #4/#5）→ 每张卡 commit + 状态更新。
+- **质量门禁**：N/A 纯 docs 立案
+- **commit trailer**：无强制 Subagents（纯立案 / 不涉及实施）
+- **闭环**：WAVE3 完全收官 / WAVE4 已立案 / 主循环本会话结束 / 等新会话启动按规范自动推进 Wave 4
+
+---
+
 ## [CHG-SN-9-LINES-VIEW-UNIFY-FIX-4] SourceLineAliasesClient.test.tsx mock 同步 listAllSourceLines（Codex stop-time review 4th / stale mock 防 silent test pass）
 - **完成时间**：2026-05-28
 - **执行模型**：claude-sonnet-4-6（主循环 / FIX 紧随 CODENAME-MATRIX / 不切换 §16.5）

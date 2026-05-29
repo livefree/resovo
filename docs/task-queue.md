@@ -1978,7 +1978,7 @@ CHG-369 (前台主题选择器, 独立)
 
 ## [SEQ-20260528-MOD-WAVE3] server-next 内容审核台 Wave 3 — Wave 2 长尾清理 + 架构 / 长期 P3 卡（plan §14 Wave 3 + §17.2 Wave 3 增补）
 
-- **状态**：⏳ **验收期（2026-05-28 启动）**（实施期 9/10 + 3 DEFERRED 完成 / 验收报告 docs/manual/wave-3-acceptance.md / 等用户走完 §6 5 条验收路径签字 → 主循环自动取 Wave 4 首卡）
+- **状态**：✅ **完全收官（用户签字 2026-05-28）**（实施期 9/10 + 3 DEFERRED + 验收期补丁 LINES-VIEW-UNIFY/CODENAME-MATRIX + 4 Codex FIX 全闭环 / 17 commits / Wave 4 已立案 SEQ-20260528-MOD-WAVE4 等新会话启动）
 - **创建时间**：2026-05-28
 - **目标**：按用户 2026-05-28 决策"长尾先清 + plan §14 主线"：先清 4 张 Wave 2 长尾 follow-up，再按 plan §14 / §17.2 Wave 3 入 6 张 P3 长期主线卡。
 - **执行约束**：沿用 Wave 1/2 §16.1-16.5（UI/UX 谨慎 / docs/manual 同步 / 主循环全自动 + BLOCKER 触发清单）
@@ -2083,3 +2083,57 @@ Wave 3 主线：MOD-BUTTON-MIGRATE → REJECTED-ENHANCE（独立 UX）
 ```
 
 执行序列建议：**PRE-INDEX-DESIGN-RULES → CHG-369-B → -FOLLOWUP-CONTENT-SOURCE-ROW → -FOLLOWUP-AUTO-RETIRED-LABEL → MOD-BUTTON-MIGRATE → REJECTED-ENHANCE → PLAYER-ERROR → META-BANGUMI-A → SITE-VIEWS-EXTRACT → ROUTE-LABEL-D**
+
+---
+
+## [SEQ-20260528-MOD-WAVE4] server-next Wave 4 — Wave 3 follow-up 收尾 + Layer B 退役 worker 闭环（W4-务实方案）
+
+- **状态**：⬜ 待开始（2026-05-28 立案 / 用户决策"W4-务实方案 / 起新会话推进" / Wave 3 已验收签字）
+- **创建时间**：2026-05-28
+- **目标**：基于 Wave 3 实施期累积的 5 张 follow-up 卡 + plan §10.5 Layer B 退役 worker（A-164-1 占位）/ 短小精悍 / ~1-2 周完成 / 收尾 Wave 3 设计取舍推出的接入路径，让 player-core / route-labeling / rejected 三个域完整闭环。
+- **范围**：消费方接入 + worker 实施 + 视觉对齐（不含 SITE-VIEWS-EXTRACT 大型重构 / 不含 BUTTON-MIGRATE 长尾 / 不含 BANGUMI-A 用户暂缓）
+- **执行约束**：沿用 Wave 1/2/3 §16.1-16.5（UI/UX 谨慎 / docs/manual 同步 / 主循环全自动 + BLOCKER 触发清单）
+- **建议主循环模型**：`claude-sonnet-4-6`（多数消费方接入）+ `claude-opus-4-7`（RETRY-CONTROL 跨 Opus / DEAD-LINE-WORKER 触发新依赖评估）
+- **依赖**：Wave 3 已签字验收（2026-05-28）/ ADR-108 + ADR-164 + 既有 player-core onError + suppressDefaultErrorUI public API + listAllSourceLines + MOUNTAIN_CODENAMES + Migration 079 + auto_retired 字段全部已 ship
+
+### 任务列表（按执行序列）
+
+| # | TASK-ID | 标题 | ADR | 建议模型 |
+|---|---|---|---|---|
+| 1 | ⬜ **CHG-SN-9-REJECTED-ENHANCE-B** 待开始 | Wave 3 #6 follow-up / plan §7 拆 -B 视觉对齐：BTN_SM → AdminButton + 复用 admin-ui SplitPane + 批量 reopen UI + 跳回 pending 提示 / 估 4 业务 + 1 测试 + 1 docs | 否 | sonnet-4-6 |
+| 2 | ⬜ **CHG-SN-9-PLAYER-ERROR-CONSUMER-A** 待开始 | Wave 3 #7 follow-up / AdminPlayer onError 消费 + POST /v1/feedback/playback {success:false, errorCode} 上报失败 + DEBT-FIX-D-ERROR 真正闭环（API 端 Wave 3 已 ship / 此卡接入消费方）/ 估 3 业务 + 1 测试 + 1 docs | 否 | sonnet-4-6 |
+| 3 | ⬜ **CHG-SN-9-PLAYER-ERROR-CONSUMER-B** 待开始 | Wave 3 #7 follow-up / PlayerShell onError 消费 + 自动切下一线路 + 标 dead-source（注意 R-N-3 src 快照非匹配键 / 用 sourceId 关联 state）/ 估 4 业务 + 1 测试 + 1 docs | 否 | sonnet-4-6 |
+| 4 | ⬜ **CHG-SN-9-PLAYER-ERROR-RETRY-CONTROL** 待开始 | Wave 3 #7 follow-up / retrySourceLoad 上抛设计：方案 A onError(event, controls) vs 方案 B useImperativeHandle / 需 Opus 评审 / 起独立 ADR-166 起草卡（如评审决定 useImperativeHandle）/ 估 ADR 1 docs + 实施 4 业务 + 1 测试 | **是 ADR-166** | opus-4-7 + arch-reviewer |
+| 5 | ⬜ **PRE-DEAD-LINE-AUTO-RETIRE-WORKER** 待开始 | plan §10.5 / ADR-164 A-164-1 占位实施：apps/worker 全 dead 180 天自动检测 → UPDATE source_line_aliases SET retired_at = NOW(), auto_retired = true / 与既有 LinesPanel "已退役·自动" UI 直接联动 / 触发 R-MID-1 audit RETRO（与 -A2b 范式）/ 估 5 业务 + 1 测试 + 1 docs + 1 architecture.md sync | 否（ADR-164 已 Accepted）| opus-4-7 + arch-reviewer（worker 新依赖评估） |
+| 6 | ⬜ **CHG-SN-9-WAVE3-FOLLOWUP-CODENAME-MATRIX-E2E** 待开始 | Wave 3 验收期补丁 CODENAME-MATRIX e2e 测试补全（playwright headless / 点击单元格 → 矩阵选择 → 占用建议 → 冷却 disabled / docs/manual sync）/ 估 1 e2e + 1 docs | 否 | sonnet-4-6 |
+
+### Wave 4 BLOCKER 触发清单（沿用 Wave 1/2/3 §16.5）
+
+- typecheck / lint / test / verify 报错 + 自动修复失败
+- 任务范围超出卡片定义（改动 > 卡片范围 5 项）
+- ADR 起草卡 Opus 评审 BLOCKER 红线未消解
+- schema migration 冲突
+- 跨 app 影响范围扩大 / 引入新依赖（worker 卡可能触发 / 需用户确认）
+- 人工已审核 Wave 报告未通过
+
+### 关键依赖图
+
+```
+REJECTED-ENHANCE-B (独立 UI / 不依赖)
+PLAYER-ERROR-CONSUMER-A (依赖 Wave 3 PLAYER-ERROR public API ✅)
+PLAYER-ERROR-CONSUMER-B (同上)
+PLAYER-ERROR-RETRY-CONTROL (依赖 CONSUMER-A/B 接入实证 / 建议放在 -A/-B 之后)
+DEAD-LINE-AUTO-RETIRE-WORKER (依赖 Migration 079 ✅ + LinesPanel auto_retired UI ✅)
+CODENAME-MATRIX-E2E (依赖 Wave 3 验收期补丁 CODENAME-MATRIX ✅)
+```
+
+执行序列建议：**REJECTED-ENHANCE-B → PLAYER-ERROR-CONSUMER-A → PLAYER-ERROR-CONSUMER-B → PLAYER-ERROR-RETRY-CONTROL（ADR-166）→ DEAD-LINE-AUTO-RETIRE-WORKER → CODENAME-MATRIX-E2E**
+
+### 范围外（明确不纳入 Wave 4）
+
+- **SEQ-FOLLOWUP-MIGRATE**（Wave 3 BLOCKER 方案 A）：BTN_* → AdminButton 38 文件长尾迁移 / 独立 SEQ 择期推进 / 非 Wave 节奏
+- **SITE-VIEWS-EXTRACT**（Wave 3 组合 X）：plan §10.6 架构重构 / 独立 SEQ-FOLLOWUP-ARCH / Opus 大型评审
+- **META-BANGUMI-A**（plan §13 用户暂缓）：下一轮迭代再评估
+- **跨用户分享自定义主题**（ADR-165 §2 范围外）：远期 Phase 5 / 独立 schema / 独立 ADR
+- **preferences 字段版本控制**（Y-165-3 + §10 风险 5）：字段数 ≥ 3 触发 / 当前 1 字段不需
+- **BroadcastChannel 跨 tab preferences**（Y-165-5）：Phase 4 评估 / 当前 last-write-wins 兜底
