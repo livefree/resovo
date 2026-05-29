@@ -195,19 +195,30 @@ export class MetadataEnrichService {
     if (best.score >= MATCH_THRESHOLD) {
       const detail = await getDoubanDetailRich(best.id)
       if (detail) {
+        // CHORE-11 (2026-05-29) — 改条件赋值范式（同 step1 imdb / step1b title_norm /
+        //   DoubanService 既有正确模式），消除 step2 之前用三元 `: undefined` 模式：
+        //   `{writers: undefined}` 在 JS 中 property 真实存在 → safeUpdate/updateCatalogFields
+        //   无 undefined skip → `undefined ?? null` → SQL `writers = null` → 违反
+        //   `writers TEXT[] NOT NULL` 等 5 列约束。详 docs/decisions.md ADR-167 (TBD) /
+        //   PR #4 SEQ-20260529-01 / 修法 (b) updateCatalogFields 同 commit 加 undefined skip 防御
         const ratingNum = detail.rate ? parseFloat(detail.rate) : NaN
-        await this.catalogService.safeUpdate(catalogId, {
+        const updateFields: import('@/api/db/queries/mediaCatalog').CatalogUpdateData = {
           doubanId: detail.id,
-          rating: !isNaN(ratingNum) ? ratingNum : undefined,
-          description: detail.plotSummary ?? undefined,
-          coverUrl: detail.poster ?? undefined,
-          director: detail.directors.length > 0 ? detail.directors : undefined,
-          cast: detail.cast.length > 0 ? detail.cast : undefined,
-          writers: detail.screenwriters.length > 0 ? detail.screenwriters : undefined,
-          genres: detail.genres.length > 0 ? mapDoubanGenres(detail.genres) : undefined,
-          genresRaw: detail.genres.length > 0 ? detail.genres : undefined,
-          country: detail.countries[0] ?? undefined,
-        }, 'douban', { sourceRef: detail.id })
+        }
+        if (!isNaN(ratingNum)) updateFields.rating = ratingNum
+        if (detail.plotSummary) updateFields.description = detail.plotSummary
+        if (detail.poster) updateFields.coverUrl = detail.poster
+        if (detail.directors.length > 0) updateFields.director = detail.directors
+        if (detail.cast.length > 0) updateFields.cast = detail.cast
+        if (detail.screenwriters.length > 0) updateFields.writers = detail.screenwriters
+        if (detail.genres.length > 0) {
+          updateFields.genresRaw = detail.genres
+          const mapped = mapDoubanGenres(detail.genres)
+          if (mapped.length > 0) updateFields.genres = mapped
+        }
+        if (detail.countries[0]) updateFields.country = detail.countries[0]
+
+        await this.catalogService.safeUpdate(catalogId, updateFields, 'douban', { sourceRef: detail.id })
         await this.writeExternalRef(
           videoId, detail.id, 'auto_matched',
           best.score, { network_score: best.score }, 'network'

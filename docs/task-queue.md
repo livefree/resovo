@@ -1902,9 +1902,9 @@ CHG-353 (ROUTE-LABEL-A2) → 依赖 CHG-352 后端返回排序数据
 
 ## [SEQ-20260529-01] Bangumi PR follow-up — metadataProvenance SQL 列数 bug + step2 三元 undefined NOT NULL 违规
 
-- **状态**：🟡 规划中
+- **状态**：✅ 已完成（2026-05-29 04:59 / 同 PR 双卡实施 + arch 防御兜底）
 - **创建时间**：2026-05-29 04:09
-- **最后更新时间**：2026-05-29 04:30
+- **最后更新时间**：2026-05-29 04:59
 - **目标**：收口 Bangumi PR #1/#3 merge 后用户决策的两张 pre-existing P2 follow-up 卡 — (1) `batchUpsertFieldProvenance` SQL 列数 / 占位符不匹配（META-06 引入至今 provenance 静默失败）；(2) `MetadataEnrichService.step2NetworkSearch` 三元 `: undefined` 模式 + safeUpdate/updateCatalogFields 无 undefined skip → 5 个 NOT NULL TEXT[] 列写 null 违规
 - **范围**：apps/api/src/db/queries/metadataProvenance.ts + apps/api/src/services/MetadataEnrichService.ts + 单测/集成测试
 - **依赖**：无（PR #1/#2/#3 已 merge；两卡互相独立可并行）
@@ -1913,11 +1913,13 @@ CHG-353 (ROUTE-LABEL-A2) → 依赖 CHG-352 后端返回排序数据
 
 ### 任务列表（按执行顺序）
 
-1. **CHORE-10** — 修 `metadataProvenance.ts:94-96` SQL INSERT 列数 / 占位符不匹配（状态：⬜ 待开始）
+1. **CHORE-10** — 修 `metadataProvenance.ts:94-96` SQL INSERT 列数 / 占位符不匹配（状态：✅ 已完成）
    - 创建时间：2026-05-29 04:09
    - 计划开始：（待主循环按优先级排程）
-   - 实际开始：（未开始）
-   - 完成时间：（未完成）
+   - 实际开始：2026-05-29 04:35
+   - 完成时间：2026-05-29 04:55
+   - 修法：(b) INSERT 列删 `updated_at`（schema `TIMESTAMPTZ NOT NULL DEFAULT NOW()` 自动生效）；ON CONFLICT UPDATE 仍显式 `updated_at = NOW()`
+   - 测试：tests/unit/api/metadataProvenanceQueries.test.ts 新建 4 用例（单字段 5 占位符 / 多字段 N=3 占位符 (3×5=15) / sourceRef=null / 空数组早返回）
    - 验收要点：
      - INSERT 列出 6 列 `(catalog_id, field_name, source_kind, source_ref, source_priority, updated_at)` 但 values 数组每行只生成 5 个占位符 `($1..$5)`，未追加 `NOW()`。Postgres 报 `INSERT has more target columns than expressions`，整个 `batchUpsertFieldProvenance` 抛错。caller `MediaCatalogService.safeUpdate:235-251` 用 `void ... .catch(stderr)` 静默失败，所以 catalog 主写入不阻塞，但 **所有 provenance 写入从未真正落地**（META-06 引入至今）
      - 修法二选一：(a) values 末尾补 `NOW()` 第 6 占位符；(b) INSERT 列去掉 `updated_at` 让 DB 默认值生效
@@ -1925,11 +1927,15 @@ CHG-353 (ROUTE-LABEL-A2) → 依赖 CHG-352 后端返回排序数据
      - changelog.md 顺便标记"META-06 引入至今所有 provenance 写入实际未落地"历史 bug 闭环
    - 优先级：P2 / 建议模型：sonnet-4-6
 
-2. **CHORE-11** — 修 `MetadataEnrichService.ts:199-210` step2 三元 `: undefined` 模式 → 5 个 NOT NULL TEXT[] 列写 null 违规（状态：⬜ 待开始）
+2. **CHORE-11** — 修 `MetadataEnrichService.ts:199-210` step2 三元 `: undefined` 模式 → 5 个 NOT NULL TEXT[] 列写 null 违规（状态：✅ 已完成）
    - 创建时间：2026-05-29 04:30
    - 计划开始：（待主循环排程；与 CHORE-10 可并行）
-   - 实际开始：（未开始）
-   - 完成时间：（未完成）
+   - 实际开始：2026-05-29 04:40
+   - 完成时间：2026-05-29 04:58
+   - 修法：双修 (a)+(b)：
+     - (a) **主修**：MetadataEnrichService.ts:199-228 step2 改条件赋值范式（同 step1 imdb / step1b title_norm / DoubanService.ts:104-118 既有正确模式），消除三元 `: undefined`
+     - (b) **防御兜底**：mediaCatalog.mutations.ts:155-160 `updateCatalogFields` 加 undefined skip：`if (key in data && data[key] !== undefined)`，同时去掉 `?? null`（显式 null 仍正常写入支持 nullable 列清空语义）
+   - 测试：tests/unit/api/mediaCatalogMutationsUndefinedSkip.test.ts 新建 6 用例（writers undefined skip / 5 列全 undefined skip / 显式 null 写入 / 混合 undefined+有效值 / 空数组 [] 合法 / 全 undefined 走早返回 SELECT）
    - 验收要点：
      - **真 bug 验证（深查 trace 后确认 PR #1 Known Issues #3 是真，但描述需校正）**：
        - 路径：`MetadataEnrichService.step2NetworkSearch:199-210` （不是 DoubanService.ts:104-118 / 后者用条件赋值风格安全）

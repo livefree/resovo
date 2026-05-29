@@ -152,10 +152,15 @@ export async function updateCatalogFields(
     stillsMeta: 'stills_meta',
   }
 
+  // CHORE-11 (2026-05-29) — 防御兜底：跳过 undefined value 不写 SET 子句。
+  //   旧实现 `if (key in data)` + `data[key] ?? null` 会把 `{writers: undefined}` 写成
+  //   `writers = null` 触发 NOT NULL 违规（5 列：director/cast/writers/genres/genres_raw）。
+  //   主修在 caller（MetadataEnrichService step2 改条件赋值）；此处加 undefined skip 防未来
+  //   caller 同样误用。注意：null（显式赋值 null）仍写入 → 支持 nullable 列清空语义。
   for (const [key, col] of Object.entries(fieldMap) as [keyof CatalogUpdateData, string][]) {
-    if (key in data) {
+    if (key in data && (data as Record<string, unknown>)[key] !== undefined) {
       setClauses.push(`${col} = $${idx++}`)
-      params.push((data as Record<string, unknown>)[key] ?? null)
+      params.push((data as Record<string, unknown>)[key])
     }
   }
 
