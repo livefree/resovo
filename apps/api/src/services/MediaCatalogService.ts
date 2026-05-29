@@ -206,6 +206,11 @@ export class MediaCatalogService {
     const skippedFields: string[] = []
 
     for (const [key, value] of Object.entries(fields) as [keyof CatalogUpdateData, unknown][]) {
+      // CHORE-11 (2026-05-29) FIX-FIX：value === undefined 直接 skip 整段（含 provenance 计算），
+      //   避免 caller 用 `field: X ?? undefined` 模式时 provenance 误记"写入"了该字段。
+      //   此处不计入 skippedFields（语义：不是"被锁阻挡"的 skipped，是"没传值"）。
+      //   updateCatalogFields 兜底层也有 undefined skip，双层保护；本层修是为了 provenance 准确性。
+      if (value === undefined) continue
       // 硬锁：任何来源都阻挡
       if (hardLockedSet.has(key as string)) {
         skippedFields.push(key as string)
