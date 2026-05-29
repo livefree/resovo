@@ -40,6 +40,58 @@
 
 ---
 
+## [CHG-PRE-DEAD-LINE-AUTO-RETIRE-WORKER-A] Migration 081 + auto-retire-line queries + docs（Wave 4 #5-A / ADR-164 D-164-8 闭环 / arch-reviewer Opus A- CONDITIONAL）
+- **完成时间**：2026-05-28
+- **记录时间**：2026-05-28
+- **执行模型**：claude-opus-4-7（主循环 / 符合卡片建议）
+- **子代理**：arch-reviewer (claude-opus-4-7) — 1 轮独立评审 / A- CONDITIONAL / 推荐方案 D'（dead_since 加 alias 表 / worker 自维护 / 不动 probe/render 写路径）/ 4 红线 R-DEAD-1/2/3/4 主循环全消化 + 5 P1 黄线（Y-DEAD-1/2/3/4/5）部分落 / 部分留 -B 子卡或 follow-up
+- **承接 ADR-164 D-164-8**：worker 走独立 DB query 函数（不暴露端点 / **不写 admin audit** / **不触发 R-MID-1 RETRO** / 写 worker 日志）/ task-queue 原写"触发 R-MID-1 audit RETRO"与 ADR-164 D-164-8 真源冲突 → 本卡按 ADR 真源勘误
+- **修改文件**（5 项 / PATCH=5 = 软上限 ✅）：
+  - `apps/api/src/db/migrations/081_source_line_aliases_dead_since.sql` NEW — dead_since TIMESTAMPTZ NULL + 部分索引 `idx_source_line_aliases_dead_since (dead_since) WHERE dead_since IS NOT NULL AND retired_at IS NULL` + DO 块自检（列 + 索引必须存在 / Migration 079 范式同构）+ ROLLBACK 注释
+  - `apps/api/src/db/queries/auto-retire-line.ts` NEW — `autoRetireLineByDeadCheck(pool, log): Promise<RetiredAliasRow[]>` 4 段式：
+    - 段 0：`pg_try_advisory_lock(hashtext('worker:auto-retire-line'))` 非阻塞获取 / 拿不到锁 return [] + log.info（R-DEAD-3）
+    - 段 1+2：CTE alias_dead_status LEFT JOIN video_sources（WHERE vs.is_active=true）→ classified 3 状态（orphan / all_dead / has_alive）→ UPDATE dead_since CASE 三态守卫（上升沿 all_dead+NULL→NOW / 下降沿 has_alive→NULL / 孤儿 orphan+!NULL→NULL R-DEAD-2 显式清 / 否则保持）
+    - 段 3：UPDATE retired_at + auto_retired WHERE dead_since < NOW() - $1 days AND (site_key, source_name) IN (子查询 ORDER BY dead_since ASC LIMIT $2) RETURNING（R-DEAD-1 段 2/段 3 双独立 SQL + R-DEAD-4 RETURNING）
+    - 段 finally：`pg_advisory_unlock` 防 lock 泄漏
+    - 导出 `DEAD_THRESHOLD_DAYS = 180` + `RETIRE_BATCH_LIMIT = 50` const（Y-DEAD-1 抽常量）
+  - `tests/unit/api/auto-retire-line-queries.test.ts` NEW — 6 case：
+    - T6 advisory lock 拿不到 → 跳过段 1+2/3 + 返回 [] + log info（R-DEAD-3）
+    - T8 advisory unlock 必在 finally 调用（即使段 1+2 SQL 抛错也 unlock / R-DEAD-3 unlock 不漏）
+    - T1+T2+T3+T7 段 1+2 SQL 含 CTE + LEFT JOIN + classified CASE 三态守卫 + orphan 显式清 NULL + retired_at IS NULL 过滤（R-DEAD-2）
+    - T4 段 3 RETURNING 退役清单 + values=[DEAD_THRESHOLD_DAYS=180, RETIRE_BATCH_LIMIT=50] + SET retired_at=NOW() + auto_retired=true（R-DEAD-4）
+    - T5 batch limit + ORDER BY dead_since ASC LIMIT $2（防雪崩）
+    - R-DEAD-1 段 1+2 与 段 3 是两条独立 query 调用（sqlSeq = lock → maintain → retire → unlock）
+  - `docs/architecture.md` EDIT — §5 source_line_aliases schema 表新增 dead_since 行说明 + 索引段加 idx_source_line_aliases_dead_since 部分索引说明 + 表头改 "Migration 063 / 079 / 081"
+  - `docs/manual/auto-retire-line-worker.md` NEW — 11 节运维手册：业务规则 / dead_since 状态机 4 路径表 / cron 03:30 daily / batch 50 / advisory lock / 4 段工作流 + R-DEAD-1 解释 / 监控指标 / 误报恢复 SQL / 不在范围内（含 R-MID-1 不触发的明示）/ follow-up / 参考
+- **新增依赖**：无（pg / pino 既有）
+- **数据库变更**：Migration 081 / source_line_aliases 加 1 列 + 1 部分索引 / 已 sync architecture.md §5 + 081 SQL 文件注释
+- **设计取舍**（详 arch-reviewer 评审报告）：
+  - **方案 D'（dead_since 加 alias 表 / worker 自维护）**：对决 A（在 video_sources 加列 / 写路径侵入重）/ B（last_probed_at 近似 / 致命缺陷概念错位）/ C（source_health_events CTE / SQL 复杂 / 历史可能不全）；D' 完胜在"零写路径侵入 + 概念对齐 alias 治理粒度 + 极简 SQL + 历史安全（首次启用 180 天延迟是特性）+ 测试可控"
+  - **不起 ADR-167**：ADR-164 D-164-8 + plan §10.5 + arch-reviewer 评审报告 = 完整决策真源；无新依赖、无新架构原语、schema 改动是字段级未达 ADR 阈值；起 `docs/manual/auto-retire-line-worker.md` 实施指南替代独立 ADR（同 ADR-152 / Migration 058a 范式）
+  - **R-DEAD-1 段 2 段 3 双独立 SQL**：防 PostgreSQL `NOW()` 同事务等值导致"刚写 dead_since=NOW() 就被段 3 判 < NOW()-180 days"逻辑错
+  - **R-DEAD-2 LEFT JOIN + orphan 显式清 NULL**：防 INNER JOIN 排除孤儿 alias / 防 source 被删后 dead_since 卡死 / 防 180 天后误退役
+  - **R-DEAD-3 pg_try_advisory_lock 非阻塞 vs pg_advisory_lock 阻塞**：非阻塞防多 worker 实例竞争挂起连接池 / finally unlock 防 lock 泄漏
+  - **R-DEAD-4 RETURNING + log per row vs 静默退役**：D-164-8 "不写 admin audit" ≠ "不留痕迹"；worker 结构化日志支持审计回溯（含 source_site_key / source_name / dead_since / retired_at metric）
+  - **不写 source_health_events**：D-164-8 worker 不写 admin audit / source_health_events 是 admin / probe 范畴 / structured log 已足
+  - **180 / 50 / 03:30 抽常量**：未来调阈值零业务破坏；DEAD_THRESHOLD_DAYS + RETIRE_BATCH_LIMIT 已 export const；cron 字符串走 ENV `WORKER_CRON_AUTO_RETIRE_LINE`（-B 子卡承接）
+- **不触发**：
+  - architecture.md sync ✅ 已同步 §5 schema 表 + 索引段
+  - **R-MID-1 RETRO 明示不触发**：D-164-8 真源 / worker 写非 admin 路径 / R-MID-1 仅 admin POST/PUT/DELETE 写端点适用
+  - 新 admin route：本卡纯 query + worker 范畴 / 无端点（-B worker 写 DB / 无 HTTP route）
+  - admin-ui Props 改动：未触 packages/admin-ui
+  - Opus 二次评审：arch-reviewer 评审已 PASS / 主循环消化 R-DEAD-1/2/3/4 后直接 ship
+- **质量门禁**：typecheck ✅ EXIT=0（root + 7 workspaces）/ lint ✅ 0 error 0 warning / verify:adr-contracts ✅ EXIT=0（198 路由 81 ADR 端点 / verify-sql-schema-alignment 含 081 自动识别 / 277 D-N 全闭环）/ auto-retire-line-queries 6/6 PASS（既有 0 + 新 6 / R-DEAD-1/2/3/4 全覆盖）/ 既有消费方零回归（query 是新增文件 / 既有 sources-matrix.ts 等不动）
+- **commit trailer**：`Subagents: arch-reviewer (claude-opus-4-7)` + `Migration: 081`
+- **Y-DEAD 落地 / 留 follow-up**：
+  - Y-DEAD-1（抽常量）✅ DEAD_THRESHOLD_DAYS / RETIRE_BATCH_LIMIT 已 export const
+  - Y-DEAD-2（首次启用 7 天观察）✅ 不实施（接受首批 180 天后批量退役 / 文档明示 / 评审建议）
+  - Y-DEAD-3（人工 unretire 端点）→ 留 `CHG-PRE-DEAD-LINE-UNRETIRE-ENDPOINT` 独立 follow-up 卡（docs/manual/auto-retire-line-worker.md §10 已记录）
+  - Y-DEAD-4（LinesPanel dead_since tooltip）→ 留 admin-ui follow-up 独立卡（同 §10）
+  - Y-DEAD-5（dead_since 状态机 3 路径单测）✅ T1+T2+T3 合并覆盖（上升沿 / 下降沿 / 孤儿）
+- **Wave 4 进度**：#1 ✅ → #2 ✅ → #3 ✅ → #4-ADR ✅ → #4-ADR-FIX-1 ✅ → #4-EP ✅ → #4-EP-FIX-2 ✅ → #4-EP-FIX-3 ✅ → **#5-A ✅ ship** / 下一卡 #5-B PRE-DEAD-LINE-AUTO-RETIRE-WORKER-B（worker job + cron 注册 + integration test / sonnet-4-6 / 依赖 -A queries 函数 + Migration 081 + docs/manual）
+
+---
+
 ## [CHG-SN-9-PLAYER-ERROR-RETRY-CONTROL-EP-FIX-3] PlayerShell 切视频同集时 stale watchdog 清理（Codex stop-time review FIX-3）
 - **完成时间**：2026-05-28
 - **记录时间**：2026-05-28
