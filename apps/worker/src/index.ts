@@ -4,6 +4,7 @@ import { config } from './config'
 import { jobLogger, baseLogger } from './observability/logger'
 import { runSourceHealthLevel1, runSourceHealthLevel2 } from './jobs/source-health'
 import { runFeedbackDrivenRecheck } from './jobs/feedback-driven-recheck'
+import { runAutoRetireLine } from './jobs/auto-retire-line'
 
 const log = baseLogger
 
@@ -37,6 +38,15 @@ const feedbackTask = cron.schedule(
   { scheduled: false },
 )
 
+// CHG-PRE-DEAD-LINE-AUTO-RETIRE-WORKER-B / Wave 4 #5-B / ADR-164 D-164-8
+// 每日 03:30 UTC 跑 alias 全 dead 持续 180 天检测 + 自动退役
+// 不写 admin audit / 不触发 R-MID-1 / 仅结构化 worker 日志
+const autoRetireLineTask = cron.schedule(
+  config.cron.autoRetireLine,
+  () => runWithLogger('auto-retire-line', () => runAutoRetireLine(db, jobLogger('auto-retire-line'))),
+  { scheduled: false },
+)
+
 async function startup(): Promise<void> {
   log.info({ instanceId: config.workerInstanceId }, 'worker starting')
 
@@ -46,11 +56,13 @@ async function startup(): Promise<void> {
   level1Task.start()
   level2Task.start()
   feedbackTask.start()
+  autoRetireLineTask.start()
   log.info(
     {
       level1_cron: config.cron.level1Probe,
       level2_cron: config.cron.level2Render,
       feedback_cron: config.cron.feedbackDriven,
+      auto_retire_line_cron: config.cron.autoRetireLine,
     },
     'cron tasks started',
   )
@@ -65,6 +77,7 @@ async function shutdown(signal: string): Promise<void> {
   level1Task.stop()
   level2Task.stop()
   feedbackTask.stop()
+  autoRetireLineTask.stop()
   await db.end()
   log.info('worker stopped')
   process.exit(0)

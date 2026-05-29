@@ -3,6 +3,9 @@ export const config = {
     level1Probe: process.env.WORKER_CRON_LEVEL1 ?? '0 */6 * * *',
     level2Render: process.env.WORKER_CRON_LEVEL2 ?? '0 */2 * * *',
     feedbackDriven: process.env.WORKER_CRON_FEEDBACK ?? '*/1 * * * *',
+    // CHG-PRE-DEAD-LINE-AUTO-RETIRE-WORKER-B / Wave 4 #5-B / arch-reviewer Q2 推荐
+    // 每日 03:30 UTC：避开 level1 整点波峰（0/6/12/18）+ 180 天阈值粒度允许 daily + 误报 24h 内可发现
+    autoRetireLine: process.env.WORKER_CRON_AUTO_RETIRE_LINE ?? '30 3 * * *',
   },
   rateLimit: {
     level1Global: 20,

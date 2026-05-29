@@ -6,7 +6,7 @@
 
 ## 进行中任务
 
-（空 / Wave 4 #5-A 已 ship / Migration 081 + auto-retire-line queries + docs / 下一卡 #5-B worker 层）
+（空 / Wave 4 #5-B 已 ship / ADR-164 D-164-8 完整闭环 / 下一卡 #6 CODENAME-MATRIX-E2E 最终收尾）
 
 ---
 

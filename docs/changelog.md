@@ -40,6 +40,52 @@
 
 ---
 
+## [CHG-PRE-DEAD-LINE-AUTO-RETIRE-WORKER-B] worker 层接入 auto-retire-line cron job（Wave 4 #5-B / ADR-164 D-164-8 完整闭环）
+- **完成时间**：2026-05-28
+- **记录时间**：2026-05-28
+- **执行模型**：claude-opus-4-7（启动会话偏离卡片建议 sonnet-4-6 / 卡片范围 worker 集成 / 不需 Opus 二次评审 / 偏离不阻断）
+- **子代理**：无（ADR-164 D-164-8 + #5-A arch-reviewer 评审已 PASS）
+- **依赖**：#5-A ship（Migration 081 + autoRetireLineByDeadCheck query 函数 + Codex FIX-1/FIX-2 闭环 + docs/manual/auto-retire-line-worker.md）
+- **修改文件**（4 项 / PATCH=4 ≤ 5 ✅）：
+  - `apps/worker/src/jobs/auto-retire-line.ts` NEW — `runAutoRetireLine(pool, log)` 入口：
+    - 跨 app import `autoRetireLineByDeadCheck` from `../../../api/src/db/queries/auto-retire-line`（worker tsc 验证 cross-import 可编译 / 复用 -A 单点真源避免双维护漂移）
+    - R-DEAD-4 RETURNING 行循环 log.info `auto_retire_line.retired` metric（含 source_site_key / source_name / dead_since / retired_at ISO）
+    - 批次 batch_total log.info（运维监控指标 / arch-reviewer §7）
+    - retired_at 用单一 `new Date().toISOString()` 让所有 row 共享同一时间戳（防大批量时跨 ms 抖动）
+    - 抛错由调用方 runWithLogger 既有 try/catch 包（不挂 worker / log.error）
+  - `apps/worker/src/jobs/auto-retire-line.test.ts` NEW — 5 case：
+    - T1+T5：调 query 函数 + 每条 retire 结构化日志 + batch_total 日志（含 metric 字段精确匹配 + ISO 字符串正则）
+    - T2：queries 返回空数组 → 仅 batch_total=0 / 不抛错 / 不写 retired log
+    - T3：queries 返回 N 行（N=5 边界）→ N 条 retired log + 1 条 batch_total（共 6 次 info）
+    - T4：queries 抛错 → 向上抛 / 不吞错 / 不写 batch_total
+    - T5b：retired_at 是同一 ISO 字符串（所有 row 共享一次 new Date().toISOString()）
+    - mock 用 vi.hoisted 保证 vi.mock 工厂前初始化 / 跨 app 路径 mock
+  - `apps/worker/src/index.ts` EDIT — 注册 `autoRetireLineTask = cron.schedule(config.cron.autoRetireLine, () => runWithLogger('auto-retire-line', () => runAutoRetireLine(db, jobLogger('auto-retire-line'))), { scheduled: false })` + startup 加 `autoRetireLineTask.start()` 和 `auto_retire_line_cron` log 字段 + shutdown 加 `autoRetireLineTask.stop()`
+  - `apps/worker/src/config.ts` EDIT — `cron.autoRetireLine: process.env.WORKER_CRON_AUTO_RETIRE_LINE ?? '30 3 * * *'`（arch-reviewer Q2 推荐 / 避开 level1 整点波峰 0/6/12/18 + 180 天阈值粒度允许 daily + 误报 24h 内可发现）
+- **新增依赖**：无（node-cron 既有 / -A query 函数复用）
+- **数据库变更**：无（-A Migration 081 ship）
+- **设计取舍**：
+  - **跨 app import vs worker 内联 SQL**：跨 app import — 既有 worker job 内联 SQL（level1-probe / level2-render / feedback-driven）但本卡 -A 已 ship 测试覆盖（10/10 含 Codex FIX-1/FIX-2 闭环）的 query 函数 / 复用单点真源胜过重复维护 / worker tsc 验证 `../../../api/src/db/queries/auto-retire-line` 可编译
+  - **cron 03:30 daily**：arch-reviewer Q2 推荐 / 避开 level1 整点波峰（0/6/12/18 → 03:30 安全）+ 180 天阈值粒度允许 daily + 误报 24h 内可被人工发现
+  - **runWithLogger 既有 try/catch 包**：worker 既有范式 / queries 抛错自动转 log.error + 不挂 worker / 不需在 runAutoRetireLine 内重复 try/catch
+  - **retired_at 共享一次 ISO 字符串**：所有 row 一次 `new Date().toISOString()` / 防大批量时跨 ms 抖动 / 日志按"本次 cron run"语义聚合而非"每行精确时间"
+- **不触发**：
+  - architecture.md sync：worker 范畴 / 不动 schema（dead_since 列与索引在 -A ship）
+  - R-MID-1 RETRO：D-164-8 真源 / worker 不写 admin audit
+  - 新 ADR：worker 集成是 ADR-164 D-164-8 + arch-reviewer §8.2 -B 实施承接 / 不构成新决策
+  - Opus 评审：arch-reviewer 评审已 PASS / -B 不需二次评审
+  - admin-ui Props 改动：未触 packages/admin-ui
+- **质量门禁**：typecheck ✅ EXIT=0（root + 7 workspaces / 含 worker tsconfig 跨 app import 验证）/ lint ✅ 0 error 0 warning / verify:adr-contracts ✅ EXIT=0（198 路由 81 ADR 端点 / verify-sql-schema-alignment ✅ / 277 D-N 全闭环）/ worker auto-retire-line 5/5 PASS + 既有 -A queries 10/10 PASS = 15/15 / 既有消费方零回归
+- **ADR-164 D-164-8 完整闭环**：
+  - Wave 2 #13 ADR-164 Accepted（auto_retired 字段 schema）
+  - Wave 3 #4 LinesPanel UI（"已退役·自动"标识）
+  - Wave 4 #5-A schema + queries + docs（Migration 081 + autoRetireLineByDeadCheck + Codex FIX-1/FIX-2）
+  - Wave 4 #5-B（本卡）：worker job + cron + 集成测试
+  - **完整链路**：worker cron 03:30 daily 自动检测 → 段 0 advisory lock → 段 1+2 维护 dead_since → 段 3 检测+退役 → RETURNING 行 → worker 结构化日志 → LinesPanel UI 显示"已退役·自动"
+- **Wave 4 进度**：#1 ✅ → #2 ✅ → #3 ✅ → #4-ADR ✅ (+FIX-1) → #4-EP ✅ (+FIX-2 +FIX-3) → #5-A ✅ (+FIX-1 +FIX-2) → **#5-B ✅ ship** / 剩 1 卡 #6 CHG-SN-9-WAVE3-FOLLOWUP-CODENAME-MATRIX-E2E（playwright e2e 测试补全 / sonnet / Wave 4 收尾甜品）
+
+---
+
 ## [CHG-PRE-DEAD-LINE-AUTO-RETIRE-WORKER-A-FIX-2] unlock 失败时 client.release(err) destroy connection（Codex stop-time review 第 4 轮 / 防 lock 泄漏 pool）
 - **完成时间**：2026-05-28
 - **记录时间**：2026-05-28
