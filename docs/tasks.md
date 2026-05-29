@@ -1,20 +1,20 @@
 # Resovo（流光） — 任务看板
 
-> last_reviewed: 2026-05-28
+> last_reviewed: 2026-05-29
 
 ---
 
 ## 进行中任务
 
-（空 / Wave 4 验收返工 3 FIX 全 ship `f4cd032d` `3e9de605` + FIX-3 / 等用户复验 wave-4-acceptance.md §9）
+（空 / Wave 4 完全收官 用户签字 PASS 2026-05-29 ✅ / 等 Wave 5 立案指令）
 
 ---
 
-## ✅ Wave 4 实施期收官（SEQ-20260528-MOD-WAVE4 / 等用户验收 2026-05-28）
+## ✅ Wave 4 完全收官（SEQ-20260528-MOD-WAVE4 / 用户验收签字 2026-05-29）
 
-实施期 6/6 + 7 拆卡（4-ADR / 4-EP / 5-A / 5-B）+ 6 Codex stop-time review FIX 全闭环 + arch-reviewer Opus 2 次评审（ADR-166 + PRE-DEAD-LINE-WORKER）/ 13 commits / 1 ADR 起草并 Accepted（ADR-166）/ 1 ADR 完整链路闭环（ADR-164 D-164-8 schema → query → worker → UI）。
+实施期 6/6 + 7 拆卡（4-ADR / 4-EP / 5-A / 5-B）+ **8 Codex stop-time review FIX** 全闭环 + arch-reviewer Opus 2 次评审（ADR-166 + PRE-DEAD-LINE-WORKER）+ **用户验收返工 1 轮 4 finding（FIX-1/2/3）+ Codex 第 8 轮 LEFT JOIN 退化 FIX-4** / 17 commits（13 主线 + 4 验收返工）/ 1 ADR 起草并 Accepted（ADR-166）/ 1 ADR 完整链路闭环（ADR-164 D-164-8 schema → query → worker → UI）。
 
-**验收报告**：`docs/manual/wave-4-acceptance.md`
+**验收报告**：`docs/manual/wave-4-acceptance.md`（§9 用户已签字 PASS 2026-05-29）
 
 详细卡片清单 ↓
 

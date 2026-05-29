@@ -2088,9 +2088,10 @@ Wave 3 主线：MOD-BUTTON-MIGRATE → REJECTED-ENHANCE（独立 UX）
 
 ## [SEQ-20260528-MOD-WAVE4] server-next Wave 4 — Wave 3 follow-up 收尾 + Layer B 退役 worker 闭环（W4-务实方案）
 
-- **状态**：✅ **实施期完全收官 = 100%**（2026-05-29 / 等用户验收 / 验收报告 `docs/manual/wave-4-acceptance.md`）/ 实施期 6/6 + 7 拆卡（4-ADR / 4-EP / 5-A / 5-B）+ 6 Codex stop-time review FIX 全闭环 + arch-reviewer Opus 2 次评审 / 13 commits / 1 ADR 起草并 Accepted（ADR-166）/ 1 ADR 完整链路闭环（ADR-164 D-164-8）
+- **状态**：✅ **完全收官（用户签字 2026-05-29）= 100%**（验收报告 `docs/manual/wave-4-acceptance.md` §9 PASS）/ 实施期 6/6 + 7 拆卡（4-ADR / 4-EP / 5-A / 5-B）+ **8 Codex stop-time review FIX 全闭环** + arch-reviewer Opus 2 次评审 + **用户验收返工 1 轮 4 finding 全消化（FIX-1/2/3 + Codex FIX-4）** / 17 commits / 1 ADR 起草并 Accepted（ADR-166）/ 1 ADR 完整链路闭环（ADR-164 D-164-8）
 - **创建时间**：2026-05-28
 - **收官时间**：2026-05-29
+- **用户验收签字**：2026-05-29 PASS（"wave 4 可以通过"）
 - **目标**：基于 Wave 3 实施期累积的 5 张 follow-up 卡 + plan §10.5 Layer B 退役 worker（A-164-1 占位）/ 短小精悍 / ~1-2 周完成 / 收尾 Wave 3 设计取舍推出的接入路径，让 player-core / route-labeling / rejected 三个域完整闭环。
 - **范围**：消费方接入 + worker 实施 + 视觉对齐（不含 SITE-VIEWS-EXTRACT 大型重构 / 不含 BUTTON-MIGRATE 长尾 / 不含 BANGUMI-A 用户暂缓）
 - **执行约束**：沿用 Wave 1/2/3 §16.1-16.5（UI/UX 谨慎 / docs/manual 同步 / 主循环全自动 + BLOCKER 触发清单）

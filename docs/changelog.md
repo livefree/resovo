@@ -40,6 +40,48 @@
 
 ---
 
+## [WAVE4-CLOSE-SIGNED] Wave 4 完全收官 / 用户验收签字 PASS（SEQ-20260528-MOD-WAVE4 / 2026-05-29）
+- **完成时间**：2026-05-29
+- **记录时间**：2026-05-29
+- **执行模型**：claude-opus-4-7（验收收官 / 不涉及实施）
+- **子代理**：无
+- **触发**：用户 2026-05-29 验收第 3 轮："wave 4 可以通过"
+- **范围**（3 docs / PATCH=3 严守）：
+  - `docs/manual/wave-4-acceptance.md`：
+    - 文件头 status 改 "实施期收官 / 等待人工验收" → "✅ **完全收官 / 用户验收签字 2026-05-29**"
+    - 加验收签字日期 + 验收返工历史（3 轮反馈消化路径）
+    - §9 用户签字栏 `⬜ 等待签字` → `✅ PASS 签字 2026-05-29` + 签字栏 ☑ 填充
+    - §10 前置条件 4 项 ✅ 全满足（仅留"长尾候选选哪条 SEQ"等用户起 Wave 5 立案）
+  - `docs/tasks.md`：
+    - 头部 "Wave 4 实施期收官" → "Wave 4 完全收官 用户签字 2026-05-29"
+    - 进行中任务说明 "等用户复验" → "等 Wave 5 立案指令"
+    - last_reviewed 2026-05-28 → 2026-05-29
+    - 标 8 Codex FIX + 1 用户验收返工 完整路径
+  - `docs/task-queue.md`：SEQ-20260528-MOD-WAVE4 段头部状态：
+    - "实施期完全收官 = 100% / 等用户验收" → "完全收官（用户签字 2026-05-29）= 100%"
+    - 加用户验收签字栏（PASS 2026-05-29 / "wave 4 可以通过"）
+- **Wave 4 最终总结**：
+  - **实施期完成度**：100%（6/6 主卡 / 7 拆卡单元）
+  - **commit 数**：17 总（13 主线实施 + 4 验收返工：3 FIX + Codex FIX-4）
+  - **测试增量**：~58 case 新增 / 全相关测试零回归
+  - **ADR 起草**：1（ADR-166 PlayerErrorControls / A- CONDITIONAL → 等同 A-）
+  - **ADR 完整链路闭环**：1（ADR-164 D-164-8 schema → query → worker → UI）
+  - **新依赖**：0（pg / pino / node-cron 既有）
+  - **新 Migration**：1（081 / source_line_aliases.dead_since）
+  - **新 cron job**：1（worker auto-retire-line 03:30 daily）
+  - **arch-reviewer Opus 评审**：2 轮（ADR-166 + PRE-DEAD-LINE-WORKER 方案 D'）/ 均 A- CONDITIONAL / 红线全消化
+  - **Codex stop-time review**：8 轮（player-error 3 + auto-retire 3 + WAVE4-CLOSE 1 + FIX-4 LEFT JOIN 退化）/ 全消化
+  - **用户验收反馈**：1 轮 4 finding（P1 / P1-P2 / P2 / P3）/ 3 FIX 全消化
+  - **质量门禁**：每卡 typecheck/lint/verify 全 EXIT=0 / 无回归
+- **Wave 5 立案准备**：
+  - 候选 follow-up（详 wave-4-acceptance.md §8.2）：
+    - 高优：CHG-PRE-DEAD-LINE-UNRETIRE-ENDPOINT（人工 unretire admin 端点 / 误报恢复必要 / Y-DEAD-3）
+    - 中优：LinesPanel dead_since tooltip（Y-DEAD-4 / 运维可观测性）/ SEQ-FOLLOWUP-MIGRATE（BTN_* 38 tsx 长尾迁移）
+    - 低优：SEQ-FOLLOWUP-ARCH（SITE-VIEWS-EXTRACT）/ CHG-SN-9-META-BANGUMI-A
+  - 新会话启动：`claude --model claude-sonnet-4-6` + 用户决策 Wave 5 范围（按 SEQ 推进 vs 单卡推进 vs 等 Wave 4 实测反馈再立案）
+
+---
+
 ## [WAVE4-VALIDATION-FIX-1/2/3] Wave 4 用户验收返工 4 项 finding 全消化（2026-05-29 / 3 FIX commits）
 - **完成时间**：2026-05-29
 - **记录时间**：2026-05-29

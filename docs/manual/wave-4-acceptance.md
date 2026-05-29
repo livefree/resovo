@@ -1,9 +1,11 @@
 # Wave 4 验收报告（SEQ-20260528-MOD-WAVE4）
 
-> status: 实施期收官 / 等待人工验收
+> status: ✅ **完全收官 / 用户验收签字 2026-05-29**
 > 收官日期：2026-05-29
+> 验收签字：2026-05-29（用户）
 > plan 依据：W4-务实方案 / Wave 3 验收期推出的 follow-up 卡（CHG-SN-9-REJECTED-ENHANCE-B / -PLAYER-ERROR-CONSUMER-A / -B / -RETRY-CONTROL / PRE-DEAD-LINE-AUTO-RETIRE-WORKER ADR-164 A-164-1）+ Wave 3 验收期补丁 CODENAME-MATRIX e2e
 > 工程约束：plan §16.2 集中验收 + plan §16.5 BLOCKER 触发清单 + CLAUDE.md "PATCH 卡范围 ≤ 5 项" 软上限
+> 验收返工：3 FIX（commits `f4cd032d` + `3e9de605` + `6f5eee51`）+ Codex 第 8 轮 FIX-4（`45f63d2e`）= 4 项 finding 全消化 + LEFT JOIN 退化 bug 修复
 
 ---
 
@@ -254,27 +256,31 @@ cron 03:30 UTC daily
 
 ---
 
-## 9. 用户签字
+## 9. 用户签字 ✅
 
-- **状态**：⬜ 等待签字
-- **建议验收路径**：按 §6.1-6.5 五段依次手动验收
+- **状态**：✅ **PASS 签字 2026-05-29**
 - **签字栏**：
 
   ```
-  [ ] 签字日期：__________
-  [ ] 签字人：__________
-  [ ] 验收结论（PASS / 部分 PASS / FAIL）：__________
-  [ ] 退回原因（如 FAIL）：__________
+  [x] 签字日期：2026-05-29
+  [x] 签字人：用户
+  [x] 验收结论：PASS（"wave 4 可以通过"）
+  [x] 退回原因（如 FAIL）：N/A
   ```
+
+- **验收反馈历史**：
+  - 第 1 轮（2026-05-29）：4 项 finding（P1 source_site_key NULL fallback / P1/P2 段 3 无二次确认 / P2 reopen 未清 selectedIds / P3 硬编码颜色）→ 3 FIX 卡返工（`f4cd032d` `3e9de605` `6f5eee51`）
+  - 第 2 轮（Codex stop-time review 第 8 轮）：LEFT JOIN 退化 bug（孤儿 alias 同名其他站 source 被吞）→ FIX-4（`45f63d2e`）
+  - 第 3 轮：✅ PASS
 
 ---
 
-## 10. 进入 Wave 5 前置条件
+## 10. 进入 Wave 5 前置条件 ✅ 全满足
 
-- [ ] §6 各路径用户已手动验收
-- [ ] §9 用户签字完成
-- [ ] 无新 BLOCKER 写入 `docs/task-queue.md` 尾部
-- [ ] 长尾候选（§8.2）由用户决策选哪条 SEQ 推进
+- [x] §6 各路径用户已手动验收
+- [x] §9 用户签字完成
+- [x] 无新 BLOCKER 写入 `docs/task-queue.md` 尾部
+- [ ] 长尾候选（§8.2）由用户决策选哪条 SEQ 推进（待用户起 Wave 5 立案指令）
 
 ---
 
