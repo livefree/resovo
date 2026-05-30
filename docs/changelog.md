@@ -12331,3 +12331,23 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
   - **Face 4 线路区** 逐源活性已由 `LinesPanel` 承担，区头 source 汇总徽标价值边际 → META-13 待评估。
   - VideoListClient.tsx 772→782（+10，仍在 file-size BASELINE_EXEMPT，未成新违规；列 cell 必须与其余列同处 buildVideoColumns）。
   - `[Pill] children non-primitive` stderr 警告为 VideoListClient 行内既有 Pill 噪声（非 enrichment 徽标 / 无 enrichmentSummary 行亦出现），pre-existing。
+
+---
+
+## [META-12-A] Face 3 审核台 enrichmentSummary 后端注入（P3 feature-2 / ADR-170 AMENDMENT 1）
+- **完成时间**：2026-05-30
+- **记录时间**：2026-05-30
+- **执行模型**：claude-opus-4-8
+- **子代理**：无（复用 ADR-170 已 Opus 评审的 EnrichmentSummary 契约 + buildEnrichmentSummary 投影；仅 additive 扩展到 moderation 消费方，无新 shape → 以 ADR-170 AMENDMENT 1 登记，未起新 ADR / 未 spawn Opus）
+- **来源序列**：SEQ-20260530-02（P3 feature-2）
+- **修改文件**：
+  - `apps/api/src/db/queries/videos.internal.ts` — 新增 `EnrichmentSourceRow` 最小输入接口；`buildEnrichmentSummary` 参数由 `DbVideoRow` 窄化为 `EnrichmentSourceRow`（DbVideoRow 仍满足，向后兼容；单一投影真源跨 row 形态复用）
+  - `apps/api/src/db/queries/moderation.ts` — import buildEnrichmentSummary；`DbPendingQueueRow` +3 可选输入字段（bangumiStatus/metaQuality/bangumiSubjectId）；`listPendingQueue` SELECT +3 列（v.bangumi_status / v.meta_quality / mc.bangumi_subject_id）；mapper destructure 剔除 3 个 raw 输入源（防 meta_quality JSON 泄漏）后注入 `enrichmentSummary`
+  - `packages/types/src/admin-moderation.types.ts` — `VideoQueueRow += enrichmentSummary?: EnrichmentSummary`（additive 可选）+ import EnrichmentSummary
+  - `docs/decisions.md` — ADR-170 AMENDMENT 1（D-170-AMD1-1/2/3 + 1 偏离登记：mapper as DoubanStatus/SourceCheckStatus 窄化）
+  - `tests/unit/api/moderation-enrichment-summary.test.ts`（新建）— 3 单测（enrichmentSummary 注入 / raw 输入源不泄漏 / null 缺省派生）
+- **新增依赖**：无
+- **数据库变更**：无（v.bangumi_status 由 ADR-170 migration 082 已加；meta_quality/bangumi_subject_id 既有列）
+- **质量门禁**：typecheck EXIT=0 / lint EXIT=0 / verify:adr-contracts EXIT=0 / **3 新单测全过** / 全量 **440 文件 5692 passed 零失败**（5689→5692 净 +3 零回归）
+- **关键决策（ADR-170 AMENDMENT 1）**：①`enrichmentSummary` 消费方从 `VideoAdminRow/Detail` 扩展至审核台 `VideoQueueRow`（additive 非新契约）②`buildEnrichmentSummary` 窄化 `EnrichmentSourceRow` 实现单一投影真源跨 row 复用（价值排序 2）③mapper 剔除 raw `meta_quality` 防 JSON 泄漏（贯彻 ADR-170「前端不解析零散 JSON」）④VideoQueueRow.enrichmentSummary 可选不破坏 StagingRow extends + 其余消费方
+- **注意事项**：本卡仅后端数据注入；**META-12-B 前端**（ModListRow 行内簇 + RightPane/TabDetail 详情簇）独立后续卡，数据已就绪。`as DoubanStatus/SourceCheckStatus` 窄化转换（DbPendingQueueRow 遗留 string 类型 / 值由 DB CHECK 保证 / 已偏离登记 D-170-AMD1-1）。

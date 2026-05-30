@@ -168,12 +168,30 @@ export function mapVideoCard(row: DbVideoRow): VideoCard {
 }
 
 /**
- * buildEnrichmentSummary — DbVideoRow → EnrichmentSummary 派生投影（ADR-170 C-3 / R-5）。
+ * EnrichmentSourceRow — buildEnrichmentSummary 的最小输入契约（ADR-170 AMENDMENT / META-12-A）。
+ *
+ * 仅声明投影所需 6 个 snake_case 字段，使投影逻辑可跨 row 形态复用：
+ * DbVideoRow（admin 列表/详情）满足之；moderation listPendingQueue 亦构造此形入参。
+ * 单一真源：所有 EnrichmentSummary 派生（默认值 + meta_quality 展开）只在本函数发生。
+ */
+export interface EnrichmentSourceRow {
+  douban_status: DoubanStatus | null
+  bangumi_status: BangumiStatus | null
+  source_check_status: SourceCheckStatus | null
+  meta_score: number | null
+  meta_quality: VideoMetaQuality | null
+  bangumi_subject_id: number | null
+}
+
+/**
+ * buildEnrichmentSummary — EnrichmentSourceRow → EnrichmentSummary 派生投影（ADR-170 C-3 / R-5）。
  *
  * 纯函数，由 admin 路径（VideoService.adminList/adminFindById）注入到 VideoAdminRow/Detail；
  * **不挂 public mapVideoRow**（public Video 形状不变）。从同一 row 单次构造，展开 meta_quality JSON。
+ * 参数窄化为 EnrichmentSourceRow（ADR-170 AMENDMENT / META-12-A）：DbVideoRow 仍满足，
+ * 新增 moderation 消费方亦可复用同一投影，禁止异源重复实现。
  */
-export function buildEnrichmentSummary(row: DbVideoRow): EnrichmentSummary {
+export function buildEnrichmentSummary(row: EnrichmentSourceRow): EnrichmentSummary {
   const mq = row.meta_quality
   return {
     doubanStatus: row.douban_status ?? 'pending',

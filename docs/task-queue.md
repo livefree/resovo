@@ -156,9 +156,9 @@
    - 创建时间：2026-05-30 / 实际开始：2026-05-30 / 完成时间：2026-05-30（执行 claude-opus-4-8 / 子代理无 / 门禁全过 / 9 新单测 / 全量 5689 passed 零回归）
    - 执行模型: claude-opus-4-8
    - 验收要点：①视频库新增 `enrichment` 列（默认可见，douban_status/meta_score 隐藏列保留）✅ ②抽屉头簇含富集时间（enrichedAt.slice 0,10 / null→「未富集」）✅ ③anime 行/抽屉才显 bangumi ✅ ④门禁全过 + 9 单测 ✅
-2. **META-12** — Face 3 审核台 enrichment（后端 `VideoQueueRow`/moderation query 补 enrichmentSummary 注入 + ModListRow/RightPane TabDetail UI）（状态：⬜ 待开始）
-   - 创建时间：2026-05-30
-   - 备注：需后端改动（apps/api moderation query + @resovo/types VideoQueueRow），范围可能 > Face 1/2；超 5 项则拆 -A 后端 / -B 前端。
+2. **META-12** — Face 3 审核台 enrichment（已拆 -A 后端 / -B 前端）
+   - **META-12-A**（后端）✅ 已完成（2026-05-30 / claude-opus-4-8 / 子代理无 / 门禁全过 / 3 新单测 / 全量 5692 passed 零回归）：`buildEnrichmentSummary` 窄化 `EnrichmentSourceRow` 复用 + moderation `listPendingQueue` SELECT +3 列 + mapper 注入 enrichmentSummary（剔除 raw metaQuality 防泄漏）+ `VideoQueueRow += enrichmentSummary?` + ADR-170 AMENDMENT 1 登记。
+   - **META-12-B**（前端）⬜ 待开始：`ModListRow` 行内簇（density='row'）+ `RightPane/TabDetail` 详情簇（density='header'）接入 `EnrichmentBadgeCluster` + 单测。数据已就绪（VideoQueueRow.enrichmentSummary）。
 3. **META-13**（可选）— Face 4 线路区 TabLines 区头 source 徽标（`EnrichmentBadge kind="source"` 汇总 source_check_status）（状态：⬜ 待评估）
    - 创建时间：2026-05-30
    - 备注：逐源活性已由 LinesPanel 承担，本卡仅区头汇总徽标，价值边际 → 待 META-11/12 后评估是否值得做。

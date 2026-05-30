@@ -27,6 +27,7 @@ import type {
   VideoType,
   VideoQuality,    // 既有 video_sources.quality CHECK 5 值（4K/1080P/720P/480P/360P）
   DoubanStatus,    // 既有 032_videos_pipeline_status_fields.sql CHECK 4 值
+  EnrichmentSummary, // ADR-170 / META-12-A AMENDMENT：审核台 VideoQueueRow 富集摘要
 } from './video.types'
 
 // ── 共享 cell 类型 ────────────────────────────────────────────────────────────
@@ -344,6 +345,9 @@ export interface VideoQueueRow {
   readonly trendingTag: string | null         // 051 既有：trending_tag CHECK ('hot'/'weekly_top'/'editors_pick'/'exclusive') NULL
   readonly createdAt: string                  // DB: created_at TIMESTAMPTZ NOT NULL
   readonly updatedAt: string                  // DB: updated_at TIMESTAMPTZ NOT NULL
+  // META-12-A / ADR-170 AMENDMENT：富集摘要派生投影（审核台徽标消费 / EnrichmentBadge）。
+  // 由 listPendingQueue mapper 经 buildEnrichmentSummary 注入；additive 可选（旧路径/未注入时缺省）。
+  readonly enrichmentSummary?: EnrichmentSummary
 }
 
 export interface PendingQueueResponse {

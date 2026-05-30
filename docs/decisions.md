@@ -18317,6 +18317,18 @@ BANGUMI_USER_AGENT:     z.string().default('resovo/1.0 (https://github.com/...)'
 - **D-170-2**：bangumi 状态仅设列、不设 `meta_quality` JSON 子状态（与 douban 双轨不对称）。处置：accept（刻意简化）；若未来需 bangumi 置信度/匹配方式可观测信号，再起卡扩 `meta_quality.bangumi_*`。
 - **D-170-3**：`EnrichmentSummary` camelCase 嵌入 server-next snake_case row。处置：accept（共享域契约统一 camelCase）。
 
+### AMENDMENT 1（META-12-A / 2026-05-30）：`enrichmentSummary` 消费方扩展至审核台 `VideoQueueRow`
+
+- **背景**：ADR-170 D-170-5 原把 `enrichmentSummary` 注入范围**显式限定在 `VideoAdminRow/Detail`**（视频库列表/详情）。P3 feature-2 富集徽标第 3 消费面（审核台 `ModListRow`/`RightPane`）需同一摘要，但其数据行 `VideoQueueRow`（`listPendingQueue`）当时无 `enrichmentSummary`。本 AMENDMENT 将范围扩展至 `VideoQueueRow`。
+- **性质**：**additive 消费方扩展，非新契约**。`EnrichmentSummary` shape 不变、`buildEnrichmentSummary` 投影逻辑不变（仅复用），无新字段、无新 migration。故以 AMENDMENT 登记而非新 ADR；EnrichmentSummary 契约本身已经 ADR-170 Opus 评审。
+- **决策要点**：
+  - **D-170-AMD1-1**：`buildEnrichmentSummary` 参数由 `DbVideoRow` 窄化为新接口 `EnrichmentSourceRow`（6 个投影所需 snake_case 字段）。`DbVideoRow` 仍满足之（向后兼容）；moderation `listPendingQueue` 构造同形入参复用同一投影 → **单一真源**，禁止异源重复实现派生逻辑（价值排序 2 复用）。
+  - **D-170-AMD1-2**：`listPendingQueue` SELECT 增 `v.bangumi_status / v.meta_quality / mc.bangumi_subject_id`（既有列，无 migration）；mapper **destructure 剔除 `metaQuality/bangumiStatus/bangumiSubjectId` 三个 raw 输入源**（不入响应行），仅注入派生后的 `enrichmentSummary`——**防 raw `meta_quality` JSON 泄漏前端**（贯彻 ADR-170「前端不解析零散 JSON」原则）。
+  - **D-170-AMD1-3**：`VideoQueueRow`（`packages/types`）增 `enrichmentSummary?: EnrichmentSummary`（**additive 可选**：旧路径/未注入时缺省，不破坏 `StagingRow extends VideoQueueRow` 及其余消费方 PendingCenter/RightPane/ModListRow）。
+- **影响文件**：`apps/api/src/db/queries/videos.internal.ts`（EnrichmentSourceRow + 窄化签名）、`apps/api/src/db/queries/moderation.ts`（SELECT + DbPendingQueueRow + mapper 注入）、`packages/types/src/admin-moderation.types.ts`（VideoQueueRow 字段）。
+- **偏离登记**：
+  - **D-170-AMD1-1**：moderation mapper 对 `doubanStatus/sourceCheckStatus`（DbPendingQueueRow 遗留 `string` 类型）`as DoubanStatus/SourceCheckStatus` 窄化转换。处置：accept（值由 DB CHECK 约束保证合法，与既有 API 边界 string→enum 收紧一致）。
+
 ---
 
 ## ADR-172：EnrichmentBadge 共享组件 API 契约（SEQ-EXT-META-E / Track external-metadata）

@@ -6,7 +6,7 @@
 
 ## 进行中任务
 
-（空 / SEQ-20260530-02 P3 feature-2：META-11 视频库 + 编辑抽屉接入 EnrichmentBadgeCluster ship 2026-05-30 / 下一步 META-12 审核台 enrichment（含后端注入）或 META-13 线路区评估）
+（空 / SEQ-20260530-02 P3 feature-2：META-12-A 审核台 enrichmentSummary 后端注入 ship 2026-05-30 / 下一步 META-12-B 前端 ModListRow + RightPane/TabDetail 接入簇）
 
 ---
 

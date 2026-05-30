@@ -6,6 +6,9 @@
 
 import type { Pool } from 'pg'
 import { deriveAggregateState } from '@resovo/types'
+import type { DoubanStatus, BangumiStatus, SourceCheckStatus, VideoMetaQuality } from '@resovo/types'
+// META-12-A / ADR-170 AMENDMENT：复用 admin 路径同一投影逻辑（单一真源，禁止异源重复实现）
+import { buildEnrichmentSummary } from './videos.internal'
 
 export interface ModerationHistoryRow {
   id: string
@@ -139,6 +142,11 @@ interface DbPendingQueueRow {
   trendingTag: string | null
   createdAt: string
   updatedAt: string
+  // META-12-A / ADR-170 AMENDMENT：enrichmentSummary 输入源（仅 query 内部用，
+  // mapper 派生后 destructure 剔除 → 不入 VideoQueueRow 响应，防 raw meta_quality JSON 泄漏）
+  bangumiStatus?: BangumiStatus
+  metaQuality?: VideoMetaQuality | null
+  bangumiSubjectId?: number | null
 }
 
 interface CursorPayload {
@@ -295,6 +303,10 @@ export async function listPendingQueue(
               v.staff_note AS "staffNote",
               v.review_label_key AS "reviewLabelKey",
               v.douban_status AS "doubanStatus",
+              -- META-12-A：enrichmentSummary 派生输入源（bangumi_status + meta_quality JSON + mc.bangumi_subject_id）
+              v.bangumi_status AS "bangumiStatus",
+              v.meta_quality AS "metaQuality",
+              mc.bangumi_subject_id AS "bangumiSubjectId",
               COALESCE(v.review_source, 'manual') AS "reviewSource",
               v.trending_tag AS "trendingTag",
               v.created_at AS "createdAt",
@@ -330,10 +342,21 @@ export async function listPendingQueue(
     const probeOk = typeof row.probeAggregateOk === 'string' ? parseInt(row.probeAggregateOk, 10) : row.probeAggregateOk
     const renderTotal = typeof row.renderAggregateTotal === 'string' ? parseInt(row.renderAggregateTotal, 10) : row.renderAggregateTotal
     const renderOk = typeof row.renderAggregateOk === 'string' ? parseInt(row.renderAggregateOk, 10) : row.renderAggregateOk
+    // META-12-A：destructure 剔除 3 个 raw 输入源（不入响应 / 防 meta_quality JSON 泄漏），
+    // 经 buildEnrichmentSummary（admin 同源投影）派生 enrichmentSummary（ADR-170 AMENDMENT）
+    const { metaQuality, bangumiStatus, bangumiSubjectId, ...rest } = row
     return {
-      ...row,
+      ...rest,
       probeAggregate: { total: probeTotal, ok: probeOk, state: deriveAggregateState(probeOk, probeTotal) },
       renderAggregate: { total: renderTotal, ok: renderOk, state: deriveAggregateState(renderOk, renderTotal) },
+      enrichmentSummary: buildEnrichmentSummary({
+        douban_status: rest.doubanStatus as DoubanStatus,
+        bangumi_status: bangumiStatus ?? null,
+        source_check_status: rest.sourceCheckStatus as SourceCheckStatus,
+        meta_score: rest.metaScore,
+        meta_quality: metaQuality ?? null,
+        bangumi_subject_id: bangumiSubjectId ?? null,
+      }),
     }
   })
   const last = data[data.length - 1]
