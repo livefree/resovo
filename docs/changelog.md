@@ -12307,3 +12307,27 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
   - ADR-172 Accepted 是 **ADR-170 D-170-1 偏离收口的触发前置**（消费面全切 EnrichmentBadge 后于主版本边界评估废弃 `Video` 平铺富集字段）。
   - `size='md'` 当前与 'sm' 无字号差异（Pill 固定 `--font-size-xxs`，size 落 data-size 供未来 Pill 扩展 / 黄线 D-172-5）。
   - **file-size-budget 22 文件违规为 pre-existing 基线**（stash 后干净 main 同 22 文件 / 与 META-10 零关系，新文件均 ≤138L）。
+
+---
+
+## [META-11] feature-2 视频库列表 + 编辑抽屉接入 EnrichmentBadgeCluster（P3 前端消费）
+- **完成时间**：2026-05-30
+- **记录时间**：2026-05-30
+- **执行模型**：claude-opus-4-8
+- **子代理**：无（无新共享 API 契约；EnrichmentBadge/Cluster 已由 META-10 ADR-172 沉淀）
+- **来源序列**：SEQ-20260530-02（P3 前端消费 feature-2 四消费面徽标）
+- **方案**：`docs/designs/external-metadata-ux-overhaul_20260529.md` §3.5（4 消费面表）
+- **数据可用性勘察**：Face 1 视频库（`VideoAdminRow.enrichmentSummary?`）+ Face 2 编辑抽屉（`VideoAdminDetail`）数据就绪（META-09 已注入）→ 本卡接入；Face 3 审核台（`VideoQueueRow` 缺完整 enrichmentSummary，需后端补）→ 拆 META-12；Face 4 线路区（逐源活性已由共享 `LinesPanel` 承担）→ 可选 META-13。
+- **修改文件**：
+  - `apps/server-next/src/lib/videos/columns.ts` — VIDEO_COLUMN_DESCRIPTORS 新增 `enrichment` 列（默认可见）；douban_status/meta_score 默认隐藏列保留（ADR-170 排序契约）
+  - `apps/server-next/src/app/admin/videos/_client/VideoListClient.tsx` — import `EnrichmentBadgeCluster`；`buildVideoColumns` 新增 `enrichment` 列 cell（`density="row"`，row.enrichmentSummary 缺省→不渲染，anime-only bangumi 由 Cluster 内部依 row.type 门控）
+  - `apps/server-next/src/app/admin/videos/_client/VideoEditDrawer.tsx` — import `EnrichmentBadgeCluster`；QUICK_HEAD 追加簇（`density="header"`，enrichedAtLabel = `富集 ${enrichedAt.slice(0,10)}` / null→「未富集」）
+  - `tests/unit/components/server-next/admin/videos/enrichment-cluster-faces.test.tsx`（新建）— 9 单测（列注册 2 + 视频库行渲染 3 + 抽屉头 4）
+- **新增依赖**：无（仅消费 admin-ui `EnrichmentBadgeCluster`）
+- **数据库变更**：无
+- **质量门禁**：typecheck EXIT=0 / lint EXIT=0 / verify:adr-contracts EXIT=0 / **9 新单测全过** / 全量 **439 文件 5689 passed 零失败**（5680→5689 净 +9 零回归）
+- **注意事项**：
+  - 本卡仅 2 个数据就绪面接入；**Face 3 审核台需后端给 `VideoQueueRow`/moderation query 补 `enrichmentSummary` 注入**（超 ADR-170 已布线范围）→ META-12（含后端，超 5 项则拆 -A/-B）。
+  - **Face 4 线路区** 逐源活性已由 `LinesPanel` 承担，区头 source 汇总徽标价值边际 → META-13 待评估。
+  - VideoListClient.tsx 772→782（+10，仍在 file-size BASELINE_EXEMPT，未成新违规；列 cell 必须与其余列同处 buildVideoColumns）。
+  - `[Pill] children non-primitive` stderr 警告为 VideoListClient 行内既有 Pill 噪声（非 enrichment 徽标 / 无 enrichmentSummary 行亦出现），pre-existing。

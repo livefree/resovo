@@ -5,7 +5,7 @@ import type { CSSProperties } from 'react'
 import {
   DataTable, FilterChipBar,
   EmptyState, ErrorState, LoadingState, useTableQuery,
-  Pill, VisChip, Thumb, DualSignal, AdminButton,
+  Pill, VisChip, Thumb, DualSignal, AdminButton, EnrichmentBadgeCluster,
   type TableColumn, type TableQueryPatch, type TableSelectionState, type TableView, type ViewScope,
 } from '@resovo/admin-ui'
 import { useTableRouterAdapter } from '@/lib/table-router-adapter'
@@ -359,6 +359,16 @@ function buildVideoColumns(
       filterable: true, filterFieldName: 'reviewStatus', filterKind: 'enum', filterOptions: reviewOptions,
       cell: ({ row }) => row.review_status
         ? <Pill variant={reviewPillVariant(row.review_status)}>{reviewPillLabel(row.review_status)}</Pill>
+        : null,
+    },
+    // ── enrichment 列：META-11 / feature-2 富集徽标簇（EnrichmentBadgeCluster density='row'）──
+    // 合并展示豆瓣/Bangumi(anime)/源活性/元数据完整度/拼音警告；消费 ADR-170 enrichmentSummary（admin 注入）
+    // anime-only bangumi 门控由 Cluster 内部依 row.type 处理；enrichmentSummary 缺省（旧行/未注入）→ 不渲染
+    {
+      id: 'enrichment', header: '富集', accessor: (r) => r.enrichmentSummary ? String(r.enrichmentSummary.metaScore) : '',
+      width: 150, minWidth: 120, enableResizing: true, enableSorting: false, defaultVisible: true,
+      cell: ({ row }) => row.enrichmentSummary
+        ? <EnrichmentBadgeCluster summary={row.enrichmentSummary} type={row.type} density="row" />
         : null,
     },
     // AMD2-PATCH-2：后端 SORT_FIELDS 扩展 'douban_status' → ORDER BY v.douban_status

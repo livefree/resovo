@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useEffect, useCallback } from 'react'
-import { Drawer, LoadingState, ErrorState, VisChip, DualSignal, Thumb } from '@resovo/admin-ui'
+import { Drawer, LoadingState, ErrorState, VisChip, DualSignal, Thumb, EnrichmentBadgeCluster } from '@resovo/admin-ui'
 import type { VideoAdminDetail } from '@/lib/videos'
 import { getVideo, patchVideoMeta, createVideo } from '@/lib/videos/api'
 import type { VideoType } from '@resovo/types'
@@ -249,6 +249,19 @@ export function VideoEditDrawer({ open, videoId, onClose, onSaved }: VideoEditDr
                 </div>
                 <VisChip visibility={visibility} review={review} />
                 <DualSignal probe="unknown" render="unknown" />
+                {/* META-11 / feature-2：富集徽标簇（density='header'：含 label + 富集时间）*/}
+                {video.enrichmentSummary && (
+                  <EnrichmentBadgeCluster
+                    summary={video.enrichmentSummary}
+                    type={video.type}
+                    density="header"
+                    enrichedAtLabel={
+                      video.enrichmentSummary.enrichedAt
+                        ? `富集 ${video.enrichmentSummary.enrichedAt.slice(0, 10)}`
+                        : undefined
+                    }
+                  />
+                )}
               </div>
             )}
 

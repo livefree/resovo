@@ -9,6 +9,9 @@ export const VIDEO_COLUMN_DESCRIPTORS: readonly ColumnDescriptor[] = [
   { id: 'image_health',  header: '图片健康',      defaultVisible: true  },
   { id: 'visibility',    header: '可见性',        defaultVisible: true  },
   { id: 'review_status', header: '审核状态',      defaultVisible: true  },
+  // META-11 / feature-2：富集徽标簇（EnrichmentBadgeCluster density='row'）合并展示
+  // 豆瓣/Bangumi/源活性/元数据完整度/拼音警告；douban_status + meta_score 保留默认隐藏列（排序契约）
+  { id: 'enrichment',    header: '富集',          defaultVisible: true  },
   { id: 'douban_status', header: '豆瓣状态',      defaultVisible: false },
   { id: 'meta_score',    header: '元数据完整度',   defaultVisible: false },
   { id: 'created_at',    header: '创建时间',      defaultVisible: false, enableSorting: true },

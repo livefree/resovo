@@ -138,7 +138,30 @@
    - 执行模型: claude-opus-4-8
    - 验收要点：①Props 契约经 arch-reviewer Opus 评审 PASS ✅（discriminated union）②零硬编码颜色（复用 `--state-*` token）✅ ③anime-only 渲染 bangumi 徽标 ✅ ④pinyin 警告 ✅ ⑤meta_score 阈值变色 ✅ ⑥单测覆盖 kind×status 映射 + cluster density + anime 分支 ✅
 
-> **下一步（P3 前端消费 feature-2）**：4 消费面接入 EnrichmentBadgeCluster —— 视频库 `lib/videos/columns.ts`（density='row'）/ `VideoEditDrawer` QUICK_HEAD（density='header'）/ 审核台行/详情 / `TabLines` 逐源。各面独立拆卡（PATCH ≤ 5）。
+---
+
+## [SEQ-20260530-02] 外部元数据 UX 整改 — P3 前端消费 feature-2（四消费面徽标）
+
+- **状态**：🔄 执行中（META-11 ✅ ship 2026-05-30 / META-12·13 待开始）
+- **创建时间**：2026-05-30
+- **最后更新时间**：2026-05-30
+- **目标**：把 META-10 的 `EnrichmentBadgeCluster` 接入富集反馈 4 消费面（设计方案 §3.5）。
+- **范围**：server-next admin UI 消费层接入；**不动后端契约**（除 Face 3 需后端补 enrichmentSummary 注入，单独成卡）。
+- **依赖**：META-10 ✅（EnrichmentBadge/Cluster 已沉淀）+ META-09 ✅（VideoAdminRow/Detail.enrichmentSummary 已注入）。
+- **数据可用性勘察结论**：Face 1（视频库 `VideoAdminRow`）+ Face 2（编辑抽屉 `VideoAdminDetail`）数据就绪；Face 3（审核台 `VideoQueueRow`）缺完整 enrichmentSummary 需后端补；Face 4（线路区）逐源活性已由共享 `LinesPanel` 承担。
+
+### 任务列表（按执行顺序）
+
+1. **META-11** — Face 1 视频库列表 `enrichment` 列（density='row'）+ Face 2 编辑抽屉 QUICK_HEAD 簇（density='header'）（状态：✅ 已完成）
+   - 创建时间：2026-05-30 / 实际开始：2026-05-30 / 完成时间：2026-05-30（执行 claude-opus-4-8 / 子代理无 / 门禁全过 / 9 新单测 / 全量 5689 passed 零回归）
+   - 执行模型: claude-opus-4-8
+   - 验收要点：①视频库新增 `enrichment` 列（默认可见，douban_status/meta_score 隐藏列保留）✅ ②抽屉头簇含富集时间（enrichedAt.slice 0,10 / null→「未富集」）✅ ③anime 行/抽屉才显 bangumi ✅ ④门禁全过 + 9 单测 ✅
+2. **META-12** — Face 3 审核台 enrichment（后端 `VideoQueueRow`/moderation query 补 enrichmentSummary 注入 + ModListRow/RightPane TabDetail UI）（状态：⬜ 待开始）
+   - 创建时间：2026-05-30
+   - 备注：需后端改动（apps/api moderation query + @resovo/types VideoQueueRow），范围可能 > Face 1/2；超 5 项则拆 -A 后端 / -B 前端。
+3. **META-13**（可选）— Face 4 线路区 TabLines 区头 source 徽标（`EnrichmentBadge kind="source"` 汇总 source_check_status）（状态：⬜ 待评估）
+   - 创建时间：2026-05-30
+   - 备注：逐源活性已由 LinesPanel 承担，本卡仅区头汇总徽标，价值边际 → 待 META-11/12 后评估是否值得做。
 
 ---
 
