@@ -4,7 +4,7 @@
  */
 
 import type { Pool, PoolClient } from 'pg'
-import type { VideoCard, VideoType, DoubanStatus, SourceCheckStatus, TrendingTag, VideoMetaQuality } from '@/types'
+import type { VideoCard, VideoType, DoubanStatus, BangumiStatus, SourceCheckStatus, TrendingTag, VideoMetaQuality } from '@/types'
 import type { DbVideoRow } from './videos.internal'
 import {
   VIDEO_FULL_SELECT, VIDEO_JOIN,
@@ -307,6 +307,26 @@ export async function updateVideoSourceCheckStatus(
 ): Promise<void> {
   await db.query(
     `UPDATE videos SET source_check_status = $1, updated_at = NOW()
+     WHERE id = $2 AND deleted_at IS NULL`,
+    [status, videoId]
+  )
+}
+
+/**
+ * 写入 Bangumi 匹配状态（ADR-170 / C-2 接入）。
+ *
+ * 接受 `Pool | PoolClient`：
+ *   - `PoolClient` —— 供 BangumiService.applyAutoMatchAtomic / confirmMatch 在
+ *     其 BEGIN/COMMIT 事务内调用（与 catalog+ref 原子，R-3）。
+ *   - `Pool` —— 供 matchAndEnrich 的 candidate/none 分支（无事务）调用。
+ */
+export async function updateVideoBangumiStatus(
+  db: Pool | PoolClient,
+  videoId: string,
+  status: BangumiStatus
+): Promise<void> {
+  await db.query(
+    `UPDATE videos SET bangumi_status = $1, updated_at = NOW()
      WHERE id = $2 AND deleted_at IS NULL`,
     [status, videoId]
   )

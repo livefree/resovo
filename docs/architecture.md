@@ -276,6 +276,7 @@ resovo/
 - `is_published`：兼容字段，仍参与查询/索引/状态机
 - `site_key`：`VARCHAR(100)`，FK -> `crawler_sites(key)`
 - `douban_status`：`pending | matched | candidate | unmatched`（Migration 032，自动丰富 Job 写入）
+- `bangumi_status`：`pending | matched | candidate | unmatched`（Migration 082 / ADR-170，BangumiService 写入；非 anime 恒 pending，镜像 douban_status）
 - `source_check_status`：`pending | ok | partial | all_dead`（Migration 032，源活性批量检验结果）
 - `meta_score`：`SMALLINT 0-100`（Migration 032，元数据完整度评分）
 - `episode_count`：`INT NOT NULL DEFAULT 1`（Migration 001 / 爬虫推算）— **三层集数语义的第 1 层**："已收录最大集数"（`videos.crawler.ts:248` 通过 `GREATEST(episode_count, $2)` 单向递增写入；近似 *activeEpisodes* 语义 / 详 ADR-163 §3 D-163-2 命名保留依据 + §11 advisory）
@@ -844,6 +845,7 @@ UserPreferences = {
 - `046_video_sources_source_site_key.sql`（CHG-414：video_sources 新增 source_site_key 行级源站字段，存量 backfill 自 videos.site_key）
 - `076_auto_crawl_daily_times_array.sql`（CHG-SN-9-CW1-CW2-REDESIGN-A-EP-1C-1a / ADR-155 D-155-6：system_settings KV seed `auto_crawl_last_trigger_marks = '{}'` JSON object 容器 — daily 多 dailyTime 防重维度从 date 升级为 `{YYYY-MM-DD HH:MM: isoTs}`，允许同日不同时间各触发一次；047–075 migration 列表 drift 待独立 docs 清理卡补全）
 - `077_bangumi_metadata.sql`（ADR-161 / CHG-BNG-01：external_data.bangumi_entries 扩 rank/nsfw + 新建 catalog_episodes 逐集元数据表）
+- `082_videos_bangumi_status.sql`（ADR-170 / META-07：videos.bangumi_status 列 + idx_videos_bangumi_status，镜像 032 douban_status；078–081 列表 drift 同上待清理卡补全）
 
 > **MediaCatalogService.CATALOG_SOURCE_PRIORITY 调整**（ADR-161 决策要点 2）：`bangumi` 优先级 3 → 4（> douban:3，= tmdb:4，< manual:5）。anime 下 Bangumi 优先于豆瓣；bangumi 来源仅对 anime 写入，非 anime 不受影响。
 

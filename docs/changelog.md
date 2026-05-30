@@ -12189,3 +12189,29 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 
 - PR #4（merged `43476d3218e447c5041fd9efcec0f3557b5b9647`）— SEQ-20260529-01 双卡立卡
 - 本 PR（待开）— CHORE-10 + CHORE-11 同 PR 双修
+
+---
+
+## [META-07] ADR-170 C-1：videos.bangumi_status 列 + BangumiStatus 类型 + updateVideoBangumiStatus query（地基）
+- **完成时间**：2026-05-29
+- **记录时间**：2026-05-29
+- **执行模型**：claude-opus-4-8
+- **子代理**：arch-reviewer (claude-opus-4-8) — ADR-170 决策评审（CONDITIONAL → R1-R3/Y1-Y4/A1-A4 + 二轮人审 R5 全消化）
+- **来源**：SEQ-20260529-02「外部元数据 UX 整改」P1 地基首卡 / 方案 `docs/designs/external-metadata-ux-overhaul_20260529.md` / ADR-170（`docs/decisions.md`）
+- **修改文件**：
+  - `apps/api/src/db/migrations/082_videos_bangumi_status.sql` — 新建：videos.bangumi_status 列（4 态 CHECK，DEFAULT 'pending'）+ idx_videos_bangumi_status 部分索引，镜像 032 douban_status，幂等 + DO $$ 验证
+  - `packages/types/src/video.types.ts` — 新增 `BANGUMI_STATUSES` const + `BangumiStatus` type（镜像 DOUBAN_STATUSES）
+  - `packages/types/src/index.ts` — runtime export `BANGUMI_STATUSES`（P2：`export type *` 不导 const）
+  - `apps/api/src/db/queries/videos.status.ts` — 新增 `updateVideoBangumiStatus(db: Pool | PoolClient, videoId, status)`（双形态供 C-2 事务内/外调用）
+  - `apps/api/src/db/queries/videos.ts` — barrel re-export `updateVideoBangumiStatus`（P2）
+  - `docs/architecture.md` — videos.bangumi_status 字段 + migration 082 清单同步
+  - `tests/unit/api/videos-bangumi-status.test.ts` — 新建 7 用例（query 双形态 SQL/params + migration SQL 文本断言 CHECK 4 值 + BANGUMI_STATUSES runtime export）
+  - `docs/decisions.md` — ADR-170 Accepted（同 commit 落库）
+  - `docs/designs/external-metadata-ux-overhaul_20260529.md` — 方案落盘（R1 决策 + ADR 骨架）
+  - `docs/tasks.md` / `docs/task-queue.md` — SEQ-20260529-02 立案 + META-07 收尾
+  - `docs/audit/known-failing-tests_20260529.md` — 新建：20 个 pre-existing 失败台账
+  - `docs/audit/adr-d-status.json` — verify:adr-contracts 生成（ADR-170 D-170-1~5 登记 pending）
+- **新增依赖**：无
+- **数据库变更**：videos 表新增 `bangumi_status TEXT NOT NULL DEFAULT 'pending' CHECK IN (4 值)` + `idx_videos_bangumi_status` 部分索引（migration 082，幂等）
+- **质量门禁**：typecheck EXIT=0 / lint EXIT=0 / verify:adr-contracts EXIT=0 / 新单测 7/7 / 全量 5616 passed **零回归**（20 个 pre-existing 失败经 stash 基线比对一致，已落档 known-failing-tests_20260529.md）
+- **注意事项**：本卡仅地基（列+类型+query+出口），**未接写入方**（C-2/META-08：BangumiService matchAndEnrich/confirmMatch 写 status）、**未建 EnrichmentSummary**（C-3/META-09）。bangumi_status 现恒为默认 'pending'，直到 C-2 接入。

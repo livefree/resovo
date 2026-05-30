@@ -52,6 +52,15 @@ export type TrendingTag = typeof TRENDING_TAGS[number]
 export const DOUBAN_STATUSES = ['pending', 'matched', 'candidate', 'unmatched'] as const
 export type DoubanStatus = typeof DOUBAN_STATUSES[number]
 
+/**
+ * Bangumi 匹配状态（videos.bangumi_status / ADR-170）：镜像 DOUBAN_STATUSES 四态。
+ * 由 BangumiService（matchAndEnrich auto/candidate/none + confirmMatch）写入；
+ * 非 anime 视频恒 'pending'（UI 据 video.type 决定不渲染 bangumi 徽标）。
+ * ⚠ 数组值须与 migration 082 的 `CHECK (bangumi_status IN (...))` 保持同步。
+ */
+export const BANGUMI_STATUSES = ['pending', 'matched', 'candidate', 'unmatched'] as const
+export type BangumiStatus = typeof BANGUMI_STATUSES[number]
+
 /** 源活性批量检验结果（ADR-157 D-157-1 双形态） */
 export const SOURCE_CHECK_STATUSES = ['pending', 'ok', 'partial', 'all_dead'] as const
 export type SourceCheckStatus = typeof SOURCE_CHECK_STATUSES[number]
