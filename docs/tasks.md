@@ -6,23 +6,7 @@
 
 ## 进行中任务
 
-### META-14-C — 富集 Logo 重设计：簇重构 + 单测重写 + 4 面 visual 回归（P3 redesign）
-- **状态**：🔄 进行中
-- **来源序列**：SEQ-20260530-03
-- **建议模型**：sonnet
-- **执行模型**：claude-opus-4-8
-- **子代理调用**：无（实施 ADR-172 AMENDMENT 2 已 Opus 评审契约）
-- **实际开始**：2026-05-30
-- **文件范围**：
-  - 重写 `enrichment-badge-cluster.tsx`（logo 行 douban→bangumi(anime)→tmdb→imdb + state 推导 + density row/header 矩阵 + meta chip 仅 header + 移除 source）
-  - 重写 `enrichment-badge.types.ts`（删 douban/bangumi/source Props，收窄 kind 为 meta|pinyin）
-  - 重写 `enrichment-badge.tsx`（删 source/match 视觉，保 meta/pinyin）
-  - 改 barrel（删 SourceBadgeProps 等）
-  - 重写 `tests/unit/components/admin-ui/enrichment-badge/enrichment-badge.test.tsx`
-  - 4 消费面（VideoListClient/VideoEditDrawer/ModListRow/TabDetail）调用签名不变 → 仅 visual 回归
-- **完成备注**：_（完成后填写）_
-
-> 前序 META-14-ADR/B/A ✅。本卡触碰 admin-ui 公开 Props → commit 带 arch-reviewer Opus trailer。
+（空 / SEQ-20260530-03 富集徽标 Logo 重设计完成：META-14-ADR/B/A/C 全 ship 2026-05-30 — 4 源品牌 logo（douban/bangumi/tmdb/imdb）+ 三态（命中彩色/候选+琥珀点/未命中灰显）+ hover tooltip + 移除 source 冗余。4 消费面经 logo 渲染。下一步：用户起 dev server 走读 visual 回归 / 或推 PR / 或 META-13 Face 4）
 
 ---
 

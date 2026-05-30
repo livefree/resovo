@@ -12423,3 +12423,24 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **数据库变更**：无
 - **质量门禁**：typecheck EXIT=0 / lint EXIT=0 / **12 新单测全过** / 全量 **442 文件 5709 passed 零失败**（5697→5709 净 +12）/ 新文件均 ≤112L
 - **注意事项**：A 仅建原语 + 资源（**不接簇** / 隔离风险）；簇重构 + 删旧 source kind 在 META-14-C。jsdom 不表示 `opacity:var()`（opacity 期望数值）→ absent 单测仅断言 grayscale 滤镜，opacity token 浏览器生效（已注释）。全量遇 1 flaky（`StagingTable.test.tsx` apps/server v1 / 单跑 13/13 过 / 并行偶发 / 与本卡无关 / 同前 StagingEditPanel）。
+
+---
+
+## [META-14-C] 富集 Logo 重设计：簇重构 + 删旧 source kind + 单测重写（ADR-172 AMENDMENT 2）
+- **完成时间**：2026-05-30
+- **记录时间**：2026-05-30
+- **执行模型**：claude-opus-4-8
+- **子代理**：arch-reviewer (claude-opus-4-8) — ADR-172 AMENDMENT 2 契约评审（META-14-ADR 产出 / 本卡实施簇重构 → 触碰 admin-ui 公开 Props 携 trailer）
+- **来源序列**：SEQ-20260530-03（富集徽标 Logo 重设计收官）
+- **修改文件**：
+  - `enrichment-badge-cluster.tsx`（重写）— logo 行（douban→bangumi(anime)→tmdb→imdb 经 SourceLogoBadge）+ state 推导（douban/bangumi 据 status；tmdb/imdb=ID 非空）+ density 矩阵（row 仅命中彩色 logo 无 meta/时间 / header 全显含 absent 灰显 + meta chip + 富集时间）+ href 经 SOURCE_HREF_BUILDERS 构造 + 移除 source kind
+  - `enrichment-badge.types.ts`（重写）— 删 DoubanBadgeProps/BangumiBadgeProps/SourceBadgeProps；EnrichmentBadgeKind 收窄 meta|pinyin；清理 DoubanStatus/BangumiStatus/SourceCheckStatus import
+  - `enrichment-badge.tsx`（重写）— 删 matchStatusVisual/sourceVisual；deriveEnrichmentBadge 仅 meta/pinyin
+  - `enrichment-badge/index.ts` — barrel 删 DoubanBadgeProps/BangumiBadgeProps/SourceBadgeProps 导出
+  - `tests/unit/components/admin-ui/enrichment-badge/enrichment-badge.test.tsx`（重写 / 24 单测）— logo 行 + state 推导 + density 矩阵 + href + pinyin + meta + 零硬编码色
+  - `enrichment-cluster-faces.test.tsx` + `enrichment-cluster-moderation.test.tsx` — 选择器 data-kind→data-source（logo 契约）
+- **新增依赖**：无
+- **数据库变更**：无
+- **质量门禁**：typecheck EXIT=0 / lint EXIT=0 / verify:adr-contracts EXIT=0 / enrichment-badge 24 + 消费面 14 全过 / 全量 **442 文件 5695 passed 零失败**（重跑确认；首跑 1 flaky UserSubmissionsClient 单跑 12/12 过·零消费 EnrichmentBadge·与本卡无关）
+- **关键**：**SEQ-20260530-03 logo 重设计全闭环**。4 消费面（VideoListClient enrichment 列 / VideoEditDrawer QUICK_HEAD / ModListRow / TabDetail）**调用签名不变 = 零代码改动**，经 faces/moderation 组件级测试渲染真实消费组件断言 data-source logo 验证。
+- **注意事项**：**visual 回归（软门）** 需用户起 dev server 走读 4 面截图确认 logo 视觉。第 3 个全量并行 flaky（UserSubmissionsClient / 前有 StagingEditPanel·StagingTable）—— server-next/v1 admin 组件并行渲染时序偶发，pre-existing 环境问题，建议择时起 flaky 加固卡。

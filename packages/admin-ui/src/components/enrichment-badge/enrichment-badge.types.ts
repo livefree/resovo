@@ -18,22 +18,17 @@
  */
 
 import type {
-  DoubanStatus,
-  BangumiStatus,
-  SourceCheckStatus,
   EnrichmentSummary,
   VideoType,
 } from '@resovo/types'
 
 // ── 共享枚举 ─────────────────────────────────────────────────────
 
-/** 徽标维度（kind）— 5 维度对齐 EnrichmentSummary 信号集 */
-export type EnrichmentBadgeKind =
-  | 'douban'
-  | 'bangumi'
-  | 'source'
-  | 'meta'
-  | 'pinyin'
+/**
+ * 徽标维度（kind）— ADR-172 AMENDMENT 2 收窄为 meta | pinyin。
+ * douban/bangumi/tmdb/imdb 改由 SourceLogoBadge（品牌 logo）承载；source 已移除（与 DualSignal 去重）。
+ */
+export type EnrichmentBadgeKind = 'meta' | 'pinyin'
 
 /** 尺寸（默认 'sm'）— 当前 Pill 固定 xxs 字号，size 落 data-size 供未来 Pill 扩展 + 测试标记 */
 export type EnrichmentBadgeSize = 'sm' | 'md'
@@ -102,24 +97,6 @@ interface EnrichmentBadgeCommonProps {
   readonly testId?: string
 }
 
-/** kind='douban'：吃 4 态 DoubanStatus */
-export interface DoubanBadgeProps extends EnrichmentBadgeCommonProps {
-  readonly kind: 'douban'
-  readonly status: DoubanStatus
-}
-
-/** kind='bangumi'：吃 4 态 BangumiStatus（镜像 DoubanStatus） */
-export interface BangumiBadgeProps extends EnrichmentBadgeCommonProps {
-  readonly kind: 'bangumi'
-  readonly status: BangumiStatus
-}
-
-/** kind='source'：吃 SourceCheckStatus */
-export interface SourceBadgeProps extends EnrichmentBadgeCommonProps {
-  readonly kind: 'source'
-  readonly status: SourceCheckStatus
-}
-
 /** kind='meta'：吃 0–100 数值 metaScore（阈值变色） */
 export interface MetaBadgeProps extends EnrichmentBadgeCommonProps {
   readonly kind: 'meta'
@@ -137,11 +114,8 @@ export interface PinyinBadgeProps extends EnrichmentBadgeCommonProps {
   readonly isPinyin: boolean
 }
 
-/** EnrichmentBadge — discriminated union（按 kind 区分 payload，类型安全） */
+/** EnrichmentBadge — discriminated union（meta | pinyin；外部源改用 SourceLogoBadge / AMENDMENT 2） */
 export type EnrichmentBadgeProps =
-  | DoubanBadgeProps
-  | BangumiBadgeProps
-  | SourceBadgeProps
   | MetaBadgeProps
   | PinyinBadgeProps
 

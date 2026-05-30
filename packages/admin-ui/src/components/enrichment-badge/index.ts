@@ -28,9 +28,6 @@ export type {
   EnrichmentBadgeKind,
   EnrichmentBadgeSize,
   EnrichmentBadgeDensity,
-  DoubanBadgeProps,
-  BangumiBadgeProps,
-  SourceBadgeProps,
   MetaBadgeProps,
   PinyinBadgeProps,
 } from './enrichment-badge.types'

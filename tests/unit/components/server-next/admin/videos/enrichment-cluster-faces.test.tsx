@@ -133,15 +133,15 @@ describe('feature-2 Face 1 — 视频库行渲染 EnrichmentBadgeCluster', () =>
       expect(container.querySelector('[data-enrichment-badge-cluster][data-density="row"]')).toBeTruthy()
     })
     const cluster = container.querySelector('[data-enrichment-badge-cluster]')!
-    expect(cluster.querySelector('[data-kind="bangumi"]')).toBeTruthy()
+    expect(cluster.querySelector('[data-source="bangumi"]')).toBeTruthy()
   })
 
   it('movie 行 → 簇不含 bangumi 徽标（anime-only 门控）', async () => {
     listVideosMock.mockResolvedValue({ data: [makeRow({ type: 'movie' })], total: 1, page: 1, limit: 20 })
     const { container } = render(<VideoListClient />)
     await waitFor(() => expect(container.querySelector('[data-enrichment-badge-cluster]')).toBeTruthy())
-    expect(container.querySelector('[data-kind="bangumi"]')).toBeNull()
-    expect(container.querySelector('[data-kind="douban"]')).toBeTruthy()
+    expect(container.querySelector('[data-source="bangumi"]')).toBeNull()
+    expect(container.querySelector('[data-source="douban"]')).toBeTruthy()
   })
 
   it('行无 enrichmentSummary → 不渲染簇', async () => {
@@ -162,7 +162,7 @@ describe('feature-2 Face 2 — 编辑抽屉头部 EnrichmentBadgeCluster', () =>
     const { container } = render(<VideoEditDrawer open videoId="v1" onClose={vi.fn()} onSaved={vi.fn()} />)
     await waitFor(() => expect(container.querySelector('[data-enrichment-badge-cluster][data-density="header"]')).toBeTruthy())
     const cluster = container.querySelector('[data-enrichment-badge-cluster]')!
-    expect(cluster.querySelector('[data-kind="bangumi"]')).toBeTruthy()
+    expect(cluster.querySelector('[data-source="bangumi"]')).toBeTruthy()
     // 富集时间 slot（enrichedAt.slice(0,10)）
     expect(container.querySelector('[data-enrichment-cluster-time]')?.textContent).toContain('2026-05-30')
   })
@@ -171,7 +171,7 @@ describe('feature-2 Face 2 — 编辑抽屉头部 EnrichmentBadgeCluster', () =>
     getVideoMock.mockResolvedValue(makeDetail({ type: 'movie', enrichmentSummary: makeSummary() }))
     const { container } = render(<VideoEditDrawer open videoId="v1" onClose={vi.fn()} onSaved={vi.fn()} />)
     await waitFor(() => expect(container.querySelector('[data-enrichment-badge-cluster]')).toBeTruthy())
-    expect(container.querySelector('[data-kind="bangumi"]')).toBeNull()
+    expect(container.querySelector('[data-source="bangumi"]')).toBeNull()
   })
 
   it('enrichedAt=null → 富集时间 slot 显示「未富集」', async () => {

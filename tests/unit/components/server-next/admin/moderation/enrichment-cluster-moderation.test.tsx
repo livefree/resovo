@@ -63,13 +63,13 @@ describe('META-12-B ModListRow — 行内富集簇', () => {
     const { container } = render(<ModListRow it={makeRow({ type: 'anime' })} active={false} onClick={noop} />)
     const cluster = container.querySelector('[data-enrichment-badge-cluster][data-density="row"]')
     expect(cluster).toBeTruthy()
-    expect(cluster!.querySelector('[data-kind="bangumi"]')).toBeTruthy()
+    expect(cluster!.querySelector('[data-source="bangumi"]')).toBeTruthy()
   })
 
   it('movie 行 → 簇不含 bangumi（anime-only 门控）', () => {
     const { container } = render(<ModListRow it={makeRow({ type: 'movie' })} active={false} onClick={noop} />)
     expect(container.querySelector('[data-enrichment-badge-cluster]')).toBeTruthy()
-    expect(container.querySelector('[data-kind="bangumi"]')).toBeNull()
+    expect(container.querySelector('[data-source="bangumi"]')).toBeNull()
   })
 
   it('行无 enrichmentSummary → 不渲染簇', () => {
@@ -87,7 +87,7 @@ describe('META-12-B TabDetail — 详情富集簇', () => {
     expect(wrap).toBeTruthy()
     const cluster = wrap!.querySelector('[data-enrichment-badge-cluster][data-density="header"]')
     expect(cluster).toBeTruthy()
-    expect(cluster!.querySelector('[data-kind="bangumi"]')).toBeTruthy()
+    expect(cluster!.querySelector('[data-source="bangumi"]')).toBeTruthy()
     expect(container.querySelector('[data-enrichment-cluster-time]')?.textContent).toContain('2026-05-30')
   })
 
