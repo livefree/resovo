@@ -12256,3 +12256,26 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **数据库变更**：无（SELECT 增列，列由 migration 082/026 提供）
 - **质量门禁**：typecheck EXIT=0 / lint EXIT=0 / videos-bangumi-status 10 + 相关 32 全过 / 全量 5622 passed **零新增回归**（失败集 = known-failing 台账 20 个，精确一致）
 - **注意事项**：`enrichmentSummary` 仅注入 admin DTO（VideoAdminRow/Detail）；public `Video`/`VideoCard`/`mapVideoCard` 形状未变（R-5）。additive 字段，平铺 douban_status/meta_score 保留（排序契约依赖）。**ADR-170 C-1/C-2/C-3 三卡闭环，SEQ-20260529-02 P1 地基完成**；下游 P2 = ADR-172 `EnrichmentBadge` 共享组件（消费 EnrichmentSummary）。
+
+---
+
+## [CHORE-TEST-BASELINE-20260529] 清理 pre-existing 前端单测失败（6 文件 / 20 用例）
+- **完成时间**：2026-05-30
+- **记录时间**：2026-05-30
+- **执行模型**：claude-opus-4-8
+- **子代理**：无
+- **来源**：META-07 全量单测发现的 known-failing 台账（`docs/audit/known-failing-tests_20260529.md`）；用户 2026-05-30 同意落卡 + commit
+- **流程说明**：本卡按用户交互流（先诊断 + 修复，再"落成任务卡 + commit"），执行先于卡片落档；根因均为**测试侧**未跟随组件演进，无产品代码 bug
+- **修改文件**（仅测试 + 文档）：
+  - `tests/unit/web-next/route-theme-selector.test.tsx` — CHG-369-B 末尾「自定义」option：补传 `customTheme`/`onOpenCustomDialog` props + 断言改 `ALL_THEMES.length + 1`
+  - `tests/unit/web-next/player-shell-hydration.test.tsx` — ADR-165 mount 时 `/users/me/preferences` GET：stub `useRouteTheme`（消除偏好 GET）+ 补全 `@/lib/line-display-name` mock 缺失的 `buildThemedSources`/`matchActiveSourceIndex` + `RouteThemeSelector` mock 成 null（隔离 ALL_THEMES / route-theme-storage 命名导出）
+  - `tests/unit/components/server-next/admin/moderation/ModerationBatch.test.tsx` — CHG-360-C/ADR-159 ModListRow 改用 `DualSignalCount`：3 个 fixture 补 `probeAggregate`/`renderAggregate`（DualSignalAggregate）
+  - `tests/unit/components/server-next/admin/submissions/SubmissionsListClient.test.tsx` — 组件新增 `useRouter()`：补 `vi.mock('next/navigation')`
+  - `tests/unit/components/server-next/admin/sources/SourcesClient.test.tsx` — 同上：补 `vi.mock('next/navigation')`
+  - `tests/unit/components/server-next/admin/sources/SourcesReplaceTip.test.tsx` — CHG-SN-9-LINES-VIEW-UNIFY 已移除「一键替换最相似 URL」按钮 + Modal：重写为覆盖「线路别名管理」链接（`sources-line-aliases-link` → `router.push('/admin/source-line-aliases')`）
+  - `docs/audit/known-failing-tests_20260529.md` — 台账标记 ✅ 已修复 + 确认根因
+  - `docs/task-queue.md` — 卡片 → ✅ 主体完成；拆出 `CHORE-TEST-CRAWLER-TZ-FLAKY` 残留项
+- **新增依赖**：无
+- **数据库变更**：无
+- **质量门禁**：typecheck EXIT=0 / lint EXIT=0 / 6 文件 30 用例全过（20 修复 + 10 既有）/ 全量 **5642 passed / 0 failed**（437 文件）**零失败**
+- **注意事项**：三类根因 —— ① 组件契约演进未同步（custom option / DualSignalCount 聚合字段 / preferences GET）；② server-next 客户端组件 `useRouter` 测试缺 `next/navigation` mock；③ 覆盖已删除功能需重写。**CrawlerClient 时区 flaky 未在本次范围**（非 20 个稳定失败之一），已拆 `CHORE-TEST-CRAWLER-TZ-FLAKY` 残留卡择时处理。

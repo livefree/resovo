@@ -1,9 +1,14 @@
 /**
- * SourcesReplaceTip.test.tsx — CHG-SN-8-FUP-SOURCES-DEAD-BTN
+ * SourcesReplaceTip.test.tsx — SourcesClient 顶栏 action 行为
+ *
+ * 历史：原覆盖「一键替换最相似 URL」按钮 + 筹备中提示 Modal（CHG-SN-8-FUP-SOURCES-DEAD-BTN）。
+ * CHG-SN-9-LINES-VIEW-UNIFY（Wave 3 验收 / 2026-05-28）已移除该占位按钮 + Modal，
+ * 替换为「线路别名管理」链接（testid=sources-line-aliases-link）→ router.push('/admin/source-line-aliases')。
+ * 本文件随之更新为覆盖新的顶栏 action（旧 testid sources-replace-* 已不存在）。
  *
  * 范围（2 用例）：
- *  1. 按钮点击 → 「一键替换」提示 Modal 渲染
- *  2. 点击「我知道了」→ Modal 关闭
+ *  1. 顶栏渲染「线路别名管理」链接（不依赖数据加载 / PageHeader action 无条件渲染）
+ *  2. 点击 → router.push('/admin/source-line-aliases')
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -16,8 +21,9 @@ vi.mock('../../../../../../apps/server-next/src/lib/sources/api', () => ({
   fetchDistinct: vi.fn().mockResolvedValue([]),
 }))
 
+const pushMock = vi.fn()
 vi.mock('next/navigation', () => ({
-  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), back: vi.fn(), forward: vi.fn(), refresh: vi.fn(), prefetch: vi.fn() }),
+  useRouter: () => ({ push: pushMock, replace: vi.fn(), back: vi.fn(), forward: vi.fn(), refresh: vi.fn(), prefetch: vi.fn() }),
   useSearchParams: () => new URLSearchParams(),
   usePathname: () => '/admin/sources',
 }))
@@ -40,28 +46,18 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
-describe('SourcesClient · 一键替换最相似 URL 提示 Modal (CHG-SN-8-FUP-SOURCES-DEAD-BTN)', () => {
-  it('1. 按钮点击 → 提示 Modal 渲染', async () => {
+describe('SourcesClient · 顶栏「线路别名管理」action (CHG-SN-9-LINES-VIEW-UNIFY)', () => {
+  it('1. 顶栏渲染「线路别名管理」链接', async () => {
     render(<SourcesClient />)
-    const btn = await waitFor(() => screen.getByTestId('sources-replace-similar-btn'))
+    const btn = await waitFor(() => screen.getByTestId('sources-line-aliases-link'))
     expect(btn).not.toBeNull()
-    expect(btn.textContent).toContain('一键替换最相似 URL')
-    fireEvent.click(btn)
-    await waitFor(() => {
-      expect(screen.getByTestId('sources-replace-tip-modal')).not.toBeNull()
-    })
-    expect(screen.getByText(/筹备中/)).not.toBeNull()
-    expect(screen.getByText(/当前替代路径/)).not.toBeNull()
+    expect(btn.textContent).toContain('线路别名管理')
   })
 
-  it('2. 点击「我知道了」→ Modal 关闭', async () => {
+  it('2. 点击 → router.push("/admin/source-line-aliases")', async () => {
     render(<SourcesClient />)
-    const btn = await waitFor(() => screen.getByTestId('sources-replace-similar-btn'))
+    const btn = await waitFor(() => screen.getByTestId('sources-line-aliases-link'))
     fireEvent.click(btn)
-    const dismissBtn = await waitFor(() => screen.getByTestId('sources-replace-tip-dismiss'))
-    fireEvent.click(dismissBtn)
-    await waitFor(() => {
-      expect(screen.queryByTestId('sources-replace-tip-modal')).toBeNull()
-    })
+    expect(pushMock).toHaveBeenCalledWith('/admin/source-line-aliases')
   })
 })
