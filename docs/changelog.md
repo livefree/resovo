@@ -12215,3 +12215,24 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **数据库变更**：videos 表新增 `bangumi_status TEXT NOT NULL DEFAULT 'pending' CHECK IN (4 值)` + `idx_videos_bangumi_status` 部分索引（migration 082，幂等）
 - **质量门禁**：typecheck EXIT=0 / lint EXIT=0 / verify:adr-contracts EXIT=0 / 新单测 7/7 / 全量 5616 passed **零回归**（20 个 pre-existing 失败经 stash 基线比对一致，已落档 known-failing-tests_20260529.md）
 - **注意事项**：本卡仅地基（列+类型+query+出口），**未接写入方**（C-2/META-08：BangumiService matchAndEnrich/confirmMatch 写 status）、**未建 EnrichmentSummary**（C-3/META-09）。bangumi_status 现恒为默认 'pending'，直到 C-2 接入。
+
+---
+
+## [META-08] ADR-170 C-2：BangumiService 三路径写 bangumi_status
+- **完成时间**：2026-05-29
+- **记录时间**：2026-05-29
+- **执行模型**：claude-opus-4-8
+- **子代理**：无
+- **来源**：ADR-170 D-170-4（`docs/decisions.md`）/ SEQ-20260529-02 P1 地基第 2 卡 / 依赖 META-07
+- **修改文件**：
+  - `apps/api/src/services/BangumiService.ts` — 状态投影下沉 `matchAndEnrich`（统一覆盖 step3 自动流 / bangumi-sync 直调 / 改类型→anime 三路径）：
+    - `matchAndEnrich` 两处 `none` return 前写 `'unmatched'`（Pool）；`candidate` 分支 writeRef 后写 `'candidate'`（Pool）
+    - `applyAutoMatchAtomic`：upsert auto_matched ref 后、COMMIT 前 `updateVideoBangumiStatus(client, ..., 'matched')`（**事务内 / R-3 原子**）
+    - `confirmMatch`：upsert manual_confirmed ref 后、COMMIT 前同样事务内写 `'matched'`
+    - 新增 best-effort 私有 `writeBangumiStatus`（Pool 路径，失败 stderr 不静默吞 / 不阻断 enrich）
+  - `tests/unit/api/bangumi-service.test.ts` — 扩四态断言（auto/confirm 用事务 client / candidate/none 用 Pool）+ ROLLBACK 不写脏 status + 补 videos mock `updateVideoBangumiStatus`
+  - `tests/unit/api/metadataEnrich.test.ts` — 补 videos mock `updateVideoBangumiStatus`（step3→matchAndEnrich 间接调用）
+- **新增依赖**：无
+- **数据库变更**：无（消费 META-07 列）
+- **质量门禁**：typecheck EXIT=0 / lint EXIT=0 / bangumi-service 27 + 相关 77 全过 / 全量 5617 passed **零新增回归**（失败集 = known-failing 台账 20 个，精确一致）
+- **注意事项**：非 anime 视频 step3 不执行 → bangumi_status 恒 'pending'，前端据 type 不渲染徽标（C-3/META-09 接 EnrichmentSummary）。`MetadataEnrichService.step3` 未改（状态写下沉 BangumiService 自动覆盖）。`low_confidence` none 分支（confidence<0.60）因 dump 基础分 0.70 实际不可达，其 'unmatched' 写为防御性，无专测。

@@ -125,6 +125,7 @@ vi.mock('@/api/db/queries/catalogEpisodes', () => ({
 }))
 vi.mock('@/api/db/queries/videos', () => ({
   updateEpisodeCount: vi.fn().mockResolvedValue(undefined),
+  updateVideoBangumiStatus: vi.fn().mockResolvedValue(undefined),
 }))
 vi.mock('@/api/db/queries/mediaCatalog', () => ({
   findCatalogById: vi.fn(),
@@ -152,6 +153,7 @@ const mFindById = extQ.findBangumiById as ReturnType<typeof vi.fn>
 const mUpsertRef = extQ.upsertVideoExternalRef as ReturnType<typeof vi.fn>
 const mUpsertEps = epQ.upsertCatalogEpisodes as ReturnType<typeof vi.fn>
 const mUpdateEpCount = vQ.updateEpisodeCount as ReturnType<typeof vi.fn>
+const mUpdateBangumiStatus = vQ.updateVideoBangumiStatus as ReturnType<typeof vi.fn>
 const mFindCatalog = catQ.findCatalogById as ReturnType<typeof vi.fn>
 const mUpdateCatalog = catQ.updateCatalogFields as ReturnType<typeof vi.fn>
 
@@ -185,14 +187,16 @@ describe('BangumiService.matchAndEnrich', () => {
     mConfigured.mockReturnValue(true)
   })
 
-  it('本地无匹配 → none/no_local_match', async () => {
+  it('本地无匹配 → none/no_local_match + 写 bangumi_status=unmatched（Pool / ADR-170）', async () => {
     mFindByTitle.mockResolvedValue([])
     const r = await svc.matchAndEnrich({ videoId: VID, catalogId: CID, titleNorm: 'x', year: 2007 })
     expect(r).toEqual({ matched: 'none', reason: 'no_local_match' })
     expect(mUpsertRef).not.toHaveBeenCalled()
+    // none 无事务 → 经 Pool（this.db = mockPool）写 unmatched
+    expect(mUpdateBangumiStatus).toHaveBeenCalledWith(mockPool, VID, 'unmatched')
   })
 
-  it('置信度 candidate（无年份 0.70）→ 写 candidate ref，不更新 catalog', async () => {
+  it('置信度 candidate（无年份 0.70）→ 写 candidate ref + bangumi_status=candidate（Pool），不更新 catalog', async () => {
     mFindByTitle.mockResolvedValue([entry()])
     const r = await svc.matchAndEnrich({ videoId: VID, catalogId: CID, titleNorm: 'x', year: null })
     expect(r).toMatchObject({ matched: 'candidate', bangumiSubjectId: 51 })
@@ -201,6 +205,8 @@ describe('BangumiService.matchAndEnrich', () => {
     }))
     expect(mGetSubject).not.toHaveBeenCalled()
     expect(mUpdateCatalog).not.toHaveBeenCalled()
+    // candidate 无事务 → Pool 写
+    expect(mUpdateBangumiStatus).toHaveBeenCalledWith(mockPool, VID, 'candidate')
   })
 
   it('auto + Token 配置 → 拉 rich 详情 + 逐集 + 回填集数', async () => {
@@ -278,6 +284,9 @@ describe('BangumiService.matchAndEnrich', () => {
     expect(mUpsertRef).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
       provider: 'bangumi', matchStatus: 'auto_matched', isPrimary: true,
     }))
+    // ADR-170 R-3：status 写入用事务 client（mockClient，非 mockPool）→ 与 catalog+ref 同事务
+    expect(mUpdateBangumiStatus).toHaveBeenCalledWith(mockClient, VID, 'matched')
+    expect(mUpdateBangumiStatus).not.toHaveBeenCalledWith(mockPool, VID, 'matched')
     expect(clientReleased).toBe(true)
   })
 
@@ -296,6 +305,8 @@ describe('BangumiService.matchAndEnrich', () => {
     expect(clientQueries).not.toContain('COMMIT')
     // ref 在 catalog 写入之后才写 → catalog 失败时根本未触达 ref upsert（无孤儿 auto_matched ref）
     expect(mUpsertRef).not.toHaveBeenCalled()
+    // ADR-170 R-3：catalog 失败 → status 也未写（无脏 matched）
+    expect(mUpdateBangumiStatus).not.toHaveBeenCalled()
     expect(clientReleased).toBe(true)
   })
 })
@@ -351,6 +362,8 @@ describe('BangumiService.confirmMatch', () => {
     expect(mUpsertRef).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
       provider: 'bangumi', matchStatus: 'manual_confirmed', isPrimary: true,
     }))
+    // ADR-170 D-170-4：手动确认 → matched，用事务 client（同事务原子）
+    expect(mUpdateBangumiStatus).toHaveBeenCalledWith(mockClient, VID, 'matched')
     // BEGIN ... COMMIT；client 释放
     expect(clientQueries[0]).toBe('BEGIN')
     expect(clientQueries[clientQueries.length - 1]).toBe('COMMIT')

@@ -107,7 +107,9 @@
    - 实际开始：2026-05-29
    - 完成时间：2026-05-29（执行 claude-opus-4-8 / arch-reviewer Opus 评 ADR-170 / 门禁全过 / 7 新单测 / 零回归 / commit 见 changelog META-07）
    - 验收要点：migration 082 幂等 + BANGUMI_STATUSES runtime export + query 双形态单测 + 零回归 ✅
-2. **META-08** — ADR-170 C-2：BangumiService 三路径写 status（matchAndEnrich auto 入 applyAutoMatchAtomic 事务 / candidate-none Pool / confirmMatch 事务）（状态：⬜ 待开始 / META-07 已满足依赖）
+2. **META-08** — ADR-170 C-2：BangumiService 三路径写 status（matchAndEnrich auto 入 applyAutoMatchAtomic 事务 / candidate-none Pool / confirmMatch 事务）（状态：✅ 已完成）
+   - 实际开始：2026-05-29
+   - 完成时间：2026-05-29（执行 claude-opus-4-8 / 门禁全过 / bangumi-service 27 + 2 mock 修复 / 零新增回归 / commit 见 changelog META-08）
    - 依赖：META-07 完成后
    - 验收要点：bangumi-sync 直调路径 + 手动 confirm 路径均更新 bangumi_status；auto 原子性（R-3）
 3. **META-09** — ADR-170 C-3：EnrichmentSummary 类型 + DbVideoRow/VIDEO_FULL_SELECT(+2 列) + buildEnrichmentSummary（admin 路径注入）+ server-next VideoAdminRow/Detail 镜像（状态：⬜ 待开始）

@@ -7,7 +7,7 @@
  */
 
 import type { Pool, PoolClient } from 'pg'
-import type { BangumiCandidate } from '@/types'
+import type { BangumiCandidate, BangumiStatus } from '@/types'
 import { MediaCatalogService } from './MediaCatalogService'
 import type { CatalogUpdateData } from './MediaCatalogService'
 import * as externalDataQueries from '@/api/db/queries/externalData'
@@ -68,18 +68,27 @@ export class BangumiService {
    * 仅本地 dump 召回；auto 命中后按需拉 REST 详情（Token 缺失/失败则降级用本地 dump 字段）。
    */
   async matchAndEnrich({ videoId, catalogId, titleNorm, year }: MatchAndEnrichInput): Promise<BangumiEnrichResult> {
+    // ADR-170 D-170-4：状态投影下沉本方法，统一覆盖 step3 自动流 / bangumi-sync 直调 / 改类型→anime 三路径。
     const matches = await externalDataQueries.findBangumiByTitleNorm(this.db, titleNorm, year)
-    if (matches.length === 0) return { matched: 'none', reason: 'no_local_match' }
+    if (matches.length === 0) {
+      await this.writeBangumiStatus(videoId, 'unmatched')
+      return { matched: 'none', reason: 'no_local_match' }
+    }
 
     const best = matches[0]
     const { confidence, breakdown } = computeLocalBangumiConfidence(best, year)
-    if (confidence < CONFIDENCE_CANDIDATE) return { matched: 'none', reason: 'low_confidence' }
+    if (confidence < CONFIDENCE_CANDIDATE) {
+      await this.writeBangumiStatus(videoId, 'unmatched')
+      return { matched: 'none', reason: 'low_confidence' }
+    }
 
     const status = confidence >= CONFIDENCE_AUTO_MATCH ? 'auto_matched' : 'candidate'
 
     if (status === 'candidate') {
       // candidate：仅记 ref（无 catalog 写入 → 无脏态风险，沿用 best-effort writeRef）
       await this.writeRef(videoId, best.bangumiId, 'candidate', confidence, breakdown)
+      // 无事务（无 catalog 写）→ Pool 写 status（best-effort，记录不静默吞 / ADR-170 D-170-4）
+      await this.writeBangumiStatus(videoId, 'candidate')
       return { matched: 'candidate', bangumiSubjectId: best.bangumiId, confidence }
     }
 
@@ -136,6 +145,8 @@ export class BangumiService {
         isPrimary: true,
         linkedBy: 'moderator',
       })
+      // ADR-170 D-170-4：手动确认 → matched（与 catalog+ref 同事务）
+      await videosQueries.updateVideoBangumiStatus(client, videoId, 'matched')
       await client.query('COMMIT')
       return { updated: true }
     } catch (err) {
@@ -298,6 +309,8 @@ export class BangumiService {
         linkedBy: 'auto',
         notes: JSON.stringify(breakdown),
       })
+      // ADR-170 R-3：status 写入与 catalog+ref 同事务（消除「已提交但 status 未写」窗口）
+      await videosQueries.updateVideoBangumiStatus(client, videoId, 'matched')
       await client.query('COMMIT')
       return result.episodes
     } catch (err) {
@@ -330,6 +343,20 @@ export class BangumiService {
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       process.stderr.write(`[BangumiService] writeRef failed for ${videoId}: ${msg}\n`)
+    }
+  }
+
+  /**
+   * 写 videos.bangumi_status（无事务路径：none/candidate 分支）。
+   * best-effort：失败记录到 stderr 不抛（不阻断 enrich 主流程），但**不静默吞**（ADR-170 D-170-4 / Y-2）。
+   * auto/confirm 路径不走此助手——它们在各自事务内直接 updateVideoBangumiStatus(client, ...) 以保原子性。
+   */
+  private async writeBangumiStatus(videoId: string, status: BangumiStatus): Promise<void> {
+    try {
+      await videosQueries.updateVideoBangumiStatus(this.db, videoId, status)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      process.stderr.write(`[BangumiService] updateVideoBangumiStatus(${status}) failed for ${videoId}: ${msg}\n`)
     }
   }
 }
