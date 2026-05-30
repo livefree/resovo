@@ -6,7 +6,7 @@
 
 ## 进行中任务
 
-（空 / SEQ-20260530-02 P3 feature-2：META-12-A 审核台 enrichmentSummary 后端注入 ship 2026-05-30 / 下一步 META-12-B 前端 ModListRow + RightPane/TabDetail 接入簇）
+（空 / SEQ-20260530-02 P3 feature-2 主体完成：META-11 视频库+抽屉 / META-12-A 审核台后端 / META-12-B 审核台前端 全 ship 2026-05-30 — faces 1/2/3 已接入 EnrichmentBadgeCluster。Face 4 线路区 = META-13 待评估 backlog / 用户未纳入本轮范围）
 
 ---
 

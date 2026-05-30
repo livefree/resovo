@@ -11,7 +11,7 @@
  * 信息密度对齐设计稿：DetailRow 单行 < 28px，紧凑（label 等宽字符 + value 右对齐）。
  */
 import React, { useCallback, useState } from 'react'
-import { AdminButton, CountryName, useToast } from '@resovo/admin-ui'
+import { AdminButton, CountryName, useToast, EnrichmentBadgeCluster } from '@resovo/admin-ui'
 import type { VideoQueueRow } from '@resovo/types'
 import { listVideoSources } from '@/lib/videos/api'
 import { reprobeRoute } from '@/lib/sources/api'
@@ -135,6 +135,25 @@ export function TabDetail({ v }: TabDetailProps): React.ReactElement {
       <DetailRow label={M.detail.isPublished} value={String(v.isPublished)} ok={v.isPublished} />
       <DetailRow label={M.detail.visibility} value={v.visibilityStatus} ok={v.visibilityStatus === 'public'} />
       <DetailRow label={M.detail.reviewStatus} value={v.reviewStatus} ok={v.reviewStatus === 'approved'} />
+
+      {/* META-12-B / feature-2：富集徽标簇（density='header'）；下方 DetailRow 保留文字态明细 */}
+      {v.enrichmentSummary && (
+        <>
+          <div style={{ ...SECTION_HEADER_STYLE, marginTop: 12 }}>富集</div>
+          <div style={{ padding: '4px 8px' }} data-right-detail-enrichment>
+            <EnrichmentBadgeCluster
+              summary={v.enrichmentSummary}
+              type={v.type}
+              density="header"
+              enrichedAtLabel={
+                v.enrichmentSummary.enrichedAt
+                  ? `富集 ${v.enrichmentSummary.enrichedAt.slice(0, 10)}`
+                  : undefined
+              }
+            />
+          </div>
+        </>
+      )}
 
       <div style={{ ...SECTION_HEADER_STYLE, marginTop: 12 }}>{M.detail.doubanStatus}</div>
       <DetailRow label="douban_status" value={String(doubanLabel)} ok={v.doubanStatus === 'matched'} />

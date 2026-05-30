@@ -12351,3 +12351,20 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **质量门禁**：typecheck EXIT=0 / lint EXIT=0 / verify:adr-contracts EXIT=0 / **3 新单测全过** / 全量 **440 文件 5692 passed 零失败**（5689→5692 净 +3 零回归）
 - **关键决策（ADR-170 AMENDMENT 1）**：①`enrichmentSummary` 消费方从 `VideoAdminRow/Detail` 扩展至审核台 `VideoQueueRow`（additive 非新契约）②`buildEnrichmentSummary` 窄化 `EnrichmentSourceRow` 实现单一投影真源跨 row 复用（价值排序 2）③mapper 剔除 raw `meta_quality` 防 JSON 泄漏（贯彻 ADR-170「前端不解析零散 JSON」）④VideoQueueRow.enrichmentSummary 可选不破坏 StagingRow extends + 其余消费方
 - **注意事项**：本卡仅后端数据注入；**META-12-B 前端**（ModListRow 行内簇 + RightPane/TabDetail 详情簇）独立后续卡，数据已就绪。`as DoubanStatus/SourceCheckStatus` 窄化转换（DbPendingQueueRow 遗留 string 类型 / 值由 DB CHECK 保证 / 已偏离登记 D-170-AMD1-1）。
+
+---
+
+## [META-12-B] Face 3 审核台前端接入 EnrichmentBadgeCluster（P3 feature-2）
+- **完成时间**：2026-05-30
+- **记录时间**：2026-05-30
+- **执行模型**：claude-opus-4-8
+- **子代理**：无（消费 META-10 EnrichmentBadgeCluster + META-12-A 已就绪数据 VideoQueueRow.enrichmentSummary）
+- **来源序列**：SEQ-20260530-02（P3 feature-2 / 完成 Face 3 = faces 1-3）
+- **修改文件**：
+  - `apps/server-next/src/app/admin/moderation/_client/ModListRow.tsx` — import + meta 行 DualSignalCount 旁加 `EnrichmentBadgeCluster density="row"`（it.enrichmentSummary 缺省→不渲染 / anime-only bangumi 由 Cluster 依 it.type 门控）
+  - `apps/server-next/src/app/admin/moderation/_client/RightPane/TabDetail.tsx` — import + 状态三元下新增「富集」section `EnrichmentBadgeCluster density="header"`（含富集时间；下方 douban/meta_score/source_check DetailRow 文字态明细保留）
+  - `tests/unit/components/server-next/admin/moderation/enrichment-cluster-moderation.test.tsx`（新建）— 5 单测（ModListRow anime/movie/缺省 3 + TabDetail 有/无 enrichmentSummary 2）
+- **新增依赖**：无
+- **数据库变更**：无
+- **质量门禁**：typecheck EXIT=0 / lint EXIT=0 / verify:adr-contracts EXIT=0 / **5 新单测全过** / 全量 **441 文件 5697 passed 零失败**（5692→5697 净 +5 零回归）
+- **注意事项**：**P3 feature-2 主体完成**（faces 1 视频库 / 2 编辑抽屉 / 3 审核台 全接入 EnrichmentBadgeCluster）。**Face 4 线路区**（TabLines 区头 source 汇总徽标）= META-13 backlog，逐源活性已由共享 LinesPanel 承担，用户本轮未纳入范围。

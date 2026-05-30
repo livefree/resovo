@@ -1,7 +1,7 @@
 'use client'
 
 import React from 'react'
-import { DualSignalCount, Thumb } from '@resovo/admin-ui'
+import { DualSignalCount, Thumb, EnrichmentBadgeCluster } from '@resovo/admin-ui'
 import type { VideoQueueRow } from '@resovo/types'
 
 interface ModListRowProps {
@@ -97,6 +97,10 @@ export function ModListRow({
         <div style={{ marginTop: 4, display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
           {/* CHG-360-C / ADR-159：X/Y 聚合显示 / 按 DISTINCT 线路 count / partial 黄色 */}
           <DualSignalCount probe={it.probeAggregate} render={it.renderAggregate} />
+          {/* META-12-B / feature-2：富集徽标簇（density='row'）；anime-only bangumi 由 Cluster 依 it.type 门控 */}
+          {it.enrichmentSummary && (
+            <EnrichmentBadgeCluster summary={it.enrichmentSummary} type={it.type} density="row" />
+          )}
           {it.badges.length > 0 && (
             <span style={{ fontSize: 'var(--font-size-2xs)', color: 'var(--state-warning-fg)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {it.badges[0]}
