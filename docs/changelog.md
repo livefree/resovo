@@ -12236,3 +12236,23 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **数据库变更**：无（消费 META-07 列）
 - **质量门禁**：typecheck EXIT=0 / lint EXIT=0 / bangumi-service 27 + 相关 77 全过 / 全量 5617 passed **零新增回归**（失败集 = known-failing 台账 20 个，精确一致）
 - **注意事项**：非 anime 视频 step3 不执行 → bangumi_status 恒 'pending'，前端据 type 不渲染徽标（C-3/META-09 接 EnrichmentSummary）。`MetadataEnrichService.step3` 未改（状态写下沉 BangumiService 自动覆盖）。`low_confidence` none 分支（confidence<0.60）因 dump 基础分 0.70 实际不可达，其 'unmatched' 写为防御性，无专测。
+
+---
+
+## [META-09] ADR-170 C-3：EnrichmentSummary 契约 + admin 路径注入（P1 地基收官）
+- **完成时间**：2026-05-29
+- **记录时间**：2026-05-29
+- **执行模型**：claude-opus-4-8
+- **子代理**：无
+- **来源**：ADR-170 D-170-5 + R-5（`docs/decisions.md`）/ SEQ-20260529-02 P1 地基末卡 / 依赖 META-07/08
+- **修改文件**：
+  - `packages/types/src/video.types.ts` — 新增 `EnrichmentSummary` interface（doubanStatus/bangumiStatus/sourceCheckStatus/metaScore/enrichedAt/titleEnIsPinyin/doubanConfidence/bangumiSubjectId）；`export type *` 自动导出
+  - `apps/api/src/db/queries/videos.internal.ts` — `DbVideoRow` 加 `bangumi_status`/`bangumi_subject_id`；`VIDEO_FULL_SELECT` 加 `v.bangumi_status, mc.bangumi_subject_id`；新增纯函数 `buildEnrichmentSummary(row)`（展开 meta_quality + 平铺列）。**mapVideoRow/public Video 不改**
+  - `apps/api/src/db/queries/videos.ts` — barrel `export { buildEnrichmentSummary }`
+  - `apps/api/src/services/VideoService.ts` — `adminList`/`adminFindById` 注入 `enrichmentSummary`（**admin 路径**，raw 行；R-5：非 public mapVideoRow）
+  - `apps/server-next/src/lib/videos/types.ts` — `VideoAdminRow` 加 `enrichmentSummary?: EnrichmentSummary`（Detail extends 自动覆盖）+ import
+  - `tests/unit/api/videos-bangumi-status.test.ts` — 加 `buildEnrichmentSummary` 3 例（meta_quality 展开 / null 缺省 / pending 回退）；共 10 用例
+- **新增依赖**：无
+- **数据库变更**：无（SELECT 增列，列由 migration 082/026 提供）
+- **质量门禁**：typecheck EXIT=0 / lint EXIT=0 / videos-bangumi-status 10 + 相关 32 全过 / 全量 5622 passed **零新增回归**（失败集 = known-failing 台账 20 个，精确一致）
+- **注意事项**：`enrichmentSummary` 仅注入 admin DTO（VideoAdminRow/Detail）；public `Video`/`VideoCard`/`mapVideoCard` 形状未变（R-5）。additive 字段，平铺 douban_status/meta_score 保留（排序契约依赖）。**ADR-170 C-1/C-2/C-3 三卡闭环，SEQ-20260529-02 P1 地基完成**；下游 P2 = ADR-172 `EnrichmentBadge` 共享组件（消费 EnrichmentSummary）。

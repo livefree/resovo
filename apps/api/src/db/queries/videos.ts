@@ -15,6 +15,7 @@ import {
 } from './videos.internal'
 
 export type { DbVideoRow } from './videos.internal'
+export { buildEnrichmentSummary } from './videos.internal'
 
 // ── 子模块再导出 ──────────────────────────────────────────────────
 

@@ -115,6 +115,26 @@ export interface VideoMetaQuality {
   /** Service 写入时刻（ISO 8601 / 用于"上次丰富时间"显示与重跑判断 / 任何写入路径都更新） */
   enriched_at?: string
 }
+
+/**
+ * EnrichmentSummary — 富集摘要派生投影（ADR-170 D-170-5 / C-3）。
+ *
+ * 服务端展开 `meta_quality` JSON + 平铺列，**仅后台 DTO**（VideoAdminRow/Detail）经
+ * `buildEnrichmentSummary` 在 admin 路径注入；不挂 public `Video` / `mapVideoRow`（R-5）。
+ * 供前端 EnrichmentBadge（ADR-172）直接消费，避免各页自解析零散 JSON。
+ *
+ * 纯派生：由同一 row 字段单次构造（doubanStatus = row.douban_status 等同源），禁止与平铺字段异源双写。
+ */
+export interface EnrichmentSummary {
+  doubanStatus: DoubanStatus
+  bangumiStatus: BangumiStatus            // 非 anime 恒 'pending'，UI 据 type 不渲染
+  sourceCheckStatus: SourceCheckStatus
+  metaScore: number                        // 0–100
+  enrichedAt: string | null                // ← meta_quality.enriched_at
+  titleEnIsPinyin: boolean                 // ← meta_quality.title_en_is_pinyin（缺省 false）
+  doubanConfidence: number | null          // ← meta_quality.douban_confidence
+  bangumiSubjectId: number | null          // ← media_catalog.bangumi_subject_id
+}
 /** VideoGenre — 内容题材（与 VideoType 内容形式严格正交）
  *
  * 对齐豆瓣视频分类（2026-04-22 META-10 对齐表）：

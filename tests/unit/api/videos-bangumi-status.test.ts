@@ -16,6 +16,7 @@ import { fileURLToPath } from 'node:url'
 import { dirname, resolve } from 'node:path'
 import type { Pool, PoolClient } from 'pg'
 import { updateVideoBangumiStatus } from '@/api/db/queries/videos.status'
+import { buildEnrichmentSummary, type DbVideoRow } from '@/api/db/queries/videos'
 import { BANGUMI_STATUSES } from '@/types'
 
 const mockQuery = vi.fn()
@@ -93,5 +94,45 @@ describe('migration 082 — SQL 文本契约', () => {
     expect(sql).toMatch(/COMMIT;/)
     expect(sql).toMatch(/IF\s+NOT\s+EXISTS/i)
     expect(sql).toMatch(/RAISE\s+EXCEPTION/i) // DO $$ 验证 $$
+  })
+})
+
+// ── 3. buildEnrichmentSummary（ADR-170 C-3 派生投影）──────────────
+
+describe('buildEnrichmentSummary — 富集摘要派生', () => {
+  function row(p: Partial<DbVideoRow> = {}): DbVideoRow {
+    return {
+      douban_status: 'matched', bangumi_status: 'candidate',
+      source_check_status: 'ok', meta_score: 80,
+      meta_quality: { enriched_at: '2026-05-29T00:00:00Z', title_en_is_pinyin: true, douban_confidence: 0.92 },
+      bangumi_subject_id: 51, ...p,
+    } as DbVideoRow
+  }
+
+  it('#8 meta_quality 有值 → 展开 enrichedAt/titleEnIsPinyin/doubanConfidence + 平铺列', () => {
+    expect(buildEnrichmentSummary(row())).toEqual({
+      doubanStatus: 'matched', bangumiStatus: 'candidate', sourceCheckStatus: 'ok',
+      metaScore: 80, enrichedAt: '2026-05-29T00:00:00Z', titleEnIsPinyin: true,
+      doubanConfidence: 0.92, bangumiSubjectId: 51,
+    })
+  })
+
+  it('#9 meta_quality=null → enrichedAt:null / titleEnIsPinyin:false / doubanConfidence:null（缺省）', () => {
+    const s = buildEnrichmentSummary(row({ meta_quality: null, bangumi_subject_id: null }))
+    expect(s.enrichedAt).toBeNull()
+    expect(s.titleEnIsPinyin).toBe(false)
+    expect(s.doubanConfidence).toBeNull()
+    expect(s.bangumiSubjectId).toBeNull()
+  })
+
+  it('#10 状态列缺省回退 pending（防御 null 列）', () => {
+    const s = buildEnrichmentSummary(row({
+      douban_status: undefined as never, bangumi_status: undefined as never,
+      source_check_status: undefined as never, meta_score: undefined as never,
+    }))
+    expect(s.doubanStatus).toBe('pending')
+    expect(s.bangumiStatus).toBe('pending')
+    expect(s.sourceCheckStatus).toBe('pending')
+    expect(s.metaScore).toBe(0)
   })
 })
