@@ -82,14 +82,43 @@ vi.mock('@/lib/line-display-name', () => ({
   buildLineDisplayName: () => 'L1',
   deduplicateLabels: (arr: unknown[]) => arr,
   getDefaultTheme: () => ({ labels: ['立春'], deadLabel: '已断', pendingLabel: '未测' }),
+  // PlayerShell.tsx 静态 import buildThemedSources / matchActiveSourceIndex（line 12）→
+  // 不在 mock 中提供时，vitest 严格代理在被访问的瞬间抛 "No export defined"。
+  matchActiveSourceIndex: () => 0,
+  buildThemedSources: (raw: Array<{ sourceUrl: string; type: string }>) =>
+    (raw ?? []).map((s) => ({ src: s.sourceUrl, type: s.type, label: 'L1' })),
 }))
 
 vi.mock('@/lib/video-detail', () => ({
   extractShortId: (slug: string) => slug.split('-').pop() ?? slug,
 }))
 
+// useRouteTheme mock（ADR-165 / CHG-SN-9-ROUTE-LABEL-D-A2）：
+// 真 hook 内部 useUserPreferencesSync 会在 mount 时 apiClient.get('/users/me/preferences')，
+// 会污染本测试"apiClient.get 仅 videos/sources"的断言（甚至在 apiGetMock 无 implementation 时
+// .then 于 undefined 上崩溃）。本测试只关心 fetch 行为，故 stub 掉主题/偏好同步子系统。
+vi.mock('@/lib/route-theme-storage', () => {
+  // 稳定引用：与真 hook（useState）一致，theme 标识不每次 render 变 → 不重复触发
+  // PlayerShell 主题切换 effect（line 249）。否则 routeTheme 每渲染换引用会反复 relabel。
+  const theme = { id: 'jie_qi', displayName: '节气', labels: ['立春'], deadLabel: '已断', fallbackPrefix: '线路' }
+  const noop = () => {}
+  return {
+    useRouteTheme: () => ({
+      theme,
+      customTheme: null,
+      syncing: false,
+      setTheme: noop,
+      setCustomTheme: noop,
+      clearCustomTheme: noop,
+    }),
+  }
+})
+
 // SourceBar / ResumePrompt / playerShell.layout 等 UI 组件简化 mock
 vi.mock('@/components/player/SourceBar', () => ({ SourceBar: () => null }))
+// RouteThemeSelector：本测试只关心 fetch 行为，不渲染主题选择器 UI（其内部 import
+// ALL_THEMES / route-theme-storage 命名导出，本测试均已精简 mock → 渲染会触发严格代理报错）
+vi.mock('@/components/player/RouteThemeSelector', () => ({ RouteThemeSelector: () => null }))
 vi.mock('@/components/player/ResumePrompt', () => ({
   ResumePrompt: () => null,
   saveProgress: vi.fn(),

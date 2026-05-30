@@ -19,6 +19,14 @@ const upsertLineAliasMock = vi.fn()
 const fetchDistinctMock = vi.fn().mockResolvedValue([])
 const toastPushMock = vi.fn()
 
+// SourcesClient 使用 useRouter()（next/navigation / "线路别名管理" 链接 push）；jsdom 下无
+// app router context → 不 mock 会抛 "invariant expected app router to be mounted"。
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), back: vi.fn(), forward: vi.fn(), refresh: vi.fn(), prefetch: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(),
+  usePathname: () => '/admin/sources',
+}))
+
 vi.mock('../../../../../../apps/server-next/src/lib/sources/api', () => ({
   listVideoGroups: (...args: unknown[]) => listVideoGroupsMock(...args),
   getVideoGroupStats: (...args: unknown[]) => getVideoGroupStatsMock(...args),

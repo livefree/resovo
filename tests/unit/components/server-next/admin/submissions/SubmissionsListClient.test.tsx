@@ -12,6 +12,14 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 const listSubmissionsMock = vi.fn()
 const listCrawlerSitesMock = vi.fn().mockResolvedValue([])
 
+// SubmissionsListClient 使用 useRouter()（next/navigation）；jsdom 下无 app router context →
+// 不 mock 会抛 "invariant expected app router to be mounted"。
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), back: vi.fn(), forward: vi.fn(), refresh: vi.fn(), prefetch: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(),
+  usePathname: () => '/admin/submissions',
+}))
+
 vi.mock('../../../../../../apps/server-next/src/lib/submissions/api', () => ({
   listSubmissions: (...args: unknown[]) => listSubmissionsMock(...args),
   approveSubmission: vi.fn(),

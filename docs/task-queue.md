@@ -119,14 +119,25 @@
 
 ---
 
-## [CHORE-TEST-BASELINE-20260529] 清理 pre-existing 前端单测失败（择时）
+## [CHORE-TEST-BASELINE-20260529] 清理 pre-existing 前端单测失败
 
-- **状态**：⬜ 待开始（用户 2026-05-29 决策：择时处理，先落档避免重复发现）
+- **状态**：✅ 主体完成（2026-05-30 / claude-opus-4-8 / 用户同意落卡+commit）；CrawlerClient 时区 flaky 加固 **未做**（拆为残留项，见下）
 - **来源**：META-07 全量单测验证发现 / 经 stash 基线比对确认与 META-07 无关
-- **台账**：`docs/audit/known-failing-tests_20260529.md`（6 文件 / 20 用例 + CrawlerClient 时区 flaky）
-- **范围**：route-theme-selector / player-shell-hydration / ModerationBatch / SubmissionsListClient / SourcesClient / SourcesReplaceTip（前端 jsdom 测试，疑组件大改后测试未同步）；CrawlerClient 时区测试加固为时区无关
-- **建议模型**：sonnet（逐文件对齐测试与实现）；拆子卡按文件
-- **验收要点**：6 文件 20 用例全绿 + CrawlerClient 全量并行稳定通过
+- **台账**：`docs/audit/known-failing-tests_20260529.md`（已更新为 ✅ 已修复）
+- **范围**：route-theme-selector / player-shell-hydration / ModerationBatch / SubmissionsListClient / SourcesClient / SourcesReplaceTip（前端 jsdom 测试，根因均为测试侧未跟随组件演进）
+- **执行模型**：claude-opus-4-8 / 子代理：无
+- **结果**：6 文件 20 用例**全绿**；全量 **5642 passed / 0 failed**（437 文件）；typecheck + lint EXIT=0。仅改测试文件，无产品代码改动。
+- **根因归纳**：① 组件契约演进未同步（theme-selector 加 custom option / ModerationBatch DualSignalCount 聚合字段 / hydration 新增 preferences GET）；② server-next 客户端组件用 `useRouter` 但测试缺 `next/navigation` mock（Submissions / Sources）；③ 覆盖已删除功能（SourcesReplaceTip → 重写到「线路别名管理」链接）
+- **残留项（择时）**：CrawlerClient 时区测试加固为时区无关断言（flaky，非 20 个稳定失败之一，单跑 66/66 通过）
+
+---
+
+## [CHORE-TEST-CRAWLER-TZ-FLAKY] CrawlerClient 时区测试加固（从 CHORE-TEST-BASELINE-20260529 拆出）
+
+- **状态**：⬜ 待开始（择时）
+- **台账**：`docs/audit/known-failing-tests_20260529.md` §Flaky
+- **范围**：`tests/unit/components/server-next/admin/crawler/CrawlerClient.test.tsx` 用例 51（时间轴 HH:MM 断言）改为时区无关，消除全量并行偶发失败
+- **建议模型**：haiku（单文件断言加固）
 
 ---
 
