@@ -18239,3 +18239,82 @@ BANGUMI_USER_AGENT:     z.string().default('resovo/1.0 (https://github.com/...)'
 - **D-161-1**：占位条目标题失配可能产生重复 catalog（见决策要点 8）。处置：accept（best-effort），不在本期闭环；未来归并卡触发条件 = 重复 catalog（同 bangumi_subject_id 多条 / 同名多条）> 5% 时起 PRE-MERGE-CATALOG 卡。
 
 ---
+
+## ADR-170：videos.bangumi_status 列 + BangumiStatus 类型 + EnrichmentSummary 对外契约（SEQ-EXT-META-01 / Track external-metadata）
+
+- **状态**：**Accepted**（arch-reviewer claude-opus-4-8 × 1 轮 CONDITIONAL：R1（bangumi-sync 直调 matchAndEnrich → step3 单点写会漏）+ R2（077 已重号 / 026 文件名）+ R3（auto status 须入 applyAutoMatchAtomic 事务）+ Y1–Y4 + A1–A4；**二轮人审 R5**：`enrichmentSummary` 挂载方向修正（admin 路径 `buildEnrichmentSummary` 注入，非 public `mapVideoRow`）+ 补 2 个 barrel 出口（`packages/types/index.ts` / `videos.ts`）；全部已消化）
+- **来源**：设计方案 `docs/designs/external-metadata-ux-overhaul_20260529.md` §3.2/§3.3（ADR-C）。本 ADR 为「外部元数据 UX 整改」契约核心，ADR-171（事件/通知）、ADR-172（EnrichmentBadge 组件）依赖其类型，**须先 Accepted**。
+
+### 背景
+
+`videos` 表有 `douban_status`（032）记豆瓣匹配态，但**无 bangumi 对应列**。Bangumi 匹配态仅散落在 `video_external_refs(provider='bangumi')`，列表/详情/审核台无法廉价读取，UI 无法显示 Bangumi 徽标。更严重的是手动确认 `BangumiService.confirmMatch`（`BangumiService.ts:114`）只写 catalog + external_ref、**不更新任何 videos 状态**，而 `updateVideoEnrichStatus`（`videos.status.ts:256`）签名只支持 `{doubanStatus, metaScore, metaQuality}`——导致手动确认后 UI 徽标停在 pending/candidate。同时 `enriched_at`/`title_en_is_pinyin`/`douban_confidence` 埋在 `videos.meta_quality` JSON，`mc.bangumi_subject_id` 未被 `VIDEO_FULL_SELECT`（`videos.internal.ts:185`）选取，前端只能自解析零散 JSON。本 ADR 统一收口：加列 + 类型 + 专用 query + 服务端展开的 `EnrichmentSummary` 契约。
+
+### 决策要点
+
+1. **（D-170-1）Migration 082 加列**：`082_videos_bangumi_status.sql` 给 `videos` 加
+   `bangumi_status TEXT NOT NULL DEFAULT 'pending' CHECK (bangumi_status IN ('pending','matched','candidate','unmatched'))`
+   + 部分索引 `idx_videos_bangumi_status ON videos (bangumi_status) WHERE deleted_at IS NULL`（**显式镜像** `032` 的 `idx_videos_douban_status` 谓词，A-2）。幂等（`ADD COLUMN IF NOT EXISTS` + `DO $$ 验证 $$`），同步 `docs/architecture.md`。
+   **R-2 事实校正**：迁移目录已存在重号史（`077_bangumi_metadata.sql` + `077_videos_meta_quality.sql` 共用 077；另有 `058a_*`、乱序 `053_*`）。本 ADR 已实查确认 **082 未被占用**（现存最大为 `080_users_preferences.sql` / `081_source_line_aliases_dead_since.sql`）。被引用的既有文件真实名为 **`026_create_media_catalog.sql`**（`bangumi_subject_id INT UNIQUE` :66 / `douban_id TEXT UNIQUE` :65）。
+
+2. **（D-170-2）类型**：`packages/types/src/video.types.ts` 增
+   `export const BANGUMI_STATUSES = ['pending','matched','candidate','unmatched'] as const`（**与 `DOUBAN_STATUSES` 字面同序**，A-1）+ `export type BangumiStatus = typeof BANGUMI_STATUSES[number]`，加注释「镜像 DOUBAN_STATUSES；CHECK 约束须与 migration 082 同步」。
+
+3. **（D-170-3）专用 query**：**不扩展** `updateVideoEnrichStatus`（douban 聚合语义，enrich 末尾单次写）；新增 `updateVideoBangumiStatus(db: Pool | PoolClient, videoId: string, status: BangumiStatus)` 于 `videos.status.ts`（与 `updateVideoSourceCheckStatus` :303 并列，A-4）。`Pool | PoolClient` 双形态：供 confirmMatch / applyAutoMatchAtomic 在事务内复用连接。
+
+4. **（D-170-4）全部写入方 —— 状态投影下沉 `BangumiService`（R-1 核心修正）**：
+   - **关键修正**：草案原「auto 流统一在 `MetadataEnrichService.step3` 单点写」**错误**——`bangumi-sync` 端点（`moderation.bangumi.ts:52`）**直调 `svc.matchAndEnrich`，不经 step3、不入队**；`step3Bangumi`（`MetadataEnrichService.ts:282`）本身也**丢弃** `matchAndEnrich` 返回值。故状态映射+写入**下沉进 `BangumiService.matchAndEnrich` 自身**，一次覆盖三条路径（step3 自动富集 / bangumi-sync 直调 / VideoService 改类型→anime 经 enrichmentQueue），不外溢到 caller（符合边界与复用）。
+   - **auto（matched）**：在 `applyAutoMatchAtomic`（`BangumiService.ts:278`）的 `BEGIN/COMMIT` 事务内、upsert ref 之后、COMMIT 之前，`await updateVideoBangumiStatus(client, videoId, 'matched')`——**与 catalog+ref 同事务**（R-3：消除「catalog/ref 已提交、status 未写」的不一致窗口；ROLLBACK 重试幂等）。
+   - **candidate / none（unmatched）**：无 catalog 写、无事务（仅 best-effort writeRef）→ 经 Pool 写（事务外）；写入失败须记录不静默吞（Y-2 防与 ref 不同步）。
+   - **手动确认 confirmMatch**：在其既有 `BEGIN/COMMIT` 事务内、upsert `manual_confirmed` ref 之后 `await updateVideoBangumiStatus(client, videoId, 'matched')`（与 catalog+ref 原子）。confirmMatch **不经 matchAndEnrich**，故独立写。
+   - **ignore / retry**：预留（未来 ignore 端点写 `'unmatched'`）。
+   - **非 anime**：step3 不执行 → 恒 `'pending'`；前端据 `video.type !== 'anime'` 决定不渲染 bangumi 徽标，**不依赖 status 值**。
+   - **（A-3）刻意不对称**：douban 侧有「列 `douban_status` + `meta_quality.douban_match_status` JSON 子状态」双轨；bangumi **只设列 status，不引入 `meta_quality` JSON 子状态**——刻意简化，非遗漏。
+
+5. **（D-170-5）EnrichmentSummary 对外契约（纯派生投影 / additive）**：
+   - `packages/types` 新增（camelCase 共享域契约）：
+     ```ts
+     interface EnrichmentSummary {
+       doubanStatus: DoubanStatus
+       bangumiStatus: BangumiStatus
+       sourceCheckStatus: SourceCheckStatus
+       metaScore: number
+       enrichedAt: string | null        // ← meta_quality.enriched_at
+       titleEnIsPinyin: boolean         // ← meta_quality.title_en_is_pinyin（缺省 false）
+       doubanConfidence: number | null  // ← meta_quality.douban_confidence
+       bangumiSubjectId: number | null  // ← mc.bangumi_subject_id
+     }
+     ```
+   - `DbVideoRow`（`videos.internal.ts:15`）增 `bangumi_status / bangumi_subject_id`；`VIDEO_FULL_SELECT` 增 **`v.bangumi_status, mc.bangumi_subject_id`**（**仅此两列**；`release_date` 等 feature-5 detail 字段推迟到 feature-5 卡，避免本 ADR 越界 / Y-4）。`listAdminVideos`(`videos.ts:299`) 与 `findAdminVideoById`(`videos.ts:333`) **均复用 `VIDEO_FULL_SELECT`**，加列后 admin raw 行自动带新列。
+   - **（R-5 二轮人审：挂载方向修正）**：新增纯函数 `buildEnrichmentSummary(row: DbVideoRow): EnrichmentSummary`（`videos.internal.ts`，与 mapVideoRow 并列）。**注入点是 admin 路径**，因为：public 详情 `findVideoByShortId`(`videos.ts:145`，`is_published=true AND visibility_status='public'`) 才走 `mapVideoRow`→`Video`；而 admin `VideoService.adminList`(`:176`)/`adminFindById`(`:180`) **返回 raw `DbVideoRow`（`unknown`），不经 mapVideoRow**。故 enrichmentSummary 在 `VideoService.adminList/adminFindById`（或 admin 专用 mapper）注入 `{...row, enrichmentSummary: buildEnrichmentSummary(row)}`。**不挂 `mapVideoRow` / public `Video`**（否则前台暴露、后台仍拿不到 = 方向反）。server-next `VideoAdminRow/Detail` 镜像增 `enrichmentSummary`。
+   - **（Y-1）纯派生约束**：`EnrichmentSummary` 由 `buildEnrichmentSummary` 从**同一 row 单次构造**（`doubanStatus = row.douban_status` 等同源引用），禁止与平铺字段异源双写。现有平铺字段 `doubanStatus/sourceCheckStatus/metaScore/metaQuality` **保留不删**（向后兼容：server-next `VideoListFilter.sortField` 含 `'douban_status'|'meta_score'` 排序契约依赖之）；标为**未来收口候选**——待 ADR-172 EnrichmentBadge 全面接管消费面后，于主版本边界评估废弃平铺字段（follow-up，防 additive 沦为永久债）。
+   - **（Y-2）只挂后台 / 不动 public**：`enrichmentSummary` **不挂前台 `VideoCard` / 不改 `mapVideoCard` / 不改 public `Video`**（前台不渲染富集徽标）。public 详情查询虽因 `VIDEO_FULL_SELECT` 多选两列，但 `mapVideoRow` 不映射它们 → public `Video` 形状不变。
+   - **（Y-3）命名偏离登记**：`EnrichmentSummary` 内部 camelCase（跨三端共享域契约）嵌入 server-next 全 snake_case 的 `VideoAdminRow`，为**刻意偏离**（非 bug），后续维护者勿「修正」。
+
+### 影响文件
+
+- 新建：`apps/api/src/db/migrations/082_videos_bangumi_status.sql`
+- 修改：
+  - `packages/types/src/video.types.ts`（BANGUMI_STATUSES + BangumiStatus + EnrichmentSummary）
+  - **`packages/types/src/index.ts`**（**runtime export `BANGUMI_STATUSES`** —— `:42` 的 const 出口块需补；`export type *` 不导出 const，P2）
+  - `apps/api/src/db/queries/videos.status.ts`（新 query `updateVideoBangumiStatus`）
+  - **`apps/api/src/db/queries/videos.ts`**（**barrel re-export `updateVideoBangumiStatus`** —— `:44` 从 `./videos.status` 的 `export {}` 块需补；BangumiService 经 `* as videosQueries` 消费，P2）
+  - `apps/api/src/services/BangumiService.ts`（matchAndEnrich + applyAutoMatchAtomic + confirmMatch 写 status）
+  - `apps/api/src/db/queries/videos.internal.ts`（DbVideoRow + VIDEO_FULL_SELECT + **新增 `buildEnrichmentSummary`**）
+  - `apps/api/src/services/VideoService.ts`（**admin 路径注入 enrichmentSummary** —— `adminList`/`adminFindById`，R-5）
+  - `apps/server-next/src/lib/videos/types.ts`（VideoAdminRow/Detail 镜像）
+  - `docs/architecture.md`（082 schema 同步）
+- **注**：`MetadataEnrichService.step3Bangumi` / `updateVideoEnrichStatus` / `mapVideoRow` / public `Video` / `VideoCard` **均不改**。
+
+### 实施拆卡（M-SN-5：影响文件 10+，单卡 PATCH ≤ 5 项，须拆）
+
+- **C-1**：migration 082 + `BANGUMI_STATUSES`/`BangumiStatus` 类型 + **`packages/types/src/index.ts` runtime export** + `updateVideoBangumiStatus` query + **`videos.ts` barrel re-export** + architecture.md。
+- **C-2**：BangumiService 三路径写 status（matchAndEnrich auto 入 applyAutoMatchAtomic 事务 / candidate-none Pool / confirmMatch 事务）。
+- **C-3**：`EnrichmentSummary` 类型 + DbVideoRow/VIDEO_FULL_SELECT + `buildEnrichmentSummary` + **VideoService admin 路径注入** + server-next VideoAdminRow/Detail 镜像。
+
+### 偏离登记
+
+- **D-170-1**：`EnrichmentSummary` 与 `Video` 平铺字段重复（additive）。处置：accept（向后兼容 + 排序契约依赖平铺字段不可删）；标未来收口候选，触发条件 = ADR-172 后所有消费面切到 EnrichmentBadge → 主版本边界评估废弃平铺字段。
+- **D-170-2**：bangumi 状态仅设列、不设 `meta_quality` JSON 子状态（与 douban 双轨不对称）。处置：accept（刻意简化）；若未来需 bangumi 置信度/匹配方式可观测信号，再起卡扩 `meta_quality.bangumi_*`。
+- **D-170-3**：`EnrichmentSummary` camelCase 嵌入 server-next snake_case row。处置：accept（共享域契约统一 camelCase）。
+
+---

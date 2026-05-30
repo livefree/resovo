@@ -15,6 +15,7 @@ import {
 } from './videos.internal'
 
 export type { DbVideoRow } from './videos.internal'
+export { buildEnrichmentSummary } from './videos.internal'
 
 // ── 子模块再导出 ──────────────────────────────────────────────────
 
@@ -43,7 +44,7 @@ export type {
 } from './videos.status'
 export {
   getModerationStats, listPendingReviewVideos,
-  updateVideoEnrichStatus, updateVideoSourceCheckStatus,
+  updateVideoEnrichStatus, updateVideoSourceCheckStatus, updateVideoBangumiStatus,
   updateVideoEpisodes, updateEpisodeCount,
   syncSourceCheckStatusFromSources, bulkSyncSourceCheckStatus,
   setVideoTrendingTag, clearVideoTrendingTag, listVideosByTrendingTag,

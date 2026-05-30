@@ -52,6 +52,15 @@ export type TrendingTag = typeof TRENDING_TAGS[number]
 export const DOUBAN_STATUSES = ['pending', 'matched', 'candidate', 'unmatched'] as const
 export type DoubanStatus = typeof DOUBAN_STATUSES[number]
 
+/**
+ * Bangumi 匹配状态（videos.bangumi_status / ADR-170）：镜像 DOUBAN_STATUSES 四态。
+ * 由 BangumiService（matchAndEnrich auto/candidate/none + confirmMatch）写入；
+ * 非 anime 视频恒 'pending'（UI 据 video.type 决定不渲染 bangumi 徽标）。
+ * ⚠ 数组值须与 migration 082 的 `CHECK (bangumi_status IN (...))` 保持同步。
+ */
+export const BANGUMI_STATUSES = ['pending', 'matched', 'candidate', 'unmatched'] as const
+export type BangumiStatus = typeof BANGUMI_STATUSES[number]
+
 /** 源活性批量检验结果（ADR-157 D-157-1 双形态） */
 export const SOURCE_CHECK_STATUSES = ['pending', 'ok', 'partial', 'all_dead'] as const
 export type SourceCheckStatus = typeof SOURCE_CHECK_STATUSES[number]
@@ -105,6 +114,26 @@ export interface VideoMetaQuality {
   douban_match_status?: DoubanMatchQualityStatus
   /** Service 写入时刻（ISO 8601 / 用于"上次丰富时间"显示与重跑判断 / 任何写入路径都更新） */
   enriched_at?: string
+}
+
+/**
+ * EnrichmentSummary — 富集摘要派生投影（ADR-170 D-170-5 / C-3）。
+ *
+ * 服务端展开 `meta_quality` JSON + 平铺列，**仅后台 DTO**（VideoAdminRow/Detail）经
+ * `buildEnrichmentSummary` 在 admin 路径注入；不挂 public `Video` / `mapVideoRow`（R-5）。
+ * 供前端 EnrichmentBadge（ADR-172）直接消费，避免各页自解析零散 JSON。
+ *
+ * 纯派生：由同一 row 字段单次构造（doubanStatus = row.douban_status 等同源），禁止与平铺字段异源双写。
+ */
+export interface EnrichmentSummary {
+  doubanStatus: DoubanStatus
+  bangumiStatus: BangumiStatus            // 非 anime 恒 'pending'，UI 据 type 不渲染
+  sourceCheckStatus: SourceCheckStatus
+  metaScore: number                        // 0–100
+  enrichedAt: string | null                // ← meta_quality.enriched_at
+  titleEnIsPinyin: boolean                 // ← meta_quality.title_en_is_pinyin（缺省 false）
+  doubanConfidence: number | null          // ← meta_quality.douban_confidence
+  bangumiSubjectId: number | null          // ← media_catalog.bangumi_subject_id
 }
 /** VideoGenre — 内容题材（与 VideoType 内容形式严格正交）
  *

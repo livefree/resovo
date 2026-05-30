@@ -7,7 +7,8 @@
 import type {
   Video, VideoCard, VideoType, VideoStatus, VideoGenre,
   ContentFormat, EpisodePattern, ReviewStatus, VisibilityStatus,
-  DoubanStatus, SourceCheckStatus, TrendingTag, VideoMetaQuality,
+  DoubanStatus, BangumiStatus, SourceCheckStatus, TrendingTag, VideoMetaQuality,
+  EnrichmentSummary,
 } from '@/types'
 
 // ── 内部 DB 行类型 ────────────────────────────────────────────────
@@ -42,6 +43,8 @@ export interface DbVideoRow {
   site_key: string | null
   // Migration 032 — 流水线辅助字段
   douban_status: DoubanStatus
+  // Migration 082 — Bangumi 匹配状态（ADR-170）
+  bangumi_status: BangumiStatus
   source_check_status: SourceCheckStatus
   meta_score: number
   // Migration 077 — 元数据信号字典 jsonb（CHG-365-A2）
@@ -77,6 +80,7 @@ export interface DbVideoRow {
   douban_id: string | null
   imdb_id: string | null
   tmdb_id: number | null
+  bangumi_subject_id: number | null   // Migration 026 / ADR-170 C-3：富集摘要用
   title_normalized: string
   metadata_source: string
   // 图片治理字段（IMG-01，ADR-046）
@@ -163,6 +167,26 @@ export function mapVideoCard(row: DbVideoRow): VideoCard {
   }
 }
 
+/**
+ * buildEnrichmentSummary — DbVideoRow → EnrichmentSummary 派生投影（ADR-170 C-3 / R-5）。
+ *
+ * 纯函数，由 admin 路径（VideoService.adminList/adminFindById）注入到 VideoAdminRow/Detail；
+ * **不挂 public mapVideoRow**（public Video 形状不变）。从同一 row 单次构造，展开 meta_quality JSON。
+ */
+export function buildEnrichmentSummary(row: DbVideoRow): EnrichmentSummary {
+  const mq = row.meta_quality
+  return {
+    doubanStatus: row.douban_status ?? 'pending',
+    bangumiStatus: row.bangumi_status ?? 'pending',
+    sourceCheckStatus: row.source_check_status ?? 'pending',
+    metaScore: row.meta_score ?? 0,
+    enrichedAt: mq?.enriched_at ?? null,
+    titleEnIsPinyin: mq?.title_en_is_pinyin ?? false,
+    doubanConfidence: mq?.douban_confidence ?? null,
+    bangumiSubjectId: row.bangumi_subject_id ?? null,
+  }
+}
+
 // ── 公共子查询片段 ────────────────────────────────────────────────
 
 export const SOURCE_COUNT_SUBQUERY = `(
@@ -188,14 +212,14 @@ export const VIDEO_FULL_SELECT = `
   v.source_content_type, v.normalized_type, v.content_format, v.episode_pattern,
   v.review_status, v.visibility_status, v.needs_manual_review,
   v.content_rating, v.site_key, v.source_category,
-  v.douban_status, v.source_check_status, v.meta_score, v.meta_quality,
+  v.douban_status, v.bangumi_status, v.source_check_status, v.meta_score, v.meta_quality,
   v.total_episodes, v.current_episodes, v.trending_tag,
   v.staff_note, v.review_label_key, v.review_source,
   mc.title_en, mc.title_original, mc.description, mc.cover_url,
   mc.rating, mc.rating_votes, mc.runtime_minutes, mc.year, mc.country,
   mc.status, mc.director, mc."cast", mc.writers, mc.genres,
   mc.aliases, mc.languages, mc.tags,
-  mc.douban_id, mc.imdb_id, mc.tmdb_id, mc.title_normalized, mc.metadata_source,
+  mc.douban_id, mc.imdb_id, mc.tmdb_id, mc.bangumi_subject_id, mc.title_normalized, mc.metadata_source,
   mc.poster_blurhash, mc.poster_status,
   mc.backdrop_blurhash, mc.backdrop_status,
   mc.logo_url, mc.logo_status

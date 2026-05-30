@@ -12189,3 +12189,70 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 
 - PR #4（merged `43476d3218e447c5041fd9efcec0f3557b5b9647`）— SEQ-20260529-01 双卡立卡
 - 本 PR（待开）— CHORE-10 + CHORE-11 同 PR 双修
+
+---
+
+## [META-07] ADR-170 C-1：videos.bangumi_status 列 + BangumiStatus 类型 + updateVideoBangumiStatus query（地基）
+- **完成时间**：2026-05-29
+- **记录时间**：2026-05-29
+- **执行模型**：claude-opus-4-8
+- **子代理**：arch-reviewer (claude-opus-4-8) — ADR-170 决策评审（CONDITIONAL → R1-R3/Y1-Y4/A1-A4 + 二轮人审 R5 全消化）
+- **来源**：SEQ-20260529-02「外部元数据 UX 整改」P1 地基首卡 / 方案 `docs/designs/external-metadata-ux-overhaul_20260529.md` / ADR-170（`docs/decisions.md`）
+- **修改文件**：
+  - `apps/api/src/db/migrations/082_videos_bangumi_status.sql` — 新建：videos.bangumi_status 列（4 态 CHECK，DEFAULT 'pending'）+ idx_videos_bangumi_status 部分索引，镜像 032 douban_status，幂等 + DO $$ 验证
+  - `packages/types/src/video.types.ts` — 新增 `BANGUMI_STATUSES` const + `BangumiStatus` type（镜像 DOUBAN_STATUSES）
+  - `packages/types/src/index.ts` — runtime export `BANGUMI_STATUSES`（P2：`export type *` 不导 const）
+  - `apps/api/src/db/queries/videos.status.ts` — 新增 `updateVideoBangumiStatus(db: Pool | PoolClient, videoId, status)`（双形态供 C-2 事务内/外调用）
+  - `apps/api/src/db/queries/videos.ts` — barrel re-export `updateVideoBangumiStatus`（P2）
+  - `docs/architecture.md` — videos.bangumi_status 字段 + migration 082 清单同步
+  - `tests/unit/api/videos-bangumi-status.test.ts` — 新建 7 用例（query 双形态 SQL/params + migration SQL 文本断言 CHECK 4 值 + BANGUMI_STATUSES runtime export）
+  - `docs/decisions.md` — ADR-170 Accepted（同 commit 落库）
+  - `docs/designs/external-metadata-ux-overhaul_20260529.md` — 方案落盘（R1 决策 + ADR 骨架）
+  - `docs/tasks.md` / `docs/task-queue.md` — SEQ-20260529-02 立案 + META-07 收尾
+  - `docs/audit/known-failing-tests_20260529.md` — 新建：20 个 pre-existing 失败台账
+  - `docs/audit/adr-d-status.json` — verify:adr-contracts 生成（ADR-170 D-170-1~5 登记 pending）
+- **新增依赖**：无
+- **数据库变更**：videos 表新增 `bangumi_status TEXT NOT NULL DEFAULT 'pending' CHECK IN (4 值)` + `idx_videos_bangumi_status` 部分索引（migration 082，幂等）
+- **质量门禁**：typecheck EXIT=0 / lint EXIT=0 / verify:adr-contracts EXIT=0 / 新单测 7/7 / 全量 5616 passed **零回归**（20 个 pre-existing 失败经 stash 基线比对一致，已落档 known-failing-tests_20260529.md）
+- **注意事项**：本卡仅地基（列+类型+query+出口），**未接写入方**（C-2/META-08：BangumiService matchAndEnrich/confirmMatch 写 status）、**未建 EnrichmentSummary**（C-3/META-09）。bangumi_status 现恒为默认 'pending'，直到 C-2 接入。
+
+---
+
+## [META-08] ADR-170 C-2：BangumiService 三路径写 bangumi_status
+- **完成时间**：2026-05-29
+- **记录时间**：2026-05-29
+- **执行模型**：claude-opus-4-8
+- **子代理**：无
+- **来源**：ADR-170 D-170-4（`docs/decisions.md`）/ SEQ-20260529-02 P1 地基第 2 卡 / 依赖 META-07
+- **修改文件**：
+  - `apps/api/src/services/BangumiService.ts` — 状态投影下沉 `matchAndEnrich`（统一覆盖 step3 自动流 / bangumi-sync 直调 / 改类型→anime 三路径）：
+    - `matchAndEnrich` 两处 `none` return 前写 `'unmatched'`（Pool）；`candidate` 分支 writeRef 后写 `'candidate'`（Pool）
+    - `applyAutoMatchAtomic`：upsert auto_matched ref 后、COMMIT 前 `updateVideoBangumiStatus(client, ..., 'matched')`（**事务内 / R-3 原子**）
+    - `confirmMatch`：upsert manual_confirmed ref 后、COMMIT 前同样事务内写 `'matched'`
+    - 新增 best-effort 私有 `writeBangumiStatus`（Pool 路径，失败 stderr 不静默吞 / 不阻断 enrich）
+  - `tests/unit/api/bangumi-service.test.ts` — 扩四态断言（auto/confirm 用事务 client / candidate/none 用 Pool）+ ROLLBACK 不写脏 status + 补 videos mock `updateVideoBangumiStatus`；**R-3 负向测试补全（审核）**：auto 与 confirmMatch 的 `updateVideoBangumiStatus` 自身失败 → ROLLBACK + 不得 COMMIT（共 29 用例）
+  - `tests/unit/api/metadataEnrich.test.ts` — 补 videos mock `updateVideoBangumiStatus`（step3→matchAndEnrich 间接调用）
+- **新增依赖**：无
+- **数据库变更**：无（消费 META-07 列）
+- **质量门禁**：typecheck EXIT=0 / lint EXIT=0 / bangumi-service 27 + 相关 77 全过 / 全量 5617 passed **零新增回归**（失败集 = known-failing 台账 20 个，精确一致）
+- **注意事项**：非 anime 视频 step3 不执行 → bangumi_status 恒 'pending'，前端据 type 不渲染徽标（C-3/META-09 接 EnrichmentSummary）。`MetadataEnrichService.step3` 未改（状态写下沉 BangumiService 自动覆盖）。`low_confidence` none 分支（confidence<0.60）因 dump 基础分 0.70 实际不可达，其 'unmatched' 写为防御性，无专测。
+
+---
+
+## [META-09] ADR-170 C-3：EnrichmentSummary 契约 + admin 路径注入（P1 地基收官）
+- **完成时间**：2026-05-29
+- **记录时间**：2026-05-29
+- **执行模型**：claude-opus-4-8
+- **子代理**：无
+- **来源**：ADR-170 D-170-5 + R-5（`docs/decisions.md`）/ SEQ-20260529-02 P1 地基末卡 / 依赖 META-07/08
+- **修改文件**：
+  - `packages/types/src/video.types.ts` — 新增 `EnrichmentSummary` interface（doubanStatus/bangumiStatus/sourceCheckStatus/metaScore/enrichedAt/titleEnIsPinyin/doubanConfidence/bangumiSubjectId）；`export type *` 自动导出
+  - `apps/api/src/db/queries/videos.internal.ts` — `DbVideoRow` 加 `bangumi_status`/`bangumi_subject_id`；`VIDEO_FULL_SELECT` 加 `v.bangumi_status, mc.bangumi_subject_id`；新增纯函数 `buildEnrichmentSummary(row)`（展开 meta_quality + 平铺列）。**mapVideoRow/public Video 不改**
+  - `apps/api/src/db/queries/videos.ts` — barrel `export { buildEnrichmentSummary }`
+  - `apps/api/src/services/VideoService.ts` — `adminList`/`adminFindById` 注入 `enrichmentSummary`（**admin 路径**，raw 行；R-5：非 public mapVideoRow）
+  - `apps/server-next/src/lib/videos/types.ts` — `VideoAdminRow` 加 `enrichmentSummary?: EnrichmentSummary`（Detail extends 自动覆盖）+ import
+  - `tests/unit/api/videos-bangumi-status.test.ts` — 加 `buildEnrichmentSummary` 3 例（meta_quality 展开 / null 缺省 / pending 回退）；共 10 用例
+- **新增依赖**：无
+- **数据库变更**：无（SELECT 增列，列由 migration 082/026 提供）
+- **质量门禁**：typecheck EXIT=0 / lint EXIT=0 / videos-bangumi-status 10 + 相关 32 全过 / 全量 5622 passed **零新增回归**（失败集 = known-failing 台账 20 个，精确一致）
+- **注意事项**：`enrichmentSummary` 仅注入 admin DTO（VideoAdminRow/Detail）；public `Video`/`VideoCard`/`mapVideoCard` 形状未变（R-5）。additive 字段，平铺 douban_status/meta_score 保留（排序契约依赖）。**ADR-170 C-1/C-2/C-3 三卡闭环，SEQ-20260529-02 P1 地基完成**；下游 P2 = ADR-172 `EnrichmentBadge` 共享组件（消费 EnrichmentSummary）。

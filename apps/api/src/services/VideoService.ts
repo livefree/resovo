@@ -173,11 +173,14 @@ export class VideoService {
       limit,
     })
 
-    return { data: rows, total, page, limit }
+    // ADR-170 C-3 / R-5：admin 路径注入 enrichmentSummary（raw 行，不经 public mapVideoRow）
+    const data = rows.map((r) => ({ ...r, enrichmentSummary: videoQueries.buildEnrichmentSummary(r) }))
+    return { data, total, page, limit }
   }
 
   async adminFindById(id: string): Promise<unknown | null> {
-    return videoQueries.findAdminVideoById(this.db, id)
+    const row = await videoQueries.findAdminVideoById(this.db, id)
+    return row ? { ...row, enrichmentSummary: videoQueries.buildEnrichmentSummary(row) } : null
   }
 
   /**

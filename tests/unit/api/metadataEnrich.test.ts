@@ -27,6 +27,8 @@ vi.mock('@/api/db/queries/videos', () => ({
   updateVideoEpisodes: vi.fn().mockResolvedValue(true),
   // ADR-161：BangumiService.applyEnrichmentDb 经 updateEpisodeCount 回填 bangumi 本篇集数
   updateEpisodeCount: vi.fn().mockResolvedValue(undefined),
+  // ADR-170 C-2：BangumiService matchAndEnrich/applyAutoMatchAtomic 写 bangumi_status
+  updateVideoBangumiStatus: vi.fn().mockResolvedValue(undefined),
 }))
 
 vi.mock('@/api/db/queries/sources', () => ({

@@ -90,6 +90,46 @@
 
 ---
 
+## [SEQ-20260529-02] 外部元数据（豆瓣/Bangumi）接入与体验整改 — P1 地基
+
+- **状态**：✅ 已完成（META-07/08/09 三卡全 ship 2026-05-29 / ADR-170 C-1/C-2/C-3 闭环）
+- **创建时间**：2026-05-29
+- **最后更新时间**：2026-05-29
+- **目标**：落地「外部元数据 UX 整改」方案 P1 地基契约（ADR-170 Accepted）：videos.bangumi_status 列 + BangumiStatus 类型 + updateVideoBangumiStatus query + EnrichmentSummary 对外契约。
+- **范围**：`apps/api`（migration / queries / BangumiService / VideoService）+ `packages/types` + `apps/server-next/lib/videos/types`。不含前端徽标（ADR-172 / 后续 wave）。
+- **依赖**：ADR-170 ✅ Accepted（`docs/decisions.md`）。下游 ADR-171/172 依赖本序列产出的类型。
+- **方案/ADR 全文**：`docs/designs/external-metadata-ux-overhaul_20260529.md` + `docs/decisions.md` ADR-170。
+
+### 任务列表（按执行顺序）
+
+1. **META-07** — ADR-170 C-1：bangumi_status 列 + BangumiStatus 类型 + updateVideoBangumiStatus query + 2 barrel 出口 + architecture.md（状态：✅ 已完成）
+   - 创建时间：2026-05-29
+   - 实际开始：2026-05-29
+   - 完成时间：2026-05-29（执行 claude-opus-4-8 / arch-reviewer Opus 评 ADR-170 / 门禁全过 / 7 新单测 / 零回归 / commit 见 changelog META-07）
+   - 验收要点：migration 082 幂等 + BANGUMI_STATUSES runtime export + query 双形态单测 + 零回归 ✅
+2. **META-08** — ADR-170 C-2：BangumiService 三路径写 status（matchAndEnrich auto 入 applyAutoMatchAtomic 事务 / candidate-none Pool / confirmMatch 事务）（状态：✅ 已完成）
+   - 实际开始：2026-05-29
+   - 完成时间：2026-05-29（执行 claude-opus-4-8 / 门禁全过 / bangumi-service 27 + 2 mock 修复 / 零新增回归 / commit 见 changelog META-08）
+   - 依赖：META-07 完成后
+   - 验收要点：bangumi-sync 直调路径 + 手动 confirm 路径均更新 bangumi_status；auto 原子性（R-3）
+3. **META-09** — ADR-170 C-3：EnrichmentSummary 类型 + DbVideoRow/VIDEO_FULL_SELECT(+2 列) + buildEnrichmentSummary（admin 路径注入）+ server-next VideoAdminRow/Detail 镜像（状态：✅ 已完成）
+   - 实际开始：2026-05-29
+   - 完成时间：2026-05-29（执行 claude-opus-4-8 / 门禁全过 / +3 buildEnrichmentSummary 单测 / 零新增回归 / commit 见 changelog META-09）
+   - 验收要点：enrichmentSummary 出现在 admin 列表/详情（非 public）；前端不解析零散 JSON
+
+---
+
+## [CHORE-TEST-BASELINE-20260529] 清理 pre-existing 前端单测失败（择时）
+
+- **状态**：⬜ 待开始（用户 2026-05-29 决策：择时处理，先落档避免重复发现）
+- **来源**：META-07 全量单测验证发现 / 经 stash 基线比对确认与 META-07 无关
+- **台账**：`docs/audit/known-failing-tests_20260529.md`（6 文件 / 20 用例 + CrawlerClient 时区 flaky）
+- **范围**：route-theme-selector / player-shell-hydration / ModerationBatch / SubmissionsListClient / SourcesClient / SourcesReplaceTip（前端 jsdom 测试，疑组件大改后测试未同步）；CrawlerClient 时区测试加固为时区无关
+- **建议模型**：sonnet（逐文件对齐测试与实现）；拆子卡按文件
+- **验收要点**：6 文件 20 用例全绿 + CrawlerClient 全量并行稳定通过
+
+---
+
 
 ## M-SN-7 跟踪卡（arch-reviewer M-SN-6-29-AUDIT 输出 + 衔接建议）
 

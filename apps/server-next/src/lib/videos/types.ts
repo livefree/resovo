@@ -5,9 +5,10 @@ import type {
   ReviewStatus,
   VisibilityStatus,
   DoubanStatus,
+  EnrichmentSummary,
 } from '@resovo/types'
 
-export type { VideoType, VideoStatus, VideoGenre, ReviewStatus, VisibilityStatus, DoubanStatus }
+export type { VideoType, VideoStatus, VideoGenre, ReviewStatus, VisibilityStatus, DoubanStatus, EnrichmentSummary }
 
 // ── 列表行（对应 GET /admin/videos 响应结构）─────────────────────
 
@@ -32,6 +33,8 @@ export interface VideoAdminRow {
   source_check_status?: string
   poster_status?: string | null
   backdrop_status?: string | null
+  // ADR-170 C-3：富集摘要派生对象（admin DTO 专属，前端 EnrichmentBadge 消费）
+  enrichmentSummary?: EnrichmentSummary
 }
 
 // ── 列表查询参数 ──────────────────────────────────────────────────
