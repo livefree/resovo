@@ -309,6 +309,26 @@ describe('BangumiService.matchAndEnrich', () => {
     expect(mUpdateBangumiStatus).not.toHaveBeenCalled()
     expect(clientReleased).toBe(true)
   })
+
+  it('auto + status update 写失败 → ROLLBACK + 抛错，不得 COMMIT（ADR-170 R-3：status 在事务内）', async () => {
+    mFindByTitle.mockResolvedValue([entry({ year: 2007 })])
+    mGetSubject.mockResolvedValue(subject())
+    mGetEpisodes.mockResolvedValue([])
+    mUpdateBangumiStatus.mockRejectedValueOnce(new Error('status update failure'))
+
+    await expect(
+      svc.matchAndEnrich({ videoId: VID, catalogId: CID, titleNorm: 'x', year: 2007 }),
+    ).rejects.toThrow('status update failure')
+
+    // status 写在 ref 之后、COMMIT 之前 → catalog + ref 已写但事务整体 ROLLBACK（无半提交脏态）
+    expect(mUpdateCatalog).toHaveBeenCalled()
+    expect(mUpsertRef).toHaveBeenCalled()
+    expect(mUpdateBangumiStatus).toHaveBeenCalledWith(mockClient, VID, 'matched')
+    expect(clientQueries).toContain('BEGIN')
+    expect(clientQueries).toContain('ROLLBACK')
+    expect(clientQueries).not.toContain('COMMIT')
+    expect(clientReleased).toBe(true)
+  })
 })
 
 describe('BangumiService.confirmMatch', () => {
@@ -419,6 +439,25 @@ describe('BangumiService.confirmMatch', () => {
     // enrichCatalog 已调用 updateCatalogFields（共享 client），但事务 ROLLBACK
     expect(mUpdateCatalog).toHaveBeenCalled()
     expect(mUpsertRef).toHaveBeenCalled()
+    expect(clientQueries).toContain('BEGIN')
+    expect(clientQueries).toContain('ROLLBACK')
+    expect(clientQueries).not.toContain('COMMIT')
+    expect(clientReleased).toBe(true)
+  })
+
+  it('confirmMatch + status update 写失败 → ROLLBACK + 抛错，不得 COMMIT（ADR-170 R-3：status 在事务内）', async () => {
+    mConfigured.mockReturnValue(true)
+    mFindById.mockResolvedValue(null)
+    mGetSubject.mockResolvedValue(subject({ id: 99999 }))
+    mGetEpisodes.mockResolvedValue([])
+    mUpdateBangumiStatus.mockRejectedValueOnce(new Error('status update failure'))
+
+    await expect(svc.confirmMatch(VID, CID, 99999)).rejects.toThrow('status update failure')
+
+    // status 写在 ref 之后、COMMIT 之前 → catalog + manual_confirmed ref 已写但事务整体 ROLLBACK
+    expect(mUpdateCatalog).toHaveBeenCalled()
+    expect(mUpsertRef).toHaveBeenCalled()
+    expect(mUpdateBangumiStatus).toHaveBeenCalledWith(mockClient, VID, 'matched')
     expect(clientQueries).toContain('BEGIN')
     expect(clientQueries).toContain('ROLLBACK')
     expect(clientQueries).not.toContain('COMMIT')

@@ -12230,7 +12230,7 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
     - `applyAutoMatchAtomic`：upsert auto_matched ref 后、COMMIT 前 `updateVideoBangumiStatus(client, ..., 'matched')`（**事务内 / R-3 原子**）
     - `confirmMatch`：upsert manual_confirmed ref 后、COMMIT 前同样事务内写 `'matched'`
     - 新增 best-effort 私有 `writeBangumiStatus`（Pool 路径，失败 stderr 不静默吞 / 不阻断 enrich）
-  - `tests/unit/api/bangumi-service.test.ts` — 扩四态断言（auto/confirm 用事务 client / candidate/none 用 Pool）+ ROLLBACK 不写脏 status + 补 videos mock `updateVideoBangumiStatus`
+  - `tests/unit/api/bangumi-service.test.ts` — 扩四态断言（auto/confirm 用事务 client / candidate/none 用 Pool）+ ROLLBACK 不写脏 status + 补 videos mock `updateVideoBangumiStatus`；**R-3 负向测试补全（审核）**：auto 与 confirmMatch 的 `updateVideoBangumiStatus` 自身失败 → ROLLBACK + 不得 COMMIT（共 29 用例）
   - `tests/unit/api/metadataEnrich.test.ts` — 补 videos mock `updateVideoBangumiStatus`（step3→matchAndEnrich 间接调用）
 - **新增依赖**：无
 - **数据库变更**：无（消费 META-07 列）
