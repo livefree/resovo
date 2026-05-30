@@ -41,6 +41,37 @@ export type EnrichmentBadgeSize = 'sm' | 'md'
 /** 簇上下文密度 — row=列表行紧凑（dot only）/ header=抽屉头稍宽（含 label + 富集时间 slot） */
 export type EnrichmentBadgeDensity = 'row' | 'header'
 
+// ── 外部源 Logo 徽标（ADR-172 AMENDMENT 2 / META-14-A）──────────────
+
+/** 4 个外部元数据源（品牌 logo 徽标）。tmdb/imdb 对所有 type 渲染；bangumi 仅 anime（门控在簇）。 */
+export type SourceLogoKind = 'douban' | 'bangumi' | 'tmdb' | 'imdb'
+
+/**
+ * 源命中三态：
+ *   matched   → 全彩 logo
+ *   candidate → 全彩 logo + 右上琥珀小点（仅 douban/bangumi；tmdb/imdb 无此态）
+ *   absent    → 灰显（grayscale 滤镜 + --logo-absent-opacity；row 不渲染 / header 渲染暴露缺口）
+ */
+export type SourceMatchState = 'matched' | 'candidate' | 'absent'
+
+/** Logo 尺寸（默认 'sm'）。落 data-size + 决定 img 像素尺寸。 */
+export type SourceLogoSize = 'sm' | 'md'
+
+export interface SourceLogoBadgeProps {
+  readonly source: SourceLogoKind
+  readonly state: SourceMatchState
+  /** 命中外部页链接；省略 / absent → 渲染裸 img（无 <a>）。 */
+  readonly href?: string
+  /** 默认 'sm'。 */
+  readonly size?: SourceLogoSize
+  /**
+   * hover tooltip + img alt 复合语义（如「豆瓣：已匹配」）。
+   * 省略时组件据 source+state 派生兜底文案（修复旧契约仅 aria-label 无 tooltip 缺口）。
+   */
+  readonly title?: string
+  readonly testId?: string
+}
+
 // ── meta_score 阈值常量（单测对拍真源）─────────────────────────────
 
 /**

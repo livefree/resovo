@@ -12401,3 +12401,25 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **数据库变更**：无（media_catalog 026 四源 ID 列已存在）
 - **质量门禁**：typecheck EXIT=0 / lint EXIT=0 / verify:adr-contracts EXIT=0 / 全量 **441 文件 5697 passed 零失败**（净 0 / EnrichmentSummary 加 3 必填字段，全部 fixture 同步）
 - **注意事项**：A/C 才用这些字段（B 仅供数据）。全量首跑遇 1 flaky（`StagingEditPanel.test.tsx` apps/server v1 冻结组件 / 单跑 12/12 过 / 重跑全绿 / 并行负载偶发渲染时序 / 与本卡无关）。
+
+---
+
+## [META-14-A] 富集 Logo 重设计：logo 资源 + SourceLogoBadge 原语（ADR-172 AMENDMENT 2）
+- **完成时间**：2026-05-30
+- **记录时间**：2026-05-30
+- **执行模型**：claude-opus-4-8
+- **子代理**：arch-reviewer (claude-opus-4-8) — ADR-172 AMENDMENT 2 契约评审（META-14-ADR 产出 / 本卡实施其 SourceLogoBadge 契约 → 触碰 admin-ui 公开 Props 携 trailer）
+- **来源序列**：SEQ-20260530-03
+- **修改文件**：
+  - `packages/admin-ui/src/components/enrichment-badge/enrichment-logos.ts`（新建 / 16KB）— 4 源 PNG（docs/logo 压缩 40×40）data-URI 常量 SOURCE_LOGO_DATA_URI + SOURCE_LABEL + SOURCE_HREF_BUILDERS（外部页 href / 组件内集中构造）
+  - `packages/admin-ui/src/components/enrichment-badge/source-logo-badge.tsx`（新建 92L）— SourceLogoBadge 原语（matched 全彩 / candidate +琥珀小点 / absent grayscale+--logo-absent-opacity 灰显 / a11y title+alt 修复 hover tooltip 缺口 / 命中+href→<a target=_blank rel=noopener noreferrer>）
+  - `packages/admin-ui/src/components/enrichment-badge/enrichment-badge.types.ts` — +SourceLogoKind/SourceMatchState/SourceLogoSize/SourceLogoBadgeProps（A 阶段只增；C 删旧 source/douban/bangumi Props）
+  - `packages/admin-ui/src/components/enrichment-badge/index.ts` — barrel +SourceLogoBadge/SOURCE_*/类型
+  - `packages/design-tokens/src/semantic/layout.ts` — +media 组 `logo-absent-opacity: 0.4`（独立 token 不复用 shelf-empty-opacity）
+  - `packages/design-tokens/src/css/tokens.css` — build 重生成（含 --logo-absent-opacity）
+  - `docs/logo/{douban,bangumi,tmdb,imdb}_logo.png` — 用户提供素材纳入版本控制
+  - `tests/unit/components/admin-ui/enrichment-badge/source-logo-badge.test.tsx`（新建 112L）— 12 单测（4 源 data-URI / 三态视觉 / a11y title 派生 / href 链接 / 零硬编码色）
+- **新增依赖**：无（logo 内联 data-URI / 不引图片库 / 不引图标库）
+- **数据库变更**：无
+- **质量门禁**：typecheck EXIT=0 / lint EXIT=0 / **12 新单测全过** / 全量 **442 文件 5709 passed 零失败**（5697→5709 净 +12）/ 新文件均 ≤112L
+- **注意事项**：A 仅建原语 + 资源（**不接簇** / 隔离风险）；簇重构 + 删旧 source kind 在 META-14-C。jsdom 不表示 `opacity:var()`（opacity 期望数值）→ absent 单测仅断言 grayscale 滤镜，opacity token 浏览器生效（已注释）。全量遇 1 flaky（`StagingTable.test.tsx` apps/server v1 / 单跑 13/13 过 / 并行偶发 / 与本卡无关 / 同前 StagingEditPanel）。

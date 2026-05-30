@@ -195,6 +195,7 @@
   --shelf-card-w-top10: 170px;
   --shelf-empty-opacity: 0.32;
   --shelf-empty-min-slots: 4;
+  --logo-absent-opacity: 0.4;
   --header-height: 72px;
   --header-main-gap: var(--space-6);
   --header-nav-gap: var(--space-1);

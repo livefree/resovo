@@ -14,6 +14,7 @@ export interface LayoutToken {
   shelf: LayoutGroup
   header: LayoutGroup
   footer: LayoutGroup
+  media: LayoutGroup
 }
 
 export const layout: LayoutToken = {
@@ -47,6 +48,12 @@ export const layout: LayoutToken = {
     'shelf-card-w-top10':     '170px',
     'shelf-empty-opacity':    '0.32',
     'shelf-empty-min-slots':  '4',
+  },
+
+  // ── Media / Logo（ADR-172 AMENDMENT 2）──────────────────────────
+  media: {
+    // SourceLogoBadge absent 态灰显不透明度（配 filter: grayscale(1)；独立于 shelf-empty-opacity 避免跨域耦合）
+    'logo-absent-opacity':    '0.4',
   },
 
   // ── Header component alias（spec §8.2）──────────────────────────
