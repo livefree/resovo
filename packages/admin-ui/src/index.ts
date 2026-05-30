@@ -71,6 +71,10 @@ export * from './components/segment'
 // 视频线路聚合展示 + 单集 toggle + 线路 toggle + AdminPlayer 切源回调
 export * from './components/composite/lines-panel'
 
+// EnrichmentBadge 富集徽标（META-10 / ADR-172 / ADR-E；arch-reviewer Opus PASS）
+// 单徽标（douban/bangumi/source/meta/pinyin）+ 组合簇（消费 EnrichmentSummary，anime-only bangumi）
+export * from './components/enrichment-badge'
+
 // VideoPicker 业务级选择器（M-SN-SHARED-04-A / CHG-SN-8 SEQ-20260521-02 / arch-reviewer Opus A−）
 // 消灭 UUID 输入；fetcher 注入实现 admin-ui ↔ apps/* 隔离（ADR-103b）
 export * from './components/pickers'

@@ -18318,3 +18318,86 @@ BANGUMI_USER_AGENT:     z.string().default('resovo/1.0 (https://github.com/...)'
 - **D-170-3**：`EnrichmentSummary` camelCase 嵌入 server-next snake_case row。处置：accept（共享域契约统一 camelCase）。
 
 ---
+
+## ADR-172：EnrichmentBadge 共享组件 API 契约（SEQ-EXT-META-E / Track external-metadata）
+
+- **状态**：Accepted（arch-reviewer claude-opus-4-8 PASS；Props 契约强制 Opus 评审，CLAUDE.md 共享组件 API 契约）
+- **来源**：设计方案 `docs/designs/external-metadata-ux-overhaul_20260529.md` §3.4/§3.5（ADR-E）。本 ADR 依赖 ADR-170（`EnrichmentSummary` 类型 + `BangumiStatus`）已 Accepted；为「外部元数据 UX 整改」P2 共享层，仅建组件 + 契约 + 单测，不接入 4 消费面（归 P3）。
+
+### 背景
+
+富集反馈（豆瓣状态 / Bangumi 状态 / 源活性 / 元数据完整度 / 拼音警告）需在 4 个消费面出现：①视频库列表行（`lib/videos/columns.ts`）②视频编辑抽屉头部（`VideoEditDrawer` QUICK_HEAD）③审核台行/详情 ④线路区（`TabLines`）。3+ 消费方 → 必须沉淀为 `packages/admin-ui` 共享组件（CLAUDE.md「同一 UI 模式 3 处以上必须提取」）。沿用 cell 层既有派生范式（VisChip / SignalChip：domain state → Pill variant + 文案 + data-attr + 复合 aria-label），不重新实现 Pill 视觉。`EnrichmentSummary` 类型已由 ADR-170 落在 `packages/types`，本组件直接消费，不在 admin-ui 重复定义。
+
+### 决策要点
+
+1. **（D-172-1）单徽标 `<EnrichmentBadge>` — discriminated union props**：按 `kind` 区分 payload，类型安全（5 个 kind 各自接受不同 status 形态：douban/bangumi 吃 4 态枚举、source 吃 `SourceCheckStatus`、meta 吃 0–100 数值、pinyin 吃 boolean）。**否决松散 props**（如 `status: string`）——松散 props 无法在编译期阻止「kind='meta' 却传枚举字符串」这类误用，违反价值排序 1（正确性）+ 3（类型可扩展）。共享 props：`size?: 'sm' | 'md'`（默认 'sm'，落 data-size 供未来 Pill 扩展 + 测试标记）、`showLabel?: boolean`（默认 true；false 时仅渲染 dot + tooltip，用于 density='row' 紧凑场景）、`testId?`。徽标渲染统一复用 `<Pill>`（不自绘视觉）。
+
+2. **（D-172-2）kind×status → Pill variant + 文案 + dot 映射**（完整表见下「映射表」）：
+   - **douban / bangumi**：`matched → ok`「已匹配」/ `candidate → warn`「候选」/ `unmatched → danger`「未匹配」/ `pending → neutral`「待匹配」。
+     - 裁定：**unmatched 用 `danger`（非 neutral）**。理由：`unmatched` 是富集已执行但无命中的**确定性负面结果**，需运营注意补救（手动匹配）；`pending` 才是「尚未处理」的中性态。用 danger 与 pending(neutral) 区分二者语义层级，对齐 VisChip「已拒=danger / 待审=warn」的「负面终态 > 进行中」配色梯度。
+   - **source**：`ok → ok`「源正常」/ `partial → warn`「部分失效」/ `all_dead → danger`「全部失效」/ `pending → neutral`「待检」。与 SignalChip 状态文案族（可用/部分/失效/待测）同义。
+   - **meta**：**阈值变色 Pill（否决复用 Spark）**。Spark 是趋势数值序列可视化（`readonly number[]`），meta_score 是单标量，语义不匹配；且 Spark 0 数据点 return null、无 dot，与徽标「必含 dot」硬约束冲突。meta 用 Pill 渲染 `{metaScore}` 文案 + 阈值映射 variant：`≥ 80 → ok` / `50–79 → warn` / `< 50 → danger`。阈值为常量导出（`META_SCORE_THRESHOLDS`）供单测对拍。
+   - **pinyin**：`titleEnIsPinyin === true → warn`「拼音」+ 文案前缀 ⚠（U+26A0，字符非依赖）；`false → 不渲染`（组件 return null）。
+
+3. **（D-172-3）组合簇 `<EnrichmentBadgeCluster>`**：props `summary: EnrichmentSummary`、`type: VideoType`、`density: 'row' | 'header'`（无默认，必传，消费方显式声明上下文）、`enrichedAtLabel?`、`testId?`。派生渲染规则（纯派生，零受控状态）：
+   - **anime-only 规则**：bangumi 徽标**仅当 `type === 'anime'` 渲染**（依据 ADR-170 D-170-4「非 anime 恒 pending，UI 据 type 不渲染」），**不依赖 status 值**。
+   - **pinyin 徽标仅当 `summary.titleEnIsPinyin === true` 渲染**。
+   - **徽标固定排列顺序**：`douban → bangumi(anime) → source → meta → pinyin`（语义重要性：外部匹配源 → 源活性 → 完整度 → 数据质量警告；与映射表行序一致，单测可锁序）。
+   - **density 差异**：`row`（列表行紧凑）→ `size='sm'` + `showLabel=false`（仅 dot + tooltip）+ 不显示 `enrichedAt`；`header`（抽屉头稍宽）→ `size='md'` + `showLabel=true` + 末尾附 `enrichedAtLabel` 相对时间文本（省略时显示「未富集」）。`enrichedAt` 文案格式化不下沉本组件（消费方传入），本组件仅决定**是否渲染该 slot**，避免 i18n/时间库下沉污染 admin-ui（对齐 LinesPanel「i18n 不下沉」边界）。
+
+4. **（D-172-4）零硬编码颜色 + 依赖方向 + a11y**：
+   - 颜色**仅经 Pill 间接消费 `--state-*` token**，组件自身零 style 颜色字面量（meta 阈值只决定 PillVariant，不直接写色）。
+   - 依赖方向单向：`admin-ui → @resovo/types`，**不 import 任何 apps/server-next/\*\* 或 apps/api/\*\* 类型**（对齐 LinesPanel R2）。
+   - 全部 Props `readonly`（对齐 cell 层 + LinesPanel 约定）。
+   - data-attribute：单徽标根 `data-enrichment-badge` + `data-kind` + `data-status`（meta 用 score 字符串）+ `data-size`；簇根 `data-enrichment-badge-cluster` + `data-type` + `data-density`。
+   - a11y：复用 Pill 的 `role="status"`；每个徽标传**复合 aria-label**（派生文案 + 维度前缀，对齐 VisChip 范式），如 `豆瓣：已匹配`、`元数据完整度：72`、`英文标题疑似拼音`。`showLabel=false` 时 dot 语义由 aria-label 兜底。
+
+5. **（D-172-5）`EnrichmentSummary` 类型 owner**：保持在 `packages/types`（ADR-170 D-170-5 已落）。组件 `import type { EnrichmentSummary, VideoType, DoubanStatus, BangumiStatus, SourceCheckStatus } from '@resovo/types'`，**不在 admin-ui 重复定义**。该类型已经 `packages/types/src/index.ts` 的 `export type * from './video.types'` 对外暴露，无需新增 barrel 出口。
+
+### 映射表（kind × status → variant / 文案，实装 + 单测对拍真源）
+
+| 序 | kind | status / 入参 | 渲染 | Pill variant | label | aria-label |
+|---|---|---|---|---|---|---|
+| 1 | douban | matched | ✅ | ok | 已匹配 | 豆瓣：已匹配 |
+| 1 | douban | candidate | ✅ | warn | 候选 | 豆瓣：候选 |
+| 1 | douban | unmatched | ✅ | danger | 未匹配 | 豆瓣：未匹配 |
+| 1 | douban | pending | ✅ | neutral | 待匹配 | 豆瓣：待匹配 |
+| 2 | bangumi | matched/candidate/unmatched/pending | ✅* | 同 douban | 同 douban | Bangumi：… |
+| 3 | source | ok | ✅ | ok | 源正常 | 源活性：正常 |
+| 3 | source | partial | ✅ | warn | 部分失效 | 源活性：部分失效 |
+| 3 | source | all_dead | ✅ | danger | 全部失效 | 源活性：全部失效 |
+| 3 | source | pending | ✅ | neutral | 待检 | 源活性：待检 |
+| 4 | meta | score ≥ 80 | ✅ | ok | {score} | 元数据完整度：{score} |
+| 4 | meta | 50 ≤ score < 80 | ✅ | warn | {score} | 元数据完整度：{score} |
+| 4 | meta | score < 50 | ✅ | danger | {score} | 元数据完整度：{score} |
+| 5 | pinyin | isPinyin=true | ✅ | warn | ⚠ 拼音 | 英文标题疑似拼音 |
+| 5 | pinyin | isPinyin=false | ❌ return null | — | — | — |
+
+> *bangumi 单徽标无条件按表渲染；**anime-only 门控只在 `<EnrichmentBadgeCluster>` 层施加**（`type !== 'anime'` → bangumi 徽标不进簇）。单徽标是无状态映射原子，门控属于簇的派生职责。
+> meta 边界对拍点：`80→ok` / `79→warn` / `50→warn` / `49→danger` / `0→danger` / `100→ok`；超界值兜底不抛错（`>100→ok` / `<0→danger`）。
+
+### 影响文件
+
+- 新建：
+  - `packages/admin-ui/src/components/enrichment-badge/enrichment-badge.types.ts`（Props 契约 + 映射常量）
+  - `packages/admin-ui/src/components/enrichment-badge/enrichment-badge.tsx`（单徽标实装）
+  - `packages/admin-ui/src/components/enrichment-badge/enrichment-badge-cluster.tsx`（簇实装）
+  - `packages/admin-ui/src/components/enrichment-badge/index.ts`（barrel）
+  - `tests/unit/components/admin-ui/enrichment-badge/enrichment-badge.test.tsx`（单测）
+- 修改：`packages/admin-ui/src/index.ts`（新增 `export * from './components/enrichment-badge'`，对齐 LinesPanel composite 注册范式）
+- **不改**：`packages/types/*`（EnrichmentSummary 已就绪）；4 消费面文件（P3 卡接入）。
+
+### 依赖
+
+- ADR-170（Accepted）：`EnrichmentSummary` / `BangumiStatus` 类型。
+- 本 ADR Accepted 是 ADR-170 D-170-1 偏离收口的**触发前置**（消费面全切 EnrichmentBadge 后，于主版本边界评估废弃 `Video` 平铺富集字段）。
+
+### 偏离登记
+
+- **D-172-1**：`unmatched` 用 `danger` 而非 `neutral`。处置：accept（`unmatched`=确定性负面终态需运营补救，与 `pending` 中性态区分）。若 P3 接入后运营反馈 danger 过强（列表行红点噪声），可降级为 `warn`，仅改映射表一行 + 对应单测，不动 Props 契约。
+- **D-172-2**：meta_score 用阈值变色 Pill 而非复用 Spark。处置：accept（Spark 是趋势序列原语，单标量语义不匹配 + 0 点 return null 与「必含 dot」冲突）。未来若需 meta_score 趋势（多次富集历史），另起卡用 Spark，与本徽标并存不替换。
+- **D-172-3**：pinyin 用 ⚠（U+26A0）emoji 字符前缀。处置：accept——emoji 是 Unicode 文本字符，非图标库依赖，不违反 admin-ui「零图标库依赖」约束（该约束针对 lucide-react 等 npm 包 import）。屏幕阅读器由复合 aria-label 兜底，不依赖 emoji 朗读。
+- **D-172-4**：`EnrichmentBadgeCluster` 不下沉 `enrichedAt` 时间格式化 / i18n。处置：accept（对齐 LinesPanel i18n 不下沉边界）；簇仅决定 slot 是否渲染，文案由消费方提供。
+- **D-172-5（黄线，实装注意）**：Pill 当前固定 `--font-size-xxs`，`size='md'` 仅落 `data-size` 标记，视觉上 sm/md 当前无字号差异（与 SignalChip size 现状一致，供未来 Pill 扩展）。
+
+---

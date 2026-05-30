@@ -6,7 +6,7 @@
 
 ## 进行中任务
 
-（空 / SEQ-20260529-02 P1 地基完成：META-07/08/09 全 ship 2026-05-29 / ADR-170 C-1/C-2/C-3 闭环 / 下一步 P2 ADR-172 EnrichmentBadge 或推送 PR）
+（空 / SEQ-20260530-01 P2 共享层：META-10 ADR-172 EnrichmentBadge ship 2026-05-30 / 下一步 P3 前端消费 feature-2 四消费面接入 或推送 PR）
 
 ---
 

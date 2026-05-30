@@ -12279,3 +12279,31 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **数据库变更**：无
 - **质量门禁**：typecheck EXIT=0 / lint EXIT=0 / 6 文件 30 用例全过（20 修复 + 10 既有）/ 全量 **5642 passed / 0 failed**（437 文件）**零失败**
 - **注意事项**：三类根因 —— ① 组件契约演进未同步（custom option / DualSignalCount 聚合字段 / preferences GET）；② server-next 客户端组件 `useRouter` 测试缺 `next/navigation` mock；③ 覆盖已删除功能需重写。**CrawlerClient 时区 flaky 未在本次范围**（非 20 个稳定失败之一），已拆 `CHORE-TEST-CRAWLER-TZ-FLAKY` 残留卡择时处理。
+
+---
+
+## [META-10] ADR-172 EnrichmentBadge 共享组件契约 + 实装（P2 共享层）
+- **完成时间**：2026-05-30
+- **记录时间**：2026-05-30
+- **执行模型**：claude-opus-4-8
+- **子代理**：arch-reviewer (claude-opus-4-8) — ADR-172 EnrichmentBadge Props 契约独立设计 + 评审 PASS（强制 Opus，CLAUDE.md §模型路由「新共享组件 API 契约」）
+- **来源序列**：SEQ-20260530-01（外部元数据 UX 整改 P2 共享层）
+- **方案/ADR**：`docs/designs/external-metadata-ux-overhaul_20260529.md` §3.4/§3.5 + `docs/decisions.md` ADR-172（Accepted）
+- **修改文件**：
+  - `docs/decisions.md` — 追加 ADR-172（D-172-1..5 + kind×status 映射表 + 5 偏离登记）
+  - `packages/admin-ui/src/components/enrichment-badge/enrichment-badge.types.ts`（新建 138L）— discriminated union Props（DoubanBadgeProps/BangumiBadgeProps/SourceBadgeProps/MetaBadgeProps/PinyinBadgeProps）+ `EnrichmentBadgeClusterProps` + `META_SCORE_THRESHOLDS` 常量
+  - `packages/admin-ui/src/components/enrichment-badge/enrichment-badge.tsx`（新建 124L）— 单徽标实装 + 纯派生函数 `deriveEnrichmentBadge`（复用 `<Pill>`，零自绘颜色）
+  - `packages/admin-ui/src/components/enrichment-badge/enrichment-badge-cluster.tsx`（新建 96L）— 组合簇（anime-only bangumi 门控 / pinyin 门控 / 固定排序 / density row|header 差异 / enrichedAt slot）
+  - `packages/admin-ui/src/components/enrichment-badge/index.ts`（新建 26L）— barrel
+  - `packages/admin-ui/src/index.ts` — 注册 `export * from './components/enrichment-badge'`（对齐 LinesPanel composite 范式）
+  - `tests/unit/components/admin-ui/enrichment-badge/enrichment-badge.test.tsx`（新建 338L）— 38 单测
+  - `docs/audit/adr-d-status.json` — verify:adr-contracts 自动重生成（纳入 ADR-172 D-172-* + 修正 ADR-170 closure 漂移）
+- **新增依赖**：无（仅消费 `@resovo/types` + cell 层 `Pill`；零图标库依赖，pinyin ⚠ 为 U+26A0 文本字符）
+- **数据库变更**：无
+- **质量门禁**：typecheck EXIT=0 / lint EXIT=0 / verify:adr-contracts EXIT=0 / **38 新单测全过** / 全量 **438 文件 5680 passed 零失败**（5642→5680 净 +38，零回归）/ 新文件均 ≤138L（守卫内）
+- **关键决策（ADR-172）**：①单徽标用 discriminated union props（按 kind 区分 payload，编译期类型安全，否决松散 props）②douban/bangumi 4 态映射 matched→ok/candidate→warn/unmatched→**danger**(确定性负面终态)/pending→neutral ③meta_score 阈值变色 Pill（≥80 ok/50-79 warn/<50 danger，否决复用 Spark：趋势序列原语语义不匹配）④cluster anime-only 门控**不依赖 status 值**（依 ADR-170 D-170-4）⑤density row=dot only / header=label+富集时间 slot ⑥enrichedAt 文案格式化不下沉 admin-ui（消费方传入，对齐 LinesPanel i18n 边界）
+- **注意事项**：
+  - 本卡**只建共享组件 + 契约 + 单测，未接入 4 消费面**（视频库 columns / VideoEditDrawer QUICK_HEAD / moderation / TabLines）→ **P3 feature-2** 独立拆卡接入。
+  - ADR-172 Accepted 是 **ADR-170 D-170-1 偏离收口的触发前置**（消费面全切 EnrichmentBadge 后于主版本边界评估废弃 `Video` 平铺富集字段）。
+  - `size='md'` 当前与 'sm' 无字号差异（Pill 固定 `--font-size-xxs`，size 落 data-size 供未来 Pill 扩展 / 黄线 D-172-5）。
+  - **file-size-budget 22 文件违规为 pre-existing 基线**（stash 后干净 main 同 22 文件 / 与 META-10 零关系，新文件均 ≤138L）。

@@ -119,6 +119,29 @@
 
 ---
 
+## [SEQ-20260530-01] 外部元数据 UX 整改 — P2 共享层（EnrichmentBadge）
+
+- **状态**：✅ 已完成（META-10 ship 2026-05-30 / ADR-172 Accepted / arch-reviewer Opus PASS）
+- **创建时间**：2026-05-30
+- **最后更新时间**：2026-05-30
+- **目标**：落地「外部元数据 UX 整改」方案 P2 共享层（ADR-172 / ADR-E）：在 `packages/admin-ui` 沉淀 `EnrichmentBadge` + `EnrichmentBadgeCluster` 共享组件，消费 ADR-170 `EnrichmentSummary` 契约，为 P3 四消费面（视频库/编辑/审核/线路）提供统一徽标原语。
+- **范围**：`packages/admin-ui/src/components/enrichment-badge/*` 新建 + barrel 导出 + 单测 + `docs/decisions.md` ADR-172 正式落档。**不含** 4 消费面接入（P3 feature-2）。
+- **依赖**：ADR-170 ✅ Accepted（`EnrichmentSummary`/`BangumiStatus` 已在 `@resovo/types`）。
+- **方案/ADR 全文**：`docs/designs/external-metadata-ux-overhaul_20260529.md` §3.3/§3.4 + ADR-172 骨架（§13）。
+
+### 任务列表（按执行顺序）
+
+1. **META-10** — ADR-172：EnrichmentBadge 共享组件 Props 契约（强制 Opus 子代理）+ packages/admin-ui 实装（单徽标 + 组合簇）+ barrel + 单测（状态：✅ 已完成）
+   - 创建时间：2026-05-30
+   - 实际开始：2026-05-30
+   - 完成时间：2026-05-30（执行 claude-opus-4-8 / 子代理 arch-reviewer (claude-opus-4-8) ADR-172 PASS / 门禁全过 / 38 新单测 / 全量 5680 passed 零回归 / commit 见 changelog META-10）
+   - 执行模型: claude-opus-4-8
+   - 验收要点：①Props 契约经 arch-reviewer Opus 评审 PASS ✅（discriminated union）②零硬编码颜色（复用 `--state-*` token）✅ ③anime-only 渲染 bangumi 徽标 ✅ ④pinyin 警告 ✅ ⑤meta_score 阈值变色 ✅ ⑥单测覆盖 kind×status 映射 + cluster density + anime 分支 ✅
+
+> **下一步（P3 前端消费 feature-2）**：4 消费面接入 EnrichmentBadgeCluster —— 视频库 `lib/videos/columns.ts`（density='row'）/ `VideoEditDrawer` QUICK_HEAD（density='header'）/ 审核台行/详情 / `TabLines` 逐源。各面独立拆卡（PATCH ≤ 5）。
+
+---
+
 ## [CHORE-TEST-BASELINE-20260529] 清理 pre-existing 前端单测失败
 
 - **状态**：✅ 主体完成（2026-05-30 / claude-opus-4-8 / 用户同意落卡+commit）；CrawlerClient 时区 flaky 加固 **未做**（拆为残留项，见下）
