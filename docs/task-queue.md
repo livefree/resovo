@@ -183,7 +183,6 @@
 4. **META-14-C** — 簇重构 + 单测重写 + 4 面回归：重写 types/badge/cluster/barrel（logo 行 + 移除 source + meta 仅 header）+ 重写单测（状态：✅ 已完成 2026-05-30 / claude-opus-4-8 + arch-reviewer (claude-opus-4-8) / 门禁全过 / enrichment-badge 24 + 消费面 14 单测 / 全量 5695 passed 零回归 / 4 消费面调用签名不变零代码改动·经 logo 渲染验证）
 
 > **visual 回归（软门）**：4 消费面（视频库列/编辑抽屉头/审核行/审核详情）需用户起 dev server 走读截图确认 logo 显示。组件级测试已验证 logo 渲染（faces/moderation 渲染真实消费组件断言 data-source logo）。
-4. **META-14-C** — 簇重构 + 单测重写 + 4 面 visual 回归：重写 types/badge/cluster/barrel（删 source、加 logo 行、meta 仅 header）+ 重写单测（状态：⬜ 待开始 / 建议 sonnet / 触碰公开 Props → Opus trailer）
 
 ---
 
@@ -2338,3 +2337,31 @@ CODENAME-MATRIX-E2E (依赖 Wave 3 验收期补丁 CODENAME-MATRIX ✅)
 8. **用户复审**：要求更多信息判断"关键发现"。主循环深查 trace：MetadataEnrichService.ts:199-210 step2NetworkSearch 用三元 `: undefined` 模式而非条件赋值，`{writers: undefined}` 经 safeUpdate（无 undefined skip）→ updateCatalogFields（`undefined ?? null` = null）→ SQL `writers = null` → 违反 `writers TEXT[] NOT NULL` → **PR #1 Known Issues #3 是真 bug**，影响 5 列（director/cast/writers/genres/genres_raw），第 4 轮 Codex + 主循环当时漏看了 MetadataEnrichService 路径 → **重立 CHORE-11**
 
 原始 review thread：`019e7344-a3b1-7c13-8c80-d38f34073c45`（PR #3 评审）。
+
+---
+
+## [SEQ-20260530-04] 外部富集数据基建补齐（dump 导入 + 队列恢复 + 重富集）
+
+- **状态**：⬜ 待开始（用户排查 SEQ-20260530-03 富集覆盖低后落卡 2026-05-30）
+- **创建时间**：2026-05-30
+- **最后更新时间**：2026-05-30
+- **目标**：解决「富集徽标全灰」根因——外部源 dump 从未导入 + Redis/worker 未跑 → 富集命中率 ~0.2%（2751 视频仅 6 douban matched / 0 bangumi matched / 0 tmdb / 0 imdb）。
+- **根因诊断（已查实）**：① `external_douban_movies_raw`/`external_tmdb_movies_raw`/`external_bangumi_subjects_raw`/`external_imdb_tmdb_links`/`external_import_batches` 全 0 行（dump 未导入）② `redis-cli ping` 无响应 + 无 worker 进程 → 72%（1966）从未富集 ③ 785 个跑过富集的里 782 个 douban unmatched（本地 dump 空，仅靠 step2 网络偶中）。
+- **资产盘点**：✅ TMDB dump 文件已在 `external-db/tmdb/[124万]TMDB电影元数据.csv`（未导入）；❌ 豆瓣 dump 缺失（脚本默认 `external-db/douban/moviedata-10m/movies.csv`）；❌ Bangumi dump 缺失但 `BANGUMI_API_TOKEN` 已配（REST 可用）；✅ douban_cookie/proxy 已在 system_settings。
+
+### 任务列表（按收益排序）
+
+1. **META-15-A** — 导入 TMDB dump（文件已有，立即可做）（状态：⬜ 待开始 / 用户确认即跑）
+   - `node --env-file=.env.local --import tsx scripts/import-external-data.ts --source tmdb --file 'external-db/tmdb/[124万]TMDB电影元数据.csv'` → 再 `--build-only` 关联进 media_catalog
+   - 验收：`external_tmdb_movies_raw` > 0 + `media_catalog.tmdb_id` 命中数上升 → TMDB logo 点亮
+   - 风险：CSV 表头需匹配 ExternalDataImportService 解析期望（'id'/'imdb_id' 列）；不匹配则需适配
+2. **META-15-B** — 起 Redis + worker（用户操作）（状态：⬜ 待开始）
+   - `brew services start redis`（或用户方式）+ 另开终端 `npm run dev -w @resovo/worker`
+   - 验收：`redis-cli ping` = PONG + worker 进程在跑 + enrichment-queue 开始消费
+3. **META-15-C** — 批量重富集 1966 未富集 + 782 unmatched（依赖 A+B / 量大耗时）（状态：⬜ 待开始）
+   - 需重富集入队脚本（确认是否存在 / 否则新建 backfill 脚本 trigger='backfill'）；anime 自动走 step3 Bangumi REST（token 已配）
+   - 验收：douban/bangumi matched 数显著上升 → 徽标覆盖提升
+4. **META-15-D** — 补豆瓣 dump（需用户提供 moviedata-10m movies.csv）（状态：⬜ 待开始 / 阻塞于文件）
+   - 用户提供文件位置 → `import-douban-dump.ts` 或 `import-external-data.ts --source douban --file <path>` → 豆瓣本地召回上量（最大收益 / 豆瓣是主源）
+
+> **Bangumi API 接入说明**：代码层**已接入**（`lib/bangumi.ts` 读 `BANGUMI_API_TOKEN` + `MetadataEnrichService.step3Bangumi` 对 anime 自动委托 BangumiService REST 富集）。当前没生效只因 Redis/worker 没跑（同 META-15-B）。一旦起 worker + 重富集 anime（META-15-C），Bangumi 自动匹配。剩余「凭证移 system_settings + UI 测试连接」（ADR-168/feature-1）是 backlog，非必需。
