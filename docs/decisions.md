@@ -18413,3 +18413,47 @@ BANGUMI_USER_AGENT:     z.string().default('resovo/1.0 (https://github.com/...)'
 - **D-172-5（黄线，实装注意）**：Pill 当前固定 `--font-size-xxs`，`size='md'` 仅落 `data-size` 标记，视觉上 sm/md 当前无字号差异（与 SignalChip size 现状一致，供未来 Pill 扩展）。
 
 ---
+
+### AMENDMENT 2（META-14 / 2026-05-30）：富集徽标重设计 — 彩点+文字 → 外部源品牌 Logo
+
+- **状态**：Accepted（arch-reviewer claude-opus-4-8 CONDITIONAL → 主循环消化红线 R-AMD2-1 后等同 PASS；共享组件 API 契约变更，CLAUDE.md 强制 Opus 评审）
+- **触发**：P3（META-11/12）落地后用户走读反馈 3 点 —— ①列表无文字彩点不可读、无 hover tooltip；②source 徽标与既有 DualSignal/source_health 列重复；③抽屉「富集时间」与「豆瓣未匹配」文字并列语义矛盾。
+- **性质**：**破坏性重构（非 additive）**。删除 `kind='source'` + 重设单徽标视觉范式（Pill→品牌 Logo）+ 扩展 `EnrichmentSummary` 3 字段。4 消费面已在线消费 `EnrichmentBadgeCluster`（P3 已落 / 调用签名不变），现有单测已对拍旧 5-kind 映射 → 本 AMENDMENT 同步重写消费面 visual 回归 + 单测（非回归，属契约改写）。
+- **用户已批准决策（R1）**：①4 源品牌 Logo（douban/bangumi(anime)/tmdb/imdb）②Logo 资源方案 A（admin-ui 内 data-URI 自包含）③TMDB+IMDb 纳入（未来富集补全英文标题后落实数据）④meta_score 仅 header 显示⑤未命中：row 不显 / header 灰显。
+
+#### 决策要点
+
+- **（D-172-AMD2-1）新原语 `<SourceLogoBadge>`**：Props `source: SourceLogoKind`（douban|bangumi|tmdb|imdb）、`state: SourceMatchState`（matched|candidate|absent）、`href?`、`size?`、`title?`、`testId?`。三态视觉：matched=全彩 logo；candidate=全彩+右上琥珀小点（颜色 `--state-warning-fg`，**仅 douban/bangumi**）；absent=同 logo 经 `filter: grayscale(1)` + `opacity: var(--logo-absent-opacity)` 灰显（grayscale 是滤镜非颜色字面量 / opacity 走新增语义 token，零硬编码颜色）。Logo 经方案 A `enrichment-logos.ts` 的 `SOURCE_LOGO_DATA_URI: Record<SourceLogoKind, string>`（PNG base64 data-URI，admin-ui 自包含 / 零 app 路径耦合 / Edge 兼容）。a11y：`<img alt>` = 复合语义（「豆瓣：已匹配」）+ `title` 属性提供 hover tooltip（**修复旧契约仅 aria-label 无 tooltip 缺口**）；命中且有 href → 包 `<a target="_blank" rel="noopener noreferrer">`。
+- **（D-172-AMD2-2）`EnrichmentBadgeCluster` 修订**：移除 source kind（去重）；固定排序 `douban → bangumi(anime) → tmdb → imdb`（logo 行）+ ⚠pinyin（保留）+ meta_score chip（**仅 header**）+ 富集时间（仅 header）。row：只渲染 `state!=='absent'` 彩色 logo（未命中不占位）、无 meta chip、无时间；header：全部适用源 logo（命中彩色/未命中灰显）+ meta chip + 富集时间。门控：bangumi 仅 `type==='anime'`（沿用 ADR-170 D-170-4）；**tmdb/imdb 对所有 type 渲染**（外部库通用）。
+- **（D-172-AMD2-3）`EnrichmentSummary` 扩展 3 字段**：增 `doubanId: string|null`（← mc.douban_id）/ `tmdbId: number|null`（← mc.tmdb_id）/ `imdbId: string|null`（← mc.imdb_id）。**无 migration**（media_catalog 026 三列已存在）。state 推导：douban/bangumi 据 status（matched/candidate/其余 absent）；tmdb=`tmdbId!=null?matched:absent`；imdb=`imdbId!=null?matched:absent`（无状态列 → 二态）。`sourceCheckStatus/doubanConfidence/bangumiSubjectId` 保留类型（向后兼容 + href 构造），Cluster 不再渲染 source。数据链路：`buildEnrichmentSummary`/`EnrichmentSourceRow` 补 3 入参；`VIDEO_FULL_SELECT` 已 select 三列（admin 零 SQL 改动）；moderation `listPendingQueue` SQL 补 `mc.tmdb_id/imdb_id/douban_id` 投影。
+- **（D-172-AMD2-4）旧契约处置**：删 `kind='source'`（SourceBadgeProps + sourceVisual + 映射 + 单测块）+ douban/bangumi 的 Pill 渲染分支（改 SourceLogoBadge 承载）；`EnrichmentBadgeKind` 收窄为 `'meta'|'pinyin'`，`EnrichmentBadgeProps` = `MetaBadgeProps|PinyinBadgeProps`（保 union 形态 + 完备性守卫）。保留 meta/pinyin + META_SCORE_THRESHOLDS + Pill 复用。新增 SourceLogo* 类型/原语/data-URI/href builder。**4 消费面调用签名不变（零代码改动，仅 visual 回归）**。
+- **（D-172-AMD2-5）外部页 href（组件内集中构造）**：`SOURCE_HREF_BUILDERS` —— douban `https://movie.douban.com/subject/{doubanId}/` / bangumi `https://bgm.tv/subject/{bangumiSubjectId}` / tmdb `https://www.themoviedb.org/movie/{tmdbId}` / imdb `https://www.imdb.com/title/{imdbId}/`。仅 `state!=='absent'` 且对应 id 非空渲染 `<a target=_blank rel=noopener noreferrer>`。裁定：下沉组件内（URL 模板与 source 一一绑定 / DRY / 纯字符串模板不破坏单向依赖）。
+
+#### 影响文件
+
+- 修改：`packages/types/src/video.types.ts`（EnrichmentSummary +3 字段）
+- 修改：`apps/api/src/db/queries/videos.internal.ts`（EnrichmentSourceRow +3 + buildEnrichmentSummary +3 投影；VIDEO_FULL_SELECT 已含三列免改）
+- 修改：`apps/api/src/db/queries/moderation.ts`（listPendingQueue SQL +3 列 + EnrichmentSourceRow 透传）
+- 重写：`packages/admin-ui/src/components/enrichment-badge/{enrichment-badge.types.ts,enrichment-badge.tsx,enrichment-badge-cluster.tsx,index.ts}`
+- 新建：`enrichment-badge/source-logo-badge.tsx` + `enrichment-logos.ts`
+- 修改：`packages/design-tokens/src/**`（新增 `--logo-absent-opacity`）
+- 重写：`tests/unit/components/admin-ui/enrichment-badge/enrichment-badge.test.tsx`
+- **不改调用签名**：VideoListClient / VideoEditDrawer / ModListRow / TabDetail（仅 visual 回归）
+
+#### 偏离登记
+
+- **D-172-AMD2-A**：absent 灰显用 `filter: grayscale(1)` + `opacity: var(--logo-absent-opacity)`。处置：accept（grayscale 是 CSS 滤镜非颜色字面量；opacity 走新增独立 token，不复用 `--shelf-empty-opacity` 避免跨域耦合；单测颜色 grep 白名单 `grayscale(`）。
+- **D-172-AMD2-B**：tmdb/imdb 无 candidate 态（无状态列 / 命中=ID 非空二态）。处置：accept（未来富集引入置信度可扩 SourceMatchState，向前兼容）。
+- **D-172-AMD2-C**：tmdb href `/movie/{id}` 对 tv 类型不精确。处置：accept（首版 / tmdb 命中稀疏；覆盖上量后据 VideoType 分支 `/tv/`）。
+- **D-172-AMD2-D**：TMDB/IMDb 品牌 logo 使用。处置：accept（内部 admin 工具属合理使用；-A 卡用官方标准 logo 不变形改色）。
+- **D-172-AMD2-E**：旧单测（source 4 态 + douban/bangumi Pill 文案 + 簇排序断言）必然失败。处置：accept（同 commit 重写，非回归）。
+
+#### 实施拆卡（严格串行 B→A→C）
+
+- **META-14-B**（数据层先行）：EnrichmentSummary +3 + EnrichmentSourceRow +3 + buildEnrichmentSummary +3 + moderation SQL +3。
+- **META-14-A**（logo 资源 + 新原语）：enrichment-logos.ts（4 源 base64 + href builders）+ source-logo-badge.tsx（三态 + a11y title/alt + href）+ design-token `--logo-absent-opacity` + 单测。
+- **META-14-C**（簇重构 + 单测重写 + 4 面 visual 回归）：重写 types/badge/cluster/barrel + 重写单测；消费面不改代码仅走读回归。
+
+> A/C 触碰 admin-ui 公开 Props，commit 必带 `Subagents: arch-reviewer (claude-opus-4-8)` trailer。
+
+---

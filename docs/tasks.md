@@ -6,7 +6,21 @@
 
 ## 进行中任务
 
-（空 / SEQ-20260530-02 P3 feature-2 主体完成：META-11 视频库+抽屉 / META-12-A 审核台后端 / META-12-B 审核台前端 全 ship 2026-05-30 — faces 1/2/3 已接入 EnrichmentBadgeCluster。Face 4 线路区 = META-13 待评估 backlog / 用户未纳入本轮范围）
+### META-14-B — 富集 Logo 重设计 数据层：EnrichmentSummary +3 字段（P3 redesign）
+- **状态**：🔄 进行中
+- **来源序列**：SEQ-20260530-03
+- **建议模型**：sonnet
+- **执行模型**：claude-opus-4-8
+- **子代理调用**：无（消费 ADR-172 AMENDMENT 2 已 Opus 评审契约；纯数据层扩展无新契约）
+- **实际开始**：2026-05-30
+- **文件范围**：
+  - 改 `packages/types/src/video.types.ts`（EnrichmentSummary +doubanId/tmdbId/imdbId）
+  - 改 `apps/api/src/db/queries/videos.internal.ts`（EnrichmentSourceRow +3 + buildEnrichmentSummary +3 投影；VIDEO_FULL_SELECT 已含三列）
+  - 改 `apps/api/src/db/queries/moderation.ts`（listPendingQueue SQL +3 列 mc.douban_id/tmdb_id/imdb_id + EnrichmentSourceRow 透传）
+  - 改 moderation enrichmentSummary 测试（断言新字段）
+- **完成备注**：_（完成后填写）_
+
+> 前序 META-14-ADR ✅（ADR-172 AMENDMENT 2 已落 decisions.md / arch-reviewer Opus PASS）。后续 META-14-A（logo+原语）/ -C（簇重构）。
 
 ---
 

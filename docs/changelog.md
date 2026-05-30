@@ -12368,3 +12368,18 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **数据库变更**：无
 - **质量门禁**：typecheck EXIT=0 / lint EXIT=0 / verify:adr-contracts EXIT=0 / **5 新单测全过** / 全量 **441 文件 5697 passed 零失败**（5692→5697 净 +5 零回归）
 - **注意事项**：**P3 feature-2 主体完成**（faces 1 视频库 / 2 编辑抽屉 / 3 审核台 全接入 EnrichmentBadgeCluster）。**Face 4 线路区**（TabLines 区头 source 汇总徽标）= META-13 backlog，逐源活性已由共享 LinesPanel 承担，用户本轮未纳入范围。
+
+---
+
+## [META-14-ADR] 富集徽标 Logo 化重设计 — ADR-172 AMENDMENT 2 起草（强制 Opus）
+- **完成时间**：2026-05-30
+- **记录时间**：2026-05-30
+- **执行模型**：claude-opus-4-8
+- **子代理**：arch-reviewer (claude-opus-4-8) — 修订 ADR-172 logo 化契约（独立设计 + 评审 CONDITIONAL→PASS / 捕获红线 R-AMD2-1：P3 已落地=破坏性在线重构非 additive）
+- **来源序列**：SEQ-20260530-03（富集徽标重设计 / 用户走读反馈）
+- **修改文件**：`docs/decisions.md`（ADR-172 AMENDMENT 2：D-172-AMD2-1..5 + 5 偏离登记 + B→A→C 拆卡）
+- **背景**：P3（META-11/12）落地后用户走读反馈 —— ①列表彩点不可读无 tooltip ②source 徽标与 DualSignal/source_health 冗余 ③「富集时间 vs 豆瓣未匹配」语义矛盾。用户批准重设计方向（4 品牌 logo / 方案 A data-URI / TMDB+IMDb 纳入 / meta 仅 header / 未命中灰显）。
+- **新增依赖**：无
+- **数据库变更**：无（media_catalog 四源 ID 列 026 已存在）
+- **关键契约（AMENDMENT 2）**：①新原语 `SourceLogoBadge`（4 源×matched/candidate/absent 三态 + a11y title 修复 tooltip 缺口 + href 跳外部页）②Cluster 移除 source kind / logo 行 + meta chip(仅header) + 富集时间(仅header) / row 只显命中彩色 logo·header 全显含灰显未命中 ③EnrichmentSummary +doubanId/tmdbId/imdbId ④absent 灰显 = grayscale 滤镜 + `--logo-absent-opacity` token（零硬编码颜色）⑤href 下沉组件内集中构造
+- **注意事项**：**破坏性重构**（4 消费面调用签名不变=零代码改动 / 仅 visual 回归；现有单测同 commit 重写）。后续严格串行 META-14-B（数据）→ -A（logo+原语）→ -C（簇重构）。A/C 触碰 admin-ui 公开 Props → commit 必带 arch-reviewer Opus trailer。

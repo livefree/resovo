@@ -161,7 +161,26 @@
    - **META-12-B**（前端）✅ 已完成（2026-05-30 / claude-opus-4-8 / 子代理无 / 门禁全过 / 5 新单测 / 全量 5697 passed 零回归）：`ModListRow` 行内簇（density='row'）+ `RightPane/TabDetail` 详情簇（density='header'）接入 `EnrichmentBadgeCluster`。
 3. **META-13**（可选）— Face 4 线路区 TabLines 区头 source 徽标（`EnrichmentBadge kind="source"` 汇总 source_check_status）（状态：⬜ 待评估）
    - 创建时间：2026-05-30
-   - 备注：逐源活性已由 LinesPanel 承担，本卡仅区头汇总徽标，价值边际 → 待 META-11/12 后评估是否值得做。
+   - 备注：逐源活性已由 LinesPanel 承担，本卡仅区头汇总徽标，价值边际 → 待 META-11/12 后评估是否值得做。**注**：AMENDMENT 2 已从富集簇移除 source kind；本卡若做，改用 DualSignal 体系而非 EnrichmentBadge。
+
+---
+
+## [SEQ-20260530-03] 富集徽标重设计 — 外部源品牌 Logo（ADR-172 AMENDMENT 2）
+
+- **状态**：🔄 执行中（META-14-ADR ✅ / B·A·C 待开始 2026-05-30）
+- **创建时间**：2026-05-30
+- **最后更新时间**：2026-05-30
+- **目标**：按用户走读反馈重设计富集徽标 —— 彩点+文字 → 4 外部源品牌 Logo（douban/bangumi/tmdb/imdb），移除冗余 source 徽标，修复「富集时间 vs 未匹配」矛盾（灰显未命中）。
+- **范围**：`packages/admin-ui` enrichment-badge 重写 + 新 SourceLogoBadge 原语 + data-URI logo 资源 + EnrichmentSummary +3 字段（admin + moderation 数据层）+ design-token。**调用签名不变**（4 消费面零代码改动 / 仅 visual 回归）。
+- **依赖**：ADR-172 AMENDMENT 2 ✅ Accepted（arch-reviewer Opus）。
+- **用户批准决策**：A data-URI / TMDB+IMDb 纳入 / meta_score 仅 header / 未命中灰显。
+
+### 任务列表（严格串行 B→A→C）
+
+1. **META-14-ADR** — ADR-172 AMENDMENT 2 起草（arch-reviewer Opus）（状态：✅ 已完成 2026-05-30 / claude-opus-4-8 + arch-reviewer (claude-opus-4-8) / decisions.md 落档）
+2. **META-14-B** — 数据层：EnrichmentSummary +3（doubanId/tmdbId/imdbId）+ EnrichmentSourceRow +3 + buildEnrichmentSummary +3 投影 + moderation listPendingQueue SQL +3 列（状态：⬜ 待开始 / 建议 sonnet）
+3. **META-14-A** — logo 资源 + 新原语：`enrichment-logos.ts`（4 源 base64 data-URI + href builders）+ `source-logo-badge.tsx`（三态 matched/candidate/absent + a11y title/alt + href）+ design-token `--logo-absent-opacity` + 单测（状态：⬜ 待开始 / 建议 sonnet / 触碰公开 Props → Opus trailer）
+4. **META-14-C** — 簇重构 + 单测重写 + 4 面 visual 回归：重写 types/badge/cluster/barrel（删 source、加 logo 行、meta 仅 header）+ 重写单测（状态：⬜ 待开始 / 建议 sonnet / 触碰公开 Props → Opus trailer）
 
 ---
 
