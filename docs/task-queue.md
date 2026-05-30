@@ -2365,3 +2365,25 @@ CODENAME-MATRIX-E2E (依赖 Wave 3 验收期补丁 CODENAME-MATRIX ✅)
    - 用户提供文件位置 → `import-douban-dump.ts` 或 `import-external-data.ts --source douban --file <path>` → 豆瓣本地召回上量（最大收益 / 豆瓣是主源）
 
 > **Bangumi API 接入说明**：代码层**已接入**（`lib/bangumi.ts` 读 `BANGUMI_API_TOKEN` + `MetadataEnrichService.step3Bangumi` 对 anime 自动委托 BangumiService REST 富集）。当前没生效只因 Redis/worker 没跑（同 META-15-B）。一旦起 worker + 重富集 anime（META-15-C），Bangumi 自动匹配。剩余「凭证移 system_settings + UI 测试连接」（ADR-168/feature-1）是 backlog，非必需。
+
+---
+
+## [SEQ-20260530-05] 外部数据源凭证统一管理 + Secret Redaction（ADR-168 / ADR-A）
+
+- **状态**：⬜ 待开始（用户要求：API key 不能仅靠 .env.local 明文，需设置页配置 / 2026-05-30）
+- **创建时间**：2026-05-30
+- **最后更新时间**：2026-05-30
+- **目标**：在站点设置页提供**可扩展的外部源凭证配置**（Bangumi token 现在 / TMDB api_key 以后），凭证存 `system_settings`，并落地 secret redaction（审计不落明文 + GET 遮罩 + PATCH 占位跳过）；顺带修复现有 `douban_cookie`/`notification_webhook_secret` 明文落审计/明文回传隐患。
+- **背景**：代码层 Bangumi REST 已接入（`lib/bangumi.ts` 读 `BANGUMI_API_TOKEN`），但**仅 .env.local 明文**，无设置页配置、无遮罩。用户已获 Bangumi access token，后续加 TMDB。
+- **方案/ADR**：`docs/designs/external-metadata-ux-overhaul_20260529.md` §2 + §13 ADR-168 骨架（D-168-1..6 已锁；at-rest 加密 NEGATED for P1）。
+- **可扩展性要求（用户明示）**：凭证结构通用化（非 bangumi 专用）—— 支持 bangumi_api_token / tmdb_api_key / 未来源；`SECRET_KEY_PATTERNS` 需覆盖 `_token$/_cookie$/_secret$` + **新增 `_api_key$`/`_key$`**（tmdb_api_key）（ADR 内裁定精确正则，避免误伤非密钥 key）。
+
+### 任务列表（按执行顺序）
+
+1. **META-16-ADR** — ADR-168 正式起草（强制 Opus / 安全 + 跨 lib/service/route/UI）（状态：⬜ 待开始）
+   - 消化 design §13 D-168-1..6 + 通用化（多源凭证）+ `_api_key$` 模式裁定 + 现有 douban_cookie/webhook_secret 回归红线
+2. **META-16-A** — 后端：system_settings 凭证 key（bangumi_api_token/user_agent/timeout_ms + tmdb_api_key 占位）+ types `SystemSettingKey` union + redaction helper（审计 `<set>/<cleared>` + GET 遮罩 `••••<后4位>`+`<key>Set` + PATCH 占位跳过）+ 修 siteConfig.ts/deserializeSiteSettings + 回归 webhook/douban 既有「保存即清空」（状态：⬜ 待开始）
+3. **META-16-B** — 凭证解析下沉 Service：`lib/bangumi.ts` 接受可选 config + `BangumiService.getBangumiConfig(db)` 读 system_settings（进程内缓存 ~60s）+ 缺省回退 env（向后兼容）（状态：⬜ 待开始）
+4. **META-16-C** — 前端：SettingsTab 新增「外部数据源」分组卡（与豆瓣 cookie/proxy 并列）+ password input + 遮罩显示/显隐切换 + 状态行（已配置/未配置）+ 单测（状态：⬜ 待开始）
+
+> **范围说明**：「测试连接」按钮（POST .../bangumi/test）依赖 ADR-F endpoint ADR，**不在本 SEQ**（feature-1 §2.4 的连接测试推后）；本 SEQ 仅「配置 + 存储 + 遮罩 + 消费」。at-rest 应用层加密 NEGATED for P1（follow-up）。
