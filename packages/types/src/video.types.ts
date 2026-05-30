@@ -134,6 +134,10 @@ export interface EnrichmentSummary {
   titleEnIsPinyin: boolean                 // ← meta_quality.title_en_is_pinyin（缺省 false）
   doubanConfidence: number | null          // ← meta_quality.douban_confidence
   bangumiSubjectId: number | null          // ← media_catalog.bangumi_subject_id
+  // ADR-172 AMENDMENT 2：外部源 ID（logo state 推导 + 外部页跳链）。
+  doubanId: string | null                  // ← media_catalog.douban_id（豆瓣 logo href）
+  tmdbId: number | null                    // ← media_catalog.tmdb_id（命中=非空 / TMDB logo）
+  imdbId: string | null                    // ← media_catalog.imdb_id（命中=非空 / IMDb logo）
 }
 /** VideoGenre — 内容题材（与 VideoType 内容形式严格正交）
  *

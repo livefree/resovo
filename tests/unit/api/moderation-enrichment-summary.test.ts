@@ -25,6 +25,10 @@ function makeRawRow(over: Record<string, unknown> = {}): Record<string, unknown>
     bangumiStatus: 'candidate',
     metaQuality: { enriched_at: '2026-05-30T01:00:00Z', title_en_is_pinyin: true, douban_confidence: 0.8 },
     bangumiSubjectId: 8,
+    // META-14-B 外部源 ID 输入源
+    doubanId: '1292052',
+    tmdbId: 27205,
+    imdbId: 'tt1375666',
     ...over,
   }
 }
@@ -53,23 +57,29 @@ describe('listPendingQueue — enrichmentSummary 注入（META-12-A）', () => {
       titleEnIsPinyin: true,
       doubanConfidence: 0.8,
       bangumiSubjectId: 8,
+      doubanId: '1292052',
+      tmdbId: 27205,
+      imdbId: 'tt1375666',
     })
   })
 
-  it('raw 输入源（metaQuality / bangumiStatus / bangumiSubjectId）不泄漏进响应行', async () => {
+  it('raw 输入源（metaQuality / bangumiStatus / bangumiSubjectId / 外部源 ID）不泄漏进响应行', async () => {
     const result = await listPendingQueue(mockDb([makeRawRow()]), FILTERS, 'actor-1')
     const row = result.data[0] as Record<string, unknown>
     expect(row.metaQuality).toBeUndefined()
     expect(row.bangumiStatus).toBeUndefined()
     expect(row.bangumiSubjectId).toBeUndefined()
+    expect(row.doubanId).toBeUndefined()
+    expect(row.tmdbId).toBeUndefined()
+    expect(row.imdbId).toBeUndefined()
     // 既有平铺字段保留（doubanStatus / sourceCheckStatus / metaScore 仍在）
     expect(row.doubanStatus).toBe('matched')
     expect(row.metaScore).toBe(72)
   })
 
-  it('meta_quality=null / bangumi_subject_id=null → 缺省派生（pending/false/null）', async () => {
+  it('meta_quality=null / 各源 ID=null → 缺省派生（pending/false/null）', async () => {
     const result = await listPendingQueue(
-      mockDb([makeRawRow({ metaQuality: null, bangumiSubjectId: null, bangumiStatus: 'pending' })]),
+      mockDb([makeRawRow({ metaQuality: null, bangumiSubjectId: null, bangumiStatus: 'pending', doubanId: null, tmdbId: null, imdbId: null })]),
       FILTERS,
       'actor-1',
     )
@@ -80,6 +90,9 @@ describe('listPendingQueue — enrichmentSummary 注入（META-12-A）', () => {
       titleEnIsPinyin: false,
       doubanConfidence: null,
       bangumiSubjectId: null,
+      doubanId: null,
+      tmdbId: null,
+      imdbId: null,
     })
   })
 })

@@ -12383,3 +12383,21 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **数据库变更**：无（media_catalog 四源 ID 列 026 已存在）
 - **关键契约（AMENDMENT 2）**：①新原语 `SourceLogoBadge`（4 源×matched/candidate/absent 三态 + a11y title 修复 tooltip 缺口 + href 跳外部页）②Cluster 移除 source kind / logo 行 + meta chip(仅header) + 富集时间(仅header) / row 只显命中彩色 logo·header 全显含灰显未命中 ③EnrichmentSummary +doubanId/tmdbId/imdbId ④absent 灰显 = grayscale 滤镜 + `--logo-absent-opacity` token（零硬编码颜色）⑤href 下沉组件内集中构造
 - **注意事项**：**破坏性重构**（4 消费面调用签名不变=零代码改动 / 仅 visual 回归；现有单测同 commit 重写）。后续严格串行 META-14-B（数据）→ -A（logo+原语）→ -C（簇重构）。A/C 触碰 admin-ui 公开 Props → commit 必带 arch-reviewer Opus trailer。
+
+---
+
+## [META-14-B] 富集 Logo 重设计 数据层：EnrichmentSummary +3 外部源 ID（ADR-172 AMENDMENT 2）
+- **完成时间**：2026-05-30
+- **记录时间**：2026-05-30
+- **执行模型**：claude-opus-4-8
+- **子代理**：无（实施 META-14-ADR 已 Opus 评审的 ADR-172 AMENDMENT 2 契约；纯数据层扩展）
+- **来源序列**：SEQ-20260530-03
+- **修改文件**：
+  - `packages/types/src/video.types.ts` — EnrichmentSummary +doubanId/tmdbId/imdbId（外部源 ID，logo state 推导 + href）
+  - `apps/api/src/db/queries/videos.internal.ts` — EnrichmentSourceRow +3 字段 + buildEnrichmentSummary +3 投影（VIDEO_FULL_SELECT 已含 mc.douban_id/imdb_id/tmdb_id 免改）
+  - `apps/api/src/db/queries/moderation.ts` — listPendingQueue SQL +3 列（mc.douban_id/tmdb_id/imdb_id）+ DbPendingQueueRow +3 可选输入 + mapper destructure 透传 buildEnrichmentSummary
+  - `tests/unit/api/moderation-enrichment-summary.test.ts` + `videos-bangumi-status.test.ts` + 3 组件 makeSummary fixture（enrichment-cluster-faces / enrichment-cluster-moderation / admin-ui enrichment-badge）— 同步 +3 字段断言/构造
+- **新增依赖**：无
+- **数据库变更**：无（media_catalog 026 四源 ID 列已存在）
+- **质量门禁**：typecheck EXIT=0 / lint EXIT=0 / verify:adr-contracts EXIT=0 / 全量 **441 文件 5697 passed 零失败**（净 0 / EnrichmentSummary 加 3 必填字段，全部 fixture 同步）
+- **注意事项**：A/C 才用这些字段（B 仅供数据）。全量首跑遇 1 flaky（`StagingEditPanel.test.tsx` apps/server v1 冻结组件 / 单跑 12/12 过 / 重跑全绿 / 并行负载偶发渲染时序 / 与本卡无关）。

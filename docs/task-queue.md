@@ -178,8 +178,8 @@
 ### 任务列表（严格串行 B→A→C）
 
 1. **META-14-ADR** — ADR-172 AMENDMENT 2 起草（arch-reviewer Opus）（状态：✅ 已完成 2026-05-30 / claude-opus-4-8 + arch-reviewer (claude-opus-4-8) / decisions.md 落档）
-2. **META-14-B** — 数据层：EnrichmentSummary +3（doubanId/tmdbId/imdbId）+ EnrichmentSourceRow +3 + buildEnrichmentSummary +3 投影 + moderation listPendingQueue SQL +3 列（状态：⬜ 待开始 / 建议 sonnet）
-3. **META-14-A** — logo 资源 + 新原语：`enrichment-logos.ts`（4 源 base64 data-URI + href builders）+ `source-logo-badge.tsx`（三态 matched/candidate/absent + a11y title/alt + href）+ design-token `--logo-absent-opacity` + 单测（状态：⬜ 待开始 / 建议 sonnet / 触碰公开 Props → Opus trailer）
+2. **META-14-B** — 数据层：EnrichmentSummary +3（doubanId/tmdbId/imdbId）+ EnrichmentSourceRow +3 + buildEnrichmentSummary +3 投影 + moderation listPendingQueue SQL +3 列（状态：✅ 已完成 2026-05-30 / claude-opus-4-8 / 子代理无 / 门禁全过 / 全量 5697 passed 零回归；VIDEO_FULL_SELECT 已含三列免改）
+3. **META-14-A** — logo 资源 + 新原语：`enrichment-logos.ts`（4 源 base64 data-URI + href builders）+ `source-logo-badge.tsx`（三态 matched/candidate/absent + a11y title/alt + href）+ design-token `--logo-absent-opacity` + 单测（状态：🔄 进行中 / 触碰公开 Props → Opus trailer）
 4. **META-14-C** — 簇重构 + 单测重写 + 4 面 visual 回归：重写 types/badge/cluster/barrel（删 source、加 logo 行、meta 仅 header）+ 重写单测（状态：⬜ 待开始 / 建议 sonnet / 触碰公开 Props → Opus trailer）
 
 ---

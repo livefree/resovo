@@ -105,15 +105,17 @@ describe('buildEnrichmentSummary — 富集摘要派生', () => {
       douban_status: 'matched', bangumi_status: 'candidate',
       source_check_status: 'ok', meta_score: 80,
       meta_quality: { enriched_at: '2026-05-29T00:00:00Z', title_en_is_pinyin: true, douban_confidence: 0.92 },
-      bangumi_subject_id: 51, ...p,
+      bangumi_subject_id: 51,
+      douban_id: '1292052', tmdb_id: 27205, imdb_id: 'tt1375666', ...p,
     } as DbVideoRow
   }
 
-  it('#8 meta_quality 有值 → 展开 enrichedAt/titleEnIsPinyin/doubanConfidence + 平铺列', () => {
+  it('#8 meta_quality 有值 → 展开 enrichedAt/titleEnIsPinyin/doubanConfidence + 平铺列 + 外部源 ID', () => {
     expect(buildEnrichmentSummary(row())).toEqual({
       doubanStatus: 'matched', bangumiStatus: 'candidate', sourceCheckStatus: 'ok',
       metaScore: 80, enrichedAt: '2026-05-29T00:00:00Z', titleEnIsPinyin: true,
       doubanConfidence: 0.92, bangumiSubjectId: 51,
+      doubanId: '1292052', tmdbId: 27205, imdbId: 'tt1375666',
     })
   })
 

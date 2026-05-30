@@ -76,6 +76,9 @@ function makeSummary(over: Partial<EnrichmentSummary> = {}): EnrichmentSummary {
     titleEnIsPinyin: false,
     doubanConfidence: 0.9,
     bangumiSubjectId: 8,
+    doubanId: '1292052',
+    tmdbId: 27205,
+    imdbId: 'tt1375666',
     ...over,
   }
 }

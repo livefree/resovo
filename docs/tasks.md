@@ -6,21 +6,22 @@
 
 ## 进行中任务
 
-### META-14-B — 富集 Logo 重设计 数据层：EnrichmentSummary +3 字段（P3 redesign）
+### META-14-A — 富集 Logo 重设计：logo 资源 + SourceLogoBadge 原语（P3 redesign）
 - **状态**：🔄 进行中
 - **来源序列**：SEQ-20260530-03
 - **建议模型**：sonnet
 - **执行模型**：claude-opus-4-8
-- **子代理调用**：无（消费 ADR-172 AMENDMENT 2 已 Opus 评审契约；纯数据层扩展无新契约）
+- **子代理调用**：无（实施 ADR-172 AMENDMENT 2 已 Opus 评审契约）
 - **实际开始**：2026-05-30
 - **文件范围**：
-  - 改 `packages/types/src/video.types.ts`（EnrichmentSummary +doubanId/tmdbId/imdbId）
-  - 改 `apps/api/src/db/queries/videos.internal.ts`（EnrichmentSourceRow +3 + buildEnrichmentSummary +3 投影；VIDEO_FULL_SELECT 已含三列）
-  - 改 `apps/api/src/db/queries/moderation.ts`（listPendingQueue SQL +3 列 mc.douban_id/tmdb_id/imdb_id + EnrichmentSourceRow 透传）
-  - 改 moderation enrichmentSummary 测试（断言新字段）
+  - 新建 `packages/admin-ui/src/components/enrichment-badge/enrichment-logos.ts`（4 源 base64 data-URI + href builders + SOURCE_HREF_BUILDERS）
+  - 新建 `packages/admin-ui/src/components/enrichment-badge/source-logo-badge.tsx`（三态 matched/candidate/absent + a11y title/alt + href `<a>`）
+  - 改 `packages/admin-ui/src/components/enrichment-badge/enrichment-badge.types.ts`（SourceLogoKind/SourceMatchState/SourceLogoBadgeProps）
+  - 改 `packages/design-tokens/src/**`（新增 `--logo-absent-opacity`）
+  - 改 barrel + 新建 source-logo-badge 单测
 - **完成备注**：_（完成后填写）_
 
-> 前序 META-14-ADR ✅（ADR-172 AMENDMENT 2 已落 decisions.md / arch-reviewer Opus PASS）。后续 META-14-A（logo+原语）/ -C（簇重构）。
+> 前序 META-14-ADR ✅ + META-14-B ✅（EnrichmentSummary +3 字段数据层）。本卡触碰 admin-ui 公开 Props → commit 带 arch-reviewer Opus trailer。后续 META-14-C（簇重构）。
 
 ---
 

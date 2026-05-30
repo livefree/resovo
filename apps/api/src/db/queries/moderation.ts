@@ -147,6 +147,10 @@ interface DbPendingQueueRow {
   bangumiStatus?: BangumiStatus
   metaQuality?: VideoMetaQuality | null
   bangumiSubjectId?: number | null
+  // META-14-B / ADR-172 AMENDMENT 2：外部源 ID 输入源（同上 destructure 剔除）
+  doubanId?: string | null
+  tmdbId?: number | null
+  imdbId?: string | null
 }
 
 interface CursorPayload {
@@ -307,6 +311,10 @@ export async function listPendingQueue(
               v.bangumi_status AS "bangumiStatus",
               v.meta_quality AS "metaQuality",
               mc.bangumi_subject_id AS "bangumiSubjectId",
+              -- META-14-B：外部源 ID（logo state 推导 + href）
+              mc.douban_id AS "doubanId",
+              mc.tmdb_id AS "tmdbId",
+              mc.imdb_id AS "imdbId",
               COALESCE(v.review_source, 'manual') AS "reviewSource",
               v.trending_tag AS "trendingTag",
               v.created_at AS "createdAt",
@@ -344,7 +352,7 @@ export async function listPendingQueue(
     const renderOk = typeof row.renderAggregateOk === 'string' ? parseInt(row.renderAggregateOk, 10) : row.renderAggregateOk
     // META-12-A：destructure 剔除 3 个 raw 输入源（不入响应 / 防 meta_quality JSON 泄漏），
     // 经 buildEnrichmentSummary（admin 同源投影）派生 enrichmentSummary（ADR-170 AMENDMENT）
-    const { metaQuality, bangumiStatus, bangumiSubjectId, ...rest } = row
+    const { metaQuality, bangumiStatus, bangumiSubjectId, doubanId, tmdbId, imdbId, ...rest } = row
     return {
       ...rest,
       probeAggregate: { total: probeTotal, ok: probeOk, state: deriveAggregateState(probeOk, probeTotal) },
@@ -356,6 +364,9 @@ export async function listPendingQueue(
         meta_score: rest.metaScore,
         meta_quality: metaQuality ?? null,
         bangumi_subject_id: bangumiSubjectId ?? null,
+        douban_id: doubanId ?? null,
+        tmdb_id: tmdbId ?? null,
+        imdb_id: imdbId ?? null,
       }),
     }
   })

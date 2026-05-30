@@ -181,6 +181,10 @@ export interface EnrichmentSourceRow {
   meta_score: number | null
   meta_quality: VideoMetaQuality | null
   bangumi_subject_id: number | null
+  // ADR-172 AMENDMENT 2：外部源 ID（logo state 推导 + href）
+  douban_id: string | null
+  tmdb_id: number | null
+  imdb_id: string | null
 }
 
 /**
@@ -202,6 +206,9 @@ export function buildEnrichmentSummary(row: EnrichmentSourceRow): EnrichmentSumm
     titleEnIsPinyin: mq?.title_en_is_pinyin ?? false,
     doubanConfidence: mq?.douban_confidence ?? null,
     bangumiSubjectId: row.bangumi_subject_id ?? null,
+    doubanId: row.douban_id ?? null,
+    tmdbId: row.tmdb_id ?? null,
+    imdbId: row.imdb_id ?? null,
   }
 }
 

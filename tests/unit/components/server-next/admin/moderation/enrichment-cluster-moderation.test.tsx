@@ -32,7 +32,8 @@ function makeSummary(over: Partial<EnrichmentSummary> = {}): EnrichmentSummary {
   return {
     doubanStatus: 'matched', bangumiStatus: 'matched', sourceCheckStatus: 'ok',
     metaScore: 88, enrichedAt: '2026-05-30T12:00:00Z', titleEnIsPinyin: false,
-    doubanConfidence: 0.9, bangumiSubjectId: 8, ...over,
+    doubanConfidence: 0.9, bangumiSubjectId: 8,
+    doubanId: '1292052', tmdbId: 27205, imdbId: 'tt1375666', ...over,
   }
 }
 
