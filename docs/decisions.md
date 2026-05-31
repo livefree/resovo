@@ -18267,6 +18267,7 @@ BANGUMI_USER_AGENT:     z.string().default('resovo/1.0 (https://github.com/...)'
    - **candidate / none（unmatched）**：无 catalog 写、无事务（仅 best-effort writeRef）→ 经 Pool 写（事务外）；写入失败须记录不静默吞（Y-2 防与 ref 不同步）。
    - **手动确认 confirmMatch**：在其既有 `BEGIN/COMMIT` 事务内、upsert `manual_confirmed` ref 之后 `await updateVideoBangumiStatus(client, videoId, 'matched')`（与 catalog+ref 原子）。confirmMatch **不经 matchAndEnrich**，故独立写。
    - **ignore / retry**：预留（未来 ignore 端点写 `'unmatched'`）。
+   - **（D-170-4-AMD / META-15-C FIX，Codex stop-time review）已绑定→只刷新不重配**：`matchAndEnrich` 入口若检出**既有 primary bangumi ref（auto_matched / manual_confirmed）**，**跳过重新匹配**，改走 `refreshExistingMatch`——按既有 subject 刷新 catalog(COALESCE)/逐集/角色 + 重申 `'matched'`，**不动 ref、不降级**。原因：批量重富集（missing-characters mode 重跑既有 matched anime 补 META-19 角色）若重走匹配，`none`→写 `'unmatched'` 会**清空绑定**、`candidate`→降级、`auto` upsert 会把 `manual_confirmed` 覆盖成 `auto` 甚至改绑异 subject。unmatched/never 视频无 primary ref → 落正常匹配（unmatched mode 重试匹配语义不变）。REST 详情瞬时失败且无 dump → 抛错重试，绝不清空既有数据。
    - **非 anime**：step3 不执行 → 恒 `'pending'`；前端据 `video.type !== 'anime'` 决定不渲染 bangumi 徽标，**不依赖 status 值**。
    - **（A-3）刻意不对称**：douban 侧有「列 `douban_status` + `meta_quality.douban_match_status` JSON 子状态」双轨；bangumi **只设列 status，不引入 `meta_quality` JSON 子状态**——刻意简化，非遗漏。
 

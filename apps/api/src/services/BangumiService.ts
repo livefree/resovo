@@ -107,6 +107,22 @@ export class BangumiService {
     // ADR-170 D-170-4：状态投影下沉本方法，统一覆盖 step3 自动流 / bangumi-sync 直调 / 改类型→anime 三路径。
     // 命中来源双轨：① 本地 dump 精确召回（毫秒级）② META-17 方案 A：dump 空/低置信时 REST 精确兜底。
     const cfg = await this.getBangumiConfig()   // ADR-168：凭证（DB system_settings 优先，回退 env）
+
+    // META-15-C FIX（Codex stop-time review）：已有 primary bangumi 绑定（auto_matched/manual_confirmed）
+    // → **只刷新不重配**。防批量重富集（missing-characters 等）重跑匹配把既有绑定降级（matched→
+    // unmatched/candidate）、覆盖人工校正（manual_confirmed→auto）、或改绑到不同 subject。
+    // unmatched/never 视频无 primary ref → 落空，走下方正常匹配（unmatched mode 重试匹配的语义不变）。
+    const existingPrimary = await externalDataQueries.findPrimaryVideoExternalRef(this.db, videoId, 'bangumi')
+    if (
+      existingPrimary &&
+      (existingPrimary.matchStatus === 'auto_matched' || existingPrimary.matchStatus === 'manual_confirmed')
+    ) {
+      const boundId = Number(existingPrimary.externalId)
+      if (Number.isFinite(boundId) && boundId > 0) {
+        return await this.refreshExistingMatch(videoId, catalogId, boundId, existingPrimary.confidence, cfg)
+      }
+    }
+
     const matches = await externalDataQueries.findBangumiByTitleNorm(this.db, titleNorm, year)
     let resolved: { bangumiId: number; confidence: number; breakdown: Record<string, number>; localEntry: BangumiEntryMatch | null } | null = null
 
@@ -160,6 +176,47 @@ export class BangumiService {
       confidence,
       episodes: episodesWritten,
       degraded: data.degraded,
+    }
+  }
+
+  /**
+   * META-15-C FIX（Codex stop-time review）：已有 primary bangumi 绑定时的「只刷新不重配」路径。
+   * **不重新匹配 / 不动 ref**（保留既有 manual_confirmed/auto_matched 绑定，防降级·改绑·清空）；
+   * 仅按既有 subject 拉数据刷新 catalog(COALESCE)/逐集/角色，并重申 bangumi_status='matched'（幂等·
+   * 兼修历史 buggy 重富集留下的「有绑定却 unmatched」不一致）。REST 详情瞬时失败且无 dump 兜底 →
+   * 抛出让 Bull 重试，绝不清空既有数据。
+   */
+  private async refreshExistingMatch(
+    videoId: string,
+    catalogId: string,
+    bangumiId: number,
+    existingConfidence: number | null,
+    cfg: BangumiClientConfig,
+  ): Promise<BangumiEnrichResult> {
+    const entry = await externalDataQueries.findBangumiById(this.db, bangumiId)
+    const data = await this.gatherEnrichmentData(bangumiId, entry, cfg)
+    if (data.fields === null) {
+      throw new Error(`bangumi refresh: subject ${bangumiId} detail fetch failed (transient) — retry`)
+    }
+    const client = await this.db.connect()
+    try {
+      await client.query('BEGIN')
+      const result = await this.applyEnrichmentDb(client, videoId, catalogId, bangumiId, data)
+      // 不 upsert ref（保留既有绑定）；重申 matched（绑定恒为 matched，幂等修不一致）
+      await videosQueries.updateVideoBangumiStatus(client, videoId, 'matched')
+      await client.query('COMMIT')
+      return {
+        matched: 'auto',
+        bangumiSubjectId: bangumiId,
+        confidence: existingConfidence ?? 1,
+        episodes: result.episodes,
+        degraded: data.degraded,
+      }
+    } catch (err) {
+      try { await client.query('ROLLBACK') } catch { /* connection may already be lost */ }
+      throw err
+    } finally {
+      client.release()
     }
   }
 

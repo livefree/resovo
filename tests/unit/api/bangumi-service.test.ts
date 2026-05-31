@@ -171,6 +171,8 @@ vi.mock('@/api/db/queries/externalData', () => ({
   findBangumiByTitleNorm: vi.fn(),
   findBangumiById: vi.fn(),
   upsertVideoExternalRef: vi.fn().mockResolvedValue({}),
+  // META-15-C FIX：默认无既有绑定 → 走正常匹配（既有用例不受影响）；绑定用例各自覆写
+  findPrimaryVideoExternalRef: vi.fn().mockResolvedValue(null),
 }))
 vi.mock('@/api/db/queries/catalogEpisodes', () => ({
   upsertCatalogEpisodes: vi.fn().mockResolvedValue(0),
@@ -221,6 +223,7 @@ const mFindCatalog = catQ.findCatalogById as ReturnType<typeof vi.fn>
 const mUpdateCatalog = catQ.updateCatalogFields as ReturnType<typeof vi.fn>
 const mGetCharacters = bangumiLib.getCharacters as ReturnType<typeof vi.fn>
 const mReplaceChars = charQ.replaceCatalogCharacters as ReturnType<typeof vi.fn>
+const mFindPrimaryRef = extQ.findPrimaryVideoExternalRef as ReturnType<typeof vi.fn>
 
 const VID = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'
 const CID = 'cccccccc-dddd-eeee-ffff-111111111111'
@@ -332,6 +335,66 @@ describe('BangumiService.matchAndEnrich', () => {
 
     await svc.matchAndEnrich({ videoId: VID, catalogId: CID, titleNorm: 'x', year: 2007 })
     expect(mReplaceChars).toHaveBeenCalledWith(mockClient, CID, 'bangumi', [])
+  })
+
+  // ── META-15-C FIX（Codex）：已有绑定只刷新不重配 ─────────────────────
+  const primaryRef = (over: Record<string, unknown> = {}) => ({
+    id: 'r1', videoId: VID, provider: 'bangumi', externalId: '51',
+    matchStatus: 'auto_matched', matchMethod: 'title_norm', confidence: 0.9,
+    isPrimary: true, linkedBy: 'auto', linkedAt: '2026-05-01T00:00:00Z', notes: null,
+    ...over,
+  })
+
+  it('META-15-C：已有 primary 绑定 → 只刷新不重配（不调匹配 / 不动 ref / 刷新角色 / 重申 matched）', async () => {
+    mFindPrimaryRef.mockResolvedValue(primaryRef())
+    mGetSubject.mockResolvedValue(subject())
+    mGetEpisodes.mockResolvedValue([])
+    mGetCharacters.mockResolvedValue([
+      { id: 1, name: 'A', type: 1, images: null, relation: '主角', summary: '', actors: [{ id: 9, name: 'CV', type: 1, images: null }] },
+    ])
+
+    const r = await svc.matchAndEnrich({ videoId: VID, catalogId: CID, titleNorm: 'x', year: 2007 })
+    expect(r).toMatchObject({ matched: 'auto', bangumiSubjectId: 51 })
+    expect(mFindByTitle).not.toHaveBeenCalled()           // 不重新匹配
+    expect(mUpsertRef).not.toHaveBeenCalled()             // 不动既有 ref（不降级/不改绑）
+    expect(mFindById).toHaveBeenCalledWith(expect.anything(), 51)  // 按既有 subject 刷新
+    expect(mReplaceChars).toHaveBeenCalledWith(mockClient, CID, 'bangumi', expect.any(Array))  // 刷新角色
+    expect(mUpdateBangumiStatus).toHaveBeenCalledWith(mockClient, VID, 'matched')  // 重申 matched
+  })
+
+  it('META-15-C：已 matched + 重配本应 none → 绑定不被清空为 unmatched（核心修复）', async () => {
+    mFindPrimaryRef.mockResolvedValue(primaryRef())
+    mFindByTitle.mockResolvedValue([])   // 若重配：本地空
+    mSearchStrict.mockResolvedValue([])  // 若重配：REST 空 → 本会 none → unmatched
+    mGetSubject.mockResolvedValue(subject())
+    mGetEpisodes.mockResolvedValue([])
+    mGetCharacters.mockResolvedValue([])
+
+    const r = await svc.matchAndEnrich({ videoId: VID, catalogId: CID, titleNorm: 'x', year: 2007 })
+    expect(r.matched).toBe('auto')
+    expect(mUpdateBangumiStatus).not.toHaveBeenCalledWith(expect.anything(), VID, 'unmatched')
+  })
+
+  it('META-15-C：manual_confirmed 绑定 → 不被降级为 auto（不 upsert ref）', async () => {
+    mFindPrimaryRef.mockResolvedValue(primaryRef({ matchStatus: 'manual_confirmed', linkedBy: 'moderator', confidence: 1 }))
+    mGetSubject.mockResolvedValue(subject())
+    mGetEpisodes.mockResolvedValue([])
+    mGetCharacters.mockResolvedValue(null)  // 角色抓取失败 → 不动角色
+
+    await svc.matchAndEnrich({ videoId: VID, catalogId: CID, titleNorm: 'x', year: 2007 })
+    expect(mUpsertRef).not.toHaveBeenCalled()
+    expect(mReplaceChars).not.toHaveBeenCalled()  // getCharacters null → 不替换
+  })
+
+  it('META-15-C：candidate primary（非 matched 绑定）不触发刷新 → 走正常匹配', async () => {
+    mFindPrimaryRef.mockResolvedValue(primaryRef({ matchStatus: 'candidate', isPrimary: true }))
+    mFindByTitle.mockResolvedValue([])
+    mSearchStrict.mockResolvedValue([])
+
+    const r = await svc.matchAndEnrich({ videoId: VID, catalogId: CID, titleNorm: 'x', year: 2007 })
+    // candidate 不算「已绑定」→ 落正常匹配；本地+REST 空 → none
+    expect(mFindByTitle).toHaveBeenCalled()
+    expect(r).toMatchObject({ matched: 'none' })
   })
 
   it('auto + Token 缺失 → 降级用本地 dump 字段，不调 API', async () => {

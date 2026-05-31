@@ -14,6 +14,8 @@ vi.mock('@/api/db/queries/externalData', () => ({
   findDoubanByAlias: vi.fn(),
   findDoubanByImdbId: vi.fn(),
   findBangumiByTitleNorm: vi.fn(),
+  // META-15-C FIX：BangumiService.matchAndEnrich 守卫调用；默认无既有绑定 → 走正常匹配
+  findPrimaryVideoExternalRef: vi.fn().mockResolvedValue(null),
   upsertVideoExternalRef: vi.fn().mockResolvedValue({
     id: 'ref1', videoId: 'v1', provider: 'douban', externalId: 'd1',
     matchStatus: 'auto_matched', matchMethod: 'title', confidence: 0.92,

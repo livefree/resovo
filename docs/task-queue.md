@@ -2357,7 +2357,8 @@ CODENAME-MATRIX-E2E (依赖 Wave 3 验收期补丁 CODENAME-MATRIX ✅)
    - 用户起 redis + dev server；富集消费者在 **apps/api** `server.ts:194 registerEnrichmentWorker`（非 apps/worker，后者是 cron）。海贼王 douban + 师兄啊师兄 bangumi 端到端富集通过。
 3. **META-15-C** — 批量重富集 backfill 脚本（状态：✅ **工具就绪** 2026-05-31 / claude-opus-4-8 / 子代理无 / 门禁全过 / 5 新单测 / 全量 5774 passed）
    - `EnrichJobData += trigger?` + worker 日志 + `listVideosForBackfillEnrich`（never/unmatched/**missing-characters**/all）+ `scripts/reenrich-backfill.ts`（--mode/--type/--limit/--dry-run，复用 enrichmentQueue 配置含 attempts/backoff/removeOnComplete）
-   - **Codex FIX**：① 加 `missing-characters` mode（anime 无 catalog_characters，纳入 all）→ 覆盖**既有 matched anime**（否则 META-19 角色永填不上）② jobId 改 `backfill-<runTs>-<id>`（不复用爬虫 enrich-<id>，避免撞残留 job 被静默跳过）
+   - **Codex FIX-1**：① 加 `missing-characters` mode（anime 无 catalog_characters，纳入 all）→ 覆盖**既有 matched anime**（否则 META-19 角色永填不上）② jobId 改 `backfill-<runTs>-<id>`（不复用爬虫 enrich-<id>，避免撞残留 job 被静默跳过）
+   - **Codex FIX-2**：matched-anime 重富集会损坏既有 Bangumi 绑定（清空/降级/覆盖人工）→ `matchAndEnrich` 入口「已 primary 绑定→只刷新不重配」（refreshExistingMatch，ADR-170 D-170-4-AMD）；+4 守卫单测
    - **dry-run 实测：all 2,835 条**（含已 matched anime）/ **missing-characters 420**（当前全部 anime 无角色）。anime 走 META-17 Bangumi REST 兜底 + META-19 角色入库。
    - **⚠️ 全量运行交用户**：需先起 api server（worker 在 server.ts:194，concurrency=2 限流）+ redis；当前 redis 起但 worker 未跑。运行：`node --env-file=.env.local --import tsx scripts/reenrich-backfill.ts`（建议先 `--limit 20 --type anime` 验证 matched/角色上升，再全量）。
 4. **META-15-D** — 补豆瓣 dump（需用户提供 moviedata-10m movies.csv）（状态：⬜ 待开始 / 阻塞于文件）
