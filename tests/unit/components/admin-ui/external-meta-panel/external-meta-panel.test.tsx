@@ -143,6 +143,26 @@ describe('ExternalMetaPanel — 源并集总览', () => {
     expect(row(container, 'bangumi')!.textContent).toContain('92%')
   })
 
+  it('externalRefs：渲染匹配方式（matchMethod）—— 已知映射文案', () => {
+    const refs: ExternalRefSummary[] = [
+      makeRef({ provider: 'douban', matchMethod: 'imdb_id', matchStatus: 'auto_matched' }),
+    ]
+    const { container } = render(
+      <ExternalMetaPanel summary={makeSummary()} type={'movie' as VideoType} externalRefs={refs} density="drawer" />,
+    )
+    expect(row(container, 'douban')!.textContent).toContain('IMDb ID')
+  })
+
+  it('externalRefs：未知 matchMethod 回退原始串（不丢信息）', () => {
+    const refs: ExternalRefSummary[] = [
+      makeRef({ provider: 'tmdb', matchMethod: 'some_future_method', matchStatus: 'auto_matched' }),
+    ]
+    const { container } = render(
+      <ExternalMetaPanel summary={makeSummary()} type={'movie' as VideoType} externalRefs={refs} density="drawer" />,
+    )
+    expect(row(container, 'tmdb')!.textContent).toContain('some_future_method')
+  })
+
   it('无 ref 命中源：回退 summary id + 「已匹配」文案', () => {
     const { container } = render(
       <ExternalMetaPanel summary={makeSummary()} type={'movie' as VideoType} density="drawer" />,

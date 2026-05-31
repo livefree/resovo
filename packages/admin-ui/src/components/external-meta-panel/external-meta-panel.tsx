@@ -66,6 +66,25 @@ const MATCH_STATUS_LABEL: Record<ExternalRefMatchStatus, string> = {
   rejected: '已忽略',
 }
 
+/**
+ * 匹配方式文案（运营判「靠什么匹配上」/ D-172-AMD3-2 保留 matchMethod 的展示落点）。
+ * 已知方式见 MetadataEnrichService / BangumiService writeRef；未知方式回退原始串（不丢信息）。
+ */
+const MATCH_METHOD_LABEL: Record<string, string> = {
+  imdb_id: 'IMDb ID',
+  title: '标题',
+  title_norm: '标题',
+  alias: '别名',
+  network: '网络搜索',
+  manual: '人工',
+  manual_fields: '人工字段',
+}
+
+function methodText(matchMethod: string | null): string | null {
+  if (!matchMethod) return null
+  return MATCH_METHOD_LABEL[matchMethod] ?? matchMethod
+}
+
 /** douban/bangumi 4 态 status → SourceMatchState（与 EnrichmentBadgeCluster 同口径）。 */
 function deriveMatchState(status: DoubanStatus | BangumiStatus): SourceMatchState {
   if (status === 'matched') return 'matched'
@@ -137,6 +156,7 @@ function SourceRow({ entry, size }: { entry: SourceEntry; size: SourceLogoSize }
   const { provider, state, externalId, ref } = entry
   const href = state !== 'absent' && externalId ? SOURCE_HREF_BUILDERS[provider](externalId) : undefined
   const statusText = ref ? MATCH_STATUS_LABEL[ref.matchStatus] : stateText(state)
+  const methodLabel = methodText(ref?.matchMethod ?? null)
   const confidencePct = ref?.confidence != null ? ` ${Math.round(ref.confidence * 100)}%` : ''
   return (
     <div style={SOURCE_ROW_STYLE} data-external-source-row data-source={provider} data-state={state}>
@@ -144,8 +164,11 @@ function SourceRow({ entry, size }: { entry: SourceEntry; size: SourceLogoSize }
       <span style={SOURCE_LABEL_STYLE}>{SOURCE_LABEL[provider]}</span>
       {externalId ? <code style={ID_STYLE}>{externalId}</code> : <span style={MUTED_STYLE}>—</span>}
       <span style={{ flex: 1 }} />
-      <span style={{ fontSize: 'var(--font-size-xxs)', color: stateColor(state) }}>
-        {statusText}{confidencePct}
+      <span
+        style={{ fontSize: 'var(--font-size-xxs)', color: stateColor(state) }}
+        data-external-source-status
+      >
+        {statusText}{methodLabel ? ` · ${methodLabel}` : ''}{confidencePct}
       </span>
       {ref?.isPrimary && <span style={PRIMARY_PILL_STYLE}>主源</span>}
     </div>

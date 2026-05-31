@@ -12575,5 +12575,6 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
   - 测试：`tests/unit/components/admin-ui/external-meta-panel/external-meta-panel.test.tsx`（13 新单测）+ 3 TabDetail 测试补 `getVideo` mock
 - **新增依赖**：无 / **数据库变更**：无 / **新增路由**：无（verify:endpoint-adr ✅ 203 路由对齐）
 - **质量门禁**：typecheck EXIT=0 / lint EXIT=0（仅既有 img warning）/ **全量 444 文件 5752 passed 0 failed** / verify:adr-contracts EXIT=0 / verify:endpoint-adr ✅
-- **效果**：运营在视频编辑抽屉 + 审核台详情可见已回填的 Bangumi 条目级字段（日文原名/放送日/排名/评分）+ 多源并集总览（命中源/外部 ID/置信度/主源/可点外链）→ 可判定富集回填质量。
+- **效果**：运营在视频编辑抽屉 + 审核台详情可见已回填的 Bangumi 条目级字段（日文原名/放送日/排名/评分）+ 多源并集总览（命中源/外部 ID/匹配方式/置信度/主源/可点外链）→ 可判定富集回填质量。
+- **Codex stop-time review FIX**（commit 见下）：`ExternalMetaPanel` 源行漏渲染 `matchMethod`（数据携带但未展示，违背 D-172-AMD3-2「保留 matchMethod 供运营判靠什么匹配上」初衷）→ 源行状态文案补「匹配方式」（MATCH_METHOD_LABEL 已知映射 imdb_id/title/title_norm/alias/network/manual/manual_fields + 未知回退原始串）+ 2 新单测。
 - **注意事项（已记录后续）**：**META-19** Bangumi CV/角色自动入库管线（抓 `/v0/subjects/:id/characters` + 角色↔CV schema + 回填 + 展示，现 `media_catalog.cast TEXT[]` 扁平结构承载不了配对）—— 用户「后面补充管线，充实数据」诉求；逐集放送 / 前台公开详情页 / tmdb·imdb 条目级专属块本期未做。
