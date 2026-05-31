@@ -12,6 +12,7 @@ import { render, screen } from '@testing-library/react'
 
 vi.mock('../../../../../../apps/server-next/src/lib/videos/api', () => ({
   listVideoSources: vi.fn().mockResolvedValue([]),
+  getVideo: vi.fn().mockResolvedValue(null),
 }))
 
 vi.mock('../../../../../../apps/server-next/src/lib/sources/api', () => ({

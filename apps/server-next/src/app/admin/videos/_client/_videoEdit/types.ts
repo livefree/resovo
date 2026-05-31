@@ -2,7 +2,7 @@ import type { VideoType, VideoStatus } from '@resovo/types'
 
 export type { VideoType, VideoStatus }
 
-export type TabKey = 'basic' | 'lines' | 'images' | 'douban'
+export type TabKey = 'basic' | 'lines' | 'images' | 'douban' | 'external'
 
 export interface FormState {
   title: string

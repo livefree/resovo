@@ -18515,3 +18515,43 @@ Bangumi token 现直读 `process.env.BANGUMI_API_TOKEN`（`lib/bangumi.ts:15`）
 - 新增测试要点：redactSecretsForAudit（set/cleared/原样/null）/ maskSecret（长/短/空）/ GET 遮罩 + Set 布尔（修既存隐患）/ PATCH 占位跳过（douban_cookie/webhook_secret 不被保存即清空）/ isSecretSettingKey（4 命中 + 6 不命中）/ lib cfg 优先与 env 回退。
 
 ---
+
+## ADR-172 AMENDMENT 3（META-18 / 2026-05-30）：外部元数据真源并集视图 — 条目级展示层
+
+- **状态**：Accepted（arch-reviewer claude-opus-4-8 CONDITIONAL → 主循环满足 3 条件后等同 PASS；admin-ui 公开 Props 新增 + `@resovo/types` 公开类型新增，双触发 CLAUDE.md 强制 Opus 评审）
+- **触发**：用户走读反馈 —— 动漫类型视频详情/编辑页未消费已回填的 Bangumi 条目级字段（日文原名/放送日/排名/评分），且无「多源并集总览」（命中了哪些源/外部 ID/置信度/链接）→ 运营无法判定富集回填质量。
+- **性质**：**additive（纯展示层）**。新增展示组件 + 详情 DTO 扩展，不动富集管线、不改 public 路径、不改既有徽标契约。
+- **用户已锁决策**：①展示界面 = 视频编辑抽屉 + 审核台详情 两处 ②深度 = **仅条目级**（不含逐集放送 catalog_episodes）③设计原则 = 以 `media_catalog` 真源为中心 + 所有命中源**并集**展示（非每源孤岛 tab）④CV/角色管线记为 META-19 后续。
+
+### 决策要点
+
+- **（D-172-AMD3-1）跨层原语下沉 `@resovo/types`**：`ExternalRefProvider`（douban|tmdb|bangumi|imdb）+ `ExternalRefMatchStatus`（auto_matched|manual_confirmed|candidate|rejected）由 `apps/api/src/db/queries/externalData.ts` 迁入 `@resovo/types/src/video.types.ts`（含双形态 runtime const `EXTERNAL_REF_PROVIDERS`/`EXTERNAL_REF_MATCH_STATUSES`）；api 层改 `import type` 复用，不保留本地重复定义（避免四源枚举三处分叉 / CLAUDE.md「3 处以上必须提取」）。当前该两字面量仅 externalData.ts 引用，下沉低风险。
+- **（D-172-AMD3-2）新建展示窄化投影类型**（`@resovo/types`）：
+  - `ExternalRefSummary` = video_external_refs 面向展示窄化（provider/externalId/matchStatus/matchMethod/confidence/isPrimary）；**剔除** id/videoId/linkedAt/linkedBy/notes（写工作流/审计字段，纯展示不消费、不诱导写操作）。
+  - `BangumiEntrySummary` = bangumi_entries 条目级投影（bangumiId/titleCn/titleJp/year/rating/summary/airDate/coverUrl/rank/nsfw）。**严格排除 rating_votes**（dump 无 votes 列；votes 属 `media_catalog` 真源合并值，异源不混 → 归真源字段区）。
+- **（D-172-AMD3-3）admin 详情 DTO 扩展**：`VideoService.adminFindById` 在 `enrichmentSummary` 外追加 `externalRefs: ExternalRefSummary[]`（经 `listVideoExternalRefs` 映射）+ `bangumiInfo?: BangumiEntrySummary`（**仅 `type==='anime'` 且有 primary bangumi ref / bangumi_subject_id 时**经 `findBangumiById` 注入；dump 缺条目则 undefined）。**红线**：只挂 `adminFindById`，绝不挂 `mapVideoRow`/public `Video`（ADR-170 R-5）；`adminList`（列表）不注入（防 N×findBangumiById）。server-next `VideoAdminDetail` 镜像 `externalRefs?`/`bangumiInfo?` + 补 `title_original?`/`rating_votes?`/`metadata_source?`（api raw row 已 select，仅前端镜像未声明）。
+- **（D-172-AMD3-4）admin-ui 新共享组件 `ExternalMetaPanel`**（`packages/admin-ui/src/components/external-meta-panel/`）：**纯展示零事件回调**（不耦合 TabDouban / douban-candidate / douban-ignore 写工作流）。Props `summary: EnrichmentSummary` / `type: VideoType` / `externalRefs?` / `bangumiInfo?` / `catalogFields?{titleOriginal,rating,ratingVotes,metadataSource}`（内联可选对象，**不吃** server-next/api 类型以守单向依赖）/ `enrichedAtLabel?` / `density?: 'drawer'|'compact'` / `testId?`。复用 `SourceLogoBadge` + `SOURCE_HREF_BUILDERS` + `SOURCE_LABEL`（不重绘 logo/href）。三区纵向布局（非 tab）：①源并集总览（4 源 logo + 外部 ID + matchMethod + 置信度 + primary 标记；bangumi 仅 anime；未命中 drawer 灰显占位/compact 不占位）②真源字段区（titleOriginal/rating+votes/metadataSource 标注）③Bangumi 条目块（anime-only：日文原名/放送日/排名/评分/nsfw + summary 可选折叠；bangumiInfo 缺失则整块不渲染）。
+- **（D-172-AMD3-5）审核台懒加载隔离**：`RightPane/TabDetail` 用 `getVideo(v.id)` 懒取扩展详情消费同 Panel，**不得污染 queue list query**（`listPendingQueue`/`VideoQueueRow` 形状不变，新字段不进列表查询）。
+
+### 影响文件
+
+- 修改：`packages/types/src/video.types.ts`（+EXTERNAL_REF_PROVIDERS/EXTERNAL_REF_MATCH_STATUSES/ExternalRefProvider/ExternalRefMatchStatus/ExternalRefSummary/BangumiEntrySummary）、`packages/types/src/index.ts`（runtime const 值导出）
+- 修改：`apps/api/src/db/queries/externalData.ts`（provider/status 改 import 复用）、`apps/api/src/services/VideoService.ts`（adminFindById 注入 externalRefs + bangumiInfo）
+- 修改：`apps/server-next/src/lib/videos/types.ts`（VideoAdminDetail 镜像 + catalogFields 字段）、`VideoEditDrawer.tsx`（新「外部元数据」tab）、`moderation/_client/RightPane/TabDetail.tsx`（懒加载消费）
+- 新建：`packages/admin-ui/src/components/external-meta-panel/{types.ts,external-meta-panel.tsx,index.ts}` + admin-ui barrel 导出
+- 测试：external-meta-panel 单测 + 消费面回归
+
+### 偏离登记
+
+- **D-172-AMD3-A**：`bangumiInfo` 不含 rating_votes（异源分离 / votes 归 catalogFields）。处置：accept。
+- **D-172-AMD3-B**：`catalogFields` 用内联可选对象而非吃 `VideoAdminDetail`/`DbVideoRow`。处置：accept（守 admin-ui 单向依赖红线）。
+- **D-172-AMD3-C**：tmdb/imdb 条目级专属块本期不做（仅 source 总览展示 ID/链接）。处置：accept（TMDB/IMDb 富集管线未建 / 沿用 AMD2-B 二态）。
+
+### 实施拆卡（严格串行 B→A→C / 对应 META-18-A/B）
+
+- **B（types 下沉 + DTO）= META-18-A**：`@resovo/types` 4 类型 + api provider/status 改 import + adminFindById 注入 + server-next 镜像。
+- **A（admin-ui Panel）+ C（两消费面接入）= META-18-B**：ExternalMetaPanel + 单测 + 编辑抽屉新 tab + 审核台 TabDetail 懒加载。
+
+> A/C 触碰 admin-ui 公开 Props + `@resovo/types` 公开类型，commit 必带 `Subagents: arch-reviewer (claude-opus-4-8)` trailer。
+
+---

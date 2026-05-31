@@ -12550,3 +12550,30 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **测试环境说明**：本机因本会话多次重跑过载，完整全量套件未在合理时间跑完（per-file 耗时翻 2-3 倍 / 进度 257/443 仍全 ✓）；改动为**孤立 UI 卡 + 自身测试**（不触 apps/api 或他模块），以「受影响面 135 全过 + META-16-B 干净基线 5736 + typecheck/lint 绿」证明零回归（earlier 过载跑的「4 failed」为并行 flaky 集群 Staging/UserSubmissions/CrawlerClient）。
 - **SEQ-20260530-05 全闭环**：设置页配 Bangumi token → system_settings → getBangumiConfig 60s 缓存 → 驱动富集；secret 三道遮罩（审计/GET/PATCH）保护 + 修现有 douban_cookie/webhook_secret 隐患。**至此「API key 进设置页、不靠 .env.local 明文」用户诉求达成。**
 - **注意事项**：测试连接按钮（bangumi/test 端点）NOT in scope（依赖 ADR-173/F-A，feature-1 §2.4 推后）；TMDB api_key UI 待 TMDB 富集起卡时补（占位字段已就绪）。
+
+---
+
+## [META-18] 外部元数据展示层 — 真源并集视图（条目级 / SEQ-20260530-06 全闭环）
+- **完成时间**：2026-05-30
+- **记录时间**：2026-05-30
+- **执行模型**：claude-opus-4-8
+- **子代理**：arch-reviewer (claude-opus-4-8) — ADR-172 AMENDMENT 3 共享组件 API 契约（CONDITIONAL → 满足 3 条件等同 PASS）
+- **来源序列**：SEQ-20260530-06（外部元数据展示层 / 用户走读：动漫详情/编辑页缺 Bangumi 条目级字段 + 无多源并集总览 → 无法判定富集回填质量）
+- **用户决策（已锁）**：①两处界面（视频编辑抽屉 + 审核台详情）②仅条目级（不含逐集放送）③以 media_catalog 真源为中心 + 所有命中源并集（非每源孤岛 tab）④CV/角色管线记为 META-19 后续
+- **META-18-ADR**：ADR-172 AMENDMENT 3 落档（D-172-AMD3-1..5 + 3 偏离 + 11 红线）
+- **META-18-A（后端 / 不新建路由）**：
+  - `packages/types/src/video.types.ts` — 新增 `EXTERNAL_REF_PROVIDERS`/`EXTERNAL_REF_MATCH_STATUSES`（双形态 const）+ `ExternalRefProvider`/`ExternalRefMatchStatus`（下沉自 api）+ `ExternalRefSummary`（展示窄化，剔除 id/videoId/linkedAt/linkedBy/notes）+ `BangumiEntrySummary`（条目级，**排除 rating_votes** 异源分离）
+  - `packages/types/src/index.ts` — 2 runtime const 值导出
+  - `apps/api/src/db/queries/externalData.ts` — provider/status 改 `import type` + re-export 复用（D-172-AMD3-1，消除四源枚举重复）
+  - `apps/api/src/services/VideoService.ts` — `adminFindById` 注入 `externalRefs`（`listVideoExternalRefs` 映射窄化）+ `bangumiInfo`（仅 anime + primary bangumi ref/subject → `findBangumiById`）；新增私有 `loadBangumiInfo`。**仅详情注入**：不挂 `adminList`（防 N×findBangumiById）、不挂 public `mapVideoRow`（R-5）
+  - `apps/server-next/src/lib/videos/types.ts` — `VideoAdminDetail` 镜像 `externalRefs?`/`bangumiInfo?` + `title_original?`/`rating_votes?`/`metadata_source?`（真源字段区）
+- **META-18-B（前端）**：
+  - `packages/admin-ui/src/components/external-meta-panel/{types.ts,external-meta-panel.tsx,index.ts}` — 新共享组件 `ExternalMetaPanel`（纯展示零回调）：三区纵向布局（①源并集总览 4 源 logo+ID+匹配方式+置信度+主源 ②真源字段区 ③Bangumi 条目块 anime-only）；复用 SourceLogoBadge + SOURCE_HREF_BUILDERS + SOURCE_LABEL；density drawer(全部含未命中灰显)/compact(仅命中)；零硬编码色
+  - `packages/admin-ui/src/index.ts` — barrel 导出
+  - `VideoEditDrawer.tsx` + `_videoEdit/types.ts` — 新「外部元数据」tab（density='drawer'）
+  - `moderation/_client/RightPane/TabDetail.tsx` — 懒加载 `getVideo(v.id)` 取扩展详情消费同组件（density='compact'）；失败降级不阻断（extError 提示，非空 catch）
+  - 测试：`tests/unit/components/admin-ui/external-meta-panel/external-meta-panel.test.tsx`（13 新单测）+ 3 TabDetail 测试补 `getVideo` mock
+- **新增依赖**：无 / **数据库变更**：无 / **新增路由**：无（verify:endpoint-adr ✅ 203 路由对齐）
+- **质量门禁**：typecheck EXIT=0 / lint EXIT=0（仅既有 img warning）/ **全量 444 文件 5752 passed 0 failed** / verify:adr-contracts EXIT=0 / verify:endpoint-adr ✅
+- **效果**：运营在视频编辑抽屉 + 审核台详情可见已回填的 Bangumi 条目级字段（日文原名/放送日/排名/评分）+ 多源并集总览（命中源/外部 ID/置信度/主源/可点外链）→ 可判定富集回填质量。
+- **注意事项（已记录后续）**：**META-19** Bangumi CV/角色自动入库管线（抓 `/v0/subjects/:id/characters` + 角色↔CV schema + 回填 + 展示，现 `media_catalog.cast TEXT[]` 扁平结构承载不了配对）—— 用户「后面补充管线，充实数据」诉求；逐集放送 / 前台公开详情页 / tmdb·imdb 条目级专属块本期未做。

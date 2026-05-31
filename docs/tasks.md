@@ -6,7 +6,7 @@
 
 ## 进行中任务
 
-（空 / SEQ-20260530-05 ADR-168 凭证管理全闭环：META-16-ADR/A/B/C 全 ship 2026-05-30 — secret redaction 三道协议 + 凭证下沉 Service + SettingsTab 外部数据源卡。设置页配 Bangumi token 即驱动富集。下一步候选：META-15-C 批量重富集 / META-15-D 豆瓣 dump / Bangumi 别名感知 B / 推 PR）
+（空 / SEQ-20260530-06 外部元数据展示层全闭环：META-18-ADR/A/B 全 ship 2026-05-30 — admin-ui ExternalMetaPanel 真源并集视图 + adminFindById 注入 externalRefs/bangumiInfo + 编辑抽屉新「外部元数据」tab + 审核台 TabDetail 懒加载。arch-reviewer Opus PASS / 全量 5752 passed 零回归。下一步候选：META-19 CV/角色管线 / META-15-C 批量重富集 / META-15-D 豆瓣 dump / 推 PR）
 
 ---
 

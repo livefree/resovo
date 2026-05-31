@@ -19,6 +19,7 @@ const toastPushMock = vi.fn()
 
 vi.mock('../../../../../../apps/server-next/src/lib/videos/api', () => ({
   listVideoSources: (...args: unknown[]) => listVideoSourcesMock(...args),
+  getVideo: vi.fn().mockResolvedValue(null),
 }))
 
 vi.mock('../../../../../../apps/server-next/src/lib/sources/api', () => ({

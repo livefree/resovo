@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useEffect, useCallback } from 'react'
-import { Drawer, LoadingState, ErrorState, VisChip, DualSignal, Thumb, EnrichmentBadgeCluster } from '@resovo/admin-ui'
+import { Drawer, LoadingState, ErrorState, VisChip, DualSignal, Thumb, EnrichmentBadgeCluster, ExternalMetaPanel } from '@resovo/admin-ui'
 import type { VideoAdminDetail } from '@/lib/videos'
 import { getVideo, patchVideoMeta, createVideo } from '@/lib/videos/api'
 import type { VideoType } from '@resovo/types'
@@ -69,6 +69,7 @@ const TABS: ReadonlyArray<{ id: TabKey; label: string }> = [
   { id: 'lines', label: '线路管理' },
   { id: 'images', label: '图片素材' },
   { id: 'douban', label: '豆瓣·元数据' },
+  { id: 'external', label: '外部元数据' },
 ]
 
 export function VideoEditDrawer({ open, videoId, onClose, onSaved }: VideoEditDrawerProps) {
@@ -287,6 +288,28 @@ export function VideoEditDrawer({ open, videoId, onClose, onSaved }: VideoEditDr
                     doubanId={video.douban_id}
                     reviewStatus={video.review_status}
                     onRefresh={onSaved}
+                  />
+                )}
+                {/* META-18 / ADR-172 AMENDMENT 3：外部元数据真源并集视图（条目级） */}
+                {tab === 'external' && video && video.enrichmentSummary && (
+                  <ExternalMetaPanel
+                    summary={video.enrichmentSummary}
+                    type={video.type}
+                    externalRefs={video.externalRefs}
+                    bangumiInfo={video.bangumiInfo}
+                    catalogFields={{
+                      titleOriginal: video.title_original,
+                      rating: video.rating,
+                      ratingVotes: video.rating_votes,
+                      metadataSource: video.metadata_source,
+                    }}
+                    enrichedAtLabel={
+                      video.enrichmentSummary.enrichedAt
+                        ? `富集 ${video.enrichmentSummary.enrichedAt.slice(0, 10)}`
+                        : undefined
+                    }
+                    density="drawer"
+                    testId="data-video-external-meta"
                   />
                 )}
               </div>

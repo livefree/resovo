@@ -6,8 +6,11 @@
 import type { Pool } from 'pg'
 import type { Redis } from 'ioredis'
 import type { Client as ESClient } from '@elastic/elasticsearch'
-import type { Video, VideoCard, VideoType, VideoStatus, VisibilityStatus, Pagination, CountByTypeItem } from '@/types'
+import type { Video, VideoCard, VideoType, VideoStatus, VisibilityStatus, Pagination, CountByTypeItem, ExternalRefSummary, BangumiEntrySummary } from '@/types'
 import * as videoQueries from '@/api/db/queries/videos'
+// ADR-172 AMENDMENT 3 / D-172-AMD3-3：admin 详情注入外部源并集 + bangumi 条目级
+import * as externalDataQueries from '@/api/db/queries/externalData'
+import type { VideoExternalRef } from '@/api/db/queries/externalData'
 import type {
   UpdateVideoMetaInput,
   ModerationStats,
@@ -180,7 +183,54 @@ export class VideoService {
 
   async adminFindById(id: string): Promise<unknown | null> {
     const row = await videoQueries.findAdminVideoById(this.db, id)
-    return row ? { ...row, enrichmentSummary: videoQueries.buildEnrichmentSummary(row) } : null
+    if (!row) return null
+    // ADR-172 AMENDMENT 3：外部源并集（多源映射）+ bangumi 条目级（anime + 命中时）。
+    // 仅详情注入（不挂列表 / 不挂 public mapVideoRow / R-5）。
+    const refs = await externalDataQueries.listVideoExternalRefs(this.db, id)
+    const externalRefs: ExternalRefSummary[] = refs.map((r) => ({
+      provider: r.provider,
+      externalId: r.externalId,
+      matchStatus: r.matchStatus,
+      matchMethod: r.matchMethod,
+      confidence: r.confidence,
+      isPrimary: r.isPrimary,
+    }))
+    const bangumiInfo = await this.loadBangumiInfo(row, refs)
+    return {
+      ...row,
+      enrichmentSummary: videoQueries.buildEnrichmentSummary(row),
+      externalRefs,
+      ...(bangumiInfo ? { bangumiInfo } : {}),
+    }
+  }
+
+  /**
+   * ADR-172 AMENDMENT 3 / D-172-AMD3-3：取 anime 的 Bangumi 条目级展示投影。
+   * 仅 type==='anime' 时尝试；优先 primary bangumi ref 的 externalId，回退 row.bangumi_subject_id；
+   * dump 无该条目（findBangumiById=null）则返回 null（bangumiInfo 不下发）。
+   */
+  private async loadBangumiInfo(
+    row: { type: string; bangumi_subject_id: number | null },
+    refs: VideoExternalRef[],
+  ): Promise<BangumiEntrySummary | null> {
+    if (row.type !== 'anime') return null
+    const primaryBangumi = refs.find((r) => r.provider === 'bangumi' && r.isPrimary)
+    const bangumiId = primaryBangumi ? Number(primaryBangumi.externalId) : row.bangumi_subject_id
+    if (!bangumiId || !Number.isFinite(bangumiId)) return null
+    const entry = await externalDataQueries.findBangumiById(this.db, bangumiId)
+    if (!entry) return null
+    return {
+      bangumiId: entry.bangumiId,
+      titleCn: entry.titleCn,
+      titleJp: entry.titleJp,
+      year: entry.year,
+      rating: entry.rating,
+      summary: entry.summary,
+      airDate: entry.airDate,
+      coverUrl: entry.coverUrl,
+      rank: entry.rank,
+      nsfw: entry.nsfw,
+    }
   }
 
   /**

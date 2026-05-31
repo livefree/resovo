@@ -139,6 +139,58 @@ export interface EnrichmentSummary {
   tmdbId: number | null                    // ← media_catalog.tmdb_id（命中=非空 / TMDB logo）
   imdbId: string | null                    // ← media_catalog.imdb_id（命中=非空 / IMDb logo）
 }
+
+// ── 外部元数据展示层（ADR-172 AMENDMENT 3 / 真源并集视图）────────────
+
+/**
+ * 外部数据源标识（4 源）。下沉自 apps/api externalData.ts（D-172-AMD3-1：避免四源枚举三处重复）。
+ * api 层 ExternalRefProvider 改为 import type 复用本定义；与 admin-ui SourceLogoKind 取值一致。
+ */
+export const EXTERNAL_REF_PROVIDERS = ['douban', 'tmdb', 'bangumi', 'imdb'] as const
+export type ExternalRefProvider = typeof EXTERNAL_REF_PROVIDERS[number]
+
+/** 外部关联匹配状态（4 态）。下沉自 apps/api externalData.ts（D-172-AMD3-1）。 */
+export const EXTERNAL_REF_MATCH_STATUSES = [
+  'auto_matched', 'manual_confirmed', 'candidate', 'rejected',
+] as const
+export type ExternalRefMatchStatus = typeof EXTERNAL_REF_MATCH_STATUSES[number]
+
+/**
+ * ExternalRefSummary — video_external_refs 面向展示的窄化投影（ADR-172 AMENDMENT 3 / D-172-AMD3-2）。
+ *
+ * 剔除写工作流/审计字段（id / videoId / linkedAt / linkedBy / notes）—— 纯展示不消费，
+ * 且不诱导消费方做写操作。保留 matchMethod（运营判「靠什么匹配上」）。
+ * 仅 admin 详情 DTO（adminFindById）注入；不挂 public Video / mapVideoRow（R-5）。
+ */
+export interface ExternalRefSummary {
+  provider: ExternalRefProvider
+  externalId: string
+  matchStatus: ExternalRefMatchStatus
+  matchMethod: string | null
+  confidence: number | null  // 0..1
+  isPrimary: boolean
+}
+
+/**
+ * BangumiEntrySummary — bangumi_entries 条目级展示投影（ADR-172 AMENDMENT 3 / D-172-AMD3-2）。
+ *
+ * 来自 external_data.bangumi_entries（本地 dump，经 findBangumiById）。
+ * 注意（D-172-AMD3-A）：dump 条目无 rating_votes —— votes 属 media_catalog 真源合并值，
+ * 不进本对象（异源不混）。仅 type==='anime' 且命中 bangumi 时由 Service 注入；否则 undefined。
+ */
+export interface BangumiEntrySummary {
+  bangumiId: number
+  titleCn: string | null
+  titleJp: string | null
+  year: number | null
+  rating: number | null   // 0..10
+  summary: string | null
+  airDate: string | null
+  coverUrl: string | null
+  rank: number | null
+  nsfw: boolean
+}
+
 /** VideoGenre — 内容题材（与 VideoType 内容形式严格正交）
  *
  * 对齐豆瓣视频分类（2026-04-22 META-10 对齐表）：

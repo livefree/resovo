@@ -2387,3 +2387,29 @@ CODENAME-MATRIX-E2E (依赖 Wave 3 验收期补丁 CODENAME-MATRIX ✅)
 4. **META-16-C** — 前端 SettingsTab「外部数据源」分组卡（状态：✅ 已完成 2026-05-30 / claude-opus-4-8 / 子代理无 / 门禁全过 / SettingsTab 14 + 受影响面 135 全过 / 机器过载未跑完整全量·基线 META-16-B 5736 + 孤立改动 + typecheck/lint 绿）。测试连接按钮 NOT in scope（依赖 ADR-173/F-A）。
 
 > **范围说明**：「测试连接」按钮（POST .../bangumi/test）依赖 ADR-F endpoint ADR，**不在本 SEQ**（feature-1 §2.4 的连接测试推后）；本 SEQ 仅「配置 + 存储 + 遮罩 + 消费」。at-rest 应用层加密 NEGATED for P1（follow-up）。
+
+---
+
+## [SEQ-20260530-06] 外部元数据展示层 — 真源并集视图（条目级）
+
+- **状态**：✅ 已完成（META-18-ADR/A/B 全 ship 2026-05-30 / claude-opus-4-8 + arch-reviewer Opus / 门禁全过 / 全量 5752 passed 零回归）
+- **创建时间**：2026-05-30
+- **最后更新时间**：2026-05-30
+- **目标**：在后台**视频编辑抽屉 + 审核台详情**两处展示已回填的外部源条目级数据（评分+人数 / 日文原名 / 放送日 / 排名 / nsfw）+ **多源并集总览**（命中源 / 外部 ID / 置信度 / 链接），让运营可判定富集回填质量。
+- **范围**：admin-ui 新共享展示组件 + 详情 DTO 扩展（**不新建路由**，扩 `adminFindById`）+ 两消费面接入。**仅展示层**，不动富集管线；**仅条目级**，不含逐集放送。
+- **依赖**：META-09/12/14 ✅（EnrichmentSummary + 富集徽标已落地）；`listVideoExternalRefs` / `findBangumiById` 已存在。
+- **用户决策（已锁）**：①两处界面 ②条目级（不含逐集）③CV/角色管线记为 META-19 后续。
+- **设计原则**：编辑/真源页 = `media_catalog` 真源 + 所有命中源**并集**（非每源孤岛 tab）。
+
+### 任务列表（按执行顺序）
+
+1. **META-18-ADR** — 共享组件 API 契约（强制 Opus）：`ExternalMetaPanel` Props + 详情 DTO 扩展形态（`externalRefs[]` + `bangumiInfo?`）+ ADR-172 AMENDMENT 3 落档（状态：✅ 已完成 2026-05-30 / claude-opus-4-8 + arch-reviewer (claude-opus-4-8) CONDITIONAL→满足 3 条件等同 PASS / decisions.md 落档）
+   - 3 条件全满足：①provider/status 字面量下沉 @resovo/types + api import 复用 ②bangumiInfo 排除 rating_votes（votes 归 catalogFields）③串行 B→A→C + Opus trailer + 审核台懒加载不污染 queue list query
+2. **META-18-A** — 后端：`adminFindById` 注入 `externalRefs`（`listVideoExternalRefs`）+ `bangumiInfo`（anime+subject→`findBangumiById`）+ `@resovo/types` 契约 + server-next 镜像（状态：✅ 已完成 2026-05-30 / claude-opus-4-8 / 不新建路由 verify:endpoint-adr ✅ 203 路由 / typecheck 全绿）
+   - 4 新类型（EXTERNAL_REF_PROVIDERS/MATCH_STATUSES + ExternalRefSummary + BangumiEntrySummary）；非 anime/无 subject 不带 bangumiInfo；不挂 public mapVideoRow / 列表不注入
+3. **META-18-B** — 前端：admin-ui `ExternalMetaPanel` 共享组件 + 编辑抽屉新 tab + 审核台 TabDetail 懒加载消费 + 单测（状态：✅ 已完成 2026-05-30 / claude-opus-4-8 / external-meta-panel 13 新单测 + 受影响 6 文件 47 全过 / 全量 5752 passed 零回归）
+   - 两消费面渲染并集总览 + bangumi 条目块；anime-only；零硬编码色；3 个 TabDetail 测试补 getVideo mock
+
+### 已记录后续（本序列不做）
+
+- **META-19** — Bangumi CV/角色自动入库管线：抓 `/v0/subjects/:id/characters`（含声优）+ 新建角色↔CV schema（现 `media_catalog.cast TEXT[]` 扁平结构承载不了配对）+ 回填管线 + 展示。**触发**：用户「后面要补充管线，充实数据」。涉及新 REST 抓取 + migration + 可能 ADR → 独立序列，排在展示层之后。（状态：⬜ 待立案）

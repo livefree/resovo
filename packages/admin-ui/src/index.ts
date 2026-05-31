@@ -75,6 +75,10 @@ export * from './components/composite/lines-panel'
 // 单徽标（douban/bangumi/source/meta/pinyin）+ 组合簇（消费 EnrichmentSummary，anime-only bangumi）
 export * from './components/enrichment-badge'
 
+// ExternalMetaPanel 外部元数据真源并集视图（META-18 / ADR-172 AMENDMENT 3；arch-reviewer Opus PASS）
+// 条目级展示：源并集总览 + 真源字段区 + Bangumi 条目块（anime-only）
+export * from './components/external-meta-panel'
+
 // VideoPicker 业务级选择器（M-SN-SHARED-04-A / CHG-SN-8 SEQ-20260521-02 / arch-reviewer Opus A−）
 // 消灭 UUID 输入；fetcher 注入实现 admin-ui ↔ apps/* 隔离（ADR-103b）
 export * from './components/pickers'
