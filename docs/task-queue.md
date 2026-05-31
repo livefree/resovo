@@ -2370,7 +2370,7 @@ CODENAME-MATRIX-E2E (依赖 Wave 3 验收期补丁 CODENAME-MATRIX ✅)
 
 ## [SEQ-20260530-05] 外部数据源凭证统一管理 + Secret Redaction（ADR-168 / ADR-A）
 
-- **状态**：🔄 执行中（META-16-ADR 进行中 2026-05-30 / 用户要求 API key 不靠 .env.local 明文，需设置页配置）
+- **状态**：✅ 已完成（META-16-ADR/A/B/C 全 ship 2026-05-30 / ADR-168 凭证管理全闭环）
 - **创建时间**：2026-05-30
 - **最后更新时间**：2026-05-30
 - **目标**：在站点设置页提供**可扩展的外部源凭证配置**（Bangumi token 现在 / TMDB api_key 以后），凭证存 `system_settings`，并落地 secret redaction（审计不落明文 + GET 遮罩 + PATCH 占位跳过）；顺带修复现有 `douban_cookie`/`notification_webhook_secret` 明文落审计/明文回传隐患。
@@ -2384,6 +2384,6 @@ CODENAME-MATRIX-E2E (依赖 Wave 3 验收期补丁 CODENAME-MATRIX ✅)
    - 消化 design §13 D-168-1..6 + 通用化（多源凭证）+ `_api_key$` 模式裁定 + 现有 douban_cookie/webhook_secret 回归红线
 2. **META-16-A** — 后端：secret redaction + 凭证 key 类型扩展（状态：✅ 已完成 2026-05-30 / claude-opus-4-8 / 子代理无 / 门禁全过 / secret-redaction 24 + system-config +3 / 全量 5734 passed 零回归）
 3. **META-16-B** — 凭证解析下沉 Service：lib/bangumi 5 函数加 cfg + getBangumiConfig 60s 缓存 + env 回退（状态：✅ 已完成 2026-05-30 / claude-opus-4-8 / 子代理无 / 门禁全过 / bangumi-service 44 + metadataEnrich mock 同步 / 全量 5736 passed 零回归非 flaky）
-4. **META-16-C** — 前端：SettingsTab 新增「外部数据源」分组卡（与豆瓣 cookie/proxy 并列）+ password input + 遮罩显示/显隐切换 + 状态行（已配置/未配置）+ 单测（状态：⬜ 待开始）
+4. **META-16-C** — 前端 SettingsTab「外部数据源」分组卡（状态：✅ 已完成 2026-05-30 / claude-opus-4-8 / 子代理无 / 门禁全过 / SettingsTab 14 + 受影响面 135 全过 / 机器过载未跑完整全量·基线 META-16-B 5736 + 孤立改动 + typecheck/lint 绿）。测试连接按钮 NOT in scope（依赖 ADR-173/F-A）。
 
 > **范围说明**：「测试连接」按钮（POST .../bangumi/test）依赖 ADR-F endpoint ADR，**不在本 SEQ**（feature-1 §2.4 的连接测试推后）；本 SEQ 仅「配置 + 存储 + 遮罩 + 消费」。at-rest 应用层加密 NEGATED for P1（follow-up）。

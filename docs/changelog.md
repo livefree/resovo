@@ -12533,3 +12533,20 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **质量门禁**：typecheck/lint EXIT=0 / bangumi-service 44 + metadataEnrich 全过 / 全量 **443 文件 5736 passed**（1 flaky StagingTable v1 单跑 13/13 过·与本卡无关）
 - **效果**：Bangumi 富集现**优先用 system_settings 配置的 token**（设置页配置即生效，60s 缓存），DB 未配则回退 env（向后兼容）。**至此设置页配的 Bangumi token 真正驱动富集**（闭合「代码已接入 API 但缺设置页配置」缺口）。
 - **注意事项**：UI（SettingsTab 外部数据源卡）由 META-16-C 补；测试连接按钮 NOT in scope。
+
+---
+
+## [META-16-C] ADR-168 前端：SettingsTab「外部数据源」分组卡（SEQ-20260530-05 收官）
+- **完成时间**：2026-05-30
+- **记录时间**：2026-05-30
+- **执行模型**：claude-opus-4-8
+- **子代理**：无（实施 ADR-168 已 Opus 评审契约 / 消费 META-16-A/B 已就绪后端字段）
+- **来源序列**：SEQ-20260530-05（外部数据源凭证统一管理 / ADR-168）
+- **修改文件**：
+  - `apps/server-next/src/app/admin/settings/_tabs/SettingsTab.tsx` — 新增「外部数据源」AdminCard（豆瓣卡后）：Bangumi API Token（AdminInput type=password + 显隐切换按钮）+ User-Agent + 请求超时(ms) + 状态行（bangumiApiTokenSet → 绿「已配置 REST 详情+逐集」/ 灰「未配置 dump 降级」）；showBangumiToken state
+  - `tests/unit/components/server-next/admin/system/SettingsTab.test.tsx` — FIXTURE +8 字段（遮罩值/Set 布尔）+ 2 新测（1b token password 默认隐藏+显隐切换+未配置状态行 / 1c 已配置绿条+新 token 保存发明文）
+- **新增依赖**：无 / **数据库变更**：无
+- **质量门禁**：typecheck/lint EXIT=0 / SettingsTab 14 全过 / 受影响测试面（system + secret-redaction）10 文件 135 全过
+- **测试环境说明**：本机因本会话多次重跑过载，完整全量套件未在合理时间跑完（per-file 耗时翻 2-3 倍 / 进度 257/443 仍全 ✓）；改动为**孤立 UI 卡 + 自身测试**（不触 apps/api 或他模块），以「受影响面 135 全过 + META-16-B 干净基线 5736 + typecheck/lint 绿」证明零回归（earlier 过载跑的「4 failed」为并行 flaky 集群 Staging/UserSubmissions/CrawlerClient）。
+- **SEQ-20260530-05 全闭环**：设置页配 Bangumi token → system_settings → getBangumiConfig 60s 缓存 → 驱动富集；secret 三道遮罩（审计/GET/PATCH）保护 + 修现有 douban_cookie/webhook_secret 隐患。**至此「API key 进设置页、不靠 .env.local 明文」用户诉求达成。**
+- **注意事项**：测试连接按钮（bangumi/test 端点）NOT in scope（依赖 ADR-173/F-A，feature-1 §2.4 推后）；TMDB api_key UI 待 TMDB 富集起卡时补（占位字段已就绪）。

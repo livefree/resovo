@@ -6,19 +6,7 @@
 
 ## 进行中任务
 
-### META-16-C — ADR-168 前端：SettingsTab「外部数据源」分组卡
-- **状态**：🔄 进行中
-- **来源序列**：SEQ-20260530-05
-- **建议模型**：sonnet
-- **执行模型**：claude-opus-4-8
-- **子代理调用**：无（实施 ADR-168 已 Opus 评审契约 / 消费已就绪后端字段）
-- **实际开始**：2026-05-30
-- **文件范围**：
-  - 改 `apps/server-next/src/app/admin/settings/_tabs/SettingsTab.tsx`（新增「外部数据源」分组卡：Bangumi API Token password + 显隐切换 + User-Agent + 超时 + 状态行；消费 bangumiApiTokenSet）
-  - 改/新建 SettingsTab 单测（外部数据源区渲染 + 遮罩占位回提）
-- **完成备注**：_（完成后填写）_
-
-> 前序 META-16-ADR/A/B ✅（redaction + keys + 凭证下沉 / 全量 5736 passed）。测试连接按钮 NOT in scope（依赖 ADR-173/F-A）。
+（空 / SEQ-20260530-05 ADR-168 凭证管理全闭环：META-16-ADR/A/B/C 全 ship 2026-05-30 — secret redaction 三道协议 + 凭证下沉 Service + SettingsTab 外部数据源卡。设置页配 Bangumi token 即驱动富集。下一步候选：META-15-C 批量重富集 / META-15-D 豆瓣 dump / Bangumi 别名感知 B / 推 PR）
 
 ---
 
