@@ -2361,8 +2361,10 @@ CODENAME-MATRIX-E2E (依赖 Wave 3 验收期补丁 CODENAME-MATRIX ✅)
    - **Codex FIX-2**：matched-anime 重富集会损坏既有 Bangumi 绑定（清空/降级/覆盖人工）→ `matchAndEnrich` 入口「已 primary 绑定→只刷新不重配」（refreshExistingMatch，ADR-170 D-170-4-AMD）；+4 守卫单测
    - **dry-run 实测：all 2,835 条**（含已 matched anime）/ **missing-characters 420**（当前全部 anime 无角色）。anime 走 META-17 Bangumi REST 兜底 + META-19 角色入库。
    - **⚠️ 全量运行交用户**：需先起 api server（worker 在 server.ts:194，concurrency=2 限流）+ redis；当前 redis 起但 worker 未跑。运行：`node --env-file=.env.local --import tsx scripts/reenrich-backfill.ts`（建议先 `--limit 20 --type anime` 验证 matched/角色上升，再全量）。
-4. **META-15-D** — 补豆瓣 dump（需用户提供 moviedata-10m movies.csv）（状态：⬜ 待开始 / 阻塞于文件）
-   - 用户提供文件位置 → `import-douban-dump.ts` 或 `import-external-data.ts --source douban --file <path>` → 豆瓣本地召回上量（最大收益）。注：豆瓣网络 step2 已可用（cookie 已配 / 海贼王已网络命中），dump 提升命中率与速度。
+4. **META-15-D** — 导入豆瓣 dump（状态：✅ 已完成 2026-05-31 / 用户提供文件 / 导入 140,502 行）
+   - `import-douban-dump.ts` 全量导入 `external-db/douban/moviedata-10m/movies.csv`（81M / 2020-11；dry-run 解析 140,502 无错 → 全量 0→**140,502 行** / title_normalized 填充仅 2 空 / ON CONFLICT 幂等）。列对齐已抽查核对。
+   - **价值边界**：dump 是 14 万部**电影**；库内 movie 仅 245（其余 series/variety/short/anime/other）→ 主要惠及 movie 类型 step1 本地召回（评分/演职员/genres 完整 + 毫秒级，替代慢网络 step2）。剧集/综艺/短片不在电影 dump 覆盖。
+   - **后续**：当前 backfill 队列剩余 job 处理时自动命中新 dump；导入前已处理的 douban-unmatched movie 可 `reenrich-backfill --mode unmatched` 重入补命中。
 5. **META-17** — Bangumi 匹配质量改进：matchAndEnrich REST 精确兜底（方案 A）（状态：✅ 已完成 2026-05-30 / claude-opus-4-8 / 子代理无 / 单测 39 + 真实 API + 实时端到端三重验证 / 全量 5705 passed 零回归）
    - 根因：matchAndEnrich 只查空本地 dump、无 REST 兜底。修：dump 空/低置信 + token → REST 搜索 + 精确(name_cn/name 规范化==titleNorm)计分。师兄啊师兄→matched 388781 / 海贼王安全漏配（避开海贼王子）。
    - **follow-up（择时）**：① Bangumi 别名感知 B（top-N getSubject 查 infobox 别名 → 召回海贼王↔航海王）② normalizeTitle 补 CJK 标点剥离（「当前、正被打扰中！」类漏配）

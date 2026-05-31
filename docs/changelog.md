@@ -12638,3 +12638,16 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **实跑发现并修复（airdate DATE 解析）**：用户起 worker 全量 backfill 后，failed 队列暴露 `invalid input syntax for type date: "2099"` —— Bangumi 部分剧集 airdate 为「仅年份(2099)/残缺(2024-00-00)/空」，直插 `catalog_episodes.airdate DATE` 失败并**回滚整个 enrich 事务**（该视频 catalog+角色+ref 全写不进）。修：`mapEpisodes` 加 `sanitizeAirdate`（仅接受合法 `YYYY-MM-DD` + 月日范围校验，否则 null）+ 单测（2099/残缺/空/越界 → null）。**注**：运行中 worker 若经 `npm run api`（--watch）会自动 reload 生效；否则需重启；失败视频下次 backfill 自动重入。
 - **Codex stop-time review FIX-2（matched-anime backfill 损坏既有 Bangumi 绑定）**：missing-characters 把已 matched anime 重走完整 `enrich()`→`matchAndEnrich` 重新匹配，会**清空/降级/改绑既有绑定**（`none`→`unmatched` 清空 / `candidate` 降级 / `auto` 覆盖 `manual_confirmed` 人工校正 / 改绑异 subject）。修：`matchAndEnrich` 入口检出既有 primary bangumi ref（auto_matched/manual_confirmed）→ **只刷新不重配**（`refreshExistingMatch`：按既有 subject 刷新 catalog COALESCE/逐集/角色 + 重申 matched，不动 ref/不降级；REST 瞬时失败抛错重试不清空）。unmatched/never 无 primary ref → 正常匹配（语义不变）。+4 守卫单测（已绑定只刷新 / 不被清空 unmatched / manual 不降级 / candidate-primary 仍正常匹配）+ metadataEnrich/bangumi-service mock 补 `findPrimaryVideoExternalRef`。ADR-170 D-170-4-AMD 落档。全量 **5780 passed 0 failed**（本轮无 flaky）。
 - **⚠️ 全量运行交用户**：当前 redis 起但 **api server(worker) 未跑** → 未实际入队（避免堆积无人消费）。运行步骤：① 起 api server（`npm run api` 或 dev / worker 在 server.ts:194 concurrency=2）② `node --env-file=.env.local --import tsx scripts/reenrich-backfill.ts`（建议先 `--limit 20 --type anime` 验证 matched/角色上升再全量）。worker concurrency=2 限流，全量数千条逐步消化数十分钟。
+- **运行验证（2026-05-31，用户起 worker 全量跑）**：队列消化中（waiting 持续下降 / active=2）；DB 增长确认 —— bangumi matched 28→73↑、有角色 catalog 7→47↑、catalog_characters 270→954↑；角色 CV 配对写入正确（宁缺—杨天翔 / 堀北鈴音—鬼頭明里 / カイマン—高木渉 实样核对）。监控命令：redis-cli llen bull:enrichment-queue:wait + `reenrich-backfill --dry-run`（剩余待富集）+ DB matched/角色计数。
+
+---
+
+## [META-15-D] 导入豆瓣 dump（external_data.douban_entries / SEQ-20260530-04）
+- **完成时间**：2026-05-31
+- **执行模型**：claude-opus-4-8 / 子代理：无（运行既有 `import-douban-dump.ts`，无代码改动）
+- **来源序列**：SEQ-20260530-04（外部富集数据基建补齐）；用户提供文件并指出"dump 较老（2020）可能没用"。
+- **文件**：`external-db/douban/moviedata-10m/movies.csv`（81M / 140,503 行 / 2020-11；21 列与脚本 EXPECTED_COLS 逐列吻合，抽查"记忆迷局"列对齐正确：SCORE/VOTES/IMDB/RELEASE_DATE 全对位；YEAR 分布真实 2006-2019 主导，个别 2049 垃圾行非系统性）。
+- **执行**：dry-run 解析 140,502 行无错 → 全量导入 `external_data.douban_entries` **0 → 140,502 行**（ON CONFLICT douban_id 幂等 / title_normalized 填充仅 2 空 → step1 本地召回可用）。与运行中 backfill 并发无冲突（分表读写）。
+- **价值评估（回应"老 dump 是否有用"）**：**有用但有边界**。豆瓣本地表此前为空（仅 12 网络命中）；导入后 movie 类型 step1 本地召回上量（评分/演职员/genres 完整 + 毫秒级，替代慢/限流网络 step2）。**边界**：dump 是 14 万部**电影**，库内 movie 仅 245（其余 series 271/variety 251/short 692/anime 420/other 839…）→ 主要惠及 movie；剧集/综艺/短片/anime 不在电影 dump 覆盖（anime 靠 bangumi）。2020 数据对存量老片完全够用；2021+ 新片仍走网络兜底。
+- **新增依赖/代码/schema 变更**：无（纯数据导入）。
+- **后续**：运行中 backfill 剩余 job 自动命中新 dump；导入前已处理的 douban-unmatched movie 可 `reenrich-backfill --mode unmatched` 重入补命中（unmatched 视频无绑定，重配安全）。

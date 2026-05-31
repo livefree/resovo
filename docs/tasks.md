@@ -6,7 +6,7 @@
 
 ## 进行中任务
 
-（空 / SEQ-20260530-04 META-15-C backfill 脚本工具就绪 2026-05-31 — EnrichJobData+trigger + listVideosForBackfillEnrich(never/unmatched/missing-characters/all) + scripts/reenrich-backfill.ts。Codex FIX：missing-characters mode 覆盖已 matched anime + jobId backfill-<runTs>-<id> 防静默跳过。dry-run 实测 all 2835 / missing-characters 420。门禁全过 / 5775 passed。**全量运行交用户：先起 api server(worker) + redis，再 `node --env-file=.env.local --import tsx scripts/reenrich-backfill.ts`（建议先 --limit 20 --type anime 验证）**。下一步候选：用户运行 backfill / META-15-D 豆瓣 dump（阻塞于文件）/ 角色头像渲染 / 推 PR）：META-19-ADR/A/B/C 全 ship 2026-05-30 — migration 083 两表 normalized（catalog_characters + catalog_character_actors，已应用）+ lib/bangumi getCharacters（成功返数组含[]/失败返 null）+ BangumiService gather/apply delete-then-insert（charactersFetched 守卫：成功空清陈旧/失败跳过）+ adminFindById 注入 bangumiCharacters + ExternalMetaPanel 角色·声优区。arch-reviewer Opus PASS / 全量 5766 passed 零回归。**存量 anime 角色回填需 META-15-C 重富集触发**。下一步候选：META-15-C 批量重富集 / META-15-D 豆瓣 dump / 角色头像渲染 / 推 PR）
+（空 / SEQ-20260530-04 外部富集数据基建：META-15-B(worker)✅ / META-15-C(backfill 脚本)✅ / **META-15-D(豆瓣 dump 导入 140,502 行)✅ 2026-05-31** / META-15-A(TMDB)DEFER。详见 changelog + task-queue。用户已起 worker 全量 backfill 运行中（bangumi+角色 强劲爬升 / douban 限 movie 类型）。下一步候选：Bangumi 别名感知 B / 角色头像渲染 / 推 PR）
 
 ---
 
