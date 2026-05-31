@@ -174,6 +174,21 @@ function parseDurationSeconds(raw: string | null | undefined): number | null {
   return null
 }
 
+/**
+ * 清洗 Bangumi airdate → 仅接受完整合法 `YYYY-MM-DD`，否则 null（META-15-C backfill 暴露）。
+ * Bangumi 部分剧集 airdate 为「仅年份(2099) / 残缺(2024-00-00) / 空」→ 直插 DATE 列会
+ * `invalid input syntax for type date` 失败并回滚整个 enrich 事务（catalog+角色+ref 全丢）。
+ */
+function sanitizeAirdate(raw: string | null | undefined): string | null {
+  if (!raw) return null
+  const m = raw.trim().match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  if (!m) return null
+  const mo = Number(m[2])
+  const d = Number(m[3])
+  if (mo < 1 || mo > 12 || d < 1 || d > 31) return null
+  return `${m[1]}-${m[2]}-${m[3]}`
+}
+
 /** BangumiEpisode[] → CatalogEpisodeInput[]（source='bangumi'） */
 export function mapEpisodes(episodes: BangumiEpisode[]): CatalogEpisodeInput[] {
   return episodes.map((e) => ({
@@ -184,7 +199,7 @@ export function mapEpisodes(episodes: BangumiEpisode[]): CatalogEpisodeInput[] {
     ep: typeof e.ep === 'number' ? e.ep : null,
     name: e.name?.trim() || null,
     nameCn: e.name_cn?.trim() || null,
-    airdate: e.airdate?.trim() || null,
+    airdate: sanitizeAirdate(e.airdate),
     durationSeconds: e.duration_seconds ?? parseDurationSeconds(e.duration),
     description: e.desc?.trim() || null,
   }))

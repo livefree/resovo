@@ -127,6 +127,21 @@ describe('mapEpisodes', () => {
       name: 'Ep1', nameCn: '第一集', airdate: '2007-10-04', durationSeconds: 1440,
     })
   })
+
+  it('META-15-C：清洗非法 airdate（仅年份/残缺/空 → null，防 DATE 插入失败回滚）', () => {
+    const mk = (id: number, airdate: string) => ({
+      id, type: 0, name: '', name_cn: '', sort: id, ep: id,
+      airdate, duration: '', duration_seconds: 0, desc: '',
+    })
+    const r = mapEpisodes([
+      mk(1, '2099'),          // 仅年份
+      mk(2, '2024-00-00'),    // 残缺月日
+      mk(3, ''),              // 空
+      mk(4, '2007-10-04'),    // 合法
+      mk(5, '2024-13-40'),    // 越界月日
+    ])
+    expect(r.map((e) => e.airdate)).toEqual([null, null, null, '2007-10-04', null])
+  })
 })
 
 describe('mapCharacters（META-19）', () => {
