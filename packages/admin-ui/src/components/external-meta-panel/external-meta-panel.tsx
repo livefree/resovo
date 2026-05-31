@@ -194,6 +194,9 @@ const RELATION_LABEL: Record<string, string> = {
   主角: '主角', 配角: '配角', 客串: '客串', 闲角: '闲角',
 }
 
+/** ADR-161 AMENDMENT 展示契约：仅展示主角 + 配角（客串/闲角不展示，降噪）。 */
+const DISPLAY_RELATIONS: ReadonlySet<string> = new Set(['主角', '配角'])
+
 const CHAR_NAME_STYLE: React.CSSProperties = {
   fontSize: 'var(--font-size-xs)', color: 'var(--fg-default)',
   display: 'inline-flex', alignItems: 'center', gap: '4px', minWidth: 0,
@@ -202,12 +205,18 @@ const RELATION_TAG_STYLE: React.CSSProperties = {
   fontSize: 'var(--font-size-2xs)', color: 'var(--fg-muted)', flexShrink: 0,
 }
 
-/** 角色 + CV 区（anime-only）。已按 sort 排序（主角→配角→…），cap top-N；CV 多值用 / 连接。 */
+/**
+ * 角色 + CV 区（anime-only）。ADR-161 AMENDMENT 展示契约：仅主角 + 配角（客串/闲角降噪），
+ * 已按 sort 排序（主角→配角→…），cap top-N；CV 多值用 / 连接。过滤后为空则不渲染。
+ */
 function CharactersBlock({
   characters, density,
-}: { characters: readonly CatalogCharacterSummary[]; density: ExternalMetaPanelDensity }): React.ReactElement {
+}: { characters: readonly CatalogCharacterSummary[]; density: ExternalMetaPanelDensity }): React.ReactElement | null {
   const cap = density === 'compact' ? 4 : 8
-  const shown = characters.slice(0, cap)
+  const shown = characters
+    .filter((c) => c.relation != null && DISPLAY_RELATIONS.has(c.relation))
+    .slice(0, cap)
+  if (shown.length === 0) return null
   return (
     <div data-external-characters-block>
       <div style={SECTION_HEADER_STYLE}>角色 · 声优</div>

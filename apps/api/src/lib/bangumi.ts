@@ -175,11 +175,17 @@ export async function getEpisodes(subjectId: number, cfg?: BangumiClientConfig):
 
 /**
  * GET /v0/subjects/{id}/characters — 拉取某作品全部角色 + 各自 CV（无分页，一次返回数组）。
- * 注意与 getEpisodes 不同：该端点直接返回数组而非 { data, total } 包裹。失败/无数据返回 []。
+ * 注意与 getEpisodes 不同：该端点直接返回数组而非 { data, total } 包裹。
+ *
+ * 返回语义（区分「抓取失败」与「成功返回空」，供调用方判定是否全量替换）：
+ *   - 成功（含空作品）→ 数组（可能 []）
+ *   - 抓取失败 / 非数组响应 → null
+ * 调用方据此：fetch 成功（非 null）才 delete-then-insert 全量替换（含清空陈旧）；
+ * 失败（null）跳过，保留既有角色（不被瞬时故障误删）。
  */
-export async function getCharacters(subjectId: number, cfg?: BangumiClientConfig): Promise<BangumiCharacter[]> {
+export async function getCharacters(subjectId: number, cfg?: BangumiClientConfig): Promise<BangumiCharacter[] | null> {
   const resp = await bgmGet<BangumiCharacter[]>(`/v0/subjects/${subjectId}/characters`, cfg)
-  return Array.isArray(resp) ? resp : []
+  return Array.isArray(resp) ? resp : null
 }
 
 /**

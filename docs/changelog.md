@@ -12608,4 +12608,8 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **新增依赖**：无 / **数据库变更**：migration 083（2 新表，已应用）/ **新增路由**：无（verify:endpoint-adr ✅ 203 路由）
 - **质量门禁**：typecheck/lint EXIT=0 / **全量 444 文件 5766 passed 0 failed** / verify:adr-contracts EXIT=0 / migration 083 dry-run + 实际应用成功
 - **效果**：anime 富集/重富集时自动抓取角色 + CV 入库；后台编辑抽屉 + 审核台详情「角色 · 声优」区展示「角色名 — CV1 / CV2」（N:M 配对）。
-- **注意事项**：**存量 matched anime 角色需 META-15-C 批量重富集触发**（本序列仅保证新富集/重富集写入）；角色头像（image_url 已存）/ persons 抓取 / 角色检索页 / 前台展示 → 后续 AMENDMENT。
+- **Codex stop-time review FIX**（commit 见下）：
+  - **① 陈旧角色数据**：原 `length>0` 守卫无法区分「getCharacters 抓取失败」与「成功返回空」→ 成功返回空时本应清空陈旧角色却保留。修：`getCharacters` 失败返 `null`、成功返数组（含 `[]`）；`EnrichmentData.charactersFetched` 标记 fetch 成功；`applyEnrichmentDb` 据此替换（**成功空也清陈旧**，失败跳过防误删）。
+  - **② 展示违反 ADR 过滤契约**：`CharactersBlock` 原 `slice(0,cap)` 未按 relation 过滤 → 漏出客串/闲角。修：按 ADR 展示契约 `DISPLAY_RELATIONS={主角,配角}` 过滤后再 cap，过滤为空则不渲染。
+  - 测试更新：bangumi-lib（null/空区分）+ bangumi-service（失败 null 不替换 / 成功空替换清陈旧）+ external-meta-panel（客串/闲角不展示 / 全客串不渲染）。
+- **注意事项**：**存量 matched anime 角色需 META-15-C 批量重富集触发**（本序列仅保证新富集/重富集写入）；角色头像（image_url 已存）/ persons 抓取 / 角色检索页 / 前台展示 → 后续 AMENDMENT。全量回归 5769 passed（AuditClient 1 例并行 flaky，隔离 22/22 通过，与本卡无关）。

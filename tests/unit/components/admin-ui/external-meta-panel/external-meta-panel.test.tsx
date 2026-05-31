@@ -252,6 +252,26 @@ describe('ExternalMetaPanel — 角色 · 声优区', () => {
     expect(block!.textContent).toContain('中井和哉 / CV二')  // N:M 多 CV
   })
 
+  it('ADR 过滤契约：仅主角+配角，客串/闲角不展示', () => {
+    const { container } = render(
+      <ExternalMetaPanel summary={makeSummary()} type={'anime' as VideoType} characters={CHARACTERS} density="drawer" />,
+    )
+    // CHARACTERS：路飞(主角) + 索隆(配角) + 路人甲(客串) → 只展示前两个
+    expect(charRows(container)).toHaveLength(2)
+    expect(charsBlock(container)!.textContent).not.toContain('路人甲')
+  })
+
+  it('ADR 过滤契约：全为客串/闲角 → 角色块不渲染', () => {
+    const cameoOnly: CatalogCharacterSummary[] = [
+      { name: '客串A', relation: '客串', imageUrl: null, actors: [{ name: 'CV', imageUrl: null }] },
+      { name: '闲角B', relation: '闲角', imageUrl: null, actors: [] },
+    ]
+    const { container } = render(
+      <ExternalMetaPanel summary={makeSummary()} type={'anime' as VideoType} characters={cameoOnly} density="drawer" />,
+    )
+    expect(charsBlock(container)).toBeNull()
+  })
+
   it('非 anime：即便传 characters 也不渲染角色块', () => {
     const { container } = render(
       <ExternalMetaPanel summary={makeSummary()} type={'movie' as VideoType} characters={CHARACTERS} density="drawer" />,

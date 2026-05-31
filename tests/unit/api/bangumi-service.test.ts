@@ -161,7 +161,8 @@ describe('mapCharacters（META-19）', () => {
 vi.mock('@/api/lib/bangumi', () => ({
   getSubject: vi.fn(),
   getEpisodes: vi.fn(),
-  getCharacters: vi.fn().mockResolvedValue([]),
+  // 默认 null = 抓取未成功（既有 auto 用例不触发角色替换）；角色用例各自覆写
+  getCharacters: vi.fn().mockResolvedValue(null),
   searchSubjects: vi.fn(),
   searchSubjectsStrict: vi.fn(),
   isBangumiApiConfigured: vi.fn(),
@@ -313,14 +314,24 @@ describe('BangumiService.matchAndEnrich', () => {
     ]))
   })
 
-  it('META-19：auto + getCharacters 空（失败/降级）→ 不调 replaceCatalogCharacters（不误删 / D-161-AMD-3）', async () => {
+  it('META-19：auto + getCharacters 抓取失败(null) → 不调 replaceCatalogCharacters（不误删 / D-161-AMD-3）', async () => {
     mFindByTitle.mockResolvedValue([entry({ year: 2007 })])
     mGetSubject.mockResolvedValue(subject())
     mGetEpisodes.mockResolvedValue([])
-    mGetCharacters.mockResolvedValue([])  // 角色抓取失败/无 → 空
+    mGetCharacters.mockResolvedValue(null)  // 抓取失败 → 保留既有角色
 
     await svc.matchAndEnrich({ videoId: VID, catalogId: CID, titleNorm: 'x', year: 2007 })
     expect(mReplaceChars).not.toHaveBeenCalled()
+  })
+
+  it('META-19：auto + getCharacters 成功返回空([]) → 调 replace([]) 清陈旧角色（非误删）', async () => {
+    mFindByTitle.mockResolvedValue([entry({ year: 2007 })])
+    mGetSubject.mockResolvedValue(subject())
+    mGetEpisodes.mockResolvedValue([])
+    mGetCharacters.mockResolvedValue([])  // 成功但作品无角色 → 应清空陈旧
+
+    await svc.matchAndEnrich({ videoId: VID, catalogId: CID, titleNorm: 'x', year: 2007 })
+    expect(mReplaceChars).toHaveBeenCalledWith(mockClient, CID, 'bangumi', [])
   })
 
   it('auto + Token 缺失 → 降级用本地 dump 字段，不调 API', async () => {

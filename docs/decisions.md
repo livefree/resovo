@@ -18567,7 +18567,7 @@ Bangumi token 现直读 `process.env.BANGUMI_API_TOKEN`（`lib/bangumi.ts:15`）
 
 - **（D-161-AMD-1）两表 normalized**：`catalog_characters` + `catalog_character_actors`（非单表 JSONB）。理由：N:M 真实存在；actor 是有独立 person_id 的一等实体（未来「声优反查角色」可结构化查询）；catalog_episodes 扁平单表是「叶子无子集合」先例，不构成约束。Migration 083：`catalog_characters(catalog_id FK CASCADE, source, external_character_id NOT NULL, name, relation, char_type, sort, image_url, summary)` UNIQUE`(catalog_id,source,external_character_id)`；`catalog_character_actors(character_id FK CASCADE, external_actor_id, name, image_url, sort)` UNIQUE`(character_id,external_actor_id)`。
 - **（D-161-AMD-2）delete-by-catalog-then-insert 全量替换**（非 upsert）：角色集合会变（源端增删角色），upsert 无法删孤儿；catalog_episodes 用 upsert 因逐集集合稳定，角色不然。`replaceCatalogCharacters(db: PoolClient, ...)` **仅 PoolClient**（delete+insert 须单事务，防空窗）。
-- **（D-161-AMD-3）degraded 守卫**：Phase 2 角色替换 `if (!data.degraded)`——REST 失败走 dump 降级时 `characters:[]`，**跳过替换**（防瞬时故障误删已有角色）。
+- **（D-161-AMD-3）charactersFetched 守卫**（Codex stop-time review FIX）：`getCharacters` 区分「抓取失败(返 `null`)」与「成功返回空(`[]`)」。Phase 2 仅 `charactersFetched`（fetch 成功，含空）才 delete-then-insert 全量替换——**成功返回空也清陈旧角色**（避免保留过时数据）；抓取失败(null) 跳过（防瞬时故障误删）。**注**：原裁定为 `!degraded` 守卫，但 getCharacters 与 getSubject 解耦独立失败 → `!degraded` 会在 getCharacters 瞬时失败时误删；`length>0` 又无法清空陈旧 → 最终用 fetch-成功语义（null/[] 区分）兼顾两者。
 - **（D-161-AMD-4）存储全集 / 展示过滤**：存全部角色（含客串/闲角，~52 行/番），relation 过滤是展示决策下沉渲染层（主角+配角 cap top-N）；存储层职责单一不业务过滤。`sort` 写入时按 relation 权重 + 原序填充。
 - **（D-161-AMD-5）抓取/写入集成（单点接入两路径）**：`lib/bangumi.getCharacters`（无分页，直接返回数组 / 失败 []）→ `gatherEnrichmentData`（Phase 1 拉取 + `mapCharacters` relation→sort + actor 序）→ `EnrichmentData.characters` → `applyEnrichmentDb`（Phase 2 事务内 `replaceCatalogCharacters`）。auto（applyAutoMatchAtomic）+ 人工（confirmMatch）两路径均经 applyEnrichmentDb，**单点接入自动覆盖**。
 - **（D-161-AMD-6）DTO + 展示**：`adminFindById` 新增**顶层** `bangumiCharacters?`（异源不混，不挂 bangumiInfo 内 / 同 AMD3-A votes 原则；仅 anime + 命中下发）。`@resovo/types`：`CatalogCharacterSummary`{name,relation,imageUrl,actors[]} + `CatalogCharacterActorSummary`{name,imageUrl}（窄化，剔除外部 id/sort/summary）。`ExternalMetaPanelProps` 新增 `characters?`（admin-ui 公开 Props → Opus trailer）；`CharactersBlock`（anime-only）渲染主角+配角 cap top-N，CV 配对「角色名 — CV1 / CV2」，relation Record 兜底原文，零硬编码色；本期不渲染头像（image_url 存但展示后续 AMENDMENT）。
@@ -18594,7 +18594,7 @@ Bangumi token 现直读 `process.env.BANGUMI_API_TOKEN`（`lib/bangumi.ts:15`）
 
 1. migration 编号落地前 Glob 确认（082 最新 → 083）；architecture.md 必须同步（绝对禁止项）。
 2. admin-ui Props 新增 `characters` → commit 带 `Subagents: arch-reviewer (claude-opus-4-8)` trailer。
-3. degraded 守卫必须存在（REST 失败禁止 delete 角色）。
+3. charactersFetched 守卫必须存在（getCharacters 抓取失败 null → 禁止 delete 角色；成功空 [] → 替换清陈旧）。
 4. `replaceCatalogCharacters` 仅 PoolClient + 事务内（两路径均满足）。
 5. 无 any / 无空 catch（getCharacters 复用 bgmGet catch 返回 []）/ 无硬编码颜色（CharactersBlock 仅 token）。
 

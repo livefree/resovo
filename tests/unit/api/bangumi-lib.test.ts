@@ -79,14 +79,19 @@ describe('lib/bangumi getCharacters（META-19）', () => {
     expect(url).toContain('/v0/subjects/42/characters')
   })
 
-  it('请求失败返回 []（降级，不抛）', async () => {
-    fetchMock.mockRejectedValue(new Error('boom'))
+  it('成功返回空数组（空作品）—— 区分于失败', async () => {
+    fetchMock.mockResolvedValue(okJson([]))
     expect(await getCharacters(42)).toEqual([])
   })
 
-  it('非数组响应返回 []（防御）', async () => {
+  it('请求失败返回 null（与成功空 [] 区分，不抛）', async () => {
+    fetchMock.mockRejectedValue(new Error('boom'))
+    expect(await getCharacters(42)).toBeNull()
+  })
+
+  it('非数组响应返回 null（防御）', async () => {
     fetchMock.mockResolvedValue(okJson({ unexpected: true }))
-    expect(await getCharacters(42)).toEqual([])
+    expect(await getCharacters(42)).toBeNull()
   })
 })
 

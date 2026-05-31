@@ -65,8 +65,11 @@ export interface MatchAndEnrichInput {
 interface EnrichmentData {
   fields: CatalogUpdateData | null
   episodes: CatalogEpisodeInput[]
-  // ADR-161 AMENDMENT / META-19：角色 + CV（仅 REST 命中且 getCharacters 非空时填充）
+  // ADR-161 AMENDMENT / META-19：角色 + CV。
+  // characters = 本次抓到的集合（可能 []）；charactersFetched = getCharacters 是否成功（区分失败 vs 成功空）。
+  // 仅 charactersFetched 才全量替换（成功返回空也替换 → 清陈旧；失败跳过 → 不误删）。
   characters: CatalogCharacterInput[]
+  charactersFetched: boolean
   mainEpisodeCount: number
   degraded: boolean
 }
@@ -297,6 +300,7 @@ export class BangumiService {
     let fields: CatalogUpdateData | null = null
     let episodes: CatalogEpisodeInput[] = []
     let characters: CatalogCharacterInput[] = []
+    let charactersFetched = false
     let mainEpisodeCount = 0
     let degraded = true
 
@@ -312,10 +316,14 @@ export class BangumiService {
         mainEpisodeCount = subject.eps && subject.eps > 0
           ? subject.eps
           : eps.filter((e) => e.type === 0).length
-        // ADR-161 AMENDMENT / META-19：角色 + CV。getCharacters 独立失败返回 []（与 subject 解耦）→
-        // 仅非空时填充；apply 侧据 length>0 守卫，避免 characters 抓取瞬时失败误删既有角色（D-161-AMD-3）
+        // ADR-161 AMENDMENT / META-19：角色 + CV。getCharacters 与 subject 解耦，独立失败返 null。
+        // 区分「抓取失败(null)」与「成功返回空([])」：仅成功(非 null)标 charactersFetched，
+        // apply 侧据此全量替换（成功空也替换 → 清陈旧角色；失败跳过 → 不误删 / D-161-AMD-3）。
         const chars = await getCharacters(bangumiId, cfg)
-        if (chars.length > 0) characters = mapCharacters(chars)
+        if (chars !== null) {
+          charactersFetched = true
+          characters = mapCharacters(chars)
+        }
       }
     }
 
@@ -330,7 +338,7 @@ export class BangumiService {
       if (entry.coverUrl) fields.coverUrl = entry.coverUrl
     }
 
-    return { fields, episodes, characters, mainEpisodeCount, degraded }
+    return { fields, episodes, characters, charactersFetched, mainEpisodeCount, degraded }
   }
 
   /**
@@ -360,9 +368,10 @@ export class BangumiService {
     const isClient = 'release' in db && typeof (db as PoolClient).release === 'function'
 
     // ADR-161 AMENDMENT / META-19：角色 + CV 全量替换（delete-then-insert，仅事务内 PoolClient）。
-    // 守卫 length>0（D-161-AMD-3）：getCharacters 失败/降级时 characters=[] → 跳过，不误删既有角色。
+    // 守卫 charactersFetched（D-161-AMD-3）：getCharacters 成功（含返回空）才替换 —— 成功返回空也
+    // 清陈旧角色（避免保留过时数据）；抓取失败(null) 时 charactersFetched=false → 跳过，不误删。
     // 两路径（applyAutoMatchAtomic / confirmMatch）均传 client，恒满足 isClient。
-    if (data.characters.length > 0 && isClient) {
+    if (data.charactersFetched && isClient) {
       await catalogCharacterQueries.replaceCatalogCharacters(
         db as PoolClient, catalogId, 'bangumi', data.characters,
       )
