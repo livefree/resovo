@@ -8,7 +8,31 @@ import type { BangumiEntryMatch } from '@/api/db/queries/externalData'
 import type { BangumiSubject, BangumiEpisode, BangumiInfoboxItem, BangumiSearchItem, BangumiCharacter, BangumiImages } from '@/api/lib/bangumi'
 import type { CatalogEpisodeInput } from '@/api/db/queries/catalogEpisodes'
 import type { CatalogCharacterInput } from '@/api/db/queries/catalogCharacters'
-import { normalizeTitle } from './TitleNormalizer'
+import { normalizeForExternalMatch } from './TitleNormalizer'
+
+// ── 有损键歧义守卫（META-22 三次修订 / Codex stop-time review）──────────
+
+/**
+ * 判定本地 dump 标题命中是否「歧义」——外部源 `title_normalized` 经 `[^\p{L}\p{N}]`
+ * 有损存储，标点不敏感匹配可能命中**多条不同记录**；若 top-2 的年份判别档相同
+ *（或视频无年份可判别），则标题键不足以唯一定位 → 禁止 auto 绑定，降级 candidate 人工确认。
+ *
+ * 年份档与 `findDoubanByTitleNorm`/`findBangumiByTitleNorm` 的 SQL ORDER BY 一致：
+ * 视频无年份→全 0；exact→0；±1→1；其余（含条目无年份）→2。
+ */
+export function isAmbiguousLocalMatch(
+  matches: ReadonlyArray<{ year: number | null }>,
+  videoYear: number | null,
+): boolean {
+  if (matches.length < 2) return false
+  const tier = (entryYear: number | null): number => {
+    if (videoYear === null) return 0
+    if (entryYear === null) return 2
+    const diff = Math.abs(entryYear - videoYear)
+    return diff === 0 ? 0 : diff === 1 ? 1 : 2
+  }
+  return tier(matches[0].year) === tier(matches[1].year)
+}
 
 // ── 置信度（复用豆瓣 dump 阈值范式，本地匹配仅 title_norm，base 0.70）────
 
@@ -48,8 +72,8 @@ export function computeRestBangumiConfidence(
   titleNorm: string,
   year: number | null,
 ): { confidence: number; breakdown: Record<string, number> } {
-  const nameCnNorm = item.name_cn ? normalizeTitle(item.name_cn) : ''
-  const nameJpNorm = item.name ? normalizeTitle(item.name) : ''
+  const nameCnNorm = item.name_cn ? normalizeForExternalMatch(item.name_cn) : ''
+  const nameJpNorm = item.name ? normalizeForExternalMatch(item.name) : ''
   const exact = (nameCnNorm !== '' && nameCnNorm === titleNorm) || (nameJpNorm !== '' && nameJpNorm === titleNorm)
   if (!exact) return { confidence: 0, breakdown: { rest_no_exact: 0 } }
 
@@ -87,7 +111,7 @@ export function computeAliasBangumiConfidence(
     ...parseInfoboxAliases(subject.infobox),
   ]
   const exact = candidates.some((c) => {
-    const n = c ? normalizeTitle(c) : ''
+    const n = c ? normalizeForExternalMatch(c) : ''
     return n !== '' && n === titleNorm
   })
   if (!exact) return { confidence: 0, breakdown: { rest_alias_no_exact: 0 } }

@@ -12677,3 +12677,35 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **新增依赖/schema/路由/Props 契约变更**：无。
 - **质量门禁**：typecheck/lint EXIT=0 / 全量 444 文件 **5787 passed**（VideoImageSection 1 并行 flaky，隔离 21/21 通过，无关）。
 - **范围**：渲染角色头像；CV 头像未渲染（actor.imageUrl 已存，后续按需）。
+
+---
+
+## [META-22] 外部源富集匹配 CJK 标点不敏感归一化（解耦归并键 / SEQ-20260530-04 follow-up ②）
+- **完成时间**：2026-05-31
+- **记录时间**：2026-05-31 03:25
+- **执行模型**：claude-opus-4-8
+- **子代理**：无（service 层归一化解耦 + 单测，非新契约/schema/ADR；建议模型 sonnet，人工以 opus 主循环执行）
+- **来源**：META-17 follow-up ②（富集 step1 本地召回对中文标题漏配，如「当前、正被打扰中！」）。
+- **根因**：两端 normalize 不一致 —— 视频侧 `titleNorm` 经 `normalizeTitle` 保留 CJK 标点（→`当前、正被打扰中！`），而豆瓣/bangumi dump 侧（`ExternalDataImportService:447` / `bangumi-dump-refresh:37` 的 `[^\p{L}\p{N}]`）剥离全部标点（→`当前正被打扰中`）；`findDoubanByTitleNorm` / `findBangumiByTitleNorm` / `BangumiService.matchViaRest` 比对落空。
+- **⚠️ Codex stop-time review 三轮否决 → 三次修正**：
+  - **轮1（解耦归并键）**：初版直接在 `normalizeTitle` 内剥标点 —— 但该函数输出即**持久化归并键 `media_catalog.title_normalized`**（`CrawlerService:172` / `VideoService:256` / `VideoMergesService:403` 写入）。改它会使新入库行剥标点、存量行保留标点 → 含标点标题归并/去重新旧不匹配 → **漏归并、重复 catalog 行**（真实回归）。Codex「unsafely changes the shared catalog key」准确。→ 修正：`normalizeTitle` 保持原状，匹配逻辑下沉到独立函数（见下）。
+  - **轮2（正则误剥合法字符）**：轮1 修正引入的剥离用手挑 CJK 范围 `[、-〿・！-／…]`（U+3001–303F 等）—— 但该范围**混入合法标题字符**：々(U+3005 叠字符/Lm)、〇(U+3007/Nl)、苏杭数字(〡-〩·〸-〺/Nl)，它们属 `\p{L}`/`\p{N}`，dump 侧 `[^\p{L}\p{N}]` **保留**而我误剥 → 破坏「人々」「佐々木」类匹配（node 实证 `人々`→我剥成`人`）。Codex「strips valid title characters, breaking existing dump matches」准确。→ 修正：剥离正则改用 Unicode 属性（见轮3 定稿）。
+  - **轮3（有损塌缩误绑外部记录）**：轮2 用 `[^\p{L}\p{N}]` 连**空格/标记**都剥（过度有损），且本地 dump 精确命中 `findByTitleNorm` 取 `matches[0]` 直接按「标题+年份」给 0.92 → **auto_matched**，无歧义检查 → 不同作品塌缩同键时**高置信误绑**。Codex「lossy punctuation stripping can auto-bind the wrong external record」准确。→ 双修：① 剥离正则改 `[\p{P}\p{S}]`（只剥标点/符号，**保留空格/标记**降低塌缩面；CJK 无空格仍逐字符对齐 dump；含空格标题保 pre-META-22 安全 under-match）；② 新增 `isAmbiguousLocalMatch` 守卫：本地命中多条不同记录且 top-2 年份同档 → 禁止 auto，降级 candidate 人工确认。
+- **最终方案（解耦归并键 + 标点/符号剥离 + 有损歧义守卫）**：
+  - `normalizeTitle` **保持原状**（保留标点，归并键不变 → 零回归；docstring 加不变式警示注释）
+  - 新增 `stripExternalMatchPunct(s)=s.replace(/[\p{P}\p{S}]/gu,'').replace(/\s+/g,' ').trim()`（保留字母数字含 々〇 与词间空格，剥标点/符号）+ `normalizeForExternalMatch(raw)=strip(normalizeTitle(raw))`
+  - 新增 `isAmbiguousLocalMatch(matches, videoYear)`（年份档 mirror SQL ORDER BY；top-2 同档或无年份判别 → 歧义）
+  - 匹配领域统一改用：`MetadataEnrichService` titleNorm（douban dump 查询 + bangumi matchAndEnrich 两边界）+ step1 douban auto 加歧义守卫 / `BangumiService.matchAndEnrich` 边界 strip（兼容 step3 新算值 **与** bangumi-sync 端点持久化 `title_normalized` 两来源）+ 本地命中歧义守卫 / `searchCandidates` keyword / `BangumiService.utils` REST+别名候选侧
+- **修改文件**：
+  - `apps/api/src/services/TitleNormalizer.ts` — 还原 `normalizeTitle` + 新增 `PUNCT_SYMBOLS`(`/[\p{P}\p{S}]/gu`)、`stripExternalMatchPunct`、`normalizeForExternalMatch` + 不变式/防误剥/防塌缩注释
+  - `apps/api/src/services/BangumiService.utils.ts` — 新增 `isAmbiguousLocalMatch` + computeRest/Alias 候选名 `normalizeForExternalMatch`
+  - `apps/api/src/services/BangumiService.ts` — matchAndEnrich 边界 strip（matchNorm）+ 本地命中 `localAmbiguous` 守卫（`!localAmbiguous` 才 auto）+ searchCandidates 归一化
+  - `apps/api/src/services/MetadataEnrichService.ts` — titleNorm 改 `normalizeForExternalMatch` + step1 douban `ambiguous` 守卫
+  - `tests/unit/api/title-normalizer.test.ts` — normalizeTitle「保留 CJK 标点」防回归 2 + `normalizeForExternalMatch` 11（含 々/〇/苏杭数字保留 + 空格保留 + ♪ 符号 + 漏配核心）+ `stripExternalMatchPunct` 5
+  - `tests/unit/api/bangumi-service.test.ts` — `isAmbiguousLocalMatch` 5 + matchAndEnrich 歧义降级 1
+  - `tests/unit/api/metadataEnrich.test.ts` — TitleNormalizer mock 补新函数（`[\p{P}\p{S}]` 对齐）+ douban 歧义降级 1
+- **生效面**：富集匹配 CJK 标题逐字符对齐 dump → **立即生效，无需重导 dump**；**归并键 `title_normalized` 完全不变 → 零回归、无需 backfill**；有损键歧义命中**不再 auto 误绑**（降级人工）。
+- **新增依赖/schema/路由/Props 契约变更**：无。
+- **数据库变更**：无。
+- **质量门禁**：typecheck / lint / verify:adr-contracts EXIT=0 / title-normalizer 57 + bangumi-service 66 + metadataEnrich 32 + bangumiRoutes 12（含 sync auto 持久化路径）全过 / 全量 445 文件 **5814 passed 0 failed**（无 flaky）。
+- **注意事项**：① `normalizeForExternalMatch` 复用 `normalizeTitle` 全流程（去年份/季数/画质），与 dump 侧 `[^\p{L}\p{N}]`（不去季数/画质）在这些维度仍有差异，属 pre-existing。② 含空格标题（英文）匹配键保留空格 → 与 dump 空格剥离形态不一致，沿用 pre-META-22 安全 under-match，不在本卡范围。

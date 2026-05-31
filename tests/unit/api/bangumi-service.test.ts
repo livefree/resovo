@@ -10,6 +10,7 @@ import {
   computeLocalBangumiConfidence,
   computeRestBangumiConfidence,
   computeAliasBangumiConfidence,
+  isAmbiguousLocalMatch,
   parseInfobox,
   parseInfoboxAliases,
   mapSubjectToCatalogFields,
@@ -41,6 +42,24 @@ describe('computeLocalBangumiConfidence', () => {
   })
   it('年份差 ≥2 → 0.70（不加分）', () => {
     expect(computeLocalBangumiConfidence(entry({ year: 2007 }), 2010).confidence).toBeCloseTo(0.7)
+  })
+})
+
+describe('isAmbiguousLocalMatch（META-22 三次修订 / 有损键歧义守卫）', () => {
+  it('单条命中 → 非歧义', () => {
+    expect(isAmbiguousLocalMatch([{ year: 2007 }], 2007)).toBe(false)
+  })
+  it('top-2 同为年份精确 → 歧义（标题键无法唯一定位）', () => {
+    expect(isAmbiguousLocalMatch([{ year: 2007 }, { year: 2007 }], 2007)).toBe(true)
+  })
+  it('top-1 年份精确 / top-2 年份差 2 → 非歧义（年份可区分）', () => {
+    expect(isAmbiguousLocalMatch([{ year: 2007 }, { year: 2010 }], 2007)).toBe(false)
+  })
+  it('视频无年份 + 多条命中 → 歧义（无年份可判别）', () => {
+    expect(isAmbiguousLocalMatch([{ year: 2007 }, { year: 2010 }], null)).toBe(true)
+  })
+  it('top-2 同为差 1 档 → 歧义', () => {
+    expect(isAmbiguousLocalMatch([{ year: 2008 }, { year: 2006 }], 2007)).toBe(true)
   })
 })
 
@@ -321,6 +340,18 @@ describe('BangumiService.matchAndEnrich', () => {
     expect(mGetSubject).not.toHaveBeenCalled()
     expect(mUpdateCatalog).not.toHaveBeenCalled()
     // candidate 无事务 → Pool 写
+    expect(mUpdateBangumiStatus).toHaveBeenCalledWith(mockPool, VID, 'candidate')
+  })
+
+  it('META-22：本地有损键命中多条同年份不同 subject → 歧义降级 candidate（不 auto 绑定/不写 catalog）', async () => {
+    // 两条不同 subject 均年份精确（confidence 0.92），标题键无法唯一定位 → 禁止 auto
+    mFindByTitle.mockResolvedValue([entry({ bangumiId: 51, year: 2007 }), entry({ bangumiId: 99, year: 2007 })])
+    const r = await svc.matchAndEnrich({ videoId: VID, catalogId: CID, titleNorm: 'x', year: 2007 })
+    expect(r).toMatchObject({ matched: 'candidate', bangumiSubjectId: 51 })
+    expect(mUpsertRef).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      matchStatus: 'candidate', isPrimary: false,
+    }))
+    expect(mUpdateCatalog).not.toHaveBeenCalled()
     expect(mUpdateBangumiStatus).toHaveBeenCalledWith(mockPool, VID, 'candidate')
   })
 

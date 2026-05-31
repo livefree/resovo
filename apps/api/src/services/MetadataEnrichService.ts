@@ -20,7 +20,8 @@ import { getDoubanDetailRich } from '@/api/lib/doubanAdapter'
 import { mapDoubanGenres } from '@/api/lib/genreMapper'
 import { MediaCatalogService } from './MediaCatalogService'
 import { BangumiService } from './BangumiService'
-import { normalizeTitle } from './TitleNormalizer'
+import { isAmbiguousLocalMatch } from './BangumiService.utils'
+import { normalizeForExternalMatch } from './TitleNormalizer'
 import { isPinyin } from './PinyinDetector'
 import * as externalDataQueries from '@/api/db/queries/externalData'
 import * as sourcesQueries from '@/api/db/queries/sources'
@@ -70,7 +71,9 @@ export class MetadataEnrichService {
 
   async enrich(data: EnrichJobData): Promise<void> {
     const { videoId, catalogId, title, year, type } = data
-    const titleNorm = normalizeTitle(title)
+    // 外部源富集匹配用标点不敏感归一化（META-22）：仅流向 step1 douban dump 查询 +
+    // step3 bangumi matchAndEnrich 两个匹配边界；不参与持久化归并键。
+    const titleNorm = normalizeForExternalMatch(title)
 
     // 预取 catalog 以获取 imdbId / titleEn（供 step1 精确匹配 / 拼音判断）+ status
     //（决定 episodes 写 total 还是 current / ADR-163 D-163-5）
@@ -177,7 +180,9 @@ export class MetadataEnrichService {
 
     if (confidence < CONFIDENCE_CANDIDATE) return null
 
-    const matchStatus = confidence >= CONFIDENCE_AUTO_MATCH ? 'auto_matched' : 'candidate'
+    // META-22：本地有损键命中多条不同 douban 记录且年份同档 → 歧义，禁止 auto 绑定（降级候选人工确认）
+    const ambiguous = isAmbiguousLocalMatch(matches, year)
+    const matchStatus = (confidence >= CONFIDENCE_AUTO_MATCH && !ambiguous) ? 'auto_matched' : 'candidate'
 
     recordDoubanSignal(metaQuality, confidence, matchBy, matchStatus)
 

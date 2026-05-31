@@ -20,11 +20,12 @@ import * as videosQueries from '@/api/db/queries/videos'
 import * as systemSettingsQueries from '@/api/db/queries/systemSettings'
 import { getSubject, getEpisodes, getCharacters, searchSubjects, searchSubjectsStrict, isBangumiApiConfigured } from '@/api/lib/bangumi'
 import type { BangumiClientConfig } from '@/api/lib/bangumi'
-import { normalizeTitle } from './TitleNormalizer'
+import { normalizeForExternalMatch, stripExternalMatchPunct } from './TitleNormalizer'
 import {
   computeLocalBangumiConfidence,
   computeRestBangumiConfidence,
   computeAliasBangumiConfidence,
+  isAmbiguousLocalMatch,
   mapSubjectToCatalogFields,
   mapEpisodes,
   mapCharacters,
@@ -126,20 +127,26 @@ export class BangumiService {
       }
     }
 
-    const matches = await externalDataQueries.findBangumiByTitleNorm(this.db, titleNorm, year)
+    // META-22：入参 titleNorm 双来源（step3 新算 normalizeForExternalMatch / bangumi-sync 端点
+    // 直传持久化 title_normalized）→ 在匹配边界统一剥 CJK 标点，与 dump 存储 + REST 候选侧对齐。
+    const matchNorm = stripExternalMatchPunct(titleNorm)
+    const matches = await externalDataQueries.findBangumiByTitleNorm(this.db, matchNorm, year)
     let resolved: { bangumiId: number; confidence: number; breakdown: Record<string, number>; localEntry: BangumiEntryMatch | null } | null = null
+    // META-22：本地有损键命中多条不同 subject 且年份同档 → 歧义，禁止 auto 绑定（降级候选人工确认）
+    let localAmbiguous = false
 
     if (matches.length > 0) {
       const best = matches[0]
       const { confidence, breakdown } = computeLocalBangumiConfidence(best, year)
       if (confidence >= CONFIDENCE_CANDIDATE) {
         resolved = { bangumiId: best.bangumiId, confidence, breakdown, localEntry: best }
+        localAmbiguous = isAmbiguousLocalMatch(matches, year)
       }
     }
 
-    // META-17 方案 A：本地未命中（或低置信）+ token 配置 → REST 精确兜底
+    // META-17 方案 A：本地未命中（或低置信）+ token 配置 → REST 精确兜底（REST 不涉本地有损歧义）
     if (resolved === null && isBangumiApiConfigured(cfg)) {
-      resolved = await this.matchViaRest(titleNorm, year, cfg)
+      resolved = await this.matchViaRest(matchNorm, year, cfg)
     }
 
     if (resolved === null) {
@@ -148,7 +155,7 @@ export class BangumiService {
     }
 
     const { bangumiId, confidence, breakdown, localEntry } = resolved
-    const status = confidence >= CONFIDENCE_AUTO_MATCH ? 'auto_matched' : 'candidate'
+    const status = (confidence >= CONFIDENCE_AUTO_MATCH && !localAmbiguous) ? 'auto_matched' : 'candidate'
 
     if (status === 'candidate') {
       // candidate：仅记 ref（无 catalog 写入 → 无脏态风险，沿用 best-effort writeRef）
@@ -325,7 +332,8 @@ export class BangumiService {
   }): Promise<BangumiCandidate[]> {
     const out = new Map<number, BangumiCandidate>()
 
-    const localNorm = input.keyword ? normalizeTitle(input.keyword) : input.titleNorm
+    // META-22：keyword 走匹配领域归一化（标点不敏感）；titleNorm 入参（可能是持久化归并键）统一剥标点对齐
+    const localNorm = input.keyword ? normalizeForExternalMatch(input.keyword) : stripExternalMatchPunct(input.titleNorm)
     const locals = await externalDataQueries.findBangumiByTitleNorm(this.db, localNorm, input.year)
     for (const e of locals) {
       const { confidence } = computeLocalBangumiConfidence(e, input.year)

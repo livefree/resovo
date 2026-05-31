@@ -5,7 +5,12 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { normalizeTitle, buildMatchKey } from '@/api/services/TitleNormalizer'
+import {
+  normalizeTitle,
+  buildMatchKey,
+  normalizeForExternalMatch,
+  stripExternalMatchPunct,
+} from '@/api/services/TitleNormalizer'
 
 describe('normalizeTitle', () => {
   // ── 基础小写 ─────────────────────────────────────────────────────
@@ -132,6 +137,18 @@ describe('normalizeTitle', () => {
     expect(normalizeTitle('流浪地球（正片）')).toBe('流浪地球')
   })
 
+  // ── CJK 标点保留（META-22 归并键不变式 / 防回归）─────────────────
+  // normalizeTitle 输出即持久化归并键 title_normalized；刻意保留 CJK 标点以维持存量行键稳定。
+  // 标点不敏感的富集匹配归一化由 normalizeForExternalMatch 负责（见下方 describe）。
+
+  it('保留顿号「、」与全角感叹号「！」（归并键稳定）', () => {
+    expect(normalizeTitle('当前、正被打扰中！')).toBe('当前、正被打扰中！')
+  })
+
+  it('保留书名号「《》」（不剥离）', () => {
+    expect(normalizeTitle('《灌篮高手》')).toBe('《灌篮高手》')
+  })
+
   // ── 复合场景 ─────────────────────────────────────────────────────
 
   it('中英文混合标题：去年份 + 小写', () => {
@@ -192,5 +209,88 @@ describe('buildMatchKey', () => {
     const a = buildMatchKey('无年份剧集', null, 'series')
     const b = buildMatchKey('无年份剧集', null, 'series')
     expect(a).toBe(b)
+  })
+})
+
+// ── normalizeForExternalMatch（META-22 / 外部源富集匹配）──────────────
+
+describe('normalizeForExternalMatch', () => {
+  it('剥离顿号「、」与全角感叹号「！」（dump 侧召回对齐）', () => {
+    expect(normalizeForExternalMatch('当前、正被打扰中！')).toBe('当前正被打扰中')
+  })
+
+  it('剥离全角问号「？」', () => {
+    expect(normalizeForExternalMatch('你的名字？')).toBe('你的名字')
+  })
+
+  it('剥离全角逗号/句号「，。」', () => {
+    expect(normalizeForExternalMatch('夏目友人帐，第。集')).toBe('夏目友人帐第集')
+  })
+
+  it('剥离书名号「《》」与引号「「」」', () => {
+    expect(normalizeForExternalMatch('《灌篮高手》「全国大赛」')).toBe('灌篮高手全国大赛')
+  })
+
+  it('剥离片假名中点「・」与全角冒号「：」', () => {
+    expect(normalizeForExternalMatch('钢之炼金术师：FA・剧场版')).toBe('钢之炼金术师fa剧场版')
+  })
+
+  it('带标点与无标点标题归一化后相同（漏配修复核心）', () => {
+    expect(normalizeForExternalMatch('当前、正被打扰中！')).toBe(normalizeForExternalMatch('当前正被打扰中'))
+  })
+
+  it('全角字母数字保留（\\p{L}/\\p{N}）', () => {
+    expect(normalizeForExternalMatch('Ｑ１０')).toBe('ｑ１０')
+  })
+
+  // ── 防回归：合法 CJK 字符不被误剥（Codex stop-time review）──────────
+  // 々(U+3005 Lm) / 〇(U+3007 Nl) / 苏杭数字属字母数字，dump 侧 [^\p{L}\p{N}] 保留，必须一致保留
+
+  it('保留叠字符「々」（人々 / 佐々木 类，与 dump 一致）', () => {
+    expect(normalizeForExternalMatch('佐々木')).toBe('佐々木')
+    expect(normalizeForExternalMatch('人々')).toBe('人々')
+  })
+
+  it('保留表零汉字「〇」', () => {
+    expect(normalizeForExternalMatch('二〇二三')).toBe('二〇二三')
+  })
+
+  it('剥 ASCII 标点但保留词间空格（降低有损塌缩面）', () => {
+    // 仅剥 \p{P}/\p{S}（'-'/':'）→ 空格保留（不像 dump [^\p{L}\p{N}] 连空格全剥）
+    expect(normalizeForExternalMatch('Spider-Man: No Way Home')).toBe('spiderman no way home')
+  })
+
+  it('剥音符符号「♪」（\\p{S}）', () => {
+    expect(normalizeForExternalMatch('おねがい♪マイメロディ')).toBe('おねがいマイメロディ')
+  })
+
+  it('仍复用 normalizeTitle 全流程（去年份/季数/画质）', () => {
+    expect(normalizeForExternalMatch('海贼王！第二季(2023)[1080P]')).toBe('海贼王')
+  })
+})
+
+// ── stripExternalMatchPunct（META-22 / 已归一字符串剥标点符号）──────────
+
+describe('stripExternalMatchPunct', () => {
+  it('对已归一字符串剥标点（持久化 title_normalized 入匹配边界）', () => {
+    // 模拟持久化归并键（normalizeTitle 输出，保留标点）→ 匹配边界剥成 dump 对齐形态（CJK 无空格）
+    expect(stripExternalMatchPunct(normalizeTitle('当前、正被打扰中！'))).toBe('当前正被打扰中')
+  })
+
+  it('幂等：已剥字符串再剥不变', () => {
+    const once = stripExternalMatchPunct('当前正被打扰中')
+    expect(stripExternalMatchPunct(once)).toBe('当前正被打扰中')
+  })
+
+  it('剥标点后折叠残留空白（保留词间单空格）', () => {
+    expect(stripExternalMatchPunct('a ！ b')).toBe('a b')
+  })
+
+  it('保留 々〇 等字母数字字符', () => {
+    expect(stripExternalMatchPunct('佐々木・2〇')).toBe('佐々木2〇')
+  })
+
+  it('空字符串返回空字符串', () => {
+    expect(stripExternalMatchPunct('')).toBe('')
   })
 })

@@ -6,7 +6,7 @@
 
 ## 进行中任务
 
-（空 / SEQ-20260530-04 外部富集数据基建：META-15-B(worker)✅ / META-15-C(backfill 脚本)✅ / **META-15-D(豆瓣 dump 导入 140,502 行)✅ 2026-05-31** / META-15-A(TMDB)DEFER。详见 changelog + task-queue。用户已起 worker 全量 backfill 运行中（bangumi+角色 强劲爬升 / douban 限 movie 类型）。下一步候选：Bangumi 别名感知 B / 角色头像渲染 / 推 PR）
+（空 / SEQ-20260530-04 外部富集数据基建：META-15-B(worker)✅ / META-15-C(backfill 脚本)✅ / **META-15-D(豆瓣 dump 导入 140,502 行)✅** / META-17(Bangumi REST 兜底)✅ / META-20(别名感知)✅ / **META-22(富集匹配归一化·解耦归并键+标点符号剥离+有损歧义守卫)✅ 2026-05-31** / META-15-A(TMDB)DEFER。详见 changelog + task-queue。用户已起 worker 全量 backfill 运行中。下一步候选：SEQ-20260530-04 follow-up 全收口 / Wave 5 待立案 / 推 PR）
 
 ---
 

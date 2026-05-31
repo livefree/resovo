@@ -66,9 +66,16 @@ vi.mock('@/api/lib/genreMapper', () => ({
   mapDoubanGenres: vi.fn((genres: string[]) => genres),
 }))
 
-vi.mock('@/api/services/TitleNormalizer', () => ({
-  normalizeTitle: vi.fn((t: string) => t.toLowerCase().replace(/\s/g, '')),
-}))
+vi.mock('@/api/services/TitleNormalizer', () => {
+  // META-22：与真实实现一致剥 \p{P}/\p{S}（保留字母数字与空格）
+  const stripPunct = (t: string) => t.replace(/[\p{P}\p{S}]/gu, '').replace(/\s+/g, ' ').trim()
+  const norm = (t: string) => t.toLowerCase().replace(/\s/g, '')
+  return {
+    normalizeTitle: vi.fn(norm),
+    normalizeForExternalMatch: vi.fn((t: string) => stripPunct(norm(t))),
+    stripExternalMatchPunct: vi.fn((t: string) => stripPunct(t)),
+  }
+})
 
 vi.mock('@/api/lib/postgres', () => ({
   db: { query: vi.fn().mockResolvedValue({ rows: [] }) },
@@ -154,6 +161,25 @@ describe('MetadataEnrichService.enrich()', () => {
     expect(mockSafeUpdate).toHaveBeenCalledWith('c1', expect.objectContaining({ doubanId: 'd1' }), 'douban', { sourceRef: 'd1' })
     const call = vi.mocked(videosQueries.updateVideoEnrichStatus).mock.calls[0]
     expect(call[2]).toMatchObject({ doubanStatus: 'matched' })
+  })
+
+  it('META-22: Step1 有损键命中多条同年份不同 douban → 歧义降级 candidate（不写 catalog）', async () => {
+    // 两条不同 douban_id 均年份精确（0.92），标题键无法唯一定位 → 禁止 auto 绑定
+    vi.mocked(externalDataQueries.findDoubanByTitleNorm).mockResolvedValue([
+      makeDoubanMatch({ doubanId: 'd1', year: 2013 }),
+      makeDoubanMatch({ doubanId: 'd2', year: 2013 }),
+    ])
+
+    await service.enrich(makeJobData())
+
+    // 降级 candidate：写 ref(candidate) 但不写 catalog
+    expect(mockSafeUpdate).not.toHaveBeenCalledWith('c1', expect.objectContaining({ doubanId: 'd1' }), 'douban', { sourceRef: 'd1' })
+    expect(externalDataQueries.upsertVideoExternalRef).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ provider: 'douban', externalId: 'd1', matchStatus: 'candidate' }),
+    )
+    const call = vi.mocked(videosQueries.updateVideoEnrichStatus).mock.calls[0]
+    expect(call[2]).toMatchObject({ doubanStatus: 'candidate' })
   })
 
   it('Step1 auto_matched → 写 video_external_refs(auto_matched)', async () => {
