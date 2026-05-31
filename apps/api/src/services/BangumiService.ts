@@ -15,7 +15,9 @@ import type { BangumiEntryMatch } from '@/api/db/queries/externalData'
 import * as catalogEpisodeQueries from '@/api/db/queries/catalogEpisodes'
 import type { CatalogEpisodeInput } from '@/api/db/queries/catalogEpisodes'
 import * as videosQueries from '@/api/db/queries/videos'
+import * as systemSettingsQueries from '@/api/db/queries/systemSettings'
 import { getSubject, getEpisodes, searchSubjects, searchSubjectsStrict, isBangumiApiConfigured } from '@/api/lib/bangumi'
+import type { BangumiClientConfig } from '@/api/lib/bangumi'
 import { normalizeTitle } from './TitleNormalizer'
 import {
   computeLocalBangumiConfidence,
@@ -33,6 +35,14 @@ function parseYear(date: string | null | undefined): number | null {
 // ── 阈值（复用豆瓣范式）───────────────────────────────────────────
 const CONFIDENCE_AUTO_MATCH = 0.85
 const CONFIDENCE_CANDIDATE = 0.6
+
+// ── ADR-168 D-168-5：Bangumi 凭证进程内缓存（避免每 job 查 system_settings）──
+const BANGUMI_CONFIG_TTL_MS = 60_000
+let bangumiConfigCache: { value: BangumiClientConfig; expiresAt: number } | null = null
+/** 测试钩子：清空凭证缓存（生产无需，60s TTL 自然过期）。 */
+export function clearBangumiConfigCache(): void {
+  bangumiConfigCache = null
+}
 
 // ── 结果类型 ───────────────────────────────────────────────────────
 export type BangumiEnrichResult =
@@ -65,12 +75,30 @@ export class BangumiService {
   }
 
   /**
+   * ADR-168 D-168-5：从 system_settings 解析 Bangumi 凭证（token/UA/timeout），进程内 60s 缓存。
+   * 仅注入 DB 有值的字段 → lib/bangumi 对缺省字段回退 process.env（向后兼容）。
+   */
+  private async getBangumiConfig(): Promise<BangumiClientConfig> {
+    const now = Date.now()
+    if (bangumiConfigCache && bangumiConfigCache.expiresAt > now) return bangumiConfigCache.value
+    const raw = await systemSettingsQueries.getAllSettings(this.db)
+    const cfg: BangumiClientConfig = {}
+    if (raw.bangumi_api_token) cfg.token = raw.bangumi_api_token
+    if (raw.bangumi_user_agent) cfg.userAgent = raw.bangumi_user_agent
+    const t = Number(raw.bangumi_api_timeout_ms)
+    if (Number.isFinite(t) && t > 0) cfg.timeoutMs = t
+    bangumiConfigCache = { value: cfg, expiresAt: now + BANGUMI_CONFIG_TTL_MS }
+    return cfg
+  }
+
+  /**
    * 对单视频做 Bangumi 匹配 + 丰富（供 MetadataEnrichService.step3 与后台手动调用）。
    * 仅本地 dump 召回；auto 命中后按需拉 REST 详情（Token 缺失/失败则降级用本地 dump 字段）。
    */
   async matchAndEnrich({ videoId, catalogId, titleNorm, year }: MatchAndEnrichInput): Promise<BangumiEnrichResult> {
     // ADR-170 D-170-4：状态投影下沉本方法，统一覆盖 step3 自动流 / bangumi-sync 直调 / 改类型→anime 三路径。
     // 命中来源双轨：① 本地 dump 精确召回（毫秒级）② META-17 方案 A：dump 空/低置信时 REST 精确兜底。
+    const cfg = await this.getBangumiConfig()   // ADR-168：凭证（DB system_settings 优先，回退 env）
     const matches = await externalDataQueries.findBangumiByTitleNorm(this.db, titleNorm, year)
     let resolved: { bangumiId: number; confidence: number; breakdown: Record<string, number>; localEntry: BangumiEntryMatch | null } | null = null
 
@@ -83,8 +111,8 @@ export class BangumiService {
     }
 
     // META-17 方案 A：本地未命中（或低置信）+ token 配置 → REST 精确兜底
-    if (resolved === null && isBangumiApiConfigured()) {
-      resolved = await this.matchViaRest(titleNorm, year)
+    if (resolved === null && isBangumiApiConfigured(cfg)) {
+      resolved = await this.matchViaRest(titleNorm, year, cfg)
     }
 
     if (resolved === null) {
@@ -108,7 +136,7 @@ export class BangumiService {
     // 已提交的 auto_matched/primary ref 脏态）。REST 已在 gatherEnrichmentData 完成，事务内无网络等待；
     // job 失败时整体 ROLLBACK，由上层 enrichmentQueue 重试（幂等收敛，但不留孤儿 ref）。
     // localEntry=null（REST 兜底命中）时 gatherEnrichmentData 纯走 REST（与 confirmMatch 同路径）。
-    const data = await this.gatherEnrichmentData(bangumiId, localEntry)
+    const data = await this.gatherEnrichmentData(bangumiId, localEntry, cfg)
     // Codex stop-time review 修复：REST 兜底命中（localEntry=null）但 getSubject 详情瞬时失败 → fields=null
     // （无 dump 降级可用）。此时**不可**提交「matched 但无数据」终态 → 抛出让 Bull 重试 / 端点报错。
     // 本地 dump 命中（localEntry≠null）时 fields 恒由 dump 兜底为非空，不受此守卫影响。
@@ -139,8 +167,9 @@ export class BangumiService {
   private async matchViaRest(
     titleNorm: string,
     year: number | null,
+    cfg?: BangumiClientConfig,
   ): Promise<{ bangumiId: number; confidence: number; breakdown: Record<string, number>; localEntry: null } | null> {
-    const items = await searchSubjectsStrict(titleNorm)
+    const items = await searchSubjectsStrict(titleNorm, 10, cfg)
     let best: { bangumiId: number; confidence: number; breakdown: Record<string, number>; localEntry: null } | null = null
     for (const item of items) {
       const { confidence, breakdown } = computeRestBangumiConfidence(item, titleNorm, year)
@@ -163,9 +192,10 @@ export class BangumiService {
    * REST 全程在事务外，不会持事务空闲等网络（Codex FIX-1：避免 idle-in-transaction 占满 pool）。
    */
   async confirmMatch(videoId: string, catalogId: string, bangumiId: number): Promise<{ updated: boolean }> {
+    const cfg = await this.getBangumiConfig()   // ADR-168
     const entry = await externalDataQueries.findBangumiById(this.db, bangumiId)
     // Phase 1：REST 在事务外，避免长持锁
-    const data = await this.gatherEnrichmentData(bangumiId, entry)
+    const data = await this.gatherEnrichmentData(bangumiId, entry, cfg)
     if (!data.fields) return { updated: false }
 
     // Phase 2：DB 写入原子事务
@@ -225,19 +255,22 @@ export class BangumiService {
       })
     }
 
-    if (input.keyword && isBangumiApiConfigured()) {
-      const items = await searchSubjects(input.keyword)
-      for (const it of items) {
-        if (out.has(it.id)) continue
-        out.set(it.id, {
-          bangumiSubjectId: it.id,
-          nameCn: it.name_cn?.trim() || null,
-          nameJp: it.name?.trim() || null,
-          year: parseYear(it.date),
-          rating: it.rating?.score ?? null,
-          coverUrl: it.images?.large ?? it.images?.common ?? null,
-          confidence: 0,
-        })
+    if (input.keyword) {
+      const cfg = await this.getBangumiConfig()   // ADR-168
+      if (isBangumiApiConfigured(cfg)) {
+        const items = await searchSubjects(input.keyword, 10, cfg)
+        for (const it of items) {
+          if (out.has(it.id)) continue
+          out.set(it.id, {
+            bangumiSubjectId: it.id,
+            nameCn: it.name_cn?.trim() || null,
+            nameJp: it.name?.trim() || null,
+            year: parseYear(it.date),
+            rating: it.rating?.score ?? null,
+            coverUrl: it.images?.large ?? it.images?.common ?? null,
+            confidence: 0,
+          })
+        }
       }
     }
 
@@ -254,18 +287,19 @@ export class BangumiService {
   private async gatherEnrichmentData(
     bangumiId: number,
     entry: BangumiEntryMatch | null,
+    cfg?: BangumiClientConfig,
   ): Promise<EnrichmentData> {
     let fields: CatalogUpdateData | null = null
     let episodes: CatalogEpisodeInput[] = []
     let mainEpisodeCount = 0
     let degraded = true
 
-    if (isBangumiApiConfigured()) {
-      const subject = await getSubject(bangumiId)
+    if (isBangumiApiConfigured(cfg)) {
+      const subject = await getSubject(bangumiId, cfg)
       if (subject) {
         fields = mapSubjectToCatalogFields(subject)
         degraded = false
-        const eps = await getEpisodes(bangumiId)
+        const eps = await getEpisodes(bangumiId, cfg)
         if (eps.length > 0) episodes = mapEpisodes(eps)
         // 本篇集数（ADR-161 P1）：优先 wiki eps（本篇数）；否则数 type===0 本篇；
         // 不用 total_episodes（含 SP/OP/ED 章节，会高估用户侧剧集数）

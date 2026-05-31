@@ -31,6 +31,11 @@ vi.mock('@/api/db/queries/videos', () => ({
   updateVideoBangumiStatus: vi.fn().mockResolvedValue(undefined),
 }))
 
+// META-16-B：BangumiService.getBangumiConfig 读 system_settings（anime step3 路径）→ 返回空避免 db.query
+vi.mock('@/api/db/queries/systemSettings', () => ({
+  getAllSettings: vi.fn().mockResolvedValue({}),
+}))
+
 vi.mock('@/api/db/queries/sources', () => ({
   listSourcesForBatchVerify: vi.fn(),
   updateSourceActiveStatus: vi.fn().mockResolvedValue(undefined),

@@ -148,6 +148,10 @@ vi.mock('@/api/db/queries/videos', () => ({
   updateEpisodeCount: vi.fn().mockResolvedValue(undefined),
   updateVideoBangumiStatus: vi.fn().mockResolvedValue(undefined),
 }))
+// META-16-B：getBangumiConfig 读 system_settings；默认返回空 → cfg={} → lib 回退 env（mConfigured 控制行为）
+vi.mock('@/api/db/queries/systemSettings', () => ({
+  getAllSettings: vi.fn().mockResolvedValue({}),
+}))
 vi.mock('@/api/db/queries/mediaCatalog', () => ({
   findCatalogById: vi.fn(),
   updateCatalogFields: vi.fn(),
@@ -159,13 +163,15 @@ vi.mock('@/api/db/queries/metadataProvenance', () => ({
   batchUpsertFieldProvenance: vi.fn().mockResolvedValue(undefined),
 }))
 
-import { BangumiService } from '@/api/services/BangumiService'
+import { BangumiService, clearBangumiConfigCache } from '@/api/services/BangumiService'
 import * as bangumiLib from '@/api/lib/bangumi'
 import * as extQ from '@/api/db/queries/externalData'
 import * as epQ from '@/api/db/queries/catalogEpisodes'
 import * as vQ from '@/api/db/queries/videos'
 import * as catQ from '@/api/db/queries/mediaCatalog'
+import * as sysQ from '@/api/db/queries/systemSettings'
 
+const mGetAllSettings = sysQ.getAllSettings as ReturnType<typeof vi.fn>
 const mGetSubject = bangumiLib.getSubject as ReturnType<typeof vi.fn>
 const mGetEpisodes = bangumiLib.getEpisodes as ReturnType<typeof vi.fn>
 const mConfigured = bangumiLib.isBangumiApiConfigured as ReturnType<typeof vi.fn>
@@ -193,6 +199,7 @@ describe('BangumiService.matchAndEnrich', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    clearBangumiConfigCache()
     clientQueries = []
     clientReleased = false
     mockClient = {
@@ -364,7 +371,7 @@ describe('BangumiService.matchAndEnrich', () => {
     mGetEpisodes.mockResolvedValue([])
     const r = await svc.matchAndEnrich({ videoId: VID, catalogId: CID, titleNorm: '海贼王', year: 2007 })
     expect(r).toMatchObject({ matched: 'auto', bangumiSubjectId: 975 })
-    expect(mSearchStrict).toHaveBeenCalledWith('海贼王')
+    expect(mSearchStrict).toHaveBeenCalledWith('海贼王', 10, expect.any(Object))
     expect(mUpsertRef).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ matchStatus: 'auto_matched', isPrimary: true }))
   })
 
@@ -437,6 +444,32 @@ describe('BangumiService.matchAndEnrich', () => {
     expect(mUpsertRef).not.toHaveBeenCalled()
     expect(mUpdateBangumiStatus).not.toHaveBeenCalledWith(expect.anything(), VID, 'matched')
   })
+
+  // ── META-16-B：凭证下沉 Service（system_settings → cfg → lib）──────────
+  it('getBangumiConfig：DB token 流到 lib 调用（cfg.token）', async () => {
+    mGetAllSettings.mockResolvedValue({ bangumi_api_token: 'db-token-xyz', bangumi_user_agent: 'custom/1.0', bangumi_api_timeout_ms: '5000' })
+    mFindByTitle.mockResolvedValue([])
+    mSearchStrict.mockResolvedValue([])
+    await svc.matchAndEnrich({ videoId: VID, catalogId: CID, titleNorm: 'x', year: 2007 })
+    expect(mSearchStrict).toHaveBeenCalledWith('x', 10, { token: 'db-token-xyz', userAgent: 'custom/1.0', timeoutMs: 5000 })
+  })
+
+  it('getBangumiConfig：DB 空 → cfg={}（lib 回退 env）', async () => {
+    mGetAllSettings.mockResolvedValue({})
+    mFindByTitle.mockResolvedValue([])
+    mSearchStrict.mockResolvedValue([])
+    await svc.matchAndEnrich({ videoId: VID, catalogId: CID, titleNorm: 'y', year: 2007 })
+    expect(mSearchStrict).toHaveBeenCalledWith('y', 10, {})
+  })
+
+  it('getBangumiConfig：60s 缓存 → 同实例多次只查 system_settings 一次', async () => {
+    mGetAllSettings.mockResolvedValue({ bangumi_api_token: 't' })
+    mFindByTitle.mockResolvedValue([])
+    mSearchStrict.mockResolvedValue([])
+    await svc.matchAndEnrich({ videoId: VID, catalogId: CID, titleNorm: 'a', year: 2007 })
+    await svc.matchAndEnrich({ videoId: VID, catalogId: CID, titleNorm: 'b', year: 2007 })
+    expect(mGetAllSettings).toHaveBeenCalledTimes(1)   // 缓存命中，第二次不查库
+  })
 })
 
 describe('BangumiService.confirmMatch', () => {
@@ -450,6 +483,7 @@ describe('BangumiService.confirmMatch', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    clearBangumiConfigCache()
     clientQueries = []
     clientReleased = false
     mockClient = {
@@ -485,7 +519,7 @@ describe('BangumiService.confirmMatch', () => {
     mGetEpisodes.mockResolvedValue([])
     const r = await svc.confirmMatch(VID, CID, 99999)
     expect(r).toEqual({ updated: true })
-    expect(mGetSubject).toHaveBeenCalledWith(99999)
+    expect(mGetSubject).toHaveBeenCalledWith(99999, expect.any(Object))
     expect(mUpdateCatalog).toHaveBeenCalled()
     expect(mUpsertRef).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
       provider: 'bangumi', matchStatus: 'manual_confirmed', isPrimary: true,
@@ -592,6 +626,7 @@ describe('BangumiService.searchCandidates', () => {
   let svc: BangumiService
   beforeEach(() => {
     vi.clearAllMocks()
+    clearBangumiConfigCache()
     svc = new BangumiService({} as never)
   })
 

@@ -12515,3 +12515,21 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **质量门禁**：typecheck/lint/verify:adr-contracts EXIT=0 / 全量 **443 文件 5734 passed 零失败**（+27 零回归）
 - **修既存隐患**：douban_cookie / notification_webhook_secret 不再明文落审计 + 不再明文经 GET 回传；占位跳过防「保存即清空」（NotificationsTab 表单回提 masked 值安全）。
 - **注意事项**：凭证仍只「存储 + 遮罩」，**Bangumi 富集尚未消费 system_settings token**（仍读 env）→ META-16-B 下沉。
+
+---
+
+## [META-16-B] ADR-168 凭证解析下沉 Service（BangumiClientConfig + 60s 缓存）
+- **完成时间**：2026-05-30
+- **记录时间**：2026-05-30
+- **执行模型**：claude-opus-4-8
+- **子代理**：无（实施 ADR-168 D-168-5 已 Opus 评审契约）
+- **来源序列**：SEQ-20260530-05
+- **修改文件**：
+  - `apps/api/src/lib/bangumi.ts` — 导出 `BangumiClientConfig`；apiToken/timeoutMs/userAgent 接受 cfg 缺省回退 env；getSubject/getEpisodes/searchSubjects/searchSubjectsStrict/isBangumiApiConfigured + buildHeaders/bgmGet 加末位可选 cfg 透传
+  - `apps/api/src/services/BangumiService.ts` — 私有 `getBangumiConfig()` 读 system_settings（仅注入 DB 有值字段）+ 模块级 60s TTL 缓存 + `clearBangumiConfigCache()` 测试钩子；matchAndEnrich/confirmMatch/searchCandidates/matchViaRest/gatherEnrichmentData 5 调用点透传 cfg
+  - `tests/unit/api/bangumi-service.test.ts` — mock systemSettings.getAllSettings + clearBangumiConfigCache(beforeEach) + 3 新测（DB token 流到 lib / 空回退 / 60s 缓存只查一次）+ 既有断言补 cfg 参数
+  - `tests/unit/api/metadataEnrich.test.ts` — mock systemSettings.getAllSettings（anime step3→getBangumiConfig 路径，防 db.query 崩溃）
+- **新增依赖**：无 / **数据库变更**：无
+- **质量门禁**：typecheck/lint EXIT=0 / bangumi-service 44 + metadataEnrich 全过 / 全量 **443 文件 5736 passed**（1 flaky StagingTable v1 单跑 13/13 过·与本卡无关）
+- **效果**：Bangumi 富集现**优先用 system_settings 配置的 token**（设置页配置即生效，60s 缓存），DB 未配则回退 env（向后兼容）。**至此设置页配的 Bangumi token 真正驱动富集**（闭合「代码已接入 API 但缺设置页配置」缺口）。
+- **注意事项**：UI（SettingsTab 外部数据源卡）由 META-16-C 补；测试连接按钮 NOT in scope。

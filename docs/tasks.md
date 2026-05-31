@@ -6,20 +6,19 @@
 
 ## 进行中任务
 
-### META-16-B — ADR-168 凭证解析下沉 Service（BangumiClientConfig + 60s 缓存）
+### META-16-C — ADR-168 前端：SettingsTab「外部数据源」分组卡
 - **状态**：🔄 进行中
 - **来源序列**：SEQ-20260530-05
 - **建议模型**：sonnet
 - **执行模型**：claude-opus-4-8
-- **子代理调用**：无（实施 ADR-168 D-168-5 已 Opus 评审契约）
+- **子代理调用**：无（实施 ADR-168 已 Opus 评审契约 / 消费已就绪后端字段）
 - **实际开始**：2026-05-30
 - **文件范围**：
-  - 改 `apps/api/src/lib/bangumi.ts`（导出 `BangumiClientConfig` + getSubject/getEpisodes/searchSubjects/searchSubjectsStrict/isBangumiApiConfigured 加末位可选 cfg + 内部 apiToken/timeoutMs/userAgent 接受 cfg 缺省回退 env）
-  - 改 `apps/api/src/services/BangumiService.ts`（私有 `getBangumiConfig()` 读 system_settings + 60s 模块级缓存 + 5 调用点透传 cfg）
-  - 改 `tests/unit/api/bangumi-service.test.ts`（cfg 透传 + env 回退 + 缓存用例；clearBangumiConfigCache 测试钩子）
+  - 改 `apps/server-next/src/app/admin/settings/_tabs/SettingsTab.tsx`（新增「外部数据源」分组卡：Bangumi API Token password + 显隐切换 + User-Agent + 超时 + 状态行；消费 bangumiApiTokenSet）
+  - 改/新建 SettingsTab 单测（外部数据源区渲染 + 遮罩占位回提）
 - **完成备注**：_（完成后填写）_
 
-> 前序 META-16-ADR ✅ + META-16-A ✅（redaction + keys / 全量 5734 passed）。后续 META-16-C（SettingsTab UI）。
+> 前序 META-16-ADR/A/B ✅（redaction + keys + 凭证下沉 / 全量 5736 passed）。测试连接按钮 NOT in scope（依赖 ADR-173/F-A）。
 
 ---
 
