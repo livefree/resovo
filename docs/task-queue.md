@@ -2351,18 +2351,18 @@ CODENAME-MATRIX-E2E (依赖 Wave 3 验收期补丁 CODENAME-MATRIX ✅)
 
 ### 任务列表（按收益排序）
 
-1. **META-15-A** — 导入 TMDB dump（文件已有，立即可做）（状态：⬜ 待开始 / 用户确认即跑）
-   - `node --env-file=.env.local --import tsx scripts/import-external-data.ts --source tmdb --file 'external-db/tmdb/[124万]TMDB电影元数据.csv'` → 再 `--build-only` 关联进 media_catalog
-   - 验收：`external_tmdb_movies_raw` > 0 + `media_catalog.tmdb_id` 命中数上升 → TMDB logo 点亮
-   - 风险：CSV 表头需匹配 ExternalDataImportService 解析期望（'id'/'imdb_id' 列）；不匹配则需适配
-2. **META-15-B** — 起 Redis + worker（用户操作）（状态：⬜ 待开始）
-   - `brew services start redis`（或用户方式）+ 另开终端 `npm run dev -w @resovo/worker`
-   - 验收：`redis-cli ping` = PONG + worker 进程在跑 + enrichment-queue 开始消费
-3. **META-15-C** — 批量重富集 1966 未富集 + 782 unmatched（依赖 A+B / 量大耗时）（状态：⬜ 待开始）
-   - 需重富集入队脚本（确认是否存在 / 否则新建 backfill 脚本 trigger='backfill'）；anime 自动走 step3 Bangumi REST（token 已配）
+1. **META-15-A** — 导入 TMDB dump（状态：⛔ **DEFER**（2026-05-30 排查））
+   - **不做原因**：`buildCatalogFromTmdb` 对 1.24M 行逐行 findOrCreate → 建百万孤儿 catalog；且**无「现有视频↔tmdb」回填路径**（富集不碰 tmdb）。TMDB logo 点亮需先设计「定向回填」（按 imdb/title 匹配现有视频），等做「TMDB API」时一并。
+2. **META-15-B** — 起 Redis + worker（状态：✅ **已验证** 2026-05-30）
+   - 用户起 redis + dev server；富集消费者在 **apps/api** `server.ts:194 registerEnrichmentWorker`（非 apps/worker，后者是 cron）。海贼王 douban + 师兄啊师兄 bangumi 端到端富集通过。
+3. **META-15-C** — 批量重富集 1966 未富集 + 782 unmatched（状态：⬜ 待开始 / 需 backfill 入队脚本）
+   - 新建 backfill 脚本（trigger='backfill' / 遍历未富集 + unmatched 入 enrichment-queue）；anime 走 META-17 已生效的 Bangumi REST 精确兜底
    - 验收：douban/bangumi matched 数显著上升 → 徽标覆盖提升
 4. **META-15-D** — 补豆瓣 dump（需用户提供 moviedata-10m movies.csv）（状态：⬜ 待开始 / 阻塞于文件）
-   - 用户提供文件位置 → `import-douban-dump.ts` 或 `import-external-data.ts --source douban --file <path>` → 豆瓣本地召回上量（最大收益 / 豆瓣是主源）
+   - 用户提供文件位置 → `import-douban-dump.ts` 或 `import-external-data.ts --source douban --file <path>` → 豆瓣本地召回上量（最大收益）。注：豆瓣网络 step2 已可用（cookie 已配 / 海贼王已网络命中），dump 提升命中率与速度。
+5. **META-17** — Bangumi 匹配质量改进：matchAndEnrich REST 精确兜底（方案 A）（状态：✅ 已完成 2026-05-30 / claude-opus-4-8 / 子代理无 / 单测 39 + 真实 API + 实时端到端三重验证 / 全量 5705 passed 零回归）
+   - 根因：matchAndEnrich 只查空本地 dump、无 REST 兜底。修：dump 空/低置信 + token → REST 搜索 + 精确(name_cn/name 规范化==titleNorm)计分。师兄啊师兄→matched 388781 / 海贼王安全漏配（避开海贼王子）。
+   - **follow-up（择时）**：① Bangumi 别名感知 B（top-N getSubject 查 infobox 别名 → 召回海贼王↔航海王）② normalizeTitle 补 CJK 标点剥离（「当前、正被打扰中！」类漏配）
 
 > **Bangumi API 接入说明**：代码层**已接入**（`lib/bangumi.ts` 读 `BANGUMI_API_TOKEN` + `MetadataEnrichService.step3Bangumi` 对 anime 自动委托 BangumiService REST 富集）。当前没生效只因 Redis/worker 没跑（同 META-15-B）。一旦起 worker + 重富集 anime（META-15-C），Bangumi 自动匹配。剩余「凭证移 system_settings + UI 测试连接」（ADR-168/feature-1）是 backlog，非必需。
 

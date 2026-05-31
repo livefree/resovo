@@ -6,7 +6,7 @@
 
 ## 进行中任务
 
-（空 / SEQ-20260530-03 富集徽标 Logo 重设计完成：META-14-ADR/B/A/C 全 ship 2026-05-30 — 4 源品牌 logo（douban/bangumi/tmdb/imdb）+ 三态（命中彩色/候选+琥珀点/未命中灰显）+ hover tooltip + 移除 source 冗余。4 消费面经 logo 渲染。下一步：用户起 dev server 走读 visual 回归 / 或推 PR / 或 META-13 Face 4）
+（空 / META-17 Bangumi REST 精确兜底 ship 2026-05-30：单测 39 + 真实 API + 实时端到端三重验证（师兄啊师兄→bangumi matched 388781 / 海贼王安全漏配）。下一步候选：批量重富集 / Bangumi 别名感知 B / 凭证管理 ADR-168 / META-13 Face 4）
 
 ---
 

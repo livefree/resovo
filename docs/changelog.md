@@ -12444,3 +12444,23 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **质量门禁**：typecheck EXIT=0 / lint EXIT=0 / verify:adr-contracts EXIT=0 / enrichment-badge 24 + 消费面 14 全过 / 全量 **442 文件 5695 passed 零失败**（重跑确认；首跑 1 flaky UserSubmissionsClient 单跑 12/12 过·零消费 EnrichmentBadge·与本卡无关）
 - **关键**：**SEQ-20260530-03 logo 重设计全闭环**。4 消费面（VideoListClient enrichment 列 / VideoEditDrawer QUICK_HEAD / ModListRow / TabDetail）**调用签名不变 = 零代码改动**，经 faces/moderation 组件级测试渲染真实消费组件断言 data-source logo 验证。
 - **注意事项**：**visual 回归（软门）** 需用户起 dev server 走读 4 面截图确认 logo 视觉。第 3 个全量并行 flaky（UserSubmissionsClient / 前有 StagingEditPanel·StagingTable）—— server-next/v1 admin 组件并行渲染时序偶发，pre-existing 环境问题，建议择时起 flaky 加固卡。
+
+---
+
+## [META-17] Bangumi 匹配质量改进：matchAndEnrich REST 精确兜底（方案 A / SEQ-20260530-04）
+- **完成时间**：2026-05-30
+- **记录时间**：2026-05-30
+- **执行模型**：claude-opus-4-8
+- **子代理**：无（apps/api service 层匹配算法改进，非共享契约 / 非新 ADR）
+- **来源序列**：SEQ-20260530-04（富集基建排查衍生）
+- **根因**：`BangumiService.matchAndEnrich`（auto 富集路径）只查本地 dump（`findBangumiByTitleNorm`，该表空）、**无 REST 兜底** → 任何动漫 auto 匹配不上 bangumi。REST `searchSubjects` 此前仅手动 searchCandidates 使用。
+- **修改文件**：
+  - `apps/api/src/services/BangumiService.utils.ts` — 新增 `computeRestBangumiConfidence`（仅 name_cn/name 规范化精确等于 titleNorm 才计分 base 0.70 + 年份加分；非精确返 0；import normalizeTitle）
+  - `apps/api/src/services/BangumiService.ts` — matchAndEnrich 重构为「本地命中 / REST 兜底」双轨：dump 空或低置信 + `isBangumiApiConfigured()` → 私有 `matchViaRest`（searchSubjects + 精确计分取最高）；REST 命中 localEntry=null → gatherEnrichmentData(bangumiId, null) 纯 REST（与 confirmMatch 同路径）
+  - `tests/unit/api/bangumi-service.test.ts` — +11 测试（computeRest 单测 4 + REST 兜底 7：精确 auto/candidate / 海贼王子拒绝 / 航海王漏配 / token 未配不调 / 本地命中不兜底）；beforeEach 加 searchSubjects 默认 []
+- **新增依赖**：无
+- **数据库变更**：无
+- **方案 A（用户批准 / 安全零误配）**：精确匹配兜底。命中「爬取名==bangumi name_cn/name」的多数动漫；模糊（海贼王→海贼王子）+ 别名差异（海贼王 vs 航海王）安全拒绝/漏配，留人工确认。
+- **质量门禁**：typecheck/lint EXIT=0 / bangumi-service 39 全过 / 全量 **442 文件 5705 passed 零失败**（+11 / 零回归）
+- **三重验证**：① 单测 39 ② 真实 bangumi API（师兄啊师兄→388781 AUTO / 搜神记→434759 AUTO 靠年份选对 / 海贼王→NO-MATCH 避开海贼王子）③ **实时端到端**（入队师兄啊师兄 → 运行中 worker 热重载新代码 → DB bangumi_status=matched + subject_id=388781 + 日文原名写入）
+- **注意事项**：dev DB 现已有真实富集数据（海贼王 douban matched / 师兄啊师兄 bangumi matched）→ 这些视频徽标已可点亮。follow-up：别名感知 B（召回航海王类）+ normalizeTitle CJK 标点剥离（当前、正被打扰中！类）。META-15-A（TMDB dump）已 DEFER（孤儿 catalog / 无视频回填路径）。

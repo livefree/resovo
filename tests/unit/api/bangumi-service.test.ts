@@ -8,10 +8,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 // ── utils（纯函数，无需 mock）────────────────────────────────────
 import {
   computeLocalBangumiConfidence,
+  computeRestBangumiConfidence,
   parseInfobox,
   mapSubjectToCatalogFields,
   mapEpisodes,
 } from '@/api/services/BangumiService.utils'
+import type { BangumiSearchItem } from '@/api/lib/bangumi'
 import type { BangumiEntryMatch } from '@/api/db/queries/externalData'
 import type { BangumiSubject, BangumiEpisode } from '@/api/lib/bangumi'
 
@@ -35,6 +37,24 @@ describe('computeLocalBangumiConfidence', () => {
   })
   it('年份差 ≥2 → 0.70（不加分）', () => {
     expect(computeLocalBangumiConfidence(entry({ year: 2007 }), 2010).confidence).toBeCloseTo(0.7)
+  })
+})
+
+describe('computeRestBangumiConfidence（META-17 方案 A：精确兜底）', () => {
+  const item = (p: Partial<BangumiSearchItem> = {}): BangumiSearchItem => ({
+    id: 1, name: 'ONE PIECE', name_cn: '海贼王', date: '2007-01-01', images: null, rating: null, ...p,
+  })
+  it('name_cn 精确 + 年份精确 → 0.92（auto）', () => {
+    expect(computeRestBangumiConfidence(item(), '海贼王', 2007).confidence).toBeCloseTo(0.92)
+  })
+  it('name(日) 精确无年份 → 0.70（candidate）', () => {
+    expect(computeRestBangumiConfidence(item({ name_cn: '别名', name: 'clannad' }), 'clannad', null).confidence).toBeCloseTo(0.7)
+  })
+  it('模糊（海贼王子 ≠ 海贼王）→ 0（拒绝）', () => {
+    expect(computeRestBangumiConfidence(item({ name_cn: '海贼王子', name: '' }), '海贼王', 2007).confidence).toBe(0)
+  })
+  it('别名差异（航海王 ≠ 海贼王）→ 0（安全漏配）', () => {
+    expect(computeRestBangumiConfidence(item({ name_cn: '航海王', name: 'ONE PIECE' }), '海贼王', 1999).confidence).toBe(0)
   })
 })
 
@@ -148,6 +168,7 @@ import * as catQ from '@/api/db/queries/mediaCatalog'
 const mGetSubject = bangumiLib.getSubject as ReturnType<typeof vi.fn>
 const mGetEpisodes = bangumiLib.getEpisodes as ReturnType<typeof vi.fn>
 const mConfigured = bangumiLib.isBangumiApiConfigured as ReturnType<typeof vi.fn>
+const mSearchSubjects = bangumiLib.searchSubjects as ReturnType<typeof vi.fn>
 const mFindByTitle = extQ.findBangumiByTitleNorm as ReturnType<typeof vi.fn>
 const mFindById = extQ.findBangumiById as ReturnType<typeof vi.fn>
 const mUpsertRef = extQ.upsertVideoExternalRef as ReturnType<typeof vi.fn>
@@ -185,6 +206,8 @@ describe('BangumiService.matchAndEnrich', () => {
     mFindCatalog.mockResolvedValue({ id: CID, metadataSource: 'crawler', lockedFields: [] })
     mUpdateCatalog.mockResolvedValue({ id: CID, metadataSource: 'bangumi' })
     mConfigured.mockReturnValue(true)
+    // META-17：REST 兜底默认无命中（既有用例 REST 不参与 → 行为不变）；REST 用例各自覆写
+    mSearchSubjects.mockResolvedValue([])
   })
 
   it('本地无匹配 → none/no_local_match + 写 bangumi_status=unmatched（Pool / ADR-170）', async () => {
@@ -328,6 +351,65 @@ describe('BangumiService.matchAndEnrich', () => {
     expect(clientQueries).toContain('ROLLBACK')
     expect(clientQueries).not.toContain('COMMIT')
     expect(clientReleased).toBe(true)
+  })
+
+  // ── META-17 方案 A：REST 精确兜底（本地 dump 空时）──────────────────
+  it('REST 兜底：name_cn 精确 + 年份 → auto（dump 空 / token 配置）', async () => {
+    mFindByTitle.mockResolvedValue([])
+    mSearchSubjects.mockResolvedValue([
+      { id: 975, name: 'ONE PIECE', name_cn: '海贼王', date: '2007-01-01', images: null, rating: null },
+    ])
+    mGetSubject.mockResolvedValue(subject({ id: 975 }))
+    mGetEpisodes.mockResolvedValue([])
+    const r = await svc.matchAndEnrich({ videoId: VID, catalogId: CID, titleNorm: '海贼王', year: 2007 })
+    expect(r).toMatchObject({ matched: 'auto', bangumiSubjectId: 975 })
+    expect(mSearchSubjects).toHaveBeenCalledWith('海贼王')
+    expect(mUpsertRef).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ matchStatus: 'auto_matched', isPrimary: true }))
+  })
+
+  it('REST 兜底：name 精确无年份 → candidate', async () => {
+    mFindByTitle.mockResolvedValue([])
+    mSearchSubjects.mockResolvedValue([
+      { id: 800, name: 'clannad', name_cn: '别名不符', date: null, images: null, rating: null },
+    ])
+    const r = await svc.matchAndEnrich({ videoId: VID, catalogId: CID, titleNorm: 'clannad', year: null })
+    expect(r).toMatchObject({ matched: 'candidate', bangumiSubjectId: 800 })
+    expect(mUpdateBangumiStatus).toHaveBeenCalledWith(mockPool, VID, 'candidate')
+  })
+
+  it('REST 兜底：模糊命中（海贼王子 ≠ 海贼王）→ 拒绝 none/unmatched（防假阳性）', async () => {
+    mFindByTitle.mockResolvedValue([])
+    mSearchSubjects.mockResolvedValue([
+      { id: 145691, name: '', name_cn: '海贼王子', date: null, images: null, rating: null },
+    ])
+    const r = await svc.matchAndEnrich({ videoId: VID, catalogId: CID, titleNorm: '海贼王', year: null })
+    expect(r).toEqual({ matched: 'none', reason: 'no_local_match' })
+    expect(mUpdateBangumiStatus).toHaveBeenCalledWith(mockPool, VID, 'unmatched')
+  })
+
+  it('REST 兜底：别名差异（航海王 ≠ 海贼王）→ 安全漏配 none（留人工确认）', async () => {
+    mFindByTitle.mockResolvedValue([])
+    mSearchSubjects.mockResolvedValue([
+      { id: 975, name: 'ONE PIECE', name_cn: '航海王', date: '1999-01-01', images: null, rating: null },
+    ])
+    const r = await svc.matchAndEnrich({ videoId: VID, catalogId: CID, titleNorm: '海贼王', year: 1999 })
+    expect(r).toEqual({ matched: 'none', reason: 'no_local_match' })
+  })
+
+  it('REST 兜底：token 未配置 → 不调 REST', async () => {
+    mConfigured.mockReturnValue(false)
+    mFindByTitle.mockResolvedValue([])
+    const r = await svc.matchAndEnrich({ videoId: VID, catalogId: CID, titleNorm: '海贼王', year: 2007 })
+    expect(r).toEqual({ matched: 'none', reason: 'no_local_match' })
+    expect(mSearchSubjects).not.toHaveBeenCalled()
+  })
+
+  it('本地命中 → 不触发 REST 兜底', async () => {
+    mFindByTitle.mockResolvedValue([entry({ year: 2007 })])
+    mGetSubject.mockResolvedValue(subject())
+    mGetEpisodes.mockResolvedValue([])
+    await svc.matchAndEnrich({ videoId: VID, catalogId: CID, titleNorm: 'x', year: 2007 })
+    expect(mSearchSubjects).not.toHaveBeenCalled()
   })
 })
 

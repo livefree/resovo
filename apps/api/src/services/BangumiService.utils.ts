@@ -5,8 +5,9 @@
 
 import type { CatalogUpdateData } from '@/api/db/queries/mediaCatalog'
 import type { BangumiEntryMatch } from '@/api/db/queries/externalData'
-import type { BangumiSubject, BangumiEpisode, BangumiInfoboxItem } from '@/api/lib/bangumi'
+import type { BangumiSubject, BangumiEpisode, BangumiInfoboxItem, BangumiSearchItem } from '@/api/lib/bangumi'
 import type { CatalogEpisodeInput } from '@/api/db/queries/catalogEpisodes'
+import { normalizeTitle } from './TitleNormalizer'
 
 // ── 置信度（复用豆瓣 dump 阈值范式，本地匹配仅 title_norm，base 0.70）────
 
@@ -23,6 +24,39 @@ export function computeLocalBangumiConfidence(
   let confidence = 0.7
   if (year !== null && entry.year !== null) {
     const diff = Math.abs(entry.year - year)
+    if (diff === 0) {
+      breakdown.year_exact = 0.22
+      confidence += 0.22
+    } else if (diff === 1) {
+      breakdown.year_close = 0.17
+      confidence += 0.17
+    }
+  }
+  return { confidence: Math.min(1, confidence), breakdown }
+}
+
+/**
+ * REST 搜索候选置信度（ADR-161 / META-17 方案 A：精确兜底，安全零误配）。
+ *
+ * REST `searchSubjects` 是模糊搜索（「海贼王」会返回「海贼王子」等子串命中），故**仅当候选
+ * `name_cn` 或 `name` 规范化后精确等于 titleNorm** 才给分（base 0.70，与本地 dump 精确同档）+ 年份加分；
+ * 非精确返回 0（< CANDIDATE 阈值 → 拒绝），避免假阳性。别名差异（海贼王↔航海王）会安全漏配，留人工确认。
+ */
+export function computeRestBangumiConfidence(
+  item: BangumiSearchItem,
+  titleNorm: string,
+  year: number | null,
+): { confidence: number; breakdown: Record<string, number> } {
+  const nameCnNorm = item.name_cn ? normalizeTitle(item.name_cn) : ''
+  const nameJpNorm = item.name ? normalizeTitle(item.name) : ''
+  const exact = (nameCnNorm !== '' && nameCnNorm === titleNorm) || (nameJpNorm !== '' && nameJpNorm === titleNorm)
+  if (!exact) return { confidence: 0, breakdown: { rest_no_exact: 0 } }
+
+  const breakdown: Record<string, number> = { rest_title_exact: 0.7 }
+  let confidence = 0.7
+  const itemYear = extractYear(item.date)
+  if (year !== null && itemYear !== null) {
+    const diff = Math.abs(itemYear - year)
     if (diff === 0) {
       breakdown.year_exact = 0.22
       confidence += 0.22

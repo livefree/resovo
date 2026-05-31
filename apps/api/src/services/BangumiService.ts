@@ -19,6 +19,7 @@ import { getSubject, getEpisodes, searchSubjects, isBangumiApiConfigured } from 
 import { normalizeTitle } from './TitleNormalizer'
 import {
   computeLocalBangumiConfidence,
+  computeRestBangumiConfidence,
   mapSubjectToCatalogFields,
   mapEpisodes,
 } from './BangumiService.utils'
@@ -69,44 +70,75 @@ export class BangumiService {
    */
   async matchAndEnrich({ videoId, catalogId, titleNorm, year }: MatchAndEnrichInput): Promise<BangumiEnrichResult> {
     // ADR-170 D-170-4：状态投影下沉本方法，统一覆盖 step3 自动流 / bangumi-sync 直调 / 改类型→anime 三路径。
+    // 命中来源双轨：① 本地 dump 精确召回（毫秒级）② META-17 方案 A：dump 空/低置信时 REST 精确兜底。
     const matches = await externalDataQueries.findBangumiByTitleNorm(this.db, titleNorm, year)
-    if (matches.length === 0) {
-      await this.writeBangumiStatus(videoId, 'unmatched')
-      return { matched: 'none', reason: 'no_local_match' }
+    let resolved: { bangumiId: number; confidence: number; breakdown: Record<string, number>; localEntry: BangumiEntryMatch | null } | null = null
+
+    if (matches.length > 0) {
+      const best = matches[0]
+      const { confidence, breakdown } = computeLocalBangumiConfidence(best, year)
+      if (confidence >= CONFIDENCE_CANDIDATE) {
+        resolved = { bangumiId: best.bangumiId, confidence, breakdown, localEntry: best }
+      }
     }
 
-    const best = matches[0]
-    const { confidence, breakdown } = computeLocalBangumiConfidence(best, year)
-    if (confidence < CONFIDENCE_CANDIDATE) {
-      await this.writeBangumiStatus(videoId, 'unmatched')
-      return { matched: 'none', reason: 'low_confidence' }
+    // META-17 方案 A：本地未命中（或低置信）+ token 配置 → REST 精确兜底
+    if (resolved === null && isBangumiApiConfigured()) {
+      resolved = await this.matchViaRest(titleNorm, year)
     }
 
+    if (resolved === null) {
+      await this.writeBangumiStatus(videoId, 'unmatched')
+      return { matched: 'none', reason: matches.length > 0 ? 'low_confidence' : 'no_local_match' }
+    }
+
+    const { bangumiId, confidence, breakdown, localEntry } = resolved
     const status = confidence >= CONFIDENCE_AUTO_MATCH ? 'auto_matched' : 'candidate'
 
     if (status === 'candidate') {
       // candidate：仅记 ref（无 catalog 写入 → 无脏态风险，沿用 best-effort writeRef）
-      await this.writeRef(videoId, best.bangumiId, 'candidate', confidence, breakdown)
+      await this.writeRef(videoId, bangumiId, 'candidate', confidence, breakdown)
       // 无事务（无 catalog 写）→ Pool 写 status（best-effort，记录不静默吞 / ADR-170 D-170-4）
       await this.writeBangumiStatus(videoId, 'candidate')
-      return { matched: 'candidate', bangumiSubjectId: best.bangumiId, confidence }
+      return { matched: 'candidate', bangumiSubjectId: bangumiId, confidence }
     }
 
     // auto_matched：Phase 1 REST（无 DB 锁）→ Phase 2 catalog/episodes/episode_count + ref
     // 原子事务（与 confirmMatch 同构 / Codex stop-time review：防 catalog 写失败遗留
     // 已提交的 auto_matched/primary ref 脏态）。REST 已在 gatherEnrichmentData 完成，事务内无网络等待；
     // job 失败时整体 ROLLBACK，由上层 enrichmentQueue 重试（幂等收敛，但不留孤儿 ref）。
-    const data = await this.gatherEnrichmentData(best.bangumiId, best)
+    // localEntry=null（REST 兜底命中）时 gatherEnrichmentData 纯走 REST（与 confirmMatch 同路径）。
+    const data = await this.gatherEnrichmentData(bangumiId, localEntry)
     const episodesWritten = await this.applyAutoMatchAtomic(
-      videoId, catalogId, best.bangumiId, confidence, breakdown, data,
+      videoId, catalogId, bangumiId, confidence, breakdown, data,
     )
     return {
       matched: 'auto',
-      bangumiSubjectId: best.bangumiId,
+      bangumiSubjectId: bangumiId,
       confidence,
       episodes: episodesWritten,
       degraded: data.degraded,
     }
+  }
+
+  /**
+   * META-17 方案 A：REST 精确兜底匹配（本地 dump 未命中时）。
+   * searchSubjects 模糊搜索 → 仅取 `name_cn`/`name` 规范化精确等于 titleNorm 的候选（computeRestBangumiConfidence），
+   * 取置信度最高者。非精确一律拒绝（避免「海贼王→海贼王子」假阳性）。返回 localEntry=null（无本地条目）。
+   */
+  private async matchViaRest(
+    titleNorm: string,
+    year: number | null,
+  ): Promise<{ bangumiId: number; confidence: number; breakdown: Record<string, number>; localEntry: null } | null> {
+    const items = await searchSubjects(titleNorm)
+    let best: { bangumiId: number; confidence: number; breakdown: Record<string, number>; localEntry: null } | null = null
+    for (const item of items) {
+      const { confidence, breakdown } = computeRestBangumiConfidence(item, titleNorm, year)
+      if (confidence >= CONFIDENCE_CANDIDATE && (best === null || confidence > best.confidence)) {
+        best = { bangumiId: item.id, confidence, breakdown, localEntry: null }
+      }
+    }
+    return best
   }
 
   /**
