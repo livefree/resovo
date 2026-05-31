@@ -12665,3 +12665,15 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **新增依赖/schema/路由**：无。
 - **质量门禁**：typecheck/lint/verify:adr-contracts EXIT=0 / 全量 444 文件 **5787 passed 0 failed**（本轮无 flaky）。
 - **成本**：仅 name-exact 未命中时触发 top-5 getSubject（worker concurrency=2 限流）；多数命中走 pass 1 快路径无额外调用。
+
+---
+
+## [META-21] 角色头像渲染（ExternalMetaPanel CharactersBlock / ADR-161 AMENDMENT 续）
+- **完成时间**：2026-05-31
+- **执行模型**：claude-opus-4-8 / 子代理：无（纯渲染增强，消费已存 imageUrl，不改公开 Props 契约 → 无 Opus trailer）
+- **来源**：META-19 ADR-161 AMENDMENT D-161-AMD-6 标注「头像后续 AMENDMENT」；数据（catalog_characters.image_url + actors.image_url）META-19 已端到端就位。
+- **修改文件**：`packages/admin-ui/src/components/external-meta-panel/external-meta-panel.tsx`（CharactersBlock 行首加 `Thumb size="square-sm"` 28×28，复用 admin-ui cell 原语；object-fit cover / 空 src → placeholder / loading=lazy / decorative=false alt=角色名）
+- **测试**：external-meta-panel +1（有 imageUrl → data-thumb img src / 空 → placeholder）
+- **新增依赖/schema/路由/Props 契约变更**：无。
+- **质量门禁**：typecheck/lint EXIT=0 / 全量 444 文件 **5787 passed**（VideoImageSection 1 并行 flaky，隔离 21/21 通过，无关）。
+- **范围**：渲染角色头像；CV 头像未渲染（actor.imageUrl 已存，后续按需）。

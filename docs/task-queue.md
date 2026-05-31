@@ -2443,4 +2443,5 @@ CODENAME-MATRIX-E2E (依赖 Wave 3 验收期补丁 CODENAME-MATRIX ✅)
 ### 已记录后续
 
 - **既有 matched anime 角色回填**：依赖 META-15-C 批量重富集（本序列保证「新富集/重富集时写入」，存量需触发重富集）。
+- **角色头像**：✅ **META-21 完成**（2026-05-31 / CharactersBlock Thumb square-sm 28×28；CV 头像仍后续按需）。
 - 角色头像渲染 / persons(制作人员) 抓取 / 角色检索页 / 前台公开展示 —— 后续 AMENDMENT。

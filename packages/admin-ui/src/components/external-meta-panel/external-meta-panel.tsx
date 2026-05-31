@@ -17,6 +17,7 @@
  */
 import React from 'react'
 import { SourceLogoBadge } from '../enrichment-badge/source-logo-badge'
+import { Thumb } from '../cell/thumb'
 import { SOURCE_HREF_BUILDERS, SOURCE_LABEL } from '../enrichment-badge/enrichment-logos'
 import type { SourceMatchState, SourceLogoKind, SourceLogoSize } from '../enrichment-badge/enrichment-badge.types'
 import type {
@@ -197,6 +198,11 @@ const RELATION_LABEL: Record<string, string> = {
 /** ADR-161 AMENDMENT 展示契约：仅展示主角 + 配角（客串/闲角不展示，降噪）。 */
 const DISPLAY_RELATIONS: ReadonlySet<string> = new Set(['主角', '配角'])
 
+const CHAR_ROW_STYLE: React.CSSProperties = {
+  display: 'flex', alignItems: 'center', gap: '8px',
+  padding: '4px 10px', background: 'var(--bg-surface-raised)',
+  borderRadius: 'var(--radius-sm)', marginBottom: '3px',
+}
 const CHAR_NAME_STYLE: React.CSSProperties = {
   fontSize: 'var(--font-size-xs)', color: 'var(--fg-default)',
   display: 'inline-flex', alignItems: 'center', gap: '4px', minWidth: 0,
@@ -221,7 +227,9 @@ function CharactersBlock({
     <div data-external-characters-block>
       <div style={SECTION_HEADER_STYLE}>角色 · 声优</div>
       {shown.map((c, i) => (
-        <div key={`${c.name}-${i}`} style={META_ROW_STYLE} data-external-character-row>
+        <div key={`${c.name}-${i}`} style={CHAR_ROW_STYLE} data-external-character-row>
+          {/* 角色头像（META-21；square-sm 28×28，object-fit cover；空 src 走 Thumb placeholder） */}
+          <Thumb src={c.imageUrl} size="square-sm" decorative={false} alt={c.name} loading="lazy" />
           <span style={CHAR_NAME_STYLE}>
             {c.relation && (
               c.relation === '主角'
@@ -230,6 +238,7 @@ function CharactersBlock({
             )}
             <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.name}</span>
           </span>
+          <span style={{ flex: 1 }} />
           <span style={META_VALUE_STYLE}>
             {c.actors.length > 0 ? c.actors.map((a) => a.name).join(' / ') : '—'}
           </span>

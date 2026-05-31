@@ -304,4 +304,21 @@ describe('ExternalMetaPanel — 角色 · 声优区', () => {
     expect(charRows(container)).toHaveLength(1)
     expect(charsBlock(container)!.textContent).toContain('无CV角色')
   })
+
+  it('META-21：角色头像渲染（有 imageUrl → Thumb img src / 空 → placeholder）', () => {
+    const withImg: CatalogCharacterSummary[] = [
+      { name: '有像角色', relation: '主角', imageUrl: 'https://lain.bgm.tv/crt/x.jpg', actors: [{ name: 'CV甲', imageUrl: null }] },
+      { name: '无像角色', relation: '配角', imageUrl: null, actors: [{ name: 'CV乙', imageUrl: null }] },
+    ]
+    const { container } = render(
+      <ExternalMetaPanel summary={makeSummary()} type={'anime' as VideoType} characters={withImg} density="drawer" />,
+    )
+    const rows = charRows(container)
+    // 行 1：有 imageUrl → Thumb has-src + img src
+    const img = rows[0].querySelector('[data-thumb] img') as HTMLImageElement | null
+    expect(img).not.toBeNull()
+    expect(img!.getAttribute('src')).toBe('https://lain.bgm.tv/crt/x.jpg')
+    // 行 2：空 imageUrl → Thumb placeholder（无 img）
+    expect(rows[1].querySelector('[data-thumb][data-state="placeholder"]')).not.toBeNull()
+  })
 })
