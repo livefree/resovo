@@ -2430,9 +2430,9 @@ CODENAME-MATRIX-E2E (依赖 Wave 3 验收期补丁 CODENAME-MATRIX ✅)
 ### 任务列表（按执行顺序）
 
 1. **META-19-ADR** — 角色↔CV schema + 抓取/写入/展示契约 + ADR 落档（强制 Opus）（状态：✅ 已完成 2026-05-30 / arch-reviewer (claude-opus-4-8) CONDITIONAL→满足 5 红线等同 PASS / ADR-161 AMENDMENT 落档）
-   - 裁定：两表 normalized + delete-then-insert（length>0 守卫）+ ADR-161 AMENDMENT + 顶层 bangumiCharacters DTO + ExternalMetaPanel characters Props
+   - 裁定：两表 normalized + delete-then-insert（charactersFetched 守卫：成功含空清陈旧/失败跳过）+ ADR-161 AMENDMENT + 顶层 bangumiCharacters DTO + ExternalMetaPanel characters Props（主角+配角过滤）
 2. **META-19-A** — migration 083 + 类型 + catalogCharacters 查询 + architecture.md 同步（状态：✅ 已完成 2026-05-30 / migration 083 已应用 / 2 投影 + replaceCatalogCharacters/listCatalogCharactersForDisplay / typecheck 绿）
-3. **META-19-B** — lib/bangumi `getCharacters` + BangumiService 集成（gather+apply 单点接入两路径）+ 单测（状态：✅ 已完成 2026-05-30 / getCharacters + mapCharacters + degraded/length>0 守卫 / bangumi-lib 12 + bangumi-service 48 + metadataEnrich 31 全过）
+3. **META-19-B** — lib/bangumi `getCharacters` + BangumiService 集成（gather+apply 单点接入两路径）+ 单测（状态：✅ 已完成 2026-05-30 / getCharacters(成功返数组含[]/失败返 null) + mapCharacters + charactersFetched 守卫 / bangumi-lib 13 + bangumi-service 49 + metadataEnrich 31 全过）
 4. **META-19-C** — DTO 注入（adminFindById）+ ExternalMetaPanel 角色/CV 区（anime）+ 单测（状态：✅ 已完成 2026-05-30 / external-meta-panel 20 单测 / 编辑抽屉 + 审核台两面接入 / commit 带 Opus trailer）
 
 ### 已记录后续

@@ -12595,7 +12595,7 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
   - `apps/api/src/db/queries/catalogCharacters.ts`（新）— `replaceCatalogCharacters`（delete-by-catalog-then-insert，**仅 PoolClient**）+ `listCatalogCharactersForDisplay`（2 查询，产出展示投影）
   - `docs/architecture.md` §5.6 + migration 列表同步
 - **META-19-B（抓取 + 集成）**：
-  - `apps/api/src/lib/bangumi.ts` — `getCharacters`（无分页直接返回数组 / 失败 []）+ `BangumiCharacter`/`BangumiCharacterActor` 接口
+  - `apps/api/src/lib/bangumi.ts` — `getCharacters`（无分页 / 成功返数组含 `[]` / 失败返 `null`，见下方 FIX）+ `BangumiCharacter`/`BangumiCharacterActor` 接口
   - `apps/api/src/services/BangumiService.utils.ts` — `mapCharacters`（relation 权重排序 + actor 序 + 取图降级）
   - `apps/api/src/services/BangumiService.ts` — `EnrichmentData.characters` + `gatherEnrichmentData` 拉取（length>0 才填）+ `applyEnrichmentDb` `replaceCatalogCharacters`（**length>0 && isClient 守卫**：D-161-AMD-3 防 getCharacters 瞬时失败误删既有角色）；**单点接入自动覆盖 auto + confirmMatch 两路径**
   - 测试：bangumi-lib +3（getCharacters）/ bangumi-service +4（auto 写角色 / 空不删 / mapCharacters 排序+N:M）

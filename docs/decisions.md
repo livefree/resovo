@@ -18569,13 +18569,13 @@ Bangumi token 现直读 `process.env.BANGUMI_API_TOKEN`（`lib/bangumi.ts:15`）
 - **（D-161-AMD-2）delete-by-catalog-then-insert 全量替换**（非 upsert）：角色集合会变（源端增删角色），upsert 无法删孤儿；catalog_episodes 用 upsert 因逐集集合稳定，角色不然。`replaceCatalogCharacters(db: PoolClient, ...)` **仅 PoolClient**（delete+insert 须单事务，防空窗）。
 - **（D-161-AMD-3）charactersFetched 守卫**（Codex stop-time review FIX）：`getCharacters` 区分「抓取失败(返 `null`)」与「成功返回空(`[]`)」。Phase 2 仅 `charactersFetched`（fetch 成功，含空）才 delete-then-insert 全量替换——**成功返回空也清陈旧角色**（避免保留过时数据）；抓取失败(null) 跳过（防瞬时故障误删）。**注**：原裁定为 `!degraded` 守卫，但 getCharacters 与 getSubject 解耦独立失败 → `!degraded` 会在 getCharacters 瞬时失败时误删；`length>0` 又无法清空陈旧 → 最终用 fetch-成功语义（null/[] 区分）兼顾两者。
 - **（D-161-AMD-4）存储全集 / 展示过滤**：存全部角色（含客串/闲角，~52 行/番），relation 过滤是展示决策下沉渲染层（主角+配角 cap top-N）；存储层职责单一不业务过滤。`sort` 写入时按 relation 权重 + 原序填充。
-- **（D-161-AMD-5）抓取/写入集成（单点接入两路径）**：`lib/bangumi.getCharacters`（无分页，直接返回数组 / 失败 []）→ `gatherEnrichmentData`（Phase 1 拉取 + `mapCharacters` relation→sort + actor 序）→ `EnrichmentData.characters` → `applyEnrichmentDb`（Phase 2 事务内 `replaceCatalogCharacters`）。auto（applyAutoMatchAtomic）+ 人工（confirmMatch）两路径均经 applyEnrichmentDb，**单点接入自动覆盖**。
+- **（D-161-AMD-5）抓取/写入集成（单点接入两路径）**：`lib/bangumi.getCharacters`（无分页，**成功返数组含 `[]` / 失败返 `null`**）→ `gatherEnrichmentData`（Phase 1 拉取 + `mapCharacters` relation→sort + actor 序；非 null 才置 `charactersFetched=true`）→ `EnrichmentData.{characters, charactersFetched}` → `applyEnrichmentDb`（Phase 2 事务内，仅 `charactersFetched` 才 `replaceCatalogCharacters`，见 D-161-AMD-3）。auto（applyAutoMatchAtomic）+ 人工（confirmMatch）两路径均经 applyEnrichmentDb，**单点接入自动覆盖**。
 - **（D-161-AMD-6）DTO + 展示**：`adminFindById` 新增**顶层** `bangumiCharacters?`（异源不混，不挂 bangumiInfo 内 / 同 AMD3-A votes 原则；仅 anime + 命中下发）。`@resovo/types`：`CatalogCharacterSummary`{name,relation,imageUrl,actors[]} + `CatalogCharacterActorSummary`{name,imageUrl}（窄化，剔除外部 id/sort/summary）。`ExternalMetaPanelProps` 新增 `characters?`（admin-ui 公开 Props → Opus trailer）；`CharactersBlock`（anime-only）渲染主角+配角 cap top-N，CV 配对「角色名 — CV1 / CV2」，relation Record 兜底原文，零硬编码色；本期不渲染头像（image_url 存但展示后续 AMENDMENT）。
 
 ### 影响文件
 
 - 新建：`apps/api/src/db/migrations/083_bangumi_characters.sql`、`apps/api/src/db/queries/catalogCharacters.ts`
-- 修改：`apps/api/src/lib/bangumi.ts`（getCharacters + BangumiCharacter/Actor 接口）、`apps/api/src/services/BangumiService.ts`（gather+apply + degraded 守卫）、`apps/api/src/services/BangumiService.utils.ts`（mapCharacters）、`apps/api/src/services/VideoService.ts`（adminFindById 注入 bangumiCharacters）、`packages/types/src/video.types.ts`（2 投影）、`packages/admin-ui/src/components/external-meta-panel/{types.ts,external-meta-panel.tsx}`（characters Props + CharactersBlock）、`apps/server-next/src/lib/videos/types.ts`（VideoAdminDetail 镜像）、`docs/architecture.md`（§5.6 catalog_characters 段 + migration 列表）
+- 修改：`apps/api/src/lib/bangumi.ts`（getCharacters + BangumiCharacter/Actor 接口）、`apps/api/src/services/BangumiService.ts`（gather+apply + charactersFetched 守卫）、`apps/api/src/services/BangumiService.utils.ts`（mapCharacters）、`apps/api/src/services/VideoService.ts`（adminFindById 注入 bangumiCharacters）、`packages/types/src/video.types.ts`（2 投影）、`packages/admin-ui/src/components/external-meta-panel/{types.ts,external-meta-panel.tsx}`（characters Props + CharactersBlock）、`apps/server-next/src/lib/videos/types.ts`（VideoAdminDetail 镜像）、`docs/architecture.md`（§5.6 catalog_characters 段 + migration 列表）
 
 ### 偏离登记（对 077/161 原范式）
 
@@ -18587,7 +18587,7 @@ Bangumi token 现直读 `process.env.BANGUMI_API_TOKEN`（`lib/bangumi.ts:15`）
 ### 实施拆卡（严格串行 A→B→C / META-19-A/B/C）
 
 - **A**：migration 083 + `@resovo/types` 2 投影 + `catalogCharacters.ts`（replace + list）+ architecture.md §5.6/migration 列表 + 本 AMENDMENT。
-- **B**：`getCharacters` + BangumiCharacter/Actor 接口 + `mapCharacters` + `EnrichmentData.characters` + gather/apply 接入 + degraded 守卫 + 单测（N:M / degraded 不删 / 全量替换）。
+- **B**：`getCharacters` + BangumiCharacter/Actor 接口 + `mapCharacters` + `EnrichmentData.{characters,charactersFetched}` + gather/apply 接入 + charactersFetched 守卫 + 单测（N:M / 失败 null 不删 / 成功空清陈旧 / 全量替换）。
 - **C**：`adminFindById` 注入 bangumiCharacters + `ExternalMetaPanelProps.characters` + `CharactersBlock` + 单测。
 
 ### 红线
@@ -18596,7 +18596,7 @@ Bangumi token 现直读 `process.env.BANGUMI_API_TOKEN`（`lib/bangumi.ts:15`）
 2. admin-ui Props 新增 `characters` → commit 带 `Subagents: arch-reviewer (claude-opus-4-8)` trailer。
 3. charactersFetched 守卫必须存在（getCharacters 抓取失败 null → 禁止 delete 角色；成功空 [] → 替换清陈旧）。
 4. `replaceCatalogCharacters` 仅 PoolClient + 事务内（两路径均满足）。
-5. 无 any / 无空 catch（getCharacters 复用 bgmGet catch 返回 []）/ 无硬编码颜色（CharactersBlock 仅 token）。
+5. 无 any / 无空 catch（getCharacters 复用 bgmGet catch；失败 → bgmGet 返 null → getCharacters 返 null）/ 无硬编码颜色（CharactersBlock 仅 token）。
 
 > C（及 B 若触 admin-ui）触碰 admin-ui 公开 Props + `@resovo/types` 公开类型，commit 必带 `Subagents: arch-reviewer (claude-opus-4-8)` trailer。
 

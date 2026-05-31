@@ -6,8 +6,9 @@
 --   catalog_character_actors   角色下的 CV（声优，N 个；归属于角色行，随角色 CASCADE）
 --
 -- 来源：Bangumi GET /v0/subjects/{id}/characters（无分页，一次返回全部角色 + 各自 actors[]）。
--- 写入策略：BangumiService delete-by-catalog-then-insert（事务内 / 仅 REST 命中非降级时），
---           角色集合 = 源端集合（可删除源端已不存在的孤儿角色，区别于逐集 upsert）。
+-- 写入策略：BangumiService delete-by-catalog-then-insert（事务内 / 仅 getCharacters 抓取成功时，
+--           含成功返回空 → 清陈旧；抓取失败跳过防误删）。角色集合 = 源端集合
+--           （可删除源端已不存在的孤儿角色，区别于逐集 upsert）。
 -- 幂等：IF NOT EXISTS，可重复执行。
 
 BEGIN;

@@ -36,7 +36,8 @@ export interface CatalogCharacterInput {
  *
  * **仅 PoolClient**（必须在调用方事务内 / Codex 红线 4）：delete + insert 跨多语句，
  * 若各自连接会暴露空窗；角色集合切换须原子可见。actor 行随 character CASCADE，
- * DELETE 父行即清子行。调用方须保证 `!degraded`（REST 命中）才调用（防瞬时故障误删）。
+ * DELETE 父行即清子行。调用方须保证 getCharacters 抓取成功（`charactersFetched`）才调用——
+ * 成功返回空也调用（清陈旧角色）；抓取失败（null）跳过不调用（防瞬时故障误删）。传空数组即清空该 catalog 角色。
  *
  * @returns 写入角色数
  */
