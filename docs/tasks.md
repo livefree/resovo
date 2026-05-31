@@ -1,12 +1,14 @@
 # Resovo（流光） — 任务看板
 
-> last_reviewed: 2026-05-29
+> last_reviewed: 2026-05-31
 
 ---
 
 ## 进行中任务
 
-（空 / FIX-SETTINGS-PARTIAL-SAVE ✅ 2026-05-31：SettingsTab 只提交 dirty 字段根治跨 Tab 覆盖 + per-Tab 窄化 DTO + token 有效性脚本验证通过（用户 token 有效）。详见 changelog。/ SEQ-20260530-04 外部富集数据基建：META-15-B(worker)✅ / META-15-C(backfill 脚本)✅ / **META-15-D(豆瓣 dump 导入 140,502 行)✅** / META-17(Bangumi REST 兜底)✅ / META-20(别名感知)✅ / **META-22(富集匹配归一化·解耦归并键+标点符号剥离+有损歧义守卫)✅ 2026-05-31** / META-15-A(TMDB)DEFER。详见 changelog + task-queue。用户已起 worker 全量 backfill 运行中。下一步候选：SEQ-20260530-04 follow-up 全收口 / Wave 5 待立案 / 推 PR）
+（空）
+
+> 上一阶段（SEQ-20260530 外部元数据系列 + FIX-SETTINGS-PARTIAL-SAVE）已全部收口，详见 changelog.md + task-queue.md。下一步候选见下方「下次会话恢复入口」。
 
 ---
 

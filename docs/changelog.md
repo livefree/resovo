@@ -12736,3 +12736,19 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **数据库变更**：无。
 - **质量门禁**：typecheck / lint EXIT=0 / SettingsTab 17 + NotificationsTab 11 + LoginSessionsTab 5 全过 / 全量 445 文件 **5817 passed 0 failed**（无 flaky）。
 - **注意事项**：UX 可发现性问题（敏感字段无内联保存、全局「保存设置」在页面底部易漏）未在本卡处理，可后续单独立卡（sticky 保存栏 + 未保存提示 + beforeunload 警告）。
+
+---
+
+## [MAINT-DOC-CLEANUP-20260531] 阶段收尾文档清理（工作台清空 + 遗留状态收口对齐）
+- **完成时间**：2026-05-31
+- **执行模型**：claude-opus-4-8
+- **子代理**：无
+- **类型**：MAINT 维护性文档清理（无业务逻辑 / 仅状态文档对齐 / 可逆 / 3 文件）
+- **背景**：SEQ-20260530 外部元数据系列 + FIX-SETTINGS-PARTIAL-SAVE 收口后，工作台与队列存在状态漂移，做阶段收尾清理（用户指令「清理工作台 + 清理文档」）。
+- **改动**：
+  - `docs/tasks.md`：「进行中任务」区从混合状态长行清空回稳定态「（空）」+ 收尾说明；`last_reviewed` 2026-05-29 → 2026-05-31。
+  - `docs/task-queue.md`：① **SEQ-20260530-04** 序列头 `⬜ 待开始` → `✅ 已完成`（META-15-B/C/D + META-17/20/22 全 ship；META-15-A TMDB ⛔DEFER；全量 backfill 工具就绪交用户本地 worker 执行）② **CHG-SN-9-DT-HEADER-REDESIGN-ADR-AMEND-1/2** 残留 `🔄 进行中` → `✅`（下游实施 EP-4/4.5/5-* 全 ✅ + Wave 3/4 用户验收签字 2026-05-29 → ADR-149 AMENDMENT de-facto Accepted）③ **SEQ-20260526-ENUMS-SSOT-01** 序列头 `🔄 执行中` → `✅`（header 漂移；文末「序列状态」子节早已标 ✅ / CHG-337+CHG-338 + ADR-157 全闭环）。
+- **核实**：无活跃 🚨 BLOCKER；无待确认 PHASE COMPLETE；清理前工作树干净；测试基线 5817 passed 0 failed（沿用 FIX-SETTINGS 卡记录，本次纯文档未重跑）。
+- **新增依赖/schema/路由/Props 契约变更**：无。
+- **数据库变更**：无。
+- **质量门禁**：纯状态文档清理，未触代码，无需 typecheck/lint/test。
