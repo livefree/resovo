@@ -341,3 +341,59 @@ export async function findAdminVideoById(
   )
   return result.rows[0] ?? null
 }
+
+// ── 批量重富集 backfill（META-15-C）──────────────────────────────────
+
+/** never=从未富集（meta_quality NULL）/ unmatched=douban|bangumi 未命中 / all=两者并集 */
+export type BackfillEnrichMode = 'never' | 'unmatched' | 'all'
+
+/** backfill 入队所需最小字段（对齐 EnrichJobData：videoId/catalogId/title/year/type）。 */
+export interface BackfillEnrichRow {
+  id: string
+  catalog_id: string
+  title: string
+  type: VideoType
+  year: number | null
+}
+
+/**
+ * 列出需要批量重富集的视频（META-15-C）。
+ *   - never：meta_quality IS NULL（富集从未跑过）
+ *   - unmatched：douban_status='unmatched' OR bangumi_status='unmatched'（跑过但未命中，可重试）
+ *   - all：以上并集
+ * 排除软删；可选 type 过滤 + limit（小批验证）。按 created_at 升序（先老后新，稳定）。
+ */
+export async function listVideosForBackfillEnrich(
+  db: Pool,
+  opts: { mode?: BackfillEnrichMode; type?: VideoType; limit?: number } = {}
+): Promise<BackfillEnrichRow[]> {
+  const mode = opts.mode ?? 'all'
+  const conditions: string[] = ['v.deleted_at IS NULL']
+  const params: unknown[] = []
+  let idx = 1
+
+  if (mode === 'never') {
+    conditions.push('v.meta_quality IS NULL')
+  } else if (mode === 'unmatched') {
+    conditions.push("(v.douban_status = 'unmatched' OR v.bangumi_status = 'unmatched')")
+  } else {
+    conditions.push("(v.meta_quality IS NULL OR v.douban_status = 'unmatched' OR v.bangumi_status = 'unmatched')")
+  }
+
+  if (opts.type) {
+    conditions.push(`v.type = $${idx++}`)
+    params.push(opts.type)
+  }
+
+  let sql = `SELECT v.id, v.catalog_id, v.title, v.type, mc.year
+     ${VIDEO_JOIN}
+     WHERE ${conditions.join(' AND ')}
+     ORDER BY v.created_at ASC`
+  if (opts.limit != null) {
+    sql += ` LIMIT $${idx++}`
+    params.push(opts.limit)
+  }
+
+  const result = await db.query<BackfillEnrichRow>(sql, params)
+  return result.rows
+}

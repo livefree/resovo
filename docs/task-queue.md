@@ -2355,9 +2355,10 @@ CODENAME-MATRIX-E2E (依赖 Wave 3 验收期补丁 CODENAME-MATRIX ✅)
    - **不做原因**：`buildCatalogFromTmdb` 对 1.24M 行逐行 findOrCreate → 建百万孤儿 catalog；且**无「现有视频↔tmdb」回填路径**（富集不碰 tmdb）。TMDB logo 点亮需先设计「定向回填」（按 imdb/title 匹配现有视频），等做「TMDB API」时一并。
 2. **META-15-B** — 起 Redis + worker（状态：✅ **已验证** 2026-05-30）
    - 用户起 redis + dev server；富集消费者在 **apps/api** `server.ts:194 registerEnrichmentWorker`（非 apps/worker，后者是 cron）。海贼王 douban + 师兄啊师兄 bangumi 端到端富集通过。
-3. **META-15-C** — 批量重富集 1966 未富集 + 782 unmatched（状态：⬜ 待开始 / 需 backfill 入队脚本）
-   - 新建 backfill 脚本（trigger='backfill' / 遍历未富集 + unmatched 入 enrichment-queue）；anime 走 META-17 已生效的 Bangumi REST 精确兜底
-   - 验收：douban/bangumi matched 数显著上升 → 徽标覆盖提升
+3. **META-15-C** — 批量重富集 backfill 脚本（状态：✅ **工具就绪** 2026-05-31 / claude-opus-4-8 / 子代理无 / 门禁全过 / 5 新单测 / 全量 5774 passed）
+   - `EnrichJobData += trigger?` + worker 日志 + `listVideosForBackfillEnrich`（never/unmatched/all）+ `scripts/reenrich-backfill.ts`（--mode/--type/--limit/--dry-run，复用 enrichmentQueue 配置含 attempts/backoff/removeOnComplete）
+   - **dry-run 实测：2,827 条待富集**（anime 412 / movie 245 / series 271 / short 692 / other 839 / ...）。anime 走 META-17 Bangumi REST 兜底 + META-19 角色入库。
+   - **⚠️ 全量运行交用户**：需先起 api server（worker 在 server.ts:194，concurrency=2 限流）+ redis；当前 redis 起但 worker 未跑。运行：`node --env-file=.env.local --import tsx scripts/reenrich-backfill.ts`（建议先 `--limit 20 --type anime` 验证 matched/角色上升，再全量）。
 4. **META-15-D** — 补豆瓣 dump（需用户提供 moviedata-10m movies.csv）（状态：⬜ 待开始 / 阻塞于文件）
    - 用户提供文件位置 → `import-douban-dump.ts` 或 `import-external-data.ts --source douban --file <path>` → 豆瓣本地召回上量（最大收益）。注：豆瓣网络 step2 已可用（cookie 已配 / 海贼王已网络命中），dump 提升命中率与速度。
 5. **META-17** — Bangumi 匹配质量改进：matchAndEnrich REST 精确兜底（方案 A）（状态：✅ 已完成 2026-05-30 / claude-opus-4-8 / 子代理无 / 单测 39 + 真实 API + 实时端到端三重验证 / 全量 5705 passed 零回归）

@@ -6,7 +6,7 @@
 
 ## 进行中任务
 
-（空 / SEQ-20260530-07 Bangumi CV/角色管线全闭环：META-19-ADR/A/B/C 全 ship 2026-05-30 — migration 083 两表 normalized（catalog_characters + catalog_character_actors，已应用）+ lib/bangumi getCharacters（成功返数组含[]/失败返 null）+ BangumiService gather/apply delete-then-insert（charactersFetched 守卫：成功空清陈旧/失败跳过）+ adminFindById 注入 bangumiCharacters + ExternalMetaPanel 角色·声优区。arch-reviewer Opus PASS / 全量 5766 passed 零回归。**存量 anime 角色回填需 META-15-C 重富集触发**。下一步候选：META-15-C 批量重富集 / META-15-D 豆瓣 dump / 角色头像渲染 / 推 PR）
+（空 / SEQ-20260530-04 META-15-C backfill 脚本工具就绪 2026-05-31 — EnrichJobData+trigger + listVideosForBackfillEnrich(never/unmatched/all) + scripts/reenrich-backfill.ts。dry-run 实测 2827 条待富集。门禁全过 / 5774 passed。**全量运行交用户：先起 api server(worker) + redis，再 `node --env-file=.env.local --import tsx scripts/reenrich-backfill.ts`（建议先 --limit 20 --type anime 验证）**。下一步候选：用户运行 backfill / META-15-D 豆瓣 dump（阻塞于文件）/ 角色头像渲染 / 推 PR）：META-19-ADR/A/B/C 全 ship 2026-05-30 — migration 083 两表 normalized（catalog_characters + catalog_character_actors，已应用）+ lib/bangumi getCharacters（成功返数组含[]/失败返 null）+ BangumiService gather/apply delete-then-insert（charactersFetched 守卫：成功空清陈旧/失败跳过）+ adminFindById 注入 bangumiCharacters + ExternalMetaPanel 角色·声优区。arch-reviewer Opus PASS / 全量 5766 passed 零回归。**存量 anime 角色回填需 META-15-C 重富集触发**。下一步候选：META-15-C 批量重富集 / META-15-D 豆瓣 dump / 角色头像渲染 / 推 PR）
 
 ---
 

@@ -12613,3 +12613,23 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
   - **② 展示违反 ADR 过滤契约**：`CharactersBlock` 原 `slice(0,cap)` 未按 relation 过滤 → 漏出客串/闲角。修：按 ADR 展示契约 `DISPLAY_RELATIONS={主角,配角}` 过滤后再 cap，过滤为空则不渲染。
   - 测试更新：bangumi-lib（null/空区分）+ bangumi-service（失败 null 不替换 / 成功空替换清陈旧）+ external-meta-panel（客串/闲角不展示 / 全客串不渲染）。
 - **注意事项**：**存量 matched anime 角色需 META-15-C 批量重富集触发**（本序列仅保证新富集/重富集写入）；角色头像（image_url 已存）/ persons 抓取 / 角色检索页 / 前台展示 → 后续 AMENDMENT。全量回归 5769 passed（AuditClient 1 例并行 flaky，隔离 22/22 通过，与本卡无关）。
+
+---
+
+## [META-15-C] 批量重富集 backfill 脚本（SEQ-20260530-04）
+- **完成时间**：2026-05-31（工具就绪；全量运行交用户）
+- **记录时间**：2026-05-31
+- **执行模型**：claude-opus-4-8
+- **子代理**：无（运营脚本 + 单查询，复用 enrichmentQueue + EnrichJobData，非新共享契约/schema/ADR/路由）
+- **来源序列**：SEQ-20260530-04（外部富集数据基建补齐）
+- **问题**：存量视频富集覆盖低（从未富集 meta_quality NULL + douban/bangumi unmatched）→ 徽标/角色/外部数据空。需 backfill 重新入队，借 douban 网络 step2 + META-17 Bangumi REST 兜底 + META-19 角色入库填充。
+- **修改文件**：
+  - `apps/api/src/services/MetadataEnrichService.ts` — `EnrichJobData += trigger?: 'crawl'|'backfill'|'manual'`（可观测）
+  - `apps/api/src/workers/enrichmentWorker.ts` — job started 日志记 trigger
+  - `apps/api/src/db/queries/videos.ts` — `listVideosForBackfillEnrich(db,{mode,type,limit})` + `BackfillEnrichMode`/`BackfillEnrichRow`（never=meta_quality NULL / unmatched=douban|bangumi / all=并集；复用 VIDEO_JOIN，软删排除，created_at 升序）
+  - `scripts/reenrich-backfill.ts`（新）— `--mode/--type/--limit/--dry-run`；复用 `enrichmentQueue`（保留 attempts/backoff/removeOnComplete → 瞬时失败自动重试，对 bangumi REST 兜底关键）；trigger='backfill' + jobId `enrich-${id}` 去重；进程末 process.exit 防 queue.ts 多队列连接悬挂
+  - `tests/unit/api/backfill-enrich-query.test.ts`（新，5 测）— 三 mode WHERE 构造 + type/limit 参数化 + 行透传
+- **新增依赖**：无 / **数据库变更**：无 / **新增路由**：无（verify:endpoint-adr ✅）
+- **质量门禁**：typecheck/lint/verify:adr-contracts EXIT=0 / 全量 444 文件 **5774 passed**（StagingEditPanel 1 例并行 flaky，隔离 12/12 通过，与本卡无关 / v1 admin 已知 flaky 集群）
+- **dry-run 实测**：`--dry-run` → **2,827 条待富集**（anime 412 / movie 245 / series 271 / short 692 / other 839 / variety 251 / documentary 67 / sports 39 / music 8 / kids 3）。脚本接线 + queue 导入 + 自退出全验证。
+- **⚠️ 全量运行交用户**：当前 redis 起但 **api server(worker) 未跑** → 未实际入队（避免堆积无人消费）。运行步骤：① 起 api server（`npm run api` 或 dev / worker 在 server.ts:194 concurrency=2）② `node --env-file=.env.local --import tsx scripts/reenrich-backfill.ts`（建议先 `--limit 20 --type anime` 验证 matched/角色上升再全量）。worker concurrency=2 限流，全量数千条逐步消化数十分钟。
