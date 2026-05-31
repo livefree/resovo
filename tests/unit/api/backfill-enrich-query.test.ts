@@ -30,12 +30,24 @@ describe('listVideosForBackfillEnrich (META-15-C)', () => {
     expect(sql).not.toContain('v.meta_quality IS NULL')
   })
 
-  it('mode=all（默认）→ 三条件并集', async () => {
+  it('mode=missing-characters → anime 且无 catalog_characters（含已 matched anime）', async () => {
+    await listVideosForBackfillEnrich(db, { mode: 'missing-characters' })
+    const [sql] = query.mock.calls[0]
+    expect(sql).toContain("v.type = 'anime'")
+    expect(sql).toContain('NOT EXISTS')
+    expect(sql).toContain('catalog_characters cc')
+    expect(sql).not.toContain('v.meta_quality IS NULL')
+  })
+
+  it('mode=all（默认）→ 四条件并集（含 anime 缺角色，覆盖已 matched anime）', async () => {
     await listVideosForBackfillEnrich(db)
     const [sql] = query.mock.calls[0]
     expect(sql).toContain('v.meta_quality IS NULL OR')
     expect(sql).toContain("v.douban_status = 'unmatched'")
     expect(sql).toContain("v.bangumi_status = 'unmatched'")
+    // 关键：all 必须含 anime 缺角色条件（否则漏掉已 matched anime 的角色回填）
+    expect(sql).toContain('catalog_characters cc')
+    expect(sql).toContain('NOT EXISTS')
   })
 
   it('type + limit 参数化', async () => {

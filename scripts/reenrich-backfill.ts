@@ -8,13 +8,18 @@
  * 用法：
  *   node --env-file=.env.local --import tsx scripts/reenrich-backfill.ts [选项]
  * 选项：
- *   --mode <never|unmatched|all>  默认 all（never=meta_quality NULL / unmatched=douban|bangumi 未命中）
+ *   --mode <never|unmatched|missing-characters|all>  默认 all
+ *       never=meta_quality NULL / unmatched=douban|bangumi 未命中 /
+ *       missing-characters=anime 无 catalog_characters（含已 matched anime，补 META-19 角色）/
+ *       all=以上并集
  *   --type <anime|movie|tv|...>   仅某类型（可选）
  *   --limit <N>                   仅前 N 条（小批验证用）
  *   --dry-run                     只统计不入队
  *
  * 注意：需 Redis + enrichment worker 运行（apps/api server.ts:194）。worker concurrency=2 限流，
- *       全量 ~数千条会持续数十分钟逐步消化。jobId `enrich-${id}` 去重（队列中已有则跳过）。
+ *       全量 ~数千条会持续数十分钟逐步消化。
+ *       jobId 用 `backfill-<runTs>-<id>`（每次运行唯一）—— **不复用爬虫的 `enrich-<id>`**，
+ *       避免与残留（delayed/completed 保留 200/failed 保留 50）job 撞 id 被 Bull 静默跳过而漏跑。
  */
 
 import { db } from '@/api/lib/postgres'
@@ -32,8 +37,8 @@ function parseArgs(): { mode: BackfillEnrichMode; type: VideoType | undefined; l
     return i !== -1 ? args[i + 1] ?? null : null
   }
   const rawMode = getOpt('--mode') ?? 'all'
-  if (!['never', 'unmatched', 'all'].includes(rawMode)) {
-    throw new Error(`--mode 非法：${rawMode}（应为 never|unmatched|all）`)
+  if (!['never', 'unmatched', 'missing-characters', 'all'].includes(rawMode)) {
+    throw new Error(`--mode 非法：${rawMode}（应为 never|unmatched|missing-characters|all）`)
   }
   const rawLimit = getOpt('--limit')
   const limit = rawLimit != null ? Number.parseInt(rawLimit, 10) : null
@@ -67,6 +72,9 @@ async function main(): Promise<void> {
     return
   }
 
+  // 每次运行唯一前缀：避免与爬虫 `enrich-<id>` 及残留 job 撞 id 被 Bull 静默跳过（漏跑）。
+  // 同一 run 内每视频唯一（query 返回去重视频）；enrich 幂等（COALESCE/safeUpdate），重复处理无害。
+  const runTs = Date.now()
   let enqueued = 0
   for (const r of rows) {
     const data: EnrichJobData = {
@@ -77,9 +85,9 @@ async function main(): Promise<void> {
       type: r.type,
       trigger: 'backfill',
     }
-    // 复用 enrichmentQueue defaultJobOptions（attempts/backoff/removeOnComplete）；
-    // jobId 去重（队列中已有同视频任务则不重复入队）。无 delay（worker concurrency=2 自然限流）。
-    await enrichmentQueue.add(data, { jobId: `enrich-${r.id}` })
+    // 复用 enrichmentQueue defaultJobOptions（attempts/backoff/removeOnComplete）。
+    // 无 delay（worker concurrency=2 自然限流）。
+    await enrichmentQueue.add(data, { jobId: `backfill-${runTs}-${r.id}` })
     enqueued++
     if (enqueued % 200 === 0) {
       process.stdout.write(`\r[reenrich-backfill] 已入队：${enqueued.toLocaleString()} / ${rows.length.toLocaleString()}`)

@@ -12631,5 +12631,8 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
   - `tests/unit/api/backfill-enrich-query.test.ts`（新，5 测）— 三 mode WHERE 构造 + type/limit 参数化 + 行透传
 - **新增依赖**：无 / **数据库变更**：无 / **新增路由**：无（verify:endpoint-adr ✅）
 - **质量门禁**：typecheck/lint/verify:adr-contracts EXIT=0 / 全量 444 文件 **5774 passed**（StagingEditPanel 1 例并行 flaky，隔离 12/12 通过，与本卡无关 / v1 admin 已知 flaky 集群）
-- **dry-run 实测**：`--dry-run` → **2,827 条待富集**（anime 412 / movie 245 / series 271 / short 692 / other 839 / variety 251 / documentary 67 / sports 39 / music 8 / kids 3）。脚本接线 + queue 导入 + 自退出全验证。
+- **dry-run 实测**：`--dry-run` → **2,835 条待富集**（FIX 后含已 matched anime）。脚本接线 + queue 导入 + 自退出全验证。
+- **Codex stop-time review FIX**（同 commit）：
+  - **① 漏掉既有 matched anime**：原 mode 仅 never+unmatched，**已 matched anime（meta_quality 已写）不在任一 mode → 永远不重富集 → META-19 角色永远填不上**（恰是 META-15-C 对 META-19 的核心用途）。修：新增 `missing-characters` mode（`type='anime' AND NOT EXISTS catalog_characters`）并纳入 `all`。实测 `all` 2827→2835（+8 已 matched anime）；`missing-characters`=420（当前全部 anime 无角色）。
+  - **② 固定 jobId 静默跳过**：原 `enrich-${id}` 与爬虫同 id，且 removeOnComplete:200/removeOnFail:50 保留的历史 job 会让 Bull `add` 静默跳过 → 部分目标漏跑。修：jobId 改 `backfill-${runTs}-${id}`（每次运行唯一，不撞残留 job；enrich 幂等重复处理无害）。
 - **⚠️ 全量运行交用户**：当前 redis 起但 **api server(worker) 未跑** → 未实际入队（避免堆积无人消费）。运行步骤：① 起 api server（`npm run api` 或 dev / worker 在 server.ts:194 concurrency=2）② `node --env-file=.env.local --import tsx scripts/reenrich-backfill.ts`（建议先 `--limit 20 --type anime` 验证 matched/角色上升再全量）。worker concurrency=2 限流，全量数千条逐步消化数十分钟。
