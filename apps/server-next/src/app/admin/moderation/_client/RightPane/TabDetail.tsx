@@ -192,6 +192,7 @@ export function TabDetail({ v }: TabDetailProps): React.ReactElement {
             type={extDetail.type}
             externalRefs={extDetail.externalRefs}
             bangumiInfo={extDetail.bangumiInfo}
+            characters={extDetail.bangumiCharacters}
             catalogFields={{
               titleOriginal: extDetail.title_original,
               rating: extDetail.rating,

@@ -7,7 +7,7 @@
 import { afterEach, describe, it, expect } from 'vitest'
 import { cleanup, render } from '@testing-library/react'
 import React from 'react'
-import type { EnrichmentSummary, ExternalRefSummary, BangumiEntrySummary, VideoType } from '@resovo/types'
+import type { EnrichmentSummary, ExternalRefSummary, BangumiEntrySummary, CatalogCharacterSummary, VideoType } from '@resovo/types'
 import { ExternalMetaPanel } from '../../../../../packages/admin-ui/src/components/external-meta-panel/external-meta-panel'
 import type { ExternalMetaCatalogFields } from '../../../../../packages/admin-ui/src/components/external-meta-panel/types'
 
@@ -57,11 +57,19 @@ const BANGUMI_INFO: BangumiEntrySummary = {
   nsfw: false,
 }
 
+const CHARACTERS: CatalogCharacterSummary[] = [
+  { name: '蒙奇·D·路飞', relation: '主角', imageUrl: null, actors: [{ name: '田中真弓', imageUrl: null }] },
+  { name: '罗罗诺亚·索隆', relation: '配角', imageUrl: null, actors: [{ name: '中井和哉', imageUrl: null }, { name: 'CV二', imageUrl: null }] },
+  { name: '路人甲', relation: '客串', imageUrl: null, actors: [] },
+]
+
 const row = (c: HTMLElement, source: string) =>
   c.querySelector(`[data-external-source-row][data-source="${source}"]`) as HTMLElement | null
 const allRows = (c: HTMLElement) => Array.from(c.querySelectorAll('[data-external-source-row]'))
 const bangumiBlock = (c: HTMLElement) => c.querySelector('[data-external-bangumi-block]')
 const catalogBox = (c: HTMLElement) => c.querySelector('[data-external-catalog-fields]')
+const charsBlock = (c: HTMLElement) => c.querySelector('[data-external-characters-block]')
+const charRows = (c: HTMLElement) => Array.from(c.querySelectorAll('[data-external-character-row]'))
 
 // ── 源并集总览 ────────────────────────────────────────────────────────
 
@@ -227,5 +235,53 @@ describe('ExternalMetaPanel — 真源字段区', () => {
       <ExternalMetaPanel summary={makeSummary()} type={'movie' as VideoType} catalogFields={cf} density="drawer" />,
     )
     expect(catalogBox(container)).toBeNull()
+  })
+})
+
+// ── 角色 · 声优区（META-19）─────────────────────────────────────────
+
+describe('ExternalMetaPanel — 角色 · 声优区', () => {
+  it('anime + characters：渲染角色块 + 角色名 + CV（多 CV 用 / 连接）', () => {
+    const { container } = render(
+      <ExternalMetaPanel summary={makeSummary()} type={'anime' as VideoType} characters={CHARACTERS} density="drawer" />,
+    )
+    const block = charsBlock(container)
+    expect(block).not.toBeNull()
+    expect(block!.textContent).toContain('蒙奇·D·路飞')
+    expect(block!.textContent).toContain('田中真弓')
+    expect(block!.textContent).toContain('中井和哉 / CV二')  // N:M 多 CV
+  })
+
+  it('非 anime：即便传 characters 也不渲染角色块', () => {
+    const { container } = render(
+      <ExternalMetaPanel summary={makeSummary()} type={'movie' as VideoType} characters={CHARACTERS} density="drawer" />,
+    )
+    expect(charsBlock(container)).toBeNull()
+  })
+
+  it('anime + 无 characters：不渲染角色块', () => {
+    const { container } = render(
+      <ExternalMetaPanel summary={makeSummary()} type={'anime' as VideoType} density="drawer" />,
+    )
+    expect(charsBlock(container)).toBeNull()
+  })
+
+  it('compact 密度：cap top-4', () => {
+    const many: CatalogCharacterSummary[] = Array.from({ length: 10 }, (_, i) => ({
+      name: `角色${i}`, relation: '配角', imageUrl: null, actors: [{ name: `CV${i}`, imageUrl: null }],
+    }))
+    const { container } = render(
+      <ExternalMetaPanel summary={makeSummary()} type={'anime' as VideoType} characters={many} density="compact" />,
+    )
+    expect(charRows(container)).toHaveLength(4)
+  })
+
+  it('CV 缺失：渲染占位 —', () => {
+    const noActor: CatalogCharacterSummary[] = [{ name: '无CV角色', relation: '主角', imageUrl: null, actors: [] }]
+    const { container } = render(
+      <ExternalMetaPanel summary={makeSummary()} type={'anime' as VideoType} characters={noActor} density="drawer" />,
+    )
+    expect(charRows(container)).toHaveLength(1)
+    expect(charsBlock(container)!.textContent).toContain('无CV角色')
   })
 })

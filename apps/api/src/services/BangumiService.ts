@@ -14,9 +14,11 @@ import * as externalDataQueries from '@/api/db/queries/externalData'
 import type { BangumiEntryMatch } from '@/api/db/queries/externalData'
 import * as catalogEpisodeQueries from '@/api/db/queries/catalogEpisodes'
 import type { CatalogEpisodeInput } from '@/api/db/queries/catalogEpisodes'
+import * as catalogCharacterQueries from '@/api/db/queries/catalogCharacters'
+import type { CatalogCharacterInput } from '@/api/db/queries/catalogCharacters'
 import * as videosQueries from '@/api/db/queries/videos'
 import * as systemSettingsQueries from '@/api/db/queries/systemSettings'
-import { getSubject, getEpisodes, searchSubjects, searchSubjectsStrict, isBangumiApiConfigured } from '@/api/lib/bangumi'
+import { getSubject, getEpisodes, getCharacters, searchSubjects, searchSubjectsStrict, isBangumiApiConfigured } from '@/api/lib/bangumi'
 import type { BangumiClientConfig } from '@/api/lib/bangumi'
 import { normalizeTitle } from './TitleNormalizer'
 import {
@@ -24,6 +26,7 @@ import {
   computeRestBangumiConfidence,
   mapSubjectToCatalogFields,
   mapEpisodes,
+  mapCharacters,
 } from './BangumiService.utils'
 
 function parseYear(date: string | null | undefined): number | null {
@@ -62,6 +65,8 @@ export interface MatchAndEnrichInput {
 interface EnrichmentData {
   fields: CatalogUpdateData | null
   episodes: CatalogEpisodeInput[]
+  // ADR-161 AMENDMENT / META-19：角色 + CV（仅 REST 命中且 getCharacters 非空时填充）
+  characters: CatalogCharacterInput[]
   mainEpisodeCount: number
   degraded: boolean
 }
@@ -291,6 +296,7 @@ export class BangumiService {
   ): Promise<EnrichmentData> {
     let fields: CatalogUpdateData | null = null
     let episodes: CatalogEpisodeInput[] = []
+    let characters: CatalogCharacterInput[] = []
     let mainEpisodeCount = 0
     let degraded = true
 
@@ -306,6 +312,10 @@ export class BangumiService {
         mainEpisodeCount = subject.eps && subject.eps > 0
           ? subject.eps
           : eps.filter((e) => e.type === 0).length
+        // ADR-161 AMENDMENT / META-19：角色 + CV。getCharacters 独立失败返回 []（与 subject 解耦）→
+        // 仅非空时填充；apply 侧据 length>0 守卫，避免 characters 抓取瞬时失败误删既有角色（D-161-AMD-3）
+        const chars = await getCharacters(bangumiId, cfg)
+        if (chars.length > 0) characters = mapCharacters(chars)
       }
     }
 
@@ -320,7 +330,7 @@ export class BangumiService {
       if (entry.coverUrl) fields.coverUrl = entry.coverUrl
     }
 
-    return { fields, episodes, mainEpisodeCount, degraded }
+    return { fields, episodes, characters, mainEpisodeCount, degraded }
   }
 
   /**
@@ -348,6 +358,16 @@ export class BangumiService {
 
     // safeUpdate 接受 PoolClient（共享事务）或不传（走 service 自带 this.db）
     const isClient = 'release' in db && typeof (db as PoolClient).release === 'function'
+
+    // ADR-161 AMENDMENT / META-19：角色 + CV 全量替换（delete-then-insert，仅事务内 PoolClient）。
+    // 守卫 length>0（D-161-AMD-3）：getCharacters 失败/降级时 characters=[] → 跳过，不误删既有角色。
+    // 两路径（applyAutoMatchAtomic / confirmMatch）均传 client，恒满足 isClient。
+    if (data.characters.length > 0 && isClient) {
+      await catalogCharacterQueries.replaceCatalogCharacters(
+        db as PoolClient, catalogId, 'bangumi', data.characters,
+      )
+    }
+
     const { updated } = await this.catalogService.safeUpdate(catalogId, data.fields, 'bangumi', {
       sourceRef: String(bangumiId),
       db: isClient ? (db as PoolClient) : undefined,

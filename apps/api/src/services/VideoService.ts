@@ -11,6 +11,8 @@ import * as videoQueries from '@/api/db/queries/videos'
 // ADR-172 AMENDMENT 3 / D-172-AMD3-3：admin 详情注入外部源并集 + bangumi 条目级
 import * as externalDataQueries from '@/api/db/queries/externalData'
 import type { VideoExternalRef } from '@/api/db/queries/externalData'
+// ADR-161 AMENDMENT / META-19：admin 详情注入 bangumi 角色 + CV
+import * as catalogCharacterQueries from '@/api/db/queries/catalogCharacters'
 import type {
   UpdateVideoMetaInput,
   ModerationStats,
@@ -196,11 +198,16 @@ export class VideoService {
       isPrimary: r.isPrimary,
     }))
     const bangumiInfo = await this.loadBangumiInfo(row, refs)
+    // ADR-161 AMENDMENT / META-19：anime 角色 + CV（仅命中时下发；非 anime 跳过）
+    const bangumiCharacters = row.type === 'anime'
+      ? await catalogCharacterQueries.listCatalogCharactersForDisplay(this.db, row.catalog_id, 'bangumi')
+      : []
     return {
       ...row,
       enrichmentSummary: videoQueries.buildEnrichmentSummary(row),
       externalRefs,
       ...(bangumiInfo ? { bangumiInfo } : {}),
+      ...(bangumiCharacters.length > 0 ? { bangumiCharacters } : {}),
     }
   }
 

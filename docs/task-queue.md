@@ -2412,4 +2412,30 @@ CODENAME-MATRIX-E2E (依赖 Wave 3 验收期补丁 CODENAME-MATRIX ✅)
 
 ### 已记录后续（本序列不做）
 
-- **META-19** — Bangumi CV/角色自动入库管线：抓 `/v0/subjects/:id/characters`（含声优）+ 新建角色↔CV schema（现 `media_catalog.cast TEXT[]` 扁平结构承载不了配对）+ 回填管线 + 展示。**触发**：用户「后面要补充管线，充实数据」。涉及新 REST 抓取 + migration + 可能 ADR → 独立序列，排在展示层之后。（状态：⬜ 待立案）
+- **META-19** — Bangumi CV/角色自动入库管线（已立案 → SEQ-20260530-07）。
+
+---
+
+## [SEQ-20260530-07] Bangumi CV/角色自动入库管线 + 展示
+
+- **状态**：✅ 已完成（META-19-ADR/A/B/C 全 ship 2026-05-30 / claude-opus-4-8 + arch-reviewer Opus / migration 083 已应用 / 门禁全过 / 全量 5766 passed 零回归）
+- **创建时间**：2026-05-30
+- **最后更新时间**：2026-05-30
+- **目标**：把 Bangumi 角色 + 声优(CV)纳入自动富集管线（抓 `/v0/subjects/:id/characters` + 新建角色↔CV 配对 schema + 回填）+ 后台外部元数据面展示，充实 anime 数据。
+- **范围**：migration（新表）+ lib/bangumi + BangumiService + queries + DTO + ExternalMetaPanel 展示。**仅 anime**；新富集/重富集时写入（既有 matched 角色回填依赖 META-15-C）。
+- **依赖**：META-18 ✅（ExternalMetaPanel + 详情 DTO 注入已就绪，角色区接入其上）；BangumiService gather/apply 两段范式 + catalog_episodes 表范式可复用。
+- **触发**：用户「后面要补充管线，充实数据」；META-18 调研确认 CV/声优当前完全不抓不存。
+- **已确认数据形态**（实测）：character{id,name,type,images,summary,relation,actors[]} + actor{id,name,type,images}；**N:M**（52 角色 14 个多 CV）→ 必须 normalized 配对。
+
+### 任务列表（按执行顺序）
+
+1. **META-19-ADR** — 角色↔CV schema + 抓取/写入/展示契约 + ADR 落档（强制 Opus）（状态：✅ 已完成 2026-05-30 / arch-reviewer (claude-opus-4-8) CONDITIONAL→满足 5 红线等同 PASS / ADR-161 AMENDMENT 落档）
+   - 裁定：两表 normalized + delete-then-insert（length>0 守卫）+ ADR-161 AMENDMENT + 顶层 bangumiCharacters DTO + ExternalMetaPanel characters Props
+2. **META-19-A** — migration 083 + 类型 + catalogCharacters 查询 + architecture.md 同步（状态：✅ 已完成 2026-05-30 / migration 083 已应用 / 2 投影 + replaceCatalogCharacters/listCatalogCharactersForDisplay / typecheck 绿）
+3. **META-19-B** — lib/bangumi `getCharacters` + BangumiService 集成（gather+apply 单点接入两路径）+ 单测（状态：✅ 已完成 2026-05-30 / getCharacters + mapCharacters + degraded/length>0 守卫 / bangumi-lib 12 + bangumi-service 48 + metadataEnrich 31 全过）
+4. **META-19-C** — DTO 注入（adminFindById）+ ExternalMetaPanel 角色/CV 区（anime）+ 单测（状态：✅ 已完成 2026-05-30 / external-meta-panel 20 单测 / 编辑抽屉 + 审核台两面接入 / commit 带 Opus trailer）
+
+### 已记录后续
+
+- **既有 matched anime 角色回填**：依赖 META-15-C 批量重富集（本序列保证「新富集/重富集时写入」，存量需触发重富集）。
+- 角色头像渲染 / persons(制作人员) 抓取 / 角色检索页 / 前台公开展示 —— 后续 AMENDMENT。

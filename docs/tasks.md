@@ -6,7 +6,7 @@
 
 ## 进行中任务
 
-（空 / SEQ-20260530-06 外部元数据展示层全闭环：META-18-ADR/A/B 全 ship 2026-05-30 — admin-ui ExternalMetaPanel 真源并集视图 + adminFindById 注入 externalRefs/bangumiInfo + 编辑抽屉新「外部元数据」tab + 审核台 TabDetail 懒加载。arch-reviewer Opus PASS / 全量 5752 passed 零回归。下一步候选：META-19 CV/角色管线 / META-15-C 批量重富集 / META-15-D 豆瓣 dump / 推 PR）
+（空 / SEQ-20260530-07 Bangumi CV/角色管线全闭环：META-19-ADR/A/B/C 全 ship 2026-05-30 — migration 083 两表 normalized（catalog_characters + catalog_character_actors，已应用）+ lib/bangumi getCharacters + BangumiService gather/apply delete-then-insert（length>0 守卫）+ adminFindById 注入 bangumiCharacters + ExternalMetaPanel 角色·声优区。arch-reviewer Opus PASS / 全量 5766 passed 零回归。**存量 anime 角色回填需 META-15-C 重富集触发**。下一步候选：META-15-C 批量重富集 / META-15-D 豆瓣 dump / 角色头像渲染 / 推 PR）
 
 ---
 

@@ -90,6 +90,25 @@ export interface BangumiEpisode {
   desc: string
 }
 
+/** 角色下的配音演员/声优（CV）（/v0/subjects/{id}/characters 的 actors[] 元素） */
+export interface BangumiCharacterActor {
+  id: number
+  name: string
+  type: number          // 1 个人 / 2 公司 / 3 组合
+  images: BangumiImages | null
+}
+
+/** 作品角色（/v0/subjects/{id}/characters 数组元素；无分页，一次返回全部） */
+export interface BangumiCharacter {
+  id: number
+  name: string
+  type: number          // 1 角色 / 2 机体 / 3 舰船 / 4 组织
+  images: BangumiImages | null
+  relation: string      // 主角 / 配角 / 客串 / 闲角
+  summary: string
+  actors: BangumiCharacterActor[]
+}
+
 /** 搜索结果条目（POST /v0/search/subjects 的 data 元素，字段较 subject 精简） */
 export interface BangumiSearchItem {
   id: number
@@ -152,6 +171,15 @@ export async function getEpisodes(subjectId: number, cfg?: BangumiClientConfig):
     if (all.length >= resp.total) break
   }
   return all
+}
+
+/**
+ * GET /v0/subjects/{id}/characters — 拉取某作品全部角色 + 各自 CV（无分页，一次返回数组）。
+ * 注意与 getEpisodes 不同：该端点直接返回数组而非 { data, total } 包裹。失败/无数据返回 []。
+ */
+export async function getCharacters(subjectId: number, cfg?: BangumiClientConfig): Promise<BangumiCharacter[]> {
+  const resp = await bgmGet<BangumiCharacter[]>(`/v0/subjects/${subjectId}/characters`, cfg)
+  return Array.isArray(resp) ? resp : []
 }
 
 /**

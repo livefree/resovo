@@ -9,6 +9,7 @@ import type {
   EnrichmentSummary,
   ExternalRefSummary,
   BangumiEntrySummary,
+  CatalogCharacterSummary,
   VideoType,
 } from '@resovo/types'
 
@@ -35,6 +36,8 @@ export interface ExternalMetaPanelProps {
   readonly externalRefs?: readonly ExternalRefSummary[]
   /** Bangumi 条目级详情（仅 anime + 命中时）；省略 → 不渲染条目块。 */
   readonly bangumiInfo?: BangumiEntrySummary
+  /** Bangumi 角色 + CV（ADR-161 AMENDMENT / META-19；仅 anime + 命中时）；省略 → 不渲染角色块。 */
+  readonly characters?: readonly CatalogCharacterSummary[]
   /** 真源字段区展示值（消费方从 VideoAdminDetail 平铺取）。 */
   readonly catalogFields?: ExternalMetaCatalogFields
   /** 富集时间相对文案（消费方格式化后传入）。 */

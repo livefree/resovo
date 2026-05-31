@@ -297,6 +297,7 @@ export function VideoEditDrawer({ open, videoId, onClose, onSaved }: VideoEditDr
                     type={video.type}
                     externalRefs={video.externalRefs}
                     bangumiInfo={video.bangumiInfo}
+                    characters={video.bangumiCharacters}
                     catalogFields={{
                       titleOriginal: video.title_original,
                       rating: video.rating,

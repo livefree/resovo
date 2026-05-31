@@ -191,6 +191,27 @@ export interface BangumiEntrySummary {
   nsfw: boolean
 }
 
+/**
+ * CatalogCharacterActorSummary — 角色下 CV(声优) 展示投影（ADR-161 AMENDMENT / META-19）。
+ * 来自 catalog_character_actors。剔除 externalActorId / sort（展示不消费，下发即有序）。
+ */
+export interface CatalogCharacterActorSummary {
+  name: string
+  imageUrl: string | null
+}
+
+/**
+ * CatalogCharacterSummary — 作品角色展示投影（ADR-161 AMENDMENT / META-19）。
+ * 来自 catalog_characters（+ JOIN actors）。仅 admin 详情 DTO（adminFindById）注入，
+ * anime + REST 命中时下发；剔除 externalCharacterId / charType / sort / summary（展示不消费）。
+ */
+export interface CatalogCharacterSummary {
+  name: string
+  relation: string | null
+  imageUrl: string | null
+  actors: CatalogCharacterActorSummary[]
+}
+
 /** VideoGenre — 内容题材（与 VideoType 内容形式严格正交）
  *
  * 对齐豆瓣视频分类（2026-04-22 META-10 对齐表）：

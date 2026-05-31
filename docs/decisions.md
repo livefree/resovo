@@ -18555,3 +18555,49 @@ Bangumi token 现直读 `process.env.BANGUMI_API_TOKEN`（`lib/bangumi.ts:15`）
 > A/C 触碰 admin-ui 公开 Props + `@resovo/types` 公开类型，commit 必带 `Subagents: arch-reviewer (claude-opus-4-8)` trailer。
 
 ---
+
+## ADR-161 AMENDMENT 2026-05-30（CHG-BNG-CHAR / META-19）— 角色↔CV 自动入库（catalog_characters + catalog_character_actors）
+
+- **状态**：Accepted（arch-reviewer claude-opus-4-8 CONDITIONAL → 满足 5 红线后等同 PASS；新 schema + 新 REST 抓取 + admin-ui 公开 Props 新增 + `@resovo/types` 公开类型新增，多触发 CLAUDE.md 强制 Opus 评审）
+- **触发**：用户「后面要补充管线，充实数据」+ META-18 调研确认 Bangumi 富集当前**不抓角色/声优**（`mapSubjectToCatalogFields` 仅解析导演/编剧；`media_catalog.cast TEXT[]` 扁平结构存不了角色↔CV 配对）。
+- **性质**：additive（新表 + 新抓取 + 新展示区，不改既有 catalog/episodes 写入）。本 AMENDMENT 是 ADR-161 Bangumi 接入的自然延伸（`getCharacters` 平行 `getEpisodes`；`catalog_characters` 平行 `catalog_episodes`；同 gather/apply 两段、同 catalog_id 归属范式）。
+- **已实测数据形态**（api.bgm.tv/v0/subjects/{id}/characters，无分页一次返回）：character{id,name,type,images,summary,relation(主角·配角·客串·闲角),actors[]} + actor{id,name,type,images}；**N:M**（实测 52 角色 14 个多 CV）。
+
+### 决策要点
+
+- **（D-161-AMD-1）两表 normalized**：`catalog_characters` + `catalog_character_actors`（非单表 JSONB）。理由：N:M 真实存在；actor 是有独立 person_id 的一等实体（未来「声优反查角色」可结构化查询）；catalog_episodes 扁平单表是「叶子无子集合」先例，不构成约束。Migration 083：`catalog_characters(catalog_id FK CASCADE, source, external_character_id NOT NULL, name, relation, char_type, sort, image_url, summary)` UNIQUE`(catalog_id,source,external_character_id)`；`catalog_character_actors(character_id FK CASCADE, external_actor_id, name, image_url, sort)` UNIQUE`(character_id,external_actor_id)`。
+- **（D-161-AMD-2）delete-by-catalog-then-insert 全量替换**（非 upsert）：角色集合会变（源端增删角色），upsert 无法删孤儿；catalog_episodes 用 upsert 因逐集集合稳定，角色不然。`replaceCatalogCharacters(db: PoolClient, ...)` **仅 PoolClient**（delete+insert 须单事务，防空窗）。
+- **（D-161-AMD-3）degraded 守卫**：Phase 2 角色替换 `if (!data.degraded)`——REST 失败走 dump 降级时 `characters:[]`，**跳过替换**（防瞬时故障误删已有角色）。
+- **（D-161-AMD-4）存储全集 / 展示过滤**：存全部角色（含客串/闲角，~52 行/番），relation 过滤是展示决策下沉渲染层（主角+配角 cap top-N）；存储层职责单一不业务过滤。`sort` 写入时按 relation 权重 + 原序填充。
+- **（D-161-AMD-5）抓取/写入集成（单点接入两路径）**：`lib/bangumi.getCharacters`（无分页，直接返回数组 / 失败 []）→ `gatherEnrichmentData`（Phase 1 拉取 + `mapCharacters` relation→sort + actor 序）→ `EnrichmentData.characters` → `applyEnrichmentDb`（Phase 2 事务内 `replaceCatalogCharacters`）。auto（applyAutoMatchAtomic）+ 人工（confirmMatch）两路径均经 applyEnrichmentDb，**单点接入自动覆盖**。
+- **（D-161-AMD-6）DTO + 展示**：`adminFindById` 新增**顶层** `bangumiCharacters?`（异源不混，不挂 bangumiInfo 内 / 同 AMD3-A votes 原则；仅 anime + 命中下发）。`@resovo/types`：`CatalogCharacterSummary`{name,relation,imageUrl,actors[]} + `CatalogCharacterActorSummary`{name,imageUrl}（窄化，剔除外部 id/sort/summary）。`ExternalMetaPanelProps` 新增 `characters?`（admin-ui 公开 Props → Opus trailer）；`CharactersBlock`（anime-only）渲染主角+配角 cap top-N，CV 配对「角色名 — CV1 / CV2」，relation Record 兜底原文，零硬编码色；本期不渲染头像（image_url 存但展示后续 AMENDMENT）。
+
+### 影响文件
+
+- 新建：`apps/api/src/db/migrations/083_bangumi_characters.sql`、`apps/api/src/db/queries/catalogCharacters.ts`
+- 修改：`apps/api/src/lib/bangumi.ts`（getCharacters + BangumiCharacter/Actor 接口）、`apps/api/src/services/BangumiService.ts`（gather+apply + degraded 守卫）、`apps/api/src/services/BangumiService.utils.ts`（mapCharacters）、`apps/api/src/services/VideoService.ts`（adminFindById 注入 bangumiCharacters）、`packages/types/src/video.types.ts`（2 投影）、`packages/admin-ui/src/components/external-meta-panel/{types.ts,external-meta-panel.tsx}`（characters Props + CharactersBlock）、`apps/server-next/src/lib/videos/types.ts`（VideoAdminDetail 镜像）、`docs/architecture.md`（§5.6 catalog_characters 段 + migration 列表）
+
+### 偏离登记（对 077/161 原范式）
+
+- **D-161-AMD-A**：两表 normalized（vs catalog_episodes 单表）。处置：accept（数据形态驱动）。
+- **D-161-AMD-B**：delete-then-insert（vs catalog_episodes upsert）。处置：accept（角色集合可变，需删孤儿）。
+- **D-161-AMD-C**：`replaceCatalogCharacters` 仅 PoolClient（vs upsertCatalogEpisodes 双形态）。处置：accept（delete+insert 须单事务）。
+- **D-161-AMD-D**：`external_character_id NOT NULL`（vs catalog_episodes external_episode_id nullable）。处置：accept（角色无 id 无意义；delete-then-insert 不依赖 ON CONFLICT 过滤空键）。
+
+### 实施拆卡（严格串行 A→B→C / META-19-A/B/C）
+
+- **A**：migration 083 + `@resovo/types` 2 投影 + `catalogCharacters.ts`（replace + list）+ architecture.md §5.6/migration 列表 + 本 AMENDMENT。
+- **B**：`getCharacters` + BangumiCharacter/Actor 接口 + `mapCharacters` + `EnrichmentData.characters` + gather/apply 接入 + degraded 守卫 + 单测（N:M / degraded 不删 / 全量替换）。
+- **C**：`adminFindById` 注入 bangumiCharacters + `ExternalMetaPanelProps.characters` + `CharactersBlock` + 单测。
+
+### 红线
+
+1. migration 编号落地前 Glob 确认（082 最新 → 083）；architecture.md 必须同步（绝对禁止项）。
+2. admin-ui Props 新增 `characters` → commit 带 `Subagents: arch-reviewer (claude-opus-4-8)` trailer。
+3. degraded 守卫必须存在（REST 失败禁止 delete 角色）。
+4. `replaceCatalogCharacters` 仅 PoolClient + 事务内（两路径均满足）。
+5. 无 any / 无空 catch（getCharacters 复用 bgmGet catch 返回 []）/ 无硬编码颜色（CharactersBlock 仅 token）。
+
+> C（及 B 若触 admin-ui）触碰 admin-ui 公开 Props + `@resovo/types` 公开类型，commit 必带 `Subagents: arch-reviewer (claude-opus-4-8)` trailer。
+
+---

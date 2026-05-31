@@ -12578,3 +12578,34 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **效果**：运营在视频编辑抽屉 + 审核台详情可见已回填的 Bangumi 条目级字段（日文原名/放送日/排名/评分）+ 多源并集总览（命中源/外部 ID/匹配方式/置信度/主源/可点外链）→ 可判定富集回填质量。
 - **Codex stop-time review FIX**（commit 见下）：`ExternalMetaPanel` 源行漏渲染 `matchMethod`（数据携带但未展示，违背 D-172-AMD3-2「保留 matchMethod 供运营判靠什么匹配上」初衷）→ 源行状态文案补「匹配方式」（MATCH_METHOD_LABEL 已知映射 imdb_id/title/title_norm/alias/network/manual/manual_fields + 未知回退原始串）+ 2 新单测。
 - **注意事项（已记录后续）**：**META-19** Bangumi CV/角色自动入库管线（抓 `/v0/subjects/:id/characters` + 角色↔CV schema + 回填 + 展示，现 `media_catalog.cast TEXT[]` 扁平结构承载不了配对）—— 用户「后面补充管线，充实数据」诉求；逐集放送 / 前台公开详情页 / tmdb·imdb 条目级专属块本期未做。
+
+---
+
+## [META-19] Bangumi CV/角色自动入库管线 + 展示（SEQ-20260530-07 全闭环）
+- **完成时间**：2026-05-30
+- **记录时间**：2026-05-30
+- **执行模型**：claude-opus-4-8
+- **子代理**：arch-reviewer (claude-opus-4-8) — ADR-161 AMENDMENT 角色↔CV schema + 抓取/写入/展示契约（CONDITIONAL → 满足 5 红线等同 PASS）
+- **来源序列**：SEQ-20260530-07（用户「后面要补充管线，充实数据」+ META-18 调研确认 CV/声优当前完全不抓不存）
+- **已实测数据形态**（api.bgm.tv/v0/subjects/{id}/characters，无分页）：character{id,name,type,images,summary,relation,actors[]} + actor{id,name,type,images}；**N:M**（52 角色 14 个多 CV）→ 两表 normalized 必需。
+- **META-19-ADR**：ADR-161 AMENDMENT 落档（D-161-AMD-1..6 + 4 偏离 + 5 红线）。
+- **META-19-A（schema + 类型 + query）**：
+  - `apps/api/src/db/migrations/083_bangumi_characters.sql`（**已应用**）— 两表 `catalog_characters` + `catalog_character_actors`（catalog_id + source 归属，对齐 077；UNIQUE 幂等键 + 索引 + DO 验证块）
+  - `packages/types/src/video.types.ts` — `CatalogCharacterSummary` + `CatalogCharacterActorSummary`（窄化展示投影）
+  - `apps/api/src/db/queries/catalogCharacters.ts`（新）— `replaceCatalogCharacters`（delete-by-catalog-then-insert，**仅 PoolClient**）+ `listCatalogCharactersForDisplay`（2 查询，产出展示投影）
+  - `docs/architecture.md` §5.6 + migration 列表同步
+- **META-19-B（抓取 + 集成）**：
+  - `apps/api/src/lib/bangumi.ts` — `getCharacters`（无分页直接返回数组 / 失败 []）+ `BangumiCharacter`/`BangumiCharacterActor` 接口
+  - `apps/api/src/services/BangumiService.utils.ts` — `mapCharacters`（relation 权重排序 + actor 序 + 取图降级）
+  - `apps/api/src/services/BangumiService.ts` — `EnrichmentData.characters` + `gatherEnrichmentData` 拉取（length>0 才填）+ `applyEnrichmentDb` `replaceCatalogCharacters`（**length>0 && isClient 守卫**：D-161-AMD-3 防 getCharacters 瞬时失败误删既有角色）；**单点接入自动覆盖 auto + confirmMatch 两路径**
+  - 测试：bangumi-lib +3（getCharacters）/ bangumi-service +4（auto 写角色 / 空不删 / mapCharacters 排序+N:M）
+- **META-19-C（DTO + 展示）**：
+  - `apps/api/src/services/VideoService.ts` — `adminFindById` 注入**顶层** `bangumiCharacters`（anime + 命中；异源不混不挂 bangumiInfo 内）
+  - `apps/server-next/src/lib/videos/types.ts` — `VideoAdminDetail.bangumiCharacters?` 镜像
+  - `packages/admin-ui/src/components/external-meta-panel/{types.ts,external-meta-panel.tsx}` — `ExternalMetaPanelProps.characters?` + `CharactersBlock`（anime-only / 已排序 cap top-N drawer 8·compact 4 / CV 多值 `/` 连接 / relation Record 兜底 / 零硬编码色 / 本期不渲染头像）
+  - `VideoEditDrawer.tsx` + `TabDetail.tsx` 两消费面传 `characters`
+  - 测试：external-meta-panel +5（角色块 / 非 anime 不渲染 / 无数据不渲染 / compact cap / 无 CV 占位）
+- **新增依赖**：无 / **数据库变更**：migration 083（2 新表，已应用）/ **新增路由**：无（verify:endpoint-adr ✅ 203 路由）
+- **质量门禁**：typecheck/lint EXIT=0 / **全量 444 文件 5766 passed 0 failed** / verify:adr-contracts EXIT=0 / migration 083 dry-run + 实际应用成功
+- **效果**：anime 富集/重富集时自动抓取角色 + CV 入库；后台编辑抽屉 + 审核台详情「角色 · 声优」区展示「角色名 — CV1 / CV2」（N:M 配对）。
+- **注意事项**：**存量 matched anime 角色需 META-15-C 批量重富集触发**（本序列仅保证新富集/重富集写入）；角色头像（image_url 已存）/ persons 抓取 / 角色检索页 / 前台展示 → 后续 AMENDMENT。

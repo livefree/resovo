@@ -21,9 +21,9 @@ import { SOURCE_HREF_BUILDERS, SOURCE_LABEL } from '../enrichment-badge/enrichme
 import type { SourceMatchState, SourceLogoKind, SourceLogoSize } from '../enrichment-badge/enrichment-badge.types'
 import type {
   DoubanStatus, BangumiStatus, ExternalRefProvider, ExternalRefMatchStatus,
-  ExternalRefSummary, BangumiEntrySummary,
+  ExternalRefSummary, BangumiEntrySummary, CatalogCharacterSummary,
 } from '@resovo/types'
-import type { ExternalMetaPanelProps } from './types'
+import type { ExternalMetaPanelProps, ExternalMetaPanelDensity } from './types'
 
 // ── styles（零硬编码颜色）────────────────────────────────────────────
 
@@ -189,10 +189,51 @@ function BangumiBlock({ info }: { info: BangumiEntrySummary }): React.ReactEleme
   )
 }
 
+/** relation 文案兜底原文（防源端扩值破坏 / 同 MATCH_METHOD_LABEL 范式）。 */
+const RELATION_LABEL: Record<string, string> = {
+  主角: '主角', 配角: '配角', 客串: '客串', 闲角: '闲角',
+}
+
+const CHAR_NAME_STYLE: React.CSSProperties = {
+  fontSize: 'var(--font-size-xs)', color: 'var(--fg-default)',
+  display: 'inline-flex', alignItems: 'center', gap: '4px', minWidth: 0,
+}
+const RELATION_TAG_STYLE: React.CSSProperties = {
+  fontSize: 'var(--font-size-2xs)', color: 'var(--fg-muted)', flexShrink: 0,
+}
+
+/** 角色 + CV 区（anime-only）。已按 sort 排序（主角→配角→…），cap top-N；CV 多值用 / 连接。 */
+function CharactersBlock({
+  characters, density,
+}: { characters: readonly CatalogCharacterSummary[]; density: ExternalMetaPanelDensity }): React.ReactElement {
+  const cap = density === 'compact' ? 4 : 8
+  const shown = characters.slice(0, cap)
+  return (
+    <div data-external-characters-block>
+      <div style={SECTION_HEADER_STYLE}>角色 · 声优</div>
+      {shown.map((c, i) => (
+        <div key={`${c.name}-${i}`} style={META_ROW_STYLE} data-external-character-row>
+          <span style={CHAR_NAME_STYLE}>
+            {c.relation && (
+              c.relation === '主角'
+                ? <span style={PRIMARY_PILL_STYLE}>{RELATION_LABEL[c.relation] ?? c.relation}</span>
+                : <span style={RELATION_TAG_STYLE}>{RELATION_LABEL[c.relation] ?? c.relation}</span>
+            )}
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.name}</span>
+          </span>
+          <span style={META_VALUE_STYLE}>
+            {c.actors.length > 0 ? c.actors.map((a) => a.name).join(' / ') : '—'}
+          </span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 // ── 主组件 ───────────────────────────────────────────────────────────
 
 export function ExternalMetaPanel(props: ExternalMetaPanelProps): React.ReactElement {
-  const { type, catalogFields, bangumiInfo, enrichedAtLabel, density = 'drawer', testId } = props
+  const { type, catalogFields, bangumiInfo, characters, enrichedAtLabel, density = 'drawer', testId } = props
   const size: SourceLogoSize = density === 'drawer' ? 'md' : 'sm'
   const entries = buildEntries(props)
   // compact：仅命中源；drawer：全部（未命中灰显，暴露缺口）
@@ -231,6 +272,11 @@ export function ExternalMetaPanel(props: ExternalMetaPanelProps): React.ReactEle
 
       {/* ③ Bangumi 条目块（anime-only） */}
       {type === 'anime' && bangumiInfo && <BangumiBlock info={bangumiInfo} />}
+
+      {/* ④ 角色 · 声优区（anime-only / META-19） */}
+      {type === 'anime' && characters && characters.length > 0 && (
+        <CharactersBlock characters={characters} density={density} />
+      )}
     </div>
   )
 }
