@@ -2367,7 +2367,7 @@ CODENAME-MATRIX-E2E (依赖 Wave 3 验收期补丁 CODENAME-MATRIX ✅)
    - **后续**：当前 backfill 队列剩余 job 处理时自动命中新 dump；导入前已处理的 douban-unmatched movie 可 `reenrich-backfill --mode unmatched` 重入补命中。
 5. **META-17** — Bangumi 匹配质量改进：matchAndEnrich REST 精确兜底（方案 A）（状态：✅ 已完成 2026-05-30 / claude-opus-4-8 / 子代理无 / 单测 39 + 真实 API + 实时端到端三重验证 / 全量 5705 passed 零回归）
    - 根因：matchAndEnrich 只查空本地 dump、无 REST 兜底。修：dump 空/低置信 + token → REST 搜索 + 精确(name_cn/name 规范化==titleNorm)计分。师兄啊师兄→matched 388781 / 海贼王安全漏配（避开海贼王子）。
-   - **follow-up（择时）**：① Bangumi 别名感知 B（top-N getSubject 查 infobox 别名 → 召回海贼王↔航海王）② normalizeTitle 补 CJK 标点剥离（「当前、正被打扰中！」类漏配）
+   - **follow-up**：① ✅ **META-20 Bangumi 别名感知 B**（2026-05-31 / matchViaRest pass 2：name 未命中 → top-5 getSubject 查 infobox「别名」精确匹配 → 召回海贼王↔航海王 / 别名+年份→auto、别名无年份→candidate / getSubject null 跳过不退化 / +6 单测）② normalizeTitle 补 CJK 标点剥离（「当前、正被打扰中！」类漏配）— 仍待办
 
 > **Bangumi API 接入说明**：代码层**已接入**（`lib/bangumi.ts` 读 `BANGUMI_API_TOKEN` + `MetadataEnrichService.step3Bangumi` 对 anime 自动委托 BangumiService REST 富集）。当前没生效只因 Redis/worker 没跑（同 META-15-B）。一旦起 worker + 重富集 anime（META-15-C），Bangumi 自动匹配。剩余「凭证移 system_settings + UI 测试连接」（ADR-168/feature-1）是 backlog，非必需。
 

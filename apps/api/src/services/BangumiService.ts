@@ -24,6 +24,7 @@ import { normalizeTitle } from './TitleNormalizer'
 import {
   computeLocalBangumiConfidence,
   computeRestBangumiConfidence,
+  computeAliasBangumiConfidence,
   mapSubjectToCatalogFields,
   mapEpisodes,
   mapCharacters,
@@ -38,6 +39,8 @@ function parseYear(date: string | null | undefined): number | null {
 // ── 阈值（复用豆瓣范式）───────────────────────────────────────────
 const CONFIDENCE_AUTO_MATCH = 0.85
 const CONFIDENCE_CANDIDATE = 0.6
+// 别名感知 B（META-20）：name 未命中时 getSubject 查别名的候选上限（控 REST 调用量）
+const ALIAS_CHECK_TOP_N = 5
 
 // ── ADR-168 D-168-5：Bangumi 凭证进程内缓存（避免每 job 查 system_settings）──
 const BANGUMI_CONFIG_TTL_MS = 60_000
@@ -228,6 +231,11 @@ export class BangumiService {
    * **严格搜索**（Codex stop-time review 修复）：用 searchSubjectsStrict —— API 瞬时失败（超时/429/5xx/网络）
    * **抛出**而非返回 []，使 matchAndEnrich 将其上抛（enrichment job 由 Bull 重试 / bangumi-sync 端点报错），
    * 避免把瞬时故障误写成终态 unmatched（不可重试）。真无结果（200 + 空）才返回 null（→ 终态 unmatched 正确）。
+   *
+   * **别名感知 B**（META-20）：name 未精确命中时，对 top-N 候选拉 getSubject 查 infobox「别名」
+   * （curated，仅精确才认）—— 召回 name 与本地标题不一致但别名命中的作品（海贼王↔航海王）。
+   * getSubject null（瞬时/404）跳过：别名 pass 仅在 name-exact 基线（→unmatched）之上**增召回**，
+   * 不引入新退化（瞬时未召回 = 与未做别名前同为 unmatched，下次 backfill 重试）。
    */
   private async matchViaRest(
     titleNorm: string,
@@ -236,8 +244,20 @@ export class BangumiService {
   ): Promise<{ bangumiId: number; confidence: number; breakdown: Record<string, number>; localEntry: null } | null> {
     const items = await searchSubjectsStrict(titleNorm, 10, cfg)
     let best: { bangumiId: number; confidence: number; breakdown: Record<string, number>; localEntry: null } | null = null
+    // pass 1：name_cn/name 精确（无额外 REST 调用，保留 META-17 快路径）
     for (const item of items) {
       const { confidence, breakdown } = computeRestBangumiConfidence(item, titleNorm, year)
+      if (confidence >= CONFIDENCE_CANDIDATE && (best === null || confidence > best.confidence)) {
+        best = { bangumiId: item.id, confidence, breakdown, localEntry: null }
+      }
+    }
+    if (best !== null) return best
+
+    // pass 2（别名感知）：name 未命中 → top-N getSubject 查 infobox 别名
+    for (const item of items.slice(0, ALIAS_CHECK_TOP_N)) {
+      const subject = await getSubject(item.id, cfg)
+      if (!subject) continue
+      const { confidence, breakdown } = computeAliasBangumiConfidence(subject, titleNorm, year)
       if (confidence >= CONFIDENCE_CANDIDATE && (best === null || confidence > best.confidence)) {
         best = { bangumiId: item.id, confidence, breakdown, localEntry: null }
       }

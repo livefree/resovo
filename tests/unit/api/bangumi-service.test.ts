@@ -9,7 +9,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import {
   computeLocalBangumiConfidence,
   computeRestBangumiConfidence,
+  computeAliasBangumiConfidence,
   parseInfobox,
+  parseInfoboxAliases,
   mapSubjectToCatalogFields,
   mapEpisodes,
   mapCharacters,
@@ -55,8 +57,35 @@ describe('computeRestBangumiConfidence（META-17 方案 A：精确兜底）', ()
   it('模糊（海贼王子 ≠ 海贼王）→ 0（拒绝）', () => {
     expect(computeRestBangumiConfidence(item({ name_cn: '海贼王子', name: '' }), '海贼王', 2007).confidence).toBe(0)
   })
-  it('别名差异（航海王 ≠ 海贼王）→ 0（安全漏配）', () => {
+  it('别名差异（航海王 ≠ 海贼王）→ 0（安全漏配，由 META-20 别名感知补救）', () => {
     expect(computeRestBangumiConfidence(item({ name_cn: '航海王', name: 'ONE PIECE' }), '海贼王', 1999).confidence).toBe(0)
+  })
+})
+
+describe('parseInfoboxAliases / computeAliasBangumiConfidence（META-20 别名感知 B）', () => {
+  it('parseInfoboxAliases 提取「别名」（字符串 + 数组型）', () => {
+    expect(parseInfoboxAliases([
+      { key: '别名', value: [{ v: '海贼王' }, { v: 'ワンピース' }] },
+      { key: '导演', value: '尾田' },
+    ])).toEqual(['海贼王', 'ワンピース'])
+    expect(parseInfoboxAliases([{ key: '别名', value: '航海王' }])).toEqual(['航海王'])
+    expect(parseInfoboxAliases(null)).toEqual([])
+  })
+
+  it('别名精确命中 + 年份 → ≥0.85（auto，召回 海贼王↔航海王）', () => {
+    const subj = subject({ name_cn: '航海王', name: 'ONE PIECE', date: '1999-10-20', infobox: [{ key: '别名', value: [{ v: '海贼王' }] }] })
+    const r = computeAliasBangumiConfidence(subj, '海贼王', 1999)
+    expect(r.confidence).toBeCloseTo(0.92)
+  })
+
+  it('别名命中无年份 → 0.70（candidate，人工确认）', () => {
+    const subj = subject({ name_cn: '航海王', name: 'ONE PIECE', date: null, infobox: [{ key: '别名', value: '海贼王' }] })
+    expect(computeAliasBangumiConfidence(subj, '海贼王', null).confidence).toBeCloseTo(0.7)
+  })
+
+  it('无别名命中 → 0（不引入假阳性）', () => {
+    const subj = subject({ name_cn: '航海王', name: 'ONE PIECE', infobox: [{ key: '别名', value: '航海王启航' }] })
+    expect(computeAliasBangumiConfidence(subj, '火影忍者', 2002).confidence).toBe(0)
   })
 })
 
@@ -409,6 +438,29 @@ describe('BangumiService.matchAndEnrich', () => {
     const r = await svc.matchAndEnrich({ videoId: VID, catalogId: CID, titleNorm: 'x', year: 2007 })
     // candidate 不算「已绑定」→ 落正常匹配；本地+REST 空 → none
     expect(mFindByTitle).toHaveBeenCalled()
+    expect(r).toMatchObject({ matched: 'none' })
+  })
+
+  it('META-20：本地空 + REST name 未命中 + 别名命中 → auto（pass 2 别名感知）', async () => {
+    mFindByTitle.mockResolvedValue([])  // 本地 dump 空
+    // REST 搜索：name_cn=航海王 ≠ 海贼王 → pass 1 miss
+    mSearchStrict.mockResolvedValue([{ id: 100, name: 'ONE PIECE', name_cn: '航海王', date: '1999-10-20', images: null, rating: null }])
+    // pass 2 getSubject：infobox 别名含 海贼王 + 年份 1999 → 0.92 auto
+    mGetSubject.mockResolvedValue(subject({ id: 100, name_cn: '航海王', name: 'ONE PIECE', date: '1999-10-20', infobox: [{ key: '别名', value: [{ v: '海贼王' }] }] }))
+    mGetEpisodes.mockResolvedValue([])
+    mGetCharacters.mockResolvedValue(null)
+
+    const r = await svc.matchAndEnrich({ videoId: VID, catalogId: CID, titleNorm: '海贼王', year: 1999 })
+    expect(r).toMatchObject({ matched: 'auto', bangumiSubjectId: 100 })
+    expect(mUpsertRef).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ provider: 'bangumi', matchStatus: 'auto_matched' }))
+  })
+
+  it('META-20：REST name 未命中 + 别名也不命中 → none（不引入假阳性）', async () => {
+    mFindByTitle.mockResolvedValue([])
+    mSearchStrict.mockResolvedValue([{ id: 101, name: 'NARUTO', name_cn: '火影忍者', date: '2002-10-03', images: null, rating: null }])
+    mGetSubject.mockResolvedValue(subject({ id: 101, name_cn: '火影忍者', name: 'NARUTO', infobox: [{ key: '别名', value: '鸣人' }] }))
+
+    const r = await svc.matchAndEnrich({ videoId: VID, catalogId: CID, titleNorm: '海贼王', year: 1999 })
     expect(r).toMatchObject({ matched: 'none' })
   })
 

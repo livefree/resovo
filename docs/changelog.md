@@ -12651,3 +12651,17 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **价值评估（回应"老 dump 是否有用"）**：**有用但有边界**。豆瓣本地表此前为空（仅 12 网络命中）；导入后 movie 类型 step1 本地召回上量（评分/演职员/genres 完整 + 毫秒级，替代慢/限流网络 step2）。**边界**：dump 是 14 万部**电影**，库内 movie 仅 245（其余 series 271/variety 251/short 692/anime 420/other 839…）→ 主要惠及 movie；剧集/综艺/短片/anime 不在电影 dump 覆盖（anime 靠 bangumi）。2020 数据对存量老片完全够用；2021+ 新片仍走网络兜底。
 - **新增依赖/代码/schema 变更**：无（纯数据导入）。
 - **后续**：运行中 backfill 剩余 job 自动命中新 dump；导入前已处理的 douban-unmatched movie 可 `reenrich-backfill --mode unmatched` 重入补命中（unmatched 视频无绑定，重配安全）。
+
+---
+
+## [META-20] Bangumi 别名感知匹配（matchViaRest pass 2 / SEQ-20260530-04 follow-up）
+- **完成时间**：2026-05-31
+- **执行模型**：claude-opus-4-8 / 子代理：无（matchViaRest 算法扩展，ADR-161/META-17 范围内，非新契约/schema/ADR）
+- **来源**：META-17 follow-up ①（REST 精确兜底安全但召回保守，别名差异如 海贼王↔航海王 漏配）。
+- **问题**：`computeRestBangumiConfidence` 仅 name_cn/name 精确 → Bangumi 规范名与站内标题不一致时漏配（航海王≠海贼王）。
+- **方案（保守增召回，零新假阳性）**：`matchViaRest` 拆两段 —— pass 1 name 精确（不变，无额外 REST）；pass 1 无命中时 pass 2：对 top-5 候选 `getSubject` 查 infobox「别名」键，仅 `normalizeTitle` 精确等于 titleNorm 才认（base 0.70 + 年份加分：别名+年份→≥0.85 auto / 别名无年份→0.70 candidate 人工确认）。`getSubject` null（瞬时/404）跳过——pass 2 仅在 name-exact 基线（→unmatched）之上增召回，瞬时未召回 = 与未做前同为 unmatched（下次 backfill 重试），不引入新退化。
+- **修改文件**：`apps/api/src/services/BangumiService.utils.ts`（`parseInfoboxAliases` + `computeAliasBangumiConfidence`）、`apps/api/src/services/BangumiService.ts`（matchViaRest pass 2 + `ALIAS_CHECK_TOP_N=5`）
+- **测试**：bangumi-service +6（parseInfoboxAliases 字符串/数组/null / 别名+年份 0.92 / 别名无年份 0.70 / 无别名命中 0 / 集成：name 未命中+别名命中→auto / name+别名都不命中→none）
+- **新增依赖/schema/路由**：无。
+- **质量门禁**：typecheck/lint/verify:adr-contracts EXIT=0 / 全量 444 文件 **5787 passed 0 failed**（本轮无 flaky）。
+- **成本**：仅 name-exact 未命中时触发 top-5 getSubject（worker concurrency=2 限流）；多数命中走 pass 1 快路径无额外调用。

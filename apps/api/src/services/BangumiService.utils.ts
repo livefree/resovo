@@ -69,6 +69,45 @@ export function computeRestBangumiConfidence(
   return { confidence: Math.min(1, confidence), breakdown }
 }
 
+/**
+ * REST 别名感知置信度（META-20 别名感知 B）：name 未精确命中时查 subject infobox 别名。
+ *
+ * 仅当 titleNorm 规范化后**精确**等于某别名（或 name_cn/name 兜底）才给分（base 0.70 + 年份加分，
+ * 同 REST exact 档）。保守：仅精确别名匹配（curated infobox 「别名」键），避免假阳性；
+ * 别名无年份 → 0.70 候选（人工确认），别名 + 年份 → ≥0.85 自动（召回海贼王↔航海王）。
+ */
+export function computeAliasBangumiConfidence(
+  subject: BangumiSubject,
+  titleNorm: string,
+  year: number | null,
+): { confidence: number; breakdown: Record<string, number> } {
+  const candidates = [
+    subject.name_cn,
+    subject.name,
+    ...parseInfoboxAliases(subject.infobox),
+  ]
+  const exact = candidates.some((c) => {
+    const n = c ? normalizeTitle(c) : ''
+    return n !== '' && n === titleNorm
+  })
+  if (!exact) return { confidence: 0, breakdown: { rest_alias_no_exact: 0 } }
+
+  const breakdown: Record<string, number> = { rest_alias_exact: 0.7 }
+  let confidence = 0.7
+  const itemYear = extractYear(subject.date)
+  if (year !== null && itemYear !== null) {
+    const diff = Math.abs(itemYear - year)
+    if (diff === 0) {
+      breakdown.year_exact = 0.22
+      confidence += 0.22
+    } else if (diff === 1) {
+      breakdown.year_close = 0.17
+      confidence += 0.17
+    }
+  }
+  return { confidence: Math.min(1, confidence), breakdown }
+}
+
 // ── infobox 解析 ───────────────────────────────────────────────────
 
 /** 把 infobox value（string | {k?,v}[]）摊平为字符串数组 */
@@ -78,6 +117,17 @@ function infoboxValues(value: BangumiInfoboxItem['value']): string[] {
     return value.map((x) => x?.v).filter((v): v is string => typeof v === 'string' && v.trim().length > 0)
   }
   return []
+}
+
+/** 从 infobox 提取别名（键「别名」；中文名/英文名通常已在 name_cn/name，不重复取）。 */
+export function parseInfoboxAliases(infobox: BangumiInfoboxItem[] | undefined | null): string[] {
+  if (!Array.isArray(infobox)) return []
+  const out: string[] = []
+  for (const item of infobox) {
+    if (!item || typeof item.key !== 'string') continue
+    if (item.key.trim() === '别名' || item.key.trim() === '別名') out.push(...infoboxValues(item.value))
+  }
+  return out
 }
 
 export interface ParsedInfobox {
