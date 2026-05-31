@@ -12464,3 +12464,19 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **质量门禁**：typecheck/lint EXIT=0 / bangumi-service 39 全过 / 全量 **442 文件 5705 passed 零失败**（+11 / 零回归）
 - **三重验证**：① 单测 39 ② 真实 bangumi API（师兄啊师兄→388781 AUTO / 搜神记→434759 AUTO 靠年份选对 / 海贼王→NO-MATCH 避开海贼王子）③ **实时端到端**（入队师兄啊师兄 → 运行中 worker 热重载新代码 → DB bangumi_status=matched + subject_id=388781 + 日文原名写入）
 - **注意事项**：dev DB 现已有真实富集数据（海贼王 douban matched / 师兄啊师兄 bangumi matched）→ 这些视频徽标已可点亮。follow-up：别名感知 B（召回航海王类）+ normalizeTitle CJK 标点剥离（当前、正被打扰中！类）。META-15-A（TMDB dump）已 DEFER（孤儿 catalog / 无视频回填路径）。
+
+---
+
+## [META-17-FIX] Bangumi REST 兜底瞬时失败处理（Codex stop-time review 修复）
+- **完成时间**：2026-05-30
+- **记录时间**：2026-05-30
+- **执行模型**：claude-opus-4-8
+- **子代理**：无（Codex stop-time review 触发 / 修 META-17 正确性缺陷）
+- **缺陷（Codex review）**：REST 兜底把 Bangumi API **瞬时失败**静默转成**终态**（unmatched / matched-空数据），不可重试 → 永久丢失潜在匹配 / 留下空 matched。
+- **修复文件**：
+  - `apps/api/src/lib/bangumi.ts` — 新增 `searchSubjectsStrict`（网络/超时/非 2xx **抛出**，不吞）；`searchSubjects` 重构为其 try/catch 宽容包装（契约不变，searchCandidates 手动路径仍优雅 []）
+  - `apps/api/src/services/BangumiService.ts` — ① `matchViaRest` 改用 `searchSubjectsStrict`（瞬时失败上抛 → enrichment job 由 Bull 重试 / bangumi-sync 端点报错，不写终态 unmatched；真无结果 200+空 才 → unmatched 正确）② matchAndEnrich 加 `data.fields===null` 守卫：REST 命中（localEntry=null）但 getSubject 详情瞬时失败 → 抛出重试，不提交「matched 但空数据」终态（本地 dump 命中 fields 恒非空，不受影响）
+  - `tests/unit/api/bangumi-service.test.ts` — mock 加 searchSubjectsStrict；+2 用例（搜索 throw→上抛不写 unmatched / getSubject 失败→上抛不写 matched）
+- **新增依赖**：无 / **数据库变更**：无
+- **质量门禁**：typecheck/lint EXIT=0 / bangumi-service 41 全过 / 全量 **442 文件 5707 passed 零失败**
+- **语义**：瞬时失败 → 保持 pending + 重试（可恢复）；确定性无匹配（API 正常返回空）→ 终态 unmatched（正确）。

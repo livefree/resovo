@@ -144,19 +144,32 @@ export async function getEpisodes(subjectId: number): Promise<BangumiEpisode[]> 
 }
 
 /**
- * POST /v0/search/subjects — 关键词搜索动画（type=2）候选。失败返回 []。
+ * POST /v0/search/subjects — 关键词搜索动画（type=2）候选。
+ *
+ * **严格版**：网络错误 / 超时 / 非 2xx 一律**抛出**（不吞）。
+ * 用于自动富集匹配路径（BangumiService.matchViaRest）—— 调用方需区分「真无结果（[]）」与
+ * 「瞬时失败（throw）」，避免把 API 瞬时故障误写成终态 unmatched（Codex stop-time review）。
+ * 成功且 data 缺省 → 返回 []（真无结果）。
+ */
+export async function searchSubjectsStrict(keyword: string, limit = 10): Promise<BangumiSearchItem[]> {
+  const res = await fetch(`${API_BASE}/v0/search/subjects?limit=${limit}`, {
+    method: 'POST',
+    headers: buildHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify({ keyword, filter: { type: [2] } }),
+    signal: AbortSignal.timeout(timeoutMs()),
+  })
+  if (!res.ok) throw new Error(`bangumi searchSubjects failed: HTTP ${res.status}`)
+  const data = (await res.json()) as { data?: BangumiSearchItem[] }
+  return Array.isArray(data.data) ? data.data : []
+}
+
+/**
+ * POST /v0/search/subjects — 关键词搜索动画（type=2）候选。**宽容版**：失败返回 []。
+ * 用于手动后台候选搜索（searchCandidates）—— API 故障时优雅降级为「无候选」，不阻断 UI。
  */
 export async function searchSubjects(keyword: string, limit = 10): Promise<BangumiSearchItem[]> {
   try {
-    const res = await fetch(`${API_BASE}/v0/search/subjects?limit=${limit}`, {
-      method: 'POST',
-      headers: buildHeaders({ 'Content-Type': 'application/json' }),
-      body: JSON.stringify({ keyword, filter: { type: [2] } }),
-      signal: AbortSignal.timeout(timeoutMs()),
-    })
-    if (!res.ok) return []
-    const data = (await res.json()) as { data?: BangumiSearchItem[] }
-    return Array.isArray(data.data) ? data.data : []
+    return await searchSubjectsStrict(keyword, limit)
   } catch {
     return []
   }

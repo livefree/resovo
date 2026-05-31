@@ -133,6 +133,7 @@ vi.mock('@/api/lib/bangumi', () => ({
   getSubject: vi.fn(),
   getEpisodes: vi.fn(),
   searchSubjects: vi.fn(),
+  searchSubjectsStrict: vi.fn(),
   isBangumiApiConfigured: vi.fn(),
 }))
 vi.mock('@/api/db/queries/externalData', () => ({
@@ -168,7 +169,7 @@ import * as catQ from '@/api/db/queries/mediaCatalog'
 const mGetSubject = bangumiLib.getSubject as ReturnType<typeof vi.fn>
 const mGetEpisodes = bangumiLib.getEpisodes as ReturnType<typeof vi.fn>
 const mConfigured = bangumiLib.isBangumiApiConfigured as ReturnType<typeof vi.fn>
-const mSearchSubjects = bangumiLib.searchSubjects as ReturnType<typeof vi.fn>
+const mSearchStrict = bangumiLib.searchSubjectsStrict as ReturnType<typeof vi.fn>
 const mFindByTitle = extQ.findBangumiByTitleNorm as ReturnType<typeof vi.fn>
 const mFindById = extQ.findBangumiById as ReturnType<typeof vi.fn>
 const mUpsertRef = extQ.upsertVideoExternalRef as ReturnType<typeof vi.fn>
@@ -207,7 +208,7 @@ describe('BangumiService.matchAndEnrich', () => {
     mUpdateCatalog.mockResolvedValue({ id: CID, metadataSource: 'bangumi' })
     mConfigured.mockReturnValue(true)
     // META-17：REST 兜底默认无命中（既有用例 REST 不参与 → 行为不变）；REST 用例各自覆写
-    mSearchSubjects.mockResolvedValue([])
+    mSearchStrict.mockResolvedValue([])
   })
 
   it('本地无匹配 → none/no_local_match + 写 bangumi_status=unmatched（Pool / ADR-170）', async () => {
@@ -356,20 +357,20 @@ describe('BangumiService.matchAndEnrich', () => {
   // ── META-17 方案 A：REST 精确兜底（本地 dump 空时）──────────────────
   it('REST 兜底：name_cn 精确 + 年份 → auto（dump 空 / token 配置）', async () => {
     mFindByTitle.mockResolvedValue([])
-    mSearchSubjects.mockResolvedValue([
+    mSearchStrict.mockResolvedValue([
       { id: 975, name: 'ONE PIECE', name_cn: '海贼王', date: '2007-01-01', images: null, rating: null },
     ])
     mGetSubject.mockResolvedValue(subject({ id: 975 }))
     mGetEpisodes.mockResolvedValue([])
     const r = await svc.matchAndEnrich({ videoId: VID, catalogId: CID, titleNorm: '海贼王', year: 2007 })
     expect(r).toMatchObject({ matched: 'auto', bangumiSubjectId: 975 })
-    expect(mSearchSubjects).toHaveBeenCalledWith('海贼王')
+    expect(mSearchStrict).toHaveBeenCalledWith('海贼王')
     expect(mUpsertRef).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ matchStatus: 'auto_matched', isPrimary: true }))
   })
 
   it('REST 兜底：name 精确无年份 → candidate', async () => {
     mFindByTitle.mockResolvedValue([])
-    mSearchSubjects.mockResolvedValue([
+    mSearchStrict.mockResolvedValue([
       { id: 800, name: 'clannad', name_cn: '别名不符', date: null, images: null, rating: null },
     ])
     const r = await svc.matchAndEnrich({ videoId: VID, catalogId: CID, titleNorm: 'clannad', year: null })
@@ -379,7 +380,7 @@ describe('BangumiService.matchAndEnrich', () => {
 
   it('REST 兜底：模糊命中（海贼王子 ≠ 海贼王）→ 拒绝 none/unmatched（防假阳性）', async () => {
     mFindByTitle.mockResolvedValue([])
-    mSearchSubjects.mockResolvedValue([
+    mSearchStrict.mockResolvedValue([
       { id: 145691, name: '', name_cn: '海贼王子', date: null, images: null, rating: null },
     ])
     const r = await svc.matchAndEnrich({ videoId: VID, catalogId: CID, titleNorm: '海贼王', year: null })
@@ -389,7 +390,7 @@ describe('BangumiService.matchAndEnrich', () => {
 
   it('REST 兜底：别名差异（航海王 ≠ 海贼王）→ 安全漏配 none（留人工确认）', async () => {
     mFindByTitle.mockResolvedValue([])
-    mSearchSubjects.mockResolvedValue([
+    mSearchStrict.mockResolvedValue([
       { id: 975, name: 'ONE PIECE', name_cn: '航海王', date: '1999-01-01', images: null, rating: null },
     ])
     const r = await svc.matchAndEnrich({ videoId: VID, catalogId: CID, titleNorm: '海贼王', year: 1999 })
@@ -401,7 +402,7 @@ describe('BangumiService.matchAndEnrich', () => {
     mFindByTitle.mockResolvedValue([])
     const r = await svc.matchAndEnrich({ videoId: VID, catalogId: CID, titleNorm: '海贼王', year: 2007 })
     expect(r).toEqual({ matched: 'none', reason: 'no_local_match' })
-    expect(mSearchSubjects).not.toHaveBeenCalled()
+    expect(mSearchStrict).not.toHaveBeenCalled()
   })
 
   it('本地命中 → 不触发 REST 兜底', async () => {
@@ -409,7 +410,32 @@ describe('BangumiService.matchAndEnrich', () => {
     mGetSubject.mockResolvedValue(subject())
     mGetEpisodes.mockResolvedValue([])
     await svc.matchAndEnrich({ videoId: VID, catalogId: CID, titleNorm: 'x', year: 2007 })
-    expect(mSearchSubjects).not.toHaveBeenCalled()
+    expect(mSearchStrict).not.toHaveBeenCalled()
+  })
+
+  // ── Codex stop-time review 修复：瞬时失败不得写终态 ───────────────────
+  it('REST 搜索瞬时失败（throw）→ 上抛重试，不写终态 unmatched', async () => {
+    mFindByTitle.mockResolvedValue([])
+    mSearchStrict.mockRejectedValue(new Error('bangumi searchSubjects failed: HTTP 429'))
+    await expect(
+      svc.matchAndEnrich({ videoId: VID, catalogId: CID, titleNorm: '海贼王', year: 2007 }),
+    ).rejects.toThrow('429')
+    // 关键：未把瞬时失败误写成终态 unmatched（保持 pending，由 Bull 重试）
+    expect(mUpdateBangumiStatus).not.toHaveBeenCalled()
+  })
+
+  it('REST 命中但 getSubject 详情瞬时失败（fields=null）→ 上抛重试，不提交 matched 空数据', async () => {
+    mFindByTitle.mockResolvedValue([])
+    mSearchStrict.mockResolvedValue([
+      { id: 975, name: 'ONE PIECE', name_cn: '海贼王', date: '2007-01-01', images: null, rating: null },
+    ])
+    mGetSubject.mockResolvedValue(null) // 详情瞬时失败 → degraded + fields=null（REST 命中无 dump 降级）
+    await expect(
+      svc.matchAndEnrich({ videoId: VID, catalogId: CID, titleNorm: '海贼王', year: 2007 }),
+    ).rejects.toThrow(/detail fetch failed/)
+    // 关键：未提交 matched + 未写 ref（无「matched 但空数据」终态）
+    expect(mUpsertRef).not.toHaveBeenCalled()
+    expect(mUpdateBangumiStatus).not.toHaveBeenCalledWith(expect.anything(), VID, 'matched')
   })
 })
 

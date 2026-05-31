@@ -15,7 +15,7 @@ import type { BangumiEntryMatch } from '@/api/db/queries/externalData'
 import * as catalogEpisodeQueries from '@/api/db/queries/catalogEpisodes'
 import type { CatalogEpisodeInput } from '@/api/db/queries/catalogEpisodes'
 import * as videosQueries from '@/api/db/queries/videos'
-import { getSubject, getEpisodes, searchSubjects, isBangumiApiConfigured } from '@/api/lib/bangumi'
+import { getSubject, getEpisodes, searchSubjects, searchSubjectsStrict, isBangumiApiConfigured } from '@/api/lib/bangumi'
 import { normalizeTitle } from './TitleNormalizer'
 import {
   computeLocalBangumiConfidence,
@@ -109,6 +109,12 @@ export class BangumiService {
     // job 失败时整体 ROLLBACK，由上层 enrichmentQueue 重试（幂等收敛，但不留孤儿 ref）。
     // localEntry=null（REST 兜底命中）时 gatherEnrichmentData 纯走 REST（与 confirmMatch 同路径）。
     const data = await this.gatherEnrichmentData(bangumiId, localEntry)
+    // Codex stop-time review 修复：REST 兜底命中（localEntry=null）但 getSubject 详情瞬时失败 → fields=null
+    // （无 dump 降级可用）。此时**不可**提交「matched 但无数据」终态 → 抛出让 Bull 重试 / 端点报错。
+    // 本地 dump 命中（localEntry≠null）时 fields 恒由 dump 兜底为非空，不受此守卫影响。
+    if (data.fields === null) {
+      throw new Error(`bangumi enrich: subject ${bangumiId} detail fetch failed (no fields, transient) — retry`)
+    }
     const episodesWritten = await this.applyAutoMatchAtomic(
       videoId, catalogId, bangumiId, confidence, breakdown, data,
     )
@@ -123,14 +129,18 @@ export class BangumiService {
 
   /**
    * META-17 方案 A：REST 精确兜底匹配（本地 dump 未命中时）。
-   * searchSubjects 模糊搜索 → 仅取 `name_cn`/`name` 规范化精确等于 titleNorm 的候选（computeRestBangumiConfidence），
+   * searchSubjectsStrict 模糊搜索 → 仅取 `name_cn`/`name` 规范化精确等于 titleNorm 的候选（computeRestBangumiConfidence），
    * 取置信度最高者。非精确一律拒绝（避免「海贼王→海贼王子」假阳性）。返回 localEntry=null（无本地条目）。
+   *
+   * **严格搜索**（Codex stop-time review 修复）：用 searchSubjectsStrict —— API 瞬时失败（超时/429/5xx/网络）
+   * **抛出**而非返回 []，使 matchAndEnrich 将其上抛（enrichment job 由 Bull 重试 / bangumi-sync 端点报错），
+   * 避免把瞬时故障误写成终态 unmatched（不可重试）。真无结果（200 + 空）才返回 null（→ 终态 unmatched 正确）。
    */
   private async matchViaRest(
     titleNorm: string,
     year: number | null,
   ): Promise<{ bangumiId: number; confidence: number; breakdown: Record<string, number>; localEntry: null } | null> {
-    const items = await searchSubjects(titleNorm)
+    const items = await searchSubjectsStrict(titleNorm)
     let best: { bangumiId: number; confidence: number; breakdown: Record<string, number>; localEntry: null } | null = null
     for (const item of items) {
       const { confidence, breakdown } = computeRestBangumiConfidence(item, titleNorm, year)
