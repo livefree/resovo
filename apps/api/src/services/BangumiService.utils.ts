@@ -5,8 +5,9 @@
 
 import type { CatalogUpdateData } from '@/api/db/queries/mediaCatalog'
 import type { BangumiEntryMatch } from '@/api/db/queries/externalData'
-import type { BangumiSubject, BangumiEpisode, BangumiInfoboxItem, BangumiSearchItem } from '@/api/lib/bangumi'
+import type { BangumiSubject, BangumiEpisode, BangumiInfoboxItem, BangumiSearchItem, BangumiCharacter, BangumiImages } from '@/api/lib/bangumi'
 import type { CatalogEpisodeInput } from '@/api/db/queries/catalogEpisodes'
+import type { CatalogCharacterInput } from '@/api/db/queries/catalogCharacters'
 import { normalizeTitle } from './TitleNormalizer'
 
 // ── 置信度（复用豆瓣 dump 阈值范式，本地匹配仅 title_norm，base 0.70）────
@@ -68,6 +69,45 @@ export function computeRestBangumiConfidence(
   return { confidence: Math.min(1, confidence), breakdown }
 }
 
+/**
+ * REST 别名感知置信度（META-20 别名感知 B）：name 未精确命中时查 subject infobox 别名。
+ *
+ * 仅当 titleNorm 规范化后**精确**等于某别名（或 name_cn/name 兜底）才给分（base 0.70 + 年份加分，
+ * 同 REST exact 档）。保守：仅精确别名匹配（curated infobox 「别名」键），避免假阳性；
+ * 别名无年份 → 0.70 候选（人工确认），别名 + 年份 → ≥0.85 自动（召回海贼王↔航海王）。
+ */
+export function computeAliasBangumiConfidence(
+  subject: BangumiSubject,
+  titleNorm: string,
+  year: number | null,
+): { confidence: number; breakdown: Record<string, number> } {
+  const candidates = [
+    subject.name_cn,
+    subject.name,
+    ...parseInfoboxAliases(subject.infobox),
+  ]
+  const exact = candidates.some((c) => {
+    const n = c ? normalizeTitle(c) : ''
+    return n !== '' && n === titleNorm
+  })
+  if (!exact) return { confidence: 0, breakdown: { rest_alias_no_exact: 0 } }
+
+  const breakdown: Record<string, number> = { rest_alias_exact: 0.7 }
+  let confidence = 0.7
+  const itemYear = extractYear(subject.date)
+  if (year !== null && itemYear !== null) {
+    const diff = Math.abs(itemYear - year)
+    if (diff === 0) {
+      breakdown.year_exact = 0.22
+      confidence += 0.22
+    } else if (diff === 1) {
+      breakdown.year_close = 0.17
+      confidence += 0.17
+    }
+  }
+  return { confidence: Math.min(1, confidence), breakdown }
+}
+
 // ── infobox 解析 ───────────────────────────────────────────────────
 
 /** 把 infobox value（string | {k?,v}[]）摊平为字符串数组 */
@@ -77,6 +117,17 @@ function infoboxValues(value: BangumiInfoboxItem['value']): string[] {
     return value.map((x) => x?.v).filter((v): v is string => typeof v === 'string' && v.trim().length > 0)
   }
   return []
+}
+
+/** 从 infobox 提取别名（键「别名」；中文名/英文名通常已在 name_cn/name，不重复取）。 */
+export function parseInfoboxAliases(infobox: BangumiInfoboxItem[] | undefined | null): string[] {
+  if (!Array.isArray(infobox)) return []
+  const out: string[] = []
+  for (const item of infobox) {
+    if (!item || typeof item.key !== 'string') continue
+    if (item.key.trim() === '别名' || item.key.trim() === '別名') out.push(...infoboxValues(item.value))
+  }
+  return out
 }
 
 export interface ParsedInfobox {
@@ -173,6 +224,21 @@ function parseDurationSeconds(raw: string | null | undefined): number | null {
   return null
 }
 
+/**
+ * 清洗 Bangumi airdate → 仅接受完整合法 `YYYY-MM-DD`，否则 null（META-15-C backfill 暴露）。
+ * Bangumi 部分剧集 airdate 为「仅年份(2099) / 残缺(2024-00-00) / 空」→ 直插 DATE 列会
+ * `invalid input syntax for type date` 失败并回滚整个 enrich 事务（catalog+角色+ref 全丢）。
+ */
+function sanitizeAirdate(raw: string | null | undefined): string | null {
+  if (!raw) return null
+  const m = raw.trim().match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  if (!m) return null
+  const mo = Number(m[2])
+  const d = Number(m[3])
+  if (mo < 1 || mo > 12 || d < 1 || d > 31) return null
+  return `${m[1]}-${m[2]}-${m[3]}`
+}
+
 /** BangumiEpisode[] → CatalogEpisodeInput[]（source='bangumi'） */
 export function mapEpisodes(episodes: BangumiEpisode[]): CatalogEpisodeInput[] {
   return episodes.map((e) => ({
@@ -183,8 +249,46 @@ export function mapEpisodes(episodes: BangumiEpisode[]): CatalogEpisodeInput[] {
     ep: typeof e.ep === 'number' ? e.ep : null,
     name: e.name?.trim() || null,
     nameCn: e.name_cn?.trim() || null,
-    airdate: e.airdate?.trim() || null,
+    airdate: sanitizeAirdate(e.airdate),
     durationSeconds: e.duration_seconds ?? parseDurationSeconds(e.duration),
     description: e.desc?.trim() || null,
   }))
+}
+
+// ── 角色 + CV 映射（ADR-161 AMENDMENT / META-19）──────────────────────
+
+/** relation 展示排序权重（越小越靠前）；未知 relation 排末（9）。 */
+const RELATION_SORT_WEIGHT: Record<string, number> = {
+  主角: 0, 配角: 1, 客串: 2, 闲角: 3,
+}
+
+/** 取最佳可用图（large→medium→common→grid→small），无则 null。 */
+function pickImage(images: BangumiImages | null): string | null {
+  return images?.large || images?.medium || images?.common || images?.grid || images?.small || null
+}
+
+/**
+ * BangumiCharacter[] → CatalogCharacterInput[]（source='bangumi'）。
+ * sort = relation 权重 × 1000 + 原序（relation 分组内保留源序）；actor 按源数组序。
+ */
+export function mapCharacters(characters: BangumiCharacter[]): CatalogCharacterInput[] {
+  return characters.map((c, i) => {
+    const weight = RELATION_SORT_WEIGHT[c.relation?.trim() ?? ''] ?? 9
+    return {
+      source: 'bangumi',
+      externalCharacterId: String(c.id),
+      name: c.name?.trim() || String(c.id),
+      relation: c.relation?.trim() || null,
+      charType: typeof c.type === 'number' ? c.type : null,
+      sort: weight * 1000 + i,
+      imageUrl: pickImage(c.images),
+      summary: c.summary?.trim() || null,
+      actors: (c.actors ?? []).map((a, j) => ({
+        externalActorId: String(a.id),
+        name: a.name?.trim() || String(a.id),
+        imageUrl: pickImage(a.images),
+        sort: j,
+      })),
+    }
+  })
 }

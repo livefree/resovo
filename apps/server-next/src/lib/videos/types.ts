@@ -6,9 +6,12 @@ import type {
   VisibilityStatus,
   DoubanStatus,
   EnrichmentSummary,
+  ExternalRefSummary,
+  BangumiEntrySummary,
+  CatalogCharacterSummary,
 } from '@resovo/types'
 
-export type { VideoType, VideoStatus, VideoGenre, ReviewStatus, VisibilityStatus, DoubanStatus, EnrichmentSummary }
+export type { VideoType, VideoStatus, VideoGenre, ReviewStatus, VisibilityStatus, DoubanStatus, EnrichmentSummary, ExternalRefSummary, BangumiEntrySummary, CatalogCharacterSummary }
 
 // ── 列表行（对应 GET /admin/videos 响应结构）─────────────────────
 
@@ -77,6 +80,15 @@ export interface VideoAdminDetail extends VideoAdminRow {
   cast: string[]
   writers: string[]
   douban_id: string | null
+  // ADR-172 AMENDMENT 3：真源字段区（catalogFields 镜像；api raw row 已 select）
+  title_original?: string | null
+  rating_votes?: number | null
+  metadata_source?: string | null
+  // ADR-172 AMENDMENT 3：外部源并集（仅 adminFindById 注入，列表不带）
+  externalRefs?: readonly ExternalRefSummary[]
+  bangumiInfo?: BangumiEntrySummary  // 仅 anime + 命中时存在
+  // ADR-161 AMENDMENT / META-19：bangumi 角色 + CV（仅 anime + 命中时存在）
+  bangumiCharacters?: readonly CatalogCharacterSummary[]
 }
 
 // ── 元数据编辑 Patch ──────────────────────────────────────────────

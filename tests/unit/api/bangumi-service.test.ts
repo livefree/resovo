@@ -9,10 +9,14 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import {
   computeLocalBangumiConfidence,
   computeRestBangumiConfidence,
+  computeAliasBangumiConfidence,
   parseInfobox,
+  parseInfoboxAliases,
   mapSubjectToCatalogFields,
   mapEpisodes,
+  mapCharacters,
 } from '@/api/services/BangumiService.utils'
+import type { BangumiCharacter } from '@/api/lib/bangumi'
 import type { BangumiSearchItem } from '@/api/lib/bangumi'
 import type { BangumiEntryMatch } from '@/api/db/queries/externalData'
 import type { BangumiSubject, BangumiEpisode } from '@/api/lib/bangumi'
@@ -53,8 +57,35 @@ describe('computeRestBangumiConfidence（META-17 方案 A：精确兜底）', ()
   it('模糊（海贼王子 ≠ 海贼王）→ 0（拒绝）', () => {
     expect(computeRestBangumiConfidence(item({ name_cn: '海贼王子', name: '' }), '海贼王', 2007).confidence).toBe(0)
   })
-  it('别名差异（航海王 ≠ 海贼王）→ 0（安全漏配）', () => {
+  it('别名差异（航海王 ≠ 海贼王）→ 0（安全漏配，由 META-20 别名感知补救）', () => {
     expect(computeRestBangumiConfidence(item({ name_cn: '航海王', name: 'ONE PIECE' }), '海贼王', 1999).confidence).toBe(0)
+  })
+})
+
+describe('parseInfoboxAliases / computeAliasBangumiConfidence（META-20 别名感知 B）', () => {
+  it('parseInfoboxAliases 提取「别名」（字符串 + 数组型）', () => {
+    expect(parseInfoboxAliases([
+      { key: '别名', value: [{ v: '海贼王' }, { v: 'ワンピース' }] },
+      { key: '导演', value: '尾田' },
+    ])).toEqual(['海贼王', 'ワンピース'])
+    expect(parseInfoboxAliases([{ key: '别名', value: '航海王' }])).toEqual(['航海王'])
+    expect(parseInfoboxAliases(null)).toEqual([])
+  })
+
+  it('别名精确命中 + 年份 → ≥0.85（auto，召回 海贼王↔航海王）', () => {
+    const subj = subject({ name_cn: '航海王', name: 'ONE PIECE', date: '1999-10-20', infobox: [{ key: '别名', value: [{ v: '海贼王' }] }] })
+    const r = computeAliasBangumiConfidence(subj, '海贼王', 1999)
+    expect(r.confidence).toBeCloseTo(0.92)
+  })
+
+  it('别名命中无年份 → 0.70（candidate，人工确认）', () => {
+    const subj = subject({ name_cn: '航海王', name: 'ONE PIECE', date: null, infobox: [{ key: '别名', value: '海贼王' }] })
+    expect(computeAliasBangumiConfidence(subj, '海贼王', null).confidence).toBeCloseTo(0.7)
+  })
+
+  it('无别名命中 → 0（不引入假阳性）', () => {
+    const subj = subject({ name_cn: '航海王', name: 'ONE PIECE', infobox: [{ key: '别名', value: '航海王启航' }] })
+    expect(computeAliasBangumiConfidence(subj, '火影忍者', 2002).confidence).toBe(0)
   })
 })
 
@@ -125,6 +156,48 @@ describe('mapEpisodes', () => {
       name: 'Ep1', nameCn: '第一集', airdate: '2007-10-04', durationSeconds: 1440,
     })
   })
+
+  it('META-15-C：清洗非法 airdate（仅年份/残缺/空 → null，防 DATE 插入失败回滚）', () => {
+    const mk = (id: number, airdate: string) => ({
+      id, type: 0, name: '', name_cn: '', sort: id, ep: id,
+      airdate, duration: '', duration_seconds: 0, desc: '',
+    })
+    const r = mapEpisodes([
+      mk(1, '2099'),          // 仅年份
+      mk(2, '2024-00-00'),    // 残缺月日
+      mk(3, ''),              // 空
+      mk(4, '2007-10-04'),    // 合法
+      mk(5, '2024-13-40'),    // 越界月日
+    ])
+    expect(r.map((e) => e.airdate)).toEqual([null, null, null, '2007-10-04', null])
+  })
+})
+
+describe('mapCharacters（META-19）', () => {
+  const chars: BangumiCharacter[] = [
+    { id: 1, name: '配角X', type: 1, images: { medium: 'x.jpg' }, relation: '配角', summary: 's1', actors: [{ id: 91, name: 'CV-X', type: 1, images: null }] },
+    { id: 2, name: '主角Y', type: 1, images: null, relation: '主角', summary: 's2',
+      actors: [{ id: 92, name: 'CV-Y1', type: 1, images: { large: 'y1.jpg' } }, { id: 93, name: 'CV-Y2', type: 1, images: null }] },
+    { id: 3, name: '路人Z', type: 1, images: null, relation: '闲角', summary: '', actors: [] },
+  ]
+
+  it('映射 + relation 权重排序（主角 sort < 配角 < 闲角）', () => {
+    const r = mapCharacters(chars)
+    const byName = Object.fromEntries(r.map((c) => [c.name, c]))
+    expect(byName['主角Y'].sort).toBeLessThan(byName['配角X'].sort)
+    expect(byName['配角X'].sort).toBeLessThan(byName['路人Z'].sort)
+  })
+
+  it('保留 N:M 多 CV + 字段映射 + 取图降级', () => {
+    const r = mapCharacters(chars)
+    const y = r.find((c) => c.name === '主角Y')!
+    expect(y).toMatchObject({ source: 'bangumi', externalCharacterId: '2', relation: '主角', charType: 1 })
+    expect(y.actors).toHaveLength(2)
+    expect(y.actors[0]).toMatchObject({ externalActorId: '92', name: 'CV-Y1', imageUrl: 'y1.jpg', sort: 0 })
+    expect(y.actors[1]).toMatchObject({ externalActorId: '93', name: 'CV-Y2', imageUrl: null, sort: 1 })
+    // 取图降级：配角X 用 medium
+    expect(r.find((c) => c.name === '配角X')!.imageUrl).toBe('x.jpg')
+  })
 })
 
 // ── Service（mock 依赖）──────────────────────────────────────────
@@ -132,6 +205,8 @@ describe('mapEpisodes', () => {
 vi.mock('@/api/lib/bangumi', () => ({
   getSubject: vi.fn(),
   getEpisodes: vi.fn(),
+  // 默认 null = 抓取未成功（既有 auto 用例不触发角色替换）；角色用例各自覆写
+  getCharacters: vi.fn().mockResolvedValue(null),
   searchSubjects: vi.fn(),
   searchSubjectsStrict: vi.fn(),
   isBangumiApiConfigured: vi.fn(),
@@ -140,13 +215,22 @@ vi.mock('@/api/db/queries/externalData', () => ({
   findBangumiByTitleNorm: vi.fn(),
   findBangumiById: vi.fn(),
   upsertVideoExternalRef: vi.fn().mockResolvedValue({}),
+  // META-15-C FIX：默认无既有绑定 → 走正常匹配（既有用例不受影响）；绑定用例各自覆写
+  findPrimaryVideoExternalRef: vi.fn().mockResolvedValue(null),
 }))
 vi.mock('@/api/db/queries/catalogEpisodes', () => ({
   upsertCatalogEpisodes: vi.fn().mockResolvedValue(0),
 }))
+vi.mock('@/api/db/queries/catalogCharacters', () => ({
+  replaceCatalogCharacters: vi.fn().mockResolvedValue(0),
+}))
 vi.mock('@/api/db/queries/videos', () => ({
   updateEpisodeCount: vi.fn().mockResolvedValue(undefined),
   updateVideoBangumiStatus: vi.fn().mockResolvedValue(undefined),
+}))
+// META-16-B：getBangumiConfig 读 system_settings；默认返回空 → cfg={} → lib 回退 env（mConfigured 控制行为）
+vi.mock('@/api/db/queries/systemSettings', () => ({
+  getAllSettings: vi.fn().mockResolvedValue({}),
 }))
 vi.mock('@/api/db/queries/mediaCatalog', () => ({
   findCatalogById: vi.fn(),
@@ -159,13 +243,16 @@ vi.mock('@/api/db/queries/metadataProvenance', () => ({
   batchUpsertFieldProvenance: vi.fn().mockResolvedValue(undefined),
 }))
 
-import { BangumiService } from '@/api/services/BangumiService'
+import { BangumiService, clearBangumiConfigCache } from '@/api/services/BangumiService'
 import * as bangumiLib from '@/api/lib/bangumi'
 import * as extQ from '@/api/db/queries/externalData'
 import * as epQ from '@/api/db/queries/catalogEpisodes'
 import * as vQ from '@/api/db/queries/videos'
 import * as catQ from '@/api/db/queries/mediaCatalog'
+import * as charQ from '@/api/db/queries/catalogCharacters'
+import * as sysQ from '@/api/db/queries/systemSettings'
 
+const mGetAllSettings = sysQ.getAllSettings as ReturnType<typeof vi.fn>
 const mGetSubject = bangumiLib.getSubject as ReturnType<typeof vi.fn>
 const mGetEpisodes = bangumiLib.getEpisodes as ReturnType<typeof vi.fn>
 const mConfigured = bangumiLib.isBangumiApiConfigured as ReturnType<typeof vi.fn>
@@ -178,6 +265,9 @@ const mUpdateEpCount = vQ.updateEpisodeCount as ReturnType<typeof vi.fn>
 const mUpdateBangumiStatus = vQ.updateVideoBangumiStatus as ReturnType<typeof vi.fn>
 const mFindCatalog = catQ.findCatalogById as ReturnType<typeof vi.fn>
 const mUpdateCatalog = catQ.updateCatalogFields as ReturnType<typeof vi.fn>
+const mGetCharacters = bangumiLib.getCharacters as ReturnType<typeof vi.fn>
+const mReplaceChars = charQ.replaceCatalogCharacters as ReturnType<typeof vi.fn>
+const mFindPrimaryRef = extQ.findPrimaryVideoExternalRef as ReturnType<typeof vi.fn>
 
 const VID = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'
 const CID = 'cccccccc-dddd-eeee-ffff-111111111111'
@@ -193,6 +283,7 @@ describe('BangumiService.matchAndEnrich', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    clearBangumiConfigCache()
     clientQueries = []
     clientReleased = false
     mockClient = {
@@ -250,6 +341,127 @@ describe('BangumiService.matchAndEnrich', () => {
     }))
     expect(mUpsertEps).toHaveBeenCalled()
     expect(mUpdateEpCount).toHaveBeenCalledWith(expect.anything(), VID, 24)
+  })
+
+  it('META-19：auto + getCharacters 命中 → replaceCatalogCharacters 全量替换（事务内 client）', async () => {
+    mFindByTitle.mockResolvedValue([entry({ year: 2007 })])
+    mGetSubject.mockResolvedValue(subject())
+    mGetEpisodes.mockResolvedValue([])
+    mGetCharacters.mockResolvedValue([
+      { id: 1, name: '主角A', type: 1, images: { large: 'a.jpg' }, relation: '主角', summary: 's',
+        actors: [{ id: 9, name: 'CV甲', type: 1, images: null }, { id: 10, name: 'CV乙', type: 1, images: null }] },
+    ])
+
+    await svc.matchAndEnrich({ videoId: VID, catalogId: CID, titleNorm: 'x', year: 2007 })
+    expect(mReplaceChars).toHaveBeenCalledWith(mockClient, CID, 'bangumi', expect.arrayContaining([
+      expect.objectContaining({
+        externalCharacterId: '1', name: '主角A', relation: '主角',
+        actors: expect.arrayContaining([expect.objectContaining({ name: 'CV甲' })]),
+      }),
+    ]))
+  })
+
+  it('META-19：auto + getCharacters 抓取失败(null) → 不调 replaceCatalogCharacters（不误删 / D-161-AMD-3）', async () => {
+    mFindByTitle.mockResolvedValue([entry({ year: 2007 })])
+    mGetSubject.mockResolvedValue(subject())
+    mGetEpisodes.mockResolvedValue([])
+    mGetCharacters.mockResolvedValue(null)  // 抓取失败 → 保留既有角色
+
+    await svc.matchAndEnrich({ videoId: VID, catalogId: CID, titleNorm: 'x', year: 2007 })
+    expect(mReplaceChars).not.toHaveBeenCalled()
+  })
+
+  it('META-19：auto + getCharacters 成功返回空([]) → 调 replace([]) 清陈旧角色（非误删）', async () => {
+    mFindByTitle.mockResolvedValue([entry({ year: 2007 })])
+    mGetSubject.mockResolvedValue(subject())
+    mGetEpisodes.mockResolvedValue([])
+    mGetCharacters.mockResolvedValue([])  // 成功但作品无角色 → 应清空陈旧
+
+    await svc.matchAndEnrich({ videoId: VID, catalogId: CID, titleNorm: 'x', year: 2007 })
+    expect(mReplaceChars).toHaveBeenCalledWith(mockClient, CID, 'bangumi', [])
+  })
+
+  // ── META-15-C FIX（Codex）：已有绑定只刷新不重配 ─────────────────────
+  const primaryRef = (over: Record<string, unknown> = {}) => ({
+    id: 'r1', videoId: VID, provider: 'bangumi', externalId: '51',
+    matchStatus: 'auto_matched', matchMethod: 'title_norm', confidence: 0.9,
+    isPrimary: true, linkedBy: 'auto', linkedAt: '2026-05-01T00:00:00Z', notes: null,
+    ...over,
+  })
+
+  it('META-15-C：已有 primary 绑定 → 只刷新不重配（不调匹配 / 不动 ref / 刷新角色 / 重申 matched）', async () => {
+    mFindPrimaryRef.mockResolvedValue(primaryRef())
+    mGetSubject.mockResolvedValue(subject())
+    mGetEpisodes.mockResolvedValue([])
+    mGetCharacters.mockResolvedValue([
+      { id: 1, name: 'A', type: 1, images: null, relation: '主角', summary: '', actors: [{ id: 9, name: 'CV', type: 1, images: null }] },
+    ])
+
+    const r = await svc.matchAndEnrich({ videoId: VID, catalogId: CID, titleNorm: 'x', year: 2007 })
+    expect(r).toMatchObject({ matched: 'auto', bangumiSubjectId: 51 })
+    expect(mFindByTitle).not.toHaveBeenCalled()           // 不重新匹配
+    expect(mUpsertRef).not.toHaveBeenCalled()             // 不动既有 ref（不降级/不改绑）
+    expect(mFindById).toHaveBeenCalledWith(expect.anything(), 51)  // 按既有 subject 刷新
+    expect(mReplaceChars).toHaveBeenCalledWith(mockClient, CID, 'bangumi', expect.any(Array))  // 刷新角色
+    expect(mUpdateBangumiStatus).toHaveBeenCalledWith(mockClient, VID, 'matched')  // 重申 matched
+  })
+
+  it('META-15-C：已 matched + 重配本应 none → 绑定不被清空为 unmatched（核心修复）', async () => {
+    mFindPrimaryRef.mockResolvedValue(primaryRef())
+    mFindByTitle.mockResolvedValue([])   // 若重配：本地空
+    mSearchStrict.mockResolvedValue([])  // 若重配：REST 空 → 本会 none → unmatched
+    mGetSubject.mockResolvedValue(subject())
+    mGetEpisodes.mockResolvedValue([])
+    mGetCharacters.mockResolvedValue([])
+
+    const r = await svc.matchAndEnrich({ videoId: VID, catalogId: CID, titleNorm: 'x', year: 2007 })
+    expect(r.matched).toBe('auto')
+    expect(mUpdateBangumiStatus).not.toHaveBeenCalledWith(expect.anything(), VID, 'unmatched')
+  })
+
+  it('META-15-C：manual_confirmed 绑定 → 不被降级为 auto（不 upsert ref）', async () => {
+    mFindPrimaryRef.mockResolvedValue(primaryRef({ matchStatus: 'manual_confirmed', linkedBy: 'moderator', confidence: 1 }))
+    mGetSubject.mockResolvedValue(subject())
+    mGetEpisodes.mockResolvedValue([])
+    mGetCharacters.mockResolvedValue(null)  // 角色抓取失败 → 不动角色
+
+    await svc.matchAndEnrich({ videoId: VID, catalogId: CID, titleNorm: 'x', year: 2007 })
+    expect(mUpsertRef).not.toHaveBeenCalled()
+    expect(mReplaceChars).not.toHaveBeenCalled()  // getCharacters null → 不替换
+  })
+
+  it('META-15-C：candidate primary（非 matched 绑定）不触发刷新 → 走正常匹配', async () => {
+    mFindPrimaryRef.mockResolvedValue(primaryRef({ matchStatus: 'candidate', isPrimary: true }))
+    mFindByTitle.mockResolvedValue([])
+    mSearchStrict.mockResolvedValue([])
+
+    const r = await svc.matchAndEnrich({ videoId: VID, catalogId: CID, titleNorm: 'x', year: 2007 })
+    // candidate 不算「已绑定」→ 落正常匹配；本地+REST 空 → none
+    expect(mFindByTitle).toHaveBeenCalled()
+    expect(r).toMatchObject({ matched: 'none' })
+  })
+
+  it('META-20：本地空 + REST name 未命中 + 别名命中 → auto（pass 2 别名感知）', async () => {
+    mFindByTitle.mockResolvedValue([])  // 本地 dump 空
+    // REST 搜索：name_cn=航海王 ≠ 海贼王 → pass 1 miss
+    mSearchStrict.mockResolvedValue([{ id: 100, name: 'ONE PIECE', name_cn: '航海王', date: '1999-10-20', images: null, rating: null }])
+    // pass 2 getSubject：infobox 别名含 海贼王 + 年份 1999 → 0.92 auto
+    mGetSubject.mockResolvedValue(subject({ id: 100, name_cn: '航海王', name: 'ONE PIECE', date: '1999-10-20', infobox: [{ key: '别名', value: [{ v: '海贼王' }] }] }))
+    mGetEpisodes.mockResolvedValue([])
+    mGetCharacters.mockResolvedValue(null)
+
+    const r = await svc.matchAndEnrich({ videoId: VID, catalogId: CID, titleNorm: '海贼王', year: 1999 })
+    expect(r).toMatchObject({ matched: 'auto', bangumiSubjectId: 100 })
+    expect(mUpsertRef).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ provider: 'bangumi', matchStatus: 'auto_matched' }))
+  })
+
+  it('META-20：REST name 未命中 + 别名也不命中 → none（不引入假阳性）', async () => {
+    mFindByTitle.mockResolvedValue([])
+    mSearchStrict.mockResolvedValue([{ id: 101, name: 'NARUTO', name_cn: '火影忍者', date: '2002-10-03', images: null, rating: null }])
+    mGetSubject.mockResolvedValue(subject({ id: 101, name_cn: '火影忍者', name: 'NARUTO', infobox: [{ key: '别名', value: '鸣人' }] }))
+
+    const r = await svc.matchAndEnrich({ videoId: VID, catalogId: CID, titleNorm: '海贼王', year: 1999 })
+    expect(r).toMatchObject({ matched: 'none' })
   })
 
   it('auto + Token 缺失 → 降级用本地 dump 字段，不调 API', async () => {
@@ -364,7 +576,7 @@ describe('BangumiService.matchAndEnrich', () => {
     mGetEpisodes.mockResolvedValue([])
     const r = await svc.matchAndEnrich({ videoId: VID, catalogId: CID, titleNorm: '海贼王', year: 2007 })
     expect(r).toMatchObject({ matched: 'auto', bangumiSubjectId: 975 })
-    expect(mSearchStrict).toHaveBeenCalledWith('海贼王')
+    expect(mSearchStrict).toHaveBeenCalledWith('海贼王', 10, expect.any(Object))
     expect(mUpsertRef).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ matchStatus: 'auto_matched', isPrimary: true }))
   })
 
@@ -437,6 +649,32 @@ describe('BangumiService.matchAndEnrich', () => {
     expect(mUpsertRef).not.toHaveBeenCalled()
     expect(mUpdateBangumiStatus).not.toHaveBeenCalledWith(expect.anything(), VID, 'matched')
   })
+
+  // ── META-16-B：凭证下沉 Service（system_settings → cfg → lib）──────────
+  it('getBangumiConfig：DB token 流到 lib 调用（cfg.token）', async () => {
+    mGetAllSettings.mockResolvedValue({ bangumi_api_token: 'db-token-xyz', bangumi_user_agent: 'custom/1.0', bangumi_api_timeout_ms: '5000' })
+    mFindByTitle.mockResolvedValue([])
+    mSearchStrict.mockResolvedValue([])
+    await svc.matchAndEnrich({ videoId: VID, catalogId: CID, titleNorm: 'x', year: 2007 })
+    expect(mSearchStrict).toHaveBeenCalledWith('x', 10, { token: 'db-token-xyz', userAgent: 'custom/1.0', timeoutMs: 5000 })
+  })
+
+  it('getBangumiConfig：DB 空 → cfg={}（lib 回退 env）', async () => {
+    mGetAllSettings.mockResolvedValue({})
+    mFindByTitle.mockResolvedValue([])
+    mSearchStrict.mockResolvedValue([])
+    await svc.matchAndEnrich({ videoId: VID, catalogId: CID, titleNorm: 'y', year: 2007 })
+    expect(mSearchStrict).toHaveBeenCalledWith('y', 10, {})
+  })
+
+  it('getBangumiConfig：60s 缓存 → 同实例多次只查 system_settings 一次', async () => {
+    mGetAllSettings.mockResolvedValue({ bangumi_api_token: 't' })
+    mFindByTitle.mockResolvedValue([])
+    mSearchStrict.mockResolvedValue([])
+    await svc.matchAndEnrich({ videoId: VID, catalogId: CID, titleNorm: 'a', year: 2007 })
+    await svc.matchAndEnrich({ videoId: VID, catalogId: CID, titleNorm: 'b', year: 2007 })
+    expect(mGetAllSettings).toHaveBeenCalledTimes(1)   // 缓存命中，第二次不查库
+  })
 })
 
 describe('BangumiService.confirmMatch', () => {
@@ -450,6 +688,7 @@ describe('BangumiService.confirmMatch', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    clearBangumiConfigCache()
     clientQueries = []
     clientReleased = false
     mockClient = {
@@ -485,7 +724,7 @@ describe('BangumiService.confirmMatch', () => {
     mGetEpisodes.mockResolvedValue([])
     const r = await svc.confirmMatch(VID, CID, 99999)
     expect(r).toEqual({ updated: true })
-    expect(mGetSubject).toHaveBeenCalledWith(99999)
+    expect(mGetSubject).toHaveBeenCalledWith(99999, expect.any(Object))
     expect(mUpdateCatalog).toHaveBeenCalled()
     expect(mUpsertRef).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
       provider: 'bangumi', matchStatus: 'manual_confirmed', isPrimary: true,
@@ -592,6 +831,7 @@ describe('BangumiService.searchCandidates', () => {
   let svc: BangumiService
   beforeEach(() => {
     vi.clearAllMocks()
+    clearBangumiConfigCache()
     svc = new BangumiService({} as never)
   })
 

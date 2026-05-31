@@ -14,6 +14,8 @@ vi.mock('@/api/db/queries/externalData', () => ({
   findDoubanByAlias: vi.fn(),
   findDoubanByImdbId: vi.fn(),
   findBangumiByTitleNorm: vi.fn(),
+  // META-15-C FIX：BangumiService.matchAndEnrich 守卫调用；默认无既有绑定 → 走正常匹配
+  findPrimaryVideoExternalRef: vi.fn().mockResolvedValue(null),
   upsertVideoExternalRef: vi.fn().mockResolvedValue({
     id: 'ref1', videoId: 'v1', provider: 'douban', externalId: 'd1',
     matchStatus: 'auto_matched', matchMethod: 'title', confidence: 0.92,
@@ -29,6 +31,11 @@ vi.mock('@/api/db/queries/videos', () => ({
   updateEpisodeCount: vi.fn().mockResolvedValue(undefined),
   // ADR-170 C-2：BangumiService matchAndEnrich/applyAutoMatchAtomic 写 bangumi_status
   updateVideoBangumiStatus: vi.fn().mockResolvedValue(undefined),
+}))
+
+// META-16-B：BangumiService.getBangumiConfig 读 system_settings（anime step3 路径）→ 返回空避免 db.query
+vi.mock('@/api/db/queries/systemSettings', () => ({
+  getAllSettings: vi.fn().mockResolvedValue({}),
 }))
 
 vi.mock('@/api/db/queries/sources', () => ({

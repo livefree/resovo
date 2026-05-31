@@ -12480,3 +12480,200 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **新增依赖**：无 / **数据库变更**：无
 - **质量门禁**：typecheck/lint EXIT=0 / bangumi-service 41 全过 / 全量 **442 文件 5707 passed 零失败**
 - **语义**：瞬时失败 → 保持 pending + 重试（可恢复）；确定性无匹配（API 正常返回空）→ 终态 unmatched（正确）。
+
+---
+
+## [META-16-ADR] ADR-168 外部数据源凭证统一管理 + Secret Redaction 起草（强制 Opus）
+- **完成时间**：2026-05-30
+- **记录时间**：2026-05-30
+- **执行模型**：claude-opus-4-8
+- **子代理**：arch-reviewer (claude-opus-4-8) — 起草 ADR-168 + 自审（D-168-1..7 锁定 / 4 维度自检 + 红黄线 / CLAUDE.md 禁止项对照）
+- **来源序列**：SEQ-20260530-05
+- **修改文件**：`docs/decisions.md`（ADR-168 Accepted：SECRET_KEY_PATTERNS / 审计 redaction `<set>/<cleared>` / GET 遮罩 `••••后4位`+Set 布尔 / PATCH 占位跳过 / 凭证下沉 Service BangumiClientConfig+60s 缓存 / at-rest 加密 NEGATED P1 / tmdb_api_key 占位）
+- **背景**：用户要求 API key 进设置页（不靠 .env.local 明文 / bangumi 现在·tmdb 以后）+ 修现有 douban_cookie/notification_webhook_secret 明文落审计(siteConfig.ts:155-156)/明文回传(deserializeSiteSettings:86,99)。
+- **新增依赖**：无 / **数据库变更**：无（KV 无 DDL）
+- **关键决策**：通用化多源（_api_key$ 模式覆盖 tmdb）+ 三道 redaction 协议（审计零字符 / GET 后4位 / PATCH 占位防保存即清空）+ 凭证 env 回退向后兼容。
+- **注意事项**：实施拆 META-16-A（后端 redaction+keys）/ -B（凭证下沉 Service）/ -C（SettingsTab UI）。测试连接按钮 NOT in scope（依赖 ADR-173/F-A）。
+
+---
+
+## [META-16-A] ADR-168 后端：secret redaction + 凭证 key 类型扩展
+- **完成时间**：2026-05-30
+- **记录时间**：2026-05-30
+- **执行模型**：claude-opus-4-8
+- **子代理**：无（实施 ADR-168 已 Opus 评审契约）
+- **来源序列**：SEQ-20260530-05
+- **修改文件**：
+  - `packages/types/src/system.types.ts` — SystemSettingKey +4（bangumi_api_token/user_agent/timeout_ms + tmdb_api_key 占位）；SiteSettings +8（遮罩值 + Set 布尔）；新增 runtime const MASK_PREFIX/SECRET_KEY_PATTERNS/isSecretSettingKey
+  - `packages/types/src/index.ts` — runtime export 上述 3 const
+  - `apps/api/src/lib/secretRedaction.ts`（新建）— redactSecretsForAudit（`<set>/<cleared>`）/ maskSecret（`••••后4位`）/ isMaskedPlaceholder
+  - `apps/api/src/routes/admin/siteConfig.ts` — POST schema +4 字段 + 敏感键占位跳过（douban_cookie/webhook_secret/bangumi_api_token/tmdb_api_key）+ 审计 before/after redact
+  - `apps/api/src/db/queries/systemSettings.ts` — deserializeSiteSettings 敏感字段 maskSecret + Set 布尔 + bangumi 默认值（UA resovo/1.0 / timeout 8000）
+  - `apps/server/src/components/admin/system/site-settings/SiteSettings.tsx`（v1 冻结 type-sync 默认值）
+  - `tests/unit/api/secret-redaction.test.ts`（新建 24）+ `system-config.test.ts`（+3：GET 遮罩 / 审计 redact / PATCH 占位跳过）
+- **新增依赖**：无 / **数据库变更**：无（KV 无 DDL）
+- **质量门禁**：typecheck/lint/verify:adr-contracts EXIT=0 / 全量 **443 文件 5734 passed 零失败**（+27 零回归）
+- **修既存隐患**：douban_cookie / notification_webhook_secret 不再明文落审计 + 不再明文经 GET 回传；占位跳过防「保存即清空」（NotificationsTab 表单回提 masked 值安全）。
+- **注意事项**：凭证仍只「存储 + 遮罩」，**Bangumi 富集尚未消费 system_settings token**（仍读 env）→ META-16-B 下沉。
+
+---
+
+## [META-16-B] ADR-168 凭证解析下沉 Service（BangumiClientConfig + 60s 缓存）
+- **完成时间**：2026-05-30
+- **记录时间**：2026-05-30
+- **执行模型**：claude-opus-4-8
+- **子代理**：无（实施 ADR-168 D-168-5 已 Opus 评审契约）
+- **来源序列**：SEQ-20260530-05
+- **修改文件**：
+  - `apps/api/src/lib/bangumi.ts` — 导出 `BangumiClientConfig`；apiToken/timeoutMs/userAgent 接受 cfg 缺省回退 env；getSubject/getEpisodes/searchSubjects/searchSubjectsStrict/isBangumiApiConfigured + buildHeaders/bgmGet 加末位可选 cfg 透传
+  - `apps/api/src/services/BangumiService.ts` — 私有 `getBangumiConfig()` 读 system_settings（仅注入 DB 有值字段）+ 模块级 60s TTL 缓存 + `clearBangumiConfigCache()` 测试钩子；matchAndEnrich/confirmMatch/searchCandidates/matchViaRest/gatherEnrichmentData 5 调用点透传 cfg
+  - `tests/unit/api/bangumi-service.test.ts` — mock systemSettings.getAllSettings + clearBangumiConfigCache(beforeEach) + 3 新测（DB token 流到 lib / 空回退 / 60s 缓存只查一次）+ 既有断言补 cfg 参数
+  - `tests/unit/api/metadataEnrich.test.ts` — mock systemSettings.getAllSettings（anime step3→getBangumiConfig 路径，防 db.query 崩溃）
+- **新增依赖**：无 / **数据库变更**：无
+- **质量门禁**：typecheck/lint EXIT=0 / bangumi-service 44 + metadataEnrich 全过 / 全量 **443 文件 5736 passed**（1 flaky StagingTable v1 单跑 13/13 过·与本卡无关）
+- **效果**：Bangumi 富集现**优先用 system_settings 配置的 token**（设置页配置即生效，60s 缓存），DB 未配则回退 env（向后兼容）。**至此设置页配的 Bangumi token 真正驱动富集**（闭合「代码已接入 API 但缺设置页配置」缺口）。
+- **注意事项**：UI（SettingsTab 外部数据源卡）由 META-16-C 补；测试连接按钮 NOT in scope。
+
+---
+
+## [META-16-C] ADR-168 前端：SettingsTab「外部数据源」分组卡（SEQ-20260530-05 收官）
+- **完成时间**：2026-05-30
+- **记录时间**：2026-05-30
+- **执行模型**：claude-opus-4-8
+- **子代理**：无（实施 ADR-168 已 Opus 评审契约 / 消费 META-16-A/B 已就绪后端字段）
+- **来源序列**：SEQ-20260530-05（外部数据源凭证统一管理 / ADR-168）
+- **修改文件**：
+  - `apps/server-next/src/app/admin/settings/_tabs/SettingsTab.tsx` — 新增「外部数据源」AdminCard（豆瓣卡后）：Bangumi API Token（AdminInput type=password + 显隐切换按钮）+ User-Agent + 请求超时(ms) + 状态行（bangumiApiTokenSet → 绿「已配置 REST 详情+逐集」/ 灰「未配置 dump 降级」）；showBangumiToken state
+  - `tests/unit/components/server-next/admin/system/SettingsTab.test.tsx` — FIXTURE +8 字段（遮罩值/Set 布尔）+ 2 新测（1b token password 默认隐藏+显隐切换+未配置状态行 / 1c 已配置绿条+新 token 保存发明文）
+- **新增依赖**：无 / **数据库变更**：无
+- **质量门禁**：typecheck/lint EXIT=0 / SettingsTab 14 全过 / 受影响测试面（system + secret-redaction）10 文件 135 全过
+- **测试环境说明**：本机因本会话多次重跑过载，完整全量套件未在合理时间跑完（per-file 耗时翻 2-3 倍 / 进度 257/443 仍全 ✓）；改动为**孤立 UI 卡 + 自身测试**（不触 apps/api 或他模块），以「受影响面 135 全过 + META-16-B 干净基线 5736 + typecheck/lint 绿」证明零回归（earlier 过载跑的「4 failed」为并行 flaky 集群 Staging/UserSubmissions/CrawlerClient）。
+- **SEQ-20260530-05 全闭环**：设置页配 Bangumi token → system_settings → getBangumiConfig 60s 缓存 → 驱动富集；secret 三道遮罩（审计/GET/PATCH）保护 + 修现有 douban_cookie/webhook_secret 隐患。**至此「API key 进设置页、不靠 .env.local 明文」用户诉求达成。**
+- **注意事项**：测试连接按钮（bangumi/test 端点）NOT in scope（依赖 ADR-173/F-A，feature-1 §2.4 推后）；TMDB api_key UI 待 TMDB 富集起卡时补（占位字段已就绪）。
+
+---
+
+## [META-18] 外部元数据展示层 — 真源并集视图（条目级 / SEQ-20260530-06 全闭环）
+- **完成时间**：2026-05-30
+- **记录时间**：2026-05-30
+- **执行模型**：claude-opus-4-8
+- **子代理**：arch-reviewer (claude-opus-4-8) — ADR-172 AMENDMENT 3 共享组件 API 契约（CONDITIONAL → 满足 3 条件等同 PASS）
+- **来源序列**：SEQ-20260530-06（外部元数据展示层 / 用户走读：动漫详情/编辑页缺 Bangumi 条目级字段 + 无多源并集总览 → 无法判定富集回填质量）
+- **用户决策（已锁）**：①两处界面（视频编辑抽屉 + 审核台详情）②仅条目级（不含逐集放送）③以 media_catalog 真源为中心 + 所有命中源并集（非每源孤岛 tab）④CV/角色管线记为 META-19 后续
+- **META-18-ADR**：ADR-172 AMENDMENT 3 落档（D-172-AMD3-1..5 + 3 偏离 + 11 红线）
+- **META-18-A（后端 / 不新建路由）**：
+  - `packages/types/src/video.types.ts` — 新增 `EXTERNAL_REF_PROVIDERS`/`EXTERNAL_REF_MATCH_STATUSES`（双形态 const）+ `ExternalRefProvider`/`ExternalRefMatchStatus`（下沉自 api）+ `ExternalRefSummary`（展示窄化，剔除 id/videoId/linkedAt/linkedBy/notes）+ `BangumiEntrySummary`（条目级，**排除 rating_votes** 异源分离）
+  - `packages/types/src/index.ts` — 2 runtime const 值导出
+  - `apps/api/src/db/queries/externalData.ts` — provider/status 改 `import type` + re-export 复用（D-172-AMD3-1，消除四源枚举重复）
+  - `apps/api/src/services/VideoService.ts` — `adminFindById` 注入 `externalRefs`（`listVideoExternalRefs` 映射窄化）+ `bangumiInfo`（仅 anime + primary bangumi ref/subject → `findBangumiById`）；新增私有 `loadBangumiInfo`。**仅详情注入**：不挂 `adminList`（防 N×findBangumiById）、不挂 public `mapVideoRow`（R-5）
+  - `apps/server-next/src/lib/videos/types.ts` — `VideoAdminDetail` 镜像 `externalRefs?`/`bangumiInfo?` + `title_original?`/`rating_votes?`/`metadata_source?`（真源字段区）
+- **META-18-B（前端）**：
+  - `packages/admin-ui/src/components/external-meta-panel/{types.ts,external-meta-panel.tsx,index.ts}` — 新共享组件 `ExternalMetaPanel`（纯展示零回调）：三区纵向布局（①源并集总览 4 源 logo+ID+匹配方式+置信度+主源 ②真源字段区 ③Bangumi 条目块 anime-only）；复用 SourceLogoBadge + SOURCE_HREF_BUILDERS + SOURCE_LABEL；density drawer(全部含未命中灰显)/compact(仅命中)；零硬编码色
+  - `packages/admin-ui/src/index.ts` — barrel 导出
+  - `VideoEditDrawer.tsx` + `_videoEdit/types.ts` — 新「外部元数据」tab（density='drawer'）
+  - `moderation/_client/RightPane/TabDetail.tsx` — 懒加载 `getVideo(v.id)` 取扩展详情消费同组件（density='compact'）；失败降级不阻断（extError 提示，非空 catch）
+  - 测试：`tests/unit/components/admin-ui/external-meta-panel/external-meta-panel.test.tsx`（13 新单测）+ 3 TabDetail 测试补 `getVideo` mock
+- **新增依赖**：无 / **数据库变更**：无 / **新增路由**：无（verify:endpoint-adr ✅ 203 路由对齐）
+- **质量门禁**：typecheck EXIT=0 / lint EXIT=0（仅既有 img warning）/ **全量 444 文件 5752 passed 0 failed** / verify:adr-contracts EXIT=0 / verify:endpoint-adr ✅
+- **效果**：运营在视频编辑抽屉 + 审核台详情可见已回填的 Bangumi 条目级字段（日文原名/放送日/排名/评分）+ 多源并集总览（命中源/外部 ID/匹配方式/置信度/主源/可点外链）→ 可判定富集回填质量。
+- **Codex stop-time review FIX**（commit 见下）：`ExternalMetaPanel` 源行漏渲染 `matchMethod`（数据携带但未展示，违背 D-172-AMD3-2「保留 matchMethod 供运营判靠什么匹配上」初衷）→ 源行状态文案补「匹配方式」（MATCH_METHOD_LABEL 已知映射 imdb_id/title/title_norm/alias/network/manual/manual_fields + 未知回退原始串）+ 2 新单测。
+- **注意事项（已记录后续）**：**META-19** Bangumi CV/角色自动入库管线（抓 `/v0/subjects/:id/characters` + 角色↔CV schema + 回填 + 展示，现 `media_catalog.cast TEXT[]` 扁平结构承载不了配对）—— 用户「后面补充管线，充实数据」诉求；逐集放送 / 前台公开详情页 / tmdb·imdb 条目级专属块本期未做。
+
+---
+
+## [META-19] Bangumi CV/角色自动入库管线 + 展示（SEQ-20260530-07 全闭环）
+- **完成时间**：2026-05-30
+- **记录时间**：2026-05-30
+- **执行模型**：claude-opus-4-8
+- **子代理**：arch-reviewer (claude-opus-4-8) — ADR-161 AMENDMENT 角色↔CV schema + 抓取/写入/展示契约（CONDITIONAL → 满足 5 红线等同 PASS）
+- **来源序列**：SEQ-20260530-07（用户「后面要补充管线，充实数据」+ META-18 调研确认 CV/声优当前完全不抓不存）
+- **已实测数据形态**（api.bgm.tv/v0/subjects/{id}/characters，无分页）：character{id,name,type,images,summary,relation,actors[]} + actor{id,name,type,images}；**N:M**（52 角色 14 个多 CV）→ 两表 normalized 必需。
+- **META-19-ADR**：ADR-161 AMENDMENT 落档（D-161-AMD-1..6 + 4 偏离 + 5 红线）。
+- **META-19-A（schema + 类型 + query）**：
+  - `apps/api/src/db/migrations/083_bangumi_characters.sql`（**已应用**）— 两表 `catalog_characters` + `catalog_character_actors`（catalog_id + source 归属，对齐 077；UNIQUE 幂等键 + 索引 + DO 验证块）
+  - `packages/types/src/video.types.ts` — `CatalogCharacterSummary` + `CatalogCharacterActorSummary`（窄化展示投影）
+  - `apps/api/src/db/queries/catalogCharacters.ts`（新）— `replaceCatalogCharacters`（delete-by-catalog-then-insert，**仅 PoolClient**）+ `listCatalogCharactersForDisplay`（2 查询，产出展示投影）
+  - `docs/architecture.md` §5.6 + migration 列表同步
+- **META-19-B（抓取 + 集成）**：
+  - `apps/api/src/lib/bangumi.ts` — `getCharacters`（无分页 / 成功返数组含 `[]` / 失败返 `null`，见下方 FIX）+ `BangumiCharacter`/`BangumiCharacterActor` 接口
+  - `apps/api/src/services/BangumiService.utils.ts` — `mapCharacters`（relation 权重排序 + actor 序 + 取图降级）
+  - `apps/api/src/services/BangumiService.ts` — `EnrichmentData.characters` + `gatherEnrichmentData` 拉取（length>0 才填）+ `applyEnrichmentDb` `replaceCatalogCharacters`（**length>0 && isClient 守卫**：D-161-AMD-3 防 getCharacters 瞬时失败误删既有角色）；**单点接入自动覆盖 auto + confirmMatch 两路径**
+  - 测试：bangumi-lib +3（getCharacters）/ bangumi-service +4（auto 写角色 / 空不删 / mapCharacters 排序+N:M）
+- **META-19-C（DTO + 展示）**：
+  - `apps/api/src/services/VideoService.ts` — `adminFindById` 注入**顶层** `bangumiCharacters`（anime + 命中；异源不混不挂 bangumiInfo 内）
+  - `apps/server-next/src/lib/videos/types.ts` — `VideoAdminDetail.bangumiCharacters?` 镜像
+  - `packages/admin-ui/src/components/external-meta-panel/{types.ts,external-meta-panel.tsx}` — `ExternalMetaPanelProps.characters?` + `CharactersBlock`（anime-only / 已排序 cap top-N drawer 8·compact 4 / CV 多值 `/` 连接 / relation Record 兜底 / 零硬编码色 / 本期不渲染头像）
+  - `VideoEditDrawer.tsx` + `TabDetail.tsx` 两消费面传 `characters`
+  - 测试：external-meta-panel +5（角色块 / 非 anime 不渲染 / 无数据不渲染 / compact cap / 无 CV 占位）
+- **新增依赖**：无 / **数据库变更**：migration 083（2 新表，已应用）/ **新增路由**：无（verify:endpoint-adr ✅ 203 路由）
+- **质量门禁**：typecheck/lint EXIT=0 / **全量 444 文件 5766 passed 0 failed** / verify:adr-contracts EXIT=0 / migration 083 dry-run + 实际应用成功
+- **效果**：anime 富集/重富集时自动抓取角色 + CV 入库；后台编辑抽屉 + 审核台详情「角色 · 声优」区展示「角色名 — CV1 / CV2」（N:M 配对）。
+- **Codex stop-time review FIX**（commit 见下）：
+  - **① 陈旧角色数据**：原 `length>0` 守卫无法区分「getCharacters 抓取失败」与「成功返回空」→ 成功返回空时本应清空陈旧角色却保留。修：`getCharacters` 失败返 `null`、成功返数组（含 `[]`）；`EnrichmentData.charactersFetched` 标记 fetch 成功；`applyEnrichmentDb` 据此替换（**成功空也清陈旧**，失败跳过防误删）。
+  - **② 展示违反 ADR 过滤契约**：`CharactersBlock` 原 `slice(0,cap)` 未按 relation 过滤 → 漏出客串/闲角。修：按 ADR 展示契约 `DISPLAY_RELATIONS={主角,配角}` 过滤后再 cap，过滤为空则不渲染。
+  - 测试更新：bangumi-lib（null/空区分）+ bangumi-service（失败 null 不替换 / 成功空替换清陈旧）+ external-meta-panel（客串/闲角不展示 / 全客串不渲染）。
+- **注意事项**：**存量 matched anime 角色需 META-15-C 批量重富集触发**（本序列仅保证新富集/重富集写入）；角色头像（image_url 已存）/ persons 抓取 / 角色检索页 / 前台展示 → 后续 AMENDMENT。全量回归 5769 passed（AuditClient 1 例并行 flaky，隔离 22/22 通过，与本卡无关）。
+
+---
+
+## [META-15-C] 批量重富集 backfill 脚本（SEQ-20260530-04）
+- **完成时间**：2026-05-31（工具就绪；全量运行交用户）
+- **记录时间**：2026-05-31
+- **执行模型**：claude-opus-4-8
+- **子代理**：无（运营脚本 + 单查询，复用 enrichmentQueue + EnrichJobData，非新共享契约/schema/ADR/路由）
+- **来源序列**：SEQ-20260530-04（外部富集数据基建补齐）
+- **问题**：存量视频富集覆盖低（从未富集 meta_quality NULL + douban/bangumi unmatched）→ 徽标/角色/外部数据空。需 backfill 重新入队，借 douban 网络 step2 + META-17 Bangumi REST 兜底 + META-19 角色入库填充。
+- **修改文件**：
+  - `apps/api/src/services/MetadataEnrichService.ts` — `EnrichJobData += trigger?: 'crawl'|'backfill'|'manual'`（可观测）
+  - `apps/api/src/workers/enrichmentWorker.ts` — job started 日志记 trigger
+  - `apps/api/src/db/queries/videos.ts` — `listVideosForBackfillEnrich(db,{mode,type,limit})` + `BackfillEnrichMode`/`BackfillEnrichRow`（never=meta_quality NULL / unmatched=douban|bangumi / all=并集；复用 VIDEO_JOIN，软删排除，created_at 升序）
+  - `scripts/reenrich-backfill.ts`（新）— `--mode/--type/--limit/--dry-run`；复用 `enrichmentQueue`（保留 attempts/backoff/removeOnComplete → 瞬时失败自动重试，对 bangumi REST 兜底关键）；trigger='backfill' + jobId `enrich-${id}` 去重；进程末 process.exit 防 queue.ts 多队列连接悬挂
+  - `tests/unit/api/backfill-enrich-query.test.ts`（新，5 测）— 三 mode WHERE 构造 + type/limit 参数化 + 行透传
+- **新增依赖**：无 / **数据库变更**：无 / **新增路由**：无（verify:endpoint-adr ✅）
+- **质量门禁**：typecheck/lint/verify:adr-contracts EXIT=0 / 全量 444 文件 **5774 passed**（StagingEditPanel 1 例并行 flaky，隔离 12/12 通过，与本卡无关 / v1 admin 已知 flaky 集群）
+- **dry-run 实测**：`--dry-run` → **2,835 条待富集**（FIX 后含已 matched anime）。脚本接线 + queue 导入 + 自退出全验证。
+- **Codex stop-time review FIX**（同 commit）：
+  - **① 漏掉既有 matched anime**：原 mode 仅 never+unmatched，**已 matched anime（meta_quality 已写）不在任一 mode → 永远不重富集 → META-19 角色永远填不上**（恰是 META-15-C 对 META-19 的核心用途）。修：新增 `missing-characters` mode（`type='anime' AND NOT EXISTS catalog_characters`）并纳入 `all`。实测 `all` 2827→2835（+8 已 matched anime）；`missing-characters`=420（当前全部 anime 无角色）。
+  - **② 固定 jobId 静默跳过**：原 `enrich-${id}` 与爬虫同 id，且 removeOnComplete:200/removeOnFail:50 保留的历史 job 会让 Bull `add` 静默跳过 → 部分目标漏跑。修：jobId 改 `backfill-${runTs}-${id}`（每次运行唯一，不撞残留 job；enrich 幂等重复处理无害）。
+- **实跑发现并修复（airdate DATE 解析）**：用户起 worker 全量 backfill 后，failed 队列暴露 `invalid input syntax for type date: "2099"` —— Bangumi 部分剧集 airdate 为「仅年份(2099)/残缺(2024-00-00)/空」，直插 `catalog_episodes.airdate DATE` 失败并**回滚整个 enrich 事务**（该视频 catalog+角色+ref 全写不进）。修：`mapEpisodes` 加 `sanitizeAirdate`（仅接受合法 `YYYY-MM-DD` + 月日范围校验，否则 null）+ 单测（2099/残缺/空/越界 → null）。**注**：运行中 worker 若经 `npm run api`（--watch）会自动 reload 生效；否则需重启；失败视频下次 backfill 自动重入。
+- **Codex stop-time review FIX-2（matched-anime backfill 损坏既有 Bangumi 绑定）**：missing-characters 把已 matched anime 重走完整 `enrich()`→`matchAndEnrich` 重新匹配，会**清空/降级/改绑既有绑定**（`none`→`unmatched` 清空 / `candidate` 降级 / `auto` 覆盖 `manual_confirmed` 人工校正 / 改绑异 subject）。修：`matchAndEnrich` 入口检出既有 primary bangumi ref（auto_matched/manual_confirmed）→ **只刷新不重配**（`refreshExistingMatch`：按既有 subject 刷新 catalog COALESCE/逐集/角色 + 重申 matched，不动 ref/不降级；REST 瞬时失败抛错重试不清空）。unmatched/never 无 primary ref → 正常匹配（语义不变）。+4 守卫单测（已绑定只刷新 / 不被清空 unmatched / manual 不降级 / candidate-primary 仍正常匹配）+ metadataEnrich/bangumi-service mock 补 `findPrimaryVideoExternalRef`。ADR-170 D-170-4-AMD 落档。全量 **5780 passed 0 failed**（本轮无 flaky）。
+- **⚠️ 全量运行交用户**：当前 redis 起但 **api server(worker) 未跑** → 未实际入队（避免堆积无人消费）。运行步骤：① 起 api server（`npm run api` 或 dev / worker 在 server.ts:194 concurrency=2）② `node --env-file=.env.local --import tsx scripts/reenrich-backfill.ts`（建议先 `--limit 20 --type anime` 验证 matched/角色上升再全量）。worker concurrency=2 限流，全量数千条逐步消化数十分钟。
+- **运行验证（2026-05-31，用户起 worker 全量跑）**：队列消化中（waiting 持续下降 / active=2）；DB 增长确认 —— bangumi matched 28→73↑、有角色 catalog 7→47↑、catalog_characters 270→954↑；角色 CV 配对写入正确（宁缺—杨天翔 / 堀北鈴音—鬼頭明里 / カイマン—高木渉 实样核对）。监控命令：redis-cli llen bull:enrichment-queue:wait + `reenrich-backfill --dry-run`（剩余待富集）+ DB matched/角色计数。
+
+---
+
+## [META-15-D] 导入豆瓣 dump（external_data.douban_entries / SEQ-20260530-04）
+- **完成时间**：2026-05-31
+- **执行模型**：claude-opus-4-8 / 子代理：无（运行既有 `import-douban-dump.ts`，无代码改动）
+- **来源序列**：SEQ-20260530-04（外部富集数据基建补齐）；用户提供文件并指出"dump 较老（2020）可能没用"。
+- **文件**：`external-db/douban/moviedata-10m/movies.csv`（81M / 140,503 行 / 2020-11；21 列与脚本 EXPECTED_COLS 逐列吻合，抽查"记忆迷局"列对齐正确：SCORE/VOTES/IMDB/RELEASE_DATE 全对位；YEAR 分布真实 2006-2019 主导，个别 2049 垃圾行非系统性）。
+- **执行**：dry-run 解析 140,502 行无错 → 全量导入 `external_data.douban_entries` **0 → 140,502 行**（ON CONFLICT douban_id 幂等 / title_normalized 填充仅 2 空 → step1 本地召回可用）。与运行中 backfill 并发无冲突（分表读写）。
+- **价值评估（回应"老 dump 是否有用"）**：**有用但有边界**。豆瓣本地表此前为空（仅 12 网络命中）；导入后 movie 类型 step1 本地召回上量（评分/演职员/genres 完整 + 毫秒级，替代慢/限流网络 step2）。**边界**：dump 是 14 万部**电影**，库内 movie 仅 245（其余 series 271/variety 251/short 692/anime 420/other 839…）→ 主要惠及 movie；剧集/综艺/短片/anime 不在电影 dump 覆盖（anime 靠 bangumi）。2020 数据对存量老片完全够用；2021+ 新片仍走网络兜底。
+- **新增依赖/代码/schema 变更**：无（纯数据导入）。
+- **后续**：运行中 backfill 剩余 job 自动命中新 dump；导入前已处理的 douban-unmatched movie 可 `reenrich-backfill --mode unmatched` 重入补命中（unmatched 视频无绑定，重配安全）。
+
+---
+
+## [META-20] Bangumi 别名感知匹配（matchViaRest pass 2 / SEQ-20260530-04 follow-up）
+- **完成时间**：2026-05-31
+- **执行模型**：claude-opus-4-8 / 子代理：无（matchViaRest 算法扩展，ADR-161/META-17 范围内，非新契约/schema/ADR）
+- **来源**：META-17 follow-up ①（REST 精确兜底安全但召回保守，别名差异如 海贼王↔航海王 漏配）。
+- **问题**：`computeRestBangumiConfidence` 仅 name_cn/name 精确 → Bangumi 规范名与站内标题不一致时漏配（航海王≠海贼王）。
+- **方案（保守增召回，零新假阳性）**：`matchViaRest` 拆两段 —— pass 1 name 精确（不变，无额外 REST）；pass 1 无命中时 pass 2：对 top-5 候选 `getSubject` 查 infobox「别名」键，仅 `normalizeTitle` 精确等于 titleNorm 才认（base 0.70 + 年份加分：别名+年份→≥0.85 auto / 别名无年份→0.70 candidate 人工确认）。`getSubject` null（瞬时/404）跳过——pass 2 仅在 name-exact 基线（→unmatched）之上增召回，瞬时未召回 = 与未做前同为 unmatched（下次 backfill 重试），不引入新退化。
+- **修改文件**：`apps/api/src/services/BangumiService.utils.ts`（`parseInfoboxAliases` + `computeAliasBangumiConfidence`）、`apps/api/src/services/BangumiService.ts`（matchViaRest pass 2 + `ALIAS_CHECK_TOP_N=5`）
+- **测试**：bangumi-service +6（parseInfoboxAliases 字符串/数组/null / 别名+年份 0.92 / 别名无年份 0.70 / 无别名命中 0 / 集成：name 未命中+别名命中→auto / name+别名都不命中→none）
+- **新增依赖/schema/路由**：无。
+- **质量门禁**：typecheck/lint/verify:adr-contracts EXIT=0 / 全量 444 文件 **5787 passed 0 failed**（本轮无 flaky）。
+- **成本**：仅 name-exact 未命中时触发 top-5 getSubject（worker concurrency=2 限流）；多数命中走 pass 1 快路径无额外调用。
+
+---
+
+## [META-21] 角色头像渲染（ExternalMetaPanel CharactersBlock / ADR-161 AMENDMENT 续）
+- **完成时间**：2026-05-31
+- **执行模型**：claude-opus-4-8 / 子代理：无（纯渲染增强，消费已存 imageUrl，不改公开 Props 契约 → 无 Opus trailer）
+- **来源**：META-19 ADR-161 AMENDMENT D-161-AMD-6 标注「头像后续 AMENDMENT」；数据（catalog_characters.image_url + actors.image_url）META-19 已端到端就位。
+- **修改文件**：`packages/admin-ui/src/components/external-meta-panel/external-meta-panel.tsx`（CharactersBlock 行首加 `Thumb size="square-sm"` 28×28，复用 admin-ui cell 原语；object-fit cover / 空 src → placeholder / loading=lazy / decorative=false alt=角色名）
+- **测试**：external-meta-panel +1（有 imageUrl → data-thumb img src / 空 → placeholder）
+- **新增依赖/schema/路由/Props 契约变更**：无。
+- **质量门禁**：typecheck/lint EXIT=0 / 全量 444 文件 **5787 passed**（VideoImageSection 1 并行 flaky，隔离 21/21 通过，无关）。
+- **范围**：渲染角色头像；CV 头像未渲染（actor.imageUrl 已存，后续按需）。

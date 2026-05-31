@@ -10,10 +10,11 @@
  *
  * 信息密度对齐设计稿：DetailRow 单行 < 28px，紧凑（label 等宽字符 + value 右对齐）。
  */
-import React, { useCallback, useState } from 'react'
-import { AdminButton, CountryName, useToast, EnrichmentBadgeCluster } from '@resovo/admin-ui'
+import React, { useCallback, useEffect, useState } from 'react'
+import { AdminButton, CountryName, useToast, EnrichmentBadgeCluster, ExternalMetaPanel } from '@resovo/admin-ui'
 import type { VideoQueueRow } from '@resovo/types'
-import { listVideoSources } from '@/lib/videos/api'
+import type { VideoAdminDetail } from '@/lib/videos'
+import { listVideoSources, getVideo } from '@/lib/videos/api'
 import { reprobeRoute } from '@/lib/sources/api'
 import { M } from '@/i18n/messages/zh-CN/moderation'
 
@@ -76,6 +77,22 @@ export function TabDetail({ v }: TabDetailProps): React.ReactElement {
   const toast = useToast()
   const doubanLabel = M.detail[v.doubanStatus as keyof typeof M.detail] ?? v.doubanStatus
   const [reprobePending, setReprobePending] = useState(false)
+
+  // META-18 / ADR-172 AMENDMENT 3：懒加载扩展详情（externalRefs + bangumiInfo），
+  // 复用 GET /admin/videos/:id（不污染 queue list query）。失败仅降级，不阻断其余详情。
+  const [extDetail, setExtDetail] = useState<VideoAdminDetail | null>(null)
+  const [extError, setExtError] = useState<string | null>(null)
+  useEffect(() => {
+    let cancelled = false
+    setExtDetail(null)
+    setExtError(null)
+    getVideo(v.id)
+      .then((d) => { if (!cancelled) setExtDetail(d) })
+      .catch((err: unknown) => {
+        if (!cancelled) setExtError(err instanceof Error ? err.message : '加载失败')
+      })
+    return () => { cancelled = true }
+  }, [v.id])
 
   // CHG-SN-8-05：批量重测此视频所有线路
   const handleReprobeAll = useCallback(async () => {
@@ -165,6 +182,33 @@ export function TabDetail({ v }: TabDetailProps): React.ReactElement {
       <DetailRow label={M.detail.episodesTriad} value={formatEpisodesTriad(v)} />
       <DetailRow label="meta_score" value={String(v.metaScore)} />
       <DetailRow label="source_check" value={v.sourceCheckStatus} />
+
+      {/* META-18 / ADR-172 AMENDMENT 3：外部元数据真源并集（懒加载详情，density='compact'） */}
+      {extDetail?.enrichmentSummary && (
+        <div style={{ marginTop: 12 }} data-right-detail-external-meta>
+          <div style={SECTION_HEADER_STYLE}>外部元数据</div>
+          <ExternalMetaPanel
+            summary={extDetail.enrichmentSummary}
+            type={extDetail.type}
+            externalRefs={extDetail.externalRefs}
+            bangumiInfo={extDetail.bangumiInfo}
+            characters={extDetail.bangumiCharacters}
+            catalogFields={{
+              titleOriginal: extDetail.title_original,
+              rating: extDetail.rating,
+              ratingVotes: extDetail.rating_votes,
+              metadataSource: extDetail.metadata_source,
+            }}
+            density="compact"
+            testId="moderation-detail-external-meta"
+          />
+        </div>
+      )}
+      {extError && (
+        <div style={{ marginTop: 8, fontSize: 'var(--font-size-xxs)', color: 'var(--fg-muted)' }}>
+          外部元数据加载失败：{extError}
+        </div>
+      )}
     </div>
   )
 }

@@ -14,14 +14,20 @@ import * as externalDataQueries from '@/api/db/queries/externalData'
 import type { BangumiEntryMatch } from '@/api/db/queries/externalData'
 import * as catalogEpisodeQueries from '@/api/db/queries/catalogEpisodes'
 import type { CatalogEpisodeInput } from '@/api/db/queries/catalogEpisodes'
+import * as catalogCharacterQueries from '@/api/db/queries/catalogCharacters'
+import type { CatalogCharacterInput } from '@/api/db/queries/catalogCharacters'
 import * as videosQueries from '@/api/db/queries/videos'
-import { getSubject, getEpisodes, searchSubjects, searchSubjectsStrict, isBangumiApiConfigured } from '@/api/lib/bangumi'
+import * as systemSettingsQueries from '@/api/db/queries/systemSettings'
+import { getSubject, getEpisodes, getCharacters, searchSubjects, searchSubjectsStrict, isBangumiApiConfigured } from '@/api/lib/bangumi'
+import type { BangumiClientConfig } from '@/api/lib/bangumi'
 import { normalizeTitle } from './TitleNormalizer'
 import {
   computeLocalBangumiConfidence,
   computeRestBangumiConfidence,
+  computeAliasBangumiConfidence,
   mapSubjectToCatalogFields,
   mapEpisodes,
+  mapCharacters,
 } from './BangumiService.utils'
 
 function parseYear(date: string | null | undefined): number | null {
@@ -33,6 +39,16 @@ function parseYear(date: string | null | undefined): number | null {
 // ── 阈值（复用豆瓣范式）───────────────────────────────────────────
 const CONFIDENCE_AUTO_MATCH = 0.85
 const CONFIDENCE_CANDIDATE = 0.6
+// 别名感知 B（META-20）：name 未命中时 getSubject 查别名的候选上限（控 REST 调用量）
+const ALIAS_CHECK_TOP_N = 5
+
+// ── ADR-168 D-168-5：Bangumi 凭证进程内缓存（避免每 job 查 system_settings）──
+const BANGUMI_CONFIG_TTL_MS = 60_000
+let bangumiConfigCache: { value: BangumiClientConfig; expiresAt: number } | null = null
+/** 测试钩子：清空凭证缓存（生产无需，60s TTL 自然过期）。 */
+export function clearBangumiConfigCache(): void {
+  bangumiConfigCache = null
+}
 
 // ── 结果类型 ───────────────────────────────────────────────────────
 export type BangumiEnrichResult =
@@ -52,6 +68,11 @@ export interface MatchAndEnrichInput {
 interface EnrichmentData {
   fields: CatalogUpdateData | null
   episodes: CatalogEpisodeInput[]
+  // ADR-161 AMENDMENT / META-19：角色 + CV。
+  // characters = 本次抓到的集合（可能 []）；charactersFetched = getCharacters 是否成功（区分失败 vs 成功空）。
+  // 仅 charactersFetched 才全量替换（成功返回空也替换 → 清陈旧；失败跳过 → 不误删）。
+  characters: CatalogCharacterInput[]
+  charactersFetched: boolean
   mainEpisodeCount: number
   degraded: boolean
 }
@@ -65,12 +86,46 @@ export class BangumiService {
   }
 
   /**
+   * ADR-168 D-168-5：从 system_settings 解析 Bangumi 凭证（token/UA/timeout），进程内 60s 缓存。
+   * 仅注入 DB 有值的字段 → lib/bangumi 对缺省字段回退 process.env（向后兼容）。
+   */
+  private async getBangumiConfig(): Promise<BangumiClientConfig> {
+    const now = Date.now()
+    if (bangumiConfigCache && bangumiConfigCache.expiresAt > now) return bangumiConfigCache.value
+    const raw = await systemSettingsQueries.getAllSettings(this.db)
+    const cfg: BangumiClientConfig = {}
+    if (raw.bangumi_api_token) cfg.token = raw.bangumi_api_token
+    if (raw.bangumi_user_agent) cfg.userAgent = raw.bangumi_user_agent
+    const t = Number(raw.bangumi_api_timeout_ms)
+    if (Number.isFinite(t) && t > 0) cfg.timeoutMs = t
+    bangumiConfigCache = { value: cfg, expiresAt: now + BANGUMI_CONFIG_TTL_MS }
+    return cfg
+  }
+
+  /**
    * 对单视频做 Bangumi 匹配 + 丰富（供 MetadataEnrichService.step3 与后台手动调用）。
    * 仅本地 dump 召回；auto 命中后按需拉 REST 详情（Token 缺失/失败则降级用本地 dump 字段）。
    */
   async matchAndEnrich({ videoId, catalogId, titleNorm, year }: MatchAndEnrichInput): Promise<BangumiEnrichResult> {
     // ADR-170 D-170-4：状态投影下沉本方法，统一覆盖 step3 自动流 / bangumi-sync 直调 / 改类型→anime 三路径。
     // 命中来源双轨：① 本地 dump 精确召回（毫秒级）② META-17 方案 A：dump 空/低置信时 REST 精确兜底。
+    const cfg = await this.getBangumiConfig()   // ADR-168：凭证（DB system_settings 优先，回退 env）
+
+    // META-15-C FIX（Codex stop-time review）：已有 primary bangumi 绑定（auto_matched/manual_confirmed）
+    // → **只刷新不重配**。防批量重富集（missing-characters 等）重跑匹配把既有绑定降级（matched→
+    // unmatched/candidate）、覆盖人工校正（manual_confirmed→auto）、或改绑到不同 subject。
+    // unmatched/never 视频无 primary ref → 落空，走下方正常匹配（unmatched mode 重试匹配的语义不变）。
+    const existingPrimary = await externalDataQueries.findPrimaryVideoExternalRef(this.db, videoId, 'bangumi')
+    if (
+      existingPrimary &&
+      (existingPrimary.matchStatus === 'auto_matched' || existingPrimary.matchStatus === 'manual_confirmed')
+    ) {
+      const boundId = Number(existingPrimary.externalId)
+      if (Number.isFinite(boundId) && boundId > 0) {
+        return await this.refreshExistingMatch(videoId, catalogId, boundId, existingPrimary.confidence, cfg)
+      }
+    }
+
     const matches = await externalDataQueries.findBangumiByTitleNorm(this.db, titleNorm, year)
     let resolved: { bangumiId: number; confidence: number; breakdown: Record<string, number>; localEntry: BangumiEntryMatch | null } | null = null
 
@@ -83,8 +138,8 @@ export class BangumiService {
     }
 
     // META-17 方案 A：本地未命中（或低置信）+ token 配置 → REST 精确兜底
-    if (resolved === null && isBangumiApiConfigured()) {
-      resolved = await this.matchViaRest(titleNorm, year)
+    if (resolved === null && isBangumiApiConfigured(cfg)) {
+      resolved = await this.matchViaRest(titleNorm, year, cfg)
     }
 
     if (resolved === null) {
@@ -108,7 +163,7 @@ export class BangumiService {
     // 已提交的 auto_matched/primary ref 脏态）。REST 已在 gatherEnrichmentData 完成，事务内无网络等待；
     // job 失败时整体 ROLLBACK，由上层 enrichmentQueue 重试（幂等收敛，但不留孤儿 ref）。
     // localEntry=null（REST 兜底命中）时 gatherEnrichmentData 纯走 REST（与 confirmMatch 同路径）。
-    const data = await this.gatherEnrichmentData(bangumiId, localEntry)
+    const data = await this.gatherEnrichmentData(bangumiId, localEntry, cfg)
     // Codex stop-time review 修复：REST 兜底命中（localEntry=null）但 getSubject 详情瞬时失败 → fields=null
     // （无 dump 降级可用）。此时**不可**提交「matched 但无数据」终态 → 抛出让 Bull 重试 / 端点报错。
     // 本地 dump 命中（localEntry≠null）时 fields 恒由 dump 兜底为非空，不受此守卫影响。
@@ -128,6 +183,47 @@ export class BangumiService {
   }
 
   /**
+   * META-15-C FIX（Codex stop-time review）：已有 primary bangumi 绑定时的「只刷新不重配」路径。
+   * **不重新匹配 / 不动 ref**（保留既有 manual_confirmed/auto_matched 绑定，防降级·改绑·清空）；
+   * 仅按既有 subject 拉数据刷新 catalog(COALESCE)/逐集/角色，并重申 bangumi_status='matched'（幂等·
+   * 兼修历史 buggy 重富集留下的「有绑定却 unmatched」不一致）。REST 详情瞬时失败且无 dump 兜底 →
+   * 抛出让 Bull 重试，绝不清空既有数据。
+   */
+  private async refreshExistingMatch(
+    videoId: string,
+    catalogId: string,
+    bangumiId: number,
+    existingConfidence: number | null,
+    cfg: BangumiClientConfig,
+  ): Promise<BangumiEnrichResult> {
+    const entry = await externalDataQueries.findBangumiById(this.db, bangumiId)
+    const data = await this.gatherEnrichmentData(bangumiId, entry, cfg)
+    if (data.fields === null) {
+      throw new Error(`bangumi refresh: subject ${bangumiId} detail fetch failed (transient) — retry`)
+    }
+    const client = await this.db.connect()
+    try {
+      await client.query('BEGIN')
+      const result = await this.applyEnrichmentDb(client, videoId, catalogId, bangumiId, data)
+      // 不 upsert ref（保留既有绑定）；重申 matched（绑定恒为 matched，幂等修不一致）
+      await videosQueries.updateVideoBangumiStatus(client, videoId, 'matched')
+      await client.query('COMMIT')
+      return {
+        matched: 'auto',
+        bangumiSubjectId: bangumiId,
+        confidence: existingConfidence ?? 1,
+        episodes: result.episodes,
+        degraded: data.degraded,
+      }
+    } catch (err) {
+      try { await client.query('ROLLBACK') } catch { /* connection may already be lost */ }
+      throw err
+    } finally {
+      client.release()
+    }
+  }
+
+  /**
    * META-17 方案 A：REST 精确兜底匹配（本地 dump 未命中时）。
    * searchSubjectsStrict 模糊搜索 → 仅取 `name_cn`/`name` 规范化精确等于 titleNorm 的候选（computeRestBangumiConfidence），
    * 取置信度最高者。非精确一律拒绝（避免「海贼王→海贼王子」假阳性）。返回 localEntry=null（无本地条目）。
@@ -135,15 +231,33 @@ export class BangumiService {
    * **严格搜索**（Codex stop-time review 修复）：用 searchSubjectsStrict —— API 瞬时失败（超时/429/5xx/网络）
    * **抛出**而非返回 []，使 matchAndEnrich 将其上抛（enrichment job 由 Bull 重试 / bangumi-sync 端点报错），
    * 避免把瞬时故障误写成终态 unmatched（不可重试）。真无结果（200 + 空）才返回 null（→ 终态 unmatched 正确）。
+   *
+   * **别名感知 B**（META-20）：name 未精确命中时，对 top-N 候选拉 getSubject 查 infobox「别名」
+   * （curated，仅精确才认）—— 召回 name 与本地标题不一致但别名命中的作品（海贼王↔航海王）。
+   * getSubject null（瞬时/404）跳过：别名 pass 仅在 name-exact 基线（→unmatched）之上**增召回**，
+   * 不引入新退化（瞬时未召回 = 与未做别名前同为 unmatched，下次 backfill 重试）。
    */
   private async matchViaRest(
     titleNorm: string,
     year: number | null,
+    cfg?: BangumiClientConfig,
   ): Promise<{ bangumiId: number; confidence: number; breakdown: Record<string, number>; localEntry: null } | null> {
-    const items = await searchSubjectsStrict(titleNorm)
+    const items = await searchSubjectsStrict(titleNorm, 10, cfg)
     let best: { bangumiId: number; confidence: number; breakdown: Record<string, number>; localEntry: null } | null = null
+    // pass 1：name_cn/name 精确（无额外 REST 调用，保留 META-17 快路径）
     for (const item of items) {
       const { confidence, breakdown } = computeRestBangumiConfidence(item, titleNorm, year)
+      if (confidence >= CONFIDENCE_CANDIDATE && (best === null || confidence > best.confidence)) {
+        best = { bangumiId: item.id, confidence, breakdown, localEntry: null }
+      }
+    }
+    if (best !== null) return best
+
+    // pass 2（别名感知）：name 未命中 → top-N getSubject 查 infobox 别名
+    for (const item of items.slice(0, ALIAS_CHECK_TOP_N)) {
+      const subject = await getSubject(item.id, cfg)
+      if (!subject) continue
+      const { confidence, breakdown } = computeAliasBangumiConfidence(subject, titleNorm, year)
       if (confidence >= CONFIDENCE_CANDIDATE && (best === null || confidence > best.confidence)) {
         best = { bangumiId: item.id, confidence, breakdown, localEntry: null }
       }
@@ -163,9 +277,10 @@ export class BangumiService {
    * REST 全程在事务外，不会持事务空闲等网络（Codex FIX-1：避免 idle-in-transaction 占满 pool）。
    */
   async confirmMatch(videoId: string, catalogId: string, bangumiId: number): Promise<{ updated: boolean }> {
+    const cfg = await this.getBangumiConfig()   // ADR-168
     const entry = await externalDataQueries.findBangumiById(this.db, bangumiId)
     // Phase 1：REST 在事务外，避免长持锁
-    const data = await this.gatherEnrichmentData(bangumiId, entry)
+    const data = await this.gatherEnrichmentData(bangumiId, entry, cfg)
     if (!data.fields) return { updated: false }
 
     // Phase 2：DB 写入原子事务
@@ -225,19 +340,22 @@ export class BangumiService {
       })
     }
 
-    if (input.keyword && isBangumiApiConfigured()) {
-      const items = await searchSubjects(input.keyword)
-      for (const it of items) {
-        if (out.has(it.id)) continue
-        out.set(it.id, {
-          bangumiSubjectId: it.id,
-          nameCn: it.name_cn?.trim() || null,
-          nameJp: it.name?.trim() || null,
-          year: parseYear(it.date),
-          rating: it.rating?.score ?? null,
-          coverUrl: it.images?.large ?? it.images?.common ?? null,
-          confidence: 0,
-        })
+    if (input.keyword) {
+      const cfg = await this.getBangumiConfig()   // ADR-168
+      if (isBangumiApiConfigured(cfg)) {
+        const items = await searchSubjects(input.keyword, 10, cfg)
+        for (const it of items) {
+          if (out.has(it.id)) continue
+          out.set(it.id, {
+            bangumiSubjectId: it.id,
+            nameCn: it.name_cn?.trim() || null,
+            nameJp: it.name?.trim() || null,
+            year: parseYear(it.date),
+            rating: it.rating?.score ?? null,
+            coverUrl: it.images?.large ?? it.images?.common ?? null,
+            confidence: 0,
+          })
+        }
       }
     }
 
@@ -254,24 +372,35 @@ export class BangumiService {
   private async gatherEnrichmentData(
     bangumiId: number,
     entry: BangumiEntryMatch | null,
+    cfg?: BangumiClientConfig,
   ): Promise<EnrichmentData> {
     let fields: CatalogUpdateData | null = null
     let episodes: CatalogEpisodeInput[] = []
+    let characters: CatalogCharacterInput[] = []
+    let charactersFetched = false
     let mainEpisodeCount = 0
     let degraded = true
 
-    if (isBangumiApiConfigured()) {
-      const subject = await getSubject(bangumiId)
+    if (isBangumiApiConfigured(cfg)) {
+      const subject = await getSubject(bangumiId, cfg)
       if (subject) {
         fields = mapSubjectToCatalogFields(subject)
         degraded = false
-        const eps = await getEpisodes(bangumiId)
+        const eps = await getEpisodes(bangumiId, cfg)
         if (eps.length > 0) episodes = mapEpisodes(eps)
         // 本篇集数（ADR-161 P1）：优先 wiki eps（本篇数）；否则数 type===0 本篇；
         // 不用 total_episodes（含 SP/OP/ED 章节，会高估用户侧剧集数）
         mainEpisodeCount = subject.eps && subject.eps > 0
           ? subject.eps
           : eps.filter((e) => e.type === 0).length
+        // ADR-161 AMENDMENT / META-19：角色 + CV。getCharacters 与 subject 解耦，独立失败返 null。
+        // 区分「抓取失败(null)」与「成功返回空([])」：仅成功(非 null)标 charactersFetched，
+        // apply 侧据此全量替换（成功空也替换 → 清陈旧角色；失败跳过 → 不误删 / D-161-AMD-3）。
+        const chars = await getCharacters(bangumiId, cfg)
+        if (chars !== null) {
+          charactersFetched = true
+          characters = mapCharacters(chars)
+        }
       }
     }
 
@@ -286,7 +415,7 @@ export class BangumiService {
       if (entry.coverUrl) fields.coverUrl = entry.coverUrl
     }
 
-    return { fields, episodes, mainEpisodeCount, degraded }
+    return { fields, episodes, characters, charactersFetched, mainEpisodeCount, degraded }
   }
 
   /**
@@ -314,6 +443,17 @@ export class BangumiService {
 
     // safeUpdate 接受 PoolClient（共享事务）或不传（走 service 自带 this.db）
     const isClient = 'release' in db && typeof (db as PoolClient).release === 'function'
+
+    // ADR-161 AMENDMENT / META-19：角色 + CV 全量替换（delete-then-insert，仅事务内 PoolClient）。
+    // 守卫 charactersFetched（D-161-AMD-3）：getCharacters 成功（含返回空）才替换 —— 成功返回空也
+    // 清陈旧角色（避免保留过时数据）；抓取失败(null) 时 charactersFetched=false → 跳过，不误删。
+    // 两路径（applyAutoMatchAtomic / confirmMatch）均传 client，恒满足 isClient。
+    if (data.charactersFetched && isClient) {
+      await catalogCharacterQueries.replaceCatalogCharacters(
+        db as PoolClient, catalogId, 'bangumi', data.characters,
+      )
+    }
+
     const { updated } = await this.catalogService.safeUpdate(catalogId, data.fields, 'bangumi', {
       sourceRef: String(bangumiId),
       db: isClient ? (db as PoolClient) : undefined,

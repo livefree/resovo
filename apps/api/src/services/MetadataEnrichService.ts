@@ -36,6 +36,8 @@ export interface EnrichJobData {
   title: string
   year: number | null
   type: string
+  /** 触发来源（可观测；crawl=爬虫入库 / backfill=批量重富集 / manual=后台手动）。省略视为 crawl。 */
+  trigger?: 'crawl' | 'backfill' | 'manual'
 }
 
 // ── 内部常量 ──────────────────────────────────────────────────────

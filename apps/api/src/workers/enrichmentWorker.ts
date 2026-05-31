@@ -14,11 +14,11 @@ const workerLog = baseLogger.child({ worker: 'enrich-worker' })
 // ── 任务处理 ──────────────────────────────────────────────────────
 
 async function processEnrichJob(job: Bull.Job<EnrichJobData>): Promise<void> {
-  const { videoId, catalogId, title, year, type } = job.data
+  const { videoId, catalogId, title, year, type, trigger } = job.data
   const service = new MetadataEnrichService(db)
 
   const jobLog = withJob(workerLog, job)
-  jobLog.info({ video_id: videoId, title, year: year ?? null, type }, 'job started')
+  jobLog.info({ video_id: videoId, title, year: year ?? null, type, trigger: trigger ?? 'crawl' }, 'job started')
 
   await service.enrich({ videoId, catalogId, title, year, type })
 

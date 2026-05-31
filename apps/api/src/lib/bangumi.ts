@@ -12,15 +12,25 @@
 // config.ts 仍声明这组变量做启动校验/文档；此处运行时按需读取，便于测试注入。
 const API_BASE = 'https://api.bgm.tv'
 
-function apiToken(): string | undefined {
-  return process.env.BANGUMI_API_TOKEN || undefined
+/**
+ * ADR-168 D-168-5：凭证可注入配置。来源优先级 = cfg 字段 > process.env > 默认。
+ * BangumiService 经 system_settings 读取后注入；缺省（cfg 省略或字段 undefined）回退 env（向后兼容 / 测试注入不破坏）。
+ */
+export interface BangumiClientConfig {
+  token?: string
+  userAgent?: string
+  timeoutMs?: number
 }
-function timeoutMs(): number {
-  const n = Number(process.env.BANGUMI_API_TIMEOUT_MS)
-  return Number.isFinite(n) && n > 0 ? n : 8000
+
+function apiToken(cfg?: BangumiClientConfig): string | undefined {
+  return cfg?.token || process.env.BANGUMI_API_TOKEN || undefined
 }
-function userAgent(): string {
-  return process.env.BANGUMI_USER_AGENT || 'resovo/1.0 (+https://github.com/resovo)'
+function timeoutMs(cfg?: BangumiClientConfig): number {
+  const raw = cfg?.timeoutMs ?? Number(process.env.BANGUMI_API_TIMEOUT_MS)
+  return Number.isFinite(raw) && (raw as number) > 0 ? (raw as number) : 8000
+}
+function userAgent(cfg?: BangumiClientConfig): string {
+  return cfg?.userAgent || process.env.BANGUMI_USER_AGENT || 'resovo/1.0 (+https://github.com/resovo)'
 }
 
 // ── 类型（v0 schema 子集，仅取本项目消费字段）─────────────────────
@@ -80,6 +90,25 @@ export interface BangumiEpisode {
   desc: string
 }
 
+/** 角色下的配音演员/声优（CV）（/v0/subjects/{id}/characters 的 actors[] 元素） */
+export interface BangumiCharacterActor {
+  id: number
+  name: string
+  type: number          // 1 个人 / 2 公司 / 3 组合
+  images: BangumiImages | null
+}
+
+/** 作品角色（/v0/subjects/{id}/characters 数组元素；无分页，一次返回全部） */
+export interface BangumiCharacter {
+  id: number
+  name: string
+  type: number          // 1 角色 / 2 机体 / 3 舰船 / 4 组织
+  images: BangumiImages | null
+  relation: string      // 主角 / 配角 / 客串 / 闲角
+  summary: string
+  actors: BangumiCharacterActor[]
+}
+
 /** 搜索结果条目（POST /v0/search/subjects 的 data 元素，字段较 subject 精简） */
 export interface BangumiSearchItem {
   id: number
@@ -92,22 +121,22 @@ export interface BangumiSearchItem {
 
 // ── HTTP 封装 ─────────────────────────────────────────────────────
 
-function buildHeaders(extra?: Record<string, string>): Record<string, string> {
+function buildHeaders(cfg?: BangumiClientConfig, extra?: Record<string, string>): Record<string, string> {
   const headers: Record<string, string> = {
-    'User-Agent': userAgent(),
+    'User-Agent': userAgent(cfg),
     Accept: 'application/json',
     ...extra,
   }
-  const token = apiToken()
+  const token = apiToken(cfg)
   if (token) headers.Authorization = `Bearer ${token}`
   return headers
 }
 
-async function bgmGet<T>(path: string): Promise<T | null> {
+async function bgmGet<T>(path: string, cfg?: BangumiClientConfig): Promise<T | null> {
   try {
     const res = await fetch(`${API_BASE}${path}`, {
-      headers: buildHeaders(),
-      signal: AbortSignal.timeout(timeoutMs()),
+      headers: buildHeaders(cfg),
+      signal: AbortSignal.timeout(timeoutMs(cfg)),
     })
     if (!res.ok) return null
     return (await res.json()) as T
@@ -119,15 +148,15 @@ async function bgmGet<T>(path: string): Promise<T | null> {
 // ── 公开 API ──────────────────────────────────────────────────────
 
 /** GET /v0/subjects/{id} — 单条作品 rich 详情；失败返回 null */
-export async function getSubject(id: number): Promise<BangumiSubject | null> {
-  return bgmGet<BangumiSubject>(`/v0/subjects/${id}`)
+export async function getSubject(id: number, cfg?: BangumiClientConfig): Promise<BangumiSubject | null> {
+  return bgmGet<BangumiSubject>(`/v0/subjects/${id}`, cfg)
 }
 
 /**
  * GET /v0/episodes — 拉取某作品全部本篇逐集（分页，单页 100，上限 50 页防无界，ADR-161 A4）。
  * 失败/无数据返回 []。
  */
-export async function getEpisodes(subjectId: number): Promise<BangumiEpisode[]> {
+export async function getEpisodes(subjectId: number, cfg?: BangumiClientConfig): Promise<BangumiEpisode[]> {
   const PAGE = 100
   const MAX_PAGES = 50
   const all: BangumiEpisode[] = []
@@ -135,12 +164,28 @@ export async function getEpisodes(subjectId: number): Promise<BangumiEpisode[]> 
     const offset = page * PAGE
     const resp = await bgmGet<{ data: BangumiEpisode[]; total: number }>(
       `/v0/episodes?subject_id=${subjectId}&limit=${PAGE}&offset=${offset}`,
+      cfg,
     )
     if (!resp || !Array.isArray(resp.data) || resp.data.length === 0) break
     all.push(...resp.data)
     if (all.length >= resp.total) break
   }
   return all
+}
+
+/**
+ * GET /v0/subjects/{id}/characters — 拉取某作品全部角色 + 各自 CV（无分页，一次返回数组）。
+ * 注意与 getEpisodes 不同：该端点直接返回数组而非 { data, total } 包裹。
+ *
+ * 返回语义（区分「抓取失败」与「成功返回空」，供调用方判定是否全量替换）：
+ *   - 成功（含空作品）→ 数组（可能 []）
+ *   - 抓取失败 / 非数组响应 → null
+ * 调用方据此：fetch 成功（非 null）才 delete-then-insert 全量替换（含清空陈旧）；
+ * 失败（null）跳过，保留既有角色（不被瞬时故障误删）。
+ */
+export async function getCharacters(subjectId: number, cfg?: BangumiClientConfig): Promise<BangumiCharacter[] | null> {
+  const resp = await bgmGet<BangumiCharacter[]>(`/v0/subjects/${subjectId}/characters`, cfg)
+  return Array.isArray(resp) ? resp : null
 }
 
 /**
@@ -151,12 +196,12 @@ export async function getEpisodes(subjectId: number): Promise<BangumiEpisode[]> 
  * 「瞬时失败（throw）」，避免把 API 瞬时故障误写成终态 unmatched（Codex stop-time review）。
  * 成功且 data 缺省 → 返回 []（真无结果）。
  */
-export async function searchSubjectsStrict(keyword: string, limit = 10): Promise<BangumiSearchItem[]> {
+export async function searchSubjectsStrict(keyword: string, limit = 10, cfg?: BangumiClientConfig): Promise<BangumiSearchItem[]> {
   const res = await fetch(`${API_BASE}/v0/search/subjects?limit=${limit}`, {
     method: 'POST',
-    headers: buildHeaders({ 'Content-Type': 'application/json' }),
+    headers: buildHeaders(cfg, { 'Content-Type': 'application/json' }),
     body: JSON.stringify({ keyword, filter: { type: [2] } }),
-    signal: AbortSignal.timeout(timeoutMs()),
+    signal: AbortSignal.timeout(timeoutMs(cfg)),
   })
   if (!res.ok) throw new Error(`bangumi searchSubjects failed: HTTP ${res.status}`)
   const data = (await res.json()) as { data?: BangumiSearchItem[] }
@@ -167,15 +212,15 @@ export async function searchSubjectsStrict(keyword: string, limit = 10): Promise
  * POST /v0/search/subjects — 关键词搜索动画（type=2）候选。**宽容版**：失败返回 []。
  * 用于手动后台候选搜索（searchCandidates）—— API 故障时优雅降级为「无候选」，不阻断 UI。
  */
-export async function searchSubjects(keyword: string, limit = 10): Promise<BangumiSearchItem[]> {
+export async function searchSubjects(keyword: string, limit = 10, cfg?: BangumiClientConfig): Promise<BangumiSearchItem[]> {
   try {
-    return await searchSubjectsStrict(keyword, limit)
+    return await searchSubjectsStrict(keyword, limit, cfg)
   } catch {
     return []
   }
 }
 
 /** Token 是否已配置（调用方据此决定走 REST 详情还是仅本地 dump 降级） */
-export function isBangumiApiConfigured(): boolean {
-  return Boolean(apiToken())
+export function isBangumiApiConfigured(cfg?: BangumiClientConfig): boolean {
+  return Boolean(apiToken(cfg))
 }

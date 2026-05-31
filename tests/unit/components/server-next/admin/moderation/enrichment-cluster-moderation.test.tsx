@@ -20,7 +20,7 @@ vi.mock('@resovo/admin-ui', async () => {
     useToast: () => ({ push: vi.fn(() => 'tid'), dismiss: vi.fn(), dismissAll: vi.fn() }),
   }
 })
-vi.mock('@/lib/videos/api', () => ({ listVideoSources: vi.fn() }))
+vi.mock('@/lib/videos/api', () => ({ listVideoSources: vi.fn(), getVideo: vi.fn().mockResolvedValue(null) }))
 vi.mock('@/lib/sources/api', () => ({ reprobeRoute: vi.fn() }))
 
 import { ModListRow } from '../../../../../../apps/server-next/src/app/admin/moderation/_client/ModListRow'

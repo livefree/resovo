@@ -6,7 +6,7 @@
 
 ## 进行中任务
 
-（空 / META-17 Bangumi REST 精确兜底 ship 2026-05-30：单测 39 + 真实 API + 实时端到端三重验证（师兄啊师兄→bangumi matched 388781 / 海贼王安全漏配）。下一步候选：批量重富集 / Bangumi 别名感知 B / 凭证管理 ADR-168 / META-13 Face 4）
+（空 / SEQ-20260530-04 外部富集数据基建：META-15-B(worker)✅ / META-15-C(backfill 脚本)✅ / **META-15-D(豆瓣 dump 导入 140,502 行)✅ 2026-05-31** / META-15-A(TMDB)DEFER。详见 changelog + task-queue。用户已起 worker 全量 backfill 运行中（bangumi+角色 强劲爬升 / douban 限 movie 类型）。下一步候选：Bangumi 别名感知 B / 角色头像渲染 / 推 PR）
 
 ---
 

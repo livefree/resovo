@@ -36,7 +36,7 @@ export type * from './admin-audit.types'
 export type * from './admin-shell.types'
 export type * from './dashboard'
 
-export { DEFAULT_INGEST_POLICY } from './system.types'
+export { DEFAULT_INGEST_POLICY, MASK_PREFIX, SECRET_KEY_PATTERNS, isSecretSettingKey } from './system.types'
 
 // ── ADR-157 D-157-1 视频枚举值常量（双形态，12 enum 全集 P0/P1/P2）─
 export {
@@ -45,6 +45,7 @@ export {
   DOUBAN_STATUSES, SOURCE_CHECK_STATUSES, VIDEO_QUALITIES, SOURCE_TYPES,
   DOUBAN_MATCH_METHODS, DOUBAN_MATCH_STATUSES,
   BANGUMI_STATUSES,
+  EXTERNAL_REF_PROVIDERS, EXTERNAL_REF_MATCH_STATUSES,
 } from './video.types'
 
 // ── ADR-157 D-157-1 类型守卫工具 ────────────────────────────────

@@ -94,6 +94,8 @@ export function SettingsTab() {
   const [error, setError] = useState<Error | null>(null)
   const [dirty, setDirty] = useState(false)
   const [retryKey, setRetryKey] = useState(0)
+  // ADR-168 META-16-C：Bangumi token 显隐切换（默认隐藏；输入新值时可显）
+  const [showBangumiToken, setShowBangumiToken] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -214,6 +216,65 @@ export function SettingsTab() {
             data-testid="setting-doubanCookie"
             aria-label="豆瓣 Cookie"
           />
+        </div>
+      </AdminCard>
+
+      {/* ── 外部数据源（ADR-168）── */}
+      <AdminCard
+        surface="plain"
+        padding="md"
+        header={{ title: '外部数据源', subtitle: 'Bangumi API 凭证（动漫富集走 REST 详情 + 逐集）' }}
+        data-testid="settings-card-external"
+      >
+        <div style={FIELD_GRID_STYLE}>
+          <label style={FIELD_LABEL_STYLE}>Bangumi API Token</label>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <AdminInput
+              type={showBangumiToken ? 'text' : 'password'}
+              value={settings.bangumiApiToken}
+              onChange={(e) => update('bangumiApiToken', e.target.value)}
+              placeholder="未配置 · 粘贴 bangumi.tv access token"
+              data-testid="setting-bangumiApiToken"
+              aria-label="Bangumi API Token"
+            />
+            <AdminButton
+              size="sm"
+              variant="ghost"
+              onClick={() => setShowBangumiToken((v) => !v)}
+              data-testid="setting-bangumiToken-toggle"
+            >
+              {showBangumiToken ? '隐藏' : '显示'}
+            </AdminButton>
+          </div>
+          <label style={FIELD_LABEL_STYLE}>User-Agent</label>
+          <AdminInput
+            value={settings.bangumiUserAgent}
+            onChange={(e) => update('bangumiUserAgent', e.target.value)}
+            placeholder="resovo/1.0 (+https://github.com/resovo)"
+            data-testid="setting-bangumiUserAgent"
+            aria-label="Bangumi User-Agent"
+          />
+          <label style={FIELD_LABEL_STYLE}>请求超时 (ms)</label>
+          <AdminInput
+            type="number"
+            value={String(settings.bangumiApiTimeoutMs)}
+            onChange={(e) => update('bangumiApiTimeoutMs', Number(e.target.value))}
+            placeholder="8000"
+            data-testid="setting-bangumiApiTimeoutMs"
+            aria-label="Bangumi 请求超时毫秒"
+          />
+        </div>
+        <div
+          style={{
+            marginTop: '10px',
+            fontSize: 'var(--font-size-xs)',
+            color: settings.bangumiApiTokenSet ? 'var(--state-success-fg)' : 'var(--fg-muted)',
+          }}
+          data-testid="setting-bangumi-status"
+        >
+          {settings.bangumiApiTokenSet
+            ? '✅ 已配置 · 动漫富集启用 REST 详情 + 逐集'
+            : '未配置 · 动漫富集走本地 dump 降级（字段较少）'}
         </div>
       </AdminCard>
 

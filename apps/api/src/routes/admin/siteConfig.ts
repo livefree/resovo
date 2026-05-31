@@ -15,6 +15,7 @@ import * as systemSettingsQueries from '@/api/db/queries/systemSettings'
 import * as crawlerSitesQueries from '@/api/db/queries/crawlerSites'
 import { getSchedulerStatus } from '@/api/workers/maintenanceScheduler'
 import { AuditLogService } from '@/api/services/AuditLogService'
+import { redactSecretsForAudit, isMaskedPlaceholder } from '@/api/lib/secretRedaction'
 import type { SystemSettingKey } from '@/types'
 
 const SiteSettingsBodySchema = z.object({
@@ -43,6 +44,11 @@ const SiteSettingsBodySchema = z.object({
   sessionTimeoutMinutes:      z.number().int().min(5).max(1440).optional(),
   sessionMaxConcurrent:       z.number().int().min(1).max(50).optional(),
   sessionExtendOnActivity:    z.boolean().optional(),
+  // ADR-168：外部数据源凭证（bangumi 现在 / tmdb 占位）
+  bangumiApiToken:            z.string().max(500).optional(),
+  bangumiUserAgent:           z.string().max(200).optional(),
+  bangumiApiTimeoutMs:        z.number().int().min(1000).max(60000).optional(),
+  tmdbApiKey:                 z.string().max(500).optional(),
 })
 
 const ConfigFileBodySchema = z.object({
@@ -107,7 +113,8 @@ export async function adminSiteConfigRoutes(fastify: FastifyInstance) {
     if (d.siteName !== undefined)             pairs.site_name             = d.siteName
     if (d.siteAnnouncement !== undefined)     pairs.site_announcement     = d.siteAnnouncement
     if (d.doubanProxy !== undefined)          pairs.douban_proxy          = d.doubanProxy
-    if (d.doubanCookie !== undefined)         pairs.douban_cookie         = d.doubanCookie
+    // ADR-168 D-168-4：敏感凭证遮罩占位回提 → 跳过写入（保留 DB 原值，防「保存即清空」）
+    if (d.doubanCookie !== undefined && !isMaskedPlaceholder(d.doubanCookie)) pairs.douban_cookie = d.doubanCookie
     if (d.showAdultContent !== undefined)     pairs.show_adult_content    = String(d.showAdultContent)
     if (d.contentFilterEnabled !== undefined) pairs.content_filter_enabled = String(d.contentFilterEnabled)
     if (d.videoProxyEnabled !== undefined)    pairs.video_proxy_enabled   = String(d.videoProxyEnabled)
@@ -127,7 +134,8 @@ export async function adminSiteConfigRoutes(fastify: FastifyInstance) {
       }
       pairs.notification_webhook_url = d.notificationWebhookUrl
     }
-    if (d.notificationWebhookSecret !== undefined)  pairs.notification_webhook_secret  = d.notificationWebhookSecret
+    // ADR-168 D-168-4：占位回提跳过（修既存隐患 + 防保存即清空）
+    if (d.notificationWebhookSecret !== undefined && !isMaskedPlaceholder(d.notificationWebhookSecret)) pairs.notification_webhook_secret = d.notificationWebhookSecret
     // CHG-SN-8-FUP-WEBHOOK-IMPL-EP-B / ADR-146：事件订阅 JSON 数组（去重 + 限制 20 件）
     if (d.notificationWebhookEvents !== undefined) {
       pairs.notification_webhook_events = JSON.stringify(Array.from(new Set(d.notificationWebhookEvents)))
@@ -135,6 +143,11 @@ export async function adminSiteConfigRoutes(fastify: FastifyInstance) {
     if (d.sessionTimeoutMinutes !== undefined)       pairs.session_timeout_minutes       = String(d.sessionTimeoutMinutes)
     if (d.sessionMaxConcurrent !== undefined)        pairs.session_max_concurrent        = String(d.sessionMaxConcurrent)
     if (d.sessionExtendOnActivity !== undefined)     pairs.session_extend_on_activity    = String(d.sessionExtendOnActivity)
+    // ADR-168：外部数据源凭证。bangumi_api_token / tmdb_api_key 为 secret → 占位回提跳过；UA/timeout 非敏感正常写
+    if (d.bangumiApiToken !== undefined && !isMaskedPlaceholder(d.bangumiApiToken)) pairs.bangumi_api_token = d.bangumiApiToken
+    if (d.bangumiUserAgent !== undefined)            pairs.bangumi_user_agent            = d.bangumiUserAgent
+    if (d.bangumiApiTimeoutMs !== undefined)         pairs.bangumi_api_timeout_ms        = String(d.bangumiApiTimeoutMs)
+    if (d.tmdbApiKey !== undefined && !isMaskedPlaceholder(d.tmdbApiKey)) pairs.tmdb_api_key = d.tmdbApiKey
 
     // CHG-SN-6-RETRO-3-A：审计 — 写 admin_audit_log（system.settings_update / ultrareview P0-3）
     // beforeJsonb: 当前 settings 子集（仅本次更新的 key 旧值）；afterJsonb: 新值（zod 校验后子集）
@@ -147,13 +160,14 @@ export async function adminSiteConfigRoutes(fastify: FastifyInstance) {
 
     await systemSettingsQueries.setManySettings(db, pairs)
 
+    // ADR-168 D-168-2：审计 before/after 对敏感键 redact 为 <set>/<cleared>（零字符，含修现有 webhook_secret 隐患）
     auditSvc.write({
       actorId: request.user!.userId,
       actionType: 'system.settings_update',
       targetKind: 'system',
       targetId: null,
-      beforeJsonb: beforeSubset,
-      afterJsonb: pairs as Record<string, unknown>,
+      beforeJsonb: redactSecretsForAudit(beforeSubset),
+      afterJsonb: redactSecretsForAudit(pairs as Record<string, unknown>),
       requestId: request.id,
     })
 

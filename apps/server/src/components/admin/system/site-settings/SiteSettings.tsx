@@ -19,6 +19,7 @@ const DEFAULT_SETTINGS: SiteSettings = {
   siteAnnouncement:            '',
   doubanProxy:                 '',
   doubanCookie:                '',
+  doubanCookieSet:             false,
   showAdultContent:            false,
   contentFilterEnabled:        true,
   videoProxyEnabled:           false,
@@ -32,10 +33,18 @@ const DEFAULT_SETTINGS: SiteSettings = {
   notificationWebhookEnabled:  false,
   notificationWebhookUrl:      '',
   notificationWebhookSecret:   '',
+  notificationWebhookSecretSet: false,
   notificationWebhookEvents:   [],
   sessionTimeoutMinutes:       60,
   sessionMaxConcurrent:        5,
   sessionExtendOnActivity:     true,
+  // ADR-168：外部数据源凭证（v1 冻结 / 仅 type-sync 默认值，UI 不消费）
+  bangumiApiToken:             '',
+  bangumiApiTokenSet:          false,
+  bangumiUserAgent:            'resovo/1.0 (+https://github.com/resovo)',
+  bangumiApiTimeoutMs:         8000,
+  tmdbApiKey:                  '',
+  tmdbApiKeySet:               false,
 }
 
 // ── 子组件 ────────────────────────────────────────────────────

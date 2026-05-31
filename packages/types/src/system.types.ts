@@ -52,6 +52,11 @@ export type SystemSettingKey =
   | 'session_timeout_minutes'
   | 'session_max_concurrent'
   | 'session_extend_on_activity'
+  // ADR-168：外部数据源凭证（bangumi 现在 / tmdb 占位）。bangumi_api_token 命中 SECRET_KEY_PATTERNS。
+  | 'bangumi_api_token'
+  | 'bangumi_user_agent'
+  | 'bangumi_api_timeout_ms'
+  | 'tmdb_api_key'                       // ADR-168 D-168-7 占位（入 union + 遮罩管线，本期不消费）
 
 export interface SystemSetting {
   key: SystemSettingKey
@@ -59,12 +64,36 @@ export interface SystemSetting {
   updatedAt: string
 }
 
+// ── ADR-168：Secret Redaction 真源（三端共享 runtime const）──────────────
+
+/** GET 遮罩前缀（maskSecret 输出 + isMaskedPlaceholder 识别同源，防漂移） */
+export const MASK_PREFIX = '••••'
+
+/**
+ * 敏感 setting 键模式（ADR-168 D-168-1）。命中者经审计 redaction（`<set>`/`<cleared>`）
+ * + GET 遮罩（`••••后4位`）+ PATCH 占位跳过。
+ * 用 `(^|_)<word>$` 避免误伤（`_url$`/`_to$`/`_agent$`/`_ms$` 结构上不含四词尾）。
+ * 命中：douban_cookie / notification_webhook_secret / bangumi_api_token / tmdb_api_key。
+ */
+export const SECRET_KEY_PATTERNS: readonly RegExp[] = [
+  /(^|_)token$/,
+  /(^|_)cookie$/,
+  /(^|_)secret$/,
+  /(^|_)api_key$/,
+]
+
+/** 键是否为敏感凭证（ADR-168）。 */
+export function isSecretSettingKey(key: string): boolean {
+  return SECRET_KEY_PATTERNS.some((re) => re.test(key))
+}
+
 /** 站点配置对象（反序列化后） */
 export interface SiteSettings {
   siteName: string
   siteAnnouncement: string
   doubanProxy: string
-  doubanCookie: string
+  doubanCookie: string                   // ADR-168：GET 遮罩值（maskSecret）
+  doubanCookieSet: boolean               // ADR-168：是否已配置（raw 非空）
   showAdultContent: boolean
   contentFilterEnabled: boolean
   videoProxyEnabled: boolean
@@ -77,12 +106,20 @@ export interface SiteSettings {
   notificationEmailTo: string
   notificationWebhookEnabled: boolean
   notificationWebhookUrl: string
-  notificationWebhookSecret: string
+  notificationWebhookSecret: string      // ADR-168：GET 遮罩值
+  notificationWebhookSecretSet: boolean  // ADR-168：是否已配置
   // CHG-SN-8-FUP-WEBHOOK-IMPL-EP-B / ADR-146 D-146-1：事件订阅多选数组（默认 []）
   notificationWebhookEvents: string[]
   sessionTimeoutMinutes: number
   sessionMaxConcurrent: number
   sessionExtendOnActivity: boolean
+  // ADR-168：外部数据源凭证（bangumi 现在 / tmdb 占位）
+  bangumiApiToken: string                // GET 遮罩值
+  bangumiApiTokenSet: boolean
+  bangumiUserAgent: string               // 非敏感（默认 resovo/1.0 (+...)）
+  bangumiApiTimeoutMs: number            // 非敏感（默认 8000）
+  tmdbApiKey: string                     // GET 遮罩值（占位）
+  tmdbApiKeySet: boolean
 }
 
 export type AutoCrawlMode = 'incremental' | 'full'

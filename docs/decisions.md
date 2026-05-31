@@ -18267,6 +18267,7 @@ BANGUMI_USER_AGENT:     z.string().default('resovo/1.0 (https://github.com/...)'
    - **candidate / none（unmatched）**：无 catalog 写、无事务（仅 best-effort writeRef）→ 经 Pool 写（事务外）；写入失败须记录不静默吞（Y-2 防与 ref 不同步）。
    - **手动确认 confirmMatch**：在其既有 `BEGIN/COMMIT` 事务内、upsert `manual_confirmed` ref 之后 `await updateVideoBangumiStatus(client, videoId, 'matched')`（与 catalog+ref 原子）。confirmMatch **不经 matchAndEnrich**，故独立写。
    - **ignore / retry**：预留（未来 ignore 端点写 `'unmatched'`）。
+   - **（D-170-4-AMD / META-15-C FIX，Codex stop-time review）已绑定→只刷新不重配**：`matchAndEnrich` 入口若检出**既有 primary bangumi ref（auto_matched / manual_confirmed）**，**跳过重新匹配**，改走 `refreshExistingMatch`——按既有 subject 刷新 catalog(COALESCE)/逐集/角色 + 重申 `'matched'`，**不动 ref、不降级**。原因：批量重富集（missing-characters mode 重跑既有 matched anime 补 META-19 角色）若重走匹配，`none`→写 `'unmatched'` 会**清空绑定**、`candidate`→降级、`auto` upsert 会把 `manual_confirmed` 覆盖成 `auto` 甚至改绑异 subject。unmatched/never 视频无 primary ref → 落正常匹配（unmatched mode 重试匹配语义不变）。REST 详情瞬时失败且无 dump → 抛错重试，绝不清空既有数据。
    - **非 anime**：step3 不执行 → 恒 `'pending'`；前端据 `video.type !== 'anime'` 决定不渲染 bangumi 徽标，**不依赖 status 值**。
    - **（A-3）刻意不对称**：douban 侧有「列 `douban_status` + `meta_quality.douban_match_status` JSON 子状态」双轨；bangumi **只设列 status，不引入 `meta_quality` JSON 子状态**——刻意简化，非遗漏。
 
@@ -18455,5 +18456,149 @@ BANGUMI_USER_AGENT:     z.string().default('resovo/1.0 (https://github.com/...)'
 - **META-14-C**（簇重构 + 单测重写 + 4 面 visual 回归）：重写 types/badge/cluster/barrel + 重写单测；消费面不改代码仅走读回归。
 
 > A/C 触碰 admin-ui 公开 Props，commit 必带 `Subagents: arch-reviewer (claude-opus-4-8)` trailer。
+
+---
+
+## ADR-168：外部数据源凭证统一管理 + Secret Redaction 协议（SEQ-EXT-META-A / Track external-metadata）
+
+- **状态**：**Accepted**（arch-reviewer claude-opus-4-8 × 1 轮起草 + 自审：D-168-1..8 全部锁定无待定；覆盖现存 douban_cookie / notification_webhook_secret 明文隐患 + 通用化多源；无新依赖、无新 admin route）
+- **来源**：设计方案 `docs/designs/external-metadata-ux-overhaul_20260529.md` §2.2/§2.3/§2.4 + §13 ADR-168 骨架 + §11.1 凭证存储安全决策。本 ADR 为「外部元数据 UX 整改」P1 地基。用户要求：API key 不能仅靠 .env.local 明文，需设置页配置（bangumi 现在 / tmdb 以后）。
+
+### 背景
+
+Bangumi token 现直读 `process.env.BANGUMI_API_TOKEN`（`lib/bangumi.ts:15`），无法在站点设置页配置。更严重的安全隐患（已逐行核实）：
+1. **明文落审计表**：`POST /admin/system/settings`（`siteConfig.ts:97`）`auditSvc.write({ beforeJsonb: beforeSubset, afterJsonb: pairs })`（`:155-156`）—— 现有 `notification_webhook_secret`（`:130`）、`douban_cookie`（`:110`）原样明文写入 `admin_audit_log`。
+2. **明文经 GET 回传**：`deserializeSiteSettings`（`systemSettings.ts:81`）的 `doubanCookie`（`:86`）/ `notificationWebhookSecret`（`:99`）明文返回前端。
+3. **无占位跳过**：POST 对 secret 零特殊处理 —— 一旦做 GET 遮罩，前端原样回提遮罩值会把真凭证覆盖为遮罩串（「保存即清空」风险）。
+
+`system_settings.value` 是 TEXT KV，不加密；本 ADR 定义 secret redaction 三道协议（审计/GET/PATCH）+ Bangumi 凭证下沉 Service（向后兼容 env）。**本 ADR 定契约，实施拆 META-16-A/B/C**。
+
+### 决策要点
+
+1. **（D-168-1）敏感键模式 `SECRET_KEY_PATTERNS`**（`packages/types` runtime const，三端共享）：`/(^|_)token$/`、`/(^|_)cookie$/`、`/(^|_)secret$/`、`/(^|_)api_key$/`（通用化多源，覆盖未来 tmdb_api_key）。`isSecretSettingKey(key)` 判定。
+   - **命中**：douban_cookie / notification_webhook_secret / bangumi_api_token / tmdb_api_key。
+   - **不命中（精度护栏）**：notification_webhook_url / notification_email_to / douban_proxy / video_proxy_url / bangumi_user_agent / bangumi_api_timeout_ms / config_file_url / auto_crawl_*。用 `(^|_)<word>$` 避免误伤（`_url$`/`_to$`/`_agent$`/`_ms$` 不含四词尾）。
+
+2. **（D-168-2）审计 redaction（零字符状态标记）**：纯函数 `redactSecretsForAudit(rec): rec|null` —— 命中键值非空→`'<set>'` / 空串|null|undefined→`'<cleared>'` / 非命中键原样 / `null` 入参→`null`（保 ADR-118 audit 语义）。**落点**：siteConfig POST 审计 write 前对 beforeSubset + pairs 双向应用。对现有 webhook_secret 立即生效（修隐患）。角括号标记与 logger `censor:'<redacted>'` 同族；不破坏 `extractAuditPayloadSummary`。
+
+3. **（D-168-3）GET 遮罩 + Set 布尔**：纯函数 `maskSecret(raw)` —— ≥4→`'••••'+后4位` / 1–3→`'••••'`（全遮罩，不泄漏短凭证）/ 空串→`''`。**落点**：`deserializeSiteSettings`（raw→DTO 唯一收口，GET handler 直接 send 其结果）。敏感字段返回遮罩 + 新增 `<key>Set` 布尔（doubanCookieSet / notificationWebhookSecretSet / bangumiApiTokenSet / tmdbApiKeySet）。bangumiUserAgent/bangumiApiTimeoutMs 非敏感明文。
+
+4. **（D-168-4）PATCH 遮罩占位跳过（防保存即清空）**：POST 构建 pairs 时敏感字段：`value.startsWith('••••')`（`isMaskedPlaceholder`，`MASK_PREFIX='••••'` 单一真源）→ **该 key 不入 pairs**（保留原值）；`value===''`→写空串（→审计 `<cleared>`，主动清空）；其他明文→正常覆盖。三态互斥（占位=不变/空=清空/明文=覆盖）。
+
+5. **（D-168-5）凭证解析下沉 Service（本 ADR 定契约，实施 META-16-B）**：`lib/bangumi.ts` 导出 `BangumiClientConfig {token?,userAgent?,timeoutMs?}`；5 函数（getSubject/getEpisodes/searchSubjects/searchSubjectsStrict/isBangumiApiConfigured）加**末位可选 cfg**，内部 `apiToken()/timeoutMs()/userAgent()` 接受 cfg 缺省**回退 process.env**（向后兼容）。`BangumiService` 新增私有 `getBangumiConfig()` 从 system_settings 读（**进程内模块级 ~60s TTL 缓存**）；matchAndEnrich/confirmMatch/searchCandidates/matchViaRest/gatherEnrichmentData 调 lib 时透传。
+
+6. **（D-168-6）at-rest 应用层加密 NEGATED for P1**：不引入 KV value 列加密（理由 §11.1：密钥管理/轮换/迁移/启动失败拖大 P1，无合规强制/无 dump 外发风险；redaction 三道已覆盖日志/响应泄漏主威胁）。follow-up ADR（触发：合规要求 / DB dump 外发链路）。
+
+7. **（D-168-7）新增 keys + 类型扩展**：`SystemSettingKey` +`bangumi_api_token`/`bangumi_user_agent`/`bangumi_api_timeout_ms`/`tmdb_api_key`（**占位不消费**）。`SiteSettings` + bangumiApiToken(遮罩)/bangumiApiTokenSet/bangumiUserAgent/bangumiApiTimeoutMs/tmdbApiKey(占位)/tmdbApiKeySet + 补 doubanCookieSet/notificationWebhookSecretSet。`SiteSettingsBodySchema` + bangumiApiToken(.max 500)/bangumiUserAgent(.max 200)/bangumiApiTimeoutMs(int 1000–60000)/tmdbApiKey(.max 500)。`deserializeSiteSettings` + bangumiUserAgent 默认 `resovo/1.0 (+...)` / bangumiApiTimeoutMs 默认 8000。
+
+### 影响文件
+
+- 修改：`packages/types/src/system.types.ts`（union +4 / SiteSettings +8）、`packages/types/src/index.ts`（runtime export SECRET_KEY_PATTERNS/isSecretSettingKey/MASK_PREFIX）、`apps/api/src/routes/admin/siteConfig.ts`（占位跳过 + 审计 redaction + schema/pairs）、`apps/api/src/db/queries/systemSettings.ts`（遮罩 + Set 布尔 + bangumi 默认）、`apps/api/src/lib/bangumi.ts`（BangumiClientConfig + 5 函数 cfg）、`apps/api/src/services/BangumiService.ts`（getBangumiConfig 缓存 + 透传）、`apps/server-next/src/app/admin/settings/_tabs/SettingsTab.tsx`（外部数据源卡）
+- 新建：`packages/types/src/security.types.ts`（或归 system.types：SECRET_KEY_PATTERNS/isSecretSettingKey/MASK_PREFIX）、`apps/api/src/lib/secretRedaction.ts`（redactSecretsForAudit/maskSecret/isMaskedPlaceholder）
+- **注**：AuditLogService 不改（redaction 在 route 落点）；无 migration（KV 无 DDL）。
+
+### 实施拆卡（M-SN-5：影响文件 8+，须拆 / 超 5 项再拆 A1/A2）
+
+- **META-16-A**：SECRET_KEY_PATTERNS/maskSecret/redactSecretsForAudit/isMaskedPlaceholder + types union/接口/index runtime export + siteConfig POST 占位跳过/审计 redaction/schema + deserializeSiteSettings 遮罩。
+- **META-16-B**：BangumiClientConfig + lib/bangumi 5 函数 cfg + getBangumiConfig 60s 缓存 + BangumiService 透传。
+- **META-16-C**：SettingsTab「外部数据源」分组卡（bangumiApiToken password + show/hide / userAgent / timeoutMs / 状态行）。**测试连接按钮 NOT in scope**（依赖 ADR-173/F-A）。
+
+### 偏离登记
+
+- **D-168-6**：at-rest 加密 NEGATED for P1（follow-up / 触发：合规 或 dump 外发）。
+- **D-168-7**：tmdb_api_key 仅入 union + 遮罩管线，不消费（通用化占位，TMDB 富集后续复用零返工）。
+- **D-168-2 vs D-168-3 不对称**：审计零字符 / GET 露后 4 位。处置：accept（审计长期高敏留存 → 零字符；GET admin 实时编辑 → 后 4 位助辨识且不足重建）。
+- **D-168-5 缓存一致性**：60s TTL 窗口旧凭证可能短暂沿用。处置：accept（凭证低频变更 / 富集最终一致）。
+
+### 回归红线
+
+- 既有必过：`tests/unit/api/system-config.test.ts`（`system.settings_update` payload，非敏感键不受影响 + **新增敏感键被 redact 断言**）/ audit-log-coverage / set-equal（无新 action type）。
+- 新增测试要点：redactSecretsForAudit（set/cleared/原样/null）/ maskSecret（长/短/空）/ GET 遮罩 + Set 布尔（修既存隐患）/ PATCH 占位跳过（douban_cookie/webhook_secret 不被保存即清空）/ isSecretSettingKey（4 命中 + 6 不命中）/ lib cfg 优先与 env 回退。
+
+---
+
+## ADR-172 AMENDMENT 3（META-18 / 2026-05-30）：外部元数据真源并集视图 — 条目级展示层
+
+- **状态**：Accepted（arch-reviewer claude-opus-4-8 CONDITIONAL → 主循环满足 3 条件后等同 PASS；admin-ui 公开 Props 新增 + `@resovo/types` 公开类型新增，双触发 CLAUDE.md 强制 Opus 评审）
+- **触发**：用户走读反馈 —— 动漫类型视频详情/编辑页未消费已回填的 Bangumi 条目级字段（日文原名/放送日/排名/评分），且无「多源并集总览」（命中了哪些源/外部 ID/置信度/链接）→ 运营无法判定富集回填质量。
+- **性质**：**additive（纯展示层）**。新增展示组件 + 详情 DTO 扩展，不动富集管线、不改 public 路径、不改既有徽标契约。
+- **用户已锁决策**：①展示界面 = 视频编辑抽屉 + 审核台详情 两处 ②深度 = **仅条目级**（不含逐集放送 catalog_episodes）③设计原则 = 以 `media_catalog` 真源为中心 + 所有命中源**并集**展示（非每源孤岛 tab）④CV/角色管线记为 META-19 后续。
+
+### 决策要点
+
+- **（D-172-AMD3-1）跨层原语下沉 `@resovo/types`**：`ExternalRefProvider`（douban|tmdb|bangumi|imdb）+ `ExternalRefMatchStatus`（auto_matched|manual_confirmed|candidate|rejected）由 `apps/api/src/db/queries/externalData.ts` 迁入 `@resovo/types/src/video.types.ts`（含双形态 runtime const `EXTERNAL_REF_PROVIDERS`/`EXTERNAL_REF_MATCH_STATUSES`）；api 层改 `import type` 复用，不保留本地重复定义（避免四源枚举三处分叉 / CLAUDE.md「3 处以上必须提取」）。当前该两字面量仅 externalData.ts 引用，下沉低风险。
+- **（D-172-AMD3-2）新建展示窄化投影类型**（`@resovo/types`）：
+  - `ExternalRefSummary` = video_external_refs 面向展示窄化（provider/externalId/matchStatus/matchMethod/confidence/isPrimary）；**剔除** id/videoId/linkedAt/linkedBy/notes（写工作流/审计字段，纯展示不消费、不诱导写操作）。
+  - `BangumiEntrySummary` = bangumi_entries 条目级投影（bangumiId/titleCn/titleJp/year/rating/summary/airDate/coverUrl/rank/nsfw）。**严格排除 rating_votes**（dump 无 votes 列；votes 属 `media_catalog` 真源合并值，异源不混 → 归真源字段区）。
+- **（D-172-AMD3-3）admin 详情 DTO 扩展**：`VideoService.adminFindById` 在 `enrichmentSummary` 外追加 `externalRefs: ExternalRefSummary[]`（经 `listVideoExternalRefs` 映射）+ `bangumiInfo?: BangumiEntrySummary`（**仅 `type==='anime'` 且有 primary bangumi ref / bangumi_subject_id 时**经 `findBangumiById` 注入；dump 缺条目则 undefined）。**红线**：只挂 `adminFindById`，绝不挂 `mapVideoRow`/public `Video`（ADR-170 R-5）；`adminList`（列表）不注入（防 N×findBangumiById）。server-next `VideoAdminDetail` 镜像 `externalRefs?`/`bangumiInfo?` + 补 `title_original?`/`rating_votes?`/`metadata_source?`（api raw row 已 select，仅前端镜像未声明）。
+- **（D-172-AMD3-4）admin-ui 新共享组件 `ExternalMetaPanel`**（`packages/admin-ui/src/components/external-meta-panel/`）：**纯展示零事件回调**（不耦合 TabDouban / douban-candidate / douban-ignore 写工作流）。Props `summary: EnrichmentSummary` / `type: VideoType` / `externalRefs?` / `bangumiInfo?` / `catalogFields?{titleOriginal,rating,ratingVotes,metadataSource}`（内联可选对象，**不吃** server-next/api 类型以守单向依赖）/ `enrichedAtLabel?` / `density?: 'drawer'|'compact'` / `testId?`。复用 `SourceLogoBadge` + `SOURCE_HREF_BUILDERS` + `SOURCE_LABEL`（不重绘 logo/href）。三区纵向布局（非 tab）：①源并集总览（4 源 logo + 外部 ID + matchMethod + 置信度 + primary 标记；bangumi 仅 anime；未命中 drawer 灰显占位/compact 不占位）②真源字段区（titleOriginal/rating+votes/metadataSource 标注）③Bangumi 条目块（anime-only：日文原名/放送日/排名/评分/nsfw + summary 可选折叠；bangumiInfo 缺失则整块不渲染）。
+- **（D-172-AMD3-5）审核台懒加载隔离**：`RightPane/TabDetail` 用 `getVideo(v.id)` 懒取扩展详情消费同 Panel，**不得污染 queue list query**（`listPendingQueue`/`VideoQueueRow` 形状不变，新字段不进列表查询）。
+
+### 影响文件
+
+- 修改：`packages/types/src/video.types.ts`（+EXTERNAL_REF_PROVIDERS/EXTERNAL_REF_MATCH_STATUSES/ExternalRefProvider/ExternalRefMatchStatus/ExternalRefSummary/BangumiEntrySummary）、`packages/types/src/index.ts`（runtime const 值导出）
+- 修改：`apps/api/src/db/queries/externalData.ts`（provider/status 改 import 复用）、`apps/api/src/services/VideoService.ts`（adminFindById 注入 externalRefs + bangumiInfo）
+- 修改：`apps/server-next/src/lib/videos/types.ts`（VideoAdminDetail 镜像 + catalogFields 字段）、`VideoEditDrawer.tsx`（新「外部元数据」tab）、`moderation/_client/RightPane/TabDetail.tsx`（懒加载消费）
+- 新建：`packages/admin-ui/src/components/external-meta-panel/{types.ts,external-meta-panel.tsx,index.ts}` + admin-ui barrel 导出
+- 测试：external-meta-panel 单测 + 消费面回归
+
+### 偏离登记
+
+- **D-172-AMD3-A**：`bangumiInfo` 不含 rating_votes（异源分离 / votes 归 catalogFields）。处置：accept。
+- **D-172-AMD3-B**：`catalogFields` 用内联可选对象而非吃 `VideoAdminDetail`/`DbVideoRow`。处置：accept（守 admin-ui 单向依赖红线）。
+- **D-172-AMD3-C**：tmdb/imdb 条目级专属块本期不做（仅 source 总览展示 ID/链接）。处置：accept（TMDB/IMDb 富集管线未建 / 沿用 AMD2-B 二态）。
+
+### 实施拆卡（严格串行 B→A→C / 对应 META-18-A/B）
+
+- **B（types 下沉 + DTO）= META-18-A**：`@resovo/types` 4 类型 + api provider/status 改 import + adminFindById 注入 + server-next 镜像。
+- **A（admin-ui Panel）+ C（两消费面接入）= META-18-B**：ExternalMetaPanel + 单测 + 编辑抽屉新 tab + 审核台 TabDetail 懒加载。
+
+> A/C 触碰 admin-ui 公开 Props + `@resovo/types` 公开类型，commit 必带 `Subagents: arch-reviewer (claude-opus-4-8)` trailer。
+
+---
+
+## ADR-161 AMENDMENT 2026-05-30（CHG-BNG-CHAR / META-19）— 角色↔CV 自动入库（catalog_characters + catalog_character_actors）
+
+- **状态**：Accepted（arch-reviewer claude-opus-4-8 CONDITIONAL → 满足 5 红线后等同 PASS；新 schema + 新 REST 抓取 + admin-ui 公开 Props 新增 + `@resovo/types` 公开类型新增，多触发 CLAUDE.md 强制 Opus 评审）
+- **触发**：用户「后面要补充管线，充实数据」+ META-18 调研确认 Bangumi 富集当前**不抓角色/声优**（`mapSubjectToCatalogFields` 仅解析导演/编剧；`media_catalog.cast TEXT[]` 扁平结构存不了角色↔CV 配对）。
+- **性质**：additive（新表 + 新抓取 + 新展示区，不改既有 catalog/episodes 写入）。本 AMENDMENT 是 ADR-161 Bangumi 接入的自然延伸（`getCharacters` 平行 `getEpisodes`；`catalog_characters` 平行 `catalog_episodes`；同 gather/apply 两段、同 catalog_id 归属范式）。
+- **已实测数据形态**（api.bgm.tv/v0/subjects/{id}/characters，无分页一次返回）：character{id,name,type,images,summary,relation(主角·配角·客串·闲角),actors[]} + actor{id,name,type,images}；**N:M**（实测 52 角色 14 个多 CV）。
+
+### 决策要点
+
+- **（D-161-AMD-1）两表 normalized**：`catalog_characters` + `catalog_character_actors`（非单表 JSONB）。理由：N:M 真实存在；actor 是有独立 person_id 的一等实体（未来「声优反查角色」可结构化查询）；catalog_episodes 扁平单表是「叶子无子集合」先例，不构成约束。Migration 083：`catalog_characters(catalog_id FK CASCADE, source, external_character_id NOT NULL, name, relation, char_type, sort, image_url, summary)` UNIQUE`(catalog_id,source,external_character_id)`；`catalog_character_actors(character_id FK CASCADE, external_actor_id, name, image_url, sort)` UNIQUE`(character_id,external_actor_id)`。
+- **（D-161-AMD-2）delete-by-catalog-then-insert 全量替换**（非 upsert）：角色集合会变（源端增删角色），upsert 无法删孤儿；catalog_episodes 用 upsert 因逐集集合稳定，角色不然。`replaceCatalogCharacters(db: PoolClient, ...)` **仅 PoolClient**（delete+insert 须单事务，防空窗）。
+- **（D-161-AMD-3）charactersFetched 守卫**（Codex stop-time review FIX）：`getCharacters` 区分「抓取失败(返 `null`)」与「成功返回空(`[]`)」。Phase 2 仅 `charactersFetched`（fetch 成功，含空）才 delete-then-insert 全量替换——**成功返回空也清陈旧角色**（避免保留过时数据）；抓取失败(null) 跳过（防瞬时故障误删）。**注**：原裁定为 `!degraded` 守卫，但 getCharacters 与 getSubject 解耦独立失败 → `!degraded` 会在 getCharacters 瞬时失败时误删；`length>0` 又无法清空陈旧 → 最终用 fetch-成功语义（null/[] 区分）兼顾两者。
+- **（D-161-AMD-4）存储全集 / 展示过滤**：存全部角色（含客串/闲角，~52 行/番），relation 过滤是展示决策下沉渲染层（主角+配角 cap top-N）；存储层职责单一不业务过滤。`sort` 写入时按 relation 权重 + 原序填充。
+- **（D-161-AMD-5）抓取/写入集成（单点接入两路径）**：`lib/bangumi.getCharacters`（无分页，**成功返数组含 `[]` / 失败返 `null`**）→ `gatherEnrichmentData`（Phase 1 拉取 + `mapCharacters` relation→sort + actor 序；非 null 才置 `charactersFetched=true`）→ `EnrichmentData.{characters, charactersFetched}` → `applyEnrichmentDb`（Phase 2 事务内，仅 `charactersFetched` 才 `replaceCatalogCharacters`，见 D-161-AMD-3）。auto（applyAutoMatchAtomic）+ 人工（confirmMatch）两路径均经 applyEnrichmentDb，**单点接入自动覆盖**。
+- **（D-161-AMD-6）DTO + 展示**：`adminFindById` 新增**顶层** `bangumiCharacters?`（异源不混，不挂 bangumiInfo 内 / 同 AMD3-A votes 原则；仅 anime + 命中下发）。`@resovo/types`：`CatalogCharacterSummary`{name,relation,imageUrl,actors[]} + `CatalogCharacterActorSummary`{name,imageUrl}（窄化，剔除外部 id/sort/summary）。`ExternalMetaPanelProps` 新增 `characters?`（admin-ui 公开 Props → Opus trailer）；`CharactersBlock`（anime-only）渲染主角+配角 cap top-N，CV 配对「角色名 — CV1 / CV2」，relation Record 兜底原文，零硬编码色。**META-21（2026-05-31）**：角色头像渲染落地 —— 行首 `Thumb size="square-sm"`（28×28，复用 admin-ui cell 原语，object-fit cover / 空 src 走 placeholder），消费已存 `imageUrl`；纯渲染增强，不改 Props 契约（无 Opus trailer）。CV 头像仍未渲染（actor.imageUrl 已存，后续按需）。
+
+### 影响文件
+
+- 新建：`apps/api/src/db/migrations/083_bangumi_characters.sql`、`apps/api/src/db/queries/catalogCharacters.ts`
+- 修改：`apps/api/src/lib/bangumi.ts`（getCharacters + BangumiCharacter/Actor 接口）、`apps/api/src/services/BangumiService.ts`（gather+apply + charactersFetched 守卫）、`apps/api/src/services/BangumiService.utils.ts`（mapCharacters）、`apps/api/src/services/VideoService.ts`（adminFindById 注入 bangumiCharacters）、`packages/types/src/video.types.ts`（2 投影）、`packages/admin-ui/src/components/external-meta-panel/{types.ts,external-meta-panel.tsx}`（characters Props + CharactersBlock）、`apps/server-next/src/lib/videos/types.ts`（VideoAdminDetail 镜像）、`docs/architecture.md`（§5.6 catalog_characters 段 + migration 列表）
+
+### 偏离登记（对 077/161 原范式）
+
+- **D-161-AMD-A**：两表 normalized（vs catalog_episodes 单表）。处置：accept（数据形态驱动）。
+- **D-161-AMD-B**：delete-then-insert（vs catalog_episodes upsert）。处置：accept（角色集合可变，需删孤儿）。
+- **D-161-AMD-C**：`replaceCatalogCharacters` 仅 PoolClient（vs upsertCatalogEpisodes 双形态）。处置：accept（delete+insert 须单事务）。
+- **D-161-AMD-D**：`external_character_id NOT NULL`（vs catalog_episodes external_episode_id nullable）。处置：accept（角色无 id 无意义；delete-then-insert 不依赖 ON CONFLICT 过滤空键）。
+
+### 实施拆卡（严格串行 A→B→C / META-19-A/B/C）
+
+- **A**：migration 083 + `@resovo/types` 2 投影 + `catalogCharacters.ts`（replace + list）+ architecture.md §5.6/migration 列表 + 本 AMENDMENT。
+- **B**：`getCharacters` + BangumiCharacter/Actor 接口 + `mapCharacters` + `EnrichmentData.{characters,charactersFetched}` + gather/apply 接入 + charactersFetched 守卫 + 单测（N:M / 失败 null 不删 / 成功空清陈旧 / 全量替换）。
+- **C**：`adminFindById` 注入 bangumiCharacters + `ExternalMetaPanelProps.characters` + `CharactersBlock` + 单测。
+
+### 红线
+
+1. migration 编号落地前 Glob 确认（082 最新 → 083）；architecture.md 必须同步（绝对禁止项）。
+2. admin-ui Props 新增 `characters` → commit 带 `Subagents: arch-reviewer (claude-opus-4-8)` trailer。
+3. charactersFetched 守卫必须存在（getCharacters 抓取失败 null → 禁止 delete 角色；成功空 [] → 替换清陈旧）。
+4. `replaceCatalogCharacters` 仅 PoolClient + 事务内（两路径均满足）。
+5. 无 any / 无空 catch（getCharacters 复用 bgmGet catch；失败 → bgmGet 返 null → getCharacters 返 null）/ 无硬编码颜色（CharactersBlock 仅 token）。
+
+> C（及 B 若触 admin-ui）触碰 admin-ui 公开 Props + `@resovo/types` 公开类型，commit 必带 `Subagents: arch-reviewer (claude-opus-4-8)` trailer。
 
 ---

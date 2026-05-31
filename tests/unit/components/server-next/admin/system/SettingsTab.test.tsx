@@ -63,7 +63,8 @@ const FIXTURE = {
   siteName: 'Resovo',
   siteAnnouncement: 'Welcome',
   doubanProxy: 'https://douban-proxy.example.com',
-  doubanCookie: 'll=12345',
+  doubanCookie: '••••2345',
+  doubanCookieSet: true,
   showAdultContent: false,
   contentFilterEnabled: true,
   videoProxyEnabled: false,
@@ -72,6 +73,14 @@ const FIXTURE = {
   autoCrawlMaxPerRun: 100,
   autoCrawlRecentOnly: true,
   autoCrawlRecentDays: 7,
+  // ADR-168 META-16-C：外部数据源凭证（遮罩值 + Set 布尔）
+  notificationWebhookSecretSet: false,
+  bangumiApiToken: '',
+  bangumiApiTokenSet: false,
+  bangumiUserAgent: 'resovo/1.0 (+https://github.com/resovo)',
+  bangumiApiTimeoutMs: 8000,
+  tmdbApiKey: '',
+  tmdbApiKeySet: false,
 }
 
 beforeEach(() => {
@@ -92,6 +101,34 @@ describe('SettingsTab', () => {
       expect(screen.getByTestId('settings-card-auto-crawl')).not.toBeNull()
       expect(screen.getByTestId('settings-card-images')).not.toBeNull()
     })
+  })
+
+  it('1b. 外部数据源卡（ADR-168）：token password 默认隐藏 + 显隐切换 + 未配置状态行', async () => {
+    getSiteSettingsMock.mockResolvedValueOnce(FIXTURE)
+    const { container } = render(<SettingsTab />)
+    await waitFor(() => expect(screen.getByTestId('settings-card-external')).not.toBeNull())
+    const token = container.querySelector('[data-testid="setting-bangumiApiToken"] input') as HTMLInputElement
+    expect(token.getAttribute('type')).toBe('password')
+    // 未配置状态行
+    expect(screen.getByTestId('setting-bangumi-status').textContent).toContain('未配置')
+    // 显隐切换 → type=text
+    fireEvent.click(screen.getByTestId('setting-bangumiToken-toggle'))
+    await waitFor(() => {
+      const t2 = container.querySelector('[data-testid="setting-bangumiApiToken"] input') as HTMLInputElement
+      expect(t2.getAttribute('type')).toBe('text')
+    })
+  })
+
+  it('1c. 外部数据源卡：已配置 → 状态行绿条 + 新 token 保存发明文', async () => {
+    getSiteSettingsMock.mockResolvedValueOnce({ ...FIXTURE, bangumiApiToken: '••••wxyz', bangumiApiTokenSet: true })
+    saveSiteSettingsMock.mockResolvedValueOnce({ ok: true })
+    const { container } = render(<SettingsTab />)
+    await waitFor(() => expect(screen.getByTestId('setting-bangumi-status').textContent).toContain('已配置'))
+    const token = container.querySelector('[data-testid="setting-bangumiApiToken"] input') as HTMLInputElement
+    fireEvent.change(token, { target: { value: 'new-real-token' } })
+    fireEvent.click(screen.getByTestId('settings-save'))
+    await waitFor(() => expect(saveSiteSettingsMock).toHaveBeenCalled())
+    expect(saveSiteSettingsMock.mock.calls[0][0]).toMatchObject({ bangumiApiToken: 'new-real-token' })
   })
 
   it('2. 初次加载注入 13 字段值', async () => {

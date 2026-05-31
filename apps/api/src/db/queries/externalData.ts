@@ -6,6 +6,8 @@
  */
 
 import type { Pool, PoolClient } from 'pg'
+// ADR-172 AMENDMENT 3 / D-172-AMD3-1：provider/status 字面量下沉 @resovo/types，本文件复用（不再本地定义）
+import type { ExternalRefProvider, ExternalRefMatchStatus } from '@/types'
 
 // ── 类型 ──────────────────────────────────────────────────────────
 
@@ -329,8 +331,8 @@ export async function listBangumiEntriesForSeed(
 
 // ── video_external_refs ───────────────────────────────────────────
 
-export type ExternalRefProvider = 'douban' | 'tmdb' | 'bangumi' | 'imdb'
-export type ExternalRefMatchStatus = 'auto_matched' | 'manual_confirmed' | 'candidate' | 'rejected'
+// D-172-AMD3-1：类型真源在 @resovo/types，本文件 re-export 维持既有 import 路径向后兼容
+export type { ExternalRefProvider, ExternalRefMatchStatus }
 
 export interface VideoExternalRef {
   id: string
