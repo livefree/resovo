@@ -131,6 +131,75 @@ describe('SettingsTab', () => {
     expect(saveSiteSettingsMock.mock.calls[0][0]).toMatchObject({ bangumiApiToken: 'new-real-token' })
   })
 
+  it('1d. 只提交改动过的字段（不全量覆盖其它 Tab 配置 / FIX-SETTINGS-PARTIAL-SAVE）', async () => {
+    getSiteSettingsMock.mockResolvedValueOnce(FIXTURE)
+    saveSiteSettingsMock.mockResolvedValueOnce({ ok: true })
+    const { container } = render(<SettingsTab />)
+    await waitFor(() => screen.getByTestId('settings-save'))
+    // 仅改一个字段
+    fireEvent.click(container.querySelector('input[data-testid="setting-showAdultContent"]') as HTMLInputElement)
+    fireEvent.click(screen.getByTestId('settings-save'))
+    await waitFor(() => expect(saveSiteSettingsMock).toHaveBeenCalled())
+    const patch = saveSiteSettingsMock.mock.calls[0][0] as Record<string, unknown>
+    // patch 仅含改动字段（防全量快照覆盖其它 Tab 的 notification*/session* 等）
+    expect(Object.keys(patch)).toEqual(['showAdultContent'])
+    expect(patch).not.toHaveProperty('siteName')
+    expect(patch).not.toHaveProperty('notificationEmailEnabled')
+    expect(patch).not.toHaveProperty('sessionTimeoutMinutes')
+    expect(patch).not.toHaveProperty('bangumiApiToken')
+  })
+
+  it('1e. in-flight 保存期间的编辑不被静默丢弃（dirty 竞态 / Codex review）', async () => {
+    getSiteSettingsMock.mockResolvedValueOnce(FIXTURE)
+    let resolveFirst!: (v: unknown) => void
+    saveSiteSettingsMock.mockReturnValueOnce(new Promise((r) => { resolveFirst = r }))
+    const { container } = render(<SettingsTab />)
+    await waitFor(() => screen.getByTestId('settings-save'))
+    // 改字段 A（showAdultContent）→ 点保存进入 in-flight
+    fireEvent.click(container.querySelector('input[data-testid="setting-showAdultContent"]') as HTMLInputElement)
+    fireEvent.click(screen.getByTestId('settings-save'))
+    await waitFor(() => expect(saveSiteSettingsMock).toHaveBeenCalledTimes(1))
+    // 保存进行中改字段 B（siteName）
+    fireEvent.change(
+      container.querySelector('[data-testid="setting-siteName"] input') as HTMLInputElement,
+      { target: { value: 'NewName' } },
+    )
+    // 第一次保存完成（A 提交成功）
+    saveSiteSettingsMock.mockResolvedValueOnce({ ok: true })
+    resolveFirst({ ok: true })
+    // B 仍为未保存 → 保存按钮可点（未被首次保存的 clear 静默吞掉）
+    await waitFor(() => expect((screen.getByTestId('settings-save') as HTMLButtonElement).disabled).toBe(false))
+    // 再次保存 → 第二次 patch 仅含 siteName=NewName（A 已清、B 保留）
+    fireEvent.click(screen.getByTestId('settings-save'))
+    await waitFor(() => expect(saveSiteSettingsMock).toHaveBeenCalledTimes(2))
+    expect(saveSiteSettingsMock.mock.calls[1][0]).toEqual({ siteName: 'NewName' })
+  })
+
+  it('1f. in-flight 重改同一已提交字段不丢（same-field 竞态 / Codex review）', async () => {
+    getSiteSettingsMock.mockResolvedValueOnce(FIXTURE)
+    let resolveFirst!: (v: unknown) => void
+    saveSiteSettingsMock.mockReturnValueOnce(new Promise((r) => { resolveFirst = r }))
+    const { container } = render(<SettingsTab />)
+    await waitFor(() => screen.getByTestId('settings-save'))
+    const siteName = () => container.querySelector('[data-testid="setting-siteName"] input') as HTMLInputElement
+    // 改 siteName=v1 → 保存 in-flight（提交 v1）
+    fireEvent.change(siteName(), { target: { value: 'v1' } })
+    fireEvent.click(screen.getByTestId('settings-save'))
+    await waitFor(() => expect(saveSiteSettingsMock).toHaveBeenCalledTimes(1))
+    expect(saveSiteSettingsMock.mock.calls[0][0]).toEqual({ siteName: 'v1' })
+    // 保存进行中又改同一字段 siteName=v2
+    fireEvent.change(siteName(), { target: { value: 'v2' } })
+    // 第一次保存完成
+    saveSiteSettingsMock.mockResolvedValueOnce({ ok: true })
+    resolveFirst({ ok: true })
+    // siteName 仍 dirty（v2 未被首次保存静默清除）→ 按钮可点
+    await waitFor(() => expect((screen.getByTestId('settings-save') as HTMLButtonElement).disabled).toBe(false))
+    // 二次保存提交 v2（同字段 in-flight 重改不丢）
+    fireEvent.click(screen.getByTestId('settings-save'))
+    await waitFor(() => expect(saveSiteSettingsMock).toHaveBeenCalledTimes(2))
+    expect(saveSiteSettingsMock.mock.calls[1][0]).toEqual({ siteName: 'v2' })
+  })
+
   it('2. 初次加载注入 13 字段值', async () => {
     getSiteSettingsMock.mockResolvedValueOnce(FIXTURE)
     const { container } = render(<SettingsTab />)

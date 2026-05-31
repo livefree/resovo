@@ -19,7 +19,7 @@ import {
   LoadingState,
   useToast,
 } from '@resovo/admin-ui'
-import { getSiteSettings, saveSiteSettings } from '@/lib/system/api'
+import { getSiteSettings, saveSiteSettings, type SessionSettingsPatch } from '@/lib/system/api'
 import { ApiClientError } from '@/lib/api-client'
 
 const SECTION_STYLE: CSSProperties = {
@@ -124,11 +124,12 @@ export function LoginSessionsTab() {
     if (!state) return
     setSaving(true)
     try {
-      await saveSiteSettings({
+      const patch: SessionSettingsPatch = {
         sessionTimeoutMinutes: state.timeoutMinutes,
         sessionMaxConcurrent: state.maxConcurrent,
         sessionExtendOnActivity: state.extendOnActivity,
-      })
+      }
+      await saveSiteSettings(patch)
       toast.push({ title: '已保存', description: '会话设置已更新', level: 'success' })
       setDirty(false)
     } catch (err: unknown) {

@@ -18,7 +18,7 @@
  * 注：原生 <input type="checkbox"> 兜底（admin-ui 暂无 AdminCheckbox 原语）
  */
 
-import React, { useState, useEffect, useCallback, type CSSProperties } from 'react'
+import React, { useState, useEffect, useCallback, useRef, type CSSProperties } from 'react'
 import {
   AdminCard,
   AdminButton,
@@ -33,7 +33,7 @@ import {
   getSiteSettings,
   saveSiteSettings,
   type SiteSettings,
-  type SiteSettingsPatch,
+  type GeneralSettingsPatch,
 } from '@/lib/system/api'
 import { ApiClientError } from '@/lib/api-client'
 
@@ -93,6 +93,11 @@ export function SettingsTab() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<Error | null>(null)
   const [dirty, setDirty] = useState(false)
+  // FIX-SETTINGS-PARTIAL-SAVE：只提交本次改动过的字段，避免全量快照覆盖其它 Tab 配置
+  const dirtyKeysRef = useRef<Set<keyof GeneralSettingsPatch>>(new Set())
+  // 保存进行中（非 null）时记录被改动的键：成功后这些键保留为 dirty，防 in-flight 编辑被静默清除。
+  // 同步写读（不经 useEffect），消除值比对方案的时序窗口（含 same-field 重改）。
+  const touchedDuringSaveRef = useRef<Set<keyof GeneralSettingsPatch> | null>(null)
   const [retryKey, setRetryKey] = useState(0)
   // ADR-168 META-16-C：Bangumi token 显隐切换（默认隐藏；输入新值时可显）
   const [showBangumiToken, setShowBangumiToken] = useState(false)
@@ -105,6 +110,7 @@ export function SettingsTab() {
       .then((res) => {
         if (cancelled) return
         setSettings(res)
+        dirtyKeysRef.current.clear()
         setDirty(false)
       })
       .catch((err: unknown) => {
@@ -117,27 +123,47 @@ export function SettingsTab() {
 
   const refresh = useCallback(() => setRetryKey((k) => k + 1), [])
 
-  const update = useCallback(<K extends keyof SiteSettings>(key: K, value: SiteSettings[K]) => {
+  const update = useCallback(<K extends keyof GeneralSettingsPatch>(key: K, value: SiteSettings[K]) => {
     setSettings((prev) => (prev ? { ...prev, [key]: value } : prev))
+    dirtyKeysRef.current.add(key)
+    // 保存进行中改动 → 记录，成功后保留为 dirty（不被本次保存清除）
+    touchedDuringSaveRef.current?.add(key)
     setDirty(true)
   }, [])
 
   const handleSave = useCallback(async () => {
     if (!settings) return
+    // 仅提交本次改动过的字段（dirty）：后端部分 upsert，未提交字段保持不变 → 不覆盖其它 Tab
+    const submittedKeys = Array.from(dirtyKeysRef.current)
+    if (submittedKeys.length === 0) {
+      setDirty(false)
+      return
+    }
+    const patch: GeneralSettingsPatch = {}
+    for (const key of submittedKeys) {
+      ;(patch as Record<string, unknown>)[key] = settings[key]
+    }
+    touchedDuringSaveRef.current = new Set()  // 开始追踪 in-flight 改动
     setSaving(true)
     try {
-      const patch: SiteSettingsPatch = settings
       await saveSiteSettings(patch)
       toast.push({
         title: '已保存',
         description: '站点设置已更新；audit_log 已写入',
         level: 'success',
       })
-      setDirty(false)
+      // 仅清除「保存进行中未再被改动」的已提交键；in-flight 期间被改的键（含同字段重改）
+      // 保留为 dirty，避免静默丢失保存进行中的编辑
+      const touched = touchedDuringSaveRef.current ?? new Set<keyof GeneralSettingsPatch>()
+      for (const key of submittedKeys) {
+        if (!touched.has(key)) dirtyKeysRef.current.delete(key)
+      }
+      setDirty(dirtyKeysRef.current.size > 0)
     } catch (err: unknown) {
       const { title, description } = describeApiError(err)
       toast.push({ title, description, level: 'danger' })
     } finally {
+      touchedDuringSaveRef.current = null  // 结束追踪
       setSaving(false)
     }
   }, [settings, toast])

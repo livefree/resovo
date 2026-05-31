@@ -12709,3 +12709,30 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **数据库变更**：无。
 - **质量门禁**：typecheck / lint / verify:adr-contracts EXIT=0 / title-normalizer 57 + bangumi-service 66 + metadataEnrich 32 + bangumiRoutes 12（含 sync auto 持久化路径）全过 / 全量 445 文件 **5814 passed 0 failed**（无 flaky）。
 - **注意事项**：① `normalizeForExternalMatch` 复用 `normalizeTitle` 全流程（去年份/季数/画质），与 dump 侧 `[^\p{L}\p{N}]`（不去季数/画质）在这些维度仍有差异，属 pre-existing。② 含空格标题（英文）匹配键保留空格 → 与 dump 空格剥离形态不一致，沿用 pre-META-22 安全 under-match，不在本卡范围。
+
+---
+
+## [FIX-SETTINGS-PARTIAL-SAVE] 设置保存只提交 dirty 字段 + 按 Tab 拆窄化 DTO（P0 数据丢失）
+- **完成时间**：2026-05-31
+- **记录时间**：2026-05-31 13:05
+- **执行模型**：claude-opus-4-8
+- **子代理**：无（DTO 按现有 Tab 边界切分，方向用户给定；Opus 主循环直接设计）
+- **来源**：用户即时报告 —— SettingsTab 保存会覆盖其它 Tab 的新配置。
+- **根因（P0 数据丢失）**：`SettingsTab.handleSave` 提交整个加载快照 `patch = settings`（含 notification*/session* 等其它 Tab 字段的旧值），后端 `setManySettings` 全量 upsert → 用 SettingsTab 加载时的旧值覆盖其它 Tab 期间保存的新值。NotificationsTab/LoginSessionsTab 早已只提交各自子集，唯独 SettingsTab 全量。
+- **修复**：
+  - **P0 只提交 dirty 字段**：SettingsTab 引入 `dirtyKeysRef: Set<keyof GeneralSettingsPatch>`，`update` 时记录改动键，`handleSave` 仅从 dirty 键构造 patch（空则跳过）。无论哪个 Tab 都只发自己改的字段 → 跨 Tab 不再互相覆盖。顺带消除「遮罩 token 未改也回提」（未改即不在 dirty）。
+  - **P0-竞态修复（Codex stop-time review × 2）**：① 初版成功后无条件 `dirtyKeysRef.clear()` → 吞掉 `await saveSiteSettings` 进行中新改的字段（静默丢编辑）。② 二版用 `settingsRef`+useEffect 值比对，但 useEffect 同步**异步**，save 在 flush 前 resolve 时 ref 仍旧值 → 同字段 in-flight 重改被误判「未改」而删键（same-field 丢失窗口）。**定稿**：改用同步追踪 `touchedDuringSaveRef`——`handleSave` 开始时置空集合，`update` 在保存进行中把改动键加入该集合（同步），成功后**仅清除「保存进行中未被 touch」的已提交键**，被 touch 的键（含同字段重改）保留为 dirty。`finally` 清理。同步写读、无 useEffect 时序窗口，彻底消除丢失（含 same-field）。
+  - **P1 按 Tab 拆窄化 DTO**：`lib/system/api.ts` 新增 `GeneralSettingsPatch`/`NotificationSettingsPatch`/`SessionSettingsPatch`（`Partial<Pick<SiteSettings, …>>`），`saveSiteSettings` 入参改为三者 union；三个 Tab 各用自己的窄类型，编译期杜绝越界写入其它 Tab 字段。后端 `SiteSettingsBodySchema`（全 optional + 部分 upsert）天然支持，无需改。
+  - **token 有效性验证**：新增一次性脚本 `scripts/verify-bangumi-token.ts`（读 `system_settings.bangumi_api_token` → 调 Bangumi `/v0/me` 鉴权端点）。**不新增 admin 端点**，避开 CLAUDE.md「admin route 未起 ADR → BLOCKER」（正式「测试连接」按钮仍需另起 ADR-F）。
+- **修改文件**：
+  - `apps/server-next/src/lib/system/api.ts` — 3 个 per-Tab Patch 类型 + saveSiteSettings union 入参
+  - `apps/server-next/src/app/admin/settings/_tabs/SettingsTab.tsx` — dirtyKeysRef + touchedDuringSaveRef + handleSave 仅提交 dirty 且成功后仅清未被 touch 的已提交键 + update 限定 `keyof GeneralSettingsPatch`
+  - `apps/server-next/src/app/admin/settings/_tabs/NotificationsTab.tsx` — 显式 `NotificationSettingsPatch` 标注
+  - `apps/server-next/src/app/admin/settings/_tabs/LoginSessionsTab.tsx` — 显式 `SessionSettingsPatch` 标注
+  - `tests/unit/components/server-next/admin/system/SettingsTab.test.tsx` — +3 测试（① 改单字段 → patch 仅含该字段，断言不含 siteName/notification*/session*/bangumiApiToken；② in-flight 改另一字段不丢；③ in-flight 重改同一已提交字段不丢 / same-field 竞态）
+  - `scripts/verify-bangumi-token.ts`（新）— 一次性 token 有效性验证（不打印 token 片段/账号 id，避免凭证信息外泄）
+- **验证**：脚本实跑确认已存 token 通过 Bangumi `/v0/me` 鉴权（HTTP 200），token 有效（证实保存已落库且可用）。
+- **新增依赖/schema/路由/Props 契约变更**：无（仅前端 DTO 类型 + 一次性脚本）。
+- **数据库变更**：无。
+- **质量门禁**：typecheck / lint EXIT=0 / SettingsTab 17 + NotificationsTab 11 + LoginSessionsTab 5 全过 / 全量 445 文件 **5817 passed 0 failed**（无 flaky）。
+- **注意事项**：UX 可发现性问题（敏感字段无内联保存、全局「保存设置」在页面底部易漏）未在本卡处理，可后续单独立卡（sticky 保存栏 + 未保存提示 + beforeunload 警告）。

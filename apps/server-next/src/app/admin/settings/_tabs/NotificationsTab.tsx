@@ -20,7 +20,7 @@ import {
   LoadingState,
   useToast,
 } from '@resovo/admin-ui'
-import { getSiteSettings, saveSiteSettings } from '@/lib/system/api'
+import { getSiteSettings, saveSiteSettings, type NotificationSettingsPatch } from '@/lib/system/api'
 import { ApiClientError } from '@/lib/api-client'
 // CHG-SN-8-FUP-WEBHOOK-IMPL-EP-B / ADR-146：测试端点 + 事件 enum 真源
 import { testWebhook, WEBHOOK_EVENT_TYPES, WEBHOOK_EVENT_LABELS, type WebhookEventType } from '@/lib/system/webhook-api'
@@ -184,14 +184,15 @@ export function NotificationsTab() {
     if (!state) return
     setSaving(true)
     try {
-      await saveSiteSettings({
+      const patch: NotificationSettingsPatch = {
         notificationEmailEnabled: state.emailEnabled,
         notificationEmailTo: state.emailTo,
         notificationWebhookEnabled: state.webhookEnabled,
         notificationWebhookUrl: state.webhookUrl,
         notificationWebhookSecret: state.webhookSecret,
         notificationWebhookEvents: state.webhookEvents as string[],
-      })
+      }
+      await saveSiteSettings(patch)
       toast.push({ title: '已保存', description: '通知设置已更新', level: 'success' })
       setDirty(false)
     } catch (err: unknown) {

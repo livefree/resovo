@@ -60,12 +60,40 @@ export type { SiteSettings }
 /** 写入 payload — 全字段 optional（部分更新） */
 export type SiteSettingsPatch = Partial<SiteSettings>
 
+// ── 按 Tab 窄化 DTO（FIX-SETTINGS-PARTIAL-SAVE）─────────────────────
+// 每个 Tab 只能提交自己负责的字段，编译期杜绝越界覆盖其它 Tab（后端 schema 全 optional +
+// 部分 upsert，天然支持窄提交）。bangumiApiTokenSet/tmdbApiKeySet 为 GET 派生只读，不入 patch。
+
+/** 基础设置 Tab（基础信息 / 内容过滤 / 豆瓣 / 自动爬取 / 外部数据源） */
+export type GeneralSettingsPatch = Partial<Pick<SiteSettings,
+  | 'siteName' | 'siteAnnouncement'
+  | 'showAdultContent' | 'contentFilterEnabled' | 'videoProxyEnabled' | 'videoProxyUrl'
+  | 'doubanProxy' | 'doubanCookie'
+  | 'autoCrawlEnabled' | 'autoCrawlMaxPerRun' | 'autoCrawlRecentOnly' | 'autoCrawlRecentDays'
+  | 'bangumiApiToken' | 'bangumiUserAgent' | 'bangumiApiTimeoutMs' | 'tmdbApiKey'
+>>
+
+/** 通知 Tab */
+export type NotificationSettingsPatch = Partial<Pick<SiteSettings,
+  | 'notificationEmailEnabled' | 'notificationEmailTo'
+  | 'notificationWebhookEnabled' | 'notificationWebhookUrl' | 'notificationWebhookSecret'
+  | 'notificationWebhookEvents'
+>>
+
+/** 登录与会话 Tab */
+export type SessionSettingsPatch = Partial<Pick<SiteSettings,
+  | 'sessionTimeoutMinutes' | 'sessionMaxConcurrent' | 'sessionExtendOnActivity'
+>>
+
 export async function getSiteSettings(): Promise<SiteSettings> {
   const result = await apiClient.get<{ data: SiteSettings }>('/admin/system/settings')
   return result.data
 }
 
-export async function saveSiteSettings(patch: SiteSettingsPatch): Promise<{ ok: true }> {
+/** 接受任一 Tab 的窄 patch（底层端点接受 Partial<SiteSettings> 部分更新） */
+export async function saveSiteSettings(
+  patch: GeneralSettingsPatch | NotificationSettingsPatch | SessionSettingsPatch,
+): Promise<{ ok: true }> {
   const result = await apiClient.post<{ data: { ok: true } }>('/admin/system/settings', patch)
   return result.data
 }
