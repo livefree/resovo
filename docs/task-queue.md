@@ -2370,7 +2370,7 @@ CODENAME-MATRIX-E2E (依赖 Wave 3 验收期补丁 CODENAME-MATRIX ✅)
 
 ## [SEQ-20260530-05] 外部数据源凭证统一管理 + Secret Redaction（ADR-168 / ADR-A）
 
-- **状态**：⬜ 待开始（用户要求：API key 不能仅靠 .env.local 明文，需设置页配置 / 2026-05-30）
+- **状态**：🔄 执行中（META-16-ADR 进行中 2026-05-30 / 用户要求 API key 不靠 .env.local 明文，需设置页配置）
 - **创建时间**：2026-05-30
 - **最后更新时间**：2026-05-30
 - **目标**：在站点设置页提供**可扩展的外部源凭证配置**（Bangumi token 现在 / TMDB api_key 以后），凭证存 `system_settings`，并落地 secret redaction（审计不落明文 + GET 遮罩 + PATCH 占位跳过）；顺带修复现有 `douban_cookie`/`notification_webhook_secret` 明文落审计/明文回传隐患。
@@ -2380,7 +2380,7 @@ CODENAME-MATRIX-E2E (依赖 Wave 3 验收期补丁 CODENAME-MATRIX ✅)
 
 ### 任务列表（按执行顺序）
 
-1. **META-16-ADR** — ADR-168 正式起草（强制 Opus / 安全 + 跨 lib/service/route/UI）（状态：⬜ 待开始）
+1. **META-16-ADR** — ADR-168 起草（强制 Opus）（状态：✅ 已完成 2026-05-30 / claude-opus-4-8 + arch-reviewer (claude-opus-4-8) / decisions.md 落档 D-168-1..7）
    - 消化 design §13 D-168-1..6 + 通用化（多源凭证）+ `_api_key$` 模式裁定 + 现有 douban_cookie/webhook_secret 回归红线
 2. **META-16-A** — 后端：system_settings 凭证 key（bangumi_api_token/user_agent/timeout_ms + tmdb_api_key 占位）+ types `SystemSettingKey` union + redaction helper（审计 `<set>/<cleared>` + GET 遮罩 `••••<后4位>`+`<key>Set` + PATCH 占位跳过）+ 修 siteConfig.ts/deserializeSiteSettings + 回归 webhook/douban 既有「保存即清空」（状态：⬜ 待开始）
 3. **META-16-B** — 凭证解析下沉 Service：`lib/bangumi.ts` 接受可选 config + `BangumiService.getBangumiConfig(db)` 读 system_settings（进程内缓存 ~60s）+ 缺省回退 env（向后兼容）（状态：⬜ 待开始）

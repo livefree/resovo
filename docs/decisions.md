@@ -18457,3 +18457,61 @@ BANGUMI_USER_AGENT:     z.string().default('resovo/1.0 (https://github.com/...)'
 > A/C 触碰 admin-ui 公开 Props，commit 必带 `Subagents: arch-reviewer (claude-opus-4-8)` trailer。
 
 ---
+
+## ADR-168：外部数据源凭证统一管理 + Secret Redaction 协议（SEQ-EXT-META-A / Track external-metadata）
+
+- **状态**：**Accepted**（arch-reviewer claude-opus-4-8 × 1 轮起草 + 自审：D-168-1..8 全部锁定无待定；覆盖现存 douban_cookie / notification_webhook_secret 明文隐患 + 通用化多源；无新依赖、无新 admin route）
+- **来源**：设计方案 `docs/designs/external-metadata-ux-overhaul_20260529.md` §2.2/§2.3/§2.4 + §13 ADR-168 骨架 + §11.1 凭证存储安全决策。本 ADR 为「外部元数据 UX 整改」P1 地基。用户要求：API key 不能仅靠 .env.local 明文，需设置页配置（bangumi 现在 / tmdb 以后）。
+
+### 背景
+
+Bangumi token 现直读 `process.env.BANGUMI_API_TOKEN`（`lib/bangumi.ts:15`），无法在站点设置页配置。更严重的安全隐患（已逐行核实）：
+1. **明文落审计表**：`POST /admin/system/settings`（`siteConfig.ts:97`）`auditSvc.write({ beforeJsonb: beforeSubset, afterJsonb: pairs })`（`:155-156`）—— 现有 `notification_webhook_secret`（`:130`）、`douban_cookie`（`:110`）原样明文写入 `admin_audit_log`。
+2. **明文经 GET 回传**：`deserializeSiteSettings`（`systemSettings.ts:81`）的 `doubanCookie`（`:86`）/ `notificationWebhookSecret`（`:99`）明文返回前端。
+3. **无占位跳过**：POST 对 secret 零特殊处理 —— 一旦做 GET 遮罩，前端原样回提遮罩值会把真凭证覆盖为遮罩串（「保存即清空」风险）。
+
+`system_settings.value` 是 TEXT KV，不加密；本 ADR 定义 secret redaction 三道协议（审计/GET/PATCH）+ Bangumi 凭证下沉 Service（向后兼容 env）。**本 ADR 定契约，实施拆 META-16-A/B/C**。
+
+### 决策要点
+
+1. **（D-168-1）敏感键模式 `SECRET_KEY_PATTERNS`**（`packages/types` runtime const，三端共享）：`/(^|_)token$/`、`/(^|_)cookie$/`、`/(^|_)secret$/`、`/(^|_)api_key$/`（通用化多源，覆盖未来 tmdb_api_key）。`isSecretSettingKey(key)` 判定。
+   - **命中**：douban_cookie / notification_webhook_secret / bangumi_api_token / tmdb_api_key。
+   - **不命中（精度护栏）**：notification_webhook_url / notification_email_to / douban_proxy / video_proxy_url / bangumi_user_agent / bangumi_api_timeout_ms / config_file_url / auto_crawl_*。用 `(^|_)<word>$` 避免误伤（`_url$`/`_to$`/`_agent$`/`_ms$` 不含四词尾）。
+
+2. **（D-168-2）审计 redaction（零字符状态标记）**：纯函数 `redactSecretsForAudit(rec): rec|null` —— 命中键值非空→`'<set>'` / 空串|null|undefined→`'<cleared>'` / 非命中键原样 / `null` 入参→`null`（保 ADR-118 audit 语义）。**落点**：siteConfig POST 审计 write 前对 beforeSubset + pairs 双向应用。对现有 webhook_secret 立即生效（修隐患）。角括号标记与 logger `censor:'<redacted>'` 同族；不破坏 `extractAuditPayloadSummary`。
+
+3. **（D-168-3）GET 遮罩 + Set 布尔**：纯函数 `maskSecret(raw)` —— ≥4→`'••••'+后4位` / 1–3→`'••••'`（全遮罩，不泄漏短凭证）/ 空串→`''`。**落点**：`deserializeSiteSettings`（raw→DTO 唯一收口，GET handler 直接 send 其结果）。敏感字段返回遮罩 + 新增 `<key>Set` 布尔（doubanCookieSet / notificationWebhookSecretSet / bangumiApiTokenSet / tmdbApiKeySet）。bangumiUserAgent/bangumiApiTimeoutMs 非敏感明文。
+
+4. **（D-168-4）PATCH 遮罩占位跳过（防保存即清空）**：POST 构建 pairs 时敏感字段：`value.startsWith('••••')`（`isMaskedPlaceholder`，`MASK_PREFIX='••••'` 单一真源）→ **该 key 不入 pairs**（保留原值）；`value===''`→写空串（→审计 `<cleared>`，主动清空）；其他明文→正常覆盖。三态互斥（占位=不变/空=清空/明文=覆盖）。
+
+5. **（D-168-5）凭证解析下沉 Service（本 ADR 定契约，实施 META-16-B）**：`lib/bangumi.ts` 导出 `BangumiClientConfig {token?,userAgent?,timeoutMs?}`；5 函数（getSubject/getEpisodes/searchSubjects/searchSubjectsStrict/isBangumiApiConfigured）加**末位可选 cfg**，内部 `apiToken()/timeoutMs()/userAgent()` 接受 cfg 缺省**回退 process.env**（向后兼容）。`BangumiService` 新增私有 `getBangumiConfig()` 从 system_settings 读（**进程内模块级 ~60s TTL 缓存**）；matchAndEnrich/confirmMatch/searchCandidates/matchViaRest/gatherEnrichmentData 调 lib 时透传。
+
+6. **（D-168-6）at-rest 应用层加密 NEGATED for P1**：不引入 KV value 列加密（理由 §11.1：密钥管理/轮换/迁移/启动失败拖大 P1，无合规强制/无 dump 外发风险；redaction 三道已覆盖日志/响应泄漏主威胁）。follow-up ADR（触发：合规要求 / DB dump 外发链路）。
+
+7. **（D-168-7）新增 keys + 类型扩展**：`SystemSettingKey` +`bangumi_api_token`/`bangumi_user_agent`/`bangumi_api_timeout_ms`/`tmdb_api_key`（**占位不消费**）。`SiteSettings` + bangumiApiToken(遮罩)/bangumiApiTokenSet/bangumiUserAgent/bangumiApiTimeoutMs/tmdbApiKey(占位)/tmdbApiKeySet + 补 doubanCookieSet/notificationWebhookSecretSet。`SiteSettingsBodySchema` + bangumiApiToken(.max 500)/bangumiUserAgent(.max 200)/bangumiApiTimeoutMs(int 1000–60000)/tmdbApiKey(.max 500)。`deserializeSiteSettings` + bangumiUserAgent 默认 `resovo/1.0 (+...)` / bangumiApiTimeoutMs 默认 8000。
+
+### 影响文件
+
+- 修改：`packages/types/src/system.types.ts`（union +4 / SiteSettings +8）、`packages/types/src/index.ts`（runtime export SECRET_KEY_PATTERNS/isSecretSettingKey/MASK_PREFIX）、`apps/api/src/routes/admin/siteConfig.ts`（占位跳过 + 审计 redaction + schema/pairs）、`apps/api/src/db/queries/systemSettings.ts`（遮罩 + Set 布尔 + bangumi 默认）、`apps/api/src/lib/bangumi.ts`（BangumiClientConfig + 5 函数 cfg）、`apps/api/src/services/BangumiService.ts`（getBangumiConfig 缓存 + 透传）、`apps/server-next/src/app/admin/settings/_tabs/SettingsTab.tsx`（外部数据源卡）
+- 新建：`packages/types/src/security.types.ts`（或归 system.types：SECRET_KEY_PATTERNS/isSecretSettingKey/MASK_PREFIX）、`apps/api/src/lib/secretRedaction.ts`（redactSecretsForAudit/maskSecret/isMaskedPlaceholder）
+- **注**：AuditLogService 不改（redaction 在 route 落点）；无 migration（KV 无 DDL）。
+
+### 实施拆卡（M-SN-5：影响文件 8+，须拆 / 超 5 项再拆 A1/A2）
+
+- **META-16-A**：SECRET_KEY_PATTERNS/maskSecret/redactSecretsForAudit/isMaskedPlaceholder + types union/接口/index runtime export + siteConfig POST 占位跳过/审计 redaction/schema + deserializeSiteSettings 遮罩。
+- **META-16-B**：BangumiClientConfig + lib/bangumi 5 函数 cfg + getBangumiConfig 60s 缓存 + BangumiService 透传。
+- **META-16-C**：SettingsTab「外部数据源」分组卡（bangumiApiToken password + show/hide / userAgent / timeoutMs / 状态行）。**测试连接按钮 NOT in scope**（依赖 ADR-173/F-A）。
+
+### 偏离登记
+
+- **D-168-6**：at-rest 加密 NEGATED for P1（follow-up / 触发：合规 或 dump 外发）。
+- **D-168-7**：tmdb_api_key 仅入 union + 遮罩管线，不消费（通用化占位，TMDB 富集后续复用零返工）。
+- **D-168-2 vs D-168-3 不对称**：审计零字符 / GET 露后 4 位。处置：accept（审计长期高敏留存 → 零字符；GET admin 实时编辑 → 后 4 位助辨识且不足重建）。
+- **D-168-5 缓存一致性**：60s TTL 窗口旧凭证可能短暂沿用。处置：accept（凭证低频变更 / 富集最终一致）。
+
+### 回归红线
+
+- 既有必过：`tests/unit/api/system-config.test.ts`（`system.settings_update` payload，非敏感键不受影响 + **新增敏感键被 redact 断言**）/ audit-log-coverage / set-equal（无新 action type）。
+- 新增测试要点：redactSecretsForAudit（set/cleared/原样/null）/ maskSecret（长/短/空）/ GET 遮罩 + Set 布尔（修既存隐患）/ PATCH 占位跳过（douban_cookie/webhook_secret 不被保存即清空）/ isSecretSettingKey（4 命中 + 6 不命中）/ lib cfg 优先与 env 回退。
+
+---

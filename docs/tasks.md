@@ -6,7 +6,24 @@
 
 ## 进行中任务
 
-（空 / META-17 Bangumi REST 精确兜底 ship 2026-05-30：单测 39 + 真实 API + 实时端到端三重验证（师兄啊师兄→bangumi matched 388781 / 海贼王安全漏配）。下一步候选：批量重富集 / Bangumi 别名感知 B / 凭证管理 ADR-168 / META-13 Face 4）
+### META-16-A — ADR-168 后端：secret redaction + 凭证 key 类型扩展
+- **状态**：🔄 进行中
+- **来源序列**：SEQ-20260530-05
+- **建议模型**：sonnet
+- **执行模型**：claude-opus-4-8
+- **子代理调用**：无（实施 ADR-168 已 Opus 评审契约）
+- **实际开始**：2026-05-30
+- **文件范围**：
+  - 新建 `packages/types/src/security.types.ts`（SECRET_KEY_PATTERNS / isSecretSettingKey / MASK_PREFIX）+ `packages/types/src/index.ts` runtime export
+  - 改 `packages/types/src/system.types.ts`（SystemSettingKey +4 / SiteSettings +8 字段）
+  - 新建 `apps/api/src/lib/secretRedaction.ts`（redactSecretsForAudit / maskSecret / isMaskedPlaceholder）
+  - 改 `apps/api/src/routes/admin/siteConfig.ts`（POST 占位跳过 + 审计 redaction + schema/pairs 扩展）
+  - 改 `apps/api/src/db/queries/systemSettings.ts`（deserializeSiteSettings 遮罩 + Set 布尔 + bangumi 默认值）
+  - 新建 `tests/unit/api/secret-redaction.test.ts` + 扩 system-config 审计回归
+- **完成备注**：_（完成后填写）_
+
+> 前序 META-16-ADR ✅（ADR-168 Accepted / arch-reviewer Opus）。后续 META-16-B（凭证下沉 Service）/ -C（SettingsTab UI）。
+> 黄线（Opus 评审）：Y1 pairs 顺序 zod→占位过滤→pairs→审计 redact / Y2 前端无其他明文 secret 消费方（Grep 复核）。
 
 ---
 

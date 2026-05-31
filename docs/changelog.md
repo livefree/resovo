@@ -12480,3 +12480,17 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **新增依赖**：无 / **数据库变更**：无
 - **质量门禁**：typecheck/lint EXIT=0 / bangumi-service 41 全过 / 全量 **442 文件 5707 passed 零失败**
 - **语义**：瞬时失败 → 保持 pending + 重试（可恢复）；确定性无匹配（API 正常返回空）→ 终态 unmatched（正确）。
+
+---
+
+## [META-16-ADR] ADR-168 外部数据源凭证统一管理 + Secret Redaction 起草（强制 Opus）
+- **完成时间**：2026-05-30
+- **记录时间**：2026-05-30
+- **执行模型**：claude-opus-4-8
+- **子代理**：arch-reviewer (claude-opus-4-8) — 起草 ADR-168 + 自审（D-168-1..7 锁定 / 4 维度自检 + 红黄线 / CLAUDE.md 禁止项对照）
+- **来源序列**：SEQ-20260530-05
+- **修改文件**：`docs/decisions.md`（ADR-168 Accepted：SECRET_KEY_PATTERNS / 审计 redaction `<set>/<cleared>` / GET 遮罩 `••••后4位`+Set 布尔 / PATCH 占位跳过 / 凭证下沉 Service BangumiClientConfig+60s 缓存 / at-rest 加密 NEGATED P1 / tmdb_api_key 占位）
+- **背景**：用户要求 API key 进设置页（不靠 .env.local 明文 / bangumi 现在·tmdb 以后）+ 修现有 douban_cookie/notification_webhook_secret 明文落审计(siteConfig.ts:155-156)/明文回传(deserializeSiteSettings:86,99)。
+- **新增依赖**：无 / **数据库变更**：无（KV 无 DDL）
+- **关键决策**：通用化多源（_api_key$ 模式覆盖 tmdb）+ 三道 redaction 协议（审计零字符 / GET 后4位 / PATCH 占位防保存即清空）+ 凭证 env 回退向后兼容。
+- **注意事项**：实施拆 META-16-A（后端 redaction+keys）/ -B（凭证下沉 Service）/ -C（SettingsTab UI）。测试连接按钮 NOT in scope（依赖 ADR-173/F-A）。
