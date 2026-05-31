@@ -12494,3 +12494,24 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **新增依赖**：无 / **数据库变更**：无（KV 无 DDL）
 - **关键决策**：通用化多源（_api_key$ 模式覆盖 tmdb）+ 三道 redaction 协议（审计零字符 / GET 后4位 / PATCH 占位防保存即清空）+ 凭证 env 回退向后兼容。
 - **注意事项**：实施拆 META-16-A（后端 redaction+keys）/ -B（凭证下沉 Service）/ -C（SettingsTab UI）。测试连接按钮 NOT in scope（依赖 ADR-173/F-A）。
+
+---
+
+## [META-16-A] ADR-168 后端：secret redaction + 凭证 key 类型扩展
+- **完成时间**：2026-05-30
+- **记录时间**：2026-05-30
+- **执行模型**：claude-opus-4-8
+- **子代理**：无（实施 ADR-168 已 Opus 评审契约）
+- **来源序列**：SEQ-20260530-05
+- **修改文件**：
+  - `packages/types/src/system.types.ts` — SystemSettingKey +4（bangumi_api_token/user_agent/timeout_ms + tmdb_api_key 占位）；SiteSettings +8（遮罩值 + Set 布尔）；新增 runtime const MASK_PREFIX/SECRET_KEY_PATTERNS/isSecretSettingKey
+  - `packages/types/src/index.ts` — runtime export 上述 3 const
+  - `apps/api/src/lib/secretRedaction.ts`（新建）— redactSecretsForAudit（`<set>/<cleared>`）/ maskSecret（`••••后4位`）/ isMaskedPlaceholder
+  - `apps/api/src/routes/admin/siteConfig.ts` — POST schema +4 字段 + 敏感键占位跳过（douban_cookie/webhook_secret/bangumi_api_token/tmdb_api_key）+ 审计 before/after redact
+  - `apps/api/src/db/queries/systemSettings.ts` — deserializeSiteSettings 敏感字段 maskSecret + Set 布尔 + bangumi 默认值（UA resovo/1.0 / timeout 8000）
+  - `apps/server/src/components/admin/system/site-settings/SiteSettings.tsx`（v1 冻结 type-sync 默认值）
+  - `tests/unit/api/secret-redaction.test.ts`（新建 24）+ `system-config.test.ts`（+3：GET 遮罩 / 审计 redact / PATCH 占位跳过）
+- **新增依赖**：无 / **数据库变更**：无（KV 无 DDL）
+- **质量门禁**：typecheck/lint/verify:adr-contracts EXIT=0 / 全量 **443 文件 5734 passed 零失败**（+27 零回归）
+- **修既存隐患**：douban_cookie / notification_webhook_secret 不再明文落审计 + 不再明文经 GET 回传；占位跳过防「保存即清空」（NotificationsTab 表单回提 masked 值安全）。
+- **注意事项**：凭证仍只「存储 + 遮罩」，**Bangumi 富集尚未消费 system_settings token**（仍读 env）→ META-16-B 下沉。

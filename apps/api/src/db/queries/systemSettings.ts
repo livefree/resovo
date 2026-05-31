@@ -5,6 +5,7 @@
 
 import type { Pool } from 'pg'
 import type { AutoCrawlConfig, AutoCrawlSiteOverride, SystemSettingKey, SiteSettings } from '@/types'
+import { maskSecret } from '@/api/lib/secretRedaction'
 
 interface DbRow {
   key: SystemSettingKey
@@ -83,7 +84,9 @@ export function deserializeSiteSettings(raw: Record<string, string>): SiteSettin
     siteName:              raw.site_name ?? '',
     siteAnnouncement:      raw.site_announcement ?? '',
     doubanProxy:           raw.douban_proxy ?? '',
-    doubanCookie:          raw.douban_cookie ?? '',
+    // ADR-168 D-168-3：敏感凭证 GET 遮罩 + Set 布尔（修既存明文回传隐患）
+    doubanCookie:          maskSecret(raw.douban_cookie ?? ''),
+    doubanCookieSet:       (raw.douban_cookie ?? '').length > 0,
     showAdultContent:      raw.show_adult_content === 'true',
     contentFilterEnabled:  raw.content_filter_enabled !== 'false',
     videoProxyEnabled:     raw.video_proxy_enabled === 'true',
@@ -96,12 +99,20 @@ export function deserializeSiteSettings(raw: Record<string, string>): SiteSettin
     notificationEmailTo:        raw.notification_email_to ?? '',
     notificationWebhookEnabled: raw.notification_webhook_enabled === 'true',
     notificationWebhookUrl:     raw.notification_webhook_url ?? '',
-    notificationWebhookSecret:  raw.notification_webhook_secret ?? '',
+    notificationWebhookSecret:  maskSecret(raw.notification_webhook_secret ?? ''),
+    notificationWebhookSecretSet: (raw.notification_webhook_secret ?? '').length > 0,
     // CHG-SN-8-FUP-WEBHOOK-IMPL-EP-B / ADR-146：事件订阅 JSON 数组（解析失败降级 []）
     notificationWebhookEvents:  parseWebhookEvents(raw.notification_webhook_events),
     sessionTimeoutMinutes:      Number(raw.session_timeout_minutes ?? 60),
     sessionMaxConcurrent:       Number(raw.session_max_concurrent ?? 5),
     sessionExtendOnActivity:    raw.session_extend_on_activity !== 'false',
+    // ADR-168：外部数据源凭证（bangumi 现在 / tmdb 占位）
+    bangumiApiToken:            maskSecret(raw.bangumi_api_token ?? ''),
+    bangumiApiTokenSet:         (raw.bangumi_api_token ?? '').length > 0,
+    bangumiUserAgent:           raw.bangumi_user_agent ?? 'resovo/1.0 (+https://github.com/resovo)',
+    bangumiApiTimeoutMs:        Number(raw.bangumi_api_timeout_ms ?? 8000),
+    tmdbApiKey:                 maskSecret(raw.tmdb_api_key ?? ''),
+    tmdbApiKeySet:              (raw.tmdb_api_key ?? '').length > 0,
   }
 }
 

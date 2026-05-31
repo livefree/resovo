@@ -2382,7 +2382,7 @@ CODENAME-MATRIX-E2E (依赖 Wave 3 验收期补丁 CODENAME-MATRIX ✅)
 
 1. **META-16-ADR** — ADR-168 起草（强制 Opus）（状态：✅ 已完成 2026-05-30 / claude-opus-4-8 + arch-reviewer (claude-opus-4-8) / decisions.md 落档 D-168-1..7）
    - 消化 design §13 D-168-1..6 + 通用化（多源凭证）+ `_api_key$` 模式裁定 + 现有 douban_cookie/webhook_secret 回归红线
-2. **META-16-A** — 后端：system_settings 凭证 key（bangumi_api_token/user_agent/timeout_ms + tmdb_api_key 占位）+ types `SystemSettingKey` union + redaction helper（审计 `<set>/<cleared>` + GET 遮罩 `••••<后4位>`+`<key>Set` + PATCH 占位跳过）+ 修 siteConfig.ts/deserializeSiteSettings + 回归 webhook/douban 既有「保存即清空」（状态：⬜ 待开始）
+2. **META-16-A** — 后端：secret redaction + 凭证 key 类型扩展（状态：✅ 已完成 2026-05-30 / claude-opus-4-8 / 子代理无 / 门禁全过 / secret-redaction 24 + system-config +3 / 全量 5734 passed 零回归）
 3. **META-16-B** — 凭证解析下沉 Service：`lib/bangumi.ts` 接受可选 config + `BangumiService.getBangumiConfig(db)` 读 system_settings（进程内缓存 ~60s）+ 缺省回退 env（向后兼容）（状态：⬜ 待开始）
 4. **META-16-C** — 前端：SettingsTab 新增「外部数据源」分组卡（与豆瓣 cookie/proxy 并列）+ password input + 遮罩显示/显隐切换 + 状态行（已配置/未配置）+ 单测（状态：⬜ 待开始）
 

@@ -104,6 +104,18 @@ describe('GET /admin/system/settings', () => {
     const body = res.json<{ data: { siteName: string } }>()
     expect(body.data.siteName).toBe('Resovo')
   })
+
+  it('GET 遮罩 douban_cookie + doubanCookieSet（ADR-168 D-168-3 / 修既存明文回传隐患）', async () => {
+    mockDbQuery.mockResolvedValue({
+      rows: [{ key: 'douban_cookie', value: 'secretcookievalue1234' }],
+      rowCount: 1,
+    })
+    const app = await buildApp()
+    const res = await app.inject({ method: 'GET', url: '/admin/system/settings', headers: authHeader('admin') })
+    const body = res.json<{ data: { doubanCookie: string; doubanCookieSet: boolean } }>()
+    expect(body.data.doubanCookie).toBe('••••1234')   // 不再明文回传
+    expect(body.data.doubanCookieSet).toBe(true)
+  })
 })
 
 describe('POST /admin/system/settings', () => {
@@ -155,6 +167,44 @@ describe('POST /admin/system/settings', () => {
         afterJsonb: expect.objectContaining({ site_name: 'NewName' }),
       }),
     )
+  })
+
+  it('审计 redact 敏感键为 <set>（ADR-168 D-168-2 / 不落明文）', async () => {
+    const mockConnect = { query: vi.fn().mockResolvedValue({}), release: vi.fn() }
+    const db = await import('@/api/lib/postgres')
+    ;(db.db as unknown as { connect: ReturnType<typeof vi.fn> }).connect = vi.fn().mockResolvedValue(mockConnect)
+    const app = await buildApp()
+    await app.inject({
+      method: 'POST', url: '/admin/system/settings',
+      headers: { ...authHeader('admin'), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ bangumiApiToken: 'real-token-abcd' }),
+    })
+    await new Promise((r) => setImmediate(r))
+    expect(insertAuditLogMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        afterJsonb: expect.objectContaining({ bangumi_api_token: '<set>' }),
+      }),
+    )
+  })
+
+  it('PATCH 遮罩占位回提 → 跳过写入（ADR-168 D-168-4 / 防保存即清空）', async () => {
+    const mockConnect = { query: vi.fn().mockResolvedValue({}), release: vi.fn() }
+    const db = await import('@/api/lib/postgres')
+    ;(db.db as unknown as { connect: ReturnType<typeof vi.fn> }).connect = vi.fn().mockResolvedValue(mockConnect)
+    const app = await buildApp()
+    await app.inject({
+      method: 'POST', url: '/admin/system/settings',
+      headers: { ...authHeader('admin'), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ bangumiApiToken: '••••abcd', siteName: 'X' }),
+    })
+    await new Promise((r) => setImmediate(r))
+    const call = insertAuditLogMock.mock.calls.find(
+      (c: unknown[]) => (c[1] as { actionType?: string })?.actionType === 'system.settings_update',
+    )
+    const after = (call![1] as { afterJsonb: Record<string, unknown> }).afterJsonb
+    expect(after).not.toHaveProperty('bangumi_api_token')   // 占位被跳过
+    expect(after).toHaveProperty('site_name')               // 非占位正常写
   })
 })
 
