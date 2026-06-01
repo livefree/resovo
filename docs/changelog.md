@@ -13287,11 +13287,11 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **子代理**：无（仅消费既有 `enableColumnResizing` + 列字段，不改共享组件 API → 无需 Opus arch-reviewer / 无 trailer）
 - **来源**：用户指令「表格列宽可调已经开发，将功能应用到后台所有的表格中」。
 - **前置**：resize 核心（DTR-A..F）原在 main，本卡先 `git merge main → dev`（merge commit e56607e3 / main 独有 14 commit 全 resize / 解 changelog + adr-d-status.json 冲突，二者均 docs 追加类）。
-- **范围**：server-next 全部 `<DataTable>` 渲染点 13 处（v1 apps/server 已自带独立 resize 引擎且冻结期，不在范围）。
+- **范围（计数口径：渲染点 = 单个 `<DataTable>` 实例，与文件数区分；ImageHealthClient 1 文件含 domains+missing **2 渲染点**）**：server-next 操作型 `<DataTable>` 渲染点共 **15 个**（分布于 14 个 client 文件）。本卡新启用 **14 个**（VideoListClient 1 个 DTR-E 已先启用、未改）；FIX 另追加 2 个 dev/components demo 表（见末尾 FIX）→ 全量 **17 渲染点**。v1 apps/server 已自带独立 resize 引擎且冻结期，不在范围。
   - **A. 仅加 `enableColumnResizing`（columnPrefs 早已接线）**：StagingPageClient / CrawlerSiteList / CrawlerRunsView / SourcesClient。
   - **B. 补 columnPrefs in-session 接线（`useState<ReadonlyMap<string,ColumnPreference>>` + `query.columns=columnPrefs` + `if (patch.columns) setColumnPrefs(...)`）+ `enableColumnResizing`**：UsersListClient / SubmissionsListClient / AuditClient / SubtitlesListClient / ImageHealthClient（domains + missing **两表**各一份 prefs）/ RunInlinePanel / KeywordCrawlDrawer / MergeClient / SourceLineAliasesClient。
   - **C. 额外补列宽（整表无 width，规避开 resize 后全列塌到默认 160px）**：MergeClient（作品列仅 minWidth 240 作 flex / 候选数·重合度 width 110）+ SourceLineAliasesClient（site_key 150 / source_name 170 / 别名仅 minWidth 160 作 flex / 代号 140 / 优先级 90 / 状态 130 / 使用 200 / 操作 160）。
-- **修改文件**：13 个 client（上述）+ MergeClient/SourceLineAliasesClient 内联列定义补宽。列定义独立文件（users/submissions/subtitles/crawler-site/audit/image-health columns）多数早已声明 `enableResizing`+width，本卡未改其列、仅开消费方开关。
+- **修改文件**：13 个 client 文件（上述 A 4 + B 9 / 含 14 个新启用渲染点 —— ImageHealthClient 1 文件 2 表）+ MergeClient/SourceLineAliasesClient 内联列定义补宽。列定义独立文件（users/submissions/subtitles/crawler-site/audit/image-health columns）多数早已声明 `enableResizing`+width，本卡未改其列、仅开消费方开关。
 - **设计说明**：① 契约——`enableColumnResizing` 为 DataTable 静态开关；非 action 列默认 `enableResizing!==false` 即可调，action 列需显式 opt-in（保持操作列固定，零回归）。② 列宽提交经 `onQueryChange({columns})` 回 `query.columns`，故手写 query 消费方必须接 `patch.columns`（顺带补齐其早先失效的列隐藏持久）。③ 接线为 **in-session**（mirror StagingPageClient 既有 columnPrefs 范式 / 与现有列隐藏一致基线）；**仅 VideoListClient 经 useTableQuery 跨刷新持久** → 非 videos 表跨刷新持久属既有 follow-up（ADR-103 §4.2.2 AMENDMENT 的 N1-149-2 DB 级跨设备同步），本卡不扩范围。
 - **新增依赖/schema/路由/Props 契约变更**：无（纯消费方接线）。
 - **质量门禁**：typecheck EXIT=0（8 workspace）/ lint EXIT=0（5/5；AuditClient:187 等 react-hooks/exhaustive-deps + TabImages img 均 pre-existing 非本卡）/ **全量 448 文件 5901 passed**（唯一失败 `VideoImageSection.test.tsx` 为既有并行 flaky，隔离 21/21 全过，apps/server 海报预览，与 DataTable 无关）/ verify:adr-contracts EXIT=0（adr-d-status.json 经脚本重生成合入 ADR-174 / enum-ssot advisory 非阻塞）。
@@ -13303,5 +13303,5 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
   - **KeywordCrawlDrawer `title`**：同上 → 补 `minWidth:220`。
   - **dev/components demo**：纳入完整性——COLUMNS 补 width（title minWidth 200 主列 / category 140 / views 110 / status 120）+ 两 DataTable 加 `enableColumnResizing`，showcase 列宽可调。
   - 复核确认其余表均为「0 或 1 个无 width 列且 minWidth≥200」→ 与已验收 VideoListClient 范式一致（主列固定 + 末尾 `minmax(0,1fr)` 占位轨），无回归。
-  - 完整性：server-next **全部** `<DataTable>` 渲染点（14 操作 + 2 demo）均已启用；`<table>` 原生 HTML 子表（merge/audit/expand/role-matrix 等）非 DataTable、无此能力，不在范围。
+  - 完整性（**计数订正**：先前误记「14 操作」系把 ImageHealthClient 1 文件按 1 表计 / 实为 2 表）：server-next **全部** `<DataTable>` 渲染点 = **操作型 15 个（14 client 文件，ImageHealthClient domains+missing 2 表）+ dev/components demo 2 个 = 17 个**，均已启用 `enableColumnResizing`；`<table>` 原生 HTML 子表（merge/audit/expand/role-matrix 等）非 DataTable、无此能力，不在范围。`grep -rho enableColumnResizing apps/server-next/src` 实测 17 处可复核。
   - FIX 门禁：typecheck EXIT=0 / lint 5/5 / **全量 448 文件 5902 passed 0 failed**（VideoImageSection flaky 本次未复现）。
