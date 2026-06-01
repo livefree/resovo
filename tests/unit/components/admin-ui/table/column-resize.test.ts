@@ -203,6 +203,12 @@ describe('measureColumnContentWidth', () => {
     Object.defineProperty(root.querySelector('.c')!, 'scrollWidth', { value: 70 })
     expect(measureColumnContentWidth(root, 'x')).toBe(70) // handle 8 跳过，取内容 70
   })
+  it('DTR-F-FIX2（Codex review）：自定义纯文本 cell（无元素后代）回退测 wrapper，不丢内容', () => {
+    const root = document.createElement('div')
+    root.innerHTML = `<div data-col-id="t">纯文本内容</div>` // 无元素后代，直接文本节点
+    Object.defineProperty(root.querySelector('[data-col-id="t"]')!, 'scrollWidth', { value: 90 })
+    expect(measureColumnContentWidth(root, 't')).toBe(90) // 回退 wrapper，不返回 0
+  })
 })
 
 describe('column-visibility setColumnWidth / resetColumnWidths', () => {

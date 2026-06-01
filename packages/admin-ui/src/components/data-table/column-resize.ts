@@ -187,7 +187,9 @@ export function measureColumnContentWidth(
         const dw = (d as HTMLElement).scrollWidth
         if (dw > inner) inner = dw
       })
-      w = inner
+      // 无元素后代（自定义 cell 返回纯字符串 / wrapper 直接含文本节点）→ 回退测 wrapper 自身，
+      // 避免丢内容（Codex stop-time review）；有元素后代（pill/chip）仍走后代测量保持修复。
+      w = inner || (el as HTMLElement).scrollWidth
     }
     if (w > max) max = w
   })

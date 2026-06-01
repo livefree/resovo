@@ -12804,3 +12804,12 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
   - `docs/decisions.md` — ADR-103 §4.2.2 AMENDMENT 2 限制②措辞同步（测后代内容元素 / 警示 width:100% 填充型中间容器仍可能偏宽）
 - **门禁**：完整 typecheck ✓ / lint 5/5 ✓ / table 子集 497 全过（+3）/ data-table 模块 0 新违规。
 - **效果**：pill 列（可见性/审核）auto-fit 从"≈列宽×2"修正为"≈pill 内容宽+padding"；title 等截断文本列经后代 span scrollWidth 取完整文本宽。Track: admin-ui-datatable-resize。
+
+## [DTR-F-FIX2] auto-fit 测量回归修复：自定义纯文本 cell 不丢内容（Codex stop-time review）
+- **完成时间**：2026-06-01 / **执行模型**：claude-opus-4-8（主循环）/ **子代理**：无（Codex stop-time review 反馈修复）
+- **来源**：Codex stop-time review——"auto-fit drops valid custom text-cell content"。
+- **根因**：DTR-F-FIX1 改自定义 cell 测"最宽后代元素"后，对**返回纯字符串的自定义 cell**（wrapper 内是文本节点、无元素后代）`querySelectorAll('*')` 为空 → `inner=0` → 该 cell 内容被丢弃（auto-fit 不计入），列可能仅按表头宽自适应、截断这些文本 cell。
+- **修改文件**：
+  - `packages/admin-ui/src/components/data-table/column-resize.ts` — `measureColumnContentWidth`：无元素后代时 `w = inner || el.scrollWidth` 回退测 wrapper 自身（恢复纯文本旧行为不丢内容；有元素后代的 pill/chip 仍走后代测量保持 FIX1）。
+  - `tests/unit/.../column-resize.test.ts` — +1 回归 case（自定义纯文本 cell 无元素后代 → 回退 wrapper，不返回 0）
+- **门禁**：typecheck ✓ / lint 5/5 ✓ / table 子集 498 全过（+1）/ data-table 模块 0 新违规。Track: admin-ui-datatable-resize。
