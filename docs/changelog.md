@@ -13064,3 +13064,14 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **D-N 闭环**：D-174-7 ✅。
 - **质量门禁**：typecheck+lint+verify:adr-contracts EXIT=0 / bangumi-service 72 + metadataEnrich 33 全过 / **全量 5832 passed 0 failed 零回归**（本轮前台 jsdom flaky 未触发）。
 - **已知边界（非 silent gap，已 ADR 登记）**：redirect 后源 catalog 可能 childless（benign empty row，运行时不自动删——删行需快照/回滚保护沿用 META-23-C 范式，留 follow-up）；step1/2 douban 字段遗留旧行但 video 已落 canonical existing，下次重富集最终一致。
+
+## [META-23-D-FIX2] 修正 task audit 误记 amend 前身哈希为 FIX1 shipped 提交（Codex stop-time review）
+- **完成时间**：2026-06-01
+- **记录时间**：2026-06-01 09:45
+- **执行模型**：claude-opus-4-8
+- **子代理**：无
+- **问题（Codex stop-time review 指出）**：FIX1 经 `git commit --amend` 补 bookkeeping 后真实 shipped 哈希为 `15560dbe`，但 task-queue.md 完成备注仍记 amend 前身 `8fdfebd1`（已被取代、悬空于 reflog、不在 dev 历史）→ 审计指向不存在的 shipped 提交。
+- **修复**：`docs/task-queue.md` FIX1 引用 `8fdfebd1` → `15560dbe`。本次**单独 commit**（不再 amend FIX1，避免自引用哈希「改了又变」悖论，使 `15560dbe` 保持稳定可引用 / commit `e0903429`）。
+- **教训**：审计 doc 引用 commit 哈希时，勿在「将被 amend 的同一 commit」内嵌入其自身哈希；FIX1 后续若还需补记应单独 commit 而非 amend。
+- **新增依赖/数据库变更/Props 契约变更**：无（docs-only）。
+- **质量门禁**：无代码改动；引用一致性核验 `grep 8fdfebd1 docs/` 0 残留。
