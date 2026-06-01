@@ -307,6 +307,7 @@ Migration 026 建表，Migration 042（META-06）新增 6 个扩展字段：
 - `description TEXT` / `cover_url TEXT` / `rating NUMERIC` / `rating_votes INT`：简介/封面/评分/评分人数
 - `director TEXT[]` / `cast TEXT[]` / `writers TEXT[]`：导演/演员/编剧（字符串数组）
 - `imdb_id TEXT` / `tmdb_id INT` / `douban_id TEXT` / `bangumi_subject_id INT`：外部 ID
+  - `bangumi_subject_id`：UNIQUE（`media_catalog_bangumi_subject_id_key`）。富集写入前经 `MediaCatalogService.resolveBangumiBinding` **运行时去重**（ADR-174 D-174-3）：subject 已被他 catalog 占用且 type 同 + year 差 <2 → `safe redirect`，把当前 video 重指向 existing catalog（改写 `videos.catalog_id`）写同值不撞唯一约束；不安全 → `conflict` 降级记 candidate 不写绑定、不炸事务（保留 unmatched，靠 Bull 重试收敛）。**运行时改 `videos.catalog_id` 后，下游所有以 catalogId 为输入的步骤（`MetadataEnrichService.step5MetaScore` 算分）必须改用 `effectiveCatalogId`**（D-174-7 / 红线 R13），防对 orphan catalog 算分。`douban/imdb/tmdb` 同构去重为 follow-up（沉淀通用原语 `linkExternalIdOrRedirect`）。
 - `metadata_source TEXT`：元数据最近写入来源（manual/tmdb/bangumi/douban/crawler）
 - `locked_fields TEXT[]`：已锁定字段列表（手动确认后不被自动覆盖）
 

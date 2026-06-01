@@ -13075,3 +13075,22 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **教训**：审计 doc 引用 commit 哈希时，勿在「将被 amend 的同一 commit」内嵌入其自身哈希；FIX1 后续若还需补记应单独 commit 而非 amend。
 - **新增依赖/数据库变更/Props 契约变更**：无（docs-only）。
 - **质量门禁**：无代码改动；引用一致性核验 `grep 8fdfebd1 docs/` 0 残留。
+
+## [META-23-E] 全量回归 + 重跑 anime backfill 验证命中回升（SEQ-20260531-01 收官 / D-174-5/R7/R8）
+- **完成时间**：2026-06-01
+- **记录时间**：2026-06-01 03:24
+- **执行模型**：claude-opus-4-8（建议 sonnet / 人工覆盖会话级 over-provision，workflow §235 不阻断；纯验证+门禁+文档收尾无中途升级风险）
+- **子代理**：无
+- **任务**：SEQ-20260531-01（归并键剥标点统一 + catalog 冗余合并 + Bangumi 唯一约束兜底）收尾验证卡——全量回归确认零回归 + architecture.md 字段语义收尾 + 用户重跑 anime backfill 复核 JP 命中率回升。
+- **修改文件**：
+  - `docs/architecture.md` — line 309 新增 `bangumi_subject_id` 运行时去重/重指向注记（UNIQUE 约束 + `resolveBangumiBinding` safe redirect / conflict 降级 candidate + 下游须用 `effectiveCatalogId` 防 orphan 算分 / D-174-3/D-174-7/R13 + douban 同构 follow-up）；line 301 `title_normalized` ADR-174 语义复核已就位（C 落档）/ R8 闭环。
+  - `docs/tasks.md` / `docs/task-queue.md` — 卡片收尾 + 序列状态 ✅。
+  - `docs/audit/adr-d-status.json` — verify:adr-d-numbers 自动重算（仅 generatedAt 时间戳，闭环计数 289/13 不变）。
+- **质量门禁**：typecheck EXIT=0 / lint EXIT=0（仅 web-next 既有 useEffect warning，非本卡范围）/ **全量 445 files 5832 passed 0 failed 零回归** / verify:adr-contracts EXIT=0 / verify:sql-schema-alignment EXIT=0（55 表全对齐）。（无前端/PLAYER/AUTH/SEARCH/VIDEO 代码改动 → 不触发 e2e。）
+- **验证（用户重跑 backfill）**：`node --env-file=.env.local --import tsx scripts/reenrich-backfill.ts --mode unmatched --type anime`（453 入队）+ worker 消化完毕（enrichment-queue waiting/active/delayed=0）。临时只读统计脚本实测（统计后即删，未入库）：
+  - **JP anime（mc.country='JP'）：total=149 / bangumi_matched=84 / unmatched=57 → 56.4%，对比基线 48.7%（150 matched 73）回升 +7.7pp（+11 命中）。**
+  - 全 anime：matched 145→166（+21）/ bangumi=candidate 23 条（D dedupConflict 降级，未失败、记 candidate 待人工，符合 D-174-3 设计）/ douban_matched 11 / meta_null=0（全部至少富集一次、无 orphan）。
+  - backfill_unmatched（douban OR bangumi unmatched）449（主体为「REST 搜不到/低置信」273 bangumi_unmatched，与标点无关 → 本序列不负责，另起 SEQ 提升 Bangumi 召回率）。
+- **新增依赖**：无
+- **数据库变更**：无（E 卡纯验证；存量数据变更由 C 的 migration 084 完成）
+- **注意事项**：① **SEQ-20260531-01 全序列收官（A–E 全 ✅）**：归并键剥标点根治「同番裂多 catalog 抢绑同 subject 撞唯一约束」根因。② `videos` 表无 `country` 列（country 仅在 `media_catalog`），统计 JP 须 join `mc.country`。③ douban/imdb/tmdb 同构唯一约束去重为 follow-up（沉淀通用原语 `linkExternalIdOrRedirect`）。④ 剩余 273 bangumi_unmatched 的召回率提升需先诊断「REST 搜不到」真因 → 独立 SEQ。

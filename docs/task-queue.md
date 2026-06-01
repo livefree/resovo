@@ -2450,9 +2450,10 @@ CODENAME-MATRIX-E2E (依赖 Wave 3 验收期补丁 CODENAME-MATRIX ✅)
 
 ## [SEQ-20260531-01] 归并键剥标点统一 + catalog 冗余合并 + Bangumi 唯一约束兜底（ADR-174）
 
-- **状态**：🔄 执行中（A✅ B✅ / C-E ⬜）
+- **状态**：✅ 完全收官（A✅ B✅ C✅ D✅ E✅ / 2026-06-01）
 - **创建时间**：2026-05-31
-- **最后更新时间**：2026-05-31
+- **最后更新时间**：2026-06-01 03:24
+- **收官结论**：归并键改剥标点根治「同番裂多 catalog 抢绑同 subject 撞唯一约束」；存量 3124→3072（合并 52 冗余行）+ 富集运行时 `resolveBangumiBinding` 去重兜底。验收实测 **JP anime 命中率 48.7%→56.4%（+7.7pp）/ 全 anime matched 145→166（+21）**，全量 5832 passed 零回归。「REST 搜不到/低置信」(273 主体) 与标点无关 → 另起 SEQ（Bangumi 召回率提升）。
 - **目标**：根治「同一作品因标题标点差异裂成多 catalog 行 → 抢绑同一 Bangumi subject → 撞 `media_catalog_bangumi_subject_id_key` 唯一约束 → 富集写入失败留 unmatched」。把归并键 `media_catalog.title_normalized` 从「保留 CJK 标点」改为「剥标点」（对齐外部匹配键），重算存量 + 合并冗余 catalog + 富集写入唯一约束兜底。
 - **范围**：apps/api（TitleNormalizer 新增 `normalizeMergeKey` / BangumiService 真去重兜底 / 键写入+查询入参全切换）+ migration 084（存量重算 backfill + 52 组冗余合并 + 删行快照备份）+ architecture.md schema 语义同步 + decisions.md ADR-174。**前台搜索/展示 `title` 保留标点不变。**
 - **依赖**：无（独立序列）。上游诊断：本会话实测（anime 462 matched 145 / JP 150 matched 73=48.7% / 抽样 30 unmatched JP anime：5 撞唯一约束 + 25 REST 搜不到 + 0 可正常匹配）。
@@ -2494,9 +2495,11 @@ CODENAME-MATRIX-E2E (依赖 Wave 3 验收期补丁 CODENAME-MATRIX ✅)
    - 依赖：META-23-C ✅
    - 验收：两 video 撞同 subject 610703 → 真去重重指向不抛 duplicate key + 降级 candidate 不炸事务
    - 完成备注：`MediaCatalogService.resolveBangumiBinding` 只读查重接缝（safe/redirect/conflict 三态 / isRedirectSafe = type 必同 + year 差 <2 才安全）+ `linkVideo` 加可选 db（事务内重指向共享连接）+ `CatalogBindingResolution` 导出类型（为 follow-up `linkExternalIdOrRedirect` 通用原语留可提取接缝）。`applyEnrichmentDb` 写 subject 前 resolveBangumiBinding：redirect → linkVideo 重指向 video 到 existing 并写 existing（同值 UPDATE 不撞唯一约束）；conflict → dedupConflict 不写 catalog 规避冲突。`applyAutoMatchAtomic` dedupConflict 降级 candidate ref(非 primary)+保留 unmatched+仍 COMMIT（绝不让单冲突 video 炸 matchAndEnrich）；`matchAndEnrich` auto dedupConflict → 返回 candidate；`confirmMatch` 经既有 !wrote 分支自然 ROLLBACK+updated:false。仅 bangumi（douban/imdb/tmdb follow-up）；pre-check 主体 + 并发残余靠 ROLLBACK+Bull 重试收敛（UPDATE 不支持 ON CONFLICT，非语义主体 / D-174-3）。门禁 typecheck+lint+verify:adr-contracts EXIT=0 / bangumi-service 72 + metadataEnrich 33 全过 / 全量 5832 passed 0 failed 零回归。D-174-3 ✅ 闭环。**Codex stop-time review FIX1**（commit 15560dbe）：redirect 真去重改 video.catalog_id 后，`MetadataEnrichService.step5MetaScore` 仍用旧 catalogId 对 orphan catalog 算分 → 让 `matchAndEnrich` auto 返回 `effectiveCatalogId` 沿 step3Bangumi 回传 step5；补 ADR D-174-7 + 红线 R13（运行时改 video↔catalog 归属，下游所有以 catalogId 为输入的步骤必须改用有效 catalogId）+ 已知边界登记。D-174-7 ✅ 闭环。执行模型: claude-opus-4-8
-5. **META-23-E** — 全量回归 + 重跑 anime backfill 验证命中回升（D-174-5/R7/R8）（状态：⬜ 待开始）
+5. **META-23-E** — 全量回归 + 重跑 anime backfill 验证命中回升（D-174-5/R7/R8）（状态：✅ 已完成 2026-06-01 03:24 / claude-opus-4-8 / 子代理 无）
    - 建议模型：sonnet（验证 + 门禁 + architecture.md 收尾）
+   - 实际开始：2026-06-01 02:47
    - 验收：4 质量门禁全过 + verify:sql-schema-alignment + architecture.md 字段语义同步 + 用户重跑 `--mode unmatched --type anime` 后 JP 命中率回升复核
+   - 完成备注：① 4 门禁全过（typecheck/lint EXIT=0 / **全量 445 files 5832 passed 0 failed 零回归** / verify:adr-contracts EXIT=0）② verify:sql-schema-alignment EXIT=0（55 表全对齐）③ architecture.md 复核 line 301 `title_normalized` ADR-174 语义已就位 + **新增 line 309 `bangumi_subject_id` 运行时去重/重指向注记**（D-174-3/D-174-7/R13 + douban 同构 follow-up）/ R8 闭环。④ **用户重跑 `--mode unmatched --type anime`（453 入队）+ worker 消化完毕**（队列 waiting/active/delayed=0）实测：JP anime（mc.country='JP'）total=149 / bangumi_matched=84 / unmatched=57 → **56.4%，对比基线 48.7%（150 matched 73）回升 +7.7pp（+11 命中）**；全 anime matched 145→166（+21）/ bangumi=candidate 23 条（D dedupConflict 降级、未失败、记 candidate 待人工，符合 D-174-3 设计）/ meta_null=0（全部至少富集一次、无 orphan）。本序列不负责的「REST 搜不到/低置信」(273 bangumi_unmatched 主体) → 另起 SEQ。**D-174-5/R7/R8 ✅ 闭环。** 执行模型: claude-opus-4-8
 
 ### SEQ-20260531-01 BLOCKER 触发清单
 
