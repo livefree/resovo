@@ -12762,18 +12762,19 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **来源序列**：SEQ-20260531-01（META-23 系列首卡 / 共 5 卡 A..E 严格串行）
 - **触发**：用户排查富集列空白 → 本会话诊断 anime Bangumi 回填 matched 仅 31.4%（JP 48.7%）；抽样 30 unmatched JP anime = 5 撞唯一约束 + 25 REST 搜不到 + 0 可正常匹配。用户拍板：归并键改剥标点（展示/搜索 title 保留标点；匹配类中间操作含归并忽略标点空格）。
 - **根因（已实测复现）**：同番标题写法差异（`当前，正被打扰中！` vs `当前正被打扰中`）→ 归并键 `media_catalog.title_normalized`（normalizeTitle 保留 CJK 标点）不同 → 裂成多 catalog 行 → 抢绑同一 Bangumi subject 610703 → 撞 `media_catalog_bangumi_subject_id_key` UNIQUE → 富集事务 duplicate key 抛错 → 留 unmatched。matchAndEnrich 走「已存在 catalogId 直接 update」绕过 findOrCreate 的 bangumiId 去重 = 精确机理。
-- **本卡产出**：`docs/decisions.md` 追加 ADR-174（Accepted）。设计裁定要点：
-  - D-174-1：新增独立 `normalizeMergeKey`=stripExternalMatchPunct(normalizeTitle)，不改 normalizeTitle（它供 CrawlerRefetchService 相似度计算）；归并键写入点全切。
-  - D-174-2：migration 084 两阶段（A: TS 脚本重算 3124 行禁纯 SQL / B: 52 冗余行 51 组合并·留存行确定性·子表 ON CONFLICT·删行快照备份，因 media_catalog 无 deleted_at）。
-  - D-174-3：applyEnrichmentDb 写 subject 前 findCatalogByBangumiId → 撞占用则 video.catalog_id 重指向 existing（真去重）/ 不安全降级 candidate 不炸事务；仅 bangumi，douban/imdb/tmdb 同构 follow-up。
-  - D-174-4：查询点 SQL 无需改，写入+查询入参键同批切（R6 最高翻车点）；dump 表不在范围。
-  - D-174-5：5 类测试 + architecture.md 同步字段语义（R8）。
+- **本卡产出**：`docs/decisions.md` 追加 ADR-174（Accepted）。设计裁定 5 条详见 ADR-174 正文（裁定编号见 decisions.md，本卡仅落档**不实施**，故不在此 changelog 标记任何 D-N 闭环——各裁定的闭环随对应实施卡 B..E 逐条登记）：
+  - 裁定 ①（归一化函数）：新增独立 `normalizeMergeKey`=stripExternalMatchPunct(normalizeTitle)，不改 normalizeTitle（它供 CrawlerRefetchService 相似度计算）；归并键写入点全切。→ 实施于 META-23-B。
+  - 裁定 ②（存量迁移）：migration 084 两阶段（A: TS 脚本重算 3124 行禁纯 SQL / B: 52 冗余行 51 组合并·留存行确定性·子表 ON CONFLICT·删行快照备份，因 media_catalog 无 deleted_at）。→ 实施于 META-23-C。
+  - 裁定 ③（唯一约束兜底）：applyEnrichmentDb 写 subject 前 findCatalogByBangumiId → 撞占用则 video.catalog_id 重指向 existing（真去重）/ 不安全降级 candidate 不炸事务；仅 bangumi，douban/imdb/tmdb 同构 follow-up。→ 实施于 META-23-D。
+  - 裁定 ④（消费方对齐）：查询点 SQL 无需改，写入+查询入参键同批切（R6 最高翻车点）；dump 表不在范围。→ 实施于 META-23-B（写入侧）+ 验证于 META-23-E。
+  - 裁定 ⑤（回归门禁）：5 类测试 + architecture.md 同步字段语义（R8）。→ 实施于 META-23-E。
 - **实测关键事实**：剥标点重算仅 52 冗余行/51 组合并、0 组多外部 ID（合并干净）；media_catalog 有 created_at 无 deleted_at（R4 删行须快照备份）；migration 下一序号 084。
 - **本序列不解决**：「REST 搜不到/低置信」（83% unmatched anime，与标点无关）→ 另起 SEQ。
 - **修改文件**：`docs/decisions.md`（ADR-174）/ `docs/task-queue.md`（SEQ-20260531-01 序列 + META-23-A..E）/ `docs/tasks.md`（卡片）。
 - **新增依赖/schema/路由/Props 契约变更**：无（本卡仅 ADR 落档；schema 迁移在 META-23-C）。
 - **数据库变更**：无（本卡仅文档）。
-- **质量门禁**：verify:adr-contracts EXIT=0（D-174-1..5 advisory 未闭环=预期，实施期 B..E 逐条闭环；其余 enum-ssot/error-message 警告为 pre-existing 与本卡无关）。
+- **质量门禁**：verify:adr-contracts EXIT=0（ADR-174 各裁定 advisory 未闭环=预期，实施期 B..E 逐条闭环；其余 enum-ssot/error-message 警告为 pre-existing 与本卡无关）。
+- **审计修正（Codex stop-time review）**：本条目原逐条罗列 `D-174-1..5` 字面编号，被 verify-adr-d-numbers 的 `D-\d+-\d+` 正则误抓为「全部闭环」（adr-d-status.json 误标 ADR-174 closed=5）。实际仅裁定①随 META-23-B 落地。已将本卡（纯落档·零实施）的裁定改为「裁定①..⑤」叙述式编号，D-N 闭环字面仅出现在真正实施它的卡，杜绝审计虚标。
 
 ---
 
