@@ -6,7 +6,7 @@
 
 ## 进行中任务
 
-（空 / META-23-D applyEnrichmentDb 唯一约束兜底真去重 ✅ 2026-06-01：resolveBangumiBinding 查重接缝 safe/redirect/conflict 三态 + applyAutoMatchAtomic dedupConflict 降级 candidate 不炸事务 + confirmMatch 自然 ROLLBACK；全量净增 6 用例全过零回归）
+（空 / META-23-D applyEnrichmentDb 唯一约束兜底真去重 ✅ 2026-06-01：resolveBangumiBinding 查重接缝 safe/redirect/conflict 三态 + applyAutoMatchAtomic dedupConflict 降级 candidate 不炸事务 + confirmMatch 自然 ROLLBACK；+Codex FIX1 redirect 有效 catalogId 沿调用链传 step5 防 orphan 算分（D-174-7/R13）；全量 5832 passed 0 failed 零回归）
 
 > SEQ-20260531-01：A✅ B✅ C✅ **D✅** / **E ⬜**。下一卡 **META-23-E**（全量回归 + architecture.md 字段语义收尾 + 用户重跑 `reenrich-backfill --mode unmatched --type anime` 验证 JP 命中率回升 / sonnet 级）。详见 task-queue.md + changelog.md。
 

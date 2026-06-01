@@ -52,8 +52,11 @@ export function clearBangumiConfigCache(): void {
 }
 
 // ── 结果类型 ───────────────────────────────────────────────────────
+// auto.catalogId（ADR-174 D-174-3）：富集实际写入的有效 catalog —— 正常等于入参 catalogId，
+// 真去重 redirect 时为重指向后的 existing catalog。调用方（MetadataEnrichService.step5MetaScore）
+// 必须用它而非入参 catalogId，否则在 redirect 后会对已弃置的 orphan catalog 算 meta_score。
 export type BangumiEnrichResult =
-  | { matched: 'auto'; bangumiSubjectId: number; confidence: number; episodes: number; degraded: boolean }
+  | { matched: 'auto'; bangumiSubjectId: number; confidence: number; episodes: number; degraded: boolean; catalogId: string }
   | { matched: 'candidate'; bangumiSubjectId: number; confidence: number }
   | { matched: 'none'; reason: 'no_local_match' | 'low_confidence' }
 
@@ -190,6 +193,7 @@ export class BangumiService {
       confidence,
       episodes: apply.episodes,
       degraded: data.degraded,
+      catalogId: apply.effectiveCatalogId,
     }
   }
 
@@ -225,6 +229,7 @@ export class BangumiService {
         confidence: existingConfidence ?? 1,
         episodes: result.episodes,
         degraded: data.degraded,
+        catalogId: result.effectiveCatalogId,
       }
     } catch (err) {
       try { await client.query('ROLLBACK') } catch { /* connection may already be lost */ }
@@ -450,8 +455,8 @@ export class BangumiService {
     catalogId: string,
     bangumiId: number,
     data: EnrichmentData,
-  ): Promise<{ episodes: number; wrote: boolean; dedupConflict: boolean }> {
-    if (!data.fields) return { episodes: 0, wrote: false, dedupConflict: false }
+  ): Promise<{ episodes: number; wrote: boolean; dedupConflict: boolean; effectiveCatalogId: string }> {
+    if (!data.fields) return { episodes: 0, wrote: false, dedupConflict: false, effectiveCatalogId: catalogId }
 
     // safeUpdate 接受 PoolClient（共享事务）或不传（走 service 自带 this.db）
     const isClient = 'release' in db && typeof (db as PoolClient).release === 'function'
@@ -459,7 +464,8 @@ export class BangumiService {
     // D-174-3：唯一约束兜底真去重判定（只读，redirect 的 linkVideo 在本事务内执行保原子性）
     const resolution = await this.catalogService.resolveBangumiBinding(db, catalogId, bangumiId)
     if (resolution.kind === 'conflict') {
-      return { episodes: 0, wrote: false, dedupConflict: true }
+      // 冲突未重指向 → video 仍属入参 catalogId
+      return { episodes: 0, wrote: false, dedupConflict: true, effectiveCatalogId: catalogId }
     }
     const targetCatalogId = resolution.kind === 'redirect' ? resolution.targetCatalogId : catalogId
     if (resolution.kind === 'redirect') {
@@ -489,7 +495,7 @@ export class BangumiService {
       sourceRef: String(bangumiId),
       db: isClient ? (db as PoolClient) : undefined,
     })
-    return { episodes: episodesWritten, wrote: updated !== null, dedupConflict: false }
+    return { episodes: episodesWritten, wrote: updated !== null, dedupConflict: false, effectiveCatalogId: targetCatalogId }
   }
 
   /**
@@ -510,7 +516,7 @@ export class BangumiService {
     confidence: number,
     breakdown: Record<string, number>,
     data: EnrichmentData,
-  ): Promise<{ episodes: number; dedupConflict: boolean }> {
+  ): Promise<{ episodes: number; dedupConflict: boolean; effectiveCatalogId: string }> {
     const client = await this.db.connect()
     try {
       await client.query('BEGIN')
@@ -531,7 +537,7 @@ export class BangumiService {
       // ADR-170 R-3：status 写入与 catalog+ref 同事务（消除「已提交但 status 未写」窗口）
       await videosQueries.updateVideoBangumiStatus(client, videoId, conflict ? 'unmatched' : 'matched')
       await client.query('COMMIT')
-      return { episodes: conflict ? 0 : result.episodes, dedupConflict: conflict }
+      return { episodes: conflict ? 0 : result.episodes, dedupConflict: conflict, effectiveCatalogId: result.effectiveCatalogId }
     } catch (err) {
       try { await client.query('ROLLBACK') } catch { /* connection may already be lost */ }
       throw err

@@ -620,7 +620,8 @@ describe('BangumiService.matchAndEnrich', () => {
       id === EXISTING_CID ? catalogRow(EXISTING_CID, 'anime', 2007, 'bangumi') : catalogRow(CID, 'anime', 2007))
 
     const r = await svc.matchAndEnrich({ videoId: VID, catalogId: CID, titleNorm: 'x', year: 2007 })
-    expect(r).toMatchObject({ matched: 'auto', bangumiSubjectId: 51 })
+    // 有效 catalogId 回传为重指向后的 EXISTING（供 MetadataEnrichService.step5 算分用）
+    expect(r).toMatchObject({ matched: 'auto', bangumiSubjectId: 51, catalogId: EXISTING_CID })
     // 运行时真去重：video.catalog_id 重指向 EXISTING（事务 client）
     expect(mLinkVideo).toHaveBeenCalledWith(mockClient, VID, EXISTING_CID)
     // 富集写到 EXISTING（已持有 subject → UPDATE 同值不撞唯一约束），不写当前裂行 CID
@@ -675,7 +676,8 @@ describe('BangumiService.matchAndEnrich', () => {
     mFindCatalogByBangumiId.mockResolvedValue(catalogRow(CID, 'anime', 2007, 'bangumi'))
 
     const r = await svc.matchAndEnrich({ videoId: VID, catalogId: CID, titleNorm: 'x', year: 2007 })
-    expect(r).toMatchObject({ matched: 'auto', bangumiSubjectId: 51 })
+    // 自绑无重指向 → 有效 catalogId 仍为入参 CID
+    expect(r).toMatchObject({ matched: 'auto', bangumiSubjectId: 51, catalogId: CID })
     expect(mLinkVideo).not.toHaveBeenCalled()
     expect(mUpdateCatalog).toHaveBeenCalledWith(expect.anything(), CID, expect.objectContaining({ bangumiSubjectId: 51 }))
   })

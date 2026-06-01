@@ -112,15 +112,18 @@ export class MetadataEnrichService {
     }
 
     // Step 3: 动画类型补充 Bangumi 数据（ADR-161：委托 BangumiService，含置信度 + ref + rich 详情 + 逐集）
+    // ADR-174 D-174-3：bangumi 真去重可能把 video.catalog_id 重指向到 existing catalog →
+    // 返回有效 catalogId 供 step5 使用（用旧入参 catalogId 会对已弃置 orphan catalog 算分）。
+    let effectiveCatalogId = catalogId
     if (type === 'anime') {
-      await this.step3Bangumi(videoId, catalogId, titleNorm, year)
+      effectiveCatalogId = await this.step3Bangumi(videoId, catalogId, titleNorm, year)
     }
 
     // Step 4: 源 HEAD 检验
     const sourceStatus = await this.step4SourceCheck(videoId)
 
-    // Step 5: 计算 meta_score
-    const metaScore = await this.step5MetaScore(catalogId)
+    // Step 5: 计算 meta_score（用 step3 后的有效 catalogId，含 redirect 真去重场景）
+    const metaScore = await this.step5MetaScore(effectiveCatalogId)
 
     metaQuality.enriched_at = new Date().toISOString()
 
@@ -291,9 +294,12 @@ export class MetadataEnrichService {
     catalogId: string,
     titleNorm: string,
     year: number | null,
-  ): Promise<void> {
+  ): Promise<string> {
     // ADR-161：置信度评分 + video_external_refs(provider='bangumi') + auto 命中拉 REST rich 详情 + 逐集
-    await this.bangumiService.matchAndEnrich({ videoId, catalogId, titleNorm, year })
+    const result = await this.bangumiService.matchAndEnrich({ videoId, catalogId, titleNorm, year })
+    // ADR-174 D-174-3：仅 auto 写入路径可能 redirect 真去重 → 返回有效 catalogId；
+    // candidate/none 无 catalog 写入与重指向，沿用入参 catalogId。
+    return result.matched === 'auto' ? result.catalogId : catalogId
   }
 
   // ── Step 4 ───────────────────────────────────────────────────────

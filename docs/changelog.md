@@ -13046,3 +13046,21 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **D-N 闭环**：D-174-3 ✅（applyEnrichmentDb 唯一约束兜底真去重落地）。
 - **质量门禁**：typecheck EXIT=0 / lint EXIT=0（5/5 successful）/ bangumi-service 72 + metadataEnrich 32 全过 / verify:adr-contracts EXIT=0（端点 203 对齐 / SQL schema 对齐 / error-message+D-N 既有 advisory 不阻塞）。全量单测净增 6 用例全过；唯一失败为前台 jsdom 并行 flaky（基线同样 1 个不同文件失败：基线 StagingEditPanel / 本次 CrawlerRunsView，隔离均过 → 与纯后端改动无关）。
 - **注意事项**：① 仅 bangumi_subject_id；douban/imdb/tmdb 同构唯一约束兜底为 follow-up（届时提取 `MediaCatalogService.linkExternalIdOrRedirect` 通用原语，本卡 `resolveBangumiBinding` 即其只读内核）。② pre-check 是去重主体；并发窗口内仍可能撞唯一约束 → 事务 ROLLBACK 后由 Bull 重试收敛（重试时 existing 已存在 → 走 redirect/safe），ON CONFLICT 非语义主体（UPDATE 不支持 ON CONFLICT / D-174-3）。③ Y5 重指向改 video.catalog_id 在事务 client 内执行保原子性。④ 下一卡 META-23-E：全量回归 + architecture.md 字段语义收尾 + 用户重跑 anime backfill 验证命中回升。
+
+## [META-23-D-FIX1] redirect 跨步骤 catalogId 传播 + step5 orphan catalog 修复（Codex stop-time review）
+- **完成时间**：2026-06-01
+- **记录时间**：2026-06-01 09:35
+- **执行模型**：claude-opus-4-8
+- **子代理**：无
+- **问题（Codex stop-time review 指出）**：redirect 真去重把 `video.catalog_id` 改到 existing catalog，但 `MetadataEnrichService.enrich` 的本地 `catalogId` 变量仍是旧值 → `step5MetaScore(catalogId)` 对**已弃置的 orphan catalog**算分 → 错误 meta_score 被持久化。redirect 改动未沿调用链向下游传播。
+- **修复**：
+  - `apps/api/src/services/BangumiService.ts` — `applyEnrichmentDb`/`applyAutoMatchAtomic` 返回新增 `effectiveCatalogId`（redirect 时为重指向后的 existing，否则入参）；`BangumiEnrichResult` 的 `auto` 变体新增 `catalogId`（仅 auto 写入路径可能 redirect，'none'/'candidate' 不加 → 不破坏既有 toEqual 断言）；`matchAndEnrich` + `refreshExistingMatch` 的 auto 返回回填该 catalogId。
+  - `apps/api/src/services/MetadataEnrichService.ts` — `step3Bangumi` 返回有效 catalogId（auto → result.catalogId / 否则入参）；`enrich` 用 `effectiveCatalogId` 跑 `step5MetaScore`（redirect 后用 canonical existing 算分）。
+  - `tests/unit/api/bangumi-service.test.ts` — redirect/safe 用例断言回传 `catalogId`（EXISTING_CID / CID）。
+  - `tests/unit/api/metadataEnrich.test.ts` — +1 regression：模拟 resolveBangumiBinding redirect → 断言 step5 `findCatalogById` 用重指向后的 c2 + linkVideo('v1','c2')。
+  - `docs/decisions.md` — ADR-174 补 D-174-7（redirect 跨步骤 catalogId 传播）+ 红线 R13 + 已知可接受边界（源 catalog 可能 childless 留周期清理 follow-up / step1-2 douban 字段遗留旧行但 video 落 canonical existing 最终一致）。
+- **新增依赖/Props 契约变更**：无。
+- **数据库变更**：无。
+- **D-N 闭环**：D-174-7 ✅。
+- **质量门禁**：typecheck+lint+verify:adr-contracts EXIT=0 / bangumi-service 72 + metadataEnrich 33 全过 / **全量 5832 passed 0 failed 零回归**（本轮前台 jsdom flaky 未触发）。
+- **已知边界（非 silent gap，已 ADR 登记）**：redirect 后源 catalog 可能 childless（benign empty row，运行时不自动删——删行需快照/回滚保护沿用 META-23-C 范式，留 follow-up）；step1/2 douban 字段遗留旧行但 video 已落 canonical existing，下次重富集最终一致。

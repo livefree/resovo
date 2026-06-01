@@ -348,6 +348,23 @@ describe('MetadataEnrichService.enrich()', () => {
     expect(bangumiCall[1]).toMatchObject({ bangumiSubjectId: 999 })
   })
 
+  it('Step3 redirect（ADR-174 D-174-3）：bangumi 真去重重指向 → step5 用重指向后的 catalogId 算分（不用旧 orphan catalog）', async () => {
+    vi.mocked(externalDataQueries.findBangumiByTitleNorm).mockResolvedValue([{
+      bangumiId: 999, titleCn: '进击的巨人', titleJp: '進撃の巨人',
+      year: 2013, rating: 9.0, summary: '关于巨人', airDate: '2013-04-06',
+    }])
+    // 共享 MediaCatalogService 实例（MetadataEnrichService 注入给 BangumiService）→ 模拟真去重重指向到 c2
+    const sharedCatalogSvc = (MediaCatalogService as ReturnType<typeof vi.fn>).mock.results.at(-1)?.value
+    sharedCatalogSvc.resolveBangumiBinding.mockResolvedValue({ kind: 'redirect', targetCatalogId: 'c2' })
+
+    await service.enrich(makeJobData({ type: 'anime' }))
+
+    // 真去重重指向：video c1 → c2（事务 client 共享连接）
+    expect(sharedCatalogSvc.linkVideo).toHaveBeenCalledWith('v1', 'c2', expect.anything())
+    // 关键：step5MetaScore 读重指向后的 c2（而非已弃置的旧 c1）→ findCatalogById 用 c2
+    expect(vi.mocked(catalogQueries.findCatalogById)).toHaveBeenCalledWith(expect.anything(), 'c2')
+  })
+
   // ── Step4: 源检验 ─────────────────────────────────────────────────
 
   it('Step4: 无源 → source_check_status=pending', async () => {
