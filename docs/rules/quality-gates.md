@@ -132,6 +132,10 @@
 2. **`npm run verify:error-message`**（advisory，不阻塞）：扫 `apps/api/src/services + routes/admin` 内 `new AppError(...)` + `reply.code().send({error:{...message:...}})` 抛出 message 字面量；比对 ADR §错误码 message 模板表；不在模板中 → 警告（milestone 审计前应清零）
 
 3. **`npm run verify:adr-d-numbers`**（advisory）：解析 ADR §决策要点 D-NNN-N 编号，**权威源 changelog.md 显式 D-N 闭环**；ADR 列出但 changelog 未闭环的 D 编号 → 警告 + 产物 `docs/audit/adr-d-status.json` 给 milestone 审计消费
+   - **⚠️ changelog D-N 字面 = 闭环（Y-CHECKLIST-1 契约 / SEQ-20260531-01 加固）**：脚本以「changelog 出现 `D-NNN-N` 字面」为唯一闭环标识（裸正则 `/D-\d+-\d+/`，**无法区分"描述"与"闭环"**）。其隐含前提是「changelog 只记已完成工作」。**规约守卫（落档卡禁写未实施 D-N 字面）**：
+     - **ADR 落档卡 / 仅设计卡（零实施）**：正文**禁止**出现尚未实施的 `D-NNN-N` 字面编号——否则被误抓为已闭环（adr-d-status.json 虚标未完成工作为 complete）。未实施的裁定**改用叙述式编号「裁定①②③…」**，编号对照见 decisions.md ADR 正文。
+     - **`D-NNN-N` 闭环字面只允许出现在「真正实施该 D-N 的那张卡」的 changelog 条目**——使「提及=闭环」与事实一致。
+     - 根因案例：META-23-A（纯落档）原逐条罗列 `D-174-1..5` → 5 条全被误标 closed；修正后落档卡用「裁定①..⑤」、`D-174-1` 闭环字面仅在 META-23-B（实施卡）。脚本契约不动（避免误伤历史 285 条自由叙述式闭环）。
 
 4. **`npm run verify:sql-schema-alignment`**（advisory，CHG-SN-6-CHECKLIST-AUDIT-3 新增）：解析 `apps/api/src/db/migrations/*.sql` 全集（CREATE TABLE / ADD COLUMN / DROP COLUMN / RENAME COLUMN）算出每表当前 schema → 扫 `apps/api/src/db/queries/**/*.ts` + `apps/api/src/services/**/*.ts` 内 SQL template literal `<alias>.<column>` 字面量 → 比对 5 核心表（videos / video_sources / users / media_catalog / watch_history）schema → 不在列表的报警；防 CHG-SN-5-13-PATCH-2 类 migration 029 后未迁移 mc JOIN 偏离。M-SN-6 完善后扩 alias 上下文推断 + 升 FAIL fast
 
