@@ -126,6 +126,13 @@ interface TableColumnBase<T> {
   readonly accessor: (row: T) => unknown
   readonly width?: number
   readonly minWidth?: number
+  /**
+   * 列宽上限（px / DTR-B 列宽可调）。
+   * 拖拽 / 键盘 / 双击 auto-fit 时 width 钳制到 [minWidth, maxWidth]；
+   * 缺省时无上限（仅受 minWidth 下限约束）。
+   * 仅在表级 `DataTableProps.enableColumnResizing===true` 时生效（静态门控）。
+   */
+  readonly maxWidth?: number
   readonly enableResizing?: boolean
   readonly enableSorting?: boolean
   readonly cell?: (ctx: TableCellContext<T>) => ReactNode

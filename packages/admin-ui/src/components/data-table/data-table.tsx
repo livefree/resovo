@@ -37,6 +37,8 @@ import { applyClientFilters, applyClientSort } from './client-data-ops'
 import { buildGridTemplate } from './data-table-grid'
 import { DataTableHeaderRow } from './data-table-header-row'
 import { DataTableBody } from './data-table-body'
+// DTR-B 列宽可调控制器（仅 enableColumnResizing 路径生效）
+import { useColumnResizeController } from './use-column-resize'
 
 // ── DataTable component ───────────────────────────────────────────
 
@@ -57,6 +59,8 @@ export function DataTable<T>(props: DataTableProps<T>): React.ReactElement {
     onRowClick,
     density = 'comfortable',
     'data-testid': testId,
+    // DTR-B：表级列宽可调静态门控（默认 false / 现有消费方零回归）
+    enableColumnResizing,
     // @deprecated ADR-149 D-149-1：enableHeaderMenu 已废弃（EP-2 起 noop ignored，
     // 不从 props 解构中读取；消费方仍可传 true/false 不破 typecheck，多余 prop 被忽略）。
     // 列级 ⋯ 触发器由 columnTriggerVisibility 控制；EP-4-B 完全从类型中删除。
@@ -140,7 +144,13 @@ export function DataTable<T>(props: DataTableProps<T>): React.ReactElement {
     density === 'poster'  ? 'var(--row-h-poster)'  :
     'var(--row-h)'
   const hasSelection = selection !== undefined
-  const gridTemplate = buildGridTemplate(columns, colMap, hasSelection)
+
+  // DTR-B 列宽可调（C1：静态门控，只读 props 字面值，不依赖可见列）。
+  // 控制器集中持有 resize 接线（rootRef/rootStyle/headerContext）；legacy 路径走
+  // buildGridTemplate 字面模板（C2 不引 CSS 变量），resize 路径 rows 用 var(--dt-grid-template)。
+  const resizeEnabled = enableColumnResizing === true
+  const resize = useColumnResizeController<T>({ enabled: resizeEnabled, columns, colMap, hasSelection, onQueryChange })
+  const gridColumnsValue = resizeEnabled ? 'var(--dt-grid-template)' : buildGridTemplate(columns, colMap, hasSelection)
 
   // sort helpers — ADR-149 D-149-4：列名点击二态互斥 asc ↔ desc（不可回 none / 业界范式）
   // 清除排序入口移到列级 ⋯ popover 「清除排序」按钮 + 矩阵 popover × 按钮
@@ -253,7 +263,7 @@ export function DataTable<T>(props: DataTableProps<T>): React.ReactElement {
     const isHovered = hoveredKey === key
     return {
       display: 'grid',
-      gridTemplateColumns: gridTemplate,
+      gridTemplateColumns: gridColumnsValue,
       height: rowHeight,
       background: isSelected
         ? 'var(--admin-accent-soft)'
@@ -273,11 +283,15 @@ export function DataTable<T>(props: DataTableProps<T>): React.ReactElement {
       data-table
       data-testid={testId}
       role="grid"
+      // DTR-B：resize 路径挂 rootRef + `--dt-grid-template` CSS 变量（拖拽命令式改一处，
+      // thead/body 各行 gridTemplateColumns 同用 var() 全行对齐）；ref 常挂无副作用。
+      ref={resize.rootRef}
       // CHG-DESIGN-02 Step 7B fix#2（Codex review）：frame 不承担滚动
       // 横向 + 纵向滚动统一发到内部 [data-table-scroll] 单一 viewport，避免
       // 横纵滚动容器分裂导致垂直滚动条随 scrollLeft 漂移。frame 自身保持
       // overflow:hidden（dt-styles 注入）+ flex column 语义。
-      style={{ position: 'relative' }}
+      // rootStyle = position:relative（+ resize 时 --dt-grid-template CSS 变量初值）。
+      style={resize.rootStyle}
       aria-label="data table"
       aria-rowcount={effectiveTotalRows}
     >
@@ -330,7 +344,7 @@ export function DataTable<T>(props: DataTableProps<T>): React.ReactElement {
       <div data-table-scroll role="presentation">
         {/* sticky header（DTR-A 抽至 DataTableHeaderRow）*/}
         <DataTableHeaderRow
-          gridTemplate={gridTemplate}
+          gridTemplate={gridColumnsValue}
           rowHeight={rowHeight}
           hasSelection={hasSelection}
           allPageSelected={allPageSelected}
@@ -343,6 +357,7 @@ export function DataTable<T>(props: DataTableProps<T>): React.ReactElement {
           openMenuColId={menuColId}
           onOpenMenu={handleOpenColumnMenu}
           onHeaderClick={handleHeaderClick}
+          resize={resize.headerContext}
         />
 
         {/* body（DTR-A 抽至 DataTableBody）*/}
@@ -362,6 +377,7 @@ export function DataTable<T>(props: DataTableProps<T>): React.ReactElement {
           flashRowKeys={flashRowKeys}
           expandedKeys={expandedKeys}
           renderExpandedRow={renderExpandedRow}
+          resizeEnabled={resizeEnabled}
         />
       </div>
       {/* CHG-DESIGN-02 Step 5/7 + 7B fix#3：bulk action bar 在 frame 直接子层

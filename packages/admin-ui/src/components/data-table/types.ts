@@ -41,6 +41,21 @@ export interface DataTableProps<T> {
   readonly 'data-testid'?: string
 
   /**
+   * 表级列宽可调门控（DTR-B / SEQ-20260531-01 / ADR-103 §4.2.2）。
+   *
+   * **静态门控语义（arch-reviewer C1）**：`resizeEnabled = enableColumnResizing === true`，
+   * 直接读 props 字面值，**不依赖可见列 / 不派生**。默认 `false`。
+   * - `false`（默认）：走 legacy 网格模板（`buildGridTemplate`），现有消费方**零行为变化**，
+   *   即使列声明了 `enableResizing: true` 也不渲染 resize handle、不引入 CSS 变量布局。
+   * - `true`：启用 `fixed-left + flex-last` 布局 —— 除 flex 列（最后一个可见非 action 且未定宽列）
+   *   外全部固定 px；表头列名之间渲染拖拽分割线（Pointer + 键盘 + 双击 auto-fit）；
+   *   默认字符串 cell / 表头 label 截断 + native title 悬浮（行高不变）；列宽偏好持久化。
+   *
+   * 列级 `TableColumn.enableResizing` 仅决定「哪些列有可拖 handle」，**不能隐式开启整表布局**。
+   */
+  readonly enableColumnResizing?: boolean
+
+  /**
    * @deprecated ADR-149 / CHG-SN-9-DT-HEADER-REDESIGN-EP-1（2026-05-23）
    * 此 prop 已废弃。新方案：点列名 → toggle asc/desc（互斥）+ 列名右侧 ⋯ 列级三点 +
    * toolbar 右端 ⋯ 统一矩阵 popover。本 prop 在 EP-1 阶段保留但 noop（不再触发任何效果），

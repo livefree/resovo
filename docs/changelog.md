@@ -12698,3 +12698,30 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **质量门禁（全量）**：全量 typecheck ✓（7 workspace）/ lint ✓（turbo 5/5 successful，仅 pre-existing warning）/ verify:adr-contracts ✓（末项 enum-ssot advisory 非阻塞，警告均 pre-existing 无关文件）/ verify:file-size-budget 新违规 24→21（本轨 4 文件全脱离 + data-table 脱离 baseline 豁免）/ **全量 test:run 5788 passed（445 文件，0 失败）**，data-table 子集 429 零行为变化验证。
 - **环境前置**：worktree 新建后需 `npm install` + 构建本地包 `external-adapter/douban-adapter`（dist gitignore、无 prepare 脚本），否则 apps/api 全量 typecheck 报 douban-adapter 模块缺失（与本轨无关）。
 - **注意事项**：偏离 arch-reviewer C7「matrix inline style 迁 CSS」——改为常量平移（column-matrix-menu.styles.ts），同样达标且零视觉回归风险，inline/CSS 双轨债记 follow-up（按价值排序 #1 稳定性优先）。其余 C1–C7 待 DTR-B..E 落地。Track: admin-ui-datatable-resize。
+
+## [DTR-B] 通用表格 DataTable 列宽可调核心（类型契约 + 布局 + handle + 截断 / SEQ-20260531-01）
+- **完成时间**：2026-06-01
+- **记录时间**：2026-06-01 05:20
+- **执行模型**：claude-opus-4-8（主循环）
+- **子代理**：arch-reviewer (claude-opus-4-8) — 无新增 spawn；实现 DTR-A 已锁定的契约（`enableColumnResizing`/`maxWidth` + C1–C6）。因改 admin-ui `types.ts` 公开 Props，commit 带 `Subagents: arch-reviewer (claude-opus-4-8)` trailer 引用 DTR-A 评审锁定（CLAUDE.md 共享组件 API 契约强制 Opus）。
+- **修改文件**：
+  - `packages/admin-ui/src/components/data-table/types.ts` — `DataTableProps.enableColumnResizing?: boolean`（默认 false / C1 静态门控，文档化语义）
+  - `packages/admin-ui/src/components/data-table/column-types.ts` — `TableColumnBase.maxWidth?: number`
+  - `packages/admin-ui/src/components/data-table/column-resize.ts` — 新建（纯函数：clampWidth/pickFlexColumnId(C5)/buildResizableGridTemplate(fixed-left+flex-last+加载期钳制+占位轨+override)/isResizableColumn/resolveColumnWidth/measureColumnContentWidth + 常量，177 行）
+  - `packages/admin-ui/src/components/data-table/resize-handle.tsx` — 新建（`<ColumnResizeHandle>` role=separator + 完整 a11y + Pointer 全生命周期 rAF 命令式预览 + 键盘 ←/→/Shift/Home/End + 双击 auto-fit + 五事件 stopPropagation(C6)，213 行）
+  - `packages/admin-ui/src/components/data-table/use-column-resize.ts` — 新建（`useColumnResizeController` 控制器：rootRef/rootStyle/gridTemplate memo/headerContext + preview/commit/rollback/autoFit，131 行）
+  - `packages/admin-ui/src/components/data-table/data-table.tsx` — 接入控制器（root rootRef + `--dt-grid-template` CSS 变量 / rows 走 var() vs legacy 字面 / header resize 上下文 / body resizeEnabled），522→496 控制下沉后 ≤500
+  - `packages/admin-ui/src/components/data-table/data-table-header-row.tsx` — resize 路径：th position:relative + label 截断 span(data-col-id) + 可调列 handle 渲染
+  - `packages/admin-ui/src/components/data-table/data-table-body.tsx` — resize 路径：body cell data-col-id + 默认字符串 cell 截断 span + native title
+  - `packages/admin-ui/src/components/data-table/column-visibility.ts` — `setColumnWidth`（全量 map / visible 兜底 defaultVisible C4）+ `resetColumnWidths`
+  - `packages/admin-ui/src/components/data-table/dt-styles-resize.ts` — 新建（handle 分割线 + drag 光标禁选 + 截断 CSS，颜色零硬编码 + reduced-motion，74 行）
+  - `packages/admin-ui/src/components/data-table/dt-styles.tsx` — 注入器拼接 base+matrix+**resize**（2 行）
+- **新增依赖/schema/路由**：无
+- **Props 契约变更**：`DataTableProps.enableColumnResizing?`（表级，默认 false，零回归）+ `TableColumn.maxWidth?`（列级上限）；index.ts 公开导出**不变**（setColumnWidth/resetColumnWidths 保持模块内部，不扩 api-surface）。已在 DTR-A arch-reviewer 锁定。
+- **数据库变更**：无
+- **质量门禁**：admin-ui typecheck ✓ / 完整 typecheck 7 workspace ✓ / server-next 消费方 typecheck ✓ / lint ✓（turbo 5/5）/ `verify:file-size-budget` data-table 模块 **0 新违规**（沿用 DTR-A 21 既有 / 全部 apps/ 非本轨文件）/ table 子集 **429 全过** + 临时 smoke 14 全过（跑后删，正式测试归 DTR-E）。
+- **全量 test:run 观察**：本轨改动与干净 DTR-A HEAD **均** 出现「每次全量随机挂 1 个不同的无关 `apps/server-next/admin/**` 测试」（UserSubmissionsClient / StagingEditPanel / CrawlerClient 三次各不同，全部隔离单跑通过）→ 经 stash 我的改动后干净 HEAD 复现，确证为 **server-next admin 测试套件既有非确定性跨测试污染 flake，与 DTR-B 零关系**（failing 测试不走 resize 路径）。本轨不修（不在文件范围），记既有债观察。
+- **注意事项**：
+  - 卡边界合并：handle a11y/键盘/双击 auto-fit 从 DTR-C 并入 DTR-B（半成品 handle 不可独立验收，价值排序 #1）。DTR-C 收窄为矩阵「重置列宽」入口 + 收口复核。
+  - 文件范围据实增补 data-table-body.tsx + dt-styles.tsx（DTR-A 把 body 渲染/CSS 注入重构后的直接后果）；dt-styles-resize 用 `.ts` 对齐 base/matrix 既有命名（plan 写 .tsx）。
+  - legacy `buildGridTemplate`（data-table-grid.ts）**零改动**（C2）；DTR-D 负责存储迁移 localStorage + ADR-103 §4.2.2 修订；DTR-E 负责 VideoListClient 验收消费 + 完整单测/组件测/Playwright。Track: admin-ui-datatable-resize。

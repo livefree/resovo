@@ -6,6 +6,8 @@
  * 职责：loading / error / empty 状态 + 数据行（selection 框 + 各列 cell + 可展开行）。
  * 纵向滚动由父级 [data-table-scroll] 承担，本 wrapper 仅作 row 容器（保留 [data-table-body] 标记）。
  * 行样式 / hover / selection / 展开状态由 DataTable 主组件通过 props 注入，零行为变化。
+ * DTR-B：`resizeEnabled` 时给 body cell 加 `data-col-id`（auto-fit 测宽扫描）+ 默认字符串 cell
+ *   包 `[data-dt-truncate]`+native title（截断悬浮 / 需求 (4)）；缺省零行为变化。
  */
 import React from 'react'
 import type { ReactNode } from 'react'
@@ -28,6 +30,8 @@ export interface DataTableBodyProps<T> {
   readonly flashRowKeys?: ReadonlySet<string>
   readonly expandedKeys?: ReadonlySet<string>
   readonly renderExpandedRow?: (row: T) => React.ReactNode
+  /** DTR-B：列宽可调启用 → body cell 加 data-col-id + 默认字符串 cell 截断悬浮 */
+  readonly resizeEnabled?: boolean
 }
 
 export function DataTableBody<T>({
@@ -46,6 +50,7 @@ export function DataTableBody<T>({
   flashRowKeys,
   expandedKeys,
   renderExpandedRow,
+  resizeEnabled,
 }: DataTableBodyProps<T>): React.ReactElement {
   return (
     <div role="rowgroup" data-table-body>
@@ -93,19 +98,26 @@ export function DataTableBody<T>({
               )}
               {visibleColumns.map((col) => {
                 const value = col.accessor(row)
-                const content = col.cell
-                  ? col.cell({ row, value, rowIndex: idx })
+                const hasCustomCell = col.cell !== undefined
+                const content = hasCustomCell
+                  ? col.cell!({ row, value, rowIndex: idx })
                   : String(value ?? '')
+                // DTR-B：默认字符串 cell 在 resize 路径包 truncate span + native title；
+                // 自定义 cell 自管布局（仅加 data-col-id 供 auto-fit 测宽）
+                const truncate = resizeEnabled && !hasCustomCell
                 return (
                   <div
                     key={col.id}
                     role="cell"
+                    data-col-id={resizeEnabled ? col.id : undefined}
                     style={{
                       ...TD_STYLE,
                       ...(col.overflowVisible ? { overflow: 'visible' } : {}),
                     }}
                   >
-                    {content}
+                    {truncate
+                      ? <span data-dt-truncate title={String(value ?? '')}>{content}</span>
+                      : content}
                   </div>
                 )
               })}

@@ -5,11 +5,16 @@
  *
  * 职责：渲染 sticky 表头 rowgroup —— selection 全选框 + 各列名（排序指示 + 列级 ⋯ 触发器）。
  * 交互回调由 DataTable 主组件注入（onHeaderClick / onOpenMenu / onSelectAll）。
- * DTR-B 将在此为可调列追加列宽 resize handle（仅表头列名之间，需求 (2)）。
+ * DTR-B：`resize` 上下文存在时（enableColumnResizing），为可调列在右缘追加 resize handle
+ *   （仅表头列名之间 / 需求 (2)）+ 列名 label 截断悬浮 + th position:relative；`resize` 缺省
+ *   时走 legacy 渲染，**零行为变化**。
  */
 import React from 'react'
 import type { TableColumn, TableSortState, FilterValue } from './types'
 import { TH_STYLE } from './data-table-grid'
+import { columnMinWidth, isResizableColumn } from './column-resize'
+import { ColumnResizeHandle } from './resize-handle'
+import type { HeaderRowResizeContext } from './use-column-resize'
 
 // ── sort indicator (inline SVG) ───────────────────────────────────
 
@@ -47,6 +52,8 @@ export interface DataTableHeaderRowProps<T> {
   readonly onOpenMenu: (colId: string, anchorEl: HTMLElement) => void
   /** 列名整体点击 → toggle 排序 */
   readonly onHeaderClick: (colId: string) => void
+  /** 列宽可调上下文（DTR-B）；缺省走 legacy 表头零行为变化 */
+  readonly resize?: HeaderRowResizeContext<T>
 }
 
 export function DataTableHeaderRow<T>({
@@ -63,6 +70,7 @@ export function DataTableHeaderRow<T>({
   openMenuColId,
   onOpenMenu,
   onHeaderClick,
+  resize,
 }: DataTableHeaderRowProps<T>): React.ReactElement {
   return (
     <div
@@ -118,20 +126,29 @@ export function DataTableHeaderRow<T>({
             sortable || hasFilter || hasAutoFilter || hidable || isFiltered || isSorted
           // 列名整体可点 → toggle 排序（如该列可排序）
           const interactive = sortable
+          // DTR-B：resize 路径 —— th position:relative（承载绝对定位 handle）+ 列名 label 截断
+          const headerTitle = typeof col.header === 'string' ? col.header : undefined
+          const showHandle = resize !== undefined && isResizableColumn(col, resize.flexColumnId)
           return (
             <div
               key={col.id}
               role="columnheader"
               aria-sort={isSorted ? (sort.direction === 'asc' ? 'ascending' : 'descending') : undefined}
               data-th-interactive={interactive ? 'true' : undefined}
-              style={{ ...TH_STYLE, cursor: interactive ? 'pointer' : 'default' }}
+              style={{
+                ...TH_STYLE,
+                cursor: interactive ? 'pointer' : 'default',
+                ...(resize !== undefined ? { position: 'relative' } : {}),
+              }}
               tabIndex={interactive ? 0 : undefined}
               onClick={interactive ? () => onHeaderClick(col.id) : undefined}
               onKeyDown={interactive ? (e) => {
                 if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onHeaderClick(col.id) }
               } : undefined}
             >
-              {col.header}
+              {resize !== undefined
+                ? <span data-dt-truncate data-col-id={col.id} title={headerTitle}>{col.header}</span>
+                : col.header}
               {sortable && <SortIcon direction={sortDir} />}
               {showTrigger && (
                 <button
@@ -156,6 +173,19 @@ export function DataTableHeaderRow<T>({
                     }
                   }}
                 >⋯</button>
+              )}
+              {showHandle && resize !== undefined && (
+                <ColumnResizeHandle
+                  colId={col.id}
+                  width={resize.resolveWidth(col)}
+                  minWidth={columnMinWidth(col)}
+                  maxWidth={col.maxWidth}
+                  columnLabel={headerTitle ?? col.id}
+                  onPreview={resize.onPreview}
+                  onCommit={resize.onCommit}
+                  onRollback={resize.onRollback}
+                  onAutoFit={resize.onAutoFit}
+                />
               )}
             </div>
           )

@@ -15,7 +15,7 @@
 
 ## 进行中任务
 
-（空 — DTR-A 完成；下一张 DTR-B，开始时置 🔄）
+（空 — DTR-A ✅ + DTR-B ✅ 完成；下一张 DTR-C，开始时置 🔄）
 
 ---
 
@@ -39,21 +39,41 @@
   - **偏离**：arch-reviewer C7「matrix inline style 迁 CSS」改为常量平移（column-matrix-menu.styles.ts），同样达标、零视觉回归风险，inline/CSS 双轨债记 follow-up（价值排序 #1 稳定性优先）。
   - **沉淀判断**：纯拆分到共享层内聚模块（client-ops/grid/header-row/body/column-types），边界清晰，是。
 
+### ✅ DTR-B — resize 核心（类型契约 + 布局 + handle + 截断）
+
+- **状态**：✅ 完成（2026-06-01）
+- **建议模型**：claude-opus-4-8
+- **执行模型**：claude-opus-4-8（主循环）
+- **子代理调用**：无新增 spawn。API 契约（`enableColumnResizing` / `maxWidth`）+ flex 列规则（C5）+ CSS 变量 grid + 文件拆分边界已在 **DTR-A 的 arch-reviewer (claude-opus-4-8) PASS-WITH-CONDITIONS** 锁定，DTR-B 为该已评审契约的实现，无再定义。commit 带 `Subagents: arch-reviewer (claude-opus-4-8)` trailer 引用该锁定（CLAUDE.md「改 admin-ui types.ts 公开 Props」要求）。
+- **问题理解**：DataTable 无列宽可调；需作通用能力沉淀（消费方 opt-in），不做成专页逻辑。
+- **方案（落地 C1–C6）**：
+  - ① 类型：`DataTableProps.enableColumnResizing?: boolean`（默认 false / C1 静态门控）+ `TableColumnBase.maxWidth?: number`。
+  - ② `column-resize.ts` 纯函数：`clampWidth`（下限+可选上限+取整）/ `pickFlexColumnId`（C5：最后可见非 action 且未定宽列，否则 null）/ `buildResizableGridTemplate`（fixed-left + flex-last + 加载期钳制 + 无 flex 末尾 `minmax(0,1fr)` 占位轨 + override 预览）/ `isResizableColumn` / `resolveColumnWidth` / `measureColumnContentWidth`（auto-fit 测当前页）。legacy `buildGridTemplate` 留在 data-table-grid.ts **零改动**（C2）。
+  - ③ `resize-handle.tsx`：`<ColumnResizeHandle>` `role="separator"` + 完整 a11y（aria-orientation/valuenow/min/max/label）+ Pointer 全生命周期（setPointerCapture + rAF 命令式改 `--dt-grid-template` 不 setState / pointerup 提交 / pointercancel+lostpointercapture 回滚 / 卸载 cleanup）+ 键盘 ←/→ ±8、Shift ±32、Home→min、End→max(未定义 no-op) + 双击 auto-fit + 五事件全 stopPropagation（C6）。
+  - ④ `use-column-resize.ts`：`useColumnResizeController` 集中接线（rootRef / rootStyle / gridTemplate memo / headerContext / preview/commit/rollback/autoFit），data-table.tsx 仅消费 3 出口。
+  - ⑤ 集成：root `[data-table]` 挂 rootRef + `--dt-grid-template` CSS 变量；thead/body 行 `gridTemplateColumns` 走 `var(--dt-grid-template)`（resize 路径）/ legacy 字面模板（C2）。表头 label + 默认字符串 body cell 包 `[data-dt-truncate]`+native title（截断不变高）；body cell 加 `data-col-id`（auto-fit 扫描）。th position:relative 仅 resize 路径。
+  - ⑥ `column-visibility.ts`：`setColumnWidth`（返回全量 map / visible 兜底 `defaultVisible!==false` C4）+ `resetColumnWidths`（清 width 保留 visible）。
+  - ⑦ `dt-styles-resize.ts`（新）：handle 分割线（1px var(--border-default)，hover/active var(--border-strong)/var(--admin-accent-border)，col-resize，reduced-motion 关过渡）+ `[data-dt-resizing]` 全局禁选光标 + `[data-dt-truncate]` 截断；颜色零硬编码。dt-styles.tsx 单注入守卫拼接 base+matrix+resize。
+- **文件范围（实际，含 DTR-A 重构后增补）**：`types.ts`/`column-types.ts`、新 `column-resize.ts`/`resize-handle.tsx`/`use-column-resize.ts`、`data-table.tsx`/`data-table-header-row.tsx`、`column-visibility.ts`、新 `dt-styles-resize.ts`；**增补**：`data-table-body.tsx`（DTR-A 把 body 渲染拆出，data-col-id+截断落此）+ `dt-styles.tsx`（注入器拼接 resize CSS，2 行）。index.ts 未动（setColumnWidth/resetColumnWidths 保持模块内部，不扩公开 API surface）。
+- **验收**：admin-ui typecheck ✓ / server-next 消费方 typecheck ✓ / 完整 typecheck 7 workspace ✓ / lint ✓（turbo 5/5）/ `verify:file-size-budget` data-table 模块 **0 新违规**（data-table.tsx 控制下沉后 522→496 ≤500，新文件全 ≤213）/ table 子集 **429 全过** + 临时 smoke 14 全过（纯函数双分支 + 组件集成 + 键盘 +8 + stopPropagation；跑后删，正式测试归 DTR-E）。
+- **完成备注**（执行模型 claude-opus-4-8）：
+  - 新文件行数：column-resize 177 / resize-handle 213 / use-column-resize 131 / dt-styles-resize 74；data-table.tsx 496（接线下沉 hook 后回 ≤500）。
+  - **偏离 1（卡边界合并）**：原 DTR-C 列的「handle 键盘 Home/End + a11y aria + 双击 auto-fit 接线」并入 DTR-B —— 半成品 handle 不可独立验收（价值排序 #1 正确性/稳定性）。DTR-C 收窄为矩阵「重置列宽」入口（column-matrix-menu/footer + data-table `handleMatrixResetColumnWidths` + `onResetColumnWidths` Props）+ 收口复核。
+  - **偏离 2（文件范围增补）**：DTR-A 把 body 渲染从 data-table.tsx 拆到 data-table-body.tsx（plan 撰写时尚在 data-table.tsx），故 data-col-id+截断落 data-table-body.tsx；dt-styles.tsx 注入器需 2 行拼接 resize CSS。两者均为 DTR-A 重构的直接后果，已据实更新本卡文件范围。
+  - **偏离 3（dt-styles-resize 后缀）**：plan 写 `.tsx`，对齐 DTR-A 既有 `dt-styles-base.ts`/`dt-styles-matrix.ts`（纯字符串常量无 JSX）改用 `.ts`。
+  - **全量 test:run 观察**：DTR-A HEAD 与本轨改动后均出现「每次全量随机挂 1 个不同的无关 `apps/server-next/admin/**` 测试」（实测 UserSubmissionsClient / StagingEditPanel / CrawlerClient 三次各不同 / 全部隔离单跑通过）→ 确证为 **server-next admin 测试套件既有的非确定性跨测试污染 flake**（stash 我的改动后干净 HEAD 同样复现），**与 DTR-B 零关系**（改动全在 packages/admin-ui/data-table，failing 测试不走 resize 路径）。不在本轨文件范围，不修；记为既有债观察。
+  - **沉淀判断**：列宽可调作为通用 DataTable 能力沉淀进共享层（column-resize 纯函数 + controller hook + handle 组件），消费方 opt-in，是。
+- **下一张（DTR-C）依赖**：DTR-B 已导出 `resetColumnWidths`（column-visibility.ts，模块内）供 DTR-C 矩阵「重置列宽」串联。
+
 ---
 
 ## 待开始任务
 
-### ⬜ DTR-B — resize 核心（类型契约 + 布局 + handle + 截断）
+### ⬜ DTR-C — 矩阵「重置列宽」收口（handle a11y/键盘/auto-fit 已在 DTR-B 完成）
 
 - **建议模型**：claude-opus-4-8
-- **方案**：① `DataTableProps.enableColumnResizing?: boolean`（默认 false，静态门控）+ `TableColumn.maxWidth?`（按 arch-reviewer 定位）；② `column-resize.ts`（`clampWidth` / `buildGridTemplate` legacy↔flex-last 双分支 + 加载期钳制 / `measureColumnContentWidth`）；③ `resize-handle.tsx`（Pointer 全生命周期 + 键盘 + dblclick + stopPropagation）；④ data-table 集成（`--dt-grid-template` CSS 变量 grid + handle 渲染 + 默认 cell/header `data-dt-truncate`+`title` 截断不变高 + body cell `data-col-id`）；⑤ `column-visibility.ts` 加 `setColumnWidth`/`resetColumnWidths`（返回完整 map）。
-- **文件范围**：`types.ts`/`column-types.ts`、新 `column-resize.ts`/`resize-handle.tsx`/`use-column-resize.ts`、`data-table.tsx`/`data-table-header-row.tsx`、`column-visibility.ts`、`dt-styles-resize.tsx`
-
-### ⬜ DTR-C — 矩阵「重置列宽」+ 增强收口
-
-- **建议模型**：claude-opus-4-8
-- **方案**：① `ColumnMatrixMenu.onResetColumnWidths?` Props + `ColumnMatrixFooter` 加「重置列宽」按钮；② data-table `handleMatrixResetColumnWidths` 串联；③ 双击 auto-fit 接线（仅测当前渲染页）；④ 键盘 Home→min / End→max(未定义 no-op)；⑤ a11y aria（separator + valuenow/min/max + label）完整。
-- **文件范围**：`column-matrix-menu.tsx`/`column-matrix-footer.tsx`、`data-table.tsx`、`resize-handle.tsx`
+- **方案（收窄后）**：① `ColumnMatrixMenu.onResetColumnWidths?` Props + `ColumnMatrixFooter` 加「重置列宽」按钮；② data-table `handleMatrixResetColumnWidths` 串联（调 DTR-B 已落地的 `resetColumnWidths`）；③ 收口复核：handle a11y（separator+valuenow/min/max+label）、键盘（←/→/Shift/Home/End）、双击 auto-fit **已在 DTR-B 落地** → DTR-C 仅核验 + 必要微调，不重做。
+- **文件范围**：`column-matrix-menu.tsx`/`column-matrix-footer.tsx`、`data-table.tsx`（resize-handle.tsx 已在 DTR-B 完成，DTR-C 如需微调再纳入）
 
 ### ⬜ DTR-D — 存储迁移 localStorage + ADR-103 §4.2.2 修订
 

@@ -21,10 +21,13 @@
 import { useEffect } from 'react'
 import { DT_CSS_BASE } from './dt-styles-base'
 import { DT_CSS_MATRIX } from './dt-styles-matrix'
+import { DT_CSS_RESIZE } from './dt-styles-resize'
 
 const STYLE_ID = 'admin-ui-dt-styles'
 
-const DT_CSS = DT_CSS_BASE + DT_CSS_MATRIX
+// DTR-B：追加列宽可调样式（拖拽分割线 / drag 光标 / 截断悬浮）。
+// 单一注入守卫不变；resize DOM 仅 enableColumnResizing 路径渲染，legacy 表格不受影响。
+const DT_CSS = DT_CSS_BASE + DT_CSS_MATRIX + DT_CSS_RESIZE
 
 let injected = false
 
