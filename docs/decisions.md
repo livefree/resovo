@@ -3429,7 +3429,7 @@ export interface TableColumn<T> {
   readonly width?: number
   /** 最小宽度；默认读取 admin-layout/table.ts 的 col-min-w (80px) */
   readonly minWidth?: number
-  /** 是否允许列宽拖拽（M-SN-2 落地，由 useTableQuery 持久化到 sessionStorage）*/
+  /** 是否允许列宽拖拽（M-SN-2 声明 / DTR 落地拖拽 UI；列宽经 useTableQuery 持久化到 localStorage 布局偏好，DTR-D AMENDMENT 原 sessionStorage / 详 §4.2.2）*/
   readonly enableResizing?: boolean
   /** 是否允许排序；为 true 时 header 渲染 sort indicator + 点击触发 onQueryChange.sort */
   readonly enableSorting?: boolean
@@ -3583,7 +3583,7 @@ export function useTableQuery(options: UseTableQueryOptions): {
 
 同步到 URL 的状态（影响"分享 / 书签 / 后退-前进"语义的状态）：
 - `pagination.page` → URL key `page`（默认 1 时省略）
-- `pagination.pageSize` → **不进 URL**，归入 sessionStorage（属用户布局偏好）
+- `pagination.pageSize` → **不进 URL**，归入布局偏好持久化（DTR-D AMENDMENT：localStorage，原 sessionStorage / 详 §4.2.2）
 - `sort.field` + `sort.direction` → URL keys `sort` + `sortDir`（field 为 undefined 时两 keys 均省略）
 - `filters` → URL key 模式 `f.{filterId}` + 编码规则见下表
 
@@ -3603,21 +3603,39 @@ Next.js App Router 适配（消费方实现 `TableRouterAdapter`）：
 - `getSearchParams` → `useSearchParams()` 返回值的副本
 - `replace` → `router.replace(\`${pathname}?${next.toString()}\`, { scroll: false })`（`scroll: false` 必填，避免 query 变更引起页面顶部滚动）
 
-**4.2.2 sessionStorage 同步规约**
+**4.2.2 持久化偏好同步规约**
 
-存储 key：`admin-ui:table:{tableId}:v1`（tableId 由消费方稳定提供；与 v1 双轨命名收敛为单一 namespace）
+> **AMENDMENT（DTR-D / SEQ-20260531-01 / arch-reviewer claude-opus-4-8 C3，2026-06-01）**：
+> 原规约（CHG-SN-2-13）布局偏好 + saved views 合并存于**单一 sessionStorage key** `:v1`。
+> 通用表格列宽可调（DTR）落地后，列宽属"我希望这张表长这样"的**跨会话布局偏好**，会话级
+> sessionStorage 关标签页即失语义不符；故拆为**双 key 双介质**：布局偏好迁 localStorage（跨会话），
+> saved views 留 sessionStorage（会话内 / 避免跨会话跨账号视图残留）。DB-level 跨设备同步另起
+> ADR（N1-149-2，本轮不做）。下文为修订后规约（原单 key 规约整体废止）。
 
-持久化字段：
-- `pagination.pageSize`（用户喜欢的 20/50/100）
-- `columns`（visible + width；按 column.id 索引）
+**双 key 双介质**：
+- 布局偏好（`pagination.pageSize` + `columns` 的 visible+width）→ **localStorage**
+  key `admin-ui:table:{tableId}:v2`（跨会话持久 / 关标签页重开仍在）
+- saved views（CHG-DESIGN-02 Step 6）→ **sessionStorage**
+  key `admin-ui:table:{tableId}:views:v1`（会话内瞬态 / 关标签页清理）
 
 不持久化字段（走 URL 或瞬态）：
 - `pagination.page`、`sort`、`filters` —— 走 URL
 - `selection` —— 会话瞬态
 
+schema 加固（C3）：`columns[*].width` 仅接受 `Number.isFinite(w) && w > 0`；非法（NaN/Infinity/≤0/
+非数字）则**丢弃该列 width 保留 visible**（防跨版本/脏数据污染，不整体清除偏好）。
+
 序列化容错：JSON.parse 失败 / schema 不匹配 → 静默清除该 key + fallback defaults，不阻塞渲染（禁止空 catch，统一 console.warn）。
 
-v1 → v2 迁移：CHG-SN-2-13 不读取 v1 旧 key（`admin:table:{route}:{tableId}:v1` / `admin:table:settings:{tableId}:v1`）—— apps/server 退役路径，v1 用户偏好不迁移；server-next 是新表格首次会话从默认开始。
+旧 key 迁移：
+- 旧合并 `admin-ui:table:{tableId}:v1`（sessionStorage / pageSize+columns+views 合一）**一次性重置不迁移**
+  （C3）：新代码不读取，readFromStorage 时 best-effort 清理该旧 key；server-next 用户首次从默认初始化
+  布局（saved views 本就会话级、关标签页即失，重置无感）。
+- 更旧 v1 key（`admin:table:{route}:{tableId}:v1` / `admin:table:settings:{tableId}:v1`，apps/server 退役路径）同样不读取不迁移。
+
+封装：上述 key/介质/校验细节全部封装在 `storage-sync.ts`；对外 4 个签名
+（`readFromStorage`/`writeToStorage`/`writeViewsToStorage`/`storedPrefsToColumnMap` + `StoredPrefs`
+合并形态）不随介质迁移而变，消费方（`use-table-query`）零逻辑改动。
 
 **4.2.3 store 实现要点**（与 ADR-103a §4.4-1 Provider 不下沉硬约束对齐）
 

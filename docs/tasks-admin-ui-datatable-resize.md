@@ -15,7 +15,7 @@
 
 ## 进行中任务
 
-（空 — DTR-A ✅ + DTR-B ✅ + DTR-C ✅ 完成；下一张 DTR-D，开始时置 🔄）
+（空 — DTR-A ✅ + DTR-B ✅ + DTR-C ✅ + DTR-D ✅ 完成；下一张 DTR-E，开始时置 🔄）
 
 ---
 
@@ -77,16 +77,27 @@
 - **偏离**：`resetAllWidths` 放进 `useColumnResizeController`（而非 data-table.tsx 内 `handleMatrixResetColumnWidths` useCallback），保 data-table.tsx ≤500 行预算 + 逻辑内聚（控制器是列宽状态变更的天然 owner）。
 - **沉淀判断**：通用矩阵 popover 增「重置列宽」批量动作，沉淀进共享 footer + 控制器，是。
 
+### ✅ DTR-D — 存储迁移 localStorage + ADR-103 §4.2.2 修订
+
+- **状态**：✅ 完成（2026-06-01）
+- **建议模型**：claude-opus-4-8 / **执行模型**：claude-opus-4-8（主循环）
+- **子代理调用**：无新增 spawn。ADR §4.2.2 修订要点（双 key 双介质 / width 校验 / 旧 v1 清理）已在 DTR-A arch-reviewer (claude-opus-4-8) C3 锁定，本卡实现 + 同步 ADR 文档。commit 带 `Subagents: arch-reviewer (claude-opus-4-8)` trailer（持 adr 锁，改 docs/decisions.md）。
+- **方案（落地 C3）**：
+  - storage-sync.ts **双 key 双介质**：布局偏好（pageSize+columns visible/width）→ localStorage `admin-ui:table:{id}:v2`；saved views → sessionStorage `admin-ui:table:{id}:views:v1`。拆分后读写**不再需要 read-merge 保另一侧**（分键自然隔离 / 较旧实现简化）。
+  - 旧合并 `:v1`（sessionStorage）**一次性清理不迁移**：readFromStorage 入口 best-effort `safeRemove`。
+  - schema 加固：`isValidWidth`（`typeof number && Number.isFinite && > 0`）；parseLayout/writeToStorage 双向过滤，非法 width 丢弃保 visible。
+  - SSR 安全：`safeGet/safeSet/safeRemove` + `typeof window` 守卫，模块顶层零副作用。
+  - 对外契约不变：`readFromStorage/writeToStorage/writeViewsToStorage/storedPrefsToColumnMap` + `StoredPrefs` 合并形态零改 → use-table-query 仅 docstring 改。
+  - docs/decisions.md：ADR-103 §4.2.2 AMENDMENT（原单 key sessionStorage 规约废止 / 改双 key 双介质，含动机 + 旧 key 处置 + 封装说明）+ §3586（pageSize 介质）+ §3432（列宽持久化口径）AMENDMENT 标注。
+- **文件范围**：`storage-sync.ts`、`use-table-query.ts`、`docs/decisions.md`
+- **验收**：admin-ui typecheck ✓ / 完整 typecheck 7 workspace（含 server-next 消费方）✓ / lint 5/5 ✓ / **verify:adr-contracts exit=0**（4 核心 check 全 ✅ / 末 enum-ssot+error-message advisory 非阻塞 pre-existing）/ file-size-budget data-table 模块 0 新违规（storage-sync 270 行）/ table 子集 **429 全过**（含既有 saved-views-persist 12 round-trip 不回归）+ 临时 smoke 4 全过（介质拆分 / width 校验 NaN/0/负/字符串/null 全丢弃保 visible / 旧 v1 清理 / writeToStorage 不持久化 NaN；跑后删）。
+- **偏离**：plan 写「`isStoredPrefs` 加 width 校验」→ 实改为独立 `isValidWidth` + parseLayout 清洗（width 非法应**丢弃保 visible** 而非整体 reject 偏好，guard 语义不适合做"部分清洗"，故拆 sanitize 步骤）；plan「拆字段或双 key」选**双 key**（C3 明示 layout:v2/views:v1）。
+- **沉淀判断**：存储介质策略封装在 storage-sync.ts 共享层，对外签名不变，消费方零感，是。
+- **跨设备 follow-up**：N1-149-2（DB-level `user_table_preferences` 跨设备同步）本轮不做，已在 ADR §4.2.2 AMENDMENT + tasks Follow-up 标注，另起 ADR。
+
 ---
 
 ## 待开始任务
-
-### ⬜ DTR-D — 存储迁移 localStorage + ADR-103 §4.2.2 修订
-
-- **建议模型**：claude-opus-4-8
-- **子代理**：arch-reviewer(Opus) 已起草 ADR 要点（DTR-A 同一评审）
-- **方案**：① `storage-sync.ts` 布局偏好(pageSize/visibility/width)→localStorage（key `:v2`）/ saved views 留 sessionStorage（拆字段或双 key，按 arch-reviewer）；② 旧 `:v1` 一次性重置不迁移；③ `isStoredPrefs` 加 `Number.isFinite(width)&&width>0` 校验；④ `use-table-query.ts`/`storage-sync.ts` docstring 同步；⑤ `docs/decisions.md` ADR-103 §4.2.2 修订（持 adr 锁）。
-- **文件范围**：`storage-sync.ts`、`use-table-query.ts`、`docs/decisions.md`
 
 ### ⬜ DTR-E — 验收消费方 + 测试 + 门禁
 

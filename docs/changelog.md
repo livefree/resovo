@@ -12741,3 +12741,19 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **数据库变更**：无
 - **质量门禁**：admin-ui typecheck ✓ / 完整 typecheck 7 workspace（含 server-next 消费方）✓ / lint 5/5 ✓ / file-size-budget data-table 模块 0 新违规 / table 子集 **429 全过** + 临时 smoke 2 全过（跑后删，正式测试归 DTR-E）。
 - **注意事项**：偏离 —— `resetAllWidths` 放进 useColumnResizeController（非 data-table.tsx 内 useCallback），保 data-table.tsx ≤500 预算 + 逻辑内聚。handle a11y/键盘/auto-fit 已在 DTR-B 落地（本卡仅核验）。DTR-D 负责存储迁移 + ADR-103 §4.2.2；DTR-E 负责验收消费 + 测试。Track: admin-ui-datatable-resize。
+
+## [DTR-D] 通用表格 DataTable 存储迁移 localStorage + ADR-103 §4.2.2 修订（SEQ-20260531-01）
+- **完成时间**：2026-06-01
+- **记录时间**：2026-06-01 05:40
+- **执行模型**：claude-opus-4-8（主循环）
+- **子代理**：arch-reviewer (claude-opus-4-8) — 无新增 spawn；ADR §4.2.2 修订要点（双 key 双介质 / width 校验 / 旧 v1 清理）已在 DTR-A C3 锁定。持 adr 锁改 docs/decisions.md，commit 带 `Subagents: arch-reviewer (claude-opus-4-8)` trailer。
+- **修改文件**：
+  - `packages/admin-ui/src/components/data-table/storage-sync.ts` — 双 key 双介质（布局偏好 localStorage `:v2` / saved views sessionStorage `:views:v1`）+ 旧合并 `:v1` 一次性清理不迁移 + `isValidWidth`(finite>0) 校验丢弃保 visible + SSR 安全 safeGet/Set/Remove；对外 4 签名 + StoredPrefs 合并形态不变
+  - `packages/admin-ui/src/components/data-table/use-table-query.ts` — docstring 同步（sessionStorage → 布局 localStorage / views sessionStorage 双介质）
+  - `docs/decisions.md` — ADR-103 §4.2.2 AMENDMENT（原单 key sessionStorage 规约废止 → 双 key 双介质，含动机/旧 key 处置/封装说明）+ §3586（pageSize 介质）+ §3432（列宽持久化口径）AMENDMENT 标注
+- **新增依赖/schema/路由**：无
+- **Props 契约变更**：无（storage-sync 公开签名 + StoredPrefs 形态不变；介质迁移对消费方透明）
+- **ADR 变更**：ADR-103 §4.2.2 AMENDMENT（DTR-D / arch-reviewer C3 锁定）
+- **数据库变更**：无
+- **质量门禁**：admin-ui typecheck ✓ / 完整 typecheck 7 workspace（含 server-next 消费方）✓ / lint 5/5 ✓ / **verify:adr-contracts exit=0**（verify-endpoint-adr/sql-schema/style-shorthand/admin-shell-types-mirror 全 ✅ / enum-ssot+error-message advisory 非阻塞 pre-existing）/ file-size-budget data-table 模块 0 新违规（storage-sync 270 行）/ table 子集 **429 全过**（既有 saved-views-persist 12 round-trip 不回归）+ 临时 smoke 4 全过（跑后删，正式测试归 DTR-E）。
+- **注意事项**：旧 `:v1`（sessionStorage 合并）一次性重置——升级后用户旧布局偏好 + saved views 不迁移、从默认重建（views 本会话级关标签页即失、无感）。跨设备 DB-level 同步（N1-149-2）另起 ADR 本轮不做。偏离：plan「isStoredPrefs 加 width 校验」改为独立 isValidWidth + parseLayout 清洗（width 非法应丢弃保 visible 而非整体 reject）。DTR-E 负责 VideoListClient 验收消费 + 完整单测/组件测/Playwright + test:e2e。Track: admin-ui-datatable-resize。
