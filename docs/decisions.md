@@ -3613,8 +3613,10 @@ Next.js App Router 适配（消费方实现 `TableRouterAdapter`）：
 > **限制（明确记录）**：① server 模式 auto-fit **仅测当前渲染页** DOM，翻页内容更宽不回溯；② 测宽口径
 > （**DTR-F-FIX4 统一**）：对每个 `[data-col-id]` 元素用 `Range.getBoundingClientRect` 测**内容几何宽**
 > （文本 glyph 宽 / 元素 box 宽）——**不受 `flex:1` 填充 / `overflow:hidden` / 当前列宽影响**，截断态仍为完整文本宽
-> → auto-fit **一次到位 + 幂等无漂移**。（取代 FIX1/2/3 的 scrollWidth 路径：`flex:1` 的 `[data-dt-truncate]`
-> scrollWidth=列宽，曾致 pill 过宽 / 表头 label 填充使列宽每次只缩一点渐进到 min / 纯文本 drift 等连环问题。）
+> → auto-fit **一次到位 + 幂等无漂移**。**FIX5**：文本在 `flex:1` 的 `[data-dt-truncate]`（默认 cell / 表头 label）
+> 内时须 Range **该 truncate 元素本身**取文本 glyph 宽——若 Range 其 wrapper，`selectNodeContents` 选中的是被填满的
+> span **元素 box**=列宽，默认文本列将缩不下来。（取代 FIX1/2/3 的 scrollWidth 路径：`flex:1` 元素 scrollWidth=列宽，
+> 曾致 pill 过宽 / 表头 label 填充使列宽每次只缩一点渐进到 min / 纯文本 drift 等连环问题。）
 > resize handle 跳过；jsdom 无 layout 故单测需 mock createRange；③ **不做首屏运行时 auto-fit**（用户决策：
 > 避免 server 分页表首屏抖动 + 翻页跳动 → 首屏走"校准声明宽"，auto-fit 仅用户主动点击/双击触发）；
 > ④ 测不到内容（scrollWidth≤0）的列**保持原宽**，不兜底声明宽/DEFAULT。`resetColumnWidths` 纯函数保留

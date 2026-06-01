@@ -181,7 +181,12 @@ export function measureColumnContentWidth(
   let max = 0
   scrollEl.querySelectorAll(selector).forEach((el) => {
     if (el.hasAttribute('data-dt-resize-handle')) return
-    const w = measureRangeWidth(el)
+    // 默认 cell / 表头 label 文本在 `[data-dt-truncate]`（flex:1 填满列宽）内：
+    // 须 Range **truncate 元素本身**（其内容是文本节点 → Range 取 glyph 几何宽）；
+    // 若 Range 它的 wrapper，selectNodeContents 选中的是被填满的 span **元素 box**=列宽（DTR-F-FIX5）。
+    // 自定义 cell（无 truncate / pill/chip content-sized）→ Range wrapper 内容（元素 box=内容宽）。
+    const target = el.matches('[data-dt-truncate]') ? el : (el.querySelector('[data-dt-truncate]') ?? el)
+    const w = measureRangeWidth(target)
     if (w > max) max = w
   })
   return max

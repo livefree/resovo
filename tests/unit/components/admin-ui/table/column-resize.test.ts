@@ -198,6 +198,19 @@ describe('measureColumnContentWidth (Range 几何测量 / DTR-F-FIX4)', () => {
     const spy = mockRangeByTestW()
     try { expect(measureColumnContentWidth(root, 'p')).toBe(60) } finally { spy.mockRestore() }
   })
+  it('DTR-F-FIX5：默认 cell 文本 → Range 内层 truncate 元素（文本 glyph），不测被填满的 span/wrapper box', () => {
+    const root = document.createElement('div')
+    // wrapper（data-test-w=200=填满列宽）> truncate span（data-test-w=55=文本 glyph 宽）
+    root.innerHTML = `<div data-col-id="d" data-test-w="200"><span data-dt-truncate data-test-w="55"></span></div>`
+    const spy = mockRangeByTestW()
+    try { expect(measureColumnContentWidth(root, 'd')).toBe(55) } finally { spy.mockRestore() }
+  })
+  it('DTR-F-FIX5：表头 label（本身是 data-dt-truncate）→ Range 自身文本', () => {
+    const root = document.createElement('div')
+    root.innerHTML = `<span data-dt-truncate data-col-id="h" data-test-w="42"></span>`
+    const spy = mockRangeByTestW()
+    try { expect(measureColumnContentWidth(root, 'h')).toBe(42) } finally { spy.mockRestore() }
+  })
   it('跳过 resize handle（非内容）', () => {
     const root = document.createElement('div')
     root.innerHTML = `<span data-dt-resize-handle data-col-id="x" data-test-w="8"></span><div data-col-id="x" data-test-w="70"></div>`

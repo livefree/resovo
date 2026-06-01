@@ -12837,3 +12837,16 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
   - `docs/decisions.md` — ADR-103 §4.2.2 AMENDMENT 2 限制②改为 FIX4 统一 Range 口径
 - **门禁**：typecheck ✓ / lint 5/5 ✓ / table 子集 497 全过 / data-table 模块 0 新违规。
 - **效果**：拖很宽后双击/自适应 **一次缩到内容宽**（不再每次缩一点）；反复点击幂等稳定；pill/文本/表头 label 全部按真实内容几何宽。Track: admin-ui-datatable-resize。
+
+## [DTR-F-FIX5] auto-fit 默认文本列仍缩不动修复：Range truncate 元素本身取 glyph 宽（Codex stop-time review round 3）
+- **完成时间**：2026-06-01 / **执行模型**：claude-opus-4-8（主循环）/ **子代理**：无（Codex stop-time review 反馈修复）
+- **来源**：Codex stop-time review——"Range-only auto-fit still cannot shrink widened default text columns"。
+- **根因**：FIX4 对**每个 [data-col-id] 元素**调 `Range.selectNodeContents`。默认 cell 结构是 `wrapper > <span data-dt-truncate flex:1>text`，对 **wrapper** 调 selectNodeContents 选中的是被 flex 填满的 **span 元素**，Range 返回**元素 box=列宽**（非文本 glyph）→ 默认文本列仍测成列宽、拖宽后缩不下来。表头 label（data-col-id 在 span 自身）正常。
+- **修复**：测量目标改为——`el` 自身是 `[data-dt-truncate]`（表头 label）→ Range `el`；否则有 `[data-dt-truncate]` 后代（默认 cell 文本 span）→ Range **该 truncate 元素**（其内容是文本节点 → glyph 宽）；无 truncate（自定义 pill/纯文本）→ Range wrapper 内容（元素 box / 文本）。
+- **修改文件**：
+  - `packages/admin-ui/src/components/data-table/column-resize.ts` — `measureColumnContentWidth` 测量目标 `el.matches('[data-dt-truncate]') ? el : (el.querySelector('[data-dt-truncate]') ?? el)`
+  - `tests/unit/.../column-resize.test.ts` — +2 case（默认 cell 取内层 truncate glyph 不取填满 box / 表头 label 自身）
+  - `tests/unit/.../column-resize-handle.test.tsx` — `mockRangeByCol` 用 `closest('[data-col-id]')`（node 可能是无 data-col-id 的内层 truncate span）
+  - `docs/decisions.md` — ADR-103 §4.2.2 AMENDMENT 2 限制②补 FIX5 truncate-元素定位说明
+- **门禁**：typecheck ✓ / lint 5/5 ✓ / table 子集 499 全过（+2）/ data-table 模块 0 新违规。
+- **效果**：默认文本列（年份/创建时间等）拖宽后 auto-fit 也能一次缩到文本宽。Track: admin-ui-datatable-resize。

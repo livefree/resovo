@@ -67,7 +67,11 @@ function mockRangeByCol(widthByColId: Record<string, number>) {
     let node: HTMLElement | null = null
     return {
       selectNodeContents(n: Node) { node = n as HTMLElement },
-      getBoundingClientRect: () => ({ width: widthByColId[node?.getAttribute?.('data-col-id') ?? ''] ?? 0 }),
+      getBoundingClientRect: () => {
+        // node 可能是内层 truncate span（无 data-col-id）或 wrapper/表头 label（有）→ 取最近 data-col-id
+        const id = node?.getAttribute?.('data-col-id') ?? node?.closest?.('[data-col-id]')?.getAttribute('data-col-id') ?? ''
+        return { width: widthByColId[id] ?? 0 }
+      },
     } as unknown as Range
   })
 }
