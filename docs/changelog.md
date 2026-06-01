@@ -12846,3 +12846,20 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **数据库变更**：无（修复回滚/守卫逻辑，未动 schema/数据）。
 - **质量门禁**：typecheck EXIT=0 / 回滚 dry-run 跑通 / verify:adr-contracts 待跑。
 - **诚实声明**：META-23-C 合并不可逆性在 D-174-6 钉死；当前库已合并状态下「最大可恢复能力」=被删行取证 + videos 指向，不可字节级还原到合并前布局。
+
+---
+
+## [META-23-C-FIX2] 回滚误删留存行元数据修复 + 阶段 A 守卫强制化（Codex stop-time review）
+- **完成时间**：2026-06-01
+- **执行模型**：claude-opus-4-8
+- **子代理**：无（承接 agentId aa706a8fcc7a53b32 评审结论，本卡为其落地修正）
+- **来源**：Codex stop-time review「rollback can delete valid survivor metadata, and the new phase-A guard does not enforce ordering」。
+- **问题 1（回滚误删留存行有效元数据）**：上轮 provenance/locks 回滚用 `DELETE ... WHERE field_name 在快照 AND catalog_id IN (冗余行, 留存行)` → **把留存行自己合法的 field 也删了**（留存行的值是合并时按留存优先保留的有效数据，快照里没有它，删了无法还原）。
+  - 修：去掉伤留存行的 DELETE，改为**仅 INSERT 冗余行快照回其原 (冗余 catalog_id, field_name)**（冗余 catalog_id ≠ 留存行，不撞留存 PK；ON CONFLICT DO NOTHING 防理论并发）。**零触碰留存行**——合并阶段 B 本就只动 catalog_id ∈ redundantIds 的行，留存行 field 全程未被碰，回滚也不该碰。冗余行复活后带回自己 field（取证完整），留存行 field 零误删。
+- **问题 2（阶段 A 守卫不强制顺序）**：上轮 dedup 的阶段 A 检测只 `warn` 不阻断 → 检测到阶段 A 未跑也照跑，等于没强制 A→B。
+  - 修：改为**阻断式守卫**。判据精确化：只检**单行组**（冗余组阶段 A 整组跳过、键暂留旧值属预期不一致，不能作判据）的 title_normalized 是否 ≠ normalizeMergeKey；单行组不一致 = 阶段 A 未跑 → throw 阻断（除非 --dry-run / --force）。强制 A 先于 B（R10）。
+- **验证**：typecheck EXIT=0 / 回滚 dry-run 跑通（复活 52 + 还原 videos 52，provenance 不删留存行）/ dedup 守卫正向验证（库已合并→单行组全自洽→守卫放行→防重跑拦截，无误报阶段 A 未跑）。本次子表快照全 0 行，回滚 catalog+videos 能力完整。
+- **修改文件**：`scripts/dedup-catalog-084-rollback.ts`（provenance/locks 还原去 DELETE 留存行）/ `scripts/dedup-catalog-084.ts`（阶段 A 守卫 warn→阻断 + 单行组判据）。
+- **新增依赖/schema/Props 契约变更**：无。
+- **数据库变更**：无（修复回滚/守卫逻辑）。
+- **质量门禁**：typecheck EXIT=0 / 回滚 + dedup 守卫 dry-run 实测 / verify:adr-contracts 待跑。

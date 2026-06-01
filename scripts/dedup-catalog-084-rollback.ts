@@ -76,15 +76,22 @@ async function rollback(client: PoolClient): Promise<void> {
   //    当前库该 id 可能存在（转移走，catalog_id 变了）或不存在（被删碰撞）。
   //    无损还原 = DELETE 当前库这些 id 的残留 → INSERT 快照全量（id 主键精确，无歧义）。
   //
-  //  PK(catalog_id, field_name) 子表（provenance/locks）：无独立 id。合并时冗余侧 field
-  //    被「先删留存行已有的、再 UPDATE 剩余转移到留存行」。还原依据：快照含冗余行原始
-  //    (原 catalog_id, field_name, value…)。
-  //    无损还原步骤：① 删当前库中「(留存行, field_name) 且该 field 出现在某被合并冗余行快照」
-  //    的行——但合并后留存行的该 field 可能是「留存行原有」或「冗余转移来」，二者已不可区分。
-  //    故采用「快照即权威重建」：先删当前库中 catalog_id ∈ {快照原 catalog_id ∪ 对应留存行}
-  //    且 field_name ∈ 快照 的行，再按快照 (原 catalog_id, field_name) 全量 INSERT；
-  //    留存行原有但未被冗余覆盖的 field 不在快照故不动。这保证冗余行 field 精确复位，
-  //    且留存行被冗余「先删」掉的原值若在快照（被删的是冗余侧不是留存侧）不受影响。
+  //  PK(catalog_id, field_name) 子表（provenance/locks）：无独立 id。合并阶段 B 对这两表
+  //    **只动 catalog_id ∈ redundantIds 的行**（先删与留存行碰撞的冗余侧、再把剩余冗余侧
+  //    UPDATE 到留存行）；**留存行自身的 field 全程未被触碰**。
+  //    ⚠️ Codex 修正：回滚**绝不能 DELETE catalog_id=留存行的行**——那会删掉留存行自己合法的
+  //    元数据（其值是合并时按留存优先保留下来的有效数据，快照里没有它，删了无法还原）。
+  //    正确还原（只复位「冗余来源」的 field，不碰留存行）：
+  //      ① 把「转移到留存行的冗余 field」挪回原冗余 catalog_id —— 这些行 = 当前在留存行名下、
+  //         (留存行, field_name) 命中快照 (surviving_id 对应组) 且留存行原本无此 field。
+  //         但「留存行原本无此 field」不可判（留存行 field 未快照）→ 改用 id-free 安全策略：
+  //         先 INSERT 冗余行快照回原 (冗余 catalog_id, field)（冗余 catalog_id ≠ 留存行，不撞留存行 PK）；
+  //         若该冗余 catalog_id+field 当前已存在（理论不会，冗余行已删）则 ON CONFLICT DO NOTHING。
+  //      ② 转移到留存行的那份冗余副本：合并后它 catalog_id=留存行，与留存行原有 field 同 PK 已合一，
+  //         无法区分来源 → **保留现状不动**（留存行视角该 field 已是单一值，删它反而伤留存）。
+  //    净效果：冗余行复活后带回自己的 field（取证完整）；留存行 field 一概不动（零误删）。
+  //    代价：若某 field 合并时「冗余转移覆盖式进留存行」（实际不会——UPDATE 不覆盖留存已有键，
+  //    碰撞的冗余侧被先删入快照），则该 field 在留存行多留一份，属可接受的非字节级（D-174-6）。
   //
   //  顺序：characters 在 episodes 后（孙表 actors 依赖 character 先复活，见步骤末）。
 
@@ -101,20 +108,16 @@ async function rollback(client: PoolClient): Promise<void> {
   )
   await client.query(`INSERT INTO catalog_character_actors SELECT * FROM _bak_catalog_character_actors_084`)
 
-  // ── PK(catalog_id, field_name) 子表（无 id，快照即权威重建）──
+  // ── PK(catalog_id, field_name) 子表（无 id）：只复位冗余来源，零触碰留存行（Codex 修正）──
   for (const t of ['video_metadata_provenance', 'video_metadata_locks']) {
     const bak = `_bak_${t}_084`
-    // 删当前库中「field_name 在快照、catalog_id 属于(快照原 catalog_id 或其对应留存行)」的残留
-    // （留存行 = 该冗余行在 _bak_media_catalog_084.surviving_id）
+    // 仅 INSERT 冗余行快照回其**原** (冗余 catalog_id, field_name)；冗余 catalog_id ≠ 留存行，
+    // 不撞留存行 PK。冗余行已删→其 catalog_id 下无残留，正常插回；ON CONFLICT 仅防理论并发。
+    // **不删任何 catalog_id=留存行的行**（留存行 field 是合并保留的有效值、快照里没有、删则丢失）。
     await client.query(
-      `DELETE FROM ${t} cur
-       USING ${bak} b
-       LEFT JOIN _bak_media_catalog_084 mc ON mc.id = b.catalog_id
-       WHERE cur.field_name = b.field_name
-         AND cur.catalog_id IN (b.catalog_id, mc.surviving_id)`,
+      `INSERT INTO ${t} SELECT * FROM ${bak}
+       ON CONFLICT (catalog_id, field_name) DO NOTHING`,
     )
-    // 按快照原 (catalog_id, field_name) 全量复位
-    await client.query(`INSERT INTO ${t} SELECT * FROM ${bak}`)
   }
 
   // 3. videos 指向还原（回 old_catalog_id；条件防覆盖回滚后新写入）

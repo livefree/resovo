@@ -169,19 +169,28 @@ async function main(): Promise<void> {
       throw new Error(`快照表缺失（migration 084 未 apply？）：${missing.join(', ')}。请先 npm run migrate。`)
     }
 
-    // 前向守卫②（Y1 部署顺序）：阶段 A backfill 应已跑——抽查「单行组键已是 normalizeMergeKey」。
-    // 若发现大量单行组键仍带标点（未重算），警示阶段 A 未跑（dedup 仍可跑因分组走内存键，但
-    // 合并后单行组键不自洽，需补跑 backfill / A'）。仅警告不阻断（dedup 内存分组不依赖落库键）。
-    {
-      const sample = await pool.query<{ id: string; title: string; title_normalized: string }>(
-        `SELECT id, title, title_normalized FROM media_catalog LIMIT 500`,
+    // 前向守卫②（强制 A→B 顺序 / Codex：守卫须强制而非仅警告）：阶段 A backfill 必须已跑。
+    // 判据：**单行组**（非冗余组，阶段 A 应已重算其键）中是否仍有 title_normalized ≠ normalizeMergeKey
+    // 的行。冗余组阶段 A 整组跳过（键暂留旧值，预期不一致），故只检单行组——单行组不一致 = 阶段 A 未跑。
+    // 检测到 → **阻断**（除非 --dry-run 观测 / --force 显式越过），强制 A 先于 B。
+    if (!DRY_RUN && !FORCE) {
+      const all = await pool.query<{ id: string; title: string; title_normalized: string; year: number | null; type: string }>(
+        `SELECT id, title, title_normalized, year, type FROM media_catalog`,
       )
-      let staleSingle = 0
-      for (const r of sample.rows) if (r.title_normalized !== normalizeMergeKey(r.title)) staleSingle++
-      if (staleSingle > 50) {
-        process.stdout.write(
-          `[dedup-084] ⚠️ 抽样 500 行有 ${staleSingle} 行 title_normalized 与 normalizeMergeKey 不一致 —— ` +
-            `阶段 A backfill 可能未跑。dedup 仍会用内存键正确分组合并，但完成后须跑 backfill（A'）补齐键自洽。\n`,
+      const grp = new Map<string, number>()
+      for (const r of all.rows) {
+        const gk = `${normalizeMergeKey(r.title)}|${r.year ?? ''}|${r.type}`
+        grp.set(gk, (grp.get(gk) ?? 0) + 1)
+      }
+      let singleStale = 0
+      for (const r of all.rows) {
+        const gk = `${normalizeMergeKey(r.title)}|${r.year ?? ''}|${r.type}`
+        if (grp.get(gk) === 1 && r.title_normalized !== normalizeMergeKey(r.title)) singleStale++
+      }
+      if (singleStale > 0) {
+        throw new Error(
+          `阶段 A 未跑：${singleStale} 个单行组 title_normalized 与 normalizeMergeKey 不一致。` +
+            `必须先 node ... scripts/backfill-merge-key.ts（A→B 顺序 / R10）。如确需越过请加 --force。`,
         )
       }
     }
