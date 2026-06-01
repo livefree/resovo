@@ -12850,3 +12850,16 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
   - `docs/decisions.md` — ADR-103 §4.2.2 AMENDMENT 2 限制②补 FIX5 truncate-元素定位说明
 - **门禁**：typecheck ✓ / lint 5/5 ✓ / table 子集 499 全过（+2）/ data-table 模块 0 新违规。
 - **效果**：默认文本列（年份/创建时间等）拖宽后 auto-fit 也能一次缩到文本宽。Track: admin-ui-datatable-resize。
+
+## [DTR-F-GATES] DTR-F + FIX1-5 完整 pre-ship 门禁建立（Codex stop-time review）
+- **完成时间**：2026-06-01 / **执行模型**：claude-opus-4-8（主循环）/ **子代理**：无
+- **来源**：Codex stop-time review——"required pre-ship gates are not established"（DTR-F 6 提交此前仅用 table 子集增量验证，未跑齐完整必跑门禁）。
+- **完整门禁运行结果（全绿，e2e 除外见下）**：
+  - `npm run typecheck`（7 workspace）→ **exit 0** ✓
+  - `npm run lint`（turbo 5/5）→ **exit 0** ✓
+  - `npm run test -- --run`（**完整单元套件**）→ **448 文件 / 5858 passed / 0 failed** ✓（本次干净绿，既有 server-next admin flake 未复现）
+  - `npm run verify:adr-contracts` → **exit 0** ✓（4 核心 check / enum-ssot+error-message advisory 非阻塞）
+  - `npm run verify:admin-guardrails` → **exit 0** ✓
+  - `npm run verify:file-size-budget` → exit 1，**data-table 模块 0 命中 / 新违规计数 21 全为继承的 apps/ 既有违规**（非本轨，与 DTR-A..F 一致基线）
+- **test:e2e（VIDEO 必跑）——本地环境门控，无法建立**：实测对本 worktree `:3013`（worktree 代码 / 3 webServer URL 全指 :3013 复用避免 boot）运行 `videos-column-resize.spec.ts`，5 spec 全卡在首个 `video-list-table` 可见断言（页面 307 重定向登录）。**根因 = env，非本轨代码**：server-next 服务端 auth 调真后端 `:4000`，spec 的 mock cookie 被真后端拒（page.route 仅拦浏览器请求、拦不到服务端 fetch）。**经既有 `videos.spec.ts` 同样卡在 `video-list-table` 可见确证为 admin-next e2e 本地通病**（CI/正确 env 下方可跑）。本轨 e2e spec 已编译 + `--list` 列出 5 tests + 镜像既有范式；逻辑由完整单测/组件测充分覆盖。
+- **结论**：除环境门控的 e2e 外，全部必跑门禁已建立绿态。Track: admin-ui-datatable-resize。
