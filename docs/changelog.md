@@ -12677,3 +12677,24 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **新增依赖/schema/路由/Props 契约变更**：无。
 - **质量门禁**：typecheck/lint EXIT=0 / 全量 444 文件 **5787 passed**（VideoImageSection 1 并行 flaky，隔离 21/21 通过，无关）。
 - **范围**：渲染角色头像；CV 头像未渲染（actor.imageUrl 已存，后续按需）。
+
+## [DTR-A] 通用表格 DataTable 文件体积预拆（列宽可调前置 / SEQ-20260531-01）
+- **完成时间**：2026-06-01
+- **记录时间**：2026-06-01 04:15
+- **执行模型**：claude-opus-4-8（主循环）
+- **子代理**：arch-reviewer (claude-opus-4-8) — PASS-WITH-CONDITIONS，敲定列宽可调 API 契约 + flex 列算法 + CSS 变量 grid + 存储拆分 + 文件拆分边界 + 7 条落地约束 C1–C7
+- **修改文件**：
+  - `packages/admin-ui/src/components/data-table/types.ts` — 列定义 union + 过滤值簇抽至 column-types.ts，re-export 保持兼容（509→307）
+  - `packages/admin-ui/src/components/data-table/column-types.ts` — 新建（TableColumnBase / 4 KindColumn / AutoFilterColumnFields / ColumnKind / ColumnDescriptor / FilterValue 等，254 行）
+  - `packages/admin-ui/src/components/data-table/dt-styles.tsx` — 拆为注入器（709→51），单一 DTStyles 注入守卫保留
+  - `packages/admin-ui/src/components/data-table/dt-styles-base.ts` + `dt-styles-matrix.ts` — 新建（base/matrix CSS 字符串）
+  - `packages/admin-ui/src/components/data-table/column-matrix-menu.tsx` — 抽样式常量 / 键盘 hook / footer（608→469）
+  - `packages/admin-ui/src/components/data-table/column-matrix-menu.styles.ts` + `use-matrix-keyboard.ts` + `column-matrix-footer.tsx` — 新建
+  - `packages/admin-ui/src/components/data-table/data-table.tsx` — 抽 client-ops / grid 原语 / 表头行 / 行体（737→480）
+  - `packages/admin-ui/src/components/data-table/client-data-ops.ts` + `data-table-grid.ts` + `data-table-header-row.tsx` + `data-table-body.tsx` — 新建
+- **新增依赖/schema/路由**：无
+- **Props 契约变更**：无（纯结构拆分，index.ts 公开导出不变；enableColumnResizing/maxWidth/onResetColumnWidths 等留 DTR-B/C）
+- **数据库变更**：无
+- **质量门禁（全量）**：全量 typecheck ✓（7 workspace）/ lint ✓（turbo 5/5 successful，仅 pre-existing warning）/ verify:adr-contracts ✓（末项 enum-ssot advisory 非阻塞，警告均 pre-existing 无关文件）/ verify:file-size-budget 新违规 24→21（本轨 4 文件全脱离 + data-table 脱离 baseline 豁免）/ **全量 test:run 5788 passed（445 文件，0 失败）**，data-table 子集 429 零行为变化验证。
+- **环境前置**：worktree 新建后需 `npm install` + 构建本地包 `external-adapter/douban-adapter`（dist gitignore、无 prepare 脚本），否则 apps/api 全量 typecheck 报 douban-adapter 模块缺失（与本轨无关）。
+- **注意事项**：偏离 arch-reviewer C7「matrix inline style 迁 CSS」——改为常量平移（column-matrix-menu.styles.ts），同样达标且零视觉回归风险，inline/CSS 双轨债记 follow-up（按价值排序 #1 稳定性优先）。其余 C1–C7 待 DTR-B..E 落地。Track: admin-ui-datatable-resize。

@@ -4,16 +4,20 @@
  * data-table.tsx — DataTable v2 基座组件
  * 真源：ADR-103 §4.1 + §4.3（CHG-SN-2-13）
  *
- * 职责：渲染列/行/sticky header/hover/选区/sort indicator/两档分页（client/server）。
+ * 职责：编排列/行/sticky header/hover/选区/sort indicator/两档分页（client/server）。
  * 不做：不内置 Toolbar/Pagination/ColumnSettingsPanel；不持有数据；不发请求。
  * client mode：内部 filter + sort + paginate；server mode：直接渲染 rows（当前页）。
+ *
+ * DTR-A（SEQ-20260531-01）文件体积预拆：
+ *   - client filter/sort → ./client-data-ops
+ *   - 网格模板 + cell 样式原语 → ./data-table-grid
+ *   - sticky 表头行 → ./data-table-header-row
+ *   - 行渲染 rowgroup → ./data-table-body
  */
 import React, { useState, useCallback, useMemo, useRef } from 'react'
 import type {
   DataTableProps,
-  TableColumn,
   FilterableColumn,
-  FilterValue,
   TableQueryPatch,
   TableSortState,
   ColumnPreference,
@@ -28,134 +32,11 @@ import { PaginationFoot } from './pagination-foot'
 import { setColumnVisibility, clearAllColumnFilters, resetColumnVisibility } from './column-visibility'
 // ADR-149 EP-4.5 / D-149-16：矩阵触发器接入 DataTable 主组件
 import { ColumnMatrixMenu } from './column-matrix-menu'
-
-// ── client-mode data processing ──────────────────────────────────
-
-function matchFilter(cellValue: unknown, filter: FilterValue): boolean {
-  const str = String(cellValue ?? '')
-  if (filter.kind === 'text') return str.toLowerCase().includes(filter.value.toLowerCase())
-  if (filter.kind === 'number') return Number(cellValue) === filter.value
-  if (filter.kind === 'bool') return Boolean(cellValue) === filter.value
-  if (filter.kind === 'enum') return filter.value.includes(str)
-  if (filter.kind === 'range') {
-    const n = Number(cellValue)
-    if (!Number.isFinite(n)) return false
-    if (filter.min !== undefined && n < filter.min) return false
-    if (filter.max !== undefined && n > filter.max) return false
-    return true
-  }
-  if (filter.kind === 'date-range') {
-    if (filter.from !== undefined && str < filter.from) return false
-    if (filter.to !== undefined && str > filter.to) return false
-    return true
-  }
-  return true
-}
-
-function applyClientFilters<T>(
-  rows: readonly T[],
-  columns: readonly TableColumn<T>[],
-  filters: ReadonlyMap<string, FilterValue>,
-): readonly T[] {
-  if (filters.size === 0) return rows
-  return rows.filter((row) => {
-    for (const [filterId, filter] of filters) {
-      const col = columns.find((c) => c.id === filterId)
-      if (!col) continue
-      if (!matchFilter(col.accessor(row), filter)) return false
-    }
-    return true
-  })
-}
-
-function applyClientSort<T>(
-  rows: readonly T[],
-  columns: readonly TableColumn<T>[],
-  sort: TableSortState,
-): readonly T[] {
-  if (sort.field === undefined) return rows
-  const col = columns.find((c) => c.id === sort.field)
-  if (!col) return rows
-  return [...rows].sort((a, b) => {
-    const av = col.accessor(a)
-    const bv = col.accessor(b)
-    const aStr = String(av ?? '')
-    const bStr = String(bv ?? '')
-    const cmp = typeof av === 'number' && typeof bv === 'number'
-      ? av - bv
-      : aStr.localeCompare(bStr)
-    return sort.direction === 'asc' ? cmp : -cmp
-  })
-}
-
-// ── style helpers ─────────────────────────────────────────────────
-
-const SELECTION_COL_W = 40
-
-function buildGridTemplate<T>(
-  columns: readonly TableColumn<T>[],
-  colMap: ReadonlyMap<string, { visible: boolean; width?: number }>,
-  hasSelection: boolean,
-): string {
-  const tracks: string[] = []
-  if (hasSelection) tracks.push(`${SELECTION_COL_W}px`)
-  for (const col of columns) {
-    const pref = colMap.get(col.id)
-    if (pref ? !pref.visible && !col.pinned : col.defaultVisible === false && !col.pinned) continue
-    const width = pref?.width ?? col.width
-    tracks.push(width ? `${width}px` : `minmax(${col.minWidth ?? 80}px, 1fr)`)
-  }
-  return tracks.join(' ')
-}
-
-const TH_STYLE: React.CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: '4px',
-  padding: '0 12px',
-  fontSize: 'var(--font-size-xs)',
-  fontWeight: 600,
-  color: 'var(--fg-muted)',
-  // CHG-UX-05d：bg 必须不透明（sticky 表头滚动时下方 row 不能穿透）；
-  // 与 [data-table] 容器同色（surface-raised），视觉与 CHG-UI-05a 透明继承等效
-  background: 'var(--bg-surface-raised)',
-  borderBottom: '1px solid var(--border-subtle)',
-  cursor: 'default',
-  userSelect: 'none',
-  overflow: 'hidden',
-  whiteSpace: 'nowrap',
-}
-
-const TD_STYLE: React.CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  padding: '0 12px',
-  fontSize: 'var(--font-size-sm-tight)',
-  color: 'var(--fg-default)',
-  borderBottom: '1px solid var(--border-subtle)',
-  overflow: 'hidden',
-  whiteSpace: 'nowrap',
-}
-
-// ── sort indicator (inline SVG) ───────────────────────────────────
-
-function SortIcon({ direction }: { direction: 'asc' | 'desc' | 'none' }) {
-  const color = direction === 'none' ? 'var(--fg-muted)' : 'var(--fg-default)'
-  return (
-    <svg width="10" height="12" viewBox="0 0 10 12" fill="none" aria-hidden="true">
-      <path
-        d="M5 1L2 4H8L5 1Z"
-        fill={direction === 'asc' ? color : 'var(--fg-muted)'}
-        opacity={direction === 'none' ? 0.4 : 1}
-      />
-      <path
-        d="M5 11L2 8H8L5 11Z"
-        fill={direction === 'desc' ? color : 'var(--fg-muted)'}
-        opacity={direction === 'none' ? 0.4 : 1}
-      />
-    </svg>
-  )
-}
+// DTR-A 文件体积预拆抽出
+import { applyClientFilters, applyClientSort } from './client-data-ops'
+import { buildGridTemplate } from './data-table-grid'
+import { DataTableHeaderRow } from './data-table-header-row'
+import { DataTableBody } from './data-table-body'
 
 // ── DataTable component ───────────────────────────────────────────
 
@@ -203,10 +84,6 @@ export function DataTable<T>(props: DataTableProps<T>): React.ReactElement {
   // 提供时 ViewsMenu 始终渲染触发按钮（"视图 · {label} ▾"），故 viewsConfig 提供
   // 即视为有内容
   const hasViewsContent = toolbar?.viewsConfig !== undefined
-  // ADR-149 EP-3：showHiddenColumnsChip 已删；hasToolbarContent 现在直接判定 3 槽位
-  const hasToolbarContent = (
-    searchSlot.renderable || trailingSlot.renderable || hasViewsContent
-  )
 
   // CHG-DESIGN-02 Step 5：bulk bar 渲染门控
   // 仅当 bulkActions 可渲染 + selection 非空时显示
@@ -290,6 +167,12 @@ export function DataTable<T>(props: DataTableProps<T>): React.ReactElement {
   const handleHeaderMenuHide = useCallback((colId: string) => {
     onQueryChange({ columns: setColumnVisibility(colMap, colId, false) } satisfies TableQueryPatch)
   }, [colMap, onQueryChange])
+
+  // 打开列级 ⋯ popover（anchor = ⋯ button，非 th div）
+  const handleOpenColumnMenu = useCallback((colId: string, anchorEl: HTMLElement) => {
+    menuAnchorRef.current = anchorEl
+    setMenuColId(colId)
+  }, [])
 
   // ADR-149 EP-3：hiddenColumnsCount / showHiddenColumnsChip / handleHiddenColsChange 已删除
   // 列可见性管理统一到 column-matrix-menu（EP-4.5 已接入矩阵触发器）
@@ -445,181 +328,41 @@ export function DataTable<T>(props: DataTableProps<T>): React.ReactElement {
         * 共享同一 scrollLeft；foot 留在 frame 直接子层（不进 scrollport），永远
         * 固定在底部不随横向滚动漂移。 */}
       <div data-table-scroll role="presentation">
-      {/* sticky header */}
-      <div
-        role="rowgroup"
-        style={{ position: 'sticky', top: 0, zIndex: 1 }}
-      >
-        <div
-          role="row"
-          style={{
-            display: 'grid',
-            gridTemplateColumns: gridTemplate,
-            height: rowHeight,
-          }}
-        >
-          {hasSelection && (
-            <div role="columnheader" style={{ ...TH_STYLE, justifyContent: 'center' }}>
-              <input
-                type="checkbox"
-                checked={allPageSelected}
-                ref={(el) => { if (el) el.indeterminate = somePageSelected }}
-                onChange={handleSelectAll}
-                aria-label="全选当前页"
-              />
-            </div>
-          )}
-          {visibleColumns.map((col) => {
-            // AMD2 D-150-AMD2-2：column.kind 默认值规则
-            // - data（缺省）：filterable + enableSorting 默认 true / 显式 false 禁用
-            // - action：filter 字段 type 层 never / 不显示 ⋯ 触发器
-            // - media / computed：默认 false / 显式 true 启用
-            const kind = col.kind ?? 'data'
-            const explicitSorting = (col as { enableSorting?: boolean }).enableSorting
-            const explicitFilterable = (col as { filterable?: boolean }).filterable
-            const sortable = kind === 'action' ? false
-              : kind === 'data' ? explicitSorting !== false
-              : explicitSorting === true
-            const isSorted = query.sort.field === col.id
-            const sortDir = isSorted ? query.sort.direction : 'none'
-            // ADR-149 D-149-3 R-149-2：列级 ⋯ 触发器可见性判定
-            // AMD2：kind === 'action' 时永远不显触发器 / 其它走 sub1-EXTEND 6 条件 OR
-            const hasFilter = col.columnMenu?.filterContent !== undefined
-            const hasAutoFilter = kind === 'action' ? false
-              : kind === 'data' ? explicitFilterable !== false
-              : explicitFilterable === true
-            const hidable = kind === 'action' ? false : (col.pinned !== true && col.columnMenu?.canHide !== false)
-            // sub 2 PATCH R-EP3A-1：D-150-4 桥接 / filterFieldName ?? id
-            const filterKey = (col as { filterFieldName?: string }).filterFieldName ?? col.id
-            const isFiltered = col.columnMenu?.isFiltered === true || query.filters.has(filterKey)
-            const isMenuOpen = menuColId === col.id
-            const showTrigger = kind === 'action' ? false :
-              columnTriggerVisibility === 'always' ? true :
-              columnTriggerVisibility === 'never' ? false :
-              sortable || hasFilter || hasAutoFilter || hidable || isFiltered || isSorted
-            // 列名整体可点 → toggle 排序（如该列可排序）
-            const interactive = sortable
-            return (
-              <div
-                key={col.id}
-                role="columnheader"
-                aria-sort={isSorted ? (query.sort.direction === 'asc' ? 'ascending' : 'descending') : undefined}
-                data-th-interactive={interactive ? 'true' : undefined}
-                style={{ ...TH_STYLE, cursor: interactive ? 'pointer' : 'default' }}
-                tabIndex={interactive ? 0 : undefined}
-                onClick={interactive ? () => handleHeaderClick(col.id) : undefined}
-                onKeyDown={interactive ? (e) => {
-                  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleHeaderClick(col.id) }
-                } : undefined}
-              >
-                {col.header}
-                {sortable && <SortIcon direction={sortDir} />}
-                {showTrigger && (
-                  <button
-                    type="button"
-                    aria-haspopup="menu"
-                    aria-expanded={isMenuOpen}
-                    aria-label={`${typeof col.header === 'string' ? col.header : col.id} 列操作`}
-                    data-th-menu-icon
-                    data-open={isMenuOpen ? 'true' : undefined}
-                    data-active={isSorted || isFiltered ? 'true' : undefined}
-                    data-testid={`th-menu-trigger-${col.id}`}
-                    onClick={(e) => {
-                      // ADR-149 D-149-3 R-149-6：必须 stopPropagation 防冒泡到列名 toggle 排序
-                      e.stopPropagation()
-                      menuAnchorRef.current = e.currentTarget
-                      setMenuColId(col.id)
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.stopPropagation()
-                        e.preventDefault()
-                        menuAnchorRef.current = e.currentTarget
-                        setMenuColId(col.id)
-                      }
-                    }}
-                  >⋯</button>
-                )}
-              </div>
-            )
-          })}
-        </div>
-      </div>
+        {/* sticky header（DTR-A 抽至 DataTableHeaderRow）*/}
+        <DataTableHeaderRow
+          gridTemplate={gridTemplate}
+          rowHeight={rowHeight}
+          hasSelection={hasSelection}
+          allPageSelected={allPageSelected}
+          somePageSelected={somePageSelected}
+          onSelectAll={handleSelectAll}
+          visibleColumns={visibleColumns}
+          sort={query.sort}
+          filters={query.filters}
+          columnTriggerVisibility={columnTriggerVisibility}
+          openMenuColId={menuColId}
+          onOpenMenu={handleOpenColumnMenu}
+          onHeaderClick={handleHeaderClick}
+        />
 
-      {/* body — CHG-DESIGN-02 Step 7B fix#2：纵向滚动由父级 [data-table-scroll]
-        * 承担，本 wrapper 仅作 row 容器（保留 [data-table-body] 标记供测试 / 选择器
-        * 引用）；不再独立 overflow-y / flex / min-height。 */}
-      <div role="rowgroup" data-table-body>
-        {loading && (
-          <div style={{ padding: '40px', textAlign: 'center', color: 'var(--fg-muted)' }}>
-            加载中…
-          </div>
-        )}
-        {!loading && error && (
-          <div style={{ padding: '40px', textAlign: 'center', color: 'var(--state-error-fg)' }}>
-            {error.message}
-          </div>
-        )}
-        {!loading && !error && pageRows.length === 0 && (
-          <div style={{ padding: '40px', textAlign: 'center', color: 'var(--fg-muted)' }}>
-            {emptyState ?? '暂无数据'}
-          </div>
-        )}
-        {!loading && !error && pageRows.map((row, idx) => {
-          const key = rowKey(row)
-          const isFlashing = flashRowKeys?.has(key) ?? false
-          const isExpanded = expandedKeys?.has(key) ?? false
-          return (
-            <React.Fragment key={key}>
-              <div
-                role="row"
-                aria-selected={selection?.selectedKeys.has(key)}
-                aria-expanded={renderExpandedRow ? isExpanded : undefined}
-                data-flash={isFlashing ? 'true' : undefined}
-                style={rowStyle(key)}
-                onMouseEnter={() => setHoveredKey(key)}
-                onMouseLeave={() => setHoveredKey(null)}
-                onClick={() => onRowClick?.(row, idx)}
-              >
-                {hasSelection && (
-                  <div role="cell" style={{ ...TD_STYLE, justifyContent: 'center' }}>
-                    <input
-                      type="checkbox"
-                      checked={selection?.selectedKeys.has(key) ?? false}
-                      onChange={() => handleSelectRow(key)}
-                      onClick={(e) => e.stopPropagation()}
-                      aria-label={`选择行 ${key}`}
-                    />
-                  </div>
-                )}
-                {visibleColumns.map((col) => {
-                  const value = col.accessor(row)
-                  const content = col.cell
-                    ? col.cell({ row, value, rowIndex: idx })
-                    : String(value ?? '')
-                  return (
-                    <div
-                      key={col.id}
-                      role="cell"
-                      style={{
-                        ...TD_STYLE,
-                        ...(col.overflowVisible ? { overflow: 'visible' } : {}),
-                      }}
-                    >
-                      {content}
-                    </div>
-                  )
-                })}
-              </div>
-              {isExpanded && renderExpandedRow && (
-                <div data-table-expand-panel role="region" aria-label={`展开行 ${key}`}>
-                  {renderExpandedRow(row)}
-                </div>
-              )}
-            </React.Fragment>
-          )
-        })}
-      </div>
+        {/* body（DTR-A 抽至 DataTableBody）*/}
+        <DataTableBody
+          loading={loading}
+          error={error}
+          emptyState={emptyState}
+          pageRows={pageRows}
+          rowKey={rowKey}
+          hasSelection={hasSelection}
+          selection={selection}
+          visibleColumns={visibleColumns}
+          rowStyle={rowStyle}
+          onRowHover={setHoveredKey}
+          onSelectRow={handleSelectRow}
+          onRowClick={onRowClick}
+          flashRowKeys={flashRowKeys}
+          expandedKeys={expandedKeys}
+          renderExpandedRow={renderExpandedRow}
+        />
       </div>
       {/* CHG-DESIGN-02 Step 5/7 + 7B fix#3：bulk action bar 在 frame 直接子层
         * 上一轮（fix#2）把 bulk bar 留在 [data-table-scroll] 内 + sticky bottom，

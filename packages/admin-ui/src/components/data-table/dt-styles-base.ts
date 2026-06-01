@@ -1,0 +1,338 @@
+/**
+ * dt-styles-base.ts — DataTable 基础 framed surface CSS（DTR-A 拆自 dt-styles.tsx）
+ *
+ * 范围：frame / scrollport / body wrapper / toolbar / matrix-trigger / 表头交互 /
+ *       row 分割线 / flash 动画 / bulk action bar / foot pagination。
+ * 注入：由 dt-styles.tsx 单一 DTStyles 守卫统一拼接注入（本文件不自注入）。
+ */
+export const DT_CSS_BASE = `
+/* ── DataTable framed surface（reference.md §4.4 + 设计稿 .dt） ─────── *
+ * 与 data-table.tsx TH_STYLE.background 显式同步（CHG-UX-05d）：表头是 sticky
+ * 元素，必须不透明；改本变量时记得同步 inline 表头背景。长期方案见 ADR-112
+ * §后续序列触发清单（迁 TH_STYLE 背景到 dt-styles）。 */
+[data-table] {
+  background: var(--bg-surface-raised);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  height: 100%;
+  /* CHG-UX2-03c：强制 frame 撑满父容器宽度
+   * 修复 flex column 父下 dt computed width < 容器宽（实测 998 vs 期望 1011）
+   * 视觉表现为"frame 右侧直角"（右边 13px 空白让圆角看起来不到容器边） */
+  width: 100%;
+  /* CHG-DESIGN-02 Step 7A：防御性兜底
+   * 消费方未提供 height 约束（如父容器无 height: calc(...)）时，
+   * 至少保留 240px 可视高度，避免 flex 链下塌成 0。
+   *
+   * 两种高度消费模式（ADR-103 AMENDMENT 2026-05-14 / CHG-SN-6-DATATABLE-STICKY-SCROLL）：
+   *   A. 整页滚动（默认）：消费方不设 height，AdminShell main 整页滚动；本变量 240px 兜底
+   *   B. body 独立滚动（增强）：消费方父级 height: calc(100vh - ...) + min-height: 0 穿透；
+   *      table body 单轴滚动 / thead sticky / foot 固定底部
+   * 详见 docs/rules/admin-module-template.md 2026-05-14 修订。
+   */
+  min-height: 240px;
+  /* min-width: 0 打破 grid/flex 父链 auto 阻断，确保 frame 自身不被宽内容撑大 */
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── DataTable 单一 scrollport（CHG-DESIGN-02 Step 7B fix#2 / Codex review）─────── *
+ * 横向 + 纵向滚动统一在本容器内发生（双轴 overflow:auto）。thead / body rows /
+ * bulk bar 共享同一 scrollLeft，避免横纵 viewport 分裂导致垂直滚动条随 scrollLeft
+ * 漂移。foot 留在 [data-table] frame 直接子层（外层固定底栏，不进 scrollport）。 */
+[data-table-scroll] {
+  flex: 1 1 auto;
+  /* min-height: var(--row-h) 兜底短数据时 thead/foot/bulk 视觉重叠（arch-reviewer R-3）；
+   * min-height: 0 让 flex item 能被 container 压缩。两者合一取较大值。 */
+  min-height: var(--row-h, 40px);
+  /* min-width: 0 让 scrollport 自身宽度不被内容撑出 frame */
+  min-width: 0;
+  overflow: auto;
+  /* sticky 子（thead / bulk）需要 contain: paint 保证不被横滚带飞，
+   * 主流浏览器 sticky 实现已经处理；此处不强制。 */
+}
+
+/* ── body wrapper（语义 marker，不再独立滚动）─────── *
+ * Step 7B fix#2：纵向滚动迁到父级 [data-table-scroll]，本节点仅承载 role=rowgroup
+ * 语义和测试选择器引用，不重复设置 overflow / flex / min-height（避免与父链冲突）。 */
+[data-table-body] {
+  display: contents;
+}
+
+/* ── DataTable 内置 toolbar（CHG-DESIGN-02 Step 4，设计稿 .dt__toolbar） ─────── */
+[data-table-toolbar] {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: var(--toolbar-padding-y) var(--toolbar-padding-x);
+  border-bottom: 1px solid var(--border-default);
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+[data-table-toolbar-search] {
+  flex: 0 0 auto;
+  min-width: 200px;
+}
+[data-table-toolbar-trailing] {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+/* ── ADR-149 EP-3 删除：
+ *   [data-table-toolbar-hidden-cols-chip] 隐藏列 chip（功能迁移 column-matrix-menu 可见性 cell）
+ *   [data-table-filter-chips] + [data-table-filter-chip*] filter chips slot（功能迁移 column-matrix-menu 过滤格）
+ *   注：FilterChip / FilterChipBar 独立业务组件样式仍在 filter-chip.tsx 内 inline，未受影响。 */
+
+/* ── ADR-149 AMENDMENT 2 D-149-16 §(3) / EP-4.5 矩阵触发器（R-AMEND-2-2 修订）─────── *
+ * 独立 [data-table-matrix-trigger] data attribute + 样式块，禁止复用 [data-th-menu-icon]
+ * （后者 opacity:0 hover 显隐 / toolbar 中将隐身）。本触发器 opacity:1 恒显。
+ *
+ * 视觉与列级 ⋯ 完全隔离（thead 用 [data-th-menu-icon] / toolbar 用本规则）。
+ * [data-active="true"] 表示矩阵 popover 已打开，accent 色高亮。 */
+[data-table-matrix-trigger] {
+  /* EP-4.5-HOTFIX-2 / 问题 2：margin-left: auto 把矩阵触发器推到 toolbar 最右
+   * （即使没 trailing 槽位 / toolbar.trailing wrapper 的 margin-left: auto 与本规则不冲突，
+   * flex 多 margin-left:auto 时第一个抢占剩余空间 / matrix-trigger 始终在最右）*/
+  margin-left: auto;
+  min-width: 28px;
+  height: 24px;
+  padding: 0 6px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  color: var(--fg-muted);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: var(--font-size-sm-tight);
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: color var(--duration-fast) var(--easing-ease-out),
+              background var(--duration-fast) var(--easing-ease-out),
+              border-color var(--duration-fast) var(--easing-ease-out);
+}
+[data-table-matrix-trigger]:hover {
+  color: var(--fg-default);
+  background: var(--bg-surface-row);
+  border-color: var(--border-default);
+}
+[data-table-matrix-trigger][data-active="true"] {
+  background: var(--admin-accent-soft);
+  color: var(--admin-accent-on-soft);
+  border-color: var(--admin-accent-border);
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-table-matrix-trigger] { transition: none; }
+}
+
+/* thead-right fallback 槽位（toolbar.hidden=true 时矩阵触发器渲染在 thead 末尾） */
+[data-table-matrix-trigger-thead-slot] {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--row-h-compact, 24px);
+  height: 100%;
+  padding: 0 4px;
+  flex-shrink: 0;
+}
+
+/* ── 表头行交互（CHG-UX-05d）─────── *
+ * 表头是 sticky 元素 + 用户期望"文字高亮（非灰化背景）+ 三点 hover 显隐"；
+ * 不归 [data-interactive="icon"] 通用类，单独维护本规则块。
+ *
+ * data-th-interactive="true"：sortable 或 enableHeaderMenu（data-table.tsx 计算）
+ * data-th-menu-icon：enableHeaderMenu 渲染的 ⋯ 图标
+ * data-th-menu-icon[data-open="true"]：菜单展开时（即使未 hover 也保持可见） */
+[data-table] [role="columnheader"][data-th-interactive="true"] {
+  transition: color var(--duration-fast) var(--easing-ease-out);
+}
+[data-table] [role="columnheader"][data-th-interactive="true"]:hover {
+  /* TH_STYLE inline color: var(--fg-muted) specificity 高于本规则；
+     需 !important 让 hover 文字高亮赢 inline default（与 interaction-styles.tsx
+     hover/active background !important 同一设计决策，CHG-UX-05c）*/
+  color: var(--fg-default) !important;
+}
+/* ADR-149 D-149-3 / R-149-6：列级 ⋯ 真按钮触发器
+ *   - opacity:0 默认隐藏，hover 列 / 菜单展开 / 已排序已过滤 → opacity:1 恒显
+ *   - cursor: pointer / 自身 stopPropagation 在 data-table.tsx 内处理
+ *   - 基础按钮样式：透明背景 + muted 色 + fontSize 跟随表头 */
+[data-table] [role="columnheader"] [data-th-menu-icon] {
+  opacity: 0;
+  transition: opacity var(--duration-fast) var(--easing-ease-out);
+  margin-left: 4px;
+  background: transparent;
+  border: 0;
+  padding: 0 4px;
+  color: var(--fg-muted);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: var(--font-size-xs);
+  line-height: 1;
+}
+[data-table] [role="columnheader"]:hover [data-th-menu-icon],
+[data-table] [role="columnheader"] [data-th-menu-icon][data-open="true"],
+[data-table] [role="columnheader"] [data-th-menu-icon][data-active="true"] {
+  opacity: 1;
+}
+[data-table] [role="columnheader"] [data-th-menu-icon]:hover {
+  color: var(--fg-default);
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-table] [role="columnheader"][data-th-interactive="true"],
+  [data-table] [role="columnheader"] [data-th-menu-icon] { transition: none; }
+}
+
+/* ── Row 分割线（CHG-UI-05 显式落地；arch-reviewer C-3 约束 row hover/selected 仍走 inline） ─────── *
+ * 行分割线 + 最后一行 reset，避免与 foot/bulk 顶边重线；hover/selected 仍由 data-table.tsx
+ * rowStyle 内联控制（var(--bg-surface-row) / var(--admin-accent-soft)）。 */
+[data-table] [role="rowgroup"] [role="row"] {
+  border-bottom: 1px solid var(--border-default);
+}
+[data-table] [role="rowgroup"] [role="row"]:last-child {
+  border-bottom: none;
+}
+
+/* ── Row flash 动画（乐观更新场景；CHG-DESIGN-02 Step 5 flashRowKeys 配套） ─────── */
+@keyframes admin-ui-dt-flash {
+  0%   { background: color-mix(in oklch, var(--admin-accent-soft) 100%, transparent); }
+  100% { background: transparent; }
+}
+[data-table] [role="row"][data-flash="true"] {
+  animation: admin-ui-dt-flash 1.5s ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-table] [role="row"][data-flash="true"] { animation: none; }
+}
+
+/* ── Bulk action bar（CHG-DESIGN-02 Step 5 + 7B fix#3，设计稿 .dt__bulk）─────── *
+ * fix#3：bulk bar 作 frame 直接子层 flex slot（不在 scrollport 内 sticky）；
+ * selection 非空时显示，与 foot 一同永驻 frame 内底部不被 long table content 埋没。 */
+[data-table-bulk] {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 14px;
+  background: var(--bg-surface-elevated);
+  border-top: 1px solid var(--accent-default);
+  font-size: 12px;
+  flex-shrink: 0;
+  min-width: 0;
+}
+[data-table-bulk-count] {
+  color: var(--fg-default);
+  font-weight: 500;
+}
+[data-table-bulk-count] em {
+  color: var(--admin-accent-on-soft);
+  font-style: normal;
+  font-weight: 700;
+}
+[data-table-bulk-sep] {
+  width: 1px;
+  height: 18px;
+  background: var(--border-strong);
+}
+[data-table-bulk-actions] {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+[data-table-bulk-clear] {
+  background: transparent;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  color: var(--fg-muted);
+  padding: 3px 10px;
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+[data-table-bulk-clear]:hover {
+  color: var(--fg-default);
+  border-color: var(--border-strong);
+}
+
+/* ── DataTable foot pagination（CHG-DESIGN-02 Step 7A，设计稿 .dt__foot / .dt__pager）─────── */
+[data-table-foot] {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: var(--foot-padding-y) var(--foot-padding-x);
+  border-top: 1px solid var(--border-default);
+  background: var(--bg-surface-elevated);
+  font-size: 12px;
+  color: var(--fg-muted);
+  flex-shrink: 0;
+}
+[data-table-foot-summary] {
+  flex: 0 0 auto;
+}
+[data-table-foot-pagesize] {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+[data-table-foot-pagesize-label] {
+  color: var(--fg-muted);
+}
+[data-table-foot-pagesize] select {
+  height: var(--row-h-compact, 24px);
+  padding: 0 6px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface);
+  color: var(--fg-default);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+[data-table-foot-pagesize] select:hover {
+  border-color: var(--border-strong);
+}
+[data-table-foot-pager] {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+[data-table-foot-pager-btn] {
+  min-width: var(--row-h-compact, 24px);
+  height: var(--row-h-compact, 24px);
+  padding: 0 6px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--fg-muted);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+}
+[data-table-foot-pager-btn]:hover:not(:disabled):not([data-active="true"]) {
+  background: var(--bg-surface-row);
+  color: var(--fg-default);
+}
+[data-table-foot-pager-btn][data-active="true"] {
+  background: var(--admin-accent-soft);
+  color: var(--admin-accent-on-soft);
+  border-color: var(--admin-accent-border);
+  cursor: default;
+}
+[data-table-foot-pager-btn]:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+[data-table-foot-pager-ellipsis] {
+  padding: 0 4px;
+  color: var(--fg-muted);
+  user-select: none;
+}
+
+` as const
