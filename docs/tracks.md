@@ -20,8 +20,9 @@
 | sn4-07-fe-moderation | ✅ 已集成 | `track/sn4-07-fe-moderation`（已删除）| `docs/archive/tasks/tasks-sn4-07-fe-moderation.md` | 无（已释放） | 2026-05-02 | 2026-05-02 |
 | sn4-08-video-edit-drawer | ✅ 已集成 | `track/sn4-08-video-edit-drawer`（已删除）| `docs/archive/tasks/tasks-sn4-08-video-edit-drawer.md` | 无（已释放） | 2026-05-02 | 2026-05-02 |
 | bangumi | 🔄 活跃 | `track/bangumi` | `docs/tasks-bangumi.md` | adr / architecture | 2026-05-27 | — |
+| admin-ui-datatable-resize | ✅ 已集成 | `track/admin-ui-datatable-resize`（已删除）| `docs/archive/tasks/tasks-admin-ui-datatable-resize.md` | 无（已释放） | 2026-06-01 | 2026-06-01（PR #9）|
 
-**当前活跃 Track 数：1 / 3**（bangumi 单 Track 活跃；与 main 上 server-next WIP 并行，文件域 apps/api vs apps/server-next 零重叠）
+**当前活跃 Track 数：1 / 3**（bangumi 单 Track 活跃；admin-ui-datatable-resize 已集成 2026-06-01 释放冲突域；与 main 上 server-next WIP 并行，文件域 apps/api vs apps/server-next 零重叠）
 
 ---
 
@@ -211,3 +212,24 @@
 - **执行真源**：`~/.claude/plans/bangumi-tv-bangumi-https-bangumi-tv-dev-enumerated-cosmos.md`（已批准）
 - **说明**：Bangumi.tv 接入——REST 客户端 + dump 索引匹配增强 + 逐集表 + anime 下 Bangumi 优先 + 反向建库无源占位条目。文件域全在 apps/api + scripts，与 main 上 server-next（apps/server-next）WIP 零重叠。
 - **预留编号**：ADR-161、migration 077。
+
+---
+
+## admin-ui-datatable-resize
+
+- **状态**：✅ 已集成（2026-06-01，PR #9 merge `524ab514`）
+- **分支**：`track/admin-ui-datatable-resize`（从 main HEAD `8b0377e0` 切出 / 已删除；worktree 已移除）
+- **任务文件**：`docs/archive/tasks/tasks-admin-ui-datatable-resize.md`（已归档）
+- **文件作用域**：
+  - `packages/admin-ui/src/components/data-table/**`（resize 核心 + 文件拆分：`data-table.tsx` / `types.ts` / `dt-styles.tsx` / `column-matrix-menu.tsx` / `column-visibility.ts` / `storage-sync.ts` / `use-table-query.ts` + 新建 `column-resize.ts` / `resize-handle.tsx` / `use-column-resize.ts` / `data-table-header-row.tsx` / `column-types.ts` / `column-matrix-footer.tsx` / `dt-styles-{base,matrix,resize}.tsx`）
+  - `apps/server-next/src/app/admin/videos/_client/VideoListClient.tsx`（仅加 `enableColumnResizing` prop，验收消费方）
+  - `docs/decisions.md`（ADR-103 §4.2.2 存储介质修订）
+- **持有冲突域**：无（已释放，集成时 admin-ui 公开 Props（`enableColumnResizing`/`maxWidth`/`onAutoFitColumnWidths`）+ ADR-103 §4.2.2 AMENDMENT 1/2 已落 main）
+- **创建时间**：2026-06-01
+- **集成时间**：2026-06-01（PR #9）
+- **建议模型**：`claude-opus-4-8`（主循环；本任务含共享组件 API 契约 + ADR 修订，CLAUDE.md 强制 Opus arch-reviewer）
+- **执行真源**：`~/.claude/plans/worktree-server-next-1-2-3-4-5-serialized-thimble.md`（已批准）
+- **子代理**：`arch-reviewer (claude-opus-4-8)` —— DTR-A PASS-WITH-CONDITIONS（C1–C7）+ DTR-F PASS-WITH-CONDITIONS（F1–F16）
+- **冻结约定 caveat**：本文件 §「共享层冻结约定（双轨期内）」系 sn4-07/08 双轨期保守约定；按 `parallel-dev-rules.md`（source_of_truth）§三组件软锁 + api-surface 硬锁 + Opus 评审机制推进，bangumi 文件域（apps/api/**）与本轨 admin-ui 零重叠，无实际冲突。用户已批准本计划并授权并行。
+- **说明**：通用表格 `DataTable` 列宽可调（拖拽 / 键盘 / 双击 auto-fit + `fixed-left/flex-last` 布局 + 表头分割线 + 截断悬浮 + 布局偏好 localStorage 持久化）。表级 `enableColumnResizing` 默认 false，现有消费方零回归。
+- **收官**：DTR-A（预拆）→ B（核心）→ C（矩阵收口）→ D（存储迁移 + ADR §4.2.2 AMD1）→ E（验收+测试）→ F（验收返工：auto-fit 全列 + 校准 + action opt-in 解禁 + ADR §4.2.2 AMD2）+ FIX1–5（Codex stop-time review：auto-fit 测量统一 Range 几何）+ GATES（完整门禁建立：typecheck/lint/单测 5858 passed/adr-contracts/admin-guardrails 全绿 / file-size-budget data-table 0 新违规 / **e2e 本地环境门控待 CI 跑**）。

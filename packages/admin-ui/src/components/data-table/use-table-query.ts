@@ -5,13 +5,18 @@
  * 真源：ADR-103 §4.2（CHG-SN-2-13）
  *
  * 职责：
- *   - 初始化：URL 参数 + sessionStorage 合并 → 初始 snapshot
+ *   - 初始化：URL 参数 + 持久化偏好（storage-sync）合并 → 初始 snapshot
  *   - 状态：订阅 tableQueryStore（useSyncExternalStore）
- *   - patch：PATCH 语义变更 + 同步 URL（router.replace）+ 同步 sessionStorage
+ *   - patch：PATCH 语义变更 + 同步 URL（router.replace）+ 同步持久化偏好（storage-sync）
  *   - reset：恢复到 defaults
  *
+ * 持久化介质（DTR-D / ADR-103 §4.2.2 AMENDMENT）：布局偏好（pageSize/columns visible+width）
+ *   → **localStorage** `:v2`（跨会话）；saved views → **sessionStorage** `:views:v1`（会话内）。
+ *   具体 key/介质细节封装在 storage-sync.ts，本 hook 仅通过 readFromStorage/writeToStorage/
+ *   writeViewsToStorage 公开签名交互（签名不随介质迁移而变）。
+ *
  * 约束（ADR-103 §4.10）：
- *   - 模块顶层零 window / sessionStorage / document 访问（全在 useEffect 内）
+ *   - 模块顶层零 window / localStorage / sessionStorage / document 访问（全在 useEffect 内）
  *   - router 反向注入：不直 import next/navigation
  *   - 零 any
  */
@@ -70,7 +75,7 @@ export function useTableQuery(options: UseTableQueryOptions): {
     () => emptyViewsRef.current,
   )
 
-  // Initialize from URL + sessionStorage on mount
+  // Initialize from URL + 持久化偏好（storage-sync：layout localStorage / views sessionStorage）on mount
   useEffect(() => {
     const { tableId: tid, router: r, defaults: defs, urlNamespace: ns, columns: cols } = optionsRef.current
     const existing = tableQueryStore.getState().snapshots.get(tid)
@@ -90,7 +95,7 @@ export function useTableQuery(options: UseTableQueryOptions): {
       urlParams = { page: base.pagination.page, sort: base.sort, filters: new Map() }
     }
 
-    // 2. Read sessionStorage
+    // 2. Read 持久化偏好（布局 localStorage:v2 + views sessionStorage:views:v1）
     const stored = readFromStorage(tid)
 
     // 3. Merge: URL wins for page/sort/filters; storage wins for pageSize/columns（如存在）

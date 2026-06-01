@@ -260,8 +260,10 @@ function buildVideoColumns(
     // CHG-UX2-03d：cover width = Thumb 48 + cell padding 24 = 72，贴合 cell content；
     // 不再用 wrapper div（CHG-UX2-03c 的 wrapper 让 Thumb 成为 flex item，破坏 flex-shrink:0）
     {
+      // DTR-F：解禁列宽（去 enableResizing:false）；width 72 = Thumb 48 + padding 24 已贴合内容 +
+      // 容下表头「封面」2 字；minWidth 56 给 handle/截断呼吸。auto-fit 测得仍约 72。
       id: 'cover', kind: 'media', header: '封面', accessor: (r) => r.cover_url,
-      width: 72, minWidth: 64, enableResizing: false, defaultVisible: true,
+      width: 72, minWidth: 56, defaultVisible: true,
       cell: ({ row }) => <Thumb src={row.cover_url} size="poster-md" />,
     },
     // ── title 列：标题 + meta（shortId · year）──
@@ -393,8 +395,10 @@ function buildVideoColumns(
     // 8A 第一阶段保留 VideoRowActions（AdminDropdown 形态）；inline xs btn ×5 重构留 8A 第二阶段
     // CHG-UX2-03b 收窄 170 → 150（消除横滚）
     {
+      // DTR-F：解禁列宽（action 列 opt-in：enableResizing:true 才可调）；width 150→120 贴合
+      // VideoRowActions(AdminDropdown) 实宽 + 容下表头「操作」2 字。
       id: 'actions', kind: 'action', header: '操作', accessor: () => null,
-      width: 150, minWidth: 130, enableResizing: false, defaultVisible: true,
+      width: 120, minWidth: 100, enableResizing: true, defaultVisible: true,
       cell: ({ row }) => (
         <VideoRowActions
           row={row}
@@ -753,6 +757,8 @@ export function VideoListClient() {
               emptyState={<EmptyState title="暂无视频" description="调整筛选条件后重试" />}
               data-testid="video-list-table"
               enableHeaderMenu
+              // DTR-E：通用表格列宽可调验收消费方（列已声明 enableResizing / SEQ-20260531-01）
+              enableColumnResizing
               density="poster"
               flashRowKeys={flashRowKeys}
               toolbar={{
