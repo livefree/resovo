@@ -158,11 +158,15 @@ export function buildResizableGridTemplate<T>(
 }
 
 /**
- * 测量某列**当前渲染页**所有可见 body cell 的最大内容宽度（双击 auto-fit）。
+ * 测量某列**当前渲染页**所有可见 cell + 表头 label 的最大**内容**宽度（auto-fit / 双击）。
  *
- * 扫描 `[data-table-scroll]` 内带 `[data-col-id="{colId}"]` 的 cell；优先取其内部
- * `[data-dt-truncate]` 子项的 `scrollWidth`（截断态下仍反映完整内容宽），缺省回退 cell 自身。
- * server 模式下仅覆盖当前页行（文档化限制）。无 DOM / 无命中时返回 0。
+ * 扫描带 `[data-col-id="{colId}"]` 的元素，分两类取宽（DTR-F-FIX1）：
+ *   - 元素**本身**是 `[data-dt-truncate]`（表头 label span）→ 直接取其 `scrollWidth`（完整文本宽）。
+ *   - 否则是 **body cell wrapper**（`overflow:hidden` + grid 固定宽 → 其自身 scrollWidth = **列宽**、
+ *     不反映内容）→ 取其**最宽后代元素**的 `scrollWidth`：截断文本后代 scrollWidth=完整文本，
+ *     pill/chip/复合等自然宽元素 scrollWidth=内容宽；**排除 wrapper 自身**避免测成列宽。
+ *   - resize handle（`[data-dt-resize-handle]`）非内容，跳过。
+ * server 模式下仅覆盖当前页行（文档化限制）。无 DOM / 无命中 / 无后代时返回 0。
  */
 export function measureColumnContentWidth(
   scrollEl: HTMLElement | null | undefined,
@@ -171,9 +175,20 @@ export function measureColumnContentWidth(
   if (!scrollEl) return 0
   const selector = `[data-col-id="${cssEscape(colId)}"]`
   let max = 0
-  scrollEl.querySelectorAll(selector).forEach((cell) => {
-    const inner = cell.querySelector('[data-dt-truncate]') ?? cell
-    const w = (inner as HTMLElement).scrollWidth
+  scrollEl.querySelectorAll(selector).forEach((el) => {
+    if (el.hasAttribute('data-dt-resize-handle')) return
+    let w: number
+    if (el.matches('[data-dt-truncate]')) {
+      w = (el as HTMLElement).scrollWidth
+    } else {
+      // body cell wrapper：测最宽后代内容元素（排除 overflow:hidden 固定宽的 wrapper 自身）
+      let inner = 0
+      el.querySelectorAll('*').forEach((d) => {
+        const dw = (d as HTMLElement).scrollWidth
+        if (dw > inner) inner = dw
+      })
+      w = inner
+    }
     if (w > max) max = w
   })
   return max

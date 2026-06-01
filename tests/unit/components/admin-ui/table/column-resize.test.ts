@@ -181,6 +181,28 @@ describe('measureColumnContentWidth', () => {
     expect(measureColumnContentWidth(null, 'a')).toBe(0)
     expect(measureColumnContentWidth(document.createElement('div'), 'zzz')).toBe(0)
   })
+  it('DTR-F-FIX1：自定义 cell 测最宽后代内容，不测 overflow:hidden 的 wrapper 自身（修 pill 列过宽）', () => {
+    const root = document.createElement('div')
+    root.innerHTML = `<div data-col-id="p"><span class="pill"></span></div>`
+    const wrapper = root.querySelector('[data-col-id="p"]')!
+    const pill = root.querySelector('.pill')!
+    Object.defineProperty(wrapper, 'scrollWidth', { value: 200 }) // = 当前列宽（不该用）
+    Object.defineProperty(pill, 'scrollWidth', { value: 60 })     // 内容真实宽
+    expect(measureColumnContentWidth(root, 'p')).toBe(60)         // 取内容宽，非 wrapper 200
+  })
+  it('DTR-F-FIX1：表头 label（本身是 data-dt-truncate）测自身 scrollWidth', () => {
+    const root = document.createElement('div')
+    root.innerHTML = `<span data-dt-truncate data-col-id="h"></span>`
+    Object.defineProperty(root.querySelector('[data-col-id="h"]')!, 'scrollWidth', { value: 42 })
+    expect(measureColumnContentWidth(root, 'h')).toBe(42)
+  })
+  it('DTR-F-FIX1：跳过 resize handle（非内容）', () => {
+    const root = document.createElement('div')
+    root.innerHTML = `<span data-dt-resize-handle data-col-id="x"></span><div data-col-id="x"><span class="c"></span></div>`
+    Object.defineProperty(root.querySelector('[data-dt-resize-handle]')!, 'scrollWidth', { value: 8 })
+    Object.defineProperty(root.querySelector('.c')!, 'scrollWidth', { value: 70 })
+    expect(measureColumnContentWidth(root, 'x')).toBe(70) // handle 8 跳过，取内容 70
+  })
 })
 
 describe('column-visibility setColumnWidth / resetColumnWidths', () => {

@@ -12793,3 +12793,14 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **数据库变更**：无
 - **质量门禁**：完整 typecheck 7 workspace ✓ / lint 5/5 ✓ / **全量 test:run 448 文件 5852 passed（+7 / 唯 1 失败 = 既有 server-next admin flake StagingTable，隔离 13/13 过，与本轨零关系）** / file-size-budget data-table 模块 0 新违规（计数仍 21）/ verify:adr-contracts exit=0 / e2e --list 编译 5 tests ✓。
 - **注意事项**：① auto-fit 复用 measureColumnContentWidth（selector 天然含表头列名 span）→ 已满足"容下列名"；② flex 列也参与 auto-fit（写宽后余量归占位轨）；③ title 保持无 width minWidth:220（**不擅改 C5 锁定 flex 选取语义**，若验收仍嫌右侧空白另起 ADR）；④ resetColumnWidths 纯函数保留（清空原语 + 测试，本轮不接线）。用户将重开 :3013 实测 DTR-F。**本轨 DTR-A..F 全部收官，待集成 PR**。Track: admin-ui-datatable-resize。
+
+## [DTR-F-FIX1] auto-fit 测量修复：自定义 cell 测后代内容宽（修 pill 列过宽 ~2x）
+- **完成时间**：2026-06-01 / **执行模型**：claude-opus-4-8（主循环）/ **子代理**：无（测量 bug 修复，arch-reviewer E 点已预警此精度问题）
+- **来源**：用户实测 DTR-F 反馈——"可见性/审核列 auto-fit 后达 pill 内容宽两倍左右"。
+- **根因**：`measureColumnContentWidth` 对自定义 cell（pill/VisChip，无 `[data-dt-truncate]`）回退测 **cell wrapper 自身** scrollWidth；wrapper 是 `overflow:hidden`+grid 固定宽容器，内容不溢出时 `scrollWidth=clientWidth=当前列宽`，不反映 pill 内容 → auto-fit 把列固定在"列宽+padding"，越测越宽。
+- **修改文件**：
+  - `packages/admin-ui/src/components/data-table/column-resize.ts` — `measureColumnContentWidth` 改：元素本身是 `[data-dt-truncate]`（表头 label）→ 测自身；否则（body cell wrapper）→ 测**最宽后代元素** scrollWidth（截断文本后代=完整文本 / pill 自然宽元素=内容宽 / 排除 wrapper 自身）；跳过 resize handle。
+  - `tests/unit/.../column-resize.test.ts` — +3 case（自定义 cell 测后代非 wrapper / 表头 label 测自身 / 跳过 handle）
+  - `docs/decisions.md` — ADR-103 §4.2.2 AMENDMENT 2 限制②措辞同步（测后代内容元素 / 警示 width:100% 填充型中间容器仍可能偏宽）
+- **门禁**：完整 typecheck ✓ / lint 5/5 ✓ / table 子集 497 全过（+3）/ data-table 模块 0 新违规。
+- **效果**：pill 列（可见性/审核）auto-fit 从"≈列宽×2"修正为"≈pill 内容宽+padding"；title 等截断文本列经后代 span scrollWidth 取完整文本宽。Track: admin-ui-datatable-resize。
