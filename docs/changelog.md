@@ -12879,3 +12879,20 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **新增依赖/schema/Props 契约变更**：无。
 - **数据库变更**：无（修复回滚逻辑；本次迁移子表快照 0 行未实际触发，逻辑为通用正确性而备）。
 - **质量门禁**：typecheck EXIT=0 / 回滚 dry-run 跑通 / 合成 B 类场景实证 PASS / verify:adr-contracts 待跑。
+
+---
+
+## [META-23-C-FIX4] 回滚 provenance/locks 回退「只插不删」+ 残留报告（Codex stop-time review / Opus 裁定）
+- **完成时间**：2026-06-01
+- **执行模型**：claude-opus-4-8
+- **子代理**：arch-reviewer (claude-opus-4-8) / agentId acb02c256adb21e56 — provenance/locks 回滚信息论死结裁定
+- **来源**：Codex stop-time review「the new equality-based delete can still remove valid survivor metadata」。
+- **信息论本质（Opus 确认）**：`(catalog_id, field_name)` 类子表（无独立 id、无来源列、A 类留存侧从未快照）合并后，留存行 field 的来源(A 类原有 / B 类冗余转移)标记**被永久擦除**。FIX3 的「逐列 IS NOT DISTINCT FROM 删 B 类」判据**仍会误删**——同作品两 catalog 的同 field 其 source_kind/priority/updated_at 常完全重合（同源同批 backfill），值空间真实重合，A 类逐列等于冗余快照是常态非边缘。Codex 三轮（误删→遗留→相等误删）是同一死结三个面；轮3 把「确定误删」换成「概率误删」，从数据安全看更坏（静默、不可枚举）。
+- **终局（Opus 裁定 (a)：回滚侧接受不可达 + 数据安全侧）**：provenance/locks 回滚**只 INSERT 冗余快照回原 catalog_id，绝不 DELETE 留存行任何行**（回退到轮2 行为）。B 类转移副本遗留在留存行 = 已知不可逆损失（接受，宁留勿误删）；误删 A 类 = 不可逆且静默（禁止）。逐列判据**从 DELETE 执行路径降级到 REPORT 观测路径**——跑完报告疑似 B 类残留候选数，交人工裁定（同代码，改用途）。
+- **provenance vs locks 区别对待**：provenance 纯审计血缘，残留=噪声无害（信息级报告）；locks 字段锁有运行时语义（影响后续富集覆盖），残留=留存行多一个本不该有的字段冻结（**强制报告 + 风险声明，须人工核查解锁**）。
+- **实证（合成反例，事务内 ROLLBACK）**：造留存行 S 的 A 类 rating 与冗余快照 R 的 rating **逐列完全相同**（轮3 会误删的反例）→ 新逻辑下 S={rating}（A 类零误删）、R={rating}（冗余复位）→ **PASS：A 类零误删（即便值空间重合）+ 冗余取证完整**。
+- **修改文件**：`scripts/dedup-catalog-084-rollback.ts`（provenance/locks 删逐列 DELETE→只插不删 + 残留报告，注释撤回「破解判据」错误结论）/ `docs/decisions.md`（D-174-6 补信息论边界 + locks 运行时区别 + R11 只插不删/禁值判据删、R12 未来合并须保留来源可区分性）。
+- **新增依赖/schema/Props 契约变更**：无。
+- **数据库变更**：无（修复回滚逻辑；本次两表快照 0 行未触发，逻辑为通用工具正确性而备）。
+- **质量门禁**：typecheck EXIT=0 / 回滚 dry-run 跑通（只插不删 + 残留报告 0 候选）/ 合成反例实证 A 类零误删 PASS / verify:adr-contracts 待跑。
+- **闭环说明**：Codex 三轮底线（宁留勿误删）一致正确，轮3 是其反例，回退即闭环。精确删 B 信息论不可达，承认它选数据安全侧是终局而非补丁。

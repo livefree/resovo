@@ -76,21 +76,17 @@ async function rollback(client: PoolClient): Promise<void> {
   //    当前库该 id 可能存在（转移走，catalog_id 变了）或不存在（被删碰撞）。
   //    无损还原 = DELETE 当前库这些 id 的残留 → INSERT 快照全量（id 主键精确，无歧义）。
   //
-  //  PK(catalog_id, field_name) 子表（provenance/locks）：无独立 id。合并阶段 B 对这两表
-  //    **只动 catalog_id ∈ redundantIds 的行**，冗余侧 field 分两类：
-  //      A 类（碰撞）：留存行原有该 field + 冗余行也有 → 合并删冗余侧（留存优先）→ 进快照。
-  //      B 类（转移）：留存行原本无该 field + 冗余行有 → 合并 `UPDATE SET catalog_id` 整行搬到留存行。
-  //    ⚠️ Codex 两轮修正的死结 + 破解：
-  //      - 不能删 catalog_id=留存行的「全部」该 field（会删留存行原有 = A 类留存侧，快照无法还原）。
-  //      - 但只 INSERT 冗余快照回原 catalog_id 又会把 B 类「转移到留存行的那份」**遗留在留存行**
-  //        （transferred survivor metadata left behind）。
-  //      破解判据：B 类转移是 `UPDATE SET catalog_id`——**只改 catalog_id，其余列（value/source/
-  //        priority/updated_at 等）原封保留冗余行原值**。故留存行上「除 catalog_id 外逐列等于某
-  //        冗余快照行」的 = B 类转移来的副本（精确锁定，删它）；留存行原有 field（A 类留存侧）
-  //        值是自己的、不会逐列等于冗余快照，**不被误删**。
-  //    还原三步：① 删留存行上逐列匹配冗余快照的 B 类转移残留 → ② INSERT 冗余快照回原 catalog_id
-  //      （A+B 类冗余副本全复位）。净效果：留存行只剩自己原有 field（A 类留存侧，零误删），
-  //      冗余行复活后带回 A+B 全部自己的 field（取证完整，B 类不遗留）。
+  //  PK(catalog_id, field_name) 子表（provenance/locks）：无独立 id。合并冗余侧 field 两类：
+  //      A 类（留存行原有）：合并未碰（删的是冗余侧）→ 留存行保留自己的值。
+  //      B 类（冗余转移）：留存行原无、冗余行 `UPDATE SET catalog_id` 搬来 → 留存行多一份。
+  //    ⚠️ 信息论不可达（Codex 三轮 + Opus 裁定 acb02c256adb21e56 / D-174-6）：
+  //      合并擦除了留存行 field 的来源(A/B)标记（无 id、无来源列、A 类留存侧从未快照）。
+  //      回滚侧任何事后判据都无法精确区分 A/B —— 同作品两 catalog 的同 field 其
+  //      source_kind/source_priority/updated_at 常完全重合（同源同批 backfill），值空间真实重合。
+  //      故「逐列相等删 B 类」会误删 A 类（曾在轮3 误用，已撤回）。
+  //    **终局（数据安全，宁留勿误删）：只 INSERT 冗余快照回原 catalog_id，绝不 DELETE 留存行任何行。**
+  //      B 类转移副本遗留在留存行 = 已知不可逆损失（接受）；误删 A 类 = 不可逆且静默（禁止）。
+  //      遗留不静默：跑完用逐列判据**报告**疑似 B 类残留候选（仅 REPORT 不删，交人工裁定）。
   //
   //  顺序：characters 在 episodes 后（孙表 actors 依赖 character 先复活，见步骤末）。
 
@@ -107,31 +103,42 @@ async function rollback(client: PoolClient): Promise<void> {
   )
   await client.query(`INSERT INTO catalog_character_actors SELECT * FROM _bak_catalog_character_actors_084`)
 
-  // ── PK(catalog_id, field_name) 子表（无 id）：删 B 类转移残留 + 复位冗余快照（Codex 两轮修正）──
-  //   逐列匹配判据见上方注释。各表「除 catalog_id 外」的列：
-  //     provenance: field_name/source_kind/source_ref/source_priority/updated_at
-  //     locks:      field_name/lock_mode/locked_by/locked_at/reason
-  //   用 IS NOT DISTINCT FROM 处理 nullable 列（source_ref / reason）。
-  const otherCols: Record<string, string[]> = {
+  // ── PK(catalog_id, field_name) 子表（无 id）：只插不删 + 残留报告（Opus 裁定终局）──
+  //   逐列「除 catalog_id 外」列（用于 REPORT 候选判据，非 DELETE）：
+  //     provenance: source_kind/source_ref/source_priority/updated_at（+field_name）
+  //     locks:      lock_mode/locked_by/locked_at/reason（+field_name）
+  //   IS NOT DISTINCT FROM 处理 nullable（source_ref / reason）。
+  const reportCols: Record<string, string[]> = {
     video_metadata_provenance: ['field_name', 'source_kind', 'source_ref', 'source_priority', 'updated_at'],
     video_metadata_locks: ['field_name', 'lock_mode', 'locked_by', 'locked_at', 'reason'],
   }
   for (const t of ['video_metadata_provenance', 'video_metadata_locks']) {
     const bak = `_bak_${t}_084`
-    const colMatch = otherCols[t]
-      .map((c) => `cur.${c} IS NOT DISTINCT FROM b.${c}`)
-      .join(' AND ')
-    // ① 删留存行（cur.catalog_id = b 的 surviving_id）上「除 catalog_id 外逐列等于冗余快照」的 B 类转移残留
-    await client.query(
-      `DELETE FROM ${t} cur
-       USING ${bak} b
-       JOIN _bak_media_catalog_084 mc ON mc.id = b.catalog_id
-       WHERE cur.catalog_id = mc.surviving_id AND ${colMatch}`,
-    )
-    // ② 复位冗余快照回原 (冗余 catalog_id, field_name)；冗余 catalog_id ≠ 留存行，不撞留存 PK
+    // 唯一执行动作：复位冗余快照回原 (冗余 catalog_id, field_name)。冗余 catalog_id ≠ 留存行，
+    // 不撞留存 PK。**绝不 DELETE 留存行任何行**（删 = 不可逆误删 A 类 / R11）。
     await client.query(
       `INSERT INTO ${t} SELECT * FROM ${bak} ON CONFLICT (catalog_id, field_name) DO NOTHING`,
     )
+    // 残留报告（非执行路径 / 不删）：逐列判据报告留存行上疑似 B 类转移残留，交人工裁定。
+    // 判据不精确（A 类同源同批可能逐列等于冗余快照 → 误报），仅 REPORT 不 DELETE。
+    const colMatch = reportCols[t].map((c) => `cur.${c} IS NOT DISTINCT FROM b.${c}`).join(' AND ')
+    const residual = await client.query<{ n: string }>(
+      `SELECT COUNT(*)::text AS n
+       FROM ${t} cur
+       JOIN _bak_media_catalog_084 mc ON cur.catalog_id = mc.surviving_id
+       JOIN ${bak} b ON b.catalog_id = mc.id AND ${colMatch}`,
+    )
+    const n = Number(residual.rows[0]?.n ?? 0)
+    if (t === 'video_metadata_locks') {
+      // locks 有运行时语义（字段冻结影响后续富集覆盖）→ 残留报告强制 + 风险声明
+      process.stdout.write(
+        `  ⚠️ locks 疑似 B 类转移残留候选: ${n}（运行时后果：留存行可能多一个本不该有的字段冻结；` +
+          `判据不精确含误报，**须人工核查并决定是否解锁**，回滚未自动删除）\n`,
+      )
+    } else {
+      // provenance 纯审计血缘，残留=噪声无害 → 信息级
+      process.stdout.write(`  provenance 疑似 B 类转移残留候选: ${n}（审计噪声，无运行时后果，遗留可接受）\n`)
+    }
   }
 
   // 3. videos 指向还原（回 old_catalog_id；条件防覆盖回滚后新写入）
