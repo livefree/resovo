@@ -23,6 +23,7 @@ import {
   pickFlexColumnId,
   resolveColumnWidth,
 } from './column-resize'
+import { resetColumnWidths } from './column-visibility'
 
 /**
  * 列宽 resize 上下文（注入 DataTableHeaderRow）。enabled 时由本 hook 构造，
@@ -53,6 +54,8 @@ export interface ColumnResizeController<T> {
   /** 当前网格模板（enabled=false 时为空串，调用方不消费）。 */
   readonly gridTemplate: string
   readonly headerContext: HeaderRowResizeContext<T> | undefined
+  /** 重置所有列宽（矩阵 popover「重置列宽」/ DTR-C）：清 width 保留 visible。 */
+  readonly resetAllWidths: () => void
 }
 
 export function useColumnResizeController<T>({
@@ -117,6 +120,11 @@ export function useColumnResizeController<T>({
     [colMap],
   )
 
+  const resetAllWidths = useCallback(
+    () => onQueryChange({ columns: resetColumnWidths(columns, colMap) } satisfies TableQueryPatch),
+    [columns, colMap, onQueryChange],
+  )
+
   const rootStyle = useMemo<CSSProperties>(
     () =>
       enabled
@@ -140,5 +148,5 @@ export function useColumnResizeController<T>({
     [enabled, flexColumnId, resolveWidth, previewWidth, commitWidth, rollbackPreview, autoFit],
   )
 
-  return { rootRef, rootStyle, gridTemplate, headerContext }
+  return { rootRef, rootStyle, gridTemplate, headerContext, resetAllWidths }
 }

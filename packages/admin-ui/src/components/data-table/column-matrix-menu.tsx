@@ -64,6 +64,8 @@ export interface ColumnMatrixMenuProps {
   readonly onClearAllFilters: () => void
   /** 底部批量按钮：恢复默认列可见性（按 column.defaultVisible 重置） */
   readonly onResetColumnVisibility: () => void
+  /** 底部批量按钮：重置列宽（DTR-C / 仅表级 enableColumnResizing 时传入，缺省不渲染该按钮） */
+  readonly onResetColumnWidths?: () => void
   readonly onClose: () => void
 }
 
@@ -104,6 +106,7 @@ export function ColumnMatrixMenu({
   onClearSort,
   onClearAllFilters,
   onResetColumnVisibility,
+  onResetColumnWidths,
   onClose,
 }: ColumnMatrixMenuProps): React.ReactElement | null {
   const [mounted, setMounted] = useState(false)
@@ -461,6 +464,7 @@ export function ColumnMatrixMenu({
         onClearAllFilters={onClearAllFilters}
         onClearSort={onClearSort}
         onResetColumnVisibility={onResetColumnVisibility}
+        onResetColumnWidths={onResetColumnWidths}
       />
     </div>
   )

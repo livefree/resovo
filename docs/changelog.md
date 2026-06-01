@@ -12725,3 +12725,19 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
   - 卡边界合并：handle a11y/键盘/双击 auto-fit 从 DTR-C 并入 DTR-B（半成品 handle 不可独立验收，价值排序 #1）。DTR-C 收窄为矩阵「重置列宽」入口 + 收口复核。
   - 文件范围据实增补 data-table-body.tsx + dt-styles.tsx（DTR-A 把 body 渲染/CSS 注入重构后的直接后果）；dt-styles-resize 用 `.ts` 对齐 base/matrix 既有命名（plan 写 .tsx）。
   - legacy `buildGridTemplate`（data-table-grid.ts）**零改动**（C2）；DTR-D 负责存储迁移 localStorage + ADR-103 §4.2.2 修订；DTR-E 负责 VideoListClient 验收消费 + 完整单测/组件测/Playwright。Track: admin-ui-datatable-resize。
+
+## [DTR-C] 通用表格 DataTable 矩阵「重置列宽」收口（SEQ-20260531-01）
+- **完成时间**：2026-06-01
+- **记录时间**：2026-06-01 05:30
+- **执行模型**：claude-opus-4-8（主循环）
+- **子代理**：arch-reviewer (claude-opus-4-8) — 无新增 spawn；`onResetColumnWidths` 是 DTR-A 锁定契约三公开字段之一，本卡实现。commit 带 `Subagents: arch-reviewer (claude-opus-4-8)` trailer（改公开 ColumnMatrixMenuProps）。
+- **修改文件**：
+  - `packages/admin-ui/src/components/data-table/column-matrix-footer.tsx` — 加「重置列宽」按钮（`onResetColumnWidths` 提供时渲染 / data-testid matrix-foot-reset-widths）
+  - `packages/admin-ui/src/components/data-table/column-matrix-menu.tsx` — `ColumnMatrixMenuProps.onResetColumnWidths?` + 透传 footer
+  - `packages/admin-ui/src/components/data-table/use-column-resize.ts` — 控制器加 `resetAllWidths`（调 resetColumnWidths，逻辑下沉保 data-table.tsx ≤500）
+  - `packages/admin-ui/src/components/data-table/data-table.tsx` — ColumnMatrixMenu 传 `onResetColumnWidths={resizeEnabled ? resize.resetAllWidths : undefined}`（497 行）
+- **新增依赖/schema/路由**：无
+- **Props 契约变更**：`ColumnMatrixMenuProps.onResetColumnWidths?`（可选，缺省不渲染该按钮，零回归）。已在 DTR-A arch-reviewer 锁定。
+- **数据库变更**：无
+- **质量门禁**：admin-ui typecheck ✓ / 完整 typecheck 7 workspace（含 server-next 消费方）✓ / lint 5/5 ✓ / file-size-budget data-table 模块 0 新违规 / table 子集 **429 全过** + 临时 smoke 2 全过（跑后删，正式测试归 DTR-E）。
+- **注意事项**：偏离 —— `resetAllWidths` 放进 useColumnResizeController（非 data-table.tsx 内 useCallback），保 data-table.tsx ≤500 预算 + 逻辑内聚。handle a11y/键盘/auto-fit 已在 DTR-B 落地（本卡仅核验）。DTR-D 负责存储迁移 + ADR-103 §4.2.2；DTR-E 负责验收消费 + 测试。Track: admin-ui-datatable-resize。

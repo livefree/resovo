@@ -15,7 +15,7 @@
 
 ## 进行中任务
 
-（空 — DTR-A ✅ + DTR-B ✅ 完成；下一张 DTR-C，开始时置 🔄）
+（空 — DTR-A ✅ + DTR-B ✅ + DTR-C ✅ 完成；下一张 DTR-D，开始时置 🔄）
 
 ---
 
@@ -65,15 +65,21 @@
   - **沉淀判断**：列宽可调作为通用 DataTable 能力沉淀进共享层（column-resize 纯函数 + controller hook + handle 组件），消费方 opt-in，是。
 - **下一张（DTR-C）依赖**：DTR-B 已导出 `resetColumnWidths`（column-visibility.ts，模块内）供 DTR-C 矩阵「重置列宽」串联。
 
+### ✅ DTR-C — 矩阵「重置列宽」收口
+
+- **状态**：✅ 完成（2026-06-01）
+- **建议模型**：claude-opus-4-8 / **执行模型**：claude-opus-4-8（主循环）
+- **子代理调用**：无新增 spawn。`ColumnMatrixMenu.onResetColumnWidths?` 是 DTR-A arch-reviewer (claude-opus-4-8) 锁定契约三公开字段之一，本卡为实现。commit 带 `Subagents: arch-reviewer (claude-opus-4-8)` trailer（改公开 ColumnMatrixMenuProps）。
+- **方案（落地）**：① `ColumnMatrixFooter` 加「重置列宽」按钮（`onResetColumnWidths` 提供时才渲染，对齐既有「恢复默认列可见性」范式 / data-testid `matrix-foot-reset-widths`）；② `ColumnMatrixMenuProps.onResetColumnWidths?` 透传到 footer；③ data-table 经 `resize.resetAllWidths`（下沉进控制器，调 DTR-B `resetColumnWidths`）串联，仅 `resizeEnabled` 时传入（否则按钮不渲染）。
+- **文件范围**：`column-matrix-footer.tsx`、`column-matrix-menu.tsx`、`data-table.tsx`、`use-column-resize.ts`（`resetAllWidths` 下沉，保 data-table.tsx ≤500：497）
+- **收口复核**：handle a11y（separator+valuenow/min/max+label）/ 键盘（←/→/Shift/Home/End）/ 双击 auto-fit 已在 DTR-B 落地，本卡核验无需改动。
+- **验收**：admin-ui typecheck ✓ / 完整 typecheck 7 workspace（含 server-next 消费方 ColumnMatrixMenuProps）✓ / lint 5/5 ✓ / file-size-budget data-table 模块 0 新违规 / table 子集 **429 全过** + 临时 smoke 2 全过（resize 开 → 按钮现+点击清全 width 保 visible / 未开 → 无按钮且「恢复默认列可见性」不受影响；跑后删）。
+- **偏离**：`resetAllWidths` 放进 `useColumnResizeController`（而非 data-table.tsx 内 `handleMatrixResetColumnWidths` useCallback），保 data-table.tsx ≤500 行预算 + 逻辑内聚（控制器是列宽状态变更的天然 owner）。
+- **沉淀判断**：通用矩阵 popover 增「重置列宽」批量动作，沉淀进共享 footer + 控制器，是。
+
 ---
 
 ## 待开始任务
-
-### ⬜ DTR-C — 矩阵「重置列宽」收口（handle a11y/键盘/auto-fit 已在 DTR-B 完成）
-
-- **建议模型**：claude-opus-4-8
-- **方案（收窄后）**：① `ColumnMatrixMenu.onResetColumnWidths?` Props + `ColumnMatrixFooter` 加「重置列宽」按钮；② data-table `handleMatrixResetColumnWidths` 串联（调 DTR-B 已落地的 `resetColumnWidths`）；③ 收口复核：handle a11y（separator+valuenow/min/max+label）、键盘（←/→/Shift/Home/End）、双击 auto-fit **已在 DTR-B 落地** → DTR-C 仅核验 + 必要微调，不重做。
-- **文件范围**：`column-matrix-menu.tsx`/`column-matrix-footer.tsx`、`data-table.tsx`（resize-handle.tsx 已在 DTR-B 完成，DTR-C 如需微调再纳入）
 
 ### ⬜ DTR-D — 存储迁移 localStorage + ADR-103 §4.2.2 修订
 
