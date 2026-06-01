@@ -58,6 +58,20 @@ function handleFor(container: HTMLElement, colId: string): HTMLElement {
 
 beforeEach(() => { document.body.removeAttribute('data-dt-resizing') })
 
+/**
+ * mock document.createRange：getBoundingClientRect 按 selectNodeContents 节点的 data-col-id 返回内容几何宽
+ * （DTR-F-FIX4：auto-fit 测量改 Range / jsdom 无 layout 需 mock）。返回 spy，调用方 finally restore。
+ */
+function mockRangeByCol(widthByColId: Record<string, number>) {
+  return vi.spyOn(document, 'createRange').mockImplementation(() => {
+    let node: HTMLElement | null = null
+    return {
+      selectNodeContents(n: Node) { node = n as HTMLElement },
+      getBoundingClientRect: () => ({ width: widthByColId[node?.getAttribute?.('data-col-id') ?? ''] ?? 0 }),
+    } as unknown as Range
+  })
+}
+
 describe('handle 渲染门控', () => {
   it('仅可调非 flex/非 action 列出 handle', () => {
     const { container } = renderDT()
@@ -146,20 +160,18 @@ describe('键盘', () => {
 })
 
 describe('双击 auto-fit', () => {
-  it('测当前页内容宽 + padding 提交（mock scrollWidth）', () => {
+  it('测当前页内容几何宽 + padding 提交（Range mock）', () => {
     const { container, onQueryChange } = renderDT()
-    // body cell 'name' 的截断 span mock scrollWidth=200
-    const root = container.querySelector('[data-table]')!
-    root.querySelectorAll('[role="cell"][data-col-id="name"] [data-dt-truncate]').forEach((el) => {
-      Object.defineProperty(el, 'scrollWidth', { value: 200, configurable: true })
-    })
-    fireEvent.doubleClick(handleFor(container, 'name'))
-    // 200 + AUTOFIT_PADDING_X(24) = 224，钳到 [80,300]
-    expect(onQueryChange.mock.calls[0][0].columns?.get('name')?.width).toBe(224)
+    const spy = mockRangeByCol({ name: 200 }) // 内容几何宽 200
+    try {
+      fireEvent.doubleClick(handleFor(container, 'name'))
+      // 200 + AUTOFIT_PADDING_X(24) = 224，钳到 [80,300]
+      expect(onQueryChange.mock.calls[0][0].columns?.get('name')?.width).toBe(224)
+    } finally { spy.mockRestore() }
   })
-  it('测不到内容（scrollWidth=0）→ 不提交', () => {
+  it('测不到内容（Range 0）→ 不提交', () => {
     const { container, onQueryChange } = renderDT()
-    fireEvent.doubleClick(handleFor(container, 'name'))
+    fireEvent.doubleClick(handleFor(container, 'name')) // 未 mock Range → jsdom 0
     expect(onQueryChange).not.toHaveBeenCalled()
   })
 })
@@ -194,25 +206,24 @@ describe('不触发表头排序（stopPropagation）', () => {
 })
 
 describe('自适应列宽（矩阵 popover / DTR-F）', () => {
-  it('打开矩阵 → 点击「自适应列宽」按内容 auto-fit 全列（mock scrollWidth），保留 visible', () => {
+  it('打开矩阵 → 点击「自适应列宽」按内容几何宽 auto-fit 全列（Range mock），保留 visible', () => {
     const onQueryChange = vi.fn<(p: TableQueryPatch) => void>()
     const cols = new Map([['name', { visible: true, width: 250 }], ['url', { visible: true, width: 200 }], ['act', { visible: true }]])
-    const { container, getByTestId } = render(
+    const { getByTestId } = render(
       <DataTable rows={ROWS} columns={COLUMNS} rowKey={(r) => r.id} mode="client" query={snap(cols)} onQueryChange={onQueryChange} enableColumnResizing />,
     )
-    // mock name/url body 截断 span scrollWidth（jsdom 无 layout）
-    const root = container.querySelector('[data-table]')!
-    root.querySelectorAll('[role="cell"][data-col-id="name"] [data-dt-truncate]').forEach((el) => Object.defineProperty(el, 'scrollWidth', { value: 100, configurable: true }))
-    root.querySelectorAll('[role="cell"][data-col-id="url"] [data-dt-truncate]').forEach((el) => Object.defineProperty(el, 'scrollWidth', { value: 160, configurable: true }))
-    fireEvent.click(getByTestId('matrix-trigger'))
-    fireEvent.click(document.querySelector('[data-testid="matrix-foot-reset-widths"]') as HTMLElement)
-    const patched = onQueryChange.mock.calls[0][0].columns!
-    expect(patched.get('name')).toEqual({ visible: true, width: 124 })  // clamp(100+24, [80,300])
-    expect(patched.get('url')).toEqual({ visible: true, width: 184 })   // clamp(160+24, min 80)
-    // act 是 action 未 opt-in → 不可调 → 保持原状（无 width）
-    expect(patched.get('act')).toEqual({ visible: true })
+    const spy = mockRangeByCol({ name: 100, url: 160 })
+    try {
+      fireEvent.click(getByTestId('matrix-trigger'))
+      fireEvent.click(document.querySelector('[data-testid="matrix-foot-reset-widths"]') as HTMLElement)
+      const patched = onQueryChange.mock.calls[0][0].columns!
+      expect(patched.get('name')).toEqual({ visible: true, width: 124 })  // clamp(100+24, [80,300])
+      expect(patched.get('url')).toEqual({ visible: true, width: 184 })   // clamp(160+24, min 80)
+      // act 是 action 未 opt-in → 不可调 → 保持原状（无 width）
+      expect(patched.get('act')).toEqual({ visible: true })
+    } finally { spy.mockRestore() }
   })
-  it('全测不到内容（scrollWidth=0）→ 不提交', () => {
+  it('全测不到内容（Range 0）→ 不提交', () => {
     const onQueryChange = vi.fn<(p: TableQueryPatch) => void>()
     const { getByTestId } = render(
       <DataTable rows={ROWS} columns={COLUMNS} rowKey={(r) => r.id} mode="client" query={snap()} onQueryChange={onQueryChange} enableColumnResizing />,

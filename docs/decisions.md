@@ -3611,10 +3611,11 @@ Next.js App Router 适配（消费方实现 `TableRouterAdapter`）：
 > 文案"重置列宽"→**"自适应列宽"**。同时 `isResizableColumn` 对 `kind:'action'` 改为 **opt-in**
 > （`enableResizing:true` 才可调 / 默认仍不可调 → 其他消费表零回归）；视频库封面(media)/操作(action)列解禁。
 > **限制（明确记录）**：① server 模式 auto-fit **仅测当前渲染页** DOM，翻页内容更宽不回溯；② 测宽口径
-> （DTR-F-FIX1/2/3）：默认字符串 cell 测截断 span scrollWidth；自定义 cell 有元素后代→测**最宽后代元素**
-> scrollWidth（pill/chip 自然宽）；自定义**纯文本** cell（无元素后代）→ 用 **Range 测文本几何宽**（nowrap 完整文本宽，
-> **不回退 overflow:hidden wrapper 的 scrollWidth**——后者=列宽会致重复点击 width drift）；均**排除 wrapper 自身**。
-> 复合 cell 若存在 width:100% 填充型中间元素仍可能偏宽（消费方避免）；③ **不做首屏运行时 auto-fit**（用户决策：
+> （**DTR-F-FIX4 统一**）：对每个 `[data-col-id]` 元素用 `Range.getBoundingClientRect` 测**内容几何宽**
+> （文本 glyph 宽 / 元素 box 宽）——**不受 `flex:1` 填充 / `overflow:hidden` / 当前列宽影响**，截断态仍为完整文本宽
+> → auto-fit **一次到位 + 幂等无漂移**。（取代 FIX1/2/3 的 scrollWidth 路径：`flex:1` 的 `[data-dt-truncate]`
+> scrollWidth=列宽，曾致 pill 过宽 / 表头 label 填充使列宽每次只缩一点渐进到 min / 纯文本 drift 等连环问题。）
+> resize handle 跳过；jsdom 无 layout 故单测需 mock createRange；③ **不做首屏运行时 auto-fit**（用户决策：
 > 避免 server 分页表首屏抖动 + 翻页跳动 → 首屏走"校准声明宽"，auto-fit 仅用户主动点击/双击触发）；
 > ④ 测不到内容（scrollWidth≤0）的列**保持原宽**，不兜底声明宽/DEFAULT。`resetColumnWidths` 纯函数保留
 > （清空 width 原语 / 潜在他用），本轮不接线。下方 AMENDMENT（存储介质）不受本条影响。

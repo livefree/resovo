@@ -165,57 +165,57 @@ describe('resolveColumnWidth', () => {
   })
 })
 
-describe('measureColumnContentWidth', () => {
-  it('扫描 data-col-id cell 内 truncate scrollWidth 取最大', () => {
+/**
+ * mock document.createRange：getBoundingClientRect 按 selectNodeContents 的节点 `data-test-w`
+ * 桩返回内容几何宽（模拟真实浏览器 Range 测量 / jsdom 无 layout）。
+ */
+function mockRangeByTestW() {
+  return vi.spyOn(document, 'createRange').mockImplementation(() => {
+    let node: HTMLElement | null = null
+    return {
+      selectNodeContents(n: Node) { node = n as HTMLElement },
+      getBoundingClientRect: () => ({ width: Number(node?.getAttribute?.('data-test-w') ?? 0) }),
+    } as unknown as Range
+  })
+}
+
+describe('measureColumnContentWidth (Range 几何测量 / DTR-F-FIX4)', () => {
+  it('取各 cell 内容几何宽（data-test-w）的最大（max over cells，含表头/body）', () => {
     const root = document.createElement('div')
     root.innerHTML = `
-      <div data-col-id="a"><span data-dt-truncate></span></div>
-      <div data-col-id="a"><span data-dt-truncate></span></div>
-      <div data-col-id="b"></div>`
-    const spans = root.querySelectorAll('[data-dt-truncate]')
-    Object.defineProperty(spans[0], 'scrollWidth', { value: 80 })
-    Object.defineProperty(spans[1], 'scrollWidth', { value: 150 })
-    expect(measureColumnContentWidth(root, 'a')).toBe(150)
+      <span data-dt-truncate data-col-id="a" data-test-w="42"></span>
+      <div data-col-id="a" data-test-w="80"></div>
+      <div data-col-id="a" data-test-w="150"></div>
+      <div data-col-id="b" data-test-w="999"></div>`
+    const spy = mockRangeByTestW()
+    try { expect(measureColumnContentWidth(root, 'a')).toBe(150) } finally { spy.mockRestore() }
+  })
+  it('Range 测内容几何宽，不受元素 scrollWidth（=列宽）影响 → 修 pill 过宽 / 表头 label 填充渐缩', () => {
+    const root = document.createElement('div')
+    root.innerHTML = `<div data-col-id="p" data-test-w="60"></div>`
+    // scrollWidth=200（当前列宽 / flex 填充元素的 scrollWidth）—— 不该被用
+    Object.defineProperty(root.querySelector('[data-col-id="p"]')!, 'scrollWidth', { value: 200 })
+    const spy = mockRangeByTestW()
+    try { expect(measureColumnContentWidth(root, 'p')).toBe(60) } finally { spy.mockRestore() }
+  })
+  it('跳过 resize handle（非内容）', () => {
+    const root = document.createElement('div')
+    root.innerHTML = `<span data-dt-resize-handle data-col-id="x" data-test-w="8"></span><div data-col-id="x" data-test-w="70"></div>`
+    const spy = mockRangeByTestW()
+    try { expect(measureColumnContentWidth(root, 'x')).toBe(70) } finally { spy.mockRestore() }
+  })
+  it('幂等：同一内容几何宽多次测量稳定（不随列宽漂移）', () => {
+    const root = document.createElement('div')
+    root.innerHTML = `<div data-col-id="t" data-test-w="64"></div>`
+    const spy = mockRangeByTestW()
+    try {
+      expect(measureColumnContentWidth(root, 't')).toBe(64)
+      expect(measureColumnContentWidth(root, 't')).toBe(64) // 再测仍 64（content 不变）
+    } finally { spy.mockRestore() }
   })
   it('无 DOM / 无命中 → 0', () => {
     expect(measureColumnContentWidth(null, 'a')).toBe(0)
     expect(measureColumnContentWidth(document.createElement('div'), 'zzz')).toBe(0)
-  })
-  it('DTR-F-FIX1：自定义 cell 测最宽后代内容，不测 overflow:hidden 的 wrapper 自身（修 pill 列过宽）', () => {
-    const root = document.createElement('div')
-    root.innerHTML = `<div data-col-id="p"><span class="pill"></span></div>`
-    const wrapper = root.querySelector('[data-col-id="p"]')!
-    const pill = root.querySelector('.pill')!
-    Object.defineProperty(wrapper, 'scrollWidth', { value: 200 }) // = 当前列宽（不该用）
-    Object.defineProperty(pill, 'scrollWidth', { value: 60 })     // 内容真实宽
-    expect(measureColumnContentWidth(root, 'p')).toBe(60)         // 取内容宽，非 wrapper 200
-  })
-  it('DTR-F-FIX1：表头 label（本身是 data-dt-truncate）测自身 scrollWidth', () => {
-    const root = document.createElement('div')
-    root.innerHTML = `<span data-dt-truncate data-col-id="h"></span>`
-    Object.defineProperty(root.querySelector('[data-col-id="h"]')!, 'scrollWidth', { value: 42 })
-    expect(measureColumnContentWidth(root, 'h')).toBe(42)
-  })
-  it('DTR-F-FIX1：跳过 resize handle（非内容）', () => {
-    const root = document.createElement('div')
-    root.innerHTML = `<span data-dt-resize-handle data-col-id="x"></span><div data-col-id="x"><span class="c"></span></div>`
-    Object.defineProperty(root.querySelector('[data-dt-resize-handle]')!, 'scrollWidth', { value: 8 })
-    Object.defineProperty(root.querySelector('.c')!, 'scrollWidth', { value: 70 })
-    expect(measureColumnContentWidth(root, 'x')).toBe(70) // handle 8 跳过，取内容 70
-  })
-  it('DTR-F-FIX3（Codex review）：自定义纯文本 cell 用 Range 测文本宽，不回退 wrapper（防 width drift）', () => {
-    const root = document.createElement('div')
-    root.innerHTML = `<div data-col-id="t">纯文本内容</div>` // 无元素后代，直接文本节点
-    // wrapper.scrollWidth = 当前列宽 200（若误回退 wrapper 会随列宽 drift）
-    Object.defineProperty(root.querySelector('[data-col-id="t"]')!, 'scrollWidth', { value: 200 })
-    // Range 测文本几何宽 64（不随列宽变）
-    const rangeStub = { selectNodeContents: () => {}, getBoundingClientRect: () => ({ width: 64 }) }
-    const spy = vi.spyOn(document, 'createRange').mockReturnValue(rangeStub as unknown as Range)
-    try {
-      expect(measureColumnContentWidth(root, 't')).toBe(64) // 用 Range 64，非 wrapper 200 → 无漂移
-    } finally {
-      spy.mockRestore()
-    }
   })
 })
 

@@ -12824,3 +12824,16 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
   - `docs/decisions.md` — ADR-103 §4.2.2 AMENDMENT 2 限制②措辞同步（纯文本 Range 测 / 不回退 wrapper 防 drift）
 - **门禁**：typecheck ✓ / lint 5/5 ✓ / table 子集 498 全过 / data-table 模块 0 新违规。
 - **效果**：纯文本自定义 cell auto-fit 取文本几何宽（不随列宽漂移）；pill/chip（元素后代）保持 FIX1；默认字符串 cell 走截断 span。Track: admin-ui-datatable-resize。
+
+## [DTR-F-FIX4] auto-fit 测量统一改 Range 几何测量（修「每次只缩一点直到 min」+ 收敛 FIX1/2/3）
+- **完成时间**：2026-06-01 / **执行模型**：claude-opus-4-8（主循环）/ **子代理**：无（用户实测反馈 + 根因收敛）
+- **来源**：用户实测——"列调很宽后双击/自适应列宽不一次到位，每次只缩一点直到最小"。
+- **根因（贯穿 FIX1/2/3 的总根源）**：`[data-dt-truncate]`（表头 label + 默认 cell 文本）有 `flex:1` 会**填满容器** → 其 `scrollWidth = 列宽`（文本不溢出时），不反映内容。表头 label 填满整列 → auto-fit 每次测到≈列宽-图标宽 → 每点缩一点（图标宽）渐进到 min。`scrollWidth` 对任何 flex 填充 / overflow:hidden 元素都不可靠（同源致 FIX1 pill 过宽、FIX2/3 纯文本问题）。
+- **修复（统一）**：`measureColumnContentWidth` 改为对每个 `[data-col-id]` 元素用 `Range.getBoundingClientRect` 测**内容几何宽**（文本 glyph / 元素 box），**不受 flex 填充 / overflow:hidden / 当前列宽影响**，截断态仍为完整文本宽 → **一次到位 + 幂等无漂移**。彻底取代 FIX1/2/3 的 scrollWidth + 后代/wrapper/纯文本回退分支。
+- **修改文件**：
+  - `packages/admin-ui/src/components/data-table/column-resize.ts` — `measureColumnContentWidth` 简化为 Range-only（复用 `measureRangeWidth`）；docstring 记录根因与口径
+  - `tests/unit/.../column-resize.test.ts` — measureColumnContentWidth describe 重写（mock createRange 按 `data-test-w` 桩 / +幂等用例 / 5 case）
+  - `tests/unit/.../column-resize-handle.test.tsx` — auto-fit（双击 + 矩阵）测试改 `mockRangeByCol`（按 colId 返回几何宽）替代 scrollWidth mock
+  - `docs/decisions.md` — ADR-103 §4.2.2 AMENDMENT 2 限制②改为 FIX4 统一 Range 口径
+- **门禁**：typecheck ✓ / lint 5/5 ✓ / table 子集 497 全过 / data-table 模块 0 新违规。
+- **效果**：拖很宽后双击/自适应 **一次缩到内容宽**（不再每次缩一点）；反复点击幂等稳定；pill/文本/表头 label 全部按真实内容几何宽。Track: admin-ui-datatable-resize。

@@ -158,15 +158,19 @@ export function buildResizableGridTemplate<T>(
 }
 
 /**
- * 测量某列**当前渲染页**所有可见 cell + 表头 label 的最大**内容**宽度（auto-fit / 双击）。
+ * 测量某列**当前渲染页**所有 cell + 表头 label 的最大**内容几何宽**（auto-fit / 双击）。
  *
- * 扫描带 `[data-col-id="{colId}"]` 的元素，分两类取宽（DTR-F-FIX1）：
- *   - 元素**本身**是 `[data-dt-truncate]`（表头 label span）→ 直接取其 `scrollWidth`（完整文本宽）。
- *   - 否则是 **body cell wrapper**（`overflow:hidden` + grid 固定宽 → 其自身 scrollWidth = **列宽**、
- *     不反映内容）→ 取其**最宽后代元素**的 `scrollWidth`：截断文本后代 scrollWidth=完整文本，
- *     pill/chip/复合等自然宽元素 scrollWidth=内容宽；**排除 wrapper 自身**避免测成列宽。
+ * 对每个 `[data-col-id="{colId}"]` 元素用 `Range.getBoundingClientRect` 测其**内容布局几何宽**：
+ *   - 文本内容 → 测 glyph 几何宽（`nowrap` 完整文本宽），**不受 `flex:1` 填充 / `overflow:hidden` /
+ *     当前列宽影响**；
+ *   - 元素内容（pill/chip/复合）→ 测其 box 几何宽（content-sized 元素 = 内容宽）。
  *   - resize handle（`[data-dt-resize-handle]`）非内容，跳过。
- * server 模式下仅覆盖当前页行（文档化限制）。无 DOM / 无命中 / 无后代时返回 0。
+ * server 模式下仅覆盖当前页行（文档化限制）。无 DOM / 无 Range / 无命中 → 0。
+ *
+ * **为何用 Range 而非 scrollWidth**（DTR-F-FIX4 统一）：`[data-dt-truncate]`（表头 label + 默认 cell）
+ *   有 `flex:1` 会填满容器 → 其 `scrollWidth = 列宽`（文本不溢出时），不反映内容 → 致 pill 过宽 /
+ *   表头 label 填充使 auto-fit 每次只缩一点渐进到 min / drift 等连环问题（FIX1/2/3 的 scrollWidth 路径根因）。
+ *   Range 测的是内容几何（glyph / box），与元素填充宽无关，截断态下仍是完整文本宽 → 一次到位 + 幂等无漂移。
  */
 export function measureColumnContentWidth(
   scrollEl: HTMLElement | null | undefined,
@@ -177,22 +181,7 @@ export function measureColumnContentWidth(
   let max = 0
   scrollEl.querySelectorAll(selector).forEach((el) => {
     if (el.hasAttribute('data-dt-resize-handle')) return
-    let w: number
-    if (el.matches('[data-dt-truncate]')) {
-      w = (el as HTMLElement).scrollWidth
-    } else {
-      // body cell wrapper：测最宽后代内容元素（排除 overflow:hidden 固定宽的 wrapper 自身）
-      let inner = 0
-      el.querySelectorAll('*').forEach((d) => {
-        const dw = (d as HTMLElement).scrollWidth
-        if (dw > inner) inner = dw
-      })
-      // 无元素后代（自定义 cell 返回纯字符串/数字/fragment 文本）→ 用 Range 测文本布局宽。
-      // **不可**回退 wrapper.scrollWidth：wrapper overflow:hidden 固定宽，文本不溢出时 scrollWidth=列宽，
-      // auto-fit 每次点击会越测越宽（width drift / Codex stop-time review）；Range 测文本几何宽，
-      // nowrap 下为完整文本宽、不随列宽漂移。
-      w = inner || measureRangeWidth(el)
-    }
+    const w = measureRangeWidth(el)
     if (w > max) max = w
   })
   return max
@@ -205,9 +194,10 @@ function cssEscape(value: string): string {
 }
 
 /**
- * 测元素内容（含纯文本节点）的**布局几何宽**（Range.getBoundingClientRect）。
- * 用于无元素后代的纯文本 cell —— 文本在 `nowrap` 下布局宽 = 完整文本宽，**不随列宽漂移**
- * （区别于 overflow:hidden wrapper 的 scrollWidth=列宽）。无 Range / SSR / 异常时返回 0。
+ * 测元素内容（文本节点 + 子元素）的**布局几何宽**（`Range.selectNodeContents` + getBoundingClientRect）。
+ * 文本在 `nowrap` 下几何宽 = 完整文本宽（截断态下仍是完整宽），元素内容取其 box 几何；
+ * **均不受元素自身 flex 填充 / overflow:hidden / 当前列宽影响**（区别于 scrollWidth）。
+ * 无 Range / SSR / 异常时返回 0（jsdom 无 layout 时亦 0，单测需 mock createRange）。
  */
 function measureRangeWidth(el: Element): number {
   const doc = el.ownerDocument
