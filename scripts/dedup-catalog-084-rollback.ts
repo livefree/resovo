@@ -152,26 +152,40 @@ async function rollback(client: PoolClient): Promise<void> {
       if (residual.rows.length === 0) {
         process.stdout.write('  locks 疑似 B 类转移残留候选: 0（无须人工处理）\n')
       } else {
-        // ⚠️ Codex（多轮收敛终局）：残留是 **fail-safe 副作用，不是待删的坏数据**，本脚本**只诊断记录、
-        //   不提供任何删除方法/指引**（含原子内容条件删——它解 TOCTOU 但解不了误报，仍可能删中合法 A 类锁，
-        //   fail-dangerous）。关键认知：
-        //   · 残留 B 类锁的后果是「该字段被保守地不再富集覆盖」= 可能漏更新某字段（fail-safe，不破坏/不误删数据）；
-        //     而任何「删残留」的尝试都是 fail-dangerous（误报 + TOCTOU 叠加 → 可能删合法锁）。两害取轻：保留。
-        //   · 误报（信息论不可达）+ TOCTOU 叠加后，不存在「既不误删合法锁又能清残留」的删除方法——故不提供。
-        //   · 若运营确认某字段锁需解除，走**日常字段锁管理流程**（其安全性是该流程的职责，与本回滚无关），
-        //     不依据本台账批量/脚本化删除。
-        //   脚本职责到此为止：列清单 + 落台账供审计追溯。
+        // ⚠️ Codex（多轮收敛，含 hard/soft 分级修正）：残留 locks 须**按 lock_mode 分级**，不可一概「无需处置」：
+        //   · soft 残留：safeUpdate 仅挡非 manual 来源（MediaCatalogService.ts:220 `source !== 'manual'`），
+        //     manual 仍可覆盖 → 较轻、近 fail-safe，通常无需处置。
+        //   · **hard 残留：safeUpdate 无条件跳过该字段（:215），任何来源含 manual 都不能覆盖 = 留存行该字段
+        //     被永久冻结、富集与手动均无法更新 → 实质运行时问题，需处置**（不是无害 fail-safe，前述「一概无需处置」错误，已撤回）。
+        //   删除困境仍在（误报信息论不可达 + TOCTOU），脚本不提供任何自动删除方法。且**经核实当前无 admin
+        //   字段锁管理 route/UI**（removeFieldLock/upsertFieldLock 无任何 route 调用方）——故不指向「日常管理流程」
+        //   （该流程不存在，前述指向是虚假声称，已撤回）。hard 残留解除须 DBA/工程介入，逐条业务核查 + 原子内容
+        //   条件删（自担误报判定责任）。脚本职责：分级诊断 + 落台账（标 hard/soft）供审计与人工处置。
+        const hardRows = residual.rows.filter((r) => r.lock_mode === 'hard')
+        const softRows = residual.rows.filter((r) => r.lock_mode !== 'hard')
         process.stdout.write(
-          `  ℹ️ locks 疑似 B 类转移残留候选 ${residual.rows.length} 条（fail-safe：相关字段会被保守地不再富集覆盖，` +
-            `不破坏/不误删数据；判据含误报）。**本脚本仅诊断记录，不删、不提供删除方法**——\n` +
-            `     残留属可接受的保守副作用，无需处置；如个别字段锁确需解除，走日常字段锁管理流程（非依据本台账）。\n` +
-            `     诊断明细（同步落 _residual_locks_084 供审计追溯）：\n`,
+          `  ⚠️ locks 疑似 B 类转移残留候选 ${residual.rows.length} 条（hard ${hardRows.length} / soft ${softRows.length}；判据含误报）。\n`,
         )
-        for (const r of residual.rows) {
-          process.stdout.write(`    · catalog=${r.catalog_id} field=${r.field_name} mode=${r.lock_mode} by=${r.locked_by}\n`)
+        if (hardRows.length > 0) {
+          process.stdout.write(
+            `     ❗ hard 锁残留 ${hardRows.length} 条 = 留存行该字段被永久冻结（富集+手动均无法更新），**需处置**。\n` +
+              `        当前无 admin 字段锁管理通道；解除须 DBA/工程逐条业务核查（确属本次合并误转移）后处理，\n` +
+              `        删除有误报+TOCTOU 风险无自动安全方法（详见 D-174-6 / 不据本台账批量删）：\n`,
+          )
+          for (const r of hardRows) {
+            process.stdout.write(`        · catalog=${r.catalog_id} field=${r.field_name} by=${r.locked_by}\n`)
+          }
+        }
+        if (softRows.length > 0) {
+          process.stdout.write(
+            `     soft 锁残留 ${softRows.length} 条（仅挡非 manual 覆盖，manual 仍可更新 → 较轻，通常无需处置）：\n`,
+          )
+          for (const r of softRows) {
+            process.stdout.write(`        · catalog=${r.catalog_id} field=${r.field_name} by=${r.locked_by}\n`)
+          }
         }
         process.stdout.write(
-          `  明细已落 _residual_locks_084（诊断/审计台账；本脚本不据其删除任何锁，也不规定删除流程）。\n`,
+          `  明细已落 _residual_locks_084（含 lock_mode；本脚本不删/不提供删除方法，hard 残留交 DBA/工程处置）。\n`,
         )
       }
     } else {

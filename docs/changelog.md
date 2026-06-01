@@ -12988,3 +12988,23 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **数据库变更**：无。
 - **质量门禁**：typecheck EXIT=0 / grep 无 DELETE 字面 + 无删除方法指引 / 回滚 dry-run 跑通 / verify:adr-contracts 待跑。
 - **闭环说明**：FIX5→FIX10 围绕 locks 残留六轮收敛的最终结论——残留是 fail-safe 副作用而非坏数据；误报+TOCTOU 叠加使「安全清除残留」不可达；故回滚脚本的唯一正确做法是「保留残留 + 纯诊断 + 不提供任何删除路径」，删除属日常字段锁管理流程职责。
+
+---
+
+## [META-23-C-FIX11] 回滚 locks 残留按 hard/soft 分级 + 移除不存在流程指向（Codex stop-time review）
+- **完成时间**：2026-06-01
+- **执行模型**：claude-opus-4-8
+- **子代理**：无
+- **来源**：Codex stop-time review「残留 `hard` 锁被错误降级为'无需处置'，且指向不存在的管理流程」（第七轮指 locks 残留）。
+- **问题（FIX10 引入的两处误判，已核实确认）**：
+  - ① **hard 锁被错误一概「无需处置」**：核 `MediaCatalogService.ts:215`——`hardLockedSet.has(key)` 时该字段**无条件跳过**，任何来源含 manual 都不能覆盖 → 留存行 hard 残留 = 该字段**被永久冻结**（富集+手动均无法更新），是**实质运行时问题**，非 FIX10 所称无害 fail-safe。仅 soft 锁（`:220` `source !== 'manual'`）才较轻（manual 仍可覆盖）。FIX10「一概无需处置」错误，撤回。
+  - ② **指向不存在的流程**：grep 核实 `removeFieldLock`/`upsertFieldLock`（`metadataProvenance.ts`）**无任何 route/UI 调用方**——「日常字段锁管理流程」不存在，FIX10 指向属虚假声称，撤回。
+- **修复**：
+  - 脚本 locks 残留按 `lock_mode` 分级输出：**hard 残留**标 ❗「字段被永久冻结、需处置」，**soft 残留**标「较轻、通常无需处置」；`_residual_locks_084` 台账保留 `lock_mode` 列供分级追溯。
+  - 处置话术诚实化：当前无 admin 字段锁管理通道，hard 残留解除须 **DBA/工程逐条业务核查**后处理；删除受**误报+TOCTOU** 制约无自动安全方法（沿用 FIX10 信息论结论 + R11），脚本**仍不删/不提供删除方法**。不再指向任何「日常字段锁管理流程」。
+  - ADR-174 D-174-6「locks ≠ provenance」段补 hard/soft 分级 + 无管理通道事实 + 删除困境，撤回旧「噪声/可接受/无需处置」一概定性。
+- **修改文件**：`scripts/dedup-catalog-084-rollback.ts`（locks 残留 hard/soft 分级 + 移除不存在流程指向）/ `docs/decisions.md`（D-174-6 locks 段修正）。
+- **新增依赖/schema/Props 契约变更**：无。
+- **数据库变更**：无。
+- **质量门禁**：typecheck EXIT=0 / 回滚 dry-run 跑通（本次 0 残留）/ verify:adr-contracts EXIT=0。
+- **诚实声明**：本轮纠正 FIX10 的两处过度简化——hard 残留有实质运行时后果（字段永久冻结）不可一概轻描淡写；处置无 admin 通道，不可指向虚构流程。已确立真相不变（误报+TOCTOU → 无自动安全删除；脚本只诊断不删）。
