@@ -12677,3 +12677,189 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **新增依赖/schema/路由/Props 契约变更**：无。
 - **质量门禁**：typecheck/lint EXIT=0 / 全量 444 文件 **5787 passed**（VideoImageSection 1 并行 flaky，隔离 21/21 通过，无关）。
 - **范围**：渲染角色头像；CV 头像未渲染（actor.imageUrl 已存，后续按需）。
+
+## [DTR-A] 通用表格 DataTable 文件体积预拆（列宽可调前置 / SEQ-20260531-01）
+- **完成时间**：2026-06-01
+- **记录时间**：2026-06-01 04:15
+- **执行模型**：claude-opus-4-8（主循环）
+- **子代理**：arch-reviewer (claude-opus-4-8) — PASS-WITH-CONDITIONS，敲定列宽可调 API 契约 + flex 列算法 + CSS 变量 grid + 存储拆分 + 文件拆分边界 + 7 条落地约束 C1–C7
+- **修改文件**：
+  - `packages/admin-ui/src/components/data-table/types.ts` — 列定义 union + 过滤值簇抽至 column-types.ts，re-export 保持兼容（509→307）
+  - `packages/admin-ui/src/components/data-table/column-types.ts` — 新建（TableColumnBase / 4 KindColumn / AutoFilterColumnFields / ColumnKind / ColumnDescriptor / FilterValue 等，254 行）
+  - `packages/admin-ui/src/components/data-table/dt-styles.tsx` — 拆为注入器（709→51），单一 DTStyles 注入守卫保留
+  - `packages/admin-ui/src/components/data-table/dt-styles-base.ts` + `dt-styles-matrix.ts` — 新建（base/matrix CSS 字符串）
+  - `packages/admin-ui/src/components/data-table/column-matrix-menu.tsx` — 抽样式常量 / 键盘 hook / footer（608→469）
+  - `packages/admin-ui/src/components/data-table/column-matrix-menu.styles.ts` + `use-matrix-keyboard.ts` + `column-matrix-footer.tsx` — 新建
+  - `packages/admin-ui/src/components/data-table/data-table.tsx` — 抽 client-ops / grid 原语 / 表头行 / 行体（737→480）
+  - `packages/admin-ui/src/components/data-table/client-data-ops.ts` + `data-table-grid.ts` + `data-table-header-row.tsx` + `data-table-body.tsx` — 新建
+- **新增依赖/schema/路由**：无
+- **Props 契约变更**：无（纯结构拆分，index.ts 公开导出不变；enableColumnResizing/maxWidth/onResetColumnWidths 等留 DTR-B/C）
+- **数据库变更**：无
+- **质量门禁（全量）**：全量 typecheck ✓（7 workspace）/ lint ✓（turbo 5/5 successful，仅 pre-existing warning）/ verify:adr-contracts ✓（末项 enum-ssot advisory 非阻塞，警告均 pre-existing 无关文件）/ verify:file-size-budget 新违规 24→21（本轨 4 文件全脱离 + data-table 脱离 baseline 豁免）/ **全量 test:run 5788 passed（445 文件，0 失败）**，data-table 子集 429 零行为变化验证。
+- **环境前置**：worktree 新建后需 `npm install` + 构建本地包 `external-adapter/douban-adapter`（dist gitignore、无 prepare 脚本），否则 apps/api 全量 typecheck 报 douban-adapter 模块缺失（与本轨无关）。
+- **注意事项**：偏离 arch-reviewer C7「matrix inline style 迁 CSS」——改为常量平移（column-matrix-menu.styles.ts），同样达标且零视觉回归风险，inline/CSS 双轨债记 follow-up（按价值排序 #1 稳定性优先）。其余 C1–C7 待 DTR-B..E 落地。Track: admin-ui-datatable-resize。
+
+## [DTR-B] 通用表格 DataTable 列宽可调核心（类型契约 + 布局 + handle + 截断 / SEQ-20260531-01）
+- **完成时间**：2026-06-01
+- **记录时间**：2026-06-01 05:20
+- **执行模型**：claude-opus-4-8（主循环）
+- **子代理**：arch-reviewer (claude-opus-4-8) — 无新增 spawn；实现 DTR-A 已锁定的契约（`enableColumnResizing`/`maxWidth` + C1–C6）。因改 admin-ui `types.ts` 公开 Props，commit 带 `Subagents: arch-reviewer (claude-opus-4-8)` trailer 引用 DTR-A 评审锁定（CLAUDE.md 共享组件 API 契约强制 Opus）。
+- **修改文件**：
+  - `packages/admin-ui/src/components/data-table/types.ts` — `DataTableProps.enableColumnResizing?: boolean`（默认 false / C1 静态门控，文档化语义）
+  - `packages/admin-ui/src/components/data-table/column-types.ts` — `TableColumnBase.maxWidth?: number`
+  - `packages/admin-ui/src/components/data-table/column-resize.ts` — 新建（纯函数：clampWidth/pickFlexColumnId(C5)/buildResizableGridTemplate(fixed-left+flex-last+加载期钳制+占位轨+override)/isResizableColumn/resolveColumnWidth/measureColumnContentWidth + 常量，177 行）
+  - `packages/admin-ui/src/components/data-table/resize-handle.tsx` — 新建（`<ColumnResizeHandle>` role=separator + 完整 a11y + Pointer 全生命周期 rAF 命令式预览 + 键盘 ←/→/Shift/Home/End + 双击 auto-fit + 五事件 stopPropagation(C6)，213 行）
+  - `packages/admin-ui/src/components/data-table/use-column-resize.ts` — 新建（`useColumnResizeController` 控制器：rootRef/rootStyle/gridTemplate memo/headerContext + preview/commit/rollback/autoFit，131 行）
+  - `packages/admin-ui/src/components/data-table/data-table.tsx` — 接入控制器（root rootRef + `--dt-grid-template` CSS 变量 / rows 走 var() vs legacy 字面 / header resize 上下文 / body resizeEnabled），522→496 控制下沉后 ≤500
+  - `packages/admin-ui/src/components/data-table/data-table-header-row.tsx` — resize 路径：th position:relative + label 截断 span(data-col-id) + 可调列 handle 渲染
+  - `packages/admin-ui/src/components/data-table/data-table-body.tsx` — resize 路径：body cell data-col-id + 默认字符串 cell 截断 span + native title
+  - `packages/admin-ui/src/components/data-table/column-visibility.ts` — `setColumnWidth`（全量 map / visible 兜底 defaultVisible C4）+ `resetColumnWidths`
+  - `packages/admin-ui/src/components/data-table/dt-styles-resize.ts` — 新建（handle 分割线 + drag 光标禁选 + 截断 CSS，颜色零硬编码 + reduced-motion，74 行）
+  - `packages/admin-ui/src/components/data-table/dt-styles.tsx` — 注入器拼接 base+matrix+**resize**（2 行）
+- **新增依赖/schema/路由**：无
+- **Props 契约变更**：`DataTableProps.enableColumnResizing?`（表级，默认 false，零回归）+ `TableColumn.maxWidth?`（列级上限）；index.ts 公开导出**不变**（setColumnWidth/resetColumnWidths 保持模块内部，不扩 api-surface）。已在 DTR-A arch-reviewer 锁定。
+- **数据库变更**：无
+- **质量门禁**：admin-ui typecheck ✓ / 完整 typecheck 7 workspace ✓ / server-next 消费方 typecheck ✓ / lint ✓（turbo 5/5）/ `verify:file-size-budget` data-table 模块 **0 新违规**（沿用 DTR-A 21 既有 / 全部 apps/ 非本轨文件）/ table 子集 **429 全过** + 临时 smoke 14 全过（跑后删，正式测试归 DTR-E）。
+- **全量 test:run 观察**：本轨改动与干净 DTR-A HEAD **均** 出现「每次全量随机挂 1 个不同的无关 `apps/server-next/admin/**` 测试」（UserSubmissionsClient / StagingEditPanel / CrawlerClient 三次各不同，全部隔离单跑通过）→ 经 stash 我的改动后干净 HEAD 复现，确证为 **server-next admin 测试套件既有非确定性跨测试污染 flake，与 DTR-B 零关系**（failing 测试不走 resize 路径）。本轨不修（不在文件范围），记既有债观察。
+- **注意事项**：
+  - 卡边界合并：handle a11y/键盘/双击 auto-fit 从 DTR-C 并入 DTR-B（半成品 handle 不可独立验收，价值排序 #1）。DTR-C 收窄为矩阵「重置列宽」入口 + 收口复核。
+  - 文件范围据实增补 data-table-body.tsx + dt-styles.tsx（DTR-A 把 body 渲染/CSS 注入重构后的直接后果）；dt-styles-resize 用 `.ts` 对齐 base/matrix 既有命名（plan 写 .tsx）。
+  - legacy `buildGridTemplate`（data-table-grid.ts）**零改动**（C2）；DTR-D 负责存储迁移 localStorage + ADR-103 §4.2.2 修订；DTR-E 负责 VideoListClient 验收消费 + 完整单测/组件测/Playwright。Track: admin-ui-datatable-resize。
+
+## [DTR-C] 通用表格 DataTable 矩阵「重置列宽」收口（SEQ-20260531-01）
+- **完成时间**：2026-06-01
+- **记录时间**：2026-06-01 05:30
+- **执行模型**：claude-opus-4-8（主循环）
+- **子代理**：arch-reviewer (claude-opus-4-8) — 无新增 spawn；`onResetColumnWidths` 是 DTR-A 锁定契约三公开字段之一，本卡实现。commit 带 `Subagents: arch-reviewer (claude-opus-4-8)` trailer（改公开 ColumnMatrixMenuProps）。
+- **修改文件**：
+  - `packages/admin-ui/src/components/data-table/column-matrix-footer.tsx` — 加「重置列宽」按钮（`onResetColumnWidths` 提供时渲染 / data-testid matrix-foot-reset-widths）
+  - `packages/admin-ui/src/components/data-table/column-matrix-menu.tsx` — `ColumnMatrixMenuProps.onResetColumnWidths?` + 透传 footer
+  - `packages/admin-ui/src/components/data-table/use-column-resize.ts` — 控制器加 `resetAllWidths`（调 resetColumnWidths，逻辑下沉保 data-table.tsx ≤500）
+  - `packages/admin-ui/src/components/data-table/data-table.tsx` — ColumnMatrixMenu 传 `onResetColumnWidths={resizeEnabled ? resize.resetAllWidths : undefined}`（497 行）
+- **新增依赖/schema/路由**：无
+- **Props 契约变更**：`ColumnMatrixMenuProps.onResetColumnWidths?`（可选，缺省不渲染该按钮，零回归）。已在 DTR-A arch-reviewer 锁定。
+- **数据库变更**：无
+- **质量门禁**：admin-ui typecheck ✓ / 完整 typecheck 7 workspace（含 server-next 消费方）✓ / lint 5/5 ✓ / file-size-budget data-table 模块 0 新违规 / table 子集 **429 全过** + 临时 smoke 2 全过（跑后删，正式测试归 DTR-E）。
+- **注意事项**：偏离 —— `resetAllWidths` 放进 useColumnResizeController（非 data-table.tsx 内 useCallback），保 data-table.tsx ≤500 预算 + 逻辑内聚。handle a11y/键盘/auto-fit 已在 DTR-B 落地（本卡仅核验）。DTR-D 负责存储迁移 + ADR-103 §4.2.2；DTR-E 负责验收消费 + 测试。Track: admin-ui-datatable-resize。
+
+## [DTR-D] 通用表格 DataTable 存储迁移 localStorage + ADR-103 §4.2.2 修订（SEQ-20260531-01）
+- **完成时间**：2026-06-01
+- **记录时间**：2026-06-01 05:40
+- **执行模型**：claude-opus-4-8（主循环）
+- **子代理**：arch-reviewer (claude-opus-4-8) — 无新增 spawn；ADR §4.2.2 修订要点（双 key 双介质 / width 校验 / 旧 v1 清理）已在 DTR-A C3 锁定。持 adr 锁改 docs/decisions.md，commit 带 `Subagents: arch-reviewer (claude-opus-4-8)` trailer。
+- **修改文件**：
+  - `packages/admin-ui/src/components/data-table/storage-sync.ts` — 双 key 双介质（布局偏好 localStorage `:v2` / saved views sessionStorage `:views:v1`）+ 旧合并 `:v1` 一次性清理不迁移 + `isValidWidth`(finite>0) 校验丢弃保 visible + SSR 安全 safeGet/Set/Remove；对外 4 签名 + StoredPrefs 合并形态不变
+  - `packages/admin-ui/src/components/data-table/use-table-query.ts` — docstring 同步（sessionStorage → 布局 localStorage / views sessionStorage 双介质）
+  - `docs/decisions.md` — ADR-103 §4.2.2 AMENDMENT（原单 key sessionStorage 规约废止 → 双 key 双介质，含动机/旧 key 处置/封装说明）+ §3586（pageSize 介质）+ §3432（列宽持久化口径）AMENDMENT 标注
+- **新增依赖/schema/路由**：无
+- **Props 契约变更**：无（storage-sync 公开签名 + StoredPrefs 形态不变；介质迁移对消费方透明）
+- **ADR 变更**：ADR-103 §4.2.2 AMENDMENT（DTR-D / arch-reviewer C3 锁定）
+- **数据库变更**：无
+- **质量门禁**：admin-ui typecheck ✓ / 完整 typecheck 7 workspace（含 server-next 消费方）✓ / lint 5/5 ✓ / **verify:adr-contracts exit=0**（verify-endpoint-adr/sql-schema/style-shorthand/admin-shell-types-mirror 全 ✅ / enum-ssot+error-message advisory 非阻塞 pre-existing）/ file-size-budget data-table 模块 0 新违规（storage-sync 270 行）/ table 子集 **429 全过**（既有 saved-views-persist 12 round-trip 不回归）+ 临时 smoke 4 全过（跑后删，正式测试归 DTR-E）。
+- **注意事项**：旧 `:v1`（sessionStorage 合并）一次性重置——升级后用户旧布局偏好 + saved views 不迁移、从默认重建（views 本会话级关标签页即失、无感）。跨设备 DB-level 同步（N1-149-2）另起 ADR 本轮不做。偏离：plan「isStoredPrefs 加 width 校验」改为独立 isValidWidth + parseLayout 清洗（width 非法应丢弃保 visible 而非整体 reject）。DTR-E 负责 VideoListClient 验收消费 + 完整单测/组件测/Playwright + test:e2e。Track: admin-ui-datatable-resize。
+
+## [DTR-E] 通用表格 DataTable 列宽可调验收消费 + 测试 + 门禁（SEQ-20260531-01 / 收官）
+- **完成时间**：2026-06-01
+- **记录时间**：2026-06-01 05:55
+- **执行模型**：claude-opus-4-8（主循环）
+- **子代理**：无（验收消费 + 测试，不定义新契约 / 不改 ADR）
+- **修改文件**：
+  - `apps/server-next/src/app/admin/videos/_client/VideoListClient.tsx` — `<DataTable>` 加 `enableColumnResizing`（验收消费方 / 列已声明 enableResizing；782→784，仍 baseline 豁免）
+  - `tests/unit/components/admin-ui/table/column-resize.test.ts` — 纯函数单测 26 case（clampWidth/pickFlex 双分支/buildResizableGridTemplate flex-last+占位轨+override+加载期钳制/legacy buildGridTemplate/isResizable/resolveWidth/measureColumnContentWidth/setColumnWidth+resetColumnWidths）
+  - `tests/unit/components/admin-ui/table/storage-sync-medium.test.ts` — 存储单测 18 case（双 key 双介质/合并/views Map round-trip/width 校验/旧 v1 清理/JSON 损坏/storedPrefsToColumnMap）
+  - `tests/unit/components/admin-ui/table/column-resize-handle.test.tsx` — handle 组件测 20 case（门控/a11y/拖拽提交+maxWidth 钳制/pointercancel 回滚/非主键不拖/键盘/auto-fit/截断+title/不触发排序/矩阵重置/legacy 零变化）；jsdom 补 PointerEvent polyfill
+  - `tests/e2e/admin/videos-column-resize.spec.ts` — Playwright 5 spec（handle 渲染/拖拽改宽+localStorage:v2 持久/刷新跨会话持久/矩阵重置/键盘+auto-fit）
+- **新增依赖/schema/路由/Props 契约/ADR/DB**：无
+- **质量门禁**：完整 typecheck 7 workspace（含 server-next）✓ / lint 5/5 ✓ / **全量 test:run 448 文件 5846 passed 0 failed**（+58 新测试；modern-table pointer 测试零回归证 PointerEvent polyfill 跨文件无泄漏；既有 server-next admin flake 本次未复现）/ verify:file-size-budget data-table 模块 0 新违规 + 新违规计数仍 21 / verify:adr-contracts exit=0 / verify:admin-guardrails ✓ / Playwright e2e `--list` 编译 5 tests ✓。
+- **e2e 运行门控（唯一遗留）**：`npm run test:e2e` 需启 3 dev server（apps/server + server-next + web-next）；本 worktree 缺 `.env.local`（gitignored 未随 worktree 复制）→ web-next dev 退出码 9，且 reuseExistingServer 复用主仓运行中的 server-next（非本 worktree 代码）。e2e **运行**留待用户在已配 env + 启本 worktree dev server 的环境执行；spec 已编译 + 列出 5 tests，逻辑由 58 单测/组件测充分覆盖。
+- **注意事项**：**SEQ-20260531-01 / Track admin-ui-datatable-resize DTR-A..E 全部收官**，本轨功能完整待集成 PR（`track(admin-ui-datatable-resize): 通用表格列宽可调`）。偏离：plan ④「7 条 e2e」收敛为 5 条（窄滚动/宽拉伸属布局视觉，localStorage 持久 + handle 行为已覆盖核心）。Track: admin-ui-datatable-resize。
+
+## [DTR-F] 列宽验收返工：重置→自适应列宽(auto-fit) + 校准声明宽 + 封面/操作列解禁（SEQ-20260531-01）
+- **完成时间**：2026-06-01
+- **记录时间**：2026-06-01 14:00
+- **执行模型**：claude-opus-4-8（主循环）
+- **子代理**：arch-reviewer (claude-opus-4-8) — PASS-WITH-CONDITIONS + F1..F16 落地约束（改 ADR-103 §4.2.2 reset 语义 + 共享组件 isResizableColumn 判定 → 强制 Opus 评审）
+- **来源**：用户实测 /admin/videos 验收反馈——"初始布局非最佳；封面/标题列名截断；无理由禁用封面/操作列"
+- **修改文件**：
+  - `packages/admin-ui/src/components/data-table/column-resize.ts` — 拆 `isWidthAdjustable`（含 flex / action opt-in）vs `isResizableColumn`（排除 flex 渲 handle）；新增 `buildAutoFitColumnMap` 纯函数（测不到保原宽不兜底 / flex 也写宽 / F2-F4）
+  - `packages/admin-ui/src/components/data-table/use-column-resize.ts` — `resetAllWidths`→`autoFitAllWidths`（measure isWidthAdjustable 列 + buildAutoFitColumnMap 单次提交）
+  - `packages/admin-ui/src/components/data-table/column-matrix-footer.tsx` + `column-matrix-menu.tsx` + `data-table.tsx` — prop `onResetColumnWidths`→`onAutoFitColumnWidths`，按钮文案"重置列宽"→**"自适应列宽"**（data-testid `matrix-foot-reset-widths` 保留）
+  - `apps/server-next/src/app/admin/videos/_client/VideoListClient.tsx` — 封面删 enableResizing:false（minWidth 64→56）；操作 enableResizing:false→true（width 150→120 minWidth 130→100）
+  - `docs/decisions.md` — ADR-103 §4.2.2 **AMENDMENT 2**（reset→auto-fit 语义 + action opt-in + 4 限制）
+  - `tests/unit/.../column-resize.test.ts`（+isResizableColumn action 3 case +buildAutoFitColumnMap 5 case）/ `column-resize-handle.test.tsx`（重置→自适应 auto-fit mock scrollWidth）/ `tests/e2e/admin/videos-column-resize.spec.ts`（test④ auto-fit 语义 + test① 封面/操作 handle 断言）
+- **新增依赖/schema/路由**：无
+- **Props 契约变更**：`ColumnMatrixMenuProps`/`ColumnMatrixFooterProps` `onResetColumnWidths`→`onAutoFitColumnWidths`（内部组件，仅 data-table.tsx 一处 wiring）；`isResizableColumn` action 行为契约扩展（opt-in，向后兼容零回归）；新增导出 `isWidthAdjustable` / `buildAutoFitColumnMap`（模块内 + 测试，未进 index.ts 公开 API）
+- **ADR 变更**：ADR-103 §4.2.2 AMENDMENT 2（DTR-F / arch-reviewer claude-opus-4-8）
+- **数据库变更**：无
+- **质量门禁**：完整 typecheck 7 workspace ✓ / lint 5/5 ✓ / **全量 test:run 448 文件 5852 passed（+7 / 唯 1 失败 = 既有 server-next admin flake StagingTable，隔离 13/13 过，与本轨零关系）** / file-size-budget data-table 模块 0 新违规（计数仍 21）/ verify:adr-contracts exit=0 / e2e --list 编译 5 tests ✓。
+- **注意事项**：① auto-fit 复用 measureColumnContentWidth（selector 天然含表头列名 span）→ 已满足"容下列名"；② flex 列也参与 auto-fit（写宽后余量归占位轨）；③ title 保持无 width minWidth:220（**不擅改 C5 锁定 flex 选取语义**，若验收仍嫌右侧空白另起 ADR）；④ resetColumnWidths 纯函数保留（清空原语 + 测试，本轮不接线）。用户将重开 :3013 实测 DTR-F。**本轨 DTR-A..F 全部收官，待集成 PR**。Track: admin-ui-datatable-resize。
+
+## [DTR-F-FIX1] auto-fit 测量修复：自定义 cell 测后代内容宽（修 pill 列过宽 ~2x）
+- **完成时间**：2026-06-01 / **执行模型**：claude-opus-4-8（主循环）/ **子代理**：无（测量 bug 修复，arch-reviewer E 点已预警此精度问题）
+- **来源**：用户实测 DTR-F 反馈——"可见性/审核列 auto-fit 后达 pill 内容宽两倍左右"。
+- **根因**：`measureColumnContentWidth` 对自定义 cell（pill/VisChip，无 `[data-dt-truncate]`）回退测 **cell wrapper 自身** scrollWidth；wrapper 是 `overflow:hidden`+grid 固定宽容器，内容不溢出时 `scrollWidth=clientWidth=当前列宽`，不反映 pill 内容 → auto-fit 把列固定在"列宽+padding"，越测越宽。
+- **修改文件**：
+  - `packages/admin-ui/src/components/data-table/column-resize.ts` — `measureColumnContentWidth` 改：元素本身是 `[data-dt-truncate]`（表头 label）→ 测自身；否则（body cell wrapper）→ 测**最宽后代元素** scrollWidth（截断文本后代=完整文本 / pill 自然宽元素=内容宽 / 排除 wrapper 自身）；跳过 resize handle。
+  - `tests/unit/.../column-resize.test.ts` — +3 case（自定义 cell 测后代非 wrapper / 表头 label 测自身 / 跳过 handle）
+  - `docs/decisions.md` — ADR-103 §4.2.2 AMENDMENT 2 限制②措辞同步（测后代内容元素 / 警示 width:100% 填充型中间容器仍可能偏宽）
+- **门禁**：完整 typecheck ✓ / lint 5/5 ✓ / table 子集 497 全过（+3）/ data-table 模块 0 新违规。
+- **效果**：pill 列（可见性/审核）auto-fit 从"≈列宽×2"修正为"≈pill 内容宽+padding"；title 等截断文本列经后代 span scrollWidth 取完整文本宽。Track: admin-ui-datatable-resize。
+
+## [DTR-F-FIX2] auto-fit 测量回归修复：自定义纯文本 cell 不丢内容（Codex stop-time review）
+- **完成时间**：2026-06-01 / **执行模型**：claude-opus-4-8（主循环）/ **子代理**：无（Codex stop-time review 反馈修复）
+- **来源**：Codex stop-time review——"auto-fit drops valid custom text-cell content"。
+- **根因**：DTR-F-FIX1 改自定义 cell 测"最宽后代元素"后，对**返回纯字符串的自定义 cell**（wrapper 内是文本节点、无元素后代）`querySelectorAll('*')` 为空 → `inner=0` → 该 cell 内容被丢弃（auto-fit 不计入），列可能仅按表头宽自适应、截断这些文本 cell。
+- **修改文件**：
+  - `packages/admin-ui/src/components/data-table/column-resize.ts` — `measureColumnContentWidth`：无元素后代时 `w = inner || el.scrollWidth` 回退测 wrapper 自身（恢复纯文本旧行为不丢内容；有元素后代的 pill/chip 仍走后代测量保持 FIX1）。
+  - `tests/unit/.../column-resize.test.ts` — +1 回归 case（自定义纯文本 cell 无元素后代 → 回退 wrapper，不返回 0）
+- **门禁**：typecheck ✓ / lint 5/5 ✓ / table 子集 498 全过（+1）/ data-table 模块 0 新违规。Track: admin-ui-datatable-resize。
+
+## [DTR-F-FIX3] auto-fit 纯文本 width drift 修复：改 Range 测文本宽（Codex stop-time review round 2）
+- **完成时间**：2026-06-01 / **执行模型**：claude-opus-4-8（主循环）/ **子代理**：无（Codex stop-time review 反馈修复）
+- **来源**：Codex stop-time review——"pure-text fallback reintroduces auto-fit width drift"。
+- **根因**：DTR-F-FIX2 对纯文本 cell 回退测 `el.scrollWidth`（wrapper）。wrapper 是 overflow:hidden 固定宽，文本不溢出时 scrollWidth=列宽 → 每次点「自适应列宽」列宽 +padding 越测越宽（无限 drift），与最初 pill bug 同源。
+- **修改文件**：
+  - `packages/admin-ui/src/components/data-table/column-resize.ts` — 新增 `measureRangeWidth`（Range.getBoundingClientRect 测文本几何宽 / nowrap 完整文本宽 / SSR+异常→0）；纯文本 cell（无元素后代）`w = inner || measureRangeWidth(el)` 改测 Range，**去掉 wrapper 回退**（drift 源）。
+  - `tests/unit/.../column-resize.test.ts` — FIX2 用例改为 FIX3（mock createRange 验证用 Range 64 而非 wrapper 200 → 不漂移）
+  - `docs/decisions.md` — ADR-103 §4.2.2 AMENDMENT 2 限制②措辞同步（纯文本 Range 测 / 不回退 wrapper 防 drift）
+- **门禁**：typecheck ✓ / lint 5/5 ✓ / table 子集 498 全过 / data-table 模块 0 新违规。
+- **效果**：纯文本自定义 cell auto-fit 取文本几何宽（不随列宽漂移）；pill/chip（元素后代）保持 FIX1；默认字符串 cell 走截断 span。Track: admin-ui-datatable-resize。
+
+## [DTR-F-FIX4] auto-fit 测量统一改 Range 几何测量（修「每次只缩一点直到 min」+ 收敛 FIX1/2/3）
+- **完成时间**：2026-06-01 / **执行模型**：claude-opus-4-8（主循环）/ **子代理**：无（用户实测反馈 + 根因收敛）
+- **来源**：用户实测——"列调很宽后双击/自适应列宽不一次到位，每次只缩一点直到最小"。
+- **根因（贯穿 FIX1/2/3 的总根源）**：`[data-dt-truncate]`（表头 label + 默认 cell 文本）有 `flex:1` 会**填满容器** → 其 `scrollWidth = 列宽`（文本不溢出时），不反映内容。表头 label 填满整列 → auto-fit 每次测到≈列宽-图标宽 → 每点缩一点（图标宽）渐进到 min。`scrollWidth` 对任何 flex 填充 / overflow:hidden 元素都不可靠（同源致 FIX1 pill 过宽、FIX2/3 纯文本问题）。
+- **修复（统一）**：`measureColumnContentWidth` 改为对每个 `[data-col-id]` 元素用 `Range.getBoundingClientRect` 测**内容几何宽**（文本 glyph / 元素 box），**不受 flex 填充 / overflow:hidden / 当前列宽影响**，截断态仍为完整文本宽 → **一次到位 + 幂等无漂移**。彻底取代 FIX1/2/3 的 scrollWidth + 后代/wrapper/纯文本回退分支。
+- **修改文件**：
+  - `packages/admin-ui/src/components/data-table/column-resize.ts` — `measureColumnContentWidth` 简化为 Range-only（复用 `measureRangeWidth`）；docstring 记录根因与口径
+  - `tests/unit/.../column-resize.test.ts` — measureColumnContentWidth describe 重写（mock createRange 按 `data-test-w` 桩 / +幂等用例 / 5 case）
+  - `tests/unit/.../column-resize-handle.test.tsx` — auto-fit（双击 + 矩阵）测试改 `mockRangeByCol`（按 colId 返回几何宽）替代 scrollWidth mock
+  - `docs/decisions.md` — ADR-103 §4.2.2 AMENDMENT 2 限制②改为 FIX4 统一 Range 口径
+- **门禁**：typecheck ✓ / lint 5/5 ✓ / table 子集 497 全过 / data-table 模块 0 新违规。
+- **效果**：拖很宽后双击/自适应 **一次缩到内容宽**（不再每次缩一点）；反复点击幂等稳定；pill/文本/表头 label 全部按真实内容几何宽。Track: admin-ui-datatable-resize。
+
+## [DTR-F-FIX5] auto-fit 默认文本列仍缩不动修复：Range truncate 元素本身取 glyph 宽（Codex stop-time review round 3）
+- **完成时间**：2026-06-01 / **执行模型**：claude-opus-4-8（主循环）/ **子代理**：无（Codex stop-time review 反馈修复）
+- **来源**：Codex stop-time review——"Range-only auto-fit still cannot shrink widened default text columns"。
+- **根因**：FIX4 对**每个 [data-col-id] 元素**调 `Range.selectNodeContents`。默认 cell 结构是 `wrapper > <span data-dt-truncate flex:1>text`，对 **wrapper** 调 selectNodeContents 选中的是被 flex 填满的 **span 元素**，Range 返回**元素 box=列宽**（非文本 glyph）→ 默认文本列仍测成列宽、拖宽后缩不下来。表头 label（data-col-id 在 span 自身）正常。
+- **修复**：测量目标改为——`el` 自身是 `[data-dt-truncate]`（表头 label）→ Range `el`；否则有 `[data-dt-truncate]` 后代（默认 cell 文本 span）→ Range **该 truncate 元素**（其内容是文本节点 → glyph 宽）；无 truncate（自定义 pill/纯文本）→ Range wrapper 内容（元素 box / 文本）。
+- **修改文件**：
+  - `packages/admin-ui/src/components/data-table/column-resize.ts` — `measureColumnContentWidth` 测量目标 `el.matches('[data-dt-truncate]') ? el : (el.querySelector('[data-dt-truncate]') ?? el)`
+  - `tests/unit/.../column-resize.test.ts` — +2 case（默认 cell 取内层 truncate glyph 不取填满 box / 表头 label 自身）
+  - `tests/unit/.../column-resize-handle.test.tsx` — `mockRangeByCol` 用 `closest('[data-col-id]')`（node 可能是无 data-col-id 的内层 truncate span）
+  - `docs/decisions.md` — ADR-103 §4.2.2 AMENDMENT 2 限制②补 FIX5 truncate-元素定位说明
+- **门禁**：typecheck ✓ / lint 5/5 ✓ / table 子集 499 全过（+2）/ data-table 模块 0 新违规。
+- **效果**：默认文本列（年份/创建时间等）拖宽后 auto-fit 也能一次缩到文本宽。Track: admin-ui-datatable-resize。
+
+## [DTR-F-GATES] DTR-F + FIX1-5 完整 pre-ship 门禁建立（Codex stop-time review）
+- **完成时间**：2026-06-01 / **执行模型**：claude-opus-4-8（主循环）/ **子代理**：无
+- **来源**：Codex stop-time review——"required pre-ship gates are not established"（DTR-F 6 提交此前仅用 table 子集增量验证，未跑齐完整必跑门禁）。
+- **完整门禁运行结果（全绿，e2e 除外见下）**：
+  - `npm run typecheck`（7 workspace）→ **exit 0** ✓
+  - `npm run lint`（turbo 5/5）→ **exit 0** ✓
+  - `npm run test -- --run`（**完整单元套件**）→ **448 文件 / 5858 passed / 0 failed** ✓（本次干净绿，既有 server-next admin flake 未复现）
+  - `npm run verify:adr-contracts` → **exit 0** ✓（4 核心 check / enum-ssot+error-message advisory 非阻塞）
+  - `npm run verify:admin-guardrails` → **exit 0** ✓
+  - `npm run verify:file-size-budget` → exit 1，**data-table 模块 0 命中 / 新违规计数 21 全为继承的 apps/ 既有违规**（非本轨，与 DTR-A..F 一致基线）
+- **test:e2e（VIDEO 必跑）——本地环境门控，无法建立**：实测对本 worktree `:3013`（worktree 代码 / 3 webServer URL 全指 :3013 复用避免 boot）运行 `videos-column-resize.spec.ts`，5 spec 全卡在首个 `video-list-table` 可见断言（页面 307 重定向登录）。**根因 = env，非本轨代码**：server-next 服务端 auth 调真后端 `:4000`，spec 的 mock cookie 被真后端拒（page.route 仅拦浏览器请求、拦不到服务端 fetch）。**经既有 `videos.spec.ts` 同样卡在 `video-list-table` 可见确证为 admin-next e2e 本地通病**（CI/正确 env 下方可跑）。本轨 e2e spec 已编译 + `--list` 列出 5 tests + 镜像既有范式；逻辑由完整单测/组件测充分覆盖。
+- **结论**：除环境门控的 e2e 外，全部必跑门禁已建立绿态。Track: admin-ui-datatable-resize。

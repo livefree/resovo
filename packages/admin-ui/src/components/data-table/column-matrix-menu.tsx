@@ -34,6 +34,9 @@ import type {
   TableSortState,
 } from './types'
 import { isColumnVisible, setColumnVisibility } from './column-visibility'
+import { PANEL_STYLE, HEADER_STYLE, CLOSE_BTN_STYLE, GRID_WRAP_STYLE } from './column-matrix-menu.styles'
+import { ColumnMatrixFooter } from './column-matrix-footer'
+import { useMatrixKeyboard } from './use-matrix-keyboard'
 
 export interface ColumnMatrixMenuProps {
   readonly open: boolean
@@ -61,6 +64,8 @@ export interface ColumnMatrixMenuProps {
   readonly onClearAllFilters: () => void
   /** 底部批量按钮：恢复默认列可见性（按 column.defaultVisible 重置） */
   readonly onResetColumnVisibility: () => void
+  /** 底部批量按钮：自适应列宽（DTR-F / 仅表级 enableColumnResizing 时传入，缺省不渲染该按钮） */
+  readonly onAutoFitColumnWidths?: () => void
   readonly onClose: () => void
 }
 
@@ -70,73 +75,8 @@ interface Pos {
 }
 const DEFAULT_POS: Pos = { top: 0, left: 0 }
 
-// ── 样式（核心 inline；细节走 dt-styles.tsx `[data-column-matrix-menu]` 选择器） ───
-
-const PANEL_STYLE: React.CSSProperties = {
-  position: 'fixed',
-  zIndex: 'var(--z-admin-dropdown)' as React.CSSProperties['zIndex'],
-  background: 'var(--bg-surface-elevated)',
-  border: '1px solid var(--border-strong)',
-  borderRadius: 'var(--radius-md)',
-  boxShadow: 'var(--shadow-lg)',
-  minWidth: '520px',
-  maxWidth: '90vw',
-  maxHeight: '60vh',
-  display: 'flex',
-  flexDirection: 'column',
-  outline: 'none',
-}
-
-const HEADER_STYLE: React.CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'space-between',
-  padding: '10px 14px',
-  borderBottom: '1px solid var(--border-default)',
-  fontSize: 'var(--font-size-sm-tight)',
-  fontWeight: 600,
-  color: 'var(--fg-default)',
-  flexShrink: 0,
-}
-
-const CLOSE_BTN_STYLE: React.CSSProperties = {
-  background: 'transparent',
-  border: 0,
-  color: 'var(--fg-muted)',
-  cursor: 'pointer',
-  fontSize: '16px',
-  lineHeight: 1,
-  padding: '2px 6px',
-}
-
-const GRID_WRAP_STYLE: React.CSSProperties = {
-  overflowY: 'auto',
-  overflowX: 'auto',
-  flex: '1 1 auto',
-  minHeight: 0,
-}
-
-const FOOT_STYLE: React.CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: '8px',
-  padding: '8px 14px',
-  borderTop: '1px solid var(--border-default)',
-  background: 'var(--bg-surface)',
-  flexShrink: 0,
-  flexWrap: 'wrap',
-}
-
-const FOOT_BTN_STYLE: React.CSSProperties = {
-  background: 'transparent',
-  border: '1px solid var(--border-default)',
-  borderRadius: 'var(--radius-sm)',
-  color: 'var(--fg-muted)',
-  padding: '4px 10px',
-  fontFamily: 'inherit',
-  fontSize: '12px',
-  cursor: 'pointer',
-}
+// ── 样式：DTR-A 抽至 ./column-matrix-menu.styles
+//    PANEL/HEADER/CLOSE_BTN/GRID_WRAP 本文件用；FOOT/FOOT_BTN 迁至 column-matrix-footer ───
 
 // ── 工具：判定该列是否已过滤 ─────────────────────────────────────────────
 // sub 2 PATCH R-EP3A-1（2026-05-24）：D-150-4 业务 key 桥接 — filtersMap key 是
@@ -166,6 +106,7 @@ export function ColumnMatrixMenu({
   onClearSort,
   onClearAllFilters,
   onResetColumnVisibility,
+  onAutoFitColumnWidths,
   onClose,
 }: ColumnMatrixMenuProps): React.ReactElement | null {
   const [mounted, setMounted] = useState(false)
@@ -243,64 +184,8 @@ export function ColumnMatrixMenu({
     }
   }, [open, mounted])
 
-  // 键盘语义：ArrowUp/Down/Left/Right 在 grid 内 cell 间移动焦点（D-149-12）
-  const handleGridKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
-    const key = e.key
-    if (key !== 'ArrowUp' && key !== 'ArrowDown' && key !== 'ArrowLeft' && key !== 'ArrowRight') return
-    const panel = panelRef.current
-    if (!panel) return
-    const focusables = Array.from(
-      panel.querySelectorAll<HTMLElement>(
-        '[data-cell-focusable="true"]:not([aria-disabled="true"]):not([disabled])',
-      ),
-    )
-    if (focusables.length === 0) return
-    const active = document.activeElement as HTMLElement
-    const idx = focusables.indexOf(active)
-    if (idx < 0) return
-    e.preventDefault()
-    const activeRow = parseInt(active.dataset.gridRow ?? '0', 10)
-    const activeCol = parseInt(active.dataset.gridCol ?? '0', 10)
-    // 找同列上/下 或 同行左/右 最近 focusable
-    let target: HTMLElement | undefined
-    if (key === 'ArrowDown' || key === 'ArrowUp') {
-      const sameColFocusables = focusables.filter((el) => parseInt(el.dataset.gridCol ?? '0', 10) === activeCol)
-      const sameColIdx = sameColFocusables.indexOf(active)
-      const delta = key === 'ArrowDown' ? 1 : -1
-      target = sameColFocusables[sameColIdx + delta]
-    } else {
-      const sameRowFocusables = focusables.filter((el) => parseInt(el.dataset.gridRow ?? '0', 10) === activeRow)
-      const sameRowIdx = sameRowFocusables.indexOf(active)
-      const delta = key === 'ArrowRight' ? 1 : -1
-      target = sameRowFocusables[sameRowIdx + delta]
-    }
-    target?.focus()
-  }, [])
-
-  // Tab 循环 focus trap
-  const handleTabKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
-    if (e.key !== 'Tab') return
-    const panel = panelRef.current
-    if (!panel) return
-    const focusable = Array.from(
-      panel.querySelectorAll<HTMLElement>('button:not([disabled]), [role="switch"]:not([aria-disabled="true"]), [tabindex]:not([tabindex="-1"])'),
-    ).filter((el) => !el.hasAttribute('disabled'))
-    if (focusable.length === 0) return
-    const first = focusable[0]
-    const last = focusable[focusable.length - 1]
-    const active = document.activeElement
-    if (e.shiftKey) {
-      if (active === first) {
-        e.preventDefault()
-        last?.focus()
-      }
-    } else {
-      if (active === last) {
-        e.preventDefault()
-        first?.focus()
-      }
-    }
-  }, [])
+  // 键盘语义（grid 导航 + Tab focus trap）：DTR-A 抽至 ./use-matrix-keyboard
+  const { handleGridKeyDown, handleTabKeyDown } = useMatrixKeyboard(panelRef)
 
   // ── 单格交互处理 ──────────────────────────────────────
 
@@ -574,33 +459,13 @@ export function ColumnMatrixMenu({
         </table>
       </div>
 
-      {/* Foot */}
-      <div style={FOOT_STYLE} role="group" aria-label="批量操作">
-        <button
-          type="button"
-          style={FOOT_BTN_STYLE}
-          onClick={onClearAllFilters}
-          data-testid="matrix-foot-clear-filters"
-        >
-          清除全部过滤
-        </button>
-        <button
-          type="button"
-          style={FOOT_BTN_STYLE}
-          onClick={onClearSort}
-          data-testid="matrix-foot-clear-sort"
-        >
-          清除排序
-        </button>
-        <button
-          type="button"
-          style={FOOT_BTN_STYLE}
-          onClick={onResetColumnVisibility}
-          data-testid="matrix-foot-reset-visibility"
-        >
-          恢复默认列可见性
-        </button>
-      </div>
+      {/* Foot — DTR-A 抽至 ColumnMatrixFooter */}
+      <ColumnMatrixFooter
+        onClearAllFilters={onClearAllFilters}
+        onClearSort={onClearSort}
+        onResetColumnVisibility={onResetColumnVisibility}
+        onAutoFitColumnWidths={onAutoFitColumnWidths}
+      />
     </div>
   )
 

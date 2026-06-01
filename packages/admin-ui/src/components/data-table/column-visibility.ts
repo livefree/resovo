@@ -31,6 +31,49 @@ export function setColumnVisibility(
 }
 
 /**
+ * 设置列宽，返回**完整合并 colMap**（不可变更新 / DTR-B 列宽可调）。
+ *
+ * 必须返回全量 map（保留每列 visible），原因：`useTableQuery.applyPatch.columns` 是
+ * **完全替换**语义（VideoListClient line 647 已注明），缺列即丢可见性。与 `setColumnVisibility`
+ * 的全量合并范式对齐。
+ *
+ * @param width 已由调用方钳制到 [minWidth, maxWidth]；本函数不再二次钳制（纯写入）。
+ * @param defaultVisible 当该列尚未进入 colMap 时的 visible 兜底（arch-reviewer C4：
+ *   调用方传 `col.defaultVisible !== false`，缺省 `true`）。已存在 pref 时优先沿用其 visible。
+ */
+export function setColumnWidth(
+  colMap: ReadonlyMap<string, ColumnPreference>,
+  colId: string,
+  width: number,
+  defaultVisible = true,
+): ReadonlyMap<string, ColumnPreference> {
+  const next = new Map(colMap)
+  const prev = colMap.get(colId)
+  next.set(colId, {
+    visible: prev?.visible ?? defaultVisible,
+    width,
+  })
+  return next
+}
+
+/**
+ * 清除所有列的 width，**保留 visible**，返回全量 colMap（矩阵 popover「重置列宽」/ DTR-C 接线）。
+ *
+ * 与 `resetColumnVisibility` 的合并范式对称：遍历 columns 写入 `{ visible: 当前可见性 }`，
+ * 丢弃 width 字段。当前可见性优先取 colMap（用户手工调整），缺省回退 column.defaultVisible。
+ */
+export function resetColumnWidths(
+  columns: readonly ColumnDescriptor[],
+  colMap: ReadonlyMap<string, ColumnPreference>,
+): ReadonlyMap<string, ColumnPreference> {
+  const next = new Map<string, ColumnPreference>()
+  for (const col of columns) {
+    next.set(col.id, { visible: isColumnVisible(col, colMap) })
+  }
+  return next
+}
+
+/**
  * 判断列当前是否可见。pinned 列恒可见。
  * 与 data-table.tsx visibleColumns useMemo 中的判定保持一致。
  */

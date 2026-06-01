@@ -211,3 +211,23 @@
 - **执行真源**：`~/.claude/plans/bangumi-tv-bangumi-https-bangumi-tv-dev-enumerated-cosmos.md`（已批准）
 - **说明**：Bangumi.tv 接入——REST 客户端 + dump 索引匹配增强 + 逐集表 + anime 下 Bangumi 优先 + 反向建库无源占位条目。文件域全在 apps/api + scripts，与 main 上 server-next（apps/server-next）WIP 零重叠。
 - **预留编号**：ADR-161、migration 077。
+
+---
+
+## admin-ui-datatable-resize
+
+- **状态**：🔄 活跃
+- **分支**：`track/admin-ui-datatable-resize`（从 main HEAD `8b0377e0` 切出，独立 worktree `/Users/livefree/projects/resovo-track-admin-ui-datatable-resize`）
+- **任务文件**：`docs/tasks-admin-ui-datatable-resize.md`
+- **文件作用域**：
+  - `packages/admin-ui/src/components/data-table/**`（resize 核心 + 文件拆分：`data-table.tsx` / `types.ts` / `dt-styles.tsx` / `column-matrix-menu.tsx` / `column-visibility.ts` / `storage-sync.ts` / `use-table-query.ts` + 新建 `column-resize.ts` / `resize-handle.tsx` / `use-column-resize.ts` / `data-table-header-row.tsx` / `column-types.ts` / `column-matrix-footer.tsx` / `dt-styles-{base,matrix,resize}.tsx`）
+  - `apps/server-next/src/app/admin/videos/_client/VideoListClient.tsx`（仅加 `enableColumnResizing` prop，验收消费方）
+  - `docs/decisions.md`（ADR-103 §4.2.2 存储介质修订）
+- **持有冲突域**：`admin-ui:api-surface`（新增公开 Props：`enableColumnResizing` / `maxWidth` / `onResetColumnWidths`）、`admin-ui:component:data-table`（组件软锁）、`adr`（`docs/decisions.md`，ADR-103 §4.2.2；与 bangumi(ADR-161) 同文件不同段，经 SEQ-20260531-01 接受 + 用户 adr 锁豁免授权并行）
+- **创建时间**：2026-06-01
+- **集成时间**：—（完成后填写）
+- **建议模型**：`claude-opus-4-8`（主循环；本任务含共享组件 API 契约 + ADR 修订，CLAUDE.md 强制 Opus arch-reviewer）
+- **执行真源**：`~/.claude/plans/worktree-server-next-1-2-3-4-5-serialized-thimble.md`（已批准）
+- **子代理**：`arch-reviewer`（claude-opus-…）敲定 API 契约 + flex 列规则 + CSS 变量 grid + 存储拆分 + 文件拆分边界（运行中）
+- **冻结约定 caveat**：本文件 §「共享层冻结约定（双轨期内）」系 sn4-07/08 双轨期保守约定；按 `parallel-dev-rules.md`（source_of_truth）§三组件软锁 + api-surface 硬锁 + Opus 评审机制推进，bangumi 文件域（apps/api/**）与本轨 admin-ui 零重叠，无实际冲突。用户已批准本计划并授权并行。
+- **说明**：通用表格 `DataTable` 列宽可调（拖拽 / 键盘 / 双击 auto-fit + `fixed-left/flex-last` 布局 + 表头分割线 + 截断悬浮 + 布局偏好 localStorage 持久化）。表级 `enableColumnResizing` 默认 false，现有消费方零回归。
