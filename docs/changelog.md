@@ -12896,3 +12896,18 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **数据库变更**：无（修复回滚逻辑；本次两表快照 0 行未触发，逻辑为通用工具正确性而备）。
 - **质量门禁**：typecheck EXIT=0 / 回滚 dry-run 跑通（只插不删 + 残留报告 0 候选）/ 合成反例实证 A 类零误删 PASS / verify:adr-contracts 待跑。
 - **闭环说明**：Codex 三轮底线（宁留勿误删）一致正确，轮3 是其反例，回退即闭环。精确删 B 信息论不可达，承认它选数据安全侧是终局而非补丁。
+
+---
+
+## [META-23-C-FIX5] 回滚 locks 残留报告改可操作明细（Codex stop-time review）
+- **完成时间**：2026-06-01
+- **执行模型**：claude-opus-4-8
+- **子代理**：无（承接 acb02c256adb21e56 裁定的「locks 残留强制报告」落地）
+- **来源**：Codex stop-time review「locks rollback reports only a count, so stale runtime locks cannot be manually remediated」。
+- **问题**：FIX4 的 locks 残留报告只打印计数 `n`，运营拿到「有 N 条残留」却**无法定位是哪些 (catalog_id, field_name) 锁** → 无从解锁。locks 有运行时语义（字段冻结影响后续富集覆盖），残留报告必须**可操作明细**而非计数。
+- **修复**：locks 残留报告改为——① 落 `_residual_locks_084` 明细表（catalog_id/field_name/lock_mode/locked_by/locked_at/reason，回滚脚本内 CREATE IF NOT EXISTS，幂等 ON CONFLICT 更新 reported_at）② 逐条打印 `catalog=… field=… mode=… by=…` ③ 给出人工解锁 SQL 提示（`DELETE … USING _residual_locks_084 …`，附「逐条核查勿无差别删」警示，因判据含误报）。provenance 残留仍为计数（审计噪声无运行时后果，无须逐条解锁）。
+- **实证（合成场景事务内 ROLLBACK）**：造留存行 S 上 'cover' 锁（hard / admin-zhang）逐列等于冗余快照 → 报告输出 1 条明细 `field=cover mode=hard by=admin-zhang`，运营可据此定位解锁 → **PASS：明细含 catalog_id+field_name+mode+by**。
+- **修改文件**：`scripts/dedup-catalog-084-rollback.ts`（locks 残留：计数→明细表+逐条打印+解锁 SQL）。
+- **新增依赖/schema/Props 契约变更**：无（`_residual_locks_084` 为回滚脚本运行时产物表，非 schema 契约）。
+- **数据库变更**：无（修复回滚报告；本次 locks 快照 0 行未触发）。
+- **质量门禁**：typecheck EXIT=0 / 回滚 dry-run 跑通（locks 候选 0）/ 合成 locks 残留实证明细可操作 PASS / verify:adr-contracts 待跑。

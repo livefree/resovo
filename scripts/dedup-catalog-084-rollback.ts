@@ -122,22 +122,56 @@ async function rollback(client: PoolClient): Promise<void> {
     // 残留报告（非执行路径 / 不删）：逐列判据报告留存行上疑似 B 类转移残留，交人工裁定。
     // 判据不精确（A 类同源同批可能逐列等于冗余快照 → 误报），仅 REPORT 不 DELETE。
     const colMatch = reportCols[t].map((c) => `cur.${c} IS NOT DISTINCT FROM b.${c}`).join(' AND ')
-    const residual = await client.query<{ n: string }>(
-      `SELECT COUNT(*)::text AS n
-       FROM ${t} cur
-       JOIN _bak_media_catalog_084 mc ON cur.catalog_id = mc.surviving_id
-       JOIN ${bak} b ON b.catalog_id = mc.id AND ${colMatch}`,
-    )
-    const n = Number(residual.rows[0]?.n ?? 0)
     if (t === 'video_metadata_locks') {
-      // locks 有运行时语义（字段冻结影响后续富集覆盖）→ 残留报告强制 + 风险声明
-      process.stdout.write(
-        `  ⚠️ locks 疑似 B 类转移残留候选: ${n}（运行时后果：留存行可能多一个本不该有的字段冻结；` +
-          `判据不精确含误报，**须人工核查并决定是否解锁**，回滚未自动删除）\n`,
+      // locks 有运行时语义（字段冻结影响后续富集覆盖）→ 残留报告必须**可操作明细**（catalog_id+field_name），
+      // 仅计数无法人工解锁（Codex）。落 _residual_locks_084 表（回滚产物，脚本内建）+ 逐条打印 + 解锁 SQL 提示。
+      await client.query(
+        `CREATE TABLE IF NOT EXISTS _residual_locks_084 (
+           catalog_id UUID NOT NULL, field_name TEXT NOT NULL, lock_mode TEXT, locked_by TEXT,
+           locked_at TIMESTAMPTZ, reason TEXT, reported_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+           PRIMARY KEY (catalog_id, field_name)
+         )`,
       )
+      const residual = await client.query<{
+        catalog_id: string; field_name: string; lock_mode: string; locked_by: string
+      }>(
+        `SELECT cur.catalog_id, cur.field_name, cur.lock_mode, cur.locked_by
+         FROM ${t} cur
+         JOIN _bak_media_catalog_084 mc ON cur.catalog_id = mc.surviving_id
+         JOIN ${bak} b ON b.catalog_id = mc.id AND ${colMatch}`,
+      )
+      // 落明细表（幂等：ON CONFLICT 更新 reported_at）
+      await client.query(
+        `INSERT INTO _residual_locks_084 (catalog_id, field_name, lock_mode, locked_by, locked_at, reason)
+         SELECT cur.catalog_id, cur.field_name, cur.lock_mode, cur.locked_by, cur.locked_at, cur.reason
+         FROM ${t} cur
+         JOIN _bak_media_catalog_084 mc ON cur.catalog_id = mc.surviving_id
+         JOIN ${bak} b ON b.catalog_id = mc.id AND ${colMatch}
+         ON CONFLICT (catalog_id, field_name) DO UPDATE SET reported_at = NOW()`,
+      )
+      if (residual.rows.length === 0) {
+        process.stdout.write('  locks 疑似 B 类转移残留候选: 0（无须人工处理）\n')
+      } else {
+        process.stdout.write(
+          `  ⚠️ locks 疑似 B 类转移残留候选 ${residual.rows.length} 条（运行时后果：留存行可能多一个本不该有的字段冻结；` +
+            `判据含误报，回滚未自动删除）。明细已落 _residual_locks_084，逐条：\n`,
+        )
+        for (const r of residual.rows) {
+          process.stdout.write(`    · catalog=${r.catalog_id} field=${r.field_name} mode=${r.lock_mode} by=${r.locked_by}\n`)
+        }
+        process.stdout.write(
+          `  人工解锁（核查确属误转移后）：DELETE FROM video_metadata_locks l USING _residual_locks_084 r ` +
+            `WHERE l.catalog_id=r.catalog_id AND l.field_name=r.field_name;（逐条核查，勿无差别删）\n`,
+        )
+      }
     } else {
-      // provenance 纯审计血缘，残留=噪声无害 → 信息级
-      process.stdout.write(`  provenance 疑似 B 类转移残留候选: ${n}（审计噪声，无运行时后果，遗留可接受）\n`)
+      // provenance 纯审计血缘，残留=噪声无害 → 计数信息级即可（无运行时后果，无须逐条解锁）
+      const cnt = await client.query<{ n: string }>(
+        `SELECT COUNT(*)::text AS n FROM ${t} cur
+         JOIN _bak_media_catalog_084 mc ON cur.catalog_id = mc.surviving_id
+         JOIN ${bak} b ON b.catalog_id = mc.id AND ${colMatch}`,
+      )
+      process.stdout.write(`  provenance 疑似 B 类转移残留候选: ${Number(cnt.rows[0]?.n ?? 0)}（审计噪声，无运行时后果，遗留可接受）\n`)
     }
   }
 
