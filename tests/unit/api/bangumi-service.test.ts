@@ -253,9 +253,12 @@ vi.mock('@/api/db/queries/systemSettings', () => ({
 }))
 vi.mock('@/api/db/queries/mediaCatalog', () => ({
   findCatalogById: vi.fn(),
+  // D-174-3：默认无他行占用该 subject → resolveBangumiBinding 返回 safe（既有用例不受影响）
+  findCatalogByBangumiId: vi.fn().mockResolvedValue(null),
   updateCatalogFields: vi.fn(),
   setLockedFields: vi.fn(),
   addLockedFields: vi.fn(),
+  linkVideoToCatalog: vi.fn().mockResolvedValue(undefined),
 }))
 vi.mock('@/api/db/queries/metadataProvenance', () => ({
   getHardLockedFields: vi.fn().mockResolvedValue([]),
@@ -283,6 +286,8 @@ const mUpsertEps = epQ.upsertCatalogEpisodes as ReturnType<typeof vi.fn>
 const mUpdateEpCount = vQ.updateEpisodeCount as ReturnType<typeof vi.fn>
 const mUpdateBangumiStatus = vQ.updateVideoBangumiStatus as ReturnType<typeof vi.fn>
 const mFindCatalog = catQ.findCatalogById as ReturnType<typeof vi.fn>
+const mFindCatalogByBangumiId = catQ.findCatalogByBangumiId as ReturnType<typeof vi.fn>
+const mLinkVideo = catQ.linkVideoToCatalog as ReturnType<typeof vi.fn>
 const mUpdateCatalog = catQ.updateCatalogFields as ReturnType<typeof vi.fn>
 const mGetCharacters = bangumiLib.getCharacters as ReturnType<typeof vi.fn>
 const mReplaceChars = charQ.replaceCatalogCharacters as ReturnType<typeof vi.fn>
@@ -319,6 +324,8 @@ describe('BangumiService.matchAndEnrich', () => {
     mConfigured.mockReturnValue(true)
     // META-17：REST 兜底默认无命中（既有用例 REST 不参与 → 行为不变）；REST 用例各自覆写
     mSearchStrict.mockResolvedValue([])
+    // D-174-3：默认无他行占用该 subject → safe（去重用例各自覆写为 redirect/conflict）
+    mFindCatalogByBangumiId.mockResolvedValue(null)
   })
 
   it('本地无匹配 → none/no_local_match + 写 bangumi_status=unmatched（Pool / ADR-170）', async () => {
@@ -597,6 +604,82 @@ describe('BangumiService.matchAndEnrich', () => {
     expect(clientReleased).toBe(true)
   })
 
+  // ── ADR-174 D-174-3：唯一约束兜底真去重（同番裂行抢绑同一 subject）─────────
+  const EXISTING_CID = 'eeeeeeee-1111-2222-3333-444444444444'
+  // 当前行 CID 与 existing 行各自的 type/year（resolveBangumiBinding + safeUpdate 共用 findCatalogById）
+  const catalogRow = (id: string, type: string, year: number | null, src = 'crawler') =>
+    ({ id, type, year, metadataSource: src, lockedFields: [] })
+
+  it('D-174-3 redirect：subject 已被他行占用 + type/year 一致 → 重指向 video + 写 existing（不抛 duplicate key / auto）', async () => {
+    mFindByTitle.mockResolvedValue([entry({ year: 2007 })])
+    mGetSubject.mockResolvedValue(subject())
+    mGetEpisodes.mockResolvedValue([])
+    // subject 51 已被 EXISTING 占用（同 anime/2007 → 重指向安全）
+    mFindCatalogByBangumiId.mockResolvedValue(catalogRow(EXISTING_CID, 'anime', 2007, 'bangumi'))
+    mFindCatalog.mockImplementation(async (_db: unknown, id: string) =>
+      id === EXISTING_CID ? catalogRow(EXISTING_CID, 'anime', 2007, 'bangumi') : catalogRow(CID, 'anime', 2007))
+
+    const r = await svc.matchAndEnrich({ videoId: VID, catalogId: CID, titleNorm: 'x', year: 2007 })
+    expect(r).toMatchObject({ matched: 'auto', bangumiSubjectId: 51 })
+    // 运行时真去重：video.catalog_id 重指向 EXISTING（事务 client）
+    expect(mLinkVideo).toHaveBeenCalledWith(mockClient, VID, EXISTING_CID)
+    // 富集写到 EXISTING（已持有 subject → UPDATE 同值不撞唯一约束），不写当前裂行 CID
+    expect(mUpdateCatalog).toHaveBeenCalledWith(expect.anything(), EXISTING_CID, expect.objectContaining({ bangumiSubjectId: 51 }))
+    expect(mUpsertRef).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ matchStatus: 'auto_matched', isPrimary: true }))
+    expect(clientQueries).toContain('COMMIT')
+    expect(clientQueries).not.toContain('ROLLBACK')
+  })
+
+  it('D-174-3 conflict：subject 被他行占用但 type 冲突 → 降级 candidate ref + 保留 unmatched + COMMIT（不炸事务）', async () => {
+    mFindByTitle.mockResolvedValue([entry({ year: 2007 })])
+    mGetSubject.mockResolvedValue(subject())
+    mGetEpisodes.mockResolvedValue([])
+    // subject 51 被 EXISTING 占用，但 EXISTING 是 movie ≠ 当前 anime → 重指向不安全
+    mFindCatalogByBangumiId.mockResolvedValue(catalogRow(EXISTING_CID, 'movie', 2007, 'bangumi'))
+    mFindCatalog.mockImplementation(async (_db: unknown, id: string) =>
+      id === EXISTING_CID ? catalogRow(EXISTING_CID, 'movie', 2007, 'bangumi') : catalogRow(CID, 'anime', 2007))
+
+    const r = await svc.matchAndEnrich({ videoId: VID, catalogId: CID, titleNorm: 'x', year: 2007 })
+    // 降级为 candidate（带 subjectId 供审核台人工裁定），不抛 duplicate key
+    expect(r).toMatchObject({ matched: 'candidate', bangumiSubjectId: 51 })
+    expect(mLinkVideo).not.toHaveBeenCalled()       // 不重指向
+    expect(mUpdateCatalog).not.toHaveBeenCalled()    // 不写 catalog（规避唯一约束冲突）
+    expect(mUpsertRef).toHaveBeenCalledWith(mockClient, expect.objectContaining({ matchStatus: 'candidate', isPrimary: false }))
+    expect(mUpdateBangumiStatus).toHaveBeenCalledWith(mockClient, VID, 'unmatched')
+    expect(mUpdateBangumiStatus).not.toHaveBeenCalledWith(mockClient, VID, 'matched')
+    // 正常 COMMIT（绝不让单冲突 video 炸 matchAndEnrich）
+    expect(clientQueries).toContain('COMMIT')
+    expect(clientQueries).not.toContain('ROLLBACK')
+  })
+
+  it('D-174-3 conflict：year 显著冲突（≥2）→ 同样降级 candidate（不重指向到不同年份作品）', async () => {
+    mFindByTitle.mockResolvedValue([entry({ year: 2007 })])
+    mGetSubject.mockResolvedValue(subject())
+    mGetEpisodes.mockResolvedValue([])
+    // 同 anime 但 year 差 3（2007 vs 2010）→ 视为不同版本/季 → 不安全
+    mFindCatalogByBangumiId.mockResolvedValue(catalogRow(EXISTING_CID, 'anime', 2010, 'bangumi'))
+    mFindCatalog.mockImplementation(async (_db: unknown, id: string) =>
+      id === EXISTING_CID ? catalogRow(EXISTING_CID, 'anime', 2010, 'bangumi') : catalogRow(CID, 'anime', 2007))
+
+    const r = await svc.matchAndEnrich({ videoId: VID, catalogId: CID, titleNorm: 'x', year: 2007 })
+    expect(r).toMatchObject({ matched: 'candidate', bangumiSubjectId: 51 })
+    expect(mLinkVideo).not.toHaveBeenCalled()
+    expect(mUpdateCatalog).not.toHaveBeenCalled()
+  })
+
+  it('D-174-3 safe（自绑）：subject 已绑在当前 catalog → 正常 auto 写入，不重指向', async () => {
+    mFindByTitle.mockResolvedValue([entry({ year: 2007 })])
+    mGetSubject.mockResolvedValue(subject())
+    mGetEpisodes.mockResolvedValue([])
+    // 占用者即当前行 CID → safe（resolveBangumiBinding 不查 findCatalogById，直接 safe）
+    mFindCatalogByBangumiId.mockResolvedValue(catalogRow(CID, 'anime', 2007, 'bangumi'))
+
+    const r = await svc.matchAndEnrich({ videoId: VID, catalogId: CID, titleNorm: 'x', year: 2007 })
+    expect(r).toMatchObject({ matched: 'auto', bangumiSubjectId: 51 })
+    expect(mLinkVideo).not.toHaveBeenCalled()
+    expect(mUpdateCatalog).toHaveBeenCalledWith(expect.anything(), CID, expect.objectContaining({ bangumiSubjectId: 51 }))
+  })
+
   // ── META-17 方案 A：REST 精确兜底（本地 dump 空时）──────────────────
   it('REST 兜底：name_cn 精确 + 年份 → auto（dump 空 / token 配置）', async () => {
     mFindByTitle.mockResolvedValue([])
@@ -733,6 +816,8 @@ describe('BangumiService.confirmMatch', () => {
     svc = new BangumiService(mockPool as never)
     mFindCatalog.mockResolvedValue({ id: CID, metadataSource: 'crawler', lockedFields: [] })
     mUpdateCatalog.mockResolvedValue({ id: CID, metadataSource: 'bangumi' })
+    // D-174-3：默认无他行占用该 subject → safe
+    mFindCatalogByBangumiId.mockResolvedValue(null)
   })
 
   it('subject 不在 dump 且无 Token → updated:false，不写 catalog/ref（P1）', async () => {
@@ -855,6 +940,47 @@ describe('BangumiService.confirmMatch', () => {
     expect(clientQueries).toContain('ROLLBACK')
     expect(clientQueries).not.toContain('COMMIT')
     expect(clientReleased).toBe(true)
+  })
+
+  // ── ADR-174 D-174-3：手动确认路径的唯一约束兜底真去重 ─────────────────
+  const EX_CID = 'eeeeeeee-9999-8888-7777-666666666666'
+  const row = (id: string, type: string, src = 'crawler') =>
+    ({ id, type, year: 2007, metadataSource: src, lockedFields: [] })
+
+  it('D-174-3 confirmMatch redirect：subject 已被他行占用(安全) → 重指向 video + 写 existing + manual_confirmed', async () => {
+    mConfigured.mockReturnValue(true)
+    mFindById.mockResolvedValue(null)
+    mGetSubject.mockResolvedValue(subject({ id: 51 }))
+    mGetEpisodes.mockResolvedValue([])
+    mFindCatalogByBangumiId.mockResolvedValue(row(EX_CID, 'anime', 'bangumi'))
+    mFindCatalog.mockImplementation(async (_db: unknown, id: string) =>
+      id === EX_CID ? row(EX_CID, 'anime', 'bangumi') : row(CID, 'anime'))
+
+    const r = await svc.confirmMatch(VID, CID, 51)
+    expect(r).toEqual({ updated: true })
+    expect(mLinkVideo).toHaveBeenCalledWith(mockClient, VID, EX_CID)
+    expect(mUpdateCatalog).toHaveBeenCalledWith(expect.anything(), EX_CID, expect.anything())
+    expect(mUpsertRef).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ matchStatus: 'manual_confirmed', isPrimary: true }))
+    expect(clientQueries).toContain('COMMIT')
+  })
+
+  it('D-174-3 confirmMatch conflict：subject 被他行占用但 type 冲突 → updated:false + ROLLBACK（不抛 / 不写 ref）', async () => {
+    mConfigured.mockReturnValue(true)
+    mFindById.mockResolvedValue(null)
+    mGetSubject.mockResolvedValue(subject({ id: 51 }))
+    mGetEpisodes.mockResolvedValue([])
+    mFindCatalogByBangumiId.mockResolvedValue(row(EX_CID, 'movie', 'bangumi'))
+    mFindCatalog.mockImplementation(async (_db: unknown, id: string) =>
+      id === EX_CID ? row(EX_CID, 'movie', 'bangumi') : row(CID, 'anime'))
+
+    const r = await svc.confirmMatch(VID, CID, 51)
+    expect(r).toEqual({ updated: false })
+    expect(mLinkVideo).not.toHaveBeenCalled()
+    expect(mUpdateCatalog).not.toHaveBeenCalled()
+    expect(mUpsertRef).not.toHaveBeenCalled()
+    expect(clientQueries).toContain('BEGIN')
+    expect(clientQueries).toContain('ROLLBACK')
+    expect(clientQueries).not.toContain('COMMIT')
   })
 })
 

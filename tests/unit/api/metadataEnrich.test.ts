@@ -51,6 +51,9 @@ vi.mock('@/api/services/MediaCatalogService', () => ({
   MediaCatalogService: vi.fn().mockImplementation(() => ({
     // ADMIN-14: safeUpdate 返回 { updated, skippedFields }
     safeUpdate: vi.fn().mockResolvedValue({ updated: { id: 'catalog-1' }, skippedFields: [] }),
+    // ADR-174 D-174-3：BangumiService.applyEnrichmentDb 写 subject 前查重判定（默认无冲突 safe）
+    resolveBangumiBinding: vi.fn().mockResolvedValue({ kind: 'safe' }),
+    linkVideo: vi.fn().mockResolvedValue(undefined),
   })),
 }))
 

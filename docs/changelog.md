@@ -13028,3 +13028,21 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **数据库变更**：无。
 - **质量门禁**：typecheck EXIT=0 / 回滚 dry-run 跑通（本次 0 残留）/ verify:adr-contracts EXIT=0。
 - **诚实声明**：FIX11 在未实读 `:204/:220` 数据来源的情况下，把 `locked_fields` 列的「挡非 manual」行为错记到 `video_metadata_locks` soft 行——属同类「未核实即声称运行时效力」的诚实性问题。本轮已实读两套存储全部消费方钉死语义：hard 残留有真实冻结效力（需处置），soft 残留无覆盖效力（审计噪声）。
+
+## [META-23-D] applyEnrichmentDb 唯一约束兜底真去重 + 单测（SEQ-20260531-01 / ADR-174 D-174-3）
+- **完成时间**：2026-06-01
+- **记录时间**：2026-06-01 09:10
+- **执行模型**：claude-opus-4-8
+- **子代理**：无（设计已由 ADR-174 arch-reviewer claude-opus-4-8 / agentId a42951b36f50da8dd 完成裁定，本卡为既定 D-174-3 实施落地）
+- **问题/根因**：同番裂多 catalog 行抢绑同一 Bangumi subject → 第二行写 `bangumi_subject_id` 撞 `media_catalog_bangumi_subject_id_key` UNIQUE → 富集事务抛 duplicate key → 视频留 unmatched。`applyEnrichmentDb` 走「已存在 catalogId 直接写」绕过 findOrCreate 的 bangumiId 去重，写前未检测该 subject 是否已被他行占用。
+- **修改文件**：
+  - `apps/api/src/services/MediaCatalogService.ts` — 新增 `resolveBangumiBinding(db, currentCatalogId, bangumiId)` 只读查重接缝（safe/redirect/conflict 三态）+ `CatalogBindingResolution` 导出类型 + 私有 `isRedirectSafe`（type 必同 + year 差 <2 才安全）；`linkVideo` 加可选 `db` 参数（事务内重指向共享连接）。为 follow-up `linkExternalIdOrRedirect` 通用原语留提取接缝。
+  - `apps/api/src/services/BangumiService.ts` — `applyEnrichmentDb` 写 subject 前调 `resolveBangumiBinding`：redirect → `linkVideo` 重指向 video.catalog_id 到 existing 并写 existing；conflict → 返回 `dedupConflict` 不写 catalog（规避唯一约束）；返回值加 `dedupConflict`。`applyAutoMatchAtomic` 据 dedupConflict 降级（candidate ref 非 primary + 保留 unmatched + 仍 COMMIT，绝不炸事务），返回 `{ episodes, dedupConflict }`。`matchAndEnrich` auto 分支 dedupConflict → 返回 `{ matched: 'candidate' }`。`confirmMatch` 经既有 `!result.wrote` 分支自然处理（ROLLBACK + updated:false）。
+  - `tests/unit/api/bangumi-service.test.ts` — mock 补 `findCatalogByBangumiId`(默认 null)/`linkVideoToCatalog`；两 describe beforeEach 默认 safe；+6 用例（matchAndEnrich：redirect 重指向不抛 / conflict-type 降级 / conflict-year≥2 降级 / safe 自绑；confirmMatch：redirect 重指向 manual_confirmed / conflict updated:false+ROLLBACK）。
+  - `tests/unit/api/metadataEnrich.test.ts` — MediaCatalogService mock 补 `resolveBangumiBinding`(默认 safe)/`linkVideo`（step3 经 BangumiService 调用，否则 `is not a function`）。
+  - `docs/audit/adr-d-status.json` — verify:adr-contracts 运行再生成（仅 generatedAt 时间戳）。
+- **新增依赖/Props 契约变更**：无（BangumiService/MediaCatalogService 为后端 service，非共享 UI 组件 Props；新增 service 方法为既定 ADR-174 设计）。
+- **数据库变更**：无（运行时去重为既有表读写，无 schema/migration）。
+- **D-N 闭环**：D-174-3 ✅（applyEnrichmentDb 唯一约束兜底真去重落地）。
+- **质量门禁**：typecheck EXIT=0 / lint EXIT=0（5/5 successful）/ bangumi-service 72 + metadataEnrich 32 全过 / verify:adr-contracts EXIT=0（端点 203 对齐 / SQL schema 对齐 / error-message+D-N 既有 advisory 不阻塞）。全量单测净增 6 用例全过；唯一失败为前台 jsdom 并行 flaky（基线同样 1 个不同文件失败：基线 StagingEditPanel / 本次 CrawlerRunsView，隔离均过 → 与纯后端改动无关）。
+- **注意事项**：① 仅 bangumi_subject_id；douban/imdb/tmdb 同构唯一约束兜底为 follow-up（届时提取 `MediaCatalogService.linkExternalIdOrRedirect` 通用原语，本卡 `resolveBangumiBinding` 即其只读内核）。② pre-check 是去重主体；并发窗口内仍可能撞唯一约束 → 事务 ROLLBACK 后由 Bull 重试收敛（重试时 existing 已存在 → 走 redirect/safe），ON CONFLICT 非语义主体（UPDATE 不支持 ON CONFLICT / D-174-3）。③ Y5 重指向改 video.catalog_id 在事务 client 内执行保原子性。④ 下一卡 META-23-E：全量回归 + architecture.md 字段语义收尾 + 用户重跑 anime backfill 验证命中回升。

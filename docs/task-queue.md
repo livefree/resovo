@@ -2488,11 +2488,12 @@ CODENAME-MATRIX-E2E (依赖 Wave 3 验收期补丁 CODENAME-MATRIX ✅)
    - 文件范围：`084_merge_key_backfill_dedup.sql`（8 快照表）+ `scripts/backfill-merge-key.ts` + `scripts/dedup-catalog-084.ts` + `scripts/dedup-catalog-084-rollback.ts` + `docs/architecture.md`
    - 依赖：META-23-B ✅（写入侧已切新键，Y1 部署顺序）
    - 完成备注：Opus 精确 SQL 方案 + 抓 3 陷阱（DESC 留存行 / UPDATE 无 ON CONFLICT 先删碰撞再 UPDATE+IS NOT DISTINCT FROM / 孙表 catalog_character_actors 快照）。**执行 A→B→A'**：A 重算单行组+冗余组整组跳过（规避 uq_catalog_title_year_type）→ B 合并 51 组删 52 行 → A' 补 34 留存行键。实测：catalog 3124→3072 / 不一致 0 / uq 违反 0 / 子表悬挂 0 / video 孤立 0 / bangumi 164 douban 54 不变（删行全裸冗余）/ 快照 52 行 / 当前打扰番已绑 610703（根因消除）。门禁 typecheck+lint+verify:adr-contracts EXIT=0 / 全量 5825 passed 零回归。执行模型: claude-opus-4-8
-4. **META-23-D** — `applyEnrichmentDb` 唯一约束兜底真去重 + 单测（D-174-3）（状态：⬜ 待开始）
+4. **META-23-D** — `applyEnrichmentDb` 唯一约束兜底真去重 + 单测（D-174-3）（状态：✅ 已完成 2026-06-01 / claude-opus-4-8 / 子代理 无）
    - 建议模型：opus（动 BangumiService 富集核心路径 + 事务原子性 / ADR-170 兼容）
-   - 文件范围：`apps/api/src/services/BangumiService.ts`（applyEnrichmentDb 写 subject 前查重重指向 + 降级 candidate）+ MediaCatalogService 查重接缝 + `tests/unit/api/bangumi-service.test.ts`
+   - 文件范围：`apps/api/src/services/BangumiService.ts`（applyEnrichmentDb 写 subject 前查重重指向 + 降级 candidate）+ `apps/api/src/services/MediaCatalogService.ts`（查重接缝）+ `tests/unit/api/bangumi-service.test.ts` + `tests/unit/api/metadataEnrich.test.ts`(mock 同步)
    - 依赖：META-23-C ✅
    - 验收：两 video 撞同 subject 610703 → 真去重重指向不抛 duplicate key + 降级 candidate 不炸事务
+   - 完成备注：`MediaCatalogService.resolveBangumiBinding` 只读查重接缝（safe/redirect/conflict 三态 / isRedirectSafe = type 必同 + year 差 <2 才安全）+ `linkVideo` 加可选 db（事务内重指向共享连接）+ `CatalogBindingResolution` 导出类型（为 follow-up `linkExternalIdOrRedirect` 通用原语留可提取接缝）。`applyEnrichmentDb` 写 subject 前 resolveBangumiBinding：redirect → linkVideo 重指向 video 到 existing 并写 existing（同值 UPDATE 不撞唯一约束）；conflict → dedupConflict 不写 catalog 规避冲突。`applyAutoMatchAtomic` dedupConflict 降级 candidate ref(非 primary)+保留 unmatched+仍 COMMIT（绝不让单冲突 video 炸 matchAndEnrich）；`matchAndEnrich` auto dedupConflict → 返回 candidate；`confirmMatch` 经既有 !wrote 分支自然 ROLLBACK+updated:false。仅 bangumi（douban/imdb/tmdb follow-up）；pre-check 主体 + 并发残余靠 ROLLBACK+Bull 重试收敛（UPDATE 不支持 ON CONFLICT，非语义主体 / D-174-3）。门禁 typecheck+lint+verify:adr-contracts EXIT=0 / bangumi-service 72 + metadataEnrich 32 全过 / 全量净增 6 用例全过零回归（唯一前台 jsdom flaky 基线同存、隔离过、与纯后端改动无关）。D-174-3 ✅ 闭环。执行模型: claude-opus-4-8
 5. **META-23-E** — 全量回归 + 重跑 anime backfill 验证命中回升（D-174-5/R7/R8）（状态：⬜ 待开始）
    - 建议模型：sonnet（验证 + 门禁 + architecture.md 收尾）
    - 验收：4 质量门禁全过 + verify:sql-schema-alignment + architecture.md 字段语义同步 + 用户重跑 `--mode unmatched --type anime` 后 JP 命中率回升复核

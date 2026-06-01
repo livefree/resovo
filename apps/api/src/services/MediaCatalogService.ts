@@ -55,6 +55,37 @@ export interface FindOrCreateCatalogInput extends CatalogInsertData {
   metadataSource: CatalogMetadataSource
 }
 
+// ── 外部 ID 绑定判定（ADR-174 D-174-3 唯一约束兜底真去重）────────────
+
+/**
+ * 写外部 ID（当前仅 bangumi_subject_id）到 catalog 前的真去重判定结果：
+ * - safe：无他行占用该外部 ID（或占用者即当前行）→ 当前 catalog 可直接绑定
+ * - redirect：他行已占用且重指向安全 → video.catalog_id 应改指 target（运行时即时去重）
+ * - conflict：他行已占用但重指向不安全（type 不同 / year 显著冲突）→ 调用方降级处理
+ *
+ * follow-up（ADR-174 #1）：douban/imdb/tmdb 同类唯一约束同构，届时提取为
+ * `linkExternalIdOrRedirect(provider, externalId, ...)` 通用原语，本判定即其只读内核。
+ */
+export type CatalogBindingResolution =
+  | { kind: 'safe' }
+  | { kind: 'redirect'; targetCatalogId: string }
+  | { kind: 'conflict' }
+
+/**
+ * 重指向安全性判定：把 video 从 current catalog 改指到已占用同一 subject 的 existing catalog，
+ * 仅当二者确属同一作品时才安全。判据（保守）：
+ * - type 必须相同（不同内容类型 → 重指向会错分视频，必拒）
+ * - year 若双方均有且差距 ≥2（与置信度评分「年份差≥2 不加分」一致）→ 视为不同版本/季，拒
+ * 缺 year 不阻断（多数裂行同源同 year，缺值留给 type 把关）。
+ */
+function isRedirectSafe(current: MediaCatalogRow, existing: MediaCatalogRow): boolean {
+  if (current.type !== existing.type) return false
+  if (current.year != null && existing.year != null && Math.abs(current.year - existing.year) >= 2) {
+    return false
+  }
+  return true
+}
+
 // ── 服务类 ────────────────────────────────────────────────────────
 
 export class MediaCatalogService {
@@ -280,10 +311,33 @@ export class MediaCatalogService {
   }
 
   /**
-   * linkVideo — 将 videos.catalog_id 绑定到指定 catalog（通常在 findOrCreate 后调用）
+   * resolveBangumiBinding — ADR-174 D-174-3：写 bangumi_subject_id 前的唯一约束兜底真去重判定。
+   *
+   * 只读：判定该 subject 是否已被他行占用，以及当前 video 能否安全重指向（不写库，
+   * redirect 的 linkVideo 由调用方在事务内执行以保原子性）。db 透传调用方的事务连接，
+   * 确保读到事务内一致快照。
    */
-  async linkVideo(videoId: string, catalogId: string): Promise<void> {
-    await catalogQueries.linkVideoToCatalog(this.db, videoId, catalogId)
+  async resolveBangumiBinding(
+    db: Pool | PoolClient,
+    currentCatalogId: string,
+    bangumiId: number,
+  ): Promise<CatalogBindingResolution> {
+    const existing = await catalogQueries.findCatalogByBangumiId(db, bangumiId)
+    // 无他行占用，或占用者即当前行 → 当前 catalog 直接绑定（safe，无需查当前行）
+    if (!existing || existing.id === currentCatalogId) return { kind: 'safe' }
+    // 他行已占用 → 取当前行判定重指向安全性
+    const current = await catalogQueries.findCatalogById(db, currentCatalogId)
+    if (!current || !isRedirectSafe(current, existing)) return { kind: 'conflict' }
+    return { kind: 'redirect', targetCatalogId: existing.id }
+  }
+
+  /**
+   * linkVideo — 将 videos.catalog_id 绑定到指定 catalog（通常在 findOrCreate 后调用）。
+   * 可选 db：调用方在外部事务（如 BangumiService 真去重重指向）时传入 PoolClient 共享连接保原子性；
+   * 不传则走 this.db（既有调用方零兼容性破坏）。
+   */
+  async linkVideo(videoId: string, catalogId: string, db?: Pool | PoolClient): Promise<void> {
+    await catalogQueries.linkVideoToCatalog(db ?? this.db, videoId, catalogId)
   }
 
   /**

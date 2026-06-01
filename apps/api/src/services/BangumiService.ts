@@ -177,14 +177,18 @@ export class BangumiService {
     if (data.fields === null) {
       throw new Error(`bangumi enrich: subject ${bangumiId} detail fetch failed (no fields, transient) — retry`)
     }
-    const episodesWritten = await this.applyAutoMatchAtomic(
+    const apply = await this.applyAutoMatchAtomic(
       videoId, catalogId, bangumiId, confidence, breakdown, data,
     )
+    if (apply.dedupConflict) {
+      // D-174-3 ③：subject 已被他行占用且重指向不安全 → 已在事务内降级 candidate ref + unmatched
+      return { matched: 'candidate', bangumiSubjectId: bangumiId, confidence }
+    }
     return {
       matched: 'auto',
       bangumiSubjectId: bangumiId,
       confidence,
-      episodes: episodesWritten,
+      episodes: apply.episodes,
       degraded: data.degraded,
     }
   }
@@ -430,7 +434,15 @@ export class BangumiService {
    * Phase 2（纯 DB 写入）：把 gatherEnrichmentData 收集的字段写到 catalog + 逐集 + 集数回填。
    * - 传 PoolClient：所有写入复用该连接（confirmMatch 原子事务场景）
    * - 传 Pool：每个 query 各自管连接（matchAndEnrich 后台 job，eventually consistent + idempotent）
-   * 返回逐集写入数与是否实际写入 catalog。
+   *
+   * ADR-174 D-174-3 唯一约束兜底真去重：写 bangumi_subject_id 前先经 resolveBangumiBinding 判定该
+   * subject 是否已被他行占用 —— safe → 写当前 catalog；redirect → 重指向 video 到 existing 并写 existing
+   * （运行时即时去重，避免撞 media_catalog_bangumi_subject_id_key）；conflict（type/year 不安全）→
+   * 不写 catalog，返回 dedupConflict 让调用方降级（绝不抛 duplicate key 炸事务）。
+   * 注：pre-check 是去重主体；并发窗口内仍可能撞唯一约束 → 事务 ROLLBACK 后由 Bull 重试收敛
+   * （重试时 existing 已存在 → 走 redirect / safe），ON CONFLICT 非语义主体（D-174-3）。
+   *
+   * 返回逐集写入数、是否实际写入 catalog、是否因去重不安全降级。
    */
   private async applyEnrichmentDb(
     db: Pool | PoolClient,
@@ -438,19 +450,30 @@ export class BangumiService {
     catalogId: string,
     bangumiId: number,
     data: EnrichmentData,
-  ): Promise<{ episodes: number; wrote: boolean }> {
-    if (!data.fields) return { episodes: 0, wrote: false }
+  ): Promise<{ episodes: number; wrote: boolean; dedupConflict: boolean }> {
+    if (!data.fields) return { episodes: 0, wrote: false, dedupConflict: false }
+
+    // safeUpdate 接受 PoolClient（共享事务）或不传（走 service 自带 this.db）
+    const isClient = 'release' in db && typeof (db as PoolClient).release === 'function'
+
+    // D-174-3：唯一约束兜底真去重判定（只读，redirect 的 linkVideo 在本事务内执行保原子性）
+    const resolution = await this.catalogService.resolveBangumiBinding(db, catalogId, bangumiId)
+    if (resolution.kind === 'conflict') {
+      return { episodes: 0, wrote: false, dedupConflict: true }
+    }
+    const targetCatalogId = resolution.kind === 'redirect' ? resolution.targetCatalogId : catalogId
+    if (resolution.kind === 'redirect') {
+      // 运行时即时真去重：当前 video 改指到已占用该 subject 的 existing catalog（共享 db 连接）
+      await this.catalogService.linkVideo(videoId, targetCatalogId, db)
+    }
 
     const episodesWritten = data.episodes.length > 0
-      ? await catalogEpisodeQueries.upsertCatalogEpisodes(db, catalogId, data.episodes)
+      ? await catalogEpisodeQueries.upsertCatalogEpisodes(db, targetCatalogId, data.episodes)
       : 0
 
     if (data.mainEpisodeCount > 0) {
       await videosQueries.updateEpisodeCount(db, videoId, data.mainEpisodeCount)
     }
-
-    // safeUpdate 接受 PoolClient（共享事务）或不传（走 service 自带 this.db）
-    const isClient = 'release' in db && typeof (db as PoolClient).release === 'function'
 
     // ADR-161 AMENDMENT / META-19：角色 + CV 全量替换（delete-then-insert，仅事务内 PoolClient）。
     // 守卫 charactersFetched（D-161-AMD-3）：getCharacters 成功（含返回空）才替换 —— 成功返回空也
@@ -458,15 +481,15 @@ export class BangumiService {
     // 两路径（applyAutoMatchAtomic / confirmMatch）均传 client，恒满足 isClient。
     if (data.charactersFetched && isClient) {
       await catalogCharacterQueries.replaceCatalogCharacters(
-        db as PoolClient, catalogId, 'bangumi', data.characters,
+        db as PoolClient, targetCatalogId, 'bangumi', data.characters,
       )
     }
 
-    const { updated } = await this.catalogService.safeUpdate(catalogId, data.fields, 'bangumi', {
+    const { updated } = await this.catalogService.safeUpdate(targetCatalogId, data.fields, 'bangumi', {
       sourceRef: String(bangumiId),
       db: isClient ? (db as PoolClient) : undefined,
     })
-    return { episodes: episodesWritten, wrote: updated !== null }
+    return { episodes: episodesWritten, wrote: updated !== null, dedupConflict: false }
   }
 
   /**
@@ -474,7 +497,11 @@ export class BangumiService {
    * → upsert ref(auto_matched, primary) → COMMIT；任一步骤失败 ROLLBACK 并抛出。
    * 防 catalog 写失败时遗留已提交的 auto_matched/primary ref 脏态（Codex stop-time review）。
    * REST 已在 Phase 1（gatherEnrichmentData）完成，事务内无网络等待（不占 idle-in-transaction）。
-   * 返回逐集写入数。
+   *
+   * ADR-174 D-174-3 ③：applyEnrichmentDb 报 dedupConflict（subject 已被他行占用且重指向不安全）时
+   * 降级 —— 写 candidate ref（非 primary）+ 保留 bangumi_status=unmatched，仍正常 COMMIT
+   * （绝不让单冲突 video 炸整个 matchAndEnrich）；审核台据 candidate ref 人工裁定。
+   * 返回逐集写入数与是否降级。
    */
   private async applyAutoMatchAtomic(
     videoId: string,
@@ -483,26 +510,28 @@ export class BangumiService {
     confidence: number,
     breakdown: Record<string, number>,
     data: EnrichmentData,
-  ): Promise<number> {
+  ): Promise<{ episodes: number; dedupConflict: boolean }> {
     const client = await this.db.connect()
     try {
       await client.query('BEGIN')
       const result = await this.applyEnrichmentDb(client, videoId, catalogId, bangumiId, data)
+      const conflict = result.dedupConflict
+      // conflict → candidate/非 primary/unmatched（降级）；否则 auto_matched/primary/matched（正常）
       await externalDataQueries.upsertVideoExternalRef(client, {
         videoId,
         provider: 'bangumi',
         externalId: String(bangumiId),
-        matchStatus: 'auto_matched',
+        matchStatus: conflict ? 'candidate' : 'auto_matched',
         matchMethod: 'title_norm',
         confidence,
-        isPrimary: true,
+        isPrimary: !conflict,
         linkedBy: 'auto',
         notes: JSON.stringify(breakdown),
       })
       // ADR-170 R-3：status 写入与 catalog+ref 同事务（消除「已提交但 status 未写」窗口）
-      await videosQueries.updateVideoBangumiStatus(client, videoId, 'matched')
+      await videosQueries.updateVideoBangumiStatus(client, videoId, conflict ? 'unmatched' : 'matched')
       await client.query('COMMIT')
-      return result.episodes
+      return { episodes: conflict ? 0 : result.episodes, dedupConflict: conflict }
     } catch (err) {
       try { await client.query('ROLLBACK') } catch { /* connection may already be lost */ }
       throw err

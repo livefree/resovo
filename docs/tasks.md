@@ -6,9 +6,9 @@
 
 ## 进行中任务
 
-（空 / META-23-C migration 084 ✅ 2026-06-01：重算883+合并51组删52行+补34行，不一致0/uq违反0/零回归。当前打扰番已绑 subject 610703）
+（空 / META-23-D applyEnrichmentDb 唯一约束兜底真去重 ✅ 2026-06-01：resolveBangumiBinding 查重接缝 safe/redirect/conflict 三态 + applyAutoMatchAtomic dedupConflict 降级 candidate 不炸事务 + confirmMatch 自然 ROLLBACK；全量净增 6 用例全过零回归）
 
-> SEQ-20260531-01：A✅ B✅ **C✅** / **D-E ⬜**。下一卡 **META-23-D**（applyEnrichmentDb 唯一约束兜底真去重，opus 级·动富集核心）。⚠️ 运维：用户可重跑 `reenrich-backfill --mode unmatched --type anime` 让已合并+已绑 subject 的番刷新富集（META-23-E 验证命中回升）。详见 task-queue.md + changelog.md。
+> SEQ-20260531-01：A✅ B✅ C✅ **D✅** / **E ⬜**。下一卡 **META-23-E**（全量回归 + architecture.md 字段语义收尾 + 用户重跑 `reenrich-backfill --mode unmatched --type anime` 验证 JP 命中率回升 / sonnet 级）。详见 task-queue.md + changelog.md。
 
 ---
 
