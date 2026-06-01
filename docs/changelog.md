@@ -12911,3 +12911,18 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **新增依赖/schema/Props 契约变更**：无（`_residual_locks_084` 为回滚脚本运行时产物表，非 schema 契约）。
 - **数据库变更**：无（修复回滚报告；本次 locks 快照 0 行未触发）。
 - **质量门禁**：typecheck EXIT=0 / 回滚 dry-run 跑通（locks 候选 0）/ 合成 locks 残留实证明细可操作 PASS / verify:adr-contracts 待跑。
+
+---
+
+## [META-23-C-FIX6] 回滚 locks 解锁 SQL 去批删，改逐条单删模板（Codex stop-time review）
+- **完成时间**：2026-06-01
+- **执行模型**：claude-opus-4-8
+- **子代理**：无
+- **来源**：Codex stop-time review「generated remediation SQL can delete legitimate runtime locks」。
+- **问题**：FIX5 给的解锁 SQL `DELETE FROM video_metadata_locks l USING _residual_locks_084 r WHERE …` 是**一键删全部候选**形态。但候选来自**不精确判据**（含误报：A 类合法锁同源同批可能逐列等于冗余快照被误判）+ `_residual_locks_084` 累积跨次候选 → 运营粘贴即无差别删除合法运行时锁，文字「逐条核查」警示挡不住「粘贴即执行」。
+- **修复**：残留报告改为**纯诊断 + 逐条单删模板**——移除任何 `USING _residual/_bak` 的批量 DELETE；每条候选输出独立的带具体值单删语句 `DELETE FROM video_metadata_locks WHERE catalog_id='<具体>' AND field_name='<具体>';`，运营须对每一条单独业务核查后才执行该行。明示「判据含误报、禁止整批执行」。`_residual_locks_084` 降级为纯诊断台账（不提供据其批删的语句）。
+- **实证（合成场景）**：2 条候选 → 各生成独立带具体 catalog_id+field_name 的单删模板，无 USING 批删 → **PASS：不存在一键删全部候选的危险 SQL，误报合法锁不会被无差别删除**。
+- **修改文件**：`scripts/dedup-catalog-084-rollback.ts`（locks 残留解锁提示：批删 USING → 逐条单删模板）。
+- **新增依赖/schema/Props 契约变更**：无。
+- **数据库变更**：无。
+- **质量门禁**：typecheck EXIT=0 / grep 确认无批量 DELETE 执行语句（唯一 DELETE 字面是逐条单删模板字符串）/ 合成实证逐条模板 PASS / verify:adr-contracts 待跑。

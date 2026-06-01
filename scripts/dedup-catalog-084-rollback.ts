@@ -152,16 +152,21 @@ async function rollback(client: PoolClient): Promise<void> {
       if (residual.rows.length === 0) {
         process.stdout.write('  locks 疑似 B 类转移残留候选: 0（无须人工处理）\n')
       } else {
+        // ⚠️ Codex：判据含误报（A 类合法锁同源同批可能逐列等于冗余快照 → 误判）。
+        //   **绝不提供可直接批量执行的 DELETE**——运营粘贴即会误删合法运行时锁。
+        //   只输出诊断明细 + **逐条单删模板**（每条带具体值，运营须对每一条单独业务核查后才执行该行）。
         process.stdout.write(
-          `  ⚠️ locks 疑似 B 类转移残留候选 ${residual.rows.length} 条（运行时后果：留存行可能多一个本不该有的字段冻结；` +
-            `判据含误报，回滚未自动删除）。明细已落 _residual_locks_084，逐条：\n`,
+          `  ⚠️ locks 疑似 B 类转移残留候选 ${residual.rows.length} 条（运行时后果：留存行可能多一个本不该有的字段冻结）。\n` +
+            `     **判据含误报，回滚未自动删除；下列为诊断 + 逐条单删模板，禁止整批执行——须逐条业务核查确属误转移后再删该行：**\n`,
         )
         for (const r of residual.rows) {
           process.stdout.write(`    · catalog=${r.catalog_id} field=${r.field_name} mode=${r.lock_mode} by=${r.locked_by}\n`)
+          process.stdout.write(
+            `      单删模板（核查后）：DELETE FROM video_metadata_locks WHERE catalog_id='${r.catalog_id}' AND field_name='${r.field_name}';\n`,
+          )
         }
         process.stdout.write(
-          `  人工解锁（核查确属误转移后）：DELETE FROM video_metadata_locks l USING _residual_locks_084 r ` +
-            `WHERE l.catalog_id=r.catalog_id AND l.field_name=r.field_name;（逐条核查，勿无差别删）\n`,
+          `  明细已落 _residual_locks_084（仅诊断台账，不提供据其批删的语句；逐条核查后用上方单删模板）。\n`,
         )
       }
     } else {
