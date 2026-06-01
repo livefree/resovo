@@ -12863,3 +12863,19 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **新增依赖/schema/Props 契约变更**：无。
 - **数据库变更**：无（修复回滚/守卫逻辑）。
 - **质量门禁**：typecheck EXIT=0 / 回滚 + dedup 守卫 dry-run 实测 / verify:adr-contracts 待跑。
+
+---
+
+## [META-23-C-FIX3] 回滚 B 类转移元数据遗留修复（Codex stop-time review）
+- **完成时间**：2026-06-01
+- **执行模型**：claude-opus-4-8
+- **子代理**：无
+- **来源**：Codex stop-time review「rollback still leaves transferred survivor metadata behind」。
+- **问题（与上轮 FIX2 的相反约束构成死结）**：provenance/locks 的冗余 field 分两类——A 类（碰撞：留存行原有+冗余也有→合并删冗余侧进快照）、B 类（转移：留存行原无+冗余有→UPDATE SET catalog_id 整行搬到留存行）。FIX2「只 INSERT 冗余快照、不删任何 catalog_id=留存行」解决了「误删留存行 A 类原有值」，但把 **B 类转移到留存行的那份遗留在留存行**（transferred survivor metadata left behind）。而若简单删 catalog_id=留存行的全部该 field 又会误删 A 类留存侧（FIX2 批评点）。
+- **破解判据**：B 类转移是 `UPDATE SET catalog_id`——**只改 catalog_id，其余列（source_kind/source_ref/source_priority/updated_at 等）原封保留冗余原值**。故留存行上「除 catalog_id 外逐列等于某冗余快照行」的 = B 类转移副本（精确删）；留存行原有 field（A 类留存侧）值是自己的、不会逐列等于冗余快照（不误删）。
+- **修复**：provenance/locks 回滚改三步——① 删留存行（cur.catalog_id = 快照 surviving_id）上「除 catalog_id 外逐列 IS NOT DISTINCT FROM 冗余快照」的 B 类转移残留 → ② INSERT 冗余快照回原 catalog_id（A+B 冗余副本全复位）。逐列用 IS NOT DISTINCT FROM 处理 nullable（source_ref/reason）。
+- **实证（合成场景，事务内 ROLLBACK）**：造留存行 S 有 A 类 rating（自己值）+ B 类 cover（逐列同冗余）、冗余行 R 有 rating（A 类异值）+ cover（B 类）。回滚后 S={rating}（A 类留存侧保留、B 类 cover 删除）、R={cover,rating}（冗余副本全复位）→ **PASS：留存行零误删 + B 类不遗留 + 冗余取证完整**。
+- **修改文件**：`scripts/dedup-catalog-084-rollback.ts`（provenance/locks 还原三步 + 逐列匹配判据）。
+- **新增依赖/schema/Props 契约变更**：无。
+- **数据库变更**：无（修复回滚逻辑；本次迁移子表快照 0 行未实际触发，逻辑为通用正确性而备）。
+- **质量门禁**：typecheck EXIT=0 / 回滚 dry-run 跑通 / 合成 B 类场景实证 PASS / verify:adr-contracts 待跑。
