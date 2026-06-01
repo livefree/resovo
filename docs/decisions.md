@@ -18624,17 +18624,20 @@ Bangumi token 现直读 `process.env.BANGUMI_API_TOKEN`（`lib/bangumi.ts:15`）
 - **D-174-3（唯一约束冲突兜底）**：`BangumiService.applyEnrichmentDb` 在 `safeUpdate(catalogId, {bangumiSubjectId})` 之前先 `findCatalogByBangumiId(client, bangumiId)`：① existing ≠ 当前 catalogId → 当前 video 的 `catalog_id` 重指向 existing（运行时即时真去重），富集写 existing；② existing = 当前 / null → 正常写；③ 重指向不安全（type/year 冲突）→ 降级记 `video_external_refs` candidate，保留 unmatched，正常 COMMIT，**绝不让单冲突 video 炸整个 matchAndEnrich**。`ON CONFLICT DO NOTHING` 仅作真去重 UPDATE 的并发保险（+重查收敛），非语义主体（否则制造「ref matched 但 catalog 空」脏态）。**仅 bangumi_subject_id**；douban/imdb/tmdb 三同类约束识别为同构风险但当前未实测冲突 → follow-up（沉淀 `MediaCatalogService.linkExternalIdOrRedirect` 通用原语 / 本 ADR 实现时留可提取接缝）。
 - **D-174-4（受影响消费方）**：查询点 videos.crawler.ts:197 / mediaCatalog.ts:144 / video-merge-candidates.ts:61/88/122 GROUP BY **SQL 无需改逻辑**——只要写入侧 + 查询入参侧键生成同批切 `normalizeMergeKey`（R6 最高翻车点：任一漏切→新写入新键 vs 查询旧键→漏归并）+ 阶段 A 重算存量，键全局自洽。dump 表 `external_data.douban_entries.title_normalized`（ExternalDataImportService:447 本地 `normalizeTitle` 经 `[^\p{L}\p{N}]` 写入）**不在范围**：已剥标点、不同表不同语义不同函数，是被匹配侧基准；Y3 勿误统一/误改。
 - **D-174-5（回归与门禁）**：5 类测试（① 归一化同键/幂等/CJK 对齐/含空格 under-match ② 迁移幂等 ③ 52 组合并正确性·子表无悬挂·外部 ID 无丢失 ④ 唯一约束兜底·真去重重指向不抛+降级不炸事务 ⑤ 富集列/审核台图标渲染回归）。**architecture.md 必须同步 `title_normalized` 语义变更**（列 DDL 不变但内容契约从「保留标点」变「剥标点」/ R8 / schema 绝对禁止项覆盖）。门禁 `verify:adr-contracts` + `verify:sql-schema-alignment` 必跑。
+- **D-174-6（回滚边界 / Codex stop-time review + Opus 评审 / META-23-C 实施期补记）**：本迁移**不可逆**，回滚是「数据安全网」**非字节级逐行无损还原**。根因：① 留存行的合并前归并键被阶段 A'（合并后补跑 backfill）**覆盖式 UPDATE 永久丢失、且从未快照**；② `uq_catalog_title_year_type`（同 `(title_normalized,year,type)` 无外部 ID 行仅一行）在设计上**拒绝**「复活的冗余行与已收敛留存行同键共存」（这正是合并目的）。回滚脚本（`scripts/dedup-catalog-084-rollback.ts`）能恢复：被删 52 行全字段（取证）+ videos 指向 + 子表快照复位；**不能**还原留存行被前移的键（复活行 title_normalized 追加 sentinel `‹rollback-084›` 规避 uq 索引，键不自洽待人工裁定）。修正缺陷：原脚本 `ON CONFLICT (id)` 误以为能兜 uq 部分唯一索引（实际只兜主键），复活无外部 ID 同键行必撞 → 已改为复活带 sentinel。**红线 R9：任何后续覆盖式重算归并键的迁移，若要求可回滚，必须在覆盖前快照原始 `title_normalized`**（本次 A/A' 未做的教训）。**前向守卫（R10）**：`dedup-catalog-084.ts` 运行时校验 8 张快照表齐全（migration 084 已 apply）+ 抽样警示阶段 A 是否已跑，避免误序执行。
 
 ### 红线（实施前必须满足，违反即阻塞）
 
 - **R1** `normalizeMergeKey` 保持 META-22 不变量：CJK 标题与 dump `[^\p{L}\p{N}]` 逐字符一致（零召回损失）+ 含空格标题 under-match 不误绑；不得引入更激进塌缩。
 - **R2** 阶段 B 留存行选择确定性（有外部 ID + 最早 created_at），不依赖隐式行序。
-- **R3** 子表转移处理 `(catalog_id, episode_no)` 类唯一约束（ON CONFLICT DO NOTHING 留存行优先），否则转移 UPDATE 撞约束炸迁移。
-- **R4** 合并删行可回滚：media_catalog 无 deleted_at → 删前全字段快照备份。
+- **R3** 子表转移处理 `(catalog_id, source, external_*)` / `(catalog_id, field_name)` / `(catalog_id, alias)` 类唯一约束。**注意：UPDATE 不支持 ON CONFLICT**（INSERT 专有）→ 实装为「先删冗余侧与留存行碰撞的行（留存优先），再 UPDATE 剩余转移」+ `IS NOT DISTINCT FROM`（处理 nullable `external_episode_id`，`=` 对 NULL 漏判）。否则转移 UPDATE 撞唯一索引炸迁移（META-23-C 实测修正）。
+- **R4** 合并删行可回滚：media_catalog 无 deleted_at → 删前全字段快照备份（含孙表 catalog_character_actors）。**但回滚是数据安全网非字节级无损**，见 D-174-6 + R9。
 - **R5** 存量重算用 TS 脚本调 `normalizeMergeKey`，禁纯 SQL 复刻。
 - **R6** 写入侧 + 查询入参侧键生成同批切换零遗漏。
 - **R7** D-174-5 五类测试全绿才 commit。
 - **R8** architecture.md 同步 title_normalized 语义变更。
+- **R9** 任何后续**覆盖式重算归并键**的迁移，若要求可回滚，**必须在覆盖前快照原始 `title_normalized`**（本次 A/A' 未做 → 留存行旧键不可逆丢失 / D-174-6 教训）。
+- **R10** 数据迁移脚本须有**前向守卫**：运行时校验前置（快照表齐全 / 上游阶段已跑），避免误序执行中途 SQL 报错（META-23-C `dedup-catalog-084.ts` 已加）。
 
 ### 黄线
 

@@ -12821,3 +12821,28 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **数据库变更**：migration 084 新增 8 张 `_bak_*_084` 快照表（保留至五类测试全绿 + 线上观察一迭代后另起卡 DROP）；media_catalog.title_normalized 存量内容重算（列 DDL 不变）；删 52 冗余 catalog 行（快照可回滚）。architecture.md 已同步（R8）。
 - **质量门禁**：typecheck EXIT=0 / lint EXIT=0 / verify:adr-contracts EXIT=0（verify-sql-schema-alignment 55 表含新快照表对齐）/ 全量 445 文件 **5825 passed 0 failed** 零回归。
 - **运维交接**：用户可重跑 `reenrich-backfill --mode unmatched --type anime` 让已合并+已绑 subject 的番刷新富集状态（bangumi_status / catalog 富集字段），META-23-E 验证 JP anime 命中回升。
+
+---
+
+## [META-23-C-FIX] migration 084 回滚脚本无损性修复 + 前向守卫（Codex stop-time review / D-174-6）
+- **完成时间**：2026-06-01
+- **执行模型**：claude-opus-4-8
+- **子代理**：arch-reviewer (claude-opus-4-8) / agentId aa706a8fcc7a53b32 — 回滚撞唯一索引可行性评估
+- **来源**：Codex stop-time review「migration 084 rollback is not lossless and forward guards are incomplete」。
+- **问题（Opus 评审确诊 2 真 bug + 1 诚实性）**：
+  - ① **真 bug**：`dedup-catalog-084-rollback.ts` 复活冗余行用 `ON CONFLICT (id) DO NOTHING`，**只兜主键不兜 `uq_catalog_title_year_type` 部分唯一索引** → 复活无外部 ID 同键冗余行必撞 duplicate key（dry-run 实测抛错）。
+  - ② **真 bug**：provenance/locks（PK `(catalog_id,field_name)` 无独立 id）原还原用 `INSERT ON CONFLICT DO NOTHING`，对「转移走的行」不还原位置 → 非无损。
+  - ③ **诚实性**：回滚头注释声称「完全无损/语义无损」与既成事实不符——合并不可逆（留存行合并前键被阶段 A' 覆盖式 UPDATE 永久丢失、从未快照；ADR-174 后果栏已自认不可逆），回滚比 ADR 更乐观属过度承诺。
+  - ④ **前向守卫缺失**：dedup/backfill 注释写了前置但无运行时校验。
+- **修复**：
+  - 回滚复活逻辑：title_normalized 追加 sentinel `‹rollback-084›` 规避 uq 部分索引（不再依赖 ON CONFLICT(id) 兜 uq），复活行键不自洽显式标注待人工裁定。
+  - provenance/locks 还原：改「删当前库中 field 在快照、catalog_id ∈ (冗余行 ∪ 留存行) 的残留 → 按快照原 catalog_id 全量复位」；PK(id) 子表改「DELETE 快照 id 残留 → INSERT 快照全量」（id 精确）。
+  - 头注释改写为诚实「数据安全网」声明：能恢复被删 52 行全字段 + videos 指向 + 子表快照；**不还原留存行被前移的键**（旧值已丢）。
+  - 前向守卫（R10）：`dedup-catalog-084.ts` 加运行时校验——8 张快照表齐全（migration 084 已 apply）+ 抽样 500 行警示阶段 A 是否已跑。
+  - ADR-174 补 **D-174-6**（回滚边界）+ **R9**（覆盖式重算须先快照旧键）+ **R10**（迁移前向守卫）；R3 表述修正为「UPDATE 不支持 ON CONFLICT → 先删碰撞再 UPDATE」与实装一致。
+- **验证**：回滚 dry-run 跑通（复活 52 行带 sentinel 不撞 uq / 还原 52 videos 指向 / ROLLBACK 干净）；typecheck EXIT=0。本次迁移子表快照全 0 行（被删 52 行纯裸 catalog），回滚实际只需恢复 catalog 全字段 + videos 指向，能力完整。
+- **修改文件**：`scripts/dedup-catalog-084-rollback.ts`（复活逻辑 + provenance/locks 还原 + 头注释）/ `scripts/dedup-catalog-084.ts`（前向守卫）/ `docs/decisions.md`（ADR-174 D-174-6 + R9/R10 + R3 修正）。
+- **新增依赖/schema/Props 契约变更**：无（仅脚本逻辑 + ADR 文档）。
+- **数据库变更**：无（修复回滚/守卫逻辑，未动 schema/数据）。
+- **质量门禁**：typecheck EXIT=0 / 回滚 dry-run 跑通 / verify:adr-contracts 待跑。
+- **诚实声明**：META-23-C 合并不可逆性在 D-174-6 钉死；当前库已合并状态下「最大可恢复能力」=被删行取证 + videos 指向，不可字节级还原到合并前布局。

@@ -154,6 +154,38 @@ async function main(): Promise<void> {
   const pool = new Pool({ connectionString: databaseUrl })
 
   try {
+    // 前向守卫①：migration 084 已 apply（8 张快照表齐全），否则给清晰错误而非中途 SQL 报错
+    const REQUIRED_BAK = [
+      '_bak_media_catalog_084', '_bak_catalog_episodes_084', '_bak_catalog_characters_084',
+      '_bak_catalog_character_actors_084', '_bak_video_metadata_provenance_084',
+      '_bak_video_metadata_locks_084', '_bak_media_catalog_aliases_084', '_bak_videos_catalog_id_084',
+    ]
+    const bakExist = await pool.query<{ tablename: string }>(
+      `SELECT tablename FROM pg_tables WHERE schemaname='public' AND tablename = ANY($1::text[])`,
+      [REQUIRED_BAK],
+    )
+    const missing = REQUIRED_BAK.filter((t) => !bakExist.rows.some((r) => r.tablename === t))
+    if (missing.length > 0) {
+      throw new Error(`快照表缺失（migration 084 未 apply？）：${missing.join(', ')}。请先 npm run migrate。`)
+    }
+
+    // 前向守卫②（Y1 部署顺序）：阶段 A backfill 应已跑——抽查「单行组键已是 normalizeMergeKey」。
+    // 若发现大量单行组键仍带标点（未重算），警示阶段 A 未跑（dedup 仍可跑因分组走内存键，但
+    // 合并后单行组键不自洽，需补跑 backfill / A'）。仅警告不阻断（dedup 内存分组不依赖落库键）。
+    {
+      const sample = await pool.query<{ id: string; title: string; title_normalized: string }>(
+        `SELECT id, title, title_normalized FROM media_catalog LIMIT 500`,
+      )
+      let staleSingle = 0
+      for (const r of sample.rows) if (r.title_normalized !== normalizeMergeKey(r.title)) staleSingle++
+      if (staleSingle > 50) {
+        process.stdout.write(
+          `[dedup-084] ⚠️ 抽样 500 行有 ${staleSingle} 行 title_normalized 与 normalizeMergeKey 不一致 —— ` +
+            `阶段 A backfill 可能未跑。dedup 仍会用内存键正确分组合并，但完成后须跑 backfill（A'）补齐键自洽。\n`,
+        )
+      }
+    }
+
     // 防重跑：快照表已有 084 批次 → 除非 --force 否则拒绝
     if (!DRY_RUN && !FORCE) {
       const bak = await pool.query<{ n: string }>(
