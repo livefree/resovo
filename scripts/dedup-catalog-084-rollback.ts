@@ -152,23 +152,27 @@ async function rollback(client: PoolClient): Promise<void> {
       if (residual.rows.length === 0) {
         process.stdout.write('  locks 疑似 B 类转移残留候选: 0（无须人工处理）\n')
       } else {
-        // ⚠️ Codex（两轮）：本脚本**不生成任何可执行删除 SQL**（批删/单删均不可）。两类无解风险：
-        //   ① 判据含误报（A 类合法锁同源同批可能逐列等于冗余快照 → 误判删合法锁，信息论不可达）；
-        //   ② TOCTOU——报告时刻 vs 运营执行时刻之间，该 (catalog_id, field_name) PK 位置可能已被
-        //      重新锁定为一条全新合法锁，按 PK 删会删掉这条无关新锁。
-        //   故残留报告**纯诊断**：列明细 + 指向既有正规解锁通道 `removeFieldLock(catalogId, fieldName)`
-        //   （apps/api/src/db/queries/metadataProvenance.ts），运营经业务核查确属误转移后**经该函数**
-        //   处理（函数内可带当前状态校验），不喂 SQL 盲执行。
+        // ⚠️ Codex（三轮）：本脚本**纯诊断，不删、不生成删除 SQL、不指向任何"安全删除通道"**。
+        //   两类风险对**任何**按 (catalog_id, field_name) 的事后删除都无解，无"安全通道"可言：
+        //   ① 误报（信息论不可达）：候选含 A 类合法锁（同源同批逐列等于冗余快照），无法区分。
+        //   ② TOCTOU：报告时刻 vs 处理时刻之间，该 PK 位置可能已被重新锁定为全新合法锁。
+        //   既有 removeFieldLock(metadataProvenance.ts:182) **内部就是裸 PK DELETE、无任何状态校验**，
+        //   与单删 SQL 同样不安全 —— 故**不再标榜它为安全通道**（曾误称"可带状态校验规避 TOCTOU"，错误，已撤回）。
+        //   处理责任完全在人工：必须先 SELECT 当前 (catalog_id, field_name) 的锁，逐列比对是否仍等于
+        //   下方报告快照（locked_by/locked_at 未变 = 仍是同一把锁、未被替换），确认无误 + 确属误转移，
+        //   才自行删除；TOCTOU 核对与误报判定的责任在操作者，本脚本不代为生成可盲执行的语句。
         process.stdout.write(
           `  ⚠️ locks 疑似 B 类转移残留候选 ${residual.rows.length} 条（运行时后果：留存行可能多一个本不该有的字段冻结）。\n` +
-            `     **判据含误报，回滚未自动删除、也不生成删除 SQL**（误报 + TOCTOU 风险）。诊断明细如下，\n` +
-            `     运营须逐条业务核查确属误转移后，经正规通道 removeFieldLock(catalogId, fieldName) 处理：\n`,
+            `     **疑似清单（判据含误报）。本脚本不删、不生成删除语句、无"安全删除通道"。**\n` +
+            `     处理前操作者须逐条：① SELECT 当前该 (catalog_id, field_name) 锁，比对 locked_by/locked_at\n` +
+            `     是否仍等于下方快照（防 TOCTOU：变了说明已被替换为新锁，禁止删）；② 业务核查确属误转移；\n` +
+            `     ③ 二者皆满足才自行删除（removeFieldLock 等工具均为裸 PK 删、无状态校验，安全责任在操作者）：\n`,
         )
         for (const r of residual.rows) {
           process.stdout.write(`    · catalog=${r.catalog_id} field=${r.field_name} mode=${r.lock_mode} by=${r.locked_by}\n`)
         }
         process.stdout.write(
-          `  明细已落 _residual_locks_084（纯诊断台账，供查询核对；处理走 removeFieldLock，不据本表批删）。\n`,
+          `  明细已落 _residual_locks_084（纯诊断台账，供人工 TOCTOU 比对核对；本脚本不据其删除任何锁）。\n`,
         )
       }
     } else {

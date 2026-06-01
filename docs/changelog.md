@@ -12941,3 +12941,18 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **数据库变更**：无。
 - **质量门禁**：typecheck EXIT=0 / grep 确认全脚本无 `DELETE FROM video_metadata_locks` 字面（0）/ 回滚 dry-run 跑通 / verify:adr-contracts 待跑。
 - **闭环说明**：FIX5→FIX6→FIX7 三轮收敛到「回滚脚本不越界生成运维删除指令」——残留只诊断、处理走正规通道。误报 + TOCTOU 双风险根除。
+
+---
+
+## [META-23-C-FIX8] 回滚 locks 残留撤回虚假「安全通道」声称，诚实归属 TOCTOU 责任（Codex stop-time review）
+- **完成时间**：2026-06-01
+- **执行模型**：claude-opus-4-8
+- **子代理**：无
+- **来源**：Codex stop-time review「the new "safe channel" still performs the same TOCTOU-unsafe PK delete」。
+- **诚实性问题**：FIX7 把残留处理指向「既有正规通道 `removeFieldLock`」并注释「可带状态校验规避 TOCTOU」——但核查 `metadataProvenance.ts:182` 该函数**内部就是裸 `DELETE WHERE catalog_id=$1 AND field_name=$2`、零状态校验**，与被移除的单删 SQL 同样不安全。这是又一个虚假安全声称（同前几轮「虚假无损」同类），把删除动作转移到一个同样 TOCTOU-unsafe 的函数还标榜为「安全通道」。
+- **终局修复**：撤回「安全通道/规避 TOCTOU」声称。诚实声明——**对任何按 (catalog_id, field_name) 的事后删除，误报（信息论不可达）+ TOCTOU 两类风险都无解，不存在安全删除通道**。残留报告纯诊断；处理责任完全在操作者，须逐条 ① SELECT 当前锁比对 locked_by/locked_at 是否仍等于快照（防 TOCTOU：变了=已被替换为新锁，禁删）② 业务核查确属误转移 ③ 皆满足才自行删除（明示 removeFieldLock 等工具均裸 PK 删无校验、安全责任在操作者）。本脚本不删、不生成删除语句、不指向任何「安全通道」。
+- **修改文件**：`scripts/dedup-catalog-084-rollback.ts`（locks 残留注释 + 输出：撤回虚假安全声称，归属 TOCTOU 核对责任）。
+- **新增依赖/schema/Props 契约变更**：无。
+- **数据库变更**：无。
+- **质量门禁**：typecheck EXIT=0 / grep 确认无 DELETE 字面（0）+ 「安全通道」仅剩撤回声明 / 回滚 dry-run 跑通 / verify:adr-contracts 待跑。
+- **闭环说明**：FIX5→FIX8 围绕「残留 locks 如何处理」四轮收敛——批删→单删→指正规通道→诚实承认无安全通道+责任归操作者。根本教训：回滚脚本对 PK-only、含误报、有 TOCTOU 的残留，唯一诚实做法是纯诊断 + 风险与责任透明，不制造任何「看似安全」的删除路径。
