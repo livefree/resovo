@@ -18,7 +18,7 @@ import type { Pool } from 'pg'
 import * as externalDataQueries from '@/api/db/queries/externalData'
 import * as catalogQueries from '@/api/db/queries/mediaCatalog'
 import type { BangumiGapQueryRow } from '@/api/db/queries/mediaCatalog'
-import { normalizeTitle } from './TitleNormalizer'
+import { normalizeMergeKey } from './TitleNormalizer'
 
 export interface SeedPlaceholdersInput {
   minRank?: number | null
@@ -67,7 +67,7 @@ export class BangumiSeedService {
       }
 
       // ② 三元组去重（部分唯一索引不覆盖带 bangumi_id 的 INSERT，须显式 SELECT 防重复占位）
-      const titleNormalized = normalizeTitle(title)
+      const titleNormalized = normalizeMergeKey(title)
       const byNorm = await catalogQueries.findCatalogByNormalizedKey(this.db, titleNormalized, entry.year, 'anime')
       if (byNorm) {
         matched++

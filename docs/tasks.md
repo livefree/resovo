@@ -6,9 +6,9 @@
 
 ## 进行中任务
 
-（空 / META-23-A ADR-174 落档 ✅ 2026-05-31）
+（空 / META-23-B normalizeMergeKey 切换 ✅ 2026-05-31：全量 5825 passed 零回归）
 
-> SEQ-20260531-01 共 5 卡（META-23-A..E 严格串行）。**META-23-A 已完成**（ADR-174 落档 + arch-reviewer Opus 设计裁定）。下一卡 META-23-B（normalizeMergeKey 新增 + 键切换）为代码实施，待启动。详见 task-queue.md。
+> SEQ-20260531-01：A✅ B✅ / **C-E ⬜**。下一卡 **META-23-C**（migration 084：存量重算 backfill + 52 冗余合并 + 删行快照备份，opus 级·不可逆迁移）待启动。详见 task-queue.md。
 
 ---
 

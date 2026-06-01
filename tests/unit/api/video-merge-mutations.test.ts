@@ -46,6 +46,8 @@ vi.mock('@/api/services/AuditLogService', () => ({
 
 vi.mock('@/api/services/TitleNormalizer', () => ({
   normalizeTitle: (t: string) => t.toLowerCase(),
+  // ADR-174：VideoMergesService.split 新建 video 归并键改用 normalizeMergeKey（剥标点）
+  normalizeMergeKey: (t: string) => t.toLowerCase().replace(/[\p{P}\p{S}\s]/gu, ''),
 }))
 
 import * as mutations from '@/api/db/queries/video-merge-mutations'

@@ -2450,7 +2450,7 @@ CODENAME-MATRIX-E2E (依赖 Wave 3 验收期补丁 CODENAME-MATRIX ✅)
 
 ## [SEQ-20260531-01] 归并键剥标点统一 + catalog 冗余合并 + Bangumi 唯一约束兜底（ADR-174）
 
-- **状态**：🔄 执行中
+- **状态**：🔄 执行中（A✅ B✅ / C-E ⬜）
 - **创建时间**：2026-05-31
 - **最后更新时间**：2026-05-31
 - **目标**：根治「同一作品因标题标点差异裂成多 catalog 行 → 抢绑同一 Bangumi subject → 撞 `media_catalog_bangumi_subject_id_key` 唯一约束 → 富集写入失败留 unmatched」。把归并键 `media_catalog.title_normalized` 从「保留 CJK 标点」改为「剥标点」（对齐外部匹配键），重算存量 + 合并冗余 catalog + 富集写入唯一约束兜底。
@@ -2478,11 +2478,11 @@ CODENAME-MATRIX-E2E (依赖 Wave 3 验收期补丁 CODENAME-MATRIX ✅)
    - 文件范围：`docs/decisions.md`（追加 ADR-174）
    - 依赖：无（设计已由 arch-reviewer 完成）
    - 完成备注：ADR-174 完整落档（背景+决策 D-174-1..5+8 红线+5 黄线+后果+follow-up）；verify:adr-contracts EXIT=0（D-174-1..5 advisory 未闭环=预期，实施期 B..E 逐条闭环）；media_catalog 无 deleted_at 已核实（R4 删行须快照备份）/ migration 下一序号 084。执行模型: claude-opus-4-8
-2. **META-23-B** — `normalizeMergeKey` 新增 + 键写入/查询入参全切换 + 单测（D-174-1/R1/R6）（状态：⬜ 待开始）
+2. **META-23-B** — `normalizeMergeKey` 新增 + 键写入/查询入参全切换 + 单测（D-174-1/R1/R6）（状态：✅ 已完成 2026-05-31 / claude-opus-4-8 / 子代理 无）
    - 建议模型：sonnet（函数新增 + 调用点切换 / 无 schema）
-   - 文件范围：`apps/api/src/services/TitleNormalizer.ts`（+normalizeMergeKey + 注释修订）/ CrawlerService.ts:172 / VideoService.ts:256 / VideoMergesService.ts:403 / buildMatchKey + 查询入参侧 / `tests/unit/api/title-normalizer.test.ts`
+   - 文件范围：`apps/api/src/services/TitleNormalizer.ts`（+normalizeMergeKey + normalizeTitle/normalizeForExternalMatch 注释修订 + buildMatchKey 切换）/ CrawlerService.ts:172 / VideoService.ts:256 / VideoMergesService.ts:403 / BangumiSeedService.ts:70 / `tests/unit/api/title-normalizer.test.ts`(+8) / 3 mock 同步（crawler-service-data-guards / crawler-service-es / video-merge-mutations）
    - 依赖：META-23-A ✅
-   - 验收：R1 不变量单测（当前，正被打扰中！==当前正被打扰中 / 幂等 / CJK 对齐 dump / 含空格 under-match）+ R6 零遗漏核验
+   - 完成备注：新增 `normalizeMergeKey`=stripExternalMatchPunct(normalizeTitle)，与 normalizeForExternalMatch 实现等价但语义分立；buildMatchKey + 4 service 写入点（Crawler/Video/VideoMerges/BangumiSeed）全切；**不切**：CrawlerRefetchService:69/87（相似度）/ ExternalDataImportService:447 + bangumi-dump-refresh（各自本地 normalizeTitle dump 基准，Y3 守住）/ normalizeForExternalMatch。查询点（findCatalogByNormalizedKey / videos.crawler:197 / video-merge-candidates GROUP BY）消费入参 key 自动对齐。`videos.crawler.ts:166` fallback `input.title.toLowerCase()` 是 queries 层退化兜底（CrawlerService 总传 titleNormalized），不引 service 依赖保持分层纯净。R1 单测 +8（同番归并/与 normalizeForExternalMatch 逐字符一致/CJK 对齐 dump [^\p{L}\p{N}]/幂等/含空格 under-match/々〇 保留/buildMatchKey 同键）。门禁：typecheck+lint EXIT=0 / title-normalizer 65 全过 / 全量 445 文件 **5825 passed 0 failed** 零回归（3 mock 失配已同步补 normalizeMergeKey）。执行模型: claude-opus-4-8
 3. **META-23-C** — migration 084：存量重算 backfill + 52 组合并 + 删行快照备份（D-174-2/R2/R3/R4/R5）（状态：⬜ 待开始）
    - 建议模型：opus（数据迁移 / 不可逆删行 / 子表转移 / 强制 Opus 评审实施方案）
    - 文件范围：`apps/api/src/db/migrations/084_*.sql` + backfill TS 脚本（scripts/ 或 migration 内）+ architecture.md 同步

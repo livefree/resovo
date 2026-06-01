@@ -12774,3 +12774,23 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **新增依赖/schema/路由/Props 契约变更**：无（本卡仅 ADR 落档；schema 迁移在 META-23-C）。
 - **数据库变更**：无（本卡仅文档）。
 - **质量门禁**：verify:adr-contracts EXIT=0（D-174-1..5 advisory 未闭环=预期，实施期 B..E 逐条闭环；其余 enum-ssot/error-message 警告为 pre-existing 与本卡无关）。
+
+---
+
+## [META-23-B] normalizeMergeKey 新增 + 归并键写入/查询入参全切换（ADR-174 D-174-1/R1/R6）
+- **完成时间**：2026-05-31
+- **执行模型**：claude-opus-4-8（偏离建议 sonnet：本会话主循环 Opus 连续推进 / ADR-174 已锁设计 / 函数新增+调用点切换无架构决策风险）
+- **子代理**：无（设计由 META-23-A arch-reviewer 完成）
+- **来源序列**：SEQ-20260531-01（META-23 系列 2/5）
+- **本卡产出（D-174-1）**：`TitleNormalizer.ts` 新增 `normalizeMergeKey(raw)=stripExternalMatchPunct(normalizeTitle(raw))`，产出持久化归并键，与 `normalizeForExternalMatch`（外部匹配运行时键）实现等价但**语义分立**（共用 stripExternalMatchPunct 私有实现），避免「只想动外部匹配却意外改归并键生成」同构回归（META-22 教训）。
+- **R6 归并键写入侧全切换（零遗漏）**：buildMatchKey（TitleNormalizer:155）+ CrawlerService:172 + VideoService:256 + VideoMergesService:403 + BangumiSeedService:70 全切 normalizeMergeKey。**刻意不切**（D-174-1/Y3）：CrawlerRefetchService:69/87（相似度计算需保留标点分辨力）/ ExternalDataImportService:447 + bangumi-dump-refresh:37（各自本地 normalizeTitle，dump 侧 `[^\p{L}\p{N}]` 基准）/ normalizeForExternalMatch（已剥标点）。查询点 findCatalogByNormalizedKey / videos.crawler:197 / video-merge-candidates GROUP BY 消费入参 key，写入侧切换后自动对齐（SQL 无需改）。`normalizeTitle` 注释同步：明确它是 normalizeMergeKey + normalizeForExternalMatch + 相似度计算的共享前置，勿改语义。
+- **边界处理**：`videos.crawler.ts:166` fallback `input.title.toLowerCase()` 是 queries 层退化兜底（CrawlerService 总传 titleNormalized），保持分层纯净不引 service 依赖。
+- **修改文件**：
+  - `apps/api/src/services/TitleNormalizer.ts`（+normalizeMergeKey + normalizeTitle/normalizeForExternalMatch 注释修订 + buildMatchKey 切换）
+  - `apps/api/src/services/CrawlerService.ts` / `VideoService.ts` / `VideoMergesService.ts` / `BangumiSeedService.ts`（import + 调用切换）
+  - `tests/unit/api/title-normalizer.test.ts`（+8：同番归并/与 normalizeForExternalMatch 逐字符一致/CJK 对齐 dump [^\p{L}\p{N}]/幂等/含空格 under-match/々〇 保留/buildMatchKey 同键）
+  - `tests/unit/api/{crawler-service-data-guards,crawler-service-es,video-merge-mutations}.test.ts`（mock 补 normalizeMergeKey）
+- **新增依赖/schema/路由/Props 契约变更**：无。
+- **数据库变更**：无（schema 迁移在 META-23-C；本卡仅写入侧函数切换，新入库行即用新键 / Y1 部署顺序前半）。
+- **质量门禁**：typecheck EXIT=0 / lint EXIT=0 / verify:adr-contracts EXIT=0 / title-normalizer 65 全过 / 全量 445 文件 **5825 passed 0 failed** 零回归（3 mock 失配已同步）。
+- **注意事项**：存量 3124 行仍是旧键（带标点），与新写入新键暂不一致 → 必须 META-23-C backfill 重算消除窗口（Y1）。本卡单独部署期间，存量含标点视频的归并/查询仍按旧键，新入库视频按新键——属预期过渡态。

@@ -50,7 +50,7 @@ import {
 } from '@/api/db/queries/video-merge-mutations'
 import { AuditLogService } from '@/api/services/AuditLogService'
 import { AppError } from '@/api/lib/errors'
-import { normalizeTitle } from '@/api/services/TitleNormalizer'
+import { normalizeMergeKey } from '@/api/services/TitleNormalizer'
 import {
   computeOverlapScore,
   pickRecommendedTarget,
@@ -400,7 +400,7 @@ export class VideoMergesService {
           title: group.newVideoMeta.title,
           year: group.newVideoMeta.year ?? null,
           type: group.newVideoMeta.type,
-          titleNormalized: normalizeTitle(group.newVideoMeta.title),
+          titleNormalized: normalizeMergeKey(group.newVideoMeta.title),
         })
         newVideoIds.push(newVideoId)
         await assignSourcesToVideo(client, group.sourceIds, newVideoId)

@@ -78,10 +78,11 @@ const PUNCT_SYMBOLS = /[\p{P}\p{S}]/gu
  * 6. 折叠空白、去首尾空格
  * 7. Unicode 小写
  *
- * 注意：本函数输出即持久化归并键 `media_catalog.title_normalized`（CrawlerService /
- * VideoService / VideoMergesService 写入），**刻意保留 CJK 标点**以维持存量行键稳定。
- * 外部源富集匹配（与 dump 侧 `[^\p{L}\p{N}]` 对齐）请用 `normalizeForExternalMatch`，
- * 勿改本函数语义（META-22：曾误改致归并键回归，已解耦）。
+ * 注意：本函数**保留 CJK 标点**，是 `normalizeMergeKey`（持久化归并键 / ADR-174）与
+ * `normalizeForExternalMatch`（外部源匹配键 / META-22）的共享前置步骤，也直接供
+ * CrawlerRefetchService 相似度计算（保留标点的分辨力）。**勿改本函数语义**：改它会同时
+ * 改掉相似度阈值输入分布（ADR-174 D-174-1 / META-22 曾误改致归并键回归）。
+ * 归并键请用 `normalizeMergeKey`，外部匹配请用 `normalizeForExternalMatch`（二者均剥标点）。
  */
 export function normalizeTitle(title: string): string {
   let s = title
@@ -133,9 +134,27 @@ export function stripExternalMatchPunct(normalized: string): string {
  *
  * 用途：视频标题↔豆瓣/Bangumi dump（`title_normalized` 经 `[^\p{L}\p{N}]` 存储）
  * 及 Bangumi REST 候选名的标点不敏感比较，修复「当前、正被打扰中！」类漏配。
- * **与归并键解耦**：归并键仍用 `normalizeTitle`（保留标点，存量行键稳定）。
  */
 export function normalizeForExternalMatch(rawTitle: string): string {
+  return stripExternalMatchPunct(normalizeTitle(rawTitle))
+}
+
+/**
+ * 持久化归并键归一化（ADR-174 / D-174-1）：`normalizeTitle` 全流程 + 标点/符号剥离。
+ *
+ * 用途：`media_catalog.title_normalized` 的**唯一**生成入口（CrawlerService /
+ * VideoService / VideoMergesService / BangumiSeedService / buildMatchKey 及 catalog
+ * 三元组去重查询入参均经本函数），使「当前，正被打扰中！」与「当前正被打扰中」归并为同一作品，
+ * 根治同番裂多 catalog 行 → 抢绑同一外部 subject 撞唯一约束（ADR-174 背景）。
+ *
+ * 与 `normalizeForExternalMatch` 实现等价但**语义分立**：本函数产出持久化归并键，
+ * 后者产出外部源匹配运行时键；二者共用 `stripExternalMatchPunct` 私有实现。分立避免
+ * 「只想动外部匹配行为却意外改掉持久化键生成规则」的同构回归（META-22 教训）。
+ *
+ * 不变量（ADR-174 R1）：CJK 标题与 dump 侧 `[^\p{L}\p{N}]` 逐字符一致（零召回损失）；
+ * 含空格标题保留词间空格（under-match 安全，不塌缩不同作品误绑）。
+ */
+export function normalizeMergeKey(rawTitle: string): string {
   return stripExternalMatchPunct(normalizeTitle(rawTitle))
 }
 
@@ -152,6 +171,6 @@ export function buildMatchKey(
   year: number | null,
   type: string
 ): string {
-  const normalized = normalizeTitle(title)
+  const normalized = normalizeMergeKey(title)
   return `${normalized}|${year ?? ''}|${type}`
 }

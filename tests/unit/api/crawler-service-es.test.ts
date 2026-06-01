@@ -30,6 +30,8 @@ vi.mock('@/api/db/queries/crawlerSites', () => ({
 }))
 vi.mock('@/api/services/TitleNormalizer', () => ({
   normalizeTitle: vi.fn((t: string) => t.toLowerCase()),
+  // ADR-174：归并键写入点改用 normalizeMergeKey（剥标点）；mock 对齐剥标点行为
+  normalizeMergeKey: vi.fn((t: string) => t.toLowerCase().replace(/[\p{P}\p{S}\s]/gu, '')),
 }))
 vi.mock('@/api/lib/config', () => ({
   config: { AUTO_PUBLISH_CRAWLED: 'false' },

@@ -23,7 +23,7 @@ import type { CatalogUpdateData } from '@/api/db/queries/mediaCatalog'
 import { VideoIndexSyncService } from '@/api/services/VideoIndexSyncService'
 import { CACHE_PREFIXES } from '@/api/services/CacheService'
 import { AuditLogService } from '@/api/services/AuditLogService'
-import { normalizeTitle } from '@/api/services/TitleNormalizer'
+import { normalizeMergeKey } from '@/api/services/TitleNormalizer'
 import { enrichmentQueue } from '@/api/lib/queue'
 import type { EnrichJobData } from '@/api/services/MetadataEnrichService'
 
@@ -253,7 +253,7 @@ export class VideoService {
     const catalogService = new MediaCatalogService(this.db)
     const catalog = await catalogService.findOrCreate({
       title: input.title,
-      titleNormalized: normalizeTitle(input.title),
+      titleNormalized: normalizeMergeKey(input.title),
       type: input.type,
       year: input.year ?? null,
       titleEn: input.titleEn ?? null,

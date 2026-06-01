@@ -9,7 +9,7 @@
 import type { Pool } from 'pg'
 import type { Client as ESClient } from '@elastic/elasticsearch'
 import { parseXmlResponse, parseJsonResponse, parseVodItem } from './SourceParserService'
-import { normalizeTitle } from './TitleNormalizer'
+import { normalizeMergeKey } from './TitleNormalizer'
 import { MediaCatalogService } from './MediaCatalogService'
 import { VideoIndexSyncService } from './VideoIndexSyncService'
 import * as crawlerTasksQueries from '@/api/db/queries/crawlerTasks'
@@ -168,8 +168,8 @@ export class CrawlerService {
       ? Math.max(...sources.map((s) => s.episodeNumber ?? 1))
       : 1
 
-    // Step 1: 标准化标题
-    const titleNormalized = normalizeTitle(video.title)
+    // Step 1: 生成归并键（ADR-174 D-174-1：剥标点，使同番不同标点写法归并同一 catalog）
+    const titleNormalized = normalizeMergeKey(video.title)
 
     // Step 2: 找到或创建 media_catalog 条目（爬虫来源，最低优先级）
     const catalogService = new MediaCatalogService(this.db)

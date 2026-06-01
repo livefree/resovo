@@ -9,6 +9,7 @@ import {
   normalizeTitle,
   buildMatchKey,
   normalizeForExternalMatch,
+  normalizeMergeKey,
   stripExternalMatchPunct,
 } from '@/api/services/TitleNormalizer'
 
@@ -292,5 +293,52 @@ describe('stripExternalMatchPunct', () => {
 
   it('空字符串返回空字符串', () => {
     expect(stripExternalMatchPunct('')).toBe('')
+  })
+})
+
+// ── normalizeMergeKey（ADR-174 / 持久化归并键剥标点）────────────────
+
+describe('normalizeMergeKey', () => {
+  it('D-174 核心：同番不同标点写法归并同一键', () => {
+    // 这正是 ADR-174 根因案例：两写法此前因保留标点裂成两 catalog 行 → 抢绑同 subject 撞唯一约束
+    expect(normalizeMergeKey('当前，正被打扰中！')).toBe(normalizeMergeKey('当前正被打扰中'))
+    expect(normalizeMergeKey('当前，正被打扰中！')).toBe('当前正被打扰中')
+  })
+
+  it('R1 不变量：与 normalizeForExternalMatch 输出逐字符一致（共用实现）', () => {
+    for (const t of ['当前，正被打扰中！', '加油吧，中村君！', '海贼王！第二季(2023)[1080P]', 'Spider-Man: No Way Home']) {
+      expect(normalizeMergeKey(t)).toBe(normalizeForExternalMatch(t))
+    }
+  })
+
+  it('R1 不变量：CJK 标题与 dump 侧 [^\\p{L}\\p{N}] 逐字符对齐（零召回损失）', () => {
+    // dump 侧（external_data import）对无空格 CJK 串剥成纯字母数字；归并键须对齐
+    const dumpSide = (s: string) => s.replace(/[（(][^）)]*[）)]/g, '').replace(/[^\p{L}\p{N}]/gu, '').toLowerCase()
+    for (const t of ['当前、正被打扰中！', '钢之炼金术师：FA', '夏目友人帐，第。集']) {
+      expect(normalizeMergeKey(t)).toBe(dumpSide(t))
+    }
+  })
+
+  it('R1 不变量：幂等（对已归一串再跑输出不变）', () => {
+    const once = normalizeMergeKey('当前，正被打扰中！')
+    expect(normalizeMergeKey(once)).toBe(once)
+  })
+
+  it('R1 不变量：含空格标题保留词间空格（under-match 安全，不塌缩误绑）', () => {
+    expect(normalizeMergeKey('Spider-Man: No Way Home')).toBe('spiderman no way home')
+  })
+
+  it('保留 々〇 / 苏杭数字（合法字母数字，不误剥）', () => {
+    expect(normalizeMergeKey('佐々木')).toBe('佐々木')
+    expect(normalizeMergeKey('二〇二三')).toBe('二〇二三')
+  })
+
+  it('复用 normalizeTitle 全流程（去年份/季数/画质后再剥标点）', () => {
+    expect(normalizeMergeKey('海贼王！第二季(2023)[1080P]')).toBe('海贼王')
+  })
+
+  it('buildMatchKey 经 normalizeMergeKey：同番不同标点写法同 matchKey', () => {
+    expect(buildMatchKey('当前，正被打扰中！', 2026, 'anime'))
+      .toBe(buildMatchKey('当前正被打扰中', 2026, 'anime'))
   })
 })
