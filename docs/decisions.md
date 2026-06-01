@@ -18602,3 +18602,60 @@ Bangumi token 现直读 `process.env.BANGUMI_API_TOKEN`（`lib/bangumi.ts:15`）
 > C（及 B 若触 admin-ui）触碰 admin-ui 公开 Props + `@resovo/types` 公开类型，commit 必带 `Subagents: arch-reviewer (claude-opus-4-8)` trailer。
 
 ---
+
+## ADR-174：匹配类归一化键统一剥标点 + 存量迁移 + Bangumi 唯一约束兜底（SEQ-20260531-01 / META-23）
+
+- **状态**：Accepted（arch-reviewer claude-opus-4-8 设计裁定 / agentId a42951b36f50da8dd / PASS·满足 8 红线即可实施）
+- **日期**：2026-05-31
+- **关联**：META-22（外部匹配键剥标点解耦 / 本 ADR 继承其 CJK 不变量）/ ADR-114-NEGATED（video_sources 复合键 / 本 ADR 只动 catalog 层不触碰）/ ADR-161（findOrCreate retry 收敛 + 富集原子性）/ ADR-170 R-3（status 与 catalog+ref 同事务 / D-174-3 真去重在同事务内不破坏原子性）/ CLAUDE.md「schema 变更同步 architecture.md」绝对禁止项
+
+### 背景
+
+后台「视频库富集列 / 审核台富集图标」大面积空白。诊断（2026-05-31 实测）：anime 462 个 Bangumi matched 仅 145（31.4%），JP 150 个仅 73 matched（48.7%）。抽样 30 个 unmatched JP anime 归因：**5 撞唯一约束冲突 / 25 REST 搜不到或低置信 / 0 可正常匹配**。
+
+冲突机理（已实测复现）：同一作品因标题写法差异（`当前，正被打扰中！` vs `当前正被打扰中`）→ 归并键 `media_catalog.title_normalized`（`normalizeTitle` 保留 CJK 标点）不同 → 被判不同作品 → 各建一个 catalog 行 → 都匹配到同一 Bangumi subject 610703 → 第二行写入 `bangumi_subject_id` 撞 `media_catalog_bangumi_subject_id_key` UNIQUE → 整个富集事务抛 duplicate key → 该视频留 unmatched。`matchAndEnrich` 走「已存在 catalogId 直接 update」路径，绕过 `findOrCreate` 内已有的 bangumiId 去重，是冲突精确机理。
+
+### 决策（用户已锁 2026-05-31）
+
+标题展示/搜索（`videos.title` / `media_catalog.title`）**保留标点空格不变**；所有匹配类中间操作（含**归并键**）**忽略标点空格**。本 ADR 仅解决「唯一约束冲突」类（约 17%）；「REST 搜不到」类（83%）显式除外（另起 SEQ）。
+
+- **D-174-1（归一化函数策略）**：新增独立 `normalizeMergeKey(raw) = stripExternalMatchPunct(normalizeTitle(raw))`，与 `normalizeForExternalMatch` 实现等价但**语义分立**（一个持久化归并键、一个外部匹配运行时键，共用 `stripExternalMatchPunct` 私有实现）。**不改 `normalizeTitle` 函数体**——它还供 CrawlerRefetchService 相似度计算（:69/:87），改它会改相似度阈值输入分布，超范围且无实测支撑。所有归并键写入点（CrawlerService:172 / VideoService:256 / VideoMergesService:403 / buildMatchKey / videos.crawler INSERT 入参）切到 `normalizeMergeKey`。`normalizeTitle` 注释同步：从「本函数输出即持久化归并键」改为「归并键由 normalizeMergeKey 生成；本函数为其与外部匹配键的共享前置」。
+- **D-174-2（存量迁移协议）**：migration 084 两阶段。**阶段 A**：TS 脚本读行 → `normalizeMergeKey(title)` → UPDATE 全 3124 行 title_normalized（**禁纯 SQL 复刻归一化逻辑**，必漂移致新旧键不一致 / META-22 教训核心 / R5）；幂等可重跑；先于阶段 B 提交。**阶段 B**：每组一事务合并 52 冗余行（51 组 / 实测 0 组多外部 ID）。留存行规则（确定性）：`ORDER BY (bangumi_subject_id IS NOT NULL, douban_id IS NOT NULL, created_at ASC, id ASC)` 取第一行。子表 `videos.catalog_id` / `video_external_refs` / `catalog_episodes` / `catalog_characters` 全部 UPDATE 指向留存行，对 `(catalog_id, episode_no)` 类唯一约束用 `ON CONFLICT DO NOTHING`（留存行优先 / R3）。**`media_catalog` 无 `deleted_at`（无软删）→ 删冗余行前必须全字段快照备份到迁移日志/备份表，保证可回滚（R4）**。
+- **D-174-3（唯一约束冲突兜底）**：`BangumiService.applyEnrichmentDb` 在 `safeUpdate(catalogId, {bangumiSubjectId})` 之前先 `findCatalogByBangumiId(client, bangumiId)`：① existing ≠ 当前 catalogId → 当前 video 的 `catalog_id` 重指向 existing（运行时即时真去重），富集写 existing；② existing = 当前 / null → 正常写；③ 重指向不安全（type/year 冲突）→ 降级记 `video_external_refs` candidate，保留 unmatched，正常 COMMIT，**绝不让单冲突 video 炸整个 matchAndEnrich**。`ON CONFLICT DO NOTHING` 仅作真去重 UPDATE 的并发保险（+重查收敛），非语义主体（否则制造「ref matched 但 catalog 空」脏态）。**仅 bangumi_subject_id**；douban/imdb/tmdb 三同类约束识别为同构风险但当前未实测冲突 → follow-up（沉淀 `MediaCatalogService.linkExternalIdOrRedirect` 通用原语 / 本 ADR 实现时留可提取接缝）。
+- **D-174-4（受影响消费方）**：查询点 videos.crawler.ts:197 / mediaCatalog.ts:144 / video-merge-candidates.ts:61/88/122 GROUP BY **SQL 无需改逻辑**——只要写入侧 + 查询入参侧键生成同批切 `normalizeMergeKey`（R6 最高翻车点：任一漏切→新写入新键 vs 查询旧键→漏归并）+ 阶段 A 重算存量，键全局自洽。dump 表 `external_data.douban_entries.title_normalized`（ExternalDataImportService:447 本地 `normalizeTitle` 经 `[^\p{L}\p{N}]` 写入）**不在范围**：已剥标点、不同表不同语义不同函数，是被匹配侧基准；Y3 勿误统一/误改。
+- **D-174-5（回归与门禁）**：5 类测试（① 归一化同键/幂等/CJK 对齐/含空格 under-match ② 迁移幂等 ③ 52 组合并正确性·子表无悬挂·外部 ID 无丢失 ④ 唯一约束兜底·真去重重指向不抛+降级不炸事务 ⑤ 富集列/审核台图标渲染回归）。**architecture.md 必须同步 `title_normalized` 语义变更**（列 DDL 不变但内容契约从「保留标点」变「剥标点」/ R8 / schema 绝对禁止项覆盖）。门禁 `verify:adr-contracts` + `verify:sql-schema-alignment` 必跑。
+
+### 红线（实施前必须满足，违反即阻塞）
+
+- **R1** `normalizeMergeKey` 保持 META-22 不变量：CJK 标题与 dump `[^\p{L}\p{N}]` 逐字符一致（零召回损失）+ 含空格标题 under-match 不误绑；不得引入更激进塌缩。
+- **R2** 阶段 B 留存行选择确定性（有外部 ID + 最早 created_at），不依赖隐式行序。
+- **R3** 子表转移处理 `(catalog_id, episode_no)` 类唯一约束（ON CONFLICT DO NOTHING 留存行优先），否则转移 UPDATE 撞约束炸迁移。
+- **R4** 合并删行可回滚：media_catalog 无 deleted_at → 删前全字段快照备份。
+- **R5** 存量重算用 TS 脚本调 `normalizeMergeKey`，禁纯 SQL 复刻。
+- **R6** 写入侧 + 查询入参侧键生成同批切换零遗漏。
+- **R7** D-174-5 五类测试全绿才 commit。
+- **R8** architecture.md 同步 title_normalized 语义变更。
+
+### 黄线
+
+- **Y1** 部署顺序：先发代码（写入侧已用 normalizeMergeKey）→ 再跑 backfill 重算存量，使窗口内新写入即新键；或维护窗口内一次完成。
+- **Y2** VideoMergesService 合并能力确认是 video 级还是 catalog 级；若仅 video 级，阶段 B 用专用 backfill 不强塞。
+- **Y3** ExternalDataImportService:447 本地 normalizeTitle 与 TitleNormalizer 同名不同语义，勿误统一 dump 侧基准。
+- **Y4** video_sources 复合键（ADR-114-NEGATED）：合并停在 catalog 层不动 video_sources schema，兼容；测试验证经 video.catalog_id 间接关联无悬挂。
+- **Y5** 真去重重指向改 video.catalog_id，验证不破坏审核台 in-flight 展示。
+
+### 后果
+
+- 正面：根治同番裂多行 + 唯一约束冲突（约 17% unmatched anime）；清理 52 冗余 catalog 数据更干净；归并键与外部匹配键语义对齐；为 douban/imdb/tmdb 通用去重原语留接缝。
+- 负面/成本：一次不可逆数据迁移（删 52 行需快照备份兜底）；存量键不一致窗口需部署顺序管控；不解决 83% 的「REST 搜不到」（另起 SEQ）。
+
+### D-N 偏离登记
+
+D-174-1 ~ D-174-5 共 5 条，实施期（META-23-B..E）逐条闭环；advisory，不阻塞 CI。
+
+### 已知 follow-up（不在本 ADR）
+
+1. douban/imdb/tmdb 同类唯一约束兜底 → 沉淀 `MediaCatalogService.linkExternalIdOrRedirect` 通用原语。
+2. 「REST 搜不到/低置信」（83% unmatched anime）→ 另起 SEQ（先诊断 25 个搜不到真因：Bangumi 未收录 / 中文译名差异 / 阈值偏严）。
+
+---

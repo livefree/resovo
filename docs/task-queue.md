@@ -2445,3 +2445,60 @@ CODENAME-MATRIX-E2E (依赖 Wave 3 验收期补丁 CODENAME-MATRIX ✅)
 - **既有 matched anime 角色回填**：依赖 META-15-C 批量重富集（本序列保证「新富集/重富集时写入」，存量需触发重富集）。
 - **角色头像**：✅ **META-21 完成**（2026-05-31 / CharactersBlock Thumb square-sm 28×28；CV 头像仍后续按需）。
 - 角色头像渲染 / persons(制作人员) 抓取 / 角色检索页 / 前台公开展示 —— 后续 AMENDMENT。
+
+---
+
+## [SEQ-20260531-01] 归并键剥标点统一 + catalog 冗余合并 + Bangumi 唯一约束兜底（ADR-174）
+
+- **状态**：🔄 执行中
+- **创建时间**：2026-05-31
+- **最后更新时间**：2026-05-31
+- **目标**：根治「同一作品因标题标点差异裂成多 catalog 行 → 抢绑同一 Bangumi subject → 撞 `media_catalog_bangumi_subject_id_key` 唯一约束 → 富集写入失败留 unmatched」。把归并键 `media_catalog.title_normalized` 从「保留 CJK 标点」改为「剥标点」（对齐外部匹配键），重算存量 + 合并冗余 catalog + 富集写入唯一约束兜底。
+- **范围**：apps/api（TitleNormalizer 新增 `normalizeMergeKey` / BangumiService 真去重兜底 / 键写入+查询入参全切换）+ migration 084（存量重算 backfill + 52 组冗余合并 + 删行快照备份）+ architecture.md schema 语义同步 + decisions.md ADR-174。**前台搜索/展示 `title` 保留标点不变。**
+- **依赖**：无（独立序列）。上游诊断：本会话实测（anime 462 matched 145 / JP 150 matched 73=48.7% / 抽样 30 unmatched JP anime：5 撞唯一约束 + 25 REST 搜不到 + 0 可正常匹配）。
+- **用户决策（已锁 2026-05-31）**：归并键改剥标点（根治）；展示/搜索 title 保留标点；所有匹配类中间操作（含归并）忽略标点空格。
+- **关键事实（已核实）**：① `media_catalog` 有 `created_at` 无 `deleted_at`（无软删 → R4：删行须先快照备份再物理删）② 剥标点重算后仅 52 冗余行 / 51 组合并，0 组有多外部 ID 冲突（合并干净）③ migration 下一序号 084 ④ `matchAndEnrich` 走「已存在 catalogId 直接 update」绕过 findOrCreate 的 bangumiId 去重 = 冲突精确机理。
+- **本序列不解决**：「REST 搜不到/低置信」（83% 的 unmatched，与标点无关）→ 另起 SEQ（Bangumi 召回率提升，需先诊断 25 个搜不到的真因）。
+
+### ADR-174 设计裁定（arch-reviewer claude-opus-4-8 / agentId a42951b36f50da8dd / PASS·满足 8 红线）
+
+- **D-174-1** 新增独立 `normalizeMergeKey(raw)=stripExternalMatchPunct(normalizeTitle(raw))`，**不改 `normalizeTitle`**（它还供 CrawlerRefetchService 相似度计算 :69/:87，改它超范围）；所有归并键写入点切到新函数。
+- **D-174-2** 两阶段 migration：阶段 A TS 脚本重算全 3124 行 title_normalized（禁纯 SQL 复刻 / R5）；阶段 B 每组一事务合并 52 冗余行（留存行规则=有外部 ID + 最早 created_at；子表 videos/episodes/characters/external_refs 转移指向留存行 + `ON CONFLICT DO NOTHING`；删行先快照备份 / R3+R4）。
+- **D-174-3** `applyEnrichmentDb` 写 bangumi_subject_id 前先 `findCatalogByBangumiId`：已被他行占用→当前 video 的 catalog_id 重指向 existing（运行时真去重）；重指向不安全→降级记 candidate 不炸事务；ON CONFLICT 仅作并发保险非主体。**仅 bangumi**；douban/imdb/tmdb 同构 follow-up（沉淀 `MediaCatalogService.linkExternalIdOrRedirect` 接缝）。
+- **D-174-4** 查询点（videos.crawler.ts:197 / mediaCatalog.ts:144 / video-merge-candidates GROUP BY）SQL 无需改，但**写入侧+查询入参侧键生成必须同批切 `normalizeMergeKey` 零遗漏（R6 最高翻车点）**；dump 表 `douban_entries.title_normalized` 不在范围（已剥标点、不同表不同语义）。
+- **D-174-5** 5 类测试必覆盖（归一化同键/幂等/CJK 对齐 + 迁移幂等 + 合并正确性 + 唯一约束兜底 + 富集渲染回归）；architecture.md 同步字段语义 / R8。
+- **8 红线**：R1 CJK 零召回损失+含空格 under-match 不变量 / R2 留存行确定性 / R3 子表唯一约束 ON CONFLICT / R4 删行可回滚（无 deleted_at→快照备份）/ R5 backfill 用 TS 非纯 SQL / R6 写入+查询入参键零遗漏切换 / R7 5 类测试全绿 / R8 architecture.md 同步。
+- **5 黄线**：Y1 部署顺序（先发代码再 backfill）/ Y2 VideoMergesService 是否 catalog 级合并 / Y3 ExternalDataImportService:447 本地 normalizeTitle 勿误统一 / Y4 video_sources 复合键 ADR-114-NEGATED 兼容（只动 catalog 层）/ Y5 重指向改 video.catalog_id 不破坏审核台。
+
+### 任务列表（按执行顺序 / 严格串行依赖）
+
+1. **META-23-A** — ADR-174 落档 decisions.md（D-174-1..5 + 红/黄线 + 关联 META-22/ADR-114-NEGATED/ADR-161/ADR-170）（状态：✅ 已完成 2026-05-31 / claude-opus-4-8 / 子代理 arch-reviewer (claude-opus-4-8) agentId a42951b36f50da8dd）
+   - 创建时间：2026-05-31
+   - 建议模型：opus（ADR 产出 / arch-reviewer 设计已就绪，本卡落档 + D-N 编号登记）
+   - 文件范围：`docs/decisions.md`（追加 ADR-174）
+   - 依赖：无（设计已由 arch-reviewer 完成）
+   - 完成备注：ADR-174 完整落档（背景+决策 D-174-1..5+8 红线+5 黄线+后果+follow-up）；verify:adr-contracts EXIT=0（D-174-1..5 advisory 未闭环=预期，实施期 B..E 逐条闭环）；media_catalog 无 deleted_at 已核实（R4 删行须快照备份）/ migration 下一序号 084。执行模型: claude-opus-4-8
+2. **META-23-B** — `normalizeMergeKey` 新增 + 键写入/查询入参全切换 + 单测（D-174-1/R1/R6）（状态：⬜ 待开始）
+   - 建议模型：sonnet（函数新增 + 调用点切换 / 无 schema）
+   - 文件范围：`apps/api/src/services/TitleNormalizer.ts`（+normalizeMergeKey + 注释修订）/ CrawlerService.ts:172 / VideoService.ts:256 / VideoMergesService.ts:403 / buildMatchKey + 查询入参侧 / `tests/unit/api/title-normalizer.test.ts`
+   - 依赖：META-23-A ✅
+   - 验收：R1 不变量单测（当前，正被打扰中！==当前正被打扰中 / 幂等 / CJK 对齐 dump / 含空格 under-match）+ R6 零遗漏核验
+3. **META-23-C** — migration 084：存量重算 backfill + 52 组合并 + 删行快照备份（D-174-2/R2/R3/R4/R5）（状态：⬜ 待开始）
+   - 建议模型：opus（数据迁移 / 不可逆删行 / 子表转移 / 强制 Opus 评审实施方案）
+   - 文件范围：`apps/api/src/db/migrations/084_*.sql` + backfill TS 脚本（scripts/ 或 migration 内）+ architecture.md 同步
+   - 依赖：META-23-B ✅（写入侧已切新键，Y1 部署顺序）
+   - 验收：迁移幂等集成测试 + 52 组合并正确性（子表无悬挂 / 外部 ID 无丢失 / 快照可回滚）
+4. **META-23-D** — `applyEnrichmentDb` 唯一约束兜底真去重 + 单测（D-174-3）（状态：⬜ 待开始）
+   - 建议模型：opus（动 BangumiService 富集核心路径 + 事务原子性 / ADR-170 兼容）
+   - 文件范围：`apps/api/src/services/BangumiService.ts`（applyEnrichmentDb 写 subject 前查重重指向 + 降级 candidate）+ MediaCatalogService 查重接缝 + `tests/unit/api/bangumi-service.test.ts`
+   - 依赖：META-23-C ✅
+   - 验收：两 video 撞同 subject 610703 → 真去重重指向不抛 duplicate key + 降级 candidate 不炸事务
+5. **META-23-E** — 全量回归 + 重跑 anime backfill 验证命中回升（D-174-5/R7/R8）（状态：⬜ 待开始）
+   - 建议模型：sonnet（验证 + 门禁 + architecture.md 收尾）
+   - 验收：4 质量门禁全过 + verify:sql-schema-alignment + architecture.md 字段语义同步 + 用户重跑 `--mode unmatched --type anime` 后 JP 命中率回升复核
+
+### SEQ-20260531-01 BLOCKER 触发清单
+
+- 任一红线 R1-R8 未满足 → 暂停。
+- META-23-C 迁移在真实 PG 上跑出非预期合并（组数≠51 / 出现多外部 ID 冲突组）→ 暂停核对。
+- douban/imdb/tmdb 同类约束 follow-up 不在本序列，发现新冲突类型 → 记 QUESTION 不扩范围。

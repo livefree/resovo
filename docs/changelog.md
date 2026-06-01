@@ -12752,3 +12752,25 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **新增依赖/schema/路由/Props 契约变更**：无。
 - **数据库变更**：无。
 - **质量门禁**：纯状态文档清理，未触代码，无需 typecheck/lint/test。
+
+---
+
+## [META-23-A] ADR-174 落档 — 匹配类归一化键统一剥标点 + 存量迁移 + Bangumi 唯一约束兜底
+- **完成时间**：2026-05-31
+- **执行模型**：claude-opus-4-8
+- **子代理**：arch-reviewer (claude-opus-4-8) / agentId a42951b36f50da8dd — ADR-174 设计裁定（D-174-1..5 + 8 红线 R1-R8 + 5 黄线 Y1-Y5）
+- **来源序列**：SEQ-20260531-01（META-23 系列首卡 / 共 5 卡 A..E 严格串行）
+- **触发**：用户排查富集列空白 → 本会话诊断 anime Bangumi 回填 matched 仅 31.4%（JP 48.7%）；抽样 30 unmatched JP anime = 5 撞唯一约束 + 25 REST 搜不到 + 0 可正常匹配。用户拍板：归并键改剥标点（展示/搜索 title 保留标点；匹配类中间操作含归并忽略标点空格）。
+- **根因（已实测复现）**：同番标题写法差异（`当前，正被打扰中！` vs `当前正被打扰中`）→ 归并键 `media_catalog.title_normalized`（normalizeTitle 保留 CJK 标点）不同 → 裂成多 catalog 行 → 抢绑同一 Bangumi subject 610703 → 撞 `media_catalog_bangumi_subject_id_key` UNIQUE → 富集事务 duplicate key 抛错 → 留 unmatched。matchAndEnrich 走「已存在 catalogId 直接 update」绕过 findOrCreate 的 bangumiId 去重 = 精确机理。
+- **本卡产出**：`docs/decisions.md` 追加 ADR-174（Accepted）。设计裁定要点：
+  - D-174-1：新增独立 `normalizeMergeKey`=stripExternalMatchPunct(normalizeTitle)，不改 normalizeTitle（它供 CrawlerRefetchService 相似度计算）；归并键写入点全切。
+  - D-174-2：migration 084 两阶段（A: TS 脚本重算 3124 行禁纯 SQL / B: 52 冗余行 51 组合并·留存行确定性·子表 ON CONFLICT·删行快照备份，因 media_catalog 无 deleted_at）。
+  - D-174-3：applyEnrichmentDb 写 subject 前 findCatalogByBangumiId → 撞占用则 video.catalog_id 重指向 existing（真去重）/ 不安全降级 candidate 不炸事务；仅 bangumi，douban/imdb/tmdb 同构 follow-up。
+  - D-174-4：查询点 SQL 无需改，写入+查询入参键同批切（R6 最高翻车点）；dump 表不在范围。
+  - D-174-5：5 类测试 + architecture.md 同步字段语义（R8）。
+- **实测关键事实**：剥标点重算仅 52 冗余行/51 组合并、0 组多外部 ID（合并干净）；media_catalog 有 created_at 无 deleted_at（R4 删行须快照备份）；migration 下一序号 084。
+- **本序列不解决**：「REST 搜不到/低置信」（83% unmatched anime，与标点无关）→ 另起 SEQ。
+- **修改文件**：`docs/decisions.md`（ADR-174）/ `docs/task-queue.md`（SEQ-20260531-01 序列 + META-23-A..E）/ `docs/tasks.md`（卡片）。
+- **新增依赖/schema/路由/Props 契约变更**：无（本卡仅 ADR 落档；schema 迁移在 META-23-C）。
+- **数据库变更**：无（本卡仅文档）。
+- **质量门禁**：verify:adr-contracts EXIT=0（D-174-1..5 advisory 未闭环=预期，实施期 B..E 逐条闭环；其余 enum-ssot/error-message 警告为 pre-existing 与本卡无关）。
