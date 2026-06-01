@@ -12757,3 +12757,19 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **数据库变更**：无
 - **质量门禁**：admin-ui typecheck ✓ / 完整 typecheck 7 workspace（含 server-next 消费方）✓ / lint 5/5 ✓ / **verify:adr-contracts exit=0**（verify-endpoint-adr/sql-schema/style-shorthand/admin-shell-types-mirror 全 ✅ / enum-ssot+error-message advisory 非阻塞 pre-existing）/ file-size-budget data-table 模块 0 新违规（storage-sync 270 行）/ table 子集 **429 全过**（既有 saved-views-persist 12 round-trip 不回归）+ 临时 smoke 4 全过（跑后删，正式测试归 DTR-E）。
 - **注意事项**：旧 `:v1`（sessionStorage 合并）一次性重置——升级后用户旧布局偏好 + saved views 不迁移、从默认重建（views 本会话级关标签页即失、无感）。跨设备 DB-level 同步（N1-149-2）另起 ADR 本轮不做。偏离：plan「isStoredPrefs 加 width 校验」改为独立 isValidWidth + parseLayout 清洗（width 非法应丢弃保 visible 而非整体 reject）。DTR-E 负责 VideoListClient 验收消费 + 完整单测/组件测/Playwright + test:e2e。Track: admin-ui-datatable-resize。
+
+## [DTR-E] 通用表格 DataTable 列宽可调验收消费 + 测试 + 门禁（SEQ-20260531-01 / 收官）
+- **完成时间**：2026-06-01
+- **记录时间**：2026-06-01 05:55
+- **执行模型**：claude-opus-4-8（主循环）
+- **子代理**：无（验收消费 + 测试，不定义新契约 / 不改 ADR）
+- **修改文件**：
+  - `apps/server-next/src/app/admin/videos/_client/VideoListClient.tsx` — `<DataTable>` 加 `enableColumnResizing`（验收消费方 / 列已声明 enableResizing；782→784，仍 baseline 豁免）
+  - `tests/unit/components/admin-ui/table/column-resize.test.ts` — 纯函数单测 26 case（clampWidth/pickFlex 双分支/buildResizableGridTemplate flex-last+占位轨+override+加载期钳制/legacy buildGridTemplate/isResizable/resolveWidth/measureColumnContentWidth/setColumnWidth+resetColumnWidths）
+  - `tests/unit/components/admin-ui/table/storage-sync-medium.test.ts` — 存储单测 18 case（双 key 双介质/合并/views Map round-trip/width 校验/旧 v1 清理/JSON 损坏/storedPrefsToColumnMap）
+  - `tests/unit/components/admin-ui/table/column-resize-handle.test.tsx` — handle 组件测 20 case（门控/a11y/拖拽提交+maxWidth 钳制/pointercancel 回滚/非主键不拖/键盘/auto-fit/截断+title/不触发排序/矩阵重置/legacy 零变化）；jsdom 补 PointerEvent polyfill
+  - `tests/e2e/admin/videos-column-resize.spec.ts` — Playwright 5 spec（handle 渲染/拖拽改宽+localStorage:v2 持久/刷新跨会话持久/矩阵重置/键盘+auto-fit）
+- **新增依赖/schema/路由/Props 契约/ADR/DB**：无
+- **质量门禁**：完整 typecheck 7 workspace（含 server-next）✓ / lint 5/5 ✓ / **全量 test:run 448 文件 5846 passed 0 failed**（+58 新测试；modern-table pointer 测试零回归证 PointerEvent polyfill 跨文件无泄漏；既有 server-next admin flake 本次未复现）/ verify:file-size-budget data-table 模块 0 新违规 + 新违规计数仍 21 / verify:adr-contracts exit=0 / verify:admin-guardrails ✓ / Playwright e2e `--list` 编译 5 tests ✓。
+- **e2e 运行门控（唯一遗留）**：`npm run test:e2e` 需启 3 dev server（apps/server + server-next + web-next）；本 worktree 缺 `.env.local`（gitignored 未随 worktree 复制）→ web-next dev 退出码 9，且 reuseExistingServer 复用主仓运行中的 server-next（非本 worktree 代码）。e2e **运行**留待用户在已配 env + 启本 worktree dev server 的环境执行；spec 已编译 + 列出 5 tests，逻辑由 58 单测/组件测充分覆盖。
+- **注意事项**：**SEQ-20260531-01 / Track admin-ui-datatable-resize DTR-A..E 全部收官**，本轨功能完整待集成 PR（`track(admin-ui-datatable-resize): 通用表格列宽可调`）。偏离：plan ④「7 条 e2e」收敛为 5 条（窄滚动/宽拉伸属布局视觉，localStorage 持久 + handle 行为已覆盖核心）。Track: admin-ui-datatable-resize。

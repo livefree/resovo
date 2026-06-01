@@ -15,7 +15,7 @@
 
 ## 进行中任务
 
-（空 — DTR-A ✅ + DTR-B ✅ + DTR-C ✅ + DTR-D ✅ 完成；下一张 DTR-E，开始时置 🔄）
+（空 — **DTR-A..E 全部 ✅ 完成（2026-06-01）**；本轨功能完整，待集成 PR：`track(admin-ui-datatable-resize): 通用表格列宽可调`。集成阶段串行更新 task-queue + tracks.md ✅ + 清空持有冲突域。唯一遗留：DTR-E Playwright e2e 5 spec 已写+编译+列出，**运行需在已配 .env.local 且启本 worktree 自身 dev server 的环境**执行 `npm run test:e2e`。）
 
 ---
 
@@ -95,15 +95,23 @@
 - **沉淀判断**：存储介质策略封装在 storage-sync.ts 共享层，对外签名不变，消费方零感，是。
 - **跨设备 follow-up**：N1-149-2（DB-level `user_table_preferences` 跨设备同步）本轮不做，已在 ADR §4.2.2 AMENDMENT + tasks Follow-up 标注，另起 ADR。
 
----
+### ✅ DTR-E — 验收消费方 + 测试 + 门禁
 
-## 待开始任务
-
-### ⬜ DTR-E — 验收消费方 + 测试 + 门禁
-
-- **建议模型**：claude-opus-4-8
-- **方案**：① `VideoListClient.tsx` `<DataTable>` 加 `enableColumnResizing`（最小改动，验收页）；② 单测（column-resize 双分支/钳制/测宽、column-visibility setColumnWidth/reset、storage-sync local/session+width 校验）；③ 组件测试（handle 仅可调非 flex 列 / 拖拽提交 / pointercancel 回滚 / 键盘 / dblclick / 截断+title / 不触发排序 / 重置列宽）；④ Playwright `admin-next-chromium`（7 条端到端，含关标签页重开持久）；⑤ 全门禁（typecheck/lint/test/verify:file-size-budget/verify:adr-contracts/verify:admin-guardrails/test:e2e）。
-- **文件范围**：`VideoListClient.tsx`、`tests/unit/**`、`tests/e2e/**`
+- **状态**：✅ 完成（2026-06-01）；e2e spec 已写+编译，**运行环境门控**（见备注）。
+- **建议模型**：claude-opus-4-8 / **执行模型**：claude-opus-4-8（主循环）
+- **子代理调用**：无（验收消费 + 测试，不定义新契约 / 不改 ADR）。
+- **方案（落地）**：
+  - ① `VideoListClient.tsx` `<DataTable>` 加 `enableColumnResizing`（验收页 / 列已声明 enableResizing）。
+  - ② 单测 `column-resize.test.ts`（clampWidth/pickFlex 双分支/buildResizableGridTemplate flex-last+占位轨+override+加载期钳制/legacy buildGridTemplate 双分支/isResizable/resolveWidth/measureColumnContentWidth/setColumnWidth+resetColumnWidths，26 case）。
+  - ② 单测 `storage-sync-medium.test.ts`（双 key 双介质/合并/views Map round-trip/width 校验/旧 v1 清理/JSON 损坏/storedPrefsToColumnMap，~18 case）。
+  - ③ 组件测 `column-resize-handle.test.tsx`（handle 门控/a11y/拖拽提交+maxWidth 钳制/pointercancel 回滚/非主键不拖/键盘 ←→/Shift/Home/End/双击 auto-fit mock scrollWidth/截断+title/不触发排序/矩阵重置/legacy 零变化，20 case）。jsdom 补 PointerEvent polyfill（基于 MouseEvent / 跨文件零污染实测）。
+  - ④ Playwright `tests/e2e/admin/videos-column-resize.spec.ts`（5 spec：handle 渲染/拖拽改宽+localStorage:v2 持久/刷新跨会话持久/矩阵重置 width 清空/键盘+auto-fit）。
+  - ⑤ 门禁如下。
+- **文件范围**：`apps/server-next/.../VideoListClient.tsx`、`tests/unit/components/admin-ui/table/{column-resize,storage-sync-medium,column-resize-handle}.test.{ts,tsx}`、`tests/e2e/admin/videos-column-resize.spec.ts`
+- **验收（门禁全绿）**：完整 typecheck 7 workspace（含 server-next VideoListClient）✓ / lint 5/5 ✓ / **全量 test:run 448 文件 5846 passed 0 failed**（含本卡 +58 新测试；modern-table pointer 测试零回归证 polyfill 无泄漏；既有 server-next admin flake 本次未复现）/ verify:file-size-budget data-table 模块 0 新违规（VideoListClient 782→784 仍 baseline 豁免 / 新违规计数仍 21）/ verify:adr-contracts exit=0（DTR-D）/ verify:admin-guardrails ✓（no in-scope）/ Playwright e2e spec `--list` 编译 5 tests ✓。
+- **e2e 运行门控（唯一遗留）**：`npm run test:e2e` 需启 3 dev server（apps/server + server-next + web-next）；本 worktree 缺 `.env.local`（gitignored 未随 worktree 复制）→ web-next dev 退出码 9，且 reuseExistingServer 会复用**主仓**运行中的 server-next（非本 worktree 代码）。故 e2e **运行**留待用户在已配 env + 启本 worktree 自身 dev server 的环境执行；spec 本身已编译通过 + 列出 5 tests，逻辑由 58 单测/组件测充分覆盖。
+- **偏离**：plan ④「7 条 e2e」收敛为 5 条（合并 ①handle ②拖拽+持久 ③刷新持久 ④重置 ⑤键盘+auto-fit；窄水平滚动/宽 flex 拉伸属布局视觉，localStorage 持久 + handle 行为已覆盖核心）。
+- **沉淀判断**：验收消费 + 测试，无新共享层沉淀（feature 已在 B–D 沉淀）。
 
 ---
 

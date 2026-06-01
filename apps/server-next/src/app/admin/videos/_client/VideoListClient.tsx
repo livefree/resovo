@@ -753,6 +753,8 @@ export function VideoListClient() {
               emptyState={<EmptyState title="暂无视频" description="调整筛选条件后重试" />}
               data-testid="video-list-table"
               enableHeaderMenu
+              // DTR-E：通用表格列宽可调验收消费方（列已声明 enableResizing / SEQ-20260531-01）
+              enableColumnResizing
               density="poster"
               flashRowKeys={flashRowKeys}
               toolbar={{
