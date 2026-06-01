@@ -4,7 +4,7 @@
  *   legacy buildGridTemplate / 加载期钳制 / override 预览 / isResizableColumn /
  *   resolveColumnWidth / measureColumnContentWidth / column-visibility setColumnWidth + resetColumnWidths。
  */
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import {
   clampWidth, pickFlexColumnId, buildResizableGridTemplate, isResizableColumn,
   resolveColumnWidth, measureColumnContentWidth, columnMinWidth, buildAutoFitColumnMap,
@@ -203,11 +203,19 @@ describe('measureColumnContentWidth', () => {
     Object.defineProperty(root.querySelector('.c')!, 'scrollWidth', { value: 70 })
     expect(measureColumnContentWidth(root, 'x')).toBe(70) // handle 8 跳过，取内容 70
   })
-  it('DTR-F-FIX2（Codex review）：自定义纯文本 cell（无元素后代）回退测 wrapper，不丢内容', () => {
+  it('DTR-F-FIX3（Codex review）：自定义纯文本 cell 用 Range 测文本宽，不回退 wrapper（防 width drift）', () => {
     const root = document.createElement('div')
     root.innerHTML = `<div data-col-id="t">纯文本内容</div>` // 无元素后代，直接文本节点
-    Object.defineProperty(root.querySelector('[data-col-id="t"]')!, 'scrollWidth', { value: 90 })
-    expect(measureColumnContentWidth(root, 't')).toBe(90) // 回退 wrapper，不返回 0
+    // wrapper.scrollWidth = 当前列宽 200（若误回退 wrapper 会随列宽 drift）
+    Object.defineProperty(root.querySelector('[data-col-id="t"]')!, 'scrollWidth', { value: 200 })
+    // Range 测文本几何宽 64（不随列宽变）
+    const rangeStub = { selectNodeContents: () => {}, getBoundingClientRect: () => ({ width: 64 }) }
+    const spy = vi.spyOn(document, 'createRange').mockReturnValue(rangeStub as unknown as Range)
+    try {
+      expect(measureColumnContentWidth(root, 't')).toBe(64) // 用 Range 64，非 wrapper 200 → 无漂移
+    } finally {
+      spy.mockRestore()
+    }
   })
 })
 

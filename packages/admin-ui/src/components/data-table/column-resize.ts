@@ -187,9 +187,11 @@ export function measureColumnContentWidth(
         const dw = (d as HTMLElement).scrollWidth
         if (dw > inner) inner = dw
       })
-      // 无元素后代（自定义 cell 返回纯字符串 / wrapper 直接含文本节点）→ 回退测 wrapper 自身，
-      // 避免丢内容（Codex stop-time review）；有元素后代（pill/chip）仍走后代测量保持修复。
-      w = inner || (el as HTMLElement).scrollWidth
+      // 无元素后代（自定义 cell 返回纯字符串/数字/fragment 文本）→ 用 Range 测文本布局宽。
+      // **不可**回退 wrapper.scrollWidth：wrapper overflow:hidden 固定宽，文本不溢出时 scrollWidth=列宽，
+      // auto-fit 每次点击会越测越宽（width drift / Codex stop-time review）；Range 测文本几何宽，
+      // nowrap 下为完整文本宽、不随列宽漂移。
+      w = inner || measureRangeWidth(el)
     }
     if (w > max) max = w
   })
@@ -200,6 +202,24 @@ export function measureColumnContentWidth(
 function cssEscape(value: string): string {
   if (typeof CSS !== 'undefined' && typeof CSS.escape === 'function') return CSS.escape(value)
   return value.replace(/["\\\]]/g, '\\$&')
+}
+
+/**
+ * 测元素内容（含纯文本节点）的**布局几何宽**（Range.getBoundingClientRect）。
+ * 用于无元素后代的纯文本 cell —— 文本在 `nowrap` 下布局宽 = 完整文本宽，**不随列宽漂移**
+ * （区别于 overflow:hidden wrapper 的 scrollWidth=列宽）。无 Range / SSR / 异常时返回 0。
+ */
+function measureRangeWidth(el: Element): number {
+  const doc = el.ownerDocument
+  if (!doc || typeof doc.createRange !== 'function') return 0
+  try {
+    const range = doc.createRange()
+    range.selectNodeContents(el)
+    const w = range.getBoundingClientRect().width
+    return Number.isFinite(w) && w > 0 ? Math.ceil(w) : 0
+  } catch {
+    return 0
+  }
 }
 
 /**

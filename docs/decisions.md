@@ -3610,10 +3610,11 @@ Next.js App Router 适配（消费方实现 `TableRouterAdapter`）：
 > 行为由"清空 width 回声明宽"改为 **auto-fit 全列**（按当前渲染页内容 + 表头列名取 max 宽，钳 [min,max]），
 > 文案"重置列宽"→**"自适应列宽"**。同时 `isResizableColumn` 对 `kind:'action'` 改为 **opt-in**
 > （`enableResizing:true` 才可调 / 默认仍不可调 → 其他消费表零回归）；视频库封面(media)/操作(action)列解禁。
-> **限制（明确记录）**：① server 模式 auto-fit **仅测当前渲染页** DOM，翻页内容更宽不回溯；② 自定义 cell
-> 测 cell **最宽后代内容元素** 的 scrollWidth（DTR-F-FIX1：排除 overflow:hidden 固定宽 wrapper 自身，
-> 修 pill/chip 列被测成列宽的过宽问题）——复合 cell 若存在 width:100% 填充型中间容器仍可能偏宽（消费方避免）；
-> ③ **不做首屏运行时 auto-fit**（用户决策：
+> **限制（明确记录）**：① server 模式 auto-fit **仅测当前渲染页** DOM，翻页内容更宽不回溯；② 测宽口径
+> （DTR-F-FIX1/2/3）：默认字符串 cell 测截断 span scrollWidth；自定义 cell 有元素后代→测**最宽后代元素**
+> scrollWidth（pill/chip 自然宽）；自定义**纯文本** cell（无元素后代）→ 用 **Range 测文本几何宽**（nowrap 完整文本宽，
+> **不回退 overflow:hidden wrapper 的 scrollWidth**——后者=列宽会致重复点击 width drift）；均**排除 wrapper 自身**。
+> 复合 cell 若存在 width:100% 填充型中间元素仍可能偏宽（消费方避免）；③ **不做首屏运行时 auto-fit**（用户决策：
 > 避免 server 分页表首屏抖动 + 翻页跳动 → 首屏走"校准声明宽"，auto-fit 仅用户主动点击/双击触发）；
 > ④ 测不到内容（scrollWidth≤0）的列**保持原宽**，不兜底声明宽/DEFAULT。`resetColumnWidths` 纯函数保留
 > （清空 width 原语 / 潜在他用），本轮不接线。下方 AMENDMENT（存储介质）不受本条影响。

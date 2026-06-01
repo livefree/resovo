@@ -12813,3 +12813,14 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
   - `packages/admin-ui/src/components/data-table/column-resize.ts` — `measureColumnContentWidth`：无元素后代时 `w = inner || el.scrollWidth` 回退测 wrapper 自身（恢复纯文本旧行为不丢内容；有元素后代的 pill/chip 仍走后代测量保持 FIX1）。
   - `tests/unit/.../column-resize.test.ts` — +1 回归 case（自定义纯文本 cell 无元素后代 → 回退 wrapper，不返回 0）
 - **门禁**：typecheck ✓ / lint 5/5 ✓ / table 子集 498 全过（+1）/ data-table 模块 0 新违规。Track: admin-ui-datatable-resize。
+
+## [DTR-F-FIX3] auto-fit 纯文本 width drift 修复：改 Range 测文本宽（Codex stop-time review round 2）
+- **完成时间**：2026-06-01 / **执行模型**：claude-opus-4-8（主循环）/ **子代理**：无（Codex stop-time review 反馈修复）
+- **来源**：Codex stop-time review——"pure-text fallback reintroduces auto-fit width drift"。
+- **根因**：DTR-F-FIX2 对纯文本 cell 回退测 `el.scrollWidth`（wrapper）。wrapper 是 overflow:hidden 固定宽，文本不溢出时 scrollWidth=列宽 → 每次点「自适应列宽」列宽 +padding 越测越宽（无限 drift），与最初 pill bug 同源。
+- **修改文件**：
+  - `packages/admin-ui/src/components/data-table/column-resize.ts` — 新增 `measureRangeWidth`（Range.getBoundingClientRect 测文本几何宽 / nowrap 完整文本宽 / SSR+异常→0）；纯文本 cell（无元素后代）`w = inner || measureRangeWidth(el)` 改测 Range，**去掉 wrapper 回退**（drift 源）。
+  - `tests/unit/.../column-resize.test.ts` — FIX2 用例改为 FIX3（mock createRange 验证用 Range 64 而非 wrapper 200 → 不漂移）
+  - `docs/decisions.md` — ADR-103 §4.2.2 AMENDMENT 2 限制②措辞同步（纯文本 Range 测 / 不回退 wrapper 防 drift）
+- **门禁**：typecheck ✓ / lint 5/5 ✓ / table 子集 498 全过 / data-table 模块 0 新违规。
+- **效果**：纯文本自定义 cell auto-fit 取文本几何宽（不随列宽漂移）；pill/chip（元素后代）保持 FIX1；默认字符串 cell 走截断 span。Track: admin-ui-datatable-resize。
