@@ -49,19 +49,22 @@ const MOCK_ROWS: DemoRow[] = Array.from({ length: 35 }, (_, i) => ({
 }))
 
 const COLUMNS: TableColumn<DemoRow>[] = [
-  { id: 'title', header: '标题', accessor: (r) => r.title, enableSorting: true },
-  { id: 'category', header: '分类', accessor: (r) => r.category, enableSorting: true },
+  // CHG-DT-RESIZE-ROLLOUT：demo 列补 width（title 留 minWidth 作主列）→ 展示列宽可调时不塌默认 160
+  { id: 'title', header: '标题', accessor: (r) => r.title, enableSorting: true, minWidth: 200 },
+  { id: 'category', header: '分类', accessor: (r) => r.category, enableSorting: true, width: 140, minWidth: 100 },
   {
     id: 'views',
     header: '播放量',
     accessor: (r) => r.views,
     enableSorting: true,
+    width: 110, minWidth: 90,
     cell: (ctx) => <span>{(ctx.value as number).toLocaleString()}</span>,
   },
   {
     id: 'status',
     header: '状态',
     accessor: (r) => r.status,
+    width: 120, minWidth: 100,
     cell: (ctx) => {
       const v = ctx.value as string
       const color = v === 'active' ? 'var(--state-success-fg)' : v === 'draft' ? 'var(--fg-muted)' : 'var(--state-error-fg)'
@@ -179,6 +182,7 @@ function ClientTableDemo() {
         selection={selection}
         onSelectionChange={setSelection}
         rowKey={(r) => r.id}
+        enableColumnResizing
       />
       <Pagination
         page={snapshot.pagination.page}
@@ -228,6 +232,7 @@ function ServerTableDemo() {
         onQueryChange={(next: TableQueryPatch) => { patch(next); setPage(1) }}
         rowKey={(r) => r.id}
         totalRows={totalRows}
+        enableColumnResizing
       />
       <Pagination
         page={page}

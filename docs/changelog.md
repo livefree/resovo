@@ -13296,4 +13296,12 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **新增依赖/schema/路由/Props 契约变更**：无（纯消费方接线）。
 - **质量门禁**：typecheck EXIT=0（8 workspace）/ lint EXIT=0（5/5；AuditClient:187 等 react-hooks/exhaustive-deps + TabImages img 均 pre-existing 非本卡）/ **全量 448 文件 5901 passed**（唯一失败 `VideoImageSection.test.tsx` 为既有并行 flaky，隔离 21/21 全过，apps/server 海报预览，与 DataTable 无关）/ verify:adr-contracts EXIT=0（adr-d-status.json 经脚本重生成合入 ADR-174 / enum-ssot advisory 非阻塞）。
 - **e2e（VIDEO）**：沿用 DTR-E 既有结论受本地 env 门控（需 3 dev server + .env）；本卡仅改 admin 表格消费方、不触播放器/auth/search，resize 行为由 DTR-E 既有 `videos-column-resize.spec.ts` + 58 单测/组件测覆盖。
-- **范围/注意**：未改 moderation PendingPaneController（自定义列表非 DataTable）/ CrawlerClient·CrawlerRunDetailView（委托给已列入子组件）/ dev/components demo（非真实后台表）。
+- **范围/注意**：未改 moderation PendingPaneController（自定义列表非 DataTable）/ CrawlerClient·CrawlerRunDetailView（委托给已列入子组件）。
+- **Codex stop-time review FIX（同卡，2026-06-01 16:45）**：审查指出「rollout 不完整 + 引入 flex 布局回归」。复核 resize 网格模型——legacy `buildGridTemplate` 让**每个无 width 列**各 `minmax(minWidth,1fr)` 等分余量；开 resize 后 `buildResizableGridTemplate` **仅留最后一个无 width 非 action 列作 flex**，其余无 width 列塌成 `width??minWidth??160`。故**任何含 ≥2 无 width 非 action 列、或主列无 minWidth 的表**会回归。逐表审计后修复 4 处：
+  - **ImageHealthColumns missing 表**：`title`+`brokenDomain` 双无 width → 给 brokenDomain 补 `width:220`（仅留 title 主列）。
+  - **StagingPageClient `video`**：原既无 width 也无 minWidth（塌 160）→ 补 `minWidth:240`。
+  - **KeywordCrawlDrawer `title`**：同上 → 补 `minWidth:220`。
+  - **dev/components demo**：纳入完整性——COLUMNS 补 width（title minWidth 200 主列 / category 140 / views 110 / status 120）+ 两 DataTable 加 `enableColumnResizing`，showcase 列宽可调。
+  - 复核确认其余表均为「0 或 1 个无 width 列且 minWidth≥200」→ 与已验收 VideoListClient 范式一致（主列固定 + 末尾 `minmax(0,1fr)` 占位轨），无回归。
+  - 完整性：server-next **全部** `<DataTable>` 渲染点（14 操作 + 2 demo）均已启用；`<table>` 原生 HTML 子表（merge/audit/expand/role-matrix 等）非 DataTable、无此能力，不在范围。
+  - FIX 门禁：typecheck EXIT=0 / lint 5/5 / **全量 448 文件 5902 passed 0 failed**（VideoImageSection flaky 本次未复现）。

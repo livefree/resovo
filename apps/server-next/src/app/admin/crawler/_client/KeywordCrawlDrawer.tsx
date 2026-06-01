@@ -349,6 +349,8 @@ export function KeywordCrawlDrawer({ open, onClose, sites }: KeywordCrawlDrawerP
         kind: 'data',
         header: '标题',
         accessor: (r) => r.title,
+        // CHG-DT-RESIZE-ROLLOUT：补 minWidth（原既无 width 也无 minWidth）→ 开 resize 后主列固定 220 而非塌 160
+        minWidth: 220,
         filterable: false,
         enableSorting: false,
         cell: ({ row }) => {

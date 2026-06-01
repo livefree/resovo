@@ -88,7 +88,8 @@ export function buildMissingVideoColumns(): readonly TableColumn<MissingVideoRow
       enableSorting: true, // ADR-150 阶段 5 EP-4 follow-up sort 全栈（'brokenDomain' → 'broken_domain' / evt.url 排序近似域名）
       header: '破损域名',
       accessor: (r) => r.brokenDomain ?? '',
-      minWidth: 200,
+      // CHG-DT-RESIZE-ROLLOUT：补 width（原仅 minWidth）→ 全表仅 title 留无宽作主列，规避开 resize 后 title+brokenDomain 双塌 minWidth
+      width: 220, minWidth: 200,
       defaultVisible: true,
       cell: ({ row }) => (
         <code style={{ fontSize: 'var(--font-size-xs)' }} data-broken-domain>

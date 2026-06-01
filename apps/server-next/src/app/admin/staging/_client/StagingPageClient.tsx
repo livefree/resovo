@@ -242,6 +242,8 @@ function buildStagingColumns(cbs: StagingColumnsCallbacks): readonly TableColumn
       id: 'video',
       header: '视频',
       accessor: (row) => row.title,
+      // CHG-DT-RESIZE-ROLLOUT：补 minWidth（原既无 width 也无 minWidth）→ 开 resize 后主列固定 240 而非塌 160
+      minWidth: 240,
       cell: ({ row }: TableCellContext<StagingRow>) => (
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <Thumb size="poster-sm" src={row.coverUrl ?? undefined} alt={row.title} />
