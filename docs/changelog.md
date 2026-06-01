@@ -12956,3 +12956,19 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **数据库变更**：无。
 - **质量门禁**：typecheck EXIT=0 / grep 确认无 DELETE 字面（0）+ 「安全通道」仅剩撤回声明 / 回滚 dry-run 跑通 / verify:adr-contracts 待跑。
 - **闭环说明**：FIX5→FIX8 围绕「残留 locks 如何处理」四轮收敛——批删→单删→指正规通道→诚实承认无安全通道+责任归操作者。根本教训：回滚脚本对 PK-only、含误报、有 TOCTOU 的残留，唯一诚实做法是纯诊断 + 风险与责任透明，不制造任何「看似安全」的删除路径。
+
+---
+
+## [META-23-C-FIX9] 回滚 locks 残留移除非原子人工流程，诚实归为纯诊断（Codex stop-time review）
+- **完成时间**：2026-06-01
+- **执行模型**：claude-opus-4-8
+- **子代理**：无
+- **来源**：Codex stop-time review「the new manual procedure still leaves a TOCTOU race」。
+- **问题**：FIX8 给的人工流程「① SELECT 当前锁比对 → ② 业务核查 → ③ 删除」**本身就是教科书 TOCTOU**——SELECT（检查）与 DELETE（使用）非原子，之间锁仍可能被替换；只是把竞态窗口从「报告→执行」挪到「人工 SELECT→人工 DELETE」，窗口反而更长。
+- **认清根本**：残留 locks 夹两类性质不同、均超出回滚脚本职责的难题——① 误报（信息论不可达，唯人工业务判断可辨）② TOCTOU（任何「先检查后删除」非原子流程都有竞态，**唯一正解是原子「内容条件删」**：`DELETE WHERE catalog_id+field_name+locked_by+locked_at+lock_mode 全等于快照`，锁被替换→内容变→0 行删→无竞态）。前者脚本无能为力，后者属运维操作（需先经业务判断），均非数据迁移回滚脚本职责。
+- **终局修复**：移除有缺陷的 SELECT-then-DELETE 人工流程。脚本职责止于**纯诊断**——列疑似清单 + 落 `_residual_locks_084`（含全部内容列 lock_mode/locked_by/locked_at/reason，供运维构造原子条件）。明示处理交运维按两原则：误报需人工业务核查；确属误转移再删须用原子内容条件删，裸 PK 删（含 removeFieldLock）有竞态勿用。脚本不删、不生成删除语句、不规定删除流程。
+- **修改文件**：`scripts/dedup-catalog-084-rollback.ts`（locks 残留：移除非原子人工流程 → 纯诊断 + 原子内容条件删原则交运维）。
+- **新增依赖/schema/Props 契约变更**：无。
+- **数据库变更**：无。
+- **质量门禁**：typecheck EXIT=0 / grep 无 DELETE 字面（0）/ _residual_locks_084 含全部内容列 / 回滚 dry-run 跑通 / verify:adr-contracts 待跑。
+- **闭环说明**：FIX5→FIX9 围绕残留 locks 五轮收敛——批删→单删→正规通道→撤回虚假安全→移除非原子流程归纯诊断。根本教训：① 误报是信息论不可达（脚本无能为力，唯人工业务判断）② TOCTOU 唯一正解是原子内容条件删（非任何先检查后删除）③ 二者均超回滚脚本职责，脚本唯一诚实做法是纯诊断 + 把正确原则透明交运维，不代行无法保证安全的删除。
