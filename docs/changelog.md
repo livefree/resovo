@@ -12926,3 +12926,18 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **新增依赖/schema/Props 契约变更**：无。
 - **数据库变更**：无。
 - **质量门禁**：typecheck EXIT=0 / grep 确认无批量 DELETE 执行语句（唯一 DELETE 字面是逐条单删模板字符串）/ 合成实证逐条模板 PASS / verify:adr-contracts 待跑。
+
+---
+
+## [META-23-C-FIX7] 回滚 locks 残留不再生成删除 SQL，改指向正规通道（Codex stop-time review）
+- **完成时间**：2026-06-01
+- **执行模型**：claude-opus-4-8
+- **子代理**：无
+- **来源**：Codex stop-time review「generated remediation SQL can still delete the wrong lock」（连续第二轮指 remediation SQL）。
+- **认清根本**：回滚脚本**生成可执行删除 SQL 本身是反模式**——无论批删（FIX5）还是单删模板（FIX6），运营盲执行都有两类无解风险：① 判据含误报（A 类合法锁同源同批逐列等于冗余快照 → 删合法锁，信息论不可达）；② **TOCTOU**——报告时刻 vs 执行时刻之间，该 (catalog_id, field_name) PK 位置可能已被重新锁定为全新合法锁，按 PK 删会删掉这条无关新锁。
+- **终局修复**：残留报告**不生成任何 DELETE SQL**（连单删模板都移除，全脚本 `DELETE FROM video_metadata_locks` 字面 = 0）。改为**纯诊断**：列明细（catalog_id/field_name/mode/by）+ 落 `_residual_locks_084` 诊断台账 + **指向既有正规解锁通道 `removeFieldLock(catalogId, fieldName)`**（apps/api/src/db/queries/metadataProvenance.ts:182）。运营经业务核查确属误转移后经该函数处理（函数内可带当前状态校验，规避 TOCTOU），不喂 SQL 盲执行。
+- **修改文件**：`scripts/dedup-catalog-084-rollback.ts`（locks 残留：移除单删模板 SQL → 纯诊断 + 指向 removeFieldLock）。
+- **新增依赖/schema/Props 契约变更**：无。
+- **数据库变更**：无。
+- **质量门禁**：typecheck EXIT=0 / grep 确认全脚本无 `DELETE FROM video_metadata_locks` 字面（0）/ 回滚 dry-run 跑通 / verify:adr-contracts 待跑。
+- **闭环说明**：FIX5→FIX6→FIX7 三轮收敛到「回滚脚本不越界生成运维删除指令」——残留只诊断、处理走正规通道。误报 + TOCTOU 双风险根除。

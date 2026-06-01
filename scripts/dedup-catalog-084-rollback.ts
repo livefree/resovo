@@ -152,21 +152,23 @@ async function rollback(client: PoolClient): Promise<void> {
       if (residual.rows.length === 0) {
         process.stdout.write('  locks 疑似 B 类转移残留候选: 0（无须人工处理）\n')
       } else {
-        // ⚠️ Codex：判据含误报（A 类合法锁同源同批可能逐列等于冗余快照 → 误判）。
-        //   **绝不提供可直接批量执行的 DELETE**——运营粘贴即会误删合法运行时锁。
-        //   只输出诊断明细 + **逐条单删模板**（每条带具体值，运营须对每一条单独业务核查后才执行该行）。
+        // ⚠️ Codex（两轮）：本脚本**不生成任何可执行删除 SQL**（批删/单删均不可）。两类无解风险：
+        //   ① 判据含误报（A 类合法锁同源同批可能逐列等于冗余快照 → 误判删合法锁，信息论不可达）；
+        //   ② TOCTOU——报告时刻 vs 运营执行时刻之间，该 (catalog_id, field_name) PK 位置可能已被
+        //      重新锁定为一条全新合法锁，按 PK 删会删掉这条无关新锁。
+        //   故残留报告**纯诊断**：列明细 + 指向既有正规解锁通道 `removeFieldLock(catalogId, fieldName)`
+        //   （apps/api/src/db/queries/metadataProvenance.ts），运营经业务核查确属误转移后**经该函数**
+        //   处理（函数内可带当前状态校验），不喂 SQL 盲执行。
         process.stdout.write(
           `  ⚠️ locks 疑似 B 类转移残留候选 ${residual.rows.length} 条（运行时后果：留存行可能多一个本不该有的字段冻结）。\n` +
-            `     **判据含误报，回滚未自动删除；下列为诊断 + 逐条单删模板，禁止整批执行——须逐条业务核查确属误转移后再删该行：**\n`,
+            `     **判据含误报，回滚未自动删除、也不生成删除 SQL**（误报 + TOCTOU 风险）。诊断明细如下，\n` +
+            `     运营须逐条业务核查确属误转移后，经正规通道 removeFieldLock(catalogId, fieldName) 处理：\n`,
         )
         for (const r of residual.rows) {
           process.stdout.write(`    · catalog=${r.catalog_id} field=${r.field_name} mode=${r.lock_mode} by=${r.locked_by}\n`)
-          process.stdout.write(
-            `      单删模板（核查后）：DELETE FROM video_metadata_locks WHERE catalog_id='${r.catalog_id}' AND field_name='${r.field_name}';\n`,
-          )
         }
         process.stdout.write(
-          `  明细已落 _residual_locks_084（仅诊断台账，不提供据其批删的语句；逐条核查后用上方单删模板）。\n`,
+          `  明细已落 _residual_locks_084（纯诊断台账，供查询核对；处理走 removeFieldLock，不据本表批删）。\n`,
         )
       }
     } else {
