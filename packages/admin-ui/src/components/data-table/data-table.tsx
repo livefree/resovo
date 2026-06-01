@@ -479,7 +479,7 @@ export function DataTable<T>(props: DataTableProps<T>): React.ReactElement {
         onClearSort={handleHeaderMenuClearSort}
         onClearAllFilters={handleMatrixClearAllFilters}
         onResetColumnVisibility={handleMatrixResetColumnVisibility}
-        onResetColumnWidths={resizeEnabled ? resize.resetAllWidths : undefined}
+        onAutoFitColumnWidths={resizeEnabled ? resize.autoFitAllWidths : undefined}
         onClose={handleMatrixClose}
       />
       {/* CHG-DESIGN-02 Step 7A + 7B fix#2/3：foot 在 [data-table-scroll] 之外，

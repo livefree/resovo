@@ -193,18 +193,33 @@ describe('不触发表头排序（stopPropagation）', () => {
   })
 })
 
-describe('重置列宽（矩阵 popover）', () => {
-  it('打开矩阵 → 点击「重置列宽」清所有 width 保 visible', () => {
+describe('自适应列宽（矩阵 popover / DTR-F）', () => {
+  it('打开矩阵 → 点击「自适应列宽」按内容 auto-fit 全列（mock scrollWidth），保留 visible', () => {
     const onQueryChange = vi.fn<(p: TableQueryPatch) => void>()
     const cols = new Map([['name', { visible: true, width: 250 }], ['url', { visible: true, width: 200 }], ['act', { visible: true }]])
-    const { getByTestId } = render(
+    const { container, getByTestId } = render(
       <DataTable rows={ROWS} columns={COLUMNS} rowKey={(r) => r.id} mode="client" query={snap(cols)} onQueryChange={onQueryChange} enableColumnResizing />,
     )
+    // mock name/url body 截断 span scrollWidth（jsdom 无 layout）
+    const root = container.querySelector('[data-table]')!
+    root.querySelectorAll('[role="cell"][data-col-id="name"] [data-dt-truncate]').forEach((el) => Object.defineProperty(el, 'scrollWidth', { value: 100, configurable: true }))
+    root.querySelectorAll('[role="cell"][data-col-id="url"] [data-dt-truncate]').forEach((el) => Object.defineProperty(el, 'scrollWidth', { value: 160, configurable: true }))
     fireEvent.click(getByTestId('matrix-trigger'))
     fireEvent.click(document.querySelector('[data-testid="matrix-foot-reset-widths"]') as HTMLElement)
     const patched = onQueryChange.mock.calls[0][0].columns!
-    expect([...patched.values()].every((p) => p.width === undefined)).toBe(true)
-    expect(patched.get('name')?.visible).toBe(true)
+    expect(patched.get('name')).toEqual({ visible: true, width: 124 })  // clamp(100+24, [80,300])
+    expect(patched.get('url')).toEqual({ visible: true, width: 184 })   // clamp(160+24, min 80)
+    // act 是 action 未 opt-in → 不可调 → 保持原状（无 width）
+    expect(patched.get('act')).toEqual({ visible: true })
+  })
+  it('全测不到内容（scrollWidth=0）→ 不提交', () => {
+    const onQueryChange = vi.fn<(p: TableQueryPatch) => void>()
+    const { getByTestId } = render(
+      <DataTable rows={ROWS} columns={COLUMNS} rowKey={(r) => r.id} mode="client" query={snap()} onQueryChange={onQueryChange} enableColumnResizing />,
+    )
+    fireEvent.click(getByTestId('matrix-trigger'))
+    fireEvent.click(document.querySelector('[data-testid="matrix-foot-reset-widths"]') as HTMLElement)
+    expect(onQueryChange).not.toHaveBeenCalled()
   })
 })
 

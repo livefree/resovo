@@ -7,8 +7,8 @@
 import { describe, it, expect } from 'vitest'
 import {
   clampWidth, pickFlexColumnId, buildResizableGridTemplate, isResizableColumn,
-  resolveColumnWidth, measureColumnContentWidth, columnMinWidth,
-  DEFAULT_COL_W, DEFAULT_COL_MIN_W,
+  resolveColumnWidth, measureColumnContentWidth, columnMinWidth, buildAutoFitColumnMap,
+  DEFAULT_COL_W, DEFAULT_COL_MIN_W, AUTOFIT_PADDING_X,
 } from '../../../../../packages/admin-ui/src/components/data-table/column-resize'
 import { buildGridTemplate, SELECTION_COL_W } from '../../../../../packages/admin-ui/src/components/data-table/data-table-grid'
 import { setColumnWidth, resetColumnWidths } from '../../../../../packages/admin-ui/src/components/data-table/column-visibility'
@@ -107,11 +107,53 @@ describe('legacy buildGridTemplate (C2 零改动验证)', () => {
 })
 
 describe('isResizableColumn', () => {
-  it('flex 列 / action 列不可调；enableResizing=false 不可调', () => {
+  it('flex 列不可调；data 列 enableResizing=false 不可调', () => {
     expect(isResizableColumn(COLS[0], 'b')).toBe(true)    // a 非 flex 非 action
     expect(isResizableColumn(COLS[1], 'b')).toBe(false)   // b 是 flex
-    expect(isResizableColumn(COLS[2], 'b')).toBe(false)   // act action
     expect(isResizableColumn({ id: 'z', header: 'Z', accessor: () => '', enableResizing: false }, 'b')).toBe(false)
+  })
+  it('DTR-F：action 列 opt-in —— 默认不可调，显式 enableResizing:true 才可调', () => {
+    // 未写 enableResizing 的 action 列 → 不可调（零回归其他消费表）
+    expect(isResizableColumn(COLS[2], 'b')).toBe(false)
+    // 显式 true → 可调
+    expect(isResizableColumn({ id: 'act2', header: '', kind: 'action', accessor: () => null, enableResizing: true }, 'b')).toBe(true)
+    // 显式 false → 不可调
+    expect(isResizableColumn({ id: 'act3', header: '', kind: 'action', accessor: () => null, enableResizing: false }, 'b')).toBe(false)
+  })
+})
+
+describe('buildAutoFitColumnMap (DTR-F)', () => {
+  it('对测到内容的可调列写 clamp(content+padding)，保留 visible', () => {
+    const next = buildAutoFitColumnMap(COLS, ALL_VISIBLE(), new Map([['a', 100]]))
+    // a: clamp(100+24, min 60, max∞) = 124
+    expect(next.get('a')).toEqual({ visible: true, width: 100 + AUTOFIT_PADDING_X })
+  })
+  it('测不到内容（<=0 / 缺失）的列保持原 colMap 条目，不兜底', () => {
+    const colMap = new Map<string, ColumnPreference>([['a', { visible: true, width: 200 }], ['b', { visible: true }], ['act', { visible: true }]])
+    const next = buildAutoFitColumnMap(COLS, colMap, new Map([['a', 0]])) // a 测得 0
+    expect(next.get('a')).toEqual({ visible: true, width: 200 })   // 保持原宽，不写
+    expect(next.get('b')).toEqual({ visible: true })               // b 未测到 → 原状
+  })
+  it('flex 列也能被写宽（F3：isWidthAdjustable 不排除 flex）', () => {
+    const next = buildAutoFitColumnMap(COLS, ALL_VISIBLE(), new Map([['b', 90]]))
+    // b 即便当前是 flex 列，measured>0 → 写宽 clamp(90+24, min 80) = 114
+    expect(next.get('b')).toEqual({ visible: true, width: 114 })
+  })
+  it('action 列默认不写（opt-in）；钳制到 [min,max]', () => {
+    const cols: TableColumn<Row>[] = [
+      { id: 'a', header: 'A', accessor: () => '', minWidth: 100, maxWidth: 150 },
+      { id: 'act', header: '', kind: 'action', accessor: () => null }, // 未 opt-in
+    ]
+    const next = buildAutoFitColumnMap(cols, new Map([['a', { visible: true }], ['act', { visible: true }]]), new Map([['a', 9999], ['act', 9999]]))
+    expect(next.get('a')).toEqual({ visible: true, width: 150 })  // 钳到 maxWidth
+    expect(next.get('act')).toEqual({ visible: true })            // action 未 opt-in → 不写
+  })
+  it('action 列 opt-in（enableResizing:true）则参与 auto-fit', () => {
+    const cols: TableColumn<Row>[] = [
+      { id: 'act', header: '', kind: 'action', accessor: () => null, enableResizing: true, minWidth: 80 },
+    ]
+    const next = buildAutoFitColumnMap(cols, new Map([['act', { visible: true }]]), new Map([['act', 100]]))
+    expect(next.get('act')).toEqual({ visible: true, width: 124 }) // clamp(100+24, min 80)
   })
 })
 

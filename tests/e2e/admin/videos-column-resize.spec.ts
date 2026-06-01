@@ -84,6 +84,9 @@ test.describe('DataTable 列宽可调（VideoListClient 验收）', () => {
     await expect(handles.first()).toBeVisible()
     expect(await handles.count()).toBeGreaterThan(0)
     expect(await page.locator('[role="cell"] [data-dt-resize-handle]').count()).toBe(0)
+    // DTR-F：封面（media 解禁）+ 操作（action opt-in）现在也有 handle（可拖）
+    await expect(page.locator('[data-testid="dt-resize-handle-cover"]')).toHaveCount(1)
+    await expect(page.locator('[data-testid="dt-resize-handle-actions"]')).toHaveCount(1)
   })
 
   test('② 拖分隔线 → 列宽变化 + 持久化到 localStorage :v2', async ({ context, page }) => {
@@ -129,31 +132,20 @@ test.describe('DataTable 列宽可调（VideoListClient 验收）', () => {
     expect(JSON.stringify(await readLayoutPrefs(page))).toBe(JSON.stringify(persisted))
   })
 
-  test('④ 矩阵「重置列宽」→ width 清空', async ({ context, page }) => {
+  test('④ 矩阵「自适应列宽」→ 按内容 auto-fit 全列写入 width（DTR-F）', async ({ context, page }) => {
     await setModeratorCookies(context)
     await installMocks(page, ROWS)
     await page.goto('/admin/videos')
     await expect(page.getByTestId('video-list-table')).toBeVisible({ timeout: 15000 })
-    // 先拖一下产生 width
-    const handle = page.locator('[role="columnheader"] [data-dt-resize-handle]').first()
-    const box = (await handle.boundingBox())!
-    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
-    await page.mouse.down()
-    await page.mouse.move(box.x + box.width / 2 + 90, box.y + box.height / 2, { steps: 6 })
-    await page.mouse.up()
-    await expect.poll(async () => {
-      const p = await readLayoutPrefs(page)
-      const cols = (p?.value.columns ?? {}) as Record<string, { width?: number }>
-      return Object.values(cols).some((c) => typeof c.width === 'number')
-    }, { timeout: 5000 }).toBe(true)
-    // 打开矩阵 → 重置列宽
+    // 打开矩阵 → 自适应列宽（真实浏览器有 layout，scrollWidth 真实）
     await page.getByTestId('matrix-trigger').click()
     await page.getByTestId('matrix-foot-reset-widths').click()
+    // auto-fit 把可调列按内容宽写入 localStorage :v2
     await expect.poll(async () => {
       const p = await readLayoutPrefs(page)
       const cols = (p?.value.columns ?? {}) as Record<string, { width?: number }>
-      return Object.values(cols).every((c) => c.width === undefined)
-    }, { timeout: 5000 }).toBe(true)
+      return Object.values(cols).filter((c) => typeof c.width === 'number' && c.width > 0).length
+    }, { timeout: 5000 }).toBeGreaterThan(0)
   })
 
   test('⑤ 键盘 ArrowRight 调宽 + 双击 auto-fit', async ({ context, page }) => {

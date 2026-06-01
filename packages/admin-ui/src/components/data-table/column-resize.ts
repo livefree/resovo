@@ -88,17 +88,27 @@ export function pickFlexColumnId<T>(
 }
 
 /**
- * 列是否可调列宽（渲染右缘 handle）：
- *   `enableResizing !== false` && 非 action 列 && 非 flex 列（flex 列自适应不可拖）。
- * selection 列由调用方单独排除（恒 40px，不经此判定）。
+ * 列是否**允许设置/自适应列宽**（与 flex 无关 / DTR-F）：
+ *   - `kind:'action'`：**默认否**，须显式 `enableResizing:true` opt-in（避免其他消费表操作列
+ *     突然可调 / 零回归）；
+ *   - 其余列（data/media/computed）：`enableResizing !== false` 即允许。
+ * 用途：auto-fit 全列时需**包含 flex 列**（flex 列也按内容定宽，余量归占位轨 / F3），故此谓词不排除 flex。
+ */
+export function isWidthAdjustable<T>(col: TableColumn<T>): boolean {
+  if (columnKind(col) === 'action') return col.enableResizing === true
+  return col.enableResizing !== false
+}
+
+/**
+ * 列是否**渲染右缘拖拽 handle**：在 isWidthAdjustable 基础上**额外排除 flex 列**
+ *   （flex 列自适应吸收余量、不给 handle）。selection 列由调用方单独排除（恒 40px）。
  */
 export function isResizableColumn<T>(
   col: TableColumn<T>,
   flexColumnId: string | null,
 ): boolean {
   if (col.id === flexColumnId) return false
-  if (columnKind(col) === 'action') return false
-  return col.enableResizing !== false
+  return isWidthAdjustable(col)
 }
 
 /**
@@ -173,4 +183,33 @@ export function measureColumnContentWidth(
 function cssEscape(value: string): string {
   if (typeof CSS !== 'undefined' && typeof CSS.escape === 'function') return CSS.escape(value)
   return value.replace(/["\\\]]/g, '\\$&')
+}
+
+/**
+ * 构建「自适应列宽」（auto-fit 全列）的全量 colMap（DTR-F / 矩阵「自适应列宽」按钮）。
+ *
+ * 纯函数：DOM 测宽由调用方（控制器）完成后以 `measured`（colId → 内容宽，含表头列名）传入。
+ * 规则（arch-reviewer F2/F3/F4）：
+ *   - 从 `colMap` **全量克隆**起步（保留每列 visible + 不可调列/隐藏列原 width）。
+ *   - 仅对 `isWidthAdjustable===true` 且 `measured>0` 的列覆盖 width = clamp(measured+padding, min, max)。
+ *   - **flex 列也写宽**（F3：isWidthAdjustable 不排除 flex）：写入后该列 hasDefinedWidth=true → 下一帧
+ *     pickFlexColumnId 返回 null → 余量归末尾 `minmax(0,1fr)` 占位轨；全列定宽、无单列被拉伸。
+ *   - **测不到内容（measured<=0）的列保持原宽**（F4）：不进入覆盖、**禁止**用声明宽/DEFAULT 兜底
+ *     （防 jsdom/空表把全列写成兜底值污染存储 + 破坏校准声明宽）。
+ */
+export function buildAutoFitColumnMap<T>(
+  columns: readonly TableColumn<T>[],
+  colMap: ColMap,
+  measured: ReadonlyMap<string, number>,
+): ReadonlyMap<string, ColumnPreference> {
+  const next = new Map<string, ColumnPreference>(colMap)
+  for (const col of columns) {
+    if (!isWidthAdjustable(col)) continue
+    const content = measured.get(col.id) ?? 0
+    if (content <= 0) continue
+    const width = clampWidth(content + AUTOFIT_PADDING_X, columnMinWidth(col), col.maxWidth)
+    const prev = next.get(col.id)
+    next.set(col.id, { visible: prev?.visible ?? col.defaultVisible !== false, width })
+  }
+  return next
 }

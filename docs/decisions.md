@@ -3605,6 +3605,17 @@ Next.js App Router 适配（消费方实现 `TableRouterAdapter`）：
 
 **4.2.2 持久化偏好同步规约**
 
+> **AMENDMENT 2（DTR-F / SEQ-20260531-01 / arch-reviewer claude-opus-4-8，2026-06-01）—— 列宽自适应交互语义**：
+> 用户验收反馈"回到声明初始布局非最佳"。矩阵 popover 批量按钮（data-testid `matrix-foot-reset-widths`）
+> 行为由"清空 width 回声明宽"改为 **auto-fit 全列**（按当前渲染页内容 + 表头列名取 max 宽，钳 [min,max]），
+> 文案"重置列宽"→**"自适应列宽"**。同时 `isResizableColumn` 对 `kind:'action'` 改为 **opt-in**
+> （`enableResizing:true` 才可调 / 默认仍不可调 → 其他消费表零回归）；视频库封面(media)/操作(action)列解禁。
+> **限制（明确记录）**：① server 模式 auto-fit **仅测当前渲染页** DOM，翻页内容更宽不回溯；② 自定义 cell
+> （非默认字符串 cell）测 cell 自身 scrollWidth，复合组件精度近似；③ **不做首屏运行时 auto-fit**（用户决策：
+> 避免 server 分页表首屏抖动 + 翻页跳动 → 首屏走"校准声明宽"，auto-fit 仅用户主动点击/双击触发）；
+> ④ 测不到内容（scrollWidth≤0）的列**保持原宽**，不兜底声明宽/DEFAULT。`resetColumnWidths` 纯函数保留
+> （清空 width 原语 / 潜在他用），本轮不接线。下方 AMENDMENT（存储介质）不受本条影响。
+
 > **AMENDMENT（DTR-D / SEQ-20260531-01 / arch-reviewer claude-opus-4-8 C3，2026-06-01）**：
 > 原规约（CHG-SN-2-13）布局偏好 + saved views 合并存于**单一 sessionStorage key** `:v1`。
 > 通用表格列宽可调（DTR）落地后，列宽属"我希望这张表长这样"的**跨会话布局偏好**，会话级

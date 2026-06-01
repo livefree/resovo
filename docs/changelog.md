@@ -12773,3 +12773,23 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **质量门禁**：完整 typecheck 7 workspace（含 server-next）✓ / lint 5/5 ✓ / **全量 test:run 448 文件 5846 passed 0 failed**（+58 新测试；modern-table pointer 测试零回归证 PointerEvent polyfill 跨文件无泄漏；既有 server-next admin flake 本次未复现）/ verify:file-size-budget data-table 模块 0 新违规 + 新违规计数仍 21 / verify:adr-contracts exit=0 / verify:admin-guardrails ✓ / Playwright e2e `--list` 编译 5 tests ✓。
 - **e2e 运行门控（唯一遗留）**：`npm run test:e2e` 需启 3 dev server（apps/server + server-next + web-next）；本 worktree 缺 `.env.local`（gitignored 未随 worktree 复制）→ web-next dev 退出码 9，且 reuseExistingServer 复用主仓运行中的 server-next（非本 worktree 代码）。e2e **运行**留待用户在已配 env + 启本 worktree dev server 的环境执行；spec 已编译 + 列出 5 tests，逻辑由 58 单测/组件测充分覆盖。
 - **注意事项**：**SEQ-20260531-01 / Track admin-ui-datatable-resize DTR-A..E 全部收官**，本轨功能完整待集成 PR（`track(admin-ui-datatable-resize): 通用表格列宽可调`）。偏离：plan ④「7 条 e2e」收敛为 5 条（窄滚动/宽拉伸属布局视觉，localStorage 持久 + handle 行为已覆盖核心）。Track: admin-ui-datatable-resize。
+
+## [DTR-F] 列宽验收返工：重置→自适应列宽(auto-fit) + 校准声明宽 + 封面/操作列解禁（SEQ-20260531-01）
+- **完成时间**：2026-06-01
+- **记录时间**：2026-06-01 14:00
+- **执行模型**：claude-opus-4-8（主循环）
+- **子代理**：arch-reviewer (claude-opus-4-8) — PASS-WITH-CONDITIONS + F1..F16 落地约束（改 ADR-103 §4.2.2 reset 语义 + 共享组件 isResizableColumn 判定 → 强制 Opus 评审）
+- **来源**：用户实测 /admin/videos 验收反馈——"初始布局非最佳；封面/标题列名截断；无理由禁用封面/操作列"
+- **修改文件**：
+  - `packages/admin-ui/src/components/data-table/column-resize.ts` — 拆 `isWidthAdjustable`（含 flex / action opt-in）vs `isResizableColumn`（排除 flex 渲 handle）；新增 `buildAutoFitColumnMap` 纯函数（测不到保原宽不兜底 / flex 也写宽 / F2-F4）
+  - `packages/admin-ui/src/components/data-table/use-column-resize.ts` — `resetAllWidths`→`autoFitAllWidths`（measure isWidthAdjustable 列 + buildAutoFitColumnMap 单次提交）
+  - `packages/admin-ui/src/components/data-table/column-matrix-footer.tsx` + `column-matrix-menu.tsx` + `data-table.tsx` — prop `onResetColumnWidths`→`onAutoFitColumnWidths`，按钮文案"重置列宽"→**"自适应列宽"**（data-testid `matrix-foot-reset-widths` 保留）
+  - `apps/server-next/src/app/admin/videos/_client/VideoListClient.tsx` — 封面删 enableResizing:false（minWidth 64→56）；操作 enableResizing:false→true（width 150→120 minWidth 130→100）
+  - `docs/decisions.md` — ADR-103 §4.2.2 **AMENDMENT 2**（reset→auto-fit 语义 + action opt-in + 4 限制）
+  - `tests/unit/.../column-resize.test.ts`（+isResizableColumn action 3 case +buildAutoFitColumnMap 5 case）/ `column-resize-handle.test.tsx`（重置→自适应 auto-fit mock scrollWidth）/ `tests/e2e/admin/videos-column-resize.spec.ts`（test④ auto-fit 语义 + test① 封面/操作 handle 断言）
+- **新增依赖/schema/路由**：无
+- **Props 契约变更**：`ColumnMatrixMenuProps`/`ColumnMatrixFooterProps` `onResetColumnWidths`→`onAutoFitColumnWidths`（内部组件，仅 data-table.tsx 一处 wiring）；`isResizableColumn` action 行为契约扩展（opt-in，向后兼容零回归）；新增导出 `isWidthAdjustable` / `buildAutoFitColumnMap`（模块内 + 测试，未进 index.ts 公开 API）
+- **ADR 变更**：ADR-103 §4.2.2 AMENDMENT 2（DTR-F / arch-reviewer claude-opus-4-8）
+- **数据库变更**：无
+- **质量门禁**：完整 typecheck 7 workspace ✓ / lint 5/5 ✓ / **全量 test:run 448 文件 5852 passed（+7 / 唯 1 失败 = 既有 server-next admin flake StagingTable，隔离 13/13 过，与本轨零关系）** / file-size-budget data-table 模块 0 新违规（计数仍 21）/ verify:adr-contracts exit=0 / e2e --list 编译 5 tests ✓。
+- **注意事项**：① auto-fit 复用 measureColumnContentWidth（selector 天然含表头列名 span）→ 已满足"容下列名"；② flex 列也参与 auto-fit（写宽后余量归占位轨）；③ title 保持无 width minWidth:220（**不擅改 C5 锁定 flex 选取语义**，若验收仍嫌右侧空白另起 ADR）；④ resetColumnWidths 纯函数保留（清空原语 + 测试，本轮不接线）。用户将重开 :3013 实测 DTR-F。**本轨 DTR-A..F 全部收官，待集成 PR**。Track: admin-ui-datatable-resize。

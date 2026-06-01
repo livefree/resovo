@@ -16,14 +16,15 @@ import type { CSSProperties } from 'react'
 import type { ColumnPreference, TableColumn, TableQueryPatch } from './types'
 import {
   AUTOFIT_PADDING_X,
+  buildAutoFitColumnMap,
   buildResizableGridTemplate,
   clampWidth,
   columnMinWidth,
+  isWidthAdjustable,
   measureColumnContentWidth,
   pickFlexColumnId,
   resolveColumnWidth,
 } from './column-resize'
-import { resetColumnWidths } from './column-visibility'
 
 /**
  * 列宽 resize 上下文（注入 DataTableHeaderRow）。enabled 时由本 hook 构造，
@@ -54,8 +55,11 @@ export interface ColumnResizeController<T> {
   /** 当前网格模板（enabled=false 时为空串，调用方不消费）。 */
   readonly gridTemplate: string
   readonly headerContext: HeaderRowResizeContext<T> | undefined
-  /** 重置所有列宽（矩阵 popover「重置列宽」/ DTR-C）：清 width 保留 visible。 */
-  readonly resetAllWidths: () => void
+  /**
+   * 自适应全列列宽（矩阵 popover「自适应列宽」/ DTR-F）：对所有可调列按当前渲染页内容 + 表头列名
+   * auto-fit 测宽后一次性提交；测不到内容的列保持原宽。
+   */
+  readonly autoFitAllWidths: () => void
 }
 
 export function useColumnResizeController<T>({
@@ -120,10 +124,18 @@ export function useColumnResizeController<T>({
     [colMap],
   )
 
-  const resetAllWidths = useCallback(
-    () => onQueryChange({ columns: resetColumnWidths(columns, colMap) } satisfies TableQueryPatch),
-    [columns, colMap, onQueryChange],
-  )
+  const autoFitAllWidths = useCallback(() => {
+    // 遍历所有可调列测当前渲染页内容宽（measureColumnContentWidth 的 selector 天然命中
+    // 表头列名 span，故已含「容得下列名」/ arch-reviewer F1）；测不到的列不进 measured。
+    const measured = new Map<string, number>()
+    for (const col of columns) {
+      if (!isWidthAdjustable(col)) continue // 含 flex 列（auto-fit 全列 / F3）
+      const w = measureColumnContentWidth(rootRef.current, col.id)
+      if (w > 0) measured.set(col.id, w)
+    }
+    if (measured.size === 0) return // 全测不到（无 DOM / 空表）→ 不动列宽
+    onQueryChange({ columns: buildAutoFitColumnMap(columns, colMap, measured) } satisfies TableQueryPatch)
+  }, [columns, colMap, onQueryChange])
 
   const rootStyle = useMemo<CSSProperties>(
     () =>
@@ -148,5 +160,5 @@ export function useColumnResizeController<T>({
     [enabled, flexColumnId, resolveWidth, previewWidth, commitWidth, rollbackPreview, autoFit],
   )
 
-  return { rootRef, rootStyle, gridTemplate, headerContext, resetAllWidths }
+  return { rootRef, rootStyle, gridTemplate, headerContext, autoFitAllWidths }
 }
