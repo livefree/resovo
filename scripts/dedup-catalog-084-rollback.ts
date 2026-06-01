@@ -152,15 +152,18 @@ async function rollback(client: PoolClient): Promise<void> {
       if (residual.rows.length === 0) {
         process.stdout.write('  locks 疑似 B 类转移残留候选: 0（无须人工处理）\n')
       } else {
-        // ⚠️ Codex（多轮收敛，含 hard/soft 分级修正）：残留 locks 须**按 lock_mode 分级**，不可一概「无需处置」：
-        //   · soft 残留：safeUpdate 仅挡非 manual 来源（MediaCatalogService.ts:220 `source !== 'manual'`），
-        //     manual 仍可覆盖 → 较轻、近 fail-safe，通常无需处置。
-        //   · **hard 残留：safeUpdate 无条件跳过该字段（:215），任何来源含 manual 都不能覆盖 = 留存行该字段
-        //     被永久冻结、富集与手动均无法更新 → 实质运行时问题，需处置**（不是无害 fail-safe，前述「一概无需处置」错误，已撤回）。
-        //   删除困境仍在（误报信息论不可达 + TOCTOU），脚本不提供任何自动删除方法。且**经核实当前无 admin
-        //   字段锁管理 route/UI**（removeFieldLock/upsertFieldLock 无任何 route 调用方）——故不指向「日常管理流程」
-        //   （该流程不存在，前述指向是虚假声称，已撤回）。hard 残留解除须 DBA/工程介入，逐条业务核查 + 原子内容
-        //   条件删（自担误报判定责任）。脚本职责：分级诊断 + 落台账（标 hard/soft）供审计与人工处置。
+        // ⚠️ Codex round 12（修正 FIX11 soft 误读）：残留按 lock_mode 分级，但**两套 soft 存储不可混淆**：
+        //   · safeUpdate 的「软锁」阻挡（MediaCatalogService.ts:220）读的是 **media_catalog.locked_fields 列**
+        //     （manual 写入 / 是 catalog 行自身列，留存行保留自己的、冗余行随删 → **不向留存行转移**，本回滚无此类残留）。
+        //   · 本处残留来自 **video_metadata_locks 表**（随 UPDATE catalog_id 转移到留存行），其消费方只有两个：
+        //     - getHardLockedFields（:138 仅取 lock_mode='hard'）→ hardLockedSet → :215 阻挡**所有**覆盖（含 manual）；
+        //     - getLocksByCatalogId（取全部行）→ **仅** moderation.ts:413 审核台**只读展示**，不参与任何覆盖守卫。
+        //   故真实运行时语义（FIX11「soft 仅挡非 manual」是把 locked_fields 列行为错安到 video_metadata_locks soft 行上，已撤回）：
+        //   · **hard 残留 = 留存行该字段被永久冻结**（getHardLockedFields → :215，富集+手动均无法更新）→ 实质运行时问题，**需处置**。
+        //   · **soft 残留 = 无任何覆盖守卫消费方**，仅在审核台 locks 展示露出（审计/可观测噪声·误导性归属）→ 不挡富集、不挡 manual，
+        //     近似 provenance 噪声，非运行时危害（仍报告，供审计透明）。
+        //   删除困境（误报信息论不可达 + TOCTOU）+ **当前无 admin 字段锁管理 route/UI**（removeFieldLock/upsertFieldLock 无调用方）
+        //   不变：脚本不删、不提供删除方法，hard 残留解除须 DBA/工程逐条业务核查。脚本职责：分级诊断 + 落台账供审计。
         const hardRows = residual.rows.filter((r) => r.lock_mode === 'hard')
         const softRows = residual.rows.filter((r) => r.lock_mode !== 'hard')
         process.stdout.write(
@@ -168,7 +171,7 @@ async function rollback(client: PoolClient): Promise<void> {
         )
         if (hardRows.length > 0) {
           process.stdout.write(
-            `     ❗ hard 锁残留 ${hardRows.length} 条 = 留存行该字段被永久冻结（富集+手动均无法更新），**需处置**。\n` +
+            `     ❗ hard 残留 ${hardRows.length} 条 = 留存行该字段被永久冻结（getHardLockedFields→:215，富集+手动均无法更新），**需处置**。\n` +
               `        当前无 admin 字段锁管理通道；解除须 DBA/工程逐条业务核查（确属本次合并误转移）后处理，\n` +
               `        删除有误报+TOCTOU 风险无自动安全方法（详见 D-174-6 / 不据本台账批量删）：\n`,
           )
@@ -178,7 +181,7 @@ async function rollback(client: PoolClient): Promise<void> {
         }
         if (softRows.length > 0) {
           process.stdout.write(
-            `     soft 锁残留 ${softRows.length} 条（仅挡非 manual 覆盖，manual 仍可更新 → 较轻，通常无需处置）：\n`,
+            `     soft 残留 ${softRows.length} 条 = **无覆盖守卫消费方**（仅审核台 locks 展示露出 / 不挡富集与 manual）→ 审计噪声，非运行时危害：\n`,
           )
           for (const r of softRows) {
             process.stdout.write(`        · catalog=${r.catalog_id} field=${r.field_name} by=${r.locked_by}\n`)

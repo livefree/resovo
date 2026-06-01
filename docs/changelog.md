@@ -13008,3 +13008,23 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **数据库变更**：无。
 - **质量门禁**：typecheck EXIT=0 / 回滚 dry-run 跑通（本次 0 残留）/ verify:adr-contracts EXIT=0。
 - **诚实声明**：本轮纠正 FIX10 的两处过度简化——hard 残留有实质运行时后果（字段永久冻结）不可一概轻描淡写；处置无 admin 通道，不可指向虚构流程。已确立真相不变（误报+TOCTOU → 无自动安全删除；脚本只诊断不删）。
+
+---
+
+## [META-23-C-FIX12] 回滚 locks soft 分级纠正两套 soft 存储混淆（Codex stop-time review）
+- **完成时间**：2026-06-01
+- **执行模型**：claude-opus-4-8
+- **子代理**：无
+- **来源**：Codex stop-time review「新增 soft 锁分级误读了真实运行时语义」（第八轮指 locks 残留，承接 FIX11）。
+- **问题（FIX11 的 soft 分级误读，已逐点核实）**：FIX11 写「soft 残留:仅挡非 manual 来源（`MediaCatalogService.ts:220`），manual 仍可覆盖 → 较轻、近 fail-safe」——把 `:220` 的行为错安到 `video_metadata_locks` 的 soft 行上。实读确认存在**两套独立 soft 存储**：
+  - `:220` 软锁阻挡读的是 **`media_catalog.locked_fields` 列**（`softLockedSet = current.lockedFields`，:204），manual 写入、catalog 行自身列；合并时留存行保留自己的列、冗余行随删 → **不向留存行转移**，本回滚根本无此类残留。
+  - 回滚 locks 残留来自 **`video_metadata_locks` 表**（随 UPDATE catalog_id 转移到留存行）。其消费方仅两个：`getHardLockedFields`（`:138` 仅取 `lock_mode='hard'`）→ `hardLockedSet` → `:215` 阻挡所有覆盖；`getLocksByCatalogId`（取全部行）→ **仅** `moderation.ts:413` 审核台**只读展示**，不参与覆盖守卫。
+  - 故 `video_metadata_locks.lock_mode='soft'` 残留行**无任何覆盖守卫消费方**——不挡富集、不挡 manual，FIX11「仅挡非 manual」是张冠李戴的虚假运行时声称。
+- **修复**：
+  - 脚本 soft 残留输出改为「**无覆盖守卫消费方**（仅审核台 locks 展示露出 / 不挡富集与 manual）→ 审计噪声，非运行时危害」；新增注释辨析两套 soft 存储 + 各自消费方。hard 残留定性不变（getHardLockedFields→:215 永久冻结，需处置）。
+  - D-174-6「locks ≠ provenance」段补 round 12 两套 soft 存储辨析，撤回 FIX11 的 soft 误读。
+- **修改文件**：`scripts/dedup-catalog-084-rollback.ts`（soft 残留定性纠正 + 两套存储注释）/ `docs/decisions.md`（D-174-6 round 12 辨析）。
+- **新增依赖/schema/Props 契约变更**：无。
+- **数据库变更**：无。
+- **质量门禁**：typecheck EXIT=0 / 回滚 dry-run 跑通（本次 0 残留）/ verify:adr-contracts EXIT=0。
+- **诚实声明**：FIX11 在未实读 `:204/:220` 数据来源的情况下，把 `locked_fields` 列的「挡非 manual」行为错记到 `video_metadata_locks` soft 行——属同类「未核实即声称运行时效力」的诚实性问题。本轮已实读两套存储全部消费方钉死语义：hard 残留有真实冻结效力（需处置），soft 残留无覆盖效力（审计噪声）。
