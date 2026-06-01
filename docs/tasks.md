@@ -6,9 +6,9 @@
 
 ## 进行中任务
 
-（空 / META-23-B normalizeMergeKey 切换 ✅ 2026-05-31：全量 5825 passed 零回归）
+（空 / META-23-C migration 084 ✅ 2026-06-01：重算883+合并51组删52行+补34行，不一致0/uq违反0/零回归。当前打扰番已绑 subject 610703）
 
-> SEQ-20260531-01：A✅ B✅ / **C-E ⬜**。下一卡 **META-23-C**（migration 084：存量重算 backfill + 52 冗余合并 + 删行快照备份，opus 级·不可逆迁移）待启动。详见 task-queue.md。
+> SEQ-20260531-01：A✅ B✅ **C✅** / **D-E ⬜**。下一卡 **META-23-D**（applyEnrichmentDb 唯一约束兜底真去重，opus 级·动富集核心）。⚠️ 运维：用户可重跑 `reenrich-backfill --mode unmatched --type anime` 让已合并+已绑 subject 的番刷新富集（META-23-E 验证命中回升）。详见 task-queue.md + changelog.md。
 
 ---
 

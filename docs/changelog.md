@@ -12795,3 +12795,29 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **数据库变更**：无（schema 迁移在 META-23-C；本卡仅写入侧函数切换，新入库行即用新键 / Y1 部署顺序前半）。
 - **质量门禁**：typecheck EXIT=0 / lint EXIT=0 / verify:adr-contracts EXIT=0 / title-normalizer 65 全过 / 全量 445 文件 **5825 passed 0 failed** 零回归（3 mock 失配已同步）。
 - **注意事项**：存量 3124 行仍是旧键（带标点），与新写入新键暂不一致 → 必须 META-23-C backfill 重算消除窗口（Y1）。本卡单独部署期间，存量含标点视频的归并/查询仍按旧键，新入库视频按新键——属预期过渡态。
+
+---
+
+## [META-23-C] migration 084：归并键存量重算 + 52 冗余 catalog 合并 + 删行快照备份（ADR-174 D-174-2）
+- **完成时间**：2026-06-01
+- **执行模型**：claude-opus-4-8
+- **子代理**：arch-reviewer (claude-opus-4-8) / agentId ab52594c0cb7e1258 — migration 084 执行方案设计（精确到 SQL 级，抓出 3 个照 ADR 正文抄会出事的陷阱）
+- **来源序列**：SEQ-20260531-01（META-23 系列 3/5 / 不可逆数据迁移）
+- **本卡产出（D-174-2）**：把 `media_catalog.title_normalized` 存量 3124 行重算为剥标点归并键 + 合并因此暴露的 52 冗余 catalog 行（51 组），根治同番裂多行抢绑同 subject 撞唯一约束。
+- **arch-reviewer 抓出的 3 陷阱（实施必守）**：
+  - ① 留存行 `ORDER BY (bangumi_subject_id IS NOT NULL) DESC ...`：Postgres `false<true`，照 D-174-2 正文示意的隐含 ASC 会选**无外部 ID 行**当留存行 = 删错数据。必须 DESC。
+  - ② **UPDATE 不支持 ON CONFLICT**（INSERT 专有）：子表转移 `UPDATE catalog_id` 撞唯一索引直接抛错 → 改「先删冗余侧碰撞行，再 UPDATE 剩余」+ `IS NOT DISTINCT FROM`（`catalog_episodes.external_episode_id` nullable，`=` 对 NULL 返 unknown 漏判）。
+  - ③ `catalog_characters` 有孙表 `catalog_character_actors`（CASCADE）：删碰撞 character 连带删 actors，快照必须覆盖孙表否则无法回滚（R4）。
+- **执行编排（A→B→A' 三步，实测修正）**：
+  - migration 084.sql 仅建 8 张快照表（DDL，无 DML，安全）；DML 全在两个独立 TS 脚本（R5：重算须 TS 调 normalizeMergeKey）。
+  - 阶段 A（`scripts/backfill-merge-key.ts`）：重算单行组键；**冗余组整组跳过**（初版只跳「无外部 ID 组」致 survivor 更新撞 uq_catalog_title_year_type，修正为整组跳过）。真跑更新 883 行（幂等 0）。
+  - 阶段 B（`scripts/dedup-catalog-084.ts`）：每组一事务（选留存行 DESC→写快照含孙表→videos 重指向→provenance/locks/episodes/characters/aliases 删碰撞+UPDATE→删冗余行→组内断言）。dry-run 全链路无抛错 → 真跑合并 51 组删 52 行失败 0。
+  - **阶段 A'（合并后补跑 backfill）**：冗余组已删，补齐 34 个带外部 ID 留存行的键（首跑被整组跳过仍带标点）。补后不一致 0。脚本头注释已固化 A→B→A' 编排。
+- **验收实测全过**：catalog 3124→3072（-52）/ title_normalized 与 normalizeMergeKey 不一致 0 / uq_catalog_title_year_type 违反组 0（根因消除）/ 子表悬挂引用 0（episodes/characters/provenance/actors）/ video 孤立 0（含软删）/ bangumi_subject_id 164 不变 / douban_id 54 不变（被删 52 行全无外部 ID，纯裸冗余占位）/ 快照 `_bak_media_catalog_084` 52 行 + `_bak_videos_catalog_id_084` 52 行 / 防重跑 `--force` 生效 / backfill 三次跑收敛 updated=0。
+- **终极验证**：原撞唯一约束 unmatched 的「当前、正被打扰中！」，合并后 catalog `title_normalized=当前正被打扰中` + 已绑 `bangumi_subject_id=610703` → 冲突路径根治。
+- **回滚预案**：`scripts/dedup-catalog-084-rollback.ts`（从 _bak_*_084 复活 catalog + 还原子表/孙表 + videos 指向，单事务，支持 --dry-run）。
+- **修改文件**：`apps/api/src/db/migrations/084_merge_key_backfill_dedup.sql`（新）/ `scripts/backfill-merge-key.ts`（新）/ `scripts/dedup-catalog-084.ts`（新）/ `scripts/dedup-catalog-084-rollback.ts`（新）/ `docs/architecture.md`（title_normalized 语义变更 + _bak_*_084 + 写入入口 / R8）/ `docs/task-queue.md` / `docs/tasks.md`。
+- **新增依赖/Props 契约变更**：无。
+- **数据库变更**：migration 084 新增 8 张 `_bak_*_084` 快照表（保留至五类测试全绿 + 线上观察一迭代后另起卡 DROP）；media_catalog.title_normalized 存量内容重算（列 DDL 不变）；删 52 冗余 catalog 行（快照可回滚）。architecture.md 已同步（R8）。
+- **质量门禁**：typecheck EXIT=0 / lint EXIT=0 / verify:adr-contracts EXIT=0（verify-sql-schema-alignment 55 表含新快照表对齐）/ 全量 445 文件 **5825 passed 0 failed** 零回归。
+- **运维交接**：用户可重跑 `reenrich-backfill --mode unmatched --type anime` 让已合并+已绑 subject 的番刷新富集状态（bangumi_status / catalog 富集字段），META-23-E 验证 JP anime 命中回升。

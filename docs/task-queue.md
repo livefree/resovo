@@ -2483,11 +2483,11 @@ CODENAME-MATRIX-E2E (依赖 Wave 3 验收期补丁 CODENAME-MATRIX ✅)
    - 文件范围：`apps/api/src/services/TitleNormalizer.ts`（+normalizeMergeKey + normalizeTitle/normalizeForExternalMatch 注释修订 + buildMatchKey 切换）/ CrawlerService.ts:172 / VideoService.ts:256 / VideoMergesService.ts:403 / BangumiSeedService.ts:70 / `tests/unit/api/title-normalizer.test.ts`(+8) / 3 mock 同步（crawler-service-data-guards / crawler-service-es / video-merge-mutations）
    - 依赖：META-23-A ✅
    - 完成备注：新增 `normalizeMergeKey`=stripExternalMatchPunct(normalizeTitle)，与 normalizeForExternalMatch 实现等价但语义分立；buildMatchKey + 4 service 写入点（Crawler/Video/VideoMerges/BangumiSeed）全切；**不切**：CrawlerRefetchService:69/87（相似度）/ ExternalDataImportService:447 + bangumi-dump-refresh（各自本地 normalizeTitle dump 基准，Y3 守住）/ normalizeForExternalMatch。查询点（findCatalogByNormalizedKey / videos.crawler:197 / video-merge-candidates GROUP BY）消费入参 key 自动对齐。`videos.crawler.ts:166` fallback `input.title.toLowerCase()` 是 queries 层退化兜底（CrawlerService 总传 titleNormalized），不引 service 依赖保持分层纯净。R1 单测 +8（同番归并/与 normalizeForExternalMatch 逐字符一致/CJK 对齐 dump [^\p{L}\p{N}]/幂等/含空格 under-match/々〇 保留/buildMatchKey 同键）。门禁：typecheck+lint EXIT=0 / title-normalizer 65 全过 / 全量 445 文件 **5825 passed 0 failed** 零回归（3 mock 失配已同步补 normalizeMergeKey）。执行模型: claude-opus-4-8
-3. **META-23-C** — migration 084：存量重算 backfill + 52 组合并 + 删行快照备份（D-174-2/R2/R3/R4/R5）（状态：⬜ 待开始）
+3. **META-23-C** — migration 084：存量重算 backfill + 52 组合并 + 删行快照备份（D-174-2/R2/R3/R4/R5）（状态：✅ 已完成 2026-06-01 / claude-opus-4-8 / 子代理 arch-reviewer (claude-opus-4-8) agentId ab52594c0cb7e1258）
    - 建议模型：opus（数据迁移 / 不可逆删行 / 子表转移 / 强制 Opus 评审实施方案）
-   - 文件范围：`apps/api/src/db/migrations/084_*.sql` + backfill TS 脚本（scripts/ 或 migration 内）+ architecture.md 同步
+   - 文件范围：`084_merge_key_backfill_dedup.sql`（8 快照表）+ `scripts/backfill-merge-key.ts` + `scripts/dedup-catalog-084.ts` + `scripts/dedup-catalog-084-rollback.ts` + `docs/architecture.md`
    - 依赖：META-23-B ✅（写入侧已切新键，Y1 部署顺序）
-   - 验收：迁移幂等集成测试 + 52 组合并正确性（子表无悬挂 / 外部 ID 无丢失 / 快照可回滚）
+   - 完成备注：Opus 精确 SQL 方案 + 抓 3 陷阱（DESC 留存行 / UPDATE 无 ON CONFLICT 先删碰撞再 UPDATE+IS NOT DISTINCT FROM / 孙表 catalog_character_actors 快照）。**执行 A→B→A'**：A 重算单行组+冗余组整组跳过（规避 uq_catalog_title_year_type）→ B 合并 51 组删 52 行 → A' 补 34 留存行键。实测：catalog 3124→3072 / 不一致 0 / uq 违反 0 / 子表悬挂 0 / video 孤立 0 / bangumi 164 douban 54 不变（删行全裸冗余）/ 快照 52 行 / 当前打扰番已绑 610703（根因消除）。门禁 typecheck+lint+verify:adr-contracts EXIT=0 / 全量 5825 passed 零回归。执行模型: claude-opus-4-8
 4. **META-23-D** — `applyEnrichmentDb` 唯一约束兜底真去重 + 单测（D-174-3）（状态：⬜ 待开始）
    - 建议模型：opus（动 BangumiService 富集核心路径 + 事务原子性 / ADR-170 兼容）
    - 文件范围：`apps/api/src/services/BangumiService.ts`（applyEnrichmentDb 写 subject 前查重重指向 + 降级 candidate）+ MediaCatalogService 查重接缝 + `tests/unit/api/bangumi-service.test.ts`

@@ -296,7 +296,9 @@ resovo/
 Migration 026 建表，Migration 042（META-06）新增 6 个扩展字段：
 
 核心字段：
-- `title` / `title_en` / `title_original` / `title_normalized`：标题四形态
+- `title` / `title_en` / `title_original` / `title_normalized`：标题四形态。
+  - `title`：原始标题，**保留标点空格**（展示 + 前台搜索 `videos.title ILIKE`）。
+  - `title_normalized`：**归并去重键**。**ADR-174（2026-06-01）起改为剥标点**（`normalizeMergeKey` = `stripExternalMatchPunct(normalizeTitle)`，剥 `\p{P}/\p{S}`），与外部源匹配键 `normalizeForExternalMatch` 对齐 —— 使「当前，正被打扰中！」与「当前正被打扰中」归并同一作品，根治同番裂多 catalog 行→抢绑同一 Bangumi subject 撞 `bangumi_subject_id` 唯一约束。**语义变更**（列 DDL 不变，内容契约从「保留标点」变「剥标点」）；存量 3124 行由 migration 084 + `scripts/backfill-merge-key.ts` 重算 + `scripts/dedup-catalog-084.ts` 合并 52 冗余行（删行前快照至 `_bak_*_084` 系列表，R4 可回滚）。写入入口统一 `normalizeMergeKey`（CrawlerService / VideoService / VideoMergesService / BangumiSeedService / buildMatchKey）。注意：`normalizeTitle`（保留标点）仍供 CrawlerRefetchService 相似度计算；dump 表 `external_data.*.title_normalized` 是独立基准（`[^\p{L}\p{N}]`），不受本变更影响。
 - `type`：作品类型（与 videos.type 一致）
 - `genres TEXT[]` / `genres_raw TEXT[]`：平台题材 / 原始题材
 - `year INT` / `release_date TEXT`：年份与首播/上映日期
