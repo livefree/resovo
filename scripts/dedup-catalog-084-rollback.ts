@@ -152,28 +152,26 @@ async function rollback(client: PoolClient): Promise<void> {
       if (residual.rows.length === 0) {
         process.stdout.write('  locks 疑似 B 类转移残留候选: 0（无须人工处理）\n')
       } else {
-        // ⚠️ Codex（四轮收敛）：本脚本职责止于**纯诊断报告**——只列疑似清单，**不删、不生成删除语句、
-        //   不规定任何删除流程**。原因：残留 locks 的处理夹两类性质不同的难题，均超出回滚脚本职责：
-        //   ① 误报（信息论不可达）：候选含 A 类合法锁（同源同批逐列等于冗余快照），唯人工业务判断可辨。
-        //   ② TOCTOU：任何「先检查后删除」的**非原子**流程（脚本批删/单删、甚至人工 SELECT-then-DELETE）
-        //      都有竞态——检查与删除之间该 PK 位置可能被替换为新合法锁。**唯一正解是原子的「内容条件删」**：
-        //      `DELETE WHERE catalog_id=? AND field_name=? AND locked_by=? AND locked_at=? AND lock_mode=?`
-        //      （锁被替换→内容变→0 行删，无竞态）。但这属**运维操作**（需先经 ① 的人工业务判断确属误转移），
-        //      不是数据迁移回滚脚本的职责——回滚脚本既无法替人做 ① 的业务判断，也不应代生成 ② 的运维语句。
-        //   故终局：脚本只输出诊断明细 + 落台账，处理交运维（误报判定 + 原子内容条件删，均在脚本职责外）。
+        // ⚠️ Codex（多轮收敛终局）：残留是 **fail-safe 副作用，不是待删的坏数据**，本脚本**只诊断记录、
+        //   不提供任何删除方法/指引**（含原子内容条件删——它解 TOCTOU 但解不了误报，仍可能删中合法 A 类锁，
+        //   fail-dangerous）。关键认知：
+        //   · 残留 B 类锁的后果是「该字段被保守地不再富集覆盖」= 可能漏更新某字段（fail-safe，不破坏/不误删数据）；
+        //     而任何「删残留」的尝试都是 fail-dangerous（误报 + TOCTOU 叠加 → 可能删合法锁）。两害取轻：保留。
+        //   · 误报（信息论不可达）+ TOCTOU 叠加后，不存在「既不误删合法锁又能清残留」的删除方法——故不提供。
+        //   · 若运营确认某字段锁需解除，走**日常字段锁管理流程**（其安全性是该流程的职责，与本回滚无关），
+        //     不依据本台账批量/脚本化删除。
+        //   脚本职责到此为止：列清单 + 落台账供审计追溯。
         process.stdout.write(
-          `  ⚠️ locks 疑似 B 类转移残留候选 ${residual.rows.length} 条（运行时后果：留存行可能多一个本不该有的字段冻结）。\n` +
-            `     **疑似诊断清单（判据含误报）。本脚本不删、不生成删除语句、不规定删除流程——处理交运维：**\n` +
-            `     · 误报判定：需人工业务核查该字段冻结是否确属本次合并误转移（脚本无法辨别 A 类合法锁）。\n` +
-            `     · 若确属误转移再删：须用**原子内容条件删**（DELETE … WHERE catalog_id+field_name+locked_by+\n` +
-            `       locked_at+lock_mode 全等于快照值）避免 TOCTOU；裸 PK 删（含 removeFieldLock）有竞态，勿用。\n` +
-            `     诊断明细（_residual_locks_084 同步落表，含全部内容列供运维构造原子条件）：\n`,
+          `  ℹ️ locks 疑似 B 类转移残留候选 ${residual.rows.length} 条（fail-safe：相关字段会被保守地不再富集覆盖，` +
+            `不破坏/不误删数据；判据含误报）。**本脚本仅诊断记录，不删、不提供删除方法**——\n` +
+            `     残留属可接受的保守副作用，无需处置；如个别字段锁确需解除，走日常字段锁管理流程（非依据本台账）。\n` +
+            `     诊断明细（同步落 _residual_locks_084 供审计追溯）：\n`,
         )
         for (const r of residual.rows) {
           process.stdout.write(`    · catalog=${r.catalog_id} field=${r.field_name} mode=${r.lock_mode} by=${r.locked_by}\n`)
         }
         process.stdout.write(
-          `  明细已落 _residual_locks_084（纯诊断台账；本脚本不据其删除任何锁，处理交运维按上述原则）。\n`,
+          `  明细已落 _residual_locks_084（诊断/审计台账；本脚本不据其删除任何锁，也不规定删除流程）。\n`,
         )
       }
     } else {
