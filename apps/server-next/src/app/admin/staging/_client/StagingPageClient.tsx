@@ -465,6 +465,7 @@ export function StagingPageClient() {
               }}
               loading={loading}
               data-testid="staging-table"
+              enableColumnResizing
             />
           )}
     </div>

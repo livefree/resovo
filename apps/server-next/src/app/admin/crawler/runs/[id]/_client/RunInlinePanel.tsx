@@ -27,6 +27,7 @@ import {
   LoadingState,
   CodeText,
   useToast,
+  type ColumnPreference,
   type TableColumn,
   type TableSortState,
   type TableSelectionState,
@@ -281,6 +282,7 @@ export function RunInlinePanel({ runId }: RunInlinePanelProps) {
   const [tasksPage, setTasksPage] = useState(1)
   const [tasksPageSize, setTasksPageSize] = useState(50)
   const [tasksSort, setTasksSort] = useState<TableSortState>({ field: 'startedAt', direction: 'desc' })
+  const [tasksColumnPrefs, setTasksColumnPrefs] = useState<ReadonlyMap<string, ColumnPreference>>(new Map())
   const [tasksLoading, setTasksLoading] = useState(true)
   const [tasksError, setTasksError] = useState<Error | null>(null)
 
@@ -405,10 +407,10 @@ export function RunInlinePanel({ runId }: RunInlinePanelProps) {
       pagination: { page: tasksPage, pageSize: tasksPageSize },
       sort: tasksSort,
       filters: new Map(),
-      columns: new Map(),
+      columns: tasksColumnPrefs,
       selection,
     }),
-    [tasksPage, tasksPageSize, tasksSort, selection],
+    [tasksPage, tasksPageSize, tasksSort, selection, tasksColumnPrefs],
   )
 
   if (runLoading && !run) {
@@ -564,11 +566,13 @@ export function RunInlinePanel({ runId }: RunInlinePanelProps) {
                       }
                     }
                     if (patch.sort) setTasksSort(patch.sort)
+                    if (patch.columns) setTasksColumnPrefs(patch.columns)
                   }}
                   totalRows={tasksTotal}
                   loading={tasksLoading}
                   emptyState={<EmptyState title="暂无任务" description="该批次未产生任务记录" />}
                   data-testid="run-detail-tasks-table"
+                  enableColumnResizing
                   pagination={{ pageSizeOptions: [20, 50, 100, 200] }}
                 />
               )

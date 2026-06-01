@@ -35,6 +35,7 @@ import {
   useToast,
   getVideoTypeOptions,
   type AdminSelectOption,
+  type ColumnPreference,
   type TableSelectionState,
   type TableSortState,
 } from '@resovo/admin-ui'
@@ -154,6 +155,7 @@ export function SubmissionsListClient() {
   const [siteKey, setSiteKey] = useState<string | null>(null)
   const [sites, setSites] = useState<readonly CrawlerSite[]>([])
   const [selection, setSelection] = useState<TableSelectionState>({ selectedKeys: new Set(), mode: 'page' })
+  const [columnPrefs, setColumnPrefs] = useState<ReadonlyMap<string, ColumnPreference>>(new Map())
   const [pendingId, setPendingId] = useState<string | null>(null)
   const [batchPending, setBatchPending] = useState(false)
   const toast = useToast()
@@ -368,10 +370,10 @@ export function SubmissionsListClient() {
       pagination: { page, pageSize },
       sort,
       filters: new Map(),
-      columns: new Map(),
+      columns: columnPrefs,
       selection,
     }),
-    [page, pageSize, sort, selection],
+    [page, pageSize, sort, selection, columnPrefs],
   )
 
   return (
@@ -444,6 +446,7 @@ export function SubmissionsListClient() {
                     }
                   }
                   if (patch.sort) setSort(patch.sort)
+                  if (patch.columns) setColumnPrefs(patch.columns)
                 }}
                 totalRows={total}
                 loading={loading}
@@ -452,6 +455,7 @@ export function SubmissionsListClient() {
                 emptyState={<EmptyState title="暂无待审投稿" description="调整筛选条件后重试" />}
                 data-testid="submission-table"
                 enableHeaderMenu
+                enableColumnResizing
                 toolbar={{
                   search: toolbarSearch,
                   trailing: toolbarTrailing,

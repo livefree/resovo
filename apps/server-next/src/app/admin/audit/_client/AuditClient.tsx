@@ -29,6 +29,7 @@ import {
   AdminButton,
   useToast,
   type DistinctOption,
+  type ColumnPreference,
   type FilterValue,
   type TableSortState,
 } from '@resovo/admin-ui'
@@ -105,6 +106,7 @@ export function AuditClient() {
   //   actionType / targetKind / actorId / requestId / createdAt
   // DataTableAutoFilter apply 提交时一次性触发 / 无需 debounce
   const [filtersMap, setFiltersMap] = useState<ReadonlyMap<string, FilterValue>>(new Map())
+  const [columnPrefs, setColumnPrefs] = useState<ReadonlyMap<string, ColumnPreference>>(new Map())
 
   const actionTypeFilter = useMemo<AdminAuditActionType | undefined>(() => {
     const v = filtersMap.get('actionType')
@@ -280,10 +282,10 @@ export function AuditClient() {
       sort,
       // sub 2：filters 用 filtersMap state（D-150-4 业务 key 统一）
       filters: filtersMap,
-      columns: new Map(),
+      columns: columnPrefs,
       selection: { selectedKeys: new Set<string>(), mode: 'page' as const },
     }),
-    [page, pageSize, sort, filtersMap],
+    [page, pageSize, sort, filtersMap, columnPrefs],
   )
 
   return (
@@ -332,6 +334,7 @@ export function AuditClient() {
                   if (patch.sort) setSort(patch.sort)
                   // sub 2：filters patch（DataTableAutoFilter popover OK 触发 / 矩阵清空）
                   if (patch.filters) { setFiltersMap(patch.filters); setPage(1) }
+                  if (patch.columns) setColumnPrefs(patch.columns)
                 }}
                 totalRows={total}
                 loading={loading}
@@ -339,6 +342,7 @@ export function AuditClient() {
                 emptyState={<EmptyState title="暂无审计记录" description="调整筛选条件后重试" />}
                 data-testid="audit-table"
                 enableHeaderMenu
+                enableColumnResizing
                 toolbar={{
                   trailing: toolbarTrailing,
                   hideFilterChips: true,

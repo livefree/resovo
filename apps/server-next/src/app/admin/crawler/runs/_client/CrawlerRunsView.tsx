@@ -480,6 +480,7 @@ export function CrawlerRunsView() {
                 columns={columns}
                 rowKey={(r) => r.id}
                 mode="server"
+                enableColumnResizing
                 query={query}
                 onQueryChange={(patch) => {
                   if (patch.pagination) {

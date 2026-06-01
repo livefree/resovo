@@ -4,9 +4,7 @@
 
 ---
 
-## 进行中任务
-
-（空 / **SEQ-20260531-01 归并键剥标点统一全序列 ✅ 完全收官** 2026-06-01：A✅ B✅ C✅ D✅ **E✅**。META-23-E 全量回归 5832 passed 零回归 + 4 门禁全过 + architecture.md 字段语义收尾；用户重跑 `reenrich-backfill --mode unmatched --type anime`（453 入队）后 **JP anime 命中率 48.7%→56.4%（+7.7pp）** / 全 anime matched 145→166（+21）/ 23 条 dedupConflict 降级 candidate / meta_null=0 / 队列已 drain。详见 task-queue.md + changelog.md。）
+（空 / **CHG-DT-RESIZE-ROLLOUT 列宽可调推广 server-next 全表 ✅ 已完成** 2026-06-01：先 merge main→dev 引入 resize 核心 DTR-A..F；13 个 `<DataTable>` 渲染点全部启用 `enableColumnResizing`（4 已接线仅加开关 / 9 补 in-session columnPrefs 接线 / Merge+SourceLineAliases 额外补列宽）；4 门禁全过 5901 passed 零回归。详见 changelog。/ **SEQ-20260531-01 归并键剥标点统一全序列 ✅ 完全收官** 2026-06-01：A✅ B✅ C✅ D✅ **E✅**。META-23-E 全量回归 5832 passed 零回归 + 4 门禁全过 + architecture.md 字段语义收尾；用户重跑 `reenrich-backfill --mode unmatched --type anime`（453 入队）后 **JP anime 命中率 48.7%→56.4%（+7.7pp）** / 全 anime matched 145→166（+21）/ 23 条 dedupConflict 降级 candidate / meta_null=0 / 队列已 drain。详见 task-queue.md + changelog.md。）
 
 ---
 

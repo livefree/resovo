@@ -29,6 +29,7 @@ import {
   AdminCard,
   Modal,
   useToast,
+  type ColumnPreference,
   type TableColumn,
   type TableSortState,
   type FilterValue,
@@ -110,6 +111,7 @@ export function SourceLineAliasesClient() {
   // CHG-SN-9-CODENAME-MATRIX：codename 单元格点击触发的矩阵选择弹层
   const [pickerForRow, setPickerForRow] = useState<SourceLineRow | null>(null)
   const [pickerSaving, setPickerSaving] = useState(false)
+  const [columnPrefs, setColumnPrefs] = useState<ReadonlyMap<string, ColumnPreference>>(new Map())
 
   // DataTable v2 query state（mode='client' / 数据量 <200 / 无 pagination / 仅 sort）
   const query = useMemo(
@@ -117,10 +119,10 @@ export function SourceLineAliasesClient() {
       pagination: { page: 1, pageSize: 200 },
       sort,
       filters: new Map<string, FilterValue>(),
-      columns: new Map(),
+      columns: columnPrefs,
       selection: { selectedKeys: new Set<string>(), mode: 'page' as const },
     }),
-    [sort],
+    [sort, columnPrefs],
   )
 
   const refresh = useCallback(async () => {
@@ -245,6 +247,8 @@ export function SourceLineAliasesClient() {
       id: 'sourceSiteKey',
       header: 'site_key',
       accessor: (r) => r.sourceSiteKey,
+      width: 150, minWidth: 110,
+      enableResizing: true,
       cell: ({ row }) => (
         <code style={{ fontSize: '12px', color: 'var(--fg-muted)' }}>{row.sourceSiteKey}</code>
       ),
@@ -253,6 +257,8 @@ export function SourceLineAliasesClient() {
       id: 'sourceName',
       header: 'source_name',
       accessor: (r) => r.sourceName,
+      width: 170, minWidth: 120,
+      enableResizing: true,
       cell: ({ row }) => (
         <code style={{ fontSize: '12px', color: 'var(--fg-muted)' }}>{row.sourceName}</code>
       ),
@@ -261,6 +267,8 @@ export function SourceLineAliasesClient() {
       id: 'displayName',
       header: '别名',
       accessor: (r) => r.displayName,
+      minWidth: 160, // 仅 minWidth → 列宽可调时作 flex 列吸收余量
+      enableResizing: true,
       cell: ({ row }) =>
         row.assignedAt === null ? (
           <span style={{ color: 'var(--fg-muted)', fontStyle: 'italic' }}>
@@ -274,6 +282,8 @@ export function SourceLineAliasesClient() {
       id: 'codename',
       header: '代号 (Layer B)',
       accessor: (r) => r.codename ?? '—',
+      width: 140, minWidth: 120,
+      enableResizing: true,
       // CHG-SN-9-CODENAME-MATRIX：单元格内联点击 → 弹矩阵选择器
       cell: ({ row }) => (
         <button
@@ -302,11 +312,15 @@ export function SourceLineAliasesClient() {
       id: 'priority',
       header: '优先级',
       accessor: (r) => r.priority,
+      width: 90, minWidth: 70,
+      enableResizing: true,
     },
     {
       id: 'status',
       header: '状态',
       kind: 'computed',
+      width: 130, minWidth: 100,
+      enableResizing: true,
       accessor: (r) =>
         r.assignedAt === null
           ? 'unassigned'
@@ -333,6 +347,8 @@ export function SourceLineAliasesClient() {
       id: 'usage',
       header: '使用',
       accessor: (r) => r.videoCount,
+      width: 200, minWidth: 140,
+      enableResizing: true,
       cell: ({ row }) => {
         // FIX-3: alias-only 孤儿行（已分配别名但 video_sources 全软删 / 不存在）
         // 仍需在 UI 显示让运维监控冷却期 codename 占用
@@ -355,6 +371,7 @@ export function SourceLineAliasesClient() {
       header: '操作',
       kind: 'action',
       accessor: () => null,
+      width: 160, minWidth: 130,
       cell: ({ row }) => {
         const key = `${row.sourceSiteKey}/${row.sourceName}`
         const isAssigned = row.assignedAt !== null
@@ -488,10 +505,12 @@ export function SourceLineAliasesClient() {
           query={query}
           onQueryChange={(patch) => {
             if (patch.sort) setSort(patch.sort)
+            if (patch.columns) setColumnPrefs(patch.columns)
           }}
           emptyState={<EmptyState title="暂无别名" description="还未配置任何线路别名" />}
           data-testid="source-line-aliases-table"
           enableHeaderMenu
+          enableColumnResizing
         />
       )}
 

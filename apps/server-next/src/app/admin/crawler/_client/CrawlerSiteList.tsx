@@ -161,6 +161,7 @@ export function CrawlerSiteList({
         columns={columns}
         rowKey={(r) => r.key}
         mode="client"
+        enableColumnResizing
         query={query}
         onQueryChange={(patch) => {
           if (patch.pagination) {

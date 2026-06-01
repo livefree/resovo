@@ -32,6 +32,7 @@ import {
   AdminButton,
   KpiCard,
   useToast,
+  type ColumnPreference,
   type TableSortState,
 } from '@resovo/admin-ui'
 import {
@@ -73,6 +74,7 @@ export function SubtitlesListClient() {
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE)
   const [sort, setSort] = useState<TableSortState>({ field: 'created_at', direction: 'desc' })
+  const [columnPrefs, setColumnPrefs] = useState<ReadonlyMap<string, ColumnPreference>>(new Map())
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<Error | undefined>()
   const [retryKey, setRetryKey] = useState(0)
@@ -186,10 +188,10 @@ export function SubtitlesListClient() {
       pagination: { page, pageSize },
       sort,
       filters: new Map(),
-      columns: new Map(),
+      columns: columnPrefs,
       selection: { selectedKeys: new Set<string>(), mode: 'page' as const },
     }),
-    [page, pageSize, sort],
+    [page, pageSize, sort, columnPrefs],
   )
 
   return (
@@ -277,12 +279,14 @@ export function SubtitlesListClient() {
                     }
                   }
                   if (patch.sort) setSort(patch.sort)
+                  if (patch.columns) setColumnPrefs(patch.columns)
                 }}
                 totalRows={total}
                 loading={loading}
                 emptyState={<EmptyState title="暂无待审字幕" description="所有字幕已完成审核" />}
                 data-testid="subtitle-table"
                 enableHeaderMenu
+                enableColumnResizing
                 toolbar={{ hideFilterChips: true }}
                 pagination={{ pageSizeOptions: [10, 20, 50] }}
               />

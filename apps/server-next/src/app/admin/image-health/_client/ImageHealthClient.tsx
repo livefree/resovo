@@ -25,6 +25,7 @@ import {
   PageHeader,
   AdminButton,
   useToast,
+  type ColumnPreference,
   type TableSortState,
 } from '@resovo/admin-ui'
 import { SwitchDomainModal } from './SwitchDomainModal'
@@ -91,6 +92,8 @@ export function ImageHealthClient() {
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE)
   const [sort, setSort] = useState<TableSortState>({ field: 'created_at', direction: 'desc' })
   const [retryKey, setRetryKey] = useState(0)
+  const [missingColumnPrefs, setMissingColumnPrefs] = useState<ReadonlyMap<string, ColumnPreference>>(new Map())
+  const [domainsColumnPrefs, setDomainsColumnPrefs] = useState<ReadonlyMap<string, ColumnPreference>>(new Map())
 
   // ── 数据加载（KPI + 域名 + 缺图列表 并行） ──
   useEffect(() => {
@@ -207,10 +210,10 @@ export function ImageHealthClient() {
       pagination: { page, pageSize },
       sort,
       filters: new Map(),
-      columns: new Map(),
+      columns: missingColumnPrefs,
       selection: { selectedKeys: new Set<string>(), mode: 'page' as const },
     }),
-    [page, pageSize, sort],
+    [page, pageSize, sort, missingColumnPrefs],
   )
 
   const domainsQuery = useMemo(
@@ -218,10 +221,10 @@ export function ImageHealthClient() {
       pagination: { page: 1, pageSize: 20 },
       sort: { field: undefined, direction: 'desc' as const },
       filters: new Map(),
-      columns: new Map(),
+      columns: domainsColumnPrefs,
       selection: { selectedKeys: new Set<string>(), mode: 'page' as const },
     }),
-    [],
+    [domainsColumnPrefs],
   )
 
   return (
@@ -333,10 +336,11 @@ export function ImageHealthClient() {
               rowKey={(r) => r.domain}
               mode="client"
               query={domainsQuery}
-              onQueryChange={() => { /* client mode 内置 */ }}
+              onQueryChange={(patch) => { if (patch.columns) setDomainsColumnPrefs(patch.columns) }}
               loading={loading && domains.length === 0}
               emptyState={<EmptyState title="暂无破损域名" description="所有 CDN 域名健康" />}
               data-testid="image-health-domains-table"
+              enableColumnResizing
               pagination={{ hidden: true }}
             />
           )}
@@ -389,12 +393,14 @@ export function ImageHealthClient() {
                 }
               }
               if (patch.sort) setSort(patch.sort)
+              if (patch.columns) setMissingColumnPrefs(patch.columns)
             }}
             totalRows={missingTotal}
             loading={loading && missingRows.length === 0}
             emptyState={<EmptyState title="无缺图视频" description="所有发布视频海报状态健康" />}
             data-testid="image-health-missing-table"
             enableHeaderMenu
+            enableColumnResizing
             pagination={{ pageSizeOptions: [10, 20, 50, 100] }}
           />
         )}

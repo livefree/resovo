@@ -569,6 +569,7 @@ export function SourcesClient() {
                       columns={columns}
                       rowKey={(r) => r.videoId}
                       mode="server"
+                      enableColumnResizing
                       query={query}
                       onQueryChange={(patch) => {
                         if (patch.pagination) {

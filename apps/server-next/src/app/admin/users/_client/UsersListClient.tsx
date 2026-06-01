@@ -31,6 +31,7 @@ import {
   AdminButton,
   KpiCard,
   useToast,
+  type ColumnPreference,
   type DistinctOption,
   type FilterValue,
   type TableSortState,
@@ -107,6 +108,7 @@ export function UsersListClient() {
   // sub B（2026-05-24）：4 filter state + 1 debounce 合并为 filtersMap
   // ADR-150 D-150-4 业务 key 桥接：'q' (column.id=username) / 'role' / 'banned'
   const [filtersMap, setFiltersMap] = useState<ReadonlyMap<string, FilterValue>>(new Map())
+  const [columnPrefs, setColumnPrefs] = useState<ReadonlyMap<string, ColumnPreference>>(new Map())
   const [pendingId, setPendingId] = useState<string | null>(null)
   const [stats, setStats] = useState<UserStats | null>(null)
   const [roleMatrixOpen, setRoleMatrixOpen] = useState(false)
@@ -321,10 +323,10 @@ export function UsersListClient() {
       sort,
       // sub B：filters 用 filtersMap state（D-150-4 业务 key 桥接）
       filters: filtersMap,
-      columns: new Map(),
+      columns: columnPrefs,
       selection: { selectedKeys: new Set<string>(), mode: 'page' as const },
     }),
-    [page, pageSize, sort, filtersMap],
+    [page, pageSize, sort, filtersMap, columnPrefs],
   )
 
   // CHG-SN-6-23：导出当前页 rows 为 CSV
@@ -474,12 +476,14 @@ export function UsersListClient() {
                   if (patch.sort) setSort(patch.sort)
                   // sub B：filters patch（DataTableAutoFilter popover OK 触发 / 矩阵清空）
                   if (patch.filters) { setFiltersMap(patch.filters); setPage(1) }
+                  if (patch.columns) setColumnPrefs(patch.columns)
                 }}
                 totalRows={total}
                 loading={loading}
                 emptyState={<EmptyState title="暂无用户" description="调整筛选条件后重试" />}
                 data-testid="users-table"
                 enableHeaderMenu
+                enableColumnResizing
                 selection={{ selectedKeys: selectedIds, mode: 'page' }}
                 onSelectionChange={handleSelectionChange}
                 bulkActions={

@@ -13279,3 +13279,21 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
   - `npm run verify:file-size-budget` → exit 1，**data-table 模块 0 命中 / 新违规计数 21 全为继承的 apps/ 既有违规**（非本轨，与 DTR-A..F 一致基线）
 - **test:e2e（VIDEO 必跑）——本地环境门控，无法建立**：实测对本 worktree `:3013`（worktree 代码 / 3 webServer URL 全指 :3013 复用避免 boot）运行 `videos-column-resize.spec.ts`，5 spec 全卡在首个 `video-list-table` 可见断言（页面 307 重定向登录）。**根因 = env，非本轨代码**：server-next 服务端 auth 调真后端 `:4000`，spec 的 mock cookie 被真后端拒（page.route 仅拦浏览器请求、拦不到服务端 fetch）。**经既有 `videos.spec.ts` 同样卡在 `video-list-table` 可见确证为 admin-next e2e 本地通病**（CI/正确 env 下方可跑）。本轨 e2e spec 已编译 + `--list` 列出 5 tests + 镜像既有范式；逻辑由完整单测/组件测充分覆盖。
 - **结论**：除环境门控的 e2e 外，全部必跑门禁已建立绿态。Track: admin-ui-datatable-resize。
+
+## [CHG-DT-RESIZE-ROLLOUT] 列宽可调能力推广到 server-next 全部表格
+- **完成时间**：2026-06-01
+- **记录时间**：2026-06-01 16:30
+- **执行模型**：claude-opus-4-8（主循环）
+- **子代理**：无（仅消费既有 `enableColumnResizing` + 列字段，不改共享组件 API → 无需 Opus arch-reviewer / 无 trailer）
+- **来源**：用户指令「表格列宽可调已经开发，将功能应用到后台所有的表格中」。
+- **前置**：resize 核心（DTR-A..F）原在 main，本卡先 `git merge main → dev`（merge commit e56607e3 / main 独有 14 commit 全 resize / 解 changelog + adr-d-status.json 冲突，二者均 docs 追加类）。
+- **范围**：server-next 全部 `<DataTable>` 渲染点 13 处（v1 apps/server 已自带独立 resize 引擎且冻结期，不在范围）。
+  - **A. 仅加 `enableColumnResizing`（columnPrefs 早已接线）**：StagingPageClient / CrawlerSiteList / CrawlerRunsView / SourcesClient。
+  - **B. 补 columnPrefs in-session 接线（`useState<ReadonlyMap<string,ColumnPreference>>` + `query.columns=columnPrefs` + `if (patch.columns) setColumnPrefs(...)`）+ `enableColumnResizing`**：UsersListClient / SubmissionsListClient / AuditClient / SubtitlesListClient / ImageHealthClient（domains + missing **两表**各一份 prefs）/ RunInlinePanel / KeywordCrawlDrawer / MergeClient / SourceLineAliasesClient。
+  - **C. 额外补列宽（整表无 width，规避开 resize 后全列塌到默认 160px）**：MergeClient（作品列仅 minWidth 240 作 flex / 候选数·重合度 width 110）+ SourceLineAliasesClient（site_key 150 / source_name 170 / 别名仅 minWidth 160 作 flex / 代号 140 / 优先级 90 / 状态 130 / 使用 200 / 操作 160）。
+- **修改文件**：13 个 client（上述）+ MergeClient/SourceLineAliasesClient 内联列定义补宽。列定义独立文件（users/submissions/subtitles/crawler-site/audit/image-health columns）多数早已声明 `enableResizing`+width，本卡未改其列、仅开消费方开关。
+- **设计说明**：① 契约——`enableColumnResizing` 为 DataTable 静态开关；非 action 列默认 `enableResizing!==false` 即可调，action 列需显式 opt-in（保持操作列固定，零回归）。② 列宽提交经 `onQueryChange({columns})` 回 `query.columns`，故手写 query 消费方必须接 `patch.columns`（顺带补齐其早先失效的列隐藏持久）。③ 接线为 **in-session**（mirror StagingPageClient 既有 columnPrefs 范式 / 与现有列隐藏一致基线）；**仅 VideoListClient 经 useTableQuery 跨刷新持久** → 非 videos 表跨刷新持久属既有 follow-up（ADR-103 §4.2.2 AMENDMENT 的 N1-149-2 DB 级跨设备同步），本卡不扩范围。
+- **新增依赖/schema/路由/Props 契约变更**：无（纯消费方接线）。
+- **质量门禁**：typecheck EXIT=0（8 workspace）/ lint EXIT=0（5/5；AuditClient:187 等 react-hooks/exhaustive-deps + TabImages img 均 pre-existing 非本卡）/ **全量 448 文件 5901 passed**（唯一失败 `VideoImageSection.test.tsx` 为既有并行 flaky，隔离 21/21 全过，apps/server 海报预览，与 DataTable 无关）/ verify:adr-contracts EXIT=0（adr-d-status.json 经脚本重生成合入 ADR-174 / enum-ssot advisory 非阻塞）。
+- **e2e（VIDEO）**：沿用 DTR-E 既有结论受本地 env 门控（需 3 dev server + .env）；本卡仅改 admin 表格消费方、不触播放器/auth/search，resize 行为由 DTR-E 既有 `videos-column-resize.spec.ts` + 58 单测/组件测覆盖。
+- **范围/注意**：未改 moderation PendingPaneController（自定义列表非 DataTable）/ CrawlerClient·CrawlerRunDetailView（委托给已列入子组件）/ dev/components demo（非真实后台表）。

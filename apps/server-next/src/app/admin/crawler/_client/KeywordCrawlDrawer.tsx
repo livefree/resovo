@@ -30,6 +30,7 @@ import {
   useToast,
   type AdminSelectOption,
   type PillVariant,
+  type ColumnPreference,
   type TableColumn,
   type TableQuerySnapshot,
 } from '@resovo/admin-ui'
@@ -230,6 +231,7 @@ export function KeywordCrawlDrawer({ open, onClose, sites }: KeywordCrawlDrawerP
   const [results, setResults] = useState<readonly KeywordPreviewResult[] | null>(null)
   const [previewing, setPreviewing] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+  const [columnPrefs, setColumnPrefs] = useState<ReadonlyMap<string, ColumnPreference>>(new Map())
 
   // 默认全选 enabled 站点（disabled 不参与采集）
   const enabledSites = useMemo(() => sites.filter((s) => !s.disabled), [sites])
@@ -413,10 +415,10 @@ export function KeywordCrawlDrawer({ open, onClose, sites }: KeywordCrawlDrawerP
       pagination: { page: 1, pageSize: 200 },
       sort: { field: undefined, direction: 'desc' },
       filters: new Map(),
-      columns: new Map(),
+      columns: columnPrefs,
       selection: { selectedKeys: new Set<string>(), mode: 'page' },
     }),
-    [],
+    [columnPrefs],
   )
 
   // ── 立即采集按钮 disabled 文案 ───────────────────────────────────
@@ -526,8 +528,9 @@ export function KeywordCrawlDrawer({ open, onClose, sites }: KeywordCrawlDrawerP
               rowKey={(r) => r.key}
               mode="client"
               query={query}
-              onQueryChange={() => { /* noop — 预览表无交互态 */ }}
+              onQueryChange={(patch) => { if (patch.columns) setColumnPrefs(patch.columns) }}
               density="compact"
+              enableColumnResizing
               pagination={{ hidden: true }}
               data-testid="keyword-crawl-preview-table"
             />

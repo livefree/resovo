@@ -34,6 +34,7 @@ import {
   Segment,
   VideoPicker,
   useToast,
+  type ColumnPreference,
   type TableColumn,
   type TableSortState,
   type SegmentItem,
@@ -292,6 +293,7 @@ function CandidatesSection() {
   const [pageSize, setPageSize] = useState(20)
   // ADR-150 阶段 5 EP-4 follow-up（2026-05-25）：Merge sort 全栈打通 / Service 层 sort
   const [sort, setSort] = useState<TableSortState>({ field: undefined, direction: 'desc' })
+  const [columnPrefs, setColumnPrefs] = useState<ReadonlyMap<string, ColumnPreference>>(new Map())
   const [data, setData] = useState<readonly CandidateGroup[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -372,6 +374,8 @@ function CandidatesSection() {
       enableSorting: true, // ADR-150 阶段 5 EP-4 follow-up sort 全栈打通
       header: '作品',
       accessor: (g) => g.titleNormalized,
+      minWidth: 240, // 仅 minWidth（无 width）→ 列宽可调时作 flex 列吸收余量
+      enableResizing: true,
       cell: ({ row }) => (
         <div>
           <div style={{ fontWeight: 500 }}>{row.titleNormalized}</div>
@@ -385,6 +389,8 @@ function CandidatesSection() {
       enableSorting: true, // ADR-150 阶段 5 EP-4 follow-up sort 全栈打通
       header: '候选数',
       accessor: (g) => g.videos.length,
+      width: 110, minWidth: 90,
+      enableResizing: true,
       cell: ({ row }) => <span>{row.videos.length} 条</span>,
     },
     {
@@ -393,6 +399,8 @@ function CandidatesSection() {
       enableSorting: true, // ADR-150 阶段 5 EP-4 follow-up sort 全栈打通（默认 score DESC / 切 ASC 看低重合度）
       header: '重合度',
       accessor: (g) => g.score,
+      width: 110, minWidth: 90,
+      enableResizing: true,
       cell: ({ row }) => <span style={SCORE_BADGE_STYLE}>{(row.score * 100).toFixed(1)}%</span>,
     },
   ], [])
@@ -402,9 +410,9 @@ function CandidatesSection() {
     // ADR-150 阶段 5 EP-4 follow-up（2026-05-25）：sort 真 state 接通（非 hardcode）
     sort,
     filters: new Map(),
-    columns: new Map(),
+    columns: columnPrefs,
     selection: { selectedKeys: new Set<string>(), mode: 'page' as const },
-  }), [page, pageSize, sort])
+  }), [page, pageSize, sort, columnPrefs])
 
   if (loading && data.length === 0) return <LoadingState variant="skeleton" skeletonRows={6} />
   if (error) return <ErrorState error={error} onRetry={load} />
@@ -452,6 +460,7 @@ function CandidatesSection() {
         columns={columns}
         rowKey={(g) => g.groupKey}
         mode="server"
+        enableColumnResizing
         query={query}
         onQueryChange={(patch) => {
           if (patch.pagination) {
@@ -460,6 +469,7 @@ function CandidatesSection() {
           }
           // ADR-150 阶段 5 EP-4 follow-up（2026-05-25）：sort patch 接通
           if (patch.sort) setSort(patch.sort)
+          if (patch.columns) setColumnPrefs(patch.columns)
         }}
         totalRows={total}
         loading={loading}
