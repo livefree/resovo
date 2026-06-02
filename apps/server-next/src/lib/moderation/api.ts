@@ -3,47 +3,15 @@ import type {
   PendingQueueResponse,
   VideoQueueRow,
   VideoSourceLine,
-  SourceHealthEvent,
   ReviewLabel,
-  DualSignalDisplayState,
 } from '@resovo/types'
+// CHG-VSR-PRE-2（R1）：source 操作真源已移至 sources/api；本文件 re-export 保后兼容
+import type { SourceLineRowData } from '@/lib/sources/types'
 
-// ── 本地类型（GET /admin/sources snake_case 响应行）─────────────────
-
-export interface ContentSourceRow {
-  readonly id: string
-  readonly probe_status: string
-  readonly render_status: string
-  readonly latency_ms: number | null
-  readonly is_active: boolean
-  readonly source_name: string
-  readonly episode_number: number | null
-  readonly source_site_key: string | null
-  readonly source_url: string
-  readonly video_title: string | null
-  /** Migration 061 行级乐观锁版本字段（CHG-SN-5-PRE-01-C） */
-  readonly updated_at: string
-  // ── CHG-368-B-FOLLOWUP-CONTENT-SOURCE-ROW + CHG-368-B-FOLLOWUP-AUTO-RETIRED-LABEL ──
-  // ADR-164 alias 派生字段集 3 字段（D-164-2 + D-164-4 + D-164-8）：
-  // listAdminSources LEFT JOIN source_line_aliases (source_site_key, source_name) PK 匹配
-  // 透传到 LinesPanel codename badge + 退役行 opacity + 自动/手动文案区分（aggregate.ts 取首行）
-  /** 运维短码（"泰山-2" / 未分配 → null / D-164-2） */
-  readonly codename: string | null
-  /** 软删时间戳（在役 → null / 已退役 → ISO timestamp / D-164-4） */
-  readonly retired_at: string | null
-  /** 退役方式（D-164-8 / true=worker 自动 / false=人工 / DB DEFAULT false） */
-  readonly auto_retired: boolean
-}
-
-export interface LineHealthPage {
-  readonly data: readonly SourceHealthEvent[]
-  readonly pagination: {
-    readonly total: number
-    readonly page: number
-    readonly limit: number
-    readonly hasNext: boolean
-  }
-}
+// ── 本地类型 ───────────────────────────────────────────────────────
+// CHG-VSR-PRE-2（R1/Y1）：ContentSourceRow 收敛为中性 SourceLineRowData 别名（历史消费方零破坏）。
+// LineHealthPage / source 操作真源移至 sources/api（见本文件「线路」段 re-export）。
+export type ContentSourceRow = SourceLineRowData
 
 export interface StagingApiRow {
   readonly id: string
@@ -177,130 +145,30 @@ export async function updateStaffNote(id: string, note: string | null): Promise<
   await apiClient.patch<unknown>(`/admin/moderation/${id}/staff-note`, { note })
 }
 
-// ── 线路 ──────────────────────────────────────────────────────────────
-
-export async function fetchVideoSources(videoId: string): Promise<ContentSourceRow[]> {
-  const res = await apiClient.get<{ data: ContentSourceRow[]; total: number; page: number; limit: number }>(
-    `/admin/sources?videoId=${encodeURIComponent(videoId)}&limit=100`,
-  )
-  return res.data
-}
-
-export async function toggleSource(
-  videoId: string,
-  sourceId: string,
-  isActive: boolean,
-  /** CHG-SN-5-PRE-01-C：行级乐观锁；从 ContentSourceRow.updated_at 透传，server 不匹配抛 409 REVIEW_RACE。*/
-  expectedUpdatedAt?: string,
-): Promise<{ id: string; is_active: boolean; updated_at: string }> {
-  const res = await apiClient.patch<{ data: { id: string; is_active: boolean; updated_at: string } }>(
-    `/admin/videos/${videoId}/sources/${sourceId}`,
-    {
-      isActive,
-      ...(expectedUpdatedAt ? { expectedUpdatedAt } : {}),
-    },
-  )
-  return res.data
-}
-
-export async function disableDeadSources(videoId: string): Promise<{ disabled: number }> {
-  const res = await apiClient.post<{ data: { disabled: number } }>(
-    `/admin/videos/${videoId}/sources/disable-dead`,
-    {},
-  )
-  return res.data
-}
-
-export async function refetchSources(videoId: string): Promise<void> {
-  await apiClient.post<unknown>(`/admin/videos/${videoId}/refetch-sources`, {})
-}
-
-// ── 单源 inline 诊断动作（CHG-351-C + CHG-356 AMENDMENT）─────────────
-// AMENDMENT 2026-05-27（CHG-356）：BREAKING — 异步占位 jobId → 同步快探 + UPDATE DB
-//   旧 { probeJobId, queued: true } → 新 { newProbeStatus, latencyMs, queued: false }
-//   前端 LinesPanel 接 response 后立即 setLines update probe_status/render_status/latency_ms
-
-export interface SingleSourceProbeResult {
-  readonly sourceId: string
-  readonly newProbeStatus: 'ok' | 'dead'
-  readonly latencyMs: number | null
-  readonly queued: false
-}
-
-export interface SingleSourceRenderCheckResult {
-  readonly sourceId: string
-  readonly newRenderStatus: 'ok' | 'dead'
-  readonly queued: false
-}
-
-export async function probeOneSource(sourceId: string): Promise<SingleSourceProbeResult> {
-  const res = await apiClient.post<{ data: SingleSourceProbeResult }>(
-    `/admin/sources/${encodeURIComponent(sourceId)}/probe`,
-    {},
-  )
-  return res.data
-}
-
-export async function renderCheckOneSource(sourceId: string): Promise<SingleSourceRenderCheckResult> {
-  const res = await apiClient.post<{ data: SingleSourceRenderCheckResult }>(
-    `/admin/sources/${encodeURIComponent(sourceId)}/render-check`,
-    {},
-  )
-  return res.data
-}
-
-// ── 视频级 batch 探测/试播（CHG-357 / ADR-158 AMENDMENT 2）────────
-
-export interface BatchProbeResultItem {
-  readonly sourceId: string
-  readonly newProbeStatus: 'ok' | 'dead'
-  readonly latencyMs: number | null
-  readonly error?: string
-}
-export interface BatchProbeResult {
-  readonly videoId: string
-  readonly results: ReadonlyArray<BatchProbeResultItem>
-  readonly summary: { readonly total: number; readonly ok: number; readonly dead: number; readonly failed: number }
-}
-
-export interface BatchRenderCheckResultItem {
-  readonly sourceId: string
-  readonly newRenderStatus: 'ok' | 'dead'
-  readonly error?: string
-}
-export interface BatchRenderCheckResult {
-  readonly videoId: string
-  readonly results: ReadonlyArray<BatchRenderCheckResultItem>
-  readonly summary: { readonly total: number; readonly ok: number; readonly dead: number; readonly failed: number }
-}
-
-export async function batchProbeVideo(videoId: string): Promise<BatchProbeResult> {
-  const res = await apiClient.post<{ data: BatchProbeResult }>(
-    `/admin/videos/${encodeURIComponent(videoId)}/sources/batch-probe`,
-    {},
-  )
-  return res.data
-}
-
-export async function batchRenderCheckVideo(videoId: string): Promise<BatchRenderCheckResult> {
-  const res = await apiClient.post<{ data: BatchRenderCheckResult }>(
-    `/admin/videos/${encodeURIComponent(videoId)}/sources/batch-render-check`,
-    {},
-  )
-  return res.data
-}
-
-// ── 线路健康事件 ──────────────────────────────────────────────────────
-
-export async function fetchLineHealth(
-  videoId: string,
-  sourceId: string,
-  page = 1,
-): Promise<LineHealthPage> {
-  return apiClient.get<LineHealthPage>(
-    `/admin/moderation/${videoId}/line-health/${sourceId}?page=${page}&limit=20`,
-  )
-}
+// ── 线路（视频级播放源操作）──────────────────────────────────────────
+// CHG-VSR-PRE-2（R1 方案 B）：实现已移至 `@/lib/sources/api`（单一真源）；端点不变。
+// 唯一历史消费方 moderation/_client/LinesPanel 已迁移至 useSourceLinesController；
+// 此处 re-export 保后兼容（旧 import path 不破坏）。
+export {
+  fetchVideoSources,
+  toggleSource,
+  disableDeadSources,
+  refetchSources,
+  probeOneSource,
+  renderCheckOneSource,
+  batchProbeVideo,
+  batchRenderCheckVideo,
+  fetchLineHealth,
+} from '@/lib/sources/api'
+export type {
+  LineHealthPage,
+  SingleSourceProbeResult,
+  SingleSourceRenderCheckResult,
+  BatchProbeResultItem,
+  BatchProbeResult,
+  BatchRenderCheckResultItem,
+  BatchRenderCheckResult,
+} from '@/lib/sources/api'
 
 // ── 视频审计日志（RightPane.History · CHG-SN-4-FIX-C）─────────────────
 
@@ -375,13 +243,8 @@ export async function fetchRejectedVideos(page = 1, limit = 30): Promise<Rejecte
 }
 
 // ── 工具函数 ──────────────────────────────────────────────────────────
-
-export function toDisplayState(status: string): DualSignalDisplayState {
-  if (status === 'ok' || status === 'partial' || status === 'dead' || status === 'pending') {
-    return status
-  }
-  return 'unknown'
-}
+// CHG-VSR-PRE-2：toDisplayState 真源移至 sources/api；re-export 保后兼容（moderation-api.test 消费）
+export { toDisplayState } from '@/lib/sources/api'
 
 // ── CHG-SN-8-04-VIEW · ADR-137：类似视频召回（GET /admin/moderation/:id/similar）
 

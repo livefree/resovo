@@ -3,6 +3,7 @@
  */
 
 import { apiClient } from '@/lib/api-client'
+import type { DualSignalDisplayState, SourceHealthEvent } from '@resovo/types'
 import type {
   VideoGroupListResult,
   VideoGroupListParams,
@@ -11,6 +12,7 @@ import type {
   SourceLineAlias,
   SourceLineRow,
   SourceRouteBySite,
+  SourceLineRowData,
 } from './types'
 
 /**
@@ -208,4 +210,148 @@ export async function reprobeRoute(siteKey: string, sourceName: string): Promise
 export async function deleteRoute(siteKey: string, sourceName: string): Promise<RouteDeleteResult> {
   const result = await apiClient.delete<{ data: RouteDeleteResult }>(buildRoutePath(siteKey, sourceName))
   return result.data
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// CHG-VSR-PRE-2（R1 方案 B）：视频级播放源操作（单一真源）
+//
+// 从 `lib/moderation/api` 移入，统一供 `useSourceLinesController` + 三消费方使用；
+// `lib/moderation/api` re-export 这些符号保后兼容（blast radius 已核实：仅 LinesPanel 消费）。
+// 端点不变（与原 moderation/api 逐一对齐），故无后端回归。
+// ════════════════════════════════════════════════════════════════════════════
+
+export interface LineHealthPage {
+  readonly data: readonly SourceHealthEvent[]
+  readonly pagination: {
+    readonly total: number
+    readonly page: number
+    readonly limit: number
+    readonly hasNext: boolean
+  }
+}
+
+// ── 单源 inline 诊断结果（CHG-356 AMENDMENT：同步快探 + UPDATE DB）─────
+export interface SingleSourceProbeResult {
+  readonly sourceId: string
+  readonly newProbeStatus: 'ok' | 'dead'
+  readonly latencyMs: number | null
+  readonly queued: false
+}
+export interface SingleSourceRenderCheckResult {
+  readonly sourceId: string
+  readonly newRenderStatus: 'ok' | 'dead'
+  readonly queued: false
+}
+
+// ── 视频级 batch 探测/试播（CHG-357 / ADR-158 AMENDMENT 2）────────
+export interface BatchProbeResultItem {
+  readonly sourceId: string
+  readonly newProbeStatus: 'ok' | 'dead'
+  readonly latencyMs: number | null
+  readonly error?: string
+}
+export interface BatchProbeResult {
+  readonly videoId: string
+  readonly results: ReadonlyArray<BatchProbeResultItem>
+  readonly summary: { readonly total: number; readonly ok: number; readonly dead: number; readonly failed: number }
+}
+export interface BatchRenderCheckResultItem {
+  readonly sourceId: string
+  readonly newRenderStatus: 'ok' | 'dead'
+  readonly error?: string
+}
+export interface BatchRenderCheckResult {
+  readonly videoId: string
+  readonly results: ReadonlyArray<BatchRenderCheckResultItem>
+  readonly summary: { readonly total: number; readonly ok: number; readonly dead: number; readonly failed: number }
+}
+
+/**
+ * 拉取视频全部播放源（含禁用源）。
+ * 待校准点①：显式 `active=all`，确保禁用源行不丢（后端 `/admin/sources` 默认亦为 'all'）。
+ */
+export async function fetchVideoSources(videoId: string): Promise<SourceLineRowData[]> {
+  const params = new URLSearchParams({ videoId, active: 'all', limit: '100', page: '1' })
+  const res = await apiClient.get<{ data: SourceLineRowData[]; total: number; page: number; limit: number }>(
+    `/admin/sources?${params}`,
+  )
+  return res.data
+}
+
+export async function toggleSource(
+  videoId: string,
+  sourceId: string,
+  isActive: boolean,
+  /** CHG-SN-5-PRE-01-C：行级乐观锁；不匹配抛 409 REVIEW_RACE。*/
+  expectedUpdatedAt?: string,
+): Promise<{ id: string; is_active: boolean; updated_at: string }> {
+  const res = await apiClient.patch<{ data: { id: string; is_active: boolean; updated_at: string } }>(
+    `/admin/videos/${videoId}/sources/${sourceId}`,
+    { isActive, ...(expectedUpdatedAt ? { expectedUpdatedAt } : {}) },
+  )
+  return res.data
+}
+
+export async function disableDeadSources(videoId: string): Promise<{ disabled: number }> {
+  const res = await apiClient.post<{ data: { disabled: number } }>(
+    `/admin/videos/${videoId}/sources/disable-dead`,
+    {},
+  )
+  return res.data
+}
+
+export async function refetchSources(videoId: string, siteKeys?: readonly string[]): Promise<void> {
+  await apiClient.post<unknown>(
+    `/admin/videos/${videoId}/refetch-sources`,
+    siteKeys && siteKeys.length > 0 ? { siteKeys: [...siteKeys] } : {},
+  )
+}
+
+export async function probeOneSource(sourceId: string): Promise<SingleSourceProbeResult> {
+  const res = await apiClient.post<{ data: SingleSourceProbeResult }>(
+    `/admin/sources/${encodeURIComponent(sourceId)}/probe`,
+    {},
+  )
+  return res.data
+}
+
+export async function renderCheckOneSource(sourceId: string): Promise<SingleSourceRenderCheckResult> {
+  const res = await apiClient.post<{ data: SingleSourceRenderCheckResult }>(
+    `/admin/sources/${encodeURIComponent(sourceId)}/render-check`,
+    {},
+  )
+  return res.data
+}
+
+export async function batchProbeVideo(videoId: string): Promise<BatchProbeResult> {
+  const res = await apiClient.post<{ data: BatchProbeResult }>(
+    `/admin/videos/${encodeURIComponent(videoId)}/sources/batch-probe`,
+    {},
+  )
+  return res.data
+}
+
+export async function batchRenderCheckVideo(videoId: string): Promise<BatchRenderCheckResult> {
+  const res = await apiClient.post<{ data: BatchRenderCheckResult }>(
+    `/admin/videos/${encodeURIComponent(videoId)}/sources/batch-render-check`,
+    {},
+  )
+  return res.data
+}
+
+export async function fetchLineHealth(
+  videoId: string,
+  sourceId: string,
+  page = 1,
+): Promise<LineHealthPage> {
+  return apiClient.get<LineHealthPage>(
+    `/admin/moderation/${videoId}/line-health/${sourceId}?page=${page}&limit=20`,
+  )
+}
+
+export function toDisplayState(status: string): DualSignalDisplayState {
+  if (status === 'ok' || status === 'partial' || status === 'dead' || status === 'pending') {
+    return status
+  }
+  return 'unknown'
 }
