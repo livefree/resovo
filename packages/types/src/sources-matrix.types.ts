@@ -80,9 +80,10 @@ export interface VideoGroupRow {
   readonly disabledCount?: number
   /**
    * 视频级最高源分辨率档（展示用）。**逐源取 `quality_detected ?? quality` 回退后，跨该视频全部源取最高档**
-   * （档位序 `4K > 2K > 1080P > 720P > 480P > 360P > 240P`，复用 canonical `QUALITY_ORDER`/`ResolutionTier`；全空 → `null`）。
-   * `null` = 无任何已知质量（显「质量未知」，**不并入低质量**）。类型/命名复用 canonical `ResolutionTier`（admin-moderation.types.ts，与 `StagingRow.qualityHighest` 同名同型）。
-   * ⚠ **聚合口径勿照搬 LinesPanel `pickHighestQuality`（aggregate.ts）——它仅取 `quality_detected`、不含 `quality` 回退**；
+   * （档位序 `4K > 2K > 1080P > 720P > 480P > 360P > 240P`，4K 最高；全空 → `null`）。
+   * `null` = 无任何已知质量（显「质量未知」，**不并入低质量**）。值域/命名复用 canonical 类型 `ResolutionTier`（admin-moderation.types.ts，
+   * 与 `StagingRow.qualityHighest` 同名同型）；上述档位序**无共享常量**（`aggregate.ts` 的 `QUALITY_ORDER` 是 admin-ui module-local、非导出），由 producer 卡 3 在 SQL CASE 内实现。
+   * ⚠ **聚合口径勿照搬 LinesPanel `pickHighestQuality`（aggregate.ts，module-local）——它仅取 `quality_detected`、不含 `quality` 回退**；
    *   本字段须含 `quality_detected ?? quality` 回退链（设计 §0.2/§3.3，059 D-12），producer 卡 3 不得直接复用该函数。
    * 排序/低质量判定走服务端 rank 派生键（见 `VideoGroupListParams.lowQuality` / `sortField='quality'`，非 DTO 字段）。卡 3 填充
    */
