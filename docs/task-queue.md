@@ -2697,3 +2697,32 @@ CODENAME-MATRIX-E2E (依赖 Wave 3 验收期补丁 CODENAME-MATRIX ✅)
 - 卡 2/3 发现需**新增** admin route（非扩展现有）→ 先起独立 ADR + Opus PASS（`verify:endpoint-adr`），不得直接加 route。
 - 复合列被要求挂多条件筛选 → 记 QUESTION，不扩 DataTable 公共契约（§2.6 阻断项 1）。
 - 发现需触碰 `user_submissions` 写入 → 暂停（本批次裁决不做，§5.1）。
+
+---
+
+## [SEQ-20260602-01] 后台表格表头行高标准化（表头高度与 body 密度解耦）
+
+- **状态**：✅ 已完成
+- **创建时间**：2026-06-02 17:30
+- **最后更新时间**：2026-06-02 17:42
+- **目标**：统一 server-next 各后台列表表头行高，消除 videos/sources（poster=80px）与其余页面（comfortable=40px）的表头高度断裂。
+- **范围**：`packages/admin-ui` DataTable 表头高度逻辑（内部行为，不动公共 Props 契约、不新增 token）。
+- **依赖**：无（独立，用户直接指派）。
+
+1. **CHG-DT-HEAD-HEIGHT-DECOUPLE** — 表头行高与 body 行密度解耦（表头恒用 `--row-h` 40px）（状态：✅ 已完成 2026-06-02 / claude-opus-4-8 / 子代理 无）
+    - 创建时间：2026-06-02 17:30
+    - 完成时间：2026-06-02 17:42
+    - 建议模型：sonnet（共享组件内部行为修正 + 单测；不改 Props 契约 / 不新增 token → 不触发 Opus 门禁）
+    - 变更原因：DataTable 表头高度 inline `height: rowHeight` 复用 body 行 density 令牌（`data-table.tsx:142-145` + `data-table-header-row.tsx:85`），poster 密度页面（videos/sources）表头被撑到 80px，与其余 40px 页面视觉断裂。v1 ModernDataTable 表头 `h-12`(48px) 本就与密度解耦——v2 误耦合属回归。
+    - 影响的已完成任务：CHG-VSR-4-A/4-B（videos poster 列表）、CHG-VSR-5-A（sources poster 列表）—— 仅表头视觉收敛，body 行/列/筛选零变更。
+    - 文件范围：`packages/admin-ui/src/components/data-table/data-table.tsx`（拆 `headerHeight` 常量 = `var(--row-h)`，停止把 density rowHeight 传表头）；`packages/admin-ui/src/components/data-table/data-table-header-row.tsx`（内部 prop `rowHeight`→`headerHeight`，未公开导出）；`tests/unit/components/admin-ui/table/data-table.test.tsx`（+3 解耦断言）。
+    - 变更内容：表头行高全站恒定 `var(--row-h)`（40px），与 density 无关；body 行高保留 density 令牌（poster 80 / compact 32 / comfortable 40）。不新增 token、不改公共 Props、不动 `--row-h-relaxed` 悬空令牌（记后续 token 清理）。
+    - 验收要点：videos/sources 表头 80→40px；其余页面零变化；body 行高/poster 缩略图零变化；全量单测零回归 + 新增解耦断言通过。
+    - 完成备注：表头高度从 `rowHeight`（density 令牌）拆出独立 `headerHeight = 'var(--row-h)'` 常量恒定传 `DataTableHeaderRow`；内部 prop `rowHeight`→`headerHeight` 重命名（`DataTableHeaderRowProps` 未公开导出，零外部影响）；body 行 `rowStyle` 仍用 density `rowHeight` 不变。**videos/sources 表头 80→40px**、crawler 抽屉 32→40px、其余页面不变；body 行高/poster 缩略图零变化。门禁全过：typecheck/lint/verify:adr-contracts EXIT=0 / **全量 454 files 6018 passed 0 failed 零 flaky**（净 +3 解耦断言：poster/compact/comfortable 三态表头恒 `var(--row-h)`）。无新端点/schema/ADR/token。共享层沉淀评估：本身即共享组件内部修正，无需再沉淀。执行模型: claude-opus-4-8
+
+### SEQ-20260602-01 设计标准（确立）
+
+- **后台表格表头行高 = 全站恒定 `var(--row-h)`（40px），与 body 行 density 完全解耦。**
+- body 行高继续按 density 取令牌：comfortable 40 / compact 32 / poster 80 / relaxed 48。
+- 表头不随 poster/compact 伸缩（表头只渲染列名）；新表格不得给表头单独设密度高度。
+- `--row-h-relaxed`（48px）当前为 DataTable 不可达悬空令牌（density union 无 relaxed），本卡不删，记后续 token 清理。

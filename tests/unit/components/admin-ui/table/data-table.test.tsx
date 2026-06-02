@@ -486,3 +486,59 @@ describe('DataTable — SSR 零 throw', () => {
     expect(html).toContain('Score')
   })
 })
+
+// ── 表头行高与 body 密度解耦（CHG-DT-HEAD-HEIGHT-DECOUPLE）─────────────
+// 表头只渲染列名，不随 poster/compact 密度伸缩；全站恒用 var(--row-h)（40px）。
+// body 行高仍按 density 取令牌。querySelectorAll('[role="row"]')[0] = 表头行 / [1] = 首个 body 行。
+
+describe('DataTable — 表头行高与 body 密度解耦', () => {
+  it('density="poster"：表头行恒为 var(--row-h)，body 行用 var(--row-h-poster)', () => {
+    const { container } = render(
+      <DataTable
+        rows={ROWS}
+        columns={COLUMNS}
+        rowKey={(r) => r.id}
+        mode="client"
+        query={makeSnapshot()}
+        onQueryChange={() => {}}
+        density="poster"
+      />,
+    )
+    const allRows = container.querySelectorAll<HTMLElement>('[role="row"]')
+    expect(allRows[0].style.height).toBe('var(--row-h)')        // 表头不随 poster 撑高
+    expect(allRows[1].style.height).toBe('var(--row-h-poster)') // body 仍取 poster 密度
+  })
+
+  it('density="compact"：表头行仍为 var(--row-h)（不随密度收缩），body 行用 var(--row-h-compact)', () => {
+    const { container } = render(
+      <DataTable
+        rows={ROWS}
+        columns={COLUMNS}
+        rowKey={(r) => r.id}
+        mode="client"
+        query={makeSnapshot()}
+        onQueryChange={() => {}}
+        density="compact"
+      />,
+    )
+    const allRows = container.querySelectorAll<HTMLElement>('[role="row"]')
+    expect(allRows[0].style.height).toBe('var(--row-h)')         // 表头恒定，不收缩
+    expect(allRows[1].style.height).toBe('var(--row-h-compact)') // body 取 compact 密度
+  })
+
+  it('缺省 density（comfortable）：表头与 body 行高一致 var(--row-h)', () => {
+    const { container } = render(
+      <DataTable
+        rows={ROWS}
+        columns={COLUMNS}
+        rowKey={(r) => r.id}
+        mode="client"
+        query={makeSnapshot()}
+        onQueryChange={() => {}}
+      />,
+    )
+    const allRows = container.querySelectorAll<HTMLElement>('[role="row"]')
+    expect(allRows[0].style.height).toBe('var(--row-h)')
+    expect(allRows[1].style.height).toBe('var(--row-h)')
+  })
+})

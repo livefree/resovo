@@ -38,7 +38,11 @@ function SortIcon({ direction }: { direction: 'asc' | 'desc' | 'none' }) {
 
 export interface DataTableHeaderRowProps<T> {
   readonly gridTemplate: string
-  readonly rowHeight: string
+  /**
+   * 表头行高（CHG-DT-HEAD-HEIGHT-DECOUPLE）：与 body 行密度解耦，由主组件恒定传入
+   * `var(--row-h)`（40px）。表头只渲染列名，不随 poster/compact 密度伸缩。
+   */
+  readonly headerHeight: string
   readonly hasSelection: boolean
   readonly allPageSelected: boolean
   readonly somePageSelected: boolean
@@ -58,7 +62,7 @@ export interface DataTableHeaderRowProps<T> {
 
 export function DataTableHeaderRow<T>({
   gridTemplate,
-  rowHeight,
+  headerHeight,
   hasSelection,
   allPageSelected,
   somePageSelected,
@@ -82,7 +86,7 @@ export function DataTableHeaderRow<T>({
         style={{
           display: 'grid',
           gridTemplateColumns: gridTemplate,
-          height: rowHeight,
+          height: headerHeight,
         }}
       >
         {hasSelection && (

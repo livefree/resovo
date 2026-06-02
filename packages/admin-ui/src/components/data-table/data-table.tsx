@@ -143,6 +143,11 @@ export function DataTable<T>(props: DataTableProps<T>): React.ReactElement {
     density === 'compact' ? 'var(--row-h-compact)' :
     density === 'poster'  ? 'var(--row-h-poster)'  :
     'var(--row-h)'
+  // CHG-DT-HEAD-HEIGHT-DECOUPLE：表头行高与 body 行密度**解耦**。表头只渲染列名，
+  // 不随 poster/compact 伸缩；全站恒用 --row-h（40px），消除 poster 页面（videos/sources）
+  // 表头被撑到 80px 与其余 40px 页面的视觉断裂（对齐 v1 ModernDataTable 固定表头高度范式）。
+  // body 行高仍按 density 取令牌（rowHeight），缩略图等密度内容不受影响。
+  const headerHeight = 'var(--row-h)'
   const hasSelection = selection !== undefined
 
   // DTR-B 列宽可调（C1：静态门控，只读 props 字面值，不依赖可见列）。
@@ -345,7 +350,7 @@ export function DataTable<T>(props: DataTableProps<T>): React.ReactElement {
         {/* sticky header（DTR-A 抽至 DataTableHeaderRow）*/}
         <DataTableHeaderRow
           gridTemplate={gridColumnsValue}
-          rowHeight={rowHeight}
+          headerHeight={headerHeight}
           hasSelection={hasSelection}
           allPageSelected={allPageSelected}
           somePageSelected={somePageSelected}

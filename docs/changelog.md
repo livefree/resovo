@@ -13655,3 +13655,21 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **注意事项**：① **审核台 R-4 保持快照**：moderation/LinesPanel probeState/renderState/title 仍在 open 时快照（不改实时派生），并发 probe 期间已开抽屉头部 BarSignal 不跳变 = **零行为变更**（避免触碰并发关键路径）；TabLines/sources 保持实时派生。② **并发缺陷修复**：hook 的 requestToken 修复了原 3 处共有的 stale 覆盖缺陷（快速切源 A→B 时 A 的延迟响应不再覆盖 B / close 后响应不回写）—— 正向修复非回归。③ **TabLines 分页轻微一致性变化**：单页（total<=limit）不再显示「1/1（共 N 条）」分页栏（原 always-pass → 标准化 `total>limit`，与 moderation/sources 一致）；moderation/sources 本就 `total>20` 故无变化。④ **审核台 e2e 既有 env 阻塞**：moderation specs 因本机鉴权 env 登录重定向（PRE-2 已记录 / 页面加载前失败、LinesPanel 从未渲染 → 与本卡 drawer 改动无关、非回归 / 其 fall-through 已 200 与 videos 的 continue() 不同根因，修复属共享 moderation 测试基建超本卡范围）；drawer 关键路径回归由 12 例 hook 单测（开合/分页/并发/error）+ typecheck + 全量零回归覆盖。⑤ `LineHealthDrawerPagination` 未从 @resovo/admin-ui barrel 导出 → hook 内定义同形态 `HealthDrawerPagination`（结构兼容 LineHealthDrawerProps.pagination）。
 - **Codex stop-time review FIX（retry 重取错误页）**：原实现 `setPage(targetPage)` 仅在 `load` 的 `.then` 成功分支设置 → 翻页**失败**时 `state.page` 仍为「上次成功页」，`retry()` 重取错误页（page 1 而非用户尝试的失败页 2）。这是对 `SourceLinesExpand` 原行为（`changeHealthPage` 立即 `setHealthPage`）的回归 + `moderation` 原潜在 bug。修复：`setPage` 移到 `open`(=1)/`changePage`(=nextPage) **立即设置**（拉取前），`load` 不再设 page → retry 重取「尝试页」（对齐 SourceLinesExpand 正确范式，且保留 token 并发守卫 events/total/limit 回写）。**修复后 3 消费方 retry 行为统一正确**（moderation 从潜在错误页修正为尝试页）。强化 U-6 为精确回归守卫（断言 reject page 2 后 `state.page===2` + retry 调 `fetchHealth('src-A', 2)`，旧实现取 1 会红）。复跑 hook 12/12 + typecheck/lint EXIT=0 + 全量 454 files 6015 passed（4 unhandled rejection = `use-filter-presets.ts:162` post-teardown `window is not defined` 既有 flaky〔CHG-VSR-2 已记录〕，隔离重跑 7/7 干净，与本 hook 无关）。
 - **[AI-CHECK]**：分层 NO 违反（hook 在 lib/sources，UI 经 admin-ui）；跨模块 NO（hook 不 import 消费方 / 不下沉 i18n，R-5）；重复逻辑 **消除**（3 处 → 1 hook）；hack/any/空 catch NO（catch 内明确分支）；颜色无关；函数/文件规模 NO（hook ~150 行声明性）；契约经 arch-reviewer Opus CONDITIONAL PASS。结论：SAFE。
+
+## [CHG-DT-HEAD-HEIGHT-DECOUPLE] 后台表格表头行高与 body 密度解耦（表头恒用 `--row-h` 40px）
+- **完成时间**：2026-06-02
+- **记录时间**：2026-06-02 17:42
+- **执行模型**：claude-opus-4-8（建议 sonnet；共享组件内部行为修正 + 单测，不改 Props 契约 / 不新增 token → 不触发 Opus 门禁，主循环模型已为 Opus 故直接实施）
+- **子代理**：无（未改公共 Props 类型、未新增 token 字段，不触发 CLAUDE.md §模型路由强制 Opus 子代理三条件）
+- **背景（根因）**：后台各列表页表头行高不一致——videos/sources（`density="poster"`）表头 **80px**、其余主列表（缺省 comfortable）40px、crawler 抽屉（compact）32px。根因：DataTable 表头高度 inline `height: rowHeight` 复用了 body 行的 density 令牌（`data-table.tsx` 单一 `rowHeight` 同时喂表头 `DataTableHeaderRow` 与 body `rowStyle`）。表头只渲染列名、无理由随 body 密度伸缩；poster 密度页面表头被撑到 80px。对照 v1 `ModernDataTable` 表头 `h-12`(48px) 本就与密度**解耦**——v2 重构误把表头耦合进密度令牌，属回归。
+- **设计标准（确立）**：**后台表格表头行高 = 全站恒定 `var(--row-h)`（40px），与 body 行 density 完全解耦**；body 行高继续按 density 取令牌（comfortable 40 / compact 32 / poster 80 / relaxed 48）；新表格不得给表头单独设密度高度。
+- **修改文件**：
+  - `packages/admin-ui/src/components/data-table/data-table.tsx` — 拆出独立 `const headerHeight = 'var(--row-h)'`（密度无关），改 `<DataTableHeaderRow headerHeight={headerHeight} />`；body `rowStyle` 的 `height: rowHeight`（density 令牌）保持不变。
+  - `packages/admin-ui/src/components/data-table/data-table-header-row.tsx` — 内部 prop `rowHeight`→`headerHeight`（`DataTableHeaderRowProps` 未从 barrel 公开导出，零外部影响）+ JSDoc 说明解耦语义；`height: headerHeight`。
+  - `tests/unit/components/admin-ui/table/data-table.test.tsx` — +3 解耦断言（`querySelectorAll('[role="row"]')[0]`=表头 / `[1]`=首 body 行）：poster→表头 `var(--row-h)` & body `var(--row-h-poster)`；compact→表头 `var(--row-h)` & body `var(--row-h-compact)`；缺省→两者 `var(--row-h)`。
+- **新增依赖**：无
+- **数据库变更**：无（纯前端共享组件内部行为；无新 route/schema/ADR/token）
+- **门禁/验收**：typecheck EXIT=0 / lint 5 successful EXIT=0 / verify:adr-contracts EXIT=0 / **全量 454 files 6018 passed 0 failed 零 flaky**（净 +3 解耦断言）/ data-table.test 28/28。
+- **效果**：videos/sources 表头 **80→40px**、crawler 抽屉 32→40px、其余主列表（staging/merge/crawler 站点/runs/source-line-aliases/audit）不变；body 行高与 poster 缩略图零变化。
+- **注意事项**：① `--row-h-relaxed`（48px）当前为 DataTable 不可达悬空令牌（density union 仅 comfortable|compact|poster），本卡不删，记后续 token 清理。② 复用现有 `--row-h` 而非新增 `--row-h-head` token，避免触发令牌层新增字段的 Opus 门禁、改动最收敛（用户已确认采用 40px 不新增 token）。
+- **[AI-CHECK]**：分层 NO 违反（共享组件内部）；跨模块 NO；重复逻辑 NO（消除「表头误用 body 密度」的隐性耦合）；hack/any/空 catch NO；颜色无关（仅高度令牌）；函数/文件规模 NO；公共 Props 契约未变。结论：SAFE。
