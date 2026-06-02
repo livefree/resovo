@@ -126,34 +126,47 @@ describe('useSourceLinesController', () => {
     expect(results).toContainEqual({ action: 'toggle', status: 'failed', code: 'STATE_INVALID' })
   })
 
-  it('toggle 失败回滚：仅还原目标行，不整组覆盖并发更新（Codex stop-time review）', async () => {
-    vi.mocked(api.fetchVideoSources).mockResolvedValue([
-      makeRow({ id: 'a', is_active: true }),
-      makeRow({ id: 'b', is_active: true, probe_status: 'ok' }),
-    ])
-    let rejectToggle!: (e: unknown) => void
-    vi.mocked(api.toggleSource).mockReturnValue(new Promise((_res, rej) => { rejectToggle = rej }))
+  it('toggle 失败：以 server 真相重 fetch 对账，同一行并发 server-confirmed is_active 不被回滚覆盖（Codex stop-time review）', async () => {
+    vi.mocked(api.fetchVideoSources)
+      .mockResolvedValueOnce([makeRow({ id: 'a', is_active: true, probe_status: 'dead', render_status: 'dead' })])
+      // 失败后重 fetch 的 server 真相：A 已被（并发 disableDead）确认为 inactive
+      .mockResolvedValueOnce([makeRow({ id: 'a', is_active: false, probe_status: 'dead', render_status: 'dead' })])
+    vi.mocked(api.toggleSource).mockRejectedValue(Object.assign(new Error('network'), { code: 'INTERNAL' }))
+    const results: SourceActionResult[] = []
+
+    const { result } = renderHook(() => useSourceLinesController('v1', { onActionResult: (r) => results.push(r) }))
+    await flush()
+
+    await act(async () => { await result.current[1].toggleEpisode('a', false) })
+
+    // 重 fetch 对账 server 真相 → A=inactive（旧版整组/单行回滚会错误还原为 active=prevActive）
+    expect(api.fetchVideoSources).toHaveBeenCalledTimes(2)
+    expect(result.current[0].lines.find((l) => l.id === 'a')!.is_active).toBe(false)
+    expect(results).toContainEqual({ action: 'toggle', status: 'failed', code: 'INTERNAL' })
+  })
+
+  it('toggle 失败 + 重 fetch 亦失败 → 退化为仅回滚目标行（不还原 stale 整组）', async () => {
+    vi.mocked(api.fetchVideoSources)
+      .mockResolvedValueOnce([
+        makeRow({ id: 'a', is_active: true }),
+        makeRow({ id: 'b', is_active: true, probe_status: 'ok' }),
+      ])
+      .mockRejectedValueOnce(new Error('refetch down'))
+    vi.mocked(api.toggleSource).mockRejectedValue(new Error('network'))
     vi.mocked(api.probeOneSource).mockResolvedValue({ sourceId: 'b', newProbeStatus: 'dead', latencyMs: null, queued: false })
 
     const { result } = renderHook(() => useSourceLinesController('v1'))
     await flush()
 
-    // A 的 toggle 挂起（乐观置 inactive）
-    let toggleDone!: Promise<void>
-    act(() => { toggleDone = result.current[1].toggleEpisode('a', false) })
-
-    // 并发：B 探测完成（server-confirmed 改 B.probe_status='dead'）
+    // 并发：B 探测 server-confirmed dead（在 toggle A 失败前）
     await act(async () => { await result.current[1].probeEpisode('b') })
     expect(result.current[0].lines.find((l) => l.id === 'b')!.probe_status).toBe('dead')
 
-    // A 非 race 失败 → 仅回滚 A，不得抹掉 B 的并发更新（旧整组快照还原会回退 B 到 'ok'）
-    await act(async () => {
-      rejectToggle(Object.assign(new Error('network'), { code: 'INTERNAL' }))
-      await toggleDone
-    })
+    // A toggle 失败 + 重 fetch 也失败 → 退化为仅回滚 A，不动 B（B 并发更新保留）
+    await act(async () => { await result.current[1].toggleEpisode('a', false) })
 
-    expect(result.current[0].lines.find((l) => l.id === 'a')!.is_active).toBe(true)     // A 回滚
-    expect(result.current[0].lines.find((l) => l.id === 'b')!.probe_status).toBe('dead') // B 并发更新保留
+    expect(result.current[0].lines.find((l) => l.id === 'a')!.is_active).toBe(true)      // A 退化回滚
+    expect(result.current[0].lines.find((l) => l.id === 'b')!.probe_status).toBe('dead') // B 不被整组还原抹掉
   })
 
   it('disableDead：dead 行本地置 inactive + onActionResult success', async () => {

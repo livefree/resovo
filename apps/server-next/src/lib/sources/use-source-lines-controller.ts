@@ -160,14 +160,10 @@ export function useSourceLinesController(
 
   useEffect(() => { reload() }, [reload])
 
-  // ── toggle（R2 乐观更新 + 409 重 fetch + 失败仅回滚目标行）───────────────
+  // ── toggle（R2 乐观更新 + 失败一律 server 真相重 fetch 对账）───────────────
   const toggleEpisode = useCallback(async (episodeId: string, nextActive: boolean) => {
     const target = linesRef.current.find((l) => l.id === episodeId)
     const prevActive = target?.is_active
-    // Codex stop-time review FIX：失败时**仅回滚本次目标行** is_active，绝不整组还原启动快照
-    //   （整组还原会抹掉期间并发操作对其他行的 server-confirmed 更新 → 客户端偏离 server 真相 + 恢复 stale 行）
-    const rollbackTarget = () =>
-      setLines((prev) => prev.map((l) => l.id === episodeId ? { ...l, is_active: prevActive ?? l.is_active } : l))
     setTogglingIds((s) => new Set(s).add(episodeId))
     setLines((prev) => prev.map((l) => l.id === episodeId ? { ...l, is_active: nextActive } : l))
     try {
@@ -177,19 +173,24 @@ export function useSourceLinesController(
       ))
       emit({ action: 'toggle', status: 'success' })
     } catch (e: unknown) {
-      if (isRaceError(e)) {
-        // 409：以 server 真相覆盖整组（重 fetch 失败则退化为仅回滚目标行，不还原 stale 快照）
-        try {
-          const fresh = await fetchVideoSources(videoId)
-          if (videoIdRef.current === videoId) setLines(fresh)
-        } catch {
-          rollbackTarget()
-        }
-        emit({ action: 'toggle', status: 'race' })
-      } else {
-        rollbackTarget()
-        emit({ action: 'toggle', status: 'failed', code: getErrorCode(e) })
+      // Codex stop-time review FIX：失败（含 race 与非 race）一律以 server 真相重 fetch 整组对账。
+      //   任何本地回滚（整组快照 / 单行还原 prevActive）都可能覆盖期间并发操作对**同一行**
+      //   （如 disableDead 改同行 is_active）或**其他行**的 server-confirmed 更新 → 偏离 server 真相。
+      //   唯一安全口径是 server 真相；仅当重 fetch 亦失败（如断网）才退化为最小本地回退：
+      //   仅当目标行仍持有本次乐观值时才还原（绝不动已被并发改成别的值的行）。
+      try {
+        const fresh = await fetchVideoSources(videoId)
+        if (videoIdRef.current === videoId) setLines(fresh)
+      } catch {
+        setLines((prev) => prev.map((l) =>
+          (l.id === episodeId && l.is_active === nextActive)
+            ? { ...l, is_active: prevActive ?? l.is_active }
+            : l,
+        ))
       }
+      emit(isRaceError(e)
+        ? { action: 'toggle', status: 'race' }
+        : { action: 'toggle', status: 'failed', code: getErrorCode(e) })
     } finally {
       setTogglingIds((s) => { const next = new Set(s); next.delete(episodeId); return next })
     }
