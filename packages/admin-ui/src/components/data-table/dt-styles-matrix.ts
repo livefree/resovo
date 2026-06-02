@@ -154,7 +154,9 @@ export const DT_CSS_MATRIX = `/* ── ColumnMatrixMenu（ADR-149 D-149-2/5/6/7
  *   - 删除 [data-kind-radio]* 全部规则（kind radio section 已被组件删除） */
 [data-autofilter-popover] {
   width: 320px;
-  max-height: 480px;
+  /* CHG-VSR-DTAF-VIEWPORT：max-height 由 header-menu 注入 --dt-autofilter-max-height（min(480, 视口可用)）
+   * 驱动，缺省回退 480px 维持原行为；配合 flip-up 定位确保 footer [data-actions]「应用」恒在视口内。 */
+  max-height: var(--dt-autofilter-max-height, 480px);
   display: flex;
   flex-direction: column;
   font-size: 13px;
@@ -242,6 +244,9 @@ export const DT_CSS_MATRIX = `/* ── ColumnMatrixMenu（ADR-149 D-149-2/5/6/7
   margin: 0;
   padding: 0;
   max-height: 240px;
+  /* CHG-VSR-DTAF-VIEWPORT：min-height:0 让 value-list 在 popover 受视口约束收缩时随 flex 父收缩
+   * （配合 [data-section="value"] flex:1 1 auto），footer 不被挤出；空间充足时仍受 max-height:240 限。 */
+  min-height: 0;
   overflow-y: auto;
   border: 1px solid var(--border-subtle);
   border-radius: 4px;

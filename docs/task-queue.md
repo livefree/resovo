@@ -2649,10 +2649,13 @@ CODENAME-MATRIX-E2E (依赖 Wave 3 验收期补丁 CODENAME-MATRIX ✅)
     - 建议模型：sonnet
     - 范围：动漫集数 / Bangumi 筛选 / 连接失败 / 试播失败 / 待补源 / 待探测 / 批量探测 / 长剧集展开；e2e（VIDEO/SOURCES 路径）。
     - 验收要点：`test -- --run` + `test:e2e` + `verify:adr-contracts` 全过；零回归。
-    - 依赖：CHG-VSR-4-B / CHG-VSR-5-B / CHG-VSR-6 / **CHG-VSR-DTAF-VIEWPORT（e2e 门禁前置：sources smoke test 3 现红）**。
+    - 依赖：CHG-VSR-4-B ✅ / CHG-VSR-5-B ✅ / CHG-VSR-6 ✅ / **CHG-VSR-DTAF-VIEWPORT ✅（e2e 门禁前置已解：sources smoke test 3 实测转绿 2026-06-02）**。
 
-12.5. **CHG-VSR-DTAF-VIEWPORT** — `DataTableAutoFilter` popover 视口溢出修复（高页面「应用」按钮不可达）（状态：⬜ 未开始 — CHG-VSR-5-A 实测暴露 / 既有缺陷）
+12.5. **CHG-VSR-DTAF-VIEWPORT** — `DataTableAutoFilter` popover 视口溢出修复（高页面「应用」按钮不可达）（状态：✅ 已完成 2026-06-02 / claude-opus-4-8 / 子代理 无）
     - 创建时间：2026-06-02
+    - 实际开始：2026-06-02 14:05
+    - 完成时间：2026-06-02 14:35
+    - 完成备注：**视口感知定位**。`header-menu.tsx` 纯函数 `computeHeaderMenuPosition`——下方放得下完整 **且 footer 距视口底 ≥ SAFE_BOTTOM_GAP(56)** → 向下；否则上方放得下/够用(≥160) → flip-up（CSS `bottom` 锚定表头上沿，footer 落表头上方避底部叠层）；兜底向下贴底 + maxHeight 内滚 + 水平右溢 clamp；统一 `reposition(measure)` 替换原恒向下两 effect（开启实测自然宽高缓存、scroll/resize 仅重锚）。`dt-styles-matrix.ts` autofilter `max-height` 改 `var(--dt-autofilter-max-height, 480px)` + value-list `min-height:0`。**根因**：原恒 `top:rect.bottom+4` 致中部表头 footer 压视口底/右下角撞 Next dev 浮标。**实测 e2e sources smoke 4/4 PASS**（test 3 目标转绿；test 4 纯 maxHeight 方案曾回归〔footer 压右下角〕→ SAFE_BOTTOM_GAP flip-up 修复，stash 基线对照确认）。门禁全过 + 全量 6002 passed + 1 flaky（StagingEditPanel 隔离过，无关）+ 9 新定位单测。无公开 Props/契约变更 → 不触发 Opus trailer。详见 changelog。执行模型: claude-opus-4-8
     - 建议模型：sonnet（admin-ui 定位逻辑，若改 Props/行为契约则 Opus 评审）
     - **症状**：`/admin/sources` 列头菜单（如「探测」列 ⋯）打开 `DataTableAutoFilter` popover 后，底部 `[data-actions]`「应用」按钮落在视口折叠线下方不可达（playwright `scrollIntoView` 对浮层无效，e2e `sources-sort-filter-smoke.spec.ts` test 3 `filter-probe-status` 红，54 次重试失败）。
     - **根因**：`[data-autofilter-popover]` `max-height: 480px`（`dt-styles-matrix.ts:157`）+ **无视口翻转（flip-up）/ 无 available-below 约束**。从页面靠下列头（sources 页有 4 KPI 卡，表头 y≈350）向下展开 → popover 底部 y≈830 > 720 视口。`[data-value-list]` 内部 240px 滚动不解决整 popover 元素底部出屏。
