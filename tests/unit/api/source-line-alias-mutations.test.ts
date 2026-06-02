@@ -12,21 +12,16 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-vi.mock('@/api/db/queries/sources-matrix', () => ({
-  listVideoGroups: vi.fn(),
-  getVideoGroupStats: vi.fn(),
-  getVideoMatrix: vi.fn(),
+// CHG-VSR-3 / ADR-117 AMENDMENT 3（D-117-VSR3-7 方案 A）：别名 CRUD 符号迁至 source-line-aliases.ts，mock 路径同步
+vi.mock('@/api/db/queries/source-line-aliases', () => ({
   listLineAliases: vi.fn(),
+  listAllSourceLines: vi.fn(),
   upsertLineAlias: vi.fn(),
   upsertLineAliasFull: vi.fn(),
   retireLineAlias: vi.fn(),
   updateLineAliasPriority: vi.fn(),
   findCodenameAssignments: vi.fn(),
   findLineAlias: vi.fn(),
-  listRoutesBySite: vi.fn(),
-  selectRouteSampleSource: vi.fn(),
-  countRouteSources: vi.fn(),
-  softDeleteRouteBySite: vi.fn(),
 }))
 
 vi.mock('@/api/db/queries/video-merge-mutations', () => ({
@@ -40,7 +35,7 @@ vi.mock('@/api/services/AuditLogService', () => ({
 }))
 
 import { SourcesMatrixService } from '@/api/services/SourcesMatrixService'
-import * as queries from '@/api/db/queries/sources-matrix'
+import * as queries from '@/api/db/queries/source-line-aliases'
 import { MOUNTAIN_CODENAMES } from '@resovo/types'
 import { AppError } from '@/api/lib/errors'
 

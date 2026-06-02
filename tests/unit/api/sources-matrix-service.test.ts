@@ -14,10 +14,17 @@ import { SourcesMatrixService, aggregateSignal } from '@/api/services/SourcesMat
 
 // ── mock DB 查询 ───────────────────────────────────────────────────
 
+// CHG-VSR-3 / ADR-117 AMENDMENT 3（D-117-VSR3-7 方案 A）：queries 拆 4 文件，vi.mock 按符号物理位置分路径
 vi.mock('@/api/db/queries/sources-matrix', () => ({
   listVideoGroups: vi.fn(),
   getVideoGroupStats: vi.fn(),
+}))
+
+vi.mock('@/api/db/queries/video-matrix', () => ({
   getVideoMatrix: vi.fn(),
+}))
+
+vi.mock('@/api/db/queries/source-line-aliases', () => ({
   listLineAliases: vi.fn(),
   upsertLineAlias: vi.fn(),
   findLineAlias: vi.fn(),
@@ -34,6 +41,8 @@ vi.mock('@/api/services/AuditLogService', () => ({
 }))
 
 import * as queries from '@/api/db/queries/sources-matrix'
+import * as videoMatrixQueries from '@/api/db/queries/video-matrix'
+import * as aliasQueries from '@/api/db/queries/source-line-aliases'
 import * as mergeMutations from '@/api/db/queries/video-merge-mutations'
 import { AuditLogService } from '@/api/services/AuditLogService'
 
@@ -112,6 +121,34 @@ describe('SourcesMatrixService.listVideoGroups', () => {
     expect(result.data).toHaveLength(0)
     expect(result.total).toBe(0)
   })
+
+  it('CHG-VSR-3：派生列双层透传（raw → Service map 显式枚举，非 spread）', async () => {
+    vi.mocked(queries.listVideoGroups).mockResolvedValueOnce({
+      data: [{
+        videoId: 'v1', title: 't', shortId: 'abc', type: 'movie', year: 2024, coverUrl: null,
+        lineCount: 2, sourceCount: 5,
+        probeStatuses: ['ok'], renderStatuses: ['ok'],
+        updatedAt: '2026-01-01T00:00:00Z', siteKeys: ['bilibili'],
+        activeSourceCount: 3, disabledCount: 2, connectFailCount: 1, renderFailCount: 0,
+        pendingProbeCount: 1, qualityHighest: '1080P', qualityCoverage: 0.8,
+        latencyMedianMs: 150, needsSource: false, isPublished: true, lastCheckedAt: '2026-01-02T00:00:00Z',
+      }],
+      total: 1, page: 1, limit: 20,
+    })
+    const svc = new SourcesMatrixService(mockPool)
+    const r = (await svc.listVideoGroups({})).data[0]
+    expect(r?.activeSourceCount).toBe(3)
+    expect(r?.disabledCount).toBe(2)
+    expect(r?.connectFailCount).toBe(1)
+    expect(r?.renderFailCount).toBe(0)
+    expect(r?.pendingProbeCount).toBe(1)
+    expect(r?.qualityHighest).toBe('1080P')
+    expect(r?.qualityCoverage).toBe(0.8)
+    expect(r?.latencyMedianMs).toBe(150)
+    expect(r?.needsSource).toBe(false)
+    expect(r?.isPublished).toBe(true)
+    expect(r?.lastCheckedAt).toBe('2026-01-02T00:00:00Z')
+  })
 })
 
 // ── SourcesMatrixService.getVideoMatrix ──────────────────────────
@@ -121,11 +158,11 @@ describe('SourcesMatrixService.getVideoMatrix', () => {
     vi.mocked(mergeMutations.fetchVideosByIds).mockResolvedValueOnce([
       { id: 'v1', deleted_at: null } as never,
     ])
-    vi.mocked(queries.getVideoMatrix).mockResolvedValueOnce([])
+    vi.mocked(videoMatrixQueries.getVideoMatrix).mockResolvedValueOnce([])
     const svc = new SourcesMatrixService(mockPool)
     const lines = await svc.getVideoMatrix('v1')
     expect(lines).toEqual([])
-    expect(queries.getVideoMatrix).toHaveBeenCalledWith(mockPool, 'v1')
+    expect(videoMatrixQueries.getVideoMatrix).toHaveBeenCalledWith(mockPool, 'v1')
   })
 
   it('NOT_FOUND：video 不存在 → AppError 404（D-117-9）', async () => {
@@ -136,7 +173,7 @@ describe('SourcesMatrixService.getVideoMatrix', () => {
       httpStatus: 404,
       message: expect.stringContaining('不存在'),
     })
-    expect(queries.getVideoMatrix).not.toHaveBeenCalled()
+    expect(videoMatrixQueries.getVideoMatrix).not.toHaveBeenCalled()
   })
 
   it('NOT_FOUND：video 已软删除 → AppError 404（D-117-9）', async () => {
@@ -163,8 +200,8 @@ describe('SourcesMatrixService.upsertLineAlias', () => {
   const ACTOR_ID = '00000000-0000-0000-0000-000000000001'
 
   it('INSERT 路径：beforeJsonb=null + afterJsonb 含新值（audit payload 内容显式断言 R-MID-1）', async () => {
-    vi.mocked(queries.findLineAlias).mockResolvedValueOnce(null)
-    vi.mocked(queries.upsertLineAlias).mockResolvedValueOnce(ALIAS_AFTER)
+    vi.mocked(aliasQueries.findLineAlias).mockResolvedValueOnce(null)
+    vi.mocked(aliasQueries.upsertLineAlias).mockResolvedValueOnce(ALIAS_AFTER)
     const svc = new SourcesMatrixService(mockPool)
     const auditSvcInstance = (AuditLogService as unknown as ReturnType<typeof vi.fn>).mock.results.at(-1)!.value
 
@@ -195,8 +232,8 @@ describe('SourcesMatrixService.upsertLineAlias', () => {
       displayName: '旧别名',
       updatedAt: '2026-05-01T00:00:00Z',
     }
-    vi.mocked(queries.findLineAlias).mockResolvedValueOnce(ALIAS_BEFORE)
-    vi.mocked(queries.upsertLineAlias).mockResolvedValueOnce(ALIAS_AFTER)
+    vi.mocked(aliasQueries.findLineAlias).mockResolvedValueOnce(ALIAS_BEFORE)
+    vi.mocked(aliasQueries.upsertLineAlias).mockResolvedValueOnce(ALIAS_AFTER)
     const svc = new SourcesMatrixService(mockPool)
     const auditSvcInstance = (AuditLogService as unknown as ReturnType<typeof vi.fn>).mock.results.at(-1)!.value
 
@@ -214,8 +251,8 @@ describe('SourcesMatrixService.upsertLineAlias', () => {
   })
 
   it('targetId 是复合键 ${siteKey}/${sourceName}（ADR-117 §audit log 协议）', async () => {
-    vi.mocked(queries.findLineAlias).mockResolvedValueOnce(null)
-    vi.mocked(queries.upsertLineAlias).mockResolvedValueOnce(ALIAS_AFTER)
+    vi.mocked(aliasQueries.findLineAlias).mockResolvedValueOnce(null)
+    vi.mocked(aliasQueries.upsertLineAlias).mockResolvedValueOnce(ALIAS_AFTER)
     const svc = new SourcesMatrixService(mockPool)
     const auditSvcInstance = (AuditLogService as unknown as ReturnType<typeof vi.fn>).mock.results.at(-1)!.value
 

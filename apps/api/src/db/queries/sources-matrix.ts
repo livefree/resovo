@@ -1,8 +1,12 @@
 /**
- * sources-matrix.ts — /admin/sources 线路矩阵聚合查询（ADR-117 / CHG-SN-5-11-PATCH-2）
+ * sources-matrix.ts — /admin/sources 视频分组聚合查询（ADR-117 / CHG-VSR-3）
  *
  * D-117-7 / -3 修订（2026-05-13 CHG-SN-5-11-PATCH-2）：类型契约迁移至 `@resovo/types`
  * `sources-matrix.types.ts`（共享层），本文件仅 re-export + 提供 DB 查询。
+ *
+ * CHG-VSR-3 / ADR-117 AMENDMENT 3（D-117-VSR3-7）：拆分单一关注点——
+ * 别名 CRUD → `source-line-aliases.ts` / routes-by-site + 行 mutations → `source-routes.ts`
+ * / 单视频矩阵 → `video-matrix.ts`；本文件仅保留视频分组 KPI 统计 + 列表（含派生列 / KPI②维度）。
  *
  * 查询按 ADR-114-NEGATED 复合键约束：(source_site_key, source_name) 是线路的唯一标识。
  * 聚合业务逻辑（aggregateSignal）已迁至 Service 层（SourcesMatrixService），不在 DB 查询层。
@@ -10,32 +14,21 @@
 
 import type { Pool } from 'pg'
 import type {
-  DualSignalState,
+  ResolutionTier,
   SourceSegment,
   VideoGroupRow,
   VideoGroupListResult,
   VideoGroupListParams,
   VideoGroupStats,
-  EpisodeCell,
-  LineMatrixRow,
-  SourceLineAlias,
-  SourceLineRow,
-  SourceRouteBySite,
 } from '@resovo/types'
 
 // re-export 共享类型，保持向后兼容（apps/api 内部消费方）
 export type {
-  DualSignalState,
   SourceSegment,
   VideoGroupRow,
   VideoGroupListResult,
   VideoGroupListParams,
   VideoGroupStats,
-  EpisodeCell,
-  LineMatrixRow,
-  SourceLineAlias,
-  SourceLineRow,
-  SourceRouteBySite,
 }
 
 /**
@@ -43,6 +36,8 @@ export type {
  * 由 Service 层（SourcesMatrixService）通过 aggregateSignal 派生 VideoGroupRow.probeStatus/renderStatus。
  *
  * CHG-SN-5-11-PATCH-2 P0-2 完成 Service 抽出：DB 查询层不持有业务规则。
+ * CHG-VSR-3：派生列（activeSourceCount / qualityHighest 等，VideoGroupRow optional 字段）
+ * 在本层直接产出，由 Service map 显式透传（D-117-VSR3 派生列双层透传）。
  */
 export interface VideoGroupRowRaw extends Omit<VideoGroupRow, 'probeStatus' | 'renderStatus'> {
   readonly probeStatuses: readonly string[]
@@ -72,66 +67,77 @@ interface DbVideoGroupRow {
   updated_at: string
   // HOTFIX-PATCH-2B-FIX1（2026-05-25）：cell 显示该行跨的站点列表（STRING_AGG DISTINCT csv）
   site_keys: string | null
+  // ── CHG-VSR-3 派生列（D-117-VSR3-1..3）：bigint COUNT 经 node-pg 回传为 string ──
+  active_source_count: string
+  disabled_count: string
+  connect_fail_count: string
+  render_fail_count: string
+  pending_probe_count: string
+  quality_coverage: string | number | null
+  latency_median_ms: string | number | null
+  quality_highest: string | null
+  needs_source: boolean
+  is_published: boolean
+  last_checked_at: string | null
 }
 
-interface DbEpisodeCellRow {
-  episode_number: number
-  source_id: string
-  source_url: string
-  probe_status: string
-  render_status: string
-  is_active: boolean
-  source_site_key: string | null
-  source_name: string
-  display_name: string | null
-}
-
-interface DbAliasRow {
-  source_site_key: string
-  source_name: string
-  display_name: string
-  // Migration 079 / ADR-164 D-164-2..D-164-8 新增 4 列
-  codename: string | null
-  priority: number
-  retired_at: string | null
-  auto_retired: boolean
-  updated_at: string
-}
-
-/** ADR-164 D-164-12 / CHG-368-B-A1：DbAliasRow → SourceLineAlias 映射 helper（复用 4 SELECT 路径）*/
-function mapAliasRow(r: DbAliasRow): SourceLineAlias {
-  return {
-    sourceSiteKey: r.source_site_key,
-    sourceName: r.source_name,
-    displayName: r.display_name,
-    codename: r.codename,
-    priority: r.priority,
-    retiredAt: r.retired_at,
-    autoRetired: r.auto_retired,
-    updatedAt: r.updated_at,
-  }
-}
+/**
+ * D-117-VSR3-1：`quality_rank` CASE 7 档单一定义（Q1 SELECT 派生列 / Q2 stats 子查询 / Q3
+ * quickFilters low_quality EXISTS 三处共用，禁散落）。逐源 `quality_detected ?? quality` 回退口径
+ * （CHG-VSR-1 注释）；**勿照搬 LinesPanel `pickHighestQuality`**（aggregate.ts，仅 quality_detected、丢 quality 回退）。
+ *
+ * alias 参数化以适配不同 video_sources 别名（主查询 `vs` / EXISTS 子查询 `vsN`，避免别名遮蔽既有 vsN 约定）。
+ * alias 值由本模块硬编码（非用户输入），无注入面。档位序：4K=7 …… 240P=1 / 无共享常量（producer 在 SQL CASE 实现）。
+ */
+const QUALITY_RANK_EXPR = (alias: string): string =>
+  `CASE COALESCE(${alias}.quality_detected, ${alias}.quality) ` +
+  `WHEN '4K' THEN 7 WHEN '2K' THEN 6 WHEN '1080P' THEN 5 WHEN '720P' THEN 4 ` +
+  `WHEN '480P' THEN 3 WHEN '360P' THEN 2 WHEN '240P' THEN 1 ELSE NULL END`
 
 // ── 查询：视频分组 KPI 统计 ───────────────────────────────────────
 
+/**
+ * KPI 统计（D-117-VSR3-4）：①维度（source_check_status）口径**零变更**保留 total/active/dead/orphan，
+ * ②维度（video_sources 探测/质量聚合）新增 abnormal/needsSource/pendingProbe/lowQuality。
+ *
+ * **BLOCKER 结构约束**：①（videos 单行属性）与②（video_sources 聚合 / lowQuality 需视频级 MAX）
+ * **禁同层 FILTER 双算** → 走 per-video 子查询 g（每视频一行）+ 外层 COUNT FILTER。
+ * total=有源视频数（INNER JOIN 天然），与旧 `EXISTS(video_sources)` 等价（单测逐值回归断言）。
+ */
 export async function getVideoGroupStats(db: Pool): Promise<VideoGroupStats> {
   const result = await db.query<{
     total: string
     active: string
     dead: string
     orphan: string
+    abnormal: string
+    needs_source: string
+    pending_probe: string
+    low_quality: string
   }>(
     `SELECT
-       COUNT(DISTINCT v.id)::TEXT AS total,
-       COUNT(DISTINCT v.id) FILTER (WHERE v.source_check_status IN ('ok', 'partial'))::TEXT AS active,
-       COUNT(DISTINCT v.id) FILTER (WHERE v.source_check_status = 'all_dead')::TEXT AS dead,
-       COUNT(DISTINCT v.id) FILTER (WHERE v.source_check_status = 'all_dead' AND v.is_published = false)::TEXT AS orphan
-     FROM videos v
-     WHERE v.deleted_at IS NULL
-       AND EXISTS (
-         SELECT 1 FROM video_sources vs
-         WHERE vs.video_id = v.id AND vs.deleted_at IS NULL
-       )`,
+       COUNT(*)::TEXT AS total,
+       COUNT(*) FILTER (WHERE g.source_check_status IN ('ok', 'partial'))::TEXT AS active,
+       COUNT(*) FILTER (WHERE g.source_check_status = 'all_dead')::TEXT AS dead,
+       COUNT(*) FILTER (WHERE g.source_check_status = 'all_dead' AND g.is_published = false)::TEXT AS orphan,
+       COUNT(*) FILTER (WHERE g.has_abnormal)::TEXT AS abnormal,
+       COUNT(*) FILTER (WHERE g.needs_source)::TEXT AS needs_source,
+       COUNT(*) FILTER (WHERE g.has_pending)::TEXT AS pending_probe,
+       COUNT(*) FILTER (WHERE g.quality_rank_max < 4)::TEXT AS low_quality
+     FROM (
+       SELECT
+         v.id,
+         v.source_check_status,
+         v.is_published,
+         bool_or(vs.probe_status = 'dead' OR vs.render_status = 'dead') AS has_abnormal,
+         bool_or(vs.probe_status = 'pending') AS has_pending,
+         (COUNT(*) FILTER (WHERE vs.is_active AND vs.probe_status <> 'dead' AND vs.render_status <> 'dead') = 0) AS needs_source,
+         MAX(${QUALITY_RANK_EXPR('vs')}) AS quality_rank_max
+       FROM videos v
+       JOIN video_sources vs ON vs.video_id = v.id AND vs.deleted_at IS NULL
+       WHERE v.deleted_at IS NULL
+       GROUP BY v.id, v.source_check_status, v.is_published
+     ) g`,
   )
   const row = result.rows[0]
   return {
@@ -139,6 +145,11 @@ export async function getVideoGroupStats(db: Pool): Promise<VideoGroupStats> {
     active: parseInt(row?.active ?? '0', 10),
     dead: parseInt(row?.dead ?? '0', 10),
     orphan: parseInt(row?.orphan ?? '0', 10),
+    // CHG-VSR-3 ②维度（探测/质量）
+    abnormal: parseInt(row?.abnormal ?? '0', 10),
+    needsSource: parseInt(row?.needs_source ?? '0', 10),
+    pendingProbe: parseInt(row?.pending_probe ?? '0', 10),
+    lowQuality: parseInt(row?.low_quality ?? '0', 10),
   }
 }
 
@@ -146,11 +157,15 @@ export async function getVideoGroupStats(db: Pool): Promise<VideoGroupStats> {
 
 // ADR-150 阶段 5 EP-4（2026-05-24）：sources sort 全栈白名单（与 PATCH-2 + distinct-whitelist 同范式）
 // 字段映射：column.id → SQL ORDER BY 表达式（含 SELECT alias / 表前缀 / aggregate function）
+// CHG-VSR-3 / D-117-VSR3-6：新增 activeSources/quality/lastChecked 走 SELECT 别名引用（裸标识符，IDENT 正则零放宽）
 const SOURCES_SORT_FIELD_MAP: Record<string, string> = {
   video: 'v.title',              // column.id 'video' / cell 显示 title + cover 复合
   lineCount: 'line_count',       // SELECT alias / COUNT(DISTINCT line_key)
   sourceCount: 'source_count',   // SELECT alias / COUNT(vs.id)
   updated_at: 'MAX(vs.updated_at)', // 默认 fallback / aggregate
+  activeSources: 'active_source_count', // SELECT alias / COUNT FILTER is_active（数值序，无 ::TEXT cast）
+  quality: 'quality_rank_max',          // SELECT alias / MAX(quality_rank) int
+  lastChecked: 'last_checked_at',       // SELECT alias / COALESCE(MAX(last_probed_at), MAX(updated_at)) ISO TEXT
 }
 
 // AMD2-PATCH-2 风格 SQL identifier 正则启动期断言（防 SQL 注入 / 与 SORT_IDENT_REGEX 同范式）
@@ -217,6 +232,34 @@ export async function listVideoGroups(
     paramValues.push(params.renderStatus)
   }
 
+  // CHG-VSR-3 / D-117-VSR3-5：quickFilters 谓词全落 WHERE EXISTS（探测维度② / 质量），多卡可组合 AND。
+  // 无 param 值（谓词常量 / QUALITY_RANK_EXPR 硬编码 alias），不占 $idx。
+  const quickFilters = new Set(params.quickFilters ?? [])
+  if (quickFilters.has('has_abnormal')) {
+    conditions.push(
+      `EXISTS (SELECT 1 FROM video_sources vs5 WHERE vs5.video_id = v.id AND (vs5.probe_status = 'dead' OR vs5.render_status = 'dead') AND vs5.deleted_at IS NULL)`,
+    )
+  }
+  if (quickFilters.has('pending_probe')) {
+    conditions.push(
+      `EXISTS (SELECT 1 FROM video_sources vs6 WHERE vs6.video_id = v.id AND vs6.probe_status = 'pending' AND vs6.deleted_at IS NULL)`,
+    )
+  }
+  if (quickFilters.has('needs_source')) {
+    conditions.push(
+      `NOT EXISTS (SELECT 1 FROM video_sources vs7 WHERE vs7.video_id = v.id AND vs7.is_active AND vs7.probe_status <> 'dead' AND vs7.render_status <> 'dead' AND vs7.deleted_at IS NULL)`,
+    )
+  }
+  // D-117-VSR3-5：`lowQuality` 列筛选 与 quickFilters 'low_quality' **入口归一**（OR 合流单份谓词，不双 push）。
+  // 低质量 = 含已知质量（COALESCE 非空）AND 无任何源 rank>=4（即最高 < 720P）；质量未知（全空）不命中（NOT EXISTS 自然成立但前置 EXISTS 已知质量过滤掉）。
+  const wantLowQuality = params.lowQuality === true || quickFilters.has('low_quality')
+  if (wantLowQuality) {
+    conditions.push(
+      `EXISTS (SELECT 1 FROM video_sources vs8 WHERE vs8.video_id = v.id AND COALESCE(vs8.quality_detected, vs8.quality) IS NOT NULL AND vs8.deleted_at IS NULL) ` +
+      `AND NOT EXISTS (SELECT 1 FROM video_sources vs9 WHERE vs9.video_id = v.id AND (${QUALITY_RANK_EXPR('vs9')}) >= 4 AND vs9.deleted_at IS NULL)`,
+    )
+  }
+
   const whereClause = conditions.map((c) => `(${c})`).join(' AND ')
 
   // HOTFIX-PATCH-2A §1-BUG-3（2026-05-25）：updatedAt 日期范围（HAVING / GROUP BY 后过滤）
@@ -230,13 +273,22 @@ export async function listVideoGroups(
     havingClauses.push(`MAX(vs.updated_at) < ($${idx++}::DATE + INTERVAL '1 day')`)
     paramValues.push(params.updatedAtTo)
   }
+  // CHG-VSR-3：lastChecked 日期范围（MAX(last_probed_at) HAVING / 与 updatedAt 同范式 / CHG-VSR-1 "卡 3 实现"）
+  if (params.lastCheckedFrom) {
+    havingClauses.push(`MAX(vs.last_probed_at) >= $${idx++}::DATE`)
+    paramValues.push(params.lastCheckedFrom)
+  }
+  if (params.lastCheckedTo) {
+    havingClauses.push(`MAX(vs.last_probed_at) < ($${idx++}::DATE + INTERVAL '1 day')`)
+    paramValues.push(params.lastCheckedTo)
+  }
   const havingClause = havingClauses.length > 0 ? `HAVING ${havingClauses.join(' AND ')}` : ''
 
   // ADR-150 阶段 5 EP-4：sort 字段白名单 lookup / fallback MAX(vs.updated_at) DESC（默认行为不变）
   const sortCol = (params.sortField && SOURCES_SORT_FIELD_MAP[params.sortField]) ?? 'MAX(vs.updated_at)'
   const sortDir = params.sortDir === 'asc' ? 'ASC' : 'DESC'
 
-  // HOTFIX-PATCH-2A §1-BUG-3：count SQL HAVING 支持（updatedAt range filter 时走聚合子查询）
+  // HOTFIX-PATCH-2A §1-BUG-3：count SQL HAVING 支持（updatedAt/lastChecked range filter 时走聚合子查询）
   // havingClauses 非空 → 嵌套子查询 COUNT(*) / 否则保留原 COUNT(DISTINCT v.id) 形态（性能优势）
   const countSql = havingClauses.length > 0
     ? `SELECT COUNT(*)::TEXT AS cnt FROM (
@@ -252,6 +304,8 @@ export async function listVideoGroups(
   const total = parseInt(countResult.rows[0]?.cnt ?? '0', 10)
 
   // CHG-SN-5-13-PATCH-2: year + cover_url 已 migration 029 迁移到 media_catalog；需 JOIN（参 videos.ts VIDEO_JOIN）
+  // CHG-VSR-3：派生列单趟聚合 FILTER（D-117-VSR3-1..3）。GROUP BY 追加 v.is_published（D-1）。
+  // quality_rank_max（仅 ORDER BY 用，不映射 DTO）/ quality_highest=CASE MAX(rank) 反查 label（D-2）。
   const rowsResult = await db.query<DbVideoGroupRow>(
     `SELECT
        v.id AS video_id,
@@ -265,12 +319,26 @@ export async function listVideoGroups(
        STRING_AGG(DISTINCT vs.probe_status, ',') AS probe_status,
        STRING_AGG(DISTINCT vs.render_status, ',') AS render_status,
        MAX(vs.updated_at)::TEXT AS updated_at,
-       STRING_AGG(DISTINCT COALESCE(vs.source_site_key, v.site_key), ',' ORDER BY COALESCE(vs.source_site_key, v.site_key)) AS site_keys
+       STRING_AGG(DISTINCT COALESCE(vs.source_site_key, v.site_key), ',' ORDER BY COALESCE(vs.source_site_key, v.site_key)) AS site_keys,
+       COUNT(vs.id) FILTER (WHERE vs.is_active = true) AS active_source_count,
+       COUNT(vs.id) FILTER (WHERE vs.is_active = false) AS disabled_count,
+       COUNT(vs.id) FILTER (WHERE vs.probe_status = 'dead') AS connect_fail_count,
+       COUNT(vs.id) FILTER (WHERE vs.render_status = 'dead') AS render_fail_count,
+       COUNT(vs.id) FILTER (WHERE vs.probe_status = 'pending') AS pending_probe_count,
+       (COUNT(*) FILTER (WHERE vs.quality_detected IS NOT NULL)::FLOAT / NULLIF(COUNT(*), 0)) AS quality_coverage,
+       percentile_cont(0.5) WITHIN GROUP (ORDER BY vs.latency_ms) AS latency_median_ms,
+       MAX(${QUALITY_RANK_EXPR('vs')}) AS quality_rank_max,
+       CASE MAX(${QUALITY_RANK_EXPR('vs')})
+         WHEN 7 THEN '4K' WHEN 6 THEN '2K' WHEN 5 THEN '1080P' WHEN 4 THEN '720P'
+         WHEN 3 THEN '480P' WHEN 2 THEN '360P' WHEN 1 THEN '240P' ELSE NULL END AS quality_highest,
+       (COUNT(vs.id) FILTER (WHERE vs.is_active AND vs.probe_status <> 'dead' AND vs.render_status <> 'dead') = 0) AS needs_source,
+       v.is_published AS is_published,
+       COALESCE(MAX(vs.last_probed_at), MAX(vs.updated_at))::TEXT AS last_checked_at
      FROM videos v
      JOIN media_catalog mc ON mc.id = v.catalog_id
      JOIN video_sources vs ON vs.video_id = v.id AND vs.deleted_at IS NULL
      WHERE ${whereClause}
-     GROUP BY v.id, mc.year, mc.cover_url
+     GROUP BY v.id, mc.year, mc.cover_url, v.is_published
      ${havingClause}
      ORDER BY ${sortCol} ${sortDir} NULLS LAST
      LIMIT $${idx++} OFFSET $${idx++}`,
@@ -279,6 +347,7 @@ export async function listVideoGroups(
 
   // 返回 raw 状态数组；Service 层负责 aggregateSignal 派生最终 probeStatus/renderStatus
   // CHG-SN-5-11-PATCH-2 P0-2：业务规则归口 Service，DB 查询层不持有
+  // CHG-VSR-3：派生列在本层产出（D-117-VSR3 派生列双层透传：raw map + Service map 均显式枚举）
   const data: VideoGroupRowRaw[] = rowsResult.rows.map((row) => ({
     videoId: row.video_id,
     title: row.title,
@@ -293,467 +362,20 @@ export async function listVideoGroups(
     updatedAt: row.updated_at,
     // HOTFIX-PATCH-2B-FIX1（2026-05-25）：站点列表派生（STRING_AGG csv → 数组 / 去重已 SQL 保证 / 升序）
     siteKeys: (row.site_keys ?? '').split(',').filter(Boolean),
+    // ── CHG-VSR-3 派生列（bigint COUNT → string → parseInt）──
+    activeSourceCount: parseInt(row.active_source_count, 10),
+    disabledCount: parseInt(row.disabled_count, 10),
+    connectFailCount: parseInt(row.connect_fail_count, 10),
+    renderFailCount: parseInt(row.render_fail_count, 10),
+    pendingProbeCount: parseInt(row.pending_probe_count, 10),
+    qualityCoverage: row.quality_coverage == null ? undefined : Number(row.quality_coverage),
+    latencyMedianMs: row.latency_median_ms == null ? null : Math.round(Number(row.latency_median_ms)),
+    // D-2：CASE MAX(rank) 在 SQL 反查 label，本层仅断言 ResolutionTier（CASE 仅产 7 档或 NULL，断言安全）
+    qualityHighest: (row.quality_highest as ResolutionTier | null) ?? null,
+    needsSource: row.needs_source,
+    isPublished: row.is_published,
+    lastCheckedAt: row.last_checked_at,
   }))
 
   return { data, total, page, limit }
-}
-
-// ── 查询：单视频线路×集数矩阵 ─────────────────────────────────────
-
-export async function getVideoMatrix(
-  db: Pool,
-  videoId: string,
-): Promise<LineMatrixRow[]> {
-  const rows = await db.query<DbEpisodeCellRow>(
-    `SELECT
-       vs.episode_number,
-       vs.id AS source_id,
-       vs.source_url,
-       vs.probe_status,
-       vs.render_status,
-       vs.is_active,
-       COALESCE(vs.source_site_key, v.site_key) AS source_site_key,
-       vs.source_name,
-       sla.display_name
-     FROM video_sources vs
-     JOIN videos v ON v.id = vs.video_id
-     LEFT JOIN source_line_aliases sla
-       ON sla.source_site_key = COALESCE(vs.source_site_key, v.site_key)
-      AND sla.source_name = vs.source_name
-     WHERE vs.video_id = $1
-       AND vs.deleted_at IS NULL
-     ORDER BY vs.source_name, vs.episode_number`,
-    [videoId],
-  )
-
-  // 中间形态：episodes 为 mutable 数组便于 push，最后通过 readonly cast 返回符合共享类型
-  type LineMatrixRowMutable = {
-    sourceSiteKey: string
-    sourceName: string
-    displayName: string | null
-    episodes: EpisodeCell[]
-  }
-  const linesMap = new Map<string, LineMatrixRowMutable>()
-  for (const row of rows.rows) {
-    const key = `${row.source_site_key ?? ''}::${row.source_name}`
-    let line = linesMap.get(key)
-    if (!line) {
-      line = {
-        sourceSiteKey: row.source_site_key ?? '',
-        sourceName: row.source_name,
-        displayName: row.display_name,
-        episodes: [],
-      }
-      linesMap.set(key, line)
-    } else if (row.display_name !== null && line.displayName === null) {
-      // 取第一个非 null 别名（LEFT JOIN 同线路各行应相同，但防御性取最新非空值）
-      line.displayName = row.display_name
-    }
-    line.episodes.push({
-      episodeNumber: row.episode_number,
-      sourceId: row.source_id,
-      sourceUrl: row.source_url,
-      probeStatus: row.probe_status as DualSignalState,
-      renderStatus: row.render_status as DualSignalState,
-      isActive: row.is_active,
-    })
-  }
-
-  return Array.from(linesMap.values())
-}
-
-// ── 查询：全局别名列表 ────────────────────────────────────────────
-
-export async function listLineAliases(db: Pool): Promise<SourceLineAlias[]> {
-  const result = await db.query<DbAliasRow>(
-    `SELECT source_site_key, source_name, display_name,
-            codename, priority, retired_at, auto_retired,
-            updated_at
-     FROM source_line_aliases
-     ORDER BY source_site_key, source_name`,
-  )
-  return result.rows.map(mapAliasRow)
-}
-
-// ── 查询：全线路视图（CHG-SN-9-LINES-VIEW-UNIFY + FIX-3）─────────
-// FULL OUTER JOIN 范式（FIX-3 / Codex stop-time review 3rd）：
-//   - 左侧：video_sources 聚合 subquery → 拿到 (site_key, source_name, video_count, active_count, episode_count)
-//   - 右侧：source_line_aliases → 别名 4 字段 + assignedAt
-//   - FULL OUTER JOIN → 包含两边并集 / 不丢任何一侧的孤儿行
-//
-// **修复的 bug（FIX-3）**：原 `FROM video_sources LEFT JOIN sla` 写法会丢失 **alias-only 孤儿行**：
-//   - 例：sla 表有 codename='泰山-2' 退役行（retired_at NOT NULL / 90 天冷却期内）
-//   - 但对应 video_sources 全被软删 / 或站点废弃后 vs 行被清理
-//   - 管理 UI 应仍显示该行让运维监控冷却期 + 防 codename 提前复用
-//
-// 三类 row 分布：
-//   - **unassigned-only**：vs 有 + sla 无 → assignedAt=null + videoCount > 0
-//   - **alias-only 孤儿**：vs 无 + sla 有 → assignedAt 非 null + videoCount=0（FIX-3 新覆盖）
-//   - **正常**：vs 有 + sla 有 → assignedAt 非 null + videoCount > 0
-//
-// 索引设计 4 步核验（db-rules.md §"索引设计 4 步核验"）：
-//   1. 索引键：source_line_aliases (source_site_key, source_name) 复合 PK
-//   2. 部分索引 WHERE：N/A
-//   3. 候选 driving 谓词：FULL OUTER JOIN ON 复合
-//   4. 匹配判定：driving = 索引键 ✅（实测留 EXPLAIN ANALYZE）
-
-export async function listAllSourceLines(db: Pool): Promise<SourceLineRow[]> {
-  const result = await db.query<{
-    source_site_key: string
-    source_name: string
-    display_name: string | null
-    codename: string | null
-    priority: number | null
-    retired_at: string | null
-    auto_retired: boolean | null
-    sla_updated_at: string | null
-    video_count: string
-    active_count: string
-    episode_count: string
-  }>(
-    `SELECT
-       COALESCE(vs_agg.source_site_key, sla.source_site_key) AS source_site_key,
-       COALESCE(vs_agg.source_name, sla.source_name) AS source_name,
-       sla.display_name,
-       sla.codename,
-       sla.priority,
-       sla.retired_at,
-       sla.auto_retired,
-       sla.updated_at AS sla_updated_at,
-       COALESCE(vs_agg.video_count, '0') AS video_count,
-       COALESCE(vs_agg.active_count, '0') AS active_count,
-       COALESCE(vs_agg.episode_count, '0') AS episode_count
-     FROM (
-       SELECT
-         source_site_key,
-         source_name,
-         COUNT(DISTINCT video_id)::TEXT AS video_count,
-         COUNT(*) FILTER (WHERE is_active = true)::TEXT AS active_count,
-         COUNT(*)::TEXT AS episode_count
-       FROM video_sources
-       WHERE deleted_at IS NULL
-         AND source_site_key IS NOT NULL
-       GROUP BY source_site_key, source_name
-     ) vs_agg
-     FULL OUTER JOIN source_line_aliases sla
-       ON vs_agg.source_site_key = sla.source_site_key
-      AND vs_agg.source_name = sla.source_name
-     ORDER BY 1, 2`,
-  )
-
-  return result.rows.map((r) => ({
-    sourceSiteKey: r.source_site_key,
-    sourceName: r.source_name,
-    // 未分配 alias 时 fallback 到 source_name；alias-only 孤儿行 sla.display_name 必非空
-    displayName: r.display_name ?? r.source_name,
-    codename: r.codename,
-    priority: r.priority ?? 0,
-    retiredAt: r.retired_at,
-    autoRetired: r.auto_retired ?? false,
-    assignedAt: r.sla_updated_at,
-    videoCount: parseInt(r.video_count, 10),
-    activeCount: parseInt(r.active_count, 10),
-    episodeCount: parseInt(r.episode_count, 10),
-  }))
-}
-
-// ── 查询：单条别名（Service 层 audit before 状态）────────────────────
-
-export async function findLineAlias(
-  db: Pool,
-  sourceSiteKey: string,
-  sourceName: string,
-): Promise<SourceLineAlias | null> {
-  const result = await db.query<DbAliasRow>(
-    `SELECT source_site_key, source_name, display_name,
-            codename, priority, retired_at, auto_retired,
-            updated_at
-     FROM source_line_aliases
-     WHERE source_site_key = $1 AND source_name = $2`,
-    [sourceSiteKey, sourceName],
-  )
-  const r = result.rows[0]
-  if (!r) return null
-  return mapAliasRow(r)
-}
-
-// ── 写操作：upsert 别名（既有签名 / 后兼容 wrapper）───────────────
-
-export async function upsertLineAlias(
-  db: Pool,
-  sourceSiteKey: string,
-  sourceName: string,
-  displayName: string,
-  updatedBy: string,
-): Promise<SourceLineAlias> {
-  return upsertLineAliasFull(db, sourceSiteKey, sourceName, { displayName }, updatedBy)
-}
-
-/**
- * CHG-368-B-A2a / ADR-164 §5.7：扩 upsert 接 codename + priority 可选字段。
- *   INSERT 路径：codename / priority 取 input 值（priority 缺省走 DB DEFAULT 0）
- *   UPDATE 路径：仅当 input 字段非 undefined 时覆盖（避免误清空既有值）
- *   既有 retired_at + auto_retired 不在 upsert 路径修改（→ retireLineAlias 专用端点）
- */
-export async function upsertLineAliasFull(
-  db: Pool,
-  sourceSiteKey: string,
-  sourceName: string,
-  input: import('@resovo/types').UpsertAliasInput,
-  updatedBy: string,
-): Promise<SourceLineAlias> {
-  const codenameProvided = input.codename !== undefined
-  const priorityProvided = input.priority !== undefined
-
-  const result = await db.query<DbAliasRow>(
-    `INSERT INTO source_line_aliases
-       (source_site_key, source_name, display_name, codename, priority, updated_by, updated_at)
-     VALUES ($1, $2, $3, $4, COALESCE($5::SMALLINT, 0), $6, NOW())
-     ON CONFLICT (source_site_key, source_name)
-     DO UPDATE SET
-       display_name = EXCLUDED.display_name,
-       codename     = CASE WHEN $7::BOOLEAN THEN EXCLUDED.codename ELSE source_line_aliases.codename END,
-       priority     = CASE WHEN $8::BOOLEAN THEN EXCLUDED.priority ELSE source_line_aliases.priority END,
-       updated_by   = EXCLUDED.updated_by,
-       updated_at   = NOW()
-     RETURNING source_site_key, source_name, display_name,
-               codename, priority, retired_at, auto_retired,
-               updated_at`,
-    [
-      sourceSiteKey, sourceName, input.displayName,
-      codenameProvided ? input.codename : null,
-      priorityProvided ? input.priority : null,
-      updatedBy,
-      codenameProvided,
-      priorityProvided,
-    ],
-  )
-  const r = result.rows[0]
-  if (!r) {
-    throw new Error('upsertLineAliasFull: RETURNING 0 rows (unexpected)')
-  }
-  return mapAliasRow(r)
-}
-
-/**
- * CHG-368-B-A2a / ADR-164 §5.7：手动退役别名。
- *   UPDATE retired_at = NOW(), auto_retired = false / WHERE 守卫：行存在 AND retired_at IS NULL
- *   返回 rowCount > 0 表示退役成功 / 否则调用方根据 before fetch 区分 404 vs 409
- *   不影响 codename 字段（保留追溯 / 冷却期满后由新 upsert 复用）
- */
-export async function retireLineAlias(
-  db: Pool,
-  sourceSiteKey: string,
-  sourceName: string,
-): Promise<SourceLineAlias | null> {
-  const result = await db.query<DbAliasRow>(
-    `UPDATE source_line_aliases
-       SET retired_at   = NOW(),
-           auto_retired = false,
-           updated_at   = NOW()
-     WHERE source_site_key = $1
-       AND source_name     = $2
-       AND retired_at IS NULL
-     RETURNING source_site_key, source_name, display_name,
-               codename, priority, retired_at, auto_retired,
-               updated_at`,
-    [sourceSiteKey, sourceName],
-  )
-  const r = result.rows[0]
-  return r ? mapAliasRow(r) : null
-}
-
-/**
- * CHG-368-B-A2a / ADR-164 §5.7：单字段更新 priority（高频运营操作）。
- *   priority 范围 0-100 由 DB CHECK 强制（违反抛 23514）
- *   WHERE 守卫：行存在（rowCount=0 → 调用方抛 NOT_FOUND）
- *   不要求 retired_at IS NULL（已退役行也允许调 priority / 数据完整性 / Service 层可加业务规则限制）
- */
-export async function updateLineAliasPriority(
-  db: Pool,
-  sourceSiteKey: string,
-  sourceName: string,
-  priority: number,
-): Promise<SourceLineAlias | null> {
-  const result = await db.query<DbAliasRow>(
-    `UPDATE source_line_aliases
-       SET priority   = $3::SMALLINT,
-           updated_at = NOW()
-     WHERE source_site_key = $1
-       AND source_name     = $2
-     RETURNING source_site_key, source_name, display_name,
-               codename, priority, retired_at, auto_retired,
-               updated_at`,
-    [sourceSiteKey, sourceName, priority],
-  )
-  const r = result.rows[0]
-  return r ? mapAliasRow(r) : null
-}
-
-/**
- * CHG-368-B-A2a / ADR-164 D-164-10 + D-164-11：查所有 codename 非 NULL 行（含已退役）。
- *   用途：① GET codename-pool occupied / cooling 分段判定 ② isCodenameInCooling 应用层判定
- *   返回 codename + retired_at 两列（其他字段不需要 / 减少 IO）
- *
- *   access path 评估（按"索引设计 4 步核验"）：
- *     - 索引键：idx_codename_active = codename / 部分 WHERE = codename IS NOT NULL AND retired_at IS NULL
- *     - 查询 driving 谓词：codename IS NOT NULL（含已退役 / retired_at 不约束）
- *     - 匹配性：本查询 driving 谓词只匹配 `idx_codename_active` 的 codename 列 + WHERE 子句**部分覆盖**（在役行覆盖 / 已退役行不在索引中）
- *     - 结论：在役行可走索引 / 已退役行需补全表扫 → 规划器实际选择视数据 selectivity（可能直接表扫一遍简单）。留 EXPLAIN ANALYZE 实测。
- *     - 不在 hot path（codename-pool 端点低频）/ 即使全表扫成本可接受
- */
-export async function findCodenameAssignments(
-  db: Pool,
-): Promise<readonly { codename: string; retiredAt: string | null }[]> {
-  const result = await db.query<{ codename: string; retired_at: string | null }>(
-    `SELECT codename, retired_at
-       FROM source_line_aliases
-      WHERE codename IS NOT NULL`,
-  )
-  return result.rows.map((r) => ({ codename: r.codename, retiredAt: r.retired_at }))
-}
-
-// ── 查询：按 siteKey 聚合线路明细（ADR-117 AMENDMENT 2026-05-19）─────
-
-/**
- * DB 中间形态：probe/render statuses 是 STRING_AGG 拼接的逗号分隔字符串
- * （DISTINCT 已在 SQL 层去重）；Service 层 split + 调用 aggregateSignal 派生 worst。
- */
-export interface SourceRouteBySiteRaw extends Omit<SourceRouteBySite, 'probeStatus' | 'renderStatus'> {
-  readonly probeStatuses: readonly string[]
-  readonly renderStatuses: readonly string[]
-}
-
-interface DbRouteBySiteRow {
-  source_site_key: string
-  source_name: string
-  display_name: string | null
-  probe_statuses: string | null
-  render_statuses: string | null
-  avg_latency_ms: string | null
-  source_count: string
-  active_count: string
-  last_probed_at: string | null
-}
-
-/**
- * 按 siteKey 聚合 video_sources 行 → 单站点线路明细列表
- * （ADR-117 AMENDMENT 2026-05-19 / CHG-SN-7-REDO-01-E）。
- *
- * 业务规则归口 Service 层：
- *   - SQL 仅 STRING_AGG DISTINCT 拼 raw 状态；Service split + aggregateSignal 派生 worst
- *   - latency 选 AVG 不选 p95（Y2 评估 / 单站点 < 200 线路 / PG percentile_disc 性能受限）
- *   - 软删除过滤 vs.deleted_at IS NULL（与 row 3 getVideoMatrix 一致）
- *   - COALESCE(vs.source_site_key, v.site_key) fallback（migration 046 NULLABLE）
- */
-export async function listRoutesBySite(
-  db: Pool,
-  siteKey: string,
-): Promise<readonly SourceRouteBySiteRaw[]> {
-  const result = await db.query<DbRouteBySiteRow>(
-    `SELECT
-       COALESCE(vs.source_site_key, v.site_key)     AS source_site_key,
-       vs.source_name                                AS source_name,
-       sla.display_name                              AS display_name,
-       STRING_AGG(DISTINCT vs.probe_status, ',')     AS probe_statuses,
-       STRING_AGG(DISTINCT vs.render_status, ',')    AS render_statuses,
-       AVG(vs.latency_ms) FILTER (WHERE vs.latency_ms IS NOT NULL) AS avg_latency_ms,
-       COUNT(*)                                      AS source_count,
-       COUNT(*) FILTER (WHERE vs.is_active = true)   AS active_count,
-       MAX(vs.last_probed_at)                        AS last_probed_at
-     FROM video_sources vs
-     JOIN videos v ON v.id = vs.video_id
-     LEFT JOIN source_line_aliases sla
-       ON sla.source_site_key = COALESCE(vs.source_site_key, v.site_key)
-      AND sla.source_name     = vs.source_name
-     WHERE COALESCE(vs.source_site_key, v.site_key) = $1
-       AND vs.deleted_at IS NULL
-     GROUP BY COALESCE(vs.source_site_key, v.site_key), vs.source_name, sla.display_name
-     ORDER BY vs.source_name ASC`,
-    [siteKey],
-  )
-
-  return result.rows.map((r): SourceRouteBySiteRaw => ({
-    sourceSiteKey: r.source_site_key,
-    sourceName: r.source_name,
-    displayName: r.display_name,
-    probeStatuses: r.probe_statuses ? r.probe_statuses.split(',') : [],
-    renderStatuses: r.render_statuses ? r.render_statuses.split(',') : [],
-    avgLatencyMs: r.avg_latency_ms != null ? Math.round(Number(r.avg_latency_ms)) : null,
-    sourceCount: Number(r.source_count),
-    activeCount: Number(r.active_count),
-    lastProbedAt: r.last_probed_at,
-  }))
-}
-
-// ── ADR-117 AMENDMENT 2 2026-05-19 / CHG-SN-7-REDO-01-E2 ──────────
-// 行级 3 mutations 支撑 queries（test 样本 / 软删除）
-
-/**
- * 取 (siteKey, sourceName) 线路下的代表性样本（episode 最小、is_active、未删除的一行 source_url + videoId）
- * 用于 row 7 POST test 端点同步快探。
- */
-export async function selectRouteSampleSource(
-  db: Pool,
-  siteKey: string,
-  sourceName: string,
-): Promise<{ readonly videoId: string; readonly sourceUrl: string } | null> {
-  const result = await db.query<{ video_id: string; source_url: string }>(
-    `SELECT vs.video_id, vs.source_url
-       FROM video_sources vs
-       JOIN videos v ON v.id = vs.video_id
-      WHERE COALESCE(vs.source_site_key, v.site_key) = $1
-        AND vs.source_name = $2
-        AND vs.deleted_at IS NULL
-        AND vs.is_active = true
-      ORDER BY vs.episode_number ASC NULLS LAST
-      LIMIT 1`,
-    [siteKey, sourceName],
-  )
-  if (result.rows.length === 0) return null
-  return { videoId: result.rows[0].video_id, sourceUrl: result.rows[0].source_url }
-}
-
-/**
- * 统计 (siteKey, sourceName) 线路下未删除 video_sources 行数（用于 reprobe queuedCount + 404 判定）
- */
-export async function countRouteSources(
-  db: Pool,
-  siteKey: string,
-  sourceName: string,
-): Promise<number> {
-  const result = await db.query<{ count: string }>(
-    `SELECT COUNT(*) AS count
-       FROM video_sources vs
-       JOIN videos v ON v.id = vs.video_id
-      WHERE COALESCE(vs.source_site_key, v.site_key) = $1
-        AND vs.source_name = $2
-        AND vs.deleted_at IS NULL`,
-    [siteKey, sourceName],
-  )
-  return Number(result.rows[0]?.count ?? 0)
-}
-
-/**
- * 软删除 (siteKey, sourceName) 线路下所有未删除的 video_sources 行；
- * 返回被删行的 id 列表（供 audit beforeJsonb 引用）。
- * ADR-105 软删除范式（deleted_at = NOW()）+ ADR-117 AMENDMENT 2 §SQL 设计。
- */
-export async function softDeleteRouteBySite(
-  db: Pool,
-  siteKey: string,
-  sourceName: string,
-): Promise<readonly string[]> {
-  const result = await db.query<{ id: string }>(
-    `UPDATE video_sources vs
-        SET deleted_at = NOW(), updated_at = NOW()
-       FROM videos v
-      WHERE vs.video_id = v.id
-        AND COALESCE(vs.source_site_key, v.site_key) = $1
-        AND vs.source_name = $2
-        AND vs.deleted_at IS NULL
-      RETURNING vs.id`,
-    [siteKey, sourceName],
-  )
-  return result.rows.map((r) => r.id)
 }

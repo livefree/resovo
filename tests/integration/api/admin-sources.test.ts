@@ -12,12 +12,13 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { Pool } from 'pg'
 import { createIntegrationPool } from '../../helpers/integration-pg'
 
+// CHG-VSR-3 / ADR-117 AMENDMENT 3（D-117-VSR3-7）：queries 拆 4 文件，import 路径同步迁移
 import {
   listVideoGroups,
   getVideoGroupStats,
-  getVideoMatrix,
-  listLineAliases,
 } from '../../../apps/api/src/db/queries/sources-matrix'
+import { getVideoMatrix } from '../../../apps/api/src/db/queries/video-matrix'
+import { listLineAliases } from '../../../apps/api/src/db/queries/source-line-aliases'
 
 let db: Pool
 

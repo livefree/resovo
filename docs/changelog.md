@@ -13439,3 +13439,27 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **新增依赖/schema/路由/Props 契约**：无（client 序列化层）。
 - **质量门禁**：typecheck 8 workspace EXIT=0 / lint EXIT=0 / **全量 449 文件 5917 passed 0 failed 零回归**。
 - **[AI-CHECK]**：六问全过——契约闭环（type 声明 ↔ client 序列化 ↔ 后端解析三者一致）；零回归（仅 listVideos 加序列化分支）；无 any/颜色/越层。注意：client 数组用 CSV（非重复 key），因后端 csvEnum/csvFreeStr 取单 string 拆分；卡 4 UI 调 listVideos 即可触达全部新过滤。
+
+## [CHG-VSR-3] 线路聚合 API：派生列 + KPI②维度 + queries 拆分（ADR-117 AMENDMENT 3）
+- **完成时间**：2026-06-02
+- **记录时间**：2026-06-02 08:20
+- **执行模型**：claude-opus-4-8
+- **子代理**：arch-reviewer (claude-opus-4-8)（设计阶段，ADR-117 AMENDMENT 3「需修改」→ 2 BLOCKER + 1 HIGH + 3 MEDIUM 纳入 D-117-VSR3-1..8；本卡按已 Accepted 设计实施）
+- **修改文件**：
+  - `apps/api/src/db/queries/source-line-aliases.ts`（**新建** 291 行）— 别名 CRUD（listLineAliases/listAllSourceLines/findLineAlias/upsertLineAlias/upsertLineAliasFull/retireLineAlias/updateLineAliasPriority/findCodenameAssignments + `DbAliasRow`/`mapAliasRow`），自 sources-matrix.ts 拆出（D-117-VSR3-7）。
+  - `apps/api/src/db/queries/source-routes.ts`（**新建** 158 行）— routes-by-site 视图（listRoutesBySite + `SourceRouteBySiteRaw`/`DbRouteBySiteRow`）+ 行级 3 mutations（selectRouteSampleSource/countRouteSources/softDeleteRouteBySite），自 sources-matrix.ts 拆出。
+  - `apps/api/src/db/queries/video-matrix.ts`（**新建** 88 行）— getVideoMatrix（单视频线路×集数矩阵 + `DbEpisodeCellRow`），自 sources-matrix.ts 拆出。
+  - `apps/api/src/db/queries/sources-matrix.ts`（759→**381**）— 保留 video-groups 单一关注点。新增 `QUALITY_RANK_EXPR` alias 参数化 module-level const 工厂（Q1 SELECT/Q2 stats/Q3 quickFilter low_quality 三处共用、`COALESCE(quality_detected,quality)` 回退口径、勿照搬 LinesPanel pickHighestQuality）。`listVideoGroups`：单趟聚合 FILTER 派生列（active_source_count/disabled_count/connect_fail_count/render_fail_count/pending_probe_count）+ quality_coverage（仅 quality_detected 实测比例）+ percentile_cont(0.5) 延迟中位（全源非空 scope）+ quality_rank_max(ORDER BY 用) + quality_highest=CASE MAX(rank) 反查 label（质量未知 null 不并入低质量）+ needs_source/is_published/last_checked_at；GROUP BY 追加 v.is_published（D-1）；quickFilters 全 WHERE EXISTS（vs5-9 可组合 AND，lowQuality/quickFilter 'low_quality' OR 合流单份谓词不双 push，D-5）；lastChecked HAVING 范围（CHG-VSR-1「卡 3 实现」闭环）；SOURCES_SORT_FIELD_MAP 扩 activeSources/quality/lastChecked 走裸 SELECT 别名（IDENT 正则零放宽，D-6）。`getVideoGroupStats`：per-video 子查询 g（bool_or/MAX）+ 外层 COUNT FILTER，①(total/active/dead/orphan) source_check_status 口径零变更 + ②(abnormal/needsSource/pendingProbe/lowQuality) 探测/质量维度（禁①②同层双算，D-4）。SourceSegment + segment 查询分支原样保留（卡 5 删，D-8）。
+  - `apps/api/src/services/SourcesMatrixService.ts`（586→613）— import 路径迁移至 4 query 文件（D-117-VSR3-7 方案 A）；listVideoGroups map 显式枚举透传 11 派生列（双层透传）；VideoGroupsQuerySchema 扩 quickFilters(csvToStringArray SOURCE_QUICK_FILTERS)/lowQuality(queryBool 显式枚举防 'false'→true)/lastCheckedFrom/To/sortField enum；getVideoGroupStats 透传②维度（query 层已产出）。
+  - `tests/unit/api/sources-matrix.test.ts` — 直接 import 拆分（getVideoGroupStats/listVideoGroups ← sources-matrix；getVideoMatrix ← video-matrix；listLineAliases/upsertLineAlias ← source-line-aliases）+ VIDEO_ROW 补派生列 + 新增 19 单测（派生列映射/SQL FILTER/CASE/quickFilters/sortField/lastChecked HAVING/KPI② SQL+映射）。
+  - `tests/unit/api/sources-matrix-service.test.ts` — vi.mock 拆 3 路径（sources-matrix/video-matrix/source-line-aliases）+ namespace import（queries/videoMatrixQueries/aliasQueries）+ 新增 1 派生列双层透传单测。
+  - `tests/unit/api/source-line-alias-mutations.test.ts` / `source-line-alias-retire-priority-audit.test.ts` — vi.mock + import 路径 → source-line-aliases。
+  - `tests/unit/api/sources-routes-by-site.test.ts` — import listRoutesBySite → source-routes。
+  - `tests/unit/api/admin-source-lines-view.test.ts` — 7 处 dynamic import → source-line-aliases。
+  - `tests/integration/api/admin-sources.test.ts` — relative import 拆分。
+- **新增依赖**：无。
+- **数据库变更**：无（quality_rank 纯派生；quality/quality_detected/latency_ms/last_probed_at/is_active/is_published 列均已存在）→ architecture.md 零同步。
+- **门禁**：typecheck 8 workspace EXIT=0 / lint EXIT=0 / verify:adr-contracts EXIT=0 / verify:endpoint-adr EXIT=0（203 路由对齐，无新 route）/ **全量 5933 passed**（1 失败=`VideoImageSection.test.tsx` jsdom testing-library waitFor 计时 flaky，隔离重跑 21/21 通过、与本卡无关，同 CHG-VSR-2 既有 flaky 模式）。e2e N/A（API-only 无 UI 消费方，留卡 4/5/6 + CHG-VSR-7）。
+- **D-N 偏离闭环**：D-117-VSR3-1（QUALITY_RANK_EXPR 工厂三处共用）✅ / -2（CASE MAX 反查 label + ResolutionTier 断言）✅ / -3（latency 全源非空 scope）✅ / -4（KPI② per-video 子查询 + ①零变更逐值回归）✅ / -5（quickFilters WHERE EXISTS + OR 合流）✅ / -6（sortField SELECT 别名 IDENT 零放宽）✅ / -7（4 文件拆分 + 测试 mock 路径方案 A）✅ / -8（SourceSegment 保留 + 零 user_submissions）✅。
+- **注意事项**：① `SourcesMatrixService.ts`(613) 为既有 debt（HEAD 已 586>500，设计 D-117-VSR3-7 仅 scope 拆 queries 文件未含 Service，本卡 +27 行均派生列透传 map + zod schema 加性声明）；file-size-budget 本卡**净改善 -1**（sources-matrix.ts 759→381 退出违规），建议 SEQ-FOLLOWUP-ARCH 长尾治理 Service 拆分。② `last_checked_at` ORDER BY 走 ISO TEXT 字典序（=时序，已注释）。③ 派生列均为 VideoGroupRow optional 字段（CHG-VSR-1 契约，不改 types.ts 签名）；卡 4/5 UI 消费方直接读取即可触达。④ KPI 字段 dead/orphan(①) 与 abnormal(②) 维度不同源不可混算（卡 5 rename 级联后移除①遗留字段）。
+- **[AI-CHECK]**：结构检查 分层 NO 违反 / 跨模块内部 NO；代码质量 重复逻辑 NO（QUALITY_RANK_EXPR 单一定义）/ hack NO；规模检查 函数 NO / 文件 YES（SourcesMatrixService 613 既有 debt，设计未 scope，另起长尾卡）；安全 副作用/吞异常 NO。结论：SAFE。

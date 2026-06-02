@@ -11,10 +11,13 @@
 
 import { z } from 'zod'
 import type { Pool } from 'pg'
+// CHG-VSR-3 / ADR-117 AMENDMENT 3（D-117-VSR3-7）：queries 拆 4 文件，import 路径同步迁移
 import {
   listVideoGroups as listVideoGroupsRaw,
   getVideoGroupStats,
-  getVideoMatrix,
+} from '@/api/db/queries/sources-matrix'
+import { getVideoMatrix } from '@/api/db/queries/video-matrix'
+import {
   listLineAliases,
   listAllSourceLines,
   type SourceLineRow,
@@ -24,12 +27,14 @@ import {
   updateLineAliasPriority as updateLineAliasPriorityQuery,
   findCodenameAssignments,
   findLineAlias,
+} from '@/api/db/queries/source-line-aliases'
+import {
   listRoutesBySite as listRoutesBySiteRaw,
   selectRouteSampleSource,
   countRouteSources,
   softDeleteRouteBySite,
-} from '@/api/db/queries/sources-matrix'
-import { MOUNTAIN_CODENAMES } from '@resovo/types'
+} from '@/api/db/queries/source-routes'
+import { MOUNTAIN_CODENAMES, SOURCE_QUICK_FILTERS } from '@resovo/types'
 // CHG-357 / arch-reviewer I1：probeOne / renderCheckOne 迁至 SourceProbeService
 //   解 file-size BLOCKER (551→<400 行) + 配合 batch internal 抽取
 import {
@@ -53,6 +58,7 @@ import type {
   CodenamePool,
   UpsertAliasInput,
   RetireAliasInput,
+  SourceQuickFilter,
 } from '@resovo/types'
 import { fetchVideosByIds } from '@/api/db/queries/video-merge-mutations'
 import { AuditLogService } from '@/api/services/AuditLogService'
@@ -91,6 +97,8 @@ const csvToFreeStringArray = (maxLen = 64) =>
     return parts
   })
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/
+// query 布尔（z.coerce.boolean 把 'false' 也判 true，故显式枚举 / 参 routes/admin/videos.ts queryBool）
+const queryBool = z.enum(['true', 'false']).optional().transform((v) => (v === undefined ? undefined : v === 'true'))
 
 export const VideoGroupsQuerySchema = z.object({
   page:          z.coerce.number().int().min(1).optional().default(1),
@@ -105,8 +113,15 @@ export const VideoGroupsQuerySchema = z.object({
   // HOTFIX-PATCH-2A §1-BUG-3：updatedAt 日期范围（YYYY-MM-DD）/ HAVING MAX(vs.updated_at) >= / <=
   updatedAtFrom: z.string().regex(ISO_DATE_RE, 'updatedAtFrom 必须是 YYYY-MM-DD 格式').optional(),
   updatedAtTo:   z.string().regex(ISO_DATE_RE, 'updatedAtTo 必须是 YYYY-MM-DD 格式').optional(),
-  // ADR-150 阶段 5 EP-4（2026-05-24）：sort 全栈打通 / 4 字段白名单 zod enum
-  sortField:     z.enum(['video', 'lineCount', 'sourceCount', 'updated_at']).optional(),
+  // CHG-VSR-3 / D-117-VSR3-5：quickFilters KPI 卡快捷筛选（CSV → SourceQuickFilter 数组 / WHERE EXISTS 可组合 AND）
+  quickFilters:  csvToStringArray(SOURCE_QUICK_FILTERS),
+  // CHG-VSR-3 / D-117-VSR3-5：lowQuality 质量列 boolean 筛选（与 quickFilters 'low_quality' OR 合流单份谓词）
+  lowQuality:    queryBool,
+  // CHG-VSR-3：lastChecked 日期范围（YYYY-MM-DD）/ HAVING MAX(vs.last_probed_at) >= / <（CHG-VSR-1 "卡 3 实现"）
+  lastCheckedFrom: z.string().regex(ISO_DATE_RE, 'lastCheckedFrom 必须是 YYYY-MM-DD 格式').optional(),
+  lastCheckedTo:   z.string().regex(ISO_DATE_RE, 'lastCheckedTo 必须是 YYYY-MM-DD 格式').optional(),
+  // ADR-150 阶段 5 EP-4 + CHG-VSR-3 / D-117-VSR3-6：sort 白名单扩 activeSources/quality/lastChecked
+  sortField:     z.enum(['video', 'lineCount', 'sourceCount', 'updated_at', 'activeSources', 'quality', 'lastChecked']).optional(),
   sortDir:       z.enum(['asc', 'desc']).optional(),
 })
 
@@ -212,6 +227,18 @@ export class SourcesMatrixService {
       updatedAt: r.updatedAt,
       // HOTFIX-PATCH-2B-FIX1（2026-05-25）：siteKeys 透传（DB 层 STRING_AGG DISTINCT 派生 / 升序）
       siteKeys: r.siteKeys,
+      // CHG-VSR-3 / ADR-117 AMENDMENT 3：派生列双层透传（raw map 已产出，Service 显式枚举透传，非 spread）
+      activeSourceCount: r.activeSourceCount,
+      disabledCount: r.disabledCount,
+      connectFailCount: r.connectFailCount,
+      renderFailCount: r.renderFailCount,
+      pendingProbeCount: r.pendingProbeCount,
+      qualityHighest: r.qualityHighest,
+      qualityCoverage: r.qualityCoverage,
+      latencyMedianMs: r.latencyMedianMs,
+      needsSource: r.needsSource,
+      isPublished: r.isPublished,
+      lastCheckedAt: r.lastCheckedAt,
     }))
     return { data, total: raw.total, page: raw.page, limit: raw.limit }
   }

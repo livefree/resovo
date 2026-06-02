@@ -11,7 +11,8 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type { Pool } from 'pg'
-import { listRoutesBySite } from '@/api/db/queries/sources-matrix'
+// CHG-VSR-3 / ADR-117 AMENDMENT 3（D-117-VSR3-7）：routes-by-site 查询迁至 source-routes.ts
+import { listRoutesBySite } from '@/api/db/queries/source-routes'
 import { SourcesMatrixService, aggregateSignal } from '@/api/services/SourcesMatrixService'
 
 function makePool(rows: Record<string, unknown>[]): Pool {

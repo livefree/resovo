@@ -11,13 +11,16 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type { Pool } from 'pg'
+// CHG-VSR-3 / ADR-117 AMENDMENT 3（D-117-VSR3-7）：queries 拆 4 文件，import 路径同步迁移
 import {
   getVideoGroupStats,
   listVideoGroups,
-  getVideoMatrix,
+} from '@/api/db/queries/sources-matrix'
+import { getVideoMatrix } from '@/api/db/queries/video-matrix'
+import {
   listLineAliases,
   upsertLineAlias,
-} from '@/api/db/queries/sources-matrix'
+} from '@/api/db/queries/source-line-aliases'
 
 // ── Mock pool ─────────────────────────────────────────────────────
 
@@ -71,6 +74,18 @@ describe('listVideoGroups', () => {
     updated_at: '2026-01-01T00:00:00Z',
     // HOTFIX-PATCH-2B-FIX1（2026-05-25）：cell 显示该行跨的站点列表
     site_keys: 'bilibili,youku',
+    // CHG-VSR-3 派生列（bigint COUNT 经 node-pg 回传为 string / 布尔/浮点原样）
+    active_source_count: '3',
+    disabled_count: '2',
+    connect_fail_count: '1',
+    render_fail_count: '0',
+    pending_probe_count: '1',
+    quality_coverage: 0.8,
+    latency_median_ms: 150.5,
+    quality_highest: '1080P',
+    needs_source: false,
+    is_published: true,
+    last_checked_at: '2026-01-02T00:00:00Z',
   }
 
   // CHG-SN-5-11-PATCH-2 P0-2：queries 层不再 aggregate，返回 raw status 数组；
@@ -355,5 +370,185 @@ describe('upsertLineAlias', () => {
     expect(params[5]).toBe('actor-uuid')   // updatedBy 位置变更
     expect(params[6]).toBe(false)          // codenameProvided flag
     expect(params[7]).toBe(false)          // priorityProvided flag
+  })
+})
+
+// ── CHG-VSR-3 / ADR-117 AMENDMENT 3：派生列 + KPI② + quickFilters + sortField ──
+
+describe('CHG-VSR-3 listVideoGroups 派生列（D-117-VSR3-1..3）', () => {
+  const VIDEO_ROW = {
+    video_id: 'v1', title: 't', short_id: 'abc', type: 'series', year: 2024, cover_url: null,
+    line_count: '2', source_count: '5', probe_status: 'ok', render_status: 'ok',
+    updated_at: '2026-01-01T00:00:00Z', site_keys: 'bilibili',
+    active_source_count: '3', disabled_count: '2', connect_fail_count: '1',
+    render_fail_count: '0', pending_probe_count: '1', quality_coverage: 0.8,
+    latency_median_ms: 150.5, quality_highest: '1080P', needs_source: false,
+    is_published: true, last_checked_at: '2026-01-02T00:00:00Z',
+  }
+
+  it('派生列映射：active/disabled/connect_fail/render_fail/pending + 质量 + 覆盖率 + 延迟中位 + needs_source', async () => {
+    const db = makePool([{ cnt: '1' }], [VIDEO_ROW])
+    const r = (await listVideoGroups(db, {})).data[0]
+    expect(r.activeSourceCount).toBe(3)
+    expect(r.disabledCount).toBe(2)
+    expect(r.connectFailCount).toBe(1)
+    expect(r.renderFailCount).toBe(0)
+    expect(r.pendingProbeCount).toBe(1)
+    expect(r.qualityCoverage).toBeCloseTo(0.8)
+    expect(r.latencyMedianMs).toBe(151) // Math.round(150.5)
+    expect(r.qualityHighest).toBe('1080P')
+    expect(r.needsSource).toBe(false)
+    expect(r.isPublished).toBe(true)
+    expect(r.lastCheckedAt).toBe('2026-01-02T00:00:00Z')
+  })
+
+  it('quality_highest=null → 质量未知（不并入低质量）', async () => {
+    const db = makePool([{ cnt: '1' }], [{ ...VIDEO_ROW, quality_highest: null, latency_median_ms: null }])
+    const r = (await listVideoGroups(db, {})).data[0]
+    expect(r.qualityHighest).toBeNull()
+    expect(r.latencyMedianMs).toBeNull()
+  })
+
+  it('SQL SELECT 含派生 FILTER + percentile_cont 覆盖率 + 质量 CASE（COALESCE 回退口径）+ is_published GROUP BY', async () => {
+    const db = makePool([{ cnt: '0' }], [])
+    await listVideoGroups(db, {})
+    const sql = (db.query as ReturnType<typeof vi.fn>).mock.calls[1][0] as string
+    expect(sql).toContain('FILTER (WHERE vs.is_active = true) AS active_source_count')
+    expect(sql).toContain('FILTER (WHERE vs.is_active = false) AS disabled_count')
+    expect(sql).toContain("FILTER (WHERE vs.probe_status = 'dead') AS connect_fail_count")
+    expect(sql).toContain("FILTER (WHERE vs.render_status = 'dead') AS render_fail_count")
+    expect(sql).toContain("FILTER (WHERE vs.probe_status = 'pending') AS pending_probe_count")
+    expect(sql).toContain('percentile_cont(0.5) WITHIN GROUP (ORDER BY vs.latency_ms)')
+    expect(sql).toContain('FILTER (WHERE vs.quality_detected IS NOT NULL)')
+    // QUALITY_RANK_EXPR 回退口径：COALESCE(quality_detected, quality)（勿照搬 pickHighestQuality）
+    expect(sql).toContain('COALESCE(vs.quality_detected, vs.quality)')
+    expect(sql).toContain('AS quality_highest')
+    expect(sql).toContain('AS needs_source')
+    expect(sql).toContain('GROUP BY v.id, mc.year, mc.cover_url, v.is_published')
+  })
+})
+
+describe('CHG-VSR-3 listVideoGroups quickFilters（D-117-VSR3-5 / WHERE EXISTS）', () => {
+  const sqlOf = (db: Pool, callIdx: number) =>
+    (db.query as ReturnType<typeof vi.fn>).mock.calls[callIdx][0] as string
+
+  it('has_abnormal → EXISTS (probe=dead OR render=dead)', async () => {
+    const db = makePool([{ cnt: '0' }], [])
+    await listVideoGroups(db, { quickFilters: ['has_abnormal'] })
+    expect(sqlOf(db, 0)).toContain("(vs5.probe_status = 'dead' OR vs5.render_status = 'dead')")
+  })
+
+  it('pending_probe → EXISTS (probe=pending)', async () => {
+    const db = makePool([{ cnt: '0' }], [])
+    await listVideoGroups(db, { quickFilters: ['pending_probe'] })
+    expect(sqlOf(db, 0)).toContain("vs6.probe_status = 'pending'")
+  })
+
+  it('needs_source → NOT EXISTS (可播源)', async () => {
+    const db = makePool([{ cnt: '0' }], [])
+    await listVideoGroups(db, { quickFilters: ['needs_source'] })
+    const sql = sqlOf(db, 0)
+    expect(sql).toContain('NOT EXISTS')
+    expect(sql).toContain("vs7.is_active AND vs7.probe_status <> 'dead' AND vs7.render_status <> 'dead'")
+  })
+
+  it('low_quality（含已知质量 AND 无源 rank>=4）+ COALESCE 回退口径', async () => {
+    const db = makePool([{ cnt: '0' }], [])
+    await listVideoGroups(db, { quickFilters: ['low_quality'] })
+    const sql = sqlOf(db, 0)
+    expect(sql).toContain('COALESCE(vs8.quality_detected, vs8.quality) IS NOT NULL')
+    expect(sql).toContain('NOT EXISTS')
+    expect(sql).toContain('>= 4')
+  })
+
+  it('lowQuality=true 与 quickFilters low_quality OR 合流：单份谓词不双 push', async () => {
+    const db = makePool([{ cnt: '0' }], [])
+    await listVideoGroups(db, { lowQuality: true, quickFilters: ['low_quality'] })
+    const sql = sqlOf(db, 0)
+    expect((sql.match(/vs9\.video_id/g) ?? []).length).toBe(1)
+  })
+
+  it('lowQuality=false 且无 quickFilters → 不注入低质量谓词', async () => {
+    const db = makePool([{ cnt: '0' }], [])
+    await listVideoGroups(db, { lowQuality: false })
+    expect(sqlOf(db, 1)).not.toContain('vs9')
+  })
+
+  it('多 quickFilters 可组合 AND（has_abnormal + needs_source 共存）', async () => {
+    const db = makePool([{ cnt: '0' }], [])
+    await listVideoGroups(db, { quickFilters: ['has_abnormal', 'needs_source'] })
+    const sql = sqlOf(db, 0)
+    expect(sql).toContain('vs5.probe_status')
+    expect(sql).toContain('vs7.is_active')
+  })
+})
+
+describe('CHG-VSR-3 listVideoGroups sortField 扩展（D-117-VSR3-6 / SELECT 别名）', () => {
+  const dataSql = (db: Pool) => (db.query as ReturnType<typeof vi.fn>).mock.calls[1][0] as string
+
+  it('sortField=activeSources → ORDER BY active_source_count', async () => {
+    const db = makePool([{ cnt: '0' }], [])
+    await listVideoGroups(db, { sortField: 'activeSources', sortDir: 'desc' })
+    expect(dataSql(db)).toContain('ORDER BY active_source_count DESC')
+  })
+
+  it('sortField=quality → ORDER BY quality_rank_max', async () => {
+    const db = makePool([{ cnt: '0' }], [])
+    await listVideoGroups(db, { sortField: 'quality', sortDir: 'asc' })
+    expect(dataSql(db)).toContain('ORDER BY quality_rank_max ASC')
+  })
+
+  it('sortField=lastChecked → ORDER BY last_checked_at', async () => {
+    const db = makePool([{ cnt: '0' }], [])
+    await listVideoGroups(db, { sortField: 'lastChecked', sortDir: 'desc' })
+    expect(dataSql(db)).toContain('ORDER BY last_checked_at DESC')
+  })
+
+  it('lastCheckedFrom + lastCheckedTo → HAVING MAX(vs.last_probed_at) 范围（含到日 +1 天）', async () => {
+    const db = makePool([{ cnt: '0' }], [])
+    await listVideoGroups(db, { lastCheckedFrom: '2026-05-01', lastCheckedTo: '2026-05-25' })
+    const countSql = (db.query as ReturnType<typeof vi.fn>).mock.calls[0][0] as string
+    expect(countSql).toContain('HAVING')
+    expect(countSql).toContain('MAX(vs.last_probed_at) >= $')
+    expect(countSql).toContain('MAX(vs.last_probed_at) < ($')
+    expect(countSql).toContain("INTERVAL '1 day'")
+  })
+})
+
+describe('CHG-VSR-3 getVideoGroupStats KPI②（D-117-VSR3-4 / per-video 子查询 + COUNT FILTER）', () => {
+  it('SQL = per-video 子查询 g + 外层 ①(保留) + ②(新增) COUNT FILTER', async () => {
+    const db = makePool([{}])
+    await getVideoGroupStats(db)
+    const sql = (db.query as ReturnType<typeof vi.fn>).mock.calls[0][0] as string
+    // ①口径保留（source_check_status 维度，逐值回归基线）
+    expect(sql).toContain("FILTER (WHERE g.source_check_status IN ('ok', 'partial'))")
+    expect(sql).toContain("FILTER (WHERE g.source_check_status = 'all_dead')")
+    expect(sql).toContain("g.source_check_status = 'all_dead' AND g.is_published = false")
+    // ②新增（探测/质量维度）
+    expect(sql).toContain('FILTER (WHERE g.has_abnormal)')
+    expect(sql).toContain('FILTER (WHERE g.needs_source)')
+    expect(sql).toContain('FILTER (WHERE g.has_pending)')
+    expect(sql).toContain('FILTER (WHERE g.quality_rank_max < 4)')
+    // 禁①②同层双算 → per-video 子查询
+    expect(sql).toContain('bool_or')
+    expect(sql).toContain('GROUP BY v.id, v.source_check_status, v.is_published')
+  })
+
+  it('映射②维度字段 + ①等价回归（旧 4 字段逐值正确）', async () => {
+    const db = makePool([{
+      total: '10', active: '6', dead: '2', orphan: '1',
+      abnormal: '3', needs_source: '2', pending_probe: '4', low_quality: '1',
+    }])
+    const stats = await getVideoGroupStats(db)
+    // ①等价回归
+    expect(stats.total).toBe(10)
+    expect(stats.active).toBe(6)
+    expect(stats.dead).toBe(2)
+    expect(stats.orphan).toBe(1)
+    // ②新增
+    expect(stats.abnormal).toBe(3)
+    expect(stats.needsSource).toBe(2)
+    expect(stats.pendingProbe).toBe(4)
+    expect(stats.lowQuality).toBe(1)
   })
 })

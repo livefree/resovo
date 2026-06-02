@@ -22,7 +22,7 @@ describe('listAllSourceLines — CHG-SN-9-LINES-VIEW-UNIFY SQL contract', () => 
   // FIX-3：FULL OUTER JOIN 范式（防 alias-only 孤儿行消失）
 
   it('SQL FULL OUTER JOIN：vs_agg subquery + source_line_aliases（保 alias-only 行 / Codex 3rd FIX）', async () => {
-    const { listAllSourceLines } = await import('@/api/db/queries/sources-matrix')
+    const { listAllSourceLines } = await import('@/api/db/queries/source-line-aliases')
     const db = makeMockDb()
     await listAllSourceLines(db)
 
@@ -38,7 +38,7 @@ describe('listAllSourceLines — CHG-SN-9-LINES-VIEW-UNIFY SQL contract', () => 
   })
 
   it('SELECT COALESCE 处理 alias-only 行的 site_key/source_name + 0 默认值', async () => {
-    const { listAllSourceLines } = await import('@/api/db/queries/sources-matrix')
+    const { listAllSourceLines } = await import('@/api/db/queries/source-line-aliases')
     const db = makeMockDb()
     await listAllSourceLines(db)
 
@@ -51,7 +51,7 @@ describe('listAllSourceLines — CHG-SN-9-LINES-VIEW-UNIFY SQL contract', () => 
   })
 
   it('SELECT 含 sla.* alias 字段（display_name / codename / priority / retired_at / auto_retired / updated_at）', async () => {
-    const { listAllSourceLines } = await import('@/api/db/queries/sources-matrix')
+    const { listAllSourceLines } = await import('@/api/db/queries/source-line-aliases')
     const db = makeMockDb()
     await listAllSourceLines(db)
 
@@ -65,7 +65,7 @@ describe('listAllSourceLines — CHG-SN-9-LINES-VIEW-UNIFY SQL contract', () => 
   })
 
   it('vs_agg subquery 含聚合 video_count / active_count / episode_count + WHERE deleted_at + site_key IS NOT NULL', async () => {
-    const { listAllSourceLines } = await import('@/api/db/queries/sources-matrix')
+    const { listAllSourceLines } = await import('@/api/db/queries/source-line-aliases')
     const db = makeMockDb()
     await listAllSourceLines(db)
 
@@ -78,7 +78,7 @@ describe('listAllSourceLines — CHG-SN-9-LINES-VIEW-UNIFY SQL contract', () => 
   })
 
   it('row mapping：未分配行 displayName fallback 到 source_name / priority=0 / autoRetired=false / assignedAt=null', async () => {
-    const { listAllSourceLines } = await import('@/api/db/queries/sources-matrix')
+    const { listAllSourceLines } = await import('@/api/db/queries/source-line-aliases')
     const db = {
       query: vi.fn().mockResolvedValue({
         rows: [
@@ -118,7 +118,7 @@ describe('listAllSourceLines — CHG-SN-9-LINES-VIEW-UNIFY SQL contract', () => 
   })
 
   it('row mapping：alias-only 孤儿行（FIX-3 / 退役 / cooling）→ videoCount=0 + assignedAt 非 null（Codex 3rd FIX）', async () => {
-    const { listAllSourceLines } = await import('@/api/db/queries/sources-matrix')
+    const { listAllSourceLines } = await import('@/api/db/queries/source-line-aliases')
     const db = {
       query: vi.fn().mockResolvedValue({
         rows: [
@@ -157,7 +157,7 @@ describe('listAllSourceLines — CHG-SN-9-LINES-VIEW-UNIFY SQL contract', () => 
   })
 
   it('row mapping：已分配行字段全透传', async () => {
-    const { listAllSourceLines } = await import('@/api/db/queries/sources-matrix')
+    const { listAllSourceLines } = await import('@/api/db/queries/source-line-aliases')
     const db = {
       query: vi.fn().mockResolvedValue({
         rows: [
