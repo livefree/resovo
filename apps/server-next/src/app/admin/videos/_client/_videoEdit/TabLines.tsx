@@ -8,7 +8,7 @@
  *   - 新增 probe / render-check 能力（单源 + 全量），失败经 onActionResult → alert(VE)
  *   - LineHealthDrawer 开合/分页/标题留本地（R5）；取数走 actions.fetchHealth
  */
-import React, { useState, useCallback, useMemo } from 'react'
+import React, { useCallback, useMemo } from 'react'
 import {
   LinesPanel,
   groupSourcesByLine,
@@ -18,9 +18,10 @@ import {
 } from '@resovo/admin-ui'
 import type { SourceHealthEvent } from '@resovo/types'
 import { VE } from '@/i18n/messages/zh-CN/videos-edit'
-import { toDisplayState, type LineHealthPage } from '@/lib/sources/api'
+import { toDisplayState } from '@/lib/sources/api'
 import { useSourceLinesController } from '@/lib/sources/use-source-lines-controller'
 import type { SourceActionResult } from '@/lib/sources/use-source-lines-controller'
+import { useLineHealthDrawer } from '@/lib/sources/use-line-health-drawer'
 
 export interface TabLinesProps {
   readonly videoId: string
@@ -53,37 +54,12 @@ export function TabLines({ videoId }: TabLinesProps): React.ReactElement {
 
   const aggregatedLines = useMemo(() => groupSourcesByLine(state.lines), [state.lines])
 
-  // ── Health drawer（R5 留消费方）────────────────────────────────────────
-  const [healthSourceId, setHealthSourceId] = useState<string | null>(null)
-  const [healthPage, setHealthPage] = useState(1)
-  const [health, setHealth] = useState<LineHealthPage | null>(null)
-  const [healthLoading, setHealthLoading] = useState(false)
+  // ── Health drawer（CHG-VSR-6-FOLLOWUP：共享 hook / 取数+并发+分页中性化）──────
+  // 省略 loadFailedText → 保持 TabLines 现状（catch 静默清空，无 error 态）；
+  // probeState/renderState/title 仍由本组件从 state.lines 实时派生（R3/R4 留消费方控制）。
+  const [health, healthActions] = useLineHealthDrawer({ fetchHealth: actions.fetchHealth })
 
-  const loadHealth = useCallback((sourceId: string, page: number) => {
-    setHealthLoading(true)
-    actions.fetchHealth(sourceId, page)
-      .then(setHealth)
-      .catch(() => setHealth(null))
-      .finally(() => setHealthLoading(false))
-  }, [actions])
-
-  const openHealth = useCallback((sourceId: string) => {
-    setHealthSourceId(sourceId)
-    setHealthPage(1)
-    loadHealth(sourceId, 1)
-  }, [loadHealth])
-
-  const closeHealth = useCallback(() => {
-    setHealthSourceId(null)
-    setHealth(null)
-  }, [])
-
-  const loadHealthPage = useCallback((page: number) => {
-    setHealthPage(page)
-    if (healthSourceId) loadHealth(healthSourceId, page)
-  }, [healthSourceId, loadHealth])
-
-  const healthSrc = healthSourceId ? state.lines.find((s) => s.id === healthSourceId) ?? null : null
+  const healthSrc = health.sourceId ? state.lines.find((s) => s.id === health.sourceId) ?? null : null
   const healthTitle = healthSrc
     ? m.healthDrawer.title(
         healthSrc.source_site_key ?? healthSrc.site_key ?? healthSrc.source_name,
@@ -104,7 +80,7 @@ export function TabLines({ videoId }: TabLinesProps): React.ReactElement {
         onToggleEpisode={({ episodeId, nextActive }) => actions.toggleEpisode(episodeId, nextActive)}
         onDisableDead={actions.disableDead}
         onRefetch={() => actions.refetch()}
-        onHealthOpen={({ episodeId }) => openHealth(episodeId)}
+        onHealthOpen={({ episodeId }) => healthActions.open(episodeId)}
         onProbeEpisode={({ episodeId }) => actions.probeEpisode(episodeId)}
         onRenderCheckEpisode={({ episodeId }) => actions.renderCheckEpisode(episodeId)}
         onProbeAllSources={actions.probeAllSources}
@@ -123,21 +99,16 @@ export function TabLines({ videoId }: TabLinesProps): React.ReactElement {
       </p>
 
       <LineHealthDrawer
-        open={healthSourceId !== null}
-        onClose={closeHealth}
+        open={health.open}
+        onClose={healthActions.close}
         title={healthTitle}
         probeState={healthSrc ? toDisplayState(healthSrc.probe_status) : 'unknown'}
         renderState={healthSrc ? toDisplayState(healthSrc.render_status) : 'unknown'}
-        events={(health?.data ?? []) as SourceHealthEvent[]}
-        loading={healthLoading}
+        events={health.events as SourceHealthEvent[]}
+        loading={health.loading}
         emptyText={m.healthDrawer.empty}
         loadingText={m.healthDrawer.loading}
-        pagination={health ? {
-          page: healthPage,
-          total: health.pagination.total,
-          limit: health.pagination.limit,
-          onPageChange: loadHealthPage,
-        } : undefined}
+        pagination={health.pagination}
         testId="data-line-health-drawer"
       />
     </div>

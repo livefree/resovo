@@ -35,10 +35,10 @@ import {
   LineHealthDrawer,
   useToast,
 } from '@resovo/admin-ui'
-import type { SourceHealthEvent } from '@resovo/types'
 import { toDisplayState } from '@/lib/sources/api'
 import { useSourceLinesController } from '@/lib/sources/use-source-lines-controller'
 import type { SourceActionResult } from '@/lib/sources/use-source-lines-controller'
+import { useLineHealthDrawer } from '@/lib/sources/use-line-health-drawer'
 
 // ── 内联文案（sources 模块无 i18n 文件，跟随 SourcesClient/SourceColumns 现状）──────
 
@@ -132,46 +132,14 @@ export function SourceLinesExpand({ videoId }: SourceLinesExpandProps) {
 
   const aggregatedLines = useMemo(() => groupSourcesByLine(state.lines), [state.lines])
 
-  // ── Health drawer（R5 留消费方 / 仿 TabLines 分散 state）──────────────────────
-  const [healthSourceId, setHealthSourceId] = useState<string | null>(null)
-  const [healthPage, setHealthPage] = useState(1)
-  const [healthEvents, setHealthEvents] = useState<SourceHealthEvent[]>([])
-  const [healthTotal, setHealthTotal] = useState(0)
-  const [healthLoading, setHealthLoading] = useState(false)
-  const [healthError, setHealthError] = useState<string | null>(null)
+  // ── Health drawer（CHG-VSR-6-FOLLOWUP：共享 hook / 取数+并发+分页中性化）──────
+  // loadFailedText 注入 → 保留 error 红条 + retry（R3）；probeState/renderState/title 实时派生留本地（R4）。
+  const [health, healthActions] = useLineHealthDrawer({
+    fetchHealth: actions.fetchHealth,
+    loadFailedText: TXT.loadFailed,
+  })
 
-  const loadHealth = useCallback((sourceId: string, page: number) => {
-    setHealthLoading(true)
-    setHealthError(null)
-    actions.fetchHealth(sourceId, page)
-      .then((res) => {
-        setHealthEvents(res.data as SourceHealthEvent[])
-        setHealthTotal(res.pagination.total)
-      })
-      .catch(() => setHealthError(TXT.loadFailed))
-      .finally(() => setHealthLoading(false))
-  }, [actions])
-
-  const openHealth = useCallback((sourceId: string) => {
-    setHealthSourceId(sourceId)
-    setHealthPage(1)
-    loadHealth(sourceId, 1)
-  }, [loadHealth])
-
-  const closeHealth = useCallback(() => {
-    setHealthSourceId(null)
-    setHealthEvents([])
-    setHealthTotal(0)
-    setHealthError(null)
-  }, [])
-
-  const changeHealthPage = useCallback((page: number) => {
-    if (!healthSourceId) return
-    setHealthPage(page)
-    loadHealth(healthSourceId, page)
-  }, [healthSourceId, loadHealth])
-
-  const healthSrc = healthSourceId ? state.lines.find((l) => l.id === healthSourceId) ?? null : null
+  const healthSrc = health.sourceId ? state.lines.find((l) => l.id === health.sourceId) ?? null : null
   const healthTitle = healthSrc
     ? `${healthSrc.source_name} · ${healthSrc.episode_number != null ? `EP${healthSrc.episode_number}` : TXT.fullEpisode}`
     : ''
@@ -184,7 +152,7 @@ export function SourceLinesExpand({ videoId }: SourceLinesExpandProps) {
         onToggleEpisode={({ episodeId, nextActive }) => actions.toggleEpisode(episodeId, nextActive)}
         onDisableDead={actions.disableDead}
         onRefetch={() => actions.refetch()}
-        onHealthOpen={({ episodeId }) => openHealth(episodeId)}
+        onHealthOpen={({ episodeId }) => healthActions.open(episodeId)}
         onProbeEpisode={({ episodeId }) => actions.probeEpisode(episodeId)}
         onRenderCheckEpisode={({ episodeId }) => actions.renderCheckEpisode(episodeId)}
         onProbeAllSources={actions.probeAllSources}
@@ -202,19 +170,17 @@ export function SourceLinesExpand({ videoId }: SourceLinesExpandProps) {
         testId="sources-lines-expand"
       />
       <LineHealthDrawer
-        open={healthSourceId !== null}
-        onClose={closeHealth}
+        open={health.open}
+        onClose={healthActions.close}
         title={healthTitle}
         probeState={healthSrc ? toDisplayState(healthSrc.probe_status) : 'unknown'}
         renderState={healthSrc ? toDisplayState(healthSrc.render_status) : 'unknown'}
-        events={healthEvents}
-        loading={healthLoading}
-        error={healthError ? { message: healthError, onRetry: () => changeHealthPage(healthPage) } : null}
+        events={health.events}
+        loading={health.loading}
+        error={health.error ? { message: health.error, onRetry: healthActions.retry } : null}
         emptyText={TXT.healthEmpty}
         loadingText={TXT.healthLoading}
-        pagination={healthTotal > 20
-          ? { page: healthPage, total: healthTotal, limit: 20, onPageChange: changeHealthPage }
-          : undefined}
+        pagination={health.pagination}
         testId="sources-line-health-drawer"
       />
     </div>

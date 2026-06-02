@@ -2679,8 +2679,11 @@ CODENAME-MATRIX-E2E (依赖 Wave 3 验收期补丁 CODENAME-MATRIX ✅)
     - 验收要点：submit 返 410 + 不写库 + 前台无投稿入口；`report-error` 不受影响。
     - 依赖：无（独立，任意时点）。
 
-14. **CHG-VSR-6-FOLLOWUP-DRAWER-HOOK** — 提取共享 `useLineHealthDrawer`（消除 3 处 drawer 重复）（状态：⬜ 未开始 — CHG-VSR-6 衍生 / 用户裁决 2026-06-02 拆出）
+14. **CHG-VSR-6-FOLLOWUP-DRAWER-HOOK** — 提取共享 `useLineHealthDrawer`（消除 3 处 drawer 重复）（状态：✅ 已完成 2026-06-02 / claude-opus-4-8 / 子代理 arch-reviewer (claude-opus-4-8)）
     - 创建时间：2026-06-02
+    - 实际开始：2026-06-02 15:30
+    - 完成时间：2026-06-02 16:10
+    - 完成备注：**新建中性 hook `useLineHealthDrawer`（arch-reviewer Opus CONDITIONAL PASS 蓝图）+ 3 消费方迁移**。hook 返回 `[state, actions]`，持有 open/sourceId/page/events/total/limit/loading/error + 派生 pagination；**不持有 probeState/renderState/title**（消费方派生 → R-4 审核台保持快照 / TabLines·sources 实时派生，零行为变更）；`fetchHealth` 注入；**requestToken 并发保护**（R-1/R-2 修复现有 3 处 stale 覆盖缺陷）；`loadFailedText` 可选注入（兼容 TabLines 无 error 现状）；分页 `total>limit` limit 取响应真值（R-6 禁硬编码）。门禁全过：typecheck/lint/verify×2 EXIT=0 / **全量 454 files 6015 passed 0 failed 零 flaky**（净 +12 hook 单测）/ hook 12 例（并发/分页/error/no-op）+ SourcesClient 渲染 SourceLinesExpand 过。**审核台 e2e 既有 env 阻塞**（登录重定向先于 LinesPanel 渲染 = 非本卡回归 / PRE-2 已记录），drawer 关键路径回归由 12 例 hook 单测 + typecheck + 全量零回归覆盖。注：TabLines 单页不再显示分页栏（蓝图 R-6 标准化，与 moderation/sources 一致）。详见 changelog。执行模型: claude-opus-4-8
     - 建议模型：**opus**（共享 hook 契约 / 跨 3 消费方 / 触碰审核台并发敏感关键路径 → 强制 Opus 子代理评审 + commit trailer `Subagents: arch-reviewer (...)`）
     - 背景：CHG-VSR-PRE-2 注意 ③ + CHG-VSR-6 引入第 3 处 health drawer 本地实现（`moderation/LinesPanel` + `TabLines` + `SourceLinesExpand` 各一份：open·page·title·events·loading·error + `fetchHealth` 取数）。达 CLAUDE.md「同一 UI 模式 3 处以上必须提取」阈值。
     - 文件范围：新建 `apps/server-next/src/lib/sources/use-line-health-drawer.ts`（中性 hook：open/close/changePage + events/loading/error 状态 + 取数编排）；3 消费方迁移 `moderation/_client/LinesPanel.tsx` + `videos/_client/_videoEdit/TabLines.tsx` + `sources/_client/SourceLinesExpand.tsx`；title 拼接 / i18n 文案 slot 留消费方（各异：M.lines / VE.lines / 内联中文）。

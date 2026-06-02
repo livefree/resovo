@@ -17,30 +17,20 @@ import {
   useToast,
 } from '@resovo/admin-ui'
 import type { LineAggregate } from '@resovo/admin-ui'
-import type { SourceHealthEvent } from '@resovo/types'
+import type { DualSignalDisplayState } from '@resovo/types'
 import { toDisplayState } from '@/lib/sources/api'
 import { useSourceLinesController } from '@/lib/sources/use-source-lines-controller'
 import type { SourceLineRowData, SourceActionResult } from '@/lib/sources/use-source-lines-controller'
+import { useLineHealthDrawer } from '@/lib/sources/use-line-health-drawer'
 import { M } from '@/i18n/messages/zh-CN/moderation'
 
-// ── Health drawer state（R5 留消费方）────────────────────────────────────────
-
-interface HealthDrawerState {
-  readonly open: boolean
-  readonly sourceId: string | null
+// ── Health drawer 快照（CHG-VSR-6-FOLLOWUP / R4 审核台保持「open 时快照」）────────
+// 审核台**不**实时派生 probe/render/title：open 时存快照，drawer 期间冻结，并发 probe 改
+// state.lines 不影响已开抽屉头部 BarSignal（保持现行为，避免触碰并发关键路径）。
+interface HealthSnapshot {
   readonly title: string
-  readonly probeState: string
-  readonly renderState: string
-  readonly events: SourceHealthEvent[]
-  readonly loading: boolean
-  readonly error: string | null
-  readonly page: number
-  readonly total: number
-}
-
-const DRAWER_CLOSED: HealthDrawerState = {
-  open: false, sourceId: null, title: '', probeState: 'unknown', renderState: 'unknown',
-  events: [], loading: false, error: null, page: 1, total: 0,
+  readonly probeState: DualSignalDisplayState
+  readonly renderState: DualSignalDisplayState
 }
 
 // ── Props ────────────────────────────────────────────────────────────────────
@@ -68,7 +58,8 @@ export function LinesPanel({ videoId, selectedKey, onLineSelect, onSourceHealthC
   const toast = useToast()
   // R4：localized 红条留消费方（toggle race/fail + disableDead/refetch fail）
   const [actionError, setActionError] = useState<string | null>(null)
-  const [drawer, setDrawer] = useState<HealthDrawerState>(DRAWER_CLOSED)
+  // CHG-VSR-6-FOLLOWUP：health drawer 取数/并发/分页经共享 hook；title/probe/render 走本地快照（R4）
+  const [snapshot, setSnapshot] = useState<HealthSnapshot | null>(null)
 
   // Y4：每次 reload 后首行自动选 → onLineSelect 桥接（仅受控用法）
   const handleLoaded = useCallback((rows: readonly SourceLineRowData[]) => {
@@ -144,35 +135,30 @@ export function LinesPanel({ videoId, selectedKey, onLineSelect, onSourceHealthC
     onActionResult: handleActionResult,
   })
 
+  // R3：loadFailedText 必传 → 保留 error 红条 + retry（审核台现有能力）
+  const [health, healthActions] = useLineHealthDrawer({
+    fetchHealth: actions.fetchHealth,
+    loadFailedText: M.lines.loadFailed,
+  })
+
   const aggregatedLines = useMemo(() => groupSourcesByLine(state.lines), [state.lines])
 
+  // R4：open 时存快照（title/probe/render 冻结）+ hook 接管取数/并发/分页
   const handleHealthOpen = useCallback(({ episodeId }: { lineKey: string; episodeId: string }) => {
     const src = state.lines.find((l) => l.id === episodeId)
     if (!src) return
-    const title = `${src.source_name} · EP${src.episode_number ?? M.lines.fullEpisode}`
-    setDrawer({
-      open: true, sourceId: src.id, title,
+    setSnapshot({
+      title: `${src.source_name} · EP${src.episode_number ?? M.lines.fullEpisode}`,
       probeState: toDisplayState(src.probe_status),
       renderState: toDisplayState(src.render_status),
-      events: [], loading: true, error: null, page: 1, total: 0,
     })
-    actions.fetchHealth(src.id, 1)
-      .then((res) => setDrawer((d) => ({
-        ...d, events: res.data as SourceHealthEvent[], loading: false, total: res.pagination.total, page: 1,
-      })))
-      .catch(() => setDrawer((d) => ({ ...d, loading: false, error: M.lines.loadFailed })))
-  }, [state.lines, actions])
+    healthActions.open(src.id)
+  }, [state.lines, healthActions])
 
-  const handleHealthPage = useCallback(async (page: number) => {
-    if (!drawer.sourceId) return
-    setDrawer((d) => ({ ...d, loading: true }))
-    try {
-      const res = await actions.fetchHealth(drawer.sourceId, page)
-      setDrawer((d) => ({ ...d, events: res.data as SourceHealthEvent[], loading: false, page }))
-    } catch {
-      setDrawer((d) => ({ ...d, loading: false, error: M.lines.loadFailed }))
-    }
-  }, [drawer.sourceId, actions])
+  const closeHealth = useCallback(() => {
+    healthActions.close()
+    setSnapshot(null)
+  }, [healthActions])
 
   return (
     <>
@@ -200,19 +186,15 @@ export function LinesPanel({ videoId, selectedKey, onLineSelect, onSourceHealthC
         aria-label="审核台视频线路"
       />
       <LineHealthDrawer
-        open={drawer.open}
-        onClose={() => setDrawer(DRAWER_CLOSED)}
-        title={drawer.title}
-        probeState={drawer.probeState as Parameters<typeof LineHealthDrawer>[0]['probeState']}
-        renderState={drawer.renderState as Parameters<typeof LineHealthDrawer>[0]['renderState']}
-        events={drawer.events}
-        loading={drawer.loading}
-        error={drawer.error
-          ? { message: drawer.error, onRetry: () => drawer.sourceId && void handleHealthPage(drawer.page) }
-          : null}
-        pagination={drawer.total > 20
-          ? { page: drawer.page, total: drawer.total, limit: 20, onPageChange: handleHealthPage }
-          : undefined}
+        open={health.open}
+        onClose={closeHealth}
+        title={snapshot?.title ?? ''}
+        probeState={snapshot?.probeState ?? 'unknown'}
+        renderState={snapshot?.renderState ?? 'unknown'}
+        events={health.events}
+        loading={health.loading}
+        error={health.error ? { message: health.error, onRetry: healthActions.retry } : null}
+        pagination={health.pagination}
       />
     </>
   )
