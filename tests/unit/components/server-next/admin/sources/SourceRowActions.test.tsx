@@ -59,7 +59,7 @@ function renderActions(props: Partial<React.ComponentProps<typeof SourceRowActio
     <SourceRowActions
       row={makeRow()}
       expanded={false}
-      isAdmin
+      isAdmin={true}
       onExpandToggle={onExpandToggle}
       onReload={onReload}
       {...props}
