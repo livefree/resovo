@@ -1,15 +1,14 @@
 'use client'
 
-import { useCallback } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 import type {
   TableQuerySnapshot,
   FilterValue,
-  FilterChipProps,
   TableQueryPatch,
 } from '@resovo/admin-ui'
-import type { VideoListFilter, CrawlerSite } from '@/lib/videos'
-import type { VideoType, VisibilityStatus, ReviewStatus } from '@resovo/types'
+import type { VideoListFilter } from '@/lib/videos'
+import type { VideoType, VideoStatus, VisibilityStatus, ReviewStatus, DoubanStatus, BangumiStatus } from '@resovo/types'
 import { getVideoTypeOptions } from '@resovo/admin-ui'
 
 // ── filter option constants ───────────────────────────────────────
@@ -40,11 +39,32 @@ export const REVIEW_STATUS_OPTIONS: ReadonlyArray<{ value: ReviewStatus; label: 
   { value: 'rejected', label: '已拒绝' },
 ]
 
+// ── 页面级快捷筛选（B 方案 / 设计 §2.6③）─────────────────────────
+// 派生/布尔条件，不适合列筛选；点击切换·可组合·选中高亮·全部清空（PageHeader 子标题渲染）。
+// state 用独立 React Set（不入 snapshot.filters / 避开 bool URL 往返 kind 推断歧义），
+// 经 buildVideoFilter 第二参数合流到 VideoListFilter 派生 boolean（仅 true 发送）。
+export const VIDEO_QUICK_FILTERS = [
+  { key: 'pendingReview', label: '待审' },
+  { key: 'metaIncomplete', label: '元数据缺失' },
+  { key: 'episodeMismatch', label: '集数不一致' },
+] as const
+export type VideoQuickFilterKey = (typeof VIDEO_QUICK_FILTERS)[number]['key']
+
 // ── snapshot → API filter mapping ────────────────────────────────
 
 function getEnumFirst(filters: ReadonlyMap<string, FilterValue>, key: string): string | undefined {
   const v = filters.get(key)
   return v?.kind === 'enum' ? v.value[0] : undefined
+}
+
+function getEnumArray(filters: ReadonlyMap<string, FilterValue>, key: string): readonly string[] | undefined {
+  const v = filters.get(key)
+  return v?.kind === 'enum' && v.value.length > 0 ? v.value : undefined
+}
+
+function getRange(filters: ReadonlyMap<string, FilterValue>, key: string): { min?: number; max?: number } | undefined {
+  const v = filters.get(key)
+  return v?.kind === 'range' ? { min: v.min, max: v.max } : undefined
 }
 
 function getTextValue(filters: ReadonlyMap<string, FilterValue>, key: string): string | undefined {
@@ -76,12 +96,19 @@ const COMPOSITE_SORT_MAP: Readonly<Record<string, VideoSortField>> = {
   status: 'review_status',
 }
 
-export function buildVideoFilter(snapshot: TableQuerySnapshot): VideoListFilter {
+export function buildVideoFilter(
+  snapshot: TableQuerySnapshot,
+  quickFilters?: ReadonlySet<VideoQuickFilterKey>,
+): VideoListFilter {
   const { filters, sort, pagination } = snapshot
   // AMD2-PATCH-1：sort.field 白名单守卫（与 CrawlerRunsView sub 2 EXTEND 一致范式）
   // CHG-VSR-4-A：先经复合列映射，再白名单守卫（映射缺失 → 兜底原 id 直通）
   const mappedField = sort.field ? (COMPOSITE_SORT_MAP[sort.field] ?? sort.field) : undefined
   const sortField = isVideoSortField(mappedField) ? mappedField : undefined
+  // CHG-VSR-4-B（设计 §2.6②）：原子可筛选列经列头菜单 → snapshot.filters；映射到 ADR-150 AMD3 入参
+  const yearRange = getRange(filters, 'year')
+  const metaRange = getRange(filters, 'metaScore')
+  const isPub = getEnumFirst(filters, 'isPublished')
   return {
     q: getTextValue(filters, 'q'),
     type: getEnumFirst(filters, 'type') as VideoType | undefined,
@@ -89,6 +116,20 @@ export function buildVideoFilter(snapshot: TableQuerySnapshot): VideoListFilter 
     visibilityStatus: getEnumFirst(filters, 'visibilityStatus') as VisibilityStatus | undefined,
     reviewStatus: getEnumFirst(filters, 'reviewStatus') as ReviewStatus | undefined,
     site: getEnumFirst(filters, 'site'),
+    // ── CHG-VSR-4-B 原子列筛选（range → min/max；enum 多选 → 数组；isPublished 单值 → bool）──
+    yearMin: yearRange?.min,
+    yearMax: yearRange?.max,
+    country: getEnumArray(filters, 'country'),
+    catalogStatus: getEnumArray(filters, 'catalogStatus') as readonly VideoStatus[] | undefined,
+    isPublished: isPub === 'published' ? true : isPub === 'draft' ? false : undefined,
+    doubanStatus: getEnumArray(filters, 'doubanStatus') as readonly DoubanStatus[] | undefined,
+    bangumiStatus: getEnumArray(filters, 'bangumiStatus') as readonly BangumiStatus[] | undefined,
+    metaScoreMin: metaRange?.min,
+    metaScoreMax: metaRange?.max,
+    // ── CHG-VSR-4-B 页面级快捷筛选（B 方案 / 派生 boolean，仅 true 发送，api 层 === true 才追加谓词）──
+    pendingReview: quickFilters?.has('pendingReview') || undefined,
+    metaIncomplete: quickFilters?.has('metaIncomplete') || undefined,
+    episodeMismatch: quickFilters?.has('episodeMismatch') || undefined,
     sortField,
     sortDir: sortField ? sort.direction : undefined,
     page: pagination.page,
@@ -96,48 +137,13 @@ export function buildVideoFilter(snapshot: TableQuerySnapshot): VideoListFilter 
   }
 }
 
-// ── filter chip display helpers ──────────────────────────────────
-
-const FILTER_LABELS: Readonly<Record<string, string>> = {
-  q: '搜索', type: '类型', status: '上架状态',
-  visibilityStatus: '可见性', reviewStatus: '审核状态', site: '站点',
-}
-
-function getFilterDisplayValue(key: string, value: FilterValue): string {
-  if (value.kind === 'text') return value.value
-  if (value.kind !== 'enum') return ''
-  const v = value.value[0]
-  if (!v) return ''
-  if (key === 'type') return VIDEO_TYPE_OPTIONS.find((o) => o.value === v)?.label ?? v
-  if (key === 'status') return VIDEO_STATUS_OPTIONS.find((o) => o.value === v)?.label ?? v
-  if (key === 'visibilityStatus') return VISIBILITY_OPTIONS.find((o) => o.value === v)?.label ?? v
-  if (key === 'reviewStatus') return REVIEW_STATUS_OPTIONS.find((o) => o.value === v)?.label ?? v
-  return v
-}
-
-export function buildFilterChips(
-  snapshot: TableQuerySnapshot,
-  onClear: (key: string) => void,
-): readonly FilterChipProps[] {
-  const chips: FilterChipProps[] = []
-  for (const [key, value] of snapshot.filters) {
-    const displayValue = getFilterDisplayValue(key, value)
-    if (!displayValue) continue
-    chips.push({
-      id: key,
-      label: FILTER_LABELS[key] ?? key,
-      value: displayValue,
-      onClear: () => onClear(key),
-    })
-  }
-  return chips
-}
-
-// ── VideoFilterBar component ─────────────────────────────────────
+// ── VideoFilterBar component（CHG-VSR-4-B / 设计 §1.1 + §2.6①）────
+// 表格头部左侧唯一筛选入口 = q 搜索框（后端 ILIKE 多列 OR：title / title_en / title_original / short_id）。
+// 旧 status/site 下拉 + FilterChipBar 退场（§1.1：头部仅搜索 + 列设置；列筛选走列头菜单；
+// 已选过滤激活态在列头指示符体现，不出现已选过滤 chip 条）。
 
 export interface VideoFilterBarProps {
   readonly snapshot: TableQuerySnapshot
-  readonly sites: readonly CrawlerSite[]
   readonly onPatch: (next: TableQueryPatch) => void
 }
 
@@ -149,55 +155,53 @@ const INPUT_STYLE: CSSProperties = {
   color: 'var(--fg-default)',
   fontSize: 'var(--font-size-sm)',
   // outline 由 InteractionStyles §5 focus-visible 兜底（CHG-UX-06）
-  minWidth: '180px',
+  minWidth: '260px',
 }
 
-const SELECT_STYLE: CSSProperties = {
-  ...INPUT_STYLE,
-  minWidth: '120px',
-  cursor: 'pointer',
+const SEARCH_DEBOUNCE_MS = 300
+
+function currentQ(filters: ReadonlyMap<string, FilterValue>): string {
+  const v = filters.get('q')
+  return v?.kind === 'text' ? v.value : ''
 }
 
-const WRAP_STYLE: CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: 'var(--space-2)',
-  flexWrap: 'wrap',
-}
+export function VideoFilterBar({ snapshot, onPatch }: VideoFilterBarProps) {
+  const committedQ = currentQ(snapshot.filters)
+  const [draft, setDraft] = useState(committedQ)
+  // filtersRef 保最新 filters，debounce commit 时 read-modify-write 不丢并发列筛选（patch.filters 全替换语义）
+  const filtersRef = useRef(snapshot.filters)
+  filtersRef.current = snapshot.filters
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-// sub C（2026-05-24）：VideoFilterBar 简化 6 → 2 控件
-//   - 删 q text input（→ title 列 ⋯ popover text filter / filterFieldName='q'）
-//   - 删 type / visibilityStatus / reviewStatus 3 enum select（→ 对应列 ⋯ popover）
-//   - 保留 status + site 2 enum select（外置 / 与 visibility+review 维度有重叠 / 无对应列承载）
-//   - debounceRef + handleSearch 一并删（DataTableAutoFilter "应用"按钮一次性 commit / 无 debounce）
-export function VideoFilterBar({ snapshot, sites, onPatch }: VideoFilterBarProps) {
-  const setFilter = useCallback((key: string, value: string) => {
-    const next = new Map(snapshot.filters)
-    if (value) {
-      next.set(key, { kind: 'enum', value: [value] } as const)
-    } else {
-      next.delete(key)
-    }
+  // 外部 q 变化（列头菜单清除 / URL 反序列化 / 全部清空）同步回输入框
+  useEffect(() => { setDraft(committedQ) }, [committedQ])
+  // 卸载清理 pending timer（防 setState-after-unmount）
+  useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current) }, [])
+
+  const commit = useCallback((value: string) => {
+    const next = new Map(filtersRef.current)
+    const trimmed = value.trim()
+    if (trimmed) next.set('q', { kind: 'text', value: trimmed })
+    else next.delete('q')
     onPatch({ filters: next })
-  }, [snapshot.filters, onPatch])
+  }, [onPatch])
 
-  const getEnum = (key: string): string => {
-    const v = snapshot.filters.get(key)
-    return v?.kind === 'enum' ? (v.value[0] ?? '') : ''
-  }
+  const onChange = useCallback((value: string) => {
+    setDraft(value)
+    if (timerRef.current) clearTimeout(timerRef.current)
+    timerRef.current = setTimeout(() => commit(value), SEARCH_DEBOUNCE_MS)
+  }, [commit])
 
   return (
-    <div data-video-filter-bar style={WRAP_STYLE}>
-      <select value={getEnum('status')} onChange={(e) => setFilter('status', e.target.value)} data-testid="filter-status" data-interactive="trigger" style={SELECT_STYLE} aria-label="上架状态">
-        <option value="">全部状态</option>
-        {VIDEO_STATUS_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-      </select>
-      {sites.length > 0 && (
-        <select value={getEnum('site')} onChange={(e) => setFilter('site', e.target.value)} data-testid="filter-site" data-interactive="trigger" style={SELECT_STYLE} aria-label="来源站点">
-          <option value="">全部站点</option>
-          {sites.map((s) => <option key={s.key} value={s.key}>{s.name}</option>)}
-        </select>
-      )}
-    </div>
+    <input
+      type="search"
+      value={draft}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder="标题 / 英文名 / 原名 / 短ID"
+      aria-label="搜索视频"
+      data-testid="videos-search-input"
+      data-interactive="input"
+      style={INPUT_STYLE}
+    />
   )
 }

@@ -23,9 +23,11 @@ import {
   Pill, VisChip, Thumb, DualSignal, EnrichmentBadgeCluster, CountryName,
   type TableColumn,
 } from '@resovo/admin-ui'
+import { VIDEO_STATUSES, DOUBAN_STATUSES, BANGUMI_STATUSES } from '@resovo/types'
 import type {
   VideoAdminRow, VideoType, VideoStatus, VisibilityStatus, DoubanStatus,
 } from '@/lib/videos'
+import type { TabKey } from './_videoEdit/types'
 import { VideoRowActions } from './VideoRowActions'
 
 // ── 中文标签映射 ──────────────────────────────────────────────────
@@ -232,11 +234,26 @@ function StatusCell({ row }: { row: VideoAdminRow }): ReactElement | null {
   )
 }
 
+// ── 原子可筛选列静态选项（CHG-VSR-4-B / 设计 §2.6②）──────────────────
+// 值域取 @resovo/types SSOT 常量，label 复用本文件中文映射（避免与列 cell 文案漂移）。
+// country 列无静态选项（走 distinctFetcher / media_catalog.country，CHG-VSR-2 白名单已加）。
+const CATALOG_STATUS_OPTIONS: readonly { value: string; label: string }[] =
+  VIDEO_STATUSES.map((s) => ({ value: s, label: catalogStatusLabel(s) }))
+const DOUBAN_STATUS_OPTIONS: readonly { value: string; label: string }[] =
+  DOUBAN_STATUSES.map((s) => ({ value: s, label: MATCH_STATUS_LABELS[s] }))
+const BANGUMI_STATUS_OPTIONS: readonly { value: string; label: string }[] =
+  BANGUMI_STATUSES.map((s) => ({ value: s, label: MATCH_STATUS_LABELS[s] }))
+const IS_PUBLISHED_OPTIONS: readonly { value: string; label: string }[] = [
+  { value: 'published', label: '已上架' },
+  { value: 'draft', label: '草稿' },
+]
+
 // ── column definitions（设计 §2.2 默认可见 + §2.3/§2.6② 默认隐藏）────
+// CHG-VSR-4-B：onEditRequest 扩 tab 参（图片/外部元数据/查看播放线路 深链 VideoEditDrawer tab）。
 export function buildVideoColumns(
   isAdmin: boolean,
   onRowUpdate: (id: string, patch: Partial<VideoAdminRow>) => void,
-  onEditRequest: (id: string) => void,
+  onEditRequest: (id: string, tab?: TabKey) => void,
   typeOptions: readonly { value: string; label?: string }[] = [],
   visibilityOptions: readonly { value: string; label?: string }[] = [],
   reviewOptions: readonly { value: string; label?: string }[] = [],
@@ -364,26 +381,26 @@ export function buildVideoColumns(
       },
     },
 
-    // ════ 默认隐藏原子可筛选列（§2.6②；render-only，filter 接线留 CHG-VSR-4-B）════
-    // year 年份：原子筛选载体（number-range 留 4-B）；排序由 release 复合列承担 → 禁排序避免冗余
+    // ════ 默认隐藏原子可筛选列（§2.6②；CHG-VSR-4-B filter 接线）════
+    // year 年份：number-range 筛选（→ yearMin/yearMax）；排序由 release 复合列承担 → 禁排序避免冗余
     {
       id: 'year', header: '年份', accessor: (r) => r.year ?? '',
       width: 100, minWidth: 80, enableResizing: true, enableSorting: false, defaultVisible: false,
-      filterable: false,
+      filterable: true, filterFieldName: 'year', filterKind: 'number',
       cell: ({ row }) => <span style={MUTED_TEXT_STYLE}>{row.year ?? '—'}</span>,
     },
-    // country 出品地区：CountryName（ISO→中文）；enum filter 留 4-B（需 distinct 白名单，CHG-VSR-2 已加）
+    // country 出品地区：CountryName（ISO→中文）；enum filter 走 distinct（media_catalog.country，CHG-VSR-2 白名单已加）
     {
       id: 'country', header: '出品地区', accessor: (r) => r.country ?? '',
       width: 110, minWidth: 90, enableResizing: true, enableSorting: false, defaultVisible: false,
-      filterable: false,
+      filterable: true, filterFieldName: 'country', filterKind: 'enum', filterDistinctTable: 'media_catalog',
       cell: ({ row }) => <CountryName code={row.country} muted />,
     },
-    // catalog_status 连载状态：Pill 完结/连载/未知（mc.status）；enum filter 留 4-B
+    // catalog_status 连载状态：Pill 完结/连载/未知（mc.status）；enum filter（→ catalogStatus[]）
     {
       id: 'catalog_status', header: '连载状态', accessor: (r) => r.status ?? '',
       width: 100, minWidth: 90, enableResizing: true, enableSorting: false, defaultVisible: false,
-      filterable: false,
+      filterable: true, filterFieldName: 'catalogStatus', filterKind: 'enum', filterOptions: CATALOG_STATUS_OPTIONS,
       cell: ({ row }) => (
         <Pill variant={catalogStatusVariant(row.status)}>{catalogStatusLabel(row.status)}</Pill>
       ),
@@ -406,40 +423,40 @@ export function buildVideoColumns(
         ? <Pill variant={reviewPillVariant(row.review_status)}>{reviewPillLabel(row.review_status)}</Pill>
         : null,
     },
-    // is_published 发布：Pill 已上架/草稿；enum filter 留 4-B
+    // is_published 发布：Pill 已上架/草稿；enum filter（单值 → isPublished bool）
     {
       id: 'is_published', header: '发布', accessor: (r) => (r.is_published ? 'published' : 'draft'),
       width: 90, minWidth: 80, enableResizing: true, enableSorting: false, defaultVisible: false,
-      filterable: false,
+      filterable: true, filterFieldName: 'isPublished', filterKind: 'enum', filterOptions: IS_PUBLISHED_OPTIONS,
       cell: ({ row }) => (
         <Pill variant={row.is_published ? 'ok' : 'neutral'}>{row.is_published ? '已上架' : '草稿'}</Pill>
       ),
     },
-    // douban_status 豆瓣状态：4 态中文；enum filter 留 4-B
+    // douban_status 豆瓣状态：4 态中文；enum filter（→ doubanStatus[]）
     {
       id: 'douban_status', header: '豆瓣状态', accessor: (r) => r.douban_status ?? '',
       width: 110, minWidth: 90, enableResizing: true, enableSorting: false, defaultVisible: false,
-      filterable: false,
+      filterable: true, filterFieldName: 'doubanStatus', filterKind: 'enum', filterOptions: DOUBAN_STATUS_OPTIONS,
       cell: ({ row }) => (
         <span style={MUTED_TEXT_STYLE}>{row.douban_status ? MATCH_STATUS_LABELS[row.douban_status] : '—'}</span>
       ),
     },
-    // bangumi_status Bangumi 状态（仅 anime）：4 态中文；enum filter 留 4-B
+    // bangumi_status Bangumi 状态（仅 anime）：4 态中文；enum filter（→ bangumiStatus[]）
     {
       id: 'bangumi_status', header: 'Bangumi', accessor: (r) => r.bangumi_status ?? '',
       width: 110, minWidth: 90, enableResizing: true, enableSorting: false, defaultVisible: false,
-      filterable: false,
+      filterable: true, filterFieldName: 'bangumiStatus', filterKind: 'enum', filterOptions: BANGUMI_STATUS_OPTIONS,
       cell: ({ row }) => (
         <span style={MUTED_TEXT_STYLE}>
           {row.type === 'anime' && row.bangumi_status ? MATCH_STATUS_LABELS[row.bangumi_status] : '—'}
         </span>
       ),
     },
-    // meta_score 元数据完整度：原子 number-range 筛选载体（留 4-B）；排序由 meta 复合列承担 → 禁排序
+    // meta_score 元数据完整度：number-range 筛选（→ metaScoreMin/metaScoreMax）；排序由 meta 复合列承担 → 禁排序
     {
       id: 'meta_score', header: '元数据完整度', accessor: (r) => r.meta_score ?? '',
       width: 140, minWidth: 120, enableResizing: true, enableSorting: false, defaultVisible: false,
-      filterable: false,
+      filterable: true, filterFieldName: 'metaScore', filterKind: 'number',
       cell: ({ row }) => <span style={MUTED_TEXT_STYLE}>{row.meta_score ?? '—'}</span>,
     },
     // created_at 创建时间：§2.3 既有隐藏列保留排序（sortable→created_at 直通）

@@ -112,11 +112,28 @@ describe('buildVideoColumns — 筛选面（§2.6）', () => {
     }
   })
 
-  it('4-A 筛选面 = title/type/visibility/review_status（既有可用），其余 filterable 非 true', () => {
+  it('4-B 筛选面 = title/type + 原子列(year/country/catalog_status/is_published/douban/bangumi/meta_score/visibility/review)', () => {
     const filterable = cols()
       .filter((c) => (c as { filterable?: boolean }).filterable === true)
       .map((c) => c.id)
-    expect(filterable.sort()).toEqual(['review_status', 'title', 'type', 'visibility'])
+    expect(filterable.sort()).toEqual([
+      'bangumi_status', 'catalog_status', 'country', 'douban_status', 'is_published',
+      'meta_score', 'review_status', 'title', 'type', 'visibility', 'year',
+    ])
+  })
+
+  it('原子列 filterKind/filterFieldName 接线（§2.6② → ADR-150 AMD3 入参）', () => {
+    type FCol = { filterKind?: string; filterFieldName?: string; filterDistinctTable?: string; filterOptions?: readonly unknown[] }
+    expect((colById('year') as FCol)).toMatchObject({ filterKind: 'number', filterFieldName: 'year' })
+    expect((colById('meta_score') as FCol)).toMatchObject({ filterKind: 'number', filterFieldName: 'metaScore' })
+    expect((colById('catalog_status') as FCol)).toMatchObject({ filterKind: 'enum', filterFieldName: 'catalogStatus' })
+    expect((colById('is_published') as FCol)).toMatchObject({ filterKind: 'enum', filterFieldName: 'isPublished' })
+    expect((colById('douban_status') as FCol)).toMatchObject({ filterKind: 'enum', filterFieldName: 'doubanStatus' })
+    expect((colById('bangumi_status') as FCol)).toMatchObject({ filterKind: 'enum', filterFieldName: 'bangumiStatus' })
+    // country 走 distinct（无静态 filterOptions）
+    const country = colById('country') as FCol
+    expect(country).toMatchObject({ filterKind: 'enum', filterFieldName: 'country', filterDistinctTable: 'media_catalog' })
+    expect(country.filterOptions).toBeUndefined()
   })
 })
 

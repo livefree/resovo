@@ -62,6 +62,11 @@ export interface VideoEditDrawerProps {
   readonly videoId: string | null
   readonly onClose: () => void
   readonly onSaved: () => void
+  /**
+   * CHG-VSR-4-B（用户裁决 Q2=A）：行操作「图片 / 外部元数据 / 查看播放线路」深链对应 tab。
+   * 加性，缺省 'basic'（对现有调用零行为变化）；创建模式（videoId=null）强制 'basic'（其余 tab 依赖 videoId）。
+   */
+  readonly initialTab?: TabKey
 }
 
 const TABS: ReadonlyArray<{ id: TabKey; label: string }> = [
@@ -72,7 +77,7 @@ const TABS: ReadonlyArray<{ id: TabKey; label: string }> = [
   { id: 'external', label: '外部元数据' },
 ]
 
-export function VideoEditDrawer({ open, videoId, onClose, onSaved }: VideoEditDrawerProps) {
+export function VideoEditDrawer({ open, videoId, onClose, onSaved, initialTab }: VideoEditDrawerProps) {
   // CHG-SN-8-FUP-VIDEO-MANUAL-ADD-EP-B / ADR-145：双模式 — videoId=null 创建 / 有值编辑
   const isCreating = videoId === null
   const [video, setVideo] = useState<VideoAdminDetail | null>(null)
@@ -90,7 +95,8 @@ export function VideoEditDrawer({ open, videoId, onClose, onSaved }: VideoEditDr
     if (!open) return
     setSkippedFields([])
     setSubmitError(undefined)
-    setTab('basic')
+    // CHG-VSR-4-B：创建模式（videoId=null）强制 basic（其余 tab 需 videoId）；编辑模式用 initialTab 深链
+    setTab(videoId === null ? 'basic' : (initialTab ?? 'basic'))
     if (videoId === null) {
       // 创建模式：清空表单 + 不 fetch
       setVideo(null)
@@ -114,7 +120,7 @@ export function VideoEditDrawer({ open, videoId, onClose, onSaved }: VideoEditDr
       .catch((e: unknown) => { if (!cancelled) setLoadError(e instanceof Error ? e : new Error(String(e))) })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [open, videoId])
+  }, [open, videoId, initialTab])
 
   const set = useCallback(<K extends keyof FormState>(k: K, v: FormState[K]) => {
     setForm((prev) => ({ ...prev, [k]: v }))

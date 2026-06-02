@@ -4,6 +4,7 @@ import React, { useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { AdminDropdown, type AdminDropdownItem } from '@resovo/admin-ui'
 import type { VideoAdminRow, VisibilityStatus } from '@/lib/videos'
+import type { TabKey } from './_videoEdit/types'
 import { updateVisibility, stateTransition, doubanSync, refetchSources } from '@/lib/videos/api'
 
 // ── helpers ───────────────────────────────────────────────────────
@@ -24,7 +25,8 @@ export interface VideoRowActionsProps {
   readonly row: VideoAdminRow
   readonly isAdmin: boolean
   readonly onRowUpdate: (id: string, patch: Partial<VideoAdminRow>) => void
-  readonly onEditRequest: (id: string) => void
+  /** CHG-VSR-4-B：tab 缺省 basic；图片→images / 外部元数据→external / 查看播放线路→lines */
+  readonly onEditRequest: (id: string, tab?: TabKey) => void
 }
 
 // ── menu items builder ────────────────────────────────────────────
@@ -33,6 +35,9 @@ function buildItems(
   row: VideoAdminRow,
   isAdmin: boolean,
   onEdit: () => void,
+  onImages: () => void,
+  onExternal: () => void,
+  onViewLines: () => void,
   onVisibility: (v: VisibilityStatus) => void,
   onTransition: (action: Parameters<typeof stateTransition>[1]) => void,
   onDouban: () => void,
@@ -40,8 +45,12 @@ function buildItems(
   onViewDetail: () => void,
   onMerge: () => void,
 ): readonly AdminDropdownItem[] {
+  // CHG-VSR-4-B（设计 §2.2）：编辑信息 / 图片 / 外部元数据 / 查看播放线路 = 深链 VideoEditDrawer 对应 tab
   const items: AdminDropdownItem[] = [
     { key: 'edit', label: '编辑基础信息', onClick: onEdit },
+    { key: 'images', label: '图片素材', onClick: onImages },
+    { key: 'external', label: '外部元数据', onClick: onExternal },
+    { key: 'view-lines', label: '查看播放线路', onClick: onViewLines },
   ]
 
   if (row.visibility_status !== 'public') {
@@ -133,6 +142,9 @@ export function VideoRowActions({ row, isAdmin, onRowUpdate, onEditRequest }: Vi
     row,
     isAdmin,
     () => { setOpen(false); onEditRequest(row.id) },
+    () => { setOpen(false); onEditRequest(row.id, 'images') },
+    () => { setOpen(false); onEditRequest(row.id, 'external') },
+    () => { setOpen(false); onEditRequest(row.id, 'lines') },
     (v) => withOptimistic({ visibility_status: v }, () => updateVisibility(row.id, v)),
     (action) => {
       const patch: Partial<VideoAdminRow> =

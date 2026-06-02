@@ -30,6 +30,7 @@ vi.mock('@/lib/videos/api', () => ({
   batchPublish: vi.fn(),
   batchUnpublish: vi.fn(),
   reviewVideo: vi.fn(),
+  fetchDistinct: vi.fn(() => Promise.resolve([])),
 }))
 
 vi.mock('@/lib/crawler/api', () => ({

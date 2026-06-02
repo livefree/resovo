@@ -14,6 +14,38 @@ import type {
   DoubanCandidateData,
 } from './types'
 import type { SourceHealthEvent } from '@resovo/types'
+import { formatCountryName } from '@resovo/types'
+
+// ── 列头筛选 distinct（CHG-VSR-4-B）──────────────────────────────
+
+export interface DistinctOption {
+  readonly value: string
+  readonly label?: string
+  readonly count?: number
+}
+
+/**
+ * 列头筛选 distinct 选项拉取（DataTable `distinctFetcher` 契约 / 复用 `/admin/_dt/distinct`）。
+ * CHG-VSR-4-B：视频库唯一 distinct 列 = country（media_catalog.country，CHG-VSR-2 白名单已加）；
+ * country 列额外用 `formatCountryName` 把 ISO code 映射为本地化 label（**值仍为 ISO**，后端按 ISO 过滤）。
+ */
+export async function fetchDistinct(
+  table: string,
+  field: string,
+  q?: string,
+  signal?: AbortSignal,
+): Promise<readonly DistinctOption[]> {
+  const params = new URLSearchParams({ table, col: field, limit: '50' })
+  if (q) params.set('q', q)
+  const res = await apiClient.get<{ data: readonly DistinctOption[] }>(
+    `/admin/_dt/distinct?${params.toString()}`,
+    signal ? { signal } : undefined,
+  )
+  if (field === 'country') {
+    return res.data.map((o) => ({ ...o, label: o.label ?? formatCountryName(o.value, 'zh-CN', o.value) }))
+  }
+  return res.data
+}
 
 // ── 列表 ──────────────────────────────────────────────────────────
 

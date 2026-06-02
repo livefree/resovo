@@ -17,6 +17,7 @@ const listCrawlerSitesMock = vi.fn().mockResolvedValue([])
 
 vi.mock('@/lib/videos/api', () => ({
   listVideos: (...args: unknown[]) => listVideosMock(...args),
+  fetchDistinct: vi.fn(() => Promise.resolve([])),
   batchPublish: vi.fn(),
   batchUnpublish: vi.fn(),
   reviewVideo: vi.fn(),

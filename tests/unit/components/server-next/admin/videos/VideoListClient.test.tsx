@@ -1,26 +1,27 @@
 /**
- * VideoListClient 辅助函数单测（CHG-SN-3-04）
+ * VideoListClient 辅助函数单测（CHG-SN-3-04 / CHG-VSR-4-B 扩展）
  *
  * 覆盖：
- * - buildVideoFilter: snapshot → VideoListFilter 映射（含 q / type / status / visibility /
- *   reviewStatus / site / sort / pagination）
- * - buildFilterChips: 空 / 单 / 多 filter → chip 数组
- * - VIDEO_TYPE_OPTIONS / VISIBILITY_OPTIONS / REVIEW_STATUS_OPTIONS 完整性
+ * - buildVideoFilter: snapshot → VideoListFilter 映射
+ *   - 基础：q / type / status / visibility / reviewStatus / site / sort / pagination
+ *   - CHG-VSR-4-B 原子列：year/metaScore(range) / country/catalogStatus/douban/bangumi(enum 数组) / isPublished(单值→bool)
+ *   - CHG-VSR-4-B 快捷筛选：quickFilters Set → pendingReview/metaIncomplete/episodeMismatch（仅 true）
+ * - VIDEO_TYPE_OPTIONS / VISIBILITY_OPTIONS / REVIEW_STATUS_OPTIONS / VIDEO_QUICK_FILTERS 完整性
  *
- * 注：VideoListClient 组件集成测试依赖 next/navigation mock + listVideos mock，
- * 因 vitest.config.ts 中 @ 别名当前未含 server-next 路径，组件级测试待 CHG-SN-3-14 配置更新后追加。
+ * 注：CHG-VSR-4-B 删除 FilterChipBar（设计 §1.1-5）→ buildFilterChips 死代码移除，相关单测同步删除。
  */
 
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect } from 'vitest'
 import {
   buildVideoFilter,
-  buildFilterChips,
   VIDEO_TYPE_OPTIONS,
   VIDEO_STATUS_OPTIONS,
   VISIBILITY_OPTIONS,
   REVIEW_STATUS_OPTIONS,
+  VIDEO_QUICK_FILTERS,
+  type VideoQuickFilterKey,
 } from '../../../../../../apps/server-next/src/app/admin/videos/_client/VideoFilterFields'
-import type { TableQuerySnapshot } from '../../../../../../packages/admin-ui/src/components/data-table/types'
+import type { TableQuerySnapshot, FilterValue } from '../../../../../../packages/admin-ui/src/components/data-table/types'
 
 // ── test helpers ──────────────────────────────────────────────────
 
@@ -35,7 +36,11 @@ function makeSnapshot(overrides: Partial<TableQuerySnapshot> = {}): TableQuerySn
   }
 }
 
-// ── buildVideoFilter ──────────────────────────────────────────────
+function snapshotWithFilters(entries: ReadonlyArray<readonly [string, FilterValue]>): TableQuerySnapshot {
+  return makeSnapshot({ filters: new Map(entries) })
+}
+
+// ── buildVideoFilter — 基础 ───────────────────────────────────────
 
 describe('buildVideoFilter — 空 snapshot', () => {
   it('空 filters → 全部字段 undefined（除 page/limit/sortDir）', () => {
@@ -46,6 +51,14 @@ describe('buildVideoFilter — 空 snapshot', () => {
     expect(filter.visibilityStatus).toBeUndefined()
     expect(filter.reviewStatus).toBeUndefined()
     expect(filter.site).toBeUndefined()
+    // CHG-VSR-4-B 原子/快捷字段空 snapshot 均 undefined
+    expect(filter.yearMin).toBeUndefined()
+    expect(filter.country).toBeUndefined()
+    expect(filter.isPublished).toBeUndefined()
+    expect(filter.metaScoreMax).toBeUndefined()
+    expect(filter.pendingReview).toBeUndefined()
+    expect(filter.metaIncomplete).toBeUndefined()
+    expect(filter.episodeMismatch).toBeUndefined()
   })
 
   it('默认 pagination → page=1, limit=20', () => {
@@ -54,7 +67,7 @@ describe('buildVideoFilter — 空 snapshot', () => {
     expect(filter.limit).toBe(20)
   })
 
-  it('默认 sort → sortField=undefined, sortDir=undefined（AMD2-PATCH-1 sortField 白名单守卫 / sortDir 同步）', () => {
+  it('默认 sort → sortField=undefined, sortDir=undefined（白名单守卫）', () => {
     const filter = buildVideoFilter(makeSnapshot())
     expect(filter.sortField).toBeUndefined()
     expect(filter.sortDir).toBeUndefined()
@@ -63,128 +76,140 @@ describe('buildVideoFilter — 空 snapshot', () => {
 
 describe('buildVideoFilter — text filter', () => {
   it('q text filter → filter.q', () => {
-    const snapshot = makeSnapshot({
-      filters: new Map([['q', { kind: 'text', value: '星际穿越' }]]),
-    })
-    const filter = buildVideoFilter(snapshot)
+    const filter = buildVideoFilter(snapshotWithFilters([['q', { kind: 'text', value: '星际穿越' }]]))
     expect(filter.q).toBe('星际穿越')
   })
 
   it('q text filter 空字符串 → filter.q=undefined', () => {
-    const snapshot = makeSnapshot({
-      filters: new Map([['q', { kind: 'text', value: '' }]]),
-    })
-    const filter = buildVideoFilter(snapshot)
+    const filter = buildVideoFilter(snapshotWithFilters([['q', { kind: 'text', value: '' }]]))
     expect(filter.q).toBeUndefined()
   })
 })
 
-describe('buildVideoFilter — enum filters', () => {
+describe('buildVideoFilter — 既有 enum filters（单值，向后兼容）', () => {
   it('type enum → filter.type', () => {
-    const snapshot = makeSnapshot({
-      filters: new Map([['type', { kind: 'enum', value: ['movie'] }]]),
-    })
-    expect(buildVideoFilter(snapshot).type).toBe('movie')
+    expect(buildVideoFilter(snapshotWithFilters([['type', { kind: 'enum', value: ['movie'] }]])).type).toBe('movie')
   })
-
-  it('status enum → filter.status', () => {
-    const snapshot = makeSnapshot({
-      filters: new Map([['status', { kind: 'enum', value: ['published'] }]]),
-    })
-    expect(buildVideoFilter(snapshot).status).toBe('published')
+  it('status enum → filter.status（URL 向后兼容保留映射）', () => {
+    expect(buildVideoFilter(snapshotWithFilters([['status', { kind: 'enum', value: ['published'] }]])).status).toBe('published')
   })
-
   it('visibilityStatus enum → filter.visibilityStatus', () => {
-    const snapshot = makeSnapshot({
-      filters: new Map([['visibilityStatus', { kind: 'enum', value: ['hidden'] }]]),
-    })
-    expect(buildVideoFilter(snapshot).visibilityStatus).toBe('hidden')
+    expect(buildVideoFilter(snapshotWithFilters([['visibilityStatus', { kind: 'enum', value: ['hidden'] }]])).visibilityStatus).toBe('hidden')
   })
-
   it('reviewStatus enum → filter.reviewStatus', () => {
-    const snapshot = makeSnapshot({
-      filters: new Map([['reviewStatus', { kind: 'enum', value: ['approved'] }]]),
-    })
-    expect(buildVideoFilter(snapshot).reviewStatus).toBe('approved')
+    expect(buildVideoFilter(snapshotWithFilters([['reviewStatus', { kind: 'enum', value: ['approved'] }]])).reviewStatus).toBe('approved')
   })
-
-  it('site enum → filter.site', () => {
-    const snapshot = makeSnapshot({
-      filters: new Map([['site', { kind: 'enum', value: ['bilibili'] }]]),
-    })
-    expect(buildVideoFilter(snapshot).site).toBe('bilibili')
+  it('site enum → filter.site（URL 向后兼容保留映射）', () => {
+    expect(buildVideoFilter(snapshotWithFilters([['site', { kind: 'enum', value: ['bilibili'] }]])).site).toBe('bilibili')
   })
 })
 
+// ── buildVideoFilter — CHG-VSR-4-B 原子列筛选 ─────────────────────
+
+describe('buildVideoFilter — 原子列筛选映射（§2.6②）', () => {
+  it('year range → yearMin/yearMax', () => {
+    const filter = buildVideoFilter(snapshotWithFilters([['year', { kind: 'range', min: 2000, max: 2025 }]]))
+    expect(filter.yearMin).toBe(2000)
+    expect(filter.yearMax).toBe(2025)
+  })
+
+  it('year range 仅 min → yearMin set / yearMax undefined', () => {
+    const filter = buildVideoFilter(snapshotWithFilters([['year', { kind: 'range', min: 2010 }]]))
+    expect(filter.yearMin).toBe(2010)
+    expect(filter.yearMax).toBeUndefined()
+  })
+
+  it('metaScore range → metaScoreMin/metaScoreMax', () => {
+    const filter = buildVideoFilter(snapshotWithFilters([['metaScore', { kind: 'range', min: 30, max: 90 }]]))
+    expect(filter.metaScoreMin).toBe(30)
+    expect(filter.metaScoreMax).toBe(90)
+  })
+
+  it('country enum 多选 → country[]', () => {
+    const filter = buildVideoFilter(snapshotWithFilters([['country', { kind: 'enum', value: ['US', 'JP'] }]]))
+    expect(filter.country).toEqual(['US', 'JP'])
+  })
+
+  it('catalogStatus enum → catalogStatus[]', () => {
+    const filter = buildVideoFilter(snapshotWithFilters([['catalogStatus', { kind: 'enum', value: ['ongoing'] }]]))
+    expect(filter.catalogStatus).toEqual(['ongoing'])
+  })
+
+  it('doubanStatus / bangumiStatus enum → 数组', () => {
+    const filter = buildVideoFilter(snapshotWithFilters([
+      ['doubanStatus', { kind: 'enum', value: ['matched', 'candidate'] }],
+      ['bangumiStatus', { kind: 'enum', value: ['matched'] }],
+    ]))
+    expect(filter.doubanStatus).toEqual(['matched', 'candidate'])
+    expect(filter.bangumiStatus).toEqual(['matched'])
+  })
+
+  it('isPublished 单值 published → true / draft → false', () => {
+    expect(buildVideoFilter(snapshotWithFilters([['isPublished', { kind: 'enum', value: ['published'] }]])).isPublished).toBe(true)
+    expect(buildVideoFilter(snapshotWithFilters([['isPublished', { kind: 'enum', value: ['draft'] }]])).isPublished).toBe(false)
+  })
+
+  it('enum 空数组 → undefined（不误过滤，对齐 api 空数组短路）', () => {
+    const filter = buildVideoFilter(snapshotWithFilters([['country', { kind: 'enum', value: [] }]]))
+    expect(filter.country).toBeUndefined()
+  })
+})
+
+// ── buildVideoFilter — CHG-VSR-4-B 快捷筛选(B) ────────────────────
+
+describe('buildVideoFilter — 快捷筛选 Set 合流（§2.6③）', () => {
+  it('quickFilters undefined → 三派生字段 undefined', () => {
+    const filter = buildVideoFilter(makeSnapshot())
+    expect(filter.pendingReview).toBeUndefined()
+    expect(filter.metaIncomplete).toBeUndefined()
+    expect(filter.episodeMismatch).toBeUndefined()
+  })
+
+  it('Set 含 key → 对应 boolean true（仅 true）', () => {
+    const set = new Set<VideoQuickFilterKey>(['pendingReview', 'episodeMismatch'])
+    const filter = buildVideoFilter(makeSnapshot(), set)
+    expect(filter.pendingReview).toBe(true)
+    expect(filter.episodeMismatch).toBe(true)
+    // 未选中 → undefined（不发送 false）
+    expect(filter.metaIncomplete).toBeUndefined()
+  })
+
+  it('空 Set → 全部 undefined', () => {
+    const filter = buildVideoFilter(makeSnapshot(), new Set())
+    expect(filter.pendingReview).toBeUndefined()
+    expect(filter.metaIncomplete).toBeUndefined()
+    expect(filter.episodeMismatch).toBeUndefined()
+  })
+
+  it('快捷筛选与列筛选/排序可共存', () => {
+    const snapshot = makeSnapshot({
+      filters: new Map([['type', { kind: 'enum', value: ['anime'] }]]),
+      sort: { field: 'meta', direction: 'desc' },
+    })
+    const filter = buildVideoFilter(snapshot, new Set<VideoQuickFilterKey>(['metaIncomplete']))
+    expect(filter.type).toBe('anime')
+    expect(filter.sortField).toBe('meta_score')
+    expect(filter.metaIncomplete).toBe(true)
+  })
+})
+
+// ── buildVideoFilter — sort + pagination ─────────────────────────
+
 describe('buildVideoFilter — sort + pagination', () => {
   it('sort field + direction → sortField/sortDir', () => {
-    const snapshot = makeSnapshot({
-      sort: { field: 'created_at', direction: 'desc' },
-    })
-    const filter = buildVideoFilter(snapshot)
+    const filter = buildVideoFilter(makeSnapshot({ sort: { field: 'created_at', direction: 'desc' } }))
     expect(filter.sortField).toBe('created_at')
     expect(filter.sortDir).toBe('desc')
   })
 
   it('pagination page=3 + pageSize=50 → page/limit', () => {
-    const snapshot = makeSnapshot({
-      pagination: { page: 3, pageSize: 50 },
-    })
-    const filter = buildVideoFilter(snapshot)
+    const filter = buildVideoFilter(makeSnapshot({ pagination: { page: 3, pageSize: 50 } }))
     expect(filter.page).toBe(3)
     expect(filter.limit).toBe(50)
   })
 })
 
-// ── buildFilterChips ──────────────────────────────────────────────
-
-describe('buildFilterChips', () => {
-  it('空 filters → 空 chips 数组', () => {
-    expect(buildFilterChips(makeSnapshot(), vi.fn())).toHaveLength(0)
-  })
-
-  it('q filter → 1 chip，label="搜索"，value=搜索词', () => {
-    const snapshot = makeSnapshot({
-      filters: new Map([['q', { kind: 'text', value: '星际' }]]),
-    })
-    const chips = buildFilterChips(snapshot, vi.fn())
-    expect(chips).toHaveLength(1)
-    expect(chips[0]?.label).toBe('搜索')
-    expect(chips[0]?.value).toBe('星际')
-    expect(chips[0]?.id).toBe('q')
-  })
-
-  it('type enum → chip value 为中文标签（movie → 电影）', () => {
-    const snapshot = makeSnapshot({
-      filters: new Map([['type', { kind: 'enum', value: ['movie'] }]]),
-    })
-    const chips = buildFilterChips(snapshot, vi.fn())
-    expect(chips[0]?.value).toBe('电影')
-  })
-
-  it('多 filter → 多 chip，onClear 对应 key', () => {
-    const onClear = vi.fn()
-    const snapshot = makeSnapshot({
-      filters: new Map([
-        ['type', { kind: 'enum', value: ['series'] }],
-        ['reviewStatus', { kind: 'enum', value: ['pending_review'] }],
-      ]),
-    })
-    const chips = buildFilterChips(snapshot, onClear)
-    expect(chips).toHaveLength(2)
-    chips[0]?.onClear()
-    expect(onClear).toHaveBeenCalledTimes(1)
-  })
-
-  it('enum value 空数组 → 不产生 chip', () => {
-    const snapshot = makeSnapshot({
-      filters: new Map([['type', { kind: 'enum', value: [] }]]),
-    })
-    expect(buildFilterChips(snapshot, vi.fn())).toHaveLength(0)
-  })
-})
-
-// ── option constants 完整性 ───────────────────────────────────────
+// ── option / 快捷筛选常量 完整性 ──────────────────────────────────
 
 describe('filter option 常量', () => {
   it('VIDEO_TYPE_OPTIONS 含 11 种类型', () => {
@@ -202,15 +227,16 @@ describe('filter option 常量', () => {
 
   it('VISIBILITY_OPTIONS 含 public/internal/hidden', () => {
     const values = VISIBILITY_OPTIONS.map((o) => o.value)
-    expect(values).toContain('public')
-    expect(values).toContain('internal')
-    expect(values).toContain('hidden')
+    expect(values).toEqual(expect.arrayContaining(['public', 'internal', 'hidden']))
   })
 
   it('REVIEW_STATUS_OPTIONS 含 pending_review/approved/rejected', () => {
     const values = REVIEW_STATUS_OPTIONS.map((o) => o.value)
-    expect(values).toContain('pending_review')
-    expect(values).toContain('approved')
-    expect(values).toContain('rejected')
+    expect(values).toEqual(expect.arrayContaining(['pending_review', 'approved', 'rejected']))
+  })
+
+  it('VIDEO_QUICK_FILTERS = 待审/元数据缺失/集数不一致（B 方案 §2.6③）', () => {
+    expect(VIDEO_QUICK_FILTERS.map((q) => q.key)).toEqual(['pendingReview', 'metaIncomplete', 'episodeMismatch'])
+    expect(VIDEO_QUICK_FILTERS.map((q) => q.label)).toEqual(['待审', '元数据缺失', '集数不一致'])
   })
 })

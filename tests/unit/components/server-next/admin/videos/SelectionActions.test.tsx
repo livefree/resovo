@@ -18,6 +18,7 @@ vi.mock('@/lib/videos/api', () => ({
   batchUnpublish: vi.fn(() => Promise.resolve()),
   reviewVideo: vi.fn(() => Promise.resolve()),
   listVideos: vi.fn(() => Promise.resolve({ data: [], total: 0, page: 1, limit: 20 })),
+  fetchDistinct: vi.fn(() => Promise.resolve([])),
   updateVisibility: vi.fn(() => Promise.resolve()),
   stateTransition: vi.fn(() => Promise.resolve()),
   doubanSync: vi.fn(() => Promise.resolve()),
