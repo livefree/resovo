@@ -139,13 +139,17 @@ describe('SourcesClient', () => {
     })
   })
 
-  it('listVideoGroups 请求不再携带 segment（四 Tab 移除后默认 grouped 由后端兜底）', async () => {
+  it('默认请求：不携带 segment + 默认排序 lastChecked desc（§3.4 契约 / Codex review FIX）', async () => {
     getVideoGroupStatsMock.mockResolvedValueOnce(STATS)
     listVideoGroupsMock.mockResolvedValueOnce(EMPTY_LIST)
     render(<SourcesClient />)
     await waitFor(() => expect(listVideoGroupsMock).toHaveBeenCalledTimes(1))
     const params = listVideoGroupsMock.mock.calls[0][0]
+    // 四 Tab 移除：不再携带 segment
     expect(params).not.toHaveProperty('segment')
+    // §3.4：默认排序 = 最近检测降序（非后端兜底的 updated_at）
+    expect(params.sortField).toBe('lastChecked')
+    expect(params.sortDir).toBe('desc')
   })
 
   it('Empty state：listVideoGroups 返回空 data', async () => {

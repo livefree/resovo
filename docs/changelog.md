@@ -13484,3 +13484,8 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **范围外（分卡）**：KPI 5 卡可点击 pressed + quality 低质量 boolean 过滤 + quickFilters/lowQuality 序列化 + 删 SourceSegment 枚举 → **CHG-VSR-5-B**；MatrixExpand→`LinesPanel` 展开区 → **CHG-VSR-6**；e2e 正式回归 → **CHG-VSR-7**。
 - **注意事项**：① `SourceLineAliasPanel.tsx` 内嵌使用已移除 → 成孤儿（仅 page.tsx 文档注释提及「暂保留兼容历史 IA」），未删（卡范围外 / 清理 follow-up）。② KPI 4 卡暂消费①维度 stats（total/active/dead/orphan），5-B 切②维度 5 卡。③ actions 列为占位按钮（重新探测/更多），真实接通留 5-B + 6。④ 派生列均 VideoGroupRow optional（CHG-VSR-3 已填充），UI 防御性兜底。
 - **[AI-CHECK]**：结构检查 分层 NO 违反（UI 只调 typed client）/ 跨模块内部 NO；代码质量 重复逻辑 NO（复用 Pill/SignalPill + filtersMap 既有范式）/ hack NO；规模检查 函数 NO / 文件 NO（264/290<500）；安全 副作用/吞异常 NO。结论：SAFE。
+- **Codex stop-time review FIX（展示与排序契约）**：
+  - **默认排序违反 §3.4**：初始 `sort.field=undefined` → 不发 sortField → 后端兜底 `updated_at desc`，而契约「默认 last_checked desc ✅ 已定」。改 `SourcesClient` 初始 sort `{ field: 'lastChecked', direction: 'desc' }` → 发 sortField=lastChecked（后端 ORDER BY `last_checked_sort` 时序安全列）；同时修复 §1.1-4「激活排序态在列头显指示符」（原数据已排序却无指示符 + 排错字段的展示/状态错配）。
+  - **§3.4 禁排序列显式化**：probe/render/issues 补 `enableSorting: false`（§3.4「probe/render/issues/sites 派生/多值聚合排序业务无意义」），消除 `kind:'computed'` 默认值依赖的隐式假设。sortable 集严格 = video/coverage/quality/last_checked。
+  - 单测补默认排序断言（sortField=lastChecked / sortDir=desc）；门禁全过 typecheck/lint EXIT=0 + 全量 5932 passed 0 failed。
+  - **e2e follow-up**：smoke `sources-sort-filter-smoke.spec.ts:152`（断言首请求 sortField 为 null）随默认排序变更已过时 → CHG-VSR-7 更新为 sortField=lastChecked。

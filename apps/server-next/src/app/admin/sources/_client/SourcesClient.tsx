@@ -67,7 +67,8 @@ export function SourcesClient() {
   const [keyword, setKeyword] = useState<string | undefined>()
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE)
-  const [sort, setSort] = useState<TableSortState>({ field: undefined, direction: 'desc' })
+  // §3.4：默认排序 = 最近检测降序（运维视角关注最近检测；列头显 desc 指示符 / Codex review FIX）
+  const [sort, setSort] = useState<TableSortState>({ field: 'lastChecked', direction: 'desc' })
   // HOTFIX-PATCH-2A §2-EXT（2026-05-25）：filtersMap 统一管理（D-150-4 桥接 / column.filterFieldName 即 key）
   const [filtersMap, setFiltersMap] = useState<ReadonlyMap<string, FilterValue>>(new Map())
   const probeStatusFilter = useMemo<readonly string[]>(() => {

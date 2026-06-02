@@ -116,6 +116,7 @@ export function buildColumns(
       header: '探测',
       accessor: (r) => r.probeStatus,
       width: 100,
+      enableSorting: false, // §3.4：派生聚合，排序业务无意义
       filterable: true,
       filterFieldName: 'probeStatus',
       filterKind: 'enum',
@@ -129,6 +130,7 @@ export function buildColumns(
       header: '试播',
       accessor: (r) => r.renderStatus,
       width: 100,
+      enableSorting: false, // §3.4：派生聚合，排序业务无意义
       filterable: true,
       filterFieldName: 'renderStatus',
       filterKind: 'enum',
@@ -174,6 +176,7 @@ export function buildColumns(
       header: '问题',
       accessor: (r) => r.connectFailCount ?? 0,
       width: 160,
+      enableSorting: false, // §3.4：多值聚合，排序业务无意义
       cell: ({ row }) => {
         const connectFail = row.connectFailCount ?? 0
         const renderFail = row.renderFailCount ?? 0
