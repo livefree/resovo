@@ -43,6 +43,7 @@ const MUTED_SM: CSSProperties = { fontSize: '11px', color: 'var(--fg-muted)' }
 export function buildColumns(
   expandedKeys: ReadonlySet<string>,
   actions: SourceRowActionHandlers,
+  isAdmin: boolean,
 ): readonly TableColumn<VideoGroupRow>[] {
   return [
     // 视频（复合：展开 chevron + 封面 + 标题 + type · short_id）；sortable（v.title）
@@ -276,6 +277,7 @@ export function buildColumns(
         <SourceRowActions
           row={row}
           expanded={expandedKeys.has(row.videoId)}
+          isAdmin={isAdmin}
           onExpandToggle={actions.onExpandToggle}
           onReload={actions.onReload}
         />

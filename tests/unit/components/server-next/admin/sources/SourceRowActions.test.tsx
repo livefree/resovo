@@ -59,6 +59,7 @@ function renderActions(props: Partial<React.ComponentProps<typeof SourceRowActio
     <SourceRowActions
       row={makeRow()}
       expanded={false}
+      isAdmin
       onExpandToggle={onExpandToggle}
       onReload={onReload}
       {...props}
@@ -66,6 +67,8 @@ function renderActions(props: Partial<React.ComponentProps<typeof SourceRowActio
   )
   return { onExpandToggle, onReload }
 }
+
+const btn = (id: string) => screen.getByTestId(id) as HTMLButtonElement
 
 beforeEach(() => { vi.clearAllMocks() })
 
@@ -104,7 +107,6 @@ describe('SourceRowActions — refresh / zap inline 键', () => {
     renderActions()
     fireEvent.click(screen.getByTestId('source-row-probe'))
     // pending 在首个 await 前同步 setState → click 后立即生效（用 DOM .disabled 属性，本仓未装 jest-dom matcher）
-    const btn = (id: string) => screen.getByTestId(id) as HTMLButtonElement
     expect(btn('source-row-probe').disabled).toBe(true)
     expect(btn('source-row-render-check').disabled).toBe(true)
     expect(btn('source-row-more').disabled).toBe(true)
@@ -160,5 +162,39 @@ describe('SourceRowActions — more 下拉菜单', () => {
     fireEvent.click(screen.getByTestId('source-row-more'))
     fireEvent.click(await screen.findByText('线路别名管理'))
     expect(routerPushMock).toHaveBeenCalledWith('/admin/source-line-aliases')
+  })
+})
+
+// ── admin-only 门控（Codex stop-time review：refresh/zap=adminOnly 端点）───────────
+
+describe('SourceRowActions — admin-only 门控（refresh/zap）', () => {
+  it('U-11 isAdmin=false → refresh/zap 禁用，more 仍启用', () => {
+    renderActions({ isAdmin: false })
+    expect(btn('source-row-probe').disabled).toBe(true)
+    expect(btn('source-row-render-check').disabled).toBe(true)
+    expect(btn('source-row-more').disabled).toBe(false) // moderator 仍可用 more 菜单
+  })
+
+  it('U-12 isAdmin=false → 点击禁用的 refresh/zap 不调 adminOnly api', () => {
+    renderActions({ isAdmin: false })
+    fireEvent.click(btn('source-row-probe'))
+    fireEvent.click(btn('source-row-render-check'))
+    expect(batchProbeVideoMock).not.toHaveBeenCalled()
+    expect(batchRenderCheckVideoMock).not.toHaveBeenCalled()
+  })
+
+  it('U-13 isAdmin=false（moderator）→ more 菜单「重新采集源」(moderator+admin 端点) 仍可用', async () => {
+    refetchSourcesMock.mockResolvedValue(undefined)
+    const { onReload } = renderActions({ isAdmin: false })
+    fireEvent.click(btn('source-row-more'))
+    fireEvent.click(await screen.findByText('重新采集源'))
+    await waitFor(() => expect(refetchSourcesMock).toHaveBeenCalledWith('vid-1'))
+    await waitFor(() => expect(onReload).toHaveBeenCalledTimes(1))
+  })
+
+  it('U-14 isAdmin=true → refresh/zap 启用', () => {
+    renderActions({ isAdmin: true })
+    expect(btn('source-row-probe').disabled).toBe(false)
+    expect(btn('source-row-render-check').disabled).toBe(false)
   })
 })

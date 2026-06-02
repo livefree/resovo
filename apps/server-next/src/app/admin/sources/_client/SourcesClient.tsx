@@ -75,7 +75,15 @@ const KPI_GRID_STYLE: CSSProperties = {
 
 // ── 主组件 ────────────────────────────────────────────────────────
 
-export function SourcesClient() {
+export interface SourcesClientProps {
+  /**
+   * 当前用户是否 admin（page.tsx 从 user_role cookie 派生注入）。
+   * 门控操作列 refresh/zap（adminOnly 端点）；缺省 false = 失败安全（最小权限）。
+   */
+  readonly isAdmin?: boolean
+}
+
+export function SourcesClient({ isAdmin = false }: SourcesClientProps = {}) {
   const router = useRouter()
   // ADR-149 EP-4: 接入 DataTableSearchInput 原语（IME + debounce 内置） → 删 searchInput 中间 state
   const [keyword, setKeyword] = useState<string | undefined>()
@@ -197,8 +205,8 @@ export function SourcesClient() {
   }
 
   const columns = useMemo(
-    () => buildColumns(expandedKeys, { onExpandToggle: toggleExpand, onReload: refresh }),
-    [expandedKeys, toggleExpand, refresh],
+    () => buildColumns(expandedKeys, { onExpandToggle: toggleExpand, onReload: refresh }, isAdmin),
+    [expandedKeys, toggleExpand, refresh, isAdmin],
   )
 
   const query = useMemo(() => ({

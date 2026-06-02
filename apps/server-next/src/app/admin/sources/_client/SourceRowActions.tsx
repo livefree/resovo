@@ -36,21 +36,34 @@ export interface SourceRowActionHandlers {
 export interface SourceRowActionsProps extends SourceRowActionHandlers {
   readonly row: VideoGroupRow
   readonly expanded: boolean
+  /**
+   * 当前用户是否 admin（Codex stop-time review）。refresh(batch-probe) / zap(batch-render-check)
+   * 端点为 `adminOnly` 守卫，moderator 无权——本页 moderator 可达，故非 admin 时禁用二键
+   * （disable + tooltip，对齐 CrawlerSiteExpand / VideoRowActions 既有范式）。
+   * more 菜单内 refetch-sources / disable-dead 为 `moderator+admin` 守卫，不受此门控。
+   */
+  readonly isAdmin: boolean
 }
 
 // ── styles ────────────────────────────────────────────────────────
 
-const ICON_BTN_STYLE: React.CSSProperties = {
-  width: '24px', height: '24px',
-  border: '1px solid var(--border-default)',
-  borderRadius: 'var(--radius-sm)',
-  background: 'var(--bg-surface)',
-  color: 'var(--fg-muted)',
-  cursor: 'pointer',
-  fontSize: '12px',
-  display: 'flex', alignItems: 'center', justifyContent: 'center',
-  lineHeight: 1,
+/** icon 按钮样式；disabled（pending 或无权）时降透明 + not-allowed 光标。 */
+function iconBtnStyle(disabled: boolean): React.CSSProperties {
+  return {
+    width: '24px', height: '24px',
+    border: '1px solid var(--border-default)',
+    borderRadius: 'var(--radius-sm)',
+    background: 'var(--bg-surface)',
+    color: 'var(--fg-muted)',
+    cursor: disabled ? 'not-allowed' : 'pointer',
+    opacity: disabled ? 0.45 : 1,
+    fontSize: '12px',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    lineHeight: 1,
+  }
 }
+
+const ADMIN_ONLY_TITLE = '该操作需要管理员权限'
 
 // ── helpers ───────────────────────────────────────────────────────
 
@@ -64,7 +77,7 @@ function summaryDesc(s: BatchSummary, okWord: string): string {
 
 // ── component ─────────────────────────────────────────────────────
 
-export function SourceRowActions({ row, expanded, onExpandToggle, onReload }: SourceRowActionsProps) {
+export function SourceRowActions({ row, expanded, isAdmin, onExpandToggle, onReload }: SourceRowActionsProps) {
   const router = useRouter()
   const toast = useToast()
   const [open, setOpen] = useState(false)
@@ -140,24 +153,26 @@ export function SourceRowActions({ row, expanded, onExpandToggle, onReload }: So
   items.push({ key: 'aliases', label: '线路别名管理', separator: true, onClick: () => { setOpen(false); router.push('/admin/source-line-aliases') } })
 
   // 容器层 stopPropagation：三键与下拉触发器均不冒泡到行（避免触发 onRowClick 展开/收起）。
+  // refresh/zap 为 adminOnly 端点 → 非 admin 禁用（Codex stop-time review）；more 菜单不门控。
+  const probeDisabled = pending || !isAdmin
   return (
     <div style={{ display: 'flex', gap: '4px' }} onClick={(e) => e.stopPropagation()}>
       <button
         type="button"
-        title="重新探测连接"
+        title={isAdmin ? '重新探测连接' : ADMIN_ONLY_TITLE}
         aria-label={`${row.title} 重新探测连接`}
         data-testid="source-row-probe"
-        disabled={pending}
-        style={ICON_BTN_STYLE}
+        disabled={probeDisabled}
+        style={iconBtnStyle(probeDisabled)}
         onClick={handleProbe}
       >↻</button>
       <button
         type="button"
-        title="重验播放（试播）"
+        title={isAdmin ? '重验播放（试播）' : ADMIN_ONLY_TITLE}
         aria-label={`${row.title} 重验播放`}
         data-testid="source-row-render-check"
-        disabled={pending}
-        style={ICON_BTN_STYLE}
+        disabled={probeDisabled}
+        style={iconBtnStyle(probeDisabled)}
         onClick={handleRenderCheck}
       >⚡</button>
       <AdminDropdown
@@ -169,7 +184,7 @@ export function SourceRowActions({ row, expanded, onExpandToggle, onReload }: So
             aria-label={`${row.title} 更多操作`}
             data-testid="source-row-more"
             disabled={pending}
-            style={ICON_BTN_STYLE}
+            style={iconBtnStyle(pending)}
             onClick={() => setOpen((o) => !o)}
           >⋯</button>
         }
