@@ -7,7 +7,6 @@
  */
 
 export type {
-  SourceSegment,
   VideoGroupRow,
   VideoGroupListResult,
   VideoGroupListParams,

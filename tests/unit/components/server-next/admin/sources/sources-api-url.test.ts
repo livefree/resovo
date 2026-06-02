@@ -75,31 +75,43 @@ describe('listVideoGroups URL params', () => {
     expect(url).toContain('updatedAtTo=2026-05-25')
   })
 
-  it('全参数复合透传：sort + filter + 日期范围', async () => {
+  it('全参数复合透传：sort + filter + 日期范围（CHG-VSR-5-B：segment 已删）', async () => {
     await listVideoGroups({
       page: 2,
       limit: 50,
       keyword: '黑客',
-      segment: 'dead',
       siteKey: ['bilibili'],
-      sortField: 'lineCount',
+      sortField: 'activeSources',
       sortDir: 'desc',
       probeStatus: ['ok'],
       renderStatus: ['partial', 'dead'],
-      updatedAtFrom: '2026-05-01',
-      updatedAtTo: '2026-05-25',
+      lastCheckedFrom: '2026-05-01',
+      lastCheckedTo: '2026-05-25',
     })
     const url = apiClientGetMock.mock.calls[0][0] as string
     expect(url).toContain('page=2')
     expect(url).toContain('limit=50')
     expect(url).toContain('keyword=%E9%BB%91%E5%AE%A2')
-    expect(url).toContain('segment=dead')
+    expect(url).not.toContain('segment')
     expect(url).toContain('siteKey=bilibili')
-    expect(url).toContain('sortField=lineCount')
+    expect(url).toContain('sortField=activeSources')
     expect(url).toContain('sortDir=desc')
     expect(url).toContain('probeStatus=ok')
     expect(url).toContain('renderStatus=partial%2Cdead')
-    expect(url).toContain('updatedAtFrom=2026-05-01')
-    expect(url).toContain('updatedAtTo=2026-05-25')
+    expect(url).toContain('lastCheckedFrom=2026-05-01')
+    expect(url).toContain('lastCheckedTo=2026-05-25')
+  })
+
+  it('CHG-VSR-5-B：quickFilters csv + lowQuality 透传（KPI 卡 + 质量列筛选）', async () => {
+    await listVideoGroups({ quickFilters: ['has_abnormal', 'low_quality'], lowQuality: true })
+    const url = apiClientGetMock.mock.calls[0][0] as string
+    expect(url).toContain('quickFilters=has_abnormal%2Clow_quality')
+    expect(url).toContain('lowQuality=true')
+  })
+
+  it('CHG-VSR-5-B：lowQuality=false 不发送（仅 true 透传）', async () => {
+    await listVideoGroups({ lowQuality: false })
+    const url = apiClientGetMock.mock.calls[0][0] as string
+    expect(url).not.toContain('lowQuality')
   })
 })

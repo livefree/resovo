@@ -13490,3 +13490,26 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
   - 单测补默认排序断言（sortField=lastChecked / sortDir=desc）；门禁全过 typecheck/lint EXIT=0 + 全量 5932 passed 0 failed。
   - **e2e smoke 同步修复（不留知情破坏）**：`sources-sort-filter-smoke.spec.ts` test 1 断言由「首请求 sortField=null」改为「sortField=lastChecked + sortDir=desc」（随默认排序契约更新）。实跑（直连已运行 server-next:3003 绕过 web-next:3000 webServer 冲突）：**test 1（我修的默认排序）+ test 2（video sort）+ test 4（siteKey distinct）3 PASS**。
   - **test 3 现红 → 已立追踪卡 `CHG-VSR-DTAF-VIEWPORT`（不再未追踪）**：probeStatus filter「应用」按钮 outside viewport。**根因**：`[data-autofilter-popover]` `max-height:480px`（dt-styles-matrix.ts:157）+ 无视口 flip-up，从 sources 页靠下列头（4 KPI 卡 / 表头 y≈350）向下展开 → popover 底部 y≈830 > 720 视口，浮层 `scrollIntoView` 无效。**既有缺陷非本卡回归**：取 5-A 前版本（042a43ef，旧四 Tab 表头更靠下）跑同测试同样失败（且更严重）；CHG-VSR-5-A 删 Tab 表头上移反而改善。影响所有高页面 autofilter。**修复方向**：popover 视口感知（flip-up / max-height=可用高度 + footer sticky）；属 packages/admin-ui，超 5-A 范围故独立卡（避免压力下仓促改共享组件定位）。**阻塞 CHG-VSR-7 的 test:e2e 门禁**（已在 CHG-VSR-7 依赖标注）。
+
+## [CHG-VSR-5-B] 播放线路快捷筛选(B：可点击 KPI 卡 pressed) + 列头筛选 + 删 SourceSegment
+- **完成时间**：2026-06-02
+- **记录时间**：2026-06-02 10:05
+- **执行模型**：claude-opus-4-8
+- **子代理**：无（消费 PRE-3 KpiCard pressed + 既有 admin-ui 原语，无新共享组件契约）
+- **修改文件**：
+  - `apps/server-next/src/app/admin/sources/_client/SourcesClient.tsx`（264→322）— KPI grid 4→5 列；4 display 卡（总播放源/有效/失效/孤岛 ①维度）→ 5 可点击快捷筛选卡：全部(total/清空) + `QUICK_FILTER_CARDS`（含异常源 abnormal / 待补源 needsSource / 待探测 pendingProbe / 低质量 lowQuality，消费 CHG-VSR-3 ②维度 stats）；`KpiCard` onClick+pressed（PRE-3）：`quickFilters: ReadonlySet<ActiveQuickFilter>` state，`toggleQuickFilter`（可组合 AND / setPage(1)）+ `clearQuickFilters`（全部卡）；pressed=选中态（aria-pressed/data-active）；新增 `lowQualityColumnFilter` 派生（filtersMap 'lowQuality' enum 含 'low'）；effect 透传 quickFilters + lowQuality（+deps）。
+  - `apps/server-next/src/app/admin/sources/_client/SourceColumns.tsx`（290→302）— quality 列加 `filterable`（DataTableAutoFilter 无 boolean 控件 → 单选 enum `LOW_QUALITY_OPTIONS=[{value:'low',label:'低质量（< 720P）'}]`，filterFieldName='lowQuality'）；client 派生 lowQuality=true，与 KPI 低质量卡后端 D-5 OR 合流。
+  - `apps/server-next/src/lib/sources/api.ts`（−segment +quickFilters/lowQuality）— `listVideoGroups` 删 segment 序列化；补 `quickFilters`(csv join，不传 'all') + `lowQuality`(仅 true，对齐后端 queryBool z.enum)。
+  - `apps/api/src/db/queries/sources-matrix.ts`（−segment 分支）— 删 SourceSegment import/re-export + listVideoGroups 的 segment 四 Tab 分支（dead/correction/orphan，维度①/user_submissions），由 quickFilters②/lowQuality 取代。
+  - `apps/api/src/services/sources-matrix.schemas.ts`（−segment）— VideoGroupsQuerySchema 删 segment enum。
+  - `packages/types/src/sources-matrix.types.ts`（−SourceSegment）— 删 `SourceSegment` type + `VideoGroupListParams.segment`；更新 SOURCE_QUICK_FILTERS 注释（segment 已删）。
+  - `apps/server-next/src/lib/sources/types.ts`（−re-export）— 删 SourceSegment re-export。
+  - `tests/integration/api/admin-sources.test.ts` — 3 segment 集成测试（dead/orphan/correction）→ quickFilters(has_abnormal/needs_source)/lowQuality 集成测试。
+  - `tests/unit/components/server-next/admin/sources/sources-api-url.test.ts` — 复合透传去 segment（改 activeSources/lastChecked）+ 新增 quickFilters csv + lowQuality（仅 true）序列化测试。
+  - `tests/unit/components/server-next/admin/sources/SourcesClient.test.tsx` — STATS 补②字段；KPI「4 卡」→「5 卡 = 可点击快捷筛选」（断言新 label + 旧①卡退场 + 默认全部 pressed）+ 新增「点击含异常源 → quickFilters=[has_abnormal] + pressed 切换」交互测试。
+  - `tests/unit/api/sources-matrix.test.ts` — docstring 去 segment（quickFilters/lowQuality）。
+- **新增依赖**：无。
+- **数据库变更**：无。
+- **门禁**：typecheck 8 workspace EXIT=0 / lint EXIT=0 / verify:adr-contracts EXIT=0 / verify:endpoint-adr EXIT=0 / **全量 5934 passed + 1 flaky**（`CrawlerClient.test.tsx` 导出 CSV spy 计时，隔离重跑 66/66 通过、与本卡 sources 无关）。**e2e 主动实跑**（直连 server-next:3003 绕 web-next:3000 webServer 冲突）：sources smoke **test 1（默认排序）+ test 2（video sort）+ test 4（siteKey distinct）PASS**；test 3（probe filter apply）仍 = 已追踪 `CHG-VSR-DTAF-VIEWPORT`（5-B 零新 e2e 破坏，与 5-A 后结果完全一致）。文件 SourcesClient 322 / SourceColumns 302 均<500。
+- **注意事项**：① 低质量 2 入口（KPI 低质量卡 → quickFilters 'low_quality' / 质量列筛选 → lowQuality boolean）后端 D-5 OR 合流单谓词，UI 不强制双向同步（CHG-VSR-1 设计两独立入口）。② KPI ①维度 stats 字段（active/dead/orphan）仍由 getVideoGroupStats 返回但 UI 不再消费（保留兼容 / 等价回归基线；彻底 rename 级联留后续）。③ actions 列 + bulkActions 仍占位（真实接通 CHG-VSR-6）。④ SourceSegment 全仓代码零引用（仅 changelog/types 注释历史提及）。
+- **[AI-CHECK]**：结构检查 分层 NO 违反（UI 调 typed client）/ 跨模块内部 NO；代码质量 重复逻辑 NO（复用 KpiCard PRE-3 + AutoFilter enum / lowQuality 后端 OR 合流）/ hack NO；规模检查 函数 NO / 文件 NO（322/302<500）；安全 副作用/吞异常 NO。结论：SAFE。

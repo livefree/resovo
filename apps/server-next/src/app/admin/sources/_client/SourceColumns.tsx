@@ -32,6 +32,10 @@ const RENDER_STATUS_OPTIONS: readonly DistinctOption[] = [
   { value: 'dead',    label: '试播失败' },
   { value: 'pending', label: '待测' },
 ]
+// CHG-VSR-5-B：质量列「低质量」boolean 用单选 enum 表达（勾选 = lowQuality 过滤 / 最高源 < 720P）
+const LOW_QUALITY_OPTIONS: readonly DistinctOption[] = [
+  { value: 'low', label: '低质量（< 720P）' },
+]
 
 const MUTED_SM: CSSProperties = { fontSize: '11px', color: 'var(--fg-muted)' }
 
@@ -137,7 +141,8 @@ export function buildColumns(
       filterOptions: RENDER_STATUS_OPTIONS,
       cell: ({ row }) => <SignalPill status={row.renderStatus} />,
     },
-    // 质量：最高分辨率 + 已检测覆盖率 + 延迟中位；全空显「质量未知」；sortable→quality（boolean 低质量 filter 留 5-B）
+    // 质量：最高分辨率 + 已检测覆盖率 + 延迟中位；全空显「质量未知」；sortable→quality
+    // CHG-VSR-5-B：低质量列筛选——DataTableAutoFilter 无 boolean 控件，用单选 enum 映射 lowQuality（与 KPI 低质量卡 OR 合流，后端 D-5 单谓词）
     {
       id: 'quality',
       kind: 'computed',
@@ -145,6 +150,10 @@ export function buildColumns(
       header: '质量',
       accessor: (r) => r.qualityHighest ?? '',
       width: 140,
+      filterable: true,
+      filterFieldName: 'lowQuality',
+      filterKind: 'enum',
+      filterOptions: LOW_QUALITY_OPTIONS,
       cell: ({ row }) => {
         const tier = row.qualityHighest ?? null
         const coverage = row.qualityCoverage

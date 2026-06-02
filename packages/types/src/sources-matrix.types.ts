@@ -15,13 +15,7 @@
 import type { DualSignalState, ResolutionTier } from './admin-moderation.types'
 
 /**
- * @deprecated CHG-VSR-1（2026-06-01）：四 Tab segment 模型由 `SOURCE_QUICK_FILTERS`（B 方案 KPI 卡快捷筛选）取代。
- * 仅保留兼容（`SourcesClient` + `sources-matrix.ts` 仍引用），卡 5 末尾 UI 切换后删除枚举与 segment 查询分支（设计 §5.3）。
- */
-export type SourceSegment = 'grouped' | 'dead' | 'correction' | 'orphan'
-
-/**
- * 线路页快捷筛选（B 方案 KPI 卡 / 设计 §3.5）— 取代旧四 Tab（@deprecated `SourceSegment`）。
+ * 线路页快捷筛选（B 方案 KPI 卡 / 设计 §3.5）— 取代旧四 Tab segment 模型（CHG-VSR-5-B 已删 `SourceSegment` 枚举与 segment 查询分支，设计 §5.3）。
  * 均为探测维度②/质量派生，可组合 AND；`'all'` = 清空（仅 UI 卡身份用，`VideoGroupListParams.quickFilters` 不传 `'all'`）。
  * ADR-157 D-157-1 const + type 双形态（index.ts 须同步 value re-export）。
  */
@@ -111,7 +105,6 @@ export interface VideoGroupListParams {
   readonly page?: number
   readonly limit?: number
   readonly keyword?: string
-  readonly segment?: SourceSegment
   /**
    * HOTFIX-PATCH-2B（2026-05-25）：siteKey 单值 → 数组（distinct 端点首次消费实证 / multi-select enum）
    * 多选语义"含至少一条线路在指定站点中的视频"（raw EXISTS ANY()）

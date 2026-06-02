@@ -2617,7 +2617,8 @@ CODENAME-MATRIX-E2E (依赖 Wave 3 验收期补丁 CODENAME-MATRIX ✅)
    - 验收要点：四 Tab / 别名 Tab 移除；列与 §3.2 一致；文案用「连接失败/试播失败」。
    - 依赖：CHG-VSR-1 / CHG-VSR-3 / CHG-VSR-PRE-1。
 
-10. **CHG-VSR-5-B** — 播放线路快捷筛选(B：可点击 KPI 卡 pressed) + 列头筛选 + 删 SourceSegment（状态：⬜ 未开始）
+10. **CHG-VSR-5-B** — 播放线路快捷筛选(B：可点击 KPI 卡 pressed) + 列头筛选 + 删 SourceSegment（状态：✅ 已完成 2026-06-02 / claude-opus-4-8 / 子代理 无）
+    - 完成备注：**sources 页收尾（设计 §3.5/§4）**。① **5 KPI 卡 = 可点击快捷筛选**：`SourcesClient` grid 4→5 列，卡 = 全部(total/清空) + 含异常源(abnormal) + 待补源(needsSource) + 待探测(pendingProbe) + 低质量(lowQuality)，消费 CHG-VSR-3 ②维度 stats；`KpiCard` onClick+pressed（PRE-3）切换 quickFilter（`ActiveQuickFilter` Set 状态 / 可组合 AND / pressed 选中态 aria-pressed+data-active / 全部=清空）；旧 ①维度 4 卡（总播放源/有效/失效/孤岛）退场。② **quality 列「低质量」boolean 列筛选**：DataTableAutoFilter 无 boolean 控件 → 单选 enum `[{value:'low'}]` filterFieldName='lowQuality'，client 派生 lowQuality=true（与 KPI 低质量卡后端 D-5 OR 合流）。③ **typed client 序列化**：`lib/sources/api.ts` 补 quickFilters(csv) + lowQuality(仅 true)。④ **删 SourceSegment**（末尾）：`packages/types`(删 type + VideoGroupListParams.segment) / `apps/api/sources-matrix.ts`(删 import/re-export + segment 分支) / `sources-matrix.schemas.ts`(删 schema segment) / server-next `types.ts`(删 re-export) / `api.ts`(删 segment 序列化)；测试 admin-sources 集成 3 segment→quickFilters/lowQuality + sources-api-url 复合透传去 segment + 新增 quickFilters/lowQuality 序列化测试 + SourcesClient KPI 测试改 5 卡 + quickFilter 点击交互。**全仓 SourceSegment 代码零引用**。**门禁全过**：typecheck/lint/verify:adr-contracts/verify:endpoint-adr EXIT=0 / **全量 5934 passed + 1 flaky**（`CrawlerClient` 导出 CSV，隔离 66/66 通过、与本卡 sources 无关）。**e2e 主动实跑**：sources smoke test 1/2/4 PASS（直连 :3003 绕 :3000），test 3 仍 = 已追踪 CHG-VSR-DTAF-VIEWPORT（5-B 零新破坏）。文件 SourcesClient 322 / SourceColumns 302 均<500。详见 changelog CHG-VSR-5-B。
     - 创建时间：2026-06-01 19:15
     - 建议模型：sonnet
     - 文件范围：5 KPI 卡（全部/含异常源/待补源/待探测/低质量）= 可点击筛选（pressed/可组合/全部清空）；列头菜单筛选（探测/试播/站点/质量/最近检测）；**末尾删除 `SourceSegment` 枚举 + segment 查询分支**。

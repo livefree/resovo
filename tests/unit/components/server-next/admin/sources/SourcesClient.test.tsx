@@ -68,7 +68,11 @@ import { SourcesClient } from '../../../../../../apps/server-next/src/app/admin/
 
 // ── fixtures ──────────────────────────────────────────────────────
 
-const STATS = { total: 100, active: 60, dead: 30, orphan: 10 }
+const STATS = {
+  total: 100, active: 60, dead: 30, orphan: 10,
+  // CHG-VSR-5-B：②维度 KPI（含异常源/待补源/待探测/低质量）
+  abnormal: 18, needsSource: 7, pendingProbe: 25, lowQuality: 12,
+}
 const EMPTY_LIST = { data: [], total: 0, page: 1, limit: 20 }
 
 const VIDEO_GROUP_ROW = {
@@ -127,16 +131,39 @@ describe('SourcesClient', () => {
     expect(screen.queryByRole('button', { name: '孤岛源' })).toBeNull()
   })
 
-  it('KPI 4 卡渲染：总播放源 / 有效 / 失效 / 孤岛', async () => {
+  it('KPI 5 卡 = 可点击快捷筛选：全部 / 含异常源 / 待补源 / 待探测 / 低质量（CHG-VSR-5-B §3.5）', async () => {
     getVideoGroupStatsMock.mockResolvedValueOnce(STATS)
     listVideoGroupsMock.mockResolvedValueOnce(EMPTY_LIST)
     render(<SourcesClient />)
     await waitFor(() => {
-      expect(screen.getByText('总播放源')).not.toBeNull()
-      expect(screen.getByText('有效')).not.toBeNull()
-      expect(screen.getByText('失效')).not.toBeNull()
-      expect(screen.getByText('孤岛')).not.toBeNull()
+      expect(screen.getByText('全部')).not.toBeNull()
+      expect(screen.getByText('含异常源')).not.toBeNull()
+      expect(screen.getByText('待补源')).not.toBeNull()
+      expect(screen.getByText('待探测')).not.toBeNull()
+      expect(screen.getByText('低质量')).not.toBeNull()
     })
+    // 旧 ① 维度卡退场
+    expect(screen.queryByText('总播放源')).toBeNull()
+    expect(screen.queryByText('孤岛')).toBeNull()
+    // 默认「全部」pressed（无 quickFilter）/ 其余未选中
+    expect(screen.getByTestId('sources-kpi-all').getAttribute('aria-pressed')).toBe('true')
+    expect(screen.getByTestId('sources-kpi-has_abnormal').getAttribute('aria-pressed')).toBe('false')
+  })
+
+  it('点击「含异常源」KPI 卡 → quickFilters=[has_abnormal] + pressed 选中态（CHG-VSR-5-B）', async () => {
+    getVideoGroupStatsMock.mockResolvedValueOnce(STATS)
+    listVideoGroupsMock.mockResolvedValue(EMPTY_LIST)
+    render(<SourcesClient />)
+    await waitFor(() => expect(listVideoGroupsMock).toHaveBeenCalledTimes(1))
+    fireEvent.click(screen.getByTestId('sources-kpi-has_abnormal'))
+    await waitFor(() => {
+      expect(listVideoGroupsMock).toHaveBeenCalledWith(
+        expect.objectContaining({ quickFilters: ['has_abnormal'] }),
+      )
+    })
+    // pressed 切换：含异常源选中 / 全部取消选中
+    expect(screen.getByTestId('sources-kpi-has_abnormal').getAttribute('aria-pressed')).toBe('true')
+    expect(screen.getByTestId('sources-kpi-all').getAttribute('aria-pressed')).toBe('false')
   })
 
   it('默认请求：不携带 segment + 默认排序 lastChecked desc（§3.4 契约 / Codex review FIX）', async () => {

@@ -42,9 +42,12 @@ export async function listVideoGroups(params: VideoGroupListParams = {}): Promis
   if (params.page != null)    qs.set('page', String(params.page))
   if (params.limit != null)   qs.set('limit', String(params.limit))
   if (params.keyword)         qs.set('keyword', params.keyword)
-  if (params.segment)         qs.set('segment', params.segment)
   // HOTFIX-PATCH-2B（2026-05-25）：siteKey 数组 csv join（multi-select enum）
   if (params.siteKey && params.siteKey.length > 0)  qs.set('siteKey', params.siteKey.join(','))
+  // CHG-VSR-5-B：quickFilters KPI 卡快捷筛选 csv join（has_abnormal/needs_source/pending_probe/low_quality，不传 'all'）
+  if (params.quickFilters && params.quickFilters.length > 0)  qs.set('quickFilters', params.quickFilters.join(','))
+  // CHG-VSR-5-B：lowQuality 质量列 boolean（仅 true 发送 / 后端 queryBool z.enum 'true'-'false'）
+  if (params.lowQuality === true)  qs.set('lowQuality', 'true')
   // HOTFIX-PATCH-2A §1-BUG-1（2026-05-25）：sortField / sortDir URL 透传（4df39524 漏改回填）
   if (params.sortField)       qs.set('sortField', params.sortField)
   if (params.sortDir)         qs.set('sortDir', params.sortDir)

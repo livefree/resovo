@@ -41,18 +41,19 @@ describe('GET /admin/sources/video-groups SQL 集成', () => {
     })
   })
 
-  it('listVideoGroups({segment: dead}) 失效过滤跑通', async () => {
-    const result = await listVideoGroups(db, { segment: 'dead' })
+  // CHG-VSR-5-B：segment 四 Tab 已删（dead/orphan/correction 由 quickFilters②/lowQuality 取代）
+  it('listVideoGroups({quickFilters: [has_abnormal]}) 含异常源过滤跑通（维度② EXISTS probe/render dead）', async () => {
+    const result = await listVideoGroups(db, { quickFilters: ['has_abnormal'] })
     expect(result.data).toBeInstanceOf(Array)
   })
 
-  it('listVideoGroups({segment: orphan}) 孤岛过滤跑通（is_published = false 路径）', async () => {
-    const result = await listVideoGroups(db, { segment: 'orphan' })
+  it('listVideoGroups({quickFilters: [needs_source]}) 待补源过滤跑通（NOT EXISTS 可播源）', async () => {
+    const result = await listVideoGroups(db, { quickFilters: ['needs_source'] })
     expect(result.data).toBeInstanceOf(Array)
   })
 
-  it('listVideoGroups({segment: correction}) 用户纠错过滤跑通（submitted_by EXISTS）', async () => {
-    const result = await listVideoGroups(db, { segment: 'correction' })
+  it('listVideoGroups({lowQuality: true}) 低质量过滤跑通（EXISTS 已知质量 AND NOT EXISTS rank>=4）', async () => {
+    const result = await listVideoGroups(db, { lowQuality: true })
     expect(result.data).toBeInstanceOf(Array)
   })
 

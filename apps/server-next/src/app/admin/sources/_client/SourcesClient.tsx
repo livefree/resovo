@@ -26,7 +26,7 @@ import {
   type TableSortState,
   type FilterValue,
 } from '@resovo/admin-ui'
-import type { VideoGroupRow, VideoGroupStats, VideoGroupListParams } from '@/lib/sources/types'
+import type { VideoGroupRow, VideoGroupStats, VideoGroupListParams, SourceQuickFilter } from '@/lib/sources/types'
 import { listVideoGroups, getVideoGroupStats, fetchDistinct } from '@/lib/sources/api'
 import { MatrixExpand } from './SourceMatrixRow'
 import { buildColumns } from './SourceColumns'
@@ -34,6 +34,20 @@ import { buildColumns } from './SourceColumns'
 // ── 常量 ─────────────────────────────────────────────────────────
 
 const DEFAULT_PAGE_SIZE = 20
+
+// CHG-VSR-5-B / §3.5：5 KPI 卡 = 可点击快捷筛选（B 方案）。'all'=清空（不入 quickFilters）；其余切换 quickFilter（探测②/质量）。
+type ActiveQuickFilter = Exclude<SourceQuickFilter, 'all'>
+const QUICK_FILTER_CARDS: readonly {
+  readonly key: ActiveQuickFilter
+  readonly label: string
+  readonly statKey: 'abnormal' | 'needsSource' | 'pendingProbe' | 'lowQuality'
+  readonly variant: 'is-danger' | 'is-warn' | undefined
+}[] = [
+  { key: 'has_abnormal',  label: '含异常源', statKey: 'abnormal',     variant: 'is-danger' },
+  { key: 'needs_source',  label: '待补源',   statKey: 'needsSource',  variant: 'is-danger' },
+  { key: 'pending_probe', label: '待探测',   statKey: 'pendingProbe', variant: 'is-warn' },
+  { key: 'low_quality',   label: '低质量',   statKey: 'lowQuality',   variant: 'is-warn' },
+]
 
 // §3.4：列 id → API sortField 白名单（video / coverage→activeSources / quality / last_checked→lastChecked）
 const SORT_FIELD_BY_COLUMN: Record<string, NonNullable<VideoGroupListParams['sortField']>> = {
@@ -55,7 +69,7 @@ const PAGE_STYLE: CSSProperties = {
 
 const KPI_GRID_STYLE: CSSProperties = {
   display: 'grid',
-  gridTemplateColumns: 'repeat(4, 1fr)',
+  gridTemplateColumns: 'repeat(5, 1fr)', // CHG-VSR-5-B：5 卡（全部 + 4 快捷筛选）
   gap: '12px',
 }
 
@@ -90,6 +104,13 @@ export function SourcesClient() {
     const v = filtersMap.get('site_key')
     return v?.kind === 'enum' ? (v.value as readonly string[]) : []
   }, [filtersMap])
+  // CHG-VSR-5-B：质量列「低质量」boolean 派生（单选 enum 含 'low' → lowQuality / 与 KPI 低质量卡 OR 合流，后端 D-5 单谓词）
+  const lowQualityColumnFilter = useMemo<boolean>(() => {
+    const v = filtersMap.get('lowQuality')
+    return v?.kind === 'enum' && (v.value as readonly string[]).includes('low')
+  }, [filtersMap])
+  // CHG-VSR-5-B / §3.5：KPI 卡快捷筛选状态（可组合 AND / 'all' 清空 / pressed 选中态）
+  const [quickFilters, setQuickFilters] = useState<ReadonlySet<ActiveQuickFilter>>(new Set())
   // EP-4.5-HOTFIX-3 / 问题 1+3：列偏好 state（矩阵 popover 可见性 toggle / 列级 ⋯ 隐藏此列触发）
   const [columnPrefs, setColumnPrefs] = useState<ReadonlyMap<string, { readonly visible: boolean; readonly width?: number }>>(new Map())
 
@@ -125,6 +146,9 @@ export function SourcesClient() {
       ...(lastCheckedRange.to ? { lastCheckedTo: lastCheckedRange.to } : {}),
       // HOTFIX-PATCH-2B（2026-05-25）：siteKey 数组透传（distinct 端点 multi-select enum）
       ...(siteKeyFilter.length > 0 ? { siteKey: siteKeyFilter } : {}),
+      // CHG-VSR-5-B：KPI 卡快捷筛选（quickFilters）+ 质量列低质量 boolean（lowQuality / 与 quickFilters 'low_quality' 后端 OR 合流）
+      ...(quickFilters.size > 0 ? { quickFilters: [...quickFilters] } : {}),
+      ...(lowQualityColumnFilter ? { lowQuality: true } : {}),
     })
       .then((res) => {
         if (cancelled) return
@@ -137,7 +161,7 @@ export function SourcesClient() {
       })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [page, pageSize, keyword, sort, filtersMap, retryKey])
+  }, [page, pageSize, keyword, sort, filtersMap, quickFilters, retryKey])
 
   const refresh = useCallback(() => setRetryKey((k) => k + 1), [])
 
@@ -148,6 +172,23 @@ export function SourcesClient() {
       else next.add(row.videoId)
       return next
     })
+  }
+
+  // CHG-VSR-5-B / §3.5：KPI 卡快捷筛选——切换单个 quickFilter（可组合 AND），重置页码
+  function toggleQuickFilter(key: ActiveQuickFilter) {
+    setQuickFilters((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+    setPage(1)
+  }
+  // 「全部」卡 = 清空全部快捷筛选
+  function clearQuickFilters() {
+    if (quickFilters.size === 0) return
+    setQuickFilters(new Set())
+    setPage(1)
   }
 
   const columns = useMemo(() => buildColumns(expandedKeys), [expandedKeys])
@@ -197,12 +238,28 @@ export function SourcesClient() {
         }
       />
 
-      {/* KPI 卡片（display only；CHG-VSR-5-B 重建为 5 张可点击快捷筛选 pressed）*/}
+      {/* KPI 卡 = 可点击快捷筛选（B 方案 / §3.5）：全部(清空) + 4 quickFilter，pressed 选中态、可组合 AND */}
       <div style={KPI_GRID_STYLE}>
-        <KpiCard label="总播放源" value={stats?.total ?? '—'} dataSource={stats ? 'live' : undefined} />
-        <KpiCard label="有效" variant="is-ok" value={stats?.active ?? '—'} dataSource={stats ? 'live' : undefined} />
-        <KpiCard label="失效" variant="is-danger" value={stats?.dead ?? '—'} dataSource={stats ? 'live' : undefined} />
-        <KpiCard label="孤岛" variant="is-warn" value={stats?.orphan ?? '—'} dataSource={stats ? 'live' : undefined} />
+        <KpiCard
+          label="全部"
+          value={stats?.total ?? '—'}
+          dataSource={stats ? 'live' : undefined}
+          onClick={clearQuickFilters}
+          pressed={quickFilters.size === 0}
+          testId="sources-kpi-all"
+        />
+        {QUICK_FILTER_CARDS.map((c) => (
+          <KpiCard
+            key={c.key}
+            label={c.label}
+            variant={c.variant}
+            value={stats?.[c.statKey] ?? '—'}
+            dataSource={stats ? 'live' : undefined}
+            onClick={() => toggleQuickFilter(c.key)}
+            pressed={quickFilters.has(c.key)}
+            testId={`sources-kpi-${c.key}`}
+          />
+        ))}
       </div>
 
       {/* 线路表格（自然高度；main 整页滚动）*/}

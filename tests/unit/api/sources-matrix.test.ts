@@ -3,7 +3,7 @@
  *
  * 覆盖：
  *   - getVideoGroupStats: 统计聚合
- *   - listVideoGroups: 分页 + segment 过滤 + keyword 过滤
+ *   - listVideoGroups: 分页 + quickFilters/lowQuality 过滤 + keyword 过滤（CHG-VSR-5-B：segment 已删）
  *   - getVideoMatrix: 线路×集数矩阵 + 别名合并
  *   - listLineAliases: 返回全列表
  *   - upsertLineAlias: INSERT ON CONFLICT DO UPDATE

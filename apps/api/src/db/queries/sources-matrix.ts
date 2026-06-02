@@ -15,7 +15,6 @@
 import type { Pool } from 'pg'
 import type {
   ResolutionTier,
-  SourceSegment,
   VideoGroupRow,
   VideoGroupListResult,
   VideoGroupListParams,
@@ -24,7 +23,6 @@ import type {
 
 // re-export 共享类型，保持向后兼容（apps/api 内部消费方）
 export type {
-  SourceSegment,
   VideoGroupRow,
   VideoGroupListResult,
   VideoGroupListParams,
@@ -199,15 +197,8 @@ export async function listVideoGroups(
     paramValues.push(`%${params.keyword}%`)
   }
 
-  if (params.segment === 'dead') {
-    conditions.push(`v.source_check_status = 'all_dead'`)
-  } else if (params.segment === 'correction') {
-    conditions.push(
-      `EXISTS (SELECT 1 FROM video_sources vs1 WHERE vs1.video_id = v.id AND vs1.submitted_by IS NOT NULL AND vs1.deleted_at IS NULL)`,
-    )
-  } else if (params.segment === 'orphan') {
-    conditions.push(`v.source_check_status = 'all_dead' AND v.is_published = false`)
-  }
+  // CHG-VSR-5-B：旧 segment 四 Tab 查询分支（dead/correction/orphan，维度①/user_submissions）已删——
+  // 由 quickFilters（维度②）+ lowQuality 取代（设计 §3.5「旧 Tab 退场说明」/ §5.1 用户投稿下线）。
 
   // HOTFIX-PATCH-2B（2026-05-25）：siteKey 数组 EXISTS ANY()（单值 → 多选 / distinct 端点首次消费实证）
   if (params.siteKey && params.siteKey.length > 0) {

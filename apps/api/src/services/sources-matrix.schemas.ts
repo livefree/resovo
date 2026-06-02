@@ -54,7 +54,7 @@ export const VideoGroupsQuerySchema = z.object({
   page:          z.coerce.number().int().min(1).optional().default(1),
   limit:         z.coerce.number().int().min(1).max(100).optional().default(20),
   keyword:       z.string().optional(),
-  segment:       z.enum(['grouped', 'dead', 'correction', 'orphan']).optional().default('grouped'),
+  // CHG-VSR-5-B：segment 四 Tab 已删（quickFilters/lowQuality 取代）
   // HOTFIX-PATCH-2B（2026-05-25）：siteKey 单值 → 数组（distinct 端点首次消费实证 / EXISTS ANY()）
   siteKey:       csvToFreeStringArray(64),
   // HOTFIX-PATCH-2A §2-EXT-1/2：CSV → enum 数组（参 crawler.runs.ts csvToArray）/ raw EXISTS ANY()
