@@ -165,7 +165,9 @@ const SOURCES_SORT_FIELD_MAP: Record<string, string> = {
   updated_at: 'MAX(vs.updated_at)', // 默认 fallback / aggregate
   activeSources: 'active_source_count', // SELECT alias / COUNT FILTER is_active（数值序，无 ::TEXT cast）
   quality: 'quality_rank_max',          // SELECT alias / MAX(quality_rank) int
-  lastChecked: 'last_checked_at',       // SELECT alias / COALESCE(MAX(last_probed_at), MAX(updated_at)) ISO TEXT
+  // Codex stop-time review FIX：排序走真实 timestamptz 别名 last_checked_sort（不可用 ::TEXT 的 last_checked_at——
+  // 文本排序依赖 session DateStyle 非时序安全；与既有 updated_at 走 MAX(vs.updated_at) 时间戳同范式）
+  lastChecked: 'last_checked_sort',     // SELECT alias / COALESCE(MAX(last_probed_at), MAX(updated_at)) timestamptz
 }
 
 // AMD2-PATCH-2 风格 SQL identifier 正则启动期断言（防 SQL 注入 / 与 SORT_IDENT_REGEX 同范式）
@@ -333,7 +335,9 @@ export async function listVideoGroups(
          WHEN 3 THEN '480P' WHEN 2 THEN '360P' WHEN 1 THEN '240P' ELSE NULL END AS quality_highest,
        (COUNT(vs.id) FILTER (WHERE vs.is_active AND vs.probe_status <> 'dead' AND vs.render_status <> 'dead') = 0) AS needs_source,
        v.is_published AS is_published,
-       COALESCE(MAX(vs.last_probed_at), MAX(vs.updated_at))::TEXT AS last_checked_at
+       COALESCE(MAX(vs.last_probed_at), MAX(vs.updated_at))::TEXT AS last_checked_at,
+       -- Codex review FIX：真实 timestamptz 列，仅供 ORDER BY lastChecked 时序安全排序（DTO 读 ::TEXT 的 last_checked_at）
+       COALESCE(MAX(vs.last_probed_at), MAX(vs.updated_at)) AS last_checked_sort
      FROM videos v
      JOIN media_catalog mc ON mc.id = v.catalog_id
      JOIN video_sources vs ON vs.video_id = v.id AND vs.deleted_at IS NULL

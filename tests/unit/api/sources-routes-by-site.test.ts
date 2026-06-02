@@ -13,7 +13,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type { Pool } from 'pg'
 // CHG-VSR-3 / ADR-117 AMENDMENT 3（D-117-VSR3-7）：routes-by-site 查询迁至 source-routes.ts
 import { listRoutesBySite } from '@/api/db/queries/source-routes'
-import { SourcesMatrixService, aggregateSignal } from '@/api/services/SourcesMatrixService'
+import { SourcesMatrixService } from '@/api/services/SourcesMatrixService'
+// CHG-VSR-3 Codex review FIX：aggregateSignal 拆至 sources-matrix.schemas.ts（Service 解 500 行硬限）
+import { aggregateSignal } from '@/api/services/sources-matrix.schemas'
 
 function makePool(rows: Record<string, unknown>[]): Pool {
   return {

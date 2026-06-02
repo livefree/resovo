@@ -10,7 +10,9 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { SourcesMatrixService, aggregateSignal } from '@/api/services/SourcesMatrixService'
+import { SourcesMatrixService } from '@/api/services/SourcesMatrixService'
+// CHG-VSR-3 Codex review FIX：aggregateSignal 拆至 sources-matrix.schemas.ts（Service 解 500 行硬限）
+import { aggregateSignal } from '@/api/services/sources-matrix.schemas'
 
 // ── mock DB 查询 ───────────────────────────────────────────────────
 

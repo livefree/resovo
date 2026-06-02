@@ -498,10 +498,13 @@ describe('CHG-VSR-3 listVideoGroups sortField 扩展（D-117-VSR3-6 / SELECT 别
     expect(dataSql(db)).toContain('ORDER BY quality_rank_max ASC')
   })
 
-  it('sortField=lastChecked → ORDER BY last_checked_at', async () => {
+  it('sortField=lastChecked → ORDER BY last_checked_sort（真实 timestamptz，时序安全 / Codex FIX）', async () => {
     const db = makePool([{ cnt: '0' }], [])
     await listVideoGroups(db, { sortField: 'lastChecked', sortDir: 'desc' })
-    expect(dataSql(db)).toContain('ORDER BY last_checked_at DESC')
+    const sql = dataSql(db)
+    expect(sql).toContain('ORDER BY last_checked_sort DESC')
+    // 不得以 ::TEXT 的 last_checked_at 排序（文本字典序非时序安全）
+    expect(sql).not.toContain('ORDER BY last_checked_at')
   })
 
   it('lastCheckedFrom + lastCheckedTo → HAVING MAX(vs.last_probed_at) 范围（含到日 +1 天）', async () => {

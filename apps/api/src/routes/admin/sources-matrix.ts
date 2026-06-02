@@ -15,8 +15,9 @@
 import type { FastifyInstance, FastifyReply, FastifyBaseLogger } from 'fastify'
 import { z } from 'zod'
 import { db } from '@/api/lib/postgres'
+import { SourcesMatrixService } from '@/api/services/SourcesMatrixService'
+// CHG-VSR-3 Codex review FIX：Zod schema 拆至 sources-matrix.schemas.ts（Service 解 500 行硬限）
 import {
-  SourcesMatrixService,
   VideoGroupsQuerySchema,
   UpsertAliasSchema,
   RetireAliasSchema,
@@ -24,7 +25,7 @@ import {
   RoutesBySiteParamsSchema,
   RouteActionParamsSchema,
   SingleSourceParamsSchema,
-} from '@/api/services/SourcesMatrixService'
+} from '@/api/services/sources-matrix.schemas'
 import { AppError, isAppError } from '@/api/lib/errors'
 
 export async function adminSourcesMatrixRoutes(fastify: FastifyInstance) {
