@@ -12,7 +12,7 @@
  * 不得本地重复定义同名 type / interface。
  */
 
-import type { DualSignalState } from './admin-moderation.types'
+import type { DualSignalState, ResolutionTier } from './admin-moderation.types'
 
 /**
  * @deprecated CHG-VSR-1（2026-06-01）：四 Tab segment 模型由 `SOURCE_QUICK_FILTERS`（B 方案 KPI 卡快捷筛选）取代。
@@ -79,13 +79,12 @@ export interface VideoGroupRow {
   /** 禁用源数 = `is_active=false`（**维度①**，中性非问题，§3.2 issues 列可选中性 badge）。卡 3 填充 */
   readonly disabledCount?: number
   /**
-   * 最高已知分辨率档位（排序 + 低质量判定用）。7 档映射 `{240P:1, 360P:2, 480P:3, 720P:4, 1080P:5, 2K:6, 4K:7}`。
-   * 取 `quality_detected ?? quality` 派生后视频级 MAX。`null` = 无任何已知质量（「质量未知」，**不并入低质量**）。
-   * 低质量阈值 = `<4`（即 480P/360P/240P，§3.5）。卡 3 填充
+   * 视频级最高源分辨率档（展示用）。取 `quality_detected ?? quality` 后视频级最高档（口径对齐既有
+   * `pickHighestQuality` / aggregate.ts，4K > 2K > … 全空 → `null`）。`null` = 无任何已知质量（显「质量未知」，**不并入低质量**）。
+   * 复用 canonical `ResolutionTier`（admin-moderation.types.ts，与 `StagingRow.qualityHighest` 同名同型）。
+   * 排序/低质量判定走服务端 rank 派生键（见 `VideoGroupListParams.lowQuality` / `sortField='quality'`，非 DTO 字段）。卡 3 填充
    */
-  readonly qualityRank?: number | null
-  /** 展示分辨率（`quality_detected ?? quality` 取最高档 / 全空 `null` → 显「质量未知」）。卡 3 填充 */
-  readonly qualityLabel?: string | null
+  readonly qualityHighest?: ResolutionTier | null
   /** 画质已检测覆盖率 0–1（`COUNT(quality_detected IS NOT NULL)/COUNT(*)`，画质实测比例非 probe）。卡 3 填充 */
   readonly qualityCoverage?: number
   /** 延迟中位数 ms（`percentile_cont(0.5) WITHIN GROUP ORDER BY latency_ms`）。卡 3 填充 */
@@ -129,19 +128,24 @@ export interface VideoGroupListParams {
   readonly updatedAtTo?: string
   /**
    * CHG-VSR-1（设计 §3.5）：快捷筛选 KPI 卡（B 方案），可组合 AND；UI 不传 `'all'`。
-   * ⚠ 与 `lowQuality` 对「低质量」是**同一 SQL 谓词**（`MAX(quality_rank)<4`）：
+   * ⚠ 与 `lowQuality` 对「低质量」是**同一低质量谓词**（见下 `lowQuality` 定义）：
    *   producer 须 **OR 合流** `quickFilters.includes('low_quality') || lowQuality===true`，二者不叠加不冲突（卡 3 单测覆盖等价性）。
    * 两个独立 UI 入口：`quickFilters`=KPI 卡（跨列快捷筛选）/ `lowQuality`=质量列列筛选（DataTableAutoFilter boolean）。
    */
   readonly quickFilters?: readonly SourceQuickFilter[]
-  /** 质量列 boolean 列筛选（低质量 `MAX(quality_rank)<4`）。与 `quickFilters` 的 `'low_quality'` 同谓词（见上 OR 合流）。卡 3 实现 */
+  /**
+   * 质量列 boolean 列筛选（低质量）。与 `quickFilters` 的 `'low_quality'` 同谓词（见上 OR 合流）。
+   * **低质量定义（producer 卡 3 实现）**：视频级最高源分辨率 `< 720P`（即 `ResolutionTier` 后三档 480P/360P/240P）。
+   * 服务端按 `ResolutionTier` 档位派生**排序/阈值键（quality_rank，纯 SQL 内部，非 DTO 字段）**判定；
+   * 「质量未知」（无任何已知质量）**不并入**低质量。卡 3 实现
+   */
   readonly lowQuality?: boolean
   /** 最近检测 date-range（YYYY-MM-DD / `last_probed_at`；后端 `HAVING MAX(vs.last_probed_at)`）。卡 3 实现 */
   readonly lastCheckedFrom?: string
   readonly lastCheckedTo?: string
   /**
    * ADR-150 阶段 5 EP-4（2026-05-24）+ CHG-VSR-1 扩（§3.4）：sort 白名单。
-   * 新增 `activeSources`(active_source_count) / `quality`(quality_rank) / `lastChecked`(MAX(last_probed_at))。
+   * 新增 `activeSources`(active_source_count) / `quality`(服务端 ResolutionTier 档位排序键 / 见 `lowQuality`) / `lastChecked`(MAX(last_probed_at))。
    * 值 = producer SORT_FIELD_MAP key（与展示字段名可不同）；既有 camel/snake 混用属技术债，本卡不修（新增统一 camel）。
    */
   readonly sortField?: 'video' | 'lineCount' | 'sourceCount' | 'updated_at' | 'activeSources' | 'quality' | 'lastChecked'
@@ -168,7 +172,7 @@ export interface VideoGroupStats {
   readonly needsSource?: number
   /** CHG-VSR-1：待探测（`probe_status='pending'`，**维度②**）。卡 3 填充 */
   readonly pendingProbe?: number
-  /** CHG-VSR-1：低质量（`MAX(quality_rank)<4`，仅已知质量）。卡 3 填充 */
+  /** CHG-VSR-1：低质量（最高源分辨率 < 720P，仅已知质量；定义见 `VideoGroupListParams.lowQuality`）。卡 3 填充 */
   readonly lowQuality?: number
 }
 

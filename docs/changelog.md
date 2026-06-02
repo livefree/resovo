@@ -13380,3 +13380,18 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **e2e**：N/A（纯类型加性，无运行时行为变化）。
 - **[AI-CHECK]**：六问全过——①零回归（纯加性 optional + 新枚举，既有 producer getVideoGroupStats/listVideoGroups + consumer SourcesClient/SourceColumns/VideoAdminDetail 全不受影响，reviewer 逐一核实）；②不越界（仅类型契约，未触 producer SQL/UI 渲染/DataTable 公开 Props/user_submissions）；③沉淀共享层（枚举落 @resovo/types 真源 + 桥接透出，复用 ADR-157 双形态 + DualSignalState/VideoStatus/BangumiStatus）；④无 any/颜色/空 catch；⑤术语准确（维度①/②注释钉死，连接/试播/异常/禁用对齐 §0.2）；⑥声明性文件不计入 500 行硬限。
 - **注意事项**：(1) 下游 producer（卡 3）填充 VideoGroupRow 新字段时务必遵守注释维度口径——`abnormal/connectFailCount/renderFailCount`（维度② probe·render dead）**不得**与既有 `dead`（维度① source_check_status='all_dead'）混算。(2) `quickFilters` 含 `'low_quality'` 与 `lowQuality===true` 是同一谓词，producer 须 OR 合流并补等价性单测。(3) `VideoGroupStats.orphan` 本卡**未改名**（保留兼容），rename→needsSource 级联留卡 3（API）+ 卡 4/5（UI）；`SourceSegment` 枚举本体删除留卡 5 末尾。(4) 视频库过滤入参升级（VideoListFilter/AdminVideoListFilters + ADR-150 amendment）留卡 2 与 API 同步落，本卡未预置（避免空契约）。
+
+### [CHG-VSR-1] Codex stop-time review FIX — 质量契约对齐 canonical ResolutionTier
+- **完成时间**：2026-06-01
+- **记录时间**：2026-06-01 22:52
+- **执行模型**：claude-opus-4-8（主循环）
+- **子代理**：arch-reviewer (claude-opus-4-8) — @resovo/types 契约复审，确认 Q1(a)+Q2(A)
+- **触发**：Codex stop-time review 指出 CHG-VSR-1（c5f92b2b）含 **producer-facing 不一致**——质量字段未复用代码库既有 canonical 真源。
+- **根因**：代码库已有 `ResolutionTier`（7 档，admin-moderation.types.ts:382）+ `StagingRow.qualityHighest: ResolutionTier | null`（既定字段名/lines-panel/staging 多处复用），而我新增的 `qualityLabel?: string`（松散 string + 平行新名）+ `qualityRank?: number`（注释自造平行 7 档映射表，漂移风险）违反价值排序 #2 复用 / #4 一致性。
+- **修改文件**：
+  - `packages/types/src/sources-matrix.types.ts` — ① import 加 `ResolutionTier`；② `qualityLabel?: string | null` → `qualityHighest?: ResolutionTier | null`（Q1(a)：对齐 canonical 类型 + 既有 `StagingRow.qualityHighest` 命名，口径对齐 `pickHighestQuality`/aggregate.ts）；③ **移除** `qualityRank?: number | null`（Q2(A)：rank 是 producer 内部 SQL 排序键 + 低质量谓词用，client 无读取场景，移除消除冗余+漂移载体）；④ 收口 4 处 `MAX(quality_rank)` 注释：将 quality_rank 明确标注为「服务端 ResolutionTier 档位派生的排序/阈值键，纯 SQL 内部、非 DTO 字段」，低质量定义集中到 `VideoGroupListParams.lowQuality`（< 720P / ResolutionTier 后三档）。
+- **arch-reviewer 复审结论**：CONDITIONAL→采纳 Q1(a)+Q2(A)；全仓 Grep 核实 `qualityRank`/`qualityLabel` 零 producer 填充/零 consumer 读取（本卡刚加的 optional），移除+改名**零回归**。⚠ 本次推翻上一条 CHG-VSR-1 记录里「B-2 qualityRank 7 档映射表已采纳」结论（从「保留+注释」改「移除」），属对前次评审结论的修订，已显式记述避免与历史 changelog 矛盾。
+- **新增依赖/schema/路由/Props 契约**：无（仅类型对齐既有真源）。
+- **质量门禁**：typecheck 8 workspace EXIT=0 / lint EXIT=0 / **全量 448 文件 5909 passed 0 failed 零回归**。
+- **e2e**：N/A（纯类型）。
+- **[AI-CHECK]**：六问全过——复用既有 canonical（ResolutionTier/qualityHighest/pickHighestQuality 口径）；契约面收敛（VideoGroupRow 质量单一真源 qualityHighest，rank 纯 producer 内部）；零回归（grep 确认无引用）；无 any/颜色/越层。注意事项：producer 卡 3 派生 qualityHighest 必须用既有 `pickHighestQuality`（aggregate.ts:156）口径，勿另写 MAX；低质量排序/谓词的 quality_rank 在服务端 ORDER BY CASE / FILTER 内派生，不回写 DTO。
