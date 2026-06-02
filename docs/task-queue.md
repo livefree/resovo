@@ -2513,7 +2513,7 @@ CODENAME-MATRIX-E2E (依赖 Wave 3 验收期补丁 CODENAME-MATRIX ✅)
 
 - **状态**：🔄 执行中
 - **创建时间**：2026-06-01 19:15
-- **最后更新时间**：2026-06-01 20:20（PRE-1 ✅ / PRE-3 ✅ / 8 ✅ / PRE-2 设计完成待实施）
+- **最后更新时间**：2026-06-02（PRE-1/PRE-2/PRE-3/1/2/3/5-A/5-B/8 ✅ / CHG-VSR-6 🔄 进行中 / 4-A·4-B·7 待做 / DTAF-VIEWPORT 待做）
 - **目标**：落地《视频库/播放线路职责重定义》设计方案——视频库=作品维度、播放线路=资源运维维度、别名独立页；表格头部极简(搜索+列设置) + 三层过滤 + B 方案快捷筛选；术语裁决（失效=探测②含连接/试播/异常、禁用=is_active①、待补源=无可播源含已上架）；用户投稿/失效举报整体下线。
 - **范围**：`apps/server-next`（/admin/videos + /admin/sources 两 client + 子组件）+ `apps/api`（videos/sources 聚合 + 过滤排序 + distinct 白名单 + submit 端点 410）+ `packages/admin-ui`（KpiCard pressed）+ `packages/types`（双表 DTO/术语）+ `apps/web-next`（移除投稿入口）。
 - **依赖**：设计方案 ✅（`docs/designs/videos-sources-responsibility-redesign_20260601.md` / commit e1950050）。ADR：ADR-117 amendment（sources 聚合）+ ADR-150 amendment（distinct 白名单 + country 逻辑表）；ADR-124 不触碰。
@@ -2626,8 +2626,11 @@ CODENAME-MATRIX-E2E (依赖 Wave 3 验收期补丁 CODENAME-MATRIX ✅)
     - 验收要点：KPI 卡选中态生效；快捷筛选谓词正确；SourceSegment 彻底退场。
     - 依赖：CHG-VSR-5-A / CHG-VSR-PRE-3。
 
-11. **CHG-VSR-6** — 用共享 `LinesPanel` 替换 `MatrixExpand`（消费 PRE-2 控制器）（状态：⬜ 未开始）
+11. **CHG-VSR-6** — 用共享 `LinesPanel` 替换 `MatrixExpand`（消费 PRE-2 控制器）（状态：✅ 已完成 2026-06-02 / claude-opus-4-8 / 子代理 无）
     - 创建时间：2026-06-01 19:15
+    - 实际开始时间：2026-06-02
+    - 完成备注：删 `MatrixExpand` + 随之死代码（`SourceMatrixRow` 主组件 CHG-VSR-5-A 表格化后无消费方 / `EpisodeCellBlock` / 矩阵网格常量），新建 `SourceLinesExpand.tsx`（消费 `useSourceLinesController(videoId)` + 共享 `LinesPanel` density=regular + client `groupSourcesByLine` + 本地 `LineHealthDrawer`）。**三宗罪修复**：① 消除 render 阶段 setState 发请求（controller useEffect reload）② 消除 `.slice(0,8)` 截断（LinesPanel 全量聚合，任意集数无截断）③ 全操作接通（单集/整组 toggle·probe·render·disableDead·refetch·health + codename/retired/auto_retired 显示）。反馈：toggle/disableDead/refetch 失败→`actionError` 红条 / probe·render·batch→`useToast` 浮层（与审核台 LinesPanel 同口径；内联中文 = sources 模块无 i18n 文件，跟随现状）。**不传** `onLineSelect`（无选中态）/ `onToggleLine`（controller 无 line 级 toggle，与审核台·TabLines 两参考消费方一致）。保留 `SignalPill`（`SourceColumns` 探测/试播列依赖）。`SourcesClient.renderExpandedRow` `MatrixExpand`→`SourceLinesExpand`。**测试**：删 `getVideoMatrix` mock + 补 controller 函数 mock + `toDisplayState` + 新增 12 集行展开测试（点行→经 controller useEffect 调 `fetchVideoSources(videoId)` + LinesPanel 渲染 + `12/12集` 全聚合证不截断）。**门禁全过**：typecheck 8ws / lint（新文件 `SourceLinesExpand` 零新警告 / 既有 `SourcesClient:164` exhaustive-deps 非本卡）/ verify:adr-contracts / verify:endpoint-adr EXIT=0 / **全量 450 files 5955 passed 0 failed 零 flaky**（比 PRE-2 5954 +1=本卡展开测试）。无新端点/schema/ADR（消费已有），architecture.md 零同步。**e2e**：`sources-sort-filter-smoke.spec.ts` 不展开行（测 page-load/sort/filter）+ 全 e2e 无依赖旧 `MatrixExpand` 结构（"matrix" 命中仅无关的 codename-matrix-picker）→ 本卡零 e2e 影响；展开区 e2e 归 CHG-VSR-7（沿用范式，本机鉴权 env 阻塞既有）。drawer 第 3 处本卡内联，提取 `useLineHealthDrawer` 拆 follow-up 卡 14 `CHG-VSR-6-FOLLOWUP-DRAWER-HOOK`（用户裁决 2026-06-02）。详见 changelog CHG-VSR-6。执行模型: claude-opus-4-8
+    - 用户裁决（2026-06-02）：drawer 第 3 处本卡内联（仿 TabLines），提取 `useLineHealthDrawer` 留独立 follow-up 卡（Opus 评审 + 审核台关键路径回归）。
     - 建议模型：sonnet
     - 文件范围：删 `SourceMatrixRow.tsx` 的 `MatrixExpand`；展开区 `renderExpandedRow` 接 `<LinesPanel>` + `useSourceLinesController` + `groupSourcesByLine`。
     - 约束：不扩 `getVideoMatrix`；client 端聚合；不反向 import 审核台内部。
@@ -2662,6 +2665,15 @@ CODENAME-MATRIX-E2E (依赖 Wave 3 验收期补丁 CODENAME-MATRIX ✅)
     - 门禁：非 admin 路由无 ADR-gate；**不得删路由**（CLAUDE.md）；记 changelog。
     - 验收要点：submit 返 410 + 不写库 + 前台无投稿入口；`report-error` 不受影响。
     - 依赖：无（独立，任意时点）。
+
+14. **CHG-VSR-6-FOLLOWUP-DRAWER-HOOK** — 提取共享 `useLineHealthDrawer`（消除 3 处 drawer 重复）（状态：⬜ 未开始 — CHG-VSR-6 衍生 / 用户裁决 2026-06-02 拆出）
+    - 创建时间：2026-06-02
+    - 建议模型：**opus**（共享 hook 契约 / 跨 3 消费方 / 触碰审核台并发敏感关键路径 → 强制 Opus 子代理评审 + commit trailer `Subagents: arch-reviewer (...)`）
+    - 背景：CHG-VSR-PRE-2 注意 ③ + CHG-VSR-6 引入第 3 处 health drawer 本地实现（`moderation/LinesPanel` + `TabLines` + `SourceLinesExpand` 各一份：open·page·title·events·loading·error + `fetchHealth` 取数）。达 CLAUDE.md「同一 UI 模式 3 处以上必须提取」阈值。
+    - 文件范围：新建 `apps/server-next/src/lib/sources/use-line-health-drawer.ts`（中性 hook：open/close/changePage + events/loading/error 状态 + 取数编排）；3 消费方迁移 `moderation/_client/LinesPanel.tsx` + `videos/_client/_videoEdit/TabLines.tsx` + `sources/_client/SourceLinesExpand.tsx`；title 拼接 / i18n 文案 slot 留消费方（各异：M.lines / VE.lines / 内联中文）。
+    - 约束：title 拼接与 pagination 阈值差异（moderation `total>20` vs 通用 `total>limit`）须在 hook 契约内协调；**回归审核台关键路径**（健康抽屉开合/分页/probe·render 联动，PRE-2 刚过 4 轮 Codex 并发 review）。
+    - 验收要点：3 消费方 drawer 行为零回归 + 单测覆盖 hook + 全量零回归。
+    - 依赖：CHG-VSR-6 ✅。
 
 ### SEQ-20260601-01 BLOCKER 触发清单
 

@@ -12,12 +12,14 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 
 const listVideoGroupsMock = vi.fn()
 const getVideoGroupStatsMock = vi.fn()
-const getVideoMatrixMock = vi.fn()
 const listLineAliasesMock = vi.fn()
 const upsertLineAliasMock = vi.fn()
 // HOTFIX-PATCH-2B（2026-05-25）：distinct 端点 fetcher（DataTable distinctFetcher prop 消费）
 const fetchDistinctMock = vi.fn().mockResolvedValue([])
 const toastPushMock = vi.fn()
+// CHG-VSR-6：行展开区 SourceLinesExpand 经 useSourceLinesController 消费源操作（getVideoMatrix 已随 MatrixExpand 删除）
+const fetchVideoSourcesMock = vi.fn().mockResolvedValue([])
+const fetchLineHealthMock = vi.fn().mockResolvedValue({ data: [], pagination: { total: 0, page: 1, limit: 20, hasNext: false } })
 
 // SourcesClient 使用 useRouter()（next/navigation / "线路别名管理" 链接 push）；jsdom 下无
 // app router context → 不 mock 会抛 "invariant expected app router to be mounted"。
@@ -30,10 +32,20 @@ vi.mock('next/navigation', () => ({
 vi.mock('../../../../../../apps/server-next/src/lib/sources/api', () => ({
   listVideoGroups: (...args: unknown[]) => listVideoGroupsMock(...args),
   getVideoGroupStats: (...args: unknown[]) => getVideoGroupStatsMock(...args),
-  getVideoMatrix: (...args: unknown[]) => getVideoMatrixMock(...args),
   listLineAliases: (...args: unknown[]) => listLineAliasesMock(...args),
   upsertLineAlias: (...args: unknown[]) => upsertLineAliasMock(...args),
   fetchDistinct: (...args: unknown[]) => fetchDistinctMock(...args),
+  // CHG-VSR-6：useSourceLinesController 经 SourceLinesExpand 消费的源操作 + 显示态映射
+  fetchVideoSources: (...args: unknown[]) => fetchVideoSourcesMock(...args),
+  fetchLineHealth: (...args: unknown[]) => fetchLineHealthMock(...args),
+  toggleSource: vi.fn(),
+  disableDeadSources: vi.fn(),
+  refetchSources: vi.fn(),
+  probeOneSource: vi.fn(),
+  renderCheckOneSource: vi.fn(),
+  batchProbeVideo: vi.fn(),
+  batchRenderCheckVideo: vi.fn(),
+  toDisplayState: (s: string) => (s === 'ok' || s === 'partial' || s === 'dead' || s === 'pending' ? s : 'unknown'),
 }))
 
 vi.mock('@resovo/admin-ui', async () => {
@@ -107,10 +119,11 @@ const ONE_GROUP_LIST = { data: [VIDEO_GROUP_ROW], total: 1, page: 1, limit: 20 }
 beforeEach(() => {
   listVideoGroupsMock.mockReset()
   getVideoGroupStatsMock.mockReset()
-  getVideoMatrixMock.mockReset()
   listLineAliasesMock.mockReset()
   upsertLineAliasMock.mockReset()
   toastPushMock.mockReset()
+  fetchVideoSourcesMock.mockReset()
+  fetchLineHealthMock.mockReset()
 })
 
 // ── 测试 ──────────────────────────────────────────────────────────
@@ -210,6 +223,39 @@ describe('SourcesClient', () => {
     expect(screen.getByText('可用')).not.toBeNull()
     expect(screen.getByText('1080P')).not.toBeNull()
     expect(screen.getByText(/连接失败/)).not.toBeNull()
+  })
+
+  it('行展开 → 渲染共享 LinesPanel + 经 controller 调 fetchVideoSources；12 集全聚合不截断（CHG-VSR-6 / 消除 .slice(0,8) + render 阶段请求）', async () => {
+    getVideoGroupStatsMock.mockResolvedValueOnce(STATS)
+    listVideoGroupsMock.mockResolvedValue(ONE_GROUP_LIST)
+    // 12 集单线路：旧 MatrixExpand 仅 `.slice(0,8)` 显前 8；共享 LinesPanel 全量聚合无截断
+    const sources = Array.from({ length: 12 }, (_, i) => ({
+      id: `src-${i + 1}`,
+      updated_at: '2026-01-01T00:00:00Z',
+      source_site_key: 'bilibili',
+      source_name: '线路A',
+      source_url: `https://b.com/ep${i + 1}`,
+      episode_number: i + 1,
+      is_active: true,
+      probe_status: 'ok',
+      render_status: 'ok',
+      latency_ms: 100,
+    }))
+    fetchVideoSourcesMock.mockResolvedValue(sources)
+    render(<SourcesClient />)
+    await waitFor(() => expect(screen.getByText('测试视频')).not.toBeNull())
+    // 点击行展开（onRowClick → expandedKeys → renderExpandedRow=<SourceLinesExpand>）
+    fireEvent.click(screen.getByText('测试视频'))
+    // controller 在 useEffect 内 reload（非 render 阶段发请求）→ fetchVideoSources(videoId)
+    await waitFor(() => {
+      expect(fetchVideoSourcesMock).toHaveBeenCalledWith(VIDEO_GROUP_ROW.videoId)
+    })
+    // 共享 LinesPanel 渲染 + 12/12 集全聚合（证明无 .slice(0,8) 截断）
+    await waitFor(() => {
+      expect(screen.getByTestId('sources-lines-expand')).not.toBeNull()
+      expect(screen.getByText('线路A')).not.toBeNull()
+      expect(screen.getByText('12/12集')).not.toBeNull()
+    })
   })
 
   it('搜索：输入关键词 + 回车 → 触发 listVideoGroups 带 keyword', async () => {

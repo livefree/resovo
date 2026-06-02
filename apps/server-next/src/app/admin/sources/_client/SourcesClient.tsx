@@ -28,7 +28,7 @@ import {
 } from '@resovo/admin-ui'
 import type { VideoGroupRow, VideoGroupStats, VideoGroupListParams, SourceQuickFilter } from '@/lib/sources/types'
 import { listVideoGroups, getVideoGroupStats, fetchDistinct } from '@/lib/sources/api'
-import { MatrixExpand } from './SourceMatrixRow'
+import { SourceLinesExpand } from './SourceLinesExpand'
 import { buildColumns } from './SourceColumns'
 
 // ── 常量 ─────────────────────────────────────────────────────────
@@ -303,7 +303,7 @@ export function SourcesClient() {
                 onSelectionChange={(s) => setSelectedKeys(s.selectedKeys)}
                 onRowClick={handleRowClick}
                 expandedKeys={expandedKeys}
-                renderExpandedRow={(row) => <MatrixExpand videoId={row.videoId} />}
+                renderExpandedRow={(row) => <SourceLinesExpand videoId={row.videoId} />}
                 toolbar={{
                   search: toolbarSearch,
                   hideFilterChips: true,
