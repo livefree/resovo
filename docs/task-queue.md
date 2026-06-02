@@ -2578,7 +2578,15 @@ CODENAME-MATRIX-E2E (依赖 Wave 3 验收期补丁 CODENAME-MATRIX ✅)
    - 依赖：CHG-VSR-1。
    - 完成备注：**ADR-150 AMENDMENT 3（D-150-VSR2-1..5）**——arch-reviewer Opus CONDITIONAL PASS。① `listAdminVideos` 加 14 过滤条件（types[]/yearMin-Max/country[]/catalogStatus[]/isPublished/doubanStatus[]/bangumiStatus[]/metaScoreMin-Max + 派生 episodeMismatch/episodeMissing/metaIncomplete/pendingReview）+ q 扩 title_original+short_id；数组枚举一律 `= ANY($n::text[])` 参数化 + 空数组短路（防注入/防误过滤）；SORT 白名单 +episode_count + route 默认 `updated_at desc`。② distinct **D-150-VSR2-1 采纳方案 B**（加 `media_catalog` 逻辑表直查 country，**拒绝给 distinct 端点加 JOIN** 避免安全面扩张）+ videos 表加 douban_status/bangumi_status；IDENT 正则/启动断言零改动。③ **D-150-VSR2-2 离散 query params**（拒 `?filters=` envelope，apps/api 走 pg）；**D-150-VSR2-3 type 加性 types[] 保留单值**；**D-150-VSR2-4 visibility/review 维持单值零回归**（消费方已验证单值）。VideoService.adminList 加性透传；server-next VideoListFilter 同步（CHG-VSR-1 延后项）；端点契约表 6→7 表。typecheck 8 workspace 全过 / lint EXIT=0 / **全量 5912 passed 零回归**（含新增 5 测试断言；2 failed flaky=`use-filter-presets` post-teardown window，与本卡无关，重跑 0 再现）/ verify:adr-contracts + verify:endpoint-adr EXIT=0。详见 changelog CHG-VSR-2。**Codex review FIX（typed client 可触达）**：`VideoListFilter` 14 字段未在 `lib/videos/api.ts` `listVideos` 序列化（声明却发不出 = 不可触达+内部不一致），补序列化与后端解析对齐（数组 CSV / 布尔 true-false / 范围 String / 派生仅 true）+ 新增 5 序列化测试；全量 5917 passed。
 
-6. **CHG-VSR-3** — 线路聚合 API：可用源数① / 连接失败 / 试播失败 / 待探测 / 质量(quality_rank+覆盖率+延迟中位) / 待补源 + KPI stats ①→②（状态：⬜ 未开始）
+6. **CHG-VSR-3** — 线路聚合 API：可用源数① / 连接失败 / 试播失败 / 待探测 / 质量(quality_rank+覆盖率+延迟中位) / 待补源 + KPI stats ①→②（状态：🔄 设计完成 / 待实施 — ADR-117 AMENDMENT 3 固化 2026-06-02 / claude-opus-4-8 / 子代理 arch-reviewer (claude-opus-4-8)）
+   - **设计已固化（ADR-117 AMENDMENT 3 / decisions.md，D-117-VSR3-1..8）**：arch-reviewer Opus「需修改」→ 2 BLOCKER + 1 HIGH + 3 MEDIUM 全纳入。实施蓝图（零上下文损失）：
+     - **拆分（4 文件）**：`source-line-aliases.ts`（别名 CRUD）/ `source-routes.ts`（routes-by-site + 3 mutations）/ `video-matrix.ts`（getVideoMatrix）/ `sources-matrix.ts` 保留 video-groups（~390 行）。
+     - **BLOCKER-2（必做）**：≥6 测试 `vi.mock('@/api/db/queries/sources-matrix')` 按路径 mock 别名/route 符号 → Service import + 这些测试 import & vi.mock 路径**同步迁移新文件**（方案 A）。**文件范围须显式含**：`tests/unit/api/{source-line-alias-retire-priority-audit,source-line-alias-mutations,sources-routes-by-site,sources-matrix,sources-matrix-service}.test.ts` + `tests/integration/api/admin-sources.test.ts`（落地时逐一核 grep 实际引用）。
+     - **派生列**：单趟聚合 FILTER（D-117-VSR3-1）+ `QUALITY_RANK_EXPR` 单常量三处共用（CASE COALESCE(quality_detected,quality) 7 档，勿照搬 pickHighestQuality）+ qualityHighest=CASE MAX(rank) 反查 label（D-2）+ coverage 仅 quality_detected 实测 + latencyMedian 全源非空 scope（D-3）。
+     - **KPI②**：per-video 子查询 + 外层 COUNT FILTER（D-4，**禁①②同层 FILTER 双算**）；保留①（active/dead/orphan）+ 等价回归断言。
+     - **quickFilters**：全 WHERE EXISTS（D-5，low_quality=EXISTS 已知质量 AND NOT EXISTS rank>=4）；lowQuality/quickFilter OR 合流单份谓词。
+     - **sortField**：新增走 SELECT 别名引用（D-6，IDENT 正则零放宽）+ Service zod enum 同步。
+     - 派生列**双层透传**（raw map + Service map 均显式枚举，须两处补）。无新 route/error code/migration；不碰 user_submissions；SourceSegment 保留（卡 5 删）。
    - 创建时间：2026-06-01 19:15
    - 建议模型：opus（ADR-117 amendment 起草）+ sonnet（实施）
    - 文件范围：`apps/api/src/db/queries/sources-matrix.ts`（`listVideoGroups` 增派生列 + `getVideoGroupStats` 5 卡 FILTER 从 `source_check_status`① 切探测②）+ 快捷筛选谓词（含异常/待补源/待探测/低质量 `quality_rank<4`）+ Service 层 + 单测。
