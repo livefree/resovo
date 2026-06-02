@@ -54,20 +54,34 @@ function getTextValue(filters: ReadonlyMap<string, FilterValue>, key: string): s
 
 // AMD2-PATCH-1（2026-05-24）：sort 白名单守卫（防 saved views/URL 反序列化非法 sortField → 422）
 // AMD2-PATCH-2（2026-05-24）：白名单扩 5 字段同步后端 SORT_FIELDS 扩展（apps/api/src/routes/admin/videos.ts:90）
+// CHG-VSR-4-A：+episode_count 同步后端 SORT_FIELDS（CHG-VSR-2 ADR-150 AMENDMENT 3）
 // 兑现 ADR-150 AMD2 D-150-AMD2-1 "所有有数据的列默认可排序" / 不再用前端 enableSorting:false 反范式
 const VIDEO_SORT_FIELD_WHITELIST = [
   'created_at', 'updated_at', 'title', 'year', 'type',
-  'source_health', 'visibility', 'review_status', 'douban_status', 'meta_score',
+  'source_health', 'visibility', 'review_status', 'douban_status', 'meta_score', 'episode_count',
 ] as const
 type VideoSortField = (typeof VIDEO_SORT_FIELD_WHITELIST)[number]
 function isVideoSortField(s: string | undefined): s is VideoSortField {
   return s !== undefined && (VIDEO_SORT_FIELD_WHITELIST as readonly string[]).includes(s)
 }
 
+// CHG-VSR-4-A（设计 §2.2/§2.5）：复合显示列 id → 后端 sortField 映射。
+// DataTable 排序以 column.id 作 sort.field（无独立 sortField 契约，沿用 CHG-VSR-5-A sources 页先例）；
+// 复合列 id 语义化（release/episodes/meta/status），排序到原子后端字段。
+// 直通列（title/type/updated_at/source_health/created_at/year/...）id 即后端字段，?? 兜底原值。
+const COMPOSITE_SORT_MAP: Readonly<Record<string, VideoSortField>> = {
+  release: 'year',
+  episodes: 'episode_count',
+  meta: 'meta_score',
+  status: 'review_status',
+}
+
 export function buildVideoFilter(snapshot: TableQuerySnapshot): VideoListFilter {
   const { filters, sort, pagination } = snapshot
   // AMD2-PATCH-1：sort.field 白名单守卫（与 CrawlerRunsView sub 2 EXTEND 一致范式）
-  const sortField = isVideoSortField(sort.field) ? sort.field : undefined
+  // CHG-VSR-4-A：先经复合列映射，再白名单守卫（映射缺失 → 兜底原 id 直通）
+  const mappedField = sort.field ? (COMPOSITE_SORT_MAP[sort.field] ?? sort.field) : undefined
+  const sortField = isVideoSortField(mappedField) ? mappedField : undefined
   return {
     q: getTextValue(filters, 'q'),
     type: getEnumFirst(filters, 'type') as VideoType | undefined,

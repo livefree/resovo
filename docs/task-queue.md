@@ -2513,7 +2513,7 @@ CODENAME-MATRIX-E2E (依赖 Wave 3 验收期补丁 CODENAME-MATRIX ✅)
 
 - **状态**：🔄 执行中
 - **创建时间**：2026-06-01 19:15
-- **最后更新时间**：2026-06-02（PRE-1/PRE-2/PRE-3/1/2/3/5-A/5-B/8 ✅ / CHG-VSR-6 🔄 进行中 / 4-A·4-B·7 待做 / DTAF-VIEWPORT 待做）
+- **最后更新时间**：2026-06-02（PRE-1/PRE-2/PRE-3/1/2/3/4-A/5-A/5-B/6/8 ✅ / 4-B·7·DTAF-VIEWPORT·6-FOLLOWUP-DRAWER-HOOK 待做）
 - **目标**：落地《视频库/播放线路职责重定义》设计方案——视频库=作品维度、播放线路=资源运维维度、别名独立页；表格头部极简(搜索+列设置) + 三层过滤 + B 方案快捷筛选；术语裁决（失效=探测②含连接/试播/异常、禁用=is_active①、待补源=无可播源含已上架）；用户投稿/失效举报整体下线。
 - **范围**：`apps/server-next`（/admin/videos + /admin/sources 两 client + 子组件）+ `apps/api`（videos/sources 聚合 + 过滤排序 + distinct 白名单 + submit 端点 410）+ `packages/admin-ui`（KpiCard pressed）+ `packages/types`（双表 DTO/术语）+ `apps/web-next`（移除投稿入口）。
 - **依赖**：设计方案 ✅（`docs/designs/videos-sources-responsibility-redesign_20260601.md` / commit e1950050）。ADR：ADR-117 amendment（sources 聚合）+ ADR-150 amendment（distinct 白名单 + country 逻辑表）；ADR-124 不触碰。
@@ -2596,12 +2596,15 @@ CODENAME-MATRIX-E2E (依赖 Wave 3 验收期补丁 CODENAME-MATRIX ✅)
    - 验收要点：5 KPI 计数走探测维度② + 质量口径（`quality_detected ?? quality` / 覆盖率 / 延迟中位）+ 质量未知不并入低质量 + 单测。
    - 依赖：CHG-VSR-1。
 
-7. **CHG-VSR-4-A** — 视频库列重构（复合显示列 + 默认隐藏原子可筛选列 + 数据格式）（状态：⬜ 未开始）
+7. **CHG-VSR-4-A** — 视频库列重构（复合显示列 + 默认隐藏原子可筛选列 + 数据格式）（状态：✅ 已完成 2026-06-02 / claude-opus-4-8 / 子代理 无）
    - 创建时间：2026-06-01 19:15
+   - 实际开始：2026-06-02 11:47
+   - 完成时间：2026-06-02 12:10
    - 建议模型：sonnet
    - 文件范围：videos columns（封面/视频/类型/发行信息/集数/元数据/内容状态/更新/操作 + 默认隐藏原子列 year/country/连载/可见/审核/发布/douban/bangumi/meta_score）；§2.4 数据格式降级（集数 NULL / 已播>收录 warn）。
    - 验收要点：复合显示列只读不挂筛选；默认列与 §2.2 一致；列宽/排序对齐。
    - 依赖：CHG-VSR-1 / CHG-VSR-2 / CHG-VSR-PRE-1。
+   - 完成备注：**设计 §2.2/§2.3/§2.4/§2.5/§2.6 列重构落地**。① `VideoColumns.tsx`（269→~430，声明性<500）默认可见 9 列重组（cover / title「视频」副行 `{title_en ?? title_original} · {short_id}` / type / **release** 复合〔`{year}·CountryName`+Pill 完结/连载/未知〕/ **episodes** §2.4 降级 / **meta** EnrichmentBadgeCluster〔enrichment→meta 重命名〕/ **status** 复合〔VisChip+发布 dot〕/ updated / actions）；§2.3 降级默认隐藏 source_health(保留排序)/probe/image_health；§2.6② 默认隐藏原子列 year/country/catalog_status/visibility/review_status/is_published/douban_status/bangumi_status/meta_score(render-only，filter 接线留 4-B)。② **复合列与未接线列一律显式 `filterable:false`**（D-150-AMD2-1 data-kind 默认 filterable=true / §2.6「只读不挂筛选」硬约束），4-A 筛选面收敛 = title/type/visibility/review_status（既有可用）。③ **排序对齐**：DataTable 以 column.id 作 sort.field（`sortable` 仅看 enableSorting，无 sortField 契约 / 沿用 CHG-VSR-5-A 先例）→ `buildVideoFilter` 加 `COMPOSITE_SORT_MAP`（release→year/episodes→episode_count/meta→meta_score/status→review_status）+ 白名单 +episode_count；default sort `created_at desc`→`updated_at desc`（§2.5）。④ `VIDEO_COLUMN_DESCRIPTORS` 同步 22 条；新建 `VideoColumns.test.tsx` 25 用例 + `enrichment-cluster-faces.test` 同步列重构（descriptor enrichment→meta / 锚点改 title 文本）。**门禁全过**：typecheck 8ws / lint 5 successful（零新警告）/ verify:adr-contracts / verify:endpoint-adr EXIT=0 / **全量 451 files 5984 passed 0 failed 零 flaky**（净 +25 本卡测试）。**范围外（留 4-B）**：原子列 enum/range filter 接线 + 搜索框 q 多列 + 快捷筛选 B + VideoRowActions 扩展 + 导出 CSV 移 PageHeader + FilterChipBar 删 + 视图保存移除。**e2e**：video specs 仅依赖 video-list-table/title 文本/row-actions/cover·actions resize handle/batch（列无关 columnheader handle）→ 结构零破坏（grep 实证无旧列依赖）；实跑因本机鉴权 env（:3003→307 走真实 :4000）阻塞归 CHG-VSR-7。详见 changelog CHG-VSR-4-A。执行模型: claude-opus-4-8
 
 8. **CHG-VSR-4-B** — 视频库三层过滤 + 行操作 + 快捷筛选(B 统计计数)（状态：⬜ 未开始）
    - 创建时间：2026-06-01 19:15

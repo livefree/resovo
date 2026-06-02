@@ -94,7 +94,9 @@ export function VideoListClient() {
     router,
     defaults: {
       pagination: { page: 1, pageSize: 20 },
-      sort: { field: 'created_at', direction: 'desc' },
+      // CHG-VSR-4-A（设计 §2.5）：默认「最近信息变更」视角 updated_at desc（替换原 created_at desc）；
+      // field='updated_at' 与 updated 列 id 一致（排序指示符命名空间），后端直通同名 sortField
+      sort: { field: 'updated_at', direction: 'desc' },
     },
     urlNamespace: 'v',
     columns: VIDEO_COLUMN_DESCRIPTORS,

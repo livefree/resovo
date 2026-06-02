@@ -1,20 +1,34 @@
 'use client'
 
 /**
- * VideoColumns.tsx — 视频库列定义（CHG-VSR-PRE-1 从 VideoListClient 抽出，零行为变化）
+ * VideoColumns.tsx — 视频库列定义
  *
- * reference §6.1 视频库标杆列；列 helper / 样式常量 / buildVideoColumns 全部内聚于此。
+ * CHG-VSR-4-A（设计 §2.2/§2.3/§2.4/§2.5）：职责回归后的列重构。
+ * - 默认可见复合列：cover / title(视频) / type / release(发行信息) / episodes(集数) /
+ *   meta(元数据) / status(内容状态) / updated / actions
+ * - §2.3 降级为可选列（默认隐藏，保留能力）：source_health(保留排序) / probe(占位) / image_health
+ * - §2.6② 默认隐藏原子可筛选列（render-only，filter 接线留 CHG-VSR-4-B）：
+ *   year / country / catalog_status(连载) / visibility / review_status / is_published /
+ *   douban_status / bangumi_status / meta_score / created_at
+ *
+ * 排序：DataTable 以 column.id 作 sort.field（无独立 sortField 契约 / `sortable` 仅看 enableSorting）；
+ * 复合列 id 语义化，排序映射到后端字段由 VideoFilterFields.buildVideoFilter COMPOSITE_SORT_MAP 承担。
+ * 筛选（§0.3 阻断项 1 / §2.6）：data-kind 列默认 filterable=true（D-150-AMD2-1），故复合显示列与
+ * 未接线原子列一律显式 filterable:false（"复合显示列只读不挂筛选"）；4-A 筛选面 = title/type/
+ * visibility/review_status（既有可用）；其余原子列 enum/range filter 接线留 CHG-VSR-4-B。
  */
 
-import type { CSSProperties } from 'react'
+import type { CSSProperties, ReactElement } from 'react'
 import {
-  Pill, VisChip, Thumb, DualSignal, EnrichmentBadgeCluster,
+  Pill, VisChip, Thumb, DualSignal, EnrichmentBadgeCluster, CountryName,
   type TableColumn,
 } from '@resovo/admin-ui'
-import type { VideoAdminRow, VideoType } from '@/lib/videos'
+import type {
+  VideoAdminRow, VideoType, VideoStatus, VisibilityStatus, DoubanStatus,
+} from '@/lib/videos'
 import { VideoRowActions } from './VideoRowActions'
 
-// ── column definitions（reference §6.1 视频库标杆 10 列）─────────────
+// ── 中文标签映射 ──────────────────────────────────────────────────
 
 // 类型中文映射（CHG-DESIGN-08 8A 内联到 columns 层；原 VideoTypeChip 已由 Pill 取代）
 const TYPE_LABELS: Record<VideoType, string> = {
@@ -30,6 +44,23 @@ const TYPE_LABELS: Record<VideoType, string> = {
   kids: '少儿',
   other: '其他',
 }
+
+// 可见性中文映射（visibility 原子列；与 VISIBILITY_OPTIONS 同义，columns 层内联避免反向依赖 FilterFields）
+const VISIBILITY_LABELS: Record<VisibilityStatus, string> = {
+  public: '公开',
+  internal: '内部',
+  hidden: '隐藏',
+}
+
+// 豆瓣/Bangumi 匹配状态中文映射（DOUBAN_STATUSES / BANGUMI_STATUSES 同集 4 态镜像）
+const MATCH_STATUS_LABELS: Record<DoubanStatus, string> = {
+  pending: '待匹配',
+  matched: '已匹配',
+  candidate: '候选',
+  unmatched: '未匹配',
+}
+
+// ── 样式常量 ──────────────────────────────────────────────────────
 
 // 标题列 cell 样式（thumb 与 title 分列，title 仅含标题 + meta）
 const TITLE_CELL_STYLE: CSSProperties = {
@@ -47,6 +78,30 @@ const TITLE_META_STYLE: CSSProperties = {
   whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
 }
 
+// 两行复合 cell 通用容器（release）
+const STACK_CELL_STYLE: CSSProperties = {
+  display: 'flex', flexDirection: 'column', gap: '3px', minWidth: 0, alignItems: 'flex-start',
+}
+const STACK_LINE1_STYLE: CSSProperties = {
+  fontSize: 'var(--font-size-xs)', color: 'var(--fg-default)',
+  whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%',
+}
+// 单行 muted 文本（updated / created_at / 集数 / 原子列降级）
+const MUTED_TEXT_STYLE: CSSProperties = {
+  fontSize: 'var(--font-size-xs)', color: 'var(--fg-muted)', whiteSpace: 'nowrap',
+}
+// 集数「已播 > 收录」warn 强调（外部领先爬虫）
+const EPISODES_WARN_STYLE: CSSProperties = {
+  color: 'var(--state-warning-fg)', fontWeight: 600,
+}
+// 内容状态：VisChip + 发布 dot 横排
+const STATUS_CELL_STYLE: CSSProperties = {
+  display: 'inline-flex', alignItems: 'center', gap: '6px', minWidth: 0,
+}
+const PUBLISH_DOT_STYLE: CSSProperties = {
+  width: '6px', height: '6px', borderRadius: '50%', flexShrink: 0,
+}
+
 // 源活跃 cell 样式（reference §6.1 sources 列：dot + 数字 + 活跃/一般/稀少 文案）
 const SOURCES_CELL_STYLE: CSSProperties = {
   display: 'inline-flex', alignItems: 'center', gap: '6px',
@@ -60,6 +115,8 @@ const SOURCES_NUM_STYLE: CSSProperties = {
 const SOURCES_LABEL_STYLE: CSSProperties = {
   fontSize: 'var(--font-size-2xs)', color: 'var(--fg-muted)',
 }
+
+// ── 派生 helper ───────────────────────────────────────────────────
 
 function sourcesDotColor(active: number): string {
   if (active > 10) return 'var(--state-success-fg)'
@@ -100,9 +157,82 @@ function reviewPillLabel(status: VideoAdminRow['review_status']): string {
   }
 }
 
-// sub C（2026-05-24）：ADR-150 D-150-1 双轨 — 4 列加 filterable
-//   title (text/q) / type (enum) / visibility (enum/visibilityStatus) / review_status (enum/reviewStatus)
-//   options 由消费方注入（VIDEO_TYPE_OPTIONS / VISIBILITY_OPTIONS / REVIEW_STATUS_OPTIONS）
+// 连载状态（mc.status）→ 完结(ok) / 连载(warn) / 未知(neutral)（§2.4）
+function catalogStatusVariant(status: VideoStatus | undefined): 'ok' | 'warn' | 'neutral' {
+  if (status === 'completed') return 'ok'
+  if (status === 'ongoing') return 'warn'
+  return 'neutral'
+}
+function catalogStatusLabel(status: VideoStatus | undefined): string {
+  if (status === 'completed') return '完结'
+  if (status === 'ongoing') return '连载'
+  return '未知'
+}
+
+// ── 复合列 render（§2.2 / §2.4）─────────────────────────────────────
+
+// 发行信息：① {year} · {country} ② Pill{完结/连载/未知}（取 mc.status）
+function ReleaseCell({ row }: { row: VideoAdminRow }): ReactElement {
+  const yearText = row.year != null ? String(row.year) : '—'
+  return (
+    <div style={STACK_CELL_STYLE} data-testid="release-cell">
+      <span style={STACK_LINE1_STYLE}>
+        {yearText} · <CountryName code={row.country} muted />
+      </span>
+      <Pill variant={catalogStatusVariant(row.status)}>{catalogStatusLabel(row.status)}</Pill>
+    </div>
+  )
+}
+
+// 集数降级（§2.4）：
+//  - 电影 → '—'
+//  - 三值齐全 → 收录 N · 已播 M / 共 K（已播>收录 → 已播染 warn + hover 提示）
+//  - 仅收录（已播 / 共 任一缺失）→ 收录 N
+//  - 全空 → '—'
+function EpisodesCell({ row }: { row: VideoAdminRow }): ReactElement {
+  if (row.type === 'movie') {
+    return <span style={MUTED_TEXT_STYLE} data-testid="episodes-cell">—</span>
+  }
+  const recorded = row.episode_count
+  if (recorded == null) {
+    return <span style={MUTED_TEXT_STYLE} data-testid="episodes-cell">—</span>
+  }
+  const current = row.current_episodes
+  const total = row.total_episodes
+  if (current == null || total == null) {
+    return <span style={MUTED_TEXT_STYLE} data-testid="episodes-cell">收录 {recorded}</span>
+  }
+  const aired = current > recorded
+  return (
+    <span
+      style={MUTED_TEXT_STYLE}
+      data-testid="episodes-cell"
+      title={aired ? '外部数据领先于已收录' : undefined}
+    >
+      收录 {recorded} · <span style={aired ? EPISODES_WARN_STYLE : undefined}>已播 {current}</span> / 共 {total}
+    </span>
+  )
+}
+
+// 内容状态：VisChip（visibility × review 复合）+ 发布 dot（已上架 ok / 草稿 muted）
+function StatusCell({ row }: { row: VideoAdminRow }): ReactElement | null {
+  if (!row.visibility_status || !row.review_status) return null
+  return (
+    <span style={STATUS_CELL_STYLE} data-testid="status-cell">
+      <VisChip visibility={row.visibility_status} review={row.review_status} />
+      <span
+        aria-hidden="true"
+        style={{
+          ...PUBLISH_DOT_STYLE,
+          background: row.is_published ? 'var(--state-success-fg)' : 'var(--fg-muted)',
+        }}
+      />
+      <span style={MUTED_TEXT_STYLE}>{row.is_published ? '已上架' : '草稿'}</span>
+    </span>
+  )
+}
+
+// ── column definitions（设计 §2.2 默认可见 + §2.3/§2.6② 默认隐藏）────
 export function buildVideoColumns(
   isAdmin: boolean,
   onRowUpdate: (id: string, patch: Partial<VideoAdminRow>) => void,
@@ -112,33 +242,28 @@ export function buildVideoColumns(
   reviewOptions: readonly { value: string; label?: string }[] = [],
 ): readonly TableColumn<VideoAdminRow>[] {
   return [
-    // ── thumb 列：CHG-UX2-03 升级 poster-sm 32×48 → poster-md 48×72（解决"视频库列表过小"）──
-    // CHG-UX2-03d：cover width = Thumb 48 + cell padding 24 = 72，贴合 cell content；
-    // 不再用 wrapper div（CHG-UX2-03c 的 wrapper 让 Thumb 成为 flex item，破坏 flex-shrink:0）
+    // ════ 默认可见列（§2.2）════
+    // cover：Thumb poster-md 48×72；width 72 = Thumb 48 + cell padding 24 已贴合内容
+    // （设计 §2.2 标 56 沿用旧 poster-sm，poster-md 需 72；e2e dt-resize-handle-cover 依赖保留）
     {
-      // DTR-F：解禁列宽（去 enableResizing:false）；width 72 = Thumb 48 + padding 24 已贴合内容 +
-      // 容下表头「封面」2 字；minWidth 56 给 handle/截断呼吸。auto-fit 测得仍约 72。
       id: 'cover', kind: 'media', header: '封面', accessor: (r) => r.cover_url,
       width: 72, minWidth: 56, defaultVisible: true,
       cell: ({ row }) => <Thumb src={row.cover_url} size="poster-md" />,
     },
-    // ── title 列：标题 + meta（shortId · year）──
-    // CHG-UX2-03 改弹性：删 width 保留 minWidth → buildGridTemplate 走 minmax(220px, 1fr) 撑满，
-    // 消除右侧空白 + 消除横向溢出（frame "圆角右直角"根因连锁修复）
-    // sub C：text filter / filterFieldName='q'（D-150-4 业务 key 桥接 / 后端搜 title）
+    // title「视频」：① 标题 ② {title_en ?? title_original} · {short_id}（§2.2）
+    // pinned 静态锁定（§1.1-3）；保留 q text filter（搜索入口；搜索框 q 多列扩面留 4-B）
     {
-      id: 'title', header: '标题', accessor: (r) => r.title,
+      id: 'title', header: '视频', accessor: (r) => r.title,
       minWidth: 220, enableResizing: true, enableSorting: true, defaultVisible: true, pinned: true,
       filterable: true, filterFieldName: 'q', filterKind: 'text',
       cell: ({ row }) => (
         <div style={TITLE_CELL_STYLE}>
           <span style={TITLE_TEXT_STYLE}>{row.title}</span>
-          <span style={TITLE_META_STYLE}>{row.short_id} · {row.year ?? '—'}</span>
+          <span style={TITLE_META_STYLE}>{row.title_en ?? row.title_original ?? '—'} · {row.short_id}</span>
         </div>
       ),
     },
-    // ── type 列：Pill neutral + 中文映射（reference §6.1 中性映射）──
-    // sub C：enum filter / filterFieldName='type'
+    // type：Pill neutral + 中文映射；保留 enum filter
     {
       id: 'type', header: '类型', accessor: (r) => r.type,
       width: 90, minWidth: 80, enableResizing: true, enableSorting: true, defaultVisible: true,
@@ -147,18 +272,65 @@ export function buildVideoColumns(
         <Pill variant="neutral">{TYPE_LABELS[row.type] ?? row.type}</Pill>
       ),
     },
-    // ── year 列（默认隐藏；title 列 meta 已显示 year）──
+    // release 发行信息（复合，§2.6 只读不挂筛选）：sortable→year（COMPOSITE_SORT_MAP）
     {
-      id: 'year', header: '年份', accessor: (r) => r.year ?? '',
-      width: 100, minWidth: 80, enableResizing: true, enableSorting: true, defaultVisible: false,
+      id: 'release', header: '发行信息', accessor: (r) => r.year ?? '',
+      width: 150, minWidth: 130, enableResizing: true, enableSorting: true, defaultVisible: true,
+      filterable: false,
+      cell: ({ row }) => <ReleaseCell row={row} />,
     },
-    // ── sources 列：reference §6.1 dot + 数字 + 活跃/一般/稀少 文案 ──
-    // CHG-UX2-03b 收窄 100 → 90（消除横滚 → frame 圆角完整）
-    // AMD2-PATCH-2：后端 SORT_FIELDS 扩展 'source_health' → ORDER BY active_source_count
-    // 撤回 PATCH-1 错误"enableSorting: false"反范式（违反 AMD2 D-150-AMD2-1 默认全开）
+    // episodes 集数（复合，§2.6 只读不挂筛选）：sortable→episode_count；§2.4 降级
+    {
+      id: 'episodes', header: '集数', accessor: (r) => r.episode_count ?? '',
+      width: 140, minWidth: 120, enableResizing: true, enableSorting: true, defaultVisible: true,
+      filterable: false,
+      cell: ({ row }) => <EpisodesCell row={row} />,
+    },
+    // meta 元数据（复合，§2.6 只读不挂筛选）：sortable→meta_score
+    // EnrichmentBadgeCluster density='row'；anime-only bangumi 门控由 Cluster 内部依 row.type 处理；
+    // enrichmentSummary 缺省（旧行/未注入）→ 不渲染
+    {
+      id: 'meta', header: '元数据', accessor: (r) => r.meta_score ?? '',
+      width: 170, minWidth: 140, enableResizing: true, enableSorting: true, defaultVisible: true,
+      filterable: false,
+      cell: ({ row }) => row.enrichmentSummary
+        ? <EnrichmentBadgeCluster summary={row.enrichmentSummary} type={row.type} density="row" />
+        : null,
+    },
+    // status 内容状态（复合，§2.6 只读不挂筛选）：sortable→review_status
+    {
+      id: 'status', header: '内容状态', accessor: (r) => r.review_status ?? '',
+      width: 150, minWidth: 130, enableResizing: true, enableSorting: true, defaultVisible: true,
+      filterable: false,
+      cell: ({ row }) => <StatusCell row={row} />,
+    },
+    // updated 更新时间（默认可见，§2.2）：sortable→updated_at（直通）；date-range filter 留 4-B
+    {
+      id: 'updated_at', header: '更新时间', accessor: (r) => r.updated_at ?? '',
+      width: 110, minWidth: 90, enableResizing: true, enableSorting: true, defaultVisible: true,
+      filterable: false,
+      cell: ({ row }) => <span style={MUTED_TEXT_STYLE}>{row.updated_at ?? '—'}</span>,
+    },
+    // actions 操作：VideoRowActions（溢出菜单内容扩展留 4-B）；action opt-in resize
+    {
+      id: 'actions', kind: 'action', header: '操作', accessor: () => null,
+      width: 120, minWidth: 100, enableResizing: true, defaultVisible: true,
+      cell: ({ row }) => (
+        <VideoRowActions
+          row={row}
+          isAdmin={isAdmin}
+          onRowUpdate={onRowUpdate}
+          onEditRequest={onEditRequest}
+        />
+      ),
+    },
+
+    // ════ 默认隐藏可选列（§2.3 职责回归降级）════
+    // source_health 源活跃：§2.3 降级可选列但保留排序能力（sortable→source_health 直通）
     {
       id: 'source_health', header: '源活跃', accessor: (r) => r.active_source_count ?? r.source_count,
-      width: 90, minWidth: 80, enableResizing: true, defaultVisible: true,
+      width: 90, minWidth: 80, enableResizing: true, enableSorting: true, defaultVisible: false,
+      filterable: false,
       cell: ({ row }) => {
         const active = parseInt(row.active_source_count ?? row.source_count ?? '0', 10)
         return (
@@ -170,24 +342,18 @@ export function buildVideoColumns(
         )
       },
     },
-    // ── probe 列：reference §6.1 DualSignal 探测/播放双信号 ──
-    // 后端暂未提供 probe / render 字段；先传 'unknown' / 'unknown' 占位（STATS-EXTEND-VIDEOS follow-up）
-    // CHG-UX2-03b 收窄 140 → 110（消除横滚）
-    // AMD2-PATCH-2：保留 enableSorting: false — 后端 schema 真无 probe / render 字段（placeholder
-    //   accessor 返回固定字符串 / 排序无意义）/ 待 STATS-EXTEND-VIDEOS 补字段后启用
+    // probe 探测/播放：§2.3 占位（后端字段补齐前排序禁用 / STATS-EXTEND-VIDEOS follow-up）
     {
       id: 'probe', header: '探测/播放', accessor: () => 'probe-render',
-      width: 110, minWidth: 100, enableResizing: true, enableSorting: false, defaultVisible: true,
+      width: 110, minWidth: 100, enableResizing: true, enableSorting: false, defaultVisible: false,
+      filterable: false,
       cell: () => <DualSignal probe="unknown" render="unknown" />,
     },
-    // ── image 列：reference §6.1 P0 失效|活跃 Pill ──
-    // CHG-UX2-03b 默认隐藏（消除横滚 → 用户可手动开）
-    // AMD2-PATCH-2：保留 enableSorting: false — image_health 是 poster_status + backdrop_status
-    //   复合派生（accessor 拼字符串）/ 后端无对应复合 SQL 排序字段 / 拆分排序 UX 不清晰
-    //   后续补 image_health enum 字段（如 'ok' / 'partial' / 'broken'）后端 ORDER BY 后启用
+    // image_health 图片：§2.3 P0 复合派生（poster + backdrop），无对应复合 SQL 排序字段 → 禁排序
     {
       id: 'image_health', header: '图片', accessor: (r) => `${r.poster_status ?? '-'}/${r.backdrop_status ?? '-'}`,
       width: 100, minWidth: 90, enableResizing: true, enableSorting: false, defaultVisible: false,
+      filterable: false,
       cell: ({ row }) => {
         const variant = imageHealthVariant(row)
         return (
@@ -197,72 +363,91 @@ export function buildVideoColumns(
         )
       },
     },
-    // ── visibility 列：reference §6.1 VisChip（visibility + review 复合）──
-    // sub C：enum filter / filterFieldName='visibilityStatus'（D-150-4 业务 key 桥接 column.id ≠ filterFieldName）
-    // AMD2-PATCH-2：后端 SORT_FIELDS 扩展 'visibility' → ORDER BY v.visibility_status
+
+    // ════ 默认隐藏原子可筛选列（§2.6②；render-only，filter 接线留 CHG-VSR-4-B）════
+    // year 年份：原子筛选载体（number-range 留 4-B）；排序由 release 复合列承担 → 禁排序避免冗余
+    {
+      id: 'year', header: '年份', accessor: (r) => r.year ?? '',
+      width: 100, minWidth: 80, enableResizing: true, enableSorting: false, defaultVisible: false,
+      filterable: false,
+      cell: ({ row }) => <span style={MUTED_TEXT_STYLE}>{row.year ?? '—'}</span>,
+    },
+    // country 出品地区：CountryName（ISO→中文）；enum filter 留 4-B（需 distinct 白名单，CHG-VSR-2 已加）
+    {
+      id: 'country', header: '出品地区', accessor: (r) => r.country ?? '',
+      width: 110, minWidth: 90, enableResizing: true, enableSorting: false, defaultVisible: false,
+      filterable: false,
+      cell: ({ row }) => <CountryName code={row.country} muted />,
+    },
+    // catalog_status 连载状态：Pill 完结/连载/未知（mc.status）；enum filter 留 4-B
+    {
+      id: 'catalog_status', header: '连载状态', accessor: (r) => r.status ?? '',
+      width: 100, minWidth: 90, enableResizing: true, enableSorting: false, defaultVisible: false,
+      filterable: false,
+      cell: ({ row }) => (
+        <Pill variant={catalogStatusVariant(row.status)}>{catalogStatusLabel(row.status)}</Pill>
+      ),
+    },
+    // visibility 可见性：原子单值（status 复合列已承担 VisChip）；保留既有 enum filter 避免回归
     {
       id: 'visibility', header: '可见性', accessor: (r) => r.visibility_status ?? '',
-      width: 120, minWidth: 110, enableResizing: true, defaultVisible: true,
+      width: 100, minWidth: 90, enableResizing: true, enableSorting: false, defaultVisible: false,
       filterable: true, filterFieldName: 'visibilityStatus', filterKind: 'enum', filterOptions: visibilityOptions,
-      cell: ({ row }) => (row.visibility_status && row.review_status)
-        ? <VisChip visibility={row.visibility_status} review={row.review_status} />
+      cell: ({ row }) => row.visibility_status
+        ? <Pill variant="neutral">{VISIBILITY_LABELS[row.visibility_status]}</Pill>
         : null,
     },
-    // ── review 列：reference §6.1 单 review pill（不复用 VisChip，因 visibility 列已承担复合状态）──
-    // sub C：enum filter / filterFieldName='reviewStatus'（D-150-4 业务 key 桥接）
-    // AMD2-PATCH-2：后端 SORT_FIELDS 扩展 'review_status' → ORDER BY v.review_status
+    // review_status 审核：单 review pill；保留既有 enum filter 避免回归
     {
       id: 'review_status', header: '审核', accessor: (r) => r.review_status ?? '',
-      width: 90, minWidth: 80, enableResizing: true, defaultVisible: true,
+      width: 90, minWidth: 80, enableResizing: true, enableSorting: false, defaultVisible: false,
       filterable: true, filterFieldName: 'reviewStatus', filterKind: 'enum', filterOptions: reviewOptions,
       cell: ({ row }) => row.review_status
         ? <Pill variant={reviewPillVariant(row.review_status)}>{reviewPillLabel(row.review_status)}</Pill>
         : null,
     },
-    // ── enrichment 列：META-11 / feature-2 富集徽标簇（EnrichmentBadgeCluster density='row'）──
-    // 合并展示豆瓣/Bangumi(anime)/源活性/元数据完整度/拼音警告；消费 ADR-170 enrichmentSummary（admin 注入）
-    // anime-only bangumi 门控由 Cluster 内部依 row.type 处理；enrichmentSummary 缺省（旧行/未注入）→ 不渲染
+    // is_published 发布：Pill 已上架/草稿；enum filter 留 4-B
     {
-      id: 'enrichment', header: '富集', accessor: (r) => r.enrichmentSummary ? String(r.enrichmentSummary.metaScore) : '',
-      width: 150, minWidth: 120, enableResizing: true, enableSorting: false, defaultVisible: true,
-      cell: ({ row }) => row.enrichmentSummary
-        ? <EnrichmentBadgeCluster summary={row.enrichmentSummary} type={row.type} density="row" />
-        : null,
+      id: 'is_published', header: '发布', accessor: (r) => (r.is_published ? 'published' : 'draft'),
+      width: 90, minWidth: 80, enableResizing: true, enableSorting: false, defaultVisible: false,
+      filterable: false,
+      cell: ({ row }) => (
+        <Pill variant={row.is_published ? 'ok' : 'neutral'}>{row.is_published ? '已上架' : '草稿'}</Pill>
+      ),
     },
-    // AMD2-PATCH-2：后端 SORT_FIELDS 扩展 'douban_status' → ORDER BY v.douban_status
+    // douban_status 豆瓣状态：4 态中文；enum filter 留 4-B
     {
       id: 'douban_status', header: '豆瓣状态', accessor: (r) => r.douban_status ?? '',
-      width: 180, minWidth: 160, enableResizing: true, defaultVisible: false,
+      width: 110, minWidth: 90, enableResizing: true, enableSorting: false, defaultVisible: false,
+      filterable: false,
+      cell: ({ row }) => (
+        <span style={MUTED_TEXT_STYLE}>{row.douban_status ? MATCH_STATUS_LABELS[row.douban_status] : '—'}</span>
+      ),
     },
-    // AMD2-PATCH-2：后端 SORT_FIELDS 扩展 'meta_score' → ORDER BY v.meta_score
+    // bangumi_status Bangumi 状态（仅 anime）：4 态中文；enum filter 留 4-B
+    {
+      id: 'bangumi_status', header: 'Bangumi', accessor: (r) => r.bangumi_status ?? '',
+      width: 110, minWidth: 90, enableResizing: true, enableSorting: false, defaultVisible: false,
+      filterable: false,
+      cell: ({ row }) => (
+        <span style={MUTED_TEXT_STYLE}>
+          {row.type === 'anime' && row.bangumi_status ? MATCH_STATUS_LABELS[row.bangumi_status] : '—'}
+        </span>
+      ),
+    },
+    // meta_score 元数据完整度：原子 number-range 筛选载体（留 4-B）；排序由 meta 复合列承担 → 禁排序
     {
       id: 'meta_score', header: '元数据完整度', accessor: (r) => r.meta_score ?? '',
-      width: 160, minWidth: 140, enableResizing: true, defaultVisible: false,
+      width: 140, minWidth: 120, enableResizing: true, enableSorting: false, defaultVisible: false,
+      filterable: false,
+      cell: ({ row }) => <span style={MUTED_TEXT_STYLE}>{row.meta_score ?? '—'}</span>,
     },
+    // created_at 创建时间：§2.3 既有隐藏列保留排序（sortable→created_at 直通）
     {
       id: 'created_at', header: '创建时间', accessor: (r) => r.created_at,
-      width: 160, minWidth: 140, enableResizing: true, enableSorting: true, defaultVisible: false,
-    },
-    {
-      id: 'updated_at', header: '更新时间', accessor: (r) => r.updated_at ?? '',
-      width: 160, minWidth: 140, enableResizing: true, enableSorting: true, defaultVisible: false,
-    },
-    // ── actions 列：reference §6.1 ──
-    // 8A 第一阶段保留 VideoRowActions（AdminDropdown 形态）；inline xs btn ×5 重构留 8A 第二阶段
-    // CHG-UX2-03b 收窄 170 → 150（消除横滚）
-    {
-      // DTR-F：解禁列宽（action 列 opt-in：enableResizing:true 才可调）；width 150→120 贴合
-      // VideoRowActions(AdminDropdown) 实宽 + 容下表头「操作」2 字。
-      id: 'actions', kind: 'action', header: '操作', accessor: () => null,
-      width: 120, minWidth: 100, enableResizing: true, defaultVisible: true,
-      cell: ({ row }) => (
-        <VideoRowActions
-          row={row}
-          isAdmin={isAdmin}
-          onRowUpdate={onRowUpdate}
-          onEditRequest={onEditRequest}
-        />
-      ),
+      width: 110, minWidth: 90, enableResizing: true, enableSorting: true, defaultVisible: false,
+      filterable: false,
+      cell: ({ row }) => <span style={MUTED_TEXT_STYLE}>{row.created_at}</span>,
     },
   ]
 }

@@ -107,8 +107,8 @@ function makeDetail(over: Partial<VideoAdminDetail> = {}): VideoAdminDetail {
 // ── Face 1a：列描述符注册 ─────────────────────────────────────────
 
 describe('feature-2 Face 1 — 视频库 enrichment 列注册', () => {
-  it('VIDEO_COLUMN_DESCRIPTORS 含 enrichment（默认可见）', () => {
-    const col = VIDEO_COLUMN_DESCRIPTORS.find((c) => c.id === 'enrichment')
+  it('VIDEO_COLUMN_DESCRIPTORS 含 meta 元数据列（默认可见 / CHG-VSR-4-A enrichment→meta 重命名）', () => {
+    const col = VIDEO_COLUMN_DESCRIPTORS.find((c) => c.id === 'meta')
     expect(col).toBeTruthy()
     expect(col!.defaultVisible).toBe(true)
   })
@@ -147,7 +147,8 @@ describe('feature-2 Face 1 — 视频库行渲染 EnrichmentBadgeCluster', () =>
   it('行无 enrichmentSummary → 不渲染簇', async () => {
     listVideosMock.mockResolvedValue({ data: [makeRow({ enrichmentSummary: undefined })], total: 1, page: 1, limit: 20 })
     const { container } = render(<VideoListClient />)
-    await waitFor(() => expect(container.querySelector('[data-testid="source-health"]')).toBeTruthy())
+    // CHG-VSR-4-A：source_health 列降级默认隐藏（§2.3），改等 title 列行渲染（始终可见）作锚点
+    await screen.findByText('某番')
     expect(container.querySelector('[data-enrichment-badge-cluster]')).toBeNull()
   })
 })
