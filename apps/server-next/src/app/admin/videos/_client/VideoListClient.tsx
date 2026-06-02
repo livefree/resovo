@@ -90,7 +90,12 @@ export function VideoListClient() {
   const router = useTableRouterAdapter()
   const isAdmin = false // CHG-SN-3-12 将从 session/context 注入
   const { snapshot, patch } = useTableQuery({
-    tableId: 'admin-videos',
+    // CHG-VSR-4-A：tableId bump 'admin-videos'→'admin-videos-v2' 失效回访用户旧列布局
+    // （localStorage `admin-ui:table:{tableId}:v2`）。列集 §2.2 重构后，旧 stored 列可见性
+    // （source_health/probe/visibility/review 显示、updated 隐藏）会覆盖新 defaultVisible →
+    // 新默认表不生效。storage-sync 仅 schema 校验、不对账默认可见性变化，故按 :v1→:v2 版本
+    // 失效范式定向 bump 本表 id（不动 admin-ui 共享 LAYOUT_VERSION 以免波及其他表）。
+    tableId: 'admin-videos-v2',
     router,
     defaults: {
       pagination: { page: 1, pageSize: 20 },
