@@ -29,6 +29,23 @@ export async function listVideos(filter: VideoListFilter = {}): Promise<VideoLis
   if (filter.sortDir)         params.set('sortDir', filter.sortDir)
   if (filter.page != null)    params.set('page', String(filter.page))
   if (filter.limit != null)   params.set('limit', String(filter.limit))
+  // ── CHG-VSR-2（ADR-150 AMENDMENT 3）：三层过滤入参序列化 ──
+  // 数组 → CSV（对齐后端 csvEnum/csvFreeStr 逗号分割）；布尔 → 'true'/'false'（对齐 queryBool enum）；范围 → String
+  if (filter.types?.length)         params.set('types', filter.types.join(','))
+  if (filter.yearMin != null)       params.set('yearMin', String(filter.yearMin))
+  if (filter.yearMax != null)       params.set('yearMax', String(filter.yearMax))
+  if (filter.country?.length)       params.set('country', filter.country.join(','))
+  if (filter.catalogStatus?.length) params.set('catalogStatus', filter.catalogStatus.join(','))
+  if (filter.isPublished != null)   params.set('isPublished', String(filter.isPublished))
+  if (filter.doubanStatus?.length)  params.set('doubanStatus', filter.doubanStatus.join(','))
+  if (filter.bangumiStatus?.length) params.set('bangumiStatus', filter.bangumiStatus.join(','))
+  if (filter.metaScoreMin != null)  params.set('metaScoreMin', String(filter.metaScoreMin))
+  if (filter.metaScoreMax != null)  params.set('metaScoreMax', String(filter.metaScoreMax))
+  // 派生快捷筛选：仅 true 发送（false/undefined 无意义，后端 === true 才追加谓词）
+  if (filter.episodeMismatch)       params.set('episodeMismatch', 'true')
+  if (filter.episodeMissing)        params.set('episodeMissing', 'true')
+  if (filter.metaIncomplete)        params.set('metaIncomplete', 'true')
+  if (filter.pendingReview)         params.set('pendingReview', 'true')
   return apiClient.get<VideoListResult>(`/admin/videos?${params}`)
 }
 

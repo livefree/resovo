@@ -13425,3 +13425,17 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **质量门禁**：typecheck 8 workspace EXIT=0 / lint EXIT=0 / **全量 448 文件 5912 passed 0 failed**（含新增 5 测试断言）/ verify:adr-contracts EXIT=0 / verify:endpoint-adr EXIT=0（无新 route）。
 - **e2e**：N/A（API 层；VIDEO e2e 走 UI 卡 4）。flaky 说明：首轮全量出现 2 failed = `tests/unit/server-next/admin-moderation/use-filter-presets.test.ts` 的 post-teardown `window is not defined` unhandled rejection（与本卡无关、我未碰 moderation/filter-presets），重跑 2 次均 0 再现、全 448 passed。
 - **[AI-CHECK]**：六问全过——①零回归（加性 optional + 单值字段未改 / `listAdminVideos` 唯一调用方 adminList、adminList 唯一调用方 route，pending/staging 走独立 schema 不受影响，arch-reviewer 核实）；②分层（route zod+透传 → adminList 透传无业务 → query SQL，未越层）；③防注入（数组 `= ANY($n::text[])` 参数化 + distinct 三重防御不变 + 拒 JOIN）；④无 any/颜色/空 catch；⑤复用既有 csv 范式 + ResolutionTier 无关；⑥distinct country 走逻辑表非端点 JOIN（边界收敛）。注意事项：(1) 卡 4 UI 接线时 type 多选用 `types` CSV、visibility/review 仍单值（如需多选另起）；(2) country facet 前端列标 `filterDistinctTable:'media_catalog'`；(3) 集数异常/元数据缺失为快捷筛选派生 boolean，仅传 true 生效。
+
+### [CHG-VSR-2] Codex stop-time review FIX — typed client 过滤序列化
+- **完成时间**：2026-06-02
+- **记录时间**：2026-06-02 00:05
+- **执行模型**：claude-opus-4-8（主循环）
+- **子代理**：无（一手核实 api.ts 序列化缺口 + 后端 csvEnum/queryBool 解析口径）
+- **触发**：Codex stop-time review 指出「new filter contract is internally inconsistent and not reachable through the typed client」。
+- **根因**：CHG-VSR-2 给 `VideoListFilter` 加了 14 过滤字段，但 typed client `listVideos`（`lib/videos/api.ts`）的 query 序列化器**未同步**——字段在类型里声明却发不出去（不可触达 + 契约内部不一致：类型承诺了 client 静默丢弃的能力）。
+- **修改文件**：
+  - `apps/server-next/src/lib/videos/api.ts` — `listVideos` 序列化补 14 字段，**与后端解析器精确对齐**：数组 → CSV（`.join(',')` 对齐 `csvEnum`/`csvFreeStr` 逗号分割）/ 布尔 `isPublished` → `String()`（'true'/'false' 对齐 `queryBool` z.enum）/ 范围 → `String()` / 派生快捷筛选（episodeMismatch/Missing/metaIncomplete/pendingReview）仅 true 发送（后端 `=== true` 才追加谓词）；空数组 `?.length` 短路不发。
+  - `tests/unit/server-next/videos-api-filter-serialization.test.ts`（新增）— 5 测试：数组 CSV / 范围+布尔 / 派生仅 true / 空数组短路 / episode_count 排序，证明可触达 + 序列化口径与后端一致。
+- **新增依赖/schema/路由/Props 契约**：无（client 序列化层）。
+- **质量门禁**：typecheck 8 workspace EXIT=0 / lint EXIT=0 / **全量 449 文件 5917 passed 0 failed 零回归**。
+- **[AI-CHECK]**：六问全过——契约闭环（type 声明 ↔ client 序列化 ↔ 后端解析三者一致）；零回归（仅 listVideos 加序列化分支）；无 any/颜色/越层。注意：client 数组用 CSV（非重复 key），因后端 csvEnum/csvFreeStr 取单 string 拆分；卡 4 UI 调 listVideos 即可触达全部新过滤。
