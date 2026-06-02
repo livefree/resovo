@@ -211,19 +211,12 @@ async function installVideosMocks(page: Page, state: MockState) {
       return
     }
 
-    // CHG-VSR-7：鉴权流程兜底（会话验证端点）。原 spec 缺此 mock + fall-through 走 route.continue()
-    // → /auth/me 漏到真实 :4000 → 401 → admin shell 重定向 /login（页面加载前即失败 = video e2e 长期阻塞真因）。
-    // 镜像 sources smoke 工作范式：显式 mock auth + fall-through 改 404 隔离（不漏真实后端）。
-    if ((path === '/v1/auth/refresh' || path === '/v1/auth/me') && method === 'POST') {
-      await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ accessToken: 'mock-at', user: { id: 'u1', role: 'moderator' } }) })
-      return
-    }
-    if (path === '/v1/auth/me' && method === 'GET') {
-      await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ data: { id: 'u1', role: 'moderator', email: 'mod@example.com' } }) })
-      return
-    }
-
-    // 其他未拦截 → 404（隔离测试，不 route.continue 漏真实 :4000）
+    // CHG-VSR-7：fall-through 改 404 隔离（原 route.continue() 是 video e2e 长期阻塞真因）。
+    // 根因（实测确认）：admin shell 挂载即拉 /admin/notifications + /admin/system/background-events
+    // + /admin/system/jobs；原 route.continue() 把这些未匹配请求转发到真实 :4000 → mock 会话
+    // (mock-mod-rt) 无效 → 401 → apiClient 401 拦截器 refresh 失败 → window.location.assign('/login')
+    // （api-client.ts:124-137 / handleUnauthorized）→ 页面加载前即跳登录。改 404（≠401）不触发
+    // 鉴权重定向，shell 以 degraded mode 容忍 → 页面正常渲染（对齐 sources smoke 已用的 404 隔离范式）。
     await route.fulfill({ status: 404, contentType: 'application/json', body: JSON.stringify({ error: 'not mocked' }) })
   })
 }

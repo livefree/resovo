@@ -54,14 +54,10 @@ async function installMocks(page: Page, rows: VideoRow[]) {
     if (path === '/v1/admin/videos' && method === 'GET') {
       return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ data: rows, total: rows.length, page: 1, limit: 20 }) })
     }
-    // CHG-VSR-7：鉴权流程兜底（会话验证端点）+ fall-through 改 404 隔离。原缺 /auth/me mock +
-    // route.continue() 漏真实 :4000 → 401 → 重定向 /login（页面加载前失败 = column-resize e2e 阻塞真因）。
-    if ((path === '/v1/auth/refresh' || path === '/v1/auth/me') && method === 'POST') {
-      return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ accessToken: 'mock-at', user: { id: 'u1', role: 'moderator' } }) })
-    }
-    if (path === '/v1/auth/me' && method === 'GET') {
-      return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ data: { id: 'u1', role: 'moderator', email: 'mod@example.com' } }) })
-    }
+    // CHG-VSR-7：fall-through 改 404 隔离（原 route.continue() 是 column-resize e2e 阻塞真因）。
+    // 根因（实测）：admin shell 拉 /admin/notifications + /admin/system/background-events + /jobs，
+    // route.continue() 转发真实 :4000 → mock 会话无效 401 → apiClient refresh 失败 → 重定向 /login
+    // （页面加载前失败）。改 404（≠401）不触发鉴权重定向，shell degraded mode 容忍（对齐 sources smoke）。
     return route.fulfill({ status: 404, contentType: 'application/json', body: JSON.stringify({ error: 'not mocked' }) })
   })
 }
