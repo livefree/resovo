@@ -2644,9 +2644,12 @@ CODENAME-MATRIX-E2E (依赖 Wave 3 验收期补丁 CODENAME-MATRIX ✅)
     - 验收要点：任意集数不截断（消除 `.slice(0,8)`）+ 消除 render 阶段请求 + 全操作接通（含 codename/retired/auto_retired）。
     - 依赖：CHG-VSR-PRE-2 / CHG-VSR-5-A。
 
-12. **CHG-VSR-7** — 回归测试（状态：⬜ 未开始）
+12. **CHG-VSR-7** — 回归测试（状态：✅ 已完成 2026-06-02 / claude-opus-4-8 / 子代理 无）
     - 创建时间：2026-06-01 19:15
+    - 实际开始：2026-06-02 14:45
+    - 完成时间：2026-06-02 15:05
     - 建议模型：sonnet
+    - 完成备注：**VSR 序列收官回归全过**。三门禁：`test -- --run` 453 files 6001 passed + 2 flaky（AuditClient/StagingEditPanel 隔离各 22/22、12/12 过 = 并行污染既有 flaky 非回归）/ verify:adr-contracts + verify:endpoint-adr EXIT=0 / typecheck 8ws + lint 5 successful。**VIDEO/SOURCES e2e 18/18 PASS**（videos 5 + videos-column-resize 5 + sources-smoke 4〔含 DTAF-VIEWPORT 验证〕+ codename-matrix 4，admin-next-chromium 直连 :3003）。**厘清 VIDEO e2e 长期「鉴权 env」阻塞真因 = 测试基建缺 `/auth/me` 会话 mock + fall-through `route.continue()` 漏真实 :4000 → 401 重定向登录**（非 VSR 功能回归）；修：videos 两 spec 补 auth mock + 404 隔离 + test 2 `filter-q`→`videos-search-input`（4-B 搜索框漂移）+ test 5 确认 locator getByText→getByRole（strict 双命中）。仅测试基建修复零生产代码改动。功能域覆盖 VSR-1..6 已沉淀无空缺。详见 changelog。执行模型: claude-opus-4-8
     - 范围：动漫集数 / Bangumi 筛选 / 连接失败 / 试播失败 / 待补源 / 待探测 / 批量探测 / 长剧集展开；e2e（VIDEO/SOURCES 路径）。
     - 验收要点：`test -- --run` + `test:e2e` + `verify:adr-contracts` 全过；零回归。
     - 依赖：CHG-VSR-4-B ✅ / CHG-VSR-5-B ✅ / CHG-VSR-6 ✅ / **CHG-VSR-DTAF-VIEWPORT ✅（e2e 门禁前置已解：sources smoke test 3 实测转绿 2026-06-02）**。

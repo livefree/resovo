@@ -211,7 +211,20 @@ async function installVideosMocks(page: Page, state: MockState) {
       return
     }
 
-    await route.continue()
+    // CHG-VSR-7：鉴权流程兜底（会话验证端点）。原 spec 缺此 mock + fall-through 走 route.continue()
+    // → /auth/me 漏到真实 :4000 → 401 → admin shell 重定向 /login（页面加载前即失败 = video e2e 长期阻塞真因）。
+    // 镜像 sources smoke 工作范式：显式 mock auth + fall-through 改 404 隔离（不漏真实后端）。
+    if ((path === '/v1/auth/refresh' || path === '/v1/auth/me') && method === 'POST') {
+      await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ accessToken: 'mock-at', user: { id: 'u1', role: 'moderator' } }) })
+      return
+    }
+    if (path === '/v1/auth/me' && method === 'GET') {
+      await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ data: { id: 'u1', role: 'moderator', email: 'mod@example.com' } }) })
+      return
+    }
+
+    // 其他未拦截 → 404（隔离测试，不 route.continue 漏真实 :4000）
+    await route.fulfill({ status: 404, contentType: 'application/json', body: JSON.stringify({ error: 'not mocked' }) })
   })
 }
 
@@ -240,7 +253,8 @@ test.describe('视频库黄金路径', () => {
     const listReq = page.waitForRequest((req) =>
       req.url().includes('/admin/videos') && req.url().includes('q=E2E'),
     )
-    await page.getByTestId('filter-q').fill('E2E')
+    // CHG-VSR-4-B：搜索框 testid filter-q → videos-search-input（VideoFilterBar status/site 下拉 → q 搜索框）
+    await page.getByTestId('videos-search-input').fill('E2E')
     await listReq
 
     // 只剩包含 "E2E" 的行
@@ -329,8 +343,9 @@ test.describe('视频库黄金路径', () => {
     const batchReq = page.waitForRequest(
       (req) => req.url().includes('/admin/videos/batch-unpublish') && req.method() === 'POST',
     )
-    // 确认
-    await page.locator('[data-confirm-prompt="batch-unpublish"]').getByText('确认').click()
+    // 确认（CHG-VSR-7：getByText('确认') 同时命中确认标题「确认隐藏 N 条视频？」→ strict 违规；
+    // 改 getByRole button 精确匹配「确认」按钮）
+    await page.locator('[data-confirm-prompt="batch-unpublish"]').getByRole('button', { name: '确认' }).click()
     await batchReq
 
     // bulk bar 消失（selection 已清除，DataTable 自动卸载 .dt__bulk）

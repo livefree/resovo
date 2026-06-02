@@ -13615,3 +13615,23 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **门禁**：typecheck 8 workspace EXIT=0 / lint 5 successful EXIT=0（header-menu/dt-styles 零警告）/ verify:adr-contracts + verify:endpoint-adr EXIT=0 / **全量 453 files 6002 passed + 1 flaky**（`StagingEditPanel.test.tsx` 隔离 12/12 通过 / admin/staging 与本卡正交，同 CHG-VSR-5-A 既有 flaky）/ 新增 9 定位单测。**e2e 实测**（直连 :3003 绕 :3000 webServer 冲突 / 临时 config 去 webServer，用后即删）：`sources-sort-filter-smoke.spec.ts` **4/4 PASS** — test 3（probe filter「应用」）目标转绿 + test 1/2/4 零回归。
 - **注意事项**：① **修复迭代过程**：纯 maxHeight cap 首版修好 test 3 但回归 test 4（footer 压右下角撞 Next dev 浮标 N 钮拦截点击）；经 stash 基线对照确认回归，改 SAFE_BOTTOM_GAP 触发 flip-up（footer 落表头上方远离底边/右下角）同时解 test 3/4。② Next dev 浮标（`<nextjs-portal data-nextjs-dev-overlay>`）是 **dev-only 工具叠层**（生产无），但 footer 压视口底/右下角的定位缺陷在生产同样不良（贴底/可能被分页条遮挡），SAFE_BOTTOM_GAP 是正确通用修复。③ 无公开 Props/契约变更（HeaderMenuProps 字段零增删 / `computeHeaderMenuPosition` 未在 admin-ui index 公开）→ 不触发 admin-ui Props trailer / 强制 Opus 评审。④ 解阻 **CHG-VSR-7** 的 `test:e2e` 门禁（sources smoke test 3 此前为其前置 blocker）。
 - **[AI-CHECK]**：分层 NO 违反（admin-ui 表格内部定位逻辑）；颜色零硬编码（仅 CSS var / 数值为视口几何）；any NO（CSS var 经 `Record<string,string|number>` 断言而非 any）；空 catch NO；函数规模 NO（computeHeaderMenuPosition 声明性 <30 行 / measureNatural <20 行）；契约 NO 扩张（pure helper 测试导入）。结论：SAFE。
+
+## [CHG-VSR-7] 回归测试（VSR 序列收官 / VIDEO+SOURCES e2e 全绿）
+- **完成时间**：2026-06-02
+- **记录时间**：2026-06-02 14:45
+- **执行模型**：claude-opus-4-8（建议 sonnet；会话以 opus 主循环启动 = 人工覆盖）
+- **子代理**：无
+- **性质**：VSR 序列（CHG-VSR-1..6 + PRE-1..3 + 4-A/4-B + 5-A/5-B + DTAF-VIEWPORT）收官回归卡——三门禁 + VIDEO/SOURCES e2e 全过、零回归验证。
+- **修改文件**（仅测试基建修复，零生产代码改动）：
+  - `tests/e2e/admin/videos.spec.ts` — ① **补 `/v1/auth/me`(GET/POST) + `/v1/auth/refresh` 会话端点 mock** + fall-through `route.continue()` → 404 隔离（**VIDEO e2e 长期阻塞真因**：原缺 auth mock + continue 漏真实 :4000 → 会话验证 401 → admin shell 重定向 /login，页面加载前即失败）；② test 2 搜索 testid `filter-q` → `videos-search-input`（CHG-VSR-4-B VideoFilterBar status/site 下拉 → q 搜索框漂移）；③ test 5 确认按钮 locator `getByText('确认')` → `getByRole('button',{name:'确认'})`（confirm 标题「确认隐藏 N 条视频？」含「确认」致 strict-mode 双命中）。
+  - `tests/e2e/admin/videos-column-resize.spec.ts` — 同 ① 补 auth mock + fall-through 改 404（同一阻塞真因）。
+- **新增依赖**：无
+- **数据库变更**：无
+- **门禁/验收**（全过）：
+  - `npm run test -- --run`：**453 files 6001 passed + 2 flaky**（`AuditClient.test.tsx` test 22 矩阵 popover + `StagingEditPanel.test.tsx` 元数据保存，两者隔离重跑各 22/22、12/12 通过 = 并行测试污染既有 flaky，非 VSR 回归）。
+  - `verify:adr-contracts` + `verify:endpoint-adr`：EXIT=0。
+  - `test:e2e`（VIDEO/SOURCES，admin-next-chromium 直连 :3003 / 临时去 webServer config 绕 :3000 冲突，用后即删）：**18/18 PASS** = videos.spec(5) + videos-column-resize.spec(5) + sources-sort-filter-smoke(4，含 CHG-VSR-DTAF-VIEWPORT 修复验证) + codename-matrix-picker(4)。
+  - typecheck 8ws / lint 5 successful EXIT=0。
+- **功能域覆盖确认**（VSR-1..6 已逐卡沉淀，本卡核验无空缺）：动漫集数降级（VideoColumns.test EpisodesCell §2.4）/ Bangumi 筛选（VideoColumns + VideoListClient bangumiStatus）/ 连接·试播失败·待补源·待探测（sources-matrix(-service).test + SourcesClient + VideoListClient quickFilters）/ 批量探测·长剧集展开不截断（use-source-lines-controller + sources-api-url 分页）。
+- **注意事项**：① **VIDEO e2e 长期「鉴权 env 阻塞」根因厘清**——非环境/鉴权配置问题，而是 videos 两 spec 缺 `/auth/me` 会话端点 mock + fall-through `route.continue()` 漏真实 :4000（sources smoke 早有此 mock + 404 隔离故能跑）；补齐后 10 个 VIDEO e2e 全绿，前序卡（4-A/5-A/5-B/6）「归 CHG-VSR-7」的 e2e 阻塞至此全部闭环。② 仅修既有 tests/e2e/ spec（testid/locator/mock 漂移）= 维护，未在 tests/e2e/ 新增测试（遵守重写期目录约定）。③ e2e 实跑依赖本机 :3003(server-next)+:4000(api) 运行 + 临时去 webServer config（CI 环境走标准 `npm run test:e2e`）。
+- **[AI-CHECK]**：零生产代码改动（仅测试基建修复 + docs）；无 any / 无空 catch / 颜色无关；分层无违反。VSR 序列功能正确性经 18 e2e + 6001 unit 实证零回归。结论：SAFE。
