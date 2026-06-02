@@ -182,7 +182,11 @@ export function useSourceLinesController(
       const freshTarget = fresh.find((l) => l.id === episodeId)
       const safe = videoIdRef.current === videoId && !externallyModifiedRef.current.has(episodeId)
       if (safe && freshTarget) {
-        setLines((prev) => prev.map((l) => l.id === episodeId ? freshTarget : l))
+        // 仅对账 toggle 所属字段（is_active + 乐观锁 updated_at）；保留同行被并发 confirmed 写
+        //   （如 probeEpisode 同一行改 probe_status/latency_ms）的其他字段，不用 stale freshTarget 整行覆盖。
+        setLines((prev) => prev.map((l) =>
+          l.id === episodeId ? { ...l, is_active: freshTarget.is_active, updated_at: freshTarget.updated_at } : l,
+        ))
       }
     } catch {
       if (!externallyModifiedRef.current.has(episodeId)) {

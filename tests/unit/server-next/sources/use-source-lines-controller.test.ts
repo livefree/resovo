@@ -236,6 +236,38 @@ describe('useSourceLinesController', () => {
     expect(api.fetchVideoSources).toHaveBeenCalledTimes(1) // 并发标记短路 → 未触发失败 re-fetch
   })
 
+  it('toggle 失败：re-fetch 对账只改 is_active，保留同行被并发 probe 改的字段（Codex stop-time review 第 4 轮）', async () => {
+    vi.mocked(api.fetchVideoSources)
+      .mockResolvedValueOnce([makeRow({ id: 'a', is_active: true, probe_status: 'ok', latency_ms: 100 })])
+      // 失败对账 re-fetch 返回 stale A（probe_status 仍 ok / latency 100，未含期间 probe 的 dead/42）
+      .mockResolvedValueOnce([makeRow({ id: 'a', is_active: true, probe_status: 'ok', latency_ms: 100 })])
+    let rejectToggle!: (e: unknown) => void
+    vi.mocked(api.toggleSource).mockReturnValue(new Promise((_res, rej) => { rejectToggle = rej }))
+    vi.mocked(api.probeOneSource).mockResolvedValue({ sourceId: 'a', newProbeStatus: 'dead', latencyMs: 42, queued: false })
+
+    const { result } = renderHook(() => useSourceLinesController('v1'))
+    await flush()
+
+    // A 的 toggle 挂起（乐观 is_active=false）
+    let toggleDone!: Promise<void>
+    act(() => { toggleDone = result.current[1].toggleEpisode('a', false) })
+
+    // 并发：同一行 A 的 probe server-confirmed dead（不同字段 probe_status/latency_ms）
+    await act(async () => { await result.current[1].probeEpisode('a') })
+    expect(result.current[0].lines.find((l) => l.id === 'a')!.probe_status).toBe('dead')
+
+    // A toggle 失败 → re-fetch 对账**只改 is_active**；同行 probe confirmed 字段不被 stale fresh 覆盖
+    await act(async () => {
+      rejectToggle(Object.assign(new Error('network'), { code: 'INTERNAL' }))
+      await toggleDone
+    })
+
+    const a = result.current[0].lines.find((l) => l.id === 'a')!
+    expect(a.is_active).toBe(true)       // is_active 对账 server 真相
+    expect(a.probe_status).toBe('dead')  // 同行 probe confirmed 写保留（旧整行 freshTarget 会回退 ok）
+    expect(a.latency_ms).toBe(42)        // 同行 latency 保留（旧整行会回退 100）
+  })
+
   it('disableDead：dead 行本地置 inactive + onActionResult success', async () => {
     vi.mocked(api.fetchVideoSources).mockResolvedValue([
       makeRow({ id: 'dead1', probe_status: 'dead', render_status: 'dead', is_active: true }),
