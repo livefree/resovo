@@ -65,9 +65,33 @@ export interface VideoListFilter {
   visibilityStatus?: VisibilityStatus
   reviewStatus?: ReviewStatus
   site?: string
-  /** AMD2-PATCH-2（2026-05-24）：扩展 5 字段同步后端 SORT_FIELDS（apps/api/src/routes/admin/videos.ts:90） */
+  // ── CHG-VSR-2（设计 §2.6 / ADR-150 AMENDMENT）：三层过滤入参（与后端 AdminVideoListFilters 同名 / CSV 多选由 api 层序列化）──
+  /** type 多选（加性，与单值 type 并存） */
+  types?: readonly VideoType[]
+  /** 年份范围（mc.year） */
+  yearMin?: number
+  yearMax?: number
+  /** 出品地区多选（mc.country / distinct media_catalog.country） */
+  country?: readonly string[]
+  /** 连载状态多选（mc.status） */
+  catalogStatus?: readonly VideoStatus[]
+  /** 发布布尔（v.is_published） */
+  isPublished?: boolean
+  /** 豆瓣匹配状态多选 */
+  doubanStatus?: readonly DoubanStatus[]
+  /** Bangumi 匹配状态多选（仅 anime） */
+  bangumiStatus?: readonly BangumiStatus[]
+  /** 元数据完整度范围（0–100） */
+  metaScoreMin?: number
+  metaScoreMax?: number
+  /** 快捷筛选派生 boolean（仅 true 生效） */
+  episodeMismatch?: boolean
+  episodeMissing?: boolean
+  metaIncomplete?: boolean
+  pendingReview?: boolean
+  /** AMD2-PATCH-2（2026-05-24）+ CHG-VSR-2（+episode_count）：同步后端 SORT_FIELDS */
   sortField?: 'title' | 'type' | 'year' | 'created_at' | 'updated_at'
-    | 'source_health' | 'visibility' | 'review_status' | 'douban_status' | 'meta_score'
+    | 'source_health' | 'visibility' | 'review_status' | 'douban_status' | 'meta_score' | 'episode_count'
   sortDir?: 'asc' | 'desc'
   page?: number
   limit?: number

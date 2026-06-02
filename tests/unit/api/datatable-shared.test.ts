@@ -72,10 +72,17 @@ describe('DtFiltersSchema (ADR-150 D-150-4)', () => {
 })
 
 describe('distinct-whitelist (ADR-150 D-150-3)', () => {
-  it('DT_DISTINCT_TABLES 6 表', () => {
-    expect(DT_DISTINCT_TABLES.length).toBe(6)
+  it('DT_DISTINCT_TABLES 7 表（CHG-VSR-2 加 media_catalog）', () => {
+    expect(DT_DISTINCT_TABLES.length).toBe(7)
     expect(DT_DISTINCT_TABLES).toContain('crawler_runs')
     expect(DT_DISTINCT_TABLES).toContain('sources')
+    expect(DT_DISTINCT_TABLES).toContain('media_catalog')
+  })
+
+  it('CHG-VSR-2 新 distinct 列：videos.douban_status/bangumi_status + media_catalog.country', () => {
+    expect(DT_DISTINCT_COLUMN_SQL.videos.douban_status).toBe('videos.douban_status')
+    expect(DT_DISTINCT_COLUMN_SQL.videos.bangumi_status).toBe('videos.bangumi_status')
+    expect(DT_DISTINCT_COLUMN_SQL.media_catalog.country).toBe('media_catalog.country')
   })
 
   it('DT_DISTINCT_COLUMN_SQL 每表至少 1 列', () => {

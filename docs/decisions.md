@@ -12985,7 +12985,7 @@ export type TableColumn<T> = TableColumnBase<T> & (
 
 | # | 方法 | 路径 | 用途 | Request | Response | 错误码 |
 |---|---|---|---|---|---|---|
-| 1 | GET | `/admin/_dt/distinct` | 通用 distinct 列值查询（D-150-3 v1 共用端点 / 6 表白名单 / 三重 SQL 注入防御） | Query: `table` (enum 白名单 6 表) / `col` (字符串 + 后置 lookup 403) / `q?` (≤ 64 字符 / ILIKE 模糊匹配) / `limit?=50` (≤ 200 强制) | 200 `{ data: { value: string, count: number }[] }` | 422 VALIDATION_ERROR / 403 COLUMN_NOT_WHITELISTED / 500 INTERNAL_ERROR |
+| 1 | GET | `/admin/_dt/distinct` | 通用 distinct 列值查询（D-150-3 v1 共用端点 / **7 表白名单**（CHG-VSR-2 加 media_catalog，见 AMENDMENT 3）/ 三重 SQL 注入防御） | Query: `table` (enum 白名单 **7 表**) / `col` (字符串 + 后置 lookup 403) / `q?` (≤ 64 字符 / ILIKE 模糊匹配) / `limit?=50` (≤ 200 强制) | 200 `{ data: { value: string, count: number }[] }` | 422 VALIDATION_ERROR / 403 COLUMN_NOT_WHITELISTED / 500 INTERNAL_ERROR |
 
 **响应 schema TS 类型**:
 ```typescript
@@ -13314,6 +13314,58 @@ export type TableColumn<T> = DataKindColumn<T> | ActionKindColumn<T> | MediaKind
 反例排除：本 AMENDMENT 2 不触及（a）后端 FILTER_FIELDS schema 重构 / 或（b）DataTable mode 语义新增 / 或（c）矩阵 popover 数据模型重构 → 不升 ADR-151。
 
 **结论**：AMENDMENT 2 形式追加到 decisions.md ADR-150 末尾 / status 🟢 Accepted（主体 + AMENDMENT 2 经 @livefree 2 红线仲裁等同 PASS）
+
+---
+
+## ADR-150 AMENDMENT 3 — 视频库过滤升级 + distinct 白名单扩展（CHG-VSR-2 / 2026-06-01）
+
+> 关联：SEQ-20260601-01 视频库/播放线路职责重定义（设计 `docs/designs/videos-sources-responsibility-redesign_20260601.md` §2.5/§2.6）。
+> 形态：纯 additive AMENDMENT（扩 `/admin/videos` 既有 query params + `/admin/_dt/distinct` 白名单数据），**零新 admin route**（`verify:endpoint-adr` 不触发）、零新 error code、零 migration（涉及列 country/douban_status/bangumi_status 已存在）。
+> 评审：arch-reviewer Opus（claude-opus-4-8）CONDITIONAL PASS（D-150-VSR2-1..5），主循环 claude-opus-4-8 实施。
+
+### 背景
+
+视频库 `/admin/videos` 现有过滤单值且窄（type/status/q[title+title_en]/site/visibility/review）。设计 §2.6 三层过滤模型需服务端支撑：搜索框（q 扩面）+ 原子可筛选列（多选 enum / 范围）+ 页面级快捷筛选（派生 boolean）。同时为 country/douban_status/bangumi_status 补 distinct facet。
+
+### 决策点
+
+**D-150-VSR2-1：distinct `country` 跨表取向 = 新增 `media_catalog` 逻辑表（拒绝给 distinct 端点加 JOIN）。**
+- `country` 在 `media_catalog`（mc.country），不在 videos 表。distinct 端点现 `SELECT FROM <单表>`、无 JOIN、IDENT 正则仅 `table.col`。
+- **拒绝方案 A**（给 distinct 加 hardcoded JOIN 能力）：JOIN const 片段含保留字/空格/等号，`DT_DISTINCT_IDENT_REGEX` 无法覆盖，安全面从「单标识符」扩张到「带保留字 SQL 子句」，违背 ADR-150 R-150-1 distinct SQL 注入高风险设计前提，且为单列扩永久 JOIN 原语属过度设计。
+- **采纳方案 B**：`DT_DISTINCT_TABLES` 加 `media_catalog`（实表名=逻辑名，无需 DT_DISTINCT_FROM 映射），`media_catalog.country` 直查。IDENT 正则/启动期断言**零改动**，防注入面零扩张。前端 country 列标 `filterDistinctTable: 'media_catalog'`（per-column 配置，语义自洽）。`douban_status`/`bangumi_status` 在 videos 表，归 `DT_DISTINCT_COLUMN_SQL.videos`。
+
+**D-150-VSR2-2：videos filter 入参机制 = 离散 query params（拒绝 `?filters=<json>` envelope）。**
+- ADR-150 的 `DtFiltersSchema`/`applyFilterValue` 是 server-next + Drizzle `$dynamic()` 专用；`apps/api/src/routes/admin/*` 全仓零消费该 envelope，`/admin/videos` 走 pg 手工参数化 SQL + 离散 params。
+- 强行桥接 envelope 需新写 pg 版 applyFilterValue（过度设计 + 跨原语）。本 AMENDMENT 继续用离散 query params 扩字段（与现有 type/visibilityStatus/reviewStatus 范式一致）。设计稿 §2.6 的 `filterKind: enum/number-range` 是**前端 DataTable 列契约词汇**，不等于后端接 envelope。
+- 若未来 apps/api 要消费 `?filters=` envelope，属架构原语变更 → 独立 ADR。
+
+**D-150-VSR2-3：`type` 单→多兼容 = 加性 `types[]` 保留单值 `type`。**
+- 不把 `type` 改 union（破坏 `?type=movie` 既有契约 + DB `v.type=$n` 窄化）。新增 `types?: VideoType[]`，二者皆传时 `types` 优先。
+- 数组枚举一律 `= ANY($n::text[])` JS 数组参数化（防注入），空数组在 query 层 `if (arr?.length)` 短路跳过（避免 `= ANY('{}')` 误过滤全表）。新枚举 country/catalogStatus/doubanStatus/bangumiStatus 同范式（多选数组）。
+
+**D-150-VSR2-4：visibility/review 维持单值 + 默认排序落 route 层。**
+- `visibilityStatus`/`reviewStatus` 现有消费方全为单值（server-next `api.ts` set 单值 / `getEnumFirst` 拍平 / 单测传单值），**保持单值零回归**（设计 enum 可筛选性单选即满足；多选若 UI 需要留卡 4 UI 决策）。
+- 默认排序 `updated_at desc`（§2.5）落 **route ListQuerySchema `.default('updated_at')/.default('desc')`**；DB query 层 `?? 'v.created_at'` fallback 不动（防御性默认，避免影响其他潜在调用方）。`SORT_FIELD_WHITELIST` + route `SORT_FIELDS` + server-next `VideoListFilter.sortField` 三处加 `episode_count`（§2.5）。
+
+**D-150-VSR2-5：派生快捷筛选谓词口径。**
+- `episodeMismatch` = `current_episodes IS DISTINCT FROM episode_count`（NULL 安全，任一 NULL 也算不一致，符合 §2.6）。
+- `episodeMissing` = `total_episodes IS NULL OR current_episodes IS NULL`。
+- `metaIncomplete` = `meta_score IS NULL OR meta_score < 60`（阈值对齐 §2.4「<60 warn」；§2.6「关键字段空」措辞模糊，本卡仅以 meta_score 判定避免引入未定义字段清单，如需扩另起 follow-up）。
+- `pendingReview` = `review_status='pending_review'`。
+- 四者**仅值为 true 时追加 WHERE**，false/undefined 不加反向谓词。
+
+### 端点契约变更
+
+- `GET /admin/_dt/distinct`：白名单 6 表 → **7 表**（加 media_catalog）；新增 distinct 列 `videos.douban_status` / `videos.bangumi_status` / `media_catalog.country`，均走既有 `COLUMN_NOT_WHITELISTED` 403 路径，**零新 error code**。
+- `GET /admin/videos`：query params 加性扩 `types / yearMin / yearMax / country / catalogStatus / isPublished / doubanStatus / bangumiStatus / metaScoreMin / metaScoreMax / episodeMismatch / episodeMissing / metaIncomplete / pendingReview`；`q` ILIKE 扩到 title_original + short_id；`sortField` 加 `episode_count` + 默认 `updated_at desc`。**路径/方法不变 / 无新 route**。
+
+### 门禁
+
+- `verify:endpoint-adr`：不触发（无新 `fastify.METHOD` 注册）。
+- `verify:adr-contracts`：端点契约表已同步（6→7 表）；无新错误码。
+- 三重 SQL 注入防御不变（zod enum + col lookup 403 + 硬编码 const SQL + IDENT 正则）；新数组参数走 `= ANY($n::text[])` 参数化。
+
+**结论**：AMENDMENT 3 status 🟢 Accepted（arch-reviewer Opus CONDITIONAL PASS / D-150-VSR2-1..5 全消解；纯 additive，既有调用方零回归——`listAdminVideos` 唯一调用方 `VideoService.adminList`、`adminList` 唯一调用方 `/admin/videos` route，pending/staging 走独立 schema 不受影响）。
 
 ---
 

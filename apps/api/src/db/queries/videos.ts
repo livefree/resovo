@@ -6,7 +6,7 @@
  */
 
 import type { Pool } from 'pg'
-import type { Video, VideoCard, VideoType, VisibilityStatus, ReviewStatus } from '@/types'
+import type { Video, VideoCard, VideoType, VisibilityStatus, ReviewStatus, VideoStatus, DoubanStatus, BangumiStatus } from '@/types'
 import type { DbVideoRow } from './videos.internal'
 import {
   mapVideoRow, mapVideoCard,
@@ -228,11 +228,14 @@ const SORT_FIELD_WHITELIST: Record<string, string> = {
   review_status: 'v.review_status',
   douban_status: 'v.douban_status',
   meta_score: 'v.meta_score',
+  episode_count: 'v.episode_count',     // CHG-VSR-2（§2.5）：集数列排序
 }
 
 export interface AdminVideoListFilters {
   status?: 'pending' | 'published' | 'unpublished' | 'all'
   type?: VideoType
+  /** CHG-VSR-2（§2.6）：type 多选（加性，与单值 type 并存；二者皆传时 types 优先）。`v.type = ANY` */
+  types?: readonly VideoType[]
   q?: string
   /** 按来源站点 key 筛选（videos.site_key） */
   siteKey?: string
@@ -240,6 +243,31 @@ export interface AdminVideoListFilters {
   includeAdult?: boolean
   visibilityStatus?: VisibilityStatus
   reviewStatus?: ReviewStatus
+  // ── CHG-VSR-2（设计 §2.6 三层过滤 / ADR-150 AMENDMENT D-150-VSR2-*）：原子可筛选列 + 快捷筛选派生 ──
+  /** 年份范围（mc.year，含端点） */
+  yearMin?: number
+  yearMax?: number
+  /** 出品地区多选（mc.country） */
+  country?: readonly string[]
+  /** 连载状态多选（mc.status：ongoing/completed） */
+  catalogStatus?: readonly VideoStatus[]
+  /** 发布布尔（v.is_published；与 status 三态并存取交集） */
+  isPublished?: boolean
+  /** 豆瓣匹配状态多选（v.douban_status） */
+  doubanStatus?: readonly DoubanStatus[]
+  /** Bangumi 匹配状态多选（v.bangumi_status，仅 anime 有意义） */
+  bangumiStatus?: readonly BangumiStatus[]
+  /** 元数据完整度范围（v.meta_score 0–100） */
+  metaScoreMin?: number
+  metaScoreMax?: number
+  /** 快捷筛选：集数不一致（current_episodes IS DISTINCT FROM episode_count）。仅 true 生效 */
+  episodeMismatch?: boolean
+  /** 快捷筛选：集数缺失（total_episodes 或 current_episodes 为 NULL）。仅 true 生效 */
+  episodeMissing?: boolean
+  /** 快捷筛选：元数据缺失（meta_score < 60 或 NULL，对齐 §2.4）。仅 true 生效 */
+  metaIncomplete?: boolean
+  /** 快捷筛选：待审（review_status='pending_review'）。仅 true 生效 */
+  pendingReview?: boolean
   sortField?: string
   sortDir?: 'asc' | 'desc'
   page: number
@@ -267,7 +295,10 @@ export async function listAdminVideos(
   }
 
   if (filters.q) {
-    conditions.push(`(v.title ILIKE $${idx} OR mc.title_en ILIKE $${idx})`)
+    // CHG-VSR-2（§2.6）：搜索扩面 title / title_en / title_original / short_id（单参数复用）
+    conditions.push(
+      `(v.title ILIKE $${idx} OR mc.title_en ILIKE $${idx} OR mc.title_original ILIKE $${idx} OR v.short_id ILIKE $${idx})`
+    )
     params.push(`%${filters.q}%`)
     idx++
   }
@@ -288,6 +319,62 @@ export async function listAdminVideos(
   if (filters.reviewStatus) {
     conditions.push(`v.review_status = $${idx++}`)
     params.push(filters.reviewStatus)
+  }
+
+  // ── CHG-VSR-2（设计 §2.6 / ADR-150 AMENDMENT D-150-VSR2-*）：升级过滤条件 ──
+  // 数组枚举一律 `= ANY($n::text[])` 参数化（防注入 + 空数组短路跳过避免误过滤全表）
+  if (filters.types?.length) {
+    conditions.push(`v.type = ANY($${idx++}::text[])`)
+    params.push(filters.types)
+  }
+  if (filters.yearMin !== undefined) {
+    conditions.push(`mc.year >= $${idx++}`)
+    params.push(filters.yearMin)
+  }
+  if (filters.yearMax !== undefined) {
+    conditions.push(`mc.year <= $${idx++}`)
+    params.push(filters.yearMax)
+  }
+  if (filters.country?.length) {
+    conditions.push(`mc.country = ANY($${idx++}::text[])`)
+    params.push(filters.country)
+  }
+  if (filters.catalogStatus?.length) {
+    conditions.push(`mc.status = ANY($${idx++}::text[])`)
+    params.push(filters.catalogStatus)
+  }
+  if (filters.isPublished !== undefined) {
+    conditions.push(`v.is_published = $${idx++}`)
+    params.push(filters.isPublished)
+  }
+  if (filters.doubanStatus?.length) {
+    conditions.push(`v.douban_status = ANY($${idx++}::text[])`)
+    params.push(filters.doubanStatus)
+  }
+  if (filters.bangumiStatus?.length) {
+    conditions.push(`v.bangumi_status = ANY($${idx++}::text[])`)
+    params.push(filters.bangumiStatus)
+  }
+  if (filters.metaScoreMin !== undefined) {
+    conditions.push(`v.meta_score >= $${idx++}`)
+    params.push(filters.metaScoreMin)
+  }
+  if (filters.metaScoreMax !== undefined) {
+    conditions.push(`v.meta_score <= $${idx++}`)
+    params.push(filters.metaScoreMax)
+  }
+  // 派生快捷筛选（仅 true 追加，false/undefined 不加反向谓词）
+  if (filters.episodeMismatch === true) {
+    conditions.push(`v.current_episodes IS DISTINCT FROM v.episode_count`)
+  }
+  if (filters.episodeMissing === true) {
+    conditions.push(`(v.total_episodes IS NULL OR v.current_episodes IS NULL)`)
+  }
+  if (filters.metaIncomplete === true) {
+    conditions.push(`(v.meta_score IS NULL OR v.meta_score < 60)`)
+  }
+  if (filters.pendingReview === true) {
+    conditions.push(`v.review_status = 'pending_review'`)
   }
 
   const where = conditions.join(' AND ')

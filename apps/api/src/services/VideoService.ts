@@ -151,6 +151,7 @@ export class VideoService {
   async adminList(params: {
     status?: 'pending' | 'published' | 'unpublished' | 'all'
     type?: import('@/types').VideoType
+    types?: readonly import('@/types').VideoType[]
     q?: string
     siteKey?: string
     includeAdult?: boolean
@@ -158,6 +159,20 @@ export class VideoService {
     reviewStatus?: import('@/types').ReviewStatus
     sortField?: string
     sortDir?: 'asc' | 'desc'
+    // CHG-VSR-2（§2.6）：三层过滤入参（加性透传）
+    yearMin?: number
+    yearMax?: number
+    country?: readonly string[]
+    catalogStatus?: readonly import('@/types').VideoStatus[]
+    isPublished?: boolean
+    doubanStatus?: readonly import('@/types').DoubanStatus[]
+    bangumiStatus?: readonly import('@/types').BangumiStatus[]
+    metaScoreMin?: number
+    metaScoreMax?: number
+    episodeMismatch?: boolean
+    episodeMissing?: boolean
+    metaIncomplete?: boolean
+    pendingReview?: boolean
     page?: number
     limit?: number
   }): Promise<{ data: unknown[]; total: number; page: number; limit: number }> {
@@ -167,6 +182,7 @@ export class VideoService {
     const { rows, total } = await videoQueries.listAdminVideos(this.db, {
       status: params.status ?? 'all',
       type: params.type,
+      types: params.types,
       q: params.q,
       siteKey: params.siteKey,
       includeAdult: params.includeAdult,
@@ -174,6 +190,19 @@ export class VideoService {
       reviewStatus: params.reviewStatus,
       sortField: params.sortField,
       sortDir: params.sortDir,
+      yearMin: params.yearMin,
+      yearMax: params.yearMax,
+      country: params.country,
+      catalogStatus: params.catalogStatus,
+      isPublished: params.isPublished,
+      doubanStatus: params.doubanStatus,
+      bangumiStatus: params.bangumiStatus,
+      metaScoreMin: params.metaScoreMin,
+      metaScoreMax: params.metaScoreMax,
+      episodeMismatch: params.episodeMismatch,
+      episodeMissing: params.episodeMissing,
+      metaIncomplete: params.metaIncomplete,
+      pendingReview: params.pendingReview,
       page,
       limit,
     })

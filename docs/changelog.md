@@ -13396,3 +13396,32 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **质量门禁**：typecheck 8 workspace EXIT=0 / lint EXIT=0 / **全量 448 文件 5909 passed 0 failed 零回归**。
 - **e2e**：N/A（纯类型）。
 - **[AI-CHECK]**：六问全过——复用既有 canonical（`ResolutionTier` 类型 + `qualityHighest` 命名；档位序显式拼出、**无共享常量**，producer 在 SQL CASE 实现）；契约面收敛（VideoGroupRow 质量单一真源 qualityHighest，rank 纯 producer 内部）；零回归（grep 确认无引用）；无 any/颜色/越层。**注意事项（已含二/三次 FIX 修正）**：producer 卡 3 派生 `qualityHighest`/低质量 rank 须**逐源 `quality_detected ?? quality` 回退后**按显式档位序（4K 最高）取最高档——**勿照搬 LinesPanel `pickHighestQuality`（module-local、仅 quality_detected、丢回退）**；低质量排序/谓词的 quality_rank 在服务端 ORDER BY CASE / FILTER 内派生，不回写 DTO。
+
+---
+
+## [CHG-VSR-2] 视频库 API：过滤升级 + 搜索扩面 + distinct 白名单（ADR-150 AMENDMENT 3）
+- **完成时间**：2026-06-01
+- **记录时间**：2026-06-01 23:40
+- **执行模型**：claude-opus-4-8（主循环）
+- **子代理**：arch-reviewer (claude-opus-4-8) — ADR-150 AMENDMENT 3 决策文档，CONDITIONAL PASS（D-150-VSR2-1..5）
+- **背景**：SEQ-20260601-01 视频库职责重定义。视频库 `/admin/videos` 现有过滤单值且窄，升级为设计 §2.6 三层过滤模型的服务端支撑 + distinct facet 扩展。
+- **修改文件**：
+  - `apps/api/src/db/queries/videos.ts` — `AdminVideoListFilters` 加 14 字段（types[]/yearMin/yearMax/country[]/catalogStatus[]/isPublished/doubanStatus[]/bangumiStatus[]/metaScoreMin/metaScoreMax/episodeMismatch/episodeMissing/metaIncomplete/pendingReview）；`listAdminVideos` 加对应 WHERE（数组枚举 `= ANY($n::text[])` 参数化 + `if(arr?.length)` 空数组短路；派生布尔仅 true 追加；`IS DISTINCT FROM` NULL 安全）；`q` ILIKE 扩 title_original + short_id（单参数复用）；`SORT_FIELD_WHITELIST` +`episode_count`；类型 import 加 VideoStatus/DoubanStatus/BangumiStatus。
+  - `apps/api/src/routes/admin/videos.ts` — `SORT_FIELDS` +episode_count；局部 `csvEnum`/`csvFreeStr`/`queryBool` helper（参 SourcesMatrixService/crawler.runs 各 route 私有 csv 范式）；`ListQuerySchema` 加 14 query param + 默认 `sortField='updated_at'`/`sortDir='desc'`；解构透传 adminList；import 加 BANGUMI_STATUSES。
+  - `apps/api/src/services/VideoService.ts` — `adminList` 签名 + 透传加 14 字段（加性，零回归）。
+  - `apps/api/src/services/datatable/distinct-whitelist.ts` — `DT_DISTINCT_TABLES` +`media_catalog`（D-150-VSR2-1 方案 B）；`videos` 加 douban_status/bangumi_status；`media_catalog` 加 country（逻辑名=实表名，无需 DT_DISTINCT_FROM）。**IDENT 正则/启动断言零改动**。
+  - `apps/server-next/src/lib/videos/types.ts` — `VideoListFilter` 同步 14 入参 + sortField +episode_count（CHG-VSR-1 延后项）。
+  - `docs/decisions.md` — ADR-150 **AMENDMENT 3**（D-150-VSR2-1..5）+ 端点契约表 6→7 表。
+  - `tests/unit/api/datatable-shared.test.ts` — DT_DISTINCT_TABLES 6→7 断言 + 新 distinct 列断言。
+  - `tests/unit/api/admin-video-list.test.ts` — +2 测试（数组 `= ANY` 参数化/范围/q 扩面 + 派生布尔/空数组短路）。
+- **决策点（ADR-150 AMENDMENT 3）**：
+  - **D-150-VSR2-1** distinct country：采纳方案 B（加 `media_catalog` 逻辑表直查），**拒绝给 distinct 端点加 JOIN**（JOIN const 片段含保留字，IDENT 正则无法覆盖 → 安全面扩张，违 R-150-1）。
+  - **D-150-VSR2-2** 入参机制：离散 query params，**拒绝 `?filters=` envelope**（apps/api 全仓零消费，applyFilterValue 是 Drizzle 专用）。
+  - **D-150-VSR2-3** type 单→多：加性 `types[]` 保留单值 `type`（不改 union，不破 `?type=movie` 契约）。
+  - **D-150-VSR2-4** visibility/review 维持单值（消费方已验证单值 / api.ts set 单值 / getEnumFirst 拍平 / 单测单值）；默认排序落 route，DB fallback 不动。
+  - **D-150-VSR2-5** 派生谓词口径：episodeMismatch=`IS DISTINCT FROM`；metaIncomplete=`meta_score IS NULL OR <60`（仅 meta_score，不引入未定义"关键字段"）；仅 true 追加。
+- **新增依赖**：无。
+- **数据库变更**：无（country/douban_status/bangumi_status 列已存在；distinct 只读；无 migration）。
+- **质量门禁**：typecheck 8 workspace EXIT=0 / lint EXIT=0 / **全量 448 文件 5912 passed 0 failed**（含新增 5 测试断言）/ verify:adr-contracts EXIT=0 / verify:endpoint-adr EXIT=0（无新 route）。
+- **e2e**：N/A（API 层；VIDEO e2e 走 UI 卡 4）。flaky 说明：首轮全量出现 2 failed = `tests/unit/server-next/admin-moderation/use-filter-presets.test.ts` 的 post-teardown `window is not defined` unhandled rejection（与本卡无关、我未碰 moderation/filter-presets），重跑 2 次均 0 再现、全 448 passed。
+- **[AI-CHECK]**：六问全过——①零回归（加性 optional + 单值字段未改 / `listAdminVideos` 唯一调用方 adminList、adminList 唯一调用方 route，pending/staging 走独立 schema 不受影响，arch-reviewer 核实）；②分层（route zod+透传 → adminList 透传无业务 → query SQL，未越层）；③防注入（数组 `= ANY($n::text[])` 参数化 + distinct 三重防御不变 + 拒 JOIN）；④无 any/颜色/空 catch；⑤复用既有 csv 范式 + ResolutionTier 无关；⑥distinct country 走逻辑表非端点 JOIN（边界收敛）。注意事项：(1) 卡 4 UI 接线时 type 多选用 `types` CSV、visibility/review 仍单值（如需多选另起）；(2) country facet 前端列标 `filterDistinctTable:'media_catalog'`；(3) 集数异常/元数据缺失为快捷筛选派生 boolean，仅传 true 生效。

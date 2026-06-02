@@ -20,7 +20,7 @@ import { ModerationService } from '@/api/services/ModerationService'
 import * as systemSettingsQueries from '@/api/db/queries/systemSettings'
 import { isAppError } from '@/api/lib/errors'
 import type { VisibilityStatus } from '@/types'
-import { VIDEO_TYPES, VIDEO_STATUSES, REVIEW_STATUSES, VISIBILITY_STATUSES, DOUBAN_STATUSES, SOURCE_CHECK_STATUSES } from '@resovo/types'
+import { VIDEO_TYPES, VIDEO_STATUSES, REVIEW_STATUSES, VISIBILITY_STATUSES, DOUBAN_STATUSES, BANGUMI_STATUSES, SOURCE_CHECK_STATUSES } from '@resovo/types'
 
 // ── Zod Schema ────────────────────────────────────────────────────
 
@@ -94,20 +94,70 @@ const SORT_FIELDS = [
   'created_at', 'updated_at', 'title', 'year', 'type',
   // 新扩 5 字段：
   'source_health', 'visibility', 'review_status', 'douban_status', 'meta_score',
+  // CHG-VSR-2（§2.5）：集数列排序
+  'episode_count',
 ] as const
+
+// CHG-VSR-2：CSV → enum 数组 query 解析（参 SourcesMatrixService / crawler.runs.ts 同范式，各 route 私有 helper）
+const csvEnum = <T extends string>(values: readonly T[]) =>
+  z.string().optional().transform((s, ctx) => {
+    if (!s) return undefined
+    const parts = s.split(',').map((p) => p.trim()).filter(Boolean)
+    if (parts.length === 0) return undefined
+    for (const p of parts) {
+      if (!(values as readonly string[]).includes(p)) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: `invalid value: ${p}` })
+        return z.NEVER
+      }
+    }
+    return parts as T[]
+  })
+// CSV → 自由字符串数组（country 动态值 / 长度安全约束）
+const csvFreeStr = (maxLen = 64) =>
+  z.string().optional().transform((s, ctx) => {
+    if (!s) return undefined
+    const parts = s.split(',').map((p) => p.trim()).filter(Boolean)
+    if (parts.length === 0) return undefined
+    for (const p of parts) {
+      if (p.length > maxLen) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: `value too long: ${p}` })
+        return z.NEVER
+      }
+    }
+    return parts
+  })
+// query 布尔（z.coerce.boolean 把 'false' 也判 true，故显式枚举）
+const queryBool = z.enum(['true', 'false']).optional().transform((v) => (v === undefined ? undefined : v === 'true'))
 
 const ListQuerySchema = z.object({
   status: z.enum(['pending', 'published', 'unpublished', 'all']).optional().default('all'),
   type: z.enum(VIDEO_TYPES).optional(),
+  /** CHG-VSR-2（§2.6）：type 多选（CSV，加性与单值 type 并存） */
+  types: csvEnum(VIDEO_TYPES),
   visibilityStatus: z.enum(VISIBILITY_STATUSES).optional(),
   reviewStatus: z.enum(REVIEW_STATUSES).optional(),
+  // ── CHG-VSR-2 三层过滤（§2.6 / ADR-150 AMENDMENT）：原子可筛选列 + 快捷筛选派生 ──
+  yearMin: z.coerce.number().int().optional(),
+  yearMax: z.coerce.number().int().optional(),
+  country: csvFreeStr(64),
+  catalogStatus: csvEnum(VIDEO_STATUSES),
+  isPublished: queryBool,
+  doubanStatus: csvEnum(DOUBAN_STATUSES),
+  bangumiStatus: csvEnum(BANGUMI_STATUSES),
+  metaScoreMin: z.coerce.number().int().min(0).max(100).optional(),
+  metaScoreMax: z.coerce.number().int().min(0).max(100).optional(),
+  episodeMismatch: queryBool,
+  episodeMissing: queryBool,
+  metaIncomplete: queryBool,
+  pendingReview: queryBool,
   page: z.coerce.number().int().min(1).optional().default(1),
   limit: z.coerce.number().int().min(1).max(100).optional().default(20),
   q: z.string().max(100).optional(),
   /** 按来源站点 key 筛选 */
   site: z.string().max(100).optional(),
-  sortField: z.enum(SORT_FIELDS).optional(),
-  sortDir: z.enum(['asc', 'desc']).optional(),
+  // CHG-VSR-2（§2.5）：默认排序 updated_at desc（DB 层 fallback 不动，仅 route 显式默认）
+  sortField: z.enum(SORT_FIELDS).optional().default('updated_at'),
+  sortDir: z.enum(['asc', 'desc']).optional().default('desc'),
 })
 
 // ── 路由注册 ──────────────────────────────────────────────────────
@@ -141,11 +191,16 @@ export async function adminVideoRoutes(fastify: FastifyInstance) {
       })
     }
 
-    const { status, type, visibilityStatus, reviewStatus, page, limit, q, site, sortField, sortDir } = parsed.data
+    const {
+      status, type, types, visibilityStatus, reviewStatus, page, limit, q, site, sortField, sortDir,
+      yearMin, yearMax, country, catalogStatus, isPublished, doubanStatus, bangumiStatus,
+      metaScoreMin, metaScoreMax, episodeMismatch, episodeMissing, metaIncomplete, pendingReview,
+    } = parsed.data
     const includeAdult = await shouldIncludeAdultInAdminContent()
     const result = await videoService.adminList({
       status,
       type,
+      types,
       visibilityStatus,
       reviewStatus,
       page,
@@ -155,6 +210,19 @@ export async function adminVideoRoutes(fastify: FastifyInstance) {
       includeAdult,
       sortField,
       sortDir,
+      yearMin,
+      yearMax,
+      country,
+      catalogStatus,
+      isPublished,
+      doubanStatus,
+      bangumiStatus,
+      metaScoreMin,
+      metaScoreMax,
+      episodeMismatch,
+      episodeMissing,
+      metaIncomplete,
+      pendingReview,
     })
     return reply.send(result)
   })

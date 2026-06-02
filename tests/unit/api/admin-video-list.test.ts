@@ -72,4 +72,82 @@ describe('listAdminVideos (CHG-209)', () => {
     expect(params).toContain('approved')
     expect(params).toContain('alpha')
   })
+
+  // ── CHG-VSR-2（设计 §2.6）：三层过滤升级 ──────────────────────────
+  it('CHG-VSR-2: 数组枚举走 = ANY($n::text[]) 参数化 + 范围 + q 扩面', async () => {
+    query
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ count: '0' }] })
+
+    const types = ['movie', 'anime'] as const
+    const country = ['US', 'JP']
+    const doubanStatus = ['matched', 'candidate'] as const
+    const bangumiStatus = ['matched'] as const
+    await listAdminVideos(db, {
+      status: 'all',
+      types,
+      yearMin: 2000,
+      yearMax: 2025,
+      country,
+      catalogStatus: ['ongoing'],
+      isPublished: true,
+      doubanStatus,
+      bangumiStatus,
+      metaScoreMin: 30,
+      metaScoreMax: 90,
+      q: 'naruto',
+      page: 1,
+      limit: 20,
+    })
+
+    const [sql, params] = query.mock.calls[0]
+    // 数组枚举参数化（防注入）
+    expect(sql).toContain('v.type = ANY($')
+    expect(sql).toContain('::text[]')
+    expect(sql).toContain('mc.country = ANY($')
+    expect(sql).toContain('mc.status = ANY($')
+    expect(sql).toContain('v.douban_status = ANY($')
+    expect(sql).toContain('v.bangumi_status = ANY($')
+    // 范围
+    expect(sql).toContain('mc.year >= $')
+    expect(sql).toContain('mc.year <= $')
+    expect(sql).toContain('v.meta_score >= $')
+    expect(sql).toContain('v.meta_score <= $')
+    expect(sql).toContain('v.is_published = $')
+    // q 扩面 4 列 OR
+    expect(sql).toContain('mc.title_original ILIKE')
+    expect(sql).toContain('v.short_id ILIKE')
+    // 数组以 JS array 形态作为参数（pg 参数化，非字符串拼接）
+    expect(params).toContainEqual(types)
+    expect(params).toContainEqual(country)
+    expect(params).toContainEqual(doubanStatus)
+    expect(params).toContain(2000)
+    expect(params).toContain(2025)
+    expect(params).toContain('%naruto%')
+  })
+
+  it('CHG-VSR-2: 派生快捷筛选仅 true 追加谓词，空数组短路', async () => {
+    query
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ count: '0' }] })
+
+    await listAdminVideos(db, {
+      status: 'all',
+      types: [], // 空数组 → 短路不追加（不误过滤全表）
+      episodeMismatch: true,
+      episodeMissing: true,
+      metaIncomplete: true,
+      pendingReview: true,
+      page: 1,
+      limit: 20,
+    })
+
+    const [sql] = query.mock.calls[0]
+    expect(sql).toContain('v.current_episodes IS DISTINCT FROM v.episode_count')
+    expect(sql).toContain('(v.total_episodes IS NULL OR v.current_episodes IS NULL)')
+    expect(sql).toContain('(v.meta_score IS NULL OR v.meta_score < 60)')
+    expect(sql).toContain("v.review_status = 'pending_review'")
+    // 空 types 数组短路：不出现 v.type = ANY
+    expect(sql).not.toContain('v.type = ANY')
+  })
 })

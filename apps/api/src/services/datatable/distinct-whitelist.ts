@@ -21,6 +21,8 @@ export const DT_DISTINCT_TABLES = [
   'user_submissions',
   'sources',
   'videos',
+  // CHG-VSR-2 / ADR-150 AMENDMENT D-150-VSR2-1：media_catalog 逻辑表（country distinct，跨 JOIN 列改走直查逻辑表而非给 distinct 端点加 JOIN，防注入面零扩张）
+  'media_catalog',
 ] as const
 
 export type DtDistinctTable = (typeof DT_DISTINCT_TABLES)[number]
@@ -54,6 +56,13 @@ export const DT_DISTINCT_COLUMN_SQL: Record<DtDistinctTable, Record<string, stri
   videos: {
     type: 'videos.type',
     source_check_status: 'videos.source_check_status',
+    // CHG-VSR-2（§2.6）：豆瓣 / Bangumi 匹配状态 facet（均在 videos 表，无跨表）
+    douban_status: 'videos.douban_status',
+    bangumi_status: 'videos.bangumi_status',
+  },
+  // CHG-VSR-2（D-150-VSR2-1）：country 在 media_catalog（mc.country），逻辑名=实表名，无需 DT_DISTINCT_FROM 映射
+  media_catalog: {
+    country: 'media_catalog.country',
   },
 }
 
