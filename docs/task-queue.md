@@ -2513,7 +2513,7 @@ CODENAME-MATRIX-E2E (依赖 Wave 3 验收期补丁 CODENAME-MATRIX ✅)
 
 - **状态**：🔄 执行中
 - **创建时间**：2026-06-01 19:15
-- **最后更新时间**：2026-06-01 20:05（PRE-1 ✅ / PRE-3 ✅ / PRE-2 设计完成待实施）
+- **最后更新时间**：2026-06-01 20:20（PRE-1 ✅ / PRE-3 ✅ / 8 ✅ / PRE-2 设计完成待实施）
 - **目标**：落地《视频库/播放线路职责重定义》设计方案——视频库=作品维度、播放线路=资源运维维度、别名独立页；表格头部极简(搜索+列设置) + 三层过滤 + B 方案快捷筛选；术语裁决（失效=探测②含连接/试播/异常、禁用=is_active①、待补源=无可播源含已上架）；用户投稿/失效举报整体下线。
 - **范围**：`apps/server-next`（/admin/videos + /admin/sources 两 client + 子组件）+ `apps/api`（videos/sources 聚合 + 过滤排序 + distinct 白名单 + submit 端点 410）+ `packages/admin-ui`（KpiCard pressed）+ `packages/types`（双表 DTO/术语）+ `apps/web-next`（移除投稿入口）。
 - **依赖**：设计方案 ✅（`docs/designs/videos-sources-responsibility-redesign_20260601.md` / commit e1950050）。ADR：ADR-117 amendment（sources 聚合）+ ADR-150 amendment（distinct 白名单 + country 逻辑表）；ADR-124 不触碰。
@@ -2627,7 +2627,9 @@ CODENAME-MATRIX-E2E (依赖 Wave 3 验收期补丁 CODENAME-MATRIX ✅)
     - 验收要点：`test -- --run` + `test:e2e` + `verify:adr-contracts` 全过；零回归。
     - 依赖：CHG-VSR-4-B / CHG-VSR-5-B / CHG-VSR-6。
 
-13. **CHG-VSR-8** — 关闭投稿：`POST /sources/submit` 返 410 Gone 不写库 + 移前台入口 + 停 verifyFromUserReport（状态：⬜ 未开始 / 独立）
+13. **CHG-VSR-8** — 关闭投稿：`POST /sources/submit` 返 410 Gone 不写库 + 停 verifyFromUserReport（状态：✅ 已完成 2026-06-01 / claude-opus-4-8 / 子代理 无）
+    - 完成时间：2026-06-01 20:20
+    - 完成备注：纯后端单文件——`sources.ts` submit handler 返 `410 FEATURE_RETIRED` + 不写库 + 删 VerifyService import/实例（submit 是其唯一消费方）；`report-error` 入队重验保留。**前台无调用方**（仅路由定义），无前台改动。测试：sources.test.ts +2（410 断言）/ crawler.test.ts 2 旧 submit 用例（401/202）改 410（实际 submit 测试在此文件，非预期 sources.test.ts）。typecheck/lint/**verify:adr-contracts** EXIT=0 + **全量 5909 passed 零回归**。详见 changelog CHG-VSR-8。
     - 创建时间：2026-06-01 19:15
     - 建议模型：sonnet
     - 文件范围：`apps/api/src/routes/sources.ts`（submit handler 改 410，**保留路由不删**）；`apps/web-next` 投稿 UI 入口移除；`verifyFromUserReport` 投稿触发停用（`report-error` 入队重验保留）。

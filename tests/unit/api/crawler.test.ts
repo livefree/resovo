@@ -865,24 +865,23 @@ describe('CRAWLER-04: 管理后台接口', () => {
     expect(mockContentVerifySource).toHaveBeenCalledWith('src-1')
   })
 
-  // ── POST /sources/submit ──────────────────────────────
+  // ── POST /sources/submit【已下线 CHG-VSR-8 / SEQ-20260601-01】──────────────
+  // 裁决（设计方案 §5.1 / §7-9 a）：用户投稿功能下线。保留路由（禁删 API 路径）→ 返 410、不写库。
 
-  it('POST /sources/submit：未登录返回 401', async () => {
+  it('POST /sources/submit：已下线 → 410（不再要求登录）', async () => {
     const res = await app.inject({
       method: 'POST',
       url: '/sources/submit',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ videoId: '11111111-0000-0000-0000-000000000000', sourceUrl: 'https://cdn.example.com/v.m3u8' }),
     })
-    expect(res.statusCode).toBe(401)
+    expect(res.statusCode).toBe(410)
   })
 
-  it('POST /sources/submit：普通用户（已登录）可以投稿（202）', async () => {
+  it('POST /sources/submit：登录用户投稿 → 410 FEATURE_RETIRED + 不写库', async () => {
     const { db: mockDb } = await import('@/api/lib/postgres')
     const dbMock = mockDb as { query: ReturnType<typeof vi.fn> }
-    dbMock.query
-      .mockResolvedValueOnce({ rows: [] })  // INSERT ON CONFLICT DO NOTHING
-      .mockResolvedValueOnce({ rows: [{ id: 'src-new' }] })  // SELECT id
+    dbMock.query.mockClear()
     const res = await app.inject({
       method: 'POST',
       url: '/sources/submit',
@@ -892,7 +891,9 @@ describe('CRAWLER-04: 管理后台接口', () => {
         sourceUrl: 'https://cdn.example.com/video.m3u8',
       }),
     })
-    expect(res.statusCode).toBe(202)
+    expect(res.statusCode).toBe(410)
+    expect(res.json().error.code).toBe('FEATURE_RETIRED')
+    expect(dbMock.query).not.toHaveBeenCalled()  // 不再写 video_sources 投稿源
   })
 
   // ── CHG-10: POST /admin/crawler/reindex ───────────────────────

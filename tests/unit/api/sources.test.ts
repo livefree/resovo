@@ -271,3 +271,39 @@ describe('POST /v1/videos/:id/sources/:sid/report', () => {
     expect(res.statusCode).toBe(422)
   })
 })
+
+// ═══════════════════════════════════════════════════════════════
+// POST /v1/sources/submit — 用户投稿功能已下线（CHG-VSR-8）
+// ═══════════════════════════════════════════════════════════════
+describe('POST /v1/sources/submit（已下线）', () => {
+  let app: Awaited<ReturnType<typeof buildApp>>
+
+  beforeEach(async () => {
+    app = await buildApp()
+  })
+
+  afterEach(async () => {
+    await app.close()
+  })
+
+  it('保留路由但返 410 FEATURE_RETIRED + 不写库（裁决 §5.1/§7-9 a）', async () => {
+    const token = signAccessToken({ userId: 'user-1', role: 'user' })
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/sources/submit',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { videoId: '00000000-0000-0000-0000-000000000001', sourceUrl: 'https://e.com/a.m3u8' },
+    })
+    expect(res.statusCode).toBe(410)
+    expect(res.json().error.code).toBe('FEATURE_RETIRED')
+  })
+
+  it('未登录也返 410（端点已下线，不再要求 auth）', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/sources/submit',
+      payload: {},
+    })
+    expect(res.statusCode).toBe(410)
+  })
+})

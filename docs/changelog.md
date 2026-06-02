@@ -13342,3 +13342,19 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **新增依赖/schema/路由/Props 契约变更**：`@resovo/admin-ui` KpiCardProps 新增可选 `pressed`（向后兼容，11 处既有消费方零改动）。
 - **质量门禁**：typecheck EXIT=0 / lint EXIT=0 / **全量 448 文件 5907 passed 0 failed 零回归**（kpi-card 54→59）。
 - **[AI-CHECK]**：六问全过（向后兼容已测 / 颜色全走 admin-layout token / admin-ui 组件内无越层 / 本身即共享层扩展）。无偏离。
+
+---
+
+## CHG-VSR-8 — 关闭用户投稿端点 `POST /sources/submit`（裁决 §5.1/§7-9 a）✅ 2026-06-01
+
+- **执行模型**：claude-opus-4-8（主循环）/ 子代理：无
+- **目标**：用户投稿功能下线 → 关闭 submit 端点（不再写 `is_active=false` 投稿源）。
+- **改动**（纯后端单文件 + 测试）：
+  - `apps/api/src/routes/sources.ts`：`POST /sources/submit` handler 改为返 `410 { code: 'FEATURE_RETIRED' }`、**不写库**、**不触发** `verifyFromUserReport`；**保留路由**（CLAUDE.md 禁删 API 路径）；删 `VerifyService` import + `verifyService` 实例（submit 是其唯一消费方）；去掉 authenticate preHandler（已下线无需鉴权）。
+  - `report-error`（播放器上报失效 → 入队重验）**保留不变**——即设计方案承诺的"用户反馈播放问题 → 触发探测验证"模型。
+  - 测试：`tests/unit/api/sources.test.ts` +2（410 + FEATURE_RETIRED 断言）；`tests/unit/api/crawler.test.ts` 2 旧 submit 用例（401/202）按新行为改 410 + 断言 `db.query` 未被调用。
+- **调研**：全仓 `/sources/submit` **无前台调用方**（仅路由定义本身）→ 无前台改动；前端"移除投稿入口"moot。
+- **新增依赖/schema/路由/Props 契约变更**：无（路由保留、仅改响应；非 admin 路由无 ADR-gate）。
+- **质量门禁**：typecheck EXIT=0 / lint EXIT=0 / **verify:adr-contracts EXIT=0**（FEATURE_RETIRED 未触发错误码核验，advisory 非阻塞）/ **全量 448 文件 5909 passed 0 failed 零回归**。
+- **e2e**：N/A（submit 无前台流程；410 契约由单测覆盖；`report-error` 未改）。
+- **[AI-CHECK]**：六问全过（不碰审核台/播放器关键路径 / 删多余 VerifyService 实例符合分层 / 无颜色/越层）。偏离：实际 submit 测试位于 `crawler.test.ts`（非预期 `sources.test.ts`），已如实更新并在 sources.test.ts 补断言；用 410 而非删路由（遵守 CLAUDE.md「不删 API 路径」）。
