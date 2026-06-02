@@ -2726,3 +2726,26 @@ CODENAME-MATRIX-E2E (依赖 Wave 3 验收期补丁 CODENAME-MATRIX ✅)
 - body 行高继续按 density 取令牌：comfortable 40 / compact 32 / poster 80 / relaxed 48。
 - 表头不随 poster/compact 伸缩（表头只渲染列名）；新表格不得给表头单独设密度高度。
 - `--row-h-relaxed`（48px）当前为 DataTable 不可达悬空令牌（density union 无 relaxed），本卡不删，记后续 token 清理。
+
+---
+
+## [SEQ-20260602-02] 播放线路表格操作列实装（refresh / zap / more）
+
+- **状态**：✅ 已完成
+- **创建时间**：2026-06-02 18:00
+- **最后更新时间**：2026-06-02 18:25
+- **目标**：实装播放线路表格（SourcesClient/SourceColumns）操作列——设计 §6.2 的 refresh / zap / more 三键真实功能 + UI/UX（pending / toast / 刷新本行）。
+- **范围**：apps/server-next sources 模块（行操作组件 + 列定义 + 接线 + 测试），复用既有 api 端点与共享 AdminDropdown/useToast，无新端点/schema/共享契约。
+- **依赖**：CHG-VSR-3（VideoGroupRow 派生计数）✅ / CHG-VSR-5-A（列重构）✅。
+
+1. **CHG-VSR-SOURCES-ROW-ACTIONS** — 播放线路表格操作列三键实装（状态：✅ 已完成 2026-06-02 / claude-opus-4-8 / 子代理 无）
+    - 创建时间：2026-06-02 18:00
+    - 完成时间：2026-06-02 18:25
+    - 建议模型：sonnet（标准功能实现 + 复用既有 api/共享 AdminDropdown；无新共享契约 / 无 schema → 不触发 Opus 门禁）
+    - 变更原因：播放线路表格操作列为纯占位（`SourceColumns.tsx:265-289` ↻/⋯ 仅 `stopPropagation`，无功能），注释「真实接通留 CHG-VSR-5-B + 6」但 5-B/6 均未接，遗留未实装。设计 §6.2 要求 `btn--xs ×3：refresh / zap / more`。
+    - 影响的已完成任务：CHG-VSR-5-A（占位列由本卡接通，列 id 不变不破坏 e2e）。
+    - 用户裁决（AskUserQuestion 2026-06-02）：① 三键 = refresh(↻) `batchProbeVideo`（重探连接）/ zap(⚡) `batchRenderCheckVideo`（重验播放）/ more(⋯) `AdminDropdown`，均带 pending + toast + 刷新本行；② more 菜单 4 项 = 展开/收起线路 · 重新采集源(`refetchSources`) · 停用全失效源(`disableDeadSources`，danger，仅 connectFail+renderFail>0 显示) · 线路别名管理（深链）。
+    - 文件范围：新建 `apps/server-next/src/app/admin/sources/_client/SourceRowActions.tsx`（行操作组件，对齐 videos `VideoRowActions` 范式）；改 `apps/server-next/src/app/admin/sources/_client/SourceColumns.tsx`（`buildColumns` 签名增 `actions` handlers + 操作列 cell 换 `<SourceRowActions>`）；改 `apps/server-next/src/app/admin/sources/_client/SourcesClient.tsx`（传 handlers：`onReload=refresh` / `onExpandToggle=toggleExpand`）；新建 `tests/unit/components/server-next/sources/SourceRowActions.test.tsx`。
+    - 变更内容：三键接既有 api（batch-probe / batch-render-check / refetch-sources / disable-dead 端点已存在，无新增）+ `useToast` 反馈（复用 SourceLinesExpand summary 文案口径 `ok/total · dead 失效 · failed 异常`）+ pending 期禁用全部按钮 + 完成后 `onReload` 刷新本行信号；条件菜单项基于 VideoGroupRow 派生计数。
+    - 验收要点：三键各调对应 api + toast + 刷新；停用全失效源仅在有失效源时出现 + danger；pending 禁用；列 id 不变（e2e 零破坏）；门禁全过 + 新增组件测试。
+    - 完成备注：新建 `SourceRowActions` 组件（范式对齐 videos `VideoRowActions`）：↻=`batchProbeVideo`（重探连接）/ ⚡=`batchRenderCheckVideo`（重验播放）行内键 + ⋯=`AdminDropdown`（展开/收起线路 · 重新采集源`refetchSources` · 停用全失效源`disableDeadSources`〔danger + 仅 `connectFailCount+renderFailCount>0` 显示〕 · 线路别名管理深链）。`run` 统一 pending 守卫（禁用全部按钮）+ 各 handler `try/catch` `useToast` 反馈（复用 SourceLinesExpand summary 文案口径 + level success/warn/danger/info）+ 成功后 `onReload()` 刷新本行聚合信号；容器层 stopPropagation 防误触行展开。`buildColumns(expandedKeys)`→`buildColumns(expandedKeys, actions)` 接 `{onExpandToggle,onReload}`；SourcesClient 抽 `toggleExpand(videoId)`（行点击 + 菜单共用）+ 传 `onReload=refresh`。复用既有 4 端点（batch-probe / batch-render-check / refetch-sources / disable-dead），**无新端点/schema/ADR/共享契约**。门禁全过：typecheck/lint/verify:adr-contracts EXIT=0 / **全量 455 files 6028 passed 0 failed 零 flaky**（净 +10 = SourceRowActions.test U-1..U-10：三键/菜单/条件项/pending/失败不刷新）/ sources 4 文件 37/37（含 SourcesClient.test 渲染新 cell）。列 id `actions` 不变，e2e 零破坏。共享层沉淀评估：app-local 行操作组件（消费方专属），范式已复用共享 AdminDropdown，无需再沉淀。执行模型: claude-opus-4-8

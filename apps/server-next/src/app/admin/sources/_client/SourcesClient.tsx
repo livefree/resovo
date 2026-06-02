@@ -165,13 +165,18 @@ export function SourcesClient() {
 
   const refresh = useCallback(() => setRetryKey((k) => k + 1), [])
 
-  function handleRowClick(row: VideoGroupRow) {
+  // CHG-VSR-SOURCES-ROW-ACTIONS：按 videoId 切换展开（行点击 + 操作列「展开/收起线路」共用）
+  const toggleExpand = useCallback((videoId: string) => {
     setExpandedKeys((prev) => {
       const next = new Set(prev)
-      if (next.has(row.videoId)) next.delete(row.videoId)
-      else next.add(row.videoId)
+      if (next.has(videoId)) next.delete(videoId)
+      else next.add(videoId)
       return next
     })
+  }, [])
+
+  function handleRowClick(row: VideoGroupRow) {
+    toggleExpand(row.videoId)
   }
 
   // CHG-VSR-5-B / §3.5：KPI 卡快捷筛选——切换单个 quickFilter（可组合 AND），重置页码
@@ -191,7 +196,10 @@ export function SourcesClient() {
     setPage(1)
   }
 
-  const columns = useMemo(() => buildColumns(expandedKeys), [expandedKeys])
+  const columns = useMemo(
+    () => buildColumns(expandedKeys, { onExpandToggle: toggleExpand, onReload: refresh }),
+    [expandedKeys, toggleExpand, refresh],
+  )
 
   const query = useMemo(() => ({
     pagination: { page, pageSize },

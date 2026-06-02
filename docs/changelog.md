@@ -13673,3 +13673,21 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **效果**：videos/sources 表头 **80→40px**、crawler 抽屉 32→40px、其余主列表（staging/merge/crawler 站点/runs/source-line-aliases/audit）不变；body 行高与 poster 缩略图零变化。
 - **注意事项**：① `--row-h-relaxed`（48px）当前为 DataTable 不可达悬空令牌（density union 仅 comfortable|compact|poster），本卡不删，记后续 token 清理。② 复用现有 `--row-h` 而非新增 `--row-h-head` token，避免触发令牌层新增字段的 Opus 门禁、改动最收敛（用户已确认采用 40px 不新增 token）。
 - **[AI-CHECK]**：分层 NO 违反（共享组件内部）；跨模块 NO；重复逻辑 NO（消除「表头误用 body 密度」的隐性耦合）；hack/any/空 catch NO；颜色无关（仅高度令牌）；函数/文件规模 NO；公共 Props 契约未变。结论：SAFE。
+
+## [CHG-VSR-SOURCES-ROW-ACTIONS] 播放线路表格操作列三键实装（refresh / zap / more · 设计 §6.2）
+- **完成时间**：2026-06-02
+- **记录时间**：2026-06-02 18:25
+- **执行模型**：claude-opus-4-8（建议 sonnet；标准功能实现 + 复用既有 api/共享 AdminDropdown，无新共享契约/无 schema → 不触发 Opus 门禁，主循环已为 Opus 故直接实施）
+- **子代理**：无（app-local 行操作组件，未定义共享组件 API 契约 / 未触碰 schema）
+- **背景（根因）**：播放线路表格（SourcesClient/SourceColumns）操作列为纯占位（`SourceColumns.tsx` ↻/⋯ 仅 `stopPropagation`，无功能），注释「真实接通留 CHG-VSR-5-B + 6」但 5-B（KPI 快捷筛选）/ 6（LinesPanel 替换）均未接行操作。设计 §6.2 要求 `btn--xs ×3：refresh / zap / more`。
+- **用户裁决（AskUserQuestion 2026-06-02）**：① 三键 = ↻ `batchProbeVideo`（重探连接）/ ⚡ `batchRenderCheckVideo`（重验播放）/ ⋯ `AdminDropdown`，均带 pending + toast + 刷新本行；② more 菜单 4 项 = 展开/收起线路 · 重新采集源 · 停用全失效源(danger/条件) · 线路别名管理。
+- **修改文件**：
+  - 新建 `apps/server-next/src/app/admin/sources/_client/SourceRowActions.tsx` — 行操作组件（范式对齐 videos `VideoRowActions`）。`run` 统一异步执行（`setPending(true)` → `await task` → `finally setPending(false)`，pending 期禁用全部按钮）；4 handler 各自 `try/catch` `useToast` 反馈（复用 SourceLinesExpand summary 文案 `ok/total · dead 失效 · failed 异常`，level success/warn/danger/info）+ 成功后 `onReload()`；条件菜单项「停用全失效源」仅 `(connectFailCount ?? 0)+(renderFailCount ?? 0) > 0` 时渲染 + danger；容器层 `onClick stopPropagation` 防误触行展开；3 键 + 菜单项 a11y（aria-label / title / data-testid）。
+  - `apps/server-next/src/app/admin/sources/_client/SourceColumns.tsx` — `buildColumns(expandedKeys)` → `buildColumns(expandedKeys, actions: SourceRowActionHandlers)`；操作列 cell 占位双按钮 → `<SourceRowActions row expanded={expandedKeys.has(row.videoId)} onExpandToggle onReload />`；删占位 `ACTION_BTN_STYLE`（`CSSProperties` import 保留供 `MUTED_SM`）。**列 id `actions` 不变**（e2e 零破坏）。
+  - `apps/server-next/src/app/admin/sources/_client/SourcesClient.tsx` — 抽 `toggleExpand(videoId)` useCallback（行点击 `handleRowClick` + 操作列「展开/收起线路」共用）；`buildColumns` 传 `{ onExpandToggle: toggleExpand, onReload: refresh }`（`refresh` = retryKey bump 重取本行聚合信号）。
+  - 新建 `tests/unit/components/server-next/admin/sources/SourceRowActions.test.tsx` — 10 用例（U-1..U-10）：↻→batchProbeVideo+onReload+success toast / ⚡→batchRenderCheckVideo+warn toast / probe 失败→danger toast 不刷新 / pending 禁用全部键（DOM `.disabled` 属性，本仓未装 jest-dom matcher）/ 重新采集源→refetchSources / 无失效源「停用全失效源」不出现 / 有失效源出现+点击→disableDeadSources / 展开线路矩阵→onExpandToggle / expanded=true 文案「收起线路」/ 线路别名管理→router.push。
+- **新增依赖**：无（复用 `@resovo/admin-ui` AdminDropdown/useToast）
+- **数据库变更**：无（复用既有 4 端点 batch-probe / batch-render-check / refetch-sources / disable-dead，无新 route/schema/ADR）
+- **门禁/验收**：typecheck EXIT=0 / lint EXIT=0 / verify:adr-contracts EXIT=0 / **全量 455 files 6028 passed 0 failed 零 flaky**（净 +10 = SourceRowActions.test）/ sources 4 文件 37/37（含 SourcesClient.test 渲染新 cell 零破坏）。
+- **注意事项**：① 「停用全失效源」为条件 danger 项，无失效源时不渲染（避免无意义操作）。② toast level：探测/试播无失效→success、有失效→warn、请求异常→danger、停用 0 源→info。③ 列 id `actions` 与全部既有列 id 不变，sources smoke e2e（CHG-VSR-7）零破坏。④ bulkActions 顶部「批量验证」按钮仍为占位（超本卡范围，未触碰）。
+- **[AI-CHECK]**：分层 NO 违反（UI 经 lib/sources/api，不直连 DB）；跨模块 NO（复用 videos 范式 + 共享 AdminDropdown，不反向依赖）；重复逻辑 NO（统一 `run` 收敛 4 异步入口）；hack/any/空 catch NO（catch 内 toast 明确分支）；硬编码颜色 NO（全 CSS 变量）；函数/文件规模 NO（组件 ~180 行声明性）；公共契约未变。结论：SAFE。

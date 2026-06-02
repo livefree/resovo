@@ -18,6 +18,7 @@ import {
 } from '@resovo/admin-ui'
 import type { VideoGroupRow } from '@/lib/sources/types'
 import { SignalPill } from './SourceMatrixRow'
+import { SourceRowActions, type SourceRowActionHandlers } from './SourceRowActions'
 
 // 探测 / 试播 4 态静态 filterOptions（matrix popover 多选 enum / raw EXISTS ANY 语义）
 const PROBE_STATUS_OPTIONS: readonly DistinctOption[] = [
@@ -41,6 +42,7 @@ const MUTED_SM: CSSProperties = { fontSize: '11px', color: 'var(--fg-muted)' }
 
 export function buildColumns(
   expandedKeys: ReadonlySet<string>,
+  actions: SourceRowActionHandlers,
 ): readonly TableColumn<VideoGroupRow>[] {
   return [
     // 视频（复合：展开 chevron + 封面 + 标题 + type · short_id）；sortable（v.title）
@@ -262,7 +264,7 @@ export function buildColumns(
         )
       },
     },
-    // 操作：行级运维入口（占位 / 真实接通留 CHG-VSR-5-B + 6）
+    // 操作：行级运维入口（设计 §6.2 refresh / zap / more；CHG-VSR-SOURCES-ROW-ACTIONS 实装）
     {
       id: 'actions',
       kind: 'action',
@@ -270,33 +272,14 @@ export function buildColumns(
       accessor: () => null,
       width: 120,
       overflowVisible: true,
-      cell: () => (
-        <div style={{ display: 'flex', gap: '4px' }}>
-          <button
-            type="button"
-            title="重新探测"
-            onClick={(e) => e.stopPropagation()}
-            style={ACTION_BTN_STYLE}
-          >↻</button>
-          <button
-            type="button"
-            title="更多"
-            onClick={(e) => e.stopPropagation()}
-            style={ACTION_BTN_STYLE}
-          >⋯</button>
-        </div>
+      cell: ({ row }) => (
+        <SourceRowActions
+          row={row}
+          expanded={expandedKeys.has(row.videoId)}
+          onExpandToggle={actions.onExpandToggle}
+          onReload={actions.onReload}
+        />
       ),
     },
   ]
-}
-
-const ACTION_BTN_STYLE: CSSProperties = {
-  width: '24px', height: '24px',
-  border: '1px solid var(--border-default)',
-  borderRadius: '4px',
-  background: 'var(--bg-surface)',
-  color: 'var(--fg-muted)',
-  cursor: 'pointer',
-  fontSize: '12px',
-  display: 'flex', alignItems: 'center', justifyContent: 'center',
 }
