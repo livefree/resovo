@@ -126,6 +126,36 @@ describe('useSourceLinesController', () => {
     expect(results).toContainEqual({ action: 'toggle', status: 'failed', code: 'STATE_INVALID' })
   })
 
+  it('toggle 失败回滚：仅还原目标行，不整组覆盖并发更新（Codex stop-time review）', async () => {
+    vi.mocked(api.fetchVideoSources).mockResolvedValue([
+      makeRow({ id: 'a', is_active: true }),
+      makeRow({ id: 'b', is_active: true, probe_status: 'ok' }),
+    ])
+    let rejectToggle!: (e: unknown) => void
+    vi.mocked(api.toggleSource).mockReturnValue(new Promise((_res, rej) => { rejectToggle = rej }))
+    vi.mocked(api.probeOneSource).mockResolvedValue({ sourceId: 'b', newProbeStatus: 'dead', latencyMs: null, queued: false })
+
+    const { result } = renderHook(() => useSourceLinesController('v1'))
+    await flush()
+
+    // A 的 toggle 挂起（乐观置 inactive）
+    let toggleDone!: Promise<void>
+    act(() => { toggleDone = result.current[1].toggleEpisode('a', false) })
+
+    // 并发：B 探测完成（server-confirmed 改 B.probe_status='dead'）
+    await act(async () => { await result.current[1].probeEpisode('b') })
+    expect(result.current[0].lines.find((l) => l.id === 'b')!.probe_status).toBe('dead')
+
+    // A 非 race 失败 → 仅回滚 A，不得抹掉 B 的并发更新（旧整组快照还原会回退 B 到 'ok'）
+    await act(async () => {
+      rejectToggle(Object.assign(new Error('network'), { code: 'INTERNAL' }))
+      await toggleDone
+    })
+
+    expect(result.current[0].lines.find((l) => l.id === 'a')!.is_active).toBe(true)     // A 回滚
+    expect(result.current[0].lines.find((l) => l.id === 'b')!.probe_status).toBe('dead') // B 并发更新保留
+  })
+
   it('disableDead：dead 行本地置 inactive + onActionResult success', async () => {
     vi.mocked(api.fetchVideoSources).mockResolvedValue([
       makeRow({ id: 'dead1', probe_status: 'dead', render_status: 'dead', is_active: true }),

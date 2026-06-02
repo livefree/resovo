@@ -160,10 +160,14 @@ export function useSourceLinesController(
 
   useEffect(() => { reload() }, [reload])
 
-  // ── toggle（R2 乐观更新 + 409 重 fetch + 非 race 回滚）───────────────
+  // ── toggle（R2 乐观更新 + 409 重 fetch + 失败仅回滚目标行）───────────────
   const toggleEpisode = useCallback(async (episodeId: string, nextActive: boolean) => {
     const target = linesRef.current.find((l) => l.id === episodeId)
-    const snapshot = linesRef.current
+    const prevActive = target?.is_active
+    // Codex stop-time review FIX：失败时**仅回滚本次目标行** is_active，绝不整组还原启动快照
+    //   （整组还原会抹掉期间并发操作对其他行的 server-confirmed 更新 → 客户端偏离 server 真相 + 恢复 stale 行）
+    const rollbackTarget = () =>
+      setLines((prev) => prev.map((l) => l.id === episodeId ? { ...l, is_active: prevActive ?? l.is_active } : l))
     setTogglingIds((s) => new Set(s).add(episodeId))
     setLines((prev) => prev.map((l) => l.id === episodeId ? { ...l, is_active: nextActive } : l))
     try {
@@ -174,16 +178,16 @@ export function useSourceLinesController(
       emit({ action: 'toggle', status: 'success' })
     } catch (e: unknown) {
       if (isRaceError(e)) {
-        // 409：以 server 真相覆盖（避免落到已被改过的 snapshot 旧值）
+        // 409：以 server 真相覆盖整组（重 fetch 失败则退化为仅回滚目标行，不还原 stale 快照）
         try {
           const fresh = await fetchVideoSources(videoId)
           if (videoIdRef.current === videoId) setLines(fresh)
         } catch {
-          setLines(snapshot)
+          rollbackTarget()
         }
         emit({ action: 'toggle', status: 'race' })
       } else {
-        setLines(snapshot)
+        rollbackTarget()
         emit({ action: 'toggle', status: 'failed', code: getErrorCode(e) })
       }
     } finally {
