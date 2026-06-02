@@ -2506,3 +2506,126 @@ CODENAME-MATRIX-E2E (依赖 Wave 3 验收期补丁 CODENAME-MATRIX ✅)
 - 任一红线 R1-R8 未满足 → 暂停。
 - META-23-C 迁移在真实 PG 上跑出非预期合并（组数≠51 / 出现多外部 ID 冲突组）→ 暂停核对。
 - douban/imdb/tmdb 同类约束 follow-up 不在本序列，发现新冲突类型 → 记 QUESTION 不扩范围。
+
+---
+
+## [SEQ-20260601-01] 视频库 / 播放线路 职责重定义与表格重设计
+
+- **状态**：🟡 规划中
+- **创建时间**：2026-06-01 19:15
+- **最后更新时间**：2026-06-01 19:15
+- **目标**：落地《视频库/播放线路职责重定义》设计方案——视频库=作品维度、播放线路=资源运维维度、别名独立页；表格头部极简(搜索+列设置) + 三层过滤 + B 方案快捷筛选；术语裁决（失效=探测②含连接/试播/异常、禁用=is_active①、待补源=无可播源含已上架）；用户投稿/失效举报整体下线。
+- **范围**：`apps/server-next`（/admin/videos + /admin/sources 两 client + 子组件）+ `apps/api`（videos/sources 聚合 + 过滤排序 + distinct 白名单 + submit 端点 410）+ `packages/admin-ui`（KpiCard pressed）+ `packages/types`（双表 DTO/术语）+ `apps/web-next`（移除投稿入口）。
+- **依赖**：设计方案 ✅（`docs/designs/videos-sources-responsibility-redesign_20260601.md` / commit e1950050）。ADR：ADR-117 amendment（sources 聚合）+ ADR-150 amendment（distinct 白名单 + country 逻辑表）；ADR-124 不触碰。
+- **方案全文**：`docs/designs/videos-sources-responsibility-redesign_20260601.md`（§6 拆卡表 + 各节落地点）。
+- **执行节奏**：前置 `PRE-1 / PRE-2 / PRE-3` + 契约卡 `1` 先行 → API `2 / 3` → UI `4 / 5 / 6` → 回归 `7`；`8` 独立。Opus 强制：PRE-2 / PRE-3 / 1 + 2·3 的 ADR amendment 部分。
+- **依赖链**：前置 `PRE-1 / PRE-2 / PRE-3 / 1`（可并行）→ `(2,3)` → `(4,5,6)` → `7`；`8` 任意时点。
+
+### 任务列表（按执行顺序）
+
+1. **CHG-VSR-PRE-1** — 前置：两 client 超限文件拆分（解 500 行硬限）（状态：⬜ 未开始）
+   - 创建时间：2026-06-01 19:15
+   - 建议模型：sonnet（纯重构，零行为变化）
+   - 文件范围：`VideoListClient.tsx`(789L) 抽 `buildVideoColumns` / `BatchActionsRow` 到独立文件；`SourcesClient.tsx`(623L) 抽 `buildColumns` 到独立文件。
+   - 门禁：`verify:file-size-budget` 必过；快照/单测不变。
+   - 验收要点：两 client < 500 行；typecheck/lint/test 零回归。
+   - 依赖：无（最先做）。
+
+2. **CHG-VSR-PRE-2** — 前置：抽中性 `useSourceLinesController(videoId)`（§5.5）（状态：⬜ 未开始）
+   - 创建时间：2026-06-01 19:15
+   - 建议模型：**opus**（共享 hook 契约 / 跨 3 消费方）
+   - 文件范围：新 `apps/server-next/src/lib/sources/use-source-lines-controller.ts`（启停/禁用连接失败源/重采集/健康 + 单集 probe·render-check + 整组 probe·render-check）；审核台 `moderation/LinesPanel.tsx` + 编辑抽屉 `TabLines.tsx` 迁移消费；`use-sources.ts` 并入或薄封装。
+   - 约束：**禁止 `/admin/sources` 反向 import `/admin/moderation` 内部组件**（依赖方向单向）。
+   - 门禁：共享 hook 契约 → Opus 评审 + commit trailer `Subagents: arch-reviewer (...)`。
+   - 验收要点：审核台 / 编辑抽屉 / 线路展开三方共用同一 controller，功能零回归。
+   - 依赖：PRE-1（软依赖）。
+
+3. **CHG-VSR-PRE-3** — 前置：KpiCard 扩 `pressed` / `data-active` / `aria-pressed`（B 选中态）（状态：⬜ 未开始）
+   - 创建时间：2026-06-01 19:15
+   - 建议模型：**opus**（共享组件 API 契约）
+   - 文件范围：`packages/admin-ui/src/components/cell/kpi-card.types.ts` + `kpi-card.tsx` + 单测。
+   - 门禁：`packages/admin-ui/**/types.ts` Props 变更 → 强制 Opus 评审 + commit trailer。
+   - 验收要点：受控 `pressed` 选中态 + a11y `aria-pressed`；既有消费方零破坏；新单测覆盖 pressed。
+   - 依赖：无（可并行）。
+
+4. **CHG-VSR-1** — 双表 DTO + 问题枚举 + 术语（连接/试播/异常/禁用）+ 待补源语义 + SourceSegment 仅废弃（状态：⬜ 未开始）
+   - 创建时间：2026-06-01 19:15
+   - 建议模型：**opus**（改 `@resovo/types` 跨消费方契约）
+   - 文件范围：`packages/types`（VideoGroupRow/Stats 扩字段 + 问题枚举 + 待补源派生类型）；`SourceSegment` 加 `@deprecated`（**不改名/不删**）；server-next `lib/videos/types` + `lib/sources/types` 镜像。
+   - 门禁：`@resovo/types` 契约 → 强制 Opus 子代理 + commit trailer `Subagents: arch-reviewer (...)`。
+   - 验收要点：类型可被卡 2/3/4/5/6 增量消费；SourceSegment 兼容保留；typecheck 零回归。
+   - 依赖：无（契约地基，建议早做）。
+
+5. **CHG-VSR-2** — 视频库 API：集数/Bangumi/meta 质量 + 过滤升级 + 搜索扩面 + distinct 白名单（状态：⬜ 未开始）
+   - 创建时间：2026-06-01 19:15
+   - 建议模型：opus（ADR-150 amendment 起草）+ sonnet（实施）
+   - 文件范围：`apps/api/src/db/queries/videos.ts`（`AdminVideoListFilters` 加数组 enum / 年份 range / 国家 / 连载 / 豆瓣 / Bangumi / 完整度 range / 集数异常 boolean；`q` 扩 title_original+short_id）；`services/datatable/distinct-whitelist.ts`（加 country/douban_status/bangumi_status + `media_catalog.country` 逻辑表映射）；route + 单测。
+   - ADR/门禁：**ADR-150 amendment**；扩现有端点入参/响应（非新 route）→ ADR amendment；若需新增 route → 独立 ADR + Opus PASS（`verify:endpoint-adr`）。
+   - 验收要点：新过滤/搜索/排序服务端生效 + SQL identifier 白名单防注入 + 单测覆盖新参数。
+   - 依赖：CHG-VSR-1。
+
+6. **CHG-VSR-3** — 线路聚合 API：可用源数① / 连接失败 / 试播失败 / 待探测 / 质量(quality_rank+覆盖率+延迟中位) / 待补源 + KPI stats ①→②（状态：⬜ 未开始）
+   - 创建时间：2026-06-01 19:15
+   - 建议模型：opus（ADR-117 amendment 起草）+ sonnet（实施）
+   - 文件范围：`apps/api/src/db/queries/sources-matrix.ts`（`listVideoGroups` 增派生列 + `getVideoGroupStats` 5 卡 FILTER 从 `source_check_status`① 切探测②）+ 快捷筛选谓词（含异常/待补源/待探测/低质量 `quality_rank<4`）+ Service 层 + 单测。
+   - ADR/门禁：**ADR-117 amendment**；`quality_rank` CASE 7 档（4K=7…240P=1）；待补源=无可播源（含已上架）；**不做失效举报**（不触碰 user_submissions）。
+   - 验收要点：5 KPI 计数走探测维度② + 质量口径（`quality_detected ?? quality` / 覆盖率 / 延迟中位）+ 质量未知不并入低质量 + 单测。
+   - 依赖：CHG-VSR-1。
+
+7. **CHG-VSR-4-A** — 视频库列重构（复合显示列 + 默认隐藏原子可筛选列 + 数据格式）（状态：⬜ 未开始）
+   - 创建时间：2026-06-01 19:15
+   - 建议模型：sonnet
+   - 文件范围：videos columns（封面/视频/类型/发行信息/集数/元数据/内容状态/更新/操作 + 默认隐藏原子列 year/country/连载/可见/审核/发布/douban/bangumi/meta_score）；§2.4 数据格式降级（集数 NULL / 已播>收录 warn）。
+   - 验收要点：复合显示列只读不挂筛选；默认列与 §2.2 一致；列宽/排序对齐。
+   - 依赖：CHG-VSR-1 / CHG-VSR-2 / CHG-VSR-PRE-1。
+
+8. **CHG-VSR-4-B** — 视频库三层过滤 + 行操作 + 快捷筛选(B 统计计数)（状态：⬜ 未开始）
+   - 创建时间：2026-06-01 19:15
+   - 建议模型：sonnet
+   - 文件范围：搜索框(q 多列) + 列头菜单原子列筛选 + 页面级统计计数快捷筛选（待审/元数据缺失/集数不一致，点击切换/可组合）；VideoRowActions（编辑/图片/外部元数据/审核/合并/前台/查看播放线路）；导出 CSV 移 PageHeader；视图保存暂缓移除。
+   - 验收要点：表格头部仅搜索+列设置；无筛选下拉行 / 已选过滤 chip 条；快捷筛选 B 生效。
+   - 依赖：CHG-VSR-4-A。
+
+9. **CHG-VSR-5-A** — 播放线路结构重构：删四 Tab + 删内嵌别名 Tab + 列重构（状态：⬜ 未开始）
+   - 创建时间：2026-06-01 19:15
+   - 建议模型：sonnet
+   - 文件范围：`SourcesClient.tsx`（删 SEGMENTS Tab 行 + activeTab=aliases 分支 + 内嵌 `SourceLineAliasPanel`；保留别名管理跳转）；columns（覆盖/探测/试播/质量/问题=连接失败·试播失败·待探测/站点/最近检测）；刷新改自动 refetch。
+   - 验收要点：四 Tab / 别名 Tab 移除；列与 §3.2 一致；文案用「连接失败/试播失败」。
+   - 依赖：CHG-VSR-1 / CHG-VSR-3 / CHG-VSR-PRE-1。
+
+10. **CHG-VSR-5-B** — 播放线路快捷筛选(B：可点击 KPI 卡 pressed) + 列头筛选 + 删 SourceSegment（状态：⬜ 未开始）
+    - 创建时间：2026-06-01 19:15
+    - 建议模型：sonnet
+    - 文件范围：5 KPI 卡（全部/含异常源/待补源/待探测/低质量）= 可点击筛选（pressed/可组合/全部清空）；列头菜单筛选（探测/试播/站点/质量/最近检测）；**末尾删除 `SourceSegment` 枚举 + segment 查询分支**。
+    - 验收要点：KPI 卡选中态生效；快捷筛选谓词正确；SourceSegment 彻底退场。
+    - 依赖：CHG-VSR-5-A / CHG-VSR-PRE-3。
+
+11. **CHG-VSR-6** — 用共享 `LinesPanel` 替换 `MatrixExpand`（消费 PRE-2 控制器）（状态：⬜ 未开始）
+    - 创建时间：2026-06-01 19:15
+    - 建议模型：sonnet
+    - 文件范围：删 `SourceMatrixRow.tsx` 的 `MatrixExpand`；展开区 `renderExpandedRow` 接 `<LinesPanel>` + `useSourceLinesController` + `groupSourcesByLine`。
+    - 约束：不扩 `getVideoMatrix`；client 端聚合；不反向 import 审核台内部。
+    - 验收要点：任意集数不截断（消除 `.slice(0,8)`）+ 消除 render 阶段请求 + 全操作接通（含 codename/retired/auto_retired）。
+    - 依赖：CHG-VSR-PRE-2 / CHG-VSR-5-A。
+
+12. **CHG-VSR-7** — 回归测试（状态：⬜ 未开始）
+    - 创建时间：2026-06-01 19:15
+    - 建议模型：sonnet
+    - 范围：动漫集数 / Bangumi 筛选 / 连接失败 / 试播失败 / 待补源 / 待探测 / 批量探测 / 长剧集展开；e2e（VIDEO/SOURCES 路径）。
+    - 验收要点：`test -- --run` + `test:e2e` + `verify:adr-contracts` 全过；零回归。
+    - 依赖：CHG-VSR-4-B / CHG-VSR-5-B / CHG-VSR-6。
+
+13. **CHG-VSR-8** — 关闭投稿：`POST /sources/submit` 返 410 Gone 不写库 + 移前台入口 + 停 verifyFromUserReport（状态：⬜ 未开始 / 独立）
+    - 创建时间：2026-06-01 19:15
+    - 建议模型：sonnet
+    - 文件范围：`apps/api/src/routes/sources.ts`（submit handler 改 410，**保留路由不删**）；`apps/web-next` 投稿 UI 入口移除；`verifyFromUserReport` 投稿触发停用（`report-error` 入队重验保留）。
+    - 门禁：非 admin 路由无 ADR-gate；**不得删路由**（CLAUDE.md）；记 changelog。
+    - 验收要点：submit 返 410 + 不写库 + 前台无投稿入口；`report-error` 不受影响。
+    - 依赖：无（独立，任意时点）。
+
+### SEQ-20260601-01 BLOCKER 触发清单
+
+- CHG-VSR-PRE-2 / PRE-3 / 1 任一 Opus 评审出红线未消解 → 暂停。
+- 卡 2/3 发现需**新增** admin route（非扩展现有）→ 先起独立 ADR + Opus PASS（`verify:endpoint-adr`），不得直接加 route。
+- 复合列被要求挂多条件筛选 → 记 QUESTION，不扩 DataTable 公共契约（§2.6 阻断项 1）。
+- 发现需触碰 `user_submissions` 写入 → 暂停（本批次裁决不做，§5.1）。
