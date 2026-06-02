@@ -269,13 +269,27 @@ export interface BatchRenderCheckResult {
 /**
  * 拉取视频全部播放源（含禁用源）。
  * 待校准点①：显式 `active=all`，确保禁用源行不丢（后端 `/admin/sources` 默认亦为 'all'）。
+ *
+ * CHG-VSR-6 FIX（Codex stop-time review）：后端 `/admin/sources` `limit` zod 上限 = 100
+ * （content.ts `SourceListSchema`），单页仅取前 100 行 → 长剧集 × 多线路（源行 > 100）会
+ * **静默截断**，与函数"全部"语义及 CHG-VSR-6"任意集数不截断"验收冲突。改为按 `total`
+ * 分页循环拉全量（`limit` 维持后端 cap 100），三消费方（审核台 / 编辑抽屉 / 线路展开区）共享修复。
  */
 export async function fetchVideoSources(videoId: string): Promise<SourceLineRowData[]> {
-  const params = new URLSearchParams({ videoId, active: 'all', limit: '100', page: '1' })
-  const res = await apiClient.get<{ data: SourceLineRowData[]; total: number; page: number; limit: number }>(
-    `/admin/sources?${params}`,
-  )
-  return res.data
+  const PAGE_SIZE = 100 // 后端 /admin/sources limit zod 上限（content.ts SourceListSchema）
+  const all: SourceLineRowData[] = []
+  let page = 1
+  for (;;) {
+    const params = new URLSearchParams({ videoId, active: 'all', limit: String(PAGE_SIZE), page: String(page) })
+    const res = await apiClient.get<{ data: SourceLineRowData[]; total: number; page: number; limit: number }>(
+      `/admin/sources?${params}`,
+    )
+    all.push(...res.data)
+    // 终止：空页（防御 total 不一致/越界，避免死循环）或已收齐全集
+    if (res.data.length === 0 || all.length >= res.total) break
+    page += 1
+  }
+  return all
 }
 
 export async function toggleSource(

@@ -17,7 +17,7 @@ vi.mock('../../../../../../apps/server-next/src/lib/api-client', () => ({
   },
 }))
 
-import { listVideoGroups } from '../../../../../../apps/server-next/src/lib/sources/api'
+import { listVideoGroups, fetchVideoSources } from '../../../../../../apps/server-next/src/lib/sources/api'
 
 describe('listVideoGroups URL params', () => {
   beforeEach(() => {
@@ -113,5 +113,56 @@ describe('listVideoGroups URL params', () => {
     await listVideoGroups({ lowQuality: false })
     const url = apiClientGetMock.mock.calls[0][0] as string
     expect(url).not.toContain('lowQuality')
+  })
+})
+
+describe('fetchVideoSources 分页全量拉取（CHG-VSR-6 FIX / Codex stop-time review — 不截断 >100 源）', () => {
+  beforeEach(() => {
+    apiClientGetMock.mockReset()
+  })
+
+  // 最小行（聚合/计数只需 id；apiClientGetMock 返回 any）
+  function mkRows(n: number, offset = 0): { id: string }[] {
+    return Array.from({ length: n }, (_, i) => ({ id: `s-${offset + i + 1}` }))
+  }
+
+  it('源 ≤100：单页拉取（active=all / page=1），不发第二页', async () => {
+    apiClientGetMock.mockResolvedValueOnce({ data: mkRows(80), total: 80, page: 1, limit: 100 })
+    const rows = await fetchVideoSources('vid')
+    expect(rows).toHaveLength(80)
+    expect(apiClientGetMock).toHaveBeenCalledTimes(1)
+    const url = apiClientGetMock.mock.calls[0][0] as string
+    expect(url).toContain('active=all')
+    expect(url).toContain('limit=100')
+    expect(url).toContain('page=1')
+  })
+
+  it('源 >100（250）：循环分页 3 次拼全量，零截断 + id 唯一无丢', async () => {
+    apiClientGetMock
+      .mockResolvedValueOnce({ data: mkRows(100, 0), total: 250, page: 1, limit: 100 })
+      .mockResolvedValueOnce({ data: mkRows(100, 100), total: 250, page: 2, limit: 100 })
+      .mockResolvedValueOnce({ data: mkRows(50, 200), total: 250, page: 3, limit: 100 })
+    const rows = await fetchVideoSources('vid')
+    expect(rows).toHaveLength(250)
+    expect(apiClientGetMock).toHaveBeenCalledTimes(3)
+    expect(apiClientGetMock.mock.calls[1][0]).toContain('page=2')
+    expect(apiClientGetMock.mock.calls[2][0]).toContain('page=3')
+    expect(new Set(rows.map((r) => r.id)).size).toBe(250)
+  })
+
+  it('整除边界（200=2×100）：收齐 total 即停，不发空第三页', async () => {
+    apiClientGetMock
+      .mockResolvedValueOnce({ data: mkRows(100, 0), total: 200, page: 1, limit: 100 })
+      .mockResolvedValueOnce({ data: mkRows(100, 100), total: 200, page: 2, limit: 100 })
+    const rows = await fetchVideoSources('vid')
+    expect(rows).toHaveLength(200)
+    expect(apiClientGetMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('空结果：data=[] 终止不死循环', async () => {
+    apiClientGetMock.mockResolvedValueOnce({ data: [], total: 0, page: 1, limit: 100 })
+    const rows = await fetchVideoSources('vid')
+    expect(rows).toHaveLength(0)
+    expect(apiClientGetMock).toHaveBeenCalledTimes(1)
   })
 })
