@@ -2513,7 +2513,7 @@ CODENAME-MATRIX-E2E (依赖 Wave 3 验收期补丁 CODENAME-MATRIX ✅)
 
 - **状态**：🔄 执行中
 - **创建时间**：2026-06-01 19:15
-- **最后更新时间**：2026-06-01 19:50（PRE-1 ✅ / PRE-3 ✅）
+- **最后更新时间**：2026-06-01 20:05（PRE-1 ✅ / PRE-3 ✅ / PRE-2 设计完成待实施）
 - **目标**：落地《视频库/播放线路职责重定义》设计方案——视频库=作品维度、播放线路=资源运维维度、别名独立页；表格头部极简(搜索+列设置) + 三层过滤 + B 方案快捷筛选；术语裁决（失效=探测②含连接/试播/异常、禁用=is_active①、待补源=无可播源含已上架）；用户投稿/失效举报整体下线。
 - **范围**：`apps/server-next`（/admin/videos + /admin/sources 两 client + 子组件）+ `apps/api`（videos/sources 聚合 + 过滤排序 + distinct 白名单 + submit 端点 410）+ `packages/admin-ui`（KpiCard pressed）+ `packages/types`（双表 DTO/术语）+ `apps/web-next`（移除投稿入口）。
 - **依赖**：设计方案 ✅（`docs/designs/videos-sources-responsibility-redesign_20260601.md` / commit e1950050）。ADR：ADR-117 amendment（sources 聚合）+ ADR-150 amendment（distinct 白名单 + country 逻辑表）；ADR-124 不触碰。
@@ -2530,14 +2530,28 @@ CODENAME-MATRIX-E2E (依赖 Wave 3 验收期补丁 CODENAME-MATRIX ✅)
    - 文件范围：`VideoListClient.tsx`(788→400L) 抽 `buildVideoColumns`→VideoColumns.tsx + `BatchActionsRow`→VideoBatchActions.tsx；`SourcesClient.tsx`(623→376L) 抽 `buildColumns`→SourceColumns.tsx。
    - 完成备注：3 新文件（VideoColumns 268 / VideoBatchActions 143 / SourceColumns 260）+ 2 改文件 import 收敛。**typecheck/lint EXIT=0 + 全量 5902 passed 零回归**。file-size-budget 本卡改善（22→20 违规，两目标文件移除）；剩 20 为既有 debt（范围外不修），`sources-matrix.ts` 759L 留 CHG-VSR-3 拆。e2e 跳过（纯抽分零行为变化）。详见 changelog CHG-VSR-PRE-1。
 
-2. **CHG-VSR-PRE-2** — 前置：抽中性 `useSourceLinesController(videoId)`（§5.5）（状态：⬜ 未开始）
+2. **CHG-VSR-PRE-2** — 前置：抽中性 `useSourceLinesController(videoId)`（§5.5）（状态：🔄 设计完成 / 待实施 — arch-reviewer 蓝图就绪 2026-06-01）
    - 创建时间：2026-06-01 19:15
    - 建议模型：**opus**（共享 hook 契约 / 跨 3 消费方）
-   - 文件范围：新 `apps/server-next/src/lib/sources/use-source-lines-controller.ts`（启停/禁用连接失败源/重采集/健康 + 单集 probe·render-check + 整组 probe·render-check）；审核台 `moderation/LinesPanel.tsx` + 编辑抽屉 `TabLines.tsx` 迁移消费；`use-sources.ts` 并入或薄封装。
+   - 子代理调用：arch-reviewer (claude-opus-4-8) — CONDITIONAL PASS + 5 红线 + 4 黄线（蓝图见下）
    - 约束：**禁止 `/admin/sources` 反向 import `/admin/moderation` 内部组件**（依赖方向单向）。
    - 门禁：共享 hook 契约 → Opus 评审 + commit trailer `Subagents: arch-reviewer (...)`。
    - 验收要点：审核台 / 编辑抽屉 / 线路展开三方共用同一 controller，功能零回归。
-   - 依赖：PRE-1（软依赖）。
+   - 依赖：PRE-1 ✅（软依赖）。
+
+   **arch-reviewer 蓝图（落地依据 / 2026-06-01）：**
+   - **位置/命名**：`apps/server-next/src/lib/sources/use-source-lines-controller.ts`，返回 `[state, actions]`（对齐 useVideoSources 范式）。
+   - **R1 api 去重（方案 B）**：把 source 操作从 `lib/moderation/api` **移到** `lib/sources/api.ts`（fetchVideoSources/toggleSource/disableDeadSources/refetchSources/probeOneSource/renderCheckOneSource/batchProbeVideo/batchRenderCheckVideo/fetchLineHealth/toDisplayState + result 类型）；`lib/moderation/api` re-export 保后兼容（blast radius 已核实：source 操作目前无跨模块消费）。**禁方案 A**（hook 反向依赖 moderation）。
+   - **Y1 中性行类型**：新增 `lib/sources/types.ts` `SourceLineRowData`（ContentSourceRow ∪ VideoSource ∩ admin-ui `RawSourceRow`；alias 字段 + quality_detected 均 optional；**勿复名** 既有 `SourceLineRow`）。**admin-ui 零改动**（Y2，规避 types.ts Props 门禁）。
+   - **R2 乐观锁**：toggle 采 use-sources 的「乐观更新 + 409 REVIEW_RACE 重 fetch + 非 race 回滚 snapshot」完整版，统一进 hook；**审核台原无乐观更新 → 行为变更点，须回归**。
+   - **R3**：`videoIdRef` batch stale-write 防御内建 hook。
+   - **R4 反馈注入**：hook 不 push toast/alert，只产出结构化 `SourceActionResult`，经 `options.onActionResult` 注入（审核台→useToast / TabLines→alert(VE) / 展开区自定）。
+   - **R5 health drawer**：留消费方（open/page/title/i18n 各异）；hook 仅暴露 `fetchHealth(sourceId,page)`。
+   - **Y4**：`onLineSelect`/`onSourceHealthChanged`/首行自动选 留消费方（经 `options.onLoaded`）。
+   - **待校准点（实施前必查）**：① 统一 fetch 用 `active=all`（审核台现 fetchVideoSources 无 active 参数=默认，会丢禁用源行）；② 后端 `/admin/sources?videoId=` 单行已确认同时返回 quality_detected + codename/retired_at/auto_retired（feasibility ✅，但注意 sources.ts 有两查询分支，确认走透传 alias 的分支）；③ batch 回填 `latencyMs`→`latency_ms` camel→snake（Y3）。
+   - **state/actions 面**：state{lines/loading/error/actionError/togglingIds/probingIds/renderCheckingIds/probingAllSources/renderCheckingAllSources/disableDeadPending/refetchPending}；actions{reload/toggleEpisode/disableDead/refetch/probeEpisode/renderCheckEpisode/probeAllSources/renderCheckAllSources/fetchHealth}；options{onLoaded/onActionResult}。
+   - **迁移**：moderation/LinesPanel.tsx 341→~140L（删 8 state+handler，onLoaded 放首行 onLineSelect，onActionResult 映射现有全部 toast case，drawer 本地保留）；TabLines.tsx 改用 hook（新增 probe/render 能力）+ alert 经 onActionResult；CHG-VSR-6 展开区后续消费。
+   - **关键路径回归必查**：409 红条 / batch 切视频 stale-write / 首次 onLineSelect 切源 / toast 全 case / pill 联动 / TabLines 乐观更新一致性 / 禁用源行不丢。
 
 3. **CHG-VSR-PRE-3** — 前置：KpiCard 扩 `pressed` / `data-active` / `aria-pressed`（B 选中态）（状态：✅ 已完成 2026-06-01 / claude-opus-4-8 / 子代理 arch-reviewer (claude-opus-4-8)）
    - 创建时间：2026-06-01 19:15
