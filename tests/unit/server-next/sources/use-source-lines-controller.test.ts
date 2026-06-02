@@ -47,7 +47,8 @@ function makeRow(overrides: Partial<SourceLineRowData> = {}): SourceLineRowData 
 const flush = () => act(async () => { await new Promise((r) => setTimeout(r, 0)) })
 
 describe('useSourceLinesController', () => {
-  beforeEach(() => { vi.clearAllMocks() })
+  // resetAllMocks（非 clearAllMocks）：清 mockResolvedValueOnce 队列，防短路用例残留 once 泄漏到后续用例
+  beforeEach(() => { vi.resetAllMocks() })
 
   it('reload：loading=true → 成功后 lines 就位，onLoaded 收到原始行（Y4）', async () => {
     const rows = [makeRow()]
@@ -167,6 +168,72 @@ describe('useSourceLinesController', () => {
 
     expect(result.current[0].lines.find((l) => l.id === 'a')!.is_active).toBe(true)      // A 退化回滚
     expect(result.current[0].lines.find((l) => l.id === 'b')!.probe_status).toBe('dead') // B 不被整组还原抹掉
+  })
+
+  it('toggle 失败：re-fetch 成功也只对账目标行，不用 stale fresh 覆盖其他行 newer 写（Codex stop-time review 第 3 轮）', async () => {
+    vi.mocked(api.fetchVideoSources)
+      .mockResolvedValueOnce([
+        makeRow({ id: 'a', is_active: true }),
+        makeRow({ id: 'b', is_active: true, probe_status: 'ok' }),
+      ])
+      // 失败对账的 re-fetch 返回 stale B（probe ok，未含期间并发 probe 的 dead）→ 不得用于覆盖 B
+      .mockResolvedValueOnce([
+        makeRow({ id: 'a', is_active: true }),
+        makeRow({ id: 'b', is_active: true, probe_status: 'ok' }),
+      ])
+    let rejectToggle!: (e: unknown) => void
+    vi.mocked(api.toggleSource).mockReturnValue(new Promise((_res, rej) => { rejectToggle = rej }))
+    vi.mocked(api.probeOneSource).mockResolvedValue({ sourceId: 'b', newProbeStatus: 'dead', latencyMs: null, queued: false })
+
+    const { result } = renderHook(() => useSourceLinesController('v1'))
+    await flush()
+
+    // A 的 toggle 挂起（乐观 inactive）
+    let toggleDone!: Promise<void>
+    act(() => { toggleDone = result.current[1].toggleEpisode('a', false) })
+
+    // 并发：B 探测 server-confirmed dead（newer write）
+    await act(async () => { await result.current[1].probeEpisode('b') })
+    expect(result.current[0].lines.find((l) => l.id === 'b')!.probe_status).toBe('dead')
+
+    // A 失败 → re-fetch 成功但只对账 A；B 不被 stale fresh（probe ok）覆盖
+    await act(async () => {
+      rejectToggle(Object.assign(new Error('network'), { code: 'INTERNAL' }))
+      await toggleDone
+    })
+
+    expect(result.current[0].lines.find((l) => l.id === 'a')!.is_active).toBe(true)      // A 对账 server 值
+    expect(result.current[0].lines.find((l) => l.id === 'b')!.probe_status).toBe('dead') // B 的 newer confirmed 写不被 stale fresh 覆盖
+  })
+
+  it('toggle 失败：同行并发 disableDead confirmed 写短路对账（不 re-fetch / 不回滚 / 让 confirmed 写赢）（Codex stop-time review 第 3 轮）', async () => {
+    vi.mocked(api.fetchVideoSources)
+      .mockResolvedValueOnce([makeRow({ id: 'a', is_active: true, probe_status: 'dead', render_status: 'dead' })])
+      // 若失败对账误触发 re-fetch（stale 读未含 disableDead 的写）→ 会把 A 错误还原为 active；本用例断言不触发
+      .mockResolvedValueOnce([makeRow({ id: 'a', is_active: true, probe_status: 'dead', render_status: 'dead' })])
+    let rejectToggle!: (e: unknown) => void
+    vi.mocked(api.toggleSource).mockReturnValue(new Promise((_res, rej) => { rejectToggle = rej }))
+    vi.mocked(api.disableDeadSources).mockResolvedValue({ disabled: 1 })
+
+    const { result } = renderHook(() => useSourceLinesController('v1'))
+    await flush()
+
+    // A 的 toggle 挂起（乐观 inactive）
+    let toggleDone!: Promise<void>
+    act(() => { toggleDone = result.current[1].toggleEpisode('a', false) })
+
+    // 并发：disableDead server-confirmed → A=inactive（A 在 togglingIds → 标记 externallyModified）
+    await act(async () => { await result.current[1].disableDead() })
+    expect(result.current[0].lines.find((l) => l.id === 'a')!.is_active).toBe(false)
+
+    // A toggle 失败 → 本行被并发 confirmed 写改过 → 完全不对账（不 re-fetch、不回滚）→ A 保持 false
+    await act(async () => {
+      rejectToggle(Object.assign(new Error('network'), { code: 'INTERNAL' }))
+      await toggleDone
+    })
+
+    expect(result.current[0].lines.find((l) => l.id === 'a')!.is_active).toBe(false) // confirmed 写保留
+    expect(api.fetchVideoSources).toHaveBeenCalledTimes(1) // 并发标记短路 → 未触发失败 re-fetch
   })
 
   it('disableDead：dead 行本地置 inactive + onActionResult success', async () => {

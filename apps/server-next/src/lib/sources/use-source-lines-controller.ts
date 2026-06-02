@@ -125,6 +125,15 @@ export function useSourceLinesController(
   const linesRef = useRef(lines)
   useEffect(() => { linesRef.current = lines }, [lines])
 
+  // 供并发写（disableDead）判断"某行是否正在 toggle"
+  const togglingIdsRef = useRef(togglingIds)
+  useEffect(() => { togglingIdsRef.current = togglingIds }, [togglingIds])
+
+  // Codex stop-time review FIX：并发保护集——记录"在某行 toggle 进行中、被并发 confirmed 写
+  //   （目前仅 disableDead 写 is_active）改过"的行 id。该行 toggle 失败时不回滚、也不被（可能 stale 的）
+  //   re-fetch 覆盖，确保更新的 confirmed 写不被 toggle 的失败对账反悔。
+  const externallyModifiedRef = useRef<Set<string>>(new Set())
+
   // R3 stale-write 防御：异步完成时校验 videoId 仍是当前
   const videoIdRef = useRef(videoId)
   useEffect(() => { videoIdRef.current = videoId }, [videoId])
@@ -160,41 +169,56 @@ export function useSourceLinesController(
 
   useEffect(() => { reload() }, [reload])
 
-  // ── toggle（R2 乐观更新 + 失败一律 server 真相重 fetch 对账）───────────────
-  const toggleEpisode = useCallback(async (episodeId: string, nextActive: boolean) => {
-    const target = linesRef.current.find((l) => l.id === episodeId)
-    const prevActive = target?.is_active
-    setTogglingIds((s) => new Set(s).add(episodeId))
-    setLines((prev) => prev.map((l) => l.id === episodeId ? { ...l, is_active: nextActive } : l))
+  // toggle 失败后「外科式」对账目标行（Codex stop-time review / 第 3 轮）：
+  //   - 只对账目标行，绝不触碰其他行（整组 setLines(fresh) 会用 re-fetch 发起时的快照覆盖期间落地的更新写）
+  //   - 本行若被并发 confirmed 写（disableDead）改过 → 完全不动（让 confirmed 写赢，不回滚/不被 stale fresh 覆盖）
+  //   - re-fetch 成功 → 仅应用目标行 server 真相；re-fetch 亦失败（断网）→ 退化为最小本地回退（仅当仍是本次乐观值）
+  const reconcileTargetAfterToggleFailure = useCallback(async (
+    episodeId: string, nextActive: boolean, prevActive: boolean | undefined,
+  ) => {
+    if (externallyModifiedRef.current.has(episodeId)) return
     try {
-      const res = await toggleSource(videoId, episodeId, nextActive, target?.updated_at)
-      setLines((prev) => prev.map((l) =>
-        l.id === episodeId ? { ...l, is_active: res.is_active, updated_at: res.updated_at } : l,
-      ))
-      emit({ action: 'toggle', status: 'success' })
-    } catch (e: unknown) {
-      // Codex stop-time review FIX：失败（含 race 与非 race）一律以 server 真相重 fetch 整组对账。
-      //   任何本地回滚（整组快照 / 单行还原 prevActive）都可能覆盖期间并发操作对**同一行**
-      //   （如 disableDead 改同行 is_active）或**其他行**的 server-confirmed 更新 → 偏离 server 真相。
-      //   唯一安全口径是 server 真相；仅当重 fetch 亦失败（如断网）才退化为最小本地回退：
-      //   仅当目标行仍持有本次乐观值时才还原（绝不动已被并发改成别的值的行）。
-      try {
-        const fresh = await fetchVideoSources(videoId)
-        if (videoIdRef.current === videoId) setLines(fresh)
-      } catch {
+      const fresh = await fetchVideoSources(videoId)
+      const freshTarget = fresh.find((l) => l.id === episodeId)
+      const safe = videoIdRef.current === videoId && !externallyModifiedRef.current.has(episodeId)
+      if (safe && freshTarget) {
+        setLines((prev) => prev.map((l) => l.id === episodeId ? freshTarget : l))
+      }
+    } catch {
+      if (!externallyModifiedRef.current.has(episodeId)) {
         setLines((prev) => prev.map((l) =>
           (l.id === episodeId && l.is_active === nextActive)
             ? { ...l, is_active: prevActive ?? l.is_active }
             : l,
         ))
       }
+    }
+  }, [videoId])
+
+  // ── toggle（R2 乐观更新 + 失败「外科式」对账目标行）───────────────
+  const toggleEpisode = useCallback(async (episodeId: string, nextActive: boolean) => {
+    const target = linesRef.current.find((l) => l.id === episodeId)
+    const prevActive = target?.is_active
+    externallyModifiedRef.current.delete(episodeId)  // 本次 toggle 重新开始追踪并发改写
+    setTogglingIds((s) => new Set(s).add(episodeId))
+    setLines((prev) => prev.map((l) => l.id === episodeId ? { ...l, is_active: nextActive } : l))
+    try {
+      const res = await toggleSource(videoId, episodeId, nextActive, target?.updated_at)
+      // 成功 = server 接受本次写（乐观锁 updated_at 匹配，期间无 server 端并发改本行）→ 应用 res 真相
+      setLines((prev) => prev.map((l) =>
+        l.id === episodeId ? { ...l, is_active: res.is_active, updated_at: res.updated_at } : l,
+      ))
+      emit({ action: 'toggle', status: 'success' })
+    } catch (e: unknown) {
+      await reconcileTargetAfterToggleFailure(episodeId, nextActive, prevActive)
       emit(isRaceError(e)
         ? { action: 'toggle', status: 'race' }
         : { action: 'toggle', status: 'failed', code: getErrorCode(e) })
     } finally {
+      externallyModifiedRef.current.delete(episodeId)
       setTogglingIds((s) => { const next = new Set(s); next.delete(episodeId); return next })
     }
-  }, [videoId, emit])
+  }, [videoId, emit, reconcileTargetAfterToggleFailure])
 
   // ── disableDead（dead 行本地置 inactive）─────────────────────────────
   const disableDead = useCallback(async () => {
@@ -202,9 +226,16 @@ export function useSourceLinesController(
     try {
       const res = await disableDeadSources(videoId)
       if (res.disabled > 0) {
-        setLines((prev) => prev.map((l) =>
-          (l.probe_status === 'dead' && l.render_status === 'dead') ? { ...l, is_active: false } : l,
-        ))
+        setLines((prev) => prev.map((l) => {
+          // disableDead 服务端禁用所有 dead/dead 行 → 该行 is_active 现归 disableDead 的 confirmed 写所有。
+          // 并发保护：若该行正在 toggle，则标记 externallyModified（无论本地乐观值是否已为 false）
+          //   → 该 toggle 失败时不得回滚/覆盖此 confirmed 值（Codex stop-time review FIX）。
+          if (l.probe_status === 'dead' && l.render_status === 'dead') {
+            if (togglingIdsRef.current.has(l.id)) externallyModifiedRef.current.add(l.id)
+            return l.is_active ? { ...l, is_active: false } : l
+          }
+          return l
+        }))
       }
       emit({ action: 'disableDead', status: 'success' })
     } catch {
