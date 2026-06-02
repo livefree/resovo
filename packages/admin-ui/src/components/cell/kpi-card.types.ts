@@ -231,6 +231,27 @@ export interface KpiCardProps {
   readonly onClick?: () => void
 
   /**
+   * 选中态（可选 / CHG-VSR-PRE-3）—— KpiCard 作为"可点击筛选"的 toggle 视觉（B 方案快捷筛选）。
+   *
+   * 维度独立：pressed 与 variant 正交。pressed 叠加 accent 选中环（inset ring）+ soft 背景，
+   * **不替换** variant 的警示 border（is-danger/is-warn 红/黄框在选中时仍可见 / arch-reviewer R3）。
+   *
+   * 渲染契约：
+   * - 提供 onClick（button 路径）+ pressed!==undefined → 渲染 `aria-pressed={pressed}`
+   *   （pressed=false 时显式 `aria-pressed="false"`，让屏幕阅读器播报"未选中"）。
+   * - onClick + pressed===true → 根节点渲染 `data-active="true"`（**存在性钩子**，与 admin-ui
+   *   既有 data-active 约定一致：`'true' | 不渲染`，无 `'false'` 字面值；仅作 e2e / visual-diff
+   *   断言钩子，非样式钩子 / arch-reviewer R2+Y4）。
+   * - 无 onClick（div 路径）传 pressed → **忽略 pressed 的全部效果**（不渲染 aria-pressed /
+   *   data-active / 选中视觉），dev 环境 `console.warn` 提示（arch-reviewer Y3）。
+   * - 省略 / undefined / false → 行为与现状完全一致。
+   *
+   * 注：`aria-pressed`（需 false 字面值播报）与 `data-active`（仅存在性）取值策略**不对称**是有意
+   * 设计——前者服务 a11y 播报，后者服务 CSS/CI 钩子（arch-reviewer Y2）。
+   */
+  readonly pressed?: boolean
+
+  /**
    * 数据来源标记（'mock' | 'live' | 不传）
    *
    * 三种状态的 DOM attribute 行为（实装可证一致；7B 单测覆盖）：

@@ -532,3 +532,57 @@ describe('KpiCard — SHARED-01 评审黄线修订', () => {
     expect(card?.getAttribute('aria-label')).toBe('本批视频量 649 条 (81.1%)')
   })
 })
+
+describe('KpiCard — CHG-VSR-PRE-3 pressed 选中态（arch-reviewer 评审落地）', () => {
+  it('button + pressed=true → aria-pressed/data-active + accent 选中视觉（token）', () => {
+    const { container } = render(
+      <KpiCard label="含异常源" value="12" onClick={() => {}} pressed />,
+    )
+    const card = container.querySelector('[data-kpi-card]')
+    expect(card?.tagName).toBe('BUTTON')
+    expect(card?.getAttribute('aria-pressed')).toBe('true')
+    expect(card?.getAttribute('data-active')).toBe('true') // R2 存在性
+    const style = (card as HTMLElement).style
+    expect(style.background).toContain('--admin-accent-soft')   // R1 token 层
+    expect(style.boxShadow).toContain('--admin-accent-border')  // R3 inset ring
+  })
+
+  it('button + pressed=false → aria-pressed="false" + 无 data-active + 无选中视觉', () => {
+    const { container } = render(
+      <KpiCard label="含异常源" value="12" onClick={() => {}} pressed={false} />,
+    )
+    const card = container.querySelector('[data-kpi-card]') as HTMLElement
+    expect(card.getAttribute('aria-pressed')).toBe('false') // Y2 a11y 播报未选中
+    expect(card.getAttribute('data-active')).toBeNull()     // R2 false → 不渲染
+    expect(card.style.boxShadow).toBe('')
+  })
+
+  it('R3：is-danger + pressed=true → variant 警示 border 与选中态正交共存', () => {
+    const { container } = render(
+      <KpiCard label="失效源" value="1939" variant="is-danger" onClick={() => {}} pressed />,
+    )
+    const card = container.querySelector('[data-kpi-card]') as HTMLElement
+    expect(card.style.border).toContain('--state-error-border') // 警示 border 未被吞
+    expect(card.style.boxShadow).toContain('--admin-accent-border') // 选中 ring 叠加
+  })
+
+  it('Y3：无 onClick 传 pressed → 忽略全部效果 + dev warn', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const { container } = render(<KpiCard label="纯展示" value="5" pressed />)
+    const card = container.querySelector('[data-kpi-card]') as HTMLElement
+    expect(card.tagName).toBe('DIV')
+    expect(card.getAttribute('aria-pressed')).toBeNull()
+    expect(card.getAttribute('data-active')).toBeNull()
+    expect(card.style.boxShadow).toBe('')
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("'pressed' is ignored without 'onClick'"))
+    warn.mockRestore()
+  })
+
+  it('向后兼容：button 不传 pressed → 无 aria-pressed / data-active（既有消费方零破坏）', () => {
+    const { container } = render(<KpiCard label="总播放源" value="695" onClick={() => {}} />)
+    const card = container.querySelector('[data-kpi-card]') as HTMLElement
+    expect(card.getAttribute('aria-pressed')).toBeNull()
+    expect(card.getAttribute('data-active')).toBeNull()
+    expect(card.style.boxShadow).toBe('')
+  })
+})

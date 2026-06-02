@@ -208,10 +208,16 @@ export function KpiCard({
   progress,
   icon,
   onClick,
+  pressed,
   dataSource,
   ariaLabel,
   testId,
 }: KpiCardProps): React.ReactElement {
+  // CHG-VSR-PRE-3（arch-reviewer Y3）：pressed 仅在提供 onClick 时有意义；无 onClick 传 pressed → 忽略 + dev warn
+  if (process.env.NODE_ENV !== 'production' && !onClick && pressed !== undefined) {
+    // eslint-disable-next-line no-console
+    console.warn(`[KpiCard] 'pressed' is ignored without 'onClick' (label="${label}").`)
+  }
   // 7B SHOULD（kpi-card.types.ts P1-3）：value 是非 string ReactNode 且未传 ariaLabel 时 dev warn
   if (
     process.env.NODE_ENV !== 'production' &&
@@ -264,10 +270,19 @@ export function KpiCard({
     )
   }
 
+  // CHG-VSR-PRE-3（arch-reviewer R3）：pressed 仅 button 路径生效；inset ring + soft 背景**叠加**，
+  // 不替换 variant border（is-danger/is-warn 警示色与选中态正交共存）。颜色走 admin-layout token（R1）。
+  const isPressed = onClick != null && pressed === true
   const containerStyle = useMemo<React.CSSProperties>(() => {
     const base = onClick ? CONTAINER_BUTTON_STYLE : CONTAINER_BASE_STYLE
-    return { ...base, border: variantBorderStyle(variant) }
-  }, [onClick, variant])
+    const pressedStyle: React.CSSProperties = isPressed
+      ? {
+          background: 'var(--admin-accent-soft)',
+          boxShadow: 'inset 0 0 0 1px var(--admin-accent-border)',
+        }
+      : {}
+    return { ...base, border: variantBorderStyle(variant), ...pressedStyle }
+  }, [onClick, variant, isPressed])
 
   const valueStyle = useMemo<React.CSSProperties>(
     () => ({ ...VALUE_BASE_STYLE, color: variantValueColor(variant) }),
@@ -360,6 +375,8 @@ export function KpiCard({
         data-variant={variant}
         data-testid={testId}
         aria-label={derivedAriaLabel}
+        aria-pressed={pressed}
+        data-active={isPressed ? 'true' : undefined}
         onClick={onClick}
         style={containerStyle}
         {...dataSourceAttr}

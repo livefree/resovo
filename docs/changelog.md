@@ -13323,3 +13323,22 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **file-size-budget**：本卡**改善** debt（HEAD 22 违规 → 20；VideoListClient 788/SourcesClient 623 两违规移除）；剩 20 违规均为既有、在本卡文件范围外（禁改），含 `sources-matrix.ts` 759L（CHG-VSR-3 将改它 → 届时须拆分）。该守卫非 CLAUDE.md 必跑命令。
 - **e2e**：跳过——纯零行为变化抽分，非 player/auth/search/前端行为变更；deferred 到真正改交互的 UI 卡 CHG-VSR-4/5/6。
 - **[AI-CHECK]**：六问全过（无回归 / 关键路径逐行等价 / 列定义页面专属无沉淀 / 未新增颜色 / UI 层内抽分无越层 / 无需沉淀）。偏离：file-size-budget 既有 20 违规不修（范围外）。
+
+---
+
+## CHG-VSR-PRE-3 — KpiCard 扩 `pressed` 选中态（B 方案快捷筛选前置）✅ 2026-06-01
+
+- **执行模型**：claude-opus-4-8（主循环）/ **子代理：arch-reviewer (claude-opus-4-8)**（Props 契约评审）
+- **目标**：B 方案快捷筛选以 KpiCard 作可点击 toggle 筛选 → 共享组件加选中态。
+- **改动**：
+  - `kpi-card.types.ts`：新增 `readonly pressed?: boolean`（含完整渲染契约 JSDoc）。
+  - `kpi-card.tsx`：button 路径渲染 `aria-pressed={pressed}` + `data-active={isPressed?'true':undefined}`；pressed 视觉 = `boxShadow: inset 0 0 0 1px var(--admin-accent-border)` + `background: var(--admin-accent-soft)` **叠加**（不替换 variant border）；无 onClick 传 pressed → 忽略 + dev warn。
+  - 单测 +5（button pressed true/false / is-danger×pressed 共存 / div 忽略+warn / 向后兼容）。
+- **arch-reviewer 评审**：CONDITIONAL PASS → **3 红线全采纳**：
+  - **R1**：项目无 `--accent-soft` token；改用 admin-layout `--admin-accent-soft` / `--admin-accent-border`（避免 fallback 内联 color-mix 硬编码颜色，遵守零硬编码）。
+  - **R2**：`data-active` 用存在性 `'true' | undefined`（与 admin-ui 既有 data-active 约定一致），非 `'true'/'false'`。
+  - **R3**：pressed 用 inset ring + soft bg 叠加，**不替换 variant border**——is-danger/is-warn 警示色与选中态正交共存（避免吞掉危险态）。
+  - 另采纳 Y2（aria-pressed boolean，false 显式播报）/ Y3（无 onClick 忽略 pressed 全部效果 + warn）/ Y4（data-active 为断言钩子非样式钩子）。
+- **新增依赖/schema/路由/Props 契约变更**：`@resovo/admin-ui` KpiCardProps 新增可选 `pressed`（向后兼容，11 处既有消费方零改动）。
+- **质量门禁**：typecheck EXIT=0 / lint EXIT=0 / **全量 448 文件 5907 passed 0 failed 零回归**（kpi-card 54→59）。
+- **[AI-CHECK]**：六问全过（向后兼容已测 / 颜色全走 admin-layout token / admin-ui 组件内无越层 / 本身即共享层扩展）。无偏离。
