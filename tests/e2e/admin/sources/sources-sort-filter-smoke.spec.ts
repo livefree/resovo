@@ -146,10 +146,11 @@ test.describe('CHG-SN-9-DT-AUTOFILTER-EP-4-SOURCES-E2E-SMOKE / ADR-150 阶段 5 
     await expect(page.getByText('黑客帝国')).toBeVisible({ timeout: 10000 })
     await expect(page.getByText('盗梦空间')).toBeVisible()
 
-    // 第一次 fetch 应不带 sort/filter 参数（默认状态）
+    // CHG-VSR-5-A §3.4：第一次 fetch 携带默认排序 sortField=lastChecked desc（取代旧"无 sort"默认 / 运维视角关注最近检测）；无 filter 参数
     expect(captured.videoGroups.length).toBeGreaterThanOrEqual(1)
     const firstUrl = captured.videoGroups[0]!
-    expect(firstUrl.searchParams.get('sortField')).toBeNull()
+    expect(firstUrl.searchParams.get('sortField')).toBe('lastChecked')
+    expect(firstUrl.searchParams.get('sortDir')).toBe('desc')
     expect(firstUrl.searchParams.get('probeStatus')).toBeNull()
   })
 
