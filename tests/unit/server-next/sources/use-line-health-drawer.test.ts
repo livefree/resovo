@@ -176,21 +176,23 @@ describe('useLineHealthDrawer — 分页 total>limit（limit 取响应真值）'
 // ── error 态（注入 vs 省略 loadFailedText）──────────────────────────────
 
 describe('useLineHealthDrawer — error 态', () => {
-  it('U-6 loadFailedText 提供 → reject 显 error；retry 重取当前页 → 清 error', async () => {
+  it('U-6 loadFailedText 提供 → reject 显 error；retry 重取「失败的尝试页」(2 非 1) → 清 error', async () => {
     const { fn, calls } = makeFetch()
     const { result } = renderHook(() => useLineHealthDrawer({ fetchHealth: fn, loadFailedText: '加载失败' }))
     act(() => { result.current[1].open('src-A') })
     await act(async () => { calls[0].resolve(page({ events: 1, total: 100, pageNum: 1 })) })
     act(() => { result.current[1].changePage(2) })
-    await act(async () => { calls[1].reject(new Error('boom')) })
+    await act(async () => { calls[1].reject(new Error('boom')) }) // 翻第 2 页失败
     expect(result.current[0].error).toBe('加载失败')
     expect(result.current[0].loading).toBe(false)
+    expect(result.current[0].page).toBe(2) // 失败页仍记为 2（立即设页 / Codex review 修复）
 
     act(() => { result.current[1].retry() })
-    // retry 重取「当前页」= 2（changePage 设了 page=2 前需 resolve；此处 retry 取 state.page）
-    expect(fn).toHaveBeenLastCalledWith('src-A', expect.any(Number))
-    await act(async () => { calls[2].resolve(page({ events: 2, total: 100, pageNum: 1 })) })
+    // 回归守卫：retry 重取「用户尝试的失败页」= 2，非「上次成功页」1（旧实现 .then 才设 page 的 bug）
+    expect(fn).toHaveBeenLastCalledWith('src-A', 2)
+    await act(async () => { calls[2].resolve(page({ events: 2, total: 100, pageNum: 2 })) })
     expect(result.current[0].error).toBeNull()
+    expect(result.current[0].events).toHaveLength(2)
   })
 
   it('U-7 loadFailedText 省略（TabLines 现状）→ reject 时 error 恒 null + 清空 events', async () => {

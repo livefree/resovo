@@ -115,6 +115,9 @@ export function useLineHealthDrawer(
   // R-1 竞态令牌：每次 load 自增；响应回写前比对 tokenRef.current === token，stale 丢弃。
   const tokenRef = useRef(0)
 
+  // 注意：page 由 open(=1)/changePage(=nextPage) **立即**设（拉取前），不在此 .then 设。
+  // 否则失败页 retry 会重取「上次成功页」而非「用户尝试的页」（Codex stop-time review 修复 /
+  // 对齐 SourceLinesExpand 立即设页范式）。stale 并发保护仍由 token 守卫 events/total/limit 回写。
   const load = useCallback((targetSourceId: string, targetPage: number) => {
     const token = ++tokenRef.current
     setLoading(true)
@@ -125,7 +128,6 @@ export function useLineHealthDrawer(
         setEvents(res.data)
         setTotal(res.pagination.total)
         setLimit(res.pagination.limit)
-        setPage(targetPage)
         setLoading(false)
       })
       .catch(() => {
@@ -163,12 +165,13 @@ export function useLineHealthDrawer(
 
   const changePage = useCallback((nextPage: number) => {
     if (!sourceId) return
+    setPage(nextPage) // 立即设页（拉取前）→ 失败时 retry 重取「尝试页」而非「上次成功页」
     load(sourceId, nextPage)
   }, [sourceId, load])
 
   const retry = useCallback(() => {
     if (!sourceId) return
-    load(sourceId, page)
+    load(sourceId, page) // page = 当前尝试页（open=1 / changePage=nextPage 已立即设）
   }, [sourceId, page, load])
 
   const pagination: HealthDrawerPagination | undefined =
