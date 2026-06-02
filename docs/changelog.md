@@ -13305,3 +13305,21 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
   - 复核确认其余表均为「0 或 1 个无 width 列且 minWidth≥200」→ 与已验收 VideoListClient 范式一致（主列固定 + 末尾 `minmax(0,1fr)` 占位轨），无回归。
   - 完整性（**计数订正**：先前误记「14 操作」系把 ImageHealthClient 1 文件按 1 表计 / 实为 2 表）：server-next **全部** `<DataTable>` 渲染点 = **操作型 15 个（14 client 文件，ImageHealthClient domains+missing 2 表）+ dev/components demo 2 个 = 17 个**，均已启用 `enableColumnResizing`；`<table>` 原生 HTML 子表（merge/audit/expand/role-matrix 等）非 DataTable、无此能力，不在范围。`grep -rho enableColumnResizing apps/server-next/src` 实测 17 处可复核。
   - FIX 门禁：typecheck EXIT=0 / lint 5/5 / **全量 448 文件 5902 passed 0 failed**（VideoImageSection flaky 本次未复现）。
+
+---
+
+## CHG-VSR-PRE-1 — 视频库/播放线路两 client 超限文件拆分（SEQ-20260601-01 前置）✅ 2026-06-01
+
+- **执行模型**：claude-opus-4-8（主循环）/ 子代理：无
+- **目标**：解 500 行硬限——后续 CHG-VSR-* 卡须在两 client 上叠加逻辑，先抽分列定义/批量操作，**零行为变化**。
+- **改动**：
+  - 新 `apps/server-next/src/app/admin/videos/_client/VideoColumns.tsx`（268L）：`buildVideoColumns` + 列 helper（TYPE_LABELS / 样式常量 / sourcesDotColor / sourcesLabel / imageHealthVariant / reviewPill*）逐行抽出。
+  - 新 `apps/server-next/src/app/admin/videos/_client/VideoBatchActions.tsx`（143L）：`buildBatchActions` + `BatchActionsRow` + `BatchAction` 类型 + 样式常量抽出。
+  - 新 `apps/server-next/src/app/admin/sources/_client/SourceColumns.tsx`（260L）：`buildColumns` + PROBE/RENDER_STATUS_OPTIONS 抽出。
+  - 改 `VideoListClient.tsx` **788→400L**：删抽出块 + import 收敛（删 Pill/VisChip/Thumb/DualSignal/EnrichmentBadgeCluster/TableColumn/VideoType/VideoRowActions + batch* api，加 buildVideoColumns/BatchActionsRow/buildBatchActions）。
+  - 改 `SourcesClient.tsx` **623→376L**：删抽出块 + import 收敛（删 Image/SignalPill/TableColumn/DistinctOption，加 buildColumns）。
+- **新增依赖/schema/路由/Props 契约变更**：无（同应用内文件抽分，无跨包契约）。
+- **质量门禁**：typecheck EXIT=0（8 workspace）/ lint EXIT=0（5/5；SourcesClient:174 等 react-hooks/exhaustive-deps 均 pre-existing）/ **全量 448 文件 5902 passed 0 failed 零回归**。
+- **file-size-budget**：本卡**改善** debt（HEAD 22 违规 → 20；VideoListClient 788/SourcesClient 623 两违规移除）；剩 20 违规均为既有、在本卡文件范围外（禁改），含 `sources-matrix.ts` 759L（CHG-VSR-3 将改它 → 届时须拆分）。该守卫非 CLAUDE.md 必跑命令。
+- **e2e**：跳过——纯零行为变化抽分，非 player/auth/search/前端行为变更；deferred 到真正改交互的 UI 卡 CHG-VSR-4/5/6。
+- **[AI-CHECK]**：六问全过（无回归 / 关键路径逐行等价 / 列定义页面专属无沉淀 / 未新增颜色 / UI 层内抽分无越层 / 无需沉淀）。偏离：file-size-budget 既有 20 违规不修（范围外）。

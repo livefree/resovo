@@ -2511,9 +2511,9 @@ CODENAME-MATRIX-E2E (依赖 Wave 3 验收期补丁 CODENAME-MATRIX ✅)
 
 ## [SEQ-20260601-01] 视频库 / 播放线路 职责重定义与表格重设计
 
-- **状态**：🟡 规划中
+- **状态**：🔄 执行中
 - **创建时间**：2026-06-01 19:15
-- **最后更新时间**：2026-06-01 19:15
+- **最后更新时间**：2026-06-01 19:40（PRE-1 ✅）
 - **目标**：落地《视频库/播放线路职责重定义》设计方案——视频库=作品维度、播放线路=资源运维维度、别名独立页；表格头部极简(搜索+列设置) + 三层过滤 + B 方案快捷筛选；术语裁决（失效=探测②含连接/试播/异常、禁用=is_active①、待补源=无可播源含已上架）；用户投稿/失效举报整体下线。
 - **范围**：`apps/server-next`（/admin/videos + /admin/sources 两 client + 子组件）+ `apps/api`（videos/sources 聚合 + 过滤排序 + distinct 白名单 + submit 端点 410）+ `packages/admin-ui`（KpiCard pressed）+ `packages/types`（双表 DTO/术语）+ `apps/web-next`（移除投稿入口）。
 - **依赖**：设计方案 ✅（`docs/designs/videos-sources-responsibility-redesign_20260601.md` / commit e1950050）。ADR：ADR-117 amendment（sources 聚合）+ ADR-150 amendment（distinct 白名单 + country 逻辑表）；ADR-124 不触碰。
@@ -2523,13 +2523,12 @@ CODENAME-MATRIX-E2E (依赖 Wave 3 验收期补丁 CODENAME-MATRIX ✅)
 
 ### 任务列表（按执行顺序）
 
-1. **CHG-VSR-PRE-1** — 前置：两 client 超限文件拆分（解 500 行硬限）（状态：⬜ 未开始）
+1. **CHG-VSR-PRE-1** — 前置：两 client 超限文件拆分（解 500 行硬限）（状态：✅ 已完成 2026-06-01 / claude-opus-4-8 / 子代理 无）
    - 创建时间：2026-06-01 19:15
+   - 完成时间：2026-06-01 19:40
    - 建议模型：sonnet（纯重构，零行为变化）
-   - 文件范围：`VideoListClient.tsx`(789L) 抽 `buildVideoColumns` / `BatchActionsRow` 到独立文件；`SourcesClient.tsx`(623L) 抽 `buildColumns` 到独立文件。
-   - 门禁：`verify:file-size-budget` 必过；快照/单测不变。
-   - 验收要点：两 client < 500 行；typecheck/lint/test 零回归。
-   - 依赖：无（最先做）。
+   - 文件范围：`VideoListClient.tsx`(788→400L) 抽 `buildVideoColumns`→VideoColumns.tsx + `BatchActionsRow`→VideoBatchActions.tsx；`SourcesClient.tsx`(623→376L) 抽 `buildColumns`→SourceColumns.tsx。
+   - 完成备注：3 新文件（VideoColumns 268 / VideoBatchActions 143 / SourceColumns 260）+ 2 改文件 import 收敛。**typecheck/lint EXIT=0 + 全量 5902 passed 零回归**。file-size-budget 本卡改善（22→20 违规，两目标文件移除）；剩 20 为既有 debt（范围外不修），`sources-matrix.ts` 759L 留 CHG-VSR-3 拆。e2e 跳过（纯抽分零行为变化）。详见 changelog CHG-VSR-PRE-1。
 
 2. **CHG-VSR-PRE-2** — 前置：抽中性 `useSourceLinesController(videoId)`（§5.5）（状态：⬜ 未开始）
    - 创建时间：2026-06-01 19:15
