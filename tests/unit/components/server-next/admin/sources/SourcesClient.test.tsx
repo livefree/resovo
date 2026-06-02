@@ -85,6 +85,18 @@ const VIDEO_GROUP_ROW = {
   updatedAt: '2026-01-01T00:00:00Z',
   // HOTFIX-PATCH-2B-FIX1（2026-05-25）：cell 显示该行跨的站点列表
   siteKeys: ['bilibili', 'youku'],
+  // CHG-VSR-5-A：CHG-VSR-3 派生列（覆盖/质量/问题/最近检测）
+  activeSourceCount: 5,
+  disabledCount: 0,
+  connectFailCount: 1,
+  renderFailCount: 0,
+  pendingProbeCount: 0,
+  qualityHighest: '1080P' as const,
+  qualityCoverage: 0.8,
+  latencyMedianMs: 120,
+  needsSource: false,
+  isPublished: true,
+  lastCheckedAt: '2026-01-02T00:00:00Z',
 }
 const ONE_GROUP_LIST = { data: [VIDEO_GROUP_ROW], total: 1, page: 1, limit: 20 }
 
@@ -100,13 +112,19 @@ beforeEach(() => {
 // ── 测试 ──────────────────────────────────────────────────────────
 
 describe('SourcesClient', () => {
-  it('渲染基础：PageHeader + 2 主体 tab（线路矩阵 + 全局别名表）', async () => {
+  it('渲染基础：PageHeader + 线路别名管理跳转；四 Tab / 别名 Tab 已移除（CHG-VSR-5-A §3.1）', async () => {
     getVideoGroupStatsMock.mockResolvedValueOnce(STATS)
     listVideoGroupsMock.mockResolvedValueOnce(EMPTY_LIST)
     render(<SourcesClient />)
     expect(screen.getByText('播放线路')).not.toBeNull()
-    expect(screen.getByRole('button', { name: '线路矩阵' })).not.toBeNull()
-    expect(screen.getByRole('button', { name: '全局别名表' })).not.toBeNull()
+    expect(screen.getByRole('button', { name: '线路别名管理' })).not.toBeNull()
+    // 结构移除：主体 Tab（线路矩阵/全局别名表）+ segment 四 Tab
+    expect(screen.queryByRole('button', { name: '线路矩阵' })).toBeNull()
+    expect(screen.queryByRole('button', { name: '全局别名表' })).toBeNull()
+    expect(screen.queryByRole('button', { name: '按视频分组' })).toBeNull()
+    expect(screen.queryByRole('button', { name: '仅失效' })).toBeNull()
+    expect(screen.queryByRole('button', { name: '用户纠错' })).toBeNull()
+    expect(screen.queryByRole('button', { name: '孤岛源' })).toBeNull()
   })
 
   it('KPI 4 卡渲染：总播放源 / 有效 / 失效 / 孤岛', async () => {
@@ -121,27 +139,13 @@ describe('SourcesClient', () => {
     })
   })
 
-  it('Segment 4 tabs 渲染：按视频分组 / 仅失效 / 用户纠错 / 孤岛源', async () => {
+  it('listVideoGroups 请求不再携带 segment（四 Tab 移除后默认 grouped 由后端兜底）', async () => {
     getVideoGroupStatsMock.mockResolvedValueOnce(STATS)
     listVideoGroupsMock.mockResolvedValueOnce(EMPTY_LIST)
     render(<SourcesClient />)
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: '按视频分组' })).not.toBeNull()
-      expect(screen.getByRole('button', { name: '仅失效' })).not.toBeNull()
-      expect(screen.getByRole('button', { name: '用户纠错' })).not.toBeNull()
-      expect(screen.getByRole('button', { name: '孤岛源' })).not.toBeNull()
-    })
-  })
-
-  it('segment 切换：点击"仅失效" → 触发 listVideoGroups 二次请求带 segment=dead', async () => {
-    getVideoGroupStatsMock.mockResolvedValueOnce(STATS)
-    listVideoGroupsMock.mockResolvedValue(EMPTY_LIST)
-    render(<SourcesClient />)
     await waitFor(() => expect(listVideoGroupsMock).toHaveBeenCalledTimes(1))
-    fireEvent.click(screen.getByRole('button', { name: '仅失效' }))
-    await waitFor(() => {
-      expect(listVideoGroupsMock).toHaveBeenCalledWith(expect.objectContaining({ segment: 'dead' }))
-    })
+    const params = listVideoGroupsMock.mock.calls[0][0]
+    expect(params).not.toHaveProperty('segment')
   })
 
   it('Empty state：listVideoGroups 返回空 data', async () => {
@@ -164,26 +168,17 @@ describe('SourcesClient', () => {
     })
   })
 
-  it('视频分组列表渲染：lineCount / sourceCount', async () => {
+  it('行渲染：视频标题 + 覆盖（可用数）+ 质量 + 问题 badge（CHG-VSR-5-A §3.2 列）', async () => {
     getVideoGroupStatsMock.mockResolvedValueOnce(STATS)
     listVideoGroupsMock.mockResolvedValueOnce(ONE_GROUP_LIST)
     render(<SourcesClient />)
     await waitFor(() => {
       expect(screen.getByText('测试视频')).not.toBeNull()
     })
-  })
-
-  it('切换到"全局别名表" tab → 渲染 SourceLineAliasPanel', async () => {
-    getVideoGroupStatsMock.mockResolvedValueOnce(STATS)
-    listVideoGroupsMock.mockResolvedValueOnce(EMPTY_LIST)
-    listLineAliasesMock.mockResolvedValueOnce([])
-    render(<SourcesClient />)
-    await waitFor(() => screen.getByRole('button', { name: '全局别名表' }))
-    fireEvent.click(screen.getByRole('button', { name: '全局别名表' }))
-    await waitFor(() => {
-      // SourceLineAliasPanel 调用 listLineAliases
-      expect(listLineAliasesMock).toHaveBeenCalled()
-    })
+    // 覆盖列「可用」+ 质量列 1080P + 问题列「连接失败 1」(connectFailCount=1)
+    expect(screen.getByText('可用')).not.toBeNull()
+    expect(screen.getByText('1080P')).not.toBeNull()
+    expect(screen.getByText(/连接失败/)).not.toBeNull()
   })
 
   it('搜索：输入关键词 + 回车 → 触发 listVideoGroups 带 keyword', async () => {

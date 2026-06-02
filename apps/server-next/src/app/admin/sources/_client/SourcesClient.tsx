@@ -1,16 +1,16 @@
 'use client'
 
 /**
- * SourcesClient.tsx — `/admin/sources` 播放线路管理主组件（CHG-SN-5-11-PATCH）
+ * SourcesClient.tsx — `/admin/sources` 播放线路管理主组件
  *
- * 范围：KPI 4 卡 + Segment 4 tabs + DataTable 一体化（toolbar.search + bulkActions +
- *       pagination + row 展开 slot）+ 全局别名面板
+ * CHG-VSR-5-A（2026-06-02 / 设计 §3.1/§3.2）：结构重构——
+ *   - 删四 Tab（segment：按分组/仅失效/用户纠错/孤岛源）+ 主体「线路矩阵 / 全局别名表」Tab + 内嵌别名面板。
+ *   - 列重构为 §3.2 集合（覆盖/探测/试播/质量/问题/站点/最近检测，见 SourceColumns）。
+ *   - 刷新改自动 refetch（删手动刷新按钮，保留 retryKey 供 ErrorState）。
+ *   - 保留 KPI 4 卡（display only，5-B 重建为 5 张可点击快捷筛选）+ PageHeader「线路别名管理 →」跳转。
  * 端点：apps/api/src/routes/admin/sources-matrix.ts（ADR-117）
  *
- * 原语消费：PageHeader / AdminButton / AdminInput / AdminCard / KpiCard /
- *           LoadingState / ErrorState / DataTable + useToast
- *
- * CHG-VSR-PRE-1（2026-06-01）：列定义抽到 ./SourceColumns（解 500 行硬限），零行为变化。
+ * CHG-VSR-PRE-1：列定义抽到 ./SourceColumns。
  */
 
 import { useState, useEffect, useCallback, useMemo, type CSSProperties } from 'react'
@@ -23,32 +23,30 @@ import {
   ErrorState,
   DataTable,
   DataTableSearchInput,
-  useToast,
   type TableSortState,
   type FilterValue,
 } from '@resovo/admin-ui'
-import type { VideoGroupRow, VideoGroupStats, SourceSegment } from '@/lib/sources/types'
+import type { VideoGroupRow, VideoGroupStats, VideoGroupListParams } from '@/lib/sources/types'
 import { listVideoGroups, getVideoGroupStats, fetchDistinct } from '@/lib/sources/api'
 import { MatrixExpand } from './SourceMatrixRow'
-import { SourceLineAliasPanel } from './SourceLineAliasPanel'
 import { buildColumns } from './SourceColumns'
 
 // ── 常量 ─────────────────────────────────────────────────────────
 
-const SEGMENTS: readonly { key: SourceSegment; label: string }[] = [
-  { key: 'grouped',    label: '按视频分组' },
-  { key: 'dead',       label: '仅失效' },
-  { key: 'correction', label: '用户纠错' },
-  { key: 'orphan',     label: '孤岛源' },
-]
-
 const DEFAULT_PAGE_SIZE = 20
+
+// §3.4：列 id → API sortField 白名单（video / coverage→activeSources / quality / last_checked→lastChecked）
+const SORT_FIELD_BY_COLUMN: Record<string, NonNullable<VideoGroupListParams['sortField']>> = {
+  video: 'video',
+  coverage: 'activeSources',
+  quality: 'quality',
+  lastChecked: 'lastChecked',
+}
 
 // ── 样式 ─────────────────────────────────────────────────────────
 
 const PAGE_STYLE: CSSProperties = {
   // CHG-SN-5-13-PATCH-2：删 height:100% / minHeight:0；让 AdminShell main `overflow: auto` 整页滚动
-  // 底部 padding-y 撑出 pagination footer 可达
   display: 'flex',
   flexDirection: 'column',
   gap: 'var(--section-gap)',
@@ -61,38 +59,10 @@ const KPI_GRID_STYLE: CSSProperties = {
   gap: '12px',
 }
 
-const TAB_BAR_STYLE: CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: '4px',
-  borderBottom: '1px solid var(--border-subtle)',
-}
-
-function tabStyle(active: boolean): CSSProperties {
-  // CHG-SN-5-13-PATCH-2：删 `font: 'inherit'` shorthand（与 fontWeight longhand 冲突；React 警告）
-  return {
-    padding: '8px 16px',
-    fontSize: 'var(--font-size-sm)',
-    fontFamily: 'inherit',
-    fontWeight: active ? 600 : 400,
-    color: active ? 'var(--fg-default)' : 'var(--fg-muted)',
-    background: 'none',
-    borderTop: 'none',
-    borderLeft: 'none',
-    borderRight: 'none',
-    borderBottom: active ? '2px solid var(--accent-default)' : '2px solid transparent',
-    cursor: 'pointer',
-    whiteSpace: 'nowrap',
-  }
-}
-
 // ── 主组件 ────────────────────────────────────────────────────────
 
 export function SourcesClient() {
   const router = useRouter()
-  const toast = useToast()
-  const [segment, setSegment] = useState<SourceSegment>('grouped')
-  // CHG-SN-9-LINES-VIEW-UNIFY 后：旧 CHG-SN-8-FUP-SOURCES-DEAD-BTN replaceTipOpen state 已删
   // ADR-149 EP-4: 接入 DataTableSearchInput 原语（IME + debounce 内置） → 删 searchInput 中间 state
   const [keyword, setKeyword] = useState<string | undefined>()
   const [page, setPage] = useState(1)
@@ -108,12 +78,13 @@ export function SourcesClient() {
     const v = filtersMap.get('renderStatus')
     return v?.kind === 'enum' ? (v.value as readonly string[]) : []
   }, [filtersMap])
-  const updatedAtRange = useMemo<{ from?: string; to?: string }>(() => {
-    const v = filtersMap.get('updatedAt')
+  // CHG-VSR-5-A：最近检测列 date-range filter（filtersMap key 'lastChecked' → lastCheckedFrom/To / 取代旧 updatedAt）
+  const lastCheckedRange = useMemo<{ from?: string; to?: string }>(() => {
+    const v = filtersMap.get('lastChecked')
     if (v?.kind === 'date-range') return { from: v.from, to: v.to }
     return {}
   }, [filtersMap])
-  // HOTFIX-PATCH-2B（2026-05-25）：siteKey enum filter 派生（distinct 端点首次消费实证 / filterFieldName='site_key' = filtersMap key）
+  // HOTFIX-PATCH-2B（2026-05-25）：siteKey enum filter 派生（distinct 端点 / filterFieldName='site_key' = filtersMap key）
   const siteKeyFilter = useMemo<readonly string[]>(() => {
     const v = filtersMap.get('site_key')
     return v?.kind === 'enum' ? (v.value as readonly string[]) : []
@@ -131,10 +102,6 @@ export function SourcesClient() {
   const [selectedKeys, setSelectedKeys] = useState<ReadonlySet<string>>(new Set())
   const [expandedKeys, setExpandedKeys] = useState<ReadonlySet<string>>(new Set())
 
-  const [activeTab, setActiveTab] = useState<'matrix' | 'aliases'>('matrix')
-
-  // ADR-149 EP-4: 搜索 debounce + IME 已迁移到 DataTableSearchInput 原语；本组件无需维护 debounceRef
-
   // KPI stats（独立请求，只加载一次）
   useEffect(() => {
     getVideoGroupStats().then(setStats).catch(() => null)
@@ -144,19 +111,17 @@ export function SourcesClient() {
     let cancelled = false
     setLoading(true)
     setError(undefined)
-    // ADR-150 阶段 5 EP-4（2026-05-24）：sort 白名单守卫（与 CrawlerRunsView/VideoListClient PATCH-2 范式一致）
-    const sortFieldGuarded: 'video' | 'lineCount' | 'sourceCount' | 'updated_at' | undefined =
-      sort.field === 'video' || sort.field === 'lineCount' || sort.field === 'sourceCount' || sort.field === 'updated_at'
-        ? sort.field
-        : undefined
+    // §3.4：列 id → API sortField 白名单守卫（未命中 → 默认 last_checked desc 由后端兜底）
+    const apiSortField = sort.field ? SORT_FIELD_BY_COLUMN[sort.field] : undefined
     listVideoGroups({
-      page, limit: pageSize, keyword, segment,
-      ...(sortFieldGuarded ? { sortField: sortFieldGuarded, sortDir: sort.direction } : {}),
+      page, limit: pageSize, keyword,
+      ...(apiSortField ? { sortField: apiSortField, sortDir: sort.direction } : {}),
       // HOTFIX-PATCH-2A §2-EXT（2026-05-25）：filter spread 透传 enum + date-range
       ...(probeStatusFilter.length > 0 ? { probeStatus: probeStatusFilter } : {}),
       ...(renderStatusFilter.length > 0 ? { renderStatus: renderStatusFilter } : {}),
-      ...(updatedAtRange.from ? { updatedAtFrom: updatedAtRange.from } : {}),
-      ...(updatedAtRange.to ? { updatedAtTo: updatedAtRange.to } : {}),
+      // CHG-VSR-5-A：最近检测 date-range（lastCheckedFrom/To）取代旧 updatedAt
+      ...(lastCheckedRange.from ? { lastCheckedFrom: lastCheckedRange.from } : {}),
+      ...(lastCheckedRange.to ? { lastCheckedTo: lastCheckedRange.to } : {}),
       // HOTFIX-PATCH-2B（2026-05-25）：siteKey 数组透传（distinct 端点 multi-select enum）
       ...(siteKeyFilter.length > 0 ? { siteKey: siteKeyFilter } : {}),
     })
@@ -171,16 +136,9 @@ export function SourcesClient() {
       })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [page, pageSize, keyword, segment, sort, filtersMap, retryKey])
+  }, [page, pageSize, keyword, sort, filtersMap, retryKey])
 
   const refresh = useCallback(() => setRetryKey((k) => k + 1), [])
-
-  function handleSegmentChange(seg: SourceSegment) {
-    setSegment(seg)
-    setPage(1)
-    setSelectedKeys(new Set())
-    setExpandedKeys(new Set())
-  }
 
   function handleRowClick(row: VideoGroupRow) {
     setExpandedKeys((prev) => {
@@ -217,22 +175,13 @@ export function SourcesClient() {
     />
   )
 
-  const toolbarTrailing = (
-    <AdminButton size="sm" variant="secondary" onClick={refresh}>
-      刷新
-    </AdminButton>
-  )
-
   const bulkActions = selectedKeys.size > 0 ? (
     <AdminButton size="sm" variant="secondary">批量验证</AdminButton>
   ) : null
 
   return (
     <div style={PAGE_STYLE}>
-      {/* 顶栏 */}
-      {/* CHG-SN-9-LINES-VIEW-UNIFY（Wave 3 验收期补丁 / 2026-05-28）：
-          原 "一键替换最相似 URL" 按钮长期为筹备中占位 Modal（CHG-SN-8-FUP-SOURCES-DEAD-BTN）→
-          替换为 "线路别名管理" 链接 / 跳 /admin/source-line-aliases / 统一视图含 unassigned 行 */}
+      {/* 顶栏 + 别名管理跳转（CHG-SN-9-LINES-VIEW-UNIFY） */}
       <PageHeader
         title="播放线路"
         actions={
@@ -247,129 +196,68 @@ export function SourcesClient() {
         }
       />
 
-      {/* KPI 卡片（P1-6：orphan KPI label 统一为"孤岛"，ADR-117 §7）*/}
+      {/* KPI 卡片（display only；CHG-VSR-5-B 重建为 5 张可点击快捷筛选 pressed）*/}
       <div style={KPI_GRID_STYLE}>
-        <KpiCard
-          label="总播放源"
-          value={stats?.total ?? '—'}
-          dataSource={stats ? 'live' : undefined}
-        />
-        <KpiCard
-          label="有效"
-          variant="is-ok"
-          value={stats?.active ?? '—'}
-          dataSource={stats ? 'live' : undefined}
-        />
-        <KpiCard
-          label="失效"
-          variant="is-danger"
-          value={stats?.dead ?? '—'}
-          dataSource={stats ? 'live' : undefined}
-        />
-        <KpiCard
-          label="孤岛"
-          variant="is-warn"
-          value={stats?.orphan ?? '—'}
-          dataSource={stats ? 'live' : undefined}
-        />
+        <KpiCard label="总播放源" value={stats?.total ?? '—'} dataSource={stats ? 'live' : undefined} />
+        <KpiCard label="有效" variant="is-ok" value={stats?.active ?? '—'} dataSource={stats ? 'live' : undefined} />
+        <KpiCard label="失效" variant="is-danger" value={stats?.dead ?? '—'} dataSource={stats ? 'live' : undefined} />
+        <KpiCard label="孤岛" variant="is-warn" value={stats?.orphan ?? '—'} dataSource={stats ? 'live' : undefined} />
       </div>
 
-      {/* 主体视图切换（自然高度；main 整页滚动）*/}
+      {/* 线路表格（自然高度；main 整页滚动）*/}
       <AdminCard style={{ display: 'flex', flexDirection: 'column' }}>
-        {/* 顶部 Tab */}
-        <div style={{ display: 'flex', gap: '0', borderBottom: '1px solid var(--border-subtle)', padding: '0 16px' }}>
-          <button type="button" style={tabStyle(activeTab === 'matrix')} onClick={() => setActiveTab('matrix')}>
-            线路矩阵
-          </button>
-          <button type="button" style={tabStyle(activeTab === 'aliases')} onClick={() => setActiveTab('aliases')}>
-            全局别名表
-          </button>
-        </div>
-
-        {activeTab === 'aliases' ? (
-          <div style={{ padding: '16px' }}>
-            <SourceLineAliasPanel />
-          </div>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column' }}>
-            {/* Segment tabs */}
-            <div style={{ padding: '12px 16px 0' }}>
-              <div style={TAB_BAR_STYLE}>
-                {SEGMENTS.map((s) => (
-                  <button
-                    key={s.key}
-                    type="button"
-                    style={tabStyle(segment === s.key)}
-                    onClick={() => handleSegmentChange(s.key)}
-                  >
-                    {s.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* DataTable 一体化（P1-5）— main 整页滚动模式（body 独立滚动留 M-SN-6 增强）
-              * ADR-149 EP-4：删除 "loading && rows.length === 0 → LoadingState" 条件分支，
-              * 改为 DataTable 自带 loading prop 内部显示加载态。原条件渲染会让 DataTable
-              * 在 fetch 期间 unmount/remount，导致 DataTableSearchInput 的内部 ref 丢失，
-              * Enter 立即提交时读到 ""（不是用户已输入的 keyword）。 */}
-            <div style={{ display: 'flex', flexDirection: 'column' }}>
-            {error
-              ? <div style={{ padding: '16px' }}><ErrorState error={error} onRetry={refresh} /></div>
-              : (
-                    <DataTable<VideoGroupRow>
-                      rows={rows}
-                      columns={columns}
-                      rowKey={(r) => r.videoId}
-                      mode="server"
-                      enableColumnResizing
-                      query={query}
-                      onQueryChange={(patch) => {
-                        if (patch.pagination) {
-                          if (patch.pagination.page !== undefined) setPage(patch.pagination.page)
-                          if (patch.pagination.pageSize !== undefined) {
-                            setPageSize(patch.pagination.pageSize)
-                            setPage(1)
-                          }
-                        }
-                        if (patch.sort) setSort(patch.sort)
-                        if (patch.selection) setSelectedKeys(patch.selection.selectedKeys)
-                        // EP-4.5-HOTFIX-3 / 问题 1+3：消费 columns patch
-                        if (patch.columns) setColumnPrefs(patch.columns)
-                        // HOTFIX-PATCH-2A §2-EXT：消费 filters patch（matrix popover + DataTableAutoFilter onChange）
-                        if (patch.filters) {
-                          setFiltersMap(patch.filters)
-                          setPage(1)
-                        }
-                      }}
-                      totalRows={total}
-                      loading={loading}
-                      emptyState={
-                        <div style={{ fontSize: 'var(--font-size-sm)', color: 'var(--fg-muted)' }}>
-                          {keyword ? `未找到包含「${keyword}」的视频` : '当前分组暂无数据'}
-                        </div>
-                      }
-                      selection={{ selectedKeys, mode: 'page' }}
-                      onSelectionChange={(s) => setSelectedKeys(s.selectedKeys)}
-                      onRowClick={handleRowClick}
-                      expandedKeys={expandedKeys}
-                      renderExpandedRow={(row) => <MatrixExpand videoId={row.videoId} />}
-                      toolbar={{
-                        search: toolbarSearch,
-                        trailing: toolbarTrailing,
-                        hideFilterChips: true,
-                      }}
-                      bulkActions={bulkActions}
-                      pagination={{ pageSizeOptions: [20, 50, 100] }}
-                      density="poster"
-                      // HOTFIX-PATCH-2B（2026-05-25）：distinctFetcher 注入（首次消费实证 / siteKey 列调用）
-                      distinctFetcher={fetchDistinct}
-                    />
-                  )
-            }
-            </div>
-          </div>
-        )}
+        {error
+          ? <div style={{ padding: '16px' }}><ErrorState error={error} onRetry={refresh} /></div>
+          : (
+              <DataTable<VideoGroupRow>
+                rows={rows}
+                columns={columns}
+                rowKey={(r) => r.videoId}
+                mode="server"
+                enableColumnResizing
+                query={query}
+                onQueryChange={(patch) => {
+                  if (patch.pagination) {
+                    if (patch.pagination.page !== undefined) setPage(patch.pagination.page)
+                    if (patch.pagination.pageSize !== undefined) {
+                      setPageSize(patch.pagination.pageSize)
+                      setPage(1)
+                    }
+                  }
+                  if (patch.sort) setSort(patch.sort)
+                  if (patch.selection) setSelectedKeys(patch.selection.selectedKeys)
+                  // EP-4.5-HOTFIX-3 / 问题 1+3：消费 columns patch
+                  if (patch.columns) setColumnPrefs(patch.columns)
+                  // HOTFIX-PATCH-2A §2-EXT：消费 filters patch（matrix popover + DataTableAutoFilter onChange）
+                  if (patch.filters) {
+                    setFiltersMap(patch.filters)
+                    setPage(1)
+                  }
+                }}
+                totalRows={total}
+                loading={loading}
+                emptyState={
+                  <div style={{ fontSize: 'var(--font-size-sm)', color: 'var(--fg-muted)' }}>
+                    {keyword ? `未找到包含「${keyword}」的视频` : '暂无播放线路数据'}
+                  </div>
+                }
+                selection={{ selectedKeys, mode: 'page' }}
+                onSelectionChange={(s) => setSelectedKeys(s.selectedKeys)}
+                onRowClick={handleRowClick}
+                expandedKeys={expandedKeys}
+                renderExpandedRow={(row) => <MatrixExpand videoId={row.videoId} />}
+                toolbar={{
+                  search: toolbarSearch,
+                  hideFilterChips: true,
+                }}
+                bulkActions={bulkActions}
+                pagination={{ pageSizeOptions: [20, 50, 100] }}
+                density="poster"
+                // HOTFIX-PATCH-2B（2026-05-25）：distinctFetcher 注入（siteKey 列 distinct 调用）
+                distinctFetcher={fetchDistinct}
+              />
+            )
+        }
       </AdminCard>
     </div>
   )

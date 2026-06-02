@@ -53,6 +53,9 @@ export async function listVideoGroups(params: VideoGroupListParams = {}): Promis
   if (params.renderStatus && params.renderStatus.length > 0) qs.set('renderStatus', params.renderStatus.join(','))
   if (params.updatedAtFrom)   qs.set('updatedAtFrom', params.updatedAtFrom)
   if (params.updatedAtTo)     qs.set('updatedAtTo', params.updatedAtTo)
+  // CHG-VSR-5-A：lastChecked 日期范围（最近检测列 date-range filter / CHG-VSR-3 后端 HAVING MAX(last_probed_at)）
+  if (params.lastCheckedFrom) qs.set('lastCheckedFrom', params.lastCheckedFrom)
+  if (params.lastCheckedTo)   qs.set('lastCheckedTo', params.lastCheckedTo)
   const q = qs.toString()
   return apiClient.get<VideoGroupListResult>(`/admin/sources/video-groups${q ? `?${q}` : ''}`)
 }
