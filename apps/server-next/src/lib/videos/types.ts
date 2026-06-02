@@ -5,13 +5,14 @@ import type {
   ReviewStatus,
   VisibilityStatus,
   DoubanStatus,
+  BangumiStatus,
   EnrichmentSummary,
   ExternalRefSummary,
   BangumiEntrySummary,
   CatalogCharacterSummary,
 } from '@resovo/types'
 
-export type { VideoType, VideoStatus, VideoGenre, ReviewStatus, VisibilityStatus, DoubanStatus, EnrichmentSummary, ExternalRefSummary, BangumiEntrySummary, CatalogCharacterSummary }
+export type { VideoType, VideoStatus, VideoGenre, ReviewStatus, VisibilityStatus, DoubanStatus, BangumiStatus, EnrichmentSummary, ExternalRefSummary, BangumiEntrySummary, CatalogCharacterSummary }
 
 // ── 列表行（对应 GET /admin/videos 响应结构）─────────────────────
 
@@ -38,6 +39,21 @@ export interface VideoAdminRow {
   backdrop_status?: string | null
   // ADR-170 C-3：富集摘要派生对象（admin DTO 专属，前端 EnrichmentBadge 消费）
   enrichmentSummary?: EnrichmentSummary
+  // ── CHG-VSR-1（设计 §2.2/§2.4）：视频库重设计展示字段（加性 optional，卡 2 API 填充；与 VideoAdminDetail 同名字段签名一致）──
+  /** 原名（§2.2 副行 `{title_en ?? title_original}` + 搜索 q 扩面）。与 VideoAdminDetail.title_original 同型 */
+  title_original?: string | null
+  /** 出品地区（§2.2 发行信息 `{year} · {country}`）。与 VideoAdminDetail.country 同型（mc.country） */
+  country?: string | null
+  /** 连载状态（§2.2 发行信息 Pill 完结/连载/未知，取 mc.status）。与 VideoAdminDetail.status 同型 */
+  status?: VideoStatus
+  /** 收录集数（§2.2 集数列，migration 078）。与 VideoAdminDetail.episode_count 同型 */
+  episode_count?: number
+  /** 已播集数（§2.2 集数列「已播」/ 外部领先爬虫，migration 078，可 NULL） */
+  current_episodes?: number | null
+  /** 总集数（§2.2 集数列「共」，migration 078，可 NULL） */
+  total_episodes?: number | null
+  /** Bangumi 匹配状态（§2.2 元数据 Bangumi dot，仅 anime，migration 082 / ADR-170） */
+  bangumi_status?: BangumiStatus
 }
 
 // ── 列表查询参数 ──────────────────────────────────────────────────

@@ -13358,3 +13358,25 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **质量门禁**：typecheck EXIT=0 / lint EXIT=0 / **verify:adr-contracts EXIT=0**（FEATURE_RETIRED 未触发错误码核验，advisory 非阻塞）/ **全量 448 文件 5909 passed 0 failed 零回归**。
 - **e2e**：N/A（submit 无前台流程；410 契约由单测覆盖；`report-error` 未改）。
 - **[AI-CHECK]**：六问全过（不碰审核台/播放器关键路径 / 删多余 VerifyService 实例符合分层 / 无颜色/越层）。偏离：实际 submit 测试位于 `crawler.test.ts`（非预期 `sources.test.ts`），已如实更新并在 sources.test.ts 补断言；用 410 而非删路由（遵守 CLAUDE.md「不删 API 路径」）。
+
+---
+
+## [CHG-VSR-1] 双表 DTO + 问题枚举 + 术语 + 待补源语义 + SourceSegment 仅废弃（契约地基）
+- **完成时间**：2026-06-01
+- **记录时间**：2026-06-01 22:40
+- **执行模型**：claude-opus-4-8（主循环）
+- **子代理**：arch-reviewer (claude-opus-4-8) — `@resovo/types` 跨消费方契约强制 Opus 评审，CONDITIONAL PASS
+- **背景**：SEQ-20260601-01 视频库/播放线路职责重定义系列的**契约地基卡**，为后续卡 2（视频库 API）/3（线路聚合 API）/4-A·4-B（视频库 UI）/5-A·5-B（线路 UI）/6（LinesPanel）预置双表 DTO 与术语类型。设计真源 `docs/designs/videos-sources-responsibility-redesign_20260601.md` §0.2/§2/§3/§5.3。
+- **修改文件**：
+  - `packages/types/src/sources-matrix.types.ts` — ① `SourceSegment` 加 `@deprecated`（指向 `SOURCE_QUICK_FILTERS`，仅兼容不删，§5.3）；② 新增 3 枚举（ADR-157 双形态 const+type）：`SOURCE_QUICK_FILTERS`（5 快捷筛选 all/has_abnormal/needs_source/pending_probe/low_quality）/ `SOURCE_PROBLEM_KINDS`（探测维度②：connect_fail/render_fail/pending_probe，异常源由消费方 OR 派生）/ `NEEDS_SOURCE_SEVERITIES`（online_incident/draft_pending）；③ `VideoGroupRow` 加 12 派生列 optional（activeSourceCount/connectFailCount/renderFailCount/pendingProbeCount/disabledCount/qualityRank/qualityLabel/qualityCoverage/latencyMedianMs/needsSource/isPublished/lastCheckedAt，注释钉死维度①/②区分）；④ `VideoGroupListParams` 加 quickFilters 数组 + lowQuality bool（双入口 OR 合流）+ lastCheckedFrom/To + sortField 扩 activeSources/quality/lastChecked；⑤ `VideoGroupStats` 加 4 KPI optional（abnormal/needsSource/pendingProbe/lowQuality）+ 维度①/②混居块注释。
+  - `packages/types/src/index.ts` — BLOCKER A-1：新增 3 枚举 const 的 value re-export（type-only `export type *` 不透出 const，ADR-157 双形态硬约束）。
+  - `apps/server-next/src/lib/sources/types.ts` — BLOCKER A-2：桥接补 3 新 type re-export + 3 const value re-export 块（统一类型入口）。
+  - `apps/server-next/src/lib/videos/types.ts` — E 节：`VideoAdminRow` 镜像 7 字段 optional（title_original/country/status/episode_count/current_episodes/total_episodes/bangumi_status），与 `VideoAdminDetail`（extends VideoAdminRow）既有同名字段签名逐字一致（HIGH E-1）；import + re-export 补 `BangumiStatus`。
+- **arch-reviewer 红线消解**：3 BLOCKER（A-1 index value re-export / A-2 桥接 value re-export / B-1+D-1a 维度①(is_active)与维度②(probe·render)在 DTO 注释层显式区隔）+ 1 HIGH（E-1 继承签名一致）+ 5 MEDIUM（C2 sortField `coverage`→`activeSources` 防与 qualityCoverage 冲突 / C1 quickFilters+lowQuality 双入口 OR 合流注释 / B-2 qualityRank 7 档映射表 / B-3 isPublished 非展示列标注 / E-2 维度边界）全采纳。
+- **偏离说明**：`disabledCount` 字段——reviewer MEDIUM 建议「可暂不加，留待真有消费方」，但设计 §3.2/§3.3 已明确将「禁用 {n}」列为 issues 列**可选中性 badge** 消费点，据设计文档据实保留（加性零成本，避免后续再触 @resovo/types 触发二次 Opus 评审）。
+- **新增依赖**：无。
+- **数据库变更**：无（纯类型契约；qualityRank 为派生概念，真值映射 CASE 留卡 3 producer）。
+- **质量门禁**：typecheck 8 workspace 全过 / lint 5 successful（警告均既有）/ **全量 448 文件 5909 passed 0 failed 零回归** / verify:adr-contracts EXIT=0。
+- **e2e**：N/A（纯类型加性，无运行时行为变化）。
+- **[AI-CHECK]**：六问全过——①零回归（纯加性 optional + 新枚举，既有 producer getVideoGroupStats/listVideoGroups + consumer SourcesClient/SourceColumns/VideoAdminDetail 全不受影响，reviewer 逐一核实）；②不越界（仅类型契约，未触 producer SQL/UI 渲染/DataTable 公开 Props/user_submissions）；③沉淀共享层（枚举落 @resovo/types 真源 + 桥接透出，复用 ADR-157 双形态 + DualSignalState/VideoStatus/BangumiStatus）；④无 any/颜色/空 catch；⑤术语准确（维度①/②注释钉死，连接/试播/异常/禁用对齐 §0.2）；⑥声明性文件不计入 500 行硬限。
+- **注意事项**：(1) 下游 producer（卡 3）填充 VideoGroupRow 新字段时务必遵守注释维度口径——`abnormal/connectFailCount/renderFailCount`（维度② probe·render dead）**不得**与既有 `dead`（维度① source_check_status='all_dead'）混算。(2) `quickFilters` 含 `'low_quality'` 与 `lowQuality===true` 是同一谓词，producer 须 OR 合流并补等价性单测。(3) `VideoGroupStats.orphan` 本卡**未改名**（保留兼容），rename→needsSource 级联留卡 3（API）+ 卡 4/5（UI）；`SourceSegment` 枚举本体删除留卡 5 末尾。(4) 视频库过滤入参升级（VideoListFilter/AdminVideoListFilters + ADR-150 amendment）留卡 2 与 API 同步落，本卡未预置（避免空契约）。

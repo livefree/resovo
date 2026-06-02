@@ -14,7 +14,37 @@
 
 import type { DualSignalState } from './admin-moderation.types'
 
+/**
+ * @deprecated CHG-VSR-1（2026-06-01）：四 Tab segment 模型由 `SOURCE_QUICK_FILTERS`（B 方案 KPI 卡快捷筛选）取代。
+ * 仅保留兼容（`SourcesClient` + `sources-matrix.ts` 仍引用），卡 5 末尾 UI 切换后删除枚举与 segment 查询分支（设计 §5.3）。
+ */
 export type SourceSegment = 'grouped' | 'dead' | 'correction' | 'orphan'
+
+/**
+ * 线路页快捷筛选（B 方案 KPI 卡 / 设计 §3.5）— 取代旧四 Tab（@deprecated `SourceSegment`）。
+ * 均为探测维度②/质量派生，可组合 AND；`'all'` = 清空（仅 UI 卡身份用，`VideoGroupListParams.quickFilters` 不传 `'all'`）。
+ * ADR-157 D-157-1 const + type 双形态（index.ts 须同步 value re-export）。
+ */
+export const SOURCE_QUICK_FILTERS = ['all', 'has_abnormal', 'needs_source', 'pending_probe', 'low_quality'] as const
+export type SourceQuickFilter = (typeof SOURCE_QUICK_FILTERS)[number]
+
+/**
+ * 源问题维度（探测维度② / 设计 §0.2-A）。与启停维度①（`is_active`）**严格区分**。
+ * - `connect_fail`：`probe_status='dead'`（连接失败 / 可达性）
+ * - `render_fail`：`render_status='dead'`（试播失败 / 可播性）
+ * - `pending_probe`：`probe_status='pending'`（待探测）
+ * 「异常源」= `connect_fail` OR `render_fail`（任一 dead），**无独立枚举值**，由消费方按 OR 口径派生。
+ */
+export const SOURCE_PROBLEM_KINDS = ['connect_fail', 'render_fail', 'pending_probe'] as const
+export type SourceProblemKind = (typeof SOURCE_PROBLEM_KINDS)[number]
+
+/**
+ * 「待补源视频」严重度（设计 §3.5.1）。待补源 = 视频无任何可播源（`is_active AND probe≠dead AND render≠dead`，不限上架）。
+ * - `online_incident`：已上架且无可播源（红 / 线上事故 / 最紧急）
+ * - `draft_pending`：未上架（草稿警示）
+ */
+export const NEEDS_SOURCE_SEVERITIES = ['online_incident', 'draft_pending'] as const
+export type NeedsSourceSeverity = (typeof NEEDS_SOURCE_SEVERITIES)[number]
 
 export interface VideoGroupRow {
   readonly videoId: string
@@ -35,6 +65,37 @@ export interface VideoGroupRow {
    * SQL `STRING_AGG(DISTINCT vs.source_site_key, ',')` 派生 / 前端 siteKey 列 cell 显示
    */
   readonly siteKeys: readonly string[]
+
+  // ── CHG-VSR-1（设计 §3.3）：播放线路双表重设计派生列（加性 optional，卡 3 API 填充）──
+  // ⚠ 以下均为「线路级计数/派生」，区别于本行既有 probeStatus/renderStatus（Service aggregateSignal 的 worst-of 单值，非计数）。
+  /** 可用源数 = `is_active=true`（**维度①启停**）。0 染 danger（= 全被禁用/无源）。卡 3 填充 */
+  readonly activeSourceCount?: number
+  /** 连接失败源数 = `probe_status='dead'`（**维度②探测·计数**；区别于行级聚合 `probeStatus` worst-of 单值）。卡 3 填充 */
+  readonly connectFailCount?: number
+  /** 试播失败源数 = `render_status='dead'`（**维度②探测·计数**；区别于行级聚合 `renderStatus` worst-of 单值）。卡 3 填充 */
+  readonly renderFailCount?: number
+  /** 待探测源数 = `probe_status='pending'`（**维度②**）。卡 3 填充 */
+  readonly pendingProbeCount?: number
+  /** 禁用源数 = `is_active=false`（**维度①**，中性非问题，§3.2 issues 列可选中性 badge）。卡 3 填充 */
+  readonly disabledCount?: number
+  /**
+   * 最高已知分辨率档位（排序 + 低质量判定用）。7 档映射 `{240P:1, 360P:2, 480P:3, 720P:4, 1080P:5, 2K:6, 4K:7}`。
+   * 取 `quality_detected ?? quality` 派生后视频级 MAX。`null` = 无任何已知质量（「质量未知」，**不并入低质量**）。
+   * 低质量阈值 = `<4`（即 480P/360P/240P，§3.5）。卡 3 填充
+   */
+  readonly qualityRank?: number | null
+  /** 展示分辨率（`quality_detected ?? quality` 取最高档 / 全空 `null` → 显「质量未知」）。卡 3 填充 */
+  readonly qualityLabel?: string | null
+  /** 画质已检测覆盖率 0–1（`COUNT(quality_detected IS NOT NULL)/COUNT(*)`，画质实测比例非 probe）。卡 3 填充 */
+  readonly qualityCoverage?: number
+  /** 延迟中位数 ms（`percentile_cont(0.5) WITHIN GROUP ORDER BY latency_ms`）。卡 3 填充 */
+  readonly latencyMedianMs?: number | null
+  /** 待补源 = 无任何可播源（`is_active AND probe≠dead AND render≠dead`，§3.5.1，不限上架）。卡 3 填充 */
+  readonly needsSource?: boolean
+  /** 是否已上架（**仅供消费方派生 `NeedsSourceSeverity`**：已上架+needsSource=online_incident 红；非展示列）。卡 3 填充 */
+  readonly isPublished?: boolean
+  /** 最近检测时间 = `MAX(last_probed_at)` 回退 `MAX(vs.updated_at)`。卡 3 填充 */
+  readonly lastCheckedAt?: string | null
 }
 
 export interface VideoGroupListResult {
@@ -67,18 +128,48 @@ export interface VideoGroupListParams {
   readonly updatedAtFrom?: string
   readonly updatedAtTo?: string
   /**
-   * ADR-150 阶段 5 EP-4（2026-05-24）：sort 全栈打通 sources（含 sources 排序断链顺手修）
-   * 白名单 4 字段 / column.id = 后端 sortField 命名一致（D-150-4 桥接 sort 版同范式）
+   * CHG-VSR-1（设计 §3.5）：快捷筛选 KPI 卡（B 方案），可组合 AND；UI 不传 `'all'`。
+   * ⚠ 与 `lowQuality` 对「低质量」是**同一 SQL 谓词**（`MAX(quality_rank)<4`）：
+   *   producer 须 **OR 合流** `quickFilters.includes('low_quality') || lowQuality===true`，二者不叠加不冲突（卡 3 单测覆盖等价性）。
+   * 两个独立 UI 入口：`quickFilters`=KPI 卡（跨列快捷筛选）/ `lowQuality`=质量列列筛选（DataTableAutoFilter boolean）。
    */
-  readonly sortField?: 'video' | 'lineCount' | 'sourceCount' | 'updated_at'
+  readonly quickFilters?: readonly SourceQuickFilter[]
+  /** 质量列 boolean 列筛选（低质量 `MAX(quality_rank)<4`）。与 `quickFilters` 的 `'low_quality'` 同谓词（见上 OR 合流）。卡 3 实现 */
+  readonly lowQuality?: boolean
+  /** 最近检测 date-range（YYYY-MM-DD / `last_probed_at`；后端 `HAVING MAX(vs.last_probed_at)`）。卡 3 实现 */
+  readonly lastCheckedFrom?: string
+  readonly lastCheckedTo?: string
+  /**
+   * ADR-150 阶段 5 EP-4（2026-05-24）+ CHG-VSR-1 扩（§3.4）：sort 白名单。
+   * 新增 `activeSources`(active_source_count) / `quality`(quality_rank) / `lastChecked`(MAX(last_probed_at))。
+   * 值 = producer SORT_FIELD_MAP key（与展示字段名可不同）；既有 camel/snake 混用属技术债，本卡不修（新增统一 camel）。
+   */
+  readonly sortField?: 'video' | 'lineCount' | 'sourceCount' | 'updated_at' | 'activeSources' | 'quality' | 'lastChecked'
   readonly sortDir?: 'asc' | 'desc'
 }
 
+/**
+ * 线路页 KPI 统计。
+ * ⚠ **维度混居**（卡 5 rename 级联后收敛）：
+ *   - `total/active/dead/orphan` = 旧四 Tab 遗留；`active/dead/orphan` 基于**维度① source_check_status**
+ *     （active=ok|partial / dead=all_dead / orphan=all_dead AND !is_published）。
+ *   - `abnormal/needsSource/pendingProbe/lowQuality` = CHG-VSR-1 新增 B 方案 5 KPI 卡，基于**维度②探测/质量**。
+ *   ⇒ `abnormal`（维度② connect OR render dead）**≠** `dead`（维度① all_dead），producer 不得混算（设计 §0.2）。
+ *   卡 5 完成 rename 级联后移除 `dead/orphan` 旧字段。
+ */
 export interface VideoGroupStats {
   readonly total: number
   readonly active: number
   readonly dead: number
   readonly orphan: number
+  /** CHG-VSR-1：含异常源（连接 OR 试播失败，**维度②**）。卡 3 填充 */
+  readonly abnormal?: number
+  /** CHG-VSR-1：待补源（无可播源，§3.5.1）。卡 3 填充 */
+  readonly needsSource?: number
+  /** CHG-VSR-1：待探测（`probe_status='pending'`，**维度②**）。卡 3 填充 */
+  readonly pendingProbe?: number
+  /** CHG-VSR-1：低质量（`MAX(quality_rank)<4`，仅已知质量）。卡 3 填充 */
+  readonly lowQuality?: number
 }
 
 export interface EpisodeCell {

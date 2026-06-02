@@ -2560,13 +2560,14 @@ CODENAME-MATRIX-E2E (依赖 Wave 3 验收期补丁 CODENAME-MATRIX ✅)
    - 文件范围：`packages/admin-ui/src/components/cell/kpi-card.types.ts` + `kpi-card.tsx` + 单测（+5）。
    - 完成备注：arch-reviewer Opus **CONDITIONAL PASS → 3 红线全采纳**：R1（用 `--admin-accent-soft/-border` token，禁 `--accent-soft` 不存在 fallback 硬编码）/ R2（`data-active` 存在性 `'true'|undefined`）/ R3（pressed 用 inset box-shadow + soft bg **叠加**，不替换 variant border，is-danger 警示共存）+ Y2/Y3/Y4。typecheck/lint EXIT=0 + **全量 5907 passed 零回归**（kpi-card 54→59）。详见 changelog CHG-VSR-PRE-3。
 
-4. **CHG-VSR-1** — 双表 DTO + 问题枚举 + 术语（连接/试播/异常/禁用）+ 待补源语义 + SourceSegment 仅废弃（状态：⬜ 未开始）
+4. **CHG-VSR-1** — 双表 DTO + 问题枚举 + 术语（连接/试播/异常/禁用）+ 待补源语义 + SourceSegment 仅废弃（状态：✅ 已完成 2026-06-01 / claude-opus-4-8 / 子代理 arch-reviewer (claude-opus-4-8)）
    - 创建时间：2026-06-01 19:15
    - 建议模型：**opus**（改 `@resovo/types` 跨消费方契约）
    - 文件范围：`packages/types`（VideoGroupRow/Stats 扩字段 + 问题枚举 + 待补源派生类型）；`SourceSegment` 加 `@deprecated`（**不改名/不删**）；server-next `lib/videos/types` + `lib/sources/types` 镜像。
    - 门禁：`@resovo/types` 契约 → 强制 Opus 子代理 + commit trailer `Subagents: arch-reviewer (...)`。
    - 验收要点：类型可被卡 2/3/4/5/6 增量消费；SourceSegment 兼容保留；typecheck 零回归。
    - 依赖：无（契约地基，建议早做）。
+   - 完成备注：**纯加性契约地基**——`sources-matrix.types.ts` 新增 3 枚举（`SOURCE_QUICK_FILTERS`/`SOURCE_PROBLEM_KINDS`/`NEEDS_SOURCE_SEVERITIES`，ADR-157 双形态）+ VideoGroupRow 12 派生列 optional（可用源/连接失败/试播失败/待探测/禁用/质量档+覆盖率+延迟中位/待补源/isPublished/lastCheckedAt）+ VideoGroupListParams（quickFilters 数组 + lowQuality bool 双入口 OR 合流 + lastChecked range + sortField 扩 activeSources/quality/lastChecked）+ VideoGroupStats 4 KPI optional（abnormal/needsSource/pendingProbe/lowQuality）；`SourceSegment` 加 `@deprecated`；`index.ts` + server-next `lib/sources/types.ts` 桥接补 const value re-export（A-1/A-2）；server-next `VideoAdminRow` 镜像 7 字段（title_original/country/status/episode_count/current_episodes/total_episodes/bangumi_status，与 VideoAdminDetail 签名逐字一致）。**arch-reviewer Opus CONDITIONAL PASS → 3 BLOCKER（A-1 index value re-export / A-2 桥接 value re-export / B-1+D-1a 维度①/②注释区隔）+ HIGH（E-1 继承签名一致）+ 5 MEDIUM 全消解**；偏离：`disabledCount` 据设计 §3.2/§3.3「可选中性 badge」确认保留（reviewer 建议可暂不加，按设计文档据实保留）。typecheck 8 workspace 全过 / lint 5 successful / **全量 5909 passed 零回归** / verify:adr-contracts EXIT=0。纯类型加性无运行时行为，e2e 不适用。详见 changelog CHG-VSR-1。
 
 5. **CHG-VSR-2** — 视频库 API：集数/Bangumi/meta 质量 + 过滤升级 + 搜索扩面 + distinct 白名单（状态：⬜ 未开始）
    - 创建时间：2026-06-01 19:15

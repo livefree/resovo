@@ -17,4 +17,15 @@ export type {
   SourceLineAlias,
   SourceLineRow,
   SourceRouteBySite,
+  // CHG-VSR-1：双表重设计枚举类型（探测维度②术语 / 快捷筛选 / 待补源严重度）
+  SourceQuickFilter,
+  SourceProblemKind,
+  NeedsSourceSeverity,
+} from '@resovo/types'
+
+// CHG-VSR-1（ADR-157 双形态）：枚举 const 值经统一入口透出（type-only re-export 不带 const）
+export {
+  SOURCE_QUICK_FILTERS,
+  SOURCE_PROBLEM_KINDS,
+  NEEDS_SOURCE_SEVERITIES,
 } from '@resovo/types'
