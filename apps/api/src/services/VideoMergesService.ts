@@ -49,6 +49,7 @@ import {
   countAuditTimeline,
 } from '@/api/db/queries/video-merge-mutations'
 import { AuditLogService } from '@/api/services/AuditLogService'
+import { MediaCatalogService } from '@/api/services/MediaCatalogService'
 import { AppError } from '@/api/lib/errors'
 import { normalizeMergeKey } from '@/api/services/TitleNormalizer'
 import {
@@ -71,9 +72,12 @@ export {
 
 export class VideoMergesService {
   private auditSvc: AuditLogService
+  private catalogSvc: MediaCatalogService
 
   constructor(private db: Pool) {
     this.auditSvc = new AuditLogService(db)
+    // CHG-VIR-PRE-1: split 新建 video 前需 findOrCreate 作品层 catalog（catalog_id NOT NULL / migration 029）。
+    this.catalogSvc = new MediaCatalogService(db)
   }
 
   async listCandidates(params: ListCandidatesParams): Promise<ListCandidatesResult> {
@@ -374,6 +378,22 @@ export class VideoMergesService {
       sources: currentSources.map(s => ({ id: s.id, video_id: s.video_id })),
     }
 
+    // CHG-VIR-PRE-1: 事务前为每个拆分组 findOrCreate 作品层 catalog（catalog_id NOT NULL / migration 029）。
+    // findOrCreate 自身原子（幂等：同 (title_normalized, year, type) 复用现有 catalog）；置于 split 事务外——
+    // 即便后续 split 事务回滚，新建 catalog 至多成无 video 指向的孤儿行（共享作品层无害，下次同作品复用），
+    // 以此避免改 MediaCatalogService.findOrCreate 签名去支持外部事务 client。
+    const groupCatalogIds: string[] = []
+    for (const group of groups) {
+      const catalog = await this.catalogSvc.findOrCreate({
+        title: group.newVideoMeta.title,
+        titleNormalized: normalizeMergeKey(group.newVideoMeta.title),
+        year: group.newVideoMeta.year ?? null,
+        type: group.newVideoMeta.type,
+        metadataSource: 'manual',
+      })
+      groupCatalogIds.push(catalog.id)
+    }
+
     // 4. 事务：INSERT audit + 创建新 videos + 分配 sources + 软删除原 video
     const client = await this.db.connect()
     let auditId: string
@@ -393,14 +413,14 @@ export class VideoMergesService {
         reason: null,
       })
 
-      for (const group of groups) {
+      for (let i = 0; i < groups.length; i++) {
+        const group = groups[i]!
         const shortId = Math.random().toString(36).slice(2, 10)
         const newVideoId = await insertNewVideo(client, {
           shortId,
+          catalogId: groupCatalogIds[i]!,
           title: group.newVideoMeta.title,
-          year: group.newVideoMeta.year ?? null,
           type: group.newVideoMeta.type,
-          titleNormalized: normalizeMergeKey(group.newVideoMeta.title),
         })
         newVideoIds.push(newVideoId)
         await assignSourcesToVideo(client, group.sourceIds, newVideoId)

@@ -289,23 +289,24 @@ export async function insertNewVideo(
   client: PoolClient,
   params: {
     shortId: string
-    title: string
-    year: number | null
-    type: string
-    titleNormalized: string | null
+    /** 已由调用方 MediaCatalogService.findOrCreate 取得的作品层 catalog（migration 029 后 NOT NULL）。 */
+    catalogId: string
+    title: string  // videos.title 是 media_catalog.title 的冗余副本（与 createVideo 一致）
+    type: string   // videos.type 是 media_catalog.type 的冗余副本
   },
 ): Promise<string> {
+  // CHG-VIR-PRE-1: year / title_normalized 已由 migration 029 下沉到 media_catalog（DROP videos 列），
+  // 不再写 videos；新建 video 必须携带 catalog_id（029 改 NOT NULL）。列集对齐 videos.mutations.createVideo。
   const result = await client.query<{ id: string }>(
     `INSERT INTO videos
-       (short_id, title, year, type, title_normalized, is_published)
-     VALUES ($1, $2, $3, $4, $5, false)
+       (short_id, catalog_id, title, type, is_published)
+     VALUES ($1, $2, $3, $4, false)
      RETURNING id`,
     [
       params.shortId,
+      params.catalogId,
       params.title,
-      params.year ?? null,
       params.type,
-      params.titleNormalized ?? null,
     ],
   )
   return result.rows[0]!.id

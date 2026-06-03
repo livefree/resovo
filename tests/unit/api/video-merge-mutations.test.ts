@@ -13,6 +13,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { VideoMergesService, MergeSchema, UnmergeSchema, SplitSchema } from '@/api/services/VideoMergesService'
 
+// CHG-VIR-PRE-1: split 新建 video 前先 findOrCreate 作品层 catalog（catalog_id NOT NULL / migration 029）
+const { mockFindOrCreate } = vi.hoisted(() => ({ mockFindOrCreate: vi.fn() }))
+
 // ── mock DB 查询模块 ──────────────────────────────────────────────
 
 vi.mock('@/api/db/queries/video-merge-mutations', () => ({
@@ -50,6 +53,11 @@ vi.mock('@/api/services/TitleNormalizer', () => ({
   normalizeMergeKey: (t: string) => t.toLowerCase().replace(/[\p{P}\p{S}\s]/gu, ''),
 }))
 
+// CHG-VIR-PRE-1: VideoMergesService 构造注入 MediaCatalogService；split 用 findOrCreate 建 catalog
+vi.mock('@/api/services/MediaCatalogService', () => ({
+  MediaCatalogService: vi.fn().mockImplementation(() => ({ findOrCreate: mockFindOrCreate })),
+}))
+
 import * as mutations from '@/api/db/queries/video-merge-mutations'
 import * as candidates from '@/api/db/queries/video-merge-candidates'
 import { AuditLogService } from '@/api/services/AuditLogService'
@@ -63,6 +71,8 @@ const SOURCE_ID_2 = '00000000-0000-0000-0000-000000000004'
 const AUDIT_ID = '00000000-0000-0000-0000-000000000005'
 const NEW_VIDEO_ID_1 = '00000000-0000-0000-0000-000000000006'
 const NEW_VIDEO_ID_2 = '00000000-0000-0000-0000-000000000007'
+const CATALOG_A = '00000000-0000-0000-0002-00000000000a'
+const CATALOG_B = '00000000-0000-0000-0002-00000000000b'
 const SRC_1 = '00000000-0000-0000-0001-000000000001'
 const SRC_2 = '00000000-0000-0000-0001-000000000002'
 const SRC_3 = '00000000-0000-0000-0001-000000000003'
@@ -466,6 +476,9 @@ describe('VideoMergesService.split', () => {
       makeSourceRow(SRC_4, TARGET_ID),
     ])
     vi.mocked(mutations.insertMergeAudit).mockResolvedValueOnce(AUDIT_ID)
+    mockFindOrCreate
+      .mockResolvedValueOnce({ id: CATALOG_A })
+      .mockResolvedValueOnce({ id: CATALOG_B })
     vi.mocked(mutations.insertNewVideo)
       .mockResolvedValueOnce(NEW_VIDEO_ID_1)
       .mockResolvedValueOnce(NEW_VIDEO_ID_2)
@@ -484,11 +497,17 @@ describe('VideoMergesService.split', () => {
     expect(mockClient.query).toHaveBeenCalledWith('BEGIN')
     expect(mockClient.query).toHaveBeenCalledWith('COMMIT')
 
-    // 创建了 2 个新 video
+    // CHG-VIR-PRE-1: 每组先 findOrCreate 作品层 catalog（manual 来源），再以 catalogId 建 video
+    expect(mockFindOrCreate).toHaveBeenCalledTimes(2)
+    expect(mockFindOrCreate).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      title: '分集 A', year: 2020, type: 'movie', metadataSource: 'manual',
+    }))
+
+    // 创建了 2 个新 video；insertNewVideo 携带 catalogId，不再传已下沉 catalog 的 year/title_normalized
     expect(mutations.insertNewVideo).toHaveBeenCalledTimes(2)
     expect(mutations.insertNewVideo).toHaveBeenCalledWith(mockClient, expect.objectContaining({
       title: '分集 A',
-      year: 2020,
+      catalogId: CATALOG_A,
       type: 'movie',
     }))
 
@@ -620,6 +639,8 @@ describe('VideoMergesService.split', () => {
       makeSourceRow(SRC_3, TARGET_ID),
       makeSourceRow(SRC_4, TARGET_ID),
     ])
+    // CHG-VIR-PRE-1: catalog 先行就绪（事务前），失败发生在事务内 insertMergeAudit → ROLLBACK
+    mockFindOrCreate.mockResolvedValue({ id: CATALOG_A })
     vi.mocked(mutations.insertMergeAudit).mockRejectedValueOnce(new Error('DB error'))
 
     await expect(

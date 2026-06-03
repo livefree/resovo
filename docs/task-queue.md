@@ -2771,13 +2771,14 @@ CODENAME-MATRIX-E2E (依赖 Wave 3 验收期补丁 CODENAME-MATRIX ✅)
 
 **前置门禁**
 
-1. **CHG-VIR-PRE-1** — `insertNewVideo` schema 漂移排查修复（现网正确性隐患）（状态：⬜ 未开始）
+1. **CHG-VIR-PRE-1** — `insertNewVideo` schema 漂移排查修复（现网正确性隐患）（状态：✅ 已完成 2026-06-02 / claude-opus-4-8 / 子代理 无）
    - 创建时间：2026-06-02 19:41
    - 建议模型：sonnet（既有正确性修复，无新契约）
    - 变更原因：`apps/api/src/db/queries/video-merge-mutations.ts:299-310` split 新建 video 的 INSERT 仍引用已由 migration 029 DROP 的 `videos.year` / `videos.title_normalized`，拆分到新建 video 路径会命中（arch-reviewer 未决项 3）。
    - 文件范围：`video-merge-mutations.ts`（insertNewVideo INSERT 列对齐现行 videos schema，year/title_normalized 不再写 videos，按需落 media_catalog）+ 回归测试。
    - 验收要点：split 新建 video 不引用已删列；现有 split/unmerge 测试零回归；typecheck/lint/test 全过。
    - 依赖：无（独立，建议早做；Phase 4 前必修门禁）。
+   - 完成备注：**insertNewVideo schema 漂移修复**。① `insertNewVideo`(video-merge-mutations.ts) 改签名 `{shortId,catalogId,title,type}`，INSERT 列对齐 029 后 videos schema（删已 DROP 的 year/title_normalized，加 catalog_id NOT NULL，范式对齐 `videos.mutations.createVideo`）；② `VideoMergesService` 构造注入 `MediaCatalogService`，split **事务前**对每 group `findOrCreate` 作品层 catalog（幂等；事务外，回滚至多留无害孤儿 catalog）→ 事务内 `insertNewVideo` 传 catalogId。**范围澄清**：卡片原列单文件不足以修（catalog_id NOT NULL + findOrCreate 编排在 Service 层），必要适配延伸 VideoMergesService.ts。测试：更新现有权威 `video-merge-mutations.test.ts` split（mock MediaCatalogService.findOrCreate + happy path 断言 catalogId 替代 year + 事务失败 ROLLBACK 补 findOrCreate 就绪）+ 新建 `video-merge-insert-new-video.test.ts`（insertNewVideo 真实 SQL）。**Codex stop-time review FIX**：现有 split 单测与新 catalog 依赖不兼容（初次 grep 漏 video-merge-mutations.test.ts）→ 适配 + 删初版重叠的 video-merge-split-catalog.test.ts。门禁 typecheck/lint/verify×2 EXIT=0 + **全量 456 files 6034 passed 0 failed 零回归**（StagingEditPanel jsdom flaky 隔离+全量均通过，非本卡）。无新端点/migration/ADR。执行模型: claude-opus-4-8（建议 sonnet，opus 覆盖：事务设计+依赖注入更稳妥）
 
 2. **CHG-VIR-PRE-2** — ADR-177 前置：`video_external_refs` ↔ `catalog_external_refs` 关系预研定档（状态：⬜ 未开始）
    - 创建时间：2026-06-02 19:41

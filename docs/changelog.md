@@ -13747,3 +13747,22 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 ---
 
 > **SEQ-20260602-03 Phase 0 本轮收尾（用户裁决「只做 1/2/3」）**：CHG-VIR-1（ADR-105a）/ CHG-VIR-2（ADR-175）/ CHG-VIR-3（ADR-176）三份 ADR 全 Accepted（各经 arch-reviewer claude-opus-4-8 CONDITIONAL → 修订吸收）。**CHG-VIR-4（ADR-177 外部 ID 映射真源）未做**——硬前置 CHG-VIR-PRE-2（`video_external_refs`↔`catalog_external_refs` 关系预研定档）尚未完成，依赖未满足，留后续会话；CHG-VIR-PRE-1（`insertNewVideo` schema 漂移修复，Phase 4 前置）亦待做。Phase 0 整体（4 份 ADR）未完成，不发 PHASE COMPLETE。
+
+## [CHG-VIR-PRE-1] insertNewVideo schema 漂移修复（split 新建 video 正确性隐患）
+- **完成时间**：2026-06-02
+- **记录时间**：2026-06-02 20:50
+- **执行模型**：claude-opus-4-8（建议 sonnet；opus 覆盖——修复涉及事务原子性设计 + 依赖注入，opus 更稳妥）
+- **子代理**：无
+- **背景（根因）**：`video-merge-mutations.ts:299 insertNewVideo` 的 INSERT `(short_id,title,year,type,title_normalized,is_published)` 双重失效——引用 migration 029 已 DROP 的 `year`(029:48)/`title_normalized`(029:57)，且缺 `catalog_id`（029:60 改 NOT NULL）。`VideoMergesService.split` 拆分到新建 video 路径必然命中（设计 §9.4 未决项 3 / SEQ-20260602-03 Phase 4 前置门禁）。
+- **修改文件**：
+  - `apps/api/src/db/queries/video-merge-mutations.ts` — `insertNewVideo` 改签名 `{shortId,catalogId,title,type}`，INSERT 列对齐 029 后 videos schema（删 year/title_normalized、加 catalog_id），范式对齐 `videos.mutations.createVideo`
+  - `apps/api/src/services/VideoMergesService.ts` — 构造注入 `MediaCatalogService`；split **事务前**对每 group `findOrCreate` 作品层 catalog（幂等；事务外，回滚至多留无害孤儿 catalog）→ 事务内 `insertNewVideo` 传 catalogId（**范围澄清**：调用方必要适配，卡片原列单文件不足以修 catalog_id NOT NULL + findOrCreate 编排属 Service 层）
+  - `tests/unit/api/video-merge-mutations.test.ts` — 更新现有权威 split 测试：mock `MediaCatalogService.findOrCreate` + happy path 断言 catalogId 替代 year + 「事务失败 ROLLBACK」补 findOrCreate 就绪
+  - `tests/unit/api/video-merge-insert-new-video.test.ts`（新建）— insertNewVideo 真实 SQL 回归（INSERT 含 catalog_id、不含 year/title_normalized、4 绑定参数）
+  - `docs/audit/adr-d-status.json` — verify 重算同步 D-176-1..6 闭环（CHG-VIR-3 changelog 已登记；衍生更新一并纳入）
+- **新增依赖**：无
+- **数据库变更**：无（修代码对齐既有 schema，不改 migration）
+- **门禁/验收**：typecheck/lint/verify:adr-contracts（verify-sql-schema-alignment ✅ insertNewVideo SQL 对齐 / verify-endpoint-adr ✅）/verify:endpoint-adr EXIT=0 + **全量 456 files 6034 passed 0 failed 零回归**。split happy path / unmerge(split action) 等现有测试适配后全绿。
+- **Codex stop-time review FIX**：Codex 指出「现有 split 单测与新 catalog 依赖不兼容」——初次 grep 漏 `video-merge-mutations.test.ts`（权威 merge/split 单测，未 mock MediaCatalogService → split 走真实 findOrCreate + mockClient 空 rows 抛错）。修：mock MediaCatalogService + 适配 split 断言（catalogId 替代旧 year）；删初版重叠的 `video-merge-split-catalog.test.ts`（与权威测试重复），独特 insertNewVideo SQL 测试保留为 `video-merge-insert-new-video.test.ts`。
+- **注意事项**：① split 拆出新 video 经 `findOrCreate(newVideoMeta)` 绑 catalog（同 title_normalized+year+type 复用现有）；② findOrCreate 在 split 事务外（幂等），split 回滚至多产生无 video 指向的孤儿 catalog（共享作品层无害，下次复用）——未改 MediaCatalogService.findOrCreate 签名去支持外部事务 client；③ StagingEditPanel.test.tsx jsdom flaky（隔离+全量均通过，非本卡回归 / 上一会话已记录）。
+- **[AI-CHECK]**：分层 NO 违反（findOrCreate 编排在 Service 层，insertNewVideo 纯 query）；跨模块 NO；重复逻辑 NO（删重叠测试收敛单一权威 split 测试）；any NO（mock 用 `as unknown as PoolClient/Pool`）；空 catch NO；硬编码颜色无关；函数规模 NO；insertNewVideo 签名变（内部 query，唯一消费方 VideoMergesService 已同步）。结论：SAFE。
