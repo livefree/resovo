@@ -2757,14 +2757,14 @@ CODENAME-MATRIX-E2E (依赖 Wave 3 验收期补丁 CODENAME-MATRIX ✅)
 
 - **状态**：🟡 规划中
 - **创建时间**：2026-06-02 19:41
-- **最后更新时间**：2026-06-02 23:05（**Phase 1 完结 — CHG-VIR-5 + CHG-VIR-6 ✅**：TitleIdentityParser 纯函数〔core_title_key 并行解析 + facets 七维 + Y4 护栏，40 fixture〕+ title_observations 去重聚合 shadow 表〔migration 085 + 采集链路 fire-and-forget 写入 + F3 容错〕；零生产行为变更、不参与归并决策；全量 6084 passed 零回归 / claude-opus-4-8。**Phase 2 待启动**〔CHG-VIR-7/8/9 候选证据化，CHG-VIR-8/9 建议 opus + 可能需端点 ADR amendment〕，留用户决定。 / **Phase 0 完结 — 四份 ADR 全 Accepted**：CHG-VIR-1/2/3/4 ✅〔ADR-105a/175/176/177〕 **+ 前置门禁 CHG-VIR-PRE-1 ✅**〔insertNewVideo schema 漂移修复 / 全量零回归〕 **+ CHG-VIR-PRE-2 ✅**〔ADR-177 关系定档「并存+上卷」/ arch-reviewer 认可〕；**CHG-VIR-4〔ADR-177〕已 Accepted**〔arch-reviewer CONDITIONAL → RR-A/RR-B 2 必修红线 + 4 黄线吸收 / 哨兵 -1→0 校正 / 10 D 条 + R10 不变量〕。**2026-06-02 22:15 复核 Phase 1** → CHG-VIR-5/6 卡修订〔F1 title_observations 真源=设计 §1b·不另起 ADR / F2 CHG-VIR-5 依赖补 CHG-VIR-2·ADR-175 titleKind / F3 CHG-VIR-6 补采集容错验收〕）
+- **最后更新时间**：2026-06-02 23:23（**Phase 1 完结 — CHG-VIR-5 + CHG-VIR-6 ✅**：TitleIdentityParser 纯函数〔core_title_key 并行解析 + facets 七维 + Y4 护栏，40 fixture〕+ title_observations 去重聚合 shadow 表〔migration 085 + 采集链路 fire-and-forget 写入 + F3 容错〕；零生产行为变更、不参与归并决策；全量 6084 passed 零回归 / claude-opus-4-8。**Phase 2 待启动**〔CHG-VIR-7/8/9 候选证据化，CHG-VIR-8/9 建议 opus + 可能需端点 ADR amendment〕，留用户决定。 / **Phase 0 完结 — 四份 ADR 全 Accepted**：CHG-VIR-1/2/3/4 ✅〔ADR-105a/175/176/177〕 **+ 前置门禁 CHG-VIR-PRE-1 ✅**〔insertNewVideo schema 漂移修复 / 全量零回归〕 **+ CHG-VIR-PRE-2 ✅**〔ADR-177 关系定档「并存+上卷」/ arch-reviewer 认可〕；**CHG-VIR-4〔ADR-177〕已 Accepted**〔arch-reviewer CONDITIONAL → RR-A/RR-B 2 必修红线 + 4 黄线吸收 / 哨兵 -1→0 校正 / 10 D 条 + R10 不变量〕。**2026-06-02 22:15 复核 Phase 1** → CHG-VIR-5/6 卡修订〔F1 title_observations 真源=设计 §1b·不另起 ADR / F2 CHG-VIR-5 依赖补 CHG-VIR-2·ADR-175 titleKind / F3 CHG-VIR-6 补采集容错验收〕。**2026-06-02 23:23 复核 Phase 2** → 新增 Phase 2 前置卡 **CHG-VIR-6.5**〔P2-F1：ADR-105a 补 `release_marker_mismatch` 强负 + P2-F3 group 聚合口径 + 放宽 `D-105a-N` 审计正则〕，CHG-VIR-7 依赖补 6.5）
 - **目标**：把「标准化标题 → 单 key 命中即合并」升级为 Entity Resolution（Blocking 召回 → 多证据 Scoring → 阈值分级 Decision → 可逆审计 + 决策记忆），为合并/拆分提供稳健、可解释、可回滚基础。严格按「先旁路 → 再影响排序 → 最后碰生产归并阈值」推进。
 - **范围**：`apps/api`（TitleIdentityParser 新增 / MediaCatalogService.findOrCreate / VideoMergesService / CrawlerService / 离线候选 job / migrations）+ `packages/types` + `apps/server-next`（/admin/merge + 审核台 similar tab 统一候选）+ `docs/decisions.md`（4 份 ADR）+ `docs/architecture.md`（schema 同步）。
 - **方案全文**：`docs/designs/video-identity-resolution-redesign_20260602.md`（commit 27c29a5d；含 §9 arch-reviewer 审核 + §10 修订处置）。
 - **关联 ADR**：新增 ADR-105a / ADR-175 / ADR-176 / ADR-177；ADR-105 AMENDMENT 2026-06-02（旧 ADR-105a 方向已取代，commit a35bfa36）；ADR-137（similar 算法 Phase 2c 取代）；ADR-174（D-174-3 重指向语义迁移）；ADR-114-NEGATED（跨站不合并，不触碰）。
 - **红线**：禁改 `normalizeTitle`/`normalizeMergeKey` 语义（`core_title_key` 新增并行）；禁 pg_trgm / 技术栈外依赖；繁简不归一（并列 alias）；候选对象 Phase 1-4 = video-pair，catalog 身份层留 Phase 5。
 - **执行节奏**：前置门禁 `PRE-1`（独立正确性）+ `PRE-2`（ADR-177 关系预研）→ Phase 0 四份 ADR 起草（**全 Opus + arch-reviewer PASS**，任一红线未闭环 → BLOCKER 停）→ Phase 1 旁路 → Phase 2 候选证据化(2a/2b/2c) → Phase 3 ingest shadow → Phase 4 拆分+清洗 → Phase 5 catalog 身份层。
-- **依赖链**：`PRE-1`（任意时点）；`PRE-2 → CHG-VIR-4`；`CHG-VIR-1/2/3/4`（Phase 0，可并行）→ `CHG-VIR-5/6`（Phase 1）→ `CHG-VIR-7/8/9`（Phase 2）→ `CHG-VIR-10`（Phase 3）；`CHG-VIR-11`（Phase 4，依赖 PRE-1+Phase1）；`CHG-VIR-12`（Phase 5，依赖 ADR-176/177 + Phase1-4 稳定）。
+- **依赖链**：`PRE-1`（任意时点）；`PRE-2 → CHG-VIR-4`；`CHG-VIR-1/2/3/4`（Phase 0，可并行）→ `CHG-VIR-5/6`（Phase 1）→ **`CHG-VIR-6.5`（Phase 2 前置门禁 / ADR-105a AMENDMENT）** → `CHG-VIR-7/8/9`（Phase 2）→ `CHG-VIR-10`（Phase 3）；`CHG-VIR-11`（Phase 4，依赖 PRE-1+Phase1）；`CHG-VIR-12`（Phase 5，依赖 ADR-176/177 + Phase1-4 稳定）。
 - **粒度说明**：Phase 0（ADR 起草卡）验收已具体；Phase 1-5 实施卡为**规划占位**，详细文件范围/验收待对应 ADR 定档后于启动前补全（task-queue「提前规划」性质）。
 
 ### 任务列表（按执行顺序）
@@ -2845,14 +2845,25 @@ CODENAME-MATRIX-E2E (依赖 Wave 3 验收期补丁 CODENAME-MATRIX ✅)
    - 依赖：CHG-VIR-5。
    - 完成备注：**title_observations 去重聚合表 + 采集链路 fire-and-forget shadow 写入**。Migration 085（表 + 去重唯一索引 `uq_title_observations_dedupe` COALESCE 表达式 + 反查 idx + DO 校验，已应用 dev DB）+ `db/queries/titleObservations.ts`（`recordTitleObservation` ON CONFLICT 去重键 DO UPDATE `observed_count+1`，**仅 DB query 零 service import**）+ `services/titleObservation.builder.ts`（`buildTitleObservation`：`parseTitle` facets 快照 + sha256 hash，Service 层组装供 Phase 2 复用）+ `CrawlerService.upsertVideo` Step 5 后 `void recordTitleObservation(...).catch(stderr)`（F3 容错非空 catch）+ architecture.md §5.16 同步。**范围澄清**：卡片原列 5 文件，实施扩 2 文件（① builder 修正分层——全仓 DB query 层无 import services 先例，解析/哈希属 Service 层职责 + 避免 baseline 豁免的 CrawlerService 537 行继续增长；② crawlerTitleObservation.test.ts 端到端 + F3 容错）。真实 DB 验证：同键二次写入 observed_count=2、facets jsonb 正确存取。门禁：typecheck/lint EXIT=0 + **全量 6084 passed / 0 failed**（460 files / 净 +10：query 3 + builder 4 + e2e 3）+ verify:adr-contracts EXIT=0。验收 F1（不进唯一约束/归并决策）/ 去重生效 / F3 容错 / 零生产行为变更全闭环。无新端点/ADR。**SEQ Phase 1 完结**。执行模型: claude-opus-4-8
 
+**Phase 2 启动前置门禁（复核 Phase 2 / P2-F1 新增 · 2026-06-02）**
+
+8.5. **CHG-VIR-6.5** — Phase 2 前置：ADR-105a AMENDMENT（补 `release_marker_mismatch` 强负 + group 聚合口径 + 审计正则）（状态：⬜ 未开始）
+   - 创建时间：2026-06-02 23:23
+   - 建议模型：**opus**（改 ADR-105a D-105a-3 证据表极性，Y-105a-3「实施期不得改极性」→ 须 ADR amendment + arch-reviewer PASS）
+   - 变更原因：复核 Phase 2 发现 **P2-F1**——`TitleIdentityParser` 把 `releaseMarker`（剧场版/SP/OVA/番外）剥到 facets（core_title_key 不含），但 ADR-105a `D-105a-3` 强负表仅有 `season_mismatch`、**无 `release_marker_mismatch`**；与 ADR-176「剧场版/SP/OVA 独立 catalog」不对称 → Phase 2b blocking 用 core_title_key 把「正篇」与「剧场版」召回同组且**无强负拦截**（video 层误并，早于 Phase 5）。对比：`edition`（加长版）剥到 facet 故意无强负正确（同作品），`release_marker` 也无强负 = 遗漏。
+   - 范围：① **ADR-105a AMENDMENT**（decisions.md）：`D-105a-3` 强负表补 `release_marker_mismatch`（facets.releaseMarker 不同 → veto，对齐 ADR-176；与 edition 不 veto 形成正确对比）；数据源 Phase 2 读 parser facets 实时比较（同 `season_mismatch` 口径，**不依赖 Phase 5 `media_catalog.season_number` 列**）。② 明确 **P2-F3**：`D-105a-9` Phase 2a group 行 `identityScore` 聚合口径（group→单值：组内 recommendedTarget vs 其余成员 pair 的代表/最低口径）。③ 顺带（审计盲区）放宽 `verify-adr-d-numbers` 正则识别字母 ADR 编号 `D-105a-N`，使 `D-105a-1..13` + 新增 D 条进 `adr-d-status.json`。
+   - 门禁：Opus 子代理 + arch-reviewer PASS + commit trailer `Subagents`；AMENDMENT 落 decisions.md ADR-105a。
+   - 验收要点：`release_marker_mismatch` 强负入 `D-105a-3` + 数据源/口径明确；P2-F3 group 聚合口径定档；正则放宽后 `D-105a-N` 进审计；arch-reviewer 认可。
+   - 依赖：无（Phase 1 已完成）；**CHG-VIR-7 硬前置**。
+
 **Phase 2 — 候选证据化（候选对象 video-pair）**
 
 9. **CHG-VIR-7** — Phase 2a：现有 N-video group 候选附加 evidence（不改来源）（状态：⬜ 未开始）
    - 创建时间：2026-06-02 19:41
    - 建议模型：sonnet
-   - 范围：VideoMergesService 候选保持现状 `mc.title_normalized+mc.year+v.type` N-video group（来源/排序/数量不变）；附加 `identityScore`/`evidence`/`blockingReasons`/`strongNegativeReasons`（**禁复用 legacyScore=source_overlap_ratio**）；UI 展示「为何可合并/为何拦截」。
+   - 范围：VideoMergesService 候选保持现状 `mc.title_normalized+mc.year+v.type` N-video group（来源/排序/数量不变）；附加 `identityScore`/`evidence`/`blockingReasons`/`strongNegativeReasons`（**禁复用 legacyScore=source_overlap_ratio**）；UI 展示「为何可合并/为何拦截」。**注**：strongNegativeReasons 须含 CHG-VIR-6.5 落档的 `release_marker_mismatch`。
    - 验收要点：候选数量/分页/默认排序与旧逻辑一致；仅新增 evidence 字段。
-   - 依赖：CHG-VIR-5 + CHG-VIR-1。
+   - 依赖：**CHG-VIR-6.5（Phase 2 前置门禁：ADR-105a release_marker 强负 + group 口径）** + CHG-VIR-5 + CHG-VIR-1。
 
 10. **CHG-VIR-8** — Phase 2b：`identity_candidate` shadow 写入 + 离线生成 job（状态：⬜ 未开始）
     - 创建时间：2026-06-02 19:41
