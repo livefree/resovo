@@ -2881,7 +2881,29 @@ CODENAME-MATRIX-E2E (依赖 Wave 3 验收期补丁 CODENAME-MATRIX ✅)
     - 依赖：CHG-VIR-7 + CHG-VIR-1。
     - 完成备注：**identity_candidate + 离线 job 落地（code-architect claude-opus-4-8 / agentId a9a4c5ca8088f4b87 蓝图 → 忠实实现，无需新 ADR，纯 D-105a-7/8/10 实施）**。**Migration 086**（identity_candidate 表 + 6 索引〔partial unique pending R5 + pair_key 反查 + status·version 过滤 + left/right FK 反查 + `idx_title_observations_core_key` blocking 表达式索引〕+ 2 CHECK〔left≠right + left::text<right::text canonical 有序兜底防幂等失效〕+ 自引用 FK SET NULL 保复活链 / 真实 DB 验证 partial unique 拦重复 pending + CHECK 拦反序 + DO 校验全过）。新建 5 文件：`evidenceHash.ts`（D-105a-8 八项输入域确定性序列化 + sha256，禁含 created_at/job-id R7）/ `candidateUpsert.ts`（单事务幂等 R5：hash 比对 noop / 腾位 supersede+新建 / 复活链 R6 不覆盖原 rejected + ON CONFLICT DO NOTHING 并发兜底重查）/ `externalIdLoader.ts`（Y-105a-4 双源 media_catalog+video_external_refs，仅 manual_confirmed）/ `offlineRescore.ts`（Blocking core_title_key 分桶〔禁 pairwise + MAX_BUCKET 护栏〕→ 收敛去重 → 评分 → upsert + advisory lock 单实例 + cursor keyset 分批 / D-105a-4 低分跳过）/ `db/queries/identity-candidate.ts`（6 queries 纯 SQL）。`identityCandidateWorker.ts`（Bull 队列，**裁定 A**：评分逻辑单一真源在 apps/api 不跨 ADR-107 §4 复制）+ `lib/queue.ts`/`server.ts` 注册 + 2 脚本（`enqueue-identity-rescore` 手动触发 + `identity-compare-report` 三桶对比，不切 UI/不加 admin 端点）+ architecture.md §5.15 现状基线同步。**蓝图偏离（合理）**：① 不加自动 scheduler——Phase 2b shadow 对照阶段手动触发足够，自动周期留 Phase 2c/用户裁定（避免未验证 job 自动运行）；② offlineRescore 内联 `scorePair` 替代 `scoreCandidatePairs(from ./index)` 消除 index↔offlineRescore 循环 import；③ episode/metadata digest Phase 2b 占位空串（证据细化时 bump SCORER_VERSION）。**identity_decisions / confirmed→merge（D-105a-11）留 Phase 2c**（CHG-VIR-8 无人工裁定入口）。门禁全过：typecheck/lint EXIT=0 + verify:adr-contracts EXIT=0 + **全量 6148 passed**（466 files / 净 +35：evidenceHash 14 + upsert 8 + queries 8 + offlineRescore 5；2 jsdom flaky〔VideoImageSection 21/21 + StagingEditPanel 12/12 隔离全过〕与本卡 node 端无关）+ perf baseline ✓。无新 admin 端点（worker/queue/脚本 → endpoint-adr 不触发）。ADR D-N 闭环 D-105a-7/8/10。**解阻 CHG-VIR-9（Phase 2c）**。执行模型: claude-opus-4-8
 
-11. **CHG-VIR-9** — Phase 2c：切 UI 默认候选来源（/admin/merge + 审核台 similar 统一）（状态：⬜ 未开始 / **依赖 CHG-VIR-8 ✅ 已解除**；离线 candidate 已就绪，UI 改读 identity_candidate + identity_decisions 落地 + 端点变更先补 ADR）
+11. **CHG-VIR-9** — Phase 2c：切 UI 默认候选来源（/admin/merge + 审核台 similar 统一）（状态：🟡 设计完成 → 拆 9-A/9-B/9-C / **依赖 CHG-VIR-8 ✅ 已解除**）
+    - 实际开始：2026-06-03 02:05（执行模型 claude-opus-4-8）
+    - **设计阶段产出**：code-architect (claude-opus-4-8 / agentId a662a6b4cd495065e) 端点 ADR amendment 草案 + 实施蓝图。结论：**体量 12+ 项必须拆 3 子卡**（CLAUDE.md PATCH >5 拆）。ADR-137 AMENDMENT 2026-06-02 已预告取代方向（实施 + 端点契约细化）。
+    - **3 待裁定决策点（影响 ADR + 生产行为，启动 9-A 前定）**：(a) `/admin/merge` 默认 source（蓝图荐 `legacy` 直到 shadow 稳定 / 或 `identity`）；(b) reject 是否新增独立端点 `POST /admin/identity-candidates/:id/reject`（蓝图荐**是** → 新 route 须独立 ADR + Opus PASS + verify:endpoint-adr）；(c) 切 identity 默认前是否先全量回填 title_observations（蓝图荐 similar 先切·merge 待回填）。
+
+11-A. **CHG-VIR-9-A** — Phase 2c：端点 ADR amendment + 候选来源读切换（fallback 就绪）（状态：⬜ 未开始 / 拆自 CHG-VIR-9）
+    - 建议模型：**opus**（ADR-137 AMENDMENT 2.0 + ADR-105a AMENDMENT + by-videoId query 跨消费方 + 默认值决策）
+    - 范围：ADR-137 AMENDMENT 2.0（similar 端点契约：保留路径 + 新增 `?source=identity|legacy` + 响应扩 optional 字段 candidateId/identityScore/evidence/status，向后兼容）+ ADR-105a AMENDMENT（merge candidates `?source=`）；新 query `listPendingCandidatesByVideoId`（审核台召回对侧 pair）+ `listPendingCandidatesGrouped`（merge 按 group_key 折叠）；ModerationService/VideoMergesService source 分支 + **空表自动降级 legacy**。**不含新 route / 不含 migration / 不含写路径**（verify:endpoint-adr 不触发）。
+    - 验收：候选来源可切（?source=），identity 空表自动降级 legacy；端点契约向后兼容（旧前端读 similarityScore 不破）。
+    - 依赖：CHG-VIR-8 ✅。
+
+11-B. **CHG-VIR-9-B** — Phase 2c：identity_decisions migration + confirmed→merge + reject 写路径（状态：⬜ 未开始 / 拆自 CHG-VIR-9）
+    - 建议模型：**opus**（migration 列级 DDL 跨 3+ 消费方 + 新 reject route ADR + confirmed→merge 事务 D-105a-11）
+    - **前置门禁**：spawn Opus 子代理裁 ① identity_decisions DDL（migration 087）② 新 reject 端点 ADR-NNN 草案 → verify:endpoint-adr 通过。
+    - 范围：migration 087（identity_decisions 表 + R8 CHECK confirmed 必有 audit_id + 索引）；`insertIdentityDecision`/`updateCandidateStatus`/`markDecisionReverted` queries（事务内 PoolClient）；merge 事务内挂 decision(confirmed)+candidate status=confirmed+关联 video_merge_audit.id（**单 BEGIN/COMMIT** D-105a-11 R8）；unmerge 联动 decision reverted；新增 `POST /admin/identity-candidates/:id/reject`（candidate rejected + decision，复活链 R6 已就绪）。
+    - 验收：confirm→merge 单事务 + audit 关联；reject→candidate rejected；unmerge→decision reverted；verify:adr-contracts 通过。
+    - 依赖：CHG-VIR-9-A（读契约）。
+
+11-C. **CHG-VIR-9-C** — Phase 2c：UI 切换 + confirm/reject 操作（状态：⬜ 未开始 / 拆自 CHG-VIR-9）
+    - 建议模型：sonnet（UI 编排，契约在 9-A/9-B 定）
+    - 范围：审核台 TabSimilar + MergeClient source toggle（identity/legacy）+ confirm/reject 双按钮 + 证据展示**复用 EvidencePanel**（CHG-VIR-7）；server-next api 客户端扩展（SimilarVideoItem optional 字段 + rejectIdentityCandidate + mergeVideos candidateId 透传）。
+    - 验收：两入口共用候选来源；UI 可回退 legacy；现有组件单测绿 + admin moderation/merge 手测。
+    - 依赖：CHG-VIR-9-A + CHG-VIR-9-B。
     - **前置（验证已证实）**：blocking 召回覆盖 = `title_observations` 覆盖度。dev 环境用 `scripts/backfill-title-observations.ts` 回填后跑通（573 桶/917 pair/193 候选/159 拦截/1.4s）；**生产切 UI 前须先回填 title_observations**（采集 fire-and-forget 覆盖不全），否则候选召回不全。
     - **shadow 验证结论（2026-06-03）**：新增召回 170（标点/语言变体/符号差异漏合并治理 ✅）+ 强负拦截 159（season_mismatch/external_id_conflict 误合并拦截 ✅），逐条可解释，候选质量符合预期 → 支持切 UI。
     - 创建时间：2026-06-02 19:41
