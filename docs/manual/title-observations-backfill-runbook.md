@@ -39,7 +39,8 @@ identity 候选（CHG-VIR-8 离线 job）的 blocking 召回按 `title_observati
 - [ ] **生产 API 进程运行中**：identity 重算 worker 注册在 apps/api 服务进程内（`server.ts` 启动时 `registerIdentityCandidateWorker()`），无独立 worker 进程。API 起着 = 消费者在线。
 - [ ] **Redis 可用**：Bull 队列依赖（`enqueue-identity-rescore` 入队 + worker 消费）。
 - [ ] **执行机环境**：仓库根目录、依赖已装（`npm ci`）、能连生产 DB 与 Redis 的 env 文件就绪。
-- [ ] **env 文件**：下文命令以 `--env-file=.env.production` 为例；按实际生产 env 文件名替换。脚本读取与 apps/api 相同的 `DATABASE_URL` / Redis 连接配置。
+- [ ] **env 文件**：下文命令以 `--env-file=.env.production.local` 为例（该文件名已在 `.gitignore`，不会被提交；仓库内**不存在**现成文件，需自建或按实际生产 env 文件名替换）。脚本只读两个变量：`DATABASE_URL`（coverage / backfill / compare-report）+ `REDIS_URL`（enqueue）。
+  - ⚠️ **`REDIS_URL` 必须显式填写且指向生产 API 进程同一个 Redis**——`queue.ts` 有 `redis://localhost:6379` 兜底，漏填时 enqueue 会静默入到本地 Redis，生产 worker 永远收不到 job。
 - [ ] **执行窗口**：回填为单行 INSERT 循环（keyset 分批 500 读 + 逐行写），负载温和，无需停机窗口；建议避开采集高峰以减少 DB 写竞争（非强制）。
 
 ## 4. 执行步骤
@@ -47,7 +48,7 @@ identity 候选（CHG-VIR-8 离线 job）的 blocking 召回按 `title_observati
 ### Step 0 — 回填前覆盖度快照（只读）
 
 ```bash
-node --env-file=.env.production --import tsx scripts/report-title-observation-coverage.ts
+node --env-file=.env.production.local --import tsx scripts/report-title-observation-coverage.ts
 ```
 
 记录输出（覆盖率、未覆盖数、桶数），作为回填前快照留档。生产首次执行预期：覆盖率低（仅 CHG-VIR-6 上线后新采集的 video 有观测）。
@@ -55,7 +56,7 @@ node --env-file=.env.production --import tsx scripts/report-title-observation-co
 ### Step 1 — 执行回填
 
 ```bash
-node --env-file=.env.production --import tsx scripts/backfill-title-observations.ts
+node --env-file=.env.production.local --import tsx scripts/backfill-title-observations.ts
 ```
 
 - 行为：keyset 分页（id 升序，批 500）遍历 `deleted_at IS NULL AND title IS NOT NULL` 的全部 videos，为每个 video 写一条 **site 级观测**（`source_site_key = NULL`，CHG-VIR-6 范式：video.title 对全源一致）。
@@ -66,7 +67,7 @@ node --env-file=.env.production --import tsx scripts/backfill-title-observations
 ### Step 2 — 回填后覆盖度验证（只读）
 
 ```bash
-node --env-file=.env.production --import tsx scripts/report-title-observation-coverage.ts
+node --env-file=.env.production.local --import tsx scripts/report-title-observation-coverage.ts
 ```
 
 **通过判据**：
@@ -82,7 +83,7 @@ node --env-file=.env.production --import tsx scripts/report-title-observation-co
 ### Step 3 — 全量重算入队 + 确认完成
 
 ```bash
-node --env-file=.env.production --import tsx scripts/enqueue-identity-rescore.ts
+node --env-file=.env.production.local --import tsx scripts/enqueue-identity-rescore.ts
 ```
 
 输出 `✅ 已入队 identity-rescore job: identity-rescore-<ts>`。job 由生产 API 进程内 Bull worker（concurrency 1）消费。
@@ -103,7 +104,7 @@ node --env-file=.env.production --import tsx scripts/enqueue-identity-rescore.ts
 ### Step 4 — 候选量级验证（只读）
 
 ```bash
-node --env-file=.env.production --import tsx scripts/identity-compare-report.ts
+node --env-file=.env.production.local --import tsx scripts/identity-compare-report.ts
 ```
 
 **通过判据（与 §5 dev 基线同数量级）**：

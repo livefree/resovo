@@ -14083,3 +14083,8 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **测试**：dev 实跑两脚本验证可用（coverage 报表 + compare-report 均正常出数）；门禁全过 typecheck / lint / verify:adr-contracts EXIT=0 + 全量 **473 files 6222 passed / 0 failed**（首跑 1 个 DataTable matrix jsdom flaky 重跑全过——本卡未触及 admin-ui，沿 CHG-VIR-8 已知 flaky 先例）。
 - **共享层沉淀评估**：统计 SQL 消费方仅运维场景 1 处（未达 3 处提取阈值），不沉淀；CHG-VIR-10 precision/recall 报表复用时再抽 queries 函数。
 - **注意事项**：卡片范围 = 工程产出（runbook + 验证工具）；**生产实际回填由用户/运维按 runbook 执行，执行完成并留档（§4 Step 5）前，CHG-VIR-10 与 CHG-VIR-9-D 的硬前置仍未解除**。dev 桶数 617 > 上次 full-rescan 时 573 印证「观测变化后必须重新入队 full-rescan」（runbook §5 注已说明）。
+
+### [MAINT] CHG-VIR-OBS-BACKFILL runbook env 占位名修正 + REDIS_URL 兜底警告
+- **记录时间**：2026-06-03
+- **原因**：用户按 runbook 执行报 `node: .env.production: not found`——原示例占位名易被直接复制且仓库无此文件。
+- **修改**：`docs/manual/title-observations-backfill-runbook.md` §3 env 条目改为 `.env.production.local`（.gitignore 已覆盖不会被提交，明示需自建）+ 明确脚本只读 `DATABASE_URL` / `REDIS_URL` 两变量 + ⚠️ `queue.ts` 有 `redis://localhost:6379` 兜底——漏填 REDIS_URL 时 enqueue 静默入本地 Redis、生产 worker 收不到 job；§4 五处命令示例同步替换。
