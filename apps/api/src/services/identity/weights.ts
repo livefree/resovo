@@ -10,6 +10,12 @@ import type { EvidenceType, EvidencePolarity } from '@resovo/types'
 /** scorer 版本（version 升级触发 Phase 2b superseded 重算 / Y-105a-5）。 */
 export const SCORER_VERSION = '1.0.0'
 
+/**
+ * 阈值/权重配置版本号（D-105a-8 evidence_hash 输入域 ⑧）。
+ * 随权重/阈值结构变更 bump；KV 接入后改读 KV version（forward-compat）。
+ */
+export const THRESHOLD_CONFIG_VERSION = '1.0.0'
+
 /** 非 exact 路径封顶（< 0.92 阈值 → 永不自动绑定 / D-105a-3）。 */
 export const NON_EXACT_CAP = 0.9
 
@@ -36,6 +42,12 @@ export const POSITIVE_WEIGHTS: Partial<Record<EvidenceType, number>> = {
 
 /** source_fingerprint Jaccard 阈值（默认 0.6 / D-105a-3；阈值实施期可调，权重不变）。 */
 export const SOURCE_FINGERPRINT_JACCARD_THRESHOLD = 0.6
+
+/**
+ * candidate 区间下界（默认 0.75 / D-105a-4 阈值，KV 可配）。
+ * identityScore < 此值且无强负 → 'none'，离线 job 不生成候选。
+ */
+export const CANDIDATE_MIN_THRESHOLD = 0.75
 
 /** 强负 veto 证据集合（D-105a-3 + D-105a-14 release_marker_mismatch）。 */
 export const STRONG_NEGATIVE_TYPES: readonly EvidenceType[] = [

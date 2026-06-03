@@ -37,6 +37,7 @@ import { registerEnrichmentWorker } from '@/api/workers/enrichmentWorker'
 import { registerImageHealthWorker } from '@/api/workers/imageHealthWorker'
 import { registerBlurhashWorker } from '@/api/workers/imageBlurhashWorker'
 import { registerBackfillWorker } from '@/api/workers/imageBackfillWorker'
+import { registerIdentityCandidateWorker } from '@/api/workers/identityCandidateWorker'
 import { adminStagingRoutes } from '@/api/routes/admin/staging'
 import { adminModerationRoutes } from '@/api/routes/admin/moderation'
 import { adminReviewLabelsRoutes } from '@/api/routes/admin/reviewLabels'
@@ -195,6 +196,9 @@ async function start() {
   registerImageHealthWorker()
   registerBlurhashWorker()
   registerBackfillWorker()
+  // CHG-VIR-8 Phase 2b：身份候选离线重算 worker（消费者）。无自动 scheduler——
+  // shadow 对照阶段手动 enqueue（scripts/enqueue-identity-rescore.ts），自动周期留 Phase 2c。
+  registerIdentityCandidateWorker()
 
   const schedulerEnabled = process.env.CRAWLER_SCHEDULER_ENABLED === 'true'
   if (schedulerEnabled) {

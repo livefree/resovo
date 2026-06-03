@@ -704,17 +704,17 @@ UserPreferences = {
 
 ---
 
-### 5.15 视频身份解析层（规划草案 / ADR-105a Draft / 未落 migration）
+### 5.15 视频身份解析层（Entity Resolution / ADR-105a / Phase 1a·2a·2b 已落地）
 
-> ⚠️ **规划中，非现状基线**：以下为 SEQ-20260602-03 视频身份解析升级（设计 `docs/designs/video-identity-resolution-redesign_20260602.md` §4.2/§4.3）的 schema 草案，**Phase 2b（CHG-VIR-8）才落 migration**；当前生产无 `identity_candidate` 表。本小节随设计 §5「Phase 0 同步 schema 草案」要求登记，落地时迁出本标注。真源详见 `docs/decisions.md` ADR-105a。
+> **现状基线（部分落地）**：SEQ-20260602-03 视频身份解析升级（设计 `docs/designs/video-identity-resolution-redesign_20260602.md` §4.2/§4.3）。**已落地**：`core_title_key`/facets 纯函数（Phase 1a CHG-VIR-5）+ 多证据评分 `apps/api/src/services/identity/` 模块（Phase 2a CHG-VIR-7）+ **`identity_candidate` 表（Phase 2b CHG-VIR-8 / Migration 086）** + 离线重算 Bull job。**留后续**：`identity_decisions` confirmed→merge + UI 默认切候选来源 + 自动绑定开关（Phase 2c+ / 默认 OFF）。真源详见 `docs/decisions.md` ADR-105a。
 
 把 ADR-105 v1「`(mc.title_normalized, mc.year, v.type)` 三元组等值 + 单维 `source_overlap_ratio`」升级为 Entity Resolution（Blocking 并集召回 → 多证据 Scoring → 阈值分级 → 候选离线持久化 + 决策记忆）。要点：
 
-- **`core_title_key`**（规划）：`TitleIdentityParser.parseTitle` 产出的**新增并行**确定性等值 blocking key（B-tree，**非 pg_trgm**），与 `normalizeTitle`/`normalizeMergeKey` 解耦、不改其语义、不写入 catalog 唯一约束（红线）。facets（`season_number`/`edition`/`language_variant`/序号）解析保存不删除。
-- **多证据评分**（规划）：强正（external exact ID 饱和 0.95 / alias / 同源 canonical / source 指纹重叠）/ 中正（`core_title_key` 等值 / year±1 / type 兼容 / 集数结构 / metadata）/ 强负（external ID 冲突 / season 不同 / year 远且无 exact / type 不兼容 / 集数模式冲突 / 序号冲突 → 硬否决）。阈值 `≥0.92` auto-eligible（自动绑定开关默认 OFF）/ `[0.75,0.92)` candidate / `<0.75` none / 任一强负 blocked。`identityScore` 与 `legacyScore`（`source_overlap_ratio`）字段分离。
-- **`identity_candidate`**（草案表 / Phase 2b 落地）：video-pair 内部表示 + 状态机 `pending`/`confirmed`/`rejected`/`superseded`；并发幂等 `UNIQUE(canonical_pair_key) WHERE status='pending'`；`evidence_hash` 去重 + `revived_from_candidate_id` 复活链；`trigger_source` ∈ `ingest`/`offline-rescore`/`manual-search`。完整 DDL 草案见 ADR-105a D-105a-7。
-- **离线生成**（规划）：Bull job Blocking+Scoring 双跑写候选，实时端点轻量读 + 旧 group fallback；实时 p95 继承 ADR-105 ≤200ms，离线 job 另立 SLO。
-- **决策事实源**（规划）：`identity_decisions` confirmed→merge 关联 `video_merge_audit.id`，不形成两套事实源。
+- **`core_title_key`**（Phase 1a 落地 / `apps/api/src/services/TitleIdentityParser.ts`）：`parseTitle` 产出的**新增并行**确定性等值 blocking key（B-tree，**非 pg_trgm**），与 `normalizeTitle`/`normalizeMergeKey` 解耦、不改其语义、不写入 catalog 唯一约束（红线）。facets（`seasonNumber`/`edition`/`languageVariant`/`releaseMarker`/序号）解析保存不删除。
+- **多证据评分**（Phase 2a 落地 / `apps/api/src/services/identity/`）：强正（external exact ID 饱和 0.95 / alias / 同源 canonical / source 指纹重叠）/ 中正（`core_title_key` 等值 / year±1 / type 兼容 / 集数结构 / metadata）/ 强负（external ID 冲突 / season 不同 / year 远且无 exact / type 不兼容 / 集数模式冲突 / 序号冲突 / **release_marker 不同** → 硬否决 veto）。阈值 `≥0.92` auto-eligible（自动绑定开关默认 OFF）/ `[0.75,0.92)` candidate / `<0.75` none / 任一强负 blocked。`identityScore` 与 `legacyScore`（`source_overlap_ratio`）字段分离（R3）。Phase 2a 候选行附加 evidence；外部 ID/集数/metadata 证据 Phase 2b 填实。
+- **`identity_candidate`**（Phase 2b 落地 / **Migration 086**）：video-pair 候选 shadow 表 + 状态机 `pending`/`confirmed`/`rejected`/`superseded`。字段（D-105a-7）：`left_video_id`/`right_video_id`（FK CASCADE）/ `canonical_pair_key`（min\|max 有序）/ `status` / `parser_version` / `scorer_version` / `evidence_jsonb` / `evidence_hash`（D-105a-8 确定性 sha256）/ `legacy_score`（nullable）/ `identity_score` / `strong_negative_reasons[]` / `trigger_source`（`ingest`/`offline-rescore`/`manual-search`）/ `group_key` / `revived_from_candidate_id`·`superseded_by_candidate_id`（自引用 FK SET NULL，保复活链）/ `created_at`·`updated_at`。约束：`CHECK(left<>right)` + `CHECK(left::text<right::text)`（canonical 有序兜底）。索引：`uq_identity_candidate_pending`（partial unique `WHERE status='pending'` / R5 幂等）+ pair_key 反查 + `(status,scorer_version,parser_version)` + left/right video FK 反查 + `idx_title_observations_core_key`（blocking 召回支撑，表达式索引）。
+- **离线生成**（Phase 2b 落地 / Bull `identity-candidate-queue` · `apps/api/src/workers/identityCandidateWorker.ts`）：Blocking（`title_observations.coreTitleKey` 分桶，禁 pairwise 全量 + MAX_BUCKET 护栏）→ Scoring（复用 `scorePair`）→ 单事务幂等 upsert（hash 比对 noop / 腾位 supersede + 新建 / 复活链）。与现有实时 group-by 候选并行对照（不切 UI），实时端点轻量读 + 旧 group fallback；实时 p95 继承 ADR-105 ≤200ms，离线 job 另立 SLO。手动触发 `scripts/enqueue-identity-rescore.ts`（无自动 scheduler / shadow 阶段）；对比报表 `scripts/identity-compare-report.ts`。
+- **决策事实源**（规划 / Phase 2c+）：`identity_decisions` confirmed→merge 关联 `video_merge_audit.id`，不形成两套事实源。
 
 ---
 

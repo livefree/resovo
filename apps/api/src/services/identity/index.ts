@@ -5,7 +5,7 @@
  * 纯函数（parseTitle 确定性 + scorePair 无副作用）。
  */
 
-import type { VideoSummaryForMerge, GroupIdentityScore } from '@resovo/types'
+import type { VideoSummaryForMerge, GroupIdentityScore, PairScore } from '@resovo/types'
 import { parseTitle } from '../TitleIdentityParser'
 import { scorePair, type PairSideInput } from './scorePair'
 import { aggregateGroup } from './aggregateGroup'
@@ -39,6 +39,31 @@ export function scoreGroup(videos: readonly VideoSummaryForMerge[]): GroupIdenti
   return aggregateGroup(pairs, SCORER_VERSION)
 }
 
+/**
+ * Phase 2b 离线 job 编排：对 blocking 召回收敛后的显式 pair 列表评分（externalIds 由 loader 填实）。
+ * 复用 scorePair（不改其函数体）；pair 来源从「组内 C(N,2)」换为「blocking 收敛 pair」
+ * —— D-105a-2「Blocking 禁 pairwise 全量，先经高选择性 key 收敛」的落地点。
+ */
+export function scoreCandidatePairs(
+  sides: readonly PairSideInput[],
+  candidatePairs: readonly (readonly [string, string])[],
+): PairScore[] {
+  const sideMap = new Map(sides.map((s) => [s.videoId, s]))
+  const out: PairScore[] = []
+  for (const [a, b] of candidatePairs) {
+    const sa = sideMap.get(a)
+    const sb = sideMap.get(b)
+    if (sa && sb) out.push(scorePair(sa, sb))
+  }
+  return out
+}
+
 export { scorePair, aggregateGroup, SCORER_VERSION }
+export { THRESHOLD_CONFIG_VERSION } from './weights'
 export { classifyTypePair, type TypeRelation } from './type-compat'
 export type { PairSideInput, ExternalIdSummary } from './scorePair'
+// Phase 2b
+export { computeEvidenceHash, type EvidenceHashInput, type PairFieldSnapshot } from './evidenceHash'
+export { upsertIdentityCandidate, type UpsertCandidateInput, type UpsertOutcome } from './candidateUpsert'
+export { loadExternalIdSummaries } from './externalIdLoader'
+export { runIdentityRescore, type IdentityRescoreOptions, type IdentityRescoreResult } from './offlineRescore'

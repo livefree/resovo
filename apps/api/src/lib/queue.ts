@@ -77,6 +77,17 @@ export const maintenanceQueue = new Bull('maintenance-queue', {
   },
 })
 
+/** 视频身份候选离线重算队列（SEQ-20260602-03 / CHG-VIR-8 Phase 2b / 低频 shadow 重算） */
+export const identityCandidateQueue = new Bull('identity-candidate-queue', {
+  redis: redisOptions,
+  defaultJobOptions: {
+    attempts: 2,
+    backoff: { type: 'fixed', delay: 30_000 },
+    removeOnComplete: 20,
+    removeOnFail: 10,
+  },
+})
+
 // ── 队列事件日志 ──────────────────────────────────────────────────
 
 function attachQueueLogger(queue: Bull.Queue, queueName: string) {
@@ -94,8 +105,9 @@ attachQueueLogger(verifyQueue, 'verify-queue')
 attachQueueLogger(maintenanceQueue, 'maintenance-queue')
 attachQueueLogger(enrichmentQueue, 'enrichment-queue')
 attachQueueLogger(imageHealthQueue, 'image-health-queue')
+attachQueueLogger(identityCandidateQueue, 'identity-candidate-queue')
 
-const queues = { crawlerQueue, verifyQueue, maintenanceQueue, enrichmentQueue, imageHealthQueue }
+const queues = { crawlerQueue, verifyQueue, maintenanceQueue, enrichmentQueue, imageHealthQueue, identityCandidateQueue }
 export default queues
 
 /** 确认 crawler 队列可用，避免创建任务后因入队失败留下 pending 脏状态 */
