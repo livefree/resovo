@@ -2750,3 +2750,139 @@ CODENAME-MATRIX-E2E (依赖 Wave 3 验收期补丁 CODENAME-MATRIX ✅)
     - 验收要点：三键各调对应 api + toast + 刷新；停用全失效源仅在有失效源时出现 + danger；pending 禁用；列 id 不变（e2e 零破坏）；门禁全过 + 新增组件测试。
     - 完成备注：新建 `SourceRowActions` 组件（范式对齐 videos `VideoRowActions`）：↻=`batchProbeVideo`（重探连接）/ ⚡=`batchRenderCheckVideo`（重验播放）行内键 + ⋯=`AdminDropdown`（展开/收起线路 · 重新采集源`refetchSources` · 停用全失效源`disableDeadSources`〔danger + 仅 `connectFailCount+renderFailCount>0` 显示〕 · 线路别名管理深链）。`run` 统一 pending 守卫（禁用全部按钮）+ 各 handler `try/catch` `useToast` 反馈（复用 SourceLinesExpand summary 文案口径 + level success/warn/danger/info）+ 成功后 `onReload()` 刷新本行聚合信号；容器层 stopPropagation 防误触行展开。`buildColumns(expandedKeys)`→`buildColumns(expandedKeys, actions)` 接 `{onExpandToggle,onReload}`；SourcesClient 抽 `toggleExpand(videoId)`（行点击 + 菜单共用）+ 传 `onReload=refresh`。复用既有 4 端点（batch-probe / batch-render-check / refetch-sources / disable-dead），**无新端点/schema/ADR/共享契约**。门禁全过：typecheck/lint/verify:adr-contracts EXIT=0 / **全量 455 files 6028 passed 0 failed 零 flaky**（净 +10 = SourceRowActions.test U-1..U-10：三键/菜单/条件项/pending/失败不刷新）/ sources 4 文件 37/37（含 SourcesClient.test 渲染新 cell）。列 id `actions` 不变，e2e 零破坏。共享层沉淀评估：app-local 行操作组件（消费方专属），范式已复用共享 AdminDropdown，无需再沉淀。执行模型: claude-opus-4-8
       - **Codex stop-time review FIX（refresh/zap 越权暴露）**：实证核验端点守卫——`batch-probe`(refresh)/`batch-render-check`(zap)=`adminOnly`，`disable-dead`/`refetch`=`moderator+admin`；middleware 使 sources 页 moderator 可达 → moderator 暴露 admin-only 二键。修复：`page.tsx` 读 `user_role` cookie → `isAdmin` 透传 → 非 admin 时 refresh/zap disable+tooltip（对齐 CrawlerSiteExpand/VideoRowActions），more 菜单不门控。+U-11..U-14；全量 455 files 6032 passed 零回归。
+
+---
+
+## [SEQ-20260602-03] 视频身份解析与合并/拆分升级（Entity Resolution）
+
+- **状态**：🟡 规划中
+- **创建时间**：2026-06-02 19:41
+- **最后更新时间**：2026-06-02 19:41
+- **目标**：把「标准化标题 → 单 key 命中即合并」升级为 Entity Resolution（Blocking 召回 → 多证据 Scoring → 阈值分级 Decision → 可逆审计 + 决策记忆），为合并/拆分提供稳健、可解释、可回滚基础。严格按「先旁路 → 再影响排序 → 最后碰生产归并阈值」推进。
+- **范围**：`apps/api`（TitleIdentityParser 新增 / MediaCatalogService.findOrCreate / VideoMergesService / CrawlerService / 离线候选 job / migrations）+ `packages/types` + `apps/server-next`（/admin/merge + 审核台 similar tab 统一候选）+ `docs/decisions.md`（4 份 ADR）+ `docs/architecture.md`（schema 同步）。
+- **方案全文**：`docs/designs/video-identity-resolution-redesign_20260602.md`（commit 27c29a5d；含 §9 arch-reviewer 审核 + §10 修订处置）。
+- **关联 ADR**：新增 ADR-105a / ADR-175 / ADR-176 / ADR-177；ADR-105 AMENDMENT 2026-06-02（旧 ADR-105a 方向已取代，commit a35bfa36）；ADR-137（similar 算法 Phase 2c 取代）；ADR-174（D-174-3 重指向语义迁移）；ADR-114-NEGATED（跨站不合并，不触碰）。
+- **红线**：禁改 `normalizeTitle`/`normalizeMergeKey` 语义（`core_title_key` 新增并行）；禁 pg_trgm / 技术栈外依赖；繁简不归一（并列 alias）；候选对象 Phase 1-4 = video-pair，catalog 身份层留 Phase 5。
+- **执行节奏**：前置门禁 `PRE-1`（独立正确性）+ `PRE-2`（ADR-177 关系预研）→ Phase 0 四份 ADR 起草（**全 Opus + arch-reviewer PASS**，任一红线未闭环 → BLOCKER 停）→ Phase 1 旁路 → Phase 2 候选证据化(2a/2b/2c) → Phase 3 ingest shadow → Phase 4 拆分+清洗 → Phase 5 catalog 身份层。
+- **依赖链**：`PRE-1`（任意时点）；`PRE-2 → CHG-VIR-4`；`CHG-VIR-1/2/3/4`（Phase 0，可并行）→ `CHG-VIR-5/6`（Phase 1）→ `CHG-VIR-7/8/9`（Phase 2）→ `CHG-VIR-10`（Phase 3）；`CHG-VIR-11`（Phase 4，依赖 PRE-1+Phase1）；`CHG-VIR-12`（Phase 5，依赖 ADR-176/177 + Phase1-4 稳定）。
+- **粒度说明**：Phase 0（ADR 起草卡）验收已具体；Phase 1-5 实施卡为**规划占位**，详细文件范围/验收待对应 ADR 定档后于启动前补全（task-queue「提前规划」性质）。
+
+### 任务列表（按执行顺序）
+
+**前置门禁**
+
+1. **CHG-VIR-PRE-1** — `insertNewVideo` schema 漂移排查修复（现网正确性隐患）（状态：⬜ 未开始）
+   - 创建时间：2026-06-02 19:41
+   - 建议模型：sonnet（既有正确性修复，无新契约）
+   - 变更原因：`apps/api/src/db/queries/video-merge-mutations.ts:299-310` split 新建 video 的 INSERT 仍引用已由 migration 029 DROP 的 `videos.year` / `videos.title_normalized`，拆分到新建 video 路径会命中（arch-reviewer 未决项 3）。
+   - 文件范围：`video-merge-mutations.ts`（insertNewVideo INSERT 列对齐现行 videos schema，year/title_normalized 不再写 videos，按需落 media_catalog）+ 回归测试。
+   - 验收要点：split 新建 video 不引用已删列；现有 split/unmerge 测试零回归；typecheck/lint/test 全过。
+   - 依赖：无（独立，建议早做；Phase 4 前必修门禁）。
+
+2. **CHG-VIR-PRE-2** — ADR-177 前置：`video_external_refs` ↔ `catalog_external_refs` 关系预研定档（状态：⬜ 未开始）
+   - 创建时间：2026-06-02 19:41
+   - 建议模型：**opus**（架构关系决策 + arch-reviewer 第二意见）
+   - 变更原因：arch-reviewer R1——设计 §4.6 新提 `catalog_external_refs` 与既有 `video_external_refs`（migration 041/045）语义重叠层级不同；**关系未定不得起草 ADR-177**。
+   - 产出：定档「替代/并存/上卷」关系（设计临时定向「并存+上卷」）+ D-174-3 现有写 `video_external_refs` candidate 路径迁移方案 + 两表 candidate/rejected 审计是否合并。
+   - 验收要点：关系三选一明确 + 上卷规则 + D-174-3 迁移路径；arch-reviewer 认可后方可起 CHG-VIR-4。
+   - 依赖：无。
+
+**Phase 0 — ADR 起草（全 Opus + arch-reviewer PASS；任一红线未闭环 → BLOCKER）**
+
+3. **CHG-VIR-1** — ADR-105a 起草（多证据评分 / 阈值分级 / 候选持久化 / 离线生成）（状态：⬜ 未开始）
+   - 创建时间：2026-06-02 19:41
+   - 建议模型：**opus**（ADR 起草，强制 arch-reviewer PASS）
+   - 范围：评分公式（强正/中正/强负 + 0.92/0.75 阈值）+ `core_title_key` 确定性等值 blocking（B-tree，非 pg_trgm）+ `identity_candidate` schema + 离线生成 job 性能模型（实时端点继承 ADR-105 p95 / 离线另立基线，Y5）+ **type 兼容矩阵**（代码常量真源，未决 2）+ `evidence_hash` 输入域（未决 5）+ Y1 幂等约束 + Y3 confirmed→merge 事务边界。
+   - 门禁：Opus 子代理 + arch-reviewer PASS + commit trailer Subagents；落 decisions.md ADR-105a 章节。
+   - 验收要点：评分/阈值/候选 schema/离线模型/type 矩阵/evidence_hash 全闭环；与 ADR-105 端点契约兼容；arch-reviewer PASS。
+   - 依赖：无（可与 CHG-VIR-2/3/4 并行）。
+
+4. **CHG-VIR-2** — ADR-175 起草（多语种标题模型）（状态：⬜ 未开始）
+   - 创建时间：2026-06-02 19:41
+   - 建议模型：**opus**
+   - 范围：`media_catalog` 字段语义收紧（新增 `original_language` / `title_original` 原语种 / `title_en` 仅英文）+ `media_catalog_aliases` 结构化升级（region/script/kind/confidence/is_primary_for_locale）+ **locale fallback 链**（未决 1，简繁不归一并列 alias）+ 匹配分层（同语种强 / 跨语种 alias 中强 / 罗马音辅助）。
+   - 门禁：Opus + arch-reviewer PASS；落 decisions.md ADR-175 + architecture.md schema 同步。
+   - 验收要点：字段语义 + aliases 升级 + fallback 确定性规则 + 匹配分层；arch-reviewer PASS。
+   - 依赖：无。
+
+5. **CHG-VIR-3** — ADR-176 起草（catalog 按季粒度 + series_group）（状态：⬜ 未开始）
+   - 创建时间：2026-06-02 19:41
+   - 建议模型：**opus**
+   - 范围：catalog 按季粒度（第二季/SP/OVA 独立 catalog）+ **season_number 纳入 catalog 唯一键**（解 `026:84` 唯一索引 + `normalizeTitle` 剥季的硬阻塞）+ `series_group`/`catalog_relations`（season_of/edition_of/remake_of/spinoff_of/same_work_candidate）+ catalog 无 `deleted_at` 的「删前全字段快照」回滚范式（未决 4，继承 migration 084）。
+   - 门禁：Opus + arch-reviewer PASS；落 decisions.md ADR-176 + architecture.md。
+   - 验收要点：唯一键改造方案 + series_group 模型 + 回滚范式；arch-reviewer PASS。
+   - 依赖：无。
+
+6. **CHG-VIR-4** — ADR-177 起草（外部 ID 映射真源 `catalog_external_refs`）（状态：⬜ 未开始）
+   - 创建时间：2026-06-02 19:41
+   - 建议模型：**opus**
+   - 范围：`catalog_external_refs`（provider/external_id/external_kind/relation/season_number/confidence/source/is_primary）+ partial unique index（exact 唯一 / parent 一对多 / candidate·rejected 审计保留）+ 四列降级为 cache（仅 `relation=exact AND is_primary` 回填）+ findOrCreate 改读映射表 + ADR-174 D-174-3 重指向语义迁移 + 既有数据迁移。
+   - 门禁：Opus + arch-reviewer PASS；**硬前置 CHG-VIR-PRE-2 关系定档**；落 decisions.md ADR-177 + architecture.md。
+   - 验收要点：映射表 schema + 约束分级 + cache 规则 + 迁移路径；arch-reviewer PASS。
+   - 依赖：**CHG-VIR-PRE-2**。
+
+**Phase 1 — 纯函数旁路（零生产行为变更；实施卡详细范围待 ADR 定档细化）**
+
+7. **CHG-VIR-5** — Phase 1a：TitleIdentityParser 纯函数 + fixture（状态：⬜ 未开始）
+   - 创建时间：2026-06-02 19:41
+   - 建议模型：sonnet（纯函数实施，规格来自 ADR-105a/175）
+   - 范围：新建 `apps/api/src/services/TitleIdentityParser.ts` `parseTitle(raw)→{coreTitleKey,facets,titleKind,parserVersion,confidence}`；**不改 TitleNormalizer**；大量 fixture（书名号/全半角/标点 · 国语/粤语/字幕 · 加长/导剪/SP/OVA/剧场版 · 第N季/S2/Part2/序号 · 源站噪声）。**Y4**：fixture 须区分「序号即身份（复仇者联盟4）」与「序号即季/卷（第4季）」。
+   - 验收要点：fixture 全绿 + `normalizeTitle`/`normalizeMergeKey` 输出完全不变；facets 仅观测不参与决策。
+   - 依赖：CHG-VIR-1（facets/parser 规格）。
+
+8. **CHG-VIR-6** — Phase 1b：title_observations 去重聚合表 + shadow 写入（状态：⬜ 未开始）
+   - 创建时间：2026-06-02 19:41
+   - 建议模型：sonnet（schema 来自 ADR；实施）
+   - 范围：migration `title_observations`（去重唯一键 video_id+site_key+source_name+raw_title_hash+parser_version；observed_count/first_seen/last_seen）+ 采集链路 shadow 写入；不参与合并决策。
+   - 验收要点：去重生效（重复标题只增 observed_count）；零生产行为变更。
+   - 依赖：CHG-VIR-5。
+
+**Phase 2 — 候选证据化（候选对象 video-pair）**
+
+9. **CHG-VIR-7** — Phase 2a：现有 N-video group 候选附加 evidence（不改来源）（状态：⬜ 未开始）
+   - 创建时间：2026-06-02 19:41
+   - 建议模型：sonnet
+   - 范围：VideoMergesService 候选保持现状 `mc.title_normalized+mc.year+v.type` N-video group（来源/排序/数量不变）；附加 `identityScore`/`evidence`/`blockingReasons`/`strongNegativeReasons`（**禁复用 legacyScore=source_overlap_ratio**）；UI 展示「为何可合并/为何拦截」。
+   - 验收要点：候选数量/分页/默认排序与旧逻辑一致；仅新增 evidence 字段。
+   - 依赖：CHG-VIR-5 + CHG-VIR-1。
+
+10. **CHG-VIR-8** — Phase 2b：`identity_candidate` shadow 写入 + 离线生成 job（状态：⬜ 未开始）
+    - 创建时间：2026-06-02 19:41
+    - 建议模型：**opus**（离线 job + identity_candidate 幂等/状态机，跨消费方）
+    - 范围：identity_candidate 落地（Y1 partial unique `(canonical_pair_key) WHERE status='pending'` 单事务 upsert / Y2 复活链 `revived_from_candidate_id` / Y5 版本重算可见性）+ 离线 Bull job（Blocking 多 key 并集 → Scoring → 写 candidate）；与现有候选并行对照，不切 UI。
+    - 验收要点：shadow candidate vs 旧候选对比报表（新增召回/误召回可解释）；幂等无重复 pending。
+    - 依赖：CHG-VIR-7 + CHG-VIR-1。
+
+11. **CHG-VIR-9** — Phase 2c：切 UI 默认候选来源（/admin/merge + 审核台 similar 统一）（状态：⬜ 未开始）
+    - 创建时间：2026-06-02 19:41
+    - 建议模型：**opus**（取代 ADR-137 similar 算法；端点变更可能需 ADR amendment）
+    - 范围：/admin/merge + 审核台「类似」tab 默认读 identity_candidate（C2：取代 ADR-137 四维加权）；旧实时 group by + ADR-137 算法降级 fallback。
+    - 验收要点：两入口共用候选来源；UI 可回退旧来源；端点变更先补 ADR。
+    - 依赖：CHG-VIR-8。
+
+**Phase 3 — ingest-time shadow scoring**
+
+12. **CHG-VIR-10** — Phase 3：findOrCreate 旁路 shadow scoring（不改 catalog_id 绑定）（状态：⬜ 未开始）
+    - 创建时间：2026-06-02 19:41
+    - 建议模型：**opus**（findOrCreate 是采集入库核心归并点）
+    - 范围：MediaCatalogService.findOrCreate 旁路计算「新评分会绑哪个 catalog」+ 记录 shadow decision/evidence + 对比现有 5 步；模糊只写 identity_candidate，**不自动绑定**；仅强 exact ID + 无强负 + 与现有 5 步一致才与现行为一致绑定（Y3 事务边界）。
+    - 验收要点：shadow precision/recall 报表；生产 catalog_id 零变更；是否开自动绑定留另起 ADR/Phase 5。
+    - 依赖：CHG-VIR-8。
+
+**Phase 4 — 拆分证据化 + 多语种清洗**
+
+13. **CHG-VIR-11** — Phase 4：拆分自动分组建议 + title_en 拼音迁出 + original_language 回填（状态：⬜ 未开始）
+    - 创建时间：2026-06-02 19:41
+    - 建议模型：opus（拆分增强 ADR-105 split amendment）+ sonnet（数据清洗）
+    - 范围：拆分按 season/edition/core_title/外部ID/集数范围生成分组建议 + 支持拆到已有/新建 video（仍走 `video_merge_audit`）；title_en 拼音/罗马音迁出结构化 aliases（PinyinDetector）；original_language 回填。
+    - 验收要点：拆分建议覆盖维度 + 审计强一致；拼音迁出/回填正确。
+    - 依赖：**CHG-VIR-PRE-1**（insertNewVideo 已修）+ CHG-VIR-5 + CHG-VIR-2。
+
+**Phase 5 — catalog 身份层（独立阶段，video-pair 链路稳定后）**
+
+14. **CHG-VIR-12** — Phase 5：catalog_external_refs 落地 + 四列降级 + catalog 按季 + series_group + catalog-catalog 合并（状态：⬜ 未开始）
+    - 创建时间：2026-06-02 19:41
+    - 建议模型：**opus**（catalog 身份层重构，最高风险）
+    - 范围：落地 catalog_external_refs + findOrCreate 改读映射表 + 四列降级 cache + catalog 唯一键纳入 season_number + series_group/catalog_relations + catalog-catalog 合并（restore snapshot + 子表恢复，不依赖 deleted_at）+ 评估开启真实自动 catalog 绑定。
+    - 验收要点：外部 ID 迁移前后 exact cache 与映射表一致；parent 一对多不污染 cache；catalog 合并可回滚。
+    - 依赖：CHG-VIR-3 + CHG-VIR-4 + Phase 1-4 稳定。
