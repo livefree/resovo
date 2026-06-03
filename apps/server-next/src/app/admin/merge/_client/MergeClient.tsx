@@ -4,10 +4,11 @@
  * MergeClient.tsx — `/admin/merge` 合并/拆分工作台主组件（CHG-SN-5-12 / ADR-105 / CHG-SN-7-MISC-MERGE-1/2）
  *
  * 范围：Segment 3 视图 + PageHeader 拆分工作台入口
- *   1. 待审候选 Segment — DataTable 一体化 + 行展开（card 形态左右对比 + 影响预览 + 置信度 pill）+ merge action
+ *   1. 待审候选 Segment — ./MergeCandidatesSection（CHG-VIR-9-C 拆出：DataTable + source toggle + confirm/reject）
  *   2. 已合并 Segment — AuditSection pre-filter action='merge'
  *   3. 已拆分 Segment — AuditSection pre-filter action='split'
  *   4. 拆分工作台 — PageHeader action 按钮 toggle SplitSection
+ *   5. 直接合并工作区 — ?candidate_a/?candidate_b/?candidate_id 深链（identity 候选锚点透传）
  *
  * 端点消费（ADR-105 §端点契约 4 端点）：
  *   GET  /admin/video-merges/candidates   — candidate 预览
@@ -20,34 +21,25 @@
  *   ErrorState / EmptyState / Segment / useToast = 10 件
  */
 
-import { useState, useEffect, useCallback, useMemo, type CSSProperties } from 'react'
+import { useState, useEffect, useCallback, type CSSProperties } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import {
   PageHeader,
   AdminButton,
-  AdminInput,
   AdminCard,
-  LoadingState,
-  ErrorState,
-  EmptyState,
-  DataTable,
   Segment,
   VideoPicker,
   useToast,
-  type ColumnPreference,
-  type TableColumn,
-  type TableSortState,
   type SegmentItem,
   type PickerVideoItem,
 } from '@resovo/admin-ui'
-import type { CandidateGroup, VideoSummaryForMerge } from '@resovo/types'
-import { listCandidates, mergeVideos, unmergeVideos } from '@/lib/merge/api'
+import { mergeVideos } from '@/lib/merge/api'
 import { videoPickerFetcher } from '@/lib/videos/picker-fetcher'
 import { ApiClientError } from '@/lib/api-client'
 import { SplitSection } from './MergeSplitSection'
 import { AuditSection } from './MergeAuditSection'
 import { BatchMergeWorkspace } from './BatchMergeWorkspace'
-import { EvidencePanel } from './EvidencePanel'
+import { CandidatesSection } from './MergeCandidatesSection'
 
 // ── 错误码差异化 description（ADR-105 §错误码 + CHG-SN-5-12-PATCH P0/P2-1）─────
 
@@ -90,101 +82,8 @@ const SEGMENT_ITEMS: readonly SegmentItem[] = [
   { value: 'split',      label: '已拆分' },
 ]
 
-const SCORE_BADGE_STYLE: CSSProperties = {
-  display: 'inline-block',
-  padding: '2px 8px',
-  borderRadius: '4px',
-  fontSize: '12px',
-  fontWeight: 600,
-  background: 'var(--state-success-bg)',
-  color: 'var(--state-success-fg)',
-  border: '1px solid var(--state-success-border)',
-}
-
-const SECONDARY_TEXT: CSSProperties = {
-  fontSize: 'var(--font-size-sm)',
-  color: 'var(--fg-muted)',
-}
-
-// CHG-SN-5-12-PATCH P2-2：推荐 target 显式 badge
-const RECOMMENDED_BADGE_STYLE: CSSProperties = {
-  display: 'inline-block',
-  padding: '2px 6px',
-  marginLeft: '6px',
-  borderRadius: '4px',
-  fontSize: '11px',
-  fontWeight: 600,
-  background: 'var(--state-success-bg)',
-  color: 'var(--state-success-fg)',
-  border: '1px solid var(--state-success-border)',
-}
-
-// CHG-SN-7-MISC-MERGE-2：CandidateExpand card 形态样式
-const EXPAND_PANEL_STYLE: CSSProperties = {
-  padding: '12px 16px',
-  background: 'var(--bg-surface-elevated)',
-  display: 'flex',
-  flexDirection: 'column',
-  gap: '12px',
-}
-
-const CONFIDENCE_PILL_STYLE: CSSProperties = {
-  display: 'inline-flex',
-  alignItems: 'center',
-  padding: '2px 10px',
-  borderRadius: '999px',
-  fontSize: '12px',
-  fontWeight: 700,
-  background: 'var(--state-success-bg)',
-  color: 'var(--state-success-fg)',
-  border: '1px solid var(--state-success-border)',
-}
-
-const VIDEO_CARD_STYLE: CSSProperties = {
-  border: '1px solid var(--border-subtle)',
-  borderRadius: '8px',
-  padding: '10px 12px',
-  display: 'flex',
-  flexDirection: 'column',
-  gap: '6px',
-  cursor: 'pointer',
-}
-
-const VIDEO_CARD_SELECTED_STYLE: CSSProperties = {
-  border: '1px solid var(--state-success-border)',
-  borderRadius: '8px',
-  padding: '10px 12px',
-  display: 'flex',
-  flexDirection: 'column',
-  gap: '6px',
-  cursor: 'pointer',
-  background: 'var(--state-success-bg)',
-}
-
-const IMPACT_PREVIEW_STYLE: CSSProperties = {
-  display: 'flex',
-  flexDirection: 'column',
-  gap: '6px',
-  padding: '8px 10px',
-  borderRadius: '6px',
-  background: 'var(--bg-surface)',
-  border: '1px solid var(--border-subtle)',
-}
-
-// ── CHG-VIR-7：身份评分（identityScore 与 legacyScore 双值并存，文案区分防语义混淆 / R3）
-// EvidencePanel 抽到 ./EvidencePanel（避免既有超限文件膨胀），此处仅留 pill 样式
-
-const IDENTITY_PILL_STYLE: CSSProperties = {
-  display: 'inline-flex',
-  alignItems: 'center',
-  padding: '2px 10px',
-  borderRadius: '999px',
-  fontSize: '12px',
-  fontWeight: 700,
-  background: 'var(--bg-surface)',
-  color: 'var(--fg-default)',
-  border: '1px solid var(--border-subtle)',
-}
+// CandidatesSection + CandidateExpand 及其样式常量已拆至 ./MergeCandidatesSection
+// （CHG-VIR-9-C：500 行红线先拆分再扩展 source toggle / confirm / reject）
 
 // ── 主组件 ─────────────────────────────────────────────────────────
 
@@ -218,6 +117,8 @@ export function MergeClient() {
     const p = new URLSearchParams(searchParams.toString())
     p.delete('candidate_a')
     p.delete('from')
+    // CHG-VIR-9-C：identity 候选锚点参数随 banner 一起清理
+    p.delete('candidate_id')
     const qs = p.toString()
     router.replace(qs ? `?${qs}` : '?', { scroll: false })
   }, [router, searchParams])
@@ -262,6 +163,7 @@ export function MergeClient() {
         <DirectMergeWorkspace
           candidateAId={candidateAParam}
           candidateBIdFromUrl={searchParams.get('candidate_b')}
+          candidateIdFromUrl={searchParams.get('candidate_id')}
           onMergeSuccess={dismissCandidateBanner}
         />
       )}
@@ -300,310 +202,21 @@ export function MergeClient() {
   )
 }
 
-// ── Candidates section ────────────────────────────────────────────
-
-function CandidatesSection() {
-  const [minScore, setMinScore] = useState(0.6)
-  const [pendingMinScore, setPendingMinScore] = useState('0.6')
-  const [page, setPage] = useState(1)
-  const [pageSize, setPageSize] = useState(20)
-  // ADR-150 阶段 5 EP-4 follow-up（2026-05-25）：Merge sort 全栈打通 / Service 层 sort
-  const [sort, setSort] = useState<TableSortState>({ field: undefined, direction: 'desc' })
-  const [columnPrefs, setColumnPrefs] = useState<ReadonlyMap<string, ColumnPreference>>(new Map())
-  const [data, setData] = useState<readonly CandidateGroup[]>([])
-  const [total, setTotal] = useState(0)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<Error | null>(null)
-  const [expandedKeys, setExpandedKeys] = useState<ReadonlySet<string>>(new Set())
-  const toast = useToast()
-
-  const load = useCallback(() => {
-    setLoading(true)
-    setError(null)
-    // ADR-150 阶段 5 EP-4 follow-up（2026-05-25）：sort 白名单守卫 + URL 透传
-    const sortFieldGuarded: 'score' | 'videoCount' | 'year' | 'titleNormalized' | undefined =
-      sort.field === 'score' || sort.field === 'videoCount' || sort.field === 'year' || sort.field === 'titleNormalized'
-        ? sort.field
-        : undefined
-    listCandidates({
-      minScore, limit: pageSize, page,
-      ...(sortFieldGuarded ? { sortField: sortFieldGuarded, sortDir: sort.direction } : {}),
-    })
-      .then((res) => {
-        setData(res.data)
-        setTotal(res.total)
-      })
-      .catch((e: unknown) => setError(e instanceof Error ? e : new Error('加载失败')))
-      .finally(() => setLoading(false))
-  }, [minScore, page, pageSize, sort])
-
-  useEffect(() => { load() }, [load])
-
-  const handleMerge = useCallback(
-    async (group: CandidateGroup, targetVideoId: string) => {
-      const sourceVideoIds = group.videos.map((v) => v.id).filter((id) => id !== targetVideoId)
-      try {
-        const result = await mergeVideos({ sourceVideoIds, targetVideoId })
-        toast.push({
-          level: 'success',
-          title: '合并成功',
-          description: `已合并 ${sourceVideoIds.length} 个源到 ${result.targetVideo.title}`,
-          action: {
-            label: '撤销',
-            onClick: () => {
-              unmergeVideos(result.auditId, '用户撤销')
-                .then(() => {
-                  toast.push({ level: 'success', title: '已撤销合并' })
-                  load()
-                })
-                .catch((err: unknown) => {
-                  toast.push({
-                    level: 'danger',
-                    title: '撤销失败',
-                    description: err instanceof Error ? err.message : '未知错误',
-                  })
-                })
-            },
-          },
-        })
-        load()
-      } catch (err) {
-        // CHG-SN-5-12-PATCH P0：用 ApiClientError.code 而非 message 字符串匹配
-        toast.push({
-          level: 'danger',
-          title: '合并失败',
-          description: describeError(err, 'merge'),
-        })
-      }
-    },
-    [toast, load],
-  )
-
-  // EP-3-D（2026-05-24）+ ADR-150 阶段 5 EP-4 follow-up（2026-05-25）：3 列 sort 全栈打通
-  //   - 保留 kind: 'computed'（score/videoCount/title 都是 Service 派生 / 业务无 filter 意义）
-  //   - 显式 enableSorting: true（kind='computed' 默认 false / AMD2 D-150-AMD2-2 灵活组合）
-  //   - 后端 listCandidates 扩 sortField + sortDir 白名单 4 字段（Service 层 sort / 跨页不严格稳定）
-  const columns = useMemo<TableColumn<CandidateGroup>[]>(() => [
-    {
-      id: 'titleNormalized',
-      kind: 'computed',
-      enableSorting: true, // ADR-150 阶段 5 EP-4 follow-up sort 全栈打通
-      header: '作品',
-      accessor: (g) => g.titleNormalized,
-      minWidth: 240, // 仅 minWidth（无 width）→ 列宽可调时作 flex 列吸收余量
-      enableResizing: true,
-      cell: ({ row }) => (
-        <div>
-          <div style={{ fontWeight: 500 }}>{row.titleNormalized}</div>
-          <div style={SECONDARY_TEXT}>{row.year ?? '—'} · {row.type}</div>
-        </div>
-      ),
-    },
-    {
-      id: 'videoCount',
-      kind: 'computed',
-      enableSorting: true, // ADR-150 阶段 5 EP-4 follow-up sort 全栈打通
-      header: '候选数',
-      accessor: (g) => g.videos.length,
-      width: 110, minWidth: 90,
-      enableResizing: true,
-      cell: ({ row }) => <span>{row.videos.length} 条</span>,
-    },
-    {
-      id: 'score',
-      kind: 'computed',
-      enableSorting: true, // ADR-150 阶段 5 EP-4 follow-up sort 全栈打通（默认 score DESC / 切 ASC 看低重合度）
-      header: '重合度',
-      accessor: (g) => g.score,
-      width: 110, minWidth: 90,
-      enableResizing: true,
-      cell: ({ row }) => <span style={SCORE_BADGE_STYLE}>{(row.score * 100).toFixed(1)}%</span>,
-    },
-  ], [])
-
-  const query = useMemo(() => ({
-    pagination: { page, pageSize },
-    // ADR-150 阶段 5 EP-4 follow-up（2026-05-25）：sort 真 state 接通（非 hardcode）
-    sort,
-    filters: new Map(),
-    columns: columnPrefs,
-    selection: { selectedKeys: new Set<string>(), mode: 'page' as const },
-  }), [page, pageSize, sort, columnPrefs])
-
-  if (loading && data.length === 0) return <LoadingState variant="skeleton" skeletonRows={6} />
-  if (error) return <ErrorState error={error} onRetry={load} />
-  if (data.length === 0) {
-    return (
-      <EmptyState
-        title="无合并候选"
-        description="当前没有符合条件的候选组；调整 minScore 重试。"
-      />
-    )
-  }
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-      <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-        <span style={SECONDARY_TEXT}>minScore</span>
-        <AdminInput
-          size="sm"
-          type="number"
-          step="0.05"
-          min="0"
-          max="1"
-          value={pendingMinScore}
-          onChange={(e) => setPendingMinScore(e.target.value)}
-          style={{ width: '100px' }}
-        />
-        <AdminButton
-          size="sm"
-          variant="secondary"
-          onClick={() => {
-            const v = parseFloat(pendingMinScore)
-            if (!Number.isNaN(v) && v >= 0 && v <= 1) {
-              setMinScore(v)
-              setPage(1)
-            }
-          }}
-        >
-          应用
-        </AdminButton>
-        <span style={{ ...SECONDARY_TEXT, marginLeft: 'auto' }}>共 {total} 组</span>
-      </div>
-
-      <DataTable<CandidateGroup>
-        rows={data}
-        columns={columns}
-        rowKey={(g) => g.groupKey}
-        mode="server"
-        enableColumnResizing
-        query={query}
-        onQueryChange={(patch) => {
-          if (patch.pagination) {
-            if (patch.pagination.page !== undefined) setPage(patch.pagination.page)
-            if (patch.pagination.pageSize !== undefined) { setPageSize(patch.pagination.pageSize); setPage(1) }
-          }
-          // ADR-150 阶段 5 EP-4 follow-up（2026-05-25）：sort patch 接通
-          if (patch.sort) setSort(patch.sort)
-          if (patch.columns) setColumnPrefs(patch.columns)
-        }}
-        totalRows={total}
-        loading={loading}
-        onRowClick={(group) => {
-          setExpandedKeys((prev) => {
-            const next = new Set(prev)
-            if (next.has(group.groupKey)) next.delete(group.groupKey)
-            else next.add(group.groupKey)
-            return next
-          })
-        }}
-        expandedKeys={expandedKeys}
-        renderExpandedRow={(group) => (
-          <CandidateExpand group={group} onMerge={(targetId) => handleMerge(group, targetId)} />
-        )}
-        pagination={{ pageSizeOptions: [20, 50, 100] }}
-      />
-    </div>
-  )
-}
-
-// ── Candidate 行展开 panel（card 形态，CHG-SN-7-MISC-MERGE-2）─────
-
-interface CandidateExpandProps {
-  group: CandidateGroup
-  onMerge: (targetVideoId: string) => void
-}
-
-function CandidateExpand({ group, onMerge }: CandidateExpandProps) {
-  const [targetId, setTargetId] = useState(group.recommendedTargetVideoId)
-  const targetVideo = group.videos.find((v) => v.id === targetId)
-  const sourceVideos = group.videos.filter((v) => v.id !== targetId)
-
-  return (
-    <div style={EXPAND_PANEL_STYLE}>
-      {/* 置信度（legacyScore=源重合度）+ 身份分（identityScore=多证据）双 pill + 候选数（字段分离 / R3）*/}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-        <span style={CONFIDENCE_PILL_STYLE} data-testid="confidence-pill">
-          {(group.score * 100).toFixed(1)}% 置信度
-        </span>
-        {group.identity && (
-          <span style={IDENTITY_PILL_STYLE} data-testid="identity-pill">
-            身份分 {(group.identity.identityScore * 100).toFixed(1)}%
-          </span>
-        )}
-        <span style={SECONDARY_TEXT}>{group.videos.length} 个候选视频</span>
-      </div>
-
-      {/* CHG-VIR-7：多证据身份评分面板（为何可合并 / 为何拦截 / 逐对明细）*/}
-      {group.identity && <EvidencePanel identity={group.identity} />}
-
-      {/* 视频卡片网格（左右对比） */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '8px' }}>
-        {group.videos.map((v: VideoSummaryForMerge) => (
-          <div
-            key={v.id}
-            style={v.id === targetId ? VIDEO_CARD_SELECTED_STYLE : VIDEO_CARD_STYLE}
-            onClick={() => setTargetId(v.id)}
-            data-testid={`candidate-card-${v.id}`}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-              <input
-                type="radio"
-                name={`target-${group.groupKey}`}
-                checked={targetId === v.id}
-                onChange={() => setTargetId(v.id)}
-                onClick={(e) => e.stopPropagation()}
-                aria-label={`选择 ${v.title} 为合并目标`}
-              />
-              <span style={{ fontWeight: 600, fontSize: 'var(--font-size-sm)' }}>{v.title}</span>
-              {v.id === group.recommendedTargetVideoId && (
-                <span style={RECOMMENDED_BADGE_STYLE} aria-label="推荐合并目标">推荐</span>
-              )}
-            </div>
-            <div style={SECONDARY_TEXT}>{v.sourceCount} 个源</div>
-            <div style={{ ...SECONDARY_TEXT, fontSize: '11px' }}>
-              {v.sourceSiteKeys.join(' · ') || '—'}
-            </div>
-            <div style={{ ...SECONDARY_TEXT, fontSize: '11px' }}>{v.createdAt.slice(0, 10)}</div>
-          </div>
-        ))}
-      </div>
-
-      {/* 影响预览 */}
-      {sourceVideos.length > 0 && (
-        <div style={IMPACT_PREVIEW_STYLE} data-testid="impact-preview">
-          <span style={{ fontWeight: 600, fontSize: 'var(--font-size-xs)', color: 'var(--fg-muted)' }}>
-            影响预览：{sourceVideos.length} 个源视频将合并到 {targetVideo?.title ?? '—'}
-          </span>
-          <ul style={{ margin: 0, padding: '0 0 0 16px', fontSize: 'var(--font-size-xs)', color: 'var(--fg-muted)' }}>
-            {sourceVideos.map((v) => (
-              <li key={v.id}>
-                {v.title}（{v.sourceCount} 个源{v.sourceSiteKeys.length > 0 ? `，${v.sourceSiteKeys.join('、')}` : ''}）
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-        <AdminButton size="sm" variant="primary" onClick={() => onMerge(targetId)}>
-          执行合并（{group.videos.length - 1} → target）
-        </AdminButton>
-      </div>
-    </div>
-  )
-}
-
 // ── CHG-SN-8-08-B · 直接合并工作区（候选 A 锁定 → VideoPicker 选 B → 立即合并）─
 
 interface DirectMergeWorkspaceProps {
   readonly candidateAId: string
   /** GAPS #G-merge-candidate-b-auto：从 URL ?candidate_b 注入；mount 时 fetch 一次注入 picker.value */
   readonly candidateBIdFromUrl: string | null
+  /**
+   * CHG-VIR-9-C：从 URL ?candidate_id 注入 identity_candidate.id（审核台类似 Tab 深链）。
+   * 仅当 picker 当前 B 仍 === candidate_b 时透传给 merge（换 B 后 pair 不再匹配，自动失效）。
+   */
+  readonly candidateIdFromUrl: string | null
   readonly onMergeSuccess: () => void
 }
 
-function DirectMergeWorkspace({ candidateAId, candidateBIdFromUrl, onMergeSuccess }: DirectMergeWorkspaceProps) {
+function DirectMergeWorkspace({ candidateAId, candidateBIdFromUrl, candidateIdFromUrl, onMergeSuccess }: DirectMergeWorkspaceProps) {
   const toast = useToast()
   const [candidateB, setCandidateB] = useState<PickerVideoItem | null>(null)
   const [merging, setMerging] = useState(false)
@@ -644,10 +257,14 @@ function DirectMergeWorkspace({ candidateAId, candidateBIdFromUrl, onMergeSucces
     }
     setMerging(true)
     try {
+      // CHG-VIR-9-C：B 未被换选时透传 identity 候选锚点（confirm 语义 / ADR-178 D-178-3）
+      const effectiveCandidateId =
+        candidateIdFromUrl && candidateB.id === candidateBIdFromUrl ? candidateIdFromUrl : undefined
       const result = await mergeVideos({
         sourceVideoIds: [candidateB.id],
         targetVideoId: candidateAId,
         reason: '从视频库行级 + Merge 页直接工作区',
+        ...(effectiveCandidateId ? { candidateId: effectiveCandidateId } : {}),
       })
       toast.push({
         title: '合并成功',
@@ -665,7 +282,7 @@ function DirectMergeWorkspace({ candidateAId, candidateBIdFromUrl, onMergeSucces
     } finally {
       setMerging(false)
     }
-  }, [candidateAId, candidateB, onMergeSuccess, toast])
+  }, [candidateAId, candidateB, candidateBIdFromUrl, candidateIdFromUrl, onMergeSuccess, toast])
 
   return (
     <AdminCard

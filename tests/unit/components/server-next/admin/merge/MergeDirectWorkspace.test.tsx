@@ -1,10 +1,13 @@
 /**
  * MergeDirectWorkspace.test.tsx — CHG-SN-8-08-B
  *
- * 范围（3 用例）：
+ * 范围（6 用例）：
  *  1. ?candidate_a 存在时 → 渲染 DirectMergeWorkspace + VideoPicker B
  *  2. 选 B + 点「立即合并」→ confirm + mergeVideos 携带正确参数
  *  3. B === A → toast warn + 不调 API
+ *  4. ?candidate_b 存在 → VideoPicker 自动填入
+ *  5. ?candidate_id + B 未换选 → mergeVideos 透传 candidateId（CHG-VIR-9-C）
+ *  6. ?candidate_id 存在但 B 被换选 → candidateId 不透传（CHG-VIR-9-C）
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -135,6 +138,58 @@ describe('DirectMergeWorkspace (CHG-SN-8-08-B)', () => {
       const trigger = screen.getByTestId('merge-candidate-b-picker')
       expect(trigger.textContent).toContain(VIDEO_B.title)
     })
+  })
+
+  // ── CHG-VIR-9-C：?candidate_id 透传（identity 候选锚点 / ADR-178 D-178-3 confirm 语义）──
+
+  it('5. ?candidate_id + B 未换选 → mergeVideos 透传 candidateId', async () => {
+    mockSearchString = `candidate_a=video-uuid-aaaa-1111&candidate_b=${VIDEO_B.id}&candidate_id=cand-uuid-0001&from=moderation`
+    listVideosMock.mockResolvedValue({ data: [VIDEO_B], total: 1, page: 1, limit: 20 })
+    mergeVideosMock.mockResolvedValueOnce({
+      auditId: 'audit-uuid-dddd-4444',
+      targetVideo: { id: 'video-uuid-aaaa-1111' },
+    })
+
+    render(<MergeClient />)
+    // 等待 ?candidate_b 自动填入
+    await waitFor(() => {
+      const trigger = screen.getByTestId('merge-candidate-b-picker')
+      expect(trigger.textContent).toContain(VIDEO_B.title)
+    })
+    const executeBtn = await waitFor(() => screen.getByTestId('merge-direct-execute') as HTMLButtonElement)
+    await waitFor(() => expect(executeBtn.disabled).toBe(false))
+    fireEvent.click(executeBtn)
+    await waitFor(() => {
+      expect(mergeVideosMock).toHaveBeenCalledTimes(1)
+    })
+    expect(mergeVideosMock.mock.calls[0][0]).toMatchObject({
+      sourceVideoIds: [VIDEO_B.id],
+      targetVideoId: 'video-uuid-aaaa-1111',
+      candidateId: 'cand-uuid-0001',
+    })
+  })
+
+  it('6. ?candidate_id 存在但 B 被换选 → candidateId 不透传（pair 失配自动失效）', async () => {
+    mockSearchString = 'candidate_a=video-uuid-aaaa-1111&candidate_b=video-uuid-original&candidate_id=cand-uuid-0001&from=moderation'
+    // ?candidate_b 自动填入查不到原视频（返回空）→ 用户手动从 picker 选了另一个 B
+    listVideosMock.mockResolvedValue({ data: [VIDEO_B], total: 1, page: 1, limit: 20 })
+    mergeVideosMock.mockResolvedValueOnce({
+      auditId: 'audit-uuid-eeee-5555',
+      targetVideo: { id: 'video-uuid-aaaa-1111' },
+    })
+
+    render(<MergeClient />)
+    const pickerTrigger = await waitFor(() => screen.getByTestId('merge-candidate-b-picker'))
+    fireEvent.click(pickerTrigger)
+    const row = await waitFor(() => screen.getByTestId(`merge-candidate-b-picker-row-${VIDEO_B.id}`))
+    fireEvent.click(row)
+    const executeBtn = await waitFor(() => screen.getByTestId('merge-direct-execute') as HTMLButtonElement)
+    await waitFor(() => expect(executeBtn.disabled).toBe(false))
+    fireEvent.click(executeBtn)
+    await waitFor(() => {
+      expect(mergeVideosMock).toHaveBeenCalledTimes(1)
+    })
+    expect(mergeVideosMock.mock.calls[0][0]).not.toHaveProperty('candidateId')
   })
 
   it('3. B === A → toast warn + 不调 API', async () => {

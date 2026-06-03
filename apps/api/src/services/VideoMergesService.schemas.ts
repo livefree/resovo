@@ -167,5 +167,7 @@ export function buildGroupFromPair(
     score: p.legacy_score != null ? Number(p.legacy_score) : 0,
     recommendedTargetVideoId: pickRecommendedTarget([left, right]),
     identity,
+    // CHG-VIR-9-C：confirm/reject 操作锚点（merge 透传 candidateId / POST reject）
+    candidateId: p.id,
   }
 }

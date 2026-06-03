@@ -4,6 +4,7 @@ import type {
   VideoQueueRow,
   VideoSourceLine,
   ReviewLabel,
+  EvidenceType,
 } from '@resovo/types'
 // CHG-VSR-PRE-2（R1）：source 操作真源已移至 sources/api；本文件 re-export 保后兼容
 import type { SourceLineRowData } from '@/lib/sources/types'
@@ -263,7 +264,8 @@ export interface SimilarVideoItem {
   // ── CHG-VIR-9-A：identity 来源附加（legacy 来源不填 / optional 向后兼容）─────
   readonly candidateId?: string
   readonly identityScore?: number
-  readonly strongNegativeReasons?: readonly string[]
+  /** CHG-VIR-9-C：对齐后端 EvidenceType 契约（EVIDENCE_LABELS 渲染拦截 chips） */
+  readonly strongNegativeReasons?: readonly EvidenceType[]
   readonly status?: 'pending' | 'confirmed' | 'rejected'
 }
 
@@ -274,17 +276,23 @@ export interface ListSimilarVideosOptions {
   readonly source?: 'identity' | 'legacy'
 }
 
+/** CHG-VIR-9-C：source envelope 回显（identity 空表降级 legacy 时 UI 据此提示）。 */
+export interface SimilarVideosResult {
+  readonly items: readonly SimilarVideoItem[]
+  readonly source: 'identity' | 'legacy'
+}
+
 export async function listSimilarVideos(
   videoId: string,
   opts: ListSimilarVideosOptions = {},
-): Promise<readonly SimilarVideoItem[]> {
+): Promise<SimilarVideosResult> {
   const params = new URLSearchParams()
   if (opts.limit != null) params.set('limit', String(opts.limit))
   if (opts.yearRange != null) params.set('yearRange', String(opts.yearRange))
   if (opts.source != null) params.set('source', opts.source)
   const qs = params.toString()
   const path = `/admin/moderation/${encodeURIComponent(videoId)}/similar${qs ? `?${qs}` : ''}`
-  // source envelope 回显留 9-C UI 消费；9-A 返回类型不变（含 optional identity 字段）
-  const res = await apiClient.get<{ data: readonly SimilarVideoItem[] }>(path)
-  return res.data
+  // CHG-VIR-9-C：消费 {data, source} envelope（source 缺省容错按 legacy 处理）
+  const res = await apiClient.get<{ data: readonly SimilarVideoItem[]; source?: 'identity' | 'legacy' }>(path)
+  return { items: res.data, source: res.source ?? 'legacy' }
 }

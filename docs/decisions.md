@@ -19139,6 +19139,16 @@ D-105a-1 ~ D-105a-13 共 13 条，随 Phase 1a/2a/2b/2c 实施卡（CHG-VIR-5/7/
 
 **D-N 偏离登记更新**：本 AMENDMENT 落 D-105a-11 实施（随 CHG-VIR-9-B 闭环），无新增 D-105a 编号；列级决策落 ADR-178 D-178-1~6。
 
+### AMENDMENT 2026-06-03（CHG-VIR-9-C / Phase 2c — candidates 响应扩 candidateId + UI confirm/reject 落地）
+
+**触发**：9-A/9-B 落地读切换 + 写路径后，UI 消费时发现 `buildGroupFromPair` 未透出 `identity_candidate.id` —— merge 工作台拿不到 confirm（merge 透传 candidateId / ADR-178 D-178-3）与 reject 的操作锚点。
+
+**端点契约变更（向后兼容，纯增量）**：
+- `GET /admin/video-merges/candidates` `source=identity` 时每 `CandidateGroup` **新增 optional** `candidateId: string`（= `identity_candidate.id`；legacy 来源不填）。沿 ADR-137 AMENDMENT 2.0 similar 端点 `SimilarVideoItem.candidateId` 同款模式。
+- 无 schema/route/migration 变更（verify:endpoint-adr 不触发）。
+
+**UI 落地登记（CHG-VIR-9-C）**：审核台 TabSimilar source toggle（默认 identity）+ merge 工作台 source toggle（默认 legacy / 用户裁定）+ 双入口降级回显提示 + identity 候选 confirm（合并透传 candidateId，含审核台深链 `?candidate_id` 经 DirectMergeWorkspace 透传、换 B 自动失效）+ reject（`POST /admin/identity-candidates/:id/reject` / ADR-178）+ 拦截原因 chips（EVIDENCE_LABELS 沉淀 `lib/identity/evidence-labels`）。
+
 ---
 
 ## ADR-175：多语种标题模型 — 字段语义收紧 + media_catalog_aliases 结构化升级 + locale fallback + 匹配分层（SEQ-20260602-03 / CHG-VIR-2 / Phase 0）

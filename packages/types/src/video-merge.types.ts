@@ -42,6 +42,12 @@ export interface CandidateGroup {
    * optional 兼容旧消费方 + 评分异常时可省略而不破坏候选行返回。
    */
   readonly identity?: GroupIdentityScore
+  /**
+   * CHG-VIR-9-C：identity_candidate.id（source=identity 时填充 / legacy 来源不填）。
+   * UI confirm（merge 透传 candidateId / ADR-178 D-178-3）与 reject 操作锚点；
+   * 纯增量 optional，沿 9-A SimilarVideoItem.candidateId 同款模式向后兼容。
+   */
+  readonly candidateId?: string
 }
 
 export interface ListCandidatesParams {

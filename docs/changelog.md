@@ -13992,3 +13992,33 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **注意事项**：① **解阻 CHG-VIR-9-C**（UI confirm/reject：rejectIdentityCandidate 客户端 + mergeVideos candidateId 透传 + EvidencePanel 复用）；② reject 复活链零额外实现——离线 job 既有 R6 路径（revived_from_candidate_id 新建 pending）天然兼容 rejected candidate；③ unmerge 后 candidate 保持 confirmed（不回 pending），该 pair 重新出现在候选列表依赖离线 job 重评（设计裁定 D14，避免撞 partial unique）；④ VideoMergesService.ts 520→578（baseline 豁免内；膨胀主因 merge 110→60 拆分的方法签名/注释管理开销，FILE-SIZE 拆分跟踪卡既有）；⑤ plan v1.4 §3.0.5 表为历史文档（仓内无该节），audit actionType 真源 = AdminAuditActionType union + 4 处同步守卫（与 source_line_alias.retire 先例一致）
 - **ADR D-N 闭环**：D-178-1（reject 独立端点 + IdentityCandidatesService 归属）/ D-178-2（pending→rejected 状态迁移 + 非 pending 409 口径）/ D-178-3（merge candidateId 扩参 + 单事务 R8 + 事务前校验）/ D-178-4（unmerge 联动 reverted + candidate 保持 confirmed）/ D-178-5（migration 087 DDL 定档）/ D-178-6（audit actionType/targetKind 扩展 + migration 088）—— 6 条全部随本卡实施闭环；D-105a-11（confirmed→merge 事务边界 + identity_decisions 关联）随 ADR-105a AMENDMENT 2026-06-03 闭环
 - **[AI-CHECK]**：分层 NO（migration→queries 纯 SQL→Service 编排→route 无业务逻辑，零越层）/ 跨模块内部实现 NO（merge 挂载经 IdentityCandidatesService 公开 static helper；queries 不 import Service）/ 重复逻辑 NO（decision 写入单一真源 insertIdentityDecision；reverted 复用 video_merge_audit 三列范式；校验复用 AppError + isAppError 既有映射）/ hack NO（FOR UPDATE + from-state 守卫是并发设计；事务前校验+事务内复核是快速失败 UX + 正确性双层）/ 需拆分函数 已拆（merge 110→60 / 所有新函数 <80）/ 需拆分文件 NO（新文件全 <500；VideoMergesService 578 在 baseline 豁免，膨胀已说明）/ 隐式副作用·吞异常 NO（audit fire-and-forget 是既有设计，COMMIT 后才写）/ 偏离检测：与子代理蓝图一致（22 项裁定全落地）；唯一偏离 = merge 函数拆分（蓝图预判"若净增推高风险应抽取"，实际执行）。**共享层沉淀评估**：identity-decision queries 与 IdentityCandidatesService 是 identity 域新真源（本卡即沉淀）；无应沉淀未沉淀项。结论：SAFE。
+
+---
+
+## CHG-VIR-9-C — Phase 2c：UI 切换 + confirm/reject 操作（SEQ-20260602-03 / CHG-VIR-9 全系列收口）
+
+- **完成时间**：2026-06-03
+- **记录时间**：2026-06-03 12:05
+- **执行模型**：claude-opus-4-8（建议模型 sonnet，用户直接以 opus 会话人工覆盖指派；无子代理需求——UI 编排，契约已在 9-A/9-B 定档）
+- **子代理**：无
+- **修改文件**：
+  - `packages/types/src/video-merge.types.ts` — CandidateGroup 扩 optional `candidateId`（identity 来源 confirm/reject 锚点；沿 9-A SimilarVideoItem.candidateId 同款纯增量模式，legacy 来源不填）
+  - `apps/api/src/services/VideoMergesService.schemas.ts` — buildGroupFromPair 透出 `candidateId: p.id`（9-A 遗留缺口：PendingCandidatePairRow.id 未透出，merge 工作台拿不到操作锚点）
+  - `docs/decisions.md` — ADR-105a AMENDMENT 2026-06-03（CHG-VIR-9-C）：candidates 响应扩 candidateId 登记 + UI 落地登记（无新 route/migration，verify:endpoint-adr 不触发）
+  - `apps/server-next/src/lib/identity/api.ts` — 新建：rejectIdentityCandidate（POST /admin/identity-candidates/:id/reject / ADR-178），TabSimilar + MergeCandidatesSection 双入口共用真源；confirm 不在此处（= merge 透传 candidateId / D-178-3）
+  - `apps/server-next/src/lib/identity/evidence-labels.ts` — 新建：EVIDENCE_LABELS 真源沉淀（原 EvidencePanel 本地定义，TabSimilar 拦截 chips 加入消费后跨页面共享 → 提升 lib/identity 中性层；exhaustive Record 缺项 typecheck 拦截）
+  - `apps/server-next/src/lib/moderation/api.ts` — listSimilarVideos 消费 `{data, source}` envelope（返回 SimilarVideosResult，source 缺省容错 legacy）；SimilarVideoItem.strongNegativeReasons 类型对齐后端 `EvidenceType[]`
+  - `apps/server-next/src/app/admin/moderation/_client/RightPane/TabSimilar.tsx` — source Segment toggle（默认 identity，所有状态可见空态可切）+ 降级回显提示条（请求 identity 实际 legacy）+ 身份分 pill（identity 来源替代 similarityScore 数字）+ 拦截原因 chips（EVIDENCE_LABELS）+ 拒绝按钮（window.confirm 守卫 + rejectIdentityCandidate + 行本地移除 + toast）+「发起合并」深链追加 `&candidate_id`
+  - `apps/server-next/src/app/admin/merge/_client/MergeClient.tsx` — 704→320 行（500 行红线先拆分再扩展）：CandidatesSection+CandidateExpand 拆出；DirectMergeWorkspace 接 `?candidate_id` 透传（**仅当 picker B 仍 === candidate_b 时透传**，换 B 自动失效防 pair 失配 422）+ dismissCandidateBanner 同步清理 candidate_id
+  - `apps/server-next/src/app/admin/merge/_client/MergeCandidatesSection.tsx` — 新建（348 行）：source toggle（默认 legacy / 用户裁定 (a)，shadow 稳定后另起小卡翻默认）+ 降级回显提示 + minScore 控件仅 legacy 显示（identity 路径后端不消费 minScore）+ identity 空态差异化文案 +「执行合并」透传 group.candidateId（confirm 语义 / 单事务挂 decision）+ handleReject（confirm 守卫 + toast + 刷新）
+  - `apps/server-next/src/app/admin/merge/_client/MergeCandidateExpand.tsx` — 新建（194 行，500 行 budget 二次拆分）：CandidateExpand card 形态 + 置信度/身份分双 pill + EvidencePanel 复用（CHG-VIR-7）+「拒绝候选」按钮（onReject 注入，identity 来源才渲染）；SECONDARY_TEXT 真源 export
+  - `apps/server-next/src/app/admin/merge/_client/EvidencePanel.tsx` — EVIDENCE_LABELS 本地定义删除改 import 共享真源（零行为变更）
+  - `tests/unit/components/server-next/admin/moderation/TabSimilar.test.tsx` — 5→10 用例（envelope mock + identity 行渲染 / candidate_id 深链 / reject 调用与行移除 / 降级提示 / source toggle 切换）
+  - `tests/unit/components/server-next/admin/merge/MergeCandidatesSection.test.tsx` — 新建 7 用例（默认 legacy / toggle identity + minScore 隐藏 / 降级提示 / 拒绝按钮渲染与调用 / merge 透传 candidateId / legacy 无拒绝按钮且不带 candidateId）
+  - `tests/unit/components/server-next/admin/merge/MergeDirectWorkspace.test.tsx` — +2 用例（candidate_id 透传 / B 换选自动失效）
+  - `tests/unit/server-next/identity/identity-api.test.ts` — 新建 6 用例（reject URL/encode/body/data 解包 + listSimilarVideos source 序列化与 envelope 容错）
+- **新增依赖**：无
+- **数据库变更**：无（无 migration / 无新 route，verify:endpoint-adr 不触发）
+- **测试覆盖**：typecheck/lint/verify:adr-contracts EXIT=0（endpoint-adr 204 admin 路由全对齐）；文件 budget 零新增（19 违规全 pre-existing）；**全量 6216 passed / 0 failed**（472 files / 净 +20）；e2e 本机 :3000 webServer 冲突在页面加载前失败（沿 CHG-VSR-PRE-2 先例 = 非回归）；admin moderation/merge 手测归用户验收
+- **注意事项**：① **CHG-VIR-9 全系列（9-A/9-B/9-C）收口，Phase 2c 完成**；② **生产切 UI 前须先回填 title_observations**（`scripts/backfill-title-observations.ts`，采集 fire-and-forget 覆盖不全则候选召回不全 / 卡面前置仍有效）；③ merge 默认仍 legacy（用户裁定），翻默认 identity + N-video 连通分量折叠留 shadow 稳定后小卡；④ pre-existing 发现：`tests/e2e/admin/moderation/right-pane-tabs.spec.ts:87` 仍断言 TabSimilar 占位文案（2026-05-21 已真实化），断言漂移归 e2e 环境长尾；⑤ reject 误触防护 = window.confirm（误拒后复活依赖离线 job 证据变化 R6，不可轻易恢复故加守卫）
+- **[AI-CHECK]**：分层 NO（UI 全经 lib api 客户端，零直接 fetch/DB）/ 跨模块内部实现 NO（TabSimilar 不 import merge/_client，经 lib/identity 中性层）/ 重复逻辑 NO（EVIDENCE_LABELS 与 rejectIdentityCandidate 单一真源双消费；candidateId 透传 spread 模式三处一致）/ hack NO（B 换选失效是 pair 一致性守卫；source/effectiveSource 双 state 是请求/回显语义分离）/ 需拆分函数 NO（新函数全 <80）/ 需拆分文件 已拆（MergeClient 704→320 + Section 348 + Expand 194 全 <500）/ 隐式副作用·吞异常 NO（reject 失败 toast 显式反馈）/ 偏离检测：① CandidateGroup.candidateId 契约补充（卡面未明示但 confirm/reject 必需，ADR AMENDMENT 登记）② 执行模型 sonnet→opus 人工覆盖。**共享层沉淀评估**：lib/identity/{api,evidence-labels} 本卡即沉淀（双入口真源）；无应沉淀未沉淀项。结论：SAFE。
