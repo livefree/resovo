@@ -60,11 +60,11 @@ describe('ModerationService.listSimilar (CHG-SN-8-04-EP · ADR-137)', () => {
       ])
       .mockResolvedValueOnce([])
     const svc = new ModerationService(makeDb(), makeEs())
-    const result = await svc.listSimilar('target-id', { limit: 10, yearRange: 5 })
-    expect(result.length).toBe(2)
-    expect(result[0]!.id).toBe('a')
-    expect(result[0]!.similarityScore).toBeGreaterThan(result[1]!.similarityScore)
-    expect(result[0]!.similarityScore).toBe(100)
+    const result = await svc.listSimilar('target-id', { limit: 10, yearRange: 5, source: 'legacy' })
+    expect(result.items.length).toBe(2)
+    expect(result.items[0]!.id).toBe('a')
+    expect(result.items[0]!.similarityScore).toBeGreaterThan(result.items[1]!.similarityScore)
+    expect(result.items[0]!.similarityScore).toBe(100)
   })
 
   it('2. 目标视频不存在 → 抛 NOT_FOUND AppError', async () => {
@@ -83,8 +83,9 @@ describe('ModerationService.listSimilar (CHG-SN-8-04-EP · ADR-137)', () => {
     })
     mockListCandidates.mockResolvedValue([])
     const svc = new ModerationService(makeDb(), makeEs())
-    const result = await svc.listSimilar('target', { limit: 10, yearRange: 5 })
-    expect(result).toEqual([])
+    const result = await svc.listSimilar('target', { limit: 10, yearRange: 5, source: 'legacy' })
+    expect(result.items).toEqual([])
+    expect(result.source).toBe('legacy')
   })
 
   it('4. limit 参数生效（limit=2 → 最多返回 2 条即使候选 5 条）', async () => {
@@ -98,15 +99,15 @@ describe('ModerationService.listSimilar (CHG-SN-8-04-EP · ADR-137)', () => {
       })),
     )
     const svc = new ModerationService(makeDb(), makeEs())
-    const result = await svc.listSimilar('target', { limit: 2, yearRange: 5 })
-    expect(result.length).toBe(2)
+    const result = await svc.listSimilar('target', { limit: 2, yearRange: 5, source: 'legacy' })
+    expect(result.items.length).toBe(2)
   })
 
   it('5. yearRange 透传到 query 层', async () => {
     mockFindFeatures.mockResolvedValue({ id: 't', type: 'movie', year: 2020, country: null, genres: [] })
     mockListCandidates.mockResolvedValue([])
     const svc = new ModerationService(makeDb(), makeEs())
-    await svc.listSimilar('t', { limit: 10, yearRange: 1 })
+    await svc.listSimilar('t', { limit: 10, yearRange: 1, source: 'legacy' })
     expect(mockListCandidates).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({ excludeId: 't', type: 'movie', year: 2020, yearRange: 1 }),
@@ -127,20 +128,20 @@ describe('ModerationService.listSimilar (CHG-SN-8-04-EP · ADR-137)', () => {
         { id: 'fallback-1', title: 'Fallback', type: 'anime', year: 2020, country: 'US', genres: ['action'], cover_url: null, meta_score: 60, review_status: 'approved', is_published: true },
       ])
     const svc = new ModerationService(makeDb(), makeEs())
-    const result = await svc.listSimilar('t', { limit: 10, yearRange: 5 })
+    const result = await svc.listSimilar('t', { limit: 10, yearRange: 5, source: 'legacy' })
     expect(mockListCandidates).toHaveBeenCalledTimes(2)
     // 第 2 次调用必须 relaxType=true 且 excludeIds 含 strict-1
     expect(mockListCandidates).toHaveBeenNthCalledWith(2, expect.anything(), expect.objectContaining({
       relaxType: true,
       excludeIds: ['strict-1'],
     }))
-    expect(result.length).toBe(2)
+    expect(result.items.length).toBe(2)
     // strict-1 全维度命中（type+40 / year=0+25 / country+15 / genres 100%+20 = 100）
     // fallback-1 跨类型 type+0 / year=0+25 / country+15 / genres 100%+20 = 60
-    expect(result[0]!.id).toBe('strict-1')
-    expect(result[0]!.similarityScore).toBe(100)
-    expect(result[1]!.id).toBe('fallback-1')
-    expect(result[1]!.similarityScore).toBe(60)
+    expect(result.items[0]!.id).toBe('strict-1')
+    expect(result.items[0]!.similarityScore).toBe(100)
+    expect(result.items[1]!.id).toBe('fallback-1')
+    expect(result.items[1]!.similarityScore).toBe(60)
   })
 
   it('9. CHG-SN-8-04-N1：strict ≥ limit → fallback 不触发（只 1 次 query）', async () => {
@@ -153,9 +154,9 @@ describe('ModerationService.listSimilar (CHG-SN-8-04-EP · ADR-137)', () => {
       })),
     )
     const svc = new ModerationService(makeDb(), makeEs())
-    const result = await svc.listSimilar('t', { limit: 3, yearRange: 5 })
+    const result = await svc.listSimilar('t', { limit: 3, yearRange: 5, source: 'legacy' })
     expect(mockListCandidates).toHaveBeenCalledTimes(1)
-    expect(result.length).toBe(3)
+    expect(result.items.length).toBe(3)
   })
 
   it('6. minScore 内部过滤：仅 type 匹配（40 分）不足 10 阈值之上但 ≥10 → 进结果；score < 10 不进', async () => {
@@ -169,10 +170,10 @@ describe('ModerationService.listSimilar (CHG-SN-8-04-EP · ADR-137)', () => {
       ])
       .mockResolvedValueOnce([])
     const svc = new ModerationService(makeDb(), makeEs())
-    const result = await svc.listSimilar('t', { limit: 10, yearRange: 5 })
+    const result = await svc.listSimilar('t', { limit: 10, yearRange: 5, source: 'legacy' })
     // 候选 X：type +40 / year delta 120>>5 → 0 / country 不匹配 → 0 / genres 0 交集 → 0 = 40，>= 10
-    expect(result.length).toBe(1)
-    expect(result[0]!.similarityScore).toBe(40)
+    expect(result.items.length).toBe(1)
+    expect(result.items[0]!.similarityScore).toBe(40)
   })
 })
 

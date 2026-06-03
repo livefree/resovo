@@ -11,6 +11,8 @@ import {
   supersedePendingByPairKey,
   setSupersededBy,
   countCompareBuckets,
+  listPendingCandidatesByVideoId,
+  listPendingCandidatePairs,
   type IdentityCandidateInsert,
 } from '@/api/db/queries/identity-candidate'
 
@@ -106,5 +108,26 @@ describe('countCompareBuckets', () => {
     expect(sql).toContain('cardinality(ic.strong_negative_reasons) > 0')
     expect(sql).toContain('title_normalized')
     expect(r).toEqual({ pendingTotal: 10, blockedTotal: 3, crossGroupTotal: 4 })
+  })
+})
+
+describe('listPendingCandidatesByVideoId（CHG-VIR-9-A 审核台召回）', () => {
+  it('CASE 取对侧 video + status=pending + 版本过滤 + 参数', async () => {
+    await listPendingCandidatesByVideoId(mockDb, { videoId: 'v1', scorerVersion: '1.0.0', parserVersion: '1.0.0', limit: 10 })
+    const sql = lastSql()
+    expect(sql).toContain('CASE WHEN ic.left_video_id = $1 THEN ic.right_video_id ELSE ic.left_video_id END')
+    expect(sql).toContain("status = 'pending'")
+    expect(sql).toContain('ic.scorer_version = $2')
+    expect(lastParams()).toEqual(['v1', '1.0.0', '1.0.0', 10])
+  })
+})
+
+describe('listPendingCandidatePairs（CHG-VIR-9-A merge 折叠）', () => {
+  it('status=pending + 版本过滤 + ORDER BY identity_score', async () => {
+    await listPendingCandidatePairs(mockDb, { scorerVersion: '1.0.0', parserVersion: '1.0.0', limit: 20, offset: 0 })
+    const sql = lastSql()
+    expect(sql).toContain("status = 'pending'")
+    expect(sql).toContain('ORDER BY identity_score DESC')
+    expect(lastParams()).toEqual(['1.0.0', '1.0.0', 20, 0])
   })
 })

@@ -6,8 +6,14 @@
 import { z } from 'zod'
 import type {
   VideoSummaryForMerge,
+  CandidateGroup,
+  EvidenceType,
+  EvidenceItem,
+  GroupIdentityScore,
 } from '@resovo/types'
 import type { RawVideoDetailRow } from '@/api/db/queries/video-merge-candidates'
+import type { PendingCandidatePairRow } from '@/api/db/queries/identity-candidate'
+import { SCORER_VERSION } from './identity'
 
 // ── zod schema（ADR-105 §端点契约）────────────────────────────────
 
@@ -24,6 +30,8 @@ export const ListCandidatesSchema = z.object({
   // ADR-150 阶段 5 EP-4 follow-up（2026-05-25）：sort 白名单 4 字段（Service 层 sort）
   sortField: z.enum(['score', 'videoCount', 'year', 'titleNormalized']).optional(),
   sortDir: z.enum(['asc', 'desc']).optional(),
+  // CHG-VIR-9-A：候选来源（legacy 默认 / identity 读 candidate 表，空表降级）
+  source: z.enum(['identity', 'legacy']).default('legacy'),
 })
 
 export const MergeSchema = z.object({
@@ -110,5 +118,51 @@ export function mapVideoRow(row: RawVideoDetailRow): VideoSummaryForMerge {
     createdAt: row.created_at,
     sourceCount: parseInt(row.source_count, 10),
     sourceSiteKeys: row.site_keys,
+  }
+}
+
+/**
+ * CHG-VIR-9-A：identity_candidate pending pair → 2-video CandidateGroup（merge source=identity）。
+ * blockingReasons 从 evidence 重算（hit 正向，排除强负 + 弱信号 / 与 scorePair 口径一致）。
+ */
+export function buildGroupFromPair(
+  p: PendingCandidatePairRow,
+  videoMap: Map<string, VideoSummaryForMerge>,
+): CandidateGroup | null {
+  const left = videoMap.get(p.left_video_id)
+  const right = videoMap.get(p.right_video_id)
+  if (!left || !right) return null
+  const identityScore = Number(p.identity_score)
+  const strongNegativeReasons = p.strong_negative_reasons as EvidenceType[]
+  const evidence = Array.isArray(p.evidence_jsonb) ? (p.evidence_jsonb as EvidenceItem[]) : []
+  const blockingReasons = evidence
+    .filter((e) => e.hit && e.polarity !== 'strong-negative' && e.type !== 'release_marker_weak_signal')
+    .map((e) => e.type)
+  const autoMergeBlocked = strongNegativeReasons.length > 0
+  const identity: GroupIdentityScore = {
+    identityScore,
+    strongNegativeReasons,
+    blockingReasons,
+    autoMergeBlocked,
+    pairs: [{
+      leftVideoId: p.left_video_id,
+      rightVideoId: p.right_video_id,
+      identityScore,
+      strongNegativeReasons,
+      blockingReasons,
+      evidence,
+      autoMergeBlocked,
+    }],
+    scorerVersion: SCORER_VERSION,
+  }
+  return {
+    groupKey: `${p.left_video_id}|${p.right_video_id}`,
+    titleNormalized: left.titleNormalized,
+    year: left.year,
+    type: left.type,
+    videos: [left, right],
+    score: p.legacy_score != null ? Number(p.legacy_score) : 0,
+    recommendedTargetVideoId: pickRecommendedTarget([left, right]),
+    identity,
   }
 }

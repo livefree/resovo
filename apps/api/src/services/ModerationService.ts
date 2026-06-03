@@ -16,6 +16,11 @@ import {
   type VideoFeatures,
   type SimilarCandidateRow,
 } from '@/api/db/queries/moderation'
+// CHG-VIR-9-A：审核台 similar 切 identity_candidate 来源（默认 identity，空表降级 legacy）
+import { listPendingCandidatesByVideoId } from '@/api/db/queries/identity-candidate'
+import { SCORER_VERSION } from '@/api/services/identity'
+import { TITLE_PARSER_VERSION } from '@/api/services/TitleIdentityParser'
+import type { EvidenceType } from '@resovo/types'
 import { AppError, ERRORS } from '@/api/lib/errors'
 import { baseLogger } from '@/api/lib/logger'
 
@@ -260,11 +265,47 @@ export class ModerationService {
    */
   async listSimilar(
     videoId: string,
-    opts: { readonly limit: number; readonly yearRange: number },
-  ): Promise<readonly SimilarVideoItem[]> {
+    opts: { readonly limit: number; readonly yearRange: number; readonly source?: 'identity' | 'legacy' },
+  ): Promise<SimilarResult> {
     const target = await findVideoFeatures(this.db, videoId)
     if (!target) {
       throw new AppError('NOT_FOUND', ERRORS.NOT_FOUND.message, ERRORS.NOT_FOUND.status)
+    }
+
+    // CHG-VIR-9-A：source=identity（默认）读 identity_candidate 候选；空表自动降级 legacy（ADR-137 AMENDMENT 2.0）
+    if ((opts.source ?? 'identity') === 'identity') {
+      const rows = await listPendingCandidatesByVideoId(this.db, {
+        videoId,
+        scorerVersion: SCORER_VERSION,
+        parserVersion: TITLE_PARSER_VERSION,
+        limit: opts.limit,
+      })
+      if (rows.length > 0) {
+        const items: SimilarVideoItem[] = rows.map((row) => {
+          const identityScore = Number(row.identity_score)
+          return {
+            id: row.neighbor_video_id,
+            title: row.title,
+            type: row.type,
+            year: row.year,
+            country: row.country,
+            genres: row.genres,
+            coverUrl: row.cover_url,
+            metaScore: row.meta_score,
+            reviewStatus: row.review_status,
+            isPublished: row.is_published,
+            // 旧字段保留（identity 来源填 round(identityScore*100) 保旧前端不空）
+            similarityScore: Math.round(identityScore * 100),
+            // identity 来源附加字段（向后兼容 optional / R3 与 similarityScore 分离）
+            candidateId: row.candidate_id,
+            identityScore,
+            strongNegativeReasons: row.strong_negative_reasons as EvidenceType[],
+            status: row.status as 'pending' | 'confirmed' | 'rejected',
+          }
+        })
+        return { items, source: 'identity' }
+      }
+      // identity 候选空（未回填/job 未跑）→ 落回 legacy
     }
 
     // strict 查询：type 严格相等
@@ -304,7 +345,7 @@ export class ModerationService {
       .sort((a, b) => b.score - a.score)
       .slice(0, opts.limit)
 
-    return finalScored.map(({ row, score }) => ({
+    const items: SimilarVideoItem[] = finalScored.map(({ row, score }) => ({
       id: row.id,
       title: row.title,
       type: row.type,
@@ -317,6 +358,7 @@ export class ModerationService {
       isPublished: row.is_published,
       similarityScore: score,
     }))
+    return { items, source: 'legacy' }
   }
 }
 
@@ -379,5 +421,21 @@ export interface SimilarVideoItem {
   readonly metaScore: number
   readonly reviewStatus: string
   readonly isPublished: boolean
+  /** legacy=4 维加权 0-100；identity 来源=round(identityScore*100)（保旧前端不空 / R3 与 identityScore 分离） */
   readonly similarityScore: number
+  // ── CHG-VIR-9-A：identity 来源附加字段（legacy 来源不填 / optional 向后兼容）─────
+  /** identity_candidate.id（confirm/reject 操作锚点） */
+  readonly candidateId?: string
+  /** 多证据 identityScore ∈ [0,1]（D-105a-3） */
+  readonly identityScore?: number
+  /** 强负 veto 原因（UI「看起来像但被拦截」） */
+  readonly strongNegativeReasons?: readonly EvidenceType[]
+  /** 候选状态 */
+  readonly status?: 'pending' | 'confirmed' | 'rejected'
+}
+
+/** listSimilar 结果（回显实际使用来源，便于 UI 判断是否降级 / CHG-VIR-9-A）。 */
+export interface SimilarResult {
+  readonly items: readonly SimilarVideoItem[]
+  readonly source: 'identity' | 'legacy'
 }

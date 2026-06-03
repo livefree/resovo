@@ -56,6 +56,11 @@ export interface ListCandidatesParams {
    */
   readonly sortField?: 'score' | 'videoCount' | 'year' | 'titleNormalized'
   readonly sortDir?: 'asc' | 'desc'
+  /**
+   * CHG-VIR-9-A：候选来源。`legacy`（默认）=实时 group-by（ADR-105 v1）；
+   * `identity`=读 identity_candidate（多证据候选，空表自动降级 legacy）。
+   */
+  readonly source?: 'identity' | 'legacy'
 }
 
 export interface ListCandidatesResult {
@@ -63,6 +68,8 @@ export interface ListCandidatesResult {
   readonly total: number
   readonly page: number
   readonly limit: number
+  /** 回显实际使用来源（identity 空表降级时为 legacy / CHG-VIR-9-A）。 */
+  readonly source?: 'identity' | 'legacy'
 }
 
 // ── CHG-SN-5-10：mutation 端点类型 ───────────────────────────────────

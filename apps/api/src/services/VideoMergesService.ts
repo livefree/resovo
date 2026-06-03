@@ -30,6 +30,8 @@ import {
   countRawCandidateGroups,
   fetchVideoDetailsForCandidates,
 } from '@/api/db/queries/video-merge-candidates'
+// CHG-VIR-9-A：merge source=identity 读 identity_candidate 候选（默认 legacy，空表降级）
+import { listPendingCandidatePairs } from '@/api/db/queries/identity-candidate'
 import {
   fetchVideosByIds,
   fetchSourcesByVideoId,
@@ -56,9 +58,11 @@ import {
   computeOverlapScore,
   pickRecommendedTarget,
   mapVideoRow,
+  buildGroupFromPair,
 } from './VideoMergesService.schemas'
 // CHG-VIR-7 Phase 2a：多证据身份评分（identityScore/evidence，与 legacyScore 分离 / R3）
-import { scoreGroup } from './identity'
+import { scoreGroup, SCORER_VERSION } from './identity'
+import { TITLE_PARSER_VERSION } from './TitleIdentityParser'
 
 // ── 公开 re-export（外部 import 路径保持不变）──────────────────
 export {
@@ -86,6 +90,14 @@ export class VideoMergesService {
     const { type = null, minScore, limit, page } = params
     const typeFilter = type ?? null
 
+    // CHG-VIR-9-A：source=identity 读 identity_candidate 候选（每 pending pair→2-video group）；
+    // 空表自动降级 legacy（默认 legacy，待 shadow 稳定后翻默认）。
+    if ((params.source ?? 'legacy') === 'identity') {
+      const identityResult = await this.listIdentityCandidates(page, limit)
+      if (identityResult) return identityResult
+      // identity 候选空 → 落回 legacy
+    }
+
     // 两步查询：先取候选组，再批量取 video 详情
     const offset = (page - 1) * limit
     const [rawGroups, total] = await Promise.all([
@@ -94,7 +106,7 @@ export class VideoMergesService {
     ])
 
     if (rawGroups.length === 0) {
-      return { data: [], total, page, limit }
+      return { data: [], total, page, limit, source: 'legacy' }
     }
 
     // 批量获取所有相关 video 的详情
@@ -156,7 +168,31 @@ export class VideoMergesService {
       return a.groupKey.localeCompare(b.groupKey)
     })
 
-    return { data: groups, total, page, limit }
+    return { data: groups, total, page, limit, source: 'legacy' }
+  }
+
+  /**
+   * CHG-VIR-9-A：source=identity 读 identity_candidate pending 候选，每 pair→2-video CandidateGroup。
+   * 返回 null 表示候选空（调用方降级 legacy）。merge 默认 legacy，本路径待 shadow 稳定后翻默认。
+   */
+  private async listIdentityCandidates(page: number, limit: number): Promise<ListCandidatesResult | null> {
+    const offset = (page - 1) * limit
+    const pairs = await listPendingCandidatePairs(this.db, {
+      scorerVersion: SCORER_VERSION,
+      parserVersion: TITLE_PARSER_VERSION,
+      limit,
+      offset,
+    })
+    if (pairs.length === 0) return null
+
+    const videoIds = [...new Set(pairs.flatMap((p) => [p.left_video_id, p.right_video_id]))]
+    const details = await fetchVideoDetailsForCandidates(this.db, videoIds)
+    const videoMap = new Map(details.map((v) => [v.id, mapVideoRow(v)]))
+    const groups = pairs
+      .map((p) => buildGroupFromPair(p, videoMap))
+      .filter((g): g is CandidateGroup => g !== null)
+    if (groups.length === 0) return null
+    return { data: groups, total: groups.length, page, limit, source: 'identity' }
   }
 
   // ── merge ─────────────────────────────────────────────────────────

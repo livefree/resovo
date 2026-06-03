@@ -199,6 +199,88 @@ export async function listForCompareReport(
   return r.rows
 }
 
+// ── ⑦ 审核台 similar：按 videoId 召回 pending 候选 pair（对侧 video / CHG-VIR-9-A）────
+
+/** by-videoId 召回行：对侧 video（SimilarVideoItem 字段）+ 候选评分。 */
+export interface IdentityCandidateNeighborRow {
+  readonly candidate_id: string
+  readonly neighbor_video_id: string
+  readonly title: string
+  readonly type: string
+  readonly year: number | null
+  readonly country: string | null
+  readonly genres: string[]
+  readonly cover_url: string | null
+  readonly meta_score: number
+  readonly review_status: string
+  readonly is_published: boolean
+  readonly identity_score: string
+  readonly strong_negative_reasons: string[]
+  readonly evidence_jsonb: unknown
+  readonly status: string
+}
+
+/**
+ * 召回某 video 的 pending 候选 pair（取对侧 video + SimilarVideoItem 字段，复用 listSimilarCandidates
+ * 的 videos+media_catalog JOIN 范式）。利用索引 4/5（left/right video FK 反查）。版本过滤（Y5）。
+ */
+export async function listPendingCandidatesByVideoId(
+  db: Pool,
+  params: { videoId: string; scorerVersion: string; parserVersion: string; limit: number },
+): Promise<IdentityCandidateNeighborRow[]> {
+  const r = await db.query<IdentityCandidateNeighborRow>(
+    `SELECT
+       ic.id AS candidate_id,
+       (CASE WHEN ic.left_video_id = $1 THEN ic.right_video_id ELSE ic.left_video_id END) AS neighbor_video_id,
+       nv.title, nv.type, nmc.year, nmc.country,
+       COALESCE(nmc.genres, ARRAY[]::text[]) AS genres,
+       nmc.cover_url, nv.meta_score, nv.review_status, nv.is_published,
+       ic.identity_score::text, ic.strong_negative_reasons, ic.evidence_jsonb, ic.status
+     FROM identity_candidate ic
+     JOIN videos nv
+       ON nv.id = (CASE WHEN ic.left_video_id = $1 THEN ic.right_video_id ELSE ic.left_video_id END)
+       AND nv.deleted_at IS NULL
+     LEFT JOIN media_catalog nmc ON nmc.id = nv.catalog_id
+     WHERE (ic.left_video_id = $1 OR ic.right_video_id = $1)
+       AND ic.status = 'pending'
+       AND ic.scorer_version = $2 AND ic.parser_version = $3
+     ORDER BY ic.identity_score DESC, ic.canonical_pair_key ASC
+     LIMIT $4`,
+    [params.videoId, params.scorerVersion, params.parserVersion, params.limit],
+  )
+  return r.rows
+}
+
+// ── ⑧ /admin/merge：pending 候选 pair（merge source=identity 折叠用 / CHG-VIR-9-A）──────
+
+export interface PendingCandidatePairRow {
+  readonly id: string
+  readonly left_video_id: string
+  readonly right_video_id: string
+  readonly identity_score: string
+  readonly legacy_score: string | null
+  readonly strong_negative_reasons: string[]
+  readonly evidence_jsonb: unknown
+  readonly group_key: string | null
+}
+
+/** 拉 pending 候选 pair（版本过滤 Y5）。Service 折叠成 CandidateGroup（每 pair→2-video group）。 */
+export async function listPendingCandidatePairs(
+  db: Pool,
+  params: { scorerVersion: string; parserVersion: string; limit: number; offset: number },
+): Promise<PendingCandidatePairRow[]> {
+  const r = await db.query<PendingCandidatePairRow>(
+    `SELECT id, left_video_id, right_video_id, identity_score::text, legacy_score::text,
+            strong_negative_reasons, evidence_jsonb, group_key
+     FROM identity_candidate
+     WHERE status = 'pending' AND scorer_version = $1 AND parser_version = $2
+     ORDER BY identity_score DESC, canonical_pair_key ASC
+     LIMIT $3 OFFSET $4`,
+    [params.scorerVersion, params.parserVersion, params.limit, params.offset],
+  )
+  return r.rows
+}
+
 // ── ⑥ 对比报表聚合计数（一致/新增召回/拦截 三桶 / §6.1）───────────────
 
 export async function countCompareBuckets(

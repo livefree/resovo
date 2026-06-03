@@ -13936,3 +13936,27 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **验证结果**（回填 3470 + 直接 runIdentityRescore）：**573 blocking 桶 / 917 pair / 193 候选 / 159 强负拦截 / 724 低分跳过 / 1.4s**。对比报表：跨 group 新增召回 170（标点/语言变体/符号差异漏合并治理 ✅，如「当前、正被打扰中！」↔「当前正被打扰中」/「末日逃生2：迁移国语」↔「末日逃生2：迁移」）+ 强负拦截 159（season_mismatch/external_id_conflict 误合并拦截 ✅，如「星辰变第5季」↔「第7季」）。逐条可解释，候选质量符合 ADR-105a 双向治理预期。
 - **门禁**：typecheck EXIT=0（脚本编译）。无业务逻辑变更（一次性运维脚本，复用 CHG-VIR-6 builder/query）。
 - **注意事项**：**生产切 UI（CHG-VIR-9）前须先回填 title_observations**（blocking 覆盖度），否则候选召回不全。dev DB 现有 193 shadow 候选（pending）+ 3470 回填观测，供 CHG-VIR-9 切 UI 消费（可清理重跑）。
+
+## [CHG-VIR-9-A] Phase 2c：端点 ADR amendment + 候选来源读切换（fallback 就绪）（SEQ-20260602-03 / ADR-137 AMENDMENT 2.0 + ADR-105a AMENDMENT）
+- **完成时间**：2026-06-03
+- **记录时间**：2026-06-03 02:40
+- **执行模型**：claude-opus-4-8（建议 opus，一致）
+- **子代理**：code-architect (claude-opus-4-8)（agentId a662a6b4cd495065e；CHG-VIR-9 端点 ADR amendment + 实施蓝图 + 拆 9-A/9-B/9-C，主循环按蓝图实施 9-A）
+- **背景**：Phase 2b（CHG-VIR-8）shadow 候选就绪（验证新增召回 170 / 拦截 159）。本卡把审核台 similar + /admin/merge 的 UI 候选来源切到统一 identity_candidate（ADR-137 AMENDMENT 2026-06-02 已预告取代方向）。用户裁定 similar 默认 identity / merge 默认 legacy / reject 新端点留 9-B。
+- **修改文件**：
+  - `docs/decisions.md`（改）— ADR-137 §端点契约表 similar 行加 `source?` + **AMENDMENT 2.0 2026-06-03**（端点契约：保留路径 + `?source=identity|legacy` default identity + 响应扩 optional + 空表自动降级 + 向后兼容论证）；ADR-105a **AMENDMENT 2026-06-03**（merge candidates `?source=` default legacy + 2-video 基础折叠）
+  - `apps/api/src/db/queries/identity-candidate.ts`（改）— `listPendingCandidatesByVideoId`（审核台对侧召回：CASE 取对侧 video + 复用 listSimilarCandidates 的 videos/media_catalog JOIN 范式 + version 过滤 Y5）+ `listPendingCandidatePairs`（merge 折叠用）
+  - `apps/api/src/services/ModerationService.ts`（改）— `listSimilar` 加 source 分支返回 `{ items, source }`；source=identity 读候选 map（identityScore/candidateId/strongNegativeReasons/status）+ 空表自动降级 legacy；新增 `SimilarResult` 类型 + `SimilarVideoItem` 扩 optional 字段
+  - `apps/api/src/services/VideoMergesService.ts`（改）— `listCandidates` 加 source 分支 + `listIdentityCandidates` 私有方法（每 pending pair→2-video group）+ 空表降级；3 处 return 加 source 回显
+  - `apps/api/src/services/VideoMergesService.schemas.ts`（改）— `buildGroupFromPair` helper（**抽出避免 VideoMergesService 超限膨胀**，520≈原 523）+ `ListCandidatesSchema` 加 source
+  - `apps/api/src/routes/admin/moderation.ts`（改）— `SimilarQueryParams` 加 source + handler 回显 `{ data, source }`
+  - `packages/types/src/video-merge.types.ts`（改）— `ListCandidatesParams`/`ListCandidatesResult` 加 source
+  - `apps/server-next/src/lib/moderation/api.ts`（改）— `SimilarVideoItem` optional 字段 + `ListSimilarVideosOptions` source 参数（返回类型不变避免破坏 TabSimilar）；`lib/merge/api.ts`（改）— listCandidates source 透传
+  - `tests/unit/api/identity-source-switch.test.ts`（**新建** 7）+ `identity-candidate-queries.test.ts`（+2 by-videoId/pairs SQL）+ `moderation-similar.test.ts`（7 现有更新消费 `{items,source}` + 显式 source:'legacy'）
+- **核心要点**：① 端点契约向后兼容（保留路径 + 响应扩 optional + 旧前端读 similarityScore 不破，identity 来源填 round(identityScore*100)）；② 空表自动降级 legacy（未回填/job 未跑时不空窗）；③ identityScore 与 legacyScore/similarityScore 字段分离（R3）；④ source envelope 回显实际来源；⑤ legacy 路径（4 维加权 + group-by）完整保留作 fallback，不删。
+- **ADR D-N 闭环**：无新 D 编号（ADR-137/105a AMENDMENT 端点契约细化，D-105a-9 候选层级 Phase 2c 切来源实施）。
+- **新增依赖**：无
+- **数据库变更**：无（query 新增，无 migration；identity_decisions + 写路径留 9-B）
+- **门禁/验收**：typecheck EXIT=0 + lint EXIT=0 + verify:adr-contracts EXIT=0（**无新 admin route → endpoint-adr 不触发**）+ **全量 6159 passed / 0 failed**（467 files / 净 +9）。验收：候选来源可切（?source=）✅ / identity 空表自动降级 legacy ✅ / 端点契约向后兼容 ✅ / identityScore 与 similarityScore 分离 ✅。
+- **注意事项**：① **CHG-VIR-9-B 解阻** —— 读契约就绪，9-B 落 identity_decisions migration + confirmed→merge 单事务（D-105a-11）+ 新增 `POST /admin/identity-candidates/:id/reject`（**须独立 ADR + Opus PASS + verify:endpoint-adr**）；② **蓝图偏离（合理）**：merge identity 基础折叠（每 pair→2-video group），完整 N-video 连通分量折叠 + 翻 merge 默认 identity 留 merge shadow 稳定后小卡；前端 source envelope 回显 + TabSimilar/MergeClient UI confirm/reject 留 9-C；③ 生产切 identity 默认前须回填 title_observations（blocking 覆盖度 / CHG-VIR-8 证实）；④ similar 默认已切 identity（空表降级），merge 默认仍 legacy。
+- **[AI-CHECK]**：分层 NO（query db 层 / service source 分支 / route schema+回显 / 前端 api 类型，无越层）/ 跨模块内部实现 NO（复用 listSimilarCandidates JOIN + fetchVideoDetailsForCandidates + mapVideoRow）/ 重复逻辑 NO（legacy 保留复用 fallback + buildGroupFromPair 抽 schemas 真源）/ hack NO（空表降级是设计）/ 需拆分函数 NO（listIdentityCandidates 私有方法 + buildGroupFromPair <80 行）/ 需拆分文件 NO（buildGroupFromPair 抽 schemas 避免 VideoMergesService 膨胀，回落 520）/ 隐式副作用·吞异常 NO / 偏离检测：merge 2-video 基础折叠 + merge 默认 legacy（用户裁定）+ source envelope 留 9-C，均已说明。结论：SAFE。

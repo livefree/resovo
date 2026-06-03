@@ -61,6 +61,8 @@ const SimilarPathParams = z.object({ id: z.string().uuid() })
 const SimilarQueryParams = z.object({
   limit: z.coerce.number().int().min(1).max(20).default(10),
   yearRange: z.coerce.number().int().min(1).max(15).default(5),
+  // CHG-VIR-9-A：候选来源（identity=多证据候选默认 / legacy=ADR-137 4 维加权回退）；空表自动降级
+  source: z.enum(['identity', 'legacy']).default('identity'),
 })
 
 const MetaEditSchema = z.object({
@@ -195,8 +197,9 @@ export async function adminModerationRoutes(fastify: FastifyInstance) {
       return reply.code(422).send({ error: { code: 'VALIDATION_ERROR', message: '参数错误', status: 422 } })
     }
     try {
-      const data = await moderationSvc.listSimilar(pathParsed.data.id, queryParsed.data)
-      return reply.send({ data })
+      const result = await moderationSvc.listSimilar(pathParsed.data.id, queryParsed.data)
+      // CHG-VIR-9-A：回显实际来源（identity 空表降级 legacy 时 source='legacy'）
+      return reply.send({ data: result.items, source: result.source })
     } catch (err) {
       if (isAppError(err, 'NOT_FOUND')) {
         return reply.code(404).send({ error: { code: 'NOT_FOUND', message: '视频不存在', status: 404 } })

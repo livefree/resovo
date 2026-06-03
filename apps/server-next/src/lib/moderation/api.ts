@@ -260,11 +260,18 @@ export interface SimilarVideoItem {
   readonly reviewStatus: string
   readonly isPublished: boolean
   readonly similarityScore: number
+  // ── CHG-VIR-9-A：identity 来源附加（legacy 来源不填 / optional 向后兼容）─────
+  readonly candidateId?: string
+  readonly identityScore?: number
+  readonly strongNegativeReasons?: readonly string[]
+  readonly status?: 'pending' | 'confirmed' | 'rejected'
 }
 
 export interface ListSimilarVideosOptions {
   readonly limit?: number
   readonly yearRange?: number
+  /** CHG-VIR-9-A：候选来源（identity 默认 / legacy 回退）；空表服务端自动降级 */
+  readonly source?: 'identity' | 'legacy'
 }
 
 export async function listSimilarVideos(
@@ -274,8 +281,10 @@ export async function listSimilarVideos(
   const params = new URLSearchParams()
   if (opts.limit != null) params.set('limit', String(opts.limit))
   if (opts.yearRange != null) params.set('yearRange', String(opts.yearRange))
+  if (opts.source != null) params.set('source', opts.source)
   const qs = params.toString()
   const path = `/admin/moderation/${encodeURIComponent(videoId)}/similar${qs ? `?${qs}` : ''}`
+  // source envelope 回显留 9-C UI 消费；9-A 返回类型不变（含 optional identity 字段）
   const res = await apiClient.get<{ data: readonly SimilarVideoItem[] }>(path)
   return res.data
 }

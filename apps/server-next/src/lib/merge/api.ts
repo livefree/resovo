@@ -30,6 +30,8 @@ export async function listCandidates(params: ListCandidatesParams): Promise<List
   // ADR-150 阶段 5 EP-4 follow-up（2026-05-25）：sort 全栈打通 URL 透传
   if (params.sortField) qs.set('sortField', params.sortField)
   if (params.sortDir)   qs.set('sortDir', params.sortDir)
+  // CHG-VIR-9-A：候选来源（默认 legacy；identity 读 candidate 表，空表降级）
+  if (params.source) qs.set('source', params.source)
   return apiClient.get<ListCandidatesResult>(`/admin/video-merges/candidates?${qs.toString()}`)
 }
 
