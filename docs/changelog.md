@@ -14088,3 +14088,11 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **记录时间**：2026-06-03
 - **原因**：用户按 runbook 执行报 `node: .env.production: not found`——原示例占位名易被直接复制且仓库无此文件。
 - **修改**：`docs/manual/title-observations-backfill-runbook.md` §3 env 条目改为 `.env.production.local`（.gitignore 已覆盖不会被提交，明示需自建）+ 明确脚本只读 `DATABASE_URL` / `REDIS_URL` 两变量 + ⚠️ `queue.ts` 有 `redis://localhost:6379` 兜底——漏填 REDIS_URL 时 enqueue 静默入本地 Redis、生产 worker 收不到 job；§4 五处命令示例同步替换。
+
+### [MAINT] CHG-VIR-OBS-BACKFILL 当日收口 — 单环境定档，回填执行完毕 + 硬前置解除
+- **记录时间**：2026-06-03
+- **执行模型**：claude-opus-4-8
+- **背景**：用户确认 `resovo_dev` 为唯一库、无独立生产环境 → runbook 的"生产回填"即已在该库完成（本卡早前实跑验证覆盖率 100% / 617 桶）。
+- **执行**：按 runbook §5 注重跑 full-rescan 反映 617 桶最新观测（job `identity-rescore-1780519984663`，API 进程 :4000 在线消费）→ 候选 193→**198**（173 跨 group 新增召回 / 162 强负拦截 / 密度 ≈5.5%，结构合理）。
+- **落档**：runbook 新增 §0 执行留档（单环境定档 + 全步骤结果表 + 结论）；task-queue 同步 5 处（11-D 状态行 + 完成备注补记 / CHG-VIR-10 硬前置 ✅ ×2 / CHG-VIR-9-D 依赖 ✅ / SEQ 依赖链行 / 9-C 卡面前置已满足标注）；tasks.md 头部摘要同步。
+- **结论**：**CHG-VIR-10 与 CHG-VIR-9-D 的 OBS-BACKFILL 硬前置解除**（9-D 仍余"merge shadow 稳定"用户裁定时点；CHG-VIR-10 仍余启动时 Opus 前置门禁①②）；CHG-VIR-9-C「切 UI 前须先回填」前置满足。

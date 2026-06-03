@@ -9,6 +9,20 @@
 
 ---
 
+## 0. 执行留档（2026-06-03 / 单环境定档）
+
+**用户确认（2026-06-03）：`resovo_dev` 为唯一库，无独立生产环境**——本 runbook 的"生产"即该唯一库。全部步骤已执行完毕：
+
+| 步骤 | 结果 |
+|---|---|
+| Step 0/1/2 回填 + 覆盖度 | 覆盖率 **100.0%**（3617/3617，coreTitleKey 同 100%）/ 617 桶 / 969 pair 上限 / 超护栏 0 |
+| Step 3 full-rescan | job `identity-rescore-1780519984663` 已消费完成（2026-06-03） |
+| Step 4 候选量级 | **198 pending 候选**（173 跨 group 新增召回 / 162 强负拦截）/ 密度 ≈5.5%，结构合理 |
+
+**结论：CHG-VIR-10 与 CHG-VIR-9-D 的硬前置已解除；CHG-VIR-9-C「切 UI 前须先回填」前置已满足**（候选来源 UI 已 ship，唯一环境即生效）。本文档保留供未来分环境部署时复用。
+
+---
+
 ## 1. 背景与目的
 
 identity 候选（CHG-VIR-8 离线 job）的 blocking 召回按 `title_observations.parsed_facets_jsonb->>'coreTitleKey'` 分桶——**blocking 召回覆盖 = title_observations 覆盖度**。
