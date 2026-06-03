@@ -674,6 +674,20 @@ UserPreferences = {
 
 ---
 
+### 5.15 视频身份解析层（规划草案 / ADR-105a Draft / 未落 migration）
+
+> ⚠️ **规划中，非现状基线**：以下为 SEQ-20260602-03 视频身份解析升级（设计 `docs/designs/video-identity-resolution-redesign_20260602.md` §4.2/§4.3）的 schema 草案，**Phase 2b（CHG-VIR-8）才落 migration**；当前生产无 `identity_candidate` 表。本小节随设计 §5「Phase 0 同步 schema 草案」要求登记，落地时迁出本标注。真源详见 `docs/decisions.md` ADR-105a。
+
+把 ADR-105 v1「`(mc.title_normalized, mc.year, v.type)` 三元组等值 + 单维 `source_overlap_ratio`」升级为 Entity Resolution（Blocking 并集召回 → 多证据 Scoring → 阈值分级 → 候选离线持久化 + 决策记忆）。要点：
+
+- **`core_title_key`**（规划）：`TitleIdentityParser.parseTitle` 产出的**新增并行**确定性等值 blocking key（B-tree，**非 pg_trgm**），与 `normalizeTitle`/`normalizeMergeKey` 解耦、不改其语义、不写入 catalog 唯一约束（红线）。facets（`season_number`/`edition`/`language_variant`/序号）解析保存不删除。
+- **多证据评分**（规划）：强正（external exact ID 饱和 0.95 / alias / 同源 canonical / source 指纹重叠）/ 中正（`core_title_key` 等值 / year±1 / type 兼容 / 集数结构 / metadata）/ 强负（external ID 冲突 / season 不同 / year 远且无 exact / type 不兼容 / 集数模式冲突 / 序号冲突 → 硬否决）。阈值 `≥0.92` auto-eligible（自动绑定开关默认 OFF）/ `[0.75,0.92)` candidate / `<0.75` none / 任一强负 blocked。`identityScore` 与 `legacyScore`（`source_overlap_ratio`）字段分离。
+- **`identity_candidate`**（草案表 / Phase 2b 落地）：video-pair 内部表示 + 状态机 `pending`/`confirmed`/`rejected`/`superseded`；并发幂等 `UNIQUE(canonical_pair_key) WHERE status='pending'`；`evidence_hash` 去重 + `revived_from_candidate_id` 复活链；`trigger_source` ∈ `ingest`/`offline-rescore`/`manual-search`。完整 DDL 草案见 ADR-105a D-105a-7。
+- **离线生成**（规划）：Bull job Blocking+Scoring 双跑写候选，实时端点轻量读 + 旧 group fallback；实时 p95 继承 ADR-105 ≤200ms，离线 job 另立 SLO。
+- **决策事实源**（规划）：`identity_decisions` confirmed→merge 关联 `video_merge_audit.id`，不形成两套事实源。
+
+---
+
 ## 6. 视频状态机（DB 强约束）
 
 来源：Migration `023_enforce_video_state_machine_trigger.sql`（基线）→ `033` → `034` → `053`（M-SN-4 D-01 新增暂存退回）

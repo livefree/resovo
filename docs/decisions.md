@@ -18864,3 +18864,212 @@ D-174-1 ~ D-174-5 共 5 条，实施期（META-23-B..E）逐条闭环；advisory
 2. 「REST 搜不到/低置信」（83% unmatched anime）→ 另起 SEQ（先诊断 25 个搜不到真因：Bangumi 未收录 / 中文译名差异 / 阈值偏严）。
 
 ---
+
+## ADR-105a：视频身份解析 — 多证据评分 / 阈值分级 / 候选持久化 / 离线生成（SEQ-20260602-03 / CHG-VIR-1 / Phase 0）
+
+- **状态**：**Accepted**（arch-reviewer claude-opus-4-8 / agentId a3933826a5e470df8 / CONDITIONAL → RR-1 评分可达性 + YY-1 外部 ref 字段 + YY-2 矩阵中性 + YY-3 exact 豁免边界 **4 项已吸收**，满足转 Accepted 条件；Phase 0 定档卡，不写业务代码）
+- **日期**：2026-06-02
+- **决策者**：主循环 claude-opus-4-8 / arch-reviewer (claude-opus-4-8) CONDITIONAL→Accepted
+- **关联**：ADR-105（merge/split/unmerge 端点契约 + `video_merge_audit` + v1 `source_overlap_ratio` 评分 / 本 ADR 是其 AMENDMENT 2026-06-02 规划的 ADR-105a 落档，**端点契约/audit schema/事务约束全部继承不变**）/ ADR-174（`normalizeMergeKey` 剥标点 + CJK 不变量 / 本 ADR `core_title_key` 为新增并行 key，不触碰）/ ADR-114-NEGATED（`video_sources` 复合键 + 跨站不合并 / merge 仍只整体转移 source）/ ADR-137（审核台 similar 四维加权 / Phase 2c C2 取代，不在本 ADR 实施）/ ADR-175（多语种标题模型 / alias normalized blocking key 来源）/ ADR-176（catalog 按季 / season_number facet 强负判据）/ ADR-177（外部 ID 映射真源 / 外部 exact ID 证据来源，**本 ADR 不依赖其落地，evidence 经既有 `media_catalog` 外部 ID 列 + `video_external_refs` 读取**）
+- **设计来源**：`docs/designs/video-identity-resolution-redesign_20260602.md` §4.2 / §4.3 / §5 Phase 2b（arch-reviewer Opus CONDITIONAL → R1–R3 红线已于 §10 闭环；本 ADR 吸收 Y1/Y3/Y5 + 未决项 2/5）
+
+### 背景
+
+ADR-105 v1 候选模型（`video-merge-candidates.ts:42-94` + `VideoMergesService.schemas.ts:71-90`）的事实现状：
+
+- **候选源**：`videos v JOIN media_catalog mc ON mc.id = v.catalog_id` 按 `(mc.title_normalized, mc.year, v.type)` `GROUP BY HAVING COUNT(*) > 1` 聚合出 **N-video group**（`video_ids[]`），非 pair。`title_normalized` 由 `normalizeMergeKey` 生成（ADR-174 剥标点，剥季由内层 `normalizeTitle` 的 `SEASON_PATTERNS` 完成）。
+- **评分**：单维 `computeOverlapScore` = 组内被 ≥2 个 video 共享的 `source_site_key` 数 / 并集大小 ∈ [0,1]，`minScore` 默认 0.6。因 GROUP BY 已强制三元组等值，title/year/type 贡献恒为常量，评分退化为「source 重合度」。
+- **性能基线**：candidate p95 ≤ 200ms / N=100（ADR-105 §决策要点 10）。
+
+两类缺陷（设计 §1）：① **漏合并**——year 缺失、type 被源站误标、标题噪声导致三元组不等即无法跨 year/type 召回；② **误合并**——同名同年同类型的不同作品被压入同一组，无负向证据拦截。ADR-105 AMENDMENT 2026-06-02 已废止旧 ADR-105a 的「pg_trgm + 4 维加权」方向（全库无 pg_trgm 扩展，且禁技术栈外依赖）。本 ADR 落档新方向：**确定性 blocking 召回 → 多证据 Scoring → 阈值分级 Decision → 候选离线持久化 + 决策记忆**，严格遵守「先旁路 → 再排序 → 最后才碰生产归并阈值」。
+
+### 决策要点
+
+**D-105a-1（`core_title_key` — 确定性等值 blocking key，非模糊召回 / R3）**
+- `core_title_key` 是**新增并行 key**，由 Phase 1a `TitleIdentityParser.parseTitle(raw)` 产出（CHG-VIR-5），与 `normalizeTitle` / `normalizeMergeKey` 语义解耦、**不改其函数体**（红线 R1）。
+- 语义：对原始标题做**确定性归一**（去 HTML / 装饰括号 / 画质噪声 / 全半角 / 标点折叠 + Unicode lower），并将 `season_number` / `edition` / `language_variant` / `release_marker` / 序号等 facets **解析保存而非删除**；`core_title_key` 是归一后的「作品核心标题」串。
+- **它是等值键，不是字符相似键**：`core_title_key` 相同 = B-tree 等值命中（强可承载），算中正证据。「召回变宽」**只来自多个 blocking key 取并集 + Scoring 层降权**，不来自单 key 的模糊匹配。如未来确需编辑距离 / trigram / 相似度召回，**必须另起独立 DB capability ADR**，不得在本 ADR 隐式引入 pg_trgm 或新依赖（红线 R2）。
+- **不做繁简归一 / 不做字形折叠**：简繁、港澳台译名走 ADR-175 并列 localized alias（alias normalized key 作为另一条 blocking key），不在 `core_title_key` 内塌缩，避免「不同作品塌缩同键 → 高置信误绑」（继承 ADR-174 / META-22 教训）。
+- **与 `normalizeMergeKey` 的层级关系**：`normalizeMergeKey`（写入 `media_catalog.title_normalized`，外部匹配键基线）继续保留为**保守基线**；`core_title_key` 仅作 blocking 召回，**不写入 catalog 唯一约束、不改归并键**。二者可不同值（parser 对序号/季的处理更精细），互不覆盖。
+
+**D-105a-2（多 blocking key 并集召回）**
+- Blocking keys（取并集，可组合命中，每条 B-tree 或精确索引可承载，**不依赖 pg_trgm**）：
+  1. `core_title_key` 等值键（D-105a-1）
+  2. alias normalized key（ADR-175 `media_catalog_aliases` 归一别名等值；跨语种/简繁召回来源）
+  3. 外部 ID（`imdb_id` / `tmdb_id` / `douban_id` / `bangumi_subject_id`，经 `media_catalog` 列 + `video_external_refs`）
+  4. year band（`year` 及 `year±1` 邻域，离散值等值，非范围扫描）
+  5. type compatibility class（按 D-105a-5 矩阵的兼容类，离散等值）
+  6. source fingerprint（`(source_site_key, source canonical id)` 集合，用于同源指纹重叠）
+- **召回 ≠ 决策**：blocking 只负责把可能同作品的实体拉进同一比较集合（高 recall），是否同作品由 Scoring + 阈值决定（D-105a-3/4）。Blocking 禁止 pairwise 全量比较（设计 §8），必须先经高选择性 key 收敛候选集再两两评分。
+
+**D-105a-3（多证据评分模型 — 三类证据 + 确定性聚合）**
+- 证据分三类，**权重表为代码常量真源**（与 type 矩阵同放 D-105a-5 所述常量模块；后台 KV 只调阈值不调权重结构 / 未决 2）：
+
+  | 极性 | 证据 | 默认权重 | 说明 |
+  | --- | --- | --- | --- |
+  | 强正 | `external_exact_id_match` | **saturating 0.95** | 已确认的 exact 外部 ID 命中。**当前数据源**：`media_catalog` 外部 ID 列（命中同值）+ video 级 `video_external_refs` 满足 `is_primary=true AND match_status='manual_confirmed'`（人工确认主绑定；该表用 `match_status` 而非 `relation`、无 `exact` 取值；`auto_matched` primary 是否纳入由 Phase 2b 按置信策略定，默认纳入可降档）。**ADR-177 落地后**改读 `catalog_external_refs.relation='exact' AND is_primary=true`，语义等价仅换源。命中即把 `identityScore` 饱和抬至 0.95（D-105a-3 聚合）|
+  | 强正 | `external_alias_match` | +0.45 | 外部别名命中且 year/type/country 不冲突 |
+  | 强正 | `same_site_canonical_id` | +0.40 | 同源站 canonical id 一致 |
+  | 强正 | `source_fingerprint_high_overlap` | +0.30 | 多 source 指纹高度重叠（Jaccard ≥ 配置阈值，默认 0.6） |
+  | 中正 | `core_title_key_equal` | +0.35 | `core_title_key` 等值（D-105a-1） |
+  | 中正 | `year_equal_or_off_by_one` | +0.15 | year 相同或差 1 |
+  | 中正 | `type_compatible` | +0.10 | 按 D-105a-5 矩阵判为兼容 |
+  | 中正 | `episode_structure_close` | +0.10 | 集数结构接近（集数量级 / 范围邻近） |
+  | 中正 | `metadata_close` | +0.10 | cast/director/country/runtime/tags 接近（综合，单条封顶 0.10） |
+  | 强负 | `external_id_conflict` | **veto** | 同 provider 不同 external_id 且均 exact |
+  | 强负 | `season_mismatch` | **veto** | facets `season_number` 不同（同 `core_title_key` 下季不同 / ADR-176） |
+  | 强负 | `year_far_no_exact` | **veto** | year 差 ≥2 且无 external exact ID |
+  | 强负 | `type_incompatible` | **veto** | 按 D-105a-5 矩阵判为强负 |
+  | 强负 | `episode_pattern_conflict` | **veto** | 集数模式冲突（如分集 vs 合集结构互斥） |
+  | 强负 | `ordinal_conflict` | **veto** | 同 `core_title_key` + 序号/部数不同（Y4 护栏，见 D-105a-13） |
+
+- **聚合（确定性）**：
+  ```text
+  rawScore       = Σ positiveEvidence.weight                 # 非 exact 强正 + 中正累加
+  nonExactScore  = clamp( rawScore, 0, 0.90 )                # 非 exact 路径封顶 0.90（< 0.92 阈值，永不自动）
+  exactScore     = hasStrongExternalExactMatch ? 0.95 : 0    # 强正 external exact 饱和基
+  identityScore  = clamp( max(nonExactScore, exactScore), 0, 1 )
+  autoMergeBlocked = (strongNegativeReasons.length > 0)      # 强负硬否决，独立于分值
+  ```
+- **分级可达性（确定性映射 / RR-1）**：
+  - **`auto-eligible`（≥0.92）仅 `external_exact_id_match` 路径可达**：非 exact 证据无论如何累加都被 `nonExactScore` 封顶在 0.90（candidate 区间顶），**永不进入自动绑定区**——与「自动绑定开关早期默认 OFF」的保守取向一致，多证据但无 exact ID 的 pair 一律走人工裁定。
+  - **`candidate`（[0.75,0.92)）**：非 exact 路径需**多条证据组合**越 0.75（如 `core_title_key`0.35 + `same_site_canonical_id`0.40 = 0.75 恰达；或 `external_alias_match`0.45 + `core_title_key`0.35）；**单条中正证据**（如仅 `core_title_key`0.35）< 0.75 落 `none`，不单独成候选。
+  - **`exactScore`=0.95（非 1.0）的取值理由**：① 顶部 [0.95,1.0] 区间留给「人工确认」语义（自动评分不取满分，绝对确定性只属人工 override）；② 保留 strong-negative `veto` 与 exact 共存时的拦截空间（veto 独立于分值，见下条）。
+- **强负不参与减分、只做硬否决**（veto）：避免「强负 + 多中正」相互抵消产生中间分误导。强负命中时 `identityScore` 仍计算并展示（供人工解释「为何看起来像但被拦截」），但 `autoMergeBlocked=true`，分级落 `blocked`（D-105a-4）。
+- `identityScore` 与 `legacyScore` 是**两个独立字段**（D-105a-6），评分不复用 `score`/`source_overlap_ratio`。
+- **权重为代码常量、阈值为 KV**：上表权重默认值随 D-105a-5 常量模块（KV 只调阈值不调权重结构）；`0.90` 非 exact 封顶常量与 `0.92`/`0.75` 阈值的关系本 ADR 定档——初始权重确保非 exact 单中正证据不可单独越 0.75，且非 exact 任何组合不越 0.92。
+
+**D-105a-4（阈值分级 Decision + 自动绑定早期默认关闭）**
+- 阈值为后台 KV 可配（仅调数值，不调证据/权重结构），默认：
+  - `identityScore ≥ 0.92` **且** `¬autoMergeBlocked` → `auto-eligible`（**仅在「自动绑定开关」开启的阶段/场景才真正自动合并**；该开关 Phase 1-4 默认 **OFF**，是否开启留 Phase 3 验收后另起 ADR / Phase 5）。
+  - `0.75 ≤ identityScore < 0.92` → `candidate`（进入候选，人工裁定）。
+  - `identityScore < 0.75` → `none`（不生成候选；除非人工搜索 `trigger_source='manual-search'` 触发）。
+  - 任一强负（`autoMergeBlocked`）→ `blocked`：**禁止自动合并，仅允许人工 override**。
+- 阈值常量 `0.92` / `0.75` 的语义边界与 ADR-105 `minScore` **互不替代**：`minScore` 继续过滤 `legacyScore`（旧排序口径），`identityScore` 阈值是新维度（D-105a-6）。
+
+**D-105a-5（type 兼容矩阵 — 代码常量真源 / 未决 2）**
+- 矩阵以**代码常量**为单一真源（建议落 `apps/api/src/services/identity/type-compat.ts` 之类模块，Phase 2 实施时定位），**后台 KV 只调阈值、不调矩阵结构**；维护责任随 ADR-105a。初始矩阵（设计 §4.2）：
+
+  | 关系 | 默认处理 |
+  | --- | --- |
+  | `anime` ↔ `series` | 兼容（中正 `type_compatible`）；常见源站误标 |
+  | `movie` ↔ `short` | 弱兼容，仅人工候选；不自动合并（不计 `type_compatible` 中正、不计强负） |
+  | `movie` ↔ `series` | 默认强负 `type_incompatible`，除非 `external_exact_id_match` 证明 |
+  | `variety` ↔ `series` / `anime` | 默认强负 `type_incompatible` |
+  | `other` ↔ 任何类型 | 低置信候选，禁止自动合并（不计中正、不计强负，封顶在 `candidate` 区间以下除非有强正） |
+- `external_exact_id_match` 命中时**仅豁免 `type_incompatible` 这一条 veto**（exact ID 是最强身份证据，可证明跨 type 同作品，如 movie/series 收录差异），即 exact 命中场景 `type_incompatible` 不进入 `strong_negative_reasons`、不触发 veto。**exact 不豁免其他任何强负**——`external_id_conflict` / `season_mismatch` / `year_far_no_exact` / `episode_pattern_conflict` / `ordinal_conflict` 仍各自独立 veto（YY-3：exact 不是「压制全部强负」）。
+- 矩阵 11 类 type（ADR-105 `VideoTypeEnum`）除显式 5 组关系外，其余组合默认「中性」（既不计 `type_compatible` 中正、也不 `type_incompatible` 强负，仅 `core_title_key` + 其他证据决定）。**中性为初始保守取向**：Phase 2b 对比报表若发现高频误标组合（如 `documentary`↔`series` / `kids`↔`anime`），经常量模块扩矩阵即可，不改本 ADR 结构（YY-2）。
+
+**D-105a-6（`legacyScore` / `identityScore` 字段分离 — 红线 R3）**
+- `legacyScore` = 现有 `computeOverlapScore`（`source_overlap_ratio`），继续服务 ADR-105 `minScore` 与默认排序口径，**不得复用承载新评分**。
+- `identityScore` = D-105a-3 多证据评分，新字段。Phase 2a 候选行**同时携带**两个分值 + `evidence` + `blockingReasons` + `strongNegativeReasons`（设计 §2a），UI 用于「为何可合并 / 为何拦截」解释，**不改 ADR-105 默认排序与候选数量**（D-105a-9）。
+
+**D-105a-7（`identity_candidate` schema + 状态机 — Y1 幂等 / Y2 复活链）**
+- 新增 `identity_candidate` 表（Phase 2b 落地 / CHG-VIR-8 migration），**内部用 video-pair 表示**（便于幂等、决策记忆、reject 复活链）：
+
+  ```sql
+  -- identity_candidate（草案 / Phase 2b migration 落地，本 ADR 仅定档）
+  CREATE TABLE identity_candidate (
+    id                          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    left_video_id               UUID NOT NULL REFERENCES videos(id) ON DELETE CASCADE,
+    right_video_id              UUID NOT NULL REFERENCES videos(id) ON DELETE CASCADE,
+    canonical_pair_key          TEXT NOT NULL,        -- "min(video_id)|max(video_id)" 有序规范键
+    status                      TEXT NOT NULL CHECK (status IN ('pending','confirmed','rejected','superseded')),
+    parser_version              TEXT NOT NULL,
+    scorer_version              TEXT NOT NULL,
+    evidence_jsonb              JSONB NOT NULL,
+    evidence_hash               TEXT NOT NULL,        -- D-105a-8 输入域
+    legacy_score                NUMERIC(5,4),         -- 可空（pair 无对应 group 时）
+    identity_score              NUMERIC(5,4) NOT NULL,
+    strong_negative_reasons     TEXT[] NOT NULL DEFAULT '{}',
+    trigger_source              TEXT NOT NULL CHECK (trigger_source IN ('ingest','offline-rescore','manual-search')),
+    group_key                   TEXT NULL,            -- Phase 2a N-video group 折叠展示用
+    revived_from_candidate_id   UUID NULL REFERENCES identity_candidate(id),
+    superseded_by_candidate_id  UUID NULL REFERENCES identity_candidate(id),
+    created_at                  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at                  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  );
+
+  -- Y1 并发幂等：同一 pair 同时至多一条 pending
+  CREATE UNIQUE INDEX uq_identity_candidate_pending
+    ON identity_candidate (canonical_pair_key) WHERE status = 'pending';
+  ```
+- **状态机**：`pending`（待裁定）/ `confirmed`（人工或 auto 确认）/ `rejected`（人工拒绝，默认永久压制该 pair）/ `superseded`（被新版本/新证据取代）。
+- **Y1 并发幂等**（设计 §4.3 / 参 `MediaCatalogService.findOrCreate` ON CONFLICT DO NOTHING + 重查范式 `:159-186`）：靠 partial unique index `(canonical_pair_key) WHERE status='pending'` 保证；写入用**单事务 upsert**；「旧 pending → `superseded` + 新建 pending」必须在**同一 BEGIN/COMMIT** 完成。同一 `canonical_pair_key` + 同 `scorer_version`/`parser_version` + 同 `evidence_hash` 不重复生成 pending（先比 hash，相等则 no-op）。
+- **Y2 rejected 复活链**：人工 rejected 默认永久压制；出现**新强正证据**（如新 external exact ID）允许复活，但**必须新建 pending + `revived_from_candidate_id` 指向原 rejected 行，不得覆盖/复用原 rejected 行**（避免撞 Y1 约束 + 审计断链）。
+- **`superseded`**：元数据/版本/`evidence_hash` 变化时旧 pending 置 `superseded`（`superseded_by_candidate_id` 指向新行）+ 新建 pending，同事务完成。
+
+**D-105a-8（`evidence_hash` 输入域 — 决定幂等与复活 / 未决 5）**
+- `evidence_hash` 输入域**必须稳定、确定性**，至少包含：① normalized candidate pair（`canonical_pair_key`）；② `parser_version`；③ `scorer_version`；④ 命中的 blocking key 集合（有序去重）；⑤ 参与评分的字段快照（title core key / year / type / 集数结构摘要 / 关键 metadata 摘要）；⑥ 外部引用摘要（命中的 provider+external_id+relation）；⑦ `strong_negative_reasons`（有序）；⑧ 阈值/权重配置版本号。
+- **禁止包含**：`created_at` / `updated_at` / job id / request id / 行 id 等非证据字段（否则同证据反复生成新 hash → 幂等失效）。
+- hash 算法用确定性序列化（字段有序 JSON）+ 稳定摘要（如 sha256 hex），实施时定算法常量；version 升级即 `scorer_version`/`parser_version` 变化 → hash 变化 → 受控触发 `superseded` + 新 pending（与 Y5 双写可见性配合）。
+
+**D-105a-9（候选对象层级 — group↔pair 映射 / R2）**
+- **Phase 2a**：候选来源、数量、分页、默认排序与 ADR-105 v1 **完全一致**（仍是 `media_catalog` 层 N-video group），仅在每行**附加** `identityScore`/`evidence`/`blockingReasons`/`strongNegativeReasons`（不改来源、不扩召回 / 设计 §2a）。
+- **Phase 2b 起**：`identity_candidate` 内部用 video-pair。映射规则：
+  - **group → pair**：对同一 N-video group 生成所有 unordered pair（或经 scorer pruning 后的候选 pair）。
+  - **pair → group（UI 折叠）**：按 `group_key` / shared catalog-key / connected components 折叠展示，避免把一组拆成大量重复行。
+  - **merge 执行**：仍允许 N→1（ADR-105 mutation 接收 `sourceVideoIds[]` + `targetVideoId`，不变）。
+- catalog-catalog 合并**不在本层**（留 Phase 5 / ADR-176/177）。
+
+**D-105a-10（离线生成 job 性能模型 + 性能基线 / Y5）**
+- 候选生成转**离线 Bull job**（Phase 2b / CHG-VIR-8）：Blocking 多 key 并集 → 候选集收敛 → Scoring → 写 `identity_candidate`，与现有实时候选**并行对照**，不切 UI（Phase 2c 才切）。
+- **性能基线分离（Y5）**：
+  - **实时端点**（`GET /admin/video-merges/candidates` 等）**继承 ADR-105 p95 ≤ 200ms**（实时只做轻量读 `identity_candidate` + 旧 group fallback，不在线评分）。
+  - **离线 job 另立基线**：声明单批时长 / 吞吐 / 全量重算窗口（实施卡 CHG-VIR-8 定具体 SLO），不以实时 p95 衡量。
+- **重评触发**：video title/year/type 变化 / catalog alias 变化 / source 指纹变化 / external ref 变化 / parser·scorer version 升级。job：cursor 分批 + batch size 可配 + 超时失败重试 + 版本升级可全量重算。
+- **重算期候选可见性（Y5）**：双写 + version 过滤读——新版本候选写入后，读侧按 `scorer_version`/`parser_version` 过滤，旧版本 pending 置 `superseded`，避免新旧候选并存误导。
+- **索引**：B-tree 覆盖高选择性 blocking key；JSONB/GIN 仅用于明确字段集合；**不依赖 pg_trgm**（红线 R2）。
+
+**D-105a-11（confirmed → video merge 事务边界 / Y3 + `identity_decisions`）**
+- 现 `VideoMergesService` merge 是独立事务（`VideoMergesService.ts:201-224`）。本 ADR 引入 `identity_decisions`（记录人工/auto confirmed/rejected/override），其与真实 merge **不得形成两套事实源**：
+  - confirmed → 触发 video merge 时**优先同一 BEGIN/COMMIT** 完成；decision 关联 `video_merge_audit.id`。
+  - 若必须两段式：decision 初始 `confirming`，回填 `video_merge_audit_id` 后才置 `confirmed`（参 split `updateAuditTargetIds` `VideoMergesService.ts:387-410`）；失败回滚为 `pending` 或 `failed`。
+  - merge 回滚（unmerge）时，关联 decision 标记 `reverted` 或记 `reverted_at`，**以 `video_merge_audit` 为唯一事实源**。
+  - auto decision 的 actor 用 system actor，保留 job id / request id（仅作审计血缘，不进 `evidence_hash`）。
+- `identity_decisions` / `merge_blocklist` schema 细节随 Phase 2b/2c 实施卡定档（本 ADR 锁定**关联约束与事务边界**，不锁列级 DDL，避免与 Phase 实施过度耦合）。
+
+**D-105a-12（不触碰生产阈值与端点契约）**
+- 本 ADR **不修改** ADR-105 端点契约、`video_merge_audit` schema、`minScore` 默认值、爬虫 `findOrCreate` 绑定语义、`normalizeTitle`/`normalizeMergeKey`。自动绑定开关 Phase 1-4 默认 OFF。任何「真正改变生产 `catalog_id` 绑定或自动合并」的动作均留 Phase 3 验收后另起 ADR / Phase 5。
+
+**D-105a-13（Y4 强负护栏 — 序号即身份 vs 序号即季/卷）**
+- 现 `normalizeTitle` 的 `SEASON_PATTERNS` 剥离 `第N季 / Season N / SN / Part N / Vol.N`（`TitleNormalizer.ts:30-39`）。强负「序号/部数冲突」**过激比漏判更危险**（直接 block 所有自动合并）。
+- 护栏：`ordinal_conflict` 强负**仅在「同 `core_title_key` + facets 序号不同」时生效**。`TitleIdentityParser`（CHG-VIR-5）的 fixture **必须区分**：「序号即作品身份」（如《复仇者联盟 4》——序号是片名一部分，进 `core_title_key`，不同序号 → 不同 `core_title_key` → 不会撞同 key 故不触发 ordinal veto，而是各自独立）与「序号即季/卷」（如《XX 第 4 季》——序号剥到 facets `season_number`，同剧不同季 `core_title_key` 相同 → `season_mismatch` veto 拦截）。
+
+### 红线（实施前必须满足，违反即阻塞）
+
+- **R1** 不改 `normalizeTitle` / `normalizeMergeKey` 函数体与语义；`core_title_key` 是新增并行 key，不写入 catalog 唯一约束、不替代归并键（继承 ADR-174 D-174-1 / META-22）。
+- **R2** 不引入 pg_trgm / OpenCC / 任何技术栈外依赖；`core_title_key` 与所有 blocking key 为**确定性等值**（B-tree 可承载），字符相似召回须另起独立 DB capability ADR。
+- **R3** `identityScore` 与 `legacyScore` 字段分离，**禁复用** ADR-105 `score` / `computeOverlapScore` 承载新评分（防 API/UI 语义漂移）。
+- **R4** 任一强负证据 → `autoMergeBlocked=true`，**禁止自动合并**，仅人工 override；强负只做硬否决不做减分。
+- **R5** `identity_candidate` 并发幂等靠 DB `UNIQUE(canonical_pair_key) WHERE status='pending'`；旧 pending→superseded + 新建必须同事务。
+- **R6** rejected 复活 = 新建 pending + `revived_from_candidate_id`，**绝不覆盖/复用原 rejected 行**（审计不断链）。
+- **R7** `evidence_hash` 输入域稳定确定，**禁含** `created_at`/job id/request id 等非证据字段。
+- **R8** `identity_decisions` 必须关联 `video_merge_audit.id`，confirmed→merge 优先同事务或两段式回填，**不得形成两套事实源**。
+- **R9** Phase 0-2b 不改生产 `catalog_id` 绑定、不开自动合并阈值（自动绑定开关默认 OFF）。
+- **R10** type 兼容矩阵以代码常量为单一真源，后台 KV 只调阈值不调矩阵结构；新增 type 组合在常量模块维护。
+
+### 黄线
+
+- **Y-105a-1** 候选对象 Phase 2a 保持 N-video group 不变，pair 仅 Phase 2b 内部表示；group↔pair 映射须实测候选数量/排序与旧逻辑一致（设计 §7 Phase 2a 验收）。
+- **Y-105a-2** 离线 job 全量重算成本需在 CHG-VIR-8 量化 SLO；重算期双写 + version 过滤读，避免新旧候选并存误导。
+- **Y-105a-3** `source_fingerprint_high_overlap` 的 Jaccard 阈值与 `metadata_close` 的子判据细化留 Phase 2 实施，但**权重上限与极性**本 ADR 已定档（不得在实施期改极性）。
+- **Y-105a-4** 外部 exact ID 证据在 ADR-177 落地前，经 `media_catalog` 外部 ID 列 + video 级 `video_external_refs`（`is_primary=true AND match_status='manual_confirmed'`；**注意该表用 `match_status` 而非 `relation`，无 `exact` 取值**——`relation=exact` 是 ADR-177 规划的 catalog 级字段）读取；ADR-177 落地后改读 `catalog_external_refs.relation='exact' AND is_primary=true`，证据语义不变（只换数据源 + video→catalog 层级上卷）。
+- **Y-105a-5** `scorer_version` / `parser_version` 命名与版本演进规则随 Phase 2b 落地；版本升级触发 `superseded`，不得静默改分。
+
+### 后果
+
+- 正面：漏合并（跨 year/type 经多 blocking key 并集召回）+ 误合并（强负硬否决）双向治理；候选可解释（evidence/blockingReasons/strongNegativeReasons）；候选离线持久化解耦实时 p95；决策记忆（rejected 压制 + 复活链）减少重复人工；`identityScore`/`legacyScore` 分离防语义漂移；为 Phase 3 ingest shadow / Phase 5 catalog 身份层奠基。
+- 负面/成本：新增 `identity_candidate` + 离线 job + `identity_decisions` 维护面；评分权重/阈值需人工调参与样本验证（Phase 2b 对比报表）；parser/scorer 版本演进带来重算成本；自动绑定真正开启仍需 Phase 3 验收 + 另起 ADR（本 ADR 不开）。
+
+### D-N 偏离登记
+
+D-105a-1 ~ D-105a-13 共 13 条，随 Phase 1a/2a/2b/2c 实施卡（CHG-VIR-5/7/8/9）逐条闭环；advisory，不阻塞 CI。本 ADR 经 arch-reviewer CONDITIONAL（agentId a3933826a5e470df8）→ RR-1/YY-1/YY-2/YY-3 修订吸收后转 **Accepted**：RR-1 = D-105a-3 补「分级可达性确定性映射 + 非 exact 封顶 0.90 + exactScore=0.95 取值理由」；YY-1 = `external_exact_id_match` 数据源与 Y-105a-4 校正为 `video_external_refs.is_primary=true AND match_status='manual_confirmed'`（现表无 relation/exact）；YY-3 = D-105a-5 收紧「exact 仅豁免 type_incompatible 单条 veto」；YY-2 = D-105a-5 补「中性为初始保守取向，Phase 2b 扩矩阵」。
+
+### 已知 follow-up（不在本 ADR）
+
+1. `identity_decisions` / `merge_blocklist` 列级 DDL → Phase 2b/2c 实施卡定档（本 ADR 仅锁关联约束 + 事务边界）。
+2. 真正开启自动 catalog 绑定 / 自动合并阈值 → Phase 3 验收后另起 ADR（或 Phase 5）。
+3. 字符相似 / 编辑距离召回（若 blocking 并集 recall 仍不足）→ 另起独立 DB capability ADR（评估 pg_trgm 引入成本，本 ADR 明确不在范围）。
+
+---

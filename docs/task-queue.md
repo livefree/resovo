@@ -2789,13 +2789,14 @@ CODENAME-MATRIX-E2E (依赖 Wave 3 验收期补丁 CODENAME-MATRIX ✅)
 
 **Phase 0 — ADR 起草（全 Opus + arch-reviewer PASS；任一红线未闭环 → BLOCKER）**
 
-3. **CHG-VIR-1** — ADR-105a 起草（多证据评分 / 阈值分级 / 候选持久化 / 离线生成）（状态：⬜ 未开始）
+3. **CHG-VIR-1** — ADR-105a 起草（多证据评分 / 阈值分级 / 候选持久化 / 离线生成）（状态：✅ 已完成 2026-06-02 / claude-opus-4-8 / 子代理 arch-reviewer (claude-opus-4-8)）
    - 创建时间：2026-06-02 19:41
    - 建议模型：**opus**（ADR 起草，强制 arch-reviewer PASS）
    - 范围：评分公式（强正/中正/强负 + 0.92/0.75 阈值）+ `core_title_key` 确定性等值 blocking（B-tree，非 pg_trgm）+ `identity_candidate` schema + 离线生成 job 性能模型（实时端点继承 ADR-105 p95 / 离线另立基线，Y5）+ **type 兼容矩阵**（代码常量真源，未决 2）+ `evidence_hash` 输入域（未决 5）+ Y1 幂等约束 + Y3 confirmed→merge 事务边界。
    - 门禁：Opus 子代理 + arch-reviewer PASS + commit trailer Subagents；落 decisions.md ADR-105a 章节。
    - 验收要点：评分/阈值/候选 schema/离线模型/type 矩阵/evidence_hash 全闭环；与 ADR-105 端点契约兼容；arch-reviewer PASS。
    - 依赖：无（可与 CHG-VIR-2/3/4 并行）。
+   - 完成备注：**ADR-105a Accepted（arch-reviewer claude-opus-4-8 / agentId a3933826a5e470df8 / CONDITIONAL → 4 项修订吸收）**。decisions.md 尾部追加完整 ADR-105a（13 D 条 + `identity_candidate` DDL 草案 + type 兼容矩阵 + 三类证据权重表 + 聚合公式 + evidence_hash 输入域 + 10 红线 + 5 黄线 + 后果 + follow-up）；architecture.md §5.15 加「规划草案/未落 migration」前瞻小节。R1-R3（normalizeTitle/normalizeMergeKey 解耦 + core_title_key 等值非模糊 + identityScore/legacyScore 分离）+ Y1/Y3/Y5（幂等 partial unique / confirmed→merge 事务边界 / 性能基线分离）+ 未决 2/5（type 矩阵代码常量真源 / evidence_hash 输入域）全闭环。arch-reviewer 3 必修 + 1 建议全吸收：RR-1（分级可达性确定性映射 + 非 exact 封顶 0.90 + exactScore=0.95 取值理由）/ YY-1（external_exact 数据源校正 `video_external_refs.is_primary=true AND match_status='manual_confirmed'`，现表无 relation/exact）/ YY-3（exact 仅豁免 type_incompatible 单条 veto）/ YY-2（矩阵中性为初始保守取向）。门禁：verify:adr-contracts EXIT=0（verify-endpoint-adr ✅ 203 路由对齐 / 其余 ⚠️ 既有 advisory 与本 ADR 无关）+ verify:endpoint-adr EXIT=0；纯 docs 无 TS/TSX，typecheck/lint/test 基线不受影响。未新增端点/migration（identity_candidate 留 Phase 2b CHG-VIR-8）。执行模型: claude-opus-4-8
 
 4. **CHG-VIR-2** — ADR-175 起草（多语种标题模型）（状态：⬜ 未开始）
    - 创建时间：2026-06-02 19:41
