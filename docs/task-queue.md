@@ -2757,7 +2757,7 @@ CODENAME-MATRIX-E2E (依赖 Wave 3 验收期补丁 CODENAME-MATRIX ✅)
 
 - **状态**：🟡 规划中
 - **创建时间**：2026-06-02 19:41
-- **最后更新时间**：2026-06-02 20:30（**Phase 0 进度：CHG-VIR-1/2/3 ✅ 已完成**〔ADR-105a/175/176 全 Accepted〕；CHG-VIR-4〔ADR-177〕+ 硬前置 CHG-VIR-PRE-2 + CHG-VIR-PRE-1 待后续会话 / 用户裁决「本轮只做 1/2/3」2026-06-02）
+- **最后更新时间**：2026-06-02 21:00（**Phase 0 CHG-VIR-1/2/3 ✅**〔ADR-105a/175/176 Accepted〕 **+ 前置门禁 CHG-VIR-PRE-1 ✅**〔insertNewVideo schema 漂移修复 / 全量零回归〕 **+ CHG-VIR-PRE-2 ✅**〔ADR-177 关系定档「并存+上卷」/ arch-reviewer 认可〕；**CHG-VIR-4〔ADR-177〕依赖已满足、可起草**，留用户决定；Phase 1+ 实施待启动）
 - **目标**：把「标准化标题 → 单 key 命中即合并」升级为 Entity Resolution（Blocking 召回 → 多证据 Scoring → 阈值分级 Decision → 可逆审计 + 决策记忆），为合并/拆分提供稳健、可解释、可回滚基础。严格按「先旁路 → 再影响排序 → 最后碰生产归并阈值」推进。
 - **范围**：`apps/api`（TitleIdentityParser 新增 / MediaCatalogService.findOrCreate / VideoMergesService / CrawlerService / 离线候选 job / migrations）+ `packages/types` + `apps/server-next`（/admin/merge + 审核台 similar tab 统一候选）+ `docs/decisions.md`（4 份 ADR）+ `docs/architecture.md`（schema 同步）。
 - **方案全文**：`docs/designs/video-identity-resolution-redesign_20260602.md`（commit 27c29a5d；含 §9 arch-reviewer 审核 + §10 修订处置）。
@@ -2780,13 +2780,14 @@ CODENAME-MATRIX-E2E (依赖 Wave 3 验收期补丁 CODENAME-MATRIX ✅)
    - 依赖：无（独立，建议早做；Phase 4 前必修门禁）。
    - 完成备注：**insertNewVideo schema 漂移修复**。① `insertNewVideo`(video-merge-mutations.ts) 改签名 `{shortId,catalogId,title,type}`，INSERT 列对齐 029 后 videos schema（删已 DROP 的 year/title_normalized，加 catalog_id NOT NULL，范式对齐 `videos.mutations.createVideo`）；② `VideoMergesService` 构造注入 `MediaCatalogService`，split **事务前**对每 group `findOrCreate` 作品层 catalog（幂等；事务外，回滚至多留无害孤儿 catalog）→ 事务内 `insertNewVideo` 传 catalogId。**范围澄清**：卡片原列单文件不足以修（catalog_id NOT NULL + findOrCreate 编排在 Service 层），必要适配延伸 VideoMergesService.ts。测试：更新现有权威 `video-merge-mutations.test.ts` split（mock MediaCatalogService.findOrCreate + happy path 断言 catalogId 替代 year + 事务失败 ROLLBACK 补 findOrCreate 就绪）+ 新建 `video-merge-insert-new-video.test.ts`（insertNewVideo 真实 SQL）。**Codex stop-time review FIX**：现有 split 单测与新 catalog 依赖不兼容（初次 grep 漏 video-merge-mutations.test.ts）→ 适配 + 删初版重叠的 video-merge-split-catalog.test.ts。门禁 typecheck/lint/verify×2 EXIT=0 + **全量 456 files 6034 passed 0 failed 零回归**（StagingEditPanel jsdom flaky 隔离+全量均通过，非本卡）。无新端点/migration/ADR。执行模型: claude-opus-4-8（建议 sonnet，opus 覆盖：事务设计+依赖注入更稳妥）
 
-2. **CHG-VIR-PRE-2** — ADR-177 前置：`video_external_refs` ↔ `catalog_external_refs` 关系预研定档（状态：⬜ 未开始）
+2. **CHG-VIR-PRE-2** — ADR-177 前置：`video_external_refs` ↔ `catalog_external_refs` 关系预研定档（状态：✅ 已完成 2026-06-02 / claude-opus-4-8 / 子代理 arch-reviewer (claude-opus-4-8)）
    - 创建时间：2026-06-02 19:41
    - 建议模型：**opus**（架构关系决策 + arch-reviewer 第二意见）
    - 变更原因：arch-reviewer R1——设计 §4.6 新提 `catalog_external_refs` 与既有 `video_external_refs`（migration 041/045）语义重叠层级不同；**关系未定不得起草 ADR-177**。
    - 产出：定档「替代/并存/上卷」关系（设计临时定向「并存+上卷」）+ D-174-3 现有写 `video_external_refs` candidate 路径迁移方案 + 两表 candidate/rejected 审计是否合并。
    - 验收要点：关系三选一明确 + 上卷规则 + D-174-3 迁移路径；arch-reviewer 认可后方可起 CHG-VIR-4。
    - 依赖：无。
+   - 完成备注：**关系预研定档完成（arch-reviewer claude-opus-4-8 / agentId a6cc563d53376800e / CONDITIONAL → R-1 + Y-1~4 吸收 → 认可起 CHG-VIR-4）**。新建 `docs/designs/adr177-external-refs-relation_20260602.md`。**关系三选一定档「并存 + 上卷」**：排除「替代」（`video_external_refs` = video 级真源 + 4 富集 Service 写 + 后台审核台 UI 读展示链 listVideoExternalRefs→getAdminVideoById→external-meta-panel，层级职责不同）/「纯并存」（双真源 findOrCreate 无来源）；video_external_refs 保留 video 级不改，catalog_external_refs 为 catalog 级 canonical，上卷桥接。**上卷规则**（确定性保守）：manual_confirmed primary 一致 + 精确级 → exact / auto_matched 一致 → candidate / 冲突 → candidate 不自动 exact / 跨 catalog 同 external_id 按 external_kind+season_number 裁定（show 级→parent 一对多 / season·movie→exact / exact 冲突→candidate 归并信号）。**D-174-3 迁移**：过渡期保留 video 级 candidate；ADR-177 落地新增 catalog_external_refs candidate（双写过渡，catalog_id 归属结合 D-174-7 留 ADR-177）；目标 catalog 层冲突归 catalog_external_refs。**两表审计不合并**：层级独立，video rejected 不传播 catalog rejected，catalog exact 不覆盖 video rejected；candidate/rejected 不进 partial unique（仅 exact/parent 受全局唯一）。arch-reviewer R-1（§1 漏后台 UI 读消费链 / ADR-172 AMD3，已校正）+ Y-1/2/3/4 全吸收。门禁 verify:adr-contracts EXIT=0；纯 docs 新建预研文档，无代码/migration/ADR。**解锁 CHG-VIR-4**。执行模型: claude-opus-4-8
 
 **Phase 0 — ADR 起草（全 Opus + arch-reviewer PASS；任一红线未闭环 → BLOCKER）**
 

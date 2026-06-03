@@ -13766,3 +13766,23 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **Codex stop-time review FIX**：Codex 指出「现有 split 单测与新 catalog 依赖不兼容」——初次 grep 漏 `video-merge-mutations.test.ts`（权威 merge/split 单测，未 mock MediaCatalogService → split 走真实 findOrCreate + mockClient 空 rows 抛错）。修：mock MediaCatalogService + 适配 split 断言（catalogId 替代旧 year）；删初版重叠的 `video-merge-split-catalog.test.ts`（与权威测试重复），独特 insertNewVideo SQL 测试保留为 `video-merge-insert-new-video.test.ts`。
 - **注意事项**：① split 拆出新 video 经 `findOrCreate(newVideoMeta)` 绑 catalog（同 title_normalized+year+type 复用现有）；② findOrCreate 在 split 事务外（幂等），split 回滚至多产生无 video 指向的孤儿 catalog（共享作品层无害，下次复用）——未改 MediaCatalogService.findOrCreate 签名去支持外部事务 client；③ StagingEditPanel.test.tsx jsdom flaky（隔离+全量均通过，非本卡回归 / 上一会话已记录）。
 - **[AI-CHECK]**：分层 NO 违反（findOrCreate 编排在 Service 层，insertNewVideo 纯 query）；跨模块 NO；重复逻辑 NO（删重叠测试收敛单一权威 split 测试）；any NO（mock 用 `as unknown as PoolClient/Pool`）；空 catch NO；硬编码颜色无关；函数规模 NO；insertNewVideo 签名变（内部 query，唯一消费方 VideoMergesService 已同步）。结论：SAFE。
+
+## [CHG-VIR-PRE-2] ADR-177 前置：video_external_refs ↔ catalog_external_refs 关系预研定档
+- **完成时间**：2026-06-02
+- **记录时间**：2026-06-02 21:00
+- **执行模型**：claude-opus-4-8（建议 opus；架构关系决策 + arch-reviewer 第二意见）
+- **子代理**：arch-reviewer (claude-opus-4-8)（agentId a6cc563d53376800e / CONDITIONAL → R-1 + Y-1~4 吸收 → 认可起 CHG-VIR-4）
+- **背景（根因）**：视频身份解析设计 §9.2 R1 红线——§4.6 新提 `catalog_external_refs` 与既有 `video_external_refs`（migration 041/045）语义重叠层级不同，「关系未定不得起草 ADR-177」。本卡（SEQ-20260602-03 前置门禁）定档两表关系，解锁 CHG-VIR-4（ADR-177 起草）。
+- **修改文件**：
+  - `docs/designs/adr177-external-refs-relation_20260602.md`（**新建**）— 关系预研定档：§1 现状基线（video_external_refs schema + 写入 4 Service + **读展示后台审核台 UI 链**）/ §2 catalog_external_refs 规划 / §3 关系三选一定档「并存+上卷」+ 上卷规则 / §4 D-174-3 迁移 / §5 两表审计不合并 / §6 ADR-177 输入 / §7 门禁 / §8 arch-reviewer 审核记录
+  - `docs/task-queue.md` / `docs/tasks.md` — CHG-VIR-PRE-2 状态流转 + SEQ 前置门禁完成
+- **新增依赖**：无
+- **数据库变更**：无（预研定档文档，不落 migration；catalog_external_refs schema 由 CHG-VIR-4 ADR-177 + Phase 5 落地）
+- **定档结论**：① **关系 = 并存 + 上卷**（排除「替代」：video_external_refs 是 video 级真源 + 富集写 + 审核台 UI 读，层级职责不同；排除「纯并存」：双真源 findOrCreate 无来源）；② **上卷规则**（确定性保守）：manual_confirmed primary 一致 + 精确级 → exact / auto_matched 一致 → candidate / 冲突 → candidate / 跨 catalog 同 ID 按 external_kind+season_number 裁定（show→parent 一对多 / season·movie→exact / exact 冲突→candidate 归并信号）；③ **D-174-3 迁移**：过渡期保留 video 级 candidate，ADR-177 落地新增 catalog_external_refs candidate（双写过渡，catalog_id 归属结合 D-174-7 留 ADR-177）；④ **两表审计不合并**：video rejected 不传播 catalog rejected，catalog exact 不覆盖 video rejected，candidate/rejected 不进 partial unique（仅 exact/parent 受全局唯一）。
+- **门禁/验收**：arch-reviewer CONDITIONAL → R-1（§1 漏后台 UI 读消费链 `listVideoExternalRefs`:475 → `VideoService.getAdminVideoById`:220-237 `ExternalRefSummary` → `external-meta-panel.tsx`/`VideoEditDrawer`/`TabDetail`，ADR-172 AMD3 / D-172-AMD3-2，已校正为「写入+读展示」双角色）+ Y-1（跨 catalog exact 唯一 × external_kind/season 裁定）+ Y-2（单 video exact 跨 catalog 限定）+ Y-3（candidate catalog_id 归属留 ADR-177）+ Y-4（candidate/rejected 不进 partial unique 收敛）**5 项吸收 → 认可**。verify:adr-contracts EXIT=0；纯 docs 无代码/migration。
+- **注意事项**：① **解锁 CHG-VIR-4**（ADR-177 起草硬前置已满足）；② 关系定档供 ADR-177 起草输入，正式 schema/约束/迁移由 CHG-VIR-4 落 decisions.md；③ 初次 grep 漏 video_external_refs 读消费链（只查 upsert/findPrimary），arch-reviewer R-1 捕获（D-172-AMD3-2 ExternalRefSummary 窄化投影）。
+- **[AI-CHECK]**：纯预研定档文档（无代码）；分层/跨模块/重复逻辑/any/空 catch/硬编码颜色/函数文件规模均 N/A；现状基线经 R-1 校正与代码逐字对齐；关系定档与 ADR-174/176/105a 一致；arch-reviewer 独立第二意见 CONDITIONAL→吸收 5 项后认可。结论：SAFE。
+
+---
+
+> **SEQ-20260602-03 前置门禁收尾（本会话）**：CHG-VIR-PRE-1（insertNewVideo schema 漂移修复，全量 6034 passed 零回归）+ CHG-VIR-PRE-2（ADR-177 关系定档「并存+上卷」，arch-reviewer 认可）均 ✅。**CHG-VIR-4（ADR-177 外部 ID 映射真源）依赖已满足、可起草**，留用户决定是否继续。Phase 0 四份 ADR 中 CHG-VIR-1/2/3（ADR-105a/175/176）已 Accepted，CHG-VIR-4 待起；Phase 1-5 实施待启动。
