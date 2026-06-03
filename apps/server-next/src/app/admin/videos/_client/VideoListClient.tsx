@@ -107,9 +107,11 @@ const QUICK_CHIP_STYLE: CSSProperties = {
   cursor: 'pointer',
 }
 // pressed 态复用 PRE-3 KpiCard token（--admin-accent-soft/-border 已确认存在）
+// 用完整 border shorthand 覆盖（勿用 borderColor）：与 QUICK_CHIP_STYLE.border shorthand 混用会触发
+// React rerender 警告「Removing a style property during rerender (borderColor) when border is set」
 const QUICK_CHIP_PRESSED_STYLE: CSSProperties = {
   background: 'var(--admin-accent-soft)',
-  borderColor: 'var(--admin-accent-border)',
+  border: '1px solid var(--admin-accent-border)',
   color: 'var(--accent-default)',
   fontWeight: 600,
 }

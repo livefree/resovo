@@ -14029,3 +14029,14 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **根因**：`apps/api/src/routes/admin/video-merges.ts` GET candidates 重组响应时丢 `result.source` 字段（9-A 遗留：Service 返回了 source 但 route 未透传）→ 前端 `res.source` 恒 undefined → `effectiveSource` 恒 null → **merge 工作台降级提示永不显示**；lib 层单测 mock 在 api 客户端层故漏过。
 - **修复**：route `reply.send({...})` 补 `source: result.source` 一行。
 - **测试**：新建 `tests/unit/api/video-merges-candidates-route.test.ts`（fastify inject 2 用例：降级回显 body.source='legacy' 可达前端 / identity 回显 + query 透传 Service）；回归 10 文件 86 passed + typecheck/lint 零错误。
+
+---
+
+## MAINT — VideoListClient 快捷筛选 chip style shorthand 冲突修复（用户报告 console error）
+
+- **记录时间**：2026-06-03 12:14
+- **执行模型**：claude-opus-4-8
+- **根因**：`QUICK_CHIP_STYLE.border`（shorthand）与 `QUICK_CHIP_PRESSED_STYLE.borderColor`（non-shorthand）spread 合并混用——pressed↔非 pressed rerender 时 React 移除 borderColor 与残留 border 冲突，触发「Removing a style property during rerender (borderColor) when a conflicting property is set (border)」console error（VideoListClient.tsx:306 quick filter buttons）。
+- **修复**：`QUICK_CHIP_PRESSED_STYLE.borderColor` → 完整 `border: '1px solid var(--admin-accent-border)'` shorthand 覆盖（语义不变，两分支均只有 border 单键）+ 防回归注释。
+- **测试**：videos 组件 9 文件 126 passed + typecheck 零错误。
+- **待办备忘**：`verify-style-shorthand-conflict.mjs` 对「跨对象 spread 合并」混用存在检测盲区（本 case 0 命中）；其它 server-next 文件仍有 `borderColor:` 使用待逐元素核对是否与 shorthand 交替——可起脚本增强小卡。
