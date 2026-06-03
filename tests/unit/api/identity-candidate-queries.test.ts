@@ -13,6 +13,7 @@ import {
   countCompareBuckets,
   listPendingCandidatesByVideoId,
   listPendingCandidatePairs,
+  countPendingCandidatePairs,
   type IdentityCandidateInsert,
 } from '@/api/db/queries/identity-candidate'
 
@@ -122,12 +123,39 @@ describe('listPendingCandidatesByVideoId（CHG-VIR-9-A 审核台召回）', () =
   })
 })
 
-describe('listPendingCandidatePairs（CHG-VIR-9-A merge 折叠）', () => {
+describe('listPendingCandidatePairs（CHG-VIR-9-A merge 折叠 / 9-C FIX-3 软删排除）', () => {
   it('status=pending + 版本过滤 + ORDER BY identity_score', async () => {
     await listPendingCandidatePairs(mockDb, { scorerVersion: '1.0.0', parserVersion: '1.0.0', limit: 20, offset: 0 })
     const sql = lastSql()
     expect(sql).toContain("status = 'pending'")
     expect(sql).toContain('ORDER BY identity_score DESC')
     expect(lastParams()).toEqual(['1.0.0', '1.0.0', 20, 0])
+  })
+
+  it('FIX-3（Codex review）：双侧 EXISTS 排除软删视频（stale 候选确认必败）', async () => {
+    await listPendingCandidatePairs(mockDb, { scorerVersion: '1.0.0', parserVersion: '1.0.0', limit: 20, offset: 0 })
+    const sql = lastSql()
+    expect(sql).toContain('lv.id = ic.left_video_id AND lv.deleted_at IS NULL')
+    expect(sql).toContain('rv.id = ic.right_video_id AND rv.deleted_at IS NULL')
+  })
+})
+
+describe('countPendingCandidatePairs（CHG-VIR-9-C FIX-2 分页 total）', () => {
+  it('COUNT(*) + 与 list 同 WHERE 口径（pending + 版本过滤 + 软删双侧排除）', async () => {
+    mockQuery.mockResolvedValueOnce({ rows: [{ count: '35' }] })
+    const n = await countPendingCandidatePairs(mockDb, { scorerVersion: '1.0.0', parserVersion: '1.0.0' })
+    expect(n).toBe(35)
+    const sql = lastSql()
+    expect(sql).toContain('COUNT(*)')
+    expect(sql).toContain("status = 'pending'")
+    expect(sql).toContain('lv.deleted_at IS NULL')
+    expect(sql).toContain('rv.deleted_at IS NULL')
+    expect(lastParams()).toEqual(['1.0.0', '1.0.0'])
+  })
+
+  it('rows 空容错返回 0', async () => {
+    mockQuery.mockResolvedValueOnce({ rows: [] })
+    const n = await countPendingCandidatePairs(mockDb, { scorerVersion: '1.0.0', parserVersion: '1.0.0' })
+    expect(n).toBe(0)
   })
 })

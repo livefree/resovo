@@ -14,6 +14,7 @@ vi.mock('@/api/db/queries/moderation', () => ({
 vi.mock('@/api/db/queries/identity-candidate', () => ({
   listPendingCandidatesByVideoId: vi.fn(),
   listPendingCandidatePairs: vi.fn(),
+  countPendingCandidatePairs: vi.fn(),
 }))
 vi.mock('@/api/db/queries/video-merge-candidates', () => ({
   fetchRawCandidateGroups: vi.fn(),
@@ -24,7 +25,7 @@ vi.mock('@/api/db/queries/video-merge-candidates', () => ({
 import { ModerationService } from '@/api/services/ModerationService'
 import { VideoMergesService } from '@/api/services/VideoMergesService'
 import { findVideoFeatures, listSimilarCandidates } from '@/api/db/queries/moderation'
-import { listPendingCandidatesByVideoId, listPendingCandidatePairs } from '@/api/db/queries/identity-candidate'
+import { listPendingCandidatesByVideoId, listPendingCandidatePairs, countPendingCandidatePairs } from '@/api/db/queries/identity-candidate'
 import {
   fetchRawCandidateGroups,
   countRawCandidateGroups,
@@ -88,10 +89,12 @@ describe('ModerationService.listSimilar — source 切换', () => {
 describe('VideoMergesService.listCandidates — source 切换', () => {
   const svc = () => new VideoMergesService(mockDb)
 
-  it('source=identity 有 pairs → 折叠 2-video group + source identity', async () => {
+  it('source=identity 有 pairs → 折叠 2-video group + source identity + total=全量 count（FIX-2）', async () => {
     vi.mocked(listPendingCandidatePairs).mockResolvedValue([
       { id: 'c1', left_video_id: 'a', right_video_id: 'b', identity_score: '0.9000', legacy_score: null, strong_negative_reasons: [], evidence_jsonb: [], group_key: null },
     ] as never)
+    // FIX-2（Codex review）：total 取全量 pending count（非当前页 groups.length），候选超 limit 可翻页
+    vi.mocked(countPendingCandidatePairs).mockResolvedValue(35 as never)
     vi.mocked(fetchVideoDetailsForCandidates).mockResolvedValue([
       { id: 'a', title: 'X', title_normalized: 'x', year: 2020, type: 'anime', created_at: '2026-01-01T00:00:00Z', source_count: '2', site_keys: [] },
       { id: 'b', title: 'X', title_normalized: 'x', year: 2020, type: 'anime', created_at: '2026-01-01T00:00:00Z', source_count: '2', site_keys: [] },
@@ -99,18 +102,31 @@ describe('VideoMergesService.listCandidates — source 切换', () => {
     const r = await svc().listCandidates({ minScore: 0, limit: 20, page: 1, source: 'identity' })
     expect(r.source).toBe('identity')
     expect(r.data).toHaveLength(1)
+    expect(r.total).toBe(35)
     expect(r.data[0]!.videos).toHaveLength(2)
     expect(r.data[0]!.identity!.identityScore).toBe(0.9)
     expect(fetchRawCandidateGroups).not.toHaveBeenCalled()
   })
 
-  it('source=identity 空 pairs → 降级 legacy', async () => {
+  it('source=identity 真空表（count=0）→ 降级 legacy', async () => {
     vi.mocked(listPendingCandidatePairs).mockResolvedValue([] as never)
+    vi.mocked(countPendingCandidatePairs).mockResolvedValue(0 as never)
     vi.mocked(fetchRawCandidateGroups).mockResolvedValue([] as never)
     vi.mocked(countRawCandidateGroups).mockResolvedValue(0 as never)
     const r = await svc().listCandidates({ minScore: 0, limit: 20, page: 1, source: 'identity' })
     expect(r.source).toBe('legacy')
     expect(fetchRawCandidateGroups).toHaveBeenCalled()
+  })
+
+  it('source=identity total>0 但本页空（offset 超尾）→ 空 data 保持 identity 不悄降 legacy（FIX-2）', async () => {
+    vi.mocked(listPendingCandidatePairs).mockResolvedValue([] as never)
+    vi.mocked(countPendingCandidatePairs).mockResolvedValue(35 as never)
+    vi.mocked(fetchVideoDetailsForCandidates).mockResolvedValue([] as never)
+    const r = await svc().listCandidates({ minScore: 0, limit: 20, page: 99, source: 'identity' })
+    expect(r.source).toBe('identity')
+    expect(r.data).toHaveLength(0)
+    expect(r.total).toBe(35)
+    expect(fetchRawCandidateGroups).not.toHaveBeenCalled()
   })
 
   it('默认（无 source）→ legacy（不查 candidate 表）', async () => {

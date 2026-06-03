@@ -31,7 +31,7 @@ import {
   fetchVideoDetailsForCandidates,
 } from '@/api/db/queries/video-merge-candidates'
 // CHG-VIR-9-A：merge source=identity 读 identity_candidate 候选（默认 legacy，空表降级）
-import { listPendingCandidatePairs } from '@/api/db/queries/identity-candidate'
+import { listPendingCandidatePairs, countPendingCandidatePairs } from '@/api/db/queries/identity-candidate'
 import {
   fetchVideosByIds,
   fetchSourcesByVideoId,
@@ -179,17 +179,20 @@ export class VideoMergesService {
 
   /**
    * CHG-VIR-9-A：source=identity 读 identity_candidate pending 候选，每 pair→2-video CandidateGroup。
-   * 返回 null 表示候选空（调用方降级 legacy）。merge 默认 legacy，本路径待 shadow 稳定后翻默认。
+   * 返回 null 表示候选**真空表**（调用方降级 legacy）。merge 默认 legacy，本路径待 shadow 稳定后翻默认。
+   *
+   * CHG-VIR-9-C FIX-2（Codex review）：total = 全量 pending count（曾误用当前页 groups.length，
+   * 候选超 limit 时前端无法翻页）；total>0 但本页空（offset 超尾）返回空 data 而**不悄降 legacy**
+   * （identity 模式翻页中突现 legacy 全量数据是更坏的语义漂移）。
    */
   private async listIdentityCandidates(page: number, limit: number): Promise<ListCandidatesResult | null> {
     const offset = (page - 1) * limit
-    const pairs = await listPendingCandidatePairs(this.db, {
-      scorerVersion: SCORER_VERSION,
-      parserVersion: TITLE_PARSER_VERSION,
-      limit,
-      offset,
-    })
-    if (pairs.length === 0) return null
+    const versions = { scorerVersion: SCORER_VERSION, parserVersion: TITLE_PARSER_VERSION }
+    const [pairs, total] = await Promise.all([
+      listPendingCandidatePairs(this.db, { ...versions, limit, offset }),
+      countPendingCandidatePairs(this.db, versions),
+    ])
+    if (total === 0) return null
 
     const videoIds = [...new Set(pairs.flatMap((p) => [p.left_video_id, p.right_video_id]))]
     const details = await fetchVideoDetailsForCandidates(this.db, videoIds)
@@ -197,8 +200,7 @@ export class VideoMergesService {
     const groups = pairs
       .map((p) => buildGroupFromPair(p, videoMap))
       .filter((g): g is CandidateGroup => g !== null)
-    if (groups.length === 0) return null
-    return { data: groups, total: groups.length, page, limit, source: 'identity' }
+    return { data: groups, total, page, limit, source: 'identity' }
   }
 
   // ── merge ─────────────────────────────────────────────────────────

@@ -264,7 +264,15 @@ export interface PendingCandidatePairRow {
   readonly group_key: string | null
 }
 
-/** 拉 pending 候选 pair（版本过滤 Y5）。Service 折叠成 CandidateGroup（每 pair→2-video group）。 */
+// CHG-VIR-9-C FIX-3（Codex review）：双侧排除软删视频——legacy merge 软删 pair 一侧后该 candidate
+// 仍 pending（仅 candidateId merge 路径会置 confirmed），不过滤则列表给出确认必败的 stale 候选。
+// list 与 count 共用同一口径（分页 total 一致性）。
+const PENDING_PAIR_WHERE = `
+     WHERE ic.status = 'pending' AND ic.scorer_version = $1 AND ic.parser_version = $2
+       AND EXISTS (SELECT 1 FROM videos lv WHERE lv.id = ic.left_video_id AND lv.deleted_at IS NULL)
+       AND EXISTS (SELECT 1 FROM videos rv WHERE rv.id = ic.right_video_id AND rv.deleted_at IS NULL)`
+
+/** 拉 pending 候选 pair（版本过滤 Y5 + 软删双侧排除）。Service 折叠成 CandidateGroup（每 pair→2-video group）。 */
 export async function listPendingCandidatePairs(
   db: Pool,
   params: { scorerVersion: string; parserVersion: string; limit: number; offset: number },
@@ -272,13 +280,27 @@ export async function listPendingCandidatePairs(
   const r = await db.query<PendingCandidatePairRow>(
     `SELECT id, left_video_id, right_video_id, identity_score::text, legacy_score::text,
             strong_negative_reasons, evidence_jsonb, group_key
-     FROM identity_candidate
-     WHERE status = 'pending' AND scorer_version = $1 AND parser_version = $2
+     FROM identity_candidate ic${PENDING_PAIR_WHERE}
      ORDER BY identity_score DESC, canonical_pair_key ASC
      LIMIT $3 OFFSET $4`,
     [params.scorerVersion, params.parserVersion, params.limit, params.offset],
   )
   return r.rows
+}
+
+/**
+ * CHG-VIR-9-C FIX-2（Codex review）：pending 候选全量 count（与 listPendingCandidatePairs 同 WHERE 口径）。
+ * 根因：Service 曾用 `groups.length`（当前页行数）当 total，候选超 limit 时前端无法翻页。
+ */
+export async function countPendingCandidatePairs(
+  db: Pool,
+  params: { scorerVersion: string; parserVersion: string },
+): Promise<number> {
+  const r = await db.query<{ count: string }>(
+    `SELECT COUNT(*)::text AS count FROM identity_candidate ic${PENDING_PAIR_WHERE}`,
+    [params.scorerVersion, params.parserVersion],
+  )
+  return parseInt(r.rows[0]?.count ?? '0', 10)
 }
 
 // ── ⑨ 人工裁定写路径（CHG-VIR-9-B / ADR-178）─────────────────────────

@@ -14040,3 +14040,13 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **修复**：`QUICK_CHIP_PRESSED_STYLE.borderColor` → 完整 `border: '1px solid var(--admin-accent-border)'` shorthand 覆盖（语义不变，两分支均只有 border 单键）+ 防回归注释。
 - **测试**：videos 组件 9 文件 126 passed + typecheck 零错误。
 - **待办备忘**：`verify-style-shorthand-conflict.mjs` 对「跨对象 spread 合并」混用存在检测盲区（本 case 0 命中）；其它 server-next 文件仍有 `borderColor:` 使用待逐元素核对是否与 shorthand 交替——可起脚本增强小卡。
+
+### CHG-VIR-9-C FIX-2 / FIX-3（Codex review 第 2 轮）— identity 候选分页 total + 软删 stale 候选
+
+- **记录时间**：2026-06-03 12:30
+- **FIX-2 根因**：`VideoMergesService.listIdentityCandidates` 用当前页 `groups.length` 当 `total`（9-A 引入）——pending 候选超 limit 时前端收到 total ≤ 页大小，无法翻页。
+- **FIX-2 修复**：新 `countPendingCandidatePairs`（与 list 同 WHERE 口径常量 `PENDING_PAIR_WHERE`）+ `Promise.all` 并取；降级语义同步修正——仅**真空表**（count=0）降级 legacy，offset 超尾返回空 data 保持 `source:'identity'`（identity 模式翻页中悄然切 legacy 全量数据是更坏的语义漂移）。
+- **FIX-3 根因**：`listPendingCandidatePairs` 不排除软删视频——legacy merge（无 candidateId）软删 pair 一侧后 candidate 仍 pending，merge identity 列表给出确认必败的 stale 候选（下游 `fetchVideoDetailsForCandidates` 亦不过滤 deleted_at）。
+- **FIX-3 修复**：list/count 共用 WHERE 增双侧 `EXISTS (... deleted_at IS NULL)`；similar 侧 `listPendingCandidatesByVideoId` 已有 `nv.deleted_at IS NULL` 无需改。
+- **测试**：identity-source-switch 6→8 用例（total=全量 count / 超尾不悄降）+ identity-candidate-queries +3（FIX-3 双侧 EXISTS 断言 / count 同口径 / rows 空容错）；6 文件 54 passed + typecheck 零错误。
+- **Codex P2 第 3 项**（sources-matrix lastChecked filter 与显示值口径不一致）属 CHG-VSR-3 时期代码非本系列 → 起 follow-up 卡 **CHG-VSR-LASTCHECKED-FILTER-ALIGN**（task-queue 尾部，待用户裁决排期）。
