@@ -35,7 +35,8 @@ export async function adminVideoMergesRoutes(fastify: FastifyInstance) {
       })
     }
     const result = await svc.listCandidates(parsed.data)
-    return reply.send({ data: result.data, total: result.total, page: result.page, limit: result.limit })
+    // CHG-VIR-9-C FIX（Codex review）：source 回显透传（identity 空表降级 legacy 时 UI 据此提示 / ADR-105a AMENDMENT 2026-06-03）
+    return reply.send({ data: result.data, total: result.total, page: result.page, limit: result.limit, source: result.source })
   })
 
   // ── POST /admin/video-merges ──────────────────────────────────────

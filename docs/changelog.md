@@ -14022,3 +14022,10 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **测试覆盖**：typecheck/lint/verify:adr-contracts EXIT=0（endpoint-adr 204 admin 路由全对齐）；文件 budget 零新增（19 违规全 pre-existing）；**全量 6216 passed / 0 failed**（472 files / 净 +20）；e2e 本机 :3000 webServer 冲突在页面加载前失败（沿 CHG-VSR-PRE-2 先例 = 非回归）；admin moderation/merge 手测归用户验收
 - **注意事项**：① **CHG-VIR-9 全系列（9-A/9-B/9-C）收口，Phase 2c 完成**；② **生产切 UI 前须先回填 title_observations**（`scripts/backfill-title-observations.ts`，采集 fire-and-forget 覆盖不全则候选召回不全 / 卡面前置仍有效）；③ merge 默认仍 legacy（用户裁定），翻默认 identity + N-video 连通分量折叠留 shadow 稳定后小卡；④ pre-existing 发现：`tests/e2e/admin/moderation/right-pane-tabs.spec.ts:87` 仍断言 TabSimilar 占位文案（2026-05-21 已真实化），断言漂移归 e2e 环境长尾；⑤ reject 误触防护 = window.confirm（误拒后复活依赖离线 job 证据变化 R6，不可轻易恢复故加守卫）
 - **[AI-CHECK]**：分层 NO（UI 全经 lib api 客户端，零直接 fetch/DB）/ 跨模块内部实现 NO（TabSimilar 不 import merge/_client，经 lib/identity 中性层）/ 重复逻辑 NO（EVIDENCE_LABELS 与 rejectIdentityCandidate 单一真源双消费；candidateId 透传 spread 模式三处一致）/ hack NO（B 换选失效是 pair 一致性守卫；source/effectiveSource 双 state 是请求/回显语义分离）/ 需拆分函数 NO（新函数全 <80）/ 需拆分文件 已拆（MergeClient 704→320 + Section 348 + Expand 194 全 <500）/ 隐式副作用·吞异常 NO（reject 失败 toast 显式反馈）/ 偏离检测：① CandidateGroup.candidateId 契约补充（卡面未明示但 confirm/reject 必需，ADR AMENDMENT 登记）② 执行模型 sonnet→opus 人工覆盖。**共享层沉淀评估**：lib/identity/{api,evidence-labels} 本卡即沉淀（双入口真源）；无应沉淀未沉淀项。结论：SAFE。
+
+### CHG-VIR-9-C FIX-1（Codex stop-time review）— merge candidates route 层 source 回显透传缺口
+
+- **记录时间**：2026-06-03 12:10
+- **根因**：`apps/api/src/routes/admin/video-merges.ts` GET candidates 重组响应时丢 `result.source` 字段（9-A 遗留：Service 返回了 source 但 route 未透传）→ 前端 `res.source` 恒 undefined → `effectiveSource` 恒 null → **merge 工作台降级提示永不显示**；lib 层单测 mock 在 api 客户端层故漏过。
+- **修复**：route `reply.send({...})` 补 `source: result.source` 一行。
+- **测试**：新建 `tests/unit/api/video-merges-candidates-route.test.ts`（fastify inject 2 用例：降级回显 body.source='legacy' 可达前端 / identity 回显 + query 透传 Service）；回归 10 文件 86 passed + typecheck/lint 零错误。
