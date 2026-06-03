@@ -176,7 +176,14 @@ export async function findLatestRejectedByPairKey(
 
 export async function listForCompareReport(
   db: Pool,
-  params: { scorerVersion: string; parserVersion: string; limit: number; offset: number },
+  params: {
+    scorerVersion: string
+    parserVersion: string
+    limit: number
+    offset: number
+    /** CHG-VIR-10：可选 trigger_source 切片（ingest vs offline-rescore）；缺省全量 */
+    triggerSource?: 'ingest' | 'offline-rescore' | 'manual-search'
+  },
 ): Promise<IdentityCandidateCompareRow[]> {
   const r = await db.query<IdentityCandidateCompareRow>(
     `SELECT ic.id, ic.canonical_pair_key, ic.left_video_id, ic.right_video_id,
@@ -192,9 +199,10 @@ export async function listForCompareReport(
      JOIN media_catalog lmc ON lmc.id = lv.catalog_id
      JOIN media_catalog rmc ON rmc.id = rv.catalog_id
      WHERE ic.status = 'pending' AND ic.scorer_version = $1 AND ic.parser_version = $2
+       AND ($5::text IS NULL OR ic.trigger_source = $5)
      ORDER BY ic.identity_score DESC, ic.canonical_pair_key ASC
      LIMIT $3 OFFSET $4`,
-    [params.scorerVersion, params.parserVersion, params.limit, params.offset],
+    [params.scorerVersion, params.parserVersion, params.limit, params.offset, params.triggerSource ?? null],
   )
   return r.rows
 }
@@ -384,4 +392,48 @@ export async function countCompareBuckets(
     blockedTotal: parseInt(row?.blocked_total ?? '0', 10),
     crossGroupTotal: parseInt(row?.cross_group_total ?? '0', 10),
   }
+}
+
+/** 三桶按 trigger_source 切片（CHG-VIR-10 shadow precision/recall 报表：ingest vs offline 分布）。 */
+export interface CompareBucketsBySourceRow {
+  readonly triggerSource: 'ingest' | 'offline-rescore' | 'manual-search'
+  readonly pendingTotal: number
+  readonly blockedTotal: number
+  readonly crossGroupTotal: number
+}
+
+export async function countCompareBucketsBySource(
+  db: Pool,
+  params: { scorerVersion: string; parserVersion: string },
+): Promise<CompareBucketsBySourceRow[]> {
+  const r = await db.query<{
+    trigger_source: CompareBucketsBySourceRow['triggerSource']
+    pending_total: string
+    blocked_total: string
+    cross_group_total: string
+  }>(
+    `SELECT
+       ic.trigger_source,
+       COUNT(*)::text AS pending_total,
+       COUNT(*) FILTER (WHERE cardinality(ic.strong_negative_reasons) > 0)::text AS blocked_total,
+       COUNT(*) FILTER (WHERE NOT (
+         lmc.title_normalized = rmc.title_normalized
+         AND lmc.year IS NOT DISTINCT FROM rmc.year
+         AND lv.type = rv.type))::text AS cross_group_total
+     FROM identity_candidate ic
+     JOIN videos lv ON lv.id = ic.left_video_id
+     JOIN videos rv ON rv.id = ic.right_video_id
+     JOIN media_catalog lmc ON lmc.id = lv.catalog_id
+     JOIN media_catalog rmc ON rmc.id = rv.catalog_id
+     WHERE ic.status = 'pending' AND ic.scorer_version = $1 AND ic.parser_version = $2
+     GROUP BY ic.trigger_source
+     ORDER BY ic.trigger_source ASC`,
+    [params.scorerVersion, params.parserVersion],
+  )
+  return r.rows.map((row) => ({
+    triggerSource: row.trigger_source,
+    pendingTotal: parseInt(row.pending_total, 10),
+    blockedTotal: parseInt(row.blocked_total, 10),
+    crossGroupTotal: parseInt(row.cross_group_total, 10),
+  }))
 }

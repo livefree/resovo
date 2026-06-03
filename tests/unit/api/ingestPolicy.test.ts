@@ -19,7 +19,17 @@ vi.mock('@/api/db/queries/videos', () => ({
 vi.mock('@/api/services/MediaCatalogService', () => ({
   MediaCatalogService: class {
     findOrCreate = vi.fn().mockResolvedValue({ id: 'cat-uuid-1', title: '测试视频' })
+    findOrCreateWithMatch = vi.fn().mockResolvedValue({
+      catalog: { id: 'cat-uuid-1', title: '测试视频' }, matchedStep: 'title_triple',
+    })
   },
+}))
+
+// CHG-VIR-10：ingest shadow 旁路与本测试正交，mock 掉避免真实召回/日志
+vi.mock('@/api/services/identity/ingestShadow', () => ({
+  runIngestShadowScoring: vi.fn().mockResolvedValue({
+    outcome: 'no-counterpart', counterparts: 0, candidatesUpserted: 0, shadowCatalogId: null, durationMs: 0,
+  }),
 }))
 
 vi.mock('@/api/db/queries/sources', () => ({

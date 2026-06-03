@@ -19149,6 +19149,24 @@ D-105a-1 ~ D-105a-13 共 13 条，随 Phase 1a/2a/2b/2c 实施卡（CHG-VIR-5/7/
 
 **UI 落地登记（CHG-VIR-9-C）**：审核台 TabSimilar source toggle（默认 identity）+ merge 工作台 source toggle（默认 legacy / 用户裁定）+ 双入口降级回显提示 + identity 候选 confirm（合并透传 candidateId，含审核台深链 `?candidate_id` 经 DirectMergeWorkspace 透传、换 B 自动失效）+ reject（`POST /admin/identity-candidates/:id/reject` / ADR-178）+ 拦截原因 chips（EVIDENCE_LABELS 沉淀 `lib/identity/evidence-labels`）。
 
+### AMENDMENT 2026-06-03（CHG-VIR-10 / Phase 3 — findOrCreate 旁路 ingest shadow scoring + blocking 第二召回键）
+
+**触发**：Phase 3 实施卡 CHG-VIR-10 两项前置门禁（arch-reviewer claude-opus-4-8 / agentId abf779f6c31ce38a0 裁定）：① shadow decision 持久化形态三选一；② blocking 第二召回键（CHG-VIR-8 补记缺口——召回仅 core_title_key 单 key，外部 ID 同/标题异 pair 召回不到）。无新 admin 端点 / 无 migration（召回所需索引经 `pg_indexes` 核验全部已存在：media_catalog 四外部 ID 列 partial+unique 索引 / `idx_video_external_refs_provider_external`）→ verify:endpoint-adr 不触发、无 schema 变更。
+
+**D-105a-16（ingest shadow 持久化形态 + hook 点 / 门禁①裁定：混合 B+C，拒绝新表 A）**
+- **形态 B**：pair 类决策（模糊命中 / 强负拦截）复用 `identity_candidate`（`trigger_source='ingest'`，086 CHECK 已预留），经 `pairScoringPersist` 共享层与离线 job **完全同口径**（同 scorePair / 同 evidence_hash 输入域 / 同 D-105a-4 阈值），可被 9-C 审核台 confirm/reject 回看 → precision 真值来源。
+- **形态 C**：每次旁路决策全集（含一致绑定 / 无对侧）打 pino 结构化日志 `stage='ingest-shadow'`（字段：video_id / matched_step / legacy_catalog_id / shadow_catalog_id / outcome ∈ agree-bind·disagree-bind·candidate-only·none·no-counterpart / counterparts / candidates_upserted）；agreement rate 由日志聚合。**不新建 shadow 表**（验收期短命表违反长期架构负债约束）、**不塞 identity_decisions**（087 CHECK 仅 confirmed/rejected）、不加 admin 端点（沿 2b 脚本范式）。
+- **hook 点**：`findOrCreate` 扩 `findOrCreateWithMatch` 透出 `matchedStep`（imdb_id/tmdb_id/douban_id/bangumi_id/title_triple/created/conflict_recovered；**Service 内部返回值契约**，`findOrCreate` 委托保持 7 处既有消费方零变更）；旁路计算与持久化全部在 **CrawlerService Step 4 之后**（videoId 已知，满足 identity_candidate 双 NOT NULL FK）fire-and-forget（沿 Phase 1b title_observations 容错范式，写失败不阻断采集入库主流程）。
+- **shadow bind 口径**（卡面）：仅「exact 外部 ID 命中 + 无强负」视为新评分会绑定（取最高分对侧 catalog 与 legacy 对比 agree/disagree）；模糊只进候选；**任何分支不回写 `videos.catalog_id` / 不触发 merge（R9 + D-105a-12）**。
+
+**D-105a-17（blocking 第二召回键 external_id / 门禁②裁定：纳入）**
+- 召回从 core_title_key 单键扩为 **(core_title_key ∪ external_id `provider:id`) 多键并集**（`blockingRecall.ts` 真源：离线分桶 `fetchExternalIdBuckets` keyset 分页 + HAVING>1 + MAX_BUCKET 护栏；单 video 召回 `recall*Counterparts` 与分桶同数据源 SQL → ingest 与 offline 报表可比）。数据源沿 Y-105a-4 双源（media_catalog 外部 ID 列经 catalog_id 上卷 ∪ video_external_refs `is_primary AND match_status='manual_confirmed'`）。等值确定性满足 R2（B-tree，无 pg_trgm）。
+- **evidence_hash blockingKeys 输入域**（D-105a-8 ④）改为「pair 命中的全部 blocking 桶 key 有序去重并集」= 双方 core_title_key + **共享** `provider:id` 桶 key，由 pair 自身数据确定性计算（召回路径无关，幂等不破）；既有 pending 若新增命中 ext 桶 → hash 变化 → 受控 superseded（Y5 既有机制）。
+- **不 bump SCORER_VERSION**：召回键扩展不改 scorePair 评分逻辑/权重/极性（同 pair 分数不变），bump 会错误触发全量 superseded；仅靠 blockingKeys 输入域变化驱动受控局部 superseded。
+- offlineRescore 头注释「Blocking 多 key 并集召回」自本卡起与实现相符（CHG-VIR-9-D 登记的注释修正项随本卡闭环）。
+
+**D-N 偏离登记更新**：本 AMENDMENT 新增 D-105a-16 / D-105a-17，ADR-105a 偏离编号扩为 **D-105a-1 ~ D-105a-17 共 17 条**（16/17 随 CHG-VIR-10 实施闭环）。ingest 旁路性能基线另立（D-105a-10 的实时端点 / 离线 job 双基线不适用 fire-and-forget 旁路；旁路单次召回上限 MAX_COUNTERPARTS=50 + 截断确定性排序）。是否开自动绑定仍留 Phase 3 验收后另起 ADR / Phase 5（D-105a-12 不变）。
+
 ---
 
 ## ADR-175：多语种标题模型 — 字段语义收紧 + media_catalog_aliases 结构化升级 + locale fallback + 匹配分层（SEQ-20260602-03 / CHG-VIR-2 / Phase 0）

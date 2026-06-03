@@ -11,6 +11,8 @@ import {
   supersedePendingByPairKey,
   setSupersededBy,
   countCompareBuckets,
+  countCompareBucketsBySource,
+  listForCompareReport,
   listPendingCandidatesByVideoId,
   listPendingCandidatePairs,
   countPendingCandidatePairs,
@@ -109,6 +111,41 @@ describe('countCompareBuckets', () => {
     expect(sql).toContain('cardinality(ic.strong_negative_reasons) > 0')
     expect(sql).toContain('title_normalized')
     expect(r).toEqual({ pendingTotal: 10, blockedTotal: 3, crossGroupTotal: 4 })
+  })
+})
+
+// ── CHG-VIR-10：trigger_source 切片报表 ──
+
+describe('countCompareBucketsBySource', () => {
+  it('GROUP BY trigger_source 三桶切片 + 版本过滤', async () => {
+    mockQuery.mockResolvedValueOnce({ rows: [
+      { trigger_source: 'ingest', pending_total: '2', blocked_total: '1', cross_group_total: '1' },
+      { trigger_source: 'offline-rescore', pending_total: '8', blocked_total: '2', cross_group_total: '3' },
+    ] })
+    const r = await countCompareBucketsBySource(mockDb, { scorerVersion: '1.0.0', parserVersion: '1.0.0' })
+    const sql = lastSql()
+    expect(sql).toContain('GROUP BY ic.trigger_source')
+    expect(sql).toContain('cardinality(ic.strong_negative_reasons) > 0')
+    expect(lastParams()).toEqual(['1.0.0', '1.0.0'])
+    expect(r).toEqual([
+      { triggerSource: 'ingest', pendingTotal: 2, blockedTotal: 1, crossGroupTotal: 1 },
+      { triggerSource: 'offline-rescore', pendingTotal: 8, blockedTotal: 2, crossGroupTotal: 3 },
+    ])
+  })
+})
+
+describe('listForCompareReport — triggerSource 可选切片（CHG-VIR-10）', () => {
+  it('缺省不过滤（$5 传 null）', async () => {
+    await listForCompareReport(mockDb, { scorerVersion: '1.0.0', parserVersion: '1.0.0', limit: 30, offset: 0 })
+    expect(lastSql()).toContain('$5::text IS NULL OR ic.trigger_source = $5')
+    expect(lastParams()).toEqual(['1.0.0', '1.0.0', 30, 0, null])
+  })
+
+  it('指定 triggerSource=ingest → $5 参数透传', async () => {
+    await listForCompareReport(mockDb, {
+      scorerVersion: '1.0.0', parserVersion: '1.0.0', limit: 30, offset: 0, triggerSource: 'ingest',
+    })
+    expect(lastParams()).toEqual(['1.0.0', '1.0.0', 30, 0, 'ingest'])
   })
 })
 

@@ -67,3 +67,18 @@ export { computeEvidenceHash, type EvidenceHashInput, type PairFieldSnapshot } f
 export { upsertIdentityCandidate, type UpsertCandidateInput, type UpsertOutcome } from './candidateUpsert'
 export { loadExternalIdSummaries } from './externalIdLoader'
 export { runIdentityRescore, type IdentityRescoreOptions, type IdentityRescoreResult } from './offlineRescore'
+// Phase 3（CHG-VIR-10 / D-105a-16/17）
+export {
+  runIngestShadowScoring,
+  type IngestShadowInput,
+  type IngestShadowOutcome,
+  type IngestShadowResult,
+} from './ingestShadow'
+export { scoreAndPersistPairs, buildSides, emptyPairPersistCounters, type PairPersistCounters } from './pairScoringPersist'
+export {
+  fetchCoreKeyBuckets,
+  fetchExternalIdBuckets,
+  recallCoreKeyCounterparts,
+  recallExternalIdCounterparts,
+  type BlockingBucket,
+} from './blockingRecall'

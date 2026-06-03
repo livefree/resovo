@@ -51,7 +51,17 @@ vi.mock('@/api/db/queries/videos', () => ({
 vi.mock('@/api/services/MediaCatalogService', () => ({
   MediaCatalogService: class {
     findOrCreate = findOrCreateMock
+    // CHG-VIR-10：复用 findOrCreateMock 的 per-test 配置，包一层 withMatch 契约
+    findOrCreateWithMatch = vi.fn(async (input: unknown) => ({
+      catalog: await findOrCreateMock(input), matchedStep: 'title_triple',
+    }))
   },
+}))
+// CHG-VIR-10：ingest shadow 旁路与本测试正交，mock 掉避免真实召回/日志
+vi.mock('@/api/services/identity/ingestShadow', () => ({
+  runIngestShadowScoring: vi.fn().mockResolvedValue({
+    outcome: 'no-counterpart', counterparts: 0, candidatesUpserted: 0, shadowCatalogId: null, durationMs: 0,
+  }),
 }))
 vi.mock('@/api/services/TitleNormalizer', () => ({
   normalizeTitle: vi.fn((t: string) => t.toLowerCase()),

@@ -14096,3 +14096,25 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **执行**：按 runbook §5 注重跑 full-rescan 反映 617 桶最新观测（job `identity-rescore-1780519984663`，API 进程 :4000 在线消费）→ 候选 193→**198**（173 跨 group 新增召回 / 162 强负拦截 / 密度 ≈5.5%，结构合理）。
 - **落档**：runbook 新增 §0 执行留档（单环境定档 + 全步骤结果表 + 结论）；task-queue 同步 5 处（11-D 状态行 + 完成备注补记 / CHG-VIR-10 硬前置 ✅ ×2 / CHG-VIR-9-D 依赖 ✅ / SEQ 依赖链行 / 9-C 卡面前置已满足标注）；tasks.md 头部摘要同步。
 - **结论**：**CHG-VIR-10 与 CHG-VIR-9-D 的 OBS-BACKFILL 硬前置解除**（9-D 仍余"merge shadow 稳定"用户裁定时点；CHG-VIR-10 仍余启动时 Opus 前置门禁①②）；CHG-VIR-9-C「切 UI 前须先回填」前置满足。
+
+## [CHG-VIR-10] Phase 3：findOrCreate 旁路 ingest shadow scoring + blocking 第二召回键（不改 catalog_id 绑定）
+- **完成时间**：2026-06-03
+- **记录时间**：2026-06-03 15:05
+- **执行模型**：claude-opus-4-8
+- **子代理**：arch-reviewer (claude-opus-4-8 / agentId abf779f6c31ce38a0) — 前置门禁两项裁定（①shadow 持久化形态混合 B+C / ②纳入 external_id 第二召回键）
+- **修改文件**：
+  - `apps/api/src/services/identity/blockingRecall.ts` — 新建：Blocking 召回真源（段① core_title_key 分桶自 offlineRescore 迁入 + 段② external_id `provider:id` 桶〔Y-105a-4 双源 UNION〕keyset 分页 + HAVING>1；单 video 召回 recall*Counterparts 与分桶共享同一数据源 SQL → ingest 与 offline 口径一致）
+  - `apps/api/src/services/identity/pairScoringPersist.ts` — 新建：评分→evidence_hash→幂等 upsert 共享层（persistPairs/buildSides/snapshot/externalRefSummary 自 offlineRescore 沉淀；**blockingKeys 改「双方 core key + 共享 ext 桶 key」有序去重并集**〔D-105a-17，pair 数据确定性计算、召回路径无关〕；triggerSource 参数化；返回全量 PairScore 供 ingest bind 判定）
+  - `apps/api/src/services/identity/ingestShadow.ts` — 新建：ingest 旁路编排（D-105a-16：双键召回对侧→scorePair→候选 upsert trigger_source='ingest'→shadow bind 判定〔仅 exact 命中+无强负〕→pino 结构化日志 stage='ingest-shadow' 含 outcome 五态 / matched_step / legacy vs shadow catalog；MAX_COUNTERPARTS=50 确定性截断）
+  - `apps/api/src/services/identity/offlineRescore.ts` — 双段召回编排（段①+段② 独立 cursor / 全局 seen 去重 / 共享 processBuckets）+ 消费共享层 + IdentityRescoreResult 增 externalIdBuckets + 头注释「多 key 并集」自此与实现相符（CHG-VIR-9-D 登记的注释修正项随本卡闭环）
+  - `apps/api/src/services/identity/index.ts` — Phase 3 导出（ingestShadow / pairScoringPersist / blockingRecall）
+  - `apps/api/src/services/MediaCatalogService.ts` — 新增 `findOrCreateWithMatch`（透出 CatalogMatchStep：imdb_id/tmdb_id/douban_id/bangumi_id/title_triple/created/conflict_recovered；**5 步匹配与绑定语义零变更**，findOrCreate 委托保持 7 处既有消费方零改动）
+  - `apps/api/src/services/CrawlerService.ts` — Step 2 切 findOrCreateWithMatch + Step 5 后 fire-and-forget runIngestShadowScoring（沿 F3 容错范式，失败不阻断采集主流程）+ baseLogger.child({module:'ingest-shadow'})
+  - `apps/api/src/db/queries/identity-candidate.ts` — `countCompareBucketsBySource`（三桶 GROUP BY trigger_source）+ `listForCompareReport` 可选 triggerSource 过滤（向后兼容）
+  - `scripts/identity-compare-report.ts` — trigger_source 切片输出 + `--source=` 抽样过滤
+  - `docs/decisions.md` — ADR-105a AMENDMENT 2026-06-03（CHG-VIR-10）：**D-105a-16**（ingest shadow 持久化形态混合 B+C + hook 点 + bind 口径 + fire-and-forget）+ **D-105a-17**（blocking 第二召回键 external_id + blockingKeys 输入域 + 不 bump SCORER_VERSION）；偏离编号扩为 D-105a-1~17
+  - `docs/architecture.md` — §5.15 现状同步（Phase 3 落地 / 离线生成双段召回 / ingest 旁路段新增）
+  - `tests/unit/api/identity-blocking-recall.test.ts`（新建 6）/ `identity-pair-scoring-persist.test.ts`（新建 4）/ `identity-ingest-shadow.test.ts`（新建 7，含 R9 守护断言全分支仅 SELECT）/ `crawlerIngestShadow.test.ts`（新建 3，接线+容错）/ `identity-offline-rescore.test.ts`（双段改造 +2：ext 召回 + seen 去重）/ `mediaCatalogFindOrCreate.test.ts`（+4 matchedStep 路径）/ `identity-candidate-queries.test.ts`（+3 切片查询）/ crawlerTitleObservation·ingestPolicy·crawlerImageHealthEnqueue·crawler-service-data-guards·crawler-service-es（mock 工厂同步 findOrCreateWithMatch + ingestShadow 正交 mock）
+- **新增依赖**：无
+- **数据库变更**：无（零 migration——门禁②裁定的召回索引经 pg_indexes 核验全部已存在：media_catalog 四外部 ID 列 partial+unique / idx_video_external_refs_provider_external；零新端点 → verify:endpoint-adr 不触发）
+- **注意事项**：① **生产 catalog_id 零变更（R9 + D-105a-12）**——ingest 旁路只写 shadow（identity_candidate + 日志），任何分支不回写 videos.catalog_id / 不触发 merge；自动绑定留 Phase 3 验收后另起 ADR。② blockingKeys 输入域变化 → 既有 pending 中共享 ext id 的 pair 下次重算受控 superseded（dev 实测 24 条，预期行为非回归）。③ ingest 重遇离线已建同 hash pair → noop 不改 trigger_source（trigger_source 语义 = 首建路径）。④ agreement rate 统计走 ingest-shadow 结构化日志聚合（形态 C），报表脚本只读 identity_candidate。⑤ 实施偏离三项（均合理已登记 task-queue 完成备注）：findOrCreateWithMatch 并列方法替代返回值改形 / 零 migration / D 编号 15→16、16→17 校正。⑥ D-N 闭环：**D-105a-16 / D-105a-17 随本卡实施闭环**。⑦ dev 实测：重算 638 桶（617 core + 21 ext）/ 973 pairs / +4 ext 新召回 / 1.25s；ingest 冒烟 31ms candidate-only。

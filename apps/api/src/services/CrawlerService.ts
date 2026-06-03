@@ -17,6 +17,8 @@ import * as sourcesQueries from '@/api/db/queries/sources'
 import * as videosQueries from '@/api/db/queries/videos'
 import { recordTitleObservation } from '@/api/db/queries/titleObservations'
 import { buildTitleObservation } from './titleObservation.builder'
+import { runIngestShadowScoring } from './identity/ingestShadow'
+import { baseLogger } from '@/api/lib/logger'
 import { nanoid } from 'nanoid'
 import { config } from '@/api/lib/config'
 import { enrichmentQueue, imageHealthQueue } from '@/api/lib/queue'
@@ -29,6 +31,9 @@ import { enrichmentQueue, imageHealthQueue } from '@/api/lib/queue'
  * 但当前仅取首页 → emit 'crawl.page.truncated' warn。
  */
 const CRAWL_PAGE_MIN_FOR_TRUNCATION_WARN = 10
+
+// CHG-VIR-10：ingest shadow 结构化日志（形态 C / D-105a-16），logging-rules §4 child 范式
+const ingestShadowLog = baseLogger.child({ module: 'ingest-shadow' })
 
 // ── 资源站配置 ────────────────────────────────────────────────────
 
@@ -174,8 +179,9 @@ export class CrawlerService {
     const titleNormalized = normalizeMergeKey(video.title)
 
     // Step 2: 找到或创建 media_catalog 条目（爬虫来源，最低优先级）
+    // CHG-VIR-10：withMatch 变体额外透出 matchedStep（仅供 ingest shadow 对比，绑定语义零变更）
     const catalogService = new MediaCatalogService(this.db)
-    const catalog = await catalogService.findOrCreate({
+    const { catalog, matchedStep } = await catalogService.findOrCreateWithMatch({
       title: video.title,
       titleEn: video.titleEn ?? null,
       titleNormalized,
@@ -269,6 +275,20 @@ export class CrawlerService {
     ).catch((err: unknown) => {
       process.stderr.write(
         `[CrawlerService] title observation shadow failed for ${videoId}: ${err instanceof Error ? err.message : String(err)}\n`,
+      )
+    })
+
+    // Phase 3 (CHG-VIR-10 / ADR-105a D-105a-16): ingest 旁路 shadow scoring。
+    // 只写 shadow（identity_candidate trigger_source='ingest' + 结构化日志），不改 catalog_id
+    // 绑定（R9 + D-105a-12）。fire-and-forget 容错同上：失败不阻断采集入库主流程。
+    void runIngestShadowScoring(this.db, ingestShadowLog, {
+      videoId,
+      catalogId: catalog.id,
+      matchedStep,
+      title: video.title,
+    }).catch((err: unknown) => {
+      process.stderr.write(
+        `[CrawlerService] ingest shadow scoring failed for ${videoId}: ${err instanceof Error ? err.message : String(err)}\n`,
       )
     })
 

@@ -1,9 +1,9 @@
 /**
- * tests/unit/api/crawlerTitleObservation.test.ts — SEQ-20260602-03 / CHG-VIR-6（Phase 1b）
+ * tests/unit/api/crawlerIngestShadow.test.ts — CHG-VIR-10（Phase 3 / ADR-105a D-105a-16）
  *
- * 验证 CrawlerService.upsertVideo 的 title_observations shadow 写入：
- *  - 入库后以正确入参调用 recordTitleObservation（videoId / rawTitle / siteKey）。
- *  - **F3 容错**：observation 写失败 fire-and-forget，不阻断采集入库主流程（upsertVideo 正常返回）。
+ * 验证 CrawlerService.upsertVideo 的 ingest shadow 旁路接线（仿 crawlerTitleObservation 范式）：
+ *  - 入库后以正确入参调用 runIngestShadowScoring（videoId / catalogId / matchedStep / title）。
+ *  - 容错：shadow 失败 fire-and-forget，不阻断采集入库主流程（R9 性能边界：写失败不影响主路径）。
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
@@ -15,21 +15,12 @@ vi.mock('@/api/lib/queue', () => ({
   enrichmentQueue: { add: vi.fn().mockResolvedValue({ id: 'enrich-1' }) },
 }))
 
-const mockFindOrCreate = vi.fn()
 const mockFindOrCreateWithMatch = vi.fn()
 vi.mock('@/api/services/MediaCatalogService', () => ({
   MediaCatalogService: vi.fn().mockImplementation(() => ({
-    findOrCreate: mockFindOrCreate,
     findOrCreateWithMatch: mockFindOrCreateWithMatch,
     safeUpdate: vi.fn().mockResolvedValue({ updated: {}, skippedFields: [] }),
   })),
-}))
-
-// CHG-VIR-10：ingest shadow 旁路与本测试正交，mock 掉避免真实召回/日志
-vi.mock('@/api/services/identity/ingestShadow', () => ({
-  runIngestShadowScoring: vi.fn().mockResolvedValue({
-    outcome: 'no-counterpart', counterparts: 0, candidatesUpserted: 0, shadowCatalogId: null, durationMs: 0,
-  }),
 }))
 
 vi.mock('@/api/services/VideoIndexSyncService', () => ({
@@ -51,10 +42,13 @@ vi.mock('@/api/db/queries/sources', () => ({
 
 vi.mock('@/api/lib/config', () => ({ config: { AUTO_PUBLISH_CRAWLED: 'false' } }))
 
-// recordTitleObservation 替换为 spy；入参由 CrawlerService.buildTitleObservation 真实组装（真 parseTitle + sha256）
-const mockRecordObs = vi.fn().mockResolvedValue(undefined)
 vi.mock('@/api/db/queries/titleObservations', () => ({
-  recordTitleObservation: (...args: unknown[]) => mockRecordObs(...args),
+  recordTitleObservation: vi.fn().mockResolvedValue(undefined),
+}))
+
+const mockRunShadow = vi.fn()
+vi.mock('@/api/services/identity/ingestShadow', () => ({
+  runIngestShadowScoring: (...args: unknown[]) => mockRunShadow(...args),
 }))
 
 import { CrawlerService } from '@/api/services/CrawlerService'
@@ -85,47 +79,50 @@ function bindUpsert(svc: CrawlerService): UpsertFn {
   return (svc as unknown as { upsertVideo: UpsertFn }).upsertVideo.bind(svc)
 }
 
-describe('CrawlerService — CHG-VIR-6 title_observations shadow 写入', () => {
+/** fire-and-forget promise 落定窗口（microtask flush）。 */
+const flush = () => new Promise((r) => setTimeout(r, 0))
+
+describe('CrawlerService — CHG-VIR-10 ingest shadow 旁路接线', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mockFindOrCreate.mockResolvedValue({ id: 'cat-1' })
-    mockFindOrCreateWithMatch.mockResolvedValue({ catalog: { id: 'cat-1' }, matchedStep: 'title_triple' })
-    mockRecordObs.mockResolvedValue(undefined)
-  })
-
-  it('入库后以 videoId/rawTitle/siteKey 构造的入参调用 recordTitleObservation', async () => {
-    const svc = new CrawlerService(mockDb, mockEs)
-    await bindUpsert(svc)(makeParsed('斗罗大陆 第4季 更新至30集'), undefined, 'site-a')
-
-    expect(mockRecordObs).toHaveBeenCalledTimes(1)
-    const [, input] = mockRecordObs.mock.calls[0] as [unknown, Record<string, unknown>]
-    expect(input).toMatchObject({
-      videoId: 'vid-new',
-      sourceSiteKey: 'site-a',
-      sourceName: null,
-      rawTitle: '斗罗大陆 第4季 更新至30集',
-      parserVersion: '1.0.0',
+    mockFindOrCreateWithMatch.mockResolvedValue({ catalog: { id: 'cat-1' }, matchedStep: 'created' })
+    mockRunShadow.mockResolvedValue({
+      outcome: 'no-counterpart', counterparts: 0, candidatesUpserted: 0, shadowCatalogId: null, durationMs: 0,
     })
-    // raw_title_hash = sha256 hex（64 位）
-    expect(input.rawTitleHash).toMatch(/^[0-9a-f]{64}$/)
-    // 真实 buildTitleObservation → parseTitle 产出 facets 快照
-    const facets = input.parsedFacets as Record<string, unknown>
-    expect(facets.coreTitleKey).toBe('斗罗大陆')
-    expect(facets.titleKind).toBe('crawler')
   })
 
-  it('无 siteKey → sourceSiteKey 传 null', async () => {
+  it('入库后以 videoId/catalogId/matchedStep/title 调用 runIngestShadowScoring', async () => {
     const svc = new CrawlerService(mockDb, mockEs)
-    await bindUpsert(svc)(makeParsed('某番'), undefined, undefined)
-    const [, input] = mockRecordObs.mock.calls[0] as [unknown, Record<string, unknown>]
-    expect(input.sourceSiteKey).toBeNull()
+    await bindUpsert(svc)(makeParsed('某科幻动画'), undefined, 'site-a')
+    await flush()
+
+    expect(mockRunShadow).toHaveBeenCalledTimes(1)
+    const [db, log, input] = mockRunShadow.mock.calls[0] as [unknown, unknown, Record<string, unknown>]
+    expect(db).toBe(mockDb)
+    expect(log).toBeDefined()
+    expect(input).toEqual({
+      videoId: 'vid-new',
+      catalogId: 'cat-1',
+      matchedStep: 'created',
+      title: '某科幻动画',
+    })
   })
 
-  it('F3 容错：observation 写失败 fire-and-forget，不阻断主流程', async () => {
-    mockRecordObs.mockRejectedValueOnce(new Error('db down'))
+  it('matchedStep 透传 findOrCreateWithMatch 命中步骤（exact ID 命中场景）', async () => {
+    mockFindOrCreateWithMatch.mockResolvedValue({ catalog: { id: 'cat-9' }, matchedStep: 'bangumi_id' })
     const svc = new CrawlerService(mockDb, mockEs)
-    // 不应抛错（主流程返回正常结构）
+    await bindUpsert(svc)(makeParsed('某番'), undefined, 'site-a')
+    await flush()
+    const [, , input] = mockRunShadow.mock.calls[0] as [unknown, unknown, Record<string, unknown>]
+    expect(input.matchedStep).toBe('bangumi_id')
+    expect(input.catalogId).toBe('cat-9')
+  })
+
+  it('容错：shadow 失败 fire-and-forget，不阻断主流程（采集主路径零回归）', async () => {
+    mockRunShadow.mockRejectedValueOnce(new Error('shadow down'))
+    const svc = new CrawlerService(mockDb, mockEs)
     const result = await bindUpsert(svc)(makeParsed('某剧'), undefined, 'site-a')
+    await flush()
     expect(result).toHaveProperty('videoId', 'vid-new')
   })
 })

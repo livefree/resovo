@@ -55,6 +55,27 @@ export interface FindOrCreateCatalogInput extends CatalogInsertData {
   metadataSource: CatalogMetadataSource
 }
 
+// ── findOrCreate 命中步骤（CHG-VIR-10 / ADR-105a D-105a-16）──────────
+
+/**
+ * findOrCreate 5 步匹配的命中点（Service 内部返回值契约，不动端点 / 不改绑定语义）。
+ * ingest shadow scoring 用于「现有 5 步 vs 新评分」对比切片（D-105a-12 生产绑定零变更）。
+ * `conflict_recovered` = INSERT 被并发 ON CONFLICT 跳过后重查收敛路径。
+ */
+export type CatalogMatchStep =
+  | 'imdb_id'
+  | 'tmdb_id'
+  | 'douban_id'
+  | 'bangumi_id'
+  | 'title_triple'
+  | 'created'
+  | 'conflict_recovered'
+
+export interface CatalogMatchResult {
+  readonly catalog: MediaCatalogRow
+  readonly matchedStep: CatalogMatchStep
+}
+
 // ── 外部 ID 绑定判定（ADR-174 D-174-3 唯一约束兜底真去重）────────────
 
 /**
@@ -104,6 +125,15 @@ export class MediaCatalogService {
    * 均未命中时，INSERT 新条目（ON CONFLICT DO NOTHING，再 SELECT）
    */
   async findOrCreate(input: FindOrCreateCatalogInput): Promise<MediaCatalogRow> {
+    return (await this.findOrCreateWithMatch(input)).catalog
+  }
+
+  /**
+   * findOrCreateWithMatch — findOrCreate 真源实现，额外透出命中步骤 matchedStep
+   * （CHG-VIR-10 / D-105a-16：ingest shadow 对比「现有 5 步 vs 新评分」用；
+   * 匹配逻辑与绑定语义零变更 / D-105a-12）。
+   */
+  async findOrCreateWithMatch(input: FindOrCreateCatalogInput): Promise<CatalogMatchResult> {
     const client: PoolClient = await this.db.connect()
     try {
       await client.query('BEGIN')
@@ -113,7 +143,7 @@ export class MediaCatalogService {
         const found = await catalogQueries.findCatalogByImdbId(client, input.imdbId)
         if (found) {
           await client.query('COMMIT')
-          return found
+          return { catalog: found, matchedStep: 'imdb_id' }
         }
       }
 
@@ -122,7 +152,7 @@ export class MediaCatalogService {
         const found = await catalogQueries.findCatalogByTmdbId(client, input.tmdbId)
         if (found) {
           await client.query('COMMIT')
-          return found
+          return { catalog: found, matchedStep: 'tmdb_id' }
         }
       }
 
@@ -131,7 +161,7 @@ export class MediaCatalogService {
         const found = await catalogQueries.findCatalogByDoubanId(client, input.doubanId)
         if (found) {
           await client.query('COMMIT')
-          return found
+          return { catalog: found, matchedStep: 'douban_id' }
         }
       }
 
@@ -140,7 +170,7 @@ export class MediaCatalogService {
         const found = await catalogQueries.findCatalogByBangumiId(client, input.bangumiSubjectId)
         if (found) {
           await client.query('COMMIT')
-          return found
+          return { catalog: found, matchedStep: 'bangumi_id' }
         }
       }
 
@@ -153,14 +183,14 @@ export class MediaCatalogService {
       )
       if (found5) {
         await client.query('COMMIT')
-        return found5
+        return { catalog: found5, matchedStep: 'title_triple' }
       }
 
       // 全部未命中 → INSERT（ON CONFLICT DO NOTHING 防止并发重复）
       const inserted = await catalogQueries.insertCatalog(client, input)
       if (inserted) {
         await client.query('COMMIT')
-        return inserted
+        return { catalog: inserted, matchedStep: 'created' }
       }
 
       // INSERT 被 ON CONFLICT 跳过（并发写入导致）→ 再次查询
@@ -183,7 +213,7 @@ export class MediaCatalogService {
       }
 
       await client.query('COMMIT')
-      return retry
+      return { catalog: retry, matchedStep: 'conflict_recovered' }
     } catch (err) {
       await client.query('ROLLBACK')
       throw err
