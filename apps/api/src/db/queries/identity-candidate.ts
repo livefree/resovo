@@ -281,6 +281,59 @@ export async function listPendingCandidatePairs(
   return r.rows
 }
 
+// ── ⑨ 人工裁定写路径（CHG-VIR-9-B / ADR-178）─────────────────────────
+
+/**
+ * 事务内按 id 读 candidate（reject 校验用）。`FOR UPDATE` 行锁防并发裁定竞态
+ * （两个并发 reject / reject-vs-merge 串行化）。
+ */
+export async function findCandidateById(
+  client: PoolClient,
+  candidateId: string,
+): Promise<IdentityCandidateRow | null> {
+  const r = await client.query<IdentityCandidateRow>(
+    `SELECT ${SELECT_COLS} FROM identity_candidate
+     WHERE id = $1 FOR UPDATE`,
+    [candidateId],
+  )
+  return r.rows[0] ?? null
+}
+
+/**
+ * 事务前只读按 id 读 candidate（merge candidateId 快速失败校验 / D-178-3「校验全部在 BEGIN 之前」）。
+ * 正确性由事务内 updateCandidateStatus from-state 守卫兜底，本函数仅为快速失败 UX。
+ */
+export async function findCandidateByIdReadonly(
+  db: Pool,
+  candidateId: string,
+): Promise<IdentityCandidateRow | null> {
+  const r = await db.query<IdentityCandidateRow>(
+    `SELECT ${SELECT_COLS} FROM identity_candidate
+     WHERE id = $1`,
+    [candidateId],
+  )
+  return r.rows[0] ?? null
+}
+
+/**
+ * 事务内更新 candidate 状态（pending→confirmed/rejected）。from-state 守卫：
+ * WHERE status=$from，并发冲突时 rowCount=0 → 调用方抛 STATE_CONFLICT 回滚整事务（D-178-3）。
+ */
+export async function updateCandidateStatus(
+  client: PoolClient,
+  candidateId: string,
+  fromStatus: 'pending',
+  toStatus: 'confirmed' | 'rejected',
+): Promise<number> {
+  const r = await client.query(
+    `UPDATE identity_candidate
+        SET status = $3, updated_at = NOW()
+      WHERE id = $1 AND status = $2`,
+    [candidateId, fromStatus, toStatus],
+  )
+  return r.rowCount ?? 0
+}
+
 // ── ⑥ 对比报表聚合计数（一致/新增召回/拦截 三桶 / §6.1）───────────────
 
 export async function countCompareBuckets(

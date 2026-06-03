@@ -78,6 +78,12 @@ export interface MergeParams {
   readonly sourceVideoIds: string[]
   readonly targetVideoId: string
   readonly reason?: string
+  /**
+   * CHG-VIR-9-B / ADR-178 D-178-3：关联 identity_candidate（confirmed→merge 单事务 / R8）。
+   * 提供时事务前校验 candidate pending + pair⊆合并集合，事务内挂 decision(confirmed)+candidate confirmed；
+   * 缺省时 merge 行为逐值不变（主路径零变更）。
+   */
+  readonly candidateId?: string
 }
 
 export interface MergeResult {

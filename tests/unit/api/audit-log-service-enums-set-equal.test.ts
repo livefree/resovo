@@ -97,6 +97,8 @@ const EXPECTED_ACTION_TYPES = [
   // CHG-368-B-A2b / ADR-164 D-164-7 / R-MID-1 系统化第 29-30 次（线路别名退役 + 优先级更新 / targetKind 复用 'source_line_alias'）
   'source_line_alias.retire',
   'source_line_alias.priority_update',
+  // CHG-VIR-9-B / ADR-178 D-178-6 / R-MID-1 系统化第 31 次（identity 候选人工拒绝 / targetKind 'identity_candidate'）
+  'identity_candidate.reject',
 ] as const
 
 const EXPECTED_TARGET_KINDS = [
@@ -112,6 +114,7 @@ const EXPECTED_TARGET_KINDS = [
   'user_submission',  // CHG-SN-7-REDO-02-A / ADR-124
   'user',  // CHG-SN-8-FUP-USERS-ROLE-INV-EP / ADR-139
   'filter_preset',  // CHG-SN-8-FUP-PRESET-TEAM-EP-A / ADR-144（migration 072 CHECK 12→13）
+  'identity_candidate',  // CHG-VIR-9-B / ADR-178 D-178-6（migration 088 CHECK 14→15）
 ] as const
 
 describe('AuditLogService enums set-equal 守卫（ultrareview P1-2）', () => {

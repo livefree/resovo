@@ -52,6 +52,12 @@ import {
 } from '@/api/db/queries/video-merge-mutations'
 import { AuditLogService } from '@/api/services/AuditLogService'
 import { MediaCatalogService } from '@/api/services/MediaCatalogService'
+// CHG-VIR-9-B / ADR-178：merge 事务挂 decision(confirmed) + unmerge 联动 reverted（R8 / D-105a-11）
+import { IdentityCandidatesService } from '@/api/services/IdentityCandidatesService'
+import {
+  findConfirmedDecisionByAuditId,
+  markDecisionReverted,
+} from '@/api/db/queries/identity-decision'
 import { AppError } from '@/api/lib/errors'
 import { normalizeMergeKey } from '@/api/services/TitleNormalizer'
 import {
@@ -197,11 +203,12 @@ export class VideoMergesService {
 
   // ── merge ─────────────────────────────────────────────────────────
 
-  async merge(params: MergeParams, actorId: string): Promise<MergeResult> {
-    const { sourceVideoIds, targetVideoId, reason } = params
+  /** merge 步骤 1：校验所有 video 存在 + target/source 未被软删（404/409）。返回 videoMap 供 snapshot 用。 */
+  private async assertVideosMergeable(
+    sourceVideoIds: string[],
+    targetVideoId: string,
+  ): Promise<Map<string, Awaited<ReturnType<typeof fetchVideosByIds>>[number]>> {
     const allIds = [...sourceVideoIds, targetVideoId]
-
-    // 1. 校验所有 video 存在且未删除
     const videos = await fetchVideosByIds(this.db, allIds)
     const videoMap = new Map(videos.map(v => [v.id, v]))
 
@@ -222,29 +229,25 @@ export class VideoMergesService {
         throw new AppError('STATE_CONFLICT', `sourceVideoId ${id} 已被合并到其他视频（无法作为合并源）`, 409)
       }
     }
+    return videoMap
+  }
 
-    // 2. 前置冲突探测（uq_sources_video_episode_url）
-    // ADR-105 R-105-1 + CHG-SN-5-10-PATCH P0-2：探测合并后集合内任意两点冲突
-    // （覆盖 source-vs-source + source-vs-target 全部路径）
-    const conflictCount = await detectMergeConflicts(this.db, [...sourceVideoIds, targetVideoId])
-    if (conflictCount > 0) {
-      throw new AppError(
-        'STATE_CONFLICT',
-        `source 与 target 视频存在重复 (episode_number, source_url) 组合 ${conflictCount} 条，请先在 /admin/sources 视图处理（保留其一删除其余）后再合并`,
-        409,
-      )
-    }
-
-    // 3. 构建 snapshot（source videos 完整数据 + 它们的 sources）
-    const sourcesOfSources = await fetchSourcesByVideoIds(this.db, sourceVideoIds)
-    const snapshotJsonb = {
-      videos: sourceVideoIds.map(id => videoMap.get(id)),
-      sources: sourcesOfSources.map(s => ({ id: s.id, video_id: s.video_id })),
-    }
-
-    // 4. 事务：INSERT audit + 转移 sources + 软删除 source videos
+  /**
+   * merge 步骤 4：事务执行 INSERT audit + 转移 sources + 软删除 source videos
+   * （+ candidateId 时同事务挂 decision(confirmed)+candidate confirmed / R8 单 BEGIN/COMMIT）。
+   */
+  private async runMergeTransaction(params: {
+    sourceVideoIds: string[]
+    targetVideoId: string
+    reason: string | undefined
+    candidateId: string | undefined
+    snapshotJsonb: Record<string, unknown>
+    actorId: string
+  }): Promise<{ auditId: string; decisionId: string | null }> {
+    const { sourceVideoIds, targetVideoId, reason, candidateId, snapshotJsonb, actorId } = params
     const client = await this.db.connect()
     let auditId: string
+    let decisionId: string | null = null
     try {
       await client.query('BEGIN')
 
@@ -260,6 +263,14 @@ export class VideoMergesService {
       await transferSourcesToTarget(client, sourceVideoIds, targetVideoId)
       await softDeleteVideos(client, sourceVideoIds)
 
+      if (candidateId) {
+        decisionId = await IdentityCandidatesService.attachConfirmedDecision(client, {
+          candidateId,
+          videoMergeAuditId: auditId,
+          performedBy: actorId,
+        })
+      }
+
       await client.query('COMMIT')
     } catch (err) {
       await client.query('ROLLBACK')
@@ -267,6 +278,44 @@ export class VideoMergesService {
     } finally {
       client.release()
     }
+    return { auditId, decisionId }
+  }
+
+  async merge(params: MergeParams, actorId: string): Promise<MergeResult> {
+    const { sourceVideoIds, targetVideoId, reason, candidateId } = params
+    const allIds = [...sourceVideoIds, targetVideoId]
+
+    // 1. 校验所有 video 存在且未删除（404/409 / 抽 assertVideosMergeable）
+    const videoMap = await this.assertVideosMergeable(sourceVideoIds, targetVideoId)
+
+    // 2. 前置冲突探测（uq_sources_video_episode_url）
+    // ADR-105 R-105-1 + CHG-SN-5-10-PATCH P0-2：探测合并后集合内任意两点冲突
+    // （覆盖 source-vs-source + source-vs-target 全部路径）
+    const conflictCount = await detectMergeConflicts(this.db, [...sourceVideoIds, targetVideoId])
+    if (conflictCount > 0) {
+      throw new AppError(
+        'STATE_CONFLICT',
+        `source 与 target 视频存在重复 (episode_number, source_url) 组合 ${conflictCount} 条，请先在 /admin/sources 视图处理（保留其一删除其余）后再合并`,
+        409,
+      )
+    }
+
+    // 2b. CHG-VIR-9-B / ADR-178 D-178-3：candidateId 事务前快速失败校验（BEGIN 之前，主路径零变更）
+    if (candidateId) {
+      await IdentityCandidatesService.validateForMerge(this.db, candidateId, allIds)
+    }
+
+    // 3. 构建 snapshot（source videos 完整数据 + 它们的 sources）
+    const sourcesOfSources = await fetchSourcesByVideoIds(this.db, sourceVideoIds)
+    const snapshotJsonb = {
+      videos: sourceVideoIds.map(id => videoMap.get(id)),
+      sources: sourcesOfSources.map(s => ({ id: s.id, video_id: s.video_id })),
+    }
+
+    // 4. 事务（抽 runMergeTransaction / R8 单 BEGIN/COMMIT）
+    const { auditId, decisionId } = await this.runMergeTransaction({
+      sourceVideoIds, targetVideoId, reason, candidateId, snapshotJsonb, actorId,
+    })
 
     // 5. 拼装合并后 target 摘要（ADR-105 §端点契约 row 2：targetVideo: VideoSummary）
     // CHG-SN-5-10-PATCH P0-1：COMMIT 后查 target 详情反映合并后 sourceCount/sourceSiteKeys 新状态
@@ -278,13 +327,16 @@ export class VideoMergesService {
     const targetVideo = mapVideoRow(targetDetail)
 
     // 6. fire-and-forget admin_audit_log（COMMIT 后才写，防虚假记录）
+    // CHG-VIR-9-B / ADR-178 D-178-6：candidateId 路径 afterJsonb 纯增量补 candidateId/decisionId
     this.auditSvc.write({
       actorId,
       actionType: 'video.merge',
       targetKind: 'video',
       targetId: targetVideoId,
       beforeJsonb: { sourceVideoIds, snapshot: snapshotJsonb },
-      afterJsonb: { auditId, targetVideoId },
+      afterJsonb: candidateId
+        ? { auditId, targetVideoId, candidateId, decisionId }
+        : { auditId, targetVideoId },
     })
 
     return { auditId, targetVideo }
@@ -322,6 +374,12 @@ export class VideoMergesService {
         await restoreVideos(client, restoredVideoIds)
         await reassignSourcesToOriginal(client, snapshotSources)
         await markAuditReverted(client, auditId, actorId, reason ?? null)
+        // CHG-VIR-9-B / ADR-178 D-178-4：经 audit_id 反查关联 confirmed decision 原地置 reverted
+        // （decision 值不变 / candidate 保持 confirmed 不回 pending，避撞 uq_identity_candidate_pending）
+        const decision = await findConfirmedDecisionByAuditId(client, auditId)
+        if (decision) {
+          await markDecisionReverted(client, decision.id, actorId, reason ?? null)
+        }
         await client.query('COMMIT')
       } catch (err) {
         await client.query('ROLLBACK')

@@ -38,6 +38,9 @@ export const MergeSchema = z.object({
   sourceVideoIds: z.array(z.string().uuid()).min(1).max(10),
   targetVideoId: z.string().uuid(),
   reason: z.string().max(500).optional(),
+  // CHG-VIR-9-B / ADR-178 D-178-3：关联 identity_candidate（confirmed→merge 单事务 / R8）。
+  // 纯增量 optional，缺省时 merge 行为逐值不变。
+  candidateId: z.string().uuid().optional(),
 }).refine(
   v => !v.sourceVideoIds.includes(v.targetVideoId),
   { message: 'targetVideoId 不得在 sourceVideoIds 中', path: ['targetVideoId'] },

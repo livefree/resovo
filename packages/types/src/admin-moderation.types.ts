@@ -244,6 +244,9 @@ export type AdminAuditActionType =
   | 'source_line_alias.retire'           // POST /admin/source-line-aliases/:siteKey/:sourceName/retire
   | 'source_line_alias.priority_update'  // PUT  /admin/source-line-aliases/:siteKey/:sourceName/priority
 
+  // CHG-VIR-9-B / ADR-178 D-178-6：identity 候选人工拒绝（targetKind 'identity_candidate' / targetId=candidateId）
+  | 'identity_candidate.reject'          // POST /admin/identity-candidates/:id/reject
+
 export type AdminAuditTargetKind =
   | 'video'
   | 'video_source'
@@ -259,6 +262,7 @@ export type AdminAuditTargetKind =
   | 'user'  // CHG-SN-8-FUP-USERS-ROLE-INV-EP / ADR-139：admin 操作用户实体（role_change 等）
   | 'filter_preset'  // CHG-SN-8-FUP-PRESET-TEAM-EP-A / ADR-144：FilterPreset CRUD 目标（migration 072 CHECK 12→13）
   | 'crawler_task'   // CHG-SN-9-CW1-B-EP / ADR-151：task 级 cancel 目标（单点 / batch 用 'system'）
+  | 'identity_candidate'  // CHG-VIR-9-B / ADR-178 D-178-6：identity 候选 reject 目标（migration 088 CHECK 14→15）
 
 export interface AdminAuditLog {
   readonly id: string  // bigserial → string（避免 JS 大数精度）

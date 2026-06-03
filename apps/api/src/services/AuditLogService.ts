@@ -112,6 +112,8 @@ export const ACTION_TYPES: readonly AdminAuditActionType[] = [
   'video_source.inline_action',
   // CHG-357 / ADR-158 AMENDMENT 2：视频级 batch probe + render-check 合并 actionType（R-MID-1 第 28 次 / targetKind 'video'）
   'video_source.batch_inline_action',
+  // CHG-VIR-9-B / ADR-178 D-178-6：identity 候选人工拒绝
+  'identity_candidate.reject',
 ]
 export const TARGET_KINDS: readonly AdminAuditTargetKind[] = [
   'video',
@@ -126,6 +128,7 @@ export const TARGET_KINDS: readonly AdminAuditTargetKind[] = [
   'user_submission',  // CHG-SN-7-REDO-02-A / ADR-124
   'user',  // CHG-SN-8-FUP-USERS-ROLE-INV-EP / ADR-139
   'filter_preset',  // CHG-SN-8-FUP-PRESET-TEAM-EP-A / ADR-144（migration 072 CHECK 12→13）
+  'identity_candidate',  // CHG-VIR-9-B / ADR-178 D-178-6（migration 088 CHECK 14→15）
 ]
 
 // ── zod schema（ADR-118 §端点契约 + D-118-3） ────────────────────────

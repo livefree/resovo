@@ -52,6 +52,8 @@ import { homeRoutes } from '@/api/routes/home'
 import { adminMediaRoutes } from '@/api/routes/admin/media'
 import { adminHomeModulesRoutes } from '@/api/routes/admin/home-modules'
 import { adminVideoMergesRoutes } from '@/api/routes/admin/video-merges'
+// CHG-VIR-9-B / ADR-178：identity 候选人工裁定（reject）
+import { adminIdentityCandidatesRoutes } from '@/api/routes/admin/identity-candidates'
 import { adminSourcesMatrixRoutes } from '@/api/routes/admin/sources-matrix'
 import { registerDataTableRoutes } from '@/api/routes/admin/_datatable'
 import { adminUserSubmissionsRoutes } from '@/api/routes/admin/userSubmissions'
@@ -178,6 +180,7 @@ async function start() {
   await fastify.register(homeRoutes, { prefix: '/v1' })
   await fastify.register(adminHomeModulesRoutes, { prefix: '/v1' })
   await fastify.register(adminVideoMergesRoutes, { prefix: '/v1' })
+  await fastify.register(adminIdentityCandidatesRoutes, { prefix: '/v1' })
   await fastify.register(adminSourcesMatrixRoutes, { prefix: '/v1' })
   await fastify.register(adminUserSubmissionsRoutes, { prefix: '/v1' })
   await fastify.register(adminAuditRoutes, { prefix: '/v1' })
