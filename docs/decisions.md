@@ -5613,6 +5613,7 @@ plan §4.5 ADR-端点先后协议硬约束：admin API 协议须先 ADR + Opus P
 | 3 | POST | `/admin/video-merges/:auditId/unmerge` | 撤销合并 | Body: `{ reason?: string }` | 200 `{ data: { restoredVideoIds: string[] } }` | 404 / 409（audit 已撤销 / target video 已删） |
 | 4 | POST | `/admin/videos/:id/split` | 按 source 分组拆分 | Body: `{ groups: [{ sourceIds: string[], newVideoMeta: { title, year?, type } }] }`（≥2 组） | 200 `{ data: { auditId, newVideoIds: string[] } }` | 422 / 404 / 409（id 已被合并/拆分） |
 | 5 | GET | `/admin/video-merges/audit` | 列出 merge/split/unmerge 历史 audit timeline（**ADR-105 AMENDMENT 2026-05-14 / CHG-SN-6-AUDIT-TIMELINE / RETRO 4/7**）| Query: `action?='merge'\|'split'` / `videoId?` / `limit?=20` / `page?=1` | 200 `{ data: MergeAuditRow[], total, page, limit }` | 422 VALIDATION_ERROR |
+| 6 | GET | `/admin/videos/:id/split-suggestions` | 拆分自动分组建议只读预览（**ADR-105 AMENDMENT 2026-06-03 / CHG-VIR-11-A / Phase 4 拆分证据化**，实施 = CHG-VIR-11-B）| Query: 无 | 200 `{ data: SplitSuggestionsResult }` | 422 VALIDATION_ERROR / 404 NOT_FOUND / 409 STATE_CONFLICT（已被合并） |
 
 **zod request schema（Service 层 + Route 层共享，端点实施卡 -09/-10 落地）**：
 
@@ -5869,6 +5870,124 @@ AdminAuditTargetKind 已含 'video'（admin-moderation.types.ts:127 既有），
   - PRE-MERGE-AUDIT-SHARD（snapshot_jsonb 分表）：R-ADR-105-1 极端场景命中（维持不变，与身份解析蓝图无关）
   - PRE-MERGE-TTL（撤销 TTL 约束）：R-ADR-105-2 业务案例命中（维持不变，与身份解析蓝图无关）
   - ADR-105a（评分升级）：**方向已修订，见 ADR-105 AMENDMENT 2026-06-02**（非 pg_trgm fuzzy，改 core_title_key 确定性等值 blocking + 多证据评分 + 离线候选生成）
+
+### AMENDMENT（2026-06-03 / CHG-VIR-11-A / Phase 4 拆分证据化：split-suggestions 只读建议端点 + 拆到已有 video + unmerge 还原协议修订）
+
+- **状态**：**Accepted**（arch-reviewer claude-opus-4-8 × 2 轮：第 1 轮 CONDITIONAL〔agentId a14ab66155c13a55f / R-A1 数据源前提 + R-A2 线路键口径 2 红线 + Y-A1/A2/A3 3 黄线〕→ 主循环实读反驳 R-A1 断言②③〔raw_title = 爬虫 payload 标题非 DB 行标题，per-site 观测有真实分裂信息〕→ 第 2 轮 PASS-with-conditions〔agentId a100cd57de06fca45 / 反驳成立 + 修订版 D-105-1 五点 PASS + 2 硬条件 + 1 advisory-strong 全部吸收〕）
+- **决策者**：主循环 claude-opus-4-8 / arch-reviewer (claude-opus-4-8) × 2 轮
+- **关联**：设计 `docs/designs/video-identity-resolution-redesign_20260602.md` §Phase 4 / CHG-VIR-PRE-1（insertNewVideo schema 漂移已修 + split 事务前 findOrCreate catalog 范式）/ CHG-VIR-5（TitleIdentityParser facets）/ CHG-VIR-6（title_observations，migration 085）/ ADR-105a（identity_candidate 读路径软删过滤口径）/ ADR-176（season/release_marker 独立 catalog 语义，拆分维度对齐）
+
+#### 背景（现状缺口）
+
+1. **现有 split 仅支持拆到新建 video**：`SplitSchema.groups[].newVideoMeta` 必填（本 ADR §端点契约），无法把错误归并的 sources 拆回**已存在**的另一作品 video（场景：A 作品 video 误吞 B 作品 sources，而 B 作品 video 本就存在——现只能新建重复 video 再二次 merge，两步操作 + 产生冗余 audit）。
+2. **无拆分分组建议**：运营在 `/admin/merge` 拆分工作台（MergeSplitSection）须逐线路人工判断归属；而 Phase 1b 的 `title_observations`（per `(video_id, source_site_key, source_name)` 的 `parsed_facets_jsonb`：coreTitleKey / seasonNumber / releaseMarker / edition）已具备「该线路属于哪个作品/季/形态」的证据，未被消费。
+3. **unmerge 还原协议的语义坑（本 AMENDMENT 必修前提）**：`VideoMergesService.unmerge` 对 `action='split'` 的撤销会 `softDeleteVideos(audit.target_video_ids)` **全量软删 target**——若拆分目标含已有 video，撤销会错误软删拆分前就存在的 video。snapshot 协议必须先区分「新建 / 已有」target。
+
+#### 决策要点
+
+**D-105-1（split-suggestions 只读建议端点 — 实时计算零持久化 / 第 2 轮评审修订版）**
+- 新端点 `GET /admin/videos/:id/split-suggestions`（§端点契约表 #6）：对单 video 实时计算拆分分组建议；**纯只读零副作用**（不写 `identity_candidate` / 不写 `title_observations` / 不持久化建议）。
+- **数据源（全部既有，零 migration / 零新索引 / 零采集写路径变更）**：
+  1. **线路清单真源 = `video_sources`**：线路键 `(COALESCE(source_site_key, videos.site_key), source_name)` 与 `getVideoMatrix`（`video-matrix.ts:40,63`）**逐字一致**（R-105-S9）；提供 线路→sourceIds 映射 + episode 区间；线路间集数重叠作 video 级信号。
+  2. **facet 信号源 = `title_observations` 的 site 级聚合**（migration 085，`idx_title_observations_video` 反查）：**事实口径**——观测写入为 site 级（`buildTitleObservation` `sourceName` 恒 NULL，`raw_title` = 该站点本次爬取 payload 标题，误并场景下 B 站点观测携带 B 作品真实标题 = 分裂信息来源）。per `(video_id, source_site_key)` 取 **dominant facets**——`observed_count DESC, last_seen_at DESC, raw_title_hash ASC` 排序取首条的 `parsed_facets_jsonb`（确定性，末键唯一断点）。线路按其 site_key **继承**所属 site 的 dominant facets 参与分组。
+  3. 外部 ID（`media_catalog` 外部 ID 列 + `video_external_refs`，沿 ADR-105a Y-105a-4 双源口径）：同 video 多个互斥 external_id → **仅作 video 级拆分信号（signal）**，不参与线路归组（外部 ID 无线路粒度归属）。
+- **分组算法（确定性单维）**：维度优先级 `core_title_key > season > release_marker > edition`，取**第一个**能把有观测线路分成 ≥2 个非空组的维度；该维度 facet 为 null 的线路**不参与分组**（进 `unassignedLines` 留运营手动，禁止猜测归组）。全维度均单组 → `suggestible=false` + `groups=[]`（全线路进 `unassignedLines`）。**不做多维交叉积**（保持建议可解释；多维留 follow-up）。
+  - **site 级粒度盲区（显式声明 / 第 2 轮硬条件 2）**：观测无 source_name 维度 → **同 site 全部线路必然同组（site 内无法再分）**；「同 site 内双作品误并」（两次独立误判叠加于同 site 的二阶低概率事件）超出 site 级观测表达力，本端点不解。兜底：同 `(video_id, source_site_key)` 下存在多个不同 `raw_title_hash` 高 observed_count 观测（dominant 与次高未压倒或 coreTitleKey 不同）→ 产出 `SplitSignal { kind: 'intra_site_multi_title' }` 提示运营人工核查（盲区从静默错误降级为显式提示 / advisory-strong 采纳）。
+  - **line 粒度 vs facet 继承（实施歧义消除）**：`groups[].lines[]` 以 `getVideoMatrix` 逐行（`(siteKey, sourceName)` 拆行）为真源，**line 粒度不丢**；site 级 facet 仅决定该 line 落哪个 group（禁止把 line 聚合成 site 行导致 `sourceIds` 映射错位）。
+- **suggestedMeta 预填规则（确定性）**：组建议标题 = 组内 site 观测 `observed_count DESC, last_seen_at DESC, raw_title 字典序 ASC` 取首条 `raw_title`——在 core_title_key 维度分组时，组（=误并进来的 B 作品）的标题**唯一来源**就是 B 站点报的 raw_title（不得用原 video.title + facet 后缀，B 作品套 A 标题语义错误）；`type` 继承原 video；`year` 不预填（`TitleFacets` 无年份维度，留运营补全，对齐 R-ADR-105-4「先拆后补」）。raw_title 噪声边界见 Y-105-S4。
+- **性能**：实时端点继承本 ADR p95 ≤ 200ms 基线（单 video 观测/sources 行数小 + 既有索引覆盖）。
+- 响应类型草案（实施卡 CHG-VIR-11-B 落 `packages/types`；`sourceSiteKey`/`sourceName` **非空 string**，与 `LineMatrixRow` 真源一致 / 第 2 轮硬条件 1）：
+
+  ```ts
+  type SplitSuggestionLine = {
+    sourceSiteKey: string                     // COALESCE(source_site_key, videos.site_key) 后非空（'' 兜底与 LineMatrixRow 同口径）
+    sourceName: string                        // video_sources.source_name NOT NULL
+    sourceIds: string[]                       // 该线路全部 video_sources.id
+    episodeRange: { min: number | null; max: number | null }
+    observedTitles: { rawTitle: string; observedCount: number }[]  // 所属 site 观测 top-K 展示
+  }
+  type SplitSuggestionGroup = {
+    groupKey: string                          // 确定性：`${dimension}:${facetValue}`
+    facetValue: string                        // 维度值（season → '2'；core_title_key → key 本身）
+    lines: SplitSuggestionLine[]
+    suggestedMeta: { title: string; type: VideoType }  // 预填 newVideoMeta（year 不预填）
+  }
+  type SplitSignal =
+    | { kind: 'external_id_conflict'; providers: string[] }
+    | { kind: 'episode_overlap'; lineKeys: string[] }
+    | { kind: 'intra_site_multi_title'; siteKey: string }   // site 内多标题盲区提示（第 2 轮 advisory-strong）
+    | { kind: 'multi_core_title' | 'multi_season' | 'multi_release_marker' | 'multi_edition'; values: string[] }
+  type SplitSuggestionsResult = {
+    videoId: string
+    suggestible: boolean                      // groups.length >= 2
+    dimension: 'core_title_key' | 'season' | 'release_marker' | 'edition' | null
+    signals: SplitSignal[]
+    groups: SplitSuggestionGroup[]
+    unassignedLines: SplitSuggestionLine[]
+  }
+  ```
+
+**D-105-2（SplitSchema groups 扩展 — 拆到已有 video）**
+- `groups[]` 每组改为 **`newVideoMeta` xor `targetVideoId` 恰一**（zod `.refine` 互斥必选）：
+  ```ts
+  groups: z.array(z.object({
+    sourceIds: z.array(z.string().uuid()).min(1),
+    newVideoMeta: z.object({ title: ..., year: ..., type: VideoTypeEnum }).optional(),
+    targetVideoId: z.string().uuid().optional(),
+  }).refine(g => (g.newVideoMeta !== undefined) !== (g.targetVideoId !== undefined),
+    { message: 'newVideoMeta 与 targetVideoId 必须恰好提供其一' })).min(2).max(20)
+  ```
+- `targetVideoId` 约束（Service 层校验，**全部置 BEGIN 前**，继承 ADR-105a D-105a-11 校验前置范式）：
+  - 不得等于被拆 `videoId`（422 VALIDATION_ERROR）；
+  - 组间 `targetVideoId` 互不重复（422；两组拆给同一已有 video 应合为一组）；
+  - 必须存在（404 NOT_FOUND）且 `deleted_at IS NULL`（409 STATE_CONFLICT「目标视频已被合并/删除」）。
+- `.min(2)` 不变：**1 组全量转已有 video = merge 语义，必须走 `POST /admin/video-merges`**（不开旁路，防 audit 语义混淆）。完整划分约束（Y-105-3）不变。
+- **全组 `targetVideoId`（0 新建）合法**（第 2 轮 Y-A1 显式裁定）：「误并 video 拆散归还给 ≥2 个不同已有作品」是真实运营场景，与 merge（多→一）语义不冲突（此处一→多）；此时 `created_target_video_ids=[]`，unmerge 不软删任何 target、仅 reassign 归还（D-105-4 兜底天然覆盖空数组）。
+- **不校验 catalog 一致性**（第 2 轮 Y-A2）：`targetVideoId` 与被拆 video 同 `catalog_id` 合法（同作品下季/形态重分布，对齐 ADR-176），catalog 归属沿 D-105-5，实施卡**不得**自行加 catalog 校验；`targetVideoId` 是否为其他历史 audit 的 source/target **不新增预检**（ADR-105 既有协议无「进行中锁」，并发边界沿 D-105-4，实施卡不得自行加锁引入回归）。
+- **向后兼容**：旧请求体（全组 `newVideoMeta`）完全合法，行为不变。
+
+**D-105-3（拆到已有 video 冲突预检 — 同 R-105-1 范式）**
+- 每个 `targetVideoId` 组执行与 merge 相同的前置探测：转入组 `sourceIds` 与已有 target 现有 sources 存在重复 `(episode_number, source_url)`（`uq_sources_video_episode_url` NULLS NOT DISTINCT 口径）→ **STATE_CONFLICT 409**，message 引导先在 `/admin/sources` 处理后重试；整体不执行（预检在 BEGIN 前，零半完成态）。
+
+**D-105-4（snapshot / unmerge 还原协议修订 — 本 AMENDMENT 必修核心）**
+- `snapshot_jsonb` 扩展字段 `created_target_video_ids: string[]`（本次 split **新建**的 video ids；已有 target = `target_video_ids` − `created_target_video_ids`）。JSONB 自由字段，**零 migration**。
+- `unmerge(action='split')` 修订：`softDeleteVideos` **仅作用于 `created_target_video_ids`**；已有 target video **不得软删**；其本次转入的 sources 经既有 `reassignSourcesToOriginal(snapshot.sources)` 按拆分前 `video_id` 归还原 video（snapshot.sources 记录的原归属即原 video，既有逻辑天然覆盖，无需新原语）。
+- **向后兼容**：存量 split audit 无 `created_target_video_ids` 字段 → 兜底视全部 `target_video_ids` 为新建（与现行为逐值一致，旧 audit 撤销行为零变更）。
+- **并发后置变更边界**：拆分后已有 target 又被 merge/split/软删，unmerge 时沿现有 snapshot 归还语义（与 merge unmerge 同等保证，不强化、不新增预检）；已有 target 已软删时 `reassignSourcesToOriginal` 照常归还 sources 至原 video（原 video restore 在同事务）。**具体争用链显式点名**（第 2 轮 A-2）：拆到已有 target X 后 X 又被另一次 merge 吞掉（含本次转入 source 的行被迁走），此时撤销原拆分会按 source.id 强制归还原 video（覆盖第二次 merge 的归属），而第二次 merge 的 audit snapshot 记录的原归属是 X——**两个 audit 对同一 source 形成归属争用，链式撤销顺序敏感**（后操作先撤销才能精确还原）。该风险与既有 merge-after-merge 同构（非本 AMENDMENT 新增），运营复盘经 `/admin/video-merges/audit` timeline 按时序倒序撤销。
+
+**D-105-5（catalog 归属 + 已有 target 元数据零变更）**
+- `targetVideoId` 组**不调用** `findOrCreate` catalog（沿用已有 video 的 `catalog_id`）；`newVideoMeta` 组沿 CHG-VIR-PRE-1 范式（事务前逐组 findOrCreate，回滚至多留无害孤儿 catalog）。
+- 拆到已有 video **仅转入 sources**（UPDATE video_id），**不得隐式修改**已有 video 的 title / type / catalog_id / 元数据（运营需调整走既有视频编辑路径）。
+
+**D-105-6（审计扩展 + UI 消费）**
+- `video_merge_audit` 强一致事务边界（决策要点 9）不变；`action='split'` 语义不变；`target_video_ids` 含全部组目标（新建 + 已有）。
+- `admin_audit_log`（fire-and-forget）`afterJsonb` 扩 `existingTargetVideoIds`（运营审计可见「拆到已有」的目标）；actionType 仍 `video.split` 零扩枚举。
+- UI（CHG-VIR-11-B / MergeSplitSection）：消费 suggestions 预填分组 assignments（运营可改）；「拆到已有 video」由运营**显式选择/输入**目标（v1 不自动推荐已有 video，防误导；hint 检索留 follow-up）。
+- 拆分软删原 video 后其 pending `identity_candidate` 残留**沿 merge 现状口径**（读路径 `deleted_at IS NULL` EXISTS 过滤，`identity-candidate.ts` 双侧存活校验；不在本 AMENDMENT 扩清理逻辑）。
+
+#### 红线（实施前必须满足，违反即阻塞）
+
+- **R-105-S1** suggestions 端点**纯只读零副作用**：不写任何表、不触发 job、不影响 identity shadow 链路。
+- **R-105-S2** 建议仅基于既有观测数据：无观测或维度 facet 缺失的线路**禁止猜测归组**，必须进 `unassignedLines`。
+- **R-105-S3** 拆到已有 video 仅转入 sources：**禁止隐式修改**已有 video 的 title / type / catalog_id / 任何元数据。
+- **R-105-S4** unmerge **不得软删已有 target video**：软删严格按 `created_target_video_ids` 驱动；存量 audit 无该字段时兜底全视为新建（旧行为零变更）。
+- **R-105-S5** 完整划分约束（Y-105-3）+ 事务边界（决策要点 9）+ `.min(2).max(20)` 不变；suggestions 仅 UI 预填，split 请求仍全量服务端校验（建议不可绕过校验）。
+- **R-105-S6** 错误码零新增（404 / 409 / 422 复用）；鉴权 admin only 继承（决策要点 5）。
+- **R-105-S7** **零 schema DDL + 零采集写路径变更**（两断言分立 / 第 2 轮 A-4）：① suggestions 实时计算（既有索引覆盖）、`created_target_video_ids` 为 snapshot_jsonb 自由字段——零 DDL；② 不动 `buildTitleObservation` / 不扩 `source_name` 写入维度——只读侧改聚合口径，零采集写路径变更（site 级粒度限制由 D-105-1 盲区声明 + `intra_site_multi_title` 信号兜底承接，**不得**以「补齐线路粒度」为由反向扩写路径，须独立卡）。
+- **R-105-S8** 不改 `normalizeTitle` / `normalizeMergeKey` / `TitleIdentityParser` 语义（建议消费 parser 产出，不反向驱动 parser 变更）。
+- **R-105-S9**（第 2 轮 R-A2 自黄线升格）：suggestions 的 `SplitSuggestionLine` 线路键必须 = `(COALESCE(source_site_key, videos.site_key), source_name)`，与 `video-matrix.ts` `getVideoMatrix` 行键**逐字一致**；`sourceSiteKey`/`sourceName` 类型须与 `LineMatrixRow`（`packages/types/src/sources-matrix.types.ts`）一致为**非空 string**（禁止 `string | null` 再二次 coalesce 造成与矩阵键错位 → 预填错组 → 拆错作品）。
+
+#### 黄线
+
+- **Y-105-S1** 分组算法 v1 单维（优先级 core_title_key > season > release_marker > edition）；多维交叉积 / 复合维度留 follow-up（实测单维不够再扩，须回本 AMENDMENT 增补）。**维度对称性**（第 2 轮 Y-A3）：拆分维度与 ADR-105a 强负 veto 维度同源（`season_mismatch` / `release_marker_mismatch` 既是评分系统「判不该并」的 veto 维度、也是本端点「判该拆」的分组维度），保证两套口径一致——评分与拆分是同一组身份证据的正反两面。
+- **Y-105-S2** `episode_overlap` 信号判定阈值（重叠 ≥1 集即信号 vs 比例阈值）实施期定，须确定性。
+- **Y-105-S3** 「拆到已有 video」目标 hint（按建议组 suggestedMeta 的 core_title_key 等值检索已有 video，top-K 确定性排序）留 follow-up；v1 运营显式输入/选择。
+- **Y-105-S4** suggestedMeta.title 取组内 dominant raw_title（D-105-1 排序规则）；**raw_title 为源站原始标题可含噪声**（画质前缀/源站尾缀等，`parseTitle` 的 `qualityNoise`/`sourceNoise` facets 已识别但 raw_title 本身未清洗）——v1 预填运营确认时可改（对齐 R-ADR-105-4「先拆后补」），预填前的展示清洗留 follow-up；实施期可微调展示细节但**必须确定性**（同输入同输出）。
+- **Y-105-S5**（已升格 R-105-S9，保留实施验证义务）：CHG-VIR-11-B 须以测试断言 suggestions 线路键与 `getVideoMatrix` 行键一一对应（预填错位 = 拆错作品，正确性级而非体验级）。
+
+#### D-N 偏离登记
+
+D-105-1 ~ D-105-6 共 6 条（本 AMENDMENT 新增；ADR-105 原文无 D 编号体系，自 1 起编），随 CHG-VIR-11-B 实施卡逐条闭环；advisory，不阻塞 CI。两轮评审记录：第 1 轮 CONDITIONAL（agentId a14ab66155c13a55f / R-A1 + R-A2 红线）→ 主循环实读 `CrawlerService.ts` `upsertVideo` 反驳 R-A1 断言②③（`video.title` = 爬虫 payload 标题非 DB 行标题，per-site 观测有真实分裂信息；断言①〔site 级无 source_name 维度〕成立并落入 D-105-1 事实口径）→ 第 2 轮 PASS-with-conditions（agentId a100cd57de06fca45）：硬条件 1（响应类型非空 string）+ 硬条件 2（site 级盲区落正文）+ advisory-strong（`intra_site_multi_title` 信号）全部采纳；Y-A1（0 新建合法）/ Y-A2（同 catalog 不校验 + 不新增 audit 预检）/ Y-A3（veto 维度对称性）/ A-2（merge-after-split 争用链点名）全部吸收。
 
 ---
 

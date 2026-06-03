@@ -14149,3 +14149,19 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **发现**：Codex stop-time review——折叠后 identity group 的 candidateIds 可超 MergeSchema cap：merge 集合上限 11 视频（sourceVideoIds max 10 + target）的完全图有 C(11,2)=55 个 pair，裁定原值 cap 20 会把合法 11-video 折叠组 confirm 误拒 422；且折叠后 N>11 组在 UI 真实可达（旧实现每行固定 2 视频不触发），「执行合并」必败于 sourceVideoIds max 10。
 - **修复**：① `MergeSchema.candidateIds` max 20→**55**（= C(11,2)，与 sourceVideoIds cap 自洽；types/AMENDMENT/architecture 4 处文档同步）；② `MergeCandidateExpand` 加 `MAX_MERGE_GROUP_VIDEOS=11` 守卫——N>11 折叠组禁用「执行合并」+ `merge-limit-note` 提示分批走逐对明细（逐 pair reject 不受影响）；AMENDMENT 遗留 ④ 登记超大分量分批合并辅助为可选增强。
 - **测试**：+2（schema cap 55 通过/56 拒边界 + 前端 8c N=12 禁用断言）。
+
+## [CHG-VIR-11-A] ADR-105 AMENDMENT：Phase 4 拆分证据化定档（split-suggestions 只读建议端点 + 拆到已有 video + unmerge 还原协议修订）
+- **完成时间**：2026-06-03
+- **记录时间**：2026-06-03 18:30
+- **执行模型**：claude-opus-4-8（建议模型 opus，一致）
+- **子代理**：arch-reviewer (claude-opus-4-8) × 2 轮 — 第 1 轮 agentId a14ab66155c13a55f（CONDITIONAL：R-A1 数据源前提 + R-A2 线路键口径 2 红线 + Y-A1/A2/A3 黄线）/ 第 2 轮 agentId a100cd57de06fca45（PASS-with-conditions：主循环反驳成立 + 修订版 5 点裁定 + 2 硬条件 + 1 advisory-strong）
+- **拆卡登记**：CHG-VIR-11（Phase 4）范围 ≥ 6 项跨两条独立线（拆分证据化 / 多语种清洗）→ 按 M-SN-5「PATCH 范围 ≥ 5 项拆子卡」+ CHG-VIR-9 先例拆 **11-A**（本卡 / ADR 定档）/ **11-B**（拆分实施，依赖 11-A）/ **11-C**（多语种清洗：migration + 拼音迁出 + original_language 回填 + aliases[] 迁移，依赖 ADR-175 ✅ 与 A/B 正交）。
+- **修改文件**：
+  - `docs/decisions.md` — ADR-105 章节：§端点契约表新增 #6 行（`GET /admin/videos/:id/split-suggestions`，先 ADR 登记后实施〔实施 = 11-B〕，verify:endpoint-adr 正序合规）+ 章节末追加 AMENDMENT（2026-06-03）完整小节：**D-105-1**（只读建议端点：**video_sources 线路真源**〔线路键 `(COALESCE(source_site_key, videos.site_key), source_name)` 与 getVideoMatrix 逐字一致〕+ **title_observations site 级聚合 facet 信号**〔事实口径：观测 sourceName 恒 NULL / raw_title = 爬虫 payload 标题；dominant facets 三键确定性排序〕+ 确定性单维分组 core_title_key>season>release_marker>edition + **site 级盲区显式声明**〔同 site 线路必然同组〕+ `intra_site_multi_title` 信号兜底 + line 粒度不丢〔facet 仅决定归组〕+ suggestedMeta 取 dominant raw_title〔core_title 维度组标题唯一来源〕）/ **D-105-2**（SplitSchema groups `targetVideoId` xor `newVideoMeta`：互斥 refine + 三条校验 BEGIN 前 + 0 新建合法 + 同 catalog 不校验 + 不新增 audit 预检 + 向后兼容）/ **D-105-3**（拆到已有 video 冲突预检同 R-105-1 范式 STATE_CONFLICT 409）/ **D-105-4**（snapshot 扩 `created_target_video_ids` + **unmerge 仅软删新建 target**〔旧 audit 兜底全视新建 = 现行为逐值一致〕+ merge-after-split 归属争用链显式点名）/ **D-105-5**（catalog 归属：已有 target 不 findOrCreate + 元数据零变更）/ **D-105-6**（审计扩展 existingTargetVideoIds + UI 消费边界 + candidate 残留沿现状口径）；红线 R-105-S1~S9（含 S7 零 DDL + 零采集写路径变更两断言分立 / S9 线路键逐字一致 + 非空 string 自黄线升格）+ 黄线 Y-105-S1~S5（含 S1 与 ADR-105a 强负 veto 维度对称性 / S4 raw_title 噪声边界）。
+  - `docs/tasks.md` / `docs/task-queue.md` — 拆卡登记（13a/13b/13c）+ 11-A 完成备注 + 最后更新时间。
+- **评审过程（两轮 + 主循环实读反驳）**：第 1 轮 R-A1 断言「raw_title = 已入库归并后 video 标题、恒等、无分裂输入」→ 主循环实读 `CrawlerService.ts` Step 5（`buildTitleObservation(videoId, video.title, siteKey)` 的 `video` 为 **upsertVideo 入参 payload**）反驳断言②③：误并场景 B 站点观测携带 B 作品真实标题（= 分裂信息来源）；断言①（site 级、无 source_name 维度）成立，落入 D-105-1 事实口径并修正草案「per 线路三元组聚合」事实漂移。第 2 轮确认反驳成立，且修订版（只读侧改聚合口径）较第 1 轮路径 A（改采集写路径）blast radius 更小、core_title 维度语义正确。
+- **新增依赖**：无
+- **数据库变更**：无（零 migration 零 DDL；`created_target_video_ids` 为 snapshot_jsonb 自由字段；suggestions 实时计算用既有 `idx_title_observations_video`）
+- **测试**：纯 docs 无 TS/TSX 改动。门禁：verify:adr-contracts EXIT=0 + verify:endpoint-adr EXIT=0（204 路由对齐，#6 表行先登记）+ typecheck EXIT=0；lint/test 基线不受影响。
+- **共享层沉淀评估**：定档卡无代码；D-105-1 响应类型草案指定 11-B 落 `packages/types`（API/UI 双消费）。
+- **注意事项**：① **unmerge 还原协议修订（D-105-4）是「拆到已有 video」可采纳的硬前提**——现 unmerge 对 split 撤销软删全部 target_video_ids，不修订会错误软删拆分前已存在的 video。② site 级粒度盲区为 Phase 1b 写入设计的固有信息上界（观测无 source_name 维度），「同 site 内双作品误并」二阶低概率场景以 `intra_site_multi_title` 信号显式提示而非静默归组；不得以补线路粒度为由反向扩采集写路径（R-105-S7，须独立卡）。③ 11-B 实施硬义务：响应类型非空 string（与 LineMatrixRow 一致）+ 线路键一一对应测试断言（Y-105-S5 正确性级）+ D-105-1~6 逐条闭环。④ 已知 follow-up（AMENDMENT 登记）：多维交叉分组 / episode_overlap 阈值 / 拆到已有 video 目标 hint 检索 / raw_title 展示清洗。
