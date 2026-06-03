@@ -13843,3 +13843,28 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **门禁/验收**：typecheck EXIT=0 + lint 5 successful + **全量 6084 passed / 0 failed**（460 files；本卡净 +10）+ verify:adr-contracts EXIT=0（sql-schema-alignment ✅ title_observations 非 5 核心表无对齐要求）+ migrate:check 识别 085 唯一 pending。验收要点：去重生效（重复标题只增 observed_count）✅ / 采集链路写 observation 容错 fire-and-forget 写失败不阻断 ✅ / 零生产行为变更（采集主路径无回归）✅。
 - **注意事项**：① **SEQ-20260602-03 Phase 1（CHG-VIR-5 + CHG-VIR-6）完结** —— Phase 2（CHG-VIR-7/8/9：候选证据化，CHG-VIR-8/9 建议 opus + 可能需端点 ADR amendment）待用户决定启动；② `source_name` site 级观测默认 null（同一 video.title 对全源一致，不按 source 拆行）；③ `title_observations` 当前仅采集链路写入，离线分析/后台展示消费留后续；④ video 删除经 FK ON DELETE CASCADE 连带清理观测行。
 - **[AI-CHECK]**：分层 NO（修正后 DB query 层零 service import / CrawlerService→DB query 正方向 / builder Service 层 helper）/ 跨模块内部实现 NO / 重复逻辑 NO / hack NO / 需拆分函数 NO（builder ~12 行）/ 需拆分文件 NO（主动抽 builder 避免 CrawlerService 增长）/ 隐式副作用·吞异常 NO（F3 catch 显式 stderr 日志）。结论：SAFE。
+
+## [CHG-VIR-6.5] Phase 2 前置：ADR-105a AMENDMENT（补 `release_marker_mismatch` 强负 + group→单值聚合口径 + 审计正则放宽）（SEQ-20260602-03 / Phase 2 前置门禁）
+- **完成时间**：2026-06-02
+- **记录时间**：2026-06-02 23:55
+- **执行模型**：claude-opus-4-8（建议 opus；改 D-105a-3 证据表极性触发 Y-105a-3「实施期不得改极性」→ 须 ADR amendment + arch-reviewer PASS）
+- **子代理**：arch-reviewer (claude-opus-4-8)（agentId a9d8c49369023192e；CONDITIONAL → 红线 A1/A2/B1 + 黄线 a1/b1/c1 全吸收 → Accepted）
+- **背景（根因 P2-F1 不对称缺陷）**：`TitleIdentityParser`（CHG-VIR-5）把 `releaseMarker`（剧场版/OVA/SP/番外）与 `season_number` **同范式**剥到 facets（不进 `core_title_key`），但 ADR-105a `D-105a-3` 强负表只对齐 ADR-176「分季独立 catalog」（`season_mismatch`），**遗漏 D-176-1「剧场版/SP/OVA 独立 catalog」**。后果：Phase 2b blocking 用 `core_title_key` 召回把「正篇」与「剧场版」并入同组且**无 veto 拦截**（video 层误并，早于 Phase 5）。对比 `edition`（加长版）剥到 facet 故意无强负正确（同作品 / D-176-1 归 video 层），`releaseMarker` 无强负 = 遗漏。
+- **修改文件**：
+  - `docs/decisions.md`（改）— ADR-105a：① `D-105a-3` 强负表**原地新增** `release_marker_mismatch` veto 行（零删原文）；② 章节末追加 **AMENDMENT 2026-06-02（CHG-VIR-6.5）** 小节，含 **D-105a-14**（release_marker 强负，含 null 语义收窄 + exact 不豁免 + 数据源）+ **D-105a-15**（Phase 2a group→单值聚合口径）+ D-N 偏离登记更新（扩为 D-105a-1~15 共 15 条）+ c1 影响面声明
+  - `scripts/lib/adr-parser.mjs`（改）— `parseDeviationNumbers`（ADR 编号正则 `/^ADR-(\d+)/`→`/^ADR-(\d+[a-z]?)/`；D 编号 `/D-(\d+)-(\d+)/g`→`/D-(\d+[a-z]?)-(\d+)/g`）+ `parseChangelogDeviations`（同步放宽 D 编号正则）+ docstring 注释；识别 ADR-105a 的 `D-105a-N`（此前 `\d+` 不含字母 → 审计盲区）
+  - `docs/audit/adr-d-status.json`（脚本产物，自动重生成）— 首次纳入 ADR-105a 的 D-105a-1~15
+- **核心决策（arch-reviewer 红线/黄线吸收）**：
+  - **D-105a-14 极性**：facets `releaseMarker` 不同 = 不同发布形态 = 不同作品 catalog（对齐 ADR-176 D-176-1）；video 层补 veto 使与 Phase 5 catalog 身份层极性一致。
+  - **红线 A1（null 语义收窄）**：**仅「双方均有非 null releaseMarker 且值不同」才 veto**（剧场版↔OVA/SP/番外）；`null↔非 null` **不 veto**、仅作 candidate 弱信号进 evidence。理由：parser `releaseMarker=null` 是「正则未命中」非「确定正篇」，硬 veto 会双向误判（漏标/误标剧场版）；Phase 1-4 自动绑定默认 OFF（R9），不 veto 也只进人工候选不会自动误并，误 veto 硬拦代价更高；与 D-105a-13「过激比漏判更危险」一致 + 与 `season_mismatch` 口径对齐（不改 `season_mismatch` 语义）。
+  - **红线 A2（exact 不豁免理由修正）**：与 YY-3 一致——`release_marker_mismatch` 不被 exact 豁免；主战场是无 exact ID 召回 pair，exact 场景不同 external_id 多由 `external_id_conflict` 先命中，不豁免覆盖「源站误录共享同一 exact id」边缘情形，无需特例。
+  - **红线 B1（消除 recommendedTarget 新原语）**：D-105a-15 聚合严格继承 D-105a-9「group→pair：所有 unordered pair」映射，对全部 `C(N,2)` pair 投影单值——`identityScore`=**min**（保守最弱链接）、`strongNegativeReasons`/`blockingReasons`=**union**、`evidence` 保 per-pair 明细；**不引入主 video/target 锚原语**（现有 group 是无锚等价集合）。
+  - **黄线 a1**：数据源声明 Phase 2 读 parser facets 实时比较，不依赖 Phase 5 `media_catalog.season_number`；releaseMarker 在 catalog 层无标量列（靠独立 catalog + `edition_of`/`spinoff_of` 关系），纯 facet 驱动。
+  - **黄线 b1**：Phase 2a 排序键仍 `legacyScore`，`identityScore` 仅展示列不参与排序/计数/分页（继承 Y-105a-1，候选数量/排序与旧逻辑逐值一致）。
+  - **黄线 c1（影响面纠正 arch-reviewer 前提）**：经全仓核验，decisions.md **唯一字母后缀 D 编号即 `D-105a-N`**；ADR-103a/103b 虽字母后缀标题但**章节内无任何 D 偏离编号**（放宽后 `parseDeviationNumbers` 返回空 → 零行为变化），ADR-103（纯数字）ownNumber 新旧均得 `103`（`[a-z]?` 匹配空）→ 零变化；放宽**唯一实际影响是新识别 `D-105a-N`**。verify 前后 diff `adr-d-status.json` 确认新增项全 advisory 不阻塞。
+- **ADR D-N 闭环**：**D-105a-14**（release_marker_mismatch 强负 / null 语义 / exact 不豁免 / facet 数据源）+ **D-105a-15**（Phase 2a group→单值 min/union 聚合口径）随本卡定档闭环；ADR-105a 偏离扩为 D-105a-1~15。
+- **新增依赖**：无
+- **数据库变更**：无（纯 ADR 文档定档 + 审计脚本正则；未落 migration/端点，identity_candidate 仍留 Phase 2b CHG-VIR-8）
+- **门禁/验收**：verify:adr-contracts EXIT=0（verify-adr-d-numbers 放宽后 ADR-105a 进审计：D-105a-1/13 + 新增 14/15 闭环，D-105a-2~12 advisory pending = Phase 2+ 未实施，符合预期）+ typecheck/lint/test 基线不受 docs/.mjs 影响（脚本无 TS）。验收要点：`release_marker_mismatch` 入 D-105a-3 + 收窄口径/数据源明确 ✅ / P2-F3 group 聚合口径定档（min+union over all pairs）✅ / 正则放宽后 `D-105a-N` 进审计 ✅ / arch-reviewer PASS ✅。
+- **注意事项**：① **CHG-VIR-7（Phase 2a）硬前置已解除** —— 其 `strongNegativeReasons` 须含本卡落档的 `release_marker_mismatch`，group 行单值按 D-105a-15 min/union 口径；② D-105a-14 判定**纯 facet 驱动**，实施期（CHG-VIR-7/8）不得误接 `media_catalog` 持久化列；③ release_marker veto 收窄为「双方非 null 且不同」，`null↔非 null`（正篇 vs 剧场版）走 candidate 人工裁定——Phase 2b 对比报表可统计该场景召回情况评估是否需收紧；④ ADR-105a D-105a-2~12 在 `adr-d-status.json` 显示 pending 属正常（Phase 2+ 实施卡逐条闭环）。
+- **[AI-CHECK]**：分层 NO（纯 docs + 审计脚本，不触业务分层）/ 跨模块内部实现 NO / 重复逻辑 NO / hack NO（正则放宽向后兼容，纯数字 `D-117-1` 经 `[a-z]?` 匹配空仍命中）/ 需拆分函数 NO / 需拆分文件 NO / 隐式副作用 NO（脚本仍 advisory exit 0）/ 偏离检测：建议模型 opus = 执行模型 claude-opus-4-8，无偏离。结论：SAFE。

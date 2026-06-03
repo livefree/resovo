@@ -18922,6 +18922,7 @@ ADR-105 v1 候选模型（`video-merge-candidates.ts:42-94` + `VideoMergesServic
   | 强负 | `type_incompatible` | **veto** | 按 D-105a-5 矩阵判为强负 |
   | 强负 | `episode_pattern_conflict` | **veto** | 集数模式冲突（如分集 vs 合集结构互斥） |
   | 强负 | `ordinal_conflict` | **veto** | 同 `core_title_key` + 序号/部数不同（Y4 护栏，见 D-105a-13） |
+  | 强负 | `release_marker_mismatch` | **veto** | **双方均有非 null** facets `releaseMarker` 且值不同（剧场版↔OVA↔SP↔番外 / ADR-176 剧场版·SP·OVA 独立 catalog）。null↔非 null **不 veto**（收窄口径 + 数据源详见 AMENDMENT 2026-06-02 / D-105a-14）。AMENDMENT CHG-VIR-6.5 新增行 |
 
 - **聚合（确定性）**：
   ```text
@@ -19071,6 +19072,28 @@ D-105a-1 ~ D-105a-13 共 13 条，随 Phase 1a/2a/2b/2c 实施卡（CHG-VIR-5/7/
 1. `identity_decisions` / `merge_blocklist` 列级 DDL → Phase 2b/2c 实施卡定档（本 ADR 仅锁关联约束 + 事务边界）。
 2. 真正开启自动 catalog 绑定 / 自动合并阈值 → Phase 3 验收后另起 ADR（或 Phase 5）。
 3. 字符相似 / 编辑距离召回（若 blocking 并集 recall 仍不足）→ 另起独立 DB capability ADR（评估 pg_trgm 引入成本，本 ADR 明确不在范围）。
+
+### AMENDMENT 2026-06-02（CHG-VIR-6.5 / Phase 2 前置门禁 — `release_marker_mismatch` 强负 + group→单值聚合口径）
+
+**触发**：复核 Phase 2 发现 **P2-F1 不对称缺陷**——`TitleIdentityParser`（CHG-VIR-5）把 `releaseMarker`（剧场版/OVA/SP/番外）与 `season_number` **同范式**剥到 facets（不进 `core_title_key`），但 D-105a-3 强负表只对齐了 ADR-176「分季独立 catalog」（`season_mismatch`），**遗漏了 D-176-1 同时声明的「剧场版/SP/OVA 独立 catalog」**。后果：Phase 2b blocking 用 `core_title_key` 召回会把「正篇」与「剧场版」并入同组且**无 veto 拦截**（video 层误并，早于 Phase 5 catalog 独立）。对比 `edition`（加长版/导剪版）剥到 facet **故意无强负是正确的**（同作品不同版本可合并 / D-176-1 edition 归 video 层），`releaseMarker` 无强负则是**遗漏**（不同发布形态 = 不同作品 catalog）。
+
+经 arch-reviewer claude-opus-4-8（agentId a9d8c49369023192e）CONDITIONAL → 红线 A1（null 语义收窄）/ A2（exact 不豁免理由修正）/ B1（消除 recommendedTarget 新原语）+ 黄线 a1/b1/c1 吸收后转 **Accepted**。**零删除原文**——D-105a-3 表仅追加 `release_marker_mismatch` 一行（不删改原行），以下 D-105a-14/15 为新增决策。
+
+**D-105a-14（`release_marker_mismatch` 强负 — 发布形态身份 / 对齐 ADR-176 D-176-1）**
+- **极性**：facets `releaseMarker` 不同 = 不同发布形态 = 不同作品 catalog（ADR-176 D-176-1「剧场版/SP/OVA 独立 catalog，避免误并入正季」；catalog 层用 `edition_of`/`spinoff_of` 关系而非合并表达）。video 层补此 veto，使 Phase 2 与 Phase 5 catalog 身份层极性一致。
+- **判定口径收窄（红线 A1）**：**仅在「双方均有非 null `releaseMarker` 且规范词值不同」时 veto**（剧场版↔OVA / 剧场版↔SP / OVA↔番外 …）；**`null ↔ 非 null` 不进 `strong_negative_reasons`、不 veto**，仅作 candidate 区间弱信号写入 `evidence`（供人工解释「正篇 vs 剧场版」）。理由：① parser 的 `releaseMarker=null` 语义是「未命中 `RELEASE_MARKER_RULES` 四条正则」而**非「确定是正篇」**——硬 veto `null↔非 null` 会双向误判（漏标剧场版：源站用规则未覆盖写法 → null，与真正剥出"剧场版"的同一剧场版 source 比较 → 误 veto 拆开；误标剧场版：剧名固有名含「剧场版」字样实为正篇 → 误 veto）；② Phase 1-4 自动绑定开关默认 OFF（R9 / D-105a-4），「正篇 vs 剧场版」即便不 veto 也只进 `candidate` 人工裁定，**不会自动误合并**，而误 veto 硬拦同形态 source 合并代价更高；③ 与 D-105a-13「过激比漏判更危险」框架一致，veto 留给确定性最高判据，低确定性的 `null` 降级为弱信号。**与 `season_mismatch` 口径对齐**（双方均有显式值且不同才 veto），本 AMENDMENT **不改 `season_mismatch` 语义**。
+- **exact ID 不豁免（红线 A2）**：与 D-105a-5 / YY-3「exact 仅豁免 `type_incompatible` 单条」一致——`release_marker_mismatch` **不被 exact 豁免**。`release_marker_mismatch` 主战场是**无 exact ID 的标题召回 pair**；exact 场景下不同发布形态若各有不同 external_id，已有 `external_id_conflict` veto 先命中（多为冗余触发），`release_marker_mismatch` 独立存在覆盖的是「剧场版与正篇因源站误录错误共享同一 exact id」的边缘情形——故不豁免，无需为其设特例。
+- **数据源（黄线 a1）**：Phase 2 **读 parser facets 实时比较**（与 `season_mismatch` 同口径），**不依赖 Phase 5 `media_catalog.season_number` 列**；`releaseMarker` 在 catalog 层**无对应标量列**（靠独立 catalog + `catalog_relations.edition_of`/`spinoff_of` 关系表达 / ADR-176 D-176-3），本判据**纯 facet 驱动**，实施期不得误接持久化列。
+
+**D-105a-15（Phase 2a group → 单值聚合口径 / P2-F3 — 对齐 D-105a-9 group↔pair 映射）**
+- 背景：Phase 2a 候选行是 `media_catalog` 层 N-video group，但 `identityScore`/`evidence`/`blockingReasons`/`strongNegativeReasons` 是 **video-pair 维度**；D-105a-9 未定义 group → 单值的呈现口径。
+- **聚合口径（红线 B1 — 零新增原语）**：严格继承 D-105a-9「group → pair：对同一 N-video group 生成**所有 unordered pair**」的映射，对该 group 的全部 `C(N,2)` 条 unordered pair 投影为单值，**不引入「主 video / recommendedTarget」新原语**（现有 ADR-105 v1 group 是 `GROUP BY` 聚合的无锚等价集合，无主 video 概念；引入 target 锚属架构级新原语，规避）：
+  - `identityScore` = **min** over all unordered pairs（保守口径：反映组内**最弱链接**；group merge 是 all-or-nothing 整体 source 转移 / D-105a-9 「merge 仍允许 N→1」，任一弱链接代表整组合并风险下限）。
+  - `strongNegativeReasons` / `blockingReasons` = **union** over all unordered pairs（任一 pair 命中即整组展示——整体合并下任一成员被拦截则整组不能无脑自动合并）。
+  - `evidence` 保留 **per-pair 明细**供 UI 展开（不丢信息 / D-105a-6 可解释）。
+- **不破坏 Y-105a-1（黄线 b1）**：以上聚合**仅决定既有 group 行上新增列的显示值**；Phase 2a **排序键仍是 `legacyScore`**（ADR-105 旧口径），`identityScore` **仅为展示列，不参与排序/计数/分页**——候选来源、数量、分页、默认排序与 ADR-105 v1 逐值一致（继承 D-105a-9 / Y-105a-1）。
+
+**D-N 偏离登记更新**：本 AMENDMENT 新增 D-105a-14 / D-105a-15，ADR-105a 偏离编号扩为 **D-105a-1 ~ D-105a-15 共 15 条**（D-105a-14/15 随本卡 CHG-VIR-6.5 闭环 + 文档定档，其余随 Phase 2a/2b 实施卡 CHG-VIR-7/8/9 逐条闭环）；advisory，不阻塞 CI。**审计盲区修复（c1 影响面）**：`scripts/lib/adr-parser.mjs` 正则放宽为 `D-\d+[a-z]?-\d+` 后首次识别 `D-105a-1..15` 进 `adr-d-status.json`；**经核验 decisions.md 中唯一字母后缀 D 编号即 `D-105a-N`**——ADR-103a/103b 虽为字母后缀 ADR 标题但**章节内无任何 D 偏离编号**（放宽后 `parseDeviationNumbers` 返回空数组 → 零行为变化），ADR-103（纯数字）ownNumber 新旧均得 `103`（`[a-z]?` 匹配空）→ 零变化；放宽**唯一实际影响是新识别 `D-105a-N`**。
 
 ---
 

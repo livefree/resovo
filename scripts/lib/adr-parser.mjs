@@ -101,24 +101,29 @@ export function parseErrorMessages(adrBody) {
 
 /**
  * 解析 ADR 内 D-NNN-N 偏离编号（搜全 ADR body，覆盖 §决策要点 / §端点契约 / §错误码 等多段）
- * 匹配 "D-117-1 PUT 鉴权" / "（D-117-2）" / "**当前实施偏离（D-117-7）**" 等
+ * 匹配 "D-117-1 PUT 鉴权" / "（D-117-2）" / "**当前实施偏离（D-117-7）**" / 字母后缀 "D-105a-3" 等
  *
  * CHG-SN-5-CHECKLIST-AUDIT-2 P0-2 修订：原仅搜 §决策要点 段，但 ADR 写作时 D 编号
  * 散布多段（如 ADR-117 D-117-7/-8/-9 写在 §端点契约 / §错误码 段），改全 body 搜。
  *
+ * CHG-VIR-6.5 修订：放宽 ADR 编号正则支持单字母后缀（`\d+[a-z]?`），识别 ADR-105a 的
+ * `D-105a-N`（此前 `\d+` 不含字母 → ADR-105a 全部 D 编号漏入审计盲区）。向后兼容：纯数字
+ * `D-117-1` 经 `[a-z]?` 匹配空仍命中；ownNumber 对 'ADR-105a' 取 '105a'（旧逻辑误取 '105'）。
+ *
  * @param adrBody ADR 章节正文
- * @param adrId    ADR 标识（如 'ADR-117'）；若提供，仅返回 D-NNN-N 中 NNN 与 ADR 编号匹配的项
- *                 （避免 ADR-103 body 引用 D-117-N 时误归属为 ADR-103 own 偏离）
+ * @param adrId    ADR 标识（如 'ADR-117' / 'ADR-105a'）；若提供，仅返回 D-<编号>-N 中 <编号>
+ *                 与 ADR 编号（含字母后缀）匹配的项（避免 ADR-103 body 引用 D-117-N 时误归属；
+ *                 亦使 ADR-105 body 引用 D-105a-N 不被误归到纯数字 ADR-105）
  */
 export function parseDeviationNumbers(adrBody, adrId) {
   const numbers = new Set()
-  // 提取 ADR 数字编号（如 'ADR-117' → '117'）
+  // 提取 ADR 编号（含单字母后缀；如 'ADR-117' → '117' / 'ADR-105a' → '105a'）
   let ownNumber = null
   if (adrId) {
-    const m = adrId.match(/^ADR-(\d+)/)
+    const m = adrId.match(/^ADR-(\d+[a-z]?)/)
     if (m) ownNumber = m[1]
   }
-  for (const m of adrBody.matchAll(/D-(\d+)-(\d+)/g)) {
+  for (const m of adrBody.matchAll(/D-(\d+[a-z]?)-(\d+)/g)) {
     if (ownNumber && m[1] !== ownNumber) continue  // 跳过非本 ADR own 的 D 编号
     numbers.add(`D-${m[1]}-${m[2]}`)
   }
@@ -128,11 +133,12 @@ export function parseDeviationNumbers(adrBody, adrId) {
 /**
  * 解析 changelog.md 内已闭环的 D-N 编号
  * 单一真源（Y-CHECKLIST-1 修订）：以 changelog "D-NNN-N" 出现为权威
+ * CHG-VIR-6.5 修订：同 parseDeviationNumbers 放宽支持字母后缀（`D-105a-N`）。
  */
 export function parseChangelogDeviations(changelogPath) {
   const content = readFileSync(changelogPath, 'utf-8')
   const numbers = new Set()
-  for (const m of content.matchAll(/D-(\d+)-(\d+)/g)) {
+  for (const m of content.matchAll(/D-(\d+[a-z]?)-(\d+)/g)) {
     numbers.add(`D-${m[1]}-${m[2]}`)
   }
   return [...numbers].sort()
