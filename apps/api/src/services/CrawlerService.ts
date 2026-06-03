@@ -15,6 +15,8 @@ import { VideoIndexSyncService } from './VideoIndexSyncService'
 import * as crawlerTasksQueries from '@/api/db/queries/crawlerTasks'
 import * as sourcesQueries from '@/api/db/queries/sources'
 import * as videosQueries from '@/api/db/queries/videos'
+import { recordTitleObservation } from '@/api/db/queries/titleObservations'
+import { buildTitleObservation } from './titleObservation.builder'
 import { nanoid } from 'nanoid'
 import { config } from '@/api/lib/config'
 import { enrichmentQueue, imageHealthQueue } from '@/api/lib/queue'
@@ -258,6 +260,17 @@ export class CrawlerService {
     const aliases: string[] = [video.title]
     if (video.titleEn) aliases.push(video.titleEn)
     await videosQueries.upsertVideoAliases(this.db, videoId, aliases)
+
+    // Phase 1b (CHG-VIR-6 / SEQ-20260602-03): shadow 写入 title_observations（去重聚合）。
+    // 容错 fire-and-forget（设计 §1b 复核 F3）：纯观测、不参与归并决策，写失败不阻断采集入库主流程。
+    void recordTitleObservation(
+      this.db,
+      buildTitleObservation(videoId, video.title, siteKey ?? null),
+    ).catch((err: unknown) => {
+      process.stderr.write(
+        `[CrawlerService] title observation shadow failed for ${videoId}: ${err instanceof Error ? err.message : String(err)}\n`,
+      )
+    })
 
     // Step 6: 写入播放源
     // CRAWLER-02: 默认全量替换策略（同站点全量替换）；ingest_policy.source_update='append_only' 退回旧策略

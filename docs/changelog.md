@@ -13822,3 +13822,24 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **ADR D-N 闭环**：D-105a-1（core_title_key 确定性等值/语义解耦/不改归并键）+ D-105a-13（Y4 序号身份 vs 季/卷护栏）随本实施卡闭环；ADR-175 titleKind 枚举（original/localized/romanized/aka/crawler/edition）落地。
 - **注意事项**：① titleKind 为单标题 best-effort 启发式，Phase 1a 仅观测，原始 vs 本地化语种区分留 ADR-175 catalog 层（CHG-VIR-11）；② `TITLE_PARSER_VERSION` 语义升级须 bump，驱动 `evidence_hash` 受控 superseded（Phase 2b CHG-VIR-8）；③ CHG-VIR-6（Phase 1b：title_observations shadow 写入）依赖本卡，消费 `parseTitle` 的 facets/parserVersion。
 - **[AI-CHECK]**：分层 NO（新建 service 零越层不触 Route/DB）/ 跨模块内部实现 NO / 重复逻辑 NO（helper 收敛 + 解耦为 ADR 明示）/ hack NO / 需拆分函数 NO（parseTitle ~55 行线性流水线）/ 需拆分文件 NO（386<500 单一职责）/ 隐式副作用·吞异常 NO。结论：SAFE。
+
+## [CHG-VIR-6] Phase 1b：title_observations 去重聚合表 + 采集链路 shadow 写入（SEQ-20260602-03 / Phase 1 完结）
+- **完成时间**：2026-06-02
+- **记录时间**：2026-06-02 23:05
+- **执行模型**：claude-opus-4-8（建议 sonnet；schema 真源=设计 §1b 既定，无新架构决策，opus 启动覆盖不阻断）
+- **子代理**：无
+- **背景（根因）**：视频身份解析需持久化各源观测到的原始标题 + 解析 facets 以供后续分析；「每次采集快照」无限写不可行 → 去重聚合 shadow 表（设计 §1b，**无独立 ADR**）。纯观测，不参与任何合并决策。
+- **修改文件**：
+  - `apps/api/src/db/migrations/085_title_observations.sql`（**新建**）— `title_observations` 表（id/video_id FK CASCADE/source_site_key/source_name/raw_title/raw_title_hash/parser_version/parsed_facets_jsonb/observed_count/first_seen_at/last_seen_at）+ 去重唯一索引 `uq_title_observations_dedupe (video_id, COALESCE(source_site_key,''), COALESCE(source_name,''), raw_title_hash, parser_version)` + 反查索引 `idx_title_observations_video` + DO 块校验；幂等 IF NOT EXISTS
+  - `apps/api/src/db/queries/titleObservations.ts`（**新建**）— `recordTitleObservation`（INSERT ... ON CONFLICT 去重键 DO UPDATE `observed_count+1`/`last_seen_at=NOW()`/刷新 facets）+ `TitleObservationInput` 入参契约；**仅 DB query，零 service import**
+  - `apps/api/src/services/titleObservation.builder.ts`（**新建**）— `buildTitleObservation`（`parseTitle` facets 快照 + sha256 raw_title_hash → `TitleObservationInput`）；Service 层组装 helper，独立模块供 Phase 2 离线 job 复用
+  - `apps/api/src/services/CrawlerService.ts`（改）— `upsertVideo` Step 5 后 **fire-and-forget** `void recordTitleObservation(this.db, buildTitleObservation(videoId, video.title, siteKey ?? null)).catch(stderr)`（F3 容错，非空 catch）
+  - `docs/architecture.md`（改）— 新增 §5.16 `title_observations` 现状 schema（字段表 + 索引 + 分层应用层说明）
+  - `tests/unit/api/titleObservations.test.ts` / `titleObservation-builder.test.ts` / `crawlerTitleObservation.test.ts`（**新建**）— query upsert SQL（3）+ builder 解析透传·hash（4）+ 采集链路 shadow 端到端含 F3 容错（3）共 10 用例
+- **新增依赖**：无（sha256 用 node:crypto 内建）
+- **数据库变更**：**新增 `title_observations` 表 + 2 索引**（Migration 085，已 `npm run migrate` 应用到本地 dev DB；architecture.md §5.16 同步）。纯 shadow 观测表，不进任何唯一约束/归并决策（复核 F1）。
+- **范围澄清**（卡片原列 5 文件，实施扩 2 文件）：① 新增 `titleObservation.builder.ts` —— 修正分层（全仓 DB query 层从无 import `services/` 的先例；解析/哈希组装属 Service 层职责，与 `normalizeMergeKey` 在 Service 算好再传 string 给 query 的既有范式一致），且避免向 baseline 豁免的 `CrawlerService.ts`（537 行）继续增长；② 新增 `crawlerTitleObservation.test.ts` —— 采集链路 shadow 写入 + F3 容错端到端覆盖。
+- **真实 DB 验证**：migrate 085 应用成功（表+表达式唯一索引+DO 校验全过）；一次性脚本验证同去重键二次写入 → `observed_count=2`（去重聚合生效，非重复行），`parsed_facets_jsonb` 正确存取（coreTitleKey/titleKind=crawler/confidence=0.85/seasonNumber=4/sourceNoise）；验证数据已清理。
+- **门禁/验收**：typecheck EXIT=0 + lint 5 successful + **全量 6084 passed / 0 failed**（460 files；本卡净 +10）+ verify:adr-contracts EXIT=0（sql-schema-alignment ✅ title_observations 非 5 核心表无对齐要求）+ migrate:check 识别 085 唯一 pending。验收要点：去重生效（重复标题只增 observed_count）✅ / 采集链路写 observation 容错 fire-and-forget 写失败不阻断 ✅ / 零生产行为变更（采集主路径无回归）✅。
+- **注意事项**：① **SEQ-20260602-03 Phase 1（CHG-VIR-5 + CHG-VIR-6）完结** —— Phase 2（CHG-VIR-7/8/9：候选证据化，CHG-VIR-8/9 建议 opus + 可能需端点 ADR amendment）待用户决定启动；② `source_name` site 级观测默认 null（同一 video.title 对全源一致，不按 source 拆行）；③ `title_observations` 当前仅采集链路写入，离线分析/后台展示消费留后续；④ video 删除经 FK ON DELETE CASCADE 连带清理观测行。
+- **[AI-CHECK]**：分层 NO（修正后 DB query 层零 service import / CrawlerService→DB query 正方向 / builder Service 层 helper）/ 跨模块内部实现 NO / 重复逻辑 NO / hack NO / 需拆分函数 NO（builder ~12 行）/ 需拆分文件 NO（主动抽 builder 避免 CrawlerService 增长）/ 隐式副作用·吞异常 NO（F3 catch 显式 stderr 日志）。结论：SAFE。

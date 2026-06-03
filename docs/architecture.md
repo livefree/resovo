@@ -718,6 +718,38 @@ UserPreferences = {
 
 ---
 
+### 5.16 title_observations 标题观测 shadow 表（CHG-VIR-6 / Phase 1b，Migration 085）
+
+来源：设计 `docs/designs/video-identity-resolution-redesign_20260602.md` §1b（**schema 真源 / 无独立 ADR**）。`core_title_key`/facets 解析器契约 = ADR-105a D-105a-1（`TitleIdentityParser.parseTitle`）。
+
+> **现状基线**（非规划草案）：Migration 085 已落地。**纯观测 shadow 表**——采集链路记录各源观测到的原始标题 + 解析 facets，**不进任何唯一约束 / 不参与归并决策**（复核 F1）；去重聚合避免「每次采集快照」无限写。
+
+**字段：**
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `id` | UUID PK DEFAULT gen_random_uuid() | 主键 |
+| `video_id` | UUID NOT NULL REFERENCES videos(id) ON DELETE CASCADE | 所属视频（video 删除级联） |
+| `source_site_key` | TEXT NULL | 采集站点 key（COALESCE('') 进去重键） |
+| `source_name` | TEXT NULL | 播放源名（site 级标题观测通常 NULL） |
+| `raw_title` | TEXT NOT NULL | 源站原始标题（未归一） |
+| `raw_title_hash` | TEXT NOT NULL | `raw_title` 的 sha256 hex（窄化去重键） |
+| `parser_version` | TEXT NOT NULL | `TITLE_PARSER_VERSION`（版本升级 → 不同 parser_version → 新观测行，旧行保留） |
+| `parsed_facets_jsonb` | JSONB NOT NULL DEFAULT '{}'::jsonb | `{coreTitleKey, titleKind, confidence, facets}` 解析快照 |
+| `observed_count` | INTEGER NOT NULL DEFAULT 1 | 同去重键重复观测累加（去重聚合，非快照） |
+| `first_seen_at` / `last_seen_at` | TIMESTAMPTZ NOT NULL DEFAULT NOW() | 首/末次观测时间 |
+
+**索引：**
+- `uq_title_observations_dedupe` UNIQUE `(video_id, COALESCE(source_site_key,''), COALESCE(source_name,''), raw_title_hash, parser_version)` —— 去重唯一键（设计 §1b）；upsert ON CONFLICT 命中即 `observed_count+1` + 刷新 `last_seen_at`
+- `idx_title_observations_video` `(video_id)` —— 按 video 聚合反查（离线身份解析分析）
+
+**应用层（分层：解析/哈希组装在 Service 层，DB query 层仅纯 SQL 不 import Service）：**
+- 查询层：`apps/api/src/db/queries/titleObservations.ts`（`recordTitleObservation`：ON CONFLICT 去重 upsert / `TitleObservationInput` 入参契约）
+- 组装层：`apps/api/src/services/titleObservation.builder.ts`（`buildTitleObservation`：`parseTitle` facets 快照 + sha256 raw_title_hash → `TitleObservationInput`；独立模块供 Phase 2 离线 job 复用）
+- 采集链路 hook：`apps/api/src/services/CrawlerService.ts` `upsertVideo` Step 5 后 **fire-and-forget** `void recordTitleObservation(this.db, buildTitleObservation(...)).catch(log)`（复核 F3：容错，写失败不阻断采集入库主流程）
+
+---
+
 ## 6. 视频状态机（DB 强约束）
 
 来源：Migration `023_enforce_video_state_machine_trigger.sql`（基线）→ `033` → `034` → `053`（M-SN-4 D-01 新增暂存退回）
