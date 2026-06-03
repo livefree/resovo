@@ -14068,3 +14068,18 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **新增依赖**：无
 - **数据库变更**：无
 - **注意事项**：复核结论摘要——Phase 2（2a/2b/2c）对设计完成度高：核心契约全落地、门禁全绿（6216 passed）、ADR-105a D 条 14/15 闭环（唯一 pending = D-105a 第 12 条守恒条款〔中文序数书写避免 adr-parser 误闭环〕，Phase 3 验收后另起 ADR 才闭环，非欠账）+ ADR-178 6/6。开放遗留：生产 title_observations 回填（OBS-BACKFILL）、merge 翻默认 + 连通分量折叠（9-D）、blocking 多 key 并集（CHG-VIR-10 门禁②裁定）、数据变化重评触发器（Phase 3 ingest hook 部分补齐）、episode/metadata digest 占位（细化时 bump SCORER_VERSION）。merge_blocklist 定档舍弃独立表：rejected 状态 + R6 复活链已覆盖其语义（ADR-105a follow-up 1 视为闭合）。CHG-VIR-10 启动须先过 OBS-BACKFILL + spawn Opus 子代理裁定门禁①②。
+
+## CHG-VIR-OBS-BACKFILL — 生产 title_observations 全量回填 runbook + 覆盖度验证报表
+- **完成时间**：2026-06-03
+- **执行模型**：claude-opus-4-8（建议 sonnet，用户直接以 opus 会话人工覆盖指派，沿 CHG-VIR-9-C 先例）
+- **子代理**：无
+- **来源**：SEQ-20260602-03 Phase 2 收口 follow-up（11-D）；CHG-VIR-10 与 CHG-VIR-9-D 双硬前置。
+- **修改文件**：
+  - `scripts/report-title-observation-coverage.ts`（新建）— 只读覆盖度报表：① eligible videos（与 backfill 脚本 `deleted_at IS NULL AND title IS NOT NULL` 同口径）；② 当前 parser_version 下有观测 / coreTitleKey 非空两档覆盖率 + 未覆盖数；③ parser_version 分布（识别旧版本残留行，不参与召回）；④ blocking 分桶规模（与 `offlineRescore.fetchBlockingBuckets` 同口径 HAVING>1：桶数 / ΣC(n,2) pair 上限 / 最大桶 / 超护栏桶 n>50 计数）。DEFAULT_MAX_BUCKET=50 本地复述 offlineRescore 内联默认（未 export），注释指向真源。
+  - `docs/manual/title-observations-backfill-runbook.md`（新建）— 生产回填运维手册：§1 背景（blocking 召回覆盖 = title_observations 覆盖度 + 被阻塞项表：9-C 生产切 UI / CHG-VIR-10 / 9-D）；§2 安全性声明（零生产归并行为变更——只写 title_observations + identity_candidate 两张 shadow 表；回填 DO NOTHING 真幂等可中断重跑，与采集链路 recordTitleObservation +1 语义差异显式说明）；§3 前置检查（migration 085/086 / worker 注册在 apps/api 进程内无独立进程 / Redis / env / 执行窗口建议）；§4 五步执行（前快照→回填→覆盖率 100% 通过判据→enqueue full-rescan + `identity-rescore: done` 日志确认含 IdentityRescoreResult 全字段表 + lockSkipped 处置→identity-compare-report 候选密度 0.1×–10× dev 基线判据→留档）；§5 dev 基线（2026-06-03 实测：3617 eligible / 100% 覆盖 / 617 桶 / 969 pair 上限 / 最大桶 8 超护栏 0 / 193 pending 候选 / 170 跨 group 新增召回 / 159 强负拦截 / 密度 ≈5.3% / full-rescan ≈1.4s）；§6 异常处置表（中断重跑 / 覆盖率不达 / lockSkipped / job 无 done / oversize 桶 / 密度异常 / parser_version 残留）；§7 回滚（shadow 表无生产行为可回滚；清空语句限 pending——confirmed/rejected 关联 identity_decisions 审计链 ADR-178 不得删）。
+  - `docs/tasks.md` / `docs/task-queue.md` — 任务卡生命周期 + 11-D 状态 ✅。
+- **新增依赖**：无
+- **数据库变更**：无（零端点 / 零 migration / 零生产代码变更，纯 scripts + docs）
+- **测试**：dev 实跑两脚本验证可用（coverage 报表 + compare-report 均正常出数）；门禁全过 typecheck / lint / verify:adr-contracts EXIT=0 + 全量 **473 files 6222 passed / 0 failed**（首跑 1 个 DataTable matrix jsdom flaky 重跑全过——本卡未触及 admin-ui，沿 CHG-VIR-8 已知 flaky 先例）。
+- **共享层沉淀评估**：统计 SQL 消费方仅运维场景 1 处（未达 3 处提取阈值），不沉淀；CHG-VIR-10 precision/recall 报表复用时再抽 queries 函数。
+- **注意事项**：卡片范围 = 工程产出（runbook + 验证工具）；**生产实际回填由用户/运维按 runbook 执行，执行完成并留档（§4 Step 5）前，CHG-VIR-10 与 CHG-VIR-9-D 的硬前置仍未解除**。dev 桶数 617 > 上次 full-rescan 时 573 印证「观测变化后必须重新入队 full-rescan」（runbook §5 注已说明）。

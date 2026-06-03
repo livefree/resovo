@@ -2918,13 +2918,14 @@ CODENAME-MATRIX-E2E (依赖 Wave 3 验收期补丁 CODENAME-MATRIX ✅)
 
 **Phase 2 收口 follow-up（2026-06-03 Phase 2 收口复核补建）**
 
-11-D. **CHG-VIR-OBS-BACKFILL** — 生产 title_observations 全量回填（运维执行 runbook + 验证报表）（状态：⬜ 待开始 / **CHG-VIR-10 与 CHG-VIR-9-D 双硬前置**）
+11-D. **CHG-VIR-OBS-BACKFILL** — 生产 title_observations 全量回填（运维执行 runbook + 验证报表）（状态：✅ 已完成 2026-06-03 / 实际开始 2026-06-03 13:30 / **工程产出完成；生产实际回填待用户/运维按 runbook 执行，执行完成前 CHG-VIR-10 与 CHG-VIR-9-D 硬前置仍未解除**）
     - 创建时间：2026-06-03 12:50
     - 建议模型：sonnet（脚本已有 `scripts/backfill-title-observations.ts`；产出 runbook + 验证查询，生产执行主体为用户/运维）
     - 变更原因：9-C 卡面前置「生产切 UI 前须先回填 title_observations」（采集 fire-and-forget 覆盖不全）+ CHG-VIR-10 ingest shadow 有效性同依赖——blocking 召回覆盖 = title_observations 覆盖度（9-C 验证证实：dev 回填后 573 桶/917 pair/193 候选/159 拦截）。
     - 范围：生产执行 runbook（分批/可重入确认 + 覆盖度验证查询：有 observation 的 videos 占比）→ 回填后 `enqueue-identity-rescore` 全量重算 → `identity-compare-report` 验证候选量级与 dev 基线同数量级。无生产写路径变更（脚本只写 title_observations shadow 表 + identity_candidate）。
     - 验收要点：生产覆盖度报表 + 候选量级合理（与 dev 基线比例一致）；零生产归并行为变更。
     - 依赖：CHG-VIR-9-C ✅（脚本与 shadow 链路已 ship）。
+    - 完成备注：**生产回填 runbook + 覆盖度验证报表落地**。新建 `scripts/report-title-observation-coverage.ts`（只读覆盖度报表：eligible videos〔与 backfill 脚本 WHERE 同口径〕/ 有观测 + coreTitleKey 非空两档覆盖率 / parser_version 分布识别旧版本残留 / blocking 分桶规模〔与 offlineRescore.fetchBlockingBuckets 同口径 HAVING>1 + ΣC(n,2) pair 上限 + 超护栏桶 n>50 计数〕）+ 新建 `docs/manual/title-observations-backfill-runbook.md`（§2 安全性声明〔零生产归并行为变更：只写 title_observations + identity_candidate 两张 shadow 表；DO NOTHING 真幂等可中断重跑，与采集链路 +1 语义差异显式说明〕+ §3 前置检查〔migration 085/086 / worker 在 apps/api 进程内注册无独立进程 / Redis / env〕+ §4 五步执行〔前快照→回填→覆盖率 100% 判据→enqueue full-rescan + `identity-rescore: done` 日志确认含 IdentityRescoreResult 字段表 + lockSkipped 处置→compare-report 候选密度 0.1×–10× dev 基线判据→留档〕+ §5 dev 基线 2026-06-03 实测〔3617 eligible / 100% 覆盖 / 617 桶 / 969 pair 上限 / 最大桶 8 / 193 pending 候选 / 170 新增召回 / 159 拦截 / 密度 ≈5.3%〕+ §6 异常处置表 + §7 回滚〔shadow 表无生产行为可回滚；清空语句限 pending，confirmed/rejected 关联 identity_decisions 审计链不得删〕）。dev 实跑两脚本验证可用。无生产代码变更（纯 scripts + docs，零端点/migration/schema）。门禁全过：typecheck/lint/adr-contracts EXIT=0 + 全量 **6222 passed / 0 failed**（473 files；首跑 1 DataTable matrix jsdom flaky 重跑全过，本卡未触及 admin-ui，沿 CHG-VIR-8 已知 flaky 先例）。共享层沉淀：统计 SQL 消费方仅运维 1 处不沉淀（CHG-VIR-10 报表复用时再抽 queries 函数）；DEFAULT_MAX_BUCKET=50 本地复述 offlineRescore 内联默认（未 export），注释指向真源。执行模型: claude-opus-4-8（建议 sonnet，用户直接以 opus 会话人工覆盖指派，沿 9-C 先例）
 
 11-E. **CHG-VIR-9-D** — merge 默认源翻转 identity + N-video 连通分量折叠（状态：⬜ 待开始 / 待 merge shadow 稳定后用户裁定排期）
     - 创建时间：2026-06-03 12:50
