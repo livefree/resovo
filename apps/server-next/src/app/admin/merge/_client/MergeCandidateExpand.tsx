@@ -103,11 +103,13 @@ const IDENTITY_PILL_STYLE: CSSProperties = {
 export interface CandidateExpandProps {
   group: CandidateGroup
   onMerge: (targetVideoId: string) => void
-  /** CHG-VIR-9-C：identity 来源（group.candidateId 存在）时提供拒绝操作 */
+  /** CHG-VIR-9-C：identity 来源单 pair（group.candidateId 存在）时提供整行拒绝 */
   onReject?: () => void
+  /** CHG-VIR-9-D / D-105a-18：折叠组逐 pair 拒绝（EvidencePanel pair 明细行内，per-candidate 端点） */
+  onRejectPair?: (candidateId: string, label: string) => void
 }
 
-export function CandidateExpand({ group, onMerge, onReject }: CandidateExpandProps) {
+export function CandidateExpand({ group, onMerge, onReject, onRejectPair }: CandidateExpandProps) {
   const [targetId, setTargetId] = useState(group.recommendedTargetVideoId)
   const targetVideo = group.videos.find((v) => v.id === targetId)
   const sourceVideos = group.videos.filter((v) => v.id !== targetId)
@@ -127,8 +129,9 @@ export function CandidateExpand({ group, onMerge, onReject }: CandidateExpandPro
         <span style={SECONDARY_TEXT}>{group.videos.length} 个候选视频</span>
       </div>
 
-      {/* CHG-VIR-7：多证据身份评分面板（为何可合并 / 为何拦截 / 逐对明细）*/}
-      {group.identity && <EvidencePanel identity={group.identity} />}
+      {/* CHG-VIR-7：多证据身份评分面板（为何可合并 / 为何拦截 / 逐对明细）
+          CHG-VIR-9-D：折叠组（多 pair）时逐 pair 拒绝按钮注入明细行 */}
+      {group.identity && <EvidencePanel identity={group.identity} onRejectPair={onRejectPair} />}
 
       {/* 视频卡片网格（左右对比） */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '8px' }}>

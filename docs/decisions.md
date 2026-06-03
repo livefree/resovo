@@ -19167,6 +19167,28 @@ D-105a-1 ~ D-105a-13 共 13 条，随 Phase 1a/2a/2b/2c 实施卡（CHG-VIR-5/7/
 
 **D-N 偏离登记更新**：本 AMENDMENT 新增 D-105a-16 / D-105a-17，ADR-105a 偏离编号扩为 **D-105a-1 ~ D-105a-17 共 17 条**（16/17 随 CHG-VIR-10 实施闭环）。ingest 旁路性能基线另立（D-105a-10 的实时端点 / 离线 job 双基线不适用 fire-and-forget 旁路；旁路单次召回上限 MAX_COUNTERPARTS=50 + 截断确定性排序）。是否开自动绑定仍留 Phase 3 验收后另起 ADR / Phase 5（D-105a-12 不变）。
 
+### AMENDMENT 2026-06-03（CHG-VIR-9-D / Phase 2c 收尾 — pair→connected-component 折叠 + merge 默认翻 identity）
+
+**触发**：9-A/-B/-C 落地后，`source=identity` 每 pending pair→2-video group 导致 N 视频同组渲染 C(N,2) 重复行（连通分量被拆，违反设计 §4.3「pair -> group 折叠展示」）。本 amendment 落 pair→connected-component 页内折叠 + merge 候选默认 legacy→identity 翻转（9-A AMENDMENT「待 shadow 稳定后另起小卡翻默认」兑现，本卡即该小卡；shadow 稳定性依据 = OBS-BACKFILL 单环境回填完毕 100% 覆盖 + 198 pending 候选 + CHG-VIR-10 ingest 旁路持续注入）。前置门禁 arch-reviewer 裁定（claude-opus-4-8 / agentId ad5a4777ebc076355）。
+
+**端点契约变更（向后兼容，纯增量）**：
+- **保留** `GET /admin/video-merges/candidates` 路径。`source=identity` 时返回行从「每 pair 一行」改为「每连通分量一行」（N-video group，C(N,2) 重复消除；`CandidateGroup` 新增 optional `candidateIds`，单 pair 时 `candidateId` 单数保留填充兼容 9-C）。`legacy` 路径逐值不变（Y-105a-1）。
+- **query 不变**（`listPendingCandidatePairs` / `countPendingCandidatePairs` / ORDER BY identity_score DESC / LIMIT-OFFSET 逐字不变）；折叠为 **Service 层页内 union-find**（D-105a-18）。`total` 回显维持 pending **pair 数**（非折叠后 group 数，UI 文案「共 N 对候选」区分）；同一连通分量跨页时拆成多行（跨页不折叠），属与 legacy 路径 Service-sort 同源的 pre-existing 分页近似局限。
+- `POST /admin/video-merges` Body **新增 optional** `candidateIds: string[] (uuid, 1-20)`（9-B 单数 `candidateId` 保留 deprecate，二者互斥 + 数组去重 refine）。折叠组 confirm 时传该组全部 K 个 pair 的 candidateId：事务前逐个快速失败校验（404/409/422，D-178-3 口径不变），事务内循环挂 K 个 decision(confirmed) **同一 audit_id**（087 partial unique 在 candidate_id 非 audit_id，DB 允许同 audit 多行），from-state 守卫逐个，任一冲突整 merge ROLLBACK（R8 无半完成态）。
+- **unmerge 反查对称修复（红线）**：`findConfirmedDecisionByAuditId`（LIMIT 1，0..1 行）→ `findConfirmedDecisionsByAuditId`（返回全部，ORDER BY created_at），unmerge 循环 revert 该 audit 全部 confirmed decision——原单行版在 K-candidate merge 后 unmerge 会漏 revert K-1 个 decision（永久 confirmed + 未 reverted 残留，R8 回归），是 `candidateIds[]` 可被采纳的硬前提。
+- `GET …/candidates` `source` query **default `legacy`→`identity`**（zod default 与 Service `?? 'identity'` 兜底两处一致翻转）。identity 空表自动降级 legacy + envelope `source:'legacy'` 回显不变；source toggle 保留。
+- **无新 route / 无 migration / 无 DDL 变更**（verify:endpoint-adr 不触发；087 约束已支持同 audit 多 confirmed）。
+
+**D-105a-18（pair→connected-component 折叠算法 + 分页/锚点语义 / 门禁裁定）**
+- 折叠 = 页内 union-find on pair 边（`apps/api/src/services/identity/collapsePairsToGroups.ts` 纯函数，500 行红线下不入 VideoMergesService）。否决「拉全量 pending 折叠后分页」（CHG-VIR-10 ingest 旁路使候选无上界，破坏 LIMIT 下推）与「ORDER BY canonical_pair_key 近邻」（破坏 identity_score DESC 主序，且 canonical_pair_key 与分量拓扑无关）。
+- 折叠后 `groupKey` = 分量内全部 video_id **升序 join('|')**（成员集合幂等、与 union 顺序无关，供 React rowKey + expandedKeys；N=2 退化为旧 `${left}|${right}` 排序后特例）。行序 = 各分量最高分 pair 首现序（高分分量优先，与折叠前排序语义一致）。
+- 折叠组 `GroupIdentityScore` 复用既有 `aggregateGroup`（D-105a-15 min/union），零重复实现；`score`（legacyScore）= min over pairs（同保守口径，null 沿 9-A 旧语义当 0）。
+- **reject = 逐 pair**（per-candidate 端点 `POST /admin/identity-candidates/:id/reject` K 次独立调用，路径不变）；否决「拒绝整组」单按钮（前端循环非原子、半完成态、分量内 pair 证据异质不应一刀切）。`PairScore` 加 optional `candidateId` 作逐 pair 操作锚点（运行期身份字段，不进 evidence_hash）。
+
+**遗留**：① 部分合并（任选 cluster 子集）暂不支持，UI 维持整组 N-1→target；支持时不在合并集合内的 pair candidateId 不得传（422）。② 跨页同分量折叠（需全量折叠或 cursor 分页）留后续观察，pending 候选规模显著增长时再评估。③ 「全部拒绝」便捷按钮（非原子，须逐个反馈）留可选增强。
+
+**D-N 偏离登记更新**：本 AMENDMENT 新增 D-105a-18，ADR-105a 偏离编号扩为 **D-105a-1 ~ D-105a-18 共 18 条**（18 随 CHG-VIR-9-D 实施闭环）。
+
 ---
 
 ## ADR-175：多语种标题模型 — 字段语义收紧 + media_catalog_aliases 结构化升级 + locale fallback + 匹配分层（SEQ-20260602-03 / CHG-VIR-2 / Phase 0）

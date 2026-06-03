@@ -6,7 +6,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import {
   insertIdentityDecision,
-  findConfirmedDecisionByAuditId,
+  findConfirmedDecisionsByAuditId,
   markDecisionReverted,
 } from '@/api/db/queries/identity-decision'
 
@@ -67,19 +67,26 @@ describe('insertIdentityDecision', () => {
   })
 })
 
-describe('findConfirmedDecisionByAuditId', () => {
-  it("WHERE audit_id + decision='confirmed' + reverted_at IS NULL", async () => {
-    await findConfirmedDecisionByAuditId(mockClient, 'a1')
+describe('findConfirmedDecisionsByAuditId', () => {
+  it("WHERE audit_id + decision='confirmed' + reverted_at IS NULL（CHG-VIR-9-D：无 LIMIT 1，返回全部）", async () => {
+    await findConfirmedDecisionsByAuditId(mockClient, 'a1')
     const sql = lastSql()
     expect(sql).toContain('video_merge_audit_id = $1')
     expect(sql).toContain("decision = 'confirmed'")
     expect(sql).toContain('reverted_at IS NULL')
+    expect(sql).not.toContain('LIMIT 1')
     expect(lastParams()).toEqual(['a1'])
   })
 
-  it('无命中 → null', async () => {
-    const r = await findConfirmedDecisionByAuditId(mockClient, 'a1')
-    expect(r).toBeNull()
+  it('无命中 → 空数组', async () => {
+    const r = await findConfirmedDecisionsByAuditId(mockClient, 'a1')
+    expect(r).toEqual([])
+  })
+
+  it('折叠组 merge 一个 audit 挂 K 个 decision → 全部返回（D-105a-18 / R8 对称）', async () => {
+    mockQuery.mockResolvedValueOnce({ rows: [{ id: 'd1' }, { id: 'd2' }, { id: 'd3' }] })
+    const r = await findConfirmedDecisionsByAuditId(mockClient, 'a1')
+    expect(r.map((d) => d.id)).toEqual(['d1', 'd2', 'd3'])
   })
 })
 

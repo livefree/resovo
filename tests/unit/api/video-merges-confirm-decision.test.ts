@@ -50,7 +50,7 @@ vi.mock('@/api/db/queries/identity-candidate', () => ({
 
 vi.mock('@/api/db/queries/identity-decision', () => ({
   insertIdentityDecision: vi.fn(),
-  findConfirmedDecisionByAuditId: vi.fn(),
+  findConfirmedDecisionsByAuditId: vi.fn(),
   markDecisionReverted: vi.fn(),
 }))
 
@@ -72,7 +72,7 @@ import {
 } from '@/api/db/queries/identity-candidate'
 import {
   insertIdentityDecision,
-  findConfirmedDecisionByAuditId,
+  findConfirmedDecisionsByAuditId,
   markDecisionReverted,
 } from '@/api/db/queries/identity-decision'
 import { AuditLogService } from '@/api/services/AuditLogService'
@@ -242,15 +242,71 @@ describe('VideoMergesService.merge + candidateId（ADR-178 D-178-3）', () => {
       videoMergeAuditId: AUDIT_ID,
       performedBy: ACTOR_ID,
     }))
-    // afterJsonb 纯增量补 candidateId/decisionId（D-178-6）
+    // afterJsonb 纯增量补 candidateIds/decisionIds（D-178-6 / CHG-VIR-9-D 数组化）
     expect(auditSvcInstance.write).toHaveBeenCalledWith(expect.objectContaining({
       actionType: 'video.merge',
       afterJsonb: expect.objectContaining({
         auditId: AUDIT_ID,
-        candidateId: CANDIDATE_ID,
-        decisionId: DECISION_ID,
+        candidateIds: [CANDIDATE_ID],
+        decisionIds: [DECISION_ID],
       }),
     }))
+  })
+
+  it('candidateIds 数组（折叠组 / CHG-VIR-9-D D-105a-18）→ 同事务循环挂 K 个 decision 同一 audit_id', async () => {
+    const CANDIDATE_ID_2 = '00000000-0000-0000-0000-0000000000c2'
+    const DECISION_ID_2 = '00000000-0000-0000-0000-0000000000d2'
+    const client = makeMockClient()
+    const svc = new VideoMergesService(makeMockPool(client))
+    vi.mocked(findCandidateByIdReadonly)
+      .mockResolvedValueOnce(makeCandidateRow('pending'))
+      .mockResolvedValueOnce({ ...makeCandidateRow('pending'), id: CANDIDATE_ID_2 })
+    vi.mocked(updateCandidateStatus).mockResolvedValue(1)
+    vi.mocked(insertIdentityDecision)
+      .mockResolvedValueOnce(DECISION_ID)
+      .mockResolvedValueOnce(DECISION_ID_2)
+    arrangeMergeHappyPath()
+
+    const result = await svc.merge(
+      { sourceVideoIds: [SOURCE_ID_1], targetVideoId: TARGET_ID, candidateIds: [CANDIDATE_ID, CANDIDATE_ID_2] },
+      ACTOR_ID,
+    )
+
+    expect(result.auditId).toBe(AUDIT_ID)
+    // 单事务：BEGIN/COMMIT 各一次（R8），K 个 decision 全部挂同一 auditId
+    const txCalls = client.query.mock.calls.map((c) => c[0])
+    expect(txCalls.filter((q) => q === 'BEGIN')).toHaveLength(1)
+    expect(txCalls.filter((q) => q === 'COMMIT')).toHaveLength(1)
+    expect(updateCandidateStatus).toHaveBeenCalledTimes(2)
+    expect(insertIdentityDecision).toHaveBeenCalledTimes(2)
+    expect(insertIdentityDecision).toHaveBeenNthCalledWith(1, client, expect.objectContaining({
+      candidateId: CANDIDATE_ID, videoMergeAuditId: AUDIT_ID,
+    }))
+    expect(insertIdentityDecision).toHaveBeenNthCalledWith(2, client, expect.objectContaining({
+      candidateId: CANDIDATE_ID_2, videoMergeAuditId: AUDIT_ID,
+    }))
+  })
+
+  it('candidateIds 任一校验失败（非 pending）→ 409，BEGIN 未调用（逐个事务前校验）', async () => {
+    const CANDIDATE_ID_2 = '00000000-0000-0000-0000-0000000000c2'
+    const client = makeMockClient()
+    const svc = new VideoMergesService(makeMockPool(client))
+    vi.mocked(mutations.fetchVideosByIds).mockResolvedValueOnce([
+      makeVideoRow(SOURCE_ID_1),
+      makeVideoRow(TARGET_ID),
+    ])
+    vi.mocked(mutations.detectMergeConflicts).mockResolvedValueOnce(0)
+    vi.mocked(findCandidateByIdReadonly)
+      .mockResolvedValueOnce(makeCandidateRow('pending'))
+      .mockResolvedValueOnce({ ...makeCandidateRow('rejected'), id: CANDIDATE_ID_2 })
+
+    await expect(
+      svc.merge(
+        { sourceVideoIds: [SOURCE_ID_1], targetVideoId: TARGET_ID, candidateIds: [CANDIDATE_ID, CANDIDATE_ID_2] },
+        ACTOR_ID,
+      ),
+    ).rejects.toMatchObject({ code: 'STATE_CONFLICT', httpStatus: 409 })
+    expect(client.query).not.toHaveBeenCalledWith('BEGIN')
   })
 
   it('candidateId 不存在 → 404，BEGIN 未调用（事务前快速失败）', async () => {
@@ -324,30 +380,52 @@ describe('VideoMergesService.merge + candidateId（ADR-178 D-178-3）', () => {
 // ── unmerge：decision 联动 ──────────────────────────────────────────
 
 describe('VideoMergesService.unmerge decision 联动（ADR-178 D-178-4）', () => {
-  it('merge 分支：经 auditId 反查 confirmed decision → markDecisionReverted（事务 client）', async () => {
-    const client = makeMockClient()
-    const svc = new VideoMergesService(makeMockPool(client))
-    vi.mocked(mutations.fetchAuditById).mockResolvedValueOnce(makeAuditRow('merge'))
-    vi.mocked(findConfirmedDecisionByAuditId).mockResolvedValueOnce({
-      id: DECISION_ID,
-      candidate_id: CANDIDATE_ID,
-      decision: 'confirmed',
+  function makeDecisionRow(id: string, candidateId = CANDIDATE_ID) {
+    return {
+      id,
+      candidate_id: candidateId,
+      decision: 'confirmed' as const,
       video_merge_audit_id: AUDIT_ID,
       performed_by: ACTOR_ID,
-      actor_type: 'human',
+      actor_type: 'human' as const,
       reason: null,
       reverted_at: null,
       reverted_by: null,
       reverted_reason: null,
       created_at: '2026-06-01T00:00:00Z',
-    })
+    }
+  }
+
+  it('merge 分支：经 auditId 反查 confirmed decision → markDecisionReverted（事务 client）', async () => {
+    const client = makeMockClient()
+    const svc = new VideoMergesService(makeMockPool(client))
+    vi.mocked(mutations.fetchAuditById).mockResolvedValueOnce(makeAuditRow('merge'))
+    vi.mocked(findConfirmedDecisionsByAuditId).mockResolvedValueOnce([makeDecisionRow(DECISION_ID)])
 
     await svc.unmerge(AUDIT_ID, ACTOR_ID, '撤销')
 
-    expect(findConfirmedDecisionByAuditId).toHaveBeenCalledWith(client, AUDIT_ID)
+    expect(findConfirmedDecisionsByAuditId).toHaveBeenCalledWith(client, AUDIT_ID)
     expect(markDecisionReverted).toHaveBeenCalledWith(client, DECISION_ID, ACTOR_ID, '撤销')
     // candidate 状态不被改（保持 confirmed，避撞 uq_identity_candidate_pending / D-178-4）
     expect(updateCandidateStatus).not.toHaveBeenCalled()
+    expect(client.query).toHaveBeenCalledWith('COMMIT')
+  })
+
+  it('折叠组 merge：一个 audit 挂 K 个 decision → 全部 revert（CHG-VIR-9-D / R8 对称）', async () => {
+    const DECISION_ID_2 = '00000000-0000-0000-0000-0000000000d2'
+    const client = makeMockClient()
+    const svc = new VideoMergesService(makeMockPool(client))
+    vi.mocked(mutations.fetchAuditById).mockResolvedValueOnce(makeAuditRow('merge'))
+    vi.mocked(findConfirmedDecisionsByAuditId).mockResolvedValueOnce([
+      makeDecisionRow(DECISION_ID),
+      makeDecisionRow(DECISION_ID_2, '00000000-0000-0000-0000-0000000000c2'),
+    ])
+
+    await svc.unmerge(AUDIT_ID, ACTOR_ID, '撤销')
+
+    expect(markDecisionReverted).toHaveBeenCalledTimes(2)
+    expect(markDecisionReverted).toHaveBeenNthCalledWith(1, client, DECISION_ID, ACTOR_ID, '撤销')
+    expect(markDecisionReverted).toHaveBeenNthCalledWith(2, client, DECISION_ID_2, ACTOR_ID, '撤销')
     expect(client.query).toHaveBeenCalledWith('COMMIT')
   })
 
@@ -355,7 +433,7 @@ describe('VideoMergesService.unmerge decision 联动（ADR-178 D-178-4）', () =
     const client = makeMockClient()
     const svc = new VideoMergesService(makeMockPool(client))
     vi.mocked(mutations.fetchAuditById).mockResolvedValueOnce(makeAuditRow('merge'))
-    vi.mocked(findConfirmedDecisionByAuditId).mockResolvedValueOnce(null)
+    vi.mocked(findConfirmedDecisionsByAuditId).mockResolvedValueOnce([])
 
     const result = await svc.unmerge(AUDIT_ID, ACTOR_ID)
 
@@ -371,7 +449,7 @@ describe('VideoMergesService.unmerge decision 联动（ADR-178 D-178-4）', () =
 
     await svc.unmerge(AUDIT_ID, ACTOR_ID)
 
-    expect(findConfirmedDecisionByAuditId).not.toHaveBeenCalled()
+    expect(findConfirmedDecisionsByAuditId).not.toHaveBeenCalled()
     expect(markDecisionReverted).not.toHaveBeenCalled()
   })
 })
@@ -394,5 +472,26 @@ describe('MergeSchema candidateId（纯增量向后兼容）', () => {
 
   it('非 uuid candidateId 拒绝', () => {
     expect(MergeSchema.safeParse({ ...base, candidateId: 'not-a-uuid' }).success).toBe(false)
+  })
+
+  // CHG-VIR-9-D / D-105a-18：candidateIds 数组扩参
+  it('合法 candidateIds 数组通过', () => {
+    expect(MergeSchema.safeParse({ ...base, candidateIds: [CANDIDATE_ID] }).success).toBe(true)
+  })
+
+  it('candidateId 与 candidateIds 同时提供 → 拒绝（互斥）', () => {
+    expect(MergeSchema.safeParse({
+      ...base, candidateId: CANDIDATE_ID, candidateIds: [CANDIDATE_ID],
+    }).success).toBe(false)
+  })
+
+  it('candidateIds 含重复值 → 拒绝', () => {
+    expect(MergeSchema.safeParse({
+      ...base, candidateIds: [CANDIDATE_ID, CANDIDATE_ID],
+    }).success).toBe(false)
+  })
+
+  it('candidateIds 空数组 → 拒绝（min 1）', () => {
+    expect(MergeSchema.safeParse({ ...base, candidateIds: [] }).success).toBe(false)
   })
 })

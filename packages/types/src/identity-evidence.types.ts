@@ -74,6 +74,11 @@ export interface PairScore {
   readonly evidence: readonly EvidenceItem[]
   /** veto 命中 ⇒ true（= strongNegativeReasons.length > 0） */
   readonly autoMergeBlocked: boolean
+  /**
+   * CHG-VIR-9-D / D-105a-18：identity_candidate.id（source=identity 折叠后逐 pair 操作锚点）。
+   * 运行期身份字段，不进 evidence_hash；legacy 来源 / Phase 2a 评分路径不填（向后兼容）。
+   */
+  readonly candidateId?: string
 }
 
 /**

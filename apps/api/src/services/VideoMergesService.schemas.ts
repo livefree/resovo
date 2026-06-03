@@ -9,11 +9,12 @@ import type {
   CandidateGroup,
   EvidenceType,
   EvidenceItem,
-  GroupIdentityScore,
+  PairScore,
 } from '@resovo/types'
 import type { RawVideoDetailRow } from '@/api/db/queries/video-merge-candidates'
 import type { PendingCandidatePairRow } from '@/api/db/queries/identity-candidate'
-import { SCORER_VERSION } from './identity'
+import { SCORER_VERSION, aggregateGroup } from './identity'
+import type { PairCluster } from './identity/collapsePairsToGroups'
 
 // ── zod schema（ADR-105 §端点契约）────────────────────────────────
 
@@ -30,8 +31,9 @@ export const ListCandidatesSchema = z.object({
   // ADR-150 阶段 5 EP-4 follow-up（2026-05-25）：sort 白名单 4 字段（Service 层 sort）
   sortField: z.enum(['score', 'videoCount', 'year', 'titleNormalized']).optional(),
   sortDir: z.enum(['asc', 'desc']).optional(),
-  // CHG-VIR-9-A：候选来源（legacy 默认 / identity 读 candidate 表，空表降级）
-  source: z.enum(['identity', 'legacy']).default('legacy'),
+  // CHG-VIR-9-A：候选来源（identity 读 candidate 表，空表降级 legacy）
+  // CHG-VIR-9-D / D-105a-18：默认翻 identity（9-A AMENDMENT「待 shadow 稳定后另起小卡翻默认」兑现）
+  source: z.enum(['identity', 'legacy']).default('identity'),
 })
 
 export const MergeSchema = z.object({
@@ -40,13 +42,23 @@ export const MergeSchema = z.object({
   reason: z.string().max(500).optional(),
   // CHG-VIR-9-B / ADR-178 D-178-3：关联 identity_candidate（confirmed→merge 单事务 / R8）。
   // 纯增量 optional，缺省时 merge 行为逐值不变。
+  // CHG-VIR-9-D 起 deprecate：新消费方用 candidateIds（数组），单数保留向后兼容。
   candidateId: z.string().uuid().optional(),
+  // CHG-VIR-9-D / D-105a-18：折叠组 confirm——连通分量全部 pending pair 的 candidate id，
+  // 事务内循环挂 K 个 decision(confirmed) 同一 audit_id。与 candidateId 互斥。
+  candidateIds: z.array(z.string().uuid()).min(1).max(20).optional(),
 }).refine(
   v => !v.sourceVideoIds.includes(v.targetVideoId),
   { message: 'targetVideoId 不得在 sourceVideoIds 中', path: ['targetVideoId'] },
 ).refine(
   v => new Set(v.sourceVideoIds).size === v.sourceVideoIds.length,
   { message: 'sourceVideoIds 不得含重复值', path: ['sourceVideoIds'] },
+).refine(
+  v => !(v.candidateId && v.candidateIds),
+  { message: 'candidateId 与 candidateIds 不得同时提供', path: ['candidateIds'] },
+).refine(
+  v => !v.candidateIds || new Set(v.candidateIds).size === v.candidateIds.length,
+  { message: 'candidateIds 不得含重复值', path: ['candidateIds'] },
 )
 
 export const UnmergeSchema = z.object({
@@ -124,50 +136,63 @@ export function mapVideoRow(row: RawVideoDetailRow): VideoSummaryForMerge {
   }
 }
 
-/**
- * CHG-VIR-9-A：identity_candidate pending pair → 2-video CandidateGroup（merge source=identity）。
- * blockingReasons 从 evidence 重算（hit 正向，排除强负 + 弱信号 / 与 scorePair 口径一致）。
- */
-export function buildGroupFromPair(
-  p: PendingCandidatePairRow,
-  videoMap: Map<string, VideoSummaryForMerge>,
-): CandidateGroup | null {
-  const left = videoMap.get(p.left_video_id)
-  const right = videoMap.get(p.right_video_id)
-  if (!left || !right) return null
+/** pending pair 行 → PairScore（blockingReasons 从 evidence 重算：hit 正向，排除强负 + 弱信号 / 与 scorePair 口径一致） */
+function pairRowToScore(p: PendingCandidatePairRow): PairScore {
   const identityScore = Number(p.identity_score)
   const strongNegativeReasons = p.strong_negative_reasons as EvidenceType[]
   const evidence = Array.isArray(p.evidence_jsonb) ? (p.evidence_jsonb as EvidenceItem[]) : []
   const blockingReasons = evidence
     .filter((e) => e.hit && e.polarity !== 'strong-negative' && e.type !== 'release_marker_weak_signal')
     .map((e) => e.type)
-  const autoMergeBlocked = strongNegativeReasons.length > 0
-  const identity: GroupIdentityScore = {
+  return {
+    leftVideoId: p.left_video_id,
+    rightVideoId: p.right_video_id,
     identityScore,
     strongNegativeReasons,
     blockingReasons,
-    autoMergeBlocked,
-    pairs: [{
-      leftVideoId: p.left_video_id,
-      rightVideoId: p.right_video_id,
-      identityScore,
-      strongNegativeReasons,
-      blockingReasons,
-      evidence,
-      autoMergeBlocked,
-    }],
-    scorerVersion: SCORER_VERSION,
-  }
-  return {
-    groupKey: `${p.left_video_id}|${p.right_video_id}`,
-    titleNormalized: left.titleNormalized,
-    year: left.year,
-    type: left.type,
-    videos: [left, right],
-    score: p.legacy_score != null ? Number(p.legacy_score) : 0,
-    recommendedTargetVideoId: pickRecommendedTarget([left, right]),
-    identity,
-    // CHG-VIR-9-C：confirm/reject 操作锚点（merge 透传 candidateId / POST reject）
+    evidence,
+    autoMergeBlocked: strongNegativeReasons.length > 0,
+    // CHG-VIR-9-D / D-105a-18：折叠后逐 pair confirm/reject 操作锚点
     candidateId: p.id,
+  }
+}
+
+/**
+ * CHG-VIR-9-D / D-105a-18：连通分量 → N-video CandidateGroup（merge source=identity）。
+ * 9-A buildGroupFromPair（每 pair→2-video group）的折叠演进版：group 聚合复用 aggregateGroup
+ * （D-105a-15 min/union），groupKey = clusterKey（成员 video_id 升序 join，幂等稳定）。
+ * 防御：videoMap 缺失成员时仅保留两端齐全的 pair；有效 video < 2 或 pair 为空 → null。
+ */
+export function buildGroupFromCluster(
+  cluster: PairCluster,
+  videoMap: Map<string, VideoSummaryForMerge>,
+): CandidateGroup | null {
+  const videos = cluster.videoIds
+    .map((id) => videoMap.get(id))
+    .filter((v): v is VideoSummaryForMerge => v !== undefined)
+  if (videos.length < 2) return null
+  const present = new Set(videos.map((v) => v.id))
+  const pairs = cluster.pairs.filter(
+    (p) => present.has(p.left_video_id) && present.has(p.right_video_id),
+  )
+  if (pairs.length === 0) return null
+
+  const identity = aggregateGroup(pairs.map(pairRowToScore), SCORER_VERSION)
+  // legacyScore 保守口径：min over pairs（与 identity min 同哲学；null 沿 9-A 旧语义当 0）
+  const score = Math.min(...pairs.map((p) => (p.legacy_score != null ? Number(p.legacy_score) : 0)))
+  const candidateIds = pairs.map((p) => p.id)
+  const first = videos[0]!
+  return {
+    groupKey: cluster.clusterKey,
+    titleNormalized: first.titleNormalized,
+    year: first.year,
+    type: first.type,
+    videos,
+    score,
+    recommendedTargetVideoId: pickRecommendedTarget(videos),
+    identity,
+    // CHG-VIR-9-C 单数锚点：N=2 单 pair 时保留填充（9-C 深链/既有消费方兼容）；多 pair 不填
+    ...(pairs.length === 1 ? { candidateId: pairs[0]!.id } : {}),
+    candidateIds,
   }
 }

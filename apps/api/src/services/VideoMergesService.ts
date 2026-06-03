@@ -55,7 +55,7 @@ import { MediaCatalogService } from '@/api/services/MediaCatalogService'
 // CHG-VIR-9-B / ADR-178：merge 事务挂 decision(confirmed) + unmerge 联动 reverted（R8 / D-105a-11）
 import { IdentityCandidatesService } from '@/api/services/IdentityCandidatesService'
 import {
-  findConfirmedDecisionByAuditId,
+  findConfirmedDecisionsByAuditId,
   markDecisionReverted,
 } from '@/api/db/queries/identity-decision'
 import { AppError } from '@/api/lib/errors'
@@ -64,8 +64,10 @@ import {
   computeOverlapScore,
   pickRecommendedTarget,
   mapVideoRow,
-  buildGroupFromPair,
+  buildGroupFromCluster,
 } from './VideoMergesService.schemas'
+// CHG-VIR-9-D / D-105a-18：pending pair → connected components 页内折叠（query 不变）
+import { collapsePairs } from './identity/collapsePairsToGroups'
 // CHG-VIR-7 Phase 2a：多证据身份评分（identityScore/evidence，与 legacyScore 分离 / R3）
 import { scoreGroup, SCORER_VERSION } from './identity'
 import { TITLE_PARSER_VERSION } from './TitleIdentityParser'
@@ -96,9 +98,9 @@ export class VideoMergesService {
     const { type = null, minScore, limit, page } = params
     const typeFilter = type ?? null
 
-    // CHG-VIR-9-A：source=identity 读 identity_candidate 候选（每 pending pair→2-video group）；
-    // 空表自动降级 legacy（默认 legacy，待 shadow 稳定后翻默认）。
-    if ((params.source ?? 'legacy') === 'identity') {
+    // CHG-VIR-9-A：source=identity 读 identity_candidate 候选；空表自动降级 legacy。
+    // CHG-VIR-9-D / D-105a-18：默认翻 identity（zod default 与 Service 兜底两处一致）。
+    if ((params.source ?? 'identity') === 'identity') {
       const identityResult = await this.listIdentityCandidates(page, limit)
       if (identityResult) return identityResult
       // identity 候选空 → 落回 legacy
@@ -178,12 +180,16 @@ export class VideoMergesService {
   }
 
   /**
-   * CHG-VIR-9-A：source=identity 读 identity_candidate pending 候选，每 pair→2-video CandidateGroup。
-   * 返回 null 表示候选**真空表**（调用方降级 legacy）。merge 默认 legacy，本路径待 shadow 稳定后翻默认。
+   * CHG-VIR-9-A：source=identity 读 identity_candidate pending 候选（默认来源 / 9-D 翻转）。
+   * 返回 null 表示候选**真空表**（调用方降级 legacy）。
    *
    * CHG-VIR-9-C FIX-2（Codex review）：total = 全量 pending count（曾误用当前页 groups.length，
    * 候选超 limit 时前端无法翻页）；total>0 但本页空（offset 超尾）返回空 data 而**不悄降 legacy**
    * （identity 模式翻页中突现 legacy 全量数据是更坏的语义漂移）。
+   *
+   * CHG-VIR-9-D / D-105a-18：页内 union-find 折叠 pair→connected components（每分量一行
+   * N-video group，C(N,2) 重复消除）。query/排序/total（pair 数）逐字不变；同分量跨页拆行
+   * 属已登记的分页近似局限（详 ADR-105a AMENDMENT CHG-VIR-9-D）。
    */
   private async listIdentityCandidates(page: number, limit: number): Promise<ListCandidatesResult | null> {
     const offset = (page - 1) * limit
@@ -197,8 +203,8 @@ export class VideoMergesService {
     const videoIds = [...new Set(pairs.flatMap((p) => [p.left_video_id, p.right_video_id]))]
     const details = await fetchVideoDetailsForCandidates(this.db, videoIds)
     const videoMap = new Map(details.map((v) => [v.id, mapVideoRow(v)]))
-    const groups = pairs
-      .map((p) => buildGroupFromPair(p, videoMap))
+    const groups = collapsePairs(pairs)
+      .map((c) => buildGroupFromCluster(c, videoMap))
       .filter((g): g is CandidateGroup => g !== null)
     return { data: groups, total, page, limit, source: 'identity' }
   }
@@ -236,20 +242,21 @@ export class VideoMergesService {
 
   /**
    * merge 步骤 4：事务执行 INSERT audit + 转移 sources + 软删除 source videos
-   * （+ candidateId 时同事务挂 decision(confirmed)+candidate confirmed / R8 单 BEGIN/COMMIT）。
+   * （+ candidateIds 时同事务循环挂 K 个 decision(confirmed) 同一 audit_id / R8 单 BEGIN/COMMIT，
+   * 任一 from-state 冲突 → 整 merge ROLLBACK / CHG-VIR-9-D D-105a-18）。
    */
   private async runMergeTransaction(params: {
     sourceVideoIds: string[]
     targetVideoId: string
     reason: string | undefined
-    candidateId: string | undefined
+    candidateIds: readonly string[]
     snapshotJsonb: Record<string, unknown>
     actorId: string
-  }): Promise<{ auditId: string; decisionId: string | null }> {
-    const { sourceVideoIds, targetVideoId, reason, candidateId, snapshotJsonb, actorId } = params
+  }): Promise<{ auditId: string; decisionIds: string[] }> {
+    const { sourceVideoIds, targetVideoId, reason, candidateIds, snapshotJsonb, actorId } = params
     const client = await this.db.connect()
     let auditId: string
-    let decisionId: string | null = null
+    const decisionIds: string[] = []
     try {
       await client.query('BEGIN')
 
@@ -265,12 +272,12 @@ export class VideoMergesService {
       await transferSourcesToTarget(client, sourceVideoIds, targetVideoId)
       await softDeleteVideos(client, sourceVideoIds)
 
-      if (candidateId) {
-        decisionId = await IdentityCandidatesService.attachConfirmedDecision(client, {
+      for (const candidateId of candidateIds) {
+        decisionIds.push(await IdentityCandidatesService.attachConfirmedDecision(client, {
           candidateId,
           videoMergeAuditId: auditId,
           performedBy: actorId,
-        })
+        }))
       }
 
       await client.query('COMMIT')
@@ -280,11 +287,14 @@ export class VideoMergesService {
     } finally {
       client.release()
     }
-    return { auditId, decisionId }
+    return { auditId, decisionIds }
   }
 
   async merge(params: MergeParams, actorId: string): Promise<MergeResult> {
-    const { sourceVideoIds, targetVideoId, reason, candidateId } = params
+    const { sourceVideoIds, targetVideoId, reason } = params
+    // CHG-VIR-9-D：candidateId（单数，deprecate 保留）与 candidateIds（折叠组）归一化为数组
+    //（schema refine 已保证互斥）；空数组 = 不挂 decision（主路径零变更）。
+    const candidateIds = params.candidateIds ?? (params.candidateId ? [params.candidateId] : [])
     const allIds = [...sourceVideoIds, targetVideoId]
 
     // 1. 校验所有 video 存在且未删除（404/409 / 抽 assertVideosMergeable）
@@ -302,8 +312,9 @@ export class VideoMergesService {
       )
     }
 
-    // 2b. CHG-VIR-9-B / ADR-178 D-178-3：candidateId 事务前快速失败校验（BEGIN 之前，主路径零变更）
-    if (candidateId) {
+    // 2b. CHG-VIR-9-B / ADR-178 D-178-3：candidate 事务前快速失败校验（BEGIN 之前，主路径零变更）
+    // CHG-VIR-9-D：折叠组 K 个 candidate 逐个校验（存在404/pending409/pair⊆合并集合422）
+    for (const candidateId of candidateIds) {
       await IdentityCandidatesService.validateForMerge(this.db, candidateId, allIds)
     }
 
@@ -315,8 +326,8 @@ export class VideoMergesService {
     }
 
     // 4. 事务（抽 runMergeTransaction / R8 单 BEGIN/COMMIT）
-    const { auditId, decisionId } = await this.runMergeTransaction({
-      sourceVideoIds, targetVideoId, reason, candidateId, snapshotJsonb, actorId,
+    const { auditId, decisionIds } = await this.runMergeTransaction({
+      sourceVideoIds, targetVideoId, reason, candidateIds, snapshotJsonb, actorId,
     })
 
     // 5. 拼装合并后 target 摘要（ADR-105 §端点契约 row 2：targetVideo: VideoSummary）
@@ -329,15 +340,16 @@ export class VideoMergesService {
     const targetVideo = mapVideoRow(targetDetail)
 
     // 6. fire-and-forget admin_audit_log（COMMIT 后才写，防虚假记录）
-    // CHG-VIR-9-B / ADR-178 D-178-6：candidateId 路径 afterJsonb 纯增量补 candidateId/decisionId
+    // CHG-VIR-9-B / ADR-178 D-178-6：candidate 路径 afterJsonb 纯增量补 candidateIds/decisionIds
+    //（CHG-VIR-9-D：单数 candidateId/decisionId 字段升级为数组，audit jsonb 非契约字段）
     this.auditSvc.write({
       actorId,
       actionType: 'video.merge',
       targetKind: 'video',
       targetId: targetVideoId,
       beforeJsonb: { sourceVideoIds, snapshot: snapshotJsonb },
-      afterJsonb: candidateId
-        ? { auditId, targetVideoId, candidateId, decisionId }
+      afterJsonb: candidateIds.length > 0
+        ? { auditId, targetVideoId, candidateIds, decisionIds }
         : { auditId, targetVideoId },
     })
 
@@ -378,8 +390,9 @@ export class VideoMergesService {
         await markAuditReverted(client, auditId, actorId, reason ?? null)
         // CHG-VIR-9-B / ADR-178 D-178-4：经 audit_id 反查关联 confirmed decision 原地置 reverted
         // （decision 值不变 / candidate 保持 confirmed 不回 pending，避撞 uq_identity_candidate_pending）
-        const decision = await findConfirmedDecisionByAuditId(client, auditId)
-        if (decision) {
+        // CHG-VIR-9-D / D-105a-18：折叠组一个 audit 挂 K 个 decision → 循环全部 revert（R8 对称）
+        const decisions = await findConfirmedDecisionsByAuditId(client, auditId)
+        for (const decision of decisions) {
           await markDecisionReverted(client, decision.id, actorId, reason ?? null)
         }
         await client.query('COMMIT')

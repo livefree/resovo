@@ -46,8 +46,14 @@ export interface CandidateGroup {
    * CHG-VIR-9-C：identity_candidate.id（source=identity 时填充 / legacy 来源不填）。
    * UI confirm（merge 透传 candidateId / ADR-178 D-178-3）与 reject 操作锚点；
    * 纯增量 optional，沿 9-A SimilarVideoItem.candidateId 同款模式向后兼容。
+   * CHG-VIR-9-D：折叠后 N>2 group 含多 pair 时不填（改用 candidateIds），N=2 单 pair 时保留填充。
    */
   readonly candidateId?: string
+  /**
+   * CHG-VIR-9-D / D-105a-18：折叠后该连通分量内全部 pending pair 的 identity_candidate.id
+   * （source=identity 时填充）。merge 整组 confirm 时透传给 MergeParams.candidateIds。
+   */
+  readonly candidateIds?: readonly string[]
 }
 
 export interface ListCandidatesParams {
@@ -88,8 +94,14 @@ export interface MergeParams {
    * CHG-VIR-9-B / ADR-178 D-178-3：关联 identity_candidate（confirmed→merge 单事务 / R8）。
    * 提供时事务前校验 candidate pending + pair⊆合并集合，事务内挂 decision(confirmed)+candidate confirmed；
    * 缺省时 merge 行为逐值不变（主路径零变更）。
+   * @deprecated CHG-VIR-9-D：新消费方用 candidateIds（数组）；单数保留向后兼容，二者互斥。
    */
   readonly candidateId?: string
+  /**
+   * CHG-VIR-9-D / D-105a-18：折叠组 confirm——该连通分量全部 pending pair 的 candidate id。
+   * 事务内循环挂 K 个 decision(confirmed) 同一 audit_id；与 candidateId（单数）互斥。
+   */
+  readonly candidateIds?: readonly string[]
 }
 
 export interface MergeResult {

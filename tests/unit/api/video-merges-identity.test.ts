@@ -2,7 +2,7 @@
  * video-merges-identity.test.ts — listCandidates 集成 identity 评分回归守卫
  * （SEQ-20260602-03 / CHG-VIR-7 Phase 2a）
  *
- * 验收（Y-105a-1 / D-105a-9 / D-105a-15）：
+ * 验收（Y-105a-1 / D-105a-9 / D-105a-15）：（CHG-VIR-9-D 默认翻 identity 后显式 source:'legacy'，本文件测 legacy 聚合路径）
  *  - 每组附加 identity 字段；候选数量/默认排序与旧逻辑逐值一致（仅新增字段）。
  *  - legacyScore（score）与 identityScore 字段分离（R3 / D-105a-6）。
  *  - 组内 release_marker 冲突 → identity.autoMergeBlocked + strongNegativeReasons 含 release_marker_mismatch。
@@ -61,7 +61,7 @@ describe('VideoMergesService.listCandidates — CHG-VIR-7 identity 附加', () =
       ],
     )
     const svc = new VideoMergesService(mockDb)
-    const res = await svc.listCandidates({ minScore: 0, limit: 20, page: 1 })
+    const res = await svc.listCandidates({ minScore: 0, limit: 20, page: 1, source: 'legacy' })
 
     expect(res.data).toHaveLength(1)
     const g = res.data[0]!
@@ -82,7 +82,7 @@ describe('VideoMergesService.listCandidates — CHG-VIR-7 identity 附加', () =
       ],
     )
     const svc = new VideoMergesService(mockDb)
-    const res = await svc.listCandidates({ minScore: 0, limit: 20, page: 1 })
+    const res = await svc.listCandidates({ minScore: 0, limit: 20, page: 1, source: 'legacy' })
     const g = res.data[0]!
     // 两个独立字段并存（source_overlap=1.0 全共享 vs identity 多证据评分），可不等
     expect(g.score).toBeCloseTo(1.0, 4) // 2 video 全共享 s1/s2 → overlap 1.0
@@ -99,7 +99,7 @@ describe('VideoMergesService.listCandidates — CHG-VIR-7 identity 附加', () =
       ],
     )
     const svc = new VideoMergesService(mockDb)
-    const res = await svc.listCandidates({ minScore: 0, limit: 20, page: 1 })
+    const res = await svc.listCandidates({ minScore: 0, limit: 20, page: 1, source: 'legacy' })
     const g = res.data[0]!
     expect(g.identity!.autoMergeBlocked).toBe(true)
     expect(g.identity!.strongNegativeReasons).toContain('release_marker_mismatch')
@@ -120,7 +120,7 @@ describe('VideoMergesService.listCandidates — CHG-VIR-7 identity 附加', () =
       ],
     )
     const svc = new VideoMergesService(mockDb)
-    const res = await svc.listCandidates({ minScore: 0, limit: 20, page: 1 })
+    const res = await svc.listCandidates({ minScore: 0, limit: 20, page: 1, source: 'legacy' })
     expect(res.data).toHaveLength(2) // 数量不变
     // 默认 score DESC：高重合（1.0）在前，低重合（0）在后
     expect(res.data[0]!.titleNormalized).toBe('高重合')

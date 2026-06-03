@@ -2,7 +2,7 @@
  * identity-source-switch.test.ts — 候选来源切换 + 空表自动降级（CHG-VIR-9-A / Phase 2c）
  *
  * ModerationService.listSimilar（默认 identity / 空降级 legacy）+
- * VideoMergesService.listCandidates（默认 legacy / source=identity 折叠 / 空降级）。
+ * VideoMergesService.listCandidates（默认 identity / CHG-VIR-9-D 翻转 / 折叠 / 空降级）。
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
@@ -129,11 +129,71 @@ describe('VideoMergesService.listCandidates — source 切换', () => {
     expect(fetchRawCandidateGroups).not.toHaveBeenCalled()
   })
 
-  it('默认（无 source）→ legacy（不查 candidate 表）', async () => {
+  it('默认（无 source）→ identity（CHG-VIR-9-D 翻转；空表仍降级 legacy）', async () => {
+    vi.mocked(listPendingCandidatePairs).mockResolvedValue([] as never)
+    vi.mocked(countPendingCandidatePairs).mockResolvedValue(0 as never)
     vi.mocked(fetchRawCandidateGroups).mockResolvedValue([] as never)
     vi.mocked(countRawCandidateGroups).mockResolvedValue(0 as never)
     const r = await svc().listCandidates({ minScore: 0, limit: 20, page: 1 })
+    // 默认先查 identity_candidate（翻转生效），真空表自动降级 legacy 回显
+    expect(listPendingCandidatePairs).toHaveBeenCalled()
     expect(r.source).toBe('legacy')
-    expect(listPendingCandidatePairs).not.toHaveBeenCalled()
+  })
+
+  // ── CHG-VIR-9-D / D-105a-18：connected components 折叠 ────────────────
+
+  function pairRow(id: string, left: string, right: string, score = '0.9000') {
+    return {
+      id, left_video_id: left, right_video_id: right, identity_score: score,
+      legacy_score: null, strong_negative_reasons: [], evidence_jsonb: [], group_key: null,
+    }
+  }
+  function detailRow(id: string) {
+    return {
+      id, title: `V${id}`, title_normalized: `v${id}`, year: 2020, type: 'anime',
+      created_at: '2026-01-01T00:00:00Z', source_count: '2', site_keys: [],
+    }
+  }
+
+  it('N-video 连通分量折叠：3 pair 同分量 → 1 行 group（C(N,2) 重复消除）+ candidateIds 全锚点', async () => {
+    vi.mocked(listPendingCandidatePairs).mockResolvedValue([
+      pairRow('c1', 'a', 'b', '0.9500'),
+      pairRow('c2', 'b', 'c', '0.9000'),
+      pairRow('c3', 'a', 'c', '0.8500'),
+    ] as never)
+    vi.mocked(countPendingCandidatePairs).mockResolvedValue(3 as never)
+    vi.mocked(fetchVideoDetailsForCandidates).mockResolvedValue([
+      detailRow('a'), detailRow('b'), detailRow('c'),
+    ] as never)
+    const r = await svc().listCandidates({ minScore: 0, limit: 20, page: 1, source: 'identity' })
+    expect(r.data).toHaveLength(1)
+    const g = r.data[0]!
+    expect(g.groupKey).toBe('a|b|c') // 成员升序 join，幂等稳定
+    expect(g.videos.map((v) => v.id).sort()).toEqual(['a', 'b', 'c'])
+    expect(g.candidateIds).toEqual(['c1', 'c2', 'c3'])
+    expect(g.candidateId).toBeUndefined() // 多 pair 不填单数锚点
+    // group 聚合 = min over pairs（D-105a-15 保守口径）+ 逐 pair candidateId 锚点
+    expect(g.identity!.identityScore).toBe(0.85)
+    expect(g.identity!.pairs).toHaveLength(3)
+    expect(g.identity!.pairs.map((p) => p.candidateId)).toEqual(['c1', 'c2', 'c3'])
+  })
+
+  it('多分量混合：{a,b,c} + {x,y} → 2 行 group，行序保持高分分量优先', async () => {
+    vi.mocked(listPendingCandidatePairs).mockResolvedValue([
+      pairRow('c1', 'a', 'b', '0.9500'),
+      pairRow('c4', 'x', 'y', '0.9200'),
+      pairRow('c2', 'b', 'c', '0.9000'),
+    ] as never)
+    vi.mocked(countPendingCandidatePairs).mockResolvedValue(3 as never)
+    vi.mocked(fetchVideoDetailsForCandidates).mockResolvedValue([
+      detailRow('a'), detailRow('b'), detailRow('c'), detailRow('x'), detailRow('y'),
+    ] as never)
+    const r = await svc().listCandidates({ minScore: 0, limit: 20, page: 1, source: 'identity' })
+    expect(r.data).toHaveLength(2)
+    expect(r.data[0]!.groupKey).toBe('a|b|c')
+    expect(r.data[1]!.groupKey).toBe('x|y')
+    // N=2 单 pair：candidateId 单数保留（9-C 兼容）
+    expect(r.data[1]!.candidateId).toBe('c4')
+    expect(r.data[1]!.candidateIds).toEqual(['c4'])
   })
 })

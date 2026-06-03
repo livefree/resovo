@@ -14118,3 +14118,27 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **新增依赖**：无
 - **数据库变更**：无（零 migration——门禁②裁定的召回索引经 pg_indexes 核验全部已存在：media_catalog 四外部 ID 列 partial+unique / idx_video_external_refs_provider_external；零新端点 → verify:endpoint-adr 不触发）
 - **注意事项**：① **生产 catalog_id 零变更（R9 + D-105a-12）**——ingest 旁路只写 shadow（identity_candidate + 日志），任何分支不回写 videos.catalog_id / 不触发 merge；自动绑定留 Phase 3 验收后另起 ADR。② blockingKeys 输入域变化 → 既有 pending 中共享 ext id 的 pair 下次重算受控 superseded（dev 实测 24 条，预期行为非回归）。③ ingest 重遇离线已建同 hash pair → noop 不改 trigger_source（trigger_source 语义 = 首建路径）。④ agreement rate 统计走 ingest-shadow 结构化日志聚合（形态 C），报表脚本只读 identity_candidate。⑤ 实施偏离三项（均合理已登记 task-queue 完成备注）：findOrCreateWithMatch 并列方法替代返回值改形 / 零 migration / D 编号 15→16、16→17 校正。⑥ D-N 闭环：**D-105a-16 / D-105a-17 随本卡实施闭环**。⑦ dev 实测：重算 638 桶（617 core + 21 ext）/ 973 pairs / +4 ext 新召回 / 1.25s；ingest 冒烟 31ms candidate-only。
+
+## [CHG-VIR-9-D] merge 默认源翻转 identity + N-video 连通分量折叠（Phase 2c 收尾）
+- **完成时间**：2026-06-03
+- **记录时间**：2026-06-03 16:00
+- **执行模型**：claude-opus-4-8（建议 sonnet，用户直接以 opus 会话人工覆盖，沿 OBS-BACKFILL/9-C 先例）
+- **子代理**：arch-reviewer (claude-opus-4-8 / agentId ad5a4777ebc076355) — 启动门禁 Q1-Q5 裁定（折叠算法与分页语义 / confirm 锚点 / reject 锚点 / 默认翻转 / AMENDMENT 草案）
+- **修改文件**：
+  - `apps/api/src/services/identity/collapsePairsToGroups.ts` — 新建：pending pair → connected components 页内折叠纯函数（union-find on pair 边 + 路径压缩；clusterKey = 分量成员 video_id 升序 join('|')，与 union 顺序无关幂等；行序 = 各分量最高分 pair 首现序，与折叠前排序语义一致；500 行红线下不入 VideoMergesService）
+  - `apps/api/src/services/VideoMergesService.schemas.ts` — `buildGroupFromPair` → `buildGroupFromCluster` 演进（连通分量 → N-video CandidateGroup：pairRowToScore 含 candidateId 锚点 + **复用 `aggregateGroup`〔D-105a-15 min/union〕零重复实现** + score=min over pairs 同保守口径 + N=2 单 pair 保留单数 candidateId 兼容 9-C）；`MergeSchema` 扩 optional `candidateIds[]`（uuid 1-20 + 与 candidateId 互斥 refine + 数组去重 refine）；`ListCandidatesSchema.source` default `'legacy'`→`'identity'`
+  - `apps/api/src/services/VideoMergesService.ts` — `listIdentityCandidates` 接 collapsePairs（query/排序/total〔pair 数〕逐字不变）；`merge` candidateId/candidateIds 归一化数组 + 事务前逐个快速失败校验 + 事务内循环挂 K 个 decision(confirmed) 同一 audit_id（任一 from-state 冲突整 merge ROLLBACK / R8）；`unmerge` 循环 revert 全部 confirmed decision；Service 兜底 `?? 'legacy'`→`?? 'identity'`（与 zod default 两处一致翻转）；afterJsonb candidateIds/decisionIds 数组化
+  - `apps/api/src/db/queries/identity-decision.ts` — **`findConfirmedDecisionByAuditId`（LIMIT 1）→ `findConfirmedDecisionsByAuditId`（返回全部 + ORDER BY created_at）**：折叠组 merge 一个 audit 挂 K 个 decision（087 partial unique 在 candidate_id 非 audit_id），原单行版 unmerge 漏 revert K-1 个 → R8 回归，裁定为 candidateIds[] 可采纳的硬前提
+  - `packages/types/src/video-merge.types.ts` — `CandidateGroup` 加 optional `candidateIds`（candidateId 单数标注 9-D 起多 pair 不填）；`MergeParams` 加 optional `candidateIds`（candidateId 标 @deprecated 保留兼容）
+  - `packages/types/src/identity-evidence.types.ts` — `PairScore` 加 optional `candidateId`（折叠后逐 pair 操作锚点；运行期身份字段不进 evidence_hash）
+  - `apps/server-next/src/app/admin/merge/_client/MergeCandidatesSection.tsx` — source 默认 `'identity'`（翻转）；handleMerge 透传 candidateIds（回退单数兼容）；handleReject 改收 (candidateId, label) 逐 pair；total 文案 identity 来源「共 N 对候选」区分 pair 数语义；onRejectPair 接线
+  - `apps/server-next/src/app/admin/merge/_client/MergeCandidateExpand.tsx` — props 加 onRejectPair 透传 EvidencePanel
+  - `apps/server-next/src/app/admin/merge/_client/EvidencePanel.tsx` — EvidencePanelProps 抽出 + 逐对明细行内「拒绝此对」按钮（pair.candidateId 存在时渲染，data-testid=`pair-reject-<id>`）
+  - `docs/decisions.md` — ADR-105a AMENDMENT 2026-06-03（CHG-VIR-9-D）：**D-105a-18**（折叠算法 + 分页/锚点语义）+ 端点契约纯增量变更（candidateIds 扩参 / unmerge 反查修复 / default 翻转）+ 遗留 3 项；偏离编号扩为 D-105a-1~18
+  - `docs/architecture.md` — §5.15 现状基线 + 决策写路径 ①③ 同步（candidateIds 循环挂载 / unmerge 复数反查 / reject 逐 pair）
+  - 测试：`identity-collapse-pairs.test.ts`（新建 6：空入参/N=2 退化/链式传递闭包/多分量行序/迟到边桥接/key 幂等）/ `identity-source-switch.test.ts`（默认翻转改写 + 折叠 2 用例：3 pair 同分量→1 行 + 多分量混合）/ `identity-decision-queries.test.ts`（复数化 + K 行返回 +1）/ `video-merges-confirm-decision.test.ts`（candidateIds 多锚点 + 任一失败快速失败 + K decision 循环 revert，+6）/ `video-merge-candidates.test.ts`（16 处 legacy 路径调用显式 source + schema 默认 identity 断言 +1）/ `video-merges-identity.test.ts`（4 处显式 legacy）/ `MergeCandidatesSection.test.tsx`（默认 identity 改写 + 折叠组 candidateIds/逐 pair 拒绝 8a/8b，+2）
+- **新增依赖**：无
+- **数据库变更**：无（零 migration 零 DDL——087 partial unique 在 candidate_id 已支持同 audit 多 confirmed；零新端点 → verify:endpoint-adr 不触发）
+- **测试**：门禁全过 typecheck / lint / verify:adr-contracts EXIT=0 + 全量 **478 files 6269 passed / 0 failed**（净 +18）。dev 实测：默认 identity 生效（202 pending pair）；100 pair 页内折叠 **49 行**（9 个 N>2 分量；「星辰变」4 视频 C(4,2)=6 pair→1 行）；N=2 单数锚点 40/40 保留；groupKey 两次取数幂等；source=legacy 显式仍可用（toggle 保留）。e2e 无 merge 工作台 spec（9-C 先例一致），回归由 43 组件单测 + dev 实测覆盖。
+- **共享层沉淀评估**：collapsePairs 当前消费方仅 VideoMergesService 1 处，但按裁定红线置于 `services/identity/`（与 aggregateGroup/blockingRecall 同层，识别为身份解析领域原语而非 merge 私有逻辑）；EvidencePanelProps 抽出为命名接口（原内联）。
+- **注意事项**：① **unmerge 反查修复是本卡正确性核心**——若只做 candidateIds[] 不修反查，K-candidate merge 后 unmerge 永久残留 K-1 个 confirmed decision（R8 回归）；arch-reviewer 裁定列为硬前提。② total 回显维持 pending pair 数（折叠后行数 ≤ total），同分量跨页拆行为已登记分页近似（候选规模显著增长时再评估 cursor 分页）。③ candidateId（单数）deprecate 保留：9-C 深链 `?candidate_id`（DirectMergeWorkspace 单 pair 语义）与既有消费方零变更。④ 翻默认 shadow 稳定性依据已记入 AMENDMENT（OBS-BACKFILL 100% 覆盖 + 198→202 pending + ingest 旁路持续注入）。⑤ VideoMergesService.ts 580→593（+13，注释与循环改写；折叠算法已按红线外置新文件，无新逻辑膨胀）。⑥ 遗留 3 项（AMENDMENT 登记）：部分合并 / 跨页折叠 / 「全部拒绝」按钮。⑦ D-N 闭环：**D-105a-18 随本卡实施闭环**。

@@ -6,6 +6,7 @@
  * - countRawCandidateGroups: 统计查询
  * - fetchVideoDetailsForCandidates: 批量 video + source 摘要查询
  * - VideoMergesService.listCandidates: 评分算法 + minScore 过滤 + 分页 + 推荐 target
+ *   （CHG-VIR-9-D 默认翻 identity 后本文件全部调用显式 source:'legacy'——测 legacy 实时聚合路径）
  * - ListCandidatesSchema: zod 默认值 + 边界校验
  */
 
@@ -131,7 +132,7 @@ describe('VideoMergesService.listCandidates', () => {
     mockQuery
       .mockResolvedValueOnce({ rows: [] })       // fetchRawCandidateGroups
       .mockResolvedValueOnce({ rows: [{ total: '0' }] })  // countRawCandidateGroups
-    const res = await svc.listCandidates({ type: undefined, minScore: 0.6, limit: 20, page: 1 })
+    const res = await svc.listCandidates({ source: 'legacy', type: undefined, minScore: 0.6, limit: 20, page: 1 })
     expect(res.data).toHaveLength(0)
     expect(res.total).toBe(0)
     expect(res.page).toBe(1)
@@ -146,7 +147,7 @@ describe('VideoMergesService.listCandidates', () => {
         makeVideoRow('vid-a', ['iqiyi', 'youku'], 2),
         makeVideoRow('vid-b', ['iqiyi', 'bilibili'], 3),
       ] })
-    const res = await svc.listCandidates({ type: undefined, minScore: 0.3, limit: 20, page: 1 })
+    const res = await svc.listCandidates({ source: 'legacy', type: undefined, minScore: 0.3, limit: 20, page: 1 })
     expect(res.data).toHaveLength(1)
     // shared = ['iqiyi'] (1), union = ['iqiyi','youku','bilibili'] (3) → score = 1/3 ≈ 0.333
     expect(res.data[0]?.score).toBeCloseTo(1 / 3, 3)
@@ -161,7 +162,7 @@ describe('VideoMergesService.listCandidates', () => {
         makeVideoRow('vid-b', ['youku'], 1),
       ] })
     // shared = 0, union = 2 → score = 0 < 0.6
-    const res = await svc.listCandidates({ type: undefined, minScore: 0.6, limit: 20, page: 1 })
+    const res = await svc.listCandidates({ source: 'legacy', type: undefined, minScore: 0.6, limit: 20, page: 1 })
     expect(res.data).toHaveLength(0)
   })
 
@@ -173,7 +174,7 @@ describe('VideoMergesService.listCandidates', () => {
         makeVideoRow('vid-a', ['iqiyi', 'youku'], 2),
         makeVideoRow('vid-b', ['iqiyi', 'youku'], 2),
       ] })
-    const res = await svc.listCandidates({ type: undefined, minScore: 0.6, limit: 20, page: 1 })
+    const res = await svc.listCandidates({ source: 'legacy', type: undefined, minScore: 0.6, limit: 20, page: 1 })
     expect(res.data[0]?.score).toBeCloseTo(1.0, 4)
   })
 
@@ -185,7 +186,7 @@ describe('VideoMergesService.listCandidates', () => {
         makeVideoRow('vid-a', [], 0),
         makeVideoRow('vid-b', [], 0),
       ] })
-    const res = await svc.listCandidates({ type: undefined, minScore: 0.6, limit: 20, page: 1 })
+    const res = await svc.listCandidates({ source: 'legacy', type: undefined, minScore: 0.6, limit: 20, page: 1 })
     expect(res.data).toHaveLength(0)
   })
 
@@ -197,7 +198,7 @@ describe('VideoMergesService.listCandidates', () => {
         makeVideoRow('vid-a', ['iqiyi', 'youku'], 2),   // sourceCount=2
         makeVideoRow('vid-b', ['iqiyi', 'youku'], 5),   // sourceCount=5 ← 更多
       ] })
-    const res = await svc.listCandidates({ type: undefined, minScore: 0, limit: 20, page: 1 })
+    const res = await svc.listCandidates({ source: 'legacy', type: undefined, minScore: 0, limit: 20, page: 1 })
     expect(res.data[0]?.recommendedTargetVideoId).toBe('vid-b')
   })
 
@@ -209,7 +210,7 @@ describe('VideoMergesService.listCandidates', () => {
         makeVideoRow('vid-a', ['iqiyi'], 2, '2025-01-01T00:00:00Z'),  // 更早
         makeVideoRow('vid-b', ['iqiyi'], 2, '2025-06-01T00:00:00Z'),
       ] })
-    const res = await svc.listCandidates({ type: undefined, minScore: 0, limit: 20, page: 1 })
+    const res = await svc.listCandidates({ source: 'legacy', type: undefined, minScore: 0, limit: 20, page: 1 })
     expect(res.data[0]?.recommendedTargetVideoId).toBe('vid-a')
   })
 
@@ -217,7 +218,7 @@ describe('VideoMergesService.listCandidates', () => {
     mockQuery
       .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rows: [{ total: '0' }] })
-    await svc.listCandidates({ type: 'anime', minScore: 0.6, limit: 20, page: 1 })
+    await svc.listCandidates({ source: 'legacy', type: 'anime', minScore: 0.6, limit: 20, page: 1 })
     const args1: unknown[] = mockQuery.mock.calls[0][1] as unknown[]
     const args2: unknown[] = mockQuery.mock.calls[1][1] as unknown[]
     expect(args1[0]).toBe('anime')
@@ -228,7 +229,7 @@ describe('VideoMergesService.listCandidates', () => {
     mockQuery
       .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rows: [{ total: '25' }] })
-    const res = await svc.listCandidates({ type: undefined, minScore: 0.6, limit: 10, page: 2 })
+    const res = await svc.listCandidates({ source: 'legacy', type: undefined, minScore: 0.6, limit: 10, page: 2 })
     const args: unknown[] = mockQuery.mock.calls[0][1] as unknown[]
     expect(args[2]).toBe(10)   // offset
     expect(res.page).toBe(2)
@@ -258,35 +259,35 @@ describe('VideoMergesService.listCandidates', () => {
 
     it('默认 sortField → score DESC（向后兼容 / CHG-SN-5-10-PATCH P2）', async () => {
       mockTwoGroups()
-      const res = await svc.listCandidates({ type: undefined, minScore: 0, limit: 20, page: 1 })
+      const res = await svc.listCandidates({ source: 'legacy', type: undefined, minScore: 0, limit: 20, page: 1 })
       expect(res.data[0]?.titleNormalized).toBe('b-high') // score=1.0 first
       expect(res.data[1]?.titleNormalized).toBe('a-low')  // score=0 second
     })
 
     it('sortField=score sortDir=asc → score 升序', async () => {
       mockTwoGroups()
-      const res = await svc.listCandidates({ type: undefined, minScore: 0, limit: 20, page: 1, sortField: 'score', sortDir: 'asc' })
+      const res = await svc.listCandidates({ source: 'legacy', type: undefined, minScore: 0, limit: 20, page: 1, sortField: 'score', sortDir: 'asc' })
       expect(res.data[0]?.titleNormalized).toBe('a-low')  // score=0 first
       expect(res.data[1]?.titleNormalized).toBe('b-high') // score=1.0 second
     })
 
     it('sortField=videoCount sortDir=desc → 候选数降序', async () => {
       mockTwoGroups()
-      const res = await svc.listCandidates({ type: undefined, minScore: 0, limit: 20, page: 1, sortField: 'videoCount', sortDir: 'desc' })
+      const res = await svc.listCandidates({ source: 'legacy', type: undefined, minScore: 0, limit: 20, page: 1, sortField: 'videoCount', sortDir: 'desc' })
       expect(res.data[0]?.titleNormalized).toBe('b-high') // 3 videos
       expect(res.data[1]?.titleNormalized).toBe('a-low')  // 2 videos
     })
 
     it('sortField=year sortDir=asc → 年份升序', async () => {
       mockTwoGroups()
-      const res = await svc.listCandidates({ type: undefined, minScore: 0, limit: 20, page: 1, sortField: 'year', sortDir: 'asc' })
+      const res = await svc.listCandidates({ source: 'legacy', type: undefined, minScore: 0, limit: 20, page: 1, sortField: 'year', sortDir: 'asc' })
       expect(res.data[0]?.year).toBe(2020)
       expect(res.data[1]?.year).toBe(2024)
     })
 
     it('sortField=titleNormalized sortDir=asc → 作品名 localeCompare 升序', async () => {
       mockTwoGroups()
-      const res = await svc.listCandidates({ type: undefined, minScore: 0, limit: 20, page: 1, sortField: 'titleNormalized', sortDir: 'asc' })
+      const res = await svc.listCandidates({ source: 'legacy', type: undefined, minScore: 0, limit: 20, page: 1, sortField: 'titleNormalized', sortDir: 'asc' })
       expect(res.data[0]?.titleNormalized).toBe('a-low')
       expect(res.data[1]?.titleNormalized).toBe('b-high')
     })
@@ -317,7 +318,7 @@ describe('VideoMergesService.listCandidates', () => {
         { ...makeVideoRow('vid-b1', ['iqiyi', 'youku'], 2), title_normalized: 'b_title' },
         { ...makeVideoRow('vid-b2', ['iqiyi', 'bilibili'], 2), title_normalized: 'b_title' },
       ] })
-    const res = await svc.listCandidates({ type: undefined, minScore: 0, limit: 20, page: 1 })
+    const res = await svc.listCandidates({ source: 'legacy', type: undefined, minScore: 0, limit: 20, page: 1 })
     expect(res.data).toHaveLength(2)
     // 同 score → 按 groupKey 升序：'a_title|2020|movie' < 'b_title|2020|movie'
     expect(res.data[0]?.groupKey).toBe('a_title|2020|movie')
@@ -335,6 +336,8 @@ describe('ListCandidatesSchema', () => {
     expect(result.limit).toBe(20)
     expect(result.page).toBe(1)
     expect(result.type).toBeUndefined()
+    // CHG-VIR-9-D / D-105a-18：默认 source 翻 identity（9-A AMENDMENT 兑现）
+    expect(result.source).toBe('identity')
   })
 
   it('minScore 字符串被 coerce 为数字', () => {
@@ -414,7 +417,7 @@ describe('VideoMergesService.listCandidates · perf baseline (ADR-105 §验证)'
 
       const svc = new VideoMergesService(mockDb)
       const t0 = performance.now()
-      const res = await svc.listCandidates({ type: undefined, minScore: 0, limit: 100, page: 1 })
+      const res = await svc.listCandidates({ source: 'legacy', type: undefined, minScore: 0, limit: 100, page: 1 })
       durations.push(performance.now() - t0)
       expect(res.data.length).toBe(GROUP_COUNT)
     }

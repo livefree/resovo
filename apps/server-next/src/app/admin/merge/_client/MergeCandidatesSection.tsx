@@ -56,7 +56,8 @@ const FALLBACK_NOTE_STYLE: CSSProperties = {
   border: '1px solid var(--state-warning-border)',
 }
 
-// CHG-VIR-9-C：候选来源 toggle（merge 默认 legacy / 用户裁定 (a)，shadow 稳定后再翻默认）
+// CHG-VIR-9-C：候选来源 toggle（初始默认 legacy / 用户裁定 (a)）
+// CHG-VIR-9-D / D-105a-18：默认翻 identity（9-A AMENDMENT「shadow 稳定后翻默认」兑现，降级链路保留）
 type CandidateSource = 'legacy' | 'identity'
 
 const SOURCE_ITEMS: readonly SegmentItem[] = [
@@ -80,7 +81,8 @@ export function CandidatesSection() {
   const [error, setError] = useState<Error | null>(null)
   const [expandedKeys, setExpandedKeys] = useState<ReadonlySet<string>>(new Set())
   // CHG-VIR-9-C：候选来源（请求值）+ 服务端回显（identity 空表降级 legacy 时不一致）
-  const [source, setSource] = useState<CandidateSource>('legacy')
+  // CHG-VIR-9-D：默认 identity（翻转）
+  const [source, setSource] = useState<CandidateSource>('identity')
   const [effectiveSource, setEffectiveSource] = useState<CandidateSource | null>(null)
   const toast = useToast()
 
@@ -111,10 +113,14 @@ export function CandidatesSection() {
     async (group: CandidateGroup, targetVideoId: string) => {
       const sourceVideoIds = group.videos.map((v) => v.id).filter((id) => id !== targetVideoId)
       try {
-        // CHG-VIR-9-C：identity 来源透传 candidateId（confirm 语义 / 单事务挂 decision，ADR-178 D-178-3）
+        // CHG-VIR-9-C：identity 来源透传 confirm 锚点（单事务挂 decision，ADR-178 D-178-3）
+        // CHG-VIR-9-D / D-105a-18：折叠组传全部 K 个 pair 的 candidateIds（回退单数兼容）
+        const candidateIds = group.candidateIds && group.candidateIds.length > 0
+          ? [...group.candidateIds]
+          : group.candidateId ? [group.candidateId] : undefined
         const result = await mergeVideos({
           sourceVideoIds, targetVideoId,
-          ...(group.candidateId ? { candidateId: group.candidateId } : {}),
+          ...(candidateIds ? { candidateIds } : {}),
         })
         toast.push({
           level: 'success',
@@ -152,15 +158,16 @@ export function CandidatesSection() {
   )
 
   // CHG-VIR-9-C：人工拒绝 identity 候选（pending→rejected）→ 刷新列表
+  // CHG-VIR-9-D / D-105a-18：折叠后逐 pair reject（per-candidate 端点，K 次独立调用，
+  // 不提供"拒绝整组"——前端循环非原子且分量内 pair 证据异质不应一刀切）
   const handleReject = useCallback(
-    async (group: CandidateGroup) => {
-      if (!group.candidateId) return
-      if (!confirm(`确认拒绝候选「${group.titleNormalized}」？\n\n拒绝后该候选不再出现在列表（复活由离线 job 在证据变化时重建）。`)) {
+    async (candidateId: string, label: string) => {
+      if (!confirm(`确认拒绝候选「${label}」？\n\n拒绝后该候选对不再出现在列表（复活由离线 job 在证据变化时重建）。`)) {
         return
       }
       try {
-        await rejectIdentityCandidate(group.candidateId, '合并工作台人工拒绝')
-        toast.push({ level: 'success', title: '已拒绝候选', description: group.titleNormalized })
+        await rejectIdentityCandidate(candidateId, '合并工作台人工拒绝')
+        toast.push({ level: 'success', title: '已拒绝候选', description: label })
         load()
       } catch (err: unknown) {
         toast.push({
@@ -269,7 +276,10 @@ export function CandidatesSection() {
           </AdminButton>
         </>
       )}
-      <span style={{ ...SECONDARY_TEXT, marginLeft: 'auto' }}>共 {total} 组</span>
+      {/* CHG-VIR-9-D：identity 来源 total = pending pair 数（页内折叠后行数 ≤ total），文案区分 */}
+      <span style={{ ...SECONDARY_TEXT, marginLeft: 'auto' }}>
+        {effectiveSource === 'identity' ? `共 ${total} 对候选` : `共 ${total} 组`}
+      </span>
     </div>
   )
 
@@ -338,7 +348,11 @@ export function CandidatesSection() {
           <CandidateExpand
             group={group}
             onMerge={(targetId) => handleMerge(group, targetId)}
-            onReject={group.candidateId ? () => void handleReject(group) : undefined}
+            onReject={group.candidateId
+              ? () => void handleReject(group.candidateId!, group.titleNormalized)
+              : undefined}
+            // CHG-VIR-9-D：折叠组逐 pair reject（EvidencePanel pair 明细行内按钮）
+            onRejectPair={(candidateId, label) => void handleReject(candidateId, label)}
           />
         )}
         pagination={{ pageSizeOptions: [20, 50, 100] }}

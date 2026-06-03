@@ -66,19 +66,21 @@ export async function insertIdentityDecision(
 
 /**
  * 经 video_merge_audit_id 反查未撤销的 confirmed decision（idx_identity_decision_audit）。
- * 返回 0..1 行（partial unique (candidate_id) WHERE decision='confirmed' + audit 一对一关联）。
+ * CHG-VIR-9-D / D-105a-18：折叠组 merge 一个 audit 可挂 K 个 decision（partial unique 在
+ * candidate_id 非 audit_id），原 LIMIT 1 单行版会让 unmerge 漏 revert K-1 个（R8 回归）→
+ * 改返回全部行，unmerge 循环 revert。
  */
-export async function findConfirmedDecisionByAuditId(
+export async function findConfirmedDecisionsByAuditId(
   client: PoolClient,
   videoMergeAuditId: string,
-): Promise<IdentityDecisionRow | null> {
+): Promise<IdentityDecisionRow[]> {
   const r = await client.query<IdentityDecisionRow>(
     `SELECT ${SELECT_COLS} FROM identity_decisions
      WHERE video_merge_audit_id = $1 AND decision = 'confirmed' AND reverted_at IS NULL
-     LIMIT 1`,
+     ORDER BY created_at ASC`,
     [videoMergeAuditId],
   )
-  return r.rows[0] ?? null
+  return r.rows
 }
 
 // ── ③ 标记 decision 已撤销（事务内 / D-178-4）────────────────────────
