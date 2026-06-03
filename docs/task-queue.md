@@ -2798,13 +2798,14 @@ CODENAME-MATRIX-E2E (依赖 Wave 3 验收期补丁 CODENAME-MATRIX ✅)
    - 依赖：无（可与 CHG-VIR-2/3/4 并行）。
    - 完成备注：**ADR-105a Accepted（arch-reviewer claude-opus-4-8 / agentId a3933826a5e470df8 / CONDITIONAL → 4 项修订吸收）**。decisions.md 尾部追加完整 ADR-105a（13 D 条 + `identity_candidate` DDL 草案 + type 兼容矩阵 + 三类证据权重表 + 聚合公式 + evidence_hash 输入域 + 10 红线 + 5 黄线 + 后果 + follow-up）；architecture.md §5.15 加「规划草案/未落 migration」前瞻小节。R1-R3（normalizeTitle/normalizeMergeKey 解耦 + core_title_key 等值非模糊 + identityScore/legacyScore 分离）+ Y1/Y3/Y5（幂等 partial unique / confirmed→merge 事务边界 / 性能基线分离）+ 未决 2/5（type 矩阵代码常量真源 / evidence_hash 输入域）全闭环。arch-reviewer 3 必修 + 1 建议全吸收：RR-1（分级可达性确定性映射 + 非 exact 封顶 0.90 + exactScore=0.95 取值理由）/ YY-1（external_exact 数据源校正 `video_external_refs.is_primary=true AND match_status='manual_confirmed'`，现表无 relation/exact）/ YY-3（exact 仅豁免 type_incompatible 单条 veto）/ YY-2（矩阵中性为初始保守取向）。门禁：verify:adr-contracts EXIT=0（verify-endpoint-adr ✅ 203 路由对齐 / 其余 ⚠️ 既有 advisory 与本 ADR 无关）+ verify:endpoint-adr EXIT=0；纯 docs 无 TS/TSX，typecheck/lint/test 基线不受影响。未新增端点/migration（identity_candidate 留 Phase 2b CHG-VIR-8）。执行模型: claude-opus-4-8
 
-4. **CHG-VIR-2** — ADR-175 起草（多语种标题模型）（状态：⬜ 未开始）
+4. **CHG-VIR-2** — ADR-175 起草（多语种标题模型）（状态：✅ 已完成 2026-06-02 / claude-opus-4-8 / 子代理 arch-reviewer (claude-opus-4-8)）
    - 创建时间：2026-06-02 19:41
    - 建议模型：**opus**
    - 范围：`media_catalog` 字段语义收紧（新增 `original_language` / `title_original` 原语种 / `title_en` 仅英文）+ `media_catalog_aliases` 结构化升级（region/script/kind/confidence/is_primary_for_locale）+ **locale fallback 链**（未决 1，简繁不归一并列 alias）+ 匹配分层（同语种强 / 跨语种 alias 中强 / 罗马音辅助）。
    - 门禁：Opus + arch-reviewer PASS；落 decisions.md ADR-175 + architecture.md schema 同步。
    - 验收要点：字段语义 + aliases 升级 + fallback 确定性规则 + 匹配分层；arch-reviewer PASS。
    - 依赖：无。
+   - 完成备注：**ADR-175 Accepted（arch-reviewer claude-opus-4-8 / agentId a714ba080c9641c5e / CONDITIONAL → 4 项修订吸收）**。decisions.md 追加 ADR-175（6 D 条：`original_language` 新增 + `title_original`/`title_en` 语义收紧 / `media_catalog_aliases` 5 列结构化升级〔region/script/kind/confidence/is_primary_for_locale〕+ partial unique / display_title 确定性 locale fallback 链 / 匹配分层复用 ADR-105a 既有极性 / `aliases[]` 数组列降级只读单一真源 / 写入口径；7 红线 + 5 黄线）；architecture.md §5.1a 加规划草案小节。arch-reviewer 红线-1（D-175-4 极性映射交叉错配 → 改为复用 ADR-105a `external_alias_match` 强正 / `core_title_key_equal` 中正，不回写 105a）+ 红线-2（拼音迁出须对 catalog 层 `title_en` 独立调 `isPinyin`，video 层 `title_en_is_pinyin` 仅参考）+ 黄线-1（基础去重键保留 `(catalog_id,alias)`）+ 黄线-2（回填先 lang/script/region 再选 primary）全吸收。门禁 verify:adr-contracts/endpoint-adr EXIT=0（203 路由对齐 + sql-schema 对齐 / adr-d-status.json 登记 D-175-1..6）；纯 docs 无 TS/TSX。**发现既有债务（范围外留痕）**：① architecture.md `release_date TEXT` vs migration 026 `DATE` 不一致（黄线-3，另立修正卡）；② verify-adr-d-numbers 正则 `D-\d+-\d+` 不识别 ADR-105a 的 `D-105a-N`（字母 ADR 编号审计盲区，D-105a-1..13 未进 adr-d-status.json），建议后续 MAINT 放宽正则。执行模型: claude-opus-4-8
 
 5. **CHG-VIR-3** — ADR-176 起草（catalog 按季粒度 + series_group）（状态：⬜ 未开始）
    - 创建时间：2026-06-02 19:41

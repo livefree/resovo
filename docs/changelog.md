@@ -13708,3 +13708,21 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **门禁/验收**：arch-reviewer CONDITIONAL → RR-1（评分公式补「分级可达性确定性映射 + 非 exact 封顶 0.90 + exactScore=0.95 取值理由」）/ YY-1（external_exact 数据源校正为 `video_external_refs.is_primary=true AND match_status='manual_confirmed'`，现表无 relation/exact）/ YY-3（exact 仅豁免 `type_incompatible` 单条 veto）/ YY-2（矩阵中性为初始保守取向）**4 项吸收 → Accepted**。verify:adr-contracts EXIT=0（verify-endpoint-adr ✅ 203 路由对齐；verify-error-message / verify-adr-d-numbers / enum-ssot ⚠️ 均既有 advisory 与本 ADR 无关）+ verify:endpoint-adr EXIT=0；纯 docs 改动无 TS/TSX，typecheck/lint/test 基线不受影响。
 - **注意事项**：① `core_title_key` 是**新增并行 key**，不改 `normalizeTitle`/`normalizeMergeKey` 语义、不写 catalog 唯一约束（红线 R1）；② 不引 pg_trgm，所有 blocking key 确定性等值（R2），字符相似召回须另起 DB capability ADR；③ 自动绑定开关 Phase 1-4 默认 OFF，非 exact 路径 `identityScore` 封顶 0.90 永不进自动绑定区；④ 外部 exact ID 证据 ADR-177 落地前读 `video_external_refs`（`match_status`，非 `relation`），落地后改读 `catalog_external_refs.relation='exact'`；⑤ Phase 0 本轮只做 CHG-VIR-1/2/3，CHG-VIR-4(ADR-177) 硬前置 PRE-2 留后续会话（用户裁决 2026-06-02）。
 - **[AI-CHECK]**：纯 ADR 决策文档（无代码）；分层/跨模块/重复逻辑/any/空 catch/硬编码颜色/函数文件规模均 N/A；红线 R1-R3 闭环（normalizeTitle 解耦 / 等值非模糊 / 评分字段分离）；arch-reviewer 独立第二意见 CONDITIONAL→吸收 4 项后 Accepted。结论：SAFE。
+
+## [CHG-VIR-2] ADR-175 起草（多语种标题模型：字段语义收紧 + aliases 结构化升级 + locale fallback + 匹配分层）
+- **完成时间**：2026-06-02
+- **记录时间**：2026-06-02 20:20
+- **执行模型**：claude-opus-4-8（建议 opus；ADR 起草强制 arch-reviewer PASS，主循环为 Opus）
+- **子代理**：arch-reviewer (claude-opus-4-8)（agentId a714ba080c9641c5e / CONDITIONAL → 4 项修订吸收转 Accepted）
+- **背景（根因）**：现 `media_catalog` 标题四形态语义松散——`title_en` 被拼音污染（`meta_quality.title_en_is_pinyin` + `PinyinDetector` 信号佐证）、`title_original` 无 `original_language` 标注语种；`media_catalog_aliases` 仅 `alias`/`lang`/`source`，无法支撑确定性 display_title locale fallback（设计 §9.4 未决 1）、简繁正确并列（ADR-174 红线）、跨语种/罗马音匹配分层。本卡（SEQ-20260602-03 Phase 0）落档多语种标题模型 ADR，不写业务代码、不改数据。
+- **修改文件**：
+  - `docs/decisions.md` — 尾部追加 ADR-175 完整章节（6 D 条：D-175-1 字段语义收紧 + 新增 `original_language` / D-175-2 `media_catalog_aliases` 5 列结构化升级〔region/script/kind/confidence/is_primary_for_locale〕+ partial unique `(catalog_id,lang,region,script) WHERE is_primary_for_locale` / D-175-3 display_title 确定性 6 级 fallback 链 / D-175-4 匹配分层复用 ADR-105a 既有极性 / D-175-5 `aliases[]` 数组列降级只读、表为单一真源 / D-175-6 写入口径；7 红线 + 5 黄线 + 后果 + 3 follow-up）
+  - `docs/architecture.md` — §5.1a 末尾新增「ADR-175 多语种标题模型升级（规划草案 / 未落 migration）」前瞻小节
+  - `docs/audit/adr-d-status.json` — verify 脚本自动登记 D-175-1..6（pending）
+  - `docs/task-queue.md` / `docs/tasks.md` — CHG-VIR-2 状态流转
+- **新增依赖**：无（红线 R1 明禁 OpenCC / 繁简转换依赖）
+- **数据库变更**：无（`original_language` + aliases 5 列 + partial unique 为 schema 草案，Phase 4 CHG-VIR-11 才落 migration）
+- **门禁/验收**：arch-reviewer CONDITIONAL → 红线-1（D-175-4 匹配分层极性与 ADR-105a 权重表交叉错配 → 改为复用既有 `external_alias_match` 强正 +0.45 / `core_title_key_equal` 中正 +0.35，不自创新极性、不回写 ADR-105a）/ 红线-2（拼音迁出驱动信号层级错配 → 明确对 catalog 层 `media_catalog.title_en` 重新调 `isPinyin`，video 层 `videos.meta_quality.title_en_is_pinyin` 仅交叉验证）/ 黄线-1（基础去重键保留 `(catalog_id,alias)` 取舍）/ 黄线-2（存量回填先 lang/script/region 再选 primary）**4 项吸收 → Accepted**。verify:adr-contracts EXIT=0（verify-endpoint-adr ✅ 203 路由 / verify-sql-schema-alignment ✅）+ verify:endpoint-adr EXIT=0；纯 docs 无 TS/TSX，typecheck/lint/test 基线不受影响。
+- **注意事项**：① 简繁**不做字形归一**（不引 OpenCC / R1），简体/繁体/港澳台经 `script`（ISO 15924 Hans/Hant）维度并列 alias，匹配键复用 `normalizeForExternalMatch` 不改语义（R2）；② `media_catalog_aliases` 表为别名结构化**单一真源**，`aliases[]`（META-06）降级只读（R3，迁移 Phase 4）；③ display_title fallback 同 locale 多候选确定性排序 `is_primary_for_locale DESC, confidence DESC NULLS LAST, source 优先级, created_at ASC`（R4）；④ `title_en` 收紧仅英文 + 拼音迁出 = Phase 4 CHG-VIR-11；⑤ D-175-4 完全复用 ADR-105a 证据条目，无需 AMENDMENT ADR-105a。
+- **发现既有债务（范围外留痕，不在本卡修）**：① `architecture.md` `release_date TEXT` vs migration 026 `release_date DATE` 类型不一致（arch-reviewer 黄线-3，建议另立文档修正卡）；② `scripts/verify-adr-d-numbers.mjs` 正则 `D-\d+-\d+` 不识别 ADR-105a 的 `D-105a-N`（字母 ADR 编号审计盲区，D-105a-1..13 未进 `adr-d-status.json` 的 pendingTotal），建议后续 MAINT 放宽正则支持 `D-\d+[a-z]?-\d+`。
+- **[AI-CHECK]**：纯 ADR 决策文档（无代码）；分层/跨模块/重复逻辑/any/空 catch/硬编码颜色/函数文件规模均 N/A；红线 R1-R2 闭环（简繁不归一靠 script / 归一函数语义不改）；与 ADR-105a 极性自洽（复用既有条目）；arch-reviewer 独立第二意见 CONDITIONAL→吸收 4 项后 Accepted。结论：SAFE。

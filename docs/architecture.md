@@ -319,6 +319,15 @@ META-06 新增字段：
 - `backdrop_url TEXT`：横幅/背景图 URL
 - `trailer_url TEXT`：预告片 URL
 
+**ADR-175 多语种标题模型升级（规划草案 / 未落 migration / Phase 4 CHG-VIR-11 落地）**
+
+> ⚠️ **规划中，非现状基线**：当前生产无以下字段。真源详见 `docs/decisions.md` ADR-175；落地时迁出本标注。
+
+- **`media_catalog` 字段语义收紧**：新增 `original_language TEXT NULL`（原语种 BCP47，如 `ja`/`ko`/`zh-Hans`/`en`）标注 `title_original` 语种；`title_en` 收紧为**仅真英文**（拼音/罗马音迁出 `media_catalog_aliases` `kind='romanization'`，由 `PinyinDetector` + `title_en_is_pinyin` 驱动）；`title`/`title_normalized`/`languages[]` 语义不变。
+- **`media_catalog_aliases` 结构化升级**（现状仅 `alias`/`lang`/`source` + `UNIQUE(catalog_id,alias)`，migration 026）：新增 `region`（ISO 3166-1）/ `script`（ISO 15924 `Hans`/`Hant`/`Jpan`/`Latn`/`Kore`，**简繁区分不归一**）/ `kind`（`official`/`localized`/`romanization`/`abbreviation`/`aka`/`original`）/ `confidence NUMERIC(4,2)` / `is_primary_for_locale BOOLEAN DEFAULT false`；新增 partial unique `(catalog_id,lang,COALESCE(region,''),COALESCE(script,'')) WHERE is_primary_for_locale`（每 locale 至多一首选）。表为别名结构化**单一真源**，`aliases[]` 数组列降级只读缓存。
+- **display_title locale fallback（确定性）**：requested locale primary alias → same language other region alias → `title` → `title_original` → `title_en` → raw observed title；同 locale 多候选按 `is_primary_for_locale DESC, confidence DESC NULLS LAST, source 优先级（复用 CATALOG_SOURCE_PRIORITY）, created_at ASC`。简繁**不字形归一**（不 OpenCC），仅选既有别名。
+- **匹配分层**（对接 ADR-105a alias blocking key）：同 `(lang,script)` 归一别名等值 = 强；跨语种 alias 桥接 = 中正；`romanization` 仅辅助、不单独构成强证据。
+
 ### 5.2 video_sources
 
 - `season_number INT NOT NULL DEFAULT 1`

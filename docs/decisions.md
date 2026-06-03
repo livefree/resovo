@@ -19073,3 +19073,129 @@ D-105a-1 ~ D-105a-13 共 13 条，随 Phase 1a/2a/2b/2c 实施卡（CHG-VIR-5/7/
 3. 字符相似 / 编辑距离召回（若 blocking 并集 recall 仍不足）→ 另起独立 DB capability ADR（评估 pg_trgm 引入成本，本 ADR 明确不在范围）。
 
 ---
+
+## ADR-175：多语种标题模型 — 字段语义收紧 + media_catalog_aliases 结构化升级 + locale fallback + 匹配分层（SEQ-20260602-03 / CHG-VIR-2 / Phase 0）
+
+- **状态**：**Accepted**（arch-reviewer claude-opus-4-8 / agentId a714ba080c9641c5e / CONDITIONAL → 红线-1 极性映射 + 红线-2 拼音层级 + 黄线-1 去重键 + 黄线-2 回填顺序 **4 项已吸收**；Phase 0 定档卡，不写业务代码）
+- **日期**：2026-06-02
+- **决策者**：主循环 claude-opus-4-8 / arch-reviewer (claude-opus-4-8) CONDITIONAL→Accepted
+- **关联**：ADR-174（`normalizeMergeKey`/`normalizeForExternalMatch` 剥标点 + CJK 不变量 + **简繁不归一** / 本 ADR 严格继承，匹配键复用不改语义）/ ADR-105a（alias normalized blocking key + 匹配分层证据来源 / 本 ADR 供其 alias 维度）/ ADR-161（Bangumi name_cn/name_jp 写入 title/title_original）/ ADR-170（豆瓣富集写 title_en/aliases）/ META-06（migration 042 `aliases[]`/`languages[]`）/ migration 026（`media_catalog` + `media_catalog_aliases` 建表）/ migration 030（`video_aliases`→`media_catalog_aliases` 迁移）/ CLAUDE.md「schema 变更同步 architecture.md」
+- **设计来源**：`docs/designs/video-identity-resolution-redesign_20260602.md` §4.1（四层标题模型 + locale fallback 链）/ §4.2（匹配分层）/ §9.4 未决项 1（display_title fallback 规则缺失，本 ADR 补）/ §2 已确认产品决策（简繁不归一并列 localized alias）
+
+### 背景
+
+现状 `media_catalog` 标题字段（migration 026 + META-06 / architecture.md §5.1a）：
+
+- `title`：简中标准名（Douban NAME > Bangumi name_cn > 爬虫标题），**保留标点空格**（展示 + 前台搜索）。
+- `title_en`：注释为「英文名（TMDB title 或爬虫 title_en）」，但**实测被拼音/罗马音污染**——`meta_quality.title_en_is_pinyin` 信号（migration 077 / `PinyinDetector.ts`）正是为标记此污染而生。
+- `title_original`：注释为「原始语言标题（日文动漫名、韩语片名）」，但**无 `original_language` 字段标注其语种**，写入口径不一致（不知该 original 是 ja / ko / 其他）。
+- `title_normalized`：归并键（ADR-174 `normalizeMergeKey` 剥标点）。
+- `languages TEXT[]`（META-06）：作品语言列表（音轨/制作语言）。
+- `aliases TEXT[]`（META-06）：**非结构化**别名数组，与 `media_catalog_aliases` 表语义重叠（双真源隐患）。
+
+现状 `media_catalog_aliases` 表（migration 026）：`id` / `catalog_id` FK / `alias` / `lang`（BCP47 可空）/ `source`（douban/bangumi/tmdb/crawler/manual）/ `created_at` + `UNIQUE(catalog_id, alias)`。**缺结构化维度**（region/script/kind/confidence/is_primary_for_locale），无法支撑：① 确定性 display_title locale fallback（设计 §9.4 未决 1）；② 简繁正确并列（zh-Hans / zh-Hant / zh-HK 不互相覆盖，ADR-174 红线）；③ 跨语种 / 罗马音匹配分层（ADR-105a alias 证据）。
+
+本 ADR 落档多语种标题模型：**字段语义收紧 + 别名表结构化升级 + 确定性 fallback + 匹配分层**。**不在本 ADR 改数据**（拼音迁出 / original_language 回填 = Phase 4 CHG-VIR-11）。
+
+### 决策要点
+
+**D-175-1（标题字段语义收紧 + 新增 `original_language`）**
+- **新增 `media_catalog.original_language TEXT NULL`**：原语种 BCP47 language subtag（如 `ja` / `ko` / `zh-Hans` / `en`；NULL=未知）。标注 `title_original` 是哪个语种的标题。
+- `title_original` 语义明确为「**`original_language` 语种的原标题**」（日文动漫名、韩语片名等单一原语种），不混写其他语种。
+- `title_en` 收紧为「**仅真英文标题**」（TMDB en title / 英文官方名）；**拼音/罗马音不再写入 `title_en`**，改入 `media_catalog_aliases`（`kind='romanization'`）。存量污染由 Phase 4 CHG-VIR-11 迁出——**本 ADR 不改数据**。**迁出驱动信号层级（红线-2 澄清）**：现有 `title_en_is_pinyin` 信号在 **video 层**（`videos.meta_quality`，`MetadataEnrichService` 对 `videos.title_en` 调 `PinyinDetector.isPinyin` 产出），**判定对象是 `videos.title_en` 而非 `media_catalog.title_en`**（catalog 层无此信号列）。故 Phase 4 迁出 `media_catalog.title_en` 时须**对 catalog 字段重新调用 `isPinyin`** 做 catalog 级独立判定；`videos.meta_quality.title_en_is_pinyin`（video 层）仅作交叉验证/参考，**不直接驱动 catalog 迁移**（避免 video↔catalog 同名字段层级混淆）。
+- `title`（简中标准名 / 展示主标题）+ `title_normalized`（归并键 / ADR-174）+ `languages[]`（作品语言列表，与 `original_language` 标题语种区分）**语义不变**。
+
+**D-175-2（`media_catalog_aliases` 结构化升级）**
+- 新增列（全部 nullable 或有默认，**不破坏存量行** / R7）：
+
+  | 列 | 类型 | 语义 |
+  | --- | --- | --- |
+  | `region` | TEXT NULL | 地区限定（BCP47 region subtag / ISO 3166-1，如 `CN`/`TW`/`HK`/`JP`/`US`；NULL=不限地区） |
+  | `script` | TEXT NULL | 文字系统（ISO 15924，如 `Hans`/`Hant`/`Jpan`/`Latn`/`Kore`；NULL=未知）。**简繁区分关键，不归一** |
+  | `kind` | TEXT NULL | 别名类型（代码常量枚举 `official`/`localized`/`romanization`/`abbreviation`/`aka`/`original`；罗马音/拼音=`romanization`） |
+  | `confidence` | NUMERIC(4,2) NULL | 置信度 [0,1]（来源映射 / Y4） |
+  | `is_primary_for_locale` | BOOLEAN NOT NULL DEFAULT false | 该 `(lang, region)` locale 下的首选展示别名 |
+
+- `lang` 升级语义：BCP47 language subtag（与 `region`/`script` 组合表达完整 locale；存量值保留）。
+- **约束升级**：
+  - 保留 `UNIQUE(catalog_id, alias)`（字符串级去重）。**基础去重键取舍（黄线-1）**：保留 `(catalog_id, alias)` 而非放宽含 `script/region`——简繁字形本就是不同 `alias` 字符串（如「斗罗大陆」/「鬥羅大陸」），并列入库不撞此约束；仅「同字符串别名需跨 `(script,region)` 并存」（罕见，如纯 `Latn` 英文/数字别名挂多 locale）受限。若 Phase 4 实测确需，再放宽为 `(catalog_id, alias, COALESCE(script,''), COALESCE(region,''))`（本 ADR 暂不放宽，承认该限制可接受）。
+  - **新增 partial unique**：`(catalog_id, lang, COALESCE(region,''), COALESCE(script,'')) WHERE is_primary_for_locale` —— 每 locale 至多一个首选展示别名（确定性 fallback 前提）。
+  - **简繁并列**：`zh-Hans` 与 `zh-Hant` 是不同 `(lang,script)` 行，互不覆盖；**不做字形归一 / 不引 OpenCC**（继承 ADR-174 / 设计 §2 / R1）。
+
+  ```sql
+  -- media_catalog_aliases 结构化升级（草案 / Phase 4 实施卡落 migration，本 ADR 仅定档）
+  ALTER TABLE media_catalog_aliases
+    ADD COLUMN region                TEXT,
+    ADD COLUMN script                TEXT,
+    ADD COLUMN kind                  TEXT,
+    ADD COLUMN confidence            NUMERIC(4,2),
+    ADD COLUMN is_primary_for_locale BOOLEAN NOT NULL DEFAULT false;
+
+  CREATE UNIQUE INDEX uq_catalog_aliases_primary_locale
+    ON media_catalog_aliases (catalog_id, lang, COALESCE(region,''), COALESCE(script,''))
+    WHERE is_primary_for_locale;
+  ```
+
+**D-175-3（display_title locale fallback 链 — 确定性 / 设计 §4.1 + 未决 1）**
+- 展示标题 fallback **必须确定性定义**，避免不同页面展示不一致。默认链路：
+  ```text
+  requested locale primary alias        # (lang+region+script) 命中 is_primary_for_locale 的 alias
+    → same language other region alias   # lang 匹配，region/script 放宽（按确定性排序取一）
+    → media_catalog.title                # 简中标准名
+    → title_original                     # 原语种标题
+    → title_en                           # 真英文标题
+    → raw observed title                 # title_observations（Phase 1b / CHG-VIR-6）
+  ```
+- **简繁 fallback 示例**：`zh-Hans` 缺失时可 fallback 到同语系 `zh-Hant` / `zh-HK` localized alias，但**不得把简繁字形自动转换为同一 alias**（不 OpenCC）；**只允许选择既有别名**（R1）。
+- **同 locale 多候选确定性排序**（R4）：`is_primary_for_locale DESC, confidence DESC NULLS LAST, source 优先级（manual>tmdb>bangumi>douban>crawler，复用 `CATALOG_SOURCE_PRIORITY`）, created_at ASC` 取第一，保证任意页面同输入同输出。
+
+**D-175-4（匹配分层 — 复用 ADR-105a 既有证据条目极性，不自创新极性 / 红线-1）**
+- 本 ADR **不引入与 ADR-105a 权重表冲突的新极性命名**；alias 匹配按「**是否有外部权威背书**」映射到 ADR-105a **既有**证据条目（D-105a-3 权重表），极性以 ADR-105a 为准：
+  - **外部权威别名命中** → ADR-105a `external_alias_match`（**强正 +0.45**）：alias 来自外部源（`kind ∈ {official, localized}` 且 `source ∈ {tmdb, bangumi, douban, manual}`）且 year/type/country 不冲突。**跨语种**（如英文官方名 ↔ 中文译名）经外部权威别名桥接是强身份信号——归强正的关键是**有外部权威背书**，而非语种异同（与「跨语种翻译歧义所以更弱」的直觉相反：有权威源背书才是决定性的）。
+  - **同语种归一别名等值** → 计入 ADR-105a `core_title_key_equal`（**中正 +0.35**）的等值召回：同 `(lang, script)` 别名经 `normalizeForExternalMatch` 归一后与候选 `core_title_key` 等值（含同一 catalog 内多别名归一到同 key），属确定性等值召回，中正。
+  - **罗马音/拼音辅助** → `kind='romanization'` 别名**仅作 blocking 召回辅助**，**不单独构成** `external_alias_match` 或 `core_title_key_equal` 证据（罗马音歧义高、易误绑，如不同作品同拼音）；命中仅扩大候选集，分值由其他证据决定。
+- **匹配键统一经现有归一**（`normalizeForExternalMatch` / `normalizeMergeKey`，**不改语义** / R2）；**简繁不在匹配键归一**（靠 `script` 维度区分，不塌缩 / R1）。
+- **与 ADR-105a 的边界**：本 ADR 完全复用 ADR-105a 既有条目，**不新增 ADR-105a 权重条目、无需回写 ADR-105a**（红线-1 二选一中取「复用既有极性」方案，消除极性交叉矛盾）。
+
+**D-175-5（`aliases[]` 数组列 vs `media_catalog_aliases` 表收敛 — 单一真源）**
+- `media_catalog.aliases TEXT[]`（META-06）与 `media_catalog_aliases` 表语义重叠（双真源隐患，违价值排序 2）。决策：**`media_catalog_aliases` 表为别名结构化单一真源**；`media_catalog.aliases[]` 降级为「未结构化原始别名缓存（只读兼容）」。
+- 本 ADR 定方向：**新写入走表**（带 region/script/kind/confidence/source）；数组列存量迁移到表 + 数组列只读化 = **Phase 4 数据清洗**（CHG-VIR-11），不在本 ADR 改数据。
+
+**D-175-6（写入口径 + 来源优先级）**
+- 别名写入：source（douban/bangumi/tmdb/crawler/manual）+ confidence + kind；写入幂等基于 `UNIQUE(catalog_id, alias)`（ON CONFLICT 升级结构化列，不覆盖更高 confidence/manual）。
+- `title`/`title_en`/`title_original`/`original_language` 写入仍走 `MediaCatalogService.safeUpdate`（source 优先级 + locked_fields 保护）；`original_language` 作为新字段纳入 `CatalogUpdateData`（Phase 4 实施时补类型）。
+
+### 红线（实施前必须满足，违反即阻塞）
+
+- **R1** 简繁/字形**不做归一**：简体/繁体/港澳台译名并列 alias（`script` 区分），**不引 OpenCC / 繁简转换依赖**（继承 ADR-174 + 设计 §2 + 禁技术栈外依赖）。
+- **R2** **不改** `normalizeTitle` / `normalizeMergeKey` / `normalizeForExternalMatch` 语义；匹配键复用现有归一，简繁靠 `script` 区分不进归一键。
+- **R3** `media_catalog_aliases` 表为别名结构化**单一真源**；`aliases[]` 数组列降级只读，不新增第二真源。
+- **R4** display_title fallback 链**确定性**（同 locale 多候选确定性排序），避免页面展示不一致。
+- **R5** `title_en` 收紧为**仅英文**，拼音/罗马音迁出到 `kind='romanization'` alias（迁移 Phase 4，本 ADR 不改数据）。迁出须对 **catalog 层 `media_catalog.title_en`** 独立调 `isPinyin` 判定，**不得**直接复用 video 层 `videos.meta_quality.title_en_is_pinyin` 当 catalog 迁移驱动（层级错配 / 红线-2）。
+- **R6** schema 变更（`original_language` + aliases 5 新列 + partial unique）**同步 architecture.md §5.1a**。
+- **R7** 新增列**不破坏存量行**：全部 nullable 或带默认（`is_primary_for_locale DEFAULT false`）；存量 `lang`/`alias`/`source` 保留。
+
+### 黄线
+
+- **Y-175-1** `original_language` 回填（Phase 4 CHG-VIR-11）：从 Bangumi（日漫→`ja`）/ 豆瓣 regions / source 站点推断回填；回填策略与置信度实施期定。
+- **Y-175-2** 存量行结构化列回填**顺序**（黄线-2）：**先**回填 `lang`/`script`/`region`（与 Y-175-1 语种推断同批），**再**按 D-175-3 确定性排序为每 locale 选一置 `is_primary_for_locale=true`——primary 选举依赖 lang/script 维度，维度未就绪不得先选 primary。migration 030 灌入的存量 crawler 别名 `lang=NULL` 须先回填 lang 再纳入 locale 分组。`media_catalog_aliases` 写入幂等的 `ON CONFLICT(catalog_id, alias)` 升级结构化列时亦遵此顺序（不在维度未就绪时选 primary）。
+- **Y-175-3** `kind` 枚举（official/localized/romanization/abbreviation/aka/original）以**代码常量为真源**（与 ADR-105a type 矩阵同范式），DB 不加 CHECK 约束以便扩展（或加宽松 CHECK，实施期定）。
+- **Y-175-4** `confidence` 来源映射（外部源 match confidence → alias confidence）实施期定；无来源置信时 NULL（排序 NULLS LAST）。
+- **Y-175-5** 与 ADR-105a 对接：alias 表升级后，ADR-105a 的 alias normalized blocking key 读结构化 alias（按 lang/script 维度分层），跨语种/罗马音按 D-175-4 极性进 scoring；**D-175-4 已完全复用 ADR-105a 既有证据条目（`external_alias_match` 强正 / `core_title_key_equal` 中正），未引入新极性，无需回写/AMENDMENT ADR-105a**（红线-1 闭环）。
+
+### 后果
+
+- 正面：多语种 display_title 确定性 fallback（消除页面展示不一致）；跨语种召回（英文↔中文经 alias 桥接）+ 简繁正确并列（不误塌缩）；`title_en` 纯净（拼音迁出后真英文）；`original_language` 明确原语种语义；别名单一真源（消除数组列/表双真源）；为 ADR-105a alias 匹配分层供结构化数据。
+- 负面/成本：`media_catalog_aliases` 结构化迁移 + `is_primary_for_locale` 回填成本；`original_language` 回填（Phase 4）；`aliases[]` 数组列→表过渡期双源并存；罗马音辅助权重需样本校准（避免误召回）。
+
+### D-N 偏离登记
+
+D-175-1 ~ D-175-6 共 6 条，随 Phase 4 实施卡（CHG-VIR-11）+ ADR-105a 对接逐条闭环；advisory，不阻塞 CI。本 ADR 经 arch-reviewer CONDITIONAL（agentId a714ba080c9641c5e）→ 红线-1（D-175-4 极性映射改为复用 ADR-105a 既有条目 `external_alias_match` 强正 / `core_title_key_equal` 中正，消除交叉矛盾）+ 红线-2（D-175-1/R5 拼音迁出须对 catalog 层 `title_en` 独立调 `isPinyin`，不复用 video 层 `title_en_is_pinyin`）+ 黄线-1（D-175-2 基础去重键保留 `(catalog_id,alias)` 取舍）+ 黄线-2（Y-175-2 回填先 lang/script/region 再选 primary）修订吸收后转 **Accepted**。**黄线-3**（`architecture.md` `release_date TEXT` vs migration 026 `release_date DATE` 既有文档债）范围外，留痕另立修正卡，不并入本 ADR。
+
+### 已知 follow-up（不在本 ADR）
+
+1. `title_en` 拼音/罗马音迁出 + `original_language` 回填 + `aliases[]` 数组列→表迁移 → Phase 4 CHG-VIR-11（数据清洗）。
+2. 别名 `kind`/`confidence` 来源映射规则细化 → Phase 4 实施卡定档。
+3. display_title fallback 在前台/后台/搜索三处消费方的统一接入 → 各消费方实施卡（本 ADR 仅定 fallback 规则真源）。
+
+---
