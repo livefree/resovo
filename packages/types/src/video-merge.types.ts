@@ -3,6 +3,7 @@
  */
 
 import type { VideoType } from './video.types'
+import type { GroupIdentityScore } from './identity-evidence.types'
 
 /** 候选组中单个 video 摘要 */
 export interface VideoSummaryForMerge {
@@ -31,10 +32,16 @@ export interface CandidateGroup {
   readonly year: number | null
   readonly type: VideoType
   readonly videos: readonly VideoSummaryForMerge[]
-  /** source_overlap_ratio ∈ [0, 1] */
+  /** source_overlap_ratio ∈ [0, 1]（legacyScore / ADR-105 v1 排序口径） */
   readonly score: number
   /** 推荐合并目标：source 最多的 video，同等时取最早 createdAt */
   readonly recommendedTargetVideoId: string
+  /**
+   * ADR-105a D-105a-6/9/15：多证据身份评分（与 legacyScore=`score` 字段分离 / 红线 R3）。
+   * Phase 2a（CHG-VIR-7）新增展示字段，**不参与排序/计数/分页**（D-105a-15 黄线 b1）；
+   * optional 兼容旧消费方 + 评分异常时可省略而不破坏候选行返回。
+   */
+  readonly identity?: GroupIdentityScore
 }
 
 export interface ListCandidatesParams {

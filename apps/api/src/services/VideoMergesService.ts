@@ -57,6 +57,8 @@ import {
   pickRecommendedTarget,
   mapVideoRow,
 } from './VideoMergesService.schemas'
+// CHG-VIR-7 Phase 2a：多证据身份评分（identityScore/evidence，与 legacyScore 分离 / R3）
+import { scoreGroup } from './identity'
 
 // ── 公开 re-export（外部 import 路径保持不变）──────────────────
 export {
@@ -118,8 +120,11 @@ export class VideoMergesService {
         year: raw.year,
         type: raw.type,
         videos,
-        score: Math.round(score * 10000) / 10000,  // 4 位小数
+        score: Math.round(score * 10000) / 10000,  // 4 位小数（legacyScore）
         recommendedTargetVideoId: pickRecommendedTarget(videos),
+        // CHG-VIR-7：附加多证据身份评分（D-105a-9/15）。纯 CPU 无新 DB 往返；
+        // minScore 过滤/排序/分页仍只看 legacyScore（Y-105a-1，候选数量/排序逐值不变）
+        identity: scoreGroup(videos),
       })
     }
 

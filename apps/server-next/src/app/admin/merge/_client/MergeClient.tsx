@@ -47,6 +47,7 @@ import { ApiClientError } from '@/lib/api-client'
 import { SplitSection } from './MergeSplitSection'
 import { AuditSection } from './MergeAuditSection'
 import { BatchMergeWorkspace } from './BatchMergeWorkspace'
+import { EvidencePanel } from './EvidencePanel'
 
 // ── 错误码差异化 description（ADR-105 §错误码 + CHG-SN-5-12-PATCH P0/P2-1）─────
 
@@ -167,6 +168,21 @@ const IMPACT_PREVIEW_STYLE: CSSProperties = {
   padding: '8px 10px',
   borderRadius: '6px',
   background: 'var(--bg-surface)',
+  border: '1px solid var(--border-subtle)',
+}
+
+// ── CHG-VIR-7：身份评分（identityScore 与 legacyScore 双值并存，文案区分防语义混淆 / R3）
+// EvidencePanel 抽到 ./EvidencePanel（避免既有超限文件膨胀），此处仅留 pill 样式
+
+const IDENTITY_PILL_STYLE: CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  padding: '2px 10px',
+  borderRadius: '999px',
+  fontSize: '12px',
+  fontWeight: 700,
+  background: 'var(--bg-surface)',
+  color: 'var(--fg-default)',
   border: '1px solid var(--border-subtle)',
 }
 
@@ -505,13 +521,21 @@ function CandidateExpand({ group, onMerge }: CandidateExpandProps) {
 
   return (
     <div style={EXPAND_PANEL_STYLE}>
-      {/* 置信度 pill + 候选数 */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+      {/* 置信度（legacyScore=源重合度）+ 身份分（identityScore=多证据）双 pill + 候选数（字段分离 / R3）*/}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
         <span style={CONFIDENCE_PILL_STYLE} data-testid="confidence-pill">
           {(group.score * 100).toFixed(1)}% 置信度
         </span>
+        {group.identity && (
+          <span style={IDENTITY_PILL_STYLE} data-testid="identity-pill">
+            身份分 {(group.identity.identityScore * 100).toFixed(1)}%
+          </span>
+        )}
         <span style={SECONDARY_TEXT}>{group.videos.length} 个候选视频</span>
       </div>
+
+      {/* CHG-VIR-7：多证据身份评分面板（为何可合并 / 为何拦截 / 逐对明细）*/}
+      {group.identity && <EvidencePanel identity={group.identity} />}
 
       {/* 视频卡片网格（左右对比） */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '8px' }}>

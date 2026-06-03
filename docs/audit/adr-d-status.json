@@ -1,8 +1,8 @@
 {
-  "generatedAt": "2026-06-03T06:42:28.341Z",
+  "generatedAt": "2026-06-03T07:41:55.609Z",
   "summary": {
-    "closedTotal": 312,
-    "pendingTotal": 27
+    "closedTotal": 316,
+    "pendingTotal": 23
   },
   "perAdr": [
     {
@@ -301,14 +301,10 @@
     {
       "adrId": "ADR-105a",
       "total": 15,
-      "closed": 7,
+      "closed": 11,
       "pending": [
-        "D-105a-10",
         "D-105a-11",
         "D-105a-12",
-        "D-105a-4",
-        "D-105a-5",
-        "D-105a-6",
         "D-105a-7",
         "D-105a-8"
       ]
