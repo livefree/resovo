@@ -109,10 +109,15 @@ export interface CandidateExpandProps {
   onRejectPair?: (candidateId: string, label: string) => void
 }
 
+/** 单次 merge 视频上限 = sourceVideoIds max 10 + target 1（MergeSchema / ADR-105；Codex review FIX：
+ * 折叠后 N>11 组在 UI 真实可达，执行必败 422 → 前端禁用 + 提示，逐 pair 操作仍可用） */
+const MAX_MERGE_GROUP_VIDEOS = 11
+
 export function CandidateExpand({ group, onMerge, onReject, onRejectPair }: CandidateExpandProps) {
   const [targetId, setTargetId] = useState(group.recommendedTargetVideoId)
   const targetVideo = group.videos.find((v) => v.id === targetId)
   const sourceVideos = group.videos.filter((v) => v.id !== targetId)
+  const exceedsMergeLimit = group.videos.length > MAX_MERGE_GROUP_VIDEOS
 
   return (
     <div style={EXPAND_PANEL_STYLE}>
@@ -181,14 +186,25 @@ export function CandidateExpand({ group, onMerge, onReject, onRejectPair }: Cand
         </div>
       )}
 
-      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '8px' }}>
+        {/* Codex review FIX：折叠组超单次 merge 上限（11 视频）→ 禁用整组合并，引导逐 pair 处理 */}
+        {exceedsMergeLimit && (
+          <span style={SECONDARY_TEXT} data-testid="merge-limit-note">
+            组内 {group.videos.length} 个视频超过单次合并上限（{MAX_MERGE_GROUP_VIDEOS}），请在逐对明细中分批处理
+          </span>
+        )}
         {/* CHG-VIR-9-C：identity 来源候选可人工拒绝（confirm = 执行合并透传 candidateId）*/}
         {onReject && (
           <AdminButton size="sm" variant="danger" onClick={onReject} data-testid="candidate-reject">
             拒绝候选
           </AdminButton>
         )}
-        <AdminButton size="sm" variant="primary" onClick={() => onMerge(targetId)}>
+        <AdminButton
+          size="sm"
+          variant="primary"
+          disabled={exceedsMergeLimit}
+          onClick={() => onMerge(targetId)}
+        >
           执行合并（{group.videos.length - 1} → target）
         </AdminButton>
       </div>

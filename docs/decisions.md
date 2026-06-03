@@ -19174,7 +19174,7 @@ D-105a-1 ~ D-105a-13 共 13 条，随 Phase 1a/2a/2b/2c 实施卡（CHG-VIR-5/7/
 **端点契约变更（向后兼容，纯增量）**：
 - **保留** `GET /admin/video-merges/candidates` 路径。`source=identity` 时返回行从「每 pair 一行」改为「每连通分量一行」（N-video group，C(N,2) 重复消除；`CandidateGroup` 新增 optional `candidateIds`，单 pair 时 `candidateId` 单数保留填充兼容 9-C）。`legacy` 路径逐值不变（Y-105a-1）。
 - **query 不变**（`listPendingCandidatePairs` / `countPendingCandidatePairs` / ORDER BY identity_score DESC / LIMIT-OFFSET 逐字不变）；折叠为 **Service 层页内 union-find**（D-105a-18）。`total` 回显维持 pending **pair 数**（非折叠后 group 数，UI 文案「共 N 对候选」区分）；同一连通分量跨页时拆成多行（跨页不折叠），属与 legacy 路径 Service-sort 同源的 pre-existing 分页近似局限。
-- `POST /admin/video-merges` Body **新增 optional** `candidateIds: string[] (uuid, 1-20)`（9-B 单数 `candidateId` 保留 deprecate，二者互斥 + 数组去重 refine）。折叠组 confirm 时传该组全部 K 个 pair 的 candidateId：事务前逐个快速失败校验（404/409/422，D-178-3 口径不变），事务内循环挂 K 个 decision(confirmed) **同一 audit_id**（087 partial unique 在 candidate_id 非 audit_id，DB 允许同 audit 多行），from-state 守卫逐个，任一冲突整 merge ROLLBACK（R8 无半完成态）。
+- `POST /admin/video-merges` Body **新增 optional** `candidateIds: string[] (uuid, 1-55)`（cap = C(11,2)，merge 集合上限 11 视频〔sourceVideoIds max 10 + target〕完全图 pair 数；裁定原值 20 经 Codex stop-time review 修订——20 < 55 会把合法 11-video 折叠组 confirm 误拒 422。9-B 单数 `candidateId` 保留 deprecate，二者互斥 + 数组去重 refine）。折叠组 confirm 时传该组全部 K 个 pair 的 candidateId：事务前逐个快速失败校验（404/409/422，D-178-3 口径不变），事务内循环挂 K 个 decision(confirmed) **同一 audit_id**（087 partial unique 在 candidate_id 非 audit_id，DB 允许同 audit 多行），from-state 守卫逐个，任一冲突整 merge ROLLBACK（R8 无半完成态）。
 - **unmerge 反查对称修复（红线）**：`findConfirmedDecisionByAuditId`（LIMIT 1，0..1 行）→ `findConfirmedDecisionsByAuditId`（返回全部，ORDER BY created_at），unmerge 循环 revert 该 audit 全部 confirmed decision——原单行版在 K-candidate merge 后 unmerge 会漏 revert K-1 个 decision（永久 confirmed + 未 reverted 残留，R8 回归），是 `candidateIds[]` 可被采纳的硬前提。
 - `GET …/candidates` `source` query **default `legacy`→`identity`**（zod default 与 Service `?? 'identity'` 兜底两处一致翻转）。identity 空表自动降级 legacy + envelope `source:'legacy'` 回显不变；source toggle 保留。
 - **无新 route / 无 migration / 无 DDL 变更**（verify:endpoint-adr 不触发；087 约束已支持同 audit 多 confirmed）。
@@ -19185,7 +19185,7 @@ D-105a-1 ~ D-105a-13 共 13 条，随 Phase 1a/2a/2b/2c 实施卡（CHG-VIR-5/7/
 - 折叠组 `GroupIdentityScore` 复用既有 `aggregateGroup`（D-105a-15 min/union），零重复实现；`score`（legacyScore）= min over pairs（同保守口径，null 沿 9-A 旧语义当 0）。
 - **reject = 逐 pair**（per-candidate 端点 `POST /admin/identity-candidates/:id/reject` K 次独立调用，路径不变）；否决「拒绝整组」单按钮（前端循环非原子、半完成态、分量内 pair 证据异质不应一刀切）。`PairScore` 加 optional `candidateId` 作逐 pair 操作锚点（运行期身份字段，不进 evidence_hash）。
 
-**遗留**：① 部分合并（任选 cluster 子集）暂不支持，UI 维持整组 N-1→target；支持时不在合并集合内的 pair candidateId 不得传（422）。② 跨页同分量折叠（需全量折叠或 cursor 分页）留后续观察，pending 候选规模显著增长时再评估。③ 「全部拒绝」便捷按钮（非原子，须逐个反馈）留可选增强。
+**遗留**：① 部分合并（任选 cluster 子集）暂不支持，UI 维持整组 N-1→target；支持时不在合并集合内的 pair candidateId 不得传（422）。② 跨页同分量折叠（需全量折叠或 cursor 分页）留后续观察，pending 候选规模显著增长时再评估。③ 「全部拒绝」便捷按钮（非原子，须逐个反馈）留可选增强。④ 折叠组 N>11（超单次 merge 上限）整组合并不可达——UI 禁用「执行合并」+ 提示分批走逐对明细（Codex review FIX，`MAX_MERGE_GROUP_VIDEOS=11`）；超大分量的分批合并辅助留可选增强。
 
 **D-N 偏离登记更新**：本 AMENDMENT 新增 D-105a-18，ADR-105a 偏离编号扩为 **D-105a-1 ~ D-105a-18 共 18 条**（18 随 CHG-VIR-9-D 实施闭环）。
 

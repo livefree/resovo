@@ -284,6 +284,28 @@ describe('MergeCandidatesSection (CHG-VIR-9-C)', () => {
     })
   })
 
+  it('8c. 折叠组超单次 merge 上限（N=12 > 11）：执行合并禁用 + 提示渲染（Codex review FIX）', async () => {
+    const manyVideos = Array.from({ length: 12 }, (_, i) => ({
+      id: `vid-${i}`, title: `V${i}`, titleNormalized: '復仇者聯盟', year: 2019, type: 'movie' as const,
+      createdAt: '2025-01-01T00:00:00Z', sourceCount: 1, sourceSiteKeys: ['iqiyi'],
+    }))
+    const bigGroup = {
+      ...CLUSTER_GROUP,
+      groupKey: manyVideos.map((v) => v.id).sort().join('|'),
+      recommendedTargetVideoId: 'vid-0',
+      videos: manyVideos,
+    }
+    listCandidatesMock.mockResolvedValue({ data: [bigGroup], total: 11, page: 1, limit: 20, source: 'identity' as const })
+    render(<CandidatesSection />)
+    await waitFor(() => screen.getByText('復仇者聯盟'))
+    fireEvent.click(screen.getByText('復仇者聯盟'))
+    await waitFor(() => screen.getByTestId('merge-limit-note'))
+    const mergeBtn = screen.getByRole('button', { name: /执行合并/ }) as HTMLButtonElement
+    expect(mergeBtn.disabled).toBe(true)
+    fireEvent.click(mergeBtn)
+    expect(mergeVideosMock).not.toHaveBeenCalled()
+  })
+
   it('8b. 折叠组逐 pair 拒绝：EvidencePanel 行内按钮 → rejectIdentityCandidate(对应 pair id)', async () => {
     listCandidatesMock.mockResolvedValue(CLUSTER_RES)
     rejectIdentityCandidateMock.mockResolvedValueOnce({ candidateId: 'cand-uuid-0002', status: 'rejected', decisionId: 'dec-2' })

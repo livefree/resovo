@@ -46,7 +46,9 @@ export const MergeSchema = z.object({
   candidateId: z.string().uuid().optional(),
   // CHG-VIR-9-D / D-105a-18：折叠组 confirm——连通分量全部 pending pair 的 candidate id，
   // 事务内循环挂 K 个 decision(confirmed) 同一 audit_id。与 candidateId 互斥。
-  candidateIds: z.array(z.string().uuid()).min(1).max(20).optional(),
+  // cap = C(11,2) = 55（Codex review FIX：merge 集合上限 11 视频〔sourceVideoIds max 10 + target〕
+  // 的完全图 pair 数；原 cap 20 会把合法 11-video 折叠组 confirm 误拒 422）。
+  candidateIds: z.array(z.string().uuid()).min(1).max(55).optional(),
 }).refine(
   v => !v.sourceVideoIds.includes(v.targetVideoId),
   { message: 'targetVideoId 不得在 sourceVideoIds 中', path: ['targetVideoId'] },

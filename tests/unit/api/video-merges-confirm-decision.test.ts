@@ -494,4 +494,13 @@ describe('MergeSchema candidateId（纯增量向后兼容）', () => {
   it('candidateIds 空数组 → 拒绝（min 1）', () => {
     expect(MergeSchema.safeParse({ ...base, candidateIds: [] }).success).toBe(false)
   })
+
+  // Codex review FIX：cap = C(11,2) = 55（merge 集合上限 11 视频的完全图 pair 数；
+  // 原 cap 20 会把合法 11-video 折叠组 confirm 误拒）
+  it('candidateIds 55 个（11-video 完全图上限）通过 / 56 个拒绝', () => {
+    const ids = (n: number) =>
+      Array.from({ length: n }, (_, i) => `00000000-0000-0000-0000-${String(i).padStart(12, '0')}`)
+    expect(MergeSchema.safeParse({ ...base, candidateIds: ids(55) }).success).toBe(true)
+    expect(MergeSchema.safeParse({ ...base, candidateIds: ids(56) }).success).toBe(false)
+  })
 })

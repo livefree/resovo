@@ -100,6 +100,7 @@ export interface MergeParams {
   /**
    * CHG-VIR-9-D / D-105a-18：折叠组 confirm——该连通分量全部 pending pair 的 candidate id。
    * 事务内循环挂 K 个 decision(confirmed) 同一 audit_id；与 candidateId（单数）互斥。
+   * cap = C(11,2) = 55（merge 集合上限 11 视频的完全图 pair 数 / Codex review FIX）。
    */
   readonly candidateIds?: readonly string[]
 }
