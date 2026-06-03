@@ -2757,7 +2757,7 @@ CODENAME-MATRIX-E2E (依赖 Wave 3 验收期补丁 CODENAME-MATRIX ✅)
 
 - **状态**：🟡 规划中
 - **创建时间**：2026-06-02 19:41
-- **最后更新时间**：2026-06-02 21:30（**Phase 0 完结 — 四份 ADR 全 Accepted**：CHG-VIR-1/2/3/4 ✅〔ADR-105a/175/176/177〕 **+ 前置门禁 CHG-VIR-PRE-1 ✅**〔insertNewVideo schema 漂移修复 / 全量零回归〕 **+ CHG-VIR-PRE-2 ✅**〔ADR-177 关系定档「并存+上卷」/ arch-reviewer 认可〕；**CHG-VIR-4〔ADR-177〕已 Accepted**〔arch-reviewer CONDITIONAL → RR-A/RR-B 2 必修红线 + 4 黄线吸收 / 哨兵 -1→0 校正 / 10 D 条 + R10 不变量〕；**Phase 1+ 实施待启动**，留用户决定）
+- **最后更新时间**：2026-06-02 22:15（**Phase 0 完结 — 四份 ADR 全 Accepted**：CHG-VIR-1/2/3/4 ✅〔ADR-105a/175/176/177〕 **+ 前置门禁 CHG-VIR-PRE-1 ✅**〔insertNewVideo schema 漂移修复 / 全量零回归〕 **+ CHG-VIR-PRE-2 ✅**〔ADR-177 关系定档「并存+上卷」/ arch-reviewer 认可〕；**CHG-VIR-4〔ADR-177〕已 Accepted**〔arch-reviewer CONDITIONAL → RR-A/RR-B 2 必修红线 + 4 黄线吸收 / 哨兵 -1→0 校正 / 10 D 条 + R10 不变量〕；**Phase 1+ 实施待启动**，留用户决定。**2026-06-02 22:15 复核 Phase 1** → CHG-VIR-5/6 卡修订〔F1 title_observations 真源=设计 §1b·不另起 ADR / F2 CHG-VIR-5 依赖补 CHG-VIR-2·ADR-175 titleKind / F3 CHG-VIR-6 补采集容错验收〕）
 - **目标**：把「标准化标题 → 单 key 命中即合并」升级为 Entity Resolution（Blocking 召回 → 多证据 Scoring → 阈值分级 Decision → 可逆审计 + 决策记忆），为合并/拆分提供稳健、可解释、可回滚基础。严格按「先旁路 → 再影响排序 → 最后碰生产归并阈值」推进。
 - **范围**：`apps/api`（TitleIdentityParser 新增 / MediaCatalogService.findOrCreate / VideoMergesService / CrawlerService / 离线候选 job / migrations）+ `packages/types` + `apps/server-next`（/admin/merge + 审核台 similar tab 统一候选）+ `docs/decisions.md`（4 份 ADR）+ `docs/architecture.md`（schema 同步）。
 - **方案全文**：`docs/designs/video-identity-resolution-redesign_20260602.md`（commit 27c29a5d；含 §9 arch-reviewer 审核 + §10 修订处置）。
@@ -2834,13 +2834,13 @@ CODENAME-MATRIX-E2E (依赖 Wave 3 验收期补丁 CODENAME-MATRIX ✅)
    - 建议模型：sonnet（纯函数实施，规格来自 ADR-105a/175）
    - 范围：新建 `apps/api/src/services/TitleIdentityParser.ts` `parseTitle(raw)→{coreTitleKey,facets,titleKind,parserVersion,confidence}`；**不改 TitleNormalizer**；大量 fixture（书名号/全半角/标点 · 国语/粤语/字幕 · 加长/导剪/SP/OVA/剧场版 · 第N季/S2/Part2/序号 · 源站噪声）。**Y4**：fixture 须区分「序号即身份（复仇者联盟4）」与「序号即季/卷（第4季）」。
    - 验收要点：fixture 全绿 + `normalizeTitle`/`normalizeMergeKey` 输出完全不变；facets 仅观测不参与决策。
-   - 依赖：CHG-VIR-1（facets/parser 规格）。
+   - 依赖：CHG-VIR-1（ADR-105a：`core_title_key` 归一规则 D-105a-1 / facets 字段 / Y4 序号护栏 D-105a-13）+ **CHG-VIR-2**（ADR-175：`titleKind` 枚举 original/localized/romanized/aka/crawler/edition 规格来源 · 2026-06-02 复核 F2 补全）。
 
 8. **CHG-VIR-6** — Phase 1b：title_observations 去重聚合表 + shadow 写入（状态：⬜ 未开始）
    - 创建时间：2026-06-02 19:41
-   - 建议模型：sonnet（schema 来自 ADR；实施）
-   - 范围：migration `title_observations`（去重唯一键 video_id+site_key+source_name+raw_title_hash+parser_version；observed_count/first_seen/last_seen）+ 采集链路 shadow 写入；不参与合并决策。
-   - 验收要点：去重生效（重复标题只增 observed_count）；零生产行为变更。
+   - 建议模型：sonnet（**schema 真源 = 设计文档 §1b**，无独立 ADR；实施）
+   - 范围：migration `title_observations`（**schema 真源 = `docs/designs/video-identity-resolution-redesign_20260602.md` §1b，无独立 ADR**——单一用途 shadow 观测表，不进任何唯一约束/归并决策〔2026-06-02 复核 F1 定档〕；字段：去重唯一键 video_id+COALESCE(site_key)+COALESCE(source_name)+raw_title_hash+parser_version + observed_count/first_seen/last_seen/parsed_facets_jsonb）+ 采集链路 shadow 写入；不参与合并决策。
+   - 验收要点：去重生效（重复标题只增 observed_count）；**采集链路写 observation 容错（fire-and-forget / 写失败不阻断入库主流程 · 2026-06-02 复核 F3 补全）**；零生产行为变更（采集主路径无回归）。
    - 依赖：CHG-VIR-5。
 
 **Phase 2 — 候选证据化（候选对象 video-pair）**
