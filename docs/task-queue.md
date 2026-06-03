@@ -2757,7 +2757,7 @@ CODENAME-MATRIX-E2E (依赖 Wave 3 验收期补丁 CODENAME-MATRIX ✅)
 
 - **状态**：🟡 规划中
 - **创建时间**：2026-06-02 19:41
-- **最后更新时间**：2026-06-02 19:41
+- **最后更新时间**：2026-06-02 20:30（**Phase 0 进度：CHG-VIR-1/2/3 ✅ 已完成**〔ADR-105a/175/176 全 Accepted〕；CHG-VIR-4〔ADR-177〕+ 硬前置 CHG-VIR-PRE-2 + CHG-VIR-PRE-1 待后续会话 / 用户裁决「本轮只做 1/2/3」2026-06-02）
 - **目标**：把「标准化标题 → 单 key 命中即合并」升级为 Entity Resolution（Blocking 召回 → 多证据 Scoring → 阈值分级 Decision → 可逆审计 + 决策记忆），为合并/拆分提供稳健、可解释、可回滚基础。严格按「先旁路 → 再影响排序 → 最后碰生产归并阈值」推进。
 - **范围**：`apps/api`（TitleIdentityParser 新增 / MediaCatalogService.findOrCreate / VideoMergesService / CrawlerService / 离线候选 job / migrations）+ `packages/types` + `apps/server-next`（/admin/merge + 审核台 similar tab 统一候选）+ `docs/decisions.md`（4 份 ADR）+ `docs/architecture.md`（schema 同步）。
 - **方案全文**：`docs/designs/video-identity-resolution-redesign_20260602.md`（commit 27c29a5d；含 §9 arch-reviewer 审核 + §10 修订处置）。
@@ -2807,13 +2807,14 @@ CODENAME-MATRIX-E2E (依赖 Wave 3 验收期补丁 CODENAME-MATRIX ✅)
    - 依赖：无。
    - 完成备注：**ADR-175 Accepted（arch-reviewer claude-opus-4-8 / agentId a714ba080c9641c5e / CONDITIONAL → 4 项修订吸收）**。decisions.md 追加 ADR-175（6 D 条：`original_language` 新增 + `title_original`/`title_en` 语义收紧 / `media_catalog_aliases` 5 列结构化升级〔region/script/kind/confidence/is_primary_for_locale〕+ partial unique / display_title 确定性 locale fallback 链 / 匹配分层复用 ADR-105a 既有极性 / `aliases[]` 数组列降级只读单一真源 / 写入口径；7 红线 + 5 黄线）；architecture.md §5.1a 加规划草案小节。arch-reviewer 红线-1（D-175-4 极性映射交叉错配 → 改为复用 ADR-105a `external_alias_match` 强正 / `core_title_key_equal` 中正，不回写 105a）+ 红线-2（拼音迁出须对 catalog 层 `title_en` 独立调 `isPinyin`，video 层 `title_en_is_pinyin` 仅参考）+ 黄线-1（基础去重键保留 `(catalog_id,alias)`）+ 黄线-2（回填先 lang/script/region 再选 primary）全吸收。门禁 verify:adr-contracts/endpoint-adr EXIT=0（203 路由对齐 + sql-schema 对齐 / adr-d-status.json 登记 D-175-1..6）；纯 docs 无 TS/TSX。**发现既有债务（范围外留痕）**：① architecture.md `release_date TEXT` vs migration 026 `DATE` 不一致（黄线-3，另立修正卡）；② verify-adr-d-numbers 正则 `D-\d+-\d+` 不识别 ADR-105a 的 `D-105a-N`（字母 ADR 编号审计盲区，D-105a-1..13 未进 adr-d-status.json），建议后续 MAINT 放宽正则。执行模型: claude-opus-4-8
 
-5. **CHG-VIR-3** — ADR-176 起草（catalog 按季粒度 + series_group）（状态：⬜ 未开始）
+5. **CHG-VIR-3** — ADR-176 起草（catalog 按季粒度 + series_group）（状态：✅ 已完成 2026-06-02 / claude-opus-4-8 / 子代理 arch-reviewer (claude-opus-4-8)）
    - 创建时间：2026-06-02 19:41
    - 建议模型：**opus**
    - 范围：catalog 按季粒度（第二季/SP/OVA 独立 catalog）+ **season_number 纳入 catalog 唯一键**（解 `026:84` 唯一索引 + `normalizeTitle` 剥季的硬阻塞）+ `series_group`/`catalog_relations`（season_of/edition_of/remake_of/spinoff_of/same_work_candidate）+ catalog 无 `deleted_at` 的「删前全字段快照」回滚范式（未决 4，继承 migration 084）。
    - 门禁：Opus + arch-reviewer PASS；落 decisions.md ADR-176 + architecture.md。
    - 验收要点：唯一键改造方案 + series_group 模型 + 回滚范式；arch-reviewer PASS。
    - 依赖：无。
+   - 完成备注：**ADR-176 Accepted（arch-reviewer claude-opus-4-8 / agentId a8930709146880a0f / CONDITIONAL → 5 项修订吸收）**。decisions.md 追加 ADR-176（6 D 条 + 7 红线：`season_number` 列 + 唯一键改造 `COALESCE(season_number,0)` 解「无外部 ID 分季撞 partial unique」硬阻塞〔存量 NULL→0 逐值不变〕/ catalog 按季粒度〔S2/SP/OVA/剧场版独立〕/ `catalog_relations` 5 关系有向图 + `series_group` 可选锚 / catalog 无 `deleted_at` 删行回滚范式〔继承 084 + ADR-174 D-174-6 R11/R12〕/ findOrCreate 不纳入 season 留 Phase 5）；architecture.md §5.1a 加规划草案小节。arch-reviewer R-1（`catalog_relations` 反对称四 relation 单向无环 + `same_work_candidate` 对称规范化有序对 → 补关系不变量 + R7）+ R-2（合并删行关系边端点重指向 survivor + old/new 双列快照回滚复位）+ Y-A（哨兵 0 依赖 `CHECK>0` 禁放宽）+ Y-B（回填全系列一致禁半回填）+ Y-C（architecture 同步端点重指向）全吸收。门禁 verify:adr-contracts/endpoint-adr EXIT=0（203 路由 + sql-schema 对齐 / adr-d-status.json 登记 D-176-1..6）；纯 docs 无 TS/TSX。执行模型: claude-opus-4-8
 
 6. **CHG-VIR-4** — ADR-177 起草（外部 ID 映射真源 `catalog_external_refs`）（状态：⬜ 未开始）
    - 创建时间：2026-06-02 19:41

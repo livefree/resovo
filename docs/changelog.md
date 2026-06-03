@@ -13726,3 +13726,24 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **注意事项**：① 简繁**不做字形归一**（不引 OpenCC / R1），简体/繁体/港澳台经 `script`（ISO 15924 Hans/Hant）维度并列 alias，匹配键复用 `normalizeForExternalMatch` 不改语义（R2）；② `media_catalog_aliases` 表为别名结构化**单一真源**，`aliases[]`（META-06）降级只读（R3，迁移 Phase 4）；③ display_title fallback 同 locale 多候选确定性排序 `is_primary_for_locale DESC, confidence DESC NULLS LAST, source 优先级, created_at ASC`（R4）；④ `title_en` 收紧仅英文 + 拼音迁出 = Phase 4 CHG-VIR-11；⑤ D-175-4 完全复用 ADR-105a 证据条目，无需 AMENDMENT ADR-105a。
 - **发现既有债务（范围外留痕，不在本卡修）**：① `architecture.md` `release_date TEXT` vs migration 026 `release_date DATE` 类型不一致（arch-reviewer 黄线-3，建议另立文档修正卡）；② `scripts/verify-adr-d-numbers.mjs` 正则 `D-\d+-\d+` 不识别 ADR-105a 的 `D-105a-N`（字母 ADR 编号审计盲区，D-105a-1..13 未进 `adr-d-status.json` 的 pendingTotal），建议后续 MAINT 放宽正则支持 `D-\d+[a-z]?-\d+`。
 - **[AI-CHECK]**：纯 ADR 决策文档（无代码）；分层/跨模块/重复逻辑/any/空 catch/硬编码颜色/函数文件规模均 N/A；红线 R1-R2 闭环（简繁不归一靠 script / 归一函数语义不改）；与 ADR-105a 极性自洽（复用既有条目）；arch-reviewer 独立第二意见 CONDITIONAL→吸收 4 项后 Accepted。结论：SAFE。
+
+## [CHG-VIR-3] ADR-176 起草（catalog 按季粒度 + season_number 唯一键 + catalog_relations/series_group + 删行回滚范式）
+- **完成时间**：2026-06-02
+- **记录时间**：2026-06-02 20:30
+- **执行模型**：claude-opus-4-8（建议 opus；ADR 起草强制 arch-reviewer PASS，主循环为 Opus）
+- **子代理**：arch-reviewer (claude-opus-4-8)（agentId a8930709146880a0f / CONDITIONAL → 5 项修订吸收转 Accepted）
+- **背景（根因）**：catalog 长期需按季粒度（S2/SP/OVA/剧场版独立 catalog），但现 `uq_catalog_title_year_type` = `UNIQUE(title_normalized,year,type) WHERE 四外部 ID 全 NULL`（partial）+ `normalizeTitle` 剥季 → **无外部 ID 的分季作品** title_normalized 相同撞约束无法独立 catalog（有外部 ID 的如 Bangumi 分季 subject 已可独立）；且 `media_catalog` 无 `season_number` 列、无 `deleted_at`，缺 catalog-catalog 关系模型与合并回滚范式。本卡（SEQ-20260602-03 Phase 0）落档 catalog 按季 ADR，不写业务代码、不落 migration。
+- **修改文件**：
+  - `docs/decisions.md` — 尾部追加 ADR-176 完整章节（6 D 条：D-176-1 catalog 按季粒度 / D-176-2 新增 `season_number INT NULL` + 唯一键改造 `COALESCE(season_number,0)` 解硬阻塞〔存量 NULL→0 逐值不变 + 哨兵 0 依赖 CHECK>0〕/ D-176-3 `catalog_relations` 5 关系有向图〔season_of/edition_of/remake_of/spinoff_of/same_work_candidate〕+ 关系不变量〔反对称单向无环 + 对称规范化有序对〕+ `series_group` 可选锚 / D-176-4 catalog 删行回滚范式〔继承 084 `_bak_*` + ADR-174 D-174-6/R11/R12 + 关系边端点重指向 survivor〕/ D-176-5 不改 normalizeTitle 剥季〔季用显式列〕+ findOrCreate 不纳入 season 留 Phase 5 / D-176-6 写入口径 + 回填一致性；7 红线 + 5 黄线 + 后果 + 4 follow-up）
+  - `docs/architecture.md` — §5.1a 新增「ADR-176 catalog 按季粒度升级（规划草案 / 未落 migration）」前瞻小节
+  - `docs/audit/adr-d-status.json` — verify 脚本自动登记 D-176-1..6（pending）
+  - `docs/task-queue.md` / `docs/tasks.md` — CHG-VIR-3 状态流转 + SEQ Phase 0 进度（1/2/3 ✅）
+- **新增依赖**：无
+- **数据库变更**：无（`season_number` 列 + 唯一键改造 + `catalog_relations` 表为 schema 草案，Phase 5 CHG-VIR-12 才落 migration）
+- **门禁/验收**：arch-reviewer CONDITIONAL → R-1（`catalog_relations` 反对称四 relation 单向无环 + `same_work_candidate` 对称规范化有序对 → 补 D-176-3 关系不变量 + R7）/ R-2（catalog 合并删行关系边端点重指向 survivor + old/new 双列快照回滚复位，对齐 084 videos 指向范式）/ Y-A（`COALESCE` 哨兵 0 依赖 `CHECK>0`，禁 Phase 5 放宽 `>=0`）/ Y-B（`season_number` 回填全系列一致禁半回填态）/ Y-C（architecture.md 同步端点重指向）**5 项吸收 → Accepted**。verify:adr-contracts EXIT=0（verify-endpoint-adr ✅ 203 路由 / verify-sql-schema-alignment ✅）+ verify:endpoint-adr EXIT=0；纯 docs 无 TS/TSX。
+- **注意事项**：① **不改 `normalizeTitle` 剥季语义**（红线 R1），季由新增显式列 `season_number` 承载；② 唯一键 `COALESCE(season_number,0)` 哨兵 0 正确性依赖 `CHECK>0`，Phase 5 禁放宽（R2/Y-A）；③ catalog-catalog 合并删行（无 `deleted_at`）必须继承 084 全字段快照范式 + 关系边端点重指向 survivor（R3/R-2），provenance/locks 只插不删（信息论不可逆 / ADR-174 R11/R12）；④ SP/OVA/剧场版独立 catalog 经 `catalog_relations` `edition_of`/`spinoff_of` 关联，不塞 season_number（Y-176-1）；⑤ `season_number` 列（catalog 持久化真源）vs ADR-105a facets season_number（video-pair scoring）层级清晰互补；⑥ findOrCreate 纳入 season + 实装全部留 Phase 5 CHG-VIR-12。
+- **[AI-CHECK]**：纯 ADR 决策文档（无代码）；分层/跨模块/重复逻辑/any/空 catch/硬编码颜色/函数文件规模均 N/A；红线 R1-R4 闭环（normalizeTitle 不改 / COALESCE 存量不破坏 / 回滚快照继承 / edition·language_variant 归属不变）；与 ADR-105a/174 对接自洽；arch-reviewer 独立第二意见 CONDITIONAL→吸收 5 项后 Accepted。结论：SAFE。
+
+---
+
+> **SEQ-20260602-03 Phase 0 本轮收尾（用户裁决「只做 1/2/3」）**：CHG-VIR-1（ADR-105a）/ CHG-VIR-2（ADR-175）/ CHG-VIR-3（ADR-176）三份 ADR 全 Accepted（各经 arch-reviewer claude-opus-4-8 CONDITIONAL → 修订吸收）。**CHG-VIR-4（ADR-177 外部 ID 映射真源）未做**——硬前置 CHG-VIR-PRE-2（`video_external_refs`↔`catalog_external_refs` 关系预研定档）尚未完成，依赖未满足，留后续会话；CHG-VIR-PRE-1（`insertNewVideo` schema 漂移修复，Phase 4 前置）亦待做。Phase 0 整体（4 份 ADR）未完成，不发 PHASE COMPLETE。

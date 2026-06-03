@@ -328,6 +328,15 @@ META-06 新增字段：
 - **display_title locale fallback（确定性）**：requested locale primary alias → same language other region alias → `title` → `title_original` → `title_en` → raw observed title；同 locale 多候选按 `is_primary_for_locale DESC, confidence DESC NULLS LAST, source 优先级（复用 CATALOG_SOURCE_PRIORITY）, created_at ASC`。简繁**不字形归一**（不 OpenCC），仅选既有别名。
 - **匹配分层**（对接 ADR-105a alias blocking key）：同 `(lang,script)` 归一别名等值 = 强；跨语种 alias 桥接 = 中正；`romanization` 仅辅助、不单独构成强证据。
 
+**ADR-176 catalog 按季粒度升级（规划草案 / 未落 migration / Phase 5 CHG-VIR-12 落地）**
+
+> ⚠️ **规划中，非现状基线**：当前生产 `media_catalog` 无 `season_number` 列、无 `catalog_relations` 表、无 `deleted_at`。真源详见 `docs/decisions.md` ADR-176；落地时迁出本标注。
+
+- **`media_catalog` 新增 `season_number INT NULL`**（正篇季号 1/2/…；NULL=非分季/单季/电影/特别篇；CHECK >0）。**唯一键改造**：现 `uq_catalog_title_year_type` = `UNIQUE(title_normalized,year,type) WHERE 四外部 ID 全 NULL`（partial / migration 026:85-90）→ 纳入 `COALESCE(season_number,0)` 维度，解「**无外部 ID 分季作品**因 `normalizeTitle` 剥季 → 同 title_normalized 撞约束无法独立 catalog」硬阻塞（存量 NULL→0 逐值不变 / **不改 `normalizeTitle` 剥季语义**，季由显式列承载）。
+- **catalog 按季粒度**：正篇第 N 季 / 剧场版 / SP / OVA 各独立 catalog；SP/OVA/剧场版用 `catalog_relations` 关联正篇（不塞 `season_number`）。`edition`（加长/导剪）仍归 video 层、`language_variant`（国语/粤语/字幕）仍归 source 层，不受影响。
+- **新增 `catalog_relations` 表**（catalog-catalog 关系**单一真源** / 有向图）：`from_catalog_id`/`to_catalog_id`/`relation`（`season_of`/`edition_of`/`remake_of`/`spinoff_of`/`same_work_candidate`）/`confidence`/`source`(auto/manual) + `UNIQUE(from,to,relation)` + `from≠to` CHECK + ON DELETE CASCADE。`series_group` 聚合锚可选（按 UI 需求建表，或 `season_of` 连通分量派生）。
+- **catalog 删行回滚范式**（`media_catalog` 无 `deleted_at`，删行不可逆）：catalog-catalog 合并删行前全字段快照到 `_bak_*_<migration>`（继承 migration 084 / ADR-174 D-174-6），主表 + CASCADE 子表（catalog_episodes/characters）+ 孙表（catalog_character_actors）+ `catalog_relations`（端点命中被删 catalog 须**重指向 survivor** + old/new 双列快照回滚复位，类比 084 videos 指向）+ provenance/locks + `videos.catalog_id` 指向全快照；provenance/locks 类子表**只插不删**（来源不可精确区分、信息论不可逆 / R11/R12 继承）。
+
 ### 5.2 video_sources
 
 - `season_number INT NOT NULL DEFAULT 1`
