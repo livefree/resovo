@@ -14050,3 +14050,10 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **FIX-3 修复**：list/count 共用 WHERE 增双侧 `EXISTS (... deleted_at IS NULL)`；similar 侧 `listPendingCandidatesByVideoId` 已有 `nv.deleted_at IS NULL` 无需改。
 - **测试**：identity-source-switch 6→8 用例（total=全量 count / 超尾不悄降）+ identity-candidate-queries +3（FIX-3 双侧 EXISTS 断言 / count 同口径 / rows 空容错）；6 文件 54 passed + typecheck 零错误。
 - **Codex P2 第 3 项**（sources-matrix lastChecked filter 与显示值口径不一致）属 CHG-VSR-3 时期代码非本系列 → 起 follow-up 卡 **CHG-VSR-LASTCHECKED-FILTER-ALIGN**（task-queue 尾部，待用户裁决排期）。
+
+### CHG-VIR-9-C FIX-4（Codex review 第 3 轮）— FIX-2 新增 import 未同步既有 Vitest mock 工厂
+
+- **记录时间**：2026-06-03 12:32
+- **根因**：FIX-2 在 VideoMergesService 顶层新增 `countPendingCandidatePairs` import，`video-merges-confirm-decision.test.ts` 的 identity-candidate mock 工厂未同步该 key → import 解析为 undefined（该测试现仅走 merge 写路径未触发调用故 pass，属潜伏 TypeError）。
+- **修复**：工厂补 `countPendingCandidatePairs: vi.fn()` 一行；另两个 mock 该模块的测试（reject / upsert）其 SUT 不消费 count，按需部分 mock 无需动。
+- **测试**：4 文件 44 passed。

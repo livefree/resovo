@@ -39,8 +39,10 @@ vi.mock('@/api/db/queries/video-merge-candidates', () => ({
 }))
 
 // CHG-VIR-9-B：candidate 校验 + 状态迁移（listPendingCandidatePairs 为 9-A source 切换依赖，需一并提供）
+// CHG-VIR-9-C FIX-4：countPendingCandidatePairs 为 FIX-2 新增顶层 import，工厂缺 key → import undefined 潜伏
 vi.mock('@/api/db/queries/identity-candidate', () => ({
   listPendingCandidatePairs: vi.fn(),
+  countPendingCandidatePairs: vi.fn(),
   findCandidateById: vi.fn(),
   findCandidateByIdReadonly: vi.fn(),
   updateCandidateStatus: vi.fn(),
