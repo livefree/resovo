@@ -2829,12 +2829,13 @@ CODENAME-MATRIX-E2E (依赖 Wave 3 验收期补丁 CODENAME-MATRIX ✅)
 
 **Phase 1 — 纯函数旁路（零生产行为变更；实施卡详细范围待 ADR 定档细化）**
 
-7. **CHG-VIR-5** — Phase 1a：TitleIdentityParser 纯函数 + fixture（状态：⬜ 未开始）
+7. **CHG-VIR-5** — Phase 1a：TitleIdentityParser 纯函数 + fixture（状态：✅ 已完成 2026-06-02 22:45 / claude-opus-4-8 / 子代理 无）
    - 创建时间：2026-06-02 19:41
    - 建议模型：sonnet（纯函数实施，规格来自 ADR-105a/175）
    - 范围：新建 `apps/api/src/services/TitleIdentityParser.ts` `parseTitle(raw)→{coreTitleKey,facets,titleKind,parserVersion,confidence}`；**不改 TitleNormalizer**；大量 fixture（书名号/全半角/标点 · 国语/粤语/字幕 · 加长/导剪/SP/OVA/剧场版 · 第N季/S2/Part2/序号 · 源站噪声）。**Y4**：fixture 须区分「序号即身份（复仇者联盟4）」与「序号即季/卷（第4季）」。
    - 验收要点：fixture 全绿 + `normalizeTitle`/`normalizeMergeKey` 输出完全不变；facets 仅观测不参与决策。
    - 依赖：CHG-VIR-1（ADR-105a：`core_title_key` 归一规则 D-105a-1 / facets 字段 / Y4 序号护栏 D-105a-13）+ **CHG-VIR-2**（ADR-175：`titleKind` 枚举 original/localized/romanized/aka/crawler/edition 规格来源 · 2026-06-02 复核 F2 补全）。
+   - 完成备注：**TitleIdentityParser 纯函数 + 40 fixture 全绿**。新建 `apps/api/src/services/TitleIdentityParser.ts`（386 行）`parseTitle(raw)→{coreTitleKey,facets,titleKind,parserVersion,confidence}`：10 步确定性流水线（剥 HTML→全角折叠→括号 token→季/部/卷序号→发布形态→版本→语言变体→画质噪声→源站噪声→折叠/lower/剥标点），`extractSingleMarker`/`extractNoiseTokens` 共用 helper，`parseSeasonNumeral`（阿拉伯+CJK 零~百），`classifyTitleKind`（crawler>edition>localized>romanized>original，复用 `isPinyin`）+ `computeConfidence`，`TITLE_PARSER_VERSION='1.0.0'`。facets 七维解析保存而非删除。**D-105a-1**（core_title_key 等值/语义解耦/不改归并键）+ **D-105a-13 Y4**（仅剥显式季/部关键词序号，裸序号《复仇者联盟4》保留进 core → 不同序号不同 key；第N季剥到 facets.seasonNumber → 同剧异季 core 同 season 异）闭环 + ADR-175 titleKind 枚举落地。**`TitleNormalizer.ts` 零改动**（git 确认，验收红线）。新建 `tests/unit/api/title-identity-parser.test.ts` 40 用例（全分类 + TitleNormalizer 回归守卫）。门禁：typecheck EXIT=0 + lint 5 successful + **全量 6073 passed / 1 flaky**（StagingPageClient jsdom flaky 隔离 8/8 通过，与本卡 node 纯函数无关）+ verify:adr-contracts EXIT=0。无新依赖/migration/端点/ADR。解阻 CHG-VIR-6。执行模型: claude-opus-4-8
 
 8. **CHG-VIR-6** — Phase 1b：title_observations 去重聚合表 + shadow 写入（状态：⬜ 未开始）
    - 创建时间：2026-06-02 19:41
