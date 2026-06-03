@@ -14057,3 +14057,14 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **根因**：FIX-2 在 VideoMergesService 顶层新增 `countPendingCandidatePairs` import，`video-merges-confirm-decision.test.ts` 的 identity-candidate mock 工厂未同步该 key → import 解析为 undefined（该测试现仅走 merge 写路径未触发调用故 pass，属潜伏 TypeError）。
 - **修复**：工厂补 `countPendingCandidatePairs: vi.fn()` 一行；另两个 mock 该模块的测试（reject / upsert）其 SUT 不消费 count，按需部分 mock 无需动。
 - **测试**：4 文件 44 passed。
+
+## [MAINT] SEQ-20260602-03 Phase 2 收口复核 + Phase 3 启动配置补全（纯 docs 落档）
+- **完成时间**：2026-06-03
+- **记录时间**：2026-06-03 12:55
+- **执行模型**：claude-opus-4-8
+- **子代理**：无
+- **修改文件**：
+  - `docs/task-queue.md` — ① CHG-VIR-8 完成备注补记蓝图偏离④（blocking 召回键实际仅 `core_title_key` 单 key 分桶；设计 §Phase 2b 列 6 键，外部 ID 经 externalIdLoader 仅进 scoring 证据非召回键 → 外部 ID 同/标题异 pair 召回不到；`offlineRescore.ts` 头注释「多 key 并集」与实现不符，修正并入 CHG-VIR-9-D）；② CHG-VIR-10 卡启动前补全（Opus 前置门禁①：shadow decision 持久化形态三选一——新表 migration / identity_candidate.evidence_jsonb 扩展〔trigger_source='ingest' 086 已预留〕/ 纯脚本报表，**不得塞入 identity_decisions**〔087 CHECK 仅 confirmed/rejected，YAGNI 裁定〕；门禁②：外部 ID 第二召回键裁定；fire-and-forget 性能边界 + ingest 旁路基线另立〔D-105a-10 仅覆盖实时端点/离线 job〕；硬前置 OBS-BACKFILL；引用校正 Y3→R9 + D-105a 第 12 条〔shadow 不触发 merge，D-105a-11 不适用；第 12 条此处用中文序数书写避免被 adr-parser 误判闭环——该守恒条款须保持 pending 至 Phase 3 验收后另起 ADR〕；验收报表复用 identity-compare-report 扩展）；③ 新增 11-D CHG-VIR-OBS-BACKFILL（生产 title_observations 全量回填 runbook + 验证报表，CHG-VIR-10 与 9-D 双硬前置；blocking 召回覆盖 = 覆盖度，9-C dev 验证 573 桶/917 pair/193 候选）；④ 新增 11-E CHG-VIR-9-D（merge 默认源翻转 identity + N-video 连通分量折叠——9-A 蓝图偏离登记「留小卡」补建；设计 §4.3 connected components 折叠消除 C(N,2) 重复行）；⑤ SEQ 依赖链行同步（Phase 2 → OBS-BACKFILL → Phase 3）+ 最后更新时间登记复核结论。
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：复核结论摘要——Phase 2（2a/2b/2c）对设计完成度高：核心契约全落地、门禁全绿（6216 passed）、ADR-105a D 条 14/15 闭环（唯一 pending = D-105a 第 12 条守恒条款〔中文序数书写避免 adr-parser 误闭环〕，Phase 3 验收后另起 ADR 才闭环，非欠账）+ ADR-178 6/6。开放遗留：生产 title_observations 回填（OBS-BACKFILL）、merge 翻默认 + 连通分量折叠（9-D）、blocking 多 key 并集（CHG-VIR-10 门禁②裁定）、数据变化重评触发器（Phase 3 ingest hook 部分补齐）、episode/metadata digest 占位（细化时 bump SCORER_VERSION）。merge_blocklist 定档舍弃独立表：rejected 状态 + R6 复活链已覆盖其语义（ADR-105a follow-up 1 视为闭合）。CHG-VIR-10 启动须先过 OBS-BACKFILL + spawn Opus 子代理裁定门禁①②。
