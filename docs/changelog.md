@@ -13786,3 +13786,22 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 ---
 
 > **SEQ-20260602-03 前置门禁收尾（本会话）**：CHG-VIR-PRE-1（insertNewVideo schema 漂移修复，全量 6034 passed 零回归）+ CHG-VIR-PRE-2（ADR-177 关系定档「并存+上卷」，arch-reviewer 认可）均 ✅。**CHG-VIR-4（ADR-177 外部 ID 映射真源）依赖已满足、可起草**，留用户决定是否继续。Phase 0 四份 ADR 中 CHG-VIR-1/2/3（ADR-105a/175/176）已 Accepted，CHG-VIR-4 待起；Phase 1-5 实施待启动。
+
+## [CHG-VIR-4] ADR-177 起草：外部 ID 映射真源 catalog_external_refs（Phase 0 完结）
+- **完成时间**：2026-06-02
+- **记录时间**：2026-06-02 21:30
+- **执行模型**：claude-opus-4-8（建议 opus；ADR 起草 + 强制 arch-reviewer PASS）
+- **子代理**：arch-reviewer (claude-opus-4-8)（agentId a18aea6f95f5d88ce / CONDITIONAL → RR-A + RR-B 2 必修红线 + YY-A~D 4 黄线吸收 → Accepted）
+- **背景（根因）**：`media_catalog` 四列外部 ID（imdb_id/tmdb_id/douban_id/bangumi_subject_id）作 catalog 身份唯一列存三处结构约束：① 单值无法表达 `parent` 一对多（ADR-176 按季粒度下同剧多季共享 show 级 ID）；② 无法保留 candidate/rejected 审计；③ D-174-3 把 catalog 层冲突降级记 video 级 `video_external_refs`（语义错位）。需引 catalog 级 canonical 映射表 + 约束分级 + 四列降级 cache。硬前置 CHG-VIR-PRE-2 关系定档（「并存+上卷」）已满足。
+- **修改文件**：
+  - `docs/decisions.md`（**新增 ADR-177 章节**）— 背景 + D-177-1~10（schema DDL 草案 / 并存+上卷继承 PRE-2 / 约束分级 partial unique + RR-B 不变量 / 上卷规则 / 四列降级 cache + 同事务 / findOrCreate 改读 / D-174-3 迁移 + candidate catalog_id 归属 / 两表审计不合并 / 删行回滚纳入 ADR-176 D-176-4 / 既有数据迁移）+ R1~R10 红线 + Y-177-1~6 黄线 + 后果 + D-N 偏离登记（arch-reviewer 评审记录）+ follow-up 5 条；状态 **Accepted**
+  - `docs/architecture.md` — §5.6 加 `catalog_external_refs` 规划草案小节（字段/约束分级/external_kind·relation 不变量/并存+上卷/四列降级 cache/D-174-3 迁移/删行回滚）+ §5.1a 四列降级 cache 注记（规划草案标注，落地迁出）
+  - `docs/audit/adr-d-status.json` — verify 重算登记 D-177-1..10（10 D 条 advisory）
+  - `docs/task-queue.md` / `docs/tasks.md` — CHG-VIR-4 状态流转 ✅ + Phase 0 完结 + 卡片删除
+- **新增依赖**：无
+- **数据库变更**：无（ADR 定档文档；`catalog_external_refs` 表 + partial unique + 四列降级 + 数据迁移留 Phase 5 CHG-VIR-12）
+- **核心定档**：① **关系=并存+上卷**（继承 PRE-2，排除替代/纯并存）；② **约束分级** partial unique：`exact` 全局唯一 `(provider,external_id,external_kind)` / `exact·parent` 同 catalog 唯一 `(...,COALESCE(season_number,0)) WHERE relation IN('exact','parent')` / `candidate·rejected` 不进约束保留审计（结构性免 `decision_id`）；③ **四列降级 cache**：仅 `exact AND is_primary` 回填，parent/candidate/rejected 不回填防一对多污染单值唯一列，写入与 cache 回填同事务；④ **findOrCreate 改读映射表**（cache fallback）；⑤ **D-174-3 迁移**：catalog 层冲突归 catalog_external_refs candidate（双写过渡，candidate catalog_id 按 D-174-7 redirect 两分支）；⑥ **删行回滚**纳入 ADR-176 D-176-4 `_bak_*` 快照 + 端点重指向 survivor。
+- **主动校正**：partial unique 哨兵 `COALESCE(season_number,-1)`（设计 §4.6 草案）→ `0`（与 ADR-176 `uq_catalog_title_year_type_season` 口径统一，依赖 `CHECK season_number>0` / R9）。
+- **门禁/验收**：arch-reviewer CONDITIONAL → **RR-A**（D-177-9+R8：合并重指向 exact 须按索引①预检主导，PostgreSQL `ON CONFLICT` 单目标无法同覆盖索引①②，单一兜底在 survivor/被删方 season_number 不同时漏接撞①炸事务，违 R3「不靠唯一索引兜底」）+ **RR-B**（D-177-3+R10：补 `external_kind` 全局一致 + `exact↔parent` 互斥不变量，external_kind 单调决定 relation 取值域，原两 partial unique 不阻止同一外部 ID 既 exact 又 parent / findOrCreate 分流无歧义 + 消除合并撞①大部分场景）**2 必修红线** + YY-A（redirect 条件对齐 `isRedirectSafe` 缺 year 走 safe）+ YY-B（schema 增 `rollup_rule` 溯源列）+ YY-C（exact 写入与 cache 回填同事务）+ YY-D（迁移 external_kind 推断不确定保守 candidate）**4 黄线** + 对齐建议（follow-up 5 douban/imdb/tmdb 对称）全吸收。verify:adr-contracts EXIT=0（verify-endpoint-adr ✅ 203 路由 + sql-schema 对齐 / adr-d-status.json D-177-1..10）+ verify:endpoint-adr EXIT=0；纯 docs 无 TS/TSX，typecheck/lint/test 基线不受影响。
+- **注意事项**：① **Phase 0 完结 — 四份 ADR（ADR-105a/175/176/177）全部 Accepted**；② ADR-105a `external_exact_id_match` 强正证据源切换（`media_catalog` 四列+video_external_refs → `catalog_external_refs.relation='exact'`）登记 follow-up 3 / Y-105a-4，本 ADR 不依赖其落地；③ `external_kind` provider 映射细则（TMDB show/season、IMDB title 类型、豆瓣层级）留 Phase 5 Y-177-5；④ arch-reviewer 认可无返工三项：哨兵校正 / PRE-2 四项定档忠实继承 / D-174-3 candidate catalog_id 归属无 orphan。
+- **[AI-CHECK]**：纯 ADR 定档文档（无代码）；分层/跨模块/重复逻辑/any/空 catch/硬编码颜色/函数文件规模均 N/A；schema/约束/迁移与 ADR-174/175/176/105a + PRE-2 定档逐条对齐；主动校正哨兵口径与 ADR-176 统一；arch-reviewer 独立第二意见 CONDITIONAL → 2 必修红线 + 4 黄线吸收后 Accepted；未新增端点/migration（留 Phase 5）。结论：SAFE。

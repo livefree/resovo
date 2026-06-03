@@ -2757,7 +2757,7 @@ CODENAME-MATRIX-E2E (依赖 Wave 3 验收期补丁 CODENAME-MATRIX ✅)
 
 - **状态**：🟡 规划中
 - **创建时间**：2026-06-02 19:41
-- **最后更新时间**：2026-06-02 21:00（**Phase 0 CHG-VIR-1/2/3 ✅**〔ADR-105a/175/176 Accepted〕 **+ 前置门禁 CHG-VIR-PRE-1 ✅**〔insertNewVideo schema 漂移修复 / 全量零回归〕 **+ CHG-VIR-PRE-2 ✅**〔ADR-177 关系定档「并存+上卷」/ arch-reviewer 认可〕；**CHG-VIR-4〔ADR-177〕依赖已满足、可起草**，留用户决定；Phase 1+ 实施待启动）
+- **最后更新时间**：2026-06-02 21:30（**Phase 0 完结 — 四份 ADR 全 Accepted**：CHG-VIR-1/2/3/4 ✅〔ADR-105a/175/176/177〕 **+ 前置门禁 CHG-VIR-PRE-1 ✅**〔insertNewVideo schema 漂移修复 / 全量零回归〕 **+ CHG-VIR-PRE-2 ✅**〔ADR-177 关系定档「并存+上卷」/ arch-reviewer 认可〕；**CHG-VIR-4〔ADR-177〕已 Accepted**〔arch-reviewer CONDITIONAL → RR-A/RR-B 2 必修红线 + 4 黄线吸收 / 哨兵 -1→0 校正 / 10 D 条 + R10 不变量〕；**Phase 1+ 实施待启动**，留用户决定）
 - **目标**：把「标准化标题 → 单 key 命中即合并」升级为 Entity Resolution（Blocking 召回 → 多证据 Scoring → 阈值分级 Decision → 可逆审计 + 决策记忆），为合并/拆分提供稳健、可解释、可回滚基础。严格按「先旁路 → 再影响排序 → 最后碰生产归并阈值」推进。
 - **范围**：`apps/api`（TitleIdentityParser 新增 / MediaCatalogService.findOrCreate / VideoMergesService / CrawlerService / 离线候选 job / migrations）+ `packages/types` + `apps/server-next`（/admin/merge + 审核台 similar tab 统一候选）+ `docs/decisions.md`（4 份 ADR）+ `docs/architecture.md`（schema 同步）。
 - **方案全文**：`docs/designs/video-identity-resolution-redesign_20260602.md`（commit 27c29a5d；含 §9 arch-reviewer 审核 + §10 修订处置）。
@@ -2818,13 +2818,14 @@ CODENAME-MATRIX-E2E (依赖 Wave 3 验收期补丁 CODENAME-MATRIX ✅)
    - 依赖：无。
    - 完成备注：**ADR-176 Accepted（arch-reviewer claude-opus-4-8 / agentId a8930709146880a0f / CONDITIONAL → 5 项修订吸收）**。decisions.md 追加 ADR-176（6 D 条 + 7 红线：`season_number` 列 + 唯一键改造 `COALESCE(season_number,0)` 解「无外部 ID 分季撞 partial unique」硬阻塞〔存量 NULL→0 逐值不变〕/ catalog 按季粒度〔S2/SP/OVA/剧场版独立〕/ `catalog_relations` 5 关系有向图 + `series_group` 可选锚 / catalog 无 `deleted_at` 删行回滚范式〔继承 084 + ADR-174 D-174-6 R11/R12〕/ findOrCreate 不纳入 season 留 Phase 5）；architecture.md §5.1a 加规划草案小节。arch-reviewer R-1（`catalog_relations` 反对称四 relation 单向无环 + `same_work_candidate` 对称规范化有序对 → 补关系不变量 + R7）+ R-2（合并删行关系边端点重指向 survivor + old/new 双列快照回滚复位）+ Y-A（哨兵 0 依赖 `CHECK>0` 禁放宽）+ Y-B（回填全系列一致禁半回填）+ Y-C（architecture 同步端点重指向）全吸收。门禁 verify:adr-contracts/endpoint-adr EXIT=0（203 路由 + sql-schema 对齐 / adr-d-status.json 登记 D-176-1..6）；纯 docs 无 TS/TSX。执行模型: claude-opus-4-8
 
-6. **CHG-VIR-4** — ADR-177 起草（外部 ID 映射真源 `catalog_external_refs`）（状态：⬜ 未开始）
+6. **CHG-VIR-4** — ADR-177 起草（外部 ID 映射真源 `catalog_external_refs`）（状态：✅ 已完成 2026-06-02 / claude-opus-4-8 / 子代理 arch-reviewer (claude-opus-4-8)）
    - 创建时间：2026-06-02 19:41
    - 建议模型：**opus**
    - 范围：`catalog_external_refs`（provider/external_id/external_kind/relation/season_number/confidence/source/is_primary）+ partial unique index（exact 唯一 / parent 一对多 / candidate·rejected 审计保留）+ 四列降级为 cache（仅 `relation=exact AND is_primary` 回填）+ findOrCreate 改读映射表 + ADR-174 D-174-3 重指向语义迁移 + 既有数据迁移。
    - 门禁：Opus + arch-reviewer PASS；**硬前置 CHG-VIR-PRE-2 关系定档**；落 decisions.md ADR-177 + architecture.md。
    - 验收要点：映射表 schema + 约束分级 + cache 规则 + 迁移路径；arch-reviewer PASS。
    - 依赖：**CHG-VIR-PRE-2**。
+   - 完成备注：**ADR-177 Accepted（arch-reviewer claude-opus-4-8 / agentId a18aea6f95f5d88ce / CONDITIONAL → RR-A + RR-B 2 必修红线 + YY-A~D 4 黄线吸收）**。decisions.md 追加 ADR-177（10 D 条 + `catalog_external_refs` DDL 草案 + 2 partial unique〔exact 全局唯一 / exact·parent 同 catalog 唯一 / candidate·rejected 不进约束保留审计免 `decision_id`〕+ 四列降级 cache〔仅 exact·is_primary 回填，parent/candidate/rejected 不回填防一对多污染单值唯一列〕+ 上卷规则继承 PRE-2〔manual_confirmed primary 一致+精确级→exact / 冲突→candidate / show 级→parent / exact 冲突→candidate 归并信号不靠唯一索引兜底〕+ findOrCreate 改读映射表 + D-174-3 catalog 层冲突迁移〔双写过渡 / candidate catalog_id 归属按 D-174-7 redirect 两分支〕+ 两表审计不合并 + catalog 删行回滚纳入 ADR-176 D-176-4 + 既有数据迁移；10 红线 + 6 黄线 + 后果 + follow-up 5 条）；architecture.md §5.6 加 catalog_external_refs 规划草案小节 + §5.1a 四列降级注记。**主动校正**：partial unique 哨兵 `COALESCE(season_number,-1)`（设计 §4.6 草案）→ `0`（与 ADR-176 唯一键口径统一，依赖 CHECK>0 / R9）。arch-reviewer 2 必修红线吸收：**RR-A**（D-177-9+R8：合并重指向 exact 须按索引①预检主导，PostgreSQL ON CONFLICT 单目标无法同覆盖①②，单一兜底在 season_number 不同时漏接撞①炸事务 / 与 R3「不靠唯一索引兜底」一致）+ **RR-B**（D-177-3+R10：补 `external_kind` 全局一致 + exact↔parent 互斥不变量，external_kind 单调决定 relation 取值域，原 schema 不阻止同一外部 ID 既 exact 又 parent / findOrCreate 分流无歧义 + 消除合并撞①大部分场景）；4 黄线吸收：YY-A（redirect 条件对齐 `isRedirectSafe` 缺 year 走 safe）+ YY-B（schema 增 `rollup_rule` 上卷溯源列）+ YY-C（exact 写入与 cache 回填同事务）+ YY-D（迁移 external_kind 推断不确定保守落 candidate）；对齐建议（follow-up 5：douban/imdb/tmdb 三同类约束对称归 catalog_external_refs candidate）。arch-reviewer 认可无返工三项：哨兵校正 / PRE-2 四项定档忠实继承 / D-174-3 candidate catalog_id 归属无 orphan。门禁 verify:adr-contracts EXIT=0（verify-endpoint-adr ✅ 203 路由对齐 + sql-schema 对齐 / adr-d-status.json 登记 D-177-1..10）+ verify:endpoint-adr EXIT=0；纯 docs 无 TS/TSX，typecheck/lint/test 基线不受影响。未新增端点/migration（catalog_external_refs 留 Phase 5 CHG-VIR-12）。**Phase 0 四份 ADR（ADR-105a/175/176/177）全部 Accepted，Phase 0 完结**。执行模型: claude-opus-4-8
 
 **Phase 1 — 纯函数旁路（零生产行为变更；实施卡详细范围待 ADR 定档细化）**
 
