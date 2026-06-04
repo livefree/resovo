@@ -14323,3 +14323,16 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **数据库变更**：无 schema 变更。**dev 复现 + 修复双验证**：FIX-1 换值后 refs = [candidate('111'), exact('222')] + cache='222' 一致 ✓；FIX-2 合并后 survivor refs = [candidate('D1'), candidate('D2')] + cache='D1' 一致（异值降级归并信号）✓；报表 HARD=0 全绿。
 - **测试**：门禁全过 typecheck / lint EXIT=0 + 全量 **483 files 6358 passed / 0 failed**（净 +3）。
 - **注意事项**：两修复均为「cache 单值语义 ↔ exact 多行真源」的边界协调：cache 槽位变更（换值/合并异值）必须同事务收敛旧 exact（降级 candidate 保审计，绝不 DELETE）；与 D-177-5「写 exact 同步回填 / 删降级清 cache」契约的双向完整化。归属 D-177-5 / D-177-9 闭环补强。
+
+## [CHG-VSR-LASTCHECKED-FILTER-ALIGN] 播放线路「最近检测」列筛选与显示值口径对齐（Codex review P2）
+- **完成时间**：2026-06-04
+- **记录时间**：2026-06-04 21:25
+- **执行模型**：claude-opus-4-8（建议 sonnet，用户以 opus 会话人工覆盖指派）
+- **子代理**：无（口径真源 = ADR-117 AMENDMENT 3 D-117-VSR3-1 已 Accepted，无新架构决策）
+- **修改文件**：
+  - `apps/api/src/db/queries/sources-matrix.ts` — `lastCheckedFrom/To` 两条 HAVING 谓词由裸 `MAX(vs.last_probed_at)` 改 `COALESCE(MAX(vs.last_probed_at), MAX(vs.updated_at))`，对齐显示列 `last_checked_at` 口径（D-117-VSR3-1 锚定真源；count/data SQL 复用同一 havingClauses 数组 → 单点修复双查询同步生效）；**沉淀** `LAST_CHECKED_EXPR` module-level 常量（QUALITY_RANK_EXPR「单一 SQL 常量禁散落」同范式），显示列 / 排序列 / 2 filter 谓词 4 处共用根治口径漂移（本 bug 根因即口径散落两处漂移；常量化后 SQL 产出逐字节不变）。
+  - `tests/unit/api/sources-matrix.test.ts` — 既有 lastChecked filter 用例改断 COALESCE 口径 + 负向 regex 守卫（裸 `MAX(vs.last_probed_at)` 比较谓词不得回归）；新增「data SQL 与 count SQL 同 HAVING + 显示列口径未漂移」断言用例。
+- **新增依赖**：无
+- **数据库变更**：无（零 migration 零端点；verify:endpoint-adr 不触发）
+- **测试**：门禁全过 typecheck / lint / verify:adr-contracts EXIT=0 + 全量 **483 files 6359 passed / 0 failed**（净 +1）。**dev 真实 DB 决定性验证**：影响面 = 3498 个有源但零 probe 记录的视频（旧谓词下被任何日期筛选排除，可见日期来自 updated_at 回退）；全日期范围（2026-04-22~2026-06-03）旧谓词命中 108 vs 新谓词 **3606 = 显示口径预期值逐值相等**（零多算零漏算）。
+- **注意事项**：① 修复纯增量：有 probe 记录的行 COALESCE 取第一参数退化为旧谓词 → 旧命中集是新命中集真子集，零回归。② 显示侧为 ADR 真源不动（卡面二选一取方案一）。③ 与 `updatedAtFrom/To` filter（裸 `MAX(vs.updated_at)`）语义有别属预期：updatedAt 列显示值即 `MAX(vs.updated_at)` 无回退，两 filter 各自与各自显示列一致。

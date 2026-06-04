@@ -507,14 +507,26 @@ describe('CHG-VSR-3 listVideoGroups sortField 扩展（D-117-VSR3-6 / SELECT 别
     expect(sql).not.toContain('ORDER BY last_checked_at')
   })
 
-  it('lastCheckedFrom + lastCheckedTo → HAVING MAX(vs.last_probed_at) 范围（含到日 +1 天）', async () => {
+  it('lastCheckedFrom + lastCheckedTo → HAVING COALESCE 口径范围（含到日 +1 天 / 与显示列 last_checked_at 一致）', async () => {
     const db = makePool([{ cnt: '0' }], [])
     await listVideoGroups(db, { lastCheckedFrom: '2026-05-01', lastCheckedTo: '2026-05-25' })
     const countSql = (db.query as ReturnType<typeof vi.fn>).mock.calls[0][0] as string
     expect(countSql).toContain('HAVING')
-    expect(countSql).toContain('MAX(vs.last_probed_at) >= $')
-    expect(countSql).toContain('MAX(vs.last_probed_at) < ($')
+    // CHG-VSR-LASTCHECKED-FILTER-ALIGN：filter 谓词须与显示列同 COALESCE 回退口径（D-117-VSR3-1）
+    expect(countSql).toContain('COALESCE(MAX(vs.last_probed_at), MAX(vs.updated_at)) >= $')
+    expect(countSql).toContain('COALESCE(MAX(vs.last_probed_at), MAX(vs.updated_at)) < ($')
     expect(countSql).toContain("INTERVAL '1 day'")
+    // 裸 last_probed_at 谓词回归守卫：无 probe 记录的行可见日期来自 updated_at 回退，不得被 NULL 比较排除
+    expect(countSql).not.toMatch(/(?<!COALESCE\()MAX\(vs\.last_probed_at\) [<>]/)
+  })
+
+  it('lastChecked filter：data SQL 与 count SQL 共用同一 HAVING（口径单点同步）', async () => {
+    const db = makePool([{ cnt: '0' }], [])
+    await listVideoGroups(db, { lastCheckedFrom: '2026-05-01' })
+    const sql = dataSql(db)
+    expect(sql).toContain('COALESCE(MAX(vs.last_probed_at), MAX(vs.updated_at)) >= $')
+    // 显示列口径未漂移（ADR-117 AMENDMENT 3 真源）
+    expect(sql).toContain('COALESCE(MAX(vs.last_probed_at), MAX(vs.updated_at))::TEXT AS last_checked_at')
   })
 })
 

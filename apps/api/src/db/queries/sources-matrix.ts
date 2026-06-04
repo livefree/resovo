@@ -92,6 +92,11 @@ const QUALITY_RANK_EXPR = (alias: string): string =>
   `WHEN '4K' THEN 7 WHEN '2K' THEN 6 WHEN '1080P' THEN 5 WHEN '720P' THEN 4 ` +
   `WHEN '480P' THEN 3 WHEN '360P' THEN 2 WHEN '240P' THEN 1 ELSE NULL END`
 
+// 「最近检测」聚合口径单一真源（D-117-VSR3-1 / CHG-VSR-LASTCHECKED-FILTER-ALIGN）：
+// 无 probe 记录回退 updated_at。显示列 / 排序列 / lastCheckedFrom·To filter 谓词共用，禁散落
+//（filter 与显示口径漂移即「可见日期被筛选排除」类 bug，QUALITY_RANK_EXPR 同范式）。
+const LAST_CHECKED_EXPR = 'COALESCE(MAX(vs.last_probed_at), MAX(vs.updated_at))'
+
 // ── 查询：视频分组 KPI 统计 ───────────────────────────────────────
 
 /**
@@ -266,13 +271,15 @@ export async function listVideoGroups(
     havingClauses.push(`MAX(vs.updated_at) < ($${idx++}::DATE + INTERVAL '1 day')`)
     paramValues.push(params.updatedAtTo)
   }
-  // CHG-VSR-3：lastChecked 日期范围（MAX(last_probed_at) HAVING / 与 updatedAt 同范式 / CHG-VSR-1 "卡 3 实现"）
+  // CHG-VSR-3：lastChecked 日期范围（HAVING / 与 updatedAt 同范式 / CHG-VSR-1 "卡 3 实现"）。
+  // CHG-VSR-LASTCHECKED-FILTER-ALIGN：谓词与显示列 last_checked_at 同口径（LAST_CHECKED_EXPR
+  // 单一真源；无 probe 记录的行回退 updated_at，筛选不得排除可见日期命中的行）
   if (params.lastCheckedFrom) {
-    havingClauses.push(`MAX(vs.last_probed_at) >= $${idx++}::DATE`)
+    havingClauses.push(`${LAST_CHECKED_EXPR} >= $${idx++}::DATE`)
     paramValues.push(params.lastCheckedFrom)
   }
   if (params.lastCheckedTo) {
-    havingClauses.push(`MAX(vs.last_probed_at) < ($${idx++}::DATE + INTERVAL '1 day')`)
+    havingClauses.push(`${LAST_CHECKED_EXPR} < ($${idx++}::DATE + INTERVAL '1 day')`)
     paramValues.push(params.lastCheckedTo)
   }
   const havingClause = havingClauses.length > 0 ? `HAVING ${havingClauses.join(' AND ')}` : ''
@@ -326,9 +333,9 @@ export async function listVideoGroups(
          WHEN 3 THEN '480P' WHEN 2 THEN '360P' WHEN 1 THEN '240P' ELSE NULL END AS quality_highest,
        (COUNT(vs.id) FILTER (WHERE vs.is_active AND vs.probe_status <> 'dead' AND vs.render_status <> 'dead') = 0) AS needs_source,
        v.is_published AS is_published,
-       COALESCE(MAX(vs.last_probed_at), MAX(vs.updated_at))::TEXT AS last_checked_at,
+       ${LAST_CHECKED_EXPR}::TEXT AS last_checked_at,
        -- Codex review FIX：真实 timestamptz 列，仅供 ORDER BY lastChecked 时序安全排序（DTO 读 ::TEXT 的 last_checked_at）
-       COALESCE(MAX(vs.last_probed_at), MAX(vs.updated_at)) AS last_checked_sort
+       ${LAST_CHECKED_EXPR} AS last_checked_sort
      FROM videos v
      JOIN media_catalog mc ON mc.id = v.catalog_id
      JOIN video_sources vs ON vs.video_id = v.id AND vs.deleted_at IS NULL

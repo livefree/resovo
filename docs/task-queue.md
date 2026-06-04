@@ -3039,13 +3039,13 @@ CODENAME-MATRIX-E2E (依赖 Wave 3 验收期补丁 CODENAME-MATRIX ✅)
 
 ---
 
-#### CHG-VSR-LASTCHECKED-FILTER-ALIGN — 播放线路「最近检测」列筛选与显示值口径不一致（Codex review P2 发现 / 待用户裁决排期）
+#### CHG-VSR-LASTCHECKED-FILTER-ALIGN — 播放线路「最近检测」列筛选与显示值口径不一致（Codex review P2 发现 / 用户 2026-06-04 裁定启动）
 
-- **状态**：⬜ 待开始
+- **状态**：✅ 已完成（2026-06-04）
 - **创建时间**：2026-06-03 12:28
-- **建议模型**：sonnet
+- **建议模型**：sonnet（实际 claude-opus-4-8，用户以 opus 会话人工覆盖）
 - **变更原因**：Codex stop-time review（CHG-VIR-9-C 收口时 branch diff 全量复查）发现：`apps/api/src/db/queries/sources-matrix.ts:270-275` 行显示 `lastCheckedAt` 用 `COALESCE(MAX(vs.last_probed_at), MAX(vs.updated_at))`，但日期范围 filter 只比较 `MAX(vs.last_probed_at)` —— 无 probe 记录的行其可见「最近检测」日期来自 updated_at 回退，被匹配的日期筛选错误排除，列筛选与表格显示值不一致。
 - **影响的已完成任务**：CHG-VSR-3（ADR-117 AMENDMENT 3 派生列）
 - **文件范围**：`apps/api/src/db/queries/sources-matrix.ts` + 相关测试
 - **变更内容**：filter 谓词改用与显示一致的 COALESCE 口径（或显示侧去回退，二选一须对齐 ADR-117 AMENDMENT 3 口径定义）。
-- **完成备注**：_（AI 填写，含"执行模型: <完整 ID>"一行）_
+- **完成备注**：**取方案一（filter 对齐 COALESCE）——显示侧为 D-117-VSR3-1 锚定真源（decisions.md「`COALESCE(MAX(vs.last_probed_at), MAX(vs.updated_at))` → last_checked_at」）不动**。`lastCheckedFrom/To` 两条 HAVING 谓词改 COALESCE 口径（count/data SQL 复用同一 havingClauses 数组 → 单点修复双查询同步生效）。**沉淀**：提取 `LAST_CHECKED_EXPR` module-level 常量（QUALITY_RANK_EXPR「单一 SQL 常量禁散落」同范式），显示列 / 排序列 / 2 filter 谓词 4 处共用根治口径漂移（本 bug 根因即散落两处漂移）；SQL 产出逐字节不变（断言字面 SQL 的既有测试原样通过验证零漂移）。**dev 真实 DB 决定性验证**：影响面 = 3498 个有源但零 probe 记录的视频（旧谓词下被任何日期筛选排除）；全日期范围（2026-04-22~06-03）旧谓词命中 108 vs 新谓词 **3606 = 显示口径预期逐值相等**（零多算零漏算）；有 probe 记录的行 COALESCE 退化为旧谓词 → 旧命中集是新命中集真子集，纯增量修复零回归。测试：既有 lastChecked filter 用例改断 COALESCE 口径 + 负向 regex 守卫裸 `MAX(vs.last_probed_at)` 比较谓词回归 + 新增 data SQL 与 count SQL 同 HAVING / 显示列口径未漂移断言。门禁全过：typecheck/lint EXIT=0 + 全量 **483 files 6359/6359 passed**（净 +1）+ verify:adr-contracts EXIT=0。零 migration 零端点零新依赖（verify:endpoint-adr 不触发）。执行模型: claude-opus-4-8；子代理: 无
