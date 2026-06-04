@@ -16,8 +16,20 @@ import type { VideoType } from '@/types'
 import * as catalogQueries from '@/api/db/queries/mediaCatalog'
 import type { MediaCatalogRow, CatalogInsertData, CatalogUpdateData } from '@/api/db/queries/mediaCatalog'
 import * as provenanceQueries from '@/api/db/queries/metadataProvenance'
+import * as externalRefQueries from '@/api/db/queries/catalogExternalRefs'
 
 export { MediaCatalogRow, CatalogInsertData, CatalogUpdateData }
+
+// ── 四列 cache ↔ catalog_external_refs 写侧接线映射（ADR-177 YY-C / CHG-VIR-12-D）──
+// safeUpdate 写这些字段时同事务写 exact ref / 降级 ref（imdb/tmdb 零写入方且 kind
+// 写入时判定〔D-177-11〕，不入此表 —— 富集实装卡接入时补行）。
+const CATALOG_EXTERNAL_REF_FIELDS: ReadonlyArray<{
+  readonly field: keyof CatalogUpdateData
+  readonly provider: externalRefQueries.ExternalRefProvider
+}> = [
+  { field: 'bangumiSubjectId', provider: 'bangumi' },
+  { field: 'doubanId', provider: 'douban' },
+]
 
 // ── 元数据来源优先级 ──────────────────────────────────────────────
 
@@ -289,20 +301,83 @@ export class MediaCatalogService {
       return { updated: current, skippedFields }
     }
 
-    // 若来源为 manual，自动锁定写入的字段（幂等去重）
-    if (source === 'manual') {
-      const newLockedFields = [
-        ...current.lockedFields,
-        ...Object.keys(filteredFields),
-      ]
-      const uniqueLocked = [...new Set(newLockedFields)]
-      await catalogQueries.setLockedFields(db, catalogId, uniqueLocked)
-    }
+    // ── catalog_external_refs 写侧接线（ADR-177 YY-C / CHG-VIR-12-D）─────────
+    // 四列 cache 写入与 exact ref 必须同事务（杜绝孤儿 cache / cache 滞后窗口）：
+    // - 值非 null → resolveAndWriteExactRef（R10 守卫 + 索引① 预检；exact 冲突 = 归并
+    //   信号降级 candidate，该字段**不写 cache**〔cache 槽位属 holder〕计入 skippedFields）
+    // - 值为 null（清空 cache）→ demoteExactRef 同事务降级 ref（D-177-5 反向）
+    // - imdb/tmdb 不在 EXTERNAL_KIND_BY_PROVIDER（零写入方 / kind 写入时判定），不触发
+    // 外部 ID 字段未命中时 refFields 为空 → 不起事务，主路径行为逐值不变。
+    const refFields = CATALOG_EXTERNAL_REF_FIELDS.filter(
+      ({ field }) => (filteredFields as Record<string, unknown>)[field] !== undefined
+    )
+    const ownTx = refFields.length > 0 && provenanceCtx?.db === undefined
+    const client: Pool | PoolClient = ownTx ? await this.db.connect() : db
+    try {
+      if (ownTx) await client.query('BEGIN')
 
-    const updated = await catalogQueries.updateCatalogFields(db, catalogId, {
-      ...filteredFields,
-      metadataSource: source,
-    })
+      for (const { field, provider } of refFields) {
+        const value = (filteredFields as Record<string, unknown>)[field]
+        if (value === null) {
+          await externalRefQueries.demoteExactRef(client, catalogId, provider)
+          continue
+        }
+        const externalKind = externalRefQueries.EXTERNAL_KIND_BY_PROVIDER[provider]
+        if (externalKind === undefined) continue // 防御：映射外 provider 不写 ref
+        const result = await externalRefQueries.resolveAndWriteExactRef(client, {
+          catalogId,
+          provider,
+          externalId: String(value),
+          externalKind,
+          source: source === 'manual' ? 'manual' : 'auto',
+          linkedBy: `safe-update:${source}`,
+        })
+        if (result.outcome === 'conflict_candidate' || result.outcome === 'kind_conflict') {
+          delete (filteredFields as Record<string, unknown>)[field]
+          skippedFields.push(field)
+        }
+      }
+
+      // conflict 剔除后可能无字段可写（candidate ref 已落）
+      if (Object.keys(filteredFields).length === 0) {
+        if (ownTx) await client.query('COMMIT')
+        return { updated: current, skippedFields }
+      }
+
+      // 若来源为 manual，自动锁定写入的字段（幂等去重；以 conflict 剔除后的最终字段集为准）
+      if (source === 'manual') {
+        const newLockedFields = [
+          ...current.lockedFields,
+          ...Object.keys(filteredFields),
+        ]
+        const uniqueLocked = [...new Set(newLockedFields)]
+        await catalogQueries.setLockedFields(client, catalogId, uniqueLocked)
+      }
+
+      const updated = await catalogQueries.updateCatalogFields(client, catalogId, {
+        ...filteredFields,
+        metadataSource: source,
+      })
+      if (ownTx) await client.query('COMMIT')
+      return this.finishSafeUpdate(db, catalogId, filteredFields, source, provenanceCtx, updated, skippedFields)
+    } catch (err) {
+      if (ownTx) await client.query('ROLLBACK')
+      throw err
+    } finally {
+      if (ownTx) (client as PoolClient).release()
+    }
+  }
+
+  /** safeUpdate 收尾：provenance fire-and-forget（失败不影响主流程） */
+  private finishSafeUpdate(
+    db: Pool | PoolClient,
+    catalogId: string,
+    filteredFields: CatalogUpdateData,
+    source: CatalogMetadataSource,
+    provenanceCtx: { sourceRef?: string; db?: Pool | PoolClient } | undefined,
+    updated: MediaCatalogRow | null,
+    skippedFields: string[]
+  ): { updated: MediaCatalogRow | null; skippedFields: string[] } {
 
     // 写入字段来源 provenance（非阻塞，失败不影响主流程）
     if (provenanceCtx !== undefined) {
@@ -313,7 +388,7 @@ export class MediaCatalogService {
         writtenFields,
         source,
         provenanceCtx.sourceRef ?? null,
-        incomingPriority,
+        CATALOG_SOURCE_PRIORITY[source] ?? 0,
       ).catch((err: unknown) => {
         const msg = err instanceof Error ? err.message : String(err)
         process.stderr.write(`[MediaCatalogService] provenance write failed for ${catalogId}: ${msg}\n`)

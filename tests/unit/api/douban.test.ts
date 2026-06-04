@@ -13,8 +13,27 @@ import { signAccessToken } from '@/api/lib/auth'
 
 // ── Mocks（依赖层，不 mock Service 本身，让真实 Service 运行） ──
 
-vi.mock('@/api/lib/postgres', () => ({ db: {} }))
+// db 需支持 connect（CHG-VIR-12-D：safeUpdate 写 doubanId 触发 ownTx 自起事务）
+vi.mock('@/api/lib/postgres', () => ({
+  db: {
+    query: vi.fn().mockResolvedValue({ rows: [], rowCount: 0 }),
+    connect: vi.fn().mockResolvedValue({
+      query: vi.fn().mockResolvedValue({ rows: [], rowCount: 0 }),
+      release: vi.fn(),
+    }),
+  },
+}))
 vi.mock('@/api/lib/elasticsearch', () => ({ es: {} }))
+// CHG-VIR-12-D：safeUpdate 外部 ID 写侧接线 —— mock 写原语（默认 exact_written 不剔字段）
+vi.mock('@/api/db/queries/catalogExternalRefs', async (importOriginal) => {
+  const orig = await importOriginal<typeof import('@/api/db/queries/catalogExternalRefs')>()
+  return {
+    ...orig,
+    resolveAndWriteExactRef: vi.fn().mockResolvedValue({ outcome: 'exact_written' }),
+    insertCandidateRef: vi.fn().mockResolvedValue(true),
+    demoteExactRef: vi.fn().mockResolvedValue(0),
+  }
+})
 
 vi.mock('@/api/lib/redis', () => ({
   redis: {
@@ -232,7 +251,14 @@ describe('DoubanService.syncVideo', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
-    service = new DoubanService({} as ReturnType<typeof import('pg').Pool>)
+    // connect 支撑 safeUpdate ownTx（CHG-VIR-12-D 写侧接线）
+    service = new DoubanService({
+      query: vi.fn().mockResolvedValue({ rows: [], rowCount: 0 }),
+      connect: vi.fn().mockResolvedValue({
+        query: vi.fn().mockResolvedValue({ rows: [], rowCount: 0 }),
+        release: vi.fn(),
+      }),
+    } as unknown as import('pg').Pool)
     mockVQ.findAdminVideoById.mockResolvedValue({ ...DEFAULT_VIDEO_ROW })
     mockCQ.findCatalogById.mockResolvedValue({ ...DEFAULT_CATALOG_ROW })
     mockCQ.updateCatalogFields.mockResolvedValue({

@@ -264,7 +264,18 @@ vi.mock('@/api/db/queries/metadataProvenance', () => ({
   getHardLockedFields: vi.fn().mockResolvedValue([]),
   batchUpsertFieldProvenance: vi.fn().mockResolvedValue(undefined),
 }))
+// CHG-VIR-12-D：catalog 层冲突双写 + safeUpdate 写侧接线（YY-C）—— mock 写原语
+vi.mock('@/api/db/queries/catalogExternalRefs', async (importOriginal) => {
+  const orig = await importOriginal<typeof import('@/api/db/queries/catalogExternalRefs')>()
+  return {
+    ...orig,
+    resolveAndWriteExactRef: vi.fn().mockResolvedValue({ outcome: 'exact_written' }),
+    insertCandidateRef: vi.fn().mockResolvedValue(true),
+    demoteExactRef: vi.fn().mockResolvedValue(0),
+  }
+})
 
+import * as externalRefQueries from '@/api/db/queries/catalogExternalRefs'
 import { BangumiService, clearBangumiConfigCache } from '@/api/services/BangumiService'
 import * as bangumiLib from '@/api/lib/bangumi'
 import * as extQ from '@/api/db/queries/externalData'
@@ -651,6 +662,15 @@ describe('BangumiService.matchAndEnrich', () => {
     // 正常 COMMIT（绝不让单冲突 video 炸 matchAndEnrich）
     expect(clientQueries).toContain('COMMIT')
     expect(clientQueries).not.toContain('ROLLBACK')
+    // CHG-VIR-12-D / D-177-7：catalog 层冲突同事务双写 catalog_external_refs candidate
+    // （Y-177-1 conflict 分支 → catalog_id = 当前入参 catalog；video 级 candidate 零改 R7）
+    expect(externalRefQueries.insertCandidateRef).toHaveBeenCalledWith(
+      mockClient,
+      expect.objectContaining({
+        catalogId: CID, provider: 'bangumi', externalId: '51',
+        externalKind: 'subject', source: 'auto', linkedBy: 'bangumi-enrich-conflict',
+      }),
+    )
   })
 
   it('D-174-3 conflict：year 显著冲突（≥2）→ 同样降级 candidate（不重指向到不同年份作品）', async () => {

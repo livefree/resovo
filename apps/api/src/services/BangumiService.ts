@@ -12,6 +12,7 @@ import { MediaCatalogService } from './MediaCatalogService'
 import type { CatalogUpdateData } from './MediaCatalogService'
 import * as externalDataQueries from '@/api/db/queries/externalData'
 import type { BangumiEntryMatch } from '@/api/db/queries/externalData'
+import * as externalRefQueries from '@/api/db/queries/catalogExternalRefs'
 import * as catalogEpisodeQueries from '@/api/db/queries/catalogEpisodes'
 import type { CatalogEpisodeInput } from '@/api/db/queries/catalogEpisodes'
 import * as catalogCharacterQueries from '@/api/db/queries/catalogCharacters'
@@ -464,6 +465,18 @@ export class BangumiService {
     // D-174-3：唯一约束兜底真去重判定（只读，redirect 的 linkVideo 在本事务内执行保原子性）
     const resolution = await this.catalogService.resolveBangumiBinding(db, catalogId, bangumiId)
     if (resolution.kind === 'conflict') {
+      // ADR-177 D-177-7/D-177-13 双写起点（CHG-VIR-12-D）：catalog 层冲突落 catalog 级
+      // candidate（Y-177-1 conflict 分支 → catalog_id = 当前入参 catalog，待人工裁定是否
+      // 并入占用方）；video 级 candidate 降级路径（applyAutoMatchAtomic）零改（R7）。
+      // redirect 分支不写（D-177-7：video 已归 existing，existing 已是 canonical）。
+      await externalRefQueries.insertCandidateRef(db, {
+        catalogId,
+        provider: 'bangumi',
+        externalId: String(bangumiId),
+        externalKind: 'subject',
+        source: 'auto',
+        linkedBy: 'bangumi-enrich-conflict',
+      })
       // 冲突未重指向 → video 仍属入参 catalogId
       return { episodes: 0, wrote: false, dedupConflict: true, effectiveCatalogId: catalogId }
     }
