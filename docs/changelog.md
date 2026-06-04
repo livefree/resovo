@@ -14349,3 +14349,24 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **数据库变更**：无
 - **测试**：本机 ×3 + **TZ=Asia/Kolkata（+5:30，旧断言确定性必挂）/ UTC / America/New_York 三时区 66/66 全过** + 全量并行 **483 files 6359/6359 passed**（零 flaky 复现）+ typecheck / lint EXIT=0。零产品代码改动。
 - **注意事项**：全量跑 stderr 有 1 条 jsdom `Not implemented: navigation` 噪音，来自 `CrawlerRunsView.test.tsx` 用例 32（pre-existing / 33 用例全过 / 非失败非本卡范围）。CHORE-TEST-BASELINE-20260529 系列至此全部收口。
+
+## [CHG-VIR-CLOSEOUT-AUDIT] SEQ-20260602-03 遗留项核查收尾 — 5 项前置实证 + Phase 3 shadow 验收收口 + SEQ 状态翻转
+- **完成时间**：2026-06-04
+- **记录时间**：2026-06-04 12:50
+- **执行模型**：claude-opus-4-8（建议模型 opus，一致）
+- **子代理**：无（核查 + 文档登记，数据实证由只读报表/日志聚合直接支撑）
+- **修改文件**：
+  - `docs/task-queue.md` — SEQ-20260602-03 状态 🟡 规划中 → ✅ 主体完结 + 遗留项收尾核查记录（任务列表 15. CHG-VIR-CLOSEOUT-AUDIT 逐项登记）+ 最后更新时间追加。
+  - `docs/tasks.md` — 任务卡全流程（写卡 → 执行 → 删卡）。
+  - `docs/designs/merge-split-ux-redesign_20260603.md` — 补 `git add` 纳入版本控制（docs 新文档红线；SEQ-20260604-01 CHG-VIR-13 依赖文档，内容零改动）。
+- **核查结论（5 项遗留逐一实证）**：
+  - **① Phase 3 shadow 验收观察期 → ✅ PASS 收口**：ingest-shadow 日志全量 1178 次对照（06-04 采集窗口）disagree-bind=0 / agree-bind 5 / candidate-only 143 / no-counterpart 694 / none 336；identity-compare-report 总候选 215（跨 group 召回 186 / 强负拦截 173），ingest 切片 13 候选逐条合理；生产 catalog_id 零变更（R9 + D-105a-12）。
+  - **② findOrCreate 切主读 → ❌ 已量化阻塞**：D-177-12 一致性 HARD=0 全绿 ✅；静态对照面由报表 Section 1 等价覆盖 ✅；实质阻塞 = douban 74 例 REPORT-2（cache 有值仅 candidate，切主读后精确步 miss 回落三元组）。澄清 catalog-ref-shadow 运行期 0 条非缺陷（采集输入无外部 ID，probes=0 即 return）。触发条件 = REPORT-2 趋 0。
+  - **③ 双写收敛 + cache UNIQUE 复评（Y-A4）→ ❌ 链式后置 ②**（D-177-13 复评时点 = 切主读后）。
+  - **④ 合并端点 + UI ADR → ❌ 无候选量实证**（冲突簇 Y-A3 当前 0 个）且应与 CHG-VIR-13 工作台（SEQ-20260604-01）协调，先行实施 = 过度建设。
+  - **⑤ 自动绑定 ADR（Y-177-4）→ ❌ 评估输入不全**（Phase 3 报表 ✅ 本卡收口 / 上卷 candidate 12 个零人工裁定）。
+- **新增依赖**：无
+- **数据库变更**：无（全部只读核查）
+- **测试**：纯文档改动，typecheck/lint/test 不适用；实证执行 `report-catalog-identity-consistency` ✓ HARD=0 EXIT 0 + `identity-compare-report`（全量 + --source=ingest）✓ 三桶健康。
+- **共享层沉淀评估**：否——核查结论沉淀于 task-queue.md 遗留项登记（触发条件量化可跟踪），无代码产物。
+- **注意事项**：① Phase 3 验收样本窗口 = 单日采集批（1178 次），后续采集自然延续监控；验收结论用户可随时基于新数据复核。② douban 74 例升级是人工流程（admin 豆瓣匹配确认 → 上卷 job 升 exact），非代码任务；REPORT-2 计数 = 进度指标。③ SEQ-20260604-01（CHG-VIR-13）全部 ⬜ 待开始，入口 = CHG-VIR-13-ADR。
