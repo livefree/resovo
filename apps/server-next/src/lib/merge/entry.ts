@@ -14,9 +14,11 @@
  *   tab:        tab → from
  */
 
-/** 入口来源枚举（设计 §4.1；13-A2 增补 videos-split / videos-batch） */
+/** 入口来源枚举（设计 §4.1；CHG-VIR-13-A2 增补 videos-split / videos-batch） */
 export const MERGE_ENTRY_SOURCES = [
   'videos',
+  'videos-split',
+  'videos-batch',
   'moderation',
   'moderation-batch',
   'audit-rollback',
@@ -34,6 +36,8 @@ export const MERGE_ENTRY_SOURCE_META: Record<
   { readonly label: string; readonly backHref: string; readonly backLabel: string }
 > = {
   videos: { label: '来自视频库', backHref: '/admin/videos', backLabel: '返回视频库' },
+  'videos-split': { label: '来自视频库（发起拆分）', backHref: '/admin/videos', backLabel: '返回视频库' },
+  'videos-batch': { label: '来自视频库批量操作', backHref: '/admin/videos', backLabel: '返回视频库' },
   moderation: { label: '来自审核台', backHref: '/admin/moderation', backLabel: '返回审核台' },
   'moderation-batch': { label: '来自审核台批量操作', backHref: '/admin/moderation', backLabel: '返回审核台' },
   'audit-rollback': { label: '来自审计回滚', backHref: '/admin/audit', backLabel: '返回审计页' },

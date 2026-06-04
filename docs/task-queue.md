@@ -3091,12 +3091,14 @@ CODENAME-MATRIX-E2E (依赖 Wave 3 验收期补丁 CODENAME-MATRIX ✅)
    - 范围：① `admin-shell` countProvider 实接 `/admin/merge` pending 候选总数（SWR 60s）② 新增 `lib/merge/entry.ts` 统一深链构造 ③ 替换既有 4+1 处入口内联 URL（含 rollback `?tab=`）④ MergeClient 来源回链栏。
    - 验收要点：所有入口 URL 由单一 helper 生成；导航 badge 不再依赖静态 `count: 6`。
    - 完成备注：**① countProvider 实接**：新建 `lib/admin-shell-nav-counts.ts` `useAdminNavCounts`（60s setInterval 轮询 `listCandidates({source:'identity',limit:1})` 读 total → countProvider 闭包；**合理偏离登记：设计稿「SWR」按项目惯例落地为自写 hook**——server-next 无 swr 依赖，禁新依赖红线，范式对齐 admin-shell-notifications.ts；401/403 静默降级〔moderator 无 merge 权限〕+ 其他 warn 留痕 HOTFIX-G 范式；加载中/失败/0 不入 Map 无 badge）；admin-nav.tsx 移除静态 `count: 6` 假数据（保留 badge:'warn' 色调）；admin-shell-client.tsx stub→hook。**② entry.ts**：MergeEntrySource 4 枚举 + MERGE_ENTRY_SOURCE_META（label/backHref 单一真源）+ buildMergeHref（4 形态 discriminated union；**参数顺序契约显式登记**与既有测试断言一致）。**③ 5 处替换**：VideoRowActions / TabSimilar / PendingCenter（**补 from=moderation**）/ ModerationConsole 批量 / rollback-routes ×3（**补 from=audit-rollback**）。**④ 回链栏**：merge-entry-source-bar（from 合法值守卫渲染 + 返回按钮 push backHref + 关闭仅清 from 保工作流参数）；banner 内来源前缀文案移除（回链栏承载）。测试：+merge-entry.test 8 用例 + 回链栏 4 用例；split/rollback/banner 3 处断言随行为更新（URL +from / 来源文案迁移）。门禁：typecheck/lint EXIT=0 + 全量 **484 files 6371/6371 passed**（净 +12）；crawler #30 隔离复跑 191/191 确认 flaky 与本卡无关。merge 页 e2e 留 13-WS 深链回归 + 系列收口（设计 §9）。零 migration 零端点零新依赖；未触 packages/admin-ui。执行模型: claude-opus-4-8（人工 opus 会话覆盖 sonnet 建议——与 13-ADR 同会话连续执行）；子代理: 无
-3. **CHG-VIR-13-A2** — 视频库新增合并/拆分入口（状态：⬜ 待开始）
+3. **CHG-VIR-13-A2** — 视频库新增合并/拆分入口（状态：✅ 已完成 2026-06-04）
    - 创建时间：2026-06-04（融合修订新增，设计 §10.2 增强 #3）
+   - 实际开始：2026-06-04 13:50
    - 建议模型：sonnet
    - 依赖：CHG-VIR-13-A1
    - 范围：① `VideoRowActions.tsx` 行级「发起拆分」（与「发起合并」并列）② `VideoBatchActions.tsx` 批量「合并所选」（selectedKeys ≥ 2 显示）③ `MergeEntrySource` 补 `videos-split` / `videos-batch` 枚举。
    - 验收要点：新入口走 buildMergeHref；批量入口 < 2 选中不显示。
+   - 完成备注：**① 行级「发起拆分」**：buildItems +onSplit 参数 + `split` item（merge separator 组内并列）→ `buildMergeHref({kind:'split', videoId, from:'videos-split'})` 同窗深链（拆分工作台自动加载线路矩阵）。**② 批量「合并所选」**：`buildBatchActions` 加可选 `opts.onMergeSelected` 注入（纯函数零 router 依赖保持）；count ≥ 2 且提供回调才渲染（数组头插不影响既有索引型 limit 用例——旧调用不传 opts）；label 含计数「合并所选（N）」；无 confirm（导航动作，落地页自带工作区确认）；VideoListClient 注入 `window.open` 新窗口（**对齐 moderation-batch 既有行为**，保留列表选择上下文，免引 useRouter）。**③ entry.ts** 枚举 4→6（videos-split / videos-batch）+ SOURCE_META 同步（merge-entry.test META 完整性用例遍历枚举自动覆盖）。测试：VideoRowActions +3（merge/split 深链断言——router push 升级模块级 spy 顺手补 merge 深链断言空白 + 始终渲染）+ SelectionActions +3（不传 opts 零影响 / <2 不渲染 / ≥2 回调收全 ids，import 真实 buildBatchActions 非镜像）。门禁：typecheck/lint EXIT=0 + 全量 **484 files 6377/6377 passed**（净 +6）；两轮并发 flaky（UserSubmissions/其他，均隔离复跑过 + 末轮全量零失败）确认与本卡无关。零端点零 migration 零依赖；未触 admin-ui。**13-A 系全部收口；解阻 13-WS 无新前置**。执行模型: claude-opus-4-8（人工 opus 会话覆盖 sonnet 建议，连续执行）；子代理: 无
 4. **CHG-VIR-13-WS** — 工作台 mode 骨架重构（状态：⬜ 待开始）
    - 创建时间：2026-06-04（融合修订新增，设计 §10.2 增强 #1）
    - 建议模型：sonnet

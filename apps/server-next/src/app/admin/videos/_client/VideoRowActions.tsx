@@ -45,6 +45,7 @@ function buildItems(
   onRefetch: () => void,
   onViewDetail: () => void,
   onMerge: () => void,
+  onSplit: () => void,
 ): readonly AdminDropdownItem[] {
   // CHG-VSR-4-B（设计 §2.2）：编辑信息 / 图片 / 外部元数据 / 查看播放线路 = 深链 VideoEditDrawer 对应 tab
   const items: AdminDropdownItem[] = [
@@ -82,6 +83,8 @@ function buildItems(
     { key: 'douban-sync', label: '豆瓣同步', disabled: !isAdmin, onClick: onDouban },
     { key: 'refetch', label: '重新采集', onClick: onRefetch },
     { key: 'merge', label: '发起合并', separator: true, onClick: onMerge },
+    // CHG-VIR-13-A2（设计 §10.2 增强 #3）：行级发起拆分 — 多源/多站点视频是拆分主场景
+    { key: 'split', label: '发起拆分', onClick: onSplit },
     { key: 'view-detail', label: '查看详情（前台）', onClick: onViewDetail },
   )
 
@@ -164,6 +167,11 @@ export function VideoRowActions({ row, isAdmin, onRowUpdate, onEditRequest }: Vi
     () => {
       setOpen(false)
       router.push(buildMergeHref({ kind: 'merge-pair', candidateA: row.id, from: 'videos' }))
+    },
+    // CHG-VIR-13-A2：发起拆分 → 深链拆分工作台（预填 videoId 自动加载线路矩阵）
+    () => {
+      setOpen(false)
+      router.push(buildMergeHref({ kind: 'split', videoId: row.id, from: 'videos-split' }))
     },
   )
 

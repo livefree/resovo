@@ -26,10 +26,24 @@ export interface BatchAction {
 
 export function buildBatchActions(
   selectedKeys: ReadonlySet<string>,
+  opts?: {
+    /** CHG-VIR-13-A2：批量「合并所选」导航回调（count ≥ 2 才渲染；调用方注入 buildMergeHref + router） */
+    readonly onMergeSelected?: (ids: readonly string[]) => void
+  },
 ): readonly BatchAction[] {
   const ids = Array.from(selectedKeys)
   const count = ids.length
+  const onMergeSelected = opts?.onMergeSelected
   return [
+    // CHG-VIR-13-A2（设计 §10.2 增强 #3）：合并所选 — 导航深链非 API 动作，≥2 才有合并语义
+    ...(onMergeSelected && count >= 2
+      ? [{
+          key: 'batch-merge-selected',
+          label: `合并所选（${count}）`,
+          disabled: false,
+          onConfirm: () => { onMergeSelected(ids); return Promise.resolve() },
+        } satisfies BatchAction]
+      : []),
     {
       key: 'batch-publish',
       label: '批量公开',

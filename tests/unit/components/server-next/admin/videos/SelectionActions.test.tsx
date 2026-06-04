@@ -26,6 +26,8 @@ vi.mock('@/lib/videos/api', () => ({
 }))
 
 import * as videoApi from '@/lib/videos/api'
+// CHG-VIR-13-A2：合并所选用例测真实 buildBatchActions（上方 makeActions 为镜像仅服务旧 limit 用例）
+import { buildBatchActions } from '../../../../../../apps/server-next/src/app/admin/videos/_client/VideoBatchActions'
 
 // ── batch limit constants (mirror VideoListClient.tsx) ───────────
 
@@ -233,5 +235,33 @@ describe('SelectionActionBar — confirm 流程', () => {
     fireEvent.click(screen.getByText('危险'))
     fireEvent.click(screen.getByText('取消'))
     expect(onClick).not.toHaveBeenCalled()
+  })
+})
+
+// ── CHG-VIR-13-A2：批量「合并所选」（导航动作 / onMergeSelected 注入）─────────
+
+describe('buildBatchActions — 合并所选 (CHG-VIR-13-A2)', () => {
+  it('不传 onMergeSelected → 不渲染合并 action（既有索引用例零影响）', () => {
+    const actions = buildBatchActions(new Set(['a', 'b', 'c']))
+    expect(actions.find((a) => a.key === 'batch-merge-selected')).toBeUndefined()
+    expect(actions).toHaveLength(4)
+  })
+
+  it('count < 2 → 不渲染合并 action（无合并语义）', () => {
+    const onMergeSelected = vi.fn()
+    const actions = buildBatchActions(new Set(['only-one']), { onMergeSelected })
+    expect(actions.find((a) => a.key === 'batch-merge-selected')).toBeUndefined()
+  })
+
+  it('count ≥ 2 + onMergeSelected → 渲染合并 action 且 onConfirm 回调收到全部 ids', async () => {
+    const onMergeSelected = vi.fn()
+    const actions = buildBatchActions(new Set(['id-1', 'id-2', 'id-3']), { onMergeSelected })
+    const merge = actions.find((a) => a.key === 'batch-merge-selected')
+    expect(merge).toBeDefined()
+    expect(merge!.label).toBe('合并所选（3）')
+    expect(merge!.disabled).toBe(false)
+    expect(merge!.confirm).toBeUndefined() // 导航动作无需二次确认（落地页自带工作区确认）
+    await merge!.onConfirm()
+    expect(onMergeSelected).toHaveBeenCalledWith(['id-1', 'id-2', 'id-3'])
   })
 })

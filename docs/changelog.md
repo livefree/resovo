@@ -14409,3 +14409,21 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **测试**：受影响 10 套件 75/75 → 全量 **484 files 6371/6371 passed**（净 +12）；crawler #30 隔离复跑 191/191 确认 flaky 非本卡回归；typecheck/lint EXIT=0
 - **共享层沉淀评估**：是——entry.ts 即本卡的沉淀产物（深链构造从 5 文件内联收口到单一真源；13-WS mode 模型升级时仅改此文件 + MergeClient 映射层，入口零再改）；useAdminNavCounts 为 countProvider 首个真数据接入，后续导航项（审核 484 等静态数）可循同模式接入。
 - **注意事项**：① merge 页 e2e 深链回归归 13-WS（升级映射验收）+ 系列收口（设计 §9）。② rollback `?tab=` 形态 MergeClient 尚不消费（pre-existing gap），13-WS mode/URL 双向同步时闭合。③ 下一卡可选：13-A2（视频库新增入口，依赖 13-A1 ✅）/ 13-WS（依赖 13-A1 ✅）/ 13-B1（依赖 13-ADR ✅）。
+
+## [CHG-VIR-13-A2] 视频库新增合并/拆分入口 — 行级发起拆分 + 批量合并所选
+- **完成时间**：2026-06-04
+- **记录时间**：2026-06-04 14:32
+- **执行模型**：claude-opus-4-8（人工 opus 会话覆盖 sonnet 建议——同会话连续执行）
+- **子代理**：无
+- **修改文件**：
+  - `apps/server-next/src/lib/merge/entry.ts` — MergeEntrySource 枚举 4→6（videos-split / videos-batch）+ SOURCE_META 同步
+  - `apps/server-next/src/app/admin/videos/_client/VideoRowActions.tsx` — buildItems +onSplit 参数 + `split` item（与 merge 同组并列）→ 同窗深链拆分工作台
+  - `apps/server-next/src/app/admin/videos/_client/VideoBatchActions.tsx` — buildBatchActions 加可选 `opts.onMergeSelected`（纯函数零 router 依赖）；count ≥ 2 且注入回调才头插「合并所选（N）」action（旧调用不传 opts 零影响）；无 confirm（导航动作，落地页自带工作区确认）
+  - `apps/server-next/src/app/admin/videos/_client/VideoListClient.tsx` — 注入 onMergeSelected：window.open 新窗口（对齐 moderation-batch 既有行为，保留列表选择上下文，免引 useRouter）
+  - `tests/unit/components/server-next/admin/videos/VideoRowActions.test.tsx` — router push 升级模块级 spy + 3 用例（merge 深链断言空白顺手补齐 / split 深链 / 始终渲染）
+  - `tests/unit/components/server-next/admin/videos/SelectionActions.test.tsx` — import 真实 buildBatchActions（非镜像）+ 3 用例（不传 opts 零影响 / <2 不渲染 / ≥2 回调收全 ids）
+- **新增依赖**：无
+- **数据库变更**：无
+- **测试**：受影响 5 套件 74/74 → 全量 **484 files 6377/6377 passed**（净 +6）；两轮并发负载 flaky（UserSubmissions 等，隔离复跑全过 + 末轮全量零失败）确认非本卡回归；typecheck/lint EXIT=0
+- **共享层沉淀评估**：否——本卡为 entry.ts（13-A1 沉淀）的消费方扩展；buildBatchActions 的 opts 注入模式保持纯函数边界，无新共享原语需求。
+- **注意事项**：① 13-A 系（A1+A2）全部收口。② 批量合并 >11 个执行将 422（MergeSchema 上限），与 moderation-batch 入口同等行为；13-WS 集合编辑器落地后可裁剪分批（设计 §10.4）。③ 下一卡按依赖序：13-WS（骨架，依赖 13-A1 ✅）或 13-B1（后端契约，依赖 13-ADR ✅），两者可并行域。

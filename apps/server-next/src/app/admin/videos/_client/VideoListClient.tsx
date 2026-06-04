@@ -20,6 +20,7 @@ import {
 } from './VideoFilterFields'
 import { buildVideoColumns } from './VideoColumns'
 import { BatchActionsRow, buildBatchActions } from './VideoBatchActions'
+import { buildMergeHref } from '@/lib/merge/entry'
 import { VideoEditDrawer } from './VideoEditDrawer'
 
 // ── main component ────────────────────────────────────────────────
@@ -269,8 +270,17 @@ export function VideoListClient() {
   }, [resetToFirstPage])
 
   // CHG-DESIGN-02 Step 7B：批量操作 ReactNode（DataTable.bulkActions 直传）
+  // CHG-VIR-13-A2：合并所选 → 新窗口打开 merge 工作台（对齐 moderation-batch window.open 行为，保留列表上下文）
   const batchActions = useMemo(
-    () => buildBatchActions(selection.selectedKeys),
+    () => buildBatchActions(selection.selectedKeys, {
+      onMergeSelected: (ids) => {
+        window.open(
+          buildMergeHref({ kind: 'batch-merge', ids, from: 'videos-batch' }),
+          '_blank',
+          'noopener,noreferrer',
+        )
+      },
+    }),
     [selection.selectedKeys],
   )
   const bulkActionsNode = selection.selectedKeys.size > 0

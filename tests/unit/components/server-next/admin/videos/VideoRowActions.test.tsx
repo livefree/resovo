@@ -16,9 +16,11 @@ import type { VideoAdminRow } from '../../../../../../apps/server-next/src/lib/v
 // ── mock API ──────────────────────────────────────────────────────
 
 // CHG-SN-8-04-N1 顺手修 pre-existing：CHG-SN-8-08 在 VideoRowActions 引入 useRouter（行级「发起合并」深链）但未补 mock
+// CHG-VIR-13-A2：push 升级为模块级 spy（断言合并/拆分深链 URL）
+const routerPushMock = vi.fn()
 vi.mock('next/navigation', () => ({
   useRouter: () => ({
-    push: vi.fn(),
+    push: (...args: unknown[]) => routerPushMock(...args),
     replace: vi.fn(),
     back: vi.fn(),
     forward: vi.fn(),
@@ -269,5 +271,32 @@ describe('VideoRowActions — state transition', () => {
     clickItem('approve')
     expect(onRowUpdate).toHaveBeenCalledWith('v1', { review_status: 'approved' })
     await waitFor(() => expect(videoApi.stateTransition).toHaveBeenCalledWith('v1', 'approve'))
+  })
+})
+
+describe('VideoRowActions — 合并/拆分深链 (CHG-VIR-13-A1/A2)', () => {
+  beforeEach(() => {
+    routerPushMock.mockReset()
+  })
+
+  it('点击"发起合并" → router.push buildMergeHref（candidate_a + from=videos）', () => {
+    renderActions(makeRow())
+    openDropdown()
+    clickItem('merge')
+    expect(routerPushMock).toHaveBeenCalledWith('/admin/merge?candidate_a=v1&from=videos')
+  })
+
+  it('点击"发起拆分" → router.push 拆分深链（split + from=videos-split）', () => {
+    renderActions(makeRow())
+    openDropdown()
+    clickItem('split')
+    expect(routerPushMock).toHaveBeenCalledWith('/admin/merge?split=v1&from=videos-split')
+  })
+
+  it('"发起拆分"菜单项始终渲染（与"发起合并"并列）', () => {
+    renderActions(makeRow({ review_status: 'approved', is_published: true }))
+    openDropdown()
+    expect(document.querySelector('[data-key="merge"]')).not.toBeNull()
+    expect(document.querySelector('[data-key="split"]')).not.toBeNull()
   })
 })
