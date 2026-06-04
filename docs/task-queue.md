@@ -3099,12 +3099,14 @@ CODENAME-MATRIX-E2E (依赖 Wave 3 验收期补丁 CODENAME-MATRIX ✅)
    - 范围：① `VideoRowActions.tsx` 行级「发起拆分」（与「发起合并」并列）② `VideoBatchActions.tsx` 批量「合并所选」（selectedKeys ≥ 2 显示）③ `MergeEntrySource` 补 `videos-split` / `videos-batch` 枚举。
    - 验收要点：新入口走 buildMergeHref；批量入口 < 2 选中不显示。
    - 完成备注：**① 行级「发起拆分」**：buildItems +onSplit 参数 + `split` item（merge separator 组内并列）→ `buildMergeHref({kind:'split', videoId, from:'videos-split'})` 同窗深链（拆分工作台自动加载线路矩阵）。**② 批量「合并所选」**：`buildBatchActions` 加可选 `opts.onMergeSelected` 注入（纯函数零 router 依赖保持）；count ≥ 2 且提供回调才渲染（数组头插不影响既有索引型 limit 用例——旧调用不传 opts）；label 含计数「合并所选（N）」；无 confirm（导航动作，落地页自带工作区确认）；VideoListClient 注入 `window.open` 新窗口（**对齐 moderation-batch 既有行为**，保留列表选择上下文，免引 useRouter）。**③ entry.ts** 枚举 4→6（videos-split / videos-batch）+ SOURCE_META 同步（merge-entry.test META 完整性用例遍历枚举自动覆盖）。测试：VideoRowActions +3（merge/split 深链断言——router push 升级模块级 spy 顺手补 merge 深链断言空白 + 始终渲染）+ SelectionActions +3（不传 opts 零影响 / <2 不渲染 / ≥2 回调收全 ids，import 真实 buildBatchActions 非镜像）。门禁：typecheck/lint EXIT=0 + 全量 **484 files 6377/6377 passed**（净 +6）；两轮并发 flaky（UserSubmissions/其他，均隔离复跑过 + 末轮全量零失败）确认与本卡无关。零端点零 migration 零依赖；未触 admin-ui。**13-A 系全部收口；解阻 13-WS 无新前置**。执行模型: claude-opus-4-8（人工 opus 会话覆盖 sonnet 建议，连续执行）；子代理: 无
-4. **CHG-VIR-13-WS** — 工作台 mode 骨架重构（状态：⬜ 待开始）
+4. **CHG-VIR-13-WS** — 工作台 mode 骨架重构（状态：✅ 已完成 2026-06-04）
    - 创建时间：2026-06-04（融合修订新增，设计 §10.2 增强 #1）
+   - 实际开始：2026-06-04 14:50
    - 建议模型：sonnet
-   - 依赖：CHG-VIR-13-A1（entry.ts 先收口）；与 13-B1/C1/D1 可并行
+   - 依赖：CHG-VIR-13-A1 ✅（entry.ts 先收口）；与 13-B1/C1/D1 可并行
    - 范围：① `?mode=<candidates|merge|split|records>` 模型 + Segment 4 区 + URL 双向同步 ② 旧参数升级映射（candidate_a/candidate_b/ids/split/candidate_id/from）③ DirectMergeWorkspace + BatchMergeWorkspace 合一为 `MergeWorkspace`（VideoPicker 集合编辑 + target 单选）④ MergeClient 拆文件（500 行红线）⑤ 既有深链回归 e2e。
    - 验收要点：同一时刻单一活动工作区；5+1 处旧深链升级映射逐一回归；旧组件删除无残留消费。
+   - 完成备注：**mode 模型落地**：MergeClient 重写为骨架（370→231 行）——`deriveWorkspace` 升级映射真源（显式 ?mode= > candidate_a/ids→merge > split→split > tab=merged|split→records+AuditSection 预过滤 > 默认 candidates；**不重写 URL**，旧深链保持原参数内部推导）+ Segment 4 区（onChange→router.replace ?mode= 双向同步）+ 单一活动工作区（旧 banner/Direct/Batch/Split-toggle 堆叠废除）。**MergeWorkspace 新建（272 行）**：Direct（2→1/target 锁死）+ Batch（纯 uuid 列表）合一为集合编辑器——深链 ids 并行 fetch 预填（失败 id 占位行可移除）+ VideoPicker 增删排重 + target radio 任意切换 + reason + **candidateId 透传守卫**（成员集合恰为初始 pair 无序相等才透传，增删失配自动失效，沿 Direct 语义）+ 上限 11 禁用提示；BatchMergeWorkspace.tsx 删除、DirectMergeWorkspace 随 MergeClient 重写移除（grep 零残留消费）。测试：**MergeWorkspace.test 新建 9 用例**（吸收 Direct 6 + batch 4 语义：预填×3/执行参数/candidateId 透传+失效/移除重选/​<2 禁用/空工作区）+ MergeClient.test 15→16（Segment 4 区/双向同步两半【点击→replace mode= + URL 注入→渲染】/tab= 升级映射×2/mode=records×2/拆分流程改 URL 注入）+ banner test 重写（升级映射 3 用例 + 回链栏 4 保留）；旧 Direct/batch 测试文件删除。门禁：typecheck 0 error/lint ✓ + 全量 **484 files 6379/6379 passed**（复跑全绿，上轮 1 失败=并发 flaky）。**⑤ e2e 调整登记**：深链回归以单测层全覆盖（5+1 处升级映射逐一断言），Playwright e2e 留系列收口（设计 §9 既定）。**偏离登记**：SplitSection→SplitWorkspace 重命名推迟 13-B2B（卡面预登记）。**解阻 13-B2B / 13-PLAY / 13-C2**。执行模型: claude-opus-4-8（人工 opus 会话覆盖 sonnet 建议）；子代理: 无
 5. **CHG-VIR-13-B1** — 合并候选对比数据契约扩展（状态：✅ 已完成 2026-06-04）
    - 创建时间：2026-06-04 00:00
    - 实际开始：2026-06-04 14:35（13-WS 大卡留待干净上下文，先行可并行域后端卡）

@@ -14443,3 +14443,21 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **测试**：36/36 → 全量 **484 files 6381/6381 passed**（净 +4）；**dev 真实库只读冒烟**：SQL 形态 ✓（GROUP BY 函数依赖 + jsonb_agg）+ external_ids 命中样本（douban 单 provider / bangumi+douban 双 provider，ORDER BY provider 确定性）形态精确符合契约；typecheck/lint/verify:adr-contracts EXIT=0
 - **共享层沉淀评估**：否——契约层加性扩展；mapVideoRow 单点扩展即三消费点覆盖（既有共享结构的收益兑现，无新原语）。
 - **注意事项**：① 卡面「fetchRawCandidateGroups 扩 SELECT」按实际落地修正：组级行无 video 字段不需扩，仅 detail 查询扩展（完成备注已登记）。② 13-B2A（MergeComparePanel 消费新字段）与 13-D1（状态设置后端）双解阻。③ identity 候选路径经同一 fetchVideoDetailsForCandidates + mapVideoRow，新字段自动可用（无独立改动）。
+
+## [CHG-VIR-13-WS] 工作台 mode 骨架重构 — 单一活动工作区 + Direct/Batch 合一 MergeWorkspace
+- **完成时间**：2026-06-04
+- **记录时间**：2026-06-04 15:05
+- **执行模型**：claude-opus-4-8（人工 opus 会话覆盖 sonnet 建议——同会话连续执行）
+- **子代理**：无
+- **修改文件**：
+  - `apps/server-next/src/app/admin/merge/_client/MergeClient.tsx` — 重写为 mode 骨架（370→231 行）：`deriveWorkspace` 升级映射真源（显式 ?mode= > candidate_a/ids→merge > split→split > tab=merged|split→records 预过滤 > 默认 candidates；不重写 URL 内部推导）+ Segment 4 区（candidates/merge/split/records，onChange→router.replace 双向同步）+ 单一活动工作区；describeError 多消费方共享保留
+  - `apps/server-next/src/app/admin/merge/_client/MergeWorkspace.tsx` — 新建（272 行）：Direct（2→1/target 锁死为 A）+ Batch（纯 uuid 行列表）合一为视频集合编辑器——深链 ids 并行 fetch 预填（失败 id 占位行）+ VideoPicker 增删排重 + target radio 任意切换 + reason ≤500 + candidateId 透传守卫（成员集合恰为初始 pair 无序相等才透传 confirm，增删失配自动失效）+ 上限 11 禁用提示 + toast 撤销 action
+  - `apps/server-next/src/app/admin/merge/_client/BatchMergeWorkspace.tsx` — 删除（grep 零残留消费）
+  - `tests/unit/components/server-next/admin/merge/MergeWorkspace.test.tsx` — 新建 9 用例（吸收 MergeDirectWorkspace.test 6 + batch-merge-workspace.test 4 语义；两旧文件删除）
+  - `tests/unit/components/server-next/admin/merge/MergeClient.test.tsx` — 15→16 用例（Segment 4 区断言 / mode 双向同步两半 / tab= 升级映射×2 / mode=records×2 / 拆分流程改 URL 注入式）
+  - `tests/unit/components/server-next/admin/merge/MergeCandidateBanner.test.tsx` — 重写为升级映射 3 用例（banner 废除回归守卫）+ 回链栏 4 用例保留
+- **新增依赖**：无
+- **数据库变更**：无
+- **测试**：merge 目录 5 文件 46/46 → 全量 **484 files 6379/6379 passed**（复跑全绿；上轮 1 失败 = 并发 flaky 非本卡）；typecheck 0 error / lint ✓；MergeClient 231 行 + MergeWorkspace 272 行均 <500 红线
+- **共享层沉淀评估**：否——mode 骨架为页面级编排（消费 entry.ts 单一真源）；MergeWorkspace 为 merge 域专属工作区（无跨页消费方）。13-WS 兑现 13-A1 沉淀承诺：入口文件零再改（升级映射收口在 deriveWorkspace + entry.ts）。
+- **注意事项**：① 范围 ⑤「既有深链回归 e2e」按单测层全覆盖落地（5+1 处升级映射逐一断言），Playwright e2e 留系列收口（设计 §9 既定）——偏离登记。② SplitSection→SplitWorkspace 重命名推迟 13-B2B（卡面预登记）。③ 候选行展开「转入合并工作区」动作归 13-B2B（§10.4）。④ 解阻 13-B2B / 13-PLAY / 13-C2；下一卡候选：13-D1（opus）/ 13-C1（opus）/ 13-B2A。
