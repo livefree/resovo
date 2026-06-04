@@ -14487,3 +14487,14 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
   - `tests/unit/components/server-next/admin/merge/MergeComparePreview.test.tsx` — +2 回归用例（11b 集合变化清空旧预览 / 11c 挂起旧请求过期响应不覆盖）
 - **测试**：14/14 → 全量 **484 files 6393/6393 passed**（净 +2）；typecheck/lint ✓
 - **注意事项**：问题域 = 13-B2A 新增组件（旧 structure 在 videos prop 变化后误显示旧集合线路）；同会话内闭环，13-B2A 完成备注已补登。
+
+## [CHG-VIR-13-B2A-FIX-2] Codex stop-time review — StrictMode 下 stale 守卫哨兵失效修复
+- **完成时间**：2026-06-04
+- **记录时间**：2026-06-04 15:58
+- **执行模型**：claude-opus-4-8
+- **子代理**：无（Codex stop-time review 第 2 轮触发）
+- **修改文件**：
+  - `apps/server-next/src/app/admin/merge/_client/MergeResultPreview.tsx` — unmount cleanup 由 `requestSeqRef.current = Number.MAX_SAFE_INTEGER` 改为 `+= 1`：StrictMode mount→unmount→remount 时 ref 保留，MAX 起点后 `++` 超出 2^53 精度不再递增 → seq 比对恒真 → FIX-1 守卫被永久禁用；`+= 1` 同样作废飞行请求且 remount 后自然递增
+  - `tests/unit/components/server-next/admin/merge/MergeComparePreview.test.tsx` — +1 StrictMode 回归用例（11d：remount 后正常加载 + 集合变化守卫生效 + 可重新展开）
+- **测试**：15/15 → 全量 **484 files 6394/6394 passed**（净 +1）；机器高负载期（551s+/常态 137s）3 个跨域失败（perf 基线/staging/crawler）隔离 115/115 + 负载回落终轮全量零失败 = 负载型 flaky 排除；typecheck/lint ✓
+- **注意事项**：教训沉淀——unmount 哨兵值不要用「极大值毒化」模式（StrictMode ref 保留语义下不可逆），统一用「cleanup 递增序号」（可逆、remount 友好）。

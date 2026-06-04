@@ -252,8 +252,11 @@ function MergeResultBody({ videos, targetId, onEpisodeClick }: MergeResultPrevie
     }
   }, [videos])
 
-  // unmount 后 setState 防护（最后一道：seq 永不匹配）
-  useEffect(() => () => { requestSeqRef.current = Number.MAX_SAFE_INTEGER }, [])
+  // unmount 时飞行请求作废（cleanup +1 即可：所有挂起 seq 过期）。
+  // Codex review FIX-2：不得置 MAX_SAFE_INTEGER —— StrictMode mount→unmount→remount 时
+  // ref 保留，MAX 起点后 `++` 超出 2^53 精度不再递增 → seq 比对恒真 → 守卫永久失效；
+  // `+= 1` 在 remount 后可继续自然递增，守卫语义不变。
+  useEffect(() => () => { requestSeqRef.current += 1 }, [])
 
   return (
     <div style={PANEL_STYLE} data-testid="merge-result-preview">

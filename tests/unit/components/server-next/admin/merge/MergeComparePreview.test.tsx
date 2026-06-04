@@ -227,6 +227,29 @@ describe('MergeResultPreview · merge 形态', () => {
     // 过期响应不得渲染（structure 仍为空）
     expect(screen.queryByTestId('merge-result-structure')).toBeNull()
   })
+
+  it('11d. Codex FIX-2：StrictMode（mount→unmount→remount，ref 保留）下守卫仍工作', async () => {
+    const { StrictMode } = await import('react')
+    getVideoMatrixMock.mockResolvedValue([makeLine('siteA', '线1', [1])])
+    const { rerender } = render(
+      <StrictMode>
+        <MergeResultPreview kind="merge" videos={[makeVideo('a'), makeVideo('b')]} targetId="a" />
+      </StrictMode>,
+    )
+    // remount 后正常加载路径不被破坏（MAX_SAFE_INTEGER 哨兵会在此失效——seq 恒等导致守卫永真/加载异常）
+    fireEvent.click(screen.getByTestId('merge-result-structure-toggle'))
+    await waitFor(() => expect(screen.getByTestId('merge-result-structure')).toBeTruthy())
+    // 集合变化 → stale 守卫在 StrictMode 下依然生效（旧预览清空）
+    rerender(
+      <StrictMode>
+        <MergeResultPreview kind="merge" videos={[makeVideo('a'), makeVideo('c')]} targetId="a" />
+      </StrictMode>,
+    )
+    expect(screen.queryByTestId('merge-result-structure')).toBeNull()
+    // 新集合可重新展开（守卫未被永久禁用）
+    fireEvent.click(screen.getByTestId('merge-result-structure-toggle'))
+    await waitFor(() => expect(screen.getByTestId('merge-result-structure')).toBeTruthy())
+  })
 })
 
 describe('MergeResultPreview · split 形态', () => {
