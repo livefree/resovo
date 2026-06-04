@@ -1,8 +1,8 @@
 {
-  "generatedAt": "2026-06-04T01:42:41.506Z",
+  "generatedAt": "2026-06-04T03:33:23.907Z",
   "summary": {
-    "closedTotal": 343,
-    "pendingTotal": 19
+    "closedTotal": 348,
+    "pendingTotal": 14
   },
   "perAdr": [
     {
@@ -325,14 +325,9 @@
     {
       "adrId": "ADR-177",
       "total": 14,
-      "closed": 7,
+      "closed": 12,
       "pending": [
-        "D-177-10",
         "D-177-2",
-        "D-177-4",
-        "D-177-5",
-        "D-177-6",
-        "D-177-7",
         "D-177-8"
       ]
     },
