@@ -95,7 +95,7 @@ describe('resolveAndWriteExactRef', () => {
     expect(insertSql).toContain(`'exact'`)
     expect(insertSql).toContain('ON CONFLICT DO NOTHING')
     expect(mockQuery.mock.calls[2]![1]).toEqual([
-      'cat-a', 'douban', '88001', 'subject', null, 'auto', 'test',
+      'cat-a', 'douban', '88001', 'subject', null, 'auto', 'test', null,
     ])
   })
 
@@ -122,15 +122,16 @@ describe('resolveAndWriteExactRef', () => {
 })
 
 describe('insertCandidateRef', () => {
-  it('新插入 → true；幂等 NOT EXISTS（candidate 不进 partial unique 不能靠 ON CONFLICT）', async () => {
+  it('新插入 → true；幂等 NOT EXISTS（candidate 不进 partial unique 不能靠 ON CONFLICT；自身已 exact 也跳过）', async () => {
     mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 1 })
     const r = await insertCandidateRef(mockClient, BASE)
     expect(r).toBe(true)
     const sql = sqlCalls()[0]!
     expect(sql).toContain('NOT EXISTS')
+    expect(sql).toContain(`relation IN ('candidate', 'exact')`)
     expect(sql).not.toContain('ON CONFLICT')
     expect(mockQuery.mock.calls[0]![1]).toEqual([
-      'cat-a', 'douban', '88001', 'subject', null, 'auto', 'test',
+      'cat-a', 'douban', '88001', 'subject', null, 'auto', 'test', null,
     ])
   })
 

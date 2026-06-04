@@ -138,14 +138,47 @@ async function section2(): Promise<number> {
   return r.rowCount ?? 0
 }
 
+async function section3(): Promise<number> {
+  // Y-A3（CHG-VIR-12-E）：冲突 candidate 可观测出口 —— 同 (provider, external_id) 被多个
+  // catalog 共享 candidate = 跨 catalog exact 冲突 / D-177-4 归并信号簇（喂 12-F 合并候选）。
+  console.log('━━ Section 3：冲突 candidate 簇（Y-A3 / same_work 合并候选输入）━━')
+  const r = await db.query<{
+    provider: string
+    external_id: string
+    catalogs: number
+    rules: string
+    titles: string
+  }>(
+    `SELECT r.provider, r.external_id,
+            COUNT(DISTINCT r.catalog_id)::int AS catalogs,
+            string_agg(DISTINCT COALESCE(r.rollup_rule, '-'), ',') AS rules,
+            string_agg(DISTINCT mc.title, ' / ' ORDER BY mc.title) AS titles
+       FROM catalog_external_refs r
+       JOIN media_catalog mc ON mc.id = r.catalog_id
+      WHERE r.relation = 'candidate'
+      GROUP BY r.provider, r.external_id
+     HAVING COUNT(DISTINCT r.catalog_id) > 1
+      ORDER BY catalogs DESC, r.provider, r.external_id`
+  )
+  console.log(`冲突簇：${r.rowCount} 个（多 catalog 共享同 candidate 外部 ID）`)
+  for (const row of r.rows.slice(0, 30)) {
+    console.log(
+      `  ⚑ ${row.provider}:${row.external_id} × ${row.catalogs} catalog（rule: ${row.rules}）"${row.titles}"`
+    )
+  }
+  return r.rowCount ?? 0
+}
+
 async function main(): Promise<void> {
   console.log('report-catalog-identity-consistency — 只读报表')
   const { hard, report } = await section1()
   const mixed = await section2()
+  const clusters = await section3()
   console.log('━━ 汇总 ━━')
   console.log(`HARD 违规=${hard}（exact↔cache 不一致 + 孤儿 cache）`)
   console.log(`REPORT 待升级=${report}（cache 有值仅 candidate，升 exact 走上卷/人工）`)
   console.log(`半回填态簇=${mixed}（报告性质，需人工系列归位；翻拍同名为已知 false positive）`)
+  console.log(`冲突 candidate 簇=${clusters}（same_work 合并候选信号，12-F 输入）`)
   await db.end()
   if (hard > 0) {
     console.error('✗ HARD 口径违规 > 0 — 迁移漏行 / cache 漂移，须处置后重跑')

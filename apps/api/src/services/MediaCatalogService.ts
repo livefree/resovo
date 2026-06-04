@@ -17,8 +17,14 @@ import * as catalogQueries from '@/api/db/queries/mediaCatalog'
 import type { MediaCatalogRow, CatalogInsertData, CatalogUpdateData } from '@/api/db/queries/mediaCatalog'
 import * as provenanceQueries from '@/api/db/queries/metadataProvenance'
 import * as externalRefQueries from '@/api/db/queries/catalogExternalRefs'
+import { baseLogger } from '@/api/lib/logger'
 
 export { MediaCatalogRow, CatalogInsertData, CatalogUpdateData }
+
+// findOrCreate 旁路对照日志（ADR-177 AMENDMENT D-177-14 / CHG-VIR-12-E）：
+// 读路径保持 cache 四列（行为逐值不变），COMMIT 后 fire-and-forget 对照映射表 exact，
+// pino 结构化日志（stage 范式对齐 ingest-shadow）。切主读前置条件 = 对照零分歧。
+const refShadowLog = baseLogger.child({ module: 'catalog-ref-shadow' })
 
 // ── 四列 cache ↔ catalog_external_refs 写侧接线映射（ADR-177 YY-C / CHG-VIR-12-D）──
 // safeUpdate 写这些字段时同事务写 exact ref / 降级 ref（imdb/tmdb 零写入方且 kind
@@ -144,8 +150,15 @@ export class MediaCatalogService {
    * findOrCreateWithMatch — findOrCreate 真源实现，额外透出命中步骤 matchedStep
    * （CHG-VIR-10 / D-105a-16：ingest shadow 对比「现有 5 步 vs 新评分」用；
    * 匹配逻辑与绑定语义零变更 / D-105a-12）。
+   * CHG-VIR-12-E：结果外挂 shadow 对照（D-177-14 旁路，fire-and-forget 零主路径影响）。
    */
   async findOrCreateWithMatch(input: FindOrCreateCatalogInput): Promise<CatalogMatchResult> {
+    const result = await this.findOrCreateWithMatchInternal(input)
+    this.shadowCompareRefLookup(input, result)
+    return result
+  }
+
+  private async findOrCreateWithMatchInternal(input: FindOrCreateCatalogInput): Promise<CatalogMatchResult> {
     const client: PoolClient = await this.db.connect()
     try {
       await client.query('BEGIN')
@@ -232,6 +245,59 @@ export class MediaCatalogService {
     } finally {
       client.release()
     }
+  }
+
+  /**
+   * shadow 对照（D-177-14 / CHG-VIR-12-E）：findOrCreate 命中结果 vs catalog_external_refs
+   * exact 映射。fire-and-forget 容错（对照失败不影响主流程），COMMIT 后用 this.db 独立连接。
+   * outcome 口径：
+   *   match                 cache 命中且映射表 exact 指向同一 catalog（切主读零分歧）
+   *   cache_hit_ref_miss    cache 命中但映射表无 exact（douban candidate 待升级 = 预期形态）
+   *   cache_hit_ref_mismatch cache 命中但映射表 exact 指向他 catalog（**异常，须处置**）
+   *   cache_miss_ref_hit    精确步未命中但映射表 exact 可命中（切主读后行为将变化，须复核）
+   */
+  private shadowCompareRefLookup(input: FindOrCreateCatalogInput, result: CatalogMatchResult): void {
+    const probes: Array<{ provider: externalRefQueries.ExternalRefProvider; externalId: string; step: CatalogMatchStep }> = []
+    if (input.imdbId) probes.push({ provider: 'imdb', externalId: input.imdbId, step: 'imdb_id' })
+    if (input.tmdbId != null) probes.push({ provider: 'tmdb', externalId: String(input.tmdbId), step: 'tmdb_id' })
+    if (input.doubanId) probes.push({ provider: 'douban', externalId: input.doubanId, step: 'douban_id' })
+    if (input.bangumiSubjectId != null) probes.push({ provider: 'bangumi', externalId: String(input.bangumiSubjectId), step: 'bangumi_id' })
+    if (probes.length === 0) return
+
+    void (async () => {
+      for (const probe of probes) {
+        const ref = await this.db.query<{ catalog_id: string }>(
+          `SELECT catalog_id FROM catalog_external_refs
+            WHERE provider = $1 AND external_id = $2 AND relation = 'exact'
+            LIMIT 1`,
+          [probe.provider, probe.externalId]
+        )
+        const refCatalogId = ref.rows[0]?.catalog_id
+        const cacheHit = result.matchedStep === probe.step
+        let outcome: string | null = null
+        if (cacheHit) {
+          outcome = refCatalogId === undefined
+            ? 'cache_hit_ref_miss'
+            : refCatalogId === result.catalog.id ? 'match' : 'cache_hit_ref_mismatch'
+        } else if (refCatalogId !== undefined && refCatalogId !== result.catalog.id) {
+          // 精确步未由该 provider 命中、映射表却指向不同 catalog → 切主读后行为变化点
+          outcome = 'cache_miss_ref_hit'
+        }
+        if (outcome !== null) {
+          refShadowLog.info({
+            stage: 'catalog-ref-shadow',
+            outcome,
+            provider: probe.provider,
+            externalId: probe.externalId,
+            matchedStep: result.matchedStep,
+            catalogId: result.catalog.id,
+            refCatalogId: refCatalogId ?? null,
+          })
+        }
+      }
+    })().catch((err: unknown) => {
+      refShadowLog.warn({ stage: 'catalog-ref-shadow', err: err instanceof Error ? err.message : String(err) }, 'shadow 对照失败（不影响主流程）')
+    })
   }
 
   /**

@@ -44,6 +44,8 @@ export interface ExternalRefWriteInput {
   readonly linkedBy: string
   /** 分季 ref（NULL=非分季；CHECK>0 / R9 哨兵口径） */
   readonly seasonNumber?: number | null
+  /** 上卷派生溯源（YY-B / D-177-4 规则名；非上卷写入留 NULL） */
+  readonly rollupRule?: string | null
 }
 
 export type ExactRefOutcome =
@@ -105,8 +107,8 @@ export async function resolveAndWriteExactRef(
   const inserted = await db.query(
     `INSERT INTO catalog_external_refs
        (catalog_id, provider, external_id, external_kind, relation,
-        season_number, source, is_primary, linked_by)
-     VALUES ($1, $2, $3, $4, 'exact', $5, $6, true, $7)
+        season_number, source, is_primary, linked_by, rollup_rule)
+     VALUES ($1, $2, $3, $4, 'exact', $5, $6, true, $7, $8)
      ON CONFLICT DO NOTHING`,
     [
       input.catalogId,
@@ -116,6 +118,7 @@ export async function resolveAndWriteExactRef(
       input.seasonNumber ?? null,
       input.source,
       input.linkedBy,
+      input.rollupRule ?? null,
     ]
   )
   if (inserted.rowCount === 0) {
@@ -139,8 +142,11 @@ export async function resolveAndWriteExactRef(
 }
 
 /**
- * candidate 幂等写入（同 catalog + provider + external_id + relation='candidate' 已存在则跳过）。
- * 消费方：D-174-3 catalog 层冲突双写（D-177-7/D-177-13）+ exact 冲突降级（本文件）。
+ * candidate 幂等写入。跳过条件（NOT EXISTS）：同 catalog + provider + external_id 已有
+ * `candidate`（重复信号）**或 `exact`**（自身已确认绑定，candidate 纯噪声 / CHG-VIR-12-E）；
+ * `rejected` 不阻插（拒绝后新证据可再候选，复活语义）。
+ * 消费方：D-174-3 catalog 层冲突双写（D-177-7/D-177-13）+ exact 冲突降级（本文件）+
+ * 上卷 job（D-177-4 candidate 产出）。
  * @returns true=新插入 / false=已存在（幂等）
  */
 export async function insertCandidateRef(
@@ -150,12 +156,12 @@ export async function insertCandidateRef(
   const r = await db.query(
     `INSERT INTO catalog_external_refs
        (catalog_id, provider, external_id, external_kind, relation,
-        season_number, source, is_primary, linked_by)
-     SELECT $1, $2, $3, $4, 'candidate', $5, $6, false, $7
+        season_number, source, is_primary, linked_by, rollup_rule)
+     SELECT $1, $2, $3, $4, 'candidate', $5, $6, false, $7, $8
       WHERE NOT EXISTS (
         SELECT 1 FROM catalog_external_refs
         WHERE catalog_id = $1 AND provider = $2 AND external_id = $3
-          AND relation = 'candidate'
+          AND relation IN ('candidate', 'exact')
       )`,
     [
       input.catalogId,
@@ -165,6 +171,7 @@ export async function insertCandidateRef(
       input.seasonNumber ?? null,
       input.source,
       input.linkedBy,
+      input.rollupRule ?? null,
     ]
   )
   return (r.rowCount ?? 0) > 0
