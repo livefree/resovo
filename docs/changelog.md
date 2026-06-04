@@ -14370,3 +14370,21 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **测试**：纯文档改动，typecheck/lint/test 不适用；实证执行 `report-catalog-identity-consistency` ✓ HARD=0 EXIT 0 + `identity-compare-report`（全量 + --source=ingest）✓ 三桶健康。
 - **共享层沉淀评估**：否——核查结论沉淀于 task-queue.md 遗留项登记（触发条件量化可跟踪），无代码产物。
 - **注意事项**：① Phase 3 验收样本窗口 = 单日采集批（1178 次），后续采集自然延续监控；验收结论用户可随时基于新数据复核。② douban 74 例升级是人工流程（admin 豆瓣匹配确认 → 上卷 job 升 exact），非代码任务；REPORT-2 计数 = 进度指标。③ SEQ-20260604-01（CHG-VIR-13）全部 ⬜ 待开始，入口 = CHG-VIR-13-ADR。
+
+## [CHG-VIR-13-ADR] ADR-105 AMENDMENT（D-105-7~12）+ ADR-179 Accepted — merge-split UX 工作台端点契约定档
+- **完成时间**：2026-06-04
+- **记录时间**：2026-06-04 13:40
+- **执行模型**：claude-opus-4-8
+- **子代理**：arch-reviewer (claude-opus-4-8)（agentId a19744b07045b47e3 / 第 1 轮 CONDITIONAL → R1 修订后 PASS）
+- **修改文件**：
+  - `docs/decisions.md` — ① ADR-105 章节追加 AMENDMENT 2026-06-04（D-105-7~12 + R-105-T1~T7 + Y-105-T1~T5）+ 端点契约表 #1/#2/#3/#4/#5 行加性标注；② 文件末尾新增 ADR-179（Accepted / 2 新端点契约表 + D-179-1~6）
+  - `docs/tasks.md` / `docs/task-queue.md` — 任务卡收口
+- **变更内容**：
+  - **ADR-105 AMENDMENT（4 既有端点加性扩展 + 操作内状态设置）**：D-105-7 candidates response `VideoSummaryForMerge` +7 optional（review/visibility/catalog×2/episodeRange/externalIds/coverUrl，coverUrl 真源锁 `mc.cover_url`；候选数量/排序/分页/计数逐值不变）；D-105-8 audit response `MergeAuditRow` +4 optional（actorType 从 `identity_decisions` 透出、**`video_merge_audit` 零加列**；titles 取 snapshot_jsonb；批量反查走 `idx_identity_decision_audit` 无 N+1）；D-105-9 merge `targetStatus?` / split `newVideoMeta.status?`（targetVideoId 组结构互斥天然不可携带；**action 推导以 (current, desired) 二元组为输入**——评审 R1 修订，13-D1 以 9 值 action 枚举 from-state 前置单测定档矩阵）；D-105-10 **post-COMMIT 状态写入边界**（transitionVideoState 自持 BEGIN/COMMIT+FOR UPDATE + migration 023 trigger 实证，禁事务内裸 UPDATE 三列；非原子显式声明 + `statusTransition?` 响应可观测）；D-105-11 unmerge `targetStatusBefore` 还原（fetchVideosByIds 现仅 SELECT is_published 实证 → 扩 2 列；存量 audit 兜底不动）；D-105-12 审计 afterJsonb 纯增量 + 错误码零新增。
+  - **ADR-179（2 新 admin 端点）**：`GET /admin/identity-decisions`（decision/candidateId/reverted 过滤 + 分页幂等 + pair 摘要 JOIN）+ `POST /admin/identity-candidates/:id/revive`（rejected→新建 pending + `revived_from_candidate_id` 链原行零修改 / R6；**撞 pending unique 幂等返回 reused=true 且不置 reverted**；原 rejected decision 置 reverted 三列审计闭环；pair 一侧软删 409）。**零 migration 四表实证**：086 trigger_source CHECK 复用 'manual-search'（链字段一等复活标识，否决扩枚举）/ 052 action_type 无 DB CHECK（TS 层扩 'identity_candidate.revive'）/ 088 targetKind 已含 / 041 primary 唯一保 externalIds ≤4 条。
+  - **评审闭环**：红线 R1（desired-only 固定映射对 approved-target〔merge 主场景〕确定性 422——approve/approve_and_publish/reject 均要求 from=pending_review，023 白名单 approved 间迁移走 publish/unpublish/set_hidden）→ 修订为二元组覆盖矩阵 + 前端 status-defaults 同矩阵唯一真源；Y1（088 归因 ADR-178 修正）/ Y2（coverUrl 收敛）已吸收；Y3（设计 §5 旧表 +6 为历史残留，以 ADR +7 为准）登记不动。
+- **新增依赖**：无
+- **数据库变更**：无（零 migration；两 ADR 均加性协议层）
+- **测试**：纯文档；门禁 `verify:endpoint-adr` ✓（205 admin 路由全对齐，ADR-179 2 新路径登记）+ `verify:adr-contracts` ✓ + typecheck/lint EXIT=0
+- **共享层沉淀评估**：否——协议定档无代码产物；(current,desired)→action 覆盖矩阵将在 13-D1 以纯函数 + 单测沉淀（status-defaults.ts 同矩阵真源）。
+- **注意事项**：① D-105-7/8/9 触及 `packages/types/src/video-merge.types.ts` 公开类型 → 13-B1/C1/C2/D1 实施 commit 必须带 `Subagents: arch-reviewer (claude-opus-...)` trailer（CLAUDE.md 红线，评审提醒）。② 解阻 13-A1（本就并行）/ 13-B1 / 13-C1 / 13-D1；下一卡按依赖序取 13-A1（sonnet 建议，当前 opus 会话执行须在完成备注登记偏离）。③ auto-bind 维持 OFF（D-105a-17），actorType 通道为展示预留不抢跑。

@@ -3067,7 +3067,7 @@ CODENAME-MATRIX-E2E (依赖 Wave 3 验收期补丁 CODENAME-MATRIX ✅)
 
 ## [SEQ-20260604-01] 后台合并/拆分页面 UI/UX 优化（CHG-VIR-13）
 
-- **状态**：🟡 规划中
+- **状态**：🔄 进行中（2026-06-04 13:05 起 13-ADR）
 - **创建时间**：2026-06-04 00:00
 - **最后更新时间**：2026-06-04（融合修订：独立 B 稿对比裁定吸收，设计文档 §10；新增 13-A2/13-WS，13-A→13-A1，13-B2 拆 B2A/B2B，13-C2/13-D2/13-I18N 范围与依赖更新。第二轮问答补 §10.4 N→1 交互定档：矩阵 N 列布局 + 列头 target 单选归 13-B2A；候选组「转入合并工作区」+ >11 组转工作区裁剪分批归 13-B2B。第三轮问答补 §10.5 结构级结果预览〔getVideoMatrix ×N 合成线路×集数 + 结构信号，归 13-B2A〕+ 播放抽验〔AdminPlayer 复用 + 同集对比切换，新卡 13-PLAY〕；§11 目标布局/流程图 9 张入档）
 - **目标**：在视频身份解析与合并/拆分升级已完成 Phase 5 的基础上，升级 `/admin/merge` 为统一的视频身份处置工作台（mode 骨架：candidates / merge / split / records 单一活动工作区），覆盖入口体系、合并/拆分前后预览、自动/手动记录、操作内状态设置。
@@ -3077,12 +3077,13 @@ CODENAME-MATRIX-E2E (依赖 Wave 3 验收期补丁 CODENAME-MATRIX ✅)
 
 ### 任务列表（按执行顺序）
 
-1. **CHG-VIR-13-ADR** — ADR-105 AMENDMENT + identity decisions list/revive 独立 ADR（状态：⬜ 待开始）
+1. **CHG-VIR-13-ADR** — ADR-105 AMENDMENT + identity decisions list/revive 独立 ADR（状态：✅ 已完成 2026-06-04）
    - 创建时间：2026-06-04 00:00
-   - 计划开始：待 CHG-VIR-12 收口后
+   - 实际开始：2026-06-04 13:05
    - 建议模型：**opus**（端点契约 + 状态设置边界 + revive 幂等语义）
    - 范围：① ADR-105 AMENDMENT（candidates/audit response 扩展、merge/split body 状态设置扩展、post-COMMIT 非原子边界）② 新独立 ADR（`GET /admin/identity-decisions` + `POST /admin/identity-candidates/:id/revive`）③ `verify:endpoint-adr` / `verify:adr-contracts` ④ arch-reviewer PASS。
    - 验收要点：ADR 表覆盖所有新增/扩展端点；auto-bind 保持 OFF；状态变更不绕过现有状态机。
+   - 完成备注：**ADR-105 AMENDMENT 2026-06-04（D-105-7~12）+ ADR-179 Accepted（D-179-1~6）**。AMENDMENT：candidates +7 optional（coverUrl 真源锁 `mc.cover_url`）/ audit +4 optional（actorType 从 decision 透出、`video_merge_audit` 零加列）/ merge·split body 状态扩展（targetVideoId 组结构互斥天然不可携带 status）/ **post-COMMIT 状态机边界**（transitionVideoState 自持事务 + migration 023 trigger，禁事务内裸 UPDATE；非原子显式声明 + `statusTransition` 响应可观测）/ unmerge `targetStatusBefore` 还原（fetchVideosByIds 扩 2 列依据实证）；红线 R-105-T1~T7 + 黄线 Y-105-T1~T5。ADR-179：decisions list + revive；**零 migration 四表实证**（086 trigger_source CHECK 复用 'manual-search' + `revived_from_candidate_id` 链一等标识 / 052 action_type 无 CHECK / 088 已含 targetKind / 041 primary 唯一）；revive 幂等 `reused` 标志 + 原 rejected decision 置 reverted 审计闭环 + pair 一侧软删 409。**arch-reviewer（a19744b07045b47e3）第 1 轮 CONDITIONAL → 红线 R1 修订后 PASS**：D-105-9 desired-only 固定映射对 approved-target（merge 主场景）确定性 422（approve/approve_and_publish/reject 均要求 from=pending_review，023 白名单 approved 间迁移走 publish/unpublish/set_hidden）→ 改「(current, desired) 二元组 → action」覆盖矩阵 + 13-D1 单测定档 + 前端 status-defaults 同矩阵唯一真源；Y1（088 归因 ADR-178）/ Y2（coverUrl）已收敛，Y3（设计 §5 旧表 +6 历史残留，以 ADR +7 为准）登记。门禁：verify:endpoint-adr ✓ 205 路由（ADR-179 2 新路径登记）+ verify:adr-contracts ✓ + typecheck/lint EXIT=0。零代码零 migration。**解阻 13-A1（并行位）/ 13-B1 / 13-C1 / 13-D1**。执行模型: claude-opus-4-8；子代理: arch-reviewer (claude-opus-4-8)
 2. **CHG-VIR-13-A1** — 入口收口 + badge 实时化（状态：⬜ 待开始）
    - 创建时间：2026-06-04 00:00（融合修订：原 13-A 更名）
    - 建议模型：sonnet

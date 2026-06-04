@@ -5608,11 +5608,11 @@ plan §4.5 ADR-端点先后协议硬约束：admin API 协议须先 ADR + Opus P
 
 | # | 方法 | 路径 | 用途 | Request | Response | 错误码 |
 |---|---|---|---|---|---|---|
-| 1 | GET | `/admin/video-merges/candidates` | 列出 video 合并候选 + 评分 | Query: `type?` / `minScore?=0.6` / `limit?=20` / `page?=1` | 200 `{ data: CandidateGroup[], total, page, limit }` | 422 VALIDATION_ERROR |
-| 2 | POST | `/admin/video-merges` | 执行合并 | Body: `{ sourceVideoIds: string[], targetVideoId: string, reason?: string }` | 200 `{ data: { auditId, targetVideo: VideoSummary } }` | 422 / 404（任一 video 不存在）/ 409（target 已被合并到他处） |
-| 3 | POST | `/admin/video-merges/:auditId/unmerge` | 撤销合并 | Body: `{ reason?: string }` | 200 `{ data: { restoredVideoIds: string[] } }` | 404 / 409（audit 已撤销 / target video 已删） |
-| 4 | POST | `/admin/videos/:id/split` | 按 source 分组拆分 | Body: `{ groups: [{ sourceIds: string[], newVideoMeta: { title, year?, type } }] }`（≥2 组） | 200 `{ data: { auditId, newVideoIds: string[] } }` | 422 / 404 / 409（id 已被合并/拆分） |
-| 5 | GET | `/admin/video-merges/audit` | 列出 merge/split/unmerge 历史 audit timeline（**ADR-105 AMENDMENT 2026-05-14 / CHG-SN-6-AUDIT-TIMELINE / RETRO 4/7**）| Query: `action?='merge'\|'split'` / `videoId?` / `limit?=20` / `page?=1` | 200 `{ data: MergeAuditRow[], total, page, limit }` | 422 VALIDATION_ERROR |
+| 1 | GET | `/admin/video-merges/candidates` | 列出 video 合并候选 + 评分 | Query: `type?` / `minScore?=0.6` / `limit?=20` / `page?=1` | 200 `{ data: CandidateGroup[], total, page, limit }`（VideoSummaryForMerge +7 optional 字段，**AMENDMENT 2026-06-04 D-105-7 / CHG-VIR-13-B1**）| 422 VALIDATION_ERROR |
+| 2 | POST | `/admin/video-merges` | 执行合并 | Body: `{ sourceVideoIds: string[], targetVideoId: string, reason?: string, targetStatus?: { reviewStatus?, visibilityStatus? } }`（targetStatus = **AMENDMENT 2026-06-04 D-105-9/10 / CHG-VIR-13-D1**，post-COMMIT 状态机）| 200 `{ data: { auditId, targetVideo: VideoSummary, statusTransition? } }` | 422 / 404（任一 video 不存在）/ 409（target 已被合并到他处） |
+| 3 | POST | `/admin/video-merges/:auditId/unmerge` | 撤销合并 | Body: `{ reason?: string }` | 200 `{ data: { restoredVideoIds: string[], statusTransition? } }`（targetStatusBefore 还原 = **AMENDMENT 2026-06-04 D-105-11**）| 404 / 409（audit 已撤销 / target video 已删） |
+| 4 | POST | `/admin/videos/:id/split` | 按 source 分组拆分 | Body: `{ groups: [{ sourceIds: string[], newVideoMeta: { title, year?, type, status?: { reviewStatus?, visibilityStatus? } } }] }`（≥2 组；status = **AMENDMENT 2026-06-04 D-105-9 / CHG-VIR-13-D1**）| 200 `{ data: { auditId, newVideoIds: string[], statusTransition? } }` | 422 / 404 / 409（id 已被合并/拆分） |
+| 5 | GET | `/admin/video-merges/audit` | 列出 merge/split/unmerge 历史 audit timeline（**ADR-105 AMENDMENT 2026-05-14 / CHG-SN-6-AUDIT-TIMELINE / RETRO 4/7**）| Query: `action?='merge'\|'split'` / `videoId?` / `limit?=20` / `page?=1` | 200 `{ data: MergeAuditRow[], total, page, limit }`（MergeAuditRow +4 optional 字段，**AMENDMENT 2026-06-04 D-105-8 / CHG-VIR-13-C2**）| 422 VALIDATION_ERROR |
 | 6 | GET | `/admin/videos/:id/split-suggestions` | 拆分自动分组建议只读预览（**ADR-105 AMENDMENT 2026-06-03 / CHG-VIR-11-A / Phase 4 拆分证据化**，实施 = CHG-VIR-11-B）| Query: 无 | 200 `{ data: SplitSuggestionsResult }` | 422 VALIDATION_ERROR / 404 NOT_FOUND / 409 STATE_CONFLICT（已被合并） |
 
 **zod request schema（Service 层 + Route 层共享，端点实施卡 -09/-10 落地）**：
@@ -5988,6 +5988,69 @@ AdminAuditTargetKind 已含 'video'（admin-moderation.types.ts:127 既有），
 #### D-N 偏离登记
 
 D-105-1 ~ D-105-6 共 6 条（本 AMENDMENT 新增；ADR-105 原文无 D 编号体系，自 1 起编），随 CHG-VIR-11-B 实施卡逐条闭环；advisory，不阻塞 CI。两轮评审记录：第 1 轮 CONDITIONAL（agentId a14ab66155c13a55f / R-A1 + R-A2 红线）→ 主循环实读 `CrawlerService.ts` `upsertVideo` 反驳 R-A1 断言②③（`video.title` = 爬虫 payload 标题非 DB 行标题，per-site 观测有真实分裂信息；断言①〔site 级无 source_name 维度〕成立并落入 D-105-1 事实口径）→ 第 2 轮 PASS-with-conditions（agentId a100cd57de06fca45）：硬条件 1（响应类型非空 string）+ 硬条件 2（site 级盲区落正文）+ advisory-strong（`intra_site_multi_title` 信号）全部采纳；Y-A1（0 新建合法）/ Y-A2（同 catalog 不校验 + 不新增 audit 预检）/ Y-A3（veto 维度对称性）/ A-2（merge-after-split 争用链点名）全部吸收。
+
+### AMENDMENT 2026-06-04（CHG-VIR-13-ADR / merge-split UX 工作台 — 4 端点加性扩展 + 操作内状态设置 post-COMMIT 边界）
+
+> 设计真源：`docs/designs/merge-split-ux-redesign_20260603.md` §4.2（域 B 对比数据契约）/ §4.3（域 C audit response 扩展）/ §4.4（域 D 状态设置）/ §10 融合修订（§10.1 裁定 #3 状态机边界 / §10.5 结构级预览零新端点声明）。实施 = CHG-VIR-13-B1 / 13-D1 / 13-C2（SEQ-20260604-01）。本 AMENDMENT 全部为既有端点**加性扩展**，零新路径、零 migration。
+
+**D-105-7（candidates response 扩展 — `VideoSummaryForMerge` +7 optional 字段）**
+- `reviewStatus?` / `visibilityStatus?` / `catalogId?` / `catalogTitle?` / `episodeRange?: { min: number|null, max: number|null }` / `externalIds?: { provider, externalId }[]` / `coverUrl?: string|null`（§10.2 增强 #6）。
+- 数据源：`fetchVideoDetailsForCandidates` / `fetchRawCandidateGroups` 扩 SELECT（已 JOIN media_catalog 补 mc 标题；`externalIds` 取 `video_external_refs` 仅 `is_primary=true AND match_status IN ('manual_confirmed','auto_matched')`；`episodeRange` 聚合 `video_sources` MIN/MAX episode_number）。
+- **候选数量 / 排序 / 分页 / 计数逐值不变**（沿 Phase 2a Y-105a-1 口径，新增字段不参与任何 filter/sort）。
+- §10.5 结构级线路 × 集数预览**不在本契约内**：前端按需复用既有 `GET /admin/sources/video-groups/:id/matrix`（ADR-117）×N 合成，零新端点。
+
+**D-105-8（audit response 扩展 — `MergeAuditRow` +4 optional 字段）**
+- `actorType?: 'human'|'system'`：从关联 `identity_decisions.actor_type` 透出（同 audit 多 decision 时取任一，K decision 同事务挂载恒同 actor）；无关联 decision → `'human'`（人工 merge 页直接操作无 candidate 锚点场景）。**`video_merge_audit` 零加列**（§10.1 裁定：放弃 actor_type/trigger_source 列，auto-merge 启用后也必有 decision，通道一致）。
+- `relatedCandidateIds?: string[]` / `relatedDecisionIds?: string[]`：经 `idx_identity_decision_audit` 反查。
+- `videoTitlesSnapshot?: { videoId, title }[]`：source 标题取 `snapshot_jsonb.videos[].title`（软删视频唯一可靠源，缺失兜底「(已删除视频)」）；target 标题实时 JOIN（target 未删）。
+- 列表查询保持分页口径不变；扩展字段按页内行批量反查（无 N+1：单 SQL `WHERE video_merge_audit_id = ANY($1)`）。
+
+**D-105-9（merge/split body 状态设置扩展 — 全 optional 不传零变更；映射真源 = 现/目标二元组）**
+- `MergeSchema` 扩 `targetStatus?: { reviewStatus?: ReviewStatus, visibilityStatus?: VisibilityStatus }`。
+- `SplitSchema.groups[].newVideoMeta` 扩 `status?: { reviewStatus?, visibilityStatus? }`。**拆到已有 `targetVideoId` 组结构上不可携带 status**——`newVideoMeta` xor `targetVideoId` 既有互斥（D-105-2）天然保证，与 D-105-5「不动已有 target 元数据」一致，无需新增校验分支。
+- **action 推导必须以「(current 状态, desired 状态) 二元组」为输入**（评审 R1 修订：`transitionVideoState` 的 `approve`/`approve_and_publish`/`reject` 全部硬要求 from=`pending_review`〔`videos.mutations.ts:191-230`〕，desired-only 固定映射对 approved-target——merge 主场景——确定性 422 失效）。覆盖矩阵初稿（13-D1 以 `VideoStateTransitionAction` 9 值枚举〔approve / approve_and_publish / reject / reopen_pending / publish / unpublish / set_internal / set_hidden / staging_revert〕的 from-state 前置条件逐行核对后**单测定档**，矩阵为实施真源、本表为方向）：
+  - `pending → approved+public`：`approve_and_publish`；`pending → approved+internal`：`approve`；`pending → rejected+hidden`：`reject`；
+  - `approved+internal → approved+public`：`publish`；`approved+public → approved+internal`：`unpublish` 或 `set_internal`（按 from-state 前置取舍）；`approved+* → approved+hidden`：`set_hidden`；
+  - 无合法路径的 (current, desired) 组合 → **422 VALIDATION_ERROR（请求校验阶段、BEGIN 前，需先读 current 状态）**；current == desired → no-op 跳过调用。
+- split 新建 video 恒从 `pending_review`/`internal` 出发（insertNewVideo DB DEFAULT），矩阵退化为 pending 三行，无 approved-from 分支。
+- split 新建默认不变：不传 `status` → `pending_review`/`internal`（§10.1 裁定 #1：默认待审 + 面板一键通过，智能默认在前端 `status-defaults.ts` 纯函数，**以同一 (current, desired) 矩阵为唯一真源**只产合法组合 + 含 rejected source 不自动升级）。
+
+**D-105-10（post-COMMIT 状态写入边界 — 本 AMENDMENT 核心协议）**
+- 状态语义唯一通道 = `transitionVideoState`（`videos.mutations.ts:147`：自持 BEGIN/COMMIT + FOR UPDATE；migration 023 DB trigger 强制 `(review_status, visibility_status, is_published)` 三元组校验）。**禁止在 merge/split 事务内裸 UPDATE 状态三列**（绕过状态机 action 白名单与既有审计路径，违反价值排序 2）。
+- 执行序：merge/split 事务照常 COMMIT → 之后对 target（merge）/ 各新建 video（split）逐一调 `transitionVideoState` 映射 action。
+- **非原子性显式声明**：状态 transition 失败**不回滚** merge/split；响应扩 optional `statusTransition?: 'applied' | 'failed' | 'skipped'`（merge：单值；split：`{ videoId, result }[]`），UI 据此提示「合并/拆分成功，状态未变更，请在审核台手动调整」。失败重试/补偿不在本 AMENDMENT（人工路径兜底）。
+- transition 自身的状态变更审计沿状态机既有路径（零重复落点）。
+
+**D-105-11（unmerge 状态还原 — `targetStatusBefore`）**
+- merge 携带 `targetStatus` 且实际 applied 时，事务内将 target 的 before 状态写入 `snapshot_jsonb.targetStatusBefore: { reviewStatus, visibilityStatus, isPublished }`（JSONB 自由字段零 DDL；`fetchVideosByIds` SELECT 扩 `review_status` / `visibility_status` 2 列——当前仅 `is_published`，snapshot 才有还原依据）。
+- unmerge 时该字段存在 → COMMIT 后跟随 `transitionVideoState` 还原 target 状态（同 D-105-10 post-COMMIT 边界与非原子声明）；**存量 audit 无该字段 → 不动**（旧行为逐值一致）。
+- source videos 状态本就未动，`restoreVideos` 即还原，无需额外处理。
+
+**D-105-12（审计落点 + 错误码）**
+- `admin_audit_log` 复用 `video.merge` / `video.split` actionType 零扩枚举；`afterJsonb` 纯增量补 `targetStatus`（请求值）+ `statusTransition`（结果）。
+- 错误码零新增：白名单外组合 422；其余沿既有 merge/split 映射。
+
+#### 红线（实施前必须满足，违反即阻塞）
+
+- **R-105-T1** 不传任何新 optional 字段时，merge / split / unmerge / candidates / audit 行为与响应**逐值不变**（全加性纯增量）。
+- **R-105-T2** 状态写入唯一通道 = `transitionVideoState`；禁止 merge/split 事务内裸 UPDATE `review_status` / `visibility_status` / `is_published`。
+- **R-105-T3** post-COMMIT 非原子边界必须可观测：transition 失败时响应 `statusTransition` 必须可区分，UI 必须提示人工处理路径。
+- **R-105-T4** candidates / audit response 扩展全部 optional，旧消费方零破坏；候选与 audit 列表的数量 / 排序 / 分页 / 计数逐值不变。
+- **R-105-T5** 拆到已有 target 组不得携带 status（结构互斥保证）；已有 target 元数据与状态零变更（D-105-5 延续）。
+- **R-105-T6** `video_merge_audit` 零加列零 migration；`actorType` 仅从 `identity_decisions` 透出派生。
+- **R-105-T7** 智能默认仅前端纯函数产出白名单组合（可单测）；后端 422 终守门；DB trigger 023 三元组校验兜底——三层防线一层不缺。
+
+#### 黄线
+
+- **Y-105-T1** `externalIds` 响应体积：每 video 至多 4 provider × primary 1 条，无上限风险；若未来扩非 primary 须回本 AMENDMENT。
+- **Y-105-T2** `coverUrl` 真源锁定 `media_catalog.cover_url`（评审 Y2 收敛：`fetchVideosByIds` 已 SELECT `mc.cover_url`〔`video-merge-mutations.ts:78`〕，封面真源在 catalog 层 JOIN 取，非 videos 列）；缺失返回 null 由前端 FallbackCover 链兜底。
+- **Y-105-T3** audit 扩展字段的批量反查 SQL 须走 `idx_identity_decision_audit` partial 索引（`WHERE video_merge_audit_id IS NOT NULL`），实施卡验证 EXPLAIN。
+- **Y-105-T4** `statusTransition='failed'` 的失败原因暂不结构化透出（message 文本即可）；结构化错误明细留 follow-up。
+- **Y-105-T5** auto-merge（D-105a-17 仍 OFF）启用前 `actorType` 恒 `'human'`；启用时本契约零改动直接可用，不得预先实现 system 写路径。
+
+#### D-N 偏离登记
+
+D-105-7 ~ D-105-12 共 6 条（编号续 2026-06-03 AMENDMENT 的 D-105-6），随 CHG-VIR-13-B1 / 13-D1 / 13-C2 实施卡逐条闭环；advisory，不阻塞 CI。评审记录：arch-reviewer（claude-opus-4-8 / agentId a19744b07045b47e3）第 1 轮 CONDITIONAL——红线 R1（D-105-9 desired-only 固定映射对 approved-target〔merge 主场景〕确定性 422 失效，`approve`/`approve_and_publish`/`reject` 均要求 from=pending_review）→ 已修订为「(current, desired) 二元组 → action」覆盖矩阵口径 + 13-D1 单测定档；黄线 Y2（coverUrl 锁定 mc.cover_url）已收敛、Y3（设计 §5 旧表 +6 为历史残留，以本 AMENDMENT +7 为准）登记不动。修订后按放行条件转 **PASS**。D-105-7/8/9 触及 `packages/types/src/video-merge.types.ts` 公开类型扩展 → 实施卡 commit 必须带 `Subagents: arch-reviewer (claude-opus-...)` trailer（评审提醒）。
 
 ---
 
@@ -19927,3 +19990,80 @@ ADR-105a D-105a-7 定义了 `identity_candidate` 的状态机（`pending`/`confi
 ### D-N 偏离登记
 
 D-178-1 ~ D-178-6 共 6 条，随 CHG-VIR-9-B 实施闭环；advisory，不阻塞 CI。
+
+## ADR-179：identity 决策记录读端点 + rejected 候选人工复活端点（SEQ-20260604-01 / CHG-VIR-13-ADR / merge-split UX 工作台）
+
+- **状态**：**Accepted**（arch-reviewer claude-opus-4-8 / agentId a19744b07045b47e3：D-179-1~6 全 OK 零红线；Y1 归因文字已修正；实施 = CHG-VIR-13-C1）
+- **日期**：2026-06-04
+- **决策者**：主循环 claude-opus-4-8
+- **关联**：ADR-178（reject 写路径 + identity_decisions DDL / 本 ADR 补**读**端点与 rejected 复活的人工通道）/ ADR-105a D-105a-7（candidate 状态机 / R6 复活链协议：复活 = 新建 pending + `revived_from_candidate_id`，**不得覆盖原 rejected 行**——migration 086 已预留链列与 `uq_identity_candidate_pending` partial unique）/ ADR-105 AMENDMENT 2026-06-04 D-105-8（audit response actorType 从 decision 透出，本 ADR list 端点是 decision 维度的独立查询面）/ migration 088（ADR-178 D-178-6 落地，范式沿 ADR-151 D-151-4 先例；`target_kind='identity_candidate'` 已入 DB CHECK，本 ADR 零 CHECK 扩展——评审 Y1 归因修正）/ 设计真源 `docs/designs/merge-split-ux-redesign_20260603.md` §4.3 + §10。
+
+### 背景
+
+ADR-178 落地了裁定**写**路径（reject 端点 + confirmed→merge 单事务），但 `identity_decisions` 至今无任何**读**端点（queries 仅 insert / findConfirmedDecisionsByAuditId / markDecisionReverted）：运营无法查看「拒绝过哪些候选、为什么拒绝」，merge-split UX 工作台 `mode=records` 的「决策记录」子视图（CHG-VIR-13-C2）无数据来源；rejected decision 无对应 `video_merge_audit` 行，无法挂在 audit timeline。同时 R6 复活链只有离线 job 通道（新强正证据触发），**人工误拒后无自助恢复路径**——rejected 永久压制该 pair，运营只能等证据变化。
+
+本 ADR 落两个新端点：① decision 列表只读查询；② rejected 候选人工复活。
+
+### 决策要点
+
+**D-179-1（list 端点 — 纯只读 decision 维度查询面）**
+- `GET /admin/identity-decisions`：Query `decision?='confirmed'|'rejected'` / `candidateId?=uuid` / `reverted?='true'|'false'` / `limit?=20`（max 100）/ `page?=1`。
+- Response `{ data: IdentityDecisionListRow[], total, page, limit }`（ADR-110 列表包络）。Row：decision 全列（id / candidateId / decision / actorType / performedBy / performedByUsername〔JOIN users，对齐 audit timeline 范式〕/ reason / videoMergeAuditId / revertedAt / revertedBy / revertedReason / createdAt）+ pair 摘要（JOIN identity_candidate → leftVideoId / rightVideoId / identityScore / candidateStatus；双侧 JOIN videos 取 title——软删行仍有 title 可取，附 `deleted: boolean` 标注）。
+- 排序固定 `created_at DESC, id ASC` tiebreaker（分页幂等）；驱动索引 `idx_identity_decision_candidate` + 主键序，limit ≤ 100 无性能模型问题。
+
+**D-179-2（revive 端点 — rejected → 新建 pending，R6 链）**
+- `POST /admin/identity-candidates/:id/revive`，Body `{ reason?: string }`（max 500）。
+- 校验（全部 BEGIN 前，继承 D-105a-11 校验前置范式）：candidate 存在（404）→ `status='rejected'`（否则 409，含 pending/confirmed/superseded 统一「非 rejected 即冲突」）→ pair 双侧 video 存活 `deleted_at IS NULL`（任一侧已软删 → 409「pair 一侧已被合并/删除，复活无意义」）。
+- 单事务执行：新建 pending candidate（复制原行 left/right/canonical_pair_key/evidence_jsonb/evidence_hash/identity_score/legacy_score/strong_negative_reasons/parser_version/scorer_version/group_key；`revived_from_candidate_id` = 原 id）+ 原 candidate 行**零修改**（保持 rejected）+ 原 rejected decision（该 candidate 至多一条，ADR-178 D-178-2 幂等口径保证）置 `reverted_at/reverted_by/reverted_reason`（复用 087 reverted 三列范式，表达「拒绝裁定被人工推翻」，审计链闭环；decision 值不改、不新增 decision 行——revive 是恢复候选非裁定）。
+- v1 **不重算评分**：复制原 evidence 快照；parser/scorer 后续升级时离线 job 经 evidence_hash 变化自然 supersede 重评（D-105a-8 既有协议覆盖）。
+
+**D-179-3（revive 幂等 — 撞 pending partial unique 不报错）**
+- 同 `canonical_pair_key` 已有 pending（离线 job 先一步复活/新证据重建）→ **幂等返回该既有 pending**：响应 `reused: true` + `newCandidateId` = 既有 pending id；运营意图「让该 pair 重新可裁定」已达成，409 徒增 UI 错误分支。
+- 并发安全：`INSERT ... ON CONFLICT DO NOTHING` + rowCount=0 时重查收敛（`MediaCatalogService.findOrCreate` 既有范式）；reverted 置位与 INSERT 同事务，重查路径**不**置 reverted（既有 pending 非本次复活产物时，原 rejected decision 保持未 reverted——该 pending 来自离线 job 而非人工推翻）。
+
+**D-179-4（trigger_source 复用 — 零 migration 裁定）**
+- migration 086 `trigger_source` DB CHECK 仅 `('ingest','offline-rescore','manual-search')`。新建 pending 取 `'manual-search'`（人工触发语义最近值），**不扩 CHECK 枚举**——`revived_from_candidate_id IS NOT NULL` 本身即复活语义的一等标识（链字段可精确区分 revive 来源，新增枚举值冗余且破坏本系列零 migration）。报表/UI 需区分「人工复活」时以链字段非空 + trigger_source='manual-search' 复合判定。
+
+**D-179-5（审计 — actionType TS 层新增，零 DB 变更）**
+- revive COMMIT 后 fire-and-forget `admin_audit_log`：actionType 新增 `'identity_candidate.revive'`（`action_type` 列无 DB CHECK，纯 TS 枚举扩展）；targetKind 复用 `'identity_candidate'`（migration 088 已入 CHECK）；targetId = 原 candidateId；`afterJsonb` 含 `{ newCandidateId, reused, revivedFromCandidateId }`（R-MID-1 内容断言）。
+- list 端点纯只读零审计。
+
+**D-179-6（归属 + 鉴权）**
+- 两端点路由新增于 `apps/api/src/routes/admin/identity-candidates.ts`（identity-decisions list 虽是 decision 维度，但消费方与生命周期同属 identity 候选域，不另起 route 文件）；业务层归属既有 `IdentityCandidatesService`（ADR-178 D-178-1 边界延续；禁挂 VideoMergesService）。
+- 鉴权 `preHandler: [authenticate, requireRole(['admin'])]`（对齐 ADR-178 D-178-1：identity 裁定域 admin only，moderator 不放权）。
+
+### 端点契约
+
+| # | 方法 | 路径 | 用途 | Request | Response | 错误码 |
+|---|---|---|---|---|---|---|
+| 1 | GET | `/admin/identity-decisions` | identity 裁定记录列表（confirmed/rejected + reverted 过滤，merge-split 工作台决策记录子视图数据源） | Query: `decision?='confirmed'\|'rejected'` / `candidateId?` / `reverted?='true'\|'false'` / `limit?=20` / `page?=1` | 200 `{ data: IdentityDecisionListRow[], total, page, limit }` | 422 VALIDATION_ERROR |
+| 2 | POST | `/admin/identity-candidates/:id/revive` | 人工复活 rejected 候选（新建 pending + revived_from 链，原行零修改；撞 pending 唯一约束幂等返回既有） | Body: `{ reason?: string }`（max 500） | 200 `{ data: { newCandidateId, revivedFromCandidateId, reused } }` | 422 VALIDATION_ERROR / 404（candidate 不存在）/ 409（candidate 非 rejected / pair 一侧已软删） |
+
+### 错误码
+
+零新增 ErrorCode，复用 ADR-110 既有码：
+- `VALIDATION_ERROR` 422：query/body 非法、reason 超长。
+- `NOT_FOUND` 404：`candidate <id> 不存在`。
+- `STATE_CONFLICT` 409：`candidate <id> 非 rejected 状态（当前 <status>），无法复活` / `pair 视频已被合并或删除，无法复活`。
+
+### 备选方案
+
+- **A（已否决）revive 改原行 status rejected→pending**：违反 R6「不得覆盖原 rejected 行」（086 链协议 + 审计断链）+ 撞 `uq_identity_decision_candidate_confirmed` 类历史语义。
+- **B（已否决）trigger_source 扩 'manual-revive' 枚举**：需 migration 改 086 CHECK，破坏本系列零 migration；`revived_from_candidate_id` 链字段已是一等复活标识，枚举值冗余。
+- **C（已否决）撞 pending unique 返回 409**：运营意图（pair 重新可裁定）已由既有 pending 达成，409 把幂等成功误报为冲突。
+- **D（已否决）decisions list 挂 `GET /admin/video-merges/audit` 扩参**：rejected decision 无 audit 行，挂 audit 端点语义越界；decision 是 candidate 维度独立查询面（设计 §4.3「维度正交」论证）。
+
+### 后果
+
+- 正面：决策记录可查（merge-split 工作台 records 子视图数据源闭环）；人工误拒有自助恢复路径（不再依赖离线 job 证据触发）；reverted 置位使「拒绝→复活」审计链完整；全程零 migration。
+- 负面/成本：identity-candidates route 文件 +1 端点、Service +2 方法维护面；revive 复制 evidence 不重算（陈旧评分由离线 supersede 兜底，存在短暂窗口）。
+
+### 验证
+
+- list：分页幂等（同 query 翻页无重复/丢行）；`decision`/`reverted`/`candidateId` 过滤正确；软删 video 标题可取 + `deleted` 标注。
+- revive：rejected→新建 pending + 链字段正确 + 原行零修改 + 原 decision reverted 置位；非 rejected → 409；pair 一侧软删 → 409；撞 pending unique → `reused: true` 幂等且**不**置 reverted；audit payload 内容断言（R-MID-1）。
+- `npm run verify:endpoint-adr` + `npm run verify:adr-contracts` 通过（2 新路径登记于本契约表）。
+
+### D-N 偏离登记
+
+D-179-1 ~ D-179-6 共 6 条，随 CHG-VIR-13-C1 实施闭环；advisory，不阻塞 CI。评审记录：arch-reviewer（claude-opus-4-8 / agentId a19744b07045b47e3）逐条全 OK 零红线——post-COMMIT 边界 / 零 migration 四表实读（086 CHECK + 052 无 CHECK + 088 已含 + 041 primary 唯一）/ 复活幂等 ON CONFLICT 范式 / 087 reverted CHECK 兼容 / D-178-2 至多一条 rejected 前提，全部与代码事实一致；Y1（088 归因 ADR-178 非 ADR-151）已修正。
