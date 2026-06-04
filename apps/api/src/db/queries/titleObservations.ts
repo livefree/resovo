@@ -1,8 +1,9 @@
 /**
- * titleObservations.ts — title_observations shadow 观测表写入（SEQ-20260602-03 / CHG-VIR-6 / Phase 1b）
+ * titleObservations.ts — title_observations shadow 观测表读写（SEQ-20260602-03 / CHG-VIR-6 / Phase 1b）
  *
  * schema 真源 = `docs/designs/video-identity-resolution-redesign_20260602.md` §1b（无独立 ADR）。
- * 单一用途：采集链路 shadow 观测各源原始标题 + 解析 facets，去重聚合。
+ * 写：采集链路 shadow 观测各源原始标题 + 解析 facets，去重聚合。
+ * 读：拆分建议 facet 信号源（ADR-105 AMENDMENT 2026-06-03 D-105-1 / CHG-VIR-11-B，纯只读）。
  * **不参与任何归并决策**（设计 §1b / 复核 F1）。所有 SQL 参数化（db-rules.md）。
  *
  * 分层：本文件**仅 DB query**（不 import Service 层）。原始标题→观测入参的解析/哈希组装
@@ -61,4 +62,55 @@ export async function recordTitleObservation(db: Pool, input: TitleObservationIn
       JSON.stringify(input.parsedFacets),
     ],
   )
+}
+
+// ── 只读：拆分建议 facet 信号源（ADR-105 AMENDMENT 2026-06-03 D-105-1）──────────
+
+/** 单 video 观测行（site 级口径：source_name 写入恒 NULL，COALESCE('') 聚合） */
+export interface TitleObservationRow {
+  /** COALESCE(source_site_key, '')（与去重键口径一致） */
+  readonly siteKey: string
+  readonly rawTitle: string
+  readonly rawTitleHash: string
+  readonly observedCount: number
+  readonly lastSeenAt: string
+  /** {coreTitleKey, titleKind, confidence, facets} 解析快照 */
+  readonly parsedFacets: Record<string, unknown>
+}
+
+/**
+ * 列出单 video 的全部观测行，dominant facets 确定性排序已在 SQL 落定
+ * （observed_count DESC, last_seen_at DESC, raw_title_hash ASC / D-105-1）：
+ * 同 site 首行即 dominant。idx_title_observations_video 反查（migration 085）。
+ */
+export async function listObservationsByVideoId(
+  db: Pool,
+  videoId: string,
+): Promise<TitleObservationRow[]> {
+  const result = await db.query<{
+    site_key: string
+    raw_title: string
+    raw_title_hash: string
+    observed_count: number
+    last_seen_at: string
+    parsed_facets_jsonb: Record<string, unknown>
+  }>(
+    `SELECT COALESCE(source_site_key, '') AS site_key,
+            raw_title, raw_title_hash, observed_count,
+            last_seen_at::text AS last_seen_at,
+            parsed_facets_jsonb
+       FROM title_observations
+      WHERE video_id = $1
+      ORDER BY COALESCE(source_site_key, '') ASC,
+               observed_count DESC, last_seen_at DESC, raw_title_hash ASC`,
+    [videoId],
+  )
+  return result.rows.map((r) => ({
+    siteKey: r.site_key,
+    rawTitle: r.raw_title,
+    rawTitleHash: r.raw_title_hash,
+    observedCount: r.observed_count,
+    lastSeenAt: r.last_seen_at,
+    parsedFacets: r.parsed_facets_jsonb,
+  }))
 }

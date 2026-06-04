@@ -1,11 +1,12 @@
 /**
  * merge/api.ts — /admin/merge 视图 API 客户端（CHG-SN-5-12 / ADR-105 4 端点消费）
  *
- * 端点契约：ADR-105 §端点契约 row 1-4
+ * 端点契约：ADR-105 §端点契约 row 1-4 + #6
  *   GET  /admin/video-merges/candidates
  *   POST /admin/video-merges
  *   POST /admin/video-merges/:auditId/unmerge
  *   POST /admin/videos/:id/split
+ *   GET  /admin/videos/:id/split-suggestions（ADR-105 AMENDMENT 2026-06-03 / CHG-VIR-11-B）
  */
 
 import { apiClient } from '@/lib/api-client'
@@ -17,6 +18,7 @@ import type {
   UnmergeResult,
   SplitParams,
   SplitResult,
+  SplitSuggestionsResult,
   ListAuditParams,
   ListAuditResult,
 } from '@resovo/types'
@@ -54,6 +56,14 @@ export async function splitVideo(params: SplitParams): Promise<SplitResult> {
   const result = await apiClient.post<{ data: SplitResult }>(
     `/admin/videos/${encodeURIComponent(videoId)}/split`,
     { groups },
+  )
+  return result.data
+}
+
+// CHG-VIR-11-B — GET /admin/videos/:id/split-suggestions（ADR-105 AMENDMENT 2026-06-03 D-105-1）
+export async function getSplitSuggestions(videoId: string): Promise<SplitSuggestionsResult> {
+  const result = await apiClient.get<{ data: SplitSuggestionsResult }>(
+    `/admin/videos/${encodeURIComponent(videoId)}/split-suggestions`,
   )
   return result.data
 }

@@ -67,16 +67,32 @@ export const UnmergeSchema = z.object({
   reason: z.string().max(500).optional(),
 })
 
+// ADR-105 AMENDMENT 2026-06-03 D-105-2（CHG-VIR-11-B）：groups 每组 newVideoMeta xor
+// targetVideoId 恰一（拆到新建 / 拆到已有 video）；旧请求体（全组 newVideoMeta）完全兼容。
+// 全组 targetVideoId（0 新建）合法（误并拆散归还 ≥2 个已有作品）。
+// targetVideoId 的存在/未软删/≠videoId/冲突预检在 Service 层 BEGIN 前（依赖 DB 状态）。
 export const SplitSchema = z.object({
-  groups: z.array(z.object({
-    sourceIds: z.array(z.string().uuid()).min(1),
-    newVideoMeta: z.object({
-      title: z.string().min(1).max(500),
-      year: z.number().int().min(1800).max(2100).optional(),
-      type: VideoTypeEnum,
-    }),
-  })).min(2).max(20),
-})
+  groups: z.array(
+    z.object({
+      sourceIds: z.array(z.string().uuid()).min(1),
+      newVideoMeta: z.object({
+        title: z.string().min(1).max(500),
+        year: z.number().int().min(1800).max(2100).optional(),
+        type: VideoTypeEnum,
+      }).optional(),
+      targetVideoId: z.string().uuid().optional(),
+    }).refine(
+      (g) => (g.newVideoMeta !== undefined) !== (g.targetVideoId !== undefined),
+      { message: 'newVideoMeta 与 targetVideoId 必须恰好提供其一' },
+    ),
+  ).min(2).max(20),
+}).refine(
+  (v) => {
+    const ids = v.groups.map((g) => g.targetVideoId).filter((id) => id !== undefined)
+    return new Set(ids).size === ids.length
+  },
+  { message: '组间 targetVideoId 不得重复（拆给同一已有 video 应合为一组）', path: ['groups'] },
+)
 
 // CHG-SN-6-AUDIT-TIMELINE (RETRO 4/7) — ADR-105 AMENDMENT 2026-05-14
 export const ListAuditSchema = z.object({

@@ -152,6 +152,35 @@ export async function detectMergeConflicts(
   return parseInt(result.rows[0]?.conflict_count ?? '0', 10)
 }
 
+/**
+ * 拆到已有 video 前置冲突探测（ADR-105 AMENDMENT 2026-06-03 D-105-3 / 同 R-105-1 范式）：
+ * 检测转入组 sourceIds 与已有 target video 现有 sources 是否存在相同
+ * (episode_number, source_url) 组合（uq_sources_video_episode_url NULLS NOT DISTINCT 口径）。
+ *
+ * @returns 冲突对数（>0 → Service 层 STATE_CONFLICT 409，整体不执行）
+ */
+export async function detectSplitConflictsForTarget(
+  db: Pool | PoolClient,
+  sourceIds: string[],
+  targetVideoId: string,
+): Promise<number> {
+  if (sourceIds.length === 0) return 0
+  const result = await db.query<{ conflict_count: string }>(
+    `SELECT COUNT(*)::text AS conflict_count
+       FROM video_sources incoming
+       JOIN video_sources existing
+         ON incoming.episode_number IS NOT DISTINCT FROM existing.episode_number
+        AND incoming.source_url = existing.source_url
+      WHERE incoming.id = ANY($1::uuid[])
+        AND existing.video_id = $2
+        AND existing.id <> ALL($1::uuid[])
+        AND incoming.deleted_at IS NULL
+        AND existing.deleted_at IS NULL`,
+    [sourceIds, targetVideoId],
+  )
+  return parseInt(result.rows[0]?.conflict_count ?? '0', 10)
+}
+
 /** 按 auditId 拉取 video_merge_audit 行 */
 export async function fetchAuditById(
   db: Pool | PoolClient,
@@ -315,15 +344,31 @@ export async function insertNewVideo(
 /**
  * 回填 audit 行的 target_video_ids（split 流程：先 INSERT 占位空数组，创建完新 videos 后回填）。
  * CHG-SN-5-10-PATCH P2：原 Service 层 raw SQL UPDATE 抽出，避免越层。
+ *
+ * ADR-105 AMENDMENT 2026-06-03 D-105-4：可选同步回填 snapshot_jsonb.created_target_video_ids
+ * （本次 split 新建的 video ids；已有 target = target_video_ids − created）。JSONB 自由字段零 DDL；
+ * unmerge 仅软删 created（存量 audit 无该字段 → 兜底全视为新建，旧行为逐值一致）。
  */
 export async function updateAuditTargetIds(
   client: PoolClient,
   auditId: string,
   targetVideoIds: string[],
+  createdTargetVideoIds?: string[],
 ): Promise<void> {
+  if (createdTargetVideoIds === undefined) {
+    await client.query(
+      `UPDATE video_merge_audit SET target_video_ids = $1::uuid[] WHERE id = $2`,
+      [targetVideoIds, auditId],
+    )
+    return
+  }
   await client.query(
-    `UPDATE video_merge_audit SET target_video_ids = $1::uuid[] WHERE id = $2`,
-    [targetVideoIds, auditId],
+    `UPDATE video_merge_audit
+        SET target_video_ids = $1::uuid[],
+            snapshot_jsonb = snapshot_jsonb
+              || jsonb_build_object('created_target_video_ids', $3::jsonb)
+      WHERE id = $2`,
+    [targetVideoIds, auditId, JSON.stringify(createdTargetVideoIds)],
   )
 }
 

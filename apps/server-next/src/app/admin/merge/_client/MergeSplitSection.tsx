@@ -13,8 +13,8 @@ import {
   EmptyState,
   useToast,
 } from '@resovo/admin-ui'
-import type { LineMatrixRow, VideoType } from '@resovo/types'
-import { splitVideo, unmergeVideos } from '@/lib/merge/api'
+import type { LineMatrixRow, SplitGroup, SplitSignal, SplitSuggestionsResult, VideoType } from '@resovo/types'
+import { splitVideo, unmergeVideos, getSplitSuggestions } from '@/lib/merge/api'
 import { getVideoMatrix } from '@/lib/sources/api'
 import { describeError } from './MergeClient'
 
@@ -46,6 +46,41 @@ const SELECT_STYLE: CSSProperties = {
   fontSize: 'var(--font-size-sm)',
 }
 
+// CHG-VIR-11-B（ADR-105 AMENDMENT 2026-06-03 D-105-1/6）：拆分建议消费 ──────────
+
+/** 每组元数据：targetVideoId 非空 → 拆到已有 video（D-105-2 互斥；标题/类型不提交） */
+interface GroupMeta {
+  title: string
+  type: VideoType
+  targetVideoId: string
+}
+
+const DIMENSION_LABELS: Record<string, string> = {
+  core_title_key: '核心标题',
+  season: '季',
+  release_marker: '发布形态',
+  edition: '版本',
+}
+
+function describeSignal(signal: SplitSignal): string {
+  switch (signal.kind) {
+    case 'external_id_conflict':
+      return `外部 ID 冲突（${signal.providers.join(' / ')}）`
+    case 'intra_site_multi_title':
+      return `站点 ${signal.siteKey || '(空)'} 内存在多标题，同站线路无法再分，建议人工核查`
+    case 'episode_overlap':
+      return '建议组间集数范围重叠（可能为不同作品同集数段）'
+    case 'multi_core_title':
+      return `多个核心标题：${signal.values.join(' / ')}`
+    case 'multi_season':
+      return `多个季号：${signal.values.join(' / ')}`
+    case 'multi_release_marker':
+      return `多个发布形态：${signal.values.join(' / ')}`
+    case 'multi_edition':
+      return `多个版本：${signal.values.join(' / ')}`
+  }
+}
+
 interface SplitSectionProps {
   /** CHG-363-B：来自 MergeClient `?split=:videoId` 深链 / PendingCenter 拆分按钮 / 自动 setVideoIdInput + loadMatrix */
   readonly initialVideoId?: string
@@ -59,10 +94,13 @@ export function SplitSection({ initialVideoId }: SplitSectionProps = {}) {
   const [error, setError] = useState<Error | null>(null)
   const [groupCount, setGroupCount] = useState(2)
   const [assignments, setAssignments] = useState<Record<string, number>>({})
-  const [groupMetas, setGroupMetas] = useState<{ title: string; type: VideoType }[]>([
-    { title: '分集 A', type: 'movie' },
-    { title: '分集 B', type: 'movie' },
+  const [groupMetas, setGroupMetas] = useState<GroupMeta[]>([
+    { title: '分集 A', type: 'movie', targetVideoId: '' },
+    { title: '分集 B', type: 'movie', targetVideoId: '' },
   ])
+  // CHG-VIR-11-B：拆分建议（dimension/signals 展示 + 预填）
+  const [suggestions, setSuggestions] = useState<SplitSuggestionsResult | null>(null)
+  const [suggestLoading, setSuggestLoading] = useState(false)
   const toast = useToast()
 
   // loadMatrix 接受 videoId 参数 / 避免 closure 依赖 videoIdInput state
@@ -73,6 +111,7 @@ export function SplitSection({ initialVideoId }: SplitSectionProps = {}) {
     setLoading(true)
     setError(null)
     setActiveVideoId(id)
+    setSuggestions(null)
     getVideoMatrix(id)
       .then((data) => {
         setLines(data)
@@ -96,14 +135,63 @@ export function SplitSection({ initialVideoId }: SplitSectionProps = {}) {
     loadMatrix(initialVideoId)
   }, [initialVideoId, loadMatrix])
 
+  // CHG-VIR-11-B：生成拆分建议（D-105-1 只读预览）→ 预填 groupCount/groupMetas/assignments
+  const handleSuggest = useCallback(async () => {
+    if (!activeVideoId) return
+    setSuggestLoading(true)
+    try {
+      const result = await getSplitSuggestions(activeVideoId)
+      setSuggestions(result)
+      if (!result.suggestible) {
+        toast.push({
+          level: 'info',
+          title: '暂无可用拆分建议',
+          description: '观测数据不足或各线路 facet 一致；可参考下方信号人工分组',
+        })
+        return
+      }
+      const n = Math.max(2, Math.min(20, result.groups.length))
+      setGroupCount(n)
+      setGroupMetas(result.groups.slice(0, n).map((g) => ({
+        title: g.suggestedMeta.title,
+        type: g.suggestedMeta.type,
+        targetVideoId: '',
+      })))
+      // 建议组内 lines 的 sourceIds → 组 index；unassignedLines 留组 0（运营手动复核）
+      const next: Record<string, number> = {}
+      for (const line of result.unassignedLines) {
+        for (const sid of line.sourceIds) next[sid] = 0
+      }
+      result.groups.slice(0, n).forEach((g, i) => {
+        for (const line of g.lines) {
+          for (const sid of line.sourceIds) next[sid] = i
+        }
+      })
+      setAssignments((prev) => ({ ...prev, ...next }))
+      toast.push({
+        level: 'success',
+        title: `已按「${DIMENSION_LABELS[result.dimension ?? ''] ?? result.dimension}」预填 ${result.groups.length} 组`,
+        description: result.unassignedLines.length > 0
+          ? `${result.unassignedLines.length} 条线路无观测数据未预填（留组 1，请人工复核）`
+          : '请复核分组与标题后执行拆分',
+      })
+    } catch (err) {
+      toast.push({ level: 'danger', title: '获取拆分建议失败', description: describeError(err, 'split') })
+    } finally {
+      setSuggestLoading(false)
+    }
+  }, [activeVideoId, toast])
+
   const handleSplit = useCallback(async () => {
     if (!activeVideoId || !lines) return
-    const groups = Array.from({ length: groupCount }, (_, i) => {
-      const meta = groupMetas[i] ?? { title: `分集 ${String.fromCharCode(65 + i)}`, type: 'movie' as VideoType }
-      return {
-        sourceIds: Object.entries(assignments).filter(([, g]) => g === i).map(([id]) => id),
-        newVideoMeta: { title: meta.title, type: meta.type },
-      }
+    const groups: SplitGroup[] = Array.from({ length: groupCount }, (_, i) => {
+      const meta = groupMetas[i] ?? { title: `分集 ${String.fromCharCode(65 + i)}`, type: 'movie' as VideoType, targetVideoId: '' }
+      const sourceIds = Object.entries(assignments).filter(([, g]) => g === i).map(([id]) => id)
+      // D-105-2：targetVideoId 非空 → 拆到已有 video（与 newVideoMeta 互斥）
+      const targetId = meta.targetVideoId.trim()
+      return targetId !== ''
+        ? { sourceIds, targetVideoId: targetId }
+        : { sourceIds, newVideoMeta: { title: meta.title, type: meta.type } }
     }).filter((g) => g.sourceIds.length > 0)
 
     if (groups.length < 2) {
@@ -111,12 +199,15 @@ export function SplitSection({ initialVideoId }: SplitSectionProps = {}) {
       return
     }
 
+    const existingCount = groups.filter((g) => g.targetVideoId !== undefined).length
     try {
       const result = await splitVideo({ videoId: activeVideoId, groups })
       toast.push({
         level: 'success',
         title: '拆分成功',
-        description: `已创建 ${result.newVideoIds.length} 个新 video（auditId: ${result.auditId.slice(0, 8)}）`,
+        description: existingCount > 0
+          ? `已创建 ${result.newVideoIds.length} 个新 video + 转入 ${existingCount} 个已有 video（auditId: ${result.auditId.slice(0, 8)}）`
+          : `已创建 ${result.newVideoIds.length} 个新 video（auditId: ${result.auditId.slice(0, 8)}）`,
         action: {
           label: '撤销',
           onClick: () => {
@@ -138,6 +229,7 @@ export function SplitSection({ initialVideoId }: SplitSectionProps = {}) {
       })
       setLines(null)
       setActiveVideoId(null)
+      setSuggestions(null)
     } catch (err) {
       toast.push({
         level: 'danger',
@@ -184,23 +276,53 @@ export function SplitSection({ initialVideoId }: SplitSectionProps = {}) {
                 const n = Math.max(2, Math.min(20, parseInt(e.target.value, 10) || 2))
                 setGroupCount(n)
                 setGroupMetas((prev) => Array.from({ length: n }, (_, i) =>
-                  prev[i] ?? { title: `分集 ${String.fromCharCode(65 + i)}`, type: 'movie' as VideoType },
+                  prev[i] ?? { title: `分集 ${String.fromCharCode(65 + i)}`, type: 'movie' as VideoType, targetVideoId: '' },
                 ))
               }}
               style={{ width: '80px' }}
             />
             <span style={SECONDARY_TEXT}>每组 source 必须 ≥ 1 且全 source 必须有分配</span>
+            {/* CHG-VIR-11-B：拆分自动分组建议（D-105-1 只读预览 + 预填） */}
+            <AdminButton size="sm" variant="default" onClick={handleSuggest} disabled={suggestLoading} data-testid="split-suggest-btn">
+              {suggestLoading ? '生成中…' : '生成拆分建议'}
+            </AdminButton>
           </div>
+
+          {suggestions && suggestions.signals.length > 0 && (
+            <div
+              data-testid="split-signals"
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '2px',
+                padding: '8px 10px',
+                borderRadius: '6px',
+                background: 'var(--bg-subtle)',
+                border: '1px solid var(--border-subtle)',
+                fontSize: 'var(--font-size-sm)',
+                color: 'var(--fg-muted)',
+              }}
+            >
+              {suggestions.dimension && (
+                <span>建议维度：{DIMENSION_LABELS[suggestions.dimension] ?? suggestions.dimension}</span>
+              )}
+              {suggestions.signals.map((s, i) => (
+                <span key={i}>· {describeSignal(s)}</span>
+              ))}
+            </div>
+          )}
 
           <div style={{ display: 'grid', gridTemplateColumns: `repeat(${groupCount}, 1fr)`, gap: '8px' }}>
             {Array.from({ length: groupCount }).map((_, i) => {
-              const meta = groupMetas[i] ?? { title: '', type: 'movie' as VideoType }
+              const meta = groupMetas[i] ?? { title: '', type: 'movie' as VideoType, targetVideoId: '' }
+              const toExisting = meta.targetVideoId.trim() !== ''
               return (
                 <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                   <AdminInput
                     size="sm"
                     placeholder={`分集 ${String.fromCharCode(65 + i)} 标题`}
                     value={meta.title}
+                    disabled={toExisting}
                     onChange={(e) => {
                       setGroupMetas((prev) => {
                         const next = [...prev]
@@ -212,6 +334,7 @@ export function SplitSection({ initialVideoId }: SplitSectionProps = {}) {
                   <select
                     aria-label={`分集 ${String.fromCharCode(65 + i)} 类型`}
                     value={meta.type}
+                    disabled={toExisting}
                     onChange={(e) => {
                       setGroupMetas((prev) => {
                         const next = [...prev]
@@ -225,6 +348,25 @@ export function SplitSection({ initialVideoId }: SplitSectionProps = {}) {
                       <option key={t.value} value={t.value}>{t.label}</option>
                     ))}
                   </select>
+                  {/* CHG-VIR-11-B（D-105-2/5）：拆到已有 video——填 uuid 即转入该 video（仅转 sources，不改其元数据） */}
+                  <AdminInput
+                    size="sm"
+                    placeholder="拆到已有 videoId（可选 uuid）"
+                    value={meta.targetVideoId}
+                    data-testid={`split-target-input-${i}`}
+                    onChange={(e) => {
+                      setGroupMetas((prev) => {
+                        const next = [...prev]
+                        next[i] = { ...meta, targetVideoId: e.target.value }
+                        return next
+                      })
+                    }}
+                  />
+                  {toExisting && (
+                    <span style={{ ...SECONDARY_TEXT, fontSize: '11px' }}>
+                      转入已有 video：仅转移 sources，不修改其标题/类型
+                    </span>
+                  )}
                 </div>
               )
             })}

@@ -23,6 +23,7 @@ vi.mock('@/api/db/queries/video-merge-mutations', () => ({
   fetchSourcesByVideoId: vi.fn(),
   fetchSourcesByVideoIds: vi.fn(),
   detectMergeConflicts: vi.fn(),
+  detectSplitConflictsForTarget: vi.fn(),  // CHG-VIR-11-B / D-105-3
   fetchAuditById: vi.fn(),
   insertMergeAudit: vi.fn(),
   transferSourcesToTarget: vi.fn(),
@@ -652,6 +653,210 @@ describe('VideoMergesService.split', () => {
   })
 })
 
+// ── split 拆到已有 video（ADR-105 AMENDMENT 2026-06-03 D-105-2/3/4/5 / CHG-VIR-11-B）──
+
+describe('VideoMergesService.split — 拆到已有 video', () => {
+  const EXISTING_ID = '00000000-0000-0000-0000-00000000000e'
+  const EXISTING_ID_2 = '00000000-0000-0000-0000-00000000000f'
+
+  /** 公共 mock：原 video + 4 sources 就绪 */
+  function setupBaseMocks() {
+    vi.mocked(mutations.fetchSourcesByVideoId).mockResolvedValueOnce([
+      makeSourceRow(SRC_1, TARGET_ID),
+      makeSourceRow(SRC_2, TARGET_ID),
+      makeSourceRow(SRC_3, TARGET_ID),
+      makeSourceRow(SRC_4, TARGET_ID),
+    ])
+  }
+
+  it('happy path 混合组（1 新建 + 1 已有）：已有 target 不 insertNewVideo / 不 findOrCreate，audit 回填 created 与全部 target', async () => {
+    const mockClient = makeMockClient()
+    const mockPool = makeMockPool(mockClient)
+    const svc = new VideoMergesService(mockPool)
+    const auditSvcInstance = (AuditLogService as unknown as ReturnType<typeof vi.fn>).mock.results.at(-1)!.value
+
+    vi.mocked(mutations.fetchVideosByIds)
+      .mockResolvedValueOnce([makeVideoRow(TARGET_ID)])      // 原 video 校验
+      .mockResolvedValueOnce([makeVideoRow(EXISTING_ID)])    // targetVideoId 校验
+    setupBaseMocks()
+    vi.mocked(mutations.detectSplitConflictsForTarget).mockResolvedValueOnce(0)
+    vi.mocked(mutations.insertMergeAudit).mockResolvedValueOnce(AUDIT_ID)
+    mockFindOrCreate.mockResolvedValueOnce({ id: CATALOG_A })
+    vi.mocked(mutations.insertNewVideo).mockResolvedValueOnce(NEW_VIDEO_ID_1)
+
+    const result = await svc.split({
+      videoId: TARGET_ID,
+      groups: [
+        { sourceIds: [SRC_1, SRC_3], newVideoMeta: { title: '新作品', type: 'movie' } },
+        { sourceIds: [SRC_2, SRC_4], targetVideoId: EXISTING_ID },
+      ],
+    }, ACTOR_ID)
+
+    expect(result.newVideoIds).toEqual([NEW_VIDEO_ID_1])
+    // D-105-5：已有 target 不建 catalog / 不建 video
+    expect(mockFindOrCreate).toHaveBeenCalledTimes(1)
+    expect(mutations.insertNewVideo).toHaveBeenCalledTimes(1)
+    // 冲突预检（D-105-3）
+    expect(mutations.detectSplitConflictsForTarget).toHaveBeenCalledWith(
+      mockPool, [SRC_2, SRC_4], EXISTING_ID,
+    )
+    // sources 转入已有 video
+    expect(mutations.assignSourcesToVideo).toHaveBeenCalledWith(mockClient, [SRC_2, SRC_4], EXISTING_ID)
+    // D-105-4：target_video_ids 含全部目标 + created 仅新建
+    expect(mutations.updateAuditTargetIds).toHaveBeenCalledWith(
+      mockClient, AUDIT_ID, [NEW_VIDEO_ID_1, EXISTING_ID], [NEW_VIDEO_ID_1],
+    )
+    // D-105-6：afterJsonb 扩 existingTargetVideoIds
+    expect(auditSvcInstance.write).toHaveBeenCalledWith(expect.objectContaining({
+      afterJsonb: expect.objectContaining({
+        newVideoIds: [NEW_VIDEO_ID_1],
+        existingTargetVideoIds: [EXISTING_ID],
+      }),
+    }))
+  })
+
+  it('全组 targetVideoId（0 新建）合法：newVideoIds=[] + created=[]（Y-A1 裁定）', async () => {
+    const mockClient = makeMockClient()
+    const mockPool = makeMockPool(mockClient)
+    const svc = new VideoMergesService(mockPool)
+
+    vi.mocked(mutations.fetchVideosByIds)
+      .mockResolvedValueOnce([makeVideoRow(TARGET_ID)])
+      .mockResolvedValueOnce([makeVideoRow(EXISTING_ID), makeVideoRow(EXISTING_ID_2)])
+    setupBaseMocks()
+    vi.mocked(mutations.detectSplitConflictsForTarget).mockResolvedValue(0)
+    vi.mocked(mutations.insertMergeAudit).mockResolvedValueOnce(AUDIT_ID)
+
+    const result = await svc.split({
+      videoId: TARGET_ID,
+      groups: [
+        { sourceIds: [SRC_1, SRC_3], targetVideoId: EXISTING_ID },
+        { sourceIds: [SRC_2, SRC_4], targetVideoId: EXISTING_ID_2 },
+      ],
+    }, ACTOR_ID)
+
+    expect(result.newVideoIds).toEqual([])
+    expect(mockFindOrCreate).not.toHaveBeenCalled()
+    expect(mutations.insertNewVideo).not.toHaveBeenCalled()
+    expect(mutations.updateAuditTargetIds).toHaveBeenCalledWith(
+      mockClient, AUDIT_ID, [EXISTING_ID, EXISTING_ID_2], [],
+    )
+  })
+
+  it('VALIDATION_ERROR：targetVideoId = 被拆 videoId', async () => {
+    const mockPool = makeMockPool(makeMockClient())
+    const svc = new VideoMergesService(mockPool)
+    vi.mocked(mutations.fetchVideosByIds).mockResolvedValueOnce([makeVideoRow(TARGET_ID)])
+    setupBaseMocks()
+
+    await expect(svc.split({
+      videoId: TARGET_ID,
+      groups: [
+        { sourceIds: [SRC_1, SRC_3], newVideoMeta: { title: 'A', type: 'movie' } },
+        { sourceIds: [SRC_2, SRC_4], targetVideoId: TARGET_ID },
+      ],
+    }, ACTOR_ID)).rejects.toMatchObject({ code: 'VALIDATION_ERROR', httpStatus: 422 })
+  })
+
+  it('NOT_FOUND：targetVideoId 不存在', async () => {
+    const mockPool = makeMockPool(makeMockClient())
+    const svc = new VideoMergesService(mockPool)
+    vi.mocked(mutations.fetchVideosByIds)
+      .mockResolvedValueOnce([makeVideoRow(TARGET_ID)])
+      .mockResolvedValueOnce([])  // targetVideoId 查无
+    setupBaseMocks()
+
+    await expect(svc.split({
+      videoId: TARGET_ID,
+      groups: [
+        { sourceIds: [SRC_1, SRC_3], newVideoMeta: { title: 'A', type: 'movie' } },
+        { sourceIds: [SRC_2, SRC_4], targetVideoId: EXISTING_ID },
+      ],
+    }, ACTOR_ID)).rejects.toMatchObject({ code: 'NOT_FOUND', httpStatus: 404 })
+  })
+
+  it('STATE_CONFLICT：targetVideoId 已软删', async () => {
+    const mockPool = makeMockPool(makeMockClient())
+    const svc = new VideoMergesService(mockPool)
+    vi.mocked(mutations.fetchVideosByIds)
+      .mockResolvedValueOnce([makeVideoRow(TARGET_ID)])
+      .mockResolvedValueOnce([makeVideoRow(EXISTING_ID, '2026-05-01T00:00:00Z')])
+    setupBaseMocks()
+
+    await expect(svc.split({
+      videoId: TARGET_ID,
+      groups: [
+        { sourceIds: [SRC_1, SRC_3], newVideoMeta: { title: 'A', type: 'movie' } },
+        { sourceIds: [SRC_2, SRC_4], targetVideoId: EXISTING_ID },
+      ],
+    }, ACTOR_ID)).rejects.toMatchObject({ code: 'STATE_CONFLICT', httpStatus: 409 })
+  })
+
+  it('STATE_CONFLICT：冲突预检 >0（D-105-3 同 R-105-1 范式）→ 整体不执行', async () => {
+    const mockClient = makeMockClient()
+    const mockPool = makeMockPool(mockClient)
+    const svc = new VideoMergesService(mockPool)
+    vi.mocked(mutations.fetchVideosByIds)
+      .mockResolvedValueOnce([makeVideoRow(TARGET_ID)])
+      .mockResolvedValueOnce([makeVideoRow(EXISTING_ID)])
+    setupBaseMocks()
+    vi.mocked(mutations.detectSplitConflictsForTarget).mockResolvedValueOnce(3)
+
+    await expect(svc.split({
+      videoId: TARGET_ID,
+      groups: [
+        { sourceIds: [SRC_1, SRC_3], newVideoMeta: { title: 'A', type: 'movie' } },
+        { sourceIds: [SRC_2, SRC_4], targetVideoId: EXISTING_ID },
+      ],
+    }, ACTOR_ID)).rejects.toMatchObject({
+      code: 'STATE_CONFLICT', httpStatus: 409,
+      message: expect.stringContaining('3 条'),
+    })
+    // 校验全部 BEGIN 前：事务未开启
+    expect(mockClient.query).not.toHaveBeenCalledWith('BEGIN')
+  })
+})
+
+// ── unmerge 仅软删新建 target（D-105-4 / R-105-S4）──────────────────────
+
+describe('VideoMergesService.unmerge — created_target_video_ids 驱动（D-105-4）', () => {
+  const EXISTING_ID = '00000000-0000-0000-0000-00000000000e'
+
+  it('snapshot 含 created_target_video_ids → 仅软删新建，已有 target 不软删（R-105-S4）', async () => {
+    const mockClient = makeMockClient()
+    const mockPool = makeMockPool(mockClient)
+    const svc = new VideoMergesService(mockPool)
+
+    const audit = makeAuditRow('split')
+    ;(audit as { target_video_ids: string[] }).target_video_ids = [NEW_VIDEO_ID_1, EXISTING_ID]
+    ;(audit.snapshot_jsonb as Record<string, unknown>)['created_target_video_ids'] = [NEW_VIDEO_ID_1]
+    vi.mocked(mutations.fetchAuditById).mockResolvedValueOnce(audit)
+
+    await svc.unmerge(AUDIT_ID, ACTOR_ID)
+
+    expect(mutations.softDeleteVideos).toHaveBeenCalledWith(mockClient, [NEW_VIDEO_ID_1])
+    expect(mutations.softDeleteVideos).not.toHaveBeenCalledWith(
+      mockClient, expect.arrayContaining([EXISTING_ID]),
+    )
+    // 转入 sources 经 snapshot.sources 原归属归还（既有 reassign 覆盖）
+    expect(mutations.reassignSourcesToOriginal).toHaveBeenCalled()
+  })
+
+  it('存量 audit 无 created 字段 → 兜底全视为新建（旧行为逐值一致）', async () => {
+    const mockClient = makeMockClient()
+    const mockPool = makeMockPool(mockClient)
+    const svc = new VideoMergesService(mockPool)
+
+    vi.mocked(mutations.fetchAuditById).mockResolvedValueOnce(makeAuditRow('split'))
+
+    await svc.unmerge(AUDIT_ID, ACTOR_ID)
+
+    expect(mutations.softDeleteVideos).toHaveBeenCalledWith(
+      mockClient, [NEW_VIDEO_ID_1, NEW_VIDEO_ID_2],
+    )
+  })
+})
+
 // ── MergeSchema zod 校验 ──────────────────────────────────────────
 
 describe('MergeSchema', () => {
@@ -731,6 +936,64 @@ describe('SplitSchema', () => {
     expect(() => SplitSchema.parse({
       groups: [
         { sourceIds: [SRC_1], newVideoMeta: { title: 'A', type: 'invalid_type' } },
+        { sourceIds: [SRC_2], newVideoMeta: { title: 'B', type: 'movie' } },
+      ],
+    })).toThrow()
+  })
+
+  // ── ADR-105 AMENDMENT 2026-06-03 D-105-2（CHG-VIR-11-B）：targetVideoId xor newVideoMeta ──
+
+  it('targetVideoId 组合法（混合新建+已有）', () => {
+    const result = SplitSchema.parse({
+      groups: [
+        { sourceIds: [SRC_1], newVideoMeta: { title: 'A', type: 'movie' } },
+        { sourceIds: [SRC_2], targetVideoId: TARGET_ID },
+      ],
+    })
+    expect(result.groups[1]!.targetVideoId).toBe(TARGET_ID)
+    expect(result.groups[1]!.newVideoMeta).toBeUndefined()
+  })
+
+  it('全组 targetVideoId（0 新建）合法（Y-A1）', () => {
+    expect(() => SplitSchema.parse({
+      groups: [
+        { sourceIds: [SRC_1], targetVideoId: TARGET_ID },
+        { sourceIds: [SRC_2], targetVideoId: SOURCE_ID_1 },
+      ],
+    })).not.toThrow()
+  })
+
+  it('newVideoMeta 与 targetVideoId 同时提供 → 报错（xor）', () => {
+    expect(() => SplitSchema.parse({
+      groups: [
+        { sourceIds: [SRC_1], newVideoMeta: { title: 'A', type: 'movie' }, targetVideoId: TARGET_ID },
+        { sourceIds: [SRC_2], newVideoMeta: { title: 'B', type: 'movie' } },
+      ],
+    })).toThrow(/恰好提供其一/)
+  })
+
+  it('二者均缺 → 报错（xor）', () => {
+    expect(() => SplitSchema.parse({
+      groups: [
+        { sourceIds: [SRC_1] },
+        { sourceIds: [SRC_2], newVideoMeta: { title: 'B', type: 'movie' } },
+      ],
+    })).toThrow(/恰好提供其一/)
+  })
+
+  it('组间 targetVideoId 重复 → 报错', () => {
+    expect(() => SplitSchema.parse({
+      groups: [
+        { sourceIds: [SRC_1], targetVideoId: TARGET_ID },
+        { sourceIds: [SRC_2], targetVideoId: TARGET_ID },
+      ],
+    })).toThrow(/不得重复/)
+  })
+
+  it('targetVideoId 非 uuid → 报错', () => {
+    expect(() => SplitSchema.parse({
+      groups: [
+        { sourceIds: [SRC_1], targetVideoId: 'not-a-uuid' },
         { sourceIds: [SRC_2], newVideoMeta: { title: 'B', type: 'movie' } },
       ],
     })).toThrow()

@@ -59,7 +59,9 @@ import {
   markDecisionReverted,
 } from '@/api/db/queries/identity-decision'
 import { AppError } from '@/api/lib/errors'
-import { normalizeMergeKey } from '@/api/services/TitleNormalizer'
+// ADR-105 AMENDMENT 2026-06-03 D-105-2/3/5（CHG-VIR-11-B）：split 组解析（拆到已有/新建；
+// normalizeMergeKey 的 findOrCreate 组装一并移入 helper）
+import { resolveSplitGroups } from './VideoMergesService.split-helpers'
 import {
   computeOverlapScore,
   pickRecommendedTarget,
@@ -403,16 +405,22 @@ export class VideoMergesService {
         client.release()
       }
     } else {
-      // 撤销拆分：还原原始 video + 归还 sources + 软删除拆分后 new videos
+      // 撤销拆分：还原原始 video + 归还 sources + 软删除拆分后**新建**的 videos。
+      // ADR-105 AMENDMENT 2026-06-03 D-105-4 / R-105-S4（CHG-VIR-11-B）：拆到已有 video 的
+      // target 不得软删（拆分前已存在）——软删严格按 snapshot.created_target_video_ids 驱动；
+      // 存量 audit 无该字段 → 兜底全视为新建（与旧行为逐值一致）。已有 target 本次转入的
+      // sources 经 reassignSourcesToOriginal 按拆分前归属归还原 video（既有逻辑天然覆盖）。
       restoredVideoIds = audit.source_video_ids
-      const newVideoIds = audit.target_video_ids
+      const createdRaw = (audit.snapshot_jsonb as { created_target_video_ids?: string[] })
+        .created_target_video_ids
+      const createdVideoIds = Array.isArray(createdRaw) ? createdRaw : audit.target_video_ids
 
       const client = await this.db.connect()
       try {
         await client.query('BEGIN')
         await restoreVideos(client, restoredVideoIds)
         await reassignSourcesToOriginal(client, snapshotSources)
-        await softDeleteVideos(client, newVideoIds)
+        await softDeleteVideos(client, createdVideoIds)
         await markAuditReverted(client, auditId, actorId, reason ?? null)
         await client.query('COMMIT')
       } catch (err) {
@@ -492,26 +500,17 @@ export class VideoMergesService {
       sources: currentSources.map(s => ({ id: s.id, video_id: s.video_id })),
     }
 
-    // CHG-VIR-PRE-1: 事务前为每个拆分组 findOrCreate 作品层 catalog（catalog_id NOT NULL / migration 029）。
-    // findOrCreate 自身原子（幂等：同 (title_normalized, year, type) 复用现有 catalog）；置于 split 事务外——
-    // 即便后续 split 事务回滚，新建 catalog 至多成无 video 指向的孤儿行（共享作品层无害，下次同作品复用），
-    // 以此避免改 MediaCatalogService.findOrCreate 签名去支持外部事务 client。
-    const groupCatalogIds: string[] = []
-    for (const group of groups) {
-      const catalog = await this.catalogSvc.findOrCreate({
-        title: group.newVideoMeta.title,
-        titleNormalized: normalizeMergeKey(group.newVideoMeta.title),
-        year: group.newVideoMeta.year ?? null,
-        type: group.newVideoMeta.type,
-        metadataSource: 'manual',
-      })
-      groupCatalogIds.push(catalog.id)
-    }
+    // ADR-105 AMENDMENT 2026-06-03 D-105-2/3/5（CHG-VIR-11-B）：组解析与校验全部 BEGIN 前——
+    // targetVideoId 组（拆到已有 video）校验 ≠videoId/存在/未软删 + 冲突预检（同 R-105-1 范式）；
+    // newVideoMeta 组沿 CHG-VIR-PRE-1 事务前 findOrCreate catalog（回滚至多留无害孤儿 catalog）。
+    const resolvedGroups = await resolveSplitGroups(this.db, this.catalogSvc, videoId, groups)
 
-    // 4. 事务：INSERT audit + 创建新 videos + 分配 sources + 软删除原 video
+    // 4. 事务：INSERT audit + 创建新 videos / 转入已有 videos + 分配 sources + 软删除原 video
     const client = await this.db.connect()
     let auditId: string
+    // D-105-4：created（新建，unmerge 时软删）与全部 target（audit.target_video_ids）分别记录
     const newVideoIds: string[] = []
+    const allTargetVideoIds: string[] = []
 
     try {
       await client.query('BEGIN')
@@ -527,21 +526,27 @@ export class VideoMergesService {
         reason: null,
       })
 
-      for (let i = 0; i < groups.length; i++) {
-        const group = groups[i]!
+      for (const group of resolvedGroups) {
+        if (group.kind === 'existing') {
+          // D-105-5 / R-105-S3：仅转入 sources，不改已有 video 任何元数据
+          await assignSourcesToVideo(client, [...group.sourceIds], group.targetVideoId)
+          allTargetVideoIds.push(group.targetVideoId)
+          continue
+        }
         const shortId = Math.random().toString(36).slice(2, 10)
         const newVideoId = await insertNewVideo(client, {
           shortId,
-          catalogId: groupCatalogIds[i]!,
-          title: group.newVideoMeta.title,
-          type: group.newVideoMeta.type,
+          catalogId: group.catalogId,
+          title: group.title,
+          type: group.type,
         })
         newVideoIds.push(newVideoId)
-        await assignSourcesToVideo(client, group.sourceIds, newVideoId)
+        allTargetVideoIds.push(newVideoId)
+        await assignSourcesToVideo(client, [...group.sourceIds], newVideoId)
       }
 
-      // 回填 target_video_ids（CHG-SN-5-10-PATCH P2：抽出到 mutations.updateAuditTargetIds）
-      await updateAuditTargetIds(client, auditId, newVideoIds)
+      // 回填 target_video_ids + snapshot.created_target_video_ids（D-105-4 / 零 DDL 自由字段）
+      await updateAuditTargetIds(client, auditId, allTargetVideoIds, newVideoIds)
 
       await softDeleteVideos(client, [videoId])
 
@@ -553,14 +558,15 @@ export class VideoMergesService {
       client.release()
     }
 
-    // fire-and-forget admin_audit_log
+    // fire-and-forget admin_audit_log（D-105-6：afterJsonb 扩 existingTargetVideoIds）
+    const existingTargetVideoIds = allTargetVideoIds.filter((id) => !newVideoIds.includes(id))
     this.auditSvc.write({
       actorId,
       actionType: 'video.split',
       targetKind: 'video',
       targetId: videoId,
       beforeJsonb: { originalVideoId: videoId, snapshot: snapshotJsonb },
-      afterJsonb: { auditId, newVideoIds },
+      afterJsonb: { auditId, newVideoIds, existingTargetVideoIds },
     })
 
     return { auditId, newVideoIds }

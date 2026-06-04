@@ -123,11 +123,20 @@ export interface UnmergeResult {
 
 export interface SplitGroup {
   readonly sourceIds: string[]
-  readonly newVideoMeta: {
+  /**
+   * 拆到新建 video 的元数据。ADR-105 AMENDMENT 2026-06-03（D-105-2）起与
+   * `targetVideoId` **恰一互斥**（旧请求体全组 newVideoMeta 完全兼容）。
+   */
+  readonly newVideoMeta?: {
     readonly title: string
     readonly year?: number
     readonly type: VideoType
   }
+  /**
+   * 拆到已有 video（D-105-2）：仅转入 sources，不改已有 video 任何元数据（D-105-5 / R-105-S3）。
+   * 约束：≠ 被拆 videoId / 组间互不重复 / 存在且未软删 / 冲突预检（D-105-3）。
+   */
+  readonly targetVideoId?: string
 }
 
 // ADR-105 §端点契约 row 4 Body 仅 { groups }，无 reason；保持类型与协议一致
@@ -138,7 +147,61 @@ export interface SplitParams {
 
 export interface SplitResult {
   readonly auditId: string
+  /** 本次 split **新建**的 video ids（拆到已有 video 的组不在内 / D-105-4 created_target_video_ids 同源） */
   readonly newVideoIds: string[]
+}
+
+// ── ADR-105 AMENDMENT 2026-06-03（CHG-VIR-11 / Phase 4 拆分证据化）─────────
+// GET /admin/videos/:id/split-suggestions 响应契约（D-105-1）。
+// sourceSiteKey/sourceName 为非空 string（R-105-S9：与 LineMatrixRow 真源同口径，
+// 线路键 = (COALESCE(source_site_key, videos.site_key), source_name) 与 getVideoMatrix 逐字一致）。
+
+/** 拆分建议分组维度（确定性单维，优先级 core_title_key > season > release_marker > edition） */
+export type SplitSuggestionDimension = 'core_title_key' | 'season' | 'release_marker' | 'edition'
+
+/** 单条线路（= getVideoMatrix 的 (siteKey, sourceName) 行，line 粒度不丢） */
+export interface SplitSuggestionLine {
+  /** COALESCE(source_site_key, videos.site_key) 后非空（'' 兜底与 LineMatrixRow 同口径） */
+  readonly sourceSiteKey: string
+  /** video_sources.source_name NOT NULL */
+  readonly sourceName: string
+  /** 该线路全部 video_sources.id */
+  readonly sourceIds: readonly string[]
+  readonly episodeRange: { readonly min: number | null; readonly max: number | null }
+  /** 所属 site 观测 top-K 展示（observed_count 降序） */
+  readonly observedTitles: readonly { readonly rawTitle: string; readonly observedCount: number }[]
+}
+
+export interface SplitSuggestionGroup {
+  /** 确定性：`${dimension}:${facetValue}` */
+  readonly groupKey: string
+  /** 维度值（season → '2'；core_title_key → key 本身） */
+  readonly facetValue: string
+  readonly lines: readonly SplitSuggestionLine[]
+  /** 预填 newVideoMeta（year 不预填 / D-105-1；title = dominant raw_title，可含源站噪声 Y-105-S4） */
+  readonly suggestedMeta: { readonly title: string; readonly type: VideoType }
+}
+
+/** video 级拆分信号（不参与线路归组） */
+export type SplitSignal =
+  | { readonly kind: 'external_id_conflict'; readonly providers: readonly string[] }
+  | { readonly kind: 'episode_overlap'; readonly lineKeys: readonly string[] }
+  /** site 内多标题盲区提示（同 site 线路必然同组，site 内多作品须人工核查 / 第 2 轮 advisory-strong） */
+  | { readonly kind: 'intra_site_multi_title'; readonly siteKey: string }
+  | {
+      readonly kind: 'multi_core_title' | 'multi_season' | 'multi_release_marker' | 'multi_edition'
+      readonly values: readonly string[]
+    }
+
+export interface SplitSuggestionsResult {
+  readonly videoId: string
+  /** groups.length >= 2 */
+  readonly suggestible: boolean
+  readonly dimension: SplitSuggestionDimension | null
+  readonly signals: readonly SplitSignal[]
+  readonly groups: readonly SplitSuggestionGroup[]
+  /** 无观测 / 维度 facet 缺失的线路（留运营手动，禁止猜测归组 / R-105-S2） */
+  readonly unassignedLines: readonly SplitSuggestionLine[]
 }
 
 /** video_merge_audit 行（Service 层内部用） */
