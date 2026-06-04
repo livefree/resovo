@@ -257,6 +257,35 @@ export class CatalogMergeService {
           )`,
       [loserId, survivorId]
     )
+    //   7c-pre（Codex FIX：exact↔cache 一致性）：survivor 同 provider 的 cache 列**非 NULL
+    //      且异值**时，loser 的 exact 转移后会与 cache 单值冲突（HARD 不一致）——cache 异值
+    //      即身份冲突信号，按 D-177-4「冲突只产 candidate」降级（快照已留原值可复位）
+    await client.query(
+      `UPDATE catalog_external_refs r
+          SET relation = 'candidate', is_primary = false, updated_at = NOW(),
+              notes = COALESCE(r.notes || ' | ', '') || 'demoted: survivor cache conflict (merge)'
+         FROM media_catalog s
+        WHERE r.catalog_id = $1 AND r.relation = 'exact' AND s.id = $2
+          AND (
+               (r.provider = 'imdb'    AND s.imdb_id            IS NOT NULL AND s.imdb_id            <> r.external_id)
+            OR (r.provider = 'tmdb'    AND s.tmdb_id            IS NOT NULL AND s.tmdb_id::text      <> r.external_id)
+            OR (r.provider = 'douban'  AND s.douban_id          IS NOT NULL AND s.douban_id          <> r.external_id)
+            OR (r.provider = 'bangumi' AND s.bangumi_subject_id IS NOT NULL AND s.bangumi_subject_id::text <> r.external_id)
+          )`,
+      [loserId, survivorId]
+    )
+    //   7c-pre 降级后的 candidate 若与 survivor 既有同值 candidate 重复 → 补一轮 7b 口径去重
+    await client.query(
+      `DELETE FROM catalog_external_refs r
+        WHERE r.catalog_id = $1 AND r.relation = 'candidate'
+          AND EXISTS (
+            SELECT 1 FROM catalog_external_refs s
+            WHERE s.catalog_id = $2 AND s.provider = r.provider
+              AND s.external_id = r.external_id AND s.external_kind = r.external_kind
+              AND s.relation = 'candidate'
+          )`,
+      [loserId, survivorId]
+    )
     //   7c 剩余 ref 重指向 survivor；survivor 同 provider 已有任何 exact 时，转移来的 exact
     //      is_primary 置 false（主绑定唯一性保持，cache 槽位属 survivor 原 exact）
     const redirRef = await client.query(

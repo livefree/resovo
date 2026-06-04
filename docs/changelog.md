@@ -14309,3 +14309,17 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **测试**：门禁全过 typecheck / lint / verify:adr-contracts EXIT=0 + 全量 **483 files 6355 passed / 0 failed**（净 +5）。**dev 完整往返实测**（A=loser 富内容 + B=survivor + C=第三方）：merge 统计逐项断言——videosRedirected=1 / 自环 swc 删 1 / A→C `season_of` 重指向 B→C / douban 同值 candidate 去重 1（7b）/ bangumi exact 转移（7c）+ **B cache 回填 919191**（步骤 9）/ episodes 转移 / loser 删 + dangling=0；rollback 全复原——A 复活（原值无 sentinel）+ videos 指向复位 A + episodes 回 A + B→C 边消失（A→C 复原）+ swc 复原 + B exact 消失 + **B cache 复位 null**；重复回滚阻断 ✓；provenance 残留 REPORT=1（R11「只插不删」预期行为：B 侧转移副本留存 + A 侧恢复）；测试数据零残留（实测「残留 2」为 dev 真实作品《往返80致富我醉卧美人膝》LIKE 误匹配，已逐行核实非残留）。
 - **共享层沉淀评估**：合并/回滚原语落 Service 层 = D-176-10 既定（未来 admin 端点 / same_work_candidate 裁定 UI 零重写消费）；快照表集 + merge_ops 注册表为合并审计真源；dry-run「真实路径预演 + ROLLBACK」范式可复用于后续高风险运维脚本。
 - **注意事项**：① **回滚是数据安全网非字节级无损**（D-174-6 继承）：provenance/locks 转移副本残留 = 已知不可逆损失（REPORT 不删）；合并后运行期新写入可能被 cache 复位覆盖（脚本头注释运维窗口警示）。② swc 重指向 LEAST/GREATEST 规范化是实施期必要细化（重指向后 from>to 会违 090 有序对 CHECK，ADR 未显式预见，落实 R7 语义零偏离）。③ 转移 exact 的 is_primary 降级（survivor 已有同 provider exact 时）保「主绑定唯一」语义——cache 槽位属 survivor 原 exact，与 D-177-5 一致。④ **D-N 闭环：D-176-4（快照范式 + R-2 重指向 + 回滚复位）/ D-176-10（脚本先行不起端点）/ D-177-9（RR-A 预检 + cache 重算 + 回滚边界）随本卡实施闭环**。⑤ **CHG-VIR-12 全系列（12-A~12-F 六卡）收口，Phase 5 catalog 身份层完结**；后续独立小卡（12-A 既定不在系列内）：findOrCreate 切主读（对照观察期）/ 合并端点 + UI ADR / 双写收敛 + cache UNIQUE 复评（Y-A4）/ 自动绑定 ADR。
+
+## [CHG-VIR-12-FIX] Codex stop-time review FIX：exact-ref ↔ cache 一致性两处可破坏路径修复
+- **完成时间**：2026-06-04
+- **记录时间**：2026-06-04 05:40
+- **执行模型**：claude-opus-4-8
+- **子代理**：无（Codex stop-time review 发现，主循环复盘定位 + 修复）
+- **修改文件**：
+  - `apps/api/src/db/queries/catalogExternalRefs.ts` — `demoteExactRef` 扩 optional `exceptExternalId`（换值场景：demote 同 catalog+provider 下其他 external_id 的旧 exact，新值保留；notes 区分 'cache cleared' / 'cache value replaced'）。
+  - `apps/api/src/services/MediaCatalogService.ts` — **FIX-1（safeUpdate 换值双 exact）**：写新值 exact 落定（exact_written/already_exact）后，同事务 `demoteExactRef(client, catalogId, provider, 新值)` 降级旧值 exact。复现：A 先写 doubanId='111' 再写 '222' → 双 exact is_primary + cache='222' → 旧 exact('111') 触发报表 HARD-1a。conflict_candidate 分支不 demote（cache 未变，旧 exact 仍一致）。
+  - `apps/api/src/services/CatalogMergeService.ts` — **FIX-2（合并转移 exact 遇 survivor cache 异值）**：7c 前新增 7c-pre——survivor 同 provider cache 列非 NULL 且 ≠ loser exact 值 → loser exact 降级 candidate（cache 异值即身份冲突信号，对齐 D-177-4「冲突只产 candidate」；快照已留原值可复位）+ 降级后同值 candidate 补一轮 7b 口径去重。复现：survivor cache='D1'（candidate 形态）+ loser exact('D2') 转移 → exact('D2') 与 cache='D1' 触发 HARD-1b。
+  - 测试：`catalog-external-refs-queries.test.ts` +1（exceptExternalId 分支 + 参数断言同步）/ `mediaCatalogSafeUpdate.test.ts` +2（换值 demote 调用 / conflict 不 demote）。
+- **数据库变更**：无 schema 变更。**dev 复现 + 修复双验证**：FIX-1 换值后 refs = [candidate('111'), exact('222')] + cache='222' 一致 ✓；FIX-2 合并后 survivor refs = [candidate('D1'), candidate('D2')] + cache='D1' 一致（异值降级归并信号）✓；报表 HARD=0 全绿。
+- **测试**：门禁全过 typecheck / lint EXIT=0 + 全量 **483 files 6358 passed / 0 failed**（净 +3）。
+- **注意事项**：两修复均为「cache 单值语义 ↔ exact 多行真源」的边界协调：cache 槽位变更（换值/合并异值）必须同事务收敛旧 exact（降级 candidate 保审计，绝不 DELETE）；与 D-177-5「写 exact 同步回填 / 删降级清 cache」契约的双向完整化。归属 D-177-5 / D-177-9 闭环补强。

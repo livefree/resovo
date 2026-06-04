@@ -308,6 +308,26 @@ describe('safeUpdate — catalog_external_refs 写侧接线（CHG-VIR-12-D / YY-
     )
   })
 
+  it('换值（Codex FIX）：新值 exact 落定后同事务 demote 其他旧值 exact（except=新值）', async () => {
+    const svc = new MediaCatalogService(mockDb)
+    await svc.safeUpdate('cat-1', { doubanId: 'val-222' } as never, 'manual')
+
+    expect(externalRefQueries.resolveAndWriteExactRef).toHaveBeenCalled()
+    expect(externalRefQueries.demoteExactRef).toHaveBeenCalledWith(
+      mockTxClient, 'cat-1', 'douban', 'val-222',
+    )
+  })
+
+  it('换值 conflict_candidate → 不 demote 旧值（cache 未变，旧 exact 仍与 cache 一致）', async () => {
+    vi.mocked(externalRefQueries.resolveAndWriteExactRef).mockResolvedValue({
+      outcome: 'conflict_candidate', holderCatalogId: 'cat-holder',
+    })
+    const svc = new MediaCatalogService(mockDb)
+    await svc.safeUpdate('cat-1', { doubanId: 'val-222' } as never, 'douban')
+
+    expect(externalRefQueries.demoteExactRef).not.toHaveBeenCalled()
+  })
+
   it('外部传入 client（事务内调用，如 BangumiService）→ 不自起 BEGIN，复用外部连接', async () => {
     const externalClient = { query: vi.fn().mockResolvedValue({ rows: [], rowCount: 0 }) }
     const svc = new MediaCatalogService(mockDb)

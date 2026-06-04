@@ -179,22 +179,32 @@ export async function insertCandidateRef(
 
 /**
  * exact 降级原语（D-177-5「删/降级 exact 时清 cache」的 ref 侧）：
- * catalog 清空某 provider 的 cache 列时，其 exact ref 同步降级 candidate（保留审计痕迹，
- * 不 DELETE；candidate 不进 partial unique，降级后行退出索引②无冲突）。
- * cache 列清空本身由调用方（safeUpdate → updateCatalogFields）同事务完成。
- * @returns 降级的行数（0=本无 exact，幂等）
+ * - 清空 cache 列：demote 该 catalog 该 provider 的全部 exact（不传 exceptExternalId）
+ * - **换值写入**（CHG-VIR-12-F Codex FIX）：cache 单值语义下写入新值后，同 provider
+ *   其他 external_id 的旧 exact 必须同事务降级（否则双 exact 单 cache → 报表 HARD 不一致）
+ *   → 传 exceptExternalId = 新值，demote 其余
+ * 降级到 candidate（保留审计痕迹不 DELETE；candidate 不进 partial unique，退出索引②无冲突）。
+ * cache 列变更本身由调用方（safeUpdate → updateCatalogFields）同事务完成。
+ * @returns 降级的行数（0=无可降级行，幂等）
  */
 export async function demoteExactRef(
   db: Pool | PoolClient,
   catalogId: string,
-  provider: ExternalRefProvider
+  provider: ExternalRefProvider,
+  exceptExternalId?: string
 ): Promise<number> {
   const r = await db.query(
     `UPDATE catalog_external_refs
         SET relation = 'candidate', is_primary = false, updated_at = NOW(),
-            notes = COALESCE(notes || ' | ', '') || 'demoted: cache cleared'
-      WHERE catalog_id = $1 AND provider = $2 AND relation = 'exact'`,
-    [catalogId, provider]
+            notes = COALESCE(notes || ' | ', '') || $3
+      WHERE catalog_id = $1 AND provider = $2 AND relation = 'exact'
+        AND ($4::text IS NULL OR external_id <> $4)`,
+    [
+      catalogId,
+      provider,
+      exceptExternalId === undefined ? 'demoted: cache cleared' : 'demoted: cache value replaced',
+      exceptExternalId ?? null,
+    ]
   )
   return r.rowCount ?? 0
 }

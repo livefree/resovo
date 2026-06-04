@@ -150,11 +150,22 @@ describe('demoteExactRef（D-177-5 清 cache 联动降级）', () => {
     expect(sql).toContain(`SET relation = 'candidate'`)
     expect(sql).toContain(`relation = 'exact'`)
     expect(sql).not.toContain('DELETE')
-    expect(mockQuery.mock.calls[0]![1]).toEqual(['cat-a', 'douban'])
+    expect(mockQuery.mock.calls[0]![1]).toEqual(['cat-a', 'douban', 'demoted: cache cleared', null])
   })
 
   it('本无 exact → 0（幂等）', async () => {
     mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 })
     expect(await demoteExactRef(mockClient, 'cat-a', 'bangumi')).toBe(0)
+  })
+
+  it('exceptExternalId（换值场景 Codex FIX）：仅 demote 其他值的旧 exact，新值保留', async () => {
+    mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 1 })
+    const n = await demoteExactRef(mockClient, 'cat-a', 'douban', 'new-val')
+    expect(n).toBe(1)
+    const sql = sqlCalls()[0]!
+    expect(sql).toContain('external_id <> $4')
+    expect(mockQuery.mock.calls[0]![1]).toEqual([
+      'cat-a', 'douban', 'demoted: cache value replaced', 'new-val',
+    ])
   })
 })

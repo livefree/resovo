@@ -401,6 +401,10 @@ export class MediaCatalogService {
         if (result.outcome === 'conflict_candidate' || result.outcome === 'kind_conflict') {
           delete (filteredFields as Record<string, unknown>)[field]
           skippedFields.push(field)
+        } else {
+          // 换值场景（Codex FIX）：cache 单值语义 → 新值 exact 落定后，同 provider 其他
+          // external_id 的旧 exact 同事务降级 candidate（否则双 exact 单 cache → HARD 不一致）
+          await externalRefQueries.demoteExactRef(client, catalogId, provider, String(value))
         }
       }
 
