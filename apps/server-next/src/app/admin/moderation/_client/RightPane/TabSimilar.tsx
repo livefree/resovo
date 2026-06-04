@@ -23,6 +23,7 @@ import { AdminButton, EmptyState, ErrorState, LoadingState, Segment, useToast, t
 import { listSimilarVideos, type SimilarVideoItem } from '@/lib/moderation/api'
 import { rejectIdentityCandidate } from '@/lib/identity/api'
 import { EVIDENCE_LABELS } from '@/lib/identity/evidence-labels'
+import { buildMergeHref } from '@/lib/merge/entry'
 
 export interface TabSimilarProps {
   readonly videoId: string
@@ -230,12 +231,14 @@ export function TabSimilar({ videoId }: TabSimilarProps): React.ReactElement {
               size="sm"
               variant="default"
               onClick={() => {
-                const candidateIdParam = it.candidateId
-                  ? `&candidate_id=${encodeURIComponent(it.candidateId)}`
-                  : ''
-                router.push(
-                  `/admin/merge?candidate_a=${encodeURIComponent(videoId)}&candidate_b=${encodeURIComponent(it.id)}&from=moderation${candidateIdParam}`,
-                )
+                // CHG-VIR-13-A1：buildMergeHref 收口（参数顺序契约见 entry.ts，禁内联拼接）
+                router.push(buildMergeHref({
+                  kind: 'merge-pair',
+                  candidateA: videoId,
+                  candidateB: it.id,
+                  ...(it.candidateId ? { candidateId: it.candidateId } : {}),
+                  from: 'moderation',
+                }))
               }}
               data-testid={`tab-similar-merge-${it.id}`}
             >

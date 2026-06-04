@@ -8,6 +8,7 @@ import { LinesPanel } from './LinesPanel'
 import { AdminPlayer } from './AdminPlayer'
 import { useSelectedLine } from '@/lib/moderation/use-selected-line'
 import * as api from '@/lib/moderation/api'
+import { buildMergeHref } from '@/lib/merge/entry'
 import { M } from '@/i18n/messages/zh-CN/moderation'
 
 interface PendingCenterProps {
@@ -27,9 +28,10 @@ function openAdminPreview(v: VideoQueueRow): void {
   window.open(`${WEB_NEXT_ORIGIN}${href}?preview=admin`, '_blank', 'noopener,noreferrer')
 }
 
-// CHG-363-A：跳 `/admin/merge?split=:videoId` 深链 / -B 卡补 MergeClient 接收 query 自动展开拆分 tab + 预填 videoId
+// CHG-363-A：跳拆分深链 / -B 卡补 MergeClient 接收 query 自动展开拆分 tab + 预填 videoId
+// CHG-VIR-13-A1：buildMergeHref 收口 + 补 from=moderation（来源回链栏消费）
 function openSplitWorkspace(videoId: string): void {
-  window.open(`/admin/merge?split=${encodeURIComponent(videoId)}`, '_blank', 'noopener,noreferrer')
+  window.open(buildMergeHref({ kind: 'split', videoId, from: 'moderation' }), '_blank', 'noopener,noreferrer')
 }
 
 const BTN_SM: React.CSSProperties = {

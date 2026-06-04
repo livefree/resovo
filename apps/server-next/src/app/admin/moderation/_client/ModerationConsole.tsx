@@ -14,6 +14,7 @@ import { usePendingQueue } from './usePendingQueue'
 import { BatchActionsBar } from './BatchActionsBar'
 import { PendingPaneController } from './PendingPaneController'
 import * as api from '@/lib/moderation/api'
+import { buildMergeHref } from '@/lib/merge/entry'
 import { M } from '@/i18n/messages/zh-CN/moderation'
 import { useFilterPresets } from '@/lib/moderation/use-filter-presets'
 import type { FilterPreset, FilterPresetQuery, FilterPresetTab } from '@/lib/moderation/use-filter-presets'
@@ -572,11 +573,10 @@ export function ModerationConsole(): React.ReactElement {
           onClear={clearSelection}
           pending={batchPending}
           onMerge={() => {
-            // CHG-364-A：批量合并入口 / 跳 /admin/merge?ids=<csv>&from=moderation-batch
+            // CHG-364-A：批量合并入口（CHG-VIR-13-A1：buildMergeHref 收口，禁内联拼接）
             // CHG-364-B 卡补 MergeClient 接 ?ids query + BatchMergeWorkspace（列 ids 选 target + 提交 merge）
-            const ids = Array.from(selectedIds).join(',')
             window.open(
-              `/admin/merge?ids=${encodeURIComponent(ids)}&from=moderation-batch`,
+              buildMergeHref({ kind: 'batch-merge', ids: Array.from(selectedIds), from: 'moderation-batch' }),
               '_blank',
               'noopener,noreferrer',
             )

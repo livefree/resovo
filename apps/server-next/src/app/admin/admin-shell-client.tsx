@@ -45,10 +45,11 @@ function filterNavForRole(
     .filter((section) => section.items.length > 0)
 }
 import {
-  adminNavCountProviderStub,
   buildTopbarIconsStub,
   healthSnapshotStub,
 } from '@/lib/shell-data'
+// CHG-VIR-13-A1：countProvider 实接（merge pending 候选总数 60s 轮询，替换 stub）
+import { useAdminNavCounts } from '@/lib/admin-shell-nav-counts'
 
 export interface AdminShellClientProps {
   readonly defaultCollapsed: boolean
@@ -83,6 +84,9 @@ export function AdminShellClient({ defaultCollapsed, initialTheme, initialRole, 
   const crumbs = useMemo(() => inferBreadcrumbs(pathname, ADMIN_NAV), [pathname])
 
   const topbarIcons = useMemo(() => buildTopbarIconsStub(theme), [theme])
+
+  // CHG-VIR-13-A1：merge pending 候选总数 60s 轮询 → countProvider（runtime 优先于静态 count）
+  const navCountProvider = useAdminNavCounts()
 
   const handleNavigate = useCallback((href: string) => {
     router.push(href)
@@ -167,7 +171,7 @@ export function AdminShellClient({ defaultCollapsed, initialTheme, initialRole, 
       crumbs={crumbs.length > 0 ? crumbs : undefined}
       topbarIcons={topbarIcons}
       health={healthSnapshotStub}
-      countProvider={adminNavCountProviderStub}
+      countProvider={navCountProvider}
       user={user}
       theme={theme}
       defaultCollapsed={defaultCollapsed}

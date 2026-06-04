@@ -11,6 +11,7 @@
  */
 
 import type { AdminAuditLogListRow } from '@resovo/types'
+import { buildMergeHref } from '@/lib/merge/entry'
 
 export interface RollbackTarget {
   /** null 表示不支持回滚（按钮 disabled） */
@@ -69,13 +70,13 @@ export function resolveRollbackTarget(row: AdminAuditLogListRow): RollbackTarget
         ? { href: `/admin/moderation?id=${encodeURIComponent(targetId)}`, label: '重新审核' }
         : { href: null, label: '回滚', disabledReason: '缺少 targetId' }
 
-    // ── 合并 / 拆分 ──────────────────────────────────────────────
+    // ── 合并 / 拆分（CHG-VIR-13-A1：buildMergeHref 收口 + from=audit-rollback 回链）──
     case 'video.merge':
-      return { href: '/admin/merge?tab=merged', label: '撤销合并' }
+      return { href: buildMergeHref({ kind: 'tab', tab: 'merged', from: 'audit-rollback' }), label: '撤销合并' }
     case 'video.unmerge':
-      return { href: '/admin/merge?tab=merged', label: '重新合并' }
+      return { href: buildMergeHref({ kind: 'tab', tab: 'merged', from: 'audit-rollback' }), label: '重新合并' }
     case 'video.split':
-      return { href: '/admin/merge?tab=split', label: '撤销拆分' }
+      return { href: buildMergeHref({ kind: 'tab', tab: 'split', from: 'audit-rollback' }), label: '撤销拆分' }
 
     // ── 视频源 toggle 反向 ───────────────────────────────────────
     case 'video_source.toggle':

@@ -39,9 +39,10 @@ describe('resolveRollbackTarget · 映射表', () => {
     expect(r.label).toBe('回滚到暂存')
   })
 
-  it('video.merge → /admin/merge?tab=merged 撤销合并', () => {
+  it('video.merge → /admin/merge?tab=merged&from=audit-rollback 撤销合并', () => {
+    // CHG-VIR-13-A1：buildMergeHref 收口 + from=audit-rollback（来源回链栏消费）
     const r = resolveRollbackTarget(makeRow('video.merge'))
-    expect(r.href).toBe('/admin/merge?tab=merged')
+    expect(r.href).toBe('/admin/merge?tab=merged&from=audit-rollback')
     expect(r.label).toBe('撤销合并')
   })
 

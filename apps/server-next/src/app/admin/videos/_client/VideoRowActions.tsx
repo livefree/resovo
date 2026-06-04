@@ -6,6 +6,7 @@ import { AdminDropdown, type AdminDropdownItem } from '@resovo/admin-ui'
 import type { VideoAdminRow, VisibilityStatus } from '@/lib/videos'
 import type { TabKey } from './_videoEdit/types'
 import { updateVisibility, stateTransition, doubanSync, refetchSources } from '@/lib/videos/api'
+import { buildMergeHref } from '@/lib/merge/entry'
 
 // ── helpers ───────────────────────────────────────────────────────
 
@@ -159,10 +160,10 @@ export function VideoRowActions({ row, isAdmin, onRowUpdate, onEditRequest }: Vi
     () => withSimple(() => doubanSync(row.id)),
     () => withSimple(() => refetchSources(row.id)),
     () => { setOpen(false); window.open(getDetailHref(row), '_blank') },
-    // CHG-SN-8-08：发起合并 → 深链 /admin/merge?candidate_a=<id>&from=videos
+    // CHG-SN-8-08：发起合并 → 深链（CHG-VIR-13-A1：buildMergeHref 收口，禁内联拼接）
     () => {
       setOpen(false)
-      router.push(`/admin/merge?candidate_a=${encodeURIComponent(row.id)}&from=videos`)
+      router.push(buildMergeHref({ kind: 'merge-pair', candidateA: row.id, from: 'videos' }))
     },
   )
 

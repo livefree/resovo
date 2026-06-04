@@ -125,7 +125,8 @@ describe('PendingCenter — CHG-363-A "✂ 拆分" 按钮入口', () => {
     expect(screen.queryByTestId('pending-center-split-button')).toBeNull()
   })
 
-  it('点击拆分按钮 → window.open(`/admin/merge?split=:videoId`, "_blank", "noopener,noreferrer")', () => {
+  it('点击拆分按钮 → window.open(`/admin/merge?split=:videoId&from=moderation`, "_blank", "noopener,noreferrer")', () => {
+    // CHG-VIR-13-A1：buildMergeHref 收口 + 补 from=moderation（来源回链栏消费）
     const row = baseRow({ episodeCount: 24, id: 'video-uuid-abc' })
     render(
       <PendingCenter
@@ -136,7 +137,7 @@ describe('PendingCenter — CHG-363-A "✂ 拆分" 按钮入口', () => {
     )
     fireEvent.click(screen.getByTestId('pending-center-split-button'))
     expect(windowOpenSpy).toHaveBeenCalledWith(
-      '/admin/merge?split=video-uuid-abc',
+      '/admin/merge?split=video-uuid-abc&from=moderation',
       '_blank',
       'noopener,noreferrer'
     )

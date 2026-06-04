@@ -76,7 +76,9 @@ export const ADMIN_NAV: readonly AdminNavSection[] = [
       { label: '播放线路', href: '/admin/sources', icon: <Link2 />, count: 1939, badge: 'danger' },
       // CHG-SN-9-LINES-VIEW-UNIFY（2026-05-28）：「线路别名管理」入口收口到「播放线路」页面右上角
       //   原侧边栏入口已移除 / 用户从 /admin/sources → 右上角 "线路别名管理" 按钮进入
-      { label: '合并拆分', href: '/admin/merge', icon: <Merge />, count: 6, badge: 'warn' },
+      // CHG-VIR-13-A1：静态 count: 6 假数据移除 — count 由 useAdminNavCounts 60s 轮询
+      // pending 候选总数注入（countProvider runtime 优先；加载中/0 时无 badge）
+      { label: '合并拆分', href: '/admin/merge', icon: <Merge />, badge: 'warn' },
       { label: '字幕管理', href: '/admin/subtitles', icon: <FileText />, shortcut: 'mod+4' },
       { label: '图片健康', href: '/admin/image-health', icon: <ImageIcon />, count: 597, badge: 'warn' },
     ],

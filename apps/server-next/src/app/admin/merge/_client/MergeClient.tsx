@@ -36,6 +36,8 @@ import {
 import { mergeVideos } from '@/lib/merge/api'
 import { videoPickerFetcher } from '@/lib/videos/picker-fetcher'
 import { ApiClientError } from '@/lib/api-client'
+// CHG-VIR-13-A1：来源回链栏（from 解析 + label/backHref 单一真源）
+import { isMergeEntrySource, MERGE_ENTRY_SOURCE_META } from '@/lib/merge/entry'
 import { SplitSection } from './MergeSplitSection'
 import { AuditSection } from './MergeAuditSection'
 import { BatchMergeWorkspace } from './BatchMergeWorkspace'
@@ -106,6 +108,15 @@ export function MergeClient() {
   // showSplit 初始值：?split=:videoId 存在则自动展开 / 否则默认收起
   const [showSplit, setShowSplit] = useState<boolean>(!!splitParam)
 
+  // CHG-VIR-13-A1：来源回链栏（from 合法值才渲染；关闭仅清 from，不动工作流参数）
+  const entrySource = isMergeEntrySource(fromParam) ? fromParam : null
+  const dismissEntrySourceBar = useCallback(() => {
+    const p = new URLSearchParams(searchParams.toString())
+    p.delete('from')
+    const qs = p.toString()
+    router.replace(qs ? `?${qs}` : '?', { scroll: false })
+  }, [router, searchParams])
+
   const dismissBatchIdsBanner = useCallback(() => {
     const p = new URLSearchParams(searchParams.toString())
     p.delete('ids')
@@ -135,6 +146,32 @@ export function MergeClient() {
         }
       />
 
+      {/* CHG-VIR-13-A1：来源回链栏（深链进入时渲染；label/backHref 真源 = entry.ts） */}
+      {entrySource && (
+        <AdminCard
+          surface="subtle"
+          style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '8px 14px' }}
+          data-testid="merge-entry-source-bar"
+        >
+          <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--fg-muted)' }}>
+            ◂ {MERGE_ENTRY_SOURCE_META[entrySource].label}
+          </span>
+          <span style={{ display: 'inline-flex', gap: 8 }}>
+            <AdminButton
+              size="sm"
+              variant="secondary"
+              onClick={() => router.push(MERGE_ENTRY_SOURCE_META[entrySource].backHref)}
+              data-testid="merge-entry-source-back"
+            >
+              {MERGE_ENTRY_SOURCE_META[entrySource].backLabel}
+            </AdminButton>
+            <AdminButton size="sm" variant="default" onClick={dismissEntrySourceBar} data-testid="merge-entry-source-dismiss">
+              ×
+            </AdminButton>
+          </span>
+        </AdminCard>
+      )}
+
       {/* CHG-SN-8-08：来自视频库行级「发起合并」深链 banner */}
       {candidateAParam && (
         <AdminCard
@@ -148,7 +185,8 @@ export function MergeClient() {
               已锁定候选 A：<code style={{ fontFamily: 'var(--font-mono, ui-monospace, monospace)', fontSize: '11px' }}>{candidateAParam.slice(0, 8)}</code>
             </span>
             <span style={{ fontSize: '11px', color: 'var(--fg-muted)' }}>
-              {fromParam === 'videos' ? '来自视频库行级操作；' : ''}请在下方候选列表中选择 B 完成合并（或在拆分工作台内手动操作）
+              {/* CHG-VIR-13-A1：来源前缀移除 — 来源信息由独立回链栏承载（merge-entry-source-bar） */}
+              请在下方候选列表中选择 B 完成合并（或在拆分工作台内手动操作）
             </span>
           </span>
           <AdminButton size="sm" variant="default" onClick={dismissCandidateBanner} data-testid="merge-candidate-a-clear">

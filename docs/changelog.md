@@ -14388,3 +14388,24 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **测试**：纯文档；门禁 `verify:endpoint-adr` ✓（205 admin 路由全对齐，ADR-179 2 新路径登记）+ `verify:adr-contracts` ✓ + typecheck/lint EXIT=0
 - **共享层沉淀评估**：否——协议定档无代码产物；(current,desired)→action 覆盖矩阵将在 13-D1 以纯函数 + 单测沉淀（status-defaults.ts 同矩阵真源）。
 - **注意事项**：① D-105-7/8/9 触及 `packages/types/src/video-merge.types.ts` 公开类型 → 13-B1/C1/C2/D1 实施 commit 必须带 `Subagents: arch-reviewer (claude-opus-...)` trailer（CLAUDE.md 红线，评审提醒）。② 解阻 13-A1（本就并行）/ 13-B1 / 13-C1 / 13-D1；下一卡按依赖序取 13-A1（sonnet 建议，当前 opus 会话执行须在完成备注登记偏离）。③ auto-bind 维持 OFF（D-105a-17），actorType 通道为展示预留不抢跑。
+
+## [CHG-VIR-13-A1] 入口收口 + badge 实时化 — merge 深链单一真源 + 来源回链栏
+- **完成时间**：2026-06-04
+- **记录时间**：2026-06-04 13:46
+- **执行模型**：claude-opus-4-8（人工 opus 会话覆盖 sonnet 建议——与 13-ADR 同会话连续执行）
+- **子代理**：无
+- **修改文件**：
+  - `apps/server-next/src/lib/merge/entry.ts` — 新建：MergeEntrySource 4 枚举 + MERGE_ENTRY_SOURCE_META（label/backHref 单一真源）+ buildMergeHref（merge-pair/split/batch-merge/tab 4 形态 discriminated union；参数顺序契约显式登记防测试回归）
+  - `apps/server-next/src/lib/admin-shell-nav-counts.ts` — 新建：useAdminNavCounts 60s setInterval 轮询 listCandidates({source:'identity',limit:1}) total → AdminNavCountProvider 闭包；401/403 静默（moderator 无 merge 权限）+ 其他 warn 降级（HOTFIX-G 范式）；null/0 不入 Map 无 badge
+  - `apps/server-next/src/lib/admin-nav.tsx` — merge 项移除静态 count: 6 假数据（保留 badge:'warn'）
+  - `apps/server-next/src/app/admin/admin-shell-client.tsx` — countProvider stub → useAdminNavCounts
+  - `apps/server-next/src/app/admin/videos/_client/VideoRowActions.tsx` / `moderation/_client/RightPane/TabSimilar.tsx` / `moderation/_client/PendingCenter.tsx`（补 from=moderation）/ `moderation/_client/ModerationConsole.tsx` / `lib/audit/rollback-routes.ts` ×3 行（补 from=audit-rollback）— 5 处内联 URL 拼接 → buildMergeHref
+  - `apps/server-next/src/app/admin/merge/_client/MergeClient.tsx` — 来源回链栏（merge-entry-source-bar：from 合法值守卫 + 返回按钮 + 关闭仅清 from）；candidate_a banner 来源前缀文案移除（回链栏承载）
+  - `tests/unit/lib/merge-entry.test.ts` — 新建 8 用例（4 形态 + 顺序契约 + 编码 + 守卫 + META 完整性）
+  - `tests/unit/components/server-next/admin/merge/MergeCandidateBanner.test.tsx` — +4 回链栏用例 + 用例 2 来源文案断言迁移
+  - `tests/unit/components/server-next/admin/moderation/pending-center-split-button.test.tsx` / `tests/unit/server-next/audit/rollback-routes.test.ts` — 断言随 +from 行为更新
+- **新增依赖**：无（**合理偏离登记：设计稿「SWR 轮询」按项目惯例落地为自写 setInterval hook**——server-next 无 swr 依赖，禁新依赖红线；范式对齐 admin-shell-notifications.ts POLL_INTERVAL_MS 60s）
+- **数据库变更**：无
+- **测试**：受影响 10 套件 75/75 → 全量 **484 files 6371/6371 passed**（净 +12）；crawler #30 隔离复跑 191/191 确认 flaky 非本卡回归；typecheck/lint EXIT=0
+- **共享层沉淀评估**：是——entry.ts 即本卡的沉淀产物（深链构造从 5 文件内联收口到单一真源；13-WS mode 模型升级时仅改此文件 + MergeClient 映射层，入口零再改）；useAdminNavCounts 为 countProvider 首个真数据接入，后续导航项（审核 484 等静态数）可循同模式接入。
+- **注意事项**：① merge 页 e2e 深链回归归 13-WS（升级映射验收）+ 系列收口（设计 §9）。② rollback `?tab=` 形态 MergeClient 尚不消费（pre-existing gap），13-WS mode/URL 双向同步时闭合。③ 下一卡可选：13-A2（视频库新增入口，依赖 13-A1 ✅）/ 13-WS（依赖 13-A1 ✅）/ 13-B1（依赖 13-ADR ✅）。
