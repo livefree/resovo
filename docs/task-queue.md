@@ -3069,11 +3069,11 @@ CODENAME-MATRIX-E2E (依赖 Wave 3 验收期补丁 CODENAME-MATRIX ✅)
 
 - **状态**：🟡 规划中
 - **创建时间**：2026-06-04 00:00
-- **最后更新时间**：2026-06-04（融合修订：独立 B 稿对比裁定吸收，设计文档 §10；新增 13-A2/13-WS，13-A→13-A1，13-B2 拆 B2A/B2B，13-C2/13-D2/13-I18N 范围与依赖更新。第二轮问答补 §10.4 N→1 交互定档：矩阵 N 列布局 + 列头 target 单选归 13-B2A；候选组「转入合并工作区」+ >11 组转工作区裁剪分批归 13-B2B）
+- **最后更新时间**：2026-06-04（融合修订：独立 B 稿对比裁定吸收，设计文档 §10；新增 13-A2/13-WS，13-A→13-A1，13-B2 拆 B2A/B2B，13-C2/13-D2/13-I18N 范围与依赖更新。第二轮问答补 §10.4 N→1 交互定档：矩阵 N 列布局 + 列头 target 单选归 13-B2A；候选组「转入合并工作区」+ >11 组转工作区裁剪分批归 13-B2B。第三轮问答补 §10.5 结构级结果预览〔getVideoMatrix ×N 合成线路×集数 + 结构信号，归 13-B2A〕+ 播放抽验〔AdminPlayer 复用 + 同集对比切换，新卡 13-PLAY〕；§11 目标布局/流程图 9 张入档）
 - **目标**：在视频身份解析与合并/拆分升级已完成 Phase 5 的基础上，升级 `/admin/merge` 为统一的视频身份处置工作台（mode 骨架：candidates / merge / split / records 单一活动工作区），覆盖入口体系、合并/拆分前后预览、自动/手动记录、操作内状态设置。
 - **范围**：`/admin/merge` 前端工作台（含 mode 骨架重构 + Direct/Batch 合一）、入口深链（含视频库行级拆分 / 批量合并所选新入口）、merge/split API response/body 加性扩展、identity decision 列表/复活端点、audit timeline 展开明细 + 行内撤销、导航 badge 实时化。**不含** 候选评分算法调整、auto-bind 启用、catalog-catalog admin 端点、`normalizeTitle` / `normalizeMergeKey` 修改、audit 表加列（零 migration，§10.1 裁定）、VideoEditDrawer 历史区块（P2 后置）。
 - **依赖**：CHG-VIR-12 ✅ 已完成；设计文档 `docs/designs/merge-split-ux-redesign_20260603.md`（§1–9 定档 + §10 融合修订）。
-- **依赖序**：13-ADR →（13-A1 并行）→ 13-A2 / 13-WS → 13-B1 → 13-B2A → 13-B2B / 13-C1 → 13-C2 / 13-D1 → 13-D2 → 13-I18N。后端卡（13-B1/C1/D1）与 UI 骨架卡（13-WS）可并行，无文件域交叉。
+- **依赖序**：13-ADR →（13-A1 并行）→ 13-A2 / 13-WS → 13-B1 → 13-B2A → 13-B2B / 13-PLAY / 13-C1 → 13-C2 / 13-D1 → 13-D2 → 13-I18N。后端卡（13-B1/C1/D1）与 UI 骨架卡（13-WS）可并行，无文件域交叉；13-B2B 与 13-PLAY 同依赖（13-WS + 13-B2A）可并行。
 
 ### 任务列表（按执行顺序）
 
@@ -3110,41 +3110,47 @@ CODENAME-MATRIX-E2E (依赖 Wave 3 验收期补丁 CODENAME-MATRIX ✅)
    - 创建时间：2026-06-04（融合修订：原 13-B2 拆出；§10.4 N→1 布局定档）
    - 建议模型：sonnet
    - 依赖：CHG-VIR-13-B1
-   - 范围：① `MergeComparePanel`（字段级矩阵：列 = 组内各 video N 列横向扩展，首列 sticky + 列区横滚 + 列最小宽度；**target 选择 = 列头单选**整列高亮，候选路径默认 recommendedTarget + 推荐 badge；冲突标警）② `MergeResultPreview`（合并后 target 形态随 target 切换即时重算 + 拆分组形态 + **原视频软删明示**，§10.2 增强 #4 / §10.4）。
-   - 验收要点：展示字段级差异、保留 target、source 转移、拆分后目标形态与原视频去向；N=2 与 N>2 同构无独立形态；不硬编码颜色。
+   - 范围：① `MergeComparePanel`（字段级矩阵：列 = 组内各 video N 列横向扩展，首列 sticky + 列区横滚 + 列最小宽度；**target 选择 = 列头单选**整列高亮，候选路径默认 recommendedTarget + 推荐 badge；冲突标警）② `MergeResultPreview`（合并后 target 形态随 target 切换即时重算 + 拆分组形态 + **原视频软删明示**，§10.2 增强 #4 / §10.4）③ **结构级线路 × 集数预览**（既有 `getVideoMatrix` ×N 按需拉取合成「合并后线路矩阵」+ 结构信号：集数互补正信号 / 同站同名线路 409 预警 / 完全重叠建议播放抽验；拆分侧组内明细零请求前端推导 + 组间集数覆盖提示，§10.5）。
+   - 验收要点：展示字段级差异、保留 target、source 转移、拆分后目标形态与原视频去向；N=2 与 N>2 同构无独立形态；候选行展开默认不拉矩阵（按需「展开线路集数预览」）；不硬编码颜色。
 7. **CHG-VIR-13-B2B** — 预览嵌入 + 拆分 VideoPicker + 候选组转工作区（状态：⬜ 待开始）
    - 创建时间：2026-06-04（融合修订：原 13-B2 拆出；§10.4 转入动作定档）
    - 建议模型：sonnet
    - 依赖：CHG-VIR-13-B2A、CHG-VIR-13-WS
    - 范围：① 嵌入 CandidateExpand（替换卡片网格 + 纯文本影响预览）② 嵌入 SplitWorkspace 每组下方 ③ 拆分 VideoPicker ×2（选拆分对象 + 拆到已有 video，§10.2 增强 #2）④ 候选组「转入合并工作区」次级动作 + **N>11 组引导改转工作区裁剪分批**（替换现「逐对明细分批」提示；逐 pair 拒绝保留，§10.4）。
    - 验收要点：两处手输 uuid 消除；拆到已有 video 选中即展示目标卡；>11 组可经工作区裁剪后分批执行。
-8. **CHG-VIR-13-D1** — merge/split 操作内状态设置后端扩展（状态：⬜ 待开始）
+8. **CHG-VIR-13-PLAY** — 播放抽验 PlayPreviewDrawer（状态：⬜ 待开始）
+   - 创建时间：2026-06-04（第三轮问答新增，设计 §10.5 / §11.9）
+   - 建议模型：sonnet
+   - 依赖：CHG-VIR-13-WS、CHG-VIR-13-B2A；与 13-B2B 并行
+   - 范围：① `PlayPreviewDrawer`（复用 moderation `AdminPlayer`，props 自足 videoId+sourceUrl+sourceId，跨模块导入沿 VideoEditDrawer 先例）② **同集成员切换 chips**（同 episodeNumber 下秒切 A/B/C/D source 对比画面 = 同一性判断核心交互）③ 结构预览矩阵格 / 拆分分配表行点击 ▶ 唤起 ④ 合并（候选行展开 + mode=merge）/ 拆分两侧嵌入。
+   - 验收要点：不触 player-core/shell 公共 API（仅消费 AdminPlayer 封装）；feedback 上报沿用 AdminPlayer 内建；完成后补跑 `npm run test:e2e`（PLAYER 类）。
+9. **CHG-VIR-13-D1** — merge/split 操作内状态设置后端扩展（状态：⬜ 待开始）
    - 创建时间：2026-06-04 00:00
    - 建议模型：**opus**（状态机 + merge/split 事务边界）
    - 依赖：CHG-VIR-13-ADR、CHG-VIR-13-B1
    - 范围：① MergeParams/SplitGroup 类型 + schema ② `fetchVideosByIds` 扩状态列并写 `targetStatusBefore` snapshot ③ post-COMMIT 调状态机 + 非法组合 422 ④ audit 落点 ⑤ unmerge 还原 `targetStatusBefore`。
    - 验收要点：不传状态零行为变更；状态失败不回滚 merge/split 且前端可提示；存量 audit 兜底不动。
-9. **CHG-VIR-13-D2** — 状态设置前端控件 + 智能默认（状态：⬜ 待开始）
+10. **CHG-VIR-13-D2** — 状态设置前端控件 + 智能默认（状态：⬜ 待开始）
    - 创建时间：2026-06-04 00:00
    - 建议模型：sonnet
    - 依赖：CHG-VIR-13-D1、CHG-VIR-13-B2B
    - 范围：① `status-defaults.ts` 纯函数 + 规则表单测 ② `MergeStatusControl` ③ 候选合并/合并工作区/拆分三处嵌入（嵌入点随 13-WS 新骨架）。
    - 验收要点：只产状态机白名单组合；含 rejected source 不自动升级；拆到已有 video 状态只读；split 新建默认 pending/internal + 面板一键通过（§10.1 裁定 #1）。
-10. **CHG-VIR-13-C1** — identity decisions 列表 + revive 后端（状态：⬜ 待开始）
+11. **CHG-VIR-13-C1** — identity decisions 列表 + revive 后端（状态：⬜ 待开始）
     - 创建时间：2026-06-04 00:00
     - 建议模型：**opus**（新 admin 端点 + revive 幂等）
     - 依赖：CHG-VIR-13-ADR
     - 范围：① `listIdentityDecisions` query ② revive Service 方法（`revived_from_candidate_id` 链 + pending 唯一约束处理）③ 2 个 route ④ audit 枚举扩展 ⑤ `IdentityDecisionListRow` 类型。
     - 验收要点：rejected 不被覆盖；revive 审计 payload 有内容断言；`verify:endpoint-adr` 通过。
-11. **CHG-VIR-13-C2** — 操作记录增强 + 决策记录 + 行内撤销（状态：⬜ 待开始）
+12. **CHG-VIR-13-C2** — 操作记录增强 + 决策记录 + 行内撤销（状态：⬜ 待开始）
     - 创建时间：2026-06-04 00:00（融合修订：范围 +行内撤销 + records mode 集成）
     - 建议模型：sonnet
     - 依赖：CHG-VIR-13-C1、CHG-VIR-13-WS
     - 范围：① `MergeAuditRow` 加性扩展 + Service 派生 ② audit 行展开 + auto/manual 列 ③ `MergeDecisionsSection` 决策记录子视图 + revive 操作 ④ records mode 集成（audit 时间线 + 决策记录两个子视图）⑤ 行内撤销 + reason 弹窗（§10.2 增强 #5）。
     - 验收要点：confirmed/rejected/reverted 可查；merge/split audit 可展开前后明细；rejected 可复活；有效行可直接撤销。
-12. **CHG-VIR-13-I18N** — merge 工作台硬编码文案抽离（状态：⬜ 待开始）
+13. **CHG-VIR-13-I18N** — merge 工作台硬编码文案抽离（状态：⬜ 待开始）
     - 创建时间：2026-06-04 00:00
     - 建议模型：haiku
-    - 依赖：CHG-VIR-13-B2B、CHG-VIR-13-C2、CHG-VIR-13-D2
+    - 依赖：CHG-VIR-13-B2B、CHG-VIR-13-PLAY、CHG-VIR-13-C2、CHG-VIR-13-D2
     - 范围：合并/拆分工作台新增文案抽离到 i18n 消息文件；保留测试用稳定 testid。
     - 验收要点：UI 文案不再新增散落硬编码；现有中英文消息结构不破坏。
