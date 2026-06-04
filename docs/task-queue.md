@@ -3115,12 +3115,14 @@ CODENAME-MATRIX-E2E (依赖 Wave 3 验收期补丁 CODENAME-MATRIX ✅)
    - 范围：① `VideoSummaryForMerge` 加性扩展 review/visibility/catalog/episodeRange/externalIds/**coverUrl**（7 字段，融合修订 +1）② candidates 查询 SELECT 扩展 ③ `mapVideoRow` 映射 ④ response 透出。
    - 验收要点：旧消费方零破坏；候选列表分页/排序/计数不变。
    - 完成备注：**D-105-7 全闭环**。① `VideoSummaryForMerge` +7 optional（R-105-T4 注释锚定）；② `fetchVideoDetailsForCandidates` SELECT 扩：v.review_status/visibility_status/catalog_id 经主键函数依赖免入 GROUP BY、mc.title/mc.cover_url 显式入、episodeRange=MIN/MAX(vs.episode_number)、**externalIds 走相关子查询**（仅 is_primary + manual_confirmed/auto_matched，避免与 vs 聚合笛卡尔；fetchRawCandidateGroups 组级行无 video 字段不需扩——按实际落地修正卡面表述）；③ 单一 `mapVideoRow` 扩 7 映射 → **legacy 候选 / identity 候选 / merge targetVideo 三消费点自动透出**（catalogTitle null→undefined 收敛）。测试 +4（SQL 数据源断言含 candidate/rejected 不透出守卫 / legacy 响应 7 字段 / R-105-T4 同输入 score·组数·推荐 target 逐值不变 / 旧 fixture undefined 向后兼容）。**dev 真实库冒烟**：SQL 形态 ✓ + external_ids 命中样本（douban 单 / bangumi+douban 双 provider，ORDER BY provider）形态精确符合契约。门禁：typecheck/lint EXIT=0 + verify:adr-contracts ✓（SQL schema 对齐含 video_external_refs 引用列）+ 全量 **484 files 6381/6381 passed**（净 +4）。零 migration 零端点。**解阻 13-B2A / 13-D1**。执行模型: claude-opus-4-8（人工 opus 会话覆盖 sonnet 建议）；子代理: arch-reviewer (claude-opus-4-8)（13-ADR 阶段 D-105-7 契约 PASS / a19744b07045b47e3，本卡按契约实施）
-6. **CHG-VIR-13-B2A** — 对比矩阵 + 结果预览组件（状态：⬜ 待开始）
+6. **CHG-VIR-13-B2A** — 对比矩阵 + 结果预览组件（状态：✅ 已完成 2026-06-04）
    - 创建时间：2026-06-04（融合修订：原 13-B2 拆出；§10.4 N→1 布局定档）
+   - 实际开始：2026-06-04 15:10
    - 建议模型：sonnet
-   - 依赖：CHG-VIR-13-B1
+   - 依赖：CHG-VIR-13-B1 ✅
    - 范围：① `MergeComparePanel`（字段级矩阵：列 = 组内各 video N 列横向扩展，首列 sticky + 列区横滚 + 列最小宽度；**target 选择 = 列头单选**整列高亮，候选路径默认 recommendedTarget + 推荐 badge；冲突标警）② `MergeResultPreview`（合并后 target 形态随 target 切换即时重算 + 拆分组形态 + **原视频软删明示**，§10.2 增强 #4 / §10.4）③ **结构级线路 × 集数预览**（既有 `getVideoMatrix` ×N 按需拉取合成「合并后线路矩阵」+ 结构信号：集数互补正信号 / 同站同名线路 409 预警 / 完全重叠建议播放抽验；拆分侧组内明细零请求前端推导 + 组间集数覆盖提示，§10.5）。
    - 验收要点：展示字段级差异、保留 target、source 转移、拆分后目标形态与原视频去向；N=2 与 N>2 同构无独立形态；候选行展开默认不拉矩阵（按需「展开线路集数预览」）；不硬编码颜色。
+   - 完成备注：**两组件新建（merge/_client 域内共享）**。① `MergeComparePanel`（268 行）：8 字段行 × N video 列（首列 sticky + 横滚 + minWidth 160）；列头 radio = target 单选整列高亮 + 推荐 badge；冲突推导纯函数 `deriveConflicts`（type/year 不一致→warn 行 ⚠ / 同 provider 不同 external_id→danger 行）；D-105-7 字段缺失渲染「—」零崩溃（legacy 降级兼容）。② `MergeResultPreview`（双形态 discriminated union）：merge 形态 = After 汇总（源数总和/站点并集随 target 切换 useMemo 重算）+ 软删列表 + **状态降级警示**（source 已审公开 ∧ target 非公开；数据缺失不误报）+ 13-PLAY 锚点 `onEpisodeClick?` 钩子（▶ 格渲染，抽屉留 13-PLAY）；split 形态 = 组卡（新建「默认待审·内部」/ 转入已有「不改元数据」D-105-5 文案）+ **原视频软删明示**。③ `combineMatrices` 纯函数（可单测）：getVideoMatrix ×N 合成 + 三信号（同站同名跨 video → danger 409 预警引导 /admin/sources；集数互补 → ok；完全重叠 → info 建议播放抽验）；**按需展开**（候选行展开默认零矩阵请求，按钮触发 Promise.all ×N）。测试 +12（矩阵 5 / 纯函数 3 / merge 形态 3 / split 形态 1）。门禁：typecheck 0 error / lint ✓ / 全量 **484 files 6391/6391 passed**（净 +12）。零端点零依赖；组件无消费方（13-B2B 嵌入）。**解阻 13-B2B / 13-PLAY**。执行模型: claude-opus-4-8（人工 opus 会话覆盖 sonnet 建议）；子代理: 无
 7. **CHG-VIR-13-B2B** — 预览嵌入 + 拆分 VideoPicker + 候选组转工作区（状态：⬜ 待开始）
    - 创建时间：2026-06-04（融合修订：原 13-B2 拆出；§10.4 转入动作定档）
    - 建议模型：sonnet

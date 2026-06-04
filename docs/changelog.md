@@ -14461,3 +14461,18 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **测试**：merge 目录 5 文件 46/46 → 全量 **484 files 6379/6379 passed**（复跑全绿；上轮 1 失败 = 并发 flaky 非本卡）；typecheck 0 error / lint ✓；MergeClient 231 行 + MergeWorkspace 272 行均 <500 红线
 - **共享层沉淀评估**：否——mode 骨架为页面级编排（消费 entry.ts 单一真源）；MergeWorkspace 为 merge 域专属工作区（无跨页消费方）。13-WS 兑现 13-A1 沉淀承诺：入口文件零再改（升级映射收口在 deriveWorkspace + entry.ts）。
 - **注意事项**：① 范围 ⑤「既有深链回归 e2e」按单测层全覆盖落地（5+1 处升级映射逐一断言），Playwright e2e 留系列收口（设计 §9 既定）——偏离登记。② SplitSection→SplitWorkspace 重命名推迟 13-B2B（卡面预登记）。③ 候选行展开「转入合并工作区」动作归 13-B2B（§10.4）。④ 解阻 13-B2B / 13-PLAY / 13-C2；下一卡候选：13-D1（opus）/ 13-C1（opus）/ 13-B2A。
+
+## [CHG-VIR-13-B2A] 对比矩阵 + 结果预览组件 — N 列字段矩阵 + 结构级线路×集数预览
+- **完成时间**：2026-06-04
+- **记录时间**：2026-06-04 15:15
+- **执行模型**：claude-opus-4-8（人工 opus 会话覆盖 sonnet 建议——同会话连续执行）
+- **子代理**：无
+- **修改文件**：
+  - `apps/server-next/src/app/admin/merge/_client/MergeComparePanel.tsx` — 新建：8 字段行 × N video 列矩阵（首列 sticky + 横滚 + minWidth；列头 radio target 单选整列高亮 + 推荐 badge；deriveConflicts 纯函数：type/year→warn / 同 provider 不同 external_id→danger；D-105-7 字段缺失「—」零崩溃）
+  - `apps/server-next/src/app/admin/merge/_client/MergeResultPreview.tsx` — 新建双形态：merge（After 汇总随 target useMemo 重算 + 软删列表 + 状态降级警示 + onEpisodeClick 13-PLAY 锚点钩子）/ split（组卡新建「默认待审·内部」与转入已有「不改元数据」+ 原视频软删明示 §10.2-4）；combineMatrices 导出纯函数（getVideoMatrix ×N 按需合成 + 三信号：同站同名跨 video danger 409 预警 / 集数互补 ok / 完全重叠 info 播放抽验）
+  - `tests/unit/components/server-next/admin/merge/MergeComparePreview.test.tsx` — 新建 12 用例
+- **新增依赖**：无
+- **数据库变更**：无
+- **测试**：12/12 → 全量 **484 files 6391/6391 passed**（净 +12）；typecheck 0 error / lint ✓
+- **共享层沉淀评估**：是（域内）——两组件为 merge/_client 域共享件（13-B2B 嵌入候选行展开 + MergeWorkspace 两处消费即 ≥2；若审核台后续消费再上提 src/components/shared）；combineMatrices 纯函数独立可测沉淀。
+- **注意事项**：① 组件当前无消费方（13-B2B 嵌入 CandidateExpand/SplitWorkspace + 候选组转工作区）。② onEpisodeClick 仅渲染 ▶ 钩子，PlayPreviewDrawer 实装归 13-PLAY。③ 状态降级警示的「一键修复」交互归 13-D2（MergeStatusControl）。
