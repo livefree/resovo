@@ -14476,3 +14476,14 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **测试**：12/12 → 全量 **484 files 6391/6391 passed**（净 +12）；typecheck 0 error / lint ✓
 - **共享层沉淀评估**：是（域内）——两组件为 merge/_client 域共享件（13-B2B 嵌入候选行展开 + MergeWorkspace 两处消费即 ≥2；若审核台后续消费再上提 src/components/shared）；combineMatrices 纯函数独立可测沉淀。
 - **注意事项**：① 组件当前无消费方（13-B2B 嵌入 CandidateExpand/SplitWorkspace + 候选组转工作区）。② onEpisodeClick 仅渲染 ▶ 钩子，PlayPreviewDrawer 实装归 13-PLAY。③ 状态降级警示的「一键修复」交互归 13-D2（MergeStatusControl）。
+
+## [CHG-VIR-13-B2A-FIX] Codex stop-time review — 结构预览 stale/竞态守卫
+- **完成时间**：2026-06-04
+- **记录时间**：2026-06-04 15:26
+- **执行模型**：claude-opus-4-8
+- **子代理**：无（Codex stop-time review 触发）
+- **修改文件**：
+  - `apps/server-next/src/app/admin/merge/_client/MergeResultPreview.tsx` — stale 守卫：videosKey 变化（候选组切换/成员增删）→ 旧 structure 立即失效 + requestSeqRef 飞行中旧请求作废（过期响应 seq 比对丢弃）+ unmount 防护
+  - `tests/unit/components/server-next/admin/merge/MergeComparePreview.test.tsx` — +2 回归用例（11b 集合变化清空旧预览 / 11c 挂起旧请求过期响应不覆盖）
+- **测试**：14/14 → 全量 **484 files 6393/6393 passed**（净 +2）；typecheck/lint ✓
+- **注意事项**：问题域 = 13-B2A 新增组件（旧 structure 在 videos prop 变化后误显示旧集合线路）；同会话内闭环，13-B2A 完成备注已补登。

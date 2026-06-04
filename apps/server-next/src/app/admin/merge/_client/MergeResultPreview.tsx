@@ -14,7 +14,7 @@
  * 播放抽验锚点（13-PLAY）：结构预览格 onEpisodeClick 可选注入，本卡仅渲染钩子不实现抽屉。
  */
 
-import { useCallback, useMemo, useState, type CSSProperties } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { AdminButton } from '@resovo/admin-ui'
 import type { LineMatrixRow, VideoSummaryForMerge } from '@resovo/types'
 import { getVideoMatrix } from '@/lib/sources/api'
@@ -223,20 +223,37 @@ function MergeResultBody({ videos, targetId, onEpisodeClick }: MergeResultPrevie
   const [structureLoading, setStructureLoading] = useState(false)
   const [structureError, setStructureError] = useState<string | null>(null)
 
+  // Codex stop-time review FIX：stale 守卫 — videos 集合变化（候选组切换 / 成员增删）时
+  // 旧结构预览立即失效 + 飞行中旧请求作废（seq 比对丢弃），防止把旧集合的线路显示在新集合下
+  const videosKey = useMemo(() => videos.map((v) => v.id).join('|'), [videos])
+  const requestSeqRef = useRef(0)
+  useEffect(() => {
+    requestSeqRef.current += 1
+    setStructure(null)
+    setStructureError(null)
+    setStructureLoading(false)
+  }, [videosKey])
+
   const loadStructure = useCallback(async () => {
+    const seq = ++requestSeqRef.current
     setStructureLoading(true)
     setStructureError(null)
     try {
       const inputs = await Promise.all(
         videos.map(async (video) => ({ video, lines: await getVideoMatrix(video.id) })),
       )
+      if (seq !== requestSeqRef.current) return // 过期响应（videos 已变 / 后发请求在先）丢弃
       setStructure(combineMatrices(inputs))
     } catch (err: unknown) {
+      if (seq !== requestSeqRef.current) return
       setStructureError(err instanceof Error ? err.message : '线路预览加载失败')
     } finally {
-      setStructureLoading(false)
+      if (seq === requestSeqRef.current) setStructureLoading(false)
     }
   }, [videos])
+
+  // unmount 后 setState 防护（最后一道：seq 永不匹配）
+  useEffect(() => () => { requestSeqRef.current = Number.MAX_SAFE_INTEGER }, [])
 
   return (
     <div style={PANEL_STYLE} data-testid="merge-result-preview">

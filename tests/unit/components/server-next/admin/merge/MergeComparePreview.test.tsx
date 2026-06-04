@@ -195,6 +195,38 @@ describe('MergeResultPreview · merge 形态', () => {
     expect(screen.getByTestId('structure-signal-danger')).toBeTruthy()
     expect(screen.getByTestId('merge-result-structure').textContent).toContain('来自 视频 a')
   })
+
+  it('11b. Codex FIX：videos 集合变化 → 旧结构预览立即失效（stale 守卫）', async () => {
+    getVideoMatrixMock.mockResolvedValue([makeLine('siteA', '线1', [1])])
+    const { rerender } = render(
+      <MergeResultPreview kind="merge" videos={[makeVideo('a'), makeVideo('b')]} targetId="a" />,
+    )
+    fireEvent.click(screen.getByTestId('merge-result-structure-toggle'))
+    await waitFor(() => expect(screen.getByTestId('merge-result-structure')).toBeTruthy())
+    // 集合变化（b → c）：旧预览（a+b 的线路）必须立即清空，不得显示在新集合下
+    rerender(
+      <MergeResultPreview kind="merge" videos={[makeVideo('a'), makeVideo('c')]} targetId="a" />,
+    )
+    expect(screen.queryByTestId('merge-result-structure')).toBeNull()
+  })
+
+  it('11c. Codex FIX：videos 变化时飞行中旧请求作废（过期响应丢弃，不覆盖新集合）', async () => {
+    // 旧集合请求挂起（手动控制 resolve 时序）
+    let resolveOld!: (v: LineMatrixRow[]) => void
+    getVideoMatrixMock.mockImplementation(() => new Promise<LineMatrixRow[]>((res) => { resolveOld = res }))
+    const { rerender } = render(
+      <MergeResultPreview kind="merge" videos={[makeVideo('a'), makeVideo('b')]} targetId="a" />,
+    )
+    fireEvent.click(screen.getByTestId('merge-result-structure-toggle'))
+    // 请求未返回时集合变化 → 旧请求作废
+    rerender(
+      <MergeResultPreview kind="merge" videos={[makeVideo('a'), makeVideo('c')]} targetId="a" />,
+    )
+    resolveOld([makeLine('siteA', '旧线路', [1])])
+    await new Promise((r) => setTimeout(r, 0))
+    // 过期响应不得渲染（structure 仍为空）
+    expect(screen.queryByTestId('merge-result-structure')).toBeNull()
+  })
 })
 
 describe('MergeResultPreview · split 形态', () => {
