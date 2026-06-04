@@ -27,7 +27,7 @@
 
 | 文件 | 用例 | 现象 |
 |---|---|---|
-| `tests/unit/components/server-next/admin/crawler/CrawlerClient.test.tsx` | 51. 时间轴 rangeStart/rangeEnd + ticks 使用本地时区 HH:MM（非 UTC slice） | 全量并行跑偶发失败，**单独跑 66/66 通过** → 时区/并行负载敏感，非确定性失败。建议加固为时区无关断言。 |
+| `tests/unit/components/server-next/admin/crawler/CrawlerClient.test.tsx` | 51. 时间轴 rangeStart/rangeEnd + ticks 使用本地时区 HH:MM（非 UTC slice） | ✅ **已加固（CHORE-TEST-CRAWLER-TZ-FLAKY / 2026-06-04）**。根因双重：① waitFor 只等 card testid、HH:MM 内容依赖 timeline mock 异步 resolve 后渲染（并行负载下断言早于数据 paint = flaky 主因）→ 内容断言整体包入 waitFor；② 期望值手工 `getHours()+':00'` 与组件 `toLocaleTimeString(hour12:false)` 口径不一致（半小时偏移时区/非 ':' locale 会确定性失败）→ 期望值改逐字同参 toLocaleTimeString。验证：本机 ×3 + TZ=Asia/Kolkata（+5:30）/UTC/America/New_York 全过 + 全量并行 6359 passed。 |
 
 ## 复现
 

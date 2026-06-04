@@ -201,10 +201,11 @@
 
 ## [CHORE-TEST-CRAWLER-TZ-FLAKY] CrawlerClient 时区测试加固（从 CHORE-TEST-BASELINE-20260529 拆出）
 
-- **状态**：⬜ 待开始（择时）
-- **台账**：`docs/audit/known-failing-tests_20260529.md` §Flaky
+- **状态**：✅ 已完成（2026-06-04）
+- **台账**：`docs/audit/known-failing-tests_20260529.md` §Flaky（已同步标记加固完成）
 - **范围**：`tests/unit/components/server-next/admin/crawler/CrawlerClient.test.tsx` 用例 51（时间轴 HH:MM 断言）改为时区无关，消除全量并行偶发失败
-- **建议模型**：haiku（单文件断言加固）
+- **建议模型**：haiku（单文件断言加固；实际 claude-opus-4-8，用户以 opus 会话人工覆盖）
+- **完成备注**：根因双重——① **异步竞态（flaky 主因）**：`waitFor` 只等 card testid 出现，HH:MM 内容依赖 `getCrawlerTimelineMock` 异步 resolve 后渲染，并行负载下断言早于数据 paint 即偶发失败 → 内容断言整体包入 `waitFor`；② **时区/locale 脆弱（潜伏确定性失败）**：期望值手工 `getHours().padStart + ':00'` 与组件 `formatLocalHm` 的 `toLocaleTimeString(hour12:false)` 口径不一致——半小时偏移时区（UTC+5:30 渲染 `03:30` vs 期望 `03:00`）/ 非 ':' 分隔 locale 必挂 → 期望值改与组件**逐字同参**的 `toLocaleTimeString(undefined, {hour:'2-digit',minute:'2-digit',hour12:false})`。验证：本机 ×3 全过 + **TZ=Asia/Kolkata（+5:30，旧断言必挂）/ UTC / America/New_York 三时区 66/66 全过** + 全量并行 483 files **6359/6359 passed**（全程零 flaky 复现）+ typecheck/lint EXIT=0。仅改 1 测试文件零产品代码；台账 §Flaky 同步闭档。执行模型: claude-opus-4-8；子代理: 无
 
 ---
 

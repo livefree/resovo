@@ -1076,15 +1076,22 @@ describe('CrawlerClient (REDO-01-G 高级 dropdown)', () => {
 describe('CrawlerClient — CSV-EXPORT bug fixes (CHG-SN-7-MISC-CRAWLER-TIMELINE-BUG / COLUMN-FEATURES)', () => {
   it('51. 时间轴 rangeStart/rangeEnd + ticks 使用本地时区 HH:MM（非 UTC slice）', async () => {
     // TIMELINE_LIVE rangeStart='2026-05-18T22:00:00Z' (UTC) → 本地时区不同就会与 "22:00" 不一致
-    // 直接断言：subtitle/tick 中出现的小时与 new Date('...Z').getHours() 对齐（vs 直接 UTC slice 22）
+    // CHORE-TEST-CRAWLER-TZ-FLAKY 加固：
+    // ① 期望值用与组件 formatLocalHm 逐字同参的 toLocaleTimeString 计算（时区 + locale 双无关；
+    //    手工 getHours+':00' 在半小时偏移时区 / 非 ':' 分隔 locale 下会确定性失败）
+    // ② 内容断言整体包入 waitFor（card testid 先于 timeline mock resolve 渲染，
+    //    并行负载下断言早于数据 paint 即偶发失败 = 原 flaky 主因）
     render(<CrawlerClient />)
-    await waitFor(() => screen.getByTestId('crawler-timeline-card'))
-    const localStartH = new Date('2026-05-18T22:00:00Z').getHours().toString().padStart(2, '0')
-    const localEndH = new Date('2026-05-18T23:00:00Z').getHours().toString().padStart(2, '0')
-    const card = screen.getByTestId('crawler-timeline-card')
-    // subtitle 含本地化的 HH:MM（含 :00 分钟段）
-    expect(card.textContent).toContain(`${localStartH}:00`)
-    expect(card.textContent).toContain(`${localEndH}:00`)
+    const expectLocalHm = (iso: string): string =>
+      new Date(iso).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: false })
+    const localStart = expectLocalHm('2026-05-18T22:00:00Z')
+    const localEnd = expectLocalHm('2026-05-18T23:00:00Z')
+    await waitFor(() => {
+      const card = screen.getByTestId('crawler-timeline-card')
+      // subtitle/tick 含本地化 HH:MM（组件回归到 UTC slice 时，非 UTC 时区下期望值即不再命中）
+      expect(card.textContent).toContain(localStart)
+      expect(card.textContent).toContain(localEnd)
+    })
   })
 
   it('52. 站点列表 enableHeaderMenu + columns enableSorting → 表头 interactive + menu icon', async () => {

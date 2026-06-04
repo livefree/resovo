@@ -14336,3 +14336,16 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **数据库变更**：无（零 migration 零端点；verify:endpoint-adr 不触发）
 - **测试**：门禁全过 typecheck / lint / verify:adr-contracts EXIT=0 + 全量 **483 files 6359 passed / 0 failed**（净 +1）。**dev 真实 DB 决定性验证**：影响面 = 3498 个有源但零 probe 记录的视频（旧谓词下被任何日期筛选排除，可见日期来自 updated_at 回退）；全日期范围（2026-04-22~2026-06-03）旧谓词命中 108 vs 新谓词 **3606 = 显示口径预期值逐值相等**（零多算零漏算）。
 - **注意事项**：① 修复纯增量：有 probe 记录的行 COALESCE 取第一参数退化为旧谓词 → 旧命中集是新命中集真子集，零回归。② 显示侧为 ADR 真源不动（卡面二选一取方案一）。③ 与 `updatedAtFrom/To` filter（裸 `MAX(vs.updated_at)`）语义有别属预期：updatedAt 列显示值即 `MAX(vs.updated_at)` 无回退，两 filter 各自与各自显示列一致。
+
+## [CHORE-TEST-CRAWLER-TZ-FLAKY] CrawlerClient 时间轴用例 51 时区无关加固（CHORE-TEST-BASELINE-20260529 残留项闭档）
+- **完成时间**：2026-06-04
+- **记录时间**：2026-06-04 21:35
+- **执行模型**：claude-opus-4-8（建议 haiku，用户以 opus 会话人工覆盖指派）
+- **子代理**：无
+- **修改文件**：
+  - `tests/unit/components/server-next/admin/crawler/CrawlerClient.test.tsx` — 用例 51 双重加固：① 内容断言整体包入 `waitFor`（card testid 先于 timeline mock resolve 渲染，并行负载下断言早于数据 paint = 原 flaky 主因）；② 期望值由手工 `getHours().padStart + ':00'` 改与组件 `formatLocalHm` **逐字同参**的 `toLocaleTimeString(undefined, {hour:'2-digit',minute:'2-digit',hour12:false})`（消除半小时偏移时区 / 非 ':' 分隔 locale 下的潜伏确定性失败；UTC slice 回归检出能力保留——非 UTC 时区下期望值即不命中）。
+  - `docs/audit/known-failing-tests_20260529.md` — §Flaky 唯一条目标记已加固 + 根因/验证记录闭档。
+- **新增依赖**：无
+- **数据库变更**：无
+- **测试**：本机 ×3 + **TZ=Asia/Kolkata（+5:30，旧断言确定性必挂）/ UTC / America/New_York 三时区 66/66 全过** + 全量并行 **483 files 6359/6359 passed**（零 flaky 复现）+ typecheck / lint EXIT=0。零产品代码改动。
+- **注意事项**：全量跑 stderr 有 1 条 jsdom `Not implemented: navigation` 噪音，来自 `CrawlerRunsView.test.tsx` 用例 32（pre-existing / 33 用例全过 / 非失败非本卡范围）。CHORE-TEST-BASELINE-20260529 系列至此全部收口。
