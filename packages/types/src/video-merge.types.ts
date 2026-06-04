@@ -2,7 +2,7 @@
  * video-merge.types.ts — video 合并/拆分业务类型（ADR-105 / CHG-SN-5-09/-10）
  */
 
-import type { VideoType } from './video.types'
+import type { VideoType, ReviewStatus, VisibilityStatus } from './video.types'
 import type { GroupIdentityScore } from './identity-evidence.types'
 
 /** 候选组中单个 video 摘要 */
@@ -17,6 +17,22 @@ export interface VideoSummaryForMerge {
   readonly sourceCount: number
   /** 该 video 的去重 source_site_key 集合 */
   readonly sourceSiteKeys: readonly string[]
+  // ── ADR-105 AMENDMENT 2026-06-04 D-105-7（CHG-VIR-13-B1）：对比矩阵数据契约 +7 optional ──
+  // 全部 optional 纯增量（R-105-T4 旧消费方零破坏；不参与任何 filter/sort/分页/计数）
+  /** 审核状态（VisChip 徽标 / 状态降级警示数据源） */
+  readonly reviewStatus?: ReviewStatus
+  /** 可见性状态 */
+  readonly visibilityStatus?: VisibilityStatus
+  /** 作品层 catalog id（migration 029 后 NOT NULL） */
+  readonly catalogId?: string
+  /** catalog 展示标题（mc.title） */
+  readonly catalogTitle?: string
+  /** 集数范围（video_sources MIN/MAX episode_number；无源时 min/max 均 null） */
+  readonly episodeRange?: { readonly min: number | null; readonly max: number | null }
+  /** 已确认外部 ID（video_external_refs 仅 is_primary + manual_confirmed/auto_matched；每 provider 至多 1 条 / Y-105-T1） */
+  readonly externalIds?: readonly { readonly provider: string; readonly externalId: string }[]
+  /** 封面（真源 = media_catalog.cover_url / Y-105-T2；缺失 null 由前端 FallbackCover 链兜底） */
+  readonly coverUrl?: string | null
 }
 
 /**

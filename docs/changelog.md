@@ -14427,3 +14427,19 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **测试**：受影响 5 套件 74/74 → 全量 **484 files 6377/6377 passed**（净 +6）；两轮并发负载 flaky（UserSubmissions 等，隔离复跑全过 + 末轮全量零失败）确认非本卡回归；typecheck/lint EXIT=0
 - **共享层沉淀评估**：否——本卡为 entry.ts（13-A1 沉淀）的消费方扩展；buildBatchActions 的 opts 注入模式保持纯函数边界，无新共享原语需求。
 - **注意事项**：① 13-A 系（A1+A2）全部收口。② 批量合并 >11 个执行将 422（MergeSchema 上限），与 moderation-batch 入口同等行为；13-WS 集合编辑器落地后可裁剪分批（设计 §10.4）。③ 下一卡按依赖序：13-WS（骨架，依赖 13-A1 ✅）或 13-B1（后端契约，依赖 13-ADR ✅），两者可并行域。
+
+## [CHG-VIR-13-B1] 合并候选对比数据契约扩展 — VideoSummaryForMerge +7 optional（D-105-7）
+- **完成时间**：2026-06-04
+- **记录时间**：2026-06-04 14:45
+- **执行模型**：claude-opus-4-8（人工 opus 会话覆盖 sonnet 建议——同会话连续执行）
+- **子代理**：arch-reviewer (claude-opus-4-8)（13-ADR 阶段 D-105-7 契约 PASS / agentId a19744b07045b47e3，本卡按契约实施；packages/types 公开契约扩展 trailer 依据）
+- **修改文件**：
+  - `packages/types/src/video-merge.types.ts` — VideoSummaryForMerge +7 optional（reviewStatus / visibilityStatus / catalogId / catalogTitle / episodeRange / externalIds / coverUrl），R-105-T4 纯增量注释锚定
+  - `apps/api/src/db/queries/video-merge-candidates.ts` — RawVideoDetailRow +8 列 + fetchVideoDetailsForCandidates SELECT 扩展（v.review_status/visibility_status/catalog_id 主键函数依赖免入 GROUP BY；mc.title/mc.cover_url 显式入；MIN/MAX(vs.episode_number)；externalIds 相关子查询仅 is_primary + manual_confirmed/auto_matched，避免与 vs 聚合笛卡尔）
+  - `apps/api/src/services/VideoMergesService.schemas.ts` — mapVideoRow +7 映射（单一函数 → legacy 候选 / identity 候选 / merge targetVideo 三消费点自动透出；catalogTitle null→undefined）
+  - `tests/unit/api/video-merge-candidates.test.ts` — +4 用例（SQL 数据源断言含「candidate/rejected 不透出」守卫 / legacy 响应 7 字段透出 / R-105-T4 同输入 score·组数·推荐 target 逐值不变 / 旧 fixture undefined 向后兼容）
+- **新增依赖**：无
+- **数据库变更**：无（纯读侧 SELECT 扩展；verify SQL schema 对齐 ✓）
+- **测试**：36/36 → 全量 **484 files 6381/6381 passed**（净 +4）；**dev 真实库只读冒烟**：SQL 形态 ✓（GROUP BY 函数依赖 + jsonb_agg）+ external_ids 命中样本（douban 单 provider / bangumi+douban 双 provider，ORDER BY provider 确定性）形态精确符合契约；typecheck/lint/verify:adr-contracts EXIT=0
+- **共享层沉淀评估**：否——契约层加性扩展；mapVideoRow 单点扩展即三消费点覆盖（既有共享结构的收益兑现，无新原语）。
+- **注意事项**：① 卡面「fetchRawCandidateGroups 扩 SELECT」按实际落地修正：组级行无 video 字段不需扩，仅 detail 查询扩展（完成备注已登记）。② 13-B2A（MergeComparePanel 消费新字段）与 13-D1（状态设置后端）双解阻。③ identity 候选路径经同一 fetchVideoDetailsForCandidates + mapVideoRow，新字段自动可用（无独立改动）。

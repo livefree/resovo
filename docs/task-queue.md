@@ -3105,12 +3105,14 @@ CODENAME-MATRIX-E2E (依赖 Wave 3 验收期补丁 CODENAME-MATRIX ✅)
    - 依赖：CHG-VIR-13-A1（entry.ts 先收口）；与 13-B1/C1/D1 可并行
    - 范围：① `?mode=<candidates|merge|split|records>` 模型 + Segment 4 区 + URL 双向同步 ② 旧参数升级映射（candidate_a/candidate_b/ids/split/candidate_id/from）③ DirectMergeWorkspace + BatchMergeWorkspace 合一为 `MergeWorkspace`（VideoPicker 集合编辑 + target 单选）④ MergeClient 拆文件（500 行红线）⑤ 既有深链回归 e2e。
    - 验收要点：同一时刻单一活动工作区；5+1 处旧深链升级映射逐一回归；旧组件删除无残留消费。
-5. **CHG-VIR-13-B1** — 合并候选对比数据契约扩展（状态：⬜ 待开始）
+5. **CHG-VIR-13-B1** — 合并候选对比数据契约扩展（状态：✅ 已完成 2026-06-04）
    - 创建时间：2026-06-04 00:00
+   - 实际开始：2026-06-04 14:35（13-WS 大卡留待干净上下文，先行可并行域后端卡）
    - 建议模型：sonnet
-   - 依赖：CHG-VIR-13-ADR
+   - 依赖：CHG-VIR-13-ADR ✅
    - 范围：① `VideoSummaryForMerge` 加性扩展 review/visibility/catalog/episodeRange/externalIds/**coverUrl**（7 字段，融合修订 +1）② candidates 查询 SELECT 扩展 ③ `mapVideoRow` 映射 ④ response 透出。
    - 验收要点：旧消费方零破坏；候选列表分页/排序/计数不变。
+   - 完成备注：**D-105-7 全闭环**。① `VideoSummaryForMerge` +7 optional（R-105-T4 注释锚定）；② `fetchVideoDetailsForCandidates` SELECT 扩：v.review_status/visibility_status/catalog_id 经主键函数依赖免入 GROUP BY、mc.title/mc.cover_url 显式入、episodeRange=MIN/MAX(vs.episode_number)、**externalIds 走相关子查询**（仅 is_primary + manual_confirmed/auto_matched，避免与 vs 聚合笛卡尔；fetchRawCandidateGroups 组级行无 video 字段不需扩——按实际落地修正卡面表述）；③ 单一 `mapVideoRow` 扩 7 映射 → **legacy 候选 / identity 候选 / merge targetVideo 三消费点自动透出**（catalogTitle null→undefined 收敛）。测试 +4（SQL 数据源断言含 candidate/rejected 不透出守卫 / legacy 响应 7 字段 / R-105-T4 同输入 score·组数·推荐 target 逐值不变 / 旧 fixture undefined 向后兼容）。**dev 真实库冒烟**：SQL 形态 ✓ + external_ids 命中样本（douban 单 / bangumi+douban 双 provider，ORDER BY provider）形态精确符合契约。门禁：typecheck/lint EXIT=0 + verify:adr-contracts ✓（SQL schema 对齐含 video_external_refs 引用列）+ 全量 **484 files 6381/6381 passed**（净 +4）。零 migration 零端点。**解阻 13-B2A / 13-D1**。执行模型: claude-opus-4-8（人工 opus 会话覆盖 sonnet 建议）；子代理: arch-reviewer (claude-opus-4-8)（13-ADR 阶段 D-105-7 契约 PASS / a19744b07045b47e3，本卡按契约实施）
 6. **CHG-VIR-13-B2A** — 对比矩阵 + 结果预览组件（状态：⬜ 待开始）
    - 创建时间：2026-06-04（融合修订：原 13-B2 拆出；§10.4 N→1 布局定档）
    - 建议模型：sonnet

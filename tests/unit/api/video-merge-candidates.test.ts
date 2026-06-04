@@ -428,3 +428,91 @@ describe('VideoMergesService.listCandidates · perf baseline (ADR-105 §验证)'
     expect(p95).toBeLessThan(200)
   })
 })
+
+// ── ADR-105 AMENDMENT 2026-06-04 D-105-7（CHG-VIR-13-B1）：对比矩阵 +7 optional ──
+
+/** 含 D-105-7 全部新列的完整 detail 行 fixture */
+function makeVideoRowFull(id: string, siteKeys: string[], sourceCount = 3) {
+  return {
+    ...makeVideoRow(id, siteKeys, sourceCount),
+    review_status: 'approved' as const,
+    visibility_status: 'public' as const,
+    catalog_id: 'cat-uuid-1',
+    catalog_title: '復仇者聯盟（catalog）',
+    cover_url: 'https://img.example/cover.jpg',
+    episode_min: 1,
+    episode_max: 12,
+    external_ids: [{ provider: 'douban', externalId: 'db-123' }],
+  }
+}
+
+describe('D-105-7 对比矩阵数据契约（CHG-VIR-13-B1）', () => {
+  const svc = new VideoMergesService(mockDb)
+
+  it('fetchVideoDetailsForCandidates SQL 含 7 项数据源（状态/catalog/封面/集数/外部 ID）', async () => {
+    mockQuery.mockResolvedValueOnce({ rows: [] })
+    await fetchVideoDetailsForCandidates(mockDb, ['vid-a'])
+    const sql: string = mockQuery.mock.calls[0][0] as string
+    expect(sql).toContain('v.review_status')
+    expect(sql).toContain('v.visibility_status')
+    expect(sql).toContain('v.catalog_id')
+    expect(sql).toContain('mc.title AS catalog_title')
+    expect(sql).toContain('mc.cover_url')
+    expect(sql).toContain('MIN(vs.episode_number)')
+    expect(sql).toContain('MAX(vs.episode_number)')
+    expect(sql).toContain('FROM video_external_refs r')
+    // 仅 primary + 已确认（manual_confirmed/auto_matched），candidate/rejected 不透出
+    expect(sql).toContain('r.is_primary')
+    expect(sql).toContain("'manual_confirmed', 'auto_matched'")
+  })
+
+  it('listCandidates(legacy) 响应透出 +7 optional 字段（mapVideoRow 三消费点之一）', async () => {
+    mockQuery
+      .mockResolvedValueOnce({ rows: [GROUP_ROW] })
+      .mockResolvedValueOnce({ rows: [{ total: '1' }] })
+      .mockResolvedValueOnce({ rows: [
+        makeVideoRowFull('vid-a', ['iqiyi', 'youku'], 2),
+        makeVideoRowFull('vid-b', ['iqiyi'], 3),
+      ] })
+    const res = await svc.listCandidates({ source: 'legacy', type: undefined, minScore: 0.3, limit: 20, page: 1 })
+    const v = res.data[0]!.videos.find((x) => x.id === 'vid-a')!
+    expect(v.reviewStatus).toBe('approved')
+    expect(v.visibilityStatus).toBe('public')
+    expect(v.catalogId).toBe('cat-uuid-1')
+    expect(v.catalogTitle).toBe('復仇者聯盟（catalog）')
+    expect(v.coverUrl).toBe('https://img.example/cover.jpg')
+    expect(v.episodeRange).toEqual({ min: 1, max: 12 })
+    expect(v.externalIds).toEqual([{ provider: 'douban', externalId: 'db-123' }])
+  })
+
+  it('R-105-T4：新字段不参与 score/排序/计数 — 同输入 score 与 group 结构逐值不变', async () => {
+    mockQuery
+      .mockResolvedValueOnce({ rows: [GROUP_ROW] })
+      .mockResolvedValueOnce({ rows: [{ total: '1' }] })
+      .mockResolvedValueOnce({ rows: [
+        makeVideoRowFull('vid-a', ['iqiyi', 'youku'], 2),
+        makeVideoRowFull('vid-b', ['iqiyi', 'bilibili'], 3),
+      ] })
+    const res = await svc.listCandidates({ source: 'legacy', type: undefined, minScore: 0.3, limit: 20, page: 1 })
+    // 与既有用例「两 video 共享 site key」同输入同输出：score = 1/3，组数/total 不变
+    expect(res.data).toHaveLength(1)
+    expect(res.total).toBe(1)
+    expect(res.data[0]?.score).toBeCloseTo(1 / 3, 3)
+    expect(res.data[0]?.recommendedTargetVideoId).toBe('vid-b')
+  })
+
+  it('旧 fixture（无新列）→ optional 字段 undefined 不破行结构（向后兼容）', async () => {
+    mockQuery
+      .mockResolvedValueOnce({ rows: [GROUP_ROW] })
+      .mockResolvedValueOnce({ rows: [{ total: '1' }] })
+      .mockResolvedValueOnce({ rows: [
+        makeVideoRow('vid-a', ['iqiyi'], 2),
+        makeVideoRow('vid-b', ['iqiyi'], 3),
+      ] })
+    const res = await svc.listCandidates({ source: 'legacy', type: undefined, minScore: 0.3, limit: 20, page: 1 })
+    const v = res.data[0]!.videos[0]!
+    expect(v.reviewStatus).toBeUndefined()
+    expect(v.coverUrl).toBeUndefined()
+    expect(v.id).toBeTruthy()
+  })
+})

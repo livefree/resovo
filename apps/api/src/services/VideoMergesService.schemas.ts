@@ -151,6 +151,15 @@ export function mapVideoRow(row: RawVideoDetailRow): VideoSummaryForMerge {
     createdAt: row.created_at,
     sourceCount: parseInt(row.source_count, 10),
     sourceSiteKeys: row.site_keys,
+    // ADR-105 AMENDMENT 2026-06-04 D-105-7（CHG-VIR-13-B1）：对比矩阵 +7 optional 透出
+    // （单一 mapVideoRow 服务 legacy 候选 / identity 候选 / merge targetVideo 三消费点）
+    reviewStatus: row.review_status,
+    visibilityStatus: row.visibility_status,
+    catalogId: row.catalog_id,
+    catalogTitle: row.catalog_title ?? undefined,
+    episodeRange: { min: row.episode_min, max: row.episode_max },
+    externalIds: row.external_ids,
+    coverUrl: row.cover_url,
   }
 }
 
