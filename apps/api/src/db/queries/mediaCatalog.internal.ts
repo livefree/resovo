@@ -13,6 +13,8 @@ export interface DbMediaCatalogRow {
   title_original: string | null
   /** ADR-175 D-175-1（CHG-VIR-11-C / migration 089）：title_original 语种 BCP47 subtag，NULL=未知 */
   original_language: string | null
+  /** ADR-176 D-176-2（CHG-VIR-12-B / migration 090）：正篇季号；NULL=非分季/单季/电影/特别篇 */
+  season_number: number | null
   title_normalized: string
   type: string
   genres: string[]
@@ -72,6 +74,8 @@ export interface MediaCatalogRow {
   titleOriginal: string | null
   /** ADR-175 D-175-1：title_original 语种（BCP47 subtag；NULL=未知） */
   originalLanguage: string | null
+  /** ADR-176 D-176-2：正篇季号（NULL=非分季/单季/电影/特别篇；SP/OVA/剧场版用独立 catalog + edition_of） */
+  seasonNumber: number | null
   titleNormalized: string
   type: string
   genres: string[]
@@ -162,6 +166,9 @@ export interface CatalogUpdateData {
   titleOriginal?: string | null
   /** ADR-175 D-175-6：original_language 纳入 safeUpdate 口径（CHG-VIR-11-C） */
   originalLanguage?: string | null
+  /** ADR-176 D-176-6：season_number 纳入 safeUpdate 口径（CHG-VIR-12-B；写入=富集/manual，
+   *  findOrCreate 不纳入匹配 D-176-7 故 CatalogInsertData 不扩） */
+  seasonNumber?: number | null
   titleNormalized?: string
   type?: string
   genres?: string[]
@@ -218,6 +225,7 @@ export function mapCatalogRow(row: DbMediaCatalogRow): MediaCatalogRow {
     titleEn: row.title_en,
     titleOriginal: row.title_original,
     originalLanguage: row.original_language,
+    seasonNumber: row.season_number,
     titleNormalized: row.title_normalized,
     type: row.type,
     genres: row.genres ?? [],
@@ -269,7 +277,7 @@ export function mapCatalogRow(row: DbMediaCatalogRow): MediaCatalogRow {
 
 export const CATALOG_SELECT = `
   SELECT
-    id, title, title_en, title_original, original_language, title_normalized,
+    id, title, title_en, title_original, original_language, season_number, title_normalized,
     type, genres, genres_raw, year, release_date, country, runtime_minutes,
     status, description, cover_url, rating, rating_votes,
     director, "cast", writers,
