@@ -13,7 +13,7 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { isPinyin } from '../../../../apps/api/src/services/PinyinDetector'
+import { isPinyin, isConcatenatedPinyin } from '../../../../apps/api/src/services/PinyinDetector'
 
 describe('PinyinDetector.isPinyin', () => {
   describe('典型拼音（plan §10.4.1 示例）', () => {
@@ -142,5 +142,63 @@ describe('PinyinDetector.isPinyin', () => {
       // 这是个文档化的 limit case：2 词姓名场景 helper 无法判断 / 人工校对兜底
       expect(isPinyin('Long Wang')).toBe(true)
     })
+  })
+})
+
+// ── isConcatenatedPinyin（CHG-VIR-11-C：无空格连写拼音 / catalog title_en 污染形态）──
+
+describe('isConcatenatedPinyin', () => {
+  it('真实污染样例 → true（wuyanshashou = wu-yan-sha-shou / 含 sh）', () => {
+    expect(isConcatenatedPinyin('wuyanshashou')).toBe(true)
+  })
+
+  it('长连写 → true（keaideniwugexiaohaidexiaochang）', () => {
+    expect(isConcatenatedPinyin('keaideniwugexiaohaidexiaochang')).toBe(true)
+  })
+
+  it('DP 回溯形态 → true（heitaiyangdierji：dierji 须回溯 di-er-ji，贪心 die+rji 会误判）', () => {
+    expect(isConcatenatedPinyin('heitaiyangdierji')).toBe(true)
+  })
+
+  it('混合大小写 slug → false（moxuMAO 元数据噪声不迁）', () => {
+    expect(isConcatenatedPinyin('moxuMAO')).toBe(false)
+  })
+
+  it('含数字 slug → false（maoxuewang2026）', () => {
+    expect(isConcatenatedPinyin('maoxuewang2026')).toBe(false)
+  })
+
+  it('长度 < 8 → false（banana 英文词防御）', () => {
+    expect(isConcatenatedPinyin('banana')).toBe(false)
+  })
+
+  it('音节数 < 4 → false（maoxuewang = mao-xue-wang 3 音节保守不迁）', () => {
+    expect(isConcatenatedPinyin('maoxuewang')).toBe(false)
+  })
+
+  it('无 distinctive feature → false（保守防英文）', () => {
+    // wo-bei-da-ma：可分解 4 音节但全基础音节无 distinctive → false
+    expect(isConcatenatedPinyin('wobeidama')).toBe(false)
+  })
+
+  it('含空格 → false（多词形态交给 isPinyin）', () => {
+    expect(isConcatenatedPinyin('wu yan sha shou')).toBe(false)
+  })
+
+  it('不可分解英文 → false（avengersendgame）', () => {
+    expect(isConcatenatedPinyin('avengersendgame')).toBe(false)
+  })
+
+  it('null / 空串 → false', () => {
+    expect(isConcatenatedPinyin(null)).toBe(false)
+    expect(isConcatenatedPinyin('')).toBe(false)
+  })
+})
+
+// ── DP 分解修复回归（CHG-VIR-11-C：isPinyin 词内贪心歧义形态）──────────
+
+describe('isPinyin — DP 回溯（贪心歧义词）', () => {
+  it('"Dierji Zhanshi" → true（dierji 词内须回溯 di-er-ji；修复前贪心 die+rji 误判 false）', () => {
+    expect(isPinyin('Dierji Zhanshi')).toBe(true)
   })
 })

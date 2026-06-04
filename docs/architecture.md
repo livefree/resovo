@@ -311,22 +311,24 @@ Migration 026 建表，Migration 042（META-06）新增 6 个扩展字段：
 - `metadata_source TEXT`：元数据最近写入来源（manual/tmdb/bangumi/douban/crawler）
 - `locked_fields TEXT[]`：已锁定字段列表（手动确认后不被自动覆盖）
 
+CHG-VIR-11-C 新增字段（Migration 089 / ADR-175 D-175-1）：
+- `original_language TEXT NULL`：`title_original` 的语种（BCP47 subtag：`ja`/`ko`/`zh-Hans`/`en`；NULL=未知）
+
 META-06 新增字段：
-- `aliases TEXT[]`：别名/又名列表
+- `aliases TEXT[]`：别名/又名列表（**ADR-175 D-175-5 起降级只读缓存**，结构化真源 = `media_catalog_aliases` 表）
 - `languages TEXT[]`：语言列表
 - `official_site TEXT`：官网 URL
 - `tags TEXT[]`：标签列表
 - `backdrop_url TEXT`：横幅/背景图 URL
 - `trailer_url TEXT`：预告片 URL
 
-**ADR-175 多语种标题模型升级（规划草案 / 未落 migration / Phase 4 CHG-VIR-11 落地）**
+**ADR-175 多语种标题模型（schema 已落地 Migration 089 / CHG-VIR-11-C 2026-06-03）**
 
-> ⚠️ **规划中，非现状基线**：当前生产无以下字段。真源详见 `docs/decisions.md` ADR-175；落地时迁出本标注。
-
-- **`media_catalog` 字段语义收紧**：新增 `original_language TEXT NULL`（原语种 BCP47，如 `ja`/`ko`/`zh-Hans`/`en`）标注 `title_original` 语种；`title_en` 收紧为**仅真英文**（拼音/罗马音迁出 `media_catalog_aliases` `kind='romanization'`，由 `PinyinDetector` + `title_en_is_pinyin` 驱动）；`title`/`title_normalized`/`languages[]` 语义不变。
-- **`media_catalog_aliases` 结构化升级**（现状仅 `alias`/`lang`/`source` + `UNIQUE(catalog_id,alias)`，migration 026）：新增 `region`（ISO 3166-1）/ `script`（ISO 15924 `Hans`/`Hant`/`Jpan`/`Latn`/`Kore`，**简繁区分不归一**）/ `kind`（`official`/`localized`/`romanization`/`abbreviation`/`aka`/`original`）/ `confidence NUMERIC(4,2)` / `is_primary_for_locale BOOLEAN DEFAULT false`；新增 partial unique `(catalog_id,lang,COALESCE(region,''),COALESCE(script,'')) WHERE is_primary_for_locale`（每 locale 至多一首选）。表为别名结构化**单一真源**，`aliases[]` 数组列降级只读缓存。
-- **display_title locale fallback（确定性）**：requested locale primary alias → same language other region alias → `title` → `title_original` → `title_en` → raw observed title；同 locale 多候选按 `is_primary_for_locale DESC, confidence DESC NULLS LAST, source 优先级（复用 CATALOG_SOURCE_PRIORITY）, created_at ASC`。简繁**不字形归一**（不 OpenCC），仅选既有别名。
-- **匹配分层**（对接 ADR-105a alias blocking key）：同 `(lang,script)` 归一别名等值 = 强；跨语种 alias 桥接 = 中正；`romanization` 仅辅助、不单独构成强证据。
+- **`media_catalog.original_language TEXT NULL`**（D-175-1 / **Migration 089 已落地**）：原语种 BCP47 subtag（`ja`/`ko`/`zh-Hans`/`en`；NULL=未知）标注 `title_original` 语种；已纳入 `CatalogUpdateData`（safeUpdate 三重保护自动覆盖）。首批回填（`scripts/catalog-multilingual-cleanup.ts --step=original-language`，确定性保守推断：假名→ja / 谚文→ko / 纯 ASCII 非拼音→en / 汉字按 country 映射）：ja=85 / en=14 / zh-Hans=5，置信不足留 NULL。
+- **`title_en` 收紧为仅真英文**（D-175-1/R5）：拼音/罗马音迁出 `media_catalog_aliases`（`kind='romanization'` / `lang='zh'` / `script='Latn'`）。**迁出已执行**（2026-06-03 / 2551 条；catalog 层独立双判定 `isPinyin` + `isConcatenatedPinyin`〔连写 slug 形态，CHG-VIR-11-C 新增〕，**不复用 video 层 `title_en_is_pinyin`**〔红线-2 层级独立〕）；残留 712 条保守未迁（含数字 slug 364 + 阈值未达 348，宁漏勿错，follow-up）。alias 行保存原值 = 迁出可逆。
+- **`media_catalog_aliases` 结构化升级**（D-175-2 / **Migration 089 已落地**）：新增 `region`（ISO 3166-1）/ `script`（ISO 15924 `Hans`/`Hant`/`Jpan`/`Latn`/`Kore`，**简繁区分不归一**）/ `kind`（`official`/`localized`/`romanization`/`abbreviation`/`aka`/`original`，代码常量真源 = `db/queries/catalogAliases.ts` `ALIAS_KINDS`）/ `confidence NUMERIC(4,2)` / `is_primary_for_locale BOOLEAN NOT NULL DEFAULT false`；partial unique `uq_catalog_aliases_primary_locale`（每 locale 至多一首选）。表为别名结构化**单一真源**（R3），写入经 `upsertStructuredCatalogAlias`（ON CONFLICT 升级结构化列 / 不覆盖 manual / 不降 confidence）；`aliases[]` 数组列降级只读缓存（D-175-5，存量→表迁移脚本已就绪，当前库数组列空 = no-op）。
+- **display_title locale fallback（确定性 / D-175-3，消费方接入留 follow-up）**：requested locale primary alias → same language other region alias → `title` → `title_original` → `title_en` → raw observed title；同 locale 多候选按 `is_primary_for_locale DESC, confidence DESC NULLS LAST, source 优先级（复用 CATALOG_SOURCE_PRIORITY）, created_at ASC`。简繁**不字形归一**（不 OpenCC），仅选既有别名。`is_primary_for_locale` 选举遵 Y-175-2：先回填 lang/script/region 维度再选举（当前未选举）。
+- **匹配分层**（对接 ADR-105a alias blocking key，接入留 follow-up）：同 `(lang,script)` 归一别名等值 = 强；跨语种 alias 桥接 = 中正；`romanization` 仅辅助、不单独构成强证据。
 
 **ADR-176 catalog 按季粒度升级（规划草案 / 未落 migration / Phase 5 CHG-VIR-12 落地）**
 

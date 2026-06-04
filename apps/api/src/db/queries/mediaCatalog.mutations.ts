@@ -38,7 +38,7 @@ export async function insertCatalog(
      )
      ON CONFLICT DO NOTHING
      RETURNING
-       id, title, title_en, title_original, title_normalized,
+       id, title, title_en, title_original, original_language, title_normalized,
        type, genres, genres_raw, year, release_date, country, runtime_minutes,
        status, description, cover_url, rating, rating_votes,
        director, "cast", writers,
@@ -106,6 +106,7 @@ export async function updateCatalogFields(
     title: 'title',
     titleEn: 'title_en',
     titleOriginal: 'title_original',
+    originalLanguage: 'original_language',
     titleNormalized: 'title_normalized',
     type: 'type',
     genres: 'genres',
@@ -175,7 +176,7 @@ export async function updateCatalogFields(
      SET ${setClauses.join(', ')}, updated_at = NOW()
      WHERE id = $${idx}
      RETURNING
-       id, title, title_en, title_original, title_normalized,
+       id, title, title_en, title_original, original_language, title_normalized,
        type, genres, genres_raw, year, release_date, country, runtime_minutes,
        status, description, cover_url, rating, rating_votes,
        director, "cast", writers,

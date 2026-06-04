@@ -11,6 +11,8 @@ export interface DbMediaCatalogRow {
   title: string
   title_en: string | null
   title_original: string | null
+  /** ADR-175 D-175-1（CHG-VIR-11-C / migration 089）：title_original 语种 BCP47 subtag，NULL=未知 */
+  original_language: string | null
   title_normalized: string
   type: string
   genres: string[]
@@ -68,6 +70,8 @@ export interface MediaCatalogRow {
   title: string
   titleEn: string | null
   titleOriginal: string | null
+  /** ADR-175 D-175-1：title_original 语种（BCP47 subtag；NULL=未知） */
+  originalLanguage: string | null
   titleNormalized: string
   type: string
   genres: string[]
@@ -156,6 +160,8 @@ export interface CatalogUpdateData {
   title?: string
   titleEn?: string | null
   titleOriginal?: string | null
+  /** ADR-175 D-175-6：original_language 纳入 safeUpdate 口径（CHG-VIR-11-C） */
+  originalLanguage?: string | null
   titleNormalized?: string
   type?: string
   genres?: string[]
@@ -211,6 +217,7 @@ export function mapCatalogRow(row: DbMediaCatalogRow): MediaCatalogRow {
     title: row.title,
     titleEn: row.title_en,
     titleOriginal: row.title_original,
+    originalLanguage: row.original_language,
     titleNormalized: row.title_normalized,
     type: row.type,
     genres: row.genres ?? [],
@@ -262,7 +269,7 @@ export function mapCatalogRow(row: DbMediaCatalogRow): MediaCatalogRow {
 
 export const CATALOG_SELECT = `
   SELECT
-    id, title, title_en, title_original, title_normalized,
+    id, title, title_en, title_original, original_language, title_normalized,
     type, genres, genres_raw, year, release_date, country, runtime_minutes,
     status, description, cover_url, rating, rating_votes,
     director, "cast", writers,

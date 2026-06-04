@@ -104,30 +104,40 @@ const MIN_WORD_LEN = 2
 const DISTINCTIVE_PINYIN_PATTERN = /(zh|ch|sh|q|x|j)|(ang|eng|ong|iao|iong|iang|uang|üe|ue|iu|ui|er)/
 
 /**
+ * DP 分解为拼音音节序列，返回**最少**音节数；不可完全分解返回 null。
+ * （CHG-VIR-11-C 抽出供 canDecomposeAsPinyin / isConcatenatedPinyin 共用。
+ *  原实现为贪心 longest-match，存在回溯缺陷：'dierji' 被贪心吃成 'die'+残留 'rji'
+ *  误判不可分解〔正确分解 di-er-ji〕——DP 修复为完整可达性判定，方向 = 减少
+ *  false-negative；isPinyin 在「词内贪心歧义」的罕见形态上命中率提升，护栏不变。）
+ */
+function decomposeSyllableCount(word: string): number | null {
+  const lower = word.toLowerCase()
+  if (lower.length < MIN_WORD_LEN) return null
+  // 仅含 a-z（不含数字 / 标点 / 重音）
+  if (!/^[a-z]+$/.test(lower)) return null
+
+  const n = lower.length
+  // dp[i] = 前缀 [0,i) 的最少音节数；Infinity = 不可达
+  const dp = new Array<number>(n + 1).fill(Number.POSITIVE_INFINITY)
+  dp[0] = 0
+  for (let i = 0; i < n; i++) {
+    if (dp[i]! === Number.POSITIVE_INFINITY) continue
+    // 标准拼音音节最长 6 字符（'shuang' / 'zhuang'）
+    for (let len = 1; len <= Math.min(6, n - i); len++) {
+      if (PINYIN_SYLLABLES.has(lower.slice(i, i + len))) {
+        dp[i + len] = Math.min(dp[i + len]!, dp[i]! + 1)
+      }
+    }
+  }
+  return dp[n] === Number.POSITIVE_INFINITY ? null : dp[n]!
+}
+
+/**
  * 尝试把单词按贪心 longest-match 分解为拼音音节序列。
  * 返回 true 表示能完全分解；false 表示有残留字符不在音节集合中。
  */
 function canDecomposeAsPinyin(word: string): boolean {
-  const lower = word.toLowerCase()
-  if (lower.length < MIN_WORD_LEN) return false
-  // 仅含 a-z（不含数字 / 标点 / 重音）
-  if (!/^[a-z]+$/.test(lower)) return false
-
-  let i = 0
-  while (i < lower.length) {
-    // 最长合法音节：标准拼音音节最长为 6 字符（如 'shuang' / 'zhuang'）
-    let matched = false
-    for (let len = Math.min(6, lower.length - i); len >= 1; len--) {
-      const candidate = lower.slice(i, i + len)
-      if (PINYIN_SYLLABLES.has(candidate)) {
-        i += len
-        matched = true
-        break
-      }
-    }
-    if (!matched) return false
-  }
-  return true
+  return decomposeSyllableCount(word) !== null
 }
 
 /** 至少 1 个词含拼音 distinctive feature → 防英文 false-positive */
@@ -184,4 +194,46 @@ export function isPinyin(input: string | null | undefined): boolean {
   if (!hasDistinctivePinyinFeature(words)) return false
 
   return true
+}
+
+/** isConcatenatedPinyin 保守阈值：最少音节数 / 最少字符数（CHG-VIR-11-C） */
+const MIN_CONCAT_SYLLABLES = 4
+const MIN_CONCAT_LENGTH = 8
+
+/**
+ * 判断输入是否为**无空格连写拼音**（catalog 层 title_en 实际污染形态，如
+ * "wuyanshashou" / "keaideniwugexiaohaidexiaochang"——爬虫 slug 形态）。
+ *
+ * 与 {@link isPinyin}（空格分隔 ≥2 词形态）互补，**不改其既有语义**；二者各自保守，
+ * 消费方按需组合（CHG-VIR-11-C 拼音迁出脚本：`isPinyin(x) || isConcatenatedPinyin(x)`）。
+ *
+ * 判定规则（保守）：
+ *   - trim 后单 token（含空白 → false，多词交给 isPinyin）
+ *   - 全小写 ASCII 字母（含大写/数字/非 ASCII → false，混合大小写 slug 如 "moxuMAO"
+ *     与含年份 slug 如 "maoxuewang2026" 均为元数据噪声而非罗马音，不迁）
+ *   - 长度 ≥ 8 且能完全分解为 ≥ 4 个合法拼音音节（短串歧义大："wang"/"shang" 是英文词）
+ *   - 含 distinctive pinyin feature（同 isPinyin 防英文 false-positive）
+ *
+ * 已知 false-positive：个别英文长词可完全分解（如 "manganese" = man-ga-ne-se）。
+ * 真英文标题极少为单 token 无空格长词，且迁出可恢复（alias 保留 + 运营可改）；
+ * 消费脚本默认 dry-run 列出全部命中供人工过目后再 --apply。
+ *
+ * @example
+ *   isConcatenatedPinyin('wuyanshashou')   // true（wu-yan-sha-shou / 含 sh）
+ *   isConcatenatedPinyin('moxuMAO')        // false（混合大小写）
+ *   isConcatenatedPinyin('maoxuewang2026') // false（含数字）
+ *   isConcatenatedPinyin('banana')         // false（长度 < 8）
+ *   isConcatenatedPinyin('The Avengers')   // false（含空格 / 交给 isPinyin）
+ */
+export function isConcatenatedPinyin(input: string | null | undefined): boolean {
+  if (!input) return false
+  const trimmed = input.trim()
+  if (trimmed.length < MIN_CONCAT_LENGTH) return false
+  // 单 token 全小写 ASCII 字母（大写/数字/空白/标点/非 ASCII → false）
+  if (!/^[a-z]+$/.test(trimmed)) return false
+
+  const syllables = decomposeSyllableCount(trimmed)
+  if (syllables === null || syllables < MIN_CONCAT_SYLLABLES) return false
+
+  return DISTINCTIVE_PINYIN_PATTERN.test(trimmed)
 }
