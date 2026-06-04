@@ -14209,3 +14209,19 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **测试**：门禁全过 typecheck / lint / verify:adr-contracts EXIT=0 + 全量 **480 files 6320 passed / 0 failed**（净 +12）。
 - **共享层沉淀评估**：`upsertStructuredCatalogAlias` 沉淀 query 层（后续富集 Service 写结构化 alias 的唯一入口）；`isConcatenatedPinyin` 入共享 PinyinDetector（与 isPinyin 互补，未来 video 层连写形态可复用）。
 - **注意事项**：① **关键实施发现**：catalog `title_en` 实际污染形态 = 无空格连写拼音 slug，`isPinyin`（空格 ≥2 词设计域）系统性 0 命中，且**全列 3263 条无一含空格真英文标题**——`isConcatenatedPinyin` 为 R5 红线-2 的实施期细化（判定对象仍 catalog 层独立，不复用 video 层信号），非语义偏离。② DP 修复使 isPinyin 在「词内贪心歧义」罕见形态命中率提升（方向 = 减少 false-negative；27 既有 fixture 零回归证明影响受控）。③ **保守残留（follow-up）**：712 条 title_en 未迁（含数字 slug 364〔拼音+季号/年份混合形态〕+ 阈值未达 348〔<4 音节或无 distinctive，如 'maoxuewang'/'lingtianwendao'〕），宁漏勿错。④ **primary 选举未执行**（Y-175-2：localized 行 lang/script 维度未全量就绪——当前表中仅 romanization 行带维度；选举留 follow-up）。⑤ 富集 Service（豆瓣/Bangumi/TMDB）写结构化 alias 接线 = ADR-175 follow-up 2（另卡）。⑥ **D-N 闭环：D-175-1 / D-175-2 / D-175-5 / D-175-6 随本卡实施闭环**；D-175-3（display_title fallback 消费方接入）/ D-175-4（alias 匹配分层接 ADR-105a blocking）留 follow-up 卡。
+
+## [CHG-VIR-12-A] Phase 5a：ADR-176/177 实施细则 AMENDMENT — 开放决策点闭合 + CHG-VIR-12 拆卡定档（D-176-7~10 + D-177-11~14）
+- **完成时间**：2026-06-03
+- **记录时间**：2026-06-03 21:40
+- **执行模型**：claude-opus-4-8（建议模型 opus，一致）
+- **子代理**：arch-reviewer (claude-opus-4-8 / agentId a6fba96b2a1ccb356) — PASS-with-conditions → 2 必修 + 4 建议全吸收
+- **修改文件**：
+  - `docs/decisions.md` — ADR-176 章节追加 AMENDMENT（2026-06-03 / CHG-VIR-12-A）小节：D-176-7（findOrCreate **不纳入** season_number 匹配——爆量新建分季 catalog 论证〔存量全 NULL 槽位 0 与新输入 season=N 永不命中〕+ 唯一键改造仅解约束阻塞不改归并语义；分季建立路径 = 人工 + Bangumi 按季 subject）/ D-176-8（series_group **不建表**，catalog_relations 连通分量动态派生 + Y-A1 派生锚点契约〔DAG 入度 0 正篇节点，多锚歧义报告不猜测〕）/ D-176-9（season_number 存量**不批量回填** + 系列归位约束运行期语义 + **R-A1 必修：半回填态扫描脚本**〔同三元组簇 season 混存检测，12-C 验收项〕）/ D-176-10（catalog-catalog 合并 = **运维脚本先行**，原语落 Service 层可被未来端点复用，**不起 admin route**〔MUST-8 不触发〕，端点 + UI 待候选量实证后另起 ADR）+ CHG-VIR-12 拆卡结构定档（Y-A2：12-B 标注 4 schema 对象 + 2 强制同步副产物）。
+  - `docs/decisions.md` — ADR-177 章节追加 AMENDMENT（2026-06-03 / CHG-VIR-12-A）小节：D-177-11（external_kind 映射细则——bangumi/douban→`subject`〔豆瓣产品形态按季独立分条目 = 精确级，规避 YY-D 不可靠推断〕、imdb/tmdb 方向定档〔存量 0，写入时由富集数据形态判定〕、映射函数 12-D 落常量表）/ D-177-12（迁移细则实化——bangumi 169→exact subject primary、douban 75→**维持 YY-D 保守 candidate**〔实测全局零重复但写入源 auto 富集，candidate 误绑零成本 vs exact 误绑占全局槽位的风险不对称〕、**迁移不动四列 cache 现值**〔过渡期 findOrCreate 逐值零变更〕、**R-A2 必修：一致性校验三口径**〔bangumi 硬校验 / douban 待升级清单 / 孤儿 cache 检出硬校验〕）/ D-177-13（cache UNIQUE 保留 + D-174-3 双写起点 12-D + 单写收敛不在 12 系列〔上卷 job 全量输入天然覆盖回溯〕+ Y-A4 复评显式 follow-up）/ D-177-14（findOrCreate 改读 = **旁路对照先行**〔复用 Phase 3 ingest shadow 范式 fire-and-forget〕，12 系列内不切主读；自动绑定保持 OFF + Y-A3 冲突 candidate 可观测出口〔喂 12-F 候选输入〕）+ 评审记录小节。
+  - `docs/task-queue.md` — CHG-VIR-12 → 拆卡执行中 + 12-A 完成备注 + 12-B/C/D/E/F 五子卡按定档登记（依赖链 B→C→D→E，F 依赖 B+D）。
+  - `docs/tasks.md` — 12-A 卡片收口入完成堆叠。
+- **新增依赖**：无
+- **数据库变更**：无（纯 docs 定档；零代码零 migration）
+- **测试**：门禁 verify:adr-contracts EXIT=0（D-176-7~10 + D-177-11~14 全部登记 adr-d-status.json / 205 admin 路由对齐）+ typecheck EXIT=0。
+- **共享层沉淀评估**：不适用（纯 docs）；定档产物本身即共享契约（12-B~F 五卡的实施真源）。
+- **注意事项**：① **dev 事实基线实测**（resovo_dev 唯一库）：media_catalog 3585 行，四列非 NULL imdb=0/tmdb=0/douban=75〔全局零重复〕/bangumi=169（迁移总面仅 244 ref）；video_external_refs 386 行，`is_primary AND manual_confirmed` 仅 **2 行** → R3 保守底线下上卷 exact 初始产出极少、主要产 candidate（D-177-14 对照先行的直接依据）；title_observations season facet 覆盖 303/3617 video（D-176-7 不纳入匹配 + D-176-9 不批量回填的直接依据）。② arch-reviewer 逐 Q 裁定 Q1-Q10 全 PASS（Q3/Q6 携必修条件 R-A1/R-A2，已吸收进 D-176-9/D-177-12 正文）。③ **D-N 闭环口径**：D-176-7~10 / D-177-11~14 为定档条款，随 12-B~F 实施卡逐条闭环（同 ADR-176/177 原 D 条 advisory 口径）。④ 不在 12 系列的显式 follow-up：findOrCreate 切主读、合并端点 + UI ADR、双写→单写收敛 + cache UNIQUE 复评（Y-A4）、自动绑定开启 ADR。

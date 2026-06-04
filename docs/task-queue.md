@@ -2987,12 +2987,50 @@ CODENAME-MATRIX-E2E (依赖 Wave 3 验收期补丁 CODENAME-MATRIX ✅)
 
 **Phase 5 — catalog 身份层（独立阶段，video-pair 链路稳定后）**
 
-14. **CHG-VIR-12** — Phase 5：catalog_external_refs 落地 + 四列降级 + catalog 按季 + series_group + catalog-catalog 合并（状态：⬜ 未开始）
+14. **CHG-VIR-12** — Phase 5：catalog_external_refs 落地 + 四列降级 + catalog 按季 + series_group + catalog-catalog 合并（状态：🔄 拆卡执行中 2026-06-03 / 原卡范围 7 项 ≥ 5 按 M-SN-5 + CHG-VIR-9/11 先例拆 12-A~12-E）
     - 创建时间：2026-06-02 19:41
     - 建议模型：**opus**（catalog 身份层重构，最高风险）
     - 范围：落地 catalog_external_refs + findOrCreate 改读映射表 + 四列降级 cache + catalog 唯一键纳入 season_number + series_group/catalog_relations + catalog-catalog 合并（restore snapshot + 子表恢复，不依赖 deleted_at）+ 评估开启真实自动 catalog 绑定。
     - 验收要点：外部 ID 迁移前后 exact cache 与映射表一致；parent 一对多不污染 cache；catalog 合并可回滚。
-    - 依赖：CHG-VIR-3 + CHG-VIR-4 + Phase 1-4 稳定。
+    - 依赖：CHG-VIR-3 ✅ + CHG-VIR-4 ✅ + Phase 1-4 稳定 ✅（2026-06-03 Phase 4 完结）。
+
+14a. **CHG-VIR-12-A** — Phase 5a：ADR-176/177 Phase 5 实施细则 AMENDMENT（开放决策点闭合 + 拆卡结构定档）（状态：✅ 已完成 2026-06-03 / claude-opus-4-8 / 子代理 arch-reviewer (claude-opus-4-8)）
+    - 创建时间：2026-06-03 21:00
+    - 建议模型：**opus**（ADR AMENDMENT 起草，强制 arch-reviewer PASS）
+    - 范围（纯 docs 定档）：闭合 ADR-176/177 留给 Phase 5 的全部开放决策点——Y-176-2/Y-177-2（findOrCreate 纳入 season）/ Y-176-3（series_group 建表与否）/ Y-176-4+Y-B（season_number 回填策略全系列一致）/ Y-177-1（candidate catalog_id 归属实装确认）/ Y-177-3（双写收敛 + cache UNIQUE 去留 + 存量回溯）/ Y-177-5（external_kind provider 映射细则）/ catalog-catalog 合并实施形态（端点 vs 脚本，若端点须契约登记 MUST-8）/ Y-177-4 自动绑定评估口径 / 12-B~F 拆卡边界裁定。
+    - 验收要点：AMENDMENT 落 decisions.md + arch-reviewer PASS + verify:adr-contracts EXIT=0 + commit trailer Subagents。
+    - 依赖：ADR-176 ✅ + ADR-177 ✅。
+    - 完成备注：**ADR-176 AMENDMENT（D-176-7~10）+ ADR-177 AMENDMENT（D-177-11~14）双双 Accepted（arch-reviewer claude-opus-4-8 / agentId a6fba96b2a1ccb356 / PASS-with-conditions → 2 必修 + 4 建议全吸收）**。8 新 D 条：D-176-7（findOrCreate **不纳入** season 匹配——爆量新建论证 + 唯一键改造仅解约束阻塞）/ D-176-8（series_group **不建表**，连通分量动态派生 + Y-A1 锚点契约〔DAG 入度 0 正篇，多锚报告不猜测〕）/ D-176-9（存量**不批量回填** + 系列归位约束 + **R-A1 半回填态扫描脚本**〔12-C 验收项〕）/ D-176-10（合并 = **运维脚本先行不起 admin 端点**，原语落 Service 层可复用，MUST-8 不触发）/ D-177-11（external_kind 映射：bangumi/douban→`subject`〔豆瓣按季分条目精确级〕、imdb/tmdb 方向定档存量 0 留实装卡）/ D-177-12（迁移细则：bangumi 169→exact、douban 75→**维持 YY-D 保守 candidate**〔写入源 auto 富集风险不对称〕、**不动四列 cache 现值**〔findOrCreate 逐值零变更〕、**R-A2 一致性校验三口径**〔硬校验/待升级清单/孤儿 cache 检出〕）/ D-177-13（cache UNIQUE 保留 + 双写起点 12-D + 收敛不在 12 系列〔上卷 job 全量输入天然覆盖回溯〕+ Y-A4 复评显式 follow-up）/ D-177-14（findOrCreate **旁路对照先行不切主读** + 自动绑定保持 OFF + Y-A3 冲突 candidate 可观测出口）。拆卡定档 12-B~F 五张（每卡 ≤ 4 项 / Y-A2 标注 4 schema 对象 + 2 强制副产物）。dev 事实基线实测：四列 imdb=0/tmdb=0/douban=75〔全局零重复〕/bangumi=169、manual_confirmed primary 仅 2 行、season facet 覆盖 303/3617。门禁：verify:adr-contracts EXIT=0（D-176-7~10 + D-177-11~14 全登记 adr-d-status.json）+ typecheck EXIT=0（纯 docs）。**解阻 CHG-VIR-12-B**。执行模型: claude-opus-4-8；子代理: arch-reviewer (claude-opus-4-8 / agentId a6fba96b2a1ccb356)
+
+14b. **CHG-VIR-12-B** — Phase 5b：schema migration（season_number 唯一键改造 + catalog_relations + catalog_external_refs）（状态：⬜ 未开始）
+    - 创建时间：2026-06-03 21:00
+    - 建议模型：**opus**（唯一键改造 + 双表 DDL，存量逐值不变验证）
+    - 范围（12-A 定档 / Y-A2：4 schema 对象 + 2 强制同步副产物）：① migration `media_catalog.season_number` 列 + CHECK>0 + `uq_catalog_title_year_type` → `uq_catalog_title_year_type_season`（COALESCE 0 哨兵 / 存量逐值不变验证 R2）；② `catalog_relations` 表（5 relation + R7 反对称/DAG/有序对不变量守卫）；③ `catalog_external_refs` 表（D-177-1 schema + D-177-3 2 partial unique + 2 索引）；④ 真实 DB 验证全部约束；副产物 = `CatalogUpdateData` 扩 season_number（D-176-6）+ architecture.md §5.1a/§5.6 同步（R5）。R7/R10 跨行守卫工作量大时拆 12-B-1（建表）/ 12-B-2（守卫）。
+    - 依赖：**CHG-VIR-12-A** ✅。
+
+14c. **CHG-VIR-12-C** — Phase 5c：既有数据迁移（四列回填映射表 + 一致性校验三口径 + 半回填态扫描）（状态：⬜ 未开始）
+    - 创建时间：2026-06-03 21:00
+    - 建议模型：**opus**（D-177-12 迁移分级 + R-A1/R-A2 校验脚本）
+    - 范围（12-A 定档）：① 四列现值回填 `catalog_external_refs`（bangumi 169→exact subject primary / douban 75→candidate〔YY-D 保守〕/ imdb·tmdb no-op；**不动四列 cache 现值**）；② 一致性校验脚本三口径（D-177-12 R-A2：bangumi 硬校验 / douban 待升级清单 / 孤儿 cache 检出）；③ 半回填态扫描脚本（D-176-9 R-A1：同三元组簇 season_number 混存检测）；④ 幂等 + dry-run 默认。
+    - 依赖：**CHG-VIR-12-B**。
+
+14d. **CHG-VIR-12-D** — Phase 5d：catalog_external_refs 写侧原语（exact+cache 同事务 + R10 守卫 + D-174-3 双写）（状态：⬜ 未开始）
+    - 创建时间：2026-06-03 21:00
+    - 建议模型：**opus**（写路径原语 + 不变量守卫）
+    - 范围（12-A 定档）：① ref 写原语（exact 写入与四列 cache 回填**同事务** YY-C / 删降级清 cache）；② R10 应用层守卫（external_kind 一致 + exact↔parent 互斥）+ D-177-11 映射常量表（ALIAS_KINDS 范式单一真源）；③ D-174-3 catalog 层冲突双写 `catalog_external_refs candidate`（catalog_id 归属 D-177-7/Y-177-1 两分支，video 级路径零改 R7）。
+    - 依赖：**CHG-VIR-12-C**。
+
+14e. **CHG-VIR-12-E** — Phase 5e：上卷 job + findOrCreate 旁路对照 + 冲突 candidate 可观测出口（状态：⬜ 未开始）
+    - 创建时间：2026-06-03 21:00
+    - 建议模型：**opus**（D-177-4 确定性上卷 + shadow 对照）
+    - 范围（12-A 定档）：① 上卷 job（D-177-4 四行规则表 + R3 保守底线 / 手动触发对齐 CHG-VIR-8 先例 / 消费 12-D 写原语）；② findOrCreate 旁路对照（D-177-14：保持读 cache 逐值不变 + 映射表 shadow 对照 pino 日志 + 报表，fire-and-forget）；③ 冲突 candidate 可观测出口（Y-A3：按 provider/external_id 聚合冲突簇报表，喂 12-F）。**不切主读**（独立小卡）。
+    - 依赖：**CHG-VIR-12-D**。
+
+14f. **CHG-VIR-12-F** — Phase 5f：catalog-catalog 合并脚本 + _bak_* 快照 + 重指向 + 回滚（状态：⬜ 未开始）
+    - 创建时间：2026-06-03 21:00
+    - 建议模型：**opus**（删行不可逆操作 + RR-A 预检范式）
+    - 范围（12-A 定档 D-176-10）：① 合并原语落 Service 层（D-176-4 `_bak_*` 全字段快照〔主表 + CASCADE 子表 + 孙表 + catalog_relations + catalog_external_refs〕+ 关系边/ref 端点重指向 survivor〔RR-A exact 索引①预检主导〕+ videos.catalog_id 指向 + cache 重算 D-177-9）；② 运维脚本编排（默认 dry-run + `--apply`）；③ 回滚脚本（只插不删 R11 继承 + old/new 双列复位）。**不起 admin 端点**（MUST-8 不触发，端点 + UI 另起 ADR）。
+    - 依赖：**CHG-VIR-12-B** + **CHG-VIR-12-D**（写原语/预检复用）。
 
 ---
 
