@@ -14244,3 +14244,17 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **测试**：门禁全过 typecheck / lint EXIT=0 + 全量 480 files **6319 passed / 1 failed**——唯一失败 `data-table-auto-filter.test.tsx #6c`（jsdom timing flaky，隔离重跑 24/24 全过；admin-ui DataTable 域与本卡 schema/queries 改动完全无关）+ verify:adr-contracts EXIT=0（sql-schema 对齐 **58→60 表**〔两新表识别〕/ 205 admin 路由）。
 - **共享层沉淀评估**：不适用（schema + 类型接线）；migration 约束注释与索引 4 步核验为后续 12-C~F 消费真源。
 - **注意事项**：① **未拆 12-B-1/B-2**（Y-A2 开口）：R7 反对称/DAG 与 R10 互斥均为跨行不变量、属写路径职责（12-D 写原语 / 12-F 关系写入），12-B 仅落 DB 可表达约束——swc 有序对 CHECK 是唯一可下沉 DB 的部分（已落），无守卫工作量堆积，不触发拆卡。② 两表当前**零数据零写入方**：091 表空（迁移 = 12-C）、catalog_relations 空（写入 = 12-F/上卷 job）；本卡纯 schema，生产行为零变更。③ year NULL 行在唯一键中 NULLS DISTINCT（PG 默认）——与旧索引行为一致，非本卡引入（V2/V4 首轮测试用例缺 year 暴露该既有语义，补 year 重测通过）。④ **D-N 闭环：D-176-2（列+唯一键）/ D-176-3（关系表 schema 部分）/ D-177-1 / D-177-3 随本卡实施闭环**；D-176-6 类型扩展部分落地（写入消费方接线留富集/manual 路径卡）。
+
+## [CHG-VIR-12-C] Phase 5c：既有数据迁移 — 四列回填 catalog_external_refs + 一致性三口径 + 半回填态扫描（D-177-10/12 + D-176-9 守卫落地，回填执行完毕）
+- **完成时间**：2026-06-03
+- **记录时间**：2026-06-03 23:20
+- **执行模型**：claude-opus-4-8（建议模型 opus，一致）
+- **子代理**：无（规格真源 = ADR-177 AMENDMENT D-177-12 + ADR-176 AMENDMENT D-176-9 R-A1/R-A2，照档实施）
+- **修改文件**：
+  - `scripts/catalog-external-refs-backfill.ts` — **新建**：四列现值回填映射表。`MIGRATE_SPECS` 分级真源（D-177-12：bangumi→`exact subject is_primary` / douban→`candidate subject`〔YY-D 保守维持〕）+ **imdb/tmdb 仅报告不迁移**（external_kind 事后推断不可靠，非 0 显式告警交富集实装卡写入时判定，不猜测）+ `source` 按 locked_fields CASE 取 manual/auto（D-177-10）+ `rollup_rule='cache-column-backfill-12c'` 溯源（YY-B）+ 幂等 `WHERE NOT EXISTS`（candidate 不进 partial unique 不能依赖 ON CONFLICT，统一口径）+ apply 单事务整批回滚 + 默认 dry-run。**纯 INSERT 零触碰四列 cache**（D-177-12「过渡期 findOrCreate 读 cache 逐值零变更」）。
+  - `scripts/report-catalog-identity-consistency.ts` — **新建**：只读一致性报表。Section 1 = R-A2 三口径全 4 provider 通用（HARD-1a「exact primary ref 但 cache NULL/不一致」/ HARD-1b「cache 与 exact ref 值漂移」/ REPORT-2「cache 仅 candidate 待升级清单」/ HARD-3「孤儿 cache：映射表完全无 ref」）；Section 2 = R-A1 半回填态扫描（簇键 `(title_normalized, type)` **不含 year**〔同系列各季 year 常不同〕+ year/S 明细 string_agg 供人工判读 + 翻拍同名 false positive 显式声明）。HARD>0 → EXIT 1（可接 CI / 12-F 合并前置检查）。
+- **新增依赖**：无
+- **数据库变更**：零 schema 变更。**回填执行完毕（dev 唯一库）**：244 行入 `catalog_external_refs`（bangumi 169 exact + douban 75 candidate）；cache 列计数零变更（bangumi 169 / douban 75 逐值不动）；幂等重跑全 0 命中。
+- **测试**：门禁全过 lint EXIT=0 + typecheck EXIT=0 + 全量 480 files **6320 passed / 0 failed**（12-B 轮 data-table-auto-filter flaky 本轮亦过 = flaky 终确认）。**真实 DB 验证**：① dry-run 计数与 12-A 事实基线逐值一致（169/75/0/0）；② 报表迁移后全绿（HARD=0 / REPORT-2 douban=75 预期 / 半回填簇=0）；③ **负向注入三类全检出**——孤儿 cache（HARD-3=1）+ exact 漂移（HARD-1a/1b 双向各 1）+ 半回填簇（=1 含 2025/S- 2026/S2 明细）→ EXIT 1 分支触发 → 清理 DELETE 4 CASCADE 零残留（refs 回 244）→ 报表回绿。
+- **共享层沉淀评估**：报表三口径 SQL 与回填 SPECS 为 12-D（写原语 cache 同步）/ 12-E（上卷 job）/ 12-F（合并 cache 重算）的口径真源；上卷 job 落地后报表可扩 rollup 切片（接口预留 = provider 通用循环）。
+- **注意事项**：① **实施期细化（合理偏离声明）**：D-177-12 对 imdb/tmdb 说「no-op（脚本支持但空跑）」——实现为「仅报告不迁移」：若未来 cache 非 0，脚本显式告警而非按猜测 kind 迁移（YY-D 保守精神的强化，非语义偏离）。② douban 75 待升级 = REPORT-2 预期形态（升 exact 路径 = 12-E 上卷 manual_confirmed 一致 / 人工确认），报表区分确保不误报。③ 半回填态扫描当前 0 = 存量全 NULL 的预期态；该脚本为 D-176-9 系列归位约束的长期结构化守卫（建立首个分季 catalog 后须重跑）。④ **D-N 闭环：D-177-10（迁移）/ D-177-12（细则三口径 R-A2）/ D-176-9（R-A1 扫描脚本交付）随本卡实施闭环**；REPORT-2 清单消解与上卷升级 = 12-E。
