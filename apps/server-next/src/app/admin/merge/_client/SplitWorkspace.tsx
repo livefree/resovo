@@ -1,22 +1,34 @@
 'use client'
 
 /**
- * MergeSplitSection.tsx — 拆分工作台子组件（从 MergeClient 提取，CHG-SN-7-MISC-MERGE-2）
+ * SplitWorkspace.tsx — 拆分工作区（CHG-VIR-13-B2B；原 MergeSplitSection.tsx 重命名，
+ * 13-WS 预登记偏离兑现）
+ *
+ * 本卡改造（设计 §10.2 增强 #2 + §11.4）：
+ *   - 拆分对象 = VideoPicker（替代手输 uuid + 加载按钮；选中即加载线路矩阵）
+ *   - 「拆到已有 video」= 每组 VideoPicker（替代手填 uuid；选中即显示目标卡）
+ *   - SplitResultPreview 嵌入（每组形态 + 组内线路明细零请求推导 + **原视频软删明示**）
+ *
+ * 历史：CHG-SN-7-MISC-MERGE-2 提取 / CHG-363-B 深链 / CHG-VIR-11-B 拆分建议 + 拆到已有。
  */
 
-import { useState, useCallback, useEffect, useRef, type CSSProperties } from 'react'
+import { useState, useCallback, useEffect, useRef, useMemo, type CSSProperties } from 'react'
 import {
   AdminInput,
   AdminButton,
   LoadingState,
   ErrorState,
   EmptyState,
+  VideoPicker,
   useToast,
+  type PickerVideoItem,
 } from '@resovo/admin-ui'
 import type { LineMatrixRow, SplitGroup, SplitSignal, SplitSuggestionsResult, VideoType } from '@resovo/types'
 import { splitVideo, unmergeVideos, getSplitSuggestions } from '@/lib/merge/api'
 import { getVideoMatrix } from '@/lib/sources/api'
+import { videoPickerFetcher } from '@/lib/videos/picker-fetcher'
 import { describeError } from './MergeClient'
+import { MergeResultPreview, type SplitPreviewGroup } from './MergeResultPreview'
 
 const SECONDARY_TEXT: CSSProperties = {
   fontSize: 'var(--font-size-sm)',
@@ -48,11 +60,12 @@ const SELECT_STYLE: CSSProperties = {
 
 // CHG-VIR-11-B（ADR-105 AMENDMENT 2026-06-03 D-105-1/6）：拆分建议消费 ──────────
 
-/** 每组元数据：targetVideoId 非空 → 拆到已有 video（D-105-2 互斥；标题/类型不提交） */
+/** 每组元数据：targetVideo 非空 → 拆到已有 video（D-105-2 互斥；标题/类型不提交）
+ *  CHG-VIR-13-B2B：targetVideoId 手填 string → VideoPicker 选择（PickerVideoItem） */
 interface GroupMeta {
   title: string
   type: VideoType
-  targetVideoId: string
+  targetVideo: PickerVideoItem | null
 }
 
 const DIMENSION_LABELS: Record<string, string> = {
@@ -81,30 +94,30 @@ function describeSignal(signal: SplitSignal): string {
   }
 }
 
-interface SplitSectionProps {
-  /** CHG-363-B：来自 MergeClient `?split=:videoId` 深链 / PendingCenter 拆分按钮 / 自动 setVideoIdInput + loadMatrix */
+function defaultMeta(i: number): GroupMeta {
+  return { title: `分集 ${String.fromCharCode(65 + i)}`, type: 'movie', targetVideo: null }
+}
+
+export interface SplitWorkspaceProps {
+  /** CHG-363-B：`?split=:videoId` 深链 / PendingCenter 拆分按钮 / 自动加载线路矩阵 */
   readonly initialVideoId?: string
 }
 
-export function SplitSection({ initialVideoId }: SplitSectionProps = {}) {
-  const [videoIdInput, setVideoIdInput] = useState(initialVideoId ?? '')
+export function SplitWorkspace({ initialVideoId }: SplitWorkspaceProps = {}) {
+  // CHG-VIR-13-B2B：拆分对象 VideoPicker（选中即加载；标题供 SplitResultPreview 软删明示）
+  const [selectedVideo, setSelectedVideo] = useState<PickerVideoItem | null>(null)
   const [activeVideoId, setActiveVideoId] = useState<string | null>(null)
   const [lines, setLines] = useState<LineMatrixRow[] | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<Error | null>(null)
   const [groupCount, setGroupCount] = useState(2)
   const [assignments, setAssignments] = useState<Record<string, number>>({})
-  const [groupMetas, setGroupMetas] = useState<GroupMeta[]>([
-    { title: '分集 A', type: 'movie', targetVideoId: '' },
-    { title: '分集 B', type: 'movie', targetVideoId: '' },
-  ])
+  const [groupMetas, setGroupMetas] = useState<GroupMeta[]>([defaultMeta(0), defaultMeta(1)])
   // CHG-VIR-11-B：拆分建议（dimension/signals 展示 + 预填）
   const [suggestions, setSuggestions] = useState<SplitSuggestionsResult | null>(null)
   const [suggestLoading, setSuggestLoading] = useState(false)
   const toast = useToast()
 
-  // loadMatrix 接受 videoId 参数 / 避免 closure 依赖 videoIdInput state
-  // （initialVideoId 自动加载场景：state 还没更新到 input 值就需要触发）
   const loadMatrix = useCallback((videoId: string) => {
     const id = videoId.trim()
     if (!id) return
@@ -125,14 +138,30 @@ export function SplitSection({ initialVideoId }: SplitSectionProps = {}) {
       .finally(() => setLoading(false))
   }, [])
 
+  // 拆分对象选择 → 立即加载线路矩阵
+  const handlePickVideo = useCallback((item: PickerVideoItem | null) => {
+    setSelectedVideo(item)
+    if (item) loadMatrix(item.id)
+    else { setLines(null); setActiveVideoId(null); setSuggestions(null) }
+  }, [loadMatrix])
+
   // CHG-363-B：initialVideoId 深链自动加载 / autoLoadedRef 防 re-render 重复触发
+  // CHG-VIR-13-B2B：补 fetch 标题注入 picker（软删明示文案消费）
   const autoLoadedRef = useRef<string | null>(null)
   useEffect(() => {
     if (!initialVideoId) return
     if (autoLoadedRef.current === initialVideoId) return
     autoLoadedRef.current = initialVideoId
-    setVideoIdInput(initialVideoId)
     loadMatrix(initialVideoId)
+    let cancelled = false
+    videoPickerFetcher({ q: initialVideoId, limit: 1 })
+      .then((res) => {
+        if (cancelled) return
+        const found = res.items.find((it) => it.id === initialVideoId)
+        if (found) setSelectedVideo(found)
+      })
+      .catch(() => { /* 标题充实失败不阻塞（预览以 id 短码兜底） */ })
+    return () => { cancelled = true }
   }, [initialVideoId, loadMatrix])
 
   // CHG-VIR-11-B：生成拆分建议（D-105-1 只读预览）→ 预填 groupCount/groupMetas/assignments
@@ -155,7 +184,7 @@ export function SplitSection({ initialVideoId }: SplitSectionProps = {}) {
       setGroupMetas(result.groups.slice(0, n).map((g) => ({
         title: g.suggestedMeta.title,
         type: g.suggestedMeta.type,
-        targetVideoId: '',
+        targetVideo: null,
       })))
       // 建议组内 lines 的 sourceIds → 组 index；unassignedLines 留组 0（运营手动复核）
       const next: Record<string, number> = {}
@@ -182,15 +211,44 @@ export function SplitSection({ initialVideoId }: SplitSectionProps = {}) {
     }
   }, [activeVideoId, toast])
 
+  // CHG-VIR-13-B2B（§10.5）：SplitResultPreview 组数据零请求前端推导
+  // （每组 sourceCount + 按线路聚合集数范围明细）
+  const previewGroups = useMemo<readonly SplitPreviewGroup[]>(() => {
+    if (!lines) return []
+    return Array.from({ length: groupCount }, (_, i) => {
+      const meta = groupMetas[i] ?? defaultMeta(i)
+      const groupSourceIds = new Set(
+        Object.entries(assignments).filter(([, g]) => g === i).map(([id]) => id),
+      )
+      const lineSummaries: string[] = []
+      let sourceCount = 0
+      for (const line of lines) {
+        const eps = line.episodes.filter((ep) => groupSourceIds.has(ep.sourceId))
+        if (eps.length === 0) continue
+        sourceCount += eps.length
+        const nums = eps.map((e) => e.episodeNumber)
+        const min = Math.min(...nums)
+        const max = Math.max(...nums)
+        lineSummaries.push(`${line.displayName ?? line.sourceName} ${min === max ? `E${min}` : `E${min}–E${max}`}`)
+      }
+      return {
+        label: meta.title,
+        existingTarget: meta.targetVideo?.title,
+        typeLabel: VIDEO_TYPES.find((t) => t.value === meta.type)?.label,
+        sourceCount,
+        lineSummaries,
+      }
+    }).filter((g) => g.sourceCount > 0)
+  }, [lines, groupCount, groupMetas, assignments])
+
   const handleSplit = useCallback(async () => {
     if (!activeVideoId || !lines) return
     const groups: SplitGroup[] = Array.from({ length: groupCount }, (_, i) => {
-      const meta = groupMetas[i] ?? { title: `分集 ${String.fromCharCode(65 + i)}`, type: 'movie' as VideoType, targetVideoId: '' }
+      const meta = groupMetas[i] ?? defaultMeta(i)
       const sourceIds = Object.entries(assignments).filter(([, g]) => g === i).map(([id]) => id)
-      // D-105-2：targetVideoId 非空 → 拆到已有 video（与 newVideoMeta 互斥）
-      const targetId = meta.targetVideoId.trim()
-      return targetId !== ''
-        ? { sourceIds, targetVideoId: targetId }
+      // D-105-2：targetVideo 非空 → 拆到已有 video（与 newVideoMeta 互斥）
+      return meta.targetVideo
+        ? { sourceIds, targetVideoId: meta.targetVideo.id }
         : { sourceIds, newVideoMeta: { title: meta.title, type: meta.type } }
     }).filter((g) => g.sourceIds.length > 0)
 
@@ -216,6 +274,7 @@ export function SplitSection({ initialVideoId }: SplitSectionProps = {}) {
                 toast.push({ level: 'success', title: '已撤销拆分' })
                 setLines(null)
                 setActiveVideoId(null)
+                setSelectedVideo(null)
               })
               .catch((err: unknown) => {
                 toast.push({
@@ -229,6 +288,7 @@ export function SplitSection({ initialVideoId }: SplitSectionProps = {}) {
       })
       setLines(null)
       setActiveVideoId(null)
+      setSelectedVideo(null)
       setSuggestions(null)
     } catch (err) {
       toast.push({
@@ -241,25 +301,21 @@ export function SplitSection({ initialVideoId }: SplitSectionProps = {}) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-      <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-        <AdminInput
-          size="sm"
-          placeholder="输入要拆分的 videoId (uuid)"
-          value={videoIdInput}
-          onChange={(e) => setVideoIdInput(e.target.value)}
-          style={{ width: '320px' }}
-        />
-        <AdminButton size="sm" variant="primary" onClick={() => loadMatrix(videoIdInput)} disabled={!videoIdInput.trim()}>
-          加载 sources
-        </AdminButton>
-      </div>
+      {/* CHG-VIR-13-B2B：拆分对象 VideoPicker（替代手输 uuid；选中即加载线路矩阵） */}
+      <VideoPicker
+        label="选择要拆分的视频"
+        value={selectedVideo}
+        onChange={handlePickVideo}
+        fetcher={videoPickerFetcher}
+        data-testid="split-video-picker"
+      />
 
       {loading ? (
         <LoadingState variant="skeleton" skeletonRows={6} />
       ) : error ? (
-        <ErrorState error={error} onRetry={() => loadMatrix(videoIdInput)} />
+        <ErrorState error={error} onRetry={() => activeVideoId && loadMatrix(activeVideoId)} />
       ) : !lines ? (
-        <EmptyState title="尚未加载" description="输入 videoId 后点击 '加载 sources'" />
+        <EmptyState title="尚未加载" description="选择要拆分的视频后自动加载播放线路" />
       ) : lines.length === 0 ? (
         <EmptyState title="无 sources" description="该视频暂无播放线路" />
       ) : (
@@ -275,9 +331,7 @@ export function SplitSection({ initialVideoId }: SplitSectionProps = {}) {
               onChange={(e) => {
                 const n = Math.max(2, Math.min(20, parseInt(e.target.value, 10) || 2))
                 setGroupCount(n)
-                setGroupMetas((prev) => Array.from({ length: n }, (_, i) =>
-                  prev[i] ?? { title: `分集 ${String.fromCharCode(65 + i)}`, type: 'movie' as VideoType, targetVideoId: '' },
-                ))
+                setGroupMetas((prev) => Array.from({ length: n }, (_, i) => prev[i] ?? defaultMeta(i)))
               }}
               style={{ width: '80px' }}
             />
@@ -314,8 +368,8 @@ export function SplitSection({ initialVideoId }: SplitSectionProps = {}) {
 
           <div style={{ display: 'grid', gridTemplateColumns: `repeat(${groupCount}, 1fr)`, gap: '8px' }}>
             {Array.from({ length: groupCount }).map((_, i) => {
-              const meta = groupMetas[i] ?? { title: '', type: 'movie' as VideoType, targetVideoId: '' }
-              const toExisting = meta.targetVideoId.trim() !== ''
+              const meta = groupMetas[i] ?? defaultMeta(i)
+              const toExisting = meta.targetVideo !== null
               return (
                 <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                   <AdminInput
@@ -348,23 +402,23 @@ export function SplitSection({ initialVideoId }: SplitSectionProps = {}) {
                       <option key={t.value} value={t.value}>{t.label}</option>
                     ))}
                   </select>
-                  {/* CHG-VIR-11-B（D-105-2/5）：拆到已有 video——填 uuid 即转入该 video（仅转 sources，不改其元数据） */}
-                  <AdminInput
-                    size="sm"
-                    placeholder="拆到已有 videoId（可选 uuid）"
-                    value={meta.targetVideoId}
-                    data-testid={`split-target-input-${i}`}
-                    onChange={(e) => {
+                  {/* CHG-VIR-13-B2B（D-105-2/5 + §10.2 #2）：拆到已有 video — VideoPicker 替代手填 uuid */}
+                  <VideoPicker
+                    label="拆到已有视频（可选）"
+                    value={meta.targetVideo}
+                    onChange={(item) => {
                       setGroupMetas((prev) => {
                         const next = [...prev]
-                        next[i] = { ...meta, targetVideoId: e.target.value }
+                        next[i] = { ...meta, targetVideo: item }
                         return next
                       })
                     }}
+                    fetcher={videoPickerFetcher}
+                    data-testid={`split-target-picker-${i}`}
                   />
                   {toExisting && (
                     <span style={{ ...SECONDARY_TEXT, fontSize: '11px' }}>
-                      转入已有 video：仅转移 sources，不修改其标题/类型
+                      转入已有 video：仅转移 sources，不修改其标题/类型/状态
                     </span>
                   )}
                 </div>
@@ -408,6 +462,15 @@ export function SplitSection({ initialVideoId }: SplitSectionProps = {}) {
               )}
             </tbody>
           </table>
+
+          {/* CHG-VIR-13-B2B（§10.2 #4 + §10.5）：拆分结果预览 — 每组形态 + 原视频软删明示 */}
+          {previewGroups.length > 0 && (
+            <MergeResultPreview
+              kind="split"
+              originalTitle={selectedVideo?.title ?? activeVideoId?.slice(0, 8) ?? '—'}
+              groups={previewGroups}
+            />
+          )}
 
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
             <AdminButton size="sm" variant="primary" onClick={handleSplit}>

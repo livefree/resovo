@@ -1,17 +1,25 @@
 'use client'
 
 /**
- * MergeCandidateExpand.tsx — 候选行展开 panel（card 形态，CHG-SN-7-MISC-MERGE-2）
+ * MergeCandidateExpand.tsx — 候选行展开 panel（CHG-VIR-13-B2B 嵌入改造）
  *
- * 拆自 MergeCandidatesSection（CHG-VIR-9-C / 500 行 budget）：
- * 左右对比卡片 + 影响预览 + 置信度/身份分双 pill + EvidencePanel（CHG-VIR-7）
- * + 拒绝候选按钮（identity 来源 / onReject 注入）。
+ * 历史：CHG-SN-7-MISC-MERGE-2 card 形态 → CHG-VIR-9-C 拆出 + 拒绝按钮
+ *       → CHG-VIR-13-B2B：视频卡网格 + 纯文本影响预览替换为
+ *         MergeComparePanel（N 列字段矩阵 / §10.4 列头 target 单选）
+ *         + MergeResultPreview（After 重算 + 软删列表 + 状态降级警示 / §10.5 结构预览）。
+ *
+ * 布局：双 pill → EvidencePanel → MergeComparePanel → MergeResultPreview → 操作行。
+ * §10.4-2：新增「转入合并工作区」次级动作（组成员带入 mode=merge 集合编辑器）；
+ * N>11 组整组合并禁用提示改为引导转工作区裁剪分批（逐 pair 拒绝保留）。
  */
 
-import { useState, type CSSProperties } from 'react'
+import { useCallback, useState, type CSSProperties } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { AdminButton } from '@resovo/admin-ui'
-import type { CandidateGroup, VideoSummaryForMerge } from '@resovo/types'
+import type { CandidateGroup } from '@resovo/types'
 import { EvidencePanel } from './EvidencePanel'
+import { MergeComparePanel } from './MergeComparePanel'
+import { MergeResultPreview } from './MergeResultPreview'
 
 // ── 样式（CSS 变量零硬编码颜色）────────────────────────────────────
 
@@ -19,19 +27,6 @@ import { EvidencePanel } from './EvidencePanel'
 export const SECONDARY_TEXT: CSSProperties = {
   fontSize: 'var(--font-size-sm)',
   color: 'var(--fg-muted)',
-}
-
-// CHG-SN-5-12-PATCH P2-2：推荐 target 显式 badge
-const RECOMMENDED_BADGE_STYLE: CSSProperties = {
-  display: 'inline-block',
-  padding: '2px 6px',
-  marginLeft: '6px',
-  borderRadius: '4px',
-  fontSize: '11px',
-  fontWeight: 600,
-  background: 'var(--state-success-bg)',
-  color: 'var(--state-success-fg)',
-  border: '1px solid var(--state-success-border)',
 }
 
 const EXPAND_PANEL_STYLE: CSSProperties = {
@@ -52,37 +47,6 @@ const CONFIDENCE_PILL_STYLE: CSSProperties = {
   background: 'var(--state-success-bg)',
   color: 'var(--state-success-fg)',
   border: '1px solid var(--state-success-border)',
-}
-
-const VIDEO_CARD_STYLE: CSSProperties = {
-  border: '1px solid var(--border-subtle)',
-  borderRadius: '8px',
-  padding: '10px 12px',
-  display: 'flex',
-  flexDirection: 'column',
-  gap: '6px',
-  cursor: 'pointer',
-}
-
-const VIDEO_CARD_SELECTED_STYLE: CSSProperties = {
-  border: '1px solid var(--state-success-border)',
-  borderRadius: '8px',
-  padding: '10px 12px',
-  display: 'flex',
-  flexDirection: 'column',
-  gap: '6px',
-  cursor: 'pointer',
-  background: 'var(--state-success-bg)',
-}
-
-const IMPACT_PREVIEW_STYLE: CSSProperties = {
-  display: 'flex',
-  flexDirection: 'column',
-  gap: '6px',
-  padding: '8px 10px',
-  borderRadius: '6px',
-  background: 'var(--bg-surface)',
-  border: '1px solid var(--border-subtle)',
 }
 
 // CHG-VIR-7：身份评分（identityScore 与 legacyScore 双值并存，文案区分防语义混淆 / R3）
@@ -109,15 +73,26 @@ export interface CandidateExpandProps {
   onRejectPair?: (candidateId: string, label: string) => void
 }
 
-/** 单次 merge 视频上限 = sourceVideoIds max 10 + target 1（MergeSchema / ADR-105；Codex review FIX：
- * 折叠后 N>11 组在 UI 真实可达，执行必败 422 → 前端禁用 + 提示，逐 pair 操作仍可用） */
+/** 单次 merge 视频上限 = sourceVideoIds max 10 + target 1（MergeSchema / ADR-105） */
 const MAX_MERGE_GROUP_VIDEOS = 11
 
 export function CandidateExpand({ group, onMerge, onReject, onRejectPair }: CandidateExpandProps) {
+  const router = useRouter()
+  const searchParams = useSearchParams()
   const [targetId, setTargetId] = useState(group.recommendedTargetVideoId)
-  const targetVideo = group.videos.find((v) => v.id === targetId)
-  const sourceVideos = group.videos.filter((v) => v.id !== targetId)
   const exceedsMergeLimit = group.videos.length > MAX_MERGE_GROUP_VIDEOS
+
+  // §10.4-2：组成员带入 mode=merge 集合编辑器（保留既有 URL 参数；candidate 锚点不带——
+  // 工作区集合可增删，confirm 锚点仅 MergeWorkspace 自身 pair 守卫管理）
+  const transferToWorkspace = useCallback(() => {
+    const p = new URLSearchParams(searchParams.toString())
+    p.set('mode', 'merge')
+    p.set('ids', group.videos.map((v) => v.id).join(','))
+    p.delete('candidate_a')
+    p.delete('candidate_b')
+    p.delete('candidate_id')
+    router.replace(`?${p.toString()}`, { scroll: false })
+  }, [router, searchParams, group.videos])
 
   return (
     <div style={EXPAND_PANEL_STYLE}>
@@ -138,61 +113,33 @@ export function CandidateExpand({ group, onMerge, onReject, onRejectPair }: Cand
           CHG-VIR-9-D：折叠组（多 pair）时逐 pair 拒绝按钮注入明细行 */}
       {group.identity && <EvidencePanel identity={group.identity} onRejectPair={onRejectPair} />}
 
-      {/* 视频卡片网格（左右对比） */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '8px' }}>
-        {group.videos.map((v: VideoSummaryForMerge) => (
-          <div
-            key={v.id}
-            style={v.id === targetId ? VIDEO_CARD_SELECTED_STYLE : VIDEO_CARD_STYLE}
-            onClick={() => setTargetId(v.id)}
-            data-testid={`candidate-card-${v.id}`}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-              <input
-                type="radio"
-                name={`target-${group.groupKey}`}
-                checked={targetId === v.id}
-                onChange={() => setTargetId(v.id)}
-                onClick={(e) => e.stopPropagation()}
-                aria-label={`选择 ${v.title} 为合并目标`}
-              />
-              <span style={{ fontWeight: 600, fontSize: 'var(--font-size-sm)' }}>{v.title}</span>
-              {v.id === group.recommendedTargetVideoId && (
-                <span style={RECOMMENDED_BADGE_STYLE} aria-label="推荐合并目标">推荐</span>
-              )}
-            </div>
-            <div style={SECONDARY_TEXT}>{v.sourceCount} 个源</div>
-            <div style={{ ...SECONDARY_TEXT, fontSize: '11px' }}>
-              {v.sourceSiteKeys.join(' · ') || '—'}
-            </div>
-            <div style={{ ...SECONDARY_TEXT, fontSize: '11px' }}>{v.createdAt.slice(0, 10)}</div>
-          </div>
-        ))}
-      </div>
+      {/* CHG-VIR-13-B2B：N 列字段对比矩阵（列头 target 单选 / 冲突标警 / §10.4） */}
+      <MergeComparePanel
+        videos={group.videos}
+        targetId={targetId}
+        onTargetChange={setTargetId}
+        recommendedTargetId={group.recommendedTargetVideoId}
+      />
 
-      {/* 影响预览 */}
-      {sourceVideos.length > 0 && (
-        <div style={IMPACT_PREVIEW_STYLE} data-testid="impact-preview">
-          <span style={{ fontWeight: 600, fontSize: 'var(--font-size-xs)', color: 'var(--fg-muted)' }}>
-            影响预览：{sourceVideos.length} 个源视频将合并到 {targetVideo?.title ?? '—'}
-          </span>
-          <ul style={{ margin: 0, padding: '0 0 0 16px', fontSize: 'var(--font-size-xs)', color: 'var(--fg-muted)' }}>
-            {sourceVideos.map((v) => (
-              <li key={v.id}>
-                {v.title}（{v.sourceCount} 个源{v.sourceSiteKeys.length > 0 ? `，${v.sourceSiteKeys.join('、')}` : ''}）
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+      {/* CHG-VIR-13-B2B：合并后结果预览（After 重算 + 软删列表 + 状态降级警示 + §10.5 结构预览） */}
+      <MergeResultPreview kind="merge" videos={group.videos} targetId={targetId} />
 
-      <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '8px' }}>
-        {/* Codex review FIX：折叠组超单次 merge 上限（11 视频）→ 禁用整组合并，引导逐 pair 处理 */}
+      <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+        {/* §10.4-2：>11 组整组合并禁用 → 引导转工作区裁剪分批（替换旧「逐对明细分批」提示） */}
         {exceedsMergeLimit && (
           <span style={SECONDARY_TEXT} data-testid="merge-limit-note">
-            组内 {group.videos.length} 个视频超过单次合并上限（{MAX_MERGE_GROUP_VIDEOS}），请在逐对明细中分批处理
+            组内 {group.videos.length} 个视频超过单次合并上限（{MAX_MERGE_GROUP_VIDEOS}），请转入合并工作区裁剪集合分批合并
           </span>
         )}
+        {/* §10.4-2：次级动作 — 组成员带入 mode=merge 集合编辑器（可继续增删后执行） */}
+        <AdminButton
+          size="sm"
+          variant="secondary"
+          onClick={transferToWorkspace}
+          data-testid="candidate-transfer-workspace"
+        >
+          转入合并工作区
+        </AdminButton>
         {/* CHG-VIR-9-C：identity 来源候选可人工拒绝（confirm = 执行合并透传 candidateId）*/}
         {onReject && (
           <AdminButton size="sm" variant="danger" onClick={onReject} data-testid="candidate-reject">

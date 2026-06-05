@@ -55,6 +55,11 @@ vi.mock('../../../../../../apps/server-next/src/lib/merge/api', () => ({
   listAudit: (...args: unknown[]) => listAuditMock(...args),
 }))
 
+// CHG-VIR-13-B2B：SplitWorkspace/CandidateExpand 经 picker-fetcher 消费 listVideos
+vi.mock('../../../../../../apps/server-next/src/lib/videos/api', () => ({
+  listVideos: vi.fn(() => Promise.resolve({ data: [], total: 0, page: 1, limit: 20 })),
+}))
+
 vi.mock('../../../../../../apps/server-next/src/lib/sources/api', () => ({
   getVideoMatrix: (...args: unknown[]) => getVideoMatrixMock(...args),
   listVideoGroups: vi.fn(),
@@ -178,7 +183,9 @@ describe('MergeClient', () => {
   it('mode=split URL 注入 → 渲染拆分工作台（单一活动工作区，候选不渲染）', async () => {
     mockSearchString = 'mode=split'
     render(<MergeClient />)
-    expect(await screen.findByPlaceholderText('输入要拆分的 videoId (uuid)')).not.toBeNull()
+    // CHG-VIR-13-B2B：手输 uuid 替换为 VideoPicker（选择要拆分的视频）
+    expect(await screen.findByText('选择要拆分的视频')).not.toBeNull()
+    expect(screen.queryByPlaceholderText('输入要拆分的 videoId (uuid)')).toBeNull()
     expect(listCandidatesMock).not.toHaveBeenCalled()
   })
 
@@ -191,8 +198,9 @@ describe('MergeClient', () => {
     })
     fireEvent.click(screen.getByText('復仇者聯盟'))
     await waitFor(() => {
-      expect(screen.getByText('推荐')).not.toBeNull()
-      expect(screen.getByText('Avengers B')).not.toBeNull()
+      // CHG-VIR-13-B2B：推荐 badge 在 MergeComparePanel 列头（aria-label）；标题在矩阵中多处出现
+      expect(screen.getByLabelText('推荐合并目标')).not.toBeNull()
+      expect(screen.getAllByText('Avengers B').length).toBeGreaterThan(0)
     })
   })
 
@@ -246,15 +254,10 @@ describe('MergeClient', () => {
     })
   })
 
-  it('拆分工作台：videoId 输入 → 加载 sources 失败时 ErrorState 渲染', async () => {
-    mockSearchString = 'mode=split'
-    render(<MergeClient />)
-
-    const input = await screen.findByPlaceholderText('输入要拆分的 videoId (uuid)')
-    fireEvent.change(input, { target: { value: '00000000-0000-0000-0000-000000000001' } })
-
+  it('拆分工作台：深链加载 sources 失败时 ErrorState 渲染（13-B2B VideoPicker 化后走 ?split 自动加载）', async () => {
     getVideoMatrixMock.mockRejectedValueOnce(new Error('video 不存在'))
-    fireEvent.click(screen.getByRole('button', { name: '加载 sources' }))
+    mockSearchString = 'mode=split&split=00000000-0000-0000-0000-000000000001'
+    render(<MergeClient />)
 
     await waitFor(() => {
       expect(screen.getAllByText(/video 不存在|加载失败/).length).toBeGreaterThan(0)
@@ -262,7 +265,7 @@ describe('MergeClient', () => {
   })
 
   it('拆分工作台：含 type select 11 选项（P2-3 修复验证 — 替代硬编码 movie）', async () => {
-    mockSearchString = 'mode=split'
+    mockSearchString = 'mode=split&split=00000000-0000-0000-0000-000000000001'
     getVideoMatrixMock.mockResolvedValueOnce([
       { sourceSiteKey: 'iqiyi', sourceName: '线路1', displayName: null,
         episodes: [{ episodeNumber: 1, sourceId: 's1', sourceUrl: 'https://x.com/1',
@@ -270,12 +273,8 @@ describe('MergeClient', () => {
     ])
     render(<MergeClient />)
 
-    const input = await screen.findByPlaceholderText('输入要拆分的 videoId (uuid)')
-    fireEvent.change(input, { target: { value: '00000000-0000-0000-0000-000000000001' } })
-    fireEvent.click(screen.getByRole('button', { name: '加载 sources' }))
-
     await waitFor(() => {
-      const typeSelects = screen.getAllByLabelText(/类型/)
+      const typeSelects = screen.getAllByLabelText(/分集 . 类型/)
       expect(typeSelects.length).toBe(2)
       const firstSelect = typeSelects[0] as HTMLSelectElement
       expect(firstSelect.querySelectorAll('option').length).toBe(11)
@@ -324,18 +323,49 @@ describe('MergeClient', () => {
     })
   })
 
-  it('MERGE-2：影响预览 — 展开后渲染源视频预览区块', async () => {
+  it('MERGE-2/13-B2B：结果预览 — 展开后渲染 MergeResultPreview（After + 软删列表）', async () => {
     listCandidatesMock.mockResolvedValueOnce(ONE_GROUP_RES)
     render(<MergeClient />)
     await waitFor(() => screen.getByText('復仇者聯盟'))
     fireEvent.click(screen.getByText('復仇者聯盟'))
     await waitFor(() => {
-      // 影响预览区块存在
-      expect(screen.getByTestId('impact-preview')).not.toBeNull()
-      // 源视频 Avengers A 出现在影响预览列表中
-      expect(screen.getByTestId('impact-preview').textContent).toContain('Avengers A')
-      // 目标视频 Avengers B 出现在"将合并到"文字中（推荐 target）
-      expect(screen.getByTestId('impact-preview').textContent).toContain('Avengers B')
+      // CHG-VIR-13-B2B：纯文本影响预览（impact-preview）→ MergeResultPreview
+      const preview = screen.getByTestId('merge-result-preview')
+      // 推荐 target = Avengers B（After 行）；source = Avengers A（软删列表）
+      expect(preview.textContent).toContain('Avengers B')
+      expect(screen.getByTestId('merge-result-soft-delete-list').textContent).toContain('Avengers A')
+      expect(screen.getByTestId('merge-result-soft-delete-list').textContent).toContain('将软删除')
+    })
+  })
+
+  // ── CHG-VIR-13-B2B：候选组转工作区 + 拆分结果预览嵌入 ─────────────
+
+  it('13-B2B：候选行展开「转入合并工作区」→ router.replace(mode=merge&ids=组成员)', async () => {
+    listCandidatesMock.mockResolvedValueOnce(ONE_GROUP_RES)
+    render(<MergeClient />)
+    await waitFor(() => screen.getByText('復仇者聯盟'))
+    fireEvent.click(screen.getByText('復仇者聯盟'))
+    const btn = await screen.findByTestId('candidate-transfer-workspace')
+    fireEvent.click(btn)
+    expect(routerReplaceMock).toHaveBeenCalled()
+    const url = String(routerReplaceMock.mock.calls.at(-1)![0])
+    expect(url).toContain('mode=merge')
+    expect(url).toContain('ids=vid-a%2Cvid-b')
+  })
+
+  it('13-B2B：拆分工作台分组后渲染 SplitResultPreview（组卡 + 原视频软删明示）', async () => {
+    mockSearchString = 'mode=split&split=00000000-0000-0000-0000-000000000001'
+    getVideoMatrixMock.mockResolvedValueOnce([
+      { sourceSiteKey: 'iqiyi', sourceName: '线路1', displayName: null,
+        episodes: [{ episodeNumber: 1, sourceId: 's1', sourceUrl: 'https://x.com/1',
+          probeStatus: 'ok' as const, renderStatus: 'ok' as const, isActive: true }] },
+    ])
+    render(<MergeClient />)
+    await waitFor(() => {
+      expect(screen.getByTestId('split-result-preview')).not.toBeNull()
+      expect(screen.getByTestId('split-original-soft-delete-note').textContent).toContain('软删除')
+      // 拆到已有 video 的 VideoPicker（手填 uuid 已消除）
+      expect(screen.getAllByText('拆到已有视频（可选）').length).toBe(2)
     })
   })
 

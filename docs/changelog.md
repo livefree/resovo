@@ -14591,3 +14591,21 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
   - `scripts/test-changed.mjs` — 分级改动集去掉 `--diff-filter=ACMR`（纳入删除 D）：原实现下**仅删除文件**（如删 tests/helpers/db.ts / packages/types 文件）被视为"无改动"直接 exit 0 静默跳过测试——分级清单只用于 docs-only/触发集判定、不传给 vitest，无需过滤；删 helpers/基础包现正确升全量，删普通源走 --changed（vitest 选中仍 import 它的测试报错暴露 / 零选中走安全网全量），仅删 docs 正确 SKIP
 - **测试**：worktree 实测 5 删除场景（rm helpers→FULL / rm 基础包→FULL / rm docs→SKIP / rm 普通源→CHANGED / git rm staged helpers→FULL）+ 2 回归场景（改源 CHANGED / 干净树 exit 0）全过；门禁经 test:changed 自身入口升全量 **484 files 6394/6394 passed**。
 - **注意事项**：问题域 = SLIM-B 新增脚本；同会话内闭环，SLIM-B 完成备注已补登。教训沉淀——"改动集"类工具默认不要加 diff-filter，除非清单的下游消费方确实无法处理删除路径。
+
+## [CHG-VIR-13-B2B] 预览嵌入 + 拆分 VideoPicker + 候选组转工作区
+- **完成时间**：2026-06-04
+- **记录时间**：2026-06-04 18:48
+- **执行模型**：claude-opus-4-8（人工 opus 会话覆盖 sonnet 建议——同会话连续执行）
+- **子代理**：无
+- **修改文件**：
+  - `apps/server-next/src/app/admin/merge/_client/MergeCandidateExpand.tsx` — 嵌入改造（213→160 行）：视频卡网格 + 纯文本影响预览 → MergeComparePanel（targetId 受控）+ MergeResultPreview kind=merge；「转入合并工作区」次级按钮（mode=merge&ids=组成员，清 candidate_* 锚点）；>11 提示改「转入合并工作区裁剪集合分批合并」（§10.4-2）
+  - `apps/server-next/src/app/admin/merge/_client/SplitWorkspace.tsx` — 新建（MergeSplitSection.tsx 重命名兑现 13-WS 预登记；421→484 行）：拆分对象 VideoPicker（选中即加载 + 深链标题充实 fetch）+ 每组「拆到已有视频」VideoPicker（GroupMeta string→PickerVideoItem）——两处手输 uuid 消除；previewGroups useMemo 零请求推导 → MergeResultPreview kind=split 嵌入（组卡 + 原视频软删明示）
+  - `apps/server-next/src/app/admin/merge/_client/MergeSplitSection.tsx` — 删除（重命名）
+  - `apps/server-next/src/app/admin/merge/_client/MergeClient.tsx` — import 跟随 + 注释更新
+  - `tests/unit/components/server-next/admin/merge/merge-split-deeplink.test.tsx` — 重写为 SplitWorkspace 版（4 用例 + picker-fetcher mock + VideoPicker stub）
+  - `tests/unit/components/server-next/admin/merge/MergeClient.test.tsx` — 16→18 用例（+转工作区 ids 断言 / +split 预览嵌入双 picker 断言；5 处随形态更新）
+- **新增依赖**：无
+- **数据库变更**：无
+- **测试**：merge 目录 6 文件 63/63 → 全量 **484 files 6396/6396 passed**（复跑全绿；上轮 2 失败 = 既见并发 flaky）；typecheck 0 error / lint ✓
+- **共享层沉淀评估**：否——13-B2A 组件的消费接线（ComparePanel/ResultPreview 各 2 消费点兑现）；previewGroups 推导为 SplitWorkspace 内聚逻辑。
+- **注意事项**：① SplitWorkspace 484 行接近 500 预算——13-PLAY 嵌入 ▶ 锚点时若超限先拆（分配表/分组配置子组件）。② 13-D2（MergeStatusControl 三处嵌入点）就绪。③ 剩余卡：13-PLAY / 13-D1（opus）/ 13-D2 / 13-C1（opus）/ 13-C2 / 13-I18N。

@@ -9,7 +9,7 @@
  *
  *   - candidates（默认）: ./MergeCandidatesSection（identity/legacy 候选 + 行展开就地合并）
  *   - merge:              ./MergeWorkspace（Direct/Batch 合一：集合编辑 + target 单选）
- *   - split:              ./MergeSplitSection（拆分工作台；SplitWorkspace 重命名留 13-B2B）
+ *   - split:              ./SplitWorkspace（拆分工作台；13-B2B 重命名兑现 + VideoPicker ×2）
  *   - records:            ./MergeAuditSection（合并/拆分操作记录；决策记录子视图留 13-C2）
  *
  * 旧参数升级映射（5+1 处既有深链不破 / buildMergeHref 真源在 @/lib/merge/entry）：
@@ -34,13 +34,13 @@ import {
 } from '@resovo/admin-ui'
 import { ApiClientError } from '@/lib/api-client'
 import { isMergeEntrySource, MERGE_ENTRY_SOURCE_META } from '@/lib/merge/entry'
-import { SplitSection } from './MergeSplitSection'
+import { SplitWorkspace } from './SplitWorkspace'
 import { AuditSection } from './MergeAuditSection'
 import { MergeWorkspace } from './MergeWorkspace'
 import { CandidatesSection } from './MergeCandidatesSection'
 
 // ── 错误码差异化 description（ADR-105 §错误码 + CHG-SN-5-12-PATCH P0/P2-1）─────
-// （多消费方共享：MergeCandidatesSection / MergeSplitSection / MergeWorkspace）
+// （多消费方共享：MergeCandidatesSection / SplitWorkspace / MergeWorkspace）
 
 export function describeError(err: unknown, context: 'merge' | 'split'): string {
   if (err instanceof ApiClientError) {
@@ -220,7 +220,7 @@ export function MergeClient() {
               onMergeSuccess={handleMergeSuccess}
             />
           ) : mode === 'split' ? (
-            <SplitSection initialVideoId={splitParam ?? undefined} />
+            <SplitWorkspace initialVideoId={splitParam ?? undefined} />
           ) : (
             <AuditSection initialAction={auditFilter} />
           )}
