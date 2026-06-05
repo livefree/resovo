@@ -7,8 +7,10 @@
  * Segment 4 区与 URL 双向同步，同一时刻只渲染一个工作区——废除旧「深链 banner +
  * 直接合并区 + 批量区 + 拆分 toggle 可同时堆叠」形态。
  *
- *   - candidates（默认）: ./MergeCandidatesSection（identity/legacy 候选 + 行展开就地合并）
- *   - merge:              ./MergeWorkspace（Direct/Batch 合一：集合编辑 + target 单选）
+ *   - candidates（默认，CHG-VIR-15-UX-C 更名「合并工作区」）: ./MergeCandidatesSection
+ *     （候选列表 + 行展开就地合并〔对比矩阵/线路播放/状态设置〕；常驻 merge tab 退役）
+ *   - merge（深链专用）:   ./MergeWorkspace（集合编辑 + target 单选；?ids=/?candidate_a=
+ *     批量合并入口的工作面，深链激活时 Segment 动态补项）
  *   - split:              ./SplitWorkspace（拆分工作台；13-B2B 重命名兑现 + VideoPicker ×2）
  *   - records:            ./MergeAuditSection（合并/拆分操作记录；决策记录子视图留 13-C2）
  *
@@ -74,12 +76,17 @@ export type WorkspaceMode = 'candidates' | 'merge' | 'split' | 'records'
 
 const WORKSPACE_MODES: readonly WorkspaceMode[] = ['candidates', 'merge', 'split', 'records']
 
+// CHG-VIR-15-UX-C（用户裁定 ⑦）：候选展开功能齐全（对比矩阵 + 线路播放 + 状态设置 +
+// 就地合并），常驻「合并工作区」tab 退役——「待审候选」更名顶替；mode=merge 保留为
+// **深链专用通道**（视频库/审核台 5+1 处 ?ids=/?candidate_a= 批量合并入口不经候选列表，
+// 集合编辑器仍是其唯一工作面），深链激活时 Segment 动态补「批量合并」项。
 const SEGMENT_ITEMS: readonly SegmentItem[] = [
-  { value: 'candidates', label: '待审候选' },
-  { value: 'merge',      label: '合并工作区' },
+  { value: 'candidates', label: '合并工作区' },
   { value: 'split',      label: '拆分工作区' },
   { value: 'records',    label: '操作记录' },
 ]
+
+const BATCH_MERGE_SEGMENT_ITEM: SegmentItem = { value: 'merge', label: '批量合并（深链）' }
 
 // CHG-VIR-13-C2：records mode 内层两子视图（audit 时间线 / identity 裁定记录）
 const RECORDS_VIEW_ITEMS: readonly SegmentItem[] = [
@@ -158,6 +165,14 @@ export function MergeClient() {
     router.replace(`?${p.toString()}`, { scroll: false })
   }, [router, searchParams])
 
+  // CHG-VIR-15-UX-C：深链批量合并通道激活（?ids=/?candidate_a= 或显式 ?mode=merge）
+  // → Segment 动态补「批量合并」项；无深链上下文时 3 项（常驻合并工作区 tab 退役）
+  const batchMergeActive = mode === 'merge' || mergeInitialIds.length > 0
+  const segmentItems = useMemo<readonly SegmentItem[]>(
+    () => (batchMergeActive ? [...SEGMENT_ITEMS, BATCH_MERGE_SEGMENT_ITEM] : SEGMENT_ITEMS),
+    [batchMergeActive],
+  )
+
   // CHG-VIR-13-A1：来源回链栏（from 合法值才渲染；关闭仅清 from，不动工作流参数）
   const entrySource = isMergeEntrySource(fromParam) ? fromParam : null
   const dismissEntrySourceBar = useCallback(() => {
@@ -215,7 +230,7 @@ export function MergeClient() {
       <AdminCard padding="none">
         <div style={{ padding: '12px 16px 0' }}>
           <Segment
-            items={SEGMENT_ITEMS}
+            items={segmentItems}
             value={mode}
             onChange={handleModeChange}
             size="md"

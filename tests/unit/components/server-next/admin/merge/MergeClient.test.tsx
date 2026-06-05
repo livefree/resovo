@@ -143,16 +143,28 @@ beforeEach(() => {
 // ── 测试 ──────────────────────────────────────────────────────────
 
 describe('MergeClient', () => {
-  it('渲染基础：PageHeader + Segment 4 区（CHG-VIR-13-WS mode 模型）', async () => {
+  it('渲染基础：PageHeader + Segment 常驻 3 区（CHG-VIR-15-UX-C 工作区收编）', async () => {
     listCandidatesMock.mockResolvedValueOnce(EMPTY_RES)
     render(<MergeClient />)
     expect(screen.getByText('合并 / 拆分工作台')).not.toBeNull()
-    expect(screen.getByRole('tab', { name: '待审候选' })).not.toBeNull()
+    // CHG-VIR-15-UX-C：常驻 3 区（候选更名「合并工作区」顶替旧 merge tab；
+    // 「批量合并（深链）」项仅深链上下文动态出现）
     expect(screen.getByRole('tab', { name: '合并工作区' })).not.toBeNull()
     expect(screen.getByRole('tab', { name: '拆分工作区' })).not.toBeNull()
     expect(screen.getByRole('tab', { name: '操作记录' })).not.toBeNull()
+    expect(screen.queryByRole('tab', { name: '批量合并（深链）' })).toBeNull()
     // 旧「拆分工作台」PageHeader toggle 已废除（mode Segment 取代）
     expect(screen.queryByRole('button', { name: '拆分工作台' })).toBeNull()
+  })
+
+  it('UX-C 深链通道：?ids= 进入 → 「批量合并（深链）」项动态出现且渲染 MergeWorkspace', async () => {
+    mockSearchString = 'ids=00000000-0000-0000-0000-00000000000a,00000000-0000-0000-0000-00000000000b'
+    render(<MergeClient />)
+    await waitFor(() => {
+      expect(screen.getByRole('tab', { name: '批量合并（深链）' })).not.toBeNull()
+    })
+    // 常驻 3 区仍在
+    expect(screen.getByRole('tab', { name: '合并工作区' })).not.toBeNull()
   })
 
   it('Empty state：listCandidates 返回空 data', async () => {

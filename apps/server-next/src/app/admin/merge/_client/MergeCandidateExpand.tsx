@@ -183,7 +183,7 @@ export function CandidateExpand({ group, onMerge, onReject, onRejectPair }: Cand
         {/* §10.4-2：>11 组整组合并禁用 → 引导转工作区裁剪分批（替换旧「逐对明细分批」提示） */}
         {exceedsMergeLimit && (
           <span style={SECONDARY_TEXT} data-testid="merge-limit-note">
-            组内 {group.videos.length} 个视频超过单次合并上限（{MAX_MERGE_GROUP_VIDEOS}），请转入合并工作区裁剪集合分批合并
+            组内 {group.videos.length} 个视频超过单次合并上限（{MAX_MERGE_GROUP_VIDEOS}），请转入批量合并裁剪集合分批执行
           </span>
         )}
         {/* §10.4-2：次级动作 — 组成员带入 mode=merge 集合编辑器（可继续增删后执行） */}
@@ -193,7 +193,7 @@ export function CandidateExpand({ group, onMerge, onReject, onRejectPair }: Cand
           onClick={transferToWorkspace}
           data-testid="candidate-transfer-workspace"
         >
-          转入合并工作区
+          转入批量合并
         </AdminButton>
         {/* CHG-VIR-9-C：identity 来源候选可人工拒绝（confirm = 执行合并透传 candidateId）*/}
         {onReject && (

@@ -14855,3 +14855,19 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
   - 实测发现：`video_sources.episode_number` 现 schema **NOT NULL**（NULL 重复场景实际不存在；`IS NOT DISTINCT FROM` 口径无害保留为防御 + 与唯一键 NULLS NOT DISTINCT 一致）。
   - 门禁：typecheck/lint/verify:adr-contracts EXIT=0 + merge 域 API 209/209 + 前端 102/102 + 全量 6542/6543（1=StagingEditPanel 既见 jsdom flaky 隔离 12/12 过）+ e2e merge-deeplink 6/6。
   - **Codex stop-time review FIX（D-105-16 预览契约兑现）**：detect 预检函数物理删除后「预览信息源 + 将自动去重 N 条」缺口 → combineMatrices 增 (episodeNumber, sourceUrl) 精确重复计数信号（与后端 dedupeSourcesForMerge PARTITION 同口径预演，零新端点），同站同名信号拆分为「归并显示」提示（URL 不同不去重，语义精确化）；split 侧 target sources 前端未拉取，预览不产 N 以执行后 dedupedCount 兑现——形态澄清登记 AMENDMENT D-N 偏离节。测试 6→6a/6b 拆分 + 用例 11 随更（前端 84/84）。
+
+## [CHG-VIR-15-UX-A/B/C] merge 候选页 7 项 UX 重构（用户裁定，三卡）
+- **完成时间**：2026-06-05
+- **记录时间**：2026-06-05
+- **执行模型**：claude-opus-4-8｜子代理：无（纯 UI 展示层，零共享组件 API / 零 schema / 零 API 契约变更）
+- **修改文件**：
+  - `MergeCandidatesSection.tsx`（A）— 来源 Segment toggle 退役（请求固定 identity，空表降级 legacy 链路保留；minScore 控件仅降级态显示）；+来源列（行级 `g.identity` 有无 → 多证据/实时聚合 chip）/ +相似度列（identityScore%，legacy '—'）/ +操作列（快捷合并〔推荐 target + confirm〕+ 快捷拒绝；stopPropagation 不触发行展开）
+  - `MergeComparePanel.tsx`（B）— 列等宽（tableLayout fixed + colgroup；字段列 110px，视频列 minWidth 200 撑横滚）；target 绿背景 → 整列绿色边框（头顶边+侧边+末行底边）；值全同行背景 --bg-subtle 标示（per-field valueKey）；新增「线路 · 播放」行：每视频列自己的线路+▶En（归属一目了然）+ 列内嵌 AdminPlayer（key=sourceId remount，多列同播对比画面）+ 展开/收起 toggle
+  - `MergeCandidateExpand.tsx`（B）— 线路惰性拉取（getVideoMatrix ×N，收起清数据）+ 结构信号 combineMatrices 零请求推导注入；EXPAND_PANEL_STYLE borderBottom 2px 强分隔（⑥）
+  - `MergeResultPreview.tsx`（B）— merge 形态内嵌 StructurePreview 退役 → optional `signals` 注入渲染（tone 配色对齐既有口径）；StructurePreview 本体保留（MergeWorkspace 深链消费）
+  - `MergeClient.tsx`（C）— Segment 常驻 3 区：「待审候选」更名「合并工作区」顶替旧 merge tab；mode=merge 保留**深链专用通道**（视频库/审核台 5+1 处 ?ids=/?candidate_a= 入口零破坏），深链激活时动态补「批量合并（深链）」项
+- **测试**：Section 用例 2 → 2a/2b/2c 重写；ComparePanel 11 系重写（注入契约/列内播放器装载关闭/idle-loading 态/signals；stale 守卫 11b/c/d 改测 StructurePreview 本体）；MergeClient 3 区断言 + 深链动态项用例；e2e merge-deeplink 用例 1/3 更新。merge 前端 89/89 + e2e 6/6 + tsc/lint/test:changed EXIT=0
+- **注意事项**：
+  - 来源列行级真源 = `g.identity` 有无（单查询内 identity 行有评分、降级 legacy 全表无）——未做双来源混合查询（identity 召回面 ≥ legacy 高度重叠，混合徒增重复组与分页复杂度）。
+  - AdminPlayer 跨模块导入第 2 消费方（PlayPreviewDrawer 先例）；第 3 消费方出现时按规则上提共享层。
+  - PlayPreviewDrawer + StructurePreview 保留：SplitWorkspace / MergeWorkspace（深链）继续消费。
