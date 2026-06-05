@@ -14566,3 +14566,18 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **D-N 闭环**：D-180-5（解绑 ^build + 试验入口默认不切；inputs 缓存正确性验证留 CHG-TEST-SLIM-E）
 - **共享层沉淀评估**：否——构建编排配置，无代码。
 - **注意事项**：① **存量发现**：tools/eslint-plugin-resovo 的 typecheck 脚本一直损坏（缺 @types/eslint，TS7016/TS7006 ×3）——根串行 typecheck 从不包含它故从未暴露；turbo 入口以 --filter 排除对齐现有覆盖范围（修复需新依赖 @types/eslint → 禁新依赖红线，留待人工裁定或随 ESLint plugin R&D 卡处理）。② 缓存命中判定基于 turbo 默认 inputs（全包内文件），跨 workspace 源变化是否正确失效未验证 → typecheck:turbo 不得作为门禁默认，CHG-TEST-SLIM-E 验证后才可切换。
+
+## [CHG-CARD-ATOM] 任务卡原子化判据定档（全卡型四问）
+- **完成时间**：2026-06-04
+- **记录时间**：2026-06-04 19:35
+- **执行模型**：claude-opus-4-8
+- **子代理**：Explore ×1 (claude-opus-4-8)（现有拆卡规则与缺口调查）
+- **修改文件**：
+  - `docs/rules/workflow-rules.md` — 「PATCH 卡范围软上限」扩展为「任务卡原子化判据」：全卡型起卡前四问（①改动项 >5 必拆〔原 PATCH 专属推广〕②跨层混合 schema/api-service/UI 跨 3 层强制拆、跨 2 层须写跨层理由 ③验收口径必须一句话唯一、新增测试 >12 用例 advisory ④依赖链 >4 层 advisory SEQ 重排）；阶段审计硬清单第 5 项同步全卡型
+  - `docs/rules/quality-gates.md` — §7 硬清单第 5 项「PATCH 卡」→「所有任务卡」（判据/统计口径/自动化指引同步）+ §6 第 7 条引用更新
+  - `CLAUDE.md` — 绝对禁止项对应行扩展为全卡型 + 跨 3 层禁止
+- **新增依赖**：无
+- **数据库变更**：无
+- **测试**：纯文档；test:changed docs-only SKIP 实测生效（6 个 .md 改动零测试运行 exit 0——新分层流程自证）；verify:docs-format 64 项 = 存量基线零新增；旧名"PATCH 卡范围软上限"引用全部更新（仅节标题保留出处注记）。
+- **共享层沉淀评估**：否——流程规则定档；判据单一真源 = workflow-rules §任务卡原子化判据，quality-gates/CLAUDE.md 为引用。
+- **注意事项**：① 仅约束新起卡、不追溯存量（CHG-VIR-13 系列等进行中卡不受影响）。② 数据依据 = M-SN-5 完成度反比 + CHG-VIR-9/11/12 拆卡 100% 完成度佐证；缺口调查证据 = 文件数/跨层/验收口径/链深四维无约束（CHG-VIR-12 A→F 六层链先例）。③ 自动守卫 verify:task-card-scope 已登记 CHG-CARD-ATOM-VERIFY 待立案。④ 权威源 server_next_plan §5.3 为历史 plan 文档不改写，演进真源在 workflow-rules（节内已注明扩展关系）。

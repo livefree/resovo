@@ -152,7 +152,7 @@
 4. **§1 第 5 项** "ADR §验证段逐条勾对清单"（R-CHECKLIST-2 修复 09-PATCH 类教训）
 5. **§2 第 7 问** "audit 写入位点对应 service test payload 内容显式断言"（修复 R-MID-1 教训第 5 次失守）
 6. **§3 第 6 项** "ADR §验证段未勾项"+ **第 7 项** "D-N 编号 changelog 闭环"
-7. **共享组件 API 改动 Opus trailer**（详见 `docs/rules/workflow-rules.md`）+ **PATCH 卡范围软上限 ≤ 5 项**（详见 `docs/rules/workflow-rules.md`）
+7. **共享组件 API 改动 Opus trailer**（详见 `docs/rules/workflow-rules.md`）+ **任务卡原子化判据（全卡型 ≤ 5 项 + 四问）**（详见 `docs/rules/workflow-rules.md` §任务卡原子化判据）
 
 ### 不在范围（独立卡）
 
@@ -175,7 +175,7 @@
 | 2 | 共享原语占比 ≥ 80% | 新增视图 JSX 节点中 `import from '@resovo/admin-ui'` / 共享 primitives 与 inline `<div>` 比例 ≥ 80% | `verify:primitive-usage-ratio`（M-SN-6 完善后落地，当前手工 review） | CHG-SN-5-12 DataTable 一体化（共享原语试点）|
 | 3 | R-MID-1 audit payload 内容断言 | 所有写操作测试断言 `audit_logs` 行数 + payload 关键字段非空（`expect.objectContaining({actionType, targetKind, targetId, beforeJsonb, afterJsonb})`）；新增写端点自动加入 `tests/unit/api/audit-log-coverage.test.ts` 白名单 | `tests/unit/api/audit-log-coverage.test.ts` PAYLOAD_REQUIRED + EXEMPT（已强制 9+11） | CHG-SN-5-CHECKLIST-AUDIT-2 R-MID-1 5 次系统化 |
 | 4 | schema 三层防护 | `npm run verify:adr-contracts` 4 类核验全绿（端点 + 错误码 + D-N + sql-schema-alignment）+ `tests/integration/api/**` 真实 PG 覆盖核心查询 + `npm run migrate:check` preflight 头部前置 | `verify:adr-contracts` + `test:integration` + `migrate:check` | CHG-SN-5-CHECKLIST-AUDIT + AUDIT-3 + CHG-SN-6-INTEGRATION-TEST + CI-MIGRATE-DRY-RUN |
-| 5 | PATCH 卡范围 ≤ 5 项 | 单张 PATCH 卡修复点 > 5 → 强制拆 `-A/-B`；milestone 内 PATCH 卡范围 > 5 项数 / 总 PATCH 卡数 ≥ 20% → 阶段评级降一档 | 手工统计（commit message 关键词 grep）| M-SN-5 数据观察 "PATCH 范围 ≥ 5 项 → 完成度反比"（workflow-rules 已沉淀）|
+| 5 | 任务卡范围 ≤ 5 项（**全卡型**，CHG-CARD-ATOM 扩展） | 单张卡改动项 > 5 → 强制拆 `-A/-B`（任意卡型；原子化四问见 workflow-rules §任务卡原子化判据：改动项 / 跨层混合 / 验收口径唯一 / 依赖链深度）；milestone 内范围 > 5 项卡数 / 总卡数 ≥ 20% → 阶段评级降一档 | 手工统计（commit message 关键词 grep；CHG-CARD-ATOM-VERIFY 待立案自动化）| M-SN-5 数据观察 "PATCH 范围 ≥ 5 项 → 完成度反比" + CHG-VIR-9/11/12 拆卡 100% 完成度佐证（workflow-rules 已沉淀）|
 
 **评级联动**（plan §5.3 A / B / C 修订）：
 - **A 级**：5 项硬清单 100% 命中

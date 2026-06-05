@@ -120,7 +120,7 @@ npm run verify:adr-contracts # ADR 协议合规 3 类核验（端点/错误码/D
 - ❌ 文件超 500 行非声明性 / 导出 2+ 主要概念，不先拆分就继续写
 - ❌ 新增 admin route（`apps/api/src/routes/admin/*.ts` 新 `fastify.{get,post,put,patch,delete}`）未先起独立 ADR + Opus PASS（plan §4.5 R7 MUST-8；`npm run verify:endpoint-adr` 自动核验）
 - ❌ 修改 `packages/admin-ui/src/**/types.ts` 公开 Props 字段而 commit 缺 `Subagents: arch-reviewer (claude-opus-...)` trailer（CLAUDE.md §模型路由"共享组件 API 契约强制 Opus"）
-- ❌ PATCH 卡范围 > 5 项未拆 `-A/-B` 子卡（M-SN-5 数据观察 "PATCH 范围 ≥ 5 项 → 完成度反比"）
+- ❌ 任务卡（任意卡型）范围 > 5 项未拆 `-A/-B` 子卡，或 schema/api-service/UI 跨 3 层未拆（原子化四问见 workflow-rules §任务卡原子化判据；M-SN-5 数据观察 "范围 ≥ 5 项 → 完成度反比"）
 
 ---
 

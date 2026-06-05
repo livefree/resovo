@@ -3170,9 +3170,9 @@ CODENAME-MATRIX-E2E (依赖 Wave 3 验收期补丁 CODENAME-MATRIX ✅)
 
 ## [SEQ-20260604-02] 测试流程安全瘦身 + 任务卡原子化（流程优化 / 用户指令插队）
 
-- **状态**：🔄 执行中（2026-06-04 17:40 起；用户指令：CHG-VIR-13 首卡耗时近 3 小时，优先优化流程后再继续 SEQ-20260604-01）
+- **状态**：✅ 已完成（五卡全收口 2026-06-04 19:35；ADR-180 D-180-1~6 全闭环。实测收益：单测增量 14.7s vs 全量 250s〔17×〕/ docs-only 0s；E2E 全量 290→207 用例、域子集 18~82 + 按需起 server；typecheck:turbo 缓存 37ms。后续卡：CHG-TEST-CLEANUP-* / CHG-TEST-SLIM-E / CHG-CARD-ATOM-VERIFY 待立案）
 - **创建时间**：2026-06-04 17:40
-- **最后更新时间**：2026-06-04 17:40
+- **最后更新时间**：2026-06-04 19:35
 - **目标**：① 测试执行分层化——commit 前单测增量（vitest --changed import 图）+ 全量兜底收敛三节点（preflight 冷启动 / PHASE COMPLETE 审计前 / 合并 main 前）；E2E 按任务域选跑 + web-mobile 收窄移动 3 spec；typecheck 解绑 turbo `^build`。② 任务卡原子化判据定档——把 M-SN-5 PATCH 专属 ≤5 项规则推广为全卡型四问判据。
 - **范围**：scripts/ 新增包装器 + 根 package.json scripts（只增不删）+ vitest.config.ts / playwright.config.ts / turbo.json + 规范文档（CLAUDE.md / test-rules / workflow-rules / quality-gates / decisions.md ADR-180）。**不动 tests/\*\* 测试代码**（清理另立后续卡）；`test:run` / `test:e2e` / `test:guarded*` / `preflight` 全量入口语义保持不变（兜底锚点）。
 - **依赖**：无（与 SEQ-20260604-01 无文件域交叉；CHG-VIR-13 系列暂停让行）。
@@ -3216,12 +3216,15 @@ CODENAME-MATRIX-E2E (依赖 Wave 3 验收期补丁 CODENAME-MATRIX ✅)
    - 范围（2 项）：① turbo.json typecheck dependsOn `["^build"]` → `[]` ② package.json +typecheck:turbo（试验入口；默认链路仍用现有串行 typecheck，turbo inputs 缓存正确性另立验证卡）。
    - 验收要点：typecheck 与 typecheck:turbo 报错集一致；turbo typecheck 不再触发 next build。
    - 完成备注：D-180-5 闭环。typecheck:turbo EXIT=0 零 build 触发，首跑 21.7s / 二跑缓存 37ms FULL TURBO，报错集与串行一致。存量发现：eslint-plugin-resovo typecheck 脚本一直损坏（缺 @types/eslint；根串行从不含它）→ --filter 排除对齐现有覆盖，修复需新依赖留人工裁定。门禁 lint EXIT=0 + 单测升全量两轮（互不重合 jsdom 负载 flaky ×2 各自隔离全过排除）。执行模型: claude-opus-4-8；子代理: 无。
-5. **CHG-CARD-ATOM** — 任务卡原子化判据定档（状态：⬜ 待开始）
+5. **CHG-CARD-ATOM** — 任务卡原子化判据定档（状态：✅ 已完成）
    - 创建时间：2026-06-04 17:40
+   - 实际开始：2026-06-04 19:25
+   - 完成时间：2026-06-04 19:35
    - 建议模型：opus
    - 依赖：无（正交可独立）
    - 范围（4 项）：① workflow-rules.md「PATCH 卡范围软上限」扩展为「任务卡原子化判据」（四问：改动项 >5 全卡型必拆 / 跨层混合 schema·api·UI 跨 3 层强制拆、跨 2 层须写跨层理由 / 验收口径必须一句话唯一、预估新增测试 >12 用例 advisory 评估拆分 / 依赖链 >4 层 advisory SEQ 重排）② quality-gates.md 硬清单第 5 项「PATCH 卡」→「所有任务卡」③ CLAUDE.md 绝对禁止项对应行同步 ④ 登记后续卡 verify:task-card-scope（自动守卫，可选）。
    - 验收要点：新规仅约束新起卡不追溯存量；与现有 PATCH 条款为超集关系不冲突；verify:docs-format 绿。
+   - 完成备注：四问判据落档（真源 workflow-rules §任务卡原子化判据；quality-gates/CLAUDE.md 引用同步；旧名引用全更新）。仅约束新起卡不追溯存量；自动守卫已登记 CHG-CARD-ATOM-VERIFY。门禁：test:changed docs-only SKIP 实测生效（新分层流程自证）+ verify:docs-format 存量基线零新增。执行模型: claude-opus-4-8；子代理: Explore ×1 (claude-opus-4-8)。**SEQ-20260604-02 五卡全收口**。
 
 ### 后续卡登记（本序列产出，不在本序列内执行）
 
