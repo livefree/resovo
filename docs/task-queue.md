@@ -3067,7 +3067,7 @@ CODENAME-MATRIX-E2E (依赖 Wave 3 验收期补丁 CODENAME-MATRIX ✅)
 
 ## [SEQ-20260604-01] 后台合并/拆分页面 UI/UX 优化（CHG-VIR-13）
 
-- **状态**：🔄 进行中（2026-06-04 13:05 起 13-ADR）
+- **状态**：✅ 主体完结（2026-06-04 22:10：**全部 13 卡完成**。收口硬前置执行状态——② merge 深链 e2e ✅ 新建 `tests/e2e/admin/merge/merge-deeplink.spec.ts` 6/6 全过〔升级映射 5 形态 + records 双子视图；admin-next :3003 全 mock；修 playwright glob `?` 通配符歧义 → RegExp + catch-all 兜底〕；③ video 域 ✅ 已实跑归因〔13-D1：4 passed / 5 failed 经 stash 基线对照**逐字一致 = pre-existing**，其中 publish-flow 3 个 = `test:e2e:video` admin 段不起 web server 的域选跑脚本结构性缺陷，修复归独立 follow-up〕；① player 域 ⏸ 被外部 :3000 next-server 阻塞〔PID 81689 / Jun 4 00:28 启动 = 旧代码，kill 被权限分类器拒〕——**待用户停止该进程后补跑** `npm run test:e2e:player`。pre-existing e2e 欠账〔video 域 5 failed + 域选跑脚本 web 依赖缺陷〕建议立独立卡。）
 - **创建时间**：2026-06-04 00:00
 - **最后更新时间**：2026-06-04（融合修订：独立 B 稿对比裁定吸收，设计文档 §10；新增 13-A2/13-WS，13-A→13-A1，13-B2 拆 B2A/B2B，13-C2/13-D2/13-I18N 范围与依赖更新。第二轮问答补 §10.4 N→1 交互定档：矩阵 N 列布局 + 列头 target 单选归 13-B2A；候选组「转入合并工作区」+ >11 组转工作区裁剪分批归 13-B2B。第三轮问答补 §10.5 结构级结果预览〔getVideoMatrix ×N 合成线路×集数 + 结构信号，归 13-B2A〕+ 播放抽验〔AdminPlayer 复用 + 同集对比切换，新卡 13-PLAY〕；§11 目标布局/流程图 9 张入档）
 - **目标**：在视频身份解析与合并/拆分升级已完成 Phase 5 的基础上，升级 `/admin/merge` 为统一的视频身份处置工作台（mode 骨架：candidates / merge / split / records 单一活动工作区），覆盖入口体系、合并/拆分前后预览、自动/手动记录、操作内状态设置。
