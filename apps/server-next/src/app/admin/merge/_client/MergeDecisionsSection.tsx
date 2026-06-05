@@ -124,7 +124,7 @@ export function DecisionsSection() {
               <th style={{ padding: '6px 8px', width: '80px' }}>裁定</th>
               <th style={{ padding: '6px 8px', width: '60px' }}>来源</th>
               <th style={{ padding: '6px 8px' }}>候选 pair</th>
-              <th style={{ padding: '6px 8px', width: '70px' }}>身份分</th>
+              <th style={{ padding: '6px 8px', width: '70px' }}>相似度</th>
               <th style={{ padding: '6px 8px', width: '100px' }}>操作人</th>
               <th style={{ padding: '6px 8px', width: '150px' }}>时间</th>
               <th style={{ padding: '6px 8px', width: '90px' }}>状态</th>

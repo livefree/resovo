@@ -43,19 +43,7 @@ const EXPAND_PANEL_STYLE: CSSProperties = {
   gap: '12px',
 }
 
-const CONFIDENCE_PILL_STYLE: CSSProperties = {
-  display: 'inline-flex',
-  alignItems: 'center',
-  padding: '2px 10px',
-  borderRadius: '999px',
-  fontSize: '12px',
-  fontWeight: 700,
-  background: 'var(--state-success-bg)',
-  color: 'var(--state-success-fg)',
-  border: '1px solid var(--state-success-border)',
-}
-
-// CHG-VIR-7：身份评分（identityScore 与 legacyScore 双值并存，文案区分防语义混淆 / R3）
+// CHG-VIR-7：身份评分（identityScore，UI 文案「相似度」/ CHG-VIR-14-SCORE-UI 定名）
 const IDENTITY_PILL_STYLE: CSSProperties = {
   display: 'inline-flex',
   alignItems: 'center',
@@ -121,14 +109,11 @@ export function CandidateExpand({ group, onMerge, onReject, onRejectPair }: Cand
 
   return (
     <div style={EXPAND_PANEL_STYLE}>
-      {/* 置信度（legacyScore=源重合度）+ 身份分（identityScore=多证据）双 pill + 候选数（字段分离 / R3）*/}
+      {/* 相似度（identityScore=多证据）pill + 候选数；置信度 pill（legacyScore）CHG-VIR-14-SCORE-UI 退役 */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-        <span style={CONFIDENCE_PILL_STYLE} data-testid="confidence-pill">
-          {(group.score * 100).toFixed(1)}% 置信度
-        </span>
         {group.identity && (
           <span style={IDENTITY_PILL_STYLE} data-testid="identity-pill">
-            身份分 {(group.identity.identityScore * 100).toFixed(1)}%
+            相似度 {(group.identity.identityScore * 100).toFixed(1)}%
           </span>
         )}
         <span style={SECONDARY_TEXT}>{group.videos.length} 个候选视频</span>

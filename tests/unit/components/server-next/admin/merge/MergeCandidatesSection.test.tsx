@@ -154,7 +154,7 @@ describe('MergeCandidatesSection (CHG-VIR-9-C)', () => {
     })
   })
 
-  it('4. identity group 展开：「拒绝候选」按钮 + 身份分 pill 渲染', async () => {
+  it('4. identity group 展开：「拒绝候选」按钮 + 相似度 pill 渲染', async () => {
     listCandidatesMock.mockResolvedValueOnce(IDENTITY_RES)
     render(<CandidatesSection />)
     await waitFor(() => screen.getByText('復仇者聯盟'))

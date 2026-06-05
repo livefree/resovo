@@ -5,7 +5,7 @@
  *
  * 从 MergeClient 抽出（避免既有超限文件继续膨胀 / 边界清晰）。
  * 消费 CandidateGroup.identity（GroupIdentityScore）：为何可合并（blockingReasons）/
- * 为何拦截（strongNegativeReasons veto）/ 逐对明细（pairs，身份分取最弱链接）。
+ * 为何拦截（strongNegativeReasons veto）/ 逐对明细（pairs，相似度取最弱链接）。
  */
 
 import type { CSSProperties } from 'react'
@@ -77,7 +77,7 @@ export function EvidencePanel({ identity, onRejectPair }: EvidencePanelProps) {
       )}
       <details>
         <summary style={{ ...MUTED_SM, cursor: 'pointer' }}>
-          逐对证据明细（{identity.pairs.length} 对 · 身份分取最弱链接）
+          逐对证据明细（{identity.pairs.length} 对 · 相似度取最弱链接）
         </summary>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '6px' }}>
           {identity.pairs.map((p) => {
@@ -88,7 +88,7 @@ export function EvidencePanel({ identity, onRejectPair }: EvidencePanelProps) {
                 style={{ ...MUTED_SM, display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}
               >
                 <span style={{ fontWeight: 600 }}>{pairLabel}</span>
-                <span>身份分 {(p.identityScore * 100).toFixed(1)}%</span>
+                <span>相似度 {(p.identityScore * 100).toFixed(1)}%</span>
                 {p.strongNegativeReasons.length > 0 && (
                   <span>
                     {p.strongNegativeReasons.map((t) => (

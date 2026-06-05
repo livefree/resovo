@@ -8,7 +8,7 @@
  * 行为：
  *  - 切到此 Tab 时调 `listSimilarVideos(videoId, { limit: 10, source })`（默认 identity，空表服务端降级）
  *  - source toggle（多证据 / 实时算法）+ 降级回显提示（请求 identity 实际 legacy）
- *  - 渲染 top-N 列表（标题 + meta + 身份分/相似分 pill + 拦截原因 chips + 拒绝/发起合并按钮）
+ *  - 渲染 top-N 列表（标题 + meta + 相似度/相似分 pill + 拦截原因 chips + 拒绝/发起合并按钮）
  *  - 拒绝（identity pending 候选）→ POST /admin/identity-candidates/:id/reject → 本地移除行
  *  - 发起合并 → router.push(/admin/merge?candidate_a=..&candidate_b=..&from=moderation[&candidate_id=..])
  *  - 空结果显示 EmptyState；错误显示 ErrorState + 重试
@@ -208,7 +208,7 @@ export function TabSimilar({ videoId }: TabSimilarProps): React.ReactElement {
           </span>
           {it.identityScore != null ? (
             <span style={SCORE_PILL} title={`identityScore = ${it.identityScore}`}>
-              身份分 {(it.identityScore * 100).toFixed(0)}%
+              相似度 {(it.identityScore * 100).toFixed(0)}%
             </span>
           ) : (
             <span style={SCORE_PILL} title={`similarityScore = ${it.similarityScore}`}>

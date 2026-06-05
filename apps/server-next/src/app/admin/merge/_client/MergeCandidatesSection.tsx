@@ -36,17 +36,6 @@ import { CandidateExpand, SECONDARY_TEXT } from './MergeCandidateExpand'
 
 // ── 样式（CSS 变量零硬编码颜色）────────────────────────────────────
 
-const SCORE_BADGE_STYLE: CSSProperties = {
-  display: 'inline-block',
-  padding: '2px 8px',
-  borderRadius: '4px',
-  fontSize: '12px',
-  fontWeight: 600,
-  background: 'var(--state-success-bg)',
-  color: 'var(--state-success-fg)',
-  border: '1px solid var(--state-success-border)',
-}
-
 // CHG-VIR-9-C：identity→legacy 降级回显提示条
 const FALLBACK_NOTE_STYLE: CSSProperties = {
   padding: '4px 10px',
@@ -91,8 +80,9 @@ export function CandidatesSection() {
     setLoading(true)
     setError(null)
     // ADR-150 阶段 5 EP-4 follow-up（2026-05-25）：sort 白名单守卫 + URL 透传
-    const sortFieldGuarded: 'score' | 'videoCount' | 'year' | 'titleNormalized' | undefined =
-      sort.field === 'score' || sort.field === 'videoCount' || sort.field === 'year' || sort.field === 'titleNormalized'
+    // CHG-VIR-14-SCORE-UI：score 列退役（legacyScore 误导展示），守卫白名单同步去 score
+    const sortFieldGuarded: 'videoCount' | 'year' | 'titleNormalized' | undefined =
+      sort.field === 'videoCount' || sort.field === 'year' || sort.field === 'titleNormalized'
         ? sort.field
         : undefined
     listCandidates({
@@ -218,16 +208,8 @@ export function CandidatesSection() {
       enableResizing: true,
       cell: ({ row }) => <span>{row.videos.length} 条</span>,
     },
-    {
-      id: 'score',
-      kind: 'computed',
-      enableSorting: true, // ADR-150 阶段 5 EP-4 follow-up sort 全栈打通（默认 score DESC / 切 ASC 看低重合度）
-      header: '重合度',
-      accessor: (g) => g.score,
-      width: 110, minWidth: 90,
-      enableResizing: true,
-      cell: ({ row }) => <span style={SCORE_BADGE_STYLE}>{(row.score * 100).toFixed(1)}%</span>,
-    },
+    // CHG-VIR-14-SCORE-UI：「重合度」列退役——identity 默认来源下 legacy_score 全 NULL → 恒 0% 误导；
+    // legacyScore 仅余 legacy 降级链路后端过滤/排序消费（minScore 控件保留），不再展示
   ], [])
 
   const query = useMemo(() => ({

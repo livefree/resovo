@@ -11,7 +11,7 @@
  *   - 拆分工作台：type select 11 选项（P2-3）
  *   - 已合并 Segment → listAudit action='merge'
  *   - 已拆分 Segment → listAudit action='split'
- *   - 置信度 pill：展开后显示 "85.0% 置信度"（MERGE-2）
+ *   - 置信度 pill 已退役：展开后不渲染 confidence-pill（MERGE-2 / CHG-VIR-14-SCORE-UI）
  *   - 影响预览：展开后显示源视频预览区块（MERGE-2）
  *
  * 路径策略：用相对路径 import（与 HomeOpsClient.test.tsx 同范式）避免 @ alias 在测试环境内的解析歧义。
@@ -194,7 +194,8 @@ describe('MergeClient', () => {
     render(<MergeClient />)
     await waitFor(() => {
       expect(screen.getByText('復仇者聯盟')).not.toBeNull()
-      expect(screen.getByText('85.0%')).not.toBeNull()
+      // CHG-VIR-14-SCORE-UI：「重合度」列退役 → 列表不再渲染 legacyScore 百分比
+      expect(screen.queryByText('85.0%')).toBeNull()
     })
     fireEvent.click(screen.getByText('復仇者聯盟'))
     await waitFor(() => {
@@ -310,16 +311,17 @@ describe('MergeClient', () => {
     })
   })
 
-  // ── MERGE-2：card 形态 + 置信度 pill + 影响预览 ──────────────────
+  // ── MERGE-2：card 形态 + 影响预览（置信度 pill CHG-VIR-14-SCORE-UI 退役）──────────────────
 
-  it('MERGE-2：置信度 pill — 展开后显示 "85.0% 置信度"', async () => {
+  it('MERGE-2/VIR-14：置信度 pill 已退役 — 展开后不渲染 confidence-pill（legacyScore 不再展示）', async () => {
     listCandidatesMock.mockResolvedValueOnce(ONE_GROUP_RES)
     render(<MergeClient />)
     await waitFor(() => screen.getByText('復仇者聯盟'))
     fireEvent.click(screen.getByText('復仇者聯盟'))
     await waitFor(() => {
-      expect(screen.getByTestId('confidence-pill').textContent).toContain('85.0%')
-      expect(screen.getByTestId('confidence-pill').textContent).toContain('置信度')
+      // 展开面板已渲染（结果预览存在）但 confidence-pill 不存在
+      expect(screen.getByTestId('merge-result-preview')).not.toBeNull()
+      expect(screen.queryByTestId('confidence-pill')).toBeNull()
     })
   })
 

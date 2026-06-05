@@ -14799,3 +14799,25 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
   - **根因**：13-WS 预填 `videoPickerFetcher({ q: uuid })`——后端 listVideos 的 q 仅匹配 `title/title_en/title_original/short_id ILIKE`（videos.ts:300），**UUID 恒 0 结果** → 全部深链预填路径（候选转工作区 / 视频库批量 / 审核台 batch / candidate_a+b / SplitWorkspace 标题充实）自上线起恒走「(加载失败，请确认 id)」占位。
   - **测试教训**：原单测/e2e 的 mock fetcher 按 `q===id` 返回，掩盖真实契约不匹配——本次 mock 全部对齐真实契约（搜索 mock 不再按 uuid 命中；by-id 单独 mock）+ e2e 增反占位断言。
   - 门禁：merge 域单测全过 + e2e deeplink 6/6 + server-next tsc EXIT=0 + lint EXIT=0。
+
+## [CHG-VIR-14-SCORE-UI] merge 工作台重合度（legacyScore）UI 退役 + 「身份分」全消费点改名「相似度」（用户裁定）
+- **完成时间**：2026-06-05
+- **记录时间**：2026-06-05 00:10
+- **执行模型**：claude-opus-4-8
+- **子代理**：无
+- **修改文件**：
+  - `apps/server-next/src/app/admin/merge/_client/MergeCandidatesSection.tsx` — 移除「重合度」列（id: 'score'）+ sort 白名单守卫去 score + SCORE_BADGE_STYLE 死码清理
+  - `apps/server-next/src/app/admin/merge/_client/MergeCandidateExpand.tsx` — 移除置信度 pill（confidence-pill + CONFIDENCE_PILL_STYLE）；identity-pill 文案「身份分」→「相似度」
+  - `apps/server-next/src/app/admin/merge/_client/EvidencePanel.tsx` — 「身份分取最弱链接」+ 逐对明细文案 →「相似度」
+  - `apps/server-next/src/app/admin/merge/_client/MergeDecisionsSection.tsx` — 决策记录表头「身份分」→「相似度」
+  - `apps/server-next/src/app/admin/moderation/_client/RightPane/TabSimilar.tsx` — 审核台相似 Tab pill「身份分」→「相似度」
+  - `tests/unit/components/server-next/admin/merge/MergeClient.test.tsx` — MERGE-2 改反向断言（confidence-pill 不渲染 + 候选行 85.0% 不再出现）
+  - `tests/unit/components/server-next/admin/merge/MergeCandidatesSection.test.tsx` — it 名文案对齐
+  - `tests/unit/components/server-next/admin/moderation/TabSimilar.test.tsx` — 断言「身份分 87%」→「相似度 87%」
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - **背景**（用户会话内审计裁定）：identity 默认来源下 `identity_candidate.legacy_score` 全 NULL（唯一写入点 pairScoringPersist.ts:152 硬编码 null，dev 实测 239 行全空）→ buildGroupFromCluster `min(legacy_score ?? 0)` = 0 → 「重合度」列 + 「置信度」pill 恒 0% 误导审核员。本卡为重合度退役三步走**第 1 步（仅 UI 展示层）**。
+  - **不动**：API 契约（CandidateGroup.score 字段保留）/ minScore 参数与 legacy 模式控件 / legacy 降级链路（identity 空表自动落回）/ `identity_candidate.legacy_score` DB 列 / source toggle。**完整退役（第 3 步）须起 ADR-105/105a AMENDMENT**：移除 legacy 评分路径 + computeOverlapScore + minScore + legacy_score 死列，受 Y-105a-1 黄线约束需 Opus 评审，另案排卡。
+  - identityScore 代码字段名不改，仅中文展示文案统一为「相似度」。
+  - 门禁：merge+TabSimilar 单测 93/93 + test:changed 71/71 + typecheck/lint EXIT=0 + e2e merge-deeplink 6/6。

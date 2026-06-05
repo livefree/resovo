@@ -7,7 +7,7 @@
  *  3. 「发起合并」点击（legacy 行）→ router.push 携带 candidate_a/b/from 三参数（无 candidate_id）
  *  4. 空召回 → EmptyState「未找到类似视频」
  *  5. 网络错误 → ErrorState + 重试
- *  6. identity 行 → 身份分 pill + 拦截原因 chips + 拒绝按钮
+ *  6. identity 行 → 相似度 pill + 拦截原因 chips + 拒绝按钮
  *  7. identity 行「发起合并」→ 深链追加 candidate_id
  *  8. 拒绝 → rejectIdentityCandidate 调用 + 行本地移除 + success toast
  *  9. 降级回显：请求 identity 返回 legacy → 提示条渲染
@@ -139,11 +139,11 @@ describe('TabSimilar (CHG-SN-8-04-VIEW · ADR-137 / CHG-VIR-9-C identity)', () =
 
   // ── CHG-VIR-9-C：identity 来源消费 ────────────────────────────────
 
-  it('6. identity 行：身份分 pill + 拦截原因 chips + 拒绝按钮', async () => {
+  it('6. identity 行：相似度 pill + 拦截原因 chips + 拒绝按钮', async () => {
     listSimilarVideosMock.mockResolvedValueOnce({ items: [IDENTITY_ITEM], source: 'identity' })
     render(<TabSimilar videoId="target-id" />)
     await waitFor(() => screen.getByTestId('tab-similar-list'))
-    expect(screen.getByText('身份分 87%')).not.toBeNull()
+    expect(screen.getByText('相似度 87%')).not.toBeNull()
     const veto = screen.getByTestId('tab-similar-veto-v9')
     expect(veto.textContent).toContain('季号不一致')
     expect(screen.getByTestId('tab-similar-reject-v9')).not.toBeNull()
