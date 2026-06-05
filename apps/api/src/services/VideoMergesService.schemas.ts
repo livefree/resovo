@@ -11,6 +11,7 @@ import type {
   EvidenceItem,
   PairScore,
 } from '@resovo/types'
+import { REVIEW_STATUSES, VISIBILITY_STATUSES } from '@resovo/types'
 import type { RawVideoDetailRow } from '@/api/db/queries/video-merge-candidates'
 import type { PendingCandidatePairRow } from '@/api/db/queries/identity-candidate'
 import { SCORER_VERSION, aggregateGroup } from './identity'
@@ -36,10 +37,23 @@ export const ListCandidatesSchema = z.object({
   source: z.enum(['identity', 'legacy']).default('identity'),
 })
 
+// ADR-105 AMENDMENT 2026-06-04 D-105-9（CHG-VIR-13-D1）：操作内状态设置。
+// 两维 optional 但不得双缺省（空对象无语义，显式拒绝优于静默 no-op）；
+// (current, desired) 矩阵校验在 Service 层 BEGIN 前（依赖 DB current 状态）。
+const StatusSettingSchema = z.object({
+  reviewStatus: z.enum(REVIEW_STATUSES).optional(),
+  visibilityStatus: z.enum(VISIBILITY_STATUSES).optional(),
+}).refine(
+  (v) => v.reviewStatus !== undefined || v.visibilityStatus !== undefined,
+  { message: '状态设置至少提供 reviewStatus 或 visibilityStatus 之一' },
+)
+
 export const MergeSchema = z.object({
   sourceVideoIds: z.array(z.string().uuid()).min(1).max(10),
   targetVideoId: z.string().uuid(),
   reason: z.string().max(500).optional(),
+  // D-105-9（CHG-VIR-13-D1）：合并后 target 状态设置；缺省零行为变更（R-105-T1）
+  targetStatus: StatusSettingSchema.optional(),
   // CHG-VIR-9-B / ADR-178 D-178-3：关联 identity_candidate（confirmed→merge 单事务 / R8）。
   // 纯增量 optional，缺省时 merge 行为逐值不变。
   // CHG-VIR-9-D 起 deprecate：新消费方用 candidateIds（数组），单数保留向后兼容。
@@ -79,6 +93,9 @@ export const SplitSchema = z.object({
         title: z.string().min(1).max(500),
         year: z.number().int().min(1800).max(2100).optional(),
         type: VideoTypeEnum,
+        // D-105-9（CHG-VIR-13-D1）：新建 video 状态设置（current 恒 pending_review|internal）；
+        // targetVideoId 组结构上不可携带（newVideoMeta xor targetVideoId / R-105-T5 天然互斥）
+        status: StatusSettingSchema.optional(),
       }).optional(),
       targetVideoId: z.string().uuid().optional(),
     }).refine(

@@ -24,6 +24,7 @@ import type {
   ListAuditParams,
   ListAuditResult,
   MergeAuditRow,
+  StatusTransitionOutcome,
 } from '@resovo/types'
 import {
   fetchRawCandidateGroups,
@@ -62,6 +63,17 @@ import { AppError } from '@/api/lib/errors'
 // ADR-105 AMENDMENT 2026-06-03 D-105-2/3/5（CHG-VIR-11-B）：split 组解析（拆到已有/新建；
 // normalizeMergeKey 的 findOrCreate 组装一并移入 helper）
 import { resolveSplitGroups } from './VideoMergesService.split-helpers'
+// ADR-105 AMENDMENT 2026-06-04 D-105-9/10/11（CHG-VIR-13-D1）：操作内状态设置——
+// (current,desired) 矩阵 BEGIN 前校验 + post-COMMIT transitionVideoState 唯一通道（R-105-T2）
+import {
+  resolveStatusAction,
+  applyStatusTransition,
+  applyGroupStatusTransitions,
+  planTargetStatus,
+  restoreTargetStatusBefore,
+  SPLIT_INITIAL_STATE,
+  type TargetStatusBefore,
+} from './VideoMergesService.status-helpers'
 import {
   computeOverlapScore,
   pickRecommendedTarget,
@@ -320,11 +332,20 @@ export class VideoMergesService {
       await IdentityCandidatesService.validateForMerge(this.db, candidateId, allIds)
     }
 
+    // 2c. D-105-9（CHG-VIR-13-D1）：targetStatus 矩阵校验（BEGIN 前，非法组合 422 快速失败）。
+    // plan 三态：undefined = 未携带（零行为变更 R-105-T1）/ action null = no-op / action + before
+    const statusPlan = planTargetStatus(videoMap.get(targetVideoId)!, params.targetStatus)
+
     // 3. 构建 snapshot（source videos 完整数据 + 它们的 sources）
+    // D-105-11：将实际 apply（action 非 no-op）时补 targetStatusBefore（unmerge 还原依据；
+    // post-COMMIT failed 时 target 仍 = before，还原退化 skipped 自洽）
     const sourcesOfSources = await fetchSourcesByVideoIds(this.db, sourceVideoIds)
-    const snapshotJsonb = {
+    const snapshotJsonb: Record<string, unknown> = {
       videos: sourceVideoIds.map(id => videoMap.get(id)),
       sources: sourcesOfSources.map(s => ({ id: s.id, video_id: s.video_id })),
+      ...(statusPlan?.targetStatusBefore !== undefined
+        ? { targetStatusBefore: statusPlan.targetStatusBefore }
+        : {}),
     }
 
     // 4. 事务（抽 runMergeTransaction / R8 单 BEGIN/COMMIT）
@@ -332,8 +353,18 @@ export class VideoMergesService {
       sourceVideoIds, targetVideoId, reason, candidateIds, snapshotJsonb, actorId,
     })
 
+    // 4b. D-105-10（CHG-VIR-13-D1）：post-COMMIT 状态写入（唯一通道 transitionVideoState；
+    // 失败不回滚 merge，statusTransition 可观测 R-105-T3）
+    let statusTransition: StatusTransitionOutcome | undefined
+    if (statusPlan !== undefined) {
+      statusTransition = statusPlan.action === null
+        ? 'skipped'
+        : await applyStatusTransition(this.db, targetVideoId, statusPlan.action, actorId, reason)
+    }
+
     // 5. 拼装合并后 target 摘要（ADR-105 §端点契约 row 2：targetVideo: VideoSummary）
     // CHG-SN-5-10-PATCH P0-1：COMMIT 后查 target 详情反映合并后 sourceCount/sourceSiteKeys 新状态
+    //（4b 之后查询 → reviewStatus/visibilityStatus 透出反映状态设置后形态）
     const [targetDetail] = await fetchVideoDetailsForCandidates(this.db, [targetVideoId])
     if (!targetDetail) {
       // 理论不可达：COMMIT 已完成 + targetVideo 未被删除（前置校验通过）
@@ -344,18 +375,28 @@ export class VideoMergesService {
     // 6. fire-and-forget admin_audit_log（COMMIT 后才写，防虚假记录）
     // CHG-VIR-9-B / ADR-178 D-178-6：candidate 路径 afterJsonb 纯增量补 candidateIds/decisionIds
     //（CHG-VIR-9-D：单数 candidateId/decisionId 字段升级为数组，audit jsonb 非契约字段）
+    // D-105-12（CHG-VIR-13-D1）：携带 targetStatus 时纯增量补请求值 + statusTransition 结果
     this.auditSvc.write({
       actorId,
       actionType: 'video.merge',
       targetKind: 'video',
       targetId: targetVideoId,
       beforeJsonb: { sourceVideoIds, snapshot: snapshotJsonb },
-      afterJsonb: candidateIds.length > 0
-        ? { auditId, targetVideoId, candidateIds, decisionIds }
-        : { auditId, targetVideoId },
+      afterJsonb: {
+        auditId,
+        targetVideoId,
+        ...(candidateIds.length > 0 ? { candidateIds, decisionIds } : {}),
+        ...(params.targetStatus !== undefined
+          ? { targetStatus: params.targetStatus, statusTransition }
+          : {}),
+      },
     })
 
-    return { auditId, targetVideo }
+    return {
+      auditId,
+      targetVideo,
+      ...(statusTransition !== undefined ? { statusTransition } : {}),
+    }
   }
 
   // ── unmerge ───────────────────────────────────────────────────────
@@ -377,6 +418,12 @@ export class VideoMergesService {
     const snapshotSources = (
       (audit.snapshot_jsonb as { sources?: Array<{ id: string; video_id: string }> }).sources ?? []
     )
+
+    // D-105-11（CHG-VIR-13-D1）：merge audit snapshot 含 targetStatusBefore → COMMIT 后还原；
+    // 存量 audit 无该字段 → 不动（旧行为逐值一致，响应不出现 statusTransition）
+    const targetStatusBefore = audit.action === 'merge'
+      ? (audit.snapshot_jsonb as { targetStatusBefore?: TargetStatusBefore }).targetStatusBefore
+      : undefined
 
     let restoredVideoIds: string[]
 
@@ -431,6 +478,16 @@ export class VideoMergesService {
       }
     }
 
+    // D-105-11（CHG-VIR-13-D1）：post-COMMIT 还原 target 状态（同 D-105-10 非原子边界，
+    // 失败不回滚 unmerge；还原同走 (current, before) 矩阵，无单步回路时如实 failed 人工兜底）
+    let statusTransition: StatusTransitionOutcome | undefined
+    if (targetStatusBefore !== undefined) {
+      const mergeTargetId = audit.target_video_ids[0]
+      statusTransition = mergeTargetId !== undefined
+        ? await restoreTargetStatusBefore(this.db, mergeTargetId, targetStatusBefore, actorId, reason)
+        : 'failed'
+    }
+
     // fire-and-forget admin_audit_log
     const firstRestoredId = restoredVideoIds[0] ?? auditId
     const revertedFromTargetVideoId = audit.action === 'merge' ? audit.target_video_ids[0] : undefined
@@ -440,10 +497,16 @@ export class VideoMergesService {
       targetKind: 'video',
       targetId: firstRestoredId,
       beforeJsonb: { auditId, action: audit.action, revertedFromTargetVideoId },
-      afterJsonb: { restoredVideoIds },
+      afterJsonb: {
+        restoredVideoIds,
+        ...(statusTransition !== undefined ? { statusTransition } : {}),
+      },
     })
 
-    return { restoredVideoIds }
+    return {
+      restoredVideoIds,
+      ...(statusTransition !== undefined ? { statusTransition } : {}),
+    }
   }
 
   // ── split ─────────────────────────────────────────────────────────
@@ -505,12 +568,24 @@ export class VideoMergesService {
     // newVideoMeta 组沿 CHG-VIR-PRE-1 事务前 findOrCreate catalog（回滚至多留无害孤儿 catalog）。
     const resolvedGroups = await resolveSplitGroups(this.db, this.catalogSvc, videoId, groups)
 
+    // 3b. D-105-9（CHG-VIR-13-D1）：per-group status 矩阵校验（BEGIN 前，非法组合 422 整体不执行）。
+    // current 恒 SPLIT_INITIAL_STATE（insertNewVideo DB DEFAULT pending_review|internal / migration 016）；
+    // targetVideoId 组结构上无 newVideoMeta 不可携带（R-105-T5）。
+    // undefined = 该组未携带 status（响应不产条目）；null = current==desired no-op skipped
+    const groupStatusActions = groups.map((g) =>
+      g.newVideoMeta?.status !== undefined
+        ? resolveStatusAction(SPLIT_INITIAL_STATE, g.newVideoMeta.status)
+        : undefined,
+    )
+
     // 4. 事务：INSERT audit + 创建新 videos / 转入已有 videos + 分配 sources + 软删除原 video
     const client = await this.db.connect()
     let auditId: string
     // D-105-4：created（新建，unmerge 时软删）与全部 target（audit.target_video_ids）分别记录
     const newVideoIds: string[] = []
     const allTargetVideoIds: string[] = []
+    // D-105-10：组下标 → 新建 videoId（post-COMMIT 状态写入定位；existing 组恒 undefined）
+    const createdVideoIdByGroup: (string | undefined)[] = new Array(resolvedGroups.length)
 
     try {
       await client.query('BEGIN')
@@ -526,7 +601,8 @@ export class VideoMergesService {
         reason: null,
       })
 
-      for (const group of resolvedGroups) {
+      for (let i = 0; i < resolvedGroups.length; i++) {
+        const group = resolvedGroups[i]!
         if (group.kind === 'existing') {
           // D-105-5 / R-105-S3：仅转入 sources，不改已有 video 任何元数据
           await assignSourcesToVideo(client, [...group.sourceIds], group.targetVideoId)
@@ -542,6 +618,7 @@ export class VideoMergesService {
         })
         newVideoIds.push(newVideoId)
         allTargetVideoIds.push(newVideoId)
+        createdVideoIdByGroup[i] = newVideoId
         await assignSourcesToVideo(client, [...group.sourceIds], newVideoId)
       }
 
@@ -558,7 +635,14 @@ export class VideoMergesService {
       client.release()
     }
 
-    // fire-and-forget admin_audit_log（D-105-6：afterJsonb 扩 existingTargetVideoIds）
+    // 4b. D-105-10（CHG-VIR-13-D1）：post-COMMIT 逐一应用新建 video 状态（失败不回滚 split；
+    // 数组仅含携带 status 的新建组，未携带组无 transition 意图不产条目）
+    const statusTransition = await applyGroupStatusTransitions(
+      this.db, groupStatusActions, createdVideoIdByGroup, actorId,
+    )
+
+    // fire-and-forget admin_audit_log（D-105-6：afterJsonb 扩 existingTargetVideoIds；
+    // D-105-12：携带 status 时纯增量补请求值 + statusTransition 结果）
     const existingTargetVideoIds = allTargetVideoIds.filter((id) => !newVideoIds.includes(id))
     this.auditSvc.write({
       actorId,
@@ -566,10 +650,27 @@ export class VideoMergesService {
       targetKind: 'video',
       targetId: videoId,
       beforeJsonb: { originalVideoId: videoId, snapshot: snapshotJsonb },
-      afterJsonb: { auditId, newVideoIds, existingTargetVideoIds },
+      afterJsonb: {
+        auditId,
+        newVideoIds,
+        existingTargetVideoIds,
+        ...(statusTransition !== undefined
+          ? {
+              requestedStatuses: groups.flatMap((g, i) =>
+                g.newVideoMeta?.status !== undefined
+                  ? [{ groupIndex: i, status: g.newVideoMeta.status }]
+                  : []),
+              statusTransition,
+            }
+          : {}),
+      },
     })
 
-    return { auditId, newVideoIds }
+    return {
+      auditId,
+      newVideoIds,
+      ...(statusTransition !== undefined ? { statusTransition } : {}),
+    }
   }
 
   // ── audit timeline (CHG-SN-6-AUDIT-TIMELINE / RETRO 4/7) ──────────

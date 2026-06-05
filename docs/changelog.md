@@ -14638,3 +14638,26 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **变更内容**：13-PLAY 卡面自书「完成后补跑 test:e2e(PLAYER)」门禁未兑现即标 ✅ —— 本次实跑兑现：`test:e2e:player` 8 spec，webServer 自起被外部 :3000 next-server 占用（EADDRINUSE）→ `PLAYWRIGHT_SERVERS=` 复用外部 server 实跑 38 failed；**归因 = 环境性非回归**（双证据：① smoke.spec 基础路由自身 2/2 失败〔next-placeholder 200 不通过〕= 外部 server 与 e2e 期望环境不符；② 系列全部 commits 对前台 diff 仅 video-merge.types.ts +17 行纯 optional 类型，apps/web-next / player-core 零触碰，smoke 不消费该类型）。可信 e2e 验证（干净 :3000 环境：player 域 + merge 页深链 + video 域〔13-D1 后〕）登记为**系列收口硬前置**，任一失败先修复再收口。
 - **测试**：纯 docs + e2e 实跑取证；单测门禁不受影响（6404/6404 维持）
 - **注意事项**：教训沉淀——卡面自书门禁加项必须在收口前兑现或显式降级为可追踪条目，禁止「登记留收口」的含糊态（无归宿的未尽门禁 = 完成状态不一致）。
+
+## [CHG-VIR-13-D1] merge/split 操作内状态设置后端扩展（SEQ-20260604-01 / ADR-105 AMENDMENT 2026-06-04 D-105-9~12）
+- **完成时间**：2026-06-04
+- **记录时间**：2026-06-04 20:20
+- **执行模型**：claude-opus-4-8
+- **子代理**：arch-reviewer (claude-opus-4-8 / a19744b07045b47e3)——13-ADR 阶段 D-105-9 契约 PASS（含 R1 修订「(current,desired) 二元组矩阵」），本卡按契约实施，无新 spawn
+- **修改文件**：
+  - `packages/types/src/video-merge.types.ts` — 新增 `VideoStatusSetting` / `StatusTransitionOutcome`；`MergeParams.targetStatus?` + `SplitGroup.newVideoMeta.status?`（targetVideoId 组结构互斥天然不可携带 / R-105-T5）+ `MergeResult` / `SplitResult`（数组形态）/ `UnmergeResult` 各扩 `statusTransition?`
+  - `apps/api/src/services/VideoMergesService.status-helpers.ts` — **新建（251 行）**：(current,desired) 二元组 → action 覆盖矩阵（应用层 9 值 action from-state 前置 + migration 053 trigger 白名单双层逐行核对，差集注释留档）+ `resolveStatusAction`（归一化 / no-op null / 矩阵外 422）+ `applyStatusTransition`（post-COMMIT 唯一通道 transitionVideoState / R-105-T2，失败 warn 留痕不抛）+ `planTargetStatus` / `applyGroupStatusTransitions`（编排下沉）+ `restoreTargetStatusBefore`（unmerge 还原）+ `SPLIT_INITIAL_STATE`（migration 016 DEFAULT 真源）
+  - `apps/api/src/services/VideoMergesService.ts` — merge：BEGIN 前 plan（非法 422 快速失败）→ 将 apply 时 snapshot 写 `targetStatusBefore`（no-op 不写）→ COMMIT 后 apply → targetDetail 查询后置反映新状态；split：per-group resolve（current 恒 pending|internal）+ 组下标→新建 videoId 定位 + post-COMMIT 数组仅含携带组；unmerge：snapshot 含 before → COMMIT 后反查 current 还原（存量 audit 无字段不动 = 旧行为逐值一致）；audit afterJsonb 纯增量补 targetStatus / requestedStatuses + statusTransition（D-105-12）
+  - `apps/api/src/services/VideoMergesService.schemas.ts` — `StatusSettingSchema`（双维 optional + 拒空对象）接入 MergeSchema / SplitSchema newVideoMeta
+  - `apps/api/src/db/queries/video-merge-mutations.ts` — `fetchVideosByIds` SELECT +2 列（review_status / visibility_status）+ `RawVideoRow` 同步（D-105-11 还原依据 + BEGIN 前矩阵输入）
+  - `tests/unit/api/video-merge-status-helpers.test.ts` — **新建（67 用例）**：矩阵 6×9=54 cell 全枚举定档（D-105-9 评审 R1 兑现，矩阵漂移即红）+ 归一化 4 + SPLIT_INITIAL_STATE 1 + applyStatusTransition 3 + restoreTargetStatusBefore 5
+  - `tests/unit/api/video-merge-mutations.test.ts` — +18 用例（merge targetStatus 5：R-105-T1 逐值不变 / applied+snapshot 逐值+afterJsonb / skipped / failed 不回滚 / 422 BEGIN 前；split status 4；unmerge 还原 4 含无回路边界；zod 5）+ makeVideoRow 状态参数化 + videos.mutations/logger mock
+- **新增依赖**：无
+- **数据库变更**：无（零 migration；fetchVideosByIds 仅扩 SELECT 列）
+- **注意事项**：
+  - **偏离登记 (a)**：unmerge 还原复用单步矩阵——`approve_and_publish` / `reject` 的反向（如 approved|public → pending|internal 须先 unpublish 两步 / M-SN-4 D-01）无单步回路时如实 `statusTransition='failed'` 人工兜底（D-105-11 非原子声明覆盖；**两步还原须回 ADR 另行定档，本卡不发明协议**；dev 实测 + 单测固化该边界）。13-D2 前端提示文案需覆盖此场景。
+  - **偏离登记 (b)**：VideoMergesService.ts 599→700 行（Baseline 豁免文件恶化 +101；helper 下沉已收敛 727→700；拆分归 MISC FILE-SIZE 跟踪卡）。
+  - dev 真实库实测全绿：set_hidden applied→unmerge set_internal 还原 applied / approve_and_publish applied（post-COMMIT 序保证 sources 先转移过 trigger active-source 检查）→还原无回路 failed 边界实证 / 422 approved-target→rejected 整体不执行 / split 携带组 approved|internal + 未携带组 DEFAULT / 清理零残留。
+  - 门禁：typecheck/lint EXIT=0 + verify:adr-contracts ✓ + test:changed 自动升全量 6488/6489（1 = perf p95 高负载 flaky，隔离复跑 36/36 过）。
+  - e2e:video 已实跑：admin 段 4 passed / 5 failed —— **git stash 基线对照重跑失败列表逐字一致 = pre-existing 环境性失败**（publish-flow 3 个依赖 web :3000 而 PLAYWRIGHT_SERVERS=admin 不起 web 等），与本卡 diff 零交叉非回归；可信验证维持 SEQ 系列收口硬前置 ③。
+  - 13-D2（前端控件 + 智能默认）的 `status-defaults.ts` 必须以本卡矩阵为唯一真源（R-105-T7 三层防线）。

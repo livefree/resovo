@@ -42,6 +42,16 @@ vi.mock('@/api/db/queries/video-merge-candidates', () => ({
   fetchVideoDetailsForCandidates: vi.fn(),
 }))
 
+// CHG-VIR-13-D1 / D-105-10：post-COMMIT 状态写入唯一通道（status-helpers 经此调状态机）
+vi.mock('@/api/db/queries/videos.mutations', () => ({
+  transitionVideoState: vi.fn(),
+}))
+
+// status-helpers 失败路径 statusLog.warn 留痕（沿 auditLogService.test 静默范式）
+vi.mock('@/api/lib/logger', () => ({
+  baseLogger: { child: () => ({ warn: vi.fn(), info: vi.fn(), error: vi.fn() }) },
+}))
+
 vi.mock('@/api/services/AuditLogService', () => ({
   AuditLogService: vi.fn().mockImplementation(() => ({
     write: vi.fn(),
@@ -61,6 +71,7 @@ vi.mock('@/api/services/MediaCatalogService', () => ({
 
 import * as mutations from '@/api/db/queries/video-merge-mutations'
 import * as candidates from '@/api/db/queries/video-merge-candidates'
+import * as videosMutations from '@/api/db/queries/videos.mutations'
 import { AuditLogService } from '@/api/services/AuditLogService'
 
 // ── helpers ──────────────────────────────────────────────────────
@@ -80,7 +91,12 @@ const SRC_3 = '00000000-0000-0000-0001-000000000003'
 const SRC_4 = '00000000-0000-0000-0001-000000000004'
 const SRC_FOREIGN = '00000000-0000-0000-0001-000000000099'
 
-function makeVideoRow(id: string, deletedAt: string | null = null) {
+function makeVideoRow(
+  id: string,
+  deletedAt: string | null = null,
+  // CHG-VIR-13-D1 / D-105-9：状态 2 列（默认 = insertNewVideo DB DEFAULT 同款 pending|internal|0）
+  state: { review?: string; visibility?: string; isPublished?: boolean } = {},
+) {
   return {
     id,
     short_id: id.slice(0, 8),
@@ -99,7 +115,9 @@ function makeVideoRow(id: string, deletedAt: string | null = null) {
     director: [],
     cast: [],
     writers: [],
-    is_published: false,
+    is_published: state.isPublished ?? false,
+    review_status: state.review ?? 'pending_review',
+    visibility_status: state.visibility ?? 'internal',
     title_normalized: `video ${id}`,
     catalog_id: null,
     deleted_at: deletedAt,
@@ -857,6 +875,365 @@ describe('VideoMergesService.unmerge — created_target_video_ids 驱动（D-105
   })
 })
 
+// ── 操作内状态设置（ADR-105 AMENDMENT 2026-06-04 D-105-9/10/11/12 / CHG-VIR-13-D1）──
+
+describe('VideoMergesService.merge — targetStatus（D-105-9/10/11）', () => {
+  /** merge 全套 happy-path mock（target 状态可参数化）；返回句柄供断言 */
+  function mockMergeHappyPath(targetState: { review?: string; visibility?: string; isPublished?: boolean } = {}) {
+    const mockClient = makeMockClient()
+    const mockPool = makeMockPool(mockClient)
+    const svc = new VideoMergesService(mockPool)
+    const auditSvcInstance = (AuditLogService as unknown as ReturnType<typeof vi.fn>).mock.results.at(-1)!.value
+    vi.mocked(mutations.fetchVideosByIds).mockResolvedValueOnce([
+      makeVideoRow(SOURCE_ID_1),
+      makeVideoRow(TARGET_ID, null, targetState),
+    ])
+    vi.mocked(mutations.detectMergeConflicts).mockResolvedValueOnce(0)
+    vi.mocked(mutations.fetchSourcesByVideoIds).mockResolvedValueOnce([makeSourceRow(SRC_1, SOURCE_ID_1)])
+    vi.mocked(mutations.insertMergeAudit).mockResolvedValueOnce(AUDIT_ID)
+    vi.mocked(candidates.fetchVideoDetailsForCandidates).mockResolvedValueOnce([{
+      id: TARGET_ID,
+      title: `Video ${TARGET_ID}`,
+      title_normalized: `video ${TARGET_ID}`,
+      year: 2020,
+      type: 'movie',
+      created_at: '2026-01-01T00:00:00Z',
+      source_count: '2',
+      site_keys: ['iqiyi'],
+    }])
+    return { mockClient, mockPool, svc, auditSvcInstance }
+  }
+
+  it('R-105-T1：不传 targetStatus → 不调状态机、响应无 statusTransition、snapshot 无 targetStatusBefore', async () => {
+    const { svc } = mockMergeHappyPath()
+
+    const result = await svc.merge(
+      { sourceVideoIds: [SOURCE_ID_1], targetVideoId: TARGET_ID },
+      ACTOR_ID,
+    )
+
+    expect(videosMutations.transitionVideoState).not.toHaveBeenCalled()
+    expect('statusTransition' in result).toBe(false)
+    const snapshot = vi.mocked(mutations.insertMergeAudit).mock.calls[0]![1].snapshotJsonb
+    expect('targetStatusBefore' in snapshot).toBe(false)
+  })
+
+  it('applied：pending|internal target + {approved,public} → post-COMMIT approve_and_publish + snapshot 写 targetStatusBefore + afterJsonb 补记（D-105-11/12）', async () => {
+    const { mockPool, svc, auditSvcInstance } = mockMergeHappyPath()  // 默认 pending|internal|0
+    vi.mocked(videosMutations.transitionVideoState).mockResolvedValueOnce({
+      id: TARGET_ID,
+      review_status: 'approved',
+      visibility_status: 'public',
+      is_published: true,
+      updated_at: '2026-06-04T00:00:00Z',
+    })
+
+    const result = await svc.merge(
+      {
+        sourceVideoIds: [SOURCE_ID_1],
+        targetVideoId: TARGET_ID,
+        reason: '同作品合并',
+        targetStatus: { reviewStatus: 'approved', visibilityStatus: 'public' },
+      },
+      ACTOR_ID,
+    )
+
+    expect(result.statusTransition).toBe('applied')
+    // 唯一通道 R-105-T2：post-COMMIT 经 transitionVideoState（Pool 非事务 client）
+    expect(videosMutations.transitionVideoState).toHaveBeenCalledExactlyOnceWith(
+      mockPool, TARGET_ID,
+      { action: 'approve_and_publish', reviewedBy: ACTOR_ID, reason: '同作品合并' },
+    )
+    // D-105-11：snapshot 写 targetStatusBefore（unmerge 还原依据，逐值）
+    const snapshot = vi.mocked(mutations.insertMergeAudit).mock.calls[0]![1].snapshotJsonb
+    expect(snapshot.targetStatusBefore).toEqual({
+      reviewStatus: 'pending_review',
+      visibilityStatus: 'internal',
+      isPublished: false,
+    })
+    // D-105-12：afterJsonb 纯增量补请求值 + 结果
+    expect(auditSvcInstance.write).toHaveBeenCalledWith(expect.objectContaining({
+      afterJsonb: expect.objectContaining({
+        targetStatus: { reviewStatus: 'approved', visibilityStatus: 'public' },
+        statusTransition: 'applied',
+      }),
+    }))
+  })
+
+  it('skipped：targetStatus == current → 不调状态机 + statusTransition=skipped + snapshot 不写 targetStatusBefore', async () => {
+    const { svc } = mockMergeHappyPath({ review: 'approved', visibility: 'public', isPublished: true })
+
+    const result = await svc.merge(
+      {
+        sourceVideoIds: [SOURCE_ID_1],
+        targetVideoId: TARGET_ID,
+        targetStatus: { reviewStatus: 'approved', visibilityStatus: 'public' },
+      },
+      ACTOR_ID,
+    )
+
+    expect(result.statusTransition).toBe('skipped')
+    expect(videosMutations.transitionVideoState).not.toHaveBeenCalled()
+    // no-op 不写还原依据（无可还原的变更）
+    const snapshot = vi.mocked(mutations.insertMergeAudit).mock.calls[0]![1].snapshotJsonb
+    expect('targetStatusBefore' in snapshot).toBe(false)
+  })
+
+  it('failed：transitionVideoState 抛错 → merge 不回滚（D-105-10 非原子声明）+ statusTransition=failed', async () => {
+    const { mockClient, svc } = mockMergeHappyPath()
+    vi.mocked(videosMutations.transitionVideoState).mockRejectedValueOnce(
+      new Error('trigger rejected: concurrent state change'),
+    )
+
+    const result = await svc.merge(
+      {
+        sourceVideoIds: [SOURCE_ID_1],
+        targetVideoId: TARGET_ID,
+        targetStatus: { reviewStatus: 'approved', visibilityStatus: 'public' },
+      },
+      ACTOR_ID,
+    )
+
+    // merge 本身成功（COMMIT 已发生不回滚），状态失败可观测（R-105-T3）
+    expect(result.auditId).toBe(AUDIT_ID)
+    expect(result.statusTransition).toBe('failed')
+    expect(mockClient.query).toHaveBeenCalledWith('COMMIT')
+    expect(mockClient.query).not.toHaveBeenCalledWith('ROLLBACK')
+  })
+
+  it('422：非法组合（approved|public target → rejected）→ BEGIN 前快速失败，merge 整体不执行', async () => {
+    const { mockClient, svc } = mockMergeHappyPath({ review: 'approved', visibility: 'public', isPublished: true })
+
+    await expect(
+      svc.merge(
+        {
+          sourceVideoIds: [SOURCE_ID_1],
+          targetVideoId: TARGET_ID,
+          // reject 前置 from=pending_review（评审 R1 场景：approved-target 确定性 422）
+          targetStatus: { reviewStatus: 'rejected' },
+        },
+        ACTOR_ID,
+      ),
+    ).rejects.toMatchObject({ code: 'VALIDATION_ERROR', httpStatus: 422 })
+
+    expect(mutations.insertMergeAudit).not.toHaveBeenCalled()
+    expect(mockClient.query).not.toHaveBeenCalledWith('BEGIN')
+    expect(videosMutations.transitionVideoState).not.toHaveBeenCalled()
+  })
+})
+
+describe('VideoMergesService.split — newVideoMeta.status（D-105-9/10）', () => {
+  /** split 双组 happy-path mock（status 可注入到组定义） */
+  function mockSplitHappyPath() {
+    const mockClient = makeMockClient()
+    const mockPool = makeMockPool(mockClient)
+    const svc = new VideoMergesService(mockPool)
+    const auditSvcInstance = (AuditLogService as unknown as ReturnType<typeof vi.fn>).mock.results.at(-1)!.value
+    vi.mocked(mutations.fetchVideosByIds).mockResolvedValueOnce([makeVideoRow(TARGET_ID)])
+    vi.mocked(mutations.fetchSourcesByVideoId).mockResolvedValueOnce([
+      makeSourceRow(SRC_1, TARGET_ID),
+      makeSourceRow(SRC_2, TARGET_ID),
+    ])
+    vi.mocked(mutations.insertMergeAudit).mockResolvedValueOnce(AUDIT_ID)
+    mockFindOrCreate
+      .mockResolvedValueOnce({ id: CATALOG_A })
+      .mockResolvedValueOnce({ id: CATALOG_B })
+    vi.mocked(mutations.insertNewVideo)
+      .mockResolvedValueOnce(NEW_VIDEO_ID_1)
+      .mockResolvedValueOnce(NEW_VIDEO_ID_2)
+    vi.mocked(mutations.assignSourcesToVideo).mockResolvedValue()
+    vi.mocked(mutations.softDeleteVideos).mockResolvedValueOnce()
+    return { mockClient, mockPool, svc, auditSvcInstance }
+  }
+
+  it('携带 status 组 → 新建后 post-COMMIT transition；数组仅含携带组（未携带组不产条目）', async () => {
+    const { mockPool, svc, auditSvcInstance } = mockSplitHappyPath()
+    vi.mocked(videosMutations.transitionVideoState).mockResolvedValueOnce({
+      id: NEW_VIDEO_ID_1,
+      review_status: 'approved',
+      visibility_status: 'public',
+      is_published: true,
+      updated_at: '2026-06-04T00:00:00Z',
+    })
+
+    const result = await svc.split(
+      {
+        videoId: TARGET_ID,
+        groups: [
+          // 组 0 携带 status（pending|internal → approved|public = approve_and_publish）
+          { sourceIds: [SRC_1], newVideoMeta: { title: 'A', type: 'movie', status: { reviewStatus: 'approved', visibilityStatus: 'public' } } },
+          // 组 1 未携带（无 transition 意图，不产条目）
+          { sourceIds: [SRC_2], newVideoMeta: { title: 'B', type: 'movie' } },
+        ],
+      },
+      ACTOR_ID,
+    )
+
+    expect(result.statusTransition).toEqual([{ videoId: NEW_VIDEO_ID_1, result: 'applied' }])
+    expect(videosMutations.transitionVideoState).toHaveBeenCalledExactlyOnceWith(
+      mockPool, NEW_VIDEO_ID_1,
+      { action: 'approve_and_publish', reviewedBy: ACTOR_ID, reason: undefined },
+    )
+    // D-105-12：afterJsonb 补请求值（groupIndex 锚定）+ 结果
+    expect(auditSvcInstance.write).toHaveBeenCalledWith(expect.objectContaining({
+      afterJsonb: expect.objectContaining({
+        requestedStatuses: [{ groupIndex: 0, status: { reviewStatus: 'approved', visibilityStatus: 'public' } }],
+        statusTransition: [{ videoId: NEW_VIDEO_ID_1, result: 'applied' }],
+      }),
+    }))
+  })
+
+  it('R-105-T1：全组不传 status → 不调状态机、响应无 statusTransition、afterJsonb 无补记字段', async () => {
+    const { svc, auditSvcInstance } = mockSplitHappyPath()
+
+    const result = await svc.split(
+      {
+        videoId: TARGET_ID,
+        groups: [
+          { sourceIds: [SRC_1], newVideoMeta: { title: 'A', type: 'movie' } },
+          { sourceIds: [SRC_2], newVideoMeta: { title: 'B', type: 'movie' } },
+        ],
+      },
+      ACTOR_ID,
+    )
+
+    expect(videosMutations.transitionVideoState).not.toHaveBeenCalled()
+    expect('statusTransition' in result).toBe(false)
+    const afterJsonb = auditSvcInstance.write.mock.calls[0]![0].afterJsonb
+    expect('statusTransition' in afterJsonb).toBe(false)
+    expect('requestedStatuses' in afterJsonb).toBe(false)
+  })
+
+  it('422：非法 status（visibilityStatus=public 单维 → pending|public 非法态）→ BEGIN 前整体不执行', async () => {
+    const { mockClient, svc } = mockSplitHappyPath()
+
+    await expect(
+      svc.split(
+        {
+          videoId: TARGET_ID,
+          groups: [
+            // 归一化 (pending_review, public) = 非法三元组（023 trigger pending 不可 public）
+            { sourceIds: [SRC_1], newVideoMeta: { title: 'A', type: 'movie', status: { visibilityStatus: 'public' } } },
+            { sourceIds: [SRC_2], newVideoMeta: { title: 'B', type: 'movie' } },
+          ],
+        },
+        ACTOR_ID,
+      ),
+    ).rejects.toMatchObject({ code: 'VALIDATION_ERROR', httpStatus: 422 })
+
+    expect(mutations.insertMergeAudit).not.toHaveBeenCalled()
+    expect(mockClient.query).not.toHaveBeenCalledWith('BEGIN')
+    expect(mutations.insertNewVideo).not.toHaveBeenCalled()
+  })
+
+  it('skipped：status == 初始态（pending|internal）→ 产 skipped 条目且不调状态机', async () => {
+    const { svc } = mockSplitHappyPath()
+
+    const result = await svc.split(
+      {
+        videoId: TARGET_ID,
+        groups: [
+          { sourceIds: [SRC_1], newVideoMeta: { title: 'A', type: 'movie', status: { reviewStatus: 'pending_review' } } },
+          { sourceIds: [SRC_2], newVideoMeta: { title: 'B', type: 'movie' } },
+        ],
+      },
+      ACTOR_ID,
+    )
+
+    expect(result.statusTransition).toEqual([{ videoId: NEW_VIDEO_ID_1, result: 'skipped' }])
+    expect(videosMutations.transitionVideoState).not.toHaveBeenCalled()
+  })
+})
+
+describe('VideoMergesService.unmerge — targetStatusBefore 还原（D-105-11）', () => {
+  function makeAuditWithBefore(before: { reviewStatus: string; visibilityStatus: string; isPublished: boolean }) {
+    const audit = makeAuditRow('merge')
+    return { ...audit, snapshot_jsonb: { ...audit.snapshot_jsonb, targetStatusBefore: before } }
+  }
+
+  function mockUnmergeTransaction() {
+    const mockClient = makeMockClient()
+    const mockPool = makeMockPool(mockClient)
+    const svc = new VideoMergesService(mockPool)
+    vi.mocked(mutations.restoreVideos).mockResolvedValueOnce()
+    vi.mocked(mutations.reassignSourcesToOriginal).mockResolvedValueOnce()
+    vi.mocked(mutations.markAuditReverted).mockResolvedValueOnce()
+    return { mockClient, mockPool, svc }
+  }
+
+  it('存量 audit 无 targetStatusBefore → 不查 video、不调状态机、响应无 statusTransition（旧行为逐值一致）', async () => {
+    const { svc } = mockUnmergeTransaction()
+    vi.mocked(mutations.fetchAuditById).mockResolvedValueOnce(makeAuditRow('merge'))
+
+    const result = await svc.unmerge(AUDIT_ID, ACTOR_ID)
+
+    expect('statusTransition' in result).toBe(false)
+    expect(videosMutations.transitionVideoState).not.toHaveBeenCalled()
+    // restore 路径未触发（fetchVideosByIds 仅 restore 反查 current 时调用）
+    expect(mutations.fetchVideosByIds).not.toHaveBeenCalled()
+  })
+
+  it('applied：含 targetStatusBefore（approved|internal）+ 合并后 target=approved|public → unpublish 还原', async () => {
+    const { mockPool, svc } = mockUnmergeTransaction()
+    vi.mocked(mutations.fetchAuditById).mockResolvedValueOnce(
+      makeAuditWithBefore({ reviewStatus: 'approved', visibilityStatus: 'internal', isPublished: false }),
+    )
+    // restore 反查 current：合并时 publish 后形态
+    vi.mocked(mutations.fetchVideosByIds).mockResolvedValueOnce([
+      makeVideoRow(TARGET_ID, null, { review: 'approved', visibility: 'public', isPublished: true }),
+    ])
+    vi.mocked(videosMutations.transitionVideoState).mockResolvedValueOnce({
+      id: TARGET_ID,
+      review_status: 'approved',
+      visibility_status: 'internal',
+      is_published: false,
+      updated_at: '2026-06-04T00:00:00Z',
+    })
+
+    const result = await svc.unmerge(AUDIT_ID, ACTOR_ID, '撤销合并')
+
+    expect(result.statusTransition).toBe('applied')
+    expect(videosMutations.transitionVideoState).toHaveBeenCalledExactlyOnceWith(
+      mockPool, TARGET_ID,
+      { action: 'unpublish', reviewedBy: ACTOR_ID, reason: '撤销合并' },
+    )
+  })
+
+  it('skipped：current == targetStatusBefore（合并后状态被人工改回）→ 不调状态机', async () => {
+    const { svc } = mockUnmergeTransaction()
+    vi.mocked(mutations.fetchAuditById).mockResolvedValueOnce(
+      makeAuditWithBefore({ reviewStatus: 'pending_review', visibilityStatus: 'internal', isPublished: false }),
+    )
+    vi.mocked(mutations.fetchVideosByIds).mockResolvedValueOnce([
+      makeVideoRow(TARGET_ID),  // 默认 pending|internal|0 == before
+    ])
+
+    const result = await svc.unmerge(AUDIT_ID, ACTOR_ID)
+
+    expect(result.statusTransition).toBe('skipped')
+    expect(videosMutations.transitionVideoState).not.toHaveBeenCalled()
+  })
+
+  it('failed：还原无单步回路（approved|public → pending|internal，approve_and_publish 反向）→ unmerge 本体不受影响（已知边界）', async () => {
+    const { mockClient, svc } = mockUnmergeTransaction()
+    vi.mocked(mutations.fetchAuditById).mockResolvedValueOnce(
+      makeAuditWithBefore({ reviewStatus: 'pending_review', visibilityStatus: 'internal', isPublished: false }),
+    )
+    vi.mocked(mutations.fetchVideosByIds).mockResolvedValueOnce([
+      makeVideoRow(TARGET_ID, null, { review: 'approved', visibility: 'public', isPublished: true }),
+    ])
+
+    const result = await svc.unmerge(AUDIT_ID, ACTOR_ID)
+
+    // 矩阵无 approved|public → pending|internal 单步路径（须先 unpublish 两步 / M-SN-4 D-01）
+    // → 如实 failed 人工兜底（D-105-11 非原子声明；两步还原须回 ADR 另行定档）
+    expect(result.statusTransition).toBe('failed')
+    expect(result.restoredVideoIds).toEqual([SOURCE_ID_1, SOURCE_ID_2])
+    expect(mockClient.query).toHaveBeenCalledWith('COMMIT')
+    expect(videosMutations.transitionVideoState).not.toHaveBeenCalled()
+  })
+})
+
 // ── MergeSchema zod 校验 ──────────────────────────────────────────
 
 describe('MergeSchema', () => {
@@ -890,6 +1267,40 @@ describe('MergeSchema', () => {
       sourceVideoIds: [SOURCE_ID_1],
       targetVideoId: TARGET_ID,
       reason: 'x'.repeat(501),
+    })).toThrow()
+  })
+
+  // ── targetStatus（ADR-105 AMENDMENT 2026-06-04 D-105-9 / CHG-VIR-13-D1）──
+
+  it('targetStatus 合法（单维 / 双维）→ 通过', () => {
+    const single = MergeSchema.parse({
+      sourceVideoIds: [SOURCE_ID_1],
+      targetVideoId: TARGET_ID,
+      targetStatus: { visibilityStatus: 'public' },
+    })
+    expect(single.targetStatus).toEqual({ visibilityStatus: 'public' })
+
+    const both = MergeSchema.parse({
+      sourceVideoIds: [SOURCE_ID_1],
+      targetVideoId: TARGET_ID,
+      targetStatus: { reviewStatus: 'approved', visibilityStatus: 'public' },
+    })
+    expect(both.targetStatus).toEqual({ reviewStatus: 'approved', visibilityStatus: 'public' })
+  })
+
+  it('targetStatus 空对象（双缺省无语义）→ 报错', () => {
+    expect(() => MergeSchema.parse({
+      sourceVideoIds: [SOURCE_ID_1],
+      targetVideoId: TARGET_ID,
+      targetStatus: {},
+    })).toThrow()
+  })
+
+  it('targetStatus 枚举外值 → 报错', () => {
+    expect(() => MergeSchema.parse({
+      sourceVideoIds: [SOURCE_ID_1],
+      targetVideoId: TARGET_ID,
+      targetStatus: { reviewStatus: 'published' },
     })).toThrow()
   })
 })
@@ -994,6 +1405,35 @@ describe('SplitSchema', () => {
     expect(() => SplitSchema.parse({
       groups: [
         { sourceIds: [SRC_1], targetVideoId: 'not-a-uuid' },
+        { sourceIds: [SRC_2], newVideoMeta: { title: 'B', type: 'movie' } },
+      ],
+    })).toThrow()
+  })
+
+  // ── newVideoMeta.status（ADR-105 AMENDMENT 2026-06-04 D-105-9 / CHG-VIR-13-D1）──
+
+  it('newVideoMeta.status 合法 → 通过；targetVideoId 组结构上不可携带（R-105-T5 互斥）', () => {
+    const result = SplitSchema.parse({
+      groups: [
+        { sourceIds: [SRC_1], newVideoMeta: { title: 'A', type: 'movie', status: { reviewStatus: 'approved' } } },
+        { sourceIds: [SRC_2], targetVideoId: TARGET_ID },
+      ],
+    })
+    expect(result.groups[0]!.newVideoMeta!.status).toEqual({ reviewStatus: 'approved' })
+    // status 仅存在于 newVideoMeta 内部 → targetVideoId 组无 newVideoMeta 即无 status 载体
+    expect(result.groups[1]!.newVideoMeta).toBeUndefined()
+  })
+
+  it('newVideoMeta.status 空对象 / 枚举外值 → 报错', () => {
+    expect(() => SplitSchema.parse({
+      groups: [
+        { sourceIds: [SRC_1], newVideoMeta: { title: 'A', type: 'movie', status: {} } },
+        { sourceIds: [SRC_2], newVideoMeta: { title: 'B', type: 'movie' } },
+      ],
+    })).toThrow()
+    expect(() => SplitSchema.parse({
+      groups: [
+        { sourceIds: [SRC_1], newVideoMeta: { title: 'A', type: 'movie', status: { visibilityStatus: 'visible' } } },
         { sourceIds: [SRC_2], newVideoMeta: { title: 'B', type: 'movie' } },
       ],
     })).toThrow()

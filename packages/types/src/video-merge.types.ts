@@ -102,10 +102,35 @@ export interface ListCandidatesResult {
 
 // ── CHG-SN-5-10：mutation 端点类型 ───────────────────────────────────
 
+// ── ADR-105 AMENDMENT 2026-06-04 D-105-9/10（CHG-VIR-13-D1）：操作内状态设置 ──
+
+/**
+ * merge/split 操作内状态设置（D-105-9）。两维全 optional：缺省维度取 current 值
+ * （归一化后 (current, desired) 二元组 → action 覆盖矩阵推导，矩阵 = 实施真源
+ * `VideoMergesService.status-helpers.ts`；无合法单步路径 → 422 / BEGIN 前）。
+ */
+export interface VideoStatusSetting {
+  readonly reviewStatus?: ReviewStatus
+  readonly visibilityStatus?: VisibilityStatus
+}
+
+/**
+ * post-COMMIT 状态写入结果（D-105-10 非原子边界可观测 / R-105-T3）：
+ * applied = 状态机成功；failed = transition 失败（merge/split 本身**不回滚**，
+ * UI 提示「操作成功，状态未变更，请在审核台手动调整」）；skipped = current == desired no-op。
+ */
+export type StatusTransitionOutcome = 'applied' | 'failed' | 'skipped'
+
 export interface MergeParams {
   readonly sourceVideoIds: string[]
   readonly targetVideoId: string
   readonly reason?: string
+  /**
+   * D-105-9（CHG-VIR-13-D1）：合并后对 target 的状态设置。缺省零行为变更（R-105-T1）；
+   * 提供时 BEGIN 前矩阵校验（非法组合 422），COMMIT 后经 transitionVideoState 应用
+   * （唯一状态通道 R-105-T2），实际将 apply 时事务内 snapshot 写 targetStatusBefore（D-105-11）。
+   */
+  readonly targetStatus?: VideoStatusSetting
   /**
    * CHG-VIR-9-B / ADR-178 D-178-3：关联 identity_candidate（confirmed→merge 单事务 / R8）。
    * 提供时事务前校验 candidate pending + pair⊆合并集合，事务内挂 decision(confirmed)+candidate confirmed；
@@ -125,6 +150,8 @@ export interface MergeResult {
   readonly auditId: string
   // ADR-105 §端点契约 row 2：返回合并后 target 完整摘要（含 sourceCount/sourceSiteKeys 反映新状态）
   readonly targetVideo: VideoSummaryForMerge
+  /** D-105-10：仅请求携带 targetStatus 时出现（R-105-T1 缺省响应逐值不变）。 */
+  readonly statusTransition?: StatusTransitionOutcome
 }
 
 export interface UnmergeParams {
@@ -135,6 +162,12 @@ export interface UnmergeParams {
 
 export interface UnmergeResult {
   readonly restoredVideoIds: string[]
+  /**
+   * D-105-11：仅 merge audit 的 snapshot 含 targetStatusBefore 时出现（存量 audit 无该
+   * 字段 → 不动且省略，旧行为逐值一致）。还原同走 (current, before) 矩阵：合并后状态
+   * 被人工改至无单步回路时 failed（非原子声明，人工兜底）。
+   */
+  readonly statusTransition?: StatusTransitionOutcome
 }
 
 export interface SplitGroup {
@@ -147,6 +180,12 @@ export interface SplitGroup {
     readonly title: string
     readonly year?: number
     readonly type: VideoType
+    /**
+     * D-105-9（CHG-VIR-13-D1）：新建 video 的状态设置。current 恒 pending_review|internal
+     * （insertNewVideo DB DEFAULT / migration 016），矩阵退化为 pending 行。
+     * 拆到已有 targetVideoId 组结构上不可携带（newVideoMeta xor targetVideoId / R-105-T5）。
+     */
+    readonly status?: VideoStatusSetting
   }
   /**
    * 拆到已有 video（D-105-2）：仅转入 sources，不改已有 video 任何元数据（D-105-5 / R-105-S3）。
@@ -165,6 +204,11 @@ export interface SplitResult {
   readonly auditId: string
   /** 本次 split **新建**的 video ids（拆到已有 video 的组不在内 / D-105-4 created_target_video_ids 同源） */
   readonly newVideoIds: string[]
+  /**
+   * D-105-10：仅至少一组携带 newVideoMeta.status 时出现；数组仅含携带 status 的新建 video
+   * （未携带组无 transition 意图，不产 skipped 条目）。
+   */
+  readonly statusTransition?: readonly { readonly videoId: string; readonly result: StatusTransitionOutcome }[]
 }
 
 // ── ADR-105 AMENDMENT 2026-06-03（CHG-VIR-11 / Phase 4 拆分证据化）─────────

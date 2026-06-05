@@ -27,6 +27,10 @@ export interface RawVideoRow {
   readonly cast: string[]
   readonly writers: string[]
   readonly is_published: boolean
+  // ADR-105 AMENDMENT 2026-06-04 D-105-11（CHG-VIR-13-D1）：状态 2 列——
+  // merge snapshot 写 targetStatusBefore 的还原依据 + BEGIN 前 (current, desired) 矩阵输入
+  readonly review_status: string
+  readonly visibility_status: string
   readonly title_normalized: string | null
   readonly catalog_id: string | null
   readonly deleted_at: string | null
@@ -78,7 +82,9 @@ export async function fetchVideosByIds(
             mc.title_en, mc.description, mc.cover_url,
             v.type, v.source_category AS category, mc.rating, mc.year, mc.country,
             v.episode_count, mc.status,
-            mc.director, mc."cast", mc.writers, v.is_published, mc.title_normalized,
+            mc.director, mc."cast", mc.writers, v.is_published,
+            v.review_status, v.visibility_status,
+            mc.title_normalized,
             v.catalog_id, v.deleted_at, v.created_at::text, v.updated_at::text
        FROM videos v
        JOIN media_catalog mc ON mc.id = v.catalog_id
