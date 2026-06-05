@@ -213,16 +213,19 @@ export function CandidatesSection() {
       enableResizing: true,
       cell: ({ row }) => <span>{row.videos.length} 条</span>,
     },
-    // CHG-VIR-15-UX-A（用户裁定 ①）：来源列——tab 退役后行级呈现（identity 评分存在 = 多证据）
+    // CHG-VIR-15-UX-A（用户裁定 ①）：来源列——tab 退役后行级呈现。
+    // 判定真源 = 服务端回显 effectiveSource（Codex review FIX：legacy 分支也实时填
+    // identity 评分〔CHG-VIR-7 scoreGroup〕，按 row.identity 有无判定会把降级行
+    // 全部误标「多证据」；单查询单来源，回显即行级真值）。
     {
       id: 'source',
       kind: 'computed',
       header: '来源',
-      accessor: (g) => (g.identity ? 'identity' : 'legacy'),
+      accessor: () => effectiveSource ?? '',
       width: 110, minWidth: 90,
       cell: ({ row }) => (
         <span style={SOURCE_CHIP_STYLE} data-testid={`candidate-source-${row.groupKey}`}>
-          {row.identity ? '多证据' : '实时聚合'}
+          {effectiveSource === 'legacy' ? '实时聚合' : '多证据'}
         </span>
       ),
     },
@@ -276,7 +279,7 @@ export function CandidatesSection() {
         </span>
       ),
     },
-  ], [handleMerge, handleReject])
+  ], [handleMerge, handleReject, effectiveSource])
 
   const query = useMemo(() => ({
     pagination: { page, pageSize },

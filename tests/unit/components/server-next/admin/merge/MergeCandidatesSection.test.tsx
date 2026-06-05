@@ -134,15 +134,25 @@ describe('MergeCandidatesSection (CHG-VIR-9-C)', () => {
     expect(screen.queryByTestId('merge-source-fallback-note')).toBeNull()
   })
 
-  it('2a. 来源/相似度列（CHG-VIR-15-UX-A）：identity 行标「多证据」+ 相似度 91.0%；legacy 行「实时聚合」+ —', async () => {
+  it('2a. 来源/相似度列（CHG-VIR-15-UX-A）：identity 回显 → 全行「多证据」+ 相似度 91.0%', async () => {
+    listCandidatesMock.mockResolvedValue(IDENTITY_RES)
+    render(<CandidatesSection />)
+    await waitFor(() => screen.getByText('復仇者聯盟'))
+    expect(screen.getByTestId(`candidate-source-${IDENTITY_GROUP.groupKey}`).textContent).toBe('多证据')
+    expect(screen.getByText('91.0%')).not.toBeNull()
+  })
+
+  it('2a-fix. 降级 legacy 回显（Codex FIX）：行虽带实时 identity 评分仍标「实时聚合」（真源 = effectiveSource）', async () => {
+    // 真实契约：legacy 分支也实时填 identity（CHG-VIR-7 scoreGroup）——按 row.identity
+    // 有无判定会全表误标「多证据」；本用例 fixture 对齐该形态防回归
+    const legacyWithIdentity = { ...LEGACY_GROUP, identity: IDENTITY_GROUP.identity }
     listCandidatesMock.mockResolvedValue({
-      data: [IDENTITY_GROUP, { ...LEGACY_GROUP, groupKey: 'legacy-row' }],
-      total: 2, page: 1, limit: 20, source: 'identity' as const,
+      data: [legacyWithIdentity], total: 1, page: 1, limit: 20, source: 'legacy' as const,
     })
     render(<CandidatesSection />)
-    await waitFor(() => screen.getAllByText('復仇者聯盟'))
-    expect(screen.getByTestId(`candidate-source-${IDENTITY_GROUP.groupKey}`).textContent).toBe('多证据')
-    expect(screen.getByTestId('candidate-source-legacy-row').textContent).toBe('实时聚合')
+    await waitFor(() => screen.getByText('復仇者聯盟'))
+    expect(screen.getByTestId(`candidate-source-${LEGACY_GROUP.groupKey}`).textContent).toBe('实时聚合')
+    // 相似度列仍显示实时评分（评分真实计算，与来源标签解耦）
     expect(screen.getByText('91.0%')).not.toBeNull()
   })
 
