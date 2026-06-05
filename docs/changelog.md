@@ -14953,3 +14953,15 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
   - 快捷合并（行级操作列）保持整组语义（不传 selectedVideoIds）；「转入批量合并」深链通道保留
   - 部分合并后集合外 pair 仍 pending：涉软删成员的 pair 自动从列表过滤（9-C FIX-3），两端均存活的跨界 pair（如地灵曲合并两个第一季后的跨季 pair）继续展示，由人工逐 pair 拒绝（既有能力）——完整工作流闭环
   - 建议实操验证：地灵曲组展开 → 勾掉两个第二季 → 合并两个第一季（toast 撤销可还原）→ 同理第二季 → 剩余跨季 pair 逐对拒绝
+
+## [CHG-VIR-17-PARTIAL-FIX] 子集合并 target 排除守卫（Codex stop-time review）
+- **完成时间**：2026-06-05
+- **记录时间**：2026-06-05
+- **执行模型**：claude-opus-4-8｜子代理：无
+- **根因**：handleMerge 对「target ∈ 选中集合」无结构性守卫，仅依赖 CandidateExpand 的 target 转移 effect 时序——`selectedVideoIds` 不含 `targetVideoId` 时请求仍成形，会把选中视频合并到**被排除的** target 上（语义反转的数据损坏，可撤销但错误；后端 merge 无「前端选中集合」概念不会拦截）。
+- **修改文件**：
+  - `apps/server-next/src/lib/merge/merge-selection.ts`（新 61 行）— `buildMergeSelection` 纯函数：请求成形收敛单点（target ∉ 集合 → null 结构性拒绝 / candidateIds 集合内 pair 过滤 / 全选 fallback 口径自 handleMerge 原样迁移）；落 lib/merge 与 api/entry/status-defaults 同层，可直接单测
+  - `MergeCandidatesSection.tsx`（481→474）— handleMerge 消费纯函数，null → danger toast「合并目标不在选中集合内」中止
+  - `MergeCandidateExpand.tsx` — 执行合并按钮 disabled 加 `!selectedIds.has(targetId)`（转移 effect 瞬态兜底，双层覆盖）
+- **测试**：新 `tests/unit/lib/merge-selection.test.ts` 6 用例（**核心：target ∉ 集合 → null** / 全组 / 子集跨界 pair 不传 / 不足 2 回退整组 / 9-C 单数 fallback 全选限定 / legacy 无锚点字段不出现）+ Section 11e 端到端（排除 target → 自动转移后全链路：新 target + 子集 + 仅 a-c pair）。merge 域 115/115 + test:changed 83/83 + e2e deeplink 6/6 + tsc/lint EXIT=0
+- **注意事项**：请求成形逻辑自此单点（buildMergeSelection），后续 MergeWorkspace 若需同款守卫可直接复用。

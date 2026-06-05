@@ -581,6 +581,33 @@ describe('MergeCandidatesSection (CHG-VIR-9-C)', () => {
     expect(mergeVideosMock).not.toHaveBeenCalled()
   })
 
+  it('11e. 排除 target 后合并（FIX / Codex review）：target 自动转移后全链路正确（新 target + 子集 + 集合内 pair）', async () => {
+    listCandidatesMock.mockResolvedValue(CLUSTER_RES)
+    mergeVideosMock.mockResolvedValueOnce({
+      auditId: 'audit-retarget',
+      targetVideo: { id: 'vid-a', title: 'Avengers A', titleNormalized: '復仇者聯盟',
+        year: 2019, type: 'movie', createdAt: '2025-01-01T00:00:00Z',
+        sourceCount: 5, sourceSiteKeys: ['iqiyi'] },
+    })
+    render(<CandidatesSection />)
+    await waitFor(() => screen.getByText('復仇者聯盟'))
+    fireEvent.click(screen.getByText('復仇者聯盟'))
+    await waitFor(() => screen.getByTestId('compare-select-vid-b'))
+    // 排除推荐 target vid-b → 自动转移 vid-a（选中集 {a,c}）
+    fireEvent.click(screen.getByTestId('compare-select-vid-b'))
+    await waitFor(() => {
+      expect((screen.getByLabelText('选择 Avengers A 为合并目标') as HTMLInputElement).checked).toBe(true)
+    })
+    fireEvent.click(screen.getByRole('button', { name: /执行合并/ }))
+    await waitFor(() => {
+      expect(mergeVideosMock).toHaveBeenCalledWith(expect.objectContaining({
+        sourceVideoIds: ['vid-c'],
+        targetVideoId: 'vid-a', // 不是被排除的 vid-b（buildMergeSelection 守卫 + effect 转移双层保证）
+        candidateIds: ['cand-uuid-0003'], // 仅 a-c pair；含 vid-b 的 0001/0002 跨界不传
+      }))
+    })
+  })
+
   it('11d. N=12 组（整组超限）取消勾选 1 个 → 选中 11 ≤ 上限可就地合并（8c 引导升级）', async () => {
     const manyVideos = Array.from({ length: 12 }, (_, i) => ({
       id: `vid-${i}`, title: `V${i}`, titleNormalized: '復仇者聯盟', year: 2019, type: 'movie' as const,

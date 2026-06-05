@@ -261,7 +261,9 @@ export function CandidateExpand({ group, onMerge, onReject, onRejectPair }: Cand
         <AdminButton
           size="sm"
           variant="primary"
-          disabled={exceedsMergeLimit || tooFewSelected}
+          // CHG-VIR-17-PARTIAL FIX（Codex review）：target ∈ 选中集合守卫（转移 effect 瞬态兜底；
+          // 结构性拒绝在 buildMergeSelection，此处防御性禁用双层覆盖）
+          disabled={exceedsMergeLimit || tooFewSelected || !selectedIds.has(targetId)}
           onClick={() => onMerge(targetId, targetStatus, selectedVideos.map((v) => v.id))}
         >
           执行合并（{Math.max(selectedCount - 1, 0)} → target）
