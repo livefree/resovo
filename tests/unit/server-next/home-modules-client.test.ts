@@ -15,7 +15,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 vi.mock('../../../apps/server-next/src/lib/api-client', () => ({
-  apiClient: { get: vi.fn(), post: vi.fn(), patch: vi.fn(), delete: vi.fn() },
+  apiClient: { get: vi.fn(), post: vi.fn(), patch: vi.fn(), delete: vi.fn(), postMultipart: vi.fn() },
 }))
 
 import { apiClient } from '../../../apps/server-next/src/lib/api-client'
@@ -26,12 +26,14 @@ import {
   deleteHomeModule,
   reorderHomeModules,
   publishToggleHomeModule,
+  uploadHomeModuleImage,
 } from '../../../apps/server-next/src/lib/home-modules/api'
 
 const mockedGet = vi.mocked(apiClient.get)
 const mockedPost = vi.mocked(apiClient.post)
 const mockedPatch = vi.mocked(apiClient.patch)
 const mockedDelete = vi.mocked(apiClient.delete)
+const mockedPostMultipart = vi.mocked(apiClient.postMultipart)
 
 const STUB_MODULE = {
   id: 'm1',
@@ -193,5 +195,27 @@ describe('publishToggleHomeModule', () => {
     const result = await publishToggleHomeModule('m1', false)
     expect(result.id).toBe('m1')
     expect(result.enabled).toBe(false)
+  })
+})
+
+// ── CHG-HOME-UX-03：uploadHomeModuleImage 契约 ─────────────────────────────
+
+describe('uploadHomeModuleImage', () => {
+  beforeEach(() => {
+    mockedPostMultipart.mockReset()
+    mockedPostMultipart.mockResolvedValue({ data: { url: 'https://cdn.example.com/home_modules/m1-hash.png' } })
+  })
+
+  it('POST multipart /admin/media/images，FormData 含 ownerType=home_module + ownerId + file', async () => {
+    const file = new File(['x'], 'banner.png', { type: 'image/png' })
+    const result = await uploadHomeModuleImage('m1', file)
+
+    expect(mockedPostMultipart).toHaveBeenCalledTimes(1)
+    const [path, formData] = mockedPostMultipart.mock.calls[0] as [string, FormData]
+    expect(path).toBe('/admin/media/images')
+    expect(formData.get('ownerType')).toBe('home_module')
+    expect(formData.get('ownerId')).toBe('m1')
+    expect(formData.get('file')).toBe(file)
+    expect(result.url).toBe('https://cdn.example.com/home_modules/m1-hash.png')
   })
 })

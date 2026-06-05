@@ -48,3 +48,21 @@ export async function publishToggleHomeModule(id: string, enabled: boolean): Pro
   const result = await apiClient.post<{ data: HomeModule }>(`/admin/home-modules/${id}/publish-toggle`, { enabled })
   return result.data
 }
+
+/**
+ * 上传运营横图（CHG-HOME-UX-03 / ADR-052 AMENDMENT D-052-11）。
+ *
+ * 消费 POST /admin/media/images（ownerType='home_module'）；后端写回 home_modules.image_url
+ * 并返回存储结果。**需先有模块 id**（写回模式约束，D-104-10）：新建态仅允许外链。
+ *
+ * 进度回调偏离登记：server-next apiClient 仅有 postMultipart（无 XHR 进度，CHG-SN-6-08），
+ * 消费方用 loading 态替代 v1 BannerForm 进度条；不为单消费点扩 api-client 共享层。
+ */
+export async function uploadHomeModuleImage(id: string, file: File): Promise<{ url: string }> {
+  const formData = new FormData()
+  formData.append('file', file)
+  formData.append('ownerType', 'home_module')
+  formData.append('ownerId', id)
+  const result = await apiClient.postMultipart<{ data: { url: string } }>('/admin/media/images', formData)
+  return result.data
+}

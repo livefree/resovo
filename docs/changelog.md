@@ -15018,3 +15018,18 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **新增依赖**：无
 - **数据库变更**：无
 - **注意事项**：既有端点 body 枚举值扩张非新 route（verify:endpoint-adr 不触发，ADR 卡已确认）。media 域 44/44 过；typecheck/lint EXIT=0 + test:changed 44/44；**e2e:admin 39 passed + 1 flaky（旧版 moderation 域重试过，与本卡无关）= 01-B+02 合跑门禁完成**。解阻 CHG-HOME-UX-05（图片上传依赖）。
+
+## [CHG-HOME-UX-03] 首页运营前端数据层 — types/api 扩字段 + useVideoMetaMap + deriveModuleStatus
+- **完成时间**：2026-06-05
+- **记录时间**：2026-06-05 15:42
+- **执行模型**：claude-opus-4-8（人工 opus 会话覆盖 sonnet 建议，偏离登记）
+- **子代理**：无
+- **修改文件**：
+  - `apps/server-next/src/lib/home-modules/types.ts` — CreateHomeModuleBody +title/imageUrl（UpdateBody Partial 派生自动覆盖）
+  - `apps/server-next/src/lib/home-modules/api.ts` — +uploadHomeModuleImage(id, file)（postMultipart /admin/media/images ownerType=home_module）
+  - `apps/server-next/src/lib/home-modules/derive-status.ts`（新 57 行）— deriveModuleStatus 四色生命周期纯函数（P-home §6；danger〔video meta===null〕> neutral〔禁用/过期〕> warn〔待生效〕> ok；now 注入；undefined=未取回不判 danger）
+  - `apps/server-next/src/lib/home-modules/use-video-meta-map.ts`（新 86 行）— useVideoMetaMap（仅 video 类型 refId 并发 fetchPickerItemByIdSafe + useRef 持久缓存〔null=已确认失效也缓存〕+ 稳定依赖键 sorted-join + loadingIds + cancelled 守卫）
+  - `tests/unit/server-next/home-derive-status.test.ts`（新 8 用例）/ `tests/unit/hooks/use-video-meta-map.test.tsx`（新 5 用例，jsdom renderHook）/ `tests/unit/server-next/home-modules-client.test.ts`（+1 upload FormData 契约）
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：**偏离登记 ×2**：① 上传进度条改 loading 态——server-next apiClient 仅有 postMultipart（CHG-SN-6-08）无 XHR 进度，不为单消费点扩 api-client 共享层（v1 uploadWithProgress 不迁移）；② hook 测试落 tests/unit/hooks/（JSDOM_GLOBS 内）+ 相对路径 mock——tests/unit/hooks/ 不在 vitest context-aware alias server-next importer 白名单，@/ 会误解析到 web-next。30/30 新测试 + test:changed 41/41 + typecheck/lint EXIT=0。解阻 04-A/04-B/05/07。

@@ -37,6 +37,10 @@ export interface CreateHomeModuleBody {
   readonly ordering?: number
   readonly contentRefType: HomeModuleContentRefType
   readonly contentRefId: string
+  /** 多语言标题映射 locale→string（ADR-104 AMENDMENT D-104-9；空键不传） */
+  readonly title?: Record<string, string>
+  /** 运营横图 URL；null 清空（video 类型消费端回退封面，D-052-10） */
+  readonly imageUrl?: string | null
   readonly startAt?: string | null
   readonly endAt?: string | null
   readonly enabled?: boolean

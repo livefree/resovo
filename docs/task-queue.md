@@ -3287,10 +3287,12 @@ CODENAME-MATRIX-E2E (依赖 Wave 3 验收期补丁 CODENAME-MATRIX ✅)
    - 依赖：CHG-HOME-UX-01-A ✅
    - 范围（4 项）：① media.ts OwnerTypeSchema +home_module + 错误文案 ② ImageStorageService OwnerType 类型 ③ MediaImageService.upload() home_module 分支（findHomeModuleById 404 前置 → 上传 → updateHomeModule 写回 imageUrl → 失败补偿删除，仿 banner 分支）④ 测试三用例（404/写回/补偿）。
    - 完成备注：三处扩点全落（route 枚举+文案 / OwnerType+buildKey home_modules/ 前缀 / uploadForHomeModule 仿 banner 含补偿删除）；+3 用例 media 域 44/44。门禁 typecheck/lint EXIT=0 + test:changed 44/44 + **e2e:admin 39 passed+1 flaky（无关域重试过）= 01-B+02 合跑完成**。解阻 05。执行模型: claude-opus-4-8（人工 opus 覆盖 sonnet）；子代理: 无。
-5. **CHG-HOME-UX-03** — 前端数据层（状态：⬜ 待开始）
+5. **CHG-HOME-UX-03** — 前端数据层（状态：✅ 已完成）
+   - 实际开始：2026-06-05 15:40 ｜ 完成时间：2026-06-05 15:42
    - 建议模型：sonnet
-   - 依赖：CHG-HOME-UX-01-B
+   - 依赖：CHG-HOME-UX-01-B ✅
    - 范围（4 项）：① lib/home-modules types/api 扩字段 + uploadHomeModuleImage（FormData+进度）② 新建 use-video-meta-map.ts（useVideoMetaMap：video refId 并发 fetchPickerItemByIdSafe + useRef 缓存 + 404→null）③ 新建 derive-status.ts（deriveModuleStatus 四色推导，danger>neutral>warn>ok）④ 测试三文件（derive-status 注入 now 全覆盖 / meta-map 并发缓存 / client upload 契约）。
+   - 完成备注：四件全落（derive-status 57 行 / use-video-meta-map 86 行含持久缓存+稳定依赖键+cancelled 守卫）。偏离 ×2 登记：上传进度条改 loading 态（postMultipart 复用不扩 api-client）/ hook 测试落 tests/unit/hooks/ + 相对路径 mock（alias 白名单约束）。新测试 14 用例 30/30 + test:changed 41/41 + typecheck/lint EXIT=0。解阻 04-A/04-B/05/07。执行模型: claude-opus-4-8（人工 opus 覆盖 sonnet）；子代理: 无。
 6. **CHG-HOME-UX-04-A** — HomeModuleCard 改造（状态：⬜ 待开始）
    - 建议模型：sonnet
    - 依赖：CHG-HOME-UX-03
