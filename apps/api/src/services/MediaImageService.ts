@@ -21,6 +21,7 @@ import type { Pool } from 'pg'
 import type { ImageKind } from '@/types'
 import { findAdminVideoById } from '@/api/db/queries/videos'
 import { findBannerById, updateBanner } from '@/api/db/queries/home-banners'
+import { findHomeModuleById, updateHomeModule } from '@/api/db/queries/home-modules'
 import { updateCatalogFields, type CatalogUpdateData } from '@/api/db/queries/mediaCatalog'
 import { imageHealthQueue } from '@/api/lib/queue'
 import {
@@ -104,6 +105,19 @@ export class MediaImageService {
         )
       }
       return this.uploadForVideo(input, video.catalog_id, input.kind)
+    }
+
+    // CHG-HOME-UX-02（ADR-052 AMENDMENT D-052-11）：home_module 分支，仿 banner 范式
+    if (input.ownerType === 'home_module') {
+      const module = await findHomeModuleById(this.db, input.ownerId)
+      if (!module) {
+        throw new ImageStorageError(
+          `home_module 不存在：${input.ownerId}`,
+          404,
+          'OWNER_NOT_FOUND',
+        )
+      }
+      return this.uploadForHomeModule(input)
     }
 
     // ownerType === 'banner'
@@ -219,6 +233,46 @@ export class MediaImageService {
     return {
       ...stored,
       ownerType: 'banner',
+      ownerId: input.ownerId,
+      kind: null,
+      blurhashJobId: null,
+    }
+  }
+
+  /**
+   * home_module 横图上传（CHG-HOME-UX-02 / ADR-052 AMENDMENT D-052-11）。
+   * 仿 banner 范式：upload → updateHomeModule 写回 image_url → 写库失败补偿删除。
+   */
+  private async uploadForHomeModule(
+    input: MediaImageUploadInput,
+  ): Promise<MediaImageUploadResult> {
+    const stored = await this.storage.upload({
+      buffer: input.buffer,
+      contentType: input.contentType,
+      ownerType: 'home_module',
+      ownerId: input.ownerId,
+    })
+
+    try {
+      await updateHomeModule(this.db, input.ownerId, { imageUrl: stored.url })
+    } catch (err) {
+      await this.storage.delete(stored.key)
+      const msg = err instanceof Error ? err.message : String(err)
+      process.stderr.write(
+        `[MediaImageService] home_module update failed; object deleted; moduleId=${input.ownerId} key=${stored.key}: ${msg}\n`,
+      )
+      throw err
+    }
+
+    // home_modules 无 blurhash 列，不入队（与 banner 现状一致；follow-up CHG-HOME-BLURHASH）
+
+    process.stderr.write(
+      `[image-upload] ownerType=home_module ownerId=${input.ownerId} key=${stored.key} size=${stored.size}\n`,
+    )
+
+    return {
+      ...stored,
+      ownerType: 'home_module',
       ownerId: input.ownerId,
       kind: null,
       blurhashJobId: null,

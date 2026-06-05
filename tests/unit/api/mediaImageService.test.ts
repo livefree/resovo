@@ -45,6 +45,14 @@ vi.mock('../../../apps/api/src/db/queries/home-banners', () => ({
   updateBanner: (...args: unknown[]) => mockUpdateBanner(...args),
 }))
 
+// CHG-HOME-UX-02：home_module 分支（ADR-052 AMENDMENT D-052-11）
+const mockFindHomeModuleById = vi.fn()
+const mockUpdateHomeModule = vi.fn()
+vi.mock('../../../apps/api/src/db/queries/home-modules', () => ({
+  findHomeModuleById: (...args: unknown[]) => mockFindHomeModuleById(...args),
+  updateHomeModule: (...args: unknown[]) => mockUpdateHomeModule(...args),
+}))
+
 vi.mock('../../../apps/api/src/db/queries/mediaCatalog', () => ({
   updateCatalogFields: (...args: unknown[]) => mockUpdateCatalogFields(...args),
 }))
@@ -287,5 +295,70 @@ describe('MediaImageService — 写库失败补偿删除', () => {
       ownerId: 'bnr-1',
     })).rejects.toThrow('banner table locked')
     expect(mockDelete).toHaveBeenCalled()
+  })
+})
+
+// ── CHG-HOME-UX-02：home_module 分支（ADR-052 AMENDMENT D-052-11）──────────
+
+describe('MediaImageService — home_module 分支', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockUpload.mockResolvedValue({
+      ...makeStoredResult(),
+      key: 'home_modules/hm-1-abcdef12.png',
+      url: 'https://r2.example/resovo-images/home_modules/hm-1-abcdef12.png',
+    })
+    mockFindHomeModuleById.mockResolvedValue({ id: 'hm-1' })
+    mockUpdateHomeModule.mockResolvedValue({ id: 'hm-1' })
+  })
+
+  it('home_module 不存在 → 抛 404 OWNER_NOT_FOUND 且不调 storage.upload', async () => {
+    mockFindHomeModuleById.mockResolvedValue(null)
+    const svc = new MediaImageService(mockDb)
+    try {
+      await svc.upload({
+        buffer: Buffer.from('x'),
+        contentType: 'image/png',
+        ownerType: 'home_module',
+        ownerId: 'missing',
+      })
+      throw new Error('should have thrown')
+    } catch (err) {
+      expect(err).toBeInstanceOf(ImageStorageError)
+      expect((err as ImageStorageError).statusCode).toBe(404)
+      expect((err as ImageStorageError).code).toBe('OWNER_NOT_FOUND')
+    }
+    expect(mockUpload).not.toHaveBeenCalled()
+    expect(mockUpdateHomeModule).not.toHaveBeenCalled()
+  })
+
+  it('home_module → updateHomeModule 写回 imageUrl + 不入队 + kind=null + blurhashJobId=null', async () => {
+    const svc = new MediaImageService(mockDb)
+    const result = await svc.upload({
+      buffer: Buffer.from('x'),
+      contentType: 'image/png',
+      ownerType: 'home_module',
+      ownerId: 'hm-1',
+    })
+    expect(mockUpload).toHaveBeenCalledWith(expect.objectContaining({ ownerType: 'home_module', ownerId: 'hm-1' }))
+    expect(mockUpdateHomeModule).toHaveBeenCalledWith(mockDb, 'hm-1', {
+      imageUrl: 'https://r2.example/resovo-images/home_modules/hm-1-abcdef12.png',
+    })
+    expect(mockQueueAdd).not.toHaveBeenCalled()
+    expect(result.ownerType).toBe('home_module')
+    expect(result.kind).toBeNull()
+    expect(result.blurhashJobId).toBeNull()
+  })
+
+  it('updateHomeModule 抛错 → 调 storage.delete 补偿 + 向上抛错', async () => {
+    mockUpdateHomeModule.mockRejectedValue(new Error('home_modules table locked'))
+    const svc = new MediaImageService(mockDb)
+    await expect(svc.upload({
+      buffer: Buffer.from('x'),
+      contentType: 'image/png',
+      ownerType: 'home_module',
+      ownerId: 'hm-1',
+    })).rejects.toThrow('home_modules table locked')
+    expect(mockDelete).toHaveBeenCalledWith('home_modules/hm-1-abcdef12.png')
   })
 })

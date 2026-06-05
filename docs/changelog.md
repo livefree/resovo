@@ -15004,3 +15004,17 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **新增依赖**：无
 - **数据库变更**：无
 - **注意事项**：56/56（home-modules 24 + admin-home-modules 32）全过；typecheck/lint EXIT=0 + test:changed 增量 32/32。test:e2e:admin 与 CHG-HOME-UX-02 合跑（连续后端卡批处理，偏离登记）。6 端点路径/方法/错误码/audit 枚举零变化。解阻 CHG-HOME-UX-03。
+
+## [CHG-HOME-UX-02] media ownerType 扩 home_module（ADR-052 D-052-11 实施）
+- **完成时间**：2026-06-05
+- **记录时间**：2026-06-05 15:35
+- **执行模型**：claude-opus-4-8（人工 opus 会话覆盖 sonnet 建议，偏离登记）
+- **子代理**：无
+- **修改文件**：
+  - `apps/api/src/routes/admin/media.ts` — OwnerTypeSchema +home_module + 422 错误文案三值化
+  - `apps/api/src/services/ImageStorageService.ts` — OwnerType 类型并集 +home_module + buildKey 分支（key 前缀 home_modules/）
+  - `apps/api/src/services/MediaImageService.ts` — upload() home_module 前置校验分支（findHomeModuleById 404）+ uploadForHomeModule（仿 banner 范式：upload → updateHomeModule 写回 image_url → 写库失败补偿删除；无 blurhash 入队同 banner 现状）
+  - `tests/unit/api/mediaImageService.test.ts` — +home-modules queries mock + 3 用例（404 不调 upload / 写回+不入队+kind null / 补偿删除）
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：既有端点 body 枚举值扩张非新 route（verify:endpoint-adr 不触发，ADR 卡已确认）。media 域 44/44 过；typecheck/lint EXIT=0 + test:changed 44/44；**e2e:admin 39 passed + 1 flaky（旧版 moderation 域重试过，与本卡无关）= 01-B+02 合跑门禁完成**。解阻 CHG-HOME-UX-05（图片上传依赖）。

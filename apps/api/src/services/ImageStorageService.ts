@@ -213,7 +213,7 @@ const EXT_TO_CONTENT_TYPE: Record<string, string> = {
 
 // ── 类型 ──────────────────────────────────────────────────────────
 
-export type OwnerType = 'video' | 'banner'
+export type OwnerType = 'video' | 'banner' | 'home_module'
 
 export interface ImageUploadInput {
   buffer: Buffer
@@ -391,6 +391,10 @@ export class ImageStorageService {
   ): string {
     if (input.ownerType === 'banner') {
       return `banners/${input.ownerId}-${hash}.${ext}`
+    }
+    // CHG-HOME-UX-02（D-052-11）：首页运营位横图，key 前缀 home_modules/
+    if (input.ownerType === 'home_module') {
+      return `home_modules/${input.ownerId}-${hash}.${ext}`
     }
     // ownerType === 'video'
     const kind = input.kind ?? 'poster'

@@ -21,7 +21,8 @@ import {
 } from '@/api/services/ImageStorageService'
 import type { ImageKind } from '@/types'
 
-const OwnerTypeSchema = z.enum(['video', 'banner'])
+// CHG-HOME-UX-02（ADR-052 AMENDMENT D-052-11）：+home_module（首页运营位横图）
+const OwnerTypeSchema = z.enum(['video', 'banner', 'home_module'])
 const KindSchema = z.enum([
   'poster',
   'backdrop',
@@ -94,7 +95,7 @@ export async function adminMediaRoutes(fastify: FastifyInstance): Promise<void> 
       return reply.code(422).send({
         error: {
           code: 'VALIDATION_ERROR',
-          message: "ownerType 必须为 'video' 或 'banner'",
+          message: "ownerType 必须为 'video' / 'banner' / 'home_module'",
           status: 422,
         },
       })
