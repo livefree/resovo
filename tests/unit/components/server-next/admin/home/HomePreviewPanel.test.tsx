@@ -188,3 +188,41 @@ describe('HomePreviewPanel — 轻拟真（videoMetaMap）', () => {
     expect(container.textContent).toContain('v-abc')
   })
 })
+
+// ── CHG-HOME-UX-09：top10 自动补位可视化 ─────────────────────────────────────
+
+describe('HomePreviewPanel — top10 自动补位行（autoFillItems）', () => {
+  const AUTO_ITEMS = [
+    { id: 'v-auto-1', title: '评分补位 1', coverUrl: null, rank: 2 },
+    { id: 'v-auto-2', title: '评分补位 2', coverUrl: 'https://cdn.example.com/a2.jpg', rank: 3 },
+  ]
+
+  it('top10：人工行之后渲染灰显自动补位行 + 「自动」标记 + 说明文案', () => {
+    const manual = { ...BASE_MODULE, slot: 'top10' as const }
+    const { container } = render(
+      <HomePreviewPanel slot="top10" modules={[manual]} autoFillItems={AUTO_ITEMS} />,
+    )
+    const autoRows = container.querySelectorAll('[data-preview-autofill-item]')
+    expect(autoRows.length).toBe(2)
+    expect((autoRows[0] as HTMLElement).style.opacity).toBe('0.55')
+    expect(container.textContent).toContain('评分补位 1')
+    expect(container.textContent).toContain('自动')
+    expect(container.textContent).toContain('按评分自动补位')
+  })
+
+  it('top10 人工模块为空但有补位 → 不显「暂无模块」，渲染纯自动行', () => {
+    const { container } = render(
+      <HomePreviewPanel slot="top10" modules={[]} autoFillItems={AUTO_ITEMS} />,
+    )
+    expect(container.textContent).not.toContain('暂无模块')
+    expect(container.querySelectorAll('[data-preview-autofill-item]').length).toBe(2)
+  })
+
+  it('非 top10 slot 不渲染自动补位行（featured 传入也忽略）', () => {
+    const manual = { ...BASE_MODULE, slot: 'featured' as const }
+    const { container } = render(
+      <HomePreviewPanel slot="featured" modules={[manual]} autoFillItems={AUTO_ITEMS} />,
+    )
+    expect(container.querySelectorAll('[data-preview-autofill-item]').length).toBe(0)
+  })
+})

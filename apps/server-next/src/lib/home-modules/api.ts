@@ -66,3 +66,60 @@ export async function uploadHomeModuleImage(id: string, file: File): Promise<{ u
   const result = await apiClient.postMultipart<{ data: { url: string } }>('/admin/media/images', formData)
   return result.data
 }
+
+// ── CHG-HOME-UX-09：半自动趋势导入 + top10 补位可视化（公开端点消费）──
+
+/** VideoCard 子集 → PickerVideoItem（趋势/top10 均为已发布视频） */
+interface PublicVideoCardLike {
+  readonly id: string
+  readonly shortId: string
+  readonly title: string
+  readonly titleEn: string | null
+  readonly type: string
+  readonly year: number | null
+  readonly coverUrl: string | null
+}
+
+function toPickerItem(card: PublicVideoCardLike): import('@resovo/admin-ui').PickerVideoItem {
+  return {
+    id: card.id,
+    shortId: card.shortId,
+    title: card.title,
+    titleEn: card.titleEn,
+    type: card.type,
+    year: card.year,
+    coverUrl: card.coverUrl,
+    isPublished: true,
+  }
+}
+
+/** 趋势周榜候选（「从趋势导入」半自动入口；公开端点，已在列由确认面板自动标灰） */
+export async function fetchTrendingCandidates(limit = 20): Promise<readonly import('@resovo/admin-ui').PickerVideoItem[]> {
+  const result = await apiClient.get<{ data: PublicVideoCardLike[] }>(
+    `/videos/trending?period=week&limit=${limit}`,
+    { skipAuth: true },
+  )
+  return result.data.map(toPickerItem)
+}
+
+export interface Top10AutoFillItem {
+  readonly id: string
+  readonly title: string
+  readonly coverUrl: string | null
+  readonly rank: number
+}
+
+/** top10 前台实际补位行（isPinned=false = 读时 rating 自动补位；预览面板可视化用） */
+export async function fetchTop10AutoFill(): Promise<readonly Top10AutoFillItem[]> {
+  const result = await apiClient.get<{
+    data: { items: ReadonlyArray<{ video: PublicVideoCardLike; rank: number; isPinned: boolean }> }
+  }>('/home/top10', { skipAuth: true })
+  return result.data.items
+    .filter((item) => !item.isPinned)
+    .map((item) => ({
+      id: item.video.id,
+      title: item.video.title,
+      coverUrl: item.video.coverUrl,
+      rank: item.rank,
+    }))
+}

@@ -15116,3 +15116,18 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **新增依赖**：无
 - **数据库变更**：无
 - **注意事项**：HomeOpsClient.test 补 next/navigation mock（useSearchParams，深链用例覆写）。08 相关 102/102 + test:changed 106/106（首轮 1 failed = jsdom 并发 flaky 复跑全绿）+ typecheck/lint EXIT=0。解阻 09。
+
+## [CHG-HOME-UX-09] 半自动趋势导入 + top10 补位可视化
+- **完成时间**：2026-06-05
+- **记录时间**：2026-06-05 16:36
+- **执行模型**：claude-opus-4-8（人工 opus 会话覆盖 sonnet 建议，偏离登记）
+- **子代理**：无
+- **修改文件**：
+  - `apps/server-next/src/lib/home-modules/api.ts` — +fetchTrendingCandidates（公开 /videos/trending?period=week skipAuth → VideoCard 映射 PickerVideoItem）+ fetchTop10AutoFill（公开 /home/top10 → **isPinned=false 项**映射 Top10AutoFillItem——Top10Item 自带人工/自动标记，无需求差）
+  - `apps/server-next/src/lib/home-modules/use-top10-autofill.ts`（新 31 行）— top10 tab 激活时取一次（manualCount 进依赖：置顶增删后重取；失败静默降级；前台 60s 缓存致可视化短暂滞后已注释声明为提示性可接受）
+  - `apps/server-next/src/app/admin/home/_client/HomeOpsClient.tsx`（499<500 压线）— batchAddOpen → batchAddInitial（null=关/[]=页内空白/[...]=趋势预填，页内与趋势合并单实例）+「从趋势导入」按钮（仅 featured/top10）+ handleTrendingImport + useTop10AutoFill 接线下传
+  - `apps/server-next/src/app/admin/home/_client/HomePreviewPanel.tsx` — props +autoFillItems?（仅 top10 渲染）+ AutoFillPreviewItem（灰显 0.55 + rank + 「自动」pill + 说明文案「人工置顶不足 10 个时前台按评分自动补位」）+ 空 modules 有补位不显「暂无模块」
+  - 测试：HomePreviewPanel +3（补位行+标记+文案 / 纯自动不显空态 / 非 top10 忽略）+ home-modules-client +2（trending/top10 端点契约含 isPinned 过滤断言）+ HomeOpsClient +2（趋势导入预填 / banner 无按钮）+ api mock 补 2 导出
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：**HomeOpsClient 已满 499 行**——下次任何改动必须先拆（登记 FUP）。读时补位机制（无 worker）经「自动」行在后台显性化，闭合 P-home §4.2 文档偏差的可视化侧。83/83 + test:changed 77/77 + typecheck/lint EXIT=0 + e2e:admin 39+1 flaky（07/08/09 批跑完成）。**入口体系三卡（07/08/09）全收口**；解阻 FUP。

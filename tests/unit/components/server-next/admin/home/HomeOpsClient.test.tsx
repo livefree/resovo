@@ -50,6 +50,9 @@ vi.mock('../../../../../../apps/server-next/src/lib/home-modules/api', () => ({
   deleteHomeModule: vi.fn(),
   reorderHomeModules: vi.fn(),
   publishToggleHomeModule: vi.fn(),
+  // CHG-HOME-UX-09：趋势导入 + top10 补位可视化（默认空，专项用例覆写）
+  fetchTrendingCandidates: vi.fn().mockResolvedValue([]),
+  fetchTop10AutoFill: vi.fn().mockResolvedValue([]),
 }))
 
 // ── mock picker-fetcher（CHG-HOME-UX-04-B：useVideoMetaMap 取数通道）──
@@ -436,6 +439,35 @@ describe('HomeOpsClient — 批量添加入口', () => {
       expect(mockedList).toHaveBeenCalledWith(expect.objectContaining({ slot: 'type_shortcuts' }))
     })
     expect(screen.queryByTestId('home-batch-add-btn')).toBeNull()
+  })
+})
+
+// ── CHG-HOME-UX-09：半自动趋势导入 ─────────────────────────────────────────
+
+describe('HomeOpsClient — 趋势导入入口', () => {
+  it('featured tab 显示「从趋势导入」→ 点击取趋势候选预填确认面板', async () => {
+    const { fetchTrendingCandidates } = await import('../../../../../../apps/server-next/src/lib/home-modules/api')
+    vi.mocked(fetchTrendingCandidates).mockResolvedValue([PICKER_ITEM])
+    mockedList.mockResolvedValue({ data: [], total: 0, page: 1, limit: 100 })
+    render(<HomeOpsClient />)
+    await waitFor(() => expect(mockedList).toHaveBeenCalled())
+
+    fireEvent.click(screen.getByText('精选推荐'))
+    await waitFor(() => {
+      expect(screen.queryByTestId('home-trending-import-btn')).not.toBeNull()
+    })
+
+    fireEvent.click(screen.getByTestId('home-trending-import-btn'))
+    await waitFor(() => {
+      expect(screen.queryByTestId('batch-add-item-v-abc')).not.toBeNull()
+    })
+  })
+
+  it('banner tab 不显示「从趋势导入」（仅 featured/top10）', async () => {
+    mockedList.mockResolvedValue({ data: [], total: 0, page: 1, limit: 100 })
+    render(<HomeOpsClient />)
+    await waitFor(() => expect(mockedList).toHaveBeenCalled())
+    expect(screen.queryByTestId('home-trending-import-btn')).toBeNull()
   })
 })
 

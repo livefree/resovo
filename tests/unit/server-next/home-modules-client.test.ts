@@ -219,3 +219,39 @@ describe('uploadHomeModuleImage', () => {
     expect(result.url).toBe('https://cdn.example.com/home_modules/m1-hash.png')
   })
 })
+
+// ── CHG-HOME-UX-09：趋势导入 + top10 补位可视化端点契约 ──────────────────────
+
+describe('fetchTrendingCandidates / fetchTop10AutoFill', () => {
+  beforeEach(() => {
+    mockedGet.mockReset()
+  })
+
+  it('fetchTrendingCandidates → GET /videos/trending（skipAuth）+ VideoCard 映射 PickerVideoItem', async () => {
+    mockedGet.mockResolvedValue({
+      data: [{ id: 'v1', shortId: 's1', title: 'T', titleEn: null, type: 'movie', year: 2026, coverUrl: 'https://c/x.jpg' }],
+    })
+    const { fetchTrendingCandidates } = await import('../../../apps/server-next/src/lib/home-modules/api')
+    const items = await fetchTrendingCandidates(5)
+    expect(mockedGet).toHaveBeenCalledWith('/videos/trending?period=week&limit=5', { skipAuth: true })
+    expect(items[0]).toEqual({
+      id: 'v1', shortId: 's1', title: 'T', titleEn: null, type: 'movie', year: 2026,
+      coverUrl: 'https://c/x.jpg', isPublished: true,
+    })
+  })
+
+  it('fetchTop10AutoFill → GET /home/top10 + 仅 isPinned=false 项映射', async () => {
+    mockedGet.mockResolvedValue({
+      data: {
+        items: [
+          { video: { id: 'p1', shortId: 'p', title: '置顶', titleEn: null, type: 'movie', year: null, coverUrl: null }, rank: 1, isPinned: true },
+          { video: { id: 'a1', shortId: 'a', title: '补位', titleEn: null, type: 'movie', year: null, coverUrl: 'https://c/a.jpg' }, rank: 2, isPinned: false },
+        ],
+      },
+    })
+    const { fetchTop10AutoFill } = await import('../../../apps/server-next/src/lib/home-modules/api')
+    const items = await fetchTop10AutoFill()
+    expect(mockedGet).toHaveBeenCalledWith('/home/top10', { skipAuth: true })
+    expect(items).toEqual([{ id: 'a1', title: '补位', coverUrl: 'https://c/a.jpg', rank: 2 }])
+  })
+})

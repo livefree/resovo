@@ -14,6 +14,7 @@ import type { CSSProperties } from 'react'
 import { ImageOff, Link2 } from 'lucide-react'
 import type { HomeModule, HomeModuleSlot } from '@/lib/home-modules/types'
 import type { VideoMeta, VideoMetaMap } from '@/lib/home-modules/use-video-meta-map'
+import type { Top10AutoFillItem } from '@/lib/home-modules/api'
 
 // ── 样式常量 ───────────────────────────────────────────────────────
 
@@ -237,6 +238,40 @@ function PosterPreviewItem({ module, rank, meta }: { module: HomeModule; rank: n
   )
 }
 
+/**
+ * top10 自动补位行（CHG-HOME-UX-09）：前台 /home/top10 isPinned=false 项的可视化。
+ * 灰显 + 「自动」标记；不可拖拽/编辑（非 home_modules 行，读时 rating 补位）。
+ */
+function AutoFillPreviewItem({ item }: { item: Top10AutoFillItem }) {
+  return (
+    <div style={{ ...POSTER_ITEM_STYLE, opacity: 0.55 }} data-preview-autofill-item>
+      <div style={RANK_STYLE}>{item.rank}</div>
+      {item.coverUrl ? (
+        // 装饰性配图
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={item.coverUrl} alt="" aria-hidden="true" loading="lazy" style={{ ...POSTER_THUMB_STYLE, objectFit: 'cover' }} />
+      ) : (
+        <div style={POSTER_THUMB_STYLE} aria-hidden="true"><ImageOff size={14} /></div>
+      )}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={REF_TEXT_STYLE} title={item.title}>{item.title}</div>
+      </div>
+      <span
+        style={{
+          fontSize: 'var(--font-size-2xs)',
+          color: 'var(--fg-muted)',
+          border: '1px solid var(--border-subtle)',
+          borderRadius: 'var(--radius-pill)',
+          padding: '1px 7px',
+          flexShrink: 0,
+        }}
+      >
+        自动
+      </span>
+    </div>
+  )
+}
+
 function TypeShortcutsPreview({ modules }: { modules: readonly HomeModule[] }) {
   return (
     <div style={PILLS_WRAP_STYLE} data-preview-shortcuts>
@@ -262,9 +297,11 @@ export interface HomePreviewPanelProps {
   readonly modules: readonly HomeModule[]
   /** video 引用充实数据（CHG-HOME-UX-06；父级 HomeOpsClient 下传，本组件不自取） */
   readonly videoMetaMap?: VideoMetaMap
+  /** top10 前台自动补位行（CHG-HOME-UX-09；仅 slot='top10' 渲染，父取下传） */
+  readonly autoFillItems?: readonly Top10AutoFillItem[]
 }
 
-export function HomePreviewPanel({ slot, modules, videoMetaMap = EMPTY_META_MAP }: HomePreviewPanelProps) {
+export function HomePreviewPanel({ slot, modules, videoMetaMap = EMPTY_META_MAP, autoFillItems }: HomePreviewPanelProps) {
   const enabledCount = modules.filter((m) => m.enabled).length
   const metaOf = (m: HomeModule): VideoMeta | null | undefined =>
     m.contentRefType === 'video' ? videoMetaMap.get(m.contentRefId) : undefined
@@ -276,7 +313,7 @@ export function HomePreviewPanel({ slot, modules, videoMetaMap = EMPTY_META_MAP 
         <span style={PANEL_COUNT_STYLE}>{enabledCount}/{modules.length}</span>
       </div>
       <div style={PANEL_BODY_STYLE}>
-        {modules.length === 0 ? (
+        {modules.length === 0 && !(slot === 'top10' && (autoFillItems?.length ?? 0) > 0) ? (
           <div style={EMPTY_STYLE}>暂无模块</div>
         ) : slot === 'type_shortcuts' ? (
           <TypeShortcutsPreview modules={modules} />
@@ -285,9 +322,22 @@ export function HomePreviewPanel({ slot, modules, videoMetaMap = EMPTY_META_MAP 
             <BannerPreviewItem key={m.id} module={m} rank={i + 1} meta={metaOf(m)} />
           ))
         ) : (
-          modules.map((m, i) => (
-            <PosterPreviewItem key={m.id} module={m} rank={i + 1} meta={metaOf(m)} />
-          ))
+          <>
+            {modules.map((m, i) => (
+              <PosterPreviewItem key={m.id} module={m} rank={i + 1} meta={metaOf(m)} />
+            ))}
+            {/* CHG-HOME-UX-09：top10 前台自动补位可视化（读时 rating 补满 10，灰显「自动」标记） */}
+            {slot === 'top10' && (autoFillItems?.length ?? 0) > 0 && (
+              <>
+                {autoFillItems?.map((item) => (
+                  <AutoFillPreviewItem key={item.id} item={item} />
+                ))}
+                <div style={{ ...EMPTY_STYLE, padding: '6px 0' }}>
+                  人工置顶不足 10 个时前台按评分自动补位
+                </div>
+              </>
+            )}
+          </>
         )}
       </div>
     </div>

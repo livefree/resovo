@@ -38,7 +38,9 @@ import {
   deleteHomeModule,
   reorderHomeModules,
   publishToggleHomeModule,
+  fetchTrendingCandidates,
 } from '@/lib/home-modules/api'
+import { useTop10AutoFill } from '@/lib/home-modules/use-top10-autofill'
 import type {
   HomeModule,
   HomeModuleSlot,
@@ -115,8 +117,8 @@ export function HomeOpsClient() {
   const [editingModule, setEditingModule] = useState<HomeModule | null>(null)
   // CHG-HOME-UX-04-B：删除确认 Modal（取代 window.confirm）
   const [deleteTarget, setDeleteTarget] = useState<HomeModule | null>(null)
-  // CHG-HOME-UX-07：批量添加统一确认面板
-  const [batchAddOpen, setBatchAddOpen] = useState(false)
+  // CHG-HOME-UX-07/09：批量添加统一确认面板（null=关闭；[]=页内空白；[...]=趋势导入预填）
+  const [batchAddInitial, setBatchAddInitial] = useState<readonly PickerVideoItem[] | null>(null)
   // CHG-HOME-UX-08：深链落地（?add_ids=&from= → 充实候选预填确认面板 + 来源回链栏）
   const addEntry = useHomeAddEntry()
 
@@ -146,6 +148,9 @@ export function HomeOpsClient() {
 
   // CHG-HOME-UX-04-B：video 引用充实（顶层一次，metaMap 下传 Card / PreviewPanel 共用）
   const { metaMap } = useVideoMetaMap(modules)
+
+  // CHG-HOME-UX-09：top10 前台自动补位可视化（isPinned=false 项；父取下传 PreviewPanel）
+  const top10AutoFill = useTop10AutoFill(activeSlot === 'top10', modules.length)
 
   // ── 拖拽排序 ──────────────────────────────────────────────────────
 
@@ -229,6 +234,20 @@ export function HomeOpsClient() {
     return ids
   }, [modulesBySlot])
 
+  // CHG-HOME-UX-09：半自动趋势导入 — 自动推荐 + 人工把关（确认面板把已在列项标灰）
+  const handleTrendingImport = useCallback(async () => {
+    try {
+      const candidates = await fetchTrendingCandidates()
+      setBatchAddInitial(candidates)
+    } catch (err: unknown) {
+      toast.push({
+        title: '趋势候选获取失败',
+        description: err instanceof Error ? err.message : '请稍后重试',
+        level: 'danger',
+      })
+    }
+  }, [toast])
+
   const handleBatchAdd = useCallback(async (slot: HomeModuleSlot, items: readonly PickerVideoItem[]) => {
     // ordering 末尾追加：现有最大 ordering + 1 起步
     const existing = modulesBySlot[slot] ?? []
@@ -255,7 +274,7 @@ export function HomeOpsClient() {
       }
     }
 
-    setBatchAddOpen(false)
+    setBatchAddInitial(null)
     toast.push({
       title: failed === 0 ? `已添加 ${created} 个模块` : `已添加 ${created} 个 · 失败 ${failed} 个`,
       level: failed === 0 ? 'success' : 'warn',
@@ -372,10 +391,20 @@ export function HomeOpsClient() {
                             <AdminButton
                               variant="default"
                               size="sm"
-                              onClick={() => setBatchAddOpen(true)}
+                              onClick={() => setBatchAddInitial([])}
                               data-testid="home-batch-add-btn"
                             >
                               + 添加视频
+                            </AdminButton>
+                          )}
+                          {(activeSlot === 'featured' || activeSlot === 'top10') && (
+                            <AdminButton
+                              variant="default"
+                              size="sm"
+                              onClick={() => void handleTrendingImport()}
+                              data-testid="home-trending-import-btn"
+                            >
+                              从趋势导入
                             </AdminButton>
                           )}
                           <AdminButton
@@ -427,7 +456,7 @@ export function HomeOpsClient() {
                 )
           }
         </div>
-        <HomePreviewPanel slot={activeSlot} modules={modules} videoMetaMap={metaMap} />
+        <HomePreviewPanel slot={activeSlot} modules={modules} videoMetaMap={metaMap} autoFillItems={top10AutoFill} />
       </div>
 
       <HomeModuleDrawer
@@ -445,10 +474,11 @@ export function HomeOpsClient() {
       />
 
       <BatchAddVideosModal
-        open={batchAddOpen}
+        open={batchAddInitial !== null}
         defaultSlot={activeSlot}
+        initialItems={batchAddInitial ?? []}
         getExistingIds={getExistingIds}
-        onClose={() => setBatchAddOpen(false)}
+        onClose={() => setBatchAddInitial(null)}
         onConfirm={handleBatchAdd}
       />
 
