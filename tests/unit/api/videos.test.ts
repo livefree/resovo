@@ -235,7 +235,7 @@ describe('GET /v1/videos/:id', () => {
 
 // ── DETAIL-01: slug 解析逻辑单元测试 ────────────────────────────
 
-import { extractShortId } from '@/lib/video-detail'
+import { extractShortId } from '@/lib/short-id'
 
 describe('extractShortId', () => {
   it('从标准 slug 提取最后 8 位 shortId', () => {

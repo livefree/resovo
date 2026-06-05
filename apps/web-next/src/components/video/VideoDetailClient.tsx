@@ -17,7 +17,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { apiClient } from '@/lib/api-client'
-import { extractShortId } from '@/lib/video-detail'
+import { extractShortId } from '@/lib/short-id'
 import { DetailHero } from '@/components/detail/DetailHero'
 import { EpisodePicker } from '@/components/detail/EpisodePicker'
 import { RelatedVideos } from '@/components/detail/RelatedVideos'

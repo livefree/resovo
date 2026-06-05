@@ -99,7 +99,7 @@ vi.mock('@/lib/line-display-name', () => ({
   buildLineDisplayName: () => 'L1',
 }))
 
-vi.mock('@/lib/video-detail', () => ({
+vi.mock('@/lib/short-id', () => ({
   extractShortId: (slug: string) => slug.split('-').pop() ?? slug,
 }))
 

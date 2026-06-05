@@ -89,7 +89,7 @@ vi.mock('@/lib/line-display-name', () => ({
     (raw ?? []).map((s) => ({ src: s.sourceUrl, type: s.type, label: 'L1' })),
 }))
 
-vi.mock('@/lib/video-detail', () => ({
+vi.mock('@/lib/short-id', () => ({
   extractShortId: (slug: string) => slug.split('-').pop() ?? slug,
 }))
 

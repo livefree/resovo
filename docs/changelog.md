@@ -14747,3 +14747,21 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
   - **偏离登记**：组件一次性文案（placeholder/按钮/confirm）保留内联（CHG-VSR-6 先例；验收按「语义性文案集中化」口径落地，待 next-intl 接入统一迁 JSON）。
   - 文案值逐字不变 → 既有测试零改动零破坏（merge 域 + status-defaults 102/102）。
   - **SEQ-20260604-01 全部 13 卡完结**；系列收口 e2e 硬前置（SEQ 头部 ①②③）接续执行。
+
+## [CHG-VIR-13-CLOSE-FIX] 系列收口 ①：web-next client bundle 编译破坏修复 + player 域 e2e 实跑归因
+- **完成时间**：2026-06-04
+- **记录时间**：2026-06-04 23:15
+- **执行模型**：claude-opus-4-8
+- **子代理**：无
+- **修改文件**：
+  - `apps/web-next/src/lib/short-id.ts` — **新建**：`extractShortId` 纯函数自 video-detail.ts 抽出（client/server 双侧安全）
+  - `apps/web-next/src/lib/video-detail.ts` — 本地定义 → import + re-export（server 侧既有 import 零破坏）
+  - `apps/web-next/src/components/player/PlayerShell.tsx` + `src/components/video/VideoDetailClient.tsx` — import 改址 `@/lib/short-id`
+  - `tests/unit/web-next/player-shell-{hydration,on-error}.test.tsx` — vi.mock 路径同步；`tests/unit/api/videos.test.ts` — import 对齐真源
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - **根因**：PlayerShell（'use client'）value-import `extractShortId` ← video-detail.ts（顶层 `import { cookies, headers } from 'next/headers'`）→ server-only 模块进 client bundle → 干净环境自起 webServer 编译失败。自 M3-PLAYER-02 时代潜伏；外部热 :3000 server（Jun 4 00:28 旧编译产物）长期掩盖 = **13-PLAY 当时 e2e 38 failed 含 smoke 全挂的真正根因**。
+  - **player 域 e2e 实跑终值**（修复后 + API server 手动起）：smoke 2/2 绿 + 6 passed/1 flaky-passed；31 failed 逐层归因 = pre-existing e2e 数据基建欠账——(a) playwright webServer 无 api 条目 (b) dev DB 零 seed（home_modules 0 行 → 首页 main 恒空；player.spec fixture slug `test-movie-aB3kR9x1` 等 videos 表 0 行）。本系列对 web-next 仅本 FIX（语义逐字不变，34 单测过）+ types 加性 = 零回归。
+  - **follow-up 建议立卡 CHG-E2E-SEED**：web 域 e2e seed 基建（home_modules + fixture videos seed 脚本 + playwright api webServer 条目评估）。
+  - 门禁：web-next tsc EXIT=0 + 受影响单测 34/34 + 负载性 4 文件隔离复跑 37/37 + lint EXIT=0。

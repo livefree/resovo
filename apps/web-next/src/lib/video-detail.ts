@@ -26,11 +26,10 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/v1'
  * 从 slug 提取 shortId（最后一个 `-` 后的 8 位字符）
  * 例："attack-on-titan-aB3kR9x1" → "aB3kR9x1"
  */
-export function extractShortId(slug: string): string {
-  const lastDash = slug.lastIndexOf('-')
-  if (lastDash === -1) return slug
-  return slug.slice(lastDash + 1)
-}
+// CHG-VIR-13 收口 FIX：纯函数抽至 short-id.ts（client 组件 value-import 本模块会把
+// 顶层 next/headers 拉入 client bundle）；此处 re-export 保 server 侧既有 import 兼容。
+import { extractShortId } from './short-id'
+export { extractShortId }
 
 /** ADR-160 D-160-3：判定当前请求是否处于 admin preview 模式（middleware 注入 header） */
 async function shouldUsePreview(): Promise<boolean> {
