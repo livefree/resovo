@@ -1,6 +1,6 @@
 # P-home · 首页运营位编辑器
 
-> status: 🟢 完整定稿（CHG-SN-8-MANUAL-BATCH-2 / 2026-05-21）
+> status: 🟢 完整定稿（CHG-HOME-UX-FUP / 2026-06-05 · SEQ-20260605-01 UI/UX 改造后修订）
 
 ## 0. 元信息
 
@@ -8,10 +8,10 @@
 |---|---|
 | 真源页面路径 | `/admin/home` |
 | 设计稿引用 | reference.md §5.7 |
-| 主任务卡 | CHG-SN-5-04（ADR-104 home_modules 6 端点）+ -05/-06（实施）+ CHG-SN-5-07（视图基座）+ CHG-SN-7-MISC-HOME-1（sticky 预览）+ -HOME-2（PageHeader 双按钮）+ CHG-SN-8-FUP-HOME（ContentRefPicker 接入 / 用户问题 #10）+ CHG-SN-8-MANUAL-BATCH-2（手册定稿） |
-| 涉及端点 | `GET /admin/home-modules`（含禁用 + 过期）/ `POST` / `PATCH /:id` / `DELETE /:id` / `POST /reorder` / `POST /:id/publish-toggle`（ADR-104）|
+| 主任务卡 | CHG-SN-5-04（ADR-104 home_modules 6 端点）+ -05/-06（实施）+ CHG-SN-5-07（视图基座）+ CHG-SN-7-MISC-HOME-1（sticky 预览）+ -HOME-2（PageHeader 双按钮）+ CHG-SN-8-FUP-HOME（ContentRefPicker 接入 / 用户问题 #10）+ CHG-SN-8-MANUAL-BATCH-2（手册定稿）+ **SEQ-20260605-01 CHG-HOME-UX 系列**（title/imageUrl 字段补齐〔ADR-052/104 AMENDMENT〕+ 卡片/预览真实化 + 四色 pill + 入口体系） |
+| 涉及端点 | `GET /admin/home-modules`（含禁用 + 过期）/ `POST` / `PATCH /:id` / `DELETE /:id` / `POST /reorder` / `POST /:id/publish-toggle`（ADR-104）+ `POST /admin/media/images`（ownerType=home_module 横图上传）+ 公开 `/videos/trending`（趋势导入）/ `/home/top10`（补位可视化）|
 | 适用角色 | editor + admin |
-| 最近更新 | 2026-05-21（CHG-SN-8-MANUAL-BATCH-2）|
+| 最近更新 | 2026-06-05（CHG-HOME-UX-FUP）|
 
 ---
 
@@ -92,8 +92,20 @@
 
 ### 4.2 时效模块（startAt / endAt）
 
-- 设定开始 / 结束时间 → 自动启用 / 禁用
-- 后台 worker 周期扫描；UI 不需触发
+- Drawer 内用 datetime-local 控件设定开始 / 结束时间（本地时区显示，存储 UTC ISO，对称往返零漂移；CHG-HOME-UX-05）
+- **生效机制 = 前台查询读时过滤**（`WHERE enabled AND NOW() ∈ [start_at, end_at)`），**无 worker**——到点自动生效/失效无需任何触发（2026-06-05 修正：旧文「后台 worker 周期扫描」与实现不符）
+- 模块卡片四色状态 pill 实时显示生命周期：🟢 生效中 / 🟡 待生效 / ⚪ 已隐藏·已过期 / 🔴 引用失效（video 引用 404）
+
+### 4.3 批量添加视频（CHG-HOME-UX-07/08/09 入口体系）
+
+- **页内**：slot 卡片头部「+ 添加视频」（banner/featured/top10）→ VideoPicker 多选 → 确认面板（已在列项自动标灰跳过；确认前零写库）
+- **视频库深链**：视频库行级 dropdown「加入首页运营」/ 批量选中「加入首页运营（N）」→ 新窗落地 `/admin/home?add_ids=…` 确认面板 + 来源回链栏
+- **趋势导入**（半自动）：featured/top10 头部「从趋势导入」→ 周榜候选预填确认面板，人工把关后批量创建
+
+### 4.4 top10 自动补位可视化（CHG-HOME-UX-09）
+
+- 人工置顶不足 10 个时前台按评分（rating DESC）读时自动补位
+- top10 预览面板尾部灰显「自动」标记行 = 前台实际补位结果（Redis 60s 缓存，可能短暂滞后）
 
 ## 5. 字段含义
 
@@ -102,10 +114,12 @@
 | slot | banner / featured / top10 / type_shortcuts |
 | brandScope | global（所有品牌通用）/ brand-specific（仅 brandSlug 品牌可见）|
 | contentRefType | video / external_url / custom_html / video_type |
-| contentRefId | 根据 contentRefType 不同含义（UUID / URL / HTML 片段 ID / 枚举值）|
-| ordering | 同 slot + brand 内排序权重 |
+| contentRefId | 根据 contentRefType 不同含义（UUID / URL / HTML 片段 ID / 枚举值）；video 类型经 VideoPicker 选片自动带出标题/封面（auto-fill，不覆盖手填值）|
+| title | 多语言标题映射 zh-CN/en（ADR-052 AMENDMENT；留空 = video 用视频标题，卡片/预览走降级链）|
+| imageUrl | 运营横图 URL（外链直填；编辑态可上传本地图〔写回模式需先有模块 ID〕；留空 = video 回退视频封面）|
+| ordering | 同 slot + brand 内排序权重（批量添加自动追加末尾）|
 | enabled | 是否在前台可见 |
-| startAt / endAt | 时效（ISO 8601，留空 = 立即生效 / 永久）|
+| startAt / endAt | 时效（datetime-local 本地时区编辑，存储 UTC；留空 = 立即生效 / 永久）|
 
 ## 6. 状态颜色
 
@@ -124,7 +138,10 @@
 | 改 enabled 不生效 | PATCH 不接受 enabled（ADR-104 D-104 协议）| 走 publish-toggle |
 | 前台未看到改动 | CDN 缓存 / 等 5 分钟 / 强制刷新 | 待缓存过期 |
 | 拖拽不响应 | 浏览器扩展拦截 / 触摸设备 | 用桌面鼠标 |
-| 时效模块未自动启用 | worker 未运行 | 查 cron job |
+| 时效模块未自动启用 | 误解——生效是前台查询读时过滤，无 worker，到点即生效 | 看卡片状态 pill（待生效→生效中）；前台另有 ≤60s 缓存 |
+| 卡片显示红色「引用失效」 | video 类型的 contentRefId 对应视频已删除/不可见 | 编辑模块重新选片或删除该模块 |
+| 上传按钮不见了 | 新建态无模块 ID（图片上传走写回模式）| 先保存模块再编辑上传；或直接填外链 |
+| 批量添加部分项标灰 | 该视频已在目标 slot（去重保护）| 灰项自动跳过，不重复创建 |
 
 ## 8. 与其他页面的关系
 

@@ -15131,3 +15131,15 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **新增依赖**：无
 - **数据库变更**：无
 - **注意事项**：**HomeOpsClient 已满 499 行**——下次任何改动必须先拆（登记 FUP）。读时补位机制（无 worker）经「自动」行在后台显性化，闭合 P-home §4.2 文档偏差的可视化侧。83/83 + test:changed 77/77 + typecheck/lint EXIT=0 + e2e:admin 39+1 flaky（07/08/09 批跑完成）。**入口体系三卡（07/08/09）全收口**；解阻 FUP。
+
+## [CHG-HOME-UX-FUP] follow-up 登记 + P-home 手册更新 + SEQ-20260605-01 序列收口
+- **完成时间**：2026-06-05
+- **记录时间**：2026-06-05 16:56
+- **执行模型**：claude-opus-4-8（人工 opus 会话覆盖 haiku 建议，偏离登记）
+- **子代理**：无
+- **修改文件**：
+  - `docs/task-queue.md` — 后续卡登记补全（+CHG-HOME-OPS-SPLIT 拆分预警：HomeOpsClient 499 行压线，下次触碰必拆）+ SEQ-20260605-01 状态收口 ✅
+  - `docs/manual/20-pages/P-home.md`（本卡明确标注"更新文档"）— §0 元信息（CHG-HOME-UX 系列 + 新端点）；§4.2 **worker 文档偏差修正**（旧文「后台 worker 周期扫描」→ 实际为前台查询读时 NOW() 过滤无 worker）+ 四色 pill 生命周期；§4.3 批量添加入口体系（页内/深链/趋势导入）；§4.4 top10 补位可视化；§5 字段表 +title/imageUrl + datetime-local 口径；§7 FAQ 时效条目修正 + 红 pill/上传按钮/批量标灰 3 新条目
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：全量单测兜底两轮交叉：第一轮 6674/6674 全过；第二轮 6673/6674（CrawlerRunsView #25 crawler 域与本序列零交集，隔离 33/33 过 = 既见 jsdom 并发 flaky）。verify:adr-contracts 4 项全绿 + test:changed docs-only SKIP。**SEQ-20260605-01 全 13 卡收口**。

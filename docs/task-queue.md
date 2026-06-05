@@ -3251,8 +3251,9 @@ CODENAME-MATRIX-E2E (依赖 Wave 3 验收期补丁 CODENAME-MATRIX ✅)
 
 ## [SEQ-20260605-01] 首页运营 /admin/home UI/UX 改造（字段补齐 + 卡片/预览真实化 + 入口体系）
 
-- **状态**：🔄 进行中
+- **状态**：✅ 已完成（全 13 卡收口 2026-06-05 16:56；改造主线〔UX 缺口 1-7〕+ 入口体系〔页内/深链/趋势〕全交付；前台三断裂按用户裁定仅登记后续卡）
 - **创建时间**：2026-06-05 15:04
+- **最后更新时间**：2026-06-05 16:56
 - **目标**：① 对齐设计稿 reference.md §5.7 + P-home.md §6——模块卡片（序号/120×54 横图/标题降级链/四色生命周期 Pill）+ 预览面板轻拟真（真实封面+标题）+ Drawer 体验（datetime-local / 图片上传 / auto-fill）+ 一致性收编（Segment / Modal 删除确认）。② 字段补齐（用户裁定）——home_modules 增 title JSONB 多语言 + image_url 一等列（参照 home_banners），media ownerType 扩 home_module。③ 视频入口体系（用户裁定：半自动 + 确认面板）——页内 VideoPicker multiple 批量添加 / 视频库行级+批量深链（仿 merge entry.ts 模式）/ 趋势导入 + top10 补位可视化。
 - **范围**：docs(decisions/architecture) + migration 093 + packages/types + apps/api(queries/service/media 3 文件) + apps/server-next(app/admin/home/_client 4+3 新文件 + lib/home-modules 4 文件 + lib/videos 接线 + videos/_client 3 文件接线) + tests。**不动**前台 apps/web-next（banner/featured/type_shortcuts 三处前台断裂仅登记 follow-up，用户裁定）。
 - **依赖**：无（dev 分支直接推进）。
@@ -3335,10 +3336,12 @@ CODENAME-MATRIX-E2E (依赖 Wave 3 验收期补丁 CODENAME-MATRIX ✅)
     - 依赖：CHG-HOME-UX-07 ✅
     - 范围（3 项）：①「从趋势导入」（featured/top10 → /videos/trending 候选排除已在列）② top10 tab 取公开 /home/top10 求差 → PreviewPanel 尾部灰显「自动补位」行 ③ 测试。
     - 完成备注：三项全落（求差简化为 Top10Item.isPinned 自带标记；已在列排除由确认面板自动标灰；batchAddInitial 单实例合并页内/趋势入口）。**HomeOpsClient 499 行压线，下次改动必须先拆（FUP 登记）**。+7 用例 83/83 + test:changed 77/77 + typecheck/lint EXIT=0 + e2e:admin 39+1 flaky（07/08/09 批跑）。**入口体系三卡全收口**。执行模型: claude-opus-4-8（人工 opus 覆盖 sonnet）；子代理: 无。
-13. **CHG-HOME-UX-FUP** — follow-up 登记 + 序列收口（状态：⬜ 待开始）
+13. **CHG-HOME-UX-FUP** — follow-up 登记 + 序列收口（状态：✅ 已完成）
+    - 实际开始：2026-06-05 16:40 ｜ 完成时间：2026-06-05 16:56
     - 建议模型：haiku
-    - 依赖：08/09/05/06 全完成
+    - 依赖：08/09/05/06 全完成 ✅
     - 范围（3 项）：① 后续卡登记（见下）② P-home.md 手册更新（本卡明确标注"更新文档"：worker 文档偏差修正 + 新交互）③ 全量单测兜底 + 序列状态收口。
+    - 完成备注：后续卡 +CHG-HOME-OPS-SPLIT（499 行拆分预警）；P-home.md §0/§4.2-4.4/§5/§7 修订（worker→读时过滤偏差修正 + 入口体系/四色 pill/字段表/FAQ）。全量兜底两轮交叉全过（第二轮 1 crawler flaky 隔离 33/33）；verify:adr-contracts 4 项绿。**SEQ-20260605-01 全 13 卡收口**。执行模型: claude-opus-4-8（人工 opus 覆盖 haiku）；子代理: 无。
 
 ### 后续卡登记（本序列产出，不在本序列内执行）
 
@@ -3351,3 +3354,4 @@ CODENAME-MATRIX-E2E (依赖 Wave 3 验收期补丁 CODENAME-MATRIX ✅)
 - **CHG-HOME-IMAGE-GUARD**（待立案，可选）：external_url/custom_html image 必填软校验（首版宽松，运营反馈后评估）。
 - **CHG-HOME-BANNER-URL-MAX**（待立案，可选）：v1 banner 路由 imageUrl 缺 `.max(2048)` 与 ADR-104 AMENDMENT 对齐（arch-reviewer Y-2）。
 - **CHG-BANNER-TZ-FIX**（待立案，v1 维护期 bug）：BannerForm 时间窗往返漂移——`activeFrom.slice(0,16)` UTC 切片显示 + datetime-local 本地解析提交，非 UTC+0 时区「编辑不动保存」偏移（apps/server/src/components/admin/banners/BannerForm.tsx:72,91；CHG-HOME-UX-05 实施中发现，修复参照 isoToLocalInput 对称往返模式）。
+- **CHG-HOME-OPS-SPLIT**（拆分预警，下次触碰必拆）：HomeOpsClient.tsx 已满 **499 行**（500 红线压线，CHG-HOME-UX-09 收口态）——下次任何改动前先拆（候选：批量添加域 getExistingIds/handleBatchAdd/handleTrendingImport 抽 use-batch-add.ts hook，约 −70 行）。
