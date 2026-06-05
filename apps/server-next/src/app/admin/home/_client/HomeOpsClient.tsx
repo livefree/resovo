@@ -328,10 +328,11 @@ export function HomeOpsClient() {
                               items={modules.map(m => m.id)}
                               strategy={verticalListSortingStrategy}
                             >
-                              {modules.map(module => (
+                              {modules.map((module, index) => (
                                 <HomeModuleCard
                                   key={module.id}
                                   module={module}
+                                  index={index}
                                   pendingId={pendingId}
                                   onEdit={(m) => { setEditingModule(m); setDrawerOpen(true) }}
                                   onDelete={(id) => void handleDelete(id)}

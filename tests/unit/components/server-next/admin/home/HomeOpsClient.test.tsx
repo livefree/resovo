@@ -70,6 +70,8 @@ const MODULE_FIXTURE: HomeModule = {
   ordering: 0,
   contentRefType: 'video',
   contentRefId: 'v-abc',
+  title: {},
+  imageUrl: null,
   startAt: null,
   endAt: null,
   enabled: true,
@@ -225,6 +227,74 @@ describe('HomeOpsClient — publish toggle 反向（enabled=false → 启用）'
     await waitFor(() => expect(mockedList).toHaveBeenCalled())
     // disabled 模块应渲染为可启用状态；切换路径 mock 就位即视为通过路径覆盖
     expect(mockedList).toHaveBeenCalled()
+  })
+})
+
+// ── CHG-HOME-UX-04-A：卡片重排（序号 / 横图降级链 / 标题降级链 / 四色 Pill）──
+
+describe('HomeOpsClient — HomeModuleCard 设计稿 §5.7 形态', () => {
+  it('序号 #1 渲染 + title 空且无 videoMeta → 标题降级 [类型] refId + 横图占位', async () => {
+    mockedList.mockResolvedValue({ data: [MODULE_FIXTURE], total: 1, page: 1, limit: 100 })
+    render(<HomeOpsClient />)
+    await waitFor(() => {
+      expect(screen.queryByTestId('home-module-index-m-001')).not.toBeNull()
+    })
+    expect(screen.getByTestId('home-module-index-m-001').textContent).toBe('#1')
+    // 标题降级链末位：[视频] v-abc
+    expect(screen.getByTestId('home-module-card-m-001').textContent).toContain('[视频] v-abc')
+    // 无 imageUrl + 无 videoMeta → 占位
+    expect(screen.queryByTestId('home-module-thumb-placeholder-m-001')).not.toBeNull()
+    expect(screen.queryByTestId('home-module-thumb-m-001')).toBeNull()
+  })
+
+  it('title.zh-CN 优先于降级链 + imageUrl 渲染 120×54 img', async () => {
+    const withTitle = {
+      ...MODULE_FIXTURE,
+      title: { 'zh-CN': '暑期专题', en: 'Summer' },
+      imageUrl: 'https://cdn.example.com/b.jpg',
+    }
+    mockedList.mockResolvedValue({ data: [withTitle], total: 1, page: 1, limit: 100 })
+    render(<HomeOpsClient />)
+    await waitFor(() => {
+      expect(screen.queryByTestId('home-module-thumb-m-001')).not.toBeNull()
+    })
+    expect(screen.getByTestId('home-module-card-m-001').textContent).toContain('暑期专题')
+    expect((screen.getByTestId('home-module-thumb-m-001') as HTMLImageElement).src).toBe('https://cdn.example.com/b.jpg')
+  })
+
+  it('状态 Pill：enabled 无时效 → 「生效中」；startAt 未来 → 「待生效」；禁用 → 「已隐藏」', async () => {
+    const future = new Date(Date.now() + 86400_000).toISOString()
+    mockedList.mockResolvedValue({
+      data: [
+        MODULE_FIXTURE,
+        { ...MODULE_FIXTURE, id: 'm-002', startAt: future },
+        { ...MODULE_FIXTURE, id: 'm-003', enabled: false },
+      ],
+      total: 3, page: 1, limit: 100,
+    })
+    render(<HomeOpsClient />)
+    await waitFor(() => {
+      expect(screen.queryByTestId('home-module-status-m-001')).not.toBeNull()
+    })
+    expect(screen.getByTestId('home-module-status-m-001').textContent).toContain('生效中')
+    expect(screen.getByTestId('home-module-status-m-002').textContent).toContain('待生效')
+    expect(screen.getByTestId('home-module-status-m-003').textContent).toContain('已隐藏')
+  })
+
+  it('时间窗本地化渲染（不再裸显 ISO 串）', async () => {
+    const withWindow = {
+      ...MODULE_FIXTURE,
+      startAt: '2099-06-01T08:00:00Z',
+      endAt: '2099-06-30T23:59:00Z',
+    }
+    mockedList.mockResolvedValue({ data: [withWindow], total: 1, page: 1, limit: 100 })
+    render(<HomeOpsClient />)
+    await waitFor(() => {
+      expect(screen.queryByTestId('home-module-card-m-001')).not.toBeNull()
+    })
+    const text = screen.getByTestId('home-module-card-m-001').textContent ?? ''
+    expect(text).not.toContain('2099-06-01T08:00:00Z')  // 裸 ISO 退役
+    expect(text).toContain('→')                          // 「MM-DD HH:mm → MM-DD HH:mm」形态
   })
 })
 

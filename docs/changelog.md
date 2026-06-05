@@ -15033,3 +15033,16 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **新增依赖**：无
 - **数据库变更**：无
 - **注意事项**：**偏离登记 ×2**：① 上传进度条改 loading 态——server-next apiClient 仅有 postMultipart（CHG-SN-6-08）无 XHR 进度，不为单消费点扩 api-client 共享层（v1 uploadWithProgress 不迁移）；② hook 测试落 tests/unit/hooks/（JSDOM_GLOBS 内）+ 相对路径 mock——tests/unit/hooks/ 不在 vitest context-aware alias server-next importer 白名单，@/ 会误解析到 web-next。30/30 新测试 + test:changed 41/41 + typecheck/lint EXIT=0。解阻 04-A/04-B/05/07。
+
+## [CHG-HOME-UX-04-A] HomeModuleCard 设计稿 §5.7 重排 — 序号/120×54 横图/标题降级链/四色 Pill
+- **完成时间**：2026-06-05
+- **记录时间**：2026-06-05 15:46
+- **执行模型**：claude-opus-4-8（人工 opus 会话覆盖 sonnet 建议，偏离登记）
+- **子代理**：无
+- **修改文件**：
+  - `apps/server-next/src/app/admin/home/_client/HomeModuleCard.tsx` — 全面重排：drag handle + #序号（INDEX_STYLE）+ 120×54 页面本地 img（THUMB_STYLE，降级链 imageUrl→videoMeta.coverUrl→ImageOff 占位，D-104-10 不扩 Thumb）+ 标题降级链（deriveDisplayTitle：title.zh-CN→en→videoMeta.title→[类型] refId）+ 时间窗本地化（formatTimeWindow「MM-DD HH:mm → MM-DD HH:mm」裸 ISO 退役）+ admin-ui Pill（deriveModuleStatus 四色）；props +index 必填 +videoMeta 可选
+  - `apps/server-next/src/app/admin/home/_client/HomeOpsClient.tsx` — map 调用处传 index（接口对齐一行）
+  - `tests/unit/components/server-next/admin/home/HomeOpsClient.test.tsx` — MODULE_FIXTURE 补 title/imageUrl + 新增 4 用例（序号+降级末位+占位 / zh-CN 优先+img src / 三色 Pill〔生效中/待生效/已隐藏〕/ 时间窗本地化裸 ISO 退役断言）
+- **新增依赖**：无（lucide-react ImageOff 既有依赖图标）
+- **数据库变更**：无
+- **注意事项**：videoMeta 实际注入归 04-B（本卡 undefined 路径已覆盖：占位+降级末位）；红 pill「引用失效」用例归 04-B（需 metaMap 接线）。组件测试 31/31 + test:changed 15/15 + typecheck/lint EXIT=0。解阻 04-B。
