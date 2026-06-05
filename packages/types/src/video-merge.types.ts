@@ -80,15 +80,27 @@ export interface ListCandidatesParams {
   /**
    * ADR-150 阶段 5 EP-4 follow-up（2026-05-25）：Merge 候选表 sort 全栈打通
    * Service 层 sort 范式（score 是 Service 派生 / DB 无该字段）/ 跨页不严格稳定（pre-existing 设计局限）
-   * 白名单 4 字段（D-150 列固有自动过滤 sort 版）
+   * ADR-105a AMENDMENT 2026-06-05 D-105a-19（CHG-VIR-16-TBL）：白名单扩 identityScore
+   * （identity 路径缺省 identityScore DESC；identity 路径不支持 score〔legacyScore〕排序，忽略走缺省）
    */
-  readonly sortField?: 'score' | 'videoCount' | 'year' | 'titleNormalized'
+  readonly sortField?: 'score' | 'videoCount' | 'year' | 'titleNormalized' | 'identityScore'
   readonly sortDir?: 'asc' | 'desc'
   /**
    * CHG-VIR-9-A：候选来源。`legacy`（默认）=实时 group-by（ADR-105 v1）；
    * `identity`=读 identity_candidate（多证据候选，空表自动降级 legacy）。
    */
   readonly source?: 'identity' | 'legacy'
+  /**
+   * ADR-105a AMENDMENT 2026-06-05 D-105a-19（CHG-VIR-16-TBL）：组级筛选 + 标题搜索。
+   * 相似度区间（组分 = min over pair identity_score，0..1）/ 候选数区间（折叠后成员数 ≥2）/
+   * q = 组任一成员标题双口径 contains（title lower-case 为主 + normalizeMergeKey(q)/title_normalized 辅召回）。
+   * identity 路径全量折叠后组级精确；legacy 降级路径页内近似（已登记，与 minScore 同源同阶）。
+   */
+  readonly identityScoreMin?: number
+  readonly identityScoreMax?: number
+  readonly videoCountMin?: number
+  readonly videoCountMax?: number
+  readonly q?: string
 }
 
 export interface ListCandidatesResult {
@@ -98,6 +110,11 @@ export interface ListCandidatesResult {
   readonly limit: number
   /** 回显实际使用来源（identity 空表降级时为 legacy / CHG-VIR-9-A）。 */
   readonly source?: 'identity' | 'legacy'
+  /**
+   * ADR-105a AMENDMENT 2026-06-05 D-105a-19：identity 路径 pending pair 超 cap（2000）截断时 true
+   * （仅最高分前 cap 对参与折叠 + 闭包补全；UI 警示条消费）。非截断态与 legacy 路径不填。
+   */
+  readonly truncated?: boolean
 }
 
 // ── CHG-SN-5-10：mutation 端点类型 ───────────────────────────────────

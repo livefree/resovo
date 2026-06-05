@@ -153,3 +153,32 @@ export async function fetchVideoDetailsForCandidates(
   )
   return result.rows
 }
+
+// ── ADR-105a AMENDMENT 2026-06-05 D-105a-19（CHG-VIR-16-TBL-BE）：轻元数据 ──
+
+/** 组级 q 搜索 / title·year 排序用轻行（评审 Y-1：title_normalized/year 在 media_catalog）。 */
+export interface VideoMetaLightRow {
+  readonly id: string
+  readonly title: string
+  readonly title_normalized: string
+  readonly year: number | null
+}
+
+/**
+ * 批量拉取 video 轻元数据（id/title + catalog 级 title_normalized/year）。
+ * D-105a-19 stage 3：仅 q 或 title/year 排序激活时调用，规模 ≤ 2×cap 单次有界 join（无 N+1）。
+ */
+export async function fetchVideoMetaLight(
+  db: Pool,
+  videoIds: readonly string[],
+): Promise<VideoMetaLightRow[]> {
+  if (videoIds.length === 0) return []
+  const result = await db.query<VideoMetaLightRow>(
+    `SELECT v.id, v.title, mc.title_normalized, mc.year
+     FROM videos v
+     JOIN media_catalog mc ON mc.id = v.catalog_id
+     WHERE v.id = ANY($1::uuid[])`,
+    [videoIds],
+  )
+  return result.rows
+}

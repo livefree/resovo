@@ -14889,3 +14889,21 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **评审**：arch-reviewer PASS-with-conditions → R-1（截断组完整性）/ R-2（测试影响面登记：identity-source-switch / identity-collapse-pairs / identity-candidate-queries 三文件随 BE 卡改写）回写 + Y-1~Y-5（meta 查询 media_catalog join 归属 / q 双口径 / 排序「同向非逐行等价」措辞收紧 / 泛型化实现口径锁定 / FIX-2 正交声明）全吸收
 - **测试**：纯文档零业务代码；`npm run verify:adr-contracts` EXIT=0（D-105a-19 未闭环为预期，随 CHG-VIR-16-TBL-BE 实施闭环）
 - **注意事项**：解阻 CHG-VIR-16-TBL-BE（后端落地）→ CHG-VIR-16-TBL-FE（前端接线）
+
+## [CHG-VIR-16-TBL-BE] merge 合并工作区表格组级检索后端落地（D-105a-19 实施闭环）
+- **完成时间**：2026-06-05
+- **记录时间**：2026-06-05
+- **执行模型**：claude-opus-4-8｜子代理：无（ADR 阶段 arch-reviewer adddab18b4cd502e8 PASS 引用，实施忠实落地）
+- **修改文件**：
+  - `packages/types/src/video-merge.types.ts` — ListCandidatesParams +5（sortField 扩 identityScore / identityScoreMin·Max / videoCountMin·Max / q）+ ListCandidatesResult +truncated（纯增量 optional）
+  - `apps/api/src/services/VideoMergesService.schemas.ts` — ListCandidatesSchema zod 扩展 + 双 refine（min>max → 422，显式拒绝优于静默交换）
+  - `apps/api/src/db/queries/identity-candidate.pairs.ts`（新）— ⑧ 段自 identity-candidate.ts 拆出（516>500 行硬限，sources-matrix 拆分先例；re-export 保持 import 路径零迁移）+ D-105a-19 三新 query：listPendingCandidatePairsLight（轻列全量 cap+1 探测，无 evidence 重列）/ listPendingPairsLightByVideoIds（R-1 闭包补全）/ listPendingPairsByIds（stage 5 页分量完整行回查，pending 守卫并发裁定脱落）
+  - `apps/api/src/services/identity/collapsePairsToGroups.ts` — collapsePairs 泛型化 `PairCluster<T extends PairEdge>`（评审 Y-4 口径：出参 pairs 保留入参元素类型，buildGroupFromCluster 零破坏；default = PendingCandidatePairRow）
+  - `apps/api/src/services/identity/groupFilters.ts`（新 137 行）— 双路径共用纯函数：groupMatchesFilters（区间 AND q）/ titleMatchesQuery（Y-2 双口径：title lower contains 为主 + normalizeMergeKey(q)/title_normalized 辅召回〔剥标点保词间空格，ADR-174 R1 实证修正表述〕）/ sortIdentityClusterEntries（白名单 + clusterKey tiebreak）/ clusterTitles
+  - `apps/api/src/services/VideoMergesService.ts` — listIdentityCandidates 五阶段管线重写（轻列全量 → 全局 union-find → 组级谓词〔meta 仅 q/title/year 排序激活时拉取〕→ 组级排序 → 分页切片 + per-page 完整行回查重建）+ completeClusterClosure（R-1 方案 b：闭包迭代 ≤3 轮 / ≤3×cap 守卫）+ legacy 路径共用谓词过滤 + identityScore 排序 case；total = 过滤后组数；降级判定收窄（轻列空才降级，筛选空不降级）；listPendingCandidatePairs/count 列表路径退役
+  - `apps/api/src/db/queries/video-merge-candidates.ts` — fetchVideoMetaLight（videos JOIN media_catalog 轻元数据，评审 Y-1 归属修正：title_normalized/year 在 media_catalog）
+- **偏离登记**：任务卡文件范围外 +2 文件——video-merge-candidates.ts（fetchVideoMetaLight 归属 videos 域查询文件，架构正确性优先于卡面范围）/ identity-candidate.pairs.ts（500 行红线强制拆分，identity-candidate.ts 439→516 为本卡引入，拆后 401+141）
+- **测试**：R-2 登记三文件改写——identity-source-switch.test.ts 重写（16 用例：轻列管线 mock / total=组数 / 排序×2 / 区间筛选×2 / q 命中+不降级 / **cap 截断+闭包补全**〔2001 行探测 truncated + 桥接 pair 补全后 videoCount 可信 + candidateIds 不漏〕）/ identity-candidate-queries.test.ts +3 describe（轻列无重列断言 / ANY 双侧 / pending 守卫 + 空集短路）/ identity-collapse-pairs.test.ts +泛型轻列行用例（Y-4 验证）；新增 identity-group-filters.test.ts（13 用例：双口径 q / 区间边界 / 排序白名单回落 / 组代表 meta）。改动域 55/55 + merge API 域 200/200 + **test:changed 自动升全量 491 files 6573/6573 passed 零失败**（types 包改动触发，ADR-180）
+- **门禁**：typecheck/lint EXIT=0；verify-file-size-budget 新违规清零（identity-candidate.ts 拆分收口）
+- **dev 实测（只读临时脚本，验后删除）**：缺省 identity total=99 组 + identityScore DESC 有序 ✓ / ASC 有序 ✓ / videoCount DESC（8/6/5）+ videoCountMin=3 → 24 组全部 ≥3 ✓ / score∈[0.8,0.95] → 29 组全在区间 ✓ / q=「关于」命中 1 组（样本组在内）✓ / q 无命中 total=0 **source=identity 不降级** ✓ / 同参数幂等 ✓ / 越界页空 data 保持 identity ✓
+- **注意事项**：D-105a-19 实施闭环；解阻 CHG-VIR-16-TBL-FE（前端列 sort/filter + toolbar 搜索接线）。零 migration 零新端点（query 参数扩展不触发 verify:endpoint-adr）。

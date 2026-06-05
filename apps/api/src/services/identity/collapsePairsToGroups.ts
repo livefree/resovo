@@ -1,27 +1,36 @@
 /**
- * collapsePairsToGroups.ts — pending pair → connected components 页内折叠（CHG-VIR-9-D / D-105a-18）
+ * collapsePairsToGroups.ts — pending pair → connected components 折叠（CHG-VIR-9-D / D-105a-18）
  *
  * 设计 §4.3「pair -> group：UI 聚合时按 connected components 折叠展示」。
  * group_key 列恒 null（pairScoringPersist 不写），折叠唯一依据 = pair 边的 union-find。
  *
- * 约束（arch-reviewer 裁定 / agentId ad5a4777ebc076355）：
- * - 纯函数，无 DB；query（listPendingCandidatePairs / ORDER BY / LIMIT-OFFSET）逐字不变；
- * - 折叠仅在**当前页内**进行——同一连通分量跨页时拆成多行（跨页不折叠），属与 legacy
- *   Service-sort 同源的 pre-existing 分页近似局限，已在 ADR-105a AMENDMENT 显式登记；
+ * ADR-105a AMENDMENT 2026-06-05 D-105a-19（CHG-VIR-16-TBL-BE）：泛型化——
+ * 折叠从「页内」升级「有界全量」（轻列行），入参元素类型参数化 `PairCluster<T>`
+ * （评审 Y-4 口径：结构性最小约束 PairEdge，出参 pairs 保留入参元素类型，
+ * buildGroupFromCluster 对 `.id/.evidence_jsonb` 的访问零破坏）。
+ *
+ * 约束（arch-reviewer 裁定 / agentId ad5a4777ebc076355，D-105a-19 沿用）：
+ * - 纯函数，无 DB；
  * - cluster key = 分量内全部 video_id 升序 join('|')（成员集合幂等，与 union 顺序无关，
  *   供 React rowKey + expandedKeys；N=2 退化为旧 `${left}|${right}` 排序后特例）。
  */
 
 import type { PendingCandidatePairRow } from '@/api/db/queries/identity-candidate'
 
+/** 折叠所需的结构性最小输入（D-105a-19 / 评审 Y-4）。 */
+export interface PairEdge {
+  readonly left_video_id: string
+  readonly right_video_id: string
+}
+
 /** 一个连通分量：成员 video（升序去重）+ 组成它的 pending pair 行（保持入参相对序 = 高分优先） */
-export interface PairCluster {
+export interface PairCluster<T extends PairEdge = PendingCandidatePairRow> {
   /** 分量内全部 video_id（升序去重，clusterKey 的物化基础） */
   readonly videoIds: readonly string[]
   /** 升序 videoIds join('|')，幂等稳定 */
   readonly clusterKey: string
   /** 组成分量的 pair 行（按入参顺序，入参已 ORDER BY identity_score DESC） */
-  readonly pairs: readonly PendingCandidatePairRow[]
+  readonly pairs: readonly T[]
 }
 
 /** union-find（路径压缩 + 按秩合并省略——页内规模 ≤ limit≤100，朴素压缩足够） */
@@ -39,11 +48,11 @@ function findRoot(parent: Map<string, string>, x: string): string {
 }
 
 /**
- * 页内折叠：pair 边 union-find → 连通分量。
- * 返回顺序 = 各分量**最高分 pair**在入参中的首现序（入参已按 identity_score DESC，
- * 折叠后行序仍保持高分分量优先，排序语义与折叠前一致）。
+ * 折叠：pair 边 union-find → 连通分量（D-105a-19 起入参为有界全量轻列行；泛型保留元素类型）。
+ * 返回顺序 = 各分量**最高分 pair**在入参中的首现序（入参已按 identity_score DESC；
+ * D-105a-19 起最终行序由 Service 层组级排序决定，此处顺序仅作稳定基序）。
  */
-export function collapsePairs(pairs: readonly PendingCandidatePairRow[]): PairCluster[] {
+export function collapsePairs<T extends PairEdge>(pairs: readonly T[]): PairCluster<T>[] {
   const parent = new Map<string, string>()
   const ensure = (id: string) => {
     if (!parent.has(id)) parent.set(id, id)
@@ -58,7 +67,7 @@ export function collapsePairs(pairs: readonly PendingCandidatePairRow[]): PairCl
   }
 
   // root → 分量聚合（Map 迭代序 = 插入序 = 首现序）
-  const byRoot = new Map<string, { videoIds: Set<string>; pairs: PendingCandidatePairRow[] }>()
+  const byRoot = new Map<string, { videoIds: Set<string>; pairs: T[] }>()
   for (const p of pairs) {
     const root = findRoot(parent, p.left_video_id)
     let cluster = byRoot.get(root)

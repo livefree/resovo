@@ -29,13 +29,26 @@ export const ListCandidatesSchema = z.object({
   minScore: z.coerce.number().min(0).max(1).default(0.6),
   limit: z.coerce.number().int().min(1).max(100).default(20),
   page: z.coerce.number().int().min(1).default(1),
-  // ADR-150 阶段 5 EP-4 follow-up（2026-05-25）：sort 白名单 4 字段（Service 层 sort）
-  sortField: z.enum(['score', 'videoCount', 'year', 'titleNormalized']).optional(),
+  // ADR-150 阶段 5 EP-4 follow-up（2026-05-25）：sort 白名单（Service 层 sort）
+  // ADR-105a AMENDMENT 2026-06-05 D-105a-19（CHG-VIR-16-TBL）：扩 identityScore
+  sortField: z.enum(['score', 'videoCount', 'year', 'titleNormalized', 'identityScore']).optional(),
   sortDir: z.enum(['asc', 'desc']).optional(),
   // CHG-VIR-9-A：候选来源（identity 读 candidate 表，空表降级 legacy）
   // CHG-VIR-9-D / D-105a-18：默认翻 identity（9-A AMENDMENT「待 shadow 稳定后另起小卡翻默认」兑现）
   source: z.enum(['identity', 'legacy']).default('identity'),
-})
+  // D-105a-19（CHG-VIR-16-TBL）：组级筛选 + 标题搜索（min > max → 422 refine，显式拒绝优于静默交换）
+  identityScoreMin: z.coerce.number().min(0).max(1).optional(),
+  identityScoreMax: z.coerce.number().min(0).max(1).optional(),
+  videoCountMin: z.coerce.number().int().min(2).optional(),
+  videoCountMax: z.coerce.number().int().min(2).optional(),
+  q: z.string().trim().min(1).max(100).optional(),
+}).refine(
+  (v) => v.identityScoreMin === undefined || v.identityScoreMax === undefined || v.identityScoreMin <= v.identityScoreMax,
+  { message: 'identityScoreMin 不得大于 identityScoreMax' },
+).refine(
+  (v) => v.videoCountMin === undefined || v.videoCountMax === undefined || v.videoCountMin <= v.videoCountMax,
+  { message: 'videoCountMin 不得大于 videoCountMax' },
+)
 
 // ADR-105 AMENDMENT 2026-06-04 D-105-9（CHG-VIR-13-D1）：操作内状态设置。
 // 两维 optional 但不得双缺省（空对象无语义，显式拒绝优于静默 no-op）；

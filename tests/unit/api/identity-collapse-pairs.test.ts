@@ -67,4 +67,19 @@ describe('collapsePairs', () => {
     const k2 = collapsePairs([pair('c2', 'c', 'b'), pair('c1', 'b', 'a')])[0]!.clusterKey
     expect(k1).toBe(k2)
   })
+
+  // ── D-105a-19（CHG-VIR-16-TBL-BE / 评审 Y-4）：泛型化 PairCluster<T> ────────
+
+  it('轻列行（结构性最小输入）→ 折叠成立且出参 pairs 保留入参元素类型', () => {
+    const light = [
+      { id: 'c1', left_video_id: 'a', right_video_id: 'b', identity_score: '0.9000', canonical_pair_key: 'a|b' },
+      { id: 'c2', left_video_id: 'b', right_video_id: 'c', identity_score: '0.8500', canonical_pair_key: 'b|c' },
+    ]
+    const r = collapsePairs(light)
+    expect(r).toHaveLength(1)
+    expect(r[0]!.clusterKey).toBe('a|b|c')
+    // 出参元素 = 入参元素（泛型保留：轻列字段可访问，无 evidence 重列）
+    expect(r[0]!.pairs.map((p) => p.canonical_pair_key)).toEqual(['a|b', 'b|c'])
+    expect(r[0]!.pairs.map((p) => p.identity_score)).toEqual(['0.9000', '0.8500'])
+  })
 })

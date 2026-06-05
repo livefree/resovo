@@ -30,9 +30,19 @@ import {
   fetchRawCandidateGroups,
   countRawCandidateGroups,
   fetchVideoDetailsForCandidates,
+  // D-105a-19（CHG-VIR-16-TBL-BE）：q 搜索 / title·year 排序用轻元数据（videos JOIN media_catalog）
+  fetchVideoMetaLight,
 } from '@/api/db/queries/video-merge-candidates'
-// CHG-VIR-9-A：merge source=identity 读 identity_candidate 候选（默认 legacy，空表降级）
-import { listPendingCandidatePairs, countPendingCandidatePairs } from '@/api/db/queries/identity-candidate'
+// CHG-VIR-9-A：merge source=identity 读 identity_candidate 候选（空表降级 legacy）
+// ADR-105a AMENDMENT 2026-06-05 D-105a-19（CHG-VIR-16-TBL-BE）：有界全量轻列折叠管线
+// （listPendingCandidatePairs / countPendingCandidatePairs 在列表路径退役，函数本体保留供报表/测试）
+import {
+  listPendingCandidatePairsLight,
+  listPendingPairsLightByVideoIds,
+  listPendingPairsByIds,
+  type PendingCandidatePairLightRow,
+  type PendingCandidatePairRow,
+} from '@/api/db/queries/identity-candidate'
 import {
   fetchVideosByIds,
   fetchSourcesByVideoId,
@@ -89,8 +99,14 @@ import {
   mapVideoRow,
   buildGroupFromCluster,
 } from './VideoMergesService.schemas'
-// CHG-VIR-9-D / D-105a-18：pending pair → connected components 页内折叠（query 不变）
+// CHG-VIR-9-D / D-105a-18 → D-105a-19：pending pair → connected components 折叠（有界全量）
 import { collapsePairs } from './identity/collapsePairsToGroups'
+// D-105a-19（CHG-VIR-16-TBL-BE）：组级筛选/搜索谓词 + 组级排序（identity/legacy 双路径共用）
+import {
+  groupMatchesFilters,
+  clusterTitles,
+  sortIdentityClusterEntries,
+} from './identity/groupFilters'
 // CHG-VIR-7 Phase 2a：多证据身份评分（identityScore/evidence，与 legacyScore 分离 / R3）
 import { scoreGroup, SCORER_VERSION } from './identity'
 import { TITLE_PARSER_VERSION } from './TitleIdentityParser'
@@ -104,6 +120,15 @@ export {
   SplitSchema,
   ListAuditSchema,
 } from './VideoMergesService.schemas'
+
+// ── D-105a-19（CHG-VIR-16-TBL-BE）：有界全量折叠常量 ─────────────────
+
+/** 全局折叠 pending pair 上限（当前规模 ~200 的 10× 裕量；超出 → truncated + 闭包补全）。 */
+export const MAX_COLLAPSE_PAIRS = 2000
+/** R-1 闭包补全守卫：迭代轮次上限（分量典型 2-11 视频，一轮即闭合）。 */
+const MAX_CLOSURE_ROUNDS = 3
+/** R-1 闭包补全守卫：累计 pair 上限（3×cap）。 */
+const MAX_CLOSURE_PAIRS = MAX_COLLAPSE_PAIRS * 3
 
 // ── Service ──────────────────────────────────────────────────────
 
@@ -124,7 +149,7 @@ export class VideoMergesService {
     // CHG-VIR-9-A：source=identity 读 identity_candidate 候选；空表自动降级 legacy。
     // CHG-VIR-9-D / D-105a-18：默认翻 identity（zod default 与 Service 兜底两处一致）。
     if ((params.source ?? 'identity') === 'identity') {
-      const identityResult = await this.listIdentityCandidates(page, limit)
+      const identityResult = await this.listIdentityCandidates(params)
       if (identityResult) return identityResult
       // identity 候选空 → 落回 legacy
     }
@@ -171,12 +196,22 @@ export class VideoMergesService {
       })
     }
 
-    // ADR-150 阶段 5 EP-4 follow-up（2026-05-25）：sort 全栈打通 / Service 层 4 字段白名单
+    // D-105a-19（CHG-VIR-16-TBL-BE）：组级筛选/搜索——与 identity 路径共用谓词纯函数。
+    // legacy SQL 组级分页在前 → 页内近似（与 minScore 既有过滤同源同阶，AMENDMENT 已登记；
+    // total 不计新谓词；legacy 仅 identity 空表降级态）
+    const filteredGroups = groups.filter((g) => groupMatchesFilters({
+      identityScore: g.identity?.identityScore ?? 0,
+      videoCount: g.videos.length,
+      titles: g.videos.map((v) => ({ title: v.title, titleNormalized: v.titleNormalized })),
+    }, params))
+
+    // ADR-150 阶段 5 EP-4 follow-up（2026-05-25）：sort 全栈打通 / Service 层白名单
+    // D-105a-19：扩 identityScore case（CHG-VIR-7 起 legacy 组恒有 identity 字段）
     // 默认 score DESC（保持向后兼容）/ tiebreaker groupKey ASC（CHG-SN-5-10-PATCH P2）
     const sortField = params.sortField ?? 'score'
     const sortDir = params.sortDir ?? 'desc'
     const dirSign = sortDir === 'asc' ? 1 : -1
-    groups.sort((a, b) => {
+    filteredGroups.sort((a, b) => {
       let cmp: number
       switch (sortField) {
         case 'score':
@@ -191,6 +226,9 @@ export class VideoMergesService {
         case 'titleNormalized':
           cmp = a.titleNormalized.localeCompare(b.titleNormalized)
           break
+        case 'identityScore':
+          cmp = (a.identity?.identityScore ?? 0) - (b.identity?.identityScore ?? 0)
+          break
         default:
           cmp = a.score - b.score
       }
@@ -199,37 +237,132 @@ export class VideoMergesService {
       return a.groupKey.localeCompare(b.groupKey)
     })
 
-    return { data: groups, total, page, limit, source: 'legacy' }
+    return { data: filteredGroups, total, page, limit, source: 'legacy' }
   }
 
   /**
    * CHG-VIR-9-A：source=identity 读 identity_candidate pending 候选（默认来源 / 9-D 翻转）。
    * 返回 null 表示候选**真空表**（调用方降级 legacy）。
    *
-   * CHG-VIR-9-C FIX-2（Codex review）：total = 全量 pending count（曾误用当前页 groups.length，
-   * 候选超 limit 时前端无法翻页）；total>0 但本页空（offset 超尾）返回空 data 而**不悄降 legacy**
-   * （identity 模式翻页中突现 legacy 全量数据是更坏的语义漂移）。
+   * ADR-105a AMENDMENT 2026-06-05 D-105a-19（CHG-VIR-16-TBL-BE）：有界全量轻列折叠五阶段管线
+   * 取代「pair 级 SQL 分页 + 页内折叠」（D-105a-18 supersede）：组级筛选/排序/搜索/分页，
+   * total = 过滤后**组数**（曾为 pending pair 数）；跨页同分量拆行近似随之消除。
    *
-   * CHG-VIR-9-D / D-105a-18：页内 union-find 折叠 pair→connected components（每分量一行
-   * N-video group，C(N,2) 重复消除）。query/排序/total（pair 数）逐字不变；同分量跨页拆行
-   * 属已登记的分页近似局限（详 ADR-105a AMENDMENT CHG-VIR-9-D）。
+   * 降级判定收窄：轻列全量为空（无任何 pending pair）才降级 legacy——**筛选/搜索空不降级**
+   * （返回 identity envelope + data:[] + total:0；悄降 legacy 全量数据是 9-C FIX-2 已登记的
+   * 「更坏的语义漂移」同型错误）。
    */
-  private async listIdentityCandidates(page: number, limit: number): Promise<ListCandidatesResult | null> {
-    const offset = (page - 1) * limit
+  private async listIdentityCandidates(params: ListCandidatesParams): Promise<ListCandidatesResult | null> {
+    const { page, limit } = params
     const versions = { scorerVersion: SCORER_VERSION, parserVersion: TITLE_PARSER_VERSION }
-    const [pairs, total] = await Promise.all([
-      listPendingCandidatePairs(this.db, { ...versions, limit, offset }),
-      countPendingCandidatePairs(this.db, versions),
-    ])
-    if (total === 0) return null
 
-    const videoIds = [...new Set(pairs.flatMap((p) => [p.left_video_id, p.right_video_id]))]
-    const details = await fetchVideoDetailsForCandidates(this.db, videoIds)
+    // stage 1：轻列全量（cap+1 探测截断）。降级判定在任何组级筛选之前。
+    const probe = await listPendingCandidatePairsLight(this.db, { ...versions, limit: MAX_COLLAPSE_PAIRS + 1 })
+    if (probe.length === 0) return null
+    const truncated = probe.length > MAX_COLLAPSE_PAIRS
+    const lightPairs = truncated
+      ? await this.completeClusterClosure(probe.slice(0, MAX_COLLAPSE_PAIRS), versions)
+      : probe
+
+    // stage 2：全局 union-find（泛型轻列行）
+    // stage 3 前置：组相似度 = min over pair identity_score（aggregateGroup D-105a-15 同口径）
+    const entries = collapsePairs(lightPairs).map((cluster) => ({
+      cluster,
+      clusterKey: cluster.clusterKey,
+      videoIds: cluster.videoIds,
+      identityScore: Math.min(...cluster.pairs.map((p) => Number(p.identity_score))),
+      videoCount: cluster.videoIds.length,
+    }))
+
+    // q / title·year 排序需要轻元数据（仅激活时拉取，≤ 2×cap 单次有界 join / 评审 Y-1）
+    const needMeta = params.q !== undefined
+      || params.sortField === 'titleNormalized' || params.sortField === 'year'
+    const metaMap = needMeta
+      ? new Map(
+          (await fetchVideoMetaLight(this.db, [...new Set(entries.flatMap((e) => e.cluster.videoIds))]))
+            .map((m) => [m.id, m]),
+        )
+      : undefined
+
+    // stage 3：组级谓词（与 legacy 路径共用 groupMatchesFilters，双路径语义一致）
+    const filtered = entries.filter((e) => groupMatchesFilters({
+      identityScore: e.identityScore,
+      videoCount: e.videoCount,
+      ...(metaMap ? { titles: clusterTitles(e.cluster.videoIds, metaMap) } : {}),
+    }, params))
+
+    // stage 4：组级排序（缺省 identityScore DESC；tiebreaker clusterKey ASC 分页幂等）
+    sortIdentityClusterEntries(filtered, params.sortField, params.sortDir, metaMap)
+
+    // stage 5：组级分页切片 → 仅页分量回查完整行 + video 详情 → 重建 PairCluster<完整行>
+    const total = filtered.length
+    const offset = (page - 1) * limit
+    const pageEntries = filtered.slice(offset, offset + limit)
+    const base = { total, page, limit, source: 'identity' as const, ...(truncated ? { truncated } : {}) }
+    if (pageEntries.length === 0) return { data: [], ...base }
+
+    const fullRows = await listPendingPairsByIds(
+      this.db,
+      pageEntries.flatMap((e) => e.cluster.pairs.map((p) => p.id)),
+    )
+    const fullById = new Map(fullRows.map((r) => [r.id, r]))
+    const details = await fetchVideoDetailsForCandidates(
+      this.db,
+      [...new Set(pageEntries.flatMap((e) => e.cluster.videoIds))],
+    )
     const videoMap = new Map(details.map((v) => [v.id, mapVideoRow(v)]))
-    const groups = collapsePairs(pairs)
-      .map((c) => buildGroupFromCluster(c, videoMap))
+    const groups = pageEntries
+      .map((e) => {
+        // 评审 Y-4：light cluster 不直接喂 buildGroupFromCluster——按轻列序重组完整行
+        // （分量内 pair 保序契约；并发 confirm/reject 脱落的 pair 防御性过滤）
+        const pairs = e.cluster.pairs
+          .map((p) => fullById.get(p.id))
+          .filter((p): p is PendingCandidatePairRow => p !== undefined)
+        if (pairs.length === 0) return null
+        return buildGroupFromCluster(
+          { videoIds: e.cluster.videoIds, clusterKey: e.cluster.clusterKey, pairs },
+          videoMap,
+        )
+      })
       .filter((g): g is CandidateGroup => g !== null)
-    return { data: groups, total, page, limit, source: 'identity' }
+    return { data: groups, ...base }
+  }
+
+  /**
+   * D-105a-19 截断态闭包补全（评审红线 R-1 方案 (b)）：identity_score DESC 硬截断与连通分量
+   * （pair 传递闭包）正交——界内分量缺成员/缺 candidateId 锚点时 videoCount 筛选不可信、
+   * confirm 漏 pair 复现。补全 = 对界内 pair 触及的 video 集合补查全部 pending pair，
+   * 有界迭代至闭包（轮次 ≤ MAX_CLOSURE_ROUNDS / 累计 ≤ MAX_CLOSURE_PAIRS 守卫；守卫触顶的
+   * 残余不完整仅存在于 truncated 极端态且已被警示条覆盖）。
+   * 返回按 identity_score DESC, canonical_pair_key ASC 重排（分量内 pair 保序契约）。
+   */
+  private async completeClusterClosure(
+    pairs: readonly PendingCandidatePairLightRow[],
+    versions: { scorerVersion: string; parserVersion: string },
+  ): Promise<PendingCandidatePairLightRow[]> {
+    const collected = [...pairs]
+    const seenPairs = new Set(collected.map((p) => p.id))
+    const videoIds = new Set(collected.flatMap((p) => [p.left_video_id, p.right_video_id]))
+
+    for (let round = 0; round < MAX_CLOSURE_ROUNDS && collected.length < MAX_CLOSURE_PAIRS; round++) {
+      const fetched = await listPendingPairsLightByVideoIds(this.db, { ...versions, videoIds: [...videoIds] })
+      const fresh = fetched.filter((p) => !seenPairs.has(p.id))
+      if (fresh.length === 0) break
+      let hasNewVideo = false
+      for (const p of fresh) {
+        seenPairs.add(p.id)
+        collected.push(p)
+        if (!videoIds.has(p.left_video_id)) { videoIds.add(p.left_video_id); hasNewVideo = true }
+        if (!videoIds.has(p.right_video_id)) { videoIds.add(p.right_video_id); hasNewVideo = true }
+      }
+      if (!hasNewVideo) break // 闭包达成：无新成员则下一轮不会再有新 pair
+    }
+
+    return collected.sort((a, b) => {
+      const cmp = Number(b.identity_score) - Number(a.identity_score)
+      if (cmp !== 0) return cmp
+      return a.canonical_pair_key.localeCompare(b.canonical_pair_key)
+    })
   }
 
   // ── merge ─────────────────────────────────────────────────────────
