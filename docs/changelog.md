@@ -14581,3 +14581,13 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **测试**：纯文档；test:changed docs-only SKIP 实测生效（6 个 .md 改动零测试运行 exit 0——新分层流程自证）；verify:docs-format 64 项 = 存量基线零新增；旧名"PATCH 卡范围软上限"引用全部更新（仅节标题保留出处注记）。
 - **共享层沉淀评估**：否——流程规则定档；判据单一真源 = workflow-rules §任务卡原子化判据，quality-gates/CLAUDE.md 为引用。
 - **注意事项**：① 仅约束新起卡、不追溯存量（CHG-VIR-13 系列等进行中卡不受影响）。② 数据依据 = M-SN-5 完成度反比 + CHG-VIR-9/11/12 拆卡 100% 完成度佐证；缺口调查证据 = 文件数/跨层/验收口径/链深四维无约束（CHG-VIR-12 A→F 六层链先例）。③ 自动守卫 verify:task-card-scope 已登记 CHG-CARD-ATOM-VERIFY 待立案。④ 权威源 server_next_plan §5.3 为历史 plan 文档不改写，演进真源在 workflow-rules（节内已注明扩展关系）。
+
+## [CHG-TEST-SLIM-B-FIX] Codex stop-time review — test:changed 漏删除类改动
+- **完成时间**：2026-06-04
+- **记录时间**：2026-06-04 19:55
+- **执行模型**：claude-opus-4-8
+- **子代理**：无（Codex stop-time review 触发）
+- **修改文件**：
+  - `scripts/test-changed.mjs` — 分级改动集去掉 `--diff-filter=ACMR`（纳入删除 D）：原实现下**仅删除文件**（如删 tests/helpers/db.ts / packages/types 文件）被视为"无改动"直接 exit 0 静默跳过测试——分级清单只用于 docs-only/触发集判定、不传给 vitest，无需过滤；删 helpers/基础包现正确升全量，删普通源走 --changed（vitest 选中仍 import 它的测试报错暴露 / 零选中走安全网全量），仅删 docs 正确 SKIP
+- **测试**：worktree 实测 5 删除场景（rm helpers→FULL / rm 基础包→FULL / rm docs→SKIP / rm 普通源→CHANGED / git rm staged helpers→FULL）+ 2 回归场景（改源 CHANGED / 干净树 exit 0）全过；门禁经 test:changed 自身入口升全量 **484 files 6394/6394 passed**。
+- **注意事项**：问题域 = SLIM-B 新增脚本；同会话内闭环，SLIM-B 完成备注已补登。教训沉淀——"改动集"类工具默认不要加 diff-filter，除非清单的下游消费方确实无法处理删除路径。

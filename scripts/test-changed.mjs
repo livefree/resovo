@@ -3,7 +3,7 @@
  * test-changed.mjs — 单测增量门禁包装器（ADR-180 D-180-1 / D-180-2，CHG-TEST-SLIM-B）
  *
  * 分级逻辑：
- *   1. 取改动集：git diff --name-only --diff-filter=ACMR <base>（工作区 ∪ staged）∪ untracked
+ *   1. 取改动集：git diff --name-only <base>（工作区 ∪ staged，含删除 D——删 helpers/基础包必须升全量）∪ untracked
  *   2. docs-only（全部改动为 *.md / docs/** / .github/**）→ 打印 SKIP，exit 0
  *   3. 命中升全量触发集（配置 / tests/helpers / 基础包 / 本脚本自身）→ vitest run 全量
  *   4. 否则 → vitest run --changed <base>（vitest import 图反向选测）
@@ -69,8 +69,11 @@ function runVitest(args, reason) {
 
 function getChangedFiles() {
   const opts = { cwd: ROOT, encoding: 'utf8' }
-  const diff = execFileSync('git', ['diff', '--name-only', '--diff-filter=ACMR', base], opts)
-  const cached = execFileSync('git', ['diff', '--name-only', '--diff-filter=ACMR', '--cached'], opts)
+  // 不加 --diff-filter：本清单仅用于分级（docs-only / 触发集 / 增量），必须含删除（D）——
+  // 删 tests/helpers/** 或基础包文件同样要升全量；删普通源文件走 --changed（vitest 选中
+  // 仍 import 它的测试报错暴露，或零选中走安全网全量）。Codex review FIX：原 ACMR 漏删除。
+  const diff = execFileSync('git', ['diff', '--name-only', base], opts)
+  const cached = execFileSync('git', ['diff', '--name-only', '--cached'], opts)
   const untracked = execFileSync('git', ['ls-files', '--others', '--exclude-standard'], opts)
   return [...new Set([diff, cached, untracked].flatMap((s) => s.split('\n').map((l) => l.trim()).filter(Boolean)))]
 }
