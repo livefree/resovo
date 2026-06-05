@@ -14871,3 +14871,4 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
   - 来源列行级真源 = `g.identity` 有无（单查询内 identity 行有评分、降级 legacy 全表无）——未做双来源混合查询（identity 召回面 ≥ legacy 高度重叠，混合徒增重复组与分页复杂度）。
   - AdminPlayer 跨模块导入第 2 消费方（PlayPreviewDrawer 先例）；第 3 消费方出现时按规则上提共享层。
   - PlayPreviewDrawer + StructurePreview 保留：SplitWorkspace / MergeWorkspace（深链）继续消费。
+  - **Codex stop-time review FIX（来源列误标）**：legacy 分支也实时填 identity 评分（CHG-VIR-7 scoreGroup）——按 row.identity 有无判定会把降级行全表误标「多证据」→ 来源列真源改服务端回显 effectiveSource（单查询单来源，回显即行级真值）；相似度列与来源标签解耦保留评分显示；2a-fix 用例对齐真实契约防回归（90/90）。
