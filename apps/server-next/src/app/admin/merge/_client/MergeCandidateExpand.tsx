@@ -13,13 +13,19 @@
  * N>11 组整组合并禁用提示改为引导转工作区裁剪分批（逐 pair 拒绝保留）。
  */
 
-import { useCallback, useState, type CSSProperties } from 'react'
+import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { AdminButton } from '@resovo/admin-ui'
-import type { CandidateGroup } from '@resovo/types'
+import type { CandidateGroup, VideoStatusSetting } from '@resovo/types'
+import {
+  legalStatusOptions,
+  suggestMergeTargetStatus,
+  GENERIC_STATUS_OPTIONS,
+} from '@/lib/merge/status-defaults'
 import { EvidencePanel } from './EvidencePanel'
 import { MergeComparePanel } from './MergeComparePanel'
 import { MergeResultPreview } from './MergeResultPreview'
+import { MergeStatusControl } from './MergeStatusControl'
 
 // ── 样式（CSS 变量零硬编码颜色）────────────────────────────────────
 
@@ -66,7 +72,8 @@ const IDENTITY_PILL_STYLE: CSSProperties = {
 
 export interface CandidateExpandProps {
   group: CandidateGroup
-  onMerge: (targetVideoId: string) => void
+  /** CHG-VIR-13-D2 / D-105-9：targetStatus = 操作内状态设置（null = 保持不变，不传字段） */
+  onMerge: (targetVideoId: string, targetStatus?: VideoStatusSetting | null) => void
   /** CHG-VIR-9-C：identity 来源单 pair（group.candidateId 存在）时提供整行拒绝 */
   onReject?: () => void
   /** CHG-VIR-9-D / D-105a-18：折叠组逐 pair 拒绝（EvidencePanel pair 明细行内，per-candidate 端点） */
@@ -81,6 +88,24 @@ export function CandidateExpand({ group, onMerge, onReject, onRejectPair }: Cand
   const searchParams = useSearchParams()
   const [targetId, setTargetId] = useState(group.recommendedTargetVideoId)
   const exceedsMergeLimit = group.videos.length > MAX_MERGE_GROUP_VIDEOS
+
+  // CHG-VIR-13-D2 / D-105-9（设计 §4.4）：操作内状态设置——智能默认 + 矩阵镜像选项。
+  // D-105-7 字段缺失（legacy 候选降级）→ suggestion 安全回退不建议 + GENERIC 选项（后端 422 终守门）。
+  const target = group.videos.find((v) => v.id === targetId)
+  const statusSuggestion = useMemo(() => {
+    if (!target) return { suggested: null, hint: null }
+    return suggestMergeTargetStatus(target, group.videos.filter((v) => v.id !== targetId))
+  }, [target, group.videos, targetId])
+  const statusOptions = useMemo(
+    () =>
+      target?.reviewStatus !== undefined && target.visibilityStatus !== undefined
+        ? legalStatusOptions({ reviewStatus: target.reviewStatus, visibilityStatus: target.visibilityStatus })
+        : GENERIC_STATUS_OPTIONS,
+    [target],
+  )
+  const [targetStatus, setTargetStatus] = useState<VideoStatusSetting | null>(null)
+  // target 切换 → 重置为该 target 的智能默认建议
+  useEffect(() => { setTargetStatus(statusSuggestion.suggested) }, [targetId, statusSuggestion.suggested])
 
   // §10.4-2：组成员带入 mode=merge 集合编辑器（保留既有 URL 参数；candidate 锚点不带——
   // 工作区集合可增删，confirm 锚点仅 MergeWorkspace 自身 pair 守卫管理）
@@ -124,6 +149,15 @@ export function CandidateExpand({ group, onMerge, onReject, onRejectPair }: Cand
       {/* CHG-VIR-13-B2B：合并后结果预览（After 重算 + 软删列表 + 状态降级警示 + §10.5 结构预览） */}
       <MergeResultPreview kind="merge" videos={group.videos} targetId={targetId} />
 
+      {/* CHG-VIR-13-D2 / D-105-9（§4.4）：合并后 target 状态设置（智能默认预选 + 矩阵镜像选项） */}
+      <MergeStatusControl
+        options={statusOptions}
+        value={targetStatus}
+        onChange={setTargetStatus}
+        hint={statusSuggestion.hint}
+        data-testid="candidate-status-control"
+      />
+
       <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
         {/* §10.4-2：>11 组整组合并禁用 → 引导转工作区裁剪分批（替换旧「逐对明细分批」提示） */}
         {exceedsMergeLimit && (
@@ -150,7 +184,7 @@ export function CandidateExpand({ group, onMerge, onReject, onRejectPair }: Cand
           size="sm"
           variant="primary"
           disabled={exceedsMergeLimit}
-          onClick={() => onMerge(targetId)}
+          onClick={() => onMerge(targetId, targetStatus)}
         >
           执行合并（{group.videos.length - 1} → target）
         </AdminButton>

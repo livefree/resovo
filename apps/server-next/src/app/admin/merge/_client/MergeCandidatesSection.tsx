@@ -27,8 +27,9 @@ import {
   type TableSortState,
   type SegmentItem,
 } from '@resovo/admin-ui'
-import type { CandidateGroup } from '@resovo/types'
+import type { CandidateGroup, VideoStatusSetting } from '@resovo/types'
 import { listCandidates, mergeVideos, unmergeVideos } from '@/lib/merge/api'
+import { describeStatusTransition } from '@/lib/merge/status-defaults'
 import { rejectIdentityCandidate } from '@/lib/identity/api'
 import { describeError } from './MergeClient'
 import { CandidateExpand, SECONDARY_TEXT } from './MergeCandidateExpand'
@@ -110,7 +111,7 @@ export function CandidatesSection() {
   useEffect(() => { load() }, [load])
 
   const handleMerge = useCallback(
-    async (group: CandidateGroup, targetVideoId: string) => {
+    async (group: CandidateGroup, targetVideoId: string, targetStatus?: VideoStatusSetting | null) => {
       const sourceVideoIds = group.videos.map((v) => v.id).filter((id) => id !== targetVideoId)
       try {
         // CHG-VIR-9-C：identity 来源透传 confirm 锚点（单事务挂 decision，ADR-178 D-178-3）
@@ -121,7 +122,14 @@ export function CandidatesSection() {
         const result = await mergeVideos({
           sourceVideoIds, targetVideoId,
           ...(candidateIds ? { candidateIds } : {}),
+          // CHG-VIR-13-D2 / D-105-9：操作内状态设置（null/undefined = 不传字段零行为变更）
+          ...(targetStatus ? { targetStatus } : {}),
         })
+        // D-105-10 / R-105-T3：post-COMMIT 状态写入失败可观测 → 人工处理路径提示
+        const transitionNote = describeStatusTransition(result.statusTransition)
+        if (transitionNote) {
+          toast.push({ level: transitionNote.level, title: '状态未变更', description: transitionNote.text })
+        }
         toast.push({
           level: 'success',
           title: '合并成功',
@@ -347,7 +355,7 @@ export function CandidatesSection() {
         renderExpandedRow={(group) => (
           <CandidateExpand
             group={group}
-            onMerge={(targetId) => handleMerge(group, targetId)}
+            onMerge={(targetId, targetStatus) => handleMerge(group, targetId, targetStatus)}
             onReject={group.candidateId
               ? () => void handleReject(group.candidateId!, group.titleNormalized)
               : undefined}

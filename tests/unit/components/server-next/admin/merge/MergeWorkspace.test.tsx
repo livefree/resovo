@@ -209,4 +209,43 @@ describe('MergeWorkspace (CHG-VIR-13-WS · Direct/Batch 合一)', () => {
     await waitMember('vid-bbbb-2222')
     expect(screen.getByTestId('merge-result-structure-toggle')).toBeTruthy()
   })
+
+  // ── CHG-VIR-13-D2 / D-105-9（设计 §4.4）：操作内状态设置 ──────────────
+
+  it('11. 状态控件：成员 ≥2 渲染；选「通过并公开」→ mergeVideos 携带 targetStatus（keep 时不带 = 用例 4 既有断言守护）', async () => {
+    mergeVideosMock.mockResolvedValue({
+      auditId: 'audit-12345678',
+      targetVideo: { id: 'vid-aaaa-1111', title: '视频 A' },
+      statusTransition: 'applied',
+    })
+    await renderWithUrl('ids=vid-aaaa-1111,vid-bbbb-2222&from=moderation-batch')
+    await waitMember('vid-bbbb-2222')
+    const select = screen.getByTestId('workspace-status-control-select') as HTMLSelectElement
+    fireEvent.change(select, { target: { value: 'approved|public' } })
+    fireEvent.click(screen.getByTestId('merge-workspace-execute'))
+    await waitFor(() => expect(mergeVideosMock).toHaveBeenCalledTimes(1))
+    expect(mergeVideosMock.mock.calls[0][0]).toMatchObject({
+      targetStatus: { reviewStatus: 'approved', visibilityStatus: 'public' },
+    })
+  })
+
+  it('12. statusTransition=failed → warn toast 提示人工处理路径（R-105-T3）', async () => {
+    mergeVideosMock.mockResolvedValue({
+      auditId: 'audit-12345678',
+      targetVideo: { id: 'vid-aaaa-1111', title: '视频 A' },
+      statusTransition: 'failed',
+    })
+    await renderWithUrl('ids=vid-aaaa-1111,vid-bbbb-2222&from=moderation-batch')
+    await waitMember('vid-bbbb-2222')
+    const select = screen.getByTestId('workspace-status-control-select') as HTMLSelectElement
+    fireEvent.change(select, { target: { value: 'approved|internal' } })
+    fireEvent.click(screen.getByTestId('merge-workspace-execute'))
+    await waitFor(() => expect(mergeVideosMock).toHaveBeenCalledTimes(1))
+    await waitFor(() => {
+      expect(toastPushMock.mock.calls.some(
+        (c: unknown[]) => (c[0] as { level?: string; description?: string }).level === 'warn'
+          && String((c[0] as { description?: string }).description).includes('审核台'),
+      )).toBe(true)
+    })
+  })
 })

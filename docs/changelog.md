@@ -14661,3 +14661,26 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
   - 门禁：typecheck/lint EXIT=0 + verify:adr-contracts ✓ + test:changed 自动升全量 6488/6489（1 = perf p95 高负载 flaky，隔离复跑 36/36 过）。
   - e2e:video 已实跑：admin 段 4 passed / 5 failed —— **git stash 基线对照重跑失败列表逐字一致 = pre-existing 环境性失败**（publish-flow 3 个依赖 web :3000 而 PLAYWRIGHT_SERVERS=admin 不起 web 等），与本卡 diff 零交叉非回归；可信验证维持 SEQ 系列收口硬前置 ③。
   - 13-D2（前端控件 + 智能默认）的 `status-defaults.ts` 必须以本卡矩阵为唯一真源（R-105-T7 三层防线）。
+
+## [CHG-VIR-13-D2] 状态设置前端控件 + 智能默认（SEQ-20260604-01 / 设计 §4.4 + §10.1 裁定 #1）
+- **完成时间**：2026-06-04
+- **记录时间**：2026-06-04 20:40
+- **执行模型**：claude-opus-4-8
+- **子代理**：无（status-defaults 以 13-D1 矩阵为唯一真源，无新契约设计）
+- **修改文件**：
+  - `apps/server-next/src/lib/merge/status-defaults.ts` — **新建（165 行）**：`legalStatusOptions` 矩阵镜像（与 13-D1 后端覆盖矩阵双向逐 cell 一致性单测守护 / R-105-T7 第一层防线）+ `GENERIC_STATUS_OPTIONS`（current 不可知场景白名单组合）+ `SPLIT_STATUS_OPTIONS`（默认待审/直接通过/通过并公开，全 ∈ 矩阵 pending 行）+ `suggestMergeTargetStatus`（§4.4 六行规则表 first-match，rejected source 最高优先不升级；数据不足不猜测）+ `describeStatusTransition`（仅 failed 产 warn 提示）
+  - `apps/server-next/src/app/admin/merge/_client/MergeStatusControl.tsx` — **新建（101 行）**：受控 select + 智能默认 hint；value=null = 保持不变（请求体零字段 / R-105-T1 前端侧）
+  - `apps/server-next/src/app/admin/merge/_client/MergeCandidateExpand.tsx` — 候选路径嵌入（D-105-7 字段齐备 → 矩阵镜像选项 + 智能默认预选，target 切换重算重置；legacy 降级 → GENERIC + 不建议）；`onMerge` 签名 +`targetStatus?`
+  - `apps/server-next/src/app/admin/merge/_client/MergeCandidatesSection.tsx` — handleMerge 透传 targetStatus + statusTransition failed 提示
+  - `apps/server-next/src/app/admin/merge/_client/MergeWorkspace.tsx` — 工作区嵌入（成员 = PickerVideoItem 仅 isPublished → GENERIC 选项 + 受限 hint 不产建议值）+ 透传 + failed 提示
+  - `apps/server-next/src/app/admin/merge/_client/SplitGroupMetaCard.tsx` — **新建（114 行）**：组 meta 编辑卡抽出（标题/类型/拆到已有 picker/新建状态控件；拆到已有组结构性无控件 = 只读 D-105-5）
+  - `apps/server-next/src/app/admin/merge/_client/SplitWorkspace.tsx` — 消费 SplitGroupMetaCard（490→**433 行净改善 -57**）+ newVideoMeta.status 透传 + statusTransition 数组 failed 计数提示
+  - `tests/unit/lib/merge-status-defaults.test.ts` — **新建（19 用例）**：矩阵镜像双向 6 态全枚举对照（直接 import 后端 resolveStatusAction，任意一侧漂移即红）+ SPLIT 选项可达性 + 规则表 8 + describeStatusTransition 2
+  - `tests/unit/components/server-next/admin/merge/{MergeWorkspace,MergeCandidatesSection,merge-split-deeplink}.test.tsx` — +5 用例（透传/failed toast/智能默认预选/legacy keep 零字段/split 组 status）
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - **偏离登记 (a)**：status-defaults 路径按设计稿 §4.4 真源 `lib/merge/`（卡面文件范围误写 `_client/`）。
+  - **偏离登记 (b)**：`lib/merge/api.ts` 零改动——typed MergeParams/SplitGroup/Result 自动透传新字段，卡面预计需改实际不需。
+  - **偏离登记 (c)**：实施中发现 §4.4 规则 2 单维建议值 `{reviewStatus:'approved'}` 与控件双维选项无法匹配预选（UI 显示「保持不变」但提交建议值的不一致）→ 修正为 approve 单步效果 `(approved, internal)` 双维（公开须运营显式选 approved|public，与设计「publish 需运营确认」一致）。
+  - 门禁：typecheck/lint EXIT=0 + 既有 71 前端用例零破坏 + test:changed 增量 73/73。零端点零依赖零 admin-ui 触碰；e2e merge 页维持 SEQ 系列收口硬前置。

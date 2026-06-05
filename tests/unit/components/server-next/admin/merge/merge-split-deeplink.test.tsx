@@ -126,4 +126,46 @@ describe('SplitWorkspace — CHG-363-B initialVideoId 深链自动加载（13-B2
     // 仅 1 次调用（同 id rerender 不重复触发）
     expect(getVideoMatrixMock).toHaveBeenCalledTimes(1)
   })
+
+  // ── CHG-VIR-13-D2 / D-105-9（§10.1 裁定 #1）：新建组状态设置 ──────────────
+
+  it('选「直接通过」组 0 → splitVideo newVideoMeta 携带 status；默认组 1 不带（R-105-T1）', async () => {
+    const { fireEvent } = await import('@testing-library/react')
+    getVideoMatrixMock.mockResolvedValueOnce([
+      {
+        sourceSiteKey: 'siteA',
+        sourceName: 'L1',
+        displayName: 'Line 1',
+        episodes: [
+          { sourceId: 's1', episodeNumber: 1, sourceUrl: 'https://example.com/1' },
+          { sourceId: 's2', episodeNumber: 2, sourceUrl: 'https://example.com/2' },
+        ],
+      },
+    ])
+    splitVideoMock.mockResolvedValueOnce({
+      auditId: 'audit-split-d2',
+      newVideoIds: ['nv-1', 'nv-2'],
+      statusTransition: [{ videoId: 'nv-1', result: 'applied' }],
+    })
+    const { container } = render(<SplitWorkspace initialVideoId="video-uuid-abc" />)
+    await waitFor(() => screen.getByTestId('split-status-control-0'))
+
+    // 组 0 选「直接通过（内部可见）」（SPLIT_STATUS_OPTIONS / approve 单步）
+    fireEvent.change(
+      screen.getByTestId('split-status-control-0-select') as HTMLSelectElement,
+      { target: { value: 'approved|internal' } },
+    )
+    // s2 分到组 1（分配表行内 select = <table> 内第 2 个；组 meta 的类型 select 在表外）
+    const assignSelects = container.querySelectorAll('table select')
+    fireEvent.change(assignSelects[1]!, { target: { value: '1' } })
+
+    fireEvent.click(screen.getByText(/执行拆分/))
+    await waitFor(() => expect(splitVideoMock).toHaveBeenCalledTimes(1))
+    const { groups } = splitVideoMock.mock.calls[0]![0] as {
+      groups: { newVideoMeta?: { status?: unknown } }[]
+    }
+    expect(groups[0]!.newVideoMeta!.status).toEqual({ reviewStatus: 'approved', visibilityStatus: 'internal' })
+    // 组 1 未选 → newVideoMeta 不带 status 字段（前端侧零字段）
+    expect(groups[1]!.newVideoMeta).not.toHaveProperty('status')
+  })
 })

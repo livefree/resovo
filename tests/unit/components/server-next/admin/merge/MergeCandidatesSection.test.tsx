@@ -323,4 +323,60 @@ describe('MergeCandidatesSection (CHG-VIR-9-C)', () => {
       expect(rejectIdentityCandidateMock).toHaveBeenCalledWith('cand-uuid-0002', '合并工作台人工拒绝')
     })
   })
+
+  // ── CHG-VIR-13-D2 / D-105-9（设计 §4.4）：操作内状态设置 ──────────────
+
+  // D-105-7 状态字段齐备：target(vid-b 推荐)=pending|internal + source(vid-a)=approved|public
+  // → 智能默认规则 2 命中：预选 approve 单步效果 (approved, internal) + hint
+  const STATUS_GROUP = {
+    ...LEGACY_GROUP,
+    videos: [
+      { ...LEGACY_GROUP.videos[0]!, reviewStatus: 'approved' as const, visibilityStatus: 'public' as const },
+      { ...LEGACY_GROUP.videos[1]!, reviewStatus: 'pending_review' as const, visibilityStatus: 'internal' as const },
+    ],
+  }
+  const STATUS_RES = { data: [STATUS_GROUP], total: 1, page: 1, limit: 20, source: 'legacy' as const }
+
+  it('9a. 状态字段齐备：控件渲染 + 智能默认预选 (approved, internal) + hint + merge 携带 targetStatus', async () => {
+    listCandidatesMock.mockResolvedValue(STATUS_RES)
+    mergeVideosMock.mockResolvedValueOnce({
+      auditId: 'audit-d2',
+      targetVideo: { id: 'vid-b', title: 'Avengers B', titleNormalized: '復仇者聯盟',
+        year: 2019, type: 'movie', createdAt: '2025-02-01T00:00:00Z',
+        sourceCount: 8, sourceSiteKeys: ['iqiyi'] },
+      statusTransition: 'applied',
+    })
+    render(<CandidatesSection />)
+    await waitFor(() => screen.getByText('復仇者聯盟'))
+    fireEvent.click(screen.getByText('復仇者聯盟'))
+    await waitFor(() => screen.getByTestId('candidate-status-control'))
+    // 智能默认预选（规则 2：source 已公开 + target pending → approve 单步效果）
+    const select = screen.getByTestId('candidate-status-control-select') as HTMLSelectElement
+    await waitFor(() => expect(select.value).toBe('approved|internal'))
+    expect(screen.getByTestId('candidate-status-control-hint').textContent).toContain('已发布')
+    fireEvent.click(screen.getByRole('button', { name: /执行合并/ }))
+    await waitFor(() => {
+      expect(mergeVideosMock).toHaveBeenCalledWith(expect.objectContaining({
+        targetStatus: { reviewStatus: 'approved', visibilityStatus: 'internal' },
+      }))
+    })
+  })
+
+  it('9b. legacy 候选无状态字段（D-105-7 降级）：控件默认 keep + merge 不带 targetStatus（R-105-T1 前端侧）', async () => {
+    listCandidatesMock.mockResolvedValue(LEGACY_RES)
+    mergeVideosMock.mockResolvedValueOnce({
+      auditId: 'audit-keep',
+      targetVideo: { id: 'vid-b', title: 'Avengers B', titleNormalized: '復仇者聯盟',
+        year: 2019, type: 'movie', createdAt: '2025-02-01T00:00:00Z',
+        sourceCount: 8, sourceSiteKeys: ['iqiyi'] },
+    })
+    render(<CandidatesSection />)
+    await waitFor(() => screen.getByText('復仇者聯盟'))
+    fireEvent.click(screen.getByText('復仇者聯盟'))
+    await waitFor(() => screen.getByTestId('candidate-status-control'))
+    expect((screen.getByTestId('candidate-status-control-select') as HTMLSelectElement).value).toBe('keep')
+    fireEvent.click(screen.getByRole('button', { name: /执行合并/ }))
+    await waitFor(() => expect(mergeVideosMock).toHaveBeenCalledTimes(1))
+    expect(mergeVideosMock.mock.calls[0][0]).not.toHaveProperty('targetStatus')
+  })
 })

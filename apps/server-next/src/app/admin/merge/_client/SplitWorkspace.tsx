@@ -23,7 +23,7 @@ import {
   useToast,
   type PickerVideoItem,
 } from '@resovo/admin-ui'
-import type { LineMatrixRow, SplitGroup, SplitSignal, SplitSuggestionsResult, VideoType } from '@resovo/types'
+import type { LineMatrixRow, SplitGroup, SplitSignal, SplitSuggestionsResult } from '@resovo/types'
 import { splitVideo, unmergeVideos, getSplitSuggestions } from '@/lib/merge/api'
 import { getVideoMatrix } from '@/lib/sources/api'
 import { videoPickerFetcher } from '@/lib/videos/picker-fetcher'
@@ -32,44 +32,15 @@ import { MergeResultPreview, type SplitPreviewGroup } from './MergeResultPreview
 // CHG-VIR-13-PLAY：分配表抽出（500 行预算）+ 行级 ▶ 播放抽验
 import { SplitAssignTable } from './SplitAssignTable'
 import { PlayPreviewDrawer, type PlayTarget } from './PlayPreviewDrawer'
+// CHG-VIR-13-D2：组 meta 编辑卡抽出（500 行预算 + D-105-9 状态控件嵌入）
+import { SplitGroupMetaCard, defaultMeta, VIDEO_TYPES, type GroupMeta } from './SplitGroupMetaCard'
 
 const SECONDARY_TEXT: CSSProperties = {
   fontSize: 'var(--font-size-sm)',
   color: 'var(--fg-muted)',
 }
 
-const VIDEO_TYPES: readonly { value: VideoType; label: string }[] = [
-  { value: 'movie',       label: '电影' },
-  { value: 'series',      label: '剧集' },
-  { value: 'anime',       label: '动漫' },
-  { value: 'variety',     label: '综艺' },
-  { value: 'documentary', label: '纪录片' },
-  { value: 'short',       label: '短片' },
-  { value: 'sports',      label: '体育' },
-  { value: 'music',       label: '音乐' },
-  { value: 'news',        label: '资讯' },
-  { value: 'kids',        label: '少儿' },
-  { value: 'other',       label: '其他' },
-]
-
-const SELECT_STYLE: CSSProperties = {
-  padding: '4px 6px',
-  background: 'var(--bg-surface)',
-  color: 'var(--fg-default)',
-  border: '1px solid var(--border-default)',
-  borderRadius: '4px',
-  fontSize: 'var(--font-size-sm)',
-}
-
 // CHG-VIR-11-B（ADR-105 AMENDMENT 2026-06-03 D-105-1/6）：拆分建议消费 ──────────
-
-/** 每组元数据：targetVideo 非空 → 拆到已有 video（D-105-2 互斥；标题/类型不提交）
- *  CHG-VIR-13-B2B：targetVideoId 手填 string → VideoPicker 选择（PickerVideoItem） */
-interface GroupMeta {
-  title: string
-  type: VideoType
-  targetVideo: PickerVideoItem | null
-}
 
 const DIMENSION_LABELS: Record<string, string> = {
   core_title_key: '核心标题',
@@ -95,10 +66,6 @@ function describeSignal(signal: SplitSignal): string {
     case 'multi_edition':
       return `多个版本：${signal.values.join(' / ')}`
   }
-}
-
-function defaultMeta(i: number): GroupMeta {
-  return { title: `分集 ${String.fromCharCode(65 + i)}`, type: 'movie', targetVideo: null }
 }
 
 export interface SplitWorkspaceProps {
@@ -188,6 +155,7 @@ export function SplitWorkspace({ initialVideoId }: SplitWorkspaceProps = {}) {
         title: g.suggestedMeta.title,
         type: g.suggestedMeta.type,
         targetVideo: null,
+        status: null,
       })))
       // 建议组内 lines 的 sourceIds → 组 index；unassignedLines 留组 0（运营手动复核）
       const next: Record<string, number> = {}
@@ -269,9 +237,17 @@ export function SplitWorkspace({ initialVideoId }: SplitWorkspaceProps = {}) {
       const meta = groupMetas[i] ?? defaultMeta(i)
       const sourceIds = Object.entries(assignments).filter(([, g]) => g === i).map(([id]) => id)
       // D-105-2：targetVideo 非空 → 拆到已有 video（与 newVideoMeta 互斥）
+      // CHG-VIR-13-D2 / D-105-9：新建路径携带状态设置（null = 默认待审不传字段 R-105-T1）
       return meta.targetVideo
         ? { sourceIds, targetVideoId: meta.targetVideo.id }
-        : { sourceIds, newVideoMeta: { title: meta.title, type: meta.type } }
+        : {
+            sourceIds,
+            newVideoMeta: {
+              title: meta.title,
+              type: meta.type,
+              ...(meta.status ? { status: meta.status } : {}),
+            },
+          }
     }).filter((g) => g.sourceIds.length > 0)
 
     if (groups.length < 2) {
@@ -282,6 +258,15 @@ export function SplitWorkspace({ initialVideoId }: SplitWorkspaceProps = {}) {
     const existingCount = groups.filter((g) => g.targetVideoId !== undefined).length
     try {
       const result = await splitVideo({ videoId: activeVideoId, groups })
+      // D-105-10 / R-105-T3：post-COMMIT 状态写入失败可观测（数组形态逐 video）
+      const failedCount = (result.statusTransition ?? []).filter((t) => t.result === 'failed').length
+      if (failedCount > 0) {
+        toast.push({
+          level: 'warn',
+          title: '部分状态未变更',
+          description: `拆分成功，但 ${failedCount} 个新建视频的状态设置未生效（状态机拒绝），请在审核台手动调整`,
+        })
+      }
       toast.push({
         level: 'success',
         title: '拆分成功',
@@ -388,64 +373,22 @@ export function SplitWorkspace({ initialVideoId }: SplitWorkspaceProps = {}) {
             </div>
           )}
 
+          {/* CHG-VIR-13-D2：组 meta 编辑卡（标题/类型/拆到已有/新建状态设置，抽 SplitGroupMetaCard） */}
           <div style={{ display: 'grid', gridTemplateColumns: `repeat(${groupCount}, 1fr)`, gap: '8px' }}>
-            {Array.from({ length: groupCount }).map((_, i) => {
-              const meta = groupMetas[i] ?? defaultMeta(i)
-              const toExisting = meta.targetVideo !== null
-              return (
-                <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  <AdminInput
-                    size="sm"
-                    placeholder={`分集 ${String.fromCharCode(65 + i)} 标题`}
-                    value={meta.title}
-                    disabled={toExisting}
-                    onChange={(e) => {
-                      setGroupMetas((prev) => {
-                        const next = [...prev]
-                        next[i] = { ...meta, title: e.target.value }
-                        return next
-                      })
-                    }}
-                  />
-                  <select
-                    aria-label={`分集 ${String.fromCharCode(65 + i)} 类型`}
-                    value={meta.type}
-                    disabled={toExisting}
-                    onChange={(e) => {
-                      setGroupMetas((prev) => {
-                        const next = [...prev]
-                        next[i] = { ...meta, type: e.target.value as VideoType }
-                        return next
-                      })
-                    }}
-                    style={SELECT_STYLE}
-                  >
-                    {VIDEO_TYPES.map((t) => (
-                      <option key={t.value} value={t.value}>{t.label}</option>
-                    ))}
-                  </select>
-                  {/* CHG-VIR-13-B2B（D-105-2/5 + §10.2 #2）：拆到已有 video — VideoPicker 替代手填 uuid */}
-                  <VideoPicker
-                    label="拆到已有视频（可选）"
-                    value={meta.targetVideo}
-                    onChange={(item) => {
-                      setGroupMetas((prev) => {
-                        const next = [...prev]
-                        next[i] = { ...meta, targetVideo: item }
-                        return next
-                      })
-                    }}
-                    fetcher={videoPickerFetcher}
-                    data-testid={`split-target-picker-${i}`}
-                  />
-                  {toExisting && (
-                    <span style={{ ...SECONDARY_TEXT, fontSize: '11px' }}>
-                      转入已有 video：仅转移 sources，不修改其标题/类型/状态
-                    </span>
-                  )}
-                </div>
-              )
-            })}
+            {Array.from({ length: groupCount }).map((_, i) => (
+              <SplitGroupMetaCard
+                key={i}
+                index={i}
+                meta={groupMetas[i] ?? defaultMeta(i)}
+                onChange={(m) => {
+                  setGroupMetas((prev) => {
+                    const next = [...prev]
+                    next[i] = m
+                    return next
+                  })
+                }}
+              />
+            ))}
           </div>
 
           {/* CHG-VIR-13-PLAY：分配表子组件（行级 ▶ 播放抽验） */}

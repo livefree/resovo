@@ -25,11 +25,19 @@ import {
   useToast,
   type PickerVideoItem,
 } from '@resovo/admin-ui'
+import type { VideoStatusSetting } from '@resovo/types'
 import { mergeVideos, unmergeVideos } from '@/lib/merge/api'
+import {
+  suggestMergeTargetStatus,
+  describeStatusTransition,
+  GENERIC_STATUS_OPTIONS,
+} from '@/lib/merge/status-defaults'
 import { videoPickerFetcher } from '@/lib/videos/picker-fetcher'
 import { describeError } from './MergeClient'
 // CHG-VIR-13-PLAY（§11.3 工作区预览嵌入）：结构级线路预览 + 播放抽验（{id,title} 最小输入）
 import { StructurePreview } from './StructurePreview'
+// CHG-VIR-13-D2 / D-105-9（§4.4）：操作内状态设置控件
+import { MergeStatusControl } from './MergeStatusControl'
 
 /** 单次 merge 成员上限 = sourceVideoIds max 10 + target 1（MergeSchema / ADR-105） */
 const MAX_MERGE_MEMBERS = 11
@@ -130,6 +138,21 @@ export function MergeWorkspace({ initialIds, initialTargetId, candidateIdFromUrl
     })
   }, [])
 
+  // CHG-VIR-13-D2 / D-105-9（§4.4）：操作内状态设置。成员 = PickerVideoItem 仅 isPublished
+  // （current 状态不可知）→ GENERIC 白名单选项 + 受限提示（不产建议值，后端矩阵 422 终守门）。
+  const [targetStatus, setTargetStatus] = useState<VideoStatusSetting | null>(null)
+  const statusHint = useMemo(() => {
+    const target = members.find((m) => m.id === targetId)
+    if (!target) return null
+    const sources = members.filter((m) => m.id !== targetId)
+    return suggestMergeTargetStatus(
+      { isPublished: target.isPublished },
+      sources.map((s) => ({ isPublished: s.isPublished })),
+    ).hint
+  }, [members, targetId])
+  // target 切换 → 重置（current 不可知，不带建议值跨 target）
+  useEffect(() => { setTargetStatus(null) }, [targetId])
+
   // candidate_id 透传守卫：成员集合恰为初始 pair（无序相等）时才有效（pair 失配自动失效）
   const effectiveCandidateId = useMemo(() => {
     if (!candidateIdFromUrl) return undefined
@@ -156,7 +179,14 @@ export function MergeWorkspace({ initialIds, initialTargetId, candidateIdFromUrl
         targetVideoId: targetId,
         reason: reason.trim() || undefined,
         ...(effectiveCandidateId ? { candidateId: effectiveCandidateId } : {}),
+        // CHG-VIR-13-D2 / D-105-9：操作内状态设置（null = 不传字段零行为变更）
+        ...(targetStatus ? { targetStatus } : {}),
       })
+      // D-105-10 / R-105-T3：post-COMMIT 状态写入失败可观测 → 人工处理路径提示
+      const transitionNote = describeStatusTransition(result.statusTransition)
+      if (transitionNote) {
+        toast.push({ level: transitionNote.level, title: '状态未变更', description: transitionNote.text })
+      }
       toast.push({
         title: '合并成功',
         description: `已将 ${sourceVideoIds.length} 个视频合并到「${result.targetVideo.title}」（auditId: ${result.auditId.slice(0, 8)}）`,
@@ -179,13 +209,14 @@ export function MergeWorkspace({ initialIds, initialTargetId, candidateIdFromUrl
       setMembers([])
       setTargetId(null)
       setReason('')
+      setTargetStatus(null)
       onMergeSuccess?.()
     } catch (err: unknown) {
       toast.push({ title: '合并失败', description: describeError(err, 'merge'), level: 'danger' })
     } finally {
       setMerging(false)
     }
-  }, [members, targetId, reason, effectiveCandidateId, onMergeSuccess, toast])
+  }, [members, targetId, reason, effectiveCandidateId, targetStatus, onMergeSuccess, toast])
 
   return (
     <AdminCard style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: 16 }} data-testid="merge-workspace">
@@ -243,6 +274,18 @@ export function MergeWorkspace({ initialIds, initialTargetId, candidateIdFromUrl
 
       {/* CHG-VIR-13-PLAY（§11.3）：成员 ≥2 时结构级线路 × 集数预览 + 播放抽验（同集对比切换） */}
       {members.length >= 2 && <StructurePreview videos={members} />}
+
+      {/* CHG-VIR-13-D2 / D-105-9（§4.4）：合并后 target 状态设置（成员仅 isPublished →
+          GENERIC 白名单选项，单步可达性由后端矩阵 422 终守门） */}
+      {members.length >= 2 && targetId !== null && (
+        <MergeStatusControl
+          options={GENERIC_STATUS_OPTIONS}
+          value={targetStatus}
+          onChange={setTargetStatus}
+          hint={statusHint}
+          data-testid="workspace-status-control"
+        />
+      )}
 
       <AdminInput
         size="sm"
