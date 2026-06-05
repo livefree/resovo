@@ -26,6 +26,7 @@
     "start": "npx turbo start",
     "typecheck": "tsc --noEmit && npm --workspace @resovo/server run typecheck && npm --workspace @resovo/server-next run typecheck && npm --workspace @resovo/web-next run typecheck && npm --workspace @resovo/player-core run typecheck && npm --workspace @resovo/design-tokens run typecheck && npm --workspace @resovo/admin-ui run typecheck && npm --workspace @resovo/worker run typecheck",
     "dev:server-next": "npm --workspace @resovo/server-next run dev",
+    "typecheck:turbo": "tsc --noEmit && npx turbo run typecheck --filter=!eslint-plugin-resovo",
     "lint": "npx turbo lint",
     "test": "vitest",
     "test:run": "vitest run",

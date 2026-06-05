@@ -14551,3 +14551,18 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **D-N 闭环**：D-180-3（E2E 任务域映射 + 按需 webServer）、D-180-4（web-mobile 收窄移动 3 spec）
 - **共享层沉淀评估**：否——纯 npm scripts + playwright config，零自研编排层（ADR-180 备选 C 论证）。
 - **注意事项**：① **偏离登记（实测修正 ADR 草案映射）**：tests/e2e/auth.spec.ts 与 search.spec.ts 为孤儿 spec（不被任何 project testMatch 匹配、test:e2e 从未运行）→ auth 域据实 = admin.spec.ts（角色访问）、search 域不含孤儿；孤儿处置随 tests/e2e LEGACY 清理。② 活跃隔离清单不存在（known_failing 已全部归档），web-mobile 收窄零清单清理。③ video 域两段 && 串联（admin/web 不同 server 子集）。
+
+## [CHG-TEST-SLIM-D] typecheck 解绑 turbo ^build + 试验入口（D-180-5 闭环）
+- **完成时间**：2026-06-04
+- **记录时间**：2026-06-04 18:20
+- **执行模型**：claude-opus-4-8
+- **子代理**：无
+- **修改文件**：
+  - `turbo.json` — typecheck `dependsOn: ["^build"]` → `[]`（typecheck 全部为 tsc --noEmit、无 project references、alias 指 src/，不消费 build 产物；解绑前 turbo typecheck 会无谓触发 3 个 next build）
+  - `package.json` — +typecheck:turbo（`tsc --noEmit && npx turbo run typecheck --filter=!eslint-plugin-resovo`；试验入口，默认必跑命令仍是现有串行 typecheck）
+- **新增依赖**：无
+- **数据库变更**：无
+- **测试**：typecheck:turbo EXIT=0 + 零 build 触发 + 7 tasks 与现有串行枚举一致；首跑 21.7s（串行约 70s）/ 二跑缓存 37ms FULL TURBO；与 `npm run typecheck` 报错集一致（双零错误）。门禁：lint EXIT=0 + 单测经 test:changed 升全量（turbo.json 命中触发集）——两轮全量各 1 个互不重合的 jsdom flaky（StagingEditPanel / CrawlerRunsView，历史已知负载型），各自隔离复跑 12/12 + 33/33 全过排除，483+1/484 实质全绿。
+- **D-N 闭环**：D-180-5（解绑 ^build + 试验入口默认不切；inputs 缓存正确性验证留 CHG-TEST-SLIM-E）
+- **共享层沉淀评估**：否——构建编排配置，无代码。
+- **注意事项**：① **存量发现**：tools/eslint-plugin-resovo 的 typecheck 脚本一直损坏（缺 @types/eslint，TS7016/TS7006 ×3）——根串行 typecheck 从不包含它故从未暴露；turbo 入口以 --filter 排除对齐现有覆盖范围（修复需新依赖 @types/eslint → 禁新依赖红线，留待人工裁定或随 ESLint plugin R&D 卡处理）。② 缓存命中判定基于 turbo 默认 inputs（全包内文件），跨 workspace 源变化是否正确失效未验证 → typecheck:turbo 不得作为门禁默认，CHG-TEST-SLIM-E 验证后才可切换。

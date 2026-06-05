@@ -3207,12 +3207,15 @@ CODENAME-MATRIX-E2E (依赖 Wave 3 验收期补丁 CODENAME-MATRIX ✅)
    - 范围（5 项）：① package.json +7 域脚本（smoke/player/auth/search/video/admin/mobile）② playwright.config.ts web-mobile 加 testMatch（mobile-tabbar/edge-swipe-back/mini-player 3 spec）③ known_failing 隔离清单核查同步 ④ CLAUDE.md test:e2e 行补域用法 ⑤ test-rules.md 各任务类型补对应域命令 + web-mobile 收窄说明。
    - 验收要点：--project=web-mobile --list 只列 3 spec；域命令用例数 ≪ 215；test:e2e 全量 4 projects 不变。
    - 完成备注：D-180-3/D-180-4 闭环。--list 实测：web-mobile 3 files/21 tests（原 104）、域子集 18~82 用例、全量 290→207（−29%）兜底未破。**偏离登记**：auth.spec/search.spec 实测为孤儿 spec（test:e2e 从未运行）→ 域映射据实校准 + ADR-180 D-180-3 校准注记；增强：PLAYWRIGHT_SERVERS 子集只起所需 dev server。隔离清单已全归档零清理。门禁 typecheck/lint EXIT=0 + 单测升全量 6394/6394。执行模型: claude-opus-4-8；子代理: 无。
-4. **CHG-TEST-SLIM-D** — typecheck 解绑 turbo ^build + 试验入口（状态：⬜ 待开始）
+4. **CHG-TEST-SLIM-D** — typecheck 解绑 turbo ^build + 试验入口（状态：✅ 已完成）
    - 创建时间：2026-06-04 17:40
+   - 实际开始：2026-06-04 18:55
+   - 完成时间：2026-06-04 19:20
    - 建议模型：sonnet
-   - 依赖：CHG-TEST-SLIM-A
+   - 依赖：CHG-TEST-SLIM-A ✅
    - 范围（2 项）：① turbo.json typecheck dependsOn `["^build"]` → `[]` ② package.json +typecheck:turbo（试验入口；默认链路仍用现有串行 typecheck，turbo inputs 缓存正确性另立验证卡）。
    - 验收要点：typecheck 与 typecheck:turbo 报错集一致；turbo typecheck 不再触发 next build。
+   - 完成备注：D-180-5 闭环。typecheck:turbo EXIT=0 零 build 触发，首跑 21.7s / 二跑缓存 37ms FULL TURBO，报错集与串行一致。存量发现：eslint-plugin-resovo typecheck 脚本一直损坏（缺 @types/eslint；根串行从不含它）→ --filter 排除对齐现有覆盖，修复需新依赖留人工裁定。门禁 lint EXIT=0 + 单测升全量两轮（互不重合 jsdom 负载 flaky ×2 各自隔离全过排除）。执行模型: claude-opus-4-8；子代理: 无。
 5. **CHG-CARD-ATOM** — 任务卡原子化判据定档（状态：⬜ 待开始）
    - 创建时间：2026-06-04 17:40
    - 建议模型：opus
