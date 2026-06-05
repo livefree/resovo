@@ -112,13 +112,15 @@ function deriveWorkspace(searchParams: URLSearchParams): DerivedWorkspace {
 
 // ── 样式（CSS 变量零硬编码颜色）────────────────────────────────────
 
+// CHG-VIR-13-FIX-LAYOUT：弃「height:100% 钉死 + 卡内滚动」骨架——AdminCard 的
+// body wrapper（普通块、高度 auto）会断开 children 的 flex 约束链，内容 div 的
+// flex:1 + overflow:auto 失效被撑满后遭 root overflow:hidden 裁切（表格截断且不可滚）。
+// 回归自然文档流：页面随内容增长，由 shell main（既有 overflow:auto）承担滚动。
 const PAGE_STYLE: CSSProperties = {
   display: 'flex',
   flexDirection: 'column',
-  height: '100%',
-  minHeight: 0,
   gap: 'var(--section-gap)',
-  padding: 'var(--page-padding-y) var(--page-padding-x) 0',
+  padding: 'var(--page-padding-y) var(--page-padding-x)',
 }
 
 // ── 主组件 ─────────────────────────────────────────────────────────
@@ -209,7 +211,8 @@ export function MergeClient() {
         </AdminCard>
       )}
 
-      <AdminCard style={{ display: 'flex', flexDirection: 'column', minHeight: 0, flex: 1 }}>
+      {/* CHG-VIR-13-FIX-LAYOUT：AdminCard 自然高度（滚动归 shell main），不再传 flex/overflow 语义 */}
+      <AdminCard padding="none">
         <div style={{ padding: '12px 16px 0' }}>
           <Segment
             items={SEGMENT_ITEMS}
@@ -221,7 +224,7 @@ export function MergeClient() {
           />
         </div>
 
-        <div style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: '16px' }}>
+        <div style={{ padding: '16px' }}>
           {mode === 'candidates' ? (
             <CandidatesSection />
           ) : mode === 'merge' ? (

@@ -14765,3 +14765,18 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
   - **player 域 e2e 实跑终值**（修复后 + API server 手动起）：smoke 2/2 绿 + 6 passed/1 flaky-passed；31 failed 逐层归因 = pre-existing e2e 数据基建欠账——(a) playwright webServer 无 api 条目 (b) dev DB 零 seed（home_modules 0 行 → 首页 main 恒空；player.spec fixture slug `test-movie-aB3kR9x1` 等 videos 表 0 行）。本系列对 web-next 仅本 FIX（语义逐字不变，34 单测过）+ types 加性 = 零回归。
   - **follow-up 建议立卡 CHG-E2E-SEED**：web 域 e2e seed 基建（home_modules + fixture videos seed 脚本 + playwright api webServer 条目评估）。
   - 门禁：web-next tsc EXIT=0 + 受影响单测 34/34 + 负载性 4 文件隔离复跑 37/37 + lint EXIT=0。
+
+## [CHG-VIR-13-FIX-LAYOUT] merge 工作台表格容器截断修复（用户 bug 报告）
+- **完成时间**：2026-06-05
+- **记录时间**：2026-06-05 23:30
+- **执行模型**：claude-opus-4-8
+- **子代理**：无
+- **修改文件**：
+  - `apps/server-next/src/app/admin/merge/_client/MergeClient.tsx` — PAGE_STYLE 去 `height:100%` 钉死 + AdminCard 改 `padding="none"` 自然高度（去 flex:1/minHeight/display:flex）+ 内容 div 去 flex/overflow——滚动归 shell main（既有 overflow:auto）
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - **根因**（playwright 逐层测量定位）：13-WS 引入的 AdminCard flex 误用——AdminCard DOM = `root(flex col, overflow:hidden)` > `[data-admin-card-body]`（普通块、高度 auto）> children；MergeClient 把 flex 语义设在 root 而内容 div 是 body 孙级，**body wrapper 断开 flex 约束链** → 内容 div 被撑至 1432px → root 648px hidden 裁切 = 表格截断且不可滚。
+  - 修复后实测：MAIN 747/1614 正常滚动、30 组 mock 末行可达、分页 foot 完整；视觉副效应 = 消除原 AdminCard 默认 padding(14px) 与内层 16px 的冗余叠加。
+  - **共享组件提示**：AdminCard 当前结构不支持「children 内滚」骨架（body wrapper 无 flex 透传）——后续若有同类需求应扩展 AdminCard（如 `bodyFlex` prop）经设计评审，勿在消费方重复此误用。
+  - 门禁：merge 域单测 83/83 零破坏 + server-next tsc EXIT=0 + e2e merge-deeplink 6/6 + lint EXIT=0。
