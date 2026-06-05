@@ -21,6 +21,7 @@ import {
 import { buildVideoColumns } from './VideoColumns'
 import { BatchActionsRow, buildBatchActions } from './VideoBatchActions'
 import { buildMergeHref } from '@/lib/merge/entry'
+import { buildHomeAddHref } from '@/lib/home-modules/entry'
 import { VideoEditDrawer } from './VideoEditDrawer'
 
 // ── main component ────────────────────────────────────────────────
@@ -276,6 +277,14 @@ export function VideoListClient() {
       onMergeSelected: (ids) => {
         window.open(
           buildMergeHref({ kind: 'batch-merge', ids, from: 'videos-batch' }),
+          '_blank',
+          'noopener,noreferrer',
+        )
+      },
+      // CHG-HOME-UX-08：加入首页运营 → 新窗深链确认面板（保留列表上下文）
+      onAddToHome: (ids) => {
+        window.open(
+          buildHomeAddHref({ ids, from: 'videos-batch' }),
           '_blank',
           'noopener,noreferrer',
         )

@@ -265,3 +265,23 @@ describe('buildBatchActions — 合并所选 (CHG-VIR-13-A2)', () => {
     expect(onMergeSelected).toHaveBeenCalledWith(['id-1', 'id-2', 'id-3'])
   })
 })
+
+// ── CHG-HOME-UX-08：批量加入首页运营（深链确认面板） ─────────────────────────
+
+describe('buildBatchActions — 加入首页运营 (CHG-HOME-UX-08)', () => {
+  it('count ≥ 1 + onAddToHome → 渲染 action 且回调收到全部 ids', async () => {
+    const onAddToHome = vi.fn()
+    const actions = buildBatchActions(new Set(['id-1', 'id-2']), { onAddToHome })
+    const add = actions.find((a) => a.key === 'batch-add-to-home')
+    expect(add).toBeDefined()
+    expect(add!.label).toBe('加入首页运营（2）')
+    expect(add!.confirm).toBeUndefined() // 导航动作（落地确认面板自带确认，确认前零写库）
+    await add!.onConfirm()
+    expect(onAddToHome).toHaveBeenCalledWith(['id-1', 'id-2'])
+  })
+
+  it('未注入 onAddToHome → 不渲染（向后兼容）', () => {
+    const actions = buildBatchActions(new Set(['id-1']))
+    expect(actions.find((a) => a.key === 'batch-add-to-home')).toBeUndefined()
+  })
+})

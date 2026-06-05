@@ -60,6 +60,13 @@ vi.mock('../../../../../../apps/server-next/src/lib/videos/picker-fetcher', () =
   videoPickerFetcher: vi.fn(),
 }))
 
+// ── mock next/navigation（CHG-HOME-UX-08：useHomeAddEntry 消费 useSearchParams）──
+// 默认空 params（普通访问零干扰）；深链用例经 mockSearchParams 覆写
+let mockSearchParams = new URLSearchParams()
+vi.mock('next/navigation', () => ({
+  useSearchParams: () => mockSearchParams,
+}))
+
 import {
   listHomeModules,
   deleteHomeModule,
@@ -105,6 +112,7 @@ beforeEach(() => {
   cleanup()
   vi.clearAllMocks()
   mockFetchPickerById.mockResolvedValue(PICKER_ITEM)
+  mockSearchParams = new URLSearchParams()
 })
 
 describe('HomeOpsClient — loading 态', () => {
@@ -428,6 +436,37 @@ describe('HomeOpsClient — 批量添加入口', () => {
       expect(mockedList).toHaveBeenCalledWith(expect.objectContaining({ slot: 'type_shortcuts' }))
     })
     expect(screen.queryByTestId('home-batch-add-btn')).toBeNull()
+  })
+})
+
+// ── CHG-HOME-UX-08：深链落地（?add_ids=&from=）─────────────────────────────
+
+describe('HomeOpsClient — 深链落地确认面板', () => {
+  it('带 add_ids 落地 → 来源回链栏 + 确认面板预填（充实后候选渲染）', async () => {
+    mockSearchParams = new URLSearchParams('add_ids=v-abc&from=videos-batch')
+    mockedList.mockResolvedValue({ data: [], total: 0, page: 1, limit: 100 })
+    render(<HomeOpsClient />)
+
+    // 来源回链栏
+    await waitFor(() => {
+      expect(screen.queryByTestId('home-entry-source-bar')).not.toBeNull()
+    })
+    expect(screen.getByTestId('home-entry-source-bar').textContent).toContain('来自视频库批量操作')
+    expect(screen.getByTestId('home-entry-source-bar').textContent).toContain('返回视频库')
+
+    // 确认面板打开 + 充实候选（fetchPickerItemByIdSafe → PICKER_ITEM；
+    // Modal open 帧内 useEffect(setSelected) 异步 flush，候选项断言需 waitFor）
+    await waitFor(() => {
+      expect(screen.queryByTestId('batch-add-item-v-abc')).not.toBeNull()
+    })
+  })
+
+  it('无 add_ids 普通访问 → 零回链栏零弹层（零干扰）', async () => {
+    mockedList.mockResolvedValue({ data: [], total: 0, page: 1, limit: 100 })
+    render(<HomeOpsClient />)
+    await waitFor(() => expect(mockedList).toHaveBeenCalled())
+    expect(screen.queryByTestId('home-entry-source-bar')).toBeNull()
+    expect(screen.queryByTestId('batch-add-videos-modal')).toBeNull()
   })
 })
 

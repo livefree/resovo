@@ -29,11 +29,14 @@ export function buildBatchActions(
   opts?: {
     /** CHG-VIR-13-A2：批量「合并所选」导航回调（count ≥ 2 才渲染；调用方注入 buildMergeHref + router） */
     readonly onMergeSelected?: (ids: readonly string[]) => void
+    /** CHG-HOME-UX-08：批量「加入首页运营」导航回调（count ≥ 1 渲染；调用方注入 buildHomeAddHref） */
+    readonly onAddToHome?: (ids: readonly string[]) => void
   },
 ): readonly BatchAction[] {
   const ids = Array.from(selectedKeys)
   const count = ids.length
   const onMergeSelected = opts?.onMergeSelected
+  const onAddToHome = opts?.onAddToHome
   return [
     // CHG-VIR-13-A2（设计 §10.2 增强 #3）：合并所选 — 导航深链非 API 动作，≥2 才有合并语义
     ...(onMergeSelected && count >= 2
@@ -42,6 +45,15 @@ export function buildBatchActions(
           label: `合并所选（${count}）`,
           disabled: false,
           onConfirm: () => { onMergeSelected(ids); return Promise.resolve() },
+        } satisfies BatchAction]
+      : []),
+    // CHG-HOME-UX-08：加入首页运营 — 深链确认面板（确认前零写库），≥1 即有语义
+    ...(onAddToHome && count >= 1
+      ? [{
+          key: 'batch-add-to-home',
+          label: `加入首页运营（${count}）`,
+          disabled: false,
+          onConfirm: () => { onAddToHome(ids); return Promise.resolve() },
         } satisfies BatchAction]
       : []),
     {

@@ -3323,10 +3323,12 @@ CODENAME-MATRIX-E2E (依赖 Wave 3 验收期补丁 CODENAME-MATRIX ✅)
     - 依赖：CHG-HOME-UX-04-B ✅
     - 范围（4 项）：① 新建 BatchAddVideosModal（slot 选择 + 候选列表充实 + 已在列去重标灰 + 循环 create ordering 追加 + 汇总 toast）② slot 头部「+ 添加视频」（video 类 3 slot）③ VideoPicker multiple 接线 ④ 测试（去重/循环/部分失败）。
     - 完成备注：统一确认面板首建（initialItems 预填口供 08/09 复用；确认前零写库）；VideoPicker multiple 原生多选零契约改动；handleBatchAdd ordering=max+1 末尾追加 + 汇总 toast。+8 用例 57/57 + test:changed 28/28 + typecheck/lint EXIT=0。解阻 08/09。执行模型: claude-opus-4-8（人工 opus 覆盖 sonnet）；子代理: 无。
-11. **CHG-HOME-UX-08** — 他页深链入口（仿 merge 模式）（状态：⬜ 待开始）
+11. **CHG-HOME-UX-08** — 他页深链入口（仿 merge 模式）（状态：✅ 已完成）
+    - 实际开始：2026-06-05 16:22 ｜ 完成时间：2026-06-05 16:28
     - 建议模型：sonnet
-    - 依赖：CHG-HOME-UX-07
+    - 依赖：CHG-HOME-UX-07 ✅
     - 范围（4 项）：① 新建 lib/home-modules/entry.ts（SOURCES/SOURCE_META/buildHomeAddHref/parseHomeEntry；?add_ids=&from=）② VideoRowActions「加入首页运营」+ VideoBatchActions「加入首页运营(N)」+ VideoListClient window.open ③ /admin/home 落地解析 → BatchAddVideosModal 预填 + 来源回链栏 ④ 测试（entry 纯函数参数顺序契约 / row+batch router spy / 落地解析）。
+    - 完成备注：四项全落（+use-home-add-entry hook 抽离防 500 红线，HomeOpsClient 469；深链 Modal 独立实例 + consumed 防重弹 + 无效引用过滤提示）。+12 用例 102/102 + test:changed 106/106（首轮 1 jsdom 并发 flaky 复跑全绿）+ typecheck/lint EXIT=0。解阻 09。执行模型: claude-opus-4-8（人工 opus 覆盖 sonnet）；子代理: 无。
 12. **CHG-HOME-UX-09** — 趋势导入 + top10 补位可视化（状态：⬜ 待开始）
     - 建议模型：sonnet
     - 依赖：CHG-HOME-UX-07

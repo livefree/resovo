@@ -299,4 +299,18 @@ describe('VideoRowActions — 合并/拆分深链 (CHG-VIR-13-A1/A2)', () => {
     expect(document.querySelector('[data-key="merge"]')).not.toBeNull()
     expect(document.querySelector('[data-key="split"]')).not.toBeNull()
   })
+
+  // CHG-HOME-UX-08：行级加入首页运营 → window.open 深链确认面板
+  it('点击"加入首页运营" → window.open buildHomeAddHref（add_ids + from=videos）', () => {
+    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null)
+    renderActions(makeRow())
+    openDropdown()
+    clickItem('add-to-home')
+    expect(openSpy).toHaveBeenCalledWith(
+      '/admin/home?add_ids=v1&from=videos',
+      '_blank',
+      'noopener,noreferrer',
+    )
+    openSpy.mockRestore()
+  })
 })

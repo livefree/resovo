@@ -46,6 +46,8 @@ import type {
   UpdateHomeModuleBody,
 } from '@/lib/home-modules/types'
 import { useVideoMetaMap } from '@/lib/home-modules/use-video-meta-map'
+import { useHomeAddEntry } from '@/lib/home-modules/use-home-add-entry'
+import { HOME_ENTRY_SOURCE_META } from '@/lib/home-modules/entry'
 import { HomeModuleCard } from './HomeModuleCard'
 import { HomeModuleDrawer } from './HomeModuleDrawer'
 import { HomePreviewPanel } from './HomePreviewPanel'
@@ -87,6 +89,19 @@ const SLOT_SECTION_STYLE: CSSProperties = {
   minHeight: 0,
 }
 
+// CHG-HOME-UX-08：来源回链栏（仿 merge-entry-source-bar）
+const ENTRY_SOURCE_BAR_STYLE: CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: '8px',
+  padding: '6px 12px',
+  background: 'var(--state-info-bg)',
+  border: '1px solid var(--border-subtle)',
+  borderRadius: 'var(--radius-sm)',
+  fontSize: 'var(--font-size-xs)',
+  color: 'var(--fg-default)',
+}
+
 // ── 主组件 ────────────────────────────────────────────────────────
 
 export function HomeOpsClient() {
@@ -102,6 +117,8 @@ export function HomeOpsClient() {
   const [deleteTarget, setDeleteTarget] = useState<HomeModule | null>(null)
   // CHG-HOME-UX-07：批量添加统一确认面板
   const [batchAddOpen, setBatchAddOpen] = useState(false)
+  // CHG-HOME-UX-08：深链落地（?add_ids=&from= → 充实候选预填确认面板 + 来源回链栏）
+  const addEntry = useHomeAddEntry()
 
   const loadSlot = useCallback(async (slot: HomeModuleSlot) => {
     setLoadingSlots(prev => ({ ...prev, [slot]: true }))
@@ -297,6 +314,24 @@ export function HomeOpsClient() {
         data-testid="home-ops-page-header"
       />
 
+      {/* CHG-HOME-UX-08：深链来源回链栏（仿 merge-entry-source-bar；HOME_ENTRY_SOURCE_META 真源） */}
+      {addEntry.from && (
+        <div style={ENTRY_SOURCE_BAR_STYLE} data-testid="home-entry-source-bar">
+          <span>{HOME_ENTRY_SOURCE_META[addEntry.from].label}</span>
+          {addEntry.invalidCount > 0 && (
+            <span style={{ color: 'var(--fg-muted)' }}>
+              （{addEntry.invalidCount} 个无效引用已忽略）
+            </span>
+          )}
+          <a
+            href={HOME_ENTRY_SOURCE_META[addEntry.from].backHref}
+            style={{ marginLeft: 'auto', color: 'var(--accent-default)' }}
+          >
+            {HOME_ENTRY_SOURCE_META[addEntry.from].backLabel}
+          </a>
+        </div>
+      )}
+
       {/* CHG-HOME-UX-04-B：手写 bottom-border tabs → 共享 Segment（设计稿 §5.7「Segment」）
           badge 仅显已加载 slot 的模块数（懒加载未访问 slot 无数据，全量计数端点为 follow-up） */}
       <Segment
@@ -415,6 +450,19 @@ export function HomeOpsClient() {
         getExistingIds={getExistingIds}
         onClose={() => setBatchAddOpen(false)}
         onConfirm={handleBatchAdd}
+      />
+
+      {/* CHG-HOME-UX-08：深链落地确认面板（initialItems 预填；与页内面板独立实例避免状态混淆） */}
+      <BatchAddVideosModal
+        open={addEntry.items !== null}
+        defaultSlot={activeSlot}
+        initialItems={addEntry.items ?? []}
+        getExistingIds={getExistingIds}
+        onClose={addEntry.dismiss}
+        onConfirm={async (slot, items) => {
+          await handleBatchAdd(slot, items)
+          addEntry.dismiss()
+        }}
       />
     </div>
   )

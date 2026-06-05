@@ -15099,3 +15099,20 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **新增依赖**：无
 - **数据库变更**：无
 - **注意事项**：无批量端点（循环 POST，N≤选片数，不新增 route）。home 域 57/57 + test:changed 28/28 + typecheck/lint EXIT=0。解阻 08 / 09。
+
+## [CHG-HOME-UX-08] 他页深链入口 — 视频库行级/批量「加入首页运营」+ 落地确认面板
+- **完成时间**：2026-06-05
+- **记录时间**：2026-06-05 16:28
+- **执行模型**：claude-opus-4-8（人工 opus 会话覆盖 sonnet 建议，偏离登记）
+- **子代理**：无
+- **修改文件**：
+  - `apps/server-next/src/lib/home-modules/entry.ts`（新 58 行）— 深链单一真源（仿 lib/merge/entry.ts）：HOME_ENTRY_SOURCES=['videos','videos-batch'] + SOURCE_META 回链栏元数据 + buildHomeAddHref/parseHomeAddEntry（参数顺序契约 add_ids → from；ids 去空去重保持首现序；非法 from/空 ids → null 零干扰）
+  - `apps/server-next/src/lib/home-modules/use-home-add-entry.ts`（新 60 行，HomeOpsClient 500 红线预防抽 hook）— 解析 + fetchPickerItemByIdSafe 并发充实 + 无效引用过滤（invalidCount 供提示）+ consumed 防重弹 + cancelled 守卫
+  - `apps/server-next/src/app/admin/videos/_client/VideoRowActions.tsx` — buildItems +onAddToHome +「加入首页运营」项（merge/split 之后）→ window.open 新窗深链（保留列表上下文，对齐 videos-batch 先例）
+  - `apps/server-next/src/app/admin/videos/_client/VideoBatchActions.tsx` — buildBatchActions opts +onAddToHome →「加入首页运营（N）」（count≥1；导航动作无二次 confirm——落地确认面板自带且确认前零写库）
+  - `apps/server-next/src/app/admin/videos/_client/VideoListClient.tsx` — onAddToHome 注入 window.open(buildHomeAddHref)
+  - `apps/server-next/src/app/admin/home/_client/HomeOpsClient.tsx`（469<500）— useHomeAddEntry 接线 + 来源回链栏（home-entry-source-bar，info 底色 + 无效引用计提示 + 返回链）+ 深链专用 BatchAddVideosModal 实例（initialItems 预填，与页内实例独立避免状态混淆）
+  - 测试：新建 `tests/unit/server-next/home-entry.test.ts`（7 用例：参数顺序契约/往返/去重/守卫/META）+ VideoRowActions +1（window.open spy 断言精确 URL）+ SelectionActions +2（回调 ids/向后兼容）+ HomeOpsClient +2（深链落地回链栏+面板预填〔Modal effect flush waitFor〕/ 普通访问零干扰）
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：HomeOpsClient.test 补 next/navigation mock（useSearchParams，深链用例覆写）。08 相关 102/102 + test:changed 106/106（首轮 1 failed = jsdom 并发 flaky 复跑全绿）+ typecheck/lint EXIT=0。解阻 09。
