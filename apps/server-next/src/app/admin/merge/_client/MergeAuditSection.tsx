@@ -22,6 +22,7 @@ import type { MergeAuditRow } from '@resovo/types'
 import { listAudit, unmergeVideos } from '@/lib/merge/api'
 import { describeStatusTransition } from '@/lib/merge/status-defaults'
 import { describeError } from './MergeClient'
+import { MERGE_M } from '@/i18n/messages/zh-CN/merge'
 
 const SCORE_BADGE_STYLE: CSSProperties = {
   display: 'inline-block',
@@ -159,7 +160,7 @@ export function AuditSection({ initialAction }: AuditSectionProps) {
                   </td>
                   {/* CHG-VIR-13-C2 / D-105-8：actorType（auto-merge OFF 期恒 human / Y-105-T5） */}
                   <td style={{ padding: '6px 8px' }} data-testid={`audit-actor-${row.id}`}>
-                    {row.actorType === 'system' ? '自动' : '人工'}
+                    {row.actorType === 'system' ? MERGE_M.records.actorSystem : MERGE_M.records.actorHuman}
                   </td>
                   <td style={{ padding: '6px 8px' }}>{row.performedByUsername ?? row.performedBy.slice(0, 8)}</td>
                   <td style={{ padding: '6px 8px', color: 'var(--fg-muted)', fontSize: '11px' }}>
@@ -170,8 +171,8 @@ export function AuditSection({ initialAction }: AuditSectionProps) {
                   </td>
                   <td style={{ padding: '6px 8px' }}>
                     {row.revertedAt
-                      ? <span style={SCORE_BADGE_STYLE}>已撤销</span>
-                      : <span style={SECONDARY_TEXT}>有效</span>}
+                      ? <span style={SCORE_BADGE_STYLE}>{MERGE_M.records.statusReverted}</span>
+                      : <span style={SECONDARY_TEXT}>{MERGE_M.records.statusActive}</span>}
                   </td>
                   <td style={{ padding: '6px 8px' }}>
                     <AdminButton

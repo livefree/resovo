@@ -1,5 +1,5 @@
 /**
- * audit-action-labels.ts — admin_audit_log.action_type 37 项中文 label 映射
+ * audit-action-labels.ts — admin_audit_log.action_type 全量中文 label 映射（与 AdminAuditActionType union 同步维护）
  *
  * ADR-141 D-141-2：actionType label 由前端 i18n 承担（与后端解耦）
  * 真源：packages/types/src/admin-moderation.types.ts AdminAuditActionType union
@@ -91,6 +91,11 @@ export const AUDIT_ACTION_LABELS: Readonly<Record<string, string>> = {
 
   // ── CHG-SN-8-FUP-AUDIT-ROLLBACK-EP / ADR-138 ─────────────────────
   'system.audit_rollback':           '审计回滚',
+
+  // ── CHG-VIR-13-I18N 补缺：identity 候选裁定 2 项（维护约定兑现）─────
+  // reject = CHG-VIR-9-B / ADR-178 欠账；revive = CHG-VIR-13-C1 / ADR-179
+  'identity_candidate.reject':       '拒绝合并候选',
+  'identity_candidate.revive':       '复活合并候选',
 }
 
 /**

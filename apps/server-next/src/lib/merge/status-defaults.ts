@@ -9,6 +9,8 @@
  */
 
 import type { ReviewStatus, VisibilityStatus, VideoStatusSetting, StatusTransitionOutcome } from '@resovo/types'
+// CHG-VIR-13-I18N：状态语义文案集中字典（labels/hints/transition 提示真源迁移）
+import { MERGE_M } from '@/i18n/messages/zh-CN/merge'
 
 /** 已知状态二元组（候选路径 D-105-7 透出 / split 新建固定 pending|internal） */
 export interface StatusPair {
@@ -24,17 +26,10 @@ export interface StatusOption {
   readonly label: string
 }
 
-const KEEP_OPTION: StatusOption = { key: 'keep', value: null, label: '保持不变' }
+const KEEP_OPTION: StatusOption = { key: 'keep', value: null, label: MERGE_M.statusControl.keep }
 
-/** 二元组 → 展示文案（合法三元组投影；is_published 由二元组唯一推导） */
-const PAIR_LABELS: Record<string, string> = {
-  'pending_review|internal': '待审（内部）',
-  'pending_review|hidden': '待审（隐藏）',
-  'approved|public': '通过并公开',
-  'approved|internal': '通过（内部可见）',
-  'approved|hidden': '通过（隐藏）',
-  'rejected|hidden': '拒绝（隐藏）',
-}
+/** 二元组 → 展示文案（合法三元组投影；真源 = i18n merge.ts / CHG-VIR-13-I18N） */
+const PAIR_LABELS: Readonly<Record<string, string>> = MERGE_M.statusPair
 
 /**
  * 13-D1 矩阵镜像：current 二元组 → 单步可达 desired 集合。
@@ -75,7 +70,7 @@ export const GENERIC_STATUS_OPTIONS: readonly StatusOption[] = [
   KEEP_OPTION,
   { key: 'approved|public', value: pairToSetting('approved|public'), label: PAIR_LABELS['approved|public']! },
   { key: 'approved|internal', value: pairToSetting('approved|internal'), label: PAIR_LABELS['approved|internal']! },
-  { key: 'visibility-hidden', value: { visibilityStatus: 'hidden' }, label: '设为隐藏' },
+  { key: 'visibility-hidden', value: { visibilityStatus: 'hidden' }, label: MERGE_M.statusControl.hiddenOnly },
 ]
 
 /**
@@ -83,9 +78,9 @@ export const GENERIC_STATUS_OPTIONS: readonly StatusOption[] = [
  * §10.1 裁定 #1：默认待审 + 面板一键通过）。全部 ∈ 矩阵 pending|internal 行。
  */
 export const SPLIT_STATUS_OPTIONS: readonly StatusOption[] = [
-  { key: 'keep', value: null, label: '默认待审（内部）' },
-  { key: 'approved|internal', value: pairToSetting('approved|internal'), label: '直接通过（内部可见）' },
-  { key: 'approved|public', value: pairToSetting('approved|public'), label: '通过并公开' },
+  { key: 'keep', value: null, label: MERGE_M.statusControl.splitKeep },
+  { key: 'approved|internal', value: pairToSetting('approved|internal'), label: MERGE_M.statusControl.splitApprove },
+  { key: 'approved|public', value: pairToSetting('approved|public'), label: MERGE_M.statusControl.splitApprovePublish },
 ]
 
 // ── 智能默认（设计 §4.4 规则表 / first-match）──────────────────────────
@@ -120,7 +115,7 @@ export function suggestMergeTargetStatus(
 ): StatusSuggestion {
   // 规则 6：任意含 rejected source → 不自动升级
   if (sources.some((s) => s.reviewStatus === 'rejected')) {
-    return { suggested: null, hint: '源含已拒绝内容，请人工复核' }
+    return { suggested: null, hint: MERGE_M.statusHints.rejectedSource }
   }
   // 规则 1：target 已公开（source 均非 public 与否都保持——target 已是最高可见性）
   if (isEffectivelyPublic(target)) return NO_SUGGESTION
@@ -131,19 +126,19 @@ export function suggestMergeTargetStatus(
   if (target.reviewStatus === 'pending_review' && someSourcePublic) {
     return {
       suggested: { reviewStatus: 'approved', visibilityStatus: 'internal' },
-      hint: '源中有已发布内容，是否同步发布 target？',
+      hint: MERGE_M.statusHints.sourcePublishedAskSync,
     }
   }
   // 规则 3：target=approved|internal + 某 source public → 建议 approve_and_publish
   if (target.reviewStatus === 'approved' && target.visibilityStatus === 'internal' && someSourcePublic) {
     return {
       suggested: { reviewStatus: 'approved', visibilityStatus: 'public' },
-      hint: 'source 的 public 可见性将丢失，建议提升 target 为公开',
+      hint: MERGE_M.statusHints.sourcePublicWillLose,
     }
   }
   // 工作区受限输入（target 状态不可知仅 isPublished）：source 含公开内容时仅提示不建议值
   if (target.reviewStatus === undefined && someSourcePublic) {
-    return { suggested: null, hint: '源中有已公开内容且 target 当前未公开，建议确认合并后状态' }
+    return { suggested: null, hint: MERGE_M.statusHints.workspaceLimited }
   }
   return NO_SUGGESTION
 }
@@ -160,6 +155,6 @@ export function describeStatusTransition(
   if (result !== 'failed') return null
   return {
     level: 'warn',
-    text: '操作成功，但状态未变更（状态机拒绝），请在审核台手动调整',
+    text: MERGE_M.statusTransition.failed,
   }
 }

@@ -13,6 +13,7 @@ import { type CSSProperties } from 'react'
 import { AdminInput, VideoPicker, type PickerVideoItem } from '@resovo/admin-ui'
 import type { VideoStatusSetting, VideoType } from '@resovo/types'
 import { SPLIT_STATUS_OPTIONS } from '@/lib/merge/status-defaults'
+import { MERGE_M } from '@/i18n/messages/zh-CN/merge'
 import { videoPickerFetcher } from '@/lib/videos/picker-fetcher'
 import { MergeStatusControl } from './MergeStatusControl'
 
@@ -102,7 +103,7 @@ export function SplitGroupMetaCard({ index, meta, onChange }: SplitGroupMetaCard
         // CHG-VIR-13-D2 / D-105-9（§10.1 裁定 #1）：新建 video 状态设置——
         // current 恒 pending|internal（insertNewVideo DB DEFAULT），选项全 ∈ 矩阵 pending 行
         <MergeStatusControl
-          label="新建状态"
+          label={MERGE_M.statusControl.splitLabel}
           options={SPLIT_STATUS_OPTIONS}
           value={meta.status}
           onChange={(status) => onChange({ ...meta, status })}

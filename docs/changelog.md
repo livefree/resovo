@@ -14731,3 +14731,19 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
   - dev 实证：EXPLAIN Bitmap Index Scan on idx_identity_decision_audit（Y-105-T3）+ snapshot 投影注入往返 ROLLBACK 零残留。
   - 门禁：typecheck/lint/verify:adr-contracts EXIT=0 + 前端 merge 域 83/83（既有 76 零破坏）。
   - SEQ-20260604-01 全部业务卡完结，仅剩 13-I18N（haiku 文案抽离）+ 系列收口 e2e 硬前置。
+
+## [CHG-VIR-13-I18N] merge 工作台硬编码文案抽离（SEQ-20260604-01 / 系列末卡）
+- **完成时间**：2026-06-04
+- **记录时间**：2026-06-04 21:58
+- **执行模型**：claude-opus-4-8
+- **子代理**：无
+- **修改文件**：
+  - `apps/server-next/src/i18n/messages/zh-CN/audit-action-labels.ts` — 补缺 `identity_candidate.reject`（CHG-VIR-9-B pre-existing 欠账）+ `identity_candidate.revive`（13-C1 维护约定兑现）；头注释写死计数改同步维护表述
+  - `apps/server-next/src/i18n/messages/zh-CN/merge.ts` — **新建**：MERGE_M 字典（moderation.ts `M` 同范式零框架）——statusPair 6 / statusControl 7 / statusHints 4 / statusTransition 1 / records 11 共 29 项语义文案集中
+  - `apps/server-next/src/lib/merge/status-defaults.ts` + `_client/{MergeStatusControl,SplitGroupMetaCard,MergeClient,MergeAuditSection,MergeDecisionsSection}` — 六消费方接线（文案值逐字不变）
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - **偏离登记**：组件一次性文案（placeholder/按钮/confirm）保留内联（CHG-VSR-6 先例；验收按「语义性文案集中化」口径落地，待 next-intl 接入统一迁 JSON）。
+  - 文案值逐字不变 → 既有测试零改动零破坏（merge 域 + status-defaults 102/102）。
+  - **SEQ-20260604-01 全部 13 卡完结**；系列收口 e2e 硬前置（SEQ 头部 ①②③）接续执行。

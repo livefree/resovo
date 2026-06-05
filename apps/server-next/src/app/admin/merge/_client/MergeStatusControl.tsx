@@ -11,6 +11,8 @@
 import { useMemo, type CSSProperties } from 'react'
 import type { VideoStatusSetting } from '@resovo/types'
 import type { StatusOption } from '@/lib/merge/status-defaults'
+// CHG-VIR-13-I18N：语义文案字典
+import { MERGE_M } from '@/i18n/messages/zh-CN/merge'
 
 const ROW_STYLE: CSSProperties = {
   display: 'flex',
@@ -51,7 +53,7 @@ export interface MergeStatusControlProps {
 }
 
 export function MergeStatusControl({
-  label = '合并后 target 状态',
+  label = MERGE_M.statusControl.defaultLabel,
   options,
   value,
   onChange,

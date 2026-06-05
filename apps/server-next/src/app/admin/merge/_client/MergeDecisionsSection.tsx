@@ -18,6 +18,7 @@ import {
 import type { IdentityDecisionListRow } from '@resovo/types'
 import { listIdentityDecisions, reviveIdentityCandidate } from '@/lib/identity/api'
 import { describeError } from './MergeClient'
+import { MERGE_M } from '@/i18n/messages/zh-CN/merge'
 
 const SECONDARY_TEXT: CSSProperties = {
   fontSize: 'var(--font-size-sm)',
@@ -40,8 +41,8 @@ const PAGE_SIZE = 20
 type DecisionFilter = 'all' | 'confirmed' | 'rejected'
 
 function pairLabel(row: IdentityDecisionListRow): string {
-  const left = `${row.leftVideoTitle ?? row.leftVideoId.slice(0, 8)}${row.leftVideoDeleted ? '（已删）' : ''}`
-  const right = `${row.rightVideoTitle ?? row.rightVideoId.slice(0, 8)}${row.rightVideoDeleted ? '（已删）' : ''}`
+  const left = `${row.leftVideoTitle ?? row.leftVideoId.slice(0, 8)}${row.leftVideoDeleted ? MERGE_M.records.deletedSuffix : ''}`
+  const right = `${row.rightVideoTitle ?? row.rightVideoId.slice(0, 8)}${row.rightVideoDeleted ? MERGE_M.records.deletedSuffix : ''}`
   return `${left} ↔ ${right}`
 }
 
@@ -137,9 +138,9 @@ export function DecisionsSection() {
               return (
                 <tr key={row.id} style={{ borderBottom: '1px solid var(--border-subtle)' }} data-testid={`decision-row-${row.id}`}>
                   <td style={{ padding: '6px 8px' }}>
-                    <span style={DECISION_BADGE[row.decision]}>{row.decision === 'confirmed' ? '确认' : '拒绝'}</span>
+                    <span style={DECISION_BADGE[row.decision]}>{row.decision === 'confirmed' ? MERGE_M.records.decisionConfirmed : MERGE_M.records.decisionRejected}</span>
                   </td>
-                  <td style={{ padding: '6px 8px' }}>{row.actorType === 'system' ? '自动' : '人工'}</td>
+                  <td style={{ padding: '6px 8px' }}>{row.actorType === 'system' ? MERGE_M.records.actorSystem : MERGE_M.records.actorHuman}</td>
                   <td style={{ padding: '6px 8px' }} title={row.reason ?? undefined}>
                     {pairLabel(row)}
                     {row.reason && <span style={{ ...SECONDARY_TEXT, marginLeft: 6 }}>（{row.reason}）</span>}
@@ -151,8 +152,8 @@ export function DecisionsSection() {
                   </td>
                   <td style={{ padding: '6px 8px' }}>
                     {row.revertedAt
-                      ? <span style={SECONDARY_TEXT} title={row.revertedReason ?? undefined}>已推翻</span>
-                      : <span style={SECONDARY_TEXT}>有效</span>}
+                      ? <span style={SECONDARY_TEXT} title={row.revertedReason ?? undefined}>{MERGE_M.records.decisionReverted}</span>
+                      : <span style={SECONDARY_TEXT}>{MERGE_M.records.statusActive}</span>}
                   </td>
                   <td style={{ padding: '6px 8px' }}>
                     {canRevive && (

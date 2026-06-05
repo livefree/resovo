@@ -34,6 +34,8 @@ import {
 } from '@resovo/admin-ui'
 import { ApiClientError } from '@/lib/api-client'
 import { isMergeEntrySource, MERGE_ENTRY_SOURCE_META } from '@/lib/merge/entry'
+// CHG-VIR-13-I18N：records 视图 labels
+import { MERGE_M } from '@/i18n/messages/zh-CN/merge'
 import { SplitWorkspace } from './SplitWorkspace'
 import { AuditSection } from './MergeAuditSection'
 // CHG-VIR-13-C2：records mode 第二子视图（identity 裁定记录 + revive）
@@ -81,8 +83,8 @@ const SEGMENT_ITEMS: readonly SegmentItem[] = [
 
 // CHG-VIR-13-C2：records mode 内层两子视图（audit 时间线 / identity 裁定记录）
 const RECORDS_VIEW_ITEMS: readonly SegmentItem[] = [
-  { value: 'audit',     label: '操作时间线' },
-  { value: 'decisions', label: '决策记录' },
+  { value: 'audit',     label: MERGE_M.records.viewAudit },
+  { value: 'decisions', label: MERGE_M.records.viewDecisions },
 ]
 
 interface DerivedWorkspace {
