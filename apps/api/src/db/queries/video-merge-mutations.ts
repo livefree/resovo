@@ -408,9 +408,13 @@ interface RawAuditTimelineRow {
   readonly reverted_at: string | null
   readonly reverted_by: string | null
   readonly reverted_reason: string | null
+  /** D-105-8（CHG-VIR-13-C2）：snapshot_jsonb.videos[] 投影 {videoId,title}[]（SQL 内 jsonb 抽取，
+   *  避免传整个 snapshot；source 标题 = 软删视频唯一可靠源）；snapshot 无 videos 数组 → null */
+  readonly snapshot_video_titles: { videoId: string; title: string | null }[] | null
 }
 
-/** 列出 audit timeline + LEFT JOIN users.username（ADR-105 AMENDMENT 2026-05-14）*/
+/** 列出 audit timeline + LEFT JOIN users.username（ADR-105 AMENDMENT 2026-05-14）
+ *  D-105-8（CHG-VIR-13-C2）：+snapshot videos 标题投影 */
 export async function listAuditTimeline(
   db: Pool,
   params: { action: 'merge' | 'split' | null; videoId: string | null; offset: number; limit: number },
@@ -424,7 +428,11 @@ export async function listAuditTimeline(
        vma.reason,
        vma.performed_at::text AS performed_at,
        vma.reverted_at::text AS reverted_at,
-       vma.reverted_by, vma.reverted_reason
+       vma.reverted_by, vma.reverted_reason,
+       CASE WHEN jsonb_typeof(vma.snapshot_jsonb->'videos') = 'array' THEN
+         (SELECT jsonb_agg(jsonb_build_object('videoId', v->>'id', 'title', v->>'title'))
+            FROM jsonb_array_elements(vma.snapshot_jsonb->'videos') v)
+       ELSE NULL END AS snapshot_video_titles
      FROM video_merge_audit vma
      LEFT JOIN users u ON u.id = vma.performed_by
      WHERE ($1::text IS NULL OR vma.action = $1)
@@ -432,6 +440,19 @@ export async function listAuditTimeline(
      ORDER BY vma.performed_at DESC
      LIMIT $3 OFFSET $4`,
     [action, videoId, limit, offset],
+  )
+  return result.rows
+}
+
+/** D-105-8（CHG-VIR-13-C2）：target 标题实时批量查（target 未删；轻量列集零 catalog JOIN） */
+export async function fetchVideoTitles(
+  db: Pool,
+  ids: string[],
+): Promise<{ id: string; title: string }[]> {
+  if (ids.length === 0) return []
+  const result = await db.query<{ id: string; title: string }>(
+    `SELECT id, title FROM videos WHERE id = ANY($1::uuid[])`,
+    [ids],
   )
   return result.rows
 }

@@ -186,6 +186,37 @@ export async function countIdentityDecisions(
   return parseInt(r.rows[0]?.total ?? '0', 10)
 }
 
+// ── ⑥ audit timeline 派生：批量反查 audit 关联 decision（ADR-105 D-105-8 / CHG-VIR-13-C2）──
+
+/** audit 派生用最小行（actorType 推导 + related ids 聚合） */
+export interface DecisionByAuditRow {
+  readonly id: string
+  readonly candidate_id: string
+  readonly video_merge_audit_id: string
+  readonly actor_type: 'human' | 'system'
+}
+
+/**
+ * 页内 audit ids 单 SQL 批量反查（零 N+1 / D-105-8）。
+ * Y-105-T3：谓词 `video_merge_audit_id = ANY($1)` 蕴含 IS NOT NULL → 走
+ * `idx_identity_decision_audit` partial 索引（WHERE video_merge_audit_id IS NOT NULL，
+ * 实施卡 dev EXPLAIN 验证）。
+ */
+export async function findDecisionsByAuditIds(
+  db: Pool,
+  auditIds: string[],
+): Promise<DecisionByAuditRow[]> {
+  if (auditIds.length === 0) return []
+  const r = await db.query<DecisionByAuditRow>(
+    `SELECT id, candidate_id, video_merge_audit_id, actor_type
+       FROM identity_decisions
+      WHERE video_merge_audit_id = ANY($1::uuid[])
+      ORDER BY created_at ASC`,
+    [auditIds],
+  )
+  return r.rows
+}
+
 // ── ⑤ revive 联动：反查该 candidate 未撤销的 rejected decision（事务内 / ADR-179 D-179-2）──
 
 /**

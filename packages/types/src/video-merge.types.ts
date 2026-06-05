@@ -294,6 +294,15 @@ export interface MergeAuditRow {
   readonly revertedAt: string | null
   readonly revertedBy: string | null
   readonly revertedReason: string | null
+  // ── ADR-105 AMENDMENT 2026-06-04 D-105-8（CHG-VIR-13-C2）：+4 optional ──
+  // 全部 optional 纯增量（R-105-T4 旧消费方零破坏；列表数量/排序/分页/计数逐值不变）
+  /** 关联 identity_decisions.actor_type 透出（同 audit 多 decision 恒同 actor 取任一）；无关联 decision → 'human' */
+  readonly actorType?: 'human' | 'system'
+  /** 经 idx_identity_decision_audit 批量反查（页内单 SQL ANY 零 N+1 / Y-105-T3） */
+  readonly relatedCandidateIds?: readonly string[]
+  readonly relatedDecisionIds?: readonly string[]
+  /** source 标题取 snapshot_jsonb.videos[].title（软删唯一可靠源，缺失兜底「(已删除视频)」）；target 实时 JOIN */
+  readonly videoTitlesSnapshot?: readonly { readonly videoId: string; readonly title: string }[]
 }
 
 export interface ListAuditParams {

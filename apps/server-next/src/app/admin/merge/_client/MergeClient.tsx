@@ -23,7 +23,7 @@
  * 端点消费（ADR-105 §端点契约）：candidates / merge / unmerge / split / audit。
  */
 
-import { useCallback, useMemo, type CSSProperties } from 'react'
+import { useCallback, useMemo, useState, type CSSProperties } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import {
   PageHeader,
@@ -36,6 +36,8 @@ import { ApiClientError } from '@/lib/api-client'
 import { isMergeEntrySource, MERGE_ENTRY_SOURCE_META } from '@/lib/merge/entry'
 import { SplitWorkspace } from './SplitWorkspace'
 import { AuditSection } from './MergeAuditSection'
+// CHG-VIR-13-C2：records mode 第二子视图（identity 裁定记录 + revive）
+import { DecisionsSection } from './MergeDecisionsSection'
 import { MergeWorkspace } from './MergeWorkspace'
 import { CandidatesSection } from './MergeCandidatesSection'
 
@@ -75,6 +77,12 @@ const SEGMENT_ITEMS: readonly SegmentItem[] = [
   { value: 'merge',      label: '合并工作区' },
   { value: 'split',      label: '拆分工作区' },
   { value: 'records',    label: '操作记录' },
+]
+
+// CHG-VIR-13-C2：records mode 内层两子视图（audit 时间线 / identity 裁定记录）
+const RECORDS_VIEW_ITEMS: readonly SegmentItem[] = [
+  { value: 'audit',     label: '操作时间线' },
+  { value: 'decisions', label: '决策记录' },
 ]
 
 interface DerivedWorkspace {
@@ -121,6 +129,9 @@ export function MergeClient() {
     () => deriveWorkspace(new URLSearchParams(searchParams.toString())),
     [searchParams],
   )
+
+  // CHG-VIR-13-C2（records mode 两子视图）：audit 时间线 / 决策记录内层切换
+  const [recordsView, setRecordsView] = useState<'audit' | 'decisions'>('audit')
 
   // 深链工作流参数（merge 工作区预填）
   const candidateAParam = searchParams.get('candidate_a')
@@ -222,7 +233,20 @@ export function MergeClient() {
           ) : mode === 'split' ? (
             <SplitWorkspace initialVideoId={splitParam ?? undefined} />
           ) : (
-            <AuditSection initialAction={auditFilter} />
+            /* CHG-VIR-13-C2：records mode 两子视图（audit 时间线 / 决策记录） */
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <Segment
+                items={RECORDS_VIEW_ITEMS}
+                value={recordsView}
+                onChange={(v) => setRecordsView(v as 'audit' | 'decisions')}
+                size="sm"
+                aria-label="记录视图"
+                data-testid="records-view-segment"
+              />
+              {recordsView === 'audit'
+                ? <AuditSection initialAction={auditFilter} />
+                : <DecisionsSection />}
+            </div>
           )}
         </div>
       </AdminCard>

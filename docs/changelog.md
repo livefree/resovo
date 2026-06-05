@@ -14706,3 +14706,28 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
   - dev 真实库实测全绿：happy（新行 pending+链+manual-search+evidence 复制 / 原行保持 rejected / decision reverted 三列置位）→ 幂等（撞 unique reused=true 同 id 返回）→ 409 非 rejected → 409 pair 软删 → list 过滤（candidateId + reverted=false 滤已撤销行）→ audit afterJsonb 逐值 → 清理零残留。
   - 门禁：typecheck/lint EXIT=0 + `verify:endpoint-adr` ✓ 207 路由（2 新路径对齐 ADR-179 契约表）+ verify:adr-contracts ✓ + 全量 **6526/6528**——首轮全量暴露 `audit-log-service-enums-set-equal` 真回归（actionType **第 4 处**真源副本镜像未同步，前 3 处已同步守卫未覆盖该文件）→ 已修；其余 2 失败（StagingEditPanel / data-table-auto-filter）隔离复跑 36/36 全过 = 既见 jsdom 并发 flaky 与本卡无关。
   - 13-C2 消费提示：list 响应 `reused`/`revertedAt` 已就绪供决策记录子视图 + 行内 revive 操作；前端 api client 留 13-C2。
+
+## [CHG-VIR-13-C2] 操作记录增强 + 决策记录 + 行内撤销（SEQ-20260604-01 / D-105-8 + ADR-179 消费）
+- **完成时间**：2026-06-04
+- **记录时间**：2026-06-04 21:50
+- **执行模型**：claude-opus-4-8
+- **子代理**：arch-reviewer (claude-opus-4-8 / a19744b07045b47e3)——D-105-8 契约 PASS 引用（13-ADR 阶段），本卡按契约实施，无新 spawn
+- **修改文件**：
+  - `packages/types/src/video-merge.types.ts` — `MergeAuditRow` +4 optional（actorType / relatedCandidateIds / relatedDecisionIds / videoTitlesSnapshot；R-105-T4 旧消费方零破坏）
+  - `apps/api/src/db/queries/video-merge-mutations.ts` — `listAuditTimeline` +snapshot videos SQL 内 jsonb 投影（`jsonb_typeof` 防御非数组）+ `fetchVideoTitles`（target 实时轻量查）
+  - `apps/api/src/db/queries/identity-decision.ts` — `findDecisionsByAuditIds`（页内单 SQL ANY 零 N+1；Y-105-T3 dev EXPLAIN 实证走 `idx_identity_decision_audit` partial 索引）
+  - `apps/api/src/services/VideoMergesService.ts` — listAudit 页内批量派生（actorType 无 decision 恒 'human'；source 标题 snapshot 投影 / target 实时 / 缺失兜底「(已删除视频)」）
+  - `apps/server-next/src/lib/identity/api.ts` — +`listIdentityDecisions` / `reviveIdentityCandidate`（ADR-179 两端点 client）
+  - `apps/server-next/.../merge/_client/MergeAuditSection.tsx` — auto/manual 列 + 行展开明细（前后形态/关联候选/reverted）+ 行内撤销（展开区 reason 输入；statusTransition failed 联动提示 / D-105-11）
+  - `apps/server-next/.../merge/_client/MergeDecisionsSection.tsx` — **新建（186 行）**：decision badge + pair 摘要（软删标注）+ rejected 复活（reused 幂等差异化提示）+ 过滤/分页
+  - `apps/server-next/.../merge/_client/MergeClient.tsx` — records mode 内层 Segment 双子视图（操作时间线/决策记录）
+  - `tests/unit/api/merge-audit-derive.test.ts` — **新建（4 用例）**：actorType 双分支 + 零 N+1 单次 ANY 断言 / 三级标题兜底 / 老 snapshot null / R-105-T4 逐值+透传不变
+  - `tests/unit/components/server-next/admin/merge/MergeRecordsSections.test.tsx` — **新建（7 用例）**：actor 列 / 展开明细 / 行内撤销 / 已撤销无控件 / decisions 渲染+软删标注 / revive+reused / 三态无复活按钮
+- **新增依赖**：无
+- **数据库变更**：无（零 migration；listAuditTimeline 仅扩 SELECT 投影）
+- **注意事项**：
+  - 行内撤销 reason 以展开区内联输入实现（设计 §10.2 #5「reason 弹窗」轻量等价，零新 Modal 依赖）。
+  - records 双子视图内联 MergeClient（255 行 <500，未另建容器文件）。
+  - dev 实证：EXPLAIN Bitmap Index Scan on idx_identity_decision_audit（Y-105-T3）+ snapshot 投影注入往返 ROLLBACK 零残留。
+  - 门禁：typecheck/lint/verify:adr-contracts EXIT=0 + 前端 merge 域 83/83（既有 76 零破坏）。
+  - SEQ-20260604-01 全部业务卡完结，仅剩 13-I18N（haiku 文案抽离）+ 系列收口 e2e 硬前置。

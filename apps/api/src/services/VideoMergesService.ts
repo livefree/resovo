@@ -50,6 +50,7 @@ import {
   updateAuditTargetIds,
   listAuditTimeline,
   countAuditTimeline,
+  fetchVideoTitles,
 } from '@/api/db/queries/video-merge-mutations'
 import { AuditLogService } from '@/api/services/AuditLogService'
 import { MediaCatalogService } from '@/api/services/MediaCatalogService'
@@ -58,6 +59,8 @@ import { IdentityCandidatesService } from '@/api/services/IdentityCandidatesServ
 import {
   findConfirmedDecisionsByAuditId,
   markDecisionReverted,
+  // ADR-105 D-105-8（CHG-VIR-13-C2）：audit timeline 派生——页内单 SQL 批量反查 decision
+  findDecisionsByAuditIds,
 } from '@/api/db/queries/identity-decision'
 import { AppError } from '@/api/lib/errors'
 // ADR-105 AMENDMENT 2026-06-03 D-105-2/3/5（CHG-VIR-11-B）：split 组解析（拆到已有/新建；
@@ -675,6 +678,11 @@ export class VideoMergesService {
 
   // ── audit timeline (CHG-SN-6-AUDIT-TIMELINE / RETRO 4/7) ──────────
 
+  /**
+   * D-105-8（CHG-VIR-13-C2）：+4 optional 派生（actorType / relatedCandidateIds /
+   * relatedDecisionIds / videoTitlesSnapshot）。分页/排序/计数逐值不变（R-105-T4：
+   * 派生在页内 rows 上做，单 SQL 批量反查零 N+1）。
+   */
   async listAudit(params: ListAuditParams): Promise<ListAuditResult> {
     const { action = null, videoId = null, limit, page } = params
     const offset = (page - 1) * limit
@@ -682,19 +690,61 @@ export class VideoMergesService {
       listAuditTimeline(this.db, { action, videoId, offset, limit }),
       countAuditTimeline(this.db, { action, videoId }),
     ])
-    const data: MergeAuditRow[] = rows.map((r) => ({
-      id: r.id,
-      action: r.action,
-      sourceVideoIds: r.source_video_ids,
-      targetVideoIds: r.target_video_ids,
-      performedBy: r.performed_by,
-      performedByUsername: r.performed_by_username,
-      reason: r.reason,
-      performedAt: r.performed_at,
-      revertedAt: r.reverted_at,
-      revertedBy: r.reverted_by,
-      revertedReason: r.reverted_reason,
-    }))
+
+    // 页内批量派生（D-105-8）：decision 反查（Y-105-T3 partial 索引）+ target 标题实时查
+    const auditIds = rows.map((r) => r.id)
+    const targetIds = [...new Set(rows.flatMap((r) => r.target_video_ids))]
+    const [decisions, targetTitles] = await Promise.all([
+      findDecisionsByAuditIds(this.db, auditIds),
+      fetchVideoTitles(this.db, targetIds),
+    ])
+    const decisionsByAudit = new Map<string, typeof decisions>()
+    for (const d of decisions) {
+      const list = decisionsByAudit.get(d.video_merge_audit_id) ?? []
+      list.push(d)
+      decisionsByAudit.set(d.video_merge_audit_id, list)
+    }
+    const targetTitleById = new Map(targetTitles.map((t) => [t.id, t.title]))
+
+    const data: MergeAuditRow[] = rows.map((r) => {
+      const related = decisionsByAudit.get(r.id) ?? []
+      // source 标题：snapshot 投影（软删唯一可靠源，缺失兜底）；target：实时查（未删）
+      const snapshotTitleById = new Map(
+        (r.snapshot_video_titles ?? [])
+          .filter((v): v is { videoId: string; title: string | null } => typeof v?.videoId === 'string')
+          .map((v) => [v.videoId, v.title]),
+      )
+      const videoTitlesSnapshot = [
+        ...r.source_video_ids.map((id) => ({
+          videoId: id,
+          title: snapshotTitleById.get(id) ?? '(已删除视频)',
+        })),
+        ...r.target_video_ids.map((id) => ({
+          videoId: id,
+          title: targetTitleById.get(id) ?? snapshotTitleById.get(id) ?? '(已删除视频)',
+        })),
+      ].map((v) => ({ videoId: v.videoId, title: v.title ?? '(已删除视频)' }))
+
+      return {
+        id: r.id,
+        action: r.action,
+        sourceVideoIds: r.source_video_ids,
+        targetVideoIds: r.target_video_ids,
+        performedBy: r.performed_by,
+        performedByUsername: r.performed_by_username,
+        reason: r.reason,
+        performedAt: r.performed_at,
+        revertedAt: r.reverted_at,
+        revertedBy: r.reverted_by,
+        revertedReason: r.reverted_reason,
+        // D-105-8：无关联 decision → 'human'（人工 merge 页直接操作无 candidate 锚点场景）；
+        // 多 decision 同事务挂载恒同 actor，取任一
+        actorType: related[0]?.actor_type ?? 'human',
+        relatedCandidateIds: related.map((d) => d.candidate_id),
+        relatedDecisionIds: related.map((d) => d.id),
+        videoTitlesSnapshot,
+      }
+    })
     return { data, total, page, limit }
   }
 }
