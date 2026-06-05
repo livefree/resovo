@@ -3,7 +3,7 @@
  *
  * 范围（CHG-VIR-9-D 默认翻 identity + 折叠组 candidateIds 后更新）：
  *  1. 默认 source=identity（9-D 翻转）→ listCandidates 收到 source:'identity' + minScore 控件隐藏
- *  2. toggle 切「实时聚合」→ listCandidates 收到 source:'legacy' + minScore 控件可见
+ *  2a/2b/2c. CHG-VIR-15-UX-A：来源/相似度列 + 操作列快捷合并/拒绝（toggle 退役 → 列化）
  *  3. 降级回显：默认 identity 返回 source=legacy → 提示条渲染
  *  4. identity group（candidateId 存在）展开 → 「拒绝候选」按钮渲染
  *  5. 拒绝候选 → rejectIdentityCandidate 调用 + success toast + 列表刷新
@@ -134,24 +134,64 @@ describe('MergeCandidatesSection (CHG-VIR-9-C)', () => {
     expect(screen.queryByTestId('merge-source-fallback-note')).toBeNull()
   })
 
-  it('2. toggle 切「实时聚合」：listCandidates 收到 source legacy + minScore 控件可见', async () => {
-    listCandidatesMock.mockResolvedValue(LEGACY_RES)
-    render(<CandidatesSection />)
-    await waitFor(() => screen.getByText('復仇者聯盟'))
-    fireEvent.click(screen.getByRole('tab', { name: '实时聚合' }))
-    await waitFor(() => {
-      expect(listCandidatesMock).toHaveBeenLastCalledWith(expect.objectContaining({ source: 'legacy', page: 1 }))
+  it('2a. 来源/相似度列（CHG-VIR-15-UX-A）：identity 行标「多证据」+ 相似度 91.0%；legacy 行「实时聚合」+ —', async () => {
+    listCandidatesMock.mockResolvedValue({
+      data: [IDENTITY_GROUP, { ...LEGACY_GROUP, groupKey: 'legacy-row' }],
+      total: 2, page: 1, limit: 20, source: 'identity' as const,
     })
-    expect(screen.getByText('minScore')).not.toBeNull()
+    render(<CandidatesSection />)
+    await waitFor(() => screen.getAllByText('復仇者聯盟'))
+    expect(screen.getByTestId(`candidate-source-${IDENTITY_GROUP.groupKey}`).textContent).toBe('多证据')
+    expect(screen.getByTestId('candidate-source-legacy-row').textContent).toBe('实时聚合')
+    expect(screen.getByText('91.0%')).not.toBeNull()
   })
 
-  it('3. 降级回显：默认 identity 返回 source=legacy → 提示条渲染', async () => {
+  it('2b. 操作列快捷合并（CHG-VIR-15-UX-A）：confirm → mergeVideos（推荐 target + candidateIds，不带 targetStatus）', async () => {
+    listCandidatesMock.mockResolvedValue(IDENTITY_RES)
+    mergeVideosMock.mockResolvedValueOnce({
+      auditId: 'audit-quick',
+      targetVideo: { id: 'vid-b', title: 'Avengers B', titleNormalized: '復仇者聯盟',
+        year: 2019, type: 'movie', createdAt: '2025-02-01T00:00:00Z',
+        sourceCount: 8, sourceSiteKeys: ['iqiyi'] },
+    })
+    render(<CandidatesSection />)
+    await waitFor(() => screen.getByText('復仇者聯盟'))
+    fireEvent.click(screen.getByTestId(`candidate-quick-merge-${IDENTITY_GROUP.groupKey}`))
+    await waitFor(() => {
+      expect(mergeVideosMock).toHaveBeenCalledWith(expect.objectContaining({
+        sourceVideoIds: ['vid-a'],
+        targetVideoId: 'vid-b',
+        candidateIds: ['cand-uuid-0001'],
+      }))
+    })
+    expect(mergeVideosMock.mock.calls[0]![0]).not.toHaveProperty('targetStatus')
+    // 快捷路径不触发行展开（stopPropagation）
+    expect(screen.queryByTestId('merge-compare-panel')).toBeNull()
+  })
+
+  it('2c. 操作列快捷拒绝（identity 行）：rejectIdentityCandidate 调用；legacy 行无拒绝按钮', async () => {
+    listCandidatesMock.mockResolvedValue({
+      data: [IDENTITY_GROUP, { ...LEGACY_GROUP, groupKey: 'legacy-row' }],
+      total: 2, page: 1, limit: 20, source: 'identity' as const,
+    })
+    rejectIdentityCandidateMock.mockResolvedValueOnce({ candidateId: 'cand-uuid-0001', status: 'rejected', decisionId: 'dec-q' })
+    render(<CandidatesSection />)
+    await waitFor(() => screen.getAllByText('復仇者聯盟'))
+    expect(screen.queryByTestId('candidate-quick-reject-legacy-row')).toBeNull()
+    fireEvent.click(screen.getByTestId(`candidate-quick-reject-${IDENTITY_GROUP.groupKey}`))
+    await waitFor(() => {
+      expect(rejectIdentityCandidateMock).toHaveBeenCalledWith('cand-uuid-0001', '合并工作台人工拒绝')
+    })
+  })
+
+  it('3. 降级回显：identity 返回 source=legacy → 提示条渲染 + minScore 控件可见（UX-A 降级态）', async () => {
     listCandidatesMock.mockResolvedValue(LEGACY_RES)
     render(<CandidatesSection />)
     await waitFor(() => screen.getByText('復仇者聯盟'))
     await waitFor(() => {
       expect(screen.getByTestId('merge-source-fallback-note')).not.toBeNull()
     })
+    expect(screen.getByText('minScore')).not.toBeNull()
   })
 
   it('4. identity group 展开：「拒绝候选」按钮 + 相似度 pill 渲染', async () => {

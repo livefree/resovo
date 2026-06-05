@@ -20,12 +20,10 @@ import {
   ErrorState,
   EmptyState,
   DataTable,
-  Segment,
   useToast,
   type ColumnPreference,
   type TableColumn,
   type TableSortState,
-  type SegmentItem,
 } from '@resovo/admin-ui'
 import type { CandidateGroup, VideoStatusSetting } from '@resovo/types'
 import { listCandidates, mergeVideos, unmergeVideos } from '@/lib/merge/api'
@@ -46,14 +44,22 @@ const FALLBACK_NOTE_STYLE: CSSProperties = {
   border: '1px solid var(--state-warning-border)',
 }
 
-// CHG-VIR-9-C：候选来源 toggle（初始默认 legacy / 用户裁定 (a)）
-// CHG-VIR-9-D / D-105a-18：默认翻 identity（9-A AMENDMENT「shadow 稳定后翻默认」兑现，降级链路保留）
+// CHG-VIR-15-UX-A（用户裁定 ①）：来源 Segment toggle 退役——请求固定 identity
+//（identity 空表自动降级 legacy，CHG-VIR-9-A 降级链路保留），来源改行级列呈现
+//（行级真源 = g.identity 有无：多证据评分存在 → 多证据；降级 legacy → 实时聚合）。
 type CandidateSource = 'legacy' | 'identity'
 
-const SOURCE_ITEMS: readonly SegmentItem[] = [
-  { value: 'legacy', label: '实时聚合' },
-  { value: 'identity', label: '多证据' },
-]
+/** 来源列 chip（CSS 变量零硬编码） */
+const SOURCE_CHIP_STYLE: CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  padding: '1px 8px',
+  borderRadius: 999,
+  fontSize: '11px',
+  border: '1px solid var(--border-subtle)',
+  background: 'var(--bg-subtle)',
+  color: 'var(--fg-muted)',
+}
 
 // ── Candidates section ────────────────────────────────────────────
 
@@ -70,9 +76,7 @@ export function CandidatesSection() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<Error | null>(null)
   const [expandedKeys, setExpandedKeys] = useState<ReadonlySet<string>>(new Set())
-  // CHG-VIR-9-C：候选来源（请求值）+ 服务端回显（identity 空表降级 legacy 时不一致）
-  // CHG-VIR-9-D：默认 identity（翻转）
-  const [source, setSource] = useState<CandidateSource>('identity')
+  // CHG-VIR-15-UX-A：请求固定 identity（toggle 退役）；服务端回显（空表降级 legacy 时不一致）
   const [effectiveSource, setEffectiveSource] = useState<CandidateSource | null>(null)
   const toast = useToast()
 
@@ -86,7 +90,7 @@ export function CandidatesSection() {
         ? sort.field
         : undefined
     listCandidates({
-      minScore, limit: pageSize, page, source,
+      minScore, limit: pageSize, page, source: 'identity',
       ...(sortFieldGuarded ? { sortField: sortFieldGuarded, sortDir: sort.direction } : {}),
     })
       .then((res) => {
@@ -96,7 +100,7 @@ export function CandidatesSection() {
       })
       .catch((e: unknown) => setError(e instanceof Error ? e : new Error('加载失败')))
       .finally(() => setLoading(false))
-  }, [minScore, page, pageSize, sort, source])
+  }, [minScore, page, pageSize, sort])
 
   useEffect(() => { load() }, [load])
 
@@ -209,9 +213,70 @@ export function CandidatesSection() {
       enableResizing: true,
       cell: ({ row }) => <span>{row.videos.length} 条</span>,
     },
+    // CHG-VIR-15-UX-A（用户裁定 ①）：来源列——tab 退役后行级呈现（identity 评分存在 = 多证据）
+    {
+      id: 'source',
+      kind: 'computed',
+      header: '来源',
+      accessor: (g) => (g.identity ? 'identity' : 'legacy'),
+      width: 110, minWidth: 90,
+      cell: ({ row }) => (
+        <span style={SOURCE_CHIP_STYLE} data-testid={`candidate-source-${row.groupKey}`}>
+          {row.identity ? '多证据' : '实时聚合'}
+        </span>
+      ),
+    },
+    // CHG-VIR-15-UX-A（用户裁定 ②）：相似度列（identityScore；legacy 行无评分 '—'；
+    // 不开 sort——后端白名单 videoCount/year/titleNormalized 之外，identity 来源已按其排序）
+    {
+      id: 'identityScore',
+      kind: 'computed',
+      header: '相似度',
+      accessor: (g) => g.identity?.identityScore ?? null,
+      width: 100, minWidth: 80,
+      cell: ({ row }) => row.identity
+        ? <span style={{ fontWeight: 600 }}>{(row.identity.identityScore * 100).toFixed(1)}%</span>
+        : <span style={SECONDARY_TEXT}>—</span>,
+    },
     // CHG-VIR-14-SCORE-UI：「重合度」列退役——identity 默认来源下 legacy_score 全 NULL → 恒 0% 误导；
     // legacyScore 仅余 legacy 降级链路后端过滤/排序消费（minScore 控件保留），不再展示
-  ], [])
+    // CHG-VIR-15-UX-A（用户裁定 ②）：操作列——快捷合并（推荐 target + confirm）/ 拒绝（identity 行）
+    {
+      id: 'actions',
+      kind: 'computed',
+      header: '操作',
+      accessor: () => null,
+      width: 150, minWidth: 130,
+      cell: ({ row }) => (
+        <span style={{ display: 'inline-flex', gap: 6 }} onClick={(e) => e.stopPropagation()}>
+          <AdminButton
+            size="sm"
+            variant="primary"
+            disabled={row.videos.length > 11}
+            title={row.videos.length > 11 ? '超过单次合并上限（11），请展开后分批' : undefined}
+            onClick={() => {
+              const target = row.videos.find((v) => v.id === row.recommendedTargetVideoId)
+              if (!confirm(`确认合并「${row.titleNormalized}」组？\n\n以推荐目标「${target?.title ?? '—'}」为主体保留，其余 ${row.videos.length - 1} 个视频合并后软删除（可在操作记录撤销）。\n\n如需调整目标或状态，请点击行展开。`)) return
+              void handleMerge(row, row.recommendedTargetVideoId)
+            }}
+            data-testid={`candidate-quick-merge-${row.groupKey}`}
+          >
+            合并
+          </AdminButton>
+          {row.candidateId && (
+            <AdminButton
+              size="sm"
+              variant="danger"
+              onClick={() => void handleReject(row.candidateId!, row.titleNormalized)}
+              data-testid={`candidate-quick-reject-${row.groupKey}`}
+            >
+              拒绝
+            </AdminButton>
+          )}
+        </span>
+      ),
+    },
+  ], [handleMerge, handleReject])
 
   const query = useMemo(() => ({
     pagination: { page, pageSize },
@@ -222,24 +287,16 @@ export function CandidatesSection() {
     selection: { selectedKeys: new Set<string>(), mode: 'page' as const },
   }), [page, pageSize, sort, columnPrefs])
 
-  // CHG-VIR-9-C：source toggle 头部（所有状态可见，空态/错误态下也可切换）
+  // CHG-VIR-15-UX-A：toggle 退役后的工具条（降级提示 + 降级态 minScore 控件 + 计数）
   const sourceToolbar = (
     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-      <span style={SECONDARY_TEXT}>候选来源</span>
-      <Segment
-        items={SOURCE_ITEMS}
-        value={source}
-        onChange={(v) => { setSource(v as CandidateSource); setPage(1) }}
-        size="sm"
-        aria-label="候选来源"
-      />
-      {source === 'identity' && effectiveSource === 'legacy' && !loading && (
+      {effectiveSource === 'legacy' && !loading && (
         <span style={FALLBACK_NOTE_STYLE} data-testid="merge-source-fallback-note">
           多证据候选为空，已降级实时聚合
         </span>
       )}
-      {/* identity 来源后端不消费 minScore（按 identity_score 排序）→ 仅 legacy 显示 */}
-      {source === 'legacy' && (
+      {/* identity 来源后端不消费 minScore（按 identity_score 排序）→ 仅降级 legacy 后显示 */}
+      {effectiveSource === 'legacy' && (
         <>
           <span style={SECONDARY_TEXT}>minScore</span>
           <AdminInput
@@ -296,9 +353,9 @@ export function CandidatesSection() {
         {sourceToolbar}
         <EmptyState
           title="无合并候选"
-          description={source === 'identity'
-            ? '当前没有 pending 多证据候选；可切回实时聚合或等待离线 job 生成。'
-            : '当前没有符合条件的候选组；调整 minScore 重试。'}
+          description={effectiveSource === 'legacy'
+            ? '当前没有符合条件的实时聚合候选组；调整 minScore 重试。'
+            : '当前没有 pending 多证据候选；等待离线 job 生成或在视频库发起合并。'}
         />
       </div>
     )
