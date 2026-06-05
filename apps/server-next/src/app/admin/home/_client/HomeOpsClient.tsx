@@ -50,6 +50,8 @@ import { HomeModuleCard } from './HomeModuleCard'
 import { HomeModuleDrawer } from './HomeModuleDrawer'
 import { HomePreviewPanel } from './HomePreviewPanel'
 import { DeleteModuleModal } from './DeleteModuleModal'
+import { BatchAddVideosModal, VIDEO_SLOTS } from './BatchAddVideosModal'
+import type { PickerVideoItem } from '@resovo/admin-ui'
 
 // ── 常量 ─────────────────────────────────────────────────────────
 
@@ -98,6 +100,8 @@ export function HomeOpsClient() {
   const [editingModule, setEditingModule] = useState<HomeModule | null>(null)
   // CHG-HOME-UX-04-B：删除确认 Modal（取代 window.confirm）
   const [deleteTarget, setDeleteTarget] = useState<HomeModule | null>(null)
+  // CHG-HOME-UX-07：批量添加统一确认面板
+  const [batchAddOpen, setBatchAddOpen] = useState(false)
 
   const loadSlot = useCallback(async (slot: HomeModuleSlot) => {
     setLoadingSlots(prev => ({ ...prev, [slot]: true }))
@@ -197,6 +201,52 @@ export function HomeOpsClient() {
     }
   }, [activeSlot, toast])
 
+  // ── 批量添加（CHG-HOME-UX-07：统一确认面板编排）────────────────────
+
+  /** 去重比对真源 = 已加载 modules 的 video contentRefId 集合（未加载 slot 返回空集，确认前 loadSlot 兜底） */
+  const getExistingIds = useCallback((slot: HomeModuleSlot): ReadonlySet<string> => {
+    const ids = new Set<string>()
+    for (const m of modulesBySlot[slot] ?? []) {
+      if (m.contentRefType === 'video') ids.add(m.contentRefId)
+    }
+    return ids
+  }, [modulesBySlot])
+
+  const handleBatchAdd = useCallback(async (slot: HomeModuleSlot, items: readonly PickerVideoItem[]) => {
+    // ordering 末尾追加：现有最大 ordering + 1 起步
+    const existing = modulesBySlot[slot] ?? []
+    const baseOrdering = existing.reduce((max, m) => Math.max(max, m.ordering), -1) + 1
+
+    let created = 0
+    let failed = 0
+    for (const [i, item] of items.entries()) {
+      try {
+        const module = await createHomeModule({
+          slot,
+          brandScope: 'all-brands',
+          contentRefType: 'video',
+          contentRefId: item.id,
+          ordering: baseOrdering + i,
+        })
+        created += 1
+        setModulesBySlot(prev => ({
+          ...prev,
+          [slot]: [...(prev[slot] ?? []), module],
+        }))
+      } catch {
+        failed += 1
+      }
+    }
+
+    setBatchAddOpen(false)
+    toast.push({
+      title: failed === 0 ? `已添加 ${created} 个模块` : `已添加 ${created} 个 · 失败 ${failed} 个`,
+      level: failed === 0 ? 'success' : 'warn',
+    })
+    // 目标 slot 非当前已加载视图时重载兜底（确保 ordering/顺序与服务端一致）
+    if (slot !== activeSlot) void loadSlot(slot)
+  }, [modulesBySlot, activeSlot, loadSlot, toast])
+
   // ── 编辑/创建保存 ──────────────────────────────────────────────────
 
   const handleSave = useCallback(async (data: CreateHomeModuleBody | UpdateHomeModuleBody, id: string | null) => {
@@ -282,14 +332,26 @@ export function HomeOpsClient() {
                       title: SLOT_LABEL[activeSlot],
                       subtitle: `${modules.length} 个模块 · 拖拽调整排序`,
                       actions: (
-                        <AdminButton
-                          variant="default"
-                          size="sm"
-                          onClick={() => void loadSlot(activeSlot)}
-                          data-testid="home-refresh-btn"
-                        >
-                          刷新
-                        </AdminButton>
+                        <>
+                          {(VIDEO_SLOTS as readonly string[]).includes(activeSlot) && (
+                            <AdminButton
+                              variant="default"
+                              size="sm"
+                              onClick={() => setBatchAddOpen(true)}
+                              data-testid="home-batch-add-btn"
+                            >
+                              + 添加视频
+                            </AdminButton>
+                          )}
+                          <AdminButton
+                            variant="default"
+                            size="sm"
+                            onClick={() => void loadSlot(activeSlot)}
+                            data-testid="home-refresh-btn"
+                          >
+                            刷新
+                          </AdminButton>
+                        </>
                       ),
                     }}
                     data-testid={`home-slot-card-${activeSlot}`}
@@ -345,6 +407,14 @@ export function HomeOpsClient() {
         module={deleteTarget}
         onClose={() => setDeleteTarget(null)}
         onConfirm={handleDeleteConfirmed}
+      />
+
+      <BatchAddVideosModal
+        open={batchAddOpen}
+        defaultSlot={activeSlot}
+        getExistingIds={getExistingIds}
+        onClose={() => setBatchAddOpen(false)}
+        onConfirm={handleBatchAdd}
       />
     </div>
   )

@@ -3317,10 +3317,12 @@ CODENAME-MATRIX-E2E (依赖 Wave 3 验收期补丁 CODENAME-MATRIX ✅)
    - 依赖：CHG-HOME-UX-04-B ✅
    - 范围（3 项）：① props +videoMetaMap（父传不自取）② banner 16:9 真实横图+标题 / poster 海报+排名+标题（emoji/UUID 退役）③ HomePreviewPanel.test.tsx 更新。
    - 完成备注：optional prop 零破坏（缺省空 Map 降级）；previewTitle 与卡片同降级口径；与 Card 共用 metaMap 零重复请求。+4 用例 20/20 + test:changed 40/40 + typecheck/lint EXIT=0 + e2e:admin 39+1 flaky（04-B/05/06 批跑完成）。**改造主线（UX 缺口 1-7）全收口**；解阻 07。执行模型: claude-opus-4-8（人工 opus 覆盖 sonnet）；子代理: 无。
-10. **CHG-HOME-UX-07** — 页内批量添加（统一确认面板首建）（状态：⬜ 待开始）
+10. **CHG-HOME-UX-07** — 页内批量添加（统一确认面板首建）（状态：✅ 已完成）
+    - 实际开始：2026-06-05 16:12 ｜ 完成时间：2026-06-05 16:18
     - 建议模型：sonnet
-    - 依赖：CHG-HOME-UX-04-B
+    - 依赖：CHG-HOME-UX-04-B ✅
     - 范围（4 项）：① 新建 BatchAddVideosModal（slot 选择 + 候选列表充实 + 已在列去重标灰 + 循环 create ordering 追加 + 汇总 toast）② slot 头部「+ 添加视频」（video 类 3 slot）③ VideoPicker multiple 接线 ④ 测试（去重/循环/部分失败）。
+    - 完成备注：统一确认面板首建（initialItems 预填口供 08/09 复用；确认前零写库）；VideoPicker multiple 原生多选零契约改动；handleBatchAdd ordering=max+1 末尾追加 + 汇总 toast。+8 用例 57/57 + test:changed 28/28 + typecheck/lint EXIT=0。解阻 08/09。执行模型: claude-opus-4-8（人工 opus 覆盖 sonnet）；子代理: 无。
 11. **CHG-HOME-UX-08** — 他页深链入口（仿 merge 模式）（状态：⬜ 待开始）
     - 建议模型：sonnet
     - 依赖：CHG-HOME-UX-07

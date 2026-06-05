@@ -404,6 +404,33 @@ describe('HomeOpsClient — 删除 Modal 流程（window.confirm 退役）', () 
   })
 })
 
+// ── CHG-HOME-UX-07：页内批量添加入口 ───────────────────────────────────────
+
+describe('HomeOpsClient — 批量添加入口', () => {
+  it('video 类 slot（banner）显示「+ 添加视频」→ 点击打开 BatchAddVideosModal', async () => {
+    mockedList.mockResolvedValue({ data: [MODULE_FIXTURE], total: 1, page: 1, limit: 100 })
+    render(<HomeOpsClient />)
+    await waitFor(() => {
+      expect(screen.queryByTestId('home-batch-add-btn')).not.toBeNull()
+    })
+    fireEvent.click(screen.getByTestId('home-batch-add-btn'))
+    await waitFor(() => {
+      expect(screen.queryByTestId('batch-add-videos-modal')).not.toBeNull()
+    })
+  })
+
+  it('type_shortcuts slot 不显示「+ 添加视频」（video_type 枚举不适用批量选片）', async () => {
+    mockedList.mockResolvedValue({ data: [], total: 0, page: 1, limit: 100 })
+    render(<HomeOpsClient />)
+    await waitFor(() => expect(mockedList).toHaveBeenCalled())
+    fireEvent.click(screen.getByText('类型快捷'))
+    await waitFor(() => {
+      expect(mockedList).toHaveBeenCalledWith(expect.objectContaining({ slot: 'type_shortcuts' }))
+    })
+    expect(screen.queryByTestId('home-batch-add-btn')).toBeNull()
+  })
+})
+
 describe('HomeOpsClient — HOME-2 page head actions', () => {
   it('渲染「预览前台」按钮（data-testid="home-preview-frontend-btn"）', async () => {
     mockedList.mockResolvedValue({ data: [], total: 0, page: 1, limit: 100 })

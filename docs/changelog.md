@@ -15085,3 +15085,17 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **新增依赖**：无
 - **数据库变更**：无
 - **注意事项**：预览 20/20 + home 域全绿 + test:changed 40/40 + typecheck/lint EXIT=0 + **e2e:admin 39 passed+1 flaky（publish-flow 既见 flaky 重试过）= 04-B/05/06 批跑完成**。改造主线（缺口 1-7）全部收口；解阻 07。
+
+## [CHG-HOME-UX-07] 页内批量添加 — BatchAddVideosModal 统一确认面板首建
+- **完成时间**：2026-06-05
+- **记录时间**：2026-06-05 16:18
+- **执行模型**：claude-opus-4-8（人工 opus 会话覆盖 sonnet 建议，偏离登记）
+- **子代理**：无
+- **修改文件**：
+  - `apps/server-next/src/app/admin/home/_client/BatchAddVideosModal.tsx`（新 247 行）— 三入口共用确认面板：目标 slot AdminSelect（video 类 3 slot，type_shortcuts 回落 banner）+ VideoPicker multiple（共享原语原生多选，零契约改动）+ 候选列表（缩略图+标题，已在列标灰「已在列 · 跳过」）+ initialItems 预填口（08 深链 / 09 趋势导入复用）+ 确认仅提交未在列项（确认前零写库，硬删语义安全）
+  - `apps/server-next/src/app/admin/home/_client/HomeOpsClient.tsx` — slot 卡片头部「+ 添加视频」（仅 video 类 slot）+ getExistingIds（已加载 modules 去重真源）+ handleBatchAdd 编排（ordering=max+1 末尾追加 + 循环 createHomeModule + 汇总 toast 成功 N/失败 K〔warn〕+ 跨 slot 添加后 loadSlot 兜底）
+  - `tests/unit/components/server-next/admin/home/BatchAddVideosModal.test.tsx`（新 6 用例）— 去重标灰+确认过滤 / 全在列禁用 / slot 切换重新比对（AdminSelect click+mouseDown 驱动先例）/ 页内增选 / initialItems 预填 / type_shortcuts 回落
+  - `tests/unit/components/server-next/admin/home/HomeOpsClient.test.tsx` — +2 用例（按钮开 Modal / type_shortcuts 不显示按钮）
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：无批量端点（循环 POST，N≤选片数，不新增 route）。home 域 57/57 + test:changed 28/28 + typecheck/lint EXIT=0。解阻 08 / 09。
