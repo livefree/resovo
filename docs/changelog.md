@@ -14628,3 +14628,13 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **测试**：merge 目录 7 文件 71/71 → 全量 **484 files 6404/6404 passed**（净 +8；复跑全绿）；typecheck 0 error / lint ✓
 - **共享层沉淀评估**：是（域内）——StructurePreview 最小输入解耦使其成为候选行展开 + merge 工作区双消费共享件；PlayTarget 类型为 13 系列播放抽验统一契约。
 - **注意事项**：① e2e（PLAYER 类）登记留系列收口（本机 e2e 鉴权 env 已知问题沿 CHG-VSR-PRE-2；AdminPlayer 自身已有审核台 e2e 覆盖）。② 剩余卡：13-D1（opus）/ 13-D2 / 13-C1（opus）/ 13-C2 / 13-I18N。
+
+## [CHG-VIR-13-PLAY-FIX] Codex stop-time review — 完成状态与 e2e 门禁一致性修正
+- **完成时间**：2026-06-04
+- **记录时间**：2026-06-04 19:30
+- **执行模型**：claude-opus-4-8
+- **子代理**：无（Codex stop-time review 第 3 轮触发）
+- **修改文件**：`docs/task-queue.md`（13-PLAY 完成备注 e2e 项「登记留收口」→「已实跑 + 归因」；SEQ 头部新增**系列收口硬前置 e2e gate** 显式条目）、`docs/tasks.md`（历史行同步）
+- **变更内容**：13-PLAY 卡面自书「完成后补跑 test:e2e(PLAYER)」门禁未兑现即标 ✅ —— 本次实跑兑现：`test:e2e:player` 8 spec，webServer 自起被外部 :3000 next-server 占用（EADDRINUSE）→ `PLAYWRIGHT_SERVERS=` 复用外部 server 实跑 38 failed；**归因 = 环境性非回归**（双证据：① smoke.spec 基础路由自身 2/2 失败〔next-placeholder 200 不通过〕= 外部 server 与 e2e 期望环境不符；② 系列全部 commits 对前台 diff 仅 video-merge.types.ts +17 行纯 optional 类型，apps/web-next / player-core 零触碰，smoke 不消费该类型）。可信 e2e 验证（干净 :3000 环境：player 域 + merge 页深链 + video 域〔13-D1 后〕）登记为**系列收口硬前置**，任一失败先修复再收口。
+- **测试**：纯 docs + e2e 实跑取证；单测门禁不受影响（6404/6404 维持）
+- **注意事项**：教训沉淀——卡面自书门禁加项必须在收口前兑现或显式降级为可追踪条目，禁止「登记留收口」的含糊态（无归宿的未尽门禁 = 完成状态不一致）。
