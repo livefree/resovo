@@ -14821,3 +14821,17 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
   - **不动**：API 契约（CandidateGroup.score 字段保留）/ minScore 参数与 legacy 模式控件 / legacy 降级链路（identity 空表自动落回）/ `identity_candidate.legacy_score` DB 列 / source toggle。**完整退役（第 3 步）须起 ADR-105/105a AMENDMENT**：移除 legacy 评分路径 + computeOverlapScore + minScore + legacy_score 死列，受 Y-105a-1 黄线约束需 Opus 评审，另案排卡。
   - identityScore 代码字段名不改，仅中文展示文案统一为「相似度」。
   - 门禁：merge+TabSimilar 单测 93/93 + test:changed 71/71 + typecheck/lint EXIT=0 + e2e merge-deeplink 6/6。
+
+## [CHG-MERGE-DEDUP-ADR] merge/split 线路自动去重取并集 ADR（R-105-1 策略修订 / 用户裁定）
+- **完成时间**：2026-06-05
+- **记录时间**：2026-06-05
+- **执行模型**：claude-opus-4-8
+- **子代理**：arch-reviewer (claude-opus-4-8 / ad842ae68cf0872db)——第 1 轮 CONDITIONAL → Y-105-D3/D4 吸收转 PASS
+- **修改文件**：
+  - `docs/decisions.md` — ADR-105 AMENDMENT 2026-06-05（D-105-13~16 + R-105-D1~D5 + Y-105-D1~D4）
+- **新增依赖**：无 / **数据库变更**：无（零 migration——去重纯软删 + snapshot 自由字段）
+- **注意事项**：
+  - 用户裁定废止 R-105-1 方案 A：重复 (episode_number, source_url) 不再 409，合并取并集（事务内确定性去重软删：target 恒胜 > sourceVideoIds 序首胜）。
+  - unmerge 对称：snapshot.dedupedSourceIds 驱动「先归还后复活 deleted_at」（顺序避免瞬时撞键——评审确认）。
+  - 评审唯一条件（pre-existing 盲点）：target 已软删行仍占唯一键槽位 → Y-105-D3 防御性残余预检（命中 409 明确文案，零物理删除）。
+  - 实施 = CHG-MERGE-DEDUP-EP（query 去重 SQL + Service 三流程 + types dedupedCount + 前端信号语义 + 测试 + dev 实测）。
