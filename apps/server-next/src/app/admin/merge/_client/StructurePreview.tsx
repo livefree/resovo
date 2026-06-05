@@ -102,8 +102,25 @@ export function combineMatrices(
 
   const signals: StructureSignal[] = []
 
-  // ① 同站同名线路跨 video 重复 → 自动去重提示（ADR-105 AMENDMENT 2026-06-05 D-105-16：
-  // 原 R-105-1 预检 409 已废止，重复 (episode_number, source_url) 合并时取并集自动去重）
+  // ①a D-105-16（CHG-MERGE-DEDUP-EP）：(episodeNumber, sourceUrl) 精确重复计数 →
+  // 「合并时将自动去重 N 条」——与后端 dedupeSourcesForMerge 的 PARTITION BY (ep,url)
+  // 同口径预演（每组重复保留 1 条，N = Σ(组大小 − 1)）；数据源 = 已拉取矩阵零新端点
+  const byEpUrl = new Map<string, number>()
+  for (const l of lines) {
+    for (const e of l.episodes) {
+      const k = `${e.episodeNumber}|${e.sourceUrl}`
+      byEpUrl.set(k, (byEpUrl.get(k) ?? 0) + 1)
+    }
+  }
+  const dedupCount = [...byEpUrl.values()].reduce((acc, n) => acc + Math.max(0, n - 1), 0)
+  if (dedupCount > 0) {
+    signals.push({
+      tone: 'info',
+      text: `检测到 ${dedupCount} 条重复线路（同集数 + 同播放地址）— 合并时将自动去重 ${dedupCount} 条（线路取并集）`,
+    })
+  }
+
+  // ①b 同站同名线路跨 video（URL 不同时不去重，合并后按线路键归并显示）
   const byLineKey = new Map<string, Set<string>>()
   for (const l of lines) {
     const set = byLineKey.get(l.lineKey) ?? new Set<string>()
@@ -114,7 +131,7 @@ export function combineMatrices(
   if (dupLines.length > 0) {
     signals.push({
       tone: 'info',
-      text: `同站同名线路跨视频重复（${dupLines.map(([k]) => k.split('|')[1]).join('、')}）— 重复集数将在合并时自动去重（线路取并集）`,
+      text: `同站同名线路跨视频（${dupLines.map(([k]) => k.split('|')[1]).join('、')}）— 合并后归并为同一线路显示`,
     })
   }
 
