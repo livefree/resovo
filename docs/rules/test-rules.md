@@ -123,6 +123,8 @@ test('登出后访问 /admin 重定向到 /admin/login')
 test('access_token 过期后操作自动续签，管理员无感知')
 ```
 
+任务完成后运行：`npm run test:e2e:auth`（ADR-180 域选跑）
+
 ---
 
 ### VIDEO / SEARCH 任务
@@ -171,6 +173,8 @@ test('点击视频 MetaChip（如导演名）跳转到对应搜索结果页')
 test('点击结果卡片的"立即观看"跳转到播放页')
 test('刷新搜索结果页，筛选条件从 URL 参数恢复')
 ```
+
+任务完成后运行：`npm run test:e2e:search`（SEARCH 域）/ `npm run test:e2e:video`（VIDEO 域，ADR-180 域选跑）
 
 ---
 
@@ -228,6 +232,8 @@ test('设置播放进度到 30 秒，刷新页面，进度从 30 秒续播（断
 test('切换播放线路，视频重新加载')
 test('按快捷键 T，剧场模式切换；按 F，全屏切换；按 Esc，关闭浮层')
 ```
+
+任务完成后运行：`npm run test:e2e:player`（ADR-180 域选跑）
 
 ---
 
@@ -289,13 +295,27 @@ npm run test -- --run
 # 单元测试 + 覆盖率报告
 npm run test:coverage
 
-# E2E 测试（PLAYER/AUTH/SEARCH/VIDEO 任务完成后运行）
+# E2E 按任务域选跑（PLAYER/AUTH/SEARCH/VIDEO/ADMIN 任务完成后运行对应域，ADR-180）
+npm run test:e2e:player      # 前台播放器域（player×3 + mini-player + cinema + card×2 + smoke）
+npm run test:e2e:auth        # 登录/角色访问域（admin.spec 角色访问控制）
+npm run test:e2e:search      # 搜索/浏览域（search-page + browse×2 + smoke）
+npm run test:e2e:video       # 视频治理域（governance + publish + source-flows && detail×2 + brand + smoke）
+npm run test:e2e:admin       # 后台双 project 全量（admin-chromium + admin-next-chromium）
+npm run test:e2e:smoke       # 最小冒烟（smoke + homepage）
+npm run test:e2e:mobile      # 移动专属（web-mobile project 3 spec）
+
+# E2E 全量 4 projects（Phase 门禁节点必跑；日常任务后用上方域命令）
 npm run test:e2e
 
 # 仅运行某个任务相关的测试（节省时间）
 npm run test -- --run tests/unit/api/auth.test.ts
-npm run test:e2e -- tests/e2e/player.spec.ts
+npm run test:e2e -- tests/e2e-next/player.spec.ts
 ```
+
+**域选跑机制**（ADR-180 / CHG-TEST-SLIM-C）：
+- 域脚本通过 `PLAYWRIGHT_SERVERS=admin,admin-next,web` 子集**只起所需 dev server**（如 player 域只起 web:3000，不再等待 3001/3003 启动）；`test:e2e` 全量未设置该变量，行为零变化。
+- **web-mobile 收窄**：project 只跑 `mobile-tabbar` / `edge-swipe-back` / `mini-player` 3 个移动专属 spec——移动断言的上下文自带（`test.use({ viewport, hasTouch, isMobile })` / `browser.newContext`），不依赖 project 级 iPhone 14 device；其余 16 个 spec 在 web-chromium 已有等价覆盖，不再 iPhone 14 复跑（全量 E2E 290→207 用例，web-mobile 104→21）。
+- **孤儿 spec 登记**：`tests/e2e/auth.spec.ts` 与 `tests/e2e/search.spec.ts` 不被任何 project testMatch 匹配（legacy 快照遗留），`test:e2e` 从未运行它们——域映射不纳入；处置（删除或归档）随 tests/e2e LEGACY 清理任务。
 
 ---
 

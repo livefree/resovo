@@ -14533,3 +14533,21 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **D-N 闭环**：D-180-1（增量 commit 门禁 + 三节点兜底 + 安全网）、D-180-2（升全量触发集双层防护）
 - **共享层沉淀评估**：否——独立运维脚本，无业务代码；分级规则真源在脚本 + test-rules §分层执行策略双处一致。
 - **注意事项**：① 触发集含本脚本自身与 test-guarded.ts（改门禁工具必全量自证）。② 零选中安全网经 vitest 输出 "No test files found" 缓冲检测实现（流式透传不影响正常输出）。③ E2E 域选跑归 SLIM-C；CLAUDE.md test:e2e 行同卡修订。
+
+## [CHG-TEST-SLIM-C] E2E 任务域选跑 + web-mobile 收窄（D-180-3 + D-180-4 闭环）
+- **完成时间**：2026-06-04
+- **记录时间**：2026-06-04 18:50
+- **执行模型**：claude-opus-4-8
+- **子代理**：无
+- **修改文件**：
+  - `package.json` — +7 域脚本（test:e2e:{smoke,player,auth,search,video,admin,mobile}；只增不删，test:e2e 全量入口不变）
+  - `playwright.config.ts` — ① web-mobile 加 testMatch 收窄移动 3 spec（D-180-4）② PLAYWRIGHT_SERVERS 子集机制（域脚本只起所需 dev server；未设置默认全起，全量行为零变化）
+  - `CLAUDE.md` — 必跑命令 E2E 行：域选跑为日常默认 + 全量收敛 Phase 门禁
+  - `docs/rules/test-rules.md` — 运行命令补 7 域命令 + 域选跑机制说明 + web-mobile 收窄依据 + 孤儿 spec 登记；AUTH/VIDEO·SEARCH/PLAYER 三小节补「任务完成后运行」域命令
+  - `docs/decisions.md` — ADR-180 D-180-3 实施校准注记（孤儿 spec 修正 / PLAYWRIGHT_SERVERS 增强 / 用例数实测）
+- **新增依赖**：无
+- **数据库变更**：无
+- **测试**：--list 实测全过——web-mobile 3 files/21 tests（原 19 files/104）；域子集 player 38 / auth 26 / search 18 / smoke 19 / admin 82 均 ≪ 全量；全量 `test:e2e` 290→207 用例（−29%）兜底未破；typecheck/lint EXIT=0 + 单测门禁经 test:changed 升全量 484 files 6394/6394 passed。
+- **D-N 闭环**：D-180-3（E2E 任务域映射 + 按需 webServer）、D-180-4（web-mobile 收窄移动 3 spec）
+- **共享层沉淀评估**：否——纯 npm scripts + playwright config，零自研编排层（ADR-180 备选 C 论证）。
+- **注意事项**：① **偏离登记（实测修正 ADR 草案映射）**：tests/e2e/auth.spec.ts 与 search.spec.ts 为孤儿 spec（不被任何 project testMatch 匹配、test:e2e 从未运行）→ auth 域据实 = admin.spec.ts（角色访问）、search 域不含孤儿；孤儿处置随 tests/e2e LEGACY 清理。② 活跃隔离清单不存在（known_failing 已全部归档），web-mobile 收窄零清单清理。③ video 域两段 && 串联（admin/web 不同 server 子集）。

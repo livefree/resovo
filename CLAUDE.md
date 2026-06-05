@@ -41,7 +41,8 @@ npm run typecheck            # 必须通过，有报错不得继续
 npm run lint                 # 必须通过
 npm run test:changed         # 单测增量门禁（commit 前必须通过；docs-only 自动跳过 / 配置·helpers·基础包改动自动升全量，ADR-180）
 npm run test -- --run        # 单元测试全量——三个兜底节点必跑：preflight 冷启动 / PHASE COMPLETE 审计前 / 合并 main 前（test:changed:main 可替代）
-npm run test:e2e             # PLAYER / AUTH / SEARCH / VIDEO 任务完成后运行
+npm run test:e2e:<domain>    # PLAYER / AUTH / SEARCH / VIDEO / ADMIN 任务完成后按域选跑（player/auth/search/video/admin/smoke/mobile，ADR-180；仅起所需 dev server）
+npm run test:e2e             # E2E 全量 4 projects——Phase 门禁节点必跑（PHASE COMPLETE 审计前）
 npm run verify:adr-contracts # ADR 协议合规 3 类核验（端点/错误码/D-N 偏离；CHG-SN-5-CHECKLIST-AUDIT）
 ```
 

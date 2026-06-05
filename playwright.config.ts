@@ -9,6 +9,19 @@ const ADMIN_NEXT_URL = process.env.ADMIN_NEXT_APP_URL   ?? 'http://localhost:300
 const ADMIN_SPECS      = ['**/e2e/admin.spec.ts', '**/e2e/admin-source-and-video-flows.spec.ts', '**/e2e/video-governance.spec.ts', '**/e2e/publish-flow.spec.ts']
 // server-next 后台 E2E（apps/server-next:3003）
 const ADMIN_NEXT_SPECS = ['**/e2e/admin/**/*.spec.ts']
+// web-mobile 移动专属 specs（ADR-180 D-180-4 / CHG-TEST-SLIM-C）：
+// 移动断言的上下文自带（browser.newContext({...MOBILE}) / test.use({ viewport, hasTouch, isMobile })），
+// 不依赖本 project 的 iPhone 14 device；其余 16 个 e2e-next spec 不创建移动上下文，
+// 在 web-chromium 已有等价覆盖（iPhone 14 下复跑边际覆盖≈0）。保留 3 spec 子集 = 冗余防御 + 显式移动入口。
+const WEB_MOBILE_SPECS = [
+  '**/e2e-next/mobile-tabbar.spec.ts',
+  '**/e2e-next/edge-swipe-back.spec.ts',
+  '**/e2e-next/mini-player.spec.ts',
+]
+// 按需启动 webServer（ADR-180 D-180-3 实施校准）：域选跑脚本（test:e2e:<domain>）通过
+// PLAYWRIGHT_SERVERS=admin,admin-next,web 子集只起所需 dev server；默认（未设置）全起，
+// `npm run test:e2e` 全量行为零变化。
+const SERVERS = (process.env.PLAYWRIGHT_SERVERS ?? 'admin,admin-next,web').split(',').map((s) => s.trim())
 // ── admin-visual project (ADR-116 / CHG-SN-5-PRE-01-E-1) ──────────────────
 // 隔离 testDir + testMatch，不与上述 e2e specs 混跑
 const ADMIN_VISUAL_TEST_DIR = './tests/visual'
@@ -54,6 +67,7 @@ export default defineConfig({
     {
       name: 'web-mobile',
       testDir: './tests/e2e-next',
+      testMatch: WEB_MOBILE_SPECS,
       use: { ...devices['iPhone 14'], baseURL: WEB_URL },
     },
     // ── admin-visual project (ADR-116 / CHG-SN-5-PRE-01-E-1) ─────────────
@@ -76,24 +90,24 @@ export default defineConfig({
   ],
 
   webServer: [
-    {
+    ...(SERVERS.includes('admin') ? [{
       command: 'npm --workspace @resovo/server run dev',
       url: `${ADMIN_URL}/admin`,
       reuseExistingServer: !process.env.CI,
       timeout: 60000,
-    },
-    {
+    }] : []),
+    ...(SERVERS.includes('admin-next') ? [{
       command: 'npm --workspace @resovo/server-next run dev',
       url: `${ADMIN_NEXT_URL}/admin`,
       reuseExistingServer: !process.env.CI,
       timeout: 90000,
-    },
-    {
+    }] : []),
+    ...(SERVERS.includes('web') ? [{
       // CUTOVER：web-next 是唯一前台，port 3000
       command: 'npm --workspace @resovo/web-next run dev',
       url: WEB_URL,
       reuseExistingServer: !process.env.CI,
       timeout: 60000,
-    },
+    }] : []),
   ],
 })

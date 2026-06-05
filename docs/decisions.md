@@ -20140,3 +20140,8 @@ D-179-1 ~ D-179-6 共 6 条，随 CHG-VIR-13-C1 实施闭环；advisory，不阻
 ### D-N 偏离登记
 
 D-180-1 ~ D-180-6 共 6 条：D-180-1/2 随 CHG-TEST-SLIM-B、D-180-3/4 随 CHG-TEST-SLIM-C、D-180-5 随 CHG-TEST-SLIM-D 实施闭环；D-180-6（guarded/preflight 全量语义声明）随本落档卡的 workflow-rules / quality-gates 修订即时闭环。advisory，不阻塞 CI。
+
+**D-180-3 实施校准（CHG-TEST-SLIM-C / 2026-06-04）**：
+1. **孤儿 spec 修正**：`--list` 实测发现 `tests/e2e/auth.spec.ts` 与 `tests/e2e/search.spec.ts` 不被任何 project testMatch 匹配（admin-chromium 只匹配 4 个 ADMIN_SPECS；legacy 快照遗留）——`test:e2e` 从未运行它们。域映射据实校准：auth 域 = `admin.spec.ts`（角色访问控制 = 登录态核心）；search 域 = e2e-next 3 spec + smoke（不含孤儿 `search.spec.ts`）。孤儿处置（删除或归档）随 tests/e2e LEGACY 清理任务，不在本系列。
+2. **按需 webServer 增强**：playwright webServer 为 config 级（无 per-project 支持），全量 3 server 必起会抵消域选跑收益——新增 `PLAYWRIGHT_SERVERS=admin,admin-next,web` 子集机制（域脚本设置；未设置默认全起，`test:e2e` 行为零变化）。
+3. **全量 E2E 用例数实测**：290 → 207（web-mobile 104→21 用例 / 19→3 spec，全量 −29%；域子集 18~82 用例 ≪ 207）。
