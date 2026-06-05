@@ -14922,3 +14922,14 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
   - 共享层沉淀评估：getRange/getTextValue 局部 helper 第 2 处出现（VideoFilterFields 先例），第 3 处时按规则上提共享层
   - truncated 警示文案不内嵌 cap 数值（避免与后端 MAX_COLLAPSE_PAIRS 漂移）
   - **CHG-VIR-16-TBL 系列（ADR/BE/FE 三卡）收口**：用户裁定三项 UX 全量交付
+
+## [CHG-VIR-16-TBL-FIX] route 层 truncated 透传修复（Codex stop-time review）
+- **完成时间**：2026-06-05
+- **记录时间**：2026-06-05
+- **执行模型**：claude-opus-4-8｜子代理：无
+- **根因**：`GET /admin/video-merges/candidates` route 手工构造响应对象（data/total/page/limit/source 逐字段拼装），D-105a-19 新增的 `truncated` 字段被丢弃——前端截断警示条永不显示。与 CHG-VIR-9-C FIX「source 丢字段」**同型缺口复发**（Service/前端两侧单测各自 mock 对侧，route 重组层无人断言）。
+- **修改文件**：
+  - `apps/api/src/routes/admin/video-merges.ts` — truncated 条件透传（undefined 不携带键，对齐 envelope optional 语义）
+  - `tests/unit/api/video-merges-candidates-route.test.ts` — +2 用例（#3 truncated=true 透传 + D-105a-19 检索参数 coerce 解析透传断言 / #4 非截断态不携带 truncated 键）
+- **测试**：route 4/4 + test:changed 4/4 + typecheck/lint EXIT=0
+- **注意事项**：该 route 已两次因「手工拼装响应丢新增字段」返工；后续 envelope 再扩字段时优先考虑整对象透传或在 route 测试先行加字段断言。
