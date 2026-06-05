@@ -14992,3 +14992,15 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **新增依赖**：无
 - **数据库变更**：migration 093（已执行 dev 库；幂等复跑 ✅；INSERT 往返 title/image_url 逐值一致 + 默认值分支 {}/null + 清理零残留实证）
 - **注意事项**：表当前 0 行，存量零破坏 trivially 成立。test:changed 因 packages/types 基础包改动按 ADR-180 自动升全量：493 files 6605/6605 全过；typecheck/lint EXIT=0。公开端点 GET /home/modules 自此自动透出 title/imageUrl（ADR-052 AMENDMENT R-1 确认的纯增量）。解阻 CHG-HOME-UX-01-B / CHG-HOME-UX-02。
+
+## [CHG-HOME-UX-01-B] HomeModulesService zod 扩 title/imageUrl（ADR-104 D-104-9 实施）
+- **完成时间**：2026-06-05
+- **记录时间**：2026-06-05 15:24
+- **执行模型**：claude-opus-4-8（人工 opus 会话覆盖 sonnet 建议，偏离登记）
+- **子代理**：无
+- **修改文件**：
+  - `apps/api/src/services/HomeModulesService.ts` — CreateBase +title z.record(z.string()).default({}) + imageUrl z.string().url().max(2048).nullable().optional()；create() 显式透传两字段（update() 整体透传 input 零改动；CreateSchema/UpdateSchema 经 applyBusinessRules + .partial().strict() 派生链自动覆盖）
+  - `tests/unit/api/admin-home-modules.test.ts` — +4 用例（POST 透传+缺省分支 / imageUrl 非法 URL 422 / title 值非 string 422〔z.record(z.string()) 收紧〕/ PATCH 白名单 .strict() 不误拒 + 透传）
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：56/56（home-modules 24 + admin-home-modules 32）全过；typecheck/lint EXIT=0 + test:changed 增量 32/32。test:e2e:admin 与 CHG-HOME-UX-02 合跑（连续后端卡批处理，偏离登记）。6 端点路径/方法/错误码/audit 枚举零变化。解阻 CHG-HOME-UX-03。

@@ -3275,10 +3275,12 @@ CODENAME-MATRIX-E2E (依赖 Wave 3 验收期补丁 CODENAME-MATRIX ✅)
    - 依赖：CHG-HOME-UX-ADR ✅
    - 范围（4 项）：① migration 093（ADD COLUMN IF NOT EXISTS 幂等 + 注释 down 节）② packages/types home-module.types.ts 扩字段 ③ db/queries/home-modules.ts DbRow/mapRow/INSERT/UPDATE fieldMap/4 处 SELECT ④ home-queries.test.ts 扩断言。
    - 完成备注：093 已执行 dev 库（幂等复跑 ✅ / INSERT 往返逐值一致 / 默认值 {}/null / 清理零残留）；列清单实为 6 处（4 SELECT + 2 RETURNING）全补；UPDATE fieldMap +2 + JSONB_KEYS 统一 stringify；测试 +5 断言（落点修正：home-modules.test.ts 为 query 层真源而非 home-queries.test.ts〔后者测 top10 videos queries〕，偏离登记）。门禁 typecheck/lint EXIT=0 + test:changed 基础包升全量 6605/6605。解阻 01-B / 02。执行模型: claude-opus-4-8（人工 opus 覆盖 sonnet）；子代理: 无。
-3. **CHG-HOME-UX-01-B** — service 层（状态：⬜ 待开始）
+3. **CHG-HOME-UX-01-B** — service 层（状态：✅ 已完成）
+   - 实际开始：2026-06-05 15:25 ｜ 完成时间：2026-06-05 15:24
    - 建议模型：sonnet
-   - 依赖：CHG-HOME-UX-01-A
+   - 依赖：CHG-HOME-UX-01-A ✅
    - 范围（3 项）：① HomeModulesService CreateBase +title z.record / +imageUrl z.string().url().nullable() ② create/update 透传（.strict() 验证不误拒）③ admin-home-modules/home-modules 测试扩用例。
+   - 完成备注：CreateBase +2 字段；create() 显式透传（update() 整体透传零改动）；+4 用例（透传/缺省/非法 URL 422/title 值收紧 422/PATCH 白名单 .strict() 不误拒）56/56 过。门禁 typecheck/lint EXIT=0 + test:changed 32/32。e2e:admin 与 02 合跑登记。6 端点契约零变化。解阻 03。执行模型: claude-opus-4-8（人工 opus 覆盖 sonnet）；子代理: 无。
 4. **CHG-HOME-UX-02** — media ownerType 扩 home_module（状态：⬜ 待开始）
    - 建议模型：sonnet
    - 依赖：CHG-HOME-UX-01-A

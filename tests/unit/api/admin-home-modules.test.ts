@@ -245,6 +245,83 @@ describe('POST /admin/home-modules', () => {
     expect(res.statusCode).toBe(422)
     expect(res.json().error.message).toContain('slot × contentRefType')
   })
+
+  // ── CHG-HOME-UX-01-B（ADR-104 AMENDMENT D-104-9）title / imageUrl ─────────
+
+  it('title / imageUrl 透传到 query 层；缺省时 title={} / imageUrl=null', async () => {
+    await app.inject({
+      method: 'POST',
+      url: '/v1/admin/home-modules',
+      headers: { authorization: await adminToken(), 'content-type': 'application/json' },
+      body: JSON.stringify({
+        slot: 'banner',
+        brandScope: 'all-brands',
+        contentRefType: 'external_url',
+        contentRefId: 'https://promo.example.com',
+        title: { 'zh-CN': '暑期专题', en: 'Summer' },
+        imageUrl: 'https://cdn.example.com/b.jpg',
+      }),
+    })
+    expect(mockCreate).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        title: { 'zh-CN': '暑期专题', en: 'Summer' },
+        imageUrl: 'https://cdn.example.com/b.jpg',
+      }),
+    )
+
+    // 缺省分支：default({}) / ?? null
+    mockCreate.mockClear()
+    await app.inject({
+      method: 'POST',
+      url: '/v1/admin/home-modules',
+      headers: { authorization: await adminToken(), 'content-type': 'application/json' },
+      body: JSON.stringify({
+        slot: 'featured',
+        brandScope: 'all-brands',
+        contentRefType: 'video',
+        contentRefId: 'vid-001',
+      }),
+    })
+    expect(mockCreate).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ title: {}, imageUrl: null }),
+    )
+  })
+
+  it('imageUrl 非法 URL 返回 422', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/admin/home-modules',
+      headers: { authorization: await adminToken(), 'content-type': 'application/json' },
+      body: JSON.stringify({
+        slot: 'banner',
+        brandScope: 'all-brands',
+        contentRefType: 'external_url',
+        contentRefId: 'https://promo.example.com',
+        imageUrl: 'not-a-url',
+      }),
+    })
+    expect(res.statusCode).toBe(422)
+    expect(res.json().error.code).toBe('VALIDATION_ERROR')
+  })
+
+  it('title 值非 string 返回 422（z.record(z.string()) 收紧）', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/admin/home-modules',
+      headers: { authorization: await adminToken(), 'content-type': 'application/json' },
+      body: JSON.stringify({
+        slot: 'banner',
+        brandScope: 'all-brands',
+        contentRefType: 'external_url',
+        contentRefId: 'https://promo.example.com',
+        title: { 'zh-CN': 123 },
+      }),
+    })
+    expect(res.statusCode).toBe(422)
+    expect(res.json().error.code).toBe('VALIDATION_ERROR')
+  })
 })
 
 // ── PATCH /admin/home-modules/:id ─────────────────────────────────────────
@@ -319,6 +396,23 @@ describe('PATCH /admin/home-modules/:id', () => {
     })
     expect(res.statusCode).toBe(422)
     expect(res.json().error.message).toContain('至少一字段')
+  })
+
+  // ── CHG-HOME-UX-01-B：title / imageUrl 进 PATCH 白名单（.strict() 不误拒）──
+
+  it('PATCH title / imageUrl 通过 .strict() 白名单并透传 query 层', async () => {
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/v1/admin/home-modules/${MODULE.id}`,
+      headers: { authorization: await adminToken(), 'content-type': 'application/json' },
+      body: JSON.stringify({ title: { en: 'Summer' }, imageUrl: null }),
+    })
+    expect(res.statusCode).toBe(200)
+    expect(mockUpdate).toHaveBeenCalledWith(
+      expect.anything(),
+      MODULE.id,
+      expect.objectContaining({ title: { en: 'Summer' }, imageUrl: null }),
+    )
   })
 })
 

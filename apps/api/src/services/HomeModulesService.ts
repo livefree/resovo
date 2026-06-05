@@ -47,6 +47,11 @@ const CreateBase = z.object({
   ordering: z.number().int().min(0).default(0),
   contentRefType: ContentRefTypeEnum,
   contentRefId: z.string().min(1).max(2048),
+  // ADR-104 AMENDMENT 2026-06-05（D-104-9）：多语言标题映射，值收紧为 string
+  // （i18n 文案，非自由 JSONB；与 home_banners 路由 z.record(z.string()) 一致）
+  title: z.record(z.string()).default({}),
+  // D-104-9：运营横图 URL；.url() 对 R2/local-fs 双 provider 绝对 URL 形态安全（A-1 实证）
+  imageUrl: z.string().url().max(2048).nullable().optional(),
   startAt: z.string().datetime().nullable().optional(),
   endAt: z.string().datetime().nullable().optional(),
   enabled: z.boolean().default(true),
@@ -130,6 +135,8 @@ export class HomeModulesService {
       ordering: input.ordering,
       contentRefType: input.contentRefType,
       contentRefId: input.contentRefId,
+      title: input.title ?? {},
+      imageUrl: input.imageUrl ?? null,
       startAt: input.startAt ?? null,
       endAt: input.endAt ?? null,
       enabled: input.enabled,
