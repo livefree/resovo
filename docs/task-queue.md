@@ -3246,3 +3246,84 @@ CODENAME-MATRIX-E2E (依赖 Wave 3 验收期补丁 CODENAME-MATRIX ✅)
 - **CHG-TEST-CLEANUP-\***（待立案）：测试代码瘦身——拆 >1000 行巨型测试文件（CrawlerClient 1184 / column-matrix-menu 1150 / bangumi-service 1048 / video-merge-mutations 1014）/ 参数化重复用例（step-ep5 类 50 次同构断言）/ 复审过度 mock（全仓 1091 次 vi.mock）。按模块分批，每批一卡 ≤5 文件。
 - **CHG-TEST-SLIM-E**（待立案）：turbo typecheck inputs 缓存正确性验证（改 packages/types 确认依赖 workspace 缓存失效；验证通过后才可在文档把 typecheck 默认链路切 turbo）。
 - **CHG-CARD-ATOM-VERIFY**（待立案，可选）：verify:task-card-scope 脚本——解析 task-queue.md 活跃卡「范围」项计数，>5 项无 -A/-B 拆分输出 advisory 警告。
+
+---
+
+## [SEQ-20260605-01] 首页运营 /admin/home UI/UX 改造（字段补齐 + 卡片/预览真实化 + 入口体系）
+
+- **状态**：🔄 进行中
+- **创建时间**：2026-06-05 15:04
+- **目标**：① 对齐设计稿 reference.md §5.7 + P-home.md §6——模块卡片（序号/120×54 横图/标题降级链/四色生命周期 Pill）+ 预览面板轻拟真（真实封面+标题）+ Drawer 体验（datetime-local / 图片上传 / auto-fill）+ 一致性收编（Segment / Modal 删除确认）。② 字段补齐（用户裁定）——home_modules 增 title JSONB 多语言 + image_url 一等列（参照 home_banners），media ownerType 扩 home_module。③ 视频入口体系（用户裁定：半自动 + 确认面板）——页内 VideoPicker multiple 批量添加 / 视频库行级+批量深链（仿 merge entry.ts 模式）/ 趋势导入 + top10 补位可视化。
+- **范围**：docs(decisions/architecture) + migration 093 + packages/types + apps/api(queries/service/media 3 文件) + apps/server-next(app/admin/home/_client 4+3 新文件 + lib/home-modules 4 文件 + lib/videos 接线 + videos/_client 3 文件接线) + tests。**不动**前台 apps/web-next（banner/featured/type_shortcuts 三处前台断裂仅登记 follow-up，用户裁定）。
+- **依赖**：无（dev 分支直接推进）。
+- **依赖序**：ADR →(Opus PASS)→ 01-A → 01-B → 03 → 04-A → 04-B → 06；02 与 03 并行（05 依赖 02+03）；04-B → 07 → 08/09；FUP 收口。
+- **决策依据**：用户三项拍板（2026-06-05）——字段本次一并补齐 / 前台断裂仅登记 / 预览轻拟真；入口两项拍板——自动入选=半自动趋势导入+补位可视化 / 深链落地=确认面板。计划全文见 plan 文件（linear-drifting-minsky）。
+
+### 任务列表（按执行顺序）
+
+1. **CHG-HOME-UX-ADR** — ADR-052/104 AMENDMENT（home_modules title/image_url + media ownerType）（状态：✅ 已完成）
+   - 创建时间：2026-06-05 15:04
+   - 实际开始：2026-06-05 15:04
+   - 完成时间：2026-06-05 15:30
+   - 建议模型：opus
+   - 范围（5 项）：① ADR-052 AMENDMENT：home_modules +title JSONB NOT NULL DEFAULT '{}' / +image_url TEXT NULL 一等列（vs metadata 通道论证）② ADR-104 AMENDMENT：Create/Update body 扩 title?/imageUrl?（不新增 route）③ media ownerType 扩 'home_module' 裁定 ④ image 对 video 类型可选+回退 coverUrl / auto-fill 走 drawer 端 fetch（ContentRefPicker 契约不动）/ 卡片 120×54 本地 img（不扩 Thumb）裁定 ⑤ architecture.md home_modules 表同步两列。
+   - 验收要点：arch-reviewer Opus PASS；verify:adr-contracts 绿。
+   - 完成备注：D-052-9/10/11 + D-104-9/10 五决策定档。arch-reviewer（ab0afb7523bcdd0ed）PASS-with-conditions → R-1 影响面清单（6 触点 + 公开端点 GET /home/modules 纯增量透出确认）+ Y-1 metadata 守则「title/subtitle 覆盖」条目显式 supersede 吸收；Y-2/A-2 转 follow-up（CHG-HOME-BANNER-URL-MAX + title 值侧约束评估）；A-1 实证 .url() 双 provider 绝对 URL 安全 / A-3 实证 093 标号。verify:adr-contracts EXIT=0（207 路由对齐 + SQL schema 对齐）。解阻 CHG-HOME-UX-01-A。执行模型: claude-opus-4-8；子代理: arch-reviewer (claude-opus-4-8)。
+2. **CHG-HOME-UX-01-A** — schema + query 层（状态：⬜ 待开始）
+   - 建议模型：sonnet
+   - 依赖：CHG-HOME-UX-ADR
+   - 范围（4 项）：① migration 093（ADD COLUMN IF NOT EXISTS 幂等 + 注释 down 节）② packages/types home-module.types.ts 扩字段 ③ db/queries/home-modules.ts DbRow/mapRow/INSERT/UPDATE fieldMap/4 处 SELECT ④ home-queries.test.ts 扩断言。
+3. **CHG-HOME-UX-01-B** — service 层（状态：⬜ 待开始）
+   - 建议模型：sonnet
+   - 依赖：CHG-HOME-UX-01-A
+   - 范围（3 项）：① HomeModulesService CreateBase +title z.record / +imageUrl z.string().url().nullable() ② create/update 透传（.strict() 验证不误拒）③ admin-home-modules/home-modules 测试扩用例。
+4. **CHG-HOME-UX-02** — media ownerType 扩 home_module（状态：⬜ 待开始）
+   - 建议模型：sonnet
+   - 依赖：CHG-HOME-UX-01-A
+   - 范围（4 项）：① media.ts OwnerTypeSchema +home_module + 错误文案 ② ImageStorageService OwnerType 类型 ③ MediaImageService.upload() home_module 分支（findHomeModuleById 404 前置 → 上传 → updateHomeModule 写回 imageUrl → 失败补偿删除，仿 banner 分支）④ 测试三用例（404/写回/补偿）。
+5. **CHG-HOME-UX-03** — 前端数据层（状态：⬜ 待开始）
+   - 建议模型：sonnet
+   - 依赖：CHG-HOME-UX-01-B
+   - 范围（4 项）：① lib/home-modules types/api 扩字段 + uploadHomeModuleImage（FormData+进度）② 新建 use-video-meta-map.ts（useVideoMetaMap：video refId 并发 fetchPickerItemByIdSafe + useRef 缓存 + 404→null）③ 新建 derive-status.ts（deriveModuleStatus 四色推导，danger>neutral>warn>ok）④ 测试三文件（derive-status 注入 now 全覆盖 / meta-map 并发缓存 / client upload 契约）。
+6. **CHG-HOME-UX-04-A** — HomeModuleCard 改造（状态：⬜ 待开始）
+   - 建议模型：sonnet
+   - 依赖：CHG-HOME-UX-03
+   - 范围（3 项）：① 设计稿 §5.7 重排（序号 + 120×54 本地 img imageUrl→coverUrl→占位 + 标题降级链 title.zh-CN→视频标题→[类型]refId + 本地化时间窗）② Pill variant=deriveModuleStatus ③ HomeOpsClient.test.tsx 卡片断言更新。
+7. **CHG-HOME-UX-04-B** — HomeOpsClient 编排（状态：⬜ 待开始）
+   - 建议模型：sonnet
+   - 依赖：CHG-HOME-UX-04-A
+   - 范围（4 项）：① 手写 tabs → Segment（badge=已加载 slot 计数）② window.confirm → 新建 DeleteModuleModal（仿 users Modal 范式）③ useVideoMetaMap 顶层一次接线下传 Card+PreviewPanel ④ 测试更新 + test:e2e:admin。
+8. **CHG-HOME-UX-05** — HomeModuleDrawer 字段补齐（状态：⬜ 待开始）
+   - 建议模型：sonnet
+   - 依赖：CHG-HOME-UX-03、CHG-HOME-UX-02
+   - 范围（5 项）：① FormState +titleZh/titleEn/imageUrl + payload 仅非空键 ② startAt/endAt → datetime-local 往返（仿 BannerForm）③ 图片外链 input + 编辑态上传 + 16:9 预览 + 进度（新建态无 id 仅外链）④ video 选中 auto-fill 预填空字段（不覆盖已填 / type 切走清残留）⑤ 新建 HomeModuleDrawer.test.tsx；500 行红线超则抽 ModuleImageField。
+9. **CHG-HOME-UX-06** — HomePreviewPanel 轻拟真（状态：⬜ 待开始）
+   - 建议模型：sonnet
+   - 依赖：CHG-HOME-UX-04-B
+   - 范围（3 项）：① props +videoMetaMap（父传不自取）② banner 16:9 真实横图+标题 / poster 海报+排名+标题（emoji/UUID 退役）③ HomePreviewPanel.test.tsx 更新。
+10. **CHG-HOME-UX-07** — 页内批量添加（统一确认面板首建）（状态：⬜ 待开始）
+    - 建议模型：sonnet
+    - 依赖：CHG-HOME-UX-04-B
+    - 范围（4 项）：① 新建 BatchAddVideosModal（slot 选择 + 候选列表充实 + 已在列去重标灰 + 循环 create ordering 追加 + 汇总 toast）② slot 头部「+ 添加视频」（video 类 3 slot）③ VideoPicker multiple 接线 ④ 测试（去重/循环/部分失败）。
+11. **CHG-HOME-UX-08** — 他页深链入口（仿 merge 模式）（状态：⬜ 待开始）
+    - 建议模型：sonnet
+    - 依赖：CHG-HOME-UX-07
+    - 范围（4 项）：① 新建 lib/home-modules/entry.ts（SOURCES/SOURCE_META/buildHomeAddHref/parseHomeEntry；?add_ids=&from=）② VideoRowActions「加入首页运营」+ VideoBatchActions「加入首页运营(N)」+ VideoListClient window.open ③ /admin/home 落地解析 → BatchAddVideosModal 预填 + 来源回链栏 ④ 测试（entry 纯函数参数顺序契约 / row+batch router spy / 落地解析）。
+12. **CHG-HOME-UX-09** — 趋势导入 + top10 补位可视化（状态：⬜ 待开始）
+    - 建议模型：sonnet
+    - 依赖：CHG-HOME-UX-07
+    - 范围（3 项）：①「从趋势导入」（featured/top10 → /videos/trending 候选排除已在列）② top10 tab 取公开 /home/top10 求差 → PreviewPanel 尾部灰显「自动补位」行 ③ 测试。
+13. **CHG-HOME-UX-FUP** — follow-up 登记 + 序列收口（状态：⬜ 待开始）
+    - 建议模型：haiku
+    - 依赖：08/09/05/06 全完成
+    - 范围（3 项）：① 后续卡登记（见下）② P-home.md 手册更新（本卡明确标注"更新文档"：worker 文档偏差修正 + 新交互）③ 全量单测兜底 + 序列状态收口。
+
+### 后续卡登记（本序列产出，不在本序列内执行）
+
+- **CHG-HOME-FE-BANNER**（待立案，需 ADR）：前台 HeroBanner 切换/合并消费 home_modules banner slot（现消费旧 /banners·home_banners 表，新后台 banner 配置不上前台）。
+- **CHG-HOME-FE-FEATURED**（待立案）：featured 半断裂闭环——FeaturedRow 已请求 modules 但丢弃恒显 trending（FeaturedRow.tsx:149-152 TODO）；需 /home/featured-videos 批量端点（类 top10）+ 前台消费。
+- **CHG-HOME-FE-SHORTCUTS**（待立案）：type_shortcuts 断裂——前台 CategoryShortcuts 静态 ALL_CATEGORIES 不读 home_modules；接线或裁定 slot 退役。
+- **CHG-HOME-THUMB-MD**（待立案，可选）：Thumb 扩 banner-md 120×54 收编（出现第二复用方时；共享契约 Opus）。
+- **CHG-HOME-BLURHASH**（待立案，可选）：home_module 图片 blurhash 入队（同 banner 现状 TODO）。
+- **CHG-HOME-COUNTS**（待立案，可选）：GET /admin/home-modules/counts 轻量端点（Segment badge 全 slot 计数；新 route 需 ADR）。
+- **CHG-HOME-IMAGE-GUARD**（待立案，可选）：external_url/custom_html image 必填软校验（首版宽松，运营反馈后评估）。

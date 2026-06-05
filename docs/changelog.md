@@ -14965,3 +14965,16 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
   - `MergeCandidateExpand.tsx` — 执行合并按钮 disabled 加 `!selectedIds.has(targetId)`（转移 effect 瞬态兜底，双层覆盖）
 - **测试**：新 `tests/unit/lib/merge-selection.test.ts` 6 用例（**核心：target ∉ 集合 → null** / 全组 / 子集跨界 pair 不传 / 不足 2 回退整组 / 9-C 单数 fallback 全选限定 / legacy 无锚点字段不出现）+ Section 11e 端到端（排除 target → 自动转移后全链路：新 target + 子集 + 仅 a-c pair）。merge 域 115/115 + test:changed 83/83 + e2e deeplink 6/6 + tsc/lint EXIT=0
 - **注意事项**：请求成形逻辑自此单点（buildMergeSelection），后续 MergeWorkspace 若需同款守卫可直接复用。
+
+## [CHG-HOME-UX-ADR] ADR-052/104 AMENDMENT — home_modules title/image_url 一等列补齐 + media ownerType 扩 home_module
+- **完成时间**：2026-06-05
+- **记录时间**：2026-06-05 15:30
+- **执行模型**：claude-opus-4-8
+- **子代理**：arch-reviewer (claude-opus-4-8 / ab0afb7523bcdd0ed)
+- **修改文件**：
+  - `docs/decisions.md` — ADR-052 追加 AMENDMENT 2026-06-05（D-052-9 一等列 migration 093 + 不走 metadata 通道四点论证 + Y-1 supersede「title/subtitle 覆盖」守则条目 / D-052-10 image_url 可空语义 + 降级链 `imageUrl ?? coverUrl ?? placeholder` + 首版不加条件必填 / D-052-11 media ownerType 扩 'home_module' 三处扩点 + banner 范式写回补偿 / R-1 影响面清单 6 触点 + 公开端点纯增量确认）；ADR-104 追加 AMENDMENT 2026-06-05（D-104-9 CreateBase +title z.record(z.string()) +imageUrl z.string().url().max(2048)，applyBusinessRules + .partial().strict() 派生链自动覆盖，6 端点路径/方法/错误码/audit 零变化 / D-104-10 前端实施裁定：auto-fill 走 fetchPickerItemByIdSafe 不扩 ContentRefPicker 契约 + 卡片 120×54 页面本地 img 不扩 Thumb + 上传需先有 id 新建态仅外链）
+  - `docs/architecture.md` — §5.10 home_modules 表补 title / image_url 两行 + metadata 行注记 supersede
+  - `docs/tasks.md` / `docs/task-queue.md` — SEQ-20260605-01 序列登记（13 卡）+ ADR 卡收口
+- **新增依赖**：无
+- **数据库变更**：无（migration 093 由 CHG-HOME-UX-01-A 实施；本卡纯协议定档）
+- **注意事项**：arch-reviewer PASS-with-conditions → R-1（影响面清单 + 公开端点 GET /home/modules 自动透出新列确认为有意纯增量）/ Y-1（metadata 守则 title 条目显式 supersede）已吸收；Y-2/A-2 登记 follow-up（CHG-HOME-BANNER-URL-MAX：banner imageUrl 缺 .max(2048) 对齐；title 值侧 min/max 评估）。A-1 实证 .url() 对 R2/local-fs 双 provider 绝对 URL 形态安全；A-3 实证 migration 093 标号正确。verify:adr-contracts EXIT=0。解阻 CHG-HOME-UX-01-A。

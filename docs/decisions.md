@@ -2014,6 +2014,36 @@ ORDER BY ordering ASC, created_at ASC
 | `(start_at, end_at) WHERE enabled` | 后台失效清单/cron |
 | `(content_ref_type, content_ref_id)` | 级联失效反查 |
 
+### AMENDMENT 2026-06-05（SEQ-20260605-01 / CHG-HOME-UX-ADR）：title + image_url 一等列补齐
+
+- **状态**：Accepted（arch-reviewer claude-opus-4-8 / ab0afb7523bcdd0ed PASS-with-conditions → R-1 影响面清单 + Y-1 supersede 句吸收后定档）
+- **驱动**：`/admin/home` UI/UX 改造（用户裁定字段本次一并补齐，参照 home_banners 形态）——模块卡片/预览需一等标题与横图；external_url / custom_html 类型无视频封面可回退，缺图源字段。
+
+**D-052-9：home_modules 增 `title` + `image_url` 一等列（migration 093）**
+
+- `title JSONB NOT NULL DEFAULT '{}'::jsonb`：多语言标题映射（locale→string，如 `{"zh-CN":"...","en":"..."}`），与 home_banners.title 同构。
+- `image_url TEXT NULL`：运营横图 URL。与 home_banners.image_url 的差异：**可空**（理由见 D-052-10）。
+- migration 093 `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` 幂等；存量行零破坏（title 落 `'{}'` / image_url 落 NULL）；注释式 down 节沿用 049/050 约定。
+- **不走 metadata 通道的论证**：① §metadata 使用守则的 Schema 演进条款明示「固定字段使用 3+ 次即升级为表列」——title/image 是 banner slot 全量模块的一等展示数据且 featured/top10 卡片同样消费，自始即知全量使用，直接列化即演进条款终态；② image_url 一等列才能复用 MediaImageService「写回 owner 列」补偿模式（D-052-11）；③ 与 home_banners 跨表形态一致，未来前台切换消费（follow-up CHG-HOME-FE-BANNER）映射成本最低；④ metadata 列保持不动，存量数据正交零迁移。
+- **Supersede（Y-1）**：本决策**取代** §metadata 使用守则「允许」清单中的「自定义文案（title/subtitle 覆盖）」条目——title 自此为一等列，`metadata.title` 不再用于新写入；存量 `metadata.title`（如有）一律被列值忽略。
+- 索引 / CHECK 零新增（纯展示数据，无 WHERE 过滤需求；§索引策略不变）。
+
+**D-052-10：可空语义 + 消费端降级链**
+
+- image_url 可空：video 类型模块已有 `videos.cover_url` 现成封面，强制重复传图反人类；消费端降级链 `imageUrl ?? videoMeta.coverUrl ?? placeholder`。
+- external_url / custom_html 类型 image_url 是唯一图源，但**首版不加 service 层条件必填校验**（与 ADR-104「metadata 不收紧」同口径，宽松优先 + UI 提示引导；运营反馈后评估 follow-up CHG-HOME-IMAGE-GUARD）。
+- title 空 `'{}'` 时消费端降级：video 类型用视频标题，其余显示 contentRefId 摘要。
+
+**D-052-11：media ownerType 扩 `'home_module'`**
+
+- `POST /admin/media/images` 既有端点 body 的 ownerType 枚举值扩张（**非新 route，verify:endpoint-adr 不触发**）。三处扩点：`routes/admin/media.ts` OwnerTypeSchema + 错误文案 / `ImageStorageService.OwnerType` 类型并集 + buildKey 分支 / `MediaImageService.upload()` 新分支。
+- home_module 分支仿 banner 范式：`findHomeModuleById` 前置校验（不存在 404）→ `storage.upload`（key 前缀 `home_module/`）→ `updateHomeModule` 写回 image_url → DB 写回失败补偿删除已传对象。
+- blurhash 暂不入队（与 banner 现状一致；follow-up CHG-HOME-BLURHASH）。
+
+**影响面清单（R-1）**：① migration 093；② `apps/api/src/db/queries/home-modules.ts`（DbHomeModuleRow / mapRow / INSERT / UPDATE fieldMap / 4 处 SELECT 列表）；③ `packages/types/src/home-module.types.ts`（HomeModule / CreateHomeModuleInput / UpdateHomeModuleInput 三接口）；④ `apps/api/src/services/HomeModulesService.ts`（zod，见 ADR-104 AMENDMENT）；⑤ media 三文件（D-052-11）；⑥ `docs/architecture.md` §5.10 同步两列。**公开端点 `GET /home/modules` 响应将自动透出新列——确认为有意的纯增量变更**（前台消费方按需取用，零破坏）。
+
+**follow-up 登记（Y-2 / A-2）**：banner 路由 imageUrl 缺 `.max(2048)` 与本 AMENDMENT 对齐（CHG-HOME-BANNER-URL-MAX）；title 值侧 `.min(1).max(500)` 约束评估。
+
 ---
 
 ## ADR-053：M7 scope 扩展偏离声明（2→11 卡）
@@ -5550,6 +5580,26 @@ export type AdminAuditTargetKind =
 - **关联触发条件（未来）**：
   - PRE-CACHE-HOME（缓存层引入）：决策要点 6 三条触发条件任一命中
   - PRE-HOME-MODULE-V2（端点 v2 / break change）：运营场景出现 plan §6 范围外新需求
+
+### AMENDMENT 2026-06-05（SEQ-20260605-01 / CHG-HOME-UX-ADR）：body 纯增量扩 title + imageUrl
+
+- **状态**：Accepted（与 ADR-052 AMENDMENT 2026-06-05 同卡评审：arch-reviewer claude-opus-4-8 / ab0afb7523bcdd0ed PASS-with-conditions 修订吸收后定档）
+- **前置**：ADR-052 AMENDMENT 2026-06-05（D-052-9 schema 列就绪）。
+
+**D-104-9：Create / Update body 纯增量扩 `title` + `imageUrl`**
+
+- CreateBase 增：
+  - `title: z.record(z.string()).default({})`——值收紧为 string（i18n 文案映射，非自由 JSONB）；与 home_banners 路由 `z.record(z.string(), z.string())` 等价一致（A-2 实证）。
+  - `imageUrl: z.string().url().max(2048).nullable().optional()`——`.url()` 对 ImageStorageService 双 provider 返回形态安全（R2 绝对 CDN URL / local-fs `http://localhost:4000/v1/uploads/...` 均为绝对 URL，A-1 实证）。
+- CreateSchema / UpdateSchema 经既有 `applyBusinessRules` + `.partial().strict()` 派生**自动覆盖**，新字段进 PATCH 白名单；`enabled` omit 链不受影响。
+- 响应 HomeModule 含 title / imageUrl；**6 端点路径 / 方法 / 错误码 / audit 枚举零变化**（audit before/after 快照载荷自动含新列）。不新增 route。
+- 既有关键约束「`metadata` 不做 schema 校验、本 ADR 不收紧」保持不变（title 是新列，非 metadata 收紧）。
+
+**D-104-10：前端实施裁定（登记防漂移）**
+
+- auto-fill：Drawer 内 video 选中后走 `fetchPickerItemByIdSafe` 预填空字段（标题/封面），**不扩 ContentRefPicker onChange 共享契约**（避免共享组件 API 契约二次 Opus 流程；未来 3+ 消费方需要 resolved item 再升级，follow-up 已登记）。
+- 模块卡片 120×54 横图（设计稿 reference.md §5.7）用页面本地 `<img>`，**不扩 admin-ui Thumb size 枚举**（单一消费点；cover.ts banner-sm 64×36 token「保持不动」注释明示；第二复用方出现再收编 CHG-HOME-THUMB-MD）。
+- 图片上传走「写回 owner 列」模式需先有模块 id：新建态仅允许外链 imageUrl，编辑态才显上传按钮（与 BannerForm 同约束）。
 
 ---
 
