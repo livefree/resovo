@@ -3311,10 +3311,12 @@ CODENAME-MATRIX-E2E (依赖 Wave 3 验收期补丁 CODENAME-MATRIX ✅)
    - 依赖：CHG-HOME-UX-03 ✅、CHG-HOME-UX-02 ✅
    - 范围（5 项）：① FormState +titleZh/titleEn/imageUrl + payload 仅非空键 ② startAt/endAt → datetime-local 往返（仿 BannerForm）③ 图片外链 input + 编辑态上传 + 16:9 预览 + 进度（新建态无 id 仅外链）④ video 选中 auto-fill 预填空字段（不覆盖已填 / type 切走清残留）⑤ 新建 HomeModuleDrawer.test.tsx；500 行红线超则抽 ModuleImageField。
    - 完成备注：五项全落；偏离 ×2 登记（**不仿 BannerForm `.slice(0,16)`**——该模式 UTC 显示×本地解析往返漂移 bug，改 isoToLocalInput 对称往返 + 测试守护零漂移；datetime-local 用原生 input 不扩 AdminInputType 共享契约）。ModuleImageField 预防性拆分（Drawer 471<500）。**v1 BannerForm 漂移 bug 发现登记 follow-up CHG-BANNER-TZ-FIX**。+9 用例 45/45 + test:changed 29/29 + typecheck/lint EXIT=0。执行模型: claude-opus-4-8（人工 opus 覆盖 sonnet）；子代理: 无。
-9. **CHG-HOME-UX-06** — HomePreviewPanel 轻拟真（状态：⬜ 待开始）
+9. **CHG-HOME-UX-06** — HomePreviewPanel 轻拟真（状态：✅ 已完成）
+   - 实际开始：2026-06-05 16:02 ｜ 完成时间：2026-06-05 16:08
    - 建议模型：sonnet
-   - 依赖：CHG-HOME-UX-04-B
+   - 依赖：CHG-HOME-UX-04-B ✅
    - 范围（3 项）：① props +videoMetaMap（父传不自取）② banner 16:9 真实横图+标题 / poster 海报+排名+标题（emoji/UUID 退役）③ HomePreviewPanel.test.tsx 更新。
+   - 完成备注：optional prop 零破坏（缺省空 Map 降级）；previewTitle 与卡片同降级口径；与 Card 共用 metaMap 零重复请求。+4 用例 20/20 + test:changed 40/40 + typecheck/lint EXIT=0 + e2e:admin 39+1 flaky（04-B/05/06 批跑完成）。**改造主线（UX 缺口 1-7）全收口**；解阻 07。执行模型: claude-opus-4-8（人工 opus 覆盖 sonnet）；子代理: 无。
 10. **CHG-HOME-UX-07** — 页内批量添加（统一确认面板首建）（状态：⬜ 待开始）
     - 建议模型：sonnet
     - 依赖：CHG-HOME-UX-04-B

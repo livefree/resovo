@@ -7,9 +7,13 @@
  * 布局定位：HomeOpsClient 1fr/360px grid 右侧，position:sticky。
  *
  * 仅消费已加载的 modules 数据（无额外 API 调用），实时响应拖拽/发布切换。
+ * CHG-HOME-UX-06 轻拟真：emoji/UUID 占位 → 真实封面 + 标题（videoMetaMap 由父级
+ * HomeOpsClient 下传，本组件保持不自取数据原则）。
  */
 import type { CSSProperties } from 'react'
+import { ImageOff, Link2 } from 'lucide-react'
 import type { HomeModule, HomeModuleSlot } from '@/lib/home-modules/types'
+import type { VideoMeta, VideoMetaMap } from '@/lib/home-modules/use-video-meta-map'
 
 // ── 样式常量 ───────────────────────────────────────────────────────
 
@@ -174,36 +178,59 @@ const VIDEO_TYPE_LABEL: Record<string, string> = {
   short: '短片',
 }
 
+// ── 展示派生（CHG-HOME-UX-06：与 HomeModuleCard 同降级口径）─────────
+
+/** 标题降级链：title.zh-CN → title.en → 视频标题 → contentRefId */
+function previewTitle(module: HomeModule, meta: VideoMeta | null | undefined): string {
+  return module.title['zh-CN'] || module.title['en'] || meta?.title || module.contentRefId
+}
+
 // ── Preview Items ──────────────────────────────────────────────────
 
-function BannerPreviewItem({ module, rank }: { module: HomeModule; rank: number }) {
+function BannerPreviewItem({ module, rank, meta }: { module: HomeModule; rank: number; meta: VideoMeta | null | undefined }) {
   const itemStyle = module.enabled ? BANNER_ITEM_STYLE : { ...BANNER_ITEM_STYLE, ...DISABLED_OVERLAY }
+  // 横图降级链与卡片一致：imageUrl → coverUrl → icon 占位（emoji 退役）
+  const imageSrc = module.imageUrl ?? meta?.coverUrl ?? null
   return (
     <div style={itemStyle} data-preview-banner-item>
-      <div style={BANNER_THUMB_STYLE}>
-        {module.contentRefType === 'video' ? '🎬' : '🔗'}
-      </div>
+      {imageSrc ? (
+        // 装饰性配图（标题已承载语义）
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={imageSrc} alt="" aria-hidden="true" loading="lazy" style={{ ...BANNER_THUMB_STYLE, objectFit: 'cover' }} data-preview-banner-img />
+      ) : (
+        <div style={BANNER_THUMB_STYLE} aria-hidden="true">
+          {module.contentRefType === 'video' ? <ImageOff size={14} /> : <Link2 size={14} />}
+        </div>
+      )}
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 'var(--font-size-2xs)', color: 'var(--fg-muted)', marginBottom: 2 }}>
           #{rank} · {module.contentRefType}
         </div>
-        <div style={REF_TEXT_STYLE} title={module.contentRefId}>
-          {module.contentRefId}
+        <div style={REF_TEXT_STYLE} title={previewTitle(module, meta)}>
+          {previewTitle(module, meta)}
         </div>
       </div>
     </div>
   )
 }
 
-function PosterPreviewItem({ module, rank }: { module: HomeModule; rank: number }) {
+function PosterPreviewItem({ module, rank, meta }: { module: HomeModule; rank: number; meta: VideoMeta | null | undefined }) {
   const itemStyle = module.enabled ? POSTER_ITEM_STYLE : { ...POSTER_ITEM_STYLE, ...DISABLED_OVERLAY }
+  // 海报位优先视频封面（竖版语义），imageUrl 横图兜底
+  const posterSrc = meta?.coverUrl ?? module.imageUrl ?? null
   return (
     <div style={itemStyle} data-preview-poster-item>
       <div style={RANK_STYLE}>{rank}</div>
-      <div style={POSTER_THUMB_STYLE}>🎬</div>
+      {posterSrc ? (
+        // 装饰性配图
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={posterSrc} alt="" aria-hidden="true" loading="lazy" style={{ ...POSTER_THUMB_STYLE, objectFit: 'cover' }} data-preview-poster-img />
+      ) : (
+        <div style={POSTER_THUMB_STYLE} aria-hidden="true"><ImageOff size={14} /></div>
+      )}
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={REF_TEXT_STYLE} title={module.contentRefId}>
-          {module.contentRefId}
+        <div style={REF_TEXT_STYLE} title={previewTitle(module, meta)}>
+          {previewTitle(module, meta)}
         </div>
       </div>
     </div>
@@ -228,13 +255,19 @@ function TypeShortcutsPreview({ modules }: { modules: readonly HomeModule[] }) {
 
 // ── 主组件 ────────────────────────────────────────────────────────
 
+const EMPTY_META_MAP: VideoMetaMap = new Map()
+
 export interface HomePreviewPanelProps {
   readonly slot: HomeModuleSlot
   readonly modules: readonly HomeModule[]
+  /** video 引用充实数据（CHG-HOME-UX-06；父级 HomeOpsClient 下传，本组件不自取） */
+  readonly videoMetaMap?: VideoMetaMap
 }
 
-export function HomePreviewPanel({ slot, modules }: HomePreviewPanelProps) {
+export function HomePreviewPanel({ slot, modules, videoMetaMap = EMPTY_META_MAP }: HomePreviewPanelProps) {
   const enabledCount = modules.filter((m) => m.enabled).length
+  const metaOf = (m: HomeModule): VideoMeta | null | undefined =>
+    m.contentRefType === 'video' ? videoMetaMap.get(m.contentRefId) : undefined
 
   return (
     <div data-home-preview-panel style={PANEL_STYLE}>
@@ -249,11 +282,11 @@ export function HomePreviewPanel({ slot, modules }: HomePreviewPanelProps) {
           <TypeShortcutsPreview modules={modules} />
         ) : slot === 'banner' ? (
           modules.map((m, i) => (
-            <BannerPreviewItem key={m.id} module={m} rank={i + 1} />
+            <BannerPreviewItem key={m.id} module={m} rank={i + 1} meta={metaOf(m)} />
           ))
         ) : (
           modules.map((m, i) => (
-            <PosterPreviewItem key={m.id} module={m} rank={i + 1} />
+            <PosterPreviewItem key={m.id} module={m} rank={i + 1} meta={metaOf(m)} />
           ))
         )}
       </div>

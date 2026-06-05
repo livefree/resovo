@@ -23,6 +23,8 @@ const BASE_MODULE: HomeModule = {
   ordering: 0,
   contentRefType: 'video',
   contentRefId: 'v-abc',
+  title: {},
+  imageUrl: null,
   startAt: null,
   endAt: null,
   enabled: true,
@@ -30,6 +32,10 @@ const BASE_MODULE: HomeModule = {
   createdAt: '2026-05-12T00:00:00Z',
   updatedAt: '2026-05-12T00:00:00Z',
 }
+
+const META_MAP = new Map([
+  ['v-abc', { title: '流浪地球 3', coverUrl: 'https://cdn.example.com/c.jpg', isPublished: true }],
+])
 
 describe('HomePreviewPanel — header', () => {
   it('渲染 slot label「轮播广告」', () => {
@@ -140,5 +146,45 @@ describe('HomePreviewPanel — disabled 模块样式', () => {
     const pill = container.querySelector('[data-preview-pill]') as HTMLElement
     expect(pill).not.toBeNull()
     expect(pill.style.opacity).toBe('0.4')
+  })
+})
+
+// ── CHG-HOME-UX-06：轻拟真（真实封面 + 标题，emoji/UUID 退役）─────────────────
+
+describe('HomePreviewPanel — 轻拟真（videoMetaMap）', () => {
+  it('banner：videoMeta 命中 → 真实横图（coverUrl 回退）+ 视频标题（UUID 退役）', () => {
+    const { container } = render(
+      <HomePreviewPanel slot="banner" modules={[BASE_MODULE]} videoMetaMap={META_MAP} />,
+    )
+    const img = container.querySelector('[data-preview-banner-img]') as HTMLImageElement
+    expect(img).not.toBeNull()
+    expect(img.src).toBe('https://cdn.example.com/c.jpg')
+    expect(container.textContent).toContain('流浪地球 3')
+  })
+
+  it('banner：module.imageUrl 优先于 coverUrl；title.zh-CN 优先于视频标题', () => {
+    const withOwn = { ...BASE_MODULE, imageUrl: 'https://cdn.example.com/own.jpg', title: { 'zh-CN': '运营标题' } }
+    const { container } = render(
+      <HomePreviewPanel slot="banner" modules={[withOwn]} videoMetaMap={META_MAP} />,
+    )
+    expect((container.querySelector('[data-preview-banner-img]') as HTMLImageElement).src).toBe('https://cdn.example.com/own.jpg')
+    expect(container.textContent).toContain('运营标题')
+    expect(container.textContent).not.toContain('流浪地球 3')
+  })
+
+  it('poster（top10）：coverUrl 渲染海报图 + 标题 + 排名保留', () => {
+    const mod = { ...BASE_MODULE, slot: 'top10' as const }
+    const { container } = render(
+      <HomePreviewPanel slot="top10" modules={[mod]} videoMetaMap={META_MAP} />,
+    )
+    expect((container.querySelector('[data-preview-poster-img]') as HTMLImageElement).src).toBe('https://cdn.example.com/c.jpg')
+    expect(container.textContent).toContain('流浪地球 3')
+    expect(container.textContent).toContain('1')
+  })
+
+  it('无 metaMap（缺省）→ 降级末位显示 contentRefId + icon 占位（不崩溃零破坏）', () => {
+    const { container } = render(<HomePreviewPanel slot="banner" modules={[BASE_MODULE]} />)
+    expect(container.querySelector('[data-preview-banner-img]')).toBeNull()
+    expect(container.textContent).toContain('v-abc')
   })
 })

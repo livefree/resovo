@@ -330,7 +330,7 @@ export function HomeOpsClient() {
                 )
           }
         </div>
-        <HomePreviewPanel slot={activeSlot} modules={modules} />
+        <HomePreviewPanel slot={activeSlot} modules={modules} videoMetaMap={metaMap} />
       </div>
 
       <HomeModuleDrawer

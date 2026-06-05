@@ -15072,3 +15072,16 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **新增依赖**：无
 - **数据库变更**：无
 - **注意事项**：**发现 v1 BannerForm 时间窗往返漂移 bug**（apps/server/src/components/admin/banners/BannerForm.tsx:72,91——UTC 切片显示 + 本地解析提交），v1 已冻结仅维护期修复，登记 follow-up CHG-BANNER-TZ-FIX。home 域 45/45 + test:changed 29/29 + typecheck/lint EXIT=0。解阻 FUP 部分。
+
+## [CHG-HOME-UX-06] HomePreviewPanel 轻拟真 — 真实封面 + 标题（emoji/UUID 退役）
+- **完成时间**：2026-06-05
+- **记录时间**：2026-06-05 16:08
+- **执行模型**：claude-opus-4-8（人工 opus 会话覆盖 sonnet 建议，偏离登记）
+- **子代理**：无
+- **修改文件**：
+  - `apps/server-next/src/app/admin/home/_client/HomePreviewPanel.tsx` — props +videoMetaMap?（optional 默认空 Map 零破坏；父传不自取守住「仅消费已加载数据」原则）；BannerPreviewItem 🎬/🔗 emoji → 真实 16:9 横图（imageUrl→coverUrl→ImageOff/Link2 icon 占位）+ previewTitle 降级链（与卡片同口径：title.zh-CN→en→视频标题→contentRefId）；PosterPreviewItem 🎬 → 真实海报（coverUrl 优先竖版语义）+ 标题 + 排名保留；type_shortcuts pills 与 disabled overlay 不动
+  - `apps/server-next/src/app/admin/home/_client/HomeOpsClient.tsx` — PreviewPanel 接 videoMetaMap（与 Card 共用同一 metaMap，零重复请求）
+  - `tests/unit/components/server-next/admin/home/HomePreviewPanel.test.tsx` — fixture 补 title/imageUrl + META_MAP + 4 新用例（meta 命中横图+标题 / imageUrl+title.zh-CN 优先级 / poster 海报+排名 / 缺省降级零破坏）
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：预览 20/20 + home 域全绿 + test:changed 40/40 + typecheck/lint EXIT=0 + **e2e:admin 39 passed+1 flaky（publish-flow 既见 flaky 重试过）= 04-B/05/06 批跑完成**。改造主线（缺口 1-7）全部收口；解阻 07。
