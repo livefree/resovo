@@ -3299,10 +3299,12 @@ CODENAME-MATRIX-E2E (依赖 Wave 3 验收期补丁 CODENAME-MATRIX ✅)
    - 依赖：CHG-HOME-UX-03 ✅
    - 范围（3 项）：① 设计稿 §5.7 重排（序号 + 120×54 本地 img imageUrl→coverUrl→占位 + 标题降级链 title.zh-CN→视频标题→[类型]refId + 本地化时间窗）② Pill variant=deriveModuleStatus ③ HomeOpsClient.test.tsx 卡片断言更新。
    - 完成备注：全形态落地（裸 UUID/裸 ISO 双退役）；props +index/+videoMeta（metaMap 注入归 04-B，undefined 路径本卡已覆盖）。+4 用例 31/31 + test:changed 15/15 + typecheck/lint EXIT=0。解阻 04-B。执行模型: claude-opus-4-8（人工 opus 覆盖 sonnet）；子代理: 无。
-7. **CHG-HOME-UX-04-B** — HomeOpsClient 编排（状态：⬜ 待开始）
+7. **CHG-HOME-UX-04-B** — HomeOpsClient 编排（状态：✅ 已完成）
+   - 实际开始：2026-06-05 15:50 ｜ 完成时间：2026-06-05 15:52
    - 建议模型：sonnet
-   - 依赖：CHG-HOME-UX-04-A
+   - 依赖：CHG-HOME-UX-04-A ✅
    - 范围（4 项）：① 手写 tabs → Segment（badge=已加载 slot 计数）② window.confirm → 新建 DeleteModuleModal（仿 users Modal 范式）③ useVideoMetaMap 顶层一次接线下传 Card+PreviewPanel ④ 测试更新 + test:e2e:admin。
+   - 完成备注：Segment 接管（手写 tabs 删除）+ DeleteModuleModal（103 行，目标摘要+硬删 danger 明示）+ metaMap 接线（红 pill 路径激活，四色全实装；PreviewPanel 下传归 06）。+5 用例 36/36 + test:changed 20/20 + typecheck/lint EXIT=0；e2e:admin 与 05/06 批跑登记。解阻 06/07。执行模型: claude-opus-4-8（人工 opus 覆盖 sonnet）；子代理: 无。
 8. **CHG-HOME-UX-05** — HomeModuleDrawer 字段补齐（状态：⬜ 待开始）
    - 建议模型：sonnet
    - 依赖：CHG-HOME-UX-03、CHG-HOME-UX-02

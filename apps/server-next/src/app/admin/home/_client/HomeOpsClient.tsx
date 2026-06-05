@@ -28,6 +28,7 @@ import {
   LoadingState,
   ErrorState,
   EmptyState,
+  Segment,
   useToast,
 } from '@resovo/admin-ui'
 import {
@@ -44,9 +45,11 @@ import type {
   CreateHomeModuleBody,
   UpdateHomeModuleBody,
 } from '@/lib/home-modules/types'
+import { useVideoMetaMap } from '@/lib/home-modules/use-video-meta-map'
 import { HomeModuleCard } from './HomeModuleCard'
 import { HomeModuleDrawer } from './HomeModuleDrawer'
 import { HomePreviewPanel } from './HomePreviewPanel'
+import { DeleteModuleModal } from './DeleteModuleModal'
 
 // ── 常量 ─────────────────────────────────────────────────────────
 
@@ -66,31 +69,6 @@ const PAGE_STYLE: CSSProperties = {
   minHeight: 0,
   gap: 'var(--section-gap)',
   padding: 'var(--page-padding-y) var(--page-padding-x) 0',
-}
-
-const TAB_BAR_STYLE: CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: '4px',
-  borderBottom: '1px solid var(--border-subtle)',
-  paddingBottom: '0',
-}
-
-function tabStyle(active: boolean): CSSProperties {
-  return {
-    padding: '8px 16px',
-    fontSize: 'var(--font-size-sm)',
-    fontWeight: active ? 600 : 400,
-    color: active ? 'var(--fg-default)' : 'var(--fg-muted)',
-    cursor: 'pointer',
-    background: 'transparent',
-    borderTop: 'none',
-    borderLeft: 'none',
-    borderRight: 'none',
-    borderBottom: active ? '2px solid var(--fg-default)' : '2px solid transparent',
-    borderRadius: 0,
-    marginBottom: '-1px',
-  }
 }
 
 const BODY_SPLIT_STYLE: CSSProperties = {
@@ -118,6 +96,8 @@ export function HomeOpsClient() {
   const [pendingId, setPendingId] = useState<string | null>(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [editingModule, setEditingModule] = useState<HomeModule | null>(null)
+  // CHG-HOME-UX-04-B：删除确认 Modal（取代 window.confirm）
+  const [deleteTarget, setDeleteTarget] = useState<HomeModule | null>(null)
 
   const loadSlot = useCallback(async (slot: HomeModuleSlot) => {
     setLoadingSlots(prev => ({ ...prev, [slot]: true }))
@@ -142,6 +122,9 @@ export function HomeOpsClient() {
   const modules = modulesBySlot[activeSlot] ?? []
   const loading = loadingSlots[activeSlot] ?? false
   const error = errorSlots[activeSlot]
+
+  // CHG-HOME-UX-04-B：video 引用充实（顶层一次，metaMap 下传 Card / PreviewPanel 共用）
+  const { metaMap } = useVideoMetaMap(modules)
 
   // ── 拖拽排序 ──────────────────────────────────────────────────────
 
@@ -191,10 +174,9 @@ export function HomeOpsClient() {
     }
   }, [activeSlot, toast])
 
-  // ── 删除 ──────────────────────────────────────────────────────────
+  // ── 删除（CHG-HOME-UX-04-B：Modal 确认取代 window.confirm）──────────
 
-  const handleDelete = useCallback(async (id: string) => {
-    if (!window.confirm('确认删除该运营位模块？此操作不可恢复。')) return
+  const handleDeleteConfirmed = useCallback(async (id: string) => {
     setPendingId(id)
     try {
       await deleteHomeModule(id)
@@ -202,6 +184,7 @@ export function HomeOpsClient() {
         ...prev,
         [activeSlot]: (prev[activeSlot] ?? []).filter(m => m.id !== id),
       }))
+      setDeleteTarget(null)
       toast.push({ title: '已删除', level: 'success' })
     } catch (err: unknown) {
       toast.push({
@@ -264,21 +247,20 @@ export function HomeOpsClient() {
         data-testid="home-ops-page-header"
       />
 
-      <nav style={TAB_BAR_STYLE} aria-label="运营位类型切换" role="tablist">
-        {SLOTS.map(slot => (
-          <button
-            key={slot}
-            type="button"
-            role="tab"
-            style={tabStyle(slot === activeSlot)}
-            onClick={() => setActiveSlot(slot)}
-            data-testid={`home-slot-tab-${slot}`}
-            aria-selected={slot === activeSlot}
-          >
-            {SLOT_LABEL[slot]}
-          </button>
-        ))}
-      </nav>
+      {/* CHG-HOME-UX-04-B：手写 bottom-border tabs → 共享 Segment（设计稿 §5.7「Segment」）
+          badge 仅显已加载 slot 的模块数（懒加载未访问 slot 无数据，全量计数端点为 follow-up） */}
+      <Segment
+        items={SLOTS.map(slot => ({
+          value: slot,
+          label: SLOT_LABEL[slot],
+          badge: modulesBySlot[slot]?.length,
+        }))}
+        value={activeSlot}
+        onChange={(next) => setActiveSlot(next as HomeModuleSlot)}
+        size="md"
+        aria-label="运营位类型切换"
+        data-testid="home-slot-segment"
+      />
 
       <div style={BODY_SPLIT_STYLE}>
         <div style={SLOT_SECTION_STYLE}>
@@ -333,9 +315,10 @@ export function HomeOpsClient() {
                                   key={module.id}
                                   module={module}
                                   index={index}
+                                  videoMeta={module.contentRefType === 'video' ? metaMap.get(module.contentRefId) : undefined}
                                   pendingId={pendingId}
                                   onEdit={(m) => { setEditingModule(m); setDrawerOpen(true) }}
-                                  onDelete={(id) => void handleDelete(id)}
+                                  onDelete={(id) => setDeleteTarget(modules.find(m => m.id === id) ?? null)}
                                   onPublishToggle={(id, enabled) => void handlePublishToggle(id, enabled)}
                                 />
                               ))}
@@ -356,6 +339,12 @@ export function HomeOpsClient() {
         defaultSlot={activeSlot}
         onClose={() => setDrawerOpen(false)}
         onSave={handleSave}
+      />
+
+      <DeleteModuleModal
+        module={deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={handleDeleteConfirmed}
       />
     </div>
   )

@@ -15046,3 +15046,16 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **新增依赖**：无（lucide-react ImageOff 既有依赖图标）
 - **数据库变更**：无
 - **注意事项**：videoMeta 实际注入归 04-B（本卡 undefined 路径已覆盖：占位+降级末位）；红 pill「引用失效」用例归 04-B（需 metaMap 接线）。组件测试 31/31 + test:changed 15/15 + typecheck/lint EXIT=0。解阻 04-B。
+
+## [CHG-HOME-UX-04-B] HomeOpsClient 编排 — Segment + DeleteModuleModal + useVideoMetaMap 接线
+- **完成时间**：2026-06-05
+- **记录时间**：2026-06-05 15:52
+- **执行模型**：claude-opus-4-8（人工 opus 会话覆盖 sonnet 建议，偏离登记）
+- **子代理**：无
+- **修改文件**：
+  - `apps/server-next/src/app/admin/home/_client/HomeOpsClient.tsx` — 手写 bottom-border tabs（TAB_BAR_STYLE/tabStyle/nav 删除）→ 共享 Segment（设计稿 §5.7；badge=已加载 slot 计数，懒加载未访问 slot 无 badge〔全量计数端点 follow-up CHG-HOME-COUNTS〕）；window.confirm → deleteTarget state + DeleteModuleModal；useVideoMetaMap 顶层一次接线 → videoMeta 下传 Card（video 类型 metaMap.get）
+  - `apps/server-next/src/app/admin/home/_client/DeleteModuleModal.tsx`（新 103 行）— 确认型 Modal（仿 SwitchDomainModal 范式；目标摘要 + 硬删 danger 明示 +「运营下线请改用隐藏」引导）
+  - `tests/unit/components/server-next/admin/home/HomeOpsClient.test.tsx` — +picker-fetcher mock（默认成功 meta 防误触红 pill）+5 用例（videoMeta 标题/coverUrl 回退 / 红 pill 引用失效 / Segment badge / Modal 删除全流程含行移除 / 取消不调 delete）；04-A 降级用例改 pending fetch 模拟未取回
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：window.confirm 全退役；红 pill「引用失效」路径自此激活（P-home §6 四色全实装）。组件测试 36/36 + test:changed 20/20 + typecheck/lint EXIT=0；e2e:admin 与 05/06 批跑登记（连续前端卡）。解阻 06 / 07。

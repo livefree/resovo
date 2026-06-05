@@ -52,15 +52,36 @@ vi.mock('../../../../../../apps/server-next/src/lib/home-modules/api', () => ({
   publishToggleHomeModule: vi.fn(),
 }))
 
+// ── mock picker-fetcher（CHG-HOME-UX-04-B：useVideoMetaMap 取数通道）──
+// 默认返回成功 meta（避免 null 误触发红 pill 影响既有断言）；红 pill 用例单独覆写
+const mockFetchPickerById = vi.fn()
+vi.mock('../../../../../../apps/server-next/src/lib/videos/picker-fetcher', () => ({
+  fetchPickerItemByIdSafe: (...args: unknown[]) => mockFetchPickerById(...args),
+  videoPickerFetcher: vi.fn(),
+}))
+
 import {
   listHomeModules,
+  deleteHomeModule,
   publishToggleHomeModule,
 } from '../../../../../../apps/server-next/src/lib/home-modules/api'
 import { HomeOpsClient } from '../../../../../../apps/server-next/src/app/admin/home/_client/HomeOpsClient'
 import type { HomeModule } from '../../../../../../apps/server-next/src/lib/home-modules/types'
 
 const mockedList = vi.mocked(listHomeModules)
+const mockedDelete = vi.mocked(deleteHomeModule)
 const mockedToggle = vi.mocked(publishToggleHomeModule)
+
+const PICKER_ITEM = {
+  id: 'v-abc',
+  shortId: 'abc',
+  title: '流浪地球 3',
+  titleEn: null,
+  type: 'movie',
+  year: 2026,
+  coverUrl: 'https://cdn.example.com/cover.jpg',
+  isPublished: true,
+}
 
 const MODULE_FIXTURE: HomeModule = {
   id: 'm-001',
@@ -83,6 +104,7 @@ const MODULE_FIXTURE: HomeModule = {
 beforeEach(() => {
   cleanup()
   vi.clearAllMocks()
+  mockFetchPickerById.mockResolvedValue(PICKER_ITEM)
 })
 
 describe('HomeOpsClient — loading 态', () => {
@@ -233,7 +255,9 @@ describe('HomeOpsClient — publish toggle 反向（enabled=false → 启用）'
 // ── CHG-HOME-UX-04-A：卡片重排（序号 / 横图降级链 / 标题降级链 / 四色 Pill）──
 
 describe('HomeOpsClient — HomeModuleCard 设计稿 §5.7 形态', () => {
-  it('序号 #1 渲染 + title 空且无 videoMeta → 标题降级 [类型] refId + 横图占位', async () => {
+  it('序号 #1 渲染 + title 空且 videoMeta 未取回（pending）→ 标题降级 [类型] refId + 横图占位', async () => {
+    // 模拟取数 in-flight：videoMeta undefined 走降级末位（04-B metaMap 注入后该路径仍存在）
+    mockFetchPickerById.mockReturnValue(new Promise(() => { /* pending */ }))
     mockedList.mockResolvedValue({ data: [MODULE_FIXTURE], total: 1, page: 1, limit: 100 })
     render(<HomeOpsClient />)
     await waitFor(() => {
@@ -242,9 +266,27 @@ describe('HomeOpsClient — HomeModuleCard 设计稿 §5.7 形态', () => {
     expect(screen.getByTestId('home-module-index-m-001').textContent).toBe('#1')
     // 标题降级链末位：[视频] v-abc
     expect(screen.getByTestId('home-module-card-m-001').textContent).toContain('[视频] v-abc')
-    // 无 imageUrl + 无 videoMeta → 占位
+    // 无 imageUrl + videoMeta 未取回 → 占位
     expect(screen.queryByTestId('home-module-thumb-placeholder-m-001')).not.toBeNull()
     expect(screen.queryByTestId('home-module-thumb-m-001')).toBeNull()
+  })
+
+  it('videoMeta 取回成功 → 标题用视频标题 + 横图回退 coverUrl（04-B metaMap 接线）', async () => {
+    mockedList.mockResolvedValue({ data: [MODULE_FIXTURE], total: 1, page: 1, limit: 100 })
+    render(<HomeOpsClient />)
+    await waitFor(() => {
+      expect(screen.getByTestId('home-module-card-m-001').textContent).toContain('流浪地球 3')
+    })
+    expect((screen.getByTestId('home-module-thumb-m-001') as HTMLImageElement).src).toBe('https://cdn.example.com/cover.jpg')
+  })
+
+  it('video 引用 404 → 红 pill「引用失效」（04-B metaMap null 路径）', async () => {
+    mockFetchPickerById.mockResolvedValue(null)
+    mockedList.mockResolvedValue({ data: [MODULE_FIXTURE], total: 1, page: 1, limit: 100 })
+    render(<HomeOpsClient />)
+    await waitFor(() => {
+      expect(screen.getByTestId('home-module-status-m-001').textContent).toContain('引用失效')
+    })
   })
 
   it('title.zh-CN 优先于降级链 + imageUrl 渲染 120×54 img', async () => {
@@ -295,6 +337,70 @@ describe('HomeOpsClient — HomeModuleCard 设计稿 §5.7 形态', () => {
     const text = screen.getByTestId('home-module-card-m-001').textContent ?? ''
     expect(text).not.toContain('2099-06-01T08:00:00Z')  // 裸 ISO 退役
     expect(text).toContain('→')                          // 「MM-DD HH:mm → MM-DD HH:mm」形态
+  })
+})
+
+// ── CHG-HOME-UX-04-B：Segment + DeleteModuleModal ──────────────────────────
+
+describe('HomeOpsClient — Segment 接管 slot 切换', () => {
+  it('Segment 渲染（data-testid=home-slot-segment）+ 已加载 slot 显示 badge 计数', async () => {
+    mockedList.mockResolvedValue({ data: [MODULE_FIXTURE], total: 1, page: 1, limit: 100 })
+    render(<HomeOpsClient />)
+    await waitFor(() => {
+      expect(screen.queryByTestId('home-slot-segment')).not.toBeNull()
+    })
+    // banner slot 已加载 1 个模块 → Segment item badge 显示 1
+    const segment = screen.getByTestId('home-slot-segment')
+    expect(segment.textContent).toContain('轮播广告')
+    expect(segment.textContent).toContain('1')
+  })
+})
+
+describe('HomeOpsClient — 删除 Modal 流程（window.confirm 退役）', () => {
+  it('点删除 → Modal 出现含目标摘要 → 确认 → deleteHomeModule 调用 + 行移除', async () => {
+    mockedList.mockResolvedValue({ data: [MODULE_FIXTURE], total: 1, page: 1, limit: 100 })
+    mockedDelete.mockResolvedValue(undefined)
+    render(<HomeOpsClient />)
+    await waitFor(() => {
+      expect(screen.queryByTestId('home-module-delete-m-001')).not.toBeNull()
+    })
+
+    fireEvent.click(screen.getByTestId('home-module-delete-m-001'))
+
+    // Modal 出现（不再走 window.confirm）
+    await waitFor(() => {
+      expect(screen.queryByTestId('home-module-delete-modal')).not.toBeNull()
+    })
+    expect(screen.getByTestId('home-module-delete-target').textContent).toContain('v-abc')
+
+    fireEvent.click(screen.getByTestId('home-module-delete-confirm'))
+
+    await waitFor(() => {
+      expect(mockedDelete).toHaveBeenCalledWith('m-001')
+    })
+    // 行移除
+    await waitFor(() => {
+      expect(screen.queryByTestId('home-module-card-m-001')).toBeNull()
+    })
+  })
+
+  it('取消按钮关闭 Modal 且不调 deleteHomeModule', async () => {
+    mockedList.mockResolvedValue({ data: [MODULE_FIXTURE], total: 1, page: 1, limit: 100 })
+    render(<HomeOpsClient />)
+    await waitFor(() => {
+      expect(screen.queryByTestId('home-module-delete-m-001')).not.toBeNull()
+    })
+
+    fireEvent.click(screen.getByTestId('home-module-delete-m-001'))
+    await waitFor(() => {
+      expect(screen.queryByTestId('home-module-delete-modal')).not.toBeNull()
+    })
+
+    fireEvent.click(screen.getByText('取消'))
+    await waitFor(() => {
+      expect(screen.queryByTestId('home-module-delete-modal')).toBeNull()
+    })
+    expect(mockedDelete).not.toHaveBeenCalled()
   })
 })
 
