@@ -123,7 +123,8 @@ export function CandidatesSection() {
         toast.push({
           level: 'success',
           title: '合并成功',
-          description: `已合并 ${sourceVideoIds.length} 个源到 ${result.targetVideo.title}`,
+          description: `已合并 ${sourceVideoIds.length} 个源到 ${result.targetVideo.title}`
+            + (result.dedupedCount ? `（自动去重 ${result.dedupedCount} 条重复线路）` : ''),
           action: {
             label: '撤销',
             onClick: () => {

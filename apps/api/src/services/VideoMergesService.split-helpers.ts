@@ -16,7 +16,6 @@ import type { Pool } from 'pg'
 import type { SplitGroup } from '@resovo/types'
 import {
   fetchVideosByIds,
-  detectSplitConflictsForTarget,
   type RawVideoRow,
 } from '@/api/db/queries/video-merge-mutations'
 import type { MediaCatalogService } from '@/api/services/MediaCatalogService'
@@ -71,19 +70,9 @@ export async function resolveSplitGroups(
     }
   }
 
-  // ── 冲突预检（D-105-3 / 同 R-105-1 范式，整体不执行）────────────────
-  for (const group of groups) {
-    if (group.targetVideoId === undefined) continue
-    const conflicts = await detectSplitConflictsForTarget(db, [...group.sourceIds], group.targetVideoId)
-    if (conflicts > 0) {
-      throw new AppError(
-        'STATE_CONFLICT',
-        `转入组与目标视频存在重复 (episode_number, source_url) 组合 ${conflicts} 条，` +
-          '请先在 /admin/sources 视图处理（保留其一删除其余）后再拆分',
-        409,
-      )
-    }
-  }
+  // ──（ADR-105 AMENDMENT 2026-06-05 D-105-15）原 D-105-3 冲突预检 409 废止——
+  // 转入行与已有 target 重复 (episode_number, source_url) 改为事务内去重软删
+  //（VideoMergesService.split 事务内 assignSourcesToVideo 前执行 / Y-105-D4 时序）
 
   // ── 解析（newVideoMeta 组事务前 findOrCreate catalog / CHG-VIR-PRE-1）──
   const resolved: ResolvedSplitGroup[] = []

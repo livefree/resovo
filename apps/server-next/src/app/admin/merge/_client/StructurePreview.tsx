@@ -8,7 +8,7 @@
  * 候选行展开（经 MergeResultPreview）与 mode=merge 工作区（MergeWorkspace 直接
  * 消费）共用，按需展开拉既有 getVideoMatrix ×N 前端合成。
  *
- * 三类结构信号：同站同名线路跨 video 重复（409 预警）/ 集数互补（正信号）/
+ * 三类结构信号：同站同名线路跨 video 重复（自动去重提示 / D-105-16）/ 集数互补（正信号）/
  * 完全重叠（建议播放抽验）。▶ 格默认唤起内置 PlayPreviewDrawer（同集对比切换）；
  * onEpisodeClick 外部注入时优先外部。
  *
@@ -80,7 +80,7 @@ export interface StructureSignal {
 
 /**
  * 合并后线路矩阵合成 + 三类结构信号（纯函数）：
- *  - 同站同名线路跨 video 重复 → danger（执行将触发跨站源冲突 409 预检 / R-105-1）
+ *  - 同站同名线路跨 video 重复 → info（合并时自动去重取并集 / D-105-13）
  *  - 集数互补（并集无重叠）→ ok 正信号
  *  - 跨 video 集数完全重叠 → info 建议播放抽验（可能为版本/语言差异）
  */
@@ -102,7 +102,8 @@ export function combineMatrices(
 
   const signals: StructureSignal[] = []
 
-  // ① 同站同名线路跨 video 重复 → 409 预警
+  // ① 同站同名线路跨 video 重复 → 自动去重提示（ADR-105 AMENDMENT 2026-06-05 D-105-16：
+  // 原 R-105-1 预检 409 已废止，重复 (episode_number, source_url) 合并时取并集自动去重）
   const byLineKey = new Map<string, Set<string>>()
   for (const l of lines) {
     const set = byLineKey.get(l.lineKey) ?? new Set<string>()
@@ -112,8 +113,8 @@ export function combineMatrices(
   const dupLines = [...byLineKey.entries()].filter(([, vids]) => vids.size > 1)
   if (dupLines.length > 0) {
     signals.push({
-      tone: 'danger',
-      text: `同站同名线路跨视频重复（${dupLines.map(([k]) => k.split('|')[1]).join('、')}）— 执行合并将触发跨站源冲突（409），请先在 /admin/sources 处理`,
+      tone: 'info',
+      text: `同站同名线路跨视频重复（${dupLines.map(([k]) => k.split('|')[1]).join('、')}）— 重复集数将在合并时自动去重（线路取并集）`,
     })
   }
 

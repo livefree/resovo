@@ -15,8 +15,6 @@ vi.mock('@/api/db/queries/video-merge-mutations', () => ({
   fetchVideosByIds: vi.fn(),
   fetchSourcesByVideoId: vi.fn(),
   fetchSourcesByVideoIds: vi.fn(),
-  detectMergeConflicts: vi.fn(),
-  detectSplitConflictsForTarget: vi.fn(),
   fetchAuditById: vi.fn(),
   insertMergeAudit: vi.fn(),
   transferSourcesToTarget: vi.fn(),

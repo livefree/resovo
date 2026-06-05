@@ -19,7 +19,13 @@ vi.mock('@/api/db/queries/video-merge-mutations', () => ({
   fetchVideosByIds: vi.fn(),
   fetchSourcesByVideoId: vi.fn(),
   fetchSourcesByVideoIds: vi.fn(),
-  detectMergeConflicts: vi.fn(),
+  // CHG-MERGE-DEDUP-EP（D-105-13~16）：自动去重取并集
+  dedupeSourcesForMerge: vi.fn(),
+  detectResidualTargetConflicts: vi.fn(),
+  dedupeSourcesForSplitTarget: vi.fn(),
+  detectResidualSplitTargetConflicts: vi.fn(),
+  restoreSourcesByIds: vi.fn(),
+  setAuditDedupedSourceIds: vi.fn(),
   fetchAuditById: vi.fn(),
   insertMergeAudit: vi.fn(),
   transferSourcesToTarget: vi.fn(),
@@ -179,7 +185,6 @@ function arrangeMergeHappyPath() {
     makeVideoRow(SOURCE_ID_1),
     makeVideoRow(TARGET_ID),
   ])
-  vi.mocked(mutations.detectMergeConflicts).mockResolvedValueOnce(0)
   vi.mocked(mutations.fetchSourcesByVideoIds).mockResolvedValueOnce([])
   vi.mocked(mutations.insertMergeAudit).mockResolvedValueOnce(AUDIT_ID)
   vi.mocked(candidates.fetchVideoDetailsForCandidates).mockResolvedValueOnce([{
@@ -196,6 +201,10 @@ function arrangeMergeHappyPath() {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  // CHG-MERGE-DEDUP-EP 默认零去重路径
+  vi.mocked(mutations.dedupeSourcesForMerge).mockResolvedValue([])
+  vi.mocked(mutations.detectResidualTargetConflicts).mockResolvedValue(0)
+  vi.mocked(mutations.restoreSourcesByIds).mockResolvedValue()
 })
 
 // ── merge：candidateId 路径 ──────────────────────────────────────────
@@ -295,8 +304,7 @@ describe('VideoMergesService.merge + candidateId（ADR-178 D-178-3）', () => {
       makeVideoRow(SOURCE_ID_1),
       makeVideoRow(TARGET_ID),
     ])
-    vi.mocked(mutations.detectMergeConflicts).mockResolvedValueOnce(0)
-    vi.mocked(findCandidateByIdReadonly)
+      vi.mocked(findCandidateByIdReadonly)
       .mockResolvedValueOnce(makeCandidateRow('pending'))
       .mockResolvedValueOnce({ ...makeCandidateRow('rejected'), id: CANDIDATE_ID_2 })
 
@@ -316,8 +324,7 @@ describe('VideoMergesService.merge + candidateId（ADR-178 D-178-3）', () => {
       makeVideoRow(SOURCE_ID_1),
       makeVideoRow(TARGET_ID),
     ])
-    vi.mocked(mutations.detectMergeConflicts).mockResolvedValueOnce(0)
-    vi.mocked(findCandidateByIdReadonly).mockResolvedValueOnce(null)
+      vi.mocked(findCandidateByIdReadonly).mockResolvedValueOnce(null)
 
     await expect(
       svc.merge({ sourceVideoIds: [SOURCE_ID_1], targetVideoId: TARGET_ID, candidateId: CANDIDATE_ID }, ACTOR_ID),
@@ -333,8 +340,7 @@ describe('VideoMergesService.merge + candidateId（ADR-178 D-178-3）', () => {
       makeVideoRow(SOURCE_ID_1),
       makeVideoRow(TARGET_ID),
     ])
-    vi.mocked(mutations.detectMergeConflicts).mockResolvedValueOnce(0)
-    vi.mocked(findCandidateByIdReadonly).mockResolvedValueOnce(makeCandidateRow('rejected'))
+      vi.mocked(findCandidateByIdReadonly).mockResolvedValueOnce(makeCandidateRow('rejected'))
 
     await expect(
       svc.merge({ sourceVideoIds: [SOURCE_ID_1], targetVideoId: TARGET_ID, candidateId: CANDIDATE_ID }, ACTOR_ID),
@@ -349,8 +355,7 @@ describe('VideoMergesService.merge + candidateId（ADR-178 D-178-3）', () => {
       makeVideoRow(SOURCE_ID_1),
       makeVideoRow(TARGET_ID),
     ])
-    vi.mocked(mutations.detectMergeConflicts).mockResolvedValueOnce(0)
-    vi.mocked(findCandidateByIdReadonly).mockResolvedValueOnce(
+      vi.mocked(findCandidateByIdReadonly).mockResolvedValueOnce(
       makeCandidateRow('pending', SOURCE_ID_1, OTHER_ID),  // OTHER_ID 不在合并集合
     )
 

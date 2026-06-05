@@ -152,6 +152,8 @@ export interface MergeResult {
   readonly targetVideo: VideoSummaryForMerge
   /** D-105-10：仅请求携带 targetStatus 时出现（R-105-T1 缺省响应逐值不变）。 */
   readonly statusTransition?: StatusTransitionOutcome
+  /** D-105-16（CHG-MERGE-DEDUP-EP）：实际去重条数（重复 (episode_number, source_url) 软删取并集；>0 时透出 / R-105-D4 纯增量）。 */
+  readonly dedupedCount?: number
 }
 
 export interface UnmergeParams {
@@ -209,6 +211,8 @@ export interface SplitResult {
    * （未携带组无 transition 意图，不产 skipped 条目）。
    */
   readonly statusTransition?: readonly { readonly videoId: string; readonly result: StatusTransitionOutcome }[]
+  /** D-105-16（CHG-MERGE-DEDUP-EP）：拆到已有 video 转入去重条数（>0 时透出）。 */
+  readonly dedupedCount?: number
 }
 
 // ── ADR-105 AMENDMENT 2026-06-03（CHG-VIR-11 / Phase 4 拆分证据化）─────────

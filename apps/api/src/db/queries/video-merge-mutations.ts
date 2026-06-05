@@ -129,62 +129,159 @@ export async function fetchSourcesByVideoIds(
   return result.rows
 }
 
+// ── 自动去重取并集（ADR-105 AMENDMENT 2026-06-05 D-105-13~16 / CHG-MERGE-DEDUP-EP）────
+// 原 detectMergeConflicts / detectSplitConflictsForTarget（R-105-1 方案 A 预检 409）已废止删除。
+
 /**
- * 前置冲突探测（ADR-105 R-105-1 + CHG-SN-5-10-PATCH P0-2）：
- * 检测合并后集合内任意两点是否存在相同 (episode_number, source_url) 组合，
- * 覆盖 source-vs-target + source-vs-source 全部冲突路径。
+ * merge 事务内确定性去重（D-105-13）：对合并后集合（sources + target）中重复的
+ * (episode_number, source_url) 组（IS NOT DISTINCT 口径对齐唯一键 NULLS NOT DISTINCT /
+ * Y-105-D4）软删非保留行。
  *
- * @param videoIds 合并后集合 = [...sourceVideoIds, targetVideoId]，Service 层负责拼装
- * @returns 冲突对数（s1.id < s2.id 自连接 dedupe，避免镜像重复计）
+ * 保留优先级（R-105-D2 确定性）：target 行恒胜 → sourceVideoIds 数组序首胜 → id tiebreak。
+ * target 行恒不被软删（双保险 WHERE video_id <> target；ORDER 已保证其 rn=1）。
+ *
+ * @returns 被软删的 source 行 ids（snapshot.dedupedSourceIds / unmerge 还原依据 D-105-14）
  */
-export async function detectMergeConflicts(
-  db: Pool | PoolClient,
-  videoIds: string[],
+export async function dedupeSourcesForMerge(
+  client: PoolClient,
+  sourceVideoIds: string[],
+  targetVideoId: string,
+): Promise<string[]> {
+  const result = await client.query<{ id: string }>(
+    `WITH ranked AS (
+       SELECT s.id, s.video_id,
+              ROW_NUMBER() OVER (
+                PARTITION BY s.episode_number, s.source_url
+                ORDER BY CASE WHEN s.video_id = $2 THEN 0 ELSE 1 END,
+                         array_position($1::uuid[], s.video_id),
+                         s.id
+              ) AS rn
+         FROM video_sources s
+        WHERE s.video_id = ANY($1::uuid[] || $2::uuid)
+          AND s.deleted_at IS NULL
+     )
+     UPDATE video_sources vs
+        SET deleted_at = NOW(), updated_at = NOW()
+       FROM ranked r
+      WHERE vs.id = r.id AND r.rn > 1 AND r.video_id <> $2
+     RETURNING vs.id`,
+    [sourceVideoIds, targetVideoId],
+  )
+  return result.rows.map((r) => r.id)
+}
+
+/**
+ * 残余冲突防御预检（Y-105-D3）：去重后、转移前，检测幸存 source 活行与 target
+ * **全部行（含软删）**的 (episode_number, source_url) 冲突——唯一键不含 deleted_at，
+ * target 历史软删行仍占槽位，命中则转移必撞键 → Service 层 409 整体 ROLLBACK（零物理删除）。
+ */
+export async function detectResidualTargetConflicts(
+  client: PoolClient,
+  sourceVideoIds: string[],
+  targetVideoId: string,
 ): Promise<number> {
-  if (videoIds.length < 2) return 0
-  const result = await db.query<{ conflict_count: string }>(
+  const result = await client.query<{ conflict_count: string }>(
     `SELECT COUNT(*)::text AS conflict_count
-       FROM video_sources s1
-       JOIN video_sources s2
-         ON s1.episode_number IS NOT DISTINCT FROM s2.episode_number
-        AND s1.source_url = s2.source_url
-        AND s1.id < s2.id
-      WHERE s1.video_id = ANY($1::uuid[])
-        AND s2.video_id = ANY($1::uuid[])
-        AND s1.deleted_at IS NULL
-        AND s2.deleted_at IS NULL`,
-    [videoIds],
+       FROM video_sources s
+       JOIN video_sources t
+         ON s.episode_number IS NOT DISTINCT FROM t.episode_number
+        AND s.source_url = t.source_url
+      WHERE s.video_id = ANY($1::uuid[])
+        AND s.deleted_at IS NULL
+        AND t.video_id = $2`,
+    [sourceVideoIds, targetVideoId],
   )
   return parseInt(result.rows[0]?.conflict_count ?? '0', 10)
 }
 
 /**
- * 拆到已有 video 前置冲突探测（ADR-105 AMENDMENT 2026-06-03 D-105-3 / 同 R-105-1 范式）：
- * 检测转入组 sourceIds 与已有 target video 现有 sources 是否存在相同
- * (episode_number, source_url) 组合（uq_sources_video_episode_url NULLS NOT DISTINCT 口径）。
+ * split 拆到已有 video 的转入行去重（D-105-15，对称 D-105-13）：转入组与已有 target
+ * **活行**重复的转入行软删（target 恒胜 / D-105-5 不动已有 target）。
+ * Y-105-D4：必须在事务内 assignSourcesToVideo **之前**调用。
  *
- * @returns 冲突对数（>0 → Service 层 STATE_CONFLICT 409，整体不执行）
+ * @returns 被软删的转入行 ids
  */
-export async function detectSplitConflictsForTarget(
-  db: Pool | PoolClient,
+export async function dedupeSourcesForSplitTarget(
+  client: PoolClient,
+  sourceIds: string[],
+  targetVideoId: string,
+): Promise<string[]> {
+  if (sourceIds.length === 0) return []
+  const result = await client.query<{ id: string }>(
+    `UPDATE video_sources vs
+        SET deleted_at = NOW(), updated_at = NOW()
+      WHERE vs.id = ANY($1::uuid[])
+        AND vs.deleted_at IS NULL
+        AND EXISTS (
+          SELECT 1 FROM video_sources t
+           WHERE t.video_id = $2
+             AND t.deleted_at IS NULL
+             AND t.episode_number IS NOT DISTINCT FROM vs.episode_number
+             AND t.source_url = vs.source_url
+        )
+     RETURNING vs.id`,
+    [sourceIds, targetVideoId],
+  )
+  return result.rows.map((r) => r.id)
+}
+
+/**
+ * split 转入残余冲突防御预检（Y-105-D3 split 版）：去重后幸存转入行 vs target
+ * **全部行（含软删）**。
+ */
+export async function detectResidualSplitTargetConflicts(
+  client: PoolClient,
   sourceIds: string[],
   targetVideoId: string,
 ): Promise<number> {
   if (sourceIds.length === 0) return 0
-  const result = await db.query<{ conflict_count: string }>(
+  const result = await client.query<{ conflict_count: string }>(
     `SELECT COUNT(*)::text AS conflict_count
-       FROM video_sources incoming
-       JOIN video_sources existing
-         ON incoming.episode_number IS NOT DISTINCT FROM existing.episode_number
-        AND incoming.source_url = existing.source_url
-      WHERE incoming.id = ANY($1::uuid[])
-        AND existing.video_id = $2
-        AND existing.id <> ALL($1::uuid[])
-        AND incoming.deleted_at IS NULL
-        AND existing.deleted_at IS NULL`,
+       FROM video_sources s
+       JOIN video_sources t
+         ON s.episode_number IS NOT DISTINCT FROM t.episode_number
+        AND s.source_url = t.source_url
+      WHERE s.id = ANY($1::uuid[])
+        AND s.deleted_at IS NULL
+        AND t.video_id = $2`,
     [sourceIds, targetVideoId],
   )
   return parseInt(result.rows[0]?.conflict_count ?? '0', 10)
+}
+
+/**
+ * unmerge 还原被去重软删的源（D-105-14）：恢复 deleted_at = NULL。
+ * 调用时序：reassignSourcesToOriginal **之后**（先归还原 video 再复活，避免瞬时撞 target 槽位）。
+ */
+export async function restoreSourcesByIds(
+  client: PoolClient,
+  ids: string[],
+): Promise<void> {
+  if (ids.length === 0) return
+  await client.query(
+    `UPDATE video_sources
+        SET deleted_at = NULL, updated_at = NOW()
+      WHERE id = ANY($1::uuid[])`,
+    [ids],
+  )
+}
+
+/**
+ * 事务内补写 snapshot_jsonb.dedupedSourceIds（D-105-14；零 DDL 自由字段，
+ * 沿 created_target_video_ids / updateAuditTargetIds jsonb merge 范式）。
+ */
+export async function setAuditDedupedSourceIds(
+  client: PoolClient,
+  auditId: string,
+  dedupedSourceIds: string[],
+): Promise<void> {
+  await client.query(
+    `UPDATE video_merge_audit
+        SET snapshot_jsonb = snapshot_jsonb
+          || jsonb_build_object('dedupedSourceIds', $2::jsonb)
+      WHERE id = $1`,
+    [auditId, JSON.stringify(dedupedSourceIds)],
+  )
 }
 
 /** 按 auditId 拉取 video_merge_audit 行 */

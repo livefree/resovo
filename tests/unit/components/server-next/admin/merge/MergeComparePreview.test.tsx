@@ -9,7 +9,7 @@
  *   4. 外部 ID 同 provider 不同 id → danger 行标警
  *   5. 字段缺失（旧 response）渲染「—」零崩溃
  *  combineMatrices（纯函数 / §10.5 三信号）：
- *   6. 同站同名线路跨 video 重复 → danger 信号
+ *   6. 同站同名线路跨 video 重复 → info 信号（D-105-16 自动去重提示）
  *   7. 集数互补 → ok 信号
  *   8. 集数完全重叠 → info 信号
  *  MergeResultPreview（merge 形态）：
@@ -131,12 +131,12 @@ describe('MergeComparePanel (CHG-VIR-13-B2A · §10.4 N 列矩阵)', () => {
 // ── combineMatrices 纯函数（§10.5 三信号）─────────────────────────
 
 describe('combineMatrices (§10.5 结构信号)', () => {
-  it('6. 同站同名线路跨 video 重复 → danger 信号（409 预警）', () => {
+  it('6. 同站同名线路跨 video 重复 → info 信号（D-105-16 合并时自动去重）', () => {
     const { signals } = combineMatrices([
       { video: makeVideo('a'), lines: [makeLine('siteA', '线路1', [1, 2])] },
       { video: makeVideo('b'), lines: [makeLine('siteA', '线路1', [3, 4])] },
     ])
-    expect(signals.some((s) => s.tone === 'danger' && s.text.includes('409'))).toBe(true)
+    expect(signals.some((s) => s.tone === 'info' && s.text.includes('自动去重'))).toBe(true)
   })
 
   it('7. 集数互补（无重叠）→ ok 正信号', () => {
@@ -192,7 +192,7 @@ describe('MergeResultPreview · merge 形态', () => {
     fireEvent.click(screen.getByTestId('merge-result-structure-toggle'))
     await waitFor(() => expect(screen.getByTestId('merge-result-structure')).toBeTruthy())
     expect(getVideoMatrixMock).toHaveBeenCalledTimes(2)
-    expect(screen.getByTestId('structure-signal-danger')).toBeTruthy()
+    expect(screen.getByTestId('structure-signal-info')).toBeTruthy()
     expect(screen.getByTestId('merge-result-structure').textContent).toContain('来自 视频 a')
   })
 

@@ -270,9 +270,10 @@ export function SplitWorkspace({ initialVideoId }: SplitWorkspaceProps = {}) {
       toast.push({
         level: 'success',
         title: '拆分成功',
-        description: existingCount > 0
+        description: (existingCount > 0
           ? `已创建 ${result.newVideoIds.length} 个新 video + 转入 ${existingCount} 个已有 video（auditId: ${result.auditId.slice(0, 8)}）`
-          : `已创建 ${result.newVideoIds.length} 个新 video（auditId: ${result.auditId.slice(0, 8)}）`,
+          : `已创建 ${result.newVideoIds.length} 个新 video（auditId: ${result.auditId.slice(0, 8)}）`)
+          + (result.dedupedCount ? `，自动去重 ${result.dedupedCount} 条重复线路` : ''),
         action: {
           label: '撤销',
           onClick: () => {

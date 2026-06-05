@@ -18,7 +18,6 @@ import {
   fetchVideosByIds,
   fetchSourcesByVideoId,
   fetchSourcesByVideoIds,
-  detectMergeConflicts,
   listAuditTimeline,
   countAuditTimeline,
 } from '../../../apps/api/src/db/queries/video-merge-mutations'
@@ -71,12 +70,28 @@ describe('video-merge-mutations SQL 集成', () => {
     expect(rows).toEqual([])
   })
 
-  it('detectMergeConflicts([nonexistent uuids]) 自连接 SQL 跑通（CHG-SN-5-10-PATCH P0-2 源 vs 源探测）', async () => {
-    const conflicts = await detectMergeConflicts(db, [
-      '00000000-0000-0000-0000-000000000000',
-      '00000000-0000-0000-0000-000000000001',
-    ])
-    expect(conflicts).toBe(0)
+  it('去重/残余预检 SQL 跑通（CHG-MERGE-DEDUP-EP D-105-13 / Y-105-D3：nonexistent uuids 零命中）', async () => {
+    const client = await db.connect()
+    try {
+      await client.query('BEGIN')
+      const { dedupeSourcesForMerge, detectResidualTargetConflicts } =
+        await import('../../../apps/api/src/db/queries/video-merge-mutations')
+      const deduped = await dedupeSourcesForMerge(
+        client,
+        ['00000000-0000-0000-0000-000000000000'],
+        '00000000-0000-0000-0000-000000000001',
+      )
+      expect(deduped).toEqual([])
+      const residual = await detectResidualTargetConflicts(
+        client,
+        ['00000000-0000-0000-0000-000000000000'],
+        '00000000-0000-0000-0000-000000000001',
+      )
+      expect(residual).toBe(0)
+      await client.query('ROLLBACK')
+    } finally {
+      client.release()
+    }
   })
 })
 

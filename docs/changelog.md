@@ -14835,3 +14835,22 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
   - unmerge 对称：snapshot.dedupedSourceIds 驱动「先归还后复活 deleted_at」（顺序避免瞬时撞键——评审确认）。
   - 评审唯一条件（pre-existing 盲点）：target 已软删行仍占唯一键槽位 → Y-105-D3 防御性残余预检（命中 409 明确文案，零物理删除）。
   - 实施 = CHG-MERGE-DEDUP-EP（query 去重 SQL + Service 三流程 + types dedupedCount + 前端信号语义 + 测试 + dev 实测）。
+
+## [CHG-MERGE-DEDUP-EP] merge/split 线路自动去重取并集实施（D-105-13~16）
+- **完成时间**：2026-06-05
+- **记录时间**：2026-06-05 00:45
+- **执行模型**：claude-opus-4-8
+- **子代理**：arch-reviewer (claude-opus-4-8 / ad842ae68cf0872db)——ADR 阶段 PASS 引用，本卡按契约实施
+- **修改文件**：
+  - `apps/api/src/db/queries/video-merge-mutations.ts` — +6 函数：`dedupeSourcesForMerge`（窗口函数单 SQL：PARTITION BY (ep,url) + target 恒胜 → sourceVideoIds array_position 序 → id tiebreak，rn>1 软删 RETURNING）/ `detectResidualTargetConflicts`（Y-105-D3：幸存行 vs target 含软删占槽位）/ `dedupeSourcesForSplitTarget` + `detectResidualSplitTargetConflicts`（split 对称）/ `restoreSourcesByIds` / `setAuditDedupedSourceIds`；**删除** detectMergeConflicts / detectSplitConflictsForTarget（方案 A 废止死代码）
+  - `apps/api/src/services/VideoMergesService.ts` — merge：BEGIN 前预检 409 删除 → 事务内去重（转移前 / Y-105-D4）→ 残余预检 409（「历史软删线路」明确文案）→ snapshot 补 dedupedSourceIds → 响应 dedupedCount；unmerge 双分支 reassign 后 `restoreSourcesByIds`（先归还后复活避免瞬时撞键）；split existing 组 assign 前去重 + 残余预检
+  - `apps/api/src/services/VideoMergesService.split-helpers.ts` — D-105-3 预检 409 删除（去重移事务内）
+  - `packages/types/src/video-merge.types.ts` — Merge/SplitResult +`dedupedCount?`（R-105-D4 纯增量）
+  - `apps/server-next/.../StructurePreview.tsx` — 同站同名信号 danger「409 预警」→ info「合并时自动去重（线路取并集）」
+  - `apps/server-next/.../{MergeCandidatesSection,MergeWorkspace,SplitWorkspace}.tsx` — 成功 toast 拼「自动去重 N 条重复线路」
+  - 测试：video-merge-mutations.test（预检用例重写为去重语义 + 时序断言〔dedupe < transfer / dedupe < assign invocationCallOrder〕+ 残余 409 ×2 + unmerge 复活 describe ×3）/ confirm-decision.test + merge-audit-derive.test（mock 工厂同步）/ MergeComparePreview.test（信号 info 断言）/ integration admin-video-merges.test（SQL 跑通迁移新函数）
+- **新增依赖**：无 / **数据库变更**：无（纯软删 + snapshot 自由字段）
+- **注意事项**：
+  - **dev 实测全绿**：三方两两重复（T:ep1,ep2 / A:ep1*,ep3,ep5 / B:ep2*,ep4,ep5*）→ merge dedupedCount=3、target 并集 5 活源、snapshot.dedupedSourceIds={a1,b2,b5}（**target 恒胜 + A 序首胜 b5 被删实证**）→ unmerge 三方源数逐值还原 A=3/B=3/T=2 → Y-105-D3 残余软删 409 + ROLLBACK（去重软删一并回滚，A 活源仍 3）。
+  - 实测发现：`video_sources.episode_number` 现 schema **NOT NULL**（NULL 重复场景实际不存在；`IS NOT DISTINCT FROM` 口径无害保留为防御 + 与唯一键 NULLS NOT DISTINCT 一致）。
+  - 门禁：typecheck/lint/verify:adr-contracts EXIT=0 + merge 域 API 209/209 + 前端 102/102 + 全量 6542/6543（1=StagingEditPanel 既见 jsdom flaky 隔离 12/12 过）+ e2e merge-deeplink 6/6。

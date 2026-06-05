@@ -184,7 +184,8 @@ export function MergeWorkspace({ initialIds, initialTargetId, candidateIdFromUrl
       }
       toast.push({
         title: '合并成功',
-        description: `已将 ${sourceVideoIds.length} 个视频合并到「${result.targetVideo.title}」（auditId: ${result.auditId.slice(0, 8)}）`,
+        description: `已将 ${sourceVideoIds.length} 个视频合并到「${result.targetVideo.title}」（auditId: ${result.auditId.slice(0, 8)}）`
+          + (result.dedupedCount ? `，自动去重 ${result.dedupedCount} 条重复线路` : ''),
         level: 'success',
         action: {
           label: '撤销',

@@ -22,8 +22,13 @@ vi.mock('@/api/db/queries/video-merge-mutations', () => ({
   fetchVideosByIds: vi.fn(),
   fetchSourcesByVideoId: vi.fn(),
   fetchSourcesByVideoIds: vi.fn(),
-  detectMergeConflicts: vi.fn(),
-  detectSplitConflictsForTarget: vi.fn(),  // CHG-VIR-11-B / D-105-3
+  // ADR-105 AMENDMENT 2026-06-05 D-105-13~16（CHG-MERGE-DEDUP-EP）：自动去重取并集
+  dedupeSourcesForMerge: vi.fn(),
+  detectResidualTargetConflicts: vi.fn(),
+  dedupeSourcesForSplitTarget: vi.fn(),
+  detectResidualSplitTargetConflicts: vi.fn(),
+  restoreSourcesByIds: vi.fn(),
+  setAuditDedupedSourceIds: vi.fn(),
   fetchAuditById: vi.fn(),
   insertMergeAudit: vi.fn(),
   transferSourcesToTarget: vi.fn(),
@@ -184,6 +189,13 @@ function makeMockPool(client: ReturnType<typeof makeMockClient>) {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  // CHG-MERGE-DEDUP-EP 默认零去重路径（用例按需覆写）
+  vi.mocked(mutations.dedupeSourcesForMerge).mockResolvedValue([])
+  vi.mocked(mutations.detectResidualTargetConflicts).mockResolvedValue(0)
+  vi.mocked(mutations.dedupeSourcesForSplitTarget).mockResolvedValue([])
+  vi.mocked(mutations.detectResidualSplitTargetConflicts).mockResolvedValue(0)
+  vi.mocked(mutations.restoreSourcesByIds).mockResolvedValue()
+  vi.mocked(mutations.setAuditDedupedSourceIds).mockResolvedValue()
 })
 
 // ── merge ─────────────────────────────────────────────────────────
@@ -200,7 +212,6 @@ describe('VideoMergesService.merge', () => {
       makeVideoRow(SOURCE_ID_2),
       makeVideoRow(TARGET_ID),
     ])
-    vi.mocked(mutations.detectMergeConflicts).mockResolvedValueOnce(0)
     vi.mocked(mutations.fetchSourcesByVideoIds).mockResolvedValueOnce([
       makeSourceRow(SRC_1, SOURCE_ID_1),
       makeSourceRow(SRC_2, SOURCE_ID_2),
@@ -236,10 +247,16 @@ describe('VideoMergesService.merge', () => {
       sourceSiteKeys: ['iqiyi', 'youku'],
     }))
 
-    // P0-2：detectMergeConflicts 接收合并后集合 [...sources, target]
-    expect(mutations.detectMergeConflicts).toHaveBeenCalledWith(
-      mockPool, [SOURCE_ID_1, SOURCE_ID_2, TARGET_ID],
+    // D-105-13（CHG-MERGE-DEDUP-EP）：事务内去重 + 残余预检调用（client 级）
+    expect(mutations.dedupeSourcesForMerge).toHaveBeenCalledWith(
+      mockClient, [SOURCE_ID_1, SOURCE_ID_2], TARGET_ID,
     )
+    expect(mutations.detectResidualTargetConflicts).toHaveBeenCalledWith(
+      mockClient, [SOURCE_ID_1, SOURCE_ID_2], TARGET_ID,
+    )
+    // 零去重 → 不写 snapshot 字段 + 响应无 dedupedCount
+    expect(mutations.setAuditDedupedSourceIds).not.toHaveBeenCalled()
+    expect('dedupedCount' in result).toBe(false)
 
     // 事务正确开始和提交
     expect(mockClient.query).toHaveBeenCalledWith('BEGIN')
@@ -311,49 +328,64 @@ describe('VideoMergesService.merge', () => {
     })
   })
 
-  it('STATE_CONFLICT：uq_sources_video_episode_url 冲突（冲突数 > 0）+ 合并后集合传参（P0-2）', async () => {
-    const mockPool = makeMockPool(makeMockClient())
+  it('D-105-13/14（CHG-MERGE-DEDUP-EP）：重复 (ep,url) 自动去重——snapshot 补 dedupedSourceIds + dedupedCount 透出 + 转移仍执行', async () => {
+    const mockClient = makeMockClient()
+    const mockPool = makeMockPool(mockClient)
+    const svc = new VideoMergesService(mockPool)
+    const auditSvcInstance = (AuditLogService as unknown as ReturnType<typeof vi.fn>).mock.results.at(-1)!.value
+
+    vi.mocked(mutations.fetchVideosByIds).mockResolvedValueOnce([
+      makeVideoRow(SOURCE_ID_1),
+      makeVideoRow(TARGET_ID),
+    ])
+    vi.mocked(mutations.fetchSourcesByVideoIds).mockResolvedValueOnce([makeSourceRow(SRC_1, SOURCE_ID_1)])
+    vi.mocked(mutations.insertMergeAudit).mockResolvedValueOnce(AUDIT_ID)
+    vi.mocked(mutations.dedupeSourcesForMerge).mockResolvedValueOnce([SRC_1, SRC_2, SRC_3])  // 3 条去重
+    vi.mocked(candidates.fetchVideoDetailsForCandidates).mockResolvedValueOnce([{
+      id: TARGET_ID, title: `Video ${TARGET_ID}`, title_normalized: `video ${TARGET_ID}`,
+      year: 2020, type: 'movie', created_at: '2026-01-01T00:00:00Z', source_count: '2', site_keys: ['iqiyi'],
+    }])
+
+    const result = await svc.merge({ sourceVideoIds: [SOURCE_ID_1], targetVideoId: TARGET_ID }, ACTOR_ID)
+
+    // 不再 409：合并成功 + dedupedCount 透出（D-105-16）
+    expect(result.auditId).toBe(AUDIT_ID)
+    expect(result.dedupedCount).toBe(3)
+    // D-105-14：snapshot 补 dedupedSourceIds（unmerge 还原依据）
+    expect(mutations.setAuditDedupedSourceIds).toHaveBeenCalledWith(mockClient, AUDIT_ID, [SRC_1, SRC_2, SRC_3])
+    // 去重在转移之前（Y-105-D4 时序）且转移仍执行
+    expect(mutations.transferSourcesToTarget).toHaveBeenCalledWith(mockClient, [SOURCE_ID_1], TARGET_ID)
+    const dedupeOrder = vi.mocked(mutations.dedupeSourcesForMerge).mock.invocationCallOrder[0]!
+    const transferOrder = vi.mocked(mutations.transferSourcesToTarget).mock.invocationCallOrder[0]!
+    expect(dedupeOrder).toBeLessThan(transferOrder)
+    // afterJsonb 补记（audit jsonb 非契约字段）
+    expect(auditSvcInstance.write).toHaveBeenCalledWith(expect.objectContaining({
+      afterJsonb: expect.objectContaining({ dedupedSourceIds: [SRC_1, SRC_2, SRC_3] }),
+    }))
+  })
+
+  it('Y-105-D3：残余冲突（target 含软删占槽位）→ 409 + ROLLBACK，转移未执行', async () => {
+    const mockClient = makeMockClient()
+    const mockPool = makeMockPool(mockClient)
     const svc = new VideoMergesService(mockPool)
 
     vi.mocked(mutations.fetchVideosByIds).mockResolvedValueOnce([
       makeVideoRow(SOURCE_ID_1),
       makeVideoRow(TARGET_ID),
     ])
-    vi.mocked(mutations.detectMergeConflicts).mockResolvedValueOnce(3)  // 3 条冲突
+    vi.mocked(mutations.fetchSourcesByVideoIds).mockResolvedValueOnce([])
+    vi.mocked(mutations.insertMergeAudit).mockResolvedValueOnce(AUDIT_ID)
+    vi.mocked(mutations.detectResidualTargetConflicts).mockResolvedValueOnce(2)
 
     await expect(
       svc.merge({ sourceVideoIds: [SOURCE_ID_1], targetVideoId: TARGET_ID }, ACTOR_ID),
-    ).rejects.toMatchObject({ code: 'STATE_CONFLICT', httpStatus: 409, message: expect.stringContaining('3 条') })
+    ).rejects.toMatchObject({
+      code: 'STATE_CONFLICT', httpStatus: 409,
+      message: expect.stringContaining('历史软删线路'),
+    })
 
-    // P0-2：探测调用接收合并后集合 [source, target]，覆盖 source-vs-source + source-vs-target
-    expect(mutations.detectMergeConflicts).toHaveBeenCalledWith(
-      mockPool, [SOURCE_ID_1, TARGET_ID],
-    )
-  })
-
-  it('STATE_CONFLICT：source-vs-source 内部冲突（CHG-SN-5-10-PATCH P0-2，R-105-1 漏检修复）', async () => {
-    const mockPool = makeMockPool(makeMockClient())
-    const svc = new VideoMergesService(mockPool)
-
-    vi.mocked(mutations.fetchVideosByIds).mockResolvedValueOnce([
-      makeVideoRow(SOURCE_ID_1),
-      makeVideoRow(SOURCE_ID_2),
-      makeVideoRow(TARGET_ID),
-    ])
-    // 假设两 source video 内部含相同 (episode_number, source_url) 行 → detectMergeConflicts > 0
-    vi.mocked(mutations.detectMergeConflicts).mockResolvedValueOnce(2)
-
-    await expect(
-      svc.merge(
-        { sourceVideoIds: [SOURCE_ID_1, SOURCE_ID_2], targetVideoId: TARGET_ID },
-        ACTOR_ID,
-      ),
-    ).rejects.toMatchObject({ code: 'STATE_CONFLICT', httpStatus: 409, message: expect.stringContaining('2 条') })
-
-    // 探测调用接收合并后集合 [...sources, target] 完整 3 ID
-    expect(mutations.detectMergeConflicts).toHaveBeenCalledWith(
-      mockPool, [SOURCE_ID_1, SOURCE_ID_2, TARGET_ID],
-    )
+    expect(mockClient.query).toHaveBeenCalledWith('ROLLBACK')
+    expect(mutations.transferSourcesToTarget).not.toHaveBeenCalled()
   })
 
   it('事务失败时 ROLLBACK 且不写 admin_audit_log', async () => {
@@ -366,7 +398,6 @@ describe('VideoMergesService.merge', () => {
       makeVideoRow(SOURCE_ID_1),
       makeVideoRow(TARGET_ID),
     ])
-    vi.mocked(mutations.detectMergeConflicts).mockResolvedValueOnce(0)
     vi.mocked(mutations.fetchSourcesByVideoIds).mockResolvedValueOnce([])
     vi.mocked(mutations.insertMergeAudit).mockRejectedValueOnce(new Error('DB error'))
 
@@ -697,7 +728,6 @@ describe('VideoMergesService.split — 拆到已有 video', () => {
       .mockResolvedValueOnce([makeVideoRow(TARGET_ID)])      // 原 video 校验
       .mockResolvedValueOnce([makeVideoRow(EXISTING_ID)])    // targetVideoId 校验
     setupBaseMocks()
-    vi.mocked(mutations.detectSplitConflictsForTarget).mockResolvedValueOnce(0)
     vi.mocked(mutations.insertMergeAudit).mockResolvedValueOnce(AUDIT_ID)
     mockFindOrCreate.mockResolvedValueOnce({ id: CATALOG_A })
     vi.mocked(mutations.insertNewVideo).mockResolvedValueOnce(NEW_VIDEO_ID_1)
@@ -714,9 +744,12 @@ describe('VideoMergesService.split — 拆到已有 video', () => {
     // D-105-5：已有 target 不建 catalog / 不建 video
     expect(mockFindOrCreate).toHaveBeenCalledTimes(1)
     expect(mutations.insertNewVideo).toHaveBeenCalledTimes(1)
-    // 冲突预检（D-105-3）
-    expect(mutations.detectSplitConflictsForTarget).toHaveBeenCalledWith(
-      mockPool, [SRC_2, SRC_4], EXISTING_ID,
+    // D-105-15（CHG-MERGE-DEDUP-EP）：转入前去重 + 残余预检（事务内 client 级 / Y-105-D4 时序）
+    expect(mutations.dedupeSourcesForSplitTarget).toHaveBeenCalledWith(
+      mockClient, [SRC_2, SRC_4], EXISTING_ID,
+    )
+    expect(mutations.detectResidualSplitTargetConflicts).toHaveBeenCalledWith(
+      mockClient, [SRC_2, SRC_4], EXISTING_ID,
     )
     // sources 转入已有 video
     expect(mutations.assignSourcesToVideo).toHaveBeenCalledWith(mockClient, [SRC_2, SRC_4], EXISTING_ID)
@@ -742,7 +775,6 @@ describe('VideoMergesService.split — 拆到已有 video', () => {
       .mockResolvedValueOnce([makeVideoRow(TARGET_ID)])
       .mockResolvedValueOnce([makeVideoRow(EXISTING_ID), makeVideoRow(EXISTING_ID_2)])
     setupBaseMocks()
-    vi.mocked(mutations.detectSplitConflictsForTarget).mockResolvedValue(0)
     vi.mocked(mutations.insertMergeAudit).mockResolvedValueOnce(AUDIT_ID)
 
     const result = await svc.split({
@@ -810,7 +842,7 @@ describe('VideoMergesService.split — 拆到已有 video', () => {
     }, ACTOR_ID)).rejects.toMatchObject({ code: 'STATE_CONFLICT', httpStatus: 409 })
   })
 
-  it('STATE_CONFLICT：冲突预检 >0（D-105-3 同 R-105-1 范式）→ 整体不执行', async () => {
+  it('D-105-15（CHG-MERGE-DEDUP-EP）：转入重复 → 自动去重 + snapshot 补 dedupedSourceIds + dedupedCount 透出', async () => {
     const mockClient = makeMockClient()
     const mockPool = makeMockPool(mockClient)
     const svc = new VideoMergesService(mockPool)
@@ -818,7 +850,41 @@ describe('VideoMergesService.split — 拆到已有 video', () => {
       .mockResolvedValueOnce([makeVideoRow(TARGET_ID)])
       .mockResolvedValueOnce([makeVideoRow(EXISTING_ID)])
     setupBaseMocks()
-    vi.mocked(mutations.detectSplitConflictsForTarget).mockResolvedValueOnce(3)
+    vi.mocked(mutations.insertMergeAudit).mockResolvedValueOnce(AUDIT_ID)
+    mockFindOrCreate.mockResolvedValueOnce({ id: CATALOG_A })
+    vi.mocked(mutations.insertNewVideo).mockResolvedValueOnce(NEW_VIDEO_ID_1)
+    vi.mocked(mutations.dedupeSourcesForSplitTarget).mockResolvedValueOnce([SRC_2])  // 1 条转入去重
+
+    const result = await svc.split({
+      videoId: TARGET_ID,
+      groups: [
+        { sourceIds: [SRC_1, SRC_3], newVideoMeta: { title: 'A', type: 'movie' } },
+        { sourceIds: [SRC_2, SRC_4], targetVideoId: EXISTING_ID },
+      ],
+    }, ACTOR_ID)
+
+    // 不再 409：拆分成功 + dedupedCount 透出（D-105-16）
+    expect(result.dedupedCount).toBe(1)
+    expect(mutations.setAuditDedupedSourceIds).toHaveBeenCalledWith(mockClient, AUDIT_ID, [SRC_2])
+    // 去重在 assign 之前（Y-105-D4 时序）且 assign 仍执行（软删行由 WHERE deleted_at 跳过）
+    const dedupeOrder = vi.mocked(mutations.dedupeSourcesForSplitTarget).mock.invocationCallOrder[0]!
+    const assignOrders = vi.mocked(mutations.assignSourcesToVideo).mock.invocationCallOrder
+    expect(dedupeOrder).toBeLessThan(Math.max(...assignOrders))
+    expect(mutations.assignSourcesToVideo).toHaveBeenCalledWith(mockClient, [SRC_2, SRC_4], EXISTING_ID)
+  })
+
+  it('Y-105-D3（split 版）：残余冲突（target 含软删占槽位）→ 409 + ROLLBACK', async () => {
+    const mockClient = makeMockClient()
+    const mockPool = makeMockPool(mockClient)
+    const svc = new VideoMergesService(mockPool)
+    vi.mocked(mutations.fetchVideosByIds)
+      .mockResolvedValueOnce([makeVideoRow(TARGET_ID)])
+      .mockResolvedValueOnce([makeVideoRow(EXISTING_ID)])
+    setupBaseMocks()
+    vi.mocked(mutations.insertMergeAudit).mockResolvedValueOnce(AUDIT_ID)
+    mockFindOrCreate.mockResolvedValueOnce({ id: CATALOG_A })
+    vi.mocked(mutations.insertNewVideo).mockResolvedValueOnce(NEW_VIDEO_ID_1)
+    vi.mocked(mutations.detectResidualSplitTargetConflicts).mockResolvedValueOnce(2)
 
     await expect(svc.split({
       videoId: TARGET_ID,
@@ -828,10 +894,11 @@ describe('VideoMergesService.split — 拆到已有 video', () => {
       ],
     }, ACTOR_ID)).rejects.toMatchObject({
       code: 'STATE_CONFLICT', httpStatus: 409,
-      message: expect.stringContaining('3 条'),
+      message: expect.stringContaining('历史软删线路'),
     })
-    // 校验全部 BEGIN 前：事务未开启
-    expect(mockClient.query).not.toHaveBeenCalledWith('BEGIN')
+    // 事务内 409 → ROLLBACK 整体不执行
+    expect(mockClient.query).toHaveBeenCalledWith('ROLLBACK')
+    expect(mutations.assignSourcesToVideo).not.toHaveBeenCalledWith(mockClient, [SRC_2, SRC_4], EXISTING_ID)
   })
 })
 
@@ -888,7 +955,6 @@ describe('VideoMergesService.merge — targetStatus（D-105-9/10/11）', () => {
       makeVideoRow(SOURCE_ID_1),
       makeVideoRow(TARGET_ID, null, targetState),
     ])
-    vi.mocked(mutations.detectMergeConflicts).mockResolvedValueOnce(0)
     vi.mocked(mutations.fetchSourcesByVideoIds).mockResolvedValueOnce([makeSourceRow(SRC_1, SOURCE_ID_1)])
     vi.mocked(mutations.insertMergeAudit).mockResolvedValueOnce(AUDIT_ID)
     vi.mocked(candidates.fetchVideoDetailsForCandidates).mockResolvedValueOnce([{
@@ -1231,6 +1297,59 @@ describe('VideoMergesService.unmerge — targetStatusBefore 还原（D-105-11）
     expect(result.restoredVideoIds).toEqual([SOURCE_ID_1, SOURCE_ID_2])
     expect(mockClient.query).toHaveBeenCalledWith('COMMIT')
     expect(videosMutations.transitionVideoState).not.toHaveBeenCalled()
+  })
+})
+
+// ── unmerge 去重行复活（ADR-105 AMENDMENT 2026-06-05 D-105-14 / CHG-MERGE-DEDUP-EP）──
+
+describe('VideoMergesService.unmerge — dedupedSourceIds 复活（D-105-14）', () => {
+  it('snapshot 含 dedupedSourceIds → reassign 后 restoreSourcesByIds 复活（先归还后复活时序）', async () => {
+    const mockClient = makeMockClient()
+    const mockPool = makeMockPool(mockClient)
+    const svc = new VideoMergesService(mockPool)
+
+    const audit = makeAuditRow('merge')
+    const auditWithDeduped = {
+      ...audit,
+      snapshot_jsonb: { ...audit.snapshot_jsonb, dedupedSourceIds: [SRC_1, SRC_3] },
+    }
+    vi.mocked(mutations.fetchAuditById).mockResolvedValueOnce(auditWithDeduped)
+
+    await svc.unmerge(AUDIT_ID, ACTOR_ID)
+
+    expect(mutations.restoreSourcesByIds).toHaveBeenCalledWith(mockClient, [SRC_1, SRC_3])
+    // 时序：reassignSourcesToOriginal 先于复活（避免瞬时撞 target 槽位 / 评审确认）
+    const reassignOrder = vi.mocked(mutations.reassignSourcesToOriginal).mock.invocationCallOrder[0]!
+    const restoreOrder = vi.mocked(mutations.restoreSourcesByIds).mock.invocationCallOrder[0]!
+    expect(reassignOrder).toBeLessThan(restoreOrder)
+  })
+
+  it('存量 audit 无 dedupedSourceIds → 空数组调用（函数内早退零行为变更 / R-105-D3）', async () => {
+    const mockClient = makeMockClient()
+    const mockPool = makeMockPool(mockClient)
+    const svc = new VideoMergesService(mockPool)
+    vi.mocked(mutations.fetchAuditById).mockResolvedValueOnce(makeAuditRow('merge'))
+
+    await svc.unmerge(AUDIT_ID, ACTOR_ID)
+
+    expect(mutations.restoreSourcesByIds).toHaveBeenCalledWith(mockClient, [])
+  })
+
+  it('split audit 含 dedupedSourceIds（拆到已有转入去重）→ 同恢复', async () => {
+    const mockClient = makeMockClient()
+    const mockPool = makeMockPool(mockClient)
+    const svc = new VideoMergesService(mockPool)
+
+    const audit = makeAuditRow('split')
+    const auditWithDeduped = {
+      ...audit,
+      snapshot_jsonb: { ...audit.snapshot_jsonb, dedupedSourceIds: [SRC_2] },
+    }
+    vi.mocked(mutations.fetchAuditById).mockResolvedValueOnce(auditWithDeduped)
+
+    await svc.unmerge(AUDIT_ID, ACTOR_ID)
+
+    expect(mutations.restoreSourcesByIds).toHaveBeenCalledWith(mockClient, [SRC_2])
   })
 })
 

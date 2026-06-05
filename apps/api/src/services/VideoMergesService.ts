@@ -37,7 +37,13 @@ import {
   fetchVideosByIds,
   fetchSourcesByVideoId,
   fetchSourcesByVideoIds,
-  detectMergeConflicts,
+  // ADR-105 AMENDMENT 2026-06-05 D-105-13~16（CHG-MERGE-DEDUP-EP）：自动去重取并集
+  dedupeSourcesForMerge,
+  detectResidualTargetConflicts,
+  dedupeSourcesForSplitTarget,
+  detectResidualSplitTargetConflicts,
+  restoreSourcesByIds,
+  setAuditDedupedSourceIds,
   fetchAuditById,
   insertMergeAudit,
   transferSourcesToTarget,
@@ -269,10 +275,11 @@ export class VideoMergesService {
     candidateIds: readonly string[]
     snapshotJsonb: Record<string, unknown>
     actorId: string
-  }): Promise<{ auditId: string; decisionIds: string[] }> {
+  }): Promise<{ auditId: string; decisionIds: string[]; dedupedSourceIds: string[] }> {
     const { sourceVideoIds, targetVideoId, reason, candidateIds, snapshotJsonb, actorId } = params
     const client = await this.db.connect()
     let auditId: string
+    let dedupedSourceIds: string[] = []
     const decisionIds: string[] = []
     try {
       await client.query('BEGIN')
@@ -285,6 +292,24 @@ export class VideoMergesService {
         performedBy: actorId,
         reason: reason ?? null,
       })
+
+      // D-105-13（CHG-MERGE-DEDUP-EP）：转移前确定性去重——重复 (episode_number, source_url)
+      // 软删非保留行（target 恒胜 > sourceVideoIds 序首胜），合并 = 线路取并集不再 409
+      dedupedSourceIds = await dedupeSourcesForMerge(client, sourceVideoIds, targetVideoId)
+      if (dedupedSourceIds.length > 0) {
+        // D-105-14：snapshot 补 dedupedSourceIds（unmerge「先归还后复活」还原依据）
+        await setAuditDedupedSourceIds(client, auditId, dedupedSourceIds)
+      }
+      // Y-105-D3 防御性残余预检：幸存 source 行 vs target 全部行（含软删占槽位）——
+      // 命中则转移必撞唯一键，明确 409 整体 ROLLBACK（零物理删除，人工处理路径）
+      const residual = await detectResidualTargetConflicts(client, sourceVideoIds, targetVideoId)
+      if (residual > 0) {
+        throw new AppError(
+          'STATE_CONFLICT',
+          `target 视频存在 ${residual} 条历史软删线路与待转入线路冲突（唯一键占位），请联系管理员处理后重试`,
+          409,
+        )
+      }
 
       await transferSourcesToTarget(client, sourceVideoIds, targetVideoId)
       await softDeleteVideos(client, sourceVideoIds)
@@ -304,7 +329,7 @@ export class VideoMergesService {
     } finally {
       client.release()
     }
-    return { auditId, decisionIds }
+    return { auditId, decisionIds, dedupedSourceIds }
   }
 
   async merge(params: MergeParams, actorId: string): Promise<MergeResult> {
@@ -317,17 +342,8 @@ export class VideoMergesService {
     // 1. 校验所有 video 存在且未删除（404/409 / 抽 assertVideosMergeable）
     const videoMap = await this.assertVideosMergeable(sourceVideoIds, targetVideoId)
 
-    // 2. 前置冲突探测（uq_sources_video_episode_url）
-    // ADR-105 R-105-1 + CHG-SN-5-10-PATCH P0-2：探测合并后集合内任意两点冲突
-    // （覆盖 source-vs-source + source-vs-target 全部路径）
-    const conflictCount = await detectMergeConflicts(this.db, [...sourceVideoIds, targetVideoId])
-    if (conflictCount > 0) {
-      throw new AppError(
-        'STATE_CONFLICT',
-        `source 与 target 视频存在重复 (episode_number, source_url) 组合 ${conflictCount} 条，请先在 /admin/sources 视图处理（保留其一删除其余）后再合并`,
-        409,
-      )
-    }
+    // 2. （ADR-105 AMENDMENT 2026-06-05 D-105-13）原 R-105-1 预检 409 废止——重复
+    // (episode_number, source_url) 改为事务内确定性去重取并集（见 runMergeTransaction）
 
     // 2b. CHG-VIR-9-B / ADR-178 D-178-3：candidate 事务前快速失败校验（BEGIN 之前，主路径零变更）
     // CHG-VIR-9-D：折叠组 K 个 candidate 逐个校验（存在404/pending409/pair⊆合并集合422）
@@ -351,8 +367,8 @@ export class VideoMergesService {
         : {}),
     }
 
-    // 4. 事务（抽 runMergeTransaction / R8 单 BEGIN/COMMIT）
-    const { auditId, decisionIds } = await this.runMergeTransaction({
+    // 4. 事务（抽 runMergeTransaction / R8 单 BEGIN/COMMIT；D-105-13 事务内去重）
+    const { auditId, decisionIds, dedupedSourceIds } = await this.runMergeTransaction({
       sourceVideoIds, targetVideoId, reason, candidateIds, snapshotJsonb, actorId,
     })
 
@@ -392,6 +408,8 @@ export class VideoMergesService {
         ...(params.targetStatus !== undefined
           ? { targetStatus: params.targetStatus, statusTransition }
           : {}),
+        // D-105-16（CHG-MERGE-DEDUP-EP）：去重结果纯增量补记
+        ...(dedupedSourceIds.length > 0 ? { dedupedSourceIds } : {}),
       },
     })
 
@@ -399,6 +417,8 @@ export class VideoMergesService {
       auditId,
       targetVideo,
       ...(statusTransition !== undefined ? { statusTransition } : {}),
+      // D-105-16：实际去重条数（>0 时透出；R-105-D4 纯增量）
+      ...(dedupedSourceIds.length > 0 ? { dedupedCount: dedupedSourceIds.length } : {}),
     }
   }
 
@@ -428,6 +448,11 @@ export class VideoMergesService {
       ? (audit.snapshot_jsonb as { targetStatusBefore?: TargetStatusBefore }).targetStatusBefore
       : undefined
 
+    // D-105-14（CHG-MERGE-DEDUP-EP）：被去重软删的源 ids（merge/split 双场景；
+    // 存量 audit 无该字段 → 空数组零行为变更 R-105-D3）
+    const dedupedRaw = (audit.snapshot_jsonb as { dedupedSourceIds?: string[] }).dedupedSourceIds
+    const dedupedSourceIds = Array.isArray(dedupedRaw) ? dedupedRaw : []
+
     let restoredVideoIds: string[]
 
     if (audit.action === 'merge') {
@@ -439,6 +464,8 @@ export class VideoMergesService {
         await client.query('BEGIN')
         await restoreVideos(client, restoredVideoIds)
         await reassignSourcesToOriginal(client, snapshotSources)
+        // D-105-14：先归还后复活（顺序避免瞬时撞 target 槽位 / 评审确认）
+        await restoreSourcesByIds(client, dedupedSourceIds)
         await markAuditReverted(client, auditId, actorId, reason ?? null)
         // CHG-VIR-9-B / ADR-178 D-178-4：经 audit_id 反查关联 confirmed decision 原地置 reverted
         // （decision 值不变 / candidate 保持 confirmed 不回 pending，避撞 uq_identity_candidate_pending）
@@ -470,6 +497,8 @@ export class VideoMergesService {
         await client.query('BEGIN')
         await restoreVideos(client, restoredVideoIds)
         await reassignSourcesToOriginal(client, snapshotSources)
+        // D-105-14/15：split 拆到已有 video 的转入去重行同恢复（先归还后复活）
+        await restoreSourcesByIds(client, dedupedSourceIds)
         await softDeleteVideos(client, createdVideoIds)
         await markAuditReverted(client, auditId, actorId, reason ?? null)
         await client.query('COMMIT')
@@ -589,6 +618,8 @@ export class VideoMergesService {
     const allTargetVideoIds: string[] = []
     // D-105-10：组下标 → 新建 videoId（post-COMMIT 状态写入定位；existing 组恒 undefined）
     const createdVideoIdByGroup: (string | undefined)[] = new Array(resolvedGroups.length)
+    // D-105-15（CHG-MERGE-DEDUP-EP）：拆到已有 video 转入行的去重软删 ids（unmerge 还原依据）
+    const dedupedSourceIds: string[] = []
 
     try {
       await client.query('BEGIN')
@@ -607,6 +638,22 @@ export class VideoMergesService {
       for (let i = 0; i < resolvedGroups.length; i++) {
         const group = resolvedGroups[i]!
         if (group.kind === 'existing') {
+          // D-105-15（CHG-MERGE-DEDUP-EP）：转入前去重——与已有 target 重复 (ep,url) 的
+          // 转入行软删（target 恒胜 / D-105-5 不动已有 target；Y-105-D4 时序 = assign 之前）
+          dedupedSourceIds.push(
+            ...(await dedupeSourcesForSplitTarget(client, [...group.sourceIds], group.targetVideoId)),
+          )
+          // Y-105-D3 防御性残余预检（幸存转入行 vs target 含软删占槽位）
+          const residual = await detectResidualSplitTargetConflicts(
+            client, [...group.sourceIds], group.targetVideoId,
+          )
+          if (residual > 0) {
+            throw new AppError(
+              'STATE_CONFLICT',
+              `拆分目标视频存在 ${residual} 条历史软删线路与转入线路冲突（唯一键占位），请联系管理员处理后重试`,
+              409,
+            )
+          }
           // D-105-5 / R-105-S3：仅转入 sources，不改已有 video 任何元数据
           await assignSourcesToVideo(client, [...group.sourceIds], group.targetVideoId)
           allTargetVideoIds.push(group.targetVideoId)
@@ -627,6 +674,10 @@ export class VideoMergesService {
 
       // 回填 target_video_ids + snapshot.created_target_video_ids（D-105-4 / 零 DDL 自由字段）
       await updateAuditTargetIds(client, auditId, allTargetVideoIds, newVideoIds)
+      // D-105-15：snapshot 补 dedupedSourceIds（unmerge「先归还后复活」还原依据）
+      if (dedupedSourceIds.length > 0) {
+        await setAuditDedupedSourceIds(client, auditId, dedupedSourceIds)
+      }
 
       await softDeleteVideos(client, [videoId])
 
@@ -666,6 +717,8 @@ export class VideoMergesService {
               statusTransition,
             }
           : {}),
+        // D-105-16（CHG-MERGE-DEDUP-EP）：去重结果纯增量补记
+        ...(dedupedSourceIds.length > 0 ? { dedupedSourceIds } : {}),
       },
     })
 
@@ -673,6 +726,8 @@ export class VideoMergesService {
       auditId,
       newVideoIds,
       ...(statusTransition !== undefined ? { statusTransition } : {}),
+      // D-105-16：实际去重条数（>0 时透出；R-105-D4 纯增量）
+      ...(dedupedSourceIds.length > 0 ? { dedupedCount: dedupedSourceIds.length } : {}),
     }
   }
 
