@@ -32,7 +32,8 @@ import {
   describeStatusTransition,
   GENERIC_STATUS_OPTIONS,
 } from '@/lib/merge/status-defaults'
-import { videoPickerFetcher } from '@/lib/videos/picker-fetcher'
+// CHG-VIR-13-FIX-PREFILL：深链预填走 by-id 精确查（listVideos q 不匹配 UUID）
+import { videoPickerFetcher, fetchPickerItemByIdSafe } from '@/lib/videos/picker-fetcher'
 import { describeError } from './MergeClient'
 // CHG-VIR-13-PLAY（§11.3 工作区预览嵌入）：结构级线路预览 + 播放抽验（{id,title} 最小输入）
 import { StructurePreview } from './StructurePreview'
@@ -87,24 +88,18 @@ export function MergeWorkspace({ initialIds, initialTargetId, candidateIdFromUrl
   const [prefilling, setPrefilling] = useState(false)
 
   // 深链 ids 一次性并行 fetch 注入成员（标题/shortId 充实；fetch 失败的 id 以占位行保留可移除）
+  // CHG-VIR-13-FIX-PREFILL：改走 GET /admin/videos/:id 精确查——原 videoPickerFetcher({q: uuid})
+  // 因后端 q 仅匹配 title/short_id ILIKE 对 UUID 恒 0 结果，预填恒走「加载失败」占位
   const initialIdsKey = (initialIds ?? []).join('|')
   useEffect(() => {
     const ids = Array.from(new Set(initialIds ?? [])).filter(Boolean)
     if (ids.length === 0) return
     let cancelled = false
-    const ctrl = new AbortController()
     setPrefilling(true)
     Promise.all(
-      ids.map(async (id): Promise<PickerVideoItem> => {
-        try {
-          const res = await videoPickerFetcher({ q: id, limit: 1, signal: ctrl.signal })
-          const found = res.items.find((it) => it.id === id)
-          if (found) return found
-        } catch {
-          // 单 id fetch 失败 → 走占位行（可移除/可重选），不阻塞整体预填
-        }
-        return { id, shortId: id.slice(0, 8), title: '(加载失败，请确认 id)' } as PickerVideoItem
-      }),
+      ids.map(async (id): Promise<PickerVideoItem> =>
+        (await fetchPickerItemByIdSafe(id))
+          ?? ({ id, shortId: id.slice(0, 8), title: '(加载失败，请确认 id)' } as PickerVideoItem)),
     )
       .then((items) => {
         if (cancelled) return
@@ -112,7 +107,7 @@ export function MergeWorkspace({ initialIds, initialTargetId, candidateIdFromUrl
         setTargetId((prev) => (prev && items.some((it) => it.id === prev) ? prev : items[0]?.id ?? null))
       })
       .finally(() => { if (!cancelled) setPrefilling(false) })
-    return () => { cancelled = true; ctrl.abort() }
+    return () => { cancelled = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- ids 内容键控（数组引用每 render 变）
   }, [initialIdsKey])
 

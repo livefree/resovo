@@ -7,8 +7,8 @@
  * 本模块在 apps/server-next 侧做字段映射 + listVideos 调用 + AbortSignal 兼容。
  */
 
-import type { VideoPickerFetcher } from '@resovo/admin-ui'
-import { listVideos } from './api'
+import type { PickerVideoItem, VideoPickerFetcher } from '@resovo/admin-ui'
+import { listVideos, getVideo } from './api'
 
 /**
  * 标准 VideoPicker fetcher，所有审核台 / 字幕上传 / 首页模块等消费方共用
@@ -41,5 +41,31 @@ export const videoPickerFetcher: VideoPickerFetcher = async ({ q, limit, filter 
     items,
     total: res.total,
     // 不返回 nextCursor（listVideos 是 page-based；M-SN-N follow-up）
+  }
+}
+
+/**
+ * 按 id 精确取单个 PickerVideoItem（CHG-VIR-13-FIX-PREFILL）。
+ *
+ * 深链预填（merge 工作区成员 / split 拆分对象标题充实）专用：listVideos 的 q 仅匹配
+ * title/title_en/title_original/short_id ILIKE——**UUID 永远 0 结果**，必须走
+ * `GET /admin/videos/:id`。失败（404/网络）返回 null，调用方自行占位兜底。
+ */
+export async function fetchPickerItemByIdSafe(id: string): Promise<PickerVideoItem | null> {
+  try {
+    const v = await getVideo(id)
+    return {
+      id: v.id,
+      shortId: v.short_id,
+      title: v.title,
+      titleEn: v.title_en,
+      type: v.type,
+      year: v.year,
+      coverUrl: v.cover_url,
+      isPublished: v.is_published,
+    }
+  } catch {
+    // 404（id 不存在/已软删出列表语义）或网络失败 → 调用方占位行兜底（可移除/重选）
+    return null
   }
 }

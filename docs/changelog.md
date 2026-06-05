@@ -14780,3 +14780,22 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
   - 修复后实测：MAIN 747/1614 正常滚动、30 组 mock 末行可达、分页 foot 完整；视觉副效应 = 消除原 AdminCard 默认 padding(14px) 与内层 16px 的冗余叠加。
   - **共享组件提示**：AdminCard 当前结构不支持「children 内滚」骨架（body wrapper 无 flex 透传）——后续若有同类需求应扩展 AdminCard（如 `bodyFlex` prop）经设计评审，勿在消费方重复此误用。
   - 门禁：merge 域单测 83/83 零破坏 + server-next tsc EXIT=0 + e2e merge-deeplink 6/6 + lint EXIT=0。
+
+## [CHG-VIR-13-FIX-PREFILL] 深链成员预填恒走「加载失败」兜底修复（用户 bug 报告）
+- **完成时间**：2026-06-05
+- **记录时间**：2026-06-05 23:45
+- **执行模型**：claude-opus-4-8
+- **子代理**：无
+- **修改文件**：
+  - `apps/server-next/src/lib/videos/picker-fetcher.ts` — +`fetchPickerItemByIdSafe(id)`（`GET /admin/videos/:id` 精确查 + VideoAdminDetail→PickerVideoItem 映射；失败 null 调用方占位兜底）
+  - `apps/server-next/.../merge/_client/MergeWorkspace.tsx` — 深链 ids 预填改 by-id（去 AbortController——apiClient 无 signal，cancelled flag 丢结果保留）
+  - `apps/server-next/.../merge/_client/SplitWorkspace.tsx` — 深链标题充实改 by-id
+  - `tests/.../MergeWorkspace.test.tsx` — api mock +getVideo（by-id 命中返回/未命中 reject = 真实契约形态）
+  - `tests/.../merge-split-deeplink.test.tsx` — picker-fetcher mock 工厂 +fetchPickerItemByIdSafe
+  - `tests/e2e/admin/merge/merge-deeplink.spec.ts` — route +by-id 精确 mock + 用例 2 增「标题充实非『加载失败』」断言
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - **根因**：13-WS 预填 `videoPickerFetcher({ q: uuid })`——后端 listVideos 的 q 仅匹配 `title/title_en/title_original/short_id ILIKE`（videos.ts:300），**UUID 恒 0 结果** → 全部深链预填路径（候选转工作区 / 视频库批量 / 审核台 batch / candidate_a+b / SplitWorkspace 标题充实）自上线起恒走「(加载失败，请确认 id)」占位。
+  - **测试教训**：原单测/e2e 的 mock fetcher 按 `q===id` 返回，掩盖真实契约不匹配——本次 mock 全部对齐真实契约（搜索 mock 不再按 uuid 命中；by-id 单独 mock）+ e2e 增反占位断言。
+  - 门禁：merge 域单测全过 + e2e deeplink 6/6 + server-next tsc EXIT=0 + lint EXIT=0。

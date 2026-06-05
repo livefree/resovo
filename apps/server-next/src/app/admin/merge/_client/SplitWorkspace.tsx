@@ -26,7 +26,8 @@ import {
 import type { LineMatrixRow, SplitGroup, SplitSignal, SplitSuggestionsResult } from '@resovo/types'
 import { splitVideo, unmergeVideos, getSplitSuggestions } from '@/lib/merge/api'
 import { getVideoMatrix } from '@/lib/sources/api'
-import { videoPickerFetcher } from '@/lib/videos/picker-fetcher'
+// CHG-VIR-13-FIX-PREFILL：深链标题充实走 by-id 精确查（listVideos q 不匹配 UUID）
+import { videoPickerFetcher, fetchPickerItemByIdSafe } from '@/lib/videos/picker-fetcher'
 import { describeError } from './MergeClient'
 import { MergeResultPreview, type SplitPreviewGroup } from './MergeResultPreview'
 // CHG-VIR-13-PLAY：分配表抽出（500 行预算）+ 行级 ▶ 播放抽验
@@ -124,13 +125,12 @@ export function SplitWorkspace({ initialVideoId }: SplitWorkspaceProps = {}) {
     autoLoadedRef.current = initialVideoId
     loadMatrix(initialVideoId)
     let cancelled = false
-    videoPickerFetcher({ q: initialVideoId, limit: 1 })
-      .then((res) => {
-        if (cancelled) return
-        const found = res.items.find((it) => it.id === initialVideoId)
-        if (found) setSelectedVideo(found)
+    // CHG-VIR-13-FIX-PREFILL：by-id 精确查（原 fetcher q=uuid 恒 0 结果，充实从未生效）
+    fetchPickerItemByIdSafe(initialVideoId)
+      .then((found) => {
+        if (cancelled || !found) return
+        setSelectedVideo(found)
       })
-      .catch(() => { /* 标题充实失败不阻塞（预览以 id 短码兜底） */ })
     return () => { cancelled = true }
   }, [initialVideoId, loadMatrix])
 

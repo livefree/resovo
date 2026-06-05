@@ -25,6 +25,7 @@ const routerReplaceMock = vi.fn()
 let mockSearchString = ''
 
 const listVideosMock = vi.fn()
+const getVideoMock = vi.fn()
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({
@@ -47,6 +48,8 @@ vi.mock('../../../../../../apps/server-next/src/lib/merge/api', () => ({
 
 vi.mock('../../../../../../apps/server-next/src/lib/videos/api', () => ({
   listVideos: (...args: unknown[]) => listVideosMock(...args),
+  // CHG-VIR-13-FIX-PREFILL：深链预填走 by-id（fetchPickerItemByIdSafe → getVideo）
+  getVideo: (...args: unknown[]) => getVideoMock(...args),
 }))
 
 vi.mock('@resovo/admin-ui', async () => {
@@ -91,6 +94,10 @@ beforeEach(() => {
   toastPushMock.mockReset()
   routerReplaceMock.mockReset()
   listVideosMock.mockReset()
+  getVideoMock.mockReset()
+  // by-id 精确查：命中 ROWS 返回行（VideoAdminDetail 同形态），未命中 reject（404 语义）
+  getVideoMock.mockImplementation((id: string) =>
+    ROWS[id] ? Promise.resolve(ROWS[id]) : Promise.reject(new Error('not found')))
   // 预填 fetch：按 q（=id）返回对应行；picker 搜索（任意 q）返回全部
   listVideosMock.mockImplementation(({ q }: { q?: string }) => {
     if (q && ROWS[q]) return Promise.resolve({ data: [ROWS[q]], total: 1, page: 1, limit: 20 })

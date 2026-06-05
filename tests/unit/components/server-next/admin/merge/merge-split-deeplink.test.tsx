@@ -32,6 +32,11 @@ vi.mock('../../../../../../apps/server-next/src/lib/sources/api', () => ({
 // CHG-VIR-13-B2B：SplitWorkspace 消费 videoPickerFetcher（深链标题充实 + 两处 VideoPicker）
 vi.mock('../../../../../../apps/server-next/src/lib/videos/picker-fetcher', () => ({
   videoPickerFetcher: (...args: unknown[]) => pickerFetcherMock(...args),
+  // CHG-VIR-13-FIX-PREFILL：深链标题充实改 by-id；复用 pickerFetcherMock 作为统一注入点
+  fetchPickerItemByIdSafe: async (id: string) => {
+    const res = await pickerFetcherMock({ q: id, limit: 1 })
+    return res?.items?.find((it: { id: string }) => it.id === id) ?? null
+  },
 }))
 
 vi.mock('../../../../../../apps/server-next/src/app/admin/merge/_client/MergeClient', () => ({
