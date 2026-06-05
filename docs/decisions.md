@@ -19418,6 +19418,42 @@ D-105a-1 ~ D-105a-13 共 13 条，随 Phase 1a/2a/2b/2c 实施卡（CHG-VIR-5/7/
 
 **D-N 偏离登记更新**：本 AMENDMENT 新增 D-105a-18，ADR-105a 偏离编号扩为 **D-105a-1 ~ D-105a-18 共 18 条**（18 随 CHG-VIR-9-D 实施闭环）。
 
+### AMENDMENT 2026-06-05（CHG-VIR-16-TBL-ADR / 合并工作区表格组级检索 — 有界全量轻列折叠 + 相似度/候选数筛排 + 标题搜索）
+
+**评审**：arch-reviewer（claude-opus-4-8 / agentId adddab18b4cd502e8）**PASS-with-conditions** → 红线 R-1（cap 截断组完整性，取方案 (b) 防御性闭包补全）/ R-2（测试影响面登记）回写 + 黄线 Y-1~Y-5（meta 轻查询 join 归属 / q 双口径 / 排序措辞收紧 / 泛型化实现口径 / FIX-2 正交声明）全吸收后落地。
+
+**触发**：用户裁定合并工作区表格（MergeCandidatesSection）三项 UX——① 相似度列排序 ② 相似度 + 候选数筛选 ③ 表格搜索框。「候选数」= 折叠后连通分量大小，属**组级语义**：现行「pair 级 SQL 分页 + 页内折叠」（D-105a-18）下结构性不可实现（组大小折叠后才可知，页内折叠只见当前页 pair）。D-105a-18 遗留 ②（「跨页同分量折叠需全量折叠或 cursor 分页，规模显著增长时再评估」）由本需求触发再评估。
+
+**端点契约变更（向后兼容，纯增量）**：`GET /admin/video-merges/candidates`
+- query 新增 5 个 optional 参数 + 1 个枚举扩展：
+  - `sortField` 枚举扩 `identityScore`（白名单 5 字段：score / videoCount / year / titleNormalized / identityScore；identity 路径缺省 identityScore DESC 与现行 ORDER BY 语义一致，legacy 路径缺省 score DESC 不变）
+  - `identityScoreMin` / `identityScoreMax`（coerce number 0..1；min > max → 422 refine，显式拒绝优于静默交换）
+  - `videoCountMin` / `videoCountMax`（coerce int ≥ 2；min > max → 422 refine）
+  - `q`（trim 后非空，max 100；组**任一成员** video 的 `title` 或 `title_normalized` 不区分大小写 contains 匹配——成员级匹配优于组代表标题匹配，折叠组成员标题异质〔正是待合并的原因〕，仅匹配 `videos[0]` 代表标题会漏检）
+- 响应 envelope 新增 optional `truncated?: boolean`（仅 identity 路径 cap 截断时 `true`；`ListCandidatesResult` 加性扩展）
+- **`total` 语义变更（identity 路径）**：pending **pair 数 → 过滤后组数**（supersede 9-D「total 回显维持 pair 数」条款；UI 文案「共 N 对候选」→「共 N 组」）。分页单位从 pair 改为组，**跨页同分量拆行近似随之消除**。legacy 路径 total 语义不变（组数）。
+
+**D-105a-19（有界全量轻列折叠取代页内折叠 / supersede D-105a-18 折叠范围与行序条款）**
+- identity 路径改为五阶段管线：
+  1. **轻列全量**：新 query `listPendingCandidatePairsLight`（仅 `id / left_video_id / right_video_id / identity_score / canonical_pair_key`，**不含 evidence_jsonb / strong_negative_reasons / legacy_score / group_key 重列**；WHERE 逐字复用 `PENDING_PAIR_WHERE` 口径；ORDER BY identity_score DESC, canonical_pair_key ASC；LIMIT cap+1 探测截断）
+  2. **全局 union-find**：`collapsePairs` 泛型化——实现口径锁定（评审 Y-4）：`collapsePairs<T extends { left_video_id: string; right_video_id: string }>(pairs: readonly T[]): PairCluster<T>[]`，`PairCluster<T>.pairs: readonly T[]` 参数化保留入参元素类型（既有消费方 `buildGroupFromCluster` 经 `pairRowToScore` 访问 `.id/.evidence_jsonb/.strong_negative_reasons` 零破坏）；纯函数性质 / clusterKey 口径 / 分量内 pair 保序逐字不变
+  3. **组级谓词**：相似度 = min over pair identity_score（与 aggregateGroup D-105a-15 聚合口径一致，轻列即可算）；候选数 = 分量成员数；q = 任一成员标题双口径 contains（评审 Y-2）——**原始 `title` lower-case contains 命中为主，`normalizeMergeKey(q)` contains `title_normalized` 为辅召回**（normalized 列剥标点空格，raw q 直接 contains 会漏检）。新轻元数据批量 query `fetchVideoMetaLight`：`id / title / title_normalized / year`——**注意 `title_normalized` / `year` 在 `media_catalog`，实为 `videos JOIN media_catalog` 单次有界 join（评审 Y-1，无 N+1，q 匹配的是 catalog 级归一标题）**；仅 q 或 title/year 排序激活时拉取，规模 ≤ 2×cap 单 ANY 查询
+  4. **组级排序**：sortField 白名单 + sortDir；缺省 identityScore DESC；tiebreaker clusterKey ASC（分页幂等）
+  5. **组级分页切片** → 仅当前页分量按轻列 pair id 回查完整 pair 行（新 query `listPendingPairsByIds`，含 evidence；回查后按 identity_score DESC, canonical_pair_key ASC 重排保持分量内 pair 保序契约）→ **以页分量成员集 + full 行重建 `PairCluster<完整行>`**（评审 Y-4：light cluster 不直接喂 `buildGroupFromCluster`）+ `fetchVideoDetailsForCandidates` → `buildGroupFromCluster`（**evidence 重列与 video 详情成本维持 per-page**，与现行同阶）
+- **cap = `MAX_COLLAPSE_PAIRS = 2000`**（当前规模 ~200 pending pair 的 10× 裕量；identity_score DESC 取最高分前 2000 对参与折叠；超出 → envelope `truncated: true` + 前端工具条警示「候选超上限，仅展示最高分 2000 对的折叠结果」）。D-105a-18 否决「拉全量」的理由（ingest 旁路候选无上界破坏 LIMIT 下推）以 **cap 有界化中和**：轻列 2000 行 + union-find O(α·E) 内存/CPU 平凡，重列仍 per-page 下推。
+- **截断态组完整性防御（评审红线 R-1 / 方案 (b)）**：`identity_score DESC` 硬截断与连通分量（pair 传递闭包）正交——高分 pair 在界内而桥接低分 pair 在界外时，分量会**缺成员/缺 candidateId 锚点**：`videoCount`（本卡核心筛选维度）偏小不可信，残缺组 confirm 后该分量剩余 pair 仍 pending 下次复现（与 9-D unmerge 漏 revert 同型镜像）。防御口径：**仅 truncated 态**（轻列行数 > cap）对界内 top-cap pair 触及的 video_id 集合补查「这些 video 的全部 pending pair」（轻列 ANY 查询），**有界迭代至闭包**（轮次 ≤ 3 或累计 pair ≤ 3×cap 守卫，分量典型规模 2-11 视频一轮即闭合）；守卫触顶后的残余不完整仅存在于 `truncated: true` 极端态且已被警示条覆盖。非截断态（当前常态）轻列全量本身即完整闭包，零额外查询。
+- **降级判定语义收窄**：identity→legacy 降级判定 = 轻列全量为空（**无任何 pending pair**，与现行 `total === 0` 判定等价）；**筛选/搜索结果为空不降级**（返回 `source:'identity'` + `data: []` + `total: 0`——筛选空时悄降 legacy 全量数据是 9-C FIX-2 已登记的「更坏的语义漂移」同型错误）。`countPendingCandidatePairs` 在 identity 列表路径退役（轻列全量自身即给出存在性与组数，省一次 COUNT 往返；函数本体保留供报表/测试消费）。
+- **legacy 降级路径**：新参数（identityScore/videoCount 区间 + q）Service 层组装后内存过滤 + 排序扩 `identityScore` case（`identity.identityScore`，CHG-VIR-7 起 legacy 组恒有该字段）。其 SQL 组级分页在前 → 过滤致页行数减少、total 不计新谓词，属与 minScore 既有过滤**同源同阶的已登记近似**（legacy 仅 identity 空表降级态，不值得 SQL 手术）；筛选谓词与 identity 路径共用同一纯函数，双路径语义一致。**与 9-C FIX-2 红线正交（评审 Y-5）**：FIX-2 针对「identity 翻页中突现 legacy 全量数据」的来源跳变型漂移，本近似不触及 source 回显稳定性。
+- D-105a-18 其余条款**不变**：clusterKey 口径 / aggregateGroup 复用（D-105a-15）/ reject 逐 pair / `candidateIds[]` confirm 锚点 / N>11 整组合并禁用。「行序 = 高分 pair 首现序」由显式组级排序取代——**同向非逐行等价（评审 Y-3）**：组 `identityScore` = min over pairs（最弱链接主导组序），现行为分量**最高分** pair 首现序；多分量分数交错时行序与现行不同，属组级语义的正确演进而非回归。
+
+**前端接线（CHG-VIR-16-TBL-FE 消费契约）**：相似度列 `enableSorting` + number range filter（UI 百分比输入，请求映射 ÷100）；候选数列 number range filter（整数）；toolbar 搜索框 → `q`（防抖 + 翻页重置 page=1）；sort 白名单守卫扩 `identityScore`；identity 文案「共 N 组」；`truncated` 警示条；筛选/搜索结果空时**保持 DataTable 渲染**（不切 EmptyState 整体替换，否则筛选 chip / 搜索框随表格消失无法清除条件）。
+
+**测试影响面（评审红线 R-2 / 随 CHG-VIR-16-TBL-BE 同步改写）**：「向后兼容纯增量」仅指对外 HTTP 契约，内部主路径换轨破坏以下既有断言——① `tests/unit/api/identity-source-switch.test.ts`：mock `listPendingCandidatePairs`/`countPendingCandidatePairs` 的用例迁移到轻列管线 mock，`total` 断言 pair 数 → 组数（6+ 用例）；② `tests/unit/api/identity-collapse-pairs.test.ts`：`collapsePairs` 签名泛型化适配（Y-4 口径下 `.pairs[].id` 断言应零破坏，验证之）；③ `tests/unit/api/identity-candidate-queries.test.ts`：`countPendingCandidatePairs` 用例评估留存口径（函数保留供报表/测试，列表路径退役）。BE 卡范围逼近原子化阈值（zod+types / 2-3 新 query / Service 管线 / 共享谓词纯函数 / 测试改写），入卡时按 workflow-rules 原子化四问显式评估。
+
+**遗留**：① cap 截断时组级排序仅在前 2000 对内成立（截断警示已明示）；pending 规模逼近 cap 时再评估 cursor 分页或 cap 上调。② legacy 路径页内过滤近似（上注）。③ 「作品」列 text filter 复用 q 通道留 FE 实施时按 VideoColumns title 列先例对齐。
+
+**D-N 偏离登记更新**：本 AMENDMENT 新增 D-105a-19，ADR-105a 偏离编号扩为 **D-105a-1 ~ D-105a-19 共 19 条**（19 随 CHG-VIR-16-TBL-BE 实施闭环）。
+
 ---
 
 ## ADR-175：多语种标题模型 — 字段语义收紧 + media_catalog_aliases 结构化升级 + locale fallback + 匹配分层（SEQ-20260602-03 / CHG-VIR-2 / Phase 0）

@@ -14872,3 +14872,20 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
   - AdminPlayer 跨模块导入第 2 消费方（PlayPreviewDrawer 先例）；第 3 消费方出现时按规则上提共享层。
   - PlayPreviewDrawer + StructurePreview 保留：SplitWorkspace / MergeWorkspace（深链）继续消费。
   - **Codex stop-time review FIX（来源列误标）**：legacy 分支也实时填 identity 评分（CHG-VIR-7 scoreGroup）——按 row.identity 有无判定会把降级行全表误标「多证据」→ 来源列真源改服务端回显 effectiveSource（单查询单来源，回显即行级真值）；相似度列与来源标签解耦保留评分显示；2a-fix 用例对齐真实契约防回归（90/90）。
+
+## [CHG-VIR-16-TBL-ADR] ADR-105a AMENDMENT 2026-06-05 — 合并工作区表格组级检索（D-105a-19）
+- **完成时间**：2026-06-05
+- **记录时间**：2026-06-05
+- **执行模型**：claude-opus-4-8｜子代理：arch-reviewer (claude-opus-4-8 / agentId adddab18b4cd502e8)
+- **修改文件**：
+  - `docs/decisions.md` — ADR-105a 章节追加 AMENDMENT 2026-06-05（CHG-VIR-16-TBL-ADR）：D-105a-19 有界全量轻列折叠取代页内折叠（supersede D-105a-18 折叠范围与行序条款，遗留 ② 再评估点触发）
+  - `docs/tasks.md` — 任务卡流转
+- **决策要点**：
+  - 触发 = 用户裁定合并工作区表格三项 UX（相似度排序 / 相似度 + 候选数筛选 / 标题搜索框）；「候选数」组级语义在 pair 级分页 + 页内折叠下结构性不可实现
+  - 端点契约纯增量：`GET /admin/video-merges/candidates` query +5 参数（sortField 扩 identityScore / identityScoreMin·Max / videoCountMin·Max / q）+ envelope optional `truncated`；**total 语义（identity 路径）pair 数 → 过滤后组数**（跨页拆行近似随之消除）
+  - 五阶段管线：轻列全量（cap+1 探测）→ 全局 union-find（collapsePairs 泛型化 `PairCluster<T>`）→ 组级谓词（q 双口径：title lower contains 为主 + normalizeMergeKey(q)/title_normalized 辅召回）→ 组级排序（缺省 identityScore DESC + clusterKey tiebreak）→ 组级分页切片 + per-page full 行回查重建
+  - cap = MAX_COLLAPSE_PAIRS 2000 + **截断态组完整性防御（红线 R-1 方案 (b)）**：界内 video 集合补查全部 pending pair 有界迭代至闭包（轮次 ≤3 / 累计 ≤3×cap 守卫）
+  - 降级判定收窄：轻列全量空才降级 legacy，**筛选空不降级**（9-C FIX-2 同型漂移预防）；legacy 路径页内过滤近似登记（与 FIX-2 正交，Y-5）
+- **评审**：arch-reviewer PASS-with-conditions → R-1（截断组完整性）/ R-2（测试影响面登记：identity-source-switch / identity-collapse-pairs / identity-candidate-queries 三文件随 BE 卡改写）回写 + Y-1~Y-5（meta 查询 media_catalog join 归属 / q 双口径 / 排序「同向非逐行等价」措辞收紧 / 泛型化实现口径锁定 / FIX-2 正交声明）全吸收
+- **测试**：纯文档零业务代码；`npm run verify:adr-contracts` EXIT=0（D-105a-19 未闭环为预期，随 CHG-VIR-16-TBL-BE 实施闭环）
+- **注意事项**：解阻 CHG-VIR-16-TBL-BE（后端落地）→ CHG-VIR-16-TBL-FE（前端接线）
