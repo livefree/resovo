@@ -117,14 +117,37 @@ export function CandidatesSection() {
   useEffect(() => { load() }, [load])
 
   const handleMerge = useCallback(
-    async (group: CandidateGroup, targetVideoId: string, targetStatus?: VideoStatusSetting | null) => {
-      const sourceVideoIds = group.videos.map((v) => v.id).filter((id) => id !== targetVideoId)
+    async (
+      group: CandidateGroup,
+      targetVideoId: string,
+      targetStatus?: VideoStatusSetting | null,
+      // CHG-VIR-17-PARTIAL（D-105a-18 遗留 ① 兑现）：部分合并选中集合（含 target；
+      // 缺省 = 整组，快捷合并路径不传）
+      selectedVideoIds?: readonly string[],
+    ) => {
+      const members = selectedVideoIds && selectedVideoIds.length >= 2
+        ? selectedVideoIds
+        : group.videos.map((v) => v.id)
+      const isPartial = members.length < group.videos.length
+      const sourceVideoIds = members.filter((id) => id !== targetVideoId)
       try {
         // CHG-VIR-9-C：identity 来源透传 confirm 锚点（单事务挂 decision，ADR-178 D-178-3）
         // CHG-VIR-9-D / D-105a-18：折叠组传全部 K 个 pair 的 candidateIds（回退单数兼容）
-        const candidateIds = group.candidateIds && group.candidateIds.length > 0
-          ? [...group.candidateIds]
-          : group.candidateId ? [group.candidateId] : undefined
+        // CHG-VIR-17-PARTIAL：仅传两端均在合并集合内的 pair——集合外 pair 传了后端 422
+        //（validateForMerge pair⊆集合校验 / 遗留 ① 契约）；锚点真源 = identity.pairs 逐 pair
+        // candidateId（与 group.candidateIds 同源）；部分合并时禁用整组 fallback（旧锚点含集合外 pair）
+        const memberSet = new Set(members)
+        const pairAnchors = (group.identity?.pairs ?? [])
+          .filter((p) => memberSet.has(p.leftVideoId) && memberSet.has(p.rightVideoId))
+          .map((p) => p.candidateId)
+          .filter((id): id is string => id !== undefined)
+        const candidateIds = pairAnchors.length > 0
+          ? pairAnchors
+          : isPartial
+            ? undefined
+            : group.candidateIds && group.candidateIds.length > 0
+              ? [...group.candidateIds]
+              : group.candidateId ? [group.candidateId] : undefined
         const result = await mergeVideos({
           sourceVideoIds, targetVideoId,
           ...(candidateIds ? { candidateIds } : {}),
@@ -441,7 +464,9 @@ export function CandidatesSection() {
         renderExpandedRow={(group) => (
           <CandidateExpand
             group={group}
-            onMerge={(targetId, targetStatus) => handleMerge(group, targetId, targetStatus)}
+            // CHG-VIR-17-PARTIAL：选中集合透传（部分合并 sourceVideoIds/candidateIds 子集计算在 handleMerge）
+            onMerge={(targetId, targetStatus, selectedVideoIds) =>
+              handleMerge(group, targetId, targetStatus, selectedVideoIds)}
             onReject={group.candidateId
               ? () => void handleReject(group.candidateId!, group.titleNormalized)
               : undefined}

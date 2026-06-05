@@ -19414,7 +19414,7 @@ D-105a-1 ~ D-105a-13 共 13 条，随 Phase 1a/2a/2b/2c 实施卡（CHG-VIR-5/7/
 - 折叠组 `GroupIdentityScore` 复用既有 `aggregateGroup`（D-105a-15 min/union），零重复实现；`score`（legacyScore）= min over pairs（同保守口径，null 沿 9-A 旧语义当 0）。
 - **reject = 逐 pair**（per-candidate 端点 `POST /admin/identity-candidates/:id/reject` K 次独立调用，路径不变）；否决「拒绝整组」单按钮（前端循环非原子、半完成态、分量内 pair 证据异质不应一刀切）。`PairScore` 加 optional `candidateId` 作逐 pair 操作锚点（运行期身份字段，不进 evidence_hash）。
 
-**遗留**：① 部分合并（任选 cluster 子集）暂不支持，UI 维持整组 N-1→target；支持时不在合并集合内的 pair candidateId 不得传（422）。② 跨页同分量折叠（需全量折叠或 cursor 分页）留后续观察，pending 候选规模显著增长时再评估。③ 「全部拒绝」便捷按钮（非原子，须逐个反馈）留可选增强。④ 折叠组 N>11（超单次 merge 上限）整组合并不可达——UI 禁用「执行合并」+ 提示分批走逐对明细（Codex review FIX，`MAX_MERGE_GROUP_VIDEOS=11`）；超大分量的分批合并辅助留可选增强。
+**遗留**：① 部分合并（任选 cluster 子集）暂不支持，UI 维持整组 N-1→target；支持时不在合并集合内的 pair candidateId 不得传（422）。——**✅ CHG-VIR-17-PARTIAL 2026-06-05 兑现**：展开面板列头成员勾选（默认全选）+ candidateIds 改由 identity.pairs 过滤「两端均在选中集合」计算（集合外 pair 不传，validateForMerge 契约对齐）；触发案例 = 强负 pair（season_mismatch 等）按设计仍生成 pending 候选且折叠把强负边当连通边 → 混合分量（地灵曲两季/危险关系同名异作）整组合并不可行。「强负边不参与 union-find 连通」留后续 ADR 评估（改变候选组织语义）。② 跨页同分量折叠（需全量折叠或 cursor 分页）留后续观察，pending 候选规模显著增长时再评估。——**✅ D-105a-19（CHG-VIR-16-TBL）兑现**：有界全量轻列折叠。③ 「全部拒绝」便捷按钮（非原子，须逐个反馈）留可选增强。④ 折叠组 N>11（超单次 merge 上限）整组合并不可达——UI 禁用「执行合并」+ 提示分批走逐对明细（Codex review FIX，`MAX_MERGE_GROUP_VIDEOS=11`）；超大分量的分批合并辅助留可选增强。——**CHG-VIR-17-PARTIAL 升级**：超限判定改选中数（>11 组取消勾选部分视频即可就地分批），「转入批量合并」引导保留。
 
 **D-N 偏离登记更新**：本 AMENDMENT 新增 D-105a-18，ADR-105a 偏离编号扩为 **D-105a-1 ~ D-105a-18 共 18 条**（18 随 CHG-VIR-9-D 实施闭环）。
 

@@ -14933,3 +14933,23 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
   - `tests/unit/api/video-merges-candidates-route.test.ts` — +2 用例（#3 truncated=true 透传 + D-105a-19 检索参数 coerce 解析透传断言 / #4 非截断态不携带 truncated 键）
 - **测试**：route 4/4 + test:changed 4/4 + typecheck/lint EXIT=0
 - **注意事项**：该 route 已两次因「手工拼装响应丢新增字段」返工；后续 envelope 再扩字段时优先考虑整对象透传或在 route 测试先行加字段断言。
+
+## [CHG-VIR-17-PARTIAL] 候选组部分合并（选定视频子集就地合并 / D-105a-18 遗留 ① 兑现）
+- **完成时间**：2026-06-05
+- **记录时间**：2026-06-05
+- **执行模型**：claude-opus-4-8｜子代理：无（消费既有后端契约，纯前端交互层；零 schema/API/migration/ADR）
+- **算法复核结论（dev 实证先行）**：
+  - 用户案例实查：地灵曲跨季 4 pair 全带 `season_mismatch` 强负（2017 第一季×2 / 2019 第二季×2，双非 null veto 正确触发）；危险关系同名 6 视频全 pair 带 `year_far_no_exact`/`type_incompatible` 强负——**算法行为符合设计**（D-105a-3：强负仅 veto auto-merge，pending 候选保留供人工裁定）
+  - 交互缺口真因 = collapsePairs 把强负 pair 边当连通边 →「确定不同」的视频连进同一分量 → 整组合并语义失效
+  - 后端**已天然支持部分合并**：`validateForMerge` 校验 pair 两端 ⊆ 合并集合（D-178-3）+ `candidateIds` optional——零后端改动
+  - **follow-up 登记（需用户裁定后另起 ADR 卡）**：「强负 pair 边不参与 union-find 连通」可让地灵曲自动分成两组（强负边仍展示证据），但改变候选组织语义（强负误判时真同组被拆散为多行），须 arch-reviewer 评审
+- **修改文件**：
+  - `MergeComparePanel.tsx`（474→315 行）— +optional `selectedIds`/`onSelectedChange`（列头 checkbox + 排除列整列灰化 + 排除列 target radio disabled + 列头点击选 target 跳过排除列）；500 行硬限拆出 `MergeComparePanel.styles.ts`（105 行样式常量，column-matrix-menu.styles 同范式）+ `CompareLinesRow.tsx`（152 行线路·播放行，playByVideo state 随迁；cellStyle 父级注入保持排除灰化口径单一真源；CompareLinesState 迁移 + 原路径 re-export 零消费方改动）
+  - `MergeCandidateExpand.tsx`（216→272 行）— 选中集合 state（默认全选 + 组成员变化重置）+ target 被排除自动转移（推荐者优先→选中集首个）+ 状态建议/结果预览/结构信号按选中子集重算 + 合并按钮动态数量与选中<2 禁用 + **超限判定改选中数**（整组 >11 取消勾选即可就地分批，merge-limit-note 文案升级）+ 部分合并提示（已排除 N 个视频）
+  - `MergeCandidatesSection.tsx` — handleMerge 扩 `selectedVideoIds?`：sourceVideoIds = 选中-target；**candidateIds 改由 identity.pairs 过滤「两端均在选中集合」计算**（集合外 pair 传了后端 422——遗留 ① 契约核心；全选时与 group.candidateIds 同源逐值不变由既有用例守护；部分合并禁用整组 fallback；legacy 组无 pair 锚点自然 undefined）
+  - `docs/decisions.md` — ADR-105a AMENDMENT（9-D）遗留 ①/②/④ 行追加兑现/升级标注（任务卡已标注更新文档）
+- **测试**：MergeCandidatesSection.test +4（11a 排除成员 → sourceVideoIds 子集 + candidateIds 仅集合内 pair〔跨界 0002/0003 不传〕/ 11b 排除 target 自动转移 + 排除列 radio disabled / 11c 选中<2 禁用 / 11d N=12 组取消勾选 1 个 → 选中 11 可就地合并〔8c 引导升级〕）。merge 前端域 **108/108** + test:changed 94/94 + typecheck/lint/budget/verify:adr-contracts EXIT=0 + **e2e merge-deeplink 6/6**
+- **注意事项**：
+  - 快捷合并（行级操作列）保持整组语义（不传 selectedVideoIds）；「转入批量合并」深链通道保留
+  - 部分合并后集合外 pair 仍 pending：涉软删成员的 pair 自动从列表过滤（9-C FIX-3），两端均存活的跨界 pair（如地灵曲合并两个第一季后的跨季 pair）继续展示，由人工逐 pair 拒绝（既有能力）——完整工作流闭环
+  - 建议实操验证：地灵曲组展开 → 勾掉两个第二季 → 合并两个第一季（toast 撤销可还原）→ 同理第二季 → 剩余跨季 pair 逐对拒绝

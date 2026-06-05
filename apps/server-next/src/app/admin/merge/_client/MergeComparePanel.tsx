@@ -17,109 +17,29 @@
  * 数据契约：VideoSummaryForMerge +7 optional（D-105-7）；字段缺失渲染「—」零崩溃。
  */
 
-import { useMemo, useState, type CSSProperties, type ReactNode } from 'react'
-import { VisChip, AdminButton } from '@resovo/admin-ui'
-import type { VideoSummaryForMerge, LineMatrixRow } from '@resovo/types'
-import { AdminPlayer } from '../../moderation/_client/AdminPlayer'
+import { useMemo, type CSSProperties, type ReactNode } from 'react'
+import { VisChip } from '@resovo/admin-ui'
+import type { VideoSummaryForMerge } from '@resovo/types'
+// CHG-VIR-17-PARTIAL：500 行硬限拆分——样式常量 + 线路行组件分文件（拆出随迁注释见各文件头）
+import {
+  WRAP_STYLE,
+  FIELD_COL_WIDTH,
+  VIDEO_COL_MIN_WIDTH,
+  FIELD_CELL_STYLE,
+  VIDEO_CELL_STYLE,
+  TARGET_SIDE_BORDER,
+  HEAD_CELL_STYLE,
+  HEAD_CELL_TARGET_STYLE,
+  RECOMMENDED_BADGE_STYLE,
+  WARN_TEXT,
+  DANGER_TEXT,
+  MUTED,
+  COVER_STYLE,
+} from './MergeComparePanel.styles'
+import { CompareLinesRow, type CompareLinesState } from './CompareLinesRow'
 
-// ── 样式（CSS 变量零硬编码颜色）────────────────────────────────────
-
-const WRAP_STYLE: CSSProperties = {
-  overflowX: 'auto',
-  border: '1px solid var(--border-subtle)',
-  borderRadius: 8,
-}
-
-/** 字段名列固定宽（colgroup） */
-const FIELD_COL_WIDTH = 110
-/** 视频列等宽下限（N 大时撑出横向滚动） */
-const VIDEO_COL_MIN_WIDTH = 200
-
-/** 字段名首列 sticky（§10.4） */
-const FIELD_CELL_STYLE: CSSProperties = {
-  position: 'sticky',
-  left: 0,
-  zIndex: 1,
-  background: 'var(--bg-surface)',
-  padding: '6px 10px',
-  textAlign: 'left',
-  color: 'var(--fg-muted)',
-  fontWeight: 500,
-  whiteSpace: 'nowrap',
-  borderRight: '1px solid var(--border-subtle)',
-  borderBottom: '1px solid var(--border-subtle)',
-}
-
-const VIDEO_CELL_STYLE: CSSProperties = {
-  padding: '6px 12px',
-  verticalAlign: 'top',
-  borderBottom: '1px solid var(--border-subtle)',
-  // UX-B ⑤ 等宽（tableLayout fixed）下长内容换行不撑列
-  overflowWrap: 'break-word',
-}
-
-// UX-B ④：target 整列绿色**边框**（原绿色背景退役；背景通道让位相同值行标示）
-const TARGET_SIDE_BORDER: CSSProperties = {
-  borderLeft: '2px solid var(--state-success-border)',
-  borderRight: '2px solid var(--state-success-border)',
-}
-
-const HEAD_CELL_STYLE: CSSProperties = {
-  ...VIDEO_CELL_STYLE,
-  cursor: 'pointer',
-  whiteSpace: 'nowrap',
-  overflow: 'hidden',
-  textOverflow: 'ellipsis',
-}
-
-const HEAD_CELL_TARGET_STYLE: CSSProperties = {
-  ...HEAD_CELL_STYLE,
-  ...TARGET_SIDE_BORDER,
-  borderTop: '2px solid var(--state-success-border)',
-}
-
-const RECOMMENDED_BADGE_STYLE: CSSProperties = {
-  display: 'inline-block',
-  padding: '1px 6px',
-  marginLeft: 6,
-  borderRadius: 4,
-  fontSize: '11px',
-  fontWeight: 600,
-  background: 'var(--state-success-bg)',
-  color: 'var(--state-success-fg)',
-  border: '1px solid var(--state-success-border)',
-}
-
-const WARN_TEXT: CSSProperties = { color: 'var(--state-warning-fg)', fontWeight: 600 }
-const DANGER_TEXT: CSSProperties = { color: 'var(--state-danger-fg)', fontWeight: 600 }
-const MUTED: CSSProperties = { color: 'var(--fg-muted)' }
-const COVER_STYLE: CSSProperties = {
-  width: 48,
-  aspectRatio: '2 / 3',
-  objectFit: 'cover',
-  borderRadius: 4,
-  border: '1px solid var(--border-subtle)',
-  background: 'var(--bg-subtle)',
-}
-
-/** ▶En 集按钮（线路行） */
-const EP_BUTTON_STYLE: CSSProperties = {
-  background: 'none',
-  border: '1px solid var(--border-subtle)',
-  borderRadius: 3,
-  padding: '0 4px',
-  cursor: 'pointer',
-  color: 'var(--fg-default)',
-  fontSize: '11px',
-}
-
-const EP_BUTTON_ACTIVE_STYLE: CSSProperties = {
-  ...EP_BUTTON_STYLE,
-  border: '1px solid var(--state-success-border)',
-  background: 'var(--state-success-bg)',
-  color: 'var(--state-success-fg)',
-  fontWeight: 600,
-}
+// 公开 re-export（消费方 import 路径保持不变：MergeCandidateExpand 等）
+export type { CompareLinesState }
 
 // ── 冲突推导 ──────────────────────────────────────────────────────
 
@@ -146,23 +66,6 @@ function deriveConflicts(videos: readonly VideoSummaryForMerge[]): ConflictFlags
   }
 }
 
-// ── 线路数据注入契约（CHG-VIR-15-UX-B ③；数据由消费方拉取） ─────────
-
-export interface CompareLinesState {
-  readonly status: 'idle' | 'loading' | 'error' | 'ready'
-  /** videoId → 线路矩阵（ready 时有值） */
-  readonly byVideo: ReadonlyMap<string, readonly LineMatrixRow[]>
-  readonly error?: string
-}
-
-/** 列内播放目标（▶En 点击 → 该列内嵌播放器装载） */
-interface InlinePlayTarget {
-  readonly sourceId: string
-  readonly sourceUrl: string
-  readonly episodeNumber: number
-  readonly lineLabel: string
-}
-
 // ── 组件 ──────────────────────────────────────────────────────────
 
 export interface MergeComparePanelProps {
@@ -176,6 +79,14 @@ export interface MergeComparePanelProps {
   readonly linesState?: CompareLinesState
   /** UX-B ③：展开（idle/error → load）/ 收起（ready → 清数据） */
   readonly onToggleLines?: () => void
+  /**
+   * CHG-VIR-17-PARTIAL（D-105a-18 遗留 ① 兑现）：部分合并成员勾选（受控）。
+   * undefined = 不渲染勾选（整组语义，既有消费方零影响）；提供时列头加 checkbox，
+   * 排除列整列灰化 + target radio disabled（target 必须在选中集合内，联动由消费方编排）。
+   */
+  readonly selectedIds?: ReadonlySet<string>
+  /** 勾选切换（id, 纳入与否）；与 selectedIds 成对提供 */
+  readonly onSelectedChange?: (id: string, selected: boolean) => void
 }
 
 interface FieldRow {
@@ -191,11 +102,12 @@ interface FieldRow {
 
 export function MergeComparePanel({
   videos, targetId, onTargetChange, recommendedTargetId, linesState, onToggleLines,
+  selectedIds, onSelectedChange,
 }: MergeComparePanelProps) {
   const conflicts = useMemo(() => deriveConflicts(videos), [videos])
 
-  // UX-B ③：列内嵌播放器（per-video；多列可同时播放对比画面）
-  const [playByVideo, setPlayByVideo] = useState<ReadonlyMap<string, InlinePlayTarget>>(new Map())
+  // CHG-VIR-17-PARTIAL：排除列判定（selectedIds 未提供 = 全部纳入，整组语义）
+  const isExcluded = (id: string) => selectedIds !== undefined && !selectedIds.has(id)
 
   const rows = useMemo<readonly FieldRow[]>(() => [
     {
@@ -302,7 +214,7 @@ export function MergeComparePanel({
 
   const lastRowKey = linesState ? 'lines' : rows[rows.length - 1]?.key
 
-  /** 视频列单元格样式合成（target 绿框 + 相同值行背景 + 末行底边收口） */
+  /** 视频列单元格样式合成（target 绿框 + 相同值行背景 + 末行底边收口 + 排除列灰化） */
   const cellStyle = (videoId: string, rowKey: string): CSSProperties => ({
     ...VIDEO_CELL_STYLE,
     ...(sameRowKeys.has(rowKey) ? { background: 'var(--bg-subtle)' } : {}),
@@ -310,6 +222,8 @@ export function MergeComparePanel({
     ...(videoId === targetId && rowKey === lastRowKey
       ? { borderBottom: '2px solid var(--state-success-border)' }
       : {}),
+    // CHG-VIR-17-PARTIAL：排除列整列灰化（不参与本次合并的视觉降权）
+    ...(isExcluded(videoId) ? { opacity: 0.45 } : {}),
   })
 
   return (
@@ -325,16 +239,33 @@ export function MergeComparePanel({
             {videos.map((v) => (
               <th
                 key={v.id}
-                style={v.id === targetId ? HEAD_CELL_TARGET_STYLE : HEAD_CELL_STYLE}
+                style={{
+                  ...(v.id === targetId ? HEAD_CELL_TARGET_STYLE : HEAD_CELL_STYLE),
+                  // CHG-VIR-17-PARTIAL：排除列头同列体灰化
+                  ...(isExcluded(v.id) ? { opacity: 0.45 } : {}),
+                }}
                 scope="col"
-                onClick={() => onTargetChange(v.id)}
+                onClick={() => { if (!isExcluded(v.id)) onTargetChange(v.id) }}
                 data-testid={`compare-head-${v.id}`}
               >
-                <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+                {/* CHG-VIR-17-PARTIAL：成员勾选（排除 = 不参与本次合并；target 联动由消费方编排） */}
+                {selectedIds !== undefined && onSelectedChange && (
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.has(v.id)}
+                    onChange={(e) => onSelectedChange(v.id, e.target.checked)}
+                    onClick={(e) => e.stopPropagation()}
+                    aria-label={`${selectedIds.has(v.id) ? '排除' : '纳入'} ${v.title}`}
+                    style={{ marginRight: 6 }}
+                    data-testid={`compare-select-${v.id}`}
+                  />
+                )}
+                <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, cursor: isExcluded(v.id) ? 'not-allowed' : 'pointer' }}>
                   <input
                     type="radio"
                     name="compare-target"
                     checked={targetId === v.id}
+                    disabled={isExcluded(v.id)}
                     onChange={() => onTargetChange(v.id)}
                     aria-label={`选择 ${v.title} 为合并目标`}
                   />
@@ -367,104 +298,15 @@ export function MergeComparePanel({
             </tr>
           ))}
 
-          {/* UX-B ③：线路 · 播放预览行（每视频列自己的线路 + 列内嵌播放器） */}
+          {/* UX-B ③：线路 · 播放预览行（每视频列自己的线路 + 列内嵌播放器；
+              CHG-VIR-17-PARTIAL 拆出 CompareLinesRow，cellStyle 注入保持排除灰化口径单一真源） */}
           {linesState && (
-            <tr data-testid="compare-row-lines">
-              <th style={FIELD_CELL_STYLE} scope="row">
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-start' }}>
-                  <span>线路 · 播放</span>
-                  {onToggleLines && (
-                    <AdminButton
-                      size="sm"
-                      variant="default"
-                      disabled={linesState.status === 'loading'}
-                      onClick={onToggleLines}
-                      data-testid="compare-lines-toggle"
-                    >
-                      {linesState.status === 'loading' ? '加载中…'
-                        : linesState.status === 'ready' ? '▴ 收起'
-                        : '▾ 展开'}
-                    </AdminButton>
-                  )}
-                </div>
-              </th>
-              {videos.map((v) => {
-                const lines = linesState.byVideo.get(v.id) ?? []
-                const playing = playByVideo.get(v.id) ?? null
-                return (
-                  <td key={v.id} style={cellStyle(v.id, 'lines')} data-testid={`compare-lines-${v.id}`}>
-                    {linesState.status === 'error' ? (
-                      <span style={{ ...DANGER_TEXT, fontSize: '11px' }}>{linesState.error ?? '加载失败'}</span>
-                    ) : linesState.status !== 'ready' ? (
-                      <span style={MUTED}>—</span>
-                    ) : lines.length === 0 ? (
-                      <span style={MUTED}>无线路</span>
-                    ) : (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                        {lines.map((line) => (
-                          <div key={`${line.sourceSiteKey}|${line.sourceName}`} style={{ fontSize: '11px' }}>
-                            <span style={{ fontWeight: 600 }}>{line.displayName ?? line.sourceName}</span>
-                            <span style={{ display: 'inline-flex', gap: 4, flexWrap: 'wrap', marginLeft: 6 }}>
-                              {line.episodes.map((e) => {
-                                const active = playing?.sourceId === e.sourceId
-                                return (
-                                  <button
-                                    key={e.sourceId}
-                                    type="button"
-                                    style={active ? EP_BUTTON_ACTIVE_STYLE : EP_BUTTON_STYLE}
-                                    onClick={() => {
-                                      setPlayByVideo((prev) => {
-                                        const next = new Map(prev)
-                                        next.set(v.id, {
-                                          sourceId: e.sourceId,
-                                          sourceUrl: e.sourceUrl,
-                                          episodeNumber: e.episodeNumber,
-                                          lineLabel: line.displayName ?? line.sourceName,
-                                        })
-                                        return next
-                                      })
-                                    }}
-                                    data-testid={`compare-ep-${e.sourceId}`}
-                                  >▶E{e.episodeNumber}</button>
-                                )
-                              })}
-                            </span>
-                          </div>
-                        ))}
-                        {/* 列内嵌播放器（key=sourceId remount 重载；多列同播对比画面） */}
-                        {playing && (
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                            <AdminPlayer
-                              key={playing.sourceId}
-                              videoId={v.id}
-                              sourceUrl={playing.sourceUrl}
-                              sourceId={playing.sourceId}
-                              title={v.title}
-                              testId={`compare-player-${v.id}`}
-                            />
-                            <span style={{ ...MUTED, fontSize: '11px', display: 'flex', justifyContent: 'space-between', gap: 6 }}>
-                              <span>{playing.lineLabel} · E{playing.episodeNumber}</span>
-                              <button
-                                type="button"
-                                style={EP_BUTTON_STYLE}
-                                onClick={() => {
-                                  setPlayByVideo((prev) => {
-                                    const next = new Map(prev)
-                                    next.delete(v.id)
-                                    return next
-                                  })
-                                }}
-                                data-testid={`compare-player-close-${v.id}`}
-                              >关闭</button>
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </td>
-                )
-              })}
-            </tr>
+            <CompareLinesRow
+              videos={videos}
+              linesState={linesState}
+              onToggleLines={onToggleLines}
+              cellStyle={cellStyle}
+            />
           )}
         </tbody>
       </table>

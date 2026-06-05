@@ -65,8 +65,12 @@ const IDENTITY_PILL_STYLE: CSSProperties = {
 
 export interface CandidateExpandProps {
   group: CandidateGroup
-  /** CHG-VIR-13-D2 / D-105-9：targetStatus = 操作内状态设置（null = 保持不变，不传字段） */
-  onMerge: (targetVideoId: string, targetStatus?: VideoStatusSetting | null) => void
+  /**
+   * CHG-VIR-13-D2 / D-105-9：targetStatus = 操作内状态设置（null = 保持不变，不传字段）。
+   * CHG-VIR-17-PARTIAL：selectedVideoIds = 部分合并选中集合（含 target；消费方据此算
+   * sourceVideoIds 与集合内 pair candidateIds——集合外 pair 不得传，D-105a-18 遗留 ① 契约）。
+   */
+  onMerge: (targetVideoId: string, targetStatus?: VideoStatusSetting | null, selectedVideoIds?: readonly string[]) => void
   /** CHG-VIR-9-C：identity 来源单 pair（group.candidateId 存在）时提供整行拒绝 */
   onReject?: () => void
   /** CHG-VIR-9-D / D-105a-18：折叠组逐 pair 拒绝（EvidencePanel pair 明细行内，per-candidate 端点） */
@@ -80,15 +84,52 @@ export function CandidateExpand({ group, onMerge, onReject, onRejectPair }: Cand
   const router = useRouter()
   const searchParams = useSearchParams()
   const [targetId, setTargetId] = useState(group.recommendedTargetVideoId)
-  const exceedsMergeLimit = group.videos.length > MAX_MERGE_GROUP_VIDEOS
+
+  // CHG-VIR-17-PARTIAL（D-105a-18 遗留 ① 兑现）：部分合并选中集合（默认全选）。
+  // 强负 pair 仍生成 pending 候选（D-105a-3 设计行为）+ 折叠把强负边当连通边 →
+  // 混合分量（地灵曲两季 / 危险关系同名异作）整组合并不可行，须支持子集就地合并。
+  const allIdsKey = useMemo(() => group.videos.map((v) => v.id).join('|'), [group.videos])
+  const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(
+    () => new Set(group.videos.map((v) => v.id)),
+  )
+  // 组成员变化（部分合并后列表刷新重组）→ 重置全选
+  useEffect(() => {
+    setSelectedIds(new Set(allIdsKey.split('|')))
+  }, [allIdsKey])
+  const toggleSelected = useCallback((id: string, next: boolean) => {
+    setSelectedIds((prev) => {
+      const s = new Set(prev)
+      if (next) s.add(id)
+      else s.delete(id)
+      return s
+    })
+  }, [])
+  // target 被排除 → 自动转移（推荐者优先，否则选中集合内首个；空集保持原值由禁用兜底）
+  useEffect(() => {
+    if (selectedIds.has(targetId)) return
+    const fallback = selectedIds.has(group.recommendedTargetVideoId)
+      ? group.recommendedTargetVideoId
+      : group.videos.find((v) => selectedIds.has(v.id))?.id
+    if (fallback) setTargetId(fallback)
+  }, [selectedIds, targetId, group.recommendedTargetVideoId, group.videos])
+
+  const selectedVideos = useMemo(
+    () => group.videos.filter((v) => selectedIds.has(v.id)),
+    [group.videos, selectedIds],
+  )
+  const selectedCount = selectedVideos.length
+  // 上限判定改选中数（整组 >11 但选中 ≤11 可就地分批合并，原「转批量合并」引导仅超限时出现）
+  const exceedsMergeLimit = selectedCount > MAX_MERGE_GROUP_VIDEOS
+  const tooFewSelected = selectedCount < 2
 
   // CHG-VIR-13-D2 / D-105-9（设计 §4.4）：操作内状态设置——智能默认 + 矩阵镜像选项。
   // D-105-7 字段缺失（legacy 候选降级）→ suggestion 安全回退不建议 + GENERIC 选项（后端 422 终守门）。
+  // CHG-VIR-17-PARTIAL：建议按选中子集计算（排除的视频不参与合并，不影响状态推导）。
   const target = group.videos.find((v) => v.id === targetId)
   const statusSuggestion = useMemo(() => {
     if (!target) return { suggested: null, hint: null }
-    return suggestMergeTargetStatus(target, group.videos.filter((v) => v.id !== targetId))
-  }, [target, group.videos, targetId])
+    return suggestMergeTargetStatus(target, selectedVideos.filter((v) => v.id !== targetId))
+  }, [target, selectedVideos, targetId])
   const statusOptions = useMemo(
     () =>
       target?.reviewStatus !== undefined && target.visibilityStatus !== undefined
@@ -119,13 +160,14 @@ export function CandidateExpand({ group, onMerge, onReject, onRejectPair }: Cand
   }, [linesState.status, group.videos])
 
   // 结构信号（去重 N 条 / 互补 / 重叠）：线路就绪后零额外请求推导 → ResultPreview 展示
+  // CHG-VIR-17-PARTIAL：按选中子集推导（预览 = 本次合并的实际效果；矩阵行仍显示全组列）
   const structureSignals = useMemo(() => {
     if (linesState.status !== 'ready') return undefined
-    return combineMatrices(group.videos.map((v) => ({
+    return combineMatrices(selectedVideos.map((v) => ({
       video: { id: v.id, title: v.title },
       lines: [...(linesState.byVideo.get(v.id) ?? [])],
     }))).signals
-  }, [linesState, group.videos])
+  }, [linesState, selectedVideos])
 
   // §10.4-2：组成员带入 mode=merge 集合编辑器（保留既有 URL 参数；candidate 锚点不带——
   // 工作区集合可增删，confirm 锚点仅 MergeWorkspace 自身 pair 守卫管理）
@@ -156,7 +198,8 @@ export function CandidateExpand({ group, onMerge, onReject, onRejectPair }: Cand
       {group.identity && <EvidencePanel identity={group.identity} onRejectPair={onRejectPair} />}
 
       {/* CHG-VIR-13-B2B：N 列字段对比矩阵（列头 target 单选 / 冲突标警 / §10.4）
-          CHG-VIR-15-UX-B ③：线路×集数行按视频列嵌入（展开/收起 + 列内嵌播放器） */}
+          CHG-VIR-15-UX-B ③：线路×集数行按视频列嵌入（展开/收起 + 列内嵌播放器）
+          CHG-VIR-17-PARTIAL：列头成员勾选（排除列灰化 + target 联动） */}
       <MergeComparePanel
         videos={group.videos}
         targetId={targetId}
@@ -164,11 +207,14 @@ export function CandidateExpand({ group, onMerge, onReject, onRejectPair }: Cand
         recommendedTargetId={group.recommendedTargetVideoId}
         linesState={linesState}
         onToggleLines={toggleLines}
+        selectedIds={selectedIds}
+        onSelectedChange={toggleSelected}
       />
 
       {/* CHG-VIR-13-B2B：合并后结果预览（After 重算 + 软删列表 + 状态降级警示）
-          UX-B：结构信号经已加载线路数据零请求推导注入（线路列表本体已迁矩阵行） */}
-      <MergeResultPreview kind="merge" videos={group.videos} targetId={targetId} signals={structureSignals} />
+          UX-B：结构信号经已加载线路数据零请求推导注入（线路列表本体已迁矩阵行）
+          CHG-VIR-17-PARTIAL：预览按选中子集重算（排除的视频不软删、不进 After） */}
+      <MergeResultPreview kind="merge" videos={selectedVideos} targetId={targetId} signals={structureSignals} />
 
       {/* CHG-VIR-13-D2 / D-105-9（§4.4）：合并后 target 状态设置（智能默认预选 + 矩阵镜像选项） */}
       <MergeStatusControl
@@ -180,10 +226,21 @@ export function CandidateExpand({ group, onMerge, onReject, onRejectPair }: Cand
       />
 
       <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-        {/* §10.4-2：>11 组整组合并禁用 → 引导转工作区裁剪分批（替换旧「逐对明细分批」提示） */}
+        {/* CHG-VIR-17-PARTIAL：部分合并状态提示（排除数 / 选中不足 / 选中超限引导分批） */}
+        {selectedCount < group.videos.length && !tooFewSelected && !exceedsMergeLimit && (
+          <span style={SECONDARY_TEXT} data-testid="merge-partial-note">
+            部分合并：已排除 {group.videos.length - selectedCount} 个视频（保留为独立条目）
+          </span>
+        )}
+        {tooFewSelected && (
+          <span style={SECONDARY_TEXT} data-testid="merge-too-few-note">
+            至少勾选 2 个视频才能合并
+          </span>
+        )}
+        {/* §10.4-2 → CHG-VIR-17-PARTIAL：超限判定改选中数（整组 >11 时取消勾选部分视频即可就地分批） */}
         {exceedsMergeLimit && (
           <span style={SECONDARY_TEXT} data-testid="merge-limit-note">
-            组内 {group.videos.length} 个视频超过单次合并上限（{MAX_MERGE_GROUP_VIDEOS}），请转入批量合并裁剪集合分批执行
+            选中 {selectedCount} 个视频超过单次合并上限（{MAX_MERGE_GROUP_VIDEOS}），请取消勾选部分视频分批合并，或转入批量合并
           </span>
         )}
         {/* §10.4-2：次级动作 — 组成员带入 mode=merge 集合编辑器（可继续增删后执行） */}
@@ -204,10 +261,10 @@ export function CandidateExpand({ group, onMerge, onReject, onRejectPair }: Cand
         <AdminButton
           size="sm"
           variant="primary"
-          disabled={exceedsMergeLimit}
-          onClick={() => onMerge(targetId, targetStatus)}
+          disabled={exceedsMergeLimit || tooFewSelected}
+          onClick={() => onMerge(targetId, targetStatus, selectedVideos.map((v) => v.id))}
         >
-          执行合并（{group.videos.length - 1} → target）
+          执行合并（{Math.max(selectedCount - 1, 0)} → target）
         </AdminButton>
       </div>
     </div>

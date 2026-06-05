@@ -520,4 +520,101 @@ describe('MergeCandidatesSection (CHG-VIR-9-C)', () => {
     expect(screen.queryByText('无合并候选')).toBeNull()
     expect(screen.getByText(/共\s*0\s*组/)).not.toBeNull()
   })
+
+  // ── CHG-VIR-17-PARTIAL / D-105a-18 遗留 ① 兑现：部分合并（选定子集就地合并）────
+
+  it('11a. 排除成员后合并：sourceVideoIds=选中子集 + candidateIds 仅含两端均在集合内的 pair（集合外 pair 不传 / 422 契约）', async () => {
+    listCandidatesMock.mockResolvedValue(CLUSTER_RES)
+    mergeVideosMock.mockResolvedValueOnce({
+      auditId: 'audit-partial',
+      targetVideo: { id: 'vid-b', title: 'Avengers B', titleNormalized: '復仇者聯盟',
+        year: 2019, type: 'movie', createdAt: '2025-02-01T00:00:00Z',
+        sourceCount: 8, sourceSiteKeys: ['iqiyi'] },
+    })
+    render(<CandidatesSection />)
+    await waitFor(() => screen.getByText('復仇者聯盟'))
+    fireEvent.click(screen.getByText('復仇者聯盟'))
+    await waitFor(() => screen.getByTestId('compare-select-vid-c'))
+    // 排除 vid-c → 部分合并提示出现
+    fireEvent.click(screen.getByTestId('compare-select-vid-c'))
+    await waitFor(() => screen.getByTestId('merge-partial-note'))
+    fireEvent.click(screen.getByRole('button', { name: /执行合并/ }))
+    await waitFor(() => {
+      expect(mergeVideosMock).toHaveBeenCalledWith(expect.objectContaining({
+        sourceVideoIds: ['vid-a'],
+        targetVideoId: 'vid-b',
+        // 仅 a-b pair（cand-uuid-0001）；跨界 b-c（0002）/ a-c（0003）不得传
+        candidateIds: ['cand-uuid-0001'],
+      }))
+    })
+  })
+
+  it('11b. 排除 target → target 自动转移到选中集合内成员（排除列 radio disabled）', async () => {
+    listCandidatesMock.mockResolvedValue(CLUSTER_RES)
+    render(<CandidatesSection />)
+    await waitFor(() => screen.getByText('復仇者聯盟'))
+    fireEvent.click(screen.getByText('復仇者聯盟'))
+    await waitFor(() => screen.getByTestId('compare-select-vid-b'))
+    // 推荐 target = vid-b；排除它 → 自动转移（选中集首个 vid-a）
+    fireEvent.click(screen.getByTestId('compare-select-vid-b'))
+    await waitFor(() => {
+      const radioA = screen.getByLabelText('选择 Avengers A 为合并目标') as HTMLInputElement
+      expect(radioA.checked).toBe(true)
+    })
+    const radioB = screen.getByLabelText('选择 Avengers B 为合并目标') as HTMLInputElement
+    expect(radioB.checked).toBe(false)
+    expect(radioB.disabled).toBe(true)
+  })
+
+  it('11c. 选中 < 2 → 合并按钮禁用 + 提示（不可单视频合并）', async () => {
+    listCandidatesMock.mockResolvedValue(CLUSTER_RES)
+    render(<CandidatesSection />)
+    await waitFor(() => screen.getByText('復仇者聯盟'))
+    fireEvent.click(screen.getByText('復仇者聯盟'))
+    await waitFor(() => screen.getByTestId('compare-select-vid-b'))
+    fireEvent.click(screen.getByTestId('compare-select-vid-b'))
+    fireEvent.click(screen.getByTestId('compare-select-vid-c'))
+    await waitFor(() => screen.getByTestId('merge-too-few-note'))
+    const mergeBtn = screen.getByRole('button', { name: /执行合并/ }) as HTMLButtonElement
+    expect(mergeBtn.disabled).toBe(true)
+    fireEvent.click(mergeBtn)
+    expect(mergeVideosMock).not.toHaveBeenCalled()
+  })
+
+  it('11d. N=12 组（整组超限）取消勾选 1 个 → 选中 11 ≤ 上限可就地合并（8c 引导升级）', async () => {
+    const manyVideos = Array.from({ length: 12 }, (_, i) => ({
+      id: `vid-${i}`, title: `V${i}`, titleNormalized: '復仇者聯盟', year: 2019, type: 'movie' as const,
+      createdAt: '2025-01-01T00:00:00Z', sourceCount: 1, sourceSiteKeys: ['iqiyi'],
+    }))
+    const bigGroup = {
+      ...CLUSTER_GROUP,
+      groupKey: manyVideos.map((v) => v.id).sort().join('|'),
+      recommendedTargetVideoId: 'vid-0',
+      videos: manyVideos,
+    }
+    listCandidatesMock.mockResolvedValue({ data: [bigGroup], total: 1, page: 1, limit: 20, source: 'identity' as const })
+    mergeVideosMock.mockResolvedValueOnce({
+      auditId: 'audit-batch-1',
+      targetVideo: { id: 'vid-0', title: 'V0', titleNormalized: '復仇者聯盟',
+        year: 2019, type: 'movie', createdAt: '2025-01-01T00:00:00Z',
+        sourceCount: 12, sourceSiteKeys: ['iqiyi'] },
+    })
+    render(<CandidatesSection />)
+    await waitFor(() => screen.getByText('復仇者聯盟'))
+    fireEvent.click(screen.getByText('復仇者聯盟'))
+    // 整组 12 > 11 → 超限提示
+    await waitFor(() => screen.getByTestId('merge-limit-note'))
+    // 取消勾选 1 个 → 选中 11 → 提示消失 + 可合并
+    fireEvent.click(screen.getByTestId('compare-select-vid-11'))
+    await waitFor(() => expect(screen.queryByTestId('merge-limit-note')).toBeNull())
+    const mergeBtn = screen.getByRole('button', { name: /执行合并（10 → target）/ }) as HTMLButtonElement
+    expect(mergeBtn.disabled).toBe(false)
+    fireEvent.click(mergeBtn)
+    await waitFor(() => {
+      expect(mergeVideosMock).toHaveBeenCalledTimes(1)
+    })
+    const params = mergeVideosMock.mock.calls[0]![0] as { sourceVideoIds: string[] }
+    expect(params.sourceVideoIds).toHaveLength(10)
+    expect(params.sourceVideoIds).not.toContain('vid-11')
+  })
 })
