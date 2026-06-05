@@ -3269,10 +3269,12 @@ CODENAME-MATRIX-E2E (依赖 Wave 3 验收期补丁 CODENAME-MATRIX ✅)
    - 范围（5 项）：① ADR-052 AMENDMENT：home_modules +title JSONB NOT NULL DEFAULT '{}' / +image_url TEXT NULL 一等列（vs metadata 通道论证）② ADR-104 AMENDMENT：Create/Update body 扩 title?/imageUrl?（不新增 route）③ media ownerType 扩 'home_module' 裁定 ④ image 对 video 类型可选+回退 coverUrl / auto-fill 走 drawer 端 fetch（ContentRefPicker 契约不动）/ 卡片 120×54 本地 img（不扩 Thumb）裁定 ⑤ architecture.md home_modules 表同步两列。
    - 验收要点：arch-reviewer Opus PASS；verify:adr-contracts 绿。
    - 完成备注：D-052-9/10/11 + D-104-9/10 五决策定档。arch-reviewer（ab0afb7523bcdd0ed）PASS-with-conditions → R-1 影响面清单（6 触点 + 公开端点 GET /home/modules 纯增量透出确认）+ Y-1 metadata 守则「title/subtitle 覆盖」条目显式 supersede 吸收；Y-2/A-2 转 follow-up（CHG-HOME-BANNER-URL-MAX + title 值侧约束评估）；A-1 实证 .url() 双 provider 绝对 URL 安全 / A-3 实证 093 标号。verify:adr-contracts EXIT=0（207 路由对齐 + SQL schema 对齐）。解阻 CHG-HOME-UX-01-A。执行模型: claude-opus-4-8；子代理: arch-reviewer (claude-opus-4-8)。
-2. **CHG-HOME-UX-01-A** — schema + query 层（状态：⬜ 待开始）
+2. **CHG-HOME-UX-01-A** — schema + query 层（状态：✅ 已完成）
+   - 实际开始：2026-06-05 15:35 ｜ 完成时间：2026-06-05 15:22
    - 建议模型：sonnet
-   - 依赖：CHG-HOME-UX-ADR
+   - 依赖：CHG-HOME-UX-ADR ✅
    - 范围（4 项）：① migration 093（ADD COLUMN IF NOT EXISTS 幂等 + 注释 down 节）② packages/types home-module.types.ts 扩字段 ③ db/queries/home-modules.ts DbRow/mapRow/INSERT/UPDATE fieldMap/4 处 SELECT ④ home-queries.test.ts 扩断言。
+   - 完成备注：093 已执行 dev 库（幂等复跑 ✅ / INSERT 往返逐值一致 / 默认值 {}/null / 清理零残留）；列清单实为 6 处（4 SELECT + 2 RETURNING）全补；UPDATE fieldMap +2 + JSONB_KEYS 统一 stringify；测试 +5 断言（落点修正：home-modules.test.ts 为 query 层真源而非 home-queries.test.ts〔后者测 top10 videos queries〕，偏离登记）。门禁 typecheck/lint EXIT=0 + test:changed 基础包升全量 6605/6605。解阻 01-B / 02。执行模型: claude-opus-4-8（人工 opus 覆盖 sonnet）；子代理: 无。
 3. **CHG-HOME-UX-01-B** — service 层（状态：⬜ 待开始）
    - 建议模型：sonnet
    - 依赖：CHG-HOME-UX-01-A

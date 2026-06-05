@@ -24,6 +24,8 @@ interface DbHomeModuleRow {
   ordering: number
   content_ref_type: HomeModuleContentRefType
   content_ref_id: string
+  title: Record<string, string>
+  image_url: string | null
   start_at: string | null
   end_at: string | null
   enabled: boolean
@@ -41,6 +43,8 @@ function mapRow(row: DbHomeModuleRow): HomeModule {
     ordering: row.ordering,
     contentRefType: row.content_ref_type,
     contentRefId: row.content_ref_id,
+    title: row.title ?? {},
+    imageUrl: row.image_url,
     startAt: row.start_at,
     endAt: row.end_at,
     enabled: row.enabled,
@@ -64,7 +68,7 @@ export async function listActiveHomeModules(
   const result = await db.query<DbHomeModuleRow>(
     `SELECT id, slot, brand_scope, brand_slug, ordering,
             content_ref_type, content_ref_id,
-            start_at, end_at, enabled, metadata, created_at, updated_at
+            title, image_url, start_at, end_at, enabled, metadata, created_at, updated_at
      FROM home_modules
      WHERE slot = $1
        AND enabled = true
@@ -118,7 +122,7 @@ export async function listAdminHomeModules(
     db.query<DbHomeModuleRow>(
       `SELECT id, slot, brand_scope, brand_slug, ordering,
               content_ref_type, content_ref_id,
-              start_at, end_at, enabled, metadata, created_at, updated_at
+              title, image_url, start_at, end_at, enabled, metadata, created_at, updated_at
        FROM home_modules
        ${where}
        ORDER BY slot ASC, ordering ASC, created_at ASC
@@ -145,7 +149,7 @@ export async function findHomeModuleById(
   const result = await db.query<DbHomeModuleRow>(
     `SELECT id, slot, brand_scope, brand_slug, ordering,
             content_ref_type, content_ref_id,
-            start_at, end_at, enabled, metadata, created_at, updated_at
+            title, image_url, start_at, end_at, enabled, metadata, created_at, updated_at
      FROM home_modules
      WHERE id = $1`,
     [id],
@@ -165,11 +169,11 @@ export async function createHomeModule(
   const result = await db.query<DbHomeModuleRow>(
     `INSERT INTO home_modules
        (slot, brand_scope, brand_slug, ordering, content_ref_type, content_ref_id,
-        start_at, end_at, enabled, metadata)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        title, image_url, start_at, end_at, enabled, metadata)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
      RETURNING id, slot, brand_scope, brand_slug, ordering,
                content_ref_type, content_ref_id,
-               start_at, end_at, enabled, metadata, created_at, updated_at`,
+               title, image_url, start_at, end_at, enabled, metadata, created_at, updated_at`,
     [
       input.slot,
       input.brandScope,
@@ -177,6 +181,8 @@ export async function createHomeModule(
       input.ordering ?? 0,
       input.contentRefType,
       input.contentRefId,
+      JSON.stringify(input.title ?? {}),
+      input.imageUrl ?? null,
       input.startAt ?? null,
       input.endAt ?? null,
       input.enabled ?? true,
@@ -202,15 +208,20 @@ export async function updateHomeModule(
     ['ordering', 'ordering'],
     ['contentRefType', 'content_ref_type'],
     ['contentRefId', 'content_ref_id'],
+    ['title', 'title'],
+    ['imageUrl', 'image_url'],
     ['startAt', 'start_at'],
     ['endAt', 'end_at'],
     ['enabled', 'enabled'],
     ['metadata', 'metadata'],
   ]
 
+  // title / metadata 为 JSONB 列，对象值需 stringify 后参数化
+  const JSONB_KEYS: ReadonlySet<keyof UpdateHomeModuleInput> = new Set(['metadata', 'title'])
+
   for (const [key, col] of fieldMap) {
     if (key in input) {
-      values.push(key === 'metadata' ? JSON.stringify(input[key]) : input[key])
+      values.push(JSONB_KEYS.has(key) ? JSON.stringify(input[key]) : input[key])
       sets.push(`${col} = $${values.length}`)
     }
   }
@@ -224,7 +235,7 @@ export async function updateHomeModule(
      WHERE id = $${values.length}
      RETURNING id, slot, brand_scope, brand_slug, ordering,
                content_ref_type, content_ref_id,
-               start_at, end_at, enabled, metadata, created_at, updated_at`,
+               title, image_url, start_at, end_at, enabled, metadata, created_at, updated_at`,
     values,
   )
   return result.rows[0] ? mapRow(result.rows[0]) : null
@@ -282,7 +293,7 @@ export async function listHomeModulesByContentRef(
   const result = await db.query<DbHomeModuleRow>(
     `SELECT id, slot, brand_scope, brand_slug, ordering,
             content_ref_type, content_ref_id,
-            start_at, end_at, enabled, metadata, created_at, updated_at
+            title, image_url, start_at, end_at, enabled, metadata, created_at, updated_at
      FROM home_modules
      WHERE content_ref_type = $1 AND content_ref_id = $2
      ORDER BY slot ASC, ordering ASC`,

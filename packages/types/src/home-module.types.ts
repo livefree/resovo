@@ -34,10 +34,23 @@ export interface HomeModule {
   ordering: number
   contentRefType: HomeModuleContentRefType
   contentRefId: string
+  /**
+   * 多语言标题映射 locale→string（与 home_banners.title 同构；ADR-052 AMENDMENT 2026-06-05 D-052-9）。
+   * 空 '{}' 时消费端降级：video 类型用视频标题，其余显示 contentRefId 摘要。
+   */
+  title: Record<string, string>
+  /**
+   * 运营横图 URL；可空（D-052-10）。
+   * video 类型消费端回退 videos.cover_url：降级链 `imageUrl ?? coverUrl ?? placeholder`。
+   */
+  imageUrl: string | null
   startAt: string | null
   endAt: string | null
   enabled: boolean
-  /** 非关键运营展示数据（自定义文案、样式 override）。禁止放入关键业务状态。 */
+  /**
+   * 非关键运营展示数据（样式 override 等）。禁止放入关键业务状态。
+   * title 覆盖用法已被 ADR-052 AMENDMENT 2026-06-05 取代（一等列），不再用于新写入。
+   */
   metadata: Record<string, unknown>
   createdAt: string
   updatedAt: string
@@ -50,6 +63,8 @@ export interface CreateHomeModuleInput {
   ordering?: number
   contentRefType: HomeModuleContentRefType
   contentRefId: string
+  title?: Record<string, string>
+  imageUrl?: string | null
   startAt?: string | null
   endAt?: string | null
   enabled?: boolean
@@ -63,6 +78,8 @@ export interface UpdateHomeModuleInput {
   ordering?: number
   contentRefType?: HomeModuleContentRefType
   contentRefId?: string
+  title?: Record<string, string>
+  imageUrl?: string | null
   startAt?: string | null
   endAt?: string | null
   enabled?: boolean

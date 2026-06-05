@@ -14978,3 +14978,17 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **新增依赖**：无
 - **数据库变更**：无（migration 093 由 CHG-HOME-UX-01-A 实施；本卡纯协议定档）
 - **注意事项**：arch-reviewer PASS-with-conditions → R-1（影响面清单 + 公开端点 GET /home/modules 自动透出新列确认为有意纯增量）/ Y-1（metadata 守则 title 条目显式 supersede）已吸收；Y-2/A-2 登记 follow-up（CHG-HOME-BANNER-URL-MAX：banner imageUrl 缺 .max(2048) 对齐；title 值侧 min/max 评估）。A-1 实证 .url() 对 R2/local-fs 双 provider 绝对 URL 形态安全；A-3 实证 migration 093 标号正确。verify:adr-contracts EXIT=0。解阻 CHG-HOME-UX-01-A。
+
+## [CHG-HOME-UX-01-A] home_modules schema + query 层 — title/image_url 落地（migration 093）
+- **完成时间**：2026-06-05
+- **记录时间**：2026-06-05 15:22
+- **执行模型**：claude-opus-4-8（人工 opus 会话覆盖 sonnet 建议，偏离登记）
+- **子代理**：无
+- **修改文件**：
+  - `apps/api/src/db/migrations/093_home_modules_title_image.sql`（新建）— ADD COLUMN IF NOT EXISTS title JSONB NOT NULL DEFAULT '{}' + image_url TEXT NULL，幂等 + 注释 down 节（049/050 约定）
+  - `packages/types/src/home-module.types.ts` — HomeModule / CreateHomeModuleInput / UpdateHomeModuleInput 三接口扩 title: Record<string,string> + imageUrl: string|null（HomeModule 必有，Input 可选）；metadata 注释补 supersede 注记
+  - `apps/api/src/db/queries/home-modules.ts` — DbHomeModuleRow + mapRow（title ?? {} 防御 / image_url 直通）+ 6 处列清单（4 SELECT + 2 RETURNING）+ INSERT 列 10→12 + UPDATE fieldMap +2（JSONB_KEYS 集合统一 title/metadata stringify）
+  - `tests/unit/api/home-modules.test.ts` — MODULE_ROW 补两列 + 新增 5 断言（映射透出 / null 防御兜底 / SELECT 列含 / INSERT stringify+缺省分支 / UPDATE stringify+imageUrl 清空 null）
+- **新增依赖**：无
+- **数据库变更**：migration 093（已执行 dev 库；幂等复跑 ✅；INSERT 往返 title/image_url 逐值一致 + 默认值分支 {}/null + 清理零残留实证）
+- **注意事项**：表当前 0 行，存量零破坏 trivially 成立。test:changed 因 packages/types 基础包改动按 ADR-180 自动升全量：493 files 6605/6605 全过；typecheck/lint EXIT=0。公开端点 GET /home/modules 自此自动透出 title/imageUrl（ADR-052 AMENDMENT R-1 确认的纯增量）。解阻 CHG-HOME-UX-01-B / CHG-HOME-UX-02。

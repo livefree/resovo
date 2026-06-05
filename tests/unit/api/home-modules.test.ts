@@ -20,6 +20,8 @@ const MODULE_ROW = {
   ordering: 1,
   content_ref_type: 'video',
   content_ref_id: 'vid-shortid-1',
+  title: {},
+  image_url: null,
   start_at: null,
   end_at: null,
   enabled: true,
@@ -83,6 +85,32 @@ describe('listActiveHomeModules', () => {
     mockQuery.mockResolvedValueOnce({ rows: [{ ...MODULE_ROW, metadata: null }] })
     const result = await listActiveHomeModules(mockDb, 'featured', null)
     expect(result[0].metadata).toEqual({})
+  })
+
+  // ── CHG-HOME-UX-01-A（ADR-052 AMENDMENT 2026-06-05）title / image_url 透出 ──
+
+  it('title / imageUrl 一等列正确映射透出（D-052-9）', async () => {
+    mockQuery.mockResolvedValueOnce({
+      rows: [{ ...MODULE_ROW, title: { 'zh-CN': '暑期专题', en: 'Summer' }, image_url: 'https://cdn.example.com/b.jpg' }],
+    })
+    const result = await listActiveHomeModules(mockDb, 'banner', null)
+    expect(result[0].title).toEqual({ 'zh-CN': '暑期专题', en: 'Summer' })
+    expect(result[0].imageUrl).toBe('https://cdn.example.com/b.jpg')
+  })
+
+  it('title 为 null（防御）时兜底空对象；image_url NULL 透出 null（D-052-10 可空语义）', async () => {
+    mockQuery.mockResolvedValueOnce({ rows: [{ ...MODULE_ROW, title: null, image_url: null }] })
+    const result = await listActiveHomeModules(mockDb, 'featured', null)
+    expect(result[0].title).toEqual({})
+    expect(result[0].imageUrl).toBeNull()
+  })
+
+  it('SELECT 列清单含 title 与 image_url', async () => {
+    mockQuery.mockResolvedValueOnce({ rows: [] })
+    await listActiveHomeModules(mockDb, 'banner', null)
+    const sql: string = mockQuery.mock.calls[0][0]
+    expect(sql).toContain('title')
+    expect(sql).toContain('image_url')
   })
 })
 
@@ -150,6 +178,37 @@ describe('createHomeModule', () => {
     const sql: string = mockQuery.mock.calls[0][0]
     expect(sql.toLowerCase()).toContain('insert into home_modules')
   })
+
+  // ── CHG-HOME-UX-01-A：title / imageUrl 写入 ────────────────────────────────
+
+  it('title stringify 入参、imageUrl 直通；缺省时 title={} / imageUrl=null', async () => {
+    mockQuery.mockResolvedValueOnce({ rows: [MODULE_ROW] })
+    await createHomeModule(mockDb, {
+      slot: 'banner',
+      brandScope: 'all-brands',
+      contentRefType: 'external_url',
+      contentRefId: 'https://promo.example.com',
+      title: { 'zh-CN': '暑期活动' },
+      imageUrl: 'https://cdn.example.com/b.jpg',
+    })
+    const sql: string = mockQuery.mock.calls[0][0]
+    expect(sql).toContain('title, image_url')
+    const params: unknown[] = mockQuery.mock.calls[0][1]
+    expect(params[6]).toBe(JSON.stringify({ 'zh-CN': '暑期活动' }))
+    expect(params[7]).toBe('https://cdn.example.com/b.jpg')
+
+    // 缺省分支
+    mockQuery.mockResolvedValueOnce({ rows: [MODULE_ROW] })
+    await createHomeModule(mockDb, {
+      slot: 'featured',
+      brandScope: 'all-brands',
+      contentRefType: 'video',
+      contentRefId: 'vid-abc',
+    })
+    const defaults: unknown[] = mockQuery.mock.calls[1][1]
+    expect(defaults[6]).toBe(JSON.stringify({}))
+    expect(defaults[7]).toBeNull()
+  })
 })
 
 // ── updateHomeModule ──────────────────────────────────────────────────────────
@@ -166,6 +225,22 @@ describe('updateHomeModule', () => {
     await updateHomeModule(mockDb, MODULE_ROW.id, {})
     const sql: string = mockQuery.mock.calls[0][0].trim()
     expect(sql.toUpperCase()).toMatch(/^SELECT/)
+  })
+
+  // ── CHG-HOME-UX-01-A：title（JSONB stringify）/ imageUrl 部分更新 ──────────
+
+  it('title 经 JSON.stringify 入参（JSONB 列），imageUrl 直通可清空为 null', async () => {
+    mockQuery.mockResolvedValueOnce({ rows: [MODULE_ROW] })
+    await updateHomeModule(mockDb, MODULE_ROW.id, {
+      title: { en: 'Summer' },
+      imageUrl: null,
+    })
+    const sql: string = mockQuery.mock.calls[0][0]
+    expect(sql).toContain('title = $1')
+    expect(sql).toContain('image_url = $2')
+    const params: unknown[] = mockQuery.mock.calls[0][1]
+    expect(params[0]).toBe(JSON.stringify({ en: 'Summer' }))
+    expect(params[1]).toBeNull()
   })
 })
 
