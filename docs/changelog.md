@@ -14684,3 +14684,25 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
   - **偏离登记 (b)**：`lib/merge/api.ts` 零改动——typed MergeParams/SplitGroup/Result 自动透传新字段，卡面预计需改实际不需。
   - **偏离登记 (c)**：实施中发现 §4.4 规则 2 单维建议值 `{reviewStatus:'approved'}` 与控件双维选项无法匹配预选（UI 显示「保持不变」但提交建议值的不一致）→ 修正为 approve 单步效果 `(approved, internal)` 双维（公开须运营显式选 approved|public，与设计「publish 需运营确认」一致）。
   - 门禁：typecheck/lint EXIT=0 + 既有 71 前端用例零破坏 + test:changed 增量 73/73。零端点零依赖零 admin-ui 触碰；e2e merge 页维持 SEQ 系列收口硬前置。
+
+## [CHG-VIR-13-C1] identity decisions 列表 + revive 后端（SEQ-20260604-01 / ADR-179 D-179-1~6）
+- **完成时间**：2026-06-04
+- **记录时间**：2026-06-04 21:25
+- **执行模型**：claude-opus-4-8
+- **子代理**：arch-reviewer (claude-opus-4-8 / a19744b07045b47e3)——ADR-179 契约 PASS 引用（13-ADR 阶段），本卡按契约实施，无新 spawn
+- **修改文件**：
+  - `packages/types/src/identity-decision.types.ts` — **新建**：`IdentityDecisionListRow`（decision 全列 + pair 摘要〔双侧 title + deleted 标注〕）+ `ListIdentityDecisionsParams/Result` + `ReviveCandidateResult`（reused 幂等标志）
+  - `packages/types/src/index.ts` — re-export
+  - `packages/types/src/admin-moderation.types.ts` + `apps/api/src/services/AuditLogService.ts` — actionType `'identity_candidate.revive'`（R-MID-1 第 32 次系统化；targetKind 复用 'identity_candidate' 零 CHECK 扩展 / D-179-5）
+  - `apps/api/src/db/queries/identity-decision.ts` — +`listIdentityDecisions`（JOIN users/identity_candidate/双侧 videos，软删行 title 仍可取 + deleted 标注；排序 created_at DESC, id ASC 分页幂等 / D-179-1）+ `countIdentityDecisions` + `findActiveRejectedDecisionByCandidateId`（D-178-2 至多一条）；文件头 Pool/PoolClient 口径更新
+  - `apps/api/src/services/IdentityCandidatesService.ts` — +`listDecisions`（camelCase 映射）+ `revive`（FOR UPDATE 校验全写入前 404/409×2 → 单事务复制原行新建 pending〔insertCandidate 既有 ON CONFLICT 范式复用 + revived_from 链 + trigger_source='manual-search' D-179-4〕+ **原行零修改** + 原 rejected decision 置 reverted；撞 pending unique → 重查幂等 reused:true 且不置 reverted / D-179-3）+ COMMIT 后 audit + `ReviveCandidateSchema` / `ListIdentityDecisionsSchema`（strict + reverted transform）
+  - `apps/api/src/routes/admin/identity-candidates.ts` — +`POST /admin/identity-candidates/:id/revive` + `GET /admin/identity-decisions`（D-179-6 同域归属；admin only）
+  - `tests/unit/api/identity-decisions-revive.test.ts` — **新建（13 用例）**：revive 7（happy 逐值含 audit payload R-MID-1 / 404 / 非 rejected 409 / pair 软删 409 / 幂等不置 reverted / 防御分支 / ROLLBACK 不写 audit）+ listDecisions 3 + zod 3
+  - `tests/unit/api/audit-log-coverage.test.ts` — REQUIRED_ACTION_TYPES + PAYLOAD_ASSERTION_REQUIRED 各 +1（守卫同步）
+- **新增依赖**：无
+- **数据库变更**：无（零 migration：trigger_source 复用 'manual-search'〔D-179-4〕、targetKind 088 已入 CHECK、action_type 列无 CHECK）
+- **注意事项**：
+  - **正向偏离**：卡面预计 `identity-candidate.ts` 需扩 query——实际零改动（insertCandidate / findPendingByPairKey 既有函数全覆盖 revive 需求）。
+  - dev 真实库实测全绿：happy（新行 pending+链+manual-search+evidence 复制 / 原行保持 rejected / decision reverted 三列置位）→ 幂等（撞 unique reused=true 同 id 返回）→ 409 非 rejected → 409 pair 软删 → list 过滤（candidateId + reverted=false 滤已撤销行）→ audit afterJsonb 逐值 → 清理零残留。
+  - 门禁：typecheck/lint EXIT=0 + `verify:endpoint-adr` ✓ 207 路由（2 新路径对齐 ADR-179 契约表）+ verify:adr-contracts ✓ + 全量 **6526/6528**——首轮全量暴露 `audit-log-service-enums-set-equal` 真回归（actionType **第 4 处**真源副本镜像未同步，前 3 处已同步守卫未覆盖该文件）→ 已修；其余 2 失败（StagingEditPanel / data-table-auto-filter）隔离复跑 36/36 全过 = 既见 jsdom 并发 flaky 与本卡无关。
+  - 13-C2 消费提示：list 响应 `reused`/`revertedAt` 已就绪供决策记录子视图 + 行内 revive 操作；前端 api client 留 13-C2。

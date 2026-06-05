@@ -107,6 +107,8 @@ const REQUIRED_ACTION_TYPES = [
   'source_line_alias.priority_update',  // PUT  /admin/source-line-aliases/:siteKey/:sourceName/priority
   // CHG-VIR-9-B / ADR-178 D-178-6：identity 候选人工拒绝（R-MID-1 第 31 次系统化）
   'identity_candidate.reject',          // POST /admin/identity-candidates/:id/reject
+  // CHG-VIR-13-C1 / ADR-179 D-179-5：rejected 候选人工复活（R-MID-1 第 32 次系统化）
+  'identity_candidate.revive',          // POST /admin/identity-candidates/:id/revive
 ] as const
 
 const ACTION_TYPE_REGEX = /actionType:\s*['"]([a-z_.]+)['"]/g
@@ -202,6 +204,8 @@ const PAYLOAD_ASSERTION_REQUIRED = [
   'source_line_alias.priority_update',
   // CHG-VIR-9-B / ADR-178 D-178-6：identity 候选人工拒绝 audit payload 内容断言（R-MID-1 第 31 次 / tests/unit/api/identity-candidates-reject.test.ts）
   'identity_candidate.reject',
+  // CHG-VIR-13-C1 / ADR-179 D-179-5：rejected 候选人工复活 audit payload 内容断言（R-MID-1 第 32 次 / tests/unit/api/identity-decisions-revive.test.ts）
+  'identity_candidate.revive',
 ] as const
 
 // CHG-SN-6-10：plan v1.4 §3.0.5 M-SN-4 legacy 11 项已迁移至 PAYLOAD_ASSERTION_REQUIRED

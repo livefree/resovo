@@ -30,6 +30,7 @@ export type * from './admin-moderation.types'
 export { deriveAggregateState } from './admin-moderation.types'
 export type * from './video-merge.types'
 export type * from './identity-evidence.types'
+export type * from './identity-decision.types'
 export type * from './sources-matrix.types'
 // CHG-VSR-1（2026-06-01 / ADR-157 D-157-1 双形态）：sources-matrix 枚举 const 值再导出（type-only export 不透出 const）
 export { SOURCE_QUICK_FILTERS, SOURCE_PROBLEM_KINDS, NEEDS_SOURCE_SEVERITIES } from './sources-matrix.types'

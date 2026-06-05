@@ -114,6 +114,8 @@ export const ACTION_TYPES: readonly AdminAuditActionType[] = [
   'video_source.batch_inline_action',
   // CHG-VIR-9-B / ADR-178 D-178-6：identity 候选人工拒绝
   'identity_candidate.reject',
+  // CHG-VIR-13-C1 / ADR-179 D-179-5：rejected 候选人工复活（action_type 列无 DB CHECK，纯 TS 枚举扩展）
+  'identity_candidate.revive',
 ]
 export const TARGET_KINDS: readonly AdminAuditTargetKind[] = [
   'video',

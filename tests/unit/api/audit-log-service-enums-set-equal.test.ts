@@ -99,6 +99,8 @@ const EXPECTED_ACTION_TYPES = [
   'source_line_alias.priority_update',
   // CHG-VIR-9-B / ADR-178 D-178-6 / R-MID-1 系统化第 31 次（identity 候选人工拒绝 / targetKind 'identity_candidate'）
   'identity_candidate.reject',
+  // CHG-VIR-13-C1 / ADR-179 D-179-5 / R-MID-1 系统化第 32 次（rejected 候选人工复活 / targetKind 复用 'identity_candidate'）
+  'identity_candidate.revive',
 ] as const
 
 const EXPECTED_TARGET_KINDS = [
