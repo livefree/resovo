@@ -6,7 +6,7 @@
  * 职责：展示表单（所有字段）+ 本地状态管理 + 提交调用
  */
 
-import { useState, useEffect, type CSSProperties, type ChangeEvent, type FormEvent } from 'react'
+import { useState, useEffect, useRef, type CSSProperties, type ChangeEvent, type FormEvent } from 'react'
 import {
   Drawer,
   AdminButton,
@@ -16,7 +16,7 @@ import {
   getVideoTypeOptions,
   type AdminSelectOption,
 } from '@resovo/admin-ui'
-import { videoPickerFetcher } from '@/lib/videos/picker-fetcher'
+import { videoPickerFetcher, fetchPickerItemByIdSafe } from '@/lib/videos/picker-fetcher'
 import type {
   HomeModule,
   HomeModuleSlot,
@@ -25,6 +25,7 @@ import type {
   CreateHomeModuleBody,
   UpdateHomeModuleBody,
 } from '@/lib/home-modules/types'
+import { ModuleImageField } from './ModuleImageField'
 
 // ── 常量 ─────────────────────────────────────────────────────────
 
@@ -79,9 +80,19 @@ const LABEL_STYLE: CSSProperties = {
   color: 'var(--fg-default)',
 }
 
-const HINT_STYLE: CSSProperties = {
-  fontSize: 'var(--font-size-2xs)',
-  color: 'var(--fg-muted)',
+// datetime-local 原生 input（AdminInputType 不含该类型；不为单消费点扩共享契约，
+// 视觉复刻 AdminInput md 规格；先例 SwitchDomainModal 原生 input）
+const DATETIME_INPUT_STYLE: CSSProperties = {
+  height: '28px',
+  padding: '0 10px',
+  background: 'var(--bg-surface)',
+  border: '1px solid var(--border-default)',
+  borderRadius: 'var(--radius-sm)',
+  color: 'var(--fg-default)',
+  fontSize: 'var(--font-size-xs)',
+  fontFamily: 'inherit',
+  boxSizing: 'border-box',
+  width: '100%',
 }
 
 const ROW_STYLE: CSSProperties = {
@@ -107,6 +118,35 @@ const ERROR_STYLE: CSSProperties = {
   borderRadius: 'var(--radius-sm)',
 }
 
+// ── 时间窗 datetime-local 往返（CHG-HOME-UX-05）────────────────────
+//
+// 偏离登记：不移植 v1 BannerForm `.slice(0,16)` 显示模式——该模式对 UTC ISO 直接
+// 切片显示（UTC 时刻）但 datetime-local 值按本地时区解析提交，非 UTC+0 时区下
+// 「编辑不动直接保存」会产生时差漂移。改为本地化对称往返：
+//   显示：UTC ISO → new Date() → 本地 YYYY-MM-DDTHH:mm
+//   提交：本地值 → new Date()（按本地解析）→ toISOString()（UTC）
+
+function isoToLocalInput(iso: string): string {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
+function localInputToIso(local: string): string | null {
+  if (!local) return null
+  const d = new Date(local)
+  return Number.isNaN(d.getTime()) ? null : d.toISOString()
+}
+
+/** title payload：仅非空键（'{}' 形态与后端 default 对齐） */
+function buildTitlePayload(titleZh: string, titleEn: string): Record<string, string> {
+  const title: Record<string, string> = {}
+  if (titleZh.trim()) title['zh-CN'] = titleZh.trim()
+  if (titleEn.trim()) title['en'] = titleEn.trim()
+  return title
+}
+
 // ── 表单默认值 ────────────────────────────────────────────────────
 
 interface FormState {
@@ -116,6 +156,9 @@ interface FormState {
   ordering: string
   contentRefType: HomeModuleContentRefType
   contentRefId: string
+  titleZh: string
+  titleEn: string
+  imageUrl: string
   startAt: string
   endAt: string
 }
@@ -129,6 +172,9 @@ function moduleToForm(module: HomeModule | null, defaultSlot: HomeModuleSlot): F
       ordering: '0',
       contentRefType: SLOT_CONTENT_REF_TYPES[defaultSlot][0],
       contentRefId: '',
+      titleZh: '',
+      titleEn: '',
+      imageUrl: '',
       startAt: '',
       endAt: '',
     }
@@ -140,8 +186,11 @@ function moduleToForm(module: HomeModule | null, defaultSlot: HomeModuleSlot): F
     ordering: String(module.ordering),
     contentRefType: module.contentRefType,
     contentRefId: module.contentRefId,
-    startAt: module.startAt ?? '',
-    endAt: module.endAt ?? '',
+    titleZh: module.title['zh-CN'] ?? '',
+    titleEn: module.title['en'] ?? '',
+    imageUrl: module.imageUrl ?? '',
+    startAt: module.startAt ? isoToLocalInput(module.startAt) : '',
+    endAt: module.endAt ? isoToLocalInput(module.endAt) : '',
   }
 }
 
@@ -161,11 +210,14 @@ export function HomeModuleDrawer({ open, module, defaultSlot, onClose, onSave }:
   const [form, setForm] = useState<FormState>(() => moduleToForm(module, defaultSlot))
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // CHG-HOME-UX-05 auto-fill：记录由 auto-fill 写入的值（type/选片切换时只清未被用户改动的预填）
+  const autoFilledRef = useRef<{ titleZh?: string; imageUrl?: string }>({})
 
   useEffect(() => {
     if (open) {
       setForm(moduleToForm(module, defaultSlot))
       setError(null)
+      autoFilledRef.current = {}
     }
   }, [open, module, defaultSlot])
 
@@ -173,6 +225,17 @@ export function HomeModuleDrawer({ open, module, defaultSlot, onClose, onSave }:
     value: t,
     label: CONTENT_REF_TYPE_LABELS[t],
   }))
+
+  /** auto-fill 残留清理：仅清「值仍等于 auto-fill 写入值」的字段（用户手改过的保留） */
+  function clearAutoFilled(next: FormState) {
+    if (autoFilledRef.current.titleZh !== undefined && next.titleZh === autoFilledRef.current.titleZh) {
+      next.titleZh = ''
+    }
+    if (autoFilledRef.current.imageUrl !== undefined && next.imageUrl === autoFilledRef.current.imageUrl) {
+      next.imageUrl = ''
+    }
+    autoFilledRef.current = {}
+  }
 
   function setField<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm(prev => {
@@ -183,13 +246,42 @@ export function HomeModuleDrawer({ open, module, defaultSlot, onClose, onSave }:
           next.contentRefType = allowedTypes[0]
           // CHG-SN-8-FUP-HOME：type 切换时同步 reset contentRefId（Opus 评审建议 2）
           next.contentRefId = ''
+          clearAutoFilled(next)
         }
       }
       if (key === 'contentRefType') {
         // CHG-SN-8-FUP-HOME：type 切换时同步 reset contentRefId（Opus 评审建议 2）
         next.contentRefId = ''
+        // CHG-HOME-UX-05：auto-fill 残留随 type 切走清理（不动用户手填值）
+        clearAutoFilled(next)
       }
       return next
+    })
+  }
+
+  // ── CHG-HOME-UX-05 auto-fill：video 选中后预填空字段（D-104-10）────
+  //
+  // 走 drawer 端 fetchPickerItemByIdSafe（不扩 ContentRefPicker onChange 共享契约）；
+  // 仅在对应字段为空时预填，不覆盖用户已填值；竞态守卫 = 应用前比对当前选中 id。
+  function handleContentRefChange(next: string) {
+    setField('contentRefId', next)
+    if (form.contentRefType !== 'video' || !next.trim()) return
+    void fetchPickerItemByIdSafe(next.trim()).then((item) => {
+      if (!item) return
+      setForm(prev => {
+        // 竞态守卫：用户已换选/清空则放弃本次预填
+        if (prev.contentRefId !== next || prev.contentRefType !== 'video') return prev
+        const updated = { ...prev }
+        if (!prev.titleZh.trim()) {
+          updated.titleZh = item.title
+          autoFilledRef.current.titleZh = item.title
+        }
+        if (!prev.imageUrl.trim() && item.coverUrl) {
+          updated.imageUrl = item.coverUrl
+          autoFilledRef.current.imageUrl = item.coverUrl
+        }
+        return updated
+      })
     })
   }
 
@@ -209,8 +301,10 @@ export function HomeModuleDrawer({ open, module, defaultSlot, onClose, onSave }:
         ordering: parseInt(form.ordering, 10) || 0,
         contentRefType: form.contentRefType,
         contentRefId: form.contentRefId.trim(),
-        startAt: form.startAt || null,
-        endAt: form.endAt || null,
+        title: buildTitlePayload(form.titleZh, form.titleEn),
+        imageUrl: form.imageUrl.trim() || null,
+        startAt: localInputToIso(form.startAt),
+        endAt: localInputToIso(form.endAt),
       }
       await onSave(body, module?.id ?? null)
       onClose()
@@ -285,18 +379,54 @@ export function HomeModuleDrawer({ open, module, defaultSlot, onClose, onSave }:
         </div>
 
         <div style={FIELD_STYLE}>
-          {/* CHG-SN-8-FUP-HOME：用 ContentRefPicker 替代原单 input + 4 类型 hint 反人类填法 */}
+          {/* CHG-SN-8-FUP-HOME：用 ContentRefPicker 替代原单 input + 4 类型 hint 反人类填法
+              CHG-HOME-UX-05：onChange 接 auto-fill（video 选中预填空标题/横图） */}
           <ContentRefPicker
             label="内容引用 *"
             type={form.contentRefType}
             value={form.contentRefId}
-            onChange={(next) => setField('contentRefId', next)}
+            onChange={handleContentRefChange}
             videoFetcher={videoPickerFetcher}
             videoTypeOptions={VIDEO_TYPE_OPTIONS}
             required
             data-testid="drawer-content-ref-id"
           />
         </div>
+
+        {/* CHG-HOME-UX-05：多语言标题（D-104-9；空键不传，前台/卡片走降级链） */}
+        <div style={ROW_STYLE}>
+          <div style={FIELD_STYLE}>
+            <label style={LABEL_STYLE}>标题（中文）</label>
+            <AdminInput
+              type="text"
+              value={form.titleZh}
+              onChange={(e: ChangeEvent<HTMLInputElement>) => setField('titleZh', e.target.value)}
+              placeholder="留空＝video 用视频标题"
+              size="md"
+              data-testid="drawer-title-zh"
+              aria-label="标题（中文）"
+            />
+          </div>
+          <div style={FIELD_STYLE}>
+            <label style={LABEL_STYLE}>标题（English）</label>
+            <AdminInput
+              type="text"
+              value={form.titleEn}
+              onChange={(e: ChangeEvent<HTMLInputElement>) => setField('titleEn', e.target.value)}
+              placeholder="可选"
+              size="md"
+              data-testid="drawer-title-en"
+              aria-label="标题（English）"
+            />
+          </div>
+        </div>
+
+        {/* CHG-HOME-UX-05：运营横图（外链 + 编辑态上传 + 16:9 预览） */}
+        <ModuleImageField
+          value={form.imageUrl}
+          onChange={(next) => setField('imageUrl', next)}
+          moduleId={module?.id ?? null}
+        />
 
         <div style={FIELD_STYLE}>
           <label style={LABEL_STYLE}>排序权重</label>
@@ -311,27 +441,27 @@ export function HomeModuleDrawer({ open, module, defaultSlot, onClose, onSave }:
           />
         </div>
 
+        {/* CHG-HOME-UX-05：裸 ISO 文本 → datetime-local（本地化对称往返，见 isoToLocalInput）
+            原生 input：AdminInputType 不含 datetime-local，不为单消费点扩共享契约 */}
         <div style={ROW_STYLE}>
           <div style={FIELD_STYLE}>
-            <label style={LABEL_STYLE}>生效开始时间</label>
-            <AdminInput
-              type="text"
+            <label style={LABEL_STYLE}>生效开始时间（留空＝立即）</label>
+            <input
+              type="datetime-local"
               value={form.startAt}
               onChange={(e: ChangeEvent<HTMLInputElement>) => setField('startAt', e.target.value)}
-              placeholder="ISO 8601（留空=立即）"
-              size="md"
+              style={DATETIME_INPUT_STYLE}
               data-testid="drawer-start-at"
               aria-label="生效开始时间"
             />
           </div>
           <div style={FIELD_STYLE}>
-            <label style={LABEL_STYLE}>生效结束时间</label>
-            <AdminInput
-              type="text"
+            <label style={LABEL_STYLE}>生效结束时间（留空＝永久）</label>
+            <input
+              type="datetime-local"
               value={form.endAt}
               onChange={(e: ChangeEvent<HTMLInputElement>) => setField('endAt', e.target.value)}
-              placeholder="ISO 8601（留空=永久）"
-              size="md"
+              style={DATETIME_INPUT_STYLE}
               data-testid="drawer-end-at"
               aria-label="生效结束时间"
             />

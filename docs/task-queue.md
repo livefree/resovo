@@ -3305,10 +3305,12 @@ CODENAME-MATRIX-E2E (依赖 Wave 3 验收期补丁 CODENAME-MATRIX ✅)
    - 依赖：CHG-HOME-UX-04-A ✅
    - 范围（4 项）：① 手写 tabs → Segment（badge=已加载 slot 计数）② window.confirm → 新建 DeleteModuleModal（仿 users Modal 范式）③ useVideoMetaMap 顶层一次接线下传 Card+PreviewPanel ④ 测试更新 + test:e2e:admin。
    - 完成备注：Segment 接管（手写 tabs 删除）+ DeleteModuleModal（103 行，目标摘要+硬删 danger 明示）+ metaMap 接线（红 pill 路径激活，四色全实装；PreviewPanel 下传归 06）。+5 用例 36/36 + test:changed 20/20 + typecheck/lint EXIT=0；e2e:admin 与 05/06 批跑登记。解阻 06/07。执行模型: claude-opus-4-8（人工 opus 覆盖 sonnet）；子代理: 无。
-8. **CHG-HOME-UX-05** — HomeModuleDrawer 字段补齐（状态：⬜ 待开始）
+8. **CHG-HOME-UX-05** — HomeModuleDrawer 字段补齐（状态：✅ 已完成）
+   - 实际开始：2026-06-05 15:55 ｜ 完成时间：2026-06-05 16:00
    - 建议模型：sonnet
-   - 依赖：CHG-HOME-UX-03、CHG-HOME-UX-02
+   - 依赖：CHG-HOME-UX-03 ✅、CHG-HOME-UX-02 ✅
    - 范围（5 项）：① FormState +titleZh/titleEn/imageUrl + payload 仅非空键 ② startAt/endAt → datetime-local 往返（仿 BannerForm）③ 图片外链 input + 编辑态上传 + 16:9 预览 + 进度（新建态无 id 仅外链）④ video 选中 auto-fill 预填空字段（不覆盖已填 / type 切走清残留）⑤ 新建 HomeModuleDrawer.test.tsx；500 行红线超则抽 ModuleImageField。
+   - 完成备注：五项全落；偏离 ×2 登记（**不仿 BannerForm `.slice(0,16)`**——该模式 UTC 显示×本地解析往返漂移 bug，改 isoToLocalInput 对称往返 + 测试守护零漂移；datetime-local 用原生 input 不扩 AdminInputType 共享契约）。ModuleImageField 预防性拆分（Drawer 471<500）。**v1 BannerForm 漂移 bug 发现登记 follow-up CHG-BANNER-TZ-FIX**。+9 用例 45/45 + test:changed 29/29 + typecheck/lint EXIT=0。执行模型: claude-opus-4-8（人工 opus 覆盖 sonnet）；子代理: 无。
 9. **CHG-HOME-UX-06** — HomePreviewPanel 轻拟真（状态：⬜ 待开始）
    - 建议模型：sonnet
    - 依赖：CHG-HOME-UX-04-B
@@ -3339,3 +3341,5 @@ CODENAME-MATRIX-E2E (依赖 Wave 3 验收期补丁 CODENAME-MATRIX ✅)
 - **CHG-HOME-BLURHASH**（待立案，可选）：home_module 图片 blurhash 入队（同 banner 现状 TODO）。
 - **CHG-HOME-COUNTS**（待立案，可选）：GET /admin/home-modules/counts 轻量端点（Segment badge 全 slot 计数；新 route 需 ADR）。
 - **CHG-HOME-IMAGE-GUARD**（待立案，可选）：external_url/custom_html image 必填软校验（首版宽松，运营反馈后评估）。
+- **CHG-HOME-BANNER-URL-MAX**（待立案，可选）：v1 banner 路由 imageUrl 缺 `.max(2048)` 与 ADR-104 AMENDMENT 对齐（arch-reviewer Y-2）。
+- **CHG-BANNER-TZ-FIX**（待立案，v1 维护期 bug）：BannerForm 时间窗往返漂移——`activeFrom.slice(0,16)` UTC 切片显示 + datetime-local 本地解析提交，非 UTC+0 时区「编辑不动保存」偏移（apps/server/src/components/admin/banners/BannerForm.tsx:72,91；CHG-HOME-UX-05 实施中发现，修复参照 isoToLocalInput 对称往返模式）。

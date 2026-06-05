@@ -15059,3 +15059,16 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **新增依赖**：无
 - **数据库变更**：无
 - **注意事项**：window.confirm 全退役；红 pill「引用失效」路径自此激活（P-home §6 四色全实装）。组件测试 36/36 + test:changed 20/20 + typecheck/lint EXIT=0；e2e:admin 与 05/06 批跑登记（连续前端卡）。解阻 06 / 07。
+
+## [CHG-HOME-UX-05] HomeModuleDrawer 字段补齐 — 多语言标题 + 图片 + datetime-local + auto-fill
+- **完成时间**：2026-06-05
+- **记录时间**：2026-06-05 16:00
+- **执行模型**：claude-opus-4-8（人工 opus 会话覆盖 sonnet 建议，偏离登记）
+- **子代理**：无
+- **修改文件**：
+  - `apps/server-next/src/app/admin/home/_client/HomeModuleDrawer.tsx`（352→471 行 <500）— FormState +titleZh/titleEn/imageUrl + buildTitlePayload（仅非空键）；startAt/endAt 裸 ISO 文本 → datetime-local 原生 input（**偏离登记 ×2**：① 不移植 v1 BannerForm `.slice(0,16)` 模式——该模式 UTC 显示 × 本地解析在非 UTC+0 时区「编辑不动保存」漂移，改 isoToLocalInput/localInputToIso 本地化对称往返；② AdminInputType 不含 datetime-local，用原生 input + 本地 DATETIME_INPUT_STYLE 复刻 md 视觉，不为单消费点扩共享契约）；auto-fill：handleContentRefChange → fetchPickerItemByIdSafe 预填空字段（不覆盖已填 + 竞态守卫〔应用前比对当前选中 id〕+ autoFilledRef 记录预填值，type 切走仅清未手改的残留）
+  - `apps/server-next/src/app/admin/home/_client/ModuleImageField.tsx`（新 134 行，500 红线预防性拆分）— 外链 input + 编辑态上传按钮（uploadHomeModuleImage + loading 态）+ 16:9 预览 + 新建态「保存后可上传」提示
+  - `tests/unit/components/server-next/admin/home/HomeModuleDrawer.test.tsx`（新 9 用例）— title 仅非空键 / **datetime 对称往返零漂移守护**（BannerForm bug 不回归）/ 留空 null / auto-fill 预填+不覆盖+404 零预填 / 上传按钮可见性 / imageUrl 空串→null；AdminInput testid 落容器 → 取值用 getByLabelText
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：**发现 v1 BannerForm 时间窗往返漂移 bug**（apps/server/src/components/admin/banners/BannerForm.tsx:72,91——UTC 切片显示 + 本地解析提交），v1 已冻结仅维护期修复，登记 follow-up CHG-BANNER-TZ-FIX。home 域 45/45 + test:changed 29/29 + typecheck/lint EXIT=0。解阻 FUP 部分。
