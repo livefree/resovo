@@ -429,4 +429,95 @@ describe('MergeCandidatesSection (CHG-VIR-9-C)', () => {
     await waitFor(() => expect(mergeVideosMock).toHaveBeenCalledTimes(1))
     expect(mergeVideosMock.mock.calls[0][0]).not.toHaveProperty('targetStatus')
   })
+
+  // ── CHG-VIR-16-TBL-FE / D-105a-19：组级检索（排序/筛选/搜索/截断/空态）──────
+
+  it('10a. 相似度列排序：列头菜单降序 → listCandidates 透传 sortField=identityScore + sortDir=desc', async () => {
+    listCandidatesMock.mockResolvedValue(IDENTITY_RES)
+    render(<CandidatesSection />)
+    await waitFor(() => screen.getByText('復仇者聯盟'))
+    fireEvent.click(screen.getByTestId('th-menu-trigger-identityScore'))
+    fireEvent.click(screen.getByTestId('dt-autofilter-identityScore-sort-desc'))
+    await waitFor(() => {
+      expect(listCandidatesMock).toHaveBeenLastCalledWith(
+        expect.objectContaining({ sortField: 'identityScore', sortDir: 'desc' }),
+      )
+    })
+  })
+
+  it('10b. 相似度区间筛选：% 输入 80–95 → identityScoreMin 0.8 / Max 0.95（÷100 映射）+ page 重置', async () => {
+    listCandidatesMock.mockResolvedValue(IDENTITY_RES)
+    render(<CandidatesSection />)
+    await waitFor(() => screen.getByText('復仇者聯盟'))
+    fireEvent.click(screen.getByTestId('th-menu-trigger-identityScore'))
+    fireEvent.change(screen.getByTestId('dt-autofilter-identityScore-number-min'), { target: { value: '80' } })
+    fireEvent.change(screen.getByTestId('dt-autofilter-identityScore-number-max'), { target: { value: '95' } })
+    fireEvent.click(screen.getByTestId('dt-autofilter-identityScore-apply'))
+    await waitFor(() => {
+      expect(listCandidatesMock).toHaveBeenLastCalledWith(
+        expect.objectContaining({ identityScoreMin: 0.8, identityScoreMax: 0.95, page: 1 }),
+      )
+    })
+  })
+
+  it('10c. 候选数区间筛选：min 3 → videoCountMin=3（组级精确口径）', async () => {
+    listCandidatesMock.mockResolvedValue(IDENTITY_RES)
+    render(<CandidatesSection />)
+    await waitFor(() => screen.getByText('復仇者聯盟'))
+    fireEvent.click(screen.getByTestId('th-menu-trigger-videoCount'))
+    fireEvent.change(screen.getByTestId('dt-autofilter-videoCount-number-min'), { target: { value: '3' } })
+    fireEvent.click(screen.getByTestId('dt-autofilter-videoCount-apply'))
+    await waitFor(() => {
+      expect(listCandidatesMock).toHaveBeenLastCalledWith(
+        expect.objectContaining({ videoCountMin: 3, page: 1 }),
+      )
+    })
+    expect(listCandidatesMock.mock.calls.at(-1)![0]).not.toHaveProperty('videoCountMax')
+  })
+
+  it('10d. 工具条搜索框：输入防抖 commit → q 参数 + page 重置；清空 → q 不发送', async () => {
+    listCandidatesMock.mockResolvedValue(IDENTITY_RES)
+    render(<CandidatesSection />)
+    await waitFor(() => screen.getByText('復仇者聯盟'))
+    fireEvent.change(screen.getByTestId('merge-candidates-search'), { target: { value: '復仇者' } })
+    await waitFor(() => {
+      expect(listCandidatesMock).toHaveBeenLastCalledWith(
+        expect.objectContaining({ q: '復仇者', page: 1 }),
+      )
+    })
+    fireEvent.change(screen.getByTestId('merge-candidates-search'), { target: { value: '' } })
+    await waitFor(() => {
+      expect(listCandidatesMock.mock.calls.at(-1)![0]).not.toHaveProperty('q')
+    })
+  })
+
+  it('10e. total 文案 = 「共 N 组」（D-105a-19 组数语义，identity 不再「共 N 对候选」）', async () => {
+    listCandidatesMock.mockResolvedValue({ ...IDENTITY_RES, total: 7 })
+    render(<CandidatesSection />)
+    await waitFor(() => screen.getByText('復仇者聯盟'))
+    expect(screen.getByText(/共\s*7\s*组/)).not.toBeNull()
+    expect(screen.queryByText(/对候选/)).toBeNull()
+  })
+
+  it('10f. truncated 回显 → 截断警示条渲染；未截断不渲染', async () => {
+    listCandidatesMock.mockResolvedValue({ ...IDENTITY_RES, truncated: true })
+    render(<CandidatesSection />)
+    await waitFor(() => screen.getByText('復仇者聯盟'))
+    await waitFor(() => expect(screen.getByTestId('merge-truncated-note')).not.toBeNull())
+  })
+
+  it('10g. 筛选/搜索空结果：保持 DataTable + 表内空态（搜索框可清除条件，不切整页 EmptyState）', async () => {
+    listCandidatesMock.mockImplementation(async (params: { q?: string }) =>
+      params.q
+        ? { data: [], total: 0, page: 1, limit: 20, source: 'identity' as const }
+        : IDENTITY_RES)
+    render(<CandidatesSection />)
+    await waitFor(() => screen.getByText('復仇者聯盟'))
+    fireEvent.change(screen.getByTestId('merge-candidates-search'), { target: { value: '不存在' } })
+    await waitFor(() => screen.getByText('无匹配候选'))
+    // 搜索框仍在（条件可清除）；整页空态「无合并候选」不渲染
+    expect(screen.getByTestId('merge-candidates-search')).not.toBeNull()
+    expect(screen.queryByText('无合并候选')).toBeNull()
+    expect(screen.getByText(/共\s*0\s*组/)).not.toBeNull()
+  })
 })

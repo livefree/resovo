@@ -14907,3 +14907,18 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **门禁**：typecheck/lint EXIT=0；verify-file-size-budget 新违规清零（identity-candidate.ts 拆分收口）
 - **dev 实测（只读临时脚本，验后删除）**：缺省 identity total=99 组 + identityScore DESC 有序 ✓ / ASC 有序 ✓ / videoCount DESC（8/6/5）+ videoCountMin=3 → 24 组全部 ≥3 ✓ / score∈[0.8,0.95] → 29 组全在区间 ✓ / q=「关于」命中 1 组（样本组在内）✓ / q 无命中 total=0 **source=identity 不降级** ✓ / 同参数幂等 ✓ / 越界页空 data 保持 identity ✓
 - **注意事项**：D-105a-19 实施闭环；解阻 CHG-VIR-16-TBL-FE（前端列 sort/filter + toolbar 搜索接线）。零 migration 零新端点（query 参数扩展不触发 verify:endpoint-adr）。
+
+## [CHG-VIR-16-TBL-FE] merge 合并工作区表格组级检索前端接线（相似度排序 + 相似度/候选数筛选 + 搜索框）
+- **完成时间**：2026-06-05
+- **记录时间**：2026-06-05
+- **执行模型**：claude-opus-4-8｜子代理：无（按 ADR-105a AMENDMENT 前端接线契约落地）
+- **修改文件**：
+  - `MergeCandidatesSection.tsx`（546→456 行）— 相似度列 enableSorting + number range filter（accessor 改百分比口径与 cell 显示一致）/ 候选数列 number range filter / 作品列 text filter 复用 q 通道（遗留 ③ / VideoColumns title 先例）/ filters 真 state 接通（query + onQueryChange patch + commit 翻页重置）/ sort 白名单守卫扩 identityScore / total 文案统一「共 N 组」（D-105a-19 组数语义）/ truncated 警示条 / 筛选空结果保持 DataTable 渲染（emptyState prop，整页 EmptyState 仅无检索条件时）
+  - `MergeCandidatesFilters.tsx`（新 112 行，500 行红线拆出）— buildCandidateSearchParams 纯函数（相似度 % → 0..1 clamp / 候选数整数 ≥2 / min>max 前端交换规范化防 zod 422 砸表格）+ MergeSearchInput（**复用共享原语 DataTableSearchInput**〔D-149-8 IME composition + debounce + Enter〕，本层仅 filters Map read-modify-write 适配不丢并发列筛选；自建 AdminInput 防抖版经评估废弃——缺 IME 处理）
+  - `lib/merge/api.ts` — listCandidates 序列化 +5 参数（identityScoreMin/Max / videoCountMin/Max / q）
+- **测试**：MergeCandidatesSection.test +7（10a 排序透传 / 10b % 区间 ÷100 映射 + page 重置 / 10c 候选数 min / 10d 搜索防抖 + 清空不发送 / 10e 「共 N 组」+ 反断言「对候选」/ 10f truncated 警示 / 10g 筛选空保持 DataTable + 表内空态）；MergeCandidatesFilters.test 新建 7 用例（纯函数：clamp / 交换 / 整数化 / q / 联合）。merge 前端域 **104/104** + test:changed 85/85 + typecheck/lint EXIT=0 + budget 零新违规 + **e2e merge-deeplink 6/6**
+- **注意事项**：
+  - 筛选 UI 锚点 = DataTable 列头菜单 AutoFilter（`th-menu-trigger-*` / number-min·max / apply），零自建筛选控件
+  - 共享层沉淀评估：getRange/getTextValue 局部 helper 第 2 处出现（VideoFilterFields 先例），第 3 处时按规则上提共享层
+  - truncated 警示文案不内嵌 cap 数值（避免与后端 MAX_COLLAPSE_PAIRS 漂移）
+  - **CHG-VIR-16-TBL 系列（ADR/BE/FE 三卡）收口**：用户裁定三项 UX 全量交付

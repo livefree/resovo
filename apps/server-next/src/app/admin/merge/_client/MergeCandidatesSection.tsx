@@ -24,6 +24,7 @@ import {
   type ColumnPreference,
   type TableColumn,
   type TableSortState,
+  type FilterValue,
 } from '@resovo/admin-ui'
 import type { CandidateGroup, VideoStatusSetting } from '@resovo/types'
 import { listCandidates, mergeVideos, unmergeVideos } from '@/lib/merge/api'
@@ -31,6 +32,8 @@ import { describeStatusTransition } from '@/lib/merge/status-defaults'
 import { rejectIdentityCandidate } from '@/lib/identity/api'
 import { describeError } from './MergeClient'
 import { CandidateExpand, SECONDARY_TEXT } from './MergeCandidateExpand'
+// D-105a-19（CHG-VIR-16-TBL-FE）：检索接线（filters → 参数纯函数 + 工具条搜索框）
+import { buildCandidateSearchParams, MergeSearchInput } from './MergeCandidatesFilters'
 
 // ── 样式（CSS 变量零硬编码颜色）────────────────────────────────────
 
@@ -71,8 +74,12 @@ export function CandidatesSection() {
   // ADR-150 阶段 5 EP-4 follow-up（2026-05-25）：Merge sort 全栈打通 / Service 层 sort
   const [sort, setSort] = useState<TableSortState>({ field: undefined, direction: 'desc' })
   const [columnPrefs, setColumnPrefs] = useState<ReadonlyMap<string, ColumnPreference>>(new Map())
+  // D-105a-19（CHG-VIR-16-TBL-FE）：组级筛选/搜索（相似度区间 / 候选数区间 / q）
+  const [filters, setFilters] = useState<ReadonlyMap<string, FilterValue>>(new Map())
   const [data, setData] = useState<readonly CandidateGroup[]>([])
   const [total, setTotal] = useState(0)
+  // D-105a-19：identity 路径 cap 截断回显（警示条消费）
+  const [truncated, setTruncated] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<Error | null>(null)
   const [expandedKeys, setExpandedKeys] = useState<ReadonlySet<string>>(new Set())
@@ -85,22 +92,27 @@ export function CandidatesSection() {
     setError(null)
     // ADR-150 阶段 5 EP-4 follow-up（2026-05-25）：sort 白名单守卫 + URL 透传
     // CHG-VIR-14-SCORE-UI：score 列退役（legacyScore 误导展示），守卫白名单同步去 score
-    const sortFieldGuarded: 'videoCount' | 'year' | 'titleNormalized' | undefined =
+    // D-105a-19（CHG-VIR-16-TBL-FE）：白名单扩 identityScore（相似度列排序）
+    const sortFieldGuarded: 'videoCount' | 'year' | 'titleNormalized' | 'identityScore' | undefined =
       sort.field === 'videoCount' || sort.field === 'year' || sort.field === 'titleNormalized'
+        || sort.field === 'identityScore'
         ? sort.field
         : undefined
     listCandidates({
       minScore, limit: pageSize, page, source: 'identity',
       ...(sortFieldGuarded ? { sortField: sortFieldGuarded, sortDir: sort.direction } : {}),
+      // D-105a-19：filters Map → 检索参数（相似度 % → 0..1；候选数整数 ≥2；q 文本）
+      ...buildCandidateSearchParams(filters),
     })
       .then((res) => {
         setData(res.data)
         setTotal(res.total)
+        setTruncated(res.truncated === true)
         setEffectiveSource(res.source ?? null)
       })
       .catch((e: unknown) => setError(e instanceof Error ? e : new Error('加载失败')))
       .finally(() => setLoading(false))
-  }, [minScore, page, pageSize, sort])
+  }, [minScore, page, pageSize, sort, filters])
 
   useEffect(() => { load() }, [load])
 
@@ -196,6 +208,8 @@ export function CandidatesSection() {
       accessor: (g) => g.titleNormalized,
       minWidth: 240, // 仅 minWidth（无 width）→ 列宽可调时作 flex 列吸收余量
       enableResizing: true,
+      // D-105a-19 遗留 ③：text filter 复用 q 通道（VideoColumns title 列先例，与工具条搜索同源）
+      filterable: true, filterFieldName: 'q', filterKind: 'text',
       cell: ({ row }) => (
         <div>
           <div style={{ fontWeight: 500 }}>{row.titleNormalized}</div>
@@ -211,6 +225,8 @@ export function CandidatesSection() {
       accessor: (g) => g.videos.length,
       width: 110, minWidth: 90,
       enableResizing: true,
+      // D-105a-19（CHG-VIR-16-TBL-FE）：候选数区间筛选（→ videoCountMin/Max，组级精确）
+      filterable: true, filterFieldName: 'videoCount', filterKind: 'number',
       cell: ({ row }) => <span>{row.videos.length} 条</span>,
     },
     // CHG-VIR-15-UX-A（用户裁定 ①）：来源列——tab 退役后行级呈现。
@@ -229,14 +245,17 @@ export function CandidatesSection() {
         </span>
       ),
     },
-    // CHG-VIR-15-UX-A（用户裁定 ②）：相似度列（identityScore；legacy 行无评分 '—'；
-    // 不开 sort——后端白名单 videoCount/year/titleNormalized 之外，identity 来源已按其排序）
+    // CHG-VIR-15-UX-A（用户裁定 ②）：相似度列（identityScore；legacy 行无评分 '—'）
+    // D-105a-19（CHG-VIR-16-TBL-FE）：开 sort（后端白名单扩 identityScore）+ 区间筛选
+    // （accessor/筛选 UI 均百分比口径与 cell 显示一致，请求映射 ÷100 → identityScoreMin/Max）
     {
       id: 'identityScore',
       kind: 'computed',
+      enableSorting: true,
       header: '相似度',
-      accessor: (g) => g.identity?.identityScore ?? null,
+      accessor: (g) => (g.identity ? Math.round(g.identity.identityScore * 1000) / 10 : null),
       width: 100, minWidth: 80,
+      filterable: true, filterFieldName: 'identityScore', filterKind: 'number',
       cell: ({ row }) => row.identity
         ? <span style={{ fontWeight: 600 }}>{(row.identity.identityScore * 100).toFixed(1)}%</span>
         : <span style={SECONDARY_TEXT}>—</span>,
@@ -281,21 +300,39 @@ export function CandidatesSection() {
     },
   ], [handleMerge, handleReject, effectiveSource])
 
+  // D-105a-19：筛选/搜索 commit（翻页重置 page=1）
+  const handleFiltersChange = useCallback((next: ReadonlyMap<string, FilterValue>) => {
+    setFilters(next)
+    setPage(1)
+  }, [])
+
   const query = useMemo(() => ({
     pagination: { page, pageSize },
     // ADR-150 阶段 5 EP-4 follow-up（2026-05-25）：sort 真 state 接通（非 hardcode）
     sort,
-    filters: new Map(),
+    // D-105a-19：filters 真 state 接通（列头菜单 number/text filter → 检索参数）
+    filters,
     columns: columnPrefs,
     selection: { selectedKeys: new Set<string>(), mode: 'page' as const },
-  }), [page, pageSize, sort, columnPrefs])
+  }), [page, pageSize, sort, filters, columnPrefs])
+
+  // D-105a-19：筛选/搜索激活判定（激活时空结果保持 DataTable 渲染，chip/搜索框可清除条件）
+  const hasActiveCriteria = filters.size > 0
 
   // CHG-VIR-15-UX-A：toggle 退役后的工具条（降级提示 + 降级态 minScore 控件 + 计数）
+  // CHG-VIR-16-TBL-FE：+搜索框（→ filters['q']）+ truncated 警示条
   const sourceToolbar = (
     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+      <MergeSearchInput filters={filters} onCommit={handleFiltersChange} />
       {effectiveSource === 'legacy' && !loading && (
         <span style={FALLBACK_NOTE_STYLE} data-testid="merge-source-fallback-note">
           多证据候选为空，已降级实时聚合
+        </span>
+      )}
+      {/* D-105a-19：cap 截断警示（仅 identity 路径 pending 超折叠上限时回显） */}
+      {truncated && !loading && (
+        <span style={FALLBACK_NOTE_STYLE} data-testid="merge-truncated-note">
+          pending 候选超折叠上限，仅展示最高分候选对的折叠结果
         </span>
       )}
       {/* identity 来源后端不消费 minScore（按 identity_score 排序）→ 仅降级 legacy 后显示 */}
@@ -327,9 +364,9 @@ export function CandidatesSection() {
           </AdminButton>
         </>
       )}
-      {/* CHG-VIR-9-D：identity 来源 total = pending pair 数（页内折叠后行数 ≤ total），文案区分 */}
+      {/* D-105a-19：total 语义 = 过滤后组数（identity/legacy 统一；曾为 pending pair 数「共 N 对候选」） */}
       <span style={{ ...SECONDARY_TEXT, marginLeft: 'auto' }}>
-        {effectiveSource === 'identity' ? `共 ${total} 对候选` : `共 ${total} 组`}
+        共 {total} 组
       </span>
     </div>
   )
@@ -350,7 +387,9 @@ export function CandidatesSection() {
       </div>
     )
   }
-  if (data.length === 0) {
+  // D-105a-19：仅「无任何检索条件」时整体 EmptyState；筛选/搜索空结果走 DataTable emptyState
+  // （否则筛选 chip / 列头菜单随表格消失，无法清除条件）
+  if (data.length === 0 && !hasActiveCriteria) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
         {sourceToolbar}
@@ -374,6 +413,8 @@ export function CandidatesSection() {
         rowKey={(g) => g.groupKey}
         mode="server"
         enableColumnResizing
+        // D-105a-19：筛选/搜索空结果的表内空态（表格骨架保留，chip/列头菜单可清除条件）
+        emptyState={<EmptyState title="无匹配候选" description="调整筛选或搜索条件后重试。" />}
         query={query}
         onQueryChange={(patch) => {
           if (patch.pagination) {
@@ -382,6 +423,8 @@ export function CandidatesSection() {
           }
           // ADR-150 阶段 5 EP-4 follow-up（2026-05-25）：sort patch 接通
           if (patch.sort) setSort(patch.sort)
+          // D-105a-19：列头菜单筛选 patch 接通（commit 即翻页重置）
+          if (patch.filters) handleFiltersChange(patch.filters)
           if (patch.columns) setColumnPrefs(patch.columns)
         }}
         totalRows={total}

@@ -34,6 +34,12 @@ export async function listCandidates(params: ListCandidatesParams): Promise<List
   if (params.sortDir)   qs.set('sortDir', params.sortDir)
   // CHG-VIR-9-A：候选来源（默认 legacy；identity 读 candidate 表，空表降级）
   if (params.source) qs.set('source', params.source)
+  // ADR-105a AMENDMENT 2026-06-05 D-105a-19（CHG-VIR-16-TBL）：组级筛选 + 标题搜索
+  if (params.identityScoreMin !== undefined) qs.set('identityScoreMin', String(params.identityScoreMin))
+  if (params.identityScoreMax !== undefined) qs.set('identityScoreMax', String(params.identityScoreMax))
+  if (params.videoCountMin !== undefined) qs.set('videoCountMin', String(params.videoCountMin))
+  if (params.videoCountMax !== undefined) qs.set('videoCountMax', String(params.videoCountMax))
+  if (params.q) qs.set('q', params.q)
   return apiClient.get<ListCandidatesResult>(`/admin/video-merges/candidates?${qs.toString()}`)
 }
 
