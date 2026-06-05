@@ -28,7 +28,15 @@ vi.mock('../../../../../../apps/server-next/src/lib/sources/api', () => ({
   getVideoMatrix: (...args: unknown[]) => getVideoMatrixMock(...args),
 }))
 
+// AdminPlayer stub（player-core 真播放器不进 jsdom 单测；沿 PlayPreview.test 先例）
+vi.mock('../../../../../../apps/server-next/src/app/admin/moderation/_client/AdminPlayer', () => ({
+  AdminPlayer: ({ videoId, sourceId, testId }: { videoId: string; sourceId: string; testId?: string }) => (
+    <div data-testid={testId ?? 'admin-player-stub'} data-video={videoId} data-source={sourceId} />
+  ),
+}))
+
 import { MergeComparePanel } from '../../../../../../apps/server-next/src/app/admin/merge/_client/MergeComparePanel'
+import { StructurePreview } from '../../../../../../apps/server-next/src/app/admin/merge/_client/StructurePreview'
 import {
   MergeResultPreview,
   combineMatrices,
@@ -193,29 +201,85 @@ describe('MergeResultPreview · merge 形态', () => {
     expect(screen.getByTestId('merge-result-downgrade-warn')).toBeTruthy()
   })
 
-  it('11. 展开线路集数预览 → getVideoMatrix ×N + 信号与来源徽标渲染', async () => {
-    getVideoMatrixMock
-      .mockResolvedValueOnce([makeLine('siteA', '线1', [1, 2])])
-      .mockResolvedValueOnce([makeLine('siteA', '线1', [3])])
+  // ── CHG-VIR-15-UX-B ③：线路×集数迁 ComparePanel「线路 · 播放」行（数据注入契约）──
+
+  it('11. ComparePanel 线路行：ready 注入 → 每视频列渲染自己的线路 + ▶En；点击 → 列内嵌播放器', async () => {
     const videos = [makeVideo('a'), makeVideo('b')]
-    render(<MergeResultPreview kind="merge" videos={videos} targetId="a" />)
-    fireEvent.click(screen.getByTestId('merge-result-structure-toggle'))
-    await waitFor(() => expect(screen.getByTestId('merge-result-structure')).toBeTruthy())
-    expect(getVideoMatrixMock).toHaveBeenCalledTimes(2)
-    expect(screen.getByTestId('structure-signal-info')).toBeTruthy()
-    expect(screen.getByTestId('merge-result-structure').textContent).toContain('来自 视频 a')
+    const linesState = {
+      status: 'ready' as const,
+      byVideo: new Map([
+        ['a', [makeLine('siteA', '线1', [1, 2])]],
+        ['b', [makeLine('siteB', '线2', [3])]],
+      ]),
+    }
+    render(
+      <MergeComparePanel
+        videos={videos} targetId="a" onTargetChange={vi.fn()}
+        linesState={linesState} onToggleLines={vi.fn()}
+      />,
+    )
+    // 每列只含自己的线路（区分归属 / 用户裁定 ③）
+    expect(screen.getByTestId('compare-lines-a').textContent).toContain('线1')
+    expect(screen.getByTestId('compare-lines-a').textContent).not.toContain('线2')
+    expect(screen.getByTestId('compare-lines-b').textContent).toContain('线2')
+    // toggle 显示「收起」（ready 态）
+    expect(screen.getByTestId('compare-lines-toggle').textContent).toContain('收起')
+    // 点击 ▶E1 → a 列内嵌播放器装载（b 列不受影响）
+    const ep1 = screen.getByTestId('compare-ep-s-siteA-线1-1')
+    fireEvent.click(ep1)
+    await waitFor(() => expect(screen.getByTestId('compare-player-a')).toBeTruthy())
+    expect(screen.queryByTestId('compare-player-b')).toBeNull()
+    // 关闭按钮卸载该列播放器
+    fireEvent.click(screen.getByTestId('compare-player-close-a'))
+    expect(screen.queryByTestId('compare-player-a')).toBeNull()
   })
+
+  it('11a. ComparePanel 线路行：idle → 「展开」按钮 + onToggleLines 回调；loading 禁用', () => {
+    const onToggle = vi.fn()
+    const { rerender } = render(
+      <MergeComparePanel
+        videos={[makeVideo('a')]} targetId="a" onTargetChange={vi.fn()}
+        linesState={{ status: 'idle', byVideo: new Map() }} onToggleLines={onToggle}
+      />,
+    )
+    const toggle = screen.getByTestId('compare-lines-toggle')
+    expect(toggle.textContent).toContain('展开')
+    fireEvent.click(toggle)
+    expect(onToggle).toHaveBeenCalledTimes(1)
+    rerender(
+      <MergeComparePanel
+        videos={[makeVideo('a')]} targetId="a" onTargetChange={vi.fn()}
+        linesState={{ status: 'loading', byVideo: new Map() }} onToggleLines={onToggle}
+      />,
+    )
+    expect((screen.getByTestId('compare-lines-toggle') as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  it('11e. ResultPreview signals 注入：信号条渲染（线路列表本体不再内嵌）', () => {
+    render(
+      <MergeResultPreview
+        kind="merge" videos={[makeVideo('a'), makeVideo('b')]} targetId="a"
+        signals={[{ tone: 'info', text: '合并时将自动去重 2 条' }, { tone: 'ok', text: '集数互补' }]}
+      />,
+    )
+    expect(screen.getByTestId('structure-signal-info').textContent).toContain('自动去重 2 条')
+    expect(screen.getByTestId('structure-signal-ok').textContent).toContain('互补')
+    // 旧内嵌展开按钮退役
+    expect(screen.queryByTestId('merge-result-structure-toggle')).toBeNull()
+  })
+
+  // ── StructurePreview stale 守卫（组件本体保留，MergeWorkspace 消费）──
 
   it('11b. Codex FIX：videos 集合变化 → 旧结构预览立即失效（stale 守卫）', async () => {
     getVideoMatrixMock.mockResolvedValue([makeLine('siteA', '线1', [1])])
     const { rerender } = render(
-      <MergeResultPreview kind="merge" videos={[makeVideo('a'), makeVideo('b')]} targetId="a" />,
+      <StructurePreview videos={[makeVideo('a'), makeVideo('b')]} />,
     )
     fireEvent.click(screen.getByTestId('merge-result-structure-toggle'))
     await waitFor(() => expect(screen.getByTestId('merge-result-structure')).toBeTruthy())
     // 集合变化（b → c）：旧预览（a+b 的线路）必须立即清空，不得显示在新集合下
     rerender(
-      <MergeResultPreview kind="merge" videos={[makeVideo('a'), makeVideo('c')]} targetId="a" />,
+      <StructurePreview videos={[makeVideo('a'), makeVideo('c')]} />,
     )
     expect(screen.queryByTestId('merge-result-structure')).toBeNull()
   })
@@ -225,12 +289,12 @@ describe('MergeResultPreview · merge 形态', () => {
     let resolveOld!: (v: LineMatrixRow[]) => void
     getVideoMatrixMock.mockImplementation(() => new Promise<LineMatrixRow[]>((res) => { resolveOld = res }))
     const { rerender } = render(
-      <MergeResultPreview kind="merge" videos={[makeVideo('a'), makeVideo('b')]} targetId="a" />,
+      <StructurePreview videos={[makeVideo('a'), makeVideo('b')]} />,
     )
     fireEvent.click(screen.getByTestId('merge-result-structure-toggle'))
     // 请求未返回时集合变化 → 旧请求作废
     rerender(
-      <MergeResultPreview kind="merge" videos={[makeVideo('a'), makeVideo('c')]} targetId="a" />,
+      <StructurePreview videos={[makeVideo('a'), makeVideo('c')]} />,
     )
     resolveOld([makeLine('siteA', '旧线路', [1])])
     await new Promise((r) => setTimeout(r, 0))
@@ -243,7 +307,7 @@ describe('MergeResultPreview · merge 形态', () => {
     getVideoMatrixMock.mockResolvedValue([makeLine('siteA', '线1', [1])])
     const { rerender } = render(
       <StrictMode>
-        <MergeResultPreview kind="merge" videos={[makeVideo('a'), makeVideo('b')]} targetId="a" />
+        <StructurePreview videos={[makeVideo('a'), makeVideo('b')]} />
       </StrictMode>,
     )
     // remount 后正常加载路径不被破坏（MAX_SAFE_INTEGER 哨兵会在此失效——seq 恒等导致守卫永真/加载异常）
@@ -252,7 +316,7 @@ describe('MergeResultPreview · merge 形态', () => {
     // 集合变化 → stale 守卫在 StrictMode 下依然生效（旧预览清空）
     rerender(
       <StrictMode>
-        <MergeResultPreview kind="merge" videos={[makeVideo('a'), makeVideo('c')]} targetId="a" />
+        <StructurePreview videos={[makeVideo('a'), makeVideo('c')]} />
       </StrictMode>,
     )
     expect(screen.queryByTestId('merge-result-structure')).toBeNull()

@@ -22,8 +22,11 @@ import {
   suggestMergeTargetStatus,
   GENERIC_STATUS_OPTIONS,
 } from '@/lib/merge/status-defaults'
+// CHG-VIR-15-UX-B ③：线路×集数数据拉取（按视频列嵌入对比矩阵）+ 结构信号推导
+import { getVideoMatrix } from '@/lib/sources/api'
+import { combineMatrices } from './StructurePreview'
 import { EvidencePanel } from './EvidencePanel'
-import { MergeComparePanel } from './MergeComparePanel'
+import { MergeComparePanel, type CompareLinesState } from './MergeComparePanel'
 import { MergeResultPreview } from './MergeResultPreview'
 import { MergeStatusControl } from './MergeStatusControl'
 
@@ -36,11 +39,13 @@ export const SECONDARY_TEXT: CSSProperties = {
 }
 
 const EXPAND_PANEL_STYLE: CSSProperties = {
-  padding: '12px 16px',
+  padding: '12px 16px 16px',
   background: 'var(--bg-surface-elevated)',
   display: 'flex',
   flexDirection: 'column',
   gap: '12px',
+  // CHG-VIR-15-UX-B ⑥：展开内容底部与下一条候选行强分隔
+  borderBottom: '2px solid var(--border-strong)',
 }
 
 // CHG-VIR-7：身份评分（identityScore，UI 文案「相似度」/ CHG-VIR-14-SCORE-UI 定名）
@@ -95,6 +100,33 @@ export function CandidateExpand({ group, onMerge, onReject, onRejectPair }: Cand
   // target 切换 → 重置为该 target 的智能默认建议
   useEffect(() => { setTargetStatus(statusSuggestion.suggested) }, [targetId, statusSuggestion.suggested])
 
+  // CHG-VIR-15-UX-B ③：线路×集数惰性加载 + 收起（数据注入 ComparePanel 按视频列嵌入）
+  const [linesState, setLinesState] = useState<CompareLinesState>({ status: 'idle', byVideo: new Map() })
+  const toggleLines = useCallback(() => {
+    if (linesState.status === 'ready') {
+      setLinesState({ status: 'idle', byVideo: new Map() })  // 收起（再展开重新拉取）
+      return
+    }
+    setLinesState({ status: 'loading', byVideo: new Map() })
+    Promise.all(
+      group.videos.map(async (v) => [v.id, await getVideoMatrix(v.id)] as const),
+    )
+      .then((entries) => setLinesState({ status: 'ready', byVideo: new Map(entries) }))
+      .catch((err: unknown) => setLinesState({
+        status: 'error', byVideo: new Map(),
+        error: err instanceof Error ? err.message : '线路加载失败',
+      }))
+  }, [linesState.status, group.videos])
+
+  // 结构信号（去重 N 条 / 互补 / 重叠）：线路就绪后零额外请求推导 → ResultPreview 展示
+  const structureSignals = useMemo(() => {
+    if (linesState.status !== 'ready') return undefined
+    return combineMatrices(group.videos.map((v) => ({
+      video: { id: v.id, title: v.title },
+      lines: [...(linesState.byVideo.get(v.id) ?? [])],
+    }))).signals
+  }, [linesState, group.videos])
+
   // §10.4-2：组成员带入 mode=merge 集合编辑器（保留既有 URL 参数；candidate 锚点不带——
   // 工作区集合可增删，confirm 锚点仅 MergeWorkspace 自身 pair 守卫管理）
   const transferToWorkspace = useCallback(() => {
@@ -123,16 +155,20 @@ export function CandidateExpand({ group, onMerge, onReject, onRejectPair }: Cand
           CHG-VIR-9-D：折叠组（多 pair）时逐 pair 拒绝按钮注入明细行 */}
       {group.identity && <EvidencePanel identity={group.identity} onRejectPair={onRejectPair} />}
 
-      {/* CHG-VIR-13-B2B：N 列字段对比矩阵（列头 target 单选 / 冲突标警 / §10.4） */}
+      {/* CHG-VIR-13-B2B：N 列字段对比矩阵（列头 target 单选 / 冲突标警 / §10.4）
+          CHG-VIR-15-UX-B ③：线路×集数行按视频列嵌入（展开/收起 + 列内嵌播放器） */}
       <MergeComparePanel
         videos={group.videos}
         targetId={targetId}
         onTargetChange={setTargetId}
         recommendedTargetId={group.recommendedTargetVideoId}
+        linesState={linesState}
+        onToggleLines={toggleLines}
       />
 
-      {/* CHG-VIR-13-B2B：合并后结果预览（After 重算 + 软删列表 + 状态降级警示 + §10.5 结构预览） */}
-      <MergeResultPreview kind="merge" videos={group.videos} targetId={targetId} />
+      {/* CHG-VIR-13-B2B：合并后结果预览（After 重算 + 软删列表 + 状态降级警示）
+          UX-B：结构信号经已加载线路数据零请求推导注入（线路列表本体已迁矩阵行） */}
+      <MergeResultPreview kind="merge" videos={group.videos} targetId={targetId} signals={structureSignals} />
 
       {/* CHG-VIR-13-D2 / D-105-9（§4.4）：合并后 target 状态设置（智能默认预选 + 矩阵镜像选项） */}
       <MergeStatusControl

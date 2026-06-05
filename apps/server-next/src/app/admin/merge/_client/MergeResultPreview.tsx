@@ -14,8 +14,7 @@
 
 import { useMemo, type CSSProperties } from 'react'
 import type { VideoSummaryForMerge } from '@resovo/types'
-import { StructurePreview } from './StructurePreview'
-import type { PlayTarget } from './PlayPreviewDrawer'
+import type { StructureSignal } from './StructurePreview'
 
 // 合成纯函数与类型真源迁至 StructurePreview（13-PLAY）；re-export 保持既有消费/测试 import 兼容
 export { combineMatrices, type CombinedLine, type StructureSignal } from './StructurePreview'
@@ -44,6 +43,13 @@ const WARN_NOTE_STYLE: CSSProperties = {
   border: '1px solid var(--state-warning-border)',
 }
 
+/** UX-B 信号条基底（tone 差异化配色叠加） */
+const NOTE_BASE_STYLE: CSSProperties = {
+  padding: '4px 10px',
+  borderRadius: 6,
+  fontSize: '11px',
+}
+
 const SOFT_DELETE_ROW: CSSProperties = {
   ...MUTED_SM,
   textDecoration: 'line-through',
@@ -56,8 +62,12 @@ export interface MergeResultPreviewMergeProps {
   readonly kind: 'merge'
   readonly videos: readonly VideoSummaryForMerge[]
   readonly targetId: string
-  /** 播放抽验外部接管（可选；未注入时 ▶ 格唤起内置 PlayPreviewDrawer / 13-PLAY） */
-  readonly onEpisodeClick?: (target: PlayTarget) => void
+  /**
+   * CHG-VIR-15-UX-B：结构信号（去重 N 条 / 互补 / 重叠）由消费方经已加载线路数据
+   * 推导注入（线路×集数列表本体已迁 MergeComparePanel「线路 · 播放」行；
+   * 原内嵌 StructurePreview〔展开按钮 + 全局抽屉〕在 merge 形态退役）。
+   */
+  readonly signals?: readonly StructureSignal[]
 }
 
 // ── split 形态 ─────────────────────────────────────────────────────
@@ -85,7 +95,7 @@ export function MergeResultPreview(props: MergeResultPreviewProps) {
   return <MergeResultBody {...props} />
 }
 
-function MergeResultBody({ videos, targetId, onEpisodeClick }: MergeResultPreviewMergeProps) {
+function MergeResultBody({ videos, targetId, signals }: MergeResultPreviewMergeProps) {
   const target = videos.find((v) => v.id === targetId)
   const sources = videos.filter((v) => v.id !== targetId)
 
@@ -130,8 +140,24 @@ function MergeResultBody({ videos, targetId, onEpisodeClick }: MergeResultPrevie
         </div>
       )}
 
-      {/* §10.5 结构级线路 × 集数预览 + 播放抽验（13-PLAY 共享组件） */}
-      <StructurePreview videos={videos} onEpisodeClick={onEpisodeClick} />
+      {/* CHG-VIR-15-UX-B：结构信号（线路就绪后由消费方注入；线路列表本体在对比矩阵行；
+          tone 配色对齐 StructurePreview 既有口径：danger=state-danger / ok=state-success / info=bg-subtle） */}
+      {signals && signals.map((s, i) => (
+        <div
+          key={i}
+          style={{
+            ...NOTE_BASE_STYLE,
+            ...(s.tone === 'danger'
+              ? { background: 'var(--state-danger-bg)', color: 'var(--state-danger-fg)', border: '1px solid var(--state-danger-border)' }
+              : s.tone === 'ok'
+                ? { background: 'var(--state-success-bg)', color: 'var(--state-success-fg)', border: '1px solid var(--state-success-border)' }
+                : { background: 'var(--bg-subtle)', color: 'var(--fg-muted)', border: '1px solid var(--border-subtle)' }),
+          }}
+          data-testid={`structure-signal-${s.tone}`}
+        >
+          {s.tone === 'danger' ? '⚠ ' : s.tone === 'ok' ? '✓ ' : 'ⓘ '}{s.text}
+        </div>
+      ))}
     </div>
   )
 }
