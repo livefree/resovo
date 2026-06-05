@@ -14609,3 +14609,22 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **测试**：merge 目录 6 文件 63/63 → 全量 **484 files 6396/6396 passed**（复跑全绿；上轮 2 失败 = 既见并发 flaky）；typecheck 0 error / lint ✓
 - **共享层沉淀评估**：否——13-B2A 组件的消费接线（ComparePanel/ResultPreview 各 2 消费点兑现）；previewGroups 推导为 SplitWorkspace 内聚逻辑。
 - **注意事项**：① SplitWorkspace 484 行接近 500 预算——13-PLAY 嵌入 ▶ 锚点时若超限先拆（分配表/分组配置子组件）。② 13-D2（MergeStatusControl 三处嵌入点）就绪。③ 剩余卡：13-PLAY / 13-D1（opus）/ 13-D2 / 13-C1（opus）/ 13-C2 / 13-I18N。
+
+## [CHG-VIR-13-PLAY] 播放抽验 PlayPreviewDrawer — 同集对比切换 + 两侧嵌入
+- **完成时间**：2026-06-04
+- **记录时间**：2026-06-04 19:14
+- **执行模型**：claude-opus-4-8（人工 opus 会话覆盖 sonnet 建议——同会话连续执行）
+- **子代理**：无
+- **修改文件**：
+  - `apps/server-next/src/app/admin/merge/_client/PlayPreviewDrawer.tsx` — 新建（165 行）：admin-ui Drawer（right/440）+ moderation AdminPlayer（key=sourceId remount 切源；跨模块导入沿 VideoEditDrawer 先例；feedback 内建零另加）+ 同集成员切换 chips（§11.9 核心交互：同 episodeNumber 秒切对比画面）+ 集数条
+  - `apps/server-next/src/app/admin/merge/_client/StructurePreview.tsx` — 新建（282 行）：结构级预览自 MergeResultPreview 抽出解耦——输入收窄 `{id,title}` 最小 ref（VideoSummaryForMerge/PickerVideoItem 通吃）；combineMatrices + stale 守卫（Codex FIX×2）随迁；▶ 格默认唤起内置抽屉、外部 onEpisodeClick 优先（逃生口）
+  - `apps/server-next/src/app/admin/merge/_client/MergeResultPreview.tsx` — 瘦身（170 行）：消费 StructurePreview + re-export combineMatrices 兼容既有 import
+  - `apps/server-next/src/app/admin/merge/_client/MergeWorkspace.tsx` — 成员 ≥2 嵌入 StructurePreview（§11.3 工作区预览嵌入；ComparePanel 因 summary 数据无端点不嵌——零新端点约束登记）
+  - `apps/server-next/src/app/admin/merge/_client/SplitAssignTable.tsx` — 新建（109 行）：分配表自 SplitWorkspace 抽出（500 行预算）+ 行级 ▶ 播放抽验
+  - `apps/server-next/src/app/admin/merge/_client/SplitWorkspace.tsx` — 接 SplitAssignTable + 抽屉（490 行守住红线）
+  - `tests/.../PlayPreview.test.tsx`（新建 7 用例）/ `MergeWorkspace.test.tsx`（+1 嵌入）/ `merge-split-deeplink.test.tsx`（stub 补 Drawer 修 Unhandled「No Drawer export」）
+- **新增依赖**：无
+- **数据库变更**：无
+- **测试**：merge 目录 7 文件 71/71 → 全量 **484 files 6404/6404 passed**（净 +8；复跑全绿）；typecheck 0 error / lint ✓
+- **共享层沉淀评估**：是（域内）——StructurePreview 最小输入解耦使其成为候选行展开 + merge 工作区双消费共享件；PlayTarget 类型为 13 系列播放抽验统一契约。
+- **注意事项**：① e2e（PLAYER 类）登记留系列收口（本机 e2e 鉴权 env 已知问题沿 CHG-VSR-PRE-2；AdminPlayer 自身已有审核台 e2e 覆盖）。② 剩余卡：13-D1（opus）/ 13-D2 / 13-C1（opus）/ 13-C2 / 13-I18N。

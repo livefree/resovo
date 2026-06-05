@@ -203,4 +203,10 @@ describe('MergeWorkspace (CHG-VIR-13-WS · Direct/Batch 合一)', () => {
     expect(screen.getByTestId('merge-workspace-count').textContent).toContain('成员 0')
     expect((screen.getByTestId('merge-workspace-execute') as HTMLButtonElement).disabled).toBe(true)
   })
+
+  it('10. CHG-VIR-13-PLAY（§11.3）：成员 ≥2 → 结构预览 toggle 嵌入渲染', async () => {
+    await renderWithUrl('ids=vid-aaaa-1111,vid-bbbb-2222&from=moderation-batch')
+    await waitMember('vid-bbbb-2222')
+    expect(screen.getByTestId('merge-result-structure-toggle')).toBeTruthy()
+  })
 })

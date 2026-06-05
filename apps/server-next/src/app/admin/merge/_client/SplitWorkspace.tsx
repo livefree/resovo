@@ -29,6 +29,9 @@ import { getVideoMatrix } from '@/lib/sources/api'
 import { videoPickerFetcher } from '@/lib/videos/picker-fetcher'
 import { describeError } from './MergeClient'
 import { MergeResultPreview, type SplitPreviewGroup } from './MergeResultPreview'
+// CHG-VIR-13-PLAY：分配表抽出（500 行预算）+ 行级 ▶ 播放抽验
+import { SplitAssignTable } from './SplitAssignTable'
+import { PlayPreviewDrawer, type PlayTarget } from './PlayPreviewDrawer'
 
 const SECONDARY_TEXT: CSSProperties = {
   fontSize: 'var(--font-size-sm)',
@@ -210,6 +213,25 @@ export function SplitWorkspace({ initialVideoId }: SplitWorkspaceProps = {}) {
       setSuggestLoading(false)
     }
   }, [activeVideoId, toast])
+
+  // CHG-VIR-13-PLAY：播放抽验抽屉（分配表行级 ▶ 唤起；targets = 全部 (线路, 集) 格）
+  const [playTarget, setPlayTarget] = useState<PlayTarget | null>(null)
+  const playTargets = useMemo<readonly PlayTarget[]>(() => {
+    if (!lines || !activeVideoId) return []
+    const title = selectedVideo?.title ?? activeVideoId.slice(0, 8)
+    return lines.flatMap((line) =>
+      line.episodes.map((ep) => ({
+        videoId: activeVideoId,
+        videoTitle: title,
+        sourceId: ep.sourceId,
+        sourceUrl: ep.sourceUrl,
+        episodeNumber: ep.episodeNumber,
+        lineLabel: line.displayName ?? line.sourceName,
+      })),
+    )
+  }, [lines, activeVideoId, selectedVideo])
+  // 拆分对象变化 → 抽屉关闭（stale 防护）
+  useEffect(() => { setPlayTarget(null) }, [activeVideoId])
 
   // CHG-VIR-13-B2B（§10.5）：SplitResultPreview 组数据零请求前端推导
   // （每组 sourceCount + 按线路聚合集数范围明细）
@@ -426,42 +448,26 @@ export function SplitWorkspace({ initialVideoId }: SplitWorkspaceProps = {}) {
             })}
           </div>
 
-          <table style={{ width: '100%', fontSize: 'var(--font-size-sm)' }}>
-            <thead>
-              <tr style={{ textAlign: 'left', color: 'var(--fg-muted)' }}>
-                <th style={{ padding: '4px 8px' }}>线路</th>
-                <th style={{ padding: '4px 8px' }}>集</th>
-                <th style={{ padding: '4px 8px' }}>URL</th>
-                <th style={{ padding: '4px 8px', width: '120px' }}>分配到</th>
-              </tr>
-            </thead>
-            <tbody>
-              {lines.flatMap((line) =>
-                line.episodes.map((ep) => (
-                  <tr key={ep.sourceId} style={{ borderTop: '1px solid var(--border-subtle)' }}>
-                    <td style={{ padding: '6px 8px' }}>{line.displayName ?? line.sourceName}</td>
-                    <td style={{ padding: '6px 8px' }}>E{ep.episodeNumber}</td>
-                    <td style={{ padding: '6px 8px', color: 'var(--fg-muted)', fontSize: '11px', wordBreak: 'break-all' }}>
-                      {ep.sourceUrl.slice(0, 60)}{ep.sourceUrl.length > 60 ? '…' : ''}
-                    </td>
-                    <td style={{ padding: '6px 8px' }}>
-                      <select
-                        value={assignments[ep.sourceId] ?? 0}
-                        onChange={(e) =>
-                          setAssignments((prev) => ({ ...prev, [ep.sourceId]: parseInt(e.target.value, 10) }))
-                        }
-                        style={SELECT_STYLE}
-                      >
-                        {Array.from({ length: groupCount }).map((_, i) => (
-                          <option key={i} value={i}>{groupMetas[i]?.title ?? `分集 ${String.fromCharCode(65 + i)}`}</option>
-                        ))}
-                      </select>
-                    </td>
-                  </tr>
-                )),
-              )}
-            </tbody>
-          </table>
+          {/* CHG-VIR-13-PLAY：分配表子组件（行级 ▶ 播放抽验） */}
+          <SplitAssignTable
+            lines={lines}
+            assignments={assignments}
+            groupCount={groupCount}
+            groupLabels={groupMetas.map((m) => m?.title)}
+            onAssign={(sourceId, group) => setAssignments((prev) => ({ ...prev, [sourceId]: group }))}
+            videoId={activeVideoId!}
+            videoTitle={selectedVideo?.title ?? activeVideoId!.slice(0, 8)}
+            onPlay={setPlayTarget}
+          />
+
+          {/* CHG-VIR-13-PLAY：播放抽验抽屉（同集 = 不同线路同集对比） */}
+          <PlayPreviewDrawer
+            open={playTarget !== null}
+            current={playTarget}
+            targets={playTargets}
+            onSelect={setPlayTarget}
+            onClose={() => setPlayTarget(null)}
+          />
 
           {/* CHG-VIR-13-B2B（§10.2 #4 + §10.5）：拆分结果预览 — 每组形态 + 原视频软删明示 */}
           {previewGroups.length > 0 && (

@@ -28,6 +28,8 @@ import {
 import { mergeVideos, unmergeVideos } from '@/lib/merge/api'
 import { videoPickerFetcher } from '@/lib/videos/picker-fetcher'
 import { describeError } from './MergeClient'
+// CHG-VIR-13-PLAY（§11.3 工作区预览嵌入）：结构级线路预览 + 播放抽验（{id,title} 最小输入）
+import { StructurePreview } from './StructurePreview'
 
 /** 单次 merge 成员上限 = sourceVideoIds max 10 + target 1（MergeSchema / ADR-105） */
 const MAX_MERGE_MEMBERS = 11
@@ -238,6 +240,9 @@ export function MergeWorkspace({ initialIds, initialTargetId, candidateIdFromUrl
           ))}
         </div>
       )}
+
+      {/* CHG-VIR-13-PLAY（§11.3）：成员 ≥2 时结构级线路 × 集数预览 + 播放抽验（同集对比切换） */}
+      {members.length >= 2 && <StructurePreview videos={members} />}
 
       <AdminInput
         size="sm"

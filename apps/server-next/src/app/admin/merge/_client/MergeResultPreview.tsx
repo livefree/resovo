@@ -6,18 +6,19 @@
  * 双形态：
  *   - kind='merge'：合并后 target 形态（源数总和 / 站点并集 / 状态）随 target 切换即时重算
  *     + 其余成员置灰「将软删除（可撤销）」+ 状态降级警示（§4.2 警示区）
- *     + **结构级线路 × 集数预览**（§10.5：按需展开拉既有 getVideoMatrix ×N 前端合成；
- *       三类结构信号：集数互补正信号 / 同站同名线路重复 409 预警 / 完全重叠建议播放抽验）
+ *     + 结构级线路 × 集数预览 + 播放抽验（CHG-VIR-13-PLAY 抽出 ./StructurePreview 共享，
+ *       mode=merge 工作区直接消费同组件）
  *   - kind='split'：每组拆出后形态（标题/类型/源数 + 组内线路明细零请求前端推导）
  *     + **原视频软删明示**（§10.2 增强 #4：`VideoMergesService.ts:551` 事实，旧 UI 零告知）
- *
- * 播放抽验锚点（13-PLAY）：结构预览格 onEpisodeClick 可选注入，本卡仅渲染钩子不实现抽屉。
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
-import { AdminButton } from '@resovo/admin-ui'
-import type { LineMatrixRow, VideoSummaryForMerge } from '@resovo/types'
-import { getVideoMatrix } from '@/lib/sources/api'
+import { useMemo, type CSSProperties } from 'react'
+import type { VideoSummaryForMerge } from '@resovo/types'
+import { StructurePreview } from './StructurePreview'
+import type { PlayTarget } from './PlayPreviewDrawer'
+
+// 合成纯函数与类型真源迁至 StructurePreview（13-PLAY）；re-export 保持既有消费/测试 import 兼容
+export { combineMatrices, type CombinedLine, type StructureSignal } from './StructurePreview'
 
 // ── 样式（CSS 变量零硬编码颜色）────────────────────────────────────
 
@@ -43,124 +44,10 @@ const WARN_NOTE_STYLE: CSSProperties = {
   border: '1px solid var(--state-warning-border)',
 }
 
-const DANGER_NOTE_STYLE: CSSProperties = {
-  padding: '4px 10px',
-  borderRadius: 6,
-  fontSize: '11px',
-  background: 'var(--state-danger-bg)',
-  color: 'var(--state-danger-fg)',
-  border: '1px solid var(--state-danger-border)',
-}
-
-const INFO_NOTE_STYLE: CSSProperties = {
-  padding: '4px 10px',
-  borderRadius: 6,
-  fontSize: '11px',
-  background: 'var(--bg-subtle)',
-  color: 'var(--fg-muted)',
-  border: '1px solid var(--border-subtle)',
-}
-
 const SOFT_DELETE_ROW: CSSProperties = {
   ...MUTED_SM,
   textDecoration: 'line-through',
   opacity: 0.75,
-}
-
-const ORIGIN_BADGE_STYLE: CSSProperties = {
-  display: 'inline-block',
-  padding: '0 6px',
-  marginRight: 6,
-  borderRadius: 4,
-  fontSize: '10px',
-  background: 'var(--bg-subtle)',
-  color: 'var(--fg-muted)',
-  border: '1px solid var(--border-subtle)',
-}
-
-// ── 结构级预览（§10.5）────────────────────────────────────────────
-
-/** 合成行：来源 video 标注的线路 × 集数 */
-export interface CombinedLine {
-  readonly fromVideoId: string
-  readonly fromTitle: string
-  readonly lineKey: string       // `${siteKey}|${sourceName}`
-  readonly displayName: string
-  readonly episodes: readonly { readonly episodeNumber: number; readonly sourceId: string; readonly sourceUrl: string }[]
-}
-
-export interface StructureSignal {
-  readonly tone: 'ok' | 'danger' | 'info'
-  readonly text: string
-}
-
-/**
- * 合并后线路矩阵合成 + 三类结构信号（纯函数，可单测）：
- *  - 同站同名线路跨 video 重复 → danger（执行将触发跨站源冲突 409 预检 / R-105-1）
- *  - 集数互补（并集无重叠）→ ok 正信号
- *  - 跨 video 集数完全重叠 → info 建议播放抽验（可能为版本/语言差异）
- */
-export function combineMatrices(
-  inputs: readonly { readonly video: VideoSummaryForMerge; readonly lines: readonly LineMatrixRow[] }[],
-): { lines: readonly CombinedLine[]; signals: readonly StructureSignal[] } {
-  const lines: CombinedLine[] = []
-  for (const { video, lines: rows } of inputs) {
-    for (const row of rows) {
-      lines.push({
-        fromVideoId: video.id,
-        fromTitle: video.title,
-        lineKey: `${row.sourceSiteKey}|${row.sourceName}`,
-        displayName: row.displayName ?? row.sourceName,
-        episodes: row.episodes.map((e) => ({ episodeNumber: e.episodeNumber, sourceId: e.sourceId, sourceUrl: e.sourceUrl })),
-      })
-    }
-  }
-
-  const signals: StructureSignal[] = []
-
-  // ① 同站同名线路跨 video 重复 → 409 预警
-  const byLineKey = new Map<string, Set<string>>()
-  for (const l of lines) {
-    const set = byLineKey.get(l.lineKey) ?? new Set<string>()
-    set.add(l.fromVideoId)
-    byLineKey.set(l.lineKey, set)
-  }
-  const dupLines = [...byLineKey.entries()].filter(([, vids]) => vids.size > 1)
-  if (dupLines.length > 0) {
-    signals.push({
-      tone: 'danger',
-      text: `同站同名线路跨视频重复（${dupLines.map(([k]) => k.split('|')[1]).join('、')}）— 执行合并将触发跨站源冲突（409），请先在 /admin/sources 处理`,
-    })
-  }
-
-  // ②/③ 集数关系（按 video 聚合集数集合，两两比较）
-  const epsByVideo = new Map<string, Set<number>>()
-  for (const l of lines) {
-    const set = epsByVideo.get(l.fromVideoId) ?? new Set<number>()
-    for (const e of l.episodes) set.add(e.episodeNumber)
-    epsByVideo.set(l.fromVideoId, set)
-  }
-  const videoIds = [...epsByVideo.keys()]
-  let hasOverlapAll = false
-  let hasComplement = false
-  for (let i = 0; i < videoIds.length; i++) {
-    for (let j = i + 1; j < videoIds.length; j++) {
-      const a = epsByVideo.get(videoIds[i]!)!
-      const b = epsByVideo.get(videoIds[j]!)!
-      if (a.size === 0 || b.size === 0) continue
-      const inter = [...a].filter((x) => b.has(x))
-      if (inter.length === 0) hasComplement = true
-      else if (inter.length === Math.min(a.size, b.size)) hasOverlapAll = true
-    }
-  }
-  if (hasComplement) {
-    signals.push({ tone: 'ok', text: '存在集数互补的视频对（无重叠）— 疑似同作品分段收录，合并后集数覆盖更完整' })
-  }
-  if (hasOverlapAll) {
-    signals.push({ tone: 'info', text: '存在集数完全重叠的视频对 — 建议播放抽验确认是否同内容（可能为版本/语言差异）' })
-  }
-
-  return { lines, signals }
 }
 
 // ── merge 形态 ─────────────────────────────────────────────────────
@@ -169,8 +56,8 @@ export interface MergeResultPreviewMergeProps {
   readonly kind: 'merge'
   readonly videos: readonly VideoSummaryForMerge[]
   readonly targetId: string
-  /** 13-PLAY 播放抽验锚点（可选注入；本卡仅渲染 ▶ 钩子） */
-  readonly onEpisodeClick?: (args: { videoId: string; sourceId: string; sourceUrl: string; episodeNumber: number }) => void
+  /** 播放抽验外部接管（可选；未注入时 ▶ 格唤起内置 PlayPreviewDrawer / 13-PLAY） */
+  readonly onEpisodeClick?: (target: PlayTarget) => void
 }
 
 // ── split 形态 ─────────────────────────────────────────────────────
@@ -218,46 +105,6 @@ function MergeResultBody({ videos, targetId, onEpisodeClick }: MergeResultPrevie
     )
   }, [target, sources])
 
-  // 结构级预览（§10.5：按需展开 → getVideoMatrix ×N 并行；行展开保持轻量）
-  const [structure, setStructure] = useState<ReturnType<typeof combineMatrices> | null>(null)
-  const [structureLoading, setStructureLoading] = useState(false)
-  const [structureError, setStructureError] = useState<string | null>(null)
-
-  // Codex stop-time review FIX：stale 守卫 — videos 集合变化（候选组切换 / 成员增删）时
-  // 旧结构预览立即失效 + 飞行中旧请求作废（seq 比对丢弃），防止把旧集合的线路显示在新集合下
-  const videosKey = useMemo(() => videos.map((v) => v.id).join('|'), [videos])
-  const requestSeqRef = useRef(0)
-  useEffect(() => {
-    requestSeqRef.current += 1
-    setStructure(null)
-    setStructureError(null)
-    setStructureLoading(false)
-  }, [videosKey])
-
-  const loadStructure = useCallback(async () => {
-    const seq = ++requestSeqRef.current
-    setStructureLoading(true)
-    setStructureError(null)
-    try {
-      const inputs = await Promise.all(
-        videos.map(async (video) => ({ video, lines: await getVideoMatrix(video.id) })),
-      )
-      if (seq !== requestSeqRef.current) return // 过期响应（videos 已变 / 后发请求在先）丢弃
-      setStructure(combineMatrices(inputs))
-    } catch (err: unknown) {
-      if (seq !== requestSeqRef.current) return
-      setStructureError(err instanceof Error ? err.message : '线路预览加载失败')
-    } finally {
-      if (seq === requestSeqRef.current) setStructureLoading(false)
-    }
-  }, [videos])
-
-  // unmount 时飞行请求作废（cleanup +1 即可：所有挂起 seq 过期）。
-  // Codex review FIX-2：不得置 MAX_SAFE_INTEGER —— StrictMode mount→unmount→remount 时
-  // ref 保留，MAX 起点后 `++` 超出 2^53 精度不再递增 → seq 比对恒真 → 守卫永久失效；
-  // `+= 1` 在 remount 后可继续自然递增，守卫语义不变。
-  useEffect(() => () => { requestSeqRef.current += 1 }, [])
-
   return (
     <div style={PANEL_STYLE} data-testid="merge-result-preview">
       <span style={TITLE_SM}>
@@ -283,54 +130,8 @@ function MergeResultBody({ videos, targetId, onEpisodeClick }: MergeResultPrevie
         </div>
       )}
 
-      <div>
-        <AdminButton
-          size="sm"
-          variant="default"
-          onClick={() => void loadStructure()}
-          disabled={structureLoading}
-          data-testid="merge-result-structure-toggle"
-        >
-          {structureLoading ? '加载中…' : structure ? '刷新线路集数预览' : '▾ 展开线路集数预览'}
-        </AdminButton>
-      </div>
-
-      {structureError && <div style={DANGER_NOTE_STYLE}>{structureError}</div>}
-
-      {structure && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }} data-testid="merge-result-structure">
-          {structure.signals.map((s, i) => (
-            <div
-              key={i}
-              style={s.tone === 'danger' ? DANGER_NOTE_STYLE : s.tone === 'ok' ? INFO_NOTE_STYLE : INFO_NOTE_STYLE}
-              data-testid={`structure-signal-${s.tone}`}
-            >
-              {s.tone === 'danger' ? '⚠ ' : s.tone === 'ok' ? '✓ ' : 'ⓘ '}{s.text}
-            </div>
-          ))}
-          {structure.lines.map((l, i) => (
-            <div key={`${l.fromVideoId}-${l.lineKey}-${i}`} style={{ ...MUTED_SM, display: 'flex', alignItems: 'baseline', gap: 6, flexWrap: 'wrap' }}>
-              <span style={ORIGIN_BADGE_STYLE}>来自 {l.fromTitle}</span>
-              <span style={{ fontWeight: 600 }}>{l.displayName}</span>
-              <span style={{ display: 'inline-flex', gap: 4, flexWrap: 'wrap' }}>
-                {l.episodes.map((e) => (
-                  onEpisodeClick ? (
-                    <button
-                      key={e.sourceId}
-                      type="button"
-                      onClick={() => onEpisodeClick({ videoId: l.fromVideoId, sourceId: e.sourceId, sourceUrl: e.sourceUrl, episodeNumber: e.episodeNumber })}
-                      style={{ background: 'none', border: '1px solid var(--border-subtle)', borderRadius: 3, padding: '0 4px', cursor: 'pointer', color: 'var(--fg-default)', fontSize: '11px' }}
-                      data-testid={`structure-ep-${e.sourceId}`}
-                    >▶E{e.episodeNumber}</button>
-                  ) : (
-                    <span key={e.sourceId} style={{ fontSize: '11px' }}>E{e.episodeNumber}</span>
-                  )
-                ))}
-              </span>
-            </div>
-          ))}
-        </div>
-      )}
+      {/* §10.5 结构级线路 × 集数预览 + 播放抽验（13-PLAY 共享组件） */}
+      <StructurePreview videos={videos} onEpisodeClick={onEpisodeClick} />
     </div>
   )
 }

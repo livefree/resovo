@@ -53,6 +53,9 @@ vi.mock('@resovo/admin-ui', async () => {
     // CHG-VIR-13-B2B：VideoPicker stub（拆分对象 + 拆到已有 ×N；交互测试归 MergeWorkspace.test 真组件路径）
     VideoPicker: ({ label }: { label?: string }) =>
       React.createElement('div', { 'data-testid': 'video-picker-stub' }, label ?? 'picker'),
+    // CHG-VIR-13-PLAY：Drawer stub（SplitWorkspace 渲染 PlayPreviewDrawer；open=false 不渲染）
+    Drawer: ({ open, children }: { open: boolean; children: React.ReactNode }) =>
+      open ? React.createElement('div', { 'data-testid': 'drawer-stub' }, children as React.ReactNode) : null,
     LoadingState: () => React.createElement('div', { 'data-testid': 'loading-state' }, 'loading'),
     ErrorState: ({ error }: { error: Error }) =>
       React.createElement('div', { 'data-testid': 'error-state' }, error.message),
