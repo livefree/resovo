@@ -280,7 +280,10 @@ npm run typecheck
 # Lint（有报错不得 commit）
 npm run lint
 
-# 单元测试（全部通过才 commit）
+# 单测增量门禁（commit 前必须通过 — 日常默认，ADR-180）
+npm run test:changed
+
+# 单元测试全量（三个兜底节点必跑，见下方「分层执行策略」）
 npm run test -- --run
 
 # 单元测试 + 覆盖率报告
@@ -293,6 +296,31 @@ npm run test:e2e
 npm run test -- --run tests/unit/api/auth.test.ts
 npm run test:e2e -- tests/e2e/player.spec.ts
 ```
+
+---
+
+## 分层执行策略（ADR-180 / SEQ-20260604-02）
+
+**日常 commit 前单测门禁 = 增量**：`npm run test:changed`（`scripts/test-changed.mjs` 包装器）按以下分级执行：
+
+1. **docs-only 跳过**：改动全部为 `*.md` / `docs/**` / `.github/**` → SKIP，零测试运行，exit 0
+2. **升全量触发集**（命中任一 → 直接全量并打印理由）：`vitest.config.ts` / `vitest.integration.config.ts` / 任意 `package.json` / `tsconfig*.json` / `turbo.json` / `tests/helpers/**` / `scripts/test-changed.mjs` 自身 / `scripts/test-guarded.ts` / 基础包 `packages/{types,player-core,logger}/**`
+3. **增量选测**：`vitest run --changed HEAD`，按 import 图反向选出受改动影响的测试
+4. **安全网**：git 不可用 / 非 docs 改动却选中 0 个测试 → fallback 全量（宁多跑不漏测）
+
+vitest.config.ts `forceRerunTriggers` 与第 2 级构成**双层防护**——绕过包装器直接 `vitest run --changed` 时配置层仍兜底。
+
+**全量兜底三节点**（语义不可削减，增量结果不得替代；详见 `docs/rules/workflow-rules.md`）：
+
+| 节点 | 命令 | 触发 |
+|------|------|------|
+| preflight 冷启动 | `npm run preflight`（内含全量单测） | 上次 commit >4h |
+| PHASE COMPLETE 审计前 | `npm run test:run` + `npm run test:e2e` | Phase 关闭硬前置 |
+| 合并 main 前 | `npm run test:changed:main`（对比 origin/main 增量）或全量 | merge 前 |
+
+`test:run` / `test:guarded*` / `preflight` 保持全量语义不变（兜底锚点，禁止接入增量）。
+
+**已知边界**：动态 `import()` 非字面路径 / 字符串路径加载不进 import 图——由升全量触发集（基础包直接全量）+ 三节点全量 + `test:guarded` 全量基线三重防护覆盖；漏测最迟在下一个全量节点暴露。
 
 ---
 

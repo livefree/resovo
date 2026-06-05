@@ -69,6 +69,17 @@ export default defineConfig({
     // 测试超时：单个测试 10 秒，集成测试 30 秒
     testTimeout: 10000,
     hookTimeout: 30000,
+    // 升全量触发集（ADR-180 D-180-2 配置层）：--changed / watch 模式下命中即强制全跑。
+    // 显式覆盖默认值（默认含 package.json / vitest.config.*，覆盖时必须保留）并补
+    // tests/helpers/**（setup.ts 经 setupFiles 全局加载，db/factories 仅部分文件 import，统一升全量最稳）。
+    // 与 scripts/test-changed.mjs 的脚本层触发集构成双保险（绕过包装器直接 vitest run --changed 也安全）。
+    forceRerunTriggers: [
+      '**/vitest.config.ts',
+      '**/vitest.integration.config.ts',
+      '**/tests/helpers/**',
+      '**/package.json',
+      '**/tsconfig*.json',
+    ],
   },
   resolve: {
     alias: [

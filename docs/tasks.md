@@ -103,3 +103,4 @@ claude --model claude-sonnet-4-6
 
 主循环将先校验 `docs/manual/wave-4-acceptance.md` 用户签字状态 → 按用户决策推进 Wave 5 立案或具体长尾 SEQ。
 
+

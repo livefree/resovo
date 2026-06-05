@@ -14515,3 +14515,21 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **D-N 闭环**：D-180-6（test:guarded / preflight 维持全量语义、不接入增量——workflow-rules 三节点小节 + quality-gates §6 声明即为其实施落点）；其余 5 条裁定随 CHG-TEST-SLIM-B/C/D 实施闭环
 - **共享层沉淀评估**：否——规范定档类任务，无代码产物；分层策略规则已沉淀至 workflow-rules / quality-gates 单一真源。
 - **注意事项**：① 触发背景 = 用户指令（CHG-VIR-13 首卡耗时近 3 小时，流程优化优先插队）。② test-rules.md「分层执行策略」小节与 CLAUDE.md 必跑命令修订**不在本卡**——刻意归 SLIM-B/C（文档引用的 test:changed / test:e2e:<domain> 脚本落地同卡修订，避免文档先于脚本存在的悬空窗口）。③ 落档卡 changelog 不写未实施 D-180 字面（裁定①~⑤），闭环字面归实施卡（quality-gates §6 规约守卫）。
+
+## [CHG-TEST-SLIM-B] 单测增量门禁实施（D-180-1 + D-180-2 闭环）
+- **完成时间**：2026-06-04
+- **记录时间**：2026-06-04 18:25
+- **执行模型**：claude-opus-4-8
+- **子代理**：无（设计已由 SLIM-A 阶段 Plan 子代理完成）
+- **修改文件**：
+  - `scripts/test-changed.mjs` — 新建：增量包装器（git 改动集〔diff ∪ cached ∪ untracked〕→ docs-only SKIP / 触发集升全量 / 否则 vitest run --changed HEAD；git 异常与零选中双安全网 fallback 全量；--base 支持 origin/main；--dry-run 决策预览；exit code 透传）
+  - `vitest.config.ts` — 补 forceRerunTriggers（配置层双保险：vitest.config / integration.config / tests/helpers/** / package.json / tsconfig*.json；显式覆盖默认值并保留默认项）
+  - `package.json` — +test:changed / +test:changed:main（只增不删；test:run 全量入口语义不变）
+  - `CLAUDE.md` — 必跑命令单测行分层化（commit 前 test:changed；全量三节点注记）
+  - `docs/rules/test-rules.md` — 新增「分层执行策略」小节（四级分级 + 双层防护 + 三节点表 + 已知边界声明）
+- **新增依赖**：无
+- **数据库变更**：无
+- **测试**：分级决策 7 场景 worktree 实测全过（干净树 exit 0 / docs-only SKIP / helpers·基础包 FULL / service·untracked CHANGED / 混合 CHANGED）；门禁经 test:changed 自身入口跑通——当前 diff 命中触发集（package.json + vitest.config.ts）自动升全量，**484 files 6394/6394 passed**（4.2 分钟）；typecheck / lint EXIT=0。增量 CHANGED 路径真实选测验证排程于本 commit 后干净树立即执行（配置改动在 diff 中时按设计必然 FULL，无法在 commit 前实测 CHANGED）。
+- **D-N 闭环**：D-180-1（增量 commit 门禁 + 三节点兜底 + 安全网）、D-180-2（升全量触发集双层防护）
+- **共享层沉淀评估**：否——独立运维脚本，无业务代码；分级规则真源在脚本 + test-rules §分层执行策略双处一致。
+- **注意事项**：① 触发集含本脚本自身与 test-guarded.ts（改门禁工具必全量自证）。② 零选中安全网经 vitest 输出 "No test files found" 缓冲检测实现（流式透传不影响正常输出）。③ E2E 域选跑归 SLIM-C；CLAUDE.md test:e2e 行同卡修订。

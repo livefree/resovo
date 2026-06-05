@@ -3189,12 +3189,15 @@ CODENAME-MATRIX-E2E (依赖 Wave 3 验收期补丁 CODENAME-MATRIX ✅)
    - 范围（4 项）：① decisions.md 新增 ADR-180（增量门禁/forceRerunTriggers 集/E2E 域映射/web-mobile 收窄/typecheck 解绑/guarded 全量不耦合 六裁定）② workflow-rules.md PHASE COMPLETE 硬前置补全量单测+全量 E2E + 合并 main 前节点 ③ quality-gates.md §6 补一行（test:guarded/preflight 保持全量语义、不接入增量）④ 本序列后续卡登记核对。
    - 验收要点：verify:adr-contracts + verify:docs-format 绿；落档卡 changelog 不写未实施 D-180 字面（用裁定①~⑥，闭环字面归实施卡）。
    - 完成备注：ADR-180 Accepted（六裁定 + 5 备选否决 + 三重防护回滚论证）；workflow-rules 新增「全量测试兜底三节点」小节 + PHASE COMPLETE 触发条件补全量绿硬前置；quality-gates §6 补分层边界声明（D-180-6 即时闭环）；test-rules/CLAUDE.md 修订刻意归 SLIM-B/C（避免文档先于脚本的悬空窗口）。门禁：verify:adr-contracts FAIL-fast 三项全绿 + verify:docs-format 与基线一致零新增。执行模型: claude-opus-4-8；子代理: Explore ×3 + Plan ×1（均 claude-opus-4-8）。解阻 SLIM-B/C/D。
-2. **CHG-TEST-SLIM-B** — 单测增量门禁实施（状态：⬜ 待开始）
+2. **CHG-TEST-SLIM-B** — 单测增量门禁实施（状态：✅ 已完成）
    - 创建时间：2026-06-04 17:40
+   - 实际开始：2026-06-04 18:00
+   - 完成时间：2026-06-04 18:25
    - 建议模型：sonnet
-   - 依赖：CHG-TEST-SLIM-A
+   - 依赖：CHG-TEST-SLIM-A ✅
    - 范围（5 项）：① 新增 scripts/test-changed.mjs（docs-only 跳过 / 配置·helpers·基础包升全量 / 否则 vitest run --changed HEAD / git 异常与零选中 fallback 全量）② vitest.config.ts 补 forceRerunTriggers ③ package.json +test:changed / +test:changed:main ④ CLAUDE.md 必跑命令单测行分层化 ⑤ test-rules.md 新增「分层执行策略」小节。
    - 验收要点：改 service 源→只跑相关测试；docs-only→SKIP exit 0；改 helpers/config/基础包→升全量；test:run 全量语义不变。
+   - 完成备注：D-180-1/D-180-2 闭环。分级决策 7 场景 worktree 实测全过；门禁经 test:changed 自身入口跑通（配置改动命中触发集自动升全量 484 files 6394/6394 passed / typecheck·lint EXIT=0）；CHANGED 增量路径真实选测于 commit 后干净树补验。--dry-run 决策预览随卡落地。执行模型: claude-opus-4-8（人工 opus 覆盖 sonnet 建议）；子代理: 无。
 3. **CHG-TEST-SLIM-C** — E2E 任务域选跑 + web-mobile 收窄（状态：⬜ 待开始）
    - 创建时间：2026-06-04 17:40
    - 建议模型：sonnet
