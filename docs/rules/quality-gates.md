@@ -145,6 +145,8 @@
 
 7. **`npm run verify:style-shorthand-conflict`**（CHG-SN-6-RETRO-3-B 落地 advisory / CHG-SN-6-RETRO-4 清零 17 处 / **CHG-SN-6-06 升级 FAIL fast**）：静态扫描 `apps/server-next/src` + `apps/web-next/src` + `packages/admin-ui/src` 的 `.tsx` 文件内 `: React.CSSProperties = {...}` / `style={{...}}` 块，检测 9 类 shorthand（`font` / `border` / `background` / `margin` / `padding` / `overflow` / `borderRadius` / `inset` / `flex`）与对应 longhand 同存 → React rerender 警告 "Updating a style property during rerender ... when a conflicting property is set ..."；db3b7a48 + 9e592df3 + 32392a80 + e4417fe5 累计 31 处清零后落地 FAIL fast 防回归；命中即 CI 阻塞，按提示拆 longhand 或改 fontFamily 范式修复
 
+**测试分层执行边界（ADR-180 / SEQ-20260604-02）**：日常 commit 前单测门禁为增量 `npm run test:changed`（见 `docs/rules/test-rules.md` §分层执行策略）；`npm run test:guarded`（Phase 隔离清单门禁）与 `npm run preflight` **保持全量语义不变、不接入增量**——guarded 是基线对比，增量漏选会使隔离清单 diff 失真（D-180-6）。全量兜底三节点见 `docs/rules/workflow-rules.md`。
+
 ### 4 类文档强制规则（修订 §1/§2/§3 已落地）
 
 4. **§1 第 5 项** "ADR §验证段逐条勾对清单"（R-CHECKLIST-2 修复 09-PATCH 类教训）

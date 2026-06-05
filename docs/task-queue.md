@@ -3165,3 +3165,57 @@ CODENAME-MATRIX-E2E (依赖 Wave 3 验收期补丁 CODENAME-MATRIX ✅)
     - 依赖：CHG-VIR-13-B2B、CHG-VIR-13-PLAY、CHG-VIR-13-C2、CHG-VIR-13-D2
     - 范围：合并/拆分工作台新增文案抽离到 i18n 消息文件；保留测试用稳定 testid。
     - 验收要点：UI 文案不再新增散落硬编码；现有中英文消息结构不破坏。
+
+---
+
+## [SEQ-20260604-02] 测试流程安全瘦身 + 任务卡原子化（流程优化 / 用户指令插队）
+
+- **状态**：🔄 执行中（2026-06-04 17:40 起；用户指令：CHG-VIR-13 首卡耗时近 3 小时，优先优化流程后再继续 SEQ-20260604-01）
+- **创建时间**：2026-06-04 17:40
+- **最后更新时间**：2026-06-04 17:40
+- **目标**：① 测试执行分层化——commit 前单测增量（vitest --changed import 图）+ 全量兜底收敛三节点（preflight 冷启动 / PHASE COMPLETE 审计前 / 合并 main 前）；E2E 按任务域选跑 + web-mobile 收窄移动 3 spec；typecheck 解绑 turbo `^build`。② 任务卡原子化判据定档——把 M-SN-5 PATCH 专属 ≤5 项规则推广为全卡型四问判据。
+- **范围**：scripts/ 新增包装器 + 根 package.json scripts（只增不删）+ vitest.config.ts / playwright.config.ts / turbo.json + 规范文档（CLAUDE.md / test-rules / workflow-rules / quality-gates / decisions.md ADR-180）。**不动 tests/\*\* 测试代码**（清理另立后续卡）；`test:run` / `test:e2e` / `test:guarded*` / `preflight` 全量入口语义保持不变（兜底锚点）。
+- **依赖**：无（与 SEQ-20260604-01 无文件域交叉；CHG-VIR-13 系列暂停让行）。
+- **依赖序**：SLIM-A（定档）→ SLIM-B / SLIM-C / SLIM-D 可并行；CARD-ATOM 正交可独立。
+- **决策依据**：用户三项拍板（2026-06-04）——增量为主+节点全量兜底 / E2E 按域选跑+mobile 瘦身 / 本次只改流程不动测试代码；可行性已验证（vitest 3.2.4 --changed 基于 module graph 兼容 customResolver alias；web-mobile 19 spec 中 16 个无移动逻辑、移动 3 spec 上下文自带不依赖 project device；turbo typecheck `^build` 会无谓触发 next build）。
+
+### 任务列表（按执行顺序）
+
+1. **CHG-TEST-SLIM-A** — ADR-180 测试分层执行策略定档 + 全量兜底节点规范（状态：✅ 已完成）
+   - 创建时间：2026-06-04 17:40
+   - 实际开始：2026-06-04 17:40
+   - 完成时间：2026-06-04 17:55
+   - 建议模型：opus
+   - 范围（4 项）：① decisions.md 新增 ADR-180（增量门禁/forceRerunTriggers 集/E2E 域映射/web-mobile 收窄/typecheck 解绑/guarded 全量不耦合 六裁定）② workflow-rules.md PHASE COMPLETE 硬前置补全量单测+全量 E2E + 合并 main 前节点 ③ quality-gates.md §6 补一行（test:guarded/preflight 保持全量语义、不接入增量）④ 本序列后续卡登记核对。
+   - 验收要点：verify:adr-contracts + verify:docs-format 绿；落档卡 changelog 不写未实施 D-180 字面（用裁定①~⑥，闭环字面归实施卡）。
+   - 完成备注：ADR-180 Accepted（六裁定 + 5 备选否决 + 三重防护回滚论证）；workflow-rules 新增「全量测试兜底三节点」小节 + PHASE COMPLETE 触发条件补全量绿硬前置；quality-gates §6 补分层边界声明（D-180-6 即时闭环）；test-rules/CLAUDE.md 修订刻意归 SLIM-B/C（避免文档先于脚本的悬空窗口）。门禁：verify:adr-contracts FAIL-fast 三项全绿 + verify:docs-format 与基线一致零新增。执行模型: claude-opus-4-8；子代理: Explore ×3 + Plan ×1（均 claude-opus-4-8）。解阻 SLIM-B/C/D。
+2. **CHG-TEST-SLIM-B** — 单测增量门禁实施（状态：⬜ 待开始）
+   - 创建时间：2026-06-04 17:40
+   - 建议模型：sonnet
+   - 依赖：CHG-TEST-SLIM-A
+   - 范围（5 项）：① 新增 scripts/test-changed.mjs（docs-only 跳过 / 配置·helpers·基础包升全量 / 否则 vitest run --changed HEAD / git 异常与零选中 fallback 全量）② vitest.config.ts 补 forceRerunTriggers ③ package.json +test:changed / +test:changed:main ④ CLAUDE.md 必跑命令单测行分层化 ⑤ test-rules.md 新增「分层执行策略」小节。
+   - 验收要点：改 service 源→只跑相关测试；docs-only→SKIP exit 0；改 helpers/config/基础包→升全量；test:run 全量语义不变。
+3. **CHG-TEST-SLIM-C** — E2E 任务域选跑 + web-mobile 收窄（状态：⬜ 待开始）
+   - 创建时间：2026-06-04 17:40
+   - 建议模型：sonnet
+   - 依赖：CHG-TEST-SLIM-A
+   - 范围（5 项）：① package.json +7 域脚本（smoke/player/auth/search/video/admin/mobile）② playwright.config.ts web-mobile 加 testMatch（mobile-tabbar/edge-swipe-back/mini-player 3 spec）③ known_failing 隔离清单核查同步 ④ CLAUDE.md test:e2e 行补域用法 ⑤ test-rules.md 各任务类型补对应域命令 + web-mobile 收窄说明。
+   - 验收要点：--project=web-mobile --list 只列 3 spec；域命令用例数 ≪ 215；test:e2e 全量 4 projects 不变。
+4. **CHG-TEST-SLIM-D** — typecheck 解绑 turbo ^build + 试验入口（状态：⬜ 待开始）
+   - 创建时间：2026-06-04 17:40
+   - 建议模型：sonnet
+   - 依赖：CHG-TEST-SLIM-A
+   - 范围（2 项）：① turbo.json typecheck dependsOn `["^build"]` → `[]` ② package.json +typecheck:turbo（试验入口；默认链路仍用现有串行 typecheck，turbo inputs 缓存正确性另立验证卡）。
+   - 验收要点：typecheck 与 typecheck:turbo 报错集一致；turbo typecheck 不再触发 next build。
+5. **CHG-CARD-ATOM** — 任务卡原子化判据定档（状态：⬜ 待开始）
+   - 创建时间：2026-06-04 17:40
+   - 建议模型：opus
+   - 依赖：无（正交可独立）
+   - 范围（4 项）：① workflow-rules.md「PATCH 卡范围软上限」扩展为「任务卡原子化判据」（四问：改动项 >5 全卡型必拆 / 跨层混合 schema·api·UI 跨 3 层强制拆、跨 2 层须写跨层理由 / 验收口径必须一句话唯一、预估新增测试 >12 用例 advisory 评估拆分 / 依赖链 >4 层 advisory SEQ 重排）② quality-gates.md 硬清单第 5 项「PATCH 卡」→「所有任务卡」③ CLAUDE.md 绝对禁止项对应行同步 ④ 登记后续卡 verify:task-card-scope（自动守卫，可选）。
+   - 验收要点：新规仅约束新起卡不追溯存量；与现有 PATCH 条款为超集关系不冲突；verify:docs-format 绿。
+
+### 后续卡登记（本序列产出，不在本序列内执行）
+
+- **CHG-TEST-CLEANUP-\***（待立案）：测试代码瘦身——拆 >1000 行巨型测试文件（CrawlerClient 1184 / column-matrix-menu 1150 / bangumi-service 1048 / video-merge-mutations 1014）/ 参数化重复用例（step-ep5 类 50 次同构断言）/ 复审过度 mock（全仓 1091 次 vi.mock）。按模块分批，每批一卡 ≤5 文件。
+- **CHG-TEST-SLIM-E**（待立案）：turbo typecheck inputs 缓存正确性验证（改 packages/types 确认依赖 workspace 缓存失效；验证通过后才可在文档把 typecheck 默认链路切 turbo）。
+- **CHG-CARD-ATOM-VERIFY**（待立案，可选）：verify:task-card-scope 脚本——解析 task-queue.md 活跃卡「范围」项计数，>5 项无 -A/-B 拆分输出 advisory 警告。

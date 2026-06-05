@@ -21,6 +21,16 @@ npm run preflight   # 环境 + 迁移 + 类型 + lint + 单测基线
 
 全部通过后再进入任务流程；若失败先修复基线，再选取任务。
 
+### 全量测试兜底三节点（ADR-180 / SEQ-20260604-02）
+
+日常 commit 前单测门禁为**增量**（`npm run test:changed`，详见 `docs/rules/test-rules.md` §分层执行策略）；以下三个节点必须跑**全量**，语义不可削减、增量结果不得替代：
+
+1. **preflight 冷启动**（上次 commit >4h）：`npm run preflight` 内含全量单测基线（现状保持）
+2. **PHASE COMPLETE 审计前**：全量单测 `npm run test:run` + 全量 E2E `npm run test:e2e`（4 projects）必须绿，作为独立审计员条款的硬前置之一
+3. **合并 main 前**：`npm run test:changed:main`（对比 `origin/main` 的增量）或直接全量
+
+`npm run test:guarded`（Phase 隔离清单门禁）内部自跑全量，与增量门禁是两套独立链路，不接入增量（D-180-6）。
+
 ---
 
 ### 每次开工前的三步顺序
@@ -346,7 +356,7 @@ tasks.md 最终稳定态为**空文件（仅保留标题行）**。
 
 ### PHASE COMPLETE 模板
 
-触发条件：某 Phase 所有任务 `✅ 已完成`，且已合并到 main。
+触发条件：某 Phase 所有任务 `✅ 已完成`，且已合并到 main，**且全量单测 + 全量 E2E 在审计前已绿**（全量兜底三节点第 2 项 / ADR-180——日常 commit 的增量门禁结果不得替代 Phase 全量基线）。
 
 ```markdown
 ---

@@ -14498,3 +14498,20 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
   - `tests/unit/components/server-next/admin/merge/MergeComparePreview.test.tsx` — +1 StrictMode 回归用例（11d：remount 后正常加载 + 集合变化守卫生效 + 可重新展开）
 - **测试**：15/15 → 全量 **484 files 6394/6394 passed**（净 +1）；机器高负载期（551s+/常态 137s）3 个跨域失败（perf 基线/staging/crawler）隔离 115/115 + 负载回落终轮全量零失败 = 负载型 flaky 排除；typecheck/lint ✓
 - **注意事项**：教训沉淀——unmount 哨兵值不要用「极大值毒化」模式（StrictMode ref 保留语义下不可逆），统一用「cleanup 递增序号」（可逆、remount 友好）。
+
+## [CHG-TEST-SLIM-A] ADR-180 测试分层执行策略定档 + 全量兜底节点规范
+- **完成时间**：2026-06-04
+- **记录时间**：2026-06-04 17:55
+- **执行模型**：claude-opus-4-8
+- **子代理**：Explore ×3 (claude-opus-4-8)、Plan ×1 (claude-opus-4-8)
+- **修改文件**：
+  - `docs/decisions.md` — 新增 ADR-180（Accepted）：测试分层执行策略——裁定①增量 commit 门禁 + 全量兜底三节点（preflight 冷启动 / PHASE COMPLETE 审计前 / 合并 main 前）/ 裁定②升全量触发集双层防护（脚本层 + forceRerunTriggers 配置层）/ 裁定③E2E 任务域选跑纯 npm scripts 映射 / 裁定④web-mobile 收窄移动 3 spec（16 个无移动逻辑 spec 复跑边际覆盖≈0 实证）/ 裁定⑤typecheck 解绑 turbo ^build + 试验入口默认不切；备选方案 5 项否决记录（全量调优 / 双轨 / spec tag / 删 project / diff 自动推断域）
+  - `docs/rules/workflow-rules.md` — 新增「全量测试兜底三节点」小节 + PHASE COMPLETE 模板触发条件补全量绿硬前置
+  - `docs/rules/quality-gates.md` — §6 补测试分层执行边界声明
+  - `docs/task-queue.md` — SEQ-20260604-02 序列登记（SLIM-A/B/C/D + CARD-ATOM 五卡，每卡 ≤5 项）+ 后续卡登记（CHG-TEST-CLEANUP-* 测试代码瘦身 / CHG-TEST-SLIM-E turbo inputs 验证 / CHG-CARD-ATOM-VERIFY）
+- **新增依赖**：无
+- **数据库变更**：无
+- **测试**：纯文档零代码；verify:adr-contracts FAIL-fast 三项全绿（endpoint-adr 205 路由 / style-shorthand 0 / shell-types-mirror 对齐）；verify:docs-format 与改动前基线一致（64 项均为存量、零新增）
+- **D-N 闭环**：D-180-6（test:guarded / preflight 维持全量语义、不接入增量——workflow-rules 三节点小节 + quality-gates §6 声明即为其实施落点）；其余 5 条裁定随 CHG-TEST-SLIM-B/C/D 实施闭环
+- **共享层沉淀评估**：否——规范定档类任务，无代码产物；分层策略规则已沉淀至 workflow-rules / quality-gates 单一真源。
+- **注意事项**：① 触发背景 = 用户指令（CHG-VIR-13 首卡耗时近 3 小时，流程优化优先插队）。② test-rules.md「分层执行策略」小节与 CLAUDE.md 必跑命令修订**不在本卡**——刻意归 SLIM-B/C（文档引用的 test:changed / test:e2e:<domain> 脚本落地同卡修订，避免文档先于脚本存在的悬空窗口）。③ 落档卡 changelog 不写未实施 D-180 字面（裁定①~⑤），闭环字面归实施卡（quality-gates §6 规约守卫）。
