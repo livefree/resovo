@@ -3197,7 +3197,7 @@ CODENAME-MATRIX-E2E (依赖 Wave 3 验收期补丁 CODENAME-MATRIX ✅)
    - 依赖：CHG-TEST-SLIM-A ✅
    - 范围（5 项）：① 新增 scripts/test-changed.mjs（docs-only 跳过 / 配置·helpers·基础包升全量 / 否则 vitest run --changed HEAD / git 异常与零选中 fallback 全量）② vitest.config.ts 补 forceRerunTriggers ③ package.json +test:changed / +test:changed:main ④ CLAUDE.md 必跑命令单测行分层化 ⑤ test-rules.md 新增「分层执行策略」小节。
    - 验收要点：改 service 源→只跑相关测试；docs-only→SKIP exit 0；改 helpers/config/基础包→升全量；test:run 全量语义不变。
-   - 完成备注：D-180-1/D-180-2 闭环。分级决策 7 场景 worktree 实测全过；门禁经 test:changed 自身入口跑通（配置改动命中触发集自动升全量 484 files 6394/6394 passed / typecheck·lint EXIT=0）；CHANGED 增量路径真实选测于 commit 后干净树补验。--dry-run 决策预览随卡落地。执行模型: claude-opus-4-8（人工 opus 覆盖 sonnet 建议）；子代理: 无。
+   - 完成备注：D-180-1/D-180-2 闭环。分级决策 7 场景 worktree 实测全过；门禁经 test:changed 自身入口跑通（配置改动命中触发集自动升全量 484 files 6394/6394 passed / typecheck·lint EXIT=0）；CHANGED 增量路径 commit 后干净树补验实测 = 改 1 个 service 文件 → 6 测试文件 / 117 用例 / 14.7s（vs 全量 250s，17×）。--dry-run 决策预览随卡落地。**+FIX（Codex stop-time review）**：分级改动集原 --diff-filter=ACMR 漏删除——仅删 helpers/基础包文件被视为"无改动"静默跳过；去 filter 纳入 D，5 删除 + 2 回归场景实测全过（见 changelog CHG-TEST-SLIM-B-FIX）。执行模型: claude-opus-4-8（人工 opus 覆盖 sonnet 建议）；子代理: 无。
 3. **CHG-TEST-SLIM-C** — E2E 任务域选跑 + web-mobile 收窄（状态：✅ 已完成）
    - 创建时间：2026-06-04 17:40
    - 实际开始：2026-06-04 18:30
