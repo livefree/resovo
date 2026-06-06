@@ -2153,3 +2153,21 @@
 - **新增依赖**：无
 - **数据库变更**：无
 - **注意事项**：① 不做 slot 补偿回滚——违背用户已确认的移动意图，且回滚写自身可能再失败造成二阶不一致；最终一致由 silent 重拉保证（画布反映真实位置，运营可再拖调整）；② 原子化方案（移动+排序单事务端点）需扩展 ADR-182 契约，留待运营反馈失败率后评估；③ 门禁：typecheck/lint 绿 + test:changed 62/62 + home 域 120/120。
+
+## [CHG-HOME-AUTOFILL-CORE-A] 候选生成纯函数层 + 解释模型（Phase 3 卡 13）
+- **完成时间**：2026-06-06
+- **记录时间**：2026-06-06 12:25
+- **执行模型**：claude-opus-4-8
+- **子代理**：无（契约由 ADR-183 卡内 arch-reviewer (claude-opus-4-8) 背书，无新决策面）
+- **修改文件**：
+  - `packages/types/src/home-section.types.ts` — +3 DTO：AutofillCandidate（D-182-4.4 已锁形态；origin/filterReason 双开放字符串）+ AutofillVideoSummary（快照 JSONB 内嵌展示最小集，非 VideoCard 全量）+ ContentGap（D-183-7.3 独立 DTO 无 videoId，结构上不可与候选混淆）
+  - `apps/api/src/services/home-autofill/policy.ts` — 新增：POLICY_VERSION 'hp-v1'（D-183-5）+ DOUBAN_WEIGHTS 0.4/0.3/0.15/0.15（D-183-4.1 定版，权重和 =1）+ 惩罚/半衰期/饱和阈值常量
+  - `apps/api/src/services/home-autofill/score.ts` — 新增：normVotes（ln 压缩归一，缺失/max 非正按 0 防 NaN，越界钳位）+ recencyWeight（30 天指数半衰）+ sourceHealthFromCount（3 源线性饱和）+ doubanScore（加权 + 双惩罚 + 下钳 0）+ compareBangumiCandidates（rank ASC 主序 / 缺失排后组内 rating DESC / 双缺失垫底，D-183-4.2）
+  - `apps/api/src/services/home-autofill/filters.ts` — 新增：FILTER_REASONS 6 值常量集 + evaluateCandidateFilters（方案 §7.1 顺序首中即返；图片缺失有 fallback 通过；**无 occupied_by_\* reason**——快照阶段不做跨区块去重 D-183-6.1）
+  - `apps/api/src/services/home-autofill/dedup.ts` — 新增：occupyVideoIds / isOccupied 去重纯函数（D-183-6.2 单一实现；allowDuplicates 双向豁免语义与 Phase 1 buildPreview 初版逐字一致）
+  - `apps/api/src/services/home-autofill/index.ts` — 新增：模块统一出口
+  - `apps/api/src/services/HomeCurationService.ts` — buildPreview/fetchAutoFill 去重收编（inline occupied 操作 → dedup 纯函数，行为零变更）
+  - `tests/unit/api/home-autofill-core.test.ts` — 新增 33 用例（policy 常量 2 / normVotes 边界 5 / recency·health 3 / doubanScore 6 / bangumi comparator 3 / 过滤链 10 / 去重 4）
+- **新增依赖**：无
+- **数据库变更**：无（migration 096 归 CORE-B）
+- **注意事项**：① 实施级裁量（ADR-183 D-183-4.1 只锁权重与信号集）：惩罚幅度 0.1/0.1、recency 半衰期 30 天、source_health 饱和阈值 3——均为策略常量随 POLICY_VERSION 演进，policy.ts 注释已声明；② 全模块纯函数无 IO：信号取数归候选源 queries（DOUBAN/BANGUMI 卡）、编排归 worker（REFRESH 卡）；③ filterReason 与 origin 同款开放字符串演进范式（新值随 POLICY_VERSION 递增，消费端降级展示）；④ 门禁：typecheck/lint 绿 + 全量 6827/6827（packages/types 基础包改动自动升全量，ADR-180）+ E2E admin 38 passed（2 known flaky retry 过）。

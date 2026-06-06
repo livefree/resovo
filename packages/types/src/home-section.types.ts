@@ -116,6 +116,62 @@ export interface HomePreview {
   }
 }
 
+// ── 自动填充候选与缺口 DTO（ADR-182 D-182-4.4 + ADR-183 D-183-7.3）──────────
+
+/** 候选视频摘要（快照 JSONB 内嵌；展示最小集，非 VideoCard 全量） */
+export interface AutofillVideoSummary {
+  title: string
+  slug: string
+  coverUrl: string | null
+  /** 站内 videos.type（D-183-1 分池信号，值域同 VideoType） */
+  type: string
+  year: number | null
+  rating: number | null
+  /** 可播源计数（重校验参考；apply 时仍须实时重查，方案 §12） */
+  sourceCount: number
+}
+
+/**
+ * 端点 #4 候选条目（D-182-4.4 已锁 DTO）。
+ * `origin` 为开放字符串（当前 worker 产出 douban / bangumi / trending；
+ * 新值随 policy_version 递增引入，不构成 DTO break，消费端对未知值降级展示）。
+ * `filterReason` 同为开放字符串（解释模型，常量集见
+ * apps/api services/home-autofill/filters.ts FILTER_REASONS）。
+ */
+export interface AutofillCandidate {
+  /** 候选稳定标识（快照生成时分配；端点 #5 apply 按此定位） */
+  id: string
+  videoId: string
+  videoSummary: AutofillVideoSummary
+  /** D-183-4 策略分（0–1，惩罚后下钳 0） */
+  score: number
+  /** 池内排名（1 起；filtered 条目不占名次） */
+  rank: number
+  origin: string
+  /** D-183-4.5 单区块确定性过滤结果（跨区块去重不在快照阶段，D-183-6.1） */
+  filtered: boolean
+  filterReason?: string
+  /** 已被 apply 为 pinned 的时间；未应用为 null/缺省 */
+  appliedAt?: string | null
+}
+
+/**
+ * 内容缺口条目（D-183-7.3：未映射到站内可播视频的外部条目，仅 admin 视图）。
+ * 独立 DTO 不复用 AutofillCandidate——无 videoId / videoSummary，结构上不可与候选混淆。
+ */
+export interface ContentGap {
+  /** 'douban' | 'bangumi' 开放字符串 */
+  provider: string
+  externalId: string
+  title: string
+  coverUrl?: string | null
+  /** D-183-4.1 分数（缺口 top-N 排序依据） */
+  score: number
+  rank?: number | null
+  /** 提示性字段（豆瓣 media_type 不参与分池判定，D-183-1.2） */
+  mediaTypeHint?: string | null
+}
+
 /** GET /admin/home/sections 响应条目（D-182-4 #2：settings 全量 + 状态摘要） */
 export interface HomeSectionSummary {
   settings: HomeSectionSettings

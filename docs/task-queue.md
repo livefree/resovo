@@ -1110,7 +1110,7 @@
 
 ## [SEQ-20260605-05] 首页运营治理实施 — Phase 1 真源与同构预览（治理方案 §13 落地）
 
-- **状态**：🔄 进行中（**Phase 1 已全部收口 2026-06-06 03:10**——ADR 三卡 + SLOT-EXTEND + BANNER-UNIFY-A/B + PREVIEW-API-A/B + CANVAS-A/B 共 11 卡 ✅ / TIMEWINDOW ❌ 取消；全量兜底 6748/6749、1 失败为 StagingEditPanel 既有并发 flaky 隔离 12/12 过；Phase 2 三卡已细化登记 ⬜）
+- **状态**：🔄 进行中（**Phase 1 全 11 卡 ✅ + Phase 2 全 4 卡 ✅（含 CARD-DND-B-FIX）；Phase 3 六卡细化登记 2026-06-06，卡 13 CORE-A ✅ 收口 12:25，下一卡 14 CORE-B**）
 - **创建时间**：2026-06-05 20:05
 - **最后更新时间**：2026-06-06 03:10
 - **目标**：按 `docs/designs/home-operations-governance-plan_20260605.md` §13 推进实施。本序列承载 Phase 1（真源与同构预览）+ 后续 Phase 细化登记。
@@ -1238,7 +1238,47 @@
    - 备注：与 D-052-9 预留 `CHG-HOME-IMAGE-GUARD`（管 home_modules.image_url）职责区分，两卡勿混。
    - 完成备注：方案 §6 警告级口径全落地。`lib/banners/image-guard.ts`（evaluateBannerImage 纯函数：below_min 不叠报 below_recommended / 比例 16:9–21:9 含端点 / 0 值返回空；probeImageSize 浏览器 Image naturalWidth）+ `BannerImageGuard.tsx`（防抖探测 debounceMs 可注入 / 警告条 warn Pill + 「不阻断」声明 / 探测失败「确认后仍可发布」§6.6 / desktop 21:9 + mobile 4:5 双视口 object-fit cover 安全区预览 §6.4 / 'ok' 态存 url 防 prop 清空瞬时帧空 src）+ BannerDrawer 接入（imageUrl 下方，handleSubmit 零拦截）。home_banners.image_url NOT NULL → 「缺图」态本真源不可达（焦点=尺寸/比例/探测三类）。测试 +15（纯函数 8 + 组件 6 + Drawer 集成「警告在场提交直达 onSave」1）。门禁：typecheck/lint 绿 + test:changed 55/55 + home 域 119/119 + **Phase 收口全量 6793/6793**（505 文件，4 个测试外 unhandled errors 噪音 exit 0）+ E2E admin 39 passed（1 known flaky retry 过）。执行模型: claude-opus-4-8；子代理: 无。
 
-### Phase 3–4 后续卡占位（Phase 2 收口后细化）
+### Phase 3 卡登记（细化 2026-06-06；契约全锁 ADR-183，执行序 13→18 依赖串行）
 
-- Phase 3：`CHG-HOME-AUTOFILL-CORE-A/-B` / `CHG-HOME-AUTOFILL-REFRESH` / `CHG-HOME-AUTOFILL-DOUBAN` / `CHG-HOME-AUTOFILL-BANGUMI` / `CHG-HOME-AUTOFILL-APPLY`（契约全锁于 ADR-183；migration 096 归 CORE-B）
+13. **CHG-HOME-AUTOFILL-CORE-A** — 候选生成纯函数层 + 解释模型（状态：✅ 已完成）
+   - 实际开始：2026-06-06 12:05 ｜ 完成时间：2026-06-06 12:25
+   - 建议模型：sonnet（契约 ADR-183 D-183-4/5/6 + ADR-182 D-182-4.4 已锁；实际 claude-opus-4-8，用户 opus 会话人工覆盖）
+   - 范围（5 项）：① `packages/types` AutofillCandidate + AutofillVideoSummary + ContentGap DTO（解释模型载体；ADR-182 影响面 #2 补全 + D-183-7.3 独立 DTO） ② `services/home-autofill/` policy（POLICY_VERSION 'hp-v1' + D-183-4 权重/惩罚常量）+ score 排序纯函数（normVotes 对数压缩 / doubanScore 加权缺失按 0 / recency 衰减 / bangumi comparator rank ASC + rating DESC 后置） ③ filters 通用过滤链纯函数（D-183-4.5 确定性过滤 → filtered/filterReason 开放字符串解释） ④ dedup 去重纯函数（D-183-6.2 单一实现）+ buildPreview 收编消费（行为零变更） ⑤ 单测（影响面 #8 义务：缺失信号按 0 / norm_votes 边界 / rank 缺失排后 / 过滤链 / 去重豁免）。
+   - 跨层理由：纯 api-service 层 + types（DTO 为解释模型载体，同一契约闭环；PREVIEW-API-B 同先例）。
+   - 依赖：ADR-183 ✅ / CHG-HOME-SLOT-EXTEND ✅。
+   - 完成备注：`services/home-autofill/` 5 文件（policy/score/filters/dedup/index，范式对齐 services/identity/），全模块纯函数无 IO——信号取数归候选源 queries（卡 15/16）、编排与快照写入归 worker（卡 17）。实施级裁量（D-183-4.1 只锁权重与信号集）：惩罚 0.1/0.1、半衰期 30 天、饱和阈值 3 源，均为策略常量随 POLICY_VERSION 演进。FILTER_REASONS 无 occupied_by_*（D-183-6.1 快照不做跨区块去重，单测显式守护）。buildPreview 去重收编零行为变更（既有 28 用例零回归）。测试 +33。门禁：typecheck/lint 绿 + **全量 6827/6827**（types 基础包改动升全量，ADR-180）+ E2E admin 38 passed（2 known flaky retry 过）。执行模型: claude-opus-4-8；子代理: 无。
+
+14. **CHG-HOME-AUTOFILL-CORE-B** — migration 096 快照表 + 端点 #4（状态：⬜）
+   - 建议模型：sonnet
+   - 范围（5 项）：① migration 096 `home_autofill_snapshots`（D-183-2：section CHECK 7 值与 095 同集 + trigger CHECK + candidates/gaps JSONB + 索引 (section, generated_at DESC)） ② `queries/home-autofill-snapshots.ts`（insertSnapshot + 同事务清理保留 10 / findLatestSnapshot / 各 section 最新摘要） ③ HomeCurationService candidates 域 + 端点 #4（limit ≤100 默认 50 / include_filtered / gaps additive / 快照未生成 200 空数组 snapshotAt null） ④ listSectionSummaries lastSnapshotAt/candidateCount 接入（PREVIEW-API-A 留口） ⑤ architecture.md 新表同步 + 单测（快照写入+清理同事务断言 / #4 正反 / null 语义）。
+   - 跨层理由：schema + api-service（表与读端点同一契约闭环，表落地无消费方即死代码；PREVIEW-API-A 同先例）。
+   - 依赖：CHG-HOME-AUTOFILL-CORE-A。
+
+15. **CHG-HOME-AUTOFILL-DOUBAN** — 豆瓣热门电影/剧集候选源（状态：⬜）
+   - 建议模型：sonnet
+   - 范围（4 项）：① douban 候选源 query（douban_entries JOIN 映射桥 video_external_refs/catalog_external_refs → 站内 videos；D-183-1 分池走 videos.type movie/series，豆瓣 media_type 不参与判定） ② hot_movies/hot_series 候选生成（doubanScore 接线 + 过滤链 + AutofillCandidate 解释） ③ 缺口 top-50（未映射条目按 D-183-4.1 分数 → ContentGap[]，media_type 降级提示性字段） ④ 单测（分池 / 缺失信号按 0 / 缺口 DTO 无 videoId）。
+   - 依赖：CHG-HOME-AUTOFILL-CORE-B。
+
+16. **CHG-HOME-AUTOFILL-BANGUMI** — Bangumi 热门动漫候选源 + 缺口复用 ADR-161（状态：⬜）
+   - 建议模型：sonnet
+   - 范围（4 项）：① bangumi 候选源 query（bangumi_entries rank ASC + nsfw=true 硬过滤 + 映射桥 → anime） ② hot_anime 候选生成（rank 主序 + rating 后置 + 惩罚项） ③ 缺口列表（未映射 → ContentGap；建库动作复用 ADR-161 决策 7 BangumiSeedService，治理层只读透出不新建链路） ④ 单测（nsfw 硬过滤断言守护增量防线 / rank 缺失排后）。
+   - 依赖：CHG-HOME-AUTOFILL-CORE-B；与 DOUBAN 可换序。
+
+17. **CHG-HOME-AUTOFILL-REFRESH** — worker 重算调度 + 端点 #7（状态：⬜）
+   - 建议模型：sonnet
+   - 范围（5 项）：① `lib/queue.ts` +homeAutofillQueue（D-183-3.6：attempts 2 + fixed 30s，独立队列隔离背压） ② `workers/homeAutofillScheduler.ts`（5min tick 扫描 settings refresh_interval_minutes 非空且非 manual_only → 比对最新快照 generated_at + interval → 入队；jobId `autofill:${section}` 幂等） ③ `workers/homeAutofillWorker.ts`（候选生成编排：trending/douban/bangumi 按 section 分派 → 写快照同事务清理；trigger scheduled/manual） ④ 端点 #7（429 主动 getJob+getState 检查不依赖 add 去重副作用 / manual_only 422 / 入队失败 500 不静默 / audit `home_section.refresh_candidates` + 守卫登记） ⑤ architecture.md worker 清单同步 + 单测（429 主动检查 / 幂等键 / 调度判定）。
+   - 依赖：CHG-HOME-AUTOFILL-DOUBAN + BANGUMI（worker 分派需候选源就绪）。
+
+18. **CHG-HOME-AUTOFILL-APPLY** — 端点 #5 候选转 pinned + 审计（状态：⬜）
+   - 建议模型：sonnet
+   - 范围（4 项）：① ApplyAutofillSchema（candidateIds ≥1）+ HomeCurationService.applyAutofill（读最新快照定位候选 → 逐候选重校验可见性/可播放性 → 任一失效整体 409 STATE_CONFLICT 携失效 ids → 全有或全无事务创建对应 slot home_modules pinned 行） ② banner section 语义（D-182-4.5：suggest_only 候选连同缺图风险态透出至编辑器预填，不直接写 home_banners——响应形态实施级推演入完成备注） ③ audit `home_section.apply_autofill`（afterJsonb 含 module ids + 候选来源 + policyVersion + 守卫登记） ④ 端点 #5 route + 单测（409 全有或全无 / audit payload / pinnedLimit 推演）。
+   - 依赖：CHG-HOME-AUTOFILL-CORE-B（快照读取）；与 REFRESH 可换序。
+
+### Phase 3 候补登记（六卡收口后细化）
+
+- `CHG-HOME-AUTOFILL-UI` — 候选池面板（SectionInspector「候选池展示留 Phase 3 接入位」+ 端点 #4 解释展示标灰 / #5 应用 / #7 立即刷新；方案 §7.3.5 + §12 + 验收「自动候选可解释、可跳过、可应用」）。依赖卡 14/17/18。
+- 公开首页消费切换（前台 ShelfRow → 聚合，D-183-8.3「Phase 3 末实施卡」）——涉公开端点行为，细化时核查是否需 ADR amendment。
+
+### Phase 4 后续卡占位
+
 - Phase 4：`CHG-HOME-DRAFT-PUBLISH` / `CHG-HOME-AUDIT-ROLLBACK` / `CHG-HOME-CACHE-INVALIDATE`

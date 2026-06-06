@@ -32,6 +32,7 @@ import { listAllBanners, findBannerById, updateBannerSortOrders } from '@/api/db
 import { listAdminHomeModules, findHomeModuleById, reorderHomeModules } from '@/api/db/queries/home-modules'
 import { listTrendingVideos } from '@/api/db/queries/videos'
 import { listVideosByRatingDesc, listVideoCardsByIds } from '@/api/db/queries/videos.status'
+import { occupyVideoIds, isOccupied } from '@/api/services/home-autofill'
 import { AuditLogService } from '@/api/services/AuditLogService'
 import { AppError } from '@/api/lib/errors'
 
@@ -364,7 +365,7 @@ export class HomeCurationService {
       (videoIds.length > 0 ? await listVideoCardsByIds(this.db, videoIds) : []).map((v) => [v.id, v]),
     )
 
-    // 跨区块占用集（聚合层唯一权威，D-183-6）
+    // 跨区块占用集（聚合层唯一权威，D-183-6；去重纯函数单一实现 services/home-autofill/dedup）
     const occupied = new Set<string>()
 
     const sections: HomePreviewSection[] = []
@@ -379,18 +380,14 @@ export class HomeCurationService {
         const pinned = (modulesBySlot.get(key) ?? []).map((m) => moduleToCard(m, cardMap, at))
         cards = pinned
         // pinned 视频进占用集（人工优先，不被去重）
-        if (!settings.allowDuplicates) {
-          for (const c of pinned) if (c.videoId) occupied.add(c.videoId)
-        }
+        occupyVideoIds(occupied, pinned.map((c) => c.videoId), settings.allowDuplicates)
         // 自动补位（活跃 pinned 计数后补到 displayCount；Phase 3 候选快照实装前走站内信号）
         const activeCount = pinned.filter((c) => c.enabled && c.flags.length === 0).length
         const need = Math.max(0, settings.displayCount - activeCount)
         if (need > 0 && settings.autofillMode !== 'manual_only' && key !== 'type_shortcuts') {
           const fill = await this.fetchAutoFill(key, need, pinned, occupied, settings)
           cards = [...pinned, ...fill]
-          if (!settings.allowDuplicates) {
-            for (const c of fill) if (c.videoId) occupied.add(c.videoId)
-          }
+          occupyVideoIds(occupied, fill.map((c) => c.videoId), settings.allowDuplicates)
         }
       }
 
@@ -417,7 +414,7 @@ export class HomeCurationService {
     settings: HomeSectionSettings,
   ): Promise<HomePreviewCard[]> {
     const pinnedIds = pinned.flatMap((c) => (c.videoId ? [c.videoId] : []))
-    const skip = (id: string) => pinnedIds.includes(id) || (!settings.allowDuplicates && occupied.has(id))
+    const skip = (id: string) => pinnedIds.includes(id) || isOccupied(occupied, id, settings.allowDuplicates)
 
     let candidates: VideoCard[]
     let origin: string
