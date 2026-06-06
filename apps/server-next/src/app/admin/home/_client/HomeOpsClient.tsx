@@ -53,6 +53,8 @@ import { HOME_ENTRY_SOURCE_META } from '@/lib/home-modules/entry'
 import { VIDEO_SLOTS } from '@/lib/home-modules/types'
 // CHG-HOME-BANNER-UNIFY-B / ADR-181 D-181-1：banner tab → home_banners 编辑器
 import { BannerOpsSection } from './BannerOpsSection'
+// CHG-HOME-CANVAS-A / 方案 §3：前台同构画布（只读渲染；Inspector 归 -B，卡片操作归 Phase 2）
+import { HomeCanvas } from './canvas/HomeCanvas'
 import { HomeModuleCard } from './HomeModuleCard'
 import { HomeModuleDrawer } from './HomeModuleDrawer'
 import { HomePreviewPanel } from './HomePreviewPanel'
@@ -115,6 +117,8 @@ const ENTRY_SOURCE_BAR_STYLE: CSSProperties = {
 export function HomeOpsClient() {
   const toast = useToast()
   const [activeSlot, setActiveSlot] = useState<HomeModuleSlot>('banner')
+  // CHG-HOME-CANVAS-A：画布 / 列表双视图（画布为方案 §3 主工作区方向，列表保留既有编辑能力）
+  const [viewMode, setViewMode] = useState<'list' | 'canvas'>('list')
   const [modulesBySlot, setModulesBySlot] = useState<Partial<Record<HomeModuleSlot, readonly HomeModule[]>>>({})
   const [loadingSlots, setLoadingSlots] = useState<Partial<Record<HomeModuleSlot, boolean>>>({})
   const [errorSlots, setErrorSlots] = useState<Partial<Record<HomeModuleSlot, Error>>>({})
@@ -270,6 +274,14 @@ export function HomeOpsClient() {
             <AdminButton
               variant="ghost"
               size="sm"
+              onClick={() => setViewMode(viewMode === 'list' ? 'canvas' : 'list')}
+              data-testid="home-view-toggle-btn"
+            >
+              {viewMode === 'list' ? '同构画布' : '列表编辑'}
+            </AdminButton>
+            <AdminButton
+              variant="ghost"
+              size="sm"
               onClick={() => window.open(process.env.NEXT_PUBLIC_APP_URL ?? '/', '_blank', 'noopener,noreferrer')}
               data-testid="home-preview-frontend-btn"
             >
@@ -310,8 +322,12 @@ export function HomeOpsClient() {
         </div>
       )}
 
+      {/* CHG-HOME-CANVAS-A：画布视图（只读同构渲染）；列表视图保留全部既有编辑能力 */}
+      {viewMode === 'canvas' && <HomeCanvas />}
+
       {/* CHG-HOME-UX-04-B：手写 bottom-border tabs → 共享 Segment（设计稿 §5.7「Segment」）
           badge 仅显已加载 slot 的模块数（懒加载未访问 slot 无数据，全量计数端点为 follow-up） */}
+      {viewMode === 'list' && (
       <Segment
         items={SLOTS.map(slot => ({
           value: slot,
@@ -324,7 +340,9 @@ export function HomeOpsClient() {
         aria-label="运营位类型切换"
         data-testid="home-slot-segment"
       />
+      )}
 
+      {viewMode === 'list' && (
       <div style={BODY_SPLIT_STYLE}>
         <div style={SLOT_SECTION_STYLE}>
           {/* CHG-HOME-BANNER-UNIFY-B / ADR-181 D-181-1：banner tab → home_banners 编辑器
@@ -452,6 +470,7 @@ export function HomeOpsClient() {
           ? <HomePreviewPanel slot={activeSlot} modules={modules} videoMetaMap={metaMap} autoFillItems={top10AutoFill} />
           : <div aria-hidden="true" />}
       </div>
+      )}
 
       <HomeModuleDrawer
         open={drawerOpen}

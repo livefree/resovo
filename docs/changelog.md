@@ -2046,3 +2046,19 @@
 - **新增依赖**：无
 - **数据库变更**：无
 - **注意事项**：① banner slot 冻结存量行不进 preview（聚合显式跳过 slot='banner'，真源 home_banners）；② hot_* 在 ADR-183 候选快照实装前 source='fallback'（trending 兜底语义），Phase 3 接入快照后改 'auto'+douban/bangumi origin；③ unplayable 判定本版 = sourceCount 0，深化归 Phase 3 过滤链；④ 画布消费（CANVAS-A）就绪——Phase 1 后端面（ADR 三卡 + slot 扩展 + banner 统一 + settings + preview）全部交付；⑤ 门禁：typecheck/lint 绿 + 全量 6731/6731 + verify 4 绿 + E2E admin 域。
+
+## [CHG-HOME-CANVAS-A] 后台同构画布：画布布局 + 区块渲染
+- **完成时间**：2026-06-06
+- **记录时间**：2026-06-06 02:20
+- **执行模型**：claude-opus-4-8
+- **子代理**：无
+- **修改文件**：
+  - `apps/server-next/src/lib/home-curation/types.ts` + `api.ts` — 新增：聚合门面桥接（getHomePreview / listHomeSections / updateHomeSectionSettings，ADR-182 #1/#2/#3 三端点封装）
+  - `apps/server-next/src/app/admin/home/_client/canvas/HomeCanvas.tsx` — 新增：画布容器（preview 消费 + loading/error/retry + generatedAt 工具条「正式配置实时预览（无草稿态）」+ 区块选中高亮回调）
+  - `apps/server-next/src/app/admin/home/_client/canvas/CanvasSection.tsx` — 新增：区块布局变体（banner wide 横滑 / type_shortcuts chips / featured 网格 / top10 rank 角标横滑 / hot_* poster 横滑）+ 模式 Pill + 槽位计数
+  - `apps/server-next/src/app/admin/home/_client/canvas/CanvasCard.tsx` — 新增：卡片（wide 16:9 / poster 2:3 + source pill 携 explain.origin + flags 7 值警示 Pill + empty 虚线占位）
+  - `apps/server-next/src/app/admin/home/_client/HomeOpsClient.tsx` — 画布/列表双视图切换（home-view-toggle-btn；列表保留全部既有编辑能力）
+  - `tests/unit/components/server-next/admin/home/HomeCanvas.test.tsx` — 新增 11 用例（加载/错误重试/7 区块渲染序/generatedAt+刷新/rank 角标/chips/auto·fallback origin/flags 警示/empty 占位/选中回调/槽位计数）
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：① 画布本卡为只读渲染（方案 §13 阶段衔接：「保存草稿/发布」隐藏至 Phase 4；卡片拖拽/删除/替换归 Phase 2 CHG-HOME-CARD-DND；Inspector + 环境栏归 CANVAS-B）；② 默认视图仍为列表（编辑能力完整），画布经页头切换进入——CANVAS-B 接 Inspector 后评估默认切画布；③ 颜色零硬编码（CSS 变量含 fallback：--overlay-scrim / --fg-on-media / --fg-on-accent / --radius-full 四个新引用如主题层缺失走 fallback 值，不阻塞）；④ 门禁：typecheck/lint 绿 + home 组件域 88/88 + test:changed 37/37 + E2E admin 域。

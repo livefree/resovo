@@ -1177,10 +1177,14 @@
    - 依赖：CHG-HOME-PREVIEW-API-A ✅。
    - 完成备注：D-182-4 #1 落地：HomePreview DTO（source 四态 + flags 7 值 + explain origin 开放）；buildPreview 整页聚合（7 区块渲染序 + brand 协议 + banner D-181-3 映射 + video 批量充实 + 风险态 flags + top10 rating/featured trending/hot_* fallback 补位 + 跨区块去重聚合层唯一权威 + empty 占位公式 + at 模拟 + 跳缓存）；banner 冻结存量行显式不进 preview。测试 +8 用例（18/18 文件全绿）。门禁：typecheck/lint 绿 + 全量 6731/6731 + verify-endpoint-adr 210 对齐 + E2E admin 40 passed。**Phase 1 后端面全部交付，CANVAS-A 消费就绪**。执行模型: claude-opus-4-8；子代理: 无。
 
-7. **CHG-HOME-CANVAS-A** — 后台同构画布：画布布局 + 区块渲染（状态：⬜ 待开始）
-   - 建议模型：sonnet
-   - 依赖：CHG-HOME-PREVIEW-API。
+7. **CHG-HOME-CANVAS-A** — 后台同构画布：画布布局 + 区块渲染（状态：✅ 已完成）
+   - 实际开始：2026-06-06 01:50 ｜ 完成时间：2026-06-06 02:30
+   - 建议模型：sonnet（实际 claude-opus-4-8，用户 opus 会话人工覆盖）
+   - 范围（5 项）：① server-next preview 桥接层（`lib/home-curation/`） ② 画布组件三件（HomeCanvas 容器 + CanvasSection 区块布局变体 + CanvasCard 卡片：source pill + flags 警示 + empty 占位） ③ HomeOpsClient 画布/列表视图切换接线（画布只读渲染先行，编辑操作归 -B 与 Phase 2） ④ 组件测试 ≥9 用例 ⑤ docs 收口。
+   - 跨层理由：纯 UI 层（preview 端点已由 PREVIEW-API-B 交付）。
+   - 依赖：CHG-HOME-PREVIEW-API-B ✅。
    - 备注：Phase 1 画布直写正式配置，"保存草稿 / 发布"按钮隐藏至 Phase 4（方案 §13 阶段衔接）。
+   - 完成备注：桥接层 `lib/home-curation/`（3 端点封装）+ 画布三组件（HomeCanvas 容器/CanvasSection 五种区块布局变体/CanvasCard wide·poster 双形态 + source pill 携 origin + flags 7 值警示 + empty 虚线占位）+ HomeOpsClient 画布/列表双视图切换（列表编辑能力零损失）。只读渲染先行（Inspector 归 -B，卡片操作归 Phase 2）。测试 11 新用例，home 组件域 88/88。门禁：typecheck/lint 绿 + test:changed 37/37 + E2E admin 40 passed。执行模型: claude-opus-4-8；子代理: 无。
 
 8. **CHG-HOME-CANVAS-B** — 后台同构画布：Inspector + 环境栏（状态：⬜ 待开始）
    - 建议模型：sonnet
