@@ -2291,3 +2291,15 @@
 - **新增依赖**：无
 - **数据库变更**：无
 - **注意事项**：① **方案 §12 验收「自动候选可解释、可跳过、可应用」后台 UI 闭环**——Phase 3 三端点全部接入后台消费；② banner 应用按端点恒 422（D-182-4.5）降级为「预填」编辑器（APPLY 卡显式归本卡的预填 UI 兑现）；③ 共享层沉淀评估：否——单一消费方页面组件；④ 门禁：typecheck/lint/test:changed 绿 + admin home 套件 138/138；⑤ **E2E admin 域选跑 49 failed——与本卡无关的环境性失败（git stash 干净 HEAD A/B 同样失败 + admin home 域零 E2E spec 覆盖），已起 🚨 BLOCKER**（task-queue.md 尾部）：含 admin.spec v1 重定向断言结构性不可满足线索 + playwright webServer 缺 api 条目 + reuseExistingServer 跨会话陈旧 server 复用陷阱 + 历史「exit 0」记录疑为管道退出码测量伪影，待人工裁定。
+
+## [CHG-HOME-AUTOFILL-UI-FIX] 切区竞态防御 — 迟到候选响应不得污染当前区块（Codex stop-time review）
+- **完成时间**：2026-06-06
+- **记录时间**：2026-06-06 17:35
+- **执行模型**：claude-opus-4-8
+- **子代理**：无
+- **修改文件**：
+  - `apps/server-next/src/app/admin/home/_client/canvas/CandidatePoolPanel.tsx` — +activeSectionRef 三重守卫：① load 顶部过期闭包短路（handler 持有的旧 load 不发请求不触状态）② await 后迟到响应丢弃（result/error/loading 三态均守卫）③ handleApply 成功路径切区后不清新区块选择态（effect 已重置，再清会吞用户新勾选）；apply POST 本身按点击时 target 区块发出（用户意图不变）
+  - `tests/unit/components/server-next/admin/home/CandidatePoolPanel.test.tsx` — +2 竞态用例（慢响应切区不污染 / apply 挂起中切区不清新选择态），18→20
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：① 原实现 load 无 staleness 守卫——快速切换区块时前一区块迟到响应 setResult 覆盖当前区块（展示错数据；apply 因 candidateIds 不在新区块快照会被后端 409 兜住，属展示层缺陷非写入风险）；② 修复采用 section ref 等值守卫而非请求序号——handler 旧闭包重拉会自增序号反夺「最新」位，ref 等值无此盲区；③ 门禁：typecheck/lint 绿 + test:changed 82/82（面板 20/20）。

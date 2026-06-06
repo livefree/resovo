@@ -17,7 +17,7 @@
  * 原样降级展示（同 audit-action-labels fallback 范式）。
  */
 
-import { useCallback, useEffect, useState, type CSSProperties } from 'react'
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
 import { ImageOff } from 'lucide-react'
 import { AdminButton, AdminCheckbox, Pill, useToast } from '@resovo/admin-ui'
 import { ApiClientError } from '@/lib/api-client'
@@ -211,29 +211,40 @@ export function CandidatePoolPanel({ section, autofillMode, onApplied, onBannerP
 
   const noSource = NO_CANDIDATE_SOURCE.has(section)
 
+  // 切区竞态防御（Codex review FIX）：迟到的前一区块响应不得污染当前区块；
+  // handler 持有的过期闭包 load（如 apply 后重拉）同样以此短路。
+  const activeSectionRef = useRef<HomeSectionKey>(section)
+
   const load = useCallback(async () => {
     if (noSource) {
       setLoading(false)
       return
     }
+    const target = section
+    // 过期闭包：区块已切换 → 不发请求不触状态
+    if (activeSectionRef.current !== target) return
     setLoading(true)
     setError(null)
     try {
-      setResult(await getAutofillCandidates(section, { includeFiltered: true }))
+      const r = await getAutofillCandidates(target, { includeFiltered: true })
+      if (activeSectionRef.current !== target) return  // 迟到响应：丢弃
+      setResult(r)
     } catch (err: unknown) {
+      if (activeSectionRef.current !== target) return
       setError(err instanceof Error ? err : new Error(String(err)))
     } finally {
-      setLoading(false)
+      if (activeSectionRef.current === target) setLoading(false)
     }
   }, [section, noSource])
 
-  // 区块切换 → 重拉 + 清空选择/折叠态
+  // 区块切换 → 标记当前区块 + 重拉 + 清空选择/折叠态
   useEffect(() => {
+    activeSectionRef.current = section
     setResult(null)
     setSelected(new Set())
     setShowGaps(false)
     void load()
-  }, [load])
+  }, [section, load])
 
   function toggleSelect(candidateId: string, checked: boolean) {
     setSelected((prev) => {
@@ -246,11 +257,13 @@ export function CandidatePoolPanel({ section, autofillMode, onApplied, onBannerP
 
   async function handleApply() {
     if (selected.size === 0) return
+    const target = section
     setApplying(true)
     try {
-      const { applied } = await applyAutofillCandidates(section, [...selected])
+      const { applied } = await applyAutofillCandidates(target, [...selected])
       toast.push({ title: `已应用 ${applied} 个候选为固定位`, level: 'success' })
-      setSelected(new Set())
+      // 切区竞态：已切走则不动新区块的选择态（effect 已重置）；load 自带过期闭包短路
+      if (activeSectionRef.current === target) setSelected(new Set())
       onApplied()
       void load()
     } catch (err: unknown) {

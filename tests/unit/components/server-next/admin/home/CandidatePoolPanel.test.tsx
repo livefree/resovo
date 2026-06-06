@@ -273,6 +273,75 @@ describe('CandidatePoolPanel — 区块分支', () => {
   })
 })
 
+describe('CandidatePoolPanel — 切区竞态防御（Codex review FIX）', () => {
+  it('前一区块的迟到响应不得污染当前区块候选池', async () => {
+    let resolveSlow!: (v: AutofillCandidatesResult) => void
+    const slow = new Promise<AutofillCandidatesResult>((res) => { resolveSlow = res })
+    mockedGet
+      .mockImplementationOnce(() => slow)  // hot_movies 慢响应（迟到）
+      .mockResolvedValueOnce(result({      // hot_anime 快响应
+        candidates: [candidate({ id: 'c-anime', videoId: 'v-anime', origin: 'bangumi' })],
+      }))
+
+    const view = render(
+      <CandidatePoolPanel section="hot_movies" autofillMode="manual_plus_autofill" onApplied={vi.fn()} />,
+    )
+    view.rerender(
+      <CandidatePoolPanel section="hot_anime" autofillMode="manual_plus_autofill" onApplied={vi.fn()} />,
+    )
+    await waitFor(() => expect(screen.queryByTestId('candidate-row-c-anime')).not.toBeNull())
+
+    // hot_movies 响应迟到 → 守卫丢弃，不得覆盖 hot_anime 候选
+    resolveSlow(result({ candidates: [candidate({ id: 'c-movie' })] }))
+    await new Promise((r) => setTimeout(r, 20))
+    expect(screen.queryByTestId('candidate-row-c-movie')).toBeNull()
+    expect(screen.queryByTestId('candidate-row-c-anime')).not.toBeNull()
+  })
+
+  it('应用进行中切区：成功后不清空新区块选择态（effect 已重置后用户新勾选保留）', async () => {
+    // 双区块候选：hot_movies c-1 / hot_anime c-a1+c-a2
+    let resolveApply!: (v: { applied: number }) => void
+    mockedApply.mockImplementationOnce(
+      () => new Promise<{ applied: number }>((res) => { resolveApply = res }),
+    )
+    mockedGet
+      .mockResolvedValueOnce(result())  // hot_movies
+      .mockResolvedValueOnce(result({   // hot_anime
+        candidates: [
+          candidate({ id: 'c-a1', videoId: 'v-a1', origin: 'bangumi' }),
+          candidate({ id: 'c-a2', videoId: 'v-a2', origin: 'bangumi', rank: 2 }),
+        ],
+      }))
+
+    const view = render(
+      <CandidatePoolPanel section="hot_movies" autofillMode="manual_plus_autofill" onApplied={vi.fn()} />,
+    )
+    await waitFor(() => expect(screen.queryByTestId('candidate-check-c-1')).not.toBeNull())
+    fireEvent.click(
+      screen.getByTestId('candidate-check-c-1').querySelector('input') ??
+        (screen.getByTestId('candidate-check-c-1') as HTMLInputElement),
+    )
+    fireEvent.click(screen.getByTestId('candidate-pool-apply-btn'))  // apply 挂起中
+
+    // 切到 hot_anime 并勾选 c-a1
+    view.rerender(
+      <CandidatePoolPanel section="hot_anime" autofillMode="manual_plus_autofill" onApplied={vi.fn()} />,
+    )
+    await waitFor(() => expect(screen.queryByTestId('candidate-check-c-a1')).not.toBeNull())
+    fireEvent.click(
+      screen.getByTestId('candidate-check-c-a1').querySelector('input') ??
+        (screen.getByTestId('candidate-check-c-a1') as HTMLInputElement),
+    )
+    await waitFor(() =>
+      expect(screen.getByTestId('candidate-pool-selected-count').textContent).toContain('已选 1'))
+
+    // 旧区块 apply 迟到完成 → 新区块选择态不得被清空
+    resolveApply({ applied: 1 })
+    await new Promise((r) => setTimeout(r, 20))
+    expect(screen.getByTestId('candidate-pool-selected-count').textContent).toContain('已选 1')
+  })
+})
+
 describe('CandidatePoolPanel — 内容缺口（D-183-7.3）', () => {
   it('gaps 折叠展开：toggle 显示 provider 中文 + 标题 + 分数', async () => {
     mockedGet.mockResolvedValue(result({
