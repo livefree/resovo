@@ -6,16 +6,26 @@
  * 消费 GET /admin/home/preview（ADR-182 #1，正式配置预览无草稿叠加），
  * 按 7 区块前台渲染序展示。-B 接入：环境栏（brand/locale/at/device →
  * preview 重拉）+ 右侧 Inspector（区块 settings 编辑，保存后重拉）。
- * 卡片操作归 Phase 2；候选池展示归 Phase 3。
+ *
+ * CHG-HOME-CARD-DND-B：DndContext 编排——同区块 pinned 拖拽 → 端点 #6
+ * reorder（画布唯一排序路径，audit home_section.reorder）；跨区块（方案 §5.3）
+ * 视频卡在视频型区块间落位 → 确认弹层 → PATCH slot + 端点 #6 重排目标区块。
+ * 边界：banner 卡不可拖出 / banner+type_shortcuts 不接受视频卡落位。
+ * 候选池展示归 Phase 3。
  */
 
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
-import { AdminButton, EmptyState, ErrorState, LoadingState } from '@resovo/admin-ui'
-import { getHomePreview } from '@/lib/home-curation/api'
+import { DndContext, closestCenter, type DragEndEvent } from '@dnd-kit/core'
+import { arrayMove } from '@dnd-kit/sortable'
+import { AdminButton, EmptyState, ErrorState, LoadingState, useToast } from '@resovo/admin-ui'
+import { getHomePreview, reorderHomeSection } from '@/lib/home-curation/api'
+import { updateHomeModule } from '@/lib/home-modules/api'
 import type { HomePreview, HomePreviewQuery, HomeSectionKey } from '@/lib/home-curation/types'
-import { CanvasSection } from './CanvasSection'
+import { CanvasSection, draggableCardId } from './CanvasSection'
 import { CanvasEnvBar } from './CanvasEnvBar'
 import { SectionInspector } from './SectionInspector'
+import { CrossSectionConfirmModal, type CrossSectionMove } from './CrossSectionConfirmModal'
+import { SECTION_TITLE, VIDEO_SECTIONS } from './section-meta'
 
 const WRAP_STYLE: CSSProperties = {
   display: 'flex',
@@ -45,34 +55,153 @@ const TOOLBAR_STYLE: CSSProperties = {
   color: 'var(--fg-muted)',
 }
 
+// ── 拖拽落点解析（导出供单测）────────────────────────────────────
+
+/** refId → 所在区块；非可拖卡（auto/fallback/empty）不命中 */
+export function findCardSection(preview: HomePreview, refId: string) {
+  for (const section of preview.sections) {
+    const card = section.cards.find((c) => draggableCardId(c) === refId)
+    if (card) return { key: section.key, card }
+  }
+  return null
+}
+
+/** over.id → 目标区块 key（卡 refId 或 `section:<key>` 容器） */
+export function resolveOverSection(preview: HomePreview, overId: string): HomeSectionKey | null {
+  if (overId.startsWith('section:')) {
+    const key = overId.slice('section:'.length) as HomeSectionKey
+    return preview.sections.some((s) => s.key === key) ? key : null
+  }
+  return findCardSection(preview, overId)?.key ?? null
+}
+
+/** 区块内可拖卡（pinned）有序 id 列表 */
+function sortableIdsOf(preview: HomePreview, key: HomeSectionKey): string[] {
+  const section = preview.sections.find((s) => s.key === key)
+  return (section?.cards ?? []).flatMap((c) => {
+    const id = draggableCardId(c)
+    return id ? [id] : []
+  })
+}
+
 export interface HomeCanvasProps {
   /** 区块选中回调（外部联动可选；Inspector 已内置） */
   readonly onSelectSection?: (key: HomeSectionKey) => void
 }
 
 export function HomeCanvas({ onSelectSection }: HomeCanvasProps) {
+  const toast = useToast()
   const [preview, setPreview] = useState<HomePreview | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<Error | null>(null)
   const [selected, setSelected] = useState<HomeSectionKey | null>(null)
+  // CHG-HOME-CARD-DND-B：跨区块落位确认（方案 §5.3）
+  const [pendingMove, setPendingMove] = useState<CrossSectionMove | null>(null)
+  const [moving, setMoving] = useState(false)
   // CHG-HOME-CANVAS-B：环境参数（环境栏「应用」驱动；ref 保证刷新/保存重拉用最新值）
   const queryRef = useRef<HomePreviewQuery>({})
 
-  const load = useCallback(async () => {
-    setLoading(true)
+  const load = useCallback(async (opts?: { silent?: boolean }) => {
+    if (!opts?.silent) setLoading(true)
     setError(null)
     try {
       setPreview(await getHomePreview(queryRef.current))
     } catch (err: unknown) {
       setError(err instanceof Error ? err : new Error(String(err)))
     } finally {
-      setLoading(false)
+      if (!opts?.silent) setLoading(false)
     }
   }, [])
 
   useEffect(() => {
     void load()
   }, [load])
+
+  // ── 拖拽编排（CHG-HOME-CARD-DND-B）──────────────────────────────
+
+  async function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event
+    if (!over || !preview) return
+    const activeId = String(active.id)
+    const overId = String(over.id)
+    const from = findCardSection(preview, activeId)
+    if (!from) return
+    const toKey = resolveOverSection(preview, overId)
+    if (!toKey) return
+
+    if (toKey === from.key) {
+      // 同区块重排：pinned 前缀 arrayMove → 端点 #6（拖到自身或区块容器 = 无位移）
+      if (activeId === overId || overId.startsWith('section:')) return
+      const ids = sortableIdsOf(preview, from.key)
+      const oldIndex = ids.indexOf(activeId)
+      const newIndex = ids.indexOf(overId)
+      if (oldIndex < 0 || newIndex < 0 || oldIndex === newIndex) return
+      const next = arrayMove(ids, oldIndex, newIndex)
+      try {
+        await reorderHomeSection(from.key, next.map((id, i) => ({ id, ordering: i })))
+        toast.push({ title: '排序已保存', level: 'success' })
+      } catch (err: unknown) {
+        toast.push({
+          title: '排序保存失败',
+          description: err instanceof Error ? err.message : '请稍后重试',
+          level: 'danger',
+        })
+      }
+      void load({ silent: true })
+      return
+    }
+
+    // 跨区块（方案 §5.3 拖拽边界）
+    if (from.key === 'banner') {
+      // home_banners 行不可变为 home_modules 行（D-181-1 真源分离）
+      toast.push({ title: 'Banner 不可移出 Hero 区块', description: '横幅由 home_banners 独立管理', level: 'warn' })
+      return
+    }
+    if (!from.card.videoId) {
+      toast.push({ title: '仅视频卡可跨区块移动', level: 'warn' })
+      return
+    }
+    if (!VIDEO_SECTIONS.has(toKey)) {
+      toast.push({ title: `${SECTION_TITLE[toKey]} 不接受视频卡落位`, level: 'warn' })
+      return
+    }
+
+    // 目标区块 pinned 全序：落点卡位置插入（容器落点 = 末尾）
+    const targetIds = sortableIdsOf(preview, toKey)
+    const overIndex = overId.startsWith('section:') ? targetIds.length : targetIds.indexOf(overId)
+    const insertAt = overIndex < 0 ? targetIds.length : overIndex
+    const nextIds = [...targetIds]
+    nextIds.splice(insertAt, 0, activeId)
+    setPendingMove({
+      refId: activeId,
+      title: from.card.title,
+      from: from.key,
+      to: toKey,
+      items: nextIds.map((id, i) => ({ id, ordering: i })),
+    })
+  }
+
+  /** 确认跨区块：PATCH slot（资源级，audit home_module.update）→ 端点 #6 重排目标区块 */
+  async function confirmCrossMove() {
+    if (!pendingMove) return
+    setMoving(true)
+    try {
+      await updateHomeModule(pendingMove.refId, { slot: pendingMove.to })
+      await reorderHomeSection(pendingMove.to, [...pendingMove.items])
+      toast.push({ title: `已移至 ${SECTION_TITLE[pendingMove.to]}`, level: 'success' })
+    } catch (err: unknown) {
+      // 失败同样关弹层（重拉后 items 失效，不可重试提交 stale 序）
+      toast.push({
+        title: '移动失败',
+        description: err instanceof Error ? err.message : '请稍后重试',
+        level: 'danger',
+      })
+    } finally {
+      setPendingMove(null)
+      setMoving(false)
+      void load({ silent: true })
+    }
+  }
 
   const selectedSection = preview?.sections.find((s) => s.key === selected) ?? null
 
@@ -109,17 +238,19 @@ export function HomeCanvas({ onSelectSection }: HomeCanvasProps) {
               </AdminButton>
             </div>
 
-            {preview.sections.map((section) => (
-              <CanvasSection
-                key={section.key}
-                section={section}
-                selected={selected === section.key}
-                onSelect={(key) => {
-                  setSelected(key)
-                  onSelectSection?.(key)
-                }}
-              />
-            ))}
+            <DndContext collisionDetection={closestCenter} onDragEnd={(event) => void handleDragEnd(event)}>
+              {preview.sections.map((section) => (
+                <CanvasSection
+                  key={section.key}
+                  section={section}
+                  selected={selected === section.key}
+                  onSelect={(key) => {
+                    setSelected(key)
+                    onSelectSection?.(key)
+                  }}
+                />
+              ))}
+            </DndContext>
           </div>
 
           {/* 右侧 Inspector：settings 编辑（保存成功 → 重拉 preview 反映新槽位/模式） */}
@@ -129,6 +260,14 @@ export function HomeCanvas({ onSelectSection }: HomeCanvasProps) {
           />
         </div>
       )}
+
+      {/* 跨区块落位确认（方案 §5.3） */}
+      <CrossSectionConfirmModal
+        move={pendingMove}
+        busy={moving}
+        onConfirm={() => void confirmCrossMove()}
+        onCancel={() => setPendingMove(null)}
+      />
     </div>
   )
 }

@@ -13,6 +13,7 @@ import { useEffect, useState, type ChangeEvent, type CSSProperties } from 'react
 import { AdminButton, AdminSelect, AdminInput, Pill, useToast, type AdminSelectOption } from '@resovo/admin-ui'
 import { updateHomeSectionSettings } from '@/lib/home-curation/api'
 import type { HomePreviewSection, HomeSectionKey, HomeSectionSettings } from '@/lib/home-curation/types'
+import { SECTION_TITLE } from './section-meta'
 
 const MODE_OPTIONS: readonly AdminSelectOption[] = [
   { value: 'manual_only', label: '纯人工 (manual_only)' },
@@ -56,16 +57,6 @@ const EMPTY_HINT_STYLE: CSSProperties = {
   color: 'var(--fg-muted)',
   fontSize: 'var(--font-size-xs)',
   textAlign: 'center',
-}
-
-const SECTION_TITLE: Record<string, string> = {
-  banner: 'Hero Banner',
-  type_shortcuts: '分类快捷入口',
-  featured: '精选推荐',
-  top10: 'TOP 10',
-  hot_movies: '热门电影',
-  hot_series: '热播剧集',
-  hot_anime: '热门动漫',
 }
 
 interface FormState {

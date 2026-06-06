@@ -6,7 +6,7 @@
 
 ## 当前任务（单任务工作台：同时仅 1 个 🔄 进行中；完成即删卡，历史见 docs/changelog.md）
 
-（空 — 上一任务 CHG-HOME-CARD-DND-A 已收口 2026-06-06，见 changelog；Phase 2 下一卡 CHG-HOME-CARD-DND-B 已登记待取）
+（空 — 上一任务 CHG-HOME-CARD-DND-B 已收口 2026-06-06，见 changelog；**CHG-HOME-CARD-DND 两子卡交付**，Phase 2 下一卡 CHG-HOME-EMPTY-SLOTS 待取）
 
 ---
 

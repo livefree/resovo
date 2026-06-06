@@ -1214,11 +1214,13 @@
    - 依赖：CHG-HOME-CANVAS-B ✅。
    - 完成备注：D-182-4 #6 / D-182-4.6 / D-182-5.3 零自由度落地。reorderSection 双真源分派（banner→home_banners 经 ordering→sortOrder 映射；其余→home_modules slot=section 归属校验；id 不属真源 422 AppError + 不写库不写 audit）；audit `home_section.reorder` 载荷硬约束（before/afterJsonb 均携 sectionKey+source，after 加 ids 数组；before 取 DB 原值 R-MID-1；**单条记录不嵌套 home_module.reorder**——回溯须联合两 actionType 为 D-182-4.6 有意裁定）+ 守卫登记（R-MID-1 第 34 次）。`updateBannerSortOrders` void→number 加性变更（updated 计数诚实化，对齐 reorderHomeModules 口径）。**偏离声明**：BannerService.reorder +2 行（return→await）为 query 返回类型变更强制编译闭环，范围外连带修正。banner 排序经门面首次获得审计覆盖（v1 legacy 无 audit）。测试：+10 用例（文件 28/28，audit 守卫 125/125）。门禁：typecheck/lint 绿 + test:changed 197/197 + verify:adr-contracts 4 绿（endpoint-adr 211 对齐）+ E2E admin 39 passed（1 flaky=admin-source-and-video-flows moderation reject 已知项 retry 过）。执行模型: claude-opus-4-8；子代理: 无。
 
-10b. **CHG-HOME-CARD-DND-B** — 画布同区块拖拽 + 跨区块确认弹层（UI）（状态：⬜ 待开始）
-   - 建议模型：sonnet
-   - 范围：① 桥接层 `lib/home-curation/api.ts` +reorderHomeSection ② 画布内同区块拖拽（复用 dnd-kit，pinned 卡可拖、auto/fallback/empty 不可拖）③ 跨区块落位确认弹层（方案 §5.3：视频卡跨视频型区块需确认；banner 区块不受普通 poster 卡落位）④ 组件测试。
+10b. **CHG-HOME-CARD-DND-B** — 画布同区块拖拽 + 跨区块确认弹层（UI）（状态：✅ 已完成）
+   - 实际开始：2026-06-06 00:55 ｜ 完成时间：2026-06-06 01:10
+   - 建议模型：sonnet（实际 claude-opus-4-8，用户 opus 会话人工覆盖）
+   - 范围：① 桥接层 `lib/home-curation/api.ts` +reorderHomeSection ② 画布内同区块拖拽（复用 dnd-kit，pinned 卡可拖、auto/fallback/empty 不可拖）③ 跨区块落位确认弹层（方案 §5.3：视频卡跨视频型区块需确认；banner 区块不受普通 poster 卡落位；banner 卡不可拖出）④ 组件测试 ≥8。
    - 跨层理由：纯 UI 层（端点 #6 由 -A 交付）。
-   - 依赖：CHG-HOME-CARD-DND-A。
+   - 依赖：CHG-HOME-CARD-DND-A ✅。
+   - 完成备注：方案 §5.3 三条拖拽边界全落地（banner 不可拖出 D-181-1 真源分离 / 非视频卡不可跨 / banner+type_shortcuts 不接受落位，warn toast 提示）。同区块：SortableContext per section（featured rect 策略、其余水平）+ MaybeSortable 包装（仅 pinned+refId 注册）+ 区块容器 useDroppable（`section:` 前缀落点协议）→ 端点 #6 全序载荷 + silent 重拉（loading 不闪）。跨区块：CrossSectionConfirmModal（语义改变提示）→ 确认后 PATCH slot（资源级 audit home_module.update）+ 端点 #6 重排目标区块（落点位置插入/容器落点末尾）；失败关弹层防 stale 序重试。SECTION_TITLE 第 3 消费方触发提取 `canvas/section-meta.ts`（+VIDEO_SECTIONS）, SectionInspector 收编（卡范围实施前修订补记）。测试 +11（文件 29/29，home 组件域 106/106）。门禁：typecheck/lint 绿 + test:changed 55/55 + E2E admin 39 passed（1 known flaky retry 过）。**CHG-HOME-CARD-DND 两子卡收口**。执行模型: claude-opus-4-8；子代理: 无。
 
 11. **CHG-HOME-EMPTY-SLOTS** — 画布空卡片添加入口（状态：⬜ 待开始）
    - 建议模型：sonnet

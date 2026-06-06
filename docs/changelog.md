@@ -2093,3 +2093,20 @@
 - **新增依赖**：无
 - **数据库变更**：无
 - **注意事项**：① banner 排序经门面**首次获得审计覆盖**（v1 legacy `PATCH /admin/banners/reorder` 无 audit；D-182-4.6 裁定门面为画布唯一排序路径）；② home_modules 排序历史回溯须联合 `home_module.reorder` ∪ `home_section.reorder` 两 actionType 查询（有意裁定非盲区，审计 UI 实现时不得单 actionType 过滤）；③ 原卡 CHG-HOME-CARD-DND 范围 6 项 > 5 按原子化判据拆 -A/-B，-B（画布 DnD + 跨区块确认弹层）已登记待取；④ 门禁：typecheck/lint 绿 + test:changed 197/197 + verify:adr-contracts 4 绿（endpoint-adr 211 对齐）+ E2E admin 39 passed（1 known flaky retry 过）。
+
+## [CHG-HOME-CARD-DND-B] 画布同区块拖拽 + 跨区块确认弹层（UI）
+- **完成时间**：2026-06-06
+- **记录时间**：2026-06-06 01:15
+- **执行模型**：claude-opus-4-8
+- **子代理**：无
+- **修改文件**：
+  - `apps/server-next/src/lib/home-curation/api.ts` — +`reorderHomeSection`（端点 #6 桥接；画布唯一排序路径，banner 经此获审计覆盖）
+  - `apps/server-next/src/app/admin/home/_client/canvas/section-meta.ts` — 新增：SECTION_TITLE 第 3 消费方（CanvasSection/SectionInspector/确认弹层）触发共享提取 + VIDEO_SECTIONS 集合（方案 §5.3 边界判定）
+  - `apps/server-next/src/app/admin/home/_client/canvas/CanvasSection.tsx` — SortableContext per section（featured rect / 其余水平策略）+ MaybeSortable 包装（仅 pinned+refId 注册可拖；auto/fallback/empty 不注册）+ 区块容器 useDroppable（`section:<key>` 落点协议，空区块跨区块落位）
+  - `apps/server-next/src/app/admin/home/_client/canvas/CrossSectionConfirmModal.tsx` — 新增：跨区块落位确认弹层（语义改变提示「排序策略与自动填充规则按目标区块生效」）
+  - `apps/server-next/src/app/admin/home/_client/canvas/HomeCanvas.tsx` — DndContext 编排：同区块 pinned 前缀 arrayMove → 端点 #6 全序载荷 + silent 重拉（load 加 silent 选项不闪骨架）；跨区块边界三连判（banner 不可拖出 D-181-1 / 非视频卡拒绝 / banner+type_shortcuts 不接受落位，warn toast）→ 确认后 PATCH slot + 端点 #6 重排目标区块（落点位置插入/容器落点末尾）；失败关弹层防 stale 序重试
+  - `apps/server-next/src/app/admin/home/_client/canvas/SectionInspector.tsx` — SECTION_TITLE 改 import section-meta（提取收编，行为零变化）
+  - `tests/unit/components/server-next/admin/home/HomeCanvas.test.tsx` — +11 用例（@dnd-kit mock + onDragEnd 捕获手动触发：sortable 注册边界/同区块全序载荷+silent 重拉/banner 门面分支/自身与容器落点无操作/失败重拉/跨区块弹层+确认双写链/取消/空区块末尾落位/边界拒绝 ×4/移动失败关弹层）；文件 29/29
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：① **CHG-HOME-CARD-DND 两子卡收口**——画布卡片排序闭环交付（同区块直拖 + 跨区块确认）；② 跨区块移动为两步非原子（PATCH slot → reorder），失败 toast + silent 重拉恢复（Phase 1 直写正式配置口径，方案 §13）；③ Pill ariaLabel stderr 警告为 CANVAS-A 既有 source pill 双段 children 所致，非本卡引入（范围外，留待 Phase 2 收尾顺带）；④ 门禁：typecheck/lint 绿 + test:changed 55/55 + home 组件域 106/106 + E2E admin 39 passed（1 known flaky retry 过）。
