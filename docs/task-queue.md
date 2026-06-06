@@ -1110,7 +1110,7 @@
 
 ## [SEQ-20260605-05] 首页运营治理实施 — Phase 1 真源与同构预览（治理方案 §13 落地）
 
-- **状态**：🔄 进行中（**Phase 1 全 11 卡 ✅ + Phase 2 全 4 卡 ✅（含 CARD-DND-B-FIX）；Phase 3 六卡细化登记 2026-06-06，卡 13 CORE-A + 卡 14 CORE-B ✅，下一卡 15 DOUBAN**）
+- **状态**：🔄 进行中（**Phase 1 全 11 卡 ✅ + Phase 2 全 4 卡 ✅（含 CARD-DND-B-FIX）；Phase 3 六卡细化登记 2026-06-06，卡 13/14/15 ✅（CORE-A/B + DOUBAN），下一卡 16 BANGUMI**）
 - **创建时间**：2026-06-05 20:05
 - **最后更新时间**：2026-06-06 03:10
 - **目标**：按 `docs/designs/home-operations-governance-plan_20260605.md` §13 推进实施。本序列承载 Phase 1（真源与同构预览）+ 后续 Phase 细化登记。
@@ -1256,8 +1256,10 @@
    - 跨层理由：schema + api-service（表与读端点同一契约闭环，表落地无消费方即死代码；PREVIEW-API-A 同先例）。
    - 依赖：CHG-HOME-AUTOFILL-CORE-A。
 
-15. **CHG-HOME-AUTOFILL-DOUBAN** — 豆瓣热门电影/剧集候选源（状态：⬜）
-   - 建议模型：sonnet
+15. **CHG-HOME-AUTOFILL-DOUBAN** — 豆瓣热门电影/剧集候选源（状态：✅ 已完成）
+   - 实际开始：2026-06-06 12:55 ｜ 完成时间：2026-06-06 13:05
+   - 建议模型：sonnet（实际 claude-opus-4-8，用户 opus 会话人工覆盖）
+   - 完成备注：映射桥三源 UNION（mc.douban_id + ver manual_confirmed+is_primary + cer exact，保守口径）+ 分池 videos.type 参数化（D-183-1）+ 源查询不预过滤可见性（filtered 候选入快照解释）；生成层 doubanScore 接线（recency=updated_at / 源不稳定=source_check_status partial|all_dead / 成人双信号）+ rank 仅未过滤占名次；缺口扫描窗 500 预截 + JS 精确评分 top-50（同公式单一实现）。dev 实测：movies 37 候选全 filtered(not_published，dev 数据态) / 缺口 50 正常 / 122ms；trending 兜底链路（Phase 1）保证不空窗。测试 +13。门禁：typecheck/lint 绿 + test:changed 84/84；E2E N/A（API-only）。执行模型: claude-opus-4-8；子代理: 无。
    - 范围（4 项）：① douban 候选源 query（douban_entries JOIN 映射桥 video_external_refs/catalog_external_refs → 站内 videos；D-183-1 分池走 videos.type movie/series，豆瓣 media_type 不参与判定） ② hot_movies/hot_series 候选生成（doubanScore 接线 + 过滤链 + AutofillCandidate 解释） ③ 缺口 top-50（未映射条目按 D-183-4.1 分数 → ContentGap[]，media_type 降级提示性字段） ④ 单测（分池 / 缺失信号按 0 / 缺口 DTO 无 videoId）。
    - 依赖：CHG-HOME-AUTOFILL-CORE-B。
 

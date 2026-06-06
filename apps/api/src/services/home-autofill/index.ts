@@ -12,6 +12,9 @@ export {
   PENALTY_UNSTABLE_SOURCE,
   RECENCY_HALF_LIFE_DAYS,
   SOURCE_HEALTH_SATURATION,
+  CANDIDATE_POOL_LIMIT,
+  GAP_TOP_N,
+  GAP_SCAN_WINDOW,
 } from './policy'
 export {
   normVotes,
@@ -29,3 +32,9 @@ export {
   type CandidateFilterInput,
 } from './filters'
 export { occupyVideoIds, isOccupied } from './dedup'
+export {
+  buildDoubanCandidates,
+  buildDoubanGaps,
+  generateDoubanSectionCandidates,
+  type DoubanSection,
+} from './douban'

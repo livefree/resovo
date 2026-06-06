@@ -2189,3 +2189,18 @@
 - **新增依赖**：无
 - **数据库变更**：migration 096（home_autofill_snapshots 新表；纯增量零阻断）
 - **注意事项**：① 端点 #4 不透出跨区块占用状态（D-183-6：占用结果以 preview #1 聚合权威为准，两端点职责分离）；② #2 摘要候选数 = 快照内全量（含 filtered，jsonb_array_length 口径）；③ policyVersion 未生成时 null（实施级推演：无快照即无策略产物，不回退代码常量伪装）；④ 快照写入方（worker）归 REFRESH 卡——当前表空，#4 全 section 返回未生成语义为预期中间态；⑤ 门禁：typecheck/lint 绿 + 全量 6844（1 flaky=StagingTable jsdom 既有项隔离 13/13 过）+ verify:adr-contracts EXIT=0（endpoint-adr 212 对齐）+ migrate:check 干净 + E2E admin 39 passed（1 known flaky retry 过）。
+
+## [CHG-HOME-AUTOFILL-DOUBAN] 豆瓣热门电影/剧集候选源（Phase 3 卡 15）
+- **完成时间**：2026-06-06
+- **记录时间**：2026-06-06 13:05
+- **执行模型**：claude-opus-4-8
+- **子代理**：无
+- **修改文件**：
+  - `apps/api/src/db/queries/home-autofill-douban.ts` — 新增：listDoubanCandidateSourceRows（映射桥三源 UNION：media_catalog.douban_id + video_external_refs manual_confirmed+is_primary（Y-105a-4 保守口径）+ catalog_external_refs relation='exact'；分池 WHERE videos.type 参数化 D-183-1；**不预过滤可见性**——filtered 候选保留入快照供解释；同 video 多映射 DISTINCT ON 取 votes 最高）+ listDoubanGapSourceRows（三源 NOT EXISTS + votes 序扫描窗预截，窗口钳位 2000）
+  - `apps/api/src/services/home-autofill/douban.ts` — 新增：buildDoubanCandidates（doubanScore 接线：recency=videos.updated_at 距今 / 源不稳定=source_check_status partial|all_dead / 成人=content_rating 或源站 is_adult 双信号；score DESC 排序，rank 仅未过滤条目占名次、filtered rank=0 哨兵；videoSummary.rating 取站内 catalog 非豆瓣）+ buildDoubanGaps（同公式评分单一实现，站内信号自然缺失按 0 → 纯豆瓣信号上界 0.7）+ generateDoubanSectionCandidates 编排（候选+缺口同时序产出同一快照 D-183-7.3）
+  - `apps/api/src/services/home-autofill/policy.ts` — +CANDIDATE_POOL_LIMIT 100 / GAP_TOP_N 50（D-183-7.2 裁定值）/ GAP_SCAN_WINDOW 500
+  - `apps/api/src/services/home-autofill/index.ts` — 出口同步
+  - `tests/unit/api/home-autofill-douban.test.ts` — 新增 13 用例（排序+rank 连续 / filtered 保留+不占名次 / 过滤链 5 信号映射 / 缺失按 0 / 源不稳定惩罚 / summary 口径 / 缺口 top-N+无 videoId+mediaTypeHint 提示性 / SQL 三源断言+不预过滤断言 / 编排分派）
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：① **dev 数据观察**：hot_movies 映射候选 37 条全 filtered（not_published——dev 库映射豆瓣视频均未发布）/ hot_series 仅 3 条，符合 ADR-183「初期 full_auto 产能=已映射可播视频、候选不足走 trending 兜底不空窗」预判（preview 聚合 hot_* fallback 已在 Phase 1 就绪）；缺口 top-50 正常（霸王别姬 0.681 居首）；全链路 122ms；② 实施级裁量：brandLocaleVisible 恒 true（D-182-3 settings 首版全局无 brand 维度）/ hasImageFallback 恒 false（FallbackCover 为渲染级兜底非数据级信号）——两处随过滤链输入显式声明；③ 修复过程：crawler_sites JOIN 列名 site_key→key（dev DB 实测捕获，单测 SQL 字符串断言不查列存在性的盲区，实测兜底）；④ E2E：N/A（API-only 无端点/UI 变更，CHG-VSR-3 同先例）；⑤ 门禁：typecheck/lint 绿 + test:changed 84/84。

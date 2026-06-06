@@ -29,3 +29,12 @@ export const RECENCY_HALF_LIFE_DAYS = 30
 
 /** source_health 饱和阈值：活跃可播源 ≥ 该数即满分 1（线性爬升） */
 export const SOURCE_HEALTH_SATURATION = 3
+
+/** 候选池上限（每次重算入快照的候选数；端点 #4 limit ≤100 同量级） */
+export const CANDIDATE_POOL_LIMIT = 100
+
+/** 缺口 top-N（D-183-7.2 裁定 N=50；仅 admin 视图不进前台） */
+export const GAP_TOP_N = 50
+
+/** 缺口扫描窗：votes 序预截后 JS 精确评分（豆瓣未映射池约 14 万，不可全量评分） */
+export const GAP_SCAN_WINDOW = 500
