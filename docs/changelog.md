@@ -1884,3 +1884,39 @@
 - **保留不动（核查确认）**：SEQ-20260524-01（🟡 容器 + `docs/audit/user-review-2026-05-23.md` 登记簿）；SEQ-20260602-03 / 20260604-02 / 20260605-01 各"后续卡登记"小节；`designs/` 5 份活跃设计稿（route-labeling-system / adr177 预研被 decisions.md·architecture.md·manual 真源引用，保留）；`docs/audit/adr-d-status.json` 工作区既有改动不属本卡，未提交。
 - **门禁**：docs 主体 + 1 行代码注释；`npm run test:changed` 见 commit 前执行记录。
 - **[AI-CHECK]**：六问——①归档零删失（行级切分 + 行号映射记录）②活跃文档零断链（全库 grep 0 残留）③未完成项零丢失（🟡/⬜/后续卡逐项核查保留或在归档头登记）④状态翻转均有实证（SEQ-20260601-01 全卡 ✅ / bangumi 代码在 main + 分支已删）⑤遵守追加式写入与归档命名惯例 ⑥偏离 1 项已登记（代码注释改址）。
+
+## [CHG-HOME-GOVERNANCE-PLAN] 首页运营治理方案落盘（SEQ-20260605-03 / 用户指令插队）
+
+- **完成时间**：2026-06-05
+- **记录时间**：2026-06-05 18:56
+- **任务类型**：纯文档方案落盘（本卡明确标注"更新文档"；不改代码 / schema / API）
+- **执行模型**：claude-opus-4-8（建议 sonnet，用户当前会话人工覆盖）｜ **子代理**：无
+- **修改文件**：
+  - `docs/designs/home-operations-governance-plan_20260605.md`（新）— 首页运营治理方案：前台同构画布、模块 Inspector、卡片拖拽/删除/添加、空卡片补位、Banner 横版大图强约束、自动填充、豆瓣电影/剧集、Bangumi 动漫、发布审计缓存与后续拆卡。
+  - `docs/README.md` — 活跃设计文档索引补充本治理方案。
+  - `docs/task-queue.md` — 新增并收口 SEQ-20260605-03 / CHG-HOME-GOVERNANCE-PLAN。
+  - `docs/tasks.md` — 当前任务卡生命周期登记并清空工作台。
+  - `docs/changelog.md` — 追加本记录。
+- **新增依赖**：无
+- **数据库变更**：无
+- **门禁**：`npm run test:changed` docs-only SKIP；`npm run typecheck` PASS；`npm run test -- --run` 全量 6681/6682（`tests/unit/components/admin/staging/StagingEditPanel.test.tsx` 既见并发 flaky，隔离复跑 12/12 PASS）；`npm run lint` FAIL 于既有 `apps/server-next/src/lib/home-modules/use-batch-add.ts:113` `@next/next/no-assign-module-variable`，超出本卡文件范围，未改代码且不 commit。
+- **共享层判断**：本次只落治理方案，不新增组件；后续 UI 实施阶段应优先复用 `ModernDataTable`、既有 admin form/drawer/modal、VideoPicker 与首页模块 API 客户端，若同构卡片/空槽/Inspector 字段 3 处以上复用，再沉淀到 `src/components/admin/shared/` 或对应 server-next shared 层。
+- **[AI-CHECK]**：问题理解 = 将首页运营改造需求固化为后续 UI/UX 与数据治理实施依据；根因判断 = 现后台已具备基础运营能力但缺少同构画布、强素材契约、自动填充与来源治理的统一方案；方案 = 文档化输入输出契约、状态归属、模块治理、自动填充来源、服务边界、验收标准与拆卡路径；偏离检测 = 无代码/schema/API 偏离，验证红灯均登记为既有范围外问题；结论 = docs-only 方案已落盘，可作为后续首页运营 UI/UX 改造入口。
+
+## [CHG-HOME-PRECOMMIT-LINT] 首页方案提交前 lint 阻断修复（SEQ-20260605-04 / 用户指令：提交并 push）
+
+- **完成时间**：2026-06-05
+- **记录时间**：2026-06-05 19:27
+- **任务类型**：小范围 lint 修复（提交前门禁阻断处理；不改变业务逻辑）
+- **执行模型**：claude-opus-4-8（建议 sonnet，用户当前会话人工覆盖）｜ **子代理**：无
+- **修改文件**：
+  - `apps/server-next/src/lib/home-modules/use-batch-add.ts` — 将局部变量 `module` 改名为 `createdModule`，解除 Next lint 规则 `@next/next/no-assign-module-variable`。
+  - `docs/task-queue.md` — 新增并收口 SEQ-20260605-04 / CHG-HOME-PRECOMMIT-LINT。
+  - `docs/tasks.md` — 当前任务卡生命周期登记并清空工作台。
+  - `docs/changelog.md` — 追加本记录。
+- **新增依赖**：无
+- **数据库变更**：无
+- **门禁**：`npm run lint` PASS；`npm run typecheck` PASS；`npm run test:changed` 33/33 PASS；`npm run test -- --run` 499 files / 6682 tests PASS。
+- **七问自检**：无整页刷新；无重复逻辑/重复状态；无应下沉逻辑；未破坏 Route→Service→DB 边界；无函数/文件规模新增风险；未引入技术债；不涉及 audit log 写入位点。
+- **偏离检测**：本次是命名级 lint 修复，不以补丁绕过结构问题；无兼容复杂度、状态流混乱、组件职责膨胀或无关代码触达；不涉及 ADR 验证段与 D-N 闭环。
+- **[AI-CHECK]**：结构检查：是否违反分层 NO；是否跨模块访问内部实现 NO。代码质量：是否新增重复逻辑 NO；是否存在 hack / 临时补丁 NO。规模检查：是否存在需拆分函数 NO；是否存在需拆分文件 NO。安全性：是否存在隐式副作用或吞异常 NO。结论：SAFE。

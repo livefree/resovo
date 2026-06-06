@@ -110,14 +110,14 @@ export function useBatchAdd({ modulesBySlot, setModulesBySlot, loadSlot, toast, 
     const createdModules: HomeModule[] = []
     for (const [i, item] of pending.entries()) {
       try {
-        const module = await createHomeModule({
+        const createdModule = await createHomeModule({
           slot,
           brandScope: 'all-brands',
           contentRefType: 'video',
           contentRefId: item.id,
           ordering: baseOrdering + i,
         })
-        createdModules.push(module)
+        createdModules.push(createdModule)
       } catch {
         failed += 1
       }

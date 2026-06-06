@@ -30,6 +30,7 @@
 2. `docs/server_next_plan_20260427.md`：server-next 工程主计划（含 ADR-103a Shell + ADR-103b admin-ui 边界）。
 3. **`docs/manual/`**：M-SN-8 起的"用户使用说明书"工程目录（开发卡前置草稿、完工后定稿；详见 §6）。
 4. 活跃设计文档（`docs/designs/`，2026-06）：
+   - `home-operations-governance-plan_20260605.md`（首页运营治理方案：同构编辑画布 / 自动填充 / 豆瓣与 Bangumi 热榜 / Banner 横图强约束，后续 `/admin/home` UI/UX 改造依据）
    - `videos-sources-responsibility-redesign_20260601.md`（SEQ-20260601-01 ✅ 已落地，§6 拆卡表留档）
    - `video-identity-resolution-redesign_20260602.md`（SEQ-20260602-03 主体完结；4 项后续小卡触发条件登记在 task-queue）
    - `merge-split-ux-redesign_20260603.md`（CHG-VIR-13 系列 ✅；「强负边不参与折叠连通」follow-up 待用户裁定）

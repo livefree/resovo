@@ -1060,3 +1060,48 @@
      ④ 已完成文档归档 4 件（tasks-bangumi.md / external-metadata-ux-overhaul_20260529.md / datatable-header-redesign-plan.md / known-failing-tests_20260529.md）+ 全库引用路径更新
      ⑤ 关键文档信息更新：docs/README.md（ADR 范围 100..180 / 归档指针 / last_reviewed）+ tracks.md（bangumi track 已集成收口）+ archive 季度索引
    - 验收要点：归档文件均 git add；活跃文档零断链（移动文件引用全部改址）；未完成序列（SEQ-20260524-01 / 各后续卡登记）原样保留。
+
+---
+
+## [SEQ-20260605-03] 首页运营治理方案落盘（用户指令插队）
+
+- **状态**：✅ 已完成（1/1 卡收口 2026-06-05 18:56；治理方案落盘 + README 索引；验证：test:changed docs-only SKIP / typecheck PASS / lint 受既有代码问题阻断 / full unit 1 flaky 隔离复跑通过）
+- **创建时间**：2026-06-05 18:47
+- **最后更新时间**：2026-06-05 18:56
+- **目标**：将“首页运营位 UI/UX 新改造”从口头方案落为可追踪设计/治理文档，指导后续首页运营同构画布、卡片拖拽/删除/添加、自动填充、豆瓣/Bangumi 热榜与 Banner 横图治理实施。
+- **范围**：纯文档落盘；新增 `docs/designs/home-operations-governance-plan_20260605.md`，更新 docs 索引、任务队列、当前任务与 changelog。**不改代码 / schema / API**。
+- **依赖**：SEQ-20260605-01 首页运营基础改造已完成 ✅；无 BLOCKER。
+- **跨层理由**：无跨层实现，本卡仅规划后续契约与拆卡边界。
+
+### 任务列表
+
+1. **CHG-HOME-GOVERNANCE-PLAN** — 首页运营治理方案落盘（状态：✅ 已完成）
+   - 创建时间：2026-06-05 18:47
+   - 实际开始：2026-06-05 18:47
+   - 完成时间：2026-06-05 18:56
+   - 建议模型：sonnet（文档方案落盘；实际 claude-opus-4-8，用户当前会话人工覆盖）
+   - 范围（5 项）：① 新增首页运营治理方案设计文档 ② 补 docs/README 活跃设计文档索引 ③ 登记/清理 tasks.md 当前任务 ④ 更新 task-queue 序列状态 ⑤ 追加 changelog。
+   - 验收要点：方案覆盖前台同构展示、区块可编辑/设置、视频卡片拖拽删除、空卡片添加、自动填充策略、豆瓣电影/剧集、Bangumi 动漫、顶部 Banner 横版大图强约束、实施拆卡与质量门禁。
+   - 完成备注：治理方案新增并纳入 docs/README 活跃设计索引；覆盖契约、状态归属、UI/UX 结构、卡片操作、Banner 横图强约束、自动填充、豆瓣/Bangumi 来源策略、Route→Service→queries 边界、发布审计缓存与后续拆卡。验证：`npm run test:changed` docs-only SKIP；`npm run typecheck` PASS；`npm run test -- --run` 全量 6681/6682（`StagingEditPanel` 既见并发 flaky，隔离复跑 12/12 PASS）；`npm run lint` FAIL 于既有 `apps/server-next/src/lib/home-modules/use-batch-add.ts:113` `@next/next/no-assign-module-variable`，超出本卡纯文档范围，未改代码且不 commit。
+
+---
+
+## [SEQ-20260605-04] 首页方案提交前 lint 阻断修复（用户指令：提交并 push 触发）
+
+- **状态**：✅ 已完成（1/1 卡收口 2026-06-05 19:27；提交前 lint 阻断修复；typecheck/lint/test:changed/full unit 全绿）
+- **创建时间**：2026-06-05 19:22
+- **最后更新时间**：2026-06-05 19:27
+- **目标**：修复阻断首页运营治理方案提交的 lint 红灯，使方案文档可按门禁提交并 push。
+- **范围**：仅修复 `apps/server-next/src/lib/home-modules/use-batch-add.ts` 中 `@next/next/no-assign-module-variable` 命名问题，并更新任务记录。**不改变业务逻辑**。
+- **依赖**：CHG-HOME-GOVERNANCE-PLAN 已完成 ✅；提交前门禁要求 lint 通过。
+
+### 任务列表
+
+1. **CHG-HOME-PRECOMMIT-LINT** — 首页方案提交前 lint 阻断修复（状态：✅ 已完成）
+   - 创建时间：2026-06-05 19:22
+   - 实际开始：2026-06-05 19:22
+   - 完成时间：2026-06-05 19:27
+   - 建议模型：sonnet（小范围 lint 修复；实际 claude-opus-4-8，用户当前会话人工覆盖）
+   - 范围（4 项）：① `module` 局部变量改名 ② 重新跑 typecheck/lint/test 门禁 ③ 收口 tasks/task-queue/changelog ④ 与首页方案文档一起提交并 push。
+   - 验收要点：无行为变化；lint 通过；不暂存既有 `docs/audit/adr-d-status.json`。
+   - 完成备注：`use-batch-add.ts` 中 `module` 局部变量改为 `createdModule`，仅解除 `@next/next/no-assign-module-variable`，无行为变化。门禁：`npm run lint` PASS；`npm run typecheck` PASS；`npm run test:changed` 33/33 PASS；`npm run test -- --run` 499 files / 6682 tests PASS。不暂存既有 `docs/audit/adr-d-status.json`。
