@@ -2,6 +2,8 @@ export * from './api-errors'
 export type * from './api.types'
 export type * from './banner.types'
 export type * from './home-module.types'
+// ADR-182 / CHG-HOME-PREVIEW-API-A：type + 常量数组 value export（HOME_SECTION_KEYS / HOME_AUTOFILL_MODES）
+export * from './home-section.types'
 export type * from './home.types'
 export type * from './user.types'
 // ADR-165 / CHG-SN-9-ROUTE-LABEL-D-A1：runtime exports（zod schema + 常量 + helper）

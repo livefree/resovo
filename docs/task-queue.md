@@ -1161,9 +1161,18 @@
    - 依赖：CHG-HOME-BANNER-UNIFY-A ✅。
    - 完成备注：新增 BannerOpsSection（列表/拖拽/启停/删除 Modal/创建末尾 sortOrder）+ BannerCard（deriveBannerStatus 对齐 deriveModuleStatus variant 口径，D-181-3 映射）+ BannerDrawer（时区对称往返同 HomeModuleDrawer 实现）；HomeOpsClient banner tab 分支（冻结存量清理区可编辑删除启停不可新建排序 + 顶部新建按钮隐藏 + 右栏 PreviewPanel 隐藏防误导）；顺带修复 SLOT-EXTEND 遗漏（HomeModuleDrawer SLOT_OPTIONS +3，数组非 Record 编译漏检）。测试：新增 11 用例 + HomeOpsClient 3 既有用例适配；home 组件域 77/77。门禁：typecheck/lint 绿 + test:changed 47/47 + verify 4 绿 + E2E admin 域。**D-181-1 冻结裁定全量落地（两子卡收口）**。执行模型: claude-opus-4-8；子代理: 无。
 
-6. **CHG-HOME-PREVIEW-API** — `GET /admin/home/preview` 完整首页预览聚合端点（状态：⬜ 待开始）
+6. **CHG-HOME-PREVIEW-API-A** — home_section_settings 落地 + sections/settings 端点（状态：✅ 已完成；原卡影响面 7 项 > 5 按原子化判据拆 -A/-B，2026-06-06 00:20）
+   - 实际开始：2026-06-06 00:20 ｜ 完成时间：2026-06-06 01:00
+   - 建议模型：sonnet（契约已由 ADR-182 完全锁定；实际 claude-opus-4-8，用户 opus 会话人工覆盖）
+   - 范围（5 项）：① migration 095（home_section_settings 表 + seed 7 行 + audit target_kind CHECK 15→16，ADR-182 D-182-3/D-182-5） ② `packages/types/src/home-section.types.ts`（HomeSectionKey/HomeSectionSettings 等）+ audit 枚举 +4/+1 ③ `queries/home-section-settings.ts` + `HomeCurationService` settings 部分 ④ 端点 2 `GET /admin/home/sections` + 端点 3 `PATCH /admin/home/sections/:section/settings`（routes/admin/home.ts 新文件，audit `home_section.settings_update` R-MID-1 断言） ⑤ 单测（端点正反 + audit payload + seed 幂等）。
+   - 跨层理由：schema + api-service 跨 2 层——settings 表与其读写端点属同一契约闭环（表落地无消费方即死代码）。
+   - 依赖：CHG-HOME-GOV-ADR-B ✅。
+   - 完成备注：ADR-182 D-182-2/3/4/5 零自由度落地。migration 095 已应用（seed 7 行 + audit CHECK 16 值 pg 实证）；类型层 +5 接口 +2 常量 + audit 枚举 +4/+1（apply/reorder/refresh 3 项写入位点归 Phase 2/3 卡）；queries 4 函数（countPinnedBySection banner→home_banners UNION）；HomeCurationService settings 域 + audit settings_update（targetId=settings 行 id）；端点 #2（枚举序 + 摘要 + frontendWired）/#3（非法 section 422 先于 404 + .strict() + ≥1 字段）。测试：10 新用例 + audit 守卫登记（R-MID-1 第 33 次）。门禁：typecheck/lint 绿 + **全量 6723/6723** + verify-endpoint-adr 209 对齐 + E2E admin 39 passed。执行模型: claude-opus-4-8；子代理: 无。
+
+6b. **CHG-HOME-PREVIEW-API-B** — `GET /admin/home/preview` 整页预览聚合（状态：⬜ 待开始）
    - 建议模型：sonnet
-   - 依赖：CHG-HOME-GOV-ADR-B。
+   - 范围：HomeCurationService 整页聚合（7 区块 cards + pinned/auto/fallback/empty + 风险态 flags + D-181-3 DTO 统一映射 + trending 兜底 + 跳缓存）+ 端点 1 + 单测。
+   - 依赖：CHG-HOME-PREVIEW-API-A。
 
 7. **CHG-HOME-CANVAS-A** — 后台同构画布：画布布局 + 区块渲染（状态：⬜ 待开始）
    - 建议模型：sonnet

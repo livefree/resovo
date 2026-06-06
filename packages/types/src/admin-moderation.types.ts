@@ -250,6 +250,13 @@ export type AdminAuditActionType =
   // CHG-VIR-13-C1 / ADR-179 D-179-5：rejected 候选人工复活（targetKind 复用 'identity_candidate' / targetId=原 candidateId）
   | 'identity_candidate.revive'          // POST /admin/identity-candidates/:id/revive
 
+  // CHG-HOME-PREVIEW-API-A / ADR-182 D-182-5：Home Curation 区块操作 4 项
+  // （targetKind 'home_section' / targetId = home_section_settings.id，seed 7 行恒存在）
+  | 'home_section.settings_update'    // PATCH /admin/home/sections/:section/settings
+  | 'home_section.apply_autofill'     // POST  /admin/home/sections/:section/apply-autofill（Phase 3 实装）
+  | 'home_section.reorder'            // POST  /admin/home/sections/:section/reorder（Phase 2 实装；afterJsonb 必含 sectionKey+真源标识+ids，D-182-4.6）
+  | 'home_section.refresh_candidates' // POST  /admin/home/sections/:section/refresh-candidates（Phase 3 实装）
+
 export type AdminAuditTargetKind =
   | 'video'
   | 'video_source'
@@ -266,6 +273,7 @@ export type AdminAuditTargetKind =
   | 'filter_preset'  // CHG-SN-8-FUP-PRESET-TEAM-EP-A / ADR-144：FilterPreset CRUD 目标（migration 072 CHECK 12→13）
   | 'crawler_task'   // CHG-SN-9-CW1-B-EP / ADR-151：task 级 cancel 目标（单点 / batch 用 'system'）
   | 'identity_candidate'  // CHG-VIR-9-B / ADR-178 D-178-6：identity 候选 reject 目标（migration 088 CHECK 14→15）
+  | 'home_section'  // CHG-HOME-PREVIEW-API-A / ADR-182 D-182-5：Home Curation 区块操作目标（migration 095 CHECK 15→16；targetId = home_section_settings.id）
 
 export interface AdminAuditLog {
   readonly id: string  // bigserial → string（避免 JS 大数精度）

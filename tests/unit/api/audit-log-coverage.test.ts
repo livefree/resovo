@@ -109,6 +109,8 @@ const REQUIRED_ACTION_TYPES = [
   'identity_candidate.reject',          // POST /admin/identity-candidates/:id/reject
   // CHG-VIR-13-C1 / ADR-179 D-179-5：rejected 候选人工复活（R-MID-1 第 32 次系统化）
   'identity_candidate.revive',          // POST /admin/identity-candidates/:id/revive
+  // CHG-HOME-PREVIEW-API-A / ADR-182 D-182-5：Home Curation 区块设置更新（R-MID-1 第 33 次系统化）
+  'home_section.settings_update',       // PATCH /admin/home/sections/:section/settings
 ] as const
 
 const ACTION_TYPE_REGEX = /actionType:\s*['"]([a-z_.]+)['"]/g
@@ -206,6 +208,8 @@ const PAYLOAD_ASSERTION_REQUIRED = [
   'identity_candidate.reject',
   // CHG-VIR-13-C1 / ADR-179 D-179-5：rejected 候选人工复活 audit payload 内容断言（R-MID-1 第 32 次 / tests/unit/api/identity-decisions-revive.test.ts）
   'identity_candidate.revive',
+  // CHG-HOME-PREVIEW-API-A / ADR-182 D-182-5：区块设置更新 audit payload 内容断言（R-MID-1 第 33 次 / tests/unit/api/admin-home-sections.test.ts）
+  'home_section.settings_update',
 ] as const
 
 // CHG-SN-6-10：plan v1.4 §3.0.5 M-SN-4 legacy 11 项已迁移至 PAYLOAD_ASSERTION_REQUIRED

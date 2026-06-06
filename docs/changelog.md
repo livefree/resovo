@@ -2012,3 +2012,22 @@
 - **新增依赖**：无
 - **数据库变更**：无
 - **注意事项**：① 运营入口自此统一：server-next /admin/home Banner tab 即 home_banners（Hero 真源）唯一推荐编辑入口（D-181-1.3），v1 banners UI 降级为维护期参考、随 v1 退场；② 冻结存量区无 DndContext——useSortable 在缺省 context 下安全降级（拖拽 handle 无效果，符合"不可排序"预期）；③ banner tab 右栏预览隐藏，Hero 真实效果走「预览前台」；④ CHG-HOME-BANNER-UNIFY 两子卡全部收口 → D-181-1 冻结裁定全量落地。
+
+## [CHG-HOME-PREVIEW-API-A] home_section_settings 落地 + sections/settings 端点（ADR-182 端点 #2/#3）
+- **完成时间**：2026-06-06
+- **记录时间**：2026-06-06 00:50
+- **执行模型**：claude-opus-4-8
+- **子代理**：无
+- **修改文件**：
+  - `apps/api/src/db/migrations/095_home_section_settings.sql` — 新增：home_section_settings 表（section 7 值 UNIQUE CHECK + autofill_mode 4 值 + refresh_interval_minutes/display_count/allow_duplicates/pinned_limit/settings JSONB + updated_at 触发器）+ seed 7 行幂等 + admin_audit_log.target_kind CHECK 15→16（+home_section）；已应用 dev DB 实证
+  - `packages/types/src/home-section.types.ts` — 新增：HomeSectionKey/HomeAutofillMode/HomeSectionSettings/UpdateHomeSectionSettingsInput/HomeSectionSummary + HOME_SECTION_KEYS/HOME_AUTOFILL_MODES 常量；`index.ts` value export
+  - `packages/types/src/admin-moderation.types.ts` — AdminAuditActionType +4（home_section.{settings_update,apply_autofill,reorder,refresh_candidates}）+ AdminAuditTargetKind +home_section
+  - `apps/api/src/db/queries/home-section-settings.ts` — 新增：list/find/update（动态 SET + settings JSONB 整体替换）/countPinnedBySection（banner→home_banners UNION 其余→home_modules）
+  - `apps/api/src/services/HomeCurationService.ts` — 新增：聚合层 Service（settings 域）+ SectionParamSchema/UpdateSectionSettingsSchema（.strict() + ≥1 字段）+ audit settings_update（targetId=settings 行 id，D-182-5.3）
+  - `apps/api/src/routes/admin/home.ts` — 新增：端点 #2 GET sections（枚举序 + 摘要：pinnedCount/快照 null/type_shortcuts frontendWired:false）+ 端点 #3 PATCH settings（非法 section 422 先于 404）；`server.ts` 注册
+  - `docs/architecture.md` — §5.10 新表 + audit 枚举同步
+  - `tests/unit/api/admin-home-sections.test.ts` — 新增 10 用例（枚举序/摘要字段/401/部分更新/audit R-MID-1 内容断言/非法 section/空 body/.strict()/404 兜底/null 置回）
+  - `tests/unit/api/audit-log-coverage.test.ts` — 守卫登记 home_section.settings_update（声明集 + PAYLOAD_ASSERTION_REQUIRED，R-MID-1 第 33 次系统化）
+- **新增依赖**：无
+- **数据库变更**：migration 095（新表 + seed 7 行 + audit CHECK 15→16）
+- **注意事项**：① sections 摘要的 lastSnapshotAt/candidateCount 恒 null 直到 ADR-183 快照表落地（契约语义"未生成"）；② actionType 4 项一次性入类型真源，其中 3 项（apply/reorder/refresh）写入位点归 Phase 2/3 实施卡——守卫只登记已有写入位点的 settings_update，后续卡照此逐项登记；③ 端点 #1 preview 归 -B 卡；④ 门禁：typecheck/lint 绿 + 全量 6723/6723 + verify-endpoint-adr 209 路由对齐（新 2 端点命中 ADR-182 契约表）+ E2E admin 域。

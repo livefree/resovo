@@ -6,7 +6,7 @@
 
 ## 当前任务（单任务工作台：同时仅 1 个 🔄 进行中；完成即删卡，历史见 docs/changelog.md）
 
-（空 — 上一任务 CHG-HOME-BANNER-UNIFY-B 已收口 2026-06-06，见 changelog；待 E2E 确认后提交；下一卡 CHG-HOME-PREVIEW-API 待取）
+（空 — 上一任务 CHG-HOME-PREVIEW-API-A 已收口 2026-06-06，见 changelog；下一卡 CHG-HOME-PREVIEW-API-B 待取）
 
 ---
 
