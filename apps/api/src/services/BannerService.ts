@@ -80,6 +80,7 @@ export class BannerService {
   }
 
   async reorder(orders: Array<{ id: string; sortOrder: number }>): Promise<void> {
-    return bannerQueries.updateBannerSortOrders(this.db, orders)
+    // query 返回更新行数（CHG-HOME-CARD-DND-A 加性变更）；v1 路径无消费方，维持 void 签名
+    await bannerQueries.updateBannerSortOrders(this.db, orders)
   }
 }

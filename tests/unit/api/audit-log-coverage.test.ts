@@ -111,6 +111,9 @@ const REQUIRED_ACTION_TYPES = [
   'identity_candidate.revive',          // POST /admin/identity-candidates/:id/revive
   // CHG-HOME-PREVIEW-API-A / ADR-182 D-182-5：Home Curation 区块设置更新（R-MID-1 第 33 次系统化）
   'home_section.settings_update',       // PATCH /admin/home/sections/:section/settings
+  // CHG-HOME-CARD-DND-A / ADR-182 D-182-4.6：区块排序门面（R-MID-1 第 34 次系统化；
+  // 不嵌套触发 home_module.reorder——home_modules 排序回溯须联合两 actionType 查询）
+  'home_section.reorder',               // POST /admin/home/sections/:section/reorder
 ] as const
 
 const ACTION_TYPE_REGEX = /actionType:\s*['"]([a-z_.]+)['"]/g
@@ -210,6 +213,8 @@ const PAYLOAD_ASSERTION_REQUIRED = [
   'identity_candidate.revive',
   // CHG-HOME-PREVIEW-API-A / ADR-182 D-182-5：区块设置更新 audit payload 内容断言（R-MID-1 第 33 次 / tests/unit/api/admin-home-sections.test.ts）
   'home_section.settings_update',
+  // CHG-HOME-CARD-DND-A / ADR-182 D-182-4.6：区块排序门面 audit payload 内容断言（R-MID-1 第 34 次 / tests/unit/api/admin-home-sections.test.ts）
+  'home_section.reorder',
 ] as const
 
 // CHG-SN-6-10：plan v1.4 §3.0.5 M-SN-4 legacy 11 项已迁移至 PAYLOAD_ASSERTION_REQUIRED

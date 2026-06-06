@@ -1205,11 +1205,20 @@
 
 ### Phase 2 卡登记（Phase 1 收口后细化，2026-06-06 03:10）
 
-10. **CHG-HOME-CARD-DND** — 画布卡片拖拽排序 + 跨区块确认（状态：⬜ 待开始）
-   - 建议模型：sonnet
-   - 范围：画布内同区块拖拽（复用 dnd-kit，调端点 #6 `POST /admin/home/sections/:section/reorder` 实装——门面按 section 分派真源 + audit `home_section.reorder` 载荷硬约束 D-182-4.6）+ 跨区块落位确认弹层（方案 §5.3）+ 测试。
+10. **CHG-HOME-CARD-DND-A** — 端点 #6 reorder 门面实装（后端）（状态：✅ 已完成）
+   - 实际开始：2026-06-06 00:25 ｜ 完成时间：2026-06-06 00:50
+   - 建议模型：sonnet（实际 claude-opus-4-8，用户 opus 会话人工覆盖）
+   - 拆卡（2026-06-06）：原卡范围 6 项 > 5 且跨 api-service/UI 两层 → 按原子化判据拆 -A（后端门面）/-B（画布 DnD UI），同 Phase 1 BANNER-UNIFY / CANVAS 拆分惯例。
+   - 范围（5 项）：① `ReorderSectionSchema` ② `HomeCurationService.reorderSection` 按 section 分派真源（banner → `updateBannerSortOrders` / 其余 → `reorderHomeModules` 直调 queries 不经资源级 Service；归属校验 422 / settings 缺行 404） ③ audit `home_section.reorder`（D-182-4.6 载荷硬约束 + D-182-5.3 targetId=settings.id + 守卫登记） ④ 端点 #6 route ⑤ 单测 ≥10。
+   - 跨层理由：纯 api-service 层（route + Service + queries 微调同一契约闭环）。
    - 依赖：CHG-HOME-CANVAS-B ✅。
-   - 备注：端点 #6 实装属本卡（route + Service reorder 门面 + audit 守卫登记）。
+   - 完成备注：D-182-4 #6 / D-182-4.6 / D-182-5.3 零自由度落地。reorderSection 双真源分派（banner→home_banners 经 ordering→sortOrder 映射；其余→home_modules slot=section 归属校验；id 不属真源 422 AppError + 不写库不写 audit）；audit `home_section.reorder` 载荷硬约束（before/afterJsonb 均携 sectionKey+source，after 加 ids 数组；before 取 DB 原值 R-MID-1；**单条记录不嵌套 home_module.reorder**——回溯须联合两 actionType 为 D-182-4.6 有意裁定）+ 守卫登记（R-MID-1 第 34 次）。`updateBannerSortOrders` void→number 加性变更（updated 计数诚实化，对齐 reorderHomeModules 口径）。**偏离声明**：BannerService.reorder +2 行（return→await）为 query 返回类型变更强制编译闭环，范围外连带修正。banner 排序经门面首次获得审计覆盖（v1 legacy 无 audit）。测试：+10 用例（文件 28/28，audit 守卫 125/125）。门禁：typecheck/lint 绿 + test:changed 197/197 + verify:adr-contracts 4 绿（endpoint-adr 211 对齐）+ E2E admin 39 passed（1 flaky=admin-source-and-video-flows moderation reject 已知项 retry 过）。执行模型: claude-opus-4-8；子代理: 无。
+
+10b. **CHG-HOME-CARD-DND-B** — 画布同区块拖拽 + 跨区块确认弹层（UI）（状态：⬜ 待开始）
+   - 建议模型：sonnet
+   - 范围：① 桥接层 `lib/home-curation/api.ts` +reorderHomeSection ② 画布内同区块拖拽（复用 dnd-kit，pinned 卡可拖、auto/fallback/empty 不可拖）③ 跨区块落位确认弹层（方案 §5.3：视频卡跨视频型区块需确认；banner 区块不受普通 poster 卡落位）④ 组件测试。
+   - 跨层理由：纯 UI 层（端点 #6 由 -A 交付）。
+   - 依赖：CHG-HOME-CARD-DND-A。
 
 11. **CHG-HOME-EMPTY-SLOTS** — 画布空卡片添加入口（状态：⬜ 待开始）
    - 建议模型：sonnet

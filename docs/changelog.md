@@ -2076,3 +2076,20 @@
 - **新增依赖**：无
 - **数据库变更**：无
 - **注意事项**：① **CHG-HOME-CANVAS 两子卡收口 → SEQ-20260605-05 Phase 1（真源与同构预览）全部 11 卡交付**（ADR 三卡 + SLOT-EXTEND + BANNER-UNIFY-A/B + PREVIEW-API-A/B + CANVAS-A/B；TIMEWINDOW 取消）；② 方案 §3 信息架构落地形态：画布主区 + 右侧 Inspector + 环境栏；「保存草稿/发布」按钮按 §13 阶段衔接隐藏至 Phase 4；③ Phase 2（卡片操作闭环：CARD-DND/EMPTY-SLOTS/IMAGE-GUARD-BANNER）为下一阶段，起卡前按惯例细化登记；④ 门禁：typecheck/lint 绿 + test:changed 44/44 + E2E admin 域。
+
+## [CHG-HOME-CARD-DND-A] 端点 #6 reorder 门面实装（后端）
+- **完成时间**：2026-06-06
+- **记录时间**：2026-06-06 00:55
+- **执行模型**：claude-opus-4-8
+- **子代理**：无
+- **修改文件**：
+  - `apps/api/src/services/HomeCurationService.ts` — 新增 `ReorderSectionSchema`（≥1 ≤200 uuid+ordering，.strict()）+ `reorderSection`（按 section 分派真源：banner→`updateBannerSortOrders`（ordering→sortOrder 映射）/ 其余→`reorderHomeModules`（slot=section 归属校验）；**直调 queries 不经资源级 Service**——不嵌套触发 `home_module.reorder`，D-182-4.6 有意裁定；id 不属真源 422 AppError + 不写库不写 audit；settings 缺行 null→404）+ `writeReorderAudit`（载荷硬约束：before/afterJsonb 携 sectionKey+source，after 加 ids；before 取 DB 原值 R-MID-1；targetId=settings.id D-182-5.3）
+  - `apps/api/src/routes/admin/home.ts` — 端点 #6 `POST /admin/home/sections/:section/reorder`（非法 section 422 先于 404；归属校验 AppError→422 分支）
+  - `apps/api/src/db/queries/home-banners.ts` — `updateBannerSortOrders` 返回 void→number（加性变更，updated 计数对齐 reorderHomeModules 口径）
+  - `apps/api/src/services/BannerService.ts` — **范围外编译闭环连带**：reorder 内 return→await（query 返回类型变更强制；v1 void 签名不变）
+  - `tests/unit/api/admin-home-sections.test.ts` — +10 用例（双真源分派 happy path / audit payload 内容断言 ×2 / slot 不匹配 422 / id 不存在 422 / 非法 section / body 三态校验 / 404 / 401）；文件 28/28
+  - `tests/unit/api/audit-log-coverage.test.ts` — `home_section.reorder` 守卫登记（declared + PAYLOAD_ASSERTION_REQUIRED，R-MID-1 第 34 次系统化）
+  - `docs/architecture.md` — §5.10 端点行 +#6（门面分派 + 审计联合查询口径）
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：① banner 排序经门面**首次获得审计覆盖**（v1 legacy `PATCH /admin/banners/reorder` 无 audit；D-182-4.6 裁定门面为画布唯一排序路径）；② home_modules 排序历史回溯须联合 `home_module.reorder` ∪ `home_section.reorder` 两 actionType 查询（有意裁定非盲区，审计 UI 实现时不得单 actionType 过滤）；③ 原卡 CHG-HOME-CARD-DND 范围 6 项 > 5 按原子化判据拆 -A/-B，-B（画布 DnD + 跨区块确认弹层）已登记待取；④ 门禁：typecheck/lint 绿 + test:changed 197/197 + verify:adr-contracts 4 绿（endpoint-adr 211 对齐）+ E2E admin 39 passed（1 known flaky retry 过）。

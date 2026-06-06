@@ -235,12 +235,21 @@ const mockListAdminModules = vi.fn()
 const mockTrending = vi.fn()
 const mockByRating = vi.fn()
 const mockCardsByIds = vi.fn()
+// CHG-HOME-CARD-DND-A：端点 #6 reorder 门面依赖
+const mockFindBanner = vi.fn()
+const mockUpdateBannerSorts = vi.fn()
+const mockFindModule = vi.fn()
+const mockReorderModules = vi.fn()
 
 vi.mock('@/api/db/queries/home-banners', () => ({
   listAllBanners: (...args: unknown[]) => mockListAllBanners(...args),
+  findBannerById: (...args: unknown[]) => mockFindBanner(...args),
+  updateBannerSortOrders: (...args: unknown[]) => mockUpdateBannerSorts(...args),
 }))
 vi.mock('@/api/db/queries/home-modules', () => ({
   listAdminHomeModules: (...args: unknown[]) => mockListAdminModules(...args),
+  findHomeModuleById: (...args: unknown[]) => mockFindModule(...args),
+  reorderHomeModules: (...args: unknown[]) => mockReorderModules(...args),
 }))
 vi.mock('@/api/db/queries/videos', () => ({
   listTrendingVideos: (...args: unknown[]) => mockTrending(...args),
@@ -442,5 +451,145 @@ describe('GET /admin/home/preview', () => {
       headers: { authorization: await adminToken() },
     })
     expect(res.statusCode).toBe(422)
+  })
+})
+
+// ── POST /admin/home/sections/:section/reorder（CHG-HOME-CARD-DND-A / D-182-4 #6）──
+
+describe('POST /admin/home/sections/:section/reorder', () => {
+  let app: Awaited<ReturnType<typeof buildApp>>
+
+  const UUID_A = '11111111-1111-4111-8111-111111111111'
+  const UUID_B = '22222222-2222-4222-8222-222222222222'
+
+  beforeEach(async () => {
+    vi.clearAllMocks()
+    mockFind.mockResolvedValue(settingsRow('featured', { id: 's-featured' }))
+    mockFindModule.mockImplementation((_db: unknown, id: string) =>
+      Promise.resolve(moduleRow({ id, slot: 'featured', ordering: id === UUID_A ? 0 : 1 })))
+    mockReorderModules.mockResolvedValue(2)
+    mockFindBanner.mockImplementation((_db: unknown, id: string) =>
+      Promise.resolve(bannerRow({ id, sortOrder: id === UUID_A ? 0 : 1 })))
+    mockUpdateBannerSorts.mockResolvedValue(2)
+    app = await buildApp()
+  })
+
+  function inject(section: string, body: unknown, token: string) {
+    return app.inject({
+      method: 'POST',
+      url: `/v1/admin/home/sections/${section}/reorder`,
+      headers: { authorization: token, 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+  }
+
+  const SWAP = { items: [{ id: UUID_A, ordering: 1 }, { id: UUID_B, ordering: 0 }] }
+
+  it('featured：真源分派 home_modules（直调 reorderHomeModules）→ 200 { updated }', async () => {
+    const res = await inject('featured', SWAP, await adminToken())
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.updated).toBe(2)
+    expect(mockReorderModules).toHaveBeenCalledWith(expect.anything(), SWAP.items)
+    expect(mockUpdateBannerSorts).not.toHaveBeenCalled()
+  })
+
+  it('banner：真源分派 home_banners（ordering→sortOrder 映射）→ 200 { updated }', async () => {
+    mockFind.mockResolvedValue(settingsRow('banner', { id: 's-banner' }))
+    const res = await inject('banner', SWAP, await adminToken())
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.updated).toBe(2)
+    expect(mockUpdateBannerSorts).toHaveBeenCalledWith(expect.anything(), [
+      { id: UUID_A, sortOrder: 1 },
+      { id: UUID_B, sortOrder: 0 },
+    ])
+    expect(mockReorderModules).not.toHaveBeenCalled()
+  })
+
+  it('audit R-MID-1 内容断言（home_modules 分支）：D-182-4.6 载荷硬约束 + before 取 DB 原值', async () => {
+    await inject('featured', SWAP, await adminToken())
+    expect(mockAuditWrite).toHaveBeenCalledOnce() // 不嵌套触发 home_module.reorder（D-182-4.6）
+    expect(mockAuditWrite).toHaveBeenCalledWith(expect.objectContaining({
+      actionType: 'home_section.reorder',
+      targetKind: 'home_section',
+      targetId: 's-featured', // D-182-5.3：锚定 settings 行 id
+      beforeJsonb: {
+        sectionKey: 'featured',
+        source: 'home_modules',
+        items: [{ id: UUID_A, ordering: 0 }, { id: UUID_B, ordering: 1 }], // DB 原值
+      },
+      afterJsonb: {
+        sectionKey: 'featured',
+        source: 'home_modules',
+        ids: [UUID_A, UUID_B],
+        items: SWAP.items,
+      },
+    }))
+  })
+
+  it('audit 内容断言（home_banners 分支）：source 真源标识 + before 取 sortOrder 原值', async () => {
+    mockFind.mockResolvedValue(settingsRow('banner', { id: 's-banner' }))
+    await inject('banner', SWAP, await adminToken())
+    expect(mockAuditWrite).toHaveBeenCalledOnce()
+    expect(mockAuditWrite).toHaveBeenCalledWith(expect.objectContaining({
+      actionType: 'home_section.reorder',
+      targetId: 's-banner',
+      beforeJsonb: expect.objectContaining({
+        sectionKey: 'banner',
+        source: 'home_banners',
+        items: [{ id: UUID_A, ordering: 0 }, { id: UUID_B, ordering: 1 }],
+      }),
+      afterJsonb: expect.objectContaining({ source: 'home_banners', ids: [UUID_A, UUID_B] }),
+    }))
+  })
+
+  it('id 的 slot 不属于该 section（featured 传 top10 行）→ 422 且不写库不写 audit', async () => {
+    mockFindModule.mockResolvedValue(moduleRow({ id: UUID_A, slot: 'top10' }))
+    const res = await inject('featured', { items: [{ id: UUID_A, ordering: 0 }] }, await adminToken())
+    expect(res.statusCode).toBe(422)
+    expect(res.json().error.code).toBe('VALIDATION_ERROR')
+    expect(mockReorderModules).not.toHaveBeenCalled()
+    expect(mockAuditWrite).not.toHaveBeenCalled()
+  })
+
+  it('id 不存在于真源 → 422（banner section 传 home_modules id 同口径）', async () => {
+    mockFind.mockResolvedValue(settingsRow('banner', { id: 's-banner' }))
+    mockFindBanner.mockResolvedValue(null) // 冻结存量 home_modules banner 行不属 home_banners 真源
+    const res = await inject('banner', { items: [{ id: UUID_A, ordering: 0 }] }, await adminToken())
+    expect(res.statusCode).toBe(422)
+    expect(mockUpdateBannerSorts).not.toHaveBeenCalled()
+    expect(mockAuditWrite).not.toHaveBeenCalled()
+  })
+
+  it('非法 section 枚举外值 → 422（先于 404 判定，D-182-4 #9）', async () => {
+    const res = await inject('not_a_section', SWAP, await adminToken())
+    expect(res.statusCode).toBe(422)
+    expect(mockFind).not.toHaveBeenCalled()
+  })
+
+  it('body 校验：空 items / 超 200 项 / 非 uuid id → 422', async () => {
+    const token = await adminToken()
+    expect((await inject('featured', { items: [] }, token)).statusCode).toBe(422)
+    expect((await inject('featured', {
+      items: Array.from({ length: 201 }, (_, i) => ({ id: UUID_A, ordering: i })),
+    }, token)).statusCode).toBe(422)
+    expect((await inject('featured', { items: [{ id: 'not-uuid', ordering: 0 }] }, token)).statusCode).toBe(422)
+    expect(mockReorderModules).not.toHaveBeenCalled()
+  })
+
+  it('settings 行缺失（迁移漂移兜底）→ 404', async () => {
+    mockFind.mockResolvedValue(null)
+    const res = await inject('featured', SWAP, await adminToken())
+    expect(res.statusCode).toBe(404)
+    expect(res.json().error.code).toBe('NOT_FOUND')
+  })
+
+  it('未登录返回 401', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/admin/home/sections/featured/reorder',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(SWAP),
+    })
+    expect(res.statusCode).toBe(401)
   })
 })

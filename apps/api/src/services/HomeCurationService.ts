@@ -28,11 +28,12 @@ import {
   updateHomeSectionSettings,
   countPinnedBySection,
 } from '@/api/db/queries/home-section-settings'
-import { listAllBanners } from '@/api/db/queries/home-banners'
-import { listAdminHomeModules } from '@/api/db/queries/home-modules'
+import { listAllBanners, findBannerById, updateBannerSortOrders } from '@/api/db/queries/home-banners'
+import { listAdminHomeModules, findHomeModuleById, reorderHomeModules } from '@/api/db/queries/home-modules'
 import { listTrendingVideos } from '@/api/db/queries/videos'
 import { listVideosByRatingDesc, listVideoCardsByIds } from '@/api/db/queries/videos.status'
 import { AuditLogService } from '@/api/services/AuditLogService'
+import { AppError } from '@/api/lib/errors'
 
 // ── zod schemas（ADR-182 D-182-4 #3 / #9）──────────────────────────
 
@@ -50,6 +51,14 @@ export const UpdateSectionSettingsSchema = z.object({
   // JSONB 整体替换（非深合并，与 ADR-104 metadata 同语义）
   settings: z.record(z.unknown()).optional(),
 }).strict().refine((v) => Object.keys(v).length > 0, { message: '至少一字段' })
+
+/** POST reorder body（D-182-4 #6：≥1 ≤200；形态对齐 HomeModulesService.ReorderSchema） */
+export const ReorderSectionSchema = z.object({
+  items: z.array(z.object({
+    id: z.string().uuid(),
+    ordering: z.number().int().min(0),
+  })).min(1).max(200),
+}).strict()
 
 /** GET /admin/home/preview query（D-182-4 #1） */
 export const PreviewQuerySchema = z.object({
@@ -230,6 +239,93 @@ export class HomeCurationService {
     })
 
     return after
+  }
+
+  /**
+   * 端点 #6：区块内排序门面（画布唯一排序路径，D-182-4 #6）。
+   * 按 section 分派真源：banner → `home_banners.sort_order`；其余 → `home_modules.ordering`
+   * （slot = section key）。**直调 queries 不经资源级 Service**——避免嵌套触发
+   * `home_module.reorder` 二次记录（D-182-4.6 有意裁定：home_modules 排序历史回溯须
+   * 联合 `home_module.reorder` ∪ `home_section.reorder` 两 actionType 查询）。
+   * banner 排序经本门面**首次获得审计覆盖**（v1 legacy PATCH /admin/banners/reorder 无 audit）。
+   *
+   * @throws AppError VALIDATION_ERROR 422 — items 中 id 不属于该 section 真源
+   * @returns null = section settings 行缺失（迁移漂移兜底 404）
+   */
+  async reorderSection(
+    section: HomeSectionKey,
+    params: z.infer<typeof ReorderSectionSchema>,
+    actorId: string,
+    requestId?: string,
+  ): Promise<{ updated: number } | null> {
+    // targetId 锚定 settings 行 id（D-182-5.3：section key 非 UUID，不可作 target_id）
+    const settings = await findHomeSectionSettings(this.db, section)
+    if (!settings) return null
+
+    const ids = params.items.map((i) => i.id)
+
+    if (section === 'banner') {
+      // banner section 真源 = home_banners（D-181-1；冻结存量 home_modules banner 行不属本真源）
+      const rows = await Promise.all(ids.map((id) => findBannerById(this.db, id)))
+      const byId = new Map(rows.flatMap((r) => (r ? [[r.id, r] as const] : [])))
+      const invalid = ids.filter((id) => !byId.has(id))
+      if (invalid.length > 0) {
+        throw new AppError(
+          'VALIDATION_ERROR',
+          `id 不属于 banner 区块真源 home_banners：${invalid.join(', ')}`,
+          422,
+        )
+      }
+      // R-MID-1：before 取 DB 原值（入参回写无取证价值）
+      const beforeItems = params.items.map((i) => ({ id: i.id, ordering: byId.get(i.id)!.sortOrder }))
+      const updated = await updateBannerSortOrders(
+        this.db,
+        params.items.map((i) => ({ id: i.id, sortOrder: i.ordering })),
+      )
+      this.writeReorderAudit(section, 'home_banners', settings.id, beforeItems, params.items, actorId, requestId)
+      return { updated }
+    }
+
+    const rows = await Promise.all(ids.map((id) => findHomeModuleById(this.db, id)))
+    const byId = new Map(rows.flatMap((r) => (r ? [[r.id, r] as const] : [])))
+    const invalid = ids.filter((id) => byId.get(id)?.slot !== section)
+    if (invalid.length > 0) {
+      throw new AppError(
+        'VALIDATION_ERROR',
+        `id 不属于 ${section} 区块真源 home_modules(slot=${section})：${invalid.join(', ')}`,
+        422,
+      )
+    }
+    const beforeItems = params.items.map((i) => ({ id: i.id, ordering: byId.get(i.id)!.ordering }))
+    const updated = await reorderHomeModules(this.db, params.items)
+    this.writeReorderAudit(section, 'home_modules', settings.id, beforeItems, params.items, actorId, requestId)
+    return { updated }
+  }
+
+  /** audit `home_section.reorder`（D-182-4.6 载荷硬约束：sectionKey + 真源标识 + ids + before/after ordering 对比） */
+  private writeReorderAudit(
+    sectionKey: HomeSectionKey,
+    source: 'home_banners' | 'home_modules',
+    targetId: string,
+    beforeItems: ReadonlyArray<{ id: string; ordering: number }>,
+    afterItems: ReadonlyArray<{ id: string; ordering: number }>,
+    actorId: string,
+    requestId?: string,
+  ): void {
+    this.auditSvc.write({
+      actorId,
+      actionType: 'home_section.reorder',
+      targetKind: 'home_section',
+      targetId,
+      beforeJsonb: { sectionKey, source, items: beforeItems },
+      afterJsonb: {
+        sectionKey,
+        source,
+        ids: afterItems.map((i) => i.id),
+        items: afterItems.map((i) => ({ id: i.id, ordering: i.ordering })),
+      },
+      requestId: requestId ?? null,
+    })
   }
 
   /**

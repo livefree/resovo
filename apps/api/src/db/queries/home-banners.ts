@@ -239,19 +239,26 @@ export async function deleteBanner(db: Pool, id: string): Promise<boolean> {
   return (result.rowCount ?? 0) > 0
 }
 
+/**
+ * 批量更新 sort_order（单事务，全部成功或回滚）。
+ * 返回实际更新行数（CHG-HOME-CARD-DND-A 加性变更：void→number，对齐 reorderHomeModules
+ * 口径供门面端点 #6 的 `updated` 计数；既有 void 消费方不受影响）。
+ */
 export async function updateBannerSortOrders(
   db: Pool,
   orders: Array<{ id: string; sortOrder: number }>
-): Promise<void> {
-  if (orders.length === 0) return
+): Promise<number> {
+  if (orders.length === 0) return 0
   const client = await db.connect()
+  let updated = 0
   try {
     await client.query('BEGIN')
     for (const { id, sortOrder } of orders) {
-      await client.query(
+      const r = await client.query(
         `UPDATE home_banners SET sort_order = $1 WHERE id = $2`,
         [sortOrder, id]
       )
+      updated += r.rowCount ?? 0
     }
     await client.query('COMMIT')
   } catch (err) {
@@ -260,4 +267,5 @@ export async function updateBannerSortOrders(
   } finally {
     client.release()
   }
+  return updated
 }
