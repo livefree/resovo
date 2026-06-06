@@ -246,6 +246,45 @@ describe('POST /admin/home-modules', () => {
     expect(res.json().error.message).toContain('slot × contentRefType')
   })
 
+  // ── ADR-181 D-181-4（migration 094）：hot slot × video compat ─────────────
+
+  it.each(['hot_movies', 'hot_series', 'hot_anime'] as const)(
+    'hot slot 创建成功返回 201（%s + video，ADR-181）',
+    async (slot) => {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/v1/admin/home-modules',
+        headers: { authorization: await adminToken(), 'content-type': 'application/json' },
+        body: JSON.stringify({
+          slot,
+          brandScope: 'all-brands',
+          contentRefType: 'video',
+          contentRefId: 'vid-001',
+        }),
+      })
+      expect(res.statusCode).toBe(201)
+    },
+  )
+
+  it.each(['external_url', 'custom_html', 'video_type'] as const)(
+    'hot slot 仅允许 video：hot_movies + %s 返回 422（ADR-181 compat 第 3 处同源规则）',
+    async (contentRefType) => {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/v1/admin/home-modules',
+        headers: { authorization: await adminToken(), 'content-type': 'application/json' },
+        body: JSON.stringify({
+          slot: 'hot_movies',
+          brandScope: 'all-brands',
+          contentRefType,
+          contentRefId: contentRefType === 'video_type' ? 'movie' : 'https://x.example.com',
+        }),
+      })
+      expect(res.statusCode).toBe(422)
+      expect(res.json().error.message).toContain('slot × contentRefType')
+    },
+  )
+
   // ── CHG-HOME-UX-01-B（ADR-104 AMENDMENT D-104-9）title / imageUrl ─────────
 
   it('title / imageUrl 透传到 query 层；缺省时 title={} / imageUrl=null', async () => {

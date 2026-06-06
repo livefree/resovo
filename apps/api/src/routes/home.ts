@@ -11,7 +11,8 @@ import { db } from '@/api/lib/postgres'
 import { redis } from '@/api/lib/redis'
 import { HomeService } from '@/api/services/HomeService'
 
-const HomeModuleSlotEnum = z.enum(['banner', 'featured', 'top10', 'type_shortcuts'])
+// ADR-181 D-181-4（migration 094）：+3 hot slot——公开端点纯增量（新增合法入参值，既有消费方零破坏）
+const HomeModuleSlotEnum = z.enum(['banner', 'featured', 'top10', 'type_shortcuts', 'hot_movies', 'hot_series', 'hot_anime'])
 
 export async function homeRoutes(fastify: FastifyInstance) {
   const homeService = new HomeService(db, redis)

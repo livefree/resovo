@@ -1,5 +1,5 @@
 /**
- * home-module.types.ts — 首页模块化编排（ADR-052）
+ * home-module.types.ts — 首页模块化编排（ADR-052 + ADR-181 hot slot 扩展）
  */
 
 export type HomeModuleSlot =
@@ -7,6 +7,11 @@ export type HomeModuleSlot =
   | 'featured'
   | 'top10'
   | 'type_shortcuts'
+  // ADR-181 D-181-4（migration 094）：热门 shelf pinned 头部专用（content_ref_type 仅 video）；
+  // 自动候选不落 home_modules（候选快照归 ADR-183 home_autofill_snapshots）
+  | 'hot_movies'
+  | 'hot_series'
+  | 'hot_anime'
 
 export type HomeModuleContentRefType =
   | 'video'         // content_ref_id = videos.id
@@ -20,11 +25,14 @@ export type HomeBrandScope = 'all-brands' | 'brand-specific'
 /**
  * 首页模块运营条目
  *
- * slot × content_ref_type 约束（DB CHECK 强制，ADR-052）：
+ * slot × content_ref_type 约束（DB CHECK 强制，ADR-052 + ADR-181）：
  *   banner         → video | external_url | custom_html
  *   featured       → video
  *   top10          → video（人工置顶专用；period-based trending 另走 listTrendingVideos）
  *   type_shortcuts → video_type
+ *   hot_movies     → video（ADR-181，热门 shelf pinned）
+ *   hot_series     → video（ADR-181，热门 shelf pinned）
+ *   hot_anime      → video（ADR-181，热门 shelf pinned）
  */
 export interface HomeModule {
   id: string

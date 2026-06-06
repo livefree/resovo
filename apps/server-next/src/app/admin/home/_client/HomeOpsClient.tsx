@@ -59,13 +59,17 @@ import { BatchAddVideosModal } from './BatchAddVideosModal'
 
 // ── 常量 ─────────────────────────────────────────────────────────
 
-const SLOTS: readonly HomeModuleSlot[] = ['banner', 'featured', 'top10', 'type_shortcuts']
+// ADR-181 D-181-4（migration 094）：+3 hot slot（热门 shelf pinned 头部专用）
+const SLOTS: readonly HomeModuleSlot[] = ['banner', 'featured', 'top10', 'type_shortcuts', 'hot_movies', 'hot_series', 'hot_anime']
 
 const SLOT_LABEL: Record<HomeModuleSlot, string> = {
   banner: '轮播广告',
   featured: '精选推荐',
   top10: 'TOP 10',
   type_shortcuts: '类型快捷',
+  hot_movies: '热门电影',
+  hot_series: '热播剧集',
+  hot_anime: '热门动漫',
 }
 
 const PAGE_STYLE: CSSProperties = {

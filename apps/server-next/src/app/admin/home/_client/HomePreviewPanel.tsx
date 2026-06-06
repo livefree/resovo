@@ -166,6 +166,10 @@ const SLOT_LABEL: Record<HomeModuleSlot, string> = {
   featured: '精选推荐',
   top10: 'TOP 10',
   type_shortcuts: '类型快捷',
+  // ADR-181 D-181-4：热门 shelf pinned slot
+  hot_movies: '热门电影',
+  hot_series: '热播剧集',
+  hot_anime: '热门动漫',
 }
 
 // ── video type label mapping ───────────────────────────────────────

@@ -221,7 +221,8 @@ describe('HomeOpsClient — slot tab 切换', () => {
     mockedList.mockResolvedValue({ data: [], total: 0, page: 1, limit: 100 })
     render(<HomeOpsClient />)
     await waitFor(() => expect(mockedList).toHaveBeenCalled())
-    fireEvent.click(screen.getByText(/top10|Top 10|前十|热门/i))
+    // ADR-181 +3 hot slot 后宽松正则 /热门/ 会多命中（热门电影/热播剧集/热门动漫 tab），收紧为精确 label
+    fireEvent.click(screen.getByText('TOP 10'))
     await waitFor(() => {
       expect(mockedList).toHaveBeenCalledWith(expect.objectContaining({ slot: 'top10' }))
     })

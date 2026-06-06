@@ -46,6 +46,10 @@ const SLOT_CONTENT_REF_TYPES: Record<HomeModuleSlot, readonly HomeModuleContentR
   featured: ['video'],
   top10: ['video'],
   type_shortcuts: ['video_type'],
+  // ADR-181 D-181-4：hot slot 仅 video（与 migration 094 CHECK + Service compat 同源）
+  hot_movies: ['video'],
+  hot_series: ['video'],
+  hot_anime: ['video'],
 }
 
 const CONTENT_REF_TYPE_LABELS: Record<HomeModuleContentRefType, string> = {

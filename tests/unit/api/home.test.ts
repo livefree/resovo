@@ -410,8 +410,8 @@ describe('GET /home/modules', () => {
     expect(mockListActiveHomeModules).toHaveBeenCalledWith(expect.anything(), 'banner', 'beta')
   })
 
-  it('所有合法 slot 枚举值均返回 200', async () => {
-    const slots: HomeModuleSlot[] = ['banner', 'featured', 'top10', 'type_shortcuts']
+  it('所有合法 slot 枚举值均返回 200（ADR-181：+3 hot slot）', async () => {
+    const slots: HomeModuleSlot[] = ['banner', 'featured', 'top10', 'type_shortcuts', 'hot_movies', 'hot_series', 'hot_anime']
     const app = await buildHomeApp()
     for (const slot of slots) {
       mockListActiveHomeModules.mockResolvedValueOnce([])

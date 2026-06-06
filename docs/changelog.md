@@ -1961,3 +1961,22 @@
 - **新增依赖**：无
 - **数据库变更**：无（migration 096 结构已裁定，实施归 CHG-HOME-AUTOFILL-CORE-B 卡；本卡含 dev DB 只读统计）
 - **注意事项**：① arch-reviewer 双 BLOCKER 集中在缺口条目落点——已改裁「入快照 gaps 列 + ContentGap 独立 DTO（无 videoId）+ 端点 #4 additive 扩展」，实施时不得把缺口塞进 AutofillCandidate；② 跨区块去重唯一权威在聚合层，快照阶段禁止产生 occupied_by_* filterReason；③ 端点 #7 的 429 必须主动 getJob+getState 判定，不得依赖 Bull add() 去重副作用；④ SEQ-20260605-05 ADR 三卡（181/182/183）全部 Accepted，下一卡按依赖序为 CHG-HOME-BANNER-UNIFY 或 CHG-HOME-PREVIEW-API / CHG-HOME-SLOT-EXTEND（均仅依赖已完成卡）。
+
+## [CHG-HOME-SLOT-EXTEND] HomeModuleSlot 枚举 +3（hot_movies/hot_series/hot_anime）schema 与类型全量同步
+- **完成时间**：2026-06-05
+- **记录时间**：2026-06-05 22:55
+- **执行模型**：claude-opus-4-8
+- **子代理**：无新 spawn（设计裁定引用 ADR-181 卡内 arch-reviewer (claude-opus-4-8) 评审背书）
+- **修改文件**：
+  - `apps/api/src/db/migrations/094_home_modules_hot_slots.sql` — 新增：slot CHECK 4→7 值 + ref_type_slot_compat 重建（hot_* 仅 video）；纯增量零阻断；已应用 dev DB 并 pg_constraint 实证
+  - `apps/api/src/services/HomeModulesService.ts` — SlotEnum +3 + `applyBusinessRules` compat 映射 +3（ADR-181 BLOCKER 项，加第 3 处同源规则警示注释）
+  - `packages/types/src/home-module.types.ts` — HomeModuleSlot +3 + slot×ref 约束注释更新
+  - `apps/api/src/routes/home.ts` — 公开 HomeModuleSlotEnum +3（纯增量合法入参）
+  - `apps/server-next/src/app/admin/home/_client/{HomeOpsClient,HomeModuleDrawer,HomePreviewPanel}.tsx` + `apps/server-next/src/lib/home-modules/types.ts` — SLOTS/SLOT_LABEL×2/SLOT_CONTENT_REF_TYPES/VIDEO_SLOTS +3（Record<HomeModuleSlot,...> 完整性编译强制）
+  - `docs/architecture.md` — §5.10 两处同步（枚举列表 + CHECK 描述）
+  - `tests/unit/api/admin-home-modules.test.ts` — +6 用例（it.each：3 hot slot×video→201；hot_movies×3 非 video→422）
+  - `tests/unit/api/home.test.ts` — 公开路由全 slot 用例扩 7 值
+  - `tests/unit/components/server-next/admin/home/HomeOpsClient.test.tsx` — 宽松正则 /热门/ 收紧为 'TOP 10'（新 tab 命中漂移修复）
+- **新增依赖**：无
+- **数据库变更**：migration 094（2 CHECK 重建，纯增量；down 注释式 + 缩枚举全表校验警告）
+- **注意事项**：① **范围超限接受完成度风险**（workflow-rules 强行单卡条款）：起卡预拆 -A/-B，实证 `Record<HomeModuleSlot, string>` 完整性使类型层与 UI 常量为同一编译闭环、无法拆分交付，合并回单卡（5 项），commit 含 arch-reviewer trailer；② /admin/home 即日起出现 3 个新 slot tab（热门电影/热播剧集/热门动漫），pinned 编辑与批量选片能力即开——自动候选不落 home_modules（ADR-181 D-181-4.3）；③ 门禁：typecheck/lint 绿 + 全量 6688/6688 + E2E admin 39 passed + verify:adr-contracts 4 绿；④ Phase 3 写路径（CHG-HOME-AUTOFILL-*）前置已清障。

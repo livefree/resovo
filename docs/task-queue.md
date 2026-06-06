@@ -1162,10 +1162,14 @@
    - 建议模型：sonnet
    - 依赖：CHG-HOME-CANVAS-A。
 
-9. **CHG-HOME-SLOT-EXTEND** — slot 枚举 +3（hot_movies/hot_series/hot_anime）schema 与类型全量同步（状态：⬜ 待开始；ADR-181 评审 MEDIUM 吸收新增，本卡为 ADR-181 直管前置小卡）
-   - 建议模型：sonnet（结构已由 ADR-181 D-181-4 完全锁定，零设计自由度）
-   - 范围（4 项）：① migration 094（slot inline CHECK + ref_type_slot_compat CHECK 重建，纯增量零阻断） ② `HomeModulesService` SlotEnum +3 + `applyBusinessRules` `compat` 映射 +3（→ `['video']`，**BLOCKER 项不得遗漏**） ③ `packages/types` HomeModuleSlot / routes/home.ts HomeModuleSlotEnum / server-next SLOTS·SLOT_LABEL·VIDEO_SLOTS 同步 +3 ④ `docs/architecture.md` §5.10 两处同步（枚举列表 + CHECK 描述）。
-   - 依赖：CHG-HOME-GOV-ADR-A ✅；与 Phase 1 实施卡可并行，Phase 3 写路径前必须完成。
+9. **CHG-HOME-SLOT-EXTEND** — slot 枚举 +3（hot_movies/hot_series/hot_anime）schema 与类型全量同步（状态：✅ 已完成；拆卡历程见下）
+   - 实际开始：2026-06-05 22:20 ｜ 完成时间：2026-06-05 22:55
+   - 建议模型：sonnet（结构已由 ADR-181 D-181-4 完全锁定，零设计自由度；实际 claude-opus-4-8，用户 opus 会话人工覆盖）
+   - 范围（5 项）：① migration 094（2 CHECK 重建，纯增量零阻断） ② `HomeModulesService` SlotEnum +3 + `compat` 映射 +3（ADR-181 BLOCKER 项） ③ `packages/types` HomeModuleSlot + routes/home.ts HomeModuleSlotEnum +3 ④ server-next UI 常量 +3（SLOTS / SLOT_LABEL ×2 / SLOT_CONTENT_REF_TYPES / VIDEO_SLOTS） ⑤ `docs/architecture.md` §5.10 两处 + 单测同步。
+   - **拆卡历程（2026-06-05 22:20→22:30）**：起卡时按原子化判据（跨 schema/api-service/UI 三层）预拆 -A/-B；实施中实证 `Record<HomeModuleSlot, string>` 完整性约束使 packages/types 扩枚举**立即破坏 server-next 编译**——类型层与 UI 常量为同一编译闭环，-A 单独无法过 typecheck（测试不过不得 commit）→ 按 workflow-rules「强行单卡」条款合并回单卡：commit 含 `Subagents: arch-reviewer` trailer（ADR-181 评审已背书"影响面 #3/#4/#5 归并一张前置小卡"），changelog 标注范围超限接受完成度风险。
+   - 跨层理由：枚举加性扩展在 schema / 协议 / 类型 / UI 常量四处为同一契约字面量同步，编译强制不可拆。
+   - 依赖：CHG-HOME-GOV-ADR-A ✅；Phase 3 写路径前必须完成。
+   - 完成备注：ADR-181 D-181-4 零自由度落地。migration 094 已应用 dev DB（DROP+ADD 2 CHECK，pg_constraint 实证 7 值 + hot_* 仅 video）；ADR-181 BLOCKER 项 compat 第 3 处同源规则同卡 +3 并加同步警示注释；server-next 4 文件 UI 常量 +3（/admin/home 即见 3 个新 tab + 批量选片可用）；architecture.md §5.10 两处同步。测试：新增 admin 创建正反 6 用例（it.each 3 hot×video 201 + 3 非 video 422）+ 公开路由全 slot 7 值用例扩展 + HomeOpsClient 测试宽松正则 /热门/ 收紧为精确 'TOP 10'（新 tab 命中漂移修复）。门禁：typecheck/lint EXIT=0；**全量 6688/6688 PASS**（基础包改动升全量，ADR-180）；verify:adr-contracts 4 绿；**E2E admin 域 39 passed**；migrate:check 干净。偏离说明：建议模型 sonnet、实际 opus（用户 opus 会话人工覆盖）；强行单卡（编译闭环不可拆），commit 含 arch-reviewer trailer。执行模型: claude-opus-4-8；子代理: 无新 spawn（设计背书引用 ADR-181 卡内 arch-reviewer (claude-opus-4-8)）。
 
 ### Phase 2–4 后续卡登记（Phase 1 收口后细化，卡名先占位）
 

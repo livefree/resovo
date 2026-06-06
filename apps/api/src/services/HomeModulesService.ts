@@ -27,7 +27,8 @@ import { AppError, ERRORS } from '@/api/lib/errors'
 
 // ── zod schemas（ADR-104 端点契约，R1 修订：CreateBase + applyBusinessRules）──
 
-const SlotEnum = z.enum(['banner', 'featured', 'top10', 'type_shortcuts'])
+// ADR-181 D-181-4（migration 094）：+3 hot slot（热门 shelf pinned 专用，content_ref_type 仅 video）
+const SlotEnum = z.enum(['banner', 'featured', 'top10', 'type_shortcuts', 'hot_movies', 'hot_series', 'hot_anime'])
 const BrandScopeEnum = z.enum(['all-brands', 'brand-specific'])
 const ContentRefTypeEnum = z.enum(['video', 'external_url', 'custom_html', 'video_type'])
 
@@ -77,11 +78,16 @@ function applyBusinessRules<T extends z.ZodTypeAny>(schema: T): z.ZodTypeAny {
     .refine(
       (v: CreateInput) => {
         if (v.slot === undefined || v.contentRefType === undefined) return true
+        // 与 DB CHECK home_modules_ref_type_slot_compat（migration 094）同源的第 3 处规则，
+        // slot 扩值必须同卡同步（ADR-181 arch-reviewer BLOCKER 警示）
         const compat: Record<string, readonly string[]> = {
           banner: ['video', 'external_url', 'custom_html'],
           featured: ['video'],
           top10: ['video'],
           type_shortcuts: ['video_type'],
+          hot_movies: ['video'],
+          hot_series: ['video'],
+          hot_anime: ['video'],
         }
         return compat[v.slot]?.includes(v.contentRefType) ?? false
       },
