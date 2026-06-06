@@ -1221,6 +1221,7 @@
    - 跨层理由：纯 UI 层（端点 #6 由 -A 交付）。
    - 依赖：CHG-HOME-CARD-DND-A ✅。
    - 完成备注：方案 §5.3 三条拖拽边界全落地（banner 不可拖出 D-181-1 真源分离 / 非视频卡不可跨 / banner+type_shortcuts 不接受落位，warn toast 提示）。同区块：SortableContext per section（featured rect 策略、其余水平）+ MaybeSortable 包装（仅 pinned+refId 注册）+ 区块容器 useDroppable（`section:` 前缀落点协议）→ 端点 #6 全序载荷 + silent 重拉（loading 不闪）。跨区块：CrossSectionConfirmModal（语义改变提示）→ 确认后 PATCH slot（资源级 audit home_module.update）+ 端点 #6 重排目标区块（落点位置插入/容器落点末尾）；失败关弹层防 stale 序重试。SECTION_TITLE 第 3 消费方触发提取 `canvas/section-meta.ts`（+VIDEO_SECTIONS）, SectionInspector 收编（卡范围实施前修订补记）。测试 +11（文件 29/29，home 组件域 106/106）。门禁：typecheck/lint 绿 + test:changed 55/55 + E2E admin 39 passed（1 known flaky retry 过）。**CHG-HOME-CARD-DND 两子卡收口**。执行模型: claude-opus-4-8；子代理: 无。
+   - **FIX（Codex stop-time review，2026-06-06 01:50）**：跨区块两步写部分持久化误导修复——第二步 reorder 失败时 slot 迁移已落库，原实现统一报「移动失败」（danger）误导运营。改为 slotMoved 哨兵差异化：第一步失败（零持久化）→ danger「移动失败」；第二步失败（部分持久化）→ warn「已移至 X，但落位排序未应用」+ 可再拖调整指引（不做 slot 补偿回滚——违背已确认意图且回滚自身可能再失败）。测试 +1（第二步失败差异化断言 + 不报「移动失败」反断言）+ 既有失败用例加强 toast 断言（useToast 捕获 mock）；HomeCanvas 34/34，home 域 120/120。
 
 11. **CHG-HOME-EMPTY-SLOTS** — 画布空卡片添加入口（状态：✅ 已完成）
    - 实际开始：2026-06-06 01:12 ｜ 完成时间：2026-06-06 01:25

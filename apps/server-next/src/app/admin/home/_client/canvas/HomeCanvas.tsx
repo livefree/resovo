@@ -196,22 +196,40 @@ export function HomeCanvas({ onSelectSection, onEmptySlot, reloadToken }: HomeCa
     })
   }
 
-  /** 确认跨区块：PATCH slot（资源级，audit home_module.update）→ 端点 #6 重排目标区块 */
+  /**
+   * 确认跨区块：PATCH slot（资源级，audit home_module.update）→ 端点 #6 重排目标区块。
+   * 两步非原子（Codex review 修复）：第二步 reorder 失败时 slot 迁移**已持久化**——
+   * 必须差异化提示「已移动但排序未应用」，不得报「移动失败」误导（行已在目标区块，
+   * 仅落点不精确；不做 slot 补偿回滚——违背已确认的移动意图且回滚自身可能再失败）。
+   */
   async function confirmCrossMove() {
     if (!pendingMove) return
+    const move = pendingMove
     setMoving(true)
+    let slotMoved = false
     try {
-      await updateHomeModule(pendingMove.refId, { slot: pendingMove.to })
-      await reorderHomeSection(pendingMove.to, [...pendingMove.items])
-      toast.push({ title: `已移至 ${SECTION_TITLE[pendingMove.to]}`, level: 'success' })
+      await updateHomeModule(move.refId, { slot: move.to })
+      slotMoved = true
+      await reorderHomeSection(move.to, [...move.items])
+      toast.push({ title: `已移至 ${SECTION_TITLE[move.to]}`, level: 'success' })
     } catch (err: unknown) {
-      // 失败同样关弹层（重拉后 items 失效，不可重试提交 stale 序）
-      toast.push({
-        title: '移动失败',
-        description: err instanceof Error ? err.message : '请稍后重试',
-        level: 'danger',
-      })
+      if (slotMoved) {
+        // 部分持久化态：移动成功、排序未应用——重拉后画布反映真实位置，可再拖调整
+        toast.push({
+          title: `已移至 ${SECTION_TITLE[move.to]}，但落位排序未应用`,
+          description: '卡片可能不在拖放位置，可在画布内重新拖拽调整',
+          level: 'warn',
+        })
+      } else {
+        // 第一步失败：零持久化，如实报失败
+        toast.push({
+          title: '移动失败',
+          description: err instanceof Error ? err.message : '请稍后重试',
+          level: 'danger',
+        })
+      }
     } finally {
+      // 统一关弹层（重拉后 items 失效，不可重试提交 stale 序）
       setPendingMove(null)
       setMoving(false)
       void load({ silent: true })

@@ -49,6 +49,16 @@ vi.mock('@dnd-kit/utilities', () => ({
   CSS: { Transform: { toString: () => undefined } },
 }))
 
+// useToast 捕获（CARD-DND-B-FIX：跨区块部分持久化差异化提示断言）；其余 admin-ui 导出走真实现
+const mockToastPush = vi.fn()
+vi.mock('@resovo/admin-ui', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@resovo/admin-ui')>()
+  return {
+    ...actual,
+    useToast: () => ({ push: mockToastPush, dismiss: vi.fn(), dismissAll: vi.fn() }),
+  }
+})
+
 vi.mock('../../../../../../apps/server-next/src/lib/home-curation/api', () => ({
   getHomePreview: vi.fn(),
   listHomeSections: vi.fn(),
@@ -495,7 +505,7 @@ describe('HomeCanvas — 跨区块确认弹层（方案 §5.3）', () => {
     expect(mockedReorder).not.toHaveBeenCalled()
   })
 
-  it('跨区块移动失败 → 关弹层 + 重拉（不可重试 stale 序）', async () => {
+  it('第一步 PATCH slot 失败（零持久化）→ danger「移动失败」+ 关弹层 + 重拉', async () => {
     mockedUpdateModule.mockRejectedValue(new Error('STATE_CONFLICT'))
     render(<HomeCanvas />)
     await waitFor(() => expect(screen.queryByTestId('canvas-section-featured')).not.toBeNull())
@@ -507,7 +517,31 @@ describe('HomeCanvas — 跨区块确认弹层（方案 §5.3）', () => {
 
     await waitFor(() => expect(screen.queryByTestId('cross-section-confirm-btn')).toBeNull())
     expect(mockedReorder).not.toHaveBeenCalled() // PATCH 失败不再 reorder
+    expect(mockToastPush).toHaveBeenCalledWith(expect.objectContaining({
+      title: '移动失败',
+      level: 'danger',
+    }))
     await waitFor(() => expect(mockedPreview).toHaveBeenCalledTimes(2))
+  })
+
+  it('第二步 reorder 失败（slot 已持久化）→ warn 差异化提示「已移至…排序未应用」，不报「移动失败」（Codex review 修复）', async () => {
+    mockedUpdateModule.mockResolvedValue({} as never)
+    mockedReorder.mockRejectedValue(new Error('VALIDATION_ERROR'))
+    render(<HomeCanvas />)
+    await waitFor(() => expect(screen.queryByTestId('canvas-section-featured')).not.toBeNull())
+
+    drag('r-featured', 'r-top10')
+    await waitFor(() => expect(screen.queryByTestId('cross-section-confirm-btn')).not.toBeNull())
+    fireEvent.click(screen.getByTestId('cross-section-confirm-btn'))
+
+    await waitFor(() => expect(screen.queryByTestId('cross-section-confirm-btn')).toBeNull())
+    expect(mockedUpdateModule).toHaveBeenCalledWith('r-featured', { slot: 'top10' }) // 第一步已落库
+    expect(mockToastPush).toHaveBeenCalledWith(expect.objectContaining({
+      title: expect.stringContaining('已移至') as string,
+      level: 'warn',
+    }))
+    expect(mockToastPush).not.toHaveBeenCalledWith(expect.objectContaining({ title: '移动失败' }))
+    await waitFor(() => expect(mockedPreview).toHaveBeenCalledTimes(2)) // 重拉反映真实位置
   })
 })
 

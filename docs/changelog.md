@@ -2141,3 +2141,15 @@
 - **新增依赖**：无
 - **数据库变更**：无
 - **注意事项**：① **SEQ-20260605-05 Phase 2（卡片操作闭环）全部 4 卡收口**（CARD-DND-A/-B + EMPTY-SLOTS + IMAGE-GUARD-BANNER）；② 校验级别全警告级与 D-052-9「宽松优先 + UI 提示引导」口径一致，运营反馈缺图率过高再评估升阻断；③ home_banners.image_url NOT NULL → 「缺图」态本真源不可达（焦点=尺寸/比例/探测三类）；缺横版大图风险标记（home_modules 旧语义）归 D-052-9 预留 CHG-HOME-IMAGE-GUARD，两卡勿混；④ focal point（方案 §6.5）需 schema 字段未立案，不在本卡；⑤ 门禁：typecheck/lint 绿 + test:changed 55/55 + home 域 119/119 + Phase 收口全量 6793/6793 + E2E admin 39 passed（1 known flaky retry 过）。
+
+## [CHG-HOME-CARD-DND-B-FIX] 跨区块移动部分持久化差异化提示（Codex stop-time review）
+- **完成时间**：2026-06-06
+- **记录时间**：2026-06-06 01:55
+- **执行模型**：claude-opus-4-8
+- **子代理**：无
+- **修改文件**：
+  - `apps/server-next/src/app/admin/home/_client/canvas/HomeCanvas.tsx` — confirmCrossMove 差异化错误处理：slotMoved 哨兵区分两步写失败点——第一步 PATCH slot 失败（零持久化）→ danger「移动失败」；第二步 reorder 失败（**slot 迁移已持久化**）→ warn「已移至 X，但落位排序未应用」+ 重新拖拽指引。原实现统一报「移动失败」与实际状态矛盾（卡片已在目标区块）误导运营
+  - `tests/unit/components/server-next/admin/home/HomeCanvas.test.tsx` — +1 用例（第二步失败 → warn 差异化 + 不报「移动失败」反断言 + slot 已落库断言）+ 既有第一步失败用例加强 danger toast 断言；useToast 捕获 mock（admin-ui 部分 mock，其余导出真实现）；34/34
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：① 不做 slot 补偿回滚——违背用户已确认的移动意图，且回滚写自身可能再失败造成二阶不一致；最终一致由 silent 重拉保证（画布反映真实位置，运营可再拖调整）；② 原子化方案（移动+排序单事务端点）需扩展 ADR-182 契约，留待运营反馈失败率后评估；③ 门禁：typecheck/lint 绿 + test:changed 62/62 + home 域 120/120。
