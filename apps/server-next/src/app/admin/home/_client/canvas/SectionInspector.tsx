@@ -6,13 +6,14 @@
  * 选中区块的 settings 编辑（autofillMode / refreshIntervalMinutes / displayCount /
  * allowDuplicates / pinnedLimit），消费 PATCH /admin/home/sections/:section/settings
  * （ADR-182 #3，audit home_section.settings_update 在后端落）。
- * 候选池 / 过滤原因展示归 Phase 3（端点 #4 实装后接入）。
+ * 候选池 / 过滤原因展示由 CandidatePoolPanel 承载（CHG-HOME-AUTOFILL-UI，端点 #4/#5/#7）。
  */
 
 import { useEffect, useState, type ChangeEvent, type CSSProperties } from 'react'
 import { AdminButton, AdminSelect, AdminInput, Pill, useToast, type AdminSelectOption } from '@resovo/admin-ui'
 import { updateHomeSectionSettings } from '@/lib/home-curation/api'
-import type { HomePreviewSection, HomeSectionKey, HomeSectionSettings } from '@/lib/home-curation/types'
+import type { AutofillCandidate, HomePreviewSection, HomeSectionKey, HomeSectionSettings } from '@/lib/home-curation/types'
+import { CandidatePoolPanel } from './CandidatePoolPanel'
 import { SECTION_TITLE } from './section-meta'
 
 const MODE_OPTIONS: readonly AdminSelectOption[] = [
@@ -82,9 +83,13 @@ export interface SectionInspectorProps {
   readonly section: HomePreviewSection | null
   /** settings 保存成功 → 父级重拉 preview */
   readonly onSaved: (section: HomeSectionKey) => void
+  /** 候选应用成功 → 父级重拉 preview（pinned 变化；CHG-HOME-AUTOFILL-UI） */
+  readonly onCandidateApplied: (section: HomeSectionKey) => void
+  /** banner 候选预填横幅编辑器（BannerDrawer 创建模式，HomeOpsClient 编排） */
+  readonly onBannerPrefill?: (candidate: AutofillCandidate) => void
 }
 
-export function SectionInspector({ section, onSaved }: SectionInspectorProps) {
+export function SectionInspector({ section, onSaved, onCandidateApplied, onBannerPrefill }: SectionInspectorProps) {
   const toast = useToast()
   const [form, setForm] = useState<FormState | null>(null)
   const [saving, setSaving] = useState(false)
@@ -196,7 +201,6 @@ export function SectionInspector({ section, onSaved }: SectionInspectorProps) {
       </div>
 
       <div style={HINT_STYLE}>
-        候选池与过滤原因展示随 Phase 3 自动填充实装接入；
         更新于 {new Date(settings.updatedAt).toLocaleString()}
       </div>
 
@@ -209,6 +213,15 @@ export function SectionInspector({ section, onSaved }: SectionInspectorProps) {
       >
         保存设置
       </AdminButton>
+
+      {/* 候选池（CHG-HOME-AUTOFILL-UI / 端点 #4 #5 #7）——注意用 settings.autofillMode
+          （已保存值）而非 form 编辑中间态，避免未保存切换误启停刷新入口 */}
+      <CandidatePoolPanel
+        section={key}
+        autofillMode={settings.autofillMode}
+        onApplied={() => onCandidateApplied(key)}
+        onBannerPrefill={onBannerPrefill}
+      />
     </div>
   )
 }

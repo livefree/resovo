@@ -1,12 +1,12 @@
 # Resovo（流光） — 任务看板
 
-> last_reviewed: 2026-06-05
+> last_reviewed: 2026-06-06
 
 ---
 
 ## 当前任务（单任务工作台：同时仅 1 个 🔄 进行中；完成即删卡，历史见 docs/changelog.md）
 
-（空 — 上一任务 CHG-HOME-AUTOFILL-APPLY 已收口 2026-06-06 14:50，见 changelog；**SEQ-20260605-05 Phase 3 全部 6 卡交付**，候补卡 AUTOFILL-UI / 公开首页消费切换 + Phase 4 占位待细化登记后取）
+（空 — 上一任务 CHG-HOME-AUTOFILL-UI 已收口 2026-06-06 17:05，见 changelog；**⚠️ task-queue.md 尾部有 🚨 BLOCKER（E2E admin 域门禁环境性失败）待人工裁定，取新任务前必读**）
 
 ---
 

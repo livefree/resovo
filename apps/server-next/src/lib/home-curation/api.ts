@@ -8,6 +8,9 @@
 
 import { apiClient } from '@/lib/api-client'
 import type {
+  AutofillCandidate,
+  AutofillCandidatesResult,
+  ContentGap,
   HomePreview,
   HomePreviewQuery,
   HomeSectionKey,
@@ -54,6 +57,58 @@ export async function reorderHomeSection(
   const result = await apiClient.post<{ data: { updated: number } }>(
     `/admin/home/sections/${section}/reorder`,
     { items },
+  )
+  return result.data
+}
+
+/**
+ * 端点 #4：候选快照只读消费（CHG-HOME-AUTOFILL-UI / D-182-4.4）。
+ * snapshotAt null = 快照未生成（200 非 404）；includeFiltered 同时解锁
+ * filtered 条目解释展示与 gaps 缺口（D-183-7.3 additive）。
+ */
+export async function getAutofillCandidates(
+  section: HomeSectionKey,
+  opts: { includeFiltered?: boolean } = {},
+): Promise<AutofillCandidatesResult> {
+  const qs = opts.includeFiltered ? '?include_filtered=true' : ''
+  const result = await apiClient.get<{
+    data: AutofillCandidate[]
+    snapshotAt: string | null
+    policyVersion: string | null
+    gaps?: ContentGap[]
+  }>(`/admin/home/sections/${section}/autofill-candidates${qs}`)
+  return {
+    candidates: result.data,
+    snapshotAt: result.snapshotAt,
+    policyVersion: result.policyVersion,
+    ...(result.gaps !== undefined ? { gaps: result.gaps } : {}),
+  }
+}
+
+/**
+ * 端点 #5：选中候选转 pinned（D-182-4.5 全有或全无——任一失效整体 409 零写入；
+ * banner 422 指引横幅编辑器；audit home_section.apply_autofill 在后端落）。
+ */
+export async function applyAutofillCandidates(
+  section: HomeSectionKey,
+  candidateIds: readonly string[],
+): Promise<{ applied: number }> {
+  const result = await apiClient.post<{ data: { applied: number } }>(
+    `/admin/home/sections/${section}/apply-autofill`,
+    { candidateIds },
+  )
+  return result.data
+}
+
+/**
+ * 端点 #7：手动触发候选重算入队（202 异步；进行中重复触发 429 RATE_LIMITED；
+ * manual_only 422。audit home_section.refresh_candidates 在后端落）。
+ */
+export async function refreshSectionCandidates(
+  section: HomeSectionKey,
+): Promise<{ enqueued: boolean }> {
+  const result = await apiClient.post<{ data: { enqueued: boolean } }>(
+    `/admin/home/sections/${section}/refresh-candidates`,
   )
   return result.data
 }

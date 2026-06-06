@@ -6,6 +6,10 @@
  */
 
 import type {
+  AutofillCandidate,
+  AutofillCandidatesResult,
+  AutofillVideoSummary,
+  ContentGap,
   HomePreview,
   HomePreviewCard,
   HomePreviewCardFlag,
@@ -17,6 +21,10 @@ import type {
 } from '@resovo/types'
 
 export type {
+  AutofillCandidate,
+  AutofillCandidatesResult,
+  AutofillVideoSummary,
+  ContentGap,
   HomePreview,
   HomePreviewCard,
   HomePreviewCardFlag,

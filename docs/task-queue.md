@@ -1287,9 +1287,24 @@
 
 ### Phase 3 候补登记（六卡收口后细化）
 
-- `CHG-HOME-AUTOFILL-UI` — 候选池面板（SectionInspector「候选池展示留 Phase 3 接入位」+ 端点 #4 解释展示标灰 / #5 应用 / #7 立即刷新；方案 §7.3.5 + §12 + 验收「自动候选可解释、可跳过、可应用」）。依赖卡 14/17/18。
+- `CHG-HOME-AUTOFILL-UI` — 候选池面板（SectionInspector「候选池展示留 Phase 3 接入位」+ 端点 #4 解释展示标灰 / #5 应用 / #7 立即刷新 + banner 候选预填 BannerDrawer〔APPLY 卡完成备注归此卡〕；方案 §7.3.5 + §12 + 验收「自动候选可解释、可跳过、可应用」）。依赖卡 14/17/18 ✅。— 状态：✅ 已完成（2026-06-06 17:05；CandidatePoolPanel 18 用例 + banner 预填链路 + HomeOpsClient 拆分 582→485 budget 净改善 −1；E2E admin 域环境性失败与本卡无关——clean-HEAD A/B 实证，见文末 🚨 BLOCKER；执行模型: claude-opus-4-8；详见 changelog）
 - 公开首页消费切换（前台 ShelfRow → 聚合，D-183-8.3「Phase 3 末实施卡」）——涉公开端点行为，细化时核查是否需 ADR amendment。
 
 ### Phase 4 后续卡占位
 
 - Phase 4：`CHG-HOME-DRAFT-PUBLISH` / `CHG-HOME-AUDIT-ROLLBACK` / `CHG-HOME-CACHE-INVALIDATE`
+
+---
+🚨 BLOCKER — 需要人工处理后才能继续
+- **任务**：CHG-HOME-AUTOFILL-UI 收口时发现（卡本身已完成并提交，commit 见 git log CHG-HOME-AUTOFILL-UI；BLOCKER 对象 = E2E admin 域门禁环境完整性，非本卡）
+- **时间**：2026-06-06 17:05
+- **问题描述**：`npm run test:e2e:admin`（88 tests：admin-chromium 38 + admin-next-chromium 50）稳定 **49 failed / 38-42 passed**。与本卡无关的实证：① `git stash` 后**干净 HEAD 同样失败**（dashboard.spec 3/3 同样挂，A/B 对照）；② admin home 域无任何 E2E spec 覆盖（`grep -rln "admin/home" tests/e2e/` 零命中）；③ 本卡 unit 门禁全绿（typecheck/lint/test:changed + admin home 套件 138/138）。
+- **已尝试**（5 轮复跑失败集一致）：
+  1. 陈旧 server 复用态（上会话遗留 :3003/:4000 进程）→ 48 failed；杀掉换 fresh server → 46 failed（API 缺失时 v1+next 双项目大面积挂）。
+  2. 手动起 API（:4000，/health + 401 + CORS 实测正常）+ fresh 双 admin server → 49 failed。
+  3. 带 auth cookie 预热全部 admin-next 路由（14 页全 200 编译完成）后复跑 → 49 failed（排除冷编译）。
+  4. `--workers=2` 降并发 → 49 failed（排除资源争用）。
+  5. 隔离对照：dashboard.spec 单跑 3/3 过 / 全量跑挂；admin.spec 单跑同样 15 failed（确定性）。
+- **根因线索**：① `admin.spec.ts` 15 失败含「未登录 /admin → /auth/login」系——apps/server v1 **结构上无法满足**：根级 `apps/server/middleware.ts` 在 src/app 布局下不生效（Next 要求 src/middleware.ts，现为死代码，且其目标是 `/admin/login` 非 `/auth/login`）；v1 api-client `getLoginRedirectPath` 仅匹配 `/{locale}/admin` 前缀，对 `/admin` 直访恒 null 不跳转（失败截图实证：渲染 shell + 「数据加载失败」无重定向）；v1 全 app 无 `/auth/login` 路由。② 历史「E2E admin 36/38 passed exit 0」（REFRESH/APPLY 卡）与今日同树不可复现——passed 计数恰与今日通过集吻合（38-42），疑历史 exit 0 为管道尾命令掩盖退出码的测量伪影（`cmd | grep; $?` 取 grep/tail 的 0），或当时 :3001 被含 `/auth/login` 的旧进程占用且 `reuseExistingServer: !CI` 静默复用。③ 环境陷阱双发现：playwright `webServer` **不含 apps/api（:4000）**——E2E 隐式依赖外部手动起的 API；`reuseExistingServer: !CI` 静默复用跨会话遗留 dev server。④ admin-next 26 失败为 toBeVisible 超时系（页面渲染正常但断言元素未现），隔离过/全量挂且与 workers 数无关，根因未竟。
+- **需要决策**：① 是否起独立核查卡（E2E-GATE-AUDIT：webServer 补 api 条目 + 端口归属固定 + admin.spec v1 重定向断言与实现对齐或退役）；② 或先在重启后的干净机器复跑一次排除本机状态；③ 若确认门禁长期破损，是否重定 E2E admin 基线并修正历史记录口径。**未解除前后续 ADMIN 域任务的 E2E 选跑结论不可信，须按本条目口径如实标注。**
+---

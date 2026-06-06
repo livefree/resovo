@@ -140,10 +140,20 @@ function formFromBanner(banner: Banner): BannerFormState {
 
 // ── Props ─────────────────────────────────────────────────────────
 
+/** 创建模式预填集（CHG-HOME-AUTOFILL-UI：banner 候选 → 编辑器。
+ *  imageUrl 刻意不在预填集——横版大图须人工提供，预填竖版封面会诱导误用（D-052-9 口径） */
+export interface BannerPrefill {
+  readonly titleZh?: string
+  readonly linkType?: BannerLinkType
+  readonly linkTarget?: string
+}
+
 export interface BannerDrawerProps {
   readonly open: boolean
   /** null = 创建模式 */
   readonly banner: Banner | null
+  /** 创建模式（banner=null）打开时合并入空表单；编辑模式忽略 */
+  readonly prefill?: BannerPrefill | null
   readonly onClose: () => void
   /** resolve 后由本组件关闭；reject 时展示错误条 */
   readonly onSave: (body: CreateBannerInput | UpdateBannerInput, id: string | null) => Promise<void>
@@ -151,17 +161,17 @@ export interface BannerDrawerProps {
 
 // ── 组件 ─────────────────────────────────────────────────────────
 
-export function BannerDrawer({ open, banner, onClose, onSave }: BannerDrawerProps) {
+export function BannerDrawer({ open, banner, prefill, onClose, onSave }: BannerDrawerProps) {
   const [form, setForm] = useState<BannerFormState>(EMPTY_FORM)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     if (open) {
-      setForm(banner ? formFromBanner(banner) : EMPTY_FORM)
+      setForm(banner ? formFromBanner(banner) : { ...EMPTY_FORM, ...(prefill ?? {}) })
       setError(null)
     }
-  }, [open, banner])
+  }, [open, banner, prefill])
 
   function patch<K extends keyof BannerFormState>(key: K, value: BannerFormState[K]) {
     setForm(prev => ({ ...prev, [key]: value }))

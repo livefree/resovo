@@ -64,12 +64,16 @@ vi.mock('../../../../../../apps/server-next/src/lib/home-curation/api', () => ({
   listHomeSections: vi.fn(),
   updateHomeSectionSettings: vi.fn(),
   reorderHomeSection: vi.fn(),
+  // CHG-HOME-AUTOFILL-UI：Inspector 内嵌候选池（选中区块即拉取）
+  getAutofillCandidates: vi.fn(),
+  applyAutofillCandidates: vi.fn(),
+  refreshSectionCandidates: vi.fn(),
 }))
 vi.mock('../../../../../../apps/server-next/src/lib/home-modules/api', () => ({
   updateHomeModule: vi.fn(),
 }))
 
-import { getHomePreview, reorderHomeSection } from '../../../../../../apps/server-next/src/lib/home-curation/api'
+import { getHomePreview, reorderHomeSection, getAutofillCandidates } from '../../../../../../apps/server-next/src/lib/home-curation/api'
 import { updateHomeModule } from '../../../../../../apps/server-next/src/lib/home-modules/api'
 import { HomeCanvas } from '../../../../../../apps/server-next/src/app/admin/home/_client/canvas/HomeCanvas'
 import type { HomePreview, HomePreviewCard, HomePreviewSection, HomeSectionKey, HomeSectionSettings } from '../../../../../../apps/server-next/src/lib/home-curation/types'
@@ -130,6 +134,8 @@ beforeEach(() => {
   cleanup()
   vi.clearAllMocks()
   mockedPreview.mockResolvedValue(preview())
+  // 候选池默认空快照（专项覆盖见 CandidatePoolPanel.test.tsx）
+  vi.mocked(getAutofillCandidates).mockResolvedValue({ candidates: [], snapshotAt: null, policyVersion: null })
 })
 
 describe('HomeCanvas — 加载与布局', () => {

@@ -2272,3 +2272,22 @@
 - **新增依赖**：无
 - **数据库变更**：无
 - **注意事项**：① 影响面 = audit log 后台筛选器（ADR-118 enums 端点）此前无法按 8 个 actionType / 4 个 targetKind 过滤——audit **写入**从未受影响（写路径不校验 enums 数组），属可见性缺口非数据缺口；② 根因为「4 处手工同步协议」（types union / Service 数组 / coverage 列表 / set-equal 镜像）缺少跨真源交叉断言，新守卫闭环该类别；③ 门禁：typecheck/lint 绿 + test:changed 1218/1218（守卫 134/134）。
+
+## [CHG-HOME-AUTOFILL-UI] 候选池面板 — SectionInspector 消费端点 #4/#5/#7（Phase 3 候补卡）
+- **完成时间**：2026-06-06
+- **记录时间**：2026-06-06 17:05
+- **执行模型**：claude-opus-4-8
+- **子代理**：无
+- **修改文件**：
+  - `apps/server-next/src/lib/home-curation/api.ts` — +3 客户端函数：getAutofillCandidates（#4，顶层 snapshotAt/policyVersion/gaps 重组为 AutofillCandidatesResult）/ applyAutofillCandidates（#5）/ refreshSectionCandidates（#7）
+  - `apps/server-next/src/lib/home-curation/types.ts` — re-export AutofillCandidate / AutofillCandidatesResult / AutofillVideoSummary / ContentGap（真源 packages/types）
+  - `apps/server-next/src/app/admin/home/_client/canvas/CandidatePoolPanel.tsx` — **新建**：候选解释展示（origin/filterReason 中文映射 + **未知值原样降级**——开放字符串 D-182-4.4 演进范式同 audit labels；filtered 标灰 + rank=0 哨兵无前缀；appliedAt 已应用态）/ 复选选择应用（**可跳过 = 不选**；409 全有或全无 danger 提示 + 重拉最新快照）/ 立即刷新（202 异步语义提示 / 429 warn / manual_only 禁用）/ gaps 折叠区（provider 中文 + 未知降级）/ include_filtered=true 恒开（解释展示前提）
+  - `apps/server-next/src/app/admin/home/_client/canvas/SectionInspector.tsx` — Phase 3 预留接入位填充（面板用 settings.autofillMode 已保存值而非 form 编辑中间态）+ onCandidateApplied/onBannerPrefill props
+  - `apps/server-next/src/app/admin/home/_client/canvas/HomeCanvas.tsx` — Inspector 接线（应用成功 → silent 重拉 preview）+ onBannerPrefill 上抛
+  - `apps/server-next/src/app/admin/home/_client/BannerDrawer.tsx` — +prefill prop（创建模式合并入空表单；**imageUrl 刻意不在预填集**——横版大图须人工提供，预填竖版封面诱导误用，D-052-9 口径）
+  - `apps/server-next/src/app/admin/home/_client/HomeOpsClient.tsx` + `home-ops-meta.ts` + `use-canvas-entries.ts` — banner 候选「预填」→ BannerDrawer 创建模式接线（titleZh + linkType=video + linkTarget=videoId）；**file-size 拆分**：本卡 +22 使既有违规 582 加重 → 拆声明性常量模块 + 画布入口编排 hook（EMPTY-SLOTS 空位添加 + 预填 + canvasReload 信号聚合，行为零变更）→ **485 行退出违规列表（budget 净改善 −1）**，CHG-VSR-3 / AUTOFILL-APPLY 同先例
+  - `tests/unit/components/server-next/admin/home/CandidatePoolPanel.test.tsx` — **新建 18 用例**（loading/error 重试/快照未生成/include_filtered 恒开/meta/解释映射+未知降级 ×2/filtered 标灰无复选/已应用态/选择应用含 onApplied+重拉/409 整体拒绝/202/429/manual_only 禁用/banner 预填上抛/type_shortcuts 不发请求/gaps 折叠）
+  - `tests/unit/components/server-next/admin/home/HomeCanvas.test.tsx` / `HomeOpsClient.test.tsx` — mock 补 3 新函数（Inspector 选中即拉取候选）
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：① **方案 §12 验收「自动候选可解释、可跳过、可应用」后台 UI 闭环**——Phase 3 三端点全部接入后台消费；② banner 应用按端点恒 422（D-182-4.5）降级为「预填」编辑器（APPLY 卡显式归本卡的预填 UI 兑现）；③ 共享层沉淀评估：否——单一消费方页面组件；④ 门禁：typecheck/lint/test:changed 绿 + admin home 套件 138/138；⑤ **E2E admin 域选跑 49 failed——与本卡无关的环境性失败（git stash 干净 HEAD A/B 同样失败 + admin home 域零 E2E spec 覆盖），已起 🚨 BLOCKER**（task-queue.md 尾部）：含 admin.spec v1 重定向断言结构性不可满足线索 + playwright webServer 缺 api 条目 + reuseExistingServer 跨会话陈旧 server 复用陷阱 + 历史「exit 0」记录疑为管道退出码测量伪影，待人工裁定。

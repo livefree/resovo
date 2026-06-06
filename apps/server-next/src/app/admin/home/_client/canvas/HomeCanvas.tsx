@@ -20,7 +20,7 @@ import { arrayMove } from '@dnd-kit/sortable'
 import { AdminButton, EmptyState, ErrorState, LoadingState, useToast } from '@resovo/admin-ui'
 import { getHomePreview, reorderHomeSection } from '@/lib/home-curation/api'
 import { updateHomeModule } from '@/lib/home-modules/api'
-import type { HomePreview, HomePreviewQuery, HomeSectionKey } from '@/lib/home-curation/types'
+import type { AutofillCandidate, HomePreview, HomePreviewQuery, HomeSectionKey } from '@/lib/home-curation/types'
 import { CanvasSection, draggableCardId } from './CanvasSection'
 import { CanvasEnvBar } from './CanvasEnvBar'
 import { SectionInspector } from './SectionInspector'
@@ -92,9 +92,11 @@ export interface HomeCanvasProps {
   readonly onEmptySlot?: (key: HomeSectionKey) => void
   /** 外部添加完成信号：值变化 → silent 重拉 preview（不闪骨架） */
   readonly reloadToken?: number
+  /** banner 候选预填上抛（CHG-HOME-AUTOFILL-UI：HomeOpsClient 打开 BannerDrawer 创建模式） */
+  readonly onBannerPrefill?: (candidate: AutofillCandidate) => void
 }
 
-export function HomeCanvas({ onSelectSection, onEmptySlot, reloadToken }: HomeCanvasProps) {
+export function HomeCanvas({ onSelectSection, onEmptySlot, reloadToken, onBannerPrefill }: HomeCanvasProps) {
   const toast = useToast()
   const [preview, setPreview] = useState<HomePreview | null>(null)
   const [loading, setLoading] = useState(true)
@@ -287,10 +289,13 @@ export function HomeCanvas({ onSelectSection, onEmptySlot, reloadToken }: HomeCa
             </DndContext>
           </div>
 
-          {/* 右侧 Inspector：settings 编辑（保存成功 → 重拉 preview 反映新槽位/模式） */}
+          {/* 右侧 Inspector：settings 编辑（保存成功 → 重拉 preview 反映新槽位/模式）
+              + 候选池（应用成功 → silent 重拉反映新 pinned；CHG-HOME-AUTOFILL-UI） */}
           <SectionInspector
             section={selectedSection}
             onSaved={() => void load()}
+            onCandidateApplied={() => void load({ silent: true })}
+            onBannerPrefill={onBannerPrefill}
           />
         </div>
       )}

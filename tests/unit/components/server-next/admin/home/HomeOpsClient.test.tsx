@@ -56,6 +56,10 @@ vi.mock('../../../../../../apps/server-next/src/lib/home-curation/api', () => ({
   listHomeSections: vi.fn(),
   updateHomeSectionSettings: vi.fn(),
   reorderHomeSection: vi.fn(),
+  // CHG-HOME-AUTOFILL-UI：Inspector 内嵌候选池（选中区块即拉取；面板行为归 CandidatePoolPanel.test）
+  getAutofillCandidates: vi.fn().mockResolvedValue({ candidates: [], snapshotAt: null, policyVersion: null }),
+  applyAutofillCandidates: vi.fn(),
+  refreshSectionCandidates: vi.fn(),
 }))
 
 // ── mock home-modules API（替代真实 fetch）──
