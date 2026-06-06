@@ -1110,7 +1110,7 @@
 
 ## [SEQ-20260605-05] 首页运营治理实施 — Phase 1 真源与同构预览（治理方案 §13 落地）
 
-- **状态**：🔄 进行中（**Phase 1 全 11 卡 ✅ + Phase 2 全 4 卡 ✅（含 CARD-DND-B-FIX）；Phase 3 六卡细化登记 2026-06-06，卡 13–16 ✅（CORE-A/B + DOUBAN + BANGUMI），下一卡 17 REFRESH**）
+- **状态**：🔄 进行中（**Phase 1 全 11 卡 ✅ + Phase 2 全 4 卡 ✅（含 CARD-DND-B-FIX）；Phase 3 六卡细化登记 2026-06-06，卡 13–17 ✅（CORE-A/B + DOUBAN + BANGUMI + REFRESH），末卡 18 APPLY**）
 - **创建时间**：2026-06-05 20:05
 - **最后更新时间**：2026-06-06 03:10
 - **目标**：按 `docs/designs/home-operations-governance-plan_20260605.md` §13 推进实施。本序列承载 Phase 1（真源与同构预览）+ 后续 Phase 细化登记。
@@ -1270,8 +1270,10 @@
    - 范围（4 项）：① bangumi 候选源 query（bangumi_entries rank ASC + nsfw=true 硬过滤 + 映射桥 → anime） ② hot_anime 候选生成（rank 主序 + rating 后置 + 惩罚项） ③ 缺口列表（未映射 → ContentGap；建库动作复用 ADR-161 决策 7 BangumiSeedService，治理层只读透出不新建链路） ④ 单测（nsfw 硬过滤断言守护增量防线 / rank 缺失排后）。
    - 依赖：CHG-HOME-AUTOFILL-CORE-B；与 DOUBAN 可换序。
 
-17. **CHG-HOME-AUTOFILL-REFRESH** — worker 重算调度 + 端点 #7（状态：⬜）
-   - 建议模型：sonnet
+17. **CHG-HOME-AUTOFILL-REFRESH** — worker 重算调度 + 端点 #7（状态：✅ 已完成）
+   - 实际开始：2026-06-06 13:20 ｜ 完成时间：2026-06-06 13:35
+   - 建议模型：sonnet（实际 claude-opus-4-8，用户 opus 会话人工覆盖）
+   - 完成备注：D-183-3 全条款落地：homeAutofillQueue（独立隔离背压）+ 5min 单 tick scheduler（isSectionDue 纯函数：interval null/manual_only 永不到期、无快照立即到期）+ worker 委托 recalculate 编排（douban/bangumi/trending 按 section 分派，type_shortcuts 不写空快照）+ 端点 #7（429 主动 getJob+getState 三态检查 + completed 残留不阻塞 + 入队失败 500 不静默 + audit 轻量载荷 R-MID-1 第 35 次守卫登记）。关键落实：jobId `autofill:${section}` 幂等 + **per-add removeOnComplete/removeOnFail true**（释放前提，failed 残留会永久阻塞重入）。实施级推演：banner suggest_only 候选源=trending（ADR 未裁，与 D-183-4.3 同向）。dev 端到端：6 section written + 保留清理 12 写恰 10 份 + 286ms。**ADR-182 端点 7/7 仅余 #5（APPLY 卡）**。测试 +23。门禁：typecheck/lint 绿 + 全量 6889/6889 零失败 + endpoint-adr 213 对齐 + E2E admin 38 passed。执行模型: claude-opus-4-8；子代理: 无。
    - 范围（5 项）：① `lib/queue.ts` +homeAutofillQueue（D-183-3.6：attempts 2 + fixed 30s，独立队列隔离背压） ② `workers/homeAutofillScheduler.ts`（5min tick 扫描 settings refresh_interval_minutes 非空且非 manual_only → 比对最新快照 generated_at + interval → 入队；jobId `autofill:${section}` 幂等） ③ `workers/homeAutofillWorker.ts`（候选生成编排：trending/douban/bangumi 按 section 分派 → 写快照同事务清理；trigger scheduled/manual） ④ 端点 #7（429 主动 getJob+getState 检查不依赖 add 去重副作用 / manual_only 422 / 入队失败 500 不静默 / audit `home_section.refresh_candidates` + 守卫登记） ⑤ architecture.md worker 清单同步 + 单测（429 主动检查 / 幂等键 / 调度判定）。
    - 依赖：CHG-HOME-AUTOFILL-DOUBAN + BANGUMI（worker 分派需候选源就绪）。
 

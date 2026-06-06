@@ -2218,3 +2218,26 @@
 - **新增依赖**：无
 - **数据库变更**：无
 - **注意事项**：① dev 数据观察：hot_anime 映射候选 2 条全 filtered（not_published，dev 数据态同 douban 卡）/ 缺口 50 按 rank 主序正常（混沌武士 rank 40 居首——更优 rank 条目已映射）；全链路 120ms；trending 兜底（Phase 1）保证不空窗；② 缺口建库动作复用 ADR-161 决策 7 BangumiSeedService 既有路径，治理层只读透出（D-183-7.1，零新建链路）；③ E2E：N/A（API-only 同 DOUBAN 卡）；④ 门禁：typecheck 0 错 + lint 干净 + test:changed 79/79。
+
+## [CHG-HOME-AUTOFILL-REFRESH] worker 重算调度 + 端点 #7（Phase 3 卡 17）
+- **完成时间**：2026-06-06
+- **记录时间**：2026-06-06 13:35
+- **执行模型**：claude-opus-4-8
+- **子代理**：无
+- **修改文件**：
+  - `apps/api/src/lib/queue.ts` — +homeAutofillQueue（独立队列隔离背压；attempts 2 + fixed 30s，D-183-3.6）+ logger + queues 导出
+  - `apps/api/src/services/home-autofill/trending.ts` — 新增：站内信号候选生成（featured/banner→listTrendingVideos origin 'trending' / top10→listVideosByRatingDesc origin 'rating'，与 preview fetchAutoFill 同口径；源已预过滤 published/public，过滤链仍统一跑捕获可播/封面缺失；**banner suggest_only 候选源=trending 为实施级推演**——ADR-183 未裁 banner 源，与 D-183-4.3 同向，apply 至 Hero 仍须编辑器人工确认 D-182-4.5）
+  - `apps/api/src/services/home-autofill/recalculate.ts` — 新增：单 section 重算编排（worker 只委托 Service，identityCandidateWorker 范式）：hot_movies/series→douban、hot_anime→bangumi、featured/top10/banner→trending、type_shortcuts 跳过（无视频候选概念，不写空快照污染 #2 摘要）、manual_only/settings 缺行防御性 skipped；写快照携 POLICY_VERSION + settings 全行快照（方案 §11.2 回溯链）
+  - `apps/api/src/workers/homeAutofillScheduler.ts` — 新增：单一 5min tick（D-183-3.2 常量，不为每 section 建 timer，改配下一 tick 生效）+ isSectionDue 判定纯函数（interval null/manual_only 永不到期、无快照立即到期、时间非法视为到期防卡死）+ **per-add removeOnComplete/removeOnFail: true**（jobId 释放是定频重入前提——failed 残留会永久阻塞后续入队，D-183-3.3 前提显式落实）+ 入队/查询失败 warn 不阻塞（D-183-3.6）
+  - `apps/api/src/workers/homeAutofillWorker.ts` — 新增：队列消费者（concurrency 1；结构化日志 snapshot written/skipped）
+  - `apps/api/src/services/HomeCurationService.ts` — +refreshCandidates（**429 主动 getJob+getState 检查**——不依赖 add 去重副作用（命中幂等键不抛错端点拿不到信号）；completed/failed 残留态不阻塞重入；audit `home_section.refresh_candidates` 轻量载荷 {section, enqueuedAt}，targetId=settings.id）
+  - `apps/api/src/routes/admin/home.ts` — 端点 #7 POST refresh-candidates（202 / 422 manual_only / 429 / 404 / 入队失败异常上抛 500 不静默）
+  - `apps/api/src/server.ts` — worker 注册 + scheduler 接线（HOME_AUTOFILL_SCHEDULER_ENABLED opt-out 同 maintenance 范式）
+  - `packages/types/src/home-section.types.ts` — AutofillVideoSummary.slug 改 string|null（VideoCard.slug 同口径，消费端回退 videoId 深链）
+  - `tests/unit/api/home-autofill-refresh.test.ts` — 新增 15 用例（isSectionDue 6 / tick 入队语义 3（含幂等键+释放前提断言、单 section 失败不阻塞、查询失败不抛）/ recalculate 分派 5 / buildTrendingCandidates 1）
+  - `tests/unit/api/admin-home-sections.test.ts` — +7 用例（#7：202+幂等键断言 / audit R-MID-1 / 429 三态主动检查+负断言 / completed 残留不阻塞 / manual_only 422 / 入队失败 500 不记审计 / 422·404·401）；45/45
+  - `tests/unit/api/audit-log-coverage.test.ts` — `home_section.refresh_candidates` 守卫登记（declared + PAYLOAD_ASSERTION_REQUIRED，R-MID-1 第 35 次）
+  - `docs/architecture.md` — §5.10 重算调度块（队列/scheduler/worker/端点 #7/审计语义）
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：① **dev 端到端实测**：6 section 重算全 written（hot_movies 37 候选+50 缺口 / trending 三区各 24）、端点 #4 读取链路同源摘要 6 section、**保留清理实证 12 次写入后 featured 恰 10 份**、总耗时 286ms；② ADR-182 端点 7/7 全落地（#5 apply 归下一卡 APPLY）；verify:endpoint-adr 213 对齐；③ scheduler tick 内 interval 判定基于快照 generated_at 比对（无独立状态），与 maintenanceScheduler 的 tickRunning 守卫同范式；④ 门禁：typecheck/lint 绿 + **全量 6889/6889 零失败**（types 基础包改动升全量）+ E2E admin 38 passed（2 known flaky retry 过）。

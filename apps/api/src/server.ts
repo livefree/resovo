@@ -38,6 +38,8 @@ import { registerImageHealthWorker } from '@/api/workers/imageHealthWorker'
 import { registerBlurhashWorker } from '@/api/workers/imageBlurhashWorker'
 import { registerBackfillWorker } from '@/api/workers/imageBackfillWorker'
 import { registerIdentityCandidateWorker } from '@/api/workers/identityCandidateWorker'
+import { registerHomeAutofillWorker } from '@/api/workers/homeAutofillWorker'
+import { registerHomeAutofillScheduler } from '@/api/workers/homeAutofillScheduler'
 import { adminStagingRoutes } from '@/api/routes/admin/staging'
 import { adminModerationRoutes } from '@/api/routes/admin/moderation'
 import { adminReviewLabelsRoutes } from '@/api/routes/admin/reviewLabels'
@@ -205,6 +207,8 @@ async function start() {
   // CHG-VIR-8 Phase 2b：身份候选离线重算 worker（消费者）。无自动 scheduler——
   // shadow 对照阶段手动 enqueue（scripts/enqueue-identity-rescore.ts），自动周期留 Phase 2c。
   registerIdentityCandidateWorker()
+  // CHG-HOME-AUTOFILL-REFRESH / ADR-183 D-183-3：首页自动填充候选重算（消费者）
+  registerHomeAutofillWorker()
 
   const schedulerEnabled = process.env.CRAWLER_SCHEDULER_ENABLED === 'true'
   if (schedulerEnabled) {
@@ -219,6 +223,15 @@ async function start() {
     registerMaintenanceScheduler()
   } else {
     fastify.log.info({ worker: 'maintenance-scheduler' }, 'disabled (MAINTENANCE_SCHEDULER_ENABLED=false)')
+  }
+
+  // CHG-HOME-AUTOFILL-REFRESH / ADR-183 D-183-3.2：opt-out 同 maintenance 范式
+  // （低频 DB 本地重算；interval 判定在 tick 内比对快照时间，改配下一 tick 生效）
+  const homeAutofillSchedulerEnabled = process.env.HOME_AUTOFILL_SCHEDULER_ENABLED !== 'false'
+  if (homeAutofillSchedulerEnabled) {
+    registerHomeAutofillScheduler()
+  } else {
+    fastify.log.info({ worker: 'home-autofill-scheduler' }, 'disabled (HOME_AUTOFILL_SCHEDULER_ENABLED=false)')
   }
 
   // 链接存活定时扫描：每 24h 将所有活跃 sources 批量入队 verify-queue

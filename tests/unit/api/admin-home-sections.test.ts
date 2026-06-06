@@ -46,6 +46,17 @@ vi.mock('@/api/db/queries/home-autofill-snapshots', () => ({
   findLatestHomeAutofillSnapshot: (...args: unknown[]) => mockFindLatestSnapshot(...args),
 }))
 
+// CHG-HOME-AUTOFILL-REFRESH：端点 #7 队列交互（429 主动检查 + 幂等键入队）
+const mockQueueAdd = vi.fn()
+const mockQueueGetJob = vi.fn()
+
+vi.mock('@/api/lib/queue', () => ({
+  homeAutofillQueue: {
+    add: (...args: unknown[]) => mockQueueAdd(...args),
+    getJob: (...args: unknown[]) => mockQueueGetJob(...args),
+  },
+}))
+
 const mockAuditWrite = vi.fn()
 vi.mock('@/api/services/AuditLogService', () => ({
   AuditLogService: class {
@@ -413,6 +424,122 @@ describe('GET /admin/home/sections/:section/autofill-candidates', () => {
       url: '/v1/admin/home/sections/hot_movies/autofill-candidates',
     })
     expect(res.statusCode).toBe(401)
+  })
+})
+
+// ── POST /admin/home/sections/:section/refresh-candidates（CHG-HOME-AUTOFILL-REFRESH / D-182-4 #7）──
+
+describe('POST /admin/home/sections/:section/refresh-candidates', () => {
+  let app: Awaited<ReturnType<typeof buildApp>>
+
+  beforeEach(async () => {
+    vi.clearAllMocks()
+    mockFind.mockResolvedValue(settingsRow('hot_movies', { autofillMode: 'full_auto' }))
+    mockQueueGetJob.mockResolvedValue(null)
+    mockQueueAdd.mockResolvedValue({})
+    app = await buildApp()
+  })
+
+  it('202 + enqueued + 固定 jobId 幂等键 + removeOnComplete/removeOnFail true（D-183-3.3 释放前提）', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/admin/home/sections/hot_movies/refresh-candidates',
+      headers: { authorization: await adminToken() },
+    })
+    expect(res.statusCode).toBe(202)
+    expect(res.json().data).toEqual({ enqueued: true })
+    expect(mockQueueAdd).toHaveBeenCalledWith(
+      { kind: 'recalculate', section: 'hot_movies', trigger: 'manual' },
+      { jobId: 'autofill:hot_movies', removeOnComplete: true, removeOnFail: true },
+    )
+  })
+
+  it('audit R-MID-1 内容断言：home_section.refresh_candidates 轻量载荷 { section, enqueuedAt }（D-182-4.7）', async () => {
+    await app.inject({
+      method: 'POST',
+      url: '/v1/admin/home/sections/hot_movies/refresh-candidates',
+      headers: { authorization: await adminToken() },
+    })
+    expect(mockAuditWrite).toHaveBeenCalledOnce()
+    expect(mockAuditWrite).toHaveBeenCalledWith(expect.objectContaining({
+      actionType: 'home_section.refresh_candidates',
+      targetKind: 'home_section',
+      targetId: 's-hot_movies',
+      beforeJsonb: null,
+      afterJsonb: { section: 'hot_movies', enqueuedAt: expect.any(String) },
+    }))
+  })
+
+  it('同 section 进行中 job → 429 RATE_LIMITED（主动 getJob+getState 检查，不依赖 add 去重副作用）', async () => {
+    for (const state of ['active', 'waiting', 'delayed']) {
+      mockQueueGetJob.mockResolvedValue({ getState: async () => state })
+      const res = await app.inject({
+        method: 'POST',
+        url: '/v1/admin/home/sections/hot_movies/refresh-candidates',
+        headers: { authorization: await adminToken() },
+      })
+      expect(res.statusCode).toBe(429)
+      expect(res.json().error.code).toBe('RATE_LIMITED')
+    }
+    expect(mockQueueAdd).not.toHaveBeenCalled()
+    expect(mockAuditWrite).not.toHaveBeenCalled()
+  })
+
+  it('残留 completed/failed 态 job 不阻塞重入', async () => {
+    mockQueueGetJob.mockResolvedValue({ getState: async () => 'completed' })
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/admin/home/sections/hot_movies/refresh-candidates',
+      headers: { authorization: await adminToken() },
+    })
+    expect(res.statusCode).toBe(202)
+    expect(mockQueueAdd).toHaveBeenCalledOnce()
+  })
+
+  it('manual_only section → 422（无候选可算，D-182-4.7）+ 不入队不记审计', async () => {
+    mockFind.mockResolvedValue(settingsRow('type_shortcuts', { autofillMode: 'manual_only' }))
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/admin/home/sections/type_shortcuts/refresh-candidates',
+      headers: { authorization: await adminToken() },
+    })
+    expect(res.statusCode).toBe(422)
+    expect(mockQueueAdd).not.toHaveBeenCalled()
+    expect(mockAuditWrite).not.toHaveBeenCalled()
+  })
+
+  it('入队失败异常上抛 → 500 不静默（D-183-3.6）+ 不记审计', async () => {
+    mockQueueAdd.mockRejectedValue(new Error('redis down'))
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/admin/home/sections/hot_movies/refresh-candidates',
+      headers: { authorization: await adminToken() },
+    })
+    expect(res.statusCode).toBe(500)
+    expect(mockAuditWrite).not.toHaveBeenCalled()
+  })
+
+  it('非法 section 422（先于 404）/ settings 缺行 404 / 未登录 401', async () => {
+    const bad = await app.inject({
+      method: 'POST',
+      url: '/v1/admin/home/sections/not_a_section/refresh-candidates',
+      headers: { authorization: await adminToken() },
+    })
+    expect(bad.statusCode).toBe(422)
+
+    mockFind.mockResolvedValue(null)
+    const missing = await app.inject({
+      method: 'POST',
+      url: '/v1/admin/home/sections/hot_movies/refresh-candidates',
+      headers: { authorization: await adminToken() },
+    })
+    expect(missing.statusCode).toBe(404)
+
+    const anon = await app.inject({
+      method: 'POST',
+      url: '/v1/admin/home/sections/hot_movies/refresh-candidates',
+    })
+    expect(anon.statusCode).toBe(401)
   })
 })
 

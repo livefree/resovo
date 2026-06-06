@@ -88,6 +88,23 @@ export const identityCandidateQueue = new Bull('identity-candidate-queue', {
   },
 })
 
+/**
+ * 首页自动填充候选重算队列（ADR-183 D-183-3；CHG-HOME-AUTOFILL-REFRESH）。
+ * 独立队列隔离背压（重算含映射 JOIN + 排序计算，不并入 maintenanceQueue）；
+ * 低频后台范式 attempts 2 + fixed 30s（D-183-3.6）。
+ * 注意：job 以 `autofill:${section}` 固定 jobId 入队（幂等键），入队方必须
+ * per-add 设 removeOnComplete/removeOnFail: true——jobId 释放是定频重入前提（D-183-3.3）。
+ */
+export const homeAutofillQueue = new Bull('home-autofill-queue', {
+  redis: redisOptions,
+  defaultJobOptions: {
+    attempts: 2,
+    backoff: { type: 'fixed', delay: 30_000 },
+    removeOnComplete: 20,
+    removeOnFail: 10,
+  },
+})
+
 // ── 队列事件日志 ──────────────────────────────────────────────────
 
 function attachQueueLogger(queue: Bull.Queue, queueName: string) {
@@ -106,8 +123,9 @@ attachQueueLogger(maintenanceQueue, 'maintenance-queue')
 attachQueueLogger(enrichmentQueue, 'enrichment-queue')
 attachQueueLogger(imageHealthQueue, 'image-health-queue')
 attachQueueLogger(identityCandidateQueue, 'identity-candidate-queue')
+attachQueueLogger(homeAutofillQueue, 'home-autofill-queue')
 
-const queues = { crawlerQueue, verifyQueue, maintenanceQueue, enrichmentQueue, imageHealthQueue, identityCandidateQueue }
+const queues = { crawlerQueue, verifyQueue, maintenanceQueue, enrichmentQueue, imageHealthQueue, identityCandidateQueue, homeAutofillQueue }
 export default queues
 
 /** 确认 crawler 队列可用，避免创建任务后因入队失败留下 pending 脏状态 */

@@ -8,8 +8,9 @@
  * PATCH /admin/home/sections/:section/settings  — 更新区块设置（#3，audit home_section.settings_update）
  * GET   /admin/home/sections/:section/autofill-candidates — 候选快照只读（#4，CHG-HOME-AUTOFILL-CORE-B）
  * POST  /admin/home/sections/:section/reorder   — 区块内排序门面（#6，audit home_section.reorder，CHG-HOME-CARD-DND-A）
+ * POST  /admin/home/sections/:section/refresh-candidates — 手动触发重算入队（#7，audit home_section.refresh_candidates，CHG-HOME-AUTOFILL-REFRESH）
  *
- * #5/#7 归 Phase 3 后续卡（APPLY / REFRESH）。
+ * #5 归 Phase 3 APPLY 卡。
  * 路由注册顺序声明（ADR-182）：`:section` 子动作为静态后缀路由，未来加入 `:section`
  * 通配动态路由时静态后缀必须先注册（参 home-modules.ts reorder 先于 /:id 范式）。
  */
@@ -160,5 +161,37 @@ export async function adminHomeRoutes(fastify: FastifyInstance) {
       }
       throw err
     }
+  })
+
+  // ── POST /admin/home/sections/:section/refresh-candidates ─────────────────
+  // CHG-HOME-AUTOFILL-REFRESH / D-182-4 #7：手动触发重算入队（429 主动检查，
+  // 入队失败异常上抛 → 500 不静默，ADR-183 D-183-3.6）
+
+  fastify.post('/admin/home/sections/:section/refresh-candidates', { preHandler: adminOnly }, async (request, reply) => {
+    // D-182-4 #9：非法 section 枚举外值 → 422（先于 404 判定）
+    const sectionParsed = SectionParamSchema.safeParse((request.params as { section: string }).section)
+    if (!sectionParsed.success) {
+      return reply.code(422).send({
+        error: { code: 'VALIDATION_ERROR', message: `section 必须为 ${SectionParamSchema.options.join(' / ')}`, status: 422 },
+      })
+    }
+
+    const result = await svc.refreshCandidates(sectionParsed.data, request.user!.userId, request.id)
+    if (result === 'not_found') {
+      return reply.code(404).send({
+        error: { code: 'NOT_FOUND', message: `home_section ${sectionParsed.data} settings 不存在`, status: 404 },
+      })
+    }
+    if (result === 'manual_only') {
+      return reply.code(422).send({
+        error: { code: 'VALIDATION_ERROR', message: `${sectionParsed.data} 为 manual_only 模式，无候选可算`, status: 422 },
+      })
+    }
+    if (result === 'already_queued') {
+      return reply.code(429).send({
+        error: { code: 'RATE_LIMITED', message: `${sectionParsed.data} 已有进行中的重算任务`, status: 429 },
+      })
+    }
+    return reply.code(202).send({ data: { enqueued: true } })
   })
 }

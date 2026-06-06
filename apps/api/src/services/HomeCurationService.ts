@@ -38,6 +38,7 @@ import { listAdminHomeModules, findHomeModuleById, reorderHomeModules } from '@/
 import { listTrendingVideos } from '@/api/db/queries/videos'
 import { listVideosByRatingDesc, listVideoCardsByIds } from '@/api/db/queries/videos.status'
 import { occupyVideoIds, isOccupied } from '@/api/services/home-autofill'
+import { homeAutofillQueue } from '@/api/lib/queue'
 import { AuditLogService } from '@/api/services/AuditLogService'
 import { AppError } from '@/api/lib/errors'
 
@@ -347,6 +348,50 @@ export class HomeCurationService {
     const updated = await reorderHomeModules(this.db, params.items)
     this.writeReorderAudit(section, 'home_modules', settings.id, beforeItems, params.items, actorId, requestId)
     return { updated }
+  }
+
+  /**
+   * 端点 #7：手动触发候选重算入队（D-182-4.7 / ADR-183 D-183-3.3）。
+   * 429 判定 = **主动检查** getJob+getState（不得依赖 add() 去重副作用——add 命中
+   * 幂等键不抛错，端点拿不到信号）；入队失败异常上抛 → 500 不静默（D-183-3.6）。
+   * audit `home_section.refresh_candidates`（轻量：afterJsonb 仅 { section, enqueuedAt }）。
+   */
+  async refreshCandidates(
+    section: HomeSectionKey,
+    actorId: string,
+    requestId?: string,
+  ): Promise<'not_found' | 'manual_only' | 'already_queued' | { enqueuedAt: string }> {
+    const settings = await findHomeSectionSettings(this.db, section)
+    if (!settings) return 'not_found'
+    // manual_only 无候选可算（D-182-4.7）
+    if (settings.autofillMode === 'manual_only') return 'manual_only'
+
+    const jobId = `autofill:${section}`
+    const existing = await homeAutofillQueue.getJob(jobId)
+    if (existing) {
+      const state = await existing.getState()
+      if (state === 'active' || state === 'waiting' || state === 'delayed') {
+        return 'already_queued'
+      }
+    }
+
+    // per-add removeOnComplete/removeOnFail: true 释放 jobId（定频重入前提，D-183-3.3）
+    await homeAutofillQueue.add(
+      { kind: 'recalculate', section, trigger: 'manual' },
+      { jobId, removeOnComplete: true, removeOnFail: true },
+    )
+
+    const enqueuedAt = new Date().toISOString()
+    this.auditSvc.write({
+      actorId,
+      actionType: 'home_section.refresh_candidates',
+      targetKind: 'home_section',
+      targetId: settings.id, // D-182-5.3：锚定 settings 行 id
+      beforeJsonb: null,
+      afterJsonb: { section, enqueuedAt },
+      requestId: requestId ?? null,
+    })
+    return { enqueuedAt }
   }
 
   /** audit `home_section.reorder`（D-182-4.6 载荷硬约束：sectionKey + 真源标识 + ids + before/after ordering 对比） */

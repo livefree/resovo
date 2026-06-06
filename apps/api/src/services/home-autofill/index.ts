@@ -43,3 +43,12 @@ export {
   buildBangumiGaps,
   generateBangumiSectionCandidates,
 } from './bangumi'
+export {
+  buildTrendingCandidates,
+  generateTrendingSectionCandidates,
+  type TrendingSection,
+} from './trending'
+export {
+  recalculateSectionSnapshot,
+  type RecalculateResult,
+} from './recalculate'

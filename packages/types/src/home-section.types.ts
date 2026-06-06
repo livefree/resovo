@@ -121,7 +121,8 @@ export interface HomePreview {
 /** 候选视频摘要（快照 JSONB 内嵌；展示最小集，非 VideoCard 全量） */
 export interface AutofillVideoSummary {
   title: string
-  slug: string
+  /** 与 VideoCard.slug 同口径可空（消费端回退 videoId 深链） */
+  slug: string | null
   coverUrl: string | null
   /** 站内 videos.type（D-183-1 分池信号，值域同 VideoType） */
   type: string
