@@ -15159,3 +15159,18 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **新增依赖**：无
 - **数据库变更**：无
 - **注意事项**：home 域 70/70（既有 64 零破坏）+ test:changed 38/38 + typecheck/lint EXIT=0。深链 Modal 同走 handleBatchAdd 服务端兜底（双入口同修）。
+
+## [CHG-HOME-UX-07-FIX2] Modal 预过滤决策权移除 + 深链面板预加载（Codex review 第 2 轮）
+- **完成时间**：2026-06-05
+- **记录时间**：2026-06-05 17:12
+- **执行模型**：claude-opus-4-8
+- **子代理**：无（Codex stop-time review 第 2 轮触发）
+- **根因**：① Modal handleConfirm 提交本地缓存预过滤后的 pendingItems——**预过滤仍是提交集决策层**，缓存陈旧时服务端真源守卫被旁路（守卫只能兜「传进来的」）② use-batch-add 预加载 effect 仅由 batchAddInitial 驱动——深链面板实例（addEntry.items 驱动 open）打开不预加载，slot 切换标灰失真
+- **修改文件**：
+  - `apps/server-next/src/app/admin/home/_client/BatchAddVideosModal.tsx` — handleConfirm 提交**全量 selected**（本地标灰/「待添加 N」计数降级为展示层估计；过滤唯一真源 = handleBatchAdd 服务端守卫）；头注 + onConfirm Props 注释职责分层声明
+  - `apps/server-next/src/lib/home-modules/use-batch-add.ts` — opts +externallyOpen?（深链面板 open 信号并入预加载触发：panelOpen = batchAddInitial !== null || externallyOpen）
+  - `apps/server-next/src/app/admin/home/_client/HomeOpsClient.tsx` — useBatchAdd 接 externallyOpen: addEntry.items !== null
+  - 测试：BatchAddVideosModal 确认用例改 FIX2 核心断言（提交全量含本地标灰项）+ use-batch-add +1（externallyOpen 触发预加载）
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：去重职责自此单层决策——Modal 仅展示估计，handleBatchAdd 服务端最新列表是唯一过滤层（三入口统一）。home 域 71/71 + test:changed 39/39 + typecheck/lint EXIT=0。

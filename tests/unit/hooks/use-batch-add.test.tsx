@@ -41,7 +41,10 @@ function makeItem(id: string) {
 
 const toastPush = vi.fn()
 
-function setup(modulesBySlot: Partial<Record<HomeModuleSlot, readonly HomeModule[]>> = {}) {
+function setup(
+  modulesBySlot: Partial<Record<HomeModuleSlot, readonly HomeModule[]>> = {},
+  externallyOpen = false,
+) {
   const setModulesBySlot = vi.fn()
   const loadSlot = vi.fn().mockResolvedValue(undefined)
   const hook = renderHook(() => useBatchAdd({
@@ -49,6 +52,7 @@ function setup(modulesBySlot: Partial<Record<HomeModuleSlot, readonly HomeModule
     setModulesBySlot,
     loadSlot,
     toast: { push: toastPush },
+    externallyOpen,
   }))
   return { hook, setModulesBySlot, loadSlot }
 }
@@ -143,5 +147,14 @@ describe('useBatchAdd — 面板打开预加载（FIX UI 层）', () => {
   it('未打开（初始态）→ 零预加载', () => {
     const { loadSlot } = setup({})
     expect(loadSlot).not.toHaveBeenCalled()
+  })
+
+  it('externallyOpen（深链面板实例）→ 同样触发预加载（FIX2）', async () => {
+    const { loadSlot } = setup({ banner: [] }, true)
+    await waitFor(() => {
+      expect(loadSlot).toHaveBeenCalledWith('featured')
+    })
+    expect(loadSlot).toHaveBeenCalledWith('top10')
+    expect(loadSlot).not.toHaveBeenCalledWith('banner')
   })
 })

@@ -8,8 +8,10 @@
  *   ② 他页深链：?add_ids= 落地 → initialItems 预填（CHG-HOME-UX-08）
  *   ③ 趋势导入：trending 候选 → initialItems 预填（CHG-HOME-UX-09）
  *
- * 去重（UI 层，DB 无 unique(slot, content_ref_id)）：目标 slot 已有 video
- * contentRefId 命中的项标灰「已在列」并从确认计数中排除；确认仅提交未在列项。
+ * 去重职责分层（CHG-HOME-UX-07-FIX2）：
+ *   - 本组件标灰/计数 = **展示层估计**（基于已加载缓存，面板打开时父级预加载刷新）
+ *   - 过滤唯一真源 = onConfirm 接收**全量 selected**，由 useBatchAdd.handleBatchAdd
+ *     确认时按服务端最新列表重过滤（本地预过滤不决定提交集，避免缓存陈旧旁路守卫）
  * 误操作安全：确认前零写库（硬删语义下深链静默创建被否决，用户裁定确认面板）。
  */
 
@@ -116,7 +118,10 @@ export interface BatchAddVideosModalProps {
   /** 按 slot 取已在列的 video contentRefId 集合（去重比对真源 = 已加载 modules） */
   readonly getExistingIds: (slot: HomeModuleSlot) => ReadonlySet<string>
   readonly onClose: () => void
-  /** 确认：仅提交未在列项；父级负责循环创建 + 汇总 toast + 列表刷新 */
+  /**
+   * 确认：提交**全量 selected**（含本地标灰项）——过滤唯一真源在父级
+   * handleBatchAdd 服务端守卫（FIX2）；父级负责去重/循环创建/汇总 toast/列表刷新
+   */
   readonly onConfirm: (slot: HomeModuleSlot, items: readonly PickerVideoItem[]) => Promise<void>
 }
 
@@ -145,6 +150,7 @@ export function BatchAddVideosModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, defaultSlot, initialItems])
 
+  // 展示层估计（缓存基线）：标灰与计数提示用；不决定提交集（FIX2）
   const existingIds = getExistingIds(slot)
   const pendingItems = useMemo(
     () => selected.filter((item) => !existingIds.has(item.id)),
@@ -156,7 +162,9 @@ export function BatchAddVideosModal({
     if (pendingItems.length === 0) return
     setSubmitting(true)
     try {
-      await onConfirm(slot, pendingItems)
+      // FIX2：提交全量 selected——过滤唯一真源 = handleBatchAdd 服务端守卫
+      // （本地预过滤决定提交集会在缓存陈旧时旁路守卫；最终去重/跳过以 toast 为准）
+      await onConfirm(slot, selected)
     } finally {
       setSubmitting(false)
     }

@@ -73,17 +73,17 @@ function renderModal(over: Partial<Parameters<typeof BatchAddVideosModal>[0]> = 
 }
 
 describe('BatchAddVideosModal — 去重与确认', () => {
-  it('已在列项标灰 + 摘要计数排除 + 确认仅提交未在列项', async () => {
+  it('已在列项标灰（展示层估计）+ 确认提交全量 selected（过滤唯一真源在服务端守卫，FIX2）', async () => {
     const items = [makeItem('v-a'), makeItem('v-b'), makeItem('v-c')]
     const onConfirm = renderModal({
       initialItems: items,
       getExistingIds: () => new Set(['v-b']),
     })
 
-    // v-b 标灰
+    // v-b 标灰（展示）
     expect(screen.queryByTestId('batch-add-existing-v-b')).not.toBeNull()
     expect(screen.queryByTestId('batch-add-existing-v-a')).toBeNull()
-    // 摘要：待添加 2 · 跳过 1
+    // 摘要：待添加 2 · 跳过 1（本地估计）
     expect(screen.getByTestId('batch-add-summary').textContent).toContain('待添加 2 个')
     expect(screen.getByTestId('batch-add-summary').textContent).toContain('跳过 1 个')
 
@@ -91,7 +91,9 @@ describe('BatchAddVideosModal — 去重与确认', () => {
     await waitFor(() => expect(onConfirm).toHaveBeenCalled())
     const [slot, submitted] = onConfirm.mock.calls[0] as [HomeModuleSlot, readonly PickerVideoItem[]]
     expect(slot).toBe('featured')
-    expect(submitted.map((i) => i.id)).toEqual(['v-a', 'v-c'])
+    // FIX2 核心断言：提交全量（含本地标灰的 v-b）——本地预过滤不决定提交集，
+    // 缓存陈旧时由 handleBatchAdd 服务端守卫统一裁决
+    expect(submitted.map((i) => i.id)).toEqual(['v-a', 'v-b', 'v-c'])
   })
 
   it('待添加 0（全部已在列）→ 确认按钮禁用 + onConfirm 不触发', () => {

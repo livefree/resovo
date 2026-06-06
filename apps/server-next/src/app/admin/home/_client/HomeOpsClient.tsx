@@ -222,8 +222,15 @@ export function HomeOpsClient() {
   }, [activeSlot, toast])
 
   // ── 批量添加（CHG-HOME-UX-07/09 + 07-FIX：域逻辑抽 use-batch-add——
-  //    确认时服务端真源兜底去重/ordering + 面板打开预加载未加载 video slots）──
-  const batchAdd = useBatchAdd({ modulesBySlot, setModulesBySlot, loadSlot, toast })
+  //    确认时服务端真源兜底去重/ordering + 面板打开预加载未加载 video slots；
+  //    FIX2：深链面板 open 信号并入预加载触发）──
+  const batchAdd = useBatchAdd({
+    modulesBySlot,
+    setModulesBySlot,
+    loadSlot,
+    toast,
+    externallyOpen: addEntry.items !== null,
+  })
 
   // ── 编辑/创建保存 ──────────────────────────────────────────────────
 

@@ -27,6 +27,11 @@ export interface UseBatchAddOptions {
   readonly setModulesBySlot: Dispatch<SetStateAction<ModulesBySlot>>
   readonly loadSlot: (slot: HomeModuleSlot) => Promise<void>
   readonly toast: { push: (t: { title: string; description?: string; level: 'success' | 'warn' | 'danger' }) => void }
+  /**
+   * 外部面板 open 信号（FIX2：深链确认面板实例由 addEntry.items 驱动 open，
+   * 不经 batchAddInitial——并入预加载触发，否则深链面板 slot 切换标灰失真）
+   */
+  readonly externallyOpen?: boolean
 }
 
 export interface UseBatchAddResult {
@@ -48,11 +53,12 @@ function videoIdsOf(modules: readonly HomeModule[]): Set<string> {
   return ids
 }
 
-export function useBatchAdd({ modulesBySlot, setModulesBySlot, loadSlot, toast }: UseBatchAddOptions): UseBatchAddResult {
+export function useBatchAdd({ modulesBySlot, setModulesBySlot, loadSlot, toast, externallyOpen = false }: UseBatchAddOptions): UseBatchAddResult {
   const [batchAddInitial, setBatchAddInitial] = useState<readonly PickerVideoItem[] | null>(null)
 
-  // FIX ②（UI 层）：面板打开时预加载未加载的 video slots，slot 切换标灰即时正确
-  const panelOpen = batchAddInitial !== null
+  // FIX ②（UI 层）：任一确认面板（页内/趋势/深链）打开时预加载未加载的 video slots，
+  // slot 切换标灰即时正确
+  const panelOpen = batchAddInitial !== null || externallyOpen
   useEffect(() => {
     if (!panelOpen) return
     for (const slot of VIDEO_SLOTS) {

@@ -3349,6 +3349,13 @@ CODENAME-MATRIX-E2E (依赖 Wave 3 验收期补丁 CODENAME-MATRIX ✅)
     - 根因：getExistingIds/baseOrdering 真源 = 懒加载 modulesBySlot，目标 slot 未访问 → 去重空集重复创建 + ordering 从 0 撞号；07 卡「确认前 loadSlot 兜底」注释承诺未实现。
     - 修复（3 项）：① handleBatchAdd 确认时服务端真源兜底（listHomeModules 最新列表 → 重过滤去重〔跳过进 toast〕+ ordering 按服务端 max+1 + 取列表失败零 create + 缓存整体回写）② 面板打开预加载未加载 video slots（标灰即时正确）③ 批量添加域抽 use-batch-add.ts（HomeOpsClient 499→441，兑现 CHG-HOME-OPS-SPLIT）。
     - 完成备注：+6 hook 用例（核心 = 未加载 slot 兜底去重 + max+1 回归守护）；home 域 70/70 既有零破坏 + test:changed 38/38 + typecheck/lint EXIT=0；深链/页内/趋势三入口同走兜底。执行模型: claude-opus-4-8；子代理: 无。
+15. **CHG-HOME-UX-07-FIX2** — Modal 预过滤决策权移除 + 深链面板预加载（状态：✅ 已完成）
+    - 创建时间：2026-06-05 17:10（**Codex stop-time review 第 2 轮触发**）
+    - 实际开始：2026-06-05 17:10 ｜ 完成时间：2026-06-05 17:12
+    - 建议模型：sonnet
+    - 根因：① Modal 提交本地预过滤后的 pendingItems——预过滤仍是提交集决策层，缓存陈旧时旁路服务端守卫 ② 深链面板（addEntry 驱动 open）不触发预加载，标灰失真。
+    - 修复（3 项）：① Modal 提交全量 selected（标灰/计数降级展示层估计；过滤唯一真源 = handleBatchAdd 服务端守卫）② useBatchAdd +externallyOpen 并入预加载触发 ③ 测试更新（全量提交核心断言 + 深链预加载用例）。
+    - 完成备注：去重职责单层决策定型（Modal 展示估计 / 服务端守卫唯一过滤层，三入口统一）。home 域 71/71 + test:changed 39/39 + typecheck/lint EXIT=0。执行模型: claude-opus-4-8；子代理: 无。
 
 ### 后续卡登记（本序列产出，不在本序列内执行）
 
