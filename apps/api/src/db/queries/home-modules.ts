@@ -284,6 +284,52 @@ export async function reorderHomeModules(
   return updated
 }
 
+/**
+ * 批量创建 pinned video 行（CHG-HOME-AUTOFILL-APPLY / ADR-182 D-182-4.5）。
+ * 单事务全有或全无（reorder 同款 BEGIN/COMMIT 范式）：slot 内 MAX(ordering)+1
+ * 起连续追加（事务内取 max，防并发空洞）；title 留空 {}（消费端降级视频标题，
+ * migration 093 语义）；brand 默认 all-brands（settings 首版全局，D-182-3）。
+ */
+export async function insertPinnedHomeModulesBatch(
+  db: Pool,
+  slot: HomeModuleSlot,
+  videoIds: readonly string[],
+): Promise<HomeModule[]> {
+  if (videoIds.length === 0) return []
+
+  const client = await db.connect()
+  try {
+    await client.query('BEGIN')
+    const maxResult = await client.query<{ next: number }>(
+      `SELECT COALESCE(MAX(ordering) + 1, 0)::int AS next FROM home_modules WHERE slot = $1`,
+      [slot],
+    )
+    let ordering = maxResult.rows[0]?.next ?? 0
+    const created: HomeModule[] = []
+    for (const videoId of videoIds) {
+      const result = await client.query<DbHomeModuleRow>(
+        `INSERT INTO home_modules
+           (slot, brand_scope, brand_slug, ordering, content_ref_type, content_ref_id,
+            title, image_url, start_at, end_at, enabled, metadata)
+         VALUES ($1, 'all-brands', NULL, $2, 'video', $3, '{}', NULL, NULL, NULL, true, '{}')
+         RETURNING id, slot, brand_scope, brand_slug, ordering,
+                   content_ref_type, content_ref_id,
+                   title, image_url, start_at, end_at, enabled, metadata, created_at, updated_at`,
+        [slot, ordering, videoId],
+      )
+      created.push(mapRow(result.rows[0]))
+      ordering += 1
+    }
+    await client.query('COMMIT')
+    return created
+  } catch (err) {
+    await client.query('ROLLBACK')
+    throw err
+  } finally {
+    client.release()
+  }
+}
+
 /** Admin 工具：按 content_ref 反查（用于 video 软删时的级联失效提示） */
 export async function listHomeModulesByContentRef(
   db: Pool,

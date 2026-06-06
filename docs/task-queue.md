@@ -1110,7 +1110,7 @@
 
 ## [SEQ-20260605-05] 首页运营治理实施 — Phase 1 真源与同构预览（治理方案 §13 落地）
 
-- **状态**：🔄 进行中（**Phase 1 全 11 卡 ✅ + Phase 2 全 4 卡 ✅（含 CARD-DND-B-FIX）；Phase 3 六卡细化登记 2026-06-06，卡 13–17 ✅（CORE-A/B + DOUBAN + BANGUMI + REFRESH），末卡 18 APPLY**）
+- **状态**：🔄 进行中（**Phase 1 全 11 卡 ✅ + Phase 2 全 4 卡 ✅（含 CARD-DND-B-FIX）+ Phase 3 全 6 卡 ✅ 收口 2026-06-06 14:50（CORE-A/B + DOUBAN + BANGUMI + REFRESH + APPLY；ADR-182 端点 7/7 + ADR-183 全 D 条落地）；Phase 3 候补卡（AUTOFILL-UI / 公开首页消费切换）+ Phase 4 占位待细化**）
 - **创建时间**：2026-06-05 20:05
 - **最后更新时间**：2026-06-06 03:10
 - **目标**：按 `docs/designs/home-operations-governance-plan_20260605.md` §13 推进实施。本序列承载 Phase 1（真源与同构预览）+ 后续 Phase 细化登记。
@@ -1277,8 +1277,10 @@
    - 范围（5 项）：① `lib/queue.ts` +homeAutofillQueue（D-183-3.6：attempts 2 + fixed 30s，独立队列隔离背压） ② `workers/homeAutofillScheduler.ts`（5min tick 扫描 settings refresh_interval_minutes 非空且非 manual_only → 比对最新快照 generated_at + interval → 入队；jobId `autofill:${section}` 幂等） ③ `workers/homeAutofillWorker.ts`（候选生成编排：trending/douban/bangumi 按 section 分派 → 写快照同事务清理；trigger scheduled/manual） ④ 端点 #7（429 主动 getJob+getState 检查不依赖 add 去重副作用 / manual_only 422 / 入队失败 500 不静默 / audit `home_section.refresh_candidates` + 守卫登记） ⑤ architecture.md worker 清单同步 + 单测（429 主动检查 / 幂等键 / 调度判定）。
    - 依赖：CHG-HOME-AUTOFILL-DOUBAN + BANGUMI（worker 分派需候选源就绪）。
 
-18. **CHG-HOME-AUTOFILL-APPLY** — 端点 #5 候选转 pinned + 审计（状态：⬜）
-   - 建议模型：sonnet
+18. **CHG-HOME-AUTOFILL-APPLY** — 端点 #5 候选转 pinned + 审计（状态：✅ 已完成；**Phase 3 全部 6 卡收口 2026-06-06 14:50**）
+   - 实际开始：2026-06-06 13:40 ｜ 完成时间：2026-06-06 14:50
+   - 建议模型：sonnet（实际 claude-opus-4-8，用户 opus 会话人工覆盖）
+   - 完成备注：D-182-4.5 全落地：快照定位（轮换失效 409 携 ids）→ 重校验可见性+可播性（任一失效**整体 409 零写入**，全有或全无）→ 已 pinned 重复 409 → pinnedLimit 超限 422（实施级推演）→ insertPinnedHomeModulesBatch 单事务批量插入（slot MAX(ordering)+1 事务内连续）→ audit apply_autofill 全载荷（R-MID-1 第 36 次守卫登记）。banner 422 指引编辑器（实施级推演：「透出预填」为 UI 行为，端点不写 home_banners/冻结 slot；预填 UI 归 AUTOFILL-UI 候补卡）。端点 #4 +appliedAt 派生（快照不可变——由 slot pinned 行 created_at 派生）。**file-size-budget 拆分**：Service 679→440（schemas/preview/preview-cards 三模块拆出，CHG-VSR-3 同先例）。dev 实测：409 拦截 + banner 约束实证。**ADR-182 端点 7/7 全量落地（endpoint-adr 214 对齐）**。测试 +11。门禁：typecheck/lint 绿 + 全量 6901 兜底（staging 域既有 jsdom 并发 flaky 隔离过，与本卡无关）+ E2E admin 36 passed exit 0。执行模型: claude-opus-4-8；子代理: 无。
    - 范围（4 项）：① ApplyAutofillSchema（candidateIds ≥1）+ HomeCurationService.applyAutofill（读最新快照定位候选 → 逐候选重校验可见性/可播放性 → 任一失效整体 409 STATE_CONFLICT 携失效 ids → 全有或全无事务创建对应 slot home_modules pinned 行） ② banner section 语义（D-182-4.5：suggest_only 候选连同缺图风险态透出至编辑器预填，不直接写 home_banners——响应形态实施级推演入完成备注） ③ audit `home_section.apply_autofill`（afterJsonb 含 module ids + 候选来源 + policyVersion + 守卫登记） ④ 端点 #5 route + 单测（409 全有或全无 / audit payload / pinnedLimit 推演）。
    - 依赖：CHG-HOME-AUTOFILL-CORE-B（快照读取）；与 REFRESH 可换序。
 

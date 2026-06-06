@@ -7,10 +7,11 @@
  * GET   /admin/home/sections                    — 7 区块 settings + 状态摘要（#2）
  * PATCH /admin/home/sections/:section/settings  — 更新区块设置（#3，audit home_section.settings_update）
  * GET   /admin/home/sections/:section/autofill-candidates — 候选快照只读（#4，CHG-HOME-AUTOFILL-CORE-B）
+ * POST  /admin/home/sections/:section/apply-autofill — 候选转 pinned（#5，audit home_section.apply_autofill，CHG-HOME-AUTOFILL-APPLY）
  * POST  /admin/home/sections/:section/reorder   — 区块内排序门面（#6，audit home_section.reorder，CHG-HOME-CARD-DND-A）
  * POST  /admin/home/sections/:section/refresh-candidates — 手动触发重算入队（#7，audit home_section.refresh_candidates，CHG-HOME-AUTOFILL-REFRESH）
  *
- * #5 归 Phase 3 APPLY 卡。
+ * ADR-182 端点 7/7 全量落地。
  * 路由注册顺序声明（ADR-182）：`:section` 子动作为静态后缀路由，未来加入 `:section`
  * 通配动态路由时静态后缀必须先注册（参 home-modules.ts reorder 先于 /:id 范式）。
  */
@@ -24,6 +25,7 @@ import {
   ReorderSectionSchema,
   PreviewQuerySchema,
   CandidatesQuerySchema,
+  ApplyAutofillSchema,
 } from '@/api/services/HomeCurationService'
 import { isAppError } from '@/api/lib/errors'
 
@@ -157,6 +159,55 @@ export async function adminHomeRoutes(fastify: FastifyInstance) {
       if (isAppError(err, 'VALIDATION_ERROR')) {
         return reply.code(422).send({
           error: { code: 'VALIDATION_ERROR', message: err.message, status: 422 },
+        })
+      }
+      throw err
+    }
+  })
+
+  // ── POST /admin/home/sections/:section/apply-autofill ─────────────────────
+  // CHG-HOME-AUTOFILL-APPLY / D-182-4 #5：候选转 pinned（重校验 + 全有或全无 409）
+
+  fastify.post('/admin/home/sections/:section/apply-autofill', { preHandler: adminOnly }, async (request, reply) => {
+    // D-182-4 #9：非法 section 枚举外值 → 422（先于 404 判定）
+    const sectionParsed = SectionParamSchema.safeParse((request.params as { section: string }).section)
+    if (!sectionParsed.success) {
+      return reply.code(422).send({
+        error: { code: 'VALIDATION_ERROR', message: `section 必须为 ${SectionParamSchema.options.join(' / ')}`, status: 422 },
+      })
+    }
+
+    const bodyParsed = ApplyAutofillSchema.safeParse(request.body)
+    if (!bodyParsed.success) {
+      return reply.code(422).send({
+        error: { code: 'VALIDATION_ERROR', message: bodyParsed.error.issues[0]?.message ?? '参数错误', status: 422 },
+      })
+    }
+
+    try {
+      const result = await svc.applyAutofill(
+        sectionParsed.data,
+        bodyParsed.data,
+        request.user!.userId,
+        request.id,
+      )
+      if (!result) {
+        return reply.code(404).send({
+          error: { code: 'NOT_FOUND', message: `home_section ${sectionParsed.data} settings 不存在`, status: 404 },
+        })
+      }
+      return reply.send({ data: result })
+    } catch (err) {
+      // banner 真源约束 / pinnedLimit 超限（D-182-4.5）
+      if (isAppError(err, 'VALIDATION_ERROR')) {
+        return reply.code(422).send({
+          error: { code: 'VALIDATION_ERROR', message: err.message, status: 422 },
+        })
+      }
+      // 候选缺失/失效/已应用 → 整体 409（全有或全无，message 携失效 ids）
+      if (isAppError(err, 'STATE_CONFLICT')) {
+        return reply.code(409).send({
+          error: { code: 'STATE_CONFLICT', message: err.message, status: 409 },
         })
       }
       throw err

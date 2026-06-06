@@ -315,6 +315,7 @@ describe('GET /admin/home/sections/:section/autofill-candidates', () => {
   beforeEach(async () => {
     vi.clearAllMocks()
     mockFind.mockResolvedValue(settingsRow('hot_movies'))
+    mockListAdminModules.mockResolvedValue({ rows: [], total: 0 }) // appliedAt 派生源（默认无 pinned）
     mockFindLatestSnapshot.mockResolvedValue(snapshotRow({
       candidates: [
         candidateRow('c1', { rank: 1, score: 0.9 }),
@@ -418,12 +419,227 @@ describe('GET /admin/home/sections/:section/autofill-candidates', () => {
     expect(res.statusCode).toBe(404)
   })
 
+  it('appliedAt 派生（CHG-HOME-AUTOFILL-APPLY）：同 video 已 pinned → 候选携 created_at（快照不可变不回写）', async () => {
+    mockListAdminModules.mockResolvedValue({
+      rows: [{ id: 'm-1', contentRefType: 'video', contentRefId: 'v-c1', createdAt: '2026-06-06T14:00:00Z' }],
+      total: 1,
+    })
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/admin/home/sections/hot_movies/autofill-candidates',
+      headers: { authorization: await adminToken() },
+    })
+    const data = res.json().data as AutofillCandidate[]
+    expect(data.find((c) => c.videoId === 'v-c1')?.appliedAt).toBe('2026-06-06T14:00:00Z')
+    expect(data.find((c) => c.videoId === 'v-c3')?.appliedAt).toBeUndefined()
+  })
+
   it('未登录返回 401', async () => {
     const res = await app.inject({
       method: 'GET',
       url: '/v1/admin/home/sections/hot_movies/autofill-candidates',
     })
     expect(res.statusCode).toBe(401)
+  })
+})
+
+// ── POST /admin/home/sections/:section/apply-autofill（CHG-HOME-AUTOFILL-APPLY / D-182-4 #5）──
+
+const mockInsertPinnedBatch = vi.fn()
+
+describe('POST /admin/home/sections/:section/apply-autofill', () => {
+  let app: Awaited<ReturnType<typeof buildApp>>
+
+  const CID = {
+    a: '11111111-1111-4111-8111-111111111111',
+    b: '22222222-2222-4222-8222-222222222222',
+    ghost: '99999999-9999-4999-8999-999999999999',
+  }
+
+  function applyCandidate(id: string, videoId: string) {
+    return candidateRow('x', { id, videoId, origin: 'douban' })
+  }
+
+  function applyCard(videoId: string, sourceCount = 2) {
+    return { id: videoId, sourceCount, title: 't', slug: 's', coverUrl: null, type: 'movie', rating: 8, year: 2026 }
+  }
+
+  beforeEach(async () => {
+    vi.clearAllMocks()
+    mockFind.mockResolvedValue(settingsRow('hot_movies', { autofillMode: 'full_auto', pinnedLimit: null }))
+    mockFindLatestSnapshot.mockResolvedValue(snapshotRow({
+      candidates: [applyCandidate(CID.a, 'v-a'), applyCandidate(CID.b, 'v-b')],
+    }))
+    mockCardsByIds.mockImplementation(async (_db: unknown, ids: string[]) => ids.map((id) => applyCard(id)))
+    mockListAdminModules.mockResolvedValue({ rows: [], total: 0 })
+    mockInsertPinnedBatch.mockImplementation(async (_db: unknown, slot: string, videoIds: string[]) =>
+      videoIds.map((v, i) => ({ id: `m-${v}`, slot, contentRefId: v, contentRefType: 'video', ordering: i, createdAt: '2026-06-06T14:00:00Z' })))
+    app = await buildApp()
+  })
+
+  it('200：重校验通过 → 单事务批量插入 + applied/modules 返回', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/admin/home/sections/hot_movies/apply-autofill',
+      headers: { authorization: await adminToken(), 'content-type': 'application/json' },
+      body: JSON.stringify({ candidateIds: [CID.a, CID.b] }),
+    })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.applied).toBe(2)
+    expect(res.json().data.modules).toHaveLength(2)
+    expect(mockInsertPinnedBatch).toHaveBeenCalledWith(expect.anything(), 'hot_movies', ['v-a', 'v-b'])
+  })
+
+  it('audit R-MID-1 内容断言：apply_autofill 载荷含 moduleIds + 候选来源 + policyVersion（D-182-4.5）', async () => {
+    await app.inject({
+      method: 'POST',
+      url: '/v1/admin/home/sections/hot_movies/apply-autofill',
+      headers: { authorization: await adminToken(), 'content-type': 'application/json' },
+      body: JSON.stringify({ candidateIds: [CID.a] }),
+    })
+    expect(mockAuditWrite).toHaveBeenCalledOnce()
+    expect(mockAuditWrite).toHaveBeenCalledWith(expect.objectContaining({
+      actionType: 'home_section.apply_autofill',
+      targetKind: 'home_section',
+      targetId: 's-hot_movies',
+      afterJsonb: {
+        sectionKey: 'hot_movies',
+        moduleIds: ['m-v-a'],
+        candidateIds: [CID.a],
+        origins: ['douban'],
+        policyVersion: 'hp-v1',
+      },
+    }))
+  })
+
+  it('候选 id 不在快照（轮换失效）→ 整体 409 携失效 ids + 零写入零审计', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/admin/home/sections/hot_movies/apply-autofill',
+      headers: { authorization: await adminToken(), 'content-type': 'application/json' },
+      body: JSON.stringify({ candidateIds: [CID.a, CID.ghost] }),
+    })
+    expect(res.statusCode).toBe(409)
+    expect(res.json().error.code).toBe('STATE_CONFLICT')
+    expect(res.json().error.message).toContain(CID.ghost)
+    expect(mockInsertPinnedBatch).not.toHaveBeenCalled()
+    expect(mockAuditWrite).not.toHaveBeenCalled()
+  })
+
+  it('重校验失效（视频不可见 / 无可播源）→ 整体 409（全有或全无：另一有效候选也不写入）', async () => {
+    // v-a 不在 cards 返回（已下线）；v-b 有效 → 仍整体 409
+    mockCardsByIds.mockImplementation(async (_db: unknown, ids: string[]) =>
+      ids.filter((id) => id !== 'v-a').map((id) => applyCard(id)))
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/admin/home/sections/hot_movies/apply-autofill',
+      headers: { authorization: await adminToken(), 'content-type': 'application/json' },
+      body: JSON.stringify({ candidateIds: [CID.a, CID.b] }),
+    })
+    expect(res.statusCode).toBe(409)
+    expect(res.json().error.message).toContain(CID.a)
+    expect(mockInsertPinnedBatch).not.toHaveBeenCalled()
+
+    // sourceCount 0 → 同样 409
+    mockCardsByIds.mockImplementation(async (_db: unknown, ids: string[]) => ids.map((id) => applyCard(id, 0)))
+    const res2 = await app.inject({
+      method: 'POST',
+      url: '/v1/admin/home/sections/hot_movies/apply-autofill',
+      headers: { authorization: await adminToken(), 'content-type': 'application/json' },
+      body: JSON.stringify({ candidateIds: [CID.a] }),
+    })
+    expect(res2.statusCode).toBe(409)
+  })
+
+  it('同 video 已 pinned → 409（重复应用属状态冲突）', async () => {
+    mockListAdminModules.mockResolvedValue({
+      rows: [{ id: 'm-1', contentRefType: 'video', contentRefId: 'v-a', createdAt: '2026-06-06T10:00:00Z' }],
+      total: 1,
+    })
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/admin/home/sections/hot_movies/apply-autofill',
+      headers: { authorization: await adminToken(), 'content-type': 'application/json' },
+      body: JSON.stringify({ candidateIds: [CID.a] }),
+    })
+    expect(res.statusCode).toBe(409)
+    expect(res.json().error.message).toContain(CID.a)
+  })
+
+  it('快照未生成 → 409（无可应用候选）', async () => {
+    mockFindLatestSnapshot.mockResolvedValue(null)
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/admin/home/sections/hot_movies/apply-autofill',
+      headers: { authorization: await adminToken(), 'content-type': 'application/json' },
+      body: JSON.stringify({ candidateIds: [CID.a] }),
+    })
+    expect(res.statusCode).toBe(409)
+  })
+
+  it('banner section → 422 指引编辑器（D-182-4.5 不直接写 home_banners / D-181-1）', async () => {
+    mockFind.mockResolvedValue(settingsRow('banner', { autofillMode: 'suggest_only' }))
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/admin/home/sections/banner/apply-autofill',
+      headers: { authorization: await adminToken(), 'content-type': 'application/json' },
+      body: JSON.stringify({ candidateIds: [CID.a] }),
+    })
+    expect(res.statusCode).toBe(422)
+    expect(res.json().error.message).toContain('Banner 编辑器')
+    expect(mockInsertPinnedBatch).not.toHaveBeenCalled()
+  })
+
+  it('pinnedLimit 超限 → 422（应用后超过区块上限）', async () => {
+    mockFind.mockResolvedValue(settingsRow('hot_movies', { autofillMode: 'full_auto', pinnedLimit: 1 }))
+    mockListAdminModules.mockResolvedValue({
+      rows: [{ id: 'm-x', contentRefType: 'video', contentRefId: 'v-other', createdAt: '2026-06-06T10:00:00Z' }],
+      total: 1,
+    })
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/admin/home/sections/hot_movies/apply-autofill',
+      headers: { authorization: await adminToken(), 'content-type': 'application/json' },
+      body: JSON.stringify({ candidateIds: [CID.a] }),
+    })
+    expect(res.statusCode).toBe(422)
+    expect(res.json().error.message).toContain('上限')
+  })
+
+  it('body 校验：空数组 / 非 uuid / unknown key → 422；非法 section 422；settings 缺行 404；未登录 401', async () => {
+    for (const body of [{ candidateIds: [] }, { candidateIds: ['not-uuid'] }, { candidateIds: [CID.a], extra: 1 }]) {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/v1/admin/home/sections/hot_movies/apply-autofill',
+        headers: { authorization: await adminToken(), 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      expect(res.statusCode).toBe(422)
+    }
+    const bad = await app.inject({
+      method: 'POST',
+      url: '/v1/admin/home/sections/not_a_section/apply-autofill',
+      headers: { authorization: await adminToken(), 'content-type': 'application/json' },
+      body: JSON.stringify({ candidateIds: [CID.a] }),
+    })
+    expect(bad.statusCode).toBe(422)
+
+    mockFind.mockResolvedValue(null)
+    const missing = await app.inject({
+      method: 'POST',
+      url: '/v1/admin/home/sections/hot_movies/apply-autofill',
+      headers: { authorization: await adminToken(), 'content-type': 'application/json' },
+      body: JSON.stringify({ candidateIds: [CID.a] }),
+    })
+    expect(missing.statusCode).toBe(404)
+
+    const anon = await app.inject({
+      method: 'POST',
+      url: '/v1/admin/home/sections/hot_movies/apply-autofill',
+      body: JSON.stringify({ candidateIds: [CID.a] }),
+      headers: { 'content-type': 'application/json' },
+    })
+    expect(anon.statusCode).toBe(401)
   })
 })
 
@@ -567,6 +783,7 @@ vi.mock('@/api/db/queries/home-modules', () => ({
   listAdminHomeModules: (...args: unknown[]) => mockListAdminModules(...args),
   findHomeModuleById: (...args: unknown[]) => mockFindModule(...args),
   reorderHomeModules: (...args: unknown[]) => mockReorderModules(...args),
+  insertPinnedHomeModulesBatch: (...args: unknown[]) => mockInsertPinnedBatch(...args),
 }))
 vi.mock('@/api/db/queries/videos', () => ({
   listTrendingVideos: (...args: unknown[]) => mockTrending(...args),

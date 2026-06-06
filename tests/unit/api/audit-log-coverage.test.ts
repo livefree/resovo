@@ -117,6 +117,9 @@ const REQUIRED_ACTION_TYPES = [
   // CHG-HOME-AUTOFILL-REFRESH / ADR-182 D-182-4.7：手动触发候选重算（R-MID-1 第 35 次系统化；
   // 轻量载荷 afterJsonb 仅 { section, enqueuedAt }，快照本体属系统产物不计 audit）
   'home_section.refresh_candidates',    // POST /admin/home/sections/:section/refresh-candidates
+  // CHG-HOME-AUTOFILL-APPLY / ADR-182 D-182-4.5：候选转 pinned（R-MID-1 第 36 次系统化；
+  // afterJsonb 含创建的 module ids + 候选来源 + policyVersion）
+  'home_section.apply_autofill',        // POST /admin/home/sections/:section/apply-autofill
 ] as const
 
 const ACTION_TYPE_REGEX = /actionType:\s*['"]([a-z_.]+)['"]/g
@@ -220,6 +223,8 @@ const PAYLOAD_ASSERTION_REQUIRED = [
   'home_section.reorder',
   // CHG-HOME-AUTOFILL-REFRESH / ADR-182 D-182-4.7：手动重算入队 audit payload 内容断言（R-MID-1 第 35 次 / tests/unit/api/admin-home-sections.test.ts）
   'home_section.refresh_candidates',
+  // CHG-HOME-AUTOFILL-APPLY / ADR-182 D-182-4.5：候选转 pinned audit payload 内容断言（R-MID-1 第 36 次 / tests/unit/api/admin-home-sections.test.ts）
+  'home_section.apply_autofill',
 ] as const
 
 // CHG-SN-6-10：plan v1.4 §3.0.5 M-SN-4 legacy 11 项已迁移至 PAYLOAD_ASSERTION_REQUIRED

@@ -2241,3 +2241,20 @@
 - **新增依赖**：无
 - **数据库变更**：无
 - **注意事项**：① **dev 端到端实测**：6 section 重算全 written（hot_movies 37 候选+50 缺口 / trending 三区各 24）、端点 #4 读取链路同源摘要 6 section、**保留清理实证 12 次写入后 featured 恰 10 份**、总耗时 286ms；② ADR-182 端点 7/7 全落地（#5 apply 归下一卡 APPLY）；verify:endpoint-adr 213 对齐；③ scheduler tick 内 interval 判定基于快照 generated_at 比对（无独立状态），与 maintenanceScheduler 的 tickRunning 守卫同范式；④ 门禁：typecheck/lint 绿 + **全量 6889/6889 零失败**（types 基础包改动升全量）+ E2E admin 38 passed（2 known flaky retry 过）。
+
+## [CHG-HOME-AUTOFILL-APPLY] 端点 #5 候选转 pinned + 审计（Phase 3 卡 18 / 末卡）
+- **完成时间**：2026-06-06
+- **记录时间**：2026-06-06 14:50
+- **执行模型**：claude-opus-4-8
+- **子代理**：无
+- **修改文件**：
+  - `apps/api/src/db/queries/home-modules.ts` — +insertPinnedHomeModulesBatch（单事务全有或全无，reorder 同款 BEGIN/COMMIT；slot 内 MAX(ordering)+1 起连续追加事务内取 max 防并发空洞；title 留空 {} 消费端降级视频标题 093 语义；brand 默认 all-brands D-182-3 首版全局）
+  - `apps/api/src/services/HomeCurationService.ts` — +applyAutofill（D-182-4.5：快照定位候选（轮换失效 409 携 ids）→ listVideoCardsByIds 重校验可见性+sourceCount 可播性（任一失效整体 409 零写入）→ 同 video 已 pinned 重复应用 409 → pinnedLimit 超限 422（实施级推演）→ 批量插入 → audit afterJsonb {sectionKey, moduleIds, candidateIds, origins, policyVersion}）+ banner section 422 指引编辑器（**实施级推演**：D-182-4.5「透出预填」为 UI 行为，端点不写 home_banners 亦不写冻结 banner slot；预填 UI 归 AUTOFILL-UI 候补卡）+ 端点 #4 appliedAt 派生（快照不可变不回写——由当前 slot pinned 行 content_ref_id 匹配 created_at 派生，banner 真源非 home_modules 跳过）
+  - `apps/api/src/services/home-curation.schemas.ts` / `home-curation.preview.ts` / `home-curation.preview-cards.ts` — **新增（file-size-budget 拆分）**：Service 679 行超 500 硬限 → zod schemas（6 个）+ preview 聚合（buildHomePreview + fetchAutoFill）+ 卡片映射纯函数三模块拆出（CHG-VSR-3 sources-matrix.schemas 同先例）；Service 440 行达标，buildPreview 单点委托，route 消费入口经 re-export 保持单点
+  - `apps/api/src/routes/admin/home.ts` — 端点 #5 POST apply-autofill（section 422 先于 404 / body .strict() uuid / VALIDATION_ERROR→422 / STATE_CONFLICT→409 分支）；**ADR-182 端点 7/7 全量落地**
+  - `tests/unit/api/admin-home-sections.test.ts` — +10 用例（200 批量插入断言 / audit R-MID-1 全载荷断言 / 快照轮换 409+零写入零审计 / 重校验失效整体 409（全有或全无：有效候选同被拒）/ 不可播 409 / 已 pinned 重复 409 / 快照未生成 409 / banner 422 / pinnedLimit 422 / body·section·404·401 矩阵）+ #4 appliedAt 派生用例；55/55
+  - `tests/unit/api/audit-log-coverage.test.ts` — `home_section.apply_autofill` 守卫登记（declared + PAYLOAD_ASSERTION_REQUIRED，R-MID-1 第 36 次）
+  - `docs/architecture.md` — §5.10 端点行 7/7 收口 + 拆分模块指针
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：① **SEQ-20260605-05 Phase 3（自动填充）全部 6 卡收口**（CORE-A/B + DOUBAN + BANGUMI + REFRESH + APPLY），ADR-182 7 端点 + ADR-183 全 D 条落地；② dev 实测：apply 对 dev 态全 filtered 候选正确 409 拦截（STATE_CONFLICT 携 candidate id）+ banner 约束 422 指引编辑器；③ 全量兜底 6901：3 次复跑分别 1/0/4 失败，全部为 staging 域 jsdom 并发 flaky（StagingEditPanel/StagingTable，隔离 12/12+13/13 过，Phase 1 收口同款登记项），与本卡无关；④ E2E admin 36 passed + 1 flaky（codename-matrix-picker page-load retry 过）exit 0；E2E 全量 4 projects 归序列收口节点（Phase 1/2 收口同口径）；⑤ 候补卡待细化：CHG-HOME-AUTOFILL-UI（候选池面板消费 #4/#5/#7）+ 公开首页消费切换（D-183-8.3）；⑥ 门禁：typecheck/lint 绿 + verify:endpoint-adr **214 对齐** + test:changed 295/295。
