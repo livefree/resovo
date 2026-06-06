@@ -1980,3 +1980,18 @@
 - **新增依赖**：无
 - **数据库变更**：migration 094（2 CHECK 重建，纯增量；down 注释式 + 缩枚举全表校验警告）
 - **注意事项**：① **范围超限接受完成度风险**（workflow-rules 强行单卡条款）：起卡预拆 -A/-B，实证 `Record<HomeModuleSlot, string>` 完整性使类型层与 UI 常量为同一编译闭环、无法拆分交付，合并回单卡（5 项），commit 含 arch-reviewer trailer；② /admin/home 即日起出现 3 个新 slot tab（热门电影/热播剧集/热门动漫），pinned 编辑与批量选片能力即开——自动候选不落 home_modules（ADR-181 D-181-4.3）；③ 门禁：typecheck/lint 绿 + 全量 6688/6688 + E2E admin 39 passed + verify:adr-contracts 4 绿；④ Phase 3 写路径（CHG-HOME-AUTOFILL-*）前置已清障。
+
+## [CHG-HOME-BANNER-UNIFY-A] banner slot 冻结（service 拒绝）+ server-next banners API 桥接
+- **完成时间**：2026-06-05
+- **记录时间**：2026-06-05 23:40
+- **执行模型**：claude-opus-4-8
+- **子代理**：无
+- **修改文件**：
+  - `apps/api/src/services/HomeModulesService.ts` — CreateSchema 加 banner 冻结 refine（BANNER_SLOT_FROZEN_MESSAGE 常量导出 + message 指引 /admin/banners）；update() 加 slot→banner 变相新建防护（AppError VALIDATION_ERROR 422，存量 banner 行回传原值放行）
+  - `apps/api/src/routes/admin/home-modules.ts` — PATCH catch 补 VALIDATION_ERROR AppError → 422 分支（与既有 STATE_CONFLICT 分支同范式）
+  - `apps/server-next/src/lib/banners/types.ts` + `api.ts` — 新增 home_banners 桥接层（6 端点封装：list/get/create/update(PUT)/delete/reorder(orders+sortOrder)；@resovo/types Banner 真源 re-export）
+  - `tests/unit/api/admin-home-modules.test.ts` — +3 防护用例（POST banner 422 + PATCH slot→banner 422 + 存量 banner 行回传放行 200）；既有 3 个 banner-slot Create 用例改 featured+video（冻结后不再可用作 happy-path 载体）
+  - `tests/unit/server-next/banners-client.test.ts` — 新增桥接契约 8 用例（参数序列化/pagination 包络/PUT 非 PATCH/orders body 形态）
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：① **Update 防护为 ADR-181 冻结意图的实施级推演**（ADR 字面只裁 Create 拒绝；Drawer 编辑总携带 slot，故防护必须区分"改为 banner"vs"原值回传"，在 service 层比较 before.slot）；② 桥接层暂无 UI 消费方（-B 卡接线）；/admin/home banner tab 现状：新建 422 + message 指引（中间态，-B 替换 tab 后消除）；③ 门禁：typecheck/lint 绿 + 测试 49/49 + verify:adr-contracts 4 绿 + E2E admin 域（无 banner 用例，回归性选跑）。

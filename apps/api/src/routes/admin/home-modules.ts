@@ -84,6 +84,10 @@ export async function adminHomeModulesRoutes(fastify: FastifyInstance) {
       }
       return reply.send({ data: module })
     } catch (err) {
+      // CHG-HOME-BANNER-UNIFY-A / ADR-181 D-181-1.2(a)：slot 改为 banner 的变相新建防护（service 层抛出）
+      if (isAppError(err, 'VALIDATION_ERROR')) {
+        return reply.code(422).send({ error: { code: 'VALIDATION_ERROR', message: err.message, status: 422 } })
+      }
       if (isAppError(err, 'STATE_CONFLICT') || isDatabaseCheckViolation(err)) {
         const msg = extractDbConstraintName(err) ?? 'DB CHECK 约束违反'
         return reply.code(409).send({ error: { code: 'STATE_CONFLICT', message: `DB CHECK ${msg} 触发`, status: 409 } })

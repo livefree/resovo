@@ -1145,9 +1145,18 @@
 4. **CHG-HOME-TIMEWINDOW-SCHEMA** — ~~`home_modules` 时间窗 migration~~（状态：❌ 已取消 2026-06-05 20:20）
    - 取消原因：ADR-A 调研勘误——`home_modules` 自 migration 050 起已有 `start_at`/`end_at` 全链路（CHECK + 部分索引 + queries/类型/Drawer），无需任何 migration；命名分歧处置并入 ADR-181 裁定项 ②。
 
-5. **CHG-HOME-BANNER-UNIFY** — `/admin/home` 纳入 `home_banners` 编辑 + `home_modules.banner` 去留执行（状态：⬜ 待开始）
-   - 建议模型：sonnet（裁定在 ADR-A 完成，本卡只执行）
-   - 依赖：CHG-HOME-GOV-ADR-A。
+5. **CHG-HOME-BANNER-UNIFY-A** — banner slot 冻结（service 拒绝）+ server-next banners API 桥接（状态：✅ 已完成；原卡预估测试 >12 用例 advisory 拆 -A/-B，2026-06-05 23:00）
+   - 实际开始：2026-06-05 23:00 ｜ 完成时间：2026-06-05 23:45
+   - 建议模型：sonnet（裁定在 ADR-A 完成，本卡只执行；实际 claude-opus-4-8，用户 opus 会话人工覆盖）
+   - 范围（4 项）：① `HomeModulesService` Create 拒绝 slot='banner'（VALIDATION_ERROR 422 + message 指引 /admin/banners；update/delete/reorder/publish-toggle/list 保留，D-181-1.2(a)） ② Update 路径 slot→banner 变相新建的防护口径（实施级推演，完成备注记录） ③ server-next banners API 桥接层（`lib/banners/`，消费既有 /admin/banners 6 端点，零新端点） ④ 单测（service 拒绝正反 + 桥接契约）。
+   - 跨层理由：纯 api-service + 桥接 lib 层，无 UI 组件改动（UI 归 -B）。
+   - 依赖：CHG-HOME-GOV-ADR-A ✅。
+   - 完成备注：D-181-1.2(a) 落地：CreateSchema banner 冻结 refine（message 指引 /admin/banners）+ update() slot→banner 变相新建防护（实施级推演：ADR 字面只裁 Create，但 Drawer 编辑总携带 slot → service 层比较 before.slot 区分"改为"vs"原值回传"，防误伤存量行编辑）+ PATCH route 补 VALIDATION_ERROR AppError→422 分支。桥接层 `lib/banners/`（types+api，6 端点封装，Banner 真源 @resovo/types re-export；PUT 非 PATCH / orders+sortOrder body 形态显式注释防混用）。测试：+3 防护用例 + 8 桥接契约用例 + 3 既有 banner-slot 用例改 featured 载体；49/49 PASS。门禁：typecheck/lint/verify:adr-contracts 绿 + E2E admin 域 39 passed（1 flaky=admin-source-and-video-flows moderation reject，retry 过，与本卡无关）。中间态声明：banner tab 新建 422（-B 替换 tab 后消除）。执行模型: claude-opus-4-8；子代理: 无。
+
+5b. **CHG-HOME-BANNER-UNIFY-B** — `/admin/home` Banner tab → home_banners 编辑器 UI（状态：⬜ 待开始）
+   - 建议模型：sonnet
+   - 范围：Banner tab 替换为 home_banners 列表 + 编辑 Drawer + 删除/排序/启停（消费 -A 桥接层）+ 组件测试 + v1 banners UI 降级宣导口径（D-181-1.3）。
+   - 依赖：CHG-HOME-BANNER-UNIFY-A。
 
 6. **CHG-HOME-PREVIEW-API** — `GET /admin/home/preview` 完整首页预览聚合端点（状态：⬜ 待开始）
    - 建议模型：sonnet

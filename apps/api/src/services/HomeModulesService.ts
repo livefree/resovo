@@ -95,7 +95,15 @@ function applyBusinessRules<T extends z.ZodTypeAny>(schema: T): z.ZodTypeAny {
     )
 }
 
-export const CreateSchema = applyBusinessRules(CreateBase)
+// CHG-HOME-BANNER-UNIFY-A / ADR-181 D-181-1.2(a)：banner slot 运营语义冻结——
+// Create 拒绝新建（update / delete / reorder / publish-toggle / list 保留，存量清理与审计可见性需要）
+export const BANNER_SLOT_FROZEN_MESSAGE =
+  'banner slot 已冻结（ADR-181）：Hero Banner 请改用 /admin/banners（home_banners 真源）'
+
+export const CreateSchema = applyBusinessRules(CreateBase).refine(
+  (v: CreateInput) => v.slot !== 'banner',
+  { message: BANNER_SLOT_FROZEN_MESSAGE, path: ['slot'] },
+)
 
 // UpdateSchema：omit enabled（强制走 publish-toggle 专用端点；ADR-104 Y2 闭合）
 // .strict() 确保 enabled 字段被显式拒绝（unrecognized_keys），而非静默剥离后报"至少一字段"
@@ -165,6 +173,12 @@ export class HomeModulesService {
   async update(id: string, input: UpdateParams, actorId: string, requestId?: string): Promise<HomeModule | null> {
     const before = await findHomeModuleById(this.db, id)
     if (!before) return null
+
+    // ADR-181 D-181-1.2(a) 冻结意图防护：slot 改为 banner = 变相新建，拒绝；
+    // 存量 banner 行回传 slot='banner'（未变化，Drawer 编辑总携带 slot）放行。
+    if (input.slot === 'banner' && before.slot !== 'banner') {
+      throw new AppError('VALIDATION_ERROR', BANNER_SLOT_FROZEN_MESSAGE, 422)
+    }
 
     const after = await updateHomeModule(this.db, id, input)
     if (!after) return null

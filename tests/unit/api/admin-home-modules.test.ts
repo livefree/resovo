@@ -288,15 +288,16 @@ describe('POST /admin/home-modules', () => {
   // ── CHG-HOME-UX-01-B（ADR-104 AMENDMENT D-104-9）title / imageUrl ─────────
 
   it('title / imageUrl 透传到 query 层；缺省时 title={} / imageUrl=null', async () => {
+    // CHG-HOME-BANNER-UNIFY-A：原用例 slot=banner+external_url，banner Create 冻结后改用 featured+video
     await app.inject({
       method: 'POST',
       url: '/v1/admin/home-modules',
       headers: { authorization: await adminToken(), 'content-type': 'application/json' },
       body: JSON.stringify({
-        slot: 'banner',
+        slot: 'featured',
         brandScope: 'all-brands',
-        contentRefType: 'external_url',
-        contentRefId: 'https://promo.example.com',
+        contentRefType: 'video',
+        contentRefId: 'vid-001',
         title: { 'zh-CN': '暑期专题', en: 'Summer' },
         imageUrl: 'https://cdn.example.com/b.jpg',
       }),
@@ -334,10 +335,10 @@ describe('POST /admin/home-modules', () => {
       url: '/v1/admin/home-modules',
       headers: { authorization: await adminToken(), 'content-type': 'application/json' },
       body: JSON.stringify({
-        slot: 'banner',
+        slot: 'featured',
         brandScope: 'all-brands',
-        contentRefType: 'external_url',
-        contentRefId: 'https://promo.example.com',
+        contentRefType: 'video',
+        contentRefId: 'vid-001',
         imageUrl: 'not-a-url',
       }),
     })
@@ -351,15 +352,35 @@ describe('POST /admin/home-modules', () => {
       url: '/v1/admin/home-modules',
       headers: { authorization: await adminToken(), 'content-type': 'application/json' },
       body: JSON.stringify({
-        slot: 'banner',
+        slot: 'featured',
         brandScope: 'all-brands',
-        contentRefType: 'external_url',
-        contentRefId: 'https://promo.example.com',
+        contentRefType: 'video',
+        contentRefId: 'vid-001',
         title: { 'zh-CN': 123 },
       }),
     })
     expect(res.statusCode).toBe(422)
     expect(res.json().error.code).toBe('VALIDATION_ERROR')
+  })
+
+  // ── CHG-HOME-BANNER-UNIFY-A（ADR-181 D-181-1.2(a)）：banner slot 冻结 ───────
+
+  it('banner slot Create 冻结：POST slot=banner 返回 422 + message 指引 /admin/banners', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/admin/home-modules',
+      headers: { authorization: await adminToken(), 'content-type': 'application/json' },
+      body: JSON.stringify({
+        slot: 'banner',
+        brandScope: 'all-brands',
+        contentRefType: 'video',
+        contentRefId: 'vid-001',
+      }),
+    })
+    expect(res.statusCode).toBe(422)
+    expect(res.json().error.code).toBe('VALIDATION_ERROR')
+    expect(res.json().error.message).toContain('/admin/banners')
+    expect(mockCreate).not.toHaveBeenCalled()
   })
 })
 
@@ -384,6 +405,36 @@ describe('PATCH /admin/home-modules/:id', () => {
     })
     expect(res.statusCode).toBe(200)
     expect(res.json().data.ordering).toBe(5)
+  })
+
+  // ── CHG-HOME-BANNER-UNIFY-A（ADR-181 D-181-1.2(a)）：slot→banner 变相新建防护 ──
+
+  it('PATCH 把非 banner 行的 slot 改为 banner 返回 422（变相新建防护）', async () => {
+    // MODULE.slot = 'featured'（before），改 banner → 拒
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/v1/admin/home-modules/${MODULE.id}`,
+      headers: { authorization: await adminToken(), 'content-type': 'application/json' },
+      body: JSON.stringify({ slot: 'banner', contentRefType: 'video', contentRefId: 'vid-001' }),
+    })
+    expect(res.statusCode).toBe(422)
+    expect(res.json().error.code).toBe('VALIDATION_ERROR')
+    expect(res.json().error.message).toContain('/admin/banners')
+    expect(mockUpdate).not.toHaveBeenCalled()
+  })
+
+  it('PATCH 存量 banner 行回传 slot=banner（未变化）放行 200（Drawer 编辑总携带 slot，防误伤）', async () => {
+    const bannerRow = { ...MODULE, slot: 'banner' as const, contentRefType: 'external_url' as const, contentRefId: 'https://promo.example.com' }
+    mockFindById.mockResolvedValue(bannerRow)
+    mockUpdate.mockResolvedValue({ ...bannerRow, ordering: 9 })
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/v1/admin/home-modules/${MODULE.id}`,
+      headers: { authorization: await adminToken(), 'content-type': 'application/json' },
+      body: JSON.stringify({ slot: 'banner', contentRefType: 'external_url', contentRefId: 'https://promo.example.com', ordering: 9 }),
+    })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.ordering).toBe(9)
   })
 
   it('audit log fire-and-forget 调用一次（update）', async () => {
