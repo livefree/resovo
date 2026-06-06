@@ -10,7 +10,7 @@
  * 本卡只读渲染；hover 操作（拖拽/替换/删除/固定）归 Phase 2 CHG-HOME-CARD-DND。
  */
 
-import type { CSSProperties } from 'react'
+import type { CSSProperties, KeyboardEvent, MouseEvent } from 'react'
 import { ImageOff, Plus } from 'lucide-react'
 import { Pill } from '@resovo/admin-ui'
 import type { HomePreviewCard, HomePreviewCardFlag } from '@/lib/home-curation/types'
@@ -126,19 +126,44 @@ export interface CanvasCardProps {
   readonly shape: 'wide' | 'poster'
   /** 列表内序号（top10 rank 角标等用；0 起） */
   readonly index: number
+  /** empty 占位文案（CHG-HOME-EMPTY-SLOTS / 方案 §5.2 按区块定）；缺省「空位」 */
+  readonly emptyLabel?: string
+  /** empty 占位点击（添加入口）；未传 = 纯展示。stopPropagation 防触发区块选中 */
+  readonly onEmptyClick?: () => void
 }
 
 // ── 组件 ─────────────────────────────────────────────────────────
 
-export function CanvasCard({ card, shape, index }: CanvasCardProps) {
+export function CanvasCard({ card, shape, index, emptyLabel, onEmptyClick }: CanvasCardProps) {
   const frame = shape === 'wide' ? WIDE_STYLE : POSTER_STYLE
 
   if (card.source === 'empty') {
+    const interactive = onEmptyClick !== undefined
     return (
-      <div style={{ ...frame, background: 'transparent', border: 'none' }} data-testid={`canvas-card-empty-${index}`}>
+      <div
+        style={{ ...frame, background: 'transparent', border: 'none', ...(interactive ? { cursor: 'pointer' } : {}) }}
+        data-testid={`canvas-card-empty-${index}`}
+        {...(interactive
+          ? {
+              role: 'button' as const,
+              tabIndex: 0,
+              onClick: (e: MouseEvent) => {
+                e.stopPropagation()
+                onEmptyClick()
+              },
+              onKeyDown: (e: KeyboardEvent) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  onEmptyClick()
+                }
+              },
+            }
+          : {})}
+      >
         <div style={EMPTY_STYLE}>
           <Plus size={16} aria-hidden="true" />
-          <span>空位</span>
+          <span>{emptyLabel ?? '空位'}</span>
         </div>
       </div>
     )

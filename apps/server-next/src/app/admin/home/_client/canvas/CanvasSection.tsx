@@ -28,7 +28,7 @@ import { CSS } from '@dnd-kit/utilities'
 import { Pill } from '@resovo/admin-ui'
 import type { HomePreviewCard, HomePreviewSection } from '@/lib/home-curation/types'
 import { CanvasCard } from './CanvasCard'
-import { SECTION_TITLE } from './section-meta'
+import { SECTION_TITLE, VIDEO_SECTIONS } from './section-meta'
 
 const MODE_LABEL: Record<string, string> = {
   manual_only: '纯人工',
@@ -148,9 +148,12 @@ export interface CanvasSectionProps {
   /** 区块点击（Inspector 选中联动） */
   readonly onSelect?: (key: HomePreviewSection['key']) => void
   readonly selected?: boolean
+  /** empty 占位点击（添加入口，CHG-HOME-EMPTY-SLOTS / 方案 §5.2）；
+   *  banner / 视频型区块上抛，type_shortcuts 维持纯展示（添加链路未立案） */
+  readonly onEmptySlot?: (key: HomePreviewSection['key']) => void
 }
 
-export function CanvasSection({ section, onSelect, selected }: CanvasSectionProps) {
+export function CanvasSection({ section, onSelect, selected, onEmptySlot }: CanvasSectionProps) {
   const { key, settings, cards } = section
   const isBanner = key === 'banner'
   const isShortcuts = key === 'type_shortcuts'
@@ -167,6 +170,10 @@ export function CanvasSection({ section, onSelect, selected }: CanvasSectionProp
     ...SECTION_STYLE,
     ...(selected ? { borderColor: 'var(--accent-default)', boxShadow: '0 0 0 1px var(--accent-default)' } : {}),
   }
+
+  // 方案 §5.2 空卡片：banner=添加横版 Banner / 视频型=添加视频 / 其余维持纯展示
+  const emptyLabel = isBanner ? '添加横版 Banner' : VIDEO_SECTIONS.has(key) ? '添加视频' : undefined
+  const handleEmptyClick = emptyLabel && onEmptySlot ? () => onEmptySlot(key) : undefined
 
   return (
     <section
@@ -206,7 +213,13 @@ export function CanvasSection({ section, onSelect, selected }: CanvasSectionProp
                 </MaybeSortable>
               ) : (
                 <MaybeSortable key={card.refId ?? `auto-${i}`} card={card}>
-                  <CanvasCard card={card} shape={isBanner ? 'wide' : 'poster'} index={i} />
+                  <CanvasCard
+                    card={card}
+                    shape={isBanner ? 'wide' : 'poster'}
+                    index={i}
+                    emptyLabel={emptyLabel}
+                    onEmptyClick={handleEmptyClick}
+                  />
                 </MaybeSortable>
               ),
             )}

@@ -15,17 +15,21 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, cleanup, within } from '@testing-library/react'
 import type { ReactNode } from 'react'
 
 // ── mock @dnd-kit（避免 jsdom 不支持 DOM Range / ResizeObserver 等）──
 vi.mock('@dnd-kit/core', () => ({
   DndContext: ({ children }: { children: ReactNode }) => <>{children}</>,
   closestCenter: vi.fn(),
+  // CHG-HOME-EMPTY-SLOTS：画布视图用例渲染 CanvasSection（useDroppable）
+  useDroppable: () => ({ setNodeRef: vi.fn() }),
 }))
 vi.mock('@dnd-kit/sortable', () => ({
   SortableContext: ({ children }: { children: ReactNode }) => <>{children}</>,
   verticalListSortingStrategy: vi.fn(),
+  horizontalListSortingStrategy: vi.fn(),
+  rectSortingStrategy: vi.fn(),
   arrayMove: <T,>(arr: T[], from: number, to: number): T[] => {
     const next = [...arr]
     const [moved] = next.splice(from, 1)
@@ -40,6 +44,18 @@ vi.mock('@dnd-kit/sortable', () => ({
     transition: null,
     isDragging: false,
   }),
+}))
+vi.mock('@dnd-kit/utilities', () => ({
+  CSS: { Transform: { toString: () => undefined } },
+}))
+
+// ── mock home-curation API（CHG-HOME-EMPTY-SLOTS：画布视图数据源）──
+const mockGetHomePreview = vi.fn()
+vi.mock('../../../../../../apps/server-next/src/lib/home-curation/api', () => ({
+  getHomePreview: (...args: unknown[]) => mockGetHomePreview(...args),
+  listHomeSections: vi.fn(),
+  updateHomeSectionSettings: vi.fn(),
+  reorderHomeSection: vi.fn(),
 }))
 
 // ── mock home-modules API（替代真实 fetch）──
@@ -539,5 +555,58 @@ describe('HomeOpsClient — HOME-2 page head actions', () => {
       expect(screen.getByTestId('home-module-create-btn')).not.toBeNull()
     })
     expect(screen.getByTestId('home-module-create-btn').textContent).toContain('新建模块')
+  })
+})
+
+// ── CHG-HOME-EMPTY-SLOTS：画布空位添加入口（方案 §5.2）─────────────────────
+
+describe('HomeOpsClient — 画布空位添加入口', () => {
+  const SECTION_SETTINGS = (section: string) => ({
+    id: `s-${section}`,
+    section,
+    autofillMode: 'manual_plus_autofill',
+    refreshIntervalMinutes: 60,
+    displayCount: 1,
+    allowDuplicates: false,
+    pinnedLimit: null,
+    settings: {},
+    updatedAt: '2026-06-06T00:00:00Z',
+  })
+  const EMPTY_CARD = {
+    source: 'empty', refId: null, videoId: null, title: null, imageUrl: null,
+    linkHint: null, startAt: null, endAt: null, enabled: true, flags: [], explain: null,
+  }
+  const CANVAS_PREVIEW = {
+    sections: [
+      { key: 'banner', settings: SECTION_SETTINGS('banner'), cards: [EMPTY_CARD] },
+      { key: 'featured', settings: SECTION_SETTINGS('featured'), cards: [EMPTY_CARD] },
+    ],
+    generatedAt: '2026-06-06T01:00:00Z',
+    context: { brandSlug: null, locale: null, at: null, device: 'desktop' },
+  }
+
+  async function renderCanvas() {
+    mockedList.mockResolvedValue({ data: [], total: 0, page: 1, limit: 100 })
+    mockGetHomePreview.mockResolvedValue(CANVAS_PREVIEW)
+    render(<HomeOpsClient />)
+    fireEvent.click(screen.getByTestId('home-view-toggle-btn'))
+    await waitFor(() => expect(screen.queryByTestId('canvas-section-featured')).not.toBeNull())
+  }
+
+  it('视频空位「添加视频」点击 → 打开 BatchAddVideosModal（复用 batchAdd 链路）', async () => {
+    await renderCanvas()
+    expect(screen.queryByTestId('batch-add-videos-modal')).toBeNull()
+
+    fireEvent.click(within(screen.getByTestId('canvas-section-featured')).getByTestId('canvas-card-empty-0'))
+    await waitFor(() => expect(screen.queryByTestId('batch-add-videos-modal')).not.toBeNull())
+  })
+
+  it('banner 空位「添加横版 Banner」点击 → 打开 BannerDrawer 创建实例', async () => {
+    await renderCanvas()
+    expect(screen.queryByTestId('banner-drawer')).toBeNull()
+
+    fireEvent.click(within(screen.getByTestId('canvas-section-banner')).getByTestId('canvas-card-empty-0'))
+    await waitFor(() => expect(screen.queryByTestId('banner-drawer')).not.toBeNull())
+    expect(screen.queryByTestId('batch-add-videos-modal')).toBeNull() // 两链路互不串扰
   })
 })

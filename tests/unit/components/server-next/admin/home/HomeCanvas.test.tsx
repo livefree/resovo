@@ -10,7 +10,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, cleanup, within } from '@testing-library/react'
 import type { ReactNode } from 'react'
 
 // ── mock @dnd-kit（BannerOpsSection.test 同范式：jsdom 不支持 sensors）──
@@ -508,5 +508,50 @@ describe('HomeCanvas — 跨区块确认弹层（方案 §5.3）', () => {
     await waitFor(() => expect(screen.queryByTestId('cross-section-confirm-btn')).toBeNull())
     expect(mockedReorder).not.toHaveBeenCalled() // PATCH 失败不再 reorder
     await waitFor(() => expect(mockedPreview).toHaveBeenCalledTimes(2))
+  })
+})
+
+// ── CHG-HOME-EMPTY-SLOTS：空卡片添加入口（方案 §5.2）─────────────────────────
+
+describe('HomeCanvas — 空卡片添加入口', () => {
+  it('empty 文案按区块：banner=添加横版 Banner / 视频型=添加视频', async () => {
+    mockedPreview.mockResolvedValue(preview({ banner: [EMPTY], featured: [EMPTY], top10: [EMPTY] }))
+    render(<HomeCanvas onEmptySlot={vi.fn()} />)
+    await waitFor(() => expect(screen.queryByTestId('canvas-section-banner')).not.toBeNull())
+    expect(screen.getByTestId('canvas-section-banner').textContent).toContain('添加横版 Banner')
+    expect(screen.getByTestId('canvas-section-featured').textContent).toContain('添加视频')
+    expect(screen.getByTestId('canvas-section-top10').textContent).toContain('添加视频')
+  })
+
+  it('empty 点击上抛 onEmptySlot(key) 且不触发区块选中（stopPropagation）', async () => {
+    const onEmptySlot = vi.fn()
+    const onSelectSection = vi.fn()
+    mockedPreview.mockResolvedValue(preview({ featured: [EMPTY] }))
+    render(<HomeCanvas onEmptySlot={onEmptySlot} onSelectSection={onSelectSection} />)
+    await waitFor(() => expect(screen.queryByTestId('canvas-section-featured')).not.toBeNull())
+
+    const featured = screen.getByTestId('canvas-section-featured')
+    fireEvent.click(within(featured).getByTestId('canvas-card-empty-0'))
+    expect(onEmptySlot).toHaveBeenCalledWith('featured')
+    expect(onSelectSection).not.toHaveBeenCalled()
+    expect(screen.queryByTestId('inspector-empty')).not.toBeNull() // Inspector 仍未选中态
+  })
+
+  it('未传 onEmptySlot → empty 卡纯展示（无 role=button）', async () => {
+    mockedPreview.mockResolvedValue(preview({ featured: [EMPTY] }))
+    render(<HomeCanvas />)
+    await waitFor(() => expect(screen.queryByTestId('canvas-section-featured')).not.toBeNull())
+    const empty = within(screen.getByTestId('canvas-section-featured')).getByTestId('canvas-card-empty-0')
+    expect(empty.getAttribute('role')).toBeNull()
+  })
+
+  it('reloadToken 变化 → silent 重拉（骨架不闪，画布容器持续在场）', async () => {
+    const { rerender } = render(<HomeCanvas reloadToken={0} />)
+    await waitFor(() => expect(screen.queryByTestId('home-canvas')).not.toBeNull())
+    expect(mockedPreview).toHaveBeenCalledTimes(1)
+
+    rerender(<HomeCanvas reloadToken={1} />)
+    await waitFor(() => expect(mockedPreview).toHaveBeenCalledTimes(2))
+    expect(screen.queryByTestId('home-canvas')).not.toBeNull() // silent：未回退骨架
   })
 })

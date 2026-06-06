@@ -87,9 +87,14 @@ function sortableIdsOf(preview: HomePreview, key: HomeSectionKey): string[] {
 export interface HomeCanvasProps {
   /** 区块选中回调（外部联动可选；Inspector 已内置） */
   readonly onSelectSection?: (key: HomeSectionKey) => void
+  /** empty 占位点击上抛（CHG-HOME-EMPTY-SLOTS：添加链路由 HomeOpsClient 编排——
+   *  视频位复用 BatchAddVideosModal、banner 位走 BannerDrawer 创建） */
+  readonly onEmptySlot?: (key: HomeSectionKey) => void
+  /** 外部添加完成信号：值变化 → silent 重拉 preview（不闪骨架） */
+  readonly reloadToken?: number
 }
 
-export function HomeCanvas({ onSelectSection }: HomeCanvasProps) {
+export function HomeCanvas({ onSelectSection, onEmptySlot, reloadToken }: HomeCanvasProps) {
   const toast = useToast()
   const [preview, setPreview] = useState<HomePreview | null>(null)
   const [loading, setLoading] = useState(true)
@@ -116,6 +121,16 @@ export function HomeCanvas({ onSelectSection }: HomeCanvasProps) {
   useEffect(() => {
     void load()
   }, [load])
+
+  // 外部添加完成 → silent 重拉（初始 mount 由上方 effect 承担，跳过）
+  const mountedRef = useRef(false)
+  useEffect(() => {
+    if (!mountedRef.current) {
+      mountedRef.current = true
+      return
+    }
+    void load({ silent: true })
+  }, [reloadToken, load])
 
   // ── 拖拽编排（CHG-HOME-CARD-DND-B）──────────────────────────────
 
@@ -248,6 +263,7 @@ export function HomeCanvas({ onSelectSection }: HomeCanvasProps) {
                     setSelected(key)
                     onSelectSection?.(key)
                   }}
+                  onEmptySlot={onEmptySlot}
                 />
               ))}
             </DndContext>

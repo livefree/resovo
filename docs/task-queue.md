@@ -1222,10 +1222,12 @@
    - 依赖：CHG-HOME-CARD-DND-A ✅。
    - 完成备注：方案 §5.3 三条拖拽边界全落地（banner 不可拖出 D-181-1 真源分离 / 非视频卡不可跨 / banner+type_shortcuts 不接受落位，warn toast 提示）。同区块：SortableContext per section（featured rect 策略、其余水平）+ MaybeSortable 包装（仅 pinned+refId 注册）+ 区块容器 useDroppable（`section:` 前缀落点协议）→ 端点 #6 全序载荷 + silent 重拉（loading 不闪）。跨区块：CrossSectionConfirmModal（语义改变提示）→ 确认后 PATCH slot（资源级 audit home_module.update）+ 端点 #6 重排目标区块（落点位置插入/容器落点末尾）；失败关弹层防 stale 序重试。SECTION_TITLE 第 3 消费方触发提取 `canvas/section-meta.ts`（+VIDEO_SECTIONS）, SectionInspector 收编（卡范围实施前修订补记）。测试 +11（文件 29/29，home 组件域 106/106）。门禁：typecheck/lint 绿 + test:changed 55/55 + E2E admin 39 passed（1 known flaky retry 过）。**CHG-HOME-CARD-DND 两子卡收口**。执行模型: claude-opus-4-8；子代理: 无。
 
-11. **CHG-HOME-EMPTY-SLOTS** — 画布空卡片添加入口（状态：⬜ 待开始）
-   - 建议模型：sonnet
-   - 范围：empty 占位卡点击 → VideoPicker（复用 BatchAddVideosModal 选片链路）/ banner 空位 → Banner 编辑器（方案 §5.2）+ 测试。
+11. **CHG-HOME-EMPTY-SLOTS** — 画布空卡片添加入口（状态：✅ 已完成）
+   - 实际开始：2026-06-06 01:12 ｜ 完成时间：2026-06-06 01:25
+   - 建议模型：sonnet（实际 claude-opus-4-8，用户 opus 会话人工覆盖）
+   - 范围：empty 占位卡点击 → VideoPicker（复用 BatchAddVideosModal + useBatchAdd 选片链路）/ banner 空位 → Banner 编辑器（BannerDrawer 创建实例，方案 §5.2）+ HomeCanvas onEmptySlot/reloadToken 接线 + 测试 ≥6。
    - 依赖：CHG-HOME-CANVAS-B ✅。
+   - 完成备注：方案 §5.2 落地——empty 卡按区块文案（banner=「添加横版 Banner」/ 视频型=「添加视频」VIDEO_SECTIONS 驱动 / type_shortcuts 维持纯展示，添加链路未立案）+ role=button 键盘可激活 + stopPropagation 防误触区块选中。接线：视频空位 → setActiveSlot+batchAdd.openBlank（**复用 useBatchAdd 全链路**：服务端真源去重/ordering max+1/汇总 toast 零重复实现）；banner 空位 → HomeOpsClient 画布层 BannerDrawer 创建实例（sortOrder 服务端真源 max+1——与 BannerOpsSection banners.length 策略差异：画布无列表缓存；第 2 消费方未达提取阈值不抽）；HomeCanvas +onEmptySlot/reloadToken（外部添加完成 → silent 重拉防骨架闪）。测试 +6（HomeCanvas 33/33 + HomeOpsClient 28/28，home 域 112/112）。门禁：typecheck/lint 绿 + test:changed 61/61 + E2E admin 40 passed 全绿。执行模型: claude-opus-4-8；子代理: 无。
 
 12. **CHG-HOME-IMAGE-GUARD-BANNER** — Banner 横图警告级校验（状态：⬜ 待开始）
    - 建议模型：sonnet

@@ -30,6 +30,7 @@ import {
   EmptyState,
   Segment,
   useToast,
+  type PickerVideoItem,
 } from '@resovo/admin-ui'
 import {
   listHomeModules,
@@ -51,9 +52,14 @@ import { useVideoMetaMap } from '@/lib/home-modules/use-video-meta-map'
 import { useHomeAddEntry } from '@/lib/home-modules/use-home-add-entry'
 import { HOME_ENTRY_SOURCE_META } from '@/lib/home-modules/entry'
 import { VIDEO_SLOTS } from '@/lib/home-modules/types'
+// CHG-HOME-EMPTY-SLOTS / 方案 §5.2：画布 banner 空位 → BannerDrawer 创建（sortOrder 服务端真源）
+import { listBanners, createBanner } from '@/lib/banners/api'
+import type { CreateBannerInput, UpdateBannerInput } from '@/lib/banners/types'
+import type { HomeSectionKey } from '@/lib/home-curation/types'
 // CHG-HOME-BANNER-UNIFY-B / ADR-181 D-181-1：banner tab → home_banners 编辑器
 import { BannerOpsSection } from './BannerOpsSection'
-// CHG-HOME-CANVAS-A / 方案 §3：前台同构画布（只读渲染；Inspector 归 -B，卡片操作归 Phase 2）
+import { BannerDrawer } from './BannerDrawer'
+// CHG-HOME-CANVAS-A / 方案 §3：前台同构画布（CARD-DND-B 拖拽 + EMPTY-SLOTS 添加入口已接）
 import { HomeCanvas } from './canvas/HomeCanvas'
 import { HomeModuleCard } from './HomeModuleCard'
 import { HomeModuleDrawer } from './HomeModuleDrawer'
@@ -129,6 +135,9 @@ export function HomeOpsClient() {
   const [deleteTarget, setDeleteTarget] = useState<HomeModule | null>(null)
   // CHG-HOME-UX-08：深链落地（?add_ids=&from= → 充实候选预填确认面板 + 来源回链栏）
   const addEntry = useHomeAddEntry()
+  // CHG-HOME-EMPTY-SLOTS / 方案 §5.2：画布空位添加入口
+  const [canvasReload, setCanvasReload] = useState(0)
+  const [canvasBannerDrawer, setCanvasBannerDrawer] = useState(false)
 
   const loadSlot = useCallback(async (slot: HomeModuleSlot) => {
     setLoadingSlots(prev => ({ ...prev, [slot]: true }))
@@ -242,6 +251,34 @@ export function HomeOpsClient() {
     externallyOpen: addEntry.items !== null,
   })
 
+  // ── 画布空位添加入口（CHG-HOME-EMPTY-SLOTS / 方案 §5.2）──────────────
+
+  /** 视频空位 → 切目标 slot + 打开选片面板（复用 batchAdd 全链路）；banner 空位 → BannerDrawer 创建 */
+  function handleCanvasEmptySlot(key: HomeSectionKey) {
+    if (key === 'banner') {
+      setCanvasBannerDrawer(true)
+      return
+    }
+    // 画布仅对视频型区块上抛（CanvasSection 文案守卫）；视频 section key ⊂ HomeModuleSlot
+    setActiveSlot(key as HomeModuleSlot)
+    batchAdd.openBlank()
+  }
+
+  /** 选片确认（页内/画布共用）：batchAdd 服务端兜底链路 + 画布重拉信号 */
+  async function handleBatchConfirm(slot: HomeModuleSlot, items: readonly PickerVideoItem[]) {
+    await batchAdd.handleBatchAdd(slot, items)
+    setCanvasReload(n => n + 1)
+  }
+
+  /** 画布 banner 空位创建（sortOrder 服务端真源 max+1——画布无 banners 列表缓存） */
+  async function handleCanvasBannerCreate(body: CreateBannerInput | UpdateBannerInput) {
+    const result = await listBanners({ limit: 1, sortField: 'sortOrder', sortDir: 'desc' })
+    const maxSort = result.data[0]?.sortOrder ?? -1
+    await createBanner({ ...(body as CreateBannerInput), sortOrder: maxSort + 1 })
+    toast.push({ title: 'Banner 已创建', level: 'success' })
+    setCanvasReload(n => n + 1)
+  }
+
   // ── 编辑/创建保存 ──────────────────────────────────────────────────
 
   const handleSave = useCallback(async (data: CreateHomeModuleBody | UpdateHomeModuleBody, id: string | null) => {
@@ -322,8 +359,11 @@ export function HomeOpsClient() {
         </div>
       )}
 
-      {/* CHG-HOME-CANVAS-A：画布视图（只读同构渲染）；列表视图保留全部既有编辑能力 */}
-      {viewMode === 'canvas' && <HomeCanvas />}
+      {/* CHG-HOME-CANVAS-A：画布视图；列表视图保留全部既有编辑能力。
+          EMPTY-SLOTS：空位点击 → 视频选片 / Banner 创建；添加完成 reloadToken 驱动 silent 重拉 */}
+      {viewMode === 'canvas' && (
+        <HomeCanvas onEmptySlot={handleCanvasEmptySlot} reloadToken={canvasReload} />
+      )}
 
       {/* CHG-HOME-UX-04-B：手写 bottom-border tabs → 共享 Segment（设计稿 §5.7「Segment」）
           badge 仅显已加载 slot 的模块数（懒加载未访问 slot 无数据，全量计数端点为 follow-up） */}
@@ -492,7 +532,7 @@ export function HomeOpsClient() {
         initialItems={batchAdd.batchAddInitial ?? []}
         getExistingIds={batchAdd.getExistingIds}
         onClose={batchAdd.close}
-        onConfirm={batchAdd.handleBatchAdd}
+        onConfirm={handleBatchConfirm}
       />
 
       {/* CHG-HOME-UX-08：深链落地确认面板（initialItems 预填；与页内面板独立实例避免状态混淆） */}
@@ -503,9 +543,17 @@ export function HomeOpsClient() {
         getExistingIds={batchAdd.getExistingIds}
         onClose={addEntry.dismiss}
         onConfirm={async (slot, items) => {
-          await batchAdd.handleBatchAdd(slot, items)
+          await handleBatchConfirm(slot, items)
           addEntry.dismiss()
         }}
+      />
+
+      {/* CHG-HOME-EMPTY-SLOTS：画布 banner 空位 → 创建 Drawer（与 BannerOpsSection 实例独立） */}
+      <BannerDrawer
+        open={canvasBannerDrawer}
+        banner={null}
+        onClose={() => setCanvasBannerDrawer(false)}
+        onSave={handleCanvasBannerCreate}
       />
     </div>
   )

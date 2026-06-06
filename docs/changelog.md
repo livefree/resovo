@@ -2110,3 +2110,19 @@
 - **新增依赖**：无
 - **数据库变更**：无
 - **注意事项**：① **CHG-HOME-CARD-DND 两子卡收口**——画布卡片排序闭环交付（同区块直拖 + 跨区块确认）；② 跨区块移动为两步非原子（PATCH slot → reorder），失败 toast + silent 重拉恢复（Phase 1 直写正式配置口径，方案 §13）；③ Pill ariaLabel stderr 警告为 CANVAS-A 既有 source pill 双段 children 所致，非本卡引入（范围外，留待 Phase 2 收尾顺带）；④ 门禁：typecheck/lint 绿 + test:changed 55/55 + home 组件域 106/106 + E2E admin 39 passed（1 known flaky retry 过）。
+
+## [CHG-HOME-EMPTY-SLOTS] 画布空卡片添加入口
+- **完成时间**：2026-06-06
+- **记录时间**：2026-06-06 01:30
+- **执行模型**：claude-opus-4-8
+- **子代理**：无
+- **修改文件**：
+  - `apps/server-next/src/app/admin/home/_client/canvas/CanvasCard.tsx` — empty 占位 +emptyLabel/onEmptyClick props（role=button + Enter/Space 键盘激活 + stopPropagation 防触发区块选中；未传 onClick 维持纯展示）
+  - `apps/server-next/src/app/admin/home/_client/canvas/CanvasSection.tsx` — +onEmptySlot 上抛；按区块文案（banner=「添加横版 Banner」/ 视频型=「添加视频」VIDEO_SECTIONS 驱动 / type_shortcuts 纯展示——添加链路未立案，方案 §5.2）
+  - `apps/server-next/src/app/admin/home/_client/canvas/HomeCanvas.tsx` — +onEmptySlot 透传 + reloadToken（外部添加完成 → silent 重拉，初始 mount 跳过）
+  - `apps/server-next/src/app/admin/home/_client/HomeOpsClient.tsx` — 画布空位编排：视频空位 → setActiveSlot + batchAdd.openBlank（**复用 useBatchAdd 全链路**：服务端真源去重/ordering max+1/汇总 toast）；banner 空位 → 画布层 BannerDrawer 创建实例（sortOrder 服务端真源 max+1，画布无列表缓存）；handleBatchConfirm 共用 wrapper（确认后 bump reloadToken，深链实例 +dismiss）
+  - `tests/unit/components/server-next/admin/home/HomeCanvas.test.tsx` — +4 用例（文案按区块/点击上抛+不触发选中/未传回调纯展示/reloadToken silent 重拉）；33/33
+  - `tests/unit/components/server-next/admin/home/HomeOpsClient.test.tsx` — +2 用例（画布视频空位→BatchAddVideosModal / banner 空位→BannerDrawer，两链路互不串扰）+ dnd mock 补 useDroppable/strategy/utilities + home-curation api mock；28/28
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：① 方案 §5.2「自动空位：开启自动填充/查看候选」入口随 Phase 3 候选池端点 #4 实装接入（本卡视频空位统一「添加视频」，人工 pinned 优先语义）；② banner 创建 sortOrder 第 2 消费方（BannerOpsSection=banners.length / 画布=服务端 max+1），未达 3 处提取阈值；③ 门禁：typecheck/lint 绿 + test:changed 61/61 + home 域 112/112 + E2E admin 40 passed 全绿。
