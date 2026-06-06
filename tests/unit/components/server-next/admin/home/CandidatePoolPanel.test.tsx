@@ -298,6 +298,32 @@ describe('CandidatePoolPanel — 切区竞态防御（Codex review FIX）', () =
     expect(screen.queryByTestId('candidate-row-c-anime')).not.toBeNull()
   })
 
+  it('A→B→A：A 旧代迟到响应不得覆盖 A 新代数据（section 等值不充分，序号守卫）', async () => {
+    let resolveStale!: (v: AutofillCandidatesResult) => void
+    const stale = new Promise<AutofillCandidatesResult>((res) => { resolveStale = res })
+    mockedGet
+      .mockImplementationOnce(() => stale)  // A 第一代：慢响应（迟到）
+      .mockResolvedValueOnce(result({       // B：快响应
+        candidates: [candidate({ id: 'c-anime', videoId: 'v-anime', origin: 'bangumi' })],
+      }))
+      .mockResolvedValueOnce(result({       // A 第二代：快响应（新代数据）
+        candidates: [candidate({ id: 'c-movie-new', videoId: 'v-new' })],
+      }))
+
+    const props = { autofillMode: 'manual_plus_autofill' as const, onApplied: vi.fn() }
+    const view = render(<CandidatePoolPanel section="hot_movies" {...props} />)
+    view.rerender(<CandidatePoolPanel section="hot_anime" {...props} />)
+    await waitFor(() => expect(screen.queryByTestId('candidate-row-c-anime')).not.toBeNull())
+    view.rerender(<CandidatePoolPanel section="hot_movies" {...props} />)
+    await waitFor(() => expect(screen.queryByTestId('candidate-row-c-movie-new')).not.toBeNull())
+
+    // A 第一代迟到响应：与当前区块同为 hot_movies，但序号已失配 → 丢弃
+    resolveStale(result({ candidates: [candidate({ id: 'c-movie-stale', videoId: 'v-stale' })] }))
+    await new Promise((r) => setTimeout(r, 20))
+    expect(screen.queryByTestId('candidate-row-c-movie-stale')).toBeNull()
+    expect(screen.queryByTestId('candidate-row-c-movie-new')).not.toBeNull()
+  })
+
   it('应用进行中切区：成功后不清空新区块选择态（effect 已重置后用户新勾选保留）', async () => {
     // 双区块候选：hot_movies c-1 / hot_anime c-a1+c-a2
     let resolveApply!: (v: { applied: number }) => void

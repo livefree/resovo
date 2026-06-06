@@ -211,9 +211,14 @@ export function CandidatePoolPanel({ section, autofillMode, onApplied, onBannerP
 
   const noSource = NO_CANDIDATE_SOURCE.has(section)
 
-  // 切区竞态防御（Codex review FIX）：迟到的前一区块响应不得污染当前区块；
-  // handler 持有的过期闭包 load（如 apply 后重拉）同样以此短路。
+  // 切区竞态防御（Codex review FIX ×2）：双 ref 各司其职——
+  //   activeSectionRef：load 顶部短路 handler 持有的过期闭包（区块已切换的旧 load
+  //     不发请求、更不得自增序号反夺「最新」位）。
+  //   requestSeqRef：写入守卫唯一依据。仅 section 等值不够——A→B→A 场景下
+  //     A 旧代迟到响应与当前 A 等值仍会覆盖新代数据；序号在 effect（每次区块
+  //     激活，含切到 no-source 区块）与每次合法 load 双处自增，旧代恒失配。
   const activeSectionRef = useRef<HomeSectionKey>(section)
+  const requestSeqRef = useRef(0)
 
   const load = useCallback(async () => {
     if (noSource) {
@@ -221,25 +226,28 @@ export function CandidatePoolPanel({ section, autofillMode, onApplied, onBannerP
       return
     }
     const target = section
-    // 过期闭包：区块已切换 → 不发请求不触状态
+    // 过期闭包：区块已切换 → 不发请求不触状态（必须先于序号自增）
     if (activeSectionRef.current !== target) return
+    const seq = ++requestSeqRef.current
     setLoading(true)
     setError(null)
     try {
       const r = await getAutofillCandidates(target, { includeFiltered: true })
-      if (activeSectionRef.current !== target) return  // 迟到响应：丢弃
+      if (requestSeqRef.current !== seq) return  // 迟到响应（含 A→B→A 旧代）：丢弃
       setResult(r)
     } catch (err: unknown) {
-      if (activeSectionRef.current !== target) return
+      if (requestSeqRef.current !== seq) return
       setError(err instanceof Error ? err : new Error(String(err)))
     } finally {
-      if (activeSectionRef.current === target) setLoading(false)
+      // 被更新请求取代时不动 loading——最新请求的 finally 负责收尾
+      if (requestSeqRef.current === seq) setLoading(false)
     }
   }, [section, noSource])
 
-  // 区块切换 → 标记当前区块 + 重拉 + 清空选择/折叠态
+  // 区块切换 → 标记当前区块 + 作废全部在途请求 + 重拉 + 清空选择/折叠态
   useEffect(() => {
     activeSectionRef.current = section
+    requestSeqRef.current += 1
     setResult(null)
     setSelected(new Set())
     setShowGaps(false)

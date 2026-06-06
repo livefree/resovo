@@ -1287,7 +1287,7 @@
 
 ### Phase 3 候补登记（六卡收口后细化）
 
-- `CHG-HOME-AUTOFILL-UI` — 候选池面板（SectionInspector「候选池展示留 Phase 3 接入位」+ 端点 #4 解释展示标灰 / #5 应用 / #7 立即刷新 + banner 候选预填 BannerDrawer〔APPLY 卡完成备注归此卡〕；方案 §7.3.5 + §12 + 验收「自动候选可解释、可跳过、可应用」）。依赖卡 14/17/18 ✅。— 状态：✅ 已完成（2026-06-06 17:05；CandidatePoolPanel 18 用例 + banner 预填链路 + HomeOpsClient 拆分 582→485 budget 净改善 −1；E2E admin 域环境性失败与本卡无关——clean-HEAD A/B 实证，见文末 🚨 BLOCKER；执行模型: claude-opus-4-8；详见 changelog。**FIX（Codex stop-time review，17:35）**：切区竞态——load 无 staleness 守卫，快速切换区块时前一区块迟到响应污染当前区块候选池 → +activeSectionRef 三重守卫（过期闭包短路 / 迟到响应丢弃 / apply 成功不清新区块选择态），+2 竞态用例 20/20，详见 changelog AUTOFILL-UI-FIX）
+- `CHG-HOME-AUTOFILL-UI` — 候选池面板（SectionInspector「候选池展示留 Phase 3 接入位」+ 端点 #4 解释展示标灰 / #5 应用 / #7 立即刷新 + banner 候选预填 BannerDrawer〔APPLY 卡完成备注归此卡〕；方案 §7.3.5 + §12 + 验收「自动候选可解释、可跳过、可应用」）。依赖卡 14/17/18 ✅。— 状态：✅ 已完成（2026-06-06 17:05；CandidatePoolPanel 18 用例 + banner 预填链路 + HomeOpsClient 拆分 582→485 budget 净改善 −1；E2E admin 域环境性失败与本卡无关——clean-HEAD A/B 实证，见文末 🚨 BLOCKER；执行模型: claude-opus-4-8；详见 changelog。**FIX（Codex stop-time review，17:35）**：切区竞态——load 无 staleness 守卫，快速切换区块时前一区块迟到响应污染当前区块候选池 → +activeSectionRef 三重守卫（过期闭包短路 / 迟到响应丢弃 / apply 成功不清新区块选择态），+2 竞态用例 20/20。**FIX2（第 2 轮，17:50）**：section 等值对 A→B→A 不充分（旧代迟到响应与当前 A 等值仍覆盖新代）→ 双 ref 分职：activeSectionRef 仅顶部闭包短路（先于序号自增防夺位）+ requestSeqRef 写入唯一守卫（effect+load 双处自增），+1 用例 21/21，详见 changelog AUTOFILL-UI-FIX/-FIX2）
 - 公开首页消费切换（前台 ShelfRow → 聚合，D-183-8.3「Phase 3 末实施卡」）——涉公开端点行为，细化时核查是否需 ADR amendment。
 
 ### Phase 4 后续卡占位

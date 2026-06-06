@@ -2303,3 +2303,15 @@
 - **新增依赖**：无
 - **数据库变更**：无
 - **注意事项**：① 原实现 load 无 staleness 守卫——快速切换区块时前一区块迟到响应 setResult 覆盖当前区块（展示错数据；apply 因 candidateIds 不在新区块快照会被后端 409 兜住，属展示层缺陷非写入风险）；② 修复采用 section ref 等值守卫而非请求序号——handler 旧闭包重拉会自增序号反夺「最新」位，ref 等值无此盲区；③ 门禁：typecheck/lint 绿 + test:changed 82/82（面板 20/20）。
+
+## [CHG-HOME-AUTOFILL-UI-FIX2] A→B→A 旧代迟到响应守卫补强（Codex stop-time review 第 2 轮）
+- **完成时间**：2026-06-06
+- **记录时间**：2026-06-06 17:50
+- **执行模型**：claude-opus-4-8
+- **子代理**：无
+- **修改文件**：
+  - `apps/server-next/src/app/admin/home/_client/canvas/CandidatePoolPanel.tsx` — FIX1 的 section 等值守卫对 **A→B→A 不充分**（A 旧代迟到响应与当前 A 等值仍覆盖新代数据，含 appliedAt 派生标记丢失）→ 改双 ref 分职：activeSectionRef 仅作 load 顶部过期闭包短路（**先于序号自增**——否则旧闭包自增反夺「最新」位，正是 FIX1 弃序号的盲区）；requestSeqRef 为写入唯一守卫（effect 每次区块激活 + 每次合法 load 双处自增，旧代恒失配；含切到 no-source 区块的在途作废 + 同区块 apply 后重拉不被先前慢请求倒灌）
+  - `tests/unit/components/server-next/admin/home/CandidatePoolPanel.test.tsx` — +1 A→B→A 用例（旧代 stale 响应丢弃 / 新代数据保留），20→21
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：① 守卫语义收敛为「顶部闭包合法性（section）+ 写入新鲜度（seq）」正交两层，FIX1 的两用例不变继续通过；② 门禁：typecheck/lint 绿 + test:changed 83/83（面板 21/21）。
