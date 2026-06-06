@@ -15143,3 +15143,19 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **新增依赖**：无
 - **数据库变更**：无
 - **注意事项**：全量单测兜底两轮交叉：第一轮 6674/6674 全过；第二轮 6673/6674（CrawlerRunsView #25 crawler 域与本序列零交集，隔离 33/33 过 = 既见 jsdom 并发 flaky）。verify:adr-contracts 4 项全绿 + test:changed docs-only SKIP。**SEQ-20260605-01 全 13 卡收口**。
+
+## [CHG-HOME-UX-07-FIX] 批量添加未加载 slot 重复创建 + ordering 冲突修复（Codex stop-time review）
+- **完成时间**：2026-06-05
+- **记录时间**：2026-06-05 17:05
+- **执行模型**：claude-opus-4-8
+- **子代理**：无（Codex stop-time review 触发）
+- **根因**：① getExistingIds 去重真源 = 懒加载 modulesBySlot——目标 slot 未访问时 undefined → 空集 → 已在列视频不标灰且确认后**重复创建**；② baseOrdering 按本地缓存 max+1——未加载时从 0 起与服务端已有 ordering **冲突**。07 卡注释「确认前 loadSlot 兜底」未实现（注释承诺与实现脱节）。
+- **修改文件**：
+  - `apps/server-next/src/lib/home-modules/use-batch-add.ts`（新 143 行）— 批量添加编排域 hook（自 HomeOpsClient 抽离，**同时兑现 CHG-HOME-OPS-SPLIT 拆分预警**）。修复双层：数据层 = handleBatchAdd 确认时**服务端真源兜底**（先 listHomeModules(slot) 取最新列表 → 重过滤去重〔跳过数进 toast〕+ baseOrdering 按服务端 max+1 + 列表获取失败零 create + 缓存以 fresh+本批整体回写取代逐条追加）；UI 层 = 面板打开预加载未加载 video slots（slot 切换标灰即时正确）
+  - `apps/server-next/src/lib/home-modules/types.ts` — +VIDEO_SLOTS 常量真源（自 Modal 迁入，hook 消费避免 lib→_client 反向依赖）
+  - `apps/server-next/src/app/admin/home/_client/BatchAddVideosModal.tsx` — VIDEO_SLOTS 改 import + re-export（既有消费方零迁移）
+  - `apps/server-next/src/app/admin/home/_client/HomeOpsClient.tsx`（499→441 行，红线压力解除）— 批量添加域整段（getExistingIds/handleBatchAdd/handleTrendingImport/batchAddInitial state ~60 行）→ useBatchAdd 接线
+  - `tests/unit/hooks/use-batch-add.test.tsx`（新 6 用例）— 未加载 slot 服务端兜底去重+ordering max+1（核心回归守护）/ 全在列零 create / 列表失败零 create+danger / 部分失败 warn / 打开预加载（已加载不重复）/ 初始零预加载
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：home 域 70/70（既有 64 零破坏）+ test:changed 38/38 + typecheck/lint EXIT=0。深链 Modal 同走 handleBatchAdd 服务端兜底（双入口同修）。

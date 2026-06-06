@@ -16,12 +16,13 @@
 import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import { Modal, AdminButton, AdminSelect, VideoPicker, type AdminSelectOption, type PickerVideoItem } from '@resovo/admin-ui'
 import { videoPickerFetcher } from '@/lib/videos/picker-fetcher'
-import type { HomeModuleSlot } from '@/lib/home-modules/types'
+import { VIDEO_SLOTS, type HomeModuleSlot } from '@/lib/home-modules/types'
 
 // ── 常量 ─────────────────────────────────────────────────────────
 
-/** video 类 slot（type_shortcuts 为 video_type 枚举，不适用批量选片） */
-export const VIDEO_SLOTS: readonly HomeModuleSlot[] = ['banner', 'featured', 'top10']
+// CHG-HOME-UX-07-FIX：VIDEO_SLOTS 真源迁 lib/home-modules/types.ts（hook 消费避免反向依赖）；
+// 此处 re-export 保持既有消费方零迁移
+export { VIDEO_SLOTS }
 
 const SLOT_OPTIONS: readonly AdminSelectOption[] = [
   { value: 'banner', label: '轮播广告 (banner)' },

@@ -14,6 +14,12 @@ import type { HomeModule, HomeModuleSlot, HomeModuleContentRefType, HomeBrandSco
 
 export type { HomeModule, HomeModuleSlot, HomeModuleContentRefType, HomeBrandScope }
 
+/**
+ * video 类 slot（type_shortcuts 为 video_type 枚举，不适用批量选片）。
+ * 真源（CHG-HOME-UX-07-FIX 自 BatchAddVideosModal 迁入，供 lib hook 消费避免反向依赖）。
+ */
+export const VIDEO_SLOTS: readonly HomeModuleSlot[] = ['banner', 'featured', 'top10']
+
 export interface HomeModuleListFilter {
   readonly slot?: HomeModuleSlot
   readonly brandScope?: HomeBrandScope

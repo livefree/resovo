@@ -38,9 +38,9 @@ import {
   deleteHomeModule,
   reorderHomeModules,
   publishToggleHomeModule,
-  fetchTrendingCandidates,
 } from '@/lib/home-modules/api'
 import { useTop10AutoFill } from '@/lib/home-modules/use-top10-autofill'
+import { useBatchAdd } from '@/lib/home-modules/use-batch-add'
 import type {
   HomeModule,
   HomeModuleSlot,
@@ -50,12 +50,12 @@ import type {
 import { useVideoMetaMap } from '@/lib/home-modules/use-video-meta-map'
 import { useHomeAddEntry } from '@/lib/home-modules/use-home-add-entry'
 import { HOME_ENTRY_SOURCE_META } from '@/lib/home-modules/entry'
+import { VIDEO_SLOTS } from '@/lib/home-modules/types'
 import { HomeModuleCard } from './HomeModuleCard'
 import { HomeModuleDrawer } from './HomeModuleDrawer'
 import { HomePreviewPanel } from './HomePreviewPanel'
 import { DeleteModuleModal } from './DeleteModuleModal'
-import { BatchAddVideosModal, VIDEO_SLOTS } from './BatchAddVideosModal'
-import type { PickerVideoItem } from '@resovo/admin-ui'
+import { BatchAddVideosModal } from './BatchAddVideosModal'
 
 // ── 常量 ─────────────────────────────────────────────────────────
 
@@ -117,8 +117,6 @@ export function HomeOpsClient() {
   const [editingModule, setEditingModule] = useState<HomeModule | null>(null)
   // CHG-HOME-UX-04-B：删除确认 Modal（取代 window.confirm）
   const [deleteTarget, setDeleteTarget] = useState<HomeModule | null>(null)
-  // CHG-HOME-UX-07/09：批量添加统一确认面板（null=关闭；[]=页内空白；[...]=趋势导入预填）
-  const [batchAddInitial, setBatchAddInitial] = useState<readonly PickerVideoItem[] | null>(null)
   // CHG-HOME-UX-08：深链落地（?add_ids=&from= → 充实候选预填确认面板 + 来源回链栏）
   const addEntry = useHomeAddEntry()
 
@@ -223,65 +221,9 @@ export function HomeOpsClient() {
     }
   }, [activeSlot, toast])
 
-  // ── 批量添加（CHG-HOME-UX-07：统一确认面板编排）────────────────────
-
-  /** 去重比对真源 = 已加载 modules 的 video contentRefId 集合（未加载 slot 返回空集，确认前 loadSlot 兜底） */
-  const getExistingIds = useCallback((slot: HomeModuleSlot): ReadonlySet<string> => {
-    const ids = new Set<string>()
-    for (const m of modulesBySlot[slot] ?? []) {
-      if (m.contentRefType === 'video') ids.add(m.contentRefId)
-    }
-    return ids
-  }, [modulesBySlot])
-
-  // CHG-HOME-UX-09：半自动趋势导入 — 自动推荐 + 人工把关（确认面板把已在列项标灰）
-  const handleTrendingImport = useCallback(async () => {
-    try {
-      const candidates = await fetchTrendingCandidates()
-      setBatchAddInitial(candidates)
-    } catch (err: unknown) {
-      toast.push({
-        title: '趋势候选获取失败',
-        description: err instanceof Error ? err.message : '请稍后重试',
-        level: 'danger',
-      })
-    }
-  }, [toast])
-
-  const handleBatchAdd = useCallback(async (slot: HomeModuleSlot, items: readonly PickerVideoItem[]) => {
-    // ordering 末尾追加：现有最大 ordering + 1 起步
-    const existing = modulesBySlot[slot] ?? []
-    const baseOrdering = existing.reduce((max, m) => Math.max(max, m.ordering), -1) + 1
-
-    let created = 0
-    let failed = 0
-    for (const [i, item] of items.entries()) {
-      try {
-        const module = await createHomeModule({
-          slot,
-          brandScope: 'all-brands',
-          contentRefType: 'video',
-          contentRefId: item.id,
-          ordering: baseOrdering + i,
-        })
-        created += 1
-        setModulesBySlot(prev => ({
-          ...prev,
-          [slot]: [...(prev[slot] ?? []), module],
-        }))
-      } catch {
-        failed += 1
-      }
-    }
-
-    setBatchAddInitial(null)
-    toast.push({
-      title: failed === 0 ? `已添加 ${created} 个模块` : `已添加 ${created} 个 · 失败 ${failed} 个`,
-      level: failed === 0 ? 'success' : 'warn',
-    })
-    // 目标 slot 非当前已加载视图时重载兜底（确保 ordering/顺序与服务端一致）
-    if (slot !== activeSlot) void loadSlot(slot)
-  }, [modulesBySlot, activeSlot, loadSlot, toast])
+  // ── 批量添加（CHG-HOME-UX-07/09 + 07-FIX：域逻辑抽 use-batch-add——
+  //    确认时服务端真源兜底去重/ordering + 面板打开预加载未加载 video slots）──
+  const batchAdd = useBatchAdd({ modulesBySlot, setModulesBySlot, loadSlot, toast })
 
   // ── 编辑/创建保存 ──────────────────────────────────────────────────
 
@@ -391,7 +333,7 @@ export function HomeOpsClient() {
                             <AdminButton
                               variant="default"
                               size="sm"
-                              onClick={() => setBatchAddInitial([])}
+                              onClick={batchAdd.openBlank}
                               data-testid="home-batch-add-btn"
                             >
                               + 添加视频
@@ -401,7 +343,7 @@ export function HomeOpsClient() {
                             <AdminButton
                               variant="default"
                               size="sm"
-                              onClick={() => void handleTrendingImport()}
+                              onClick={() => void batchAdd.handleTrendingImport()}
                               data-testid="home-trending-import-btn"
                             >
                               从趋势导入
@@ -474,12 +416,12 @@ export function HomeOpsClient() {
       />
 
       <BatchAddVideosModal
-        open={batchAddInitial !== null}
+        open={batchAdd.batchAddInitial !== null}
         defaultSlot={activeSlot}
-        initialItems={batchAddInitial ?? []}
-        getExistingIds={getExistingIds}
-        onClose={() => setBatchAddInitial(null)}
-        onConfirm={handleBatchAdd}
+        initialItems={batchAdd.batchAddInitial ?? []}
+        getExistingIds={batchAdd.getExistingIds}
+        onClose={batchAdd.close}
+        onConfirm={batchAdd.handleBatchAdd}
       />
 
       {/* CHG-HOME-UX-08：深链落地确认面板（initialItems 预填；与页内面板独立实例避免状态混淆） */}
@@ -487,10 +429,10 @@ export function HomeOpsClient() {
         open={addEntry.items !== null}
         defaultSlot={activeSlot}
         initialItems={addEntry.items ?? []}
-        getExistingIds={getExistingIds}
+        getExistingIds={batchAdd.getExistingIds}
         onClose={addEntry.dismiss}
         onConfirm={async (slot, items) => {
-          await handleBatchAdd(slot, items)
+          await batchAdd.handleBatchAdd(slot, items)
           addEntry.dismiss()
         }}
       />
