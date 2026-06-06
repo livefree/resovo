@@ -1934,3 +1934,16 @@
 - **新增依赖**：无
 - **数据库变更**：无（migration 094 结构已裁定，实施归 CHG-HOME-SLOT-EXTEND 卡）
 - **注意事项**：① arch-reviewer CONDITIONAL PASS 全 7 条吸收，其中 BLOCKER 为 slot×content_ref_type 规则的**第 3 处同源真源**（HomeModulesService `applyBusinessRules` compat 字面量映射）——CHG-HOME-SLOT-EXTEND 实施时与 2 处 DB CHECK 同卡同步，否则 hot_* 写路径被 422 拦死；② CHG-HOME-BANNER-DECOM（物理退役）有两条技术警告记入 ADR follow-up（缩枚举 CHECK ADD 全表校验 / 必须基于 094 后枚举集）；③ 下一卡 CHG-HOME-GOV-ADR-B（admin 端点协议 ADR-182），与 -C 可并行。
+
+## [CHG-HOME-GOV-ADR-B] Home Curation ADR ②：admin 端点协议（ADR-182）
+- **完成时间**：2026-06-05
+- **记录时间**：2026-06-05 21:40
+- **执行模型**：claude-opus-4-8
+- **子代理**：arch-reviewer (claude-opus-4-8)
+- **修改文件**：
+  - `docs/decisions.md` — 新增 ADR-182（Accepted）：D-182-1 `/admin/home/*` 聚合门面 7 端点（preview/sections/settings/candidates/apply/reorder/refresh，admin only，Route→HomeCurationService→queries 分层，资源级端点保留）/ D-182-2 HomeSectionKey 7 值枚举 / D-182-3 home_section_settings 表（migration 095：autofill_mode + refresh_interval_minutes + display_count 等列化 + seed 7 行 + 审计锚点）/ D-182-4 契约细则（含 sort_order 双写路径显式裁定 + home_section.reorder 审计载荷硬约束 + origin 开放字符串 + Phase 1 无草稿叠加声明）/ D-182-5 审计扩张（TargetKind +1 CHECK 15→16，ActionType +4）/ D-182-6 type_shortcuts 评估（slot 保留 + frontendWired:false）/ D-182-7 边界（快照/job/policyVersion 归 ADR-183）
+  - `docs/task-queue.md` — ADR-B 条目 ✅
+  - `docs/tasks.md` — 卡片登记与收口
+- **新增依赖**：无
+- **数据库变更**：无（migration 095 结构已裁定，实施归 CHG-HOME-PREVIEW-API 卡）
+- **注意事项**：① arch-reviewer BLOCKER：ADR「### 端点契约」表必须 ≥6 列才能被 verify-endpoint-adr 解析（2 列简化表会被静默跳过）——已修复并实证解析 7/7，未来 ADR 起草沿用 ADR-104 表结构；② reorder 门面审计载荷硬约束（sectionKey + 真源标识 + ids 数组）与「联合 home_module.reorder ∪ home_section.reorder 回溯」声明为实施级强制；③ 端点 3（settings PATCH）归 CHG-HOME-PREVIEW-API（读写同卡内聚）；④ 下一卡 CHG-HOME-GOV-ADR-C（自动填充策略 ADR-183，依赖 A ✅）。

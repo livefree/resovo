@@ -20358,3 +20358,133 @@ D-180-1 ~ D-180-6 共 6 条：D-180-1/2 随 CHG-TEST-SLIM-B、D-180-3/4 随 CHG-
 - **CHG-HOME-SLOT-EXTEND**（已登记 SEQ-20260605-05）：migration 094 + 影响面 #4/#5 全量同步，本 ADR 直管，无需新 ADR。
 - **CHG-HOME-BANNER-DECOM**（待立案，需满足 D-181-1.2(d) 前置条件）：banner slot 物理退役——枚举移除 + 2 CHECK 重建 + Service `compat` 同步删除 + 存量行清理/迁移。**两条技术警告**（arch-reviewer MEDIUM/LOW 吸收）：① 缩枚举的 CHECK ADD 阶段会全表校验，存量 banner 行非零将直接阻断 migration——此即 D-181-1.2(d)「存量行数为零」前置的技术依据；② CHECK 重建必须基于 **094 之后的最新枚举集**（featured / top10 / type_shortcuts / hot_movies / hot_series / hot_anime）去除 banner，不得 copy 050 原始 4 值模板回退掉 094 的 3 个 hot slot。
 - type_shortcuts 接线或退役 → ADR-182 起草时评估（D-181-5.2）。
+
+---
+
+## ADR-182：Home Curation admin 端点协议 — /admin/home 聚合门面 7 端点 + home_section_settings 表 + 审计扩张（SEQ-20260605-05 / CHG-HOME-GOV-ADR-B）
+
+- **日期**：2026-06-05
+- **状态**：**Accepted**（arch-reviewer Opus CONDITIONAL PASS → 1 BLOCKER（端点契约表 verify 脚本不可解析）+ 2 HIGH（写路径口径误读 / reorder 审计语义分裂）+ 3 MEDIUM + 2 LOW **全 8 条吸收**后定档）
+- **决策者**：主循环 claude-opus-4-8 / arch-reviewer (claude-opus-4-8)
+- **关联**：ADR-181（真源裁定，前置）/ ADR-104（home_modules admin API，资源级端点保留）/ ADR-110（ApiResponse 信封 + ErrorCode 18 码真源）/ ADR-052（metadata 守则——关键字段列化原则）/ `docs/designs/home-operations-governance-plan_20260605.md` §3/§9/§10/§11
+- **对应交付**：CHG-HOME-PREVIEW-API（端点 1-2 + migration 095）/ CHG-HOME-CANVAS-B（端点 3）/ CHG-HOME-CARD-DND（端点 6）/ Phase 3 AUTOFILL 卡（端点 4/5/7）；候选快照存储与重算 job 语义归 ADR-183
+
+### 背景
+
+ADR-181 已裁定真源（home_banners = Hero 真源 / banner slot 冻结 / hot_* slot 扩展 / 时间窗聚合 DTO 统一）。治理方案 §3 要求 `/admin/home` 升级为前台同构画布——画布消费「与前台同口径的整页聚合」，而现状仅有资源级端点（ADR-104 的 6 个 `/admin/home-modules` + v1 时代 6 个 `/admin/banners`），缺：整页预览聚合、区块 settings、自动候选读取/应用/手动刷新、区块级排序门面。同时治理方案 §10 将「区块自动刷新频率 refreshInterval」等归属 section settings，当前无存储位。
+
+### 决策要点
+
+**D-182-1 命名空间与分层：`/admin/home/*` 聚合门面，7 端点全 admin only**
+
+1. 新增路由文件 `apps/api/src/routes/admin/home.ts`，前缀 `/admin/home/`，全部 `preHandler: [fastify.authenticate, fastify.requireRole(['admin'])]`（与 ADR-104 鉴权裁定一致，moderator 不放权）。
+2. 分层：Route → `HomeCurationService`（新建聚合 Service）→ home-modules / home-banners / home-section-settings / video / externalData queries。Route 零业务逻辑；聚合层不绕过既有 queries。
+3. ADR-104 资源级 6 端点与 v1 `/admin/banners` 6 端点**全部保留不变**——门面不替代资源级 API；画布（canvas）以门面为唯一写排序/读聚合路径，资源级端点服务于既有 UI 与直接 API 消费。
+4. 路径偏离声明：治理方案 §9 表中 `GET /admin/home/autofill-candidates`（section 走 query param）调整为 `GET /admin/home/sections/:section/autofill-candidates`——与其余 4 个 section-scoped 端点 RESTful 形态一致，方案 §7.1「单区块端点内部走整页聚合」语义不变。
+
+**D-182-2 `HomeSectionKey` 枚举：7 值，前台渲染顺序**
+
+```ts
+export type HomeSectionKey =
+  | 'banner'          // 真源 home_banners（D-181-1）
+  | 'type_shortcuts'  // 真源 home_modules.type_shortcuts
+  | 'featured'        // 真源 home_modules.featured
+  | 'top10'           // 真源 home_modules.top10 + listTrendingVideos 补位
+  | 'hot_movies'      // 真源 home_modules.hot_movies（pinned）+ 候选快照（ADR-183）
+  | 'hot_series'
+  | 'hot_anime'
+```
+
+- 新类型文件 `packages/types/src/home-section.types.ts`；section ≠ slot（banner section 的真源不是 slot），两枚举独立维护、不得互相 import 复用。
+- 新增 section 必须走新 ADR（继承 ADR-052 slot 扩展同款约束）。
+
+**D-182-3 settings 存储：新表 `home_section_settings`（migration 095）**
+
+| 列 | 类型 | 约束 | 说明 |
+|---|---|---|---|
+| id | UUID | PK DEFAULT gen_random_uuid() | 审计 target_id 锚点 |
+| section | TEXT | UNIQUE NOT NULL CHECK（7 值） | HomeSectionKey |
+| autofill_mode | TEXT | NOT NULL CHECK（manual_only / manual_plus_autofill / suggest_only / full_auto） | 方案 §7.2 |
+| refresh_interval_minutes | INT | NULL CHECK (> 0) | NULL = 不自动重算；worker 调度消费（ADR-183） |
+| display_count | INT | NOT NULL CHECK (> 0) | 区块槽位数；空卡片占位数 = `max(0, display_count − pinned 数 − auto 数)`（方案 §5.2，display_count 不是空卡片数本身） |
+| allow_duplicates | BOOLEAN | NOT NULL DEFAULT false | 跨区块去重豁免（方案 §7.1） |
+| pinned_limit | INT | NULL CHECK (> 0) | full_auto 区块 pinned 头部上限；NULL = 不限 |
+| settings | JSONB | NOT NULL DEFAULT '{}' | 非关键扩展项（样式 / 文案 override）；禁关键策略字段（ADR-052 metadata 守则同款） |
+| updated_at | TIMESTAMPTZ | NOT NULL DEFAULT NOW() + trigger | 与 049/050 同范式 |
+
+- **关键策略字段列化论证**：autofill_mode / refresh_interval_minutes 是 worker 调度与聚合分支的 WHERE / 分派依据（ADR-052 metadata 守则「需要 WHERE 过滤的字段禁入 JSONB」）。
+- **seed 7 行**（migration 095 内 `INSERT ... ON CONFLICT (section) DO NOTHING` 幂等）：banner = suggest_only / 1440 / 5；type_shortcuts = manual_only / NULL / 6；featured = manual_plus_autofill / 60 / 4；top10 = manual_plus_autofill / 60 / 10；hot_movies·hot_series·hot_anime = full_auto / 1440 / 10（方案 §7.2/§7.3 默认值；运营可改，不写死）。seed 保证每 section 恒有一行 → 审计锚点恒存在。
+- **migration 编号协调**（arch-reviewer MEDIUM 吸收）：095 假定 094 已被 CHG-HOME-SLOT-EXTEND（ADR-181）占用；若 094 因序列调整改号，095 顺延——二者均在 SEQ-20260605-05 内协调，编号以实际落地为准、决策内容不受编号影响。
+- **品牌维度**：首版全局生效（单行 per section）。多品牌 override 为预留扩展：未来加 `brand_scope/brand_slug` 列 + UNIQUE(section, brand_slug) 即可增量扩展（UNIQUE(section) 改造路径在 DECOM 之外独立 ADR amendment），首版不实现、不阻塞。
+- 删除语义：**不可删**（无 DELETE 端点）；section 退役走 ADR + migration。
+
+**D-182-4 端点契约细则**
+
+> 端点总表**单一真源**为下方「### 端点契约」节（verify:endpoint-adr 解析源，arch-reviewer BLOCKER 吸收：不留双表防漂移）。本节仅承载逐端点细则。
+
+契约细则：
+
+1. **#1 preview**：响应 `HomePreview = { sections: HomePreviewSection[], generatedAt }`；每 section 含 `key / settings 摘要 / cards[]`；每 card 含 `source: 'pinned' | 'auto' | 'fallback' | 'empty'`、统一时间窗 DTO `startAt/endAt/enabled`（D-181-3 映射 home_banners）、风险态 flags（missing_image / missing_wide_image（banner 专属，方案 §6 警告级）/ pending / expired / ref_broken / unplayable）、auto 卡附 explain 摘要（来源 + 排名 + 分数）。**跳过 Redis 缓存**（方案 §12：预览必须新鲜；公开端点缓存策略不变）。`at` 参数仅影响时间窗判定，不回放历史数据。**Phase 1 预览语义显式声明**（arch-reviewer MEDIUM 吸收）：preview = **正式配置预览**（无草稿叠加，方案 §13 阶段衔接「Phase 1 画布直写」）；方案 §11 预览态的「草稿 + 当前数据聚合」待 Phase 4 `CHG-HOME-DRAFT-PUBLISH` 落地后才生效，实施方不得在 Phase 1 为 preview 实现草稿态。
+2. **#2 sections**：每区块返回 settings 全量 + 状态摘要（pinned 数 / 最近候选快照时间 / 候选数）；摘要字段缺数据时返回 null（候选快照未生成前）。
+3. **#3 settings PATCH**：zod `.strict()` partial + `.refine(≥1 字段)`；`settings` JSONB 整体替换（非深合并，与 ADR-104 metadata 同语义）；audit `home_section.settings_update`（before/after 全行快照）。
+4. **#4 candidates**：只读消费 worker 重算快照（存储结构归 ADR-183，端点契约只锁响应 DTO）：`AutofillCandidate = { id, videoId, videoSummary, score, rank, origin, filtered: boolean, filterReason?, appliedAt? }`。**`origin: string` 为开放字符串**（arch-reviewer MEDIUM 吸收）：当前 worker 产出 `douban` / `bangumi` / `trending` 三值，新增来源由 ADR-183 扩展、**不构成本 ADR DTO break**（与 `SourceHealthEventOrigin` 容纳 worker 新值的既有范式一致），消费端必须对未知值降级展示而非报错。`include_filtered=true` 时返回被过滤候选（含原因，方案 §12 标灰展示）。快照未生成 → 200 空数组 + `snapshotAt: null`（非 404——section 存在即合法）；`snapshotAt` 与 #2 sections 摘要的「最近候选快照时间」**同语义同源**（null 一致表示未生成）。
+5. **#5 apply-autofill**：应用前逐候选**重校验**可见性/可播放性（方案 §12）；任一候选失效 → 整体 409 STATE_CONFLICT，message 携带失效 candidateIds（全有或全无事务，复用 reorder 同款 BEGIN/COMMIT 模式）；成功创建对应 slot 的 home_modules pinned 行（hot_* 需 CHG-HOME-SLOT-EXTEND 先落地）；audit `home_section.apply_autofill`（afterJsonb 含创建的 module ids + 候选来源 + policyVersion）。banner section 的 apply 仅在 suggest_only 模式下将候选连同缺图风险态透出至 banner 编辑器预填——**不直接写 home_banners**（D-181-1 裁定为「home_banners 数据真源唯一 + `/admin/home` 唯一推荐运营入口」，Hero 内容的创建/修改统一经 banner 编辑器人工确认，自动链路不得静默写入；方案 §15 非目标「缺图状态必须随卡片透出」同款约束）。
+6. **#6 reorder**：门面按 section 分派真源——banner → `home_banners.sort_order`（复用 BannerService 既有 reorder 实现）；其余 → `home_modules.ordering`（复用 `reorderHomeModules` 事务）。items 中 id 不属于该 section 真源 → 422。
+   - **sort_order 双写路径显式裁定**（arch-reviewer HIGH 吸收）：D-181-1 锁的是**数据真源唯一 + 运营入口单一**，并未锁「写 API 路径唯一」。`home_banners.sort_order` 自此存在两条写路径——资源级 `PATCH /admin/banners/reorder`（v1 legacy，**实测无 audit**）与门面 reorder（有 audit）。裁定：**门面为画布唯一排序路径且唯一被审计的 banner 排序写路径**；资源级 reorder 为 v1 维护期残留，随 v1 下线退场（与 D-181-1.3 v1 UI 退场口径一致）。banner reorder 经门面**首次获得审计覆盖**，是方案 §11「审计必须覆盖 reorder」的正向收益。
+   - **审计载荷硬约束**（arch-reviewer HIGH 吸收）：`home_section.reorder` 的 afterJsonb **必须携带** `sectionKey` + 落地真源标识（`'home_banners' | 'home_modules'`）+ 受影响 ids 数组（before/after ordering 对比随附），保证按 targetId 或按 ids 反查可定位具体行。**不嵌套触发** `home_module.reorder` 二次记录（聚合层直调 queries，不经资源级 Service 审计路径）。**审计语义分裂显式化**：home_modules 排序历史回溯必须联合 `home_module.reorder` ∪ `home_section.reorder` 两 actionType 查询——此为有意裁定（避免双记录），非盲区；审计 UI / 回溯工具实现时不得只按单 actionType 过滤。
+   - 双路径职责声明：门面 = 画布唯一路径；资源级 = 既有 UI / 直接 API。
+7. **#7 refresh-candidates**：入队重算 job（job 类型与执行语义归 ADR-183）；同 section 已有进行中 job 重复触发 → 429 RATE_LIMITED；`autofill_mode = manual_only` 的 section → 422 VALIDATION_ERROR（无候选可算）；audit `home_section.refresh_candidates`（轻量，afterJsonb 仅 `{ section, enqueuedAt }`）。
+8. 响应信封全部对齐 ADR-110；**错误码零新增**（18 码内复用：NOT_FOUND 404 用于非法 section 枚举外值由 zod 422 拦截、settings 行缺失兜底 404）。
+9. `:section` 路径参数统一 zod `z.enum(HomeSectionKey 7 值)`，非法值 422（先于 404 判定）。
+
+**D-182-5 审计扩张**
+
+1. `AdminAuditTargetKind` +1：`'home_section'`——migration 095 内同卡扩 `admin_audit_log_target_kind_check` CHECK 15 → 16（沿用 088 DROP + ADD 范式）。
+2. `AdminAuditActionType` +4（TS 类型真源，DB 无 action_type CHECK）：`home_section.settings_update` / `home_section.apply_autofill` / `home_section.reorder` / `home_section.refresh_candidates`。
+3. `target_id` 锚定 = `home_section_settings.id`（seed 7 行保证恒存在；规避 section key 非 UUID 与 `target_id UUID` 列类型的冲突）。
+4. 写操作测试必须含 R-MID-1 audit payload 内容断言（workflow-rules 硬清单 3）。
+
+**D-182-6 type_shortcuts 评估（履行 D-181-5.2 义务）**
+
+1. **slot 保留，section 纳入**：type_shortcuts 进 `HomeSectionKey` 与 sections / preview 端点（settings 默认 manual_only），canvas 正常渲染编辑。
+2. 前台静态 `ALL_CATEGORIES` 与 home_modules 断裂维持 **CHG-HOME-FE-SHORTCUTS 待立案不变**（接线属前台消费切换，不阻塞本序列）；preview 端点对该 section 附 `frontendWired: false` 状态标记，Inspector 显示「前台暂未消费此配置」提示——画布不得伪装该区块配置已生效。
+3. 退役不成立理由：admin 编辑面完整（ADR-104）+ 治理方案 §4 规划其继续承载类型入口。
+
+**D-182-7 边界声明（本 ADR 不裁项）**
+
+1. 候选快照存储结构 / 重算 job 类型与调度 / 豆瓣 Bangumi 排序策略 / policyVersion 语义 → **ADR-183**（端点 #4/#5/#7 的契约已锁，ADR-183 不得变更响应 DTO 形态，只填充存储与计算实现）。
+2. 公开首页端点缓存失效协议 → Phase 4 `CHG-HOME-CACHE-INVALIDATE`。
+3. 草稿/发布模型 → Phase 4 `CHG-HOME-DRAFT-PUBLISH`（本 ADR 7 端点全部直写/直读正式配置，方案 §13 阶段衔接：Phase 1 画布直写）。
+
+### 端点契约
+
+| # | 方法 | 路径 | 用途 | Request | Response | 错误码 |
+|---|---|---|---|---|---|---|
+| 1 | GET | `/admin/home/preview` | 整页预览聚合（画布数据源） | Query: `brand_slug?` / `locale?` / `at?`（ISO datetime，preview time）/ `device?`（desktop\|mobile） | 200 `{ data: HomePreview }` | 422 VALIDATION_ERROR |
+| 2 | GET | `/admin/home/sections` | 7 区块 settings + 状态摘要 | — | 200 `{ data: HomeSectionSummary[] }` | — |
+| 3 | PATCH | `/admin/home/sections/:section/settings` | 更新区块设置 | Body: partial（autofillMode / refreshIntervalMinutes / displayCount / allowDuplicates / pinnedLimit / settings），≥1 字段 | 200 `{ data: HomeSectionSettings }` | 404 NOT_FOUND / 422 |
+| 4 | GET | `/admin/home/sections/:section/autofill-candidates` | 读取候选快照（只读） | Query: `limit?`（≤100，默认 50）/ `include_filtered?` | 200 `{ data: AutofillCandidate[], snapshotAt, policyVersion }` | 404 / 422 |
+| 5 | POST | `/admin/home/sections/:section/apply-autofill` | 候选转 pinned | Body: `{ candidateIds: string[] }`（≥1） | 200 `{ data: { applied: number, modules: HomeModule[] } }` | 404 / 422 / 409 STATE_CONFLICT |
+| 6 | POST | `/admin/home/sections/:section/reorder` | 区块内排序（画布唯一排序路径） | Body: `{ items: [{ id, ordering }] }`（≥1，≤200） | 200 `{ data: { updated: number } }` | 404 / 422 |
+| 7 | POST | `/admin/home/sections/:section/refresh-candidates` | 手动触发候选重算（入队） | — | 202 `{ data: { enqueued: true } }` | 404 / 422 / 429 RATE_LIMITED |
+
+**路由注册顺序声明**（arch-reviewer BLOCKER 附带条件吸收）：路径字面量必须与 fastify 注册字符串逐字一致（verify:endpoint-adr 精确匹配）；`:section` 子动作静态后缀路由（settings / autofill-candidates / apply-autofill / reorder / refresh-candidates）相互无前缀包含、当前无优先级冲突，但 routes/admin/home.ts 内若未来加入 `:section` 通配动态路由，静态后缀路由必须**先注册**（参 home-modules.ts reorder 先于 /:id 的注释范式）。
+
+### 影响面清单（实施卡映射）
+
+| # | 影响点 | 实施卡 |
+|---|---|---|
+| 1 | migration 095：home_section_settings 表 + seed 7 行 + audit target_kind CHECK 15→16 | CHG-HOME-PREVIEW-API（Phase 1） |
+| 2 | `packages/types/src/home-section.types.ts` 新建（HomeSectionKey / HomeSectionSettings / HomePreview / AutofillCandidate DTO） | CHG-HOME-PREVIEW-API |
+| 3 | `HomeCurationService` 新建 + `queries/home-section-settings.ts` 新建 + routes/admin/home.ts（端点 1/2） | CHG-HOME-PREVIEW-API |
+| 4 | 端点 3（settings PATCH） | **CHG-HOME-PREVIEW-API**（arch-reviewer MEDIUM 吸收：settings 读（端点 2）写（端点 3）同表同卡内聚，消除"起卡时定"摇摆；CANVAS-B 仅消费） |
+| 5 | 端点 6（reorder 门面） | CHG-HOME-CARD-DND（Phase 2） |
+| 6 | 端点 4/5/7（candidates 读 / apply / refresh） | Phase 3 AUTOFILL 卡（依赖 ADR-183 + CHG-HOME-SLOT-EXTEND） |
+| 7 | `AdminAuditActionType` +4 / `AdminAuditTargetKind` +1 | 与 #1 同卡（类型与 CHECK 同步） |
+| 8 | `docs/architecture.md` 新表 + audit 枚举同步 | 与 #1 同卡 |
+
+### follow-up 登记
+
+- settings 多品牌 override（brand_scope/brand_slug 列 + UNIQUE(section, brand_slug)）：需求出现时走 ADR amendment。
+- CHG-HOME-FE-SHORTCUTS 接线卡维持待立案（D-182-6.2）。
+- **技术债**（arch-reviewer 吸收）：CHG-HOME-BANNER-UNIFY 落地后，评估给 v1 legacy `PATCH /admin/banners/reorder` 补 audit 或冻结写能力，消除「同列两写路径审计不对等」（D-182-4.6 双写路径裁定的残留面）。

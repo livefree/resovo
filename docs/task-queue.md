@@ -1128,10 +1128,12 @@
    - 验收口径：真源与 schema 裁定 ADR-181 经 arch-reviewer Opus PASS 落档 decisions.md，三项必裁全闭环。
    - 完成备注：ADR-181 Accepted（arch-reviewer Opus CONDITIONAL PASS → 1 BLOCKER + 2 HIGH + 2 MEDIUM + 2 LOW 全 7 条吸收；事实断言逐条核验全对）。D-181-1 home_banners 维持 Hero 唯一真源 + banner slot 两段式冻结退役（CHG-HOME-FE-BANNER 废止）/ D-181-2 D-052-9 列保留 + 论证③ supersede / D-181-3 时间窗不 rename + 聚合 DTO 统一 / D-181-4 slot 枚举 +3 弃新表（compat 第 3 处同源规则 BLOCKER 警示入文）/ D-181-5 边界声明。过程勘误：方案 §9.1 时间窗误判更正（详见上方范围 ② 勘误注）；新增 CHG-HOME-SLOT-EXTEND 前置小卡（本序列卡 9）。docs-only。执行模型: claude-opus-4-8；子代理: arch-reviewer (claude-opus-4-8)。
 
-2. **CHG-HOME-GOV-ADR-B** — Home Curation ADR ②：admin 端点协议（状态：⬜ 待开始）
+2. **CHG-HOME-GOV-ADR-B** — Home Curation ADR ②：admin 端点协议（状态：✅ 已完成）
+   - 实际开始：2026-06-05 20:24 ｜ 完成时间：2026-06-05 21:40
    - 建议模型：opus（ADR 产出；MUST-8 新增 admin 端点）
    - 范围（4 项）：① 方案 §9 表 7 个新 admin 端点契约（路径/方法/参数/响应/错误码） ② section settings 结构定义（含 refreshInterval） ③ 审计要求映射（§11 覆盖面） ④ ADR-182 落档 + arch-reviewer Opus PASS（`verify:endpoint-adr` 前置闭环）。
    - 依赖：CHG-HOME-GOV-ADR-A（真源裁定决定端点操作对象）。
+   - 完成备注：ADR-182 Accepted（arch-reviewer Opus CONDITIONAL PASS → 1 BLOCKER + 2 HIGH + 3 MEDIUM + 2 LOW 全 8 条吸收）。D-182-1 `/admin/home/*` 聚合门面 7 端点（admin only，资源级端点保留；candidates 路径偏离方案 §9 改 RESTful section param）/ D-182-2 HomeSectionKey 7 值（section ≠ slot）/ D-182-3 home_section_settings 表（migration 095，关键策略字段列化 + seed 7 行 + 品牌维度预留）/ D-182-4 契约细则（preview 跳缓存 + Phase 1 无草稿叠加声明；apply 全有或全无 409；origin 开放字符串；reorder 门面双写路径显式裁定 + 审计载荷硬约束）/ D-182-5 审计扩张（TargetKind +home_section CHECK 15→16；ActionType +4；target_id 锚定 settings 行 id）/ D-182-6 type_shortcuts 评估（slot 保留 + frontendWired:false 标记，履行 D-181-5.2）/ D-182-7 边界。BLOCKER 修复实证：`verify:endpoint-adr` 解析 ADR-182 端点 7/7，全套 verify:adr-contracts EXIT=0。docs-only。执行模型: claude-opus-4-8；子代理: arch-reviewer (claude-opus-4-8)。
 
 3. **CHG-HOME-GOV-ADR-C** — Home Curation ADR ③：自动填充策略（状态：⬜ 待开始）
    - 建议模型：opus（ADR 产出）
