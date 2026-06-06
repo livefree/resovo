@@ -172,6 +172,38 @@ export interface ContentGap {
   mediaTypeHint?: string | null
 }
 
+/**
+ * 候选快照行（migration 096 / D-183-2）：worker 整份写入不可变，
+ * 端点 #4 整份只读消费；每 section 保留最近 10 份（写入+清理同事务）。
+ */
+export interface HomeAutofillSnapshot {
+  id: string
+  section: HomeSectionKey
+  /** 即端点 #4 snapshotAt（与 #2 摘要「最近候选快照时间」同语义同源） */
+  generatedAt: string
+  /** 定时 vs 手动刷新（端点 #7） */
+  trigger: 'scheduled' | 'manual'
+  /** 策略代码版本（D-183-5；语义变更必须递增） */
+  policyVersion: string
+  /** 重算时的 section settings 快照（审计回溯链，方案 §11.2） */
+  settingsSnapshot: Record<string, unknown>
+  candidates: AutofillCandidate[]
+  /** 缺口 top-N（D-183-7.3） */
+  gaps: ContentGap[]
+  createdAt: string
+}
+
+/** GET /admin/home/sections/:section/autofill-candidates 响应（D-182-4.4 + gaps additive 扩展） */
+export interface AutofillCandidatesResult {
+  candidates: AutofillCandidate[]
+  /** null = 快照未生成（200 非 404——section 存在即合法） */
+  snapshotAt: string | null
+  /** 随快照携带；未生成时 null */
+  policyVersion: string | null
+  /** include_filtered=true 时返回（D-183-7.3 additive，纯增量非 break） */
+  gaps?: ContentGap[]
+}
+
 /** GET /admin/home/sections 响应条目（D-182-4 #2：settings 全量 + 状态摘要） */
 export interface HomeSectionSummary {
   settings: HomeSectionSettings

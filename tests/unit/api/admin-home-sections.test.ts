@@ -3,10 +3,12 @@
  * （CHG-HOME-PREVIEW-API-A / ADR-182 D-182-4）
  *
  * 覆盖：
- *   - GET  /admin/home/sections           7 区块枚举序 + 摘要字段（快照 null / frontendWired）
+ *   - GET  /admin/home/sections           7 区块枚举序 + 摘要字段（快照接入 / frontendWired）
  *   - PATCH /admin/home/sections/:section/settings
  *       happy path / 非法 section 422 / 空 body 422 / unknown key 422（.strict()）/
  *       settings 行缺失 404 / audit R-MID-1 内容断言 / 鉴权 401
+ *   - GET  /admin/home/sections/:section/autofill-candidates（#4，CHG-HOME-AUTOFILL-CORE-B）
+ *       未生成 null 语义 / include_filtered + gaps additive / limit / 422 / 404
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
@@ -33,6 +35,15 @@ vi.mock('@/api/db/queries/home-section-settings', () => ({
   findHomeSectionSettings: (...args: unknown[]) => mockFind(...args),
   updateHomeSectionSettings: (...args: unknown[]) => mockUpdate(...args),
   countPinnedBySection: (...args: unknown[]) => mockCountPinned(...args),
+}))
+
+// CHG-HOME-AUTOFILL-CORE-B：快照表 queries（端点 #4 + #2 摘要接入）
+const mockSnapshotSummaries = vi.fn()
+const mockFindLatestSnapshot = vi.fn()
+
+vi.mock('@/api/db/queries/home-autofill-snapshots', () => ({
+  listLatestSnapshotSummaries: (...args: unknown[]) => mockSnapshotSummaries(...args),
+  findLatestHomeAutofillSnapshot: (...args: unknown[]) => mockFindLatestSnapshot(...args),
 }))
 
 const mockAuditWrite = vi.fn()
@@ -85,6 +96,7 @@ describe('GET /admin/home/sections', () => {
     // DB 字典序返回（hot_anime 在前）——断言 Service 重排为枚举序
     mockList.mockResolvedValue([...ALL_SECTIONS].sort().map((s) => settingsRow(s)))
     mockCountPinned.mockResolvedValue({ banner: 3, featured: 4 })
+    mockSnapshotSummaries.mockResolvedValue({})
     app = await buildApp()
   })
 
@@ -99,7 +111,7 @@ describe('GET /admin/home/sections', () => {
     expect(data.map((d) => d.settings.section)).toEqual([...ALL_SECTIONS])
   })
 
-  it('摘要字段：pinnedCount 取计数（缺省 0）/ 快照字段恒 null（ADR-183 前）/ type_shortcuts frontendWired=false', async () => {
+  it('摘要字段：pinnedCount 取计数（缺省 0）/ 快照未生成 null / type_shortcuts frontendWired=false', async () => {
     const res = await app.inject({
       method: 'GET',
       url: '/v1/admin/home/sections',
@@ -119,6 +131,27 @@ describe('GET /admin/home/sections', () => {
     expect(byKey.get('featured')?.candidateCount).toBeNull()
     expect(byKey.get('type_shortcuts')?.frontendWired).toBe(false)
     expect(byKey.get('featured')?.frontendWired).toBe(true)
+  })
+
+  it('快照摘要接入（CHG-HOME-AUTOFILL-CORE-B）：有快照的 section 填 lastSnapshotAt/candidateCount，与 #4 snapshotAt 同源语义', async () => {
+    mockSnapshotSummaries.mockResolvedValue({
+      hot_movies: { generatedAt: '2026-06-06T10:00:00Z', candidateCount: 12 },
+    })
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/admin/home/sections',
+      headers: { authorization: await adminToken() },
+    })
+    const data = res.json().data as Array<{
+      settings: { section: string }
+      lastSnapshotAt: string | null
+      candidateCount: number | null
+    }>
+    const byKey = new Map(data.map((d) => [d.settings.section, d]))
+    expect(byKey.get('hot_movies')?.lastSnapshotAt).toBe('2026-06-06T10:00:00Z')
+    expect(byKey.get('hot_movies')?.candidateCount).toBe(12)
+    expect(byKey.get('hot_series')?.lastSnapshotAt).toBeNull()
+    expect(byKey.get('hot_series')?.candidateCount).toBeNull()
   })
 
   it('未登录返回 401', async () => {
@@ -223,6 +256,163 @@ describe('PATCH /admin/home/sections/:section/settings', () => {
     })
     expect(res.statusCode).toBe(200)
     expect(res.json().data.refreshIntervalMinutes).toBeNull()
+  })
+})
+
+// ── GET /admin/home/sections/:section/autofill-candidates（CHG-HOME-AUTOFILL-CORE-B / D-182-4 #4）──
+
+import type { AutofillCandidate, ContentGap, HomeAutofillSnapshot } from '@resovo/types'
+
+function candidateRow(id: string, over: Partial<AutofillCandidate> = {}): AutofillCandidate {
+  return {
+    id,
+    videoId: `v-${id}`,
+    videoSummary: {
+      title: `视频 ${id}`, slug: `slug-${id}`, coverUrl: null,
+      type: 'movie', year: 2026, rating: 8.1, sourceCount: 2,
+    },
+    score: 0.8,
+    rank: 1,
+    origin: 'douban',
+    filtered: false,
+    ...over,
+  }
+}
+
+function snapshotRow(over: Partial<HomeAutofillSnapshot> = {}): HomeAutofillSnapshot {
+  return {
+    id: 'snap-1',
+    section: 'hot_movies',
+    generatedAt: '2026-06-06T10:00:00Z',
+    trigger: 'scheduled',
+    policyVersion: 'hp-v1',
+    settingsSnapshot: {},
+    candidates: [],
+    gaps: [],
+    createdAt: '2026-06-06T10:00:00Z',
+    ...over,
+  }
+}
+
+describe('GET /admin/home/sections/:section/autofill-candidates', () => {
+  let app: Awaited<ReturnType<typeof buildApp>>
+
+  const gap: ContentGap = {
+    provider: 'douban', externalId: 'db-9', title: '未映射条目', score: 0.7, mediaTypeHint: 'movie',
+  }
+
+  beforeEach(async () => {
+    vi.clearAllMocks()
+    mockFind.mockResolvedValue(settingsRow('hot_movies'))
+    mockFindLatestSnapshot.mockResolvedValue(snapshotRow({
+      candidates: [
+        candidateRow('c1', { rank: 1, score: 0.9 }),
+        candidateRow('c2', { rank: 2, score: 0.8, filtered: true, filterReason: 'no_playable_source' }),
+        candidateRow('c3', { rank: 3, score: 0.7 }),
+      ],
+      gaps: [gap],
+    }))
+    app = await buildApp()
+  })
+
+  it('默认（不含 filtered）：200 + 仅未过滤候选 + snapshotAt/policyVersion 顶层，无 gaps 键', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/admin/home/sections/hot_movies/autofill-candidates',
+      headers: { authorization: await adminToken() },
+    })
+    expect(res.statusCode).toBe(200)
+    const body = res.json()
+    expect((body.data as AutofillCandidate[]).map((c) => c.id)).toEqual(['c1', 'c3'])
+    expect(body.snapshotAt).toBe('2026-06-06T10:00:00Z')
+    expect(body.policyVersion).toBe('hp-v1')
+    expect('gaps' in body).toBe(false)
+  })
+
+  it('include_filtered=true：含 filtered 条目（带 filterReason）+ gaps additive（D-183-7.3）', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/admin/home/sections/hot_movies/autofill-candidates?include_filtered=true',
+      headers: { authorization: await adminToken() },
+    })
+    const body = res.json()
+    expect((body.data as AutofillCandidate[]).map((c) => c.id)).toEqual(['c1', 'c2', 'c3'])
+    expect((body.data as AutofillCandidate[])[1]?.filterReason).toBe('no_playable_source')
+    expect(body.gaps).toEqual([gap])
+  })
+
+  it('include_filtered=false 字符串按 false 语义（z.coerce.boolean 陷阱防护）', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/admin/home/sections/hot_movies/autofill-candidates?include_filtered=false',
+      headers: { authorization: await adminToken() },
+    })
+    const body = res.json()
+    expect((body.data as AutofillCandidate[]).map((c) => c.id)).toEqual(['c1', 'c3'])
+    expect('gaps' in body).toBe(false)
+  })
+
+  it('limit 截断（过滤后切片）', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/admin/home/sections/hot_movies/autofill-candidates?limit=1',
+      headers: { authorization: await adminToken() },
+    })
+    expect((res.json().data as AutofillCandidate[]).map((c) => c.id)).toEqual(['c1'])
+  })
+
+  it('limit 越界（0 / 101）返回 422', async () => {
+    for (const limit of [0, 101]) {
+      const res = await app.inject({
+        method: 'GET',
+        url: `/v1/admin/home/sections/hot_movies/autofill-candidates?limit=${limit}`,
+        headers: { authorization: await adminToken() },
+      })
+      expect(res.statusCode).toBe(422)
+    }
+  })
+
+  it('快照未生成：200 空数组 + snapshotAt/policyVersion null（非 404，D-182-4.4）', async () => {
+    mockFindLatestSnapshot.mockResolvedValue(null)
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/admin/home/sections/hot_movies/autofill-candidates',
+      headers: { authorization: await adminToken() },
+    })
+    expect(res.statusCode).toBe(200)
+    const body = res.json()
+    expect(body.data).toEqual([])
+    expect(body.snapshotAt).toBeNull()
+    expect(body.policyVersion).toBeNull()
+    expect('gaps' in body).toBe(false)
+  })
+
+  it('非法 section 枚举外值返回 422（先于 404 判定，D-182-4 #9）', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/admin/home/sections/not_a_section/autofill-candidates',
+      headers: { authorization: await adminToken() },
+    })
+    expect(res.statusCode).toBe(422)
+    expect(mockFind).not.toHaveBeenCalled()
+  })
+
+  it('settings 行缺失（迁移漂移兜底）返回 404', async () => {
+    mockFind.mockResolvedValue(null)
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/admin/home/sections/hot_movies/autofill-candidates',
+      headers: { authorization: await adminToken() },
+    })
+    expect(res.statusCode).toBe(404)
+  })
+
+  it('未登录返回 401', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/admin/home/sections/hot_movies/autofill-candidates',
+    })
+    expect(res.statusCode).toBe(401)
   })
 })
 

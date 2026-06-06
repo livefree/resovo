@@ -1110,7 +1110,7 @@
 
 ## [SEQ-20260605-05] 首页运营治理实施 — Phase 1 真源与同构预览（治理方案 §13 落地）
 
-- **状态**：🔄 进行中（**Phase 1 全 11 卡 ✅ + Phase 2 全 4 卡 ✅（含 CARD-DND-B-FIX）；Phase 3 六卡细化登记 2026-06-06，卡 13 CORE-A ✅ 收口 12:25，下一卡 14 CORE-B**）
+- **状态**：🔄 进行中（**Phase 1 全 11 卡 ✅ + Phase 2 全 4 卡 ✅（含 CARD-DND-B-FIX）；Phase 3 六卡细化登记 2026-06-06，卡 13 CORE-A + 卡 14 CORE-B ✅，下一卡 15 DOUBAN**）
 - **创建时间**：2026-06-05 20:05
 - **最后更新时间**：2026-06-06 03:10
 - **目标**：按 `docs/designs/home-operations-governance-plan_20260605.md` §13 推进实施。本序列承载 Phase 1（真源与同构预览）+ 后续 Phase 细化登记。
@@ -1248,8 +1248,10 @@
    - 依赖：ADR-183 ✅ / CHG-HOME-SLOT-EXTEND ✅。
    - 完成备注：`services/home-autofill/` 5 文件（policy/score/filters/dedup/index，范式对齐 services/identity/），全模块纯函数无 IO——信号取数归候选源 queries（卡 15/16）、编排与快照写入归 worker（卡 17）。实施级裁量（D-183-4.1 只锁权重与信号集）：惩罚 0.1/0.1、半衰期 30 天、饱和阈值 3 源，均为策略常量随 POLICY_VERSION 演进。FILTER_REASONS 无 occupied_by_*（D-183-6.1 快照不做跨区块去重，单测显式守护）。buildPreview 去重收编零行为变更（既有 28 用例零回归）。测试 +33。门禁：typecheck/lint 绿 + **全量 6827/6827**（types 基础包改动升全量，ADR-180）+ E2E admin 38 passed（2 known flaky retry 过）。执行模型: claude-opus-4-8；子代理: 无。
 
-14. **CHG-HOME-AUTOFILL-CORE-B** — migration 096 快照表 + 端点 #4（状态：⬜）
-   - 建议模型：sonnet
+14. **CHG-HOME-AUTOFILL-CORE-B** — migration 096 快照表 + 端点 #4（状态：✅ 已完成）
+   - 实际开始：2026-06-06 12:30 ｜ 完成时间：2026-06-06 12:50
+   - 建议模型：sonnet（实际 claude-opus-4-8，用户 opus 会话人工覆盖）
+   - 完成备注：D-183-2 零自由度落地。migration 096 已应用 dev DB（section/trigger CHECK + (section, generated_at DESC) 索引 pg 实证）；queries 写入+清理保留 10 同事务（失败 ROLLBACK 断言）；端点 #4（未生成 200 空 + snapshotAt/policyVersion null / include_filtered 附 filterReason+gaps additive / 布尔显式枚举防 coerce 陷阱 / 不透出跨区块占用——以 preview #1 为权威）；#2 摘要 lastSnapshotAt/candidateCount 接入（PREVIEW-API-A 留口闭环，候选数=含 filtered 全量口径）。实施级推演：policyVersion 未生成时 null 不回退代码常量伪装。测试 +17（queries 7 + 端点 10）。门禁：typecheck/lint 绿 + 全量 6844（1 flaky=StagingTable 既有项隔离过）+ verify:adr-contracts EXIT=0（212 对齐）+ E2E admin 39 passed。执行模型: claude-opus-4-8；子代理: 无。
    - 范围（5 项）：① migration 096 `home_autofill_snapshots`（D-183-2：section CHECK 7 值与 095 同集 + trigger CHECK + candidates/gaps JSONB + 索引 (section, generated_at DESC)） ② `queries/home-autofill-snapshots.ts`（insertSnapshot + 同事务清理保留 10 / findLatestSnapshot / 各 section 最新摘要） ③ HomeCurationService candidates 域 + 端点 #4（limit ≤100 默认 50 / include_filtered / gaps additive / 快照未生成 200 空数组 snapshotAt null） ④ listSectionSummaries lastSnapshotAt/candidateCount 接入（PREVIEW-API-A 留口） ⑤ architecture.md 新表同步 + 单测（快照写入+清理同事务断言 / #4 正反 / null 语义）。
    - 跨层理由：schema + api-service（表与读端点同一契约闭环，表落地无消费方即死代码；PREVIEW-API-A 同先例）。
    - 依赖：CHG-HOME-AUTOFILL-CORE-A。

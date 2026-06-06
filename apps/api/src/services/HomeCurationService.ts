@@ -11,6 +11,7 @@ import type { Pool } from 'pg'
 import {
   HOME_SECTION_KEYS,
   HOME_AUTOFILL_MODES,
+  type AutofillCandidatesResult,
   type Banner,
   type HomeModule,
   type HomePreview,
@@ -28,6 +29,10 @@ import {
   updateHomeSectionSettings,
   countPinnedBySection,
 } from '@/api/db/queries/home-section-settings'
+import {
+  findLatestHomeAutofillSnapshot,
+  listLatestSnapshotSummaries,
+} from '@/api/db/queries/home-autofill-snapshots'
 import { listAllBanners, findBannerById, updateBannerSortOrders } from '@/api/db/queries/home-banners'
 import { listAdminHomeModules, findHomeModuleById, reorderHomeModules } from '@/api/db/queries/home-modules'
 import { listTrendingVideos } from '@/api/db/queries/videos'
@@ -67,6 +72,13 @@ export const PreviewQuerySchema = z.object({
   locale: z.string().min(2).max(10).optional(),
   at: z.string().datetime().optional(),
   device: z.enum(['desktop', 'mobile']).default('desktop'),
+})
+
+/** GET autofill-candidates query（D-182-4 #4：limit ≤100 默认 50；布尔显式枚举防 z.coerce 把 'false' 判 true） */
+export const CandidatesQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(100).default(50),
+  include_filtered: z.enum(['true', 'false']).optional()
+    .transform((v) => v === 'true'),
 })
 
 // ── preview 聚合纯函数（导出供单测）──────────────────────────────
@@ -179,13 +191,14 @@ export class HomeCurationService {
 
   /**
    * 端点 #2：7 区块 settings 全量 + 状态摘要（D-182-4 #2）。
-   * 快照摘要在 ADR-183 落地前恒为 null（未生成语义，与端点 #4 snapshotAt 同源）。
+   * 快照摘要与端点 #4 snapshotAt 同语义同源（null 一致表示未生成）。
    * 输出按 HOME_SECTION_KEYS 枚举序（前台渲染顺序），非 DB 字典序。
    */
   async listSectionSummaries(): Promise<HomeSectionSummary[]> {
-    const [settingsRows, pinnedCounts] = await Promise.all([
+    const [settingsRows, pinnedCounts, snapshotSummaries] = await Promise.all([
       listHomeSectionSettings(this.db),
       countPinnedBySection(this.db),
+      listLatestSnapshotSummaries(this.db),
     ])
     const bySection = new Map(settingsRows.map((s) => [s.section, s]))
 
@@ -194,16 +207,49 @@ export class HomeCurationService {
       const settings = bySection.get(key)
       // seed 7 行恒存在（migration 095）；缺行 = 迁移漂移，跳过并由消费端按缺失处理
       if (!settings) continue
+      const snapshot = snapshotSummaries[key]
       summaries.push({
         settings,
         pinnedCount: pinnedCounts[key] ?? 0,
-        lastSnapshotAt: null,   // ADR-183 快照表落地后接入
-        candidateCount: null,   // 同上
+        lastSnapshotAt: snapshot?.generatedAt ?? null,
+        candidateCount: snapshot?.candidateCount ?? null,
         // D-182-6.2：type_shortcuts 前台静态 ALL_CATEGORIES 暂未消费此配置
         frontendWired: key !== 'type_shortcuts',
       })
     }
     return summaries
+  }
+
+  /**
+   * 端点 #4：读取候选快照（只读消费，D-182-4.4 / ADR-183 D-183-2）。
+   * 快照未生成 → 200 空数组 + snapshotAt/policyVersion null（非 404——section 存在即合法）。
+   * include_filtered=false 时剔除 filtered 条目；=true 时附 gaps（D-183-7.3 additive）。
+   * 不透出跨区块占用状态（D-183-6：占用结果以 preview 端点 #1 聚合权威为准）。
+   * @returns null = section settings 行缺失（迁移漂移兜底 404）
+   */
+  async listAutofillCandidates(
+    section: HomeSectionKey,
+    query: z.infer<typeof CandidatesQuerySchema>,
+  ): Promise<AutofillCandidatesResult | null> {
+    const settings = await findHomeSectionSettings(this.db, section)
+    if (!settings) return null
+
+    const snapshot = await findLatestHomeAutofillSnapshot(this.db, section)
+    if (!snapshot) {
+      return { candidates: [], snapshotAt: null, policyVersion: null }
+    }
+
+    const candidates = (query.include_filtered
+      ? snapshot.candidates
+      : snapshot.candidates.filter((c) => !c.filtered)
+    ).slice(0, query.limit)
+
+    return {
+      candidates,
+      snapshotAt: snapshot.generatedAt,
+      policyVersion: snapshot.policyVersion,
+      ...(query.include_filtered ? { gaps: snapshot.gaps } : {}),
+    }
   }
 
   /**

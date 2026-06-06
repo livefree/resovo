@@ -2171,3 +2171,21 @@
 - **新增依赖**：无
 - **数据库变更**：无（migration 096 归 CORE-B）
 - **注意事项**：① 实施级裁量（ADR-183 D-183-4.1 只锁权重与信号集）：惩罚幅度 0.1/0.1、recency 半衰期 30 天、source_health 饱和阈值 3——均为策略常量随 POLICY_VERSION 演进，policy.ts 注释已声明；② 全模块纯函数无 IO：信号取数归候选源 queries（DOUBAN/BANGUMI 卡）、编排归 worker（REFRESH 卡）；③ filterReason 与 origin 同款开放字符串演进范式（新值随 POLICY_VERSION 递增，消费端降级展示）；④ 门禁：typecheck/lint 绿 + 全量 6827/6827（packages/types 基础包改动自动升全量，ADR-180）+ E2E admin 38 passed（2 known flaky retry 过）。
+
+## [CHG-HOME-AUTOFILL-CORE-B] migration 096 候选快照表 + 端点 #4（Phase 3 卡 14）
+- **完成时间**：2026-06-06
+- **记录时间**：2026-06-06 12:50
+- **执行模型**：claude-opus-4-8
+- **子代理**：无
+- **修改文件**：
+  - `apps/api/src/db/migrations/096_home_autofill_snapshots.sql` — 新增：D-183-2 全列（section CHECK 7 值与 095 同源字面量 / trigger CHECK scheduled|manual / policy_version / settings_snapshot / candidates+gaps JSONB）+ 索引 (section, generated_at DESC)；不可变快照无 updated_at trigger；已应用 dev DB（CHECK + 索引 pg 实证）
+  - `packages/types/src/home-section.types.ts` — +HomeAutofillSnapshot + AutofillCandidatesResult（端点 #4 响应：snapshotAt/policyVersion null = 未生成；gaps optional additive）
+  - `apps/api/src/db/queries/home-autofill-snapshots.ts` — 新增：insertHomeAutofillSnapshot（写入+清理保留 10 **同事务**，reorderHomeModules 范式；失败 ROLLBACK 不留半写态）/ findLatestHomeAutofillSnapshot / listLatestSnapshotSummaries（DISTINCT ON + jsonb_array_length）
+  - `apps/api/src/services/HomeCurationService.ts` — candidates 域（listAutofillCandidates：未生成 200 空 + null；include_filtered 剔除/附 gaps；limit 过滤后切片）+ CandidatesQuerySchema（布尔显式枚举防 z.coerce 'false' 判 true 陷阱，videos.ts queryBool 同范式）+ listSectionSummaries 快照摘要接入（PREVIEW-API-A 留口闭环）
+  - `apps/api/src/routes/admin/home.ts` — 端点 #4 GET /admin/home/sections/:section/autofill-candidates（section 422 先于 404 / data+snapshotAt+policyVersion 顶层 + gaps additive；只读无 audit）
+  - `tests/unit/api/admin-home-sections.test.ts` — +10 用例（#4 默认剔除 filtered / include_filtered+gaps / false 字符串语义 / limit 截断+越界 422 / 未生成 null 语义 / 非法 section 422 / 缺行 404 / 401 / #2 摘要接入断言）+ 快照 queries mock 接入；38/38
+  - `tests/unit/api/home-autofill-snapshot-queries.test.ts` — 新增 7 用例（**写入+清理同事务断言**（影响面 #8 义务）：BEGIN→INSERT→DELETE→COMMIT 同 client / 失败 ROLLBACK / 参数化序列化 / 保留 N 参数 / DISTINCT ON 摘要）
+  - `docs/architecture.md` — §5.10 +home_autofill_snapshots 表全列 + 端点行 #1/#2/#3/#4/#6 + 策略纯函数层指针
+- **新增依赖**：无
+- **数据库变更**：migration 096（home_autofill_snapshots 新表；纯增量零阻断）
+- **注意事项**：① 端点 #4 不透出跨区块占用状态（D-183-6：占用结果以 preview #1 聚合权威为准，两端点职责分离）；② #2 摘要候选数 = 快照内全量（含 filtered，jsonb_array_length 口径）；③ policyVersion 未生成时 null（实施级推演：无快照即无策略产物，不回退代码常量伪装）；④ 快照写入方（worker）归 REFRESH 卡——当前表空，#4 全 section 返回未生成语义为预期中间态；⑤ 门禁：typecheck/lint 绿 + 全量 6844（1 flaky=StagingTable jsdom 既有项隔离 13/13 过）+ verify:adr-contracts EXIT=0（endpoint-adr 212 对齐）+ migrate:check 干净 + E2E admin 39 passed（1 known flaky retry 过）。
