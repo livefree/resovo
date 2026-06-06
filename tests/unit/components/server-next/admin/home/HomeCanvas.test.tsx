@@ -178,3 +178,106 @@ describe('HomeCanvas — 区块形态与卡片语义', () => {
     expect(screen.getByTestId('canvas-section-featured').textContent).toContain('2/3 位')
   })
 })
+
+// ── CHG-HOME-CANVAS-B：环境栏 + Inspector ────────────────────────────────────
+
+import { updateHomeSectionSettings } from '../../../../../../apps/server-next/src/lib/home-curation/api'
+
+const mockedUpdateSettings = vi.mocked(updateHomeSectionSettings)
+
+/** AdminInput 的 data-testid 在容器 div，真实 input 为内层 input */
+function innerInput(testId: string): HTMLInputElement {
+  const input = screen.getByTestId(testId).querySelector('input')
+  if (!input) throw new Error(`no inner input under ${testId}`)
+  return input
+}
+
+describe('HomeCanvas — 环境栏（CANVAS-B）', () => {
+  it('环境栏渲染四参数控件 + 应用按钮', async () => {
+    render(<HomeCanvas />)
+    await waitFor(() => expect(screen.queryByTestId('canvas-env-bar')).not.toBeNull())
+    expect(screen.getByTestId('env-brand-slug')).not.toBeNull()
+    expect(screen.getByTestId('env-locale')).not.toBeNull()
+    expect(screen.getByTestId('env-at')).not.toBeNull()
+    expect(screen.getByTestId('env-device')).not.toBeNull()
+  })
+
+  it('「应用」携带参数重拉 preview（brandSlug + device）', async () => {
+    render(<HomeCanvas />)
+    await waitFor(() => expect(mockedPreview).toHaveBeenCalledTimes(1))
+    fireEvent.change(innerInput('env-brand-slug'), { target: { value: 'alpha' } })
+    fireEvent.click(screen.getByTestId('env-apply-btn'))
+    await waitFor(() => expect(mockedPreview).toHaveBeenCalledTimes(2))
+    expect(mockedPreview).toHaveBeenLastCalledWith(
+      expect.objectContaining({ brandSlug: 'alpha', device: 'desktop' }),
+    )
+  })
+})
+
+describe('HomeCanvas — Inspector（CANVAS-B）', () => {
+  it('未选中区块 → 提示态', async () => {
+    render(<HomeCanvas />)
+    await waitFor(() => expect(screen.queryByTestId('home-canvas')).not.toBeNull())
+    expect(screen.getByTestId('inspector-empty')).not.toBeNull()
+  })
+
+  it('点击区块 → Inspector 展示该区块 settings 表单（预填）', async () => {
+    render(<HomeCanvas />)
+    await waitFor(() => expect(screen.queryByTestId('canvas-section-featured')).not.toBeNull())
+    fireEvent.click(screen.getByTestId('canvas-section-featured'))
+    await waitFor(() => expect(screen.queryByTestId('section-inspector-featured')).not.toBeNull())
+    expect(innerInput('inspector-display-count').value).toBe('3')
+    expect(innerInput('inspector-refresh-interval').value).toBe('60')
+  })
+
+  it('编辑 displayCount 保存 → updateHomeSectionSettings 调用 + 保存后重拉 preview', async () => {
+    mockedUpdateSettings.mockResolvedValue({ ...settings('featured'), displayCount: 6 })
+    render(<HomeCanvas />)
+    await waitFor(() => expect(screen.queryByTestId('canvas-section-featured')).not.toBeNull())
+    fireEvent.click(screen.getByTestId('canvas-section-featured'))
+    await waitFor(() => expect(screen.queryByTestId('inspector-save-btn')).not.toBeNull())
+
+    fireEvent.change(innerInput('inspector-display-count'), { target: { value: '6' } })
+    const callsBefore = mockedPreview.mock.calls.length
+    fireEvent.click(screen.getByTestId('inspector-save-btn'))
+
+    await waitFor(() => {
+      expect(mockedUpdateSettings).toHaveBeenCalledWith('featured', expect.objectContaining({
+        displayCount: 6,
+        autofillMode: 'manual_plus_autofill',
+        refreshIntervalMinutes: 60,
+        allowDuplicates: false,
+        pinnedLimit: null,
+      }))
+    })
+    await waitFor(() => expect(mockedPreview.mock.calls.length).toBeGreaterThan(callsBefore))
+  })
+
+  it('refreshIntervalMinutes 清空保存 → 传 null（停用自动重算）', async () => {
+    mockedUpdateSettings.mockResolvedValue({ ...settings('featured'), refreshIntervalMinutes: null })
+    render(<HomeCanvas />)
+    await waitFor(() => expect(screen.queryByTestId('canvas-section-featured')).not.toBeNull())
+    fireEvent.click(screen.getByTestId('canvas-section-featured'))
+    await waitFor(() => expect(screen.queryByTestId('inspector-refresh-interval')).not.toBeNull())
+
+    fireEvent.change(innerInput('inspector-refresh-interval'), { target: { value: '' } })
+    fireEvent.click(screen.getByTestId('inspector-save-btn'))
+    await waitFor(() => {
+      expect(mockedUpdateSettings).toHaveBeenCalledWith('featured', expect.objectContaining({
+        refreshIntervalMinutes: null,
+      }))
+    })
+  })
+
+  it('displayCount 非法（非正整数）→ 本地拦截不调端点', async () => {
+    render(<HomeCanvas />)
+    await waitFor(() => expect(screen.queryByTestId('canvas-section-featured')).not.toBeNull())
+    fireEvent.click(screen.getByTestId('canvas-section-featured'))
+    await waitFor(() => expect(screen.queryByTestId('inspector-display-count')).not.toBeNull())
+
+    fireEvent.change(innerInput('inspector-display-count'), { target: { value: '0' } })
+    fireEvent.click(screen.getByTestId('inspector-save-btn'))
+    await waitFor(() => expect(screen.queryByTestId('inspector-save-btn')).not.toBeNull())
+    expect(mockedUpdateSettings).not.toHaveBeenCalled()
+  })
+})

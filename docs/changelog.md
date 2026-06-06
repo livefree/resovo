@@ -2062,3 +2062,17 @@
 - **新增依赖**：无
 - **数据库变更**：无
 - **注意事项**：① 画布本卡为只读渲染（方案 §13 阶段衔接：「保存草稿/发布」隐藏至 Phase 4；卡片拖拽/删除/替换归 Phase 2 CHG-HOME-CARD-DND；Inspector + 环境栏归 CANVAS-B）；② 默认视图仍为列表（编辑能力完整），画布经页头切换进入——CANVAS-B 接 Inspector 后评估默认切画布；③ 颜色零硬编码（CSS 变量含 fallback：--overlay-scrim / --fg-on-media / --fg-on-accent / --radius-full 四个新引用如主题层缺失走 fallback 值，不阻塞）；④ 门禁：typecheck/lint 绿 + home 组件域 88/88 + test:changed 37/37 + E2E admin 域。
+
+## [CHG-HOME-CANVAS-B] 后台同构画布：Inspector + 环境栏
+- **完成时间**：2026-06-06
+- **记录时间**：2026-06-06 03:00
+- **执行模型**：claude-opus-4-8
+- **子代理**：无
+- **修改文件**：
+  - `apps/server-next/src/app/admin/home/_client/canvas/CanvasEnvBar.tsx` — 新增：环境栏（brand/locale/preview time(at)/device 四参数 +「应用」→ preview 重拉；at 经 datetime-local 本地值转 ISO）
+  - `apps/server-next/src/app/admin/home/_client/canvas/SectionInspector.tsx` — 新增：区块设置 Inspector（autofillMode/refreshIntervalMinutes(空=null)/displayCount(本地正整数校验)/allowDuplicates/pinnedLimit(空=null)，消费端点 #3；候选池展示留 Phase 3 接入位）
+  - `apps/server-next/src/app/admin/home/_client/canvas/HomeCanvas.tsx` — -B 接线：环境栏置顶 + 画布/Inspector 两栏（1fr+320px sticky）+ 环境参数 ref 驱动重拉 + settings 保存成功重拉 preview
+  - `tests/unit/components/server-next/admin/home/HomeCanvas.test.tsx` — +7 用例（环境栏控件/应用携参重拉/Inspector 未选中提示/选中预填/编辑保存+重拉/refresh 清空传 null/displayCount 非法本地拦截）；文件 18/18
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：① **CHG-HOME-CANVAS 两子卡收口 → SEQ-20260605-05 Phase 1（真源与同构预览）全部 11 卡交付**（ADR 三卡 + SLOT-EXTEND + BANNER-UNIFY-A/B + PREVIEW-API-A/B + CANVAS-A/B；TIMEWINDOW 取消）；② 方案 §3 信息架构落地形态：画布主区 + 右侧 Inspector + 环境栏；「保存草稿/发布」按钮按 §13 阶段衔接隐藏至 Phase 4；③ Phase 2（卡片操作闭环：CARD-DND/EMPTY-SLOTS/IMAGE-GUARD-BANNER）为下一阶段，起卡前按惯例细化登记；④ 门禁：typecheck/lint 绿 + test:changed 44/44 + E2E admin 域。

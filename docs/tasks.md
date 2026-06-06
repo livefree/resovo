@@ -6,7 +6,7 @@
 
 ## 当前任务（单任务工作台：同时仅 1 个 🔄 进行中；完成即删卡，历史见 docs/changelog.md）
 
-（空 — 上一任务 CHG-HOME-CANVAS-A 已收口 2026-06-06，见 changelog；Phase 1 仅剩 CHG-HOME-CANVAS-B）
+（空 — 上一任务 CHG-HOME-CANVAS-B 已收口 2026-06-06，见 changelog；**SEQ-20260605-05 Phase 1 全部 11 卡交付**，Phase 2 三卡已细化登记待取）
 
 ---
 

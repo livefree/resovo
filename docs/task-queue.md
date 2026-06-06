@@ -1110,10 +1110,10 @@
 
 ## [SEQ-20260605-05] 首页运营治理实施 — Phase 1 真源与同构预览（治理方案 §13 落地）
 
-- **状态**：🔄 进行中
+- **状态**：🔄 进行中（**Phase 1 已全部收口 2026-06-06 03:10**——ADR 三卡 + SLOT-EXTEND + BANNER-UNIFY-A/B + PREVIEW-API-A/B + CANVAS-A/B 共 11 卡 ✅ / TIMEWINDOW ❌ 取消；全量兜底 6748/6749、1 失败为 StagingEditPanel 既有并发 flaky 隔离 12/12 过；Phase 2 三卡已细化登记 ⬜）
 - **创建时间**：2026-06-05 20:05
-- **最后更新时间**：2026-06-05 20:20（勘误：TIMEWINDOW 卡取消，8 卡 → 7 卡）
-- **目标**：按 `docs/designs/home-operations-governance-plan_20260605.md` §13 推进实施。本序列承载 Phase 1（真源与同构预览）7 卡；Phase 2–4 卡在 Phase 1 收口后按 ADR 裁定细化登记（防过早细化漂移）。
+- **最后更新时间**：2026-06-06 03:10
+- **目标**：按 `docs/designs/home-operations-governance-plan_20260605.md` §13 推进实施。本序列承载 Phase 1（真源与同构预览）+ 后续 Phase 细化登记。
 - **范围**：ADR 起草（decisions.md）+ /admin/home Banner 统一 + 首页预览聚合端点 + 后台同构画布。
 - **依赖**：CHG-HOME-GOVERNANCE-PLAN ✅（含评审修订 2a4d15a7）；无 BLOCKER。
 - **执行节奏**：ADR 三卡先行（原 `CHG-HOME-GOV-ADR` 6 必裁项 > 5 → 按方案 §9 粒度建议拆 `-A/-B/-C`；全 Opus 起草 + arch-reviewer Opus PASS，新增 admin 端点走 MUST-8）→ 实施卡按 ADR 裁定执行，不得先行落 migration / 端点。
@@ -1186,9 +1186,13 @@
    - 备注：Phase 1 画布直写正式配置，"保存草稿 / 发布"按钮隐藏至 Phase 4（方案 §13 阶段衔接）。
    - 完成备注：桥接层 `lib/home-curation/`（3 端点封装）+ 画布三组件（HomeCanvas 容器/CanvasSection 五种区块布局变体/CanvasCard wide·poster 双形态 + source pill 携 origin + flags 7 值警示 + empty 虚线占位）+ HomeOpsClient 画布/列表双视图切换（列表编辑能力零损失）。只读渲染先行（Inspector 归 -B，卡片操作归 Phase 2）。测试 11 新用例，home 组件域 88/88。门禁：typecheck/lint 绿 + test:changed 37/37 + E2E admin 40 passed。执行模型: claude-opus-4-8；子代理: 无。
 
-8. **CHG-HOME-CANVAS-B** — 后台同构画布：Inspector + 环境栏（状态：⬜ 待开始）
-   - 建议模型：sonnet
-   - 依赖：CHG-HOME-CANVAS-A。
+8. **CHG-HOME-CANVAS-B** — 后台同构画布：Inspector + 环境栏（状态：✅ 已完成）
+   - 实际开始：2026-06-06 02:35 ｜ 完成时间：2026-06-06 03:10
+   - 建议模型：sonnet（实际 claude-opus-4-8，用户 opus 会话人工覆盖）
+   - 范围（5 项）：① 环境栏（brand / locale / preview time(at) / device 四参数 → preview 重拉，方案 §3） ② 区块 Inspector（选中区块 settings 编辑：autofillMode/refreshInterval/displayCount/allowDuplicates/pinnedLimit，消费端点 #3） ③ HomeCanvas 接线（环境参数下传 + 选中联动 + settings 保存后重拉） ④ 组件测试 ≥9 ⑤ docs 收口。
+   - 跨层理由：纯 UI 层（端点 #3 已由 PREVIEW-API-A 交付）。
+   - 依赖：CHG-HOME-CANVAS-A ✅。
+   - 完成备注：CanvasEnvBar（四参数 + 应用重拉，at 本地值转 ISO）+ SectionInspector（5 设置项编辑，空值 null 语义 + displayCount 本地校验，消费端点 #3；候选池展示留 Phase 3 接入位）+ HomeCanvas 两栏接线（1fr+320px sticky + 保存成功重拉）。测试 +7 用例（文件 18/18）。门禁：typecheck/lint 绿 + test:changed 44/44 + E2E admin 40 passed。**Phase 1 全部 11 卡交付收口**。执行模型: claude-opus-4-8；子代理: 无。
 
 9. **CHG-HOME-SLOT-EXTEND** — slot 枚举 +3（hot_movies/hot_series/hot_anime）schema 与类型全量同步（状态：✅ 已完成；拆卡历程见下）
    - 实际开始：2026-06-05 22:20 ｜ 完成时间：2026-06-05 22:55
@@ -1199,8 +1203,26 @@
    - 依赖：CHG-HOME-GOV-ADR-A ✅；Phase 3 写路径前必须完成。
    - 完成备注：ADR-181 D-181-4 零自由度落地。migration 094 已应用 dev DB（DROP+ADD 2 CHECK，pg_constraint 实证 7 值 + hot_* 仅 video）；ADR-181 BLOCKER 项 compat 第 3 处同源规则同卡 +3 并加同步警示注释；server-next 4 文件 UI 常量 +3（/admin/home 即见 3 个新 tab + 批量选片可用）；architecture.md §5.10 两处同步。测试：新增 admin 创建正反 6 用例（it.each 3 hot×video 201 + 3 非 video 422）+ 公开路由全 slot 7 值用例扩展 + HomeOpsClient 测试宽松正则 /热门/ 收紧为精确 'TOP 10'（新 tab 命中漂移修复）。门禁：typecheck/lint EXIT=0；**全量 6688/6688 PASS**（基础包改动升全量，ADR-180）；verify:adr-contracts 4 绿；**E2E admin 域 39 passed**；migrate:check 干净。偏离说明：建议模型 sonnet、实际 opus（用户 opus 会话人工覆盖）；强行单卡（编译闭环不可拆），commit 含 arch-reviewer trailer。执行模型: claude-opus-4-8；子代理: 无新 spawn（设计背书引用 ADR-181 卡内 arch-reviewer (claude-opus-4-8)）。
 
-### Phase 2–4 后续卡登记（Phase 1 收口后细化，卡名先占位）
+### Phase 2 卡登记（Phase 1 收口后细化，2026-06-06 03:10）
 
-- Phase 2：`CHG-HOME-CARD-DND` / `CHG-HOME-EMPTY-SLOTS` / `CHG-HOME-IMAGE-GUARD-BANNER`（与 D-052-9 预留 `CHG-HOME-IMAGE-GUARD` 职责区分，见方案 §13）
-- Phase 3：`CHG-HOME-AUTOFILL-CORE-A/-B` / `CHG-HOME-AUTOFILL-REFRESH` / `CHG-HOME-AUTOFILL-DOUBAN` / `CHG-HOME-AUTOFILL-BANGUMI` / `CHG-HOME-AUTOFILL-APPLY`
+10. **CHG-HOME-CARD-DND** — 画布卡片拖拽排序 + 跨区块确认（状态：⬜ 待开始）
+   - 建议模型：sonnet
+   - 范围：画布内同区块拖拽（复用 dnd-kit，调端点 #6 `POST /admin/home/sections/:section/reorder` 实装——门面按 section 分派真源 + audit `home_section.reorder` 载荷硬约束 D-182-4.6）+ 跨区块落位确认弹层（方案 §5.3）+ 测试。
+   - 依赖：CHG-HOME-CANVAS-B ✅。
+   - 备注：端点 #6 实装属本卡（route + Service reorder 门面 + audit 守卫登记）。
+
+11. **CHG-HOME-EMPTY-SLOTS** — 画布空卡片添加入口（状态：⬜ 待开始）
+   - 建议模型：sonnet
+   - 范围：empty 占位卡点击 → VideoPicker（复用 BatchAddVideosModal 选片链路）/ banner 空位 → Banner 编辑器（方案 §5.2）+ 测试。
+   - 依赖：CHG-HOME-CANVAS-B ✅。
+
+12. **CHG-HOME-IMAGE-GUARD-BANNER** — Banner 横图警告级校验（状态：⬜ 待开始）
+   - 建议模型：sonnet
+   - 范围：尺寸（推荐 1920×1080 / 最低 1280×720）+ 比例（16:9–21:9）+ 外链探测失败提醒——**全部警告级不阻断**（方案 §6 / D-052-9 口径）+ desktop/mobile 安全区预览 + 测试。
+   - 依赖：CHG-HOME-BANNER-UNIFY-B ✅。
+   - 备注：与 D-052-9 预留 `CHG-HOME-IMAGE-GUARD`（管 home_modules.image_url）职责区分，两卡勿混。
+
+### Phase 3–4 后续卡占位（Phase 2 收口后细化）
+
+- Phase 3：`CHG-HOME-AUTOFILL-CORE-A/-B` / `CHG-HOME-AUTOFILL-REFRESH` / `CHG-HOME-AUTOFILL-DOUBAN` / `CHG-HOME-AUTOFILL-BANGUMI` / `CHG-HOME-AUTOFILL-APPLY`（契约全锁于 ADR-183；migration 096 归 CORE-B）
 - Phase 4：`CHG-HOME-DRAFT-PUBLISH` / `CHG-HOME-AUDIT-ROLLBACK` / `CHG-HOME-CACHE-INVALIDATE`
