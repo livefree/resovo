@@ -15,9 +15,9 @@
 - 后台页面展示应与前台首页一致，但各区块可编辑 / 设置。
 - 视频卡片支持拖动、删除。
 - 各区块预设空卡片支持添加视频。
-- 各模块要有自动填充方式。
+- 各模块要有自动填充方式，且自动填充需有明确的更新频率。
 - 热门电影、电视剧从豆瓣获取；热门动漫从 Bangumi 读取。
-- 顶部 Banner 设置必须提供横版大图。
+- 顶部 Banner **强烈建议**提供横版大图（不强制）；缺横版大图时后台必须显著标记缺图提醒。
 
 现状基础：
 
@@ -51,7 +51,7 @@
 1. **单一展示真源**：前台首页最终展示必须来自统一的 Home Curation 聚合结果；后台画布预览也消费同一聚合口径。
 2. **人工优先，自动补位**：手动 pinned 条目优先，自动候选只补空位，不覆盖人工运营判断。
 3. **自动可解释**：自动填充不能只给结果，必须展示来源、排序原因、被过滤原因。
-4. **Banner 强约束**：首屏 Banner 是品牌主视觉，不允许仅靠视频封面兜底；必须提供合格横版大图。
+4. **Banner 横图治理（建议 + 提醒，不阻断）**：首屏 Banner 是品牌主视觉，**强烈建议**提供合格横版大图，但不强制阻断发布；缺横版大图时允许回退视频封面，后台画布与 Inspector 必须显著标记"缺横版大图"风险态（与 ADR-052 AMENDMENT D-052-9"宽松优先 + UI 提示引导"口径一致）。
 5. **配置与内容分离**：区块策略归 Home Curation；视频、豆瓣、Bangumi 数据仍归各自服务，避免 UI 直连 DB 或跨层调用。
 6. **发布可回滚**：运营修改必须可审计；高影响操作（发布、删除、应用自动候选）可追溯。
 
@@ -105,7 +105,8 @@
 - 删除：仅从运营位移除，不删除视频实体；危险操作二次确认。
 - 替换：打开 `VideoPicker`，保留当前排序位。
 - 固定 / 取消固定：自动卡片可一键转 pinned；pinned 卡片可释放为自动补位。
-- 状态展示：`pinned`、`auto`、待生效、已过期、引用失效、图片缺失、不可播放。
+- 状态展示：`pinned`、`auto`、待生效、已过期、引用失效、图片缺失、缺横版大图（Banner 专属风险态）、不可播放。
+- 时间窗状态依赖说明：「待生效 / 已过期」对 `home_banners` 当前 schema 已支持（`active_from` / `active_to`）；对 `home_modules` 需先完成时间窗 schema 显式扩展（见 §9.1），扩展落地前各 module 区块不展示该两态。
 
 ### 5.2 空卡片
 
@@ -124,21 +125,24 @@
 
 ## 6. Banner 横版大图治理
 
-Banner 是首屏视觉真源，必须强约束：
+Banner 是首屏视觉真源，采用**建议 + 提醒**口径（不强制阻断）：
 
-1. `imageUrl` 必填；不能仅使用 video coverUrl 兜底发布。
-2. 推荐尺寸 1920x1080；最低 1280x720。
-3. 比例建议 16:9 到 21:9；超出范围禁止发布或要求裁切。
+1. `imageUrl` **强烈建议**提供；缺失时允许回退 video coverUrl 发布，但后台必须在画布卡片、Inspector、发布确认三处显著标记"缺横版大图"风险态。
+2. 推荐尺寸 1920x1080；最低建议 1280x720。低于建议尺寸标记警告，不阻断。
+3. 比例建议 16:9 到 21:9；超出范围标记警告并建议裁切，不阻断。
 4. 上传后必须展示 desktop 与 mobile 安全区预览。
 5. 支持 focal point 设置，避免移动端裁切主体。
-6. 外链图必须通过尺寸探测；探测失败时标记风险，不允许直接发布到 Hero。
-7. Banner 文案与链接可选，但主图不可选。
+6. 外链图应通过尺寸探测；探测失败时标记风险提醒，运营确认后仍可发布。
+7. Banner 文案与链接可选。
+
+> 校验级别小结：所有横图校验（缺图 / 尺寸 / 比例 / 探测失败）统一为**警告级**——显著提醒、不阻断发布。该口径与 ADR-052 AMENDMENT 2026-06-05（D-052-9）"首版不加 service 层条件必填校验，宽松优先 + UI 提示引导"一致；后续若运营反馈缺图率过高，再评估升级为阻断级。
 
 治理裁定：
 
 - `home_banners` 继续作为 `HeroBanner` 首屏真源。
 - `/admin/home` 统一承载 Banner 编辑入口。
 - `home_modules.slot='banner'` 需要后续 ADR 裁定：退役、迁移为非 Hero 运营位，或与 `home_banners` 合并。裁定前不得让运营维护两套可同时影响首屏的 Banner 配置。
+- **D-052-9 对账义务**：ADR-052 AMENDMENT 2026-06-05 刚为 `home_modules` 补齐 `title` / `image_url` 一等列（banner slot 的 external_url / custom_html 以 `image_url` 为唯一图源）。`CHG-HOME-GOV-ADR` 起草时必须显式对账：若裁定 banner slot 退役，D-052-9 投入的列如何处置（保留供非 Hero 运营位使用 / 随迁移合并入 `home_banners`）；不得出现两份同期文档口径互斥。
 
 ## 7. 自动填充策略
 
@@ -163,6 +167,8 @@ pinned 手动条目
 - 当前 brand / locale 可展示
 - 未被当前首页其它区块占用，除非区块设置允许重复
 
+跨区块去重归属：去重需要整页视角，统一在 `HomeCurationService` 聚合层按整页一次性计算；`GET /admin/home/autofill-candidates` 等单区块端点内部走整页聚合取上下文，**不要求客户端传入其它区块的占用状态**。
+
 ### 7.2 自动模式
 
 | 模式 | 说明 | 适用 |
@@ -178,6 +184,20 @@ pinned 手动条目
 - featured：`manual_plus_autofill`
 - top10：`manual_plus_autofill`
 - 热门电影 / 热播剧集 / 热门动漫：`full_auto`，但允许 pinned 头部覆盖。
+
+### 7.3 自动更新频率
+
+自动候选不是请求时实时计算，而是**worker 定时重算 + 端点只读消费**：
+
+1. **刷新调度**：复用现有 `apps/api/src/workers/` worker + scheduler 体系（同 crawlerScheduler / maintenanceScheduler 模式），新增 home autofill 重算 job；不引入新调度依赖。
+2. **频率归属区块设置**：每个区块的 `refreshInterval` 是 section settings 的一部分（运营可配置，不写死值），默认建议：
+   - 热门电影 / 热播剧集（豆瓣源）：每 24h 重算（豆瓣 dump 数据本身低频更新）。
+   - 热门动漫（Bangumi 源）：每 24h 重算。
+   - featured / top10 自动补位（站内趋势源）：每 1h 重算。
+   - Banner `suggest_only` 候选：每 24h 重算。
+3. **重算产物**：每次重算生成带时间戳的候选快照（来源、分数、排名、过滤原因、策略版本），供后台解释展示与审计回溯（见 §11）。
+4. **重算 ≠ 生效**：`full_auto` 区块重算后下个缓存周期生效；`manual_plus_autofill` / `suggest_only` 区块重算只更新候选池，不改动 pinned 条目。
+5. **手动触发**：后台 Inspector 提供"立即刷新候选"入口（admin 端点，需纳入 ADR），用于运营即时核对，不绕过过滤规则。
 
 ## 8. 豆瓣 / Bangumi 热榜策略
 
@@ -205,6 +225,10 @@ douban_votes 权重
 - 热播剧集只取 series。
 - 类型无法确认时进入候选审核，不自动入前台。
 
+> 数据观察前置：`douban_entries.media_type` 为 nullable TEXT（约 14 万行）。`CHG-HOME-GOV-ADR` 起草前应先统计 `media_type` 的 null 占比与取值分布；若 null 占比过高，电影 / 剧集 shelf 的 `full_auto` 实际产能存疑，需在 ADR 中给出补全策略或降级为 `manual_plus_autofill`。
+
+豆瓣条目未映射的"缺口候选"治理：沿用与 §8.2 相同的内容缺口模式；豆瓣侧当前**无**对应建库服务（无 DoubanSeedService），是否扩展 ADR-161 式反向建库链路到豆瓣由 ADR 裁定，本方案不预设。
+
 ### 8.2 Bangumi 热门动漫
 
 候选来源：
@@ -224,7 +248,7 @@ rank 越小越靠前
 - 集数缺失/图片缺失惩罚
 ```
 
-未映射到站内可播视频的 Bangumi 条目进入“内容缺口”列表，可供采集/占位建库，但不直接展示。
+未映射到站内可播视频的 Bangumi 条目进入“内容缺口”列表，但不直接展示。**缺口 → 建库链路复用 ADR-161 决策 7 的 `BangumiSeedService` 反向建库能力**（含 `nsfw=false` 默认过滤、rank/year 过滤，见 `apps/api/src/db/queries/externalData.ts` 既有实现），不新建平行链路；首页治理层只负责把缺口列表透出给运营，建库动作走既有 ADR-161 路径。
 
 ## 9. 后端边界建议
 
@@ -246,11 +270,23 @@ Route
 | `GET /admin/home/preview` | 返回完整首页预览，参数含 brand、locale、at、device |
 | `GET /admin/home/sections` | 返回区块配置与当前发布状态 |
 | `PATCH /admin/home/sections/:section/settings` | 更新区块设置 |
-| `GET /admin/home/autofill-candidates` | 获取某区块自动候选与解释 |
+| `GET /admin/home/autofill-candidates` | 获取某区块自动候选与解释（消费 worker 重算快照，只读） |
 | `POST /admin/home/sections/:section/apply-autofill` | 将候选转为 pinned |
 | `POST /admin/home/sections/:section/reorder` | 区块内排序 |
+| `POST /admin/home/sections/:section/refresh-candidates` | 手动触发该区块候选重算（§7.3 第 5 条） |
 
 新增端点需要 ADR；若只是扩展现有 `/home/top10` / `/home/modules` 响应字段，走对应 ADR amendment。
+
+ADR 粒度建议：上表 7 个新 admin 端点 + Banner 真源裁定 + 时间窗 schema + 热门 shelf 存储裁定全部塞进单份 ADR 会过重，建议按「真源与 schema 裁定 / 端点协议 / 自动填充策略」拆为 2–3 份关联 ADR，每份独立走 Opus PASS（plan §4.5 R7 MUST-8）。
+
+### 9.1 时间窗 schema 显式扩展
+
+「preview time / 待生效 / 已过期」能力存在 schema gap，**必须显式扩展，不得隐含假设**：
+
+- `home_banners`：已有 `active_from` / `active_to` / `is_active`，无需变更。
+- `home_modules`：当前**无时间窗字段**，需新增 migration 补 `active_from` / `active_to`（命名与 `home_banners` 对齐，nullable，NULL 表示不限时）。
+- 该扩展跨 3+ 消费方（home-modules queries / HomeModulesService / admin UI / 前台聚合 / preview 端点），按 CLAUDE.md 模型路由规则**强制 spawn Opus 子代理裁定字段结构**后再落 migration。
+- 热门电影 / 热播剧集 / 热门动漫三个新区块的 pinned 存储为 ADR 必裁项：扩展 `HomeModuleSlot` 枚举（如 `hot_movies` / `hot_series` / `hot_anime`，ADR-052 明确"新增 slot 必须走新 ADR"）或新表。本方案倾向扩展 slot 枚举（复用 `home_modules` 的 ordering / brand_scope / 审计基建），最终由 ADR 裁定。
 
 ## 10. 状态归属
 
@@ -263,6 +299,8 @@ Route
 | 豆瓣热门候选 | externalData + HomeCuration 排序策略 |
 | Bangumi 热门候选 | externalData + HomeCuration 排序策略 |
 | Banner 横图 | Banner 配置 + media image 管线 |
+| 区块自动刷新频率 refreshInterval | Home Curation section settings |
+| 自动候选快照（含策略版本） | Home Curation 重算产物（worker 写入） |
 | 预览设备、locale、brand | `/admin/home` UI state，不写 DB |
 
 ## 11. 发布与审计
@@ -284,6 +322,11 @@ Route
 
 审计 payload 要包含 before / after、候选来源、自动策略版本、操作者与 request id。
 
+`full_auto` 区块的审计锚定：该模式无逐条"发布"动作，前台展示随外部数据与重算漂移，审计锚定两类对象——
+
+1. **策略版本变更**：运营修改区块设置（模式、refreshInterval、过滤规则、pinned 头部）时记 audit log（人工操作，含 before / after）。
+2. **重算快照**：每次 worker 重算落带时间戳的候选快照（§7.3 第 3 条），用于回溯"某时刻前台为何展示 X"；快照属系统产物，不计入人工审计流，但回滚 diff 展示时可引用。
+
 ## 12. 缓存与一致性
 
 - 前台首页可以保留短 TTL，但后台发布后应主动失效相关 key。
@@ -295,23 +338,27 @@ Route
 
 ### Phase 1：真源与同构预览
 
-1. `CHG-HOME-GOV-ADR`：起草 Home Curation ADR，裁定 Banner 真源、section settings、自动候选端点。
-2. `CHG-HOME-BANNER-UNIFY`：`/admin/home` 纳入 `home_banners` 编辑，明确 `home_modules.banner` 去留。
-3. `CHG-HOME-PREVIEW-API`：新增完整首页预览聚合端点。
-4. `CHG-HOME-CANVAS`：后台从 slot list 升级为前台同构画布。
+1. `CHG-HOME-GOV-ADR`：起草 Home Curation ADR（按 §9 粒度建议拆 2–3 份），必裁项：Banner 真源 + D-052-9 对账（§6）、时间窗 schema 扩展（§9.1，强制 Opus 子代理）、热门 shelf 存储（slot 枚举 vs 新表）、section settings、自动候选端点协议、更新频率调度。
+2. `CHG-HOME-BANNER-UNIFY`：`/admin/home` 纳入 `home_banners` 编辑，按 ADR 裁定执行 `home_modules.banner` 去留（裁定在 ADR 卡完成，本卡只执行）。
+3. `CHG-HOME-TIMEWINDOW-SCHEMA`：`home_modules` 时间窗 migration + queries / service / 类型同步（§9.1）。
+4. `CHG-HOME-PREVIEW-API`：新增完整首页预览聚合端点。
+5. `CHG-HOME-CANVAS`：后台从 slot list 升级为前台同构画布。范围大概率触发原子化判据，预拆 `-A`（画布布局 + 区块渲染）/ `-B`（Inspector + 环境栏）。
+
+> 阶段衔接：Phase 1 画布首版**直写正式配置**（与现 `/admin/home` 行为一致），头部"保存草稿 / 发布"按钮在 Phase 4 `CHG-HOME-DRAFT-PUBLISH` 落地前隐藏，避免交付假交互。
 
 ### Phase 2：卡片操作闭环
 
 1. `CHG-HOME-CARD-DND`：同构画布内卡片拖拽、跨区块确认。
 2. `CHG-HOME-EMPTY-SLOTS`：各区块空卡片添加入口。
-3. `CHG-HOME-BANNER-IMAGE-GUARD`：Banner 横图尺寸、比例、安全区、focal point 校验。
+3. `CHG-HOME-IMAGE-GUARD-BANNER`：Banner 横图尺寸、比例、安全区、focal point **警告级**校验 + 缺图风险态标记（§6）。命名与 ADR-052 AMENDMENT 预留的 `CHG-HOME-IMAGE-GUARD`（管 `home_modules.image_url`）同系列分卡，两卡职责显式区分，避免双卡漂移。
 
 ### Phase 3：自动填充
 
-1. `CHG-HOME-AUTOFILL-CORE`：通用自动填充策略、去重、解释模型。
-2. `CHG-HOME-AUTOFILL-DOUBAN`：豆瓣热门电影 / 剧集候选。
-3. `CHG-HOME-AUTOFILL-BANGUMI`：Bangumi 热门动漫候选。
-4. `CHG-HOME-AUTOFILL-APPLY`：候选应用为 pinned + 审计。
+1. `CHG-HOME-AUTOFILL-CORE`：通用自动填充策略、整页去重、解释模型。范围跨 service + 快照存储 + 类型层，预拆 `-A`（策略与去重）/ `-B`(候选快照与解释模型)。
+2. `CHG-HOME-AUTOFILL-REFRESH`：worker 重算 job + refreshInterval section settings + 手动刷新端点（§7.3）。
+3. `CHG-HOME-AUTOFILL-DOUBAN`：豆瓣热门电影 / 剧集候选（前置：media_type 分布统计，§8.1）。
+4. `CHG-HOME-AUTOFILL-BANGUMI`：Bangumi 热门动漫候选 + 缺口列表复用 ADR-161 链路（§8.2）。
+5. `CHG-HOME-AUTOFILL-APPLY`：候选应用为 pinned + 审计。
 
 ### Phase 4：发布治理
 
@@ -327,10 +374,11 @@ Route
 - 每个区块都可进入设置面板。
 - 视频卡片可拖拽、删除、替换、固定 / 取消固定。
 - 每个区块空位可添加视频或开启自动填充。
-- Banner 发布前必须有合格横版大图。
+- Banner 缺横版大图时仍可发布，但后台画布、Inspector、发布确认三处均显示"缺横版大图"风险标记。
 - 热门电影 / 热播剧集候选来自豆瓣，并只展示站内可播放映射。
 - 热门动漫候选来自 Bangumi，并排除 nsfw。
 - 自动候选可解释、可跳过、可应用。
+- 每个自动区块的更新频率可在 section settings 配置，worker 按频率重算并落候选快照；手动"立即刷新候选"可用。
 
 质量验收：
 
@@ -343,9 +391,10 @@ Route
 ## 15. 非目标
 
 - 本方案不要求本卡直接实现代码。
-- 不引入新第三方依赖。
+- 不引入新第三方依赖（含调度：复用既有 worker / scheduler 体系）。
 - 不把未映射的豆瓣 / Bangumi 条目直接展示到前台。
-- 不允许为了自动化绕过人工 Banner 横图审核。
+- 不为豆瓣新建平行的反向建库链路（Bangumi 侧复用 ADR-161；豆瓣侧扩展与否由 ADR 裁定）。
+- 自动填充不得绕过 Banner 缺图风险标记：`suggest_only` 候选应用到 Hero 时缺图状态必须随卡片透出，不允许静默清除提醒。
 
 ## 16. 当前方案结论
 
@@ -355,9 +404,16 @@ Route
 前台同构画布
 + 区块设置 Inspector
 + pinned / auto 双轨卡片
-+ 豆瓣 / Bangumi 可解释候选
-+ Banner 横图强约束
++ 豆瓣 / Bangumi 可解释候选（worker 定频重算）
++ Banner 横图治理（强烈建议 + 缺图提醒，不阻断）
 + 发布审计与缓存失效
 ```
 
 这能把运营动作从“改数据库记录”收敛为“配置首页展示策略”，也为后续多品牌、多语言、活动档期与外部榜单治理留下清晰扩展面。
+
+## 17. 修订记录
+
+| 日期 | 修订 |
+|---|---|
+| 2026-06-05 | 初稿 |
+| 2026-06-05 | 评审修订：① Banner 横图从强制必填降级为"强烈建议 + 缺图风险标记，警告级不阻断"（§0/§2/§5.1/§6/§14/§15/§16），与 ADR-052 AMENDMENT D-052-9 口径对齐并新增对账义务；② `home_modules` 时间窗 schema gap 显式化为扩展项（§5.1/§9.1，新增 `CHG-HOME-TIMEWINDOW-SCHEMA` 卡）；③ Bangumi 内容缺口裁定复用 ADR-161 `BangumiSeedService`，豆瓣侧扩展与否留 ADR 裁定（§8/§15）；④ 新增自动填充更新频率治理（§7.3，worker 定频重算 + refreshInterval section settings + 手动刷新端点 + 候选快照），§9 端点表 +1，§10/§11/§13/§14 同步；⑤ 跨区块去重归属聚合层整页计算（§7.1）；⑥ `full_auto` 审计锚定策略版本 + 重算快照（§11）；⑦ 热门 shelf 存储列为 ADR 必裁项（§9.1）；⑧ media_type 分布统计列为 ADR 前置（§8.1）；⑨ 拆卡建议补 ADR 粒度拆分、`-A/-B` 预拆、Phase 1 直写降级说明、横图守卫卡更名 `CHG-HOME-IMAGE-GUARD-BANNER`（§13）。 |
