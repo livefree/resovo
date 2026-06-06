@@ -1110,7 +1110,7 @@
 
 ## [SEQ-20260605-05] 首页运营治理实施 — Phase 1 真源与同构预览（治理方案 §13 落地）
 
-- **状态**：🔄 进行中（**Phase 1 全 11 卡 ✅ + Phase 2 全 4 卡 ✅（含 CARD-DND-B-FIX）；Phase 3 六卡细化登记 2026-06-06，卡 13/14/15 ✅（CORE-A/B + DOUBAN），下一卡 16 BANGUMI**）
+- **状态**：🔄 进行中（**Phase 1 全 11 卡 ✅ + Phase 2 全 4 卡 ✅（含 CARD-DND-B-FIX）；Phase 3 六卡细化登记 2026-06-06，卡 13–16 ✅（CORE-A/B + DOUBAN + BANGUMI），下一卡 17 REFRESH**）
 - **创建时间**：2026-06-05 20:05
 - **最后更新时间**：2026-06-06 03:10
 - **目标**：按 `docs/designs/home-operations-governance-plan_20260605.md` §13 推进实施。本序列承载 Phase 1（真源与同构预览）+ 后续 Phase 细化登记。
@@ -1263,8 +1263,10 @@
    - 范围（4 项）：① douban 候选源 query（douban_entries JOIN 映射桥 video_external_refs/catalog_external_refs → 站内 videos；D-183-1 分池走 videos.type movie/series，豆瓣 media_type 不参与判定） ② hot_movies/hot_series 候选生成（doubanScore 接线 + 过滤链 + AutofillCandidate 解释） ③ 缺口 top-50（未映射条目按 D-183-4.1 分数 → ContentGap[]，media_type 降级提示性字段） ④ 单测（分池 / 缺失信号按 0 / 缺口 DTO 无 videoId）。
    - 依赖：CHG-HOME-AUTOFILL-CORE-B。
 
-16. **CHG-HOME-AUTOFILL-BANGUMI** — Bangumi 热门动漫候选源 + 缺口复用 ADR-161（状态：⬜）
-   - 建议模型：sonnet
+16. **CHG-HOME-AUTOFILL-BANGUMI** — Bangumi 热门动漫候选源 + 缺口复用 ADR-161（状态：✅ 已完成）
+   - 实际开始：2026-06-06 13:10 ｜ 完成时间：2026-06-06 13:15
+   - 建议模型：sonnet（实际 claude-opus-4-8，用户 opus 会话人工覆盖）
+   - 完成备注：映射桥三源 UNION（bangumi_subject_id INT 直连 + ::int cast 数字正则防护）+ **nsfw 硬过滤 SQL 双路径**（候选+缺口；硬 = 不入池 ≠ filtered 解释保留；测试守护增量防线）+ **排序权威 = rank 主序 comparator 非 score 序**（D-183-4.2，score 仅解释展示 rating/10 − 惩罚同豆瓣常量，可与排序逆序）+ 缺口 ContentGap 携原生 rank（建库复用 ADR-161 BangumiSeedService 只读透出）。dev 实测：候选 2（dev 态未发布带解释）/ 缺口 50 rank 主序 / 120ms。测试 +8。门禁：typecheck/lint 绿 + test:changed 79/79；E2E N/A（API-only）。执行模型: claude-opus-4-8；子代理: 无。
    - 范围（4 项）：① bangumi 候选源 query（bangumi_entries rank ASC + nsfw=true 硬过滤 + 映射桥 → anime） ② hot_anime 候选生成（rank 主序 + rating 后置 + 惩罚项） ③ 缺口列表（未映射 → ContentGap；建库动作复用 ADR-161 决策 7 BangumiSeedService，治理层只读透出不新建链路） ④ 单测（nsfw 硬过滤断言守护增量防线 / rank 缺失排后）。
    - 依赖：CHG-HOME-AUTOFILL-CORE-B；与 DOUBAN 可换序。
 

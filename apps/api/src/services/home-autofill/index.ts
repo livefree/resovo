@@ -38,3 +38,8 @@ export {
   generateDoubanSectionCandidates,
   type DoubanSection,
 } from './douban'
+export {
+  buildBangumiCandidates,
+  buildBangumiGaps,
+  generateBangumiSectionCandidates,
+} from './bangumi'

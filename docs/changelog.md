@@ -2204,3 +2204,17 @@
 - **新增依赖**：无
 - **数据库变更**：无
 - **注意事项**：① **dev 数据观察**：hot_movies 映射候选 37 条全 filtered（not_published——dev 库映射豆瓣视频均未发布）/ hot_series 仅 3 条，符合 ADR-183「初期 full_auto 产能=已映射可播视频、候选不足走 trending 兜底不空窗」预判（preview 聚合 hot_* fallback 已在 Phase 1 就绪）；缺口 top-50 正常（霸王别姬 0.681 居首）；全链路 122ms；② 实施级裁量：brandLocaleVisible 恒 true（D-182-3 settings 首版全局无 brand 维度）/ hasImageFallback 恒 false（FallbackCover 为渲染级兜底非数据级信号）——两处随过滤链输入显式声明；③ 修复过程：crawler_sites JOIN 列名 site_key→key（dev DB 实测捕获，单测 SQL 字符串断言不查列存在性的盲区，实测兜底）；④ E2E：N/A（API-only 无端点/UI 变更，CHG-VSR-3 同先例）；⑤ 门禁：typecheck/lint 绿 + test:changed 84/84。
+
+## [CHG-HOME-AUTOFILL-BANGUMI] Bangumi 热门动漫候选源 + 缺口复用 ADR-161（Phase 3 卡 16）
+- **完成时间**：2026-06-06
+- **记录时间**：2026-06-06 13:10
+- **执行模型**：claude-opus-4-8
+- **子代理**：无
+- **修改文件**：
+  - `apps/api/src/db/queries/home-autofill-bangumi.ts` — 新增：listBangumiCandidateSourceRows（映射桥三源 UNION：mc.bangumi_subject_id INT 直连 + ver/cer external_id ::TEXT→int cast 带数字正则防护；**nsfw=false 硬过滤在 SQL**——硬 = 不入池，区别于 filtered 解释保留；anime 分池；同 video 多映射 DISTINCT ON 取 rank 最优）+ listBangumiGapSourceRows（缺口路径同样 nsfw 硬过滤 + rank ASC 主序预截）
+  - `apps/api/src/services/home-autofill/bangumi.ts` — 新增：buildBangumiCandidates（**排序权威 = compareBangumiCandidates rank 主序**，非 score 序——D-183-4.2 与 douban 加权序的根本差异，头注释显式声明；score 仅解释展示值 rating/10 − 惩罚同豆瓣常量；rank 仅未过滤占名次）+ buildBangumiGaps（ContentGap 携 bangumi 原生 rank，douban 缺口 null 对照）+ generateBangumiSectionCandidates 编排
+  - `apps/api/src/services/home-autofill/index.ts` — 出口同步
+  - `tests/unit/api/home-autofill-bangumi.test.ts` — 新增 8 用例（rank 主序非 score 序断言（score 可与排序逆序）/ rank 缺失排后组内 rating DESC / filtered 保留+rank=0 / 展示分惩罚+下钳 / 缺口 rank 携带+无 videoId / **nsfw 硬过滤 SQL 断言候选+缺口双路径**（影响面 #8 增量防线义务）/ 编排常量透传）
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：① dev 数据观察：hot_anime 映射候选 2 条全 filtered（not_published，dev 数据态同 douban 卡）/ 缺口 50 按 rank 主序正常（混沌武士 rank 40 居首——更优 rank 条目已映射）；全链路 120ms；trending 兜底（Phase 1）保证不空窗；② 缺口建库动作复用 ADR-161 决策 7 BangumiSeedService 既有路径，治理层只读透出（D-183-7.1，零新建链路）；③ E2E：N/A（API-only 同 DOUBAN 卡）；④ 门禁：typecheck 0 错 + lint 干净 + test:changed 79/79。
