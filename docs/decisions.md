@@ -20278,3 +20278,83 @@ D-180-1 ~ D-180-6 共 6 条：D-180-1/2 随 CHG-TEST-SLIM-B、D-180-3/4 随 CHG-
 1. **孤儿 spec 修正**：`--list` 实测发现 `tests/e2e/auth.spec.ts` 与 `tests/e2e/search.spec.ts` 不被任何 project testMatch 匹配（admin-chromium 只匹配 4 个 ADMIN_SPECS；legacy 快照遗留）——`test:e2e` 从未运行它们。域映射据实校准：auth 域 = `admin.spec.ts`（角色访问控制 = 登录态核心）；search 域 = e2e-next 3 spec + smoke（不含孤儿 `search.spec.ts`）。孤儿处置（删除或归档）随 tests/e2e LEGACY 清理任务，不在本系列。
 2. **按需 webServer 增强**：playwright webServer 为 config 级（无 per-project 支持），全量 3 server 必起会抵消域选跑收益——新增 `PLAYWRIGHT_SERVERS=admin,admin-next,web` 子集机制（域脚本设置；未设置默认全起，`test:e2e` 行为零变化）。
 3. **全量 E2E 用例数实测**：290 → 207（web-mobile 104→21 用例 / 19→3 spec，全量 −29%；域子集 18~82 用例 ≪ 207）。
+
+---
+
+## ADR-181：Home Curation 真源裁定 — Banner 双真源收口 + 时间窗命名分歧处置 + 热门 shelf slot 扩展（SEQ-20260605-05 / CHG-HOME-GOV-ADR-A）
+
+- **日期**：2026-06-05
+- **状态**：**Accepted**（arch-reviewer Opus CONDITIONAL PASS → 1 BLOCKER + 2 HIGH 必收条件 + 2 MEDIUM + 2 LOW 建议**全部 7 条吸收**后定档；事实断言逐条核验全数与代码真源一致）
+- **决策者**：主循环 claude-opus-4-8 / arch-reviewer (claude-opus-4-8)
+- **关联**：ADR-046（brand_scope 协议 + home_banners）/ ADR-052（home_modules + AMENDMENT D-052-9/10/11）/ ADR-104（home_modules admin API）/ ADR-110（ApiResponse + ErrorCode）/ `docs/designs/home-operations-governance-plan_20260605.md` §6/§9.1（治理方案，含 2026-06-05 时间窗勘误）
+- **对应交付**：SEQ-20260605-05 Phase 1（CHG-HOME-BANNER-UNIFY 等）；ADR-182（端点协议）/ ADR-183（自动填充策略）后续起草
+
+### 背景
+
+**Banner 双真源**：`home_banners`（migration 049）是 Hero 首屏唯一生效真源——前台 `HeroBanner` 消费公开 `GET /banners`（`apps/web-next/src/components/video/HeroBanner.tsx:32`），admin 侧已有 6 端点 `/admin/banners`（GET 列表 / GET :id / POST / PUT / DELETE / PATCH reorder），但编辑 UI 仅存于**已冻结的 server v1**（`apps/server/src/app/admin/banners/`）。与此同时 `home_modules.slot='banner'`（migration 050 + 093）在 server-next `/admin/home` 作为**默认激活 tab** 可完整编辑（D-052-9 刚补齐 title/image_url 一等列），但**前台零消费**（grep 证实 web-next 无任何 `slot=banner` 请求；SEQ-20260605-01 后续卡 CHG-HOME-FE-BANNER 已登记该断裂）。运营危害：在当前真源后台（server-next）编辑「Banner」不影响首屏，有效编辑入口反而在冻结后台——双真源 + 入口错位。
+
+**时间窗勘误**：治理方案 §9.1 初版断言 `home_modules` 无时间窗字段、需新增 migration——事实性误判。实际 migration 050 起即有 `start_at` / `end_at`（`home_modules_time_window_valid` CHECK + `(start_at, end_at) WHERE enabled` 部分索引），queries（`home-modules.ts:29-30`）/ 类型层（`HomeModule.startAt/endAt`）/ admin Drawer 编辑全链路打通。真实问题仅为**两表命名分歧**：`home_banners.active_from/active_to/is_active` vs `home_modules.start_at/end_at/enabled`。
+
+**热门 shelf**：前台首页三个热门区块（热门电影 / 热播剧集 / 热门动漫）当前为纯趋势 `ShelfRow`（`GET /videos/trending?type=...&period=week`，`page.tsx:68-95`），无任何运营 pinned 能力。治理方案 §4/§7 要求三区块支持 pinned 头部 + 豆瓣/Bangumi `full_auto` 候选，pinned 存储待裁：扩展 `HomeModuleSlot` 枚举 vs 新表。
+
+### 决策要点
+
+**D-181-1 Banner 真源唯一化 + `home_modules.slot='banner'` 冻结退役（两段式）**
+
+1. `home_banners` 维持 Hero 首屏唯一真源，公开 `GET /banners` 契约不变。
+2. `home_modules.slot='banner'` **运营语义冻结**（Phase 1 / CHG-HOME-BANNER-UNIFY 执行）：
+   - (a) `HomeModulesService` Create 路径拒绝 `slot='banner'`（VALIDATION_ERROR 422，message 指引改用 `/admin/banners`）；update / delete / reorder / list / **publish-toggle** 五类操作**保留**（存量行清理与审计可见性需要；publish-toggle 仅切存量行 `enabled`，不产生新真源冲突——ADR-104 6 端点语义完整声明，无残缺）。
+   - (b) server-next `/admin/home` 的「Banner」tab 切换为 `home_banners` 编辑器，消费**既有** `/admin/banners` 6 端点——零新端点，MUST-8 不触发。
+   - (c) 公开 `GET /home/modules` 的 slot 枚举**保留** `'banner'`（不删除 / 不重命名现有 API 行为；该 slot 零前台消费方，保留无害）。
+   - (d) **物理退役延后** follow-up `CHG-HOME-BANNER-DECOM`（枚举值移除 + 2 处 CHECK 重建 + 存量行清理）：前置条件 = 生产环境 banner slot 存量行数为零 + 冻结期 ≥ 1 个 Phase 无回退诉求。
+3. **server v1 banner 编辑 UI 处置**（arch-reviewer HIGH 吸收）：CHG-HOME-BANNER-UNIFY 落地前，v1 `apps/server/src/app/admin/banners/` 仍是唯一编辑入口（维持现状）；落地后 **server-next `/admin/home` 为唯一推荐运营入口**，v1 banners UI 降级为维护期只读参考（不再作为运营路径宣导，随 v1 整体下线退场，不单独拆除）。两入口写同一张 `home_banners` 表无 schema 冲突，但运营宣导必须单入口，避免两处各编辑一半。
+4. SEQ-20260605-01 后续卡 **CHG-HOME-FE-BANNER（前台切换消费 home_modules banner slot）随本裁定废止**——方向相反（该卡假设 home_modules 为目标真源）；其登记的断裂问题由本裁定以「冻结 + 入口统一」方式收口。
+5. 理由：立即消除双真源运营危害（价值排序 1 正确性），破坏性 migration 与 UI 改造解耦、保留可逆性；`home_banners` 的 `image_url NOT NULL` / `link_type` 模型对 Hero 语义更精确（强图视觉位），符合价值排序 2 边界清晰。
+
+**D-181-2 D-052-9 列对账：`title` / `image_url` 一等列保留不动**
+
+1. D-052-9 投入的两列**不受 banner slot 冻结影响**：列消费方含 featured / top10 卡片（D-052-9 原文「featured/top10 卡片同样消费」），且 Phase 3 热门 shelf pinned（D-181-4）同样消费——列价值随 slot 扩展增强而非削弱。
+2. D-052-11 media ownerType `'home_module'` 上传链路保留。
+3. `CHG-HOME-IMAGE-GUARD`（管 `home_modules.image_url`，D-052-10 预留）与治理方案 `CHG-HOME-IMAGE-GUARD-BANNER`（管 `home_banners.image_url` 警告级校验）职责区分维持，两卡均不受影响。
+4. 若未来 `CHG-HOME-BANNER-DECOM` 落地，存量 banner 行（如有）的 title / image_url 与 `home_banners` 同名列同构（JSONB / TEXT），迁移映射成本最低——D-052-9 论证 ③「与 home_banners 跨表形态一致」反向同样成立。
+5. **Supersede（arch-reviewer HIGH 吸收）**：本裁定**取代 D-052-9 论证 ③ 中对 `CHG-HOME-FE-BANNER` 的前向引用**——该卡随 D-181-1.4 废止；论证 ③「跨表形态一致、迁移成本最低」的价值改由 `CHG-HOME-BANNER-DECOM` 的存量行迁移承接（本条第 4 点）。D-052-9 列化决策本身**不受影响**（其余三条论证独立成立）。
+
+**D-181-3 时间窗命名分歧：不 rename、不加列、聚合 DTO 统一**
+
+1. 两表时间窗 schema 均已齐备，**禁止任何 rename migration / 加列**（API 与类型契约破坏零收益；`HomeModule.startAt/endAt` 已是公开契约）。
+2. Home Curation 聚合层（ADR-182 定义的 preview / sections 端点 DTO）统一输出 `startAt` / `endAt` / `enabled` 语义：`home_banners.active_from → startAt`、`active_to → endAt`、`is_active → enabled`，映射仅发生在聚合 DTO 层，底层 queries 零改动。
+3. 方向依据：对齐多数派（home_modules + 既有类型层惯例 `startAt/endAt`）；`home_banners` 侧字段语义完全同构（nullable TIMESTAMPTZ，NULL 不限时）。
+4. 治理方案 §5.1/§9.1/§13 勘误已同步（`CHG-HOME-TIMEWINDOW-SCHEMA` 卡取消）。
+
+**D-181-4 热门 shelf pinned 存储：扩展 `HomeModuleSlot` 枚举 +3（弃新表方案）**
+
+1. 新增 `hot_movies` / `hot_series` / `hot_anime` 三个 slot，**content_ref_type 仅允许 `video`**（与 featured/top10 同 CHECK 模式）。本 ADR 即 ADR-052 决策要点 2「新增 slot 必须走新 ADR」的履约文件；slot 枚举自此 4 → 7 值。
+2. **migration 094**（实施落点见影响面清单）：重建 2 处 CHECK——slot inline CHECK（050:21）+ `home_modules_ref_type_slot_compat`（050:42）；`ALTER TABLE ... DROP CONSTRAINT IF EXISTS + ADD CONSTRAINT` 幂等，注释式 down 沿用 049/050 约定。索引零新增（既有 `(slot, brand_scope, brand_slug, ordering) WHERE enabled` 部分索引自然覆盖新 slot）。**零阻断声明**（arch-reviewer MEDIUM 吸收）：094 为纯增量扩枚举（旧值全保留），存量行必然满足新 CHECK，ADD 阶段全表校验零阻断——与未来 DECOM 缩枚举（存量行非零会阻断 ADD）风险性质完全不同。**第 3 处同源规则**（arch-reviewer BLOCKER 吸收）：slot × content_ref_type 规则在 Service 层还有一份字面量映射——`HomeModulesService.ts` `applyBusinessRules` 内 `compat` 表（约 80-89 行，未登记 slot 经 `?? false` 直接拒绝），实施时必须与 2 处 DB CHECK **同卡同步 +3**（三 slot 均映射 `['video']`），否则 `hot_*` 写路径在 Service zod 层即被 422 拦死。
+3. `home_modules` 对热门区块**只存 pinned 头部**；`full_auto` 自动候选不落 `home_modules`（候选快照存储结构归 ADR-183），杜绝自动重算污染运营表。
+4. ADR-104 协议延展：6 个 `/admin/home-modules` 端点经 zod `SlotEnum` 扩展后自然覆盖新 slot（amendment 级变更，非新端点，`verify:endpoint-adr` 不触发）；audit log 枚举零变更（actionType 不区分 slot）。
+5. 公开 `GET /home/modules`（routes/home.ts `HomeModuleSlotEnum`）同步扩枚举——纯增量（新增合法入参值），既有消费方零破坏。
+6. **弃新表方案论证**：独立 `home_shelf_pins` 表需重复实现 brand_scope 协议 / ordering / 时间窗 / D-052-9 列 / 审计 / admin CRUD 端点（新端点 → MUST-8 ADR 面扩大）；「pinned 视频条目 + 排序 + 品牌作用域 + 时间窗」与 `home_modules` 语义完全同构，复用胜出（价值排序 2 复用 > 改动收敛）。
+7. 前台三个 ShelfRow 的消费切换（trending → Home Curation 聚合）属 Phase 3 实施卡范围，本 ADR 仅锁定存储。
+
+**D-181-5 边界声明（本 ADR 不裁项）**
+
+1. section settings 存储结构（含 refreshInterval）、候选快照表、7 个新 admin 端点协议 → **ADR-182 / ADR-183**（本 ADR 零新端点、零公开 API 行为变更）。
+2. `type_shortcuts` slot 与前台静态 `ALL_CATEGORIES` 的断裂（SEQ-20260605-01 后续卡 CHG-HOME-FE-SHORTCUTS）**不在本卡范围**——接线或退役留待 ADR-182 起草时一并评估（同属真源对齐类裁定，但治理方案 §4 未列为 Phase 1 必裁项）。
+3. 豆瓣侧是否扩展 ADR-161 式反向建库 → ADR-183。
+
+### 影响面清单（实施卡映射）
+
+| # | 影响点 | 实施卡 |
+|---|---|---|
+| 1 | server-next `/admin/home` Banner tab → home_banners 编辑器（消费既有 /admin/banners） | CHG-HOME-BANNER-UNIFY（Phase 1） |
+| 2 | `HomeModulesService` Create 拒绝 slot='banner'（zod refine + 422 message） | CHG-HOME-BANNER-UNIFY（Phase 1） |
+| 3 | migration 094（slot CHECK + ref_type_slot_compat CHECK 重建，+3 hot slot） | **CHG-HOME-SLOT-EXTEND**（本 ADR 直管前置小卡，arch-reviewer MEDIUM 吸收：与 ADR-183 自动填充策略正交、独立落地，避免 ADR-183 起草延迟反向阻塞已裁定的 schema 扩展；Phase 3 写路径前任意时点可执行） |
+| 4 | `packages/types` `HomeModuleSlot` +3 / `HomeModulesService` SlotEnum +3 **+ `applyBusinessRules` `compat` 映射 +3（三 slot → `['video']`，BLOCKER 吸收）** / routes/home.ts `HomeModuleSlotEnum` +3 / server-next SLOTS·SLOT_LABEL·VIDEO_SLOTS +3 | 与 #3 同卡（CHG-HOME-SLOT-EXTEND，类型与 schema 同步落地） |
+| 5 | `docs/architecture.md` §5.10 **两处**同步：枚举值列表（约 495 行）+ slot×content_ref_type CHECK 描述（约 508 行，补 hot_* → video） | 与 #3 同卡（schema 变更同步义务） |
+| 6 | SEQ-20260605-01 后续卡 CHG-HOME-FE-BANNER 废止登记 | 本卡（task-queue.md 标注） |
+
+### follow-up 登记
+
+- **CHG-HOME-SLOT-EXTEND**（已登记 SEQ-20260605-05）：migration 094 + 影响面 #4/#5 全量同步，本 ADR 直管，无需新 ADR。
+- **CHG-HOME-BANNER-DECOM**（待立案，需满足 D-181-1.2(d) 前置条件）：banner slot 物理退役——枚举移除 + 2 CHECK 重建 + Service `compat` 同步删除 + 存量行清理/迁移。**两条技术警告**（arch-reviewer MEDIUM/LOW 吸收）：① 缩枚举的 CHECK ADD 阶段会全表校验，存量 banner 行非零将直接阻断 migration——此即 D-181-1.2(d)「存量行数为零」前置的技术依据；② CHECK 重建必须基于 **094 之后的最新枚举集**（featured / top10 / type_shortcuts / hot_movies / hot_series / hot_anime）去除 banner，不得 copy 050 原始 4 值模板回退掉 094 的 3 个 hot slot。
+- type_shortcuts 接线或退役 → ADR-182 起草时评估（D-181-5.2）。

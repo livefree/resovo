@@ -1920,3 +1920,17 @@
 - **七问自检**：无整页刷新；无重复逻辑/重复状态；无应下沉逻辑；未破坏 Route→Service→DB 边界；无函数/文件规模新增风险；未引入技术债；不涉及 audit log 写入位点。
 - **偏离检测**：本次是命名级 lint 修复，不以补丁绕过结构问题；无兼容复杂度、状态流混乱、组件职责膨胀或无关代码触达；不涉及 ADR 验证段与 D-N 闭环。
 - **[AI-CHECK]**：结构检查：是否违反分层 NO；是否跨模块访问内部实现 NO。代码质量：是否新增重复逻辑 NO；是否存在 hack / 临时补丁 NO。规模检查：是否存在需拆分函数 NO；是否存在需拆分文件 NO。安全性：是否存在隐式副作用或吞异常 NO。结论：SAFE。
+
+## [CHG-HOME-GOV-ADR-A] Home Curation ADR ①：真源与 schema 裁定（ADR-181）
+- **完成时间**：2026-06-05
+- **记录时间**：2026-06-05 21:05
+- **执行模型**：claude-opus-4-8
+- **子代理**：arch-reviewer (claude-opus-4-8)
+- **修改文件**：
+  - `docs/decisions.md` — 新增 ADR-181（Accepted）：D-181-1 Banner 真源唯一化（home_banners 维持 Hero 真源，home_modules.slot='banner' 两段式冻结退役，v1 UI 处置声明，CHG-HOME-FE-BANNER 废止）/ D-181-2 D-052-9 title+image_url 列对账保留 + 论证③ supersede / D-181-3 时间窗命名分歧不 rename + 聚合 DTO 统一 startAt/endAt/enabled / D-181-4 热门 shelf 扩 HomeModuleSlot 枚举 +3（hot_movies/hot_series/hot_anime，弃新表；migration 094 结构锁定 + HomeModulesService compat 第 3 处同源规则 BLOCKER 警示）/ D-181-5 边界声明（settings/快照/端点归 ADR-182/183）
+  - `docs/designs/home-operations-governance-plan_20260605.md` — §5.1/§9.1/§13/§17 勘误：home_modules 实有 start_at/end_at（migration 050），原「无时间窗字段需扩展」误判撤销，CHG-HOME-TIMEWINDOW-SCHEMA 卡取消
+  - `docs/task-queue.md` — 新序列 SEQ-20260605-05 登记（Phase 1 七卡 + Phase 2–4 占位）；TIMEWINDOW 卡 ❌ 取消；CHG-HOME-SLOT-EXTEND 新卡登记（评审 MEDIUM 吸收）；SEQ-20260605-01 后续卡 CHG-HOME-FE-BANNER ❌ 废止标注（D-181-1.4）；ADR-A 条目 ✅
+  - `docs/tasks.md` — 卡片登记与收口（完成即删，回到空稳定态）
+- **新增依赖**：无
+- **数据库变更**：无（migration 094 结构已裁定，实施归 CHG-HOME-SLOT-EXTEND 卡）
+- **注意事项**：① arch-reviewer CONDITIONAL PASS 全 7 条吸收，其中 BLOCKER 为 slot×content_ref_type 规则的**第 3 处同源真源**（HomeModulesService `applyBusinessRules` compat 字面量映射）——CHG-HOME-SLOT-EXTEND 实施时与 2 处 DB CHECK 同卡同步，否则 hot_* 写路径被 422 拦死；② CHG-HOME-BANNER-DECOM（物理退役）有两条技术警告记入 ADR follow-up（缩枚举 CHECK ADD 全表校验 / 必须基于 094 后枚举集）；③ 下一卡 CHG-HOME-GOV-ADR-B（admin 端点协议 ADR-182），与 -C 可并行。

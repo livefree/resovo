@@ -1023,7 +1023,7 @@
 
 ### 后续卡登记（本序列产出，不在本序列内执行）
 
-- **CHG-HOME-FE-BANNER**（待立案，需 ADR）：前台 HeroBanner 切换/合并消费 home_modules banner slot（现消费旧 /banners·home_banners 表，新后台 banner 配置不上前台）。
+- **CHG-HOME-FE-BANNER** ❌ **已废止（ADR-181 / D-181-1.4，2026-06-05）**：~~前台 HeroBanner 切换/合并消费 home_modules banner slot~~——ADR-181 裁定方向相反（home_banners 维持 Hero 唯一真源，home_modules.slot='banner' 冻结退役）；其登记的断裂问题由「冻结 + 入口统一」收口（CHG-HOME-BANNER-UNIFY 执行）。
 - **CHG-HOME-FE-FEATURED**（待立案）：featured 半断裂闭环——FeaturedRow 已请求 modules 但丢弃恒显 trending（FeaturedRow.tsx:149-152 TODO）；需 /home/featured-videos 批量端点（类 top10）+ 前台消费。
 - **CHG-HOME-FE-SHORTCUTS**（待立案）：type_shortcuts 断裂——前台 CategoryShortcuts 静态 ALL_CATEGORIES 不读 home_modules；接线或裁定 slot 退役。
 - **CHG-HOME-THUMB-MD**（待立案，可选）：Thumb 扩 banner-md 120×54 收编（出现第二复用方时；共享契约 Opus）。
@@ -1105,3 +1105,66 @@
    - 范围（4 项）：① `module` 局部变量改名 ② 重新跑 typecheck/lint/test 门禁 ③ 收口 tasks/task-queue/changelog ④ 与首页方案文档一起提交并 push。
    - 验收要点：无行为变化；lint 通过；不暂存既有 `docs/audit/adr-d-status.json`。
    - 完成备注：`use-batch-add.ts` 中 `module` 局部变量改为 `createdModule`，仅解除 `@next/next/no-assign-module-variable`，无行为变化。门禁：`npm run lint` PASS；`npm run typecheck` PASS；`npm run test:changed` 33/33 PASS；`npm run test -- --run` 499 files / 6682 tests PASS。不暂存既有 `docs/audit/adr-d-status.json`。
+
+---
+
+## [SEQ-20260605-05] 首页运营治理实施 — Phase 1 真源与同构预览（治理方案 §13 落地）
+
+- **状态**：🔄 进行中
+- **创建时间**：2026-06-05 20:05
+- **最后更新时间**：2026-06-05 20:20（勘误：TIMEWINDOW 卡取消，8 卡 → 7 卡）
+- **目标**：按 `docs/designs/home-operations-governance-plan_20260605.md` §13 推进实施。本序列承载 Phase 1（真源与同构预览）7 卡；Phase 2–4 卡在 Phase 1 收口后按 ADR 裁定细化登记（防过早细化漂移）。
+- **范围**：ADR 起草（decisions.md）+ /admin/home Banner 统一 + 首页预览聚合端点 + 后台同构画布。
+- **依赖**：CHG-HOME-GOVERNANCE-PLAN ✅（含评审修订 2a4d15a7）；无 BLOCKER。
+- **执行节奏**：ADR 三卡先行（原 `CHG-HOME-GOV-ADR` 6 必裁项 > 5 → 按方案 §9 粒度建议拆 `-A/-B/-C`；全 Opus 起草 + arch-reviewer Opus PASS，新增 admin 端点走 MUST-8）→ 实施卡按 ADR 裁定执行，不得先行落 migration / 端点。
+
+### 任务列表
+
+1. **CHG-HOME-GOV-ADR-A** — Home Curation ADR ①：真源与 schema 裁定（状态：✅ 已完成）
+   - 创建时间：2026-06-05 20:05
+   - 实际开始：2026-06-05 20:05 ｜ 完成时间：2026-06-05 21:05
+   - 建议模型：opus（ADR 产出 + 跨 3+ 消费方 schema 裁定）
+   - 范围（4 项）：① Banner 真源裁定（`home_banners` vs `home_modules.slot='banner'` 去留）+ D-052-9 对账（title/image_url 列处置，方案 §6） ② 时间窗命名分歧处置（**勘误 2026-06-05 20:20**：`home_modules` 已有 `start_at`/`end_at`（migration 050），原"字段结构设计"撤销，改裁"不 rename / 聚合 DTO 统一"；方案 §5.1/§9.1/§13 已同步更正） ③ 热门 shelf 存储裁定（`HomeModuleSlot` 扩枚举 hot_movies/hot_series/hot_anime vs 新表，ADR-052 约束"新增 slot 必须走新 ADR"） ④ ADR-181 草案落 decisions.md + arch-reviewer Opus PASS。
+   - 验收口径：真源与 schema 裁定 ADR-181 经 arch-reviewer Opus PASS 落档 decisions.md，三项必裁全闭环。
+   - 完成备注：ADR-181 Accepted（arch-reviewer Opus CONDITIONAL PASS → 1 BLOCKER + 2 HIGH + 2 MEDIUM + 2 LOW 全 7 条吸收；事实断言逐条核验全对）。D-181-1 home_banners 维持 Hero 唯一真源 + banner slot 两段式冻结退役（CHG-HOME-FE-BANNER 废止）/ D-181-2 D-052-9 列保留 + 论证③ supersede / D-181-3 时间窗不 rename + 聚合 DTO 统一 / D-181-4 slot 枚举 +3 弃新表（compat 第 3 处同源规则 BLOCKER 警示入文）/ D-181-5 边界声明。过程勘误：方案 §9.1 时间窗误判更正（详见上方范围 ② 勘误注）；新增 CHG-HOME-SLOT-EXTEND 前置小卡（本序列卡 9）。docs-only。执行模型: claude-opus-4-8；子代理: arch-reviewer (claude-opus-4-8)。
+
+2. **CHG-HOME-GOV-ADR-B** — Home Curation ADR ②：admin 端点协议（状态：⬜ 待开始）
+   - 建议模型：opus（ADR 产出；MUST-8 新增 admin 端点）
+   - 范围（4 项）：① 方案 §9 表 7 个新 admin 端点契约（路径/方法/参数/响应/错误码） ② section settings 结构定义（含 refreshInterval） ③ 审计要求映射（§11 覆盖面） ④ ADR-182 落档 + arch-reviewer Opus PASS（`verify:endpoint-adr` 前置闭环）。
+   - 依赖：CHG-HOME-GOV-ADR-A（真源裁定决定端点操作对象）。
+
+3. **CHG-HOME-GOV-ADR-C** — Home Curation ADR ③：自动填充策略（状态：⬜ 待开始）
+   - 建议模型：opus（ADR 产出）
+   - 范围（5 项）：① 前置统计 `douban_entries.media_type` null 占比与取值分布（方案 §8.1） ② autofill 四模式 + 整页去重 + 解释模型 ③ 候选快照结构 + refreshInterval 调度（复用 workers 体系，§7.3） ④ 豆瓣/Bangumi 排序策略 + ADR-161 复用对账（§8） ⑤ ADR-183 落档 + arch-reviewer Opus PASS。
+   - 依赖：CHG-HOME-GOV-ADR-A（热门 shelf 存储裁定决定候选落点）；与 -B 可并行。
+
+4. **CHG-HOME-TIMEWINDOW-SCHEMA** — ~~`home_modules` 时间窗 migration~~（状态：❌ 已取消 2026-06-05 20:20）
+   - 取消原因：ADR-A 调研勘误——`home_modules` 自 migration 050 起已有 `start_at`/`end_at` 全链路（CHECK + 部分索引 + queries/类型/Drawer），无需任何 migration；命名分歧处置并入 ADR-181 裁定项 ②。
+
+5. **CHG-HOME-BANNER-UNIFY** — `/admin/home` 纳入 `home_banners` 编辑 + `home_modules.banner` 去留执行（状态：⬜ 待开始）
+   - 建议模型：sonnet（裁定在 ADR-A 完成，本卡只执行）
+   - 依赖：CHG-HOME-GOV-ADR-A。
+
+6. **CHG-HOME-PREVIEW-API** — `GET /admin/home/preview` 完整首页预览聚合端点（状态：⬜ 待开始）
+   - 建议模型：sonnet
+   - 依赖：CHG-HOME-GOV-ADR-B。
+
+7. **CHG-HOME-CANVAS-A** — 后台同构画布：画布布局 + 区块渲染（状态：⬜ 待开始）
+   - 建议模型：sonnet
+   - 依赖：CHG-HOME-PREVIEW-API。
+   - 备注：Phase 1 画布直写正式配置，"保存草稿 / 发布"按钮隐藏至 Phase 4（方案 §13 阶段衔接）。
+
+8. **CHG-HOME-CANVAS-B** — 后台同构画布：Inspector + 环境栏（状态：⬜ 待开始）
+   - 建议模型：sonnet
+   - 依赖：CHG-HOME-CANVAS-A。
+
+9. **CHG-HOME-SLOT-EXTEND** — slot 枚举 +3（hot_movies/hot_series/hot_anime）schema 与类型全量同步（状态：⬜ 待开始；ADR-181 评审 MEDIUM 吸收新增，本卡为 ADR-181 直管前置小卡）
+   - 建议模型：sonnet（结构已由 ADR-181 D-181-4 完全锁定，零设计自由度）
+   - 范围（4 项）：① migration 094（slot inline CHECK + ref_type_slot_compat CHECK 重建，纯增量零阻断） ② `HomeModulesService` SlotEnum +3 + `applyBusinessRules` `compat` 映射 +3（→ `['video']`，**BLOCKER 项不得遗漏**） ③ `packages/types` HomeModuleSlot / routes/home.ts HomeModuleSlotEnum / server-next SLOTS·SLOT_LABEL·VIDEO_SLOTS 同步 +3 ④ `docs/architecture.md` §5.10 两处同步（枚举列表 + CHECK 描述）。
+   - 依赖：CHG-HOME-GOV-ADR-A ✅；与 Phase 1 实施卡可并行，Phase 3 写路径前必须完成。
+
+### Phase 2–4 后续卡登记（Phase 1 收口后细化，卡名先占位）
+
+- Phase 2：`CHG-HOME-CARD-DND` / `CHG-HOME-EMPTY-SLOTS` / `CHG-HOME-IMAGE-GUARD-BANNER`（与 D-052-9 预留 `CHG-HOME-IMAGE-GUARD` 职责区分，见方案 §13）
+- Phase 3：`CHG-HOME-AUTOFILL-CORE-A/-B` / `CHG-HOME-AUTOFILL-REFRESH` / `CHG-HOME-AUTOFILL-DOUBAN` / `CHG-HOME-AUTOFILL-BANGUMI` / `CHG-HOME-AUTOFILL-APPLY`
+- Phase 4：`CHG-HOME-DRAFT-PUBLISH` / `CHG-HOME-AUDIT-ROLLBACK` / `CHG-HOME-CACHE-INVALIDATE`

@@ -6,7 +6,7 @@
 
 ## 当前任务（单任务工作台：同时仅 1 个 🔄 进行中；完成即删卡，历史见 docs/changelog.md）
 
-（空 — 上一任务 CHG-HOME-PRECOMMIT-LINT 已收口 2026-06-05，见 changelog）
+（空 — 上一任务 CHG-HOME-GOV-ADR-A 已收口 2026-06-05，见 changelog；下一卡 CHG-HOME-GOV-ADR-B 待取）
 
 ---
 
