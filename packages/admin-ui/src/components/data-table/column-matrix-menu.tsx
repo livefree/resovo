@@ -6,7 +6,7 @@
  * 真源：
  *   - docs/decisions.md ADR-149（D-149-5 矩阵语义 / D-149-6 过滤格 UI / D-149-7 排序格 UI /
  *     D-149-12 a11y 强制约束）
- *   - docs/audit/datatable-header-redesign-plan.md v3 §3.3 mockup
+ *   - docs/archive/2026Q2/datatable-header-redesign-plan_20260523.md v3 §3.3 mockup（2026-06-05 归档改址）
  *
  * 设计契约：
  *   - 矩阵语义 = 状态指示 + 批量清除；编辑过滤值走列名 ⋯ inline（本组件不内置）

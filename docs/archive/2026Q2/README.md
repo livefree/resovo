@@ -87,6 +87,15 @@
 stub 协议：以上文件移到 archive 但被 ADR / 历史决策引用的，在 root 留 stub
 （同名文件或同名目录含 README.md），指向 archive 版，保持引用链不破。
 
+## 归档清单（2026-06-05，CHORE-DOCS-CLEANUP-20260605）
+
+### 已落地方案 / 已闭档台账（3）
+- `external-metadata-ux-overhaul_20260529.md` — 外部元数据 UX 整改完整设计（ADR-168/170/171/172 + META-07..22 全落地；真源 = decisions.md 对应 ADR）
+- `datatable-header-redesign-plan_20260523.md` — DataTable 表格头重设计方案（ADR-149/150 全系列落地；原 `docs/audit/` 下无日期后缀，归档时补 `_20260523`）
+- `known-failing-tests_20260529.md` — pre-existing 失败单测台账（20 用例修复 + 时区 flaky 加固全闭档）
+
+> 同日大段归档（非本目录）：`docs/archive/changelog/changelog_M-SN-8-to-META_20260605.md` + `docs/archive/task-queue/task-queue_archive_M-SN-7-to-META_20260605.md` + `docs/archive/tasks/tasks-bangumi.md`（bangumi track 看板）。
+
 ## 查找活跃文档
 
 回到 `docs/README.md` 查当前活跃文档索引（SoT + 当前执行上下文 + references + rules）。

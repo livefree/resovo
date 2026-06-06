@@ -1,3 +1,5 @@
+> **ARCHIVED 2026-06-05**（CHORE-DOCS-CLEANUP-20260605）：本方案已全部落地——ADR-149（+2 AMENDMENT）+ ADR-150（+AMENDMENT 2）/ CHG-SN-9-DT-HEADER-REDESIGN-* + CHG-SN-9-DT-AUTOFILTER-* 全系列 ✅（2026-05-25 收口）。真源以 docs/decisions.md ADR-149/150 为准。
+
 # DataTable 表格头重设计方案
 
 > **trigger**：用户复核反馈 `#UR-B1` / `#UR-B2` / `#UR-B3` / `#UR-B4`（docs/audit/user-review-2026-05-23.md）

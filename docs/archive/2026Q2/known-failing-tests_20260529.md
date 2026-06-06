@@ -1,3 +1,5 @@
+> **ARCHIVED 2026-06-05**（CHORE-DOCS-CLEANUP-20260605）：台账全部闭档——6 文件 20 用例已修复（CHORE-TEST-BASELINE-20260529 / 2026-05-30）+ CrawlerClient 时区 flaky 已加固（CHORE-TEST-CRAWLER-TZ-FLAKY / 2026-06-04）。
+
 # 已知 pre-existing 失败单测台账（2026-05-29 基线）
 
 > 记录目的：避免后续任务反复"重新发现"这批与本次改动无关的存量失败。

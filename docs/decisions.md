@@ -18732,7 +18732,7 @@ BANGUMI_USER_AGENT:     z.string().default('resovo/1.0 (https://github.com/...)'
 ## ADR-170：videos.bangumi_status 列 + BangumiStatus 类型 + EnrichmentSummary 对外契约（SEQ-EXT-META-01 / Track external-metadata）
 
 - **状态**：**Accepted**（arch-reviewer claude-opus-4-8 × 1 轮 CONDITIONAL：R1（bangumi-sync 直调 matchAndEnrich → step3 单点写会漏）+ R2（077 已重号 / 026 文件名）+ R3（auto status 须入 applyAutoMatchAtomic 事务）+ Y1–Y4 + A1–A4；**二轮人审 R5**：`enrichmentSummary` 挂载方向修正（admin 路径 `buildEnrichmentSummary` 注入，非 public `mapVideoRow`）+ 补 2 个 barrel 出口（`packages/types/index.ts` / `videos.ts`）；全部已消化）
-- **来源**：设计方案 `docs/designs/external-metadata-ux-overhaul_20260529.md` §3.2/§3.3（ADR-C）。本 ADR 为「外部元数据 UX 整改」契约核心，ADR-171（事件/通知）、ADR-172（EnrichmentBadge 组件）依赖其类型，**须先 Accepted**。
+- **来源**：设计方案 `docs/archive/2026Q2/external-metadata-ux-overhaul_20260529.md` §3.2/§3.3（ADR-C）。本 ADR 为「外部元数据 UX 整改」契约核心，ADR-171（事件/通知）、ADR-172（EnrichmentBadge 组件）依赖其类型，**须先 Accepted**。
 
 ### 背景
 
@@ -18824,7 +18824,7 @@ BANGUMI_USER_AGENT:     z.string().default('resovo/1.0 (https://github.com/...)'
 ## ADR-172：EnrichmentBadge 共享组件 API 契约（SEQ-EXT-META-E / Track external-metadata）
 
 - **状态**：Accepted（arch-reviewer claude-opus-4-8 PASS；Props 契约强制 Opus 评审，CLAUDE.md 共享组件 API 契约）
-- **来源**：设计方案 `docs/designs/external-metadata-ux-overhaul_20260529.md` §3.4/§3.5（ADR-E）。本 ADR 依赖 ADR-170（`EnrichmentSummary` 类型 + `BangumiStatus`）已 Accepted；为「外部元数据 UX 整改」P2 共享层，仅建组件 + 契约 + 单测，不接入 4 消费面（归 P3）。
+- **来源**：设计方案 `docs/archive/2026Q2/external-metadata-ux-overhaul_20260529.md` §3.4/§3.5（ADR-E）。本 ADR 依赖 ADR-170（`EnrichmentSummary` 类型 + `BangumiStatus`）已 Accepted；为「外部元数据 UX 整改」P2 共享层，仅建组件 + 契约 + 单测，不接入 4 消费面（归 P3）。
 
 ### 背景
 
@@ -18951,7 +18951,7 @@ BANGUMI_USER_AGENT:     z.string().default('resovo/1.0 (https://github.com/...)'
 ## ADR-168：外部数据源凭证统一管理 + Secret Redaction 协议（SEQ-EXT-META-A / Track external-metadata）
 
 - **状态**：**Accepted**（arch-reviewer claude-opus-4-8 × 1 轮起草 + 自审：D-168-1..8 全部锁定无待定；覆盖现存 douban_cookie / notification_webhook_secret 明文隐患 + 通用化多源；无新依赖、无新 admin route）
-- **来源**：设计方案 `docs/designs/external-metadata-ux-overhaul_20260529.md` §2.2/§2.3/§2.4 + §13 ADR-168 骨架 + §11.1 凭证存储安全决策。本 ADR 为「外部元数据 UX 整改」P1 地基。用户要求：API key 不能仅靠 .env.local 明文，需设置页配置（bangumi 现在 / tmdb 以后）。
+- **来源**：设计方案 `docs/archive/2026Q2/external-metadata-ux-overhaul_20260529.md` §2.2/§2.3/§2.4 + §13 ADR-168 骨架 + §11.1 凭证存储安全决策。本 ADR 为「外部元数据 UX 整改」P1 地基。用户要求：API key 不能仅靠 .env.local 明文，需设置页配置（bangumi 现在 / tmdb 以后）。
 
 ### 背景
 

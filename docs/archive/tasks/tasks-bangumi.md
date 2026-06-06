@@ -1,3 +1,5 @@
+> **ARCHIVED 2026-06-05**（CHORE-DOCS-CLEANUP-20260605）：bangumi track 已于 2026-05-29 集成 main（Bangumi PR + SEQ-20260529-01 follow-up；track 分支/worktree 已删除）。本文件为 track 任务看板历史快照。
+
 # Resovo（流光） — Track bangumi 任务看板
 
 > Track: bangumi
