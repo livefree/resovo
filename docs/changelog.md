@@ -1995,3 +1995,20 @@
 - **新增依赖**：无
 - **数据库变更**：无
 - **注意事项**：① **Update 防护为 ADR-181 冻结意图的实施级推演**（ADR 字面只裁 Create 拒绝；Drawer 编辑总携带 slot，故防护必须区分"改为 banner"vs"原值回传"，在 service 层比较 before.slot）；② 桥接层暂无 UI 消费方（-B 卡接线）；/admin/home banner tab 现状：新建 422 + message 指引（中间态，-B 替换 tab 后消除）；③ 门禁：typecheck/lint 绿 + 测试 49/49 + verify:adr-contracts 4 绿 + E2E admin 域（无 banner 用例，回归性选跑）。
+
+## [CHG-HOME-BANNER-UNIFY-B] /admin/home Banner tab → home_banners 编辑器 UI
+- **完成时间**：2026-06-05
+- **记录时间**：2026-06-06 00:10
+- **执行模型**：claude-opus-4-8
+- **子代理**：无
+- **修改文件**：
+  - `apps/server-next/src/app/admin/home/_client/BannerOpsSection.tsx` — 新增：banner tab 主区编辑器（home_banners 列表 + dnd 拖拽排序（orders+sortOrder body）+ 启停 + 删除确认 Modal + 创建末尾 sortOrder 注入；消费 -A 桥接层 6 端点）
+  - `apps/server-next/src/app/admin/home/_client/BannerCard.tsx` — 新增：Banner 单卡（HomeModuleCard 同范式：handle+序号+120×54 横图+标题降级链+meta+状态 Pill+启停/编辑/删除）；deriveBannerStatus 对齐 deriveModuleStatus variant 口径（D-181-3 字段映射）
+  - `apps/server-next/src/app/admin/home/_client/BannerDrawer.tsx` — 新增：创建/编辑表单（title 多语言/imageUrl 必填/linkType+linkTarget/时间窗对称往返/isActive/brand；时区往返与 HomeModuleDrawer 同实现，第 3 消费方时抽 lib）
+  - `apps/server-next/src/app/admin/home/_client/HomeOpsClient.tsx` — banner tab 分支：渲染 BannerOpsSection + 冻结存量 home_modules 清理区（可编辑/删除/启停，不可新建不可排序）；顶部「+ 新建模块」banner tab 隐藏；右栏 PreviewPanel banner tab 隐藏（预览的是冻结数据会误导）
+  - `apps/server-next/src/app/admin/home/_client/HomeModuleDrawer.tsx` — 顺带修复 SLOT-EXTEND 遗漏：SLOT_OPTIONS +3 hot slot（数组非 Record 编译不强制故漏检）
+  - `tests/unit/components/server-next/admin/home/BannerOpsSection.test.tsx` — 新增 11 用例（加载/错误重试/空态/列表/状态派生×2/启停/删除确认+取消/新建+sortOrder/必填校验/编辑预填）
+  - `tests/unit/components/server-next/admin/home/HomeOpsClient.test.tsx` — banners API mock + 3 既有用例适配新行为（error 态切 featured 断言/批量添加改 featured 载体/新建按钮 banner 隐藏断言）
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：① 运营入口自此统一：server-next /admin/home Banner tab 即 home_banners（Hero 真源）唯一推荐编辑入口（D-181-1.3），v1 banners UI 降级为维护期参考、随 v1 退场；② 冻结存量区无 DndContext——useSortable 在缺省 context 下安全降级（拖拽 handle 无效果，符合"不可排序"预期）；③ banner tab 右栏预览隐藏，Hero 真实效果走「预览前台」；④ CHG-HOME-BANNER-UNIFY 两子卡全部收口 → D-181-1 冻结裁定全量落地。

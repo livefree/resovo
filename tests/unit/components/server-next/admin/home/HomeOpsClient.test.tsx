@@ -55,6 +55,17 @@ vi.mock('../../../../../../apps/server-next/src/lib/home-modules/api', () => ({
   fetchTop10AutoFill: vi.fn().mockResolvedValue([]),
 }))
 
+// ── mock banners API（CHG-HOME-BANNER-UNIFY-B：banner tab → BannerOpsSection）──
+// 默认空列表；BannerOpsSection 专项测试见 BannerOpsSection.test.tsx
+vi.mock('../../../../../../apps/server-next/src/lib/banners/api', () => ({
+  listBanners: vi.fn().mockResolvedValue({ data: [], pagination: { total: 0, page: 1, limit: 100, hasNext: false } }),
+  getBanner: vi.fn(),
+  createBanner: vi.fn(),
+  updateBanner: vi.fn(),
+  deleteBanner: vi.fn(),
+  reorderBanners: vi.fn(),
+}))
+
 // ── mock picker-fetcher（CHG-HOME-UX-04-B：useVideoMetaMap 取数通道）──
 // 默认返回成功 meta（避免 null 误触发红 pill 影响既有断言）；红 pill 用例单独覆写
 const mockFetchPickerById = vi.fn()
@@ -132,6 +143,10 @@ describe('HomeOpsClient — error 态 + retry', () => {
     // mockRejectedValue（持久 reject）覆盖初次 + React 可能的 effect 重跑
     mockedList.mockRejectedValue(new Error('network failure'))
     render(<HomeOpsClient />)
+
+    // CHG-HOME-BANNER-UNIFY-B：默认 banner tab 走 BannerOpsSection（不渲染 module
+    // ErrorState），切到 featured tab 断言 module 加载错误态
+    fireEvent.click(screen.getByText('精选推荐'))
 
     // 等待 ErrorState 渲染（含 "加载失败" 标题）
     await waitFor(() => {
@@ -419,9 +434,11 @@ describe('HomeOpsClient — 删除 Modal 流程（window.confirm 退役）', () 
 // ── CHG-HOME-UX-07：页内批量添加入口 ───────────────────────────────────────
 
 describe('HomeOpsClient — 批量添加入口', () => {
-  it('video 类 slot（banner）显示「+ 添加视频」→ 点击打开 BatchAddVideosModal', async () => {
+  it('video 类 slot（featured）显示「+ 添加视频」→ 点击打开 BatchAddVideosModal', async () => {
+    // CHG-HOME-BANNER-UNIFY-B：banner tab 已切 BannerOpsSection（无批量添加），改用 featured 验证
     mockedList.mockResolvedValue({ data: [MODULE_FIXTURE], total: 1, page: 1, limit: 100 })
     render(<HomeOpsClient />)
+    fireEvent.click(screen.getByText('精选推荐'))
     await waitFor(() => {
       expect(screen.queryByTestId('home-batch-add-btn')).not.toBeNull()
     })
@@ -512,10 +529,15 @@ describe('HomeOpsClient — HOME-2 page head actions', () => {
     expect(screen.getByTestId('home-preview-frontend-btn').textContent).toContain('预览前台')
   })
 
-  it('渲染「+ 新建模块」按钮（data-testid="home-module-create-btn"）', () => {
+  it('「+ 新建模块」按钮：banner tab 隐藏（slot 冻结），featured tab 渲染（CHG-HOME-BANNER-UNIFY-B）', async () => {
     mockedList.mockResolvedValue({ data: [], total: 0, page: 1, limit: 100 })
     render(<HomeOpsClient />)
-    expect(screen.getByTestId('home-module-create-btn')).not.toBeNull()
+    // 默认 banner tab：新建模块按钮隐藏（新建走 BannerOpsSection「+ 新建 Banner」）
+    expect(screen.queryByTestId('home-module-create-btn')).toBeNull()
+    fireEvent.click(screen.getByText('精选推荐'))
+    await waitFor(() => {
+      expect(screen.getByTestId('home-module-create-btn')).not.toBeNull()
+    })
     expect(screen.getByTestId('home-module-create-btn').textContent).toContain('新建模块')
   })
 })

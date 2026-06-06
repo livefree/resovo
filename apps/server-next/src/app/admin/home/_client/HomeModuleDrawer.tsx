@@ -29,11 +29,17 @@ import { ModuleImageField } from './ModuleImageField'
 
 // ── 常量 ─────────────────────────────────────────────────────────
 
+// CHG-HOME-BANNER-UNIFY-B 顺带修复 SLOT-EXTEND 遗漏：+3 hot slot（数组非 Record，
+// 编译不强制故漏检；ADR-181 D-181-4）。banner 项保留供存量行编辑回显（Create 已被
+// service 冻结拒绝，D-181-1.2(a)）。
 const SLOT_OPTIONS: readonly AdminSelectOption[] = [
   { value: 'banner', label: '轮播广告 (banner)' },
   { value: 'featured', label: '精选推荐 (featured)' },
   { value: 'top10', label: 'TOP 10' },
   { value: 'type_shortcuts', label: '类型快捷方式 (type_shortcuts)' },
+  { value: 'hot_movies', label: '热门电影 (hot_movies)' },
+  { value: 'hot_series', label: '热播剧集 (hot_series)' },
+  { value: 'hot_anime', label: '热门动漫 (hot_anime)' },
 ]
 
 const BRAND_SCOPE_OPTIONS: readonly AdminSelectOption[] = [

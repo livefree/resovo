@@ -51,6 +51,8 @@ import { useVideoMetaMap } from '@/lib/home-modules/use-video-meta-map'
 import { useHomeAddEntry } from '@/lib/home-modules/use-home-add-entry'
 import { HOME_ENTRY_SOURCE_META } from '@/lib/home-modules/entry'
 import { VIDEO_SLOTS } from '@/lib/home-modules/types'
+// CHG-HOME-BANNER-UNIFY-B / ADR-181 D-181-1：banner tab → home_banners 编辑器
+import { BannerOpsSection } from './BannerOpsSection'
 import { HomeModuleCard } from './HomeModuleCard'
 import { HomeModuleDrawer } from './HomeModuleDrawer'
 import { HomePreviewPanel } from './HomePreviewPanel'
@@ -273,14 +275,18 @@ export function HomeOpsClient() {
             >
               预览前台
             </AdminButton>
-            <AdminButton
-              variant="primary"
-              size="sm"
-              onClick={() => { setEditingModule(null); setDrawerOpen(true) }}
-              data-testid="home-module-create-btn"
-            >
-              + 新建模块
-            </AdminButton>
+            {/* CHG-HOME-BANNER-UNIFY-B：banner tab 隐藏（banner slot 已冻结 Create，
+                新建走 BannerOpsSection「+ 新建 Banner」） */}
+            {activeSlot !== 'banner' && (
+              <AdminButton
+                variant="primary"
+                size="sm"
+                onClick={() => { setEditingModule(null); setDrawerOpen(true) }}
+                data-testid="home-module-create-btn"
+              >
+                + 新建模块
+              </AdminButton>
+            )}
           </>
         }
         data-testid="home-ops-page-header"
@@ -321,7 +327,38 @@ export function HomeOpsClient() {
 
       <div style={BODY_SPLIT_STYLE}>
         <div style={SLOT_SECTION_STYLE}>
-          {loading
+          {/* CHG-HOME-BANNER-UNIFY-B / ADR-181 D-181-1：banner tab → home_banners 编辑器
+              （真源统一）；下方保留已冻结的 home_modules 存量清理区（若有，编辑/删除/启停
+              保留但不可新建不可排序，D-181-1.2(a)） */}
+          {activeSlot === 'banner' ? (
+            <>
+              <BannerOpsSection />
+              {!loading && modules.length > 0 && (
+                <AdminCard
+                  surface="plain"
+                  padding="md"
+                  header={{
+                    title: '已冻结的 home_modules 存量配置',
+                    subtitle: `${modules.length} 条 · 不影响前台首屏（真源已统一为 home_banners）· 建议删除清理`,
+                  }}
+                  data-testid="banner-frozen-modules-card"
+                >
+                  {modules.map((module, index) => (
+                    <HomeModuleCard
+                      key={module.id}
+                      module={module}
+                      index={index}
+                      videoMeta={module.contentRefType === 'video' ? metaMap.get(module.contentRefId) : undefined}
+                      pendingId={pendingId}
+                      onEdit={(m) => { setEditingModule(m); setDrawerOpen(true) }}
+                      onDelete={(id) => setDeleteTarget(modules.find(m => m.id === id) ?? null)}
+                      onPublishToggle={(id, enabled) => void handlePublishToggle(id, enabled)}
+                    />
+                  ))}
+                </AdminCard>
+              )}
+            </>
+          ) : loading
             ? <LoadingState variant="skeleton" />
             : error
               ? (
@@ -409,7 +446,11 @@ export function HomeOpsClient() {
                 )
           }
         </div>
-        <HomePreviewPanel slot={activeSlot} modules={modules} videoMetaMap={metaMap} autoFillItems={top10AutoFill} />
+        {/* banner tab：右栏预览隐藏——PreviewPanel 预览的是 home_modules（已冻结，
+            前台不消费），保留会误导运营；Hero 真实预览走「预览前台」按钮 */}
+        {activeSlot !== 'banner'
+          ? <HomePreviewPanel slot={activeSlot} modules={modules} videoMetaMap={metaMap} autoFillItems={top10AutoFill} />
+          : <div aria-hidden="true" />}
       </div>
 
       <HomeModuleDrawer
