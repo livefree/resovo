@@ -6,7 +6,7 @@
 
 ## 当前任务（单任务工作台：同时仅 1 个 🔄 进行中；完成即删卡，历史见 docs/changelog.md）
 
-（空 — 上一任务 CHG-HOME-GOV-ADR-B 已收口 2026-06-05，见 changelog；下一卡 CHG-HOME-GOV-ADR-C 待取）
+（空 — 上一任务 CHG-HOME-GOV-ADR-C 已收口 2026-06-05，见 changelog；ADR 三卡全收口，下一卡 CHG-HOME-BANNER-UNIFY / CHG-HOME-PREVIEW-API / CHG-HOME-SLOT-EXTEND 待取）
 
 ---
 

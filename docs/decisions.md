@@ -20488,3 +20488,118 @@ export type HomeSectionKey =
 - settings 多品牌 override（brand_scope/brand_slug 列 + UNIQUE(section, brand_slug)）：需求出现时走 ADR amendment。
 - CHG-HOME-FE-SHORTCUTS 接线卡维持待立案（D-182-6.2）。
 - **技术债**（arch-reviewer 吸收）：CHG-HOME-BANNER-UNIFY 落地后，评估给 v1 legacy `PATCH /admin/banners/reorder` 补 audit 或冻结写能力，消除「同列两写路径审计不对等」（D-182-4.6 双写路径裁定的残留面）。
+- **端点 #4 Response additive 扩展登记（ADR-183 D-183-7.3 回写）**：顶层增 `gaps?: ContentGap[]`（`include_filtered=true` 时返回，缺口 top-N，独立 DTO 无 videoId）——纯增量非 break，与 D-182-4.4 origin 开放口径同款演进方式。
+
+---
+
+## ADR-183：Home Curation 自动填充策略 — 候选快照表 + 定频重算调度 + 豆瓣/Bangumi 排序与分池 + ADR-161 复用对账（SEQ-20260605-05 / CHG-HOME-GOV-ADR-C）
+
+- **日期**：2026-06-05
+- **状态**：**Accepted**（arch-reviewer Opus CONDITIONAL PASS → 2 BLOCKER（缺口条目违反 #4 DTO 必填契约 / 实时计算违反只读快照语义）+ 3 HIGH（429 判定机制 / §8.1 勘误义务 / 去重解释失真）+ 4 MEDIUM + 2 LOW **全 11 条吸收**后定档；代码事实断言逐条核验全数一致）
+- **决策者**：主循环 claude-opus-4-8 / arch-reviewer (claude-opus-4-8)
+- **关联**：ADR-181（真源：hot_* slot 只存 pinned）/ ADR-182（端点契约 #4/#5/#7 DTO 已锁，本 ADR 填充存储与计算）/ ADR-161（决策 7 BangumiSeedService 反向建库）/ ADR-052（metadata/JSONB 守则）/ `docs/designs/home-operations-governance-plan_20260605.md` §7/§8/§11/§12
+- **对应交付**：Phase 3（CHG-HOME-AUTOFILL-CORE-A/-B / CHG-HOME-AUTOFILL-REFRESH / CHG-HOME-AUTOFILL-DOUBAN / CHG-HOME-AUTOFILL-BANGUMI / CHG-HOME-AUTOFILL-APPLY）
+
+### 背景（含 §8.1 前置统计实测，2026-06-05 dev DB 只读）
+
+| 数据面 | 实测 | 影响 |
+|---|---|---|
+| `external_data.douban_entries` | **140,502 行**；`media_type` null 占比 **0%**——但取值 **100% = 'movie'**（`scripts/import-douban-dump.ts:139` 导入时硬编码 `'movie'`，dump 实为豆瓣影视混合数据集） | **media_type 不可作为电影/剧集分池依据**（剧集被误标 movie）；方案 §8.1 担忧的"null 占比过高"不成立，但"标记不可信"更甚 |
+| douban 排序信号 | `douban_votes` 非空 38,562（27.4%）；`rating` 非空 25,968（18.5%） | 排序需对缺失信号降权兜底，不可假定全量可用 |
+| `external_data.bangumi_entries` | **500 行**；`rank` 非空 494（98.8%）；`nsfw=true` 0 行；`rating` 100% | rank 主排序可行；数据量小，候选池有限 |
+| 映射桥 | `video_external_refs`：douban 194 / bangumi 214；`catalog_external_refs`：douban 98 / bangumi 174 | **初期 full_auto 实际产能 = 已映射且可播的站内视频**（每源约百级）；候选不足时按 §7.1 通用算法走站内 trending 兜底，不空窗 |
+
+### 决策要点
+
+**D-183-1 分池信号改裁：映射后站内 `videos.type` 分池，不依赖豆瓣 `media_type`**
+
+1. 方案 §8.1「电影与剧集分开候选池」的**意图保留、实现信号改裁**：候选必须映射到站内可播视频才能上前台（方案 §8.1 既有约束）→ **三池统一**按映射后 `videos.type` 分池（`movie` → hot_movies；`series` → hot_series；`anime` → hot_anime，候选源 Bangumi 见 D-183-4），该信号由站内审核链路保证可信（Bangumi 侧 BangumiSeedService 占位 type 恒 `'anime'`，与本口径自洽）。
+2. 豆瓣 `media_type` 降级为**缺口候选的提示性展示字段**，不参与分池判定；「类型无法确认时进入候选审核」条款自然消解（站内 type 恒可确认）。
+3. dump 重导入时推断真实 media_type（按 dump 源字段）列为**可选 follow-up**（CHG-DOUBAN-MEDIATYPE-REIMPORT，待立案），不阻塞本序列——分池正确性已不依赖它。
+4. **治理方案 §8.1 勘误同步义务**（arch-reviewer HIGH 吸收）：本裁定推翻方案 §8.1 的 media_type 分池实现假设（意图保留），方案 §8.1 须沿用 §9.1 勘误块先例同步标注「media_type 分池假设作废，改裁站内 videos.type 分池（ADR-183 D-183-1）」——勘误回写随本 ADR 卡（CHG-HOME-GOV-ADR-C）当卡完成，消除方案与 ADR 长期矛盾。
+
+**D-183-2 候选快照存储：新表 `home_autofill_snapshots`（migration 096）**
+
+| 列 | 类型 | 约束 | 说明 |
+|---|---|---|---|
+| id | UUID | PK DEFAULT gen_random_uuid() | — |
+| section | TEXT | NOT NULL CHECK（HomeSectionKey 7 值，与 095 同集） | 快照归属区块 |
+| generated_at | TIMESTAMPTZ | NOT NULL DEFAULT NOW() | 即端点 #4 `snapshotAt` |
+| trigger | TEXT | NOT NULL CHECK（'scheduled' / 'manual'） | 定时 vs 手动刷新（端点 #7） |
+| policy_version | TEXT | NOT NULL | 策略代码版本常量（D-183-5） |
+| settings_snapshot | JSONB | NOT NULL | 重算时的 section settings 快照（审计回溯链，方案 §11.2） |
+| candidates | JSONB | NOT NULL DEFAULT '[]' | `AutofillCandidate[]`（ADR-182 D-182-4.4 DTO 同构，含 filtered 条目） |
+| gaps | JSONB | NOT NULL DEFAULT '[]' | `ContentGap[]` 缺口 top-N（D-183-7.3；独立 DTO 无 videoId，与候选同时序入快照） |
+| created_at | TIMESTAMPTZ | NOT NULL DEFAULT NOW() | — |
+
+- **candidates 走 JSONB 数组而非行级子表的论证**：快照整份生成、整份消费（端点 #4 读该 section 最新一份）、不可变（写后零 UPDATE）、无行级 WHERE / 索引需求——不触犯 ADR-052 metadata 守则（守则禁的是"需要 WHERE 过滤的关键字段"入 JSONB）；行级子表会引入无消费方的 JOIN 面。
+- **保留策略**：每 section 保留最近 **10** 份，worker 写入新快照后同事务清理超龄份（`DELETE ... WHERE id NOT IN (SELECT id ... ORDER BY generated_at DESC LIMIT 10)`）；7 section × 10 = 行数上限 70，体积可控。回滚 diff 展示（方案 §11.2）在保留窗口内可用。清理不并发的前提 = D-183-3.3 单 section job 串行化（jobId 幂等键），假设显式化、不另加锁（arch-reviewer LOW 吸收）。
+- 索引：`(section, generated_at DESC)`——端点 #4 取最新快照的唯一查询路径。
+- **section CHECK 同步义务**（arch-reviewer MEDIUM 吸收）：本表 section CHECK 与 migration 095（home_section_settings）的 section CHECK 为两处同源字面量——`HomeSectionKey` 扩值时必须**同卡同步两表 CHECK**（ADR-181 compat BLOCKER 同款教训）；D-182-2「新增 section 必须走新 ADR」为兜底闸门。
+- 快照属系统产物，写入**不计 admin audit**（方案 §11.2 已裁；人工触发的 refresh 在端点层已记 `home_section.refresh_candidates`，D-182-5）。
+
+**D-183-3 重算调度：`homeAutofillQueue` + `homeAutofillScheduler`（复用 Bull + scheduler 既有范式，零新依赖）**
+
+1. **新增 Bull 队列** `homeAutofillQueue`（`lib/queue.ts` 追加，与 crawler / enrichment / maintenance 等按域分队列范式一致；不复用 maintenanceQueue——autofill 重算含映射 JOIN + 排序计算，独立队列隔离背压）。
+2. **新增** `apps/api/src/workers/homeAutofillScheduler.ts`：单一 tick（**5 分钟**，常量）扫描 `home_section_settings` 中 `refresh_interval_minutes IS NOT NULL` 且 `autofill_mode != 'manual_only'` 的 section，比对该 section 最新快照 `generated_at + interval ≤ NOW()` → 入队重算 job。**不为每 section 建独立 timer**——interval 运营改配后下一 tick 即生效，无需重启；tickRunning 守卫 + lastRunAt 记录沿用 maintenanceScheduler 范式。
+3. **job 粒度 = 单 section**（`{ kind: 'recalculate', section, trigger }`），**入队幂等与 429 判定为两个协同机制**（arch-reviewer HIGH 吸收，非"同一判定"）：
+   - **入队幂等**：Bull jobId = `autofill:${section}` 固定键（enrichmentWorker `enrich-${videoId}` 同先例）——`queue.add` 命中已存在 jobId 时静默跳过，防 scheduler tick 与手动触发竞态重复入队；`removeOnComplete` 完成即释放 jobId，是定频重入的前提。
+   - **端点 #7 的 429**：必须**主动检查**——`queue.getJob('autofill:${section}')` + `getState()` ∈ {active, waiting, delayed} → 429 RATE_LIMITED；**不得依赖 add() 去重副作用**（add 命中去重不抛错、端点拿不到任何信号）。
+4. **worker** `homeAutofillWorker.ts`：执行候选生成（D-183-4 排序 + D-183-6 去重）→ 写快照（D-183-2）→ `full_auto` section 不写任何运营表（前台展示由聚合层读最新快照拼装，ADR-181 D-181-4.3「自动候选不落 home_modules」）。
+5. 重算 ≠ 生效（方案 §7.3.4）：`manual_plus_autofill` / `suggest_only` 仅更新候选池；`full_auto` 下个聚合读取周期生效。
+6. **重试与降级语义**（arch-reviewer MEDIUM 吸收）：`homeAutofillQueue` defaultJobOptions 对齐 maintenanceQueue 低频后台范式（`attempts: 2` + fixed 30s backoff）；Redis/Bull 不可用——scheduler 入队失败记 warn 不阻塞进程（聚合层回落最近一份快照或 trending 兜底，与 D-183-1 候选不足口径一致）；端点 #7 入队失败返回 500 INTERNAL_ERROR，**不得静默成功**（参 `ensureCrawlerQueueReady` 范式）。
+
+**D-183-4 排序策略（信号集 + 权重定版，权重不开放运营调参）**
+
+1. **豆瓣（hot_movies / hot_series）**：`score = 0.4·norm_votes + 0.3·rating/10 + 0.15·recency + 0.15·source_health − penalties`；`norm_votes = ln(1+votes)/ln(1+max_votes)`（对数压缩防头部碾压）；votes / rating 缺失按 0 计入（27.4%/18.5% 非空实测，缺失即自然降权）；recency = 站内视频最近上线/更新衰减；source_health = 可播源健康度；penalties = 图片缺失 / 源不稳定。
+2. **Bangumi（hot_anime）**：主序 `rank ASC`（494/500 可用），rank 缺失项按 `rating DESC` 排在有 rank 项之后；`nsfw=true` 硬过滤（当前 0 行，过滤仍必须实装——增量数据防线，ADR-161 Y5 同口径）；惩罚项同豆瓣。
+3. **featured / top10 自动补位**：站内 trending 信号（复用 `listTrendingVideos` 链路），不引豆瓣/Bangumi。
+4. **权重为代码常量**（随 POLICY_VERSION 演进），**首版不开放运营调参**——settings JSONB 不存权重（避免 settings 复杂化 + 权重漂移不可审计；调权需求出现时升 policy_version 走代码评审）。**与方案 §7.3「不写死值」的边界对齐声明**（arch-reviewer MEDIUM 吸收）：§7.3 约束的是运营可配的**节奏/模式参数**（refreshInterval / autofillMode，已落 settings 列）；算法权重属**策略代码**、随 policy_version 演进且变更可审计（D-183-5），不属"配置写死"范畴——CLAUDE.md「不得写死值」红线针对类型/路由/配置/筛选条件的可扩展性，非算法常量。
+5. 通用过滤链（方案 §7.1 确定性过滤项）：is_published / 前台可见 / 非成人 / ≥1 可播源 / 图片可用或有 fallback / brand·locale 可展示。被过滤候选**保留在快照内**（`filtered: true` + `filterReason`），供端点 #4 `include_filtered` 解释展示（方案 §2.3 自动可解释）。跨区块去重**不在快照阶段执行**（D-183-6 改裁）。
+
+**D-183-5 policyVersion 语义**
+
+- `POLICY_VERSION` 为代码内字符串常量（初值 `'hp-v1'`），**策略语义变更（信号集 / 权重 / 过滤规则）时必须递增**并在 changelog 标注；快照携带 policy_version + settings_snapshot → 「某时刻前台为何展示 X」= 快照（系统产物）+ settings audit（人工操作，D-182-5）双链闭环（方案 §11 审计锚定）。
+- 端点 #4 透出 policyVersion（ADR-182 已锁 DTO）；origin 开放字符串新值（如未来 `'tmdb'`）随 policy_version 递增引入（D-182-4.4 不构成 DTO break）。
+
+**D-183-6 跨区块去重：快照不做、聚合层唯一权威（arch-reviewer HIGH「解释失真」吸收改裁）**
+
+1. 初稿"快照级 best-effort 标记 `occupied_by_<section>`"存在**解释失真**：各 section 快照时序漂移（A 快照早于 B），快照内的占用标记注定可能与聚合层整页权威结果矛盾——运营在端点 #4 看到的过滤解释与 preview / 前台实际渲染打架。改裁：
+   - **快照阶段只做单区块确定性过滤**（D-183-4.5 过滤链：is_published / 可播源 / nsfw 等），**不做跨区块去重**，快照内**不产生** `occupied_by_*` filterReason——消除失真源头。
+   - **聚合层唯一权威**：`HomeCurationService` 整页输出（preview / 前台）时一次性计算跨区块去重（方案 §7.1 既裁「统一在聚合层按整页一次性计算」），按前台渲染顺序（HomeSectionKey 枚举序）先到先得；`allow_duplicates = true` 的 section 豁免。
+   - 端点 #4（读快照）**不透出跨区块占用状态**；运营需要看占用结果时以 preview（端点 #1，聚合权威输出）为准——两端点职责显式分离：#4 = 候选池与单区块过滤解释，#1 = 整页最终形态。
+2. 去重纯函数仍单一实现（聚合层调用），未来若快照阶段需要预估占用（性能优化），必须复用同一纯函数且标注非权威——当前不实现。
+
+**D-183-7 ADR-161 复用对账 + 豆瓣反向建库裁定**
+
+1. **Bangumi 缺口 → 建库**：未映射的 Bangumi 条目进「内容缺口」列表（治理层只读透出）；建库动作**复用 ADR-161 决策 7 `BangumiSeedService`**（nsfw=false 默认过滤 + rank/year 过滤既有实现），不新建平行链路——与方案 §8.2 一致，零新增。
+2. **豆瓣反向建库：首版不建**（履行方案 §8.1 留裁义务）。论证：豆瓣缺口池 ≈ 14 万 − 194 映射 ≈ **海量**，自动建库会批量制造无源空壳视频（违反价值排序 1 正确性——站内视频必须有可播源支撑）；裁定缺口列表仅透出**热度 top-N**（N=50，按 D-183-4.1 分数）供人工选择性建库参考；DoubanSeedService 是否立项待运营消化缺口节奏后另起 ADR。
+3. **缺口列表落点（arch-reviewer 双 BLOCKER 吸收改裁）**：初稿"不进快照、聚合层实时计算、塞 include_filtered 视图"存在两处违反——缺口条目无 videoId，违反 ADR-182 D-182-4.4 `AutofillCandidate.videoId` 必填契约；实时计算违反端点 #4「只读消费快照」语义。改裁：
+   - 缺口 top-N **随重算入快照**（`home_autofill_snapshots.gaps` JSONB 列，D-183-2）——与候选同时序、同 snapshotAt，端点 #4 保持纯快照只读。
+   - 独立 DTO **不复用 AutofillCandidate**：`ContentGap = { provider（'douban'|'bangumi' 开放字符串）, externalId, title, coverUrl?, score, rank?, mediaTypeHint? }`——无 videoId / videoSummary 字段，结构上不可能与候选混淆。
+   - 端点 #4 Response **additive 扩展**：顶层增 `gaps?: ContentGap[]`（`include_filtered=true` 时返回）——对 ADR-182 已锁 DTO 为纯增量非 break，**回写 ADR-182 follow-up 登记**该 additive 扩展（与 D-182-4.4 origin 开放口径同款演进方式）；**不新增端点**。
+   - 缺口仅进 admin 视图，不进前台（方案 §15 非目标「不把未映射条目直接展示到前台」维持）。
+
+**D-183-8 边界声明（本 ADR 不裁项）**
+
+1. 端点请求/响应契约 → ADR-182 已锁（本 ADR 零端点、零错误码、零 audit 枚举新增）。
+2. 候选应用为 pinned 的写路径（端点 #5 实装）→ CHG-HOME-AUTOFILL-APPLY 按 ADR-182 D-182-4.5 执行。
+3. 公开首页消费切换（前台 ShelfRow → 聚合）与缓存失效 → Phase 3 末实施卡 + Phase 4。
+
+### 影响面清单（实施卡映射）
+
+| # | 影响点 | 实施卡 |
+|---|---|---|
+| 1 | migration 096：home_autofill_snapshots 表（编号协调：假定 094/095 已占用，改号顺延） | CHG-HOME-AUTOFILL-CORE-B |
+| 2 | `lib/queue.ts` + `homeAutofillQueue`；`workers/homeAutofillScheduler.ts` + `homeAutofillWorker.ts` 新建 | CHG-HOME-AUTOFILL-REFRESH |
+| 3 | 候选生成 service（排序 + 过滤 + 去重纯函数）+ 解释模型 | CHG-HOME-AUTOFILL-CORE-A |
+| 4 | 豆瓣候选源（分池走 videos.type）/ Bangumi 候选源（rank + nsfw 过滤 + 缺口 top-N） | CHG-HOME-AUTOFILL-DOUBAN / CHG-HOME-AUTOFILL-BANGUMI |
+| 5 | 端点 #4/#5/#7 实装（契约 ADR-182 + #4 additive `gaps` 扩展） | CHG-HOME-AUTOFILL-CORE-B（#4）/ CHG-HOME-AUTOFILL-APPLY（#5）/ CHG-HOME-AUTOFILL-REFRESH（#7） |
+| 6 | `docs/architecture.md` 新表 + worker 清单同步 | 与 #1/#2 同卡 |
+| 7 | 治理方案 §8.1 勘误同步（media_type 分池假设作废 → videos.type，D-183-1.4） | 本卡（CHG-HOME-GOV-ADR-C）当卡完成 |
+| 8 | **测试义务**（arch-reviewer MEDIUM 吸收）：去重纯函数 + 排序 score 计算单测（缺失信号按 0 / norm_votes 对数压缩边界 / rank 缺失排后）；快照写入 + 清理同事务断言；nsfw 硬过滤断言（当前 0 行仍须测试守护增量防线）；429 主动状态检查单测 | 各对应实施卡 |
+
+### follow-up 登记
+
+- **CHG-DOUBAN-MEDIATYPE-REIMPORT**（待立案，可选）：dump 重导入推断真实 media_type（D-183-1.3；分池正确性不依赖，优先级低）。
+- DoubanSeedService 立项与否：运营消化缺口 top-N 节奏明确后另起 ADR（D-183-7.2）。

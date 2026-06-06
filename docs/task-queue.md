@@ -1135,10 +1135,12 @@
    - 依赖：CHG-HOME-GOV-ADR-A（真源裁定决定端点操作对象）。
    - 完成备注：ADR-182 Accepted（arch-reviewer Opus CONDITIONAL PASS → 1 BLOCKER + 2 HIGH + 3 MEDIUM + 2 LOW 全 8 条吸收）。D-182-1 `/admin/home/*` 聚合门面 7 端点（admin only，资源级端点保留；candidates 路径偏离方案 §9 改 RESTful section param）/ D-182-2 HomeSectionKey 7 值（section ≠ slot）/ D-182-3 home_section_settings 表（migration 095，关键策略字段列化 + seed 7 行 + 品牌维度预留）/ D-182-4 契约细则（preview 跳缓存 + Phase 1 无草稿叠加声明；apply 全有或全无 409；origin 开放字符串；reorder 门面双写路径显式裁定 + 审计载荷硬约束）/ D-182-5 审计扩张（TargetKind +home_section CHECK 15→16；ActionType +4；target_id 锚定 settings 行 id）/ D-182-6 type_shortcuts 评估（slot 保留 + frontendWired:false 标记，履行 D-181-5.2）/ D-182-7 边界。BLOCKER 修复实证：`verify:endpoint-adr` 解析 ADR-182 端点 7/7，全套 verify:adr-contracts EXIT=0。docs-only。执行模型: claude-opus-4-8；子代理: arch-reviewer (claude-opus-4-8)。
 
-3. **CHG-HOME-GOV-ADR-C** — Home Curation ADR ③：自动填充策略（状态：⬜ 待开始）
+3. **CHG-HOME-GOV-ADR-C** — Home Curation ADR ③：自动填充策略（状态：✅ 已完成）
+   - 实际开始：2026-06-05 21:45 ｜ 完成时间：2026-06-05 22:15
    - 建议模型：opus（ADR 产出）
    - 范围（5 项）：① 前置统计 `douban_entries.media_type` null 占比与取值分布（方案 §8.1） ② autofill 四模式 + 整页去重 + 解释模型 ③ 候选快照结构 + refreshInterval 调度（复用 workers 体系，§7.3） ④ 豆瓣/Bangumi 排序策略 + ADR-161 复用对账（§8） ⑤ ADR-183 落档 + arch-reviewer Opus PASS。
    - 依赖：CHG-HOME-GOV-ADR-A（热门 shelf 存储裁定决定候选落点）；与 -B 可并行。
+   - 完成备注：ADR-183 Accepted（arch-reviewer Opus CONDITIONAL PASS → 2 BLOCKER + 3 HIGH + 4 MEDIUM + 2 LOW 全 11 条吸收）。**关键数据观察**：media_type 实测 100% = 'movie'（导入硬编码）→ D-183-1 分池改裁站内 videos.type + 方案 §8.1 勘误回写；豆瓣排序信号 votes 27.4% / rating 18.5% 非空；bangumi 500 行 rank 98.8%；映射桥每源约 200 → 初期产能依赖 trending 兜底。D-183-2 快照表（candidates+gaps JSONB）/ D-183-3 调度（jobId 幂等 + 429 主动检查协同）/ D-183-4 权重定版 / D-183-6 去重改裁聚合层唯一权威 / D-183-7 豆瓣反向建库首版不建（缺口 top-50 入快照、ContentGap 独立 DTO、ADR-182 follow-up 回写 additive 扩展）。**ADR 三卡全收口 → Phase 1 实施卡解锁**。docs-only。执行模型: claude-opus-4-8；子代理: arch-reviewer (claude-opus-4-8)。
 
 4. **CHG-HOME-TIMEWINDOW-SCHEMA** — ~~`home_modules` 时间窗 migration~~（状态：❌ 已取消 2026-06-05 20:20）
    - 取消原因：ADR-A 调研勘误——`home_modules` 自 migration 050 起已有 `start_at`/`end_at` 全链路（CHECK + 部分索引 + queries/类型/Drawer），无需任何 migration；命名分歧处置并入 ADR-181 裁定项 ②。

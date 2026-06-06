@@ -1947,3 +1947,17 @@
 - **新增依赖**：无
 - **数据库变更**：无（migration 095 结构已裁定，实施归 CHG-HOME-PREVIEW-API 卡）
 - **注意事项**：① arch-reviewer BLOCKER：ADR「### 端点契约」表必须 ≥6 列才能被 verify-endpoint-adr 解析（2 列简化表会被静默跳过）——已修复并实证解析 7/7，未来 ADR 起草沿用 ADR-104 表结构；② reorder 门面审计载荷硬约束（sectionKey + 真源标识 + ids 数组）与「联合 home_module.reorder ∪ home_section.reorder 回溯」声明为实施级强制；③ 端点 3（settings PATCH）归 CHG-HOME-PREVIEW-API（读写同卡内聚）；④ 下一卡 CHG-HOME-GOV-ADR-C（自动填充策略 ADR-183，依赖 A ✅）。
+
+## [CHG-HOME-GOV-ADR-C] Home Curation ADR ③：自动填充策略（ADR-183）
+- **完成时间**：2026-06-05
+- **记录时间**：2026-06-05 22:15
+- **执行模型**：claude-opus-4-8
+- **子代理**：arch-reviewer (claude-opus-4-8)
+- **修改文件**：
+  - `docs/decisions.md` — 新增 ADR-183（Accepted）：D-183-1 分池信号改裁（映射后站内 videos.type 替代豆瓣 media_type——前置统计实测 140,502 行 100% = 'movie' 导入硬编码不可信）/ D-183-2 home_autofill_snapshots 表（migration 096：candidates + gaps JSONB、每 section 保留 10 份、095/096 CHECK 同步义务）/ D-183-3 homeAutofillQueue + scheduler（单 tick 5min 扫描 settings；jobId 入队幂等与端点 429 主动状态检查两机制协同；attempts:2 + Redis 不可用降级）/ D-183-4 排序策略定版（权重入码随 POLICY_VERSION 演进，不开放运营调参）/ D-183-5 policyVersion 'hp-v1' / D-183-6 跨区块去重改裁「快照不做、聚合层唯一权威」（消解释失真）/ D-183-7 Bangumi 缺口复用 ADR-161 BangumiSeedService + 豆瓣反向建库首版不建（缺口 top-50 入快照 gaps、ContentGap 独立 DTO）；ADR-182 follow-up 回写端点 #4 additive `gaps` 扩展
+  - `docs/designs/home-operations-governance-plan_20260605.md` — §8.1 勘误（media_type 分池假设作废 → videos.type）+ §17 修订行
+  - `docs/task-queue.md` — ADR-C 条目 ✅（ADR 三卡全收口，Phase 1 实施卡解锁）
+  - `docs/tasks.md` — 卡片登记与收口
+- **新增依赖**：无
+- **数据库变更**：无（migration 096 结构已裁定，实施归 CHG-HOME-AUTOFILL-CORE-B 卡；本卡含 dev DB 只读统计）
+- **注意事项**：① arch-reviewer 双 BLOCKER 集中在缺口条目落点——已改裁「入快照 gaps 列 + ContentGap 独立 DTO（无 videoId）+ 端点 #4 additive 扩展」，实施时不得把缺口塞进 AutofillCandidate；② 跨区块去重唯一权威在聚合层，快照阶段禁止产生 occupied_by_* filterReason；③ 端点 #7 的 429 必须主动 getJob+getState 判定，不得依赖 Bull add() 去重副作用；④ SEQ-20260605-05 ADR 三卡（181/182/183）全部 Accepted，下一卡按依赖序为 CHG-HOME-BANNER-UNIFY 或 CHG-HOME-PREVIEW-API / CHG-HOME-SLOT-EXTEND（均仅依赖已完成卡）。
