@@ -159,7 +159,9 @@ export function BatchAddVideosModal({
   const skippedCount = selected.length - pendingItems.length
 
   async function handleConfirm() {
-    if (pendingItems.length === 0) return
+    // FIX3：仅「真无选择」短路——本地估计（pendingItems）不得阻断提交，
+    // 缓存陈旧认为全在列时仍交服务端守卫裁决（local cache must not block confirmation）
+    if (selected.length === 0) return
     setSubmitting(true)
     try {
       // FIX2：提交全量 selected——过滤唯一真源 = handleBatchAdd 服务端守卫
@@ -234,22 +236,24 @@ export function BatchAddVideosModal({
       )}
 
       <div style={SUMMARY_STYLE} data-testid="batch-add-summary">
-        待添加 {pendingItems.length} 个{skippedCount > 0 ? ` · 已在列跳过 ${skippedCount} 个` : ''}
+        预计添加 {pendingItems.length} 个{skippedCount > 0 ? ` · 已在列跳过 ${skippedCount} 个` : ''}（确认后以服务端为准）
       </div>
 
       <div style={FOOTER_STYLE}>
         <AdminButton variant="ghost" size="md" onClick={onClose} disabled={submitting}>
           取消
         </AdminButton>
+        {/* FIX3：disabled 仅看 selected（本地估计不阻断服务端校验确认）；
+            按钮计数 = 全量提交语义（与 FIX2 提交集一致），实际去重以 toast 为准 */}
         <AdminButton
           variant="primary"
           size="md"
           loading={submitting}
-          disabled={pendingItems.length === 0}
+          disabled={selected.length === 0}
           onClick={() => void handleConfirm()}
           data-testid="batch-add-confirm"
         >
-          添加 {pendingItems.length} 个
+          添加 {selected.length} 个
         </AdminButton>
       </div>
     </Modal>

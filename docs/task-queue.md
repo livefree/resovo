@@ -3356,6 +3356,13 @@ CODENAME-MATRIX-E2E (依赖 Wave 3 验收期补丁 CODENAME-MATRIX ✅)
     - 根因：① Modal 提交本地预过滤后的 pendingItems——预过滤仍是提交集决策层，缓存陈旧时旁路服务端守卫 ② 深链面板（addEntry 驱动 open）不触发预加载，标灰失真。
     - 修复（3 项）：① Modal 提交全量 selected（标灰/计数降级展示层估计；过滤唯一真源 = handleBatchAdd 服务端守卫）② useBatchAdd +externallyOpen 并入预加载触发 ③ 测试更新（全量提交核心断言 + 深链预加载用例）。
     - 完成备注：去重职责单层决策定型（Modal 展示估计 / 服务端守卫唯一过滤层，三入口统一）。home 域 71/71 + test:changed 39/39 + typecheck/lint EXIT=0。执行模型: claude-opus-4-8；子代理: 无。
+16. **CHG-HOME-UX-07-FIX3** — 本地估计为 0 时阻断服务端校验确认（状态：✅ 已完成）
+    - 创建时间：2026-06-05 17:16（**Codex stop-time review 第 3 轮触发**）
+    - 实际开始：2026-06-05 17:16 ｜ 完成时间：2026-06-05 17:17
+    - 建议模型：sonnet
+    - 根因：确认按钮 disabled + handleConfirm 短路仍用 pendingItems（本地估计）——缓存陈旧认为全在列时阻断提交，服务端守卫无机会裁决。
+    - 修复（2 项）：① disabled/短路改 selected.length === 0（唯一禁用条件）+ 按钮计数 selected.length（全量提交语义）+ 摘要「预计添加 X（确认后以服务端为准）」② 测试更新（全灰仍可提交核心断言 + 唯一禁用条件 + 文案同步）。
+    - 完成备注：本地缓存对确认流程零决策权定型（标灰/计数纯展示；提交集与可提交性归服务端守卫/真实选择）。72/72 + test:changed 33/33 + typecheck/lint EXIT=0。执行模型: claude-opus-4-8；子代理: 无。
 
 ### 后续卡登记（本序列产出，不在本序列内执行）
 

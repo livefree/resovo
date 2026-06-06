@@ -15174,3 +15174,16 @@ Plan-Revision: 1 次（ADR-155 §5 EP-3b 拆为 EP-3b-1 + N1-EP3b-2 / 拖拽 pan
 - **新增依赖**：无
 - **数据库变更**：无
 - **注意事项**：去重职责自此单层决策——Modal 仅展示估计，handleBatchAdd 服务端最新列表是唯一过滤层（三入口统一）。home 域 71/71 + test:changed 39/39 + typecheck/lint EXIT=0。
+
+## [CHG-HOME-UX-07-FIX3] 本地估计为 0 时阻断服务端校验确认（Codex review 第 3 轮）
+- **完成时间**：2026-06-05
+- **记录时间**：2026-06-05 17:17
+- **执行模型**：claude-opus-4-8
+- **子代理**：无（Codex stop-time review 第 3 轮触发）
+- **根因**：FIX2 后确认按钮 disabled 与 handleConfirm 短路仍用 `pendingItems.length === 0`（本地缓存估计）——缓存陈旧地认为「全部已在列」时用户被阻断提交，服务端守卫无机会裁决（local cache blocks server-validated confirmation）。
+- **修改文件**：
+  - `apps/server-next/src/app/admin/home/_client/BatchAddVideosModal.tsx` — disabled/短路条件改 `selected.length === 0`（仅真无选择才禁用，唯一禁用条件）；按钮文案「添加 N 个」N=selected.length（与 FIX2 全量提交语义一致）；摘要改「预计添加 X · 已在列跳过 Y（确认后以服务端为准）」
+  - `tests/unit/components/server-next/admin/home/BatchAddVideosModal.test.tsx` — 「全部已在列→禁用」用例改「全部本地标灰仍可提交（FIX3 核心断言）」+ 新增「selected 空 = 唯一禁用条件」+ 摘要文案断言同步 + 头注覆盖清单同步
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：本地缓存自此对确认流程零决策权（标灰/计数纯展示提示，提交集与可提交性均归服务端守卫/真实选择）。home 域+hook 72/72 + test:changed 33/33 + typecheck/lint EXIT=0。

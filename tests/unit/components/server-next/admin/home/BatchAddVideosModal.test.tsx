@@ -2,9 +2,9 @@
  * BatchAddVideosModal.test.tsx — 批量添加统一确认面板（CHG-HOME-UX-07）
  *
  * 覆盖：
- *   #1 已在列项标灰「已在列 · 跳过」+ 不计入确认数
- *   #2 确认仅提交未在列项（onConfirm 参数过滤）
- *   #3 待添加 0 → 确认按钮禁用
+ *   #1 已在列项标灰「已在列 · 跳过」（展示层估计，不决定提交集）
+ *   #2 确认提交全量 selected（FIX2：过滤唯一真源 = 服务端守卫）
+ *   #3 全部本地标灰仍可提交（FIX3：本地估计不阻断）；仅 selected 空禁用
  *   #4 slot 切换 → 去重集合按目标 slot 重新比对
  *   #5 initialItems 预填（08 深链 / 09 趋势导入复用口）
  *   #6 defaultSlot=type_shortcuts（不适用）→ 回落 banner
@@ -83,8 +83,8 @@ describe('BatchAddVideosModal — 去重与确认', () => {
     // v-b 标灰（展示）
     expect(screen.queryByTestId('batch-add-existing-v-b')).not.toBeNull()
     expect(screen.queryByTestId('batch-add-existing-v-a')).toBeNull()
-    // 摘要：待添加 2 · 跳过 1（本地估计）
-    expect(screen.getByTestId('batch-add-summary').textContent).toContain('待添加 2 个')
+    // 摘要：预计添加 2 · 跳过 1（本地估计，确认后以服务端为准）
+    expect(screen.getByTestId('batch-add-summary').textContent).toContain('预计添加 2 个')
     expect(screen.getByTestId('batch-add-summary').textContent).toContain('跳过 1 个')
 
     fireEvent.click(screen.getByTestId('batch-add-confirm'))
@@ -96,11 +96,21 @@ describe('BatchAddVideosModal — 去重与确认', () => {
     expect(submitted.map((i) => i.id)).toEqual(['v-a', 'v-b', 'v-c'])
   })
 
-  it('待添加 0（全部已在列）→ 确认按钮禁用 + onConfirm 不触发', () => {
+  it('全部本地标灰仍可提交（FIX3：本地估计不阻断服务端校验确认）', async () => {
     const onConfirm = renderModal({
       initialItems: [makeItem('v-a')],
-      getExistingIds: () => new Set(['v-a']),
+      getExistingIds: () => new Set(['v-a']),  // 本地缓存认为全在列（可能陈旧）
     })
+    const btn = screen.getByTestId('batch-add-confirm') as HTMLButtonElement
+    expect(btn.disabled).toBe(false)  // 不被本地估计阻断
+    fireEvent.click(btn)
+    await waitFor(() => expect(onConfirm).toHaveBeenCalled())
+    // 全量提交，服务端守卫裁决
+    expect((onConfirm.mock.calls[0][1] as readonly { id: string }[]).map((i) => i.id)).toEqual(['v-a'])
+  })
+
+  it('selected 为空 → 确认按钮禁用 + onConfirm 不触发（唯一禁用条件）', () => {
+    const onConfirm = renderModal()
     const btn = screen.getByTestId('batch-add-confirm') as HTMLButtonElement
     expect(btn.disabled).toBe(true)
     fireEvent.click(btn)
@@ -113,7 +123,7 @@ describe('BatchAddVideosModal — 去重与确认', () => {
       getExistingIds: (slot: HomeModuleSlot) => (slot === 'top10' ? new Set(['v-a']) : new Set()),
     })
     // featured（默认）：v-a 可添加
-    expect(screen.getByTestId('batch-add-summary').textContent).toContain('待添加 1 个')
+    expect(screen.getByTestId('batch-add-summary').textContent).toContain('预计添加 1 个')
     // 切到 top10（AdminSelect 自定义 combobox：click 展开 → mouseDown option，admin-select.test 先例）
     fireEvent.click(screen.getByRole('combobox'))
     const options = screen.getAllByRole('option')
@@ -121,7 +131,7 @@ describe('BatchAddVideosModal — 去重与确认', () => {
     expect(top10Opt).toBeTruthy()
     fireEvent.mouseDown(top10Opt as HTMLElement)
     await waitFor(() => {
-      expect(screen.getByTestId('batch-add-summary').textContent).toContain('待添加 0 个')
+      expect(screen.getByTestId('batch-add-summary').textContent).toContain('预计添加 0 个')
     })
   })
 })
@@ -129,9 +139,9 @@ describe('BatchAddVideosModal — 去重与确认', () => {
 describe('BatchAddVideosModal — 入口形态', () => {
   it('页内入口（无 initialItems）：经 VideoPicker multiple 增选', () => {
     renderModal()
-    expect(screen.getByTestId('batch-add-summary').textContent).toContain('待添加 0 个')
+    expect(screen.getByTestId('batch-add-summary').textContent).toContain('预计添加 0 个')
     fireEvent.click(screen.getByTestId('mock-video-picker'))
-    expect(screen.getByTestId('batch-add-summary').textContent).toContain('待添加 1 个')
+    expect(screen.getByTestId('batch-add-summary').textContent).toContain('预计添加 1 个')
   })
 
   it('initialItems 预填（深链/趋势导入复用口）渲染候选列表', () => {
