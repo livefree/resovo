@@ -1203,7 +1203,7 @@
    - 依赖：CHG-HOME-GOV-ADR-A ✅；Phase 3 写路径前必须完成。
    - 完成备注：ADR-181 D-181-4 零自由度落地。migration 094 已应用 dev DB（DROP+ADD 2 CHECK，pg_constraint 实证 7 值 + hot_* 仅 video）；ADR-181 BLOCKER 项 compat 第 3 处同源规则同卡 +3 并加同步警示注释；server-next 4 文件 UI 常量 +3（/admin/home 即见 3 个新 tab + 批量选片可用）；architecture.md §5.10 两处同步。测试：新增 admin 创建正反 6 用例（it.each 3 hot×video 201 + 3 非 video 422）+ 公开路由全 slot 7 值用例扩展 + HomeOpsClient 测试宽松正则 /热门/ 收紧为精确 'TOP 10'（新 tab 命中漂移修复）。门禁：typecheck/lint EXIT=0；**全量 6688/6688 PASS**（基础包改动升全量，ADR-180）；verify:adr-contracts 4 绿；**E2E admin 域 39 passed**；migrate:check 干净。偏离说明：建议模型 sonnet、实际 opus（用户 opus 会话人工覆盖）；强行单卡（编译闭环不可拆），commit 含 arch-reviewer trailer。执行模型: claude-opus-4-8；子代理: 无新 spawn（设计背书引用 ADR-181 卡内 arch-reviewer (claude-opus-4-8)）。
 
-### Phase 2 卡登记（Phase 1 收口后细化，2026-06-06 03:10）
+### Phase 2 卡登记（Phase 1 收口后细化，2026-06-06 03:10；**Phase 2 全部 4 卡收口 2026-06-06 01:40**：CARD-DND-A/-B + EMPTY-SLOTS + IMAGE-GUARD-BANNER）
 
 10. **CHG-HOME-CARD-DND-A** — 端点 #6 reorder 门面实装（后端）（状态：✅ 已完成）
    - 实际开始：2026-06-06 00:25 ｜ 完成时间：2026-06-06 00:50
@@ -1229,11 +1229,13 @@
    - 依赖：CHG-HOME-CANVAS-B ✅。
    - 完成备注：方案 §5.2 落地——empty 卡按区块文案（banner=「添加横版 Banner」/ 视频型=「添加视频」VIDEO_SECTIONS 驱动 / type_shortcuts 维持纯展示，添加链路未立案）+ role=button 键盘可激活 + stopPropagation 防误触区块选中。接线：视频空位 → setActiveSlot+batchAdd.openBlank（**复用 useBatchAdd 全链路**：服务端真源去重/ordering max+1/汇总 toast 零重复实现）；banner 空位 → HomeOpsClient 画布层 BannerDrawer 创建实例（sortOrder 服务端真源 max+1——与 BannerOpsSection banners.length 策略差异：画布无列表缓存；第 2 消费方未达提取阈值不抽）；HomeCanvas +onEmptySlot/reloadToken（外部添加完成 → silent 重拉防骨架闪）。测试 +6（HomeCanvas 33/33 + HomeOpsClient 28/28，home 域 112/112）。门禁：typecheck/lint 绿 + test:changed 61/61 + E2E admin 40 passed 全绿。执行模型: claude-opus-4-8；子代理: 无。
 
-12. **CHG-HOME-IMAGE-GUARD-BANNER** — Banner 横图警告级校验（状态：⬜ 待开始）
-   - 建议模型：sonnet
-   - 范围：尺寸（推荐 1920×1080 / 最低 1280×720）+ 比例（16:9–21:9）+ 外链探测失败提醒——**全部警告级不阻断**（方案 §6 / D-052-9 口径）+ desktop/mobile 安全区预览 + 测试。
+12. **CHG-HOME-IMAGE-GUARD-BANNER** — Banner 横图警告级校验（状态：✅ 已完成；**Phase 2 三卡全部收口 2026-06-06 01:40**）
+   - 实际开始：2026-06-06 01:27 ｜ 完成时间：2026-06-06 01:40
+   - 建议模型：sonnet（实际 claude-opus-4-8，用户 opus 会话人工覆盖）
+   - 范围：尺寸（推荐 1920×1080 / 最低 1280×720）+ 比例（16:9–21:9）+ 外链探测失败提醒——**全部警告级不阻断**（方案 §6 / D-052-9 口径）+ desktop/mobile 安全区预览 + 测试 ≥8。
    - 依赖：CHG-HOME-BANNER-UNIFY-B ✅。
    - 备注：与 D-052-9 预留 `CHG-HOME-IMAGE-GUARD`（管 home_modules.image_url）职责区分，两卡勿混。
+   - 完成备注：方案 §6 警告级口径全落地。`lib/banners/image-guard.ts`（evaluateBannerImage 纯函数：below_min 不叠报 below_recommended / 比例 16:9–21:9 含端点 / 0 值返回空；probeImageSize 浏览器 Image naturalWidth）+ `BannerImageGuard.tsx`（防抖探测 debounceMs 可注入 / 警告条 warn Pill + 「不阻断」声明 / 探测失败「确认后仍可发布」§6.6 / desktop 21:9 + mobile 4:5 双视口 object-fit cover 安全区预览 §6.4 / 'ok' 态存 url 防 prop 清空瞬时帧空 src）+ BannerDrawer 接入（imageUrl 下方，handleSubmit 零拦截）。home_banners.image_url NOT NULL → 「缺图」态本真源不可达（焦点=尺寸/比例/探测三类）。测试 +15（纯函数 8 + 组件 6 + Drawer 集成「警告在场提交直达 onSave」1）。门禁：typecheck/lint 绿 + test:changed 55/55 + home 域 119/119 + **Phase 收口全量 6793/6793**（505 文件，4 个测试外 unhandled errors 噪音 exit 0）+ E2E admin 39 passed（1 known flaky retry 过）。执行模型: claude-opus-4-8；子代理: 无。
 
 ### Phase 3–4 后续卡占位（Phase 2 收口后细化）
 

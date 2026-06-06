@@ -2126,3 +2126,18 @@
 - **新增依赖**：无
 - **数据库变更**：无
 - **注意事项**：① 方案 §5.2「自动空位：开启自动填充/查看候选」入口随 Phase 3 候选池端点 #4 实装接入（本卡视频空位统一「添加视频」，人工 pinned 优先语义）；② banner 创建 sortOrder 第 2 消费方（BannerOpsSection=banners.length / 画布=服务端 max+1），未达 3 处提取阈值；③ 门禁：typecheck/lint 绿 + test:changed 61/61 + home 域 112/112 + E2E admin 40 passed 全绿。
+
+## [CHG-HOME-IMAGE-GUARD-BANNER] Banner 横图警告级校验
+- **完成时间**：2026-06-06
+- **记录时间**：2026-06-06 01:45
+- **执行模型**：claude-opus-4-8
+- **子代理**：无
+- **修改文件**：
+  - `apps/server-next/src/lib/banners/image-guard.ts` — 新增：规则纯函数 evaluateBannerImage（below_min 优先不叠报 below_recommended / 比例 16:9–21:9 含端点 / 非法输入空数组）+ probeImageSize（浏览器 Image naturalWidth/Height，img 加载不受 CORS 限）+ 常量（推荐 1920×1080 / 最低 1280×720）
+  - `apps/server-next/src/app/admin/home/_client/BannerImageGuard.tsx` — 新增：防抖探测（debounceMs 可注入测试传 0）→ 警告条（warn Pill + 「不阻断保存」声明）/ 探测失败提醒（「确认后仍可发布」§6.6）/ desktop 21:9 + mobile 4:5 双视口 object-fit cover 安全区预览（§6.4）；'ok' 态保存探测时刻 url 防 prop 清空瞬时帧空 src
+  - `apps/server-next/src/app/admin/home/_client/BannerDrawer.tsx` — imageUrl 字段下接入 BannerImageGuard（handleSubmit 零拦截——校验纯提示）
+  - `tests/unit/server-next/banner-image-guard.test.ts` — 新增 8 用例（达标/低于推荐/低于最低不叠报/方图仅比例/超宽比例/双违规并报/区间端点/非法输入）
+  - `tests/unit/components/server-next/admin/home/BannerImageGuard.test.tsx` — 新增 7 用例（空 URL 不渲染/达标 ok+双视口预览/低尺寸警告+不阻断声明/比例警告/探测失败提醒/URL 清空复位/**BannerDrawer 集成：警告在场提交直达 onSave**）
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：① **SEQ-20260605-05 Phase 2（卡片操作闭环）全部 4 卡收口**（CARD-DND-A/-B + EMPTY-SLOTS + IMAGE-GUARD-BANNER）；② 校验级别全警告级与 D-052-9「宽松优先 + UI 提示引导」口径一致，运营反馈缺图率过高再评估升阻断；③ home_banners.image_url NOT NULL → 「缺图」态本真源不可达（焦点=尺寸/比例/探测三类）；缺横版大图风险标记（home_modules 旧语义）归 D-052-9 预留 CHG-HOME-IMAGE-GUARD，两卡勿混；④ focal point（方案 §6.5）需 schema 字段未立案，不在本卡；⑤ 门禁：typecheck/lint 绿 + test:changed 55/55 + home 域 119/119 + Phase 收口全量 6793/6793 + E2E admin 39 passed（1 known flaky retry 过）。

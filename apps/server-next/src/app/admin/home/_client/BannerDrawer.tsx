@@ -13,6 +13,8 @@
 import { useState, useEffect, type CSSProperties, type ChangeEvent, type FormEvent } from 'react'
 import { Drawer, AdminButton, AdminInput, AdminSelect, type AdminSelectOption } from '@resovo/admin-ui'
 import type { Banner, BannerBrandScope, BannerLinkType, CreateBannerInput, UpdateBannerInput } from '@/lib/banners/types'
+// CHG-HOME-IMAGE-GUARD-BANNER / 方案 §6：横图警告级校验 + 安全区预览
+import { BannerImageGuard } from './BannerImageGuard'
 
 // ── 常量（与 HomeModuleDrawer 同规格）────────────────────────────
 
@@ -243,6 +245,9 @@ export function BannerDrawer({ open, banner, onClose, onSave }: BannerDrawerProp
             placeholder="https://cdn.example.com/banner.jpg"
             data-testid="banner-image-url"
           />
+          {/* CHG-HOME-IMAGE-GUARD-BANNER / 方案 §6：尺寸/比例/探测警告级校验 +
+              desktop/mobile 安全区预览——纯提示，handleSubmit 零拦截（D-052-9） */}
+          <BannerImageGuard imageUrl={form.imageUrl} />
         </div>
 
         <div style={ROW_STYLE}>
