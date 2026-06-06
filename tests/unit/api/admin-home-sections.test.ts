@@ -225,3 +225,222 @@ describe('PATCH /admin/home/sections/:section/settings', () => {
     expect(res.json().data.refreshIntervalMinutes).toBeNull()
   })
 })
+
+// ── GET /admin/home/preview（CHG-HOME-PREVIEW-API-B / D-182-4 #1）────────────
+
+import type { Banner, HomeModule, VideoCard } from '@resovo/types'
+
+const mockListAllBanners = vi.fn()
+const mockListAdminModules = vi.fn()
+const mockTrending = vi.fn()
+const mockByRating = vi.fn()
+const mockCardsByIds = vi.fn()
+
+vi.mock('@/api/db/queries/home-banners', () => ({
+  listAllBanners: (...args: unknown[]) => mockListAllBanners(...args),
+}))
+vi.mock('@/api/db/queries/home-modules', () => ({
+  listAdminHomeModules: (...args: unknown[]) => mockListAdminModules(...args),
+}))
+vi.mock('@/api/db/queries/videos', () => ({
+  listTrendingVideos: (...args: unknown[]) => mockTrending(...args),
+}))
+vi.mock('@/api/db/queries/videos.status', () => ({
+  listVideosByRatingDesc: (...args: unknown[]) => mockByRating(...args),
+  listVideoCardsByIds: (...args: unknown[]) => mockCardsByIds(...args),
+}))
+
+function bannerRow(over: Partial<Banner> = {}): Banner {
+  return {
+    id: 'bn-1',
+    title: { 'zh-CN': '首屏横幅' },
+    imageUrl: 'https://cdn.example.com/hero.jpg',
+    linkType: 'external',
+    linkTarget: 'https://promo.example.com',
+    sortOrder: 0,
+    activeFrom: null,
+    activeTo: null,
+    isActive: true,
+    brandScope: 'all-brands',
+    brandSlug: null,
+    createdAt: '2026-06-01T00:00:00Z',
+    updatedAt: '2026-06-01T00:00:00Z',
+    ...over,
+  }
+}
+
+function moduleRow(over: Partial<HomeModule> = {}): HomeModule {
+  return {
+    id: 'm-1',
+    slot: 'featured',
+    brandScope: 'all-brands',
+    brandSlug: null,
+    ordering: 0,
+    contentRefType: 'video',
+    contentRefId: 'v-1',
+    title: {},
+    imageUrl: null,
+    startAt: null,
+    endAt: null,
+    enabled: true,
+    metadata: {},
+    createdAt: '2026-06-01T00:00:00Z',
+    updatedAt: '2026-06-01T00:00:00Z',
+    ...over,
+  }
+}
+
+function videoCard(id: string, over: Partial<VideoCard> = {}): VideoCard {
+  return {
+    id,
+    shortId: `s-${id}`,
+    slug: `slug-${id}`,
+    title: `视频 ${id}`,
+    titleEn: null,
+    coverUrl: `https://cdn.example.com/${id}.jpg`,
+    posterBlurhash: null,
+    posterStatus: 'ok',
+    type: 'movie',
+    rating: 8.5,
+    year: 2026,
+    status: 'completed',
+    episodeCount: 1,
+    sourceCount: 2,
+    subtitleLangs: [],
+    ...over,
+  } as VideoCard
+}
+
+describe('GET /admin/home/preview', () => {
+  let app: Awaited<ReturnType<typeof buildApp>>
+
+  beforeEach(async () => {
+    vi.clearAllMocks()
+    mockList.mockResolvedValue([...ALL_SECTIONS].map((s) => settingsRow(s, { displayCount: 3 })))
+    mockListAllBanners.mockResolvedValue({ rows: [bannerRow()], total: 1 })
+    mockListAdminModules.mockResolvedValue({ rows: [moduleRow()], total: 1 })
+    mockCardsByIds.mockResolvedValue([videoCard('v-1')])
+    mockTrending.mockResolvedValue([videoCard('v-t1'), videoCard('v-t2'), videoCard('v-t3')])
+    mockByRating.mockResolvedValue([videoCard('v-r1'), videoCard('v-r2')])
+    app = await buildApp()
+  })
+
+  it('200 + 7 区块枚举序 + generatedAt/context 回显', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/admin/home/preview?device=mobile&brand_slug=alpha',
+      headers: { authorization: await adminToken() },
+    })
+    expect(res.statusCode).toBe(200)
+    const data = res.json().data
+    expect(data.sections.map((s: { key: string }) => s.key)).toEqual([...ALL_SECTIONS])
+    expect(data.generatedAt).toBeTruthy()
+    expect(data.context).toEqual({ brandSlug: 'alpha', locale: null, at: null, device: 'mobile' })
+  })
+
+  it('banner section：D-181-3 DTO 映射（activeFrom→startAt / isActive→enabled）+ source=pinned', async () => {
+    mockListAllBanners.mockResolvedValue({
+      rows: [bannerRow({ activeFrom: '2026-07-01T00:00:00Z', isActive: true })],
+      total: 1,
+    })
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/admin/home/preview',
+      headers: { authorization: await adminToken() },
+    })
+    const banner = res.json().data.sections.find((s: { key: string }) => s.key === 'banner')
+    const card = banner.cards[0]
+    expect(card.source).toBe('pinned')
+    expect(card.startAt).toBe('2026-07-01T00:00:00Z')
+    expect(card.enabled).toBe(true)
+    expect(card.flags).toContain('pending') // at=now < activeFrom
+  })
+
+  it('pinned video 引用失效 → ref_broken flag；无图 → missing_image', async () => {
+    mockCardsByIds.mockResolvedValue([]) // v-1 已下线
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/admin/home/preview',
+      headers: { authorization: await adminToken() },
+    })
+    const featured = res.json().data.sections.find((s: { key: string }) => s.key === 'featured')
+    const card = featured.cards[0]
+    expect(card.flags).toContain('ref_broken')
+    expect(card.flags).toContain('missing_image') // module.imageUrl null + 无 video 回退
+  })
+
+  it('跨区块去重：featured trending 补位占用后，hot_movies fallback 跳过已占用 videoId', async () => {
+    // featured 与 hot_movies 共用 trending mock 返回（v-t1/v-t2/v-t3）
+    mockListAdminModules.mockResolvedValue({ rows: [], total: 0 }) // 无 pinned
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/admin/home/preview',
+      headers: { authorization: await adminToken() },
+    })
+    const sections = res.json().data.sections
+    const featured = sections.find((s: { key: string }) => s.key === 'featured')
+    const hotMovies = sections.find((s: { key: string }) => s.key === 'hot_movies')
+    const featuredIds = featured.cards.filter((c: { videoId: string | null }) => c.videoId).map((c: { videoId: string }) => c.videoId)
+    const hotIds = hotMovies.cards.filter((c: { videoId: string | null }) => c.videoId).map((c: { videoId: string }) => c.videoId)
+    // 渲染序 featured 先占用 → hot_movies 不得重复
+    for (const id of hotIds) expect(featuredIds).not.toContain(id)
+  })
+
+  it('hot_* 补位 source=fallback + explain.origin=trending；top10 source=auto + origin=rating', async () => {
+    mockListAdminModules.mockResolvedValue({ rows: [], total: 0 })
+    // 按 type 返回独立候选集（避免渲染序在前的 featured 把单一集合全部占用）
+    mockTrending.mockImplementation((_db: unknown, filters: { type?: string }) => {
+      const prefix = filters.type ?? 'all'
+      return Promise.resolve([videoCard(`v-${prefix}-1`), videoCard(`v-${prefix}-2`)])
+    })
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/admin/home/preview',
+      headers: { authorization: await adminToken() },
+    })
+    const sections = res.json().data.sections
+    const top10 = sections.find((s: { key: string }) => s.key === 'top10')
+    const hotAnime = sections.find((s: { key: string }) => s.key === 'hot_anime')
+    const top10Auto = top10.cards.find((c: { source: string }) => c.source === 'auto')
+    expect(top10Auto?.explain?.origin).toBe('rating')
+    const hotFallback = hotAnime.cards.find((c: { source: string }) => c.source === 'fallback')
+    expect(hotFallback?.explain?.origin).toBe('trending')
+    // hot_anime 走 type=anime 候选池
+    expect(mockTrending).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ type: 'anime' }))
+  })
+
+  it('type_shortcuts 不自动补位（manual_only 语义）+ 空位 empty 卡补足 displayCount', async () => {
+    mockListAdminModules.mockResolvedValue({ rows: [], total: 0 })
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/admin/home/preview',
+      headers: { authorization: await adminToken() },
+    })
+    const shortcuts = res.json().data.sections.find((s: { key: string }) => s.key === 'type_shortcuts')
+    expect(shortcuts.cards).toHaveLength(3) // displayCount=3 全 empty
+    expect(shortcuts.cards.every((c: { source: string }) => c.source === 'empty')).toBe(true)
+  })
+
+  it('at 参数模拟时间窗：未来 at 使 startAt 已到 → 无 pending flag', async () => {
+    mockListAllBanners.mockResolvedValue({
+      rows: [bannerRow({ activeFrom: '2026-07-01T00:00:00Z' })],
+      total: 1,
+    })
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/admin/home/preview?at=2026-07-02T00:00:00Z',
+      headers: { authorization: await adminToken() },
+    })
+    const banner = res.json().data.sections.find((s: { key: string }) => s.key === 'banner')
+    expect(banner.cards[0].flags).not.toContain('pending')
+  })
+
+  it('非法 at 返回 422', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/admin/home/preview?at=not-a-date',
+      headers: { authorization: await adminToken() },
+    })
+    expect(res.statusCode).toBe(422)
+  })
+})

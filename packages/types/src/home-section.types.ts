@@ -60,6 +60,62 @@ export interface UpdateHomeSectionSettingsInput {
   settings?: Record<string, unknown>
 }
 
+// ── preview 聚合 DTO（CHG-HOME-PREVIEW-API-B / ADR-182 D-182-4 #1）──────────
+
+/** 卡片来源（D-182-4 #1） */
+export type HomePreviewCardSource = 'pinned' | 'auto' | 'fallback' | 'empty'
+
+/**
+ * 风险态 flags（警告级，方案 §6 不阻断）。
+ * missing_wide_image（banner 专属尺寸/比例警告）与 unplayable 的判定深化归
+ * Phase 2 IMAGE-GUARD-BANNER / Phase 3 候选过滤链；本版 unplayable = sourceCount 0。
+ */
+export type HomePreviewCardFlag =
+  | 'missing_image'
+  | 'missing_wide_image'
+  | 'pending'      // 待生效（startAt > at）
+  | 'expired'      // 已过期（endAt ≤ at）
+  | 'disabled'     // enabled=false / is_active=false
+  | 'ref_broken'   // video 引用失效（已下线/未发布）
+  | 'unplayable'   // 无可播源
+
+export interface HomePreviewCard {
+  source: HomePreviewCardSource
+  /** pinned 时为 home_modules.id / home_banners.id；auto·fallback 为 null；empty 为 null */
+  refId: string | null
+  videoId: string | null
+  title: string | null
+  imageUrl: string | null
+  /** 跳转目标摘要（banner linkTarget / video slug / video_type 值） */
+  linkHint: string | null
+  /** D-181-3 统一时间窗 DTO（home_banners.active_from→startAt / active_to→endAt / is_active→enabled） */
+  startAt: string | null
+  endAt: string | null
+  enabled: boolean
+  flags: HomePreviewCardFlag[]
+  /** auto / fallback 卡解释摘要（origin 开放字符串，D-182-4.4 同口径） */
+  explain: { origin: string; rank: number; score: number | null } | null
+}
+
+export interface HomePreviewSection {
+  key: HomeSectionKey
+  settings: HomeSectionSettings
+  cards: HomePreviewCard[]
+}
+
+/** GET /admin/home/preview 响应（Phase 1 = 正式配置预览，无草稿叠加，D-182-4 #1） */
+export interface HomePreview {
+  sections: HomePreviewSection[]
+  generatedAt: string
+  /** 请求上下文回显（device 仅 UI 用，不影响数据） */
+  context: {
+    brandSlug: string | null
+    locale: string | null
+    at: string | null
+    device: 'desktop' | 'mobile'
+  }
+}
+
 /** GET /admin/home/sections 响应条目（D-182-4 #2：settings 全量 + 状态摘要） */
 export interface HomeSectionSummary {
   settings: HomeSectionSettings

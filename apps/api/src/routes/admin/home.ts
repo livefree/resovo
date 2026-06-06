@@ -17,11 +17,26 @@ import {
   HomeCurationService,
   SectionParamSchema,
   UpdateSectionSettingsSchema,
+  PreviewQuerySchema,
 } from '@/api/services/HomeCurationService'
 
 export async function adminHomeRoutes(fastify: FastifyInstance) {
   const svc = new HomeCurationService(db)
   const adminOnly = [fastify.authenticate, fastify.requireRole(['admin'])]
+
+  // ── GET /admin/home/preview ───────────────────────────────────────────────
+  // CHG-HOME-PREVIEW-API-B / D-182-4 #1：整页预览聚合（跳缓存；Phase 1 正式配置预览无草稿叠加）
+
+  fastify.get('/admin/home/preview', { preHandler: adminOnly }, async (request, reply) => {
+    const parsed = PreviewQuerySchema.safeParse(request.query)
+    if (!parsed.success) {
+      return reply.code(422).send({
+        error: { code: 'VALIDATION_ERROR', message: parsed.error.issues[0]?.message ?? '参数错误', status: 422 },
+      })
+    }
+    const data = await svc.buildPreview(parsed.data)
+    return reply.send({ data })
+  })
 
   // ── GET /admin/home/sections ──────────────────────────────────────────────
 

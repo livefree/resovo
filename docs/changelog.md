@@ -2031,3 +2031,18 @@
 - **新增依赖**：无
 - **数据库变更**：migration 095（新表 + seed 7 行 + audit CHECK 15→16）
 - **注意事项**：① sections 摘要的 lastSnapshotAt/candidateCount 恒 null 直到 ADR-183 快照表落地（契约语义"未生成"）；② actionType 4 项一次性入类型真源，其中 3 项（apply/reorder/refresh）写入位点归 Phase 2/3 实施卡——守卫只登记已有写入位点的 settings_update，后续卡照此逐项登记；③ 端点 #1 preview 归 -B 卡；④ 门禁：typecheck/lint 绿 + 全量 6723/6723 + verify-endpoint-adr 209 路由对齐（新 2 端点命中 ADR-182 契约表）+ E2E admin 域。
+
+## [CHG-HOME-PREVIEW-API-B] GET /admin/home/preview 整页预览聚合（ADR-182 端点 #1）
+- **完成时间**：2026-06-06
+- **记录时间**：2026-06-06 01:40
+- **执行模型**：claude-opus-4-8
+- **子代理**：无
+- **修改文件**：
+  - `packages/types/src/home-section.types.ts` — +HomePreview/HomePreviewSection/HomePreviewCard/HomePreviewCardSource/HomePreviewCardFlag（source 四态 + flags 7 值 union + explain origin 开放字符串）
+  - `apps/api/src/services/HomeCurationService.ts` — +PreviewQuerySchema + buildPreview 整页聚合（7 区块渲染序 / brand 协议过滤 / banner D-181-3 DTO 映射 / pinned video 批量充实防 N+1 / ref_broken·unplayable·missing_image·pending·expired·disabled flags / top10 rating 补位·featured trending 补位·hot_* trending fallback / 跨区块去重聚合层唯一权威 D-183-6（pinned 占用 + allow_duplicates 豁免）/ empty 占位 D-182-3 公式 / at 时间窗模拟 / 跳缓存）+ 模块级纯函数（bannerToCard/moduleToCard/videoToAutoCard/timeWindowFlags/brandVisible）
+  - `apps/api/src/routes/admin/home.ts` — +端点 #1 GET /admin/home/preview
+  - `docs/architecture.md` — 端点 #1 + preview DTO 同步
+  - `tests/unit/api/admin-home-sections.test.ts` — +8 preview 用例（枚举序+context 回显 / banner DTO 映射+pending / ref_broken+missing_image / 跨区块去重 / fallback·auto origin / type_shortcuts 全 empty / at 时间窗模拟 / 非法 at 422）
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：① banner slot 冻结存量行不进 preview（聚合显式跳过 slot='banner'，真源 home_banners）；② hot_* 在 ADR-183 候选快照实装前 source='fallback'（trending 兜底语义），Phase 3 接入快照后改 'auto'+douban/bangumi origin；③ unplayable 判定本版 = sourceCount 0，深化归 Phase 3 过滤链；④ 画布消费（CANVAS-A）就绪——Phase 1 后端面（ADR 三卡 + slot 扩展 + banner 统一 + settings + preview）全部交付；⑤ 门禁：typecheck/lint 绿 + 全量 6731/6731 + verify 4 绿 + E2E admin 域。

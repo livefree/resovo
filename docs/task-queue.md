@@ -1169,10 +1169,13 @@
    - 依赖：CHG-HOME-GOV-ADR-B ✅。
    - 完成备注：ADR-182 D-182-2/3/4/5 零自由度落地。migration 095 已应用（seed 7 行 + audit CHECK 16 值 pg 实证）；类型层 +5 接口 +2 常量 + audit 枚举 +4/+1（apply/reorder/refresh 3 项写入位点归 Phase 2/3 卡）；queries 4 函数（countPinnedBySection banner→home_banners UNION）；HomeCurationService settings 域 + audit settings_update（targetId=settings 行 id）；端点 #2（枚举序 + 摘要 + frontendWired）/#3（非法 section 422 先于 404 + .strict() + ≥1 字段）。测试：10 新用例 + audit 守卫登记（R-MID-1 第 33 次）。门禁：typecheck/lint 绿 + **全量 6723/6723** + verify-endpoint-adr 209 对齐 + E2E admin 39 passed。执行模型: claude-opus-4-8；子代理: 无。
 
-6b. **CHG-HOME-PREVIEW-API-B** — `GET /admin/home/preview` 整页预览聚合（状态：⬜ 待开始）
-   - 建议模型：sonnet
-   - 范围：HomeCurationService 整页聚合（7 区块 cards + pinned/auto/fallback/empty + 风险态 flags + D-181-3 DTO 统一映射 + trending 兜底 + 跳缓存）+ 端点 1 + 单测。
-   - 依赖：CHG-HOME-PREVIEW-API-A。
+6b. **CHG-HOME-PREVIEW-API-B** — `GET /admin/home/preview` 整页预览聚合（状态：✅ 已完成）
+   - 实际开始：2026-06-06 01:05 ｜ 完成时间：2026-06-06 01:45
+   - 建议模型：sonnet（契约 ADR-182 D-182-4 #1 已锁；实际 claude-opus-4-8，用户 opus 会话人工覆盖）
+   - 范围（4 项）：① HomePreview/HomePreviewSection/HomePreviewCard DTO 类型层（D-182-4 #1） ② HomeCurationService.buildPreview 整页聚合（7 区块 + pinned/auto/fallback/empty source + 风险态 flags + D-181-3 时间窗 DTO 统一映射 + trending 兜底 + 跨区块整页去重（D-183-6 聚合层唯一权威初版）+ 跳缓存 + at 时间窗模拟） ③ 端点 #1 GET /admin/home/preview ④ 单测。
+   - 跨层理由：纯 api-service 层（类型 + Service + route 同一契约闭环）。
+   - 依赖：CHG-HOME-PREVIEW-API-A ✅。
+   - 完成备注：D-182-4 #1 落地：HomePreview DTO（source 四态 + flags 7 值 + explain origin 开放）；buildPreview 整页聚合（7 区块渲染序 + brand 协议 + banner D-181-3 映射 + video 批量充实 + 风险态 flags + top10 rating/featured trending/hot_* fallback 补位 + 跨区块去重聚合层唯一权威 + empty 占位公式 + at 模拟 + 跳缓存）；banner 冻结存量行显式不进 preview。测试 +8 用例（18/18 文件全绿）。门禁：typecheck/lint 绿 + 全量 6731/6731 + verify-endpoint-adr 210 对齐 + E2E admin 40 passed。**Phase 1 后端面全部交付，CANVAS-A 消费就绪**。执行模型: claude-opus-4-8；子代理: 无。
 
 7. **CHG-HOME-CANVAS-A** — 后台同构画布：画布布局 + 区块渲染（状态：⬜ 待开始）
    - 建议模型：sonnet
