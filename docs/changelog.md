@@ -2258,3 +2258,17 @@
 - **新增依赖**：无
 - **数据库变更**：无
 - **注意事项**：① **SEQ-20260605-05 Phase 3（自动填充）全部 6 卡收口**（CORE-A/B + DOUBAN + BANGUMI + REFRESH + APPLY），ADR-182 7 端点 + ADR-183 全 D 条落地；② dev 实测：apply 对 dev 态全 filtered 候选正确 409 拦截（STATE_CONFLICT 携 candidate id）+ banner 约束 422 指引编辑器；③ 全量兜底 6901：3 次复跑分别 1/0/4 失败，全部为 staging 域 jsdom 并发 flaky（StagingEditPanel/StagingTable，隔离 12/12+13/13 过，Phase 1 收口同款登记项），与本卡无关；④ E2E admin 36 passed + 1 flaky（codename-matrix-picker page-load retry 过）exit 0；E2E 全量 4 projects 归序列收口节点（Phase 1/2 收口同口径）；⑤ 候补卡待细化：CHG-HOME-AUTOFILL-UI（候选池面板消费 #4/#5/#7）+ 公开首页消费切换（D-183-8.3）；⑥ 门禁：typecheck/lint 绿 + verify:endpoint-adr **214 对齐** + test:changed 295/295。
+
+## [CHG-HOME-AUTOFILL-APPLY-FIX] 运行时 audit enums 漏同步补齐 + 新增源码⊆运行时守卫（Codex stop-time review）
+- **完成时间**：2026-06-06
+- **记录时间**：2026-06-06 14:55
+- **执行模型**：claude-opus-4-8
+- **子代理**：无
+- **修改文件**：
+  - `apps/api/src/services/AuditLogService.ts` — ACTION_TYPES +8 / TARGET_KINDS +4：`home_section.*` 4 项 + `home_section`（本系列欠账：PREVIEW-API-A 时 union 类型先行 +4/+1，ADR-118 enums 端点运行时真源漏同步 → audit 筛选器 zod 422 拒收按 home_section 过滤）；**新守卫连带揪出同类既有欠账** `image_health.rescan/switch_domain`（ADR-135）+ `crawler_task.cancel/batch_cancel`（ADR-151）+ `image_health`/`crawler_task` targetKind——union 在档、写入位点在档、双镜像同缺
+  - `tests/unit/api/audit-log-service-enums-set-equal.test.ts` — EXPECTED_* 镜像同步 +8/+4
+  - `tests/unit/api/audit-log-coverage.test.ts` — **新增「源码实际写入 actionType ⊆ 运行时 ACTION_TYPES」守卫**（R-MID-1 第 37 次系统化）：set-equal 守卫的结构性盲区 = 运行时数组与其测试硬编码镜像**同缺时双双通过**（本次 8 项漏网即此径）；新断言锚定源码扫描结果对运行时真源，镜像同缺亦拦截（上线即检出 4 项既有欠账，自证有效）
+  - `apps/server-next/src/i18n/messages/zh-CN/audit-action-labels.ts` — +6 label（home_section 4 + crawler_task 2；image_health 2 项已在档；维护约定兑现，缺失时消费方 fallback 原始 key 不空白）
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：① 影响面 = audit log 后台筛选器（ADR-118 enums 端点）此前无法按 8 个 actionType / 4 个 targetKind 过滤——audit **写入**从未受影响（写路径不校验 enums 数组），属可见性缺口非数据缺口；② 根因为「4 处手工同步协议」（types union / Service 数组 / coverage 列表 / set-equal 镜像）缺少跨真源交叉断言，新守卫闭环该类别；③ 门禁：typecheck/lint 绿 + test:changed 1218/1218（守卫 134/134）。

@@ -96,6 +96,16 @@ export const AUDIT_ACTION_LABELS: Readonly<Record<string, string>> = {
   // reject = CHG-VIR-9-B / ADR-178 欠账；revive = CHG-VIR-13-C1 / ADR-179
   'identity_candidate.reject':       '拒绝合并候选',
   'identity_candidate.revive':       '复活合并候选',
+
+  // ── ADR-151 crawler_task 2 项（Codex review 维护约定补缺）──────────
+  'crawler_task.cancel':             '取消采集任务',
+  'crawler_task.batch_cancel':       '批量取消采集任务',
+
+  // ── ADR-182 D-182-5 home_section 4 项（Phase 1–3 落地；Codex review 补齐）──
+  'home_section.settings_update':    '首页区块设置更新',
+  'home_section.apply_autofill':     '首页候选应用为固定位',
+  'home_section.reorder':            '首页区块排序',
+  'home_section.refresh_candidates': '首页候选手动重算',
 }
 
 /**

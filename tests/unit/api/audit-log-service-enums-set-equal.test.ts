@@ -101,6 +101,18 @@ const EXPECTED_ACTION_TYPES = [
   'identity_candidate.reject',
   // CHG-VIR-13-C1 / ADR-179 D-179-5 / R-MID-1 系统化第 32 次（rejected 候选人工复活 / targetKind 复用 'identity_candidate'）
   'identity_candidate.revive',
+  // CHG-SN-7-MISC-IMAGE-1 / ADR-135（Codex stop-time review 新增「源码写入 ⊆ 运行时 enums」守卫补登的既有欠账）
+  'image_health.rescan',
+  'image_health.switch_domain',
+  // CHG-SN-9-CW1-B-EP / ADR-151（同上欠账补登）
+  'crawler_task.cancel',
+  'crawler_task.batch_cancel',
+  // CHG-HOME-PREVIEW-API-A..AUTOFILL-APPLY / ADR-182 D-182-5 / R-MID-1 第 33-36 次
+  // （Home Curation 区块 4 操作 / targetKind 'home_section'；Codex stop-time review 补齐）
+  'home_section.settings_update',
+  'home_section.apply_autofill',
+  'home_section.reorder',
+  'home_section.refresh_candidates',
 ] as const
 
 const EXPECTED_TARGET_KINDS = [
@@ -116,7 +128,10 @@ const EXPECTED_TARGET_KINDS = [
   'user_submission',  // CHG-SN-7-REDO-02-A / ADR-124
   'user',  // CHG-SN-8-FUP-USERS-ROLE-INV-EP / ADR-139
   'filter_preset',  // CHG-SN-8-FUP-PRESET-TEAM-EP-A / ADR-144（migration 072 CHECK 12→13）
+  'image_health',  // CHG-SN-7-MISC-IMAGE-1 / ADR-135（Codex review 守卫补登的既有欠账）
+  'crawler_task',  // CHG-SN-9-CW1-B-EP / ADR-151（同上；单点目标，batch 用 'system'）
   'identity_candidate',  // CHG-VIR-9-B / ADR-178 D-178-6（migration 088 CHECK 14→15）
+  'home_section',  // CHG-HOME-PREVIEW-API-A / ADR-182 D-182-5（migration 095 CHECK 15→16）
 ] as const
 
 describe('AuditLogService enums set-equal 守卫（ultrareview P1-2）', () => {

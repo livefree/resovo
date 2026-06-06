@@ -15,6 +15,7 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
+import { ACTION_TYPES as RUNTIME_ACTION_TYPES } from '../../../apps/api/src/services/AuditLogService'
 
 // plan v1.4 §3.0.5 真源 + ADR-104（home_module.* 5 项扩枚举，CHG-SN-5-05/-06 落地，
 // 中期审计 2026-05-12 CHG-SN-5-06-PATCH 同卡补 guard）
@@ -281,6 +282,21 @@ describe('admin_audit_log 覆盖率守卫（plan v1.4 §3.0.5）', () => {
   it('总覆盖：plan §3.0.5 + ADR-104 + ADR-105 + ADR-117 20 个 action_type 全部就位', () => {
     expect(found.size).toBeGreaterThanOrEqual(REQUIRED_ACTION_TYPES.length)
     for (const t of REQUIRED_ACTION_TYPES) expect(found.has(t)).toBe(true)
+  })
+
+  // Codex stop-time review（CHG-HOME-AUTOFILL-APPLY-FIX）/ R-MID-1 第 37 次系统化：
+  // set-equal 守卫的盲区 = 运行时 ACTION_TYPES 与其测试硬编码镜像**同缺**时双双通过
+  // （home_section.* 4 项 union 类型先行 + 写入位点落地，而 enums 端点真源漏同步即此例——
+  // audit 筛选器 zod 422 拒收新 actionType）。本断言直接锚定「源码实际写入 ⊆ 运行时
+  // enums 真源」，镜像同缺亦拦截。
+  it('源码写入的 actionType 必须全部存在于运行时 enums 真源 ACTION_TYPES（audit 筛选器可过滤）', () => {
+    const runtime = new Set<string>(RUNTIME_ACTION_TYPES)
+    const missing = [...found].filter((a) => !runtime.has(a))
+    expect(
+      missing,
+      `检测到源码写入但 AuditLogService.ACTION_TYPES（ADR-118 enums 端点真源）缺失的 action_type：${missing.join(', ')}\n` +
+      `修复：同步更新 AuditLogService.ACTION_TYPES + audit-log-service-enums-set-equal.test.ts EXPECTED_* 镜像。`,
+    ).toEqual([])
   })
 
   // CHG-SN-5-CHECKLIST-AUDIT-2 P0-1：R-MID-1 教训第 6 次系统化（首次代码守卫形式）
