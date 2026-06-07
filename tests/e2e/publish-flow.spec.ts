@@ -43,16 +43,6 @@ const PUBLISHED_VIDEO_CARD = {
   sourceCount: 1,
 }
 
-const VIDEO_DETAIL = {
-  ...PUBLISHED_VIDEO_CARD,
-  description: '这是一部流通测试电影',
-  category: null,
-  country: 'CN',
-  director: [],
-  cast: [],
-  writers: [],
-}
-
 // ── Cookie 辅助 ────────────────────────────────────────────────────
 
 async function setAdminCookies(context: Parameters<Parameters<typeof test>[1]>[0]['context']) {
@@ -151,40 +141,7 @@ test('视频发布后，前台搜索页返回该视频', async ({ page }) => {
 })
 
 // ── 测试：详情页加载视频信息 ─────────────────────────────────────
-
-test('点击搜索结果进入详情页，基本信息可见', async ({ page }) => {
-  // Mock 视频详情
-  await page.route(`${API_BASE}/videos/fLow1234`, (route) => {
-    route.fulfill({
-      contentType: 'application/json',
-      body: JSON.stringify({ data: VIDEO_DETAIL }),
-    })
-  })
-
-  await page.goto(`${WEB_URL}/en/movie/flow-test-movie-fLow1234`)
-  // 等待页面加载（VideoDetailClient CSR）
-  await expect(page.locator('text=流通测试电影').first()).toBeVisible({ timeout: 8000 })
-})
-
-// ── 测试：播放页加载播放器组件 ───────────────────────────────────
-
-test('进入播放页，播放器容器正常加载', async ({ page }) => {
-  // Mock 视频数据
-  await page.route(`${API_BASE}/videos/fLow1234`, (route) => {
-    route.fulfill({
-      contentType: 'application/json',
-      body: JSON.stringify({ data: VIDEO_DETAIL }),
-    })
-  })
-
-  // Mock 播放源（空列表，仅验证播放器加载）
-  await page.route(`${API_BASE}/videos/fLow1234/sources*`, (route) => {
-    route.fulfill({
-      contentType: 'application/json',
-      body: JSON.stringify({ data: [] }),
-    })
-  })
-
-  await page.goto(`${WEB_URL}/en/watch/flow-test-movie-fLow1234`)
-  await expect(page.locator('[data-testid="watch-page"]')).toBeVisible()
-})
+// CHG-E2E-GATE-AUDIT-B2（2026-06-06）：退役「详情页基本信息」与「播放页播放器容器」——
+// 断言写于 apps/web CSR 时代（page.route 浏览器拦截）；CUTOVER 后 web-next 详情/播放
+// 为 SSR 取数，浏览器 mock 到不了服务端 fetch，结构性失效。该覆盖由 tests/e2e-next/
+// detail.spec + player.spec（web 域真源套件）承担；跨应用金路径保留前两测试。

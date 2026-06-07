@@ -2340,3 +2340,16 @@
 - **新增依赖**：无
 - **数据库变更**：无
 - **注意事项**：① **v1 admin-chromium 项目 21 失败 → 6**（admin.spec 19/19 EXIT=0；middleware 激活零新增失败）；② 残余 6 项 = 类 3 全链路（publish-flow 3〔ADMIN_SPECS 编成缺 :3000 web server〕+ 断言漂移 2 + video-governance 1），登记 **CHG-E2E-GATE-AUDIT-B2**；③ 考古结论：v1 E2E 自 DEC-13（3 月）起即结构性不可满足——断言对象历经多轮改版未同步，佐证 -A「历史 exit 0 为测量伪影」判断；④ 门禁：typecheck/lint/test:changed 绿（e2e spec + middleware 不入 unit import 图）。
+
+## [CHG-E2E-GATE-AUDIT-B2] v1 类 3 全链路 6 失败处置 — v1 项目全绿（SEQ-20260606-01 卡 2b）
+- **完成时间**：2026-06-06
+- **记录时间**：2026-06-06 20:20
+- **执行模型**：claude-opus-4-8
+- **子代理**：无
+- **修改文件**：
+  - `package.json` — test:e2e:admin/video 域 PLAYWRIGHT_SERVERS 补 web（publish-flow 跨应用金路径 :3000 ERR_CONNECTION_REFUSED 实证修复）
+  - `tests/e2e/publish-flow.spec.ts` — 退役详情/播放 2 项（apps/web CSR 时代断言，CUTOVER 后 web-next SSR 取数浏览器 mock 失效；覆盖归 e2e-next detail/player）+ 孤儿 VIDEO_DETAIL 清理
+  - `tests/e2e/admin-source-and-video-flows.spec.ts` / `video-governance.spec.ts` — 退役 v1 行为漂移 3 项（dropdown douban sync / reject reason 载荷 ×2，含原 known flaky），同流程归 admin-next moderation 真源套件
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：① **v1 admin-chromium 全绿 23/23 EXIT=0**（-B+-B2 累计：21 失败→0，退役 12 / 修复 9）；② E2E admin 整体余 admin-next 26 失败（-C 卡，根因 (a) 已定界）；③ 门禁：typecheck/lint 绿 + test:changed 升全量 6922/6923（1 失败 = use-filter-presets jsdom 并发 flaky 隔离 7/7 过，既有家族）。
