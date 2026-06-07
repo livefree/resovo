@@ -106,10 +106,11 @@ export function BrandProvider({ initialBrand, initialTheme, children }: BrandPro
   const getServerSnapshot = useCallback(() => initialSnapshot.current, [])
   const state = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot)
 
-  // 'system' 的 OS 解析值：首渲染恒 SSR 确定值 'light'（hydration 稳定——render 期
-  // 直读 matchMedia 会致两端首渲染不一致）；挂载后解析并监听 OS 偏好变化
-  // （连带修复：变化此前仅同步 DOM，context resolvedTheme 不更新致消费者不重渲）
-  const [systemResolved, setSystemResolved] = useState<ResolvedTheme>('light')
+  // 'system' 的 OS 解析值：null = 未解析（首渲染 context 回退 SSR 确定值 'light'，
+  // hydration 稳定——render 期直读 matchMedia 会致两端首渲染不一致）；
+  // 挂载后解析并监听 OS 偏好变化（连带修复：变化此前仅同步 DOM，
+  // context resolvedTheme 不更新致消费者不重渲）
+  const [systemResolved, setSystemResolved] = useState<ResolvedTheme | null>(null)
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -120,7 +121,7 @@ export function BrandProvider({ initialBrand, initialTheme, children }: BrandPro
     return () => mql.removeEventListener('change', apply)
   }, [])
 
-  const resolvedTheme: ResolvedTheme = state.theme === 'system' ? systemResolved : state.theme
+  const resolvedTheme: ResolvedTheme = state.theme === 'system' ? (systemResolved ?? 'light') : state.theme
 
   useEffect(() => {
     syncDomBrand(state.brand.slug)
@@ -130,10 +131,14 @@ export function BrandProvider({ initialBrand, initialTheme, children }: BrandPro
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // 主题 DOM 同步单路径：挂载 / system 解析就绪 / OS 变化 / setTheme 统一经此
+  // 主题 DOM 同步单路径：system 解析就绪 / OS 变化 / setTheme 统一经此。
+  // 'system' 未解析阶段**不写 DOM**——theme-init-script 已在首绘前按 matchMedia
+  // 设好正确 data-theme，用未解析回退值覆写会重引主题闪烁（Codex review）；
+  // 解析在首个 effect flush 内落地后由本 effect 写入同值（视觉无变化）。
   useEffect(() => {
+    if (state.theme === 'system' && systemResolved === null) return
     syncDomTheme(resolvedTheme)
-  }, [resolvedTheme])
+  }, [state.theme, systemResolved, resolvedTheme])
 
   const setBrand = useCallback((slug: string): void => {
     void (async () => {

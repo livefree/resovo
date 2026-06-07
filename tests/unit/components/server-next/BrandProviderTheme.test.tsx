@@ -85,6 +85,34 @@ describe('BrandProvider resolvedTheme — hydration 稳定性', () => {
     expect(screen.getByTestId('resolved').textContent).toBe('dark')
   })
 
+  it("system 未解析阶段不覆写既有 data-theme（pre-hydration/SSR 值保护——防主题闪烁，Codex review）", async () => {
+    // 模拟首绘前已落正确值（web-next theme-init-script / server-next SSR attr）
+    document.documentElement.dataset.theme = 'dark'
+    const observed: Array<string | null> = []
+    const mo = new MutationObserver(() => undefined)
+    mo.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['data-theme'],
+      attributeOldValue: true,
+    })
+
+    installMatchMedia(true) // OS 深色：解析结果与脚本值一致
+    render(
+      <BrandProvider initialBrand={BRAND} initialTheme="system">
+        <Probe />
+      </BrandProvider>,
+    )
+    await Promise.resolve() // 冲洗 MutationObserver 微任务队列
+    for (const record of mo.takeRecords()) observed.push(record.oldValue)
+    mo.disconnect()
+
+    // DOM 全程不得出现未解析回退值的覆写（oldValue 序列无 'light' = 从未闪过浅色）
+    expect(observed).not.toContain('light')
+    expect(document.documentElement.dataset.theme).toBe('dark')
+    // context 首渲染仍为 SSR 确定值（hydration 稳定不受守卫影响）
+    expect(seen[0]).toBe('dark')
+  })
+
   it('OS 偏好变化 → context resolvedTheme 重渲 + DOM 同步（连带修复）', () => {
     const os = installMatchMedia(true)
     render(
