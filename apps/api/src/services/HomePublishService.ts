@@ -28,6 +28,7 @@ import {
   findLatestVersionNo,
   findTruthTablesMaxUpdatedAt,
   publishHomeConfig,
+  readPublishedHomeConfig,
   listHomePublishVersions,
   findHomePublishVersionByNo,
   countHomePublishVersions,
@@ -38,6 +39,7 @@ import { schedulePublishedHomeCacheInvalidation } from '@/api/services/home-cach
 import { AppError } from '@/api/lib/errors'
 import {
   HomePageConfigSchema,
+  DraftQuerySchema,
   SaveDraftSchema,
   PublishSchema,
   ListVersionsSchema,
@@ -48,6 +50,7 @@ import {
 // route 层消费入口保持单点（HomeCurationService 同范式 re-export）
 export {
   HomePageConfigSchema,
+  DraftQuerySchema,
   SaveDraftSchema,
   PublishSchema,
   ListVersionsSchema,
@@ -116,13 +119,20 @@ export class HomePublishService {
   /**
    * 端点 #1 扩展读（CHG-HOME-DRAFT-PUBLISH-B）：草稿 + 陈旧双信号（D-185-2.2）。
    * staleness 为编辑器提示用途（gaps additive 同范式）；权威判定仍在 publish 时点。
+   * includeBase（-B-FIX2 additive）：附当前发布态整页 config——惰性建稿基线的
+   * **服务端单快照装配**（REPEATABLE READ 零分页；客户端 OFFSET 分页在页间
+   * 并发增删下可计数吻合仍漏行，全量替换语义下缺行即删行）。
    */
-  async getDraftWithStaleness(): Promise<{
+  async getDraftWithStaleness(opts: { includeBase?: boolean } = {}): Promise<{
     draft: HomeConfigDraft | null
     staleness: HomeDraftStaleness | null
+    base: HomePageConfig | null
   }> {
-    const draft = await findHomeConfigDraft(this.db)
-    if (!draft) return { draft: null, staleness: null }
+    const [draft, base] = await Promise.all([
+      findHomeConfigDraft(this.db),
+      opts.includeBase ? readPublishedHomeConfig(this.db) : Promise.resolve(null),
+    ])
+    if (!draft) return { draft: null, staleness: null, base }
 
     const [latestVersionNo, tablesMaxUpdatedAt] = await Promise.all([
       findLatestVersionNo(this.db),
@@ -141,6 +151,7 @@ export class HomePublishService {
         latestVersionNo,
         tablesMaxUpdatedAt,
       },
+      base,
     }
   }
 

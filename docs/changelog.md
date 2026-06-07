@@ -2433,6 +2433,19 @@
 - **数据库变更**：无
 - **注意事项**：① **治理方案 §14「后台 /admin/home 有 E2E 覆盖」收口**（此前零命中）；admin 域全量 **76→87 EXIT=0** 零回归；② 实施陷阱记档：canvas-section 中心点击落在空卡触发 onEmptySlot 不冒泡 select → 选区块须打 head pill（`canvas-mode-*`）；AdminInput `data-testid` 落 wrapper div → fill/toHaveValue 须 `.locator('input')` 下钻（后续 home 域 spec 沿用）；③ 视觉回归评估：**不另立**——画布动态数据密集，截图基线脆弱收益低，testid 行为断言已覆盖；④ 门禁：typecheck/lint/test:changed 绿 + `npm run test:e2e:admin` 87/87 EXIT=0。
 
+## [CHG-HOME-DRAFT-PUBLISH-B-FIX2] 惰性建稿基线改服务端单快照（Codex stop-time review 第 2 轮）
+- **完成时间**：2026-06-07
+- **记录时间**：2026-06-07 07:30
+- **执行模型**：claude-opus-4-8
+- **子代理**：无
+- **修改文件**：
+  - `apps/api/src/db/queries/home-publish.ts` — `readPublishedHomeConfig` 新增：REPEATABLE READ READ ONLY 事务包裹 `readHomePageState`（publish 事务内同款三表全量读复用）——**单快照零分页**
+  - `apps/api/src/services/HomePublishService.ts` + `home-publish.schemas.ts` + `routes/admin/home-publish.ts` — GET /admin/home/draft 增 `include_base=true` query（布尔显式枚举）：顶层 additive `base` 携当前发布态整页；缺省路径零变化（base 不计算不返回，既有断言不破）
+  - `apps/server-next/src/lib/home-curation/{api,use-home-draft}.ts` — 惰性建稿基线改 `getHomeDraft({ includeBase: true })`；同请求回传草稿态：**他端已并发建稿则采纳其 config 为基（共享单草稿模型防覆盖）**；FIX1 的客户端分页装配层 `draft-assembly.ts` 及其测试**删除**（被本方案整体取代）
+  - 测试：`home-publish.test.ts` +3（include_base 无草稿携 base / 缺省零触达零 base 键 / 有草稿并存）；e2e `_helpers` GET draft mock 同步 include_base
+- **新增依赖**：无 ｜ **数据库变更**：无
+- **注意事项**：① Codex 第 2 轮命中：「paginated draft assembly can still silently miss modules」——FIX1 的 OFFSET 分页聚合在**页间并发增删**下可计数吻合仍漏行（删页一区行 + 插页二区行净零位移即穿过 total 校验），且无稳定排序 tiebreaker 时静态数据也可页间重叠/漏行；**客户端分页本质上无法保证一致性快照**；② 规律沉淀（取代 FIX1 版本）：**「整体替换」语义的数据底座装配必须来自单一一致性快照（服务端事务内全量读）——客户端分页聚合无论怎么校验都只是缩小而非消除竞态窗**；③ dev 实测：include_base 回传 20 modules + 2 banners + 7 settings；缺省路径键集无 base；④ 门禁：typecheck/lint 绿 + test:changed 237/237 + home 域 E2E 22/22。
+
 ## [CHG-HOME-DRAFT-PUBLISH-B-FIX] 惰性建稿装配截断防御（Codex stop-time review）
 - **完成时间**：2026-06-07
 - **记录时间**：2026-06-07 07:00

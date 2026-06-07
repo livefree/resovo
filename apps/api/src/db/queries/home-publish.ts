@@ -267,6 +267,27 @@ async function readHomePageState(client: PoolClient): Promise<HomePageConfig> {
   }
 }
 
+/**
+ * 当前发布态整页读取（草稿基线装配数据源，CHG-HOME-DRAFT-PUBLISH-B-FIX2）。
+ * **服务端单快照零分页**：REPEATABLE READ 锁定三表同一可见性快照——客户端
+ * OFFSET 分页在页间并发增删下可计数吻合仍漏行（Codex review 命中），
+ * publish 全量替换语义下缺行即删行，基线装配必须走本路径。
+ */
+export async function readPublishedHomeConfig(db: Pool): Promise<HomePageConfig> {
+  const client = await db.connect()
+  try {
+    await client.query('BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY')
+    const config = await readHomePageState(client)
+    await client.query('COMMIT')
+    return config
+  } catch (err) {
+    await client.query('ROLLBACK')
+    throw err
+  } finally {
+    client.release()
+  }
+}
+
 // ── 发布事务（端点 #4；卡 26 rollback 复用——draftId 省略时跳过草稿删除）──────
 
 export interface PublishHomeConfigResult {

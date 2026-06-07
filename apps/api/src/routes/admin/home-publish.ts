@@ -21,6 +21,7 @@ import type { FastifyInstance } from 'fastify'
 import { db } from '@/api/lib/postgres'
 import {
   HomePublishService,
+  DraftQuerySchema,
   SaveDraftSchema,
   PublishSchema,
   ListVersionsSchema,
@@ -35,12 +36,19 @@ export async function adminHomePublishRoutes(fastify: FastifyInstance) {
 
   // ── GET /admin/home/draft ─────────────────────────────────────────────────
   // D-185-3.1：无草稿 200 { data: null }——存在性非错误。
-  // staleness 顶层 additive（CHG-HOME-DRAFT-PUBLISH-B / D-185-2.2 编辑器提示；
-  // 候选端点 gaps additive 同范式非 break）
+  // staleness 顶层 additive（CHG-HOME-DRAFT-PUBLISH-B / D-185-2.2 编辑器提示）；
+  // include_base=true → base 附当前发布态整页（-B-FIX2：惰性建稿基线的服务端
+  // 单快照装配，取代客户端 OFFSET 分页——页间并发增删可计数吻合仍漏行）
 
-  fastify.get('/admin/home/draft', { preHandler: adminOnly }, async (_request, reply) => {
-    const { draft, staleness } = await svc.getDraftWithStaleness()
-    return reply.send({ data: draft, staleness })
+  fastify.get('/admin/home/draft', { preHandler: adminOnly }, async (request, reply) => {
+    const parsed = DraftQuerySchema.safeParse(request.query)
+    if (!parsed.success) {
+      return reply.code(422).send({
+        error: { code: 'VALIDATION_ERROR', message: parsed.error.issues[0]?.message ?? '参数错误', status: 422 },
+      })
+    }
+    const { draft, staleness, base } = await svc.getDraftWithStaleness({ includeBase: parsed.data.include_base })
+    return reply.send({ data: draft, staleness, ...(base ? { base } : {}) })
   })
 
   // ── PUT /admin/home/draft ─────────────────────────────────────────────────

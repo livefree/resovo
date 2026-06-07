@@ -125,6 +125,12 @@ export const HomePageConfigSchema = z.object({
   }
 })
 
+/** GET /admin/home/draft query（include_base = 服务端单快照基线装配，-B-FIX2 additive；
+ * 布尔显式枚举防 coerce 陷阱） */
+export const DraftQuerySchema = z.object({
+  include_base: z.enum(['true', 'false']).optional().transform((v) => v === 'true'),
+})
+
 /** PUT /admin/home/draft body（D-185-3.1 整体替换） */
 export const SaveDraftSchema = z.object({
   config: HomePageConfigSchema,

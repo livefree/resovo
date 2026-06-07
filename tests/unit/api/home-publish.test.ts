@@ -42,6 +42,7 @@ const mockPublish = vi.fn()
 const mockListVersions = vi.fn()
 const mockFindVersionByNo = vi.fn()
 const mockCountVersions = vi.fn()
+const mockReadPublishedConfig = vi.fn()
 
 vi.mock('@/api/db/queries/home-publish', () => ({
   findHomeConfigDraft: (...args: unknown[]) => mockFindDraft(...args),
@@ -50,6 +51,7 @@ vi.mock('@/api/db/queries/home-publish', () => ({
   findLatestVersionNo: (...args: unknown[]) => mockLatestVersionNo(...args),
   findTruthTablesMaxUpdatedAt: (...args: unknown[]) => mockTablesMaxUpdatedAt(...args),
   publishHomeConfig: (...args: unknown[]) => mockPublish(...args),
+  readPublishedHomeConfig: (...args: unknown[]) => mockReadPublishedConfig(...args),
   listHomePublishVersions: (...args: unknown[]) => mockListVersions(...args),
   findHomePublishVersionByNo: (...args: unknown[]) => mockFindVersionByNo(...args),
   countHomePublishVersions: (...args: unknown[]) => mockCountVersions(...args),
@@ -217,6 +219,46 @@ describe('GET /admin/home/draft', () => {
   it('未认证 → 401', async () => {
     const res = await app.inject({ method: 'GET', url: '/v1/admin/home/draft' })
     expect(res.statusCode).toBe(401)
+  })
+
+  // ── include_base（-B-FIX2：惰性建稿基线 = 服务端单快照装配）─────────────
+
+  it('include_base=true + 无草稿 → base 携当前发布态（readPublishedHomeConfig 单快照委托）', async () => {
+    mockFindDraft.mockResolvedValue(null)
+    mockReadPublishedConfig.mockResolvedValue(pageConfig())
+    const res = await app.inject({
+      method: 'GET', url: '/v1/admin/home/draft?include_base=true',
+      headers: { authorization: await adminToken() },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data).toBeNull()
+    expect(res.json().base.settings).toHaveLength(7)
+    expect(mockReadPublishedConfig).toHaveBeenCalledTimes(1)
+  })
+
+  it('缺省路径不读 base（readPublishedHomeConfig 零触达 + 响应无 base 键）', async () => {
+    mockFindDraft.mockResolvedValue(null)
+    const res = await app.inject({
+      method: 'GET', url: '/v1/admin/home/draft',
+      headers: { authorization: await adminToken() },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toEqual({ data: null, staleness: null })
+    expect(mockReadPublishedConfig).not.toHaveBeenCalled()
+  })
+
+  it('include_base=true + 有草稿 → base 与草稿并存（他端并发建稿采纳路径数据源）', async () => {
+    mockFindDraft.mockResolvedValue(draftRow({ baseVersionNo: 1 }))
+    mockLatestVersionNo.mockResolvedValue(1)
+    mockTablesMaxUpdatedAt.mockResolvedValue(null)
+    mockReadPublishedConfig.mockResolvedValue(pageConfig({ modules: [] }))
+    const res = await app.inject({
+      method: 'GET', url: '/v1/admin/home/draft?include_base=true',
+      headers: { authorization: await adminToken() },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.id).toBe('draft-1')
+    expect(res.json().base.modules).toEqual([])
   })
 })
 

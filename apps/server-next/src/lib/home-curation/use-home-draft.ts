@@ -7,9 +7,11 @@
  * 变更立即 PUT 整页草稿（与既有画布"每操作即持久化"交互粒度一致，无丢失编辑
  * 风险），「保存草稿」不设独立按钮；显式动作 = 「发布」「丢弃草稿」。
  *
- * 首次编辑惰性建稿：无草稿时从三真源装配整页 config（draft-assembly 分页聚合
- * 至 total——**含 banner-slot 冻结存量行**，publish 全量替换语义下缺装配即被删除；
- * 不完整/超上限显式失败，CHG-HOME-DRAFT-PUBLISH-B-FIX 防静默截断）。
+ * 首次编辑惰性建稿：无草稿时基线 = `GET /admin/home/draft?include_base=true`
+ * **服务端单快照装配**（REPEATABLE READ 三表一致读，含 banner-slot 冻结存量；
+ * -B-FIX2 取代客户端 OFFSET 分页——页间并发增删可计数吻合仍漏行，publish
+ * 全量替换语义下缺行即删行）。该请求同时回传服务端草稿态：他端已并发建稿
+ * 则以其 config 为基（共享单草稿模型，防覆盖）。
  * mutate 串行化（链式 promise）防会话内 PUT 竞态。
  */
 
@@ -20,7 +22,6 @@ import {
   discardHomeDraft,
   publishHomeDraft,
 } from './api'
-import { assembleBaseConfig } from './draft-assembly'
 import type { HomeConfigDraft, HomeDraftStaleness, HomePageConfig } from './types'
 
 export interface UseHomeDraftResult {
@@ -78,12 +79,26 @@ export function useHomeDraft(): UseHomeDraftResult {
     }
   }, [])
 
+  /** 惰性建稿基线：服务端单快照（并发他端已建稿 → 采纳其 config 防覆盖） */
+  const fetchBaseConfig = useCallback(async (): Promise<HomePageConfig> => {
+    const result = await getHomeDraft({ includeBase: true })
+    if (result.draft) {
+      setDraft(result.draft)
+      setStaleness(result.staleness)
+      return result.draft.config
+    }
+    if (!result.base) {
+      throw new Error('基线装配失败：服务端未返回当前发布态，请重试')
+    }
+    return result.base
+  }, [])
+
   const mutateConfig = useCallback(
     (mutator: (config: HomePageConfig) => HomePageConfig) => {
       const run = async () => {
         setBusy(true)
         try {
-          const base = draftRef.current?.config ?? (await assembleBaseConfig())
+          const base = draftRef.current?.config ?? (await fetchBaseConfig())
           const saved = await saveHomeDraft(mutator(base))
           setDraft(saved)
         } finally {
@@ -95,7 +110,7 @@ export function useHomeDraft(): UseHomeDraftResult {
       chainRef.current = next.catch(() => undefined)
       return next
     },
-    [],
+    [fetchBaseConfig],
   )
 
   const publish = useCallback(async (note?: string) => {

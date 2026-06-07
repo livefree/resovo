@@ -41,13 +41,23 @@ export interface HomeDraftResult {
   readonly draft: HomeConfigDraft | null
   /** 陈旧双信号（无草稿 null；additive 顶层字段，D-185-2.2 编辑器提示） */
   readonly staleness: HomeDraftStaleness | null
+  /** includeBase=true 时附当前发布态整页（服务端单快照装配——惰性建稿基线，
+   * -B-FIX2：客户端 OFFSET 分页在页间并发增删下可计数吻合仍漏行） */
+  readonly base?: HomePageConfig
 }
 
-export async function getHomeDraft(): Promise<HomeDraftResult> {
-  const result = await apiClient.get<{ data: HomeConfigDraft | null; staleness: HomeDraftStaleness | null }>(
-    '/admin/home/draft',
-  )
-  return { draft: result.data, staleness: result.staleness ?? null }
+export async function getHomeDraft(opts: { includeBase?: boolean } = {}): Promise<HomeDraftResult> {
+  const qs = opts.includeBase ? '?include_base=true' : ''
+  const result = await apiClient.get<{
+    data: HomeConfigDraft | null
+    staleness: HomeDraftStaleness | null
+    base?: HomePageConfig
+  }>(`/admin/home/draft${qs}`)
+  return {
+    draft: result.data,
+    staleness: result.staleness ?? null,
+    ...(result.base ? { base: result.base } : {}),
+  }
 }
 
 /** PUT 整页整体替换（D-185-3.1；不计 audit——编辑态噪音） */

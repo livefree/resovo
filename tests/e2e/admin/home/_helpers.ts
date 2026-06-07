@@ -359,11 +359,14 @@ export async function installHomeOpsMocks(page: Page, state: HomeOpsMockState) {
       })
     }
 
-    // ── ADR-185 #1–#3：draft GET/PUT/DELETE（staleness 顶层 additive）──
+    // ── ADR-185 #1–#3：draft GET/PUT/DELETE（staleness 顶层 additive；
+    // include_base = 服务端单快照基线装配，-B-FIX2）──
     if (path === '/v1/admin/home/draft' && method === 'GET') {
+      const includeBase = url.searchParams.get('include_base') === 'true'
       return json({
         data: state.draft,
         staleness: state.draft ? (state.staleness ?? NOT_STALE) : null,
+        ...(includeBase ? { base: makeDraft(state).config } : {}),
       })
     }
     if (path === '/v1/admin/home/draft' && method === 'PUT') {
