@@ -2433,6 +2433,18 @@
 - **数据库变更**：无
 - **注意事项**：① **治理方案 §14「后台 /admin/home 有 E2E 覆盖」收口**（此前零命中）；admin 域全量 **76→87 EXIT=0** 零回归；② 实施陷阱记档：canvas-section 中心点击落在空卡触发 onEmptySlot 不冒泡 select → 选区块须打 head pill（`canvas-mode-*`）；AdminInput `data-testid` 落 wrapper div → fill/toHaveValue 须 `.locator('input')` 下钻（后续 home 域 spec 沿用）；③ 视觉回归评估：**不另立**——画布动态数据密集，截图基线脆弱收益低，testid 行为断言已覆盖；④ 门禁：typecheck/lint/test:changed 绿 + `npm run test:e2e:admin` 87/87 EXIT=0。
 
+## [CHG-HOME-DRAFT-PUBLISH-B-FIX] 惰性建稿装配截断防御（Codex stop-time review）
+- **完成时间**：2026-06-07
+- **记录时间**：2026-06-07 07:00
+- **执行模型**：claude-opus-4-8
+- **子代理**：无
+- **修改文件**：
+  - `apps/server-next/src/lib/home-curation/draft-assembly.ts` — **新建**：首次编辑惰性建稿整页装配自 use-home-draft 抽出——**分页聚合至 total**（两列表路由 limit 上限 100，原单页装配在存量 modules/banners > 100 时静默截断，publish 全量替换语义下**缺行即删行**）；超装配上限（modules 500 / banners 100，HomePageConfigSchema 同源）或聚合不完整 → **显式失败**（宁可建稿失败不可静默截断）
+  - `apps/server-next/src/lib/home-curation/use-home-draft.ts` — assembleBaseConfig 改导入装配层（错误经 mutateConfig 上抛 → 既有操作处 danger toast 自然承接）
+  - `tests/unit/server-next/home-draft-assembly.test.ts` — **新建** 5 例：单页全量 / **存量 250 三页聚合零截断（修复点核心断言）** / 超上限显式失败 / 空页提前终止聚合不完整失败 / banners pagination 包络聚合
+- **新增依赖**：无 ｜ **数据库变更**：无
+- **注意事项**：① Codex stop-time review 命中：「first draft edit can truncate existing home modules before publish」——卡 25 实施时已注意到 limit 100 边界但未设防（当时存量 20 行），属**全量替换语义的完整性前置条件缺失**；② 规律沉淀：**凡为「整体替换」语义装配数据底座，必须聚合至 total 并对不完整路径显式失败**——单页取数 + 上限默认值是静默截断温床；③ 门禁：typecheck/lint 绿 + test:changed 33/33 + home 域 E2E 22/22（惰性建稿路径回归）。
+
 ## [CHG-HOME-CACHE-INVALIDATE] 发布后缓存主动失效（SEQ-20260605-05 Phase 4 卡 27 / **Phase 4 全收口**）
 - **完成时间**：2026-06-07
 - **记录时间**：2026-06-07 06:45

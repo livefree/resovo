@@ -7,21 +7,20 @@
  * 变更立即 PUT 整页草稿（与既有画布"每操作即持久化"交互粒度一致，无丢失编辑
  * 风险），「保存草稿」不设独立按钮；显式动作 = 「发布」「丢弃草稿」。
  *
- * 首次编辑惰性建稿：无草稿时从三真源装配整页 config（banners + modules 全量
- * ——**含 banner-slot 冻结存量行**，publish 全量替换语义下缺装配即被删除）。
+ * 首次编辑惰性建稿：无草稿时从三真源装配整页 config（draft-assembly 分页聚合
+ * 至 total——**含 banner-slot 冻结存量行**，publish 全量替换语义下缺装配即被删除；
+ * 不完整/超上限显式失败，CHG-HOME-DRAFT-PUBLISH-B-FIX 防静默截断）。
  * mutate 串行化（链式 promise）防会话内 PUT 竞态。
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { listBanners } from '@/lib/banners/api'
-import { listHomeModules } from '@/lib/home-modules/api'
 import {
   getHomeDraft,
   saveHomeDraft,
   discardHomeDraft,
   publishHomeDraft,
-  listHomeSections,
 } from './api'
+import { assembleBaseConfig } from './draft-assembly'
 import type { HomeConfigDraft, HomeDraftStaleness, HomePageConfig } from './types'
 
 export interface UseHomeDraftResult {
@@ -38,20 +37,6 @@ export interface UseHomeDraftResult {
   readonly discard: () => Promise<void>
   /** 重读草稿 + 双信号（发布/丢弃后内部已自动调用） */
   readonly reload: () => Promise<void>
-}
-
-/** 三真源装配整页 config（首次编辑底座；modules 全量含冻结存量） */
-async function assembleBaseConfig(): Promise<HomePageConfig> {
-  const [bannersResult, modulesResult, sections] = await Promise.all([
-    listBanners({ limit: 100 }),
-    listHomeModules({ limit: 100 }),
-    listHomeSections(),
-  ])
-  return {
-    banners: [...bannersResult.data],
-    modules: [...modulesResult.data],
-    settings: sections.map((s) => s.settings),
-  }
 }
 
 export function useHomeDraft(): UseHomeDraftResult {
