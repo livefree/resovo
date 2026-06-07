@@ -6,7 +6,7 @@
 
 ## 当前任务（单任务工作台：同时仅 1 个 🔄 进行中；完成即删卡，历史见 docs/changelog.md）
 
-（空 — SEQ-20260607-03 卡 3A CHG-DOUBAN-HOT-STORE-A 收口 2026-06-07 16:25：迁移 099 建 items+sync_state 两表 + queries 事务全量替换/新鲜度状态 + doubanAdapter.getDoubanCollectionItems 包装；migrate 落库 + 门禁全绿；卡 3B CHG-DOUBAN-HOT-STORE-B 启动时写新卡，见 task-queue SEQ-20260607-03）
+（空 — SEQ-20260607-03 DOUBAN-HOT-ACQUISITION 全 4 卡收口 2026-06-07 16:40：ADR-187 + adapter subject_collection 服务 + 持久层（迁移/queries/lib）+ 编排抓取 job（注册表/refresh/maintenance）；全 16 合集实测落库 1294 行。后续卡 CHG-DOUBAN-HOT-WIRE 首页展示接线待用户按接口另起。见 changelog）
 
 ---
 

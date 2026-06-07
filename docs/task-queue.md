@@ -104,9 +104,9 @@
 
 ## [SEQ-20260607-03] DOUBAN-HOT-ACQUISITION — 全面落实豆瓣热门资源获取能力（采集优先，展示后置）
 
-- **状态**：🔄 执行中（卡 1 ADR ✅ / 卡 2 ADAPTER ✅ / 卡 3A STORE-A ✅ 2026-06-07 16:25；卡 3B STORE-B 待开始）
+- **状态**：✅ 已完成（本期 4 卡全收口 2026-06-07 16:40：ADR-187 + adapter 服务 + 持久层 + 编排抓取 job；全 16 合集实测落库 1294 行。后续卡 CHG-DOUBAN-HOT-WIRE 展示接线待用户按接口另起）
 - **创建时间**：2026-06-07 15:00
-- **最后更新时间**：2026-06-07 16:25
+- **最后更新时间**：2026-06-07 16:40
 - **目标**：妥善全面落实豆瓣**热门合集资源采集 + 落库能力**（实测 16 个可用合集：电影 5 / 剧集 8 / 综艺 3，含热门·热映·即将上映·Top250·口碑榜·分国别）。**不按站内映射/产品展示过滤**，全量字段入库；产品展示（首页接线）后期按接口丰富。
 - **范围**：`external-adapter/douban-adapter`（新 subject_collection 服务）+ `apps/api`（迁移建表 / queries / lib 包装 / 定时抓取 job）。**不改** home autofill、**不触** ADR-183 展示治理、**不删** douban_entries。
 - **用户裁定**（2026-06-07）：豆瓣热门资源获取要全面做透，不能被「当前产品只展示站内有的视频」反向裁剪数据层；展示后期再按接口丰富。
@@ -133,10 +133,10 @@
    - 完成备注：**实施 ADR-187 D-187-1/4/5/6/7**。迁移 099 建 `external_data.douban_collection_items`（20 列含 raw JSONB/release_date/info；BIGSERIAL PK + UNIQUE(collection,douban_id) + idx(collection,rank)/(douban_id)，M1/M2）+ `external_data.douban_collection_sync_state`（collection PK + last_attempt/success_at + last_status + last_error + item_count，M3）；architecture.md §5.5 + 迁移清单同步。queries `douban-collections.ts`：`replaceCollectionItems`（db.connect 事务 DELETE+批量 INSERT+sync_state UPSERT ok，M4①；parseYear 防御 year='' → null）+ `recordCollectionSyncState`（failed/empty_guard，DO UPDATE SET **不重置 last_success_at** 保留陈旧度，D-187-5）+ `getCollectionSyncState` + `listCollectionItems`。`doubanAdapter.getDoubanCollectionItems`（懒单例复用 createBasicRuntime+fetchWithTimeout；try/catch → **null 区分抓取失败 vs items:[] 空**）。`doubanCollections.test.ts` 6 例（事务序/ROLLBACK/sync_state 不重置 success/映射）。门禁：migrate dev 落 2 表 4 索引 / typecheck 绿 / lint 5/5 / test:changed 15 文件 193 测试。执行模型: claude-opus-4-8；子代理: 无（实施 ADR 既定 schema，arch-reviewer 已在 ADR 阶段裁定 M1/M2/M3）。
    - 依赖：CHG-DOUBAN-HOT-ADAPTER ✅。
 
-4. **CHG-DOUBAN-HOT-STORE-B** — 编排：合集注册表 + 抓取 refresh 服务（分页全量 + empty_guard）+ maintenance job kind + scheduler tick（状态：⬜ 待开始）
-   - 创建时间：2026-06-07 16:05
+4. **CHG-DOUBAN-HOT-STORE-B** — 编排：合集注册表 + 抓取 refresh 服务（分页全量 + empty_guard）+ maintenance job kind + scheduler tick（状态：✅ 已完成 2026-06-07 16:40）
+   - 创建时间：2026-06-07 16:05 ｜ 实际开始：2026-06-07 16:30 ｜ 完成时间：2026-06-07 16:40
    - 建议模型：opus
-   - 验收要点：`DOUBAN_COLLECTIONS` 注册表（16 项 + domain/category/maxItems）；refresh 服务遍历注册表分页全量拉 → empty_guard 判定 → `replaceCollectionItems`/`recordCollectionSyncState`；maintenanceWorker 加 job type `refresh-douban-collections` + maintenanceScheduler 加 tick（≥ 数小时，server.ts 已注册 maintenance 无需改）；服务单测；临时脚本实测全 16 合集落库行数 + 字段非空率；typecheck/lint/test:changed 绿。
+   - 完成备注：**实施 ADR-187 D-187-2/3/4/8**。`services/douban-collections/registry.ts`（`DOUBAN_COLLECTIONS` 16 项 + domain/category/maxItems + PAGE_SIZE=50/GLOBAL_MAX_ITEMS=600/延时/guard 阈值常量）+ `refresh.ts`（`collectAllItems` 分页全量累积 rank + 中途/首页失败 → null 整轮失败；`refreshCollection` 失败/empty_guard 判定 → replaceCollectionItems；`refreshAllCollections` 遍历 + 合集间 2s 延时 + 单合集异常隔离记 failed）。`maintenanceWorker` 加 job type `refresh-douban-collections` → refreshAllCollections + 汇总日志；`maintenanceScheduler` 加 6h tick（server.ts 已注册 maintenance 无需改）+ getSchedulerStatus。`doubanCollectionsRefresh.test.ts` 7 例（单页/分页 rank 连续/失败/empty_guard 空/骤降/首轮不误判/refreshAll 隔离）。**端到端实测（临时脚本 run-and-delete）：全 16 合集 ok 落库合计 1294 行**（movie_hot_gaia 330/top250 250/tv_hot 247…），字段齐全、raw 不含 comments、sync_state 全 ok 带 last_success_at。门禁：typecheck 绿 / lint 5/5 / test:changed 3 文件 48 测试（refresh 7 + scheduler 关联 system-config 29 + background-event 12）。执行模型: claude-opus-4-8；子代理: 无。
    - 依赖：CHG-DOUBAN-HOT-STORE-A ✅。
 
 ### 后续卡登记（本期不实施）

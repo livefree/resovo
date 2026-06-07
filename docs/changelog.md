@@ -2661,3 +2661,18 @@
   - `tests/unit/api/doubanCollections.test.ts`（新建）— 6 例（事务 BEGIN→DELETE→INSERT×N→sync_state ok→COMMIT / ROLLBACK+release / failed 不重置 last_success_at / empty_guard 透传 / getCollectionSyncState 映射+null / listCollectionItems rating Number 强转）
 - **新增依赖**：无 ｜ **数据库变更**：**migration 099**（external_data.douban_collection_items + douban_collection_sync_state；architecture.md 已同步）
 - **注意事项**：① 全量替换 DELETE+INSERT **同事务**（M4① 原子，MVCC 下并发读永不见半份/空榜）；② `getDoubanCollectionItems` 返回 null（抓取失败）vs `items:[]`（成功但空）的区分是卡 3B empty_guard 守护的前提；③ 失败路径 `recordCollectionSyncState` 故意保留 last_success_at（陈旧度持续增长，消费方据此判数据陈旧）；④ 门禁：migrate dev 落 2 表 4 索引（含 raw jsonb 验证）/ typecheck 绿 / lint 5/5 / test:changed 15 文件 193 测试全过。
+
+## [CHG-DOUBAN-HOT-STORE-B] 豆瓣合集采集编排：注册表 + refresh 服务 + maintenance job/scheduler（SEQ-20260607-03 卡 3B / 全序列收口）
+- **完成时间**：2026-06-07
+- **记录时间**：2026-06-07 16:40
+- **执行模型**：claude-opus-4-8
+- **子代理**：无（实施 ADR-187 既定编排，非新契约决策）
+- **修改文件**：
+  - `apps/api/src/services/douban-collections/registry.ts`（新建）— `DOUBAN_COLLECTIONS` 16 合集注册表（key + domain + category + maxItems?，D-187-2 代码常量 INV-4）+ 抓取常量（PAGE_SIZE=50 / GLOBAL_MAX_ITEMS=600 / PAGE_DELAY 300ms / COLLECTION_DELAY 2s / GUARD_MIN_BASELINE=10 / GUARD_DROP_RATIO=0.5）
+  - `apps/api/src/services/douban-collections/refresh.ts`（新建）— `collectAllItems`（分页全量累积 rank；中途/首页 null → 整轮失败不部分替换）+ `refreshCollection`（失败 → recordSyncState(failed) / empty_guard 空·骤降 → 保留旧 / 否则 replaceCollectionItems，D-187-3/4）+ `refreshAllCollections`（遍历注册表 + 合集间 2s 延时 + 单合集异常隔离记 failed）
+  - `apps/api/src/workers/maintenanceWorker.ts` — 加 job type `refresh-douban-collections` → refreshAllCollections + ok/failed/guarded/totalItems 汇总日志
+  - `apps/api/src/workers/maintenanceScheduler.ts` — 加 6h tick `runDoubanCollectionsTick`（入队 + jobId 幂等 + removeOnComplete/Fail）+ timer 注册 + getSchedulerStatus（server.ts 已注册 maintenance，无需改）
+  - `tests/unit/api/doubanCollectionsRefresh.test.ts`（新建）— 7 例（单页 rank 连续 + domain/category 注入 / 分页跨页 rank 连续 / 抓取失败 failed / empty_guard 空 / empty_guard 骤降 / 首轮 baseline 0 不误判 / refreshAll 全 16 异常隔离）
+- **新增依赖**：无 ｜ **数据库变更**：无（消费卡 3A 的 099 表）
+- **注意事项**：① **端到端实测（临时脚本 run-and-delete）：全 16 合集 ok 落库合计 1294 行**（movie_hot_gaia 330 / movie_top250 250 / tv_hot 247 / show_hot 61…），字段（title/year/rating/release_date）齐全、**raw 不含 comments**（strip 生效）、sync_state 全 ok 带 last_success_at、rank 连续、domain/category 正确；② 抓取频率 6h（热度榜无需高频，D-187-3）；③ 网络 I/O 在编排层、候选生成（home autofill）仍纯 DB（ADR-183 边界不变）；④ 门禁：typecheck 绿 / lint 5/5 / test:changed 3 文件 48 测试（refresh 7 + scheduler 关联 system-config 29 + background-event 12）。
+- **SEQ-20260607-03 全序列收口**：ADR-187（决策）+ CHG-DOUBAN-HOT-ADAPTER（adapter subject_collection 服务）+ STORE-A（持久层迁移/queries/lib）+ STORE-B（编排注册表/refresh/maintenance job）。**豆瓣热门资源全面采集能力闭环**——16 合集（电影 5/剧集 8/综艺 3，热门·热映·即将上映·Top250·口碑榜·分国别）实时落库，不按站内映射过滤、字段完备含 raw 兜底，6h 定时刷新 + empty_guard 守护 + 失败隔离降级。运维：maintenance scheduler 自动 6h 触发，或手动入队 `refresh-douban-collections` job。**后续**：首页展示接线 CHG-DOUBAN-HOT-WIRE 待用户按接口定展示口径另起（本期不接 home autofill / 不触 ADR-183 展示治理）。
