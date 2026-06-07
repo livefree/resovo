@@ -8,10 +8,14 @@
  *
  * 矫正策略（数据安全网，不尝试自动补写——补写须走 enrich 完整逻辑 + 网络）：
  *   把虚标 matched 改为如实反映落地状态——
- *   - 该 video 有 douban video_external_refs（匹配观测存在）→ 重置 douban_status='candidate'
- *     （INV-2：保留人工确认锚点，审核台 douban-candidate 可继续处理）
- *   - 无任何 douban ref（孤儿，多为 redirect 脱钩 / root cause 4）→ 重置 douban_status='unmatched'
- *   矫正后这些 video 在下次 enrich（A 卡 fill-if-empty 生效）或人工 confirm 时正确收敛。
+ *   - 该 video 存在 match_status='candidate' 的 douban ref → 重置 douban_status='candidate'
+ *     （INV-2：保留人工确认锚点）。**仅当 candidate ref 实际存在时才降级 candidate**：审核台
+ *     douban-candidate = DoubanService.getCandidateData 只查 match_status='candidate' 的 ref，
+ *     若降级 candidate 却无 candidate ref，则列表显示候选黄点但点开无候选可确认 = unusable
+ *     candidate 态（Codex stop-time review 修正）。
+ *   - 否则（无 candidate ref：仅 auto_matched 虚标 ref / rejected / 孤儿 redirect 脱钩）→
+ *     重置 douban_status='unmatched'（下次 enrich A 卡 fill-if-empty 生效时重新评估并写正确 ref）。
+ *   矫正后这些 video 在下次 enrich 或人工 confirm 时正确收敛。
  *
  * 用法：
  *   node --env-file=.env.local --import tsx scripts/fix-douban-status-consistency.ts [--limit N] [--dry-run]
@@ -39,23 +43,28 @@ function parseArgs(): { limit: number | null; dryRun: boolean } {
 interface OrphanRow {
   readonly id: string
   readonly douban_status: string
-  /** 该 video 最新 douban ref 的 external_id（NULL = 无任何 douban ref，孤儿） */
-  readonly ref_douban_id: string | null
+  /**
+   * 该 video 是否存在 match_status='candidate' 的 douban ref。仅此为 true 才可安全降级
+   * candidate——审核台 getCandidateData 查 candidate ref，否则候选态不可操作（unusable）。
+   */
+  readonly has_candidate_ref: boolean
 }
 
 /**
  * 圈定 douban_status=matched 但当前有效 catalog.douban_id IS NULL 的 video（INV-1 违反实例）。
- * ref_douban_id 子查询取最新 primary douban ref，用于区分降级目标（candidate vs unmatched）。
+ * has_candidate_ref：是否存在 match_status='candidate' 的 douban ref，区分降级目标
+ * （candidate vs unmatched），保证降级 candidate 后审核台可操作（避免 unusable candidate 态）。
  */
 async function findOrphans(db: Pool, limit: number | null): Promise<OrphanRow[]> {
   const result = await db.query<OrphanRow>(
     `SELECT v.id,
             v.douban_status,
-            (SELECT ver.external_id
-               FROM video_external_refs ver
-              WHERE ver.video_id = v.id AND ver.provider = 'douban'
-              ORDER BY ver.is_primary DESC, ver.updated_at DESC
-              LIMIT 1) AS ref_douban_id
+            EXISTS(
+              SELECT 1 FROM video_external_refs ver
+               WHERE ver.video_id = v.id
+                 AND ver.provider = 'douban'
+                 AND ver.match_status = 'candidate'
+            ) AS has_candidate_ref
        FROM videos v
        JOIN media_catalog mc ON mc.id = v.catalog_id
       WHERE v.douban_status = 'matched'
@@ -67,9 +76,12 @@ async function findOrphans(db: Pool, limit: number | null): Promise<OrphanRow[]>
   return result.rows
 }
 
-/** 降级目标：有 ref → candidate（保留人工锚点）；无 ref → unmatched（孤儿）。 */
+/**
+ * 降级目标：存在 candidate ref → candidate（审核台可操作，INV-2）；
+ * 否则（仅 auto_matched 虚标 / rejected / 孤儿）→ unmatched（避免 unusable candidate 态）。
+ */
 function targetStatus(row: OrphanRow): 'candidate' | 'unmatched' {
-  return row.ref_douban_id !== null ? 'candidate' : 'unmatched'
+  return row.has_candidate_ref ? 'candidate' : 'unmatched'
 }
 
 // ── 主流程 ──────────────────────────────────────────────────────────
@@ -100,7 +112,7 @@ async function main(): Promise<void> {
       else toUnmatched++
       if (dryRun) {
         process.stdout.write(
-          `  ${row.id}  matched → ${next}  (ref_douban_id=${row.ref_douban_id ?? '无'})\n`,
+          `  ${row.id}  matched → ${next}  (candidate_ref=${row.has_candidate_ref ? '有' : '无'})\n`,
         )
       }
     }
