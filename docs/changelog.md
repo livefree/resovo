@@ -2443,3 +2443,14 @@
   - `docs/task-queue.md` — Phase 4 占位行 +`CHG-HOME-DRAFT-PUBLISH` 验收项移交注记（「发布确认」处横图警告标记，卡 23 细化时写入验收标准）
 - **新增依赖**：无 ｜ **数据库变更**：无
 - **注意事项**：① 勘误原文全部 strike 保留（与方案既有两次勘误范式一致）；② 警告级不阻断口径（D-052-9）不变，仅「缺图」一类经 schema 吸收除名；③ docs-only，test:changed 自动跳过（ADR-180）。
+
+## [CHG-HOME-PHASE4-ADR] ADR-185 发布治理 — 版本快照 + 草稿覆盖层 + 7 端点协议 + 缓存失效（SEQ-20260605-05 卡 23 / 全序列收口）
+- **完成时间**：2026-06-07
+- **记录时间**：2026-06-07 02:50
+- **执行模型**：claude-opus-4-8
+- **子代理**：arch-reviewer (claude-opus-4-8)（CONDITIONAL PASS：1 HIGH + 4 MEDIUM + 2 LOW 全 7 条吸收后 Accepted；MUST-8 Opus PASS）
+- **修改文件**：
+  - `docs/decisions.md` — **ADR-185**：D-185-1 版本快照 + 草稿覆盖层（前台读路径零改动 / roll-forward 回滚 / 不设保留上限 + follow-up）；D-185-2 写路径三层清单（HIGH 吸收：门面 #3/#5/#6 停止承接画布写、保留为非画布旁路；§11.1 风险显式声明）；D-185-3 7 新 admin 端点契约（draft CRUD + publish + versions + rollback；audit 枚举拆分表述 + UNSUPPORTED 显式防御；与 ADR-138 行级回滚语义区分）；D-185-4 diff 归消费端；D-185-5 子前缀级精确 scan 删失效协议（D-184-5.2 接口位对账 + 失效失败不回滚发布）
+  - `docs/task-queue.md` — Phase 4 占位 3 卡细化为 4 卡（24 DRAFT-PUBLISH-A / 25 -B / 26 AUDIT-ROLLBACK / 27 CACHE-INVALIDATE，依赖序 24→25→26∥27）+ SEQ-20260605-05 状态 → ✅ 全 23 卡收口
+- **新增依赖**：无 ｜ **数据库变更**：无（migration 097/098 归实施卡 24）
+- **注意事项**：① **SEQ-20260605-05 全序列收口**——治理方案（home-operations-governance-plan_20260605.md）实施面全闭环：Phase 1–3 + 公开消费切换 + E2E 覆盖 + 勘误 + Phase 4 ADR；仅余 Phase 4 实施 4 卡（已细化登记待开始）；② ADR-181→185 五份关联 ADR 全 Accepted（各自 arch-reviewer Opus PASS）；③ 门禁：verify:adr-contracts EXIT=0（ADR 端点 97→104，「### 端点契约」表 verify-endpoint-adr 解析兼容）；docs-only（test:changed 自动跳过）。

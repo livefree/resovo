@@ -6,7 +6,7 @@
 
 ## 当前任务（单任务工作台：同时仅 1 个 🔄 进行中；完成即删卡，历史见 docs/changelog.md）
 
-（空 — 上一任务 CHG-HOME-GOV-PLAN-ERRATA 已收口 2026-06-07 02:10，见 changelog；**SEQ-20260605-05 仅余卡 23 CHG-HOME-PHASE4-ADR**）
+（空 — 上一任务 CHG-HOME-PHASE4-ADR 已收口 2026-06-07 02:50，见 changelog；**ADR-185 Accepted，SEQ-20260605-05 全 23 卡收口；Phase 4 实施 4 卡（24–27）已细化登记 ⬜ 待开始**）
 
 ---
 

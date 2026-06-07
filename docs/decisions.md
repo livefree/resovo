@@ -20720,3 +20720,100 @@ Route（routes/home.ts GET /home/shelf）
 
 - CHG-HOME-FE-CONSUME-B：前台 3 hot shelf 切换 `/home/shelf` + 断裂区块收编评估（已立案，SEQ-20260605-05 卡 20）。
 - Phase 4 CHG-HOME-CACHE-INVALIDATE：消费 D-184-5.2 失效接口位（依赖 CHG-HOME-PHASE4-ADR 裁定）。
+
+---
+
+## ADR-185：Home Curation 发布治理 — 版本快照 + 草稿覆盖层 + draft/publish/rollback 端点协议 + 缓存失效协议（SEQ-20260605-05 / CHG-HOME-PHASE4-ADR）
+
+- **日期**：2026-06-07
+- **状态**：**Accepted**（arch-reviewer claude-opus-4-8 CONDITIONAL PASS → 1 HIGH（门面端点定性冲突）+ 4 MEDIUM（版本保留策略 / UNSUPPORTED 显式防御 / CHECK 措辞 / 端点计数）+ 2 LOW（home.ts 拆分 / scan 删关注点）**全 7 条吸收**后定档；MUST-8 Opus PASS 环节）
+- **决策者**：主循环 claude-opus-4-8 / arch-reviewer (claude-opus-4-8)
+- **关联**：ADR-181/182/183（真源 + admin 端点 + 自动填充，前置全收口）/ ADR-184（公开消费 + D-184-5.2 失效接口位——本 ADR 失效协议的对账对象）/ ADR-110（信封 + 错误码）/ ADR-118（audit enums 端点真源）/ ADR-138（行级 audit rollback——**与本 ADR 版本回滚语义显式区分**）/ 治理方案 §11（三层发布模型 + 审计锚定）§12（缓存与一致性）§13 Phase 4
+- **对应交付**：本 ADR（裁定）+ 三张实施卡细化（CHG-HOME-DRAFT-PUBLISH-A/-B / CHG-HOME-AUDIT-ROLLBACK / CHG-HOME-CACHE-INVALIDATE）
+
+### 背景
+
+Phase 1–3 + 公开消费（ADR-184）全链路收口后，治理方案仅余 §11/§12 未落地：画布当前**直写**正式配置（Phase 1 声明的临时降级，「保存草稿/发布」按钮隐藏待解锁），编辑即生效——无编辑态隔离、无发布动作、无版本回滚、无发布后缓存主动失效。首页配置真源分布于三表：`home_banners`（Hero，D-181-1）+ `home_modules`（运营位）+ `home_section_settings`（区块策略）。
+
+### 决策要点
+
+**D-185-1 发布模型形态裁定：「版本快照 + 草稿覆盖层」——前台读路径零改动**
+
+1. **三真源表维持发布态唯一真源**：`home_banners` / `home_modules` / `home_section_settings` 的当前行 = 已发布配置。前台合成链（ADR-184 `buildHomePreview` / shelf / top10 / banners 公开端点）**零改动**——发布治理不重写刚收口的读路径。
+2. **新表 `home_publish_versions`**（migration 097）：发布动作将三表全量配置拍成**整页 JSONB 快照**（banners + modules + settings 三键），`version_no` 单调递增（serial），携 `published_by` / `published_at` / `note` / `source`（`publish` | `rollback`）。回滚 = 按目标版本快照**恢复三表**（单事务全量替换）+ 自身记为**新版本行**（roll-forward 范式：不删不改历史版本，回滚本身可再回滚）。
+3. **新表 `home_config_drafts`**（migration 098）：草稿 = **整页 JSONB 覆盖层**（与版本快照同构型），首版**全局单草稿行**（UNIQUE 约束单行，与 section settings 单行 per section 同款首版简化；多 brand 草稿留列扩展位不实现）。携 `base_version_no`（创建草稿时的最新版本号——陈旧检测锚点）。
+4. **排除选项论证**：(a) 平行草稿表（三表结构复制）——schema 加倍 + 双向同步漂移维护成本，零额外收益；(c) diff-patch 存储——实现复杂度最高，审计 diff 可由版本快照两两计算获得（D-185-4.3），不必持久化 patch。
+5. **冷启动语义**：`home_publish_versions` 空表 = 历史直写期配置即事实发布态；首次 publish 拍 version 1。回滚端点在版本数 < 2 时 422（无可回滚目标）。
+6. **版本保留策略**（arch-reviewer MEDIUM-1 吸收）：首版**不设保留上限**——论证：发布是低频人工动作（≠ ADR-183 worker 定频快照的「最近 10 份」场景，不可照搬截断），单行整页 JSONB 量级 ~数十 KB、年发布数百次体量无虞；roll-forward 回滚能力依赖完整历史链，截断直接损害回滚价值。follow-up 登记：版本数 > 1000 或单行 config > 1MB 时评估归档策略（届时 ADR amendment）。
+
+**D-185-2 写路径切换边界（编辑态不影响前台，§11.1）**
+
+1. **画布（canvas）编辑全量进草稿**：Phase 4 后画布全部配置变更（卡片增删/排序/settings/banner 编辑/**候选应用**）落 `home_config_drafts`，不再调用任何直写端点；「保存草稿 / 发布」按钮解锁。preview 端点 #1 增 `draft=true` 消费态（**草稿 + 当前数据聚合**，§11.2 预览态——ADR-182 D-182-4 #1 显式预留的 Phase 4 兑现，additive query param 非 break）。候选池在草稿上下文继续消费 #4 解释展示，但「应用」写草稿内 pinned（#5 的可见性/可播性重校验语义**挪至 publish 时点整页执行**——发布事务对 config 做整体校验，口径同 D-182-4.5）。
+2. **端点定性三层清单**（arch-reviewer HIGH-1 吸收，纠正初稿与 ADR-182 D-182-1.3 的定性冲突）。Phase 4 后**仍可实时写正式配置的入口全清单**：
+   - **真·资源级紧急通道** = ADR-104 `/admin/home-modules` 6 端点 + `/admin/banners` 6 端点（直写维持，热修 + v1 过渡 + 直接 API 消费）；
+   - **门面写端点 #3/#5/#6**（settings / apply-autofill / reorder）= **停止承接画布写**（画布改编辑草稿 JSONB），端点本身**保留不删**（「删除或重命名现有 API」红线）但降级为**非画布旁路**（API 直接消费 + 过渡期），文档标注其直写性质；
+   - 上述全部直写入口写入时触发草稿**陈旧检测**：`base_version_no` 失配与「三表 updated_at 晚于草稿 updated_at」双信号 → 编辑器显著提示「草稿基线已过时」，运营自行决定丢弃或继续（**不自动合并**——合并冲突语义复杂度不值首版投入）。
+   - **风险显式声明**：直写通道存在使 §11.1「编辑态不影响前台」是**画布工作流的保证而非系统级强制**——保留通道是热修能力与 v1 过渡的有意取舍；DRAFT-PUBLISH-B 验收标准必须含「门面 #3/#5/#6 画布写路径去向」核验项。
+3. 实施级细节（草稿 JSONB 内部 shape / 画布操作映射）归 DRAFT-PUBLISH 实施卡，本 ADR 只锁模型与端点。
+
+**D-185-3 端点协议（7 新 admin 端点，MUST-8 全量登记「### 端点契约」表）**
+
+1. **draft GET/PUT/DELETE**：读（无草稿 200 `{ data: null }`——存在性非错误）/ 整体替换保存（PUT 整页语义，非 PATCH 深合并——与 settings JSONB 整体替换同款）/ 丢弃。**draft 保存不计 audit**（编辑态噪音；§11 审计锚定发布动作）。
+2. **POST /admin/home/publish**：单事务 = 草稿应用三表（全量替换）→ 拍版本（source='publish'）→ 删草稿 → audit `home_page.publish`；缓存失效钩子事务外执行（D-185-5）。无草稿 → 422（无可发布内容）；草稿陈旧（D-185-2.2 双信号）→ 409 STATE_CONFLICT 携 base/当前版本信息（运营须先刷新草稿基线——强制覆盖参数不提供，防误覆盖热修）。
+3. **GET /admin/home/versions**（分页列表，轻量行：version_no/published_by/published_at/note/source，不含 config 载荷）+ **GET /admin/home/versions/:versionNo**（详情含全量 config JSONB）。
+4. **POST /admin/home/versions/:versionNo/rollback**：恢复三表 + 拍新版本（source='rollback'，note 自动携 `rollback to v{n}`）+ audit `home_page.rollback`。**与 ADR-138 行级 audit rollback 显式区分**：版本回滚 = 整页配置态恢复（操作对象 = 配置三表），不经 `system.audit_rollback` 行级链、不触发 D-138 二次回滚禁令——两机制操作对象不同（配置整页 vs 单 audit 行），审计各自独立 actionType。**显式防御**（arch-reviewer MEDIUM-2 吸收）：`home_page.publish` + `home_page.rollback` 必须加入 `AuditRollbackService.UNSUPPORTED_ACTION_TYPES`（与 `system.audit_rollback` 同款显式拒绝，不依赖「TARGET_KIND_TABLE_MAP 缺 home_page」的隐式兜底——隐式路径在未来加表映射时会破防），AUDIT-ROLLBACK 卡带守卫测试。
+5. **audit 枚举新增**（arch-reviewer MEDIUM-3 吸收，拆分表述防误加 CHECK）：
+   - `home_page` targetKind +1（target_id = version 行 UUID）：migration **CHECK 16→17**（DROP+ADD，migration 095 同范式）+ `AdminAuditTargetKind` 类型 + 运行时 `TARGET_KINDS` + zh-CN labels；
+   - `home_page.publish` / `home_page.rollback` actionType +2：**action_type 列无 DB CHECK**（ADR-182 D-182-5.2 既有裁定），仅 `AdminAuditActionType` 类型 + 运行时 `ACTION_TYPES` + zh-CN labels 三处；
+   - 实施卡必须带「源码写入 ⊆ 运行时 enums」守卫测试（CHG-HOME-AUTOFILL-APPLY-FIX 交叉守卫家族）。
+6. 错误码零新增（VALIDATION_ERROR 422 / STATE_CONFLICT 409 / NOT_FOUND 404 复用）；信封 ADR-110；鉴权 admin only（D-182-1 同档）。
+
+**D-185-4 审计 diff 展示模型（§11 锚定衔接）**
+
+1. audit 载荷：`home_page.publish` afterJsonb = `{ versionNo, baseVersionNo, sectionsChanged: string[], counts: { banners, modules } }`（轻量摘要——全量 config 在版本表，audit 不重复存储）；`home_page.rollback` 同构 + `targetVersionNo`。
+2. **diff 计算归消费端**（admin UI 按两版本 config JSONB 客户端计算展示），服务端不存 diff 不算 diff——与 D-185-1.4 排除 diff-patch 同理由；版本详情端点（D-185-3.3）即 diff 数据源。
+3. `full_auto` 区块漂移不入版本链（worker 重算产物有自身快照链，ADR-183 D-183-2）——版本快照仅锁**配置**（pinned/settings/banners），不锁自动候选展示结果（§11.2 既有裁定延续）。
+
+**D-185-5 发布后缓存失效协议（§12 + ADR-184 D-184-5.2 对账）**
+
+1. publish / rollback 事务成功后**主动失效**：(a) hot shelf——消费 D-184-5.2 唯一接口位 `HOME_SHELF_CACHE_PREFIX`（前缀 scan 删，覆盖全 brand 全 section）；(b) top10——`CACHE_PREFIXES.home + 'top10:'` 前缀（HomeService TOP10_TTL 60s 键族）。
+2. **失效失败不回滚发布**：发布事务已提交，失效仅加速生效；失败 warn 日志 + 60s TTL 兜底自愈（与 ADR-184 D-184-5 短 TTL 协议闭环——主动失效是优化不是正确性前提）。
+3. 失效实现归 CACHE-INVALIDATE 实施卡；关注点 = **子前缀级精确 scan 删**（arch-reviewer LOW-2 吸收：`home:shelf:*` / `home:top10:*` 两个子前缀独立删，**不得复用 `CacheService.clearCache` 的 type 级整前缀删**——`home:*` 整删会连带清非目标 home key；PROTECTED_PREFIXES 与 home 子前缀无交集，非真实风险点）。
+
+**D-185-6 边界声明（本 ADR 不裁项）**
+
+1. 草稿 JSONB 内部 shape / 画布写路径逐操作映射 / 「保存草稿/发布」UI 形态 → DRAFT-PUBLISH 实施卡（实施级推演记完成备注）。**落点提示**（arch-reviewer LOW-1 吸收）：`routes/admin/home.ts` 现 248 行 + 7 新端点将逼近 500 行硬限——draft/version 端点落独立子路由文件（如 `routes/admin/home-publish.ts`），实施卡评估执行。
+2. 多 brand 独立草稿/版本链 → 需求出现时 ADR amendment（表已留扩展位）。
+3. 定时发布（schedule publish）→ 非目标（方案 §15 未要求；时间窗字段已承载内容级定时）。
+4. 发布确认环节横图三类警告标记（ERRATA 移交验收项）→ DRAFT-PUBLISH 卡验收标准（发布确认 UI 属其范围）。
+
+### 端点契约
+
+| # | 方法 | 路径 | 用途 | Request | Response | 错误码 |
+|---|---|---|---|---|---|---|
+| 1 | GET | `/admin/home/draft` | 读当前草稿 | — | 200 `{ data: HomeConfigDraft \| null }` | — |
+| 2 | PUT | `/admin/home/draft` | 整页草稿保存（整体替换） | Body: `{ config: HomePageConfig }` | 200 `{ data: HomeConfigDraft }` | 422 |
+| 3 | DELETE | `/admin/home/draft` | 丢弃草稿 | — | 200 `{ data: { deleted: boolean } }` | — |
+| 4 | POST | `/admin/home/publish` | 发布（草稿应用 + 拍版本 + 失效钩子） | Body: `{ note? }` | 200 `{ data: { versionNo: number } }` | 422 / 409 STATE_CONFLICT |
+| 5 | GET | `/admin/home/versions` | 版本列表（轻量行，分页） | Query: `page?` / `limit?` | 200 `{ data: HomePublishVersionSummary[], total, page, limit }` | 422 |
+| 6 | GET | `/admin/home/versions/:versionNo` | 版本详情（全量 config，diff 数据源） | — | 200 `{ data: HomePublishVersion }` | 404 / 422 |
+| 7 | POST | `/admin/home/versions/:versionNo/rollback` | 版本回滚（恢复三表 + 新版本） | Body: `{ note? }` | 200 `{ data: { versionNo: number } }` | 404 / 422 |
+
+**路由注册顺序声明**：`/admin/home/draft` 与 `/admin/home/versions*` 为静态前缀，与既有 `/admin/home/sections/:section/*` 无前缀包含冲突；`versions/:versionNo/rollback` 静态后缀须先于潜在 `versions/:versionNo` 通配注册（D-182 同款范式）。
+
+### 影响面清单（实施卡映射）
+
+| # | 影响点 | 实施卡 |
+|---|---|---|
+| 1 | migration 097 `home_publish_versions` + 098 `home_config_drafts` + audit CHECK 扩展（actionType +2 / targetKind +1） | CHG-HOME-DRAFT-PUBLISH-A |
+| 2 | 端点 #1–#4（draft CRUD + publish）+ HomePageConfig/HomeConfigDraft 类型 + 陈旧检测 | CHG-HOME-DRAFT-PUBLISH-A |
+| 3 | 画布写路径切草稿 + 「保存草稿/发布」按钮解锁 + preview `draft=true` 叠加 + **发布确认横图三类警告标记（ERRATA 移交验收项）** + **「门面 #3/#5/#6 画布写路径去向」核验项（HIGH-1 吸收）** | CHG-HOME-DRAFT-PUBLISH-B |
+| 4 | 端点 #5–#7（versions 列表/详情/rollback）+ admin UI diff 展示 | CHG-HOME-AUDIT-ROLLBACK |
+| 5 | 失效钩子实装（D-184-5.2 接口位消费 + top10 前缀 + scan 批删防误删边界）+ 测试 | CHG-HOME-CACHE-INVALIDATE |
+| 6 | 运行时 audit enums 四处同步 + 「源码写入 ⊆ 运行时 enums」守卫测试 | CHG-HOME-DRAFT-PUBLISH-A |
+| 7 | `docs/architecture.md` 新表 + 端点 + audit 枚举同步 | 各对应实施卡 |
+
+### follow-up 登记
+
+- 多 brand 草稿/版本链：需求出现时 ADR amendment（D-185-6.2）。
+- v1 资源级直写通道的退场评估：随 v1 整体下线节奏（D-182-4.6 技术债条目同框）。
