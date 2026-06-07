@@ -2433,6 +2433,17 @@
 - **数据库变更**：无
 - **注意事项**：① **治理方案 §14「后台 /admin/home 有 E2E 覆盖」收口**（此前零命中）；admin 域全量 **76→87 EXIT=0** 零回归；② 实施陷阱记档：canvas-section 中心点击落在空卡触发 onEmptySlot 不冒泡 select → 选区块须打 head pill（`canvas-mode-*`）；AdminInput `data-testid` 落 wrapper div → fill/toHaveValue 须 `.locator('input')` 下钻（后续 home 域 spec 沿用）；③ 视觉回归评估：**不另立**——画布动态数据密集，截图基线脆弱收益低，testid 行为断言已覆盖；④ 门禁：typecheck/lint/test:changed 绿 + `npm run test:e2e:admin` 87/87 EXIT=0。
 
+## [CHG-SHELL-THEME-HYDRATION-FIX] BrandProvider resolvedTheme 派生 hydration mismatch（用户实测直报）
+- **完成时间**：2026-06-07
+- **记录时间**：2026-06-07
+- **执行模型**：claude-opus-4-8
+- **子代理**：无（ThemeContextValue API 形状零变更，非共享契约修改）
+- **修改文件**：
+  - `apps/server-next/src/contexts/BrandProvider.tsx` + `apps/web-next/src/contexts/BrandProvider.tsx`（同构副本同步）— **根因**：render 期急算 `resolvedTheme: resolveTheme(state.theme)`——`theme='system'` 时 SSR 分支返确定值而客户端首渲染直读 `matchMedia`，OS 偏好与 SSR 默认不一致时首渲染两端撕裂（实测面：/admin/home Topbar `data-topbar-theme` + Sun/Moon 图标 + aria-label 三处 mismatch，React 整树重建）。头注释「SSR 安全…hydration 无 mismatch」仅对 store 状态成立，**派生值泄漏 client-only 信息进首渲染**。修复：`system` 解析改 `systemResolved` state（首渲染恒 SSR 确定值——server-next 'dark' / web-next 'light'，与原 SSR 分支一致），挂载后 effect 经 matchMedia 解析 + 监听 mql change；**连带修复**：OS 偏好变化此前仅同步 DOM、context resolvedTheme 不更新（消费者图标不重渲）；主题 DOM 同步收敛单 effect 路径（挂载/解析就绪/OS 变化/setTheme 统一）；`resolveTheme` 模块私有函数移除
+  - `tests/unit/components/server-next/BrandProviderTheme.test.tsx` — **新建** 5 例：**首渲染恒 SSR 确定值（render 期探针断言 seen[0]，hydration 稳定性核心）**/ 挂载后解析 light + DOM 同步 / OS 变化重渲（连带修复断言）/ 非 system 直通 / setTheme 单路径
+- **新增依赖**：无 ｜ **数据库变更**：无
+- **注意事项**：① 触发条件 = `resovo-theme` cookie 为 `system`（或缺省映射）且 OS 浅色——admin layout 把 system 映射 'dark' 传 initialTheme，但 BrandProvider 自身拿到 'system' 后 render 期解析撕裂；② web-next 副本当前无 render 期 resolvedTheme 消费者（潜伏态），按「API 同构不跨 apps import」维护约定同卡同步防漂移；③ 规律沉淀：**SSR 安全不止 store 快照——context 派生值在 render 期读 `window`/`matchMedia` 同样破坏 hydration，client-only 解析必须经挂载后 state**（首渲染恒定 + effect 升级，next-themes 同款范式）；④ 门禁：typecheck/lint 绿 + test:changed 51/51（新增 5 + 受影响图）+ E2E admin 98/98。
+
 ## [CHG-HOME-DRAFT-PUBLISH-B-FIX2] 惰性建稿基线改服务端单快照（Codex stop-time review 第 2 轮）
 - **完成时间**：2026-06-07
 - **记录时间**：2026-06-07 07:30

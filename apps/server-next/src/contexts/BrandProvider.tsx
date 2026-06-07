@@ -5,7 +5,9 @@
  *
  * 与 apps/web-next/src/contexts/BrandProvider.tsx API 同构，不跨 apps import。
  * 双 Context 分离（BrandContext + ThemeContext）避免交叉 re-render。
- * SSR 安全：getServerSnapshot 返回 initial props 快照，hydration 无 mismatch。
+ * SSR 安全：getServerSnapshot 返回 initial props 快照；`resolvedTheme` 的
+ * `system` 解析延迟到挂载后（首渲染两端恒 'dark'，CHG-SHELL-THEME-HYDRATION-FIX
+ * ——render 期直读 matchMedia 会让派生值泄漏 client-only 信息致 hydration mismatch）。
  *
  * server-next 差异：
  * - admin 是单品牌内部工具，setBrand 仅写 cookie + DOM 同步，不 fetch /api/brands
@@ -19,6 +21,7 @@ import {
   useEffect,
   useMemo,
   useRef,
+  useState,
   useSyncExternalStore,
   type JSX,
   type ReactNode,
@@ -72,12 +75,6 @@ function writeCookie(name: string, value: string): void {
   document.cookie = `${name}=${encodeURIComponent(value)}; path=/; max-age=31536000; samesite=lax`
 }
 
-function resolveTheme(theme: Theme): ResolvedTheme {
-  if (theme !== 'system') return theme
-  if (typeof window === 'undefined') return 'dark'
-  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
-}
-
 function syncDomBrand(slug: string): void {
   if (typeof document !== 'undefined') document.documentElement.dataset.brand = slug
 }
@@ -105,21 +102,31 @@ export function BrandProvider({ initialBrand, initialTheme, children }: BrandPro
   const getServerSnapshot = useCallback(() => initialSnapshot.current, [])
   const state = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot)
 
+  // 'system' 的 OS 解析值：首渲染恒 SSR 确定值 'dark'（hydration 稳定——render 期
+  // 直读 matchMedia 会致两端首渲染不一致）；挂载后解析并监听 OS 偏好变化
+  // （连带修复：变化此前仅同步 DOM，context resolvedTheme 不更新致消费者不重渲）
+  const [systemResolved, setSystemResolved] = useState<ResolvedTheme>('dark')
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const mql = window.matchMedia('(prefers-color-scheme: dark)')
+    const apply = (): void => setSystemResolved(mql.matches ? 'dark' : 'light')
+    apply()
+    mql.addEventListener('change', apply)
+    return () => mql.removeEventListener('change', apply)
+  }, [])
+
+  const resolvedTheme: ResolvedTheme = state.theme === 'system' ? systemResolved : state.theme
+
   useEffect(() => {
     syncDomBrand(state.brand.slug)
-    syncDomTheme(resolveTheme(state.theme))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // 主题 DOM 同步单路径：挂载 / system 解析就绪 / OS 变化 / setTheme 统一经此
   useEffect(() => {
-    if (state.theme !== 'system' || typeof window === 'undefined') return
-    const mql = window.matchMedia('(prefers-color-scheme: dark)')
-    const handler = (): void => {
-      syncDomTheme(mql.matches ? 'dark' : 'light')
-    }
-    mql.addEventListener('change', handler)
-    return () => mql.removeEventListener('change', handler)
-  }, [state.theme])
+    syncDomTheme(resolvedTheme)
+  }, [resolvedTheme])
 
   const setBrand = useCallback(
     (slug: string): void => {
@@ -135,7 +142,7 @@ export function BrandProvider({ initialBrand, initialTheme, children }: BrandPro
   const setTheme = useCallback(
     (next: Theme): void => {
       store.setState({ theme: next })
-      syncDomTheme(resolveTheme(next))
+      // DOM 同步经 resolvedTheme effect 单路径承担（state 变更 → 重渲 → effect）
       writeCookie('resovo-theme', next)
     },
     [store],
@@ -147,8 +154,8 @@ export function BrandProvider({ initialBrand, initialTheme, children }: BrandPro
   )
 
   const themeValue = useMemo<ThemeContextValue>(
-    () => ({ theme: state.theme, resolvedTheme: resolveTheme(state.theme), setTheme }),
-    [state.theme, setTheme],
+    () => ({ theme: state.theme, resolvedTheme, setTheme }),
+    [state.theme, resolvedTheme, setTheme],
   )
 
   return (
