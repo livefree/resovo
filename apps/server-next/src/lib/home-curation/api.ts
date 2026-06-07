@@ -16,6 +16,8 @@ import type {
   HomePageConfig,
   HomePreview,
   HomePreviewQuery,
+  HomePublishVersion,
+  HomePublishVersionSummary,
   HomeSectionKey,
   HomeSectionSettings,
   HomeSectionSummary,
@@ -66,6 +68,45 @@ export async function discardHomeDraft(): Promise<{ deleted: boolean }> {
 export async function publishHomeDraft(note?: string): Promise<{ versionNo: number }> {
   const result = await apiClient.post<{ data: { versionNo: number } }>(
     '/admin/home/publish',
+    note ? { note } : {},
+  )
+  return result.data
+}
+
+// ── 版本历史（ADR-185 #5–#7 / CHG-HOME-AUDIT-ROLLBACK 消费）────────────────
+
+export interface HomeVersionListResult {
+  readonly rows: HomePublishVersionSummary[]
+  readonly total: number
+  readonly page: number
+  readonly limit: number
+}
+
+/** 端点 #5：轻量行分页（不含 config 载荷，D-185-3.3） */
+export async function listHomeVersions(params: { page?: number; limit?: number } = {}): Promise<HomeVersionListResult> {
+  const qs = new URLSearchParams()
+  if (params.page) qs.set('page', String(params.page))
+  if (params.limit) qs.set('limit', String(params.limit))
+  const q = qs.toString()
+  const result = await apiClient.get<{ data: HomePublishVersionSummary[]; total: number; page: number; limit: number }>(
+    `/admin/home/versions${q ? `?${q}` : ''}`,
+  )
+  return { rows: result.data, total: result.total, page: result.page, limit: result.limit }
+}
+
+/** 端点 #6：详情含全量 config（消费端 diff 数据源，D-185-4.2） */
+export async function getHomeVersion(versionNo: number): Promise<HomePublishVersion> {
+  const result = await apiClient.get<{ data: HomePublishVersion }>(`/admin/home/versions/${versionNo}`)
+  return result.data
+}
+
+/**
+ * 端点 #7：版本回滚（恢复三表 + roll-forward 新版本；audit home_page.rollback
+ * 在后端落）。版本数 < 2 时 422；目标不存在 404。
+ */
+export async function rollbackHomeVersion(versionNo: number, note?: string): Promise<{ versionNo: number }> {
+  const result = await apiClient.post<{ data: { versionNo: number } }>(
+    `/admin/home/versions/${versionNo}/rollback`,
     note ? { note } : {},
   )
   return result.data

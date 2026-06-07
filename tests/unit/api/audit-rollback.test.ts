@@ -207,6 +207,32 @@ describe('POST rollback - UNSUPPORTED actionType (ADR-138 D-138-4 F-1/F-4/F-6/F-
     await app.close()
   })
 
+  // CHG-HOME-AUDIT-ROLLBACK / ADR-185 D-185-3.4（MEDIUM-2 吸收）：home_page.* 显式防御守卫——
+  // 整页版本回滚走专用端点（POST /admin/home/versions/:n/rollback），不经本行级链；
+  // 不依赖「TARGET_KIND_TABLE_MAP 缺 home_page」隐式兜底（未来加表映射会破防）
+  it.each(['home_page.publish', 'home_page.rollback'] as const)(
+    '#4b %s → 422 UNSUPPORTED（D-185-3.4 显式防御，与 ADR-138 行级回滚语义区分）',
+    async (actionType) => {
+      getAdminAuditLogByIdMock.mockResolvedValue({
+        id: '205', actionType, targetKind: 'home_page', targetId: 'ver-uuid-1',
+        beforeJsonb: null, afterJsonb: { versionNo: 3, sectionsChanged: [] },
+      })
+      const app = await buildApp()
+      const res = await app.inject({
+        method: 'POST', url: '/admin/audit/logs/205/rollback', headers: adminAuth(),
+      })
+      expect(res.statusCode).toBe(422)
+      expect(res.json().error.code).toBe('AUDIT_ROLLBACK_UNSUPPORTED')
+      await app.close()
+    },
+  )
+
+  it('#4c UNSUPPORTED Set 直接成员守卫：home_page 2 项在档（防御回归删除）', async () => {
+    const { UNSUPPORTED_ACTION_TYPES } = await import('@/api/services/AuditRollbackService')
+    expect(UNSUPPORTED_ACTION_TYPES.has('home_page.publish')).toBe(true)
+    expect(UNSUPPORTED_ACTION_TYPES.has('home_page.rollback')).toBe(true)
+  })
+
   it('#6 target_id NULL (batch action) → 422 UNSUPPORTED', async () => {
     getAdminAuditLogByIdMock.mockResolvedValue({
       // 用一个不在 UNSUPPORTED Set 的 actionType（确保走到 target_id NULL 检查）

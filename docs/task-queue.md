@@ -1346,11 +1346,12 @@
    - 范围（5 项）：① 画布全部配置变更改写草稿 JSONB（含候选应用→草稿 pinned，D-185-2.1）② 「保存草稿/发布」按钮解锁 + 草稿陈旧提示（双信号）③ preview `draft=true` 叠加消费（ADR-182 #1 预留兑现）④ **发布确认环节横图三类警告标记（ERRATA 移交验收项）** ⑤ 验收核验项：「门面 #3/#5/#6 画布写路径去向」（ADR-185 HIGH-1 吸收——画布停用三端点写路径，端点保留为非画布旁路）+ E2E（复用 tests/e2e/admin/home/ 基座）。
    - 依赖：CHG-HOME-DRAFT-PUBLISH-A ✅。
    - 完成备注：**全 5 项落地，D-185-2 + D-185-6 闭环**。① 画布六类写路径（拖拽/跨区块/settings/候选应用/空位添加/banner 创建）全量经 `useHomeDraft.mutateConfig` 落草稿——纯变异层 `draft-mutations.ts`（新建条目预生成 UUID = 拖拽身份锚 + publish 后正式行 id）；跨区块移动草稿内单次变换**原子完成**（消解原两步 PATCH+reorder 部分持久化态）；批量添加按视图分流（list+深链维持资源级直写）。② UI 形态裁定（D-185-6.1 实施级推演）：**编辑即自动保存草稿**（不设独立保存按钮，显式动作 = 发布/丢弃）；首次编辑惰性建稿（三真源装配整页**含 banner-slot 冻结存量**——全量替换语义防误删）；陈旧提示 = GET draft 顶层 additive `staleness`（双信号编辑器提示，权威判定仍在 publish 409）。③ preview draft=true：配置三键改读覆盖层 + 当前数据聚合；shelf 链路显式 draft:false。④ PublishConfirmModal 横图三类警告（image-guard 同源探测，警告级不阻断——e2e 实证 probe_failed + 确认可用）。⑤ 核验项 = e2e 断言画布操作零触达门面 #3/#5/#6 与资源级 PATCH。dev 实测：草稿 displayCount=12 → draft=true 反映 / 缺省与公开链路维持 10；直写后 staleness 实时翻 stale。测试 +75（变异 10 + staleness/draft 6 + HomeCanvas 重写 39 + Panel 22 改造 + e2e 6 新 2 改）。门禁：typecheck/lint 绿 + test:changed 升全量 6985/6985 + verify:adr-contracts EXIT=0 + E2E admin 93/93（home 域 11→17）。执行模型: claude-opus-4-8；子代理: 无。
-26. **CHG-HOME-AUDIT-ROLLBACK** — 版本列表/详情/回滚 + diff 展示（状态：⬜ 待开始）
-   - 创建时间：2026-06-07 02:45
-   - 建议模型：sonnet
+26. **CHG-HOME-AUDIT-ROLLBACK** — 版本列表/详情/回滚 + diff 展示（状态：✅ 已完成）
+   - 创建时间：2026-06-07 02:45 ｜ 实际开始：2026-06-07 05:10 ｜ 完成时间：2026-06-07 06:10
+   - 建议模型：sonnet（实际 claude-opus-4-8，用户 opus 会话「批准继续实施 Phase 4」承接）
    - 范围（4 项）：① 端点 #5–#7（versions 分页列表/详情/rollback——恢复三表 + 拍新版本 roll-forward + audit `home_page.rollback`；**含 D-185-1.5 后半：版本数 < 2 时 rollback 422 无可回滚目标〔卡 24 移交注记〕**；rollback 复用 `publishHomeConfig`（draft 参数省略路径已预留）；写入位点落地时同步 coverage REQUIRED + PAYLOAD_ASSERTION 清单——enums/labels 卡 24 已先行）② `home_page.publish`/`home_page.rollback` 加入 `UNSUPPORTED_ACTION_TYPES` 显式防御 + 守卫测试（D-185-3.4，MEDIUM-2）③ admin UI 版本列表 + diff 展示（消费端计算，D-185-4.2；版本快照时间戳已 ms 截断——卡 24 沉淀，快照间文本 diff 稳定）④ 单测 + E2E。
    - 依赖：CHG-HOME-DRAFT-PUBLISH-A ✅（版本表先行）。
+   - 完成备注：**全 4 项落地，D-185-3 + D-185-4 闭环（ADR-185 端点契约 7/7 全量）**。① rollback = 恢复三表 + roll-forward 新版本（note 自动携 `rollback to v{n}` 用户备注追加；现存草稿不删由陈旧信号②自然标记；版本数<2 → 422 兑现移交注记）；复用 publishHomeConfig draft 省略路径零事务代码新增。② 行级防御 = UNSUPPORTED 双 actionType + 行级 rollback 422 e2e 式守卫 + Set 成员守卫（防回归删除）。③ VersionHistoryPanel：「对比上一版」**按列表序取相邻较旧版本**（serial 空洞防御）两份详情经 version-diff 纯函数本地比对；最新版本回滚禁用。**陷阱沉淀：JSON.stringify replacer 数组作用于全嵌套层级丢非顶层键**——diff normalize 平铺 stringify（pg jsonb canonical 键序保证稳定）。dev 实测：#7 回滚 v1 → v3（audit targetVersionNo + 三表 20 modules 完整）+ #5/#6 + 404/422 拦截。测试 +33（diff 6 / Panel 11 / 路由 8 / 行级防御 3 / e2e 5）。门禁：typecheck/lint 绿 + test:changed 406/406 + verify:adr-contracts EXIT=0（admin 路由 218→221）+ E2E admin **98/98**（home 域 17→22）。**卡 27 为 Phase 4 唯一剩余**。执行模型: claude-opus-4-8；子代理: 无。
 27. **CHG-HOME-CACHE-INVALIDATE** — 发布后缓存主动失效（状态：⬜ 待开始）
    - 创建时间：2026-06-07 02:45
    - 建议模型：sonnet

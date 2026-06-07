@@ -122,9 +122,11 @@ const REQUIRED_ACTION_TYPES = [
   // afterJsonb 含创建的 module ids + 候选来源 + policyVersion）
   'home_section.apply_autofill',        // POST /admin/home/sections/:section/apply-autofill
   // CHG-HOME-DRAFT-PUBLISH-A / ADR-185 D-185-4.1：整页发布（R-MID-1 第 38 次系统化；
-  // afterJsonb 轻量摘要 versionNo/baseVersionNo/sectionsChanged/counts，全量 config 在版本表。
-  // home_page.rollback 写入位点归卡 26 CHG-HOME-AUDIT-ROLLBACK，落地时补本清单）
+  // afterJsonb 轻量摘要 versionNo/baseVersionNo/sectionsChanged/counts，全量 config 在版本表）
   'home_page.publish',                  // POST /admin/home/publish
+  // CHG-HOME-AUDIT-ROLLBACK / ADR-185 D-185-3.4：版本回滚（R-MID-1 第 39 次系统化；
+  // afterJsonb 同构 publish + targetVersionNo；roll-forward 自记新版本）
+  'home_page.rollback',                 // POST /admin/home/versions/:versionNo/rollback
 ] as const
 
 const ACTION_TYPE_REGEX = /actionType:\s*['"]([a-z_.]+)['"]/g
@@ -232,6 +234,8 @@ const PAYLOAD_ASSERTION_REQUIRED = [
   'home_section.apply_autofill',
   // CHG-HOME-DRAFT-PUBLISH-A / ADR-185 D-185-4.1：整页发布 audit payload 内容断言（R-MID-1 第 38 次 / tests/unit/api/home-publish.test.ts）
   'home_page.publish',
+  // CHG-HOME-AUDIT-ROLLBACK / ADR-185 D-185-3.4：版本回滚 audit payload 内容断言（R-MID-1 第 39 次 / tests/unit/api/home-publish.test.ts）
+  'home_page.rollback',
 ] as const
 
 // CHG-SN-6-10：plan v1.4 §3.0.5 M-SN-4 legacy 11 项已迁移至 PAYLOAD_ASSERTION_REQUIRED

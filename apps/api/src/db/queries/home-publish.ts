@@ -13,6 +13,8 @@ import type {
   HomeConfigDraft,
   HomePageConfig,
   HomePublishSource,
+  HomePublishVersion,
+  HomePublishVersionSummary,
 } from '@/types'
 
 // ── DB 行类型 ────────────────────────────────────────────────────────────────
@@ -100,6 +102,72 @@ export async function findTruthTablesMaxUpdatedAt(db: Pool): Promise<string | nu
      )::TEXT AS max_updated`,
   )
   return result.rows[0]?.max_updated ?? null
+}
+
+// ── 版本读取（端点 #5/#6，CHG-HOME-AUDIT-ROLLBACK）───────────────────────────
+
+interface DbVersionRow {
+  id: string
+  version_no: number
+  source: HomePublishSource
+  note: string | null
+  published_by: string
+  published_at: string
+  config?: HomePageConfig
+}
+
+const VERSION_SUMMARY_COLUMNS = `id, version_no, source, note, published_by,
+                                 published_at::TEXT AS published_at`
+
+function mapVersionSummary(row: DbVersionRow): HomePublishVersionSummary {
+  return {
+    id: row.id,
+    versionNo: row.version_no,
+    source: row.source,
+    note: row.note,
+    publishedBy: row.published_by,
+    publishedAt: row.published_at,
+  }
+}
+
+/** 分页列表（轻量行不含 config 载荷，D-185-3.3）；version_no DESC（新在前） */
+export async function listHomePublishVersions(
+  db: Pool,
+  params: { page: number; limit: number },
+): Promise<{ rows: HomePublishVersionSummary[]; total: number }> {
+  const offset = (params.page - 1) * params.limit
+  const [rows, count] = await Promise.all([
+    db.query<DbVersionRow>(
+      `SELECT ${VERSION_SUMMARY_COLUMNS} FROM home_publish_versions
+        ORDER BY version_no DESC LIMIT $1 OFFSET $2`,
+      [params.limit, offset],
+    ),
+    db.query<{ count: string }>(`SELECT COUNT(*) FROM home_publish_versions`),
+  ])
+  return {
+    rows: rows.rows.map(mapVersionSummary),
+    total: parseInt(count.rows[0]?.count ?? '0', 10),
+  }
+}
+
+/** 详情含全量 config（端点 #6 = diff 数据源——diff 计算归消费端，D-185-4.2） */
+export async function findHomePublishVersionByNo(
+  db: Pool,
+  versionNo: number,
+): Promise<HomePublishVersion | null> {
+  const result = await db.query<DbVersionRow & { config: HomePageConfig }>(
+    `SELECT ${VERSION_SUMMARY_COLUMNS}, config FROM home_publish_versions
+      WHERE version_no = $1`,
+    [versionNo],
+  )
+  const row = result.rows[0]
+  return row ? { ...mapVersionSummary(row), config: row.config } : null
+}
+
+/** 版本总数（D-185-1.5 后半：< 2 无可回滚目标） */
+export async function countHomePublishVersions(db: Pool): Promise<number> {
+  const result = await db.query<{ count: string }>(`SELECT COUNT(*) FROM home_publish_versions`)
+  return parseInt(result.rows[0]?.count ?? '0', 10)
 }
 
 // ── 整页状态回读（发布事务内 prev/published 快照源）──────────────────────────

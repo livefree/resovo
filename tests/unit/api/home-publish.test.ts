@@ -39,6 +39,10 @@ const mockLatestVersionNo = vi.fn()
 const mockTablesMaxUpdatedAt = vi.fn()
 const mockPublish = vi.fn()
 
+const mockListVersions = vi.fn()
+const mockFindVersionByNo = vi.fn()
+const mockCountVersions = vi.fn()
+
 vi.mock('@/api/db/queries/home-publish', () => ({
   findHomeConfigDraft: (...args: unknown[]) => mockFindDraft(...args),
   upsertHomeConfigDraft: (...args: unknown[]) => mockUpsertDraft(...args),
@@ -46,6 +50,9 @@ vi.mock('@/api/db/queries/home-publish', () => ({
   findLatestVersionNo: (...args: unknown[]) => mockLatestVersionNo(...args),
   findTruthTablesMaxUpdatedAt: (...args: unknown[]) => mockTablesMaxUpdatedAt(...args),
   publishHomeConfig: (...args: unknown[]) => mockPublish(...args),
+  listHomePublishVersions: (...args: unknown[]) => mockListVersions(...args),
+  findHomePublishVersionByNo: (...args: unknown[]) => mockFindVersionByNo(...args),
+  countHomePublishVersions: (...args: unknown[]) => mockCountVersions(...args),
 }))
 
 const mockListVideoCards = vi.fn()
@@ -424,6 +431,159 @@ describe('POST /admin/home/publish', () => {
     })
     expect(res.statusCode).toBe(422)
     expect(mockFindDraft).not.toHaveBeenCalled()
+  })
+})
+
+// ── 端点 #5–#7（CHG-HOME-AUDIT-ROLLBACK / D-185-3.3-3.4）────────────────────
+
+function versionSummary(versionNo: number, over: Record<string, unknown> = {}) {
+  return {
+    id: `ver-${versionNo}`,
+    versionNo,
+    source: 'publish',
+    note: null,
+    publishedBy: 'u-admin',
+    publishedAt: '2026-06-07T01:00:00Z',
+    ...over,
+  }
+}
+
+describe('GET /admin/home/versions', () => {
+  it('200 轻量行分页（不含 config 载荷）+ 默认 page/limit', async () => {
+    mockListVersions.mockResolvedValue({ rows: [versionSummary(2), versionSummary(1)], total: 2 })
+    const res = await app.inject({
+      method: 'GET', url: '/v1/admin/home/versions',
+      headers: { authorization: await adminToken() },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toMatchObject({ total: 2, page: 1, limit: 20 })
+    expect(res.json().data).toHaveLength(2)
+    expect(res.json().data[0].config).toBeUndefined()
+    expect(mockListVersions).toHaveBeenCalledWith(expect.anything(), { page: 1, limit: 20 })
+  })
+
+  it('非法 page → 422', async () => {
+    const res = await app.inject({
+      method: 'GET', url: '/v1/admin/home/versions?page=0',
+      headers: { authorization: await adminToken() },
+    })
+    expect(res.statusCode).toBe(422)
+  })
+})
+
+describe('GET /admin/home/versions/:versionNo', () => {
+  it('200 详情含全量 config（消费端 diff 数据源）', async () => {
+    mockFindVersionByNo.mockResolvedValue({ ...versionSummary(3), config: pageConfig() })
+    const res = await app.inject({
+      method: 'GET', url: '/v1/admin/home/versions/3',
+      headers: { authorization: await adminToken() },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.versionNo).toBe(3)
+    expect(res.json().data.config.settings).toHaveLength(7)
+    expect(mockFindVersionByNo).toHaveBeenCalledWith(expect.anything(), 3)
+  })
+
+  it('版本不存在 → 404；非法 versionNo → 422（先于 404 判定）', async () => {
+    mockFindVersionByNo.mockResolvedValue(null)
+    const missing = await app.inject({
+      method: 'GET', url: '/v1/admin/home/versions/99',
+      headers: { authorization: await adminToken() },
+    })
+    expect(missing.statusCode).toBe(404)
+
+    const bad = await app.inject({
+      method: 'GET', url: '/v1/admin/home/versions/not-a-number',
+      headers: { authorization: await adminToken() },
+    })
+    expect(bad.statusCode).toBe(422)
+    expect(mockFindVersionByNo).toHaveBeenCalledTimes(1) // 422 不触达查询
+  })
+})
+
+describe('POST /admin/home/versions/:versionNo/rollback', () => {
+  it('版本数 < 2 → 422 无可回滚目标（D-185-1.5）', async () => {
+    mockCountVersions.mockResolvedValue(1)
+    const res = await app.inject({
+      method: 'POST', url: '/v1/admin/home/versions/1/rollback',
+      headers: { authorization: await adminToken() },
+      payload: {},
+    })
+    expect(res.statusCode).toBe(422)
+    expect(mockPublish).not.toHaveBeenCalled()
+  })
+
+  it('目标版本不存在 → 404', async () => {
+    mockCountVersions.mockResolvedValue(3)
+    mockFindVersionByNo.mockResolvedValue(null)
+    const res = await app.inject({
+      method: 'POST', url: '/v1/admin/home/versions/99/rollback',
+      headers: { authorization: await adminToken() },
+      payload: {},
+    })
+    expect(res.statusCode).toBe(404)
+    expect(mockPublish).not.toHaveBeenCalled()
+  })
+
+  it('happy path：恢复三表 + roll-forward 新版本 + note 自动携带 + audit home_page.rollback 内容断言（R-MID-1）', async () => {
+    const targetConfig = pageConfig()
+    mockCountVersions.mockResolvedValue(3)
+    mockFindVersionByNo.mockResolvedValue({ ...versionSummary(2, { source: 'publish' }), config: targetConfig })
+    mockPublish.mockResolvedValue({
+      versionId: 'ver-uuid-4',
+      versionNo: 4,
+      prevConfig: pageConfig({ modules: [] }),
+      publishedConfig: targetConfig,
+    })
+
+    const res = await app.inject({
+      method: 'POST', url: '/v1/admin/home/versions/2/rollback',
+      headers: { authorization: await adminToken() },
+      payload: { note: '误发布回退' },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toEqual({ data: { versionNo: 4 } })
+    // 复用 publishHomeConfig（draft 省略路径）：source='rollback' + note 自动携 target
+    expect(mockPublish).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      config: targetConfig,
+      source: 'rollback',
+      note: 'rollback to v2：误发布回退',
+      actorId: 'u-admin',
+    }))
+    expect(mockPublish.mock.calls[0]![1].draft).toBeUndefined()
+    // D-185-4.1：publish 同构摘要 + targetVersionNo；targetId = 新版本行 UUID
+    expect(mockAuditWrite).toHaveBeenCalledWith(expect.objectContaining({
+      actionType: 'home_page.rollback',
+      targetKind: 'home_page',
+      targetId: 'ver-uuid-4',
+      actorId: 'u-admin',
+      beforeJsonb: null,
+      afterJsonb: expect.objectContaining({
+        versionNo: 4,
+        targetVersionNo: 2,
+        sectionsChanged: expect.arrayContaining(['hot_movies']),
+        counts: { banners: 1, modules: 1 },
+      }),
+    }))
+  })
+
+  it('无备注 → note 仅自动携 rollback to v{n}', async () => {
+    mockCountVersions.mockResolvedValue(2)
+    mockFindVersionByNo.mockResolvedValue({ ...versionSummary(1), config: pageConfig() })
+    mockPublish.mockResolvedValue({
+      versionId: 'ver-uuid-3', versionNo: 3,
+      prevConfig: pageConfig(), publishedConfig: pageConfig(),
+    })
+    const res = await app.inject({
+      method: 'POST', url: '/v1/admin/home/versions/1/rollback',
+      headers: { authorization: await adminToken() },
+      payload: {},
+    })
+    expect(res.statusCode).toBe(200)
+    expect(mockPublish).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      note: 'rollback to v1',
+    }))
   })
 })
 

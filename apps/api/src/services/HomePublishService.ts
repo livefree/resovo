@@ -17,6 +17,8 @@ import {
   type HomeConfigDraft,
   type HomeDraftStaleness,
   type HomePageConfig,
+  type HomePublishVersion,
+  type HomePublishVersionSummary,
   type HomeSectionKey,
 } from '@resovo/types'
 import {
@@ -26,6 +28,9 @@ import {
   findLatestVersionNo,
   findTruthTablesMaxUpdatedAt,
   publishHomeConfig,
+  listHomePublishVersions,
+  findHomePublishVersionByNo,
+  countHomePublishVersions,
 } from '@/api/db/queries/home-publish'
 import { listVideoCardsByIds } from '@/api/db/queries/videos.status'
 import { AuditLogService } from '@/api/services/AuditLogService'
@@ -34,10 +39,20 @@ import {
   HomePageConfigSchema,
   SaveDraftSchema,
   PublishSchema,
+  ListVersionsSchema,
+  VersionNoParamSchema,
+  RollbackSchema,
 } from '@/api/services/home-publish.schemas'
 
 // route 层消费入口保持单点（HomeCurationService 同范式 re-export）
-export { HomePageConfigSchema, SaveDraftSchema, PublishSchema }
+export {
+  HomePageConfigSchema,
+  SaveDraftSchema,
+  PublishSchema,
+  ListVersionsSchema,
+  VersionNoParamSchema,
+  RollbackSchema,
+}
 
 // ── sectionsChanged 摘要（audit afterJsonb，D-185-4.1）─────────────────────
 
@@ -224,6 +239,80 @@ export class HomePublishService {
       afterJsonb: {
         versionNo: result.versionNo,
         baseVersionNo: draft.baseVersionNo,
+        sectionsChanged: computeSectionsChanged(result.prevConfig, result.publishedConfig),
+        counts: {
+          banners: result.publishedConfig.banners.length,
+          modules: result.publishedConfig.modules.length,
+        },
+      },
+      requestId: requestId ?? null,
+    })
+
+    return { versionNo: result.versionNo }
+  }
+
+  // ── 端点 #5–#7（CHG-HOME-AUDIT-ROLLBACK / D-185-3.3-3.4）──────────────────
+
+  /** 端点 #5：版本分页列表（轻量行不含 config，D-185-3.3） */
+  async listVersions(
+    params: z.infer<typeof ListVersionsSchema>,
+  ): Promise<{ rows: HomePublishVersionSummary[]; total: number; page: number; limit: number }> {
+    const { rows, total } = await listHomePublishVersions(this.db, params)
+    return { rows, total, page: params.page, limit: params.limit }
+  }
+
+  /** 端点 #6：版本详情（全量 config = 消费端 diff 数据源，D-185-4.2） */
+  async getVersion(versionNo: number): Promise<HomePublishVersion | null> {
+    return findHomePublishVersionByNo(this.db, versionNo)
+  }
+
+  /**
+   * 端点 #7：版本回滚（D-185-3.4）。恢复三表 + 拍新版本（source='rollback'，
+   * roll-forward——不删不改历史，回滚本身可再回滚）+ audit `home_page.rollback`。
+   * 与 ADR-138 行级 audit rollback 显式区分：操作对象 = 配置三表整页，不经
+   * `system.audit_rollback` 行级链（home_page.* 已入 UNSUPPORTED_ACTION_TYPES）。
+   * 现存草稿不删除——回滚重写三表后由陈旧信号②自然标记草稿过时。
+   *
+   * @throws AppError VALIDATION_ERROR 422 — 版本数 < 2 无可回滚目标（D-185-1.5）
+   * @returns null = 目标版本不存在（404）
+   */
+  async rollback(
+    versionNo: number,
+    params: z.infer<typeof RollbackSchema>,
+    actorId: string,
+    requestId?: string,
+  ): Promise<{ versionNo: number } | null> {
+    const total = await countHomePublishVersions(this.db)
+    if (total < 2) {
+      throw new AppError('VALIDATION_ERROR', '版本数不足，无可回滚目标（首个版本即当前事实发布态）', 422)
+    }
+
+    const target = await findHomePublishVersionByNo(this.db, versionNo)
+    if (!target) return null
+
+    // note 自动携 rollback to v{n}（D-185-3.4）；用户备注追加其后
+    const note = params.note ? `rollback to v${versionNo}：${params.note}` : `rollback to v${versionNo}`
+    const result = await publishHomeConfig(this.db, {
+      config: target.config,
+      source: 'rollback',
+      note,
+      actorId,
+    })
+    // draft 省略路径恒非 null（乐观锁仅作用于草稿删除分支）
+    if (!result) {
+      throw new AppError('STATE_CONFLICT', '回滚事务未完成，请重试', 409)
+    }
+
+    this.auditSvc.write({
+      actorId,
+      actionType: 'home_page.rollback',
+      targetKind: 'home_page',
+      targetId: result.versionId, // 新版本行 UUID（roll-forward 产物）
+      beforeJsonb: null,
+      // D-185-4.1：publish 同构摘要 + targetVersionNo
+      afterJsonb: {
+        versionNo: result.versionNo,
+        targetVersionNo: versionNo,
         sectionsChanged: computeSectionsChanged(result.prevConfig, result.publishedConfig),
         counts: {
           banners: result.publishedConfig.banners.length,

@@ -134,3 +134,19 @@ export const SaveDraftSchema = z.object({
 export const PublishSchema = z.object({
   note: z.string().min(1).max(500).optional(),
 }).strict()
+
+// ── 端点 #5–#7（CHG-HOME-AUDIT-ROLLBACK / D-185-3.3-3.4）────────────────────
+
+/** GET /admin/home/versions query（轻量行分页） */
+export const ListVersionsSchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+})
+
+/** :versionNo 路径参数（正整数；非法 → 422 先于 404 判定，D-182-4 #9 同款） */
+export const VersionNoParamSchema = z.coerce.number().int().min(1)
+
+/** POST /admin/home/versions/:versionNo/rollback body */
+export const RollbackSchema = z.object({
+  note: z.string().min(1).max(500).optional(),
+}).strict()

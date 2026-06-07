@@ -154,6 +154,12 @@ export const UNSUPPORTED_ACTION_TYPES: ReadonlySet<AdminAuditActionType> = new S
   'video.reopen',
   // 用户角色变更（需 session invalidate 联动，N1-138-1 P1+ 注册 handler）
   'user.role_change',
+  // 整页发布治理（CHG-HOME-AUDIT-ROLLBACK / ADR-185 D-185-3.4 显式防御）：
+  // 版本回滚 = 配置三表整页恢复（专用 POST /admin/home/versions/:n/rollback，
+  // roll-forward 自记新版本），与本行级链操作对象不同——不依赖
+  // 「TARGET_KIND_TABLE_MAP 缺 home_page」隐式兜底（未来加表映射会破防）
+  'home_page.publish',
+  'home_page.rollback',
 ])
 
 /**

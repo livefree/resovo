@@ -39,6 +39,7 @@ import { CanvasEnvBar } from './CanvasEnvBar'
 import { SectionInspector } from './SectionInspector'
 import { CrossSectionConfirmModal, type CrossSectionMove } from './CrossSectionConfirmModal'
 import { PublishConfirmModal } from './PublishConfirmModal'
+import { VersionHistoryPanel } from './VersionHistoryPanel'
 import { SECTION_TITLE, VIDEO_SECTIONS } from './section-meta'
 
 const WRAP_STYLE: CSSProperties = {
@@ -123,6 +124,8 @@ export function HomeCanvas({ draftCtl, onSelectSection, onEmptySlot, reloadToken
   const [moving, setMoving] = useState(false)
   // CHG-HOME-DRAFT-PUBLISH-B：发布确认弹层
   const [publishOpen, setPublishOpen] = useState(false)
+  // CHG-HOME-AUDIT-ROLLBACK：版本历史 Drawer
+  const [versionsOpen, setVersionsOpen] = useState(false)
   // CHG-HOME-CANVAS-B：环境参数（环境栏「应用」驱动；ref 保证刷新/保存重拉用最新值）
   const queryRef = useRef<HomePreviewQuery>({})
 
@@ -342,6 +345,14 @@ export function HomeCanvas({ draftCtl, onSelectSection, onEmptySlot, reloadToken
               >
                 刷新
               </AdminButton>
+              <AdminButton
+                variant="ghost"
+                size="sm"
+                onClick={() => setVersionsOpen(true)}
+                data-testid="canvas-versions-btn"
+              >
+                版本历史
+              </AdminButton>
               {draftActive && (
                 <>
                   <AdminButton
@@ -431,6 +442,17 @@ export function HomeCanvas({ draftCtl, onSelectSection, onEmptySlot, reloadToken
         busy={draftCtl.busy}
         onConfirm={(note) => void handlePublishConfirm(note)}
         onCancel={() => setPublishOpen(false)}
+      />
+
+      {/* 版本历史 + 回滚（CHG-HOME-AUDIT-ROLLBACK：回滚 roll-forward 重写三表 →
+          preview 重拉 + 草稿陈旧双信号刷新） */}
+      <VersionHistoryPanel
+        open={versionsOpen}
+        onClose={() => setVersionsOpen(false)}
+        onRolledBack={() => {
+          void load()
+          void draftCtl.reload()
+        }}
       />
     </div>
   )

@@ -70,6 +70,10 @@ vi.mock('../../../../../../apps/server-next/src/lib/home-curation/api', () => ({
   // CHG-HOME-AUTOFILL-UI：Inspector 内嵌候选池（选中区块即拉取）
   getAutofillCandidates: vi.fn(),
   refreshSectionCandidates: vi.fn(),
+  // CHG-HOME-AUDIT-ROLLBACK：版本历史 Drawer（关闭态不拉取；专项覆盖见 VersionHistoryPanel.test）
+  listHomeVersions: vi.fn(),
+  getHomeVersion: vi.fn(),
+  rollbackHomeVersion: vi.fn(),
 }))
 vi.mock('../../../../../../apps/server-next/src/lib/home-modules/api', () => ({
   updateHomeModule: vi.fn(),

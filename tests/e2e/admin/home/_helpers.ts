@@ -26,6 +26,7 @@ import type {
   HomePreview,
   HomePreviewCard,
   HomePreviewSection,
+  HomePublishVersion,
   HomeSectionKey,
   HomeSectionSettings,
 } from '@resovo/types'
@@ -161,6 +162,8 @@ export interface HomeOpsMockState {
   staleness: HomeDraftStaleness | null
   /** POST publish 行为覆写（缺省成功 versionNo 递增；'conflict' = 409 陈旧拒绝） */
   publishBehavior: 'ok' | 'conflict'
+  /** 版本链（ADR-185 #5–#7 / CHG-HOME-AUDIT-ROLLBACK；rollback 时 mock 追加新行） */
+  versions: HomePublishVersion[]
   /** 写路径 spy 日志（method + path + body） */
   writes: Array<{ method: string; path: string; body: unknown }>
 }
@@ -177,7 +180,30 @@ export function freshState(over: Partial<Omit<HomeOpsMockState, 'writes'>> = {})
     draft: null,
     staleness: null,
     publishBehavior: 'ok',
+    versions: [],
     writes: [],
+    ...over,
+  }
+}
+
+/** 版本行工厂（config 缺省 = 从 state 三键装配） */
+export function makeVersion(
+  state: HomeOpsMockState,
+  versionNo: number,
+  over: Partial<HomePublishVersion> = {},
+): HomePublishVersion {
+  return {
+    id: `ver-${versionNo}`,
+    versionNo,
+    source: 'publish',
+    note: null,
+    publishedBy: 'u-admin',
+    publishedAt: '2026-06-07T01:00:00Z',
+    config: {
+      banners: [...state.banners],
+      modules: [...state.modules],
+      settings: HOME_SECTION_KEYS.map((s) => state.settings.get(s) ?? makeSettings(s)),
+    },
     ...over,
   }
 }
@@ -353,6 +379,40 @@ export async function installHomeOpsMocks(page: Page, state: HomeOpsMockState) {
       const existed = state.draft !== null
       state.draft = null
       return json({ data: { deleted: existed } })
+    }
+
+    // ── ADR-185 #5–#7：versions 列表/详情/rollback（CHG-HOME-AUDIT-ROLLBACK）──
+    const rollbackMatch = path.match(/^\/v1\/admin\/home\/versions\/(\d+)\/rollback$/)
+    if (rollbackMatch && method === 'POST') {
+      recordWrite()
+      if (state.versions.length < 2) {
+        return json({ error: { code: 'VALIDATION_ERROR', message: '版本数不足，无可回滚目标', status: 422 } }, 422)
+      }
+      const targetNo = Number(rollbackMatch[1])
+      const target = state.versions.find((v) => v.versionNo === targetNo)
+      if (!target) {
+        return json({ error: { code: 'NOT_FOUND', message: `版本 v${targetNo} 不存在`, status: 404 } }, 404)
+      }
+      const nextNo = Math.max(...state.versions.map((v) => v.versionNo)) + 1
+      state.versions = [
+        ...state.versions,
+        { ...target, id: `ver-${nextNo}`, versionNo: nextNo, source: 'rollback', note: `rollback to v${targetNo}` },
+      ]
+      return json({ data: { versionNo: nextNo } })
+    }
+    const versionDetailMatch = path.match(/^\/v1\/admin\/home\/versions\/(\d+)$/)
+    if (versionDetailMatch && method === 'GET') {
+      const row = state.versions.find((v) => v.versionNo === Number(versionDetailMatch[1]))
+      if (!row) {
+        return json({ error: { code: 'NOT_FOUND', message: '版本不存在', status: 404 } }, 404)
+      }
+      return json({ data: row })
+    }
+    if (path === '/v1/admin/home/versions' && method === 'GET') {
+      const rows = [...state.versions]
+        .sort((a, b) => b.versionNo - a.versionNo)
+        .map(({ config: _config, ...summary }) => summary)
+      return json({ data: rows, total: rows.length, page: 1, limit: 20 })
     }
 
     // ── ADR-185 #4：publish（成功删草稿 / conflict = 陈旧 409）──

@@ -2433,6 +2433,22 @@
 - **数据库变更**：无
 - **注意事项**：① **治理方案 §14「后台 /admin/home 有 E2E 覆盖」收口**（此前零命中）；admin 域全量 **76→87 EXIT=0** 零回归；② 实施陷阱记档：canvas-section 中心点击落在空卡触发 onEmptySlot 不冒泡 select → 选区块须打 head pill（`canvas-mode-*`）；AdminInput `data-testid` 落 wrapper div → fill/toHaveValue 须 `.locator('input')` 下钻（后续 home 域 spec 沿用）；③ 视觉回归评估：**不另立**——画布动态数据密集，截图基线脆弱收益低，testid 行为断言已覆盖；④ 门禁：typecheck/lint/test:changed 绿 + `npm run test:e2e:admin` 87/87 EXIT=0。
 
+## [CHG-HOME-AUDIT-ROLLBACK] 版本列表/详情/回滚 + diff 展示（SEQ-20260605-05 Phase 4 卡 26）
+- **完成时间**：2026-06-07
+- **记录时间**：2026-06-07 06:10
+- **执行模型**：claude-opus-4-8
+- **子代理**：无（协议已由 ADR-185 Opus PASS 定档，本卡纯实施）
+- **修改文件**：
+  - `apps/api/src/db/queries/home-publish.ts` — 版本读取三函数：`listHomePublishVersions`（轻量行分页 DESC 不含 config）/ `findHomePublishVersionByNo`（详情全量 config = 消费端 diff 数据源）/ `countHomePublishVersions`
+  - `apps/api/src/services/HomePublishService.ts` + `home-publish.schemas.ts` + `routes/admin/home-publish.ts` — 端点 #5–#7（**ADR-185 端点契约 7/7 全量落地**）：versions 列表/详情（非法 versionNo 422 先于 404）/ rollback（恢复三表 + roll-forward 拍新版本 source='rollback'、note 自动携 `rollback to v{n}` 用户备注追加；**版本数 < 2 → 422 无可回滚目标**〔卡 24 移交注记兑现〕；复用 `publishHomeConfig` draft 省略路径——草稿乐观锁仅作用于草稿删除分支；现存草稿不删、由陈旧信号②自然标记；audit `home_page.rollback` targetId=新版本 UUID + afterJsonb 同构 publish + targetVersionNo；rollback 静态后缀先于详情注册）
+  - `apps/api/src/services/AuditRollbackService.ts` — `home_page.publish`/`home_page.rollback` 入 `UNSUPPORTED_ACTION_TYPES` **显式防御**（与 ADR-138 行级回滚语义区分：整页版本回滚走专用端点，操作对象 = 配置三表；不依赖 TARGET_KIND_TABLE_MAP 缺映射隐式兜底——未来加表映射会破防）
+  - `apps/server-next/src/lib/home-curation/version-diff.ts` — **新建**消费端 diff 纯函数（服务端不存不算 diff）：section 粒度 added/removed/changed（按 id）+ settingsChanged；剥离 createdAt/updatedAt 元数据（ms 截断教训延续）；**陷阱记档：JSON.stringify replacer 数组作用于全嵌套层级会丢非顶层键（title/metadata）**——平铺 stringify 即稳定（两侧均出自 pg jsonb canonical 键序）
+  - `apps/server-next/.../canvas/VersionHistoryPanel.tsx` — **新建**版本历史 Drawer：列表（source pill / 当前版本标记 / note·时间）+「对比上一版」**按列表序取相邻较旧版本**（serial 可留空洞，不可按 n-1 推算）+ 回滚确认 modal（最新版本禁用——即当前发布态）；HomeCanvas 工具栏「版本历史」入口，回滚成功 → preview 重拉 + 草稿双信号刷新
+  - `apps/server-next/src/lib/home-curation/{api,types}.ts` — listHomeVersions / getHomeVersion / rollbackHomeVersion 客户端 + 类型桥接
+  - 测试：`home-version-diff.test.ts` **新建** 6 例（恒等剥离/增删改计数/banner 独立/settings/嵌套键检出/渲染序）；`VersionHistoryPanel.test.tsx` **新建** 11 例；`home-publish.test.ts` +8（#5–#7 路由含 R-MID-1 rollback payload 内容断言）；`audit-rollback.test.ts` +3（home_page.* 行级 422 防御 ×2 + Set 成员守卫）；coverage REQUIRED/PAYLOAD +home_page.rollback；E2E `home-versions.spec.ts` **新建** 5 例（列表/diff/回滚金路径/禁用边界/冷启动空链）
+- **新增依赖**：无 ｜ **数据库变更**：无（097 版本表已就位）
+- **注意事项**：① **ADR-185 D-185-3 + D-185-4 闭环**（3.1/3.2/3.5/3.6 卡 24 + 3.3/3.4 本卡；4.1 摘要双 actionType 落定 + 4.2 diff 消费端 + 4.3 full_auto 漂移不入版本链为既有语义零代码）；缓存失效裁定闭环归卡 27——有意不引用其 D 编号字面量防 verify-adr-d-numbers 伪闭环（卡 23 沉淀规律）；② dev 实测：#5 轻量行 DESC（hasConfig false）/ #6 v1 详情 20 modules+2 banners / 404·422 拦截 / **#7 回滚 v1 → roll-forward v3**（source=rollback + note 拼接 + audit targetVersionNo=1 + sectionsChanged []〔v1≡当前态恒等〕+ 三表 20 modules 完整）；③ 门禁：typecheck/lint 绿 + test:changed 406/406（未触基础包，增量门禁）+ verify:adr-contracts EXIT=0（admin 路由 218→221 全对齐）+ `npm run test:e2e:admin` **98/98** EXIT=0（home 域 17→22）。
+
 ## [CHG-HOME-DRAFT-PUBLISH-B] 发布治理前端：画布切草稿写 + 发布确认 UI（SEQ-20260605-05 Phase 4 卡 25）
 - **完成时间**：2026-06-07
 - **记录时间**：2026-06-07 05:00
