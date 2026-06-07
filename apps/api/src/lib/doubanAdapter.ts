@@ -20,12 +20,26 @@ export type { DoubanSubjectDetails, DoubanResolvedCandidate }
 
 // ── 创建 runtime（无 cookie、无 Puppeteer、无缓存） ───────────────
 
+/** 请求超时（ms）：豆瓣挂起时避免请求无限等待（搜索/详情两路统一兜底） */
+const FETCH_TIMEOUT_MS = 10_000
+
+/**
+ * fetch 包装：调用方未自带 signal 时注入 AbortSignal.timeout 超时。
+ * resolver/details 服务均不传 signal → 恢复旧 douban.ts 的超时保护并扩展到详情路径。
+ */
+function fetchWithTimeout(
+  input: Parameters<typeof globalThis.fetch>[0],
+  init?: RequestInit,
+): Promise<Response> {
+  if (init?.signal) return globalThis.fetch(input, init)
+  return globalThis.fetch(input, { ...init, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) })
+}
+
 function createBasicRuntime() {
   return createHostRuntime({
-    fetch: globalThis.fetch.bind(globalThis),
+    fetch: fetchWithTimeout,
     getDoubanConfig: async () => ({}),
-    fetchWithVerification: (url: string, init?: RequestInit) =>
-      globalThis.fetch(url, init),
+    fetchWithVerification: fetchWithTimeout,
     logger: {
       debug: () => undefined,
       info: () => undefined,
