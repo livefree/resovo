@@ -21,6 +21,10 @@ import type {
   DoubanGetRecommendationsOptions,
   DoubanRecommendationsResponse,
 } from '../core/recommendations.types.js';
+import type {
+  DoubanCollectionItemsResult,
+  DoubanGetCollectionItemsOptions,
+} from '../core/subject-collection.types.js';
 
 export interface FetchPort {
   fetch(input: string, init?: RequestInit): Promise<Response>;
@@ -88,6 +92,11 @@ export interface DoubanRecommendationsRuntime extends FetchPort {
   logger: LoggerPort;
 }
 
+export interface DoubanSubjectCollectionRuntime extends FetchPort {
+  cache?: CachePort;
+  logger: LoggerPort;
+}
+
 export interface DoubanDetailsService {
   getById(
     subjectId: string,
@@ -130,4 +139,10 @@ export interface DoubanRecommendationsService {
     options: DoubanGetRecommendationsOptions,
   ): Promise<DoubanRecommendationsResponse>;
   getCacheKey(options: DoubanGetRecommendationsOptions): string;
+}
+
+export interface DoubanSubjectCollectionService {
+  getItems(
+    options: DoubanGetCollectionItemsOptions,
+  ): Promise<DoubanCollectionItemsResult>;
 }

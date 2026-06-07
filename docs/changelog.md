@@ -2632,3 +2632,18 @@
   - `docs/task-queue.md` — SEQ-20260607-03 登记 + 卡 1 ✅ + 卡 2/3 细化（卡 3 加 sync_state 表 + empty_guard）+ 后续卡 CHG-DOUBAN-HOT-WIRE 占位
 - **新增依赖**：无 ｜ **数据库变更**：无（migration 099 归实施卡 STORE）
 - **注意事项**：① **用户纠偏**——豆瓣热门资源获取要全面做透，**不能被「当前产品只展示站内有的视频」反向裁剪数据层**；展示后期按接口丰富 → 本期 = 采集+落库能力，**不改 home autofill / 不触 ADR-183 展示治理 / 不删 douban_entries**；② arch-reviewer 关键揪错：M1 缺 raw JSONB 兜底（违「未来展示免重抓」目标）/ M3 缺合集级新鲜度致「失败保留旧数据」无法判陈旧 + key 失效静默清空风险（最危险边角，加 empty_guard 守护）；③ 实测确认 16 合集端点全可用无限流（与被封死 subject_suggest / 被频控 search 对比）；④ docs-only（test:changed 自动跳过 / ADR-180）。
+
+## [CHG-DOUBAN-HOT-ADAPTER] douban-adapter 新增 subject_collection 采集服务（全字段归一化 + raw strip comments）（SEQ-20260607-03 卡 2）
+- **完成时间**：2026-06-07
+- **记录时间**：2026-06-07 16:00
+- **执行模型**：claude-opus-4-8
+- **子代理**：arch-reviewer (claude-opus-4-8)（ADR-187 阶段裁定服务契约——命名/runtime/字段完备/raw strip comments；卡 2 承接其结论实施）
+- **修改文件**：
+  - `external-adapter/douban-adapter/src/core/subject-collection.types.ts`（新建）— `DoubanCollectionItem` 全字段归一化类型（含 `raw` 兜底）+ `DoubanGetCollectionItemsOptions` + `DoubanCollectionItemsResult` + domain/category 枚举
+  - `external-adapter/douban-adapter/src/core/subject-collection.helpers.ts`（新建）— `buildSubjectCollectionUrl`（count clamp ≤ MAX_COLLECTION_COUNT=50 对齐 recommendations）+ `normalizeCollectionItem`（**strip comments 入 raw**，ADR-187 INV-2；id/title 缺失过滤；cover.url/rating.value·count 映射）
+  - `external-adapter/douban-adapter/src/core/subject-collection.service.ts`（新建）— `createDoubanSubjectCollectionService(runtime).getItems({collection,start?,count?})` → `{collection,total,items}`；runtime.fetch + 复用 recommendations header（Referer m.douban.com + UA + Accept-Language）+ 非 200 抛 DoubanError + logger.info 完成日志
+  - `external-adapter/douban-adapter/src/ports/runtime.ts` — 加 `DoubanSubjectCollectionRuntime extends FetchPort` + `DoubanSubjectCollectionService`
+  - `external-adapter/douban-adapter/src/index.ts` — 导出 service + 类型 + helpers + runtime 类型
+  - `external-adapter/douban-adapter/src/tests/external-package.test.ts` + `tests/fixtures/details-fixture.ts` — +1 测试（归一化全字段 / **raw 不含 comments** / 脏数据缺 id 过滤 / 无评分 → null）+ fixture `SUBJECT_COLLECTION_API_DATA`（含 comments 验证 strip）
+- **新增依赖**：无 ｜ **数据库变更**：无
+- **注意事项**：① 仿 `recommendations.*` 范式（runtime port 分层 + header + DoubanError），共享包公开 API 契约 → commit 带 `Subagents: arch-reviewer` trailer（CLAUDE.md 模型路由）；② 本服务**不缓存**（落库由卡 3 主工程抓取 job 承担）；③ 全 16 合集走同一 `getItems({collection})`，collection key 由消费方（卡 3 注册表）传入；④ 门禁：adapter `npm test` 14/14（build tsc 过）/ 主仓 typecheck 绿 / lint 5/5 / test:changed 0 相关（adapter 用 node:test 不入 vitest）。

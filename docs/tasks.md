@@ -6,7 +6,7 @@
 
 ## 当前任务（单任务工作台：同时仅 1 个 🔄 进行中；完成即删卡，历史见 docs/changelog.md）
 
-（空 — SEQ-20260607-03 卡 1 CHG-DOUBAN-HOT-ADR 收口 2026-06-07 15:30：ADR-187 Accepted，arch-reviewer Opus CONDITIONAL PASS + M1–M5 全纳入；卡 2 CHG-DOUBAN-HOT-ADAPTER 启动时写新卡，见 task-queue SEQ-20260607-03）
+（空 — SEQ-20260607-03 卡 2 CHG-DOUBAN-HOT-ADAPTER 收口 2026-06-07 16:00：douban-adapter 新增 subject_collection 服务（全字段归一化 + raw strip comments），adapter 14/14 + 主仓 typecheck/lint 绿；卡 3 CHG-DOUBAN-HOT-STORE 启动时写新卡，见 task-queue SEQ-20260607-03）
 
 ---
 

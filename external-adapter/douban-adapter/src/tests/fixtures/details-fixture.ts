@@ -246,6 +246,43 @@ export const RECOMMENDATIONS_API_DATA = {
   ],
 };
 
+export const SUBJECT_COLLECTION_API_DATA = {
+  start: 0,
+  count: 2,
+  total: 345,
+  subject_collection_items: [
+    {
+      id: '36916000',
+      title: '诺曼底72小时',
+      original_title: 'Pressure',
+      type: 'movie',
+      subtype: '',
+      year: '2026',
+      card_subtitle: '2026 / 英国 法国 美国 / 剧情 战争 / 安东尼·马拉斯 / 安德鲁·斯科特 布兰登·费舍',
+      info: '英国 法国 美国 / 剧情 战争 / 安东尼·马拉斯',
+      uri: 'douban://douban.com/movie/36916000',
+      release_date: '06.06',
+      has_linewatch: false,
+      cover: { url: 'https://img2.doubanio.com/view/photo/m_ratio_poster/public/p2932334501.jpg' },
+      rating: { value: 8.2, count: 12882, max: 10, star_count: 4.0 },
+      directors: ['安东尼·马拉斯'],
+      actors: ['安德鲁·斯科特', '布兰登·费舍'],
+      comments: [{ id: 'c1', comment: '热评应被 strip', user: { id: 'u1' } }],
+    },
+    {
+      id: '35000000',
+      title: '无评分占位片',
+      type: 'movie',
+      year: '2025',
+      cover: { url: 'https://img.example.com/p.jpg' },
+    },
+    {
+      // id 缺失 → 应被过滤
+      title: '无 id 脏数据',
+    },
+  ],
+};
+
 export const CELEBRITY_WORKS_SEARCH_HTML = `
 <html>
   <body>

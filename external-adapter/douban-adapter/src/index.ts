@@ -68,6 +68,20 @@ export {
   DEFAULT_RESOLVER_CACHE_TTL_SECONDS,
   getResolverCacheKey,
 } from './core/resolver.service.js';
+export type {
+  DoubanCollectionCategory,
+  DoubanCollectionDomain,
+  DoubanCollectionItem,
+  DoubanCollectionItemsResult,
+  DoubanGetCollectionItemsOptions,
+} from './core/subject-collection.types.js';
+export { createDoubanSubjectCollectionService } from './core/subject-collection.service.js';
+export {
+  buildSubjectCollectionUrl,
+  DEFAULT_COLLECTION_COUNT,
+  MAX_COLLECTION_COUNT,
+  normalizeCollectionItem,
+} from './core/subject-collection.helpers.js';
 export {
   parseDoubanCelebrityWorksHtml,
 } from './core/celebrity-works-parser.js';
@@ -128,6 +142,8 @@ export type {
   DoubanRecommendationsService,
   DoubanResolverRuntime,
   DoubanResolverService,
+  DoubanSubjectCollectionRuntime,
+  DoubanSubjectCollectionService,
   FetchPort,
   LoggerPort,
 } from './ports/runtime.js';

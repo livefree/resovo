@@ -7,6 +7,7 @@ import { createDoubanCommentsService } from '../core/comments.service.js';
 import { createDoubanDetailsService } from '../core/details.service.js';
 import { createDoubanRecommendationsService } from '../core/recommendations.service.js';
 import { createDoubanResolverService } from '../core/resolver.service.js';
+import { createDoubanSubjectCollectionService } from '../core/subject-collection.service.js';
 import { parseDoubanCommentsHtml } from '../core/comments-parser.js';
 import { createHostRuntime } from '../adapters/host-runtime.js';
 import { toSnakeCaseDetailsResponse } from '../compat/snake-case-details-response.js';
@@ -21,6 +22,7 @@ import {
   MOVIE_MOBILE_API_DATA,
   MOVIE_SUBJECT_ID,
   RECOMMENDATIONS_API_DATA,
+  SUBJECT_COLLECTION_API_DATA,
   SUBJECT_SEARCH_HTML,
   TV_DETAILS_HTML,
   TV_MOBILE_API_DATA,
@@ -69,6 +71,13 @@ function createTestRuntime() {
 
       if (url.includes('/rexxar/api/v2/movie/recommend?')) {
         return new Response(JSON.stringify(RECOMMENDATIONS_API_DATA), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      if (url.includes('/rexxar/api/v2/subject_collection/movie_hot_gaia/items?')) {
+        return new Response(JSON.stringify(SUBJECT_COLLECTION_API_DATA), {
           status: 200,
           headers: { 'Content-Type': 'application/json' },
         });
@@ -279,6 +288,41 @@ test('recommendations service returns normalized recommendation list', async () 
   assert.equal(result.list[0]?.id, '1295644');
   assert.equal(result.list[0]?.rate, '9.4');
   assert.equal(result.list[1]?.type, 'movie');
+});
+
+test('subject_collection service normalizes items and strips comments', async () => {
+  const service = createDoubanSubjectCollectionService(createTestRuntime());
+  const result = await service.getItems({
+    collection: 'movie_hot_gaia',
+    start: 0,
+    count: 50,
+  });
+
+  assert.equal(result.collection, 'movie_hot_gaia');
+  assert.equal(result.total, 345);
+  // 脏数据（缺 id）被过滤：3 条原始 → 2 条
+  assert.equal(result.items.length, 2);
+
+  const first = result.items[0];
+  assert.equal(first?.id, '36916000');
+  assert.equal(first?.title, '诺曼底72小时');
+  assert.equal(first?.originalTitle, 'Pressure');
+  assert.equal(first?.year, '2026');
+  assert.equal(first?.ratingValue, 8.2);
+  assert.equal(first?.ratingCount, 12882);
+  assert.equal(first?.coverUrl, 'https://img2.doubanio.com/view/photo/m_ratio_poster/public/p2932334501.jpg');
+  assert.equal(first?.releaseDate, '06.06');
+  assert.equal(first?.hasLinewatch, false);
+  assert.equal(first?.subjectType, 'movie');
+  // raw 保留原始字段但 strip comments（INV-2）
+  assert.equal((first?.raw as { directors?: string[] }).directors?.[0], '安东尼·马拉斯');
+  assert.equal((first?.raw as { comments?: unknown }).comments, undefined);
+
+  // 无评分占位片：rating 字段缺失 → null
+  const second = result.items[1];
+  assert.equal(second?.id, '35000000');
+  assert.equal(second?.ratingValue, null);
+  assert.equal(second?.originalTitle, null);
 });
 
 test('celebrity works parser extracts works from search html', () => {

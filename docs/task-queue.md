@@ -104,9 +104,9 @@
 
 ## [SEQ-20260607-03] DOUBAN-HOT-ACQUISITION — 全面落实豆瓣热门资源获取能力（采集优先，展示后置）
 
-- **状态**：🔄 执行中（卡 1 ADR ✅ 2026-06-07 15:30；卡 2/3 待开始）
+- **状态**：🔄 执行中（卡 1 ADR ✅ / 卡 2 ADAPTER ✅ 2026-06-07 16:00；卡 3 STORE 待开始）
 - **创建时间**：2026-06-07 15:00
-- **最后更新时间**：2026-06-07 15:30
+- **最后更新时间**：2026-06-07 16:00
 - **目标**：妥善全面落实豆瓣**热门合集资源采集 + 落库能力**（实测 16 个可用合集：电影 5 / 剧集 8 / 综艺 3，含热门·热映·即将上映·Top250·口碑榜·分国别）。**不按站内映射/产品展示过滤**，全量字段入库；产品展示（首页接线）后期按接口丰富。
 - **范围**：`external-adapter/douban-adapter`（新 subject_collection 服务）+ `apps/api`（迁移建表 / queries / lib 包装 / 定时抓取 job）。**不改** home autofill、**不触** ADR-183 展示治理、**不删** douban_entries。
 - **用户裁定**（2026-06-07）：豆瓣热门资源获取要全面做透，不能被「当前产品只展示站内有的视频」反向裁剪数据层；展示后期再按接口丰富。
@@ -121,10 +121,10 @@
    - 完成备注：**ADR-187 Accepted**（docs/decisions.md）。arch-reviewer (claude-opus-4-8 / agentId ab4a867db8960c7ff) 独立裁定 Q1–Q8 → CONDITIONAL PASS，揪出 5 必修条件全数纳入决策要点：**M1** items 表加 `raw JSONB`（strip comments）+ `release_date`/`info` 单列（兑现未来展示免重抓）；**M2** BIGSERIAL PK + UNIQUE(collection,douban_id)、索引 (collection,rank)+(douban_id)、rank 语义写死（拉取序位非评分）；**M3** 新增合集级 `douban_collection_sync_state` 表（last_success_at 等）+ **key 失效静默清空守护**（成功但 items 骤降→不替换保留旧 + warn）；**M4** 4 条不变量（同事务原子 / 零反哺 entries / raw strip comments / 注册表红线对齐）；**M5** 量化延时·超时·header 复用 + 队列归属裁定（复用 maintenanceQueue）+ 封顶有据（注册表 maxItems）。执行模型: claude-opus-4-8；子代理: arch-reviewer (claude-opus-4-8)。
    - 验收要点：ADR-187 Accepted（arch-reviewer Opus PASS）；零实施；task-queue 卡细化。
 
-2. **CHG-DOUBAN-HOT-ADAPTER** — douban-adapter 包新增 subject_collection 服务（全字段归一化 + 类型 + 解析 + 测试）（状态：⬜ 待开始）
-   - 创建时间：2026-06-07 15:00
+2. **CHG-DOUBAN-HOT-ADAPTER** — douban-adapter 包新增 subject_collection 服务（全字段归一化 + 类型 + 解析 + 测试）（状态：✅ 已完成 2026-06-07 16:00）
+   - 创建时间：2026-06-07 15:00 ｜ 实际开始：2026-06-07 15:40 ｜ 完成时间：2026-06-07 16:00
    - 建议模型：opus（共享包公开 API 契约 / commit 强制 `Subagents: arch-reviewer` trailer）
-   - 验收要点：`createDoubanSubjectCollectionService` 全 16 合集可取；adapter 包 node:test 过；主仓 typecheck 绿。
+   - 完成备注：**实施 ADR-187 D-187-1/3**。新建 `subject-collection.{types,helpers,service}.ts`（仿 recommendations 范式）：`createDoubanSubjectCollectionService(runtime).getItems({collection,start?,count?})` → `{collection,total,items}`；`DoubanCollectionItem` 全字段归一化（id/title/originalTitle/cardSubtitle/info/year/ratingValue/ratingCount/coverUrl/uri/releaseDate/subjectType/hasLinewatch/**raw**）；`normalizeCollectionItem` **strip comments 入 raw**（INV-2）+ id/title 缺失过滤；`buildSubjectCollectionUrl`（count clamp ≤ MAX=50 对齐 recommendations）；header 复用 recommendations（Referer m.douban.com + UA + Accept-Language）；非 200 抛 DoubanError。`ports/runtime.ts` 加 `DoubanSubjectCollectionRuntime extends FetchPort` + `DoubanSubjectCollectionService`；`index.ts` 导出 service+类型+helpers+runtime 类型。测试 +1（external-package.test.ts，含 strip comments + 脏数据过滤 + 无评分 null 断言）+ fixture `SUBJECT_COLLECTION_API_DATA`。门禁：adapter `npm test` 14/14（build tsc 过）/ 主仓 typecheck 绿 / lint 5/5 / test:changed 0 相关。执行模型: claude-opus-4-8；子代理: arch-reviewer (claude-opus-4-8 ADR 阶段裁定服务契约，卡 2 承接实施)。
    - 依赖：ADR ✅。
 
 3. **CHG-DOUBAN-HOT-STORE** — 迁移建表（items + sync_state）+ queries + lib 包装 + 定时抓取 job + server 注册（状态：⬜ 待开始）
