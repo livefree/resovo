@@ -2432,3 +2432,14 @@
 - **新增依赖**：无
 - **数据库变更**：无
 - **注意事项**：① **治理方案 §14「后台 /admin/home 有 E2E 覆盖」收口**（此前零命中）；admin 域全量 **76→87 EXIT=0** 零回归；② 实施陷阱记档：canvas-section 中心点击落在空卡触发 onEmptySlot 不冒泡 select → 选区块须打 head pill（`canvas-mode-*`）；AdminInput `data-testid` 落 wrapper div → fill/toHaveValue 须 `.locator('input')` 下钻（后续 home 域 spec 沿用）；③ 视觉回归评估：**不另立**——画布动态数据密集，截图基线脆弱收益低，testid 行为断言已覆盖；④ 门禁：typecheck/lint/test:changed 绿 + `npm run test:e2e:admin` 87/87 EXIT=0。
+
+## [CHG-HOME-GOV-PLAN-ERRATA] 治理方案 §6/§14 缺图口径勘误 + 发布确认义务移交（SEQ-20260605-05 卡 22，docs-only）
+- **完成时间**：2026-06-07
+- **记录时间**：2026-06-07 02:10
+- **执行模型**：claude-opus-4-8
+- **子代理**：无
+- **修改文件**：
+  - `docs/designs/home-operations-governance-plan_20260605.md` — §6.1 strike + 勘误（image_url NOT NULL → 缺图态不可达，实际口径 = 尺寸/比例/探测失败三类警告）；§6 校验级别小结「缺图」除名；§14 验收第 5 条同步更正；§17 修订记录 +1
+  - `docs/task-queue.md` — Phase 4 占位行 +`CHG-HOME-DRAFT-PUBLISH` 验收项移交注记（「发布确认」处横图警告标记，卡 23 细化时写入验收标准）
+- **新增依赖**：无 ｜ **数据库变更**：无
+- **注意事项**：① 勘误原文全部 strike 保留（与方案既有两次勘误范式一致）；② 警告级不阻断口径（D-052-9）不变，仅「缺图」一类经 schema 吸收除名；③ docs-only，test:changed 自动跳过（ADR-180）。

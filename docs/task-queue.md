@@ -1313,13 +1313,13 @@
    - 范围（5 项）：① 画布渲染 + 区块切换/Inspector smoke ② 卡片操作金路径（reorder 端点 spy / 删除 / 固定转换） ③ 候选池金路径（解释展示 / 应用 / 立即刷新——mock ADR-182 端点 #4/#5/#7） ④ Banner 编辑 + 横图警告态 ⑤ 全程复用 `tests/e2e/admin/_shared/shell-mocks.ts` 基座 + mock 类型绑定 `@resovo/types`（test-rules E2E 规程第 4/5 条）。
    - 依赖：无（与 19/20 可并行）。视觉回归（admin-visual baseline）不在本卡，完成备注评估是否另立。
    - 完成备注：**`tests/e2e/admin/home/` 新建 _helpers + home-ops.spec 11 用例全绿；admin 域全量 76→87 EXIT=0 零回归**。① 画布：7 区块渲染 + 生成时间戳 + Inspector 空态/联动/settings 回显 + PATCH #3 spy；② 卡片操作：删除 modal→DELETE spy→列表移除 / 发布切换 POST spy（enabled 翻转）/ **拖拽排序真实鼠标步进**（dnd-kit PointerSensor，handle 按下分步移动，reorder body 断言 [m-b,m-a] 序对换）；③ 候选池：解释展示（filtered 条目同列表不可勾选）+ 应用 #5 spy（candidateIds 断言 + 按钮 disabled→enabled 态）+ 立即刷新 #7 spy + 快照未生成态（snapshotAt null 200 语义）；④ Banner：create drawer + 横图探测失败警告（route abort → Image onerror，§6.6 风险提醒态）+ **警告级不阻断实证**（submit enabled + POST /admin/banners spy）。mock 全程类型绑定（HomeModule/Banner/HomeSectionSettings/AutofillCandidate/HomePreview 工厂）+ writes spy 日志 + route.fallback 下沉基座。实施陷阱 ×2 记档：canvas-section 中心点击落空卡触发 onEmptySlot 不达 select → 改打 head pill（canvas-mode-\*）；AdminInput data-testid 在 wrapper div → fill/toHaveValue 须 `.locator('input')` 下钻。**视觉回归评估：不另立**——画布为动态数据密集界面（时间戳/候选数据/计数实时变化），截图基线脆弱收益低，testid 行为断言已覆盖关键路径。门禁：typecheck/lint 绿 + test:changed 绿（e2e spec 不入 unit 图）+ `npm run test:e2e:admin` 87/87 EXIT=0。执行模型: claude-opus-4-8；子代理: 无。
-22. **CHG-HOME-GOV-PLAN-ERRATA** — 治理方案 §6/§14 缺图口径勘误（docs-only）（状态：⬜ 待开始）
-   - 创建时间：2026-06-06 22:05
-   - 建议模型：haiku（本卡明确标注"更新文档"）
+22. **CHG-HOME-GOV-PLAN-ERRATA** — 治理方案 §6/§14 缺图口径勘误（docs-only）（状态：✅ 已完成）
+   - 创建时间：2026-06-06 22:05 ｜ 实际开始：2026-06-07 02:00 ｜ 完成时间：2026-06-07 02:10
+   - 建议模型：haiku（实际 claude-opus-4-8，用户 opus 会话「按顺序依次推进」承接；勘误需对账实施语义非纯机械，未降子代理）
    - 变更原因：IMAGE-GUARD-BANNER 实施实证 `home_banners.image_url` NOT NULL → 「缺横版大图」态在 Hero 真源下不可达（schema 吸收），实际落地为尺寸/比例/探测三类警告；§14 验收第 5 条「三处标记」中「发布确认」处依赖 Phase 4 发布流。
    - 范围（2 项）：① §6/§14 勘误（缺图态 → 三类警告口径 + 修订记录追加） ② 「发布确认」第三处标记义务移交注记至 Phase 4 `CHG-HOME-DRAFT-PUBLISH` 验收项。
    - 依赖：无。
-   - 完成备注：_（完成后填写）_
+   - 完成备注：§6.1 strike + 勘误注记（缺图态结构上不可达，实际口径 = 三类警告；画布卡片 + Inspector 两处已承载）；§6 校验级别小结「缺图」除名；§14 验收第 5 条 strike + 更正（含 CHG-HOME-E2E-SPEC E2E 覆盖引证）；§17 修订记录 +1 行；queue Phase 4 占位行 +DRAFT-PUBLISH 验收项移交注记（卡 23 细化拆卡时写入）。原文全部保留（strike 不删除，与既有勘误范式一致）。门禁：docs-only（test:changed 自动跳过，ADR-180）。执行模型: claude-opus-4-8；子代理: 无。
 
 ### Phase 4 细化登记（2026-06-06 22:05；实施卡依赖 ADR 裁定，不得先行落端点）
 
@@ -1332,6 +1332,7 @@
    - 完成备注：_（完成后填写）_
 
 - Phase 4 实施占位（依赖卡 23 细化）：`CHG-HOME-DRAFT-PUBLISH` / `CHG-HOME-AUDIT-ROLLBACK` / `CHG-HOME-CACHE-INVALIDATE`
+  - **DRAFT-PUBLISH 验收项移交注记**（CHG-HOME-GOV-PLAN-ERRATA，2026-06-07）：方案 §6.1/§14「发布确认」处 Banner 横图警告标记义务（三类警告：尺寸/比例/探测失败；原「缺横版大图」态经 image_url NOT NULL schema 吸收不可达）——发布确认环节落地时必须实现该标记，卡 23 细化拆卡时写入 DRAFT-PUBLISH 验收标准。
 
 ---
 
