@@ -2433,6 +2433,19 @@
 - **数据库变更**：无
 - **注意事项**：① **治理方案 §14「后台 /admin/home 有 E2E 覆盖」收口**（此前零命中）；admin 域全量 **76→87 EXIT=0** 零回归；② 实施陷阱记档：canvas-section 中心点击落在空卡触发 onEmptySlot 不冒泡 select → 选区块须打 head pill（`canvas-mode-*`）；AdminInput `data-testid` 落 wrapper div → fill/toHaveValue 须 `.locator('input')` 下钻（后续 home 域 spec 沿用）；③ 视觉回归评估：**不另立**——画布动态数据密集，截图基线脆弱收益低，testid 行为断言已覆盖；④ 门禁：typecheck/lint/test:changed 绿 + `npm run test:e2e:admin` 87/87 EXIT=0。
 
+## [CHG-HOME-CACHE-INVALIDATE] 发布后缓存主动失效（SEQ-20260605-05 Phase 4 卡 27 / **Phase 4 全收口**）
+- **完成时间**：2026-06-07
+- **记录时间**：2026-06-07 06:45
+- **执行模型**：claude-opus-4-8
+- **子代理**：无（协议已由 ADR-185 Opus PASS 定档，本卡纯实施）
+- **修改文件**：
+  - `apps/api/src/services/home-cache-invalidation.ts` — **新建**失效模块：`invalidatePublishedHomeCaches`（**子前缀级精确 scan+UNLINK**——`home:shelf:*` 经 D-184-5.2 接口位 `HOME_SHELF_CACHE_PREFIX` + `home:top10:*`；不复用 CacheService.clearCache type 级整删，`home:*` 整删会连带清非目标 home key）+ `schedulePublishedHomeCacheInvalidation`（事务外 fire-and-forget：成功 debug / 失败 warn 不上抛——失效失败不回滚发布，60s TTL 兜底自愈，主动失效是优化不是正确性前提）；`HOME_PUBLISH_INVALIDATION_PREFIXES` 导出（扩前缀同卡同步约定）
+  - `apps/api/src/services/HomeService.ts` — `HOME_TOP10_CACHE_PREFIX` 导出（top10 键族失效接口位，shelf 接口位同范式）
+  - `apps/api/src/services/HomePublishService.ts` — publish/rollback 事务成功 + audit 后接失效钩子（携 trigger/versionNo 上下文）
+  - `tests/unit/api/home-cache-invalidation.test.ts` — **新建** 6 例：接口位对账（两子前缀全集）/ 精确 MATCH 断言（禁 home:\* 整删）/ 空键族合法态 / SCAN 游标分页聚合 / 成功 debug / redis 故障 warn 不上抛；`home-publish.test.ts` +3 断言（publish/rollback 钩子触发 + 竞态路径不触发）
+- **新增依赖**：无 ｜ **数据库变更**：无
+- **注意事项**：① **ADR-185 D-185-5 闭环 → D-185 全 6 项裁定收口；Phase 4 实施 4 卡（24–27）全完成 = 治理方案（home-operations-governance-plan_20260605.md）§11/§12 最后两节落地，方案全章节实施面闭环**；② dev 实测：预热 4 键（shelf 三键 + top10）→ rollback → `home:*` 键族清空（publish 钩子同链路）；③ 门禁：typecheck/lint 绿 + test:changed 74/74（API-only 增量）+ **全量单测 7021/7021 EXIT=0（Phase 收口兜底节点，一次绿）** + verify:adr-contracts EXIT=0（零新端点 221 不变）；E2E N/A（API-only，UI 零改动——admin 域卡 26 后 98/98 在档；E2E 全量受 web 域既有失修阻塞，已登记 CHG-E2E-WEB-AUDIT 待立案）。
+
 ## [CHG-HOME-AUDIT-ROLLBACK] 版本列表/详情/回滚 + diff 展示（SEQ-20260605-05 Phase 4 卡 26）
 - **完成时间**：2026-06-07
 - **记录时间**：2026-06-07 06:10

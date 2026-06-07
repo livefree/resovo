@@ -18,11 +18,14 @@ import { CACHE_PREFIXES } from '@/api/services/CacheService'
 import { buildHomeShelves, buildHomeShelfCacheKey } from '@/api/services/home-curation.shelf'
 
 const TOP10_TTL = 60
-/** D-184-5.1：与 top10 同口径短 TTL（方案 §12；主动失效归 Phase 4） */
+/** D-184-5.1：与 top10 同口径短 TTL（方案 §12；主动失效见 home-cache-invalidation） */
 const SHELF_TTL = 60
 
+/** top10 键族子前缀（ADR-185 D-185-5.1 失效接口位，CHG-HOME-CACHE-INVALIDATE） */
+export const HOME_TOP10_CACHE_PREFIX = `${CACHE_PREFIXES.home}top10:`
+
 function buildTop10CacheKey(brandSlug: string | null): string {
-  return `${CACHE_PREFIXES.home}top10:${brandSlug != null ? `b:${brandSlug}` : 'none'}`
+  return `${HOME_TOP10_CACHE_PREFIX}${brandSlug != null ? `b:${brandSlug}` : 'none'}`
 }
 
 export class HomeService {

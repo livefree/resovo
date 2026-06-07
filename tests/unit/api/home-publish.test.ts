@@ -67,6 +67,12 @@ vi.mock('@/api/services/AuditLogService', () => ({
   },
 }))
 
+// CHG-HOME-CACHE-INVALIDATE / D-185-5：事务外失效钩子（专项覆盖见 home-cache-invalidation.test.ts）
+const mockScheduleInvalidation = vi.fn()
+vi.mock('@/api/services/home-cache-invalidation', () => ({
+  schedulePublishedHomeCacheInvalidation: (...args: unknown[]) => mockScheduleInvalidation(...args),
+}))
+
 // ── Fixtures ───────────────────────────────────────────────────────────────
 
 const ALL_SECTIONS: readonly HomeSectionKey[] = [
@@ -361,7 +367,7 @@ describe('POST /admin/home/publish', () => {
     expect(mockPublish).not.toHaveBeenCalled()
   })
 
-  it('乐观锁竞态（publishHomeConfig null）→ 409', async () => {
+  it('乐观锁竞态（publishHomeConfig null）→ 409（audit/失效钩子均不触发）', async () => {
     mockFindDraft.mockResolvedValue(draftRow())
     mockLatestVersionNo.mockResolvedValue(null)
     mockTablesMaxUpdatedAt.mockResolvedValue(null)
@@ -374,6 +380,7 @@ describe('POST /admin/home/publish', () => {
     })
     expect(res.statusCode).toBe(409)
     expect(mockAuditWrite).not.toHaveBeenCalled()
+    expect(mockScheduleInvalidation).not.toHaveBeenCalled()
   })
 
   it('冷启动 happy path：单事务参数 + versionNo 返回 + audit home_page.publish 内容断言（R-MID-1）', async () => {
@@ -421,6 +428,8 @@ describe('POST /admin/home/publish', () => {
         counts: { banners: 1, modules: 1 },
       }),
     }))
+    // D-185-5：事务成功后失效钩子（事务外）
+    expect(mockScheduleInvalidation).toHaveBeenCalledWith({ trigger: 'publish', versionNo: 1 })
   })
 
   it('note 非法（空串）→ 422，service 不被触达', async () => {
@@ -566,6 +575,8 @@ describe('POST /admin/home/versions/:versionNo/rollback', () => {
         counts: { banners: 1, modules: 1 },
       }),
     }))
+    // D-185-5：rollback 同款失效钩子
+    expect(mockScheduleInvalidation).toHaveBeenCalledWith({ trigger: 'rollback', versionNo: 4 })
   })
 
   it('无备注 → note 仅自动携 rollback to v{n}', async () => {

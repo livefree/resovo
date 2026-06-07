@@ -34,6 +34,7 @@ import {
 } from '@/api/db/queries/home-publish'
 import { listVideoCardsByIds } from '@/api/db/queries/videos.status'
 import { AuditLogService } from '@/api/services/AuditLogService'
+import { schedulePublishedHomeCacheInvalidation } from '@/api/services/home-cache-invalidation'
 import { AppError } from '@/api/lib/errors'
 import {
   HomePageConfigSchema,
@@ -248,6 +249,9 @@ export class HomePublishService {
       requestId: requestId ?? null,
     })
 
+    // D-185-5：事务外主动失效（shelf + top10 子前缀；失败不回滚发布，钩子内自容忍）
+    schedulePublishedHomeCacheInvalidation({ trigger: 'publish', versionNo: result.versionNo })
+
     return { versionNo: result.versionNo }
   }
 
@@ -321,6 +325,9 @@ export class HomePublishService {
       },
       requestId: requestId ?? null,
     })
+
+    // D-185-5：事务外主动失效（publish 同款钩子；roll-forward 重写三表后加速生效）
+    schedulePublishedHomeCacheInvalidation({ trigger: 'rollback', versionNo: result.versionNo })
 
     return { versionNo: result.versionNo }
   }

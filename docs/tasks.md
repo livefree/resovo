@@ -6,7 +6,7 @@
 
 ## 当前任务（单任务工作台：同时仅 1 个 🔄 进行中；完成即删卡，历史见 docs/changelog.md）
 
-（空 — 上一任务 CHG-HOME-AUDIT-ROLLBACK 已收口 2026-06-07 06:10，见 changelog；**Phase 4 实施 24/25/26 ✅，剩卡 27 CHG-HOME-CACHE-INVALIDATE**）
+（空 — 上一任务 CHG-HOME-CACHE-INVALIDATE 已收口 2026-06-07 06:45，见 changelog；**SEQ-20260605-05 Phase 4 全 4 卡（24–27）完成，ADR-185 D-185 全 6 项裁定闭环，治理方案全章节实施面闭环**）
 
 ---
 

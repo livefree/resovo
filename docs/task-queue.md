@@ -1332,7 +1332,7 @@
    - 完成备注：**ADR-185 Accepted**（arch-reviewer claude-opus-4-8 CONDITIONAL PASS：1 HIGH + 4 MEDIUM + 2 LOW 全 7 条吸收；MUST-8 Opus PASS）。核心裁定：①「版本快照 + 草稿覆盖层」（D-185-1）——三真源表维持发布态唯一真源，**前台读路径零改动**（ADR-184 链路保护）；`home_publish_versions` 整页 JSONB roll-forward（不设保留上限 + 论证 + 1000 版/1MB 评估 follow-up）+ `home_config_drafts` 全局单草稿行（base_version_no 陈旧锚）；排除平行草稿表/diff-patch。② 7 新端点协议（draft GET/PUT/DELETE + publish + versions 列表/详情 + rollback）——HIGH 吸收 = 端点定性三层清单（资源级 12 端点真·紧急通道 / 门面 #3/#5/#6 停止承接画布写但保留为非画布旁路 / 全部直写触发草稿陈旧双信号检测 + §11.1 为画布工作流保证而非系统级强制的风险显式声明）；候选应用挪草稿、#5 重校验挪 publish 时点。③ audit：home_page targetKind CHECK 16→17 / actionType +2 无 DB CHECK（拆分表述防误加）+ UNSUPPORTED_ACTION_TYPES 显式防御（与 ADR-138 行级回滚语义区分）+ enums 同步守卫。④ 失效协议：publish/rollback 后子前缀级精确 scan 删（home:shelf:\* 经 D-184-5.2 接口位 + home:top10:\*，不复用 clearCache 整删）；失效失败不回滚发布（60s TTL 兜底闭环）。⑤ 拆卡：占位 3 卡细化为 4 卡（24 DRAFT-PUBLISH-A 后端 / 25 -B 前端含 ERRATA 移交验收项 + HIGH-1 核验项 / 26 AUDIT-ROLLBACK / 27 CACHE-INVALIDATE；依赖序 24→25→26∥27）。门禁：verify:adr-contracts EXIT=0（ADR 端点 97→104 表解析正常）；docs-only 零代码。执行模型: claude-opus-4-8；子代理: arch-reviewer (claude-opus-4-8)。
    - **FIX（Codex stop-time review，2026-06-07 03:00）**：changelog 条目误引 D-185-1…5 字面量——verify-adr-d-numbers 以「changelog 出现 D-N 字样 = 已闭环」为权威，docs-only ADR 卡引用未实施裁定编号会**伪闭环**（verifier 实证 ADR-185 仅余 D-185-6 待闭环，错误）。修正：条目改写为不含 D-185-N 字面量的表述 + 显式声明「闭环归实施卡 24–27」；修正后 D-185-1…6 全量回到待闭环态（与 docs-only 事实一致）。规律沉淀：**ADR 起草卡（零实施）的 changelog 条目不得引用本 ADR 的 D-N 字面量**——闭环标记由实施卡完成时记入。
 
-### Phase 4 实施卡（ADR-185 Accepted 后细化，CHG-HOME-PHASE4-ADR 2026-06-07；依赖序 24 → 25 → 26 ∥ 27）
+### Phase 4 实施卡（ADR-185 Accepted 后细化，CHG-HOME-PHASE4-ADR 2026-06-07；依赖序 24 → 25 → 26 ∥ 27）——**✅ 全 4 卡收口 2026-06-07 06:45（D-185 全 6 项闭环，剩 ADR-185 follow-up：版本数 > 1000 / 单行 > 1MB 时归档评估）**
 
 24. **CHG-HOME-DRAFT-PUBLISH-A** — 发布治理后端：migration 097/098 + draft CRUD + publish 端点（状态：✅ 已完成）
    - 创建时间：2026-06-07 02:45 ｜ 实际开始：2026-06-07 03:30 ｜ 完成时间：2026-06-07 03:55
@@ -1352,11 +1352,12 @@
    - 范围（4 项）：① 端点 #5–#7（versions 分页列表/详情/rollback——恢复三表 + 拍新版本 roll-forward + audit `home_page.rollback`；**含 D-185-1.5 后半：版本数 < 2 时 rollback 422 无可回滚目标〔卡 24 移交注记〕**；rollback 复用 `publishHomeConfig`（draft 参数省略路径已预留）；写入位点落地时同步 coverage REQUIRED + PAYLOAD_ASSERTION 清单——enums/labels 卡 24 已先行）② `home_page.publish`/`home_page.rollback` 加入 `UNSUPPORTED_ACTION_TYPES` 显式防御 + 守卫测试（D-185-3.4，MEDIUM-2）③ admin UI 版本列表 + diff 展示（消费端计算，D-185-4.2；版本快照时间戳已 ms 截断——卡 24 沉淀，快照间文本 diff 稳定）④ 单测 + E2E。
    - 依赖：CHG-HOME-DRAFT-PUBLISH-A ✅（版本表先行）。
    - 完成备注：**全 4 项落地，D-185-3 + D-185-4 闭环（ADR-185 端点契约 7/7 全量）**。① rollback = 恢复三表 + roll-forward 新版本（note 自动携 `rollback to v{n}` 用户备注追加；现存草稿不删由陈旧信号②自然标记；版本数<2 → 422 兑现移交注记）；复用 publishHomeConfig draft 省略路径零事务代码新增。② 行级防御 = UNSUPPORTED 双 actionType + 行级 rollback 422 e2e 式守卫 + Set 成员守卫（防回归删除）。③ VersionHistoryPanel：「对比上一版」**按列表序取相邻较旧版本**（serial 空洞防御）两份详情经 version-diff 纯函数本地比对；最新版本回滚禁用。**陷阱沉淀：JSON.stringify replacer 数组作用于全嵌套层级丢非顶层键**——diff normalize 平铺 stringify（pg jsonb canonical 键序保证稳定）。dev 实测：#7 回滚 v1 → v3（audit targetVersionNo + 三表 20 modules 完整）+ #5/#6 + 404/422 拦截。测试 +33（diff 6 / Panel 11 / 路由 8 / 行级防御 3 / e2e 5）。门禁：typecheck/lint 绿 + test:changed 406/406 + verify:adr-contracts EXIT=0（admin 路由 218→221）+ E2E admin **98/98**（home 域 17→22）。**卡 27 为 Phase 4 唯一剩余**。执行模型: claude-opus-4-8；子代理: 无。
-27. **CHG-HOME-CACHE-INVALIDATE** — 发布后缓存主动失效（状态：⬜ 待开始）
-   - 创建时间：2026-06-07 02:45
-   - 建议模型：sonnet
+27. **CHG-HOME-CACHE-INVALIDATE** — 发布后缓存主动失效（状态：✅ 已完成；**Phase 4 全 4 卡收口 → ADR-185 D-185 全 6 项裁定闭环，治理方案全章节实施面闭环**）
+   - 创建时间：2026-06-07 02:45 ｜ 实际开始：2026-06-07 06:20 ｜ 完成时间：2026-06-07 06:45
+   - 建议模型：sonnet（实际 claude-opus-4-8，用户 opus 会话「批准继续实施 Phase 4」承接）
    - 范围（3 项）：① 失效钩子：publish/rollback 事务成功后子前缀级精确 scan 删（`home:shelf:*` 经 D-184-5.2 接口位 + `home:top10:*`；**不复用 CacheService.clearCache type 级整删**，D-185-5.3）② 失效失败不回滚发布（warn + 60s TTL 兜底，D-185-5.2）③ 单测（失效键覆盖 / 失败容忍）。
    - 依赖：CHG-HOME-DRAFT-PUBLISH-A ✅（publish 钩子点存在）；与卡 26 可并行。
+   - 完成备注：**全 3 项落地，D-185-5 闭环**。`home-cache-invalidation.ts` 新建（scan+UNLINK 两子前缀独立精确删 + fire-and-forget 钩子 warn 容忍）；`HOME_TOP10_CACHE_PREFIX` 自 HomeService 导出补齐 top10 接口位；publish/rollback 双钩子接线（audit 后事务外）。dev 实测：预热 4 键 → rollback → `home:*` 键族清空。测试 +9（失效 6 + 钩子断言 3）。门禁：typecheck/lint 绿 + test:changed 74/74 + **全量单测 7021/7021（Phase 收口兜底节点一次绿）** + verify:adr-contracts EXIT=0；E2E N/A（API-only，admin 域 98/98 在档）。执行模型: claude-opus-4-8；子代理: 无。
 
    > **DRAFT-PUBLISH-B 验收项移交注记**（CHG-HOME-GOV-PLAN-ERRATA，2026-06-07）：方案 §6.1/§14「发布确认」处 Banner 横图警告标记义务（三类警告：尺寸/比例/探测失败；原「缺横版大图」态经 image_url NOT NULL schema 吸收不可达）——已写入卡 25 范围 ④。
 
