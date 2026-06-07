@@ -15,6 +15,8 @@
  */
 
 import type { BrowserContext, Page } from '@playwright/test'
+import type { VideoQueueRow } from '@resovo/types'
+import { installAdminShellMocks } from '../_shared/shell-mocks'
 
 export const API_BASE = 'http://localhost:4000/v1'
 
@@ -45,41 +47,16 @@ export async function setModeratorCookies(context: BrowserContext) {
 
 // ── Mock 数据 helpers ─────────────────────────────────────────────────
 
-export interface MockQueueRow {
-  id: string
-  // ADR-160 D-160-7：admin preview URL 派生（getVideoDetailHref + ?preview=admin）
-  slug: string | null
-  shortId: string
-  title: string
-  type: 'movie' | 'tvshow'
-  year: number | null
-  country: string | null
-  episodeCount: number
-  coverUrl: string | null
-  rating: number | null
-  category: string | null
-  isPublished: boolean
-  visibilityStatus: 'public' | 'internal' | 'hidden'
-  reviewStatus: 'pending_review' | 'approved' | 'rejected'
-  reviewReason: string | null
-  reviewedBy: string | null
-  reviewedAt: string | null
-  probe: 'green' | 'amber' | 'red' | 'unknown'
-  render: 'green' | 'amber' | 'red' | 'unknown'
-  sourceCheckStatus: 'ok' | 'partial' | 'broken' | 'unknown'
-  metaScore: number
-  needsManualReview: boolean
-  badges: string[]
-  staffNote: string | null
-  reviewLabelKey: string | null
-  doubanStatus: 'fetched' | 'pending' | 'no_match' | 'failed'
-  reviewSource: 'manual' | 'auto' | 'system'
-  trendingTag: string | null
-  createdAt: string
-  updatedAt: string
-}
+/**
+ * CHG-E2E-GATE-AUDIT-C：mock 行类型直接绑定真源 VideoQueueRow（@resovo/types），
+ * 编译期锁死契约——此前本地复制的 MockQueueRow 在 CHG-360/ADR-159（probeAggregate/
+ * renderAggregate 必填）与 ADR-157（probe/render/doubanStatus/sourceCheckStatus/
+ * reviewSource 值域规整）后全面漂移，ModListRow 渲染 `probe.state` 直接 TypeError
+ * 崩 React 根（moderation 26 失败确定性真因之一）。
+ */
+export type MockQueueRow = VideoQueueRow
 
-export function makeQueueRow(overrides: Partial<MockQueueRow> = {}): MockQueueRow {
+export function makeQueueRow(overrides: Partial<VideoQueueRow> = {}): VideoQueueRow {
   return {
     id: 'vid-mod-01',
     slug: 'shen-he-tai-e2e-shi-pin',
@@ -89,6 +66,8 @@ export function makeQueueRow(overrides: Partial<MockQueueRow> = {}): MockQueueRo
     year: 2026,
     country: 'CN',
     episodeCount: 1,
+    totalEpisodes: null,
+    currentEpisodes: null,
     coverUrl: null,
     rating: null,
     category: null,
@@ -98,15 +77,17 @@ export function makeQueueRow(overrides: Partial<MockQueueRow> = {}): MockQueueRo
     reviewReason: null,
     reviewedBy: null,
     reviewedAt: null,
-    probe: 'green',
-    render: 'green',
+    probe: 'ok',
+    render: 'ok',
+    probeAggregate: { total: 1, ok: 1, state: 'ok' },
+    renderAggregate: { total: 1, ok: 1, state: 'ok' },
     sourceCheckStatus: 'ok',
     metaScore: 80,
     needsManualReview: false,
     badges: [],
     staffNote: null,
     reviewLabelKey: null,
-    doubanStatus: 'fetched',
+    doubanStatus: 'matched',
     reviewSource: 'manual',
     trendingTag: null,
     createdAt: '2026-05-01T00:00:00Z',
@@ -115,10 +96,46 @@ export function makeQueueRow(overrides: Partial<MockQueueRow> = {}): MockQueueRo
   }
 }
 
+/**
+ * 筛选预设 mock 行（ADR-144 / CHG-SN-8-FUP-PRESET-TEAM-EP-B：presets 已迁 DB 主源，
+ * `/admin/filter-presets` 4 端点；localStorage 仅 offline fallback——e2e 改 mock 端点喂数）。
+ * 形状对齐 apps/server-next/src/lib/moderation/filter-presets-api.ts ApiFilterPreset。
+ */
+export interface MockFilterPreset {
+  id: string
+  ownerUserId: string
+  ownerUsername: string | null
+  name: string
+  scope: 'private' | 'shared'
+  tab: 'pending' | 'rejected' | 'all'
+  query: Record<string, unknown>
+  isDefault: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+export function makeFilterPreset(overrides: Partial<MockFilterPreset> = {}): MockFilterPreset {
+  return {
+    id: 'preset-e2e-01',
+    ownerUserId: 'user-mod-e2e',
+    ownerUsername: 'mod01',
+    name: 'e2e 预设',
+    scope: 'private',
+    tab: 'pending',
+    query: {},
+    isDefault: false,
+    createdAt: '2026-05-20T00:00:00Z',
+    updatedAt: '2026-05-20T00:00:00Z',
+    ...overrides,
+  }
+}
+
 export interface MockState {
   pending: MockQueueRow[]
   staging: MockQueueRow[]
   rejected: MockQueueRow[]
+  /** 筛选预设（DB 主源 mock；ADR-144） */
+  filterPresets: MockFilterPreset[]
   /** 记录所有写操作，用于断言 audit / 调用次数 */
   writes: { method: string; path: string; body?: unknown }[]
 }
@@ -128,6 +145,7 @@ export function freshState(init: Partial<MockState> = {}): MockState {
     pending: init.pending ?? [],
     staging: init.staging ?? [],
     rejected: init.rejected ?? [],
+    filterPresets: init.filterPresets ?? [],
     writes: [],
   }
 }
@@ -135,17 +153,15 @@ export function freshState(init: Partial<MockState> = {}): MockState {
 // ── 通用 mock：moderation 全 API endpoint ─────────────────────────────
 
 export async function installModerationMocks(page: Page, state: MockState) {
+  // CHG-E2E-GATE-AUDIT-C：shell 基座先注册（后注册的业务 mock 优先匹配；未匹配
+  // 请求经下方 route.fallback() 下沉到基座 → shell 端点契约正确形状 + 兜底 404）
+  await installAdminShellMocks(page)
+
   await page.route(`${API_BASE}/**`, async (route) => {
     const request = route.request()
     const url = new URL(request.url())
     const path = url.pathname
     const method = request.method()
-
-    // GET /admin/crawler/sites — 通用 dashboard / topbar 可能查询
-    if (path === '/v1/admin/crawler/sites' && method === 'GET') {
-      await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ data: [], total: 0 }) })
-      return
-    }
 
     // GET /admin/videos/moderation-stats
     if (path === '/v1/admin/videos/moderation-stats' && method === 'GET') {
@@ -184,7 +200,19 @@ export async function installModerationMocks(page: Page, state: MockState) {
       return
     }
 
-    // GET /admin/staging — StagingApiRow shape（与 VideoQueueRow 不同）
+    // GET /admin/staging/rules — 独立页规则卡（CHG-SN-7-REDO-04-B lib/staging/api.ts）
+    if (path === '/v1/admin/staging/rules' && method === 'GET') {
+      await route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({
+          data: { minMetaScore: 0, requireDoubanMatched: false, requireCoverUrl: false, minActiveSourceCount: 0 },
+        }),
+      })
+      return
+    }
+
+    // GET /admin/staging — StagingListResponse（CHG-E2E-GATE-AUDIT-C 契约对齐：
+    // REDO-04 后响应含 rules + summary，缺失时 StagingPageClient 恒卡 skeleton）
     if (path === '/v1/admin/staging' && method === 'GET') {
       const rows = state.staging.map((v) => ({
         id: v.id,
@@ -196,15 +224,73 @@ export async function installModerationMocks(page: Page, state: MockState) {
         sourceCheckStatus: v.sourceCheckStatus,
         metaScore: v.metaScore,
         activeSourceCount: 1,
-        qualityHighest: '1080p',
+        qualityHighest: '1080P',
         approvedAt: v.reviewedAt,
         updatedAt: v.updatedAt,
         readiness: { ready: true, blockers: [] },
       }))
       await route.fulfill({
         contentType: 'application/json',
-        body: JSON.stringify({ data: rows, total: rows.length }),
+        body: JSON.stringify({
+          data: rows,
+          total: rows.length,
+          rules: { minMetaScore: 0, requireDoubanMatched: false, requireCoverUrl: false, minActiveSourceCount: 0 },
+          summary: { all: rows.length, ready: rows.length, warning: 0, blocked: 0 },
+        }),
       })
+      return
+    }
+
+    // GET /admin/moderation/:id/similar — TabSimilar（ADR-137 真实化 / CHG-VIR-9-C identity）
+    if (/\/v1\/admin\/moderation\/[^/]+\/similar$/.test(path) && method === 'GET') {
+      await route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({ data: [], source: 'identity' }),
+      })
+      return
+    }
+
+    // ── /admin/filter-presets 4 端点（ADR-144 DB 主源）────────────────
+    if (path === '/v1/admin/filter-presets' && method === 'GET') {
+      await route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({ data: state.filterPresets }),
+      })
+      return
+    }
+    if (path === '/v1/admin/filter-presets' && method === 'POST') {
+      const body = request.postDataJSON() as Partial<MockFilterPreset> & { name: string; tab: MockFilterPreset['tab']; query: Record<string, unknown> }
+      state.writes.push({ method, path, body })
+      const created = makeFilterPreset({
+        id: `preset-e2e-${state.filterPresets.length + 1}-${Date.now()}`,
+        name: body.name,
+        scope: body.scope ?? 'private',
+        tab: body.tab,
+        query: body.query ?? {},
+        isDefault: body.isDefault ?? false,
+      })
+      state.filterPresets.push(created)
+      await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ data: created }) })
+      return
+    }
+    if (/\/v1\/admin\/filter-presets\/[^/]+$/.test(path) && method === 'PATCH') {
+      const id = path.split('/').pop()!
+      const body = request.postDataJSON() as Partial<MockFilterPreset>
+      state.writes.push({ method, path, body })
+      const idx = state.filterPresets.findIndex((p) => p.id === id)
+      if (idx >= 0) {
+        state.filterPresets[idx] = { ...state.filterPresets[idx], ...body, id, updatedAt: new Date().toISOString() }
+        await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ data: state.filterPresets[idx] }) })
+      } else {
+        await route.fulfill({ status: 404, contentType: 'application/json', body: JSON.stringify({ error: { code: 'NOT_FOUND', message: 'preset not found' } }) })
+      }
+      return
+    }
+    if (/\/v1\/admin\/filter-presets\/[^/]+$/.test(path) && method === 'DELETE') {
+      const id = path.split('/').pop()!
+      state.writes.push({ method, path })
+      state.filterPresets = state.filterPresets.filter((p) => p.id !== id)
+      await route.fulfill({ status: 204 })
       return
     }
 
@@ -334,7 +420,14 @@ export async function installModerationMocks(page: Page, state: MockState) {
       // mock: 入队后 source_check_status 立即变 ok（实际由 worker 异步更新）
       const idx = state.rejected.findIndex((r) => r.id === id)
       if (idx >= 0) {
-        state.rejected[idx] = { ...state.rejected[idx], sourceCheckStatus: 'ok', probe: 'green', render: 'green' }
+        state.rejected[idx] = {
+          ...state.rejected[idx],
+          sourceCheckStatus: 'ok',
+          probe: 'ok',
+          render: 'ok',
+          probeAggregate: { total: 1, ok: 1, state: 'ok' },
+          renderAggregate: { total: 1, ok: 1, state: 'ok' },
+        }
       }
       await route.fulfill({
         status: 202,
@@ -362,11 +455,10 @@ export async function installModerationMocks(page: Page, state: MockState) {
       return
     }
 
-    // 兜底：未匹配端点 → 200 空 data（避免 SSR/CSR 报错阻塞 e2e）
-    await route.fulfill({
-      contentType: 'application/json',
-      body: JSON.stringify({ data: null }),
-    })
+    // 兜底：下沉 shell 基座（CHG-E2E-GATE-AUDIT-C 根因 (b)：原 200 {data:null}
+    // 毒化 shell hooks 契约（value.data.map / value.meta.degraded）→ 3 个 Runtime
+    // TypeError → React 根崩溃 + dev overlay 全屏 → moderation 26 失败确定性真因）
+    await route.fallback()
   })
 }
 

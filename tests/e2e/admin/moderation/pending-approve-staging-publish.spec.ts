@@ -32,17 +32,17 @@ test.describe('moderation 黄金路径：approve → staging → publish', () =>
     await expect.poll(() => state.staging.length).toBe(1)
     expect(state.staging[0].reviewStatus).toBe('approved')
 
-    // 4. 切到 staging tab → 看到该视频
-    await page.getByRole('button', { name: '待发布', exact: true }).first().click()
-    await page.waitForURL(/tab=staging/)
-    await expect(page.getByText('黄金路径正向用例').first()).toBeVisible({ timeout: 5000 })
+    // 4. 进 staging 独立页 → 看到该视频（CHG-SN-7-REDO-04-C：staging tab 已迁
+    //    /admin/staging 独立页，审核台内不再有"待发布" tab）
+    await page.goto('/admin/staging')
+    await expect(page.getByText('黄金路径正向用例').first()).toBeVisible({ timeout: 10000 })
 
-    // 5. 触发发布（模拟点击发布按钮 → POST /admin/staging/:id/publish）
-    //    StagingTabContent 的"发布上架"按钮文案见 i18n.staging.publishOne = '↑ 发布上架'
+    // 5. 触发发布（REDO-04-B：行内"发布"按钮，readiness.ready 才 enabled）
+    //    → POST /admin/staging/:id/publish
     const publishReq = page.waitForRequest(
       (r) => r.url().includes(`/admin/staging/${VIDEO_ID}/publish`) && r.method() === 'POST',
     )
-    await page.getByRole('button', { name: /发布上架/ }).first().click()
+    await page.getByRole('button', { name: '发布', exact: true }).first().click()
     await publishReq
 
     // 6. 状态：is_published=true / visibilityStatus=public

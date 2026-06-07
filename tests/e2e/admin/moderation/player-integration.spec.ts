@@ -64,10 +64,12 @@ test.describe('FIX-D 黄金路径：AdminPlayer 状态切换', () => {
     await expect(page.getByText('FIX-D 播放器测试').first()).toBeVisible()
   })
 
-  test('初始状态 AdminPlayer 处于 idle（data-state="idle"）', async ({ page }) => {
-    // AdminPlayer 在未选中线路时显示 idle 占位
-    await expect(page.locator('[data-admin-player][data-state="idle"]')).toBeVisible({ timeout: 5000 })
-    await expect(page.locator('[data-admin-player][data-state="ready"]')).not.toBeVisible()
+  test('初始状态：LinesPanel 自动选首线路 → AdminPlayer 直接 ready（Y4 行为）', async ({ page }) => {
+    // CHG-E2E-GATE-AUDIT-C 契约对齐：LinesPanel Y4「每次 reload 后首行自动选」——
+    // 存在活跃线路时初始即 ready，原「初始 idle」断言为 Y4 前旧行为；
+    // 无活跃源回 idle 的覆盖见本套件第 3 用例（切换线路 → idle）。
+    await expect(page.locator('[data-admin-player][data-state="ready"]')).toBeVisible({ timeout: 5000 })
+    await expect(page.locator('[data-admin-player][data-state="idle"]')).not.toBeVisible()
   })
 
   test('选中活跃线路后 AdminPlayer 切换为 ready（data-state="ready"）', async ({ page }) => {

@@ -12,11 +12,15 @@
  *   - 不在 [data-page-head] 上做破折号断言（合法 em dash）
  *
  * 前提：apps/server-next 运行于 localhost:3003（baseURL 由 admin-next-chromium project 注入）
- * API：page.route 拦截 /v1/admin/videos/moderation-stats，不依赖真实后端
+ * API：page.route 拦截 /v1/admin/videos/moderation-stats，不依赖真实后端；
+ *      shell 级端点（notifications / jobs / nav-counts 等）由 _shared/shell-mocks
+ *      基座拦截（CHG-E2E-GATE-AUDIT-C 根因 (a)：此前直通真实 API → 假 token 401 →
+ *      apiClient refresh 又 401 → 重定向 /login → 3 用例全灭）
  * 认证：context.addCookies 注入 refresh_token + user_role=admin
  */
 
 import { test, expect, type BrowserContext, type Page } from '@playwright/test'
+import { installAdminShellMocks } from './_shared/shell-mocks'
 
 const API_BASE = 'http://localhost:4000/v1'
 
@@ -46,6 +50,9 @@ async function setAdminCookies(context: BrowserContext) {
 type StatsPath = 'full-200' | 'partial-200' | 'error-500'
 
 async function installStatsMock(page: Page, path: StatsPath) {
+  // shell 基座先注册（兜底层）；moderation-stats 业务 mock 后注册 → 优先匹配
+  await installAdminShellMocks(page)
+
   await page.route(`${API_BASE}/admin/videos/moderation-stats`, async (route) => {
     if (path === 'full-200') {
       await route.fulfill({

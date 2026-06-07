@@ -2353,3 +2353,23 @@
 - **新增依赖**：无
 - **数据库变更**：无
 - **注意事项**：① **v1 admin-chromium 全绿 23/23 EXIT=0**（-B+-B2 累计：21 失败→0，退役 12 / 修复 9）；② E2E admin 整体余 admin-next 26 失败（-C 卡，根因 (a) 已定界）；③ 门禁：typecheck/lint 绿 + test:changed 升全量 6922/6923（1 失败 = use-filter-presets jsdom 并发 flaky 隔离 7/7 过，既有家族）。
+
+## [CHG-E2E-GATE-AUDIT-C] admin-next 29 失败根因修复 — E2E admin 域全绿 + BLOCKER 撤除（SEQ-20260606-01 卡 3 / 全序列收口）
+- **完成时间**：2026-06-06
+- **记录时间**：2026-06-06 21:56
+- **执行模型**：claude-opus-4-8
+- **子代理**：无
+- **修改文件**：
+  - `tests/e2e/admin/_shared/shell-mocks.ts` — 新建共享 shell 基座 mock：5 个 shell 级端点契约正确形状（auth/refresh + notifications + background-events + jobs〔meta.degraded 必需〕+ video-merges/candidates + crawler/sites）+ 兜底 404（CHG-VSR-7 范式：404≠401 不触发鉴权重定向）
+  - `tests/e2e/admin/moderation/_helpers.ts` — ① 装基座 + 兜底 `200 {data:null}` → `route.fallback()`（根因 (b) 第一层：错误形状毒化 shell hooks → TypeError ×3 → React 根崩 + dev overlay 全屏）② `MockQueueRow` 类型绑定 `@resovo/types` VideoQueueRow（根因 (b) 第二层：漂移 3 代——缺 ADR-159 aggregates 必填字段致 ModListRow 渲染崩根 + ADR-157 规整前旧值域）③ staging 列表契约补 rules+summary（REDO-04 后缺失恒卡 skeleton）+ `/admin/staging/rules` + `/admin/moderation/:id/similar` + `/admin/filter-presets` 4 端点（ADR-144 DB 主源）+ `makeFilterPreset` 工厂
+  - `tests/e2e/admin/dashboard.spec.ts` — 装基座（根因 (a)：无 catch-all 时 shell 3 hooks 轮询直通真实 API → 假 cookie 401 → refresh 又 401 → 重定向 /login，3 用例全灭）
+  - `tests/e2e/admin/moderation/filter-presets.spec.ts` — localStorage 种数 → mock 端点种数（ADR-144 后 fetch 成功覆盖 local）+ 删除断言改 DELETE 写 spy + 「保存」选择器撞名限定 modal + 'broken' 旧值对齐 'all_dead'
+  - `tests/e2e/admin/moderation/pending-approve-staging-publish.spec.ts` / `staging-revert-to-pending.spec.ts` — staging 迁独立页对照（REDO-04-C：goto /admin/staging + 按钮「发布/退回」exact）
+  - `tests/e2e/admin/moderation/player-integration.spec.ts` — 初始断言 idle → ready（LinesPanel Y4「reload 后首行自动选」）
+  - `tests/e2e/admin/moderation/right-pane-tabs.spec.ts` — 类似 Tab 断言 M-SN-5 占位文案 → 「未找到类似视频」（ADR-137 真实化空态）
+  - `tests/e2e/admin/moderation/refetch-sources-then-reopen.spec.ts` — 按钮「重新抓取」→「刷新线路数据」（admin-ui LinesPanel header）+ probe/render 旧值对齐 dead/all_dead
+  - `tests/e2e/admin/moderation/state-preservation-stress.spec.ts` — Step2 切「待发布」tab → 切「已拒绝」（staging tab 已迁出审核台）
+  - `docs/rules/test-rules.md` — E2E 运行环境规程 +2 条：mock 兜底禁错误形状 200（统一基座 + route.fallback）/ mock 数据类型必须绑定 @resovo/types 真源
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：① **`npm run test:e2e:admin` 全量 76/76 EXIT=0**（v1 23 + admin-next 53；规程口径采集），**SEQ-20260606-01 全 4 卡收口，🚨 BLOCKER 撤除**；② **历史定性修正**：admin-next 26 失败隔离单跑同样挂（确定性 mock 契约毒化，与 API 在场/workers/编译态全部无关），原 BLOCKER「隔离过/全量挂」系 dashboard 无 API 场景的过度外推；moderation 套件自 CHG-360（aggregates 必填化）起即红，被历史 exit 0 测量伪影掩盖；③ 业务代码零改动（纯测试层 + docs），admin-next 真源覆盖按当前实现对齐断言，符合 test-rules「不允许改断言让测试通过」例外条款（断言对象 IA/契约已演进，逐项注明依据 ADR/卡号）；④ 门禁：typecheck/lint 绿 + test:changed 0 选测合法（e2e spec 不入 unit 图）。

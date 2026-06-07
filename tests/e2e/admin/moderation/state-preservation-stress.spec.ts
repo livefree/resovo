@@ -28,9 +28,11 @@ test.describe('moderation 状态保留 5 步压力测试 (plan §11.2)', () => {
     expect(page.url()).toContain('type=movie')
     expect(page.url()).toContain('sourceCheckStatus=partial')
 
-    // Step 2: 切到 staging Tab（用 aria-pressed 排除 sidebar 干扰）
-    await page.locator('button[aria-pressed]:has-text("待发布")').click()
-    await page.waitForURL(/tab=staging/)
+    // Step 2: 切到 rejected Tab（用 aria-pressed 排除 sidebar 干扰）
+    // CHG-E2E-GATE-AUDIT-C 契约对齐：staging tab 已迁独立页 /admin/staging（REDO-04-C），
+    // 审核台现存 tab = pending / rejected，切 Tab 保留筛选语义用 rejected 验证
+    await page.locator('button[aria-pressed]:has-text("已拒绝")').click()
+    await page.waitForURL(/tab=rejected/)
     // 筛选 query 仍在 URL
     expect(page.url()).toContain('type=movie')
     expect(page.url()).toContain('sourceCheckStatus=partial')

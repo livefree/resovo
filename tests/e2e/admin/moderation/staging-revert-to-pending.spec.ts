@@ -15,15 +15,16 @@ test.describe('moderation 黄金路径：staging → revert → pending', () => 
     })
     await installModerationMocks(page, state)
 
-    // 1. 直接进 staging tab（moderation-split 仅 pending tab 渲染；staging tab 看 row 出现）
-    await page.goto('/admin/moderation?tab=staging')
+    // 1. 进 staging 独立页（CHG-SN-7-REDO-04-C：?tab=staging 已迁 /admin/staging，
+    //    审核台残留 tab 深链仅做 redirect——直接访问真源页）
+    await page.goto('/admin/staging')
     await expect(page.getByText('待退回测试视频').first()).toBeVisible({ timeout: 10000 })
 
-    // 2. 点击"退回审核"按钮 → POST /admin/staging/:id/revert
+    // 2. 点击行内"退回"按钮（REDO-04-B 文案：退回审核 → 退回）→ POST /admin/staging/:id/revert
     const revertReq = page.waitForRequest(
       (r) => r.url().includes(`/admin/staging/${VIDEO_ID}/revert`) && r.method() === 'POST',
     )
-    await page.getByRole('button', { name: '退回审核' }).first().click()
+    await page.getByRole('button', { name: '退回', exact: true }).first().click()
     await revertReq
 
     // 3. mock 后 staging 空，pending +1

@@ -16,7 +16,15 @@ test.describe('moderation 黄金路径：refetch-sources（LinesPanel 入口）'
     await setModeratorCookies(context)
     const VIDEO_ID = 'vid-mod-refetch-01'
     const state = freshState({
-      pending: [makeQueueRow({ id: VIDEO_ID, title: '待补源测试视频', sourceCheckStatus: 'broken', probe: 'red', render: 'red' })],
+      pending: [makeQueueRow({
+        id: VIDEO_ID,
+        title: '待补源测试视频',
+        sourceCheckStatus: 'all_dead',
+        probe: 'dead',
+        render: 'dead',
+        probeAggregate: { total: 1, ok: 0, state: 'all_dead' },
+        renderAggregate: { total: 1, ok: 0, state: 'all_dead' },
+      })],
     })
     await installModerationMocks(page, state)
 
@@ -24,12 +32,13 @@ test.describe('moderation 黄金路径：refetch-sources（LinesPanel 入口）'
     await expect(page.getByTestId('moderation-split')).toBeVisible({ timeout: 10000 })
     await expect(page.getByText('待补源测试视频').first()).toBeVisible()
 
-    // LinesPanel 在右侧 pane 渲染（默认 rightOpen=true）
-    // 点"重新抓取"按钮（aria-label=M.aria.lineRefetch="重新抓取"）
+    // CHG-E2E-GATE-AUDIT-C 契约对齐：refetch 入口已为 LinesPanel（admin-ui composite）
+    // header 的「刷新」按钮（aria-label="刷新线路数据"），原「重新抓取」文案退役；
+    // 端点不变（use-source-lines-controller.refetch → POST refetch-sources）
     const refetchReq = page.waitForRequest(
       (r) => r.url().includes(`/admin/videos/${VIDEO_ID}/refetch-sources`) && r.method() === 'POST',
     )
-    await page.getByRole('button', { name: '重新抓取' }).first().click()
+    await page.getByRole('button', { name: '刷新线路数据' }).first().click()
     const refetchResp = await refetchReq
 
     // POST refetch-sources 返回 202（plan §3.0.5 video.refetch_sources 端点契约）

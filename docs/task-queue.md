@@ -1298,7 +1298,7 @@
 
 ## [SEQ-20260606-01] E2E-GATE-AUDIT — E2E admin 域门禁完整性修复（BLOCKER 处置 D 路径）
 
-- **状态**：🔄 进行中（人工裁定 D，2026-06-06 18:05；证据链见文末 🚨 BLOCKER 块）
+- **状态**：✅ 已完成（4/4 卡收口 2026-06-06 21:56；E2E admin 域 76/76 EXIT=0，🚨 BLOCKER 已撤除）
 - **背景**：E2E admin 域 49/88 稳定失败且干净 HEAD 同样复现（CHG-HOME-AUTOFILL-UI 收口时发现）；四条根因线索 = v1 断言结构性不可满足 / 历史 exit 0 测量伪影 / webServer 缺 api 条目 / reuseExistingServer 陈旧复用 + admin-next 26 超时根因未竟。
 - **依赖链**：`-A`（定界 + 基础设施）→ `-B`（v1 退役/降冒烟）与 `-C`（admin-next 根因）可并行；BLOCKER 在 -C 收口前保持活跃。
 
@@ -1312,24 +1312,9 @@
    - 完成备注：**v1 项目 21 失败 → 6（admin.spec 19/19 EXIT=0）**。三类处置：① **类 1 访问控制 7 项 = 真实安全缺口修复**——`apps/server/middleware.ts` 自 DEC-13 拆分起误置根级（src/app 布局下 Next 仅识别 src/middleware.ts），服务端 /admin 守卫（ADR-010）从未生效、未登录可渲染后台 shell → `git mv` 入 src/ 恢复（维护期 bug 修复，逻辑零变更）+ 断言 `/auth/login`→`/admin/login` 对齐（断言写于 ADMIN-01 apps/web 单体时代）；② 类 2 渲染 8 项 = -A 根因 (a) v1 同型——setCookies 单点加 context.route mock 会话端点（/auth/refresh + /users/me，page.route 优先不扰业务 mock）+ 退役 7 个断言对象已不存在的测试（返回前台 ×2〔e601ea2b 移除〕/ 视频筛选器 / 投稿·字幕页〔已 307 归并〕/ 用户列表 / 采集按钮文案）+ 侧边栏 label 漂移修正（源站与爬虫→采集控制台）；③ 类 3 全链路 6 项 → 登记 **-B2**（publish-flow 需 :3000 web server 套件编成缺口 + 2 项断言漂移 + video-governance 1 项；含既有 known flaky moderation reject）。门禁：typecheck/lint/test:changed 绿（e2e spec + middleware 不入 unit import 图）。**部署影响**：v1 生产部署后未登录 /admin 恢复重定向（ADR-010 设计行为）。执行模型: claude-opus-4-8；子代理: 无。
 2b. **CHG-E2E-GATE-AUDIT-B2** — v1 类 3 全链路 6 失败处置（状态：✅ 已完成 2026-06-06 20:20）
    - 完成备注：**v1 admin-chromium 项目全绿 23/23 EXIT=0**。① 套件编成修复：test:e2e:admin/video 域 PLAYWRIGHT_SERVERS 补 web——publish-flow 跨应用金路径访问 :3000 恒 ERR_CONNECTION_REFUSED（实证）；搜索页测试即恢复 ✅ ② 退役 publish-flow 详情/播放 2 项：断言写于 apps/web CSR 时代（page.route 浏览器拦截），CUTOVER 后 web-next SSR 取数 mock 到不了服务端 fetch 结构性失效；覆盖由 e2e-next detail/player spec（web 域真源）承担 ③ 退役 v1 行为漂移 3 项（dropdown douban sync 不再触发 / reject 载荷不携 reason ×2，含原 known flaky）：v1 冻结不追 UI 漂移，同流程由 admin-next moderation 套件真源覆盖。门禁：typecheck/lint 绿 + test:changed 升全量 6922/6923（1 失败 = use-filter-presets jsdom 并发 flaky，隔离 7/7 过，既有家族与本卡无关）。执行模型: claude-opus-4-8；子代理: 无。
-3. **CHG-E2E-GATE-AUDIT-C** — admin-next 26 toBeVisible 超时根因修复（状态：⬜ 待开始；-A 已定界部分根因）
+3. **CHG-E2E-GATE-AUDIT-C** — admin-next 26 toBeVisible 超时根因修复（状态：✅ 已完成 2026-06-06 21:56）
    - 建议模型：opus
-   - **-A 定界产出的根因 (a)（已实证）**：admin-next spec 以 `refresh_token=mock-admin-rt` 假 cookie + page.route 业务 mock 运行，**未 mock auth 校验端点**——真实 API（:4000）在场时 `/v1/auth/refresh` 对假 token 返回硬 401 → 客户端重定向 `/login?from=%2Fadmin`（trace 实证：dashboard.spec 隔离跑「无 API 时 3/3 过 / API 在场时 3/3 挂于 login 跳转」）。即 admin-next spec 假设「无真实后端」，与 v1 spec「需真实 API」**环境需求矛盾**——同套件混跑结构性互斥。修法候选：admin-next spec 统一 fixture mock `/v1/auth/refresh`（200 + 假 accessToken）或改 storageState 真登录。
-   - **残余根因 (b)（未竟）**：无 API 的全量跑中 admin-next 仍挂 26（隔离过/全量挂、与 workers 数无关）——待 (a) 修后复测定位（候选：route mock 跨 context 串扰 / dev server 请求队列饱和）。
-   - 验收：E2E admin 全量绿 → **删除 BLOCKER 块**。
+   - 完成备注：**E2E admin 域全量 76/76 EXIT=0**（v1 23 + admin-next 53；admin-next 29 失败→0，验收达成 → BLOCKER 块删除）。三层根因处置：① 根因 (a) dashboard 3 失败 = spec 无 catch-all，shell 3 hooks（useAdminNotifications/useAdminTasks/useAdminNavCounts，admin-shell-client 每页挂载）轮询直通真实 API → 假 cookie 401 → refresh 又 401 → handleUnauthorized 重定向 /login——新建共享基座 `tests/e2e/admin/_shared/shell-mocks.ts`（5 shell 端点契约正确形状 + auth/refresh mock + 兜底 404，CHG-VSR-7 范式：404≠401 不触发重定向）。② 根因 (b) 第一层 = moderation `_helpers` catch-all 兜底 `200 {data:null}` 毒化 shell hooks 契约（`value.data.map`/`value.meta.degraded` TypeError ×3 → React 根崩 "Application error" + Next dev overlay 全屏盖断言）→ 兜底改 `route.fallback()` 下沉基座。**历史定性修正：26 失败隔离单跑同样挂（确定性 mock 毒化，与并发/API/编译态全部无关）**——原「隔离过/全量挂」系仅隔离测过 dashboard 无 API 场景的过度外推。③ 根因 (b) 第二层 = `MockQueueRow` 契约漂移 3 代：缺 ADR-159 `probeAggregate/renderAggregate` 必填字段（ModListRow `probe.state` 渲染崩根）+ ADR-157 规整前旧值域（green/red/broken/fetched/system 均非法）→ `makeQueueRow` 类型绑定 `@resovo/types` VideoQueueRow 编译期锁契约（26→10）。④ 残余 10 = 断言/IA 漂移对照修复 6 类：staging 迁独立页 REDO-04-C ×3（goto /admin/staging + 按钮「发布/退回」+ 列表契约补 rules/summary）/ presets 迁 DB 主源 ADR-144 ×4（_helpers +`/admin/filter-presets` 4 端点 mock，弃 localStorage 种数）/ LinesPanel Y4 自动选首线路（player 初始 ready 非 idle）/ TabSimilar ADR-137 真实化（mock similar 端点 + 断言「未找到类似视频」）/ refetch 按钮改「刷新线路数据」/ 「保存」选择器撞名限定 modal。test-rules「E2E 运行环境规程」+2 条（兜底禁错误形状 200 / mock 类型绑定真源）。门禁：typecheck/lint 绿 + test:changed 0 选测合法（e2e spec 不入 unit 图）+ `npm run test:e2e:admin` 76/76 EXIT=0（规程口径采集）。执行模型: claude-opus-4-8；子代理: 无。
+   - 验收：E2E admin 全量绿 ✅ → BLOCKER 块已删除 ✅。
 
----
-🚨 BLOCKER — 需要人工处理后才能继续
-- **任务**：CHG-HOME-AUTOFILL-UI 收口时发现（卡本身已完成并提交，commit 见 git log CHG-HOME-AUTOFILL-UI；BLOCKER 对象 = E2E admin 域门禁环境完整性，非本卡）
-- **时间**：2026-06-06 17:05
-- **问题描述**：`npm run test:e2e:admin`（88 tests：admin-chromium 38 + admin-next-chromium 50）稳定 **49 failed / 38-42 passed**。与本卡无关的实证：① `git stash` 后**干净 HEAD 同样失败**（dashboard.spec 3/3 同样挂，A/B 对照）；② admin home 域无任何 E2E spec 覆盖（`grep -rln "admin/home" tests/e2e/` 零命中）；③ 本卡 unit 门禁全绿（typecheck/lint/test:changed + admin home 套件 138/138）。
-- **已尝试**（5 轮复跑失败集一致）：
-  1. 陈旧 server 复用态（上会话遗留 :3003/:4000 进程）→ 48 failed；杀掉换 fresh server → 46 failed（API 缺失时 v1+next 双项目大面积挂）。
-  2. 手动起 API（:4000，/health + 401 + CORS 实测正常）+ fresh 双 admin server → 49 failed。
-  3. 带 auth cookie 预热全部 admin-next 路由（14 页全 200 编译完成）后复跑 → 49 failed（排除冷编译）。
-  4. `--workers=2` 降并发 → 49 failed（排除资源争用）。
-  5. 隔离对照：dashboard.spec 单跑 3/3 过 / 全量跑挂；admin.spec 单跑同样 15 failed（确定性）。
-- **根因线索**：① `admin.spec.ts` 15 失败含「未登录 /admin → /auth/login」系——apps/server v1 **结构上无法满足**：根级 `apps/server/middleware.ts` 在 src/app 布局下不生效（Next 要求 src/middleware.ts，现为死代码，且其目标是 `/admin/login` 非 `/auth/login`）；v1 api-client `getLoginRedirectPath` 仅匹配 `/{locale}/admin` 前缀，对 `/admin` 直访恒 null 不跳转（失败截图实证：渲染 shell + 「数据加载失败」无重定向）；v1 全 app 无 `/auth/login` 路由。② 历史「E2E admin 36/38 passed exit 0」（REFRESH/APPLY 卡）与今日同树不可复现——passed 计数恰与今日通过集吻合（38-42），疑历史 exit 0 为管道尾命令掩盖退出码的测量伪影（`cmd | grep; $?` 取 grep/tail 的 0），或当时 :3001 被含 `/auth/login` 的旧进程占用且 `reuseExistingServer: !CI` 静默复用。③ 环境陷阱双发现：playwright `webServer` **不含 apps/api（:4000）**——E2E 隐式依赖外部手动起的 API；`reuseExistingServer: !CI` 静默复用跨会话遗留 dev server。④ admin-next 26 失败为 toBeVisible 超时系（页面渲染正常但断言元素未现），隔离过/全量挂且与 workers 数无关，根因未竟。
-- **需要决策**：① 是否起独立核查卡（E2E-GATE-AUDIT：webServer 补 api 条目 + 端口归属固定 + admin.spec v1 重定向断言与实现对齐或退役）；② 或先在重启后的干净机器复跑一次排除本机状态；③ 若确认门禁长期破损，是否重定 E2E admin 基线并修正历史记录口径。**未解除前后续 ADMIN 域任务的 E2E 选跑结论不可信，须按本条目口径如实标注。**
-- **人工裁定（2026-06-06 18:05）**：选 **D（混合路径）**——B 复跑定界先行 → A-1 基础设施双陷阱直接修 → v1 15 失败走退役/降冒烟（A-2 路线②，冻结政策对齐）→ admin-next 26 超时按根因修复（A-3，真源覆盖不可弃）→ 历史口径修正随卡收尾。已登记 SEQ-20260606-01 三卡（CHG-E2E-GATE-AUDIT-A/-B/-C）。**本 BLOCKER 在 -C 收口前保持活跃**（期间 ADMIN 域任务 E2E 选跑结论按本条目口径标注），全序列收口后删除本块。
----
+（🚨 BLOCKER 块已按裁定 D 撤除——2026-06-06 21:56，-C 收口 / E2E admin 域 76/76 EXIT=0；原文与证据链见 git 历史 + changelog [CHG-E2E-GATE-AUDIT-A/-B/-B2/-C] 四条目）

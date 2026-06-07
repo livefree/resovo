@@ -82,8 +82,10 @@ test.describe('FIX-C 黄金路径：右栏三 Tab 切换', () => {
     await tablist.getByRole('tab', { name: '类似' }).click()
     await expect(tablist.getByRole('tab', { name: '类似' })).toHaveAttribute('aria-selected', 'true')
 
-    // TabSimilar 占位文案（M.similar.placeholder）
-    await expect(page.getByText('类似视频功能将于 M-SN-5 上线')).toBeVisible({ timeout: 3000 })
+    // CHG-E2E-GATE-AUDIT-C 契约对齐：TabSimilar 已真实化（CHG-SN-8-04-VIEW / ADR-137 /
+    // CHG-VIR-9-C identity），原 M-SN-5 占位文案退役；_helpers mock similar 端点空结果
+    // → EmptyState「未找到类似视频」
+    await expect(page.getByText('未找到类似视频')).toBeVisible({ timeout: 3000 })
   })
 
   test('Tab 切换持久化到 sessionStorage', async ({ page }) => {
