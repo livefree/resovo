@@ -20885,3 +20885,77 @@ safeUpdate 单测（`tests/unit/api/mediaCatalogSafeUpdate.test.ts`）：① fil
 
 - **CHG-ENRICH-DOUBAN-CONSISTENCY-A**（opus / Subagents trailer 强制）：safeUpdate fill-if-empty（D-186-1/2/3/5）+ 返回值口径（D-186-4 写侧）+ 单测。
 - **CHG-ENRICH-DOUBAN-CONSISTENCY-B**（sonnet）：MetadataEnrichService 三处接线（D-186-4 调用侧 + meta_quality 同步）+ DoubanService 同口径核验 + 存量矫正脚本（INV-1 例外兜底）+ 单测。
+
+---
+
+## ADR-187：豆瓣热门合集资源全面采集 + 落库能力（subject_collection 数据层，展示后置）（SEQ-20260607-03 / CHG-DOUBAN-HOT-ADR）
+
+- **状态**：**Accepted**（主循环 claude-opus-4-8 / arch-reviewer claude-opus-4-8 agentId ab4a867db8960c7ff CONDITIONAL PASS → 5 必修条件 M1–M5 全数纳入决策要点；用户裁定「采集全面做透、不被展示层反向裁剪、展示后置」2026-06-07）
+- **日期**：2026-06-07
+- **决策者**：主循环 claude-opus-4-8 / arch-reviewer (claude-opus-4-8) CONDITIONAL PASS
+- **关联**：
+  - ADR-183（Home 自动填充治理；本 ADR **不改 home autofill、不触展示治理**，仅新增数据层；D-183-1「douban media_type 硬编码不可信」教训吸收进 D-187-1 domain 权威性 + D-187-6 反哺禁令）
+  - ADR-052 / ADR-183 D-183-2（metadata JSONB 守则；本 ADR `raw JSONB` 落守则豁免区——非 WHERE 过滤字段的未来兜底，与 D-183-2 JSONB 论证同口径）
+  - ADR-177 / ADR-020（外部 ID 真源/优先级；本 ADR collection_items **零反哺** douban_entries，二者职责正交并存）
+  - douban-adapter `recommendations.service`（新 subject_collection 服务复用其 runtime+header+normalize 范式）
+  - CLAUDE.md「schema 变更同步 architecture.md」「共享组件/Service API 契约强制 Opus」「不得写死值」红线（D-187-2 注册表对齐声明）
+
+### 背景
+
+首页 `hot_movies`/`hot_series` 候选源现取自 `external_data.douban_entries`（约 14 万**离线 dump**，按历史 `douban_votes` 排序），不反映豆瓣**实时热度**。实测豆瓣 `subject_collection` 端点（`GET m.douban.com/rexxar/api/v2/subject_collection/{key}/items?start&count`，Referer m.douban.com）全部可用、无限流，覆盖 16 个合集（电影 5 / 剧集 8 / 综艺 3：热门·热映·即将上映·Top250·口碑榜·分国别剧集）。
+
+**用户裁定**：豆瓣热门资源获取要**全面做透**，**不能被「当前产品只展示站内有的视频」反向裁剪数据层**；本期 = 采集 + 落库能力，产品展示（首页接线）后期按接口丰富。
+
+### 决策要点
+
+**D-187-1（采集模型 + items 表 schema / 含 M1 raw 兜底 + M2 主键索引）**
+- 新表 `external_data.douban_collection_items` 保存**全量**合集条目（**不按站内映射/产品展示过滤**）。
+- 结构化列（支撑查询/索引/未来展示）：`collection TEXT NOT NULL`（合集 key）/ `domain TEXT NOT NULL`（movie|tv|show，**注册表派生权威**）/ `category TEXT NOT NULL`（trending|ranking|upcoming）/ `douban_id TEXT NOT NULL` / `rank INT NOT NULL` / `title TEXT NOT NULL` / `original_title TEXT` / `card_subtitle TEXT` / `info TEXT` / `year INT` / `rating_value NUMERIC(4,1)` / `rating_count INT` / `cover_url TEXT` / `uri TEXT` / `release_date TEXT` / `subject_type TEXT` / `has_linewatch BOOLEAN` / `raw JSONB NOT NULL` / `fetched_at TIMESTAMPTZ NOT NULL DEFAULT NOW()`。
+- **M1（必修·高）**：整条 item 原始 JSON 存 `raw JSONB`（兑现「未来展示免重抓」目标），写入前**必须 strip `comments`**（热评数组重、含 user 嵌套、非采集层职责，归独立 comments.service）；`release_date`/`info` 另立结构化单列（即将上映/热映展示核心 + 类型国家拼接串展示常用）。
+- **M2（必修·中）**：主键 `id BIGSERIAL PRIMARY KEY` + 业务唯一 `UNIQUE(collection, douban_id)`（对齐 douban_entries/bangumi_entries 全表范式；**非复合主键**——全量替换 DELETE+INSERT 下代理键减少索引页重排，且利于未来外键引用）。索引：`(collection, rank)`（合集内按位置展示唯一查询路径）+ `(douban_id)`（与 douban_entries 关联 / 反查「此片属哪些榜」；复合唯一前缀为 collection 无法服务纯 douban_id 查询，须独立建）。`domain`/`category` **不单建索引**（低基数 + 全表上限约 2000 行，PG 顺扫足够；显式声明挡盲目加索引）。
+- **rank 语义（写死）**：rank = item 在该 collection **分页拉取的全局序位**（start 偏移 + 页内 index，0 起），**非** rating 排序；随每轮全量替换重算，消费方**不得跨轮缓存 rank 值**。
+- `subject_type` = item 原始 `type`/`subtype` 字段（留作未来细分），与 `domain`（注册表权威归类）正交——展示/分池**以 domain 为准**（继承 ADR-183 D-183-1「item 自带 type 不可信」防线，type 入 raw 不单作权威）。
+
+**D-187-2（合集注册表 / 含 M4④ 红线对齐）**
+- 代码常量注册表 `DOUBAN_COLLECTIONS`：16 项 `{ key, domain, category, maxItems? }`，新增合集仅追加一行。
+- **红线对齐声明（M4④，类比 ADR-183 D-183-4.4）**：CLAUDE.md「不得写死值」针对「类型/路由/配置/筛选条件的可扩展性」；collection key 是**豆瓣端点物理拓扑**（key 失效=上游变更，非运营可配项），属采集策略代码常量，与 ADR-183 裁定「算法权重属策略代码随评审演进」同类——**不入 DB 配置表**（避免无消费方的配置面 + 采集随 DB 漂移不可审计）。扩展性满足：追加常量行 + 代码评审，可审计可 diff。
+
+**D-187-3（抓取策略 / 含 M4① 同事务 + M5 量化）**
+- 定时 job 遍历注册表，分页拉全量（`count=50`/页，对齐 douban-adapter `MAX_RECOMMENDATIONS_LIMIT=50` 既验证安全页长，不加大以降反爬）；每合集封顶取注册表 `maxItems`（缺省全局上限 `600`，依据：实测最大 movie_hot_gaia 345 × 安全系数；**删无依据硬编码**）。
+- **M4①（不变量·同事务原子性）**：按 collection **事务全量替换** = `DELETE WHERE collection=$1` + 批量 INSERT **同一事务**；MVCC READ COMMITTED 下并发读 commit 后才见新整份、永不见半份/空榜中间态。**禁止拆成两事务**。
+- **M5（量化落点）**：礼貌延时（页间 ≥ 300ms / 合集间 ≥ 2s）+ 超时复用 `doubanAdapter.fetchWithTimeout`；header 复用 `recommendations.service`（Referer m.douban.com + UA + Accept-Language，不另定义）；抓取频率 ≥ 数小时一轮（热度榜无需高频，与 homeAutofillScheduler 5min tick 不同量级）；单合集失败隔离不影响其它。
+
+**D-187-4（合集级新鲜度状态 + key 失效守护 / 含 M3）**
+- **M3（必修·高）**：新表 `external_data.douban_collection_sync_state`（`collection TEXT PRIMARY KEY` / `last_attempt_at TIMESTAMPTZ` / `last_success_at TIMESTAMPTZ` / `last_status TEXT`('ok'|'failed'|'empty_guard') / `last_error TEXT` / `item_count INT`）。每轮抓取（成功/失败/守护跳过）均 UPSERT 状态——**独立于 items 全量替换事务**（失败时 items 不动、sync_state 仍记 failed），消费方/监控据 `last_success_at` 判数据陈旧。
+- **key 失效静默清空守护（Q8.1）**：抓取「成功但 items 数为 0 或骤降到低于阈值」（阈值口径：< 上轮 item_count × 0.5 且上轮 ≥ 一定基数）→ **不执行全量替换、保留旧数据**，`last_status='empty_guard'` + warn。防豆瓣下线/改名 collection key 时 200 空响应把好数据 DELETE 成空榜。
+
+**D-187-5（降级语义）**
+- 网络/解析失败 → 抓取 job 吞 warn、保留该 collection 上一轮旧数据（不清空），sync_state 记 failed；Redis/Bull 不可用 → warn 不阻塞进程（同 homeAutofillScheduler/queue.ts 既有降级范式）。
+- 数据陈旧判定归消费方读 `sync_state.last_success_at`（行级 `fetched_at` 仅记本行落库时刻，**不能**区分「本轮刚抓」与「失败保留旧」——故陈旧判定必须读 sync_state，不读 items.fetched_at）。
+
+**D-187-6（与 douban_entries 边界 / 含 M4②）**
+- `douban_collection_items`（实时热度榜单切片，多 collection 可含同 douban_id，字段轻）与 `douban_entries`（14 万全量静态元数据 dump，douban_id 唯一，含 cast/genres/title_normalized 等 enrich 关键列）**职责正交、并存、互不替代**。
+- **M4②（不变量·零反哺）**：collection_items 的 douban_id **绝不**自动 INSERT 进 douban_entries——反哺会污染「dump 是静态可信基线」语义，且 collection item 缺 cast/genres/title_normalized，半残行破坏 MetadataEnrichService Step1 `(title_normalized, year)` 匹配。未来若需给 collection item 补富元数据，**走 `douban_id LEFT JOIN douban_entries` 读取**，非拷贝/反写（关联而非合并）。
+- enrich/匹配链路若同时见两表：以 douban_entries 为元数据权威、collection_items 仅作热度/榜单归属信号（继承 ADR-183 D-183-1 不可信信号降级防线）。
+
+**D-187-7（不变量汇总 / M4）**
+- **INV-1**：全量替换 DELETE+INSERT 同事务原子（D-187-3）。
+- **INV-2**：raw JSONB 写入前 strip comments（D-187-1）。
+- **INV-3**：collection_items 零反哺 douban_entries（D-187-6）。
+- **INV-4**：注册表代码常量不入 DB 配置（D-187-2）。
+
+**D-187-8（展示后置 + 风险登记 / M5）**
+- 本期**不接 home autofill、不触 ADR-183 展示治理**；首页「实时热门替换」作为后续卡 **CHG-DOUBAN-HOT-WIRE**（桥表映射门控 / gap / policy 版本届时决策）。
+- **命名裁定**：表 `douban_collection_items`（准确——含 top250/口碑榜非纯 hot，优于 `douban_hot_collections`）；服务 `createDoubanSubjectCollectionService`（对齐 `createDoubanRecommendationsService` 工厂范式）+ runtime `DoubanSubjectCollectionRuntime extends FetchPort`。
+- **风险登记**：① 反爬升级到需 challenge bypass → follow-up（adapter 已有 `ChallengeBypassPort`，本期实测无限流不接，登记降级预案）；② 抓取 job 队列归属 → 裁定**复用 maintenanceQueue 新 job kind `douban-collections-refresh`**（采集 IO 低频、与现有背压隔离，参 queue.ts maintenanceQueue 范式；若背压显著再拆独立 queue）；③ 数据量 16 合集 × 封顶 ≈ 上限约 2000 行 + raw JSONB（剔 comments 后每行数 KB）= MB 级，可控。
+
+### 实施拆卡（SEQ-20260607-03）
+
+- **CHG-DOUBAN-HOT-ADAPTER**（opus / Subagents trailer 强制）：douban-adapter 新 `subject-collection.{types,helpers,service}` + parser + `DoubanSubjectCollectionRuntime` + index 导出 + node:test（D-187-1 字段归一化含 raw / D-187-3 分页）。
+- **CHG-DOUBAN-HOT-STORE**（opus）：迁移 099（items 表 + sync_state 表，M1/M2/M3）+ architecture.md 同步 + queries（`replaceCollectionItems` 同事务 M4① + sync_state UPSERT + empty_guard D-187-4）+ doubanAdapter lib 包装 + maintenanceQueue job kind + server 注册 + 单测 + 实测脚本验证全 16 合集落库。
+- **CHG-DOUBAN-HOT-WIRE**（后续，本期不做）：首页展示接线，待用户按接口定展示口径另起。
+
+### 风险与回滚
+
+- 主要风险：key 失效静默清空（D-187-4 empty_guard 守护）/ 全量替换半份可见（D-187-3 同事务）/ 反哺污染 dump（D-187-6 零反哺）/ raw 带回 comments 重数据（D-187-7 INV-2）。
+- 回滚：新增表 + 新服务 + 新 job，无改既有读路径；回滚 = drop 两表 + revert job 注册，douban_entries / home autofill / 现有消费方零影响。

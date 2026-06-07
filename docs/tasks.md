@@ -6,7 +6,7 @@
 
 ## 当前任务（单任务工作台：同时仅 1 个 🔄 进行中；完成即删卡，历史见 docs/changelog.md）
 
-（空 — SEQ-20260607-02 CHG-DOUBAN-SEARCH-RESOLVER-WIRE 收口 2026-06-07 14:15：searchDouban 从失效 subject_suggest 切到 douban-adapter resolver + 删 getDoubanDetail/DoubanSubject/UA 死代码，详情路径 mobile-api 实测可用、搜索路径接线正确但豆瓣实时限流，见 changelog）
+（空 — SEQ-20260607-03 卡 1 CHG-DOUBAN-HOT-ADR 收口 2026-06-07 15:30：ADR-187 Accepted，arch-reviewer Opus CONDITIONAL PASS + M1–M5 全纳入；卡 2 CHG-DOUBAN-HOT-ADAPTER 启动时写新卡，见 task-queue SEQ-20260607-03）
 
 ---
 

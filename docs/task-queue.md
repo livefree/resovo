@@ -101,6 +101,43 @@
    - **FIX（Codex stop-time review，2026-06-07）**：新搜索链路丢失请求超时（旧 fetch 带 `AbortSignal.timeout(8000)`，换源后 `createBasicRuntime` 的 `fetchWithVerification` 裸 fetch 无 signal → 豆瓣挂起无限等待）。修正 `doubanAdapter.ts` 加 `fetchWithTimeout`（未自带 signal 时注入 `AbortSignal.timeout(10_000)`），套用 `fetch`+`fetchWithVerification` 两路；新增 `tests/unit/api/doubanAdapter.test.ts`（2 例）。门禁复跑全绿（test:changed 14 文件 187 测试）。
 
 ---
+
+## [SEQ-20260607-03] DOUBAN-HOT-ACQUISITION — 全面落实豆瓣热门资源获取能力（采集优先，展示后置）
+
+- **状态**：🔄 执行中（卡 1 ADR ✅ 2026-06-07 15:30；卡 2/3 待开始）
+- **创建时间**：2026-06-07 15:00
+- **最后更新时间**：2026-06-07 15:30
+- **目标**：妥善全面落实豆瓣**热门合集资源采集 + 落库能力**（实测 16 个可用合集：电影 5 / 剧集 8 / 综艺 3，含热门·热映·即将上映·Top250·口碑榜·分国别）。**不按站内映射/产品展示过滤**，全量字段入库；产品展示（首页接线）后期按接口丰富。
+- **范围**：`external-adapter/douban-adapter`（新 subject_collection 服务）+ `apps/api`（迁移建表 / queries / lib 包装 / 定时抓取 job）。**不改** home autofill、**不触** ADR-183 展示治理、**不删** douban_entries。
+- **用户裁定**（2026-06-07）：豆瓣热门资源获取要全面做透，不能被「当前产品只展示站内有的视频」反向裁剪数据层；展示后期再按接口丰富。
+- **依赖**：内部串行 ADR(187) → ADAPTER → STORE；展示接线（卡 4）后续另起。
+- **决策口径**：见计划 `~/.claude/plans/steady-sparking-taco.md`（ADR-187 落地决策要点 1–6）。
+
+### 任务列表（按执行顺序，串行）
+
+1. **CHG-DOUBAN-HOT-ADR** — ADR-187 起草：采集模型 / 合集注册表 / schema 字段完备 / 分页全量替换 / 降级 / 与 douban_entries 边界 / 展示后置声明（状态：✅ 已完成 2026-06-07 15:30）
+   - 创建时间：2026-06-07 15:00 ｜ 计划开始：2026-06-07 15:00 ｜ 实际开始：2026-06-07 15:00 ｜ 完成时间：2026-06-07 15:30
+   - 建议模型：opus（撰写 ADR + 设计共享服务契约/schema → 强制 spawn arch-reviewer Opus 独立裁定）
+   - 完成备注：**ADR-187 Accepted**（docs/decisions.md）。arch-reviewer (claude-opus-4-8 / agentId ab4a867db8960c7ff) 独立裁定 Q1–Q8 → CONDITIONAL PASS，揪出 5 必修条件全数纳入决策要点：**M1** items 表加 `raw JSONB`（strip comments）+ `release_date`/`info` 单列（兑现未来展示免重抓）；**M2** BIGSERIAL PK + UNIQUE(collection,douban_id)、索引 (collection,rank)+(douban_id)、rank 语义写死（拉取序位非评分）；**M3** 新增合集级 `douban_collection_sync_state` 表（last_success_at 等）+ **key 失效静默清空守护**（成功但 items 骤降→不替换保留旧 + warn）；**M4** 4 条不变量（同事务原子 / 零反哺 entries / raw strip comments / 注册表红线对齐）；**M5** 量化延时·超时·header 复用 + 队列归属裁定（复用 maintenanceQueue）+ 封顶有据（注册表 maxItems）。执行模型: claude-opus-4-8；子代理: arch-reviewer (claude-opus-4-8)。
+   - 验收要点：ADR-187 Accepted（arch-reviewer Opus PASS）；零实施；task-queue 卡细化。
+
+2. **CHG-DOUBAN-HOT-ADAPTER** — douban-adapter 包新增 subject_collection 服务（全字段归一化 + 类型 + 解析 + 测试）（状态：⬜ 待开始）
+   - 创建时间：2026-06-07 15:00
+   - 建议模型：opus（共享包公开 API 契约 / commit 强制 `Subagents: arch-reviewer` trailer）
+   - 验收要点：`createDoubanSubjectCollectionService` 全 16 合集可取；adapter 包 node:test 过；主仓 typecheck 绿。
+   - 依赖：ADR ✅。
+
+3. **CHG-DOUBAN-HOT-STORE** — 迁移建表（items + sync_state）+ queries + lib 包装 + 定时抓取 job + server 注册（状态：⬜ 待开始）
+   - 创建时间：2026-06-07 15:00
+   - 建议模型：opus
+   - 验收要点：迁移 099 建 `douban_collection_items`（M1 raw/release_date/info + M2 PK/索引）+ `douban_collection_sync_state`（M3）；全 16 合集分页全量抓取；事务全量替换（M4①）+ sync_state UPSERT + empty_guard 守护 + 失败隔离降级；复用 maintenanceQueue job kind `douban-collections-refresh`；typecheck/lint/test:changed 绿；architecture.md 同步。
+   - 依赖：CHG-DOUBAN-HOT-ADAPTER ✅。
+
+### 后续卡登记（本期不实施）
+
+- **CHG-DOUBAN-HOT-WIRE**（占位待立案）：首页热门段落候选源接 `douban_collection_items`（桥表映射门控 / gap / policy 版本 / 与 ADR-183 展示治理关系届时决策）。待用户按接口定展示口径后另起。
+
+---
 ## 序列编号约束声明
 
 **重要**：新任务序列号不得与历史归档中的序号重复。历史已完成序列已分段归档：
