@@ -1110,9 +1110,9 @@
 
 ## [SEQ-20260605-05] 首页运营治理实施 — Phase 1 真源与同构预览（治理方案 §13 落地）
 
-- **状态**：🔄 进行中（**Phase 1 全 11 卡 ✅ + Phase 2 全 4 卡 ✅（含 CARD-DND-B-FIX）+ Phase 3 全 6 卡 ✅ 收口 2026-06-06 14:50（CORE-A/B + DOUBAN + BANGUMI + REFRESH + APPLY；ADR-182 端点 7/7 + ADR-183 全 D 条落地）；Phase 3 候补卡（AUTOFILL-UI / 公开首页消费切换）+ Phase 4 占位待细化**）
+- **状态**：🔄 进行中（**Phase 1 全 11 卡 ✅ + Phase 2 全 4 卡 ✅（含 CARD-DND-B-FIX）+ Phase 3 全 6 卡 ✅ 收口 2026-06-06 14:50 + 候补 AUTOFILL-UI ✅ 17:05；完成度审计（2026-06-06 22:00，约 85% = 22/26）立案 5 卡：FE-CONSUME-A/-B〔前台消费闭环〕+ E2E-SPEC〔§14 质量欠账〕+ GOV-PLAN-ERRATA〔docs〕+ PHASE4-ADR〔发布治理细化〕，见卡 19–23**）
 - **创建时间**：2026-06-05 20:05
-- **最后更新时间**：2026-06-06 03:10
+- **最后更新时间**：2026-06-06 22:05
 - **目标**：按 `docs/designs/home-operations-governance-plan_20260605.md` §13 推进实施。本序列承载 Phase 1（真源与同构预览）+ 后续 Phase 细化登记。
 - **范围**：ADR 起草（decisions.md）+ /admin/home Banner 统一 + 首页预览聚合端点 + 后台同构画布。
 - **依赖**：CHG-HOME-GOVERNANCE-PLAN ✅（含评审修订 2a4d15a7）；无 BLOCKER。
@@ -1287,12 +1287,51 @@
 
 ### Phase 3 候补登记（六卡收口后细化）
 
-- `CHG-HOME-AUTOFILL-UI` — 候选池面板（SectionInspector「候选池展示留 Phase 3 接入位」+ 端点 #4 解释展示标灰 / #5 应用 / #7 立即刷新 + banner 候选预填 BannerDrawer〔APPLY 卡完成备注归此卡〕；方案 §7.3.5 + §12 + 验收「自动候选可解释、可跳过、可应用」）。依赖卡 14/17/18 ✅。— 状态：✅ 已完成（2026-06-06 17:05；CandidatePoolPanel 18 用例 + banner 预填链路 + HomeOpsClient 拆分 582→485 budget 净改善 −1；E2E admin 域环境性失败与本卡无关——clean-HEAD A/B 实证，见文末 🚨 BLOCKER；执行模型: claude-opus-4-8；详见 changelog。**FIX（Codex stop-time review，17:35）**：切区竞态——load 无 staleness 守卫，快速切换区块时前一区块迟到响应污染当前区块候选池 → +activeSectionRef 三重守卫（过期闭包短路 / 迟到响应丢弃 / apply 成功不清新区块选择态），+2 竞态用例 20/20。**FIX2（第 2 轮，17:50）**：section 等值对 A→B→A 不充分（旧代迟到响应与当前 A 等值仍覆盖新代）→ 双 ref 分职：activeSectionRef 仅顶部闭包短路（先于序号自增防夺位）+ requestSeqRef 写入唯一守卫（effect+load 双处自增），+1 用例 21/21，详见 changelog AUTOFILL-UI-FIX/-FIX2）
-- 公开首页消费切换（前台 ShelfRow → 聚合，D-183-8.3「Phase 3 末实施卡」）——涉公开端点行为，细化时核查是否需 ADR amendment。
+- `CHG-HOME-AUTOFILL-UI` — 候选池面板（SectionInspector「候选池展示留 Phase 3 接入位」+ 端点 #4 解释展示标灰 / #5 应用 / #7 立即刷新 + banner 候选预填 BannerDrawer〔APPLY 卡完成备注归此卡〕；方案 §7.3.5 + §12 + 验收「自动候选可解释、可跳过、可应用」）。依赖卡 14/17/18 ✅。— 状态：✅ 已完成（2026-06-06 17:05；CandidatePoolPanel 18 用例 + banner 预填链路 + HomeOpsClient 拆分 582→485 budget 净改善 −1；E2E admin 域环境性失败与本卡无关——clean-HEAD A/B 实证，已由 SEQ-20260606-01 收口；执行模型: claude-opus-4-8；详见 changelog。**FIX（Codex stop-time review，17:35）**：切区竞态——load 无 staleness 守卫，快速切换区块时前一区块迟到响应污染当前区块候选池 → +activeSectionRef 三重守卫（过期闭包短路 / 迟到响应丢弃 / apply 成功不清新区块选择态），+2 竞态用例 20/20。**FIX2（第 2 轮，17:50）**：section 等值对 A→B→A 不充分（旧代迟到响应与当前 A 等值仍覆盖新代）→ 双 ref 分职：activeSectionRef 仅顶部闭包短路（先于序号自增防夺位）+ requestSeqRef 写入唯一守卫（effect+load 双处自增），+1 用例 21/21，详见 changelog AUTOFILL-UI-FIX/-FIX2）
+- ~~公开首页消费切换（前台 ShelfRow → 聚合，D-183-8.3「Phase 3 末实施卡」）~~ → 已立案为下方 `CHG-HOME-FE-CONSUME-A/-B`（2026-06-06 22:05 完成度审计立案）。
 
-### Phase 4 后续卡占位
+### Phase 3 收尾 + 质量收口卡登记（2026-06-06 22:05 完成度审计立案；审计结论见 changelog 后续条目）
 
-- Phase 4：`CHG-HOME-DRAFT-PUBLISH` / `CHG-HOME-AUDIT-ROLLBACK` / `CHG-HOME-CACHE-INVALIDATE`
+19. **CHG-HOME-FE-CONSUME-A** — 公开消费形态裁定 + 聚合读路径（后端）（状态：⬜ 待开始）
+   - 创建时间：2026-06-06 22:05
+   - 建议模型：opus（公开端点协议设计；若需 ADR-182 amendment / 新 ADR 当卡起草走 Opus PASS）
+   - 变更原因：D-183-8.3「Phase 3 末实施卡」——前台三个热门 shelf 仍消费趋势 query（`page.tsx` `type=movie&period=week` 实证），治理方案 §2.1「单一展示真源」前台未闭环，full_auto / pinned 头部 / 候选重算对访客无效。
+   - 范围（4 项）：① 消费形态裁定：扩展 `GET /home/modules` 响应（hot_* slot 已在 slot 枚举）vs 新公开聚合端点（pinned + full_auto 快照合成）——公开协议变更需 ADR amendment 则当卡完成 ② HomeCuration 公开读路径（pinned 头部 + 快照 auto 合成 + §7.1 通用过滤复核，Route→Service→queries 分层） ③ 缓存口径落点（§12 短 TTL 保留；主动失效钩子留 Phase 4 CACHE-INVALIDATE，本卡只留接口位） ④ 单测（合成顺序 / 过滤 / 快照缺失降级趋势兜底）。
+   - 依赖：Phase 3 全 6 卡 ✅ + AUTOFILL-UI ✅。
+   - 完成备注：_（完成后填写）_
+20. **CHG-HOME-FE-CONSUME-B** — 前台 3 hot shelf 切换聚合 + 断裂区块收编评估（状态：⬜ 待开始）
+   - 创建时间：2026-06-06 22:05
+   - 建议模型：sonnet
+   - 变更原因：同上（-A 的前台落地半张）。
+   - 范围（4 项）：① `apps/web-next` 首页三个 ShelfRow 切换聚合消费（快照缺失/空时降级现行趋势 query——§7.1「站内兜底趋势」） ② FE-FEATURED（FeaturedRow 丢弃 modules 恒显 trending）/ FE-SHORTCUTS（CategoryShortcuts 静态）是否同链路顺路收编——**仅评估与裁定**，需独立端点（如 /home/featured-videos）则维持待立案不扩范围 ③ e2e-next homepage spec 同步 ④ 单测。
+   - 依赖：CHG-HOME-FE-CONSUME-A。
+   - 完成备注：_（完成后填写）_
+21. **CHG-HOME-E2E-SPEC** — admin home 域 E2E 金路径补覆盖（状态：⬜ 待开始）
+   - 创建时间：2026-06-06 22:05
+   - 建议模型：sonnet
+   - 变更原因：治理方案 §14 质量验收明文要求「后台 /admin/home 有 E2E 覆盖」，现状 `grep -rln "admin/home" tests/e2e/` 零命中（SEQ-20260606-01 BLOCKER 处置期间实证）；E2E admin 域门禁已恢复可信（76/76 EXIT=0），补卡时机成熟。
+   - 范围（5 项）：① 画布渲染 + 区块切换/Inspector smoke ② 卡片操作金路径（reorder 端点 spy / 删除 / 固定转换） ③ 候选池金路径（解释展示 / 应用 / 立即刷新——mock ADR-182 端点 #4/#5/#7） ④ Banner 编辑 + 横图警告态 ⑤ 全程复用 `tests/e2e/admin/_shared/shell-mocks.ts` 基座 + mock 类型绑定 `@resovo/types`（test-rules E2E 规程第 4/5 条）。
+   - 依赖：无（与 19/20 可并行）。视觉回归（admin-visual baseline）不在本卡，完成备注评估是否另立。
+   - 完成备注：_（完成后填写）_
+22. **CHG-HOME-GOV-PLAN-ERRATA** — 治理方案 §6/§14 缺图口径勘误（docs-only）（状态：⬜ 待开始）
+   - 创建时间：2026-06-06 22:05
+   - 建议模型：haiku（本卡明确标注"更新文档"）
+   - 变更原因：IMAGE-GUARD-BANNER 实施实证 `home_banners.image_url` NOT NULL → 「缺横版大图」态在 Hero 真源下不可达（schema 吸收），实际落地为尺寸/比例/探测三类警告；§14 验收第 5 条「三处标记」中「发布确认」处依赖 Phase 4 发布流。
+   - 范围（2 项）：① §6/§14 勘误（缺图态 → 三类警告口径 + 修订记录追加） ② 「发布确认」第三处标记义务移交注记至 Phase 4 `CHG-HOME-DRAFT-PUBLISH` 验收项。
+   - 依赖：无。
+   - 完成备注：_（完成后填写）_
+
+### Phase 4 细化登记（2026-06-06 22:05；实施卡依赖 ADR 裁定，不得先行落端点）
+
+23. **CHG-HOME-PHASE4-ADR** — 发布治理 ADR：草稿/发布模型 + 审计回滚 + 缓存失效协议（状态：⬜ 待开始）
+   - 创建时间：2026-06-06 22:05
+   - 建议模型：opus（ADR 起草 + arch-reviewer Opus PASS；新增 admin 端点走 MUST-8）
+   - 变更原因：方案 §11 三层发布模型（编辑/预览/发布）+ §12 缓存失效全部未落地；Phase 1 画布直写为声明的临时降级（「保存草稿/发布」按钮隐藏待此解锁）。
+   - 范围（4 项）：① 草稿存储形态裁定（草稿表 vs 配置版本化 vs diff-patch） ② draft/publish/rollback 端点协议（MUST-8）+ 审计 diff 展示模型（§11 审计锚定衔接） ③ 发布后缓存失效协议（§12，与 FE-CONSUME-A 缓存口径对账） ④ 三张实施占位卡（DRAFT-PUBLISH / AUDIT-ROLLBACK / CACHE-INVALIDATE）细化拆卡。
+   - 依赖：CHG-HOME-FE-CONSUME-A（公开消费/缓存形态先定，失效协议才有对象）。
+   - 完成备注：_（完成后填写）_
+
+- Phase 4 实施占位（依赖卡 23 细化）：`CHG-HOME-DRAFT-PUBLISH` / `CHG-HOME-AUDIT-ROLLBACK` / `CHG-HOME-CACHE-INVALIDATE`
 
 ---
 

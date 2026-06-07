@@ -2373,3 +2373,14 @@
 - **新增依赖**：无
 - **数据库变更**：无
 - **注意事项**：① **`npm run test:e2e:admin` 全量 76/76 EXIT=0**（v1 23 + admin-next 53；规程口径采集），**SEQ-20260606-01 全 4 卡收口，🚨 BLOCKER 撤除**；② **历史定性修正**：admin-next 26 失败隔离单跑同样挂（确定性 mock 契约毒化，与 API 在场/workers/编译态全部无关），原 BLOCKER「隔离过/全量挂」系 dashboard 无 API 场景的过度外推；moderation 套件自 CHG-360（aggregates 必填化）起即红，被历史 exit 0 测量伪影掩盖；③ 业务代码零改动（纯测试层 + docs），admin-next 真源覆盖按当前实现对齐断言，符合 test-rules「不允许改断言让测试通过」例外条款（断言对象 IA/契约已演进，逐项注明依据 ADR/卡号）；④ 门禁：typecheck/lint 绿 + test:changed 0 选测合法（e2e spec 不入 unit 图）。
+
+## [AUDIT-HOME-GOV-PLAN-20260606] 首页运营治理方案完成度审计 + 5 卡立案
+- **完成时间**：2026-06-06
+- **记录时间**：2026-06-06 22:10
+- **执行模型**：claude-opus-4-8
+- **子代理**：无
+- **修改文件**：
+  - `docs/task-queue.md` — SEQ-20260605-05 登记卡 19–23（FE-CONSUME-A/-B / E2E-SPEC / GOV-PLAN-ERRATA / PHASE4-ADR）+ 序列状态行更新
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：① **审计结论：`home-operations-governance-plan_20260605.md` 完成度约 85%（22/26 项）**——Phase 1（11 卡）/ Phase 2（4 卡）/ Phase 3（6 卡 + 候补 AUTOFILL-UI）全收口，ADR-181/182/183 全 Accepted；② **缺口 4 项**：公开首页消费切换未实施（前台 3 hot shelf 仍消费趋势 query 实证，§2.1 单一真源前台未闭环，D-183-8.3 Phase 3 末卡）/ Phase 4 发布治理 3 占位未动（§11/§12，画布直写为声明降级）/ §14 质量验收 E2E 覆盖零命中 / §6「缺横版大图」口径被 schema 吸收（image_url NOT NULL 不可达）需勘误；③ 交叉缺口 FE-FEATURED / FE-SHORTCUTS（SEQ-20260605-01 待立案）归入 FE-CONSUME-B 收编评估项；④ 建议执行序：19（opus 裁定）→ 20 ∥ 21 ∥ 22 → 23（opus，依赖 19）。
