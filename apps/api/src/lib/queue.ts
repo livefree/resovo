@@ -105,6 +105,23 @@ export const homeAutofillQueue = new Bull('home-autofill-queue', {
   },
 })
 
+/**
+ * 豆瓣热门合集采集队列（ADR-187 D-187-8）。
+ * 独立队列隔离背压（refresh job 长任务，16 合集分页 + 礼貌延时实测 60–90s，
+ * 不并入 concurrency=1 的 maintenanceQueue 阻塞其它维护任务，同 homeAutofillQueue 隔离先例）。
+ * job 以固定 jobId `refresh-douban-collections` 入队（幂等键防重复入队）；
+ * 入队方 per-add 设 removeOnComplete/removeOnFail: true 释放 jobId（定频重入前提）。
+ */
+export const doubanCollectionsQueue = new Bull('douban-collections-queue', {
+  redis: redisOptions,
+  defaultJobOptions: {
+    attempts: 2,
+    backoff: { type: 'fixed', delay: 30_000 },
+    removeOnComplete: 20,
+    removeOnFail: 10,
+  },
+})
+
 // ── 队列事件日志 ──────────────────────────────────────────────────
 
 function attachQueueLogger(queue: Bull.Queue, queueName: string) {
@@ -124,8 +141,9 @@ attachQueueLogger(enrichmentQueue, 'enrichment-queue')
 attachQueueLogger(imageHealthQueue, 'image-health-queue')
 attachQueueLogger(identityCandidateQueue, 'identity-candidate-queue')
 attachQueueLogger(homeAutofillQueue, 'home-autofill-queue')
+attachQueueLogger(doubanCollectionsQueue, 'douban-collections-queue')
 
-const queues = { crawlerQueue, verifyQueue, maintenanceQueue, enrichmentQueue, imageHealthQueue, identityCandidateQueue, homeAutofillQueue }
+const queues = { crawlerQueue, verifyQueue, maintenanceQueue, enrichmentQueue, imageHealthQueue, identityCandidateQueue, homeAutofillQueue, doubanCollectionsQueue }
 export default queues
 
 /** 确认 crawler 队列可用，避免创建任务后因入队失败留下 pending 脏状态 */

@@ -24,7 +24,6 @@ const TICK_MS = 30 * 60_000                  // 30 分钟（auto-publish-staging
 const VERIFY_TICK_MS = 60 * 60_000           // 60 分钟（verify-published-sources）
 const STAGING_VERIFY_TICK_MS = 8 * 3600_000  // 8 小时（verify-staging-sources）
 const RECONCILE_TICK_MS = 24 * 3600_000      // 24 小时（reconcile-search-index）
-const DOUBAN_COLLECTIONS_TICK_MS = 6 * 3600_000  // 6 小时（refresh-douban-collections，ADR-187 D-187-3 热度榜无需高频）
 const PENDING_THRESHOLD_TICK_MS = 60 * 60_000  // 1 小时（CHG-SN-8-FUP-WEBHOOK-IMPL-EP-A2.3 / ADR-146）
 const PENDING_THRESHOLD_DEBOUNCE_MS = 60 * 60_000  // 1 小时 debounce（防风暴 ADR-146 R-146-3）
 // CHG-SN-8-FUP-WEBHOOK-IMPL-EP-A2.4 / ADR-146 D-146-7 #2：R2 quota 软上限告警
@@ -40,14 +39,12 @@ let stagingVerifyTimer: NodeJS.Timeout | null = null
 let reconcileTimer: NodeJS.Timeout | null = null
 let pendingThresholdTimer: NodeJS.Timeout | null = null
 let r2QuotaTimer: NodeJS.Timeout | null = null
-let doubanCollectionsTimer: NodeJS.Timeout | null = null
 let tickRunning = false
 let verifyTickRunning = false
 let stagingVerifyTickRunning = false
 let reconcileTickRunning = false
 let pendingThresholdTickRunning = false
 let r2QuotaTickRunning = false
-let doubanCollectionsTickRunning = false
 
 // CW1-E-EP step 2 / ADR-152 R-152-2：lastRunAt 记录（intervalMs 推算 nextRunAt 用）
 // 各 timer 在执行前赋值；registeredAt 作为 lastRunAt=null 时的回退基准
@@ -59,7 +56,6 @@ const lastRunAt: Record<string, string | null> = {
   'reconcile-search-index': null,
   'pending-threshold-check': null,
   'r2-quota-check': null,
-  'refresh-douban-collections': null,
 }
 
 async function runMaintenanceTick(): Promise<void> {
@@ -144,30 +140,6 @@ async function runReconcileTick(): Promise<void> {
     schedulerLog.warn({ err, stage: 'reconcile-search-index' }, 'tick failed')
   } finally {
     reconcileTickRunning = false
-  }
-}
-
-/**
- * ADR-187 / CHG-DOUBAN-HOT-STORE-B：定时刷新豆瓣 16 热门合集采集。
- * 入队 refresh-douban-collections（worker 注册表驱动分页全量 + 全量替换）；
- * 已有等待/活跃同类 job 时跳过防重复入队。
- */
-async function runDoubanCollectionsTick(): Promise<void> {
-  if (doubanCollectionsTickRunning) return
-  doubanCollectionsTickRunning = true
-  lastRunAt['refresh-douban-collections'] = new Date().toISOString()
-  try {
-    const jobData: MaintenanceJobData = { type: 'refresh-douban-collections' }
-    await maintenanceQueue.add(jobData, {
-      jobId: `refresh-douban-collections-${Date.now()}`,
-      removeOnComplete: 10,
-      removeOnFail: 5,
-    })
-    schedulerLog.info({ stage: 'refresh-douban-collections' }, 'enqueued')
-  } catch (err) {
-    schedulerLog.warn({ err, stage: 'refresh-douban-collections' }, 'tick failed')
-  } finally {
-    doubanCollectionsTickRunning = false
   }
 }
 
@@ -324,7 +296,6 @@ export function getSchedulerStatus(): SchedulerInfo[] {
     { name: 'verify-published-sources', enabled: globalEnabled && verifyTimer != null,            intervalMs: VERIFY_TICK_MS,          lastRunAt: lastRunAt['verify-published-sources'], nextRunAt: computeNextRunAt('verify-published-sources', VERIFY_TICK_MS) },
     { name: 'verify-staging-sources',   enabled: globalEnabled && stagingVerifyTimer != null,     intervalMs: STAGING_VERIFY_TICK_MS,  lastRunAt: lastRunAt['verify-staging-sources'],   nextRunAt: computeNextRunAt('verify-staging-sources', STAGING_VERIFY_TICK_MS) },
     { name: 'reconcile-search-index',   enabled: globalEnabled && reconcileTimer != null,         intervalMs: RECONCILE_TICK_MS,       lastRunAt: lastRunAt['reconcile-search-index'],   nextRunAt: computeNextRunAt('reconcile-search-index', RECONCILE_TICK_MS) },
-    { name: 'refresh-douban-collections', enabled: globalEnabled && doubanCollectionsTimer != null, intervalMs: DOUBAN_COLLECTIONS_TICK_MS, lastRunAt: lastRunAt['refresh-douban-collections'], nextRunAt: computeNextRunAt('refresh-douban-collections', DOUBAN_COLLECTIONS_TICK_MS) },
     { name: 'pending-threshold-check',  enabled: globalEnabled && pendingThresholdTimer != null,  intervalMs: PENDING_THRESHOLD_TICK_MS, lastRunAt: lastRunAt['pending-threshold-check'], nextRunAt: computeNextRunAt('pending-threshold-check', PENDING_THRESHOLD_TICK_MS) },
     { name: 'r2-quota-check',           enabled: globalEnabled && r2QuotaTimer != null,           intervalMs: R2_QUOTA_TICK_MS,        lastRunAt: lastRunAt['r2-quota-check'],           nextRunAt: computeNextRunAt('r2-quota-check', R2_QUOTA_TICK_MS) },
   ]
@@ -354,13 +325,6 @@ export function registerMaintenanceScheduler(): void {
     void runReconcileTick()
   }, RECONCILE_TICK_MS)
   schedulerLog.info({ interval_ms: RECONCILE_TICK_MS, stage: 'reconcile-search-index' }, 'registered')
-
-  // ADR-187：豆瓣热门合集采集 6h 定时刷新
-  if (doubanCollectionsTimer) return
-  doubanCollectionsTimer = setInterval(() => {
-    void runDoubanCollectionsTick()
-  }, DOUBAN_COLLECTIONS_TICK_MS)
-  schedulerLog.info({ interval_ms: DOUBAN_COLLECTIONS_TICK_MS, stage: 'refresh-douban-collections' }, 'registered')
 
   // CHG-SN-8-FUP-WEBHOOK-IMPL-EP-A2.3 / ADR-146：审核积压超阈值定时检查
   if (pendingThresholdTimer) return

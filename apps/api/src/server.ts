@@ -40,6 +40,8 @@ import { registerBackfillWorker } from '@/api/workers/imageBackfillWorker'
 import { registerIdentityCandidateWorker } from '@/api/workers/identityCandidateWorker'
 import { registerHomeAutofillWorker } from '@/api/workers/homeAutofillWorker'
 import { registerHomeAutofillScheduler } from '@/api/workers/homeAutofillScheduler'
+import { registerDoubanCollectionsWorker } from '@/api/workers/doubanCollectionsWorker'
+import { registerDoubanCollectionsScheduler } from '@/api/workers/doubanCollectionsScheduler'
 import { adminStagingRoutes } from '@/api/routes/admin/staging'
 import { adminModerationRoutes } from '@/api/routes/admin/moderation'
 import { adminReviewLabelsRoutes } from '@/api/routes/admin/reviewLabels'
@@ -212,6 +214,8 @@ async function start() {
   registerIdentityCandidateWorker()
   // CHG-HOME-AUTOFILL-REFRESH / ADR-183 D-183-3：首页自动填充候选重算（消费者）
   registerHomeAutofillWorker()
+  // ADR-187 D-187-8：豆瓣热门合集采集（消费者，独立队列隔离背压）
+  registerDoubanCollectionsWorker()
 
   const schedulerEnabled = process.env.CRAWLER_SCHEDULER_ENABLED === 'true'
   if (schedulerEnabled) {
@@ -235,6 +239,14 @@ async function start() {
     registerHomeAutofillScheduler()
   } else {
     fastify.log.info({ worker: 'home-autofill-scheduler' }, 'disabled (HOME_AUTOFILL_SCHEDULER_ENABLED=false)')
+  }
+
+  // ADR-187 D-187-8：豆瓣热门合集采集 6h 定时刷新（opt-out 同 maintenance 范式）
+  const doubanCollectionsSchedulerEnabled = process.env.DOUBAN_COLLECTIONS_SCHEDULER_ENABLED !== 'false'
+  if (doubanCollectionsSchedulerEnabled) {
+    registerDoubanCollectionsScheduler()
+  } else {
+    fastify.log.info({ worker: 'douban-collections-scheduler' }, 'disabled (DOUBAN_COLLECTIONS_SCHEDULER_ENABLED=false)')
   }
 
   // 链接存活定时扫描：每 24h 将所有活跃 sources 批量入队 verify-queue

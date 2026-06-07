@@ -137,6 +137,7 @@
    - 创建时间：2026-06-07 16:05 ｜ 实际开始：2026-06-07 16:30 ｜ 完成时间：2026-06-07 16:40
    - 建议模型：opus
    - 完成备注：**实施 ADR-187 D-187-2/3/4/8**。`services/douban-collections/registry.ts`（`DOUBAN_COLLECTIONS` 16 项 + domain/category/maxItems + PAGE_SIZE=50/GLOBAL_MAX_ITEMS=600/延时/guard 阈值常量）+ `refresh.ts`（`collectAllItems` 分页全量累积 rank + 中途/首页失败 → null 整轮失败；`refreshCollection` 失败/empty_guard 判定 → replaceCollectionItems；`refreshAllCollections` 遍历 + 合集间 2s 延时 + 单合集异常隔离记 failed）。`maintenanceWorker` 加 job type `refresh-douban-collections` → refreshAllCollections + 汇总日志；`maintenanceScheduler` 加 6h tick（server.ts 已注册 maintenance 无需改）+ getSchedulerStatus。`doubanCollectionsRefresh.test.ts` 7 例（单页/分页 rank 连续/失败/empty_guard 空/骤降/首轮不误判/refreshAll 隔离）。**端到端实测（临时脚本 run-and-delete）：全 16 合集 ok 落库合计 1294 行**（movie_hot_gaia 330/top250 250/tv_hot 247…），字段齐全、raw 不含 comments、sync_state 全 ok 带 last_success_at。门禁：typecheck 绿 / lint 5/5 / test:changed 3 文件 48 测试（refresh 7 + scheduler 关联 system-config 29 + background-event 12）。执行模型: claude-opus-4-8；子代理: 无。
+   - **FIX（Codex stop-time review，2026-06-07）**：refresh 长任务（60–90s）阻塞共享 maintenanceQueue（concurrency=1）+ tick 用 Date.now() jobId 可重复入队。修正拆独立 `doubanCollectionsQueue` + 专属 worker/scheduler（固定 jobId 幂等 + removeOnComplete/Fail 释放），回退 maintenance 两处改动 + server.ts 注册（opt-out `DOUBAN_COLLECTIONS_SCHEDULER_ENABLED`）+ ADR-187 D-187-8 AMENDMENT；新增 scheduler 单测 2 例。门禁：typecheck/lint/test:changed 59 文件 687 测试全过。
    - 依赖：CHG-DOUBAN-HOT-STORE-A ✅。
 
 ### 后续卡登记（本期不实施）

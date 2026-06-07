@@ -12,7 +12,6 @@ import { StagingPublishService } from '@/api/services/StagingPublishService'
 import { SourceVerificationService } from '@/api/services/SourceVerificationService'
 import { VideoIndexSyncService } from '@/api/services/VideoIndexSyncService'
 import { bulkSyncSourceCheckStatus } from '@/api/db/queries/videos'
-import { refreshAllCollections } from '@/api/services/douban-collections/refresh'
 import { baseLogger, withJob } from '@/api/lib/logger'
 import type pino from 'pino'
 
@@ -25,7 +24,6 @@ export type MaintenanceJobType =
   | 'verify-published-sources'
   | 'verify-staging-sources'
   | 'reconcile-search-index'
-  | 'refresh-douban-collections'
 
 export interface MaintenanceJobData {
   type: MaintenanceJobType
@@ -101,19 +99,6 @@ async function processMaintenanceJob(
         deleted: staleResult.deleted,
         errors: publishedResult.errors + staleResult.errors,
       }
-    }
-    case 'refresh-douban-collections': {
-      // ADR-187：注册表驱动全面采集豆瓣 16 热门合集 → 落库（事务全量替换）
-      const results = await refreshAllCollections(db)
-      const durationMs = Date.now() - startAt
-      const ok = results.filter((r) => r.status === 'ok').length
-      const failed = results.filter((r) => r.status === 'failed').length
-      const guarded = results.filter((r) => r.status === 'empty_guard').length
-      const totalItems = results.reduce((sum, r) => sum + r.count, 0)
-      jobLog.info({
-        stage: 'refresh-douban-collections', ok, failed, guarded, totalItems, duration_ms: durationMs,
-      }, 'job done')
-      return { type: data.type, durationMs, ok, failed, guarded, totalItems }
     }
     default: {
       const never: never = data.type

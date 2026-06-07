@@ -20947,7 +20947,7 @@ safeUpdate 单测（`tests/unit/api/mediaCatalogSafeUpdate.test.ts`）：① fil
 **D-187-8（展示后置 + 风险登记 / M5）**
 - 本期**不接 home autofill、不触 ADR-183 展示治理**；首页「实时热门替换」作为后续卡 **CHG-DOUBAN-HOT-WIRE**（桥表映射门控 / gap / policy 版本届时决策）。
 - **命名裁定**：表 `douban_collection_items`（准确——含 top250/口碑榜非纯 hot，优于 `douban_hot_collections`）；服务 `createDoubanSubjectCollectionService`（对齐 `createDoubanRecommendationsService` 工厂范式）+ runtime `DoubanSubjectCollectionRuntime extends FetchPort`。
-- **风险登记**：① 反爬升级到需 challenge bypass → follow-up（adapter 已有 `ChallengeBypassPort`，本期实测无限流不接，登记降级预案）；② 抓取 job 队列归属 → 裁定**复用 maintenanceQueue 新 job kind `douban-collections-refresh`**（采集 IO 低频、与现有背压隔离，参 queue.ts maintenanceQueue 范式；若背压显著再拆独立 queue）；③ 数据量 16 合集 × 封顶 ≈ 上限约 2000 行 + raw JSONB（剔 comments 后每行数 KB）= MB 级，可控。
+- **风险登记**：① 反爬升级到需 challenge bypass → follow-up（adapter 已有 `ChallengeBypassPort`，本期实测无限流不接，登记降级预案）；② 抓取 job 队列归属 → **裁定独立 `doubanCollectionsQueue` + 专属 worker/scheduler**（refresh 长任务实测 60–90s，并入 concurrency=1 maintenanceQueue 会阻塞其它维护任务；同 homeAutofillQueue 隔离先例；固定 jobId `refresh-douban-collections` 幂等防重复入队 + removeOnComplete/Fail 释放）。〔**AMENDMENT 2026-06-07 / Codex stop-time review**：初版裁定复用 maintenanceQueue，实施后 review 指出长任务阻塞 + 重复入队风险，本条逃生口「背压显著再拆独立 queue」兑现为独立队列；见 CHG-DOUBAN-HOT-STORE-B FIX〕；③ 数据量 16 合集 × 封顶 ≈ 上限约 2000 行 + raw JSONB（剔 comments 后每行数 KB）= MB 级，可控。
 
 ### 实施拆卡（SEQ-20260607-03）
 
