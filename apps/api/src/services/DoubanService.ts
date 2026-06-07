@@ -193,8 +193,11 @@ export class DoubanService {
     }
     if (detail.countries.length > 0) updateFields.country = detail.countries[0]
 
-    const { updated } = await catalogService.safeUpdate(video.catalog_id, updateFields, 'douban', { sourceRef: subjectId })
+    const { updated, skippedFields } = await catalogService.safeUpdate(video.catalog_id, updateFields, 'douban', { sourceRef: subjectId })
     if (!updated) return { updated: false, reason: 'catalog_update_rejected' }
+    // ADR-186 INV-1：doubanId 未落地（exact 冲突——该豆瓣条目已绑定其他作品）→ 不虚标 matched
+    //（updated 在"无字段可写"时返回原 catalog 非 null，须再查 skippedFields，arch-reviewer Q4）
+    if (skippedFields.includes('doubanId')) return { updated: false, reason: 'douban_id_conflict' }
 
     // 标记 video_external_refs 为 manual_confirmed
     await externalDataQueries.upsertVideoExternalRef(this.db, {
@@ -376,8 +379,10 @@ export class DoubanService {
     }
 
     const catalogService = new MediaCatalogService(this.db)
-    const { updated } = await catalogService.safeUpdate(video.catalog_id, updateFields, 'douban', { sourceRef: subjectId })
+    const { updated, skippedFields } = await catalogService.safeUpdate(video.catalog_id, updateFields, 'douban', { sourceRef: subjectId })
     if (!updated) return { updated: false, reason: 'catalog_update_rejected' }
+    // ADR-186 INV-1：doubanId 未落地（exact 冲突——该豆瓣条目已绑定其他作品）→ 不虚标 matched
+    if (skippedFields.includes('doubanId')) return { updated: false, reason: 'douban_id_conflict' }
 
     // 标记 manual_confirmed
     await externalDataQueries.upsertVideoExternalRef(this.db, {

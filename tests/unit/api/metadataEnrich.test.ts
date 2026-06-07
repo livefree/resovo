@@ -203,6 +203,41 @@ describe('MetadataEnrichService.enrich()', () => {
     )
   })
 
+  // ── ADR-186 D-186-4：status 跟随 safeUpdate().skippedFields（INV-1/INV-2）─────
+
+  it('ADR-186: Step1 auto 候选但 doubanId 被 skip（exact 冲突/锁）→ doubanStatus 降级 candidate（不虚标 matched）', async () => {
+    vi.mocked(externalDataQueries.findDoubanByTitleNorm).mockResolvedValue([makeDoubanMatch()])
+    // safeUpdate 返回 doubanId ∈ skippedFields（catalog 未绑定）
+    mockSafeUpdate.mockResolvedValue({ updated: { id: 'c1' }, skippedFields: ['doubanId'] })
+
+    await service.enrich(makeJobData())
+
+    // safeUpdate 仍被调用（尝试写入），但 doubanId 未落地
+    expect(mockSafeUpdate).toHaveBeenCalledWith('c1', expect.objectContaining({ doubanId: 'd1' }), 'douban', { sourceRef: 'd1' })
+    // douban_status 如实降级 candidate（INV-1）
+    const call = vi.mocked(videosQueries.updateVideoEnrichStatus).mock.calls[0]
+    expect(call[2]).toMatchObject({ doubanStatus: 'candidate' })
+    // video_external_refs 同步降级 candidate（refStatus 一致）
+    expect(externalDataQueries.upsertVideoExternalRef).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ provider: 'douban', externalId: 'd1', matchStatus: 'candidate' }),
+    )
+  })
+
+  it('ADR-186: Step1 auto 候选 doubanId 落地（skippedFields 空）→ doubanStatus=matched（回归）', async () => {
+    vi.mocked(externalDataQueries.findDoubanByTitleNorm).mockResolvedValue([makeDoubanMatch()])
+    mockSafeUpdate.mockResolvedValue({ updated: { id: 'c1' }, skippedFields: [] })
+
+    await service.enrich(makeJobData())
+
+    const call = vi.mocked(videosQueries.updateVideoEnrichStatus).mock.calls[0]
+    expect(call[2]).toMatchObject({ doubanStatus: 'matched' })
+    expect(externalDataQueries.upsertVideoExternalRef).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ provider: 'douban', externalId: 'd1', matchStatus: 'auto_matched' }),
+    )
+  })
+
   it('Step1: 本地豆瓣年份不匹配（差 3 年）→ candidate，不再走 Step2', async () => {
     // confidence = 0.70(title) + 0(年差≥2) = 0.70，[0.60,0.85) → candidate
     vi.mocked(externalDataQueries.findDoubanByTitleNorm).mockResolvedValue([makeDoubanMatch({ year: 2016 })])

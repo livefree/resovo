@@ -133,6 +133,32 @@ export class MetadataEnrichService {
     await videosQueries.updateVideoSourceCheckStatus(this.db, videoId, sourceStatus)
   }
 
+  /**
+   * ADR-186 D-186-4：豆瓣 auto 候选写入后，依 safeUpdate 返回的 skippedFields 判定 doubanId
+   * 是否真正落地 catalog（INV-1）。
+   * - doubanId ∈ skippedFields（来源优先级 fill 失败已不可能至此 / 字段锁 / exact 冲突降级 /
+   *   列已被占用）→ 落 'candidate'（refStatus='candidate'），catalog 未绑定，保留人工确认（INV-2）。
+   * - 否则 → 落 'matched'（refStatus='auto_matched'）。
+   * 同步把 recordDoubanSignal + video_external_refs 用最终 refStatus 写入，三处状态一致
+   *（douban_status / meta_quality.douban_match_status / video_external_refs.match_status）。
+   */
+  private async finalizeDoubanAutoWrite(params: {
+    videoId: string
+    doubanId: string
+    skippedFields: string[]
+    confidence: number
+    method: DoubanMatchMethod
+    breakdown: Record<string, number>
+    metaQuality: VideoMetaQuality
+  }): Promise<DoubanStatus> {
+    const { videoId, doubanId, skippedFields, confidence, method, breakdown, metaQuality } = params
+    const landed = !skippedFields.includes('doubanId')
+    const refStatus: 'auto_matched' | 'candidate' = landed ? 'auto_matched' : 'candidate'
+    recordDoubanSignal(metaQuality, confidence, method, refStatus)
+    await this.writeExternalRef(videoId, doubanId, refStatus, confidence, breakdown, method)
+    return landed ? 'matched' : 'candidate'
+  }
+
   // ── Step 1 ───────────────────────────────────────────────────────
 
   private async step1LocalDouban(
@@ -144,13 +170,13 @@ export class MetadataEnrichService {
     imdbId: string | null,
     metaQuality: VideoMetaQuality,
   ): Promise<DoubanStatus | null> {
-    // 1a: imdb_id 精确匹配（最高置信度，直接 auto_matched）
+    // 1a: imdb_id 精确匹配（最高置信度，auto 候选）
     if (imdbId) {
       const imdbMatch = await externalDataQueries.findDoubanByImdbId(this.db, imdbId)
       if (imdbMatch) {
-        recordDoubanSignal(metaQuality, 1.0, 'imdb_id', 'auto_matched')
-        await this.writeExternalRef(videoId, imdbMatch.doubanId, 'auto_matched', 1.0, { imdb_id: 1.0 }, 'imdb_id')
-        await this.catalogService.safeUpdate(catalogId, {
+        // ADR-186 D-186-4：先 safeUpdate，据 doubanId 是否真正落地决定 status / refStatus
+        // （避免 catalog 未绑定却虚标 matched）。
+        const { skippedFields } = await this.catalogService.safeUpdate(catalogId, {
           doubanId: imdbMatch.doubanId,
           rating: imdbMatch.rating ?? undefined,
           description: imdbMatch.description ?? undefined,
@@ -162,7 +188,10 @@ export class MetadataEnrichService {
           genresRaw: imdbMatch.genres.length > 0 ? imdbMatch.genres : undefined,
           country: imdbMatch.country ?? undefined,
         }, 'douban', { sourceRef: imdbMatch.doubanId })
-        return 'matched'
+        return this.finalizeDoubanAutoWrite({
+          videoId, doubanId: imdbMatch.doubanId, skippedFields,
+          confidence: 1.0, method: 'imdb_id', breakdown: { imdb_id: 1.0 }, metaQuality,
+        })
       }
     }
 
@@ -185,31 +214,32 @@ export class MetadataEnrichService {
 
     // META-22：本地有损键命中多条不同 douban 记录且年份同档 → 歧义，禁止 auto 绑定（降级候选人工确认）
     const ambiguous = isAmbiguousLocalMatch(matches, year)
-    const matchStatus = (confidence >= CONFIDENCE_AUTO_MATCH && !ambiguous) ? 'auto_matched' : 'candidate'
+    const wantAuto = confidence >= CONFIDENCE_AUTO_MATCH && !ambiguous
 
-    recordDoubanSignal(metaQuality, confidence, matchBy, matchStatus)
-
-    // 写 video_external_refs（无论 auto_matched 还是 candidate）
-    await this.writeExternalRef(videoId, best.doubanId, matchStatus, confidence, breakdown, matchBy)
-
-    // 仅 auto_matched 时写 catalog
-    if (matchStatus === 'auto_matched') {
-      await this.catalogService.safeUpdate(catalogId, {
-        doubanId: best.doubanId,
-        rating: best.rating ?? undefined,
-        description: best.description ?? undefined,
-        coverUrl: best.coverUrl ?? undefined,
-        director: best.directors,
-        cast: best.cast,
-        writers: best.writers,
-        genres: best.genres.length > 0 ? mapDoubanGenres(best.genres) : undefined,
-        genresRaw: best.genres.length > 0 ? best.genres : undefined,
-        country: best.country ?? undefined,
-      }, 'douban', { sourceRef: best.doubanId })
-      return 'matched'
+    // 置信度未达 auto（或歧义）→ candidate（不写 catalog，行为不变）
+    if (!wantAuto) {
+      recordDoubanSignal(metaQuality, confidence, matchBy, 'candidate')
+      await this.writeExternalRef(videoId, best.doubanId, 'candidate', confidence, breakdown, matchBy)
+      return 'candidate'
     }
 
-    return 'candidate'
+    // auto 候选：ADR-186 D-186-4 先 safeUpdate，据 doubanId 落地结果决定最终 status / refStatus
+    const { skippedFields } = await this.catalogService.safeUpdate(catalogId, {
+      doubanId: best.doubanId,
+      rating: best.rating ?? undefined,
+      description: best.description ?? undefined,
+      coverUrl: best.coverUrl ?? undefined,
+      director: best.directors,
+      cast: best.cast,
+      writers: best.writers,
+      genres: best.genres.length > 0 ? mapDoubanGenres(best.genres) : undefined,
+      genresRaw: best.genres.length > 0 ? best.genres : undefined,
+      country: best.country ?? undefined,
+    }, 'douban', { sourceRef: best.doubanId })
+    return this.finalizeDoubanAutoWrite({
+      videoId, doubanId: best.doubanId, skippedFields,
+      confidence, method: matchBy, breakdown, metaQuality,
+    })
   }
 
   // ── Step 2 ───────────────────────────────────────────────────────
@@ -243,7 +273,6 @@ export class MetadataEnrichService {
         //   `writers TEXT[] NOT NULL` 等 5 列约束。详 docs/decisions.md ADR-167 (TBD) /
         //   PR #4 SEQ-20260529-01 / 修法 (b) updateCatalogFields 同 commit 加 undefined skip 防御
         const ratingNum = detail.rate ? parseFloat(detail.rate) : NaN
-        recordDoubanSignal(metaQuality, best.score, 'network', 'auto_matched')
         const updateFields: import('@/api/db/queries/mediaCatalog').CatalogUpdateData = {
           doubanId: detail.id,
         }
@@ -260,19 +289,21 @@ export class MetadataEnrichService {
         }
         if (detail.countries[0]) updateFields.country = detail.countries[0]
 
-        await this.catalogService.safeUpdate(catalogId, updateFields, 'douban', { sourceRef: detail.id })
-        await this.writeExternalRef(
-          videoId, detail.id, 'auto_matched',
-          best.score, { network_score: best.score }, 'network'
-        )
+        // ADR-186 D-186-4：先 safeUpdate，据 doubanId 落地结果决定 status / refStatus
+        const { skippedFields } = await this.catalogService.safeUpdate(catalogId, updateFields, 'douban', { sourceRef: detail.id })
+        const doubanStatus = await this.finalizeDoubanAutoWrite({
+          videoId, doubanId: detail.id, skippedFields,
+          confidence: best.score, method: 'network', breakdown: { network_score: best.score }, metaQuality,
+        })
         // ADR-163 D-163-5/6：豆瓣 detail.episodes 按 catalog.status 写入 total / current
-        // auto 模式：仅当目标列 NULL 时写入（不覆盖人工校正值）
+        // auto 模式：仅当目标列 NULL 时写入（不覆盖人工校正值）。episodes 与 douban 绑定状态正交，
+        // 即便 doubanId 未落地（降级 candidate）仍是有效集数信号，照写（沿既有口径）。
         if (typeof detail.episodes === 'number' && detail.episodes > 0) {
           await videosQueries.updateVideoEpisodes(
             this.db, videoId, episodesByStatus(catalogStatus, detail.episodes), 'auto',
           )
         }
-        return 'matched'
+        return doubanStatus
       }
     }
 

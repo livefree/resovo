@@ -1396,9 +1396,9 @@
 
 ## [SEQ-20260607-01] ENRICH-DOUBAN-CONSISTENCY — 富集豆瓣匹配状态与 catalog.douban_id 落地一致性修复
 
-- **状态**：🔄 执行中
+- **状态**：✅ 已完成（3/3 卡收口 2026-06-07 13:00；ADR-186 + safeUpdate fill-if-empty + enrich status 接线 + 存量矫正脚本）
 - **创建时间**：2026-06-07 12:20
-- **最后更新时间**：2026-06-07 12:20
+- **最后更新时间**：2026-06-07 13:00
 - **目标**：消除「列表显示豆瓣图标（douban_status=matched/candidate）但视频编辑 douban_id 为空」的数据面脱钩——匹配成功时确保 `catalog.douban_id` 真正落地（空缺填充），落不了则状态如实降级 candidate。
 - **范围**：`MediaCatalogService.safeUpdate`（写侧语义）+ `MetadataEnrichService`（status 接线）+ `scripts/`（存量矫正）；**不改**前台读路径、**不改** admin-ui 组件。
 - **根因（调查结论）**：UI 两面读不同字段（图标←`videos.douban_status` / 编辑←`media_catalog.douban_id`）；`MetadataEnrichService` 三处 `safeUpdate` 不检查返回值无条件 `return 'matched'`，而 `safeUpdate` 有 4 条静默拒绝写 doubanId 路径（来源优先级整体拦截 / 字段锁 / exact ref 冲突降级 / catalog 重绑脱钩）。
@@ -1418,9 +1418,8 @@
    - 完成备注：**实施 ADR-186 D-186-1/2/3/5**。① 新增 `EXTERNAL_REF_FIELD_KEYS`（CATALOG_EXTERNAL_REF_FIELDS 单一真源派生）② 优先级闸门 L334-340 改造：低优先级源不再整段 return，逐字段判定——外部 ID cache 列（doubanId/bangumiSubjectId）且 `current[key]==null` 且 value 非空 → fillable 放行；内容字段/非空外部 ID/null 清空进锁循环前剔除计入 skippedFields；fillableKeys 空时维持整段 skip（行为逐值不变）③ **metadata_source 不降级硬约束**（D-186-3 一票否决项）：`...(isLowerPriority ? {} : { metadataSource: source })` ④ exact 写侧/字段锁路径零改动复用（D-186-5）。返回契约 `{updated, skippedFields}` 不扩字段（D-186-4 写侧）。测试 +9（mediaCatalogSafeUpdate.test.ts 26 全过，覆盖必修②④⑦ + ①③⑤⑥⑧ + 对照）。门禁：typecheck 绿 / lint 无 error / test:changed 766 全过 / verify:adr-contracts EXIT=0。执行模型: claude-opus-4-8；子代理: arch-reviewer (claude-opus-4-8 设计裁定，A 卡承接其结论实施)。
    - 依赖：ADR ✅。
 
-3. **CHG-ENRICH-DOUBAN-CONSISTENCY-B** — MetadataEnrichService status 接线 + 存量矫正脚本（状态：⬜ 待办）
-   - 创建时间：2026-06-07 12:20
-   - 建议模型：sonnet
-   - 范围（≤5，跨 service + scripts 两层；**跨层理由**：写侧 status 修复与存量数据矫正属同一一致性闭环）：① `MetadataEnrichService` step1-imdb/step1-title/step2 三处检查 safeUpdate 返回——doubanId 未落地（锁/exact 冲突）→ douban_status 落 candidate 而非 matched ② `DoubanService.syncVideo/confirmSubject` 同口径核验（已检查返回值，确认无回归）③ `scripts/` 一次性矫正脚本（dry-run 优先；圈定 douban_status=matched 且 catalog.douban_id IS NULL，按子原因重置 status 或触发补写）④ `metadataEnrich.test.ts` 补例。
+3. **CHG-ENRICH-DOUBAN-CONSISTENCY-B** — MetadataEnrichService status 接线 + 存量矫正脚本（状态：✅ 已完成 2026-06-07 13:00）
+   - 创建时间：2026-06-07 12:20 ｜ 实际开始：2026-06-07 12:48 ｜ 完成时间：2026-06-07 13:00
+   - 建议模型：sonnet（主循环 opus 承接）
+   - 完成备注：**实施 ADR-186 D-186-4 调用侧 + INV-1/INV-2 + 存量兜底**。① 新增私有 `finalizeDoubanAutoWrite`（据 skippedFields.includes('doubanId') 判 landed → 'matched' or 'candidate'，同步 recordDoubanSignal + writeExternalRef 用最终 refStatus，三处状态一致：douban_status / meta_quality.douban_match_status / video_external_refs.match_status）；step1-imdb/step1-title/step2 三处重构为**先 safeUpdate 再据落地结果判 status**（candidate 路径——置信度未达 auto——行为不变）② DoubanService.confirmSubject/confirmFields 加 `skippedFields.includes('doubanId')` → 返回 `douban_id_conflict`（exact 冲突时人工 confirm 不虚标 matched；arch-reviewer Q4：`if(!updated)` 不足以捕获，updated 返回原 catalog 非 null）；syncVideo 不写 douban_status 故无图标虚标、改 SyncReason 类型扩散，登记不改 ③ `scripts/fix-douban-status-consistency.ts`（dry-run 优先；圈定 matched + catalog.douban_id NULL，有 douban ref → candidate / 孤儿 → unmatched；事务化双批 UPDATE）④ metadataEnrich.test.ts +2 例（必修⑨降级 + ⑩回归）。仅处理 douban（bangumi 同构 follow-up）。门禁：typecheck 绿 / lint 无 error / test:changed 178 全过 / 脚本单独 tsc 编译通过。执行模型: claude-opus-4-8；子代理: 无。
    - 依赖：CHG-ENRICH-DOUBAN-CONSISTENCY-A ✅。
-   - 验收：诊断 SQL 圈定的 matched+空 doubanId 视频清零；新富集 matched ⟹ douban_id 非空。

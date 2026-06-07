@@ -2591,3 +2591,17 @@
   - `tests/unit/api/mediaCatalogSafeUpdate.test.ts` — makeCatalog 扩 doubanId/bangumiSubjectId override + 新增 describe「ADR-186 fill-if-empty」9 例（必修②metadata_source 不降级 / ④内容字段不放行 / ⑦低优先级整段 skip 回归 + ①fill 命中 / ③非 NULL 不 fill / ⑤exact 冲突降级 / ⑥硬锁 / ⑧bangumi 对称 / 对照同优先级仍更新 metadata_source）
 - **新增依赖**：无 ｜ **数据库变更**：无
 - **注意事项**：① fill-if-empty 限 douban_id/bangumi_subject_id 两字段（imdb/tmdb 零自动写入方不纳入，D-186-1 follow-up）；② 返回契约 `{updated, skippedFields}` 不扩字段（D-186-4 写侧，调用侧判定归 B 卡）；③ exact 冲突/字段锁路径零改动复用（D-186-5）；④ 门禁：typecheck 绿 / lint 无 error / test:changed 52 files 766 tests 全过（mediaCatalogSafeUpdate 26）/ verify:adr-contracts EXIT=0。
+
+## [CHG-ENRICH-DOUBAN-CONSISTENCY-B] MetadataEnrichService status 接线 + 存量矫正脚本（SEQ-20260607-01 卡 3 / 序列收口）
+- **完成时间**：2026-06-07
+- **记录时间**：2026-06-07 13:00
+- **执行模型**：claude-opus-4-8
+- **子代理**：无
+- **修改文件**：
+  - `apps/api/src/services/MetadataEnrichService.ts` — 新增私有 `finalizeDoubanAutoWrite`（据 `skippedFields.includes('doubanId')` 判 landed → matched/candidate，同步 recordDoubanSignal + writeExternalRef 用最终 refStatus）；step1-imdb/step1-title/step2 三处重构为「先 safeUpdate 再据落地结果判 status」（candidate 路径行为不变）。三处状态一致：douban_status / meta_quality.douban_match_status / video_external_refs.match_status（D-186-4 / INV-1/INV-2）
+  - `apps/api/src/services/DoubanService.ts` — confirmSubject/confirmFields 加 `skippedFields.includes('doubanId')` → 返回 `douban_id_conflict`（exact 冲突时人工 confirm 不虚标 matched；`if(!updated)` 不足以捕获，arch-reviewer Q4）
+  - `scripts/fix-douban-status-consistency.ts`（新建）— 存量矫正：圈定 douban_status=matched 且 catalog.douban_id NULL，有 douban ref → candidate / 孤儿 → unmatched；dry-run 优先 + 事务化双批 UPDATE
+  - `tests/unit/api/metadataEnrich.test.ts` — +2 例（必修⑨ skippedFields 含 doubanId → 降级 candidate + 三处状态一致 / ⑩ skippedFields 空 → matched 回归）
+- **新增依赖**：无 ｜ **数据库变更**：无
+- **注意事项**：① 仅处理 douban；bangumi_status 同构（follow-up：复制脚本改 provider/列名）；② syncVideo 不写 douban_status 故无图标虚标 + 改 SyncReason 类型扩散，登记不改；③ episodes 写入与 douban 绑定状态正交，降级 candidate 仍照写（沿既有口径）；④ 矫正脚本不自动补写（补写须走 enrich 完整逻辑 + 网络）——重置 status 后由下次 enrich（A 卡 fill-if-empty 生效）/ 人工 confirm 收敛；⑤ 门禁：typecheck 绿 / lint 无 error / test:changed 178 全过（metadataEnrich 35 / doubanService-manual 5 / douban 12）/ 脚本单独 tsc 编译通过。
+- **SEQ-20260607-01 全序列收口**：ADR-186（决策）+ A（safeUpdate fill-if-empty 写侧）+ B（enrich status 接线 + 存量矫正），「富集匹配成功但 douban_id 空」脱钩闭环。运维需在生产执行 `node --env-file=.env.local --import tsx scripts/fix-douban-status-consistency.ts --dry-run` 预览后正式跑一次矫正存量。
