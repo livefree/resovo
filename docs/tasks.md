@@ -6,7 +6,7 @@
 
 ## 当前任务（单任务工作台：同时仅 1 个 🔄 进行中；完成即删卡，历史见 docs/changelog.md）
 
-（空 — 上一任务 CHG-HOME-FE-CONSUME-B 已收口 2026-06-07 01:10，见 changelog；**D-183-8.3 前台消费闭环完成；CHG-E2E-WEB-AUDIT 已登记待立案**）
+（空 — 上一任务 CHG-HOME-E2E-SPEC 已收口 2026-06-07 01:55，见 changelog；**方案 §14 admin home E2E 覆盖收口，admin 域 87/87 EXIT=0**）
 
 ---
 

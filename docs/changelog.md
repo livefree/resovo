@@ -2420,3 +2420,15 @@
 - **新增依赖**：无
 - **数据库变更**：无
 - **注意事项**：① **D-183-8.3 前台消费闭环完成**——治理链（pinned 头部 / full_auto 快照 / 候选重算）自此对访客生效；② **收编裁定**（范围项②，仅裁定不实施）：FE-FEATURED 走 ADR-184 amendment 扩 `'featured'`（独立端点方向作废）/ FE-SHORTCUTS 不可走 shelf（video_type 非 video 卡，D-184-3.2 结构性丢弃）用既有 `/home/modules` 无需新端点；③ **定界产出**：homepage 套件全量仍 7 失败 = 既有断言漂移（nav-logo "RResovo" / hero CTA / banner dots / footer）+ ≥4 workers 并发 goto 30s 超时（6 并发复现 0 挂起请求 load 不触发、server 侧 6 并发 curl 0.5s 实证无辜）——**clean HEAD 同样 17 failed 实证与本卡无关**，证据链登记 `CHG-E2E-WEB-AUDIT` 待立案；④ 门禁：typecheck/lint 绿 + 单测 5/5 + E2E 本卡范围 4/4 绿（电影/剧集网格 + 聚合渲染 + 空降级，serial 口径）。
+
+## [CHG-HOME-E2E-SPEC] admin home 域 E2E 金路径补覆盖 — 11 用例 + admin 域 87/87（SEQ-20260605-05 卡 21）
+- **完成时间**：2026-06-07
+- **记录时间**：2026-06-07 01:55
+- **执行模型**：claude-opus-4-8
+- **子代理**：无
+- **修改文件**：
+  - `tests/e2e/admin/home/_helpers.ts` — **新建**：home 域 mock 基座（installAdminShellMocks 先注册 + 业务 catch-all route.fallback 下沉；HomeModule/Banner/HomeSectionSettings/AutofillCandidate/HomePreview 类型绑定工厂；ADR-182 #1/#3/#4/#5/#6/#7 + ADR-104 资源级 + /admin/banners v1 pagination 包络全信封对齐；writes spy 日志）
+  - `tests/e2e/admin/home/home-ops.spec.ts` — **新建** 11 用例：A 画布（7 区块渲染/Inspector 联动/settings PATCH spy）B 卡片操作（删除 modal/发布切换/拖拽排序真实鼠标步进 reorder 序断言）C 候选池（解释展示 filtered 不可勾选/应用 #5 candidateIds 断言/立即刷新 #7/快照未生成态）D Banner（drawer + 横图探测失败警告 + 警告级不阻断 submit + POST spy）
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：① **治理方案 §14「后台 /admin/home 有 E2E 覆盖」收口**（此前零命中）；admin 域全量 **76→87 EXIT=0** 零回归；② 实施陷阱记档：canvas-section 中心点击落在空卡触发 onEmptySlot 不冒泡 select → 选区块须打 head pill（`canvas-mode-*`）；AdminInput `data-testid` 落 wrapper div → fill/toHaveValue 须 `.locator('input')` 下钻（后续 home 域 spec 沿用）；③ 视觉回归评估：**不另立**——画布动态数据密集，截图基线脆弱收益低，testid 行为断言已覆盖；④ 门禁：typecheck/lint/test:changed 绿 + `npm run test:e2e:admin` 87/87 EXIT=0。

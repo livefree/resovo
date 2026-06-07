@@ -1306,13 +1306,13 @@
    - 范围（4 项）：① `apps/web-next` 首页三个 ShelfRow 切换聚合消费（快照缺失/空时降级现行趋势 query——§7.1「站内兜底趋势」） ② FE-FEATURED（FeaturedRow 丢弃 modules 恒显 trending）/ FE-SHORTCUTS（CategoryShortcuts 静态）是否同链路顺路收编——**仅评估与裁定**，需独立端点（如 /home/featured-videos）则维持待立案不扩范围 ③ e2e-next homepage spec 同步 ④ 单测。
    - 依赖：CHG-HOME-FE-CONSUME-A。
    - 完成备注：① ShelfRow 增可选 `shelfSection` prop（缺省零行为变更）：提供时走 `/home/shelf` + brand_slug 透传（ADR-052 消费侧），items 空/请求失败降级现行趋势 query + 迟到响应 cancelled 守卫（AUTOFILL-UI-FIX 同款教训）；page.tsx 三 shelf 接 hot_movies/series/anime。② **收编裁定**：FE-FEATURED → 走 ADR-184 amendment 扩 'featured'（独立端点 /home/featured-videos 方向作废，合成单一实现复用）；FE-SHORTCUTS → 不可走 shelf（video_type 非 video 卡 D-184-3.2 结构性丢弃），无需新端点用既有 /home/modules——两裁定已回写待立案条目（SEQ-20260605-01 后续卡登记）。③ homepage spec 同步：+shelf mock（emptyShelf 可选）+2 测试（聚合渲染/空降级金路径）+ **顺手修复两处既有失修**：MOCK_MOVIE/SERIES 类型绑定 VideoCard（缺 subtitleLangs → deriveSpecs 运行时崩，clean HEAD 同样 17 failed 实证非本卡引入）+ 兜底 404 catch-all（-A 后 API 恒起漏真实数据，外链封面阻塞 load）。④ 测试：单测 +5（ShelfRow.test.tsx 消费/brand/双降级/现状回归）；E2E 范围内 4/4 绿（电影/剧集网格 + 聚合渲染 + 空降级，serial 实证）；**homepage 套件全量仍 7 失败 = 既有断言漂移 + 并发 goto 超时（infra），定界证据登记 CHG-E2E-WEB-AUDIT 待立案（SEQ-20260606-01 后续卡）**，非本卡范围。门禁：typecheck/lint/test:changed 绿。执行模型: claude-opus-4-8；子代理: 无。
-21. **CHG-HOME-E2E-SPEC** — admin home 域 E2E 金路径补覆盖（状态：⬜ 待开始）
-   - 创建时间：2026-06-06 22:05
-   - 建议模型：sonnet
+21. **CHG-HOME-E2E-SPEC** — admin home 域 E2E 金路径补覆盖（状态：✅ 已完成）
+   - 创建时间：2026-06-06 22:05 ｜ 实际开始：2026-06-07 01:20 ｜ 完成时间：2026-06-07 01:55
+   - 建议模型：sonnet（实际 claude-opus-4-8，用户 opus 会话「按顺序依次推进」承接）
    - 变更原因：治理方案 §14 质量验收明文要求「后台 /admin/home 有 E2E 覆盖」，现状 `grep -rln "admin/home" tests/e2e/` 零命中（SEQ-20260606-01 BLOCKER 处置期间实证）；E2E admin 域门禁已恢复可信（76/76 EXIT=0），补卡时机成熟。
    - 范围（5 项）：① 画布渲染 + 区块切换/Inspector smoke ② 卡片操作金路径（reorder 端点 spy / 删除 / 固定转换） ③ 候选池金路径（解释展示 / 应用 / 立即刷新——mock ADR-182 端点 #4/#5/#7） ④ Banner 编辑 + 横图警告态 ⑤ 全程复用 `tests/e2e/admin/_shared/shell-mocks.ts` 基座 + mock 类型绑定 `@resovo/types`（test-rules E2E 规程第 4/5 条）。
    - 依赖：无（与 19/20 可并行）。视觉回归（admin-visual baseline）不在本卡，完成备注评估是否另立。
-   - 完成备注：_（完成后填写）_
+   - 完成备注：**`tests/e2e/admin/home/` 新建 _helpers + home-ops.spec 11 用例全绿；admin 域全量 76→87 EXIT=0 零回归**。① 画布：7 区块渲染 + 生成时间戳 + Inspector 空态/联动/settings 回显 + PATCH #3 spy；② 卡片操作：删除 modal→DELETE spy→列表移除 / 发布切换 POST spy（enabled 翻转）/ **拖拽排序真实鼠标步进**（dnd-kit PointerSensor，handle 按下分步移动，reorder body 断言 [m-b,m-a] 序对换）；③ 候选池：解释展示（filtered 条目同列表不可勾选）+ 应用 #5 spy（candidateIds 断言 + 按钮 disabled→enabled 态）+ 立即刷新 #7 spy + 快照未生成态（snapshotAt null 200 语义）；④ Banner：create drawer + 横图探测失败警告（route abort → Image onerror，§6.6 风险提醒态）+ **警告级不阻断实证**（submit enabled + POST /admin/banners spy）。mock 全程类型绑定（HomeModule/Banner/HomeSectionSettings/AutofillCandidate/HomePreview 工厂）+ writes spy 日志 + route.fallback 下沉基座。实施陷阱 ×2 记档：canvas-section 中心点击落空卡触发 onEmptySlot 不达 select → 改打 head pill（canvas-mode-\*）；AdminInput data-testid 在 wrapper div → fill/toHaveValue 须 `.locator('input')` 下钻。**视觉回归评估：不另立**——画布为动态数据密集界面（时间戳/候选数据/计数实时变化），截图基线脆弱收益低，testid 行为断言已覆盖关键路径。门禁：typecheck/lint 绿 + test:changed 绿（e2e spec 不入 unit 图）+ `npm run test:e2e:admin` 87/87 EXIT=0。执行模型: claude-opus-4-8；子代理: 无。
 22. **CHG-HOME-GOV-PLAN-ERRATA** — 治理方案 §6/§14 缺图口径勘误（docs-only）（状态：⬜ 待开始）
    - 创建时间：2026-06-06 22:05
    - 建议模型：haiku（本卡明确标注"更新文档"）
