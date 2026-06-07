@@ -20489,6 +20489,7 @@ export type HomeSectionKey =
 - CHG-HOME-FE-SHORTCUTS 接线卡维持待立案（D-182-6.2）。
 - **技术债**（arch-reviewer 吸收）：CHG-HOME-BANNER-UNIFY 落地后，评估给 v1 legacy `PATCH /admin/banners/reorder` 补 audit 或冻结写能力，消除「同列两写路径审计不对等」（D-182-4.6 双写路径裁定的残留面）。
 - **端点 #4 Response additive 扩展登记（ADR-183 D-183-7.3 回写）**：顶层增 `gaps?: ContentGap[]`（`include_filtered=true` 时返回，缺口 top-N，独立 DTO 无 videoId）——纯增量非 break，与 D-182-4.4 origin 开放口径同款演进方式。
+- **端点 #1 HomePreview additive 扩展登记（ADR-184 D-184-3.5 回写）**：`HomePreviewSection` 增可选 `consumedSnapshotAt?: string | null`（hot_* 自动补位实际消费的快照时间，公开 shelf 投影 snapshotAt 的结构来源）——纯增量非 break；同时 D-182-4 #1「快照实装前走站内信号」预留由 ADR-184 D-184-4 兑现（hot_* auto 卡 explain.score 口径变为 D-183-4 策略分 0–1，开放演进口径覆盖）。
 
 ---
 
@@ -20603,3 +20604,119 @@ export type HomeSectionKey =
 
 - **CHG-DOUBAN-MEDIATYPE-REIMPORT**（待立案，可选）：dump 重导入推断真实 media_type（D-183-1.3；分池正确性不依赖，优先级低）。
 - DoubanSeedService 立项与否：运营消化缺口 top-N 节奏明确后另起 ADR（D-183-7.2）。
+
+---
+
+## ADR-184：Home Curation 公开消费协议 — `GET /home/shelf` 聚合端点 + preview 同构合成 + hot_* 快照接线 + 缓存失效接口位（SEQ-20260605-05 / CHG-HOME-FE-CONSUME-A）
+
+- **日期**：2026-06-06
+- **状态**：**Accepted**（arch-reviewer claude-opus-4-8 CONDITIONAL PASS → 1 HIGH（snapshotAt 投影来源歧义）+ 3 MEDIUM（admin preview 行为面显式化 / filtered 权威层次 / brand 缓存隔离）+ 2 LOW（第三选项排除 / E2E 断言分工）**全 6 条吸收**后定档）
+- **决策者**：主循环 claude-opus-4-8 / arch-reviewer (claude-opus-4-8)
+- **关联**：ADR-181（hot_* slot 扩展 + 真源裁定）/ ADR-182（admin 7 端点，D-182-4 #1 preview「Phase 3 快照实装前走站内信号」预留）/ ADR-183（候选快照 + D-183-8.3 本卡递延声明）/ ADR-052/053（`/home/top10` `/home/modules` 公开端点既有契约）/ ADR-110（ApiResponse 信封 + 错误码 18 码）/ 治理方案 §2.1（单一展示真源）§7.1（通用算法）§7.2（full_auto + pinned 头部）§12（缓存与一致性）
+- **对应交付**：CHG-HOME-FE-CONSUME-A（本卡，后端）/ CHG-HOME-FE-CONSUME-B（前台切换）/ Phase 4 CHG-HOME-CACHE-INVALIDATE（消费 D-184-5 失效接口位）
+
+### 背景
+
+Phase 1–3 已建成治理链（pinned 真源 / section settings / 候选快照 / 定频重算 / apply 写路径），但**前台消费缺最后一跳**：web-next 首页三个热门 shelf 仍直连 `/videos/trending`（`apps/web-next/src/app/[locale]/page.tsx` `type=movie&period=week` 实证），full_auto 策略、pinned 头部、候选重算对访客全部无效——§2.1「单一展示真源」只在后端与 admin 画布闭环。公开侧现存端点：`/home/top10`（合成聚合）与 `/home/modules`（原始配置行），均不承载「pinned 头部 + 快照 auto 合成」语义。D-183-8.3 将本切换显式递延至 Phase 3 末实施卡，即本卡。
+
+### 决策要点
+
+**D-184-1 消费形态裁定：新公开聚合端点 `GET /home/shelf`，不扩展 `GET /home/modules`**
+
+1. `GET /home/modules` 的契约 = `home_modules` **原始配置行**（`HomeModule[]`）。auto / fallback 条目**没有 module 行可表达**（无 id / ordering / contentRef），扩展该端点等于伪造行或改变响应形状——破坏既有契约（「删除或重命名现有 API」红线邻接；ADR-181 D-181-2 (c) 对 banner slot 枚举「保留无害不删改」同款保守口径）。两端点职责显式分工：`/home/modules` = 配置行读取（既有消费方零破坏），`/home/shelf` = 展示合成消费。
+2. `/home/top10` 是「人工置顶 + fallback 合成」公开聚合**直接先例**（`Top10Item = { video, rank, isPinned }`，ADR-053）；hot shelf 与其语义同构，新端点延续该形状家族，前台消费心智一致。
+3. §7.1 跨区块去重需要**整页视角**，合成必须归聚合层整页计算（D-183-6 聚合层唯一权威）；单区块请求内部走整页聚合取上下文、不要求客户端传占用状态（方案 §7.1 明文）——原始行端点无法承载此语义。
+4. **第三选项排除声明**（arch-reviewer LOW-1 吸收）：整页公开端点 `GET /home/page` 未采纳——(a) featured / top10 / banner 已有专用消费路径（FeaturedRow / TopTenRow / HeroBanner 前台独立组件实证），整页端点与既有专用端点重叠造成双消费路径；(b) per-section 与 top10 形状家族一致，FE 切换增量最小（卡 20 仅替换 ShelfRow 数据源）；(c) 整页端点的 section 集合裁定会与 D-184-7.3「featured/top10 迁移不预设」冲突。卡 20 评估时不得重开该议题。
+
+**D-184-2 端点契约（公开、只读、零鉴权）**
+
+- `GET /home/shelf`，注册于 `routes/home.ts`（prefix `/v1`，与 top10/modules 同档公开无鉴权）。
+- Query：`section` = `z.enum(['hot_movies', 'hot_series', 'hot_anime'])`（**消费驱动窄集**：featured/top10 已有专用消费路径；扩值走本 ADR amendment，纯增量）；`brand_slug?`（max 64，ADR-052 brand 协议：null 仅命中 all-brands）。非法参数 422 VALIDATION_ERROR；**错误码零新增**；响应信封对齐 ADR-110。
+- 响应 `{ data: HomeShelfResponse }`：
+
+```ts
+export interface HomeShelfItem {
+  video: VideoCard
+  /** 1-based 最终展示序（投影后重排连续） */
+  rank: number
+  /** pinned 头部 vs 自动/兜底补位 */
+  isPinned: boolean
+}
+
+export interface HomeShelfResponse {
+  items: HomeShelfItem[]
+  /**
+   * 本次合成消费的候选快照时间；null = 未消费快照（纯 pinned + 趋势兜底）。
+   * 来源 = HomePreviewSection.consumedSnapshotAt（D-184-4.5 结构保证，非二次查询）
+   */
+  snapshotAt: string | null
+  /** 合成时间（缓存命中时为缓存体生成时间，§12 显式标记缓存时间口径） */
+  generatedAt: string
+}
+```
+
+- 类型落点 `packages/types/src/home.types.ts`（与 `Top10Response` 同文件——公开首页 API 类型域）。
+- 无可展示条目 → 200 空 `items`（趋势兜底已内建于合成，不存在 404 语义；section 枚举外值由 zod 422 拦截）。
+- **不透出 explain / origin / score / filterReason**：解释模型归 admin 端点 #1/#4（D-182-4），公开面最小化（不向访客暴露策略内部）。
+
+**D-184-3 合成语义：preview 同构投影（合成单一实现，防双份逻辑漂移）**
+
+1. 公开合成**复用 `buildHomePreview` 整页合成**作为唯一合成实现——「preview ≡ 公开页」由结构保证而非约定保证（§2 同构预览治理原则）；禁止为公开端点另写第二份排序/去重/补位逻辑。
+2. 投影规则（preview cards → 公开 items）：丢弃 `source='empty'`（公开不渲染空占位）；丢弃阻断 flags `disabled / pending / expired / ref_broken / unplayable`；**`missing_image` 不阻断**（§6 警告级；前台 SafeImage/FallbackCover 四级降级链承接，满足 §7.1「图片可用或有明确 fallback」）；`videoId=null` 的非 video 引用卡跳过（shelf 仅渲染 VideoCard）。
+3. 投影后批量 `listVideoCardsByIds` 取现时 `VideoCard` 全量作为响应载荷——该查询内建 `is_published + visibility_status='public' + deleted_at IS NULL` 过滤，即 §7.1 读时复核①（可见性）；`sourceCount === 0` 丢弃为复核②（可播性，§12「应用到首页时必须重新校验」的读路径对应物）。复核丢弃后**不二次回填**：items 数 ≤ displayCount 为合法（displayCount 是上限非保证；缺口在下个缓存周期由合成层自愈）。**双查显式接受**（arch-reviewer MEDIUM-2 吸收）：本层与 D-184-4 接线层对同批 auto 卡 videoId 各调一次 `listVideoCardsByIds`（接线层为合成内部充实、本层为公开载荷取全量）——双查为整页合成 / 单 section 投影解耦的代价，3 section 一次批量 + 60s 缓存吸收，**不得**为归并查询把投影逻辑下沉进 preview 合成（保持 D-182-4 #1 契约零感知）。
+4. `rank` 投影后重排 1-based 连续；`isPinned = (card.source === 'pinned')`。
+5. **snapshotAt 投影来源**（arch-reviewer HIGH-1 吸收，结构保证）：`HomePreviewSection` **additive 扩展**可选字段 `consumedSnapshotAt?: string | null`——由 `buildHomePreview` 在 hot_* 自动补位阶段**读到快照即回填**该 section 实际消费的 `snapshot.generatedAt`（无论候选最终通过几个；need=0 未触发补位 / 快照缺失 / 非 hot_* section → 不回填 = null 语义）。公开投影直接读取该字段，**禁止** shelf 层二次查快照（二次查可能与合成内部消费的不是同一份，语义失真）。对 ADR-182 D-182-4 #1 为纯增量非 break（与 gaps additive 同款演进方式），**回写 ADR-182 follow-up 登记**。
+
+**D-184-4 preview `fetchAutoFill` hot_* 快照接线（兑现 D-182-4 #1 预留，非 DTO break）**
+
+1. hot_* 自动补位改为：最新快照存在 → 消费 `filtered=false` 候选（快照内 rank 序）→ 读时 `listVideoCardsByIds` 复核（同 D-184-3.3 双复核）→ 通过者产出 `source='auto'` 卡，`explain.origin = candidate.origin`（douban/bangumi/trending）、`explain.score = candidate.score`（D-183-4 策略分）——origin/score 为开放演进口径（D-182-4.4），**非 preview DTO break**。
+2. 候选不足 need 或快照缺失/空 → `listTrendingVideos` 兜底（`source='fallback'`、`origin='trending'`），保持现行为（§7.1「站内兜底趋势」）。
+3. featured / top10 自动补位路径**零变更**（trending/rating 现状）。
+4. 跨区块占用照旧先到先得（D-183-6）；快照候选同样跳过 occupied / pinned；趋势兜底补位同样跳过本轮已从快照补入的 videoId（同区块内不重复）。
+5. **filtered 权威层次声明**（arch-reviewer MEDIUM-2 吸收）：快照 `filtered` 字段（D-183-4.5 重算时刻产物，hot_* 默认 1440min 重算，可能过时）**仅作候选池入口筛选**（消费 filtered=false 子集）；可见性/可播性的**最终权威**是读时 `listVideoCardsByIds` 三过滤 + `sourceCount > 0`——filtered=false 但读时复核失败的候选**必须丢弃**，不得因快照标记放行（公开安全面）。
+6. **admin preview 行为面显式声明**（arch-reviewer MEDIUM-1 吸收）：本接线**先动的是 admin 端点 #1 preview 的合成路径**（公开端点只是复用产物）——hot_* section 渲染从「trending fallback」变为「快照 auto + trending 兜底」，且 auto 卡 `explain.score` 数值口径从 `video.rating`（0–10）变为 D-183-4 策略分（0–1）。此为 ADR-182 D-182-4 #1「快照实装前走站内信号」预留的预期内兑现 + D-182-4.4 origin/score 开放演进口径覆盖。**消费方核验**（评审期实证）：server-next 画布仅 `CanvasCard.tsx` 消费 `explain.origin`（`·${origin}` 后缀展示），`explain.score` 零消费方——无 0–10 区间假设可失真，无需 UI 跟改。
+
+**D-184-5 缓存口径（§12 短 TTL + Phase 4 失效接口位）**
+
+1. Redis TTL **60s**（与 top10 同口径），key = `home:shelf:{section}:b:{brandSlug|none}`（`CACHE_PREFIXES.home` 命名空间）。
+2. **失效接口位**（本卡唯一缓存义务）：合成模块导出 `HOME_SHELF_CACHE_PREFIX` 常量 + `buildHomeShelfCacheKey(section, brandSlug)` builder——Phase 4 `CHG-HOME-CACHE-INVALIDATE` 以此为唯一失效寻址入口；本卡**不实现主动失效**（发布动作 Phase 4 才存在；60s 窗口内运营改动延迟生效与 top10 现状一致，可接受）。
+3. admin preview 端点继续**跳过缓存**（D-182-4 #1 不变）。
+4. 一次合成同时写同 brand 三个 hot section 的 key（一次 miss 填三键）——整页合成开销不随 FE 三次请求放大。**brand 隔离硬约束**（arch-reviewer MEDIUM-3 吸收）：三键填充严格限定 `b:{brandSlug}` 同命名空间；不同 `brand_slug` 触发各自独立的 `buildHomePreview`，**无跨 brand 复用**（`brandVisible` ADR-046/052 协议：null 仅命中 all-brands，非全量聚合池）——测试义务含「不同 brand_slug 缓存隔离」用例。
+
+**D-184-6 分层与落点**
+
+```text
+Route（routes/home.ts GET /home/shelf）
+  → HomeService.shelf()（公开门面 + Redis 缓存，与 topTen 同模式）
+    → home-curation.shelf.ts（新合成模块：委托 buildHomePreview + 投影 + 复核）
+      → 既有 queries（零新增 SQL 面）
+```
+
+- `HomeCurationService`（admin 门面）**不挂公开路径**——admin 鉴权语义不混入公开层；合成单一真源在 `home-curation.*` 模块层共享（preview 与 shelf 同源）。
+- 零新表 / 零 migration / 零 audit（公开只读零写径）。
+
+**D-184-7 边界声明（本 ADR 不裁项）**
+
+1. 前台 ShelfRow 切换 + FE-FEATURED / FE-SHORTCUTS 收编评估 → CHG-HOME-FE-CONSUME-B（需独立端点则维持待立案，不在本协议预设）。
+2. 发布后主动缓存失效协议 → Phase 4 CHG-HOME-PHASE4-ADR + CHG-HOME-CACHE-INVALIDATE（消费 D-184-5.2 接口位）。
+3. featured / top10 是否迁本端点 → 不预设（FE-CONSUME-B 评估，需要则走本 ADR amendment 扩 section 枚举）。
+4. locale 维度过滤（§7.1「当前 brand / locale 可展示」）：现行合成层未实现 locale 过滤（preview 同状），随多语言治理另案——**现状继承**，非本 ADR 新增缺口。
+5. **E2E 断言分工**（arch-reviewer LOW-2 吸收）：公开 DTO 不透出 source 三态细分（auto/fallback 合并为 `isPinned=false`），系公开面最小化优先于 E2E 可观测性的有意取舍——快照接线是否生效的端到端断言走 **admin 端点 #1 preview**（透出完整 source/explain）验证；公开端点 E2E 仅断言 pinned 序 + 非空 + 复核丢弃边界（卡 21/卡 20 实施方不得以 E2E 可断言性为由要求公开 DTO 补透出字段）。
+
+### 影响面清单（实施映射，全部归 CHG-HOME-FE-CONSUME-A）
+
+| # | 影响点 |
+|---|---|
+| 1 | `packages/types/src/home.types.ts`：`HomeShelfItem` + `HomeShelfResponse` + `HOME_SHELF_SECTIONS` 窄集 |
+| 2 | `packages/types/src/home-section.types.ts`：`HomePreviewSection.consumedSnapshotAt?` additive（D-184-3.5） |
+| 3 | `apps/api/src/services/home-curation.shelf.ts` 新建（投影 + 复核 + cache key builder 导出） |
+| 4 | `apps/api/src/services/home-curation.preview.ts`：`fetchAutoFill` hot_* 快照接线 + consumedSnapshotAt 回填（D-184-4） |
+| 5 | `apps/api/src/services/home-curation.preview-cards.ts`：`videoToAutoCard` 增可选 score 入参 |
+| 6 | `apps/api/src/services/HomeService.ts`：`shelf()` 公开门面 + 缓存 |
+| 7 | `apps/api/src/routes/home.ts`：`GET /home/shelf` |
+| 8 | 测试义务：合成顺序（pinned 头部 → 快照 auto → 趋势兜底）/ 投影过滤（阻断 flags / empty / 非 video）/ 读时复核丢弃（filtered=false 但下线 → 不放行）/ 快照缺失降级 / consumedSnapshotAt 回填三态 / 缓存命中跳过合成 / 不同 brand_slug 缓存隔离 / 422 |
+
+### follow-up 登记
+
+- CHG-HOME-FE-CONSUME-B：前台 3 hot shelf 切换 `/home/shelf` + 断裂区块收编评估（已立案，SEQ-20260605-05 卡 20）。
+- Phase 4 CHG-HOME-CACHE-INVALIDATE：消费 D-184-5.2 失效接口位（依赖 CHG-HOME-PHASE4-ADR 裁定）。

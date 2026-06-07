@@ -20,6 +20,14 @@ export const HOME_SECTION_KEYS: readonly HomeSectionKey[] = [
   'banner', 'type_shortcuts', 'featured', 'top10', 'hot_movies', 'hot_series', 'hot_anime',
 ]
 
+/**
+ * 公开 shelf 消费 section 窄集（ADR-184 D-184-2：消费驱动——featured/top10
+ * 已有专用消费路径；扩值走 ADR-184 amendment，纯增量）。
+ */
+export const HOME_SHELF_SECTIONS = ['hot_movies', 'hot_series', 'hot_anime'] as const satisfies readonly HomeSectionKey[]
+
+export type HomeShelfSection = (typeof HOME_SHELF_SECTIONS)[number]
+
 /** 自动填充模式（治理方案 §7.2 / ADR-182 D-182-3） */
 export type HomeAutofillMode =
   | 'manual_only'
@@ -101,6 +109,12 @@ export interface HomePreviewSection {
   key: HomeSectionKey
   settings: HomeSectionSettings
   cards: HomePreviewCard[]
+  /**
+   * hot_* 自动补位实际消费的候选快照时间（ADR-184 D-184-3.5 additive，
+   * 公开 shelf snapshotAt 的结构来源）。读到快照即回填（无论候选最终通过几个）；
+   * need=0 未触发补位 / 快照缺失 / 非 hot_* section → 缺省（null 语义）。
+   */
+  consumedSnapshotAt?: string | null
 }
 
 /** GET /admin/home/preview 响应（Phase 1 = 正式配置预览，无草稿叠加，D-182-4 #1） */

@@ -33,3 +33,25 @@ export interface CountByTypeItem {
   type: VideoType
   count: number
 }
+
+// ── Hot Shelf（ADR-184 D-184-2）──────────────────────────────────
+
+export interface HomeShelfItem {
+  video: VideoCard
+  /** 1-based 最终展示序（投影后重排连续） */
+  rank: number
+  /** pinned 头部 vs 自动/兜底补位（auto/fallback 不细分，D-184-7.5 公开面最小化） */
+  isPinned: boolean
+}
+
+/** GET /home/shelf 响应（ADR-184；section 窄集常量 HOME_SHELF_SECTIONS 见 home-section.types.ts） */
+export interface HomeShelfResponse {
+  items: HomeShelfItem[]
+  /**
+   * 本次合成消费的候选快照时间；null = 未消费快照（纯 pinned + 趋势兜底）。
+   * 来源 = HomePreviewSection.consumedSnapshotAt（D-184-3.5 结构保证，禁止二次查快照）
+   */
+  snapshotAt: string | null
+  /** 合成时间（缓存命中时为缓存体生成时间，方案 §12 显式标记缓存时间口径） */
+  generatedAt: string
+}

@@ -865,6 +865,8 @@ describe('GET /admin/home/preview', () => {
     mockCardsByIds.mockResolvedValue([videoCard('v-1')])
     mockTrending.mockResolvedValue([videoCard('v-t1'), videoCard('v-t2'), videoCard('v-t3')])
     mockByRating.mockResolvedValue([videoCard('v-r1'), videoCard('v-r2')])
+    // hot_* 快照接线（ADR-184 D-184-4）后 fetchAutoFill 会查快照；默认 null = 趋势兜底现状
+    mockFindLatestSnapshot.mockResolvedValue(null)
     app = await buildApp()
   })
 
@@ -950,6 +952,87 @@ describe('GET /admin/home/preview', () => {
     expect(hotFallback?.explain?.origin).toBe('trending')
     // hot_anime 走 type=anime 候选池
     expect(mockTrending).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ type: 'anime' }))
+    // 快照缺失 → 未消费快照（ADR-184 D-184-3.5 null 语义）
+    expect(hotAnime.consumedSnapshotAt).toBeNull()
+  })
+
+  it('hot_* 快照接线（ADR-184 D-184-4）：auto 卡携候选 origin/score + consumedSnapshotAt 回填 + filtered 入口筛选', async () => {
+    mockListAdminModules.mockResolvedValue({ rows: [], total: 0 })
+    mockFindLatestSnapshot.mockImplementation((_db: unknown, section: string) =>
+      Promise.resolve(
+        section === 'hot_movies'
+          ? snapshotRow({
+              generatedAt: '2026-06-06T12:00:00Z',
+              candidates: [
+                candidateRow('c1', { videoId: 'v-d1', score: 0.91, rank: 1, origin: 'douban' }),
+                candidateRow('c2', { videoId: 'v-d2', filtered: true, filterReason: 'not_published' }),
+                candidateRow('c3', { videoId: 'v-d3', score: 0.85, rank: 3, origin: 'bangumi' }),
+              ],
+            })
+          : null,
+      ),
+    )
+    // 读时复核全通过（请求什么 id 给什么卡）
+    mockCardsByIds.mockImplementation((_db: unknown, ids: string[]) =>
+      Promise.resolve(ids.map((id) => videoCard(id))),
+    )
+    // 趋势池按 type 区分，避免 featured 先占用
+    mockTrending.mockImplementation((_db: unknown, filters: { type?: string }) => {
+      const prefix = filters.type ?? 'all'
+      return Promise.resolve([videoCard(`v-${prefix}-1`)])
+    })
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/admin/home/preview',
+      headers: { authorization: await adminToken() },
+    })
+    const hotMovies = res.json().data.sections.find((s: { key: string }) => s.key === 'hot_movies')
+
+    // displayCount=3：快照 auto 2（c2 filtered 入口筛掉）+ trending fallback 1
+    const sources = hotMovies.cards.map((c: { source: string }) => c.source)
+    expect(sources).toEqual(['auto', 'auto', 'fallback'])
+    expect(hotMovies.cards[0].videoId).toBe('v-d1')
+    expect(hotMovies.cards[0].explain).toEqual({ origin: 'douban', rank: 1, score: 0.91 })
+    expect(hotMovies.cards[1].videoId).toBe('v-d3')
+    expect(hotMovies.cards[1].explain).toEqual({ origin: 'bangumi', rank: 2, score: 0.85 })
+    expect(hotMovies.cards[2].explain?.origin).toBe('trending')
+    // 读到快照即回填（D-184-3.5）
+    expect(hotMovies.consumedSnapshotAt).toBe('2026-06-06T12:00:00Z')
+  })
+
+  it('hot_* 快照候选读时复核失败 → 丢弃由趋势兜底，consumedSnapshotAt 仍回填（D-184-4.5）', async () => {
+    mockListAdminModules.mockResolvedValue({ rows: [], total: 0 })
+    mockFindLatestSnapshot.mockImplementation((_db: unknown, section: string) =>
+      Promise.resolve(
+        section === 'hot_movies'
+          ? snapshotRow({
+              generatedAt: '2026-06-06T12:00:00Z',
+              candidates: [candidateRow('c1', { videoId: 'v-dead', filtered: false })],
+            })
+          : null,
+      ),
+    )
+    // v-dead 读时不可见（filtered=false 不放行——最终权威是读时复核）
+    mockCardsByIds.mockImplementation((_db: unknown, ids: string[]) =>
+      Promise.resolve(ids.filter((id) => id !== 'v-dead').map((id) => videoCard(id))),
+    )
+    mockTrending.mockImplementation((_db: unknown, filters: { type?: string }) => {
+      const prefix = filters.type ?? 'all'
+      return Promise.resolve([videoCard(`v-${prefix}-1`)])
+    })
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/admin/home/preview',
+      headers: { authorization: await adminToken() },
+    })
+    const hotMovies = res.json().data.sections.find((s: { key: string }) => s.key === 'hot_movies')
+
+    const videoIds = hotMovies.cards.map((c: { videoId: string | null }) => c.videoId)
+    expect(videoIds).not.toContain('v-dead')
+    expect(hotMovies.cards.find((c: { source: string }) => c.source === 'fallback')).toBeTruthy()
+    expect(hotMovies.consumedSnapshotAt).toBe('2026-06-06T12:00:00Z')
   })
 
   it('type_shortcuts 不自动补位（manual_only 语义）+ 空位 empty 卡补足 displayCount', async () => {

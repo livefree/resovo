@@ -24,6 +24,7 @@ import {
 import { listHomeSectionSettings } from '@/api/db/queries/home-section-settings'
 import { listAllBanners } from '@/api/db/queries/home-banners'
 import { listAdminHomeModules } from '@/api/db/queries/home-modules'
+import { findLatestHomeAutofillSnapshot } from '@/api/db/queries/home-autofill-snapshots'
 import { listTrendingVideos } from '@/api/db/queries/videos'
 import { listVideosByRatingDesc, listVideoCardsByIds } from '@/api/db/queries/videos.status'
 import { occupyVideoIds, isOccupied } from '@/api/services/home-autofill'
@@ -78,6 +79,8 @@ export async function buildHomePreview(
     if (!settings) continue // seed 恒存在；缺行 = 迁移漂移，跳过
 
     let cards: HomePreviewCard[]
+    // hot_* 自动补位实际消费的快照时间（ADR-184 D-184-3.5：公开 shelf snapshotAt 结构来源）
+    let consumedSnapshotAt: string | null = null
     if (key === 'banner') {
       cards = banners.map((b) => bannerToCard(b, at))
     } else {
@@ -85,13 +88,14 @@ export async function buildHomePreview(
       cards = pinned
       // pinned 视频进占用集（人工优先，不被去重）
       occupyVideoIds(occupied, pinned.map((c) => c.videoId), settings.allowDuplicates)
-      // 自动补位（活跃 pinned 计数后补到 displayCount；Phase 3 候选快照实装前走站内信号）
+      // 自动补位（活跃 pinned 计数后补到 displayCount；hot_* 快照接线见 fetchAutoFill，D-184-4）
       const activeCount = pinned.filter((c) => c.enabled && c.flags.length === 0).length
       const need = Math.max(0, settings.displayCount - activeCount)
       if (need > 0 && settings.autofillMode !== 'manual_only' && key !== 'type_shortcuts') {
-        const fill = await fetchAutoFill(db, key, need, pinned, occupied, settings)
+        const { fill, snapshotAt } = await fetchAutoFill(db, key, need, pinned, occupied, settings)
         cards = [...pinned, ...fill]
         occupyVideoIds(occupied, fill.map((c) => c.videoId), settings.allowDuplicates)
+        consumedSnapshotAt = snapshotAt
       }
     }
 
@@ -99,7 +103,7 @@ export async function buildHomePreview(
     const emptyCount = Math.max(0, settings.displayCount - cards.length)
     for (let i = 0; i < emptyCount; i += 1) cards.push({ ...EMPTY_CARD })
 
-    sections.push({ key, settings, cards })
+    sections.push({ key, settings, cards, consumedSnapshotAt })
   }
 
   return {
@@ -109,7 +113,12 @@ export async function buildHomePreview(
   }
 }
 
-/** 自动补位取数（Phase 1：top10 走 rating、featured 走 trending、hot_* 走 trending 兜底） */
+/**
+ * 自动补位取数（top10 走 rating、featured 走 trending、hot_* 走候选快照 + trending 兜底）。
+ * hot_* 快照接线（ADR-184 D-184-4）：读到快照即回填 snapshotAt（无论候选最终通过几个）；
+ * 快照 filtered 仅作候选池入口筛选，可见性/可播性最终权威 = 读时 listVideoCardsByIds
+ * 三过滤 + sourceCount>0（D-184-4.5——filtered=false 但读时复核失败必须丢弃）。
+ */
 async function fetchAutoFill(
   db: Pool,
   key: HomeSectionKey,
@@ -117,10 +126,39 @@ async function fetchAutoFill(
   pinned: HomePreviewCard[],
   occupied: ReadonlySet<string>,
   settings: HomeSectionSettings,
-): Promise<HomePreviewCard[]> {
+): Promise<{ fill: HomePreviewCard[]; snapshotAt: string | null }> {
   const pinnedIds = pinned.flatMap((c) => (c.videoId ? [c.videoId] : []))
   const skip = (id: string) => pinnedIds.includes(id) || isOccupied(occupied, id, settings.allowDuplicates)
 
+  const fill: HomePreviewCard[] = []
+  let rank = 1
+  let snapshotAt: string | null = null
+  const type = HOT_SECTION_TYPE[key]
+
+  // hot_*：候选快照优先（D-183-4 策略分入 explain.score；快照内 rank 序消费）
+  if (type) {
+    const snapshot = await findLatestHomeAutofillSnapshot(db, key)
+    if (snapshot) {
+      snapshotAt = snapshot.generatedAt
+      const pool = snapshot.candidates.filter((c) => !c.filtered)
+      const freshCards = pool.length > 0
+        ? await listVideoCardsByIds(db, pool.map((c) => c.videoId))
+        : []
+      const freshById = new Map(freshCards.map((v) => [v.id, v]))
+      for (const cand of pool) {
+        if (fill.length >= need) break
+        const video = freshById.get(cand.videoId)
+        // 读时复核：已下线/隐藏（查询内建过滤）或无可播源 → 丢弃，不因快照标记放行
+        if (!video || video.sourceCount === 0 || skip(video.id)) continue
+        fill.push(videoToAutoCard(video, cand.origin, rank, 'auto', cand.score))
+        rank += 1
+      }
+    }
+  }
+
+  if (fill.length >= need) return { fill, snapshotAt }
+
+  // 站内信号兜底（§7.1：top10 rating / featured trending=auto / hot_* trending=fallback）
   let candidates: VideoCard[]
   let origin: string
   let source: 'auto' | 'fallback'
@@ -130,20 +168,18 @@ async function fetchAutoFill(
     origin = 'rating'
     source = 'auto'
   } else {
-    const type = HOT_SECTION_TYPE[key]
     candidates = await listTrendingVideos(db, { period: 'week', type, limit: Math.min(need + occupied.size, 50) })
     origin = 'trending'
-    // hot_*：豆瓣/Bangumi 候选快照实装（Phase 3）前为 fallback 语义；featured 为 auto
     source = type ? 'fallback' : 'auto'
   }
 
-  const fill: HomePreviewCard[] = []
-  let rank = 1
+  // 同区块内不重复：跳过本轮已从快照补入的 videoId（D-184-4.4）
+  const filledIds = new Set(fill.flatMap((c) => (c.videoId ? [c.videoId] : [])))
   for (const video of candidates) {
     if (fill.length >= need) break
-    if (skip(video.id)) continue
+    if (skip(video.id) || filledIds.has(video.id)) continue
     fill.push(videoToAutoCard(video, origin, rank, source))
     rank += 1
   }
-  return fill
+  return { fill, snapshotAt }
 }

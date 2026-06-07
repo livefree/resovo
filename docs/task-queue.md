@@ -1110,7 +1110,7 @@
 
 ## [SEQ-20260605-05] 首页运营治理实施 — Phase 1 真源与同构预览（治理方案 §13 落地）
 
-- **状态**：🔄 进行中（**Phase 1 全 11 卡 ✅ + Phase 2 全 4 卡 ✅（含 CARD-DND-B-FIX）+ Phase 3 全 6 卡 ✅ 收口 2026-06-06 14:50 + 候补 AUTOFILL-UI ✅ 17:05；完成度审计（2026-06-06 22:00，约 85% = 22/26）立案 5 卡：FE-CONSUME-A/-B〔前台消费闭环〕+ E2E-SPEC〔§14 质量欠账〕+ GOV-PLAN-ERRATA〔docs〕+ PHASE4-ADR〔发布治理细化〕，见卡 19–23**）
+- **状态**：🔄 进行中（**Phase 1 全 11 卡 ✅ + Phase 2 全 4 卡 ✅（含 CARD-DND-B-FIX）+ Phase 3 全 6 卡 ✅ 收口 2026-06-06 14:50 + 候补 AUTOFILL-UI ✅ 17:05；完成度审计（2026-06-06 22:00，约 85% = 22/26）立案 5 卡：FE-CONSUME-A/-B〔前台消费闭环〕+ E2E-SPEC〔§14 质量欠账〕+ GOV-PLAN-ERRATA〔docs〕+ PHASE4-ADR〔发布治理细化〕，见卡 19–23；卡 19 FE-CONSUME-A ✅ 2026-06-06 23:30（ADR-184 Accepted + GET /home/shelf），卡 20 依赖解除**）
 - **创建时间**：2026-06-05 20:05
 - **最后更新时间**：2026-06-06 22:05
 - **目标**：按 `docs/designs/home-operations-governance-plan_20260605.md` §13 推进实施。本序列承载 Phase 1（真源与同构预览）+ 后续 Phase 细化登记。
@@ -1292,13 +1292,13 @@
 
 ### Phase 3 收尾 + 质量收口卡登记（2026-06-06 22:05 完成度审计立案；审计结论见 changelog 后续条目）
 
-19. **CHG-HOME-FE-CONSUME-A** — 公开消费形态裁定 + 聚合读路径（后端）（状态：⬜ 待开始）
-   - 创建时间：2026-06-06 22:05
+19. **CHG-HOME-FE-CONSUME-A** — 公开消费形态裁定 + 聚合读路径（后端）（状态：✅ 已完成）
+   - 创建时间：2026-06-06 22:05 ｜ 实际开始：2026-06-06 22:30 ｜ 完成时间：2026-06-06 23:30
    - 建议模型：opus（公开端点协议设计；若需 ADR-182 amendment / 新 ADR 当卡起草走 Opus PASS）
    - 变更原因：D-183-8.3「Phase 3 末实施卡」——前台三个热门 shelf 仍消费趋势 query（`page.tsx` `type=movie&period=week` 实证），治理方案 §2.1「单一展示真源」前台未闭环，full_auto / pinned 头部 / 候选重算对访客无效。
    - 范围（4 项）：① 消费形态裁定：扩展 `GET /home/modules` 响应（hot_* slot 已在 slot 枚举）vs 新公开聚合端点（pinned + full_auto 快照合成）——公开协议变更需 ADR amendment 则当卡完成 ② HomeCuration 公开读路径（pinned 头部 + 快照 auto 合成 + §7.1 通用过滤复核，Route→Service→queries 分层） ③ 缓存口径落点（§12 短 TTL 保留；主动失效钩子留 Phase 4 CACHE-INVALIDATE，本卡只留接口位） ④ 单测（合成顺序 / 过滤 / 快照缺失降级趋势兜底）。
    - 依赖：Phase 3 全 6 卡 ✅ + AUTOFILL-UI ✅。
-   - 完成备注：_（完成后填写）_
+   - 完成备注：**ADR-184 当卡起草并 Accepted**（arch-reviewer claude-opus-4-8 CONDITIONAL PASS：1 HIGH + 3 MEDIUM + 2 LOW 全 6 条吸收）。裁定 = 新公开聚合端点 `GET /home/shelf`（不扩 /home/modules——原始配置行契约无法表达 auto/fallback 条目；top10 `{video,rank,isPinned}` 形状家族先例；§7.1 整页去重聚合层承载；第三选项 /home/page 显式排除防卡 20 重开）。合成单一实现复用 buildHomePreview（preview ≡ 公开页结构保证）：投影丢 empty/阻断 flags/非 video（missing_image 警告级放行）+ 读时 listVideoCardsByIds 复核为最终权威（快照 filtered 仅入口筛选；复核丢弃不回填）。HIGH 吸收 = `HomePreviewSection.consumedSnapshotAt?` additive 结构回填 snapshotAt（禁止 shelf 层二次查快照；回写 ADR-182 follow-up）。fetchAutoFill hot_* 快照接线兑现 D-182-4 #1 预留（admin preview 行为面显式化：explain.score 口径 rating→策略分 0–1，CanvasCard 仅消费 origin 实证无失真面）。缓存 60s + 一次 miss 填同 brand 三键（隔离硬约束）+ buildHomeShelfCacheKey 导出 = Phase 4 失效唯一接口位。测试 +14（home-shelf.test.ts 新建 12 + preview 接线 2）。dev 实测：snapshotAt 回填 + 三键 TTL 60 + 422 拦截 + 复核不回填。门禁：typecheck/lint 绿 + test:changed 升全量 6937/6937（types 基础包自动升全量）+ verify:adr-contracts EXIT=0（admin 214 不变）；E2E N/A（API-only，前台零改动）。**卡 20 依赖解除**。执行模型: claude-opus-4-8；子代理: arch-reviewer (claude-opus-4-8)。
 20. **CHG-HOME-FE-CONSUME-B** — 前台 3 hot shelf 切换聚合 + 断裂区块收编评估（状态：⬜ 待开始）
    - 创建时间：2026-06-06 22:05
    - 建议模型：sonnet

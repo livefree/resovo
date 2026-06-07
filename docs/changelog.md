@@ -2384,3 +2384,24 @@
 - **新增依赖**：无
 - **数据库变更**：无
 - **注意事项**：① **审计结论：`home-operations-governance-plan_20260605.md` 完成度约 85%（22/26 项）**——Phase 1（11 卡）/ Phase 2（4 卡）/ Phase 3（6 卡 + 候补 AUTOFILL-UI）全收口，ADR-181/182/183 全 Accepted；② **缺口 4 项**：公开首页消费切换未实施（前台 3 hot shelf 仍消费趋势 query 实证，§2.1 单一真源前台未闭环，D-183-8.3 Phase 3 末卡）/ Phase 4 发布治理 3 占位未动（§11/§12，画布直写为声明降级）/ §14 质量验收 E2E 覆盖零命中 / §6「缺横版大图」口径被 schema 吸收（image_url NOT NULL 不可达）需勘误；③ 交叉缺口 FE-FEATURED / FE-SHORTCUTS（SEQ-20260605-01 待立案）归入 FE-CONSUME-B 收编评估项；④ 建议执行序：19（opus 裁定）→ 20 ∥ 21 ∥ 22 → 23（opus，依赖 19）。
+
+## [CHG-HOME-FE-CONSUME-A] 公开消费形态裁定 + 聚合读路径（后端）— ADR-184 + GET /home/shelf（SEQ-20260605-05 卡 19）
+- **完成时间**：2026-06-06
+- **记录时间**：2026-06-06 23:30
+- **执行模型**：claude-opus-4-8
+- **子代理**：arch-reviewer (claude-opus-4-8)（ADR-184 评审：CONDITIONAL PASS → 1 HIGH + 3 MEDIUM + 2 LOW 全 6 条吸收后 Accepted）
+- **修改文件**：
+  - `docs/decisions.md` — **ADR-184**（公开消费协议）：D-184-1 裁定新公开聚合端点 `GET /home/shelf` 不扩 `/home/modules`（原始配置行契约无法表达 auto/fallback 条目 / top10 形状家族先例 / §7.1 整页去重；第三选项 `/home/page` 显式排除）+ D-184-3 preview 同构投影 + D-184-4 fetchAutoFill hot_* 快照接线 + D-184-5 缓存口径 60s + Phase 4 失效接口位；ADR-182 follow-up 回写（HomePreviewSection.consumedSnapshotAt additive + #1 预留兑现登记）
+  - `packages/types/src/home.types.ts` — `HomeShelfItem` / `HomeShelfResponse`
+  - `packages/types/src/home-section.types.ts` — `HOME_SHELF_SECTIONS` 窄集常量 + `HomeShelfSection` + `HomePreviewSection.consumedSnapshotAt?` additive（HIGH 吸收：snapshotAt 结构来源，禁止 shelf 层二次查快照）
+  - `apps/api/src/services/home-curation.preview.ts` — `fetchAutoFill` hot_* 快照接线（候选 filtered 仅入口筛选，读时 listVideoCardsByIds 复核为最终权威；origin/score 入 explain；缺失/不足 trending 兜底；同区块不重复）+ consumedSnapshotAt 回填（读到快照即回填）
+  - `apps/api/src/services/home-curation.preview-cards.ts` — `videoToAutoCard` 增可选 score 入参（快照候选传 D-183-4 策略分 0–1；CanvasCard 仅消费 origin 实证无区间失真面）
+  - `apps/api/src/services/home-curation.shelf.ts` — **新建**投影模块：丢 empty/阻断 flags/非 video 卡（missing_image 警告级放行）+ 3 section 一次批量读时复核（丢弃不回填）+ `HOME_SHELF_CACHE_PREFIX` / `buildHomeShelfCacheKey` 导出（Phase 4 CACHE-INVALIDATE 唯一失效接口位）
+  - `apps/api/src/services/HomeService.ts` — `shelf()` 公开门面：Redis TTL 60s，一次 miss 填同 brand 三键（隔离硬约束）+ settings 缺行空 shelf 防御
+  - `apps/api/src/routes/home.ts` — `GET /home/shelf`（section 窄集 zod 422 / brand_slug 协议同 ADR-052）
+  - `tests/unit/api/home-shelf.test.ts` — **新建** 12 用例（投影 4 / 缓存门面 4 / 路由 3 / key builder 1）
+  - `tests/unit/api/admin-home-sections.test.ts` — preview 快照接线 +2 用例 + 既有 fallback 测试补 consumedSnapshotAt null 断言 + beforeEach 锚定快照默认 null（防 mock 实现跨 describe 泄漏）
+  - `docs/architecture.md` — Home Curation 块补公开消费路径 + consumedSnapshotAt additive 注记
+- **新增依赖**：无
+- **数据库变更**：无（零新表 / 零 migration / 零 audit——公开只读零写径）
+- **注意事项**：① **D-183-8.3「Phase 3 末实施卡」后端半张落地**——前台 ShelfRow 切换归卡 20（CHG-HOME-FE-CONSUME-B，依赖解除）；② **admin preview 行为面同步变化**（MEDIUM 吸收显式化）：端点 #1 hot_* 渲染从「trending fallback」变为「快照 auto + trending 兜底」，explain.score 口径 rating(0–10)→策略分(0–1)，属 D-182-4 #1 预留的预期内兑现；③ dev 实测：snapshotAt 回填（快照接线生效）+ 一次 miss 填三键 TTL 60 + 422 拦截 + 复核后 items 2/10 不回填（dev 数据态 filtered 居多，合法）；④ 门禁：typecheck/lint 绿 + test:changed 升全量 **6937/6937**（types 基础包改动自动升全量，ADR-180）+ verify:adr-contracts EXIT=0（admin 214 不变——公开端点不入 MUST-8 域）；E2E N/A（API-only：admin-next 套件全 mock 不消费真实 API，前台零改动；admin home 域 E2E 覆盖归卡 21）。

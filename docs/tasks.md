@@ -6,7 +6,7 @@
 
 ## 当前任务（单任务工作台：同时仅 1 个 🔄 进行中；完成即删卡，历史见 docs/changelog.md）
 
-（空 — 上一任务 CHG-E2E-GATE-AUDIT-C 已收口 2026-06-06 21:56，见 changelog；**SEQ-20260606-01 全 4 卡收口，🚨 BLOCKER 已撤除，E2E admin 域 76/76 EXIT=0**）
+（空 — 上一任务 CHG-HOME-FE-CONSUME-A 已收口 2026-06-06 23:30，见 changelog；**ADR-184 Accepted + GET /home/shelf 落地，SEQ-20260605-05 卡 20 依赖解除**）
 
 ---
 

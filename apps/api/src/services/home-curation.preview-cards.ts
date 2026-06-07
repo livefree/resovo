@@ -69,8 +69,12 @@ export function moduleToCard(module: HomeModule, cardMap: ReadonlyMap<string, Vi
   }
 }
 
-/** 自动补位视频 → 卡（origin 开放字符串：trending / rating，D-182-4.4 同口径） */
-export function videoToAutoCard(video: VideoCard, origin: string, rank: number, source: 'auto' | 'fallback'): HomePreviewCard {
+/**
+ * 自动补位视频 → 卡（origin 开放字符串：trending / rating / douban / bangumi，D-182-4.4 同口径）。
+ * score 缺省取 video.rating（站内信号补位）；快照候选传 D-183-4 策略分 0–1
+ * （ADR-184 D-184-4.6：explain.score 口径开放演进，CanvasCard 仅消费 origin 无区间假设）。
+ */
+export function videoToAutoCard(video: VideoCard, origin: string, rank: number, source: 'auto' | 'fallback', score?: number): HomePreviewCard {
   const flags: HomePreviewCardFlag[] = []
   if (!video.coverUrl) flags.push('missing_image')
   if (video.sourceCount === 0) flags.push('unplayable')
@@ -85,7 +89,7 @@ export function videoToAutoCard(video: VideoCard, origin: string, rank: number, 
     endAt: null,
     enabled: true,
     flags,
-    explain: { origin, rank, score: video.rating ?? null },
+    explain: { origin, rank, score: score ?? video.rating ?? null },
   }
 }
 
