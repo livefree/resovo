@@ -6,7 +6,7 @@
 
 ## 当前任务（单任务工作台：同时仅 1 个 🔄 进行中；完成即删卡，历史见 docs/changelog.md）
 
-（空 — 上一任务 CHG-SHELL-THEME-HYDRATION-FIX 已收口 2026-06-07，见 changelog；SEQ-20260605-05 全量终结 + Phase 4 ✅，治理方案完成度审核残差待立案裁定）
+（空 — 上一任务 CHG-SHELL-THEME-HYDRATION-FIX（含 FIX2 防闪烁守卫）+ CHG-HOME-CANVAS-STYLE-FIX 已收口 2026-06-07，见 changelog；SEQ-20260605-05 全量终结 + Phase 4 ✅，治理方案完成度审核残差待立案裁定）
 
 ---
 

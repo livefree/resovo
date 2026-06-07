@@ -43,7 +43,12 @@ const SECTION_STYLE: CSSProperties = {
   gap: 8,
   padding: '12px 14px',
   borderRadius: 'var(--radius-md)',
-  border: '1px solid var(--border-subtle)',
+  // 拆 longhand：selected 态条件覆写 borderColor——与 `border` 简写混用会在
+  // 取消选中重渲时触发 React「Removing a style property during rerender」警告
+  // （verify-style-shorthand-conflict 仅查同对象字面量共存，跨常量 spread 为盲区）
+  borderWidth: 1,
+  borderStyle: 'solid',
+  borderColor: 'var(--border-subtle)',
   background: 'var(--bg-surface)',
   cursor: 'pointer',
 }

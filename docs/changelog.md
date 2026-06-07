@@ -2433,6 +2433,20 @@
 - **数据库变更**：无
 - **注意事项**：① **治理方案 §14「后台 /admin/home 有 E2E 覆盖」收口**（此前零命中）；admin 域全量 **76→87 EXIT=0** 零回归；② 实施陷阱记档：canvas-section 中心点击落在空卡触发 onEmptySlot 不冒泡 select → 选区块须打 head pill（`canvas-mode-*`）；AdminInput `data-testid` 落 wrapper div → fill/toHaveValue 须 `.locator('input')` 下钻（后续 home 域 spec 沿用）；③ 视觉回归评估：**不另立**——画布动态数据密集，截图基线脆弱收益低，testid 行为断言已覆盖；④ 门禁：typecheck/lint/test:changed 绿 + `npm run test:e2e:admin` 87/87 EXIT=0。
 
+## [CHG-HOME-CANVAS-STYLE-FIX] CanvasSection 选中态 border 简写/longhand 混用（用户实测直报）
+- **完成时间**：2026-06-07 ｜ **记录时间**：2026-06-07
+- **执行模型**：claude-opus-4-8 ｜ **子代理**：无
+- **修改文件**：`apps/server-next/src/app/admin/home/_client/canvas/CanvasSection.tsx` — `SECTION_STYLE.border` 简写拆 longhand（borderWidth/Style/Color）：selected 态条件覆写 `borderColor` 与简写混用，取消选中重渲时 React 报「Removing a style property during rerender (borderColor) when a conflicting property is set (border)」
+- **注意事项**：① 全 home _client 扫描仅此一处；② **verifier 盲区记档**：`verify-style-shorthand-conflict` 仅查同一对象字面量内共存，**跨常量 spread + 条件 longhand**（`{...SECTION_STYLE, ...(cond ? { borderColor } : {})}`）漏报——扩检待立案；③ 门禁：typecheck/lint 绿 + verify-style-shorthand 0 命中 + test:changed 122/122 + E2E admin 98/98。
+
+## [CHG-SHELL-THEME-HYDRATION-FIX2] system 未解析阶段不写 DOM——防覆写 pre-hydration 脚本（Codex stop-time review）
+- **完成时间**：2026-06-07 ｜ **记录时间**：2026-06-07
+- **执行模型**：claude-opus-4-8 ｜ **子代理**：无
+- **修改文件**：
+  - `apps/{server-next,web-next}/src/contexts/BrandProvider.tsx` — Codex 命中：FIX 的单路径 DOM 同步 effect 在**首次 commit** 用未解析回退值写 `data-theme`，覆写 web-next `theme-init-script` 首绘前已按 matchMedia 解析的正确值 → system+OS 深色用户闪白一帧再翻回（重引 FOUC）。修正：`systemResolved` 改 `ResolvedTheme | null`（null = 未解析哨兵），**未解析阶段不写 DOM**（脚本/SSR attr 值保护），context 回退 SSR 确定值维持 hydration 稳定；解析在首个 effect flush 内落地后写入同值（视觉无变化）
+  - 测试：server-next 文件 +1（**MutationObserver oldValue 序列断言 'light' 从未写入 DOM**——防闪烁核心）；`tests/unit/web-next/BrandProviderTheme.test.tsx` **新建** 3 例（SSR 确定值 'light' 差异面 + 脚本值保护 + 非 system 直通）
+- **注意事项**：① 规律补充（FIX 沉淀之上）：**「首渲染恒定 + 挂载后升级」还需第三条——升级落地前不得把恒定回退值写出组件边界（DOM/存储），否则会覆写更早阶段（pre-hydration script）的正确解析**；② 门禁：typecheck/lint 绿 + test:changed 122/122（provider 9 例双副本）+ E2E admin 98/98。
+
 ## [CHG-SHELL-THEME-HYDRATION-FIX] BrandProvider resolvedTheme 派生 hydration mismatch（用户实测直报）
 - **完成时间**：2026-06-07
 - **记录时间**：2026-06-07
