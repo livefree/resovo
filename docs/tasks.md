@@ -6,7 +6,7 @@
 
 ## 当前任务（单任务工作台：同时仅 1 个 🔄 进行中；完成即删卡，历史见 docs/changelog.md）
 
-（空 — 上一任务 CHG-E2E-GATE-AUDIT-A 已收口 2026-06-06 18:45，见 changelog；**SEQ-20260606-01 卡 2/3（-B v1 退役/降冒烟、-C admin-next 根因修复）待取**；🚨 BLOCKER 在 -C 收口前保持活跃）
+（空 — 上一任务 CHG-E2E-GATE-AUDIT-B 已收口 2026-06-06 19:40，见 changelog；**SEQ-20260606-01 余 -B2（v1 类 3 全链路 6 项）+ -C（admin-next 26 失败根因）待取**；🚨 BLOCKER 在 -C 收口前保持活跃）
 
 ---
 

@@ -2327,4 +2327,16 @@
   - `docs/task-queue.md` — 定界结论落档 + CORE-A/REFRESH/APPLY 三处历史口径勘误附注（原文保留）+ -C 卡根因 (a) 增补
 - **新增依赖**：无
 - **数据库变更**：无
-- **注意事项**：① **定界结论：代码态确定性失败**——清 `.next` 缓存 + 全 fresh 复跑仍 49 failed/38 passed/1 flaky（六轮同集），排除本机状态；② **连带实证 -C 根因 (a)**：admin-next spec 假 cookie（`refresh_token=mock-admin-rt`）未 mock auth 校验端点，真实 API 在场时 `/v1/auth/refresh` 硬 401 → 重定向 /login（dashboard.spec 隔离对照：无 API 3/3 过 / 有 API 3/3 挂）——admin-next「无后端」假设与 v1「需后端」需求**结构性互斥**，修法（统一 auth mock fixture 或 storageState 真登录）归 -C；③ `reuseExistingServer: !CI` 保留（本地迭代体验优先），以规程第 1 条防陈旧复用；④ E2E admin 在 -B/-C 收口前保持红（BLOCKER 活跃，ADMIN 域任务按其口径标注）；⑤ 门禁：typecheck/lint/test:changed 绿（playwright.config.ts 不入 unit import 图，0 选测合法）。
+- **注意事项**：① **定界结论：代码态确定性失败**（后续见 -B 条目）——清 `.next` 缓存 + 全 fresh 复跑仍 49 failed/38 passed/1 flaky（六轮同集），排除本机状态；② **连带实证 -C 根因 (a)**：admin-next spec 假 cookie（`refresh_token=mock-admin-rt`）未 mock auth 校验端点，真实 API 在场时 `/v1/auth/refresh` 硬 401 → 重定向 /login（dashboard.spec 隔离对照：无 API 3/3 过 / 有 API 3/3 挂）——admin-next「无后端」假设与 v1「需后端」需求**结构性互斥**，修法（统一 auth mock fixture 或 storageState 真登录）归 -C；③ `reuseExistingServer: !CI` 保留（本地迭代体验优先），以规程第 1 条防陈旧复用；④ E2E admin 在 -B/-C 收口前保持红（BLOCKER 活跃，ADMIN 域任务按其口径标注）；⑤ 门禁：typecheck/lint/test:changed 绿（playwright.config.ts 不入 unit import 图，0 选测合法）。
+
+## [CHG-E2E-GATE-AUDIT-B] v1 E2E 断言对照清点 + middleware 安全修复 + 退役/降冒烟（SEQ-20260606-01 卡 2）
+- **完成时间**：2026-06-06
+- **记录时间**：2026-06-06 19:40
+- **执行模型**：claude-opus-4-8
+- **子代理**：无
+- **修改文件**：
+  - `apps/server/middleware.ts → src/middleware.ts` — **维护期安全 bug 修复**：DEC-13 拆分起误置项目根级（src/app 布局下 Next 仅识别 src/middleware.ts）→ 服务端 /admin 访问控制（ADR-010）从未生效，未登录可渲染后台 shell。git mv 恢复守卫，逻辑零变更；**部署影响：v1 上线后未登录 /admin 恢复重定向 /admin/login**
+  - `tests/e2e/admin.spec.ts` — ① setCookies 单点加 context.route 会话端点 mock（/v1/auth/refresh + /v1/users/me；-A 根因 (a) v1 同型：真实 API 在场假 cookie 被硬 401 登出）② `/auth/login`→`/admin/login` 断言对齐 ×6（原断言写于 ADMIN-01 apps/web 单体时代）③ 退役 7 个断言对象已不存在的测试（返回前台 ×2〔e601ea2b 移除〕/ 视频筛选器 testid / 投稿·字幕页〔已 307 归并 content tab〕/ 用户列表 testid / 采集按钮文案）+ 文件头退役清单注释 ④ 侧边栏 label 漂移修正（源站与爬虫→采集控制台）⑤ 类型整理（Parameters 体操→BrowserContext）
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：① **v1 admin-chromium 项目 21 失败 → 6**（admin.spec 19/19 EXIT=0；middleware 激活零新增失败）；② 残余 6 项 = 类 3 全链路（publish-flow 3〔ADMIN_SPECS 编成缺 :3000 web server〕+ 断言漂移 2 + video-governance 1），登记 **CHG-E2E-GATE-AUDIT-B2**；③ 考古结论：v1 E2E 自 DEC-13（3 月）起即结构性不可满足——断言对象历经多轮改版未同步，佐证 -A「历史 exit 0 为测量伪影」判断；④ 门禁：typecheck/lint/test:changed 绿（e2e spec + middleware 不入 unit import 图）。

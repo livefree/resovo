@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 
+// CHG-E2E-GATE-AUDIT-B（维护期 bug 修复）：本文件自 DEC-13 拆分起误置于项目根级——
+// src/app 布局下 Next 仅识别 src/middleware.ts，根级文件为死代码，服务端 /admin
+// 访问控制（ADR-010）从未生效（未登录可渲染后台 shell）。迁入 src/ 恢复守卫，逻辑零变更。
+
 const ADMIN_ONLY_PATHS = ['/admin/users', '/admin/crawler', '/admin/analytics']
 
 export default function middleware(request: NextRequest): NextResponse {

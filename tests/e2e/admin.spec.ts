@@ -2,18 +2,24 @@
  * tests/e2e/admin.spec.ts
  * ADMIN-01: 三种角色的后台访问控制验证
  *
- * 使用 page.context().addCookies() 模拟不同角色 Cookie，
- * 不依赖真实后端或数据库。
+ * 使用 page.context().addCookies() 模拟不同角色 Cookie + context.route mock
+ * 会话端点（/auth/refresh、/users/me），不依赖真实后端或数据库。
+ *
+ * CHG-E2E-GATE-AUDIT-B（2026-06-06，v1 冻结政策）：退役 7 个断言对象已不存在的
+ * 测试（返回前台 ×2〔e601ea2b 移除〕/ 视频列表筛选器 / 投稿·字幕审核页〔已 307 归并
+ * content tab〕/ 用户列表 / 采集触发按钮文案）——v1 多轮改版未同步断言；保留访问
+ * 控制 + 现存结构断言为 v1 最小冒烟面。/auth/login → /admin/login 对齐 DEC-13 后
+ * v1 实际登录路由（服务端守卫由 src/middleware.ts 恢复，详见该文件头注）。
  */
 
-import { test, expect } from '@playwright/test'
+import { test, expect, type BrowserContext } from '@playwright/test'
 
 const BASE_URL = ''  // 使用相对路径，Playwright 自动拼接 baseURL
 
 // ── Cookie 辅助 ───────────────────────────────────────────────────
 
 async function setCookies(
-  context: Parameters<Parameters<typeof test>[1]>[0]['context'],
+  context: BrowserContext,
   {
     refreshToken,
     userRole,
@@ -45,6 +51,29 @@ async function setCookies(
   if (cookies.length > 0) {
     await context.addCookies(cookies)
   }
+
+  // CHG-E2E-GATE-AUDIT-B（-A 定界根因 (a) v1 同型）：v1 客户端启动即 tryRestoreSession
+  // （POST /v1/auth/refresh → GET /v1/users/me）；真实 API（playwright webServer 恒起）
+  // 对假 cookie 硬 401 → 客户端登出，角色门控 UI 全隐藏。统一在 context 级 mock 会话
+  // 端点（page.route 优先于 context.route，不影响各测试自有业务 mock）。
+  if (refreshToken) {
+    await context.route('**/v1/auth/refresh', (route) => route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({ accessToken: 'e2e-access-token' }),
+    }))
+    await context.route('**/v1/users/me', (route) => route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        data: {
+          id: 'e2e-user',
+          email: 'e2e@resovo.test',
+          username: 'e2e',
+          role: userRole ?? 'user',
+          created_at: '2026-01-01T00:00:00Z',
+        },
+      }),
+    }))
+  }
 }
 
 // ── 未登录用户访问 /admin ─────────────────────────────────────────
@@ -52,14 +81,14 @@ async function setCookies(
 test('未登录访问 /admin 重定向到登录页', async ({ context, page }) => {
   await setCookies(context, {})
   await page.goto(`${BASE_URL}/admin`)
-  await expect(page).toHaveURL(/\/auth\/login/)
+  await expect(page).toHaveURL(/\/admin\/login/)
   await expect(page.url()).toContain('callbackUrl')
 })
 
 test('未登录访问 /admin/videos 重定向到登录页', async ({ context, page }) => {
   await setCookies(context, {})
   await page.goto(`${BASE_URL}/admin/videos`)
-  await expect(page).toHaveURL(/\/auth\/login/)
+  await expect(page).toHaveURL(/\/admin\/login/)
 })
 
 // ── role=user 访问 /admin ─────────────────────────────────────────
@@ -84,7 +113,7 @@ test('role=moderator 访问 /admin/videos 可正常进入', async ({ context, pa
   await page.goto(`${BASE_URL}/admin/videos`)
   // 不被重定向到 403 或 login
   await expect(page).not.toHaveURL(/\/admin\/403/)
-  await expect(page).not.toHaveURL(/\/auth\/login/)
+  await expect(page).not.toHaveURL(/\/admin\/login/)
 })
 
 test('role=moderator 访问 /admin/users 重定向到 403', async ({ context, page }) => {
@@ -111,21 +140,21 @@ test('role=admin 访问 /admin/videos 可正常进入', async ({ context, page }
   await setCookies(context, { refreshToken: 'mock-rt', userRole: 'admin' })
   await page.goto(`${BASE_URL}/admin/videos`)
   await expect(page).not.toHaveURL(/\/admin\/403/)
-  await expect(page).not.toHaveURL(/\/auth\/login/)
+  await expect(page).not.toHaveURL(/\/admin\/login/)
 })
 
 test('role=admin 访问 /admin/users 可正常进入', async ({ context, page }) => {
   await setCookies(context, { refreshToken: 'mock-rt', userRole: 'admin' })
   await page.goto(`${BASE_URL}/admin/users`)
   await expect(page).not.toHaveURL(/\/admin\/403/)
-  await expect(page).not.toHaveURL(/\/auth\/login/)
+  await expect(page).not.toHaveURL(/\/admin\/login/)
 })
 
 test('role=admin 访问 /admin/analytics 可正常进入', async ({ context, page }) => {
   await setCookies(context, { refreshToken: 'mock-rt', userRole: 'admin' })
   await page.goto(`${BASE_URL}/admin/analytics`)
   await expect(page).not.toHaveURL(/\/admin\/403/)
-  await expect(page).not.toHaveURL(/\/auth\/login/)
+  await expect(page).not.toHaveURL(/\/admin\/login/)
 })
 
 // ── 侧边栏菜单按角色渲染 ──────────────────────────────────────────
@@ -139,7 +168,7 @@ test('moderator 侧边栏不显示系统管理区', async ({ context, page }) =>
   const sidebar = page.locator('[data-testid="admin-sidebar"]')
   await expect(sidebar).toBeVisible()
   await expect(sidebar.getByText('用户管理')).not.toBeVisible()
-  await expect(sidebar.getByText('源站与爬虫')).not.toBeVisible()
+  await expect(sidebar.getByText('采集控制台')).not.toBeVisible()
   await expect(sidebar.getByText('数据看板')).not.toBeVisible()
 })
 
@@ -150,28 +179,8 @@ test('admin 侧边栏显示系统管理区', async ({ context, page }) => {
   const sidebar = page.locator('[data-testid="admin-sidebar"]')
   await expect(sidebar).toBeVisible()
   await expect(sidebar.getByText('用户管理')).toBeVisible()
-  await expect(sidebar.getByText('源站与爬虫')).toBeVisible()
+  await expect(sidebar.getByText('采集控制台')).toBeVisible()
   await expect(sidebar.getByText('数据看板')).toBeVisible()
-})
-
-// ── CHG-09: 侧边栏「返回前台」入口 ───────────────────────────────
-
-test('admin 侧边栏有「返回前台」链接', async ({ context, page }) => {
-  await setCookies(context, { refreshToken: 'mock-rt', userRole: 'admin' })
-  await page.goto(`${BASE_URL}/admin/videos`)
-  await expect(page).not.toHaveURL(/\/admin\/403/)
-  const backLink = page.locator('[data-testid="admin-back-to-site"]')
-  await expect(backLink).toBeVisible()
-  await expect(backLink).toHaveAttribute('href', '/')
-})
-
-test('moderator 侧边栏同样有「返回前台」链接', async ({ context, page }) => {
-  await setCookies(context, { refreshToken: 'mock-rt', userRole: 'moderator' })
-  await page.goto(`${BASE_URL}/admin/videos`)
-  await expect(page).not.toHaveURL(/\/admin\/403/)
-  const backLink = page.locator('[data-testid="admin-back-to-site"]')
-  await expect(backLink).toBeVisible()
-  await expect(backLink).toHaveAttribute('href', '/')
 })
 
 // ── ADMIN-02: 视频列表上下架操作 ──────────────────────────────────
@@ -191,23 +200,6 @@ const MOCK_VIDEOS = [
     created_at: '2026-03-15T00:00:00Z',
   },
 ]
-
-test('视频列表页渲染并显示状态筛选器', async ({ context, page }) => {
-  await setCookies(context, { refreshToken: 'mock-rt', userRole: 'admin' })
-
-  await page.route(`${API_BASE}/admin/videos*`, (route) => {
-    route.fulfill({
-      contentType: 'application/json',
-      body: JSON.stringify({ data: MOCK_VIDEOS, total: 1, page: 1, limit: 20 }),
-    })
-  })
-
-  await page.goto(`${BASE_URL}/admin/videos`)
-  await expect(page.locator('[data-testid="admin-videos-page"]')).toBeVisible()
-  await expect(page.locator('[data-testid="admin-videos-filter-all"]')).toBeVisible()
-  await expect(page.locator('[data-testid="admin-videos-filter-pending"]')).toBeVisible()
-  await expect(page.locator('[data-testid="admin-videos-filter-published"]')).toBeVisible()
-})
 
 test('点击上架触发 PATCH 请求', async ({ context, page }) => {
   await setCookies(context, { refreshToken: 'mock-rt', userRole: 'admin' })
@@ -272,34 +264,6 @@ test('提交创建表单触发 POST 请求', async ({ context, page }) => {
 })
 
 // ── ADMIN-03: 投稿审核通过/拒绝流程 ───────────────────────────────
-
-const MOCK_SUBMISSION = {
-  id: 'sub-uuid-1',
-  video_id: 'vid-uuid-1',
-  video_title: '测试电影',
-  source_url: 'http://example.com/video.m3u8',
-  source_name: '用户投稿',
-  type: 'hls',
-  submitted_by: 'user-uuid-1',
-  submitted_by_username: 'testuser',
-  created_at: '2026-03-15T00:00:00Z',
-}
-
-test('投稿审核页面显示待审列表', async ({ context, page }) => {
-  await setCookies(context, { refreshToken: 'mock-rt', userRole: 'moderator' })
-
-  await page.route(`${API_BASE}/admin/submissions*`, (route) => {
-    route.fulfill({
-      contentType: 'application/json',
-      body: JSON.stringify({ data: [MOCK_SUBMISSION], total: 1, page: 1, limit: 20 }),
-    })
-  })
-
-  await page.goto(`${BASE_URL}/admin/submissions`)
-  await expect(page.locator('[data-testid="admin-submissions-page"]')).toBeVisible()
-  await expect(page.locator('[data-testid="admin-submission-list"]')).toBeVisible()
-  await expect(page.locator(`[data-testid="admin-submission-row-sub-uuid-1"]`)).toBeVisible()
-})
 
 test('点击通过触发 approve 请求', async ({ context, page }) => {
   await setCookies(context, { refreshToken: 'mock-rt', userRole: 'moderator' })
@@ -391,36 +355,6 @@ test('点击通过触发 approve 请求', async ({ context, page }) => {
   expect(approveCalled).toBe(true)
 })
 
-test('字幕审核页面显示待审列表', async ({ context, page }) => {
-  await setCookies(context, { refreshToken: 'mock-rt', userRole: 'moderator' })
-
-  await page.route(`${API_BASE}/admin/subtitles*`, (route) => {
-    route.fulfill({
-      contentType: 'application/json',
-      body: JSON.stringify({
-        data: [{
-          id: 'subtitle-uuid-1',
-          video_id: 'vid-uuid-1',
-          video_title: '测试电影',
-          language: 'zh-CN',
-          label: '中文简体',
-          format: 'vtt',
-          file_url: 'https://r2.resovo.dev/subtitles/vid-1/zh-CN.vtt',
-          is_verified: false,
-          created_at: '2026-03-15T00:00:00Z',
-        }],
-        total: 1,
-        page: 1,
-        limit: 20,
-      }),
-    })
-  })
-
-  await page.goto(`${BASE_URL}/admin/subtitles`)
-  await expect(page.locator('[data-testid="admin-subtitles-page"]')).toBeVisible()
-  await expect(page.locator('[data-testid="admin-subtitle-row-subtitle-uuid-1"]')).toBeVisible()
-})
-
 // ── ADMIN-04: 用户封号/解封、爬虫手动触发 ────────────────────────
 
 const MOCK_USERS = [
@@ -441,22 +375,6 @@ const MOCK_USERS = [
     created_at: '2026-01-01T00:00:00Z',
   },
 ]
-
-test('用户管理页面显示用户列表', async ({ context, page }) => {
-  await setCookies(context, { refreshToken: 'mock-rt', userRole: 'admin' })
-
-  await page.route(`${API_BASE}/admin/users*`, (route) => {
-    route.fulfill({
-      contentType: 'application/json',
-      body: JSON.stringify({ data: MOCK_USERS, total: 2, page: 1, limit: 20 }),
-    })
-  })
-
-  await page.goto(`${BASE_URL}/admin/users`)
-  await expect(page.locator('[data-testid="admin-users-page"]')).toBeVisible()
-  await expect(page.locator('[data-testid="admin-user-list"]')).toBeVisible()
-  await expect(page.locator('[data-testid="admin-user-row-user-uuid-1"]')).toBeVisible()
-})
 
 test('点击封号触发 ban 请求', async ({ context, page }) => {
   await setCookies(context, { refreshToken: 'mock-rt', userRole: 'admin' })
@@ -533,35 +451,3 @@ test('采集任务记录页为只读模式（无触发按钮）', async ({ conte
   await expect(page.locator('[data-testid="admin-crawler-trigger-incremental"]')).toHaveCount(0)
 })
 
-test('采集控制台触发入口位于 sites tab', async ({ context, page }) => {
-  await setCookies(context, { refreshToken: 'mock-rt', userRole: 'admin' })
-
-  await page.route(`${API_BASE}/admin/crawler/overview*`, (route) => {
-    route.fulfill({
-      contentType: 'application/json',
-      body: JSON.stringify({ data: { siteTotal: 0, connected: 0, running: 0, paused: 0, failed: 0, todayVideos: 0, todayDurationMs: 0 } }),
-    })
-  })
-  await page.route(`${API_BASE}/admin/crawler/runs*`, (route) => {
-    route.fulfill({
-      contentType: 'application/json',
-      body: JSON.stringify({ data: [] }),
-    })
-  })
-  await page.route(`${API_BASE}/admin/crawler/auto-config*`, (route) => {
-    route.fulfill({
-      contentType: 'application/json',
-      body: JSON.stringify({ data: { globalEnabled: false, scheduleType: 'daily', dailyTimes: ['03:00'], defaultMode: 'incremental', onlyEnabledSites: true, conflictPolicy: 'skip_running', perSiteOverrides: {} } }),
-    })
-  })
-  await page.route(`${API_BASE}/admin/crawler/sites*`, (route) => {
-    route.fulfill({
-      contentType: 'application/json',
-      body: JSON.stringify({ data: [] }),
-    })
-  })
-
-  await page.goto(`${BASE_URL}/admin/crawler`)
-  await expect(page.locator('button:has-text("全站增量采集")')).toBeVisible()
-  await expect(page.locator('button:has-text("全站全量采集")')).toBeVisible()
-})
