@@ -1334,26 +1334,27 @@
 
 ### Phase 4 实施卡（ADR-185 Accepted 后细化，CHG-HOME-PHASE4-ADR 2026-06-07；依赖序 24 → 25 → 26 ∥ 27）
 
-24. **CHG-HOME-DRAFT-PUBLISH-A** — 发布治理后端：migration 097/098 + draft CRUD + publish 端点（状态：⬜ 待开始）
-   - 创建时间：2026-06-07 02:45
-   - 建议模型：sonnet
+24. **CHG-HOME-DRAFT-PUBLISH-A** — 发布治理后端：migration 097/098 + draft CRUD + publish 端点（状态：✅ 已完成）
+   - 创建时间：2026-06-07 02:45 ｜ 实际开始：2026-06-07 03:30 ｜ 完成时间：2026-06-07 03:55
+   - 建议模型：sonnet（实际 claude-opus-4-8，用户 opus 会话「批准继续实施 Phase 4」承接）
    - 范围（5 项）：① migration 097 `home_publish_versions`（整页 JSONB 快照 + version_no serial + source publish|rollback；保留策略 = 不设上限 D-185-1.6）+ 098 `home_config_drafts`（全局单草稿行 + base_version_no）+ audit targetKind CHECK 16→17（actionType 无 DB CHECK，D-185-3.5 拆分口径） ② `HomePageConfig`/`HomeConfigDraft`/`HomePublishVersion` 类型 + queries ③ 端点 #1–#4（draft GET/PUT/DELETE + publish；publish 单事务 = 草稿应用三表 + 拍版本 + 删草稿 + audit `home_page.publish`；陈旧双信号 409 / 无草稿 422；发布时整页校验 = D-182-4.5 重校验口径挪点）④ 运行时 audit enums 三处/四处同步 + 「源码写入 ⊆ 运行时 enums」守卫测试 ⑤ 落点 `routes/admin/home-publish.ts` 独立子路由（home.ts 500 行硬限防御，D-185-6.1）+ architecture.md 同步 + 单测。
    - 依赖：ADR-185 ✅。
+   - 完成备注：**全 5 项落地，D-185-1 闭环**（1.5 后半「rollback 版本数<2 → 422」移交卡 26 注记）。publish 单事务 = 草稿**乐观锁删除**（id+updated_at 双匹配，竞态 → null → 409）→ 三表全量替换（banners/modules DELETE+INSERT 保留 id/created_at——audit 链 + appliedAt 派生依赖；settings 按 section UPDATE 不删 seed）→ 回读拍版本。zod 整页校验 = settings 7 区块全覆盖 + slot×refType 094 CHECK 镜像（第 4 处同源）+ brand 约束；banner slot 模块放行（恢复路径非新建）。**实施陷阱沉淀：pg 微秒 × JS ms 管道 = 恒等 round-trip 伪 diff**——readHomePageState 全时间戳 ms 截断 + sectionsChanged 剥离 createdAt/updatedAt 元数据（dev 实测捕获修复，恒等重发布 sectionsChanged [] 实证）。dev 实测：冷启动发布 v1（行 id round-trip 20/20+2/2，公开 shelf 无恙 =「前台读路径零改动」实证）/ 恒等重发布 v2 / 门面 #3 直写 → 发布 409 信号② / 丢弃幂等。测试 +21（home-publish.test.ts）+ 守卫三处同步（coverage REQUIRED+PAYLOAD / enums-set-equal 镜像）。门禁：typecheck/lint 绿 + test:changed 升全量 6965/6965 + verify:adr-contracts EXIT=0（admin 路由 214→218）+ E2E admin 87/87 EXIT=0。**卡 25/26/27 依赖解除**。执行模型: claude-opus-4-8；子代理: 无。
 25. **CHG-HOME-DRAFT-PUBLISH-B** — 发布治理前端：画布切草稿写 + 发布确认 UI（状态：⬜ 待开始）
    - 创建时间：2026-06-07 02:45
    - 建议模型：sonnet
    - 范围（5 项）：① 画布全部配置变更改写草稿 JSONB（含候选应用→草稿 pinned，D-185-2.1）② 「保存草稿/发布」按钮解锁 + 草稿陈旧提示（双信号）③ preview `draft=true` 叠加消费（ADR-182 #1 预留兑现）④ **发布确认环节横图三类警告标记（ERRATA 移交验收项）** ⑤ 验收核验项：「门面 #3/#5/#6 画布写路径去向」（ADR-185 HIGH-1 吸收——画布停用三端点写路径，端点保留为非画布旁路）+ E2E（复用 tests/e2e/admin/home/ 基座）。
-   - 依赖：CHG-HOME-DRAFT-PUBLISH-A。
+   - 依赖：CHG-HOME-DRAFT-PUBLISH-A ✅。
 26. **CHG-HOME-AUDIT-ROLLBACK** — 版本列表/详情/回滚 + diff 展示（状态：⬜ 待开始）
    - 创建时间：2026-06-07 02:45
    - 建议模型：sonnet
-   - 范围（4 项）：① 端点 #5–#7（versions 分页列表/详情/rollback——恢复三表 + 拍新版本 roll-forward + audit `home_page.rollback`）② `home_page.publish`/`home_page.rollback` 加入 `UNSUPPORTED_ACTION_TYPES` 显式防御 + 守卫测试（D-185-3.4，MEDIUM-2）③ admin UI 版本列表 + diff 展示（消费端计算，D-185-4.2）④ 单测 + E2E。
-   - 依赖：CHG-HOME-DRAFT-PUBLISH-A（版本表先行）。
+   - 范围（4 项）：① 端点 #5–#7（versions 分页列表/详情/rollback——恢复三表 + 拍新版本 roll-forward + audit `home_page.rollback`；**含 D-185-1.5 后半：版本数 < 2 时 rollback 422 无可回滚目标〔卡 24 移交注记〕**；rollback 复用 `publishHomeConfig`（draft 参数省略路径已预留）；写入位点落地时同步 coverage REQUIRED + PAYLOAD_ASSERTION 清单——enums/labels 卡 24 已先行）② `home_page.publish`/`home_page.rollback` 加入 `UNSUPPORTED_ACTION_TYPES` 显式防御 + 守卫测试（D-185-3.4，MEDIUM-2）③ admin UI 版本列表 + diff 展示（消费端计算，D-185-4.2；版本快照时间戳已 ms 截断——卡 24 沉淀，快照间文本 diff 稳定）④ 单测 + E2E。
+   - 依赖：CHG-HOME-DRAFT-PUBLISH-A ✅（版本表先行）。
 27. **CHG-HOME-CACHE-INVALIDATE** — 发布后缓存主动失效（状态：⬜ 待开始）
    - 创建时间：2026-06-07 02:45
    - 建议模型：sonnet
    - 范围（3 项）：① 失效钩子：publish/rollback 事务成功后子前缀级精确 scan 删（`home:shelf:*` 经 D-184-5.2 接口位 + `home:top10:*`；**不复用 CacheService.clearCache type 级整删**，D-185-5.3）② 失效失败不回滚发布（warn + 60s TTL 兜底，D-185-5.2）③ 单测（失效键覆盖 / 失败容忍）。
-   - 依赖：CHG-HOME-DRAFT-PUBLISH-A（publish 钩子点存在）；与卡 26 可并行。
+   - 依赖：CHG-HOME-DRAFT-PUBLISH-A ✅（publish 钩子点存在）；与卡 26 可并行。
 
    > **DRAFT-PUBLISH-B 验收项移交注记**（CHG-HOME-GOV-PLAN-ERRATA，2026-06-07）：方案 §6.1/§14「发布确认」处 Banner 横图警告标记义务（三类警告：尺寸/比例/探测失败；原「缺横版大图」态经 image_url NOT NULL schema 吸收不可达）——已写入卡 25 范围 ④。
 

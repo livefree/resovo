@@ -106,6 +106,10 @@ export const AUDIT_ACTION_LABELS: Readonly<Record<string, string>> = {
   'home_section.apply_autofill':     '首页候选应用为固定位',
   'home_section.reorder':            '首页区块排序',
   'home_section.refresh_candidates': '首页候选手动重算',
+
+  // ── ADR-185 D-185-3.5 home_page 发布治理 2 项（CHG-HOME-DRAFT-PUBLISH-A）──
+  'home_page.publish':               '首页配置发布',
+  'home_page.rollback':              '首页配置版本回滚',
 }
 
 /**

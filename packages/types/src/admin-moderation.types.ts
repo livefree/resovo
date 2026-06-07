@@ -257,6 +257,13 @@ export type AdminAuditActionType =
   | 'home_section.reorder'            // POST  /admin/home/sections/:section/reorder（Phase 2 实装；afterJsonb 必含 sectionKey+真源标识+ids，D-182-4.6）
   | 'home_section.refresh_candidates' // POST  /admin/home/sections/:section/refresh-candidates（Phase 3 实装）
 
+  // CHG-HOME-DRAFT-PUBLISH-A / ADR-185 D-185-3.5：整页发布治理 2 项
+  // （targetKind 'home_page' / targetId = home_publish_versions.id；afterJsonb 轻量摘要 D-185-4.1。
+  // 与 ADR-138 行级 audit rollback 显式区分——版本回滚操作对象 = 配置三表整页，
+  // 两 actionType 必须入 UNSUPPORTED_ACTION_TYPES（D-185-3.4，CHG-HOME-AUDIT-ROLLBACK 卡守卫））
+  | 'home_page.publish'   // POST /admin/home/publish
+  | 'home_page.rollback'  // POST /admin/home/versions/:versionNo/rollback（卡 26 实装）
+
 export type AdminAuditTargetKind =
   | 'video'
   | 'video_source'
@@ -274,6 +281,7 @@ export type AdminAuditTargetKind =
   | 'crawler_task'   // CHG-SN-9-CW1-B-EP / ADR-151：task 级 cancel 目标（单点 / batch 用 'system'）
   | 'identity_candidate'  // CHG-VIR-9-B / ADR-178 D-178-6：identity 候选 reject 目标（migration 088 CHECK 14→15）
   | 'home_section'  // CHG-HOME-PREVIEW-API-A / ADR-182 D-182-5：Home Curation 区块操作目标（migration 095 CHECK 15→16；targetId = home_section_settings.id）
+  | 'home_page'  // CHG-HOME-DRAFT-PUBLISH-A / ADR-185 D-185-3.5：整页发布/回滚目标（migration 097 CHECK 16→17；targetId = home_publish_versions.id）
 
 export interface AdminAuditLog {
   readonly id: string  // bigserial → string（避免 JS 大数精度）

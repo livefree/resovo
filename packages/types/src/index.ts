@@ -4,6 +4,8 @@ export type * from './banner.types'
 export type * from './home-module.types'
 // ADR-182 / CHG-HOME-PREVIEW-API-A：type + 常量数组 value export（HOME_SECTION_KEYS / HOME_AUTOFILL_MODES）
 export * from './home-section.types'
+// ADR-185 / CHG-HOME-DRAFT-PUBLISH-A：发布治理（HOME_PUBLISH_SOURCES 常量 value export）
+export * from './home-publish.types'
 export type * from './home.types'
 export type * from './user.types'
 // ADR-165 / CHG-SN-9-ROUTE-LABEL-D-A1：runtime exports（zod schema + 常量 + helper）

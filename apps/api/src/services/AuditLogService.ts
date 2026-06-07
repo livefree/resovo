@@ -130,6 +130,10 @@ export const ACTION_TYPES: readonly AdminAuditActionType[] = [
   'home_section.apply_autofill',
   'home_section.reorder',
   'home_section.refresh_candidates',
+  // CHG-HOME-DRAFT-PUBLISH-A / ADR-185 D-185-3.5：整页发布治理 2 项
+  // （rollback 写入位点归卡 26 CHG-HOME-AUDIT-ROLLBACK；enums 同卡先行，audit 筛选器即时可过滤）
+  'home_page.publish',
+  'home_page.rollback',
 ]
 export const TARGET_KINDS: readonly AdminAuditTargetKind[] = [
   'video',
@@ -148,6 +152,7 @@ export const TARGET_KINDS: readonly AdminAuditTargetKind[] = [
   'crawler_task',  // CHG-SN-9-CW1-B-EP / ADR-151（同上；单点目标，batch 用 'system'）
   'identity_candidate',  // CHG-VIR-9-B / ADR-178 D-178-6（migration 088 CHECK 14→15）
   'home_section',  // CHG-HOME-PREVIEW-API-A / ADR-182 D-182-5（migration 095 CHECK 15→16；targetId = home_section_settings.id）
+  'home_page',  // CHG-HOME-DRAFT-PUBLISH-A / ADR-185 D-185-3.5（migration 097 CHECK 16→17；targetId = home_publish_versions.id）
 ]
 
 // ── zod schema（ADR-118 §端点契约 + D-118-3） ────────────────────────

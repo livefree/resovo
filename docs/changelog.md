@@ -2433,6 +2433,25 @@
 - **数据库变更**：无
 - **注意事项**：① **治理方案 §14「后台 /admin/home 有 E2E 覆盖」收口**（此前零命中）；admin 域全量 **76→87 EXIT=0** 零回归；② 实施陷阱记档：canvas-section 中心点击落在空卡触发 onEmptySlot 不冒泡 select → 选区块须打 head pill（`canvas-mode-*`）；AdminInput `data-testid` 落 wrapper div → fill/toHaveValue 须 `.locator('input')` 下钻（后续 home 域 spec 沿用）；③ 视觉回归评估：**不另立**——画布动态数据密集，截图基线脆弱收益低，testid 行为断言已覆盖；④ 门禁：typecheck/lint/test:changed 绿 + `npm run test:e2e:admin` 87/87 EXIT=0。
 
+## [CHG-HOME-DRAFT-PUBLISH-A] 发布治理后端：migration 097/098 + draft CRUD + publish 端点（SEQ-20260605-05 Phase 4 卡 24）
+- **完成时间**：2026-06-07
+- **记录时间**：2026-06-07 03:55
+- **执行模型**：claude-opus-4-8
+- **子代理**：无（协议已由 ADR-185 Opus PASS 定档，本卡纯实施）
+- **修改文件**：
+  - `apps/api/src/db/migrations/097_home_publish_versions.sql` — **新建**：版本快照表（version_no serial UNIQUE 单调递增 / source publish|rollback CHECK / config 整页 JSONB / published_by FK users RESTRICT；不设保留上限 + 冷启动空表语义）+ audit target_kind CHECK **16→17**（+home_page，088/095 同范式；action_type 列无 DB CHECK——拆分口径防误加）
+  - `apps/api/src/db/migrations/098_home_config_drafts.sql` — **新建**：草稿覆盖层表（UNIQUE(scope) 全局单行，scope 恒 'global' 为多 brand 扩展位；base_version_no 陈旧锚无 FK——失锚即读作陈旧；updated_at 触发器 = 乐观锁 + 陈旧信号②基准）
+  - `packages/types/src/home-publish.types.ts` — **新建**：`HomePageConfig`（三键整页，entry 类型 id/时间戳可选——草稿新建行 publish 时生成，版本快照运行时恒全量）+ `HomeConfigDraft` / `HomePublishVersion(Summary)` / `HOME_PUBLISH_SOURCES`；index.ts value export
+  - `packages/types/src/admin-moderation.types.ts` + `apps/api/src/services/AuditLogService.ts` + `apps/server-next/src/i18n/messages/zh-CN/audit-action-labels.ts` — audit 枚举三处同步：`home_page` targetKind + `home_page.{publish,rollback}` actionType（rollback 写入位点归卡 26，enums 先行使 audit 筛选器即时可过滤——AUTOFILL-APPLY-FIX 教训）
+  - `apps/api/src/db/queries/home-publish.ts` — **新建**：draft CRUD（upsert 创建锚定 MAX(version_no)、冲突更新不重置锚）+ 双信号源（findLatestVersionNo / findTruthTablesMaxUpdatedAt GREATEST 三表）+ `publishHomeConfig` 单事务 = 草稿乐观锁删除（id+updated_at 双匹配，竞态 → null）→ 三表全量替换（banners/modules DELETE+INSERT **保留 id/created_at**——audit 链与 appliedAt 派生依赖；settings 按 section UPDATE，seed 行不可删）→ 回读拍版本；读取层时间戳 **ms 截断**（dev 实测捕获：pg 微秒经 JS ms 管道截断 → 恒等 round-trip 伪 diff）
+  - `apps/api/src/services/HomePublishService.ts` + `home-publish.schemas.ts` — **新建**：publish 时序 = 陈旧双信号 409（base_version_no 失配 ∨ 三表直写晚于草稿；无强制覆盖参数防误覆盖热修）→ 整页重校验（modules video 引用可见性/可播性，#5 口径挪点；banner linkTarget=short_id 非本口径对象）→ 单事务 → audit `home_page.publish`（targetId=版本行 UUID，afterJsonb 轻量摘要 versionNo/baseVersionNo/sectionsChanged/counts；sectionsChanged 剥离 createdAt/updatedAt 元数据防伪报）；zod 整页校验（7 区块 settings 全覆盖 + slot×refType 094 CHECK 镜像第 4 处 + brand 约束；banner slot 模块放行——恢复路径非新建，ADR-181 冻结的是编辑器入口）
+  - `apps/api/src/routes/admin/home-publish.ts` — **新建**独立子路由（home.ts 248 行 + 新端点防 500 硬限）：GET/PUT/DELETE /admin/home/draft + POST /admin/home/publish（无草稿 data:null 200 / 422 / 409 信封）；server.ts 注册
+  - `tests/unit/api/home-publish.test.ts` — **新建** 21 用例：draft 读写删（401/422 ×4 整页校验）/ publish（无草稿 422 / 双信号 409 ×2 / 重校验 409 / 乐观锁竞态 409 / 冷启动 happy + audit R-MID-1 payload 内容断言）/ computeSectionsChanged 4 例（元数据剥离）；audit-log-coverage（REQUIRED + PAYLOAD_ASSERTION +home_page.publish）+ enums-set-equal 镜像同步
+  - `docs/architecture.md` — 097/098 两表 + 端点 #1–#4 + audit 枚举 17 种同步
+- **新增依赖**：无
+- **数据库变更**：migration 097 + 098（dev 已应用）；`admin_audit_log.target_kind` CHECK 16→17
+- **注意事项**：① **ADR-185 D-185-1 闭环**（版本快照 + 草稿覆盖层模型 + 两表 + 冷启动；其中 1.5 后半「回滚端点版本数<2 → 422」随 rollback 端点归卡 26 兑现，已注记其范围）；端点 #5–#7 / 画布切草稿 / 缓存失效分别归卡 26/25/27，对应 D 编号闭环随各卡记入；② dev 实测全链路：冷启动发布 v1（20 modules + 2 banners 快照，三表行 id round-trip 20/20+2/2 保留，公开 shelf 链路无恙=「前台读路径零改动」实证）→ 恒等重发布 v2 sectionsChanged []（伪报修复实证）→ 门面 #3 直写后发布 409 信号② → 草稿丢弃幂等 true/false；③ 实施陷阱记档：**pg 微秒精度 × JS ms 管道 = 恒等 round-trip 伪 diff**——版本快照/比较层凡涉 timestamptz 文本化必须 ms 截断（卡 26 diff 展示消费同受益）；④ 门禁：typecheck/lint 绿 + test:changed 升全量 6965/6965（types 基础包自动升全量；StagingTable 首跑 1 例并发 flake，隔离 13/13 + 复跑全量绿）+ verify:adr-contracts EXIT=0（admin 路由 214→218 全对齐）+ `npm run test:e2e:admin` 87/87 EXIT=0（UI 零改动，labels 文件 additive）。
+
 ## [CHG-HOME-GOV-PLAN-ERRATA] 治理方案 §6/§14 缺图口径勘误 + 发布确认义务移交（SEQ-20260605-05 卡 22，docs-only）
 - **完成时间**：2026-06-07
 - **记录时间**：2026-06-07 02:10
