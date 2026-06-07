@@ -6,7 +6,7 @@
 
 ## 当前任务（单任务工作台：同时仅 1 个 🔄 进行中；完成即删卡，历史见 docs/changelog.md）
 
-（空 — SEQ-20260607-03 卡 2 CHG-DOUBAN-HOT-ADAPTER 收口 2026-06-07 16:00：douban-adapter 新增 subject_collection 服务（全字段归一化 + raw strip comments），adapter 14/14 + 主仓 typecheck/lint 绿；卡 3 CHG-DOUBAN-HOT-STORE 启动时写新卡，见 task-queue SEQ-20260607-03）
+（空 — SEQ-20260607-03 卡 3A CHG-DOUBAN-HOT-STORE-A 收口 2026-06-07 16:25：迁移 099 建 items+sync_state 两表 + queries 事务全量替换/新鲜度状态 + doubanAdapter.getDoubanCollectionItems 包装；migrate 落库 + 门禁全绿；卡 3B CHG-DOUBAN-HOT-STORE-B 启动时写新卡，见 task-queue SEQ-20260607-03）
 
 ---
 

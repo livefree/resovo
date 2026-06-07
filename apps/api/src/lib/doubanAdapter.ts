@@ -13,10 +13,15 @@ import {
   createHostRuntime,
   createDoubanDetailsService,
   createDoubanResolverService,
+  createDoubanSubjectCollectionService,
 } from 'douban-adapter'
-import type { DoubanSubjectDetails, DoubanResolvedCandidate } from 'douban-adapter'
+import type {
+  DoubanSubjectDetails,
+  DoubanResolvedCandidate,
+  DoubanCollectionItemsResult,
+} from 'douban-adapter'
 
-export type { DoubanSubjectDetails, DoubanResolvedCandidate }
+export type { DoubanSubjectDetails, DoubanResolvedCandidate, DoubanCollectionItemsResult }
 
 // ── 创建 runtime（无 cookie、无 Puppeteer、无缓存） ───────────────
 
@@ -71,6 +76,16 @@ function getResolver() {
   return _resolver
 }
 
+// subject_collection 服务 runtime 仅需 FetchPort+logger，createBasicRuntime 超集兼容。
+let _collection: ReturnType<typeof createDoubanSubjectCollectionService> | null = null
+
+function getCollectionService() {
+  if (!_collection) {
+    _collection = createDoubanSubjectCollectionService(createBasicRuntime())
+  }
+  return _collection
+}
+
 // ── 公开 API ────────────────────────────────────────────────────────
 
 /**
@@ -102,5 +117,22 @@ export async function searchDoubanRich(
     return result.candidates
   } catch {
     return []
+  }
+}
+
+/**
+ * 拉取豆瓣合集（subject_collection）单页条目（ADR-187）。
+ * 返回 `{ collection, total, items }`；网络/解析失败返回 null——
+ * **区分** null（抓取失败，调用方记 failed 保留旧数据）与 `items:[]`（成功但空，触发 empty_guard 判定）。
+ */
+export async function getDoubanCollectionItems(
+  collection: string,
+  start = 0,
+  count = 50,
+): Promise<DoubanCollectionItemsResult | null> {
+  try {
+    return await getCollectionService().getItems({ collection, start, count })
+  } catch {
+    return null
   }
 }

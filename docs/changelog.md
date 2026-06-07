@@ -2647,3 +2647,17 @@
   - `external-adapter/douban-adapter/src/tests/external-package.test.ts` + `tests/fixtures/details-fixture.ts` — +1 测试（归一化全字段 / **raw 不含 comments** / 脏数据缺 id 过滤 / 无评分 → null）+ fixture `SUBJECT_COLLECTION_API_DATA`（含 comments 验证 strip）
 - **新增依赖**：无 ｜ **数据库变更**：无
 - **注意事项**：① 仿 `recommendations.*` 范式（runtime port 分层 + header + DoubanError），共享包公开 API 契约 → commit 带 `Subagents: arch-reviewer` trailer（CLAUDE.md 模型路由）；② 本服务**不缓存**（落库由卡 3 主工程抓取 job 承担）；③ 全 16 合集走同一 `getItems({collection})`，collection key 由消费方（卡 3 注册表）传入；④ 门禁：adapter `npm test` 14/14（build tsc 过）/ 主仓 typecheck 绿 / lint 5/5 / test:changed 0 相关（adapter 用 node:test 不入 vitest）。
+
+## [CHG-DOUBAN-HOT-STORE-A] 豆瓣合集采集持久层：迁移建表 + queries 事务全量替换 + lib 包装（SEQ-20260607-03 卡 3A）
+- **完成时间**：2026-06-07
+- **记录时间**：2026-06-07 16:25
+- **执行模型**：claude-opus-4-8
+- **子代理**：无（实施 ADR-187 既定 schema/queries；schema 完备性 M1/M2/M3 已在 ADR 阶段经 arch-reviewer 裁定）
+- **修改文件**：
+  - `apps/api/src/db/migrations/099_douban_collection_items.sql`（新建）— `external_data.douban_collection_items`（20 列：collection/domain/category/douban_id/rank/title/original_title/card_subtitle/info/year/rating_value/rating_count/cover_url/uri/release_date/subject_type/has_linewatch/**raw JSONB**/fetched_at；BIGSERIAL PK + UNIQUE(collection,douban_id) + idx(collection,rank)/(douban_id)，M1/M2）+ `external_data.douban_collection_sync_state`（collection PK + last_attempt_at/last_success_at/last_status/last_error/item_count，M3）
+  - `docs/architecture.md` — §5.5 external_data 加两表 schema + 迁移清单加 099（CLAUDE.md schema 同步红线）
+  - `apps/api/src/db/queries/douban-collections.ts`（新建）— `replaceCollectionItems`（db.connect 事务 DELETE WHERE collection + 批量 INSERT + sync_state UPSERT ok，M4① 同事务原子；parseYear 防御）+ `recordCollectionSyncState`（failed/empty_guard；DO UPDATE SET **不重置 last_success_at** 保留陈旧度，D-187-5）+ `getCollectionSyncState`（empty_guard 比对上轮 count）+ `listCollectionItems`（按 rank）
+  - `apps/api/src/lib/doubanAdapter.ts` — `getDoubanCollectionItems(collection,start?,count?)` 懒单例包装（复用 createBasicRuntime + fetchWithTimeout；try/catch → **null 区分抓取失败 vs items:[] 空**，供卡 3B empty_guard 判定）
+  - `tests/unit/api/doubanCollections.test.ts`（新建）— 6 例（事务 BEGIN→DELETE→INSERT×N→sync_state ok→COMMIT / ROLLBACK+release / failed 不重置 last_success_at / empty_guard 透传 / getCollectionSyncState 映射+null / listCollectionItems rating Number 强转）
+- **新增依赖**：无 ｜ **数据库变更**：**migration 099**（external_data.douban_collection_items + douban_collection_sync_state；architecture.md 已同步）
+- **注意事项**：① 全量替换 DELETE+INSERT **同事务**（M4① 原子，MVCC 下并发读永不见半份/空榜）；② `getDoubanCollectionItems` 返回 null（抓取失败）vs `items:[]`（成功但空）的区分是卡 3B empty_guard 守护的前提；③ 失败路径 `recordCollectionSyncState` 故意保留 last_success_at（陈旧度持续增长，消费方据此判数据陈旧）；④ 门禁：migrate dev 落 2 表 4 索引（含 raw jsonb 验证）/ typecheck 绿 / lint 5/5 / test:changed 15 文件 193 测试全过。
