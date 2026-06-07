@@ -1024,8 +1024,8 @@
 ### 后续卡登记（本序列产出，不在本序列内执行）
 
 - **CHG-HOME-FE-BANNER** ❌ **已废止（ADR-181 / D-181-1.4，2026-06-05）**：~~前台 HeroBanner 切换/合并消费 home_modules banner slot~~——ADR-181 裁定方向相反（home_banners 维持 Hero 唯一真源，home_modules.slot='banner' 冻结退役）；其登记的断裂问题由「冻结 + 入口统一」收口（CHG-HOME-BANNER-UNIFY 执行）。
-- **CHG-HOME-FE-FEATURED**（待立案）：featured 半断裂闭环——FeaturedRow 已请求 modules 但丢弃恒显 trending（FeaturedRow.tsx:149-152 TODO）；需 /home/featured-videos 批量端点（类 top10）+ 前台消费。
-- **CHG-HOME-FE-SHORTCUTS**（待立案）：type_shortcuts 断裂——前台 CategoryShortcuts 静态 ALL_CATEGORIES 不读 home_modules；接线或裁定 slot 退役。
+- **CHG-HOME-FE-FEATURED**（待立案；**收编裁定 CHG-HOME-FE-CONSUME-B 2026-06-06**）：featured 半断裂闭环——FeaturedRow 已请求 modules 但丢弃恒显 trending（FeaturedRow.tsx:149-152 TODO）。~~需 /home/featured-videos 批量端点~~ → **裁定走 ADR-184 amendment 扩 `/home/shelf` section 枚举 `'featured'` 值**（D-184-2「扩值走 amendment 纯增量」+ D-184-7.3 显式留口；featured 渲染 VideoCard 网格与 shelf 合成语义同构，复用合成单一实现，独立端点方向作废）。amendment + FeaturedRow 改造为协议变更，维持独立卡不并入消费切换卡。
+- **CHG-HOME-FE-SHORTCUTS**（待立案；**收编裁定 CHG-HOME-FE-CONSUME-B 2026-06-06**）：type_shortcuts 断裂——前台 CategoryShortcuts 静态 ALL_CATEGORIES 不读 home_modules。**不可走 `/home/shelf`**（区块内容 = `video_type` 引用非 video 卡，D-184-3.2 投影协议丢非 video 卡为结构性裁定）；**无需新端点**——既有公开 `GET /home/modules?slot=type_shortcuts` 原始配置行即可服务（CategoryShortcutsClient 映射 video_type → 分类链接 + 排序），消费切换归本卡执行（即 D-182-6.2 `frontendWired: false` 断裂标记的解除条件）。
 - **CHG-HOME-THUMB-MD**（待立案，可选）：Thumb 扩 banner-md 120×54 收编（出现第二复用方时；共享契约 Opus）。
 - **CHG-HOME-BLURHASH**（待立案，可选）：home_module 图片 blurhash 入队（同 banner 现状 TODO）。
 - **CHG-HOME-COUNTS**（待立案，可选）：GET /admin/home-modules/counts 轻量端点（Segment badge 全 slot 计数；新 route 需 ADR）。
@@ -1299,13 +1299,13 @@
    - 范围（4 项）：① 消费形态裁定：扩展 `GET /home/modules` 响应（hot_* slot 已在 slot 枚举）vs 新公开聚合端点（pinned + full_auto 快照合成）——公开协议变更需 ADR amendment 则当卡完成 ② HomeCuration 公开读路径（pinned 头部 + 快照 auto 合成 + §7.1 通用过滤复核，Route→Service→queries 分层） ③ 缓存口径落点（§12 短 TTL 保留；主动失效钩子留 Phase 4 CACHE-INVALIDATE，本卡只留接口位） ④ 单测（合成顺序 / 过滤 / 快照缺失降级趋势兜底）。
    - 依赖：Phase 3 全 6 卡 ✅ + AUTOFILL-UI ✅。
    - 完成备注：**ADR-184 当卡起草并 Accepted**（arch-reviewer claude-opus-4-8 CONDITIONAL PASS：1 HIGH + 3 MEDIUM + 2 LOW 全 6 条吸收）。裁定 = 新公开聚合端点 `GET /home/shelf`（不扩 /home/modules——原始配置行契约无法表达 auto/fallback 条目；top10 `{video,rank,isPinned}` 形状家族先例；§7.1 整页去重聚合层承载；第三选项 /home/page 显式排除防卡 20 重开）。合成单一实现复用 buildHomePreview（preview ≡ 公开页结构保证）：投影丢 empty/阻断 flags/非 video（missing_image 警告级放行）+ 读时 listVideoCardsByIds 复核为最终权威（快照 filtered 仅入口筛选；复核丢弃不回填）。HIGH 吸收 = `HomePreviewSection.consumedSnapshotAt?` additive 结构回填 snapshotAt（禁止 shelf 层二次查快照；回写 ADR-182 follow-up）。fetchAutoFill hot_* 快照接线兑现 D-182-4 #1 预留（admin preview 行为面显式化：explain.score 口径 rating→策略分 0–1，CanvasCard 仅消费 origin 实证无失真面）。缓存 60s + 一次 miss 填同 brand 三键（隔离硬约束）+ buildHomeShelfCacheKey 导出 = Phase 4 失效唯一接口位。测试 +14（home-shelf.test.ts 新建 12 + preview 接线 2）。dev 实测：snapshotAt 回填 + 三键 TTL 60 + 422 拦截 + 复核不回填。门禁：typecheck/lint 绿 + test:changed 升全量 6937/6937（types 基础包自动升全量）+ verify:adr-contracts EXIT=0（admin 214 不变）；E2E N/A（API-only，前台零改动）。**卡 20 依赖解除**。执行模型: claude-opus-4-8；子代理: arch-reviewer (claude-opus-4-8)。
-20. **CHG-HOME-FE-CONSUME-B** — 前台 3 hot shelf 切换聚合 + 断裂区块收编评估（状态：⬜ 待开始）
-   - 创建时间：2026-06-06 22:05
-   - 建议模型：sonnet
+20. **CHG-HOME-FE-CONSUME-B** — 前台 3 hot shelf 切换聚合 + 断裂区块收编评估（状态：✅ 已完成）
+   - 创建时间：2026-06-06 22:05 ｜ 实际开始：2026-06-06 23:40 ｜ 完成时间：2026-06-07 01:10
+   - 建议模型：sonnet（实际 claude-opus-4-8，用户 opus 会话「按顺序依次推进」承接）
    - 变更原因：同上（-A 的前台落地半张）。
    - 范围（4 项）：① `apps/web-next` 首页三个 ShelfRow 切换聚合消费（快照缺失/空时降级现行趋势 query——§7.1「站内兜底趋势」） ② FE-FEATURED（FeaturedRow 丢弃 modules 恒显 trending）/ FE-SHORTCUTS（CategoryShortcuts 静态）是否同链路顺路收编——**仅评估与裁定**，需独立端点（如 /home/featured-videos）则维持待立案不扩范围 ③ e2e-next homepage spec 同步 ④ 单测。
    - 依赖：CHG-HOME-FE-CONSUME-A。
-   - 完成备注：_（完成后填写）_
+   - 完成备注：① ShelfRow 增可选 `shelfSection` prop（缺省零行为变更）：提供时走 `/home/shelf` + brand_slug 透传（ADR-052 消费侧），items 空/请求失败降级现行趋势 query + 迟到响应 cancelled 守卫（AUTOFILL-UI-FIX 同款教训）；page.tsx 三 shelf 接 hot_movies/series/anime。② **收编裁定**：FE-FEATURED → 走 ADR-184 amendment 扩 'featured'（独立端点 /home/featured-videos 方向作废，合成单一实现复用）；FE-SHORTCUTS → 不可走 shelf（video_type 非 video 卡 D-184-3.2 结构性丢弃），无需新端点用既有 /home/modules——两裁定已回写待立案条目（SEQ-20260605-01 后续卡登记）。③ homepage spec 同步：+shelf mock（emptyShelf 可选）+2 测试（聚合渲染/空降级金路径）+ **顺手修复两处既有失修**：MOCK_MOVIE/SERIES 类型绑定 VideoCard（缺 subtitleLangs → deriveSpecs 运行时崩，clean HEAD 同样 17 failed 实证非本卡引入）+ 兜底 404 catch-all（-A 后 API 恒起漏真实数据，外链封面阻塞 load）。④ 测试：单测 +5（ShelfRow.test.tsx 消费/brand/双降级/现状回归）；E2E 范围内 4/4 绿（电影/剧集网格 + 聚合渲染 + 空降级，serial 实证）；**homepage 套件全量仍 7 失败 = 既有断言漂移 + 并发 goto 超时（infra），定界证据登记 CHG-E2E-WEB-AUDIT 待立案（SEQ-20260606-01 后续卡）**，非本卡范围。门禁：typecheck/lint/test:changed 绿。执行模型: claude-opus-4-8；子代理: 无。
 21. **CHG-HOME-E2E-SPEC** — admin home 域 E2E 金路径补覆盖（状态：⬜ 待开始）
    - 创建时间：2026-06-06 22:05
    - 建议模型：sonnet
@@ -1357,3 +1357,7 @@
    - 验收：E2E admin 全量绿 ✅ → BLOCKER 块已删除 ✅。
 
 （🚨 BLOCKER 块已按裁定 D 撤除——2026-06-06 21:56，-C 收口 / E2E admin 域 76/76 EXIT=0；原文与证据链见 git 历史 + changelog [CHG-E2E-GATE-AUDIT-A/-B/-B2/-C] 四条目）
+
+### 后续卡登记（2026-06-07 CHG-HOME-FE-CONSUME-B 定界产出）
+
+- **CHG-E2E-WEB-AUDIT**（待立案）：web 域 e2e-next homepage 套件失修——与 SEQ-20260606-01 同病理家族但 web 侧未在该序列范围内。定界证据（2026-06-07 实证，clean HEAD 同样 17 failed 排除卡 20 改动）：① **mock 契约漂移**：MOCK_MOVIE/SERIES 缺 `subtitleLangs` → VideoCard `deriveSpecs` 运行时崩 → Next overlay 盖断言（已由卡 20 顺手修复：类型绑定 VideoCard + 兜底 404 catch-all——`-A` 后 API 恒起致未 mock 端点漏真实数据）；banners mock 形状疑似同漂移（hero CTA 不可见 / dots 2≠实际 / banner-dot-1 strict violation 待清点）。② **断言漂移**：nav-logo 期望 "Resovo" 实际 "RResovo"（logo R 标记）/ footer-disclaimer 不可见 / 语言切换 ×2 超时——serial 复跑 12/19，7 失败全为既有漂移。③ **并发 goto 超时定界未竟**：≥4 workers 时 goto('/en') 30s 超时级联（6 并发复现：0 挂起请求但 load 不触发；server 侧 6 并发 curl 0.5s 实证无辜；单测 1.1s 过）——疑 Chromium 多 context × Next dev 交互，root cause 待查。验收：homepage spec 默认并发全绿 + test:e2e:smoke EXIT=0。

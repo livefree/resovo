@@ -26,9 +26,10 @@
 import { useEffect, useState, useRef } from 'react'
 import Link from 'next/link'
 import { apiClient } from '@/lib/api-client'
+import { useBrand } from '@/hooks/useBrand'
 import { VideoCard } from './VideoCard'
 import { Skeleton } from '@/components/primitives/feedback/Skeleton'
-import type { VideoCard as VideoCardType, ApiListResponse } from '@resovo/types'
+import type { VideoCard as VideoCardType, ApiListResponse, HomeShelfResponse, HomeShelfSection } from '@resovo/types'
 
 // ── 常量 ──────────────────────────────────────────────────────────────────────
 
@@ -40,8 +41,14 @@ type ShelfTemplate = 'featured-grid' | 'top10-row' | 'poster-row' | 'landscape-r
 
 interface ShelfRowProps {
   readonly template: ShelfTemplate
-  /** API query string，例如 "type=movie&period=week&limit=10" */
+  /** API query string，例如 "type=movie&period=week&limit=10"（shelfSection 提供时作为降级路径） */
   readonly query: string
+  /**
+   * 提供时优先消费公开聚合 `GET /home/shelf?section=...`（ADR-184，pinned 头部 +
+   * 候选快照合成 + brand 透传）；items 空或请求失败时降级 `query` 趋势路径
+   * （方案 §7.1「站内兜底趋势」消费侧兜底）。缺省时行为不变（纯趋势消费）。
+   */
+  readonly shelfSection?: HomeShelfSection
   readonly title: string
   readonly viewAllHref?: string
   readonly viewAllLabel?: string
@@ -388,23 +395,48 @@ function FeaturedGrid({ videos, testId }: { readonly videos: VideoCardType[]; re
 export function ShelfRow({
   template,
   query,
+  shelfSection,
   title,
   viewAllHref,
   viewAllLabel,
   badge,
   'data-testid': testId,
 }: ShelfRowProps) {
+  const { brand } = useBrand()
   const [videos, setVideos] = useState<VideoCardType[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    // 迟到响应守卫（CHG-HOME-AUTOFILL-UI-FIX 同款教训：链式降级窗口期 props 可变）
+    let cancelled = false
     setLoading(true)
-    apiClient
-      .get<ApiListResponse<VideoCardType>>(`/videos/trending?${query}`, { skipAuth: true })
-      .then((res) => setVideos(res.data))
-      .catch(() => setVideos([]))
-      .finally(() => setLoading(false))
-  }, [query])
+
+    const fetchTrending = () =>
+      apiClient
+        .get<ApiListResponse<VideoCardType>>(`/videos/trending?${query}`, { skipAuth: true })
+        .then((res) => { if (!cancelled) setVideos(res.data) })
+        .catch(() => { if (!cancelled) setVideos([]) })
+
+    // shelfSection 提供时优先聚合消费（ADR-184）；空/失败降级趋势（§7.1 消费侧兜底）
+    const load = shelfSection
+      ? apiClient
+          .get<{ data: HomeShelfResponse }>(
+            brand.slug
+              ? `/home/shelf?section=${shelfSection}&brand_slug=${encodeURIComponent(brand.slug)}`
+              : `/home/shelf?section=${shelfSection}`,
+            { skipAuth: true },
+          )
+          .then((res) => {
+            if (cancelled) return
+            if (res.data.items.length === 0) return fetchTrending()
+            setVideos(res.data.items.map((item) => item.video))
+          })
+          .catch(() => fetchTrending())
+      : fetchTrending()
+
+    load.finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
+  }, [query, shelfSection, brand.slug])
 
   const cardWidth = 'var(--shelf-card-w-portrait)'
   const aspectRatio = '2/3'

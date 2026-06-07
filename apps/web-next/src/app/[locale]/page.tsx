@@ -64,9 +64,10 @@ export default async function HomePage({
           viewAllLabel={t('viewAll')}
         />
 
-        {/* 趋势影片 — poster-row */}
+        {/* 热门电影 — poster-row（聚合消费 ADR-184；query 为降级路径） */}
         <ShelfRow
           template="poster-row"
+          shelfSection="hot_movies"
           query="type=movie&period=week&limit=10"
           title={t('trendingMovies')}
           viewAllHref={`/${locale}/movie`}
@@ -74,9 +75,10 @@ export default async function HomePage({
           data-testid="movie-grid"
         />
 
-        {/* 趋势剧集 — poster-row */}
+        {/* 热播剧集 — poster-row（聚合消费 ADR-184；query 为降级路径） */}
         <ShelfRow
           template="poster-row"
+          shelfSection="hot_series"
           query="type=series&period=week&limit=8"
           title={t('trendingSeries')}
           viewAllHref={`/${locale}/series`}
@@ -84,9 +86,10 @@ export default async function HomePage({
           data-testid="series-grid"
         />
 
-        {/* 热门动漫 — poster-row */}
+        {/* 热门动漫 — poster-row（聚合消费 ADR-184；query 为降级路径） */}
         <ShelfRow
           template="poster-row"
+          shelfSection="hot_anime"
           query="type=anime&period=week&limit=8"
           title={t('trendingAnime')}
           viewAllHref={`/${locale}/anime`}

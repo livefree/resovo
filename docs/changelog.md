@@ -2405,3 +2405,18 @@
 - **新增依赖**：无
 - **数据库变更**：无（零新表 / 零 migration / 零 audit——公开只读零写径）
 - **注意事项**：① **D-183-8.3「Phase 3 末实施卡」后端半张落地**——前台 ShelfRow 切换归卡 20（CHG-HOME-FE-CONSUME-B，依赖解除）；② **admin preview 行为面同步变化**（MEDIUM 吸收显式化）：端点 #1 hot_* 渲染从「trending fallback」变为「快照 auto + trending 兜底」，explain.score 口径 rating(0–10)→策略分(0–1)，属 D-182-4 #1 预留的预期内兑现；③ dev 实测：snapshotAt 回填（快照接线生效）+ 一次 miss 填三键 TTL 60 + 422 拦截 + 复核后 items 2/10 不回填（dev 数据态 filtered 居多，合法）；④ 门禁：typecheck/lint 绿 + test:changed 升全量 **6937/6937**（types 基础包改动自动升全量，ADR-180）+ verify:adr-contracts EXIT=0（admin 214 不变——公开端点不入 MUST-8 域）；E2E N/A（API-only：admin-next 套件全 mock 不消费真实 API，前台零改动；admin home 域 E2E 覆盖归卡 21）。
+
+## [CHG-HOME-FE-CONSUME-B] 前台 3 hot shelf 切换聚合消费 + 断裂区块收编裁定（SEQ-20260605-05 卡 20）
+- **完成时间**：2026-06-07
+- **记录时间**：2026-06-07 01:10
+- **执行模型**：claude-opus-4-8
+- **子代理**：无
+- **修改文件**：
+  - `apps/web-next/src/components/video/Shelf.tsx` — ShelfRow 增可选 `shelfSection` prop：提供时优先 `GET /home/shelf`（ADR-184，brand_slug 透传 ADR-052 消费侧协议），items 空/失败降级现行趋势 query（§7.1 消费侧兜底）+ cancelled 迟到响应守卫；缺省零行为变更
+  - `apps/web-next/src/app/[locale]/page.tsx` — 三 ShelfRow 接 `shelfSection="hot_movies|hot_series|hot_anime"`（query 保留为降级路径）
+  - `tests/e2e-next/homepage.spec.ts` — +`/home/shelf` mock（emptyShelf 可选）+2 测试（聚合渲染 / 空降级金路径）；**顺手修复两处既有失修**：MOCK_MOVIE/SERIES 类型绑定 `VideoCard`（test-rules E2E 规程第 5 条——缺 subtitleLangs 致 deriveSpecs 运行时崩 + overlay 盖断言）+ 兜底 404 catch-all（规程第 4 条——CHG-E2E-GATE-AUDIT-A 后 :4000 恒起，未 mock 端点漏真实数据、外链封面阻塞 load）
+  - `tests/unit/web-next/ShelfRow.test.tsx` — **新建** 5 用例（聚合消费 / brand 透传 / 空降级 / 错误降级 / 缺省现状回归）
+  - `docs/task-queue.md` — FE-FEATURED / FE-SHORTCUTS 收编裁定回写 + CHG-E2E-WEB-AUDIT 待立案登记（SEQ-20260606-01 后续卡）
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：① **D-183-8.3 前台消费闭环完成**——治理链（pinned 头部 / full_auto 快照 / 候选重算）自此对访客生效；② **收编裁定**（范围项②，仅裁定不实施）：FE-FEATURED 走 ADR-184 amendment 扩 `'featured'`（独立端点方向作废）/ FE-SHORTCUTS 不可走 shelf（video_type 非 video 卡，D-184-3.2 结构性丢弃）用既有 `/home/modules` 无需新端点；③ **定界产出**：homepage 套件全量仍 7 失败 = 既有断言漂移（nav-logo "RResovo" / hero CTA / banner dots / footer）+ ≥4 workers 并发 goto 30s 超时（6 并发复现 0 挂起请求 load 不触发、server 侧 6 并发 curl 0.5s 实证无辜）——**clean HEAD 同样 17 failed 实证与本卡无关**，证据链登记 `CHG-E2E-WEB-AUDIT` 待立案；④ 门禁：typecheck/lint 绿 + 单测 5/5 + E2E 本卡范围 4/4 绿（电影/剧集网格 + 聚合渲染 + 空降级，serial 口径）。

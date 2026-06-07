@@ -5,37 +5,47 @@
  */
 
 import { test, expect } from './_fixtures'
+import type { VideoCard } from '@resovo/types'
 
 const API_BASE = 'http://localhost:4000/v1'
 
-const MOCK_MOVIE = {
+// mock 类型绑定 @resovo/types 真源（test-rules E2E 规程第 5 条）——
+// 历史漂移实证：mock 缺 subtitleLangs → VideoCard deriveSpecs 运行时崩 →
+// Next dev overlay 全屏盖断言（CHG-HOME-FE-CONSUME-B 定界：clean HEAD 同样 17 failed）
+const MOCK_MOVIE: VideoCard = {
   id: 'uuid-movie-1',
   shortId: 'aB3kR9x1',
   slug: 'test-movie-aB3kR9x1',
   title: '测试电影',
   titleEn: 'Test Movie',
   coverUrl: null,
+  posterBlurhash: null,
+  posterStatus: null,
   type: 'movie',
   rating: 8.5,
   year: 2024,
   status: 'completed',
   episodeCount: 1,
   sourceCount: 2,
+  subtitleLangs: [],
 }
 
-const MOCK_SERIES = {
+const MOCK_SERIES: VideoCard = {
   id: 'uuid-series-1',
   shortId: 'bC4lS0y2',
   slug: 'test-series-bC4lS0y2',
   title: '测试剧集',
   titleEn: 'Test Series',
   coverUrl: null,
+  posterBlurhash: null,
+  posterStatus: null,
   type: 'series',
   rating: 9.0,
   year: 2024,
   status: 'ongoing',
   episodeCount: 24,
   sourceCount: 1,
+  subtitleLangs: [],
 }
 
 const MOCK_BANNERS = [
@@ -61,12 +71,44 @@ const MOCK_BANNERS = [
   },
 ]
 
-async function mockApiRoutes(page: import('@playwright/test').Page) {
+async function mockApiRoutes(
+  page: import('@playwright/test').Page,
+  options: { readonly emptyShelf?: boolean } = {},
+) {
+  // 兜底 404（test-rules E2E 规程第 4 条：先注册 = 最低优先级）。
+  // 本 spec 自述「不依赖真实后端」，但 CHG-E2E-GATE-AUDIT-A 后 :4000 API 恒起——
+  // 未 mock 端点（/home/top10 等）会漏真实数据，真实 coverUrl 指向外部 CDN，
+  // 慢图阻塞 'load' 事件 → goto 30s 超时级联（CHG-HOME-FE-CONSUME-B 定界实证）。
+  await page.route(`${API_BASE}/**`, (route) => {
+    route.fulfill({
+      status: 404,
+      contentType: 'application/json',
+      body: JSON.stringify({ error: { code: 'NOT_FOUND', message: 'not mocked (homepage spec)', status: 404 } }),
+    })
+  })
+
   await page.route(`${API_BASE}/banners*`, (route) => {
     route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({ data: MOCK_BANNERS }),
+    })
+  })
+
+  // CHG-HOME-FE-CONSUME-B（ADR-184）：3 个 hot shelf 切换聚合消费
+  await page.route(`${API_BASE}/home/shelf*`, (route) => {
+    const section = new URL(route.request().url()).searchParams.get('section')
+    const item = section === 'hot_series' ? MOCK_SERIES : MOCK_MOVIE
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        data: {
+          items: options.emptyShelf ? [] : [{ video: item, rank: 1, isPinned: false }],
+          snapshotAt: options.emptyShelf ? null : '2026-06-06T12:00:00Z',
+          generatedAt: '2026-06-06T12:00:30Z',
+        },
+      }),
     })
   })
 
@@ -139,10 +181,29 @@ test.describe('首页', () => {
     await expect(page.getByTestId('series-grid')).toBeVisible()
   })
 
+  test('hot shelf 消费聚合端点渲染卡片（ADR-184）', async ({ page }) => {
+    await expect(page.getByTestId('movie-grid')).toContainText('测试电影')
+    await expect(page.getByTestId('series-grid')).toContainText('测试剧集')
+  })
+
   test('底部免责声明常驻显示', async ({ page }) => {
     await expect(page.getByTestId('footer-disclaimer')).toBeVisible()
   })
 
+})
+
+// ═══════════════════════════════════════════════════════════════════
+// hot shelf 降级（ADR-184 D-184 消费侧兜底：聚合空 → 趋势 query）
+// ═══════════════════════════════════════════════════════════════════
+
+test.describe('hot shelf 空降级', () => {
+  test('聚合 items 为空时降级趋势 query，网格仍渲染内容', async ({ page }) => {
+    await mockApiRoutes(page, { emptyShelf: true })
+    await page.goto('/en')
+    // shelf 空 → fetchTrending 降级 → trending mock 的 MOCK_MOVIE/MOCK_SERIES 渲染
+    await expect(page.getByTestId('movie-grid')).toContainText('测试电影')
+    await expect(page.getByTestId('series-grid')).toContainText('测试剧集')
+  })
 })
 
 // ═══════════════════════════════════════════════════════════════════
