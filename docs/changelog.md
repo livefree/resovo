@@ -2315,3 +2315,16 @@
 - **新增依赖**：无
 - **数据库变更**：无
 - **注意事项**：① 守卫语义收敛为「顶部闭包合法性（section）+ 写入新鲜度（seq）」正交两层，FIX1 的两用例不变继续通过；② 门禁：typecheck/lint 绿 + test:changed 83/83（面板 21/21）。
+
+## [CHG-E2E-GATE-AUDIT-A] B 复跑定界 + E2E 基础设施双陷阱修复（SEQ-20260606-01 卡 1 / BLOCKER 处置 D 路径）
+- **完成时间**：2026-06-06
+- **记录时间**：2026-06-06 18:45
+- **执行模型**：claude-opus-4-8
+- **子代理**：无
+- **修改文件**：
+  - `playwright.config.ts` — webServer +apps/api（:4000，url=/v1/health）恒起条目：此前 E2E 隐式依赖外部手动启动的 API（陈旧实例静默复用 / 缺失时双项目大面积超时）；`PLAYWRIGHT_SERVERS` 语义不变（仅选前端 server，API 为公共底座）；实证 playwright 自起成功
+  - `docs/rules/test-rules.md` — +「E2E 运行环境规程」3 条：跑前遗留 dev server 核查（端口归属表 + 启动时间判异）/ **退出码不得经管道尾命令采集**（`cmd | grep; $?` 恒取尾命令 0——历史「exit 0」即此伪影）/ 结果异常先隔离对照（单 spec + 干净 HEAD A/B）再归因
+  - `docs/task-queue.md` — 定界结论落档 + CORE-A/REFRESH/APPLY 三处历史口径勘误附注（原文保留）+ -C 卡根因 (a) 增补
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：① **定界结论：代码态确定性失败**——清 `.next` 缓存 + 全 fresh 复跑仍 49 failed/38 passed/1 flaky（六轮同集），排除本机状态；② **连带实证 -C 根因 (a)**：admin-next spec 假 cookie（`refresh_token=mock-admin-rt`）未 mock auth 校验端点，真实 API 在场时 `/v1/auth/refresh` 硬 401 → 重定向 /login（dashboard.spec 隔离对照：无 API 3/3 过 / 有 API 3/3 挂）——admin-next「无后端」假设与 v1「需后端」需求**结构性互斥**，修法（统一 auth mock fixture 或 storageState 真登录）归 -C；③ `reuseExistingServer: !CI` 保留（本地迭代体验优先），以规程第 1 条防陈旧复用；④ E2E admin 在 -B/-C 收口前保持红（BLOCKER 活跃，ADMIN 域任务按其口径标注）；⑤ 门禁：typecheck/lint/test:changed 绿（playwright.config.ts 不入 unit import 图，0 选测合法）。

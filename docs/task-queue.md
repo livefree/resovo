@@ -1246,7 +1246,7 @@
    - 范围（5 项）：① `packages/types` AutofillCandidate + AutofillVideoSummary + ContentGap DTO（解释模型载体；ADR-182 影响面 #2 补全 + D-183-7.3 独立 DTO） ② `services/home-autofill/` policy（POLICY_VERSION 'hp-v1' + D-183-4 权重/惩罚常量）+ score 排序纯函数（normVotes 对数压缩 / doubanScore 加权缺失按 0 / recency 衰减 / bangumi comparator rank ASC + rating DESC 后置） ③ filters 通用过滤链纯函数（D-183-4.5 确定性过滤 → filtered/filterReason 开放字符串解释） ④ dedup 去重纯函数（D-183-6.2 单一实现）+ buildPreview 收编消费（行为零变更） ⑤ 单测（影响面 #8 义务：缺失信号按 0 / norm_votes 边界 / rank 缺失排后 / 过滤链 / 去重豁免）。
    - 跨层理由：纯 api-service 层 + types（DTO 为解释模型载体，同一契约闭环；PREVIEW-API-B 同先例）。
    - 依赖：ADR-183 ✅ / CHG-HOME-SLOT-EXTEND ✅。
-   - 完成备注：`services/home-autofill/` 5 文件（policy/score/filters/dedup/index，范式对齐 services/identity/），全模块纯函数无 IO——信号取数归候选源 queries（卡 15/16）、编排与快照写入归 worker（卡 17）。实施级裁量（D-183-4.1 只锁权重与信号集）：惩罚 0.1/0.1、半衰期 30 天、饱和阈值 3 源，均为策略常量随 POLICY_VERSION 演进。FILTER_REASONS 无 occupied_by_*（D-183-6.1 快照不做跨区块去重，单测显式守护）。buildPreview 去重收编零行为变更（既有 28 用例零回归）。测试 +33。门禁：typecheck/lint 绿 + **全量 6827/6827**（types 基础包改动升全量，ADR-180）+ E2E admin 38 passed（2 known flaky retry 过）。执行模型: claude-opus-4-8；子代理: 无。
+   - 完成备注：`services/home-autofill/` 5 文件（policy/score/filters/dedup/index，范式对齐 services/identity/），全模块纯函数无 IO——信号取数归候选源 queries（卡 15/16）、编排与快照写入归 worker（卡 17）。实施级裁量（D-183-4.1 只锁权重与信号集）：惩罚 0.1/0.1、半衰期 30 天、饱和阈值 3 源，均为策略常量随 POLICY_VERSION 演进。FILTER_REASONS 无 occupied_by_*（D-183-6.1 快照不做跨区块去重，单测显式守护）。buildPreview 去重收编零行为变更（既有 28 用例零回归）。测试 +33。门禁：typecheck/lint 绿 + **全量 6827/6827**（types 基础包改动升全量，ADR-180）+ E2E admin 38 passed（2 known flaky retry 过）⚠️〔2026-06-06 勘误：passed 计数真实，但「通过」结论不成立——同套件另有约 49 个失败未入结论，疑管道尾命令退出码伪影，详见 SEQ-20260606-01 BLOCKER〕。执行模型: claude-opus-4-8；子代理: 无。
 
 14. **CHG-HOME-AUTOFILL-CORE-B** — migration 096 快照表 + 端点 #4（状态：✅ 已完成）
    - 实际开始：2026-06-06 12:30 ｜ 完成时间：2026-06-06 12:50
@@ -1273,14 +1273,14 @@
 17. **CHG-HOME-AUTOFILL-REFRESH** — worker 重算调度 + 端点 #7（状态：✅ 已完成）
    - 实际开始：2026-06-06 13:20 ｜ 完成时间：2026-06-06 13:35
    - 建议模型：sonnet（实际 claude-opus-4-8，用户 opus 会话人工覆盖）
-   - 完成备注：D-183-3 全条款落地：homeAutofillQueue（独立隔离背压）+ 5min 单 tick scheduler（isSectionDue 纯函数：interval null/manual_only 永不到期、无快照立即到期）+ worker 委托 recalculate 编排（douban/bangumi/trending 按 section 分派，type_shortcuts 不写空快照）+ 端点 #7（429 主动 getJob+getState 三态检查 + completed 残留不阻塞 + 入队失败 500 不静默 + audit 轻量载荷 R-MID-1 第 35 次守卫登记）。关键落实：jobId `autofill:${section}` 幂等 + **per-add removeOnComplete/removeOnFail true**（释放前提，failed 残留会永久阻塞重入）。实施级推演：banner suggest_only 候选源=trending（ADR 未裁，与 D-183-4.3 同向）。dev 端到端：6 section written + 保留清理 12 写恰 10 份 + 286ms。**ADR-182 端点 7/7 仅余 #5（APPLY 卡）**。测试 +23。门禁：typecheck/lint 绿 + 全量 6889/6889 零失败 + endpoint-adr 213 对齐 + E2E admin 38 passed。执行模型: claude-opus-4-8；子代理: 无。
+   - 完成备注：D-183-3 全条款落地：homeAutofillQueue（独立隔离背压）+ 5min 单 tick scheduler（isSectionDue 纯函数：interval null/manual_only 永不到期、无快照立即到期）+ worker 委托 recalculate 编排（douban/bangumi/trending 按 section 分派，type_shortcuts 不写空快照）+ 端点 #7（429 主动 getJob+getState 三态检查 + completed 残留不阻塞 + 入队失败 500 不静默 + audit 轻量载荷 R-MID-1 第 35 次守卫登记）。关键落实：jobId `autofill:${section}` 幂等 + **per-add removeOnComplete/removeOnFail true**（释放前提，failed 残留会永久阻塞重入）。实施级推演：banner suggest_only 候选源=trending（ADR 未裁，与 D-183-4.3 同向）。dev 端到端：6 section written + 保留清理 12 写恰 10 份 + 286ms。**ADR-182 端点 7/7 仅余 #5（APPLY 卡）**。测试 +23。门禁：typecheck/lint 绿 + 全量 6889/6889 零失败 + endpoint-adr 213 对齐 + E2E admin 38 passed ⚠️〔2026-06-06 勘误：同上，「通过」结论不成立，详见 SEQ-20260606-01 BLOCKER〕。执行模型: claude-opus-4-8；子代理: 无。
    - 范围（5 项）：① `lib/queue.ts` +homeAutofillQueue（D-183-3.6：attempts 2 + fixed 30s，独立队列隔离背压） ② `workers/homeAutofillScheduler.ts`（5min tick 扫描 settings refresh_interval_minutes 非空且非 manual_only → 比对最新快照 generated_at + interval → 入队；jobId `autofill:${section}` 幂等） ③ `workers/homeAutofillWorker.ts`（候选生成编排：trending/douban/bangumi 按 section 分派 → 写快照同事务清理；trigger scheduled/manual） ④ 端点 #7（429 主动 getJob+getState 检查不依赖 add 去重副作用 / manual_only 422 / 入队失败 500 不静默 / audit `home_section.refresh_candidates` + 守卫登记） ⑤ architecture.md worker 清单同步 + 单测（429 主动检查 / 幂等键 / 调度判定）。
    - 依赖：CHG-HOME-AUTOFILL-DOUBAN + BANGUMI（worker 分派需候选源就绪）。
 
 18. **CHG-HOME-AUTOFILL-APPLY** — 端点 #5 候选转 pinned + 审计（状态：✅ 已完成；**Phase 3 全部 6 卡收口 2026-06-06 14:50**）
    - 实际开始：2026-06-06 13:40 ｜ 完成时间：2026-06-06 14:50
    - 建议模型：sonnet（实际 claude-opus-4-8，用户 opus 会话人工覆盖）
-   - 完成备注：D-182-4.5 全落地：快照定位（轮换失效 409 携 ids）→ 重校验可见性+可播性（任一失效**整体 409 零写入**，全有或全无）→ 已 pinned 重复 409 → pinnedLimit 超限 422（实施级推演）→ insertPinnedHomeModulesBatch 单事务批量插入（slot MAX(ordering)+1 事务内连续）→ audit apply_autofill 全载荷（R-MID-1 第 36 次守卫登记）。banner 422 指引编辑器（实施级推演：「透出预填」为 UI 行为，端点不写 home_banners/冻结 slot；预填 UI 归 AUTOFILL-UI 候补卡）。端点 #4 +appliedAt 派生（快照不可变——由 slot pinned 行 created_at 派生）。**file-size-budget 拆分**：Service 679→440（schemas/preview/preview-cards 三模块拆出，CHG-VSR-3 同先例）。dev 实测：409 拦截 + banner 约束实证。**ADR-182 端点 7/7 全量落地（endpoint-adr 214 对齐）**。测试 +11。门禁：typecheck/lint 绿 + 全量 6901 兜底（staging 域既有 jsdom 并发 flaky 隔离过，与本卡无关）+ E2E admin 36 passed exit 0。执行模型: claude-opus-4-8；子代理: 无。
+   - 完成备注：D-182-4.5 全落地：快照定位（轮换失效 409 携 ids）→ 重校验可见性+可播性（任一失效**整体 409 零写入**，全有或全无）→ 已 pinned 重复 409 → pinnedLimit 超限 422（实施级推演）→ insertPinnedHomeModulesBatch 单事务批量插入（slot MAX(ordering)+1 事务内连续）→ audit apply_autofill 全载荷（R-MID-1 第 36 次守卫登记）。banner 422 指引编辑器（实施级推演：「透出预填」为 UI 行为，端点不写 home_banners/冻结 slot；预填 UI 归 AUTOFILL-UI 候补卡）。端点 #4 +appliedAt 派生（快照不可变——由 slot pinned 行 created_at 派生）。**file-size-budget 拆分**：Service 679→440（schemas/preview/preview-cards 三模块拆出，CHG-VSR-3 同先例）。dev 实测：409 拦截 + banner 约束实证。**ADR-182 端点 7/7 全量落地（endpoint-adr 214 对齐）**。测试 +11。门禁：typecheck/lint 绿 + 全量 6901 兜底（staging 域既有 jsdom 并发 flaky 隔离过，与本卡无关）+ E2E admin 36 passed exit 0 ⚠️〔2026-06-06 勘误：passed 计数真实但「exit 0」为管道尾命令退出码伪影，同套件另有约 49 个失败未入结论，详见 SEQ-20260606-01 BLOCKER〕。执行模型: claude-opus-4-8；子代理: 无。
    - **FIX（Codex stop-time review，2026-06-06 14:55）**：运行时 audit enums 漏同步——ADR-118 enums 端点真源 ACTION_TYPES/TARGET_KINDS 缺 home_section 系 4+1（union 类型 Phase 1 先行而运行时漏同步，筛选器 zod 422 拒收；写路径不受影响属可见性缺口）。补齐 +8/+4（**新增「源码写入 ⊆ 运行时 enums」交叉守卫连带检出同类既有欠账** image_health ×2 + crawler_task ×2 action + 2 targetKind，R-MID-1 第 37 次系统化——set-equal 守卫的结构性盲区 = 双镜像同缺时双双通过）+ zh-CN labels +6。测试守卫 134/134 + test:changed 1218/1218。
    - 范围（4 项）：① ApplyAutofillSchema（candidateIds ≥1）+ HomeCurationService.applyAutofill（读最新快照定位候选 → 逐候选重校验可见性/可播放性 → 任一失效整体 409 STATE_CONFLICT 携失效 ids → 全有或全无事务创建对应 slot home_modules pinned 行） ② banner section 语义（D-182-4.5：suggest_only 候选连同缺图风险态透出至编辑器预填，不直接写 home_banners——响应形态实施级推演入完成备注） ③ audit `home_section.apply_autofill`（afterJsonb 含 module ids + 候选来源 + policyVersion + 守卫登记） ④ 端点 #5 route + 单测（409 全有或全无 / audit payload / pinnedLimit 推演）。
    - 依赖：CHG-HOME-AUTOFILL-CORE-B（快照读取）；与 REFRESH 可换序。
@@ -1295,6 +1295,28 @@
 - Phase 4：`CHG-HOME-DRAFT-PUBLISH` / `CHG-HOME-AUDIT-ROLLBACK` / `CHG-HOME-CACHE-INVALIDATE`
 
 ---
+
+## [SEQ-20260606-01] E2E-GATE-AUDIT — E2E admin 域门禁完整性修复（BLOCKER 处置 D 路径）
+
+- **状态**：🔄 进行中（人工裁定 D，2026-06-06 18:05；证据链见文末 🚨 BLOCKER 块）
+- **背景**：E2E admin 域 49/88 稳定失败且干净 HEAD 同样复现（CHG-HOME-AUTOFILL-UI 收口时发现）；四条根因线索 = v1 断言结构性不可满足 / 历史 exit 0 测量伪影 / webServer 缺 api 条目 / reuseExistingServer 陈旧复用 + admin-next 26 超时根因未竟。
+- **依赖链**：`-A`（定界 + 基础设施）→ `-B`（v1 退役/降冒烟）与 `-C`（admin-next 根因）可并行；BLOCKER 在 -C 收口前保持活跃。
+
+1. **CHG-E2E-GATE-AUDIT-A** — B 复跑定界 + 基础设施双陷阱修复（状态：✅ 已完成 2026-06-06 18:45）
+   - 建议模型：sonnet（实际 claude-opus-4-8，用户 opus 会话承接）
+   - 范围（4 项）：① 干净态复跑定界（清理全部本仓遗留 node 进程 + apps/server·server-next `.next` 缓存 → fresh API + fresh servers 单轮复跑，固化「环境态 vs 代码态」边界结论） ② playwright.config `webServer` 补 apps/api（:4000）条目（消除隐式外部 API 依赖；`PLAYWRIGHT_SERVERS` 语义同步） ③ 陈旧 server 防复用（域选跑前 preflight 提示或文档化清理规程——改 `reuseExistingServer` 行为需评估本地迭代体验代价后定） ④ 历史口径修正：REFRESH/APPLY 卡完成备注附注勘误 + git-rules/test-rules 增补「E2E 退出码不得经管道尾命令采集」。
+   - 完成备注：① **定界结论 = 代码态确定性失败**：清 `.next` 缓存 + 全 fresh server + fresh API 复跑仍 49 failed / 38 passed / 1 flaky（与此前 5 轮一致，共 6 轮同集）——排除本机状态，-B/-C 必要性确证。② webServer api 条目落地且实证自起（[WebServer] 日志含 api 启动序列）；**连带定界出 -C 根因 (a)**：真实 API 在场时 admin-next 假 cookie 被 `/v1/auth/refresh` 硬 401 打回 → 重定向 /login（dashboard.spec 隔离对照：无 API 3/3 过 / 有 API 3/3 挂）——admin-next「无后端」假设与 v1「需后端」需求结构性互斥，已写入 -C 卡。③ test-rules.md +「E2E 运行环境规程」3 条（遗留 server 核查 / 退出码采集规范 / 异常先隔离对照）；`reuseExistingServer` 行为保留（本地迭代体验），以规程防陈旧。④ 历史口径勘误 ×3（CORE-A/REFRESH/APPLY 完成备注附注，原文保留）。门禁：typecheck/lint/test:changed 绿（playwright.config.ts 不入 unit import 图，0 选测合法）。执行模型: claude-opus-4-8；子代理: 无。
+   - 验收：复跑结论落档（passed/failed 与归因）✅；`PLAYWRIGHT_SERVERS=admin,admin-next` 一键起齐含 API ✅；文档同步 ✅。
+2. **CHG-E2E-GATE-AUDIT-B** — v1 admin.spec 15 失败退役/降冒烟（状态：⬜ 待开始；依赖 -A 定界结论）
+   - 建议模型：sonnet
+   - 范围：v1（apps/server 已冻结）E2E 断言与实现对照清点——`/admin → /auth/login` 系结构性不可满足（根级 middleware 死代码 + 无 /auth/login 路由）→ 按冻结政策退役或降为最小冒烟（保留可满足断言）；ADMIN_SPECS 列表与 changelog 同步退役理由。
+3. **CHG-E2E-GATE-AUDIT-C** — admin-next 26 toBeVisible 超时根因修复（状态：⬜ 待开始；-A 已定界部分根因）
+   - 建议模型：opus
+   - **-A 定界产出的根因 (a)（已实证）**：admin-next spec 以 `refresh_token=mock-admin-rt` 假 cookie + page.route 业务 mock 运行，**未 mock auth 校验端点**——真实 API（:4000）在场时 `/v1/auth/refresh` 对假 token 返回硬 401 → 客户端重定向 `/login?from=%2Fadmin`（trace 实证：dashboard.spec 隔离跑「无 API 时 3/3 过 / API 在场时 3/3 挂于 login 跳转」）。即 admin-next spec 假设「无真实后端」，与 v1 spec「需真实 API」**环境需求矛盾**——同套件混跑结构性互斥。修法候选：admin-next spec 统一 fixture mock `/v1/auth/refresh`（200 + 假 accessToken）或改 storageState 真登录。
+   - **残余根因 (b)（未竟）**：无 API 的全量跑中 admin-next 仍挂 26（隔离过/全量挂、与 workers 数无关）——待 (a) 修后复测定位（候选：route mock 跨 context 串扰 / dev server 请求队列饱和）。
+   - 验收：E2E admin 全量绿 → **删除 BLOCKER 块**。
+
+---
 🚨 BLOCKER — 需要人工处理后才能继续
 - **任务**：CHG-HOME-AUTOFILL-UI 收口时发现（卡本身已完成并提交，commit 见 git log CHG-HOME-AUTOFILL-UI；BLOCKER 对象 = E2E admin 域门禁环境完整性，非本卡）
 - **时间**：2026-06-06 17:05
@@ -1307,4 +1329,5 @@
   5. 隔离对照：dashboard.spec 单跑 3/3 过 / 全量跑挂；admin.spec 单跑同样 15 failed（确定性）。
 - **根因线索**：① `admin.spec.ts` 15 失败含「未登录 /admin → /auth/login」系——apps/server v1 **结构上无法满足**：根级 `apps/server/middleware.ts` 在 src/app 布局下不生效（Next 要求 src/middleware.ts，现为死代码，且其目标是 `/admin/login` 非 `/auth/login`）；v1 api-client `getLoginRedirectPath` 仅匹配 `/{locale}/admin` 前缀，对 `/admin` 直访恒 null 不跳转（失败截图实证：渲染 shell + 「数据加载失败」无重定向）；v1 全 app 无 `/auth/login` 路由。② 历史「E2E admin 36/38 passed exit 0」（REFRESH/APPLY 卡）与今日同树不可复现——passed 计数恰与今日通过集吻合（38-42），疑历史 exit 0 为管道尾命令掩盖退出码的测量伪影（`cmd | grep; $?` 取 grep/tail 的 0），或当时 :3001 被含 `/auth/login` 的旧进程占用且 `reuseExistingServer: !CI` 静默复用。③ 环境陷阱双发现：playwright `webServer` **不含 apps/api（:4000）**——E2E 隐式依赖外部手动起的 API；`reuseExistingServer: !CI` 静默复用跨会话遗留 dev server。④ admin-next 26 失败为 toBeVisible 超时系（页面渲染正常但断言元素未现），隔离过/全量挂且与 workers 数无关，根因未竟。
 - **需要决策**：① 是否起独立核查卡（E2E-GATE-AUDIT：webServer 补 api 条目 + 端口归属固定 + admin.spec v1 重定向断言与实现对齐或退役）；② 或先在重启后的干净机器复跑一次排除本机状态；③ 若确认门禁长期破损，是否重定 E2E admin 基线并修正历史记录口径。**未解除前后续 ADMIN 域任务的 E2E 选跑结论不可信，须按本条目口径如实标注。**
+- **人工裁定（2026-06-06 18:05）**：选 **D（混合路径）**——B 复跑定界先行 → A-1 基础设施双陷阱直接修 → v1 15 失败走退役/降冒烟（A-2 路线②，冻结政策对齐）→ admin-next 26 超时按根因修复（A-3，真源覆盖不可弃）→ 历史口径修正随卡收尾。已登记 SEQ-20260606-01 三卡（CHG-E2E-GATE-AUDIT-A/-B/-C）。**本 BLOCKER 在 -C 收口前保持活跃**（期间 ADMIN 域任务 E2E 选跑结论按本条目口径标注），全序列收口后删除本块。
 ---

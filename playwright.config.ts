@@ -90,6 +90,17 @@ export default defineConfig({
   ],
 
   webServer: [
+    // CHG-E2E-GATE-AUDIT-A：apps/api（:4000）为全部前端域的公共依赖，恒起——
+    // 此前缺失使 E2E 隐式依赖外部手动启动的 API（陈旧实例被静默复用 / 缺失时
+    // v1+next 双项目大面积超时）。PLAYWRIGHT_SERVERS 语义不变：仅选择前端 server
+    // （ADR-180 D-180-3「只起所需」针对前端 dev server；API 是公共底座）。
+    // reuseExistingServer 保留本地手动实例复用（开发迭代体验），CI 强制 fresh。
+    {
+      command: 'npm --workspace @resovo/api run dev',
+      url: 'http://localhost:4000/v1/health',
+      reuseExistingServer: !process.env.CI,
+      timeout: 60000,
+    },
     ...(SERVERS.includes('admin') ? [{
       command: 'npm --workspace @resovo/server run dev',
       url: `${ADMIN_URL}/admin`,
