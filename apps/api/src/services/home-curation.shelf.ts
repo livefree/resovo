@@ -55,6 +55,8 @@ export async function buildHomeShelves(
 ): Promise<Map<HomeShelfSection, HomeShelfResponse>> {
   const preview = await buildHomePreview(db, {
     device: 'desktop',
+    // 公开 shelf 恒消费发布态（草稿叠加仅 admin preview，ADR-185 D-185-1.1 前台零草稿）
+    draft: false,
     ...(brandSlug !== null ? { brand_slug: brandSlug } : {}),
   })
 

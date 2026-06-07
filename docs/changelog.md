@@ -2433,6 +2433,23 @@
 - **数据库变更**：无
 - **注意事项**：① **治理方案 §14「后台 /admin/home 有 E2E 覆盖」收口**（此前零命中）；admin 域全量 **76→87 EXIT=0** 零回归；② 实施陷阱记档：canvas-section 中心点击落在空卡触发 onEmptySlot 不冒泡 select → 选区块须打 head pill（`canvas-mode-*`）；AdminInput `data-testid` 落 wrapper div → fill/toHaveValue 须 `.locator('input')` 下钻（后续 home 域 spec 沿用）；③ 视觉回归评估：**不另立**——画布动态数据密集，截图基线脆弱收益低，testid 行为断言已覆盖；④ 门禁：typecheck/lint/test:changed 绿 + `npm run test:e2e:admin` 87/87 EXIT=0。
 
+## [CHG-HOME-DRAFT-PUBLISH-B] 发布治理前端：画布切草稿写 + 发布确认 UI（SEQ-20260605-05 Phase 4 卡 25）
+- **完成时间**：2026-06-07
+- **记录时间**：2026-06-07 05:00
+- **执行模型**：claude-opus-4-8
+- **子代理**：无（协议已由 ADR-185 Opus PASS 定档，本卡纯实施）
+- **修改文件**：
+  - `apps/api/src/services/home-curation.{schemas,preview}.ts` — preview `draft=true` 草稿叠加消费（ADR-182 #1 显式预留兑现，additive query param 布尔显式枚举防 coerce 陷阱）：配置三键改读 `home_config_drafts` 覆盖层（`draftConfigToRows` 兜底补 id/时间戳），自动候选/快照/趋势仍实时；无草稿降级发布态；`context.draft` additive 回显；shelf 链路显式 `draft: false`（公开面恒发布态）
+  - `apps/api/src/services/HomePublishService.ts` + `routes/admin/home-publish.ts` — GET draft 附顶层 additive `staleness`（双信号编辑器提示——权威判定仍在 publish 时点；gaps additive 同范式非 break）；`HomeDraftStaleness` 类型入 `packages/types/home-publish.types.ts`，`HomePreview.context.draft?` additive
+  - `apps/server-next/src/lib/home-curation/draft-mutations.ts` — **新建**纯变异层（画布操作 → HomePageConfig 逐映射）：reorder（banner sortOrder / modules ordering）/ move（**slot 迁移 + 目标重排单次变换原子完成**，消解原两步 PATCH+reorder 部分持久化态）/ settings 替换 / addVideos（slot 内去重跳过 + ordering 续接 + 默认值对账 insertPinnedHomeModulesBatch）/ applyCandidates / addBanner（草稿内 max+1）；新建条目预生成 UUID（拖拽身份锚 + publish 后即正式行 id）
+  - `apps/server-next/src/lib/home-curation/use-home-draft.ts` — **新建**草稿生命周期 hook：**编辑即自动保存草稿**（UI 形态裁定记此——与既有画布"每操作即持久化"粒度一致，「保存草稿」不设独立按钮，显式动作 = 发布/丢弃）；首次编辑惰性建稿（三真源装配整页，**含 banner-slot 冻结存量**——publish 全量替换语义下缺装配即被删）；mutate 串行链防会话内 PUT 竞态；初始读失败降级发布态
+  - `apps/server-next/.../canvas/HomeCanvas.tsx` — 写路径全量切草稿（draftCtl prop）：拖拽/跨区块/settings/候选应用经 mutateConfig；草稿态工具栏（chip 基于 vN + 发布/丢弃）+ 陈旧显著提示条；preview 按 draftActive 加 draft=true
+  - `apps/server-next/.../canvas/PublishConfirmModal.tsx` — **新建**发布确认弹层：摘要 + 可选备注 + **横图三类警告标记**（尺寸/比例/探测失败，复用 lib/banners/image-guard 同源探测；§6 警告级**不阻断发布**——ERRATA 移交验收项落地）+ 陈旧警示；409 拒绝 → danger toast + 双信号刷新
+  - `apps/server-next/.../canvas/{SectionInspector,CandidatePoolPanel}.tsx` + `use-canvas-entries.ts` + `HomeOpsClient.tsx` — 保存/应用改回调注入（onSaveSettings/onApplyCandidates/onApply）；批量添加按视图分流（canvas → 草稿 / list+深链 → 资源级直写维持）；画布 banner 创建 → 草稿条目
+  - 测试：`home-draft-mutations.test.ts` **新建** 10 例（纯函数）；`home-publish.test.ts` +staleness 3 例（22→25 形态）；`admin-home-sections.test.ts` +draft=true 3 例（草稿叠加/降级/draft=false 不触草稿查询）；`HomeCanvas.test.tsx` 重写 39 例（draftCtl mock + lastMutated 载荷断言 + 草稿工具栏 7 例）；`CandidatePoolPanel.test.tsx` 应用语义改造 22 例；E2E `home-draft-publish.spec.ts` **新建** 6 例（草稿态进入/发布金路径/横图警告不阻断/陈旧 409/丢弃）+ `home-ops.spec.ts` 2 例改造 + `_helpers` 扩 draft/publish/sections mock
+- **新增依赖**：无 ｜ **数据库变更**：无
+- **注意事项**：① **ADR-185 D-185-2 + D-185-6 闭环**（2.1 画布全量进草稿含候选应用；2.2 三层清单运行核验 = e2e 断言画布操作零触达门面 #3/#5/#6 与资源级 PATCH〔HIGH-1 验收核验项〕；6.1 独立子路由卡 24 已执行 / 6.4 发布确认横图警告本卡落地 / 6.2 多 brand·6.3 定时发布为非目标边界声明）；其余裁定闭环归卡 26（端点 #5–#7 + 审计 diff 展示）与卡 27（缓存失效）——有意不引用其 D 编号字面量防 verify-adr-d-numbers 伪闭环（卡 23 沉淀规律）；② **「编辑即不影响前台」实证**：dev 实测草稿改 top10 displayCount=12 → preview draft=true 反映 12 / 缺省 preview 与公开链路维持 10；直写门面 #3 后 GET draft staleness 实时翻 stale/tablesNewer=true；③ 候选池 appliedAt 派生仍基于正式配置（草稿 pinned 发布前不显「已应用」）——已知轻微偏差，草稿内重复防御由 slot 去重承担；④ 门禁：typecheck/lint 绿 + test:changed 升全量 6985/6985（v1 staging 域 2 例并发 flake 隔离/复跑全绿，与本卡零交集——StagingTable/StagingEditPanel 同家族既有失修候选）+ verify:adr-contracts EXIT=0（零新端点，218 不变）+ `npm run test:e2e:admin` **93/93** EXIT=0（home 域 11→17）。
+
 ## [CHG-HOME-DRAFT-PUBLISH-A] 发布治理后端：migration 097/098 + draft CRUD + publish 端点（SEQ-20260605-05 Phase 4 卡 24）
 - **完成时间**：2026-06-07
 - **记录时间**：2026-06-07 03:55

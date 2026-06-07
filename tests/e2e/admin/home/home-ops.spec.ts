@@ -5,10 +5,12 @@
  * （治理方案 §14「后台 /admin/home 有 E2E 覆盖」收口；此前零命中）
  *
  * 覆盖：
- *   A. 画布渲染 + 区块切换/Inspector smoke + settings 保存（端点 #1/#3）
- *   B. 卡片操作金路径：reorder spy / 删除 modal / 发布切换（ADR-104 资源级）
- *   C. 候选池金路径：解释展示（filtered 标灰）/ 应用 #5 / 立即刷新 #7 / 未生成态（端点 #4/#5/#7）
- *   D. Banner 编辑 + 横图警告态（§6 警告级不阻断）
+ *   A. 画布渲染 + 区块切换/Inspector smoke + settings 保存（端点 #1；保存经草稿 PUT——
+ *      CHG-HOME-DRAFT-PUBLISH-B / D-185-2.1，门面 #3 零触达核验）
+ *   B. 卡片操作金路径（list 视图）：reorder spy / 删除 modal / 发布切换（ADR-104 资源级直写维持）
+ *   C. 候选池金路径：解释展示（filtered 标灰）/ 应用经草稿 PUT（#5 零触达核验）/ 立即刷新 #7 / 未生成态
+ *   D. Banner 编辑 + 横图警告态（§6 警告级不阻断；list 视图直写维持）
+ *   （草稿生命周期 + 发布确认 → home-draft-publish.spec.ts）
  *
  * 范式：_helpers 基座（shell-mocks + 类型绑定 @resovo/types）；写路径经 state.writes spy 断言。
  */
@@ -72,7 +74,7 @@ test.describe('/admin/home 金路径', () => {
     await expect(page.getByTestId('section-inspector-featured')).toBeVisible()
   })
 
-  test('Inspector 保存：改 displayCount → PATCH settings spy（端点 #3）', async ({ page }) => {
+  test('Inspector 保存：改 displayCount → PUT 草稿 spy（D-185-2.1；门面 #3 零触达）', async ({ page }) => {
     await installHomeOpsMocks(page, state)
     await gotoHome(page)
     await enterCanvas(page)
@@ -82,10 +84,15 @@ test.describe('/admin/home 金路径', () => {
     await page.getByTestId('inspector-save-btn').click()
 
     await expect
-      .poll(() => findWrites(state, 'PATCH', '/v1/admin/home/sections/hot_movies/settings').length)
+      .poll(() => findWrites(state, 'PUT', '/v1/admin/home/draft').length)
       .toBe(1)
-    const write = findWrites(state, 'PATCH', '/v1/admin/home/sections/hot_movies/settings')[0]!
-    expect((write.body as { displayCount: number }).displayCount).toBe(5)
+    const write = findWrites(state, 'PUT', '/v1/admin/home/draft')[0]!
+    const config = (write.body as { config: { settings: Array<{ section: string; displayCount: number }> } }).config
+    expect(config.settings.find((s) => s.section === 'hot_movies')!.displayCount).toBe(5)
+    // 核验项（ADR-185 HIGH-1）：画布写路径不再触达门面 #3
+    expect(findWrites(state, 'PATCH', '/v1/admin/home/sections/hot_movies/settings')).toHaveLength(0)
+    // 首次编辑惰性建稿 → 草稿态工具栏解锁
+    await expect(page.getByTestId('canvas-draft-chip')).toBeVisible()
   })
 
   // ── B. 卡片操作金路径（list 视图，ADR-104 资源级）──────────────────────
@@ -184,7 +191,7 @@ test.describe('/admin/home 金路径', () => {
     await expect(page.getByTestId('candidate-check-c2')).not.toBeVisible()
   })
 
-  test('应用：勾选候选 → 应用按钮 → POST apply-autofill spy（端点 #5）', async ({ page }) => {
+  test('应用：勾选候选 → 应用按钮 → PUT 草稿 pinned spy（D-185-2.1；门面 #5 零触达）', async ({ page }) => {
     state.pools.set('hot_movies', {
       candidates: [makeCandidate('c1'), makeCandidate('c3', { rank: 2 })],
       snapshotAt: '2026-06-07T00:30:00Z',
@@ -203,10 +210,13 @@ test.describe('/admin/home 金路径', () => {
     await applyBtn.click()
 
     await expect
-      .poll(() => findWrites(state, 'POST', '/v1/admin/home/sections/hot_movies/apply-autofill').length)
+      .poll(() => findWrites(state, 'PUT', '/v1/admin/home/draft').length)
       .toBe(1)
-    const write = findWrites(state, 'POST', '/v1/admin/home/sections/hot_movies/apply-autofill')[0]!
-    expect((write.body as { candidateIds: string[] }).candidateIds).toEqual(['c1'])
+    const write = findWrites(state, 'PUT', '/v1/admin/home/draft')[0]!
+    const config = (write.body as { config: { modules: Array<{ slot: string; contentRefId: string }> } }).config
+    expect(config.modules.some((m) => m.slot === 'hot_movies' && m.contentRefId === 'v-c1')).toBe(true)
+    // 核验项（ADR-185 HIGH-1）：画布候选应用不再触达门面 #5（重校验挪 publish 时点）
+    expect(findWrites(state, 'POST', '/v1/admin/home/sections/hot_movies/apply-autofill')).toHaveLength(0)
   })
 
   test('立即刷新：候选池刷新按钮 → POST refresh-candidates spy（端点 #7）', async ({ page }) => {

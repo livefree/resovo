@@ -9,11 +9,14 @@
  * 先到先得，pinned 进占用集、auto/fallback 补位跳过已占用；allow_duplicates 豁免。
  */
 
+import { randomUUID } from 'node:crypto'
 import type { z } from 'zod'
 import type { Pool } from 'pg'
 import {
   HOME_SECTION_KEYS,
+  type Banner,
   type HomeModule,
+  type HomePageConfig,
   type HomePreview,
   type HomePreviewCard,
   type HomePreviewSection,
@@ -24,6 +27,7 @@ import {
 import { listHomeSectionSettings } from '@/api/db/queries/home-section-settings'
 import { listAllBanners } from '@/api/db/queries/home-banners'
 import { listAdminHomeModules } from '@/api/db/queries/home-modules'
+import { findHomeConfigDraft } from '@/api/db/queries/home-publish'
 import { findLatestHomeAutofillSnapshot } from '@/api/db/queries/home-autofill-snapshots'
 import { listTrendingVideos } from '@/api/db/queries/videos'
 import { listVideosByRatingDesc, listVideoCardsByIds } from '@/api/db/queries/videos.status'
@@ -38,6 +42,38 @@ import {
   HOT_SECTION_TYPE,
 } from '@/api/services/home-curation.preview-cards'
 
+/**
+ * 草稿配置 → 三真源行形态（draft=true 叠加消费，ADR-185 D-185-2.1 / §11.2 预览态）。
+ * 草稿新建行可缺 id/时间戳（publish 时生成）——画布侧恒预生成 UUID 保证拖拽身份，
+ * 此处兜底补齐仅防御 FE 缺省（请求内随机，不跨刷新稳定）。
+ */
+function draftConfigToRows(config: HomePageConfig): {
+  settingsRows: HomeSectionSettings[]
+  bannerRows: Banner[]
+  moduleRows: HomeModule[]
+} {
+  const now = new Date().toISOString()
+  return {
+    settingsRows: config.settings.map((s) => ({
+      ...s,
+      id: s.id ?? randomUUID(),
+      updatedAt: s.updatedAt ?? now,
+    })),
+    bannerRows: config.banners.map((b) => ({
+      ...b,
+      id: b.id ?? randomUUID(),
+      createdAt: b.createdAt ?? now,
+      updatedAt: b.updatedAt ?? now,
+    })),
+    moduleRows: config.modules.map((m) => ({
+      ...m,
+      id: m.id ?? randomUUID(),
+      createdAt: m.createdAt ?? now,
+      updatedAt: m.updatedAt ?? now,
+    })),
+  }
+}
+
 export async function buildHomePreview(
   db: Pool,
   query: z.infer<typeof PreviewQuerySchema>,
@@ -45,17 +81,30 @@ export async function buildHomePreview(
   const at = query.at ? new Date(query.at) : new Date()
   const brandSlug = query.brand_slug ?? null
 
-  const [settingsRows, bannersResult, modulesResult] = await Promise.all([
-    listHomeSectionSettings(db),
-    listAllBanners(db, { page: 1, limit: 100 }),
-    listAdminHomeModules(db, { page: 1, limit: 500 }),
-  ])
+  // draft=true：配置三键改读草稿覆盖层（草稿 + 当前数据聚合——自动候选/快照/趋势
+  // 仍为实时数据）；无草稿降级发布态（与 draft=false 同构，存在性非错误）
+  const draftRow = query.draft ? await findHomeConfigDraft(db) : null
+  let settingsRows: HomeSectionSettings[]
+  let bannerRows: Banner[]
+  let moduleRows: HomeModule[]
+  if (draftRow) {
+    ;({ settingsRows, bannerRows, moduleRows } = draftConfigToRows(draftRow.config))
+  } else {
+    const [settings, bannersResult, modulesResult] = await Promise.all([
+      listHomeSectionSettings(db),
+      listAllBanners(db, { page: 1, limit: 100 }),
+      listAdminHomeModules(db, { page: 1, limit: 500 }),
+    ])
+    settingsRows = settings
+    bannerRows = bannersResult.rows
+    moduleRows = modulesResult.rows
+  }
   const settingsBySection = new Map(settingsRows.map((s) => [s.section, s]))
 
   // brand 过滤（ADR-046 协议）+ 按 section 分组（banner slot 行已冻结，归冻结存量不进 preview）
-  const banners = bannersResult.rows.filter((b) => brandVisible(b, brandSlug))
+  const banners = bannerRows.filter((b) => brandVisible(b, brandSlug))
   const modulesBySlot = new Map<string, HomeModule[]>()
-  for (const m of modulesResult.rows) {
+  for (const m of moduleRows) {
     if (m.slot === 'banner' || !brandVisible(m, brandSlug)) continue
     const list = modulesBySlot.get(m.slot) ?? []
     list.push(m)
@@ -109,7 +158,14 @@ export async function buildHomePreview(
   return {
     sections,
     generatedAt: new Date().toISOString(),
-    context: { brandSlug, locale: query.locale ?? null, at: query.at ?? null, device: query.device },
+    context: {
+      brandSlug,
+      locale: query.locale ?? null,
+      at: query.at ?? null,
+      device: query.device,
+      // additive（CHG-HOME-DRAFT-PUBLISH-B）：true = 本次合成实际消费了草稿覆盖层
+      ...(draftRow ? { draft: true } : {}),
+    },
   }
 }
 

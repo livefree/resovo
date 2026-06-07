@@ -28,11 +28,13 @@ export async function adminHomePublishRoutes(fastify: FastifyInstance) {
   const adminOnly = [fastify.authenticate, fastify.requireRole(['admin'])]
 
   // ── GET /admin/home/draft ─────────────────────────────────────────────────
-  // D-185-3.1：无草稿 200 { data: null }——存在性非错误
+  // D-185-3.1：无草稿 200 { data: null }——存在性非错误。
+  // staleness 顶层 additive（CHG-HOME-DRAFT-PUBLISH-B / D-185-2.2 编辑器提示；
+  // 候选端点 gaps additive 同范式非 break）
 
   fastify.get('/admin/home/draft', { preHandler: adminOnly }, async (_request, reply) => {
-    const data = await svc.getDraft()
-    return reply.send({ data })
+    const { draft, staleness } = await svc.getDraftWithStaleness()
+    return reply.send({ data: draft, staleness })
   })
 
   // ── PUT /admin/home/draft ─────────────────────────────────────────────────

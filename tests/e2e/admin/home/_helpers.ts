@@ -19,7 +19,10 @@ import type {
   AutofillCandidate,
   Banner,
   ContentGap,
+  HomeConfigDraft,
+  HomeDraftStaleness,
   HomeModule,
+  HomePageConfig,
   HomePreview,
   HomePreviewCard,
   HomePreviewSection,
@@ -152,6 +155,12 @@ export interface HomeOpsMockState {
   settings: Map<HomeSectionKey, HomeSectionSettings>
   /** 端点 #4 候选池（按 section） */
   pools: Map<HomeSectionKey, CandidatePool>
+  /** 草稿覆盖层（ADR-185 / CHG-HOME-DRAFT-PUBLISH-B；PUT 时由 mock 写入） */
+  draft: HomeConfigDraft | null
+  /** GET draft 附带的陈旧双信号（缺省 = 不陈旧） */
+  staleness: HomeDraftStaleness | null
+  /** POST publish 行为覆写（缺省成功 versionNo 递增；'conflict' = 409 陈旧拒绝） */
+  publishBehavior: 'ok' | 'conflict'
   /** 写路径 spy 日志（method + path + body） */
   writes: Array<{ method: string; path: string; body: unknown }>
 }
@@ -165,9 +174,39 @@ export function freshState(over: Partial<Omit<HomeOpsMockState, 'writes'>> = {})
     banners: [makeBanner()],
     settings,
     pools: new Map(),
+    draft: null,
+    staleness: null,
+    publishBehavior: 'ok',
     writes: [],
     ...over,
   }
+}
+
+/** 草稿行工厂（config 缺省 = 从 state 三键装配） */
+export function makeDraft(state: HomeOpsMockState, over: Partial<HomeConfigDraft> = {}): HomeConfigDraft {
+  return {
+    id: 'draft-e2e-1',
+    scope: 'global',
+    config: {
+      banners: [...state.banners],
+      modules: [...state.modules],
+      settings: HOME_SECTION_KEYS.map((s) => state.settings.get(s) ?? makeSettings(s)),
+    },
+    baseVersionNo: null,
+    createdBy: 'u-admin',
+    updatedBy: 'u-admin',
+    createdAt: '2026-06-07T00:00:00Z',
+    updatedAt: '2026-06-07T01:00:00Z',
+    ...over,
+  }
+}
+
+const NOT_STALE: HomeDraftStaleness = {
+  stale: false,
+  baseMismatch: false,
+  tablesNewer: false,
+  latestVersionNo: null,
+  tablesMaxUpdatedAt: null,
 }
 
 /** spy 便捷断言：按 method+path 前缀取写记录 */
@@ -223,13 +262,29 @@ const EMPTY_CARD: HomePreviewCard = {
   explain: null,
 }
 
-export function buildPreview(state: HomeOpsMockState): HomePreview {
+export function buildPreview(state: HomeOpsMockState, opts: { draft?: boolean } = {}): HomePreview {
+  // draft=true 且有草稿 → 配置三键改读草稿（服务端 draftConfigToRows 同构镜像）
+  const fromDraft = opts.draft && state.draft ? state.draft.config : null
+  const banners: Banner[] = fromDraft
+    ? fromDraft.banners.map((b, i) => ({ ...makeBanner(), ...b, id: b.id ?? `draft-bn-${i}` }))
+    : state.banners
+  const modules: HomeModule[] = fromDraft
+    ? fromDraft.modules.map((m, i) => ({ ...makeModule(), ...m, id: m.id ?? `draft-m-${i}` }))
+    : state.modules
+  const settingsOf = (key: HomeSectionKey): HomeSectionSettings => {
+    if (fromDraft) {
+      const entry = fromDraft.settings.find((s) => s.section === key)
+      if (entry) return { ...makeSettings(key), ...entry }
+    }
+    return state.settings.get(key) ?? makeSettings(key)
+  }
+
   const sections: HomePreviewSection[] = HOME_SECTION_KEYS.map((key) => {
-    const settings = state.settings.get(key) ?? makeSettings(key)
+    const settings = settingsOf(key)
     const pinned =
       key === 'banner'
-        ? state.banners.map(bannerToPinnedCard)
-        : state.modules.filter((m) => m.slot === key).map(moduleToPinnedCard)
+        ? banners.map(bannerToPinnedCard)
+        : modules.filter((m) => m.slot === key).map(moduleToPinnedCard)
     const cards = [...pinned]
     while (cards.length < settings.displayCount) cards.push({ ...EMPTY_CARD })
     return { key, settings, cards, consumedSnapshotAt: null }
@@ -237,7 +292,10 @@ export function buildPreview(state: HomeOpsMockState): HomePreview {
   return {
     sections,
     generatedAt: '2026-06-07T01:00:00.000Z',
-    context: { brandSlug: null, locale: null, at: null, device: 'desktop' },
+    context: {
+      brandSlug: null, locale: null, at: null, device: 'desktop',
+      ...(fromDraft ? { draft: true } : {}),
+    },
   }
 }
 
@@ -257,9 +315,57 @@ export async function installHomeOpsMocks(page: Page, state: HomeOpsMockState) {
       state.writes.push({ method, path, body: request.postDataJSON() as unknown })
     }
 
-    // ── 端点 #1：整页预览（画布数据源）──
+    // ── 端点 #1：整页预览（画布数据源；draft=true 草稿叠加，ADR-185）──
     if (path === '/v1/admin/home/preview' && method === 'GET') {
-      return json({ data: buildPreview(state) })
+      return json({ data: buildPreview(state, { draft: url.searchParams.get('draft') === 'true' }) })
+    }
+
+    // ── 端点 #2：7 区块 settings 摘要（惰性建稿装配数据源，use-home-draft）──
+    if (path === '/v1/admin/home/sections' && method === 'GET') {
+      return json({
+        data: HOME_SECTION_KEYS.map((key) => ({
+          settings: state.settings.get(key) ?? makeSettings(key),
+          pinnedCount: 0,
+          lastSnapshotAt: null,
+          candidateCount: null,
+          frontendWired: key !== 'type_shortcuts',
+        })),
+      })
+    }
+
+    // ── ADR-185 #1–#3：draft GET/PUT/DELETE（staleness 顶层 additive）──
+    if (path === '/v1/admin/home/draft' && method === 'GET') {
+      return json({
+        data: state.draft,
+        staleness: state.draft ? (state.staleness ?? NOT_STALE) : null,
+      })
+    }
+    if (path === '/v1/admin/home/draft' && method === 'PUT') {
+      recordWrite()
+      const body = request.postDataJSON() as { config: HomePageConfig }
+      state.draft = state.draft
+        ? { ...state.draft, config: body.config, updatedAt: '2026-06-07T02:00:00Z' }
+        : makeDraft(state, { config: body.config })
+      return json({ data: state.draft })
+    }
+    if (path === '/v1/admin/home/draft' && method === 'DELETE') {
+      recordWrite()
+      const existed = state.draft !== null
+      state.draft = null
+      return json({ data: { deleted: existed } })
+    }
+
+    // ── ADR-185 #4：publish（成功删草稿 / conflict = 陈旧 409）──
+    if (path === '/v1/admin/home/publish' && method === 'POST') {
+      recordWrite()
+      if (!state.draft) {
+        return json({ error: { code: 'VALIDATION_ERROR', message: '无草稿可发布——请先保存草稿', status: 422 } }, 422)
+      }
+      if (state.publishBehavior === 'conflict') {
+        return json({ error: { code: 'STATE_CONFLICT', message: '草稿基线已过时：请丢弃草稿后基于最新配置重建', status: 409 } }, 409)
+      }
+      state.draft = null
+      return json({ data: { versionNo: 1 } })
     }
 
     // ── 端点 #3：settings PATCH ──

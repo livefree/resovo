@@ -11,6 +11,9 @@ import type {
   AutofillCandidate,
   AutofillCandidatesResult,
   ContentGap,
+  HomeConfigDraft,
+  HomeDraftStaleness,
+  HomePageConfig,
   HomePreview,
   HomePreviewQuery,
   HomeSectionKey,
@@ -24,8 +27,47 @@ export async function getHomePreview(query: HomePreviewQuery = {}): Promise<Home
   if (query.locale)    params.set('locale', query.locale)
   if (query.at)        params.set('at', query.at)
   if (query.device)    params.set('device', query.device)
+  if (query.draft)     params.set('draft', 'true')
   const qs = params.toString()
   const result = await apiClient.get<{ data: HomePreview }>(`/admin/home/preview${qs ? `?${qs}` : ''}`)
+  return result.data
+}
+
+// ── 发布治理（ADR-185 #1–#4 / CHG-HOME-DRAFT-PUBLISH-B 消费）──────────────
+
+export interface HomeDraftResult {
+  readonly draft: HomeConfigDraft | null
+  /** 陈旧双信号（无草稿 null；additive 顶层字段，D-185-2.2 编辑器提示） */
+  readonly staleness: HomeDraftStaleness | null
+}
+
+export async function getHomeDraft(): Promise<HomeDraftResult> {
+  const result = await apiClient.get<{ data: HomeConfigDraft | null; staleness: HomeDraftStaleness | null }>(
+    '/admin/home/draft',
+  )
+  return { draft: result.data, staleness: result.staleness ?? null }
+}
+
+/** PUT 整页整体替换（D-185-3.1；不计 audit——编辑态噪音） */
+export async function saveHomeDraft(config: HomePageConfig): Promise<HomeConfigDraft> {
+  const result = await apiClient.put<{ data: HomeConfigDraft }>('/admin/home/draft', { config })
+  return result.data
+}
+
+export async function discardHomeDraft(): Promise<{ deleted: boolean }> {
+  const result = await apiClient.delete<{ data: { deleted: boolean } }>('/admin/home/draft')
+  return result.data
+}
+
+/**
+ * 发布（D-185-3.2）：无草稿 422 / 草稿陈旧·重校验失败·并发竞态 409 STATE_CONFLICT
+ * （audit home_page.publish 在后端落；缓存失效钩子归 CHG-HOME-CACHE-INVALIDATE）。
+ */
+export async function publishHomeDraft(note?: string): Promise<{ versionNo: number }> {
+  const result = await apiClient.post<{ data: { versionNo: number } }>(
+    '/admin/home/publish',
+    note ? { note } : {},
+  )
   return result.data
 }
 

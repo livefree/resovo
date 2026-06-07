@@ -6,7 +6,7 @@
 
 ## 当前任务（单任务工作台：同时仅 1 个 🔄 进行中；完成即删卡，历史见 docs/changelog.md）
 
-（空 — 上一任务 CHG-HOME-DRAFT-PUBLISH-A 已收口 2026-06-07 03:55，见 changelog；**Phase 4 实施 24 ✅，卡 25/26/27 依赖解除 ⬜ 待开始（25 → 26 ∥ 27）**）
+（空 — 上一任务 CHG-HOME-DRAFT-PUBLISH-B 已收口 2026-06-07 05:00，见 changelog；**Phase 4 实施 24/25 ✅，剩 26 ∥ 27 待开始**）
 
 ---
 

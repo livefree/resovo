@@ -15,6 +15,7 @@ import type { Pool } from 'pg'
 import {
   HOME_SECTION_KEYS,
   type HomeConfigDraft,
+  type HomeDraftStaleness,
   type HomePageConfig,
   type HomeSectionKey,
 } from '@resovo/types'
@@ -94,6 +95,37 @@ export class HomePublishService {
   /** 端点 #1：读当前草稿（无草稿 200 data:null——存在性非错误，D-185-3.1） */
   async getDraft(): Promise<HomeConfigDraft | null> {
     return findHomeConfigDraft(this.db)
+  }
+
+  /**
+   * 端点 #1 扩展读（CHG-HOME-DRAFT-PUBLISH-B）：草稿 + 陈旧双信号（D-185-2.2）。
+   * staleness 为编辑器提示用途（gaps additive 同范式）；权威判定仍在 publish 时点。
+   */
+  async getDraftWithStaleness(): Promise<{
+    draft: HomeConfigDraft | null
+    staleness: HomeDraftStaleness | null
+  }> {
+    const draft = await findHomeConfigDraft(this.db)
+    if (!draft) return { draft: null, staleness: null }
+
+    const [latestVersionNo, tablesMaxUpdatedAt] = await Promise.all([
+      findLatestVersionNo(this.db),
+      findTruthTablesMaxUpdatedAt(this.db),
+    ])
+    const baseMismatch = (draft.baseVersionNo ?? null) !== (latestVersionNo ?? null)
+    const tablesNewer =
+      tablesMaxUpdatedAt !== null &&
+      new Date(tablesMaxUpdatedAt).getTime() > new Date(draft.updatedAt).getTime()
+    return {
+      draft,
+      staleness: {
+        stale: baseMismatch || tablesNewer,
+        baseMismatch,
+        tablesNewer,
+        latestVersionNo,
+        tablesMaxUpdatedAt,
+      },
+    }
   }
 
   /** 端点 #2：整页草稿保存（整体替换；不计 audit——编辑态噪音，D-185-3.1） */

@@ -160,18 +160,20 @@ beforeEach(async () => {
 // ── GET /admin/home/draft ──────────────────────────────────────────────────
 
 describe('GET /admin/home/draft', () => {
-  it('无草稿 → 200 data:null（存在性非错误，D-185-3.1）', async () => {
+  it('无草稿 → 200 data:null + staleness:null（存在性非错误，D-185-3.1）', async () => {
     mockFindDraft.mockResolvedValue(null)
     const res = await app.inject({
       method: 'GET', url: '/v1/admin/home/draft',
       headers: { authorization: await adminToken() },
     })
     expect(res.statusCode).toBe(200)
-    expect(res.json()).toEqual({ data: null })
+    expect(res.json()).toEqual({ data: null, staleness: null })
   })
 
-  it('有草稿 → 200 全行回读（含 baseVersionNo 陈旧锚）', async () => {
-    mockFindDraft.mockResolvedValue(draftRow({ baseVersionNo: 3 }))
+  it('有草稿基线一致 → 200 全行回读 + staleness.stale=false', async () => {
+    mockFindDraft.mockResolvedValue(draftRow({ baseVersionNo: 3, updatedAt: '2026-06-07T01:00:00Z' }))
+    mockLatestVersionNo.mockResolvedValue(3)
+    mockTablesMaxUpdatedAt.mockResolvedValue('2026-06-07T00:30:00Z')
     const res = await app.inject({
       method: 'GET', url: '/v1/admin/home/draft',
       headers: { authorization: await adminToken() },
@@ -179,6 +181,24 @@ describe('GET /admin/home/draft', () => {
     expect(res.statusCode).toBe(200)
     expect(res.json().data.baseVersionNo).toBe(3)
     expect(res.json().data.scope).toBe('global')
+    expect(res.json().staleness).toEqual({
+      stale: false,
+      baseMismatch: false,
+      tablesNewer: false,
+      latestVersionNo: 3,
+      tablesMaxUpdatedAt: '2026-06-07T00:30:00Z',
+    })
+  })
+
+  it('陈旧双信号 additive：base 失配 / 三表直写晚于草稿 → stale=true（D-185-2.2 编辑器提示）', async () => {
+    mockFindDraft.mockResolvedValue(draftRow({ baseVersionNo: 2, updatedAt: '2026-06-07T01:00:00Z' }))
+    mockLatestVersionNo.mockResolvedValue(3)
+    mockTablesMaxUpdatedAt.mockResolvedValue('2026-06-07T02:00:00Z')
+    const res = await app.inject({
+      method: 'GET', url: '/v1/admin/home/draft',
+      headers: { authorization: await adminToken() },
+    })
+    expect(res.json().staleness).toMatchObject({ stale: true, baseMismatch: true, tablesNewer: true })
   })
 
   it('未认证 → 401', async () => {

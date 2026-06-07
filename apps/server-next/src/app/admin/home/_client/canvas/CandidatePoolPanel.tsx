@@ -3,10 +3,11 @@
 /**
  * CandidatePoolPanel.tsx — 候选池面板（CHG-HOME-AUTOFILL-UI / 方案 §2.3 + §7.3.5 + §12）
  *
- * SectionInspector 内嵌，填充 Phase 3 预留接入位。消费三端点：
+ * SectionInspector 内嵌，填充 Phase 3 预留接入位。端点消费：
  *   #4 GET  autofill-candidates（include_filtered=true 恒开——解释展示 + gaps）
- *   #5 POST apply-autofill（选中候选转 pinned；全有或全无 409，D-182-4.5）
  *   #7 POST refresh-candidates（202 异步入队 / 429 进行中 / 422 manual_only）
+ *   应用：**经 onApply 落草稿 pinned**（CHG-HOME-DRAFT-PUBLISH-B / D-185-2.1——
+ *   端点 #5 重校验语义挪 publish 时点；#5 保留为非画布旁路不再由画布调用）。
  *
  * 区块分支：
  *   - banner：端点 #5 对 banner 恒 422（横版大图须人工提供，D-182-4.5）——
@@ -21,7 +22,7 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties } from 're
 import { ImageOff } from 'lucide-react'
 import { AdminButton, AdminCheckbox, Pill, useToast } from '@resovo/admin-ui'
 import { ApiClientError } from '@/lib/api-client'
-import { applyAutofillCandidates, getAutofillCandidates, refreshSectionCandidates } from '@/lib/home-curation/api'
+import { getAutofillCandidates, refreshSectionCandidates } from '@/lib/home-curation/api'
 import type {
   AutofillCandidate,
   AutofillCandidatesResult,
@@ -191,6 +192,11 @@ const GAP_ROW_STYLE: CSSProperties = {
 export interface CandidatePoolPanelProps {
   readonly section: HomeSectionKey
   readonly autofillMode: HomeSectionSettings['autofillMode']
+  /** 应用写路径（D-185-2.1 落草稿 pinned；返回应用/跳过计数供 toast） */
+  readonly onApply: (
+    section: HomeSectionKey,
+    candidates: readonly AutofillCandidate[],
+  ) => Promise<{ applied: number; skipped: number }>
   /** 应用成功 → 父级重拉 preview（pinned 变化） */
   readonly onApplied: () => void
   /** banner 候选「预填」上抛（BannerDrawer 创建模式；仅 banner 区块出现该动作） */
@@ -199,7 +205,7 @@ export interface CandidatePoolPanelProps {
 
 // ── 组件 ─────────────────────────────────────────────────────────
 
-export function CandidatePoolPanel({ section, autofillMode, onApplied, onBannerPrefill }: CandidatePoolPanelProps) {
+export function CandidatePoolPanel({ section, autofillMode, onApply, onApplied, onBannerPrefill }: CandidatePoolPanelProps) {
   const toast = useToast()
   const [result, setResult] = useState<AutofillCandidatesResult | null>(null)
   const [loading, setLoading] = useState(true)
@@ -264,28 +270,34 @@ export function CandidatePoolPanel({ section, autofillMode, onApplied, onBannerP
   }
 
   async function handleApply() {
-    if (selected.size === 0) return
+    if (selected.size === 0 || !result) return
     const target = section
+    // 选中 id → 候选对象（快照态本地解析；快照轮换由重拉自然纠正）
+    const byId = new Map(result.candidates.map((c) => [c.id, c]))
+    const picked = [...selected].flatMap((id) => {
+      const c = byId.get(id)
+      return c ? [c] : []
+    })
+    if (picked.length === 0) return
     setApplying(true)
     try {
-      const { applied } = await applyAutofillCandidates(target, [...selected])
-      toast.push({ title: `已应用 ${applied} 个候选为固定位`, level: 'success' })
+      // D-185-2.1：落草稿 pinned（重校验挪 publish 时点；slot 内重复跳过）
+      const { applied, skipped } = await onApply(target, picked)
+      toast.push({
+        title: applied > 0 ? `已将 ${applied} 个候选加入草稿固定位` : '所选候选均已在草稿固定位',
+        ...(skipped > 0 ? { description: `${skipped} 个重复候选已跳过` } : {}),
+        level: applied > 0 ? 'success' : 'warn',
+      })
       // 切区竞态：已切走则不动新区块的选择态（effect 已重置）；load 自带过期闭包短路
       if (activeSectionRef.current === target) setSelected(new Set())
       onApplied()
       void load()
     } catch (err: unknown) {
-      if (err instanceof ApiClientError && err.status === 409) {
-        // D-182-4.5 全有或全无：任一失效整体拒绝（快照轮换/已应用/重校验失效）
-        toast.push({ title: '应用被整体拒绝（候选已失效或已应用）', description: err.message, level: 'danger' })
-        void load() // 重拉获取最新快照态
-      } else {
-        toast.push({
-          title: '应用失败',
-          description: err instanceof Error ? err.message : '请稍后重试',
-          level: 'danger',
-        })
-      }
+      toast.push({
+        title: '应用失败',
+        description: err instanceof Error ? err.message : '请稍后重试',
+        level: 'danger',
+      })
     } finally {
       setApplying(false)
     }

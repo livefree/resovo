@@ -4,15 +4,21 @@
  * SectionInspector.tsx — 区块设置 Inspector（CHG-HOME-CANVAS-B / 方案 §3）
  *
  * 选中区块的 settings 编辑（autofillMode / refreshIntervalMinutes / displayCount /
- * allowDuplicates / pinnedLimit），消费 PATCH /admin/home/sections/:section/settings
- * （ADR-182 #3，audit home_section.settings_update 在后端落）。
- * 候选池 / 过滤原因展示由 CandidatePoolPanel 承载（CHG-HOME-AUTOFILL-UI，端点 #4/#5/#7）。
+ * allowDuplicates / pinnedLimit）。**CHG-HOME-DRAFT-PUBLISH-B / D-185-2.1：保存经
+ * onSaveSettings 回调落草稿**（不再调门面 #3——端点保留为非画布旁路）。
+ * 候选池 / 过滤原因展示由 CandidatePoolPanel 承载（#4/#7 只读/触发维持直连；
+ * 应用经 onApplyCandidates 落草稿 pinned）。
  */
 
 import { useEffect, useState, type ChangeEvent, type CSSProperties } from 'react'
 import { AdminButton, AdminSelect, AdminInput, Pill, useToast, type AdminSelectOption } from '@resovo/admin-ui'
-import { updateHomeSectionSettings } from '@/lib/home-curation/api'
-import type { AutofillCandidate, HomePreviewSection, HomeSectionKey, HomeSectionSettings } from '@/lib/home-curation/types'
+import type {
+  AutofillCandidate,
+  HomeConfigSectionSettingsEntry,
+  HomePreviewSection,
+  HomeSectionKey,
+  HomeSectionSettings,
+} from '@/lib/home-curation/types'
 import { CandidatePoolPanel } from './CandidatePoolPanel'
 import { SECTION_TITLE } from './section-meta'
 
@@ -81,15 +87,25 @@ function formFrom(settings: HomeSectionSettings): FormState {
 export interface SectionInspectorProps {
   /** 选中区块（null = 未选中提示态） */
   readonly section: HomePreviewSection | null
+  /** settings 保存写路径（D-185-2.1 落草稿；HomeCanvas 注入） */
+  readonly onSaveSettings: (
+    section: HomeSectionKey,
+    patch: Partial<Omit<HomeConfigSectionSettingsEntry, 'section' | 'id'>>,
+  ) => Promise<void>
   /** settings 保存成功 → 父级重拉 preview */
   readonly onSaved: (section: HomeSectionKey) => void
+  /** 候选应用写路径（D-185-2.1 落草稿 pinned；返回应用/跳过计数供 toast） */
+  readonly onApplyCandidates: (
+    section: HomeSectionKey,
+    candidates: readonly AutofillCandidate[],
+  ) => Promise<{ applied: number; skipped: number }>
   /** 候选应用成功 → 父级重拉 preview（pinned 变化；CHG-HOME-AUTOFILL-UI） */
   readonly onCandidateApplied: (section: HomeSectionKey) => void
   /** banner 候选预填横幅编辑器（BannerDrawer 创建模式，HomeOpsClient 编排） */
   readonly onBannerPrefill?: (candidate: AutofillCandidate) => void
 }
 
-export function SectionInspector({ section, onSaved, onCandidateApplied, onBannerPrefill }: SectionInspectorProps) {
+export function SectionInspector({ section, onSaveSettings, onSaved, onApplyCandidates, onCandidateApplied, onBannerPrefill }: SectionInspectorProps) {
   const toast = useToast()
   const [form, setForm] = useState<FormState | null>(null)
   const [saving, setSaving] = useState(false)
@@ -119,14 +135,15 @@ export function SectionInspector({ section, onSaved, onCandidateApplied, onBanne
     const pinned = form.pinnedLimit.trim()
     setSaving(true)
     try {
-      await updateHomeSectionSettings(key, {
+      // D-185-2.1：落草稿（HomeCanvas → mutateConfig），不再调门面 #3
+      await onSaveSettings(key, {
         autofillMode: form.autofillMode,
         refreshIntervalMinutes: refresh ? parseInt(refresh, 10) : null,
         displayCount,
         allowDuplicates: form.allowDuplicates,
         pinnedLimit: pinned ? parseInt(pinned, 10) : null,
       })
-      toast.push({ title: '区块设置已保存', level: 'success' })
+      toast.push({ title: '区块设置已存入草稿', level: 'success' })
       onSaved(key)
     } catch (err: unknown) {
       toast.push({
@@ -214,11 +231,13 @@ export function SectionInspector({ section, onSaved, onCandidateApplied, onBanne
         保存设置
       </AdminButton>
 
-      {/* 候选池（CHG-HOME-AUTOFILL-UI / 端点 #4 #5 #7）——注意用 settings.autofillMode
-          （已保存值）而非 form 编辑中间态，避免未保存切换误启停刷新入口 */}
+      {/* 候选池（CHG-HOME-AUTOFILL-UI / 端点 #4 #7 只读/触发直连；应用经
+          onApply 落草稿 D-185-2.1）——注意用 settings.autofillMode（已保存值）
+          而非 form 编辑中间态，避免未保存切换误启停刷新入口 */}
       <CandidatePoolPanel
         section={key}
         autofillMode={settings.autofillMode}
+        onApply={onApplyCandidates}
         onApplied={() => onCandidateApplied(key)}
         onBannerPrefill={onBannerPrefill}
       />

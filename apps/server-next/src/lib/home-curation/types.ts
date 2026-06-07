@@ -10,6 +10,12 @@ import type {
   AutofillCandidatesResult,
   AutofillVideoSummary,
   ContentGap,
+  HomeConfigBannerEntry,
+  HomeConfigDraft,
+  HomeConfigModuleEntry,
+  HomeConfigSectionSettingsEntry,
+  HomeDraftStaleness,
+  HomePageConfig,
   HomePreview,
   HomePreviewCard,
   HomePreviewCardFlag,
@@ -25,6 +31,12 @@ export type {
   AutofillCandidatesResult,
   AutofillVideoSummary,
   ContentGap,
+  HomeConfigBannerEntry,
+  HomeConfigDraft,
+  HomeConfigModuleEntry,
+  HomeConfigSectionSettingsEntry,
+  HomeDraftStaleness,
+  HomePageConfig,
   HomePreview,
   HomePreviewCard,
   HomePreviewCardFlag,
@@ -35,11 +47,13 @@ export type {
   HomeSectionSummary,
 }
 
-/** GET /admin/home/preview query（D-182-4 #1） */
+/** GET /admin/home/preview query（D-182-4 #1；draft = ADR-185 草稿叠加态） */
 export interface HomePreviewQuery {
   readonly brandSlug?: string
   readonly locale?: string
   /** ISO datetime；仅影响时间窗判定 */
   readonly at?: string
   readonly device?: 'desktop' | 'mobile'
+  /** true = 草稿叠加消费（无草稿服务端降级发布态，CHG-HOME-DRAFT-PUBLISH-B） */
+  readonly draft?: boolean
 }

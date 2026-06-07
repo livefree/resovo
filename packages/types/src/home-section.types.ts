@@ -117,7 +117,7 @@ export interface HomePreviewSection {
   consumedSnapshotAt?: string | null
 }
 
-/** GET /admin/home/preview 响应（Phase 1 = 正式配置预览，无草稿叠加，D-182-4 #1） */
+/** GET /admin/home/preview 响应（D-182-4 #1；draft=true 草稿叠加 = ADR-185 Phase 4 兑现） */
 export interface HomePreview {
   sections: HomePreviewSection[]
   generatedAt: string
@@ -127,6 +127,9 @@ export interface HomePreview {
     locale: string | null
     at: string | null
     device: 'desktop' | 'mobile'
+    /** additive（CHG-HOME-DRAFT-PUBLISH-B）：true = 本次合成实际消费了草稿覆盖层；
+     * 缺省 = 发布态（draft=false 或 draft=true 但无草稿降级） */
+    draft?: boolean
   }
 }
 

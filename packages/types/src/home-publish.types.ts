@@ -48,6 +48,22 @@ export interface HomeConfigDraft {
   updatedAt: string
 }
 
+/**
+ * 草稿陈旧双信号（D-185-2.2；GET /admin/home/draft additive 顶层字段，
+ * 与候选端点 gaps additive 同范式非 break）。权威判定仍在 publish 时点（409）；
+ * 本结构仅供编辑器显著提示。
+ */
+export interface HomeDraftStaleness {
+  /** baseMismatch ∨ tablesNewer */
+  stale: boolean
+  /** 信号①：base_version_no ≠ 当前最新 version_no */
+  baseMismatch: boolean
+  /** 信号②：三真源表 max(updated_at) 晚于草稿 updated_at（直写通道写入） */
+  tablesNewer: boolean
+  latestVersionNo: number | null
+  tablesMaxUpdatedAt: string | null
+}
+
 // ── 版本（097 home_publish_versions 行）─────────────────────────────────────
 
 export const HOME_PUBLISH_SOURCES = ['publish', 'rollback'] as const

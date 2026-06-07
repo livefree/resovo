@@ -792,6 +792,11 @@ vi.mock('@/api/db/queries/videos.status', () => ({
   listVideosByRatingDesc: (...args: unknown[]) => mockByRating(...args),
   listVideoCardsByIds: (...args: unknown[]) => mockCardsByIds(...args),
 }))
+// CHG-HOME-DRAFT-PUBLISH-B：preview draft=true 草稿叠加消费
+const mockFindDraft = vi.fn()
+vi.mock('@/api/db/queries/home-publish', () => ({
+  findHomeConfigDraft: (...args: unknown[]) => mockFindDraft(...args),
+}))
 
 function bannerRow(over: Partial<Banner> = {}): Banner {
   return {
@@ -1068,6 +1073,63 @@ describe('GET /admin/home/preview', () => {
       headers: { authorization: await adminToken() },
     })
     expect(res.statusCode).toBe(422)
+  })
+
+  // ── draft=true 草稿叠加消费（CHG-HOME-DRAFT-PUBLISH-B / ADR-185 D-185-2.1）──
+
+  it('draft=true 且有草稿：配置三键改读草稿（表查询不触达）+ context.draft=true', async () => {
+    mockFindDraft.mockResolvedValue({
+      id: 'draft-1',
+      scope: 'global',
+      baseVersionNo: 3,
+      config: {
+        banners: [{ ...bannerRow({ id: 'bn-draft', title: { 'zh-CN': '草稿横幅' } }) }],
+        modules: [{ ...moduleRow({ id: 'm-draft', slot: 'featured', contentRefId: 'v-1' }) }],
+        settings: [...ALL_SECTIONS].map((s) => settingsRow(s, { displayCount: 3 })),
+      },
+      createdBy: 'u-admin',
+      updatedBy: 'u-admin',
+      createdAt: '2026-06-07T00:00:00Z',
+      updatedAt: '2026-06-07T01:00:00Z',
+    })
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/admin/home/preview?draft=true',
+      headers: { authorization: await adminToken() },
+    })
+    expect(res.statusCode).toBe(200)
+    const body = res.json()
+    expect(body.data.context.draft).toBe(true)
+    // 三真源表查询不触达（草稿覆盖层为配置源；自动候选/趋势仍为实时数据）
+    expect(mockListAllBanners).not.toHaveBeenCalled()
+    expect(mockListAdminModules).not.toHaveBeenCalled()
+    expect(mockList).not.toHaveBeenCalled()
+    const banner = body.data.sections.find((s: { key: string }) => s.key === 'banner')
+    expect(banner.cards[0].refId).toBe('bn-draft')
+    const featured = body.data.sections.find((s: { key: string }) => s.key === 'featured')
+    expect(featured.cards.some((c: { refId: string | null }) => c.refId === 'm-draft')).toBe(true)
+  })
+
+  it('draft=true 无草稿：降级发布态（表查询照常）+ context.draft 缺省', async () => {
+    mockFindDraft.mockResolvedValue(null)
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/admin/home/preview?draft=true',
+      headers: { authorization: await adminToken() },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.context.draft).toBeUndefined()
+    expect(mockListAllBanners).toHaveBeenCalled()
+  })
+
+  it('draft=false / 缺省：草稿查询不触达（公开 shelf 复用面保护）', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/admin/home/preview',
+      headers: { authorization: await adminToken() },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(mockFindDraft).not.toHaveBeenCalled()
   })
 })
 

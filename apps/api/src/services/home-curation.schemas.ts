@@ -34,12 +34,15 @@ export const ReorderSectionSchema = z.object({
   })).min(1).max(200),
 }).strict()
 
-/** GET /admin/home/preview query（D-182-4 #1） */
+/** GET /admin/home/preview query（D-182-4 #1；draft=true 草稿叠加 = ADR-182 #1
+ * 显式预留的 Phase 4 兑现，additive 非 break——CHG-HOME-DRAFT-PUBLISH-B。
+ * 布尔显式枚举防 z.coerce 把 'false' 判 true（CandidatesQuerySchema 同款） */
 export const PreviewQuerySchema = z.object({
   brand_slug: z.string().min(1).max(64).optional(),
   locale: z.string().min(2).max(10).optional(),
   at: z.string().datetime().optional(),
   device: z.enum(['desktop', 'mobile']).default('desktop'),
+  draft: z.enum(['true', 'false']).optional().transform((v) => v === 'true'),
 })
 
 /** GET autofill-candidates query（D-182-4 #4：limit ≤100 默认 50；布尔显式枚举防 z.coerce 把 'false' 判 true） */

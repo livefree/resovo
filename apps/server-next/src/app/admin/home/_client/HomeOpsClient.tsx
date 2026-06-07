@@ -64,6 +64,8 @@ import { BatchAddVideosModal } from './BatchAddVideosModal'
 // CHG-HOME-AUTOFILL-UI 文件拆分（582>500 硬限）：声明性常量 + 画布入口编排 hook
 import { SLOTS, SLOT_LABEL, PAGE_STYLE, BODY_SPLIT_STYLE, SLOT_SECTION_STYLE, ENTRY_SOURCE_BAR_STYLE } from './home-ops-meta'
 import { useCanvasEntries } from './use-canvas-entries'
+// CHG-HOME-DRAFT-PUBLISH-B / ADR-185：画布草稿生命周期（canvas 全写路径落草稿）
+import { useHomeDraft } from '@/lib/home-curation/use-home-draft'
 
 // ── 主组件 ────────────────────────────────────────────────────────
 
@@ -195,8 +197,11 @@ export function HomeOpsClient() {
     externallyOpen: addEntry.items !== null,
   })
 
+  // ── 草稿生命周期（CHG-HOME-DRAFT-PUBLISH-B / D-185-2.1：画布写路径统一落草稿）──
+  const draftCtl = useHomeDraft()
+
   // ── 画布入口编排（EMPTY-SLOTS 空位添加 + AUTOFILL-UI banner 预填 → use-canvas-entries）──
-  const canvasEntries = useCanvasEntries({ batchAdd, toast, setActiveSlot })
+  const canvasEntries = useCanvasEntries({ batchAdd, toast, setActiveSlot, draftCtl, viewMode })
 
   // ── 编辑/创建保存 ──────────────────────────────────────────────────
 
@@ -282,6 +287,7 @@ export function HomeOpsClient() {
           EMPTY-SLOTS：空位点击 → 视频选片 / Banner 创建；添加完成 reloadToken 驱动 silent 重拉 */}
       {viewMode === 'canvas' && (
         <HomeCanvas
+          draftCtl={draftCtl}
           onEmptySlot={canvasEntries.handleCanvasEmptySlot}
           reloadToken={canvasEntries.canvasReload}
           onBannerPrefill={canvasEntries.handleBannerPrefill}
