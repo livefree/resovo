@@ -326,7 +326,7 @@ describe('DoubanService.syncVideo', () => {
     )
   })
 
-  it('getDoubanDetail 返回 null 时降级 fetch_failed', async () => {
+  it('getDoubanDetailRich 返回 null 时降级 fetch_failed', async () => {
     mockSearch.mockResolvedValue([{ id: '26266893', title: '流浪地球' }])
     mockDetail.mockResolvedValue(null)
 

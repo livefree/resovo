@@ -12,10 +12,11 @@
 import {
   createHostRuntime,
   createDoubanDetailsService,
+  createDoubanResolverService,
 } from 'douban-adapter'
-import type { DoubanSubjectDetails } from 'douban-adapter'
+import type { DoubanSubjectDetails, DoubanResolvedCandidate } from 'douban-adapter'
 
-export type { DoubanSubjectDetails }
+export type { DoubanSubjectDetails, DoubanResolvedCandidate }
 
 // ── 创建 runtime（无 cookie、无 Puppeteer、无缓存） ───────────────
 
@@ -45,6 +46,17 @@ function getService() {
   return _service
 }
 
+// DoubanResolverRuntime 是 DoubanDetailsRuntime 的子集（仅需 fetchWithVerification+logger），
+// 故 createBasicRuntime() 同一 runtime 可同时喂详情与 resolver 服务。
+let _resolver: ReturnType<typeof createDoubanResolverService> | null = null
+
+function getResolver() {
+  if (!_resolver) {
+    _resolver = createDoubanResolverService(createBasicRuntime())
+  }
+  return _resolver
+}
+
 // ── 公开 API ────────────────────────────────────────────────────────
 
 /**
@@ -59,5 +71,22 @@ export async function getDoubanDetailRich(
     return response.data ?? null
   } catch {
     return null
+  }
+}
+
+/**
+ * 搜索豆瓣影视候选（resolver，走 search.douban.com `window.__DATA__`）。
+ * 返回按 title/year/type 加权排序的候选列表；query/网络/解析失败统一降级 `[]`，
+ * 由调用方决定 no_match 语义（resolver 内部 parse 失败会抛 DoubanError，此处吸收）。
+ */
+export async function searchDoubanRich(
+  query: string,
+  year?: number
+): Promise<DoubanResolvedCandidate[]> {
+  try {
+    const result = await getResolver().searchSubjects({ query, year })
+    return result.candidates
+  } catch {
+    return []
   }
 }

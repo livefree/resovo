@@ -79,6 +79,27 @@
 ```
 
 ---
+
+## [SEQ-20260607-02] DOUBAN-SEARCH-RESOLVER-WIRE — 移除失效豆瓣搜索链路，接入 douban-adapter resolver
+
+- **状态**：✅ 已完成（1/1 卡收口 2026-06-07 14:15）
+- **创建时间**：2026-06-07 14:00
+- **最后更新时间**：2026-06-07 14:15
+- **目标**：`apps/api/src/lib/douban.searchDouban` 从失效端点 `movie.douban.com/j/subject_suggest`（实测恒 `[]`）切到 `douban-adapter` resolver（search.douban.com `window.__DATA__`，实测可用）；删除同文件失效详情链路 `getDoubanDetail`（302 验证墙）死代码。
+- **范围**：`apps/api/src/lib/doubanAdapter.ts`（+resolver 单例 + `searchDoubanRich`）+ `apps/api/src/lib/douban.ts`（换源 + 删死代码，保 `SuggestItem` 契约）+ 对应单测。**不改**消费方（DoubanService / MetadataEnrichService / utils）、**不改** server-next 前端类型。
+- **根因（调查结论）**：主工程搜索/详情接两个已被豆瓣反爬封死的端点；可用端点封装在 `douban-adapter` 包内，详情侧 `getDoubanDetailRich` 已接、搜索侧未接线。
+- **决策口径**（用户 2026-06-07）：同意修复——移除失效链路 + 接入 douban-adapter + 验证 adapter 功能。
+- **依赖**：无外部前置；adapter 模式保 `SuggestItem{id,title,year,sub_title}` 形状 → 零下游契约改动（单层 lib 改动，不跨 schema/api-service/UI）。
+
+### 任务列表（按执行顺序）
+
+1. **CHG-DOUBAN-SEARCH-RESOLVER-WIRE** — doubanAdapter 加 `searchDoubanRich` resolver 单例 + douban.searchDouban 换源 + 删 `getDoubanDetail`/`DoubanSubject`/UA 死代码 + 单测（状态：✅ 已完成 2026-06-07 14:15）
+   - 创建时间：2026-06-07 14:00 ｜ 计划开始：2026-06-07 14:00 ｜ 实际开始：2026-06-07 14:00 ｜ 完成时间：2026-06-07 14:15
+   - 建议模型：opus（主循环 claude-opus-4-8；非强制升 Opus 子代理情形——保公开签名/返回类型不变、零下游契约改动、非新 ADR、非播放器 core/shell）
+   - 完成备注：① `doubanAdapter.ts` 加 resolver 懒单例（复用 `createBasicRuntime()`——`DoubanDetailsRuntime` ⊇ `DoubanResolverRuntime`）+ 导出 `searchDoubanRich(query, year?)`（try/catch 吸收 resolver `DoubanError` → `[]`）+ re-export `DoubanResolvedCandidate`；② `douban.ts` 删失效死代码（`getDoubanDetail`/`DoubanSubject`/`USER_AGENTS`/`pickUA`/`extractNames`），`searchDouban` 改 `delay()`→`searchDoubanRich`→`map(mapResolvedToSuggest)`，导出纯映射 `mapResolvedToSuggest`，保 `SuggestItem`/`delay`，删旧"去年份重搜"回退（resolver 已统一 year 排序）；**`SuggestItem` 形状不变 → 消费方零改动**；③ `douban.test.ts` 修 L329 测试名误称；④ 新增 `doubanSearch.test.ts`（10 例：映射 3 + 接线/降级 4 + ……实际 7 例）。**实测验证（临时脚本，已删）**：详情路径 `getDoubanDetailRich` ✅ 完整命中（流浪地球 7.9/2019/导演/题材/演员/国家/语言；HTML challenge_page 自动降级 mobile-api）；搜索路径接线/解析/降级全正确，但豆瓣实时返回 `error_info:"搜索访问太频繁"`、`items:[]`（**环境性频率限流**，非代码缺陷——旧 subject_suggest 是永久失效，新 resolver 是可用端点配 delay+手动触发）。门禁：typecheck 绿 / lint 绿 / test:changed 13 文件 185 测试全过（doubanSearch 7 / douban 12 / metadataEnrich 35 / doubanService-manual 5 / stagingDouban 11）。执行模型: claude-opus-4-8；子代理: 无。
+   - **follow-up（未立卡，观察记录）**：resolver `parseSearchPageData` 当前不区分「限流 error_info」与「真无结果」（均 → `[]`）；若需限流可重试语义，应在 `external-adapter/douban-adapter` 包内识别 `error_info` 抛 retriable error（独立卡，超本卡 4 文件范围，不在此处改 shared 包）。
+
+---
 ## 序列编号约束声明
 
 **重要**：新任务序列号不得与历史归档中的序号重复。历史已完成序列已分段归档：
