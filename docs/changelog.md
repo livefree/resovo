@@ -2580,3 +2580,14 @@
   - `docs/tasks.md` — ADR 卡完成清空 ｜ `docs/task-queue.md` — SEQ-20260607-01 序列登记 + 卡 1 → ✅
 - **新增依赖**：无 ｜ **数据库变更**：无
 - **注意事项**：① 根因调查结论：UI 把「匹配判定」douban_status 当「数据已落地」用，二者由写侧分别产生互不校验；safeUpdate 4 条静默拒绝写 doubanId 路径（优先级整体拦截/字段锁/exact 冲突降级/catalog 重绑脱钩）；② 用户裁定 fill-if-empty + 含存量矫正脚本（2026-06-07）；③ 拆 A（safeUpdate 写侧 / opus）→ B（enrich 接线 + 矫正脚本 / sonnet）串行；④ docs-only（test:changed 自动跳过 / ADR-180）。
+
+## [CHG-ENRICH-DOUBAN-CONSISTENCY-A] MediaCatalogService.safeUpdate 外部 ID fill-if-empty 写侧 + metadata_source 不降级（SEQ-20260607-01 卡 2）
+- **完成时间**：2026-06-07
+- **记录时间**：2026-06-07 12:48
+- **执行模型**：claude-opus-4-8
+- **子代理**：arch-reviewer (claude-opus-4-8)（ADR 设计裁定承接，A 卡实施其 Q1–Q8 结论）
+- **修改文件**：
+  - `apps/api/src/services/MediaCatalogService.ts` — ① 新增 `EXTERNAL_REF_FIELD_KEYS`（CATALOG_EXTERNAL_REF_FIELDS 派生）② 优先级闸门改造（D-186-2）：低优先级源不再整段 return，逐字段判定——外部 ID cache 列且 `current[key]==null` 且 value 非空 → fillable 放行进锁循环/exact 写侧；内容字段/非空外部 ID/null 清空进锁循环前剔除计入 skippedFields；fillableKeys 空时维持整段 skip（行为逐值不变）③ metadata_source 不降级硬约束（D-186-3 一票否决项）：`...(isLowerPriority ? {} : { metadataSource: source })`
+  - `tests/unit/api/mediaCatalogSafeUpdate.test.ts` — makeCatalog 扩 doubanId/bangumiSubjectId override + 新增 describe「ADR-186 fill-if-empty」9 例（必修②metadata_source 不降级 / ④内容字段不放行 / ⑦低优先级整段 skip 回归 + ①fill 命中 / ③非 NULL 不 fill / ⑤exact 冲突降级 / ⑥硬锁 / ⑧bangumi 对称 / 对照同优先级仍更新 metadata_source）
+- **新增依赖**：无 ｜ **数据库变更**：无
+- **注意事项**：① fill-if-empty 限 douban_id/bangumi_subject_id 两字段（imdb/tmdb 零自动写入方不纳入，D-186-1 follow-up）；② 返回契约 `{updated, skippedFields}` 不扩字段（D-186-4 写侧，调用侧判定归 B 卡）；③ exact 冲突/字段锁路径零改动复用（D-186-5）；④ 门禁：typecheck 绿 / lint 无 error / test:changed 52 files 766 tests 全过（mediaCatalogSafeUpdate 26）/ verify:adr-contracts EXIT=0。

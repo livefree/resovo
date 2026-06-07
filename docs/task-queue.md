@@ -1412,12 +1412,11 @@
    - 建议模型：opus（撰写 ADR + 改共享 service 契约 → 强制 spawn arch-reviewer Opus 独立设计）
    - 完成备注：**ADR-186 Accepted**（docs/decisions.md）。arch-reviewer (claude-opus-4-8 / agentId a39b528d4e282e862) 独立设计 Q1–Q8 → CONDITIONAL PASS，揪出 Q3 metadata_source 降级一票否决项（主循环原调查未点明）；4 必修条件全数纳入 D-186-1~7：fill-if-empty 范围（限 douban_id/bangumi_subject_id 两字段）/ 优先级闸门逐字段放行（内容字段进锁循环前剔除）/ metadata_source 不降级硬约束 / status 据 skippedFields 降级 + meta_quality 同步 / exact 写侧复用 / INV-1·INV-2 不变量（含 redirect 脱钩例外归 B 卡）/ ADR-020 澄清性补充。执行模型: claude-opus-4-8；子代理: arch-reviewer (claude-opus-4-8)。
 
-2. **CHG-ENRICH-DOUBAN-CONSISTENCY-A** — MediaCatalogService.safeUpdate 写侧：外部 ID fill-if-empty + 返回值语义（状态：⬜ 待办）
-   - 创建时间：2026-06-07 12:20
+2. **CHG-ENRICH-DOUBAN-CONSISTENCY-A** — MediaCatalogService.safeUpdate 写侧：外部 ID fill-if-empty + 返回值语义（状态：✅ 已完成 2026-06-07 12:48）
+   - 创建时间：2026-06-07 12:20 ｜ 实际开始：2026-06-07 12:30 ｜ 完成时间：2026-06-07 12:48
    - 建议模型：opus（共享 service 核心契约 / commit 强制 `Subagents: arch-reviewer` trailer）
-   - 范围（≤5，跨 1 层 api-service）：① safeUpdate 优先级整体拦截分支改造——外部 ID 字段（douban_id/bangumi_subject_id）当前 NULL 时不被优先级整体拦截 ② skippedFields 返回值如实反映外部 ID 是否落地（供调用方判 status）③ exact ref 冲突 / 字段锁路径保持降级（不破坏 ADR-177 归并信号）④ `mediaCatalogSafeUpdate.test.ts` 补例 ⑤ 涉 schema 语义则同步 `architecture.md`。
+   - 完成备注：**实施 ADR-186 D-186-1/2/3/5**。① 新增 `EXTERNAL_REF_FIELD_KEYS`（CATALOG_EXTERNAL_REF_FIELDS 单一真源派生）② 优先级闸门 L334-340 改造：低优先级源不再整段 return，逐字段判定——外部 ID cache 列（doubanId/bangumiSubjectId）且 `current[key]==null` 且 value 非空 → fillable 放行；内容字段/非空外部 ID/null 清空进锁循环前剔除计入 skippedFields；fillableKeys 空时维持整段 skip（行为逐值不变）③ **metadata_source 不降级硬约束**（D-186-3 一票否决项）：`...(isLowerPriority ? {} : { metadataSource: source })` ④ exact 写侧/字段锁路径零改动复用（D-186-5）。返回契约 `{updated, skippedFields}` 不扩字段（D-186-4 写侧）。测试 +9（mediaCatalogSafeUpdate.test.ts 26 全过，覆盖必修②④⑦ + ①③⑤⑥⑧ + 对照）。门禁：typecheck 绿 / lint 无 error / test:changed 766 全过 / verify:adr-contracts EXIT=0。执行模型: claude-opus-4-8；子代理: arch-reviewer (claude-opus-4-8 设计裁定，A 卡承接其结论实施)。
    - 依赖：ADR ✅。
-   - 验收：「外部 ID 字段当前 NULL 时低优先级源可填充，非 NULL/锁/exact 冲突受保护」单测全过。
 
 3. **CHG-ENRICH-DOUBAN-CONSISTENCY-B** — MetadataEnrichService status 接线 + 存量矫正脚本（状态：⬜ 待办）
    - 创建时间：2026-06-07 12:20

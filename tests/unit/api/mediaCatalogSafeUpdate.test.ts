@@ -45,7 +45,14 @@ const mockDb = {
   connect: vi.fn().mockResolvedValue(mockTxClient),
 } as unknown as import('pg').Pool
 
-function makeCatalog(overrides: Partial<{ lockedFields: string[]; metadataSource: string }> = {}) {
+function makeCatalog(
+  overrides: Partial<{
+    lockedFields: string[]
+    metadataSource: string
+    doubanId: string | null
+    bangumiSubjectId: number | null
+  }> = {},
+) {
   return {
     id: 'cat-1',
     title: 'Old Title',
@@ -54,6 +61,9 @@ function makeCatalog(overrides: Partial<{ lockedFields: string[]; metadataSource
     genres: [],
     metadataSource: overrides.metadataSource ?? 'manual',
     lockedFields: overrides.lockedFields ?? [],
+    // ADR-186 fill-if-empty 判定读 current 外部 ID cache 列（默认 NULL = 可填充）
+    doubanId: overrides.doubanId ?? null,
+    bangumiSubjectId: overrides.bangumiSubjectId ?? null,
   } as unknown as Awaited<ReturnType<typeof catalogQueries.findCatalogById>>
 }
 
@@ -363,5 +373,139 @@ describe('safeUpdate — catalog_external_refs 写侧接线（CHG-VIR-12-D / YY-
     expect(txClientQuery.mock.calls.map((c) => String(c[0]))).toContain('ROLLBACK')
     expect(txClientRelease).toHaveBeenCalled()
     expect(catalogQueries.updateCatalogFields).not.toHaveBeenCalled()
+  })
+})
+
+describe('safeUpdate — ADR-186 fill-if-empty 外部 ID（低优先级补空缺 + metadata_source 不降级）', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.mocked(mockDb.connect).mockResolvedValue(mockTxClient as never)
+    vi.mocked(externalRefQueries.resolveAndWriteExactRef).mockResolvedValue({ outcome: 'exact_written' })
+    vi.mocked(externalRefQueries.demoteExactRef).mockResolvedValue(0)
+    vi.mocked(provenanceQueries.getHardLockedFields).mockResolvedValue([])
+    vi.mocked(catalogQueries.updateCatalogFields).mockResolvedValue({ id: 'cat-1' } as never)
+  })
+
+  it('① 低优先级 douban + doubanId 当前 NULL → fill-if-empty 写入 cache（skippedFields 空 / D-186-1）', async () => {
+    vi.mocked(catalogQueries.findCatalogById).mockResolvedValue(
+      makeCatalog({ metadataSource: 'manual', doubanId: null }) as never,
+    )
+    const svc = new MediaCatalogService(mockDb)
+    const result = await svc.safeUpdate('cat-1', { doubanId: '88001' } as never, 'douban')
+
+    expect(result.skippedFields).toEqual([])
+    expect(externalRefQueries.resolveAndWriteExactRef).toHaveBeenCalled()
+    const written = vi.mocked(catalogQueries.updateCatalogFields).mock.calls[0]![2] as Record<string, unknown>
+    expect(written).toHaveProperty('doubanId', '88001')
+  })
+
+  it('② 必修：fill-if-empty 不降级 metadata_source（D-186-3 一票否决项）', async () => {
+    vi.mocked(catalogQueries.findCatalogById).mockResolvedValue(
+      makeCatalog({ metadataSource: 'manual', doubanId: null }) as never,
+    )
+    const svc = new MediaCatalogService(mockDb)
+    await svc.safeUpdate('cat-1', { doubanId: '88001' } as never, 'douban')
+
+    const written = vi.mocked(catalogQueries.updateCatalogFields).mock.calls[0]![2] as Record<string, unknown>
+    expect(written).not.toHaveProperty('metadataSource')
+  })
+
+  it('③ doubanId 当前非 NULL → 不 fill（skippedFields 含 doubanId / 无字段可写不调写原语 / D-186-2）', async () => {
+    vi.mocked(catalogQueries.findCatalogById).mockResolvedValue(
+      makeCatalog({ metadataSource: 'manual', doubanId: 'OLD' }) as never,
+    )
+    const svc = new MediaCatalogService(mockDb)
+    const result = await svc.safeUpdate('cat-1', { doubanId: 'NEW' } as never, 'douban')
+
+    expect(result.skippedFields).toEqual(['doubanId'])
+    expect(catalogQueries.updateCatalogFields).not.toHaveBeenCalled()
+    expect(externalRefQueries.resolveAndWriteExactRef).not.toHaveBeenCalled()
+  })
+
+  it('④ 必修：fill + 内容字段混批 → 仅外部 ID 写入，内容进 skippedFields，metadata_source 不降级（D-186-2 防绕过）', async () => {
+    vi.mocked(catalogQueries.findCatalogById).mockResolvedValue(
+      makeCatalog({ metadataSource: 'tmdb', doubanId: null }) as never,
+    )
+    const svc = new MediaCatalogService(mockDb)
+    const result = await svc.safeUpdate(
+      'cat-1', { doubanId: '88001', rating: 9.9, description: 'd' } as never, 'douban',
+    )
+
+    expect(result.skippedFields).toEqual(expect.arrayContaining(['rating', 'description']))
+    expect(result.skippedFields).not.toContain('doubanId')
+    const written = vi.mocked(catalogQueries.updateCatalogFields).mock.calls[0]![2] as Record<string, unknown>
+    expect(written).toHaveProperty('doubanId', '88001')
+    expect(written).not.toHaveProperty('rating')
+    expect(written).not.toHaveProperty('description')
+    expect(written).not.toHaveProperty('metadataSource')
+  })
+
+  it('⑤ fill + exact 冲突 → doubanId 进 skippedFields 不写 cache（降级 candidate / D-186-5）', async () => {
+    vi.mocked(catalogQueries.findCatalogById).mockResolvedValue(
+      makeCatalog({ metadataSource: 'manual', doubanId: null }) as never,
+    )
+    vi.mocked(externalRefQueries.resolveAndWriteExactRef).mockResolvedValue({
+      outcome: 'conflict_candidate', holderCatalogId: 'cat-holder',
+    })
+    const svc = new MediaCatalogService(mockDb)
+    const result = await svc.safeUpdate('cat-1', { doubanId: '88001' } as never, 'douban')
+
+    expect(result.skippedFields).toContain('doubanId')
+    expect(catalogQueries.updateCatalogFields).not.toHaveBeenCalled()
+  })
+
+  it('⑥ fill 字段被硬锁 → 进 skippedFields 不写（锁优先于 fill）', async () => {
+    vi.mocked(catalogQueries.findCatalogById).mockResolvedValue(
+      makeCatalog({ metadataSource: 'manual', doubanId: null }) as never,
+    )
+    vi.mocked(provenanceQueries.getHardLockedFields).mockResolvedValue(['doubanId'])
+    const svc = new MediaCatalogService(mockDb)
+    const result = await svc.safeUpdate('cat-1', { doubanId: '88001' } as never, 'douban')
+
+    expect(result.skippedFields).toContain('doubanId')
+    expect(catalogQueries.updateCatalogFields).not.toHaveBeenCalled()
+    expect(externalRefQueries.resolveAndWriteExactRef).not.toHaveBeenCalled()
+  })
+
+  it('⑦ 必修回归：低优先级 + 无 fillable 外部 ID（仅内容字段）→ 整段 skip 行为逐值不变', async () => {
+    vi.mocked(catalogQueries.findCatalogById).mockResolvedValue(
+      makeCatalog({ metadataSource: 'manual', doubanId: null }) as never,
+    )
+    const svc = new MediaCatalogService(mockDb)
+    const result = await svc.safeUpdate(
+      'cat-1', { rating: 8.8, description: 'x' } as never, 'douban',
+    )
+
+    expect(result.skippedFields).toEqual(['rating', 'description'])
+    expect(catalogQueries.updateCatalogFields).not.toHaveBeenCalled()
+    expect(mockDb.connect).not.toHaveBeenCalled()
+  })
+
+  it('⑧ bangumi 对称：低优先级 + bangumiSubjectId 当前 NULL → fill 成功不降级 metadata_source', async () => {
+    vi.mocked(catalogQueries.findCatalogById).mockResolvedValue(
+      makeCatalog({ metadataSource: 'manual', bangumiSubjectId: null }) as never,
+    )
+    const svc = new MediaCatalogService(mockDb)
+    const result = await svc.safeUpdate('cat-1', { bangumiSubjectId: 51 } as never, 'bangumi')
+
+    expect(result.skippedFields).toEqual([])
+    expect(externalRefQueries.resolveAndWriteExactRef).toHaveBeenCalledWith(
+      mockTxClient,
+      expect.objectContaining({ provider: 'bangumi', externalId: '51' }),
+    )
+    const written = vi.mocked(catalogQueries.updateCatalogFields).mock.calls[0]![2] as Record<string, unknown>
+    expect(written).toHaveProperty('bangumiSubjectId', 51)
+    expect(written).not.toHaveProperty('metadataSource')
+  })
+
+  it('对照：同/更高优先级仍更新 metadata_source（fill-if-empty 不介入 / D-186-3 边界）', async () => {
+    vi.mocked(catalogQueries.findCatalogById).mockResolvedValue(
+      makeCatalog({ metadataSource: 'crawler', doubanId: null }) as never,
+    )
+    const svc = new MediaCatalogService(mockDb)
+    await svc.safeUpdate('cat-1', { doubanId: '88001' } as never, 'douban')
+
+    const written = vi.mocked(catalogQueries.updateCatalogFields).mock.calls[0]![2] as Record<string, unknown>
+    expect(written).toHaveProperty('metadataSource', 'douban')
   })
 })

@@ -37,6 +37,13 @@ const CATALOG_EXTERNAL_REF_FIELDS: ReadonlyArray<{
   { field: 'doubanId', provider: 'douban' },
 ]
 
+// ADR-186 D-186-2：fill-if-empty 判定用——外部 ID cache 列键集（优先级闸门放行白名单，
+// 与上方 CATALOG_EXTERNAL_REF_FIELDS 单一真源派生）。imdb/tmdb 当前零自动写入方不纳入
+// （D-186-1 follow-up：接入自动写入时随 EXTERNAL_KIND_BY_PROVIDER 同步扩面）。
+const EXTERNAL_REF_FIELD_KEYS = new Set<string>(
+  CATALOG_EXTERNAL_REF_FIELDS.map((f) => f.field as string),
+)
+
 // ── 元数据来源优先级 ──────────────────────────────────────────────
 
 export const CATALOG_SOURCE_PRIORITY: Record<string, number> = {
@@ -333,18 +340,43 @@ export class MediaCatalogService {
 
     const incomingPriority = CATALOG_SOURCE_PRIORITY[source] ?? 0
     const currentPriority = CATALOG_SOURCE_PRIORITY[current.metadataSource] ?? 0
-
-    // 来源优先级低于当前 → 跳过整个更新（全部视为 skipped）
-    if (incomingPriority < currentPriority) {
-      return { updated: current, skippedFields: Object.keys(fields) }
-    }
+    // ADR-186 D-186-2：低优先级源默认整体被拦（ADR-020 规则 D），fill-if-empty 是其例外。
+    const isLowerPriority = incomingPriority < currentPriority
 
     const hardLockedSet = new Set(hardLocked)
     const softLockedSet = new Set(current.lockedFields)
     const filteredFields: CatalogUpdateData = {}
     const skippedFields: string[] = []
 
-    for (const [key, value] of Object.entries(fields) as [keyof CatalogUpdateData, unknown][]) {
+    // ADR-186 D-186-1/2：低优先级源默认全字段 skip（ADR-020 规则 D），但外部 ID cache 列
+    // （doubanId/bangumiSubjectId）当前为 NULL 时 fill-if-empty 放行——修复「douban_status=matched
+    // 但 douban_id 空」的写入脱钩。内容字段 / 非空外部 ID 仍计入 skippedFields（不绕过优先级
+    // 保护，arch-reviewer 必修②）；fillableKeys 空时维持整段 skip（crawler 等低优先级行为逐值不变）。
+    let entriesToProcess: [keyof CatalogUpdateData, unknown][]
+    if (isLowerPriority) {
+      const fillable: [keyof CatalogUpdateData, unknown][] = []
+      for (const [key, value] of Object.entries(fields) as [keyof CatalogUpdateData, unknown][]) {
+        if (value === undefined) continue
+        if (
+          EXTERNAL_REF_FIELD_KEYS.has(key as string) &&
+          value !== null &&
+          (current as unknown as Record<string, unknown>)[key as string] == null
+        ) {
+          fillable.push([key, value])
+        } else {
+          // 非 fillable（内容字段 / 非空外部 ID / null 清空）→ 维持优先级保护
+          skippedFields.push(key as string)
+        }
+      }
+      if (fillable.length === 0) {
+        return { updated: current, skippedFields: Object.keys(fields) }
+      }
+      entriesToProcess = fillable
+    } else {
+      entriesToProcess = Object.entries(fields) as [keyof CatalogUpdateData, unknown][]
+    }
+
+    for (const [key, value] of entriesToProcess) {
       // CHORE-11 (2026-05-29) FIX-FIX：value === undefined 直接 skip 整段（含 provenance 计算），
       //   避免 caller 用 `field: X ?? undefined` 模式时 provenance 误记"写入"了该字段。
       //   此处不计入 skippedFields（语义：不是"被锁阻挡"的 skipped，是"没传值"）。
@@ -424,9 +456,12 @@ export class MediaCatalogService {
         await catalogQueries.setLockedFields(client, catalogId, uniqueLocked)
       }
 
+      // ADR-186 D-186-3（硬约束 / 一票否决项）：fill-if-empty（低优先级填充）绝不更新
+      // metadata_source——否则低优先级源接管 catalog 元数据主权、削弱后续所有字段保护，把
+      // 显示 bug 升级为数据正确性事故。字段级来源仍如实记 provenance（finishSafeUpdate）。
       const updated = await catalogQueries.updateCatalogFields(client, catalogId, {
         ...filteredFields,
-        metadataSource: source,
+        ...(isLowerPriority ? {} : { metadataSource: source }),
       })
       if (ownTx) await client.query('COMMIT')
       return this.finishSafeUpdate(db, catalogId, filteredFields, source, provenanceCtx, updated, skippedFields)
