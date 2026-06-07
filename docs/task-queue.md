@@ -1391,3 +1391,37 @@
 ### 后续卡登记（2026-06-07 CHG-HOME-FE-CONSUME-B 定界产出）
 
 - **CHG-E2E-WEB-AUDIT**（待立案）：web 域 e2e-next homepage 套件失修——与 SEQ-20260606-01 同病理家族但 web 侧未在该序列范围内。定界证据（2026-06-07 实证，clean HEAD 同样 17 failed 排除卡 20 改动）：① **mock 契约漂移**：MOCK_MOVIE/SERIES 缺 `subtitleLangs` → VideoCard `deriveSpecs` 运行时崩 → Next overlay 盖断言（已由卡 20 顺手修复：类型绑定 VideoCard + 兜底 404 catch-all——`-A` 后 API 恒起致未 mock 端点漏真实数据）；banners mock 形状疑似同漂移（hero CTA 不可见 / dots 2≠实际 / banner-dot-1 strict violation 待清点）。② **断言漂移**：nav-logo 期望 "Resovo" 实际 "RResovo"（logo R 标记）/ footer-disclaimer 不可见 / 语言切换 ×2 超时——serial 复跑 12/19，7 失败全为既有漂移。③ **并发 goto 超时定界未竟**：≥4 workers 时 goto('/en') 30s 超时级联（6 并发复现：0 挂起请求但 load 不触发；server 侧 6 并发 curl 0.5s 实证无辜；单测 1.1s 过）——疑 Chromium 多 context × Next dev 交互，root cause 待查。验收：homepage spec 默认并发全绿 + test:e2e:smoke EXIT=0。
+
+---
+
+## [SEQ-20260607-01] ENRICH-DOUBAN-CONSISTENCY — 富集豆瓣匹配状态与 catalog.douban_id 落地一致性修复
+
+- **状态**：🔄 执行中
+- **创建时间**：2026-06-07 12:20
+- **最后更新时间**：2026-06-07 12:20
+- **目标**：消除「列表显示豆瓣图标（douban_status=matched/candidate）但视频编辑 douban_id 为空」的数据面脱钩——匹配成功时确保 `catalog.douban_id` 真正落地（空缺填充），落不了则状态如实降级 candidate。
+- **范围**：`MediaCatalogService.safeUpdate`（写侧语义）+ `MetadataEnrichService`（status 接线）+ `scripts/`（存量矫正）；**不改**前台读路径、**不改** admin-ui 组件。
+- **根因（调查结论）**：UI 两面读不同字段（图标←`videos.douban_status` / 编辑←`media_catalog.douban_id`）；`MetadataEnrichService` 三处 `safeUpdate` 不检查返回值无条件 `return 'matched'`，而 `safeUpdate` 有 4 条静默拒绝写 doubanId 路径（来源优先级整体拦截 / 字段锁 / exact ref 冲突降级 / catalog 重绑脱钩）。
+- **决策口径**（用户 2026-06-07 裁定）：① 修复策略 = 补写 ID（fill-if-empty）+ 补不了如实降级 candidate；② 含存量矫正脚本。
+- **依赖**：无外部前置；内部串行 ADR → A → B（依赖链 3 层 ≤ 4）。
+
+### 任务列表（按执行顺序，串行）
+
+1. **CHG-ENRICH-DOUBAN-CONSISTENCY-ADR** — ADR 起草：safeUpdate 外部 ID fill-if-empty 语义 + douban_status 落地一致性不变量（状态：✅ 已完成 2026-06-07 12:30）
+   - 创建时间：2026-06-07 12:20 ｜ 计划开始：2026-06-07 12:20 ｜ 实际开始：2026-06-07 12:20 ｜ 完成时间：2026-06-07 12:30
+   - 建议模型：opus（撰写 ADR + 改共享 service 契约 → 强制 spawn arch-reviewer Opus 独立设计）
+   - 完成备注：**ADR-186 Accepted**（docs/decisions.md）。arch-reviewer (claude-opus-4-8 / agentId a39b528d4e282e862) 独立设计 Q1–Q8 → CONDITIONAL PASS，揪出 Q3 metadata_source 降级一票否决项（主循环原调查未点明）；4 必修条件全数纳入 D-186-1~7：fill-if-empty 范围（限 douban_id/bangumi_subject_id 两字段）/ 优先级闸门逐字段放行（内容字段进锁循环前剔除）/ metadata_source 不降级硬约束 / status 据 skippedFields 降级 + meta_quality 同步 / exact 写侧复用 / INV-1·INV-2 不变量（含 redirect 脱钩例外归 B 卡）/ ADR-020 澄清性补充。执行模型: claude-opus-4-8；子代理: arch-reviewer (claude-opus-4-8)。
+
+2. **CHG-ENRICH-DOUBAN-CONSISTENCY-A** — MediaCatalogService.safeUpdate 写侧：外部 ID fill-if-empty + 返回值语义（状态：⬜ 待办）
+   - 创建时间：2026-06-07 12:20
+   - 建议模型：opus（共享 service 核心契约 / commit 强制 `Subagents: arch-reviewer` trailer）
+   - 范围（≤5，跨 1 层 api-service）：① safeUpdate 优先级整体拦截分支改造——外部 ID 字段（douban_id/bangumi_subject_id）当前 NULL 时不被优先级整体拦截 ② skippedFields 返回值如实反映外部 ID 是否落地（供调用方判 status）③ exact ref 冲突 / 字段锁路径保持降级（不破坏 ADR-177 归并信号）④ `mediaCatalogSafeUpdate.test.ts` 补例 ⑤ 涉 schema 语义则同步 `architecture.md`。
+   - 依赖：ADR ✅。
+   - 验收：「外部 ID 字段当前 NULL 时低优先级源可填充，非 NULL/锁/exact 冲突受保护」单测全过。
+
+3. **CHG-ENRICH-DOUBAN-CONSISTENCY-B** — MetadataEnrichService status 接线 + 存量矫正脚本（状态：⬜ 待办）
+   - 创建时间：2026-06-07 12:20
+   - 建议模型：sonnet
+   - 范围（≤5，跨 service + scripts 两层；**跨层理由**：写侧 status 修复与存量数据矫正属同一一致性闭环）：① `MetadataEnrichService` step1-imdb/step1-title/step2 三处检查 safeUpdate 返回——doubanId 未落地（锁/exact 冲突）→ douban_status 落 candidate 而非 matched ② `DoubanService.syncVideo/confirmSubject` 同口径核验（已检查返回值，确认无回归）③ `scripts/` 一次性矫正脚本（dry-run 优先；圈定 douban_status=matched 且 catalog.douban_id IS NULL，按子原因重置 status 或触发补写）④ `metadataEnrich.test.ts` 补例。
+   - 依赖：CHG-ENRICH-DOUBAN-CONSISTENCY-A ✅。
+   - 验收：诊断 SQL 圈定的 matched+空 doubanId 视频清零；新富集 matched ⟹ douban_id 非空。

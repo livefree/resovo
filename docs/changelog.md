@@ -2569,3 +2569,14 @@
   - `docs/task-queue.md` — Phase 4 占位 3 卡细化为 4 卡（24 DRAFT-PUBLISH-A / 25 -B / 26 AUDIT-ROLLBACK / 27 CACHE-INVALIDATE，依赖序 24→25→26∥27）+ SEQ-20260605-05 状态 → ✅ 全 23 卡收口
 - **新增依赖**：无 ｜ **数据库变更**：无（migration 097/098 归实施卡 24）
 - **注意事项**：① **SEQ-20260605-05 全序列收口**——治理方案（home-operations-governance-plan_20260605.md）实施面全闭环：Phase 1–3 + 公开消费切换 + E2E 覆盖 + 勘误 + Phase 4 ADR；仅余 Phase 4 实施 4 卡（已细化登记待开始）；② ADR-181→185 五份关联 ADR 全 Accepted（各自 arch-reviewer Opus PASS）；③ 门禁：verify:adr-contracts EXIT=0（ADR 端点 97→104，「### 端点契约」表 verify-endpoint-adr 解析兼容）；docs-only（test:changed 自动跳过）。
+
+## [CHG-ENRICH-DOUBAN-CONSISTENCY-ADR] ADR-186 外部 ID cache 列 fill-if-empty 写入语义 + 富集匹配状态落地一致性不变量（SEQ-20260607-01 卡 1）
+- **完成时间**：2026-06-07
+- **记录时间**：2026-06-07 12:30
+- **执行模型**：claude-opus-4-8
+- **子代理**：arch-reviewer (claude-opus-4-8)（独立设计裁定 Q1–Q8 / CONDITIONAL PASS：Q3 metadata_source 降级一票否决项 + 4 必修条件全数纳入决策要点）
+- **修改文件**：
+  - `docs/decisions.md` — **ADR-186**（Accepted / 本卡零实施，D 编号闭环归实施卡 A/B）：消除「列表豆瓣图标（douban_status=matched）但编辑 douban_id 为空」数据面脱钩；裁定 fill-if-empty 写入语义（外部 ID cache 列当前 NULL 时低优先级源可填充，非 NULL 维持 ADR-020 规则 D 优先级保护）+ metadata_source 不降级硬约束（一票否决项）+ status 如实降级口径（doubanId∈skippedFields → candidate）+ 落地一致性不变量 INV-1/INV-2（含 redirect 脱钩已知例外）+ 与 ADR-020 澄清性补充关系 + ADR-177 exact 写侧复用
+  - `docs/tasks.md` — ADR 卡完成清空 ｜ `docs/task-queue.md` — SEQ-20260607-01 序列登记 + 卡 1 → ✅
+- **新增依赖**：无 ｜ **数据库变更**：无
+- **注意事项**：① 根因调查结论：UI 把「匹配判定」douban_status 当「数据已落地」用，二者由写侧分别产生互不校验；safeUpdate 4 条静默拒绝写 doubanId 路径（优先级整体拦截/字段锁/exact 冲突降级/catalog 重绑脱钩）；② 用户裁定 fill-if-empty + 含存量矫正脚本（2026-06-07）；③ 拆 A（safeUpdate 写侧 / opus）→ B（enrich 接线 + 矫正脚本 / sonnet）串行；④ docs-only（test:changed 自动跳过 / ADR-180）。
