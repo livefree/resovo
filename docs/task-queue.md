@@ -1495,7 +1495,7 @@
 
 ## [SEQ-20260607-04] EXT-RES-GOV — 外部资源治理框架 v1（豆瓣首接入 · provider 可扩展）
 
-- **状态**：🔄 进行中（卡 1 ADR ✅ / 进行卡 2 STORE）
+- **状态**：🔄 进行中（卡 1 ADR ✅ / 卡 2-A STORE-A ✅ / 进行卡 2-B STORE-B）
 - **创建时间**：2026-06-07 17:30
 - **目标**：搭 provider 无关的「外部资源治理」后台框架——采集观测（worker 抓了什么 / 成功否 / 内容类型 / 离线 vs 在线 / API 用量）+ 热门资源分类展示 + 统一资源搜索 + 富集统计；豆瓣作首个接入 provider 全量打通，Bangumi/IMDB/TMDb 占位待后续。
 - **用户定调（2026-06-07）**：① 导航落位采集中心（与采集控制并列，分组不更名）② provider 切换框架 + 4 Tab ③ 采集观测埋点（provider 无关操作日志，非窄口径 API 计数）④ 资源搜索统一（离线 dump + 在线实时）。本期搭框架 + 豆瓣接入；深度治理迭代与 Bangumi 接入框架搭好后另起。
@@ -1509,9 +1509,17 @@
    - 建议模型：opus（撰写 ADR + provider registry 跨消费方契约 + 跨 provider schema → 强制 spawn arch-reviewer Opus 独立设计）
    - 完成备注：**ADR-188 Accepted**（docs/decisions.md）。arch-reviewer (claude-opus-4-8 / agentId a8c9881fbba9ee504) 独立设计 → CONDITIONAL PASS，3 BLOCKER + 5 HIGH + 4 MEDIUM + 3 LOW **全 15 条吸收**：B1 埋点下沉在线出口（doubanAdapter + lib/douban，非 worker；offline 不入表）/ B2 status 删 empty + method 术语桥接 external.types online + offline 不记 / B3 端点 path 字面 `:provider` + `?live` 5 项契约（默认关/10s/并发1/admin_search埋点/失败降级）/ H1 registry 落 packages/types 单源 / H2 capabilities 数组 / H4 端点 6→5（overview 并 enrichment-stats）/ M4 lib/douban 纳埋点边界 + admin 鉴权 / L3 30天 purge 挂 maintenanceWorker。verify:endpoint-adr 解析 ADR-188 端点 5/5 逐字（含 `:provider`），全套 verify:adr-contracts EXIT=0。docs-only。执行模型: claude-opus-4-8；子代理: arch-reviewer (claude-opus-4-8)。
 
-2. **CHG-EXT-RES-STORE** — 数据模型 + 采集埋点（migration 100 `external_fetch_log` + fetch-log queries + provider registry 落 packages/types + doubanAdapter/lib/douban 在线出口埋点 + maintenanceWorker 30天 purge）（状态：⬜ 待开始）
-   - 建议模型：opus（schema 跨 provider + 埋点接入热路径）
-   - 依赖：CHG-EXT-RES-ADR ✅
+2. **CHG-EXT-RES-STORE**（拆 -A/-B：改动 ~10 项 + 跨 schema/shared-types/service，原子化判据强制拆）
+   - **2-A · CHG-EXT-RES-STORE-A** — 数据模型基座：provider registry 落 `packages/types`（ADR-188 D-188-2）+ migration 100 `external_fetch_log` + architecture.md 同步 + fetch-log queries（insert/query/aggregate/purge）+ 单测（状态：✅ 已完成 2026-06-07 18:25）
+     - 建议模型：opus（实施 ADR-188 既定契约 + 跨 provider schema）
+     - 依赖：CHG-EXT-RES-ADR ✅
+     - 完成备注：实施 ADR-188 **D-188-2/D-188-3**（+ D-188-7 purge query）。① `packages/types/external.types.ts` registry（PROVIDER_KEYS/ACQUISITION_METHODS/PROVIDER_CAPABILITIES const SSOT + ExternalProvider 类型 + EXTERNAL_PROVIDERS 4 provider〔douban active / bangumi·imdb·tmdb planned capabilities 留空待调研〕+ getExternalProvider helper）+ index.ts runtime 导出；② migration 100 external_fetch_log（11 列 + 2 索引，dev 已落库验证结构/索引）；③ architecture.md §5.5 + migration 列表同步；④ queries external-fetch-log.ts（insertFetchLog/queryFetchLog 动态 WHERE 分页 clamp/aggregateFetchLog operation·method 分桶/deleteFetchLogBefore）。门禁：typecheck EXIT=0 / lint 5/5 / 新测 12 例 / **test:changed 升全量 7080/7080 零回归**（packages/types 基础包 ADR-180）。执行模型: claude-opus-4-8；子代理: 无（实施卡 1 既定契约）。
+   - **2-B · CHG-EXT-RES-STORE-B** — 采集埋点接入（D-188-4）：recordFetch helper（旁路 await+吞错）+ `doubanAdapter.ts` 3 函数（search/detail/collection）+ `lib/douban.ts` searchDouban 在线出口埋点 + 调用方 source 透传（MetadataEnrichService=enrich_worker / refresh=collections_worker）+ 单测（状态：🔄 进行中）
+     - 建议模型：opus（埋点接入富集热路径，旁路不改既有行为）
+     - 依赖：CHG-EXT-RES-STORE-A ✅
+   - **2-C · CHG-EXT-RES-STORE-C** — fetch_log 30天 purge（D-188-7）：maintenanceWorker job type `purge-external-fetch-log`（调 deleteFetchLogBefore）+ scheduler tick + 单测（状态：⬜ 待开始；从 STORE-B 拆出——原 ~7 项超原子上限）
+     - 建议模型：opus（接既有维护 worker，旁路）
+     - 依赖：CHG-EXT-RES-STORE-A ✅（purge query 已在 STORE-A）
 
 3. **CHG-EXT-RES-API** — admin 路由（外部资源治理 5 端点 [ADR-188 §端点契约：providers/overview/collections/search/activity] + ExternalResourcesService 聚合 + 统一搜索 dump query 归 externalData.ts）（状态：⬜ 待开始）
    - 建议模型：opus（新 admin route → ADR-188 覆盖 + plan §4.5 R7 MUST-8）

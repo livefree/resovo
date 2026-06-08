@@ -28,6 +28,14 @@ export type * from './player.types'
 export type * from './crawler.types'
 export type * from './system.types'
 export type * from './external.types'
+// ADR-188 D-188-2 / CHG-EXT-RES-STORE-A：provider registry runtime exports（const + helper，非 type-only）
+export {
+  PROVIDER_KEYS,
+  ACQUISITION_METHODS,
+  PROVIDER_CAPABILITIES,
+  EXTERNAL_PROVIDERS,
+  getExternalProvider,
+} from './external.types'
 
 export type * from './admin-moderation.types'
 // CHG-360-A / ADR-159：runtime helper（非 type-only）
