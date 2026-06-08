@@ -257,7 +257,7 @@ export const SOURCE_LABELS: Readonly<Record<string, string>> = {
 
 /** 合集 key → 友好展示名（chip）。bangumi 派生合集（ADR-189）；douban key 走 fallback 原值。 */
 export const COLLECTION_LABELS: Readonly<Record<string, string>> = {
-  bgm_trending: '热门',
+  bgm_trending: '近期新番',
   bgm_ranking: '高分排行',
   bgm_calendar_mon: '周一',
   bgm_calendar_tue: '周二',

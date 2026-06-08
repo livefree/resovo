@@ -10,7 +10,7 @@ import type { Pool } from 'pg'
 import type { BangumiSearchItem, BangumiCalendarDay } from '@/api/lib/bangumi'
 
 vi.mock('@/api/lib/bangumi', () => ({
-  searchSubjectsSorted: vi.fn(),
+  browseSubjects: vi.fn(),
   getCalendar: vi.fn(),
 }))
 vi.mock('@/api/db/queries/bangumi-collections', () => ({
@@ -22,7 +22,7 @@ vi.mock('@/api/db/queries/bangumi-collections', () => ({
 }))
 
 import { refreshSearchCollection, refreshCalendar } from '@/api/services/bangumi-collections/refresh'
-import { searchSubjectsSorted, getCalendar } from '@/api/lib/bangumi'
+import { browseSubjects, getCalendar } from '@/api/lib/bangumi'
 import {
   replaceBangumiCollectionItems,
   replaceBangumiCollectionGroupsAtomic,
@@ -31,7 +31,7 @@ import {
   listAllBangumiCollectionSyncState,
 } from '@/api/db/queries/bangumi-collections'
 
-const mSearch = searchSubjectsSorted as ReturnType<typeof vi.fn>
+const mSearch = browseSubjects as ReturnType<typeof vi.fn>
 const mCalendar = getCalendar as ReturnType<typeof vi.fn>
 const mReplaceOne = replaceBangumiCollectionItems as ReturnType<typeof vi.fn>
 const mReplaceAtomic = replaceBangumiCollectionGroupsAtomic as ReturnType<typeof vi.fn>
@@ -40,7 +40,7 @@ const mGetSync = getBangumiCollectionSyncState as ReturnType<typeof vi.fn>
 const mListSync = listAllBangumiCollectionSyncState as ReturnType<typeof vi.fn>
 
 const db = {} as Pool
-const TRENDING = { key: 'bgm_trending', category: 'trending', sort: 'heat' } as const
+const TRENDING = { key: 'bgm_trending', category: 'trending', sort: 'date' } as const
 
 function searchItem(id: number): BangumiSearchItem {
   return { id, name: `S${id}`, name_cn: `中${id}`, date: '2026-01-01', images: { large: 'x' }, rating: { rank: 1, total: 1, score: 8.5 } }
@@ -76,7 +76,7 @@ describe('refreshSearchCollection（trending/ranking）', () => {
     expect(mRecord).not.toHaveBeenCalled()
   })
 
-  it('抓取失败（searchSubjectsSorted null）→ recordSyncState(failed) 不替换', async () => {
+  it('抓取失败（browseSubjects null）→ recordSyncState(failed) 不替换', async () => {
     mSearch.mockResolvedValueOnce(null)
     const res = await refreshSearchCollection(db, TRENDING)
     expect(res).toEqual({ collection: 'bgm_trending', status: 'failed', count: 0 })

@@ -15,7 +15,7 @@ vi.mock('@/api/lib/external-fetch-recorder', async (orig) => ({
 // lib/bangumi 直接读 process.env（不依赖 config 单例）；测试注入 Token/UA
 import {
   getSubject, getEpisodes, getCharacters, searchSubjects, searchSubjectsStrict,
-  getCalendar, searchSubjectsSorted, isBangumiApiConfigured,
+  getCalendar, browseSubjects, isBangumiApiConfigured,
 } from '@/api/lib/bangumi'
 
 function okJson(body: unknown) {
@@ -171,30 +171,32 @@ describe('lib/bangumi getCalendar（ADR-189 D-189-5）', () => {
   })
 })
 
-describe('lib/bangumi searchSubjectsSorted（ADR-189 D-189-5）', () => {
-  it('sort=heat + filter type=2 默认，返回候选 + 埋点 collection/api/ok', async () => {
-    fetchMock.mockResolvedValue(okJson({ data: [{ id: 1 }, { id: 2 }] }))
-    const items = await searchSubjectsSorted({ sort: 'heat' }, undefined, 'collections_worker')
+describe('lib/bangumi browseSubjects（ADR-189 D-189-2 修订 / GET /v0/subjects keyword-free）', () => {
+  it('sort=rank + type=2 GET 浏览，返回候选 + 埋点 collection/api/ok', async () => {
+    fetchMock.mockResolvedValue(okJson({ data: [{ id: 1 }, { id: 2 }], total: 2 }))
+    const items = await browseSubjects({ sort: 'rank' }, undefined, 'collections_worker')
     expect(items).toHaveLength(2)
     const [url, init] = fetchMock.mock.calls[0]
-    expect(url).toContain('/v0/search/subjects')
-    const body = JSON.parse(init.body)
-    expect(body.sort).toBe('heat')
-    expect(body.filter.type).toEqual([2])
-    expect(lastRecord()).toMatchObject({ operation: 'collection', method: 'api', status: 'ok', source: 'collections_worker', target: 'heat', itemCount: 2 })
+    // GET（非 POST search）：无 body，query 带 type/sort
+    expect(url).toContain('/v0/subjects?')
+    expect(url).toContain('type=2')
+    expect(url).toContain('sort=rank')
+    expect(init.method).toBeUndefined() // bgmGet 默认 GET
+    expect(lastRecord()).toMatchObject({ operation: 'collection', method: 'api', status: 'ok', source: 'collections_worker', target: 'rank', itemCount: 2 })
   })
 
-  it('air_date filter 透传 + offset 分页', async () => {
-    fetchMock.mockResolvedValue(okJson({ data: [] }))
-    await searchSubjectsSorted({ sort: 'rank', filter: { air_date: ['>=2026-01-01'] }, offset: 50 })
-    const [url, init] = fetchMock.mock.calls[0]
+  it('sort=date + year + offset 分页 → query 参数透传', async () => {
+    fetchMock.mockResolvedValue(okJson({ data: [], total: 0 }))
+    await browseSubjects({ sort: 'date', year: 2026, offset: 50 })
+    const [url] = fetchMock.mock.calls[0]
+    expect(url).toContain('sort=date')
+    expect(url).toContain('year=2026')
     expect(url).toContain('offset=50')
-    expect(JSON.parse(init.body).filter.air_date).toEqual(['>=2026-01-01'])
   })
 
   it('抓取失败返回 null（失败信号）+ 埋点 fail', async () => {
     fetchMock.mockResolvedValue(errResp(500))
-    expect(await searchSubjectsSorted({ sort: 'rank' })).toBeNull()
+    expect(await browseSubjects({ sort: 'rank' })).toBeNull()
     expect(lastRecord()).toMatchObject({ operation: 'collection', status: 'fail' })
   })
 })

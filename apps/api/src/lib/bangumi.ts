@@ -144,16 +144,12 @@ export interface BangumiCalendarDay {
   items: BangumiCalendarItem[]
 }
 
-/** search 排序维度（ADR-189 D-189-5；POST /v0/search/subjects sort，禁 any 收窄）。 */
-export type BangumiSearchSortKey = 'match' | 'heat' | 'rank' | 'score'
-
-/** search 结构化过滤（仅本项目消费字段，禁 any）。 */
-export interface BangumiSearchFilter {
-  type?: number[]
-  air_date?: string[]
-  rank?: string[]
-  nsfw?: boolean
-}
+/**
+ * 浏览排序维度（ADR-189 D-189-2 修订；GET /v0/subjects 仅支持 `date`/`rank`，禁 any 收窄）。
+ * 注意：POST /v0/search/subjects 的 heat/score 排序**要求非空 keyword**，不适用于 keyword-free 榜单浏览
+ * （Codex stop-time review：原 searchSubjectsSorted 无 keyword 发 search body 无效）→ 改用 browse 端点。
+ */
+export type BangumiBrowseSort = 'date' | 'rank'
 
 // ── HTTP 封装 ─────────────────────────────────────────────────────
 
@@ -376,38 +372,38 @@ export async function getCalendar(
 }
 
 /**
- * POST /v0/search/subjects（**排序版**，ADR-189 D-189-5）：热门(sort=heat)/排行(sort=rank) 派生合集。
- * 返回候选；**抓取失败返回 null**（worker empty_guard 区分真空 vs 失败，arch H3）。埋点 collection/api。
+ * GET /v0/subjects（**浏览版**，ADR-189 D-189-2 修订 / Codex stop-time review）：keyword-free 榜单浏览
+ * 排行(sort=rank)/近期(sort=date) 派生合集。**取代** searchSubjectsSorted（POST search 要求非空 keyword，
+ * 无 keyword 发送 body 无效）。返回候选；**抓取失败返回 null**（worker empty_guard 区分真空 vs 失败）。
+ * 埋点 collection/api。GET /v0/subjects 返回分页 `{ data, total }`（同 /v0/episodes）。
  */
-export async function searchSubjectsSorted(
-  opts: { sort: BangumiSearchSortKey; filter?: BangumiSearchFilter; limit?: number; offset?: number },
+export async function browseSubjects(
+  opts: { sort: BangumiBrowseSort; type?: number; year?: number; limit?: number; offset?: number },
   cfg?: BangumiClientConfig,
   source?: FetchSource | null,
 ): Promise<BangumiSearchItem[] | null> {
-  const limit = opts.limit ?? 50
-  const offset = opts.offset ?? 0
-  const filter: BangumiSearchFilter = { type: [2], ...opts.filter }
+  const params = new URLSearchParams({
+    type: String(opts.type ?? 2),
+    sort: opts.sort,
+    limit: String(opts.limit ?? 50),
+    offset: String(opts.offset ?? 0),
+  })
+  if (opts.year) params.set('year', String(opts.year))
   const startedAt = Date.now()
   try {
-    const res = await fetch(`${API_BASE}/v0/search/subjects?limit=${limit}&offset=${offset}`, {
-      method: 'POST',
-      headers: buildHeaders(cfg, { 'Content-Type': 'application/json' }),
-      body: JSON.stringify({ sort: opts.sort, filter }),
-      signal: AbortSignal.timeout(timeoutMs(cfg)),
-    })
-    if (!res.ok) throw new Error(`bangumi searchSubjectsSorted failed: HTTP ${res.status}`)
-    const data = (await res.json()) as { data?: BangumiSearchItem[] }
-    const items = Array.isArray(data.data) ? data.data : []
+    const resp = await bgmGet<{ data: BangumiSearchItem[]; total: number }>(`/v0/subjects?${params.toString()}`, cfg)
+    const items = Array.isArray(resp?.data) ? resp.data : []
     await recordFetch({
       provider: 'bangumi', operation: 'collection', method: 'api', status: 'ok',
       source: source ?? null, target: opts.sort, itemCount: items.length, durationMs: Date.now() - startedAt,
     })
     return items
   } catch (err) {
+    const status = statusForGetError(err)
     await recordFetch({
-      provider: 'bangumi', operation: 'collection', method: 'api', status: classifyFetchError(err),
+      provider: 'bangumi', operation: 'collection', method: 'api', status,
       source: source ?? null, target: opts.sort, itemCount: 0, durationMs: Date.now() - startedAt,
-      error: fetchErrorSummary(err),
+      error: status === 'ok' ? undefined : fetchErrorSummary(err),
     })
     return null
   }

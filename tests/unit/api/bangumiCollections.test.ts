@@ -212,7 +212,7 @@ describe('registry', () => {
   })
 
   it('search 合集携 sort；calendar 合集携 weekday 1-7', () => {
-    expect(BANGUMI_SEARCH_COLLECTIONS.find((c) => c.key === 'bgm_trending')?.sort).toBe('heat')
+    expect(BANGUMI_SEARCH_COLLECTIONS.find((c) => c.key === 'bgm_trending')?.sort).toBe('date')
     expect(BANGUMI_SEARCH_COLLECTIONS.find((c) => c.key === 'bgm_ranking')?.sort).toBe('rank')
     expect(BANGUMI_CALENDAR_COLLECTIONS.map((c) => c.weekday)).toEqual([1, 2, 3, 4, 5, 6, 7])
   })

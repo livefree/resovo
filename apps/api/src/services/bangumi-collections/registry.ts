@@ -13,15 +13,19 @@
 
 import type { BangumiCollectionCategory } from '@/api/db/queries/bangumi-collections'
 
-/** search 派生合集的排序维度（仅 trending/ranking） */
-export type BangumiSearchSort = 'heat' | 'rank'
+/**
+ * browse 派生合集的排序维度（仅 trending/ranking）。
+ * GET /v0/subjects 仅支持 `date`/`rank`（ADR-189 D-189-2 修订 / Codex stop-time review：
+ * search heat/rank 要求非空 keyword，不适用 keyword-free 榜单浏览）。
+ */
+export type BangumiBrowseSort = 'date' | 'rank'
 
 export interface BangumiCollectionEntry {
   /** 合集 key（落库 collection 列） */
   readonly key: string
   readonly category: BangumiCollectionCategory
-  /** search 派生专属：sort 维度（trending=heat / ranking=rank） */
-  readonly sort?: BangumiSearchSort
+  /** browse 派生专属：sort 维度（trending=date 近期新番 / ranking=rank 高分排行） */
+  readonly sort?: BangumiBrowseSort
   /** calendar 专属：放送星期（1=周一..7=周日） */
   readonly weekday?: number
 }
@@ -39,8 +43,8 @@ export const CALENDAR_WEEKDAY_KEYS = [
 
 /** 派生合集注册表（trending 1 + ranking 1 + calendar 7 = 9） */
 export const BANGUMI_COLLECTIONS: readonly BangumiCollectionEntry[] = [
-  { key: 'bgm_trending', category: 'trending', sort: 'heat' },
-  { key: 'bgm_ranking', category: 'ranking', sort: 'rank' },
+  { key: 'bgm_trending', category: 'trending', sort: 'date' }, // 近期新番（GET /v0/subjects sort=date）
+  { key: 'bgm_ranking', category: 'ranking', sort: 'rank' }, // 高分排行（sort=rank）
   ...CALENDAR_WEEKDAY_KEYS.map((key, i) => ({
     key,
     category: 'calendar' as const,
@@ -48,9 +52,9 @@ export const BANGUMI_COLLECTIONS: readonly BangumiCollectionEntry[] = [
   })),
 ]
 
-/** 仅 search 派生合集（trending/ranking） */
+/** 仅 browse 派生合集（trending/ranking） */
 export const BANGUMI_SEARCH_COLLECTIONS = BANGUMI_COLLECTIONS.filter(
-  (c): c is BangumiCollectionEntry & { sort: BangumiSearchSort } => c.sort !== undefined,
+  (c): c is BangumiCollectionEntry & { sort: BangumiBrowseSort } => c.sort !== undefined,
 )
 
 /** 仅 calendar 合集（7 weekday） */

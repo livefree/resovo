@@ -2910,3 +2910,17 @@
 - **新增依赖**：无 ｜ **数据库变更**：无
 - **注意事项**：① **独立发现机制**——非 home-section / 非站内 video shelf，含未入站；② 板块空数据/失败自隐（calendar 未落库时不占位）；③ hot_anime 既有 autofill 强化 = 数据新鲜核对（D-189-9 不改算法）；④ **e2e 决策**：web 无既有 homepage e2e harness，board 自隐 → 组件 4 + 后端查询 4 + 真实 DB 验证已强覆盖，homepage e2e 待 harness 另起；⑤ 门禁：typecheck/lint EXIT=0 / 新测 8 全绿 / test:changed 6 文件 85。
 - **SEQ-20260607-05 EXT-RES-BANGUMI 全收口**：ADR-189（arch CONDITIONAL PASS 11 条）+ STORE(2A schema/registry/queries · 2B 埋点+lib 扩端点 · 2C collections worker 一拉七写) + API(3A provider-dispatch 框架+DTO 泛化 · 3B BangumiResourceAdapter) + UI(4 Bangumi 4 Tab + 官方入口卡) + HOME(5A /home/daily-anime · 5B 前台板块)。**Bangumi 从 planned 占位 → active 全量接入治理框架**（概览/热门·每日放送/资源搜索/采集记录 4 Tab 实数据 + 官方入口）+ 首页每日放送发现位（含未入站交叉站内）。ADR-189 pending D-numbers 待本 changelog 闭环（D-189-1..9 已落地）。
+
+## [CHG-BNG-RES-COLLECTIONS-FIX] Bangumi 合集 refresh search→browse 端点修正（SEQ-20260607-05 收口后 · Codex stop-time review）
+- **完成时间**：2026-06-08 ｜ **记录时间**：2026-06-08 01:15 ｜ **执行模型**：claude-opus-4-8 ｜ **子代理**：无
+- **根因**：`searchSubjectsSorted` 用 `POST /v0/search/subjects` `sort=heat/rank` 派生 trending/ranking，但该端点 **`keyword` 必填且不可空**（v0.yaml `required: keyword`）——无 keyword 发送 body 无效 → trending/ranking **永远抓取失败**（被 empty_guard 静默吞、合集永不落库）。
+- **修复**：改用 **keyword-free 浏览端点 `GET /v0/subjects`**（`sort` 仅支持 `date`/`rank`）。
+  - `apps/api/src/lib/bangumi.ts` — `searchSubjectsSorted`(POST search) → **`browseSubjects`**(GET /v0/subjects?type=2&sort=&year=&limit=&offset=，返回分页 `{data,total}`)；移除无效的 `BangumiSearchSortKey`/`BangumiSearchFilter`，新增 `BangumiBrowseSort='date'|'rank'`；埋点 collection/api 不变
+  - `apps/api/src/services/bangumi-collections/registry.ts` — `bgm_trending` sort `heat`→`date`（近期新番，sort=date 限当年）/ `bgm_ranking` `rank`（高分排行，全量）；`BangumiSearchSort`→`BangumiBrowseSort`
+  - `apps/api/src/services/bangumi-collections/refresh.ts` — `collectSearchItems` 调 `browseSubjects`（type=2 + sort=date 传当年 year）
+  - `apps/server-next/src/lib/external-resources/api.ts` — COLLECTION_LABELS `bgm_trending` 「热门」→「近期新番」（对齐 sort=date 语义）
+  - `docs/decisions.md` ADR-189 D-189-2 AMENDMENT + `docs/architecture.md` 同步（browse 非 search）
+  - 测试：bangumi-lib（browseSubjects GET 断言）/ bangumiCollectionsRefresh（mock browseSubjects + TRENDING sort=date）/ bangumiCollections（registry sort=date 断言）
+- **真实 API 验证**（run-and-delete，BANGUMI_API_TOKEN 已配）：`browseSubjects({sort:'rank'})` → 3 条「攻壳机动队 S.A.C. 2nd GIG…」/ `{sort:'date',year:2026}` → 3 条当年番（原 POST search 无 keyword 返 NULL，现返真实数据）。
+- **不影响**：`searchSubjects(Strict)`（富集匹配 / 后台候选搜索）keyword 非空，正确不变。
+- **门禁**：typecheck/lint EXIT=0 / test:changed 24 文件 410 全过 / 真实 API 验证。

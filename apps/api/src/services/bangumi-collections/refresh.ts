@@ -7,7 +7,7 @@
  */
 
 import type { Pool } from 'pg'
-import { searchSubjectsSorted, getCalendar } from '@/api/lib/bangumi'
+import { browseSubjects, getCalendar } from '@/api/lib/bangumi'
 import type { BangumiSearchItem, BangumiCalendarItem } from '@/api/lib/bangumi'
 import {
   replaceBangumiCollectionItems,
@@ -90,13 +90,15 @@ function mapCalendarItem(item: BangumiCalendarItem, weekday: number, rank: numbe
  * 任一页 searchSubjectsSorted 返回 null（抓取失败）→ 整轮失败返回 null（不以部分替换，保全量语义 + 失败信号）。
  */
 async function collectSearchItems(
-  entry: BangumiCollectionEntry & { sort: 'heat' | 'rank' },
+  entry: BangumiCollectionEntry & { sort: 'date' | 'rank' },
 ): Promise<BangumiCollectionItemInput[] | null> {
   const rows: BangumiCollectionItemInput[] = []
   let offset = 0
+  // 近期新番（sort=date）限当年，避免拉到远期未定档；高分排行（sort=rank）全量
+  const year = entry.sort === 'date' ? new Date().getFullYear() : undefined
   while (rows.length < SEARCH_MAX_ITEMS) {
-    const items = await searchSubjectsSorted(
-      { sort: entry.sort, limit: SEARCH_PAGE_SIZE, offset },
+    const items = await browseSubjects(
+      { sort: entry.sort, type: 2, ...(year ? { year } : {}), limit: SEARCH_PAGE_SIZE, offset },
       undefined,
       'collections_worker',
     )
@@ -118,10 +120,10 @@ function isGuardTriggered(count: number, prevCount: number, baseline: number): b
   return count === 0 || (prevCount >= baseline && count < prevCount * GUARD_DROP_RATIO)
 }
 
-/** 刷新单个 search 合集（trending/ranking）：抓取 → 失败/empty_guard → 全量替换。 */
+/** 刷新单个 browse 合集（trending/ranking）：抓取 → 失败/empty_guard → 全量替换。 */
 export async function refreshSearchCollection(
   db: Pool,
-  entry: BangumiCollectionEntry & { sort: 'heat' | 'rank' },
+  entry: BangumiCollectionEntry & { sort: 'date' | 'rank' },
 ): Promise<BangumiRefreshResult> {
   const prev = await getBangumiCollectionSyncState(db, entry.key)
   const rows = await collectSearchItems(entry)
