@@ -20,6 +20,7 @@ import {
   fetchOverview,
   OPERATION_LABELS,
   METHOD_LABELS,
+  PROVIDER_LINKS,
   labelOf,
   type OverviewData,
   type FetchAggregateBucket,
@@ -121,20 +122,16 @@ export function OverviewTab({ provider }: { provider: ProviderKey }) {
   return (
     <div data-overview-tab>
       <div style={KPI_ROW_STYLE} data-overview-kpis>
-        <KpiCard
-          label="热门合集条目"
-          value={fmt(dataScale.collectionItems)}
-          dataSource="live"
-          ariaLabel={`热门合集条目: ${dataScale.collectionItems}`}
-          testId="ext-kpi-collection-items"
-        />
-        <KpiCard
-          label="离线元数据库"
-          value={fmt(dataScale.doubanEntries)}
-          dataSource="live"
-          ariaLabel={`离线元数据库: ${dataScale.doubanEntries}`}
-          testId="ext-kpi-douban-entries"
-        />
+        {dataScale.map((m) => (
+          <KpiCard
+            key={m.key}
+            label={m.label}
+            value={fmt(m.value)}
+            dataSource="live"
+            ariaLabel={`${m.label}: ${m.value}`}
+            testId={`ext-kpi-${m.key}`}
+          />
+        ))}
         <KpiCard
           label="采集次数 · 24h"
           value={fmt(fetchStats.total)}
@@ -185,8 +182,52 @@ export function OverviewTab({ provider }: { provider: ProviderKey }) {
           <FreshnessList rows={collectionFreshness} formatDateTime={formatDateTime} />
         </AdminCard>
       </div>
+
+      {(PROVIDER_LINKS[provider]?.length ?? 0) > 0 && (
+        <div style={SECTION_STYLE}>
+          <AdminCard
+            header={{ title: '官方入口', subtitle: 'API / 文档 / 归档 dump（外链）' }}
+            data-testid="ext-overview-official-links"
+          >
+            <div style={LINKS_ROW_STYLE} data-official-links>
+              {PROVIDER_LINKS[provider]!.map((link) => (
+                <a
+                  key={link.href}
+                  href={link.href}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  style={LINK_PILL_STYLE}
+                  data-official-link={link.href}
+                >
+                  {link.label} ↗
+                </a>
+              ))}
+            </div>
+          </AdminCard>
+        </div>
+      )}
     </div>
   )
+}
+
+const LINKS_ROW_STYLE: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  flexWrap: 'wrap',
+  gap: '8px',
+}
+
+const LINK_PILL_STYLE: React.CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  height: '28px',
+  padding: '0 12px',
+  border: '1px solid var(--border-default)',
+  borderRadius: '999px',
+  background: 'var(--bg-surface)',
+  color: 'var(--accent-default)',
+  fontSize: 'var(--font-size-xs)',
+  textDecoration: 'none',
 }
 
 function FetchBucketList({

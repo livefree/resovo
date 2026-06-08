@@ -13,14 +13,16 @@ import type { ExternalProvider, ProviderKey } from '@resovo/types'
 
 // ── 数据规模 / provider 摘要 ────────────────────────────────────────
 
-export interface DataScale {
-  readonly collectionItems: number
-  readonly doubanEntries: number
+/** provider 无关数据规模指标（ADR-189 D-189-4；UI 按数组渲染 KPI）。 */
+export interface ProviderDataMetric {
+  readonly key: string
+  readonly label: string
+  readonly value: number
 }
 
-/** providers 端点单项：registry 声明 + active provider 数据规模（planned 为 null）。 */
+/** providers 端点单项：registry 声明 + active provider 数据规模指标（planned 为 null）。 */
 export interface ProviderSummary extends ExternalProvider {
-  readonly dataScale: DataScale | null
+  readonly dataScale: ProviderDataMetric[] | null
 }
 
 // ── 概览（overview）────────────────────────────────────────────────
@@ -67,7 +69,7 @@ export interface OverviewData {
   readonly fetchStats: FetchAggregate
   readonly enrichStats: EnrichStats
   readonly collectionFreshness: CollectionFreshness[]
-  readonly dataScale: DataScale
+  readonly dataScale: ProviderDataMetric[]
 }
 
 // ── 采集流水（activity）────────────────────────────────────────────
@@ -138,22 +140,25 @@ export async function fetchActivity(provider: ProviderKey, query: ActivityQuery)
 
 export interface CollectionSummaryItem {
   readonly collection: string
-  readonly domain: string
+  readonly domain: string | null
   readonly category: string
   readonly count: number
 }
 
+/** provider 无关合集条目（ADR-189 D-189-4：externalId / subtitle / airWeekday 中性）。 */
 export interface CollectionItem {
   readonly collection: string
-  readonly domain: string
+  readonly domain: string | null
   readonly category: string
-  readonly doubanId: string
+  readonly externalId: string
   readonly rank: number
   readonly title: string
-  readonly originalTitle: string | null
+  readonly subtitle: string | null
   readonly year: number | null
-  readonly ratingValue: number | null
+  readonly rating: number | null
   readonly coverUrl: string | null
+  /** bangumi calendar 专属（1-7）；douban null */
+  readonly airWeekday: number | null
 }
 
 export interface CollectionsResult {
@@ -185,7 +190,7 @@ export async function fetchCollections(provider: ProviderKey, query: Collections
 
 export interface SearchHit {
   readonly source: 'offline' | 'online'
-  readonly doubanId: string
+  readonly externalId: string
   readonly title: string
   readonly year: number | null
   readonly rating: number | null
@@ -248,6 +253,32 @@ export const SOURCE_LABELS: Readonly<Record<string, string>> = {
   enrich_worker: '富集 worker',
   collections_worker: '合集 worker',
   admin_search: '后台搜索',
+}
+
+/** 合集 key → 友好展示名（chip）。bangumi 派生合集（ADR-189）；douban key 走 fallback 原值。 */
+export const COLLECTION_LABELS: Readonly<Record<string, string>> = {
+  bgm_trending: '热门',
+  bgm_ranking: '高分排行',
+  bgm_calendar_mon: '周一',
+  bgm_calendar_tue: '周二',
+  bgm_calendar_wed: '周三',
+  bgm_calendar_thu: '周四',
+  bgm_calendar_fri: '周五',
+  bgm_calendar_sat: '周六',
+  bgm_calendar_sun: '周日',
+}
+
+/** provider 官方入口（API / doc / dump 外链，ADR-189 D-189-8）；无声明则不渲染入口卡。 */
+export interface ProviderLink {
+  readonly label: string
+  readonly href: string
+}
+export const PROVIDER_LINKS: Readonly<Record<string, readonly ProviderLink[]>> = {
+  bangumi: [
+    { label: 'API（api.bgm.tv）', href: 'https://api.bgm.tv' },
+    { label: 'API 文档', href: 'https://bangumi.github.io/api/' },
+    { label: '归档 dump', href: 'https://github.com/bangumi/Archive' },
+  ],
 }
 
 /** 标签查表（缺失回退原 key，对增量 operation/method 值天然兼容）。 */

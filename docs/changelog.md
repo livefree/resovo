@@ -2874,3 +2874,16 @@
   - `tests/unit/api/bangumiResourceAdapter.test.ts`（新建，8 测）+ `externalResourcesService.test.ts`（bangumi active 断言 / planned 示例改 imdb）+ `externalFetchLog.test.ts`（registry bangumi active）
 - **新增依赖**：无 ｜ **数据库变更**：无（读既有表）
 - **注意事项**：① **真实 DB e2e**（run-and-delete）：dataScale dump=500 / overview freshness 含 dump 行 / unifiedSearch dump 命中 85 总 externalId="1015" 字符串 / dispatch bangumi active 非 planned；② bangumi_entries.bangumi_id 为 INT（pg 返数字）→ searchBangumiEntries 强制 String（douban_id 为 TEXT 故无此问题）；③ dump 可观测经 freshness 行复用既有 UI（守 D-188-3 不入 fetch_log）；④ 门禁：typecheck/lint/verify:adr-contracts EXIT=0 / 新测+既有 91 全绿；**test:changed 全量 EXIT=1 定界为 jsdom 重负载时序 flaky**（跨 2 次运行失败文件各异 video-merge-perf/UserSubmissions/CrawlerClient/StagingTable，均隔离重跑通过 + 零依赖本卡改动 → 非回归）；⑤ 卡 3（API A/B）完成；下一卡 4（UI Bangumi Tab）。
+
+## [CHG-BNG-RES-UI] 前端 Bangumi 治理 Tab + 官方入口卡（SEQ-20260607-05 卡 4 / ADR-189 D-189-1/4/8）
+- **完成时间**：2026-06-08 ｜ **记录时间**：2026-06-08 00:10 ｜ **执行模型**：claude-opus-4-8 ｜ **子代理**：无
+- **修改文件**：
+  - `apps/server-next/src/lib/external-resources/api.ts` — DTO 中性化同步后端（`ProviderDataMetric`〔dataScale 数组〕/ `CollectionItem` doubanId→externalId+subtitle+airWeekday / `SearchHit` externalId / summary domain nullable）+ `COLLECTION_LABELS`（bgm_calendar_mon→周一 等 9 友好 chip）+ `PROVIDER_LINKS`（bangumi 官方入口 api.bgm.tv/文档/归档 dump，D-189-8）
+  - `_client/OverviewTab.tsx` — dataScale **metric 数组渲染** KpiCard（testId `ext-kpi-${key}`）+ **官方入口卡**（`ext-overview-official-links` 外链，PROVIDER_LINKS 驱动，CSS 变量零硬编码）
+  - `_client/CollectionsTab.tsx` — externalId/subtitle/rating + 友好 chip 标签（labelOf COLLECTION_LABELS）+ 通用「外部 ID」列 + rowKey externalId
+  - `_client/SearchTab.tsx` — externalId + 通用文案（搜索资源/外部 ID，去豆瓣化）
+  - `_client/ExternalResourcesClient.tsx` — 副标题「豆瓣 · Bangumi 接入」（bangumi active 自动渲染 4 tab，零逻辑改）
+  - `tests/unit/components/server-next/admin/ExternalResources.test.tsx` — 22 测（fixture 新 DTO + bangumi active + 官方入口卡 + planned 示例改 imdb）
+  - `tests/e2e/admin/external-resources/external-resources-smoke.spec.ts` — 4 e2e（mock provider 无关路由 + planned imdb + **bangumi active 4-tab + 官方入口卡**）
+- **新增依赖**：无 ｜ **数据库变更**：无
+- **注意事项**：① API DTO 变更**强类型耦合**，douban+bangumi UI 同卡适配（不可拆——CollectionItem.externalId 等字段重命名令所有 Tab 须同 typecheck 边界更新）；② douban UI 改后**数据零行为变更**（同数值，仅字段名/渲染泛化）；③ bangumi active 后 PlannedPlaceholder 仅余 imdb/tmdb；④ 门禁：typecheck/lint EXIT=0 / 视图 22 全绿 / **admin e2e 4 passed**（含 bangumi active）/ test:changed EXIT=0；⑤ 卡 4 完成；下一卡 5（首页每日放送 + hot_anime）。

@@ -58,9 +58,14 @@ import { SearchTab } from '@/app/admin/external-resources/_client/SearchTab'
 
 const fmt = (n: number) => n.toLocaleString('zh-CN')
 
+const DOUBAN_SCALE = [
+  { key: 'collectionItems', label: '热门合集条目', value: 1294 },
+  { key: 'doubanEntries', label: '离线 dump 条目', value: 140502 },
+]
+
 const PROVIDERS = [
-  { key: 'douban', label: '豆瓣', acquisition: ['offline', 'scrape'], capabilities: ['detail', 'search'], status: 'active', dataScale: { collectionItems: 1294, doubanEntries: 140502 } },
-  { key: 'bangumi', label: 'Bangumi', acquisition: ['api'], capabilities: [], status: 'planned', dataScale: null },
+  { key: 'douban', label: '豆瓣', acquisition: ['offline', 'scrape'], capabilities: ['detail', 'search'], status: 'active', dataScale: DOUBAN_SCALE },
+  { key: 'bangumi', label: 'Bangumi', acquisition: ['api'], capabilities: ['detail', 'search', 'celebrity', 'collection', 'schedule'], status: 'active', dataScale: [{ key: 'collectionItems', label: '派生合集条目', value: 50 }, { key: 'dumpEntries', label: '离线 dump 条目', value: 9000 }] },
   { key: 'imdb', label: 'IMDB', acquisition: ['api'], capabilities: [], status: 'planned', dataScale: null },
   { key: 'tmdb', label: 'TMDb', acquisition: ['api'], capabilities: [], status: 'planned', dataScale: null },
 ]
@@ -82,7 +87,7 @@ const OVERVIEW = {
   collectionFreshness: [
     { collection: 'movie_hot_gaia', lastAttemptAt: '2026-06-07T10:00:00Z', lastSuccessAt: '2026-06-07T10:00:00Z', lastStatus: 'ok', lastError: null, itemCount: 345 },
   ],
-  dataScale: { collectionItems: 1294, doubanEntries: 140502 },
+  dataScale: DOUBAN_SCALE,
 }
 
 const ACTIVITY_ROWS = [
@@ -92,7 +97,7 @@ const ACTIVITY_ROWS = [
 
 const COLLECTIONS = {
   items: [
-    { collection: 'movie_hot_gaia', domain: 'movie', category: 'trending', doubanId: '1', rank: 0, title: '诺曼底72小时', originalTitle: null, year: 2026, ratingValue: 8.2, coverUrl: null },
+    { collection: 'movie_hot_gaia', domain: 'movie', category: 'trending', externalId: '1', rank: 0, title: '诺曼底72小时', subtitle: null, year: 2026, rating: 8.2, coverUrl: null, airWeekday: null },
   ],
   total: 345,
   summary: [
@@ -102,7 +107,7 @@ const COLLECTIONS = {
 }
 
 const SEARCH = {
-  rows: [{ source: 'offline' as const, doubanId: '26266893', title: '流浪地球', year: 2019, rating: 7.9 }],
+  rows: [{ source: 'offline' as const, externalId: '26266893', title: '流浪地球', year: 2019, rating: 7.9 }],
   total: 1,
 }
 
@@ -132,14 +137,21 @@ describe('ExternalResourcesClient', () => {
     expect(await screen.findByText('热门合集条目')).not.toBeNull()
   })
 
-  it('planned provider（bangumi）→ 待接入占位 + 获取方式 Pill，无 tab Segment / 不拉 overview', async () => {
-    currentParams = new URLSearchParams('provider=bangumi')
+  it('planned provider（imdb）→ 待接入占位 + 获取方式 Pill，无 tab Segment / 不拉 overview', async () => {
+    currentParams = new URLSearchParams('provider=imdb')
     render(<ExternalResourcesClient />)
     expect(await screen.findByTestId('ext-planned-placeholder')).not.toBeNull()
-    expect(screen.getByText('Bangumi · 待接入')).not.toBeNull()
+    expect(screen.getByText('IMDB · 待接入')).not.toBeNull()
     expect(screen.getByText('API')).not.toBeNull()
     expect(screen.queryByTestId('ext-tab-segment')).toBeNull()
     expect(mockFetchOverview).not.toHaveBeenCalled()
+  })
+
+  it('bangumi active → tab Segment + 概览面板（ADR-189）', async () => {
+    currentParams = new URLSearchParams('provider=bangumi')
+    render(<ExternalResourcesClient />)
+    expect(await screen.findByTestId('ext-tab-segment')).not.toBeNull()
+    expect(screen.queryByTestId('ext-planned-placeholder')).toBeNull()
   })
 
   it('active 渲染 4 个治理 tab（概览/热门资源/资源搜索/采集与富集记录）', async () => {
@@ -178,8 +190,8 @@ describe('ExternalResourcesClient', () => {
 describe('OverviewTab', () => {
   it('4 张 KpiCard 数值正确', async () => {
     render(<OverviewTab provider="douban" />)
-    expect((await screen.findByTestId('ext-kpi-collection-items')).textContent).toContain(fmt(1294))
-    expect(screen.getByTestId('ext-kpi-douban-entries').textContent).toContain(fmt(140502))
+    expect((await screen.findByTestId('ext-kpi-collectionItems')).textContent).toContain(fmt(1294))
+    expect(screen.getByTestId('ext-kpi-doubanEntries').textContent).toContain(fmt(140502))
     expect(screen.getByTestId('ext-kpi-fetch-total').textContent).toContain(fmt(212))
     expect(screen.getByTestId('ext-kpi-enrich-total').textContent).toContain(fmt(480))
   })
@@ -199,6 +211,20 @@ describe('OverviewTab', () => {
     render(<OverviewTab provider="douban" />)
     expect(await screen.findByText('movie_hot_gaia')).not.toBeNull()
     expect(screen.getByText('345 条')).not.toBeNull()
+  })
+
+  it('bangumi → 官方入口卡（API/doc/dump 外链，ADR-189 D-189-8）；douban 无入口卡', async () => {
+    const { unmount } = render(<OverviewTab provider="bangumi" />)
+    const links = await screen.findByTestId('ext-overview-official-links')
+    expect(links).not.toBeNull()
+    const anchors = links.querySelectorAll('a[data-official-link]')
+    expect(anchors.length).toBe(3)
+    expect(Array.from(anchors).some((a) => a.getAttribute('href') === 'https://api.bgm.tv')).toBe(true)
+    unmount()
+    // douban 无 PROVIDER_LINKS → 不渲染入口卡
+    render(<OverviewTab provider="douban" />)
+    await screen.findByTestId('ext-kpi-collectionItems')
+    expect(screen.queryByTestId('ext-overview-official-links')).toBeNull()
   })
 
   it('fetchOverview 失败 → ErrorState', async () => {

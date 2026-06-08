@@ -19,9 +19,14 @@ import { installAdminShellMocks } from '../_shared/shell-mocks'
 const API_BASE = 'http://localhost:4000/v1'
 const EXT_BASE = `${API_BASE}/admin/external-resources`
 
+const DOUBAN_SCALE = [
+  { key: 'collectionItems', label: '热门合集条目', value: 1294 },
+  { key: 'doubanEntries', label: '离线 dump 条目', value: 140502 },
+]
+
 const PROVIDERS = [
-  { key: 'douban', label: '豆瓣', acquisition: ['offline', 'scrape'], capabilities: ['detail', 'search'], status: 'active', dataScale: { collectionItems: 1294, doubanEntries: 140502 } },
-  { key: 'bangumi', label: 'Bangumi', acquisition: ['api'], capabilities: [], status: 'planned', dataScale: null },
+  { key: 'douban', label: '豆瓣', acquisition: ['offline', 'scrape'], capabilities: ['detail', 'search'], status: 'active', dataScale: DOUBAN_SCALE },
+  { key: 'bangumi', label: 'Bangumi', acquisition: ['api'], capabilities: ['detail', 'search', 'celebrity', 'collection', 'schedule'], status: 'active', dataScale: [{ key: 'collectionItems', label: '派生合集条目', value: 50 }, { key: 'dumpEntries', label: '离线 dump 条目', value: 9000 }] },
   { key: 'imdb', label: 'IMDB', acquisition: ['api'], capabilities: [], status: 'planned', dataScale: null },
   { key: 'tmdb', label: 'TMDb', acquisition: ['api'], capabilities: [], status: 'planned', dataScale: null },
 ]
@@ -34,16 +39,16 @@ const OVERVIEW = {
   },
   enrichStats: { total: 480, byStatus: [{ key: 'auto_matched', count: 400 }], byMethod: [{ key: 'title', count: 300 }] },
   collectionFreshness: [{ collection: 'movie_hot_gaia', lastAttemptAt: '2026-06-07T10:00:00Z', lastSuccessAt: '2026-06-07T10:00:00Z', lastStatus: 'ok', lastError: null, itemCount: 345 }],
-  dataScale: { collectionItems: 1294, doubanEntries: 140502 },
+  dataScale: DOUBAN_SCALE,
 }
 
 const COLLECTIONS = {
-  data: [{ collection: 'movie_hot_gaia', domain: 'movie', category: 'trending', doubanId: '1', rank: 0, title: '诺曼底72小时', originalTitle: null, year: 2026, ratingValue: 8.2, coverUrl: null }],
+  data: [{ collection: 'movie_hot_gaia', domain: 'movie', category: 'trending', externalId: '1', rank: 0, title: '诺曼底72小时', subtitle: null, year: 2026, rating: 8.2, coverUrl: null, airWeekday: null }],
   total: 345,
   summary: [{ collection: 'movie_hot_gaia', domain: 'movie', category: 'trending', count: 345 }],
 }
 
-const SEARCH = { data: [{ source: 'offline', doubanId: '26266893', title: '流浪地球', year: 2019, rating: 7.9 }], total: 1 }
+const SEARCH = { data: [{ source: 'offline', externalId: '26266893', title: '流浪地球', year: 2019, rating: 7.9 }], total: 1 }
 const ACTIVITY = { data: [{ id: '1', provider: 'douban', operation: 'detail', method: 'scrape', status: 'ok', source: 'enrich_worker', target: 'db123', itemCount: 1, durationMs: 530, error: null, createdAt: '2026-06-07T10:00:00Z' }], total: 1 }
 
 async function setAdminCookies(context: BrowserContext) {
@@ -60,10 +65,11 @@ function json(body: unknown) {
 async function installExtMocks(page: Page) {
   await installAdminShellMocks(page)
   await page.route(`${EXT_BASE}/providers`, (route) => route.fulfill(json({ data: PROVIDERS })))
-  await page.route(new RegExp('/admin/external-resources/douban/overview'), (route) => route.fulfill(json({ data: OVERVIEW })))
-  await page.route(new RegExp('/admin/external-resources/douban/collections'), (route) => route.fulfill(json(COLLECTIONS)))
-  await page.route(new RegExp('/admin/external-resources/douban/search'), (route) => route.fulfill(json(SEARCH)))
-  await page.route(new RegExp('/admin/external-resources/douban/activity'), (route) => route.fulfill(json(ACTIVITY)))
+  // provider 无关路由（douban + bangumi 均 active，复用同 fixture 做 smoke）
+  await page.route(new RegExp('/admin/external-resources/[^/]+/overview'), (route) => route.fulfill(json({ data: OVERVIEW })))
+  await page.route(new RegExp('/admin/external-resources/[^/]+/collections'), (route) => route.fulfill(json(COLLECTIONS)))
+  await page.route(new RegExp('/admin/external-resources/[^/]+/search'), (route) => route.fulfill(json(SEARCH)))
+  await page.route(new RegExp('/admin/external-resources/[^/]+/activity'), (route) => route.fulfill(json(ACTIVITY)))
 }
 
 test.describe('外部资源治理页 — admin smoke', () => {
@@ -111,13 +117,25 @@ test.describe('外部资源治理页 — admin smoke', () => {
     await expect(page.getByText('流浪地球')).toBeVisible({ timeout: 8000 })
   })
 
-  test('planned provider（bangumi）→ 待接入占位，无 tab', async ({ context, page }) => {
+  test('planned provider（imdb）→ 待接入占位，无 tab', async ({ context, page }) => {
+    await setAdminCookies(context)
+    await installExtMocks(page)
+
+    await page.goto('/admin/external-resources?provider=imdb')
+    await expect(page.getByTestId('ext-planned-placeholder')).toBeVisible({ timeout: 10000 })
+    await expect(page.getByText('IMDB · 待接入')).toBeVisible()
+    expect(await page.getByTestId('ext-tab-segment').count()).toBe(0)
+  })
+
+  test('bangumi active（ADR-189）→ 4 tab + 概览官方入口卡', async ({ context, page }) => {
     await setAdminCookies(context)
     await installExtMocks(page)
 
     await page.goto('/admin/external-resources?provider=bangumi')
-    await expect(page.getByTestId('ext-planned-placeholder')).toBeVisible({ timeout: 10000 })
-    await expect(page.getByText('Bangumi · 待接入')).toBeVisible()
-    expect(await page.getByTestId('ext-tab-segment').count()).toBe(0)
+    await expect(page.getByTestId('ext-tab-segment')).toBeVisible({ timeout: 10000 })
+    await expect(page.getByTestId('ext-planned-placeholder')).toHaveCount(0)
+    // 概览官方入口卡（API/doc/dump 外链）
+    await expect(page.getByTestId('ext-overview-official-links')).toBeVisible({ timeout: 8000 })
+    await expect(page.locator('[data-official-link="https://api.bgm.tv"]')).toBeVisible()
   })
 })

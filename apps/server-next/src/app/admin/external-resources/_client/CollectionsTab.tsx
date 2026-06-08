@@ -24,6 +24,8 @@ import type { ProviderKey } from '@resovo/types'
 import { useTableRouterAdapter } from '@/lib/table-router-adapter'
 import {
   fetchCollections,
+  COLLECTION_LABELS,
+  labelOf,
   type CollectionItem,
   type CollectionSummaryItem,
 } from '@/lib/external-resources/api'
@@ -33,8 +35,8 @@ const COLUMN_DESCRIPTORS: readonly ColumnDescriptor[] = [
   { id: 'cover', header: '封面', defaultVisible: true },
   { id: 'title', header: '标题', defaultVisible: true },
   { id: 'year', header: '年份', defaultVisible: true },
-  { id: 'ratingValue', header: '评分', defaultVisible: true },
-  { id: 'doubanId', header: '豆瓣 ID', defaultVisible: true },
+  { id: 'rating', header: '评分', defaultVisible: true },
+  { id: 'externalId', header: '外部 ID', defaultVisible: true },
 ]
 
 const CHIPS_ROW_STYLE: React.CSSProperties = {
@@ -91,7 +93,7 @@ function buildColumns(): readonly TableColumn<CollectionItem>[] {
       cell: ({ row }) => (
         <span style={TITLE_CELL_STYLE}>
           <span style={{ color: 'var(--fg-default)' }}>{row.title}</span>
-          {row.originalTitle && <span style={ORIGINAL_TITLE_STYLE}>{row.originalTitle}</span>}
+          {row.subtitle && <span style={ORIGINAL_TITLE_STYLE}>{row.subtitle}</span>}
         </span>
       ),
     },
@@ -100,12 +102,12 @@ function buildColumns(): readonly TableColumn<CollectionItem>[] {
       cell: ({ row }) => <span style={{ fontVariantNumeric: 'tabular-nums' }}>{row.year ?? '—'}</span>,
     },
     {
-      id: 'ratingValue', header: '评分', filterable: false, accessor: (r) => r.ratingValue,
-      cell: ({ row }) => <span style={{ fontVariantNumeric: 'tabular-nums', color: row.ratingValue ? 'var(--state-success-fg)' : 'var(--fg-muted)' }}>{row.ratingValue == null ? '—' : row.ratingValue.toFixed(1)}</span>,
+      id: 'rating', header: '评分', filterable: false, accessor: (r) => r.rating,
+      cell: ({ row }) => <span style={{ fontVariantNumeric: 'tabular-nums', color: row.rating ? 'var(--state-success-fg)' : 'var(--fg-muted)' }}>{row.rating == null ? '—' : row.rating.toFixed(1)}</span>,
     },
     {
-      id: 'doubanId', header: '豆瓣 ID', filterable: false, accessor: (r) => r.doubanId,
-      cell: ({ row }) => <span style={{ fontVariantNumeric: 'tabular-nums', color: 'var(--fg-muted)' }}>{row.doubanId}</span>,
+      id: 'externalId', header: '外部 ID', filterable: false, accessor: (r) => r.externalId,
+      cell: ({ row }) => <span style={{ fontVariantNumeric: 'tabular-nums', color: 'var(--fg-muted)' }}>{row.externalId}</span>,
     },
   ]
 }
@@ -191,9 +193,9 @@ export function CollectionsTab({ provider }: { provider: ProviderKey }) {
               aria-pressed={pressed}
               onClick={() => selectCollection(s.collection)}
               style={pressed ? { ...CHIP_STYLE, ...CHIP_PRESSED_STYLE } : CHIP_STYLE}
-              title={`${s.domain} · ${s.category}`}
+              title={`${s.domain ? `${s.domain} · ` : ''}${s.category}`}
             >
-              {s.collection}
+              {labelOf(COLLECTION_LABELS, s.collection)}
               <span style={CHIP_COUNT_STYLE}>{s.count}</span>
             </button>
           )
@@ -203,7 +205,7 @@ export function CollectionsTab({ provider }: { provider: ProviderKey }) {
       <DataTable<CollectionItem>
         rows={items}
         columns={columns}
-        rowKey={(row) => `${row.collection}:${row.doubanId}`}
+        rowKey={(row) => `${row.collection}:${row.externalId}`}
         mode="server"
         query={snapshot}
         onQueryChange={handlePatch}

@@ -29,7 +29,7 @@ const COLUMN_DESCRIPTORS: readonly ColumnDescriptor[] = [
   { id: 'title', header: '标题', defaultVisible: true },
   { id: 'year', header: '年份', defaultVisible: true },
   { id: 'rating', header: '评分', defaultVisible: true },
-  { id: 'doubanId', header: '豆瓣 ID', defaultVisible: true },
+  { id: 'externalId', header: '外部 ID', defaultVisible: true },
 ]
 
 const LIVE_TOGGLE_STYLE: React.CSSProperties = {
@@ -80,8 +80,8 @@ function buildColumns(): readonly TableColumn<SearchHit>[] {
       cell: ({ row }) => <span style={{ fontVariantNumeric: 'tabular-nums', color: row.rating ? 'var(--state-success-fg)' : 'var(--fg-muted)' }}>{row.rating == null ? '—' : row.rating.toFixed(1)}</span>,
     },
     {
-      id: 'doubanId', header: '豆瓣 ID', filterable: false, accessor: (r) => r.doubanId,
-      cell: ({ row }) => <span style={{ fontVariantNumeric: 'tabular-nums', color: 'var(--fg-muted)' }}>{row.doubanId}</span>,
+      id: 'externalId', header: '外部 ID', filterable: false, accessor: (r) => r.externalId,
+      cell: ({ row }) => <span style={{ fontVariantNumeric: 'tabular-nums', color: 'var(--fg-muted)' }}>{row.externalId}</span>,
     },
   ]
 }
@@ -160,8 +160,8 @@ export function SearchTab({ provider }: { provider: ProviderKey }) {
     <DataTableSearchInput
       value={q}
       onChange={onSearchChange}
-      placeholder="搜索豆瓣资源（标题）"
-      aria-label="搜索豆瓣资源"
+      placeholder="搜索资源（标题）"
+      aria-label="搜索外部资源"
       data-testid="ext-search-input"
     />
   )
@@ -180,7 +180,7 @@ export function SearchTab({ provider }: { provider: ProviderKey }) {
   )
 
   const emptyNode = trimmed.length === 0
-    ? <EmptyState title="输入关键词搜索" description="先查离线 dump（秒回）；开启「在线实时」追加豆瓣实时候选" />
+    ? <EmptyState title="输入关键词搜索" description="先查离线 dump（秒回）；开启「在线实时」追加 provider 实时候选" />
     : <EmptyState title="无匹配结果" description="换个关键词，或开启「在线实时」" />
 
   return (
@@ -193,7 +193,7 @@ export function SearchTab({ provider }: { provider: ProviderKey }) {
       <DataTable<SearchHit>
         rows={rows}
         columns={columns}
-        rowKey={(row) => `${row.source}:${row.doubanId}`}
+        rowKey={(row) => `${row.source}:${row.externalId}`}
         mode="server"
         query={snapshot}
         onQueryChange={handlePatch}
