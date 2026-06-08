@@ -16,6 +16,7 @@ import * as homeModuleQueries from '@/api/db/queries/home-modules'
 import * as videoQueries from '@/api/db/queries/videos'
 import { CACHE_PREFIXES } from '@/api/services/CacheService'
 import { buildHomeShelves, buildHomeShelfCacheKey } from '@/api/services/home-curation.shelf'
+import { listDailyAnimeByWeekday, type DailyAnimeResult } from '@/api/db/queries/home-discovery'
 
 const TOP10_TTL = 60
 /** D-184-5.1：与 top10 同口径短 TTL（方案 §12；主动失效见 home-cache-invalidation） */
@@ -126,5 +127,14 @@ export class HomeService {
     return (
       shelves.get(section) ?? { items: [], snapshotAt: null, generatedAt: new Date().toISOString() }
     )
+  }
+
+  /**
+   * 每日放送发现板块（ADR-189 D-189-7）：读 bangumi calendar 当日 weekday 切片 + 站内交叉态。
+   * 独立发现机制——不经 home-section 框架 / preview / autofill；无缓存（数据量小，落库已秒回）。
+   */
+  async dailyAnime(weekday: number): Promise<DailyAnimeResult> {
+    const items = await listDailyAnimeByWeekday(this.db, weekday)
+    return { weekday, items }
   }
 }

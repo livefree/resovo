@@ -75,4 +75,24 @@ export async function homeRoutes(fastify: FastifyInstance) {
     const data = await homeService.shelf(parsed.data.section, brandSlug)
     return reply.send({ data })
   })
+
+  // ── GET /home/daily-anime ────────────────────────────────────
+  // ADR-189 D-189-7：Bangumi 每日放送发现板块（含未入站，交叉站内）。独立发现机制——不经
+  // home-section/preview/autofill。weekday 默认服务端当日（1=周一..7=周日）。
+  fastify.get('/home/daily-anime', async (request, reply) => {
+    const QuerySchema = z.object({
+      weekday: z.coerce.number().int().min(1).max(7).optional(),
+    })
+    const parsed = QuerySchema.safeParse(request.query)
+    if (!parsed.success) {
+      return reply.code(422).send({
+        error: { code: 'VALIDATION_ERROR', message: '参数错误', status: 422 },
+      })
+    }
+    // JS getDay() 0=周日..6=周六 → 转 1=周一..7=周日
+    const todayWeekday = ((new Date().getDay() + 6) % 7) + 1
+    const weekday = parsed.data.weekday ?? todayWeekday
+    const data = await homeService.dailyAnime(weekday)
+    return reply.send({ data })
+  })
 }

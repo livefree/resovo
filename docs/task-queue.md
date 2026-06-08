@@ -1586,6 +1586,7 @@
    - 依赖：CHG-BNG-RES-API
 
 5. **CHG-BNG-HOME-WIRE**（可拆 -A/-B）— 首页每日放送 + 站内 hot_anime
-   - **5-A** 后端：`GET /home/daily-anime`（读 calendar 切片 + 交叉站内 published video）+ 单测
+   - **5-A** 后端（状态：✅ 已完成 2026-06-08 00:30）
+     - 完成备注：实施 ADR-189 **D-189-7 后端侧**。① `db/queries/home-discovery.ts`（DailyAnimeItem/Result DTO〔含 linkedVideo 站内交叉态，apps/api 侧**不进 home-section 框架**〕+ `listDailyAnimeByWeekday`：calendarKeyForWeekday 解析 weekday→合集 key〔越界返 []〕+ calendar 切片 LEFT JOIN media_catalog〔`bangumi_subject_id::TEXT = bangumi_id` 避 TEXT→INT 解析〕+ LATERAL 取站内 published 公开 video）② `HomeService.dailyAnime`（无缓存）③ `GET /home/daily-anime?weekday=N`（公开 route，默认服务端当日 1=周一..7=周日）。**不碰** preview/autofill/section。**真实 DB 验证**：weekday 1/7 查询无错返 0（空表）/ 0 越界返 [] 不查。门禁：typecheck/lint/verify:adr-contracts〔sql-schema-alignment ✅〕EXIT=0 / 新测 4 / test:changed 5 文件 81 / verify-endpoint-adr 226（公开 route 不计 admin）。执行模型: claude-opus-4-8；子代理: 无。
    - **5-B** 前台：`daily_anime` 板块组件（未入站降级态 + 想看/搜索引导）+ hot_anime 数据新鲜核对 + 单测 + 前台 e2e
    - 依赖：CHG-BNG-RES-STORE（落库）+ ADR section 授权（卡 1）

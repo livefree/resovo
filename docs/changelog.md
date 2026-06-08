@@ -2887,3 +2887,13 @@
   - `tests/e2e/admin/external-resources/external-resources-smoke.spec.ts` — 4 e2e（mock provider 无关路由 + planned imdb + **bangumi active 4-tab + 官方入口卡**）
 - **新增依赖**：无 ｜ **数据库变更**：无
 - **注意事项**：① API DTO 变更**强类型耦合**，douban+bangumi UI 同卡适配（不可拆——CollectionItem.externalId 等字段重命名令所有 Tab 须同 typecheck 边界更新）；② douban UI 改后**数据零行为变更**（同数值，仅字段名/渲染泛化）；③ bangumi active 后 PlannedPlaceholder 仅余 imdb/tmdb；④ 门禁：typecheck/lint EXIT=0 / 视图 22 全绿 / **admin e2e 4 passed**（含 bangumi active）/ test:changed EXIT=0；⑤ 卡 4 完成；下一卡 5（首页每日放送 + hot_anime）。
+
+## [CHG-BNG-HOME-WIRE-5A] 首页每日放送后端 GET /home/daily-anime（SEQ-20260607-05 卡 5-A / ADR-189 D-189-7）
+- **完成时间**：2026-06-08 ｜ **记录时间**：2026-06-08 00:30 ｜ **执行模型**：claude-opus-4-8 ｜ **子代理**：无
+- **修改文件**：
+  - `apps/api/src/db/queries/home-discovery.ts`（新建）— `DailyAnimeItem`/`DailyAnimeResult` DTO（apps/api 侧，含 `linkedVideo` 站内交叉态，**不进 home-section 框架** arch B1）+ `listDailyAnimeByWeekday`（calendarKeyForWeekday 解析 weekday→合集 key〔越界返 []〕+ calendar 切片 LEFT JOIN media_catalog〔`bangumi_subject_id::TEXT = bangumi_id`〕+ LATERAL 取站内 published 公开 video）
+  - `apps/api/src/services/HomeService.ts` — `dailyAnime(weekday)` 方法（无缓存，独立发现不经 preview/autofill/section）
+  - `apps/api/src/routes/home.ts` — `GET /home/daily-anime?weekday=N`（公开 route，默认服务端当日 1=周一..7=周日；走 home.ts 范式 Route 仅校验+委托）
+  - `tests/unit/api/homeDailyAnime.test.ts`（新建，4 测）— weekday→key 解析 / 映射 + linkedVideo 交叉（有/无站内）/ rating Number / 越界返 [] 不查 / SQL 含 published+visibility 过滤
+- **新增依赖**：无 ｜ **数据库变更**：无（读 STORE-2A 表 + media_catalog/videos 交叉）
+- **注意事项**：① **独立发现机制**——daily-anime 不进 HomeSectionKey/preview/autofill/section（守 arch B1）；② 交叉用 `bangumi_subject_id::TEXT = bangumi_id` 避 TEXT→INT 解析风险；③ **真实 DB 验证**：weekday 1/7 查询无错返 0（空表无 worker 数据）/ weekday 0 越界返 [] 不查；④ 门禁：typecheck/lint/verify:adr-contracts〔sql-schema-alignment ✅〕EXIT=0 / 新测 4 / test:changed 5 文件 81 / verify-endpoint-adr 226（公开 route 不计 admin）；⑤ 下一卡 5-B（前台板块 + hot_anime 核对）。
