@@ -1,17 +1,20 @@
 # Resovo server-next 工程实施 Plan v1
 
 > status: approved-for-execution（M-SN-0 清理工作台前的最终版）
-> version: v2.6（v0 → v1 → v2 → v2.1 → v2.2 → v2.3 → v2.4 → v2.5 → v2.6 修订记录见末尾"修订日志"；v2.6 = 方案 B' 新增 M-SN-5.5 独立 milestone（承载 cutover-blocker 4🔴+2🟠 + DEBT-LINE-KEY-01 决策 + admin-ui 通用原语/Popover 前置）+ ADR-104/051 编号漂移修正 + Popover 从 M-SN-6 提前至 M-SN-5.5）
+> version: v2.7（v0 → … → v2.6 → v2.7 修订记录见末尾"修订日志"；v2.7 = 退役路线现状对账（plan §6 与真实进度脱节修正：实际已过 M-SN-7 跟踪卡 + M-SN-8/M-SN-9 + 多 feature 序列，apps/server 仍存活于维护期，cutover 未执行）+ M-SN-7 重定义为"CUTOVER 执行门禁版"+ §3 决策表补 2 行 + 关联功能重现核对 `docs/audit/admin-cutover-parity-2026-06-08.md`）
 > owner: @engineering
 > scope: apps/server-next 工程 + packages/admin-ui 下沉 + packages/design-tokens 三层 + nginx 反代切流 + apps/server 退场
 > source_of_truth: yes（工程视角的"宪法"，所有 server-next 任务卡须引用本 plan §节号）
+> supersedes: none
+> superseded_by: none
+> last_reviewed: 2026-06-08
 > companion:
 >   - [admin_audit_20260426.md](./admin_audit_20260426.md)（现状 / 9 痛点）
 >   - [admin_design_brief_20260426.md](./admin_design_brief_20260426.md)（design 视角 brief）
 >   - [server_next_kickoff_20260427.md](./archive/2026Q2/server_next_kickoff_20260427.md)（R1–R5 决策实录 + 评审报告；2026-05-12 归档）
 >   - [docs/designs/backend_design_v2.1/](./designs/backend_design_v2.1/)（设计稿，仍在补完）
-> generated_at: 2026-04-27（v0）/ revised: 2026-04-27（v1）/ 2026-04-28（v2 / v2.1 / v2.2 / v2.3 / v2.4）/ 2026-05-01（v2.5）/ 2026-05-06（v2.6）
-> 主循环模型：claude-opus-4-7
+> generated_at: 2026-04-27（v0）/ revised: 2026-04-27（v1）/ 2026-04-28（v2 / v2.1 / v2.2 / v2.3 / v2.4）/ 2026-05-01（v2.5）/ 2026-05-06（v2.6）/ 2026-06-08（v2.7）
+> 主循环模型：claude-opus-4-7（v0–v2.6）/ claude-opus-4-8（v2.7）
 > 评审：v1 完成后 spawn arch-reviewer (Opus) 二轮评审 PASS 才进入 M-SN-0
 
 ---
@@ -103,6 +106,8 @@
 | **M-SN-5 启动前置工作纳入**（v2.6 新增）| 方案 B'：M-SN-5 主体 4w 不变 + 新增 **M-SN-5.5 独立 milestone 2.0w（软上限 3.0w）** 承载三类工作：(a) cutover-blocker 4🔴+2🟠 共 6 子卡（M-SN-4 audit §6） / (b) DEBT-LINE-KEY-01 决策（仅立决策卡，方案 B 选定后须先 ADR + Non-Goals 豁免）/ (c) admin-ui 通用原语/Popover 前置 6 子卡（只下沉原语不接业务视图）；🟡 DEBT-SN-4-09c-A 不计入本 milestone（cutover 前可选）；总周期 18.0w → 20.0w（软上限 21.0w）| CHG-PLAN-02 用户 sign-off + 3 轮 arch-reviewer Opus 评审 | §6 M-SN-5 + §6 M-SN-5.5（v2.6 新增）|
 | **DEBT-LINE-KEY-01 决策路径**（v2.6 新增 / **PRE-02 已决议方案 A 2026-05-06**）| 方案 A（维持复合键 `(source_site_key, source_name)`）vs 方案 B（line_key 一级建模 + 跨站合并）；CHG-SN-5-PRE-02 决策卡 2026-05-06 裁决采纳**方案 A**（ADR-114-NEGATED 落盘）— 业务触发条件未满足 + D-14 契约稳定 + 跨站合并 UI 设计稿不齐 + 三重 BLOCKER 触发不对称风险；方案 B 路径不启动（ADR-114 实施 / Non-Goals 豁免 / migration / 端点修订卡均不立卡）；重新评估触发条件见 ADR-114-NEGATED 后果段 | SEQ-20260502-01 推迟决策 + CHG-SN-5-PRE-02 决策卡 + arch-reviewer Opus 独立第二意见 PASS | `docs/decisions.md` ADR-114-NEGATED + §6 M-SN-5.5 B 段决策落盘 + §10.9 风险消除 + §9 ADR 索引状态 |
 | **Popover 原语提前 + ADR 编号漂移修正**（v2.6 新增）| Popover 从 M-SN-6 范围移至 M-SN-5.5（CHG-SN-5-PRE-03-F），起草时 API 契约复杂度（Portal / focus-trap / dismiss 协议）若超 Drawer **必须先升独立 sub-ADR + Opus PASS 才能起实施卡**；同时修正 v2.5 §3 决策表 / §6 M-SN-5 ADR-端点先后协议段 / 完成标准段 / §修订日志 v0→v1 段中 "ADR-104/051" 漂移 → 统一为 "ADR-104/105"（ADR-051 实为 IMG-01 图片治理 schema） | implementation-gap §3.2 + 用户偏差核对 + 3 轮 arch-reviewer Opus 评审 | §6 M-SN-5（编号修正）+ §6 M-SN-5.5（Popover 落地）+ §6 M-SN-6（移除条目）|
+| **退役路线现状对账**（v2.7 新增）| §6 工时表/里程碑划分为 v2.6 历史规划：实际进度已过 M-SN-7 跟踪卡（归档）+ M-SN-8 + M-SN-9（用户复核修复）+ CRAWLER/MOD/META/DTR/VSR/EXT-RES/HOME 多 feature 序列；`apps/server` 至今物理存活于维护期（仍在 workspaces / typecheck / `docker/nginx.conf` 链路，2026-06-06 还修过其 `middleware.ts` 安全缺口）；**cutover 未执行**。功能重现核对结论：业务功能 100% 重现/收编/拆分，无业务缺口阻塞退役（详见 `docs/audit/admin-cutover-parity-2026-06-08.md`）；v1 E2E 已降冒烟（SEQ-20260606-01，admin 域 76/76 EXIT=0）。M-SN-7 重定义为"CUTOVER 执行门禁版" | 用户指令"核对功能重现 + 更新退役路线" + 功能重现核对 + arch-reviewer Opus 评审 | §6 退役路线现状对账段 + §6 M-SN-7（重定义）|
+| **QA/dev 工具退役前迁移 dev/**（v2.7 新增）| 旧后台 `fallback-preview`（样板图预览）/ `design-tokens`（token 预览）新后台无完整对应；`sandbox` 已被 `/admin/dev/components` 覆盖。**用户裁定 2026-06-08**：`fallback-preview` + `design-tokens` 退役前补迁到 server-next `/admin/dev/`（隐藏路由工具区），不随 apps/server 直接废弃 | 用户 sign-off 2026-06-08 | 退役执行序列（task-queue）QA 工具迁移子卡 |
 
 ---
 
@@ -641,11 +646,28 @@ trailer 与 `docs/rules/git-rules.md` 当前格式兼容（已核：`Refs:` 与 
 - **软上限协议（R7 SHOULD-8）**：基线 0.5 周；任一类验收发现 critical >2 项即升至 1 周；超 1 周触发 BLOCKER §5.2 第 11 条
 - **阶段审计**：人工抽查（不全自动）
 
-### M-SN-7 · Cutover · **0.5 周**
-- **范围**：
-  - functional parity 验收清单（apps/server vs apps/server-next 全 21 路由占位逐项 diff）
-  - e2e 全绿
-  - **同 commit 内**：nginx 反代配置切换（`/admin/*` :3001 → :3003）+ apps/server 删除 + `apps/server-next` → `apps/admin` 改名（DISCUSS-4）
+### 退役路线现状对账（v2.7 新增 · 2026-06-08）
+
+> **本段为权威现状**：下方 §6 M-SN-7 以前的工时表与里程碑划分（M-SN-0～6.5）为 v2.6 历史规划，已实质执行完毕但**未严格对应实际交付节奏**。请勿据 v2.6 工时表判断当前进度。
+
+- **实际进度**：M-SN-7 跟踪卡已归档（`docs/archive/task-queue/task-queue_archive_M-SN-7-to-META_20260605.md`）；其后执行 M-SN-8 + M-SN-9（用户复核反馈逐项修复，SEQ-20260524-01 容器）+ CRAWLER/MOD/META/DTR/VSR/EXT-RES/HOME 多 feature 序列；当前仍有活跃 feature 序列（SEQ-20260607-* DOUBAN/HOME）。
+- **apps/server 状态**：至今**物理存活于维护期** —— 仍在 root `workspaces` / `typecheck` 脚本 / `docker/nginx.conf` 链路；2026-06-06 修复其 `middleware.ts` 真实安全缺口（ADR-010 守卫恢复，维护期 bug 修复，SEQ-20260606-01 CHG-E2E-GATE-AUDIT-B）。
+- **cutover（物理删除 + 改名 + nginx 切流）从未执行。**
+- **功能重现核对结论**（`docs/audit/admin-cutover-parity-2026-06-08.md`）：旧后台 26 条逻辑路由（28 物理 page.tsx）业务功能 **100% 重现 / 有意收编（banner → ADR-181/182）/ 拆分**，**无业务功能缺口阻塞退役**。残余三项收尾：① QA 工具（`fallback-preview` / `design-tokens`）退役前迁移 `/admin/dev/`；② banner 收编运营等价确认（#PARITY-BANNER-01）；③ 物理 cutover。
+- **cutover 前置完成度**：v1 E2E 已降冒烟/退役（SEQ-20260606-01，2026-06-06 收口，admin 域 76/76 EXIT=0，BLOCKER 已撤除）。
+
+### M-SN-7 · CUTOVER 执行门禁版 · **0.5 周**（v2.7 重定义）
+
+> 退役执行登记于 `docs/task-queue.md` 退役执行序列（QA 工具迁移 + banner 运营确认 + cutover 执行卡 + 7 天回滚窗）。**cutover 执行卡为高风险不可逆动作，须独立门禁，不与本规划文档同卡执行。**
+
+- **启动准入（全部满足才可起 cutover 执行卡）**：
+  - ✅ functional parity 已达成（`docs/audit/admin-cutover-parity-2026-06-08.md`）
+  - ✅ v1 E2E 已降冒烟（SEQ-20260606-01）
+  - ⏳ QA 工具迁移 `/admin/dev/` 完成（退役序列子卡）
+  - ⏳ banner 收编运营等价确认通过（#PARITY-BANNER-01）
+- **范围（cutover 当日，沿用 §4.2 / ADR-101）**：
+  - e2e 全绿（admin 域）
+  - **同 commit 内**：`docker/nginx.conf` 反代切换（`/admin/*` :3001 → :3003）+ `apps/server` 删除 + workspaces / `typecheck` 等脚本移除 + `apps/server-next` → `apps/admin` 改名（DISCUSS-4）
   - 24h 监控期
   - **+ 7 天**：物理目录 + git tag `pre-server-next-cutover` 保留；超 7 天回滚走完整 commit revert（RTO ≤ 4h，DISCUSS-5）
 - **完成标准**：cutover + 24h 平稳；运营 0 报障；同 commit 完成全部退场动作进 main
@@ -1220,4 +1242,35 @@ M-SN-0 完成 = 三批全部 PASS + 三份 ADR 进入 `docs/decisions.md` + 本 
 - 工时影响：M-SN-5 主体 4w 不变 + 新增 M-SN-5.5 2.0w（软上限 3.0w）；总周期 18.0w → 20.0w（软上限 21.0w）；v1 16w → v2.6 20w = +25% < +50% 阈值
 - 重大修订标记：是（影响 §6 范围 + 总周期 + 新增 milestone + 新增 ADR 候选 + §3 决策表 + ADR 编号修正）；按 §0 plan 版本协议须人工 sign-off — 已取得
 
-— END plan v2.6（CHG-PLAN-02 落地）—
+---
+
+### 修订日志 v2.6 → v2.7（CHG-CUTOVER-PLAN-REFRESH 落地，2026-06-08）
+
+由用户指令"核对新后台对旧后台功能的重现，更新规划退役路线；制定完善方案后执行"触发。背景：plan §6 把退役描述为 M-SN-7 · 第 20 周，但实际进度已远超（M-SN-7 跟踪卡归档 + M-SN-8/M-SN-9 + 多 feature 序列），`apps/server` 仍物理存活于维护期，cutover 从未执行 —— §6 退役路线与现实严重脱节。
+
+**修订内容**：
+- §1 文件头：version v2.6 → v2.7 + generated_at 追加 2026-06-08 + 主循环模型补 claude-opus-4-8（v2.7）
+- §3 决策表：新增 2 行（退役路线现状对账 + QA/dev 工具退役前迁移 dev/）
+- §6：M-SN-7 段前**新增"退役路线现状对账"段**（声明 v2.6 工时表为历史规划 + 实际进度 + apps/server 维护期存活 + 功能重现核对结论 + cutover 前置完成度）
+- §6 M-SN-7：**重定义为"CUTOVER 执行门禁版"**（启动准入 4 项 + cutover 当日范围沿用 §4.2/ADR-101 + 显式声明 cutover 执行卡须独立门禁不与本规划同卡）
+- 新增关联文档：`docs/audit/admin-cutover-parity-2026-06-08.md`（26 条逻辑路由 / 28 物理 page.tsx × 新后台 parity 对照矩阵 + QA 工具迁移裁定 + banner 收编运营确认项）
+
+**功能重现核对结论（写入审计文档）**：旧后台 26 条逻辑路由（28 物理 page.tsx）业务功能 100% 重现 / 有意收编（banner → ADR-181/182）/ 拆分；无业务缺口阻塞退役。残余收尾三项（QA 工具迁 dev/ + banner 运营确认 + 物理 cutover）登记进 task-queue 退役执行序列。
+
+**本次执行范围**：仅更新规划文档（plan + 审计文档 + task-queue 退役序列登记）。**不触碰代码、不删 apps/server、不切 nginx** —— 实际 cutover 物理动作独立门禁执行。
+
+**§5.2 BLOCKER 处理**：第 12 条（plan 本身需要修订）→ 走 §0 版本协议（v2.6 → v2.7 + arch-reviewer Opus 评审 + 人工 sign-off + commit trailer `Plan-Revision: v2.6 → v2.7`）。
+
+**不变约束**：Non-Goals 10 条不变 / §4.7 依赖白名单不变 / URL slug 不动 / 切流策略方案 E（ADR-101）不变 / 7 天保留 + RTO ≤ 4h 回滚协议不变。
+
+**修订日志元信息**：
+- Plan-Revision: v2.6 → v2.7
+- 主循环模型：claude-opus-4-8
+- 子代理：arch-reviewer (claude-opus-4-8) — verdict 见 commit / changelog
+- 人工 sign-off：用户 2026-06-08 批准 plan（`~/.claude/plans/prancy-mixing-volcano.md`）+ 裁定执行范围"仅文档" + QA 工具"退役前迁移 dev/"
+- 关联任务：CHG-CUTOVER-PLAN-REFRESH
+- 关联文档：`docs/audit/admin-cutover-parity-2026-06-08.md` / SEQ-20260606-01 / ADR-101 / ADR-181 / ADR-182
+- 工时影响：无（退役路线对账与重定义，不改总周期工时表数值；v2.6 工时表标注为历史规划）
+- 重大修订标记：是（影响 §6 M-SN-7 范围定义 + §3 决策表 + 退役路线）；按 §0 plan 版本协议须人工 sign-off — 已取得
+
+— END plan v2.7（CHG-CUTOVER-PLAN-REFRESH 落地）—

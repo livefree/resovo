@@ -1592,3 +1592,37 @@
    - **5-B** 前台（状态：✅ 已完成 2026-06-08 00:50）
      - 完成备注：实施 ADR-189 **D-189-7 前台侧**。① `home-discovery.ts` 补 `linkedVideo.shortId`（前台 watch deeplink 需要，同 SEQ 增量 + 5-A 测试同步）② `DailyAnimeRow.tsx`（web-next client 组件：取 `/home/daily-anime` skipAuth + 水平滚动竖卡；**linked → 站内可看徽标 + watch deeplink `/watch/{slug}-{shortId}`** / **未入站 → 想看徽标 + 站内搜索 `/search?q=`**；颜色全 CSS 变量；**空/失败自隐**不占位）③ 首页 page.tsx 接入（hot_anime shelf 之后；hot_anime 既有 autofill 链路核对无需改 D-189-9）④ i18n（zh-CN/en：dailyAnime/Available/Wish）⑤ 单测 4。门禁：typecheck/lint EXIT=0（新文件零告警）/ DailyAnimeRow 4 + homeDailyAnime 4 全绿 / test:changed 6 文件 85 全过。**e2e 决策**：web 无既有 homepage e2e harness（web e2e 仅 auth/publish/search/video-governance），daily-anime 板块空数据自隐 → 组件测试 4（linked/未入站/空自隐/无 slug）+ 后端查询测试 4 + 真实 DB 验证已强覆盖；homepage e2e 待 harness 建立后另起（板块优雅降级不阻塞）。执行模型: claude-opus-4-8；子代理: 无。
    - 依赖：CHG-BNG-RES-STORE（落库）+ ADR section 授权（卡 1）
+
+---
+
+## [SEQ-20260608-01] 旧后台 apps/server 退役执行序列（cutover 收尾）
+
+- **状态**：📋 已登记（前 2 卡可启动；cutover 执行卡须独立门禁，待前置满足后人工触发）
+- **创建时间**：2026-06-08 16:30
+- **最后更新时间**：2026-06-08 16:30
+- **source_of_truth**：`docs/server_next_plan_20260427.md` §6 M-SN-7（CUTOVER 执行门禁版，v2.7）
+- **背景**：功能重现核对（`docs/audit/admin-cutover-parity-2026-06-08.md`）确认旧后台 26 条逻辑路由（28 物理 page.tsx）业务功能 100% 重现/收编/拆分，无业务缺口阻塞退役；v1 E2E 已降冒烟（SEQ-20260606-01）。剩余三项收尾工作收口本序列。
+- **依赖**：CHG-CUTOVER-PLAN-REFRESH ✅（plan v2.7 + 审计文档落地）。
+- **关联**：plan §4.2 / ADR-101（切流回滚）/ ADR-181 + ADR-182（banner 收编）。
+
+1. **CHG-CUTOVER-QA-DEV-MIGRATE** — QA 工具退役前迁移 `/admin/dev/`（状态：📋 待启动）
+   - 范围：旧 `apps/server/src/app/admin/fallback-preview`（样板图预览）+ `design-tokens`（token 预览）补迁到 server-next `/admin/dev/`（隐藏路由工具区，对照既有 `dev/components` + `dev/visual` 范式）；`sandbox` 已被 `dev/components` 覆盖无需迁移。
+   - 不在范围：banner / 业务视图；apps/server 删除。
+   - 完成标准：两工具在 server-next `/admin/dev/` 可访问且颜色零硬编码；旧页可在 cutover 时随 apps/server 一并删除。
+   - 建议模型：sonnet。
+
+2. **CHG-CUTOVER-BANNER-OPS-VERIFY** — banner 收编运营等价确认（状态：📋 待启动）
+   - 范围：对照 ADR-181/182，确认 `/admin/home` 是否提供原 banner 的"时间窗（生效区间）+ 显示顺序拖拽"运营等价能力（#PARITY-BANNER-01）。
+   - 完成标准：等价能力确认通过；若有缺口登记为 home 增强卡（非 cutover 阻塞项）。
+   - 建议模型：sonnet。
+
+3. **CHG-CUTOVER-EXECUTE** — 物理 cutover（🔴 高风险不可逆 · 独立门禁 · 待前置满足 + 人工触发）
+   - **启动准入（全部满足）**：parity ✅（审计文档）+ v1 E2E 降冒烟 ✅（SEQ-20260606-01）+ 卡 1 QA 工具迁移 ✅ + 卡 2 banner 运营确认 ✅。
+   - 范围（同 commit 内，沿用 plan §4.2 / ADR-101）：`docker/nginx.conf` 反代切换（`/admin/*` :3001 → :3003）+ 删 `apps/server` + workspaces/`typecheck` 等脚本移除 + `apps/server-next` → `apps/admin` 改名。
+   - 完成标准：cutover + 24h 平稳；运营 0 报障；人工 final sign-off（PR 描述签字）。
+   - 建议模型：opus（高风险架构动作）。
+
+4. **CHG-CUTOVER-ROLLBACK-WINDOW** — cutover +7 天回滚窗收口（状态：📋 待 cutover 后）
+   - 范围：cutover +7 天内保留 apps/server 物理目录 + git tag `pre-server-next-cutover`（RTO ≤ 4h，nginx 一行 reload 切回）；超 7 天确认无报障后物理删除目录 + 关闭回滚窗。
+   - 完成标准：7 天观察期 0 报障；物理删除确认；回滚窗关闭记录入 changelog。
+   - 建议模型：sonnet。

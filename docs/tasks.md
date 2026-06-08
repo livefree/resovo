@@ -6,7 +6,7 @@
 
 ## 当前任务（单任务工作台：同时仅 1 个 🔄 进行中；完成即删卡，历史见 docs/changelog.md）
 
-_（当前无进行中任务。取下一个前先查 `docs/task-queue.md` 是否有 🚨 BLOCKER。SEQ-20260607-05 EXT-RES-BANGUMI 全收口。）_
+_（当前无进行中任务。取下一个前先查 `docs/task-queue.md` 是否有 🚨 BLOCKER。CHG-CUTOVER-PLAN-REFRESH 全收口 → 退役执行序列 SEQ-20260608-01 已登记。）_
 
 ---
 

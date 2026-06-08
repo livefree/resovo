@@ -2968,3 +2968,19 @@
   - 测试 `ExternalResources.test.tsx` — ① `beforeEach` 加 `tableQueryStore.setState({snapshots,views})` 重置模块级单例（修复 useTableQuery 初始化早返回致 URL 不解析的跨测试污染）；② 新增「URL restore 单值过滤（text kind）→ 仍透传 fetchActivity 单值入参」回归（修复前 enum-only 读取必失败）。
 - **平台限制（留后续）**：`inferFilterValue` 单值 enum→text 是 admin-ui url-sync 共享层限制（同样影响视频库 getEnumFirst URL restore）；根治需 deserialize 列 filterKind 感知（改 ColumnDescriptor + searchParamsToSnapshot 契约 / arch-reviewer），超本卡范围 → 另起 admin-ui filter url-sync 卡。
 - **门禁**：typecheck/lint EXIT=0 / ExternalResources 28（+1 URL restore）+ test:changed 28 全过。
+
+## [CHG-CUTOVER-PLAN-REFRESH] 旧后台 apps/server 退役路线刷新（功能重现核对 + plan v2.6 → v2.7）
+- **完成时间**：2026-06-08 ｜ **记录时间**：2026-06-08 16:45 ｜ **执行模型**：claude-opus-4-8 ｜ **子代理**：arch-reviewer (claude-opus-4-8)
+- **触发**：用户指令"核对新后台对旧后台功能的重现，更新规划退役路线；制定完善方案后执行"（plan `~/.claude/plans/prancy-mixing-volcano.md` 已批准）。本次范围 = 仅更新规划文档（不触碰代码、不删 apps/server）。
+- **背景**：`docs/server_next_plan_20260427.md` §6 把退役描述为 M-SN-7 · 第 20 周，但实际进度已远超（M-SN-7 跟踪卡归档 + M-SN-8/M-SN-9 + 多 feature 序列），`apps/server` 仍物理存活于维护期（workspaces / typecheck / `docker/nginx.conf`，2026-06-06 还修过其 `middleware.ts` 安全缺口），cutover 从未执行 —— §6 退役路线与现实严重脱节。
+- **功能重现核对结论**（新建 `docs/audit/admin-cutover-parity-2026-06-08.md`）：旧后台 26 条逻辑路由（28 物理 page.tsx）业务功能 **100% 重现 / 有意收编 / 拆分**，**无业务缺口阻塞退役**。
+  - 收编：`banners` → ADR-181/182 冻结退役 + 收编 `/admin/home`（需运营等价确认 #PARITY-BANNER-01）；`content` → 拆为 moderation+subtitles+user-submissions；`videos/new` → Drawer createVideo；`system/sites` → crawler 站点表（本就是 redirect 兼容入口）。
+  - QA/dev 工具缺口（用户裁定退役前迁移 `/admin/dev/`）：`fallback-preview` + `design-tokens`；`sandbox` 已被 dev/components 覆盖。
+  - cutover 前置已达成：v1 E2E 已降冒烟（SEQ-20260606-01，admin 域 76/76 EXIT=0）。
+- **改动**（3 份文档 + 任务卡）：
+  - 新建 `docs/audit/admin-cutover-parity-2026-06-08.md`（27→26 逻辑路由对照矩阵 + QA 迁移裁定 + banner 运营确认项 + cutover 前置完成度）。
+  - `docs/server_next_plan_20260427.md` v2.6 → v2.7：§1 头部 + 补 supersedes/superseded_by/last_reviewed 元字段 + §3 决策表 +2 行 + §6 新增"退役路线现状对账"段 + M-SN-7 重定义为"CUTOVER 执行门禁版" + 末尾修订日志。
+  - `docs/task-queue.md`：登记 `[SEQ-20260608-01]` 退役执行序列（QA 工具迁 dev/ + banner 运营确认 + cutover 执行卡〔🔴 独立门禁〕+ 7 天回滚窗）。
+- **评审**：arch-reviewer (Opus) verdict **PASS**（事实逐条核对属实：对照矩阵 / apps/server 维护期存活 / ADR-181/182/101 引用 / SEQ-20260606-01 前置）；MEDIUM-1（"27 路由"off-by-one）已在三文档同步修正为"26 逻辑 / 28 物理"口径。
+- **门禁**：test:changed docs-only SKIP（ADR-180）EXIT=0 / verify:docs-format 既有遗留基线 64→63（plan 元字段清除 1，本次零新增失败）/ typecheck/lint/verify:adr-contracts N/A（纯文档无代码·端点·schema 改动）。
+- **Plan-Revision**：v2.6 → v2.7（plan §0 SHOULD-4-a 修订协议：arch-reviewer PASS + 修订日志 + 人工 sign-off 已取得）。
