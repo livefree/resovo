@@ -186,20 +186,22 @@ describe('读路径映射', () => {
     expect(query.mock.calls[0][1]).toEqual(['bgm_calendar_mon'])
   })
 
-  it('listBangumiCollectionsSummary：count 解析 + 按 category/collection 排序', async () => {
+  it('listBangumiCollectionsSummary：count 解析 + 按 近期新番→排行→周一..周日（air_weekday）排序', async () => {
     const query = vi.fn().mockResolvedValue({
       rows: [
-        { collection: 'bgm_calendar_mon', category: 'calendar', count: '12' },
-        { collection: 'bgm_trending', category: 'trending', count: '200' },
+        { collection: 'bgm_trending', category: 'trending', count: '50' },
+        { collection: 'bgm_ranking', category: 'ranking', count: '200' },
+        { collection: 'bgm_calendar_mon', category: 'calendar', count: '9' },
       ],
     })
     const db = { query } as unknown as Pool
     const summary = await listBangumiCollectionsSummary(db)
-    expect(summary).toEqual([
-      { collection: 'bgm_calendar_mon', category: 'calendar', count: 12 },
-      { collection: 'bgm_trending', category: 'trending', count: 200 },
-    ])
-    expect(String(query.mock.calls[0][0])).toContain('ORDER BY category ASC, collection ASC')
+    expect(summary.map((s) => s.collection)).toEqual(['bgm_trending', 'bgm_ranking', 'bgm_calendar_mon'])
+    // 排序：category 优先级（trending<ranking<calendar）+ calendar 内 MIN(air_weekday) 周一..周日（非字母序）
+    const sql = String(query.mock.calls[0][0])
+    expect(sql).toContain("CASE category WHEN 'trending' THEN 0 WHEN 'ranking' THEN 1 ELSE 2 END")
+    expect(sql).toContain('MIN(air_weekday) ASC NULLS FIRST')
+    expect(sql).not.toContain('ORDER BY category ASC, collection ASC')
   })
 })
 

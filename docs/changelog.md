@@ -2924,3 +2924,11 @@
 - **真实 API 验证**（run-and-delete，BANGUMI_API_TOKEN 已配）：`browseSubjects({sort:'rank'})` → 3 条「攻壳机动队 S.A.C. 2nd GIG…」/ `{sort:'date',year:2026}` → 3 条当年番（原 POST search 无 keyword 返 NULL，现返真实数据）。
 - **不影响**：`searchSubjects(Strict)`（富集匹配 / 后台候选搜索）keyword 非空，正确不变。
 - **门禁**：typecheck/lint EXIT=0 / test:changed 24 文件 410 全过 / 真实 API 验证。
+
+## [CHG-BNG-RES-CALENDAR-ORDER-FIX] Bangumi 每日放送 chips 按周一..周日正确排序（SEQ-20260607-05 收口后 · 用户实测直报）
+- **完成时间**：2026-06-08 ｜ **记录时间**：2026-06-08 01:35 ｜ **执行模型**：claude-opus-4-8 ｜ **子代理**：无
+- **现象**：用户实测每日放送日期错乱，出现「两个周一 9」、周几对不上。
+- **根因定位（真实 API + DB 实查）**：**数据完全正确**——`/calendar` weekday.id 1=周一(9)/2=周二(9)/3=周三(15)/4=周四(20)/5=周五(11)/6=周六(18)/7=周日(19)，DB 落库 air_weekday 一一对应。bug 在**展示排序**：`listBangumiCollectionsSummary`/`listBangumiCollectionItemsPaged` 用 `ORDER BY collection ASC`（**英文 key 字母序**）→ chips 排成 周五·周一·周六·周日·周四·周二·周三；周一(9)/周二(9) 同为 9 条又被打散 → 看似「两个周一9」。
+- **修复**：`apps/api/src/db/queries/bangumi-collections.ts` 两查询 ORDER BY 改为 **`CASE category trending→0/ranking→1/calendar→2` + `air_weekday`(calendar 内 1=周一..7=周日)**（summary grouped 用 `MIN(air_weekday)`）→ chips/条目按 近期新番→高分排行→周一..周日 正确排列。
+- **真实 DB 验证**：chips 顺序 = 高分排行200 / 周一9 / 周二9 / 周三15 / 周四20 / 周五11 / 周六18 / 周日19（Mon→Sun 正确，周一9·周二9 相邻清晰）。
+- **门禁**：typecheck/lint EXIT=0 / bangumiCollections 12 + test:changed 4 文件 37 全过 / 真实 DB 验证。

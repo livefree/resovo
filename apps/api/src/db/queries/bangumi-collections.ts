@@ -256,7 +256,14 @@ function mapBrowseRow(r: DbBrowseRow): BangumiCollectionBrowseRow {
   }
 }
 
-/** 合集条目分页浏览（可选 collection 过滤；跨合集按 (collection, rank) 排序）。 */
+/**
+ * 合集展示排序（近期新番 → 高分排行 → 每日放送周一..周日）：
+ * category 优先级 + calendar 内按 air_weekday(1=周一..7=周日)，**非英文 collection key 字母序**
+ * （修复 chips/条目按 bgm_calendar_fri/mon/sat… 字母序错乱，按日期正确排列）。
+ */
+const COLLECTION_ORDER_SQL = `CASE category WHEN 'trending' THEN 0 WHEN 'ranking' THEN 1 ELSE 2 END, air_weekday ASC NULLS FIRST`
+
+/** 合集条目分页浏览（可选 collection 过滤；跨合集按 类别→放送星期→rank 排序）。 */
 export async function listBangumiCollectionItemsPaged(
   db: Pool,
   opts: { collection?: string; limit: number; offset: number },
@@ -276,7 +283,7 @@ export async function listBangumiCollectionItemsPaged(
   const rowsRes = await db.query<DbBrowseRow>(
     `SELECT collection, category, bangumi_id, rank, title, name_cn, year, rating, air_weekday, cover_url
        FROM external_data.bangumi_collection_items ${where}
-      ORDER BY collection ASC, rank ASC
+      ORDER BY ${COLLECTION_ORDER_SQL}, collection ASC, rank ASC
       LIMIT $${limitIdx} OFFSET $${offsetIdx}`,
     [...params, Math.min(Math.max(opts.limit, 1), 100), Math.max(opts.offset, 0)],
   )
@@ -292,13 +299,19 @@ export interface BangumiCollectionSummaryRow {
   count: number
 }
 
-/** 各合集条目数摘要（热门·每日放送 Tab 分类树；按 category/collection 排序）。 */
+/**
+ * 各合集条目数摘要（热门·每日放送 Tab 分类 chips；近期新番→高分排行→周一..周日）。
+ * grouped → 用 `MIN(air_weekday)` 排 calendar 内放送星期（修复字母序错乱，按日期正确排列）。
+ */
 export async function listBangumiCollectionsSummary(db: Pool): Promise<BangumiCollectionSummaryRow[]> {
   const res = await db.query<{ collection: string; category: string; count: string }>(
     `SELECT collection, category, COUNT(*)::TEXT AS count
        FROM external_data.bangumi_collection_items
       GROUP BY collection, category
-      ORDER BY category ASC, collection ASC`,
+      ORDER BY
+        CASE category WHEN 'trending' THEN 0 WHEN 'ranking' THEN 1 ELSE 2 END,
+        MIN(air_weekday) ASC NULLS FIRST,
+        collection ASC`,
   )
   return res.rows.map((r) => ({
     collection: r.collection,
