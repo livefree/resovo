@@ -2808,3 +2808,17 @@
 - **arch-reviewer 11 条全吸收**：B1 daily_anime 不进 HomeSectionKey（28 处枚举消费 + 无 videoId 与 HomePreviewCard/占用集/section seed 结构不兼容）改独立发现机制 / B2 dump-refresh 不入 fetch_log（守 D-188-3，dump 可观测走 bangumi_entries 聚合）/ H1 dataScale 解耦 provider 无关 + ProviderResourceAdapter 接口（douban 零行为变更）/ H2 分表正确拒并表（字段差异>50%）/ H3 失败信号 + 禁 any / H4 bangumi 专属常量 + calendar 一拉七写 / M1 埋点接 HTTP 出口 / M2 collection 派生语义声明 / M3 calendar 7 key 原子 / L1 官方入口复用 AdminCard / L2 /home/daily-anime 登记端点契约
 - **新增依赖**：无 ｜ **数据库变更**：无（schema 锁定于 ADR，落库归 STORE-2A）
 - **注意事项**：① 本卡纯决策零代码；② architecture.md 2 新表登记归 STORE-2A（带 migration 号，对齐 ADR-188 先例——表登记在 STORE-A 而非 ADR 卡）；③ 门禁：verify:endpoint-adr 226 admin 路由对齐（**无新 admin route**，bangumi 复用 `/:provider/*`）/ verify:adr-contracts EXIT=0（D-189-1..9 advisory 待实施卡 changelog 闭环）/ typecheck/lint EXIT=0；④ 下一卡 CHG-BNG-RES-STORE-2A（schema+registry+queries）。
+
+## [CHG-BNG-RES-STORE-2A] Bangumi 合集数据模型基座 schema+registry+queries（SEQ-20260607-05 卡 2-A / ADR-189 D-189-2/3）
+- **完成时间**：2026-06-07
+- **记录时间**：2026-06-07 22:35
+- **执行模型**：claude-opus-4-8
+- **子代理**：无（纯实施 ADR-189 锁定契约）
+- **修改文件**：
+  - `apps/api/src/db/migrations/101_bangumi_collection_items.sql`（新建）— `external_data.bangumi_collection_items`（collection/category/bangumi_id/rank/title/name_cn/year/rating/air_weekday/cover_url/raw JSONB/fetched_at；`UNIQUE(collection,bangumi_id)` + `(collection,rank)` + `(bangumi_id)` + `CHECK(category='calendar' OR air_weekday IS NULL)`）+ `bangumi_collection_sync_state`（empty_guard）；DO 块验证（dev migrate ✅）
+  - `apps/api/src/services/bangumi-collections/registry.ts`（新建）— 9 合集（bgm_trending heat / bgm_ranking rank / bgm_calendar_mon..sun 7 weekday）+ 分区 helper（BANGUMI_SEARCH/CALENDAR_COLLECTIONS / calendarKeyForWeekday）+ **bangumi 专属抓取常量**（SEARCH_PAGE_SIZE 50/SEARCH_MAX_ITEMS 200/SEARCH_PAGE_DELAY_MS 500/GUARD_MIN_BASELINE 10/CALENDAR_GUARD_MIN_BASELINE 30，**不复用豆瓣** Token API vs 反爬，arch H4）
+  - `apps/api/src/db/queries/bangumi-collections.ts`（新建）— `replaceBangumiCollectionItems`（单合集 DELETE+INSERT+sync ok）+ **`replaceBangumiCollectionGroupsAtomic`（calendar 一拉七写：单事务多合集，任一失败全 ROLLBACK，D-189-2）** + `recordBangumiCollectionSyncState`（failed/empty_guard 不刷新 last_success_at）+ 读路径（getSyncState/listAllSyncState/listItemsPaged/listSummary），对齐 douban-collections 范式 + 全参数化
+  - `docs/architecture.md` — 2 新表登记 + migration 101 列表
+  - `tests/unit/api/bangumiCollections.test.ts`（新建）— 12 单测（单合集事务/INSERT 失败 ROLLBACK / calendar 一拉七写原子 1 BEGIN+1 COMMIT / 任一组失败整体 ROLLBACK 无 COMMIT / syncState failed 不刷 success / 读路径映射 + rating Number 强转 / registry 9 合集·weekday 映射）
+- **新增依赖**：无 ｜ **数据库变更**：migration 101（2 表，dev 已落库）
+- **注意事项**：① **分表非并表**（ADR-189 D-189-3 / arch H2：与 douban 字段差异 >50%，并表致大量稀疏列）；② calendar 一拉七写原子是与豆瓣「每 collection 独立判定」的关键差异（7 weekday 共享一次 GET /calendar）；③ 门禁：typecheck/lint EXIT=0 / migrate 101 ✅ / 新测 12 全绿 / test:changed EXIT=0；④ 下一卡 CHG-BNG-RES-STORE-2B（埋点接 lib/bangumi HTTP 出口，守 D-188-3 dump-refresh 不入表）。
