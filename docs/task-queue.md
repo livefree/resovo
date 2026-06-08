@@ -1495,7 +1495,7 @@
 
 ## [SEQ-20260607-04] EXT-RES-GOV — 外部资源治理框架 v1（豆瓣首接入 · provider 可扩展）
 
-- **状态**：🔄 进行中（卡 1 ADR ✅ / 卡 2 STORE A·B·C ✅ / 进行卡 3 API）
+- **状态**：🔄 进行中（卡 1 ADR ✅ / 卡 2 STORE A·B·C ✅ / 卡 3-A API-A ✅ / 进行卡 3-B API-B）
 - **创建时间**：2026-06-07 17:30
 - **目标**：搭 provider 无关的「外部资源治理」后台框架——采集观测（worker 抓了什么 / 成功否 / 内容类型 / 离线 vs 在线 / API 用量）+ 热门资源分类展示 + 统一资源搜索 + 富集统计；豆瓣作首个接入 provider 全量打通，Bangumi/IMDB/TMDb 占位待后续。
 - **用户定调（2026-06-07）**：① 导航落位采集中心（与采集控制并列，分组不更名）② provider 切换框架 + 4 Tab ③ 采集观测埋点（provider 无关操作日志，非窄口径 API 计数）④ 资源搜索统一（离线 dump + 在线实时）。本期搭框架 + 豆瓣接入；深度治理迭代与 Bangumi 接入框架搭好后另起。
@@ -1524,9 +1524,10 @@
      - 完成备注：实施 ADR-188 **D-188-7** worker 接线。maintenanceWorker 加 job type `purge-external-fetch-log` + case（cutoff=now-retentionDays〔default 30〕→ deleteFetchLogBefore）；maintenanceScheduler 加 daily tick（入共享 maintenanceQueue，DELETE 短任务不阻塞 concurrency=1）+ timer/status/lastRunAt。入既有维护 worker（非独立 queue——purge 是秒级 DELETE，与 60-90s 的 douban refresh 不同，不需隔离）。**真实 DB e2e**：回填 -31d/-29d/now 三行 → deleteFetchLogBefore(30d cutoff) → old31 删、recent29+now 留。门禁：typecheck/lint 绿 / test:changed 2 文件 41 全过。worker/scheduler 接线遵循既有 4 job 同范式（无独立单测，purge 行为由 STORE-A deleteFetchLogBefore 单测 + 本卡 e2e 覆盖）。执行模型: claude-opus-4-8；子代理: 无。
 
 3. **CHG-EXT-RES-API**（拆 -A/-B：5 端点 + service + query ~6 项超原子上限）
-   - **3-A · CHG-EXT-RES-API-A** — 观测读端点：`providers` + `:provider/overview`（fetchStats+enrichStats+collectionFreshness+dataScale）+ `:provider/activity`（fetch_log 过滤分页）+ ExternalResourcesService 聚合（消费 aggregateFetchLog/queryFetchLog/sync_state/external_refs）+ server.ts 注册 + 单测（状态：🔄 进行中）
+   - **3-A · CHG-EXT-RES-API-A** — 观测读端点：`providers` + `:provider/overview` + `:provider/activity`（状态：✅ 已完成 2026-06-07 19:45）
      - 建议模型：opus（新 admin route → ADR-188 §端点契约覆盖 + MUST-8）
      - 依赖：CHG-EXT-RES-STORE ✅
+     - 完成备注：实施 ADR-188 §端点契约前 3 端点（D-188-5 部分，完整闭环待 API-B）。`ExternalResourcesService`（Route→Service→queries 聚合：getProviders〔registry + douban dataScale〕/ getOverview〔fetchStats+enrichStats+collectionFreshness+dataScale 并发 4 源〕/ getActivity〔queryFetchLog 过滤分页〕；planned provider → PLANNED_MARKER）+ queries `external-resources-stats.ts`（getDoubanDataScale 双 COUNT / aggregateExternalRefMatch byStatus·byMethod，NULL→(unknown)）+ `listAllCollectionSyncState`（douban-collections）+ routes 3 端点（路径逐字 :provider，鉴权 admin，planned→200+status:planned，无效 provider→404，校验→422）+ server.ts 注册（/v1 prefix）。**真实 DB e2e**：providers douban active items=1294/entries=140502 + 3 planned；overview collectionFreshness 16 合集 + enrich total 212（auto 109/candidate 101/manual 2）；bangumi→planned。门禁：verify:endpoint-adr 224 路由对齐（+3）/ typecheck/lint 绿 / 新测 7 例 / test:changed 4 文件 20 全过。执行模型: claude-opus-4-8；子代理: 无。
    - **3-B · CHG-EXT-RES-API-B** — 资源浏览端点：`:provider/collections`（合集分类）+ `:provider/search`（统一搜索 dump + `?live` 在线，5 项契约）+ dump 模糊搜索 query 归 externalData.ts（D-188-6）+ live 并发 1 限流 + 单测（状态：⬜ 待开始）
      - 建议模型：opus（新 admin route + live 抓取限流/埋点）
      - 依赖：CHG-EXT-RES-API-A

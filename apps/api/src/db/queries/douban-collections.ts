@@ -166,6 +166,16 @@ export async function getCollectionSyncState(
   return row ? mapSyncState(row) : null
 }
 
+/** 全部合集新鲜度状态（外部资源治理概览 collectionFreshness，ADR-188；按 collection 升序） */
+export async function listAllCollectionSyncState(db: Pool): Promise<CollectionSyncState[]> {
+  const result = await db.query<DbSyncStateRow>(
+    `SELECT ${SYNC_STATE_COLUMNS}
+       FROM external_data.douban_collection_sync_state
+      ORDER BY collection ASC`,
+  )
+  return result.rows.map(mapSyncState)
+}
+
 export interface CollectionItemRow {
   doubanId: string
   rank: number

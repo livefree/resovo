@@ -2733,3 +2733,18 @@
 - **新增依赖**：无 ｜ **数据库变更**：无（消费 STORE-A external_fetch_log + deleteFetchLogBefore）
 - **注意事项**：① 入**共享 maintenanceQueue**（非独立 queue）——purge 是秒级 DELETE，与 60-90s 的 douban refresh 不同形态，无阻塞 concurrency=1 之虞（区别于 SEQ-20260607-03 STORE-B-FIX 拆独立 queue 的判据）；② **真实 DB e2e**（run-and-delete）：回填 -31d/-29d/now 三行 → deleteFetchLogBefore(30d cutoff) → old31 删、recent29+now 留（30 天 cutoff 正确）；③ worker/scheduler 接线遵循既有 4 maintenance job 同范式（无独立单测）；purge 行为由 STORE-A `deleteFetchLogBefore` 单测 + 本卡 e2e 覆盖；④ 门禁：typecheck EXIT=0 / lint 5/5 / test:changed 2 文件 41 全过。
 - **卡 2 STORE 全收口**：STORE-A（数据模型 registry+表+queries）+ STORE-B（在线出口埋点）+ STORE-C（30天 purge）。external_fetch_log 观测链路完整：在线抓取→旁路埋点→落库→过滤分页/聚合读→30天 purge。下游卡 3（admin 5 端点消费）/ 卡 4（UI 治理页）。
+
+## [CHG-EXT-RES-API-A] 外部资源治理观测读端点（SEQ-20260607-04 卡 3-A / ADR-188 §端点契约 前 3 端点）
+- **完成时间**：2026-06-07
+- **记录时间**：2026-06-07 19:45
+- **执行模型**：claude-opus-4-8
+- **子代理**：无（实施 ADR-188 卡 1 §端点契约既定授权）
+- **修改文件**：
+  - `apps/api/src/routes/admin/external-resources.ts`（新建）— 3 端点：`GET /admin/external-resources/providers` / `:provider/overview`（since? 默认 24h）/ `:provider/activity`（operation/method/status/since/limit/page 过滤分页）；鉴权 authenticate+requireRole(admin)；无效 provider→404、校验失败→422、planned provider→200+`{data:null,status:'planned'}`（路径逐字 `:provider` 对齐 verify:endpoint-adr）
+  - `apps/api/src/services/ExternalResourcesService.ts`（新建）— Route→Service→queries 聚合：`getProviders`（EXTERNAL_PROVIDERS + douban dataScale）/ `getOverview`（fetchStats+enrichStats+collectionFreshness+dataScale 并发 4 源，planned→PLANNED_MARKER）/ `getActivity`（queryFetchLog 合并 provider+filter）
+  - `apps/api/src/db/queries/external-resources-stats.ts`（新建）— `getDoubanDataScale`（collection_items + douban_entries 双 COUNT）/ `aggregateExternalRefMatch`（video_external_refs 按 provider 的 byStatus + byMethod 分桶，NULL method→(unknown)）
+  - `apps/api/src/db/queries/douban-collections.ts` — 加 `listAllCollectionSyncState`（全 16 合集新鲜度）
+  - `apps/api/src/server.ts` — 注册 adminExternalResourcesRoutes（/v1 prefix，dashboard 后）
+  - `tests/unit/api/externalResourcesService.test.ts`（新建，5 例：getProviders active dataScale/planned null / getOverview 聚合 + planned 零查询 / getActivity 合并 + planned）+ `tests/unit/api/externalResourcesStats.test.ts`（新建，2 例：dataScale 双 COUNT / match 分桶 NULL→unknown）
+- **新增依赖**：无 ｜ **数据库变更**：无（消费既有表）
+- **注意事项**：① 富集「离线/在线」分布**由 UI 据 byMethod 派生**（match_method 值不强约束，service 返回原始分布更稳，ADR-188 D-188-3 同向）；② planned provider（bangumi/imdb/tmdb）所有 provider-scoped 端点零 DB 查询直接占位；③ **真实 DB e2e**：providers douban active items=1294/entries=140502 + 3 planned；overview collectionFreshness 16 合集 + enrich total 212（auto_matched 109/candidate 101/manual_confirmed 2）+ fetchStats 0（dev 无近期采集）；bangumi→planned；④ 门禁：**verify:endpoint-adr 224 路由对齐（+3）** / typecheck EXIT=0 / lint 5/5 / 新测 7 例 / test:changed 4 文件 20 全过。本条目不引用 D-188-5/6 字面量（端点契约完整 + dump 搜索 query 闭环待 API-B，防 verify-adr-d-numbers 误判）。

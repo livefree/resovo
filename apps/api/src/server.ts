@@ -25,6 +25,7 @@ import { adminSiteConfigRoutes } from '@/api/routes/admin/siteConfig'
 import { adminCrawlerSitesRoutes } from '@/api/routes/admin/crawlerSites'
 import { adminCrawlerDashboardRoutes } from '@/api/routes/admin/crawlerDashboard'
 import { adminDashboardRoutes } from '@/api/routes/admin/dashboard'
+import { adminExternalResourcesRoutes } from '@/api/routes/admin/external-resources'
 import { setupMetrics } from '@/api/plugins/metrics'
 import { userRoutes } from '@/api/routes/users'
 import { danmakuRoutes } from '@/api/routes/danmaku'
@@ -174,6 +175,7 @@ async function start() {
   await fastify.register(registerDataTableRoutes, { prefix: '/v1' })
   await fastify.register(adminCrawlerDashboardRoutes, { prefix: '/v1' })
   await fastify.register(adminDashboardRoutes, { prefix: '/v1' })
+  await fastify.register(adminExternalResourcesRoutes, { prefix: '/v1' })
   await fastify.register(adminStagingRoutes, { prefix: '/v1' })
   await fastify.register(adminModerationRoutes, { prefix: '/v1' })
   await fastify.register(adminReviewLabelsRoutes, { prefix: '/v1' })

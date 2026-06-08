@@ -6,14 +6,14 @@
 
 ## 当前任务（单任务工作台：同时仅 1 个 🔄 进行中；完成即删卡，历史见 docs/changelog.md）
 
-### CHG-EXT-RES-API-A — 外部资源治理观测读端点（providers/overview/activity）
+### CHG-EXT-RES-API-B — 外部资源治理资源浏览端点（collections/search）
 - **状态**：🔄 进行中
-- **来源序列**：SEQ-20260607-04（卡 3-A）
+- **来源序列**：SEQ-20260607-04（卡 3-B）
 - **建议模型**：opus
 - **执行模型**：claude-opus-4-8
-- **子代理调用**：无（实施 ADR-188 D-188-5 §端点契约既定授权）
-- **实际开始**：2026-06-07 19:25
-- **文件范围**：`apps/api/src/routes/admin/external-resources.ts`（新建，3 端点 providers/overview/activity）、`apps/api/src/services/ExternalResourcesService.ts`（新建聚合）、`apps/api/src/server.ts`（注册路由）、`tests/unit/...`（service + 路由单测）
+- **子代理调用**：无（实施 ADR-188 D-188-5/D-188-6 既定授权）
+- **实际开始**：2026-06-07 19:50
+- **文件范围**：`apps/api/src/routes/admin/external-resources.ts`（加 collections + search 2 端点）、`apps/api/src/services/ExternalResourcesService.ts`（加 getCollections + unifiedSearch + live 并发1限流）、`apps/api/src/db/queries/externalData.ts`（dump 模糊搜索 query，D-188-6）、`tests/unit/...`（搜索/合集单测）
 - **完成备注**：_（完成后填写）_
 
 ---
