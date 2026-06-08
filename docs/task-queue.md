@@ -1550,6 +1550,7 @@
 ## [SEQ-20260607-05] EXT-RES-BANGUMI — Bangumi 全量接入外部资源治理 + 首页每日放送
 
 - **状态**：✅ 已完成 2026-06-08 00:50（卡 1 ADR ✅ / 卡 2 STORE A·B·C ✅ / 卡 3 API 3A·3B ✅ / 卡 4 UI ✅ / 卡 5 HOME 5A·5B ✅；Bangumi active 全量接入治理框架 + 首页每日放送发现位打通）
+- **全量收口**：`npm run test -- --run` 7171/7173 passed；2 failed 定界为 **jsdom 重负载非确定性 flaky**（跨 4 次全量运行失败文件各异 CrawlerClient/StagingTable/UserSubmissions/VideoListClient/video-merge-perf，**全部隔离重跑通过 + 零依赖本 SEQ**〔无 bangumi/external/daily import〕→ 非回归）；本 SEQ 所有 bangumi/external/daily 测试零失败。typecheck/lint/verify:adr-contracts/verify:endpoint-adr EXIT=0。
 - **创建时间**：2026-06-07 21:40
 - **目标**：把 Bangumi 从治理框架的 `planned` 占位升为 **active 全量接入**——概览/热门·每日放送/资源搜索/采集记录 4 Tab 实数据 + 官方入口（API/doc/dump）+ 首页「每日放送」发现板块（含未入站，交叉站内）+ 站内 hot_anime 强化。解决调研定位的核心缺口：埋点只接 douban、热门/每日放送无数据源、capabilities 空、Service douban 硬编码、首页发现位缺失。
 - **用户定调（2026-06-07）**：① 热门/每日放送走**落库 worker**（对齐豆瓣 collection_items 范式）② 首页口径 = **每日放送发现位（含未入站）+ 站内 hot_anime 结合** ③ **本期实装**（含首页接线）。
