@@ -21055,3 +21055,123 @@ export const EXTERNAL_PROVIDERS: readonly ExternalProvider[] = [/* douban active
 
 - 主要风险：埋点污染富集热路径（D-188-4 纯旁路 await + 吞错 + offline 不记）/ live 搜索打爆豆瓣限流（D-188-5 默认关 + 并发 1 + 10s 超时 + 失败降级）/ fetch_log 无界增长（D-188-7 30 天 purge）/ registry 双真源漂移（D-188-2 packages/types 单源）。
 - 回滚：新增 1 表 + 1 registry + 5 只读端点 + 旁路埋点；回滚 = drop external_fetch_log + revert 端点/埋点/nav，既有富集/采集/home autofill 零影响。
+
+---
+
+## ADR-189：Bangumi 全量接入外部资源治理框架 + 首页每日放送发现板块（provider active 化）（SEQ-20260607-05 / CHG-BNG-RES-ADR）
+
+- **日期**：2026-06-07
+- **状态**：**Accepted**（arch-reviewer claude-opus-4-8 / agentId a95d2a463b57d2a6d × 1 轮 CONDITIONAL PASS：2 BLOCKER + 4 HIGH + 3 MEDIUM + 2 LOW，全 11 条已在本 ADR 内消化）
+- **决策者**：主循环 claude-opus-4-8 / arch-reviewer (claude-opus-4-8) × 1 轮
+- **关联**：ADR-188（外部资源治理框架真源 + registry + fetch_log + provider 参数化聚合 + **D-188-3「offline 不入表」**，本 ADR 把 bangumi 从 planned 升 active）/ ADR-187（豆瓣 collection_items 落库范式 + empty_guard，本 ADR collection 落库对齐）/ ADR-161（Bangumi REST + dump 接入，本 ADR 不改其富集行为）/ ADR-168（Bangumi 凭证 system_settings 注入）/ ADR-182 + ADR-052（home section 框架 + slot 扩展约束，本 ADR **不扩 HomeSectionKey**，每日放送走独立发现机制）/ CLAUDE.md 后端分层 + 禁 any + schema 同步 architecture.md
+- **执行真源**：`~/.claude/plans/steady-sparking-taco.md`（已批准 2026-06-07）
+- **触发**：SEQ-20260607-04（ADR-188）只接豆瓣为首 provider，Bangumi 在治理框架内仍 `status='planned'`/`capabilities=[]`、`ExternalResourcesService.isActiveDouban()` 硬编码、4 Tab 占位、`external_fetch_log` 埋点只接 doubanAdapter → 所有 Bangumi worker 活动不可观测。本 ADR 固化 Bangumi active 化协议 + 首页每日放送发现板块。
+
+### 背景
+
+Bangumi 在产品里已重度实装（ADR-161）：`lib/bangumi.ts` v0 REST 客户端（getSubject/getEpisodes/getCharacters/searchSubjects，Bearer Token 降级哲学）+ `BangumiService` 600 行富集编排（dump 召回→置信度→REST 兜底→原子事务写 catalog/episodes/characters/refs/status）+ 本地 dump 索引 `external_data.bangumi_entries`（type=2 动画 ~1 万行）+ `bangumi-dump-refresh` 定时重导 + home-autofill `hot_anime` 候选。**调研补全外部 API 能力**：`POST /v0/search/subjects` 支持 `sort=heat|rank|score|match` + 富 filter（type/air_date/rank/nsfw 等，产品仅用 type）；`GET /calendar` 每日放送（ADR-161 决策 10 暂缓）。Bangumi 无原生「合集」端点 → 用 search-sort 与 calendar 派生治理框架所需的「热门/排行/每日放送」。
+
+**用户定调（2026-06-07）**：① 热门/每日放送走**落库 worker**（对齐豆瓣，离线秒回 + fetch_log 可观测 + empty_guard 防清空）② 首页 = **每日放送发现位（含未入站）+ 站内 hot_anime 强化结合** ③ **本期实装**。
+
+### 决策要点
+
+**D-189-1（Bangumi active 化 + capabilities）**：registry `EXTERNAL_PROVIDERS` 中 bangumi `status` `'planned'→'active'`，`capabilities` 填 `['detail','search','celebrity','collection','schedule']`（**不含 comments**：v0 API 无干净评论端点）。
+- **collection/schedule 是项目侧派生语义**（arch M2）：bangumi 无原生 collection 端点，`collection` 由 search-sort 派生（热门/排行）、`schedule` 由 `/calendar` 派生。`external.types.ts` bangumi 行加内联注释指向本 ADR，防 registry 被误读为「provider 原生能力」。`acquisition` 保持 `['api']`。
+
+**D-189-2（派生「合集」语义 + 抓取/守护规则）**：3 类伪合集统一落 `bangumi_collection_items`，category∈`trending|ranking|calendar`：
+- **trending（热门）** = `POST /v0/search/subjects` `sort=heat`（+ 当季 `air_date` filter），collection key `bgm_trending`。
+- **ranking（排行）** = `sort=rank`（高分榜），key `bgm_ranking`。
+- **calendar（每日放送）** = `GET /calendar`，7 weekday 各一 collection key `bgm_calendar_mon`…`bgm_calendar_sun`。
+- **bangumi 专属抓取常量**（arch H4，**不复用豆瓣常量**——豆瓣常量为页面反爬调，bangumi 是 Token API）：calendar 单次返回 7 天全量、无页延时；trending/ranking 的 search 分页用保守延时 `≥500ms`（Token API 亦有 rate limit）。常量集独立定义于 `services/bangumi-collections/registry.ts`。
+- **calendar「一拉七写」原子性**（arch M3）：7 个 `bgm_calendar_*` 共享一次 `GET /calendar`——整体抓取失败则 7 行 sync_state **统一标 failed 且全不替换**（要么 7 weekday 全替换、要么全保留旧值），不逐 key 判定（区别于豆瓣「每 collection 独立抓取独立判定」）。
+- **empty_guard 重定义**（arch H4）：trending/ranking 沿用豆瓣 per-collection 骤降守护；calendar 守护落在「7 天总量」聚合基线（避免冷档期单 weekday 正常波动被误判），其 `GUARD_MIN_BASELINE` 下调并以总量判定。具体阈值在 STORE-2A registry 定稿。
+
+**D-189-3（schema 分表，对齐 migration 099）**（arch H2 裁定**分表正确、拒绝并表**：两 provider collection item 字段差异 > 50%，并入 `external_collection_items` 会产生大量 provider-only 稀疏列，违反价值排序 1/2）：
+- `external_data.bangumi_collection_items`：`id BIGSERIAL PK / collection TEXT / category TEXT / bangumi_id TEXT / rank INT / title TEXT（主显示名）/ name_cn TEXT（中文名，与 bangumi name/name_cn 双名语义在列注释写清）/ year INT / rating NUMERIC(4,1) / air_weekday SMALLINT（**仅 calendar 非空**）/ cover_url TEXT / raw JSONB（原始 item 兜底，对齐 099 raw，审计/字段回填依赖）/ fetched_at TIMESTAMPTZ`。约束：`UNIQUE(collection, bangumi_id)` + `idx(collection, rank)` + `idx(bangumi_id)` + `CHECK (category='calendar' OR air_weekday IS NULL)`（稀疏列语义自洽）。
+- `external_data.bangumi_collection_sync_state`：同豆瓣（`collection PK / last_attempt_at / last_success_at / last_status / last_error / item_count`，含 empty_guard 的 `last_status='empty_guard'`）。
+- **architecture.md 同步**（CLAUDE.md 绝对禁止项）。
+
+**D-189-4（ExternalResourcesService provider-dispatch 重构 + 治理 DTO provider 无关化）**（arch H1 BLOCKER-邻接）：
+- 引入 `interface ProviderResourceAdapter { getDataScale / getOverview / getCollections / unifiedSearch / getActivity }`；豆瓣现逻辑**逐方法整体移入** `DoubanResourceAdapter`（不改 SQL，由既有单测验证零行为变更）；新建 `BangumiResourceAdapter`。Service 退化为 `adapters[provider]` 选择器 + planned 兜底。接 imdb/tmdb = 加一个 adapter 类（非过度工程）。
+- **治理 DTO 必须 provider 无关**（消除 douban-ism 泄漏，跨 api-service / route / server-next UI 三消费方契约）：
+  - `dataScale` 由硬绑 `DoubanDataScale` 改为 **provider 无关指标数组** `ProviderDataMetric[]`（`{ key: string; label: string; value: number }`），UI 按数组渲染 KPI（douban 产出相同数值的指标项，**数据零变更**仅渲染泛化）。
+  - `CollectionItem` / `ResourceSearchHit` 中 douban 专名字段 `doubanId` 泛化为 `externalId`（bangumi 复用同结构，UI 列引用同步改）。
+- registry capabilities 驱动 UI Tab 渲染。**无新 admin route**（既有 `/:provider/*` 已 `z.enum(PROVIDER_KEYS)` 参数化，bangumi 仅从 PLANNED_MARKER 改实数据）→ 不触发 verify:endpoint-adr 新 route 守卫；仍跑 `verify:adr-contracts`。
+
+**D-189-5（lib/bangumi 扩端点）**：新增 `getCalendar(cfg?)` → `GET /calendar`；`searchSubjectsSorted(opts, cfg?)` → 扩 `POST /v0/search/subjects` 支持 `sort` + 结构化 `filter`（保留现 `searchSubjects` 不破坏）。约束（arch H3）：
+- 保持 lib/bangumi 模块级降级哲学；但为让 worker empty_guard 区分「真空」与「抓取失败」，二者返回**可判别失败信号**——`getCalendar(): BangumiCalendarDay[] | null`、`searchSubjectsSorted(): BangumiSearchItem[] | null`，`null` = 抓取失败（瞬时，worker 不替换/标 failed），`[]` = 真无结果（对齐 `getDoubanCollectionItems` 整页失败返 null 的范式）。
+- `sort` 入参 `z.enum(['match','heat','rank','score'])` 收窄；`filter` 结构化类型，**禁 any**。
+
+**D-189-6（埋点映射，守 ADR-188 D-188-3）**：`recordFetch` 接 **lib/bangumi 的 HTTP 出口**（bgmGet / searchSubjectsStrict 内，对照 doubanAdapter 在 lib 层接 recorder 的范式，arch M1），保持 recorder 惰性 import postgres（无 DB 环境可 import）+ await 旁路在 return 前不改降级返回语义：
+  - getSubject→`(detail, api)` / getEpisodes→`(detail, api)` / getCharacters→`(celebrity, api)` / searchSubjects(Strict)→`(search, api)` / getCalendar→`(schedule, api)` / searchSubjectsSorted→`(collection, api)`。
+  - source 调用方透传：富集=`enrich_worker` / collections worker=`bangumi_collections_worker` / 后台搜索=`admin_search`。
+  - **`bangumi-dump-refresh` 不入 fetch_log**（arch B2，**冲突收口**）：dump 重导是纯本地文件导入零外部 HTTP，与 ADR-188 D-188-3「offline 不入表」语义定义及明示理由（「入表稀释用量/成功率」）正面冲突。dump 可观测性走独立渠道——聚合 `bangumi_entries` 的 `MAX(updated_at)/COUNT(*)` 作「dump 最近重导/条数」（概览 dataScale 指标项），不塞 fetch_log。
+  - 富集事务热路径无虞（arch M1）：REST 全在 BangumiService Phase 1（事务外），recordFetch 的 ms 级 insert 不持 idle-in-transaction、失败被吞，不改富集结果。
+
+**D-189-7（首页每日放送 = 独立发现机制，不进 section 框架）**（arch B1 **BLOCKER 收口**）：
+- **`daily_anime` 不进 HomeSectionKey**——它承载未入站 Bangumi calendar 条目（无 videoId），与 `HomePreviewCard.videoId` 契约、跨区块去重占用集（`home-curation.preview.ts`）、`home_section_settings` 7 行 seed、28 处枚举消费全部结构不兼容。`home-section.types.ts:6`「新增 section 走 ADR」本意是扩**同构站内 video section**，非异构外部发现板块。
+- 改为**独立只读发现板块**：新 DTO `home-discovery.types.ts`（`DailyAnimeItem`：bangumiSubjectId / title / nameCn / coverUrl / airWeekday / rating / **站内交叉态** `linkedVideo: { videoId; slug } | null`）。
+- 新公开端点 **`GET /home/daily-anime`**（arch L2 须登记端点契约）：Route→Service→queries，走 `routes/home.ts` 既有范式（Route 仅 zod 校验 + 调 service，不含业务逻辑）；读 `bangumi_collection_items` calendar 当日 weekday 切片 + 交叉 `bangumi_subject_id → media_catalog → 站内 published video`（有则 linkedVideo 链详情，无则前台「想看/搜索」引导）。**不经** home preview / autofill / section settings 任何链路。
+- **站内 hot_anime 复用现有 autofill 不改算法**（仅核数据新鲜，D-189-9 边界）。若未来要让每日放送进首页编排画布（pinned/排序），另起独立 ADR，不在本卡范围。
+
+**D-189-8（官方入口展示位）**（arch L1）：概览 Tab 复用 admin-ui `AdminCard`（**零新共享组件**）渲染 3 个外链常量（`api.bgm.tv` / `bangumi.github.io/api` 文档 / GitHub archive dump）；URL 入常量，颜色用 CSS 变量。
+
+**D-189-9（边界）**：不改 `BangumiService` 富集匹配行为 / 不动 `hot_anime` autofill 算法（仅核数据新鲜）/ 不实装 IMDB/TMDb（registry 仍 planned）/ 不做 comments + `/v0/persons`/关联作品/角色搜索/单集详情（本期不需要，infobox 已覆盖制作人员）/ 不引入 ZIP 解压等新依赖（dump 仍由 ops provision 本地路径，沿用 CHG-BNG-09）。
+
+### Schema（STORE-2A 落地，本 ADR 锁定，需同步 docs/architecture.md）
+
+```sql
+-- 1xx_bangumi_collection_items.sql（幂等 IF NOT EXISTS；down 注释，对齐 099 约定）
+CREATE TABLE IF NOT EXISTS external_data.bangumi_collection_items (
+  id           BIGSERIAL    PRIMARY KEY,
+  collection   TEXT         NOT NULL,   -- bgm_trending|bgm_ranking|bgm_calendar_mon..sun
+  category     TEXT         NOT NULL,   -- trending|ranking|calendar
+  bangumi_id   TEXT         NOT NULL,
+  rank         INT          NOT NULL,   -- 分页/榜单序位（随全量替换重算）
+  title        TEXT         NOT NULL,   -- 主显示名（name_cn 回退 name）
+  name_cn      TEXT,                    -- 中文名（bangumi name_cn）
+  year         INT,
+  rating       NUMERIC(4,1),
+  air_weekday  SMALLINT,                -- 1-7，仅 calendar 非空
+  cover_url    TEXT,
+  raw          JSONB        NOT NULL,
+  fetched_at   TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+  CHECK (category = 'calendar' OR air_weekday IS NULL)
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_bangumi_collection_item ON external_data.bangumi_collection_items (collection, bangumi_id);
+CREATE INDEX IF NOT EXISTS idx_bangumi_collection_rank ON external_data.bangumi_collection_items (collection, rank);
+CREATE INDEX IF NOT EXISTS idx_bangumi_collection_subject ON external_data.bangumi_collection_items (bangumi_id);
+
+CREATE TABLE IF NOT EXISTS external_data.bangumi_collection_sync_state (
+  collection      TEXT         PRIMARY KEY,
+  last_attempt_at TIMESTAMPTZ,
+  last_success_at TIMESTAMPTZ,
+  last_status     TEXT,                 -- ok|failed|empty_guard
+  last_error      TEXT,
+  item_count      INT          NOT NULL DEFAULT 0
+);
+```
+
+### 端点契约
+
+| # | 方法 | 路径 | 用途 | Request | Response | 鉴权 | 错误码 |
+|---|---|---|---|---|---|---|---|
+| 治理 | — | `/admin/external-resources/:provider/*`（providers/overview/collections/search/activity） | bangumi 从 PLANNED_MARKER 改实数据 | 同 ADR-188 §端点契约（**无新 route**，复用既有 5 端点） | provider=bangumi 返实数据（dataScale 改 `ProviderDataMetric[]`） | admin | 同 ADR-188 |
+| 新 | GET | `/home/daily-anime` | 首页每日放送发现板块（含未入站，交叉站内） | Query: `weekday?`（1-7，默认当日） | 200 `{ data: { weekday, items: DailyAnimeItem[] } }` | 公开 | 422 |
+
+（`/home/daily-anime` 是公开 route 非 admin，不触发 verify:endpoint-adr admin 守卫；走 `routes/home.ts` 范式登记。）
+
+### 影响文件（卡 2–5 落地）
+
+- 新建：`apps/api/src/db/migrations/1xx_bangumi_collection_items.sql` / `services/bangumi-collections/{registry,refresh}.ts` / `db/queries/bangumi-collections.ts` / `workers/bangumiCollectionsWorker.ts`+Scheduler / `services/external-resources/{DoubanResourceAdapter,BangumiResourceAdapter}.ts`（adapter 抽象）/ `packages/types/src/home-discovery.types.ts` / `apps/web-next` 每日放送板块组件
+- 修改：`lib/bangumi.ts`（扩 2 端点 + 埋点）/ `bangumi-dump-refresh.ts`（**不**加埋点，加 dump sync 聚合渠道）/ `packages/types/external.types.ts`（capabilities + 注释）/ `ExternalResourcesService.ts`（dispatch 重构 + DTO 泛化）/ `routes/home.ts`（+daily-anime）/ server-next 治理 Tab（dataScale/externalId 泛化）
+- 文档：`docs/architecture.md`（2 新表 + migration 列表）
+
+### 风险与回滚
+
+- 主要风险：① section 框架污染（D-189-7 收口——daily_anime 不进 HomeSectionKey，独立发现机制）② offline 入表稀释观测（D-189-6 收口——dump-refresh 不入 fetch_log，守 D-188-3）③ dispatch 重构破坏 douban 零行为变更（D-189-4——douban 逻辑逐方法整搬 + 既有单测验证 + DTO 泛化解耦）④ calendar 抓取失败误清空（D-189-2 一拉七写原子 + empty_guard 总量基线）⑤ Token API 限流（D-189-2 保守延时）。
+- 回滚：新增 2 表 + 2 adapter + 1 worker + 2 lib 端点 + 1 公开端点 + 旁路埋点；回滚 = drop 2 表 + revert dispatch/worker/埋点/板块，既有 douban 治理 / Bangumi 富集 / hot_anime autofill 零影响。
+
+### 偏离登记
+
+- **D-189-DEV-1**：bangumi `collection` capability 为项目侧派生语义（非 provider 原生端点）。处置：accept + ADR/注释显式声明（D-189-1 / arch M2），不在 registry 类型层区分「原生 vs 派生」（避免类型膨胀，由 ADR 文档承载语义）。

@@ -1543,4 +1543,41 @@
 
 ### 后续卡登记（本期不做）
 - **CHG-DOUBAN-HOT-WIRE**（首页实时热门展示接线）：待用户按接口定展示口径另起；仍独立于本治理框架，ADR-183 首页链不在本序列。
-- **CHG-EXT-RES-BANGUMI**（Bangumi provider 接入）：待 Bangumi API 能力全面调研后另起（registry status='planned' 占位）。
+- **CHG-EXT-RES-BANGUMI**（Bangumi provider 接入）：调研已完成（2026-06-07）→ **立项为 SEQ-20260607-05 EXT-RES-BANGUMI**（见下）。
+
+---
+
+## [SEQ-20260607-05] EXT-RES-BANGUMI — Bangumi 全量接入外部资源治理 + 首页每日放送
+
+- **状态**：🔄 进行中（卡 1 ADR 🔄）
+- **创建时间**：2026-06-07 21:40
+- **目标**：把 Bangumi 从治理框架的 `planned` 占位升为 **active 全量接入**——概览/热门·每日放送/资源搜索/采集记录 4 Tab 实数据 + 官方入口（API/doc/dump）+ 首页「每日放送」发现板块（含未入站，交叉站内）+ 站内 hot_anime 强化。解决调研定位的核心缺口：埋点只接 douban、热门/每日放送无数据源、capabilities 空、Service douban 硬编码、首页发现位缺失。
+- **用户定调（2026-06-07）**：① 热门/每日放送走**落库 worker**（对齐豆瓣 collection_items 范式）② 首页口径 = **每日放送发现位（含未入站）+ 站内 hot_anime 结合** ③ **本期实装**（含首页接线）。
+- **范围**：schema（`bangumi_collection_items`+`sync_state` 2 新表）+ api-service（lib/bangumi 扩端点 + 埋点 + collections worker + Service provider 化 + registry capabilities）+ UI（Bangumi 4 Tab + 官方入口卡）+ 首页（新 home section `daily_anime` + `/home/daily-anime` + 前台板块）——跨四层，强制拆卡。
+- **依赖**：SEQ-20260607-04 EXT-RES-GOV ✅（治理框架 + fetch_log + provider 参数化聚合已就位）；ADR-161 Bangumi 接入 ✅（lib/bangumi/BangumiService 已实装）；无 BLOCKER。
+- **执行真源**：`~/.claude/plans/steady-sparking-taco.md`（已批准 2026-06-07）。
+
+### 任务列表（按执行顺序，串行；卡 2/5 按原子化判据再拆 -A/-B）
+
+1. **CHG-BNG-RES-ADR** — ADR 起草（决策·零实施）：active 化 + 派生合集语义 + `bangumi_collection_items` schema + Service provider-dispatch 契约 + capabilities 取值 + 埋点映射 + 首页每日放送发现机制 + 官方入口位 + 边界（状态：✅ 已完成 2026-06-07 22:10）
+   - 创建时间：2026-06-07 21:40 ｜ 实际开始：2026-06-07 21:40 ｜ 完成时间：2026-06-07 22:10
+   - 建议模型：opus（撰写 ADR + provider 契约扩展 + 跨 3+ 消费方 schema → 强制 spawn arch-reviewer Opus 独立设计）
+   - 依赖：无（SEQ 首卡）
+   - 完成备注：**ADR-189 Accepted**（docs/decisions.md）。arch-reviewer (claude-opus-4-8 / agentId a95d2a463b57d2a6d) 独立裁定 → **CONDITIONAL PASS，2 BLOCKER + 4 HIGH + 3 MEDIUM + 2 LOW 全 11 条吸收**：**B1** daily_anime **不进 HomeSectionKey**（28 处枚举消费 + 无 videoId 与 HomePreviewCard/占用集/section seed 结构不兼容）→ 改独立只读发现机制（新 `home-discovery.types.ts` DTO + `GET /home/daily-anime` 不碰 preview/autofill/section）；**B2** dump-refresh **不入 fetch_log**（守 ADR-188 D-188-3「offline 不入表」，dump 可观测走 bangumi_entries MAX(updated_at)/COUNT 聚合）；**H1** dataScale 由硬绑 DoubanDataScale 解耦为 provider 无关 `ProviderDataMetric[]` + 引入 `ProviderResourceAdapter` 接口（douban 逻辑整搬零行为变更）+ doubanId→externalId 泛化；**H2** 分表正确（拒并表，字段差异>50%）；**H3** searchSubjectsSorted/getCalendar 返回 `T[]|null` 失败信号 + sort z.enum 收窄禁 any；**H4** bangumi 专属抓取常量（不复用豆瓣）+ calendar 一拉七写原子 + empty_guard 总量基线；**M1** 埋点接 lib/bangumi HTTP 出口 / **M2** collection 派生语义声明 / **M3** calendar 7 key 原子 / **L1** 官方入口复用 AdminCard / **L2** /home/daily-anime 登记端点契约。门禁：verify:endpoint-adr 226 对齐（无新 admin route）/ verify:adr-contracts EXIT=0（D-189-1..9 待实施卡 changelog 闭环）/ typecheck/lint EXIT=0。docs-only。architecture.md 2 新表登记归 STORE-2A（带 migration 号）。执行模型: claude-opus-4-8；子代理: arch-reviewer (claude-opus-4-8)。
+
+2. **CHG-BNG-RES-STORE**（拆 -A/-B/-C：schema + 埋点 + worker 跨多层）
+   - **2-A** schema + registry + queries（`bangumi_collection_items`/`sync_state` migration + bangumi-collections registry/queries + architecture.md + 单测）
+   - **2-B** 埋点接入（recordFetch 接 lib/bangumi 全端点 + dump-refresh + source 透传 + 单测）
+   - **2-C** collections worker（bangumiCollectionsWorker + scheduler：search heat/rank + calendar 落库 + empty_guard + 埋点 + 单测/e2e）
+   - 依赖：CHG-BNG-RES-ADR
+
+3. **CHG-BNG-RES-API** — 治理服务 provider 化：ExternalResourcesService provider-dispatch 重构（抽 douban adapter + 新 bangumi adapter，douban 零行为变更）+ bangumi overview/collections/search/activity + registry capabilities 填值 + verify:adr-contracts + 单测（无新 admin route，复用 `/:provider/*`）
+   - 依赖：CHG-BNG-RES-STORE
+
+4. **CHG-BNG-RES-UI** — 前端 Bangumi Tab：概览 bangumi 分支（dataScale KPI + 官方入口卡）+ 热门·每日放送/搜索/采集记录 Tab 复用（capabilities 驱动）+ api client 适配 + 视图单测 + admin e2e
+   - 依赖：CHG-BNG-RES-API
+
+5. **CHG-BNG-HOME-WIRE**（可拆 -A/-B）— 首页每日放送 + 站内 hot_anime
+   - **5-A** 后端：`GET /home/daily-anime`（读 calendar 切片 + 交叉站内 published video）+ 单测
+   - **5-B** 前台：`daily_anime` 板块组件（未入站降级态 + 想看/搜索引导）+ hot_anime 数据新鲜核对 + 单测 + 前台 e2e
+   - 依赖：CHG-BNG-RES-STORE（落库）+ ADR section 授权（卡 1）

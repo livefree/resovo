@@ -2796,3 +2796,15 @@
 - **新增依赖**：无 ｜ **数据库变更**：无（纯前端消费 API-B 端点）
 - **注意事项**：① **零新共享组件**——复用 admin-ui `DataTable`/`DataTableSearchInput`/`Thumb`/`Pill`/`EmptyState` 等；② 三表格各自独立 useTableQuery URL namespace（`act`/`col`/`srch`）+ 外层 `?provider=&tab=`，切 provider 主动清理防串状态；③ SearchTab 在线 live 默认关（仅 dump 秒回）；live busy 仅降级横幅不阻断 dump 结果；④ 门禁：typecheck EXIT=0 / lint 5/5（新文件零告警）/ 视图单测 20 全绿 / **admin e2e 3 smoke 全绿** / test:changed 1 文件 20 全过。
 - **SEQ-20260607-04 EXT-RES-GOV 全收口**：ADR-188 + STORE(A/B/C 数据模型+埋点+purge) + API(A/B 5 端点+聚合+搜索) + UI(A/B 框架+4 Tab)。外部资源 provider 无关治理框架打通：采集观测（worker 抓取流水：内容类型/方式/成功率/用量）+ 富集统计 + 热门资源分类 + 统一搜索（dump+在线）；豆瓣 active 全量接入，Bangumi/IMDB/TMDb registry 占位待后续 CHG-EXT-RES-BANGUMI。ADR-188 pending D-numbers 仅余 D-188-8（边界声明，无代码义务）。
+
+## [CHG-BNG-RES-ADR] Bangumi 全量接入外部资源治理框架 + 首页每日放送（决策·零实施）（SEQ-20260607-05 卡 1 / ADR-189）
+- **完成时间**：2026-06-07
+- **记录时间**：2026-06-07 22:10
+- **执行模型**：claude-opus-4-8
+- **子代理**：arch-reviewer（claude-opus-4-8 / agentId a95d2a463b57d2a6d）— 独立设计裁定 CONDITIONAL PASS
+- **修改文件**（仅 docs）：
+  - `docs/decisions.md` — 新增 **ADR-189**（Accepted）：D-189-1 active 化 + capabilities `[detail/search/celebrity/collection/schedule]`（collection/schedule 派生语义声明）/ D-189-2 派生合集（trending=search heat / ranking=search rank / calendar=GET /calendar 7 weekday）+ bangumi 专属抓取常量 + calendar 一拉七写原子 + empty_guard 总量基线 / D-189-3 schema 分表 `bangumi_collection_items`+`sync_state`（CHECK air_weekday 仅 calendar）/ D-189-4 `ProviderResourceAdapter` dispatch 重构 + DTO 泛化（dataScale→`ProviderDataMetric[]` / doubanId→externalId）/ D-189-5 lib/bangumi 扩 getCalendar+searchSubjectsSorted（`T[]|null` 失败信号 + sort z.enum）/ D-189-6 埋点接 lib/bangumi HTTP 出口（dump-refresh 不入表守 D-188-3）/ D-189-7 首页每日放送 = 独立发现机制（不进 HomeSectionKey）+ `GET /home/daily-anime` / D-189-8 官方入口 AdminCard / D-189-9 边界
+  - `docs/task-queue.md` — 登记 **SEQ-20260607-05 EXT-RES-BANGUMI**（5 卡）+ 卡 1 ✅ 完成备注；SEQ-20260607-04 后续卡登记 CHG-EXT-RES-BANGUMI 指向本 SEQ
+- **arch-reviewer 11 条全吸收**：B1 daily_anime 不进 HomeSectionKey（28 处枚举消费 + 无 videoId 与 HomePreviewCard/占用集/section seed 结构不兼容）改独立发现机制 / B2 dump-refresh 不入 fetch_log（守 D-188-3，dump 可观测走 bangumi_entries 聚合）/ H1 dataScale 解耦 provider 无关 + ProviderResourceAdapter 接口（douban 零行为变更）/ H2 分表正确拒并表（字段差异>50%）/ H3 失败信号 + 禁 any / H4 bangumi 专属常量 + calendar 一拉七写 / M1 埋点接 HTTP 出口 / M2 collection 派生语义声明 / M3 calendar 7 key 原子 / L1 官方入口复用 AdminCard / L2 /home/daily-anime 登记端点契约
+- **新增依赖**：无 ｜ **数据库变更**：无（schema 锁定于 ADR，落库归 STORE-2A）
+- **注意事项**：① 本卡纯决策零代码；② architecture.md 2 新表登记归 STORE-2A（带 migration 号，对齐 ADR-188 先例——表登记在 STORE-A 而非 ADR 卡）；③ 门禁：verify:endpoint-adr 226 admin 路由对齐（**无新 admin route**，bangumi 复用 `/:provider/*`）/ verify:adr-contracts EXIT=0（D-189-1..9 advisory 待实施卡 changelog 闭环）/ typecheck/lint EXIT=0；④ 下一卡 CHG-BNG-RES-STORE-2A（schema+registry+queries）。
