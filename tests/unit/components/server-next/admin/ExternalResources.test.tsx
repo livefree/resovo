@@ -55,6 +55,7 @@ import { OverviewTab } from '@/app/admin/external-resources/_client/OverviewTab'
 import { ActivityTab } from '@/app/admin/external-resources/_client/ActivityTab'
 import { CollectionsTab } from '@/app/admin/external-resources/_client/CollectionsTab'
 import { SearchTab } from '@/app/admin/external-resources/_client/SearchTab'
+import { calendarWeekday, thisWeekDateOf } from '@/lib/external-resources/api'
 
 const fmt = (n: number) => n.toLocaleString('zh-CN')
 
@@ -288,6 +289,49 @@ describe('CollectionsTab', () => {
     mockFetchCollections.mockReset().mockResolvedValue(null)
     render(<CollectionsTab provider="douban" />)
     expect(await screen.findByText('暂无热门资源')).not.toBeNull()
+  })
+
+  it('bangumi 每日放送 chip → 周几+本周真实日期 + 「N 部」（数量非日期，修复误读）', async () => {
+    mockFetchCollections.mockReset().mockResolvedValue({
+      items: [], total: 0,
+      summary: [
+        { collection: 'bgm_calendar_mon', category: 'calendar', domain: null, count: 9 },
+        { collection: 'bgm_calendar_tue', category: 'calendar', domain: null, count: 9 },
+      ],
+    })
+    const { container } = render(<CollectionsTab provider="bangumi" />)
+    await screen.findByText('全部分类')
+    const mon = container.querySelector('[data-collection-chip="bgm_calendar_mon"]')!
+    const tue = container.querySelector('[data-collection-chip="bgm_calendar_tue"]')!
+    // 标签含周几 + 本周真实日期 M/D（连续，可读）
+    expect(mon.textContent).toMatch(/周一 \d+\/\d+/)
+    expect(tue.textContent).toMatch(/周二 \d+\/\d+/)
+    // 数量带「部」单位，与日期区分（不再被误读为日期）
+    expect(mon.textContent).toContain('9 部')
+    expect(tue.textContent).toContain('9 部')
+  })
+})
+
+describe('每日放送 chip helpers', () => {
+  it('calendarWeekday：bgm_calendar_X → 1-7；非 calendar → null', () => {
+    expect(calendarWeekday('bgm_calendar_mon')).toBe(1)
+    expect(calendarWeekday('bgm_calendar_sun')).toBe(7)
+    expect(calendarWeekday('bgm_trending')).toBeNull()
+    expect(calendarWeekday('movie_hot_gaia')).toBeNull()
+  })
+
+  it('thisWeekDateOf：周一..周日为同周 7 个连续日期 + 当日 weekday 返当日 M/D', () => {
+    const now = new Date('2026-06-10T12:00:00')
+    const dates = [1, 2, 3, 4, 5, 6, 7].map((w) => thisWeekDateOf(w, now))
+    expect(new Set(dates).size).toBe(7) // 7 个不同日期（非重复随机）
+    const todayWd = ((now.getDay() + 6) % 7) + 1
+    expect(thisWeekDateOf(todayWd, now)).toBe(`${now.getMonth() + 1}/${now.getDate()}`)
+    // 周一与周二相差 1 天（连续）
+    const [m, d] = thisWeekDateOf(1, now).split('/').map(Number)
+    const monDate = new Date(now.getFullYear(), m - 1, d)
+    const [m2, d2] = thisWeekDateOf(2, now).split('/').map(Number)
+    const tueDate = new Date(now.getFullYear(), m2 - 1, d2)
+    expect((tueDate.getTime() - monDate.getTime()) / 86400000).toBe(1)
   })
 })
 

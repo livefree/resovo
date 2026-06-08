@@ -2932,3 +2932,13 @@
 - **修复**：`apps/api/src/db/queries/bangumi-collections.ts` 两查询 ORDER BY 改为 **`CASE category trending→0/ranking→1/calendar→2` + `air_weekday`(calendar 内 1=周一..7=周日)**（summary grouped 用 `MIN(air_weekday)`）→ chips/条目按 近期新番→高分排行→周一..周日 正确排列。
 - **真实 DB 验证**：chips 顺序 = 高分排行200 / 周一9 / 周二9 / 周三15 / 周四20 / 周五11 / 周六18 / 周日19（Mon→Sun 正确，周一9·周二9 相邻清晰）。
 - **门禁**：typecheck/lint EXIT=0 / bangumiCollections 12 + test:changed 4 文件 37 全过 / 真实 DB 验证。
+
+## [CHG-BNG-RES-CALENDAR-DATE-LABEL] 每日放送 chip 显示真实日期 + 数量标「N 部」（SEQ-20260607-05 收口后 · 用户实测直报）
+- **完成时间**：2026-06-08 ｜ **记录时间**：2026-06-08 01:55 ｜ **执行模型**：claude-opus-4-8 ｜ **子代理**：无
+- **现象**：用户把 chip 上「周一 9」的 9 误读为日期（9 号），质疑「周一周二不可能都是 9」「日期不连续/随机」。
+- **澄清 + 根因**：9 是该周几的**番剧数量**（条目数），非日期——周一 9 部、周二 9 部（恰好都 9 部，正常）。原 chip 只显「周几 + 数量」无真实日期，数量紧贴周几易被误读为日期。
+- **修复**（apps/server-next）：
+  - `lib/external-resources/api.ts` — 新增 `calendarWeekday(collection)`（bgm_calendar_X→1-7）+ `thisWeekDateOf(weekday, now?)`（本周该周几真实日期 M/D，以周一为周首 → 周一..周日连续 7 天）
+  - `_client/CollectionsTab.tsx` — 每日放送 chip 标签加**本周真实日期**「周一 6/8」「周二 6/9」…（连续可读），数量改「**N 部**」与日期明确区分
+- **测试**：ExternalResources 视图 +3（calendar chip 周几+M/D+「N 部」/ calendarWeekday 映射 / thisWeekDateOf 7 连续日期 + 当日自洽）→ 25 全绿
+- **门禁**：typecheck/lint EXIT=0 / 视图 25 + test:changed 25 全过。

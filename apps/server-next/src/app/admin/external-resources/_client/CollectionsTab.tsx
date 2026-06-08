@@ -26,6 +26,8 @@ import {
   fetchCollections,
   COLLECTION_LABELS,
   labelOf,
+  calendarWeekday,
+  thisWeekDateOf,
   type CollectionItem,
   type CollectionSummaryItem,
 } from '@/lib/external-resources/api'
@@ -185,6 +187,9 @@ export function CollectionsTab({ provider }: { provider: ProviderKey }) {
         </button>
         {summary.map((s) => {
           const pressed = collection === s.collection
+          // 每日放送：标签加本周真实日期（周一 6/8…连续），数量标「N 部」避免误读为日期
+          const wd = calendarWeekday(s.collection)
+          const label = wd ? `${labelOf(COLLECTION_LABELS, s.collection)} ${thisWeekDateOf(wd)}` : labelOf(COLLECTION_LABELS, s.collection)
           return (
             <button
               key={s.collection}
@@ -195,8 +200,8 @@ export function CollectionsTab({ provider }: { provider: ProviderKey }) {
               style={pressed ? { ...CHIP_STYLE, ...CHIP_PRESSED_STYLE } : CHIP_STYLE}
               title={`${s.domain ? `${s.domain} · ` : ''}${s.category}`}
             >
-              {labelOf(COLLECTION_LABELS, s.collection)}
-              <span style={CHIP_COUNT_STYLE}>{s.count}</span>
+              {label}
+              <span style={CHIP_COUNT_STYLE}>{wd ? `${s.count} 部` : s.count}</span>
             </button>
           )
         })}

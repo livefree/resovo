@@ -268,6 +268,26 @@ export const COLLECTION_LABELS: Readonly<Record<string, string>> = {
   bgm_calendar_sun: '周日',
 }
 
+/** calendar collection key → 放送星期（1=周一..7=周日）；非 calendar → null。 */
+const CALENDAR_WEEKDAY: Readonly<Record<string, number>> = {
+  bgm_calendar_mon: 1, bgm_calendar_tue: 2, bgm_calendar_wed: 3, bgm_calendar_thu: 4,
+  bgm_calendar_fri: 5, bgm_calendar_sat: 6, bgm_calendar_sun: 7,
+}
+export function calendarWeekday(collection: string): number | null {
+  return CALENDAR_WEEKDAY[collection] ?? null
+}
+
+/**
+ * 本周某 weekday(1=周一..7=周日) 的日期 `M/D`（每日放送 chip 显示真实日期，避免把条目数误读为日期）。
+ * 以 `now` 当日所在周（周一为周首）计算 → 周一..周日为连续 7 天。
+ */
+export function thisWeekDateOf(weekday: number, now: Date = new Date()): string {
+  const todayWd = ((now.getDay() + 6) % 7) + 1 // 0=周日..6=周六 → 1=周一..7=周日
+  const d = new Date(now)
+  d.setDate(now.getDate() + (weekday - todayWd))
+  return `${d.getMonth() + 1}/${d.getDate()}`
+}
+
 /** provider 官方入口（API / doc / dump 外链，ADR-189 D-189-8）；无声明则不渲染入口卡。 */
 export interface ProviderLink {
   readonly label: string
