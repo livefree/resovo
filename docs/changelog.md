@@ -2763,3 +2763,20 @@
 - **新增依赖**：无 ｜ **数据库变更**：无（消费既有表）
 - **注意事项**：① `?live` 默认关（仅 dump，零外部请求）；live 受全局并发 1 限流（防管理员连点打爆豆瓣污染 worker 采集，D-188-5 ③）；live 抓取失败由 searchDoubanRich 内部降级 []（埋点记 status=fail source=admin_search，活动 Tab 可观测，liveError 仅用于 busy 限流态）；② **真实 DB e2e**：collections(movie_hot_gaia) total 330 + summary 16 合集（诺曼底72小时 2026 movie/trending rank=0）；search(流浪地球) dump offline 命中 1；bangumi→planned；③ 门禁：**verify:endpoint-adr 226 路由对齐（5/5 端点全实装）** / typecheck EXIT=0 / lint 5/5 / 新测 service+6·browse 4 / test:changed 26 文件 367 全过。
 - **卡 3 API 全收口**：API-A（providers/overview/activity 观测读）+ API-B（collections/search 资源浏览）。ADR-188 §端点契约 5/5 端点全实装 + ExternalResourcesService 聚合 + dump 搜索 query。下游卡 4 UI 消费。
+
+## [CHG-EXT-RES-UI-A] 外部资源治理页框架 + 观测 Tab（SEQ-20260607-04 卡 4-A / ADR-188 D-188-1）
+- **完成时间**：2026-06-07
+- **记录时间**：2026-06-07 20:55
+- **执行模型**：claude-opus-4-8
+- **子代理**：无（复用 admin-ui 既有组件，零新共享组件契约——不触发 Opus 子代理硬约束）
+- **修改文件**：
+  - `apps/server-next/src/lib/admin-nav.tsx` — 采集中心组加「外部资源」item（lucide `Globe`，与采集控制并列；分组不更名，ADR-188 D-188-1）
+  - `apps/server-next/src/lib/external-resources/api.ts`（新建）— 取数层：`fetchProviders`/`fetchOverview`/`fetchActivity`（经 apiClient，ADR-003）+ 响应类型镜像 + operation/method/status/source 中文标签映射（OPERATION/METHOD/STATUS/SOURCE_LABELS + labelOf 缺失回退）
+  - `apps/server-next/src/app/admin/external-resources/page.tsx`（新建）— server shell（Suspense + metadata）
+  - `apps/server-next/src/app/admin/external-resources/_client/ExternalResourcesClient.tsx`（新建）— provider Segment + tab 容器（URL `?provider=&tab=` 同步，仿 SettingsContainer；切 provider 重置 tab + 清理表格 `act.*` namespaced query）；active(douban) 渲染功能 Tab，planned(bangumi/imdb/tmdb) 渲染「待接入」占位（获取方式 Pill）
+  - `apps/server-next/src/app/admin/external-resources/_client/OverviewTab.tsx`（新建）— 概览：4 KpiCard（热门合集条目/离线元数据库/采集次数·24h〔成功率派生 variant〕/富集匹配）+ 采集明细按内容类型·按方式（成功/失败/超时分桶）+ 富集匹配按方式 + 合集新鲜度（Pill 状态 + 更新时间 + 条数）
+  - `apps/server-next/src/app/admin/external-resources/_client/ActivityTab.tsx`（新建）— 采集流水：admin-ui `DataTable` server 模式（fetch_log 8 列：时间/内容类型/方式/状态〔Pill〕/触发方/目标〔截断 title〕/条数/耗时）+ `useTableQuery`（URL namespace `act` 与外层 `?provider=&tab=` 互不冲突）+ 页面级 AdminSelect 过滤器（operation/method/status，切换回第 1 页，仿 VideoListClient 快捷筛选范式）
+  - `tests/unit/components/server-next/admin/ExternalResources.test.tsx`（新建，13 视图单测：Client provider/tab 切换·planned 占位·error / OverviewTab 4 KPI·明细中文标签·新鲜度·error·null-empty / ActivityTab 过滤器+流水行·空态）
+- **新增依赖**：无 ｜ **数据库变更**：无（纯前端消费 API-A/B 端点）
+- **注意事项**：① **零新共享组件**——复用 admin-ui `DataTable`/`KpiCard`/`AdminCard`/`Segment`/`PageHeader`/`Pill`/`AdminSelect`/`LoadingState`/`ErrorState`/`EmptyState`；② **富集 breakdown 归并入概览**（与采集聚合同属「概览」语义，ActivityTab 专注可下钻原始流水，避免重复渲染——较卡描述微调，更清晰）；③ 切 provider 主动清理 `act.*` URL query 防跨 provider 串表格状态；④ planned provider 全 provider-scoped 端点零请求（Client 直接渲染占位，不挂 OverviewTab/ActivityTab）；⑤ 门禁：typecheck EXIT=0 / lint 5/5（新文件零告警）/ 13 视图单测全绿 / test:changed 2 文件 19 全过（admin-nav 改动连带 admin-shell-client）；⑥ **本卡 UI-A 落地 概览+采集记录 2 Tab**；热门资源 + 资源搜索 2 Tab + admin 域 e2e 见 UI-B。
+- **复用清单沉淀**：取数标签映射（OPERATION/METHOD/STATUS/SOURCE_LABELS）置于 `lib/external-resources/api.ts`，UI-B 的 CollectionsTab/SearchTab 直接复用。

@@ -6,15 +6,21 @@
 
 ## 当前任务（单任务工作台：同时仅 1 个 🔄 进行中；完成即删卡，历史见 docs/changelog.md）
 
-### CHG-EXT-RES-UI-A — 外部资源治理页框架 + 观测 Tab
+### CHG-EXT-RES-UI-B — 外部资源浏览 Tab（热门资源 + 资源搜索）
 - **状态**：🔄 进行中
-- **来源序列**：SEQ-20260607-04（卡 4-A）
+- **来源序列**：SEQ-20260607-04（卡 4-B）
 - **建议模型**：opus
 - **执行模型**：claude-opus-4-8
 - **子代理调用**：无（复用 admin-ui 既有组件，零新共享契约）
-- **实际开始**：2026-06-07 20:15
-- **文件范围**：`apps/server-next/src/lib/admin-nav.tsx`（采集中心加外部资源 item）、`apps/server-next/src/app/admin/external-resources/page.tsx` + `_client/ExternalResourcesClient.tsx`（provider Segment + tab 容器）+ `_client/OverviewTab.tsx` + `_client/ActivityTab.tsx`、`apps/server-next/src/lib/external-resources/api.ts`（apiClient 取数 + 类型）、`tests/unit/components/server-next/...`（视图单测）
+- **实际开始**：2026-06-07 21:00
+- **文件范围**：`apps/server-next/src/lib/external-resources/api.ts`（追加 fetchCollections/unifiedSearch + 类型）、`apps/server-next/src/app/admin/external-resources/_client/ExternalResourcesClient.tsx`（TABS 扩到 4 + 挂载 2 Tab）、`_client/CollectionsTab.tsx` + `_client/SearchTab.tsx`（新建）、`tests/unit/components/server-next/...`（视图单测追加）、`tests/e2e/...`（admin 域 e2e）
 - **完成备注**：_（完成后填写）_
+
+---
+
+#### 卡 4-A 完成存档（CHG-EXT-RES-UI-A ✅ 2026-06-07 20:55）
+- 已交付：采集中心 nav「外部资源」入口 + `/admin/external-resources` provider 框架（Segment + tab 容器 `?provider=&tab=`）+ api 取数层 + 概览 Tab（KpiCard + 采集/富集明细 + 合集新鲜度）+ 采集流水 Tab（DataTable + 过滤器）+ 13 视图单测。
+- 门禁：typecheck/lint/test:changed 全绿。详见 changelog `[CHG-EXT-RES-UI-A]`。
 
 ---
 

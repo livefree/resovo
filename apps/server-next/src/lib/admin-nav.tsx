@@ -51,6 +51,7 @@ import {
   Megaphone,
   Flag,
   Bug,
+  Globe,
   Users,
   Settings,
 } from 'lucide-react'
@@ -103,6 +104,8 @@ export const ADMIN_NAV: readonly AdminNavSection[] = [
           { label: '采集批次', href: '/admin/crawler/runs', icon: <Bug /> },
         ],
       },
+      // CHG-EXT-RES-UI-A（ADR-188 D-188-1）：外部资源治理 provider 无关框架（豆瓣首接入）
+      { label: '外部资源', href: '/admin/external-resources', icon: <Globe /> },
     ],
   },
   {
