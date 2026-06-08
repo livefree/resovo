@@ -61,7 +61,11 @@ describe('getProviders', () => {
     expect(list.map((p) => p.key)).toEqual(['douban', 'bangumi', 'imdb', 'tmdb'])
     const douban = list.find((p) => p.key === 'douban')!
     expect(douban.status).toBe('active')
-    expect(douban.dataScale).toEqual({ collectionItems: 1294, doubanEntries: 140000 })
+    // ADR-189 D-189-4：dataScale 泛化为 ProviderDataMetric[]
+    expect(douban.dataScale).toEqual([
+      { key: 'collectionItems', label: '热门合集条目', value: 1294 },
+      { key: 'doubanEntries', label: '离线 dump 条目', value: 140000 },
+    ])
     expect(list.find((p) => p.key === 'bangumi')!.dataScale).toBeNull()
     // planned provider 不触发 douban dataScale 之外的查询（仅 douban 调一次）
     expect(getDoubanDataScale).toHaveBeenCalledTimes(1)
@@ -75,7 +79,7 @@ describe('getOverview', () => {
     if ('fetchStats' in r) {
       expect(r.fetchStats.total).toBe(10)
       expect(r.enrichStats.total).toBe(5)
-      expect(r.dataScale.collectionItems).toBe(1294)
+      expect(r.dataScale.find((m) => m.key === 'collectionItems')!.value).toBe(1294)
     }
     expect(aggregateFetchLog).toHaveBeenCalledWith(db, 'douban', '2026-06-06T00:00:00Z')
   })
@@ -112,7 +116,8 @@ describe('getCollections', () => {
     expect('items' in r).toBe(true)
     if ('items' in r) {
       expect(r.total).toBe(345)
-      expect(r.items[0]!.doubanId).toBe('1')
+      expect(r.items[0]!.externalId).toBe('1')
+      expect(r.items[0]!.subtitle).toBeNull() // douban originalTitle → subtitle
       expect(r.summary[0]!.count).toBe(345)
     }
     expect(listCollectionItemsPaged).toHaveBeenCalledWith(db, { collection: 'movie_hot_gaia', limit: 50, offset: 0 })
@@ -132,11 +137,11 @@ describe('unifiedSearch', () => {
       total: 1,
     })
     const r = await svc.unifiedSearch('douban', { q: '流浪地球', live: false, limit: 20, offset: 0 })
-    expect('rows' in r && r.rows).toEqual([{ source: 'offline', doubanId: '26266893', title: '流浪地球', year: 2019, rating: 7.9 }])
+    expect('rows' in r && r.rows).toEqual([{ source: 'offline', externalId: '26266893', title: '流浪地球', year: 2019, rating: 7.9 }])
     expect(searchDoubanRich).not.toHaveBeenCalled()
   })
 
-  it('live=true → 追加 online 候选，按 doubanId 去重（dump 已有不重复）', async () => {
+  it('live=true → 追加 online 候选，按 externalId 去重（dump 已有不重复）', async () => {
     vi.mocked(searchDoubanEntries).mockResolvedValue({
       rows: [{ doubanId: '1', title: 'A', year: 2020, rating: 8, coverUrl: null }],
       total: 1,
@@ -147,7 +152,7 @@ describe('unifiedSearch', () => {
     ])
     const r = await svc.unifiedSearch('douban', { q: 'x', live: true, limit: 20, offset: 0 })
     if ('rows' in r) {
-      expect(r.rows.map((h) => `${h.source}:${h.doubanId}`)).toEqual(['offline:1', 'online:2'])
+      expect(r.rows.map((h) => `${h.source}:${h.externalId}`)).toEqual(['offline:1', 'online:2'])
     }
     expect(searchDoubanRich).toHaveBeenCalledWith('x', undefined, 'admin_search')
   })

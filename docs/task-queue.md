@@ -1574,8 +1574,11 @@
      - 完成备注：实施 ADR-189 **D-189-2** worker 编排。① `services/bangumi-collections/refresh.ts`（trending/ranking 分页 searchSubjectsSorted 累积 rank〔null→整轮 failed〕+ per-collection empty_guard + replaceBangumiCollectionItems / **calendar getCalendar 一次 → 7 weekday 分组 → 7 天总量 empty_guard → replaceBangumiCollectionGroupsAtomic 一拉七写**〔getCalendar null→7 key 统一 failed〕）② `bangumiCollectionsQueue`（lib/queue 独立队列隔离背压，同 douban 范式）③ worker + scheduler（6h tick，jobId `refresh-bangumi-collections` 幂等，`BANGUMI_COLLECTIONS_SCHEDULER_ENABLED` opt-out）④ server.ts 注册（worker + scheduler）。**实现选择**：trending 用 sort=heat 不加 air_date filter（heat 已反映当前热度，ADR D-189-2 air_date 为可选，省略）；source 用 `collections_worker`。门禁：typecheck/lint EXIT=0 / 新测 6 全绿（search 成功·failed·empty_guard / calendar 一拉七写·null→7failed·总量 guard）/ test:changed 60 文件 693 全过。执行模型: claude-opus-4-8；子代理: 无。
    - 依赖：CHG-BNG-RES-ADR
 
-3. **CHG-BNG-RES-API** — 治理服务 provider 化：ExternalResourcesService provider-dispatch 重构（抽 douban adapter + 新 bangumi adapter，douban 零行为变更）+ bangumi overview/collections/search/activity + registry capabilities 填值 + verify:adr-contracts + 单测（无新 admin route，复用 `/:provider/*`）
-   - 依赖：CHG-BNG-RES-STORE
+3. **CHG-BNG-RES-API**（拆 -A/-B：DTO 泛化 + adapter 框架 + bangumi adapter ~7 项超原子上限）
+   - **3-A · CHG-BNG-RES-API-3A** — provider-dispatch 框架 + douban adapter（状态：✅ 已完成 2026-06-07 23:30）
+     - 完成备注：实施 ADR-189 **D-189-4 / arch H1**。① 治理 DTO 泛化 provider 无关（`services/external-resources/types.ts`：`ProviderDataMetric`〔dataScale 数组化〕/ `GovCollectionItem`〔doubanId→externalId + subtitle〕/ `GovSearchHit`〔externalId〕/ `ProviderResourceAdapter` 接口）② `DoubanResourceAdapter`（douban 逻辑整搬 + map 中性 DTO + live 并发 1 限流，**零行为变更**）③ `ExternalResourcesService` 退化为 adapter 分派（去 isActiveDouban，`adapterFor` 按 status=active 选 adapter，planned→PLANNED_MARKER）。route shape 透传无需改。④ service DTO 测试更新（dataScale 数组 / externalId / subtitle）；query 层 Browse/Stats 测试不受影响（保持 doubanId/DoubanDataScale）。门禁：typecheck/lint EXIT=0 / external-resources 17 测全绿 / test:changed EXIT=0。执行模型: claude-opus-4-8；子代理: 无（实施 ADR 锁定契约）。
+   - **3-B · CHG-BNG-RES-API-3B** — bangumi adapter：BangumiResourceAdapter（overview〔bangumi dataScale + sync_state freshness + dump 聚合〕/ collections〔bangumi_collection_items map 中性〕/ search〔bangumi_entries dump + searchSubjects live〕/ activity）+ getBangumiDataScale 查询 + registry status='active'·capabilities + 注册 adapter + 单测 + 真实 DB e2e
+     - 依赖：CHG-BNG-RES-API-3A ✅ + CHG-BNG-RES-STORE ✅
 
 4. **CHG-BNG-RES-UI** — 前端 Bangumi Tab：概览 bangumi 分支（dataScale KPI + 官方入口卡）+ 热门·每日放送/搜索/采集记录 Tab 复用（capabilities 驱动）+ api client 适配 + 视图单测 + admin e2e
    - 依赖：CHG-BNG-RES-API

@@ -2850,3 +2850,13 @@
   - `tests/unit/api/bangumiCollectionsRefresh.test.ts`（新建）— 6 测：search 单页/failed/empty_guard + calendar 一拉七写 atomic/null→7failed/7 天总量 guard
 - **新增依赖**：无 ｜ **数据库变更**：无（写 STORE-2A 表）
 - **注意事项**：① **calendar 一拉七写**是与豆瓣关键差异（7 weekday 共享一次 GET /calendar，整体失败全不替换）；② 埋点已在 lib/bangumi（2-B），worker 经 `collections_worker` source；③ **实现选择**：trending=sort=heat 不加 air_date filter（heat 已反映当前热度，ADR air_date 可选省略）；④ 门禁：typecheck/lint EXIT=0 / 新测 6 全绿 / test:changed 60 文件 693 全过；⑤ 卡 2（STORE A/B/C）全部完成；下一卡 CHG-BNG-RES-API（Service provider 化）。
+
+## [CHG-BNG-RES-API-3A] ExternalResourcesService provider-dispatch 框架 + DTO 泛化（SEQ-20260607-05 卡 3-A / ADR-189 D-189-4）
+- **完成时间**：2026-06-07 ｜ **记录时间**：2026-06-07 23:30 ｜ **执行模型**：claude-opus-4-8 ｜ **子代理**：无
+- **修改文件**：
+  - `apps/api/src/services/external-resources/types.ts`（新建）— provider 无关治理 DTO：`ProviderDataMetric`（dataScale 数组化解耦 DoubanDataScale，arch H1）/ `GovCollectionItem`（doubanId→externalId + subtitle 中性）/ `GovCollectionSummaryItem` / `GovSearchHit`（externalId）/ `OverviewData`/`CollectionsResult`/`SearchResult` / **`ProviderResourceAdapter` 接口**（getDataScale/getOverview/getActivity/getCollections/unifiedSearch）
+  - `apps/api/src/services/external-resources/DoubanResourceAdapter.ts`（新建）— ADR-188 douban 逻辑整搬 + map 中性 DTO（doubanId→externalId / originalTitle→subtitle / ratingValue→rating / domain 保留）+ live 并发 1 限流，**零行为变更**
+  - `apps/api/src/services/ExternalResourcesService.ts`（重构）— 退化为 adapter 分派器（去 `isActiveDouban` 硬编码，`adapterFor` 按 registry status=active 选 adapter，planned→PLANNED_MARKER；getProviders dataScale 经 adapter）；re-export 中性 DTO；route 兼容（shape 透传）
+  - `tests/unit/api/externalResourcesService.test.ts`（更新）— DTO 断言（dataScale 数组 ProviderDataMetric / externalId / subtitle）
+- **新增依赖**：无 ｜ **数据库变更**：无
+- **注意事项**：① **douban 零行为变更**——逻辑逐方法整搬 DoubanResourceAdapter，既有 query 层（Browse/Stats）测试不受影响（保持 doubanId/DoubanDataScale）；② DTO 泛化是 bangumi 复用 UI Tab 的前提（externalId/metric 数组），server-next UI 适配归卡 4；③ 接 imdb/tmdb = 加 adapter 类分派零改；④ 门禁：typecheck/lint EXIT=0 / external-resources 17 测全绿 / test:changed EXIT=0；⑤ 下一卡 3-B（BangumiResourceAdapter + registry active + 真实 DB e2e）。
