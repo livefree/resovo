@@ -25,6 +25,7 @@ import { ShelfRow } from '@/components/video/Shelf'
 import { CategoryShortcutsClient } from '@/components/home/CategoryShortcutsClient'
 import { FeaturedRow } from '@/components/home/FeaturedRow'
 import { TopTenRow } from '@/components/home/TopTenRow'
+import { DailyAnimeRow } from '@/components/home/DailyAnimeRow'
 
 // ── HomePage ──────────────────────────────────────────────────────────────────
 
@@ -95,6 +96,13 @@ export default async function HomePage({
           viewAllHref={`/${locale}/anime`}
           viewAllLabel={t('viewAll')}
           data-testid="anime-grid"
+        />
+
+        {/* 每日放送 — Bangumi calendar 发现位（含未入站，ADR-189 D-189-7）；无数据自隐 */}
+        <DailyAnimeRow
+          title={t('dailyAnime')}
+          availableLabel={t('dailyAnimeAvailable')}
+          wishLabel={t('dailyAnimeWish')}
         />
       </div>
     </>

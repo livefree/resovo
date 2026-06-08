@@ -9,10 +9,12 @@
 import type { Pool } from 'pg'
 import { calendarKeyForWeekday } from '@/api/services/bangumi-collections/registry'
 
-/** 站内交叉态：命中站内 published video → {videoId, slug}；未入站 → null。 */
+/** 站内交叉态：命中站内 published video → {videoId, slug, shortId}；未入站 → null。 */
 export interface DailyAnimeLinkedVideo {
   readonly videoId: string
-  readonly slug: string
+  readonly slug: string | null
+  /** 前台 watch deeplink 需要（`{slug}-{shortId}`） */
+  readonly shortId: string
 }
 
 export interface DailyAnimeItem {
@@ -44,6 +46,7 @@ interface DbRow {
   rank: number
   video_id: string | null
   video_slug: string | null
+  video_short_id: string | null
 }
 
 /**
@@ -58,11 +61,11 @@ export async function listDailyAnimeByWeekday(db: Pool, weekday: number): Promis
   // LATERAL 取该 catalog 下最近更新的 1 条 published 公开 video。
   const result = await db.query<DbRow>(
     `SELECT bci.bangumi_id, bci.title, bci.name_cn, bci.cover_url, bci.air_weekday, bci.rating, bci.rank,
-            v.id AS video_id, v.slug AS video_slug
+            v.id AS video_id, v.slug AS video_slug, v.short_id AS video_short_id
        FROM external_data.bangumi_collection_items bci
        LEFT JOIN media_catalog mc ON mc.bangumi_subject_id::TEXT = bci.bangumi_id
        LEFT JOIN LATERAL (
-         SELECT vi.id, vi.slug
+         SELECT vi.id, vi.slug, vi.short_id
            FROM videos vi
           WHERE vi.catalog_id = mc.id AND vi.deleted_at IS NULL
             AND vi.is_published = true AND vi.visibility_status = 'public'
@@ -82,6 +85,6 @@ export async function listDailyAnimeByWeekday(db: Pool, weekday: number): Promis
     airWeekday: r.air_weekday,
     rating: r.rating == null ? null : Number(r.rating),
     rank: r.rank,
-    linkedVideo: r.video_id && r.video_slug ? { videoId: r.video_id, slug: r.video_slug } : null,
+    linkedVideo: r.video_id && r.video_short_id ? { videoId: r.video_id, slug: r.video_slug, shortId: r.video_short_id } : null,
   }))
 }

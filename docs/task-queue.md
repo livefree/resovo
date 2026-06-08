@@ -1549,7 +1549,7 @@
 
 ## [SEQ-20260607-05] EXT-RES-BANGUMI — Bangumi 全量接入外部资源治理 + 首页每日放送
 
-- **状态**：🔄 进行中（卡 1 ADR 🔄）
+- **状态**：✅ 已完成 2026-06-08 00:50（卡 1 ADR ✅ / 卡 2 STORE A·B·C ✅ / 卡 3 API 3A·3B ✅ / 卡 4 UI ✅ / 卡 5 HOME 5A·5B ✅；Bangumi active 全量接入治理框架 + 首页每日放送发现位打通）
 - **创建时间**：2026-06-07 21:40
 - **目标**：把 Bangumi 从治理框架的 `planned` 占位升为 **active 全量接入**——概览/热门·每日放送/资源搜索/采集记录 4 Tab 实数据 + 官方入口（API/doc/dump）+ 首页「每日放送」发现板块（含未入站，交叉站内）+ 站内 hot_anime 强化。解决调研定位的核心缺口：埋点只接 douban、热门/每日放送无数据源、capabilities 空、Service douban 硬编码、首页发现位缺失。
 - **用户定调（2026-06-07）**：① 热门/每日放送走**落库 worker**（对齐豆瓣 collection_items 范式）② 首页口径 = **每日放送发现位（含未入站）+ 站内 hot_anime 结合** ③ **本期实装**（含首页接线）。
@@ -1588,5 +1588,6 @@
 5. **CHG-BNG-HOME-WIRE**（可拆 -A/-B）— 首页每日放送 + 站内 hot_anime
    - **5-A** 后端（状态：✅ 已完成 2026-06-08 00:30）
      - 完成备注：实施 ADR-189 **D-189-7 后端侧**。① `db/queries/home-discovery.ts`（DailyAnimeItem/Result DTO〔含 linkedVideo 站内交叉态，apps/api 侧**不进 home-section 框架**〕+ `listDailyAnimeByWeekday`：calendarKeyForWeekday 解析 weekday→合集 key〔越界返 []〕+ calendar 切片 LEFT JOIN media_catalog〔`bangumi_subject_id::TEXT = bangumi_id` 避 TEXT→INT 解析〕+ LATERAL 取站内 published 公开 video）② `HomeService.dailyAnime`（无缓存）③ `GET /home/daily-anime?weekday=N`（公开 route，默认服务端当日 1=周一..7=周日）。**不碰** preview/autofill/section。**真实 DB 验证**：weekday 1/7 查询无错返 0（空表）/ 0 越界返 [] 不查。门禁：typecheck/lint/verify:adr-contracts〔sql-schema-alignment ✅〕EXIT=0 / 新测 4 / test:changed 5 文件 81 / verify-endpoint-adr 226（公开 route 不计 admin）。执行模型: claude-opus-4-8；子代理: 无。
-   - **5-B** 前台：`daily_anime` 板块组件（未入站降级态 + 想看/搜索引导）+ hot_anime 数据新鲜核对 + 单测 + 前台 e2e
+   - **5-B** 前台（状态：✅ 已完成 2026-06-08 00:50）
+     - 完成备注：实施 ADR-189 **D-189-7 前台侧**。① `home-discovery.ts` 补 `linkedVideo.shortId`（前台 watch deeplink 需要，同 SEQ 增量 + 5-A 测试同步）② `DailyAnimeRow.tsx`（web-next client 组件：取 `/home/daily-anime` skipAuth + 水平滚动竖卡；**linked → 站内可看徽标 + watch deeplink `/watch/{slug}-{shortId}`** / **未入站 → 想看徽标 + 站内搜索 `/search?q=`**；颜色全 CSS 变量；**空/失败自隐**不占位）③ 首页 page.tsx 接入（hot_anime shelf 之后；hot_anime 既有 autofill 链路核对无需改 D-189-9）④ i18n（zh-CN/en：dailyAnime/Available/Wish）⑤ 单测 4。门禁：typecheck/lint EXIT=0（新文件零告警）/ DailyAnimeRow 4 + homeDailyAnime 4 全绿 / test:changed 6 文件 85 全过。**e2e 决策**：web 无既有 homepage e2e harness（web e2e 仅 auth/publish/search/video-governance），daily-anime 板块空数据自隐 → 组件测试 4（linked/未入站/空自隐/无 slug）+ 后端查询测试 4 + 真实 DB 验证已强覆盖；homepage e2e 待 harness 建立后另起（板块优雅降级不阻塞）。执行模型: claude-opus-4-8；子代理: 无。
    - 依赖：CHG-BNG-RES-STORE（落库）+ ADR section 授权（卡 1）

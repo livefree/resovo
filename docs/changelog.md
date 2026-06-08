@@ -2897,3 +2897,16 @@
   - `tests/unit/api/homeDailyAnime.test.ts`（新建，4 测）— weekday→key 解析 / 映射 + linkedVideo 交叉（有/无站内）/ rating Number / 越界返 [] 不查 / SQL 含 published+visibility 过滤
 - **新增依赖**：无 ｜ **数据库变更**：无（读 STORE-2A 表 + media_catalog/videos 交叉）
 - **注意事项**：① **独立发现机制**——daily-anime 不进 HomeSectionKey/preview/autofill/section（守 arch B1）；② 交叉用 `bangumi_subject_id::TEXT = bangumi_id` 避 TEXT→INT 解析风险；③ **真实 DB 验证**：weekday 1/7 查询无错返 0（空表无 worker 数据）/ weekday 0 越界返 [] 不查；④ 门禁：typecheck/lint/verify:adr-contracts〔sql-schema-alignment ✅〕EXIT=0 / 新测 4 / test:changed 5 文件 81 / verify-endpoint-adr 226（公开 route 不计 admin）；⑤ 下一卡 5-B（前台板块 + hot_anime 核对）。
+
+## [CHG-BNG-HOME-WIRE-5B] 首页每日放送前台发现板块（SEQ-20260607-05 卡 5-B · SEQ 收口 / ADR-189 D-189-7）
+- **完成时间**：2026-06-08 ｜ **记录时间**：2026-06-08 00:50 ｜ **执行模型**：claude-opus-4-8 ｜ **子代理**：无
+- **修改文件**：
+  - `apps/api/src/db/queries/home-discovery.ts` — `linkedVideo` 补 `shortId`（前台 watch deeplink `{slug}-{shortId}` 需要，同 SEQ 增量）+ SELECT v.short_id
+  - `tests/unit/api/homeDailyAnime.test.ts` — 同步 video_short_id + shortId 断言
+  - `apps/web-next/src/components/home/DailyAnimeRow.tsx`（新建）— client 组件取 `/home/daily-anime`（skipAuth）水平滚动竖卡；**linked → 站内可看徽标 + watch deeplink** / **未入站 → 想看徽标 + 站内搜索引导**；颜色全 CSS 变量；**空/失败自隐**不占位
+  - `apps/web-next/src/app/[locale]/page.tsx` — 热门动漫 shelf 之后接入 DailyAnimeRow（hot_anime 既有 autofill 链路核对无需改 D-189-9）
+  - `apps/web-next/messages/{zh-CN,en}.json` — home.dailyAnime/dailyAnimeAvailable/dailyAnimeWish
+  - `tests/unit/web-next/DailyAnimeRow.test.tsx`（新建，4 测）— linked watch deeplink+站内可看 / 未入站 search+想看 / 空自隐 / 失败自隐 / 无 slug deeplink
+- **新增依赖**：无 ｜ **数据库变更**：无
+- **注意事项**：① **独立发现机制**——非 home-section / 非站内 video shelf，含未入站；② 板块空数据/失败自隐（calendar 未落库时不占位）；③ hot_anime 既有 autofill 强化 = 数据新鲜核对（D-189-9 不改算法）；④ **e2e 决策**：web 无既有 homepage e2e harness，board 自隐 → 组件 4 + 后端查询 4 + 真实 DB 验证已强覆盖，homepage e2e 待 harness 另起；⑤ 门禁：typecheck/lint EXIT=0 / 新测 8 全绿 / test:changed 6 文件 85。
+- **SEQ-20260607-05 EXT-RES-BANGUMI 全收口**：ADR-189（arch CONDITIONAL PASS 11 条）+ STORE(2A schema/registry/queries · 2B 埋点+lib 扩端点 · 2C collections worker 一拉七写) + API(3A provider-dispatch 框架+DTO 泛化 · 3B BangumiResourceAdapter) + UI(4 Bangumi 4 Tab + 官方入口卡) + HOME(5A /home/daily-anime · 5B 前台板块)。**Bangumi 从 planned 占位 → active 全量接入治理框架**（概览/热门·每日放送/资源搜索/采集记录 4 Tab 实数据 + 官方入口）+ 首页每日放送发现位（含未入站交叉站内）。ADR-189 pending D-numbers 待本 changelog 闭环（D-189-1..9 已落地）。

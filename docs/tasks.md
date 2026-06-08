@@ -6,7 +6,7 @@
 
 ## 当前任务（单任务工作台：同时仅 1 个 🔄 进行中；完成即删卡，历史见 docs/changelog.md）
 
-_（当前无进行中任务。取下一个前先查 `docs/task-queue.md` 是否有 🚨 BLOCKER。下一卡：CHG-BNG-HOME-WIRE-5B 前台每日放送板块。）_
+_（当前无进行中任务。取下一个前先查 `docs/task-queue.md` 是否有 🚨 BLOCKER。SEQ-20260607-05 EXT-RES-BANGUMI 全收口。）_
 
 ---
 

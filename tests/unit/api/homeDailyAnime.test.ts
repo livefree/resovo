@@ -18,16 +18,16 @@ function dbWithRows(rows: unknown[]) {
 describe('listDailyAnimeByWeekday', () => {
   it('weekday=1 → 解析 bgm_calendar_mon + 映射 + linkedVideo 交叉（有/无站内）', async () => {
     const { db, query } = dbWithRows([
-      { bangumi_id: '326125', title: '芙莉莲', name_cn: '葬送的芙莉莲', cover_url: 'x', air_weekday: 1, rating: '9.1', rank: 0, video_id: 'vid-1', video_slug: 'frieren' },
-      { bangumi_id: '400602', title: '某番', name_cn: null, cover_url: null, air_weekday: 1, rating: null, rank: 1, video_id: null, video_slug: null },
+      { bangumi_id: '326125', title: '芙莉莲', name_cn: '葬送的芙莉莲', cover_url: 'x', air_weekday: 1, rating: '9.1', rank: 0, video_id: 'vid-1', video_slug: 'frieren', video_short_id: 'ab12cd' },
+      { bangumi_id: '400602', title: '某番', name_cn: null, cover_url: null, air_weekday: 1, rating: null, rank: 1, video_id: null, video_slug: null, video_short_id: null },
     ])
     const items = await listDailyAnimeByWeekday(db, 1)
 
     // 查询用 collection = bgm_calendar_mon
     expect(query.mock.calls[0][1]).toEqual(['bgm_calendar_mon'])
     expect(items).toHaveLength(2)
-    // 命中站内 → linkedVideo
-    expect(items[0]).toMatchObject({ bangumiSubjectId: '326125', rating: 9.1, airWeekday: 1, linkedVideo: { videoId: 'vid-1', slug: 'frieren' } })
+    // 命中站内 → linkedVideo（含 shortId 供前台 watch deeplink）
+    expect(items[0]).toMatchObject({ bangumiSubjectId: '326125', rating: 9.1, airWeekday: 1, linkedVideo: { videoId: 'vid-1', slug: 'frieren', shortId: 'ab12cd' } })
     expect(typeof items[0]!.rating).toBe('number')
     // 未入站 → linkedVideo null
     expect(items[1]).toMatchObject({ bangumiSubjectId: '400602', rating: null, linkedVideo: null })
