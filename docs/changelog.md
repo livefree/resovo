@@ -2860,3 +2860,17 @@
   - `tests/unit/api/externalResourcesService.test.ts`（更新）— DTO 断言（dataScale 数组 ProviderDataMetric / externalId / subtitle）
 - **新增依赖**：无 ｜ **数据库变更**：无
 - **注意事项**：① **douban 零行为变更**——逻辑逐方法整搬 DoubanResourceAdapter，既有 query 层（Browse/Stats）测试不受影响（保持 doubanId/DoubanDataScale）；② DTO 泛化是 bangumi 复用 UI Tab 的前提（externalId/metric 数组），server-next UI 适配归卡 4；③ 接 imdb/tmdb = 加 adapter 类分派零改；④ 门禁：typecheck/lint EXIT=0 / external-resources 17 测全绿 / test:changed EXIT=0；⑤ 下一卡 3-B（BangumiResourceAdapter + registry active + 真实 DB e2e）。
+
+## [CHG-BNG-RES-API-3B] BangumiResourceAdapter 治理服务 bangumi active 化（SEQ-20260607-05 卡 3-B / ADR-189 D-189-1/4）
+- **完成时间**：2026-06-07 ｜ **记录时间**：2026-06-07 23:55 ｜ **执行模型**：claude-opus-4-8 ｜ **子代理**：无
+- **修改文件**：
+  - `packages/types/src/external.types.ts` — bangumi `status='planned'→'active'` + `capabilities=['detail','search','celebrity','collection','schedule']`（collection/schedule 派生语义注释，arch M2）
+  - `apps/api/src/services/bangumi-config.ts`（新建）— `loadBangumiClientConfig`（ADR-168 凭证解析抽共享）
+  - `apps/api/src/services/BangumiService.ts` — getBangumiConfig 复用 loadBangumiClientConfig（去重，行为保持）
+  - `apps/api/src/db/queries/externalData.ts` — `searchBangumiEntries`（dump 搜索 title_cn/jp/normalized ILIKE，**bangumi_id INT→String** 对齐 externalId 契约）
+  - `apps/api/src/db/queries/external-resources-stats.ts` — `getBangumiDataScale`（collection items + dump entries + MAX(updated_at) dump 重导时间，D-189-6）
+  - `apps/api/src/services/external-resources/BangumiResourceAdapter.ts`（新建）— overview（fetch/enrich provider=bangumi + 9 合集 freshness + dump 重导 freshness 行）/ collections（map 中性 externalId/subtitle/airWeekday，domain null）/ search（dump + searchSubjects live 并发 1 限流 + system_settings 凭证）/ activity
+  - `apps/api/src/services/ExternalResourcesService.ts` — 注册 bangumi adapter（dispatch active）
+  - `tests/unit/api/bangumiResourceAdapter.test.ts`（新建，8 测）+ `externalResourcesService.test.ts`（bangumi active 断言 / planned 示例改 imdb）+ `externalFetchLog.test.ts`（registry bangumi active）
+- **新增依赖**：无 ｜ **数据库变更**：无（读既有表）
+- **注意事项**：① **真实 DB e2e**（run-and-delete）：dataScale dump=500 / overview freshness 含 dump 行 / unifiedSearch dump 命中 85 总 externalId="1015" 字符串 / dispatch bangumi active 非 planned；② bangumi_entries.bangumi_id 为 INT（pg 返数字）→ searchBangumiEntries 强制 String（douban_id 为 TEXT 故无此问题）；③ dump 可观测经 freshness 行复用既有 UI（守 D-188-3 不入 fetch_log）；④ 门禁：typecheck/lint/verify:adr-contracts EXIT=0 / 新测+既有 91 全绿；**test:changed 全量 EXIT=1 定界为 jsdom 重负载时序 flaky**（跨 2 次运行失败文件各异 video-merge-perf/UserSubmissions/CrawlerClient/StagingTable，均隔离重跑通过 + 零依赖本卡改动 → 非回归）；⑤ 卡 3（API A/B）完成；下一卡 4（UI Bangumi Tab）。

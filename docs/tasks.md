@@ -6,7 +6,7 @@
 
 ## 当前任务（单任务工作台：同时仅 1 个 🔄 进行中；完成即删卡，历史见 docs/changelog.md）
 
-_（当前无进行中任务。取下一个前先查 `docs/task-queue.md` 是否有 🚨 BLOCKER。下一卡：CHG-BNG-RES-API-3B bangumi adapter。）_
+_（当前无进行中任务。取下一个前先查 `docs/task-queue.md` 是否有 🚨 BLOCKER。下一卡：CHG-BNG-RES-UI 前端 Bangumi Tab。）_
 
 ---
 

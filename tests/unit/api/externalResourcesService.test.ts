@@ -14,6 +14,7 @@ vi.mock('@/api/db/queries/external-fetch-log', () => ({
 }))
 vi.mock('@/api/db/queries/external-resources-stats', () => ({
   getDoubanDataScale: vi.fn(),
+  getBangumiDataScale: vi.fn(),
   aggregateExternalRefMatch: vi.fn(),
 }))
 vi.mock('@/api/db/queries/douban-collections', () => ({
@@ -30,7 +31,7 @@ vi.mock('@/api/lib/doubanAdapter', () => ({
 
 import { ExternalResourcesService } from '@/api/services/ExternalResourcesService'
 import { aggregateFetchLog, queryFetchLog } from '@/api/db/queries/external-fetch-log'
-import { getDoubanDataScale, aggregateExternalRefMatch } from '@/api/db/queries/external-resources-stats'
+import { getDoubanDataScale, getBangumiDataScale, aggregateExternalRefMatch } from '@/api/db/queries/external-resources-stats'
 import {
   listAllCollectionSyncState,
   listCollectionItemsPaged,
@@ -45,6 +46,7 @@ const svc = new ExternalResourcesService(db)
 beforeEach(() => {
   vi.clearAllMocks()
   vi.mocked(getDoubanDataScale).mockResolvedValue({ collectionItems: 1294, doubanEntries: 140000 })
+  vi.mocked(getBangumiDataScale).mockResolvedValue({ collectionItems: 50, dumpEntries: 9000, dumpRefreshedAt: null })
   vi.mocked(aggregateFetchLog).mockResolvedValue({ total: 10, ok: 8, fail: 1, timeout: 1, avgDurationMs: 500, byOperation: [], byMethod: [] })
   vi.mocked(aggregateExternalRefMatch).mockResolvedValue({ total: 5, byStatus: [], byMethod: [] })
   vi.mocked(listAllCollectionSyncState).mockResolvedValue([])
@@ -56,7 +58,7 @@ beforeEach(() => {
 })
 
 describe('getProviders', () => {
-  it('覆盖全 4 provider；douban active 含 dataScale，planned 为 null', async () => {
+  it('覆盖全 4 provider；douban+bangumi active 含 dataScale，imdb/tmdb planned 为 null（ADR-189）', async () => {
     const list = await svc.getProviders()
     expect(list.map((p) => p.key)).toEqual(['douban', 'bangumi', 'imdb', 'tmdb'])
     const douban = list.find((p) => p.key === 'douban')!
@@ -66,9 +68,18 @@ describe('getProviders', () => {
       { key: 'collectionItems', label: '热门合集条目', value: 1294 },
       { key: 'doubanEntries', label: '离线 dump 条目', value: 140000 },
     ])
-    expect(list.find((p) => p.key === 'bangumi')!.dataScale).toBeNull()
-    // planned provider 不触发 douban dataScale 之外的查询（仅 douban 调一次）
+    // ADR-189 D-189-1：bangumi active
+    const bangumi = list.find((p) => p.key === 'bangumi')!
+    expect(bangumi.status).toBe('active')
+    expect(bangumi.dataScale).toEqual([
+      { key: 'collectionItems', label: '派生合集条目', value: 50 },
+      { key: 'dumpEntries', label: '离线 dump 条目', value: 9000 },
+    ])
+    // planned（imdb/tmdb）无 dataScale
+    expect(list.find((p) => p.key === 'imdb')!.dataScale).toBeNull()
+    expect(list.find((p) => p.key === 'tmdb')!.dataScale).toBeNull()
     expect(getDoubanDataScale).toHaveBeenCalledTimes(1)
+    expect(getBangumiDataScale).toHaveBeenCalledTimes(1)
   })
 })
 
@@ -84,8 +95,8 @@ describe('getOverview', () => {
     expect(aggregateFetchLog).toHaveBeenCalledWith(db, 'douban', '2026-06-06T00:00:00Z')
   })
 
-  it('planned provider（bangumi）→ PLANNED_MARKER，零 DB 查询', async () => {
-    const r = await svc.getOverview('bangumi', '2026-06-06T00:00:00Z')
+  it('planned provider（imdb）→ PLANNED_MARKER，零 DB 查询', async () => {
+    const r = await svc.getOverview('imdb', '2026-06-06T00:00:00Z')
     expect(r).toEqual({ status: 'planned' })
     expect(aggregateFetchLog).not.toHaveBeenCalled()
     expect(aggregateExternalRefMatch).not.toHaveBeenCalled()
@@ -167,8 +178,8 @@ describe('unifiedSearch', () => {
     await p1
   })
 
-  it('planned（bangumi）→ PLANNED_MARKER，不查 dump', async () => {
-    const r = await svc.unifiedSearch('bangumi', { q: 'x', live: true, limit: 20, offset: 0 })
+  it('planned（imdb）→ PLANNED_MARKER，不查 dump', async () => {
+    const r = await svc.unifiedSearch('imdb', { q: 'x', live: true, limit: 20, offset: 0 })
     expect(r).toEqual({ status: 'planned' })
     expect(searchDoubanEntries).not.toHaveBeenCalled()
   })

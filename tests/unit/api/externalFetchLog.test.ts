@@ -170,8 +170,15 @@ describe('provider registry（ADR-188 D-188-2）', () => {
     expect(douban?.capabilities).toEqual(expect.arrayContaining(['detail', 'search', 'collection', 'comments', 'celebrity']))
   })
 
-  it('planned provider（bangumi/imdb/tmdb）capabilities 留空待调研，status=planned', () => {
-    for (const key of ['bangumi', 'imdb', 'tmdb'] as const) {
+  it('bangumi active（ADR-189），capabilities 含 detail/search/celebrity/collection/schedule', () => {
+    const bangumi = getExternalProvider('bangumi')
+    expect(bangumi?.status).toBe('active')
+    expect(bangumi?.acquisition).toEqual(['api'])
+    expect(bangumi?.capabilities).toEqual(['detail', 'search', 'celebrity', 'collection', 'schedule'])
+  })
+
+  it('planned provider（imdb/tmdb）capabilities 留空待调研，status=planned', () => {
+    for (const key of ['imdb', 'tmdb'] as const) {
       const p = getExternalProvider(key)
       expect(p?.status).toBe('planned')
       expect(p?.capabilities).toEqual([])

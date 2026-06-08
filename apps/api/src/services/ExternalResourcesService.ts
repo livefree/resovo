@@ -15,6 +15,7 @@ import {
 } from '@resovo/types'
 import type { FetchLogFilter, FetchLogPage } from '@/api/db/queries/external-fetch-log'
 import { DoubanResourceAdapter } from './external-resources/DoubanResourceAdapter'
+import { BangumiResourceAdapter } from './external-resources/BangumiResourceAdapter'
 import type {
   ProviderResourceAdapter,
   ProviderDataMetric,
@@ -46,10 +47,10 @@ export class ExternalResourcesService {
   private readonly adapters: Partial<Record<ProviderKey, ProviderResourceAdapter>>
 
   constructor(db: Pool) {
-    // active provider 注册 adapter；planned 无 adapter → 分派落 PLANNED_MARKER
-    // （bangumi adapter 在 CHG-BNG-RES-API-3B 注册 + 同步 registry status='active'）
+    // active provider 注册 adapter；planned（imdb/tmdb）无 adapter → 分派落 PLANNED_MARKER
     this.adapters = {
       douban: new DoubanResourceAdapter(db),
+      bangumi: new BangumiResourceAdapter(db),
     }
   }
 

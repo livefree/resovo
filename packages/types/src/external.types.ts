@@ -132,9 +132,11 @@ export const EXTERNAL_PROVIDERS: readonly ExternalProvider[] = [
     capabilities: ['detail', 'search', 'collection', 'comments', 'celebrity'],
     status: 'active',
   },
-  // 以下 planned：acquisition 反映已知形态（Bangumi/IMDB/TMDb 提供公共 API），
-  // capabilities 留空待调研后填（用户定调：Bangumi 需 API 能力全面调研后确定）。
-  { key: 'bangumi', label: 'Bangumi', acquisition: ['api'], capabilities: [], status: 'planned' },
+  // bangumi（ADR-189）：active 全量接入。capabilities 中 collection/schedule 是**项目侧派生语义**
+  // （Bangumi 无原生合集端点 → collection 由 search sort=heat/rank 派生、schedule 由 GET /calendar 派生，
+  // 非 provider 原生能力，ADR-189 D-189-1 / arch M2）；detail/search/celebrity 为已实装能力（ADR-161）。
+  { key: 'bangumi', label: 'Bangumi', acquisition: ['api'], capabilities: ['detail', 'search', 'celebrity', 'collection', 'schedule'], status: 'active' },
+  // 以下 planned：acquisition 反映已知形态（IMDB/TMDb 提供公共 API），capabilities 留空待调研后填。
   { key: 'imdb', label: 'IMDB', acquisition: ['api'], capabilities: [], status: 'planned' },
   { key: 'tmdb', label: 'TMDb', acquisition: ['api'], capabilities: [], status: 'planned' },
 ]

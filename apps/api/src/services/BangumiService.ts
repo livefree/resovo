@@ -18,7 +18,7 @@ import type { CatalogEpisodeInput } from '@/api/db/queries/catalogEpisodes'
 import * as catalogCharacterQueries from '@/api/db/queries/catalogCharacters'
 import type { CatalogCharacterInput } from '@/api/db/queries/catalogCharacters'
 import * as videosQueries from '@/api/db/queries/videos'
-import * as systemSettingsQueries from '@/api/db/queries/systemSettings'
+import { loadBangumiClientConfig } from './bangumi-config'
 import { getSubject, getEpisodes, getCharacters, searchSubjects, searchSubjectsStrict, isBangumiApiConfigured } from '@/api/lib/bangumi'
 import type { BangumiClientConfig } from '@/api/lib/bangumi'
 import type { FetchSource } from '@/api/db/queries/external-fetch-log'
@@ -98,12 +98,7 @@ export class BangumiService {
   private async getBangumiConfig(): Promise<BangumiClientConfig> {
     const now = Date.now()
     if (bangumiConfigCache && bangumiConfigCache.expiresAt > now) return bangumiConfigCache.value
-    const raw = await systemSettingsQueries.getAllSettings(this.db)
-    const cfg: BangumiClientConfig = {}
-    if (raw.bangumi_api_token) cfg.token = raw.bangumi_api_token
-    if (raw.bangumi_user_agent) cfg.userAgent = raw.bangumi_user_agent
-    const t = Number(raw.bangumi_api_timeout_ms)
-    if (Number.isFinite(t) && t > 0) cfg.timeoutMs = t
+    const cfg = await loadBangumiClientConfig(this.db) // ADR-168 共享解析（去重，BangumiResourceAdapter 同源）
     bangumiConfigCache = { value: cfg, expiresAt: now + BANGUMI_CONFIG_TTL_MS }
     return cfg
   }

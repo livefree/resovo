@@ -516,6 +516,49 @@ export async function searchDoubanEntries(
   }
 }
 
+/** Bangumi dump 条目搜索命中（ADR-189 D-189-4：治理统一搜索 offline 路径）。 */
+export interface BangumiEntrySearchHit {
+  bangumiId: string
+  title: string
+  year: number | null
+  rating: number | null
+  coverUrl: string | null
+}
+
+/** 搜索 external_data.bangumi_entries（title_cn/title_jp/title_normalized ILIKE；按 rank 升序）。 */
+export async function searchBangumiEntries(
+  db: Pool,
+  q: string,
+  limit: number,
+  offset: number,
+): Promise<{ rows: BangumiEntrySearchHit[]; total: number }> {
+  const pattern = `%${q.replace(/[\\%_]/g, '\\$&')}%`
+  const where = `WHERE title_cn ILIKE $1 OR title_jp ILIKE $1 OR title_normalized ILIKE $1`
+  const totalRes = await db.query<{ count: string }>(
+    `SELECT COUNT(*)::TEXT AS count FROM external_data.bangumi_entries ${where}`,
+    [pattern],
+  )
+  const rowsRes = await db.query<{
+    bangumi_id: string | number; title_cn: string | null; title_jp: string | null; year: number | null; rating: string | null; cover_url: string | null
+  }>(
+    `SELECT bangumi_id, title_cn, title_jp, year, rating, cover_url
+       FROM external_data.bangumi_entries ${where}
+      ORDER BY rank ASC NULLS LAST, year DESC NULLS LAST
+      LIMIT $2 OFFSET $3`,
+    [pattern, limit, offset],
+  )
+  return {
+    rows: rowsRes.rows.map((r) => ({
+      bangumiId: String(r.bangumi_id), // bangumi_entries.bangumi_id 为 INT，统一 String（对齐 externalId: string 契约）
+      title: r.title_cn || r.title_jp || '',
+      year: r.year,
+      rating: r.rating ? Number(r.rating) : null,
+      coverUrl: r.cover_url,
+    })),
+    total: Number.parseInt(totalRes.rows[0]?.count ?? '0', 10),
+  }
+}
+
 /**
  * META-07: 列出一个视频的所有外部关联记录（按创建时间倒序）
  */

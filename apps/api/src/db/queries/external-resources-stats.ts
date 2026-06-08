@@ -27,6 +27,31 @@ export async function getDoubanDataScale(db: Pool): Promise<DoubanDataScale> {
   }
 }
 
+export interface BangumiDataScale {
+  /** 派生合集切片条目总数（bangumi_collection_items） */
+  collectionItems: number
+  /** 离线 dump 元数据条目总数（bangumi_entries） */
+  dumpEntries: number
+  /** dump 最近重导时间（bangumi_entries MAX(updated_at)；ADR-189 D-189-6 dump 可观测，无行→null） */
+  dumpRefreshedAt: string | null
+}
+
+/** Bangumi 数据规模：派生合集 + dump 行数 + dump 重导时间（概览 dataScale + freshness，ADR-189 D-189-6）。 */
+export async function getBangumiDataScale(db: Pool): Promise<BangumiDataScale> {
+  const result = await db.query<{ collection_items: string; dump_entries: string; dump_refreshed_at: string | null }>(
+    `SELECT
+       (SELECT COUNT(*) FROM external_data.bangumi_collection_items)::TEXT AS collection_items,
+       (SELECT COUNT(*) FROM external_data.bangumi_entries)::TEXT AS dump_entries,
+       (SELECT MAX(updated_at)::TEXT FROM external_data.bangumi_entries) AS dump_refreshed_at`,
+  )
+  const row = result.rows[0]
+  return {
+    collectionItems: Number.parseInt(row?.collection_items ?? '0', 10),
+    dumpEntries: Number.parseInt(row?.dump_entries ?? '0', 10),
+    dumpRefreshedAt: row?.dump_refreshed_at ?? null,
+  }
+}
+
 // ── 富集匹配分布（enrichStats）────────────────────────────────────────
 
 export interface MatchBucket {
