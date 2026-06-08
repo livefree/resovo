@@ -8,13 +8,13 @@
  * 抓的是什么、离线还是在线」的逐条诉求（概览给聚合，本 tab 给原始流水可下钻）。
  *
  * 表格走 server-next 真源范式：admin-ui DataTable 一体化 + useTableQuery（URL namespace
- * 'act' 与外层 ?provider=&tab= 互不冲突）。过滤器为页面级本地 state（不入 snapshot.filters，
- * 仿 VideoListClient 快捷筛选范式），切换即回第 1 页。
+ * 'act' 与外层 ?provider=&tab= 互不冲突）。operation/method/status 走**原生列过滤**
+ * （列头 ⋯ 菜单 enum 多选 → snapshot.filters → getEnumFirst 映射单值后端，对齐 VideoColumns/
+ * buildVideoFilter 标杆）；列宽可调（enableColumnResizing）；过滤变更回第 1 页。
  */
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   DataTable,
-  AdminSelect,
   Pill,
   EmptyState,
   ErrorState,
@@ -23,6 +23,8 @@ import {
   type ColumnDescriptor,
   type TableColumn,
   type TableQueryPatch,
+  type TableQuerySnapshot,
+  type FilterValue,
   type PillVariant,
 } from '@resovo/admin-ui'
 import type { ProviderKey } from '@resovo/types'
@@ -64,6 +66,16 @@ function toOptions(map: Readonly<Record<string, string>>): { value: string; labe
   return Object.entries(map).map(([value, label]) => ({ value, label }))
 }
 
+const OPERATION_OPTIONS = toOptions(OPERATION_LABELS)
+const METHOD_OPTIONS = toOptions(METHOD_LABELS)
+const STATUS_OPTIONS = toOptions(STATUS_LABELS)
+
+/** enum 列过滤取首值（单值后端入参，对齐 VideoFilterFields.getEnumFirst 标杆）。 */
+function getEnumFirst(filters: TableQuerySnapshot['filters'], key: string): string | undefined {
+  const v: FilterValue | undefined = filters.get(key)
+  return v?.kind === 'enum' ? v.value[0] : undefined
+}
+
 const TARGET_CELL_STYLE: React.CSSProperties = {
   display: 'inline-block',
   maxWidth: '260px',
@@ -75,36 +87,52 @@ const TARGET_CELL_STYLE: React.CSSProperties = {
   fontVariantNumeric: 'tabular-nums',
 }
 
-const FILTERS_ROW_STYLE: React.CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: '8px',
-  flexWrap: 'wrap',
-}
-
+// 列定义对齐 VideoColumns 范式：列宽可调（width+minWidth+enableResizing）；
+// operation/method/status 走原生 enum 列过滤（filterKind:'enum' + filterOptions → snapshot.filters，
+// 列 id 即后端过滤 key，无需 filterFieldName）；其余列只读展示（filterable:false / 未接线 sort 禁用）。
 function buildColumns(): readonly TableColumn<FetchLogRow>[] {
   return [
     {
-      id: 'createdAt', header: '时间', filterable: false, accessor: (r) => r.createdAt,
+      id: 'createdAt', header: '时间', accessor: (r) => r.createdAt,
+      width: 150, minWidth: 130, enableResizing: true, enableSorting: false, filterable: false,
       cell: ({ row }) => <span style={{ fontVariantNumeric: 'tabular-nums', color: 'var(--fg-muted)' }}>{formatDateTime(row.createdAt)}</span>,
     },
-    { id: 'operation', header: '内容类型', filterable: false, accessor: (r) => r.operation, cell: ({ row }) => labelOf(OPERATION_LABELS, row.operation) },
-    { id: 'method', header: '方式', filterable: false, accessor: (r) => r.method, cell: ({ row }) => labelOf(METHOD_LABELS, row.method) },
     {
-      id: 'status', header: '状态', filterable: false, accessor: (r) => r.status,
+      id: 'operation', header: '内容类型', accessor: (r) => r.operation,
+      width: 120, minWidth: 100, enableResizing: true, enableSorting: false,
+      filterable: true, filterKind: 'enum', filterOptions: OPERATION_OPTIONS,
+      cell: ({ row }) => labelOf(OPERATION_LABELS, row.operation),
+    },
+    {
+      id: 'method', header: '方式', accessor: (r) => r.method,
+      width: 110, minWidth: 90, enableResizing: true, enableSorting: false,
+      filterable: true, filterKind: 'enum', filterOptions: METHOD_OPTIONS,
+      cell: ({ row }) => labelOf(METHOD_LABELS, row.method),
+    },
+    {
+      id: 'status', header: '状态', accessor: (r) => r.status,
+      width: 90, minWidth: 80, enableResizing: true, enableSorting: false,
+      filterable: true, filterKind: 'enum', filterOptions: STATUS_OPTIONS,
       cell: ({ row }) => <Pill variant={STATUS_PILL[row.status] ?? 'neutral'}>{labelOf(STATUS_LABELS, row.status)}</Pill>,
     },
-    { id: 'source', header: '触发方', filterable: false, accessor: (r) => r.source, cell: ({ row }) => labelOf(SOURCE_LABELS, row.source) },
     {
-      id: 'target', header: '目标', filterable: false, accessor: (r) => r.target,
+      id: 'source', header: '触发方', accessor: (r) => r.source,
+      width: 110, minWidth: 90, enableResizing: true, enableSorting: false, filterable: false,
+      cell: ({ row }) => labelOf(SOURCE_LABELS, row.source),
+    },
+    {
+      id: 'target', header: '目标', accessor: (r) => r.target,
+      width: 260, minWidth: 160, enableResizing: true, enableSorting: false, filterable: false,
       cell: ({ row }) => <span style={TARGET_CELL_STYLE} title={row.target ?? undefined}>{row.target ?? '—'}</span>,
     },
     {
-      id: 'itemCount', header: '条数', filterable: false, accessor: (r) => r.itemCount,
+      id: 'itemCount', header: '条数', accessor: (r) => r.itemCount,
+      width: 80, minWidth: 64, enableResizing: true, enableSorting: false, filterable: false,
       cell: ({ row }) => <span style={{ fontVariantNumeric: 'tabular-nums' }}>{row.itemCount}</span>,
     },
     {
-      id: 'durationMs', header: '耗时', filterable: false, accessor: (r) => r.durationMs,
+      id: 'durationMs', header: '耗时', accessor: (r) => r.durationMs,
+      width: 90, minWidth: 72, enableResizing: true, enableSorting: false, filterable: false,
       cell: ({ row }) => <span style={{ fontVariantNumeric: 'tabular-nums', color: 'var(--fg-muted)' }}>{row.durationMs == null ? '—' : `${row.durationMs}ms`}</span>,
     },
   ]
@@ -120,10 +148,6 @@ export function ActivityTab({ provider }: { provider: ProviderKey }) {
     columns: COLUMN_DESCRIPTORS,
   })
 
-  const [operation, setOperation] = useState<string | null>(null)
-  const [method, setMethod] = useState<string | null>(null)
-  const [status, setStatus] = useState<string | null>(null)
-
   const [rows, setRows] = useState<FetchLogRow[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -134,6 +158,10 @@ export function ActivityTab({ provider }: { provider: ProviderKey }) {
 
   const page = snapshot.pagination.page
   const pageSize = snapshot.pagination.pageSize
+  // 原生列过滤 → snapshot.filters（列 id 即后端 key）；enum 取首值映射单值后端
+  const operation = getEnumFirst(snapshot.filters, 'operation')
+  const method = getEnumFirst(snapshot.filters, 'method')
+  const status = getEnumFirst(snapshot.filters, 'status')
 
   useEffect(() => {
     let cancelled = false
@@ -159,48 +187,8 @@ export function ActivityTab({ provider }: { provider: ProviderKey }) {
     return () => { cancelled = true }
   }, [provider, operation, method, status, page, pageSize, retryKey])
 
-  const resetToFirstPage = useCallback(() => {
-    if (snapshot.pagination.page !== 1) patch({ pagination: { page: 1, pageSize } })
-  }, [patch, snapshot.pagination.page, pageSize])
-
-  const onFilter = useCallback((setter: (v: string | null) => void) => (next: string | null) => {
-    setter(next)
-    resetToFirstPage()
-  }, [resetToFirstPage])
-
+  // useTableQuery.patch 内置「filter/sort 变更回第 1 页」，直接透传（对齐 VideoListClient 标杆）
   const handlePatch = useCallback((next: TableQueryPatch) => patch(next), [patch])
-
-  const filtersNode = (
-    <div style={FILTERS_ROW_STYLE} data-activity-filters>
-      <AdminSelect
-        options={toOptions(OPERATION_LABELS)}
-        value={operation}
-        onChange={onFilter(setOperation)}
-        placeholder="内容类型"
-        size="sm"
-        aria-label="按内容类型过滤"
-        data-testid="ext-activity-filter-operation"
-      />
-      <AdminSelect
-        options={toOptions(METHOD_LABELS)}
-        value={method}
-        onChange={onFilter(setMethod)}
-        placeholder="方式"
-        size="sm"
-        aria-label="按方式过滤"
-        data-testid="ext-activity-filter-method"
-      />
-      <AdminSelect
-        options={toOptions(STATUS_LABELS)}
-        value={status}
-        onChange={onFilter(setStatus)}
-        placeholder="状态"
-        size="sm"
-        aria-label="按状态过滤"
-        data-testid="ext-activity-filter-status"
-      />
-    </div>
-  )
 
   if (loading && rows.length === 0) {
     return <LoadingState variant="skeleton" />
@@ -219,9 +207,10 @@ export function ActivityTab({ provider }: { provider: ProviderKey }) {
       onQueryChange={handlePatch}
       totalRows={total}
       loading={loading}
+      enableColumnResizing
       emptyState={<EmptyState title="暂无采集记录" description="调整过滤条件或等待 worker 下次采集" />}
       data-testid="ext-activity-table"
-      toolbar={{ trailing: filtersNode, hideFilterChips: true }}
+      toolbar={{ hideFilterChips: true }}
       pagination={{ pageSizeOptions: [20, 50, 100] }}
     />
   )

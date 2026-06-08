@@ -64,23 +64,32 @@ const BUSY_BANNER_STYLE: React.CSSProperties = {
   fontSize: 'var(--font-size-xs)',
 }
 
+// 搜索结果列：列宽可调 + 列设置；结果由关键词检索决定，不挂列过滤/列排序（server 模式未接线，避免 no-op）。
 function buildColumns(): readonly TableColumn<SearchHit>[] {
   return [
     {
-      id: 'source', header: '来源', filterable: false, accessor: (r) => r.source,
+      id: 'source', header: '来源', accessor: (r) => r.source,
+      width: 80, minWidth: 64, enableResizing: true, enableSorting: false, filterable: false,
       cell: ({ row }) => <Pill variant={row.source === 'online' ? 'info' : 'neutral'}>{row.source === 'online' ? '在线' : '离线'}</Pill>,
     },
-    { id: 'title', header: '标题', filterable: false, accessor: (r) => r.title, cell: ({ row }) => <span style={{ color: 'var(--fg-default)' }}>{row.title}</span> },
     {
-      id: 'year', header: '年份', filterable: false, accessor: (r) => r.year,
+      id: 'title', header: '标题', accessor: (r) => r.title,
+      minWidth: 220, enableResizing: true, enableSorting: false, filterable: false,
+      cell: ({ row }) => <span style={{ color: 'var(--fg-default)' }}>{row.title}</span>,
+    },
+    {
+      id: 'year', header: '年份', accessor: (r) => r.year,
+      width: 90, minWidth: 80, enableResizing: true, enableSorting: false, filterable: false,
       cell: ({ row }) => <span style={{ fontVariantNumeric: 'tabular-nums' }}>{row.year ?? '—'}</span>,
     },
     {
-      id: 'rating', header: '评分', filterable: false, accessor: (r) => r.rating,
+      id: 'rating', header: '评分', accessor: (r) => r.rating,
+      width: 90, minWidth: 80, enableResizing: true, enableSorting: false, filterable: false,
       cell: ({ row }) => <span style={{ fontVariantNumeric: 'tabular-nums', color: row.rating ? 'var(--state-success-fg)' : 'var(--fg-muted)' }}>{row.rating == null ? '—' : row.rating.toFixed(1)}</span>,
     },
     {
-      id: 'externalId', header: '外部 ID', filterable: false, accessor: (r) => r.externalId,
+      id: 'externalId', header: '外部 ID', accessor: (r) => r.externalId,
+      width: 120, minWidth: 100, enableResizing: true, enableSorting: false, filterable: false,
       cell: ({ row }) => <span style={{ fontVariantNumeric: 'tabular-nums', color: 'var(--fg-muted)' }}>{row.externalId}</span>,
     },
   ]
@@ -199,6 +208,7 @@ export function SearchTab({ provider }: { provider: ProviderKey }) {
         onQueryChange={handlePatch}
         totalRows={total}
         loading={loading}
+        enableColumnResizing
         emptyState={emptyNode}
         data-testid="ext-search-table"
         toolbar={{ search: searchNode, trailing: liveToggleNode, hideFilterChips: true }}

@@ -244,15 +244,29 @@ describe('OverviewTab', () => {
 // ── ActivityTab ───────────────────────────────────────────────────
 
 describe('ActivityTab', () => {
-  it('渲染 3 过滤器 + 流水行（中文标签 + 耗时）', async () => {
-    render(<ActivityTab provider="douban" />)
-    expect(await screen.findByTestId('ext-activity-filter-operation')).not.toBeNull()
-    expect(screen.getByTestId('ext-activity-filter-method')).not.toBeNull()
-    expect(screen.getByTestId('ext-activity-filter-status')).not.toBeNull()
-    // 行：operation 中文 + status 中文 + 耗时
+  it('规范：设置所在行（表格设置 ⋯）+ 列宽可调（resize handle）+ 流水行（中文标签 + 耗时）', async () => {
+    const { container } = render(<ActivityTab provider="douban" />)
+    // 行：operation 中文 + 耗时
     expect(await screen.findByText('视频基础信息')).not.toBeNull()
     expect(screen.getByText('530ms')).not.toBeNull()
+    // 设置所在行：matrix ⋯ 触发器（aria-label 表格设置）
+    expect(screen.getByLabelText('表格设置')).not.toBeNull()
+    // 列宽设置：enableColumnResizing → resize handle 渲染
+    expect(container.querySelector('[data-dt-resize-handle]')).not.toBeNull()
     expect(mockFetchActivity).toHaveBeenCalled()
+  })
+
+  it('规范：operation/method/status 走原生列过滤（矩阵 enum filter 格），旧自定义下拉移除', async () => {
+    render(<ActivityTab provider="douban" />)
+    await screen.findByText('视频基础信息')
+    // 旧自定义 AdminSelect 过滤器已移除（不再"在表头加过滤而跳过列过滤"）
+    expect(screen.queryByTestId('ext-activity-filter-operation')).toBeNull()
+    // 打开矩阵设置 → 三列暴露原生 enum filter 格；只读列为 unsupported
+    fireEvent.click(screen.getByLabelText('表格设置'))
+    expect(await screen.findByTestId('matrix-filter-operation')).not.toBeNull()
+    expect(screen.getByTestId('matrix-filter-method')).not.toBeNull()
+    expect(screen.getByTestId('matrix-filter-status')).not.toBeNull()
+    expect(screen.getByTestId('matrix-filter-unsupported-createdAt')).not.toBeNull()
   })
 
   it('空流水 → EmptyState', async () => {
@@ -283,6 +297,14 @@ describe('CollectionsTab', () => {
     await waitFor(() =>
       expect(mockFetchCollections.mock.calls.some((c) => (c[1] as { collection?: string })?.collection === 'tv_hot')).toBe(true),
     )
+  })
+
+  it('规范：设置所在行（表格设置 ⋯，toolbar 不再 hidden）+ 列宽可调（resize handle）', async () => {
+    const { container } = render(<CollectionsTab provider="douban" />)
+    await screen.findByText('诺曼底72小时')
+    // 修复前 toolbar={{ hidden:true }} → 无 matrix 触发器；修复后设置行回归
+    expect(screen.getByLabelText('表格设置')).not.toBeNull()
+    expect(container.querySelector('[data-dt-resize-handle]')).not.toBeNull()
   })
 
   it('null（无条目）→ EmptyState', async () => {

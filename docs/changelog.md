@@ -2942,3 +2942,19 @@
   - `_client/CollectionsTab.tsx` — 每日放送 chip 标签加**本周真实日期**「周一 6/8」「周二 6/9」…（连续可读），数量改「**N 部**」与日期明确区分
 - **测试**：ExternalResources 视图 +3（calendar chip 周几+M/D+「N 部」/ calendarWeekday 映射 / thisWeekDateOf 7 连续日期 + 当日自洽）→ 25 全绿
 - **门禁**：typecheck/lint EXIT=0 / 视图 25 + test:changed 25 全过。
+
+## [CHG-EXT-RES-TABLE-SPEC] 外部资源 3 表格 DataTable 规范符合性修复（SEQ-20260607-05 收口后 · 用户实测直报）
+- **完成时间**：2026-06-08 ｜ **记录时间**：2026-06-08 08:30 ｜ **执行模型**：claude-opus-4-8 ｜ **子代理**：无
+- **现象**：用户实测外部资源页 3 张表（热门资源 / 资源搜索 / 采集记录）不符合 DataTable v2 规范——① 部分表缺「设置所在行」；② 全部缺列宽设置；③ 部分表在表头自定义过滤而跳过原生列过滤。
+- **根因定位**：
+  - ①「设置行」缺失 = `CollectionsTab` 传 `toolbar={{ hidden: true }}` → data-table.tsx:314/328 门控下 matrix ⋯ 触发器（`aria-label=表格设置`，集成 隐藏列/排序/清除过滤）不渲染。Search/Activity 已有 toolbar，触发器在。
+  - ② 三表 column 均无 `width/minWidth/enableResizing`、DataTable 无 `enableColumnResizing` → 走 legacy 网格、列宽不可调。
+  - ③ `ActivityTab` 用 `toolbar.trailing` 塞 3 个 `AdminSelect`（operation/method/status）+ 列全 `filterable:false` → **绕开原生列过滤系统**（非 VideoColumns 标杆）。
+- **修复**（前端 only，零后端/ADR 改动；单值后端经 `getEnumFirst` 取首值即合规，对齐 `buildVideoFilter` 标杆）：
+  - `_client/CollectionsTab.tsx` — 6 列补 `width/minWidth/enableResizing`（display 列 `enableSorting:false`，server sort 未接线避免 no-op）；DataTable 加 `enableColumnResizing`；`toolbar={{ hidden:true }}` → `{ hideFilterChips:true }`（恢复设置行；分类 chips 仍在表上方作合集切换器）
+  - `_client/SearchTab.tsx` — 5 列补列宽 + `enableColumnResizing`（toolbar 已含 search+live toggle，设置行已在）
+  - `_client/ActivityTab.tsx` — operation/method/status 改**原生 enum 列过滤**（`filterable+filterKind:'enum'+filterOptions`，列 id 即后端 key）；删 `AdminSelect`/`filtersNode`/页级 state；从 `snapshot.filters` 经本地 `getEnumFirst` 读 → `fetchActivity`（filter 变更回第 1 页由 `useTableQuery.patch` 内置）；8 列补列宽 + `enableColumnResizing`
+  - 测试 `ExternalResources.test.tsx` — ActivityTab 改：设置行 `表格设置` + resize handle + 矩阵 `matrix-filter-operation/method/status`（原生过滤）+ `matrix-filter-unsupported-createdAt`（只读列）+ 旧 `ext-activity-filter-*` testid 已移除；CollectionsTab 加 设置行+resize 断言
+- **沉淀决策**：`getEnumFirst`（3 行）当前 VideoFilterFields 私有 + 本卡 ActivityTab 本地各一份；admin-ui 未导出共享版，提取需改 VideoFilterFields（超本卡文件范围）→ 暂保本地，后续 admin-ui filter-helpers 卡统一沉淀。
+- **不影响**：Collections/Search 展示行为不变（仅加列宽+设置行）；ActivityTab 过滤能力等价（operation/method/status），且改为 URL 同步（`act.f.*`）+ 符合标杆。
+- **门禁**：typecheck/lint EXIT=0 / ExternalResources 27（+2 规范）+ test:changed 27 全过。

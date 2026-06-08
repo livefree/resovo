@@ -80,18 +80,23 @@ const CHIP_COUNT_STYLE: React.CSSProperties = {
 const TITLE_CELL_STYLE: React.CSSProperties = { display: 'flex', flexDirection: 'column', gap: '2px' }
 const ORIGINAL_TITLE_STYLE: React.CSSProperties = { fontSize: 'var(--font-size-xxs)', color: 'var(--fg-muted)' }
 
+// 合集为服务端预排序的策展榜单：列宽可调 + 列设置（隐藏列），但不挂排序（server sort 未接线，
+// 避免 no-op）/ 不挂列过滤（合集切换走表上方 chips）。对齐 VideoColumns 列宽范式（width+minWidth+enableResizing）。
 function buildColumns(): readonly TableColumn<CollectionItem>[] {
   return [
     {
-      id: 'rank', header: '排名', filterable: false, accessor: (r) => r.rank,
+      id: 'rank', header: '排名', accessor: (r) => r.rank,
+      width: 72, minWidth: 56, enableResizing: true, enableSorting: false, filterable: false,
       cell: ({ row }) => <span style={{ fontVariantNumeric: 'tabular-nums', color: 'var(--fg-muted)' }}>{row.rank + 1}</span>,
     },
     {
       id: 'cover', header: '封面', kind: 'media', accessor: (r) => r.coverUrl,
+      width: 72, minWidth: 56, enableResizing: true,
       cell: ({ row }) => <Thumb src={row.coverUrl} size="poster-sm" alt={row.title} />,
     },
     {
-      id: 'title', header: '标题', filterable: false, accessor: (r) => r.title,
+      id: 'title', header: '标题', accessor: (r) => r.title,
+      minWidth: 220, enableResizing: true, enableSorting: false, filterable: false,
       cell: ({ row }) => (
         <span style={TITLE_CELL_STYLE}>
           <span style={{ color: 'var(--fg-default)' }}>{row.title}</span>
@@ -100,15 +105,18 @@ function buildColumns(): readonly TableColumn<CollectionItem>[] {
       ),
     },
     {
-      id: 'year', header: '年份', filterable: false, accessor: (r) => r.year,
+      id: 'year', header: '年份', accessor: (r) => r.year,
+      width: 90, minWidth: 80, enableResizing: true, enableSorting: false, filterable: false,
       cell: ({ row }) => <span style={{ fontVariantNumeric: 'tabular-nums' }}>{row.year ?? '—'}</span>,
     },
     {
-      id: 'rating', header: '评分', filterable: false, accessor: (r) => r.rating,
+      id: 'rating', header: '评分', accessor: (r) => r.rating,
+      width: 90, minWidth: 80, enableResizing: true, enableSorting: false, filterable: false,
       cell: ({ row }) => <span style={{ fontVariantNumeric: 'tabular-nums', color: row.rating ? 'var(--state-success-fg)' : 'var(--fg-muted)' }}>{row.rating == null ? '—' : row.rating.toFixed(1)}</span>,
     },
     {
-      id: 'externalId', header: '外部 ID', filterable: false, accessor: (r) => r.externalId,
+      id: 'externalId', header: '外部 ID', accessor: (r) => r.externalId,
+      width: 120, minWidth: 100, enableResizing: true, enableSorting: false, filterable: false,
       cell: ({ row }) => <span style={{ fontVariantNumeric: 'tabular-nums', color: 'var(--fg-muted)' }}>{row.externalId}</span>,
     },
   ]
@@ -217,9 +225,10 @@ export function CollectionsTab({ provider }: { provider: ProviderKey }) {
         totalRows={total}
         loading={loading}
         density="poster"
+        enableColumnResizing
         emptyState={<EmptyState title="暂无热门资源" description="该分类暂无采集条目" />}
         data-testid="ext-collections-table"
-        toolbar={{ hidden: true }}
+        toolbar={{ hideFilterChips: true }}
         pagination={{ pageSizeOptions: [20, 50, 100] }}
       />
     </div>
