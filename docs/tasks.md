@@ -6,14 +6,14 @@
 
 ## 当前任务（单任务工作台：同时仅 1 个 🔄 进行中；完成即删卡，历史见 docs/changelog.md）
 
-### CHG-EXT-RES-API-B — 外部资源治理资源浏览端点（collections/search）
+### CHG-EXT-RES-UI-A — 外部资源治理页框架 + 观测 Tab
 - **状态**：🔄 进行中
-- **来源序列**：SEQ-20260607-04（卡 3-B）
+- **来源序列**：SEQ-20260607-04（卡 4-A）
 - **建议模型**：opus
 - **执行模型**：claude-opus-4-8
-- **子代理调用**：无（实施 ADR-188 D-188-5/D-188-6 既定授权）
-- **实际开始**：2026-06-07 19:50
-- **文件范围**：`apps/api/src/routes/admin/external-resources.ts`（加 collections + search 2 端点）、`apps/api/src/services/ExternalResourcesService.ts`（加 getCollections + unifiedSearch + live 并发1限流）、`apps/api/src/db/queries/externalData.ts`（dump 模糊搜索 query，D-188-6）、`tests/unit/...`（搜索/合集单测）
+- **子代理调用**：无（复用 admin-ui 既有组件，零新共享契约）
+- **实际开始**：2026-06-07 20:15
+- **文件范围**：`apps/server-next/src/lib/admin-nav.tsx`（采集中心加外部资源 item）、`apps/server-next/src/app/admin/external-resources/page.tsx` + `_client/ExternalResourcesClient.tsx`（provider Segment + tab 容器）+ `_client/OverviewTab.tsx` + `_client/ActivityTab.tsx`、`apps/server-next/src/lib/external-resources/api.ts`（apiClient 取数 + 类型）、`tests/unit/components/server-next/...`（视图单测）
 - **完成备注**：_（完成后填写）_
 
 ---

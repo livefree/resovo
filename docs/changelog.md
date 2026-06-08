@@ -2748,3 +2748,18 @@
   - `tests/unit/api/externalResourcesService.test.ts`（新建，5 例：getProviders active dataScale/planned null / getOverview 聚合 + planned 零查询 / getActivity 合并 + planned）+ `tests/unit/api/externalResourcesStats.test.ts`（新建，2 例：dataScale 双 COUNT / match 分桶 NULL→unknown）
 - **新增依赖**：无 ｜ **数据库变更**：无（消费既有表）
 - **注意事项**：① 富集「离线/在线」分布**由 UI 据 byMethod 派生**（match_method 值不强约束，service 返回原始分布更稳，ADR-188 D-188-3 同向）；② planned provider（bangumi/imdb/tmdb）所有 provider-scoped 端点零 DB 查询直接占位；③ **真实 DB e2e**：providers douban active items=1294/entries=140502 + 3 planned；overview collectionFreshness 16 合集 + enrich total 212（auto_matched 109/candidate 101/manual_confirmed 2）+ fetchStats 0（dev 无近期采集）；bangumi→planned；④ 门禁：**verify:endpoint-adr 224 路由对齐（+3）** / typecheck EXIT=0 / lint 5/5 / 新测 7 例 / test:changed 4 文件 20 全过。本条目不引用 D-188-5/6 字面量（端点契约完整 + dump 搜索 query 闭环待 API-B，防 verify-adr-d-numbers 误判）。
+
+## [CHG-EXT-RES-API-B] 外部资源治理资源浏览端点 collections/search（SEQ-20260607-04 卡 3-B / ADR-188 D-188-5 端点契约 5/5 全闭环 + D-188-6）
+- **完成时间**：2026-06-07
+- **记录时间**：2026-06-07 20:10
+- **执行模型**：claude-opus-4-8
+- **子代理**：无（实施 ADR-188 卡 1 §端点契约 + D-188-6 既定授权）
+- **修改文件**：
+  - `apps/api/src/routes/admin/external-resources.ts` — 加 2 端点：`GET :provider/collections`（collection?/limit/page）/ `:provider/search`（q 必填 / live? / limit/page）；路径逐字对齐 verify:endpoint-adr，鉴权/404/422/planned 占位同 API-A
+  - `apps/api/src/services/ExternalResourcesService.ts` — `getCollections`（items 分页 + 16 合集 summary 分类树）/ `unifiedSearch`（dump offline + `?live` online searchDoubanRich〔source=admin_search〕，**全局并发 1 限流**〔liveSearchInFlight；busy→liveError 降级返回 dump，非 429〕+ doubanId 去重）+ ResourceSearchHit/CollectionsResult/SearchResult 类型
+  - `apps/api/src/db/queries/externalData.ts` — `searchDoubanEntries`（**D-188-6 dump 模糊搜索归 queries 层**：title/title_normalized ILIKE + 通配符 % _ \\ 转义防注入 + douban_votes 热度倒序 + 分页）
+  - `apps/api/src/db/queries/douban-collections.ts` — `listCollectionItemsPaged`（可选 collection 过滤 + 跨合集分页）/ `listCollectionsSummary`（GROUP BY 合集分类计数）
+  - `tests/unit/api/externalResourcesService.test.ts`（+6 例：getCollections active/planned / unifiedSearch dump-only / live 去重 / **并发 1 限流 busy** / planned）+ `tests/unit/api/externalResourcesBrowse.test.ts`（新建 4 例：dump LIKE 转义 / 合集分页 collection 过滤·无过滤 / summary GROUP BY）
+- **新增依赖**：无 ｜ **数据库变更**：无（消费既有表）
+- **注意事项**：① `?live` 默认关（仅 dump，零外部请求）；live 受全局并发 1 限流（防管理员连点打爆豆瓣污染 worker 采集，D-188-5 ③）；live 抓取失败由 searchDoubanRich 内部降级 []（埋点记 status=fail source=admin_search，活动 Tab 可观测，liveError 仅用于 busy 限流态）；② **真实 DB e2e**：collections(movie_hot_gaia) total 330 + summary 16 合集（诺曼底72小时 2026 movie/trending rank=0）；search(流浪地球) dump offline 命中 1；bangumi→planned；③ 门禁：**verify:endpoint-adr 226 路由对齐（5/5 端点全实装）** / typecheck EXIT=0 / lint 5/5 / 新测 service+6·browse 4 / test:changed 26 文件 367 全过。
+- **卡 3 API 全收口**：API-A（providers/overview/activity 观测读）+ API-B（collections/search 资源浏览）。ADR-188 §端点契约 5/5 端点全实装 + ExternalResourcesService 聚合 + dump 搜索 query。下游卡 4 UI 消费。

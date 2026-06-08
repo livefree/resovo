@@ -29,6 +29,20 @@ const ActivityQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
 })
 
+const CollectionsQuerySchema = z.object({
+  collection: z.string().min(1).max(60).optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(50),
+  page: z.coerce.number().int().min(1).default(1),
+})
+
+const SearchQuerySchema = z.object({
+  q: z.string().min(1).max(100),
+  /** 在线实时开关：'1'/'true' 开（默认关，仅查 dump）。zod coerce.boolean 对 'false' 误判，故用字符串显式判定。 */
+  live: z.string().optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+  page: z.coerce.number().int().min(1).default(1),
+})
+
 /** 默认 since = 24h 前（D-188-5） */
 function defaultSince(): string {
   return new Date(Date.now() - 24 * 3600_000).toISOString()
@@ -87,5 +101,47 @@ export async function adminExternalResourcesRoutes(fastify: FastifyInstance) {
     })
     if (isPlanned(result)) return reply.send({ data: null, status: 'planned' })
     return reply.send({ data: result.rows, total: result.total })
+  })
+
+  // ── GET /admin/external-resources/:provider/collections ─────────
+  fastify.get('/admin/external-resources/:provider/collections', { preHandler: auth }, async (request, reply) => {
+    const params = ProviderParamSchema.safeParse(request.params)
+    if (!params.success) {
+      return reply.code(404).send({ error: { code: 'NOT_FOUND', message: '未知外部资源 provider', status: 404 } })
+    }
+    const query = CollectionsQuerySchema.safeParse(request.query)
+    if (!query.success) {
+      return reply.code(422).send({ error: { code: 'VALIDATION_ERROR', message: '参数错误', status: 422 } })
+    }
+    const { collection, limit, page } = query.data
+    const result = await service.getCollections(params.data.provider, {
+      ...(collection ? { collection } : {}),
+      limit,
+      offset: (page - 1) * limit,
+    })
+    if (isPlanned(result)) return reply.send({ data: null, status: 'planned' })
+    return reply.send({ data: result.items, total: result.total, summary: result.summary })
+  })
+
+  // ── GET /admin/external-resources/:provider/search ──────────────
+  fastify.get('/admin/external-resources/:provider/search', { preHandler: auth }, async (request, reply) => {
+    const params = ProviderParamSchema.safeParse(request.params)
+    if (!params.success) {
+      return reply.code(404).send({ error: { code: 'NOT_FOUND', message: '未知外部资源 provider', status: 404 } })
+    }
+    const query = SearchQuerySchema.safeParse(request.query)
+    if (!query.success) {
+      return reply.code(422).send({ error: { code: 'VALIDATION_ERROR', message: '参数错误', status: 422 } })
+    }
+    const { q, live, limit, page } = query.data
+    const result = await service.unifiedSearch(params.data.provider, {
+      q,
+      live: live === '1' || live === 'true',
+      limit,
+      offset: (page - 1) * limit,
+    })
+    if (isPlanned(result)) return reply.send({ data: null, status: 'planned' })
+    // live 限流（busy）降级返回 dump + liveError 标记（非 429 整体失败，ADR-188 D-188-5 ⑤）
+    return reply.send({ data: result.rows, total: result.total, ...(result.liveError ? { liveError: result.liveError } : {}) })
   })
 }

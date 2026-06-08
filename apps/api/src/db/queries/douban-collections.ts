@@ -235,6 +235,99 @@ export async function listCollectionItems(
   }))
 }
 
+// ── 治理浏览（ADR-188 D-188-5 热门资源 Tab）─────────────────────────────────────
+
+export interface CollectionBrowseRow {
+  collection: string
+  domain: string
+  category: string
+  doubanId: string
+  rank: number
+  title: string
+  originalTitle: string | null
+  year: number | null
+  ratingValue: number | null
+  coverUrl: string | null
+}
+
+interface DbBrowseRow {
+  collection: string
+  domain: string
+  category: string
+  douban_id: string
+  rank: number
+  title: string
+  original_title: string | null
+  year: number | null
+  rating_value: string | number | null
+  cover_url: string | null
+}
+
+/** 合集条目分页浏览（可选 collection 过滤；跨合集按 (collection, rank) 排序）。 */
+export async function listCollectionItemsPaged(
+  db: Pool,
+  opts: { collection?: string; limit: number; offset: number },
+): Promise<{ rows: CollectionBrowseRow[]; total: number }> {
+  const params: unknown[] = []
+  let where = ''
+  if (opts.collection) {
+    params.push(opts.collection)
+    where = `WHERE collection = $1`
+  }
+  const totalRes = await db.query<{ count: string }>(
+    `SELECT COUNT(*)::TEXT AS count FROM external_data.douban_collection_items ${where}`,
+    params,
+  )
+  const limitIdx = params.length + 1
+  const offsetIdx = params.length + 2
+  const rowsRes = await db.query<DbBrowseRow>(
+    `SELECT collection, domain, category, douban_id, rank, title, original_title,
+            year, rating_value, cover_url
+       FROM external_data.douban_collection_items ${where}
+      ORDER BY collection ASC, rank ASC
+      LIMIT $${limitIdx} OFFSET $${offsetIdx}`,
+    [...params, Math.min(Math.max(opts.limit, 1), 100), Math.max(opts.offset, 0)],
+  )
+  return {
+    rows: rowsRes.rows.map((r) => ({
+      collection: r.collection,
+      domain: r.domain,
+      category: r.category,
+      doubanId: r.douban_id,
+      rank: r.rank,
+      title: r.title,
+      originalTitle: r.original_title,
+      year: r.year,
+      ratingValue: r.rating_value == null ? null : Number(r.rating_value),
+      coverUrl: r.cover_url,
+    })),
+    total: Number.parseInt(totalRes.rows[0]?.count ?? '0', 10),
+  }
+}
+
+export interface CollectionSummaryRow {
+  collection: string
+  domain: string
+  category: string
+  count: number
+}
+
+/** 各合集条目数摘要（热门资源 Tab 分类树；按 domain/category/collection 排序）。 */
+export async function listCollectionsSummary(db: Pool): Promise<CollectionSummaryRow[]> {
+  const res = await db.query<{ collection: string; domain: string; category: string; count: string }>(
+    `SELECT collection, domain, category, COUNT(*)::TEXT AS count
+       FROM external_data.douban_collection_items
+      GROUP BY collection, domain, category
+      ORDER BY domain ASC, category ASC, collection ASC`,
+  )
+  return res.rows.map((r) => ({
+    collection: r.collection,
+    domain: r.domain,
+    category: r.category,
+    count: Number.parseInt(r.count, 10),
+  }))
+}
+
 // ── 辅助 ────────────────────────────────────────────────────────────────────────
 
 /** 豆瓣 year 为 string（可能 ''/非法）→ INT 列；非法返回 null */

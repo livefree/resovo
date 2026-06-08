@@ -470,6 +470,53 @@ export async function findDoubanEntryById(
 }
 
 /**
+ * ADR-188 D-188-6：后台统一搜索的 dump 路径——豆瓣离线 dump 模糊匹配 + 分页。
+ * 既有 findDoubanByTitleNorm 仅精确 + 限 5，不可复用；此处面向后台浏览搜索。
+ * title / title_normalized ILIKE（转义 % _ \ 防 LIKE 通配注入）；按 douban_votes 热度倒序。
+ */
+export interface DoubanEntrySearchHit {
+  doubanId: string
+  title: string
+  year: number | null
+  rating: number | null
+  coverUrl: string | null
+}
+
+export async function searchDoubanEntries(
+  db: Pool,
+  q: string,
+  limit: number,
+  offset: number,
+): Promise<{ rows: DoubanEntrySearchHit[]; total: number }> {
+  const pattern = `%${q.replace(/[\\%_]/g, '\\$&')}%`
+  const totalRes = await db.query<{ count: string }>(
+    `SELECT COUNT(*)::TEXT AS count FROM external_data.douban_entries
+      WHERE title ILIKE $1 OR title_normalized ILIKE $1`,
+    [pattern],
+  )
+  const rowsRes = await db.query<{
+    douban_id: string; title: string; year: number | null; rating: string | null; cover_url: string | null
+  }>(
+    `SELECT douban_id, title, year, rating, cover_url
+       FROM external_data.douban_entries
+      WHERE title ILIKE $1 OR title_normalized ILIKE $1
+      ORDER BY douban_votes DESC NULLS LAST, year DESC NULLS LAST
+      LIMIT $2 OFFSET $3`,
+    [pattern, limit, offset],
+  )
+  return {
+    rows: rowsRes.rows.map((r) => ({
+      doubanId: r.douban_id,
+      title: r.title,
+      year: r.year,
+      rating: r.rating ? Number(r.rating) : null,
+      coverUrl: r.cover_url,
+    })),
+    total: Number.parseInt(totalRes.rows[0]?.count ?? '0', 10),
+  }
+}
+
+/**
  * META-07: 列出一个视频的所有外部关联记录（按创建时间倒序）
  */
 export async function listVideoExternalRefs(

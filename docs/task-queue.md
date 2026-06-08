@@ -1495,7 +1495,7 @@
 
 ## [SEQ-20260607-04] EXT-RES-GOV — 外部资源治理框架 v1（豆瓣首接入 · provider 可扩展）
 
-- **状态**：🔄 进行中（卡 1 ADR ✅ / 卡 2 STORE A·B·C ✅ / 卡 3-A API-A ✅ / 进行卡 3-B API-B）
+- **状态**：🔄 进行中（卡 1 ADR ✅ / 卡 2 STORE A·B·C ✅ / 卡 3 API A·B ✅ / 进行卡 4 UI）
 - **创建时间**：2026-06-07 17:30
 - **目标**：搭 provider 无关的「外部资源治理」后台框架——采集观测（worker 抓了什么 / 成功否 / 内容类型 / 离线 vs 在线 / API 用量）+ 热门资源分类展示 + 统一资源搜索 + 富集统计；豆瓣作首个接入 provider 全量打通，Bangumi/IMDB/TMDb 占位待后续。
 - **用户定调（2026-06-07）**：① 导航落位采集中心（与采集控制并列，分组不更名）② provider 切换框架 + 4 Tab ③ 采集观测埋点（provider 无关操作日志，非窄口径 API 计数）④ 资源搜索统一（离线 dump + 在线实时）。本期搭框架 + 豆瓣接入；深度治理迭代与 Bangumi 接入框架搭好后另起。
@@ -1528,13 +1528,18 @@
      - 建议模型：opus（新 admin route → ADR-188 §端点契约覆盖 + MUST-8）
      - 依赖：CHG-EXT-RES-STORE ✅
      - 完成备注：实施 ADR-188 §端点契约前 3 端点（D-188-5 部分，完整闭环待 API-B）。`ExternalResourcesService`（Route→Service→queries 聚合：getProviders〔registry + douban dataScale〕/ getOverview〔fetchStats+enrichStats+collectionFreshness+dataScale 并发 4 源〕/ getActivity〔queryFetchLog 过滤分页〕；planned provider → PLANNED_MARKER）+ queries `external-resources-stats.ts`（getDoubanDataScale 双 COUNT / aggregateExternalRefMatch byStatus·byMethod，NULL→(unknown)）+ `listAllCollectionSyncState`（douban-collections）+ routes 3 端点（路径逐字 :provider，鉴权 admin，planned→200+status:planned，无效 provider→404，校验→422）+ server.ts 注册（/v1 prefix）。**真实 DB e2e**：providers douban active items=1294/entries=140502 + 3 planned；overview collectionFreshness 16 合集 + enrich total 212（auto 109/candidate 101/manual 2）；bangumi→planned。门禁：verify:endpoint-adr 224 路由对齐（+3）/ typecheck/lint 绿 / 新测 7 例 / test:changed 4 文件 20 全过。执行模型: claude-opus-4-8；子代理: 无。
-   - **3-B · CHG-EXT-RES-API-B** — 资源浏览端点：`:provider/collections`（合集分类）+ `:provider/search`（统一搜索 dump + `?live` 在线，5 项契约）+ dump 模糊搜索 query 归 externalData.ts（D-188-6）+ live 并发 1 限流 + 单测（状态：⬜ 待开始）
+   - **3-B · CHG-EXT-RES-API-B** — 资源浏览端点：`:provider/collections` + `:provider/search`（统一搜索 dump + `?live` 在线）（状态：✅ 已完成 2026-06-07 20:10）
      - 建议模型：opus（新 admin route + live 抓取限流/埋点）
-     - 依赖：CHG-EXT-RES-API-A
+     - 依赖：CHG-EXT-RES-API-A ✅
+     - 完成备注：实施 ADR-188 **D-188-5（端点契约 5/5 全闭环）+ D-188-6**。collections 端点（listCollectionItemsPaged 可选 collection 过滤分页 + listCollectionsSummary 16 合集分类树）+ search 端点（统一搜索：searchDoubanEntries dump〔LIKE 通配转义防注入 + douban_votes 热度排序〕offline + `?live` 在线 searchDoubanRich source=admin_search，**全局并发 1 限流**〔busy→liveError 降级返回 dump 非 429〕+ doubanId 去重）。dump 搜索 query 归 externalData.ts（D-188-6 layering）。**真实 DB e2e**：collections(movie_hot_gaia) total 330 + summary 16 合集；search(流浪地球) dump 命中 offline 1；bangumi→planned。门禁：verify:endpoint-adr 226 路由对齐（5/5 端点）/ typecheck/lint 绿 / 新测 service+11·browse 4 / test:changed 26 文件 367 全过。执行模型: claude-opus-4-8；子代理: 无。
 
-4. **CHG-EXT-RES-UI** — 前端治理页（采集中心 nav + provider Segment + 4 Tab，复用 admin-ui 零新共享组件）（状态：⬜ 待开始）
-   - 建议模型：opus/sonnet
-   - 依赖：CHG-EXT-RES-API
+4. **CHG-EXT-RES-UI**（拆 -A/-B：nav + shell + api client + 4 Tab ~7 项超原子上限；复用 admin-ui 零新共享组件）
+   - **4-A · CHG-EXT-RES-UI-A** — 框架 + 观测 Tab：采集中心 nav 加「外部资源」+ `/admin/external-resources` page + ExternalResourcesClient（provider Segment + tab 容器 URL `?provider=&tab=`）+ api client（lib/external-resources/api.ts）+ 概览 Tab（KpiCard：数据规模/采集用量/成功率/离线vs在线/合集新鲜度）+ 采集与富集记录 Tab（fetch_log DataTable + 富集 breakdown）（状态：🔄 进行中）
+     - 建议模型：opus/sonnet（复用 admin-ui，零新共享组件）
+     - 依赖：CHG-EXT-RES-API ✅
+   - **4-B · CHG-EXT-RES-UI-B** — 浏览 Tab：热门资源 Tab（CollectionsTab DataTable per category）+ 资源搜索 Tab（SearchTab DataTableSearchInput + 结果 + 在线开关）+ admin 域 e2e（状态：⬜ 待开始）
+     - 建议模型：opus/sonnet
+     - 依赖：CHG-EXT-RES-UI-A
 
 ### 后续卡登记（本期不做）
 - **CHG-DOUBAN-HOT-WIRE**（首页实时热门展示接线）：待用户按接口定展示口径另起；仍独立于本治理框架，ADR-183 首页链不在本序列。
