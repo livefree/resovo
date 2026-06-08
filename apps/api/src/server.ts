@@ -43,6 +43,8 @@ import { registerHomeAutofillWorker } from '@/api/workers/homeAutofillWorker'
 import { registerHomeAutofillScheduler } from '@/api/workers/homeAutofillScheduler'
 import { registerDoubanCollectionsWorker } from '@/api/workers/doubanCollectionsWorker'
 import { registerDoubanCollectionsScheduler } from '@/api/workers/doubanCollectionsScheduler'
+import { registerBangumiCollectionsWorker } from '@/api/workers/bangumiCollectionsWorker'
+import { registerBangumiCollectionsScheduler } from '@/api/workers/bangumiCollectionsScheduler'
 import { adminStagingRoutes } from '@/api/routes/admin/staging'
 import { adminModerationRoutes } from '@/api/routes/admin/moderation'
 import { adminReviewLabelsRoutes } from '@/api/routes/admin/reviewLabels'
@@ -218,6 +220,8 @@ async function start() {
   registerHomeAutofillWorker()
   // ADR-187 D-187-8：豆瓣热门合集采集（消费者，独立队列隔离背压）
   registerDoubanCollectionsWorker()
+  // ADR-189 D-189-2：Bangumi 派生合集采集（消费者，独立队列隔离背压）
+  registerBangumiCollectionsWorker()
 
   const schedulerEnabled = process.env.CRAWLER_SCHEDULER_ENABLED === 'true'
   if (schedulerEnabled) {
@@ -249,6 +253,14 @@ async function start() {
     registerDoubanCollectionsScheduler()
   } else {
     fastify.log.info({ worker: 'douban-collections-scheduler' }, 'disabled (DOUBAN_COLLECTIONS_SCHEDULER_ENABLED=false)')
+  }
+
+  // ADR-189 D-189-2：Bangumi 派生合集采集 6h 定时刷新（opt-out 同 douban 范式）
+  const bangumiCollectionsSchedulerEnabled = process.env.BANGUMI_COLLECTIONS_SCHEDULER_ENABLED !== 'false'
+  if (bangumiCollectionsSchedulerEnabled) {
+    registerBangumiCollectionsScheduler()
+  } else {
+    fastify.log.info({ worker: 'bangumi-collections-scheduler' }, 'disabled (BANGUMI_COLLECTIONS_SCHEDULER_ENABLED=false)')
   }
 
   // 链接存活定时扫描：每 24h 将所有活跃 sources 批量入队 verify-queue

@@ -122,6 +122,21 @@ export const doubanCollectionsQueue = new Bull('douban-collections-queue', {
   },
 })
 
+/**
+ * Bangumi 派生合集采集队列（ADR-189 D-189-2）。
+ * 同 douban-collections 隔离范式：refresh job 长任务（trending/ranking 分页 + calendar + 礼貌延时）
+ * 不并入 maintenanceQueue；固定 jobId `refresh-bangumi-collections` 幂等键防重复入队。
+ */
+export const bangumiCollectionsQueue = new Bull('bangumi-collections-queue', {
+  redis: redisOptions,
+  defaultJobOptions: {
+    attempts: 2,
+    backoff: { type: 'fixed', delay: 30_000 },
+    removeOnComplete: 20,
+    removeOnFail: 10,
+  },
+})
+
 // ── 队列事件日志 ──────────────────────────────────────────────────
 
 function attachQueueLogger(queue: Bull.Queue, queueName: string) {
@@ -142,8 +157,9 @@ attachQueueLogger(imageHealthQueue, 'image-health-queue')
 attachQueueLogger(identityCandidateQueue, 'identity-candidate-queue')
 attachQueueLogger(homeAutofillQueue, 'home-autofill-queue')
 attachQueueLogger(doubanCollectionsQueue, 'douban-collections-queue')
+attachQueueLogger(bangumiCollectionsQueue, 'bangumi-collections-queue')
 
-const queues = { crawlerQueue, verifyQueue, maintenanceQueue, enrichmentQueue, imageHealthQueue, identityCandidateQueue, homeAutofillQueue, doubanCollectionsQueue }
+const queues = { crawlerQueue, verifyQueue, maintenanceQueue, enrichmentQueue, imageHealthQueue, identityCandidateQueue, homeAutofillQueue, doubanCollectionsQueue, bangumiCollectionsQueue }
 export default queues
 
 /** 确认 crawler 队列可用，避免创建任务后因入队失败留下 pending 脏状态 */

@@ -2835,3 +2835,18 @@
   - `tests/unit/api/bangumi-service.test.ts` — 4 处精确调用断言补 `source` 实参（getSubject/searchSubjectsStrict 多第 3 参）
 - **新增依赖**：无 ｜ **数据库变更**：无（埋点写既有 external_fetch_log）
 - **注意事项**：① **dump-refresh 不接埋点**——守 ADR-188 D-188-3「offline 不入表」（arch B2，dump 重导是本地文件导入零外部 HTTP），dump 可观测改 bangumi_entries MAX(updated_at)/COUNT 聚合归卡 3 概览；② collections worker source 复用既有 **`collections_worker`** 枚举（非 ADR 字面 `bangumi_collections_worker`——provider 列已区分，避免枚举膨胀）；③ 富集事务热路径无虞（REST 在 BangumiService Phase 1 事务外，recordFetch ms 级 insert 不持 idle-in-transaction，arch M1）；④ 门禁：typecheck/lint EXIT=0 / bangumi-lib 20 + service 72 全绿 / test:changed 14 文件 270 全过；⑤ 下一卡 CHG-BNG-RES-STORE-2C（collections worker 消费 getCalendar/searchSubjectsSorted 落库）。
+
+## [CHG-BNG-RES-STORE-2C] Bangumi collections worker（search heat/rank + calendar 落库）（SEQ-20260607-05 卡 2-C / ADR-189 D-189-2）
+- **完成时间**：2026-06-07
+- **记录时间**：2026-06-07 23:10
+- **执行模型**：claude-opus-4-8
+- **子代理**：无
+- **修改文件**：
+  - `apps/api/src/services/bangumi-collections/refresh.ts`（新建）— trending/ranking 分页 `searchSubjectsSorted`（累积 rank / null→整轮 failed）+ per-collection empty_guard + `replaceBangumiCollectionItems`；**calendar**：`getCalendar` 一次 → 7 weekday 分组（calendarKeyForWeekday 映射）→ **7 天总量 empty_guard** → `replaceBangumiCollectionGroupsAtomic` **一拉七写**（getCalendar null → 7 key 统一 failed）；`refreshAllBangumiCollections` 编排（异常隔离）
+  - `apps/api/src/workers/bangumiCollectionsWorker.ts`（新建）— `bangumiCollectionsQueue.process(1, refreshAllBangumiCollections)`（同 douban 范式）
+  - `apps/api/src/workers/bangumiCollectionsScheduler.ts`（新建）— 6h tick + jobId `refresh-bangumi-collections` 幂等
+  - `apps/api/src/lib/queue.ts` — 新增 `bangumiCollectionsQueue`（独立队列隔离背压）+ logger + queues map
+  - `apps/api/src/server.ts` — 注册 worker + scheduler（`BANGUMI_COLLECTIONS_SCHEDULER_ENABLED` opt-out）
+  - `tests/unit/api/bangumiCollectionsRefresh.test.ts`（新建）— 6 测：search 单页/failed/empty_guard + calendar 一拉七写 atomic/null→7failed/7 天总量 guard
+- **新增依赖**：无 ｜ **数据库变更**：无（写 STORE-2A 表）
+- **注意事项**：① **calendar 一拉七写**是与豆瓣关键差异（7 weekday 共享一次 GET /calendar，整体失败全不替换）；② 埋点已在 lib/bangumi（2-B），worker 经 `collections_worker` source；③ **实现选择**：trending=sort=heat 不加 air_date filter（heat 已反映当前热度，ADR air_date 可选省略）；④ 门禁：typecheck/lint EXIT=0 / 新测 6 全绿 / test:changed 60 文件 693 全过；⑤ 卡 2（STORE A/B/C）全部完成；下一卡 CHG-BNG-RES-API（Service provider 化）。
