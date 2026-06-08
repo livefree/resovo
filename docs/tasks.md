@@ -6,7 +6,7 @@
 
 ## 当前任务（单任务工作台：同时仅 1 个 🔄 进行中；完成即删卡，历史见 docs/changelog.md）
 
-（空 — SEQ-20260607-03 DOUBAN-HOT-ACQUISITION 全 4 卡收口 2026-06-07 16:40：ADR-187 + adapter subject_collection 服务 + 持久层（迁移/queries/lib）+ 编排抓取 job（注册表/refresh/maintenance）；全 16 合集实测落库 1294 行。后续卡 CHG-DOUBAN-HOT-WIRE 首页展示接线待用户按接口另起。见 changelog）
+（空 — SEQ-20260607-04 EXT-RES-GOV 卡 1 CHG-EXT-RES-ADR 收口 2026-06-07 17:55：ADR-188 外部资源治理框架定档（arch-reviewer CONDITIONAL PASS 全 15 条吸收）。下一卡 CHG-EXT-RES-STORE（migration 100 external_fetch_log + provider registry 落 packages/types + 在线出口埋点 + 30天 purge）。见 task-queue SEQ-20260607-04 + changelog）
 
 ---
 

@@ -1,10 +1,22 @@
 {
-  "generatedAt": "2026-06-05T20:45:51.150Z",
+  "generatedAt": "2026-06-08T00:30:55.791Z",
   "summary": {
-    "closedTotal": 368,
-    "pendingTotal": 17
+    "closedTotal": 192,
+    "pendingTotal": 254
   },
   "perAdr": [
+    {
+      "adrId": "ADR-052",
+      "total": 3,
+      "closed": 3,
+      "pending": []
+    },
+    {
+      "adrId": "ADR-104",
+      "total": 2,
+      "closed": 2,
+      "pending": []
+    },
     {
       "adrId": "ADR-105",
       "total": 16,
@@ -77,188 +89,429 @@
     {
       "adrId": "ADR-137",
       "total": 6,
-      "closed": 6,
-      "pending": []
+      "closed": 0,
+      "pending": [
+        "D-137-1",
+        "D-137-2",
+        "D-137-3",
+        "D-137-4",
+        "D-137-5",
+        "D-137-6"
+      ]
     },
     {
       "adrId": "ADR-139",
       "total": 8,
-      "closed": 8,
-      "pending": []
+      "closed": 0,
+      "pending": [
+        "D-139-1",
+        "D-139-2",
+        "D-139-3",
+        "D-139-4",
+        "D-139-5",
+        "D-139-6",
+        "D-139-7",
+        "D-139-8"
+      ]
     },
     {
       "adrId": "ADR-140",
       "total": 6,
-      "closed": 6,
-      "pending": []
+      "closed": 0,
+      "pending": [
+        "D-140-1",
+        "D-140-2",
+        "D-140-3",
+        "D-140-4",
+        "D-140-5",
+        "D-140-6"
+      ]
     },
     {
       "adrId": "ADR-138",
       "total": 6,
-      "closed": 6,
-      "pending": []
+      "closed": 0,
+      "pending": [
+        "D-138-1",
+        "D-138-2",
+        "D-138-3",
+        "D-138-4",
+        "D-138-5",
+        "D-138-6"
+      ]
     },
     {
       "adrId": "ADR-141",
       "total": 6,
-      "closed": 6,
-      "pending": []
+      "closed": 0,
+      "pending": [
+        "D-141-1",
+        "D-141-2",
+        "D-141-3",
+        "D-141-4",
+        "D-141-5",
+        "D-141-6"
+      ]
     },
     {
       "adrId": "ADR-142",
       "total": 6,
-      "closed": 6,
-      "pending": []
+      "closed": 0,
+      "pending": [
+        "D-142-1",
+        "D-142-2",
+        "D-142-3",
+        "D-142-4",
+        "D-142-5",
+        "D-142-6"
+      ]
     },
     {
       "adrId": "ADR-143",
       "total": 6,
-      "closed": 6,
-      "pending": []
+      "closed": 0,
+      "pending": [
+        "D-143-1",
+        "D-143-2",
+        "D-143-3",
+        "D-143-4",
+        "D-143-5",
+        "D-143-6"
+      ]
     },
     {
       "adrId": "ADR-144",
       "total": 8,
-      "closed": 8,
-      "pending": []
+      "closed": 0,
+      "pending": [
+        "D-144-1",
+        "D-144-2",
+        "D-144-3",
+        "D-144-4",
+        "D-144-5",
+        "D-144-6",
+        "D-144-7",
+        "D-144-8"
+      ]
     },
     {
       "adrId": "ADR-145",
       "total": 8,
-      "closed": 8,
-      "pending": []
+      "closed": 0,
+      "pending": [
+        "D-145-1",
+        "D-145-2",
+        "D-145-3",
+        "D-145-4",
+        "D-145-5",
+        "D-145-6",
+        "D-145-7",
+        "D-145-8"
+      ]
     },
     {
       "adrId": "ADR-146",
       "total": 8,
-      "closed": 8,
-      "pending": []
+      "closed": 0,
+      "pending": [
+        "D-146-1",
+        "D-146-2",
+        "D-146-3",
+        "D-146-4",
+        "D-146-5",
+        "D-146-6",
+        "D-146-7",
+        "D-146-8"
+      ]
     },
     {
       "adrId": "ADR-147",
       "total": 8,
-      "closed": 8,
-      "pending": []
+      "closed": 0,
+      "pending": [
+        "D-147-1",
+        "D-147-2",
+        "D-147-3",
+        "D-147-4",
+        "D-147-5",
+        "D-147-6",
+        "D-147-7",
+        "D-147-8"
+      ]
     },
     {
       "adrId": "ADR-148",
       "total": 8,
-      "closed": 8,
-      "pending": []
+      "closed": 0,
+      "pending": [
+        "D-148-1",
+        "D-148-2",
+        "D-148-3",
+        "D-148-4",
+        "D-148-5",
+        "D-148-6",
+        "D-148-7",
+        "D-148-8"
+      ]
     },
     {
       "adrId": "ADR-149",
       "total": 16,
-      "closed": 16,
-      "pending": []
+      "closed": 1,
+      "pending": [
+        "D-149-1",
+        "D-149-10",
+        "D-149-11",
+        "D-149-12",
+        "D-149-13",
+        "D-149-14",
+        "D-149-15",
+        "D-149-16",
+        "D-149-2",
+        "D-149-3",
+        "D-149-4",
+        "D-149-5",
+        "D-149-6",
+        "D-149-7",
+        "D-149-9"
+      ]
     },
     {
       "adrId": "ADR-150",
       "total": 6,
-      "closed": 6,
-      "pending": []
+      "closed": 0,
+      "pending": [
+        "D-150-1",
+        "D-150-2",
+        "D-150-3",
+        "D-150-4",
+        "D-150-5",
+        "D-150-6"
+      ]
     },
     {
       "adrId": "ADR-150",
       "total": 6,
-      "closed": 6,
-      "pending": []
+      "closed": 0,
+      "pending": [
+        "D-150-1",
+        "D-150-2",
+        "D-150-3",
+        "D-150-4",
+        "D-150-5",
+        "D-150-6"
+      ]
     },
     {
       "adrId": "ADR-151",
       "total": 6,
-      "closed": 6,
-      "pending": []
+      "closed": 0,
+      "pending": [
+        "D-151-1",
+        "D-151-2",
+        "D-151-3",
+        "D-151-4",
+        "D-151-5",
+        "D-151-6"
+      ]
     },
     {
       "adrId": "ADR-152",
       "total": 5,
-      "closed": 5,
-      "pending": []
+      "closed": 0,
+      "pending": [
+        "D-152-1",
+        "D-152-2",
+        "D-152-3",
+        "D-152-4",
+        "D-152-5"
+      ]
     },
     {
       "adrId": "ADR-153",
       "total": 6,
-      "closed": 6,
-      "pending": []
+      "closed": 0,
+      "pending": [
+        "D-153-1",
+        "D-153-2",
+        "D-153-3",
+        "D-153-4",
+        "D-153-5",
+        "D-153-6"
+      ]
     },
     {
       "adrId": "ADR-154",
       "total": 6,
-      "closed": 6,
-      "pending": []
+      "closed": 0,
+      "pending": [
+        "D-154-1",
+        "D-154-2",
+        "D-154-3",
+        "D-154-4",
+        "D-154-5",
+        "D-154-6"
+      ]
     },
     {
       "adrId": "ADR-155",
       "total": 6,
-      "closed": 6,
-      "pending": []
+      "closed": 0,
+      "pending": [
+        "D-155-1",
+        "D-155-2",
+        "D-155-3",
+        "D-155-4",
+        "D-155-5",
+        "D-155-6"
+      ]
     },
     {
       "adrId": "ADR-157",
       "total": 6,
-      "closed": 6,
-      "pending": []
+      "closed": 0,
+      "pending": [
+        "D-157-1",
+        "D-157-2",
+        "D-157-3",
+        "D-157-4",
+        "D-157-5",
+        "D-157-6"
+      ]
     },
     {
       "adrId": "ADR-158",
       "total": 9,
-      "closed": 9,
-      "pending": []
+      "closed": 0,
+      "pending": [
+        "D-158-1",
+        "D-158-2",
+        "D-158-3",
+        "D-158-4",
+        "D-158-5",
+        "D-158-6",
+        "D-158-7",
+        "D-158-8",
+        "D-158-9"
+      ]
     },
     {
       "adrId": "ADR-158",
       "total": 2,
-      "closed": 2,
-      "pending": []
+      "closed": 0,
+      "pending": [
+        "D-158-7",
+        "D-158-9"
+      ]
     },
     {
       "adrId": "ADR-158",
       "total": 3,
-      "closed": 3,
-      "pending": []
+      "closed": 0,
+      "pending": [
+        "D-158-5",
+        "D-158-7",
+        "D-158-9"
+      ]
     },
     {
       "adrId": "ADR-159",
       "total": 7,
-      "closed": 7,
-      "pending": []
+      "closed": 0,
+      "pending": [
+        "D-159-1",
+        "D-159-2",
+        "D-159-3",
+        "D-159-4",
+        "D-159-5",
+        "D-159-6",
+        "D-159-7"
+      ]
     },
     {
       "adrId": "ADR-160",
       "total": 7,
-      "closed": 7,
-      "pending": []
+      "closed": 0,
+      "pending": [
+        "D-160-1",
+        "D-160-2",
+        "D-160-3",
+        "D-160-4",
+        "D-160-5",
+        "D-160-6",
+        "D-160-7"
+      ]
     },
     {
       "adrId": "ADR-160",
       "total": 1,
-      "closed": 1,
-      "pending": []
+      "closed": 0,
+      "pending": [
+        "D-160-4"
+      ]
     },
     {
       "adrId": "ADR-160",
       "total": 4,
-      "closed": 4,
-      "pending": []
+      "closed": 0,
+      "pending": [
+        "D-160-1",
+        "D-160-3",
+        "D-160-4",
+        "D-160-6"
+      ]
     },
     {
       "adrId": "ADR-163",
       "total": 8,
-      "closed": 8,
-      "pending": []
+      "closed": 0,
+      "pending": [
+        "D-163-1",
+        "D-163-2",
+        "D-163-3",
+        "D-163-4",
+        "D-163-5",
+        "D-163-6",
+        "D-163-7",
+        "D-163-8"
+      ]
     },
     {
       "adrId": "ADR-164",
       "total": 12,
-      "closed": 12,
-      "pending": []
+      "closed": 0,
+      "pending": [
+        "D-164-1",
+        "D-164-10",
+        "D-164-11",
+        "D-164-12",
+        "D-164-2",
+        "D-164-3",
+        "D-164-4",
+        "D-164-5",
+        "D-164-6",
+        "D-164-7",
+        "D-164-8",
+        "D-164-9"
+      ]
     },
     {
       "adrId": "ADR-165",
       "total": 11,
-      "closed": 11,
-      "pending": []
+      "closed": 0,
+      "pending": [
+        "D-165-1",
+        "D-165-10",
+        "D-165-11",
+        "D-165-2",
+        "D-165-3",
+        "D-165-4",
+        "D-165-5",
+        "D-165-6",
+        "D-165-7",
+        "D-165-8",
+        "D-165-9"
+      ]
     },
     {
       "adrId": "ADR-161",
@@ -271,30 +524,37 @@
     {
       "adrId": "ADR-170",
       "total": 5,
-      "closed": 3,
+      "closed": 0,
       "pending": [
+        "D-170-1",
         "D-170-2",
-        "D-170-3"
+        "D-170-3",
+        "D-170-4",
+        "D-170-5"
       ]
     },
     {
       "adrId": "ADR-172",
       "total": 5,
-      "closed": 2,
+      "closed": 0,
       "pending": [
+        "D-172-1",
         "D-172-2",
         "D-172-3",
-        "D-172-4"
+        "D-172-4",
+        "D-172-5"
       ]
     },
     {
       "adrId": "ADR-168",
       "total": 7,
-      "closed": 2,
+      "closed": 0,
       "pending": [
+        "D-168-1",
         "D-168-2",
         "D-168-3",
         "D-168-4",
+        "D-168-5",
         "D-168-6",
         "D-168-7"
       ]
@@ -302,9 +562,12 @@
     {
       "adrId": "ADR-174",
       "total": 7,
-      "closed": 6,
+      "closed": 3,
       "pending": [
-        "D-174-4"
+        "D-174-1",
+        "D-174-2",
+        "D-174-4",
+        "D-174-5"
       ]
     },
     {
@@ -353,6 +616,75 @@
       "total": 6,
       "closed": 6,
       "pending": []
+    },
+    {
+      "adrId": "ADR-181",
+      "total": 5,
+      "closed": 5,
+      "pending": []
+    },
+    {
+      "adrId": "ADR-182",
+      "total": 7,
+      "closed": 7,
+      "pending": []
+    },
+    {
+      "adrId": "ADR-183",
+      "total": 8,
+      "closed": 8,
+      "pending": []
+    },
+    {
+      "adrId": "ADR-184",
+      "total": 7,
+      "closed": 4,
+      "pending": [
+        "D-184-2",
+        "D-184-6",
+        "D-184-7"
+      ]
+    },
+    {
+      "adrId": "ADR-185",
+      "total": 6,
+      "closed": 6,
+      "pending": []
+    },
+    {
+      "adrId": "ADR-186",
+      "total": 7,
+      "closed": 5,
+      "pending": [
+        "D-186-6",
+        "D-186-7"
+      ]
+    },
+    {
+      "adrId": "ADR-187",
+      "total": 8,
+      "closed": 4,
+      "pending": [
+        "D-187-1",
+        "D-187-4",
+        "D-187-6",
+        "D-187-7"
+      ]
+    },
+    {
+      "adrId": "ADR-188",
+      "total": 8,
+      "closed": 0,
+      "pending": [
+        "D-188-1",
+        "D-188-2",
+        "D-188-3",
+        "D-188-4",
+        "D-188-5",
+        "D-188-6",
+        "D-188-7",
+        "D-188-8"
+      ]
     }
   ]
 }

@@ -1490,3 +1490,37 @@
    - 完成备注：**实施 ADR-186 D-186-4 调用侧 + INV-1/INV-2 + 存量兜底**。① 新增私有 `finalizeDoubanAutoWrite`（据 skippedFields.includes('doubanId') 判 landed → 'matched' or 'candidate'，同步 recordDoubanSignal + writeExternalRef 用最终 refStatus，三处状态一致：douban_status / meta_quality.douban_match_status / video_external_refs.match_status）；step1-imdb/step1-title/step2 三处重构为**先 safeUpdate 再据落地结果判 status**（candidate 路径——置信度未达 auto——行为不变）② DoubanService.confirmSubject/confirmFields 加 `skippedFields.includes('doubanId')` → 返回 `douban_id_conflict`（exact 冲突时人工 confirm 不虚标 matched；arch-reviewer Q4：`if(!updated)` 不足以捕获，updated 返回原 catalog 非 null）；syncVideo 不写 douban_status 故无图标虚标、改 SyncReason 类型扩散，登记不改 ③ `scripts/fix-douban-status-consistency.ts`（dry-run 优先；圈定 matched + catalog.douban_id NULL，有 douban ref → candidate / 孤儿 → unmatched；事务化双批 UPDATE）④ metadataEnrich.test.ts +2 例（必修⑨降级 + ⑩回归）。仅处理 douban（bangumi 同构 follow-up）。门禁：typecheck 绿 / lint 无 error / test:changed 178 全过 / 脚本单独 tsc 编译通过。执行模型: claude-opus-4-8；子代理: 无。
    - **FIX（Codex stop-time review，2026-06-07）**：矫正脚本会创建 unusable candidate 态（原「有任意 ref → candidate」太粗，审核台 getCandidateData 只查 candidate ref；auto_matched 虚标/rejected ref 被误降级 candidate → 点开无候选可确认，违反 INV-2）。修正：圈定改 `EXISTS(match_status='candidate')` → has_candidate_ref，仅存在 candidate ref 才降级 candidate，否则 unmatched。脚本 tsc 编译通过。
    - 依赖：CHG-ENRICH-DOUBAN-CONSISTENCY-A ✅。
+
+---
+
+## [SEQ-20260607-04] EXT-RES-GOV — 外部资源治理框架 v1（豆瓣首接入 · provider 可扩展）
+
+- **状态**：🔄 进行中（卡 1 ADR ✅ / 进行卡 2 STORE）
+- **创建时间**：2026-06-07 17:30
+- **目标**：搭 provider 无关的「外部资源治理」后台框架——采集观测（worker 抓了什么 / 成功否 / 内容类型 / 离线 vs 在线 / API 用量）+ 热门资源分类展示 + 统一资源搜索 + 富集统计；豆瓣作首个接入 provider 全量打通，Bangumi/IMDB/TMDb 占位待后续。
+- **用户定调（2026-06-07）**：① 导航落位采集中心（与采集控制并列，分组不更名）② provider 切换框架 + 4 Tab ③ 采集观测埋点（provider 无关操作日志，非窄口径 API 计数）④ 资源搜索统一（离线 dump + 在线实时）。本期搭框架 + 豆瓣接入；深度治理迭代与 Bangumi 接入框架搭好后另起。
+- **范围**：schema（`external_fetch_log` 新表）+ api-service（provider registry / fetch-log queries / ExternalResourcesService / 6 admin 端点 / worker 埋点）+ UI（采集中心 nav + `/admin/external-resources` provider 框架 + 4 Tab）——跨三层，必拆卡。
+- **依赖**：SEQ-20260607-03 豆瓣采集能力 ✅（`douban_collection_items` 已落库 1294 行）；无 BLOCKER。
+
+### 任务列表（按执行顺序，串行；卡 2/3 按原子化判据可再拆 -A/-B）
+
+1. **CHG-EXT-RES-ADR** — ADR 起草：IA + provider registry 契约 + `external_fetch_log` 观测模型 + 端点路由清单授权（状态：✅ 已完成 2026-06-07 17:55）
+   - 创建时间：2026-06-07 17:30 ｜ 实际开始：2026-06-07 17:30 ｜ 完成时间：2026-06-07 17:55
+   - 建议模型：opus（撰写 ADR + provider registry 跨消费方契约 + 跨 provider schema → 强制 spawn arch-reviewer Opus 独立设计）
+   - 完成备注：**ADR-188 Accepted**（docs/decisions.md）。arch-reviewer (claude-opus-4-8 / agentId a8c9881fbba9ee504) 独立设计 → CONDITIONAL PASS，3 BLOCKER + 5 HIGH + 4 MEDIUM + 3 LOW **全 15 条吸收**：B1 埋点下沉在线出口（doubanAdapter + lib/douban，非 worker；offline 不入表）/ B2 status 删 empty + method 术语桥接 external.types online + offline 不记 / B3 端点 path 字面 `:provider` + `?live` 5 项契约（默认关/10s/并发1/admin_search埋点/失败降级）/ H1 registry 落 packages/types 单源 / H2 capabilities 数组 / H4 端点 6→5（overview 并 enrichment-stats）/ M4 lib/douban 纳埋点边界 + admin 鉴权 / L3 30天 purge 挂 maintenanceWorker。verify:endpoint-adr 解析 ADR-188 端点 5/5 逐字（含 `:provider`），全套 verify:adr-contracts EXIT=0。docs-only。执行模型: claude-opus-4-8；子代理: arch-reviewer (claude-opus-4-8)。
+
+2. **CHG-EXT-RES-STORE** — 数据模型 + 采集埋点（migration 100 `external_fetch_log` + fetch-log queries + provider registry 落 packages/types + doubanAdapter/lib/douban 在线出口埋点 + maintenanceWorker 30天 purge）（状态：⬜ 待开始）
+   - 建议模型：opus（schema 跨 provider + 埋点接入热路径）
+   - 依赖：CHG-EXT-RES-ADR ✅
+
+3. **CHG-EXT-RES-API** — admin 路由（外部资源治理 5 端点 [ADR-188 §端点契约：providers/overview/collections/search/activity] + ExternalResourcesService 聚合 + 统一搜索 dump query 归 externalData.ts）（状态：⬜ 待开始）
+   - 建议模型：opus（新 admin route → ADR-188 覆盖 + plan §4.5 R7 MUST-8）
+   - 依赖：CHG-EXT-RES-STORE
+
+4. **CHG-EXT-RES-UI** — 前端治理页（采集中心 nav + provider Segment + 4 Tab，复用 admin-ui 零新共享组件）（状态：⬜ 待开始）
+   - 建议模型：opus/sonnet
+   - 依赖：CHG-EXT-RES-API
+
+### 后续卡登记（本期不做）
+- **CHG-DOUBAN-HOT-WIRE**（首页实时热门展示接线）：待用户按接口定展示口径另起；仍独立于本治理框架，ADR-183 首页链不在本序列。
+- **CHG-EXT-RES-BANGUMI**（Bangumi provider 接入）：待 Bangumi API 能力全面调研后另起（registry status='planned' 占位）。

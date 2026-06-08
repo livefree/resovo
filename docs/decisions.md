@@ -20959,3 +20959,99 @@ safeUpdate 单测（`tests/unit/api/mediaCatalogSafeUpdate.test.ts`）：① fil
 
 - 主要风险：key 失效静默清空（D-187-4 empty_guard 守护）/ 全量替换半份可见（D-187-3 同事务）/ 反哺污染 dump（D-187-6 零反哺）/ raw 带回 comments 重数据（D-187-7 INV-2）。
 - 回滚：新增表 + 新服务 + 新 job，无改既有读路径；回滚 = drop 两表 + revert job 注册，douban_entries / home autofill / 现有消费方零影响。
+
+---
+
+## ADR-188：外部资源治理框架 v1 — provider 无关采集观测 + IA + 端点协议（豆瓣首接入）（SEQ-20260607-04 / CHG-EXT-RES-ADR）
+
+- **状态**：**Accepted**（arch-reviewer Opus CONDITIONAL PASS → 3 BLOCKER + 5 HIGH + 4 MEDIUM + 3 LOW **全 15 条吸收**后定档；agentId a8c9881fbba9ee504）
+- **日期**：2026-06-07
+- **关联**：SEQ-20260607-04｜复用 ADR-187（douban_collection_items）· ADR-172（video_external_refs）· ADR-161（Bangumi）｜不触 ADR-183（home autofill 首页链）
+
+### 背景与决策
+
+豆瓣实时热门采集（ADR-187，collection_items 已落库 1294 行）+ 富集链路（`MetadataEnrichService` 5 步）已就位，但后台无治理入口，且 worker「操作流水」无持久化（抓几次 / 成功否 / 内容类型 / 离线 vs 在线 / 用量）。本 ADR 定档 **provider 无关**的「外部资源治理」后台框架契约：IA 落位 + provider registry + `external_fetch_log` 观测模型 + admin 端点协议 + 埋点层 + 边界。豆瓣首接入全量打通，Bangumi/IMDB/TMDb registry 占位。**本卡零实施。**
+
+用户定调（不可推翻）：兼容两类外部源（无公共 API 靠实时搜索/页面抓取=豆瓣 vs 有丰富 API=Bangumi）；本期搭框架 + 豆瓣接入，深度治理迭代与 Bangumi 接入框架搭好后另起。
+
+### 决策要点
+
+**D-188-1 IA 落位**：导航分组「采集中心」新增「外部资源」菜单项（与「采集控制」并列，分组不更名），路由 `/admin/external-resources`。页面 = provider 切换 Segment（豆瓣 active / Bangumi·IMDB·TMDb planned）+ 4 Tab（概览 / 热门资源 / 资源搜索 / 采集与富集记录）。Tab 可见性由 provider capabilities 驱动（D-188-2），但**每个 Tab 的数据契约 provider 专属**——接新 provider 需实现对应数据 adapter，非纯配置（arch L2 诚实声明）。
+
+**D-188-2 provider registry 契约（单一真源 = packages/types）**（arch H1/H2/H3）：类型 + 运行时 registry 数据同居 `packages/types`（对齐 `route-codenames.ts` / `external.types.ts` 既有「类型 + const 同居」范式）。`apps/api`（聚合/埋点）与 `apps/server-next`（Tab 渲染）**同源消费**，杜绝双真源漂移（否决放 apps/api/services——会迫使 server-next 反向跨 app import，违反依赖方向）。
+```ts
+export const PROVIDER_KEYS = ['douban','bangumi','imdb','tmdb'] as const
+export const ACQUISITION_METHODS = ['offline','scrape','api'] as const
+export const PROVIDER_CAPABILITIES = ['detail','search','collection','comments','schedule','celebrity'] as const
+export type ProviderKey = (typeof PROVIDER_KEYS)[number]
+export type AcquisitionMethod = (typeof ACQUISITION_METHODS)[number]
+export type ProviderCapability = (typeof PROVIDER_CAPABILITIES)[number]
+export interface ExternalProvider {
+  key: ProviderKey
+  label: string
+  acquisition: readonly AcquisitionMethod[]
+  capabilities: readonly ProviderCapability[]   // 数组非布尔 Record（arch H2：新增 capability 仅影响声明它的 provider）
+  status: 'active' | 'planned'
+}
+export const EXTERNAL_PROVIDERS: readonly ExternalProvider[] = [/* douban active / bangumi·imdb·tmdb planned */]
+```
+3 枚举建 const SSOT，zod `z.enum(PROVIDER_KEYS)` 派生；**不纳入 verify-enum-ssot 守卫**（守卫专扫视频域，扩展守卫另起卡，本期人工约定从 const 派生，arch H3）。douban = acquisition[offline,scrape] / capabilities[detail,search,collection,comments,celebrity]（schedule 否）/ active；bangumi = acquisition[api] / planned。**registry 是能力真源**：观测/UI 按 capabilities 渲染与过滤，写入侧不校验组合（arch B2④）。
+
+**D-188-3 observability 表 `external_fetch_log`（provider 无关）**（arch B2）：见下「表结构」。关键约束：
+- **method 复用 ACQUISITION_METHODS（offline|scrape|api）**；ADR 显式声明 scrape/api 二者皆属既有 `external.types.sourceFreshness` 的 `online` 上位概念，本表 method 更细是有意演进，**不回改 external.types**（术语桥接，arch B2①）。
+- **status = ok|fail|timeout**（删 empty；「成功但空」由 `status=ok AND item_count=0` 派生，避免与合集层 sync_state 的 empty_guard 近义打架，arch B2②）。
+- **offline dump 召回不入本表**（本地 DB 查询非外部 fetch，入表会稀释用量/成功率，arch B2③）。富集「离线/在线」分布改由 `video_external_refs.match_method`（imdb_id/title/alias=离线，network=在线）聚合（既有数据，零埋点）。故本表实际只产 scrape（豆瓣）/ api（Bangumi 未来）行；offline 枚举值保留供未来本地缓存命中等场景。
+- 索引 `(provider, created_at DESC)` + `(provider, operation, created_at DESC)`；删低选择性 `(provider, status)`（status 基数 3，arch B2 末）。PK BIGSERIAL（纯追加日志）。
+
+**D-188-4 埋点层（在线出口下沉，不污染热路径）**（arch B1/M2/M3/M4①）：
+- 埋点**下沉到真实外部 HTTP 出口**，非 worker 层（worker 拿不到 step1 offline / step2 scrape 分叉，放 worker 必漏点或越层窥探 Service 内部）：
+  - `apps/api/src/lib/doubanAdapter.ts` 三函数（searchDoubanRich→`operation=search` / getDoubanDetailRich→`detail` / getDoubanCollectionItems→`collection`）
+  - `apps/api/src/lib/douban.ts` 的 `searchDouban`（**关键发现**：MetadataEnrichService.step2 搜索走老 `lib/douban` 而非 adapter，只埋 adapter 会漏 step2 搜索 → `lib/douban.ts` 纳入埋点边界，arch B1/M4①）
+- **offline step1 dump 召回不埋**（D-188-3）。
+- 写入 `await + try/catch 吞错`（对齐 `MetadataEnrichService.writeExternalRef` 范式；非 fire-and-forget——观测日志丢失即失审计意义，arch M2）。单次 insert 相对 10s 级 HTTP 抓取开销可忽略，不采样（arch M3）。
+- `source`（enrich_worker|collections_worker|admin_search）= 调用方上下文，由调用方经可选参数传入出口函数；缺省 null。
+- **纯旁路**：不改既有 worker / Service 行为与返回。
+
+**D-188-5 端点协议（admin，5 端点）**（arch H4/B3/M4②）：见「### 端点契约」表。`overview` 合并 `enrichment-stats`（数据源高度重叠，单端点返回复合对象，省一次聚合 + 一次请求）。`collections` 是合集数据**首次**对后台暴露（非重复，arch H4）。全部挂既有 admin 鉴权中间件（错误码含 401/403，arch M4②）。planned provider 的 provider-scoped 端点返回 200 + `{ status:'planned' }` 占位（非 404）。
+- **`?live` 契约（搜索端点，arch B3）**：① `live` 默认关（缺省只查 dump，零外部请求）；② live 硬超时复用 adapter `FETCH_TIMEOUT_MS=10s`；③ live 限流（全局并发 1，防管理员连点打爆豆瓣污染 worker 正常采集）；④ live 抓取经 D-188-4 出口埋一条 `source=admin_search`；⑤ live 失败**降级返回 dump 结果 + `liveError` 标记**，非整体 500。
+
+**D-188-6 dump 搜索 query 归 queries 层**（arch H5）：统一搜索 dump 路径需新增「模糊匹配 + 分页」query 于 `apps/api/src/db/queries/externalData.ts`（既有 findDoubanByTitleNorm 仅精确 + 限 5，不可复用）；`ExternalResourcesService` 聚合多个 DB queries 模块合规（分层禁的是 Service 调 Service 业务 / Route 调 DB），不得在 Service 拼 SQL；live 抓取只经 doubanAdapter。
+
+**D-188-7 保留策略**（arch L3/M1）：30 天 purge 挂既有 `maintenanceWorker`（加 job type `purge-external-fetch-log` + `DELETE FROM external_data.external_fetch_log WHERE created_at < NOW() - INTERVAL '30 days'` 走 queries 层）。本期不建日级 rollup（即席聚合命中 `(provider,operation,created_at)` 索引，月量级 < 100 万行足够）；重评触发：行数 > 500 万 或概览 P95 > 200ms。
+
+**D-188-8 边界**：复用 douban-adapter / collection_items / video_external_refs / douban_entries dump；不触 ADR-183 home autofill 首页链；不改 worker/Service 既有行为（仅加埋点旁路）；不删 douban_entries；不实装 Bangumi/IMDB/TMDb 具体 provider（registry status=planned 占位）。**埋点边界显式含 `apps/api/src/lib/douban.ts`**（arch M4①）。扩展诚实声明：Tab 可见性 capabilities 驱动，但每 Tab 数据契约 provider 专属，接新 provider 需实现数据 adapter（arch L2）。
+
+### external_fetch_log 表结构（external_data schema）
+
+| 列 | 类型 | 约束 | 说明 |
+|---|---|---|---|
+| id | BIGSERIAL | PK | 纯追加日志 |
+| provider | TEXT | NOT NULL | ProviderKey（registry 真源） |
+| operation | TEXT | NOT NULL | detail/search/collection/comments/schedule/celebrity（内容类型；合法组合以 registry capabilities 为准） |
+| method | TEXT | NOT NULL | offline/scrape/api（= ACQUISITION_METHODS；scrape/api 属 external.types online 细分，不回改既有类型） |
+| status | TEXT | NOT NULL | ok/fail/timeout（删 empty；空 = ok + item_count 0） |
+| source | TEXT | NULL | enrich_worker/collections_worker/admin_search（调用方上下文） |
+| target | TEXT | NULL | query / douban_id / collection key |
+| item_count | INT | NOT NULL DEFAULT 0 | 返回条数 |
+| duration_ms | INT | NULL | 外部请求耗时 |
+| error | TEXT | NULL | 失败摘要 |
+| created_at | TIMESTAMPTZ | NOT NULL DEFAULT NOW() | 30 天 purge 锚 |
+
+索引：`idx_external_fetch_log_provider_time (provider, created_at DESC)` / `idx_external_fetch_log_provider_op (provider, operation, created_at DESC)`。
+
+### 端点契约
+
+| # | 方法 | 路径 | 用途 | Request | Response | 错误码 |
+|---|---|---|---|---|---|---|
+| 1 | GET | `/admin/external-resources/providers` | provider registry + 各自数据规模/状态摘要 | — | 200 `{ data: ExternalProviderSummary[] }` | 401 / 403 |
+| 2 | GET | `/admin/external-resources/:provider/overview` | 概览（采集用量+成功率 / 富集匹配分布 / 合集新鲜度 / 数据规模） | Query: `since?`（ISO，默认 24h 前） | 200 `{ data: { fetchStats, enrichStats, collectionFreshness, dataScale } }` | 401 / 403 / 404 / 422 |
+| 3 | GET | `/admin/external-resources/:provider/collections` | 热门合集分类条目（按 domain/category） | Query: `collection?` / `limit?`（≤100）/ `page?` | 200 `{ data: CollectionItem[], total }` | 401 / 403 / 404 / 422 |
+| 4 | GET | `/admin/external-resources/:provider/search` | 统一搜索（dump 默认 / `live` 在线补充） | Query: `q`（必填）/ `live?`（默认关）/ `limit?` / `page?` | 200 `{ data: ResourceSearchHit[], total, liveError? }` | 401 / 403 / 404 / 422 / 429 |
+| 5 | GET | `/admin/external-resources/:provider/activity` | 采集操作流水（fetch_log 过滤分页） | Query: `operation?` / `method?` / `status?` / `since?` / `limit?`（≤100）/ `page?` | 200 `{ data: FetchLogRow[], total }` | 401 / 403 / 404 / 422 |
+
+（planned provider 在 #2–#5 返回 200 `{ data: null, status:'planned' }`；路径 `:provider` 字面与 route 注册逐字一致——verify:endpoint-adr 纯字符串匹配，arch B3。）
+
+### 风险与回滚
+
+- 主要风险：埋点污染富集热路径（D-188-4 纯旁路 await + 吞错 + offline 不记）/ live 搜索打爆豆瓣限流（D-188-5 默认关 + 并发 1 + 10s 超时 + 失败降级）/ fetch_log 无界增长（D-188-7 30 天 purge）/ registry 双真源漂移（D-188-2 packages/types 单源）。
+- 回滚：新增 1 表 + 1 registry + 5 只读端点 + 旁路埋点；回滚 = drop external_fetch_log + revert 端点/埋点/nav，既有富集/采集/home autofill 零影响。
