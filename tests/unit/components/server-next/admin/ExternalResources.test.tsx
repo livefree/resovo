@@ -21,6 +21,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { tableQueryStore } from '@resovo/admin-ui'
 
 const mockFetchProviders = vi.fn()
 const mockFetchOverview = vi.fn()
@@ -113,6 +114,8 @@ const SEARCH = {
 }
 
 beforeEach(() => {
+  // tableQueryStore 模块级单例 → 跨测试重置，避免 useTableQuery 初始化早返回（URL 不再解析）污染隔离
+  tableQueryStore.setState({ snapshots: new Map(), views: new Map() })
   currentParams = new URLSearchParams()
   pushMock.mockClear()
   replaceMock.mockClear()
@@ -267,6 +270,16 @@ describe('ActivityTab', () => {
     expect(screen.getByTestId('matrix-filter-method')).not.toBeNull()
     expect(screen.getByTestId('matrix-filter-status')).not.toBeNull()
     expect(screen.getByTestId('matrix-filter-unsupported-createdAt')).not.toBeNull()
+  })
+
+  it('URL restore：单值列过滤经 URL 往返（退化为 text kind）仍透传 fetchActivity 单值入参', async () => {
+    // url-sync inferFilterValue 对无逗号单值推断为 text（非 enum）；readSingleFilter 须兼容，否则过滤丢失
+    currentParams = new URLSearchParams('act.f.operation=search')
+    render(<ActivityTab provider="douban" />)
+    await waitFor(() =>
+      expect(mockFetchActivity.mock.calls.some((c) => (c[1] as { operation?: string })?.operation === 'search')).toBe(true),
+    )
+    currentParams = new URLSearchParams()
   })
 
   it('空流水 → EmptyState', async () => {

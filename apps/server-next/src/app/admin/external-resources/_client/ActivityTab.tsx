@@ -70,10 +70,19 @@ const OPERATION_OPTIONS = toOptions(OPERATION_LABELS)
 const METHOD_OPTIONS = toOptions(METHOD_LABELS)
 const STATUS_OPTIONS = toOptions(STATUS_LABELS)
 
-/** enum 列过滤取首值（单值后端入参，对齐 VideoFilterFields.getEnumFirst 标杆）。 */
-function getEnumFirst(filters: TableQuerySnapshot['filters'], key: string): string | undefined {
+/**
+ * 读单值列过滤入参（映射单值后端 operation/method/status）。
+ * 容忍两种 kind：
+ * - `enum`：会话内列头多选应用 / URL 多值（逗号） → 取首值。
+ * - `text`：**URL restore 单值退化**——url-sync `inferFilterValue` 对无逗号值推断为 text
+ *   而非 enum，单选过滤经 URL 往返后落 text；此处一并读取，保证 URL restore 不丢过滤。
+ *   （operation/method/status 取值均为非数字/非 bool 字符串，单值必落 text，无歧义。）
+ */
+function readSingleFilter(filters: TableQuerySnapshot['filters'], key: string): string | undefined {
   const v: FilterValue | undefined = filters.get(key)
-  return v?.kind === 'enum' ? v.value[0] : undefined
+  if (v?.kind === 'enum') return v.value[0]
+  if (v?.kind === 'text') return v.value || undefined
+  return undefined
 }
 
 const TARGET_CELL_STYLE: React.CSSProperties = {
@@ -158,10 +167,10 @@ export function ActivityTab({ provider }: { provider: ProviderKey }) {
 
   const page = snapshot.pagination.page
   const pageSize = snapshot.pagination.pageSize
-  // 原生列过滤 → snapshot.filters（列 id 即后端 key）；enum 取首值映射单值后端
-  const operation = getEnumFirst(snapshot.filters, 'operation')
-  const method = getEnumFirst(snapshot.filters, 'method')
-  const status = getEnumFirst(snapshot.filters, 'status')
+  // 原生列过滤 → snapshot.filters（列 id 即后端 key）；取首值映射单值后端（enum/URL-restore text 兼容）
+  const operation = readSingleFilter(snapshot.filters, 'operation')
+  const method = readSingleFilter(snapshot.filters, 'method')
+  const status = readSingleFilter(snapshot.filters, 'status')
 
   useEffect(() => {
     let cancelled = false

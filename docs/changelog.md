@@ -2958,3 +2958,13 @@
 - **沉淀决策**：`getEnumFirst`（3 行）当前 VideoFilterFields 私有 + 本卡 ActivityTab 本地各一份；admin-ui 未导出共享版，提取需改 VideoFilterFields（超本卡文件范围）→ 暂保本地，后续 admin-ui filter-helpers 卡统一沉淀。
 - **不影响**：Collections/Search 展示行为不变（仅加列宽+设置行）；ActivityTab 过滤能力等价（operation/method/status），且改为 URL 同步（`act.f.*`）+ 符合标杆。
 - **门禁**：typecheck/lint EXIT=0 / ExternalResources 27（+2 规范）+ test:changed 27 全过。
+
+## [CHG-EXT-RES-TABLE-SPEC-FIX] ActivityTab 列过滤 URL restore 不丢失（CHG-EXT-RES-TABLE-SPEC 收口后 · Codex stop-time review）
+- **完成时间**：2026-06-08 ｜ **记录时间**：2026-06-08 09:05 ｜ **执行模型**：claude-opus-4-8 ｜ **子代理**：无
+- **现象（Codex stop-review）**：Activity enum 列过滤经 URL restore（刷新/分享链接）后丢失。
+- **根因**：`url-sync.inferFilterValue` 对**无逗号单值**推断为 `kind:'text'` 而非 `'enum'`（缺列元数据无法判别）；上一卡 `getEnumFirst` 只认 `'enum'` → 单选过滤 URL 往返（`act.f.operation=search` → text）后读不回 → `fetchActivity` 不带过滤。会话内（store 保 enum kind）正常，仅 URL restore 受损。
+- **修复**（前端 only，不动 admin-ui 共享 url-sync）：
+  - `_client/ActivityTab.tsx` — `getEnumFirst` → `readSingleFilter`，容忍 `enum`（取首值）+ `text`（URL restore 退化值）两种 kind；operation/method/status 取值均非数字/非 bool，单值必落 text 无歧义。
+  - 测试 `ExternalResources.test.tsx` — ① `beforeEach` 加 `tableQueryStore.setState({snapshots,views})` 重置模块级单例（修复 useTableQuery 初始化早返回致 URL 不解析的跨测试污染）；② 新增「URL restore 单值过滤（text kind）→ 仍透传 fetchActivity 单值入参」回归（修复前 enum-only 读取必失败）。
+- **平台限制（留后续）**：`inferFilterValue` 单值 enum→text 是 admin-ui url-sync 共享层限制（同样影响视频库 getEnumFirst URL restore）；根治需 deserialize 列 filterKind 感知（改 ColumnDescriptor + searchParamsToSnapshot 契约 / arch-reviewer），超本卡范围 → 另起 admin-ui filter url-sync 卡。
+- **门禁**：typecheck/lint EXIT=0 / ExternalResources 28（+1 URL restore）+ test:changed 28 全过。
