@@ -6,6 +6,14 @@
  */
 
 import { describe, it, expect, vi, afterEach } from 'vitest'
+
+// CHG-EXT-RES-STORE-B：searchDoubanRich 现内含采集埋点旁路；mock recordFetch 避免单测触达真实 DB
+// （classifyFetchError/fetchErrorSummary 纯函数保留真实），不影响本文件的 timeout/降级断言。
+vi.mock('@/api/lib/external-fetch-recorder', async (orig) => ({
+  ...(await orig<typeof import('@/api/lib/external-fetch-recorder')>()),
+  recordFetch: vi.fn().mockResolvedValue(undefined),
+}))
+
 import { searchDoubanRich } from '@/api/lib/doubanAdapter'
 
 // window.__DATA__ items 为空 → resolver 解析成功返回 0 候选（不抛错，专注校验 signal）

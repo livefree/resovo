@@ -13,6 +13,7 @@
 
 import { searchDoubanRich } from '@/api/lib/doubanAdapter'
 import type { DoubanResolvedCandidate } from '@/api/lib/doubanAdapter'
+import type { FetchSource } from '@/api/db/queries/external-fetch-log'
 
 // ── 礼貌抓取 ──────────────────────────────────────────────────────
 
@@ -50,11 +51,14 @@ export function mapResolvedToSuggest(candidate: DoubanResolvedCandidate): Sugges
  */
 export async function searchDouban(
   title: string,
-  year?: number
+  year?: number,
+  // 采集埋点归因（ADR-188 D-188-4）：透传给 searchDoubanRich（唯一 HTTP 出口埋点处），
+  // 本函数仅委托不重复埋点（防双计）。
+  source?: FetchSource | null,
 ): Promise<SuggestItem[]> {
   try {
     await delay()
-    const candidates = await searchDoubanRich(title, year)
+    const candidates = await searchDoubanRich(title, year, source)
     return candidates.map(mapResolvedToSuggest)
   } catch {
     // 网络错误/超时统一降级为空结果，由上层决定 no_match 语义

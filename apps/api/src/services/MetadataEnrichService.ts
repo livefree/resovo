@@ -254,7 +254,8 @@ export class MetadataEnrichService {
   ): Promise<DoubanStatus | null> {
     let candidates: Awaited<ReturnType<typeof searchDouban>>
     try {
-      candidates = await searchDouban(title, year ?? undefined)
+      // ADR-188 D-188-4：采集埋点归因 source=enrich_worker（透传至 searchDoubanRich HTTP 出口）
+      candidates = await searchDouban(title, year ?? undefined, 'enrich_worker')
     } catch {
       return null
     }
@@ -264,7 +265,7 @@ export class MetadataEnrichService {
     if (!best) return 'unmatched'
 
     if (best.score >= MATCH_THRESHOLD) {
-      const detail = await getDoubanDetailRich(best.id)
+      const detail = await getDoubanDetailRich(best.id, 'enrich_worker')
       if (detail) {
         // CHORE-11 (2026-05-29) — 改条件赋值范式（同 step1 imdb / step1b title_norm /
         //   DoubanService 既有正确模式），消除 step2 之前用三元 `: undefined` 模式：

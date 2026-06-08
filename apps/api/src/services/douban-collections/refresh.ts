@@ -51,7 +51,8 @@ async function collectAllItems(
   let start = 0
   let total = Number.POSITIVE_INFINITY
   while (rows.length < cap && start < total) {
-    const page = await getDoubanCollectionItems(entry.key, start, PAGE_SIZE)
+    // ADR-188 D-188-4：采集埋点归因 source=collections_worker（分页多页各记一行）
+    const page = await getDoubanCollectionItems(entry.key, start, PAGE_SIZE, 'collections_worker')
     if (page === null) return null
     total = page.total
     if (page.items.length === 0) break

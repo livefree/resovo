@@ -90,7 +90,8 @@ describe('searchDouban', () => {
 
     const result = await runSearch('流浪地球', 2019)
 
-    expect(mockRich).toHaveBeenCalledWith('流浪地球', 2019)
+    // CHG-EXT-RES-STORE-B：searchDouban 透传第 3 参 source 给 searchDoubanRich（此处未传 → undefined）
+    expect(mockRich).toHaveBeenCalledWith('流浪地球', 2019, undefined)
     expect(result).toEqual([
       { id: '26266893', title: '流浪地球', year: '2019', sub_title: 'The Wandering Earth' },
       { id: '1', title: '别的', year: '', sub_title: '' },
@@ -100,7 +101,7 @@ describe('searchDouban', () => {
   it('无 year 时透传 undefined', async () => {
     mockRich.mockResolvedValue([])
     await runSearch('进击的巨人')
-    expect(mockRich).toHaveBeenCalledWith('进击的巨人', undefined)
+    expect(mockRich).toHaveBeenCalledWith('进击的巨人', undefined, undefined)
   })
 
   it('resolver 返回 [] → searchDouban 返回 []', async () => {

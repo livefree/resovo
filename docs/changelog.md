@@ -2705,3 +2705,19 @@
   - `tests/unit/api/externalFetchLog.test.ts`（新建）— 12 例（insert 参数序+缺省 / queryFetchLog 仅 provider WHERE+全过滤参数对齐+clamp+映射 / aggregate 分桶+avg 取整+空数据 null / deleteFetchLogBefore rowCount / registry 不变量：douban active capabilities + planned 空 + 未知 undefined + 值域不越 SSOT）
 - **新增依赖**：无 ｜ **数据库变更**：**migration 100**（external_data.external_fetch_log；architecture.md 已同步；dev 已落库验证 11 列 + 2 索引）
 - **注意事项**：① **offline dump 召回不入本表**（D-188-3：本地 DB 查询非外部 fetch；富集离线/在线分布另由 video_external_refs.match_method 聚合），故本表实际只产 scrape/api 行；② `status` 无 empty（成功但空 = ok + item_count 0）；`method` 复用 ACQUISITION_METHODS，scrape/api 属 external.types.sourceFreshness 的 online 细分（不回改既有类型，术语桥接）；③ registry 落 packages/types（H1：apps/api + apps/server-next 同源消费，否决放 apps/api 防 server-next 反向跨 app import）；3 枚举不纳入 verify-enum-ssot 守卫（专扫视频域，H3，人工约定从 const 派生）；④ 门禁：typecheck EXIT=0 / lint 5/5 / migrate 落表验证结构+索引 / 新测 12 例 / **test:changed 升全量 7080 passed 526 文件零回归**（packages/types 基础包 ADR-180）。
+
+## [CHG-EXT-RES-STORE-B] 外部资源采集埋点接入（SEQ-20260607-04 卡 2-B / ADR-188 D-188-4）
+- **完成时间**：2026-06-07
+- **记录时间**：2026-06-07 19:00
+- **执行模型**：claude-opus-4-8
+- **子代理**：无（实施 ADR-188 卡 1 arch-reviewer 既定埋点层裁定）
+- **修改文件**：
+  - `apps/api/src/lib/external-fetch-recorder.ts`（新建）— `recordFetch`（旁路 await + try/catch 吞错，**惰性动态 import postgres** 取 db）+ `classifyFetchError`（按 name 判 AbortError/TimeoutError → timeout）+ `fetchErrorSummary`（截断 500）
+  - `apps/api/src/lib/doubanAdapter.ts` — `withDoubanFetchRecord` 包裹器 + 3 出口（searchDoubanRich=search / getDoubanDetailRich=detail / getDoubanCollectionItems=collection）埋点 + 各加可选 `source` 参；method 恒 scrape，成功/失败均记一行，返回/降级（[]/null）语义逐字不变
+  - `apps/api/src/lib/douban.ts` — `searchDouban` 加 `source` 参**透传** searchDoubanRich（委托关系，不重复埋点防双计）
+  - `apps/api/src/services/MetadataEnrichService.ts` — step2 searchDouban/getDoubanDetailRich 透传 `source='enrich_worker'`
+  - `apps/api/src/services/douban-collections/refresh.ts` — getDoubanCollectionItems 透传 `source='collections_worker'`
+  - `tests/unit/api/externalFetchRecorder.test.ts`（新建，6 例：recordFetch 写入 + 吞错 / classify DOMException·AbortError·普通 / summary 截断）+ `tests/unit/api/doubanAdapterRecord.test.ts`（新建，6 例：3 出口成功 ok+operation+source+itemCount / 失败 status+error+降级不变 / detail 有无 data）+ `tests/unit/api/doubanAdapter.test.ts`（加 recorder mock 防真实 DB）+ `tests/unit/api/doubanSearch.test.ts`·`tests/unit/api/metadataEnrich.test.ts`（3 处精确参数断言更新含 source）
+- **新增依赖**：无 ｜ **数据库变更**：无（消费 STORE-A 的 external_fetch_log）
+- **关键修正（实施期发现优于 ADR 字面）**：① ADR M4① 假设 `lib/douban.searchDouban` 是独立 HTTP 出口需单独埋点——实证其**委托** `searchDoubanRich`（doubanAdapter），故只埋 adapter 3 出口、lib/douban 仅透传 source，**否则双计**；② recorder **惰性动态 import postgres**（非静态 import）——否则 doubanAdapter 及其广泛下游测试在模块 load 期即强依赖 DATABASE_URL（postgres 无该环境变量 import 即抛），破坏全量套件；③ classifyFetchError 按 `name` 判定不依赖 instanceof Error（AbortSignal.timeout 抛 DOMException，Node 下非 Error 子类）。
+- **注意事项**：① **纯旁路**——埋点 await + 吞错，不改既有 worker/Service 行为与返回；offline step1 dump 召回不埋（D-188-3）；② source 由调用方传（出口函数不知谁调），admin_search 留待卡 3；③ **真实 DB e2e**（run-and-delete）：recordFetch→落 2 行（search/ok + collection/fail）+ queryFetchLog 过滤(status=fail,op=collection)命中 + aggregate total 2/ok 1/fail 1/avgMs 106；④ 门禁：typecheck EXIT=0 / lint 5/5 / **test:changed 17 文件 206 全过**（含 metadataEnrich/doubanSearch 断言更新）。

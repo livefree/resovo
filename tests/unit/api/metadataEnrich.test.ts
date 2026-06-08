@@ -324,11 +324,14 @@ describe('MetadataEnrichService.enrich()', () => {
       poster: 'https://img.example.com/p.jpg',
       directors: ['荒木哲郎'], cast: ['梶裕贵'], screenwriters: [],
       genres: ['动作'], countries: ['日本'],
-    } as Parameters<typeof getDoubanDetailRich>[1] extends infer R ? R : never)
+      // CHG-EXT-RES-STORE-B：getDoubanDetailRich 新增 source 第 2 参后，原 Parameters[1] hack 失效，
+      // 改用 Awaited<ReturnType> 正确返回类型（部分 mock 经 unknown 双断言）
+    } as unknown as Awaited<ReturnType<typeof getDoubanDetailRich>>)
 
     await service.enrich(makeJobData())
 
-    expect(getDoubanDetailRich).toHaveBeenCalledWith('db123')
+    // step2 详情埋点归因 source=enrich_worker（ADR-188 D-188-4）
+    expect(getDoubanDetailRich).toHaveBeenCalledWith('db123', 'enrich_worker')
     const call = vi.mocked(videosQueries.updateVideoEnrichStatus).mock.calls[0]
     expect(call[2].doubanStatus).toBe('matched')
   })
