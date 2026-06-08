@@ -712,7 +712,7 @@ describe('BangumiService.matchAndEnrich', () => {
     mGetEpisodes.mockResolvedValue([])
     const r = await svc.matchAndEnrich({ videoId: VID, catalogId: CID, titleNorm: '海贼王', year: 2007 })
     expect(r).toMatchObject({ matched: 'auto', bangumiSubjectId: 975 })
-    expect(mSearchStrict).toHaveBeenCalledWith('海贼王', 10, expect.any(Object))
+    expect(mSearchStrict).toHaveBeenCalledWith('海贼王', 10, expect.any(Object), 'enrich_worker')
     expect(mUpsertRef).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ matchStatus: 'auto_matched', isPrimary: true }))
   })
 
@@ -792,7 +792,7 @@ describe('BangumiService.matchAndEnrich', () => {
     mFindByTitle.mockResolvedValue([])
     mSearchStrict.mockResolvedValue([])
     await svc.matchAndEnrich({ videoId: VID, catalogId: CID, titleNorm: 'x', year: 2007 })
-    expect(mSearchStrict).toHaveBeenCalledWith('x', 10, { token: 'db-token-xyz', userAgent: 'custom/1.0', timeoutMs: 5000 })
+    expect(mSearchStrict).toHaveBeenCalledWith('x', 10, { token: 'db-token-xyz', userAgent: 'custom/1.0', timeoutMs: 5000 }, 'enrich_worker')
   })
 
   it('getBangumiConfig：DB 空 → cfg={}（lib 回退 env）', async () => {
@@ -800,7 +800,7 @@ describe('BangumiService.matchAndEnrich', () => {
     mFindByTitle.mockResolvedValue([])
     mSearchStrict.mockResolvedValue([])
     await svc.matchAndEnrich({ videoId: VID, catalogId: CID, titleNorm: 'y', year: 2007 })
-    expect(mSearchStrict).toHaveBeenCalledWith('y', 10, {})
+    expect(mSearchStrict).toHaveBeenCalledWith('y', 10, {}, 'enrich_worker')
   })
 
   it('getBangumiConfig：60s 缓存 → 同实例多次只查 system_settings 一次', async () => {
@@ -862,7 +862,7 @@ describe('BangumiService.confirmMatch', () => {
     mGetEpisodes.mockResolvedValue([])
     const r = await svc.confirmMatch(VID, CID, 99999)
     expect(r).toEqual({ updated: true })
-    expect(mGetSubject).toHaveBeenCalledWith(99999, expect.any(Object))
+    expect(mGetSubject).toHaveBeenCalledWith(99999, expect.any(Object), 'enrich_worker')
     expect(mUpdateCatalog).toHaveBeenCalled()
     expect(mUpsertRef).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
       provider: 'bangumi', matchStatus: 'manual_confirmed', isPrimary: true,

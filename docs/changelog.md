@@ -2822,3 +2822,16 @@
   - `tests/unit/api/bangumiCollections.test.ts`（新建）— 12 单测（单合集事务/INSERT 失败 ROLLBACK / calendar 一拉七写原子 1 BEGIN+1 COMMIT / 任一组失败整体 ROLLBACK 无 COMMIT / syncState failed 不刷 success / 读路径映射 + rating Number 强转 / registry 9 合集·weekday 映射）
 - **新增依赖**：无 ｜ **数据库变更**：migration 101（2 表，dev 已落库）
 - **注意事项**：① **分表非并表**（ADR-189 D-189-3 / arch H2：与 douban 字段差异 >50%，并表致大量稀疏列）；② calendar 一拉七写原子是与豆瓣「每 collection 独立判定」的关键差异（7 weekday 共享一次 GET /calendar）；③ 门禁：typecheck/lint EXIT=0 / migrate 101 ✅ / 新测 12 全绿 / test:changed EXIT=0；④ 下一卡 CHG-BNG-RES-STORE-2B（埋点接 lib/bangumi HTTP 出口，守 D-188-3 dump-refresh 不入表）。
+
+## [CHG-BNG-RES-STORE-2B] Bangumi 采集埋点接入 + lib 扩端点（SEQ-20260607-05 卡 2-B / ADR-189 D-189-5/6）
+- **完成时间**：2026-06-07
+- **记录时间**：2026-06-07 22:50
+- **执行模型**：claude-opus-4-8
+- **子代理**：无
+- **修改文件**：
+  - `apps/api/src/lib/bangumi.ts` — ① 全 HTTP 出口接 recordFetch（getSubject/getEpisodes→detail·getCharacters→celebrity·searchSubjects(Strict)→search·getCalendar→schedule·searchSubjectsSorted→collection，method=api）；`bgmGet` 改**抛错版**（BangumiHttpError 带 status）+ 各公开函数 try/catch 记 ok/fail/timeout（**404→ok** valid-negative）+ 保留 null/[]/strict-throw 对外语义 ② **新增 `getCalendar`**（GET /calendar，失败返 null）+ **`searchSubjectsSorted`**（POST /v0/search/subjects sort+filter，sort `z`-enum 收窄·filter 结构化禁 any·失败返 null 信号，arch H3）③ 加 `source?: FetchSource` 参（埋点透传）
+  - `apps/api/src/services/BangumiService.ts` — source 透传 additive：`gatherEnrichmentData`/`matchViaRest` 加默认 `enrich_worker` 参并下传 getSubject/getEpisodes/getCharacters/searchSubjectsStrict；`searchCandidates` 显式 `admin_search`（**不改富集行为** D-189-9）
+  - `tests/unit/api/bangumi-lib.test.ts` — 增强至 20 测：mock recorder（spy 防真实 DB 写）+ 埋点断言（provider/operation/method/status/source/itemCount）+ 404→ok·5xx→fail·getCalendar/searchSubjectsSorted 成功+失败信号
+  - `tests/unit/api/bangumi-service.test.ts` — 4 处精确调用断言补 `source` 实参（getSubject/searchSubjectsStrict 多第 3 参）
+- **新增依赖**：无 ｜ **数据库变更**：无（埋点写既有 external_fetch_log）
+- **注意事项**：① **dump-refresh 不接埋点**——守 ADR-188 D-188-3「offline 不入表」（arch B2，dump 重导是本地文件导入零外部 HTTP），dump 可观测改 bangumi_entries MAX(updated_at)/COUNT 聚合归卡 3 概览；② collections worker source 复用既有 **`collections_worker`** 枚举（非 ADR 字面 `bangumi_collections_worker`——provider 列已区分，避免枚举膨胀）；③ 富集事务热路径无虞（REST 在 BangumiService Phase 1 事务外，recordFetch ms 级 insert 不持 idle-in-transaction，arch M1）；④ 门禁：typecheck/lint EXIT=0 / bangumi-lib 20 + service 72 全绿 / test:changed 14 文件 270 全过；⑤ 下一卡 CHG-BNG-RES-STORE-2C（collections worker 消费 getCalendar/searchSubjectsSorted 落库）。

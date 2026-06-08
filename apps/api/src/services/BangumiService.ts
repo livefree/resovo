@@ -21,6 +21,7 @@ import * as videosQueries from '@/api/db/queries/videos'
 import * as systemSettingsQueries from '@/api/db/queries/systemSettings'
 import { getSubject, getEpisodes, getCharacters, searchSubjects, searchSubjectsStrict, isBangumiApiConfigured } from '@/api/lib/bangumi'
 import type { BangumiClientConfig } from '@/api/lib/bangumi'
+import type { FetchSource } from '@/api/db/queries/external-fetch-log'
 import { normalizeForExternalMatch, stripExternalMatchPunct } from './TitleNormalizer'
 import {
   computeLocalBangumiConfidence,
@@ -258,8 +259,9 @@ export class BangumiService {
     titleNorm: string,
     year: number | null,
     cfg?: BangumiClientConfig,
+    source: FetchSource = 'enrich_worker',
   ): Promise<{ bangumiId: number; confidence: number; breakdown: Record<string, number>; localEntry: null } | null> {
-    const items = await searchSubjectsStrict(titleNorm, 10, cfg)
+    const items = await searchSubjectsStrict(titleNorm, 10, cfg, source)
     let best: { bangumiId: number; confidence: number; breakdown: Record<string, number>; localEntry: null } | null = null
     // pass 1：name_cn/name 精确（无额外 REST 调用，保留 META-17 快路径）
     for (const item of items) {
@@ -272,7 +274,7 @@ export class BangumiService {
 
     // pass 2（别名感知）：name 未命中 → top-N getSubject 查 infobox 别名
     for (const item of items.slice(0, ALIAS_CHECK_TOP_N)) {
-      const subject = await getSubject(item.id, cfg)
+      const subject = await getSubject(item.id, cfg, source)
       if (!subject) continue
       const { confidence, breakdown } = computeAliasBangumiConfidence(subject, titleNorm, year)
       if (confidence >= CONFIDENCE_CANDIDATE && (best === null || confidence > best.confidence)) {
@@ -361,7 +363,7 @@ export class BangumiService {
     if (input.keyword) {
       const cfg = await this.getBangumiConfig()   // ADR-168
       if (isBangumiApiConfigured(cfg)) {
-        const items = await searchSubjects(input.keyword, 10, cfg)
+        const items = await searchSubjects(input.keyword, 10, cfg, 'admin_search')
         for (const it of items) {
           if (out.has(it.id)) continue
           out.set(it.id, {
@@ -391,6 +393,7 @@ export class BangumiService {
     bangumiId: number,
     entry: BangumiEntryMatch | null,
     cfg?: BangumiClientConfig,
+    source: FetchSource = 'enrich_worker',
   ): Promise<EnrichmentData> {
     let fields: CatalogUpdateData | null = null
     let episodes: CatalogEpisodeInput[] = []
@@ -400,11 +403,11 @@ export class BangumiService {
     let degraded = true
 
     if (isBangumiApiConfigured(cfg)) {
-      const subject = await getSubject(bangumiId, cfg)
+      const subject = await getSubject(bangumiId, cfg, source)
       if (subject) {
         fields = mapSubjectToCatalogFields(subject)
         degraded = false
-        const eps = await getEpisodes(bangumiId, cfg)
+        const eps = await getEpisodes(bangumiId, cfg, source)
         if (eps.length > 0) episodes = mapEpisodes(eps)
         // 本篇集数（ADR-161 P1）：优先 wiki eps（本篇数）；否则数 type===0 本篇；
         // 不用 total_episodes（含 SP/OP/ED 章节，会高估用户侧剧集数）
@@ -414,7 +417,7 @@ export class BangumiService {
         // ADR-161 AMENDMENT / META-19：角色 + CV。getCharacters 与 subject 解耦，独立失败返 null。
         // 区分「抓取失败(null)」与「成功返回空([])」：仅成功(非 null)标 charactersFetched，
         // apply 侧据此全量替换（成功空也替换 → 清陈旧角色；失败跳过 → 不误删 / D-161-AMD-3）。
-        const chars = await getCharacters(bangumiId, cfg)
+        const chars = await getCharacters(bangumiId, cfg, source)
         if (chars !== null) {
           charactersFetched = true
           characters = mapCharacters(chars)
