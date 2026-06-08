@@ -17,10 +17,14 @@ import { PROVIDER_KEYS, type ProviderKey } from '@resovo/types'
 import { fetchProviders, METHOD_LABELS, labelOf, type ProviderSummary } from '@/lib/external-resources/api'
 import { OverviewTab } from './OverviewTab'
 import { ActivityTab } from './ActivityTab'
+import { CollectionsTab } from './CollectionsTab'
+import { SearchTab } from './SearchTab'
 
-// ── tab 定义（UI-A：概览 + 采集记录；UI-B 追加 collections/search）─────
+// ── tab 定义（概览 / 热门资源 / 资源搜索 / 采集记录）──────────────────
 const TABS = [
   { id: 'overview', label: '概览' },
+  { id: 'collections', label: '热门资源' },
+  { id: 'search', label: '资源搜索' },
   { id: 'activity', label: '采集与富集记录' },
 ] as const
 type TabId = (typeof TABS)[number]['id']
@@ -91,9 +95,11 @@ export function ExternalResourcesClient() {
     const params = new URLSearchParams(searchParams.toString())
     if (next === DEFAULT_PROVIDER) params.delete('provider')
     else params.set('provider', next)
-    // 切 provider 重置 tab + 清理表格 namespaced query（act.*）避免跨 provider 串状态
+    // 切 provider 重置 tab + 清理表格 namespaced query（act./col./srch.）避免跨 provider 串状态
     params.delete('tab')
-    for (const k of [...params.keys()]) if (k.startsWith('act.')) params.delete(k)
+    for (const k of [...params.keys()]) {
+      if (k.startsWith('act.') || k.startsWith('col.') || k.startsWith('srch.')) params.delete(k)
+    }
     router.push(`/admin/external-resources${params.size > 0 ? `?${params}` : ''}`)
   }
 
@@ -166,6 +172,8 @@ export function ExternalResourcesClient() {
             data-ext-tabpanel={activeTab}
           >
             {activeTab === 'overview' && <OverviewTab provider={provider} />}
+            {activeTab === 'collections' && <CollectionsTab provider={provider} />}
+            {activeTab === 'search' && <SearchTab provider={provider} />}
             {activeTab === 'activity' && <ActivityTab provider={provider} />}
           </section>
         </>

@@ -6,21 +6,14 @@
 
 ## 当前任务（单任务工作台：同时仅 1 个 🔄 进行中；完成即删卡，历史见 docs/changelog.md）
 
-### CHG-EXT-RES-UI-B — 外部资源浏览 Tab（热门资源 + 资源搜索）
-- **状态**：🔄 进行中
-- **来源序列**：SEQ-20260607-04（卡 4-B）
-- **建议模型**：opus
-- **执行模型**：claude-opus-4-8
-- **子代理调用**：无（复用 admin-ui 既有组件，零新共享契约）
-- **实际开始**：2026-06-07 21:00
-- **文件范围**：`apps/server-next/src/lib/external-resources/api.ts`（追加 fetchCollections/unifiedSearch + 类型）、`apps/server-next/src/app/admin/external-resources/_client/ExternalResourcesClient.tsx`（TABS 扩到 4 + 挂载 2 Tab）、`_client/CollectionsTab.tsx` + `_client/SearchTab.tsx`（新建）、`tests/unit/components/server-next/...`（视图单测追加）、`tests/e2e/...`（admin 域 e2e）
-- **完成备注**：_（完成后填写）_
+_（当前无进行中任务。取下一个前先查 `docs/task-queue.md` 是否有 🚨 BLOCKER。）_
 
 ---
 
-#### 卡 4-A 完成存档（CHG-EXT-RES-UI-A ✅ 2026-06-07 20:55）
-- 已交付：采集中心 nav「外部资源」入口 + `/admin/external-resources` provider 框架（Segment + tab 容器 `?provider=&tab=`）+ api 取数层 + 概览 Tab（KpiCard + 采集/富集明细 + 合集新鲜度）+ 采集流水 Tab（DataTable + 过滤器）+ 13 视图单测。
-- 门禁：typecheck/lint/test:changed 全绿。详见 changelog `[CHG-EXT-RES-UI-A]`。
+#### SEQ-20260607-04 EXT-RES-GOV 全收口存档（✅ 2026-06-07 21:25）
+- 外部资源 provider 无关治理框架打通：ADR-188 + STORE(A/B/C) + API(A/B 5 端点) + UI(A/B 4 Tab)。
+- 豆瓣 active 全量接入（采集观测 / 富集统计 / 热门资源分类 / 统一搜索 dump+在线）；Bangumi/IMDB/TMDb registry 占位待 CHG-EXT-RES-BANGUMI。
+- 门禁：typecheck/lint 全绿 / 视图单测 20 + admin e2e 3 smoke 全绿。详见 changelog `[CHG-EXT-RES-UI-A]`+`[CHG-EXT-RES-UI-B]`。
 
 ---
 

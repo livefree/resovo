@@ -1495,7 +1495,7 @@
 
 ## [SEQ-20260607-04] EXT-RES-GOV — 外部资源治理框架 v1（豆瓣首接入 · provider 可扩展）
 
-- **状态**：🔄 进行中（卡 1 ADR ✅ / 卡 2 STORE A·B·C ✅ / 卡 3 API A·B ✅ / 卡 4 UI-A ✅ / 进行卡 4-B 浏览 Tab）
+- **状态**：✅ 已完成 2026-06-07 21:25（卡 1 ADR ✅ / 卡 2 STORE A·B·C ✅ / 卡 3 API A·B ✅ / 卡 4 UI A·B ✅；框架全打通——豆瓣 active 全量接入 + Bangumi/IMDB/TMDb registry 占位）
 - **创建时间**：2026-06-07 17:30
 - **目标**：搭 provider 无关的「外部资源治理」后台框架——采集观测（worker 抓了什么 / 成功否 / 内容类型 / 离线 vs 在线 / API 用量）+ 热门资源分类展示 + 统一资源搜索 + 富集统计；豆瓣作首个接入 provider 全量打通，Bangumi/IMDB/TMDb 占位待后续。
 - **用户定调（2026-06-07）**：① 导航落位采集中心（与采集控制并列，分组不更名）② provider 切换框架 + 4 Tab ③ 采集观测埋点（provider 无关操作日志，非窄口径 API 计数）④ 资源搜索统一（离线 dump + 在线实时）。本期搭框架 + 豆瓣接入；深度治理迭代与 Bangumi 接入框架搭好后另起。
@@ -1537,7 +1537,7 @@
    - **4-A · CHG-EXT-RES-UI-A** — 框架 + 观测 Tab：采集中心 nav 加「外部资源」+ `/admin/external-resources` page + ExternalResourcesClient（provider Segment + tab 容器 URL `?provider=&tab=`）+ api client（lib/external-resources/api.ts）+ 概览 Tab（KpiCard：数据规模/采集用量/成功率/离线vs在线/合集新鲜度）+ 采集与富集记录 Tab（fetch_log DataTable + 富集 breakdown）（状态：✅ 已完成 2026-06-07 20:55；UI-A 落地 概览+采集记录 2 Tab，富集 breakdown 归并入概览，planned provider 渲染待接入占位；13 视图单测全绿）
      - 建议模型：opus/sonnet（复用 admin-ui，零新共享组件）
      - 依赖：CHG-EXT-RES-API ✅
-   - **4-B · CHG-EXT-RES-UI-B** — 浏览 Tab：热门资源 Tab（CollectionsTab DataTable per category）+ 资源搜索 Tab（SearchTab DataTableSearchInput + 结果 + 在线开关）+ admin 域 e2e（状态：⬜ 待开始）
+   - **4-B · CHG-EXT-RES-UI-B** — 浏览 Tab：热门资源 Tab（CollectionsTab DataTable per category）+ 资源搜索 Tab（SearchTab DataTableSearchInput + 结果 + 在线开关）+ admin 域 e2e（状态：✅ 已完成 2026-06-07 21:25；CollectionsTab 分类 chips + 条目表 / SearchTab dump+在线开关+busy 降级横幅 / TABS 扩 4 / +7 视图单测 +3 e2e smoke 全绿）
      - 建议模型：opus/sonnet
      - 依赖：CHG-EXT-RES-UI-A
 

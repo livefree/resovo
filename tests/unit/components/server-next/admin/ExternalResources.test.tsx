@@ -25,6 +25,8 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 const mockFetchProviders = vi.fn()
 const mockFetchOverview = vi.fn()
 const mockFetchActivity = vi.fn()
+const mockFetchCollections = vi.fn()
+const mockSearchResources = vi.fn()
 
 let currentParams = new URLSearchParams()
 const pushMock = vi.fn()
@@ -43,12 +45,16 @@ vi.mock('@/lib/external-resources/api', async () => {
     fetchProviders: (...a: unknown[]) => mockFetchProviders(...a),
     fetchOverview: (...a: unknown[]) => mockFetchOverview(...a),
     fetchActivity: (...a: unknown[]) => mockFetchActivity(...a),
+    fetchCollections: (...a: unknown[]) => mockFetchCollections(...a),
+    searchResources: (...a: unknown[]) => mockSearchResources(...a),
   }
 })
 
 import { ExternalResourcesClient } from '@/app/admin/external-resources/_client/ExternalResourcesClient'
 import { OverviewTab } from '@/app/admin/external-resources/_client/OverviewTab'
 import { ActivityTab } from '@/app/admin/external-resources/_client/ActivityTab'
+import { CollectionsTab } from '@/app/admin/external-resources/_client/CollectionsTab'
+import { SearchTab } from '@/app/admin/external-resources/_client/SearchTab'
 
 const fmt = (n: number) => n.toLocaleString('zh-CN')
 
@@ -84,6 +90,22 @@ const ACTIVITY_ROWS = [
   { id: '2', provider: 'douban', operation: 'search', method: 'scrape', status: 'fail', source: 'admin_search', target: '流浪地球', itemCount: 0, durationMs: 1200, error: 'timeout', createdAt: '2026-06-07T09:00:00Z' },
 ]
 
+const COLLECTIONS = {
+  items: [
+    { collection: 'movie_hot_gaia', domain: 'movie', category: 'trending', doubanId: '1', rank: 0, title: '诺曼底72小时', originalTitle: null, year: 2026, ratingValue: 8.2, coverUrl: null },
+  ],
+  total: 345,
+  summary: [
+    { collection: 'movie_hot_gaia', domain: 'movie', category: 'trending', count: 345 },
+    { collection: 'tv_hot', domain: 'tv', category: 'trending', count: 247 },
+  ],
+}
+
+const SEARCH = {
+  rows: [{ source: 'offline' as const, doubanId: '26266893', title: '流浪地球', year: 2019, rating: 7.9 }],
+  total: 1,
+}
+
 beforeEach(() => {
   currentParams = new URLSearchParams()
   pushMock.mockClear()
@@ -91,6 +113,8 @@ beforeEach(() => {
   mockFetchProviders.mockReset().mockResolvedValue(PROVIDERS)
   mockFetchOverview.mockReset().mockResolvedValue(OVERVIEW)
   mockFetchActivity.mockReset().mockResolvedValue({ rows: ACTIVITY_ROWS, total: 2 })
+  mockFetchCollections.mockReset().mockResolvedValue(COLLECTIONS)
+  mockSearchResources.mockReset().mockResolvedValue(SEARCH)
 })
 
 afterEach(() => cleanup())
@@ -116,6 +140,14 @@ describe('ExternalResourcesClient', () => {
     expect(screen.getByText('API')).not.toBeNull()
     expect(screen.queryByTestId('ext-tab-segment')).toBeNull()
     expect(mockFetchOverview).not.toHaveBeenCalled()
+  })
+
+  it('active 渲染 4 个治理 tab（概览/热门资源/资源搜索/采集与富集记录）', async () => {
+    render(<ExternalResourcesClient />)
+    expect(await screen.findByRole('tab', { name: '概览' })).not.toBeNull()
+    expect(screen.getByRole('tab', { name: '热门资源' })).not.toBeNull()
+    expect(screen.getByRole('tab', { name: '资源搜索' })).not.toBeNull()
+    expect(screen.getByRole('tab', { name: '采集与富集记录' })).not.toBeNull()
   })
 
   it('切 tab → router.push 带 ?tab=activity', async () => {
@@ -200,5 +232,68 @@ describe('ActivityTab', () => {
     mockFetchActivity.mockReset().mockResolvedValue({ rows: [], total: 0 })
     render(<ActivityTab provider="douban" />)
     expect(await screen.findByText('暂无采集记录')).not.toBeNull()
+  })
+})
+
+// ── CollectionsTab ────────────────────────────────────────────────
+
+describe('CollectionsTab', () => {
+  it('渲染分类 chips（含计数）+ 条目（rank+1 / 评分）', async () => {
+    render(<CollectionsTab provider="douban" />)
+    expect(await screen.findByText('全部分类')).not.toBeNull()
+    // chip：movie_hot_gaia 345 / tv_hot 247
+    expect(screen.getByText('movie_hot_gaia')).not.toBeNull()
+    expect(screen.getByText('247')).not.toBeNull()
+    // 条目：标题 + rank 显示 1（rank 0 + 1）+ 评分 8.2
+    expect(await screen.findByText('诺曼底72小时')).not.toBeNull()
+    expect(screen.getByText('8.2')).not.toBeNull()
+  })
+
+  it('点击分类 chip → fetchCollections 带 collection 过滤', async () => {
+    render(<CollectionsTab provider="douban" />)
+    const chip = await screen.findByText('tv_hot')
+    fireEvent.click(chip)
+    await waitFor(() =>
+      expect(mockFetchCollections.mock.calls.some((c) => (c[1] as { collection?: string })?.collection === 'tv_hot')).toBe(true),
+    )
+  })
+
+  it('null（无条目）→ EmptyState', async () => {
+    mockFetchCollections.mockReset().mockResolvedValue(null)
+    render(<CollectionsTab provider="douban" />)
+    expect(await screen.findByText('暂无热门资源')).not.toBeNull()
+  })
+})
+
+// ── SearchTab ─────────────────────────────────────────────────────
+
+describe('SearchTab', () => {
+  it('初始无输入 → 提示 EmptyState，不调用 searchResources', async () => {
+    render(<SearchTab provider="douban" />)
+    expect(await screen.findByText('输入关键词搜索')).not.toBeNull()
+    expect(mockSearchResources).not.toHaveBeenCalled()
+  })
+
+  it('输入并回车 → 调用 searchResources + 渲染结果（离线 Pill）', async () => {
+    render(<SearchTab provider="douban" />)
+    const input = await screen.findByTestId('ext-search-input')
+    fireEvent.change(input, { target: { value: '流浪地球' } })
+    fireEvent.keyDown(input, { key: 'Enter' })
+    expect(await screen.findByText('流浪地球')).not.toBeNull()
+    expect(screen.getByText('离线')).not.toBeNull()
+    expect(mockSearchResources.mock.calls.some((c) => (c[1] as { q?: string })?.q === '流浪地球')).toBe(true)
+  })
+
+  it('开在线实时 + 搜索 → live:true 透传 + busy 降级横幅', async () => {
+    mockSearchResources.mockReset().mockImplementation((_p: unknown, query: { live?: boolean }) =>
+      Promise.resolve(query.live ? { ...SEARCH, liveError: 'busy' } : SEARCH),
+    )
+    render(<SearchTab provider="douban" />)
+    fireEvent.click(await screen.findByTestId('ext-search-live-toggle'))
+    const input = screen.getByTestId('ext-search-input')
+    fireEvent.change(input, { target: { value: '流浪地球' } })
+    fireEvent.keyDown(input, { key: 'Enter' })
+    expect(await screen.findByText(/在线搜索繁忙/)).not.toBeNull()
+    expect(mockSearchResources.mock.calls.some((c) => (c[1] as { live?: boolean })?.live === true)).toBe(true)
   })
 })

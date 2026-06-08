@@ -2780,3 +2780,19 @@
 - **新增依赖**：无 ｜ **数据库变更**：无（纯前端消费 API-A/B 端点）
 - **注意事项**：① **零新共享组件**——复用 admin-ui `DataTable`/`KpiCard`/`AdminCard`/`Segment`/`PageHeader`/`Pill`/`AdminSelect`/`LoadingState`/`ErrorState`/`EmptyState`；② **富集 breakdown 归并入概览**（与采集聚合同属「概览」语义，ActivityTab 专注可下钻原始流水，避免重复渲染——较卡描述微调，更清晰）；③ 切 provider 主动清理 `act.*` URL query 防跨 provider 串表格状态；④ planned provider 全 provider-scoped 端点零请求（Client 直接渲染占位，不挂 OverviewTab/ActivityTab）；⑤ 门禁：typecheck EXIT=0 / lint 5/5（新文件零告警）/ 13 视图单测全绿 / test:changed 2 文件 19 全过（admin-nav 改动连带 admin-shell-client）；⑥ **本卡 UI-A 落地 概览+采集记录 2 Tab**；热门资源 + 资源搜索 2 Tab + admin 域 e2e 见 UI-B。
 - **复用清单沉淀**：取数标签映射（OPERATION/METHOD/STATUS/SOURCE_LABELS）置于 `lib/external-resources/api.ts`，UI-B 的 CollectionsTab/SearchTab 直接复用。
+
+## [CHG-EXT-RES-UI-B] 外部资源浏览 Tab 热门资源 + 资源搜索（SEQ-20260607-04 卡 4-B / ADR-188 D-188-5/6 · SEQ 收口）
+- **完成时间**：2026-06-07
+- **记录时间**：2026-06-07 21:25
+- **执行模型**：claude-opus-4-8
+- **子代理**：无（复用 admin-ui 既有组件，零新共享契约）
+- **修改文件**：
+  - `apps/server-next/src/lib/external-resources/api.ts` — 追加 `fetchCollections`（items 分页 + 全合集 summary 分类计数）/ `searchResources`（dump + `?live=1` 在线 + liveError 透传）+ 对应类型（CollectionItem/CollectionSummaryItem/SearchHit/SearchResult）
+  - `apps/server-next/src/app/admin/external-resources/_client/CollectionsTab.tsx`（新建）— 热门资源：顶部分类 chips（各合集条目数，点击过滤；summary 不随过滤变化恒展全部分类）+ 条目 `DataTable`（density=poster：排名/封面〔Thumb poster-sm〕/标题+原名/年份/评分），rowKey=collection:doubanId
+  - `apps/server-next/src/app/admin/external-resources/_client/SearchTab.tsx`（新建）— 统一搜索：`DataTableSearchInput`（debounce/Enter 触发）+「在线实时」toggle（aria-pressed）+ 结果 `DataTable`（来源 Pill offline/online）；live=busy 限流 → 降级横幅「在线搜索繁忙，仅显示离线结果」；空 query → 引导 EmptyState
+  - `apps/server-next/src/app/admin/external-resources/_client/ExternalResourcesClient.tsx` — TABS 扩 2→4（概览/热门资源/资源搜索/采集与富集记录）+ 挂载 CollectionsTab/SearchTab；切 provider 清理表格 namespaced query 扩到 `act./col./srch.`
+  - `tests/unit/components/server-next/admin/ExternalResources.test.tsx` — +7 视图单测（Client 4-tab / CollectionsTab chips+条目·chip 过滤·null-empty / SearchTab 空提示·输入回车结果·live busy 横幅）→ 累计 20 全绿
+  - `tests/e2e/admin/external-resources/external-resources-smoke.spec.ts`（新建）— 3 e2e smoke：概览 4 tab+KPI 非破折号 / 热门资源 chips+表格·资源搜索输入回车结果 / planned bangumi 待接入占位（PLAYWRIGHT_SERVERS=admin-next 实跑 3 passed 15.9s）
+- **新增依赖**：无 ｜ **数据库变更**：无（纯前端消费 API-B 端点）
+- **注意事项**：① **零新共享组件**——复用 admin-ui `DataTable`/`DataTableSearchInput`/`Thumb`/`Pill`/`EmptyState` 等；② 三表格各自独立 useTableQuery URL namespace（`act`/`col`/`srch`）+ 外层 `?provider=&tab=`，切 provider 主动清理防串状态；③ SearchTab 在线 live 默认关（仅 dump 秒回）；live busy 仅降级横幅不阻断 dump 结果；④ 门禁：typecheck EXIT=0 / lint 5/5（新文件零告警）/ 视图单测 20 全绿 / **admin e2e 3 smoke 全绿** / test:changed 1 文件 20 全过。
+- **SEQ-20260607-04 EXT-RES-GOV 全收口**：ADR-188 + STORE(A/B/C 数据模型+埋点+purge) + API(A/B 5 端点+聚合+搜索) + UI(A/B 框架+4 Tab)。外部资源 provider 无关治理框架打通：采集观测（worker 抓取流水：内容类型/方式/成功率/用量）+ 富集统计 + 热门资源分类 + 统一搜索（dump+在线）；豆瓣 active 全量接入，Bangumi/IMDB/TMDb registry 占位待后续 CHG-EXT-RES-BANGUMI。ADR-188 pending D-numbers 仅余 D-188-8（边界声明，无代码义务）。
