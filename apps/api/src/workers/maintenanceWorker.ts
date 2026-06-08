@@ -12,6 +12,7 @@ import { StagingPublishService } from '@/api/services/StagingPublishService'
 import { SourceVerificationService } from '@/api/services/SourceVerificationService'
 import { VideoIndexSyncService } from '@/api/services/VideoIndexSyncService'
 import { bulkSyncSourceCheckStatus } from '@/api/db/queries/videos'
+import { deleteFetchLogBefore } from '@/api/db/queries/external-fetch-log'
 import { baseLogger, withJob } from '@/api/lib/logger'
 import type pino from 'pino'
 
@@ -24,6 +25,7 @@ export type MaintenanceJobType =
   | 'verify-published-sources'
   | 'verify-staging-sources'
   | 'reconcile-search-index'
+  | 'purge-external-fetch-log'
 
 export interface MaintenanceJobData {
   type: MaintenanceJobType
@@ -35,6 +37,8 @@ export interface MaintenanceJobData {
   stagingBatchLimit?: number
   /** reconcile-search-index: 单批次最大同步数量（default 100） */
   reconcileBatchLimit?: number
+  /** purge-external-fetch-log: 保留天数（default 30，ADR-188 D-188-7） */
+  purgeRetentionDays?: number
 }
 
 export interface MaintenanceJobResult {
@@ -99,6 +103,15 @@ async function processMaintenanceJob(
         deleted: staleResult.deleted,
         errors: publishedResult.errors + staleResult.errors,
       }
+    }
+    case 'purge-external-fetch-log': {
+      // ADR-188 D-188-7：external_fetch_log 保留 30 天，删早于 cutoff 的采集流水（防无界增长）
+      const retentionDays = data.purgeRetentionDays ?? 30
+      const cutoff = new Date(Date.now() - retentionDays * 24 * 3600_000).toISOString()
+      const deleted = await deleteFetchLogBefore(db, cutoff)
+      const durationMs = Date.now() - startAt
+      jobLog.info({ stage: 'purge-external-fetch-log', deleted, retentionDays, duration_ms: durationMs }, 'job done')
+      return { type: data.type, durationMs, deleted }
     }
     default: {
       const never: never = data.type

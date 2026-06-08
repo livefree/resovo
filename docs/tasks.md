@@ -6,14 +6,14 @@
 
 ## 当前任务（单任务工作台：同时仅 1 个 🔄 进行中；完成即删卡，历史见 docs/changelog.md）
 
-### CHG-EXT-RES-STORE-C — external_fetch_log 30天 purge
+### CHG-EXT-RES-API-A — 外部资源治理观测读端点（providers/overview/activity）
 - **状态**：🔄 进行中
-- **来源序列**：SEQ-20260607-04（卡 2-C，从 STORE-B 拆出）
+- **来源序列**：SEQ-20260607-04（卡 3-A）
 - **建议模型**：opus
 - **执行模型**：claude-opus-4-8
-- **子代理调用**：无（实施 ADR-188 D-188-7 既定保留策略）
-- **实际开始**：2026-06-07 19:05
-- **文件范围**：`apps/api/src/workers/maintenanceWorker.ts`（加 job type `purge-external-fetch-log` → deleteFetchLogBefore）、`apps/api/src/workers/maintenanceScheduler.ts`（加 purge tick）、`tests/unit/...`（purge job/tick 单测）
+- **子代理调用**：无（实施 ADR-188 D-188-5 §端点契约既定授权）
+- **实际开始**：2026-06-07 19:25
+- **文件范围**：`apps/api/src/routes/admin/external-resources.ts`（新建，3 端点 providers/overview/activity）、`apps/api/src/services/ExternalResourcesService.ts`（新建聚合）、`apps/api/src/server.ts`（注册路由）、`tests/unit/...`（service + 路由单测）
 - **完成备注**：_（完成后填写）_
 
 ---

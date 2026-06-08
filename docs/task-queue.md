@@ -1495,7 +1495,7 @@
 
 ## [SEQ-20260607-04] EXT-RES-GOV — 外部资源治理框架 v1（豆瓣首接入 · provider 可扩展）
 
-- **状态**：🔄 进行中（卡 1 ADR ✅ / 卡 2-A STORE-A ✅ / 卡 2-B STORE-B ✅ / 进行卡 2-C STORE-C）
+- **状态**：🔄 进行中（卡 1 ADR ✅ / 卡 2 STORE A·B·C ✅ / 进行卡 3 API）
 - **创建时间**：2026-06-07 17:30
 - **目标**：搭 provider 无关的「外部资源治理」后台框架——采集观测（worker 抓了什么 / 成功否 / 内容类型 / 离线 vs 在线 / API 用量）+ 热门资源分类展示 + 统一资源搜索 + 富集统计；豆瓣作首个接入 provider 全量打通，Bangumi/IMDB/TMDb 占位待后续。
 - **用户定调（2026-06-07）**：① 导航落位采集中心（与采集控制并列，分组不更名）② provider 切换框架 + 4 Tab ③ 采集观测埋点（provider 无关操作日志，非窄口径 API 计数）④ 资源搜索统一（离线 dump + 在线实时）。本期搭框架 + 豆瓣接入；深度治理迭代与 Bangumi 接入框架搭好后另起。
@@ -1518,13 +1518,18 @@
      - 建议模型：opus（埋点接入富集热路径，旁路不改既有行为）
      - 依赖：CHG-EXT-RES-STORE-A ✅
      - 完成备注：实施 ADR-188 **D-188-4**。**关键修正**（实施期发现优于 ADR 字面）：① `lib/douban.searchDouban` 实为**委托** `searchDoubanRich`（adapter），故只在 adapter 3 出口埋点、lib/douban 仅**透传 source 不重复埋**（防双计，ADR 原 M4① 假设 lib/douban 是独立出口有误）；② recorder 改 **lazy 动态 import postgres**——避免 doubanAdapter 全下游测试在 load 期强依赖 DATABASE_URL（postgres import 即抛）；③ classifyFetchError 按 `name` 判 timeout（AbortSignal.timeout 抛 DOMException 非 instanceof Error）。新增 recorder + 3 出口 withDoubanFetchRecord 包裹（method=scrape、source 调用方传、await+吞错、返回/降级语义逐字不变）。单测：externalFetchRecorder(6) + doubanAdapterRecord(6) + 既有 doubanAdapter mock recorder；3 处既有精确参数断言更新（metadataEnrich/doubanSearch×2 因 additive source）。**真实 DB e2e**：recordFetch→落 2 行 + queryFetchLog 过滤命中 + aggregate total 2/ok 1/fail 1/avgMs 106。门禁：typecheck/lint 绿 / test:changed 17 文件 206 全过。执行模型: claude-opus-4-8；子代理: 无。
-   - **2-C · CHG-EXT-RES-STORE-C** — fetch_log 30天 purge（D-188-7）：maintenanceWorker job type `purge-external-fetch-log`（调 deleteFetchLogBefore）+ scheduler tick + 单测（状态：⬜ 待开始；从 STORE-B 拆出——原 ~7 项超原子上限）
+   - **2-C · CHG-EXT-RES-STORE-C** — fetch_log 30天 purge（D-188-7）：maintenanceWorker job type `purge-external-fetch-log`（调 deleteFetchLogBefore）+ scheduler daily tick + e2e（状态：✅ 已完成 2026-06-07 19:20）
      - 建议模型：opus（接既有维护 worker，旁路）
      - 依赖：CHG-EXT-RES-STORE-A ✅（purge query 已在 STORE-A）
+     - 完成备注：实施 ADR-188 **D-188-7** worker 接线。maintenanceWorker 加 job type `purge-external-fetch-log` + case（cutoff=now-retentionDays〔default 30〕→ deleteFetchLogBefore）；maintenanceScheduler 加 daily tick（入共享 maintenanceQueue，DELETE 短任务不阻塞 concurrency=1）+ timer/status/lastRunAt。入既有维护 worker（非独立 queue——purge 是秒级 DELETE，与 60-90s 的 douban refresh 不同，不需隔离）。**真实 DB e2e**：回填 -31d/-29d/now 三行 → deleteFetchLogBefore(30d cutoff) → old31 删、recent29+now 留。门禁：typecheck/lint 绿 / test:changed 2 文件 41 全过。worker/scheduler 接线遵循既有 4 job 同范式（无独立单测，purge 行为由 STORE-A deleteFetchLogBefore 单测 + 本卡 e2e 覆盖）。执行模型: claude-opus-4-8；子代理: 无。
 
-3. **CHG-EXT-RES-API** — admin 路由（外部资源治理 5 端点 [ADR-188 §端点契约：providers/overview/collections/search/activity] + ExternalResourcesService 聚合 + 统一搜索 dump query 归 externalData.ts）（状态：⬜ 待开始）
-   - 建议模型：opus（新 admin route → ADR-188 覆盖 + plan §4.5 R7 MUST-8）
-   - 依赖：CHG-EXT-RES-STORE
+3. **CHG-EXT-RES-API**（拆 -A/-B：5 端点 + service + query ~6 项超原子上限）
+   - **3-A · CHG-EXT-RES-API-A** — 观测读端点：`providers` + `:provider/overview`（fetchStats+enrichStats+collectionFreshness+dataScale）+ `:provider/activity`（fetch_log 过滤分页）+ ExternalResourcesService 聚合（消费 aggregateFetchLog/queryFetchLog/sync_state/external_refs）+ server.ts 注册 + 单测（状态：🔄 进行中）
+     - 建议模型：opus（新 admin route → ADR-188 §端点契约覆盖 + MUST-8）
+     - 依赖：CHG-EXT-RES-STORE ✅
+   - **3-B · CHG-EXT-RES-API-B** — 资源浏览端点：`:provider/collections`（合集分类）+ `:provider/search`（统一搜索 dump + `?live` 在线，5 项契约）+ dump 模糊搜索 query 归 externalData.ts（D-188-6）+ live 并发 1 限流 + 单测（状态：⬜ 待开始）
+     - 建议模型：opus（新 admin route + live 抓取限流/埋点）
+     - 依赖：CHG-EXT-RES-API-A
 
 4. **CHG-EXT-RES-UI** — 前端治理页（采集中心 nav + provider Segment + 4 Tab，复用 admin-ui 零新共享组件）（状态：⬜ 待开始）
    - 建议模型：opus/sonnet

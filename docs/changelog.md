@@ -2721,3 +2721,15 @@
 - **新增依赖**：无 ｜ **数据库变更**：无（消费 STORE-A 的 external_fetch_log）
 - **关键修正（实施期发现优于 ADR 字面）**：① ADR M4① 假设 `lib/douban.searchDouban` 是独立 HTTP 出口需单独埋点——实证其**委托** `searchDoubanRich`（doubanAdapter），故只埋 adapter 3 出口、lib/douban 仅透传 source，**否则双计**；② recorder **惰性动态 import postgres**（非静态 import）——否则 doubanAdapter 及其广泛下游测试在模块 load 期即强依赖 DATABASE_URL（postgres 无该环境变量 import 即抛），破坏全量套件；③ classifyFetchError 按 `name` 判定不依赖 instanceof Error（AbortSignal.timeout 抛 DOMException，Node 下非 Error 子类）。
 - **注意事项**：① **纯旁路**——埋点 await + 吞错，不改既有 worker/Service 行为与返回；offline step1 dump 召回不埋（D-188-3）；② source 由调用方传（出口函数不知谁调），admin_search 留待卡 3；③ **真实 DB e2e**（run-and-delete）：recordFetch→落 2 行（search/ok + collection/fail）+ queryFetchLog 过滤(status=fail,op=collection)命中 + aggregate total 2/ok 1/fail 1/avgMs 106；④ 门禁：typecheck EXIT=0 / lint 5/5 / **test:changed 17 文件 206 全过**（含 metadataEnrich/doubanSearch 断言更新）。
+
+## [CHG-EXT-RES-STORE-C] external_fetch_log 30天 purge 接线（SEQ-20260607-04 卡 2-C / ADR-188 D-188-7）
+- **完成时间**：2026-06-07
+- **记录时间**：2026-06-07 19:20
+- **执行模型**：claude-opus-4-8
+- **子代理**：无（实施 ADR-188 既定保留策略）
+- **修改文件**：
+  - `apps/api/src/workers/maintenanceWorker.ts` — MaintenanceJobType 加 `purge-external-fetch-log` + MaintenanceJobData `purgeRetentionDays?` + case（cutoff = now − retentionDays〔default 30〕→ `deleteFetchLogBefore`，返回 deleted 计数）
+  - `apps/api/src/workers/maintenanceScheduler.ts` — daily tick `runPurgeFetchLogTick`（入共享 maintenanceQueue + jobId + removeOnComplete/Fail）+ purgeFetchLogTimer/tickRunning/lastRunAt + getSchedulerStatus 第 7 项 + registerMaintenanceScheduler timer
+- **新增依赖**：无 ｜ **数据库变更**：无（消费 STORE-A external_fetch_log + deleteFetchLogBefore）
+- **注意事项**：① 入**共享 maintenanceQueue**（非独立 queue）——purge 是秒级 DELETE，与 60-90s 的 douban refresh 不同形态，无阻塞 concurrency=1 之虞（区别于 SEQ-20260607-03 STORE-B-FIX 拆独立 queue 的判据）；② **真实 DB e2e**（run-and-delete）：回填 -31d/-29d/now 三行 → deleteFetchLogBefore(30d cutoff) → old31 删、recent29+now 留（30 天 cutoff 正确）；③ worker/scheduler 接线遵循既有 4 maintenance job 同范式（无独立单测）；purge 行为由 STORE-A `deleteFetchLogBefore` 单测 + 本卡 e2e 覆盖；④ 门禁：typecheck EXIT=0 / lint 5/5 / test:changed 2 文件 41 全过。
+- **卡 2 STORE 全收口**：STORE-A（数据模型 registry+表+queries）+ STORE-B（在线出口埋点）+ STORE-C（30天 purge）。external_fetch_log 观测链路完整：在线抓取→旁路埋点→落库→过滤分页/聚合读→30天 purge。下游卡 3（admin 5 端点消费）/ 卡 4（UI 治理页）。
