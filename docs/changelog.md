@@ -3019,10 +3019,10 @@
 - **结论**：**cutover 4 项启动准入全部满足**（parity ✅ / v1 E2E ✅ / QA 迁移 ✅ / banner 确认 ✅）→ CHG-CUTOVER-EXECUTE（🔴 高风险物理 cutover：nginx 切流 + 删 apps/server + 改名 apps/admin）解锁，待人工 final sign-off 触发，独立门禁不自动推进。
 - **执行模型**：claude-opus-4-8（主循环续用；卡建议 sonnet）；**子代理**：无（核对 + 落档，无代码/契约改动）。
 
-## [CHG-CUTOVER-EXECUTE]（Phase A）旧后台 apps/server 物理退役 + nginx /admin 切流（🟡 分支待 sign-off）
+## [CHG-CUTOVER-EXECUTE]（Phase A）旧后台 apps/server 物理退役 + nginx /admin 切流（✅ 已合并 dev）
 
 - **决策**：4 项启动准入全部满足后执行物理 cutover。AskUserQuestion（2026-06-08）裁定**分阶段**：本卡只做功能性退役；`apps/server-next → apps/admin` 改名（152 文件路径引用，纯命名零功能收益）拆为后续卡 CHG-CUTOVER-RENAME-ADMIN。
-- **交付**：分支 `cutover/retire-apps-server`（off dev），回滚 tag `pre-server-next-cutover` @ 13940b06（RTO ≤ 4h）。**未合 main/dev**，待人工 final sign-off（PR 描述签字）后合并（plan §6 / ADR-101）。
+- **交付**：分支 `cutover/retire-apps-server`（off dev，commit df619a06）→ **人工 final sign-off（用户本地确认 2026-06-08）→ 已合入 dev（merge `e3aea798`）**（plan §6 / ADR-101）。合并冲突解决结果经核验与 df619a06 树完全一致。回滚 tag `pre-server-next-cutover` @ 13940b06（RTO ≤ 4h，nginx :3003→:3001 reload + checkout tag）。**+7 天回滚观察窗启动（~2026-06-15 收口，CHG-CUTOVER-ROLLBACK-WINDOW）**。
 - **改动（256 删除 + 16 编辑）**：
   - **nginx 切流**：`docker/nginx.conf` `upstream server` :3001 → :3003（server-next），/admin + /admin/_next/ 随之指向 server-next；附回滚注释。
   - **物理删除**：`apps/server/` 整目录（含 git rm 跟踪文件 + rm -rf 未跟踪构建产物）；老 admin 测试 47 个（`tests/unit/components/admin/` 43 + 4 老 admin e2e spec + `tests/unit/components/modern-table/` 4 测 v1 ModernDataTable + `tests/unit/components/shared/` 2 测 v1 DetailPageShell/DetailSection）。

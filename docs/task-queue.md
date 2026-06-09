@@ -1597,7 +1597,7 @@
 
 ## [SEQ-20260608-01] 旧后台 apps/server 退役执行序列（cutover 收尾）
 
-- **状态**：🔄 进行中（卡 1 ✅ + 卡 2 ✅；卡 3 Phase A 🟡 分支 `cutover/retire-apps-server` 完成待人工 final sign-off；卡 5 改名 + 卡 6 docs-rules-sync 后置登记；卡 4 待 cutover 合并后）
+- **状态**：🔄 进行中（卡 1 ✅ + 卡 2 ✅ + 卡 3 Phase A ✅ 已合入 dev `e3aea798`；卡 4 回滚窗 🔄 观察至 ~2026-06-15；卡 5 改名 + 卡 6 docs-rules-sync 后置）
 - **创建时间**：2026-06-08 16:30
 - **最后更新时间**：2026-06-08 19:05
 - **source_of_truth**：`docs/server_next_plan_20260427.md` §6 M-SN-7（CUTOVER 执行门禁版，v2.7）
@@ -1618,7 +1618,7 @@
    - 建议模型：sonnet。
    - **完成备注**：**完全等价 ✅，无缺口，不登记增强卡**。时间窗 = `BannerDrawer` activeFrom/activeTo（对齐旧 CreateBannerSchema）；拖拽排序 = `BannerOpsSection` DndContext+`reorderBanners`（PATCH /admin/banners/reorder）；全 CRUD/启停/删除齐备，消费既有 /admin/banners 6 端点零新端点（同后端），ADR-181 D-181-1.3 定为唯一推荐运营入口，且增强（BannerImageGuard/多语言/品牌作用域）。测试佐证 `BannerOpsSection.test.tsx`/`banners-client.test.ts`/e2e `home-ops.spec.ts`。落档：审计文档 §2 #PARITY-BANNER-01 勾选 + §4 banner 确认 ⏳→✅；plan §6 M-SN-7 启动准入 banner 确认 ⏳→✅。docs-only。执行模型 claude-opus-4-8；子代理：无。
 
-3. **CHG-CUTOVER-EXECUTE（Phase A）** — 物理 cutover 功能性退役（🔴 不可逆 · 状态：🟡 分支完成待人工 final sign-off）
+3. **CHG-CUTOVER-EXECUTE（Phase A）** — 物理 cutover 功能性退役（🔴 不可逆 · 状态：✅ 已完成 2026-06-08，人工 sign-off + 合入 dev merge `e3aea798`）
    - **启动准入（全部满足）**：parity ✅（审计文档）+ v1 E2E 降冒烟 ✅（SEQ-20260606-01）+ 卡 1 QA 工具迁移 ✅ + 卡 2 banner 运营确认 ✅。
    - **用户决策（AskUserQuestion 2026-06-08）**：分阶段——本卡只做功能性退役；`apps/server-next → apps/admin` 改名（152 文件纯命名）拆为卡 5。
    - 已落地（分支 `cutover/retire-apps-server`，回滚 tag `pre-server-next-cutover` @ 13940b06）：`docker/nginx.conf` /admin :3001→:3003 + 物理删 `apps/server`（256 删除）+ 47 老 admin 测试删除（43 单测 + 4 e2e + 6 modern-table/shared 组件测）+ workspaces/typecheck/e2e scripts/dev.mjs/vitest/playwright/eslintrc/verify 脚本/.env.example/docker-compose/README/CLAUDE.md/architecture.md 同步（16 编辑）。
@@ -1636,7 +1636,7 @@
    - 背景：Phase A 已同步 CLAUDE.md + architecture.md 关键引用；规则文档 staleness 非 build-breaking，独立 docs 卡处理。
    - 建议模型：haiku（机械 docs 清理）。
 
-4. **CHG-CUTOVER-ROLLBACK-WINDOW** — cutover +7 天回滚窗收口（状态：📋 待 cutover 后）
-   - 范围：cutover +7 天内保留 apps/server 物理目录 + git tag `pre-server-next-cutover`（RTO ≤ 4h，nginx 一行 reload 切回）；超 7 天确认无报障后物理删除目录 + 关闭回滚窗。
-   - 完成标准：7 天观察期 0 报障；物理删除确认；回滚窗关闭记录入 changelog。
+4. **CHG-CUTOVER-ROLLBACK-WINDOW** — cutover +7 天回滚窗收口（状态：🔄 观察中 · 启动 2026-06-08 → 收口 ~2026-06-15）
+   - 范围：apps/server 已随 cutover 物理删除（恢复靠 git tag `pre-server-next-cutover`，非保留目录）；+7 天观察期内 tag 为回滚锚点（RTO ≤ 4h：checkout tag + nginx :3003→:3001 reload）；~2026-06-15 确认 0 报障后关闭回滚窗（changelog 收口；tag 可作永久历史锚点保留）。
+   - 完成标准：7 天观察期 0 报障（运营输入）；回滚窗关闭记录入 changelog。
    - 建议模型：sonnet。
