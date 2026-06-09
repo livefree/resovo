@@ -50,6 +50,7 @@ import {
 } from '@/lib/shell-data'
 // CHG-VIR-13-A1：countProvider 实接（merge pending 候选总数 60s 轮询，替换 stub）
 import { useAdminNavCounts } from '@/lib/admin-shell-nav-counts'
+import { apiClient } from '@/lib/api-client'
 
 export interface AdminShellClientProps {
   readonly defaultCollapsed: boolean
@@ -134,7 +135,7 @@ export function AdminShellClient({ defaultCollapsed, initialTheme, initialRole, 
   // （upcoming/finished → category='background' / active → source='crawler'），
   // 无需独立 useAdminBackgroundEvents hook + BackgroundEventBell 旁路
   const { items: notifications, markAllRead, markOneRead } = useAdminNotifications()
-  const { items: tasks } = useAdminTasks()
+  const { items: tasks, reload: reloadTasks } = useAdminTasks()
 
   const handleNotificationItemClick = useCallback((item: NotificationItem) => {
     markOneRead(item.id)
@@ -145,23 +146,40 @@ export function AdminShellClient({ defaultCollapsed, initialTheme, initialRole, 
     markAllRead()
   }, [markAllRead])
 
-  // CrawlerRun + bull job cancel/retry 端点尚未在 ADR-147 范围（N1-147-4 待立）；
-  // 维持现有 UX：当前 noop 不报错，按钮可见但点击无后端联动
-  const handleCancelTask = useCallback((_taskId: string) => {
-    toast.push({
-      title: '任务取消未实装',
-      description: 'CrawlerRun cancel 端点接入待 N1-147-4 follow-up；当前仅 read 视图',
-      level: 'info',
-    })
-  }, [toast])
+  // NTLG-P0-3-B / ADR-191：CrawlerRun + bull job cancel/retry 真实接线（补 N1-147-4）。
+  // POST /admin/tasks/:id/{cancel,retry} 按 id 分派（裸 UUID=crawler run / bull-{queue}-{jobId}=bull job）；
+  // 成功 → success toast + reload 刷新抽屉；失败 → danger toast 透传后端 message（含 409 文案，如运行中作业不可取消）。
+  const handleCancelTask = useCallback((taskId: string) => {
+    void (async () => {
+      try {
+        await apiClient.post(`/admin/tasks/${encodeURIComponent(taskId)}/cancel`, {})
+        toast.push({ title: '已请求取消任务', level: 'success' })
+        await reloadTasks()
+      } catch (err) {
+        toast.push({
+          title: '取消任务失败',
+          description: err instanceof Error ? err.message : '请稍后重试',
+          level: 'danger',
+        })
+      }
+    })()
+  }, [toast, reloadTasks])
 
-  const handleRetryTask = useCallback((_taskId: string) => {
-    toast.push({
-      title: '任务重试未实装',
-      description: 'bull job retry 端点接入待 N1-147-4 follow-up；当前仅 read 视图',
-      level: 'info',
-    })
-  }, [toast])
+  const handleRetryTask = useCallback((taskId: string) => {
+    void (async () => {
+      try {
+        await apiClient.post(`/admin/tasks/${encodeURIComponent(taskId)}/retry`, {})
+        toast.push({ title: '已请求重试任务', level: 'success' })
+        await reloadTasks()
+      } catch (err) {
+        toast.push({
+          title: '重试任务失败',
+          description: err instanceof Error ? err.message : '请稍后重试',
+          level: 'danger',
+        })
+      }
+    })()
+  }, [toast, reloadTasks])
 
   return (
     <>

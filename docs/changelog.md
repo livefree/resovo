@@ -3111,3 +3111,15 @@
 - **文件**：+`routes/admin/tasks.ts` / `server.ts` / `db/queries/crawlerTasks.ts` / `services/AuditLogService.ts` / `packages/types/src/{admin-moderation,admin-shell}.types.ts` / +`tests/unit/api/tasks-control-route.test.ts` / `tests/unit/api/audit-log-{coverage,service-enums-set-equal}.test.ts`。
 - **后续**：NTLG-P0-3-B 前端 `admin-shell-client.tsx` 任务抽屉 cancel/retry toast stub→真实调用（补 N1-147-4）+ e2e shell-mocks 同步。
 - **执行模型**：claude-opus-4-8（人工 opus 会话覆盖 sonnet 建议——「持续推进」授权同会话连续）；**子代理**：无。
+
+## [NTLG-P0-3-B] topbar 任务抽屉 cancel/retry 接线（SEQ-20260609-01 · ADR-191）
+
+- **背景**：NTLG-P0-3 拆卡 -B（前端），接续 -A 后端端点把 topbar 任务抽屉 cancel/retry 从 toast stub（N1-147-4「未实装」）接为真实调用。
+- **改动**：
+  - `admin-shell-client.tsx`：`handleCancelTask`/`handleRetryTask` 改 `apiClient.post('/admin/tasks/:id/{cancel,retry}', {})`（id encodeURIComponent）；成功 → success toast「已请求取消/重试任务」+ `reloadTasks()` 刷新抽屉；失败 → danger toast 透传 `err.message`（后端 message 直达，含 409 文案如「运行中的队列作业不支持取消」）。`useAdminTasks` 解构 `reload`，新增 `apiClient` 导入。
+  - e2e `shell-mocks.ts`：新增 `POST /admin/tasks/:id/{cancel,retry}` mock（正则匹配，返回 target + cancelled/retried），避免抽屉交互 e2e 漏 mock。
+- **门禁**：typecheck/lint EXIT=0（4/4）/ test:changed 增量 EXIT=0（admin-shell-client 渲染测试 6 持平）。
+- **测试**：抽屉点击交互（开抽屉→点 cancel/retry）按后端 10 route 测全覆盖 + e2e shell-mocks 已支持 + 既有 stub 无单测先例，留 e2e/手动验收（plan §9 P0「点取消/重试不再是 toast stub」）。
+- **NTLG-P0-3 整卡收口**（-A 后端 `POST /admin/tasks/:id/{cancel,retry}` + -B topbar 接线）：任务抽屉 cancel/retry 端到端打通，替换 toast stub。
+- **文件**：`apps/server-next/src/app/admin/admin-shell-client.tsx` / `tests/e2e/admin/_shared/shell-mocks.ts`。
+- **执行模型**：claude-opus-4-8（人工 opus 会话覆盖 sonnet 建议——「持续推进」授权同会话连续）；**子代理**：无。

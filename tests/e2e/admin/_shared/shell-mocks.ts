@@ -90,6 +90,13 @@ export async function installAdminShellMocks(page: Page) {
       return
     }
 
+    // POST /admin/tasks/:id/{cancel,retry} — 任务抽屉控制（ADR-191 / NTLG-P0-3-B）
+    if (/^\/v1\/admin\/tasks\/[^/]+\/(cancel|retry)$/.test(path) && method === 'POST') {
+      const action = path.endsWith('/cancel') ? 'cancelled' : 'retried'
+      await route.fulfill(json({ data: { target: { kind: 'crawler_run', id: 'mock' }, [action]: true } }))
+      return
+    }
+
     // GET /admin/video-merges/candidates — merge 页候选列表（nav 计数已迁 nav-counts，本 mock 保留供 merge 页 e2e）
     if (path === '/v1/admin/video-merges/candidates' && method === 'GET') {
       await route.fulfill(json({ data: [], total: 0, page: 1, limit: 1, source: 'identity' }))

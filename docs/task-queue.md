@@ -1680,9 +1680,11 @@
      - 范围：`POST /admin/tasks/:id/{cancel,retry}`（按 id 分派 crawler runId / `bull-{queue}-{jobId}`，响应标注 `target.kind`）+ AdminAuditActionType `task.cancel`/`task.retry` 枚举 + AdminTaskControlTarget DTO + crawler retry 经 DISTINCT source_site 重建 siteKeys + createAndEnqueueRun + server.ts 注册 + route 测。
      - 依赖：NTLG-ADR-P0（ADR-191 PASS）。建议模型：sonnet。
      - **完成备注**：`routes/admin/tasks.ts` parseTaskId 分派；cancel（crawler 复用既有协作式取消链 / bull waiting·delayed·paused→remove、active→409、终态→no-op）；retry（bull failed→job.retry()、非 failed→409 / crawler 终态→listDistinctSiteKeysByRun 重建 siteKeys + createAndEnqueueRun 新 run 返 retryRunId、非终态→409）；admin-only。**audit SSOT 4 处同步**（YL2 兑现）：AdminAuditActionType union + AuditLogService.ACTION_TYPES + set-equal EXPECTED_ACTION_TYPES + coverage REQUIRED_ACTION_TYPES/PAYLOAD_ASSERTION_REQUIRED（audit-log-coverage 守卫捕获未同步并修复）。门禁：typecheck/lint/verify:adr-contracts EXIT=0（verify-endpoint-adr ✅ 229，2 新端点匹配 ADR-191 / shell-types-mirror ✅）；route 测 10 + audit 守卫 152 全过；test:changed 升全量（packages/types 改动）——audit 守卫 2 真失败已修，余 2 失败既有 flaky（DailyAnimeRow + VideoMerges perf p95，隔离复跑 40/40 通过）。执行模型: claude-opus-4-8（人工 opus 覆盖 sonnet 建议——「持续推进」授权）；子代理: 无。
-   - **-B** 前端 topbar 接线（状态：⬜ 待开始）
+   - **-B** 前端 topbar 接线（状态：✅ 已完成 2026-06-09）
      - 范围：`admin-shell-client.tsx` 任务抽屉 cancel/retry toast stub → 真实调用（补 N1-147-4）+ e2e shell-mocks 同步。
      - 依赖：NTLG-P0-3-A。建议模型：sonnet。
+     - **完成备注**：`handleCancelTask`/`handleRetryTask` 改 `apiClient.post('/admin/tasks/:id/{cancel,retry}',{})`→成功 success toast + `reloadTasks()` 刷新抽屉 / 失败 danger toast 透传 `err.message`（含后端 409 文案如「运行中作业不支持取消」）；`useAdminTasks` 解构 `reload`；e2e shell-mocks 加两 POST mock（正则匹配 :id/cancel|retry）。门禁：typecheck/lint/test:changed EXIT=0（增量 6，admin-shell-client 渲染测试持平）。抽屉点击交互按后端 10 测全覆盖 + e2e mock 支持 + 既有 stub 无单测先例，留 e2e/手动验收（plan §9「点取消/重试不再 toast」）。执行模型: claude-opus-4-8（人工 opus 覆盖 sonnet 建议——「持续推进」授权）；子代理: 无。
+   - **NTLG-P0-3 整卡 ✅**（-A 后端端点 + -B topbar 接线，cancel/retry 端到端打通）。
 5. **NTLG-P0-4** — 采集完成 digest 文案补全（过渡态）（状态：⬜ 待开始）
    - 范围：`background-events` finished lane 把 `crawler.run.completed` 补结构化 digest 文案（正式版见 P1-b/c）。
    - 依赖：无（与 P1-b 不冲突，过渡态）。建议模型：sonnet。
