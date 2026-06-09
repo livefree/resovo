@@ -2989,8 +2989,8 @@
 
 - **背景**：cutover 删 `apps/server` 前，旧后台两个 dev/QA 工具页 `fallback-preview`（前台 FallbackCover 样板图预览）+ `design-tokens`（Brand Token 预览/编辑）在 server-next 无对应入口，需迁入隐藏 dev 区，确保退役无能力丢失（用户 2026-06-08 裁定）。
 - **改动**（仅新增 10 文件于 server-next，零改动既有文件、apps/server 未触碰）：
-  - `apps/server-next/src/app/admin/dev/fallback-preview/page.tsx` — 服务端组件 + 生产守卫 + iframe 指向前台 `/en/dev/fallback-preview`（前台路由仍在）。
-  - `apps/server-next/src/app/admin/dev/design-tokens/page.tsx` — 服务端组件 + 生产守卫 + 渲染三栏编辑器。
+  - `apps/server-next/src/app/admin/dev/fallback-preview/page.tsx` — 服务端组件 + iframe 指向前台 `/en/dev/fallback-preview`（前台路由仍在）。
+  - `apps/server-next/src/app/admin/dev/design-tokens/page.tsx` — 服务端组件 + 渲染三栏编辑器。
   - `…/design-tokens/_components/{DesignTokensView,TokenTable,TokenEditor,DiffPanel,LivePreviewFrame,InheritanceBadge}.tsx` + `{_paths,_diff}.ts` — 自 apps/server 迁移。
 - **关键现实/决策**：
   - `/admin/design-tokens/*` API 在 `apps/api`（共享后端），server-next 经 `apiClient` 直接调用，**无需迁后端**。
@@ -2998,10 +2998,11 @@
   - `TokenTable` **重写为原生可选品牌列表**（去冻结 `ModernDataTable`——CLAUDE.md 禁止 server-next 复用 v1 表；280px 窄列 picker 亦不宜套重型 admin-ui DataTable）。
   - `_paths.ts`/`_diff.ts` 纯函数逐字搬（原 apps/server 无单测，无覆盖丢失）。
   - 全部 CSS token 经 `@resovo/design-tokens/css` 解析（`--accent-*`/`--state-*`/`--bg-surface*`/`--bg-canvas`/`--fg-subtle` 等逐个核验声明存在，含暗色主题）。
-  - 两页 `NODE_ENV==='production'→notFound()` 守卫（沿用 dev/visual 隐藏路由范式）+ typed `Metadata`（server-next 主流约定 16:4）。web base URL 用 `NEXT_PUBLIC_WEB_URL ?? 'http://localhost:3002'`（沿用旧页约定）。
+  - 两页鉴权由 **middleware admin 鉴权（ADR-010）兜底**（未登录 → /login，role==='user' → /403），对标 **dev/components**（admin-only dev 工具）；typed `Metadata`（server-next 主流约定 16:4）。web base URL 用 `NEXT_PUBLIC_WEB_URL ?? 'http://localhost:3002'`（沿用旧页约定）。
 - **门禁**：typecheck 8 workspace ✅ / lint 5/5（零新增告警，既有 4 warning 属他文件）✅ / test:changed 10 非文档改动无关联测试 EXIT=0（与既有 dev 工具一致——dev/components/dev/visual 亦无单测）。新增文件全 <500 行（最大 214）、无 `any`、无空 catch、无硬编码颜色。
 - **后续**：旧 `apps/server/src/app/admin/{fallback-preview,design-tokens}` 可在 cutover（CHG-CUTOVER-EXECUTE）时随 apps/server 一并删除。卡 1 收口 → SEQ-20260608-01 下一可启动卡 = 卡 2 CHG-CUTOVER-BANNER-OPS-VERIFY。
 - **执行模型**：claude-opus-4-8（主循环续用；卡建议 sonnet，本会话续 opus 并据实记录）；**子代理**：无（纯 UI port + 内部组件重写，无新共享 API 契约/schema/ADR → 不触发强制 Opus）。
+- **Codex stop-time review FIX（鉴权模型纠偏）**：初版两页照搬 dev/visual 的 `NODE_ENV==='production'→notFound()` 守卫属误用——dev/visual 之所以需 notFound 自守，是因为它被 middleware **豁免**鉴权（Playwright 免登录抓图，`middleware.ts` 仅豁免 `/admin/dev/visual` 精确段）；本两路由**未豁免**，已有 middleware admin 鉴权兜底，该 NODE_ENV 守卫对未认证用户**根本不生效**（middleware 先 redirect /login，page 的 notFound 永不执行；故"production→notFound 隐藏未认证用户"为虚假声明），却会对**已登录管理员在生产误 404**（回退旧 apps/server 同页的生产可用性）。**修复**：移除两页 NODE_ENV 守卫 + `notFound` import，鉴权统一依赖 middleware（对标 dev/components admin-only dev 工具范式）；design-tokens 接 `isProduction={NODE_ENV==='production'}` 让 DiffPanel 生产只读（对齐 apps/api 端 PUT dev-only-403）。未认证用户在所有环境均被 middleware 拦截（→ /login），无数据泄露。门禁复跑：typecheck server-next ✅ / lint 5/5 ✅ / test:changed 2 改动无关联测试 EXIT=0。
 
 ## [CHG-CUTOVER-BANNER-OPS-VERIFY] banner 收编运营等价确认 #PARITY-BANNER-01（SEQ-20260608-01 卡 2）
 

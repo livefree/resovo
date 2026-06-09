@@ -3,11 +3,12 @@
  * CHG-CUTOVER-QA-DEV-MIGRATE：cutover 前迁入 server-next dev 工具区。
  *
  * 由前台站点渲染真实 FallbackCover + BrandSwitcher（前台路由 /en/dev/fallback-preview）。
- * 生产守卫：与 dev/visual 一致，production → notFound（隐藏 dev/QA 工具）。
+ * 鉴权：由 middleware admin 鉴权（ADR-010）兜底——未登录 → /login，role==='user' → /403。
+ * 与 dev/components 同范式（admin-only dev 工具），不采用 dev/visual 的 middleware 豁免 + notFound
+ * 模型（该模型仅 dev/visual 因免登录抓图需要）。纯 iframe 预览，无业务数据。
  */
 
 import type { Metadata } from 'next'
-import { notFound } from 'next/navigation'
 
 export const metadata: Metadata = { title: '样板图预览 — 管理后台（dev）' }
 
@@ -34,8 +35,6 @@ const FRAME_STYLE: React.CSSProperties = {
 }
 
 export default function FallbackPreviewPage() {
-  if (process.env.NODE_ENV === 'production') notFound()
-
   const previewUrl = `${WEB_BASE_URL.replace(/\/$/, '')}${PREVIEW_PATH}`
 
   return (
