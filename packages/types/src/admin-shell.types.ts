@@ -48,6 +48,26 @@ export interface TaskResultDigest {
   readonly highlights?: ReadonlyArray<string>
 }
 
+/** 任务运行登记 id（ADR-193 D-193-3）。
+ *  path A 语义占位（P1 NoopTaskRunReporter 返 sentinel）；path B（ADR-194）指向 task_runs.id，re-point 不破坏契约。 */
+export type TaskRunId = string
+
+/** 任务登记/汇报中枢契约（任务象限，ADR-193 D-193-3）。
+ *  P1 阶段为 NoopTaskRunReporter（契约先行 + log-only，不写 DB）；真实 task_runs DB 写待 ADR-194（path B）。
+ *  start 登记失败不阻断作业（内部降级 sentinel id + log warn，§11 D4）。 */
+export interface TaskRunReporter {
+  /** 一次 DB 写换 TaskRunId；登记失败降级返回 sentinel + log warn，不阻断作业 */
+  start(input: { readonly kind: string; readonly title: string; readonly ref?: string }): Promise<TaskRunId>
+  /** sentinel id → no-op；真实 id → 更新进度。失败仅 log warn，不阻断 */
+  progress(id: TaskRunId, pct: number): Promise<void>
+  /** 终态登记 + digest 落库（path B）。sentinel id → no-op。失败仅 log warn，不阻断 */
+  finish(id: TaskRunId, result: {
+    readonly status: 'success' | 'failed' | 'cancelled'
+    readonly digest?: TaskResultDigest
+    readonly error?: string
+  }): Promise<void>
+}
+
 /** 后台任务抽屉单项（admin-ui SSOT 镜像） */
 export interface AdminTaskItem {
   readonly id: string
