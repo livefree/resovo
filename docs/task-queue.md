@@ -1645,7 +1645,7 @@
 
 ## [SEQ-20260609-01] 后台「消息·通知·提醒·日志」综合治理序列（ntlg-governance 落地）
 
-- **状态**：🔄 进行中（NTLG-ADR-P0 ✅ — P0 端点 ADR 解禁；下一可取：NTLG-P0-2 无依赖快赢 / NTLG-P0-1 + NTLG-P0-3 依赖已 PASS）
+- **状态**：🔄 进行中（P0 全部 ✅；P1 地基 ADR：NTLG-ADR-P1-A ✅〔ADR-192 Accepted〕；下一可取：NTLG-ADR-P1-B〔ADR-193，无依赖，Opus 子代理设计〕）
 - **创建时间**：2026-06-09
 - **最后更新时间**：2026-06-09
 - **source_of_truth**：`docs/designs/notification-task-log-governance-plan_20260608.md`（r2.1 定稿）
@@ -1694,8 +1694,9 @@
 
 ### P1 阶段（通知架构升级 + 任务结果摘要 · 地基）
 
-6. **NTLG-ADR-P1-A** — 起草 ADR-192：通知/审计解耦双写 + notifications/notification_read_cursor(+reads) schema + 已读混合模型 + unread-count 端点（状态：⬜ 待开始）
+6. **NTLG-ADR-P1-A** — 起草 ADR-192：通知/审计解耦双写 + notifications/notification_read_cursor(+reads) schema + 已读混合模型 + unread-count 端点（状态：✅ 已完成 2026-06-09）
    - 依赖：无。建议模型：opus（跨 3+ 消费方 schema + 新 admin route，强制 Opus 子代理设计）。
+   - **完成备注**：ADR-192 Accepted（arch-reviewer (claude-opus-4-8) 独立设计 → **AUDIT RESULT: PASS**，无红线）。落定 §11 三决策：**D1** 已读混合模型（broadcast/role 走 `notification_read_cursor` per-user 高水位、定向走 `notification_reads` 逐行；新用户 cursor 初值=加入时间不回溯、markAllRead 仅 upsert 一行——消解「新管理员全历史未读 + 写放大」两 bug）/ **D2** cursor + `(scope,created_at)` 索引足够，ADR 写明理由**不补** anti-join（附未读计数 SQL 锁定口径 D-192-5）/ **D9** (a) 领域服务双写（不引事件总线、守技术栈红线，emit 不写 audit_log）。锁 `notifications`+`notification_read_cursor`(+预留 `notification_reads`) schema（migration 100，P1-a 实施）+ level DB CHECK / scope 类型层前缀校验分层；兼任 `GET /admin/notifications/unread-count` endpoint-ADR（§7 残留 B，避 P1-a 被 `verify:endpoint-adr` 挡）。边界声明：emit 中枢/TaskResultDigest 归 ADR-193、task_runs 归 ADR-194、TTL/dedup/scope 策略归 ADR-195。门禁：`verify:adr-contracts` EXIT=0 / `verify:endpoint-adr` ✅ 229 路由对齐（ADR 端点 115，已含新 unread-count 契约行预登记）/ typecheck/lint EXIT=0 / test:changed SKIP（docs-only）。3 黄线转 P1-a：① migration 100 号落地再确认；② cursor 初值=加入时间须 P1-a 实现 + 补基线 E2E 断言；③ 过渡期双写源去重单一写源开关。docs-only。执行模型: claude-opus-4-8；子代理: arch-reviewer (claude-opus-4-8 / agentId a976fc3359c4cb5d5)。
 7. **NTLG-ADR-P1-B** — 起草 ADR-193：TaskResultDigest + TaskRunReporter/NotificationEmitter 共享契约（emit fire-and-forget 对称 + 登记失败容错）（状态：⬜ 待开始）
    - 依赖：无。建议模型：opus（新共享组件 API 契约，强制 Opus 子代理设计）。
 8. **NTLG-P1-a** — 通知存储 + 读 API（状态：⬜ 待开始）

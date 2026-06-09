@@ -3133,3 +3133,21 @@
 - **文件**：`apps/api/src/services/BackgroundEventService.ts` / `tests/unit/api/background-event-service.test.ts`。
 - **P0 阶段收口**：NTLG-ADR-P0（ADR-190/191 Opus PASS）+ P0-1（nav-counts 去写死）+ P0-2（webhook 陈旧警示清理）+ P0-3（tasks cancel/retry 端到端）+ P0-4（采集 digest 文案）全部完成。P1（通知架构升级，ADR-192/193 须 Opus 子代理设计）建议新会话 opus 启动。
 - **执行模型**：claude-opus-4-8（人工 opus 会话覆盖 sonnet 建议——「持续推进」授权同会话连续）；**子代理**：无。
+
+---
+
+## [NTLG-ADR-P1-A] 起草 ADR-192：通知/审计解耦双写 + notifications schema + 已读混合模型 + unread-count 端点（SEQ-20260609-01）
+
+- **背景**：P1 通知架构升级地基 ADR（治理方案 §7 ADR-NN1）。当前通知无独立存储——`NotificationService.list` 实时从 `admin_audit_log` 按 8 类白名单派生（直写 SQL），已读存浏览器 localStorage（`lastViewedAt`，非 per-user、清缓存即丢、无服务端未读计数），审计与通知职责强行耦合同表。跨 3+ 消费方 schema + 新 admin route → CLAUDE.md §模型路由强制 Opus 子代理设计。
+- **强制 Opus 设计**：spawn arch-reviewer (claude-opus-4-8 / agentId a976fc3359c4cb5d5) 独立设计 ADR-192 → **AUDIT RESULT: PASS**，无红线。
+- **ADR-192 落定**（docs/decisions.md，Accepted）：
+  - **D-192-1（§11 D9）解耦双写采 (a) 领域服务双写**，否决 (b) 出站事件总线（引入新机制触发技术栈 BLOCKER）；audit_log 不再被通知反向依赖，emit **绝不写 admin_audit_log**（解耦验证断言）。
+  - **D-192-3（§11 D1）已读混合模型**：broadcast/role 走 `notification_read_cursor`（per-user 一行高水位、新用户初值=加入时间不回溯）+ 定向走 `notification_reads` 逐行；`markAllRead` broadcast/role 仅 upsert 一行 cursor——同时消解「新管理员全历史未读」+「用户×N 条写放大」两 bug。P1 仅实现 cursor 模型，reads 表建表预留（写路径随 P2）。
+  - **D-192-4/5（§11 D2）unread-count 索引**：cursor + `(scope,created_at)` 复合索引足够，ADR 写明理由**不补** anti-join（cursor 把全体已读压成一行高水位是核心收益）；附未读计数 SQL 锁定口径（broadcast/role 走范围扫描 + 定向走 reads NOT EXISTS + expires_at 过滤）。
+  - **schema**（migration 100，P1-a 实施）：`notifications`（BIGSERIAL PK + level DB CHECK + scope 类型层前缀校验 + dedup_key partial unique + 3 索引）+ `notification_read_cursor`（user_id PK FK）+ `notification_reads`（PK 复合，预留）。
+  - **兼任 endpoint-ADR**：`GET /admin/notifications/unread-count`（§7 残留 B，避 P1-a 被 `verify:endpoint-adr` 挡；鉴权 admin+moderator，响应 `{data:{count},meta:{scope:'self'}}`，错误码复用 ADR-110 零新增）；`GET /admin/notifications`（list）迁新表沿用 ADR-147 契约不算新路由。
+  - **边界声明**：emit 中枢/TaskResultDigest 契约归 ADR-193、task_runs 归 ADR-194、TTL/dedup/scope 生命周期策略归 ADR-195。
+- **门禁**：`verify:adr-contracts` EXIT=0 / `verify:endpoint-adr` ✅ 229 路由对齐（ADR 端点 115，含新 unread-count 契约行预登记）/ typecheck EXIT=0 / lint 4/4 / test:changed SKIP（docs-only）。
+- **3 黄线转 NTLG-P1-a 实施期**：① migration 100 号落地再确认（当前最新 099）；② cursor 初值=加入时间须实现「首次访问 upsert=user joined_at」+ 补基线 E2E 断言；③ 过渡期双写源去重单一写源开关。
+- **文件**：`docs/decisions.md`（+ADR-192）/ `docs/task-queue.md`（NTLG-ADR-P1-A ✅）/ `docs/tasks.md`（卡片流转）。
+- **执行模型**：claude-opus-4-8（主循环，人工 opus 会话「持续推进 P1」授权）；**子代理**：arch-reviewer (claude-opus-4-8 / agentId a976fc3359c4cb5d5)。

@@ -21301,3 +21301,137 @@ top bar 任务抽屉聚合 `crawler_runs`（裸 UUID id）+ bull active jobs（`
 
 - **arch-reviewer (claude-opus-4-8) 结论：AUDIT RESULT: PASS**（无红线；两端点契约表可解析、路径 `/admin/tasks/:id/cancel`·`/admin/tasks/:id/retry` 与 fastify route 逐字一致；:id 分派口径与 `TaskAggregator.ts:154` `bull-{queue}-{jobId}` + 裸 UUID 完全一致；鉴权 admin-only 对齐 `crawler.runs.ts:20`；状态机分派〔crawler 终态/bull waiting-active-failed〕无逻辑漏洞、与既有 crawler 控制态机不冲突）。
 - 黄线（转 NTLG-P0-3 实施期处理，不阻断本 ADR Accepted）：② retry/cancel 的 no-op(false) 与 404 边界在并发下（cancel 瞬间 run 转终态）需补「分派后目标态二次校验」测试断言；`task.cancel`/`task.retry` 枚举须同步 `AdminAuditActionType` SSOT 并过 `verify:enum-ssot`；新建 `routes/admin/tasks.ts` 须确认在路由注册入口挂载（门禁只校验 route→ADR 方向）。
+
+---
+
+## ADR-192：通知与审计解耦双写模型 + notifications/notification_read_cursor schema + 已读混合模型 + `GET /admin/notifications/unread-count` 端点（SEQ-20260609-01 / NTLG-ADR-P1 · ntlg-governance §2.1 + §2.3 + §7 ADR-NN1 + §11 D1/D2/D9）
+
+- **日期**：2026-06-09
+- **状态**：**Accepted**（arch-reviewer Opus PASS — 见 §评审）
+- **决策者**：主循环 claude-opus-4-8 / arch-reviewer (claude-opus-4-8)
+- **关联**：ADR-110（ApiResponse 信封 + ErrorCode 真源）/ ADR-147（通知 hub MVP：audit_log 派生 + `GET /admin/notifications` 端点契约真源）/ ADR-152（后台事件铃铛 + 60s polling）/ ADR-155（NotificationItem 双源镜像 D-155-2）/ AuditLogService（`write(): void` fire-and-forget 解耦参照系，`AuditLogService.ts:278`）/ 治理方案 `docs/designs/notification-task-log-governance-plan_20260608.md` §2.1 + §2.3 + §4.3 + §6 P1-a + §7 ADR-NN1 + §11 D1/D2/D9
+- **对应交付**：SEQ-20260609-01 NTLG-ADR-P1（本 ADR 起草）→ NTLG-P1-a（migration 100 + `db/queries/notifications.ts` + NotificationService 编排 + 两端点实施）
+- **触发**：治理方案 §6「P1 通知架构升级地基」+ §7「ADR-NN1：通知与审计解耦双写 + notifications schema + 已读混合模型 + 兼作 unread-count endpoint-ADR」（跨 3+ 消费方 schema → CLAUDE.md §模型路由 2 强制 Opus 子代理设计；`GET /admin/notifications/unread-count` 为新 `fastify.get` → `verify:endpoint-adr` 门禁，本 ADR 兼任其 endpoint-ADR）。
+
+### 背景
+
+后台通知现状（ADR-147）无独立存储：实时从 `admin_audit_log` 按 `NOTIFICATION_ACTION_WHITELIST`（8 类 actionType）派生（`NotificationService.list`，直写 SQL `NotificationService.ts:82`），已读状态存浏览器 `localStorage`（`admin-shell-notifications.ts` 的 `lastViewedAt`）。三处地基缺陷：
+
+1. **通知与审计职责耦合在同一张表**——审计是「谁对什么做了什么」（合规全量），通知是「需要被看见的事件」（人因精选），二者被强行绑定，无法独立演进。
+2. **已读非 per-user、清缓存即丢、无服务端未读计数**——top bar 铃铛红点无可信数据源。
+3. **纯逐行 reads 模型有两个 bug**（治理方案 §2.1 缺口 1/2/3）：(i) 新管理员首登会把全部历史 broadcast 通知算成未读（per-user 未读基线缺失）；(ii) `markAllRead` 需为每用户每条写一行 reads（写放大）。
+
+本 ADR 锁定终态通知**存储 schema** 与**读路径**（list / unread-count / markAllRead / markOneRead），并裁定通知与审计的**解耦双写**关系。**边界**：`NotificationEmitter` / `TaskResultDigest` / `TaskRunReporter` 的发射中枢契约归 ADR-193（NN2），本 ADR 仅声明 `emit` 接口边界（由 ADR-193 定义）并锁存储与读路径；`task_runs` 统一抽象归 ADR-194（NN3）；TTL 天数 / dedup 命名 / scope 定向生命周期策略细则归 ADR-195（NN4）——本 ADR 只锁 schema 中 `expires_at` / `dedup_key` / `scope` 字段的**存在与类型层约束**，不锁策略数值。
+
+### 决策要点
+
+1. **解耦双写采用 (a) 领域服务双写，否决 (b) 出站事件总线**（D-192-1，§11 D9）：领域服务在发生事件时按需各自调 `AuditLogService.write()`（若是 admin 操作）与 `NotificationService.emit()`（若需提醒人），**两条写路径互不依赖**。`admin_audit_log` 不再被通知反向依赖，`notifications` 表独立成新真源。否决 (b) 事件总线——引入内部 bus 是超出当前技术栈的新机制，触发 CLAUDE.md §绝对禁止「引入技术栈以外的新依赖（BLOCKER）」。**通知 emit 绝不写 `admin_audit_log`**（解耦验证断言，§9 boundary 守卫）。
+
+2. **新增 `notifications` 表为通知独立真源**（D-192-2）：字段见 §schema DDL。`id BIGSERIAL PK`（与 ADR-147 `AdminNotificationItem.id: string` 镜像——API 层 `id::text` 序列化，与现有 `SELECT id::text` 口径一致，零类型契约破坏）。`type`（语义键，如 `crawler.run.completed`）/ `level`（三值）/ `title` / `body?` / `payload JSONB?`（结构化数据，承载未来 TaskResultDigest，本 ADR 不锁其形状）/ `href?` / `source_kind`（产出象限）/ `source_ref?`（关联实体反查）/ `dedup_key?`（幂等）/ `scope`（投递范围）/ `created_at` / `expires_at?`（TTL 保留期，策略数值留 ADR-195）。
+
+3. **已读采用混合模型（broadcast/role 走 cursor，定向走逐行 reads）**（D-192-3，§11 D1）：
+   - **`notification_read_cursor`**（per-user 一行高水位线）承载 broadcast / role 已读：`read_at` 之前的 broadcast/role 通知视为已读。**新用户初始 cursor = 加入时间（`NOW()`，由 P1-a upsert 首次写入），不回溯历史**——消解「新管理员全历史未读」bug。
+   - **`notification_reads`**（逐行）仅承载定向（`scope='user:<id>'`）通知已读，及 broadcast 项的「单条已读例外位」。
+   - **`markAllRead` 语义**：broadcast/role → **仅 upsert 一行** `notification_read_cursor.read_at = NOW()`（`ON CONFLICT (user_id) DO UPDATE`），**不**逐行写 reads——消解「用户×N 条」写放大 bug；定向通知（scope=`user:<当前>`）才逐行写 `notification_reads`。
+   - **`markOneRead` 语义**：对 broadcast/role 项，写一条 `notification_reads(notification_id, user_id, read_at)` 作为「cursor 之后但已单独读过」的**例外位**（用户在未点「全部已读」时单独点掉某条）；对定向项，同样写一条 reads。未读计数对 broadcast 项须同时排除「created_at ≤ cursor」与「存在 reads 例外位」两类。
+   - **P0/P1 仅实现 cursor 模型**：当前几乎全是 broadcast（admin/mod 看同样的事），`notification_reads` 表在 P1-a **仅建表预留**，逐行已读的写路径（markOneRead 对 broadcast 写例外位 + 定向逐行）随 P2 多渠道/定向能力落地（§2.1 末段）。P1-a 的 `markAllRead` 只走 cursor upsert；`unreadCount` / `list` 的 SQL 须**预留** reads 的 `NOT EXISTS` 子句结构但 P1 阶段对空 reads 表恒为真，不影响计数正确性。
+
+4. **unread-count 用 cursor + `(scope, created_at)` 索引支撑，不补 anti-join 索引**（D-192-4，§11 D2）：cursor 模型把 broadcast/role 未读计数转化为「`scope` 命中 且 `created_at > cursor.read_at`」的范围扫描，由 `(scope, created_at)` 复合索引直接支撑，随表增长仍稳定，**无需 anti-join**。定向通知未读为「`scope='user:<当前>'` 且 `NOT EXISTS notification_reads`」，由 `notification_reads` 的 `PK(notification_id, user_id)` 支撑点查。**理由**：anti-join（`notifications LEFT JOIN reads ... WHERE reads IS NULL`）对 broadcast 会全表扫 + 大 join，随表增长退化；cursor 把「全体已读」压成一行高水位线，是该模型的核心收益，故 ADR 明确**不补** anti-join 索引。
+
+5. **未读计数 SQL 口径（锁定，零自由度）**（D-192-5）：对当前登录 user `:uid`、其角色集 `:roles`、cursor `c.read_at`（无 cursor 行时视为 epoch 0 / 用户加入时间——由 P1-a 在首次访问时 upsert 初值=加入时间保证）：
+
+   ```
+   unread = (broadcast/role 未读) + (定向未读)
+   broadcast/role 未读 =
+     COUNT(*) FROM notifications n
+       WHERE (n.scope = 'broadcast' OR n.scope = ANY(:role_scopes))   -- role_scopes 如 ['role:moderator']
+         AND n.created_at > COALESCE(c.read_at, :joined_at)
+         AND (n.expires_at IS NULL OR n.expires_at > NOW())
+         AND NOT EXISTS (SELECT 1 FROM notification_reads r           -- P1 空表恒否定，P2 例外位生效
+                          WHERE r.notification_id = n.id AND r.user_id = :uid)
+   定向未读 =
+     COUNT(*) FROM notifications n
+       WHERE n.scope = 'user:' || :uid
+         AND (n.expires_at IS NULL OR n.expires_at > NOW())
+         AND NOT EXISTS (SELECT 1 FROM notification_reads r
+                          WHERE r.notification_id = n.id AND r.user_id = :uid)
+   ```
+
+   过期通知（`expires_at <= NOW()`）一律不计入未读；TTL 数值策略留 ADR-195，本 ADR 仅锁「expires_at 参与未读过滤」口径。
+
+6. **契约收口：level 用 DB CHECK，scope 保持开放（类型层前缀校验）**（D-192-6，§2.3）：`level TEXT NOT NULL CHECK (level IN ('info','warn','danger'))` —— DB 层防脏值，与 `AdminNotificationItem.level: 'info'|'warn'|'danger'` 严格对齐；`scope TEXT NOT NULL` **不加 CHECK**，按前缀（`broadcast` / `role:*` / `user:*`）在类型层（zod / TS 联合）校验，保留 `user:<id>` 定向扩展性（避免每加一种 role/scope 都改 migration）。
+
+7. **新增通知读写 SQL 必须落 `apps/api/src/db/queries/notifications.ts`**（D-192-7，db-rules 硬约束）：`NotificationService` 仅编排 `emit / list / markAllRead / markOneRead / unreadCount`，**不**在 Service 内直写 SQL。现有 `NotificationService.list` 直写 SQL（`NotificationService.ts:82`，audit 派生历史债）在 P1-a 迁实现到新表时一并外移到 queries 层，**不扩大** Service 直写反模式。`GET /admin/notifications`（list）迁实现到新表**沿用 ADR-147 端点契约**（响应仍为 `{ data: AdminNotificationItem[], meta }`），不算新路由、不需新端点契约行。
+
+8. **`GET /admin/notifications/unread-count` 端点（本 ADR 兼任 endpoint-ADR）**（D-192-8）：top bar 铃铛红点/数字数据源。鉴权 `[authenticate, requireRole(['admin','moderator'])]`，与 `GET /admin/notifications`（ADR-147）/ `GET /admin/system/nav-counts`（ADR-190）同级（侧边栏与 top bar 对 admin + moderator 都展示）。无 query 参数（unread 范围由当前登录身份 + 角色决定）。响应 `{ data: { count: number }, meta: { scope: 'self' } }`。**错误码全部复用 ADR-110，零新增码**：401 UNAUTHORIZED / 403 FORBIDDEN（非 admin/moderator）；无 query 故无 422。`verify:endpoint-adr` 守卫扫 `apps/api/src/routes/admin/*.ts` 新 `fastify.get('/admin/notifications/unread-count', ...)` 时命中本 ADR §端点契约行。
+
+9. **迁移兼容：P1-a 先空跑兼容（旧 audit 派生回填验证读路径）**（D-192-9，§6 P1-a）：P1-a 建表 + 读 API（list/unread-count）后，**通知数据暂仍由旧 audit 派生回填**到新表（或新表读路径与旧派生并行对账），用于验证 list/unread-count/cursor 读路径正确性，避免「建表即断流」。**切换时机**：`NotificationEmitter` 接入（ADR-193 + NTLG-P1-c）后，领域服务主动 `emit` 写入新表成为唯一写源，此时**下线 audit 派生旧路径**（归 P1-c，不在 P1-a）。P1-a 阶段须保证：旧派生回填与新 emit 写入不重复计数（由 `dedup_key` 幂等 + 过渡期单一写源开关保证）。
+
+10. **emit 接口边界声明（不在本 ADR 设计）**（D-192-10）：`NotificationService.emit(...)` 的签名、fire-and-forget 对称性（与 `AuditLogService.write(): void` 同构）、`TaskResultDigest` 形状、`TaskRunReporter` 契约均归 **ADR-193（NN2）**。本 ADR 仅声明：emit **只写 `notifications` 表**（不写 audit）、写入字段须落在本 ADR 锁定的 schema 内（type/level/title/body/payload/href/source_kind/source_ref/dedup_key/scope/expires_at），`dedup_key` 命中既存行时幂等不新建（由 partial unique index 保证）。
+
+### schema（migration 100，NTLG-P1-a 实施分配）
+
+```sql
+-- migration 100_notifications.sql（NTLG-P1-a 落地；docs/architecture.md 同步——schema 变更红线）
+
+CREATE TABLE notifications (
+  id           BIGSERIAL PRIMARY KEY,
+  type         TEXT        NOT NULL,                       -- 语义键 'crawler.run.completed' / 'submission.created' / 'webhook.failed'
+  level        TEXT        NOT NULL CHECK (level IN ('info','warn','danger')),
+  title        TEXT        NOT NULL,
+  body         TEXT        NULL,
+  payload      JSONB       NULL,                           -- 结构化数据（TaskResultDigest 等，形状归 ADR-193）
+  href         TEXT        NULL,                            -- 点击跳转
+  source_kind  TEXT        NOT NULL,                        -- 'task' | 'system' | 'moderation' | 'submission' | ...
+  source_ref   TEXT        NULL,                            -- 关联实体 id（run_id / submission_id；去重&反查）
+  dedup_key    TEXT        NULL,                            -- 幂等键（防 worker 重试/轮询重复 emit）
+  scope        TEXT        NOT NULL,                        -- 'broadcast' | 'role:<r>' | 'user:<id>'（无 CHECK，类型层前缀校验）
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  expires_at   TIMESTAMPTZ NULL                             -- TTL 保留期（数值策略留 ADR-195）
+);
+
+-- 索引
+CREATE INDEX idx_notifications_created_at        ON notifications (created_at DESC);
+CREATE INDEX idx_notifications_scope_created_at  ON notifications (scope, created_at);             -- unread-count cursor 范围扫描支撑（D-192-4）
+CREATE UNIQUE INDEX uq_notifications_dedup_key   ON notifications (dedup_key) WHERE dedup_key IS NOT NULL;  -- partial unique 幂等
+
+-- broadcast/role 已读高水位线（per-user 一行；替代 localStorage lastViewedAt）
+CREATE TABLE notification_read_cursor (
+  user_id  UUID        PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  read_at  TIMESTAMPTZ NOT NULL                            -- 此刻之前的 broadcast/role 通知视为已读；新用户初值=加入时间
+);
+
+-- 定向通知逐行已读（P1 仅建表预留；写路径随 P2 定向能力落地，§2.1 末段 / D-192-3）
+CREATE TABLE notification_reads (
+  notification_id  BIGINT      NOT NULL REFERENCES notifications(id) ON DELETE CASCADE,
+  user_id          UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  read_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (notification_id, user_id)
+);
+```
+
+### 端点契约
+
+| # | 方法 | 路径 | 用途 | Request | Response | 鉴权 | 错误码 |
+|---|---|---|---|---|---|---|---|
+| 1 | GET | `/admin/notifications/unread-count` | top bar 铃铛未读计数（当前登录身份 + 角色范围；cursor 混合模型口径 D-192-5） | — | 200 `{ data: { count }, meta: { scope } }`（`count: number` 未读总数；`meta.scope: 'self'`） | admin / moderator | 401 UNAUTHORIZED / 403 FORBIDDEN |
+
+> `GET /admin/notifications`（list）迁实现到 `notifications` 新表沿用 **ADR-147 §端点契约**（`{ data: AdminNotificationItem[], meta: { total, limit, since } }`，decisions.md ADR-147 端点契约表第 1 行），**不算新路由**，本表不重列。`data.count` 为 `number`；`meta.scope` 恒 `'self'`（unread 范围始终为「当前登录用户视角」，预留未来 `?scope=` 扩展位但 P1 不实现）。
+
+### 影响文件（NTLG-P1-a 落地）
+
+- 新建：`apps/api/src/db/migrations/100_notifications.sql`（上述 DDL）+ `apps/api/src/db/queries/notifications.ts`（list / unreadCount / markAllRead / markOneRead SQL 全部落此）+ `apps/api/src/routes/admin/notifications.ts` 内新增 `fastify.get('/admin/notifications/unread-count', ...)`
+- 修改：`apps/api/src/services/NotificationService.ts`（`list` 迁新表 + 新增 `unreadCount / markAllRead / markOneRead` 编排，SQL 外移 queries 层，删除直写 SQL 历史债）+ `docs/architecture.md`（schema 变更同步——CLAUDE.md §绝对禁止红线）
+- 类型：`packages/types/src/admin-shell.types.ts`（新增 unread-count 响应 DTO，如 `AdminNotificationUnreadCountResponse`；与 `packages/admin-ui/src/shell/types.ts` 镜像须过 `verify:admin-shell-types-mirror`，ADR-155 D-155-2）
+- 前端（P1-a 接线或随后续卡）：`apps/server-next/src/lib/admin-shell-notifications.ts`（`lastViewedAt` localStorage → 服务端 cursor；铃铛红点改消费 `/admin/notifications/unread-count`）
+
+### 偏离登记
+
+- **D-192-DEV-1**：P1-a 阶段 `notification_reads` 表仅建表预留、不实现写路径（markOneRead 对 broadcast 例外位 + 定向逐行随 P2 落地）。处置：accept——当前通知近乎全 broadcast，cursor 模型已覆盖；预建表 + 在 unread/list SQL 预留 `NOT EXISTS reads` 结构（空表恒不影响计数），P2 接入零 schema 改动。
+- **D-192-DEV-2**：P1-a 过渡期通知由「旧 audit 派生回填」与「新表读路径」并存，emit 真实写入归 P1-c。处置：accept——分阶段切换降低断流风险（§6 P1-a「先空跑兼容」）；过渡期靠 `dedup_key` 幂等 + 单一写源开关防重复计数；audit 派生旧路径下线时机锁定 P1-c（emit 接入后）。
+- **D-192-DEV-3**：`scope` 不加 DB CHECK（仅类型层前缀校验）。处置：accept——保 `user:<id>` / 未来 `role:<r>` 扩展性，避免每加 scope 改 migration；脏值风险由类型层（zod 联合 + 前缀正则）收口，与 level 的 DB CHECK 形成「枚举值收口 / 开放前缀类型层校验」分层。
+
+### 评审
+
+- **arch-reviewer (claude-opus-4-8) 结论：AUDIT RESULT: PASS**（无红线；不引技术栈外依赖〔领域服务双写，非事件总线〕、SQL 落 queries 层不扩大 Service 直写、端点契约表可被 `parseEndpointContract` 解析且 `/admin/notifications/unread-count` 与未来 fastify route 逐字一致、cursor 混合模型消解「新管理员全历史未读 + markAllRead 写放大」两 bug、emit 解耦后通知不写 admin_audit_log；level DB CHECK / scope 类型层校验分层合理；未读计数 SQL 口径锁定零自由度）。
+- 黄线（转 NTLG-P1-a 实施期处理，不阻断本 ADR Accepted）：① migration 编号 100 须在 P1-a 落地时确认仍为下一可用号（当前最新 099_douban_collection_items.sql）；② `notification_read_cursor` 初值=加入时间需 P1-a 实现「首次访问 upsert cursor=user joined_at」而非默认 NOW()，并补 cursor 基线 E2E 断言（新建管理员首登历史 broadcast 不全标未读）；③ 过渡期双写源去重须有单一写源开关，避免 audit 派生 + emit 重复计数。

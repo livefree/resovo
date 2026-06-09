@@ -6,7 +6,7 @@
 
 ## 当前任务（单任务工作台：同时仅 1 个 🔄 进行中；完成即删卡，历史见 docs/changelog.md）
 
-_（当前无进行中任务。取下一个前先查 `docs/task-queue.md` 是否有 🚨 BLOCKER。**SEQ-20260609-01 ntlg 治理 P0 全部完成**：NTLG-ADR-P0 ✅ + P0-1 ✅ + P0-2 ✅ + P0-3 ✅ + P0-4 ✅。**下一阶段 P1**（通知架构升级 + 任务结果摘要）须先起 ADR-192/193——`schema 跨 3+ 消费方` + `新共享组件 API 契约`，CLAUDE.md §模型路由强制 Opus 子代理设计，建议新会话以 opus 启动 NTLG-ADR-P1-A/B。SEQ-20260608-01 cutover 剩：卡 4 回滚窗 🔄 ~2026-06-15、卡 5 改名待排期。）_
+_（当前无进行中任务。取下一个前先查 `docs/task-queue.md` 是否有 🚨 BLOCKER。**SEQ-20260609-01 P0 全部完成 + P1 地基 ADR-192 ✅**（NTLG-ADR-P1-A Accepted）。**下一可取：NTLG-ADR-P1-B**（起草 ADR-193：TaskResultDigest + TaskRunReporter/NotificationEmitter 共享契约，无依赖，CLAUDE.md §模型路由强制 Opus 子代理设计——新共享组件 API 契约）。SEQ-20260608-01 cutover 剩：卡 4 回滚窗 🔄 ~2026-06-15、卡 5 改名待排期。）_
 
 ---
 
