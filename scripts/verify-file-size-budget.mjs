@@ -60,14 +60,9 @@ const EXCLUDE_DIRS = new Set([
 // CLAUDE.md 明示 apps/server 是 v1 已冻结，"仅维护期 bug 修复"；拆分 v1 大文件
 // 违反冻结边界。这些文件永久豁免硬上限守卫，不挂拆分卡。
 
-const PERMANENT_EXEMPT = new Set([
-  // apps/server v1 frozen — 5 文件
-  'apps/server/src/components/admin/AdminVideoForm.tsx',
-  'apps/server/src/components/admin/sources/InactiveSourceTable.tsx',
-  'apps/server/src/components/admin/moderation/ModerationList.tsx',
-  'apps/server/src/components/admin/videos/VideoImageSection.tsx',
-  'apps/server/src/components/admin/staging/StagingTable.tsx',
-])
+// CHG-CUTOVER-EXECUTE（2026-06-08）：apps/server v1 退役，原 5 个 v1 frozen 豁免文件随目录删除，
+// PERMANENT_EXEMPT 清空（server-next 大文件走下方 BASELINE_EXEMPT 跟踪拆分，不进永久豁免）。
+const PERMANENT_EXEMPT = new Set([])
 
 // ── BASELINE 豁免（M-SN-6 关闭复核 2026-05-17 实测 + CHG-SN-7-PRE-01 全量扩范围 2026-05-18）─────
 // 待拆分的历史超限文件；M-SN-7 + 后续 milestone 通过 MISC / FILE-SIZE 跟踪卡逐步拆分。

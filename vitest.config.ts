@@ -84,17 +84,13 @@ export default defineConfig({
   resolve: {
     alias: [
       { find: '@/api',              replacement: path.resolve(__dirname, './apps/api/src') },
-      // CHG-DESIGN-07 7C：context-aware alias — server-next importer 走 apps/server-next；
-      // 历史 v1 server importer 仍走 apps/server。优先级高于通用 @/(.*) 通配
+      // @/components/admin|shared → server-next（CUTOVER CHG-CUTOVER-EXECUTE：apps/server v1 退役，
+      // 原 v1 importer 分支 + tests/unit/components/admin 老 admin 单测随退役删除，统一走 server-next）。
       {
         find: /^@\/components\/admin(\/.*)?$/,
         replacement: '$1',
-        customResolver(replacedId: string, importer: string | undefined) {
-          const isServerNext =
-            importer?.includes('/apps/server-next/') || importer?.includes('/tests/unit/components/server-next/') || importer?.includes('/tests/unit/admin-moderation/')
-          const base = isServerNext
-            ? path.resolve(__dirname, './apps/server-next/src/components/admin')
-            : path.resolve(__dirname, './apps/server/src/components/admin')
+        customResolver(replacedId: string) {
+          const base = path.resolve(__dirname, './apps/server-next/src/components/admin')
           const subPath = replacedId.replace(/^\//, '') || 'index'
           return resolveWithExtensions(path.resolve(base, subPath))
         },
@@ -102,31 +98,23 @@ export default defineConfig({
       {
         find: /^@\/components\/shared(\/.*)?$/,
         replacement: '$1',
-        customResolver(replacedId: string, importer: string | undefined) {
-          const isServerNext =
-            importer?.includes('/apps/server-next/') || importer?.includes('/tests/unit/components/server-next/') || importer?.includes('/tests/unit/admin-moderation/')
-          const base = isServerNext
-            ? path.resolve(__dirname, './apps/server-next/src/components/shared')
-            : path.resolve(__dirname, './apps/server/src/components/shared')
+        customResolver(replacedId: string) {
+          const base = path.resolve(__dirname, './apps/server-next/src/components/shared')
           const subPath = replacedId.replace(/^\//, '') || 'index'
           return resolveWithExtensions(path.resolve(base, subPath))
         },
       },
-      // @/stores is context-aware: server-next → apps/server-next/src/stores; server/admin → apps/server/src/stores; default → apps/web-next/src/stores
-      // （CUTOVER 2026-04-23 后 apps/web 已退役，apps/web 分支移除；server-next 2026-05-20 补入）
+      // @/stores is context-aware: server-next → apps/server-next/src/stores; default → apps/web-next/src/stores
+      // （CUTOVER 2026-04-23 apps/web 退役 / CHG-CUTOVER-EXECUTE 2026-06-08 apps/server v1 退役 → server/admin 分支移除）
       {
         find: /^@\/stores(\/.*)?$/,
         replacement: '$1',
         customResolver(replacedId: string, importer: string | undefined) {
           const isServerNext =
             importer?.includes('/apps/server-next/') || importer?.includes('/tests/unit/components/server-next/') || importer?.includes('/tests/unit/admin-moderation/')
-          const isServer =
-            importer?.includes('/apps/server/') || importer?.includes('/tests/unit/components/admin/')
           const storesBase = isServerNext
             ? path.resolve(__dirname, './apps/server-next/src/stores')
-            : isServer
-              ? path.resolve(__dirname, './apps/server/src/stores')
-              : path.resolve(__dirname, './apps/web-next/src/stores')
+            : path.resolve(__dirname, './apps/web-next/src/stores')
           const subPath = replacedId.replace(/^\//, '') || 'index'
           return resolveWithExtensions(path.resolve(storesBase, subPath))
         },
@@ -144,20 +132,17 @@ export default defineConfig({
         },
       },
       // @ resolver: context-aware
-      // server-next → apps/server-next/src; server/admin → apps/server/src; default → apps/web-next/src
+      // server-next → apps/server-next/src; default → apps/web-next/src
+      // （CHG-CUTOVER-EXECUTE 2026-06-08：apps/server v1 退役 → server/admin 分支移除）
       {
         find: /^@\/(.*)/,
         replacement: '$1',
         customResolver(replacedId: string, importer: string | undefined) {
           const isServerNext =
             importer?.includes('/apps/server-next/') || importer?.includes('/tests/unit/components/server-next/') || importer?.includes('/tests/unit/admin-moderation/')
-          const isServer =
-            importer?.includes('/apps/server/') || importer?.includes('/tests/unit/components/admin/')
           const srcBase = isServerNext
             ? path.resolve(__dirname, './apps/server-next/src')
-            : isServer
-              ? path.resolve(__dirname, './apps/server/src')
-              : path.resolve(__dirname, './apps/web-next/src')
+            : path.resolve(__dirname, './apps/web-next/src')
           return resolveWithExtensions(path.resolve(srcBase, replacedId))
         },
       },

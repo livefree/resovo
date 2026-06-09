@@ -238,13 +238,6 @@ const tasks = [
     persistent: true,
   },
   {
-    label: 'admin',
-    cwd: resolve(rootDir, 'apps/server'),
-    command: node,
-    args: ['--env-file=../../.env.local', nextBin, 'dev', '-p', '3001'],
-    persistent: true,
-  },
-  {
     // CUTOVER（2026-04-23）：apps/web 退役，apps/web-next 升为对外入口 port 3000
     label: 'web-next',
     cwd: resolve(rootDir, 'apps/web-next'),
@@ -253,8 +246,8 @@ const tasks = [
     persistent: true,
   },
   {
-    // M-SN-1（2026-04-28）：apps/server-next 工程骨架，开发期与 apps/server 并存；
-    // M-SN-7 cutover 后接管 /admin/* 并改名为 apps/admin（详见 ADR-101）
+    // CUTOVER（CHG-CUTOVER-EXECUTE，2026-06-08）：apps/server v1 退役，server-next 独占 /admin（:3003）。
+    // 改名 apps/server-next → apps/admin 留独立后续卡 CHG-CUTOVER-RENAME-ADMIN（ADR-101）。
     label: 'server-next',
     cwd: resolve(rootDir, 'apps/server-next'),
     command: node,

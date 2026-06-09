@@ -2,7 +2,6 @@
 
 import { execSync } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
-import path from 'node:path'
 
 const V2_SCOPE_DIRS = [
   'apps/server/src/components/admin/system/crawler-site',
@@ -28,8 +27,11 @@ function parseArgs(argv) {
 }
 
 function listScopeFiles() {
-  const joined = V2_SCOPE_DIRS.join(' ')
-  const out = sh(`rg --files ${joined}`)
+  // CHG-CUTOVER-EXECUTE（2026-06-08）：apps/server v1 退役后 V2_SCOPE_DIRS 目录已删除；
+  // 过滤到现存目录避免 `rg --files <不存在路径>` 抛错（退役后本守卫恒空 no-op，v1 专属）。
+  const existing = V2_SCOPE_DIRS.filter((d) => existsSync(d))
+  if (existing.length === 0) return []
+  const out = sh(`rg --files ${existing.join(' ')}`)
   return out
     .split('\n')
     .map((line) => line.trim())

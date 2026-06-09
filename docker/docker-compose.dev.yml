@@ -3,7 +3,7 @@
 #
 # 前置条件（先在单独终端启动三个进程）：
 #   npm run dev                      # web:3000
-#   npx turbo dev --filter=@resovo/server  # server:3001
+#   npx turbo dev --filter=@resovo/server-next  # server-next:3003（后台，CUTOVER 后独占 /admin）
 #   npx turbo dev --filter=@resovo/api     # api:4000
 #
 # 启动代理：
