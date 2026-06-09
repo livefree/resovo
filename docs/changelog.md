@@ -3171,3 +3171,21 @@
 - **P1 地基 ADR 全部收口**：ADR-192（通知存储/已读/解耦双写/unread-count）+ ADR-193（digest/emit/reporter 契约）Accepted → NTLG-P1-a/b/c 实施卡解锁（建议 sonnet）。
 - **文件**：`docs/decisions.md`（+ADR-193）/ `docs/task-queue.md`（NTLG-ADR-P1-B ✅）/ `docs/tasks.md`（卡片流转）。
 - **执行模型**：claude-opus-4-8（主循环，人工 opus 会话「持续推进 P1」授权）；**子代理**：arch-reviewer (claude-opus-4-8 / agentId ac8649e7b8354f56f)。
+
+---
+
+## [NTLG-P1-a-A] 通知存储 schema + queries 层地基（migration 100 + db/queries/notifications.ts）（SEQ-20260609-01）
+
+- **背景**：P1 通知架构升级实施起步（ADR-192 落地）。P1-a 范围 >5 项（migration + queries + service + 2 端点 + types + arch.md）且跨 schema/api-service 层 → 原子化判据第 1/2 问命中，拆 -A（数据层地基）/ -B（service + 端点）。本条 -A。建议 sonnet，本会话人工 opus 覆盖（AskUserQuestion 2026-06-09「继续本 opus 会话推进 P1-a」授权）。
+- **migration 100_notifications.sql**（按 ADR-192 §schema DDL，已应用 dev DB）：
+  - `notifications`（BIGSERIAL PK / `level` 三值 DB CHECK / `scope` 无 CHECK 类型层前缀校验 / `payload JSONB` 承载 TaskResultDigest / `dedup_key` / `expires_at`）+ 3 索引（`(created_at DESC)` / `(scope, created_at)` unread 核心 / `(dedup_key) WHERE NOT NULL` partial unique），索引按 db-rules 4 级结构文档化。
+  - `notification_read_cursor`（user_id PK FK→users CASCADE / read_at；新用户初值=加入时间不回溯，-B upsert）。
+  - `notification_reads`（PK(notification_id,user_id) 双 FK CASCADE；P1 仅建表预留，写路径随 P2，D-192-DEV-1）。
+- **db/queries/notifications.ts**（SQL 落 queries 层，db-rules）：insertNotification（ON CONFLICT (dedup_key) WHERE NOT NULL DO NOTHING + 反查既存 id 保幂等）/ listNotifications（scope=ANY + 时间窗 + expires 过滤 + created_at DESC）/ countUnreadNotifications（D-192-5 口径：cursor + users LEFT JOIN COALESCE(read_at, created_at) + NOT EXISTS reads + expires，不补 anti-join D-192-4）/ getReadCursor / upsertReadCursor（ON CONFLICT user_id DO UPDATE，markAllRead 单行无写放大）。query 参数类型收敛 `Queryable = Pick<Pool,'query'>`（Pool/PoolClient 皆满足，支持事务测试零污染，下游传 Pool 不破坏；类型探针证 PoolClient→Queryable 合法）。
+- **architecture.md §5.17** 登记 3 表 + 索引 4 级文档 + 未读计数口径 + 应用层分层（schema 变更红线同步）。
+- **测试**：`tests/integration/api/admin-notifications.test.ts` 8 用例全过——读路径 schema 对齐 4（list 空集 / list 字段 camelCase / countUnread cursor+JOIN 编译 / getReadCursor null）+ 写路径 BEGIN/ROLLBACK 零污染 round-trip 4（insert→list 命中 / dedup_key 幂等同 id 单行 / cursor upsert+get 单行无写放大 / 未读 cursor 高水位口径独立 scope 隔离断言 count=1）。
+- **门禁**：migrate 应用 dev DB ✅（pending 1→0）/ typecheck EXIT=0 / lint 4/4 / verify:adr-contracts EXIT=0（verify-sql-schema-alignment 78 表含新 3 表 ✅）/ test:changed EXIT=0（改动映射无 unit 测，集成测试独立 8/8 验证）。
+- **纯数据层零 API/行为变更**：现有 `GET /admin/notifications`（audit 派生）不动；端点迁移 + NotificationService 编排 + unread-count 端点归 -B。
+- **后续 -B**：NotificationService list迁新表/unreadCount/markAllRead 编排 + `GET /admin/notifications` 迁移 + `GET /admin/notifications/unread-count` + DTO + 空跑兼容回填 + 测试。⚠️ markAllRead 若需新写端点须核 ADR-192 端点契约归属（仅列 unread-count）。
+- **文件**：+`apps/api/src/db/migrations/100_notifications.sql` / +`apps/api/src/db/queries/notifications.ts` / `docs/architecture.md`（§5.17）/ +`tests/integration/api/admin-notifications.test.ts` / `docs/task-queue.md` / `docs/tasks.md`。
+- **执行模型**：claude-opus-4-8（主循环，人工 opus 覆盖 sonnet 建议）；**子代理**：无。

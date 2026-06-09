@@ -854,6 +854,33 @@ UserPreferences = {
 
 ---
 
+### 5.17 通知独立存储 + 已读混合模型（ADR-192 / NTLG-P1-a，Migration 100）
+
+来源：ADR-192（通知与审计解耦双写 + 通知独立存储 + 已读混合模型）/ 治理方案 `docs/designs/notification-task-log-governance-plan_20260608.md` §2.1。通知脱离 `admin_audit_log` 派生（ADR-147 MVP 历史债），独立成新真源；已读从浏览器 localStorage 升级为服务端 per-user cursor。
+
+**Migration 100 新增 3 表：**
+
+| 表 | 说明 |
+|---|---|
+| `notifications` | 通知独立真源。`id BIGSERIAL PK` / `type TEXT NOT NULL`（语义键）/ `level TEXT NOT NULL CHECK (level IN ('info','warn','danger'))`（D-192-6，对齐 AdminNotificationItem.level）/ `title TEXT NOT NULL` / `body TEXT NULL` / `payload JSONB NULL`（结构化数据，承载 TaskResultDigest ADR-193）/ `href TEXT NULL` / `source_kind TEXT NOT NULL`（产出象限 task/system/moderation/...）/ `source_ref TEXT NULL`（关联实体 id 反查）/ `dedup_key TEXT NULL`（幂等键）/ `scope TEXT NOT NULL`（broadcast/role:*/user:* 无 CHECK，类型层前缀校验 D-192-6）/ `created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()` / `expires_at TIMESTAMPTZ NULL`（TTL 保留期，策略数值归 ADR-195）。 |
+| `notification_read_cursor` | broadcast/role 已读高水位线（per-user 一行，替代 localStorage lastViewedAt，D-192-3）。`user_id UUID PK FK users(id) ON DELETE CASCADE` / `read_at TIMESTAMPTZ NOT NULL`（之前的 broadcast/role 视为已读；新用户初值=加入时间 users.created_at，由 P1-a-B upsert，不回溯历史）。 |
+| `notification_reads` | 定向通知逐行已读 + broadcast 单条已读例外位（P1 仅建表预留，写路径随 P2，D-192-DEV-1）。`PK(notification_id, user_id)` 双 FK ON DELETE CASCADE / `read_at TIMESTAMPTZ NOT NULL DEFAULT NOW()`。 |
+
+**索引（db-rules 4 步核验见 migration 注释）：**
+- `idx_notifications_created_at` `(created_at DESC)` —— 全 scope 混合时间线兜底 + 维护清理按 created_at 扫描。
+- `idx_notifications_scope_created_at` `(scope, created_at)` —— **unread-count 核心索引**（scope 等值 + created_at 范围扫描，D-192-5）；cursor 把「全体已读」压成一行高水位，**不补 anti-join**（D-192-4）。
+- `uq_notifications_dedup_key` `(dedup_key) WHERE dedup_key IS NOT NULL` —— partial unique 幂等（emit ON CONFLICT DO NOTHING）；反向 invariant：dedup_key IS NULL 不受唯一约束。
+
+**未读计数口径（D-192-5）：** broadcast/role 未读 = `scope ∈ broadcastScopes 且 created_at > COALESCE(cursor.read_at, users.created_at)`；定向未读 = `scope = 'user:<uid>'`；两者皆排除已过期（expires_at <= NOW()）+ 已逐行读（NOT EXISTS notification_reads）。
+
+**应用层（P1-a-A 已落地数据层；service/路由归 P1-a-B）：**
+- 查询层：`apps/api/src/db/queries/notifications.ts`（insertNotification ON CONFLICT 幂等 / listNotifications / countUnreadNotifications / getReadCursor / upsertReadCursor；SQL 全集中 queries 层，db-rules）
+- 业务层（→ P1-a-B）：`NotificationService` 编排 list 迁新表 / unreadCount / markAllRead（cursor upsert）
+- 路由层（→ P1-a-B）：`GET /admin/notifications`（迁新表沿用 ADR-147 契约）+ `GET /admin/notifications/unread-count`（ADR-192 新端点）
+- emit 写入（→ ADR-193 + P1-c）：领域服务解耦双写，emit 只写 notifications 不写 admin_audit_log
+
+---
+
 ## 6. 视频状态机（DB 强约束）
 
 来源：Migration `023_enforce_video_state_machine_trigger.sql`（基线）→ `033` → `034` → `053`（M-SN-4 D-01 新增暂存退回）
