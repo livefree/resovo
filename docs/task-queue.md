@@ -1671,9 +1671,10 @@
      - 依赖：NTLG-P0-1-A。建议模型：sonnet。
      - **完成备注**：`useAdminNavCounts` 改 `apiClient.get<AdminNavCountsResponse>('/admin/system/nav-counts')`，按 KEY_TO_HREF 映射建 href→count Map（0/缺省不入 Map 无 badge，保留降级语义；401/403 静默）；admin-nav 删 4 写死 count（moderation 484/sources 1939/imageHealth 597/userSubmissions 12）保 badge 色调；ADR-190 D-190-4 回填定稿角色矩阵表（代码真源 NavCountsService.MODULE_ROLES）；e2e shell-mocks 同步 `/admin/system/nav-counts` mock。门禁：typecheck/lint/verify:adr-contracts EXIT=0 / 新 hook 测 5（映射/0 缺省不入/null 空/401 静默/其他 warn）/ test:changed 增量 11 全过。admin e2e（侧边栏真实徽标验收）需真实栈+数据，按精确单测覆盖 + 既有先例延后为验收步骤。执行模型: claude-opus-4-8（人工 opus 覆盖 sonnet 建议——「持续推进」授权）；子代理: 无。
    - **NTLG-P0-1 整卡 ✅**（-A + -B 收口，侧边栏 5 计数端到端去写死）。
-3. **NTLG-P0-2** — 修 `NotificationsTab.tsx` 陈旧错误注释（状态：⬜ 待开始）
-   - 范围：删除"后端不发 webhook"陈旧注释（WebhookDispatcher 已实装）。零 ADR / 零端点 / 零 schema。
+3. **NTLG-P0-2** — 修 `NotificationsTab.tsx` 陈旧错误注释（状态：✅ 已完成 2026-06-09）
+   - 范围：删除"后端不发 webhook / 触发逻辑未实装"陈旧错误警示横幅 + 副标题 + 注释（WebhookDispatcher ADR-146 已完整实装，核实 fetch POST+HMAC+retry+事件触发）；同步移除断言该横幅的 test #6/#7。零 ADR / 零端点 / 零 schema。
    - 依赖：无。建议模型：haiku。
+   - **完成备注**：核实 WebhookDispatcher（ADR-146）已完整实装（fetch POST+HMAC+SSRF+retry，WebhookDispatcher.ts:142/214，被 crawler/maintenance/staging 真实事件触发，事件订阅过滤已实装）→ 横幅"未实装"确属陈旧错误。删除 `webhook-not-impl-banner` 横幅 + `WEBHOOK_WARN_BANNER_STYLE` 常量 + 改副标题为「推送系统事件到外部端点（事件订阅+HMAC 签名+失败重试，ADR-146）」+ 删 line60 陈旧注释；移除/替换 test #6/#7（合一为「不再含陈旧未实装 banner」断言，其余 ADR-146 事件订阅/连通性测试不动）。门禁：typecheck/lint EXIT=0 / NotificationsTab 测试 10 全过 / test:changed 增量 10 全过。执行模型: claude-opus-4-8（人工 opus 覆盖 haiku 建议——「持续推进」授权）；子代理: 无。
 4. **NTLG-P0-3** — tasks cancel/retry 端点 + topbar 接线（状态：⬜ 待开始）
    - 范围：`POST /admin/tasks/:id/{cancel,retry}`（按 id 分派 crawler runId / bull jobId，响应标注 target 类型）+ `admin-shell-client.tsx` toast stub→真实调用，补 N1-147-4。
    - 依赖：NTLG-ADR-P0（ADR-191 PASS）。建议模型：sonnet。

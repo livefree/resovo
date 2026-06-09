@@ -145,23 +145,14 @@ describe('NotificationsTab', () => {
     })
   })
 
-  // CHG-SN-8-GAPS-WEBHOOK-NOT-IMPL（#G-settings-webhook-impl）
-  it('6. webhook card 含「触发逻辑未实装」warn banner', async () => {
+  // NTLG-P0-2：WebhookDispatcher（ADR-146）已完整实装 → 移除陈旧「未实装」错误警示横幅
+  it('6. webhook card 不再含陈旧「未实装」警示 banner（ADR-146 已实装）', async () => {
     getSiteSettingsMock.mockResolvedValueOnce(FIXTURE)
     render(<NotificationsTab />)
-    await waitFor(() => expect(screen.getByTestId('webhook-not-impl-banner')).not.toBeNull())
-    const banner = screen.getByTestId('webhook-not-impl-banner')
-    expect(banner.textContent).toContain('Webhook 触发逻辑未实装')
-    expect(banner.textContent).toContain('不会向该 URL 发送任何 HTTP POST')
-  })
-
-  it('7. banner 指向 follow-up CHG-SN-8-FUP-WEBHOOK-IMPL + GAPS 编号', async () => {
-    getSiteSettingsMock.mockResolvedValueOnce(FIXTURE)
-    render(<NotificationsTab />)
-    await waitFor(() => expect(screen.getByTestId('webhook-not-impl-banner')).not.toBeNull())
-    const banner = screen.getByTestId('webhook-not-impl-banner')
-    expect(banner.textContent).toContain('#G-settings-webhook-impl')
-    expect(banner.textContent).toContain('CHG-SN-8-FUP-WEBHOOK-IMPL')
+    await waitFor(() => expect(screen.getByTestId('notifications-card-webhook')).not.toBeNull())
+    expect(screen.queryByTestId('webhook-not-impl-banner')).toBeNull()
+    expect(document.body.textContent).not.toContain('触发逻辑未实装')
+    expect(document.body.textContent).not.toContain('不会向该 URL 发送任何 HTTP POST')
   })
 
   // CHG-SN-8-FUP-WEBHOOK-IMPL-EP-B / ADR-146：事件订阅 checkbox + 测试连通性按钮

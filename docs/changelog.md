@@ -3087,3 +3087,12 @@
 - **NTLG-P0-1 整卡收口**（-A 后端 + -B 前端）：侧边栏 5 计数端到端去 mock，治理方案 §5 完成。
 - **文件**：`admin-shell-nav-counts.ts` / `admin-nav.tsx` / `docs/decisions.md`（ADR-190 D-190-4）/ +`tests/unit/lib/admin-shell-nav-counts.test.ts` / `tests/e2e/admin/_shared/shell-mocks.ts`。
 - **执行模型**：claude-opus-4-8（人工 opus 会话覆盖 sonnet 建议——「持续推进」授权同会话连续）；**子代理**：无。
+
+## [NTLG-P0-2] 删 NotificationsTab 陈旧「webhook 未实装」错误警示（SEQ-20260609-01）
+
+- **背景**：治理方案 §0.4/§6 P0-2——`NotificationsTab.tsx` 留有陈旧错误警示横幅，宣称「⚠ Webhook 触发逻辑未实装 / 后端 worker 不会向该 URL 发送任何 HTTP POST / 事件订阅·HMAC·重试待 ADR+实施」。
+- **核实**（删除前对照目标，CLAUDE.md 反核要求）：`WebhookDispatcher`（ADR-146）已完整实装——真发 `fetch(url,{method:'POST'})` + HMAC 签名 + SSRF 防护 + retry（`WebhookDispatcher.ts:142/214`），被 `crawlerWorker`/`maintenanceScheduler`/`staging`/`StagingPublishService` 真实事件触发（`crawler.run.failed` 等），事件订阅过滤（dispatch §订阅过滤）+ 5 事件 checkbox（EP-B）均已落地。横幅 3 项「待实施」全部已完成 → 横幅属**陈旧错误信息**。
+- **改动**：删除 `webhook-not-impl-banner` 警示横幅 + `WEBHOOK_WARN_BANNER_STYLE` 常量（删后未用）+ line60 陈旧注释；card 副标题 `⚠️ 字段存储有效但触发逻辑未实装` → `推送系统事件到外部端点（事件订阅 + HMAC 签名 + 失败重试，ADR-146）`。测试：移除断言陈旧横幅的 test #6/#7，合一为「6. webhook card 不再含陈旧『未实装』警示 banner（ADR-146 已实装）」（断言 `queryByTestId('webhook-not-impl-banner')` 为 null + 无「触发逻辑未实装」文本）；ADR-146 事件订阅/连通性测试（#8–#11）不动。
+- **门禁**：typecheck EXIT=0 / lint EXIT=0（4/4）/ NotificationsTab 测试 10 全过 / test:changed 增量 10 全过。零 ADR / 零端点 / 零 schema / 零新依赖。
+- **文件**：`apps/server-next/src/app/admin/settings/_tabs/NotificationsTab.tsx` / `tests/unit/components/server-next/admin/system/NotificationsTab.test.tsx`。
+- **执行模型**：claude-opus-4-8（人工 opus 会话覆盖 haiku 建议——「持续推进」授权同会话连续）；**子代理**：无。
