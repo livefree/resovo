@@ -21435,3 +21435,169 @@ CREATE TABLE notification_reads (
 
 - **arch-reviewer (claude-opus-4-8) 结论：AUDIT RESULT: PASS**（无红线；不引技术栈外依赖〔领域服务双写，非事件总线〕、SQL 落 queries 层不扩大 Service 直写、端点契约表可被 `parseEndpointContract` 解析且 `/admin/notifications/unread-count` 与未来 fastify route 逐字一致、cursor 混合模型消解「新管理员全历史未读 + markAllRead 写放大」两 bug、emit 解耦后通知不写 admin_audit_log；level DB CHECK / scope 类型层校验分层合理；未读计数 SQL 口径锁定零自由度）。
 - 黄线（转 NTLG-P1-a 实施期处理，不阻断本 ADR Accepted）：① migration 编号 100 须在 P1-a 落地时确认仍为下一可用号（当前最新 099_douban_collection_items.sql）；② `notification_read_cursor` 初值=加入时间需 P1-a 实现「首次访问 upsert cursor=user joined_at」而非默认 NOW()，并补 cursor 基线 E2E 断言（新建管理员首登历史 broadcast 不全标未读）；③ 过渡期双写源去重须有单一写源开关，避免 audit 派生 + emit 重复计数。
+
+---
+
+## ADR-193：`TaskResultDigest` 共享类型 + `TaskRunReporter` / `NotificationEmitter` 中枢契约（emit fire-and-forget 对称 + 登记失败容错 · path A 投影）（SEQ-20260609-01 / NTLG-ADR-P1-B · ntlg-governance §2.2 + §2.3 + §7 ADR-NN2 + §11 D3/D4/D5）
+
+- **日期**：2026-06-09
+- **状态**：**Accepted**（arch-reviewer Opus PASS — 见 §评审）
+- **决策者**：主循环 claude-opus-4-8 / arch-reviewer (claude-opus-4-8)
+- **关联**：ADR-110（ApiResponse / ErrorCode 真源）/ ADR-147（`AdminTaskItem` + `TaskAggregator` id 方案 + `GET /admin/system/jobs` 端点契约真源）/ ADR-152（背景事件 + `buildRunDigest` 过渡态宿主）/ ADR-155 D-155-2（`TaskItem` ↔ `AdminTaskItem` 双源镜像 + `verify:admin-shell-types-mirror`）/ ADR-191（`/admin/tasks/:id/{cancel,retry}` + `AdminTaskControlTarget`）/ ADR-192（notifications schema + 解耦双写 + emit 接口边界声明 D-192-10）/ AuditLogService（`write(): void` fire-and-forget 同构范本，`AuditLogService.ts:278`）/ 治理方案 `docs/designs/notification-task-log-governance-plan_20260608.md` §2.2 + §2.3 + §3 + §4.2 + §6 P1-b/P1-c + §7 ADR-NN2 + §11 D3/D4/D5
+- **对应交付**：SEQ-20260609-01 NTLG-ADR-P1-B（本 ADR 起草）→ NTLG-P1-b（`TaskResultDigest` 类型 + crawler_runs.summary→metrics 投影 + `TaskAggregator` 透出 digest + 抽屉 chips）+ NTLG-P1-c（`NotificationEmitter` / `TaskRunReporter` 中枢实装 + worker `on('completed')` emit 接入）
+- **触发**：治理方案 §7「ADR-NN2：`TaskResultDigest` + `TaskRunReporter`/`NotificationEmitter` 共享契约」+ CLAUDE.md §模型路由 1「定义新的共享组件 API 契约（Props 类型、事件签名、生命周期）须 Opus 子代理完成决策」+ 3「撰写即将成为 ADR 的决策文档」。本 ADR **无新 admin route**（digest 走既有 `GET /admin/system/jobs`），`verify:endpoint-adr` 不涉及。
+
+### 背景
+
+治理方案确立四象限边界后，任务象限（"某异步作业进行到哪、结果如何"）与通知象限（"有件需要我知道的事"）之间的桥是**任务完成时产出的结构化执行结果摘要**（§1 边界规则 3）。现状缺口（§0.2 校正后）：
+
+1. **后台任务完成有"裸通知"但无结构化 digest**。`crawler_runs.summary` 已由 `syncRunStatusFromTasks`（`crawlerRuns.ts:357`）聚合落库 10 个 int 字段（`total/pending/running/paused/done/failed/cancelled/videosUpserted/sourcesUpserted/errors`），但只被 `TaskAggregator.mapCrawlerRun`（`TaskAggregator.ts:83`）取出 `summary.error` 用于 errorMessage，**digest 指标完全未透出**到 `AdminTaskItem`。NTLG-P0-4 落了过渡态 `BackgroundEventService.buildRunDigest`（`BackgroundEventService.ts:225`）把 summary 拼成人读字符串塞进 `AdminBackgroundEventFinished.description`，但那是**字符串而非结构化指标**，前端无法渲染 metrics chips / tone 着色。
+2. **无统一 emit 契约**。每加一种后台流程都要各自手写"如何进任务中心 / 如何发通知"。ADR-192 已锁通知存储与读路径，并在 D-192-10 显式把 `emit` 签名 / fire-and-forget 对称性 / `TaskResultDigest` 形状 / `TaskRunReporter` 契约**留给本 ADR**。
+
+本 ADR 定义三个共享原语——`TaskResultDigest`（数据形状）、`NotificationEmitter`（通知发射中枢）、`TaskRunReporter`（任务登记/汇报中枢），并裁定 path A 近期默认下 digest 的数据流。**边界**：本 ADR 是 docs-only 设计（契约定义）；类型落 `packages/types` / Emitter·Reporter 实装 / `TaskAggregator` 投影改造归 NTLG-P1-b/P1-c；notifications 存储 schema·已读·unread-count 归 ADR-192（已 Accepted，本 ADR 只引用）；`task_runs` 统一抽象表（path B）+ 真源关系归 ADR-194（NN3）；TTL/dedup 命名/scope 定向**策略数值**归 ADR-195（NN4）——本 ADR 的 emit 签名含 `dedupKey/expiresAt/scope` 入参但不锁其策略。
+
+### 决策要点
+
+1. **`TaskResultDigest` 置于 `packages/types`，挂为 `AdminTaskItem.digest?` 与 `TaskItem.digest?` 镜像新字段**（D-193-1，§2.2 + ADR-155 D-155-2）：
+   - **放置裁定**：`TaskResultDigest`（含子接口 `TaskMetric`）定义在 `packages/types/src/admin-shell.types.ts`（API SSOT 侧）。已核实 `packages/admin-ui` 在 `package.json` 依赖 `@resovo/types`（依赖方向合法：UI 包可正向 import types 包，types 包不反向依赖 UI——与 admin-shell.types.ts 文件头"后端 API 引用本文件以避免 api 反向依赖 admin-ui"同向）。`packages/admin-ui/src/shell/types.ts` 通过 `import type { TaskResultDigest } from '@resovo/types'` 复用**同一类型定义**，不复制类型体。
+   - **双源镜像策略**：`AdminTaskItem` 与 `TaskItem` 新增**同名同签**字段 `readonly digest?: TaskResultDigest`。`verify:admin-shell-types-mirror` 按字段名 + 规范化类型签名字符串比对（脚本逐字比较类型签名文本），两源均写 `TaskResultDigest` 字面，签名字符串一致 → 通过。**`TaskResultDigest`/`TaskMetric` 本身不是被 mirror 守卫的镜像 interface**（MIRRORS 仅含 NotificationItem/TaskItem 两对），只需单点定义于 packages/types 即可，不产生第二份镜像维护负担。
+   - **理由**：`crawler_runs.summary` 经 `TaskAggregator`（API 层）投影成 digest，digest 必须在 API 序列化路径可见；packages/types 是 API SSOT。admin-ui 是消费 SSOT，正向 import 复用。这样 digest 单点定义、双源零漂移。
+
+2. **`NotificationEmitter.emit(...): void` fire-and-forget，与 `AuditLogService.write(): void` 同构**（D-193-2，§11 D3 + ADR-192 D-192-10）：
+   - 签名锁 `void`（**修正方案 §2.3 草案的 `Promise<void>`——与 §11 D3「emit(): void 同构 write」矛盾，以 D3 为准**）。
+   - 内部 catch、写失败仅 `logger.warn`、**不阻塞领域操作、领域服务不 await**——与 `AuditLogService.write`（`AuditLogService.ts:278`，`insertAuditLog(...).catch(err => logger.warn(...))`）逐行同构。**消解失败语义分叉**：领域服务的解耦双写 `audit.write(...); notification.emit(...)` 两行都是 fire-and-forget，无"await emit 却不 await write"的不对称。
+   - **emit 入参字段必须落在 ADR-192 notifications schema 的 11 列内**（emit 只写 notifications 表，绝不写 admin_audit_log，D-192-10 解耦断言）。**修正方案 §2.3 草案漏了 `sourceKind`**：ADR-192 schema `source_kind TEXT NOT NULL`（必填），故 `sourceKind` 列为 emit **必填**入参（不可由 Emitter 内硬编码默认值——那会丢失产出象限信息）；`sourceRef?` 为可选（去重&反查）。`payload` 入参类型为 `unknown`（承载 `TaskResultDigest` 等结构化数据，由 Emitter `JSON.stringify` 落 `payload JSONB`），**禁止 `any`**（CLAUDE.md §绝对禁止）。
+   - `dedupKey` 命中 ADR-192 `uq_notifications_dedup_key` partial unique index 时幂等不新建（由 DB 约束 + queries 层 `ON CONFLICT DO NOTHING` 保证，归 P1-c 实装；本 ADR 锁语义）。
+
+3. **`TaskRunReporter` 三方法签名 + start 登记失败不阻断作业；P1 阶段 path A 下退化为 no-op stub**（D-193-3，§11 D4 + D5 张力）：
+   - **签名**：`start(input): Promise<TaskRunId>` / `progress(id, pct): Promise<void>` / `finish(id, result): Promise<void>`（见 §契约定义）。`start` 是一次 DB 写换 `TaskRunId`；**登记失败时任务照常跑**——`start` 内部 catch DB 错误后**降级返回 sentinel TaskRunId**（如 `'unlinked'`），后续 `progress/finish` 对该 sentinel id 为 no-op，仅 `logger.warn`，与 audit fire-and-forget 哲学一致。**不让 DB 抖动拖垮后台作业**。
+   - **P1 落地形态裁定（消解 D5 张力："TaskRunId 从哪来"）**：D5 裁定 P1 不建 `task_runs` 表（path A）。故 **`TaskRunReporter` 在 P1 是"契约先行 + no-op/log-only 实装"**——interface 定义入 `packages/types`（NTLG-P1-b/c 范围），提供一个 `NoopTaskRunReporter`（`start` 直接返回 sentinel TaskRunId + log，`progress/finish` log-only），P1 的 worker **不强制接入** Reporter（digest 走 path A summary 回写，见 D-193-4，不依赖 Reporter）。Reporter 的**真实 DB 写实装**待 ADR-194 建 `task_runs` 表后落地。这样 P1-b/c 实施者不会卡在"TaskRunId 从哪来"——P1 阶段 digest 不经 Reporter，Reporter 仅为未来自动化预留契约骨架。
+   - **`TaskRunId` 类型**：`type TaskRunId = string`（path A 阶段语义占位；path B 建表后指向 `task_runs.id`，re-point 不破坏契约——与 ADR-191 `:id` 分阶段指向同哲学）。
+
+4. **path A 数据流闭环：crawler_runs.summary（已落库）→ TaskAggregator.mapCrawlerRun 投影 TaskResultDigest → AdminTaskItem.digest → 抽屉 chips**（D-193-4，§11 D5 + §2.2 path A + §3 信号→落面映射）：
+   - **不建 `task_runs` 表、不新增任何写路径**。digest 的数据底料是 `syncRunStatusFromTasks`（`crawlerRuns.ts:357`）**已落库**的 `summary` 10 个 int key。NTLG-P1-b 在 `TaskAggregator.mapCrawlerRun`（`TaskAggregator.ts:83`）新增一个纯函数 `buildTaskResultDigest(summary)`，将 summary 投影成 `TaskResultDigest`，挂到 `AdminTaskItem.digest`。`GET /admin/system/jobs` 响应即带 digest，抽屉渲染 metrics chips。**P1-b 是纯只读投影改造，零 schema 变更、零 worker 改造**。
+   - **summary → metrics 映射口径（锁定，零自由度）**：仅投影对运营有意义的指标，不把全部 10 个内部计数都暴露：
+
+     | summary key | metric.key | label | unit | tone 规则 |
+     |---|---|---|---|---|
+     | `videosUpserted` | `videos_added` | 新增视频 | （无） | `ok` |
+     | `sourcesUpserted` | `sources_added` | 新增线路 | （无） | `ok` |
+     | `failed` | `sites_failed` | 站点失败 | （无） | `>0 → warn`，`=0 → 省略该 metric` |
+     | `errors` | `errors` | 错误 | （无） | `>0 → danger`，`=0 → 省略该 metric` |
+
+     `total/pending/running/paused/done/cancelled` 为生命周期内部计数，**不进 metrics**（运营无需感知队列内部分布；run 的整体 status 已由状态机表达）。`failed=0` / `errors=0` 时**省略该 metric**（不展示"0 失败"噪声）。`videosUpserted` / `sourcesUpserted` 恒展示（即使为 0，运营需知"本次采集产出"）。
+   - **`metric.value` 类型**：metric `value: number | string`，crawler 投影全部为 `number`。
+   - **`summary` 取数防御**：复用 `buildRunDigest` 已验证的 `num(key)` 守卫（`typeof v === 'number' && Number.isFinite(v)`，`BackgroundEventService.ts:227`），非数字 / 缺字段 → 该 metric 省略，**不抛错、不进空 catch**。
+
+5. **富集成功率 / 合并候选数等 summary 暂无的字段：P1-b 不映射，留富集 worker（P1-c/P2）后补 metric**（D-193-5，§2.2 末段）：
+   - 方案 §2.2 示例 summary 文案含"富集成功率 87% / 13 进入合并候选"，但 `crawler_runs.summary` 当前**无** `enrich_success_rate` / `merge_candidates` 字段（实读 `syncRunStatusFromTasks` 仅落 10 个 key）。
+   - 裁定：**P1-b 严格按 D-193-4 表只投影 summary 已有 4 类 metric**，不为不存在的字段占位。富集成功率等由富集 worker 在 `on('completed')` 时通过 `emit` 的 `payload` 直接构造 `TaskResultDigest`（含 `enrich_success_rate` metric，unit `'%'`，tone 阈值由 P1-c 定），或 P2 富集流程接 path B 后写回 `task_runs.digest`。`TaskResultDigest.metrics` 是 `ReadonlyArray<{ key: string; ... }>`——**key 不写死枚举**（满足价值排序 3 可扩展性），新增 metric 无需改类型，自然容纳。
+
+6. **正式 `TaskResultDigest` 与过渡态 `buildRunDigest` 的迁移裁定：P1-b 并存、P1-c 收口**（D-193-6，§6 P1-b/c）：
+   - **P1-b 阶段并存**：`TaskResultDigest`（结构化，挂 `AdminTaskItem.digest`，服务任务抽屉 chips）与 `buildRunDigest`（人读字符串，挂 `AdminBackgroundEventFinished.description`，服务背景事件铃铛）**并存**——二者服务不同 UI 面（任务抽屉 vs 通知/背景事件抽屉），P1-b 不删 `buildRunDigest`（删它会断 NTLG-P0-4 已上线的 finished lane description）。
+   - **`buildRunDigest` 内部建议复用 digest 投影**：P1-b 可让 `buildRunDigest` 从 `buildTaskResultDigest(summary).summary` 字段取人读串（DRY），或保持独立——**advisory，非硬约束**（二者口径均来自同一 summary，差异仅"结构化 vs 字符串"）。
+   - **P1-c 收口**：emit 接入后，采集完成通知的 `payload` 携带结构化 `TaskResultDigest`，通知抽屉直接渲染 chips；此时 `buildRunDigest` 的字符串可退化为 fallback 或随背景事件铃铛整体收敛（归 P1-c / P2 评估，不在 P1-b）。本 ADR 锁"P1-b 并存不删、P1-c 评估收口"，不预设 P1-c 实现细节。
+
+### 契约定义
+
+```ts
+// packages/types/src/admin-shell.types.ts（NTLG-P1-b 落地）
+
+/** 任务执行结果的单条结构化指标（TaskResultDigest 子接口，复用性 D-193-1） */
+export interface TaskMetric {
+  /** 指标语义键（不写死枚举，可扩展；如 'videos_added' | 'enrich_success_rate'） */
+  readonly key: string
+  /** 人读标签（如 '新增视频'） */
+  readonly label: string
+  /** 指标值（crawler 投影恒 number；预留 string 承载非数值指标） */
+  readonly value: number | string
+  /** 单位（如 '%'）；无单位省略 */
+  readonly unit?: string
+  /** 着色语义（驱动 chip 颜色 token；省略 → neutral） */
+  readonly tone?: 'ok' | 'warn' | 'danger'
+}
+
+/** 任务执行结果摘要（任务象限 ↔ 通知象限的桥；ADR-193 D-193-1） */
+export interface TaskResultDigest {
+  /** 人读摘要（如 '新增 42 视频 · 5 线路 · 1 站点失败'） */
+  readonly summary: string
+  /** 结构化指标数组（抽屉 metrics chips；key 不写死，可增量扩展） */
+  readonly metrics: ReadonlyArray<TaskMetric>
+  /** 需要注意的要点（失败站点、超时项）；可选 */
+  readonly highlights?: ReadonlyArray<string>
+}
+
+// AdminTaskItem 新增字段（与 TaskItem 双源镜像同步，verify:admin-shell-types-mirror）：
+//   readonly digest?: TaskResultDigest
+//   （status=success/failed 时提供；path A 由 TaskAggregator 从 crawler_runs.summary 投影）
+```
+
+```ts
+// 通知发射中枢契约（通知象限）—— NTLG-P1-c 实装（ADR-193 D-193-2）
+// 入参字段一一对应 ADR-192 notifications schema 11 列（emit 只写 notifications，不写 audit）
+interface NotificationEmitter {
+  /**
+   * fire-and-forget：返回 void，内部 catch，失败仅 log warn，领域服务不 await
+   * （与 AuditLogService.write(): void 同构，消解失败语义分叉 §11 D3）
+   */
+  emit(input: {
+    readonly type: string                              // → notifications.type（语义键）
+    readonly level: 'info' | 'warn' | 'danger'         // → notifications.level（DB CHECK，ADR-192 D-192-6）
+    readonly title: string                             // → notifications.title
+    readonly sourceKind: string                        // → notifications.source_kind（NOT NULL，必填 / 修正草案漏项）
+    readonly body?: string                             // → notifications.body
+    readonly payload?: unknown                         // → notifications.payload JSONB（承载 TaskResultDigest；禁止 any）
+    readonly href?: string                             // → notifications.href
+    readonly sourceRef?: string                        // → notifications.source_ref（去重&反查）
+    readonly scope?: string                            // → notifications.scope（前缀校验 broadcast/role:*/user:*；默认 'broadcast'）
+    readonly dedupKey?: string                         // → notifications.dedup_key（partial unique 幂等）
+    readonly expiresAt?: string                        // → notifications.expires_at（ISO 8601；TTL 策略数值留 ADR-195）
+  }): void
+}
+
+// 任务登记/汇报中枢契约（任务象限）—— 契约先行；P1 为 no-op/log-only stub，真实 DB 写待 ADR-194（ADR-193 D-193-3）
+type TaskRunId = string  // path A 语义占位；path B（ADR-194）指向 task_runs.id，re-point 不破坏契约
+
+interface TaskRunReporter {
+  /**
+   * 一次 DB 写换 TaskRunId。登记失败不阻断作业（内部 catch，降级返回 sentinel id 'unlinked' + log warn，§11 D4）。
+   * P1 阶段 NoopTaskRunReporter：直接返回 sentinel + log，不写 DB。
+   */
+  start(input: { readonly kind: string; readonly title: string; readonly ref?: string }): Promise<TaskRunId>
+  /** sentinel id → no-op；真实 id → 更新进度。失败仅 log warn，不阻断 */
+  progress(id: TaskRunId, pct: number): Promise<void>
+  /** 终态登记 + digest 落库（path B）。sentinel id → no-op。失败仅 log warn，不阻断 */
+  finish(id: TaskRunId, result: {
+    readonly status: 'success' | 'failed' | 'cancelled'
+    readonly digest?: TaskResultDigest
+    readonly error?: string
+  }): Promise<void>
+}
+```
+
+> **无端点契约表**：本 ADR 不新增任何 admin route。digest 经 `TaskAggregator` 投影到既有 `GET /admin/system/jobs`（ADR-147 端点契约真源），响应仍为 `{ data: AdminTaskItem[], meta }`，`AdminTaskItem` 仅**新增可选字段** `digest?`（向后兼容，旧消费方忽略即可）。`verify:endpoint-adr` 不涉及本 ADR。
+
+### 影响文件
+
+**NTLG-P1-b（digest 类型 + crawler 投影）**：
+- 修改：`packages/types/src/admin-shell.types.ts`（新增 `TaskMetric` + `TaskResultDigest` + `AdminTaskItem.digest?`）
+- 修改：`packages/admin-ui/src/shell/types.ts`（`import type { TaskResultDigest } from '@resovo/types'` + `TaskItem.digest?` 镜像；过 `verify:admin-shell-types-mirror`）
+- 修改：`apps/api/src/services/TaskAggregator.ts`（新增 `buildTaskResultDigest(summary)` 纯函数 + `mapCrawlerRun` 挂 digest）
+- 修改：任务抽屉组件（`packages/admin-ui/src/shell/task-drawer.tsx`，渲染 metrics chips，颜色用 CSS 变量 token 映射 tone，**禁止硬编码颜色**）
+
+**NTLG-P1-c（emit / Reporter 中枢实装 + worker 接入）**：
+- 新建：`apps/api/src/services/NotificationEmitter.ts`（或并入 `NotificationService.emit`，SQL 落 `db/queries/notifications.ts`，不在 Service 直写 SQL — ADR-192 D-192-7）
+- 新建：`apps/api/src/services/TaskRunReporter.ts`（P1 `NoopTaskRunReporter` 实装）
+- 修改：`apps/api/src/workers/crawlerWorker.ts`（`registerCrawlerWorker` 的 `on('completed')`，`crawlerWorker.ts:496`，补 `emit` 带 digest 通知）
+
+### 偏离登记
+
+- **D-193-DEV-1**：`TaskRunReporter` 在 P1 为 no-op/log-only stub，真实 `task_runs` DB 写待 ADR-194（path B）。处置：accept——D5 裁定 P1 走 path A 不建 task_runs；Reporter 契约先行为未来自动化预留接口，P1 digest 走 summary 投影不依赖 Reporter，避免过早建表导致地基期重写 crawler/bull（§11 D5 风险）。
+- **D-193-DEV-2**：P1-b 富集成功率 / 合并候选数等指标不投影（summary 暂无字段）。处置：accept——`metrics` key 不写死，富集 worker 接入（P1-c/P2）时经 emit payload 或 path B digest 增量补 metric，零类型改动。
+- **D-193-DEV-3**：正式 `TaskResultDigest`（任务抽屉 chips）与过渡态 `buildRunDigest`（背景事件 description 字符串）P1-b 并存。处置：accept——二者服务不同 UI 面，删 buildRunDigest 会断 NTLG-P0-4 已上线 finished lane；P1-c 评估收口（emit payload 携结构化 digest 后）。
+- **D-193-DEV-4**：修正方案 §2.3 草案两处缺陷——`emit` 草案 `Promise<void>` 改 `void`（与 §11 D3 一致）；`emit` 入参补 `sourceKind` 必填（ADR-192 `source_kind NOT NULL`）。处置：accept——以 §11 D3 决策 + ADR-192 schema 为准，草案为示意非锁定。
+
+### 评审
+
+- **arch-reviewer (claude-opus-4-8) 结论：AUDIT RESULT: PASS**（无红线；不引技术栈外依赖〔纯 TS interface + 现有 pg/pino 实装，无事件总线〕；emit 入参 11 字段一一落在 ADR-192 notifications schema 列内、补齐 `source_kind` 必填、`payload: unknown` 不用 any；`emit(): void` 与 `write(): void` 逐行同构〔`AuditLogService.ts:278`〕消解领域服务双写失败语义分叉；path A 数据流闭环〔`crawler_runs.summary` 10 个 int key 已落库，P1-b 纯只读投影零 schema 变更〕；`TaskResultDigest` 单点定义于 packages/types、admin-ui 正向 import 复用、`digest?` 双源镜像签名字符串一致过 `verify:admin-shell-types-mirror`；`TaskRunReporter` no-op stub 消解 P1 "TaskRunId 从哪来"张力；确无新 admin route，`verify:endpoint-adr` 不涉及）。
+- 黄线（转 NTLG-P1-b/P1-c 实施期处理，不阻断本 ADR Accepted）：① P1-b 改 `packages/admin-ui/src/shell/types.ts` `TaskItem.digest?` 须与 `AdminTaskItem.digest?` 同 commit 并过 `verify:admin-shell-types-mirror`，commit 须带 `Subagents: arch-reviewer (claude-opus-...)` trailer（CLAUDE.md §绝对禁止"改 admin-ui types.ts 公开 Props 字段须 Opus trailer"）；② 抽屉 metrics chips 的 tone→颜色映射须用 CSS 变量 token，禁止硬编码颜色；③ P1-c emit 写 SQL 必须落 `db/queries/notifications.ts`，不扩大 Service 直写（ADR-192 D-192-7）；④ `dedupKey` 幂等须经 `ON CONFLICT DO NOTHING`（命中 `uq_notifications_dedup_key`），P1-c 补幂等单测。

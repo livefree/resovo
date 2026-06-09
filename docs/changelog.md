@@ -3151,3 +3151,23 @@
 - **3 黄线转 NTLG-P1-a 实施期**：① migration 100 号落地再确认（当前最新 099）；② cursor 初值=加入时间须实现「首次访问 upsert=user joined_at」+ 补基线 E2E 断言；③ 过渡期双写源去重单一写源开关。
 - **文件**：`docs/decisions.md`（+ADR-192）/ `docs/task-queue.md`（NTLG-ADR-P1-A ✅）/ `docs/tasks.md`（卡片流转）。
 - **执行模型**：claude-opus-4-8（主循环，人工 opus 会话「持续推进 P1」授权）；**子代理**：arch-reviewer (claude-opus-4-8 / agentId a976fc3359c4cb5d5)。
+
+---
+
+## [NTLG-ADR-P1-B] 起草 ADR-193：TaskResultDigest + TaskRunReporter/NotificationEmitter 共享契约（SEQ-20260609-01）
+
+- **背景**：P1 任务结果摘要 + 产出契约地基 ADR（治理方案 §7 ADR-NN2）。为所有后台任务定义统一「执行结果摘要 + 通知发射」产出契约（面向未来自动化）；现状 `TaskAggregator` 取了 `crawler_runs.summary` 却未透出 digest，每加一种后台流程都各自手写「如何进任务中心 / 如何发通知」。新共享组件 API 契约 → CLAUDE.md §模型路由 1 强制 Opus 子代理设计。
+- **强制 Opus 设计**：spawn arch-reviewer (claude-opus-4-8 / agentId ac8649e7b8354f56f) 独立设计 ADR-193 → **AUDIT RESULT: PASS**，无红线；并捕获修正方案 §2.3 草案 2 缺陷。
+- **ADR-193 落定**（docs/decisions.md，Accepted）：
+  - **D-193-2（§11 D3）`NotificationEmitter.emit(...): void` fire-and-forget**：与 `AuditLogService.write(): void` 逐行同构（内部 catch、log warn、领域服务不 await），消解「await emit 却不 await write」失败语义分叉。**修正草案缺陷 A**：草案 `Promise<void>` 与 §11 D3 矛盾 → 锁 `void`。emit 入参 11 字段一一对应 ADR-192 notifications schema 列；**修正草案缺陷 B**：补 `sourceKind` 必填（schema `source_kind NOT NULL`）；`payload:unknown` 禁 any。
+  - **D-193-3（§11 D4）`TaskRunReporter` 登记失败不阻断作业**：start 内部 catch → 降级 sentinel TaskRunId（`'unlinked'`）+ log warn，progress/finish 对 sentinel no-op。**P1 落地形态裁定**：path A 下 P1 为 `NoopTaskRunReporter`（契约先行、log-only 不写 DB），真实 task_runs DB 写待 ADR-194——消解 P1「TaskRunId 从哪来」张力。
+  - **D-193-4（§11 D5）path A 数据流闭环**：digest 走 `crawler_runs.summary`（已落库 10 int key）→ `TaskAggregator.mapCrawlerRun` 新增 `buildTaskResultDigest()` 纯函数投影 → `AdminTaskItem.digest?` → 抽屉 chips；**不建 task_runs、零 schema 变更、零 worker 改造**（path B 待 ADR-194）。summary→metrics 映射口径锁定：videosUpserted/sourcesUpserted(ok 恒展示) + failed(>0 warn)/errors(>0 danger，=0 省略)，余 6 内部计数不投影。
+  - **`TaskResultDigest`+`TaskMetric` 类型**：置 `packages/types/src/admin-shell.types.ts`（API SSOT），admin-ui 正向 import 复用（依赖方向合法）；`AdminTaskItem.digest?` 与 `TaskItem.digest?` 双源镜像（同名同签过 `verify:admin-shell-types-mirror`，TaskResultDigest 本身非镜像 interface 单点定义）。metrics key 不写死枚举（富集成功率等 P1-c/P2 经 emit payload 增量补，零类型改动）。
+  - **无新 admin route**：digest 走既有 `GET /admin/system/jobs`（ADR-147），`AdminTaskItem` 仅加可选字段向后兼容，`verify:endpoint-adr` 不涉及。
+  - **边界声明**：notifications schema 归 ADR-192、task_runs(path B) 归 ADR-194、TTL/dedup/scope 策略归 ADR-195。
+  - **过渡态迁移**：正式 `TaskResultDigest`（任务抽屉 chips）与 NTLG-P0-4 过渡态 `buildRunDigest`（背景事件 description 字符串）P1-b 并存不删（服务不同 UI 面），P1-c 评估收口。
+- **门禁**：`verify:adr-contracts` EXIT=0（verify-adr-d-numbers 识别 D-193-1..6 / `verify-admin-shell-types-mirror` 2 对镜像对齐 / `verify-endpoint-adr` 229 路由对齐无新增）/ typecheck EXIT=0 / lint 4/4 / test:changed SKIP（docs-only）。
+- **4 黄线转 NTLG-P1-b/P1-c**：① P1-b `TaskItem.digest?` 双源同 commit + mirror + Opus trailer（改 admin-ui types.ts 公开字段红线）；② chips tone→CSS 变量禁硬编码颜色；③ P1-c emit SQL 落 `db/queries/notifications.ts`；④ dedupKey ON CONFLICT DO NOTHING + 幂等单测。
+- **P1 地基 ADR 全部收口**：ADR-192（通知存储/已读/解耦双写/unread-count）+ ADR-193（digest/emit/reporter 契约）Accepted → NTLG-P1-a/b/c 实施卡解锁（建议 sonnet）。
+- **文件**：`docs/decisions.md`（+ADR-193）/ `docs/task-queue.md`（NTLG-ADR-P1-B ✅）/ `docs/tasks.md`（卡片流转）。
+- **执行模型**：claude-opus-4-8（主循环，人工 opus 会话「持续推进 P1」授权）；**子代理**：arch-reviewer (claude-opus-4-8 / agentId ac8649e7b8354f56f)。

@@ -6,7 +6,7 @@
 
 ## 当前任务（单任务工作台：同时仅 1 个 🔄 进行中；完成即删卡，历史见 docs/changelog.md）
 
-_（当前无进行中任务。取下一个前先查 `docs/task-queue.md` 是否有 🚨 BLOCKER。**SEQ-20260609-01 P0 全部完成 + P1 地基 ADR-192 ✅**（NTLG-ADR-P1-A Accepted）。**下一可取：NTLG-ADR-P1-B**（起草 ADR-193：TaskResultDigest + TaskRunReporter/NotificationEmitter 共享契约，无依赖，CLAUDE.md §模型路由强制 Opus 子代理设计——新共享组件 API 契约）。SEQ-20260608-01 cutover 剩：卡 4 回滚窗 🔄 ~2026-06-15、卡 5 改名待排期。）_
+_（当前无进行中任务。取下一个前先查 `docs/task-queue.md` 是否有 🚨 BLOCKER。**SEQ-20260609-01 P0 全部完成 + P1 地基 ADR 全部 ✅**（ADR-192 + ADR-193 Accepted）。**下一可取：NTLG-P1-a**（通知存储 + 读 API：migration 100 + `db/queries/notifications.ts` + NotificationService 编排 + unread-count 端点，依赖 ADR-192 ✅，建议 sonnet）→ P1-b（digest 类型 + crawler 投影，依赖 ADR-193 ✅，建议 sonnet）→ P1-c（解耦双写 emit 接入，依赖 P1-a+P1-b，建议 sonnet）。⚠️ P1-a/b/c 建议模型 sonnet——若续用本 opus 会话推进属人工覆盖（同 P0 先例「持续推进」授权），否则可新会话按建议 sonnet 启动。SEQ-20260608-01 cutover 剩：卡 4 回滚窗 🔄 ~2026-06-15、卡 5 改名待排期。）_
 
 ---
 
