@@ -1640,3 +1640,65 @@
    - 范围：apps/server 已随 cutover 物理删除（恢复靠 git tag `pre-server-next-cutover`，非保留目录）；+7 天观察期内 tag 为回滚锚点（RTO ≤ 4h：checkout tag + nginx :3003→:3001 reload）；~2026-06-15 确认 0 报障后关闭回滚窗（changelog 收口；tag 可作永久历史锚点保留）。
    - 完成标准：7 天观察期 0 报障（运营输入）；回滚窗关闭记录入 changelog。
    - 建议模型：sonnet。
+
+---
+
+## [SEQ-20260609-01] 后台「消息·通知·提醒·日志」综合治理序列（ntlg-governance 落地）
+
+- **状态**：🔄 进行中（NTLG-ADR-P0 ✅ — P0 端点 ADR 解禁；下一可取：NTLG-P0-2 无依赖快赢 / NTLG-P0-1 + NTLG-P0-3 依赖已 PASS）
+- **创建时间**：2026-06-09
+- **最后更新时间**：2026-06-09
+- **source_of_truth**：`docs/designs/notification-task-log-governance-plan_20260608.md`（r2.1 定稿）
+- **背景**：治理方案 r2.1 定稿但未分解进 tasks 工作流。本序列把方案 §6 的 P0/P1/P2 + §7 的 6 个 ADR 拆为原子卡。**ADR 编号锁定**：ADR-NN0a→**ADR-190**(nav-counts) / ADR-NN0b→**ADR-191**(tasks cancel·retry) / ADR-NN1→**ADR-192**(通知 schema+解耦双写+已读混合+unread-count) / ADR-NN2→**ADR-193**(TaskResultDigest+Reporter/Emitter 契约) / ADR-NN3→**ADR-194**(task_runs) / ADR-NN4→**ADR-195**(通知 TTL/dedup/scope)。
+- **门禁顺序**：P0 三端点（nav-counts/cancel/retry）+ P1 unread-count 端点全部触发 `verify:endpoint-adr` → 对应 ADR 必须先 PASS（§7 + §11 D7）。P1 schema 跨 3+ 消费方 + 共享契约强制 Opus 子代理设计（CLAUDE.md §模型路由 1/2）。
+- **§11 决策基线**：D1–D9 采纳方案推荐值（混合已读 / cursor 索引 / emit fire-and-forget / start 不阻断 / path A 近期默认 / 真源 NN3 二选一 / P0 端点 ADR 前置 / nav-counts 逐模块容错 / 服务双写不引新依赖）。
+- **会话切入裁定（AskUserQuestion 2026-06-09）**：本程序首会话切入「起 P0 门禁 ADR」（NTLG-ADR-P0）。
+
+### P0 阶段（修断链 / 去 mock，不动数据模型）
+
+1. **NTLG-ADR-P0** — 起草 ADR-190(nav-counts) + ADR-191(tasks cancel·retry) 端点契约（状态：✅ 已完成 2026-06-09）
+   - 范围：`docs/decisions.md` 追加 ADR-190 + ADR-191（§端点契约表 + 鉴权 + 错误码 + 逐模块容错口径 + :id 分派语义）；Opus arch-reviewer PASS。
+   - 完成标准：两 ADR Accepted（Opus PASS）；`verify:adr-contracts` EXIT=0；为 P0-1/P0-3 端点解禁。
+   - 依赖：无。建议模型：opus（端点 ADR + 强制 Opus PASS）。
+   - **完成备注**：ADR-190 + ADR-191 落档并经 arch-reviewer (claude-opus-4-8) 独立评审 **AUDIT RESULT: PASS**（无红线，3 黄线转 P0-1/P0-3 实施期）。门禁 `verify:adr-contracts` EXIT=0（verify-endpoint-adr ✅ 226 路由全对齐，新 3 端点行就位待实施解禁）。黄线转交：① §7 占位编号反向映射已由本 SEQ 背景闭环；② NTLG-P0-1 落地以各模块 route preHandler 角色快照回填 ADR-190 D-190-4 定稿矩阵；③ NTLG-P0-3 补 retry/cancel 并发态二次校验测试 + `task.cancel`/`task.retry` 枚举同步 SSOT + tasks.ts 路由注册挂载。执行模型: claude-opus-4-8；子代理: arch-reviewer (claude-opus-4-8)。
+2. **NTLG-P0-1** — nav-counts 聚合端点 + 侧边栏去写死（状态：⬜ 待开始）
+   - 范围：`GET /admin/system/nav-counts`（逐模块容错聚合 5 计数）+ `useAdminNavCounts` 改消费该端点 + `admin-nav.tsx` 删 4 写死 count（保 badge 色调）。
+   - 依赖：NTLG-ADR-P0（ADR-190 PASS）。建议模型：sonnet。
+3. **NTLG-P0-2** — 修 `NotificationsTab.tsx` 陈旧错误注释（状态：⬜ 待开始）
+   - 范围：删除"后端不发 webhook"陈旧注释（WebhookDispatcher 已实装）。零 ADR / 零端点 / 零 schema。
+   - 依赖：无。建议模型：haiku。
+4. **NTLG-P0-3** — tasks cancel/retry 端点 + topbar 接线（状态：⬜ 待开始）
+   - 范围：`POST /admin/tasks/:id/{cancel,retry}`（按 id 分派 crawler runId / bull jobId，响应标注 target 类型）+ `admin-shell-client.tsx` toast stub→真实调用，补 N1-147-4。
+   - 依赖：NTLG-ADR-P0（ADR-191 PASS）。建议模型：sonnet。
+5. **NTLG-P0-4** — 采集完成 digest 文案补全（过渡态）（状态：⬜ 待开始）
+   - 范围：`background-events` finished lane 把 `crawler.run.completed` 补结构化 digest 文案（正式版见 P1-b/c）。
+   - 依赖：无（与 P1-b 不冲突，过渡态）。建议模型：sonnet。
+
+### P1 阶段（通知架构升级 + 任务结果摘要 · 地基）
+
+6. **NTLG-ADR-P1-A** — 起草 ADR-192：通知/审计解耦双写 + notifications/notification_read_cursor(+reads) schema + 已读混合模型 + unread-count 端点（状态：⬜ 待开始）
+   - 依赖：无。建议模型：opus（跨 3+ 消费方 schema + 新 admin route，强制 Opus 子代理设计）。
+7. **NTLG-ADR-P1-B** — 起草 ADR-193：TaskResultDigest + TaskRunReporter/NotificationEmitter 共享契约（emit fire-and-forget 对称 + 登记失败容错）（状态：⬜ 待开始）
+   - 依赖：无。建议模型：opus（新共享组件 API 契约，强制 Opus 子代理设计）。
+8. **NTLG-P1-a** — 通知存储 + 读 API（状态：⬜ 待开始）
+   - 范围：`notifications` + `notification_read_cursor`(+预留 `notification_reads`) migration；SQL 落 `db/queries/notifications.ts`；`NotificationService` 编排 emit/list/markAllRead/unreadCount（cursor 模型）；`GET /admin/notifications`（迁新表）+ `GET /admin/notifications/unread-count`。先空跑兼容（旧 audit 派生回填验证读路径）。
+   - 依赖：NTLG-ADR-P1-A（ADR-192 PASS）。建议模型：sonnet。
+9. **NTLG-P1-b** — digest 类型 + crawler 投影（状态：⬜ 待开始）
+   - 范围：`TaskResultDigest` 落 `packages/types`；`crawler_runs.summary`→`metrics` 映射；`TaskAggregator` 透出 digest 到 `/admin/system/jobs` 的 `TaskItem`；任务抽屉展示 digest chips（path A，不建 task_runs）。
+   - 依赖：NTLG-ADR-P1-B（ADR-193 PASS）。建议模型：sonnet。
+10. **NTLG-P1-c** — 解耦双写 emit 接入（状态：⬜ 待开始）
+    - 范围：`NotificationEmitter` 中枢（fire-and-forget）；现 8 类白名单事件改领域服务主动 emit（audit/通知双写互不依赖）；crawler/富集 worker `on('completed')` 补带 digest 通知；下线 audit 派生通知旧路径。
+    - 依赖：NTLG-P1-a + NTLG-P1-b。建议模型：sonnet。
+
+### P2 阶段（增强 / 未来自动化 · 终态收口）
+
+11. **NTLG-ADR-P2** — 起草 ADR-194(task_runs 统一抽象层 + 真源关系二选一) + ADR-195(通知保留期/TTL/去重/scope 定向)（状态：⬜ 待开始）
+    - 依赖：P1 落地后（2–3 类流程接入数据支撑真源决策）。建议模型：opus。
+12. **NTLG-P2-a** — `task_runs` 统一抽象层（§2.2 路径 B），UI 收敛单一投影（状态：⬜ 待开始）
+    - 依赖：NTLG-ADR-P2（ADR-194）。建议模型：opus（数据模型）。
+13. **NTLG-P2-b** — 多渠道通知统一订阅（webhook 已有 / 邮件实装 / `submission.created` 补触发点）+ 通知偏好（状态：⬜ 待开始）
+    - 依赖：NTLG-P1-c。建议模型：sonnet。
+14. **NTLG-P2-c** — 「消息中心」页（全量历史 + 检索 + 归档）+ 未读 SSE 实时推送（替代 60s 轮询）（状态：⬜ 待开始）
+    - 依赖：NTLG-P1-a。建议模型：sonnet。
+15. **NTLG-P2-d** — 维护 worker 清理 `expires_at` 过期通知（状态：⬜ 待开始）
+    - 依赖：NTLG-ADR-P2（ADR-195）。建议模型：sonnet。

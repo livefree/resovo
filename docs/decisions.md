@@ -21176,3 +21176,120 @@ CREATE TABLE IF NOT EXISTS external_data.bangumi_collection_sync_state (
 ### 偏离登记
 
 - **D-189-DEV-1**：bangumi `collection` capability 为项目侧派生语义（非 provider 原生端点）。处置：accept + ADR/注释显式声明（D-189-1 / arch M2），不在 registry 类型层区分「原生 vs 派生」（避免类型膨胀，由 ADR 文档承载语义）。
+
+---
+
+## ADR-190：`GET /admin/system/nav-counts` 侧边栏计数聚合端点（SEQ-20260609-01 / NTLG-ADR-P0 · ntlg-governance §5 + §7 ADR-NN0a）
+
+- **日期**：2026-06-09
+- **状态**：**Accepted**（arch-reviewer Opus PASS — 见 §评审）
+- **决策者**：主循环 claude-opus-4-8 / arch-reviewer (claude-opus-4-8)
+- **关联**：ADR-110（ApiResponse 信封 + ErrorCode 真源）/ ADR-147（通知 hub + `/admin/system/jobs` 聚合范式）/ ADR-103a（`AdminNavCountProvider` 同步函数协议）/ CHG-VIR-13-A1（`useAdminNavCounts` merge 首接入 + 401/403 静默降级范式）/ 治理方案 `docs/designs/notification-task-log-governance-plan_20260608.md` §5 + §11 D7/D8
+- **对应交付**：SEQ-20260609-01 NTLG-ADR-P0（本 ADR 起草）→ NTLG-P0-1（端点实施 + 侧边栏去写死）
+- **触发**：治理方案 §5「侧边栏计数治理（去写死）」+ §7「P0 三端点须先 ADR PASS 才解禁 `verify:endpoint-adr`」（§11 D7 必须前置 PASS）。
+
+### 背景
+
+侧边栏 4 个 nav 计数写死（`apps/server-next/src/lib/admin-nav.tsx`：`moderation=484 / sources=1939 / imageHealth=597 / userSubmissions=12`），仅 `merge` 经 `useAdminNavCounts`（CHG-VIR-13-A1）接真实轮询。`useAdminNavCounts` 现单查 `GET /admin/video-merges/candidates`（identity / limit=1 读 total），需为剩余 4 模块各加一次请求方不经济，且分散无统一容错。治理方案 §5 决议：新增一次性批量聚合端点，前端单请求填充 `AdminNavCountProvider`。各模块已有 count query（`moderation.ts` pending COUNT / `sources-matrix.ts` 与 `sourceHealthEvents` 不健康线路 / `imageHealth.ts` broken / `userSubmissions.ts` pending / `video-merges` candidates total），聚合即可，零新数据模型。
+
+`verify:endpoint-adr` 守卫扫 `apps/api/src/routes/admin/*.ts` 所有 `fastify.{get,...}`，新增 `GET /admin/system/nav-counts` 无对应 ADR 行将被门禁挡（plan §4.5 R7 MUST-8），故本 ADR 先锁端点契约。
+
+### 决策要点
+
+1. **端点位置 `/admin/system/nav-counts`**（D-190-1）：归 `/admin/system/` 命名空间（与既有 `GET /admin/system/jobs` 同属"跨模块系统聚合"，非任一业务模块的从属资源），单 `GET` 返回 5 计数批量包。命名 hyphen 形式与既有 admin 路由一致。
+2. **鉴权 `[authenticate, requireRole(['admin','moderator'])]`**（D-190-2）：与 `/admin/system/jobs` / `/admin/notifications` 同级（侧边栏对 admin + moderator 都展示）。**非** admin-only——moderator 也有侧边栏，需要其可见模块的计数。
+3. **逐模块容错（§11 D8）**（D-190-3）：5 计数**各自独立 try/catch**，任一子查询失败或调用方对该模块无权 → **省略该 key**（不返回、不报 500），其余正常返回。`meta.omitted: string[]` 列出被省略的模块键、`meta.partial: true` 标记非全集。**绝不**因单模块失败拖垮整包（避免 moderator 侧边栏全空）。此为对 CHG-VIR-13-A1 现有"前端 401/403 静默降级"语义的服务端收口。
+4. **逐模块鉴权口径**（D-190-4）：每个子计数的可见性与该模块**主读端点鉴权一致**——admin 命中全部 5；moderator 命中其有权模块（默认 `moderation` + `userSubmissions` 审核相关；`sources`/`imageHealth`/`merge` 按各模块现状以 admin 为主导，对 moderator 省略该 key）。实施卡（NTLG-P0-1）以各模块**实际路由 preHandler 角色**为准对齐，ADR 此处锁"无权即省略、不报错"原则（零设计自由度的是容错行为，非角色矩阵的硬编码——角色以现有路由真源为准，防漂移）。
+5. **5 计数语义=各模块"待处理积压"（actionable backlog）**（D-190-5），与 nav badge 色调语义自洽（warn/danger/info = 需关注量）：
+   - `moderation`（badge warn）：pending 内容审核队列总数 — `db/queries/moderation.ts` pending COUNT。
+   - `sources`（badge danger）：不健康/失效播放线路数 — `db/queries/sources-matrix.ts` / `sourceHealthEvents` broken 计数。
+   - `imageHealth`（badge warn）：损坏图片 / 缺封面数 — `db/queries/imageHealth.ts` broken COUNT（既有 `image-health/stats` 口径）。
+   - `userSubmissions`（badge info）：pending 用户投稿数 — `db/queries/userSubmissions.ts` status=pending COUNT。
+   - `merge`（badge warn）：pending 合并候选数 — 既有 `video-merges/candidates`（identity source）total（与 CHG-VIR-13-A1 现状口径一致，迁入聚合）。
+6. **无缓存首版**（D-190-6）：与既有 admin 聚合端点一致（直查 DB，前端 60s 轮询）。**未来缓存触发条件**（任一命中起 PRE-CACHE-NAVCOUNTS 卡）：(a) 端点 p95 > 80ms 持续 1 周；(b) DB CPU 因本端点占比 > 20%。
+7. **SQL 落 queries 层**（D-190-7，db-rules 硬约束）：聚合由 `NavCountsService`（或扩 `TaskAggregator` 同侪 Service）编排，**只调既有 `db/queries/*.ts` count 函数**，不在 Service 直写新 SQL；若某模块缺轻量 COUNT 函数，新增落对应 `db/queries/<module>.ts`（不扩大 Service 直写 SQL 反模式）。
+8. **错误码全部复用 ADR-110，零新增**（D-190-8）：端点级 401 UNAUTHORIZED / 403 FORBIDDEN（非 admin/moderator）；无 query 参数故无 422；子模块失败走 `meta.omitted` 软降级返回 200，不映射错误码。
+
+### 端点契约
+
+| # | 方法 | 路径 | 用途 | Request | Response | 鉴权 | 错误码 |
+|---|---|---|---|---|---|---|---|
+| 1 | GET | `/admin/system/nav-counts` | 侧边栏 5 模块"待处理积压"计数批量聚合（逐模块容错） | — | 200 `{ data: { moderation, sources, imageHealth, userSubmissions, merge }, meta: { partial, omitted } }`（各 count key 可缺省；缺省键进 `meta.omitted`） | admin / moderator | 401 UNAUTHORIZED / 403 FORBIDDEN |
+
+> Response `data` 各键类型为 `number`（可选，缺省即省略该键）；`meta.partial: boolean` + `meta.omitted: string[]`（被省略模块键清单）。前端 `useAdminNavCounts` 把存在的键注入 `AdminNavCountProvider` Map（缺键无 badge），与现状"加载中/0 不入 Map"行为一致。
+
+### 影响文件（NTLG-P0-1 落地）
+
+- 新建：`apps/api/src/services/NavCountsService.ts`（编排 5 count，逐模块 try/catch + omitted 收集）+ `apps/api/src/routes/admin/system-nav-counts.ts`（端点；或并入 `system-jobs.ts` 同侪文件）
+- 复用：各模块既有 `db/queries/*.ts` count 函数（缺则补轻量 COUNT 落对应 queries 文件）
+- 修改：`apps/server-next/src/lib/admin-shell-nav-counts.ts`（`useAdminNavCounts` 改消费聚合端点）+ `apps/server-next/src/lib/admin-nav.tsx`（删 4 写死 `count`，保 `badge` 色调）
+- 类型：`packages/types`（`AdminNavCounts` DTO + `meta` 镜像，若 admin-shell types 涉及需过 `verify:admin-shell-types-mirror`）
+
+### 偏离登记
+
+- **D-190-DEV-1**：角色矩阵不在 ADR 硬编码而以「各模块主读端点现状鉴权」为单一真源。处置：accept——硬编码矩阵会与路由 preHandler 双真源漂移；ADR 锁"无权即省略"容错原则 + 默认矩阵作 advisory，实施卡按真源对齐。
+
+### 评审
+
+- **arch-reviewer (claude-opus-4-8) 结论：AUDIT RESULT: PASS**（无红线；端点契约表可被 `parseEndpointContract` 正确解析，路径 `/admin/system/nav-counts` 与未来 fastify route 字符串逐字一致，鉴权 admin+moderator 对齐 `system-jobs.ts`，§11 D8 逐模块容错忠实落地）。
+- 黄线（转 NTLG-P0-1 实施期处理，不阻断本 ADR Accepted）：① §7 占位 ADR-NN0a→ADR-190 反向映射已由 SEQ-20260609-01 背景登记闭环（ADR 标题亦含 `§7 ADR-NN0a` 正向链）；③ D-190-4 默认角色矩阵为 advisory，NTLG-P0-1 落地时以各模块实际 route preHandler 快照回填定稿，把 advisory 转已验证事实。
+
+---
+
+## ADR-191：`POST /admin/tasks/:id/{cancel,retry}` 统一任务控制端点（SEQ-20260609-01 / NTLG-ADR-P0 · ntlg-governance §4.2 + §6 P0-3 + §7 ADR-NN0b）
+
+- **日期**：2026-06-09
+- **状态**：**Accepted**（arch-reviewer Opus PASS — 见 §评审）
+- **决策者**：主循环 claude-opus-4-8 / arch-reviewer (claude-opus-4-8)
+- **关联**：ADR-110（ErrorCode 真源）/ ADR-147（任务抽屉 + `TaskAggregator` id 方案）/ ADR-151（crawler 控制态机 + 协作式取消）/ CHG-SN-6-16-A（`crawler_run.cancel` 审计）/ 治理方案 §4.2（:id 分派张力 2）+ §6 P0-3
+- **对应交付**：SEQ-20260609-01 NTLG-ADR-P0（本 ADR 起草）→ NTLG-P0-3（端点实施 + topbar toast stub 替换，补 N1-147-4）
+- **触发**：治理方案 §6 P0-3「任务取消/重试端点替换 topbar toast stub」+ §7「新 admin route 须先 ADR PASS」。
+
+### 背景
+
+top bar 任务抽屉聚合 `crawler_runs`（裸 UUID id）+ bull active jobs（`bull-{queue}-{jobId}` 前缀 id）成统一 `AdminTaskItem`（见 `TaskAggregator.mapBullJob` / `mapCrawlerRun`）。当前抽屉的取消/重试是前端 toast stub（`admin-shell-client.tsx`，N1-147-4 无后端端点）。既有 `POST /admin/crawler/runs/:id/cancel` 已实装**协作式取消**（`updateRunControlStatus 'cancelling'` + `cancelPendingTasksByRun` + `requestCancelRunningTasksByRun` + `syncRunStatusFromTasks`，admin-only，审计 `crawler_run.cancel`），但只接受 crawler runId、**不接受抽屉聚合 id**。bull 原生支持 `job.retry()`（failed 态）与 `job.remove()`（waiting 态）。治理方案 §4.2 决议：抽屉需**单一控制端点**接受聚合 id 并按 id 分派，避免前端感知 id 来源。
+
+### 决策要点
+
+1. **两端点 + `/admin/tasks` 资源前缀**（D-191-1）：`POST /admin/tasks/:id/cancel` + `POST /admin/tasks/:id/retry`，与抽屉"任务象限"对齐。**不**复用 `/admin/crawler/runs/:id/*`——抽屉 id 跨 crawler + bull 两源，统一前缀承载分派语义；crawler 专属控制端点（cancel/pause/resume）保留不动（直接操作 crawler 控制台仍走原端点）。
+2. **`:id` 分派（P0 张力 2）**（D-191-2）：按 `TaskAggregator` id 方案 dispatch——
+   - 前缀 `bull-{queue}-{jobId}`（queue ∈ {crawler, maintenance}）→ **bull job** 目标。
+   - 否则（裸 UUID）→ **crawler run** 目标。
+   - 解析失败（既非合法 bull 前缀、又非库内 run）→ 404 NOT_FOUND。
+   - 响应 `data.target = { kind: 'crawler_run' | 'bull_job', id, queue? }` **显式标注真实目标类型**（plan §4.2：契约须在响应里标注 target，便于 P2 task_runs re-point）。
+3. **cancel 语义**（D-191-3）：
+   - `crawler_run`：复用既有 `crawler/runs/:id/cancel` 协作式取消逻辑（幂等；终态 run 再 cancel 静默 no-op 返回当前态）。
+   - `bull_job`：waiting → `job.remove()`；**active → 409 STATE_CONFLICT**（bull 原生不支持运行中作业协作式取消）。P0 诚实暴露此限制，message 引导"等待完成或失败后重试"；P2（ADR-194 task_runs + 统一 reporter）再补 bull 协作式取消。
+4. **retry 语义**（D-191-4）：
+   - `bull_job`：仅 failed 态 → `job.retry()`（bull 原生）；非 failed → 409 STATE_CONFLICT。
+   - `crawler_run`：终态（failed / partial_failed / cancelled）→ 以原 run 的 `crawl_mode` / config 经 `CrawlerRunService` 既有入队路径**新建一个 run**（非原地复活，保审计链完整），`data.target.retryRunId` 返新 runId；非终态 → 409 STATE_CONFLICT。
+5. **鉴权 admin-only**（D-191-5）：`requireRole(['admin'])`，对齐既有 `crawler/runs/:id/cancel`（控制动作高权限；moderator 不放权——与抽屉"查看"权限解耦，moderator 可见任务但不可控制）。
+6. **审计**（D-191-6，AuditLogService fire-and-forget）：
+   - crawler_run cancel → 复用既有 `crawler_run.cancel` actionType（避免枚举膨胀）。
+   - 其余三路径（crawler_run retry / bull_job cancel / bull_job retry）→ 新增 `AdminAuditActionType` 枚举 `task.cancel` + `task.retry`（`targetKind='system'`，`targetId=:id`，`afterJsonb` 含 target 分派结果）。ADR 此处锁定枚举值，**NTLG-P0-3 实施卡同步** `packages/types/src/admin-moderation.types.ts` 枚举 SSOT 并过 `verify:enum-ssot`。
+7. **错误码复用 ADR-110，零新增码**（D-191-7）：404 NOT_FOUND（run/job 不存在或 id 无法分派）/ 409 STATE_CONFLICT（态不允许 cancel/retry）/ 401 / 403。无请求体故无 422。
+
+### 端点契约
+
+| # | 方法 | 路径 | 用途 | Request | Response | 鉴权 | 错误码 |
+|---|---|---|---|---|---|---|---|
+| 1 | POST | `/admin/tasks/:id/cancel` | 取消任务（按 :id 分派 crawler run / bull job） | Path `:id`（裸 UUID=crawler run / `bull-{queue}-{jobId}`=bull job） | 200 `{ data: { target, cancelled } }`（`target.kind` 标注真实目标） | admin | 404 NOT_FOUND / 409 STATE_CONFLICT |
+| 2 | POST | `/admin/tasks/:id/retry` | 重试失败任务（crawler run 新建 / bull `job.retry`） | Path `:id`（同上分派） | 200 `{ data: { target, retried } }`（crawler 含 `target.retryRunId`） | admin | 404 NOT_FOUND / 409 STATE_CONFLICT |
+
+> `data.target = { kind: 'crawler_run' | 'bull_job'; id: string; queue?: 'crawler' | 'maintenance'; retryRunId?: string }`。`cancelled` / `retried: boolean` 表动作是否实际生效（幂等 no-op 时为 false）。
+
+### 影响文件（NTLG-P0-3 落地）
+
+- 新建：`apps/api/src/routes/admin/tasks.ts`（两端点 + id 分派 helper）+ 复用 `TaskAggregator` id 解析 / `CrawlerRunService` 入队 / `crawlerRuns` 取消 queries / `queue.ts` bull 句柄
+- 修改：`packages/types/src/admin-moderation.types.ts`（`AdminAuditActionType` + `task.cancel`/`task.retry`）+ `apps/server-next/src/lib/admin-shell-client.tsx`（toast stub→真实调用）+ 任务抽屉取消/重试按钮接线
+- 类型：`packages/types`（`AdminTaskControlTarget` DTO，若进 admin-shell types 需过 `verify:admin-shell-types-mirror`）
+
+### 偏离登记
+
+- **D-191-DEV-1**：P0 阶段 bull active job cancel 不支持（返 409），非完整能力。处置：accept——bull 无原生协作式取消，P0 不引入 worker 改造；完整能力随 ADR-194 task_runs + 统一 `TaskRunReporter` 落地（§4.2 P2 re-point）。
+- **D-191-DEV-2**：crawler retry 为"新建 run"非"原地复活"。处置：accept——保审计链与 run 不可变语义；新 run 与原 run 经 `trigger_type` 可追溯。
+
+### 评审
+
+- **arch-reviewer (claude-opus-4-8) 结论：AUDIT RESULT: PASS**（无红线；两端点契约表可解析、路径 `/admin/tasks/:id/cancel`·`/admin/tasks/:id/retry` 与 fastify route 逐字一致；:id 分派口径与 `TaskAggregator.ts:154` `bull-{queue}-{jobId}` + 裸 UUID 完全一致；鉴权 admin-only 对齐 `crawler.runs.ts:20`；状态机分派〔crawler 终态/bull waiting-active-failed〕无逻辑漏洞、与既有 crawler 控制态机不冲突）。
+- 黄线（转 NTLG-P0-3 实施期处理，不阻断本 ADR Accepted）：② retry/cancel 的 no-op(false) 与 404 边界在并发下（cancel 瞬间 run 转终态）需补「分派后目标态二次校验」测试断言；`task.cancel`/`task.retry` 枚举须同步 `AdminAuditActionType` SSOT 并过 `verify:enum-ssot`；新建 `routes/admin/tasks.ts` 须确认在路由注册入口挂载（门禁只校验 route→ADR 方向）。

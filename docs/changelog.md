@@ -3047,3 +3047,15 @@
 - **门禁**：test:changed docs-only SKIP（ADR-180）exit 0 / verify:docs-format 63 既有基线持平（零新增失败）。
 - **收尾结论**：旧后台 apps/server 退役**代码 + 文档双侧全面收口**。SEQ-20260608-01 剩卡 4 回滚窗（观察 ~2026-06-15）+ 卡 5 改名（待排期）。
 - **执行模型**：claude-opus-4-8；**子代理**：无（docs 清理，无代码/契约）。
+
+## [NTLG-ADR-P0] 起草 ADR-190(nav-counts) + ADR-191(tasks cancel·retry) P0 门禁端点契约（SEQ-20260609-01）
+
+- **背景**：后台「消息·通知·提醒·日志」综合治理方案（`docs/designs/notification-task-log-governance-plan_20260608.md` r2.1 定稿）落地首会话。方案 §6 P0 的 3 个新 admin 端点触发 `verify:endpoint-adr` 门禁，须先有 ADR + Opus PASS 才能在实施卡落地（§7 + §11 D7）。本卡只产出 ADR（零路由代码）。
+- **会话切入裁定**：AskUserQuestion 确认本程序首会话切入「起 P0 门禁 ADR」；同会话先登记完整 SEQ-20260609-01 分解（15 卡：P0×4 / ADR×5 / P1×3 / P2×4，全部 ⬜ 待开始，锁定 ADR 编号 190–195）。
+- **产出**：
+  - **ADR-190** `GET /admin/system/nav-counts`：侧边栏 5 计数（moderation/sources/imageHealth/userSubmissions/merge）批量聚合端点。锁定——归 `/admin/system/` 命名空间、鉴权 admin+moderator（对齐 system-jobs）、§11 D8 逐模块容错（各计数独立 try/catch，失败/无权省略该 key 进 `meta.omitted`+`meta.partial`，不拖垮整包）、5 计数语义=各模块"待处理积压"、无缓存首版、SQL 落 queries 层（db-rules）、错误码复用 ADR-110 零新增。
+  - **ADR-191** `POST /admin/tasks/:id/{cancel,retry}`：统一任务控制端点。锁定——按 `TaskAggregator` id 方案分派（裸 UUID=crawler run / `bull-{queue}-{jobId}`=bull job）、响应标注 `data.target.kind`（§4.2 张力 2）、cancel（crawler 复用既有 `runs/:id/cancel` 协作式取消 / bull waiting→remove / bull active→409）、retry（bull failed→`job.retry()` / crawler 终态→新建 run）、admin-only（对齐 crawler cancel）、audit 复用 `crawler_run.cancel`+新增 `task.cancel`/`task.retry` 枚举（实施卡同步 SSOT）、错误码复用 ADR-110。
+- **强制 Opus 评审**：spawn arch-reviewer (claude-opus-4-8) 独立评审两端点 ADR → **AUDIT RESULT: PASS**，无红线；3 条黄线转 NTLG-P0-1/P0-3 实施期处理（§7 占位编号反向映射已由 SEQ 背景闭环 / 角色矩阵落地快照回填 / retry-cancel 并发边界测试 + enum SSOT 同步 + route 注册挂载）。评审结论回填两 ADR §评审 段。
+- **门禁**：`verify:adr-contracts` EXIT=0（`verify-endpoint-adr ✅ 226 路由全部对齐，114 ADR 端点含本 3 新端点行` / `verify-sql-schema-alignment ✅` / `verify-style-shorthand-conflict ✅` / `verify-admin-shell-types-mirror ✅`）；error-message 194 + enum-ssot 73 + d-numbers 261 均 advisory 既有基线（本卡新增 D-190/191-N 属正常待实施卡闭环，未引入新代码 message/enum）。docs-only，test:changed SKIP。
+- **文件**：`docs/decisions.md`（+ADR-190 +ADR-191）/ `docs/task-queue.md`（+SEQ-20260609-01）/ `docs/tasks.md`（卡片流转）。
+- **执行模型**：claude-opus-4-8；**子代理**：arch-reviewer (claude-opus-4-8)。
