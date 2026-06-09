@@ -134,6 +134,102 @@ describe('NotificationService.list — 白名单过滤 + 映射', () => {
   })
 })
 
+describe('NotificationService.unreadCount / markAllRead — cursor 编排（ADR-192 + AMENDMENT）', () => {
+  it('#u1 unreadCount 按角色派生 scope（broadcast + role:<role> + user:<id>）透传 query', async () => {
+    queryMock.mockResolvedValueOnce({ rows: [{ count: '3' }] })
+    const svc = new NotificationService(db)
+    const count = await svc.unreadCount('admin-1', 'admin')
+    expect(count).toBe(3)
+    // countUnreadNotifications params: [userId, broadcastScopes, targetedScope]
+    const params = queryMock.mock.calls[0][1]
+    expect(params[0]).toBe('admin-1')
+    expect(params[1]).toEqual(['broadcast', 'role:admin'])
+    expect(params[2]).toBe('user:admin-1')
+  })
+
+  it('#u2 unreadCount moderator 角色 → role:moderator scope', async () => {
+    queryMock.mockResolvedValueOnce({ rows: [{ count: '0' }] })
+    const svc = new NotificationService(db)
+    const count = await svc.unreadCount('mod-1', 'moderator')
+    expect(count).toBe(0)
+    expect(queryMock.mock.calls[0][1][1]).toEqual(['broadcast', 'role:moderator'])
+  })
+
+  it('#u3 markAllRead upsert cursor 返回 readAt（ISO 8601）', async () => {
+    queryMock.mockResolvedValueOnce({ rows: [] })
+    const svc = new NotificationService(db)
+    const result = await svc.markAllRead('admin-1')
+    expect(typeof result.readAt).toBe('string')
+    expect(() => new Date(result.readAt).toISOString()).not.toThrow()
+    // upsertReadCursor params: [userId, readAt]
+    const params = queryMock.mock.calls[0][1]
+    expect(params[0]).toBe('admin-1')
+    expect(params[1]).toBe(result.readAt)
+  })
+})
+
+describe('GET /admin/notifications/unread-count + POST /admin/notifications/read endpoints（ADR-192 AMENDMENT）', () => {
+  async function buildApp() {
+    const Fastify = (await import('fastify')).default
+    const cookie = (await import('@fastify/cookie')).default
+    const { setupAuthenticate } = await import('@/api/plugins/authenticate')
+    const { adminNotificationRoutes } = await import('@/api/routes/admin/notifications')
+    const app = Fastify({ logger: false })
+    await app.register(cookie, { secret: 'test-secret' })
+    setupAuthenticate(app)
+    await app.register(adminNotificationRoutes)
+    await app.ready()
+    return app
+  }
+
+  it('#u4 unread-count 未登录 → 401', async () => {
+    const app = await buildApp()
+    const res = await app.inject({ method: 'GET', url: '/admin/notifications/unread-count' })
+    expect(res.statusCode).toBe(401)
+    await app.close()
+  })
+
+  it('#u5 unread-count admin 登录 → 200 + { data: { count }, meta: { scope: self } }', async () => {
+    queryMock.mockResolvedValueOnce({ rows: [{ count: '7' }] })
+    const authLib = await import('@/api/lib/auth')
+    ;(authLib.verifyAccessToken as ReturnType<typeof vi.fn>).mockReturnValue({
+      userId: 'admin-1', role: 'admin', iat: Math.floor(Date.now() / 1000),
+    })
+    const app = await buildApp()
+    const res = await app.inject({
+      method: 'GET', url: '/admin/notifications/unread-count', headers: { Authorization: 'Bearer t' },
+    })
+    expect(res.statusCode).toBe(200)
+    const body = res.json() as { data: { count: number }; meta: { scope: string } }
+    expect(body.data.count).toBe(7)
+    expect(body.meta.scope).toBe('self')
+    await app.close()
+  })
+
+  it('#u6 POST read admin 登录 → 200 + { data: { readAt } }', async () => {
+    queryMock.mockResolvedValueOnce({ rows: [] })
+    const authLib = await import('@/api/lib/auth')
+    ;(authLib.verifyAccessToken as ReturnType<typeof vi.fn>).mockReturnValue({
+      userId: 'admin-1', role: 'admin', iat: Math.floor(Date.now() / 1000),
+    })
+    const app = await buildApp()
+    const res = await app.inject({
+      method: 'POST', url: '/admin/notifications/read', headers: { Authorization: 'Bearer t' },
+    })
+    expect(res.statusCode).toBe(200)
+    const body = res.json() as { data: { readAt: string } }
+    expect(typeof body.data.readAt).toBe('string')
+    await app.close()
+  })
+
+  it('#u7 POST read 未登录 → 401', async () => {
+    const app = await buildApp()
+    const res = await app.inject({ method: 'POST', url: '/admin/notifications/read' })
+    expect(res.statusCode).toBe(401)
+    await app.close()
+  })
+})
+
 describe('GET /admin/notifications endpoint — auth + 正常路径', () => {
   it('#12 未登录 → 401（任何 admin route 默认行为）', async () => {
     const Fastify = (await import('fastify')).default

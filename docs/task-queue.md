@@ -1645,7 +1645,7 @@
 
 ## [SEQ-20260609-01] 后台「消息·通知·提醒·日志」综合治理序列（ntlg-governance 落地）
 
-- **状态**：🔄 进行中（P0 全部 ✅；P1 地基 ADR 全部 ✅：NTLG-ADR-P1-A〔ADR-192〕+ NTLG-ADR-P1-B〔ADR-193〕Accepted；下一可取：NTLG-P1-a〔通知存储 + 读 API，依赖 ADR-192，建议 sonnet〕→ P1-b〔digest 类型 + crawler 投影，依赖 ADR-193，建议 sonnet〕→ P1-c〔解耦双写 emit 接入，依赖 P1-a+P1-b，建议 sonnet〕）
+- **状态**：🔄 进行中（P0 全部 ✅；P1 地基 ADR 全部 ✅〔ADR-192〔+AMENDMENT〕/ADR-193〕；**NTLG-P1-a 整卡 ✅**〔-A 数据层 + -B service/端点，通知存储 + unread-count + markAllRead cursor 端到端〕；下一可取：NTLG-P1-b〔digest 类型 + crawler 投影，依赖 ADR-193，建议 sonnet〕→ P1-c〔解耦双写 emit 接入 + list 迁新表 + 前端 markAllRead 接线，依赖 P1-a+P1-b，建议 sonnet〕）
 - **创建时间**：2026-06-09
 - **最后更新时间**：2026-06-09
 - **source_of_truth**：`docs/designs/notification-task-log-governance-plan_20260608.md`（r2.1 定稿）
@@ -1707,9 +1707,11 @@
      - 范围：migration 100（3 表 + 索引）+ `db/queries/notifications.ts`（insert/list/countUnread/getReadCursor/upsertReadCursor）+ architecture.md §5.x + 集成测试。纯数据层，零 API/行为变更。
      - 依赖：ADR-192 ✅。建议模型：sonnet（本会话 opus 覆盖）。
      - **完成备注**：按 ADR-192 §schema 落 migration 100（`notifications` + `notification_read_cursor` + `notification_reads` 预留 3 表 + 3 索引，level DB CHECK / scope 无 CHECK / dedup_key partial unique；索引按 db-rules 4 级结构文档化）。`db/queries/notifications.ts` 落 5 函数（insertNotification ON CONFLICT (dedup_key) WHERE NOT NULL DO NOTHING 幂等 + 反查既存 id / listNotifications scope 过滤 + 时间窗 + expires 过滤 / countUnreadNotifications D-192-5 口径〔cursor + users LEFT JOIN COALESCE(read_at, created_at) + NOT EXISTS reads + expires〕/ getReadCursor / upsertReadCursor ON CONFLICT user_id DO UPDATE）；query 参数类型收敛为 `Queryable = Pick<Pool,'query'>`（Pool/PoolClient 皆满足，支持事务测试零污染，下游传 Pool 不破坏，类型探针证 PoolClient→Queryable 合法）。architecture.md §5.17 登记 3 表 + 索引 4 级文档 + 未读口径。集成测试 `admin-notifications.test.ts` 8 用例全过（读路径 schema 对齐 4 + 写路径 BEGIN/ROLLBACK 零污染 round-trip 4：insert→list / dedup 幂等单行 / cursor upsert 单行无写放大 / 未读 cursor 高水位口径独立 scope 隔离）。门禁：migrate 应用 dev DB ✅ / typecheck/lint/verify:adr-contracts EXIT=0（sql-schema-alignment 78 表含新 3 表 ✅）/ test:changed EXIT=0（改动映射无 unit 测，集成测独立验证）。纯数据层零 API/行为变更，端点/service 编排归 -B。执行模型: claude-opus-4-8（人工 opus 覆盖 sonnet 建议）；子代理: 无。
-   - **NTLG-P1-a-B** — NotificationService 编排 + 端点接入（状态：⬜ 待开始）
-     - 范围：`NotificationService` list迁新表/unreadCount/markAllRead 编排 + `GET /admin/notifications`（迁新表）+ `GET /admin/notifications/unread-count` + unread-count DTO + 空跑兼容回填 + service/route 测试。
-     - 依赖：NTLG-P1-a-A。建议模型：sonnet。⚠️ markAllRead 若需新写端点须核 ADR-192 端点契约归属。
+   - **NTLG-P1-a-B** — NotificationService 编排 + 端点接入（含 ADR-192 修订）（状态：✅ 已完成 2026-06-09）
+     - 范围：**ADR-192 AMENDMENT**（markAllRead 写端点补登 + 空跑兼容读路径锁定，强制 Opus 子代理）+ `NotificationService` unreadCount/markAllRead 编排 + `GET /admin/notifications/unread-count` + `POST /admin/notifications/read` + unread-count/markRead DTO + service/route 测试。
+     - 依赖：NTLG-P1-a-A ✅。建议模型：sonnet（本会话 opus 覆盖）。
+     - **实现期发现**：markAllRead 服务端写端点缺失于 ADR-192 端点契约（仅登记 unread-count GET），§9 验证要求 P1-a 即有服务端跨设备已读 → 起 ADR-192 AMENDMENT 补登（用户裁定 2026-06-09「起 ADR-192 修订后实现全 P1-a-B」）。
+     - **完成备注**：**ADR-192 AMENDMENT Accepted**（arch-reviewer claude-opus-4-8 CONDITIONAL PASS → C1 吸收）。C1 关键发现：`adr-parser.findSubsection` 每 ADR 只解析首个 `### 端点契约` 段 → markAllRead 行必须并入 ADR-192 既有端点契约表（非另起子标题），沿 ADR-105 inline AMENDMENT 范式。AMENDMENT 4 决策：D-192-AMD-1（`POST /admin/notifications/read` 端点：upsert cursor read_at=NOW 服务端取时、空 body、200 `{data:{readAt}}`、admin+moderator、零新错误码；cursor 初值=加入时间由 P1-a-A COALESCE 读兜底已满足、收口黄线②不另做首登写）/ D-192-AMD-2（markOneRead 服务端端点不在 P1-a-B、与 reads 写路径同步 P2，D-192-DEV-4）/ D-192-AMD-3（**策略 B 双轨过渡**：list 暂不迁新表/不做 audit 回填、避免 P1-c 即删机制；unread-count+markAllRead 走新表 cursor，过渡期 unread=0 为「无新通知」正确语义）/ D-192-AMD-4（cursor 只服务新表语义，audit 派生 list 客户端已读维持 localStorage 至 P1-c 收口，不做半吊子桥接）。实现：`NotificationService.unreadCount(userId,role)`（scope 派生 broadcast+role:<role>+user:<id>，调 countUnreadNotifications）+ `markAllRead(userId)`（调 upsertReadCursor，SQL 不入 Service D-192-7）；`routes/admin/notifications.ts` +2 端点；`admin-shell.types.ts` +unread-count/markRead DTO（API-only 非镜像）。测试：notification-service.test.ts +7（unreadCount scope 派生 admin/moderator + markAllRead readAt + 4 端点 auth/200）共 16 全过。门禁：typecheck/lint EXIT=0 / verify:endpoint-adr 231 路由对齐（116 ADR 端点含 markAllRead 行解析 ✅ C1 验证）/ verify:adr-contracts EXIT=0 / test:changed 升全量〔packages/types〕。前端 markAllRead 改调端点 + list 迁新表归 P1-c。执行模型: claude-opus-4-8（人工 opus 覆盖 sonnet 建议）；子代理: arch-reviewer (claude-opus-4-8 / agentId a8246b3043fc166d0)。
 9. **NTLG-P1-b** — digest 类型 + crawler 投影（状态：⬜ 待开始）
    - 范围：`TaskResultDigest` 落 `packages/types`；`crawler_runs.summary`→`metrics` 映射；`TaskAggregator` 透出 digest 到 `/admin/system/jobs` 的 `TaskItem`；任务抽屉展示 digest chips（path A，不建 task_runs）。
    - 依赖：NTLG-ADR-P1-B（ADR-193 PASS）。建议模型：sonnet。

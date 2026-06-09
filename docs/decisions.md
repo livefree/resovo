@@ -21415,6 +21415,7 @@ CREATE TABLE notification_reads (
 | # | 方法 | 路径 | 用途 | Request | Response | 鉴权 | 错误码 |
 |---|---|---|---|---|---|---|---|
 | 1 | GET | `/admin/notifications/unread-count` | top bar 铃铛未读计数（当前登录身份 + 角色范围；cursor 混合模型口径 D-192-5） | — | 200 `{ data: { count }, meta: { scope } }`（`count: number` 未读总数；`meta.scope: 'self'`） | admin / moderator | 401 UNAUTHORIZED / 403 FORBIDDEN |
+| 2 | POST | `/admin/notifications/read` | 标记当前登录用户全部 broadcast/role 通知已读（upsert cursor 高水位线，D-192-3 / **AMENDMENT 2026-06-09 D-192-AMD-1**） | 空 body（read_at 服务端取 NOW，不接受客户端时间） | 200 `{ data: { readAt } }`（`readAt: string` ISO 8601 回显落库高水位线） | admin / moderator | 401 UNAUTHORIZED / 403 FORBIDDEN |
 
 > `GET /admin/notifications`（list）迁实现到 `notifications` 新表沿用 **ADR-147 §端点契约**（`{ data: AdminNotificationItem[], meta: { total, limit, since } }`，decisions.md ADR-147 端点契约表第 1 行），**不算新路由**，本表不重列。`data.count` 为 `number`；`meta.scope` 恒 `'self'`（unread 范围始终为「当前登录用户视角」，预留未来 `?scope=` 扩展位但 P1 不实现）。
 
@@ -21435,6 +21436,62 @@ CREATE TABLE notification_reads (
 
 - **arch-reviewer (claude-opus-4-8) 结论：AUDIT RESULT: PASS**（无红线；不引技术栈外依赖〔领域服务双写，非事件总线〕、SQL 落 queries 层不扩大 Service 直写、端点契约表可被 `parseEndpointContract` 解析且 `/admin/notifications/unread-count` 与未来 fastify route 逐字一致、cursor 混合模型消解「新管理员全历史未读 + markAllRead 写放大」两 bug、emit 解耦后通知不写 admin_audit_log；level DB CHECK / scope 类型层校验分层合理；未读计数 SQL 口径锁定零自由度）。
 - 黄线（转 NTLG-P1-a 实施期处理，不阻断本 ADR Accepted）：① migration 编号 100 须在 P1-a 落地时确认仍为下一可用号（当前最新 099_douban_collection_items.sql）；② `notification_read_cursor` 初值=加入时间需 P1-a 实现「首次访问 upsert cursor=user joined_at」而非默认 NOW()，并补 cursor 基线 E2E 断言（新建管理员首登历史 broadcast 不全标未读）；③ 过渡期双写源去重须有单一写源开关，避免 audit 派生 + emit 重复计数。
+
+### ADR-192 AMENDMENT 2026-06-09（NTLG-P1-a-B / markAllRead 写端点补登 + P1-a 空跑兼容读路径锁定）
+
+- **状态**：**Accepted**（arch-reviewer claude-opus-4-8 CONDITIONAL PASS → C1 吸收后定档 — 见下 §评审增补）
+- **决策者**：主循环 claude-opus-4-8 / arch-reviewer (claude-opus-4-8)
+- **触发卡**：SEQ-20260609-01 / NTLG-P1-a-B（NotificationService 编排 emit/list/markAllRead/unreadCount + 端点实施）
+- **关联**：ADR-192 主体（schema + D-192-3 markAllRead cursor 语义 + D-192-5 未读口径 + D-192-9 空跑兼容 + D-192-DEV-1/-2）/ ADR-110（ErrorCode 真源）/ ADR-147（`GET /admin/notifications` 端点契约真源）/ 治理方案 `notification-task-log-governance-plan_20260608.md` §6 P1-a + §9 P1 验证
+
+#### 背景（补登触发）
+
+NTLG-P1-a-A（已提交）落了 migration 100（3 表）+ `apps/api/src/db/queries/notifications.ts`（`upsertReadCursor` / `countUnreadNotifications` / `listNotifications` / `getReadCursor` / `insertNotification`），其中 `countUnreadNotifications` 已实现 `COALESCE(c.read_at, u.created_at)` 兜底。P1-a-B 做 NotificationService 编排 + 端点实施时发现：ADR-192 D-192-3 锁定了 markAllRead 的 **cursor upsert 语义**，但 ADR-192 §端点契约表**只登记了 `GET /admin/notifications/unread-count`（D-192-8），漏登 markAllRead 把 cursor 落库的写端点**。该写端点是治理方案 §6 P1-a「markAllRead 服务端化（cursor 模型）」+ §9 P1 验证「A 设备标记已读 → B 设备/清缓存后仍为已读（服务端 per-user 生效）」的必备实现，且为新 `fastify.post` → `verify:endpoint-adr` 门禁要求其有对应 ADR 端点契约行。本 AMENDMENT 补登该端点（已并入上 §端点契约表第 2 行），并锁定 P1-a 过渡期读路径策略（D-192-9 细化），不改 ADR-192 主体任何决策。
+
+#### 增补决策
+
+**D-192-AMD-1（markAllRead 写端点 `POST /admin/notifications/read`）**
+- **路径 + 方法裁定**：`POST /admin/notifications/read`。否决 `PUT /admin/notifications/read-cursor`（暴露 cursor 内部实现名，违「端点表达意图非存储结构」）与 `POST /admin/notifications/mark-all-read`（动词短语 + 连字符不符既有 admin 名词化惯例 `/admin/notifications`·`/admin/system/jobs`·`/admin/system/nav-counts`）。`POST /admin/notifications/read` = 对 notifications 集合执行「置为已读」，名词资源 + POST 动作，与既有 admin 路由命名一致。
+- **鉴权**：`[authenticate, requireRole(['admin','moderator'])]`，与 `GET /admin/notifications`（ADR-147）+ unread-count（D-192-8）逐字同级（moderator 亦有通知抽屉）。
+- **语义**：upsert 当前登录 user 的 `notification_read_cursor.read_at = NOW()`（调 P1-a-A `upsertReadCursor`，`ON CONFLICT (user_id) DO UPDATE`）。仅 broadcast/role 高水位线生效（D-192-3）；定向逐行 reads 写路径仍 deferred（D-192-DEV-1 不变）。
+- **请求体**：空（无必填字段）。read_at 服务端取 `NOW()`，不接受客户端传入时间戳（防客户端时钟漂移污染高水位线）。
+- **响应**：200 `{ data: { readAt } }`（`readAt: string` ISO 8601，回显落库高水位线，供前端立即更新本地已读基线，免一次额外 unread-count 往返）。
+- **幂等性**：天然幂等——重复调用仅把 cursor 推进到更新的 NOW()，`read_at` 单调不回退，无副作用累积。
+- **错误码**：零新增，全部复用 ADR-110。401 / 403。无 query、空 body → 无 422。
+- **cursor 初值=加入时间的实现归属（§9 基线断言收口）**：裁定 **P1-a-B 不做额外「首登初始化 cursor」写操作**。P1-a-A `countUnreadNotifications` 的 `COALESCE(c.read_at, u.created_at)` 已保证新管理员无 cursor 行时未读基线回落加入时间，历史 broadcast 不回溯算未读（消解 ADR-192 §2.1 缺口①）。cursor 行仅在用户**首次** `POST /admin/notifications/read` 时由 `upsertReadCursor` 落入。**收口 ADR-192 §评审黄线②**：该黄线设想的「首次访问 upsert cursor=joined_at」写实现，被 P1-a-A 的「COALESCE 读兜底」等价替代（零额外写、零首登 side-effect），不再另做首登写初始化。
+
+**D-192-AMD-2（markOneRead 服务端端点不在 P1-a-B 范围）**
+- 裁定：**P1-a-B 不新增 markOneRead 服务端端点**，本 AMENDMENT 只增 markAllRead 1 个端点。
+- 理由：D-192-3 定义 markOneRead 对 broadcast 写 `notification_reads` 例外位 / 对定向逐行写 reads；D-192-DEV-1 已 accept 把 `notification_reads` 全部写路径 deferred 到 P2（当前通知近乎全 broadcast，cursor 已覆盖「全部已读」主诉求）。单独为 markOneRead 提前落 reads 写路径会与 D-192-DEV-1 冲突、引入半套 reads 写实现。markOneRead 暂留客户端本地态（`admin-shell-notifications.ts` 本地 Set），与 reads 写路径一起 P2 落地。登记为偏离 D-192-DEV-4。
+
+**D-192-AMD-3（P1-a 空跑兼容读路径锁定：策略 B 双轨过渡 / D-192-9 细化）**
+- 裁定采纳**策略 (B) 双轨过渡**，否决 (A) audit 回填：
+  - **list（`GET /admin/notifications`）**：P1-a-B **不强制迁新表**；数据源迁移延后到 P1-c emit 接入（新表有真实数据）后再切，避免空列表 / 避免造 P1-c 即删的 audit→新表回填机制（YAGNI / 价值排序 5 改动收敛）。
+  - **unread-count（D-192-8）+ markAllRead（D-192-AMD-1）**：P1-a-B 实施，均走新表 cursor 模型。cursor 表独立于通知数据源 → markAllRead 写 cursor、unread-count 读 cursor + notifications 新表，可**独立于通知数据底料验证**（满足 §9「A 设备标记已读 → B 设备仍为已读」per-user 验收）。
+- **过渡期 unread-count 恒为 0 的正确性声明**：P1-a 阶段 emit 未接入（归 P1-c），notifications 表无真实行 → unread-count 读空表恒返 0。**这是过渡期正确行为**（「无新通知」语义），非缺陷；P1-c emit 接入后自然产出真实未读数，无需任何端点改动。
+- 否决 (A) 理由：audit 派生回填是 P1-c 即删临时机制，违「不造短命复杂度」；cursor 验证不依赖通知数据底料，(B) 已能完整验证读写路径。
+- **本条是 D-192-9 的细化**：D-192-9 原文允许「回填 或 并行对账」两形态，本 AMENDMENT 在 P1-a-B 范围内明确选定极简版（list 暂不迁、不回填）；D-192-9 主体「切换时机 = emit 接入后下线 audit 派生（归 P1-c）」不变。
+
+**D-192-AMD-4（cursor 高水位线 vs audit 派生 list 的已读源边界）**
+- 裁定：P1-a-B 阶段 markAllRead 写的 cursor / unread-count 读的 cursor **只服务「新表 notifications」语义**。若 P1-a-B 的 `GET /admin/notifications`（list）仍读 audit 派生（按 D-192-AMD-3 list 暂不迁），则该 list 的客户端已读**维持现状 localStorage `lastViewedAt`**，直到 P1-c list 迁新表时统一收口为 cursor 单一已读源。
+- 不做桥接：P1-a-B **不**让 cursor 高水位线对 audit 派生 list 生效（二者数据源不同 + audit 派生项无稳定 created_at↔cursor 对齐契约）。明确边界以避免「cursor + localStorage」双已读源半吊子状态长期存在——此双源为过渡期可接受临时态，收口节点锁 P1-c（list 迁新表 + emit 接入同期）。
+
+#### 影响文件（NTLG-P1-a-B 落地）
+
+- 修改：`apps/api/src/routes/admin/notifications.ts`（新增 `fastify.post('/admin/notifications/read', { preHandler: auth }, ...)`，调 `svc.markAllRead(userId)`；userId 取自 `request.user`）
+- 修改：`apps/api/src/services/NotificationService.ts`（新增 `markAllRead(userId): Promise<{ readAt }>` → 调 `upsertReadCursor`；`unreadCount(userId, ...)` → 调 `countUnreadNotifications`；SQL 全落 queries 层不在 Service 直写 — D-192-7）
+- 类型：`packages/types/src/admin-shell.types.ts`（markAllRead 响应 DTO `AdminNotificationMarkReadResponse { readAt: string }` + unread-count DTO）
+- 前端（归 P1-a-B 或后续接线）：`apps/server-next/src/lib/admin-shell-notifications.ts`（`markAllRead` 从 localStorage 改调 `POST /admin/notifications/read`；markOneRead 暂留本地 Set 至 P2）
+
+#### 偏离增补
+
+- **D-192-DEV-4**：P1-a-B 不新增 markOneRead 服务端端点（只 markAllRead 走服务端 cursor）。处置：accept——与 D-192-DEV-1（reads 写路径 deferred P2）一致；markOneRead 暂留客户端本地 Set，与 reads 写路径同步 P2，避免提前落半套 reads 写实现。
+- **D-192-DEV-5**：P1-a-B `GET /admin/notifications`（list）暂不迁新表、不做 audit→新表回填（策略 B）。处置：accept——避免造 P1-c 即删的回填机制（YAGNI / 改动收敛）；cursor/unread-count/markAllRead 不依赖通知数据底料即可验证；list 迁新表 + audit 派生下线统一锁 P1-c。过渡期 list 客户端已读维持 localStorage，与 cursor 双源为可接受临时态，P1-c 收口。
+
+#### 评审增补
+
+- **arch-reviewer (claude-opus-4-8) 结论：CONDITIONAL PASS → C1 吸收后 Accepted**。无红线：端点零新增错误码（复用 ADR-110 401/403）；鉴权与 GET /admin/notifications + unread-count 逐字同级；markAllRead 调 P1-a-A 既有 `upsertReadCursor`，SQL 不入 Service（D-192-7）；cursor 初值=加入时间由 P1-a-A `COALESCE(read_at, users.created_at)` 保证，零额外首登写，消解「新管理员全历史未读」（收口黄线②）；markOneRead deferred 与 D-192-DEV-1 一致；策略 B 不造 P1-c 即删回填机制（改动收敛）；过渡期 unread=0 为「无新通知」正确语义。
+- **C1（硬条件，已吸收）**：markAllRead 端点契约行已追加进 ADR-192 原 `### 端点契约` 表第 2 行（未另起子标题）——`scripts/lib/adr-parser.mjs` `findSubsection` 只解析每 ADR 章节内首个 `### 端点契约` 段，另起表会导致该行不被 `verify:endpoint-adr` 解析。沿 ADR-105 §端点契约表 inline AMENDMENT 注记范式。
 
 ---
 

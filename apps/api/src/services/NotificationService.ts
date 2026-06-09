@@ -12,6 +12,10 @@ import type {
   AdminAuditActionType,
   AdminNotificationItem,
 } from '@resovo/types'
+import {
+  countUnreadNotifications,
+  upsertReadCursor,
+} from '@/api/db/queries/notifications'
 
 /** 白名单 actionType（首版 8 类 / ADR-147 D-147-1） */
 export const NOTIFICATION_ACTION_WHITELIST: ReadonlySet<AdminAuditActionType> = new Set([
@@ -116,5 +120,29 @@ export class NotificationService {
       items,
       total: Number.parseInt(countRes.rows[0]?.c ?? '0', 10) || 0,
     }
+  }
+
+  /**
+   * 服务端未读计数（ADR-192 D-192-5 + AMENDMENT D-192-AMD-3）。
+   * scope 集合按调用方角色派生：broadcast + role:<role>（高水位线）+ user:<id>（定向）。
+   * 读 notifications 新表 + cursor；P1 阶段 emit 未接入（归 P1-c）→ 新表空时恒返 0（「无新通知」正确语义）。
+   */
+  async unreadCount(userId: string, role: string): Promise<number> {
+    return countUnreadNotifications(this.db, {
+      userId,
+      broadcastScopes: ['broadcast', `role:${role}`],
+      targetedScope: `user:${userId}`,
+    })
+  }
+
+  /**
+   * 标记全部 broadcast/role 通知已读（ADR-192 D-192-3 + AMENDMENT D-192-AMD-1）。
+   * 仅 upsert 一行 cursor 高水位线（避免「用户×N 条」写放大）；read_at 服务端取 NOW()。
+   * 定向逐行 reads 写路径仍 deferred（D-192-DEV-1 / P2）。
+   */
+  async markAllRead(userId: string): Promise<{ readAt: string }> {
+    const readAt = new Date().toISOString()
+    await upsertReadCursor(this.db, userId, readAt)
+    return { readAt }
   }
 }

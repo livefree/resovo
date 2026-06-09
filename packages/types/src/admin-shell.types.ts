@@ -83,6 +83,19 @@ export interface AdminNotificationListResponse {
   }
 }
 
+/** GET /admin/notifications/unread-count 响应信封（ADR-192 D-192-8） */
+export interface AdminNotificationUnreadCountResponse {
+  data: { count: number }
+  /** scope 恒 'self'（当前登录用户视角；预留 ?scope= 扩展位，P1 不实现） */
+  meta: { scope: 'self' }
+}
+
+/** POST /admin/notifications/read 响应信封（ADR-192 AMENDMENT D-192-AMD-1） */
+export interface AdminNotificationMarkReadResponse {
+  /** readAt：落库的已读高水位线（ISO 8601），供前端立即更新本地已读基线 */
+  data: { readAt: string }
+}
+
 /** bull queue 计数概览（ADR-147 §D-147-6） */
 export interface AdminQueueCounts {
   crawler: { waiting: number; active: number }

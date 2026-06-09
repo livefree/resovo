@@ -3189,3 +3189,22 @@
 - **后续 -B**：NotificationService list迁新表/unreadCount/markAllRead 编排 + `GET /admin/notifications` 迁移 + `GET /admin/notifications/unread-count` + DTO + 空跑兼容回填 + 测试。⚠️ markAllRead 若需新写端点须核 ADR-192 端点契约归属（仅列 unread-count）。
 - **文件**：+`apps/api/src/db/migrations/100_notifications.sql` / +`apps/api/src/db/queries/notifications.ts` / `docs/architecture.md`（§5.17）/ +`tests/integration/api/admin-notifications.test.ts` / `docs/task-queue.md` / `docs/tasks.md`。
 - **执行模型**：claude-opus-4-8（主循环，人工 opus 覆盖 sonnet 建议）；**子代理**：无。
+
+---
+
+## [NTLG-P1-a-B] NotificationService 编排 + unread-count/markAllRead 端点（含 ADR-192 AMENDMENT）（SEQ-20260609-01）
+
+- **背景**：P1-a 服务/端点接入。实现期发现 markAllRead 服务端写端点缺失于 ADR-192 端点契约（仅登记 unread-count GET），而方案 §9 验证「A 设备标记已读 → B 设备仍已读（服务端 per-user）」要求 P1-a 即有服务端 markAllRead → 用户裁定（AskUserQuestion 2026-06-09）「起 ADR-192 修订后实现全 P1-a-B」。建议 sonnet，本会话人工 opus 覆盖。
+- **强制 Opus 设计（ADR 修订 + 新 admin route）**：spawn arch-reviewer (claude-opus-4-8 / agentId a8246b3043fc166d0) 设计 **ADR-192 AMENDMENT** → CONDITIONAL PASS → **C1 吸收后 Accepted**。
+  - **C1 关键发现**：`scripts/lib/adr-parser.mjs` `findSubsection` 每 ADR 章节只解析**首个** `### 端点契约` 子段 → markAllRead 行**必须并入 ADR-192 既有端点契约表**（非另起子标题），否则 verify:endpoint-adr 持续 missing。沿 ADR-105 inline AMENDMENT 范式落地。
+  - **D-192-AMD-1**：`POST /admin/notifications/read`（标记全部已读：upsert cursor read_at=NOW 服务端取时、空 body、200 `{data:{readAt}}`、admin+moderator、零新错误码）；cursor 初值=加入时间由 P1-a-A `COALESCE(read_at, users.created_at)` 读兜底已满足 → **收口 ADR-192 黄线②**，不另做首登写初始化。
+  - **D-192-AMD-2**：markOneRead 服务端端点不在 P1-a-B（与 reads 表写路径同步 P2，对齐 D-192-DEV-1）；本 AMENDMENT 只增 1 端点。
+  - **D-192-AMD-3（策略 B 双轨过渡，细化 D-192-9）**：list（`GET /admin/notifications`）暂不迁新表/不做 audit 回填（避免 P1-c 即删机制，YAGNI/改动收敛）；unread-count + markAllRead 走新表 cursor，可独立验证；过渡期 emit 未接入→unread-count 读空表恒 0 为「无新通知」正确语义（P1-c 接入后自然有数）。
+  - **D-192-AMD-4**：cursor 只服务新表语义，audit 派生 list 客户端已读维持 localStorage 至 P1-c 统一收口，不做半吊子桥接。
+- **实现**：`NotificationService.unreadCount(userId, role)`（scope 派生 broadcast + role:&lt;role&gt; + user:&lt;id&gt;，调 P1-a-A `countUnreadNotifications`）+ `markAllRead(userId)`（调 `upsertReadCursor`，read_at 服务端 NOW；SQL 不入 Service，ADR-192 D-192-7）；`routes/admin/notifications.ts` +2 端点（`GET .../unread-count` D-192-8 + `POST .../read` D-192-AMD-1）；`packages/types/admin-shell.types.ts` +`AdminNotificationUnreadCountResponse`/`AdminNotificationMarkReadResponse`（API-only 非镜像类型）。
+- **测试**：`notification-service.test.ts` +7（unreadCount scope 派生 admin/moderator + markAllRead readAt 回显 + 4 端点 auth 401/200）共 16 全过。
+- **门禁**：typecheck/lint EXIT=0 / `verify:endpoint-adr` 231 路由对齐（116 ADR 端点含 markAllRead 行解析 ✅ **C1 验证**）/ `verify:adr-contracts` EXIT=0 / **test:changed 升全量〔packages/types〕492 文件 6863 测全过 EXIT=0**。
+- **后续 P1-c**：前端 markAllRead 改调 `POST /admin/notifications/read`（替 localStorage）+ list 迁新表 + emit 接入 + audit 派生下线（统一收口 cursor 单一已读源）。markOneRead 服务端 + reads 写路径 P2。
+- **NTLG-P1-a 整卡收口**（-A 数据层 + -B service/端点）：通知独立存储 + 服务端 cursor 已读 + unread-count 端到端（emit 真实数据待 P1-c）。
+- **文件**：`docs/decisions.md`（ADR-192 AMENDMENT + 端点契约表 +markAllRead 行）/ `apps/api/src/services/NotificationService.ts` / `apps/api/src/routes/admin/notifications.ts` / `packages/types/src/admin-shell.types.ts` / `tests/unit/api/notification-service.test.ts` / `docs/task-queue.md` / `docs/tasks.md`。
+- **执行模型**：claude-opus-4-8（主循环，人工 opus 覆盖 sonnet 建议）；**子代理**：arch-reviewer (claude-opus-4-8 / agentId a8246b3043fc166d0)。

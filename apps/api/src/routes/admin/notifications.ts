@@ -52,4 +52,19 @@ export async function adminNotificationRoutes(fastify: FastifyInstance) {
       },
     })
   })
+
+  // ── GET /admin/notifications/unread-count（ADR-192 D-192-8）─────────
+  // top bar 铃铛未读计数；cursor 混合模型（D-192-5）。P1 阶段 emit 未接入（归 P1-c）
+  // → notifications 新表空时恒返 0（「无新通知」过渡期正确语义，AMENDMENT D-192-AMD-3）。
+  fastify.get('/admin/notifications/unread-count', { preHandler: auth }, async (request, reply) => {
+    const count = await svc.unreadCount(request.user!.userId, request.user!.role)
+    return reply.send({ data: { count }, meta: { scope: 'self' } })
+  })
+
+  // ── POST /admin/notifications/read（ADR-192 AMENDMENT D-192-AMD-1）──
+  // 标记当前登录用户全部 broadcast/role 通知已读：upsert cursor 高水位线（read_at=NOW，服务端取时）。
+  fastify.post('/admin/notifications/read', { preHandler: auth }, async (request, reply) => {
+    const result = await svc.markAllRead(request.user!.userId)
+    return reply.send({ data: result })
+  })
 }
