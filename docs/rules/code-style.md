@@ -10,7 +10,7 @@
 
 
 > 适用范围：所有 TypeScript 文件（前端和后端）
-> 路径约定：前台 `apps/web/src/`，后台 `apps/server/src/`，API `apps/api/src/`
+> 路径约定：前台 `apps/web-next/src/`，后台 `apps/server-next/src/`，API `apps/api/src/`（apps/web / apps/server v1 已退役删除）
 > AI 在编写任何代码前必须读取本文件
 
 ---

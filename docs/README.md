@@ -17,7 +17,7 @@
 1. **`CLAUDE.md`**（仓库根目录）：执行规范唯一准则。
 2. **`docs/architecture.md`**：系统架构与模块边界。
 3. **`docs/decisions.md`**：架构决策记录（ADR-100..180，含 NEGATED / AMENDMENT）。
-4. **`docs/server_next_plan_20260427.md`**：**server-next 主计划 v2.6**（M-SN-1..7）；ADR-103a/103b 落地路径。
+4. **`docs/server_next_plan_20260427.md`**：**server-next 主计划 v2.7**（M-SN-1..7 + 退役路线现状对账；cutover 已执行 2026-06-08 CHG-CUTOVER-EXECUTE）；ADR-103a/103b 落地路径。
 5. **`docs/designs/backend_design_v2.1/reference.md`**：**后台设计真源**（合并稿 §0 七条裁决 + §11 修复顺序）；新视图必读。
 6. **`docs/task-queue.md`**：任务序列池（活跃：SEQ-20260524-01 M-SN-9 容器 🟡 + SEQ-20260601-01 起全部序列；更早分段归档见 `docs/archive/task-queue/`——M0~M-SN-0 / M-SN-1~6 / M-SN-7~META 三段）。
 7. **`docs/tasks.md`**：单任务工作台。

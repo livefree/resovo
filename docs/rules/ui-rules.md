@@ -16,10 +16,10 @@
 > **2026-04-30 修订（CHG-DESIGN-11）**：适用范围扩到 server-next + admin-ui 时代。
 
 > **适用范围**（2026-04-30 修订）：
-> - 前台 v1（历史）：`apps/web/src/components/`、`apps/web/src/app/`
-> - 前台 web-next（当前）：`apps/web-next/src/components/`、`apps/web-next/src/app/`
-> - 后台 v1（历史，cutover 前生产）：`apps/server/src/components/`、`apps/server/src/app/`
-> - **后台 server-next（当前重写主体）**：`apps/server-next/src/`（消费 `packages/admin-ui` 共享层 + `packages/design-tokens` token）
+> - ~~前台 v1：`apps/web/src/`~~（已退役删除）
+> - 前台 web-next（当前唯一前台）：`apps/web-next/src/components/`、`apps/web-next/src/app/`
+> - ~~后台 v1：`apps/server/src/`~~（**已退役删除**，CHG-CUTOVER-EXECUTE 2026-06-08）
+> - **后台 server-next（当前唯一后台）**：`apps/server-next/src/`（消费 `packages/admin-ui` 共享层 + `packages/design-tokens` token）
 >
 > AI 在编写任何前端组件前必须读取本文件。
 >
@@ -33,7 +33,7 @@
 
 ### CSS 变量（必须使用，禁止硬编码）
 
-前台与后台当前使用两套独立的 CSS 变量体系，分别来自 `apps/web/src/app/globals.css`（前台）和 `apps/server/src/app/globals.css`（后台）。两套体系并存属于已知历史分叉，将在 token 层统一后收敛。在此之前，各区域必须使用对应体系内的变量，**不得跨体系混用，不得引入新的硬编码颜色值**。
+前台与后台当前使用两套独立的 CSS 变量体系，分别来自 `apps/web-next/src/app/globals.css`（前台）和后台 `apps/server-next`（消费 `packages/design-tokens`）。两套体系并存属于已知历史分叉，将在 token 层统一后收敛。在此之前，各区域必须使用对应体系内的变量，**不得跨体系混用，不得引入新的硬编码颜色值**。（apps/web / apps/server v1 globals.css 已随退役删除）
 
 #### 前台 CSS 变量（用于 `apps/web/src/components/` 前台组件）
 
@@ -61,7 +61,7 @@
 --status-info         /* 信息/进行中 */
 ```
 
-#### 后台 CSS 变量（用于 `apps/server/src/components/admin/` 后台组件）
+#### 后台 CSS 变量（用于 `apps/server-next/src/` + `packages/admin-ui` 后台组件）
 
 ```css
 /* 背景层级 */
@@ -356,8 +356,8 @@ useEffect(() => {
 ```
 
 **参考实现：**
-- server-next（当前真源）：`packages/admin-ui/src/components/dropdown/`（如尚未抽到 admin-ui，CHG-DESIGN-12 cell 沉淀阶段补齐）
-- server v1（仅维护期）：`apps/server/src/components/admin/shared/dropdown/AdminDropdown.tsx`
+- server-next（**当前唯一真源**）：`packages/admin-ui/src/components/dropdown/`（如尚未抽到 admin-ui，CHG-DESIGN-12 cell 沉淀阶段补齐）
+- ~~server v1：`apps/server/src/components/admin/shared/dropdown/AdminDropdown.tsx`~~（已退役删除）
 
 ### 禁止行为
 
@@ -388,9 +388,11 @@ packages/admin-ui/src/
 
 未抽出的业务复合组件（DualSignal / VisChip / Spark / KpiCard / thumb / pill / inline xs actions 等）由 CHG-DESIGN-12 沉淀（详见 `docs/designs/backend_design_v2.1/reference.md` §10）。
 
-#### apps/server v1（仅维护期）
+#### ~~apps/server v1~~（已退役删除，CHG-CUTOVER-EXECUTE 2026-06-08 · 以下仅历史参考）
 
-在 `apps/server/src/components/admin/shared/` 下新建任何组件之前（**仅限 v1 维护期 bug 修复**），**必须先确认**以下目录中是否已有等价实现：
+> apps/server v1 已物理删除，下列 `apps/server/src/components/admin/shared/` 目录清单仅作历史记录；新组件一律走 server-next（`packages/admin-ui` + `docs/designs/backend_design_v2.1/reference.md`）。
+
+历史 `apps/server/src/components/admin/shared/` 结构（已删除）：
 
 ```
 apps/server/src/components/admin/shared/
@@ -537,8 +539,8 @@ function DoubanStatusBadge({ status }: { status: DoubanStatus }) {
 批量操作必须遵循"选择→确认→执行→反馈"的完整流程，不能让用户误触。
 
 > **2026-05-01 修订（形态说明）**：
-> - **server-next（当前真源）**：批量操作走 `DataTable.bulkActions` prop，渲染为**表内 sticky bottom**（`.dt__bulk`），由 DataTable 一体化管理。**不得**在 server-next 新模块外置独立 `SelectionActionBar` 浮条。
-> - **apps/server v1（已冻结）**：批量操作仍使用外置 `SelectionActionBar variant="sticky-bottom"` 浮条形态（见下方描述），仅适用于 v1 维护期 bug 修复。
+> - **server-next（当前唯一真源）**：批量操作走 `DataTable.bulkActions` prop，渲染为**表内 sticky bottom**（`.dt__bulk`），由 DataTable 一体化管理。**不得**外置独立 `SelectionActionBar` 浮条。
+> - ~~**apps/server v1（已冻结）**：外置 `SelectionActionBar variant="sticky-bottom"` 浮条~~（已退役删除，仅历史）。
 >
 > 以下流程描述适用于 v1 外置形态；server-next 交互意图相同，但实现入口是 `DataTable.bulkActions`。
 

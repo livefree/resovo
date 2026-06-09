@@ -11,10 +11,13 @@
 
 更新时间：2026-03-20 01:33
 
+> ⚠️ **退役提示（CHG-CUTOVER-EXECUTE，2026-06-08）**：本文档的 **v1 章节（`ModernDataTable` / `AdminDropdown` / `apps/server/src/components/admin/*` 等）描述的 apps/server v1 后台已物理退役删除**，相关内容仅存历史参考，**不得作为新模块模板**。
+> **当前后台模块唯一现行标准** = `docs/designs/backend_design_v2.1/reference.md` §4.4 + §10（server-next 一体化 `DataTable` / admin-ui shell / cell 复合组件）。
+
 ## 适用范围
 
-- `apps/server/src/components/admin/system/*`
-- 后续新增或重构的 admin 业务模块
+- ~~`apps/server/src/components/admin/system/*`~~（v1 已退役删除，仅历史）
+- 新增/重构 admin 业务模块 → 参 `docs/designs/backend_design_v2.1/reference.md`（server-next）
 
 ## 目标
 
@@ -176,8 +179,8 @@ module/
 
 所有需要用户手动排序的 admin 模块（Banner、来源优先级、轮播位等）必须遵守：
 
-1. **唯一入口**：使用 `SortableList`（`apps/server/src/components/admin/shared/SortableList.tsx`），不得直接使用 `@dnd-kit` 原语
-2. **依赖边界**：`@dnd-kit/core` + `@dnd-kit/sortable` 仅允许在 `apps/server` 中引入，`❌ web-next / api / player` 禁止引入
+1. **唯一入口**：~~v1 `SortableList`（apps/server，已退役删除）~~ → **server-next 直接用 `@dnd-kit`（`DndContext` + `SortableContext` + `arrayMove`）**，参考实现 `apps/server-next/src/app/admin/home/_client/BannerOpsSection.tsx`
+2. **依赖边界**：`@dnd-kit/core` + `@dnd-kit/sortable` 允许在 `apps/server-next` 引入，`❌ web-next / api / player` 禁止引入
 3. **持久化**：拖拽结束后必须立即调用后端排序 API 写回 `sort_order`，不得仅维护前端状态
 4. **性能**：分页内排序（单次请求 ≤ 100 条）；大量 item（> 50）须做虚拟化或分批提示
 5. **无障碍**：`SortableList` 已内置键盘导航（↑↓ 移位）和 `aria-roledescription`，消费方不得覆盖这些属性

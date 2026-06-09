@@ -45,7 +45,7 @@ tests/
 │   │   ├── player/              ← apps/web/src/components/player/
 │   │   │   ├── playerShell.layout.test.ts
 │   │   │   └── ResumePrompt.test.tsx
-│   │   ├── admin/               ← apps/server/src/components/admin/
+│   │   ├── server-next/         ← apps/server-next/src/components/admin/（apps/server v1 admin/ 已随退役删除）
 │   │   │   └── ...（后台组件测试）
 │   │   └── ...（其他前台组件测试）
 │   ├── stores/                  ← Zustand store 状态逻辑
@@ -79,7 +79,7 @@ bash scripts/verify-env.sh
 
 ### AUTH 任务
 
-> 注意：前台已移除用户功能（登录/注册页面、authStore）。AUTH 任务仅针对后台管理员认证（apps/api/src/routes/auth.ts + apps/server/src/）。
+> 注意：前台已移除用户功能（登录/注册页面、authStore）。AUTH 任务仅针对后台管理员认证（apps/api/src/routes/auth.ts + apps/server-next/src/，apps/server v1 已退役）。
 
 **Vitest（必须）— 采集与映射正确性**
 ```typescript

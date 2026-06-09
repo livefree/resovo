@@ -6,7 +6,7 @@
 
 ## 当前任务（单任务工作台：同时仅 1 个 🔄 进行中；完成即删卡，历史见 docs/changelog.md）
 
-_（当前无进行中任务。取下一个前先查 `docs/task-queue.md` 是否有 🚨 BLOCKER。SEQ-20260608-01 卡 1+2+3 ✅ 已完成 —— **物理 cutover Phase A 已合入 dev（merge `e3aea798`，人工 sign-off 2026-06-08）**，apps/server 物理退役、nginx /admin → server-next:3003。卡 4 回滚窗 🔄 观察至 ~2026-06-15；后续卡 5 改名 `apps/server-next→apps/admin` + 卡 6 docs-rules-sync 已登记。回滚锚点 tag `pre-server-next-cutover`。）_
+_（当前无进行中任务。取下一个前先查 `docs/task-queue.md` 是否有 🚨 BLOCKER。**旧后台 apps/server 退役已全面收尾**：cutover Phase A 合入 dev（`e3aea798`）+ docs/rules v1 引用清理 + 产品说明更新（CHG-CUTOVER-DOCS-RULES-SYNC ✅）。SEQ-20260608-01 剩：卡 4 回滚窗 🔄 观察至 ~2026-06-15、卡 5 改名 `apps/server-next→apps/admin` 待排期。）_
 
 ---
 

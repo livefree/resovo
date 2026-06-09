@@ -3031,3 +3031,19 @@
 - **门禁**：typecheck 全 8→7 workspace ✅（apps/server 移除）/ lint 5→4 task ✅ / verify:adr-contracts EXIT=0 ✅ / **vitest 6828 passed**（删 47 老测试后无解析失败；1 CSV 导出 flaky 隔离重跑 3/3 通过、首轮全量即通过、未碰该文件 → jsdom 共享环境污染既有 flake，非本退役回归）/ playwright 配置有效（admin-next 79 tests/21 files，无 admin-chromium/ADMIN_URL）/ verify:server-next-isolation EXIT=0。**非阻塞既有项**：verify:file-size-budget EXIT=1（api/server-next 超限 debt，非 apps/server，退役前即存在）；verify:admin-guardrails --staged 一次性删除假阳性（v1 obsolete 脚本，不在任何门禁）。
 - **后置**：CHG-CUTOVER-RENAME-ADMIN（改名）+ CHG-CUTOVER-DOCS-RULES-SYNC（docs/rules v1 引用清理）+ CHG-CUTOVER-ROLLBACK-WINDOW（+7 天回滚窗）登记于 task-queue SEQ-20260608-01。
 - **执行模型**：claude-opus-4-8；**子代理**：无（执行 ADR-101 + plan §4.2 既定方案，非新架构设计）。
+
+## [CHG-CUTOVER-DOCS-RULES-SYNC] 退役收尾：docs/rules v1 引用清理 + 产品说明更新（SEQ-20260608-01 卡 6）
+
+- **背景**：cutover Phase A 合入 dev 后，docs/rules 多处仍按"apps/server v1 冻结/维护期"表述与现实脱节。用户 2026-06-08 指令"收尾旧后端退役，清理旧文档，更新产品说明"明确授权改 docs/规范文件。
+- **改动（docs-only，标退役/更新现行，保留历史语义不删）**：
+  - `docs/rules/code-style.md`：路径约定 `apps/web→apps/web-next`、`apps/server→apps/server-next`。
+  - `docs/rules/test-rules.md`：测试树 `admin/ ← apps/server` 改 `server-next/ ← apps/server-next`；AUTH 注释去 apps/server。
+  - `docs/rules/workflow-rules.md`：M2 重写期双并行条款标"已收尾"（apps/web 2026-04-23 + apps/server v1 2026-06-08 均退役删除）。
+  - `docs/rules/admin-module-template.md`：顶部加 v1 退役 banner（apps/server 已删，v1 章节仅历史，新模块走 backend_design_v2.1）；**有序列表规范纠偏**——v1 `SortableList`（已删）→ server-next 直接用 `@dnd-kit`（DndContext+SortableContext），参考 `BannerOpsSection.tsx`，依赖边界改 apps/server-next。
+  - `docs/rules/ui-rules.md`：6 处 v1 段标退役（应用路径清单 / 两套 CSS 变量体系路径 / 后台 CSS 变量 scope / AdminDropdown v1 / `apps/server v1 仅维护期` shared 目录清单 / SelectionActionBar v1 浮条）。
+  - `docs/README.md`：plan `v2.6→v2.7`（含退役路线对账 + cutover 已执行）。
+  - 根 `README.md`：cutover 时已清（结构树/路由/dev 命令/URL/技术栈），本卡复核无残留。
+- **核对**：`docs/manual/*` 的"apps/server"匹配实为 `apps/server-next`（current 后端），无 v1 残留 → 不改；`docs/archive/*` 冻结不动。
+- **门禁**：test:changed docs-only SKIP（ADR-180）exit 0 / verify:docs-format 63 既有基线持平（零新增失败）。
+- **收尾结论**：旧后台 apps/server 退役**代码 + 文档双侧全面收口**。SEQ-20260608-01 剩卡 4 回滚窗（观察 ~2026-06-15）+ 卡 5 改名（待排期）。
+- **执行模型**：claude-opus-4-8；**子代理**：无（docs 清理，无代码/契约）。

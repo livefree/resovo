@@ -1597,7 +1597,7 @@
 
 ## [SEQ-20260608-01] 旧后台 apps/server 退役执行序列（cutover 收尾）
 
-- **状态**：🔄 进行中（卡 1 ✅ + 卡 2 ✅ + 卡 3 Phase A ✅ 已合入 dev `e3aea798`；卡 4 回滚窗 🔄 观察至 ~2026-06-15；卡 5 改名 + 卡 6 docs-rules-sync 后置）
+- **状态**：🔄 进行中（卡 1 ✅ + 卡 2 ✅ + 卡 3 Phase A ✅ 合入 dev `e3aea798` + 卡 6 docs-rules-sync ✅；卡 4 回滚窗 🔄 观察至 ~2026-06-15；卡 5 改名 `apps/server-next→apps/admin` 待排期）
 - **创建时间**：2026-06-08 16:30
 - **最后更新时间**：2026-06-08 19:05
 - **source_of_truth**：`docs/server_next_plan_20260427.md` §6 M-SN-7（CUTOVER 执行门禁版，v2.7）
@@ -1631,10 +1631,10 @@
    - 背景：纯命名零功能收益，AskUserQuestion 裁定后置以降回归风险。
    - 建议模型：opus（大面积路径 churn，需逐项核验）。
 
-6. **CHG-CUTOVER-DOCS-RULES-SYNC** — docs/rules 退役同步（状态：📋 低优 · docs-only）
-   - 范围：`docs/rules/{admin-module-template,test-rules,code-style,workflow-rules,ui-rules}.md` 中 apps/server v1 引用标退役/清理（archive/* 冻结不动）。
-   - 背景：Phase A 已同步 CLAUDE.md + architecture.md 关键引用；规则文档 staleness 非 build-breaking，独立 docs 卡处理。
-   - 建议模型：haiku（机械 docs 清理）。
+6. **CHG-CUTOVER-DOCS-RULES-SYNC** — docs/rules 退役同步 + 产品说明（状态：✅ 已完成 2026-06-08）
+   - 范围：`docs/rules/{admin-module-template,test-rules,code-style,workflow-rules,ui-rules}.md` 中 apps/server v1 引用标退役/清理（archive/* 冻结不动）+ docs/README plan 版本 + 根 README 复核。
+   - 背景：Phase A 已同步 CLAUDE.md + architecture.md 关键引用；规则文档 staleness 非 build-breaking，独立 docs 卡处理。用户 2026-06-08 指令"收尾旧后端退役，清理旧文档，更新产品说明"授权改 docs/规范文件。
+   - **完成备注**：code-style 路径约定 / test-rules 测试树+AUTH / workflow-rules 重写期条款 / docs-README plan v2.6→v2.7 更新现行；admin-module-template 顶部加 v1 退役 banner + @dnd-kit 有序列表规范纠偏（SortableList 已删→server-next 直接用 @dnd-kit，参 BannerOpsSection）；ui-rules 6 处 v1 段（路径/CSS 变量/AdminDropdown/v1 shared 目录/SelectionActionBar）标退役。manual 经核为 server-next 引用无 v1 残留、根 README 已清（cutover 时改）。门禁：test:changed docs-only SKIP exit 0 / verify:docs-format 63 基线持平零新增。执行模型 claude-opus-4-8；子代理：无。
 
 4. **CHG-CUTOVER-ROLLBACK-WINDOW** — cutover +7 天回滚窗收口（状态：🔄 观察中 · 启动 2026-06-08 → 收口 ~2026-06-15）
    - 范围：apps/server 已随 cutover 物理删除（恢复靠 git tag `pre-server-next-cutover`，非保留目录）；+7 天观察期内 tag 为回滚锚点（RTO ≤ 4h：checkout tag + nginx :3003→:3001 reload）；~2026-06-15 确认 0 报障后关闭回滚窗（changelog 收口；tag 可作永久历史锚点保留）。
