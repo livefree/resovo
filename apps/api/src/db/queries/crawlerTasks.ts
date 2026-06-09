@@ -370,6 +370,18 @@ export async function markTimedOutRunningTasksWithRunIds(
   }
 }
 
+/**
+ * listDistinctSiteKeysByRun — 取某 run 涉及的去重站点键（NTLG-P0-3 / ADR-191）。
+ * crawler retry 重建 createAndEnqueueRun 的 siteKeys 输入（source_site 列即 siteKey）。
+ */
+export async function listDistinctSiteKeysByRun(db: Pool, runId: string): Promise<string[]> {
+  const result = await db.query<{ source_site: string }>(
+    `SELECT DISTINCT source_site FROM crawler_tasks WHERE run_id = $1 AND source_site IS NOT NULL`,
+    [runId],
+  )
+  return result.rows.map((row) => row.source_site).filter((s): s is string => typeof s === 'string' && s.length > 0)
+}
+
 export async function markStaleHeartbeatRunningTasks(
   db: Pool,
   staleMinutes = 15,

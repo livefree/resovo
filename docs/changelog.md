@@ -3096,3 +3096,18 @@
 - **门禁**：typecheck EXIT=0 / lint EXIT=0（4/4）/ NotificationsTab 测试 10 全过 / test:changed 增量 10 全过。零 ADR / 零端点 / 零 schema / 零新依赖。
 - **文件**：`apps/server-next/src/app/admin/settings/_tabs/NotificationsTab.tsx` / `tests/unit/components/server-next/admin/system/NotificationsTab.test.tsx`。
 - **执行模型**：claude-opus-4-8（人工 opus 会话覆盖 haiku 建议——「持续推进」授权同会话连续）；**子代理**：无。
+
+## [NTLG-P0-3-A] tasks cancel/retry 后端控制端点（SEQ-20260609-01 · ADR-191 落地）
+
+- **背景**：治理方案 §6 P0-3——top bar 任务抽屉取消/重试为 toast stub（N1-147-4 无后端）。NTLG-P0-3 按原子化判据拆 -A（后端）/ -B（前端接线）；本条为 -A。
+- **实现 ADR-191** `POST /admin/tasks/:id/{cancel,retry}`（`routes/admin/tasks.ts`，admin-only）：
+  - **id 分派**（parseTaskId）：`bull-{queue}-{jobId}`（queue∈crawler/maintenance）→ bull job；否则裸 UUID → crawler run。响应 `data.target.kind` 标注真实目标（§4.2 张力 2）。
+  - **cancel**：crawler run 复用既有协作式取消链（`updateRunControlStatus('cancelling')`+`cancelPendingTasksByRun`+`requestCancelRunningTasksByRun`+`syncRunStatusFromTasks`，audit `crawler_run.cancel`）；bull waiting/delayed/paused→`job.remove()`、active→409 STATE_CONFLICT（不支持运行中取消，P0 诚实暴露）、终态→no-op(cancelled=false)。
+  - **retry**：bull failed→`job.retry()`、非 failed→409；crawler 终态（failed/partial_failed/cancelled）→`listDistinctSiteKeysByRun`（DISTINCT source_site）重建 siteKeys + `createAndEnqueueRun` 新建 run（返 `target.retryRunId`，保审计链/run 不可变）、非终态→409。
+  - 类型：`AdminTaskControlTarget`/`AdminTaskCancelResponse`/`AdminTaskRetryResponse`（`packages/types/admin-shell.types.ts`）；query `listDistinctSiteKeysByRun`（crawlerTasks.ts）；route 注册 server.ts。
+- **audit SSOT 4 处同步**（ADR-191 D-191-6 + YL2 兑现；`audit-log-coverage` 守卫正确捕获未同步并阻断 → 修复）：① `AdminAuditActionType` union（+task.cancel/task.retry）② `AuditLogService.ACTION_TYPES` 运行时真源 ③ `audit-log-service-enums-set-equal.test.ts` EXPECTED_ACTION_TYPES 镜像 ④ `audit-log-coverage.test.ts` REQUIRED_ACTION_TYPES + PAYLOAD_ASSERTION_REQUIRED（route 测已断言 audit payload）。crawler cancel 复用既有 `crawler_run.cancel` 避免膨胀。
+- **门禁**：typecheck EXIT=0 / lint EXIT=0（4/4）/ `verify:adr-contracts` EXIT=0（`verify-endpoint-adr ✅ 229`——2 新端点匹配 ADR-191 / `verify-admin-shell-types-mirror ✅` / `verify-sql-schema-alignment ✅`）。
+- **测试**：新增 `tasks-control-route.test.ts` 10 用例（cancel：crawler 复用/404/bull waiting→remove/active→409/maintenance 404/moderator→403；retry：bull failed→retry/非 failed→409/crawler 终态→重建 siteKeys 新 run/非终态→409）；audit 守卫 152 全过。test:changed 升全量（packages/types 改动 ADR-180）**6853 passed / 1 failed**，唯一失败=既有 flaky `VideoMergesService perf p95<200ms`（计时敏感，隔离复跑 40/40 通过，与本卡无关；本卡未触 listCandidates 逻辑）。
+- **文件**：+`routes/admin/tasks.ts` / `server.ts` / `db/queries/crawlerTasks.ts` / `services/AuditLogService.ts` / `packages/types/src/{admin-moderation,admin-shell}.types.ts` / +`tests/unit/api/tasks-control-route.test.ts` / `tests/unit/api/audit-log-{coverage,service-enums-set-equal}.test.ts`。
+- **后续**：NTLG-P0-3-B 前端 `admin-shell-client.tsx` 任务抽屉 cancel/retry toast stub→真实调用（补 N1-147-4）+ e2e shell-mocks 同步。
+- **执行模型**：claude-opus-4-8（人工 opus 会话覆盖 sonnet 建议——「持续推进」授权同会话连续）；**子代理**：无。

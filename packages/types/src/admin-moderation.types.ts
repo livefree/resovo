@@ -184,6 +184,10 @@ export type AdminAuditActionType =
   | 'crawler_run.pause'          // POST /admin/crawler/runs/:id/pause
   | 'crawler_run.resume'         // POST /admin/crawler/runs/:id/resume
 
+  // NTLG-P0-3 / ADR-191：统一任务控制端点（bull job / crawler run retry，crawler_run cancel 仍复用上面）
+  | 'task.cancel'                // POST /admin/tasks/:id/cancel（bull job 取消）
+  | 'task.retry'                 // POST /admin/tasks/:id/retry（bull job / crawler run 重试）
+
   // CHG-SN-6-20-A：全局采集冻结开关 audit 补齐（R-MID-1 系统化第 10 次）
   | 'crawler.freeze'             // POST /admin/crawler/freeze
 

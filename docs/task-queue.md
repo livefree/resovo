@@ -1675,9 +1675,14 @@
    - 范围：删除"后端不发 webhook / 触发逻辑未实装"陈旧错误警示横幅 + 副标题 + 注释（WebhookDispatcher ADR-146 已完整实装，核实 fetch POST+HMAC+retry+事件触发）；同步移除断言该横幅的 test #6/#7。零 ADR / 零端点 / 零 schema。
    - 依赖：无。建议模型：haiku。
    - **完成备注**：核实 WebhookDispatcher（ADR-146）已完整实装（fetch POST+HMAC+SSRF+retry，WebhookDispatcher.ts:142/214，被 crawler/maintenance/staging 真实事件触发，事件订阅过滤已实装）→ 横幅"未实装"确属陈旧错误。删除 `webhook-not-impl-banner` 横幅 + `WEBHOOK_WARN_BANNER_STYLE` 常量 + 改副标题为「推送系统事件到外部端点（事件订阅+HMAC 签名+失败重试，ADR-146）」+ 删 line60 陈旧注释；移除/替换 test #6/#7（合一为「不再含陈旧未实装 banner」断言，其余 ADR-146 事件订阅/连通性测试不动）。门禁：typecheck/lint EXIT=0 / NotificationsTab 测试 10 全过 / test:changed 增量 10 全过。执行模型: claude-opus-4-8（人工 opus 覆盖 haiku 建议——「持续推进」授权）；子代理: 无。
-4. **NTLG-P0-3** — tasks cancel/retry 端点 + topbar 接线（状态：⬜ 待开始）
-   - 范围：`POST /admin/tasks/:id/{cancel,retry}`（按 id 分派 crawler runId / bull jobId，响应标注 target 类型）+ `admin-shell-client.tsx` toast stub→真实调用，补 N1-147-4。
-   - 依赖：NTLG-ADR-P0（ADR-191 PASS）。建议模型：sonnet。
+4. **NTLG-P0-3** — tasks cancel/retry 端点 + topbar 接线（状态：🔄 进行中 — 拆 -A/-B，原子化判据 Q1 改动项 >5 + Q2 跨 api/UI 两层）
+   - **-A** 后端 tasks 控制端点（状态：✅ 已完成 2026-06-09）
+     - 范围：`POST /admin/tasks/:id/{cancel,retry}`（按 id 分派 crawler runId / `bull-{queue}-{jobId}`，响应标注 `target.kind`）+ AdminAuditActionType `task.cancel`/`task.retry` 枚举 + AdminTaskControlTarget DTO + crawler retry 经 DISTINCT source_site 重建 siteKeys + createAndEnqueueRun + server.ts 注册 + route 测。
+     - 依赖：NTLG-ADR-P0（ADR-191 PASS）。建议模型：sonnet。
+     - **完成备注**：`routes/admin/tasks.ts` parseTaskId 分派；cancel（crawler 复用既有协作式取消链 / bull waiting·delayed·paused→remove、active→409、终态→no-op）；retry（bull failed→job.retry()、非 failed→409 / crawler 终态→listDistinctSiteKeysByRun 重建 siteKeys + createAndEnqueueRun 新 run 返 retryRunId、非终态→409）；admin-only。**audit SSOT 4 处同步**（YL2 兑现）：AdminAuditActionType union + AuditLogService.ACTION_TYPES + set-equal EXPECTED_ACTION_TYPES + coverage REQUIRED_ACTION_TYPES/PAYLOAD_ASSERTION_REQUIRED（audit-log-coverage 守卫捕获未同步并修复）。门禁：typecheck/lint/verify:adr-contracts EXIT=0（verify-endpoint-adr ✅ 229，2 新端点匹配 ADR-191 / shell-types-mirror ✅）；route 测 10 + audit 守卫 152 全过；test:changed 升全量（packages/types 改动）——audit 守卫 2 真失败已修，余 2 失败既有 flaky（DailyAnimeRow + VideoMerges perf p95，隔离复跑 40/40 通过）。执行模型: claude-opus-4-8（人工 opus 覆盖 sonnet 建议——「持续推进」授权）；子代理: 无。
+   - **-B** 前端 topbar 接线（状态：⬜ 待开始）
+     - 范围：`admin-shell-client.tsx` 任务抽屉 cancel/retry toast stub → 真实调用（补 N1-147-4）+ e2e shell-mocks 同步。
+     - 依赖：NTLG-P0-3-A。建议模型：sonnet。
 5. **NTLG-P0-4** — 采集完成 digest 文案补全（过渡态）（状态：⬜ 待开始）
    - 范围：`background-events` finished lane 把 `crawler.run.completed` 补结构化 digest 文案（正式版见 P1-b/c）。
    - 依赖：无（与 P1-b 不冲突，过渡态）。建议模型：sonnet。

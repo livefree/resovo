@@ -41,6 +41,38 @@ export interface AdminTaskItem {
   readonly source?: 'crawler' | 'maintenance' | 'general'
 }
 
+/**
+ * 统一任务控制端点（POST /admin/tasks/:id/{cancel,retry}）的分派目标（ADR-191 / NTLG-P0-3）。
+ * :id 按 TaskAggregator 方案分派：裸 UUID=crawler run / `bull-{queue}-{jobId}`=bull job。
+ * 响应在 data.target 标注真实目标类型，便于 P2 task_runs re-point。
+ */
+export interface AdminTaskControlTarget {
+  readonly kind: 'crawler_run' | 'bull_job'
+  /** 原始请求 :id（聚合 id 原样回显） */
+  readonly id: string
+  /** bull_job 时的队列名 */
+  readonly queue?: 'crawler' | 'maintenance'
+  /** crawler run retry 时新建的 run id */
+  readonly retryRunId?: string
+}
+
+/** POST /admin/tasks/:id/cancel 响应（ADR-191） */
+export interface AdminTaskCancelResponse {
+  readonly data: {
+    readonly target: AdminTaskControlTarget
+    /** 动作是否实际生效（幂等 no-op 时为 false） */
+    readonly cancelled: boolean
+  }
+}
+
+/** POST /admin/tasks/:id/retry 响应（ADR-191） */
+export interface AdminTaskRetryResponse {
+  readonly data: {
+    readonly target: AdminTaskControlTarget
+    readonly retried: boolean
+  }
+}
+
 /** GET /admin/notifications 响应信封（ADR-147 §4） */
 export interface AdminNotificationListResponse {
   data: AdminNotificationItem[]

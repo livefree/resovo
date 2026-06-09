@@ -76,6 +76,9 @@ export const ACTION_TYPES: readonly AdminAuditActionType[] = [
   'crawler_run.cancel',
   'crawler_run.pause',
   'crawler_run.resume',
+  // NTLG-P0-3 / ADR-191：统一任务控制端点（bull job cancel / bull·crawler retry）
+  'task.cancel',
+  'task.retry',
   // CHG-SN-6-20-A：全局采集冻结开关 audit 补齐
   'crawler.freeze',
   // CHG-SN-6-25-RETRO：autoCrawlConfig + stop-all audit 补齐

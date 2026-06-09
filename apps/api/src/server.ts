@@ -76,6 +76,8 @@ import { adminNotificationRoutes } from '@/api/routes/admin/notifications'
 import { adminSystemJobsRoutes } from '@/api/routes/admin/system-jobs'
 // NTLG-P0-1 / ADR-190：侧边栏 nav 计数聚合端点
 import { adminSystemNavCountsRoutes } from '@/api/routes/admin/system-nav-counts'
+// NTLG-P0-3 / ADR-191：统一任务控制端点（cancel/retry）
+import { adminTaskControlRoutes } from '@/api/routes/admin/tasks'
 // CW1-E-EP / ADR-152：admin shell topbar 后台事件铃铛端点
 import { adminSystemBackgroundEventsRoutes } from '@/api/routes/admin/systemBackgroundEvents'
 import { VerifyService } from '@/api/services/VerifyService'
@@ -207,6 +209,8 @@ async function start() {
   await fastify.register(adminSystemJobsRoutes, { prefix: '/v1' })
   // NTLG-P0-1 / ADR-190：侧边栏 nav 计数聚合端点
   await fastify.register(adminSystemNavCountsRoutes, { prefix: '/v1' })
+  // NTLG-P0-3 / ADR-191：统一任务控制端点（cancel/retry）
+  await fastify.register(adminTaskControlRoutes, { prefix: '/v1' })
   // CW1-E-EP / ADR-152：admin shell topbar 后台事件铃铛端点
   await fastify.register(adminSystemBackgroundEventsRoutes, { prefix: '/v1' })
 

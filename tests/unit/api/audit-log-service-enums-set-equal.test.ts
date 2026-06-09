@@ -58,6 +58,9 @@ const EXPECTED_ACTION_TYPES = [
   'crawler_run.cancel',
   'crawler_run.pause',
   'crawler_run.resume',
+  // NTLG-P0-3 / ADR-191：统一任务控制端点
+  'task.cancel',
+  'task.retry',
   // CHG-SN-6-20-A
   'crawler.freeze',
   // CHG-SN-6-25-RETRO
