@@ -2984,3 +2984,21 @@
 - **评审**：arch-reviewer (Opus) verdict **PASS**（事实逐条核对属实：对照矩阵 / apps/server 维护期存活 / ADR-181/182/101 引用 / SEQ-20260606-01 前置）；MEDIUM-1（"27 路由"off-by-one）已在三文档同步修正为"26 逻辑 / 28 物理"口径。
 - **门禁**：test:changed docs-only SKIP（ADR-180）EXIT=0 / verify:docs-format 既有遗留基线 64→63（plan 元字段清除 1，本次零新增失败）/ typecheck/lint/verify:adr-contracts N/A（纯文档无代码·端点·schema 改动）。
 - **Plan-Revision**：v2.6 → v2.7（plan §0 SHOULD-4-a 修订协议：arch-reviewer PASS + 修订日志 + 人工 sign-off 已取得）。
+
+## [CHG-CUTOVER-QA-DEV-MIGRATE] QA 工具退役前迁移 server-next `/admin/dev/`（SEQ-20260608-01 卡 1）
+
+- **背景**：cutover 删 `apps/server` 前，旧后台两个 dev/QA 工具页 `fallback-preview`（前台 FallbackCover 样板图预览）+ `design-tokens`（Brand Token 预览/编辑）在 server-next 无对应入口，需迁入隐藏 dev 区，确保退役无能力丢失（用户 2026-06-08 裁定）。
+- **改动**（仅新增 10 文件于 server-next，零改动既有文件、apps/server 未触碰）：
+  - `apps/server-next/src/app/admin/dev/fallback-preview/page.tsx` — 服务端组件 + 生产守卫 + iframe 指向前台 `/en/dev/fallback-preview`（前台路由仍在）。
+  - `apps/server-next/src/app/admin/dev/design-tokens/page.tsx` — 服务端组件 + 生产守卫 + 渲染三栏编辑器。
+  - `…/design-tokens/_components/{DesignTokensView,TokenTable,TokenEditor,DiffPanel,LivePreviewFrame,InheritanceBadge}.tsx` + `{_paths,_diff}.ts` — 自 apps/server 迁移。
+- **关键现实/决策**：
+  - `/admin/design-tokens/*` API 在 `apps/api`（共享后端），server-next 经 `apiClient` 直接调用，**无需迁后端**。
+  - **server-next 不启用 Tailwind**（无依赖/无 `@tailwind` 指令/admin 下零 className，全仓内联 `React.CSSProperties`）→ 6 个 `.tsx` 由 Tailwind 工具类逐项转内联样式（颜色全用 CSS 变量，零硬编码）。
+  - `TokenTable` **重写为原生可选品牌列表**（去冻结 `ModernDataTable`——CLAUDE.md 禁止 server-next 复用 v1 表；280px 窄列 picker 亦不宜套重型 admin-ui DataTable）。
+  - `_paths.ts`/`_diff.ts` 纯函数逐字搬（原 apps/server 无单测，无覆盖丢失）。
+  - 全部 CSS token 经 `@resovo/design-tokens/css` 解析（`--accent-*`/`--state-*`/`--bg-surface*`/`--bg-canvas`/`--fg-subtle` 等逐个核验声明存在，含暗色主题）。
+  - 两页 `NODE_ENV==='production'→notFound()` 守卫（沿用 dev/visual 隐藏路由范式）+ typed `Metadata`（server-next 主流约定 16:4）。web base URL 用 `NEXT_PUBLIC_WEB_URL ?? 'http://localhost:3002'`（沿用旧页约定）。
+- **门禁**：typecheck 8 workspace ✅ / lint 5/5（零新增告警，既有 4 warning 属他文件）✅ / test:changed 10 非文档改动无关联测试 EXIT=0（与既有 dev 工具一致——dev/components/dev/visual 亦无单测）。新增文件全 <500 行（最大 214）、无 `any`、无空 catch、无硬编码颜色。
+- **后续**：旧 `apps/server/src/app/admin/{fallback-preview,design-tokens}` 可在 cutover（CHG-CUTOVER-EXECUTE）时随 apps/server 一并删除。卡 1 收口 → SEQ-20260608-01 下一可启动卡 = 卡 2 CHG-CUTOVER-BANNER-OPS-VERIFY。
+- **执行模型**：claude-opus-4-8（主循环续用；卡建议 sonnet，本会话续 opus 并据实记录）；**子代理**：无（纯 UI port + 内部组件重写，无新共享 API 契约/schema/ADR → 不触发强制 Opus）。

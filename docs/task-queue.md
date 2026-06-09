@@ -1597,19 +1597,20 @@
 
 ## [SEQ-20260608-01] 旧后台 apps/server 退役执行序列（cutover 收尾）
 
-- **状态**：📋 已登记（前 2 卡可启动；cutover 执行卡须独立门禁，待前置满足后人工触发）
+- **状态**：🔄 进行中（卡 1 ✅ 已完成；卡 2 可启动；cutover 执行卡须独立门禁，待前置满足后人工触发）
 - **创建时间**：2026-06-08 16:30
-- **最后更新时间**：2026-06-08 16:30
+- **最后更新时间**：2026-06-08 18:40
 - **source_of_truth**：`docs/server_next_plan_20260427.md` §6 M-SN-7（CUTOVER 执行门禁版，v2.7）
 - **背景**：功能重现核对（`docs/audit/admin-cutover-parity-2026-06-08.md`）确认旧后台 26 条逻辑路由（28 物理 page.tsx）业务功能 100% 重现/收编/拆分，无业务缺口阻塞退役；v1 E2E 已降冒烟（SEQ-20260606-01）。剩余三项收尾工作收口本序列。
 - **依赖**：CHG-CUTOVER-PLAN-REFRESH ✅（plan v2.7 + 审计文档落地）。
 - **关联**：plan §4.2 / ADR-101（切流回滚）/ ADR-181 + ADR-182（banner 收编）。
 
-1. **CHG-CUTOVER-QA-DEV-MIGRATE** — QA 工具退役前迁移 `/admin/dev/`（状态：📋 待启动）
+1. **CHG-CUTOVER-QA-DEV-MIGRATE** — QA 工具退役前迁移 `/admin/dev/`（状态：✅ 已完成 2026-06-08）
    - 范围：旧 `apps/server/src/app/admin/fallback-preview`（样板图预览）+ `design-tokens`（token 预览）补迁到 server-next `/admin/dev/`（隐藏路由工具区，对照既有 `dev/components` + `dev/visual` 范式）；`sandbox` 已被 `dev/components` 覆盖无需迁移。
    - 不在范围：banner / 业务视图；apps/server 删除。
    - 完成标准：两工具在 server-next `/admin/dev/` 可访问且颜色零硬编码；旧页可在 cutover 时随 apps/server 一并删除。
    - 建议模型：sonnet。
+   - **完成备注**：新增 10 文件（`dev/fallback-preview/page.tsx` + `dev/design-tokens/page.tsx` + `_components/{DesignTokensView,TokenTable,TokenEditor,DiffPanel,LivePreviewFrame,InheritanceBadge}.tsx` + `_components/{_paths,_diff}.ts`），零改动既有文件、apps/server 未触碰。`/admin/design-tokens/*` API 在 apps/api 共享后端经 `apiClient` 调用，无需迁后端。**关键现实**：server-next 不启用 Tailwind（全仓内联 `React.CSSProperties`）→ 6 个 `.tsx` 由 Tailwind 类转内联样式；`TokenTable` 重写为原生可选品牌列表（去冻结 `ModernDataTable`，守 CLAUDE.md server-next 边界）；`_paths`/`_diff` 纯函数逐字搬（原无单测，无覆盖丢失）。CSS token 全部经 `@resovo/design-tokens/css` 解析（逐个核验）；两页加 `NODE_ENV==='production'→notFound()` 守卫（dev/visual 范式）+ typed `Metadata`（主流约定）。门禁：typecheck 8 workspace ✅ / lint 5/5 零新增告警 ✅ / test:changed 10 非文档改动无关联测试 EXIT=0。执行模型 claude-opus-4-8（主循环续用）；子代理：无。
 
 2. **CHG-CUTOVER-BANNER-OPS-VERIFY** — banner 收编运营等价确认（状态：📋 待启动）
    - 范围：对照 ADR-181/182，确认 `/admin/home` 是否提供原 banner 的"时间窗（生效区间）+ 显示顺序拖拽"运营等价能力（#PARITY-BANNER-01）。
