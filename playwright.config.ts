@@ -1,12 +1,11 @@
 import { defineConfig, devices } from '@playwright/test'
 
 // CUTOVER（2026-04-23）：apps/web 退役，apps/web-next 升为对外入口 port 3000
+// CUTOVER（CHG-CUTOVER-EXECUTE 2026-06-08）：apps/server v1 退役，admin-chromium project + admin webServer 移除，
+// 后台 E2E 仅余 server-next（admin-next-chromium :3003）。
 const WEB_URL        = process.env.NEXT_PUBLIC_APP_URL  ?? 'http://localhost:3000'
-const ADMIN_URL      = process.env.ADMIN_APP_URL        ?? 'http://localhost:3001'
 const ADMIN_NEXT_URL = process.env.ADMIN_NEXT_APP_URL   ?? 'http://localhost:3003'
 
-// 后台 E2E：admin 访问控制 / 视频治理 / 发布流程（admin 部分）
-const ADMIN_SPECS      = ['**/e2e/admin.spec.ts', '**/e2e/admin-source-and-video-flows.spec.ts', '**/e2e/video-governance.spec.ts', '**/e2e/publish-flow.spec.ts']
 // server-next 后台 E2E（apps/server-next:3003）
 const ADMIN_NEXT_SPECS = ['**/e2e/admin/**/*.spec.ts']
 // web-mobile 移动专属 specs（ADR-180 D-180-4 / CHG-TEST-SLIM-C）：
@@ -19,9 +18,9 @@ const WEB_MOBILE_SPECS = [
   '**/e2e-next/mini-player.spec.ts',
 ]
 // 按需启动 webServer（ADR-180 D-180-3 实施校准）：域选跑脚本（test:e2e:<domain>）通过
-// PLAYWRIGHT_SERVERS=admin,admin-next,web 子集只起所需 dev server；默认（未设置）全起，
-// `npm run test:e2e` 全量行为零变化。
-const SERVERS = (process.env.PLAYWRIGHT_SERVERS ?? 'admin,admin-next,web').split(',').map((s) => s.trim())
+// PLAYWRIGHT_SERVERS=admin-next,web 子集只起所需 dev server；默认（未设置）全起，
+// `npm run test:e2e` 全量行为零变化。（CHG-CUTOVER-EXECUTE：'admin' 已随 apps/server 退役移除）
+const SERVERS = (process.env.PLAYWRIGHT_SERVERS ?? 'admin-next,web').split(',').map((s) => s.trim())
 // ── admin-visual project (ADR-116 / CHG-SN-5-PRE-01-E-1) ──────────────────
 // 隔离 testDir + testMatch，不与上述 e2e specs 混跑
 const ADMIN_VISUAL_TEST_DIR = './tests/visual'
@@ -46,13 +45,7 @@ export default defineConfig({
   },
 
   projects: [
-    // ── 后台（server:3001） ─────────────────────────────────────────
-    {
-      name: 'admin-chromium',
-      use: { ...devices['Desktop Chrome'], baseURL: ADMIN_URL },
-      testMatch: ADMIN_SPECS,
-    },
-    // ── 后台 server-next（server-next:3003） ────────────────────────
+    // ── 后台 server-next（server-next:3003） —— CUTOVER 后唯一后台 ──────
     {
       name: 'admin-next-chromium',
       use: { ...devices['Desktop Chrome'], baseURL: ADMIN_NEXT_URL },
@@ -101,12 +94,6 @@ export default defineConfig({
       reuseExistingServer: !process.env.CI,
       timeout: 60000,
     },
-    ...(SERVERS.includes('admin') ? [{
-      command: 'npm --workspace @resovo/server run dev',
-      url: `${ADMIN_URL}/admin`,
-      reuseExistingServer: !process.env.CI,
-      timeout: 60000,
-    }] : []),
     ...(SERVERS.includes('admin-next') ? [{
       command: 'npm --workspace @resovo/server-next run dev',
       url: `${ADMIN_NEXT_URL}/admin`,

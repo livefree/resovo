@@ -68,8 +68,8 @@ npm run verify:adr-contracts # ADR 协议合规 3 类核验（端点/错误码/D
 
 **共享组件**：同一 UI 模式 3 处以上必须提取。新建前先确认对应应用的共享层无等价实现：
 - 前台 web-next：`apps/web-next/src/components/shared/` + `apps/web-next/src/components/primitives/`
-- 后台 server-next（当前真源）：`packages/admin-ui/src/components/` + `packages/admin-ui/src/shell/`
-- 后台 server v1（已冻结，仅维护期 bug 修复）：`apps/server/src/components/admin/shared/`
+- 后台 server-next（**唯一真源**）：`packages/admin-ui/src/components/` + `packages/admin-ui/src/shell/`
+- ~~后台 server v1：`apps/server/src/components/admin/shared/`~~ — **已退役**（CHG-CUTOVER-EXECUTE 2026-06-08，apps/server 物理删除，/admin 切到 server-next）
 
 接口设计先于实现。
 
@@ -83,9 +83,9 @@ npm run verify:adr-contracts # ADR 协议合规 3 类核验（端点/错误码/D
   - 隐藏列 chip + popover（自动启用，pinned 显示"已锁定"）
   - filter chips slot（自动启用，6 种 FilterValue 默认 formatter + `column.renderFilterChip` 完全接管逃生口）
   - 完整体验"body 独立滚动"需消费方在父级提供 height 约束；未提供时走 `min-height: 240px` 防御性兜底
-  - **禁止**在 server-next 新模块复用 ModernDataTable / 外置 PaginationV2 / 外置 SelectionActionBar 三件套作为新模块模板
+  - **禁止**复用 ModernDataTable / 外置 PaginationV2 / 外置 SelectionActionBar 三件套作为新模块模板（v1 三件套已随 apps/server 退役删除）
   - 后续 CHG-DESIGN-08 + Step 7B 完成视频库消费切换 / CHG-DESIGN-12 完成 cell 复合组件沉淀
-- **server v1**（已冻结）：维持 `ModernDataTable` + `ColumnSettingsPanel` + `AdminDropdown` + `SelectionActionBar` + `PaginationV2` + 服务端排序，详见 `docs/rules/admin-module-template.md` v1 章节。仅维护期 bug 修复使用，不作新模块模板。
+- ~~**server v1**（ModernDataTable + ColumnSettingsPanel + AdminDropdown + SelectionActionBar + PaginationV2）~~ — **已退役**（CHG-CUTOVER-EXECUTE 2026-06-08，apps/server 物理删除；server-next 一体化 DataTable 为唯一后台表格范式）。
 
 ---
 
@@ -135,8 +135,8 @@ npm run verify:adr-contracts # ADR 协议合规 3 类核验（端点/错误码/D
 | API 接口任务 | `docs/rules/api-rules.md`             | Route、Fastify、zod、分页、响应格式、认证中间件                                |
 | 数据库任务   | `docs/rules/db-rules.md`              | migration、SQL、query、schema、索引、软删除、事务                              |
 | 测试编写     | `docs/rules/test-rules.md`            | Vitest、Playwright、test、spec、覆盖率                                         |
-| 后台模块（v1） | `docs/rules/admin-module-template.md` | apps/server v1 维护：ModernDataTable、AdminDropdown、列表页（仅维护期）        |
-| 后台模块（v2） | `docs/designs/backend_design_v2.1/reference.md` §4.4 + §10 | server-next 新模块：DataTable 一体化、admin-ui shell、cell 复合组件 |
+| 后台模块（v2，**唯一现行**） | `docs/designs/backend_design_v2.1/reference.md` §4.4 + §10 | server-next 模块：DataTable 一体化、admin-ui shell、cell 复合组件 |
+| ~~后台模块（v1）~~ | ~~`docs/rules/admin-module-template.md`~~ | **已退役**（CHG-CUTOVER-EXECUTE 2026-06-08，apps/server 物理删除；v1 章节仅存历史参考）        |
 | 任务工作流   | `docs/rules/workflow-rules.md`        | 开工、选任务、BLOCKER、PHASE COMPLETE                                          |
 | 并行开发     | `docs/rules/parallel-dev-rules.md`    | 并行、多轨道、Track、同时开发、并发任务、track 分支                            |
 | Git 提交     | `docs/rules/git-rules.md`             | commit、branch、merge、TASK-ID                                                 |
@@ -204,4 +204,4 @@ npm run verify:adr-contracts # ADR 协议合规 3 类核验（端点/错误码/D
 
 **统一 API 客户端**：`import { apiClient } from '@/lib/api-client'`（前端不得直接使用 fetch）
 
-**文件模板**：新建文件优先使用 `apps/web/src/components/templates/`、`apps/server/src/components/templates/` 和 `apps/api/src/templates/` 下的模板，详见 `TEMPLATES.md`。
+**文件模板**：新建文件优先使用 `apps/api/src/templates/` 等模板目录，详见 `TEMPLATES.md`（旧 `apps/web` / `apps/server` 模板目录已随各自退役删除；后台新模块见 `docs/designs/backend_design_v2.1/reference.md`）。

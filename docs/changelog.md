@@ -3018,3 +3018,16 @@
 - **门禁**：test:changed docs-only SKIP（ADR-180）EXIT=0 / verify:docs-format 零新增失败 / typecheck·lint·verify:adr-contracts N/A（纯文档无代码·端点·schema 改动）。
 - **结论**：**cutover 4 项启动准入全部满足**（parity ✅ / v1 E2E ✅ / QA 迁移 ✅ / banner 确认 ✅）→ CHG-CUTOVER-EXECUTE（🔴 高风险物理 cutover：nginx 切流 + 删 apps/server + 改名 apps/admin）解锁，待人工 final sign-off 触发，独立门禁不自动推进。
 - **执行模型**：claude-opus-4-8（主循环续用；卡建议 sonnet）；**子代理**：无（核对 + 落档，无代码/契约改动）。
+
+## [CHG-CUTOVER-EXECUTE]（Phase A）旧后台 apps/server 物理退役 + nginx /admin 切流（🟡 分支待 sign-off）
+
+- **决策**：4 项启动准入全部满足后执行物理 cutover。AskUserQuestion（2026-06-08）裁定**分阶段**：本卡只做功能性退役；`apps/server-next → apps/admin` 改名（152 文件路径引用，纯命名零功能收益）拆为后续卡 CHG-CUTOVER-RENAME-ADMIN。
+- **交付**：分支 `cutover/retire-apps-server`（off dev），回滚 tag `pre-server-next-cutover` @ 13940b06（RTO ≤ 4h）。**未合 main/dev**，待人工 final sign-off（PR 描述签字）后合并（plan §6 / ADR-101）。
+- **改动（256 删除 + 16 编辑）**：
+  - **nginx 切流**：`docker/nginx.conf` `upstream server` :3001 → :3003（server-next），/admin + /admin/_next/ 随之指向 server-next；附回滚注释。
+  - **物理删除**：`apps/server/` 整目录（含 git rm 跟踪文件 + rm -rf 未跟踪构建产物）；老 admin 测试 47 个（`tests/unit/components/admin/` 43 + 4 老 admin e2e spec + `tests/unit/components/modern-table/` 4 测 v1 ModernDataTable + `tests/unit/components/shared/` 2 测 v1 DetailPageShell/DetailSection）。
+  - **配置/脚本同步**：`package.json`（workspaces 去 apps/server + typecheck 去 @resovo/server + test:e2e* 域脚本重指向 admin-next）/ `playwright.config.ts`（删 admin-chromium project + admin webServer + ADMIN_URL/ADMIN_SPECS + SERVERS 默认）/ `vitest.config.ts`（@/components/admin·shared·stores·@/ 别名 collapse 去 apps/server 分支）/ `scripts/dev.mjs`（删 :3001 进程）/ `scripts/verify-{admin-guardrails,file-size-budget}.mjs`（no-op/清死条目）/ `.eslintrc.json`（删 v1 颜色 override）/ `docker-compose.dev.yml` / `.env.example` / `README.md`。
+  - **架构同步**：`CLAUDE.md`（共享组件/后台表格/规范索引/模板 4 处标 v1 退役）+ `docs/architecture.md`（顶层进程列表 + §3.3 切换声明 + §3.3.1 标历史）。
+- **门禁**：typecheck 全 8→7 workspace ✅（apps/server 移除）/ lint 5→4 task ✅ / verify:adr-contracts EXIT=0 ✅ / **vitest 6828 passed**（删 47 老测试后无解析失败；1 CSV 导出 flaky 隔离重跑 3/3 通过、首轮全量即通过、未碰该文件 → jsdom 共享环境污染既有 flake，非本退役回归）/ playwright 配置有效（admin-next 79 tests/21 files，无 admin-chromium/ADMIN_URL）/ verify:server-next-isolation EXIT=0。**非阻塞既有项**：verify:file-size-budget EXIT=1（api/server-next 超限 debt，非 apps/server，退役前即存在）；verify:admin-guardrails --staged 一次性删除假阳性（v1 obsolete 脚本，不在任何门禁）。
+- **后置**：CHG-CUTOVER-RENAME-ADMIN（改名）+ CHG-CUTOVER-DOCS-RULES-SYNC（docs/rules v1 引用清理）+ CHG-CUTOVER-ROLLBACK-WINDOW（+7 天回滚窗）登记于 task-queue SEQ-20260608-01。
+- **执行模型**：claude-opus-4-8；**子代理**：无（执行 ADR-101 + plan §4.2 既定方案，非新架构设计）。
