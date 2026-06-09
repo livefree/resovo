@@ -196,6 +196,73 @@ describe('TaskDrawer — 空态', () => {
   })
 })
 
+describe('TaskDrawer — digest chips (ADR-193 D-193-4)', () => {
+  const withDigest: readonly TaskItem[] = [{
+    id: 'td1',
+    title: '批量采集',
+    status: 'success',
+    startedAt: '2026-06-09T07:00:00Z',
+    finishedAt: '2026-06-09T07:30:00Z',
+    digest: {
+      summary: '新增 42 视频 · 5 线路 · 1 站点失败 · 2 错误',
+      metrics: [
+        { key: 'videos_added', label: '新增视频', value: 42, tone: 'ok' },
+        { key: 'sources_added', label: '新增线路', value: 5, tone: 'ok' },
+        { key: 'sites_failed', label: '站点失败', value: 1, tone: 'warn' },
+        { key: 'errors', label: '错误', value: 2, tone: 'danger' },
+      ],
+    },
+  }]
+
+  it('digest 提供 → 每条 metric 渲染为 chip（key 定位 + label + value 拼接）', () => {
+    render(<TaskDrawer open items={withDigest} onClose={vi.fn()} />)
+    expect(document.body.querySelector('[data-task-item="td1"] [data-task-item-digest]')).toBeTruthy()
+    const chips = document.body.querySelectorAll('[data-task-item="td1"] [data-task-item-digest-chip]')
+    expect(chips).toHaveLength(4)
+    const videoChip = document.body.querySelector('[data-task-item-digest-chip="videos_added"]') as HTMLElement
+    expect(videoChip.textContent).toBe('新增视频42')
+  })
+
+  it('tone → CSS state token（ok→success / warn→warning / danger→error），零硬编码色', () => {
+    render(<TaskDrawer open items={withDigest} onClose={vi.fn()} />)
+    const ok = document.body.querySelector('[data-task-item-digest-chip="videos_added"]') as HTMLElement
+    const warn = document.body.querySelector('[data-task-item-digest-chip="sites_failed"]') as HTMLElement
+    const danger = document.body.querySelector('[data-task-item-digest-chip="errors"]') as HTMLElement
+    expect(ok.style.background).toContain('--state-success-bg')
+    expect(ok.style.color).toContain('--state-success-fg')
+    expect(ok.getAttribute('data-task-item-digest-tone')).toBe('ok')
+    expect(warn.style.background).toContain('--state-warning-bg')
+    expect(danger.style.background).toContain('--state-error-bg')
+  })
+
+  it('tone 省略 → neutral（surface/muted token，data-tone="neutral"）+ value+unit 拼接', () => {
+    const items: readonly TaskItem[] = [{
+      id: 'tn', title: 'x', status: 'success', startedAt: '2026-06-09T00:00:00Z',
+      digest: { summary: 'x', metrics: [{ key: 'rate', label: '成功率', value: 87, unit: '%' }] },
+    }]
+    render(<TaskDrawer open items={items} onClose={vi.fn()} />)
+    const chip = document.body.querySelector('[data-task-item-digest-chip="rate"]') as HTMLElement
+    expect(chip.getAttribute('data-task-item-digest-tone')).toBe('neutral')
+    expect(chip.style.background).toContain('--bg-surface-row')
+    expect(chip.style.color).toContain('--fg-muted')
+    expect(chip.textContent).toBe('成功率87%')
+  })
+
+  it('digest 缺省 → 不渲染 digest row', () => {
+    render(<TaskDrawer open items={ITEMS} onClose={vi.fn()} />)
+    expect(document.body.querySelector('[data-task-item="t2"] [data-task-item-digest]')).toBeNull()
+  })
+
+  it('metrics 空数组 → 不渲染 digest row（组件防御）', () => {
+    const items: readonly TaskItem[] = [{
+      id: 'te', title: 'x', status: 'success', startedAt: '2026-06-09T00:00:00Z',
+      digest: { summary: '', metrics: [] },
+    }]
+    render(<TaskDrawer open items={items} onClose={vi.fn()} />)
+    expect(document.body.querySelector('[data-task-item="te"] [data-task-item-digest]')).toBeNull()
+  })
+})
+
 describe('TaskDrawer — ESC + backdrop 关闭（DrawerShell base 验证）', () => {
   it('ESC keydown → onClose()', () => {
     const onClose = vi.fn()

@@ -21,6 +21,12 @@
  * 使用；apps/web-next / apps/api 不消费（admin 专属）。
  */
 import type { ReactNode } from 'react'
+import type { TaskResultDigest } from '@resovo/types'
+
+// ADR-193 D-193-1：TaskResultDigest（+ 子接口 TaskMetric）单点定义于 packages/types
+// （API SSOT 侧），admin-ui 正向 import 复用同一类型定义、不复制类型体；
+// TaskItem.digest? 与 AdminTaskItem.digest? 双源镜像（verify:admin-shell-types-mirror）。
+export type { TaskResultDigest, TaskMetric } from '@resovo/types'
 
 /** AdminNav 单项导航条目（ADR-103a §4.2 5 字段扩展协议）
  *  消费方（server-next admin-nav.tsx）填充 icon ReactNode 时按 ADR-103b 选定的
@@ -138,6 +144,9 @@ export interface TaskItem {
    *  - 'crawler'：background-events active lane 映射的 crawler_run
    *  - 'maintenance'：保留扩展位（如有 maintenance worker active 数据 / 未实现） */
   readonly source?: 'crawler' | 'maintenance' | 'general'
+  /** ADR-193 D-193-1：任务执行结果摘要（与 AdminTaskItem.digest 双源镜像；
+   *  status='success' | 'failed' 时提供；TaskDrawer 渲染 metrics chips） */
+  readonly digest?: TaskResultDigest
 }
 
 /** CommandPalette 单条命令（ADR-103a §4.1.6 / CHG-SN-2-11 SSOT 上提）

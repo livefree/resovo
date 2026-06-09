@@ -30,7 +30,7 @@
  */
 import type { CSSProperties } from 'react'
 import { DrawerShell } from './drawer-shell'
-import type { TaskItem } from './types'
+import type { TaskItem, TaskMetric, TaskResultDigest } from './types'
 
 export interface TaskDrawerProps {
   readonly open: boolean
@@ -138,6 +138,43 @@ const EMPTY_STYLE: CSSProperties = {
   fontSize: 'var(--font-size-sm)',
 }
 
+// ADR-193 D-193-4：digest metrics chips（任务结果摘要）。颜色全部走 CSS state token，零硬编码色。
+const DIGEST_ROW_STYLE: CSSProperties = {
+  display: 'flex',
+  flexWrap: 'wrap',
+  gap: 'var(--space-1)',
+}
+
+const CHIP_BASE_STYLE: CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'baseline',
+  gap: 'var(--space-1)',
+  padding: '0 var(--space-2)',
+  borderRadius: 'var(--radius-sm)',
+  fontSize: 'var(--font-size-xs)',
+  lineHeight: '1.8em',
+}
+
+const CHIP_VALUE_STYLE: CSSProperties = {
+  fontWeight: 600,
+}
+
+// tone（ok/warn/danger）→ state token slot（与 STATUS_TO_SLOT 同一 token 体系）；
+// tone 省略 → neutral（中性 surface/muted token）
+const TONE_TO_SLOT: Record<NonNullable<TaskMetric['tone']>, 'success' | 'warning' | 'error'> = {
+  ok: 'success',
+  warn: 'warning',
+  danger: 'error',
+}
+
+function chipStyle(tone: TaskMetric['tone']): CSSProperties {
+  if (tone === undefined) {
+    return { ...CHIP_BASE_STYLE, background: 'var(--bg-surface-row)', color: 'var(--fg-muted)' }
+  }
+  const slot = TONE_TO_SLOT[tone]
+  return { ...CHIP_BASE_STYLE, background: `var(--state-${slot}-bg)`, color: `var(--state-${slot}-fg)` }
+}
+
 export function TaskDrawer({ open, items, onClose, onCancel, onRetry }: TaskDrawerProps) {
   const runningCount = items.filter((t) => t.status === 'running').length
   const headerActions = (
@@ -220,6 +257,7 @@ function TaskItemRow({ item, onCancel, onRetry }: TaskItemRowProps) {
       {item.finishedAt && (
         <span style={TIMESTAMP_STYLE} data-task-item-finishedat>结束 {item.finishedAt}</span>
       )}
+      {item.digest && <TaskDigestChips digest={item.digest} />}
       {item.status === 'failed' && item.errorMessage && (
         <span style={ERROR_STYLE} data-task-item-error>{item.errorMessage}</span>
       )}
@@ -255,6 +293,27 @@ function TaskItemRow({ item, onCancel, onRetry }: TaskItemRowProps) {
           重试
         </button>
       )}
+    </div>
+  )
+}
+
+/** digest metrics chips（ADR-193 D-193-4）。每个 metric → 一枚 chip（label + value[+unit]），
+ *  颜色由 tone 经 chipStyle 映射 CSS state token；metrics 为空不渲染（mapCrawlerRun 已保证非空才挂 digest）。 */
+function TaskDigestChips({ digest }: { readonly digest: TaskResultDigest }) {
+  if (digest.metrics.length === 0) return null
+  return (
+    <div data-task-item-digest style={DIGEST_ROW_STYLE}>
+      {digest.metrics.map((metric) => (
+        <span
+          key={metric.key}
+          data-task-item-digest-chip={metric.key}
+          data-task-item-digest-tone={metric.tone ?? 'neutral'}
+          style={chipStyle(metric.tone)}
+        >
+          <span>{metric.label}</span>
+          <span style={CHIP_VALUE_STYLE}>{`${metric.value}${metric.unit ?? ''}`}</span>
+        </span>
+      ))}
     </div>
   )
 }

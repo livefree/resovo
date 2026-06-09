@@ -10,8 +10,58 @@
  */
 
 import type { Pool } from 'pg'
-import type { AdminTaskItem, AdminQueueCounts } from '@resovo/types'
+import type { AdminTaskItem, AdminQueueCounts, TaskResultDigest, TaskMetric } from '@resovo/types'
 import { crawlerQueue, maintenanceQueue } from '@/api/lib/queue'
+
+/**
+ * buildTaskResultDigest — 从 crawler_runs.summary 投影结构化 TaskResultDigest（ADR-193 D-193-4，path A）。
+ *
+ * summary 键（syncRunStatusFromTasks 落库）：videosUpserted/sourcesUpserted/failed/errors
+ * （+ total/pending/running/paused/done/cancelled 6 个生命周期内部计数，运营无需感知 → 不投影）。
+ *
+ * 投影口径（D-193-4 表，零自由度）：
+ *   - videos_added（新增视频）/ sources_added（新增线路）：tone='ok'，恒展示（即使为 0，运营需知本次采集产出）
+ *   - sites_failed（站点失败）：tone='warn'，>0 展示 / =0 省略（不展示「0 失败」噪声）
+ *   - errors（错误）：tone='danger'，>0 展示 / =0 省略
+ *
+ * num 守卫复用 buildRunDigest 口径（BackgroundEventService）：非数字 / 缺字段 → 该 metric 省略，不抛错、不进空 catch。
+ * summary=null 或投影后无任何 metric → 返回 undefined（不挂 digest）。
+ */
+export function buildTaskResultDigest(
+  summary: Record<string, unknown> | null,
+): TaskResultDigest | undefined {
+  if (!summary) return undefined
+  const num = (key: string): number | undefined => {
+    const v = summary[key]
+    return typeof v === 'number' && Number.isFinite(v) ? v : undefined
+  }
+  const metrics: TaskMetric[] = []
+  const parts: string[] = []
+
+  const videos = num('videosUpserted')
+  if (videos !== undefined) {
+    metrics.push({ key: 'videos_added', label: '新增视频', value: videos, tone: 'ok' })
+    parts.push(`新增 ${videos} 视频`)
+  }
+  const sources = num('sourcesUpserted')
+  if (sources !== undefined) {
+    metrics.push({ key: 'sources_added', label: '新增线路', value: sources, tone: 'ok' })
+    parts.push(`${sources} 线路`)
+  }
+  const failed = num('failed')
+  if (failed !== undefined && failed > 0) {
+    metrics.push({ key: 'sites_failed', label: '站点失败', value: failed, tone: 'warn' })
+    parts.push(`${failed} 站点失败`)
+  }
+  const errors = num('errors')
+  if (errors !== undefined && errors > 0) {
+    metrics.push({ key: 'errors', label: '错误', value: errors, tone: 'danger' })
+    parts.push(`${errors} 错误`)
+  }
+
+  if (metrics.length === 0) return undefined
+  return { summary: parts.join(' · '), metrics }
+}
 
 interface CrawlerRunRow {
   id: string
@@ -90,6 +140,8 @@ export class TaskAggregator {
     const errorMessage = FAILED_STATUSES.has(row.status)
       ? typeof summaryError === 'string' ? summaryError : 'Crawl failed'
       : undefined
+    // ADR-193 D-193-4 path A：从已落库 summary 投影结构化 digest（纯只读，零 schema 变更）
+    const digest = buildTaskResultDigest(row.summary)
     return {
       id: row.id,
       title: `${row.crawl_mode} crawl (${row.trigger_type})`,
@@ -97,6 +149,7 @@ export class TaskAggregator {
       startedAt,
       ...(finishedAt !== undefined && { finishedAt }),
       ...(errorMessage !== undefined && { errorMessage }),
+      ...(digest !== undefined && { digest }),
     }
   }
 

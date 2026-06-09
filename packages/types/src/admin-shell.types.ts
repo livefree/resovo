@@ -23,6 +23,31 @@ export interface AdminNotificationItem {
   readonly category?: 'general' | 'background'
 }
 
+/** 任务执行结果的单条结构化指标（TaskResultDigest 子接口，复用性 ADR-193 D-193-1） */
+export interface TaskMetric {
+  /** 指标语义键（不写死枚举，可扩展；如 'videos_added' | 'enrich_success_rate'） */
+  readonly key: string
+  /** 人读标签（如 '新增视频'） */
+  readonly label: string
+  /** 指标值（crawler 投影恒 number；预留 string 承载非数值指标） */
+  readonly value: number | string
+  /** 单位（如 '%'）；无单位省略 */
+  readonly unit?: string
+  /** 着色语义（驱动 chip 颜色 token；省略 → neutral） */
+  readonly tone?: 'ok' | 'warn' | 'danger'
+}
+
+/** 任务执行结果摘要（任务象限 ↔ 通知象限的桥；ADR-193 D-193-1）
+ *  path A：由 TaskAggregator 从 crawler_runs.summary 投影；payload JSONB 亦承载此形状（P1-c emit） */
+export interface TaskResultDigest {
+  /** 人读摘要（如 '新增 42 视频 · 5 线路 · 1 站点失败'） */
+  readonly summary: string
+  /** 结构化指标数组（抽屉 metrics chips；key 不写死，可增量扩展） */
+  readonly metrics: ReadonlyArray<TaskMetric>
+  /** 需要注意的要点（失败站点、超时项）；可选 */
+  readonly highlights?: ReadonlyArray<string>
+}
+
 /** 后台任务抽屉单项（admin-ui SSOT 镜像） */
 export interface AdminTaskItem {
   readonly id: string
@@ -39,6 +64,9 @@ export interface AdminTaskItem {
   /** ADR-155 D-155-2 / EP-2：双源镜像与 packages/admin-ui/shell/types.ts TaskItem 严格同步。
    *  source: 'general'（默认 / /admin/system/jobs）/ 'crawler' / 'maintenance'（扩展位） */
   readonly source?: 'crawler' | 'maintenance' | 'general'
+  /** ADR-193 D-193-1：任务执行结果摘要（与 TaskItem.digest 双源镜像；
+   *  status=success/failed 时提供；path A 由 TaskAggregator 从 crawler_runs.summary 投影） */
+  readonly digest?: TaskResultDigest
 }
 
 /**

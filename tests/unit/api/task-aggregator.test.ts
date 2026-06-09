@@ -47,7 +47,7 @@ vi.mock('@/api/lib/queue', () => ({
   imageHealthQueue: {},
 }))
 
-import { TaskAggregator } from '@/api/services/TaskAggregator'
+import { TaskAggregator, buildTaskResultDigest } from '@/api/services/TaskAggregator'
 import { db } from '@/api/lib/postgres'
 
 beforeEach(() => {
@@ -176,5 +176,89 @@ describe('GET /admin/system/jobs endpoint', () => {
     expect(body.meta.queueCounts.crawler).toEqual({ waiting: 2, active: 1 })
     expect(body.meta.limit).toBe(20)
     await app.close()
+  })
+})
+
+describe('buildTaskResultDigest — summary→metrics 投影 (ADR-193 D-193-4)', () => {
+  it('全字段 >0 → 4 metrics（含 tone）+ 人读 summary；生命周期内部计数不投影', () => {
+    const digest = buildTaskResultDigest({
+      videosUpserted: 42, sourcesUpserted: 5, failed: 1, errors: 2,
+      // 6 个生命周期内部计数 → 不投影
+      total: 10, pending: 0, running: 0, paused: 0, done: 8, cancelled: 0,
+    })
+    expect(digest?.metrics).toEqual([
+      { key: 'videos_added', label: '新增视频', value: 42, tone: 'ok' },
+      { key: 'sources_added', label: '新增线路', value: 5, tone: 'ok' },
+      { key: 'sites_failed', label: '站点失败', value: 1, tone: 'warn' },
+      { key: 'errors', label: '错误', value: 2, tone: 'danger' },
+    ])
+    expect(digest?.summary).toBe('新增 42 视频 · 5 线路 · 1 站点失败 · 2 错误')
+  })
+
+  it('failed=0 / errors=0 → 省略该 metric（不展示 0 噪声）', () => {
+    const digest = buildTaskResultDigest({ videosUpserted: 3, sourcesUpserted: 0, failed: 0, errors: 0 })
+    expect(digest?.metrics.map((m) => m.key)).toEqual(['videos_added', 'sources_added'])
+    expect(digest?.summary).toBe('新增 3 视频 · 0 线路')
+  })
+
+  it('videos/sources=0 恒展示（运营需知本次产出，即使为 0）', () => {
+    const digest = buildTaskResultDigest({ videosUpserted: 0, sourcesUpserted: 0 })
+    expect(digest?.metrics).toEqual([
+      { key: 'videos_added', label: '新增视频', value: 0, tone: 'ok' },
+      { key: 'sources_added', label: '新增线路', value: 0, tone: 'ok' },
+    ])
+  })
+
+  it('summary=null → undefined', () => {
+    expect(buildTaskResultDigest(null)).toBeUndefined()
+  })
+
+  it('仅生命周期内部计数（无产出字段）→ undefined（metrics 空不挂 digest）', () => {
+    expect(buildTaskResultDigest({ total: 10, done: 8, running: 1, paused: 0, cancelled: 0 })).toBeUndefined()
+  })
+
+  it('非数字 / 非有限值 → num 守卫省略该 metric，不抛错', () => {
+    const digest = buildTaskResultDigest({ videosUpserted: 'NaN-str', sourcesUpserted: 7, failed: Infinity })
+    expect(digest?.metrics.map((m) => m.key)).toEqual(['sources_added'])
+    expect(digest?.summary).toBe('7 线路')
+  })
+})
+
+describe('TaskAggregator.list — digest 挂载 (ADR-193 D-193-4 path A)', () => {
+  it('crawler run summary 有产出 → item.digest 投影挂载', async () => {
+    queryMock.mockResolvedValueOnce({
+      rows: [{
+        id: 'run-d',
+        crawl_mode: 'batch',
+        trigger_type: 'all',
+        status: 'success',
+        started_at: new Date('2026-06-09T07:00:00Z'),
+        finished_at: new Date('2026-06-09T07:30:00Z'),
+        created_at: new Date('2026-06-09T07:00:00Z'),
+        summary: { videosUpserted: 12, sourcesUpserted: 3, failed: 0, errors: 0 },
+      }],
+    })
+    const svc = new TaskAggregator(db)
+    const result = await svc.list({ limit: 20, since: '2026-06-06T00:00:00Z' })
+    expect(result.items[0]?.digest?.metrics.map((m) => m.key)).toEqual(['videos_added', 'sources_added'])
+    expect(result.items[0]?.digest?.summary).toBe('新增 12 视频 · 3 线路')
+  })
+
+  it('summary=null（如 running 态未回填）→ 无 digest 字段（向后兼容）', async () => {
+    queryMock.mockResolvedValueOnce({
+      rows: [{
+        id: 'run-n',
+        crawl_mode: 'keyword',
+        trigger_type: 'single',
+        status: 'running',
+        started_at: new Date('2026-06-09T08:00:00Z'),
+        finished_at: null,
+        created_at: new Date('2026-06-09T08:00:00Z'),
+        summary: null,
+      }],
+    })
+    const svc = new TaskAggregator(db)
+    const result = await svc.list({ limit: 20, since: '2026-06-06T00:00:00Z' })
+    expect(result.items[0]?.digest).toBeUndefined()
   })
 })
