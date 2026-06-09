@@ -660,11 +660,12 @@ trailer 与 `docs/rules/git-rules.md` 当前格式兼容（已核：`Refs:` 与 
 
 > 退役执行登记于 `docs/task-queue.md` 退役执行序列（QA 工具迁移 + banner 运营确认 + cutover 执行卡 + 7 天回滚窗）。**cutover 执行卡为高风险不可逆动作，须独立门禁，不与本规划文档同卡执行。**
 
-- **启动准入（全部满足才可起 cutover 执行卡）**：
+- **启动准入（全部满足才可起 cutover 执行卡）** — 4/4 已达成（2026-06-08）：
   - ✅ functional parity 已达成（`docs/audit/admin-cutover-parity-2026-06-08.md`）
   - ✅ v1 E2E 已降冒烟（SEQ-20260606-01）
-  - ⏳ QA 工具迁移 `/admin/dev/` 完成（退役序列子卡）
-  - ⏳ banner 收编运营等价确认通过（#PARITY-BANNER-01）
+  - ✅ QA 工具迁移 `/admin/dev/` 完成（CHG-CUTOVER-QA-DEV-MIGRATE，2026-06-08；server-next `dev/{fallback-preview,design-tokens}`）
+  - ✅ banner 收编运营等价确认通过（CHG-CUTOVER-BANNER-OPS-VERIFY，2026-06-08；#PARITY-BANNER-01 完全等价）
+  - **→ 4 项启动准入全部满足；cutover 执行卡 CHG-CUTOVER-EXECUTE 解锁，待人工 final sign-off 触发（高风险不可逆，独立门禁）**
 - **范围（cutover 当日，沿用 §4.2 / ADR-101）**：
   - e2e 全绿（admin 域）
   - **同 commit 内**：`docker/nginx.conf` 反代切换（`/admin/*` :3001 → :3003）+ `apps/server` 删除 + workspaces / `typecheck` 等脚本移除 + `apps/server-next` → `apps/admin` 改名（DISCUSS-4）

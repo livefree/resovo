@@ -6,7 +6,7 @@
 
 ## 当前任务（单任务工作台：同时仅 1 个 🔄 进行中；完成即删卡，历史见 docs/changelog.md）
 
-_（当前无进行中任务。取下一个前先查 `docs/task-queue.md` 是否有 🚨 BLOCKER。SEQ-20260608-01 卡 1 CHG-CUTOVER-QA-DEV-MIGRATE ✅ 已完成；下一可启动卡 = 卡 2 CHG-CUTOVER-BANNER-OPS-VERIFY。）_
+_（当前无进行中任务。取下一个前先查 `docs/task-queue.md` 是否有 🚨 BLOCKER。SEQ-20260608-01 卡 1 + 卡 2 ✅ 已完成 → cutover 4 项启动准入全部满足；剩余卡 3 CHG-CUTOVER-EXECUTE 为 🔴 高风险物理 cutover，须独立门禁 + 人工 final sign-off 触发，不自动推进。）_
 
 ---
 

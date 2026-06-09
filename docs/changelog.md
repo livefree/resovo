@@ -3002,3 +3002,18 @@
 - **门禁**：typecheck 8 workspace ✅ / lint 5/5（零新增告警，既有 4 warning 属他文件）✅ / test:changed 10 非文档改动无关联测试 EXIT=0（与既有 dev 工具一致——dev/components/dev/visual 亦无单测）。新增文件全 <500 行（最大 214）、无 `any`、无空 catch、无硬编码颜色。
 - **后续**：旧 `apps/server/src/app/admin/{fallback-preview,design-tokens}` 可在 cutover（CHG-CUTOVER-EXECUTE）时随 apps/server 一并删除。卡 1 收口 → SEQ-20260608-01 下一可启动卡 = 卡 2 CHG-CUTOVER-BANNER-OPS-VERIFY。
 - **执行模型**：claude-opus-4-8（主循环续用；卡建议 sonnet，本会话续 opus 并据实记录）；**子代理**：无（纯 UI port + 内部组件重写，无新共享 API 契约/schema/ADR → 不触发强制 Opus）。
+
+## [CHG-CUTOVER-BANNER-OPS-VERIFY] banner 收编运营等价确认 #PARITY-BANNER-01（SEQ-20260608-01 卡 2）
+
+- **背景**：cutover 删 `apps/server` 前，确认 banner 收编（ADR-181/182：`/admin/banners` → 收编进 `/admin/home`）后 server-next 是否提供原 banner「时间窗（生效区间）+ 显示顺序拖拽」运营等价能力。
+- **核对结论（代码 + 测试双佐证）**：**完全等价 ✅，无缺口，不登记 home 增强卡，非 cutover 阻塞项**。
+  - **时间窗**：`BannerDrawer.tsx` `activeFrom`（生效时间）+ `activeTo`（失效时间）datetime-local → `CreateBannerInput.activeFrom/activeTo`；注释明确"字段集对齐 /admin/banners CreateBannerSchema"。
+  - **显示顺序拖拽**：`BannerOpsSection.tsx` `DndContext`+`SortableContext`+`handleDragEnd` → `reorderBanners([{id,sortOrder}])`（PATCH /admin/banners/reorder）。
+  - 全 CRUD（创建注入末尾 sortOrder / 编辑 / 删除确认 Modal）+ 启停齐备；**消费既有 /admin/banners 6 端点零新端点**（同后端）；ADR-181 D-181-1.3 定其为唯一推荐运营入口；较旧页**增强**（BannerImageGuard / 多语言 title / 品牌作用域）。
+  - **测试佐证**：`tests/unit/components/server-next/admin/home/BannerOpsSection.test.tsx` + `tests/unit/server-next/banners-client.test.ts` + e2e `tests/e2e/admin/home/home-ops.spec.ts`。
+- **改动**（docs-only）：
+  - `docs/audit/admin-cutover-parity-2026-06-08.md`：§2 #PARITY-BANNER-01 勾选 [x] + 完整证据；§4 前置完成度小结刷新（QA 迁移 + banner 确认 ⏳→✅，裁定 4 项达成 3 项余物理 cutover）。
+  - `docs/server_next_plan_20260427.md`：§6 M-SN-7 启动准入 QA 迁移 + banner 确认 ⏳→✅（**准入清单完成状态维护，非 plan 内容/里程碑/决策修订** → 不触发 §0 SHOULD-4-a 版本修订协议，v2.7 不变、无 Plan-Revision trailer）。
+- **门禁**：test:changed docs-only SKIP（ADR-180）EXIT=0 / verify:docs-format 零新增失败 / typecheck·lint·verify:adr-contracts N/A（纯文档无代码·端点·schema 改动）。
+- **结论**：**cutover 4 项启动准入全部满足**（parity ✅ / v1 E2E ✅ / QA 迁移 ✅ / banner 确认 ✅）→ CHG-CUTOVER-EXECUTE（🔴 高风险物理 cutover：nginx 切流 + 删 apps/server + 改名 apps/admin）解锁，待人工 final sign-off 触发，独立门禁不自动推进。
+- **执行模型**：claude-opus-4-8（主循环续用；卡建议 sonnet）；**子代理**：无（核对 + 落档，无代码/契约改动）。

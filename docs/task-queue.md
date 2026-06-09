@@ -1597,9 +1597,9 @@
 
 ## [SEQ-20260608-01] 旧后台 apps/server 退役执行序列（cutover 收尾）
 
-- **状态**：🔄 进行中（卡 1 ✅ 已完成；卡 2 可启动；cutover 执行卡须独立门禁，待前置满足后人工触发）
+- **状态**：🔄 进行中（卡 1 ✅ + 卡 2 ✅ 已完成 → cutover **4 项启动准入全部满足**；卡 3 物理 cutover 须独立门禁 + 人工 final sign-off 触发；卡 4 待 cutover 后）
 - **创建时间**：2026-06-08 16:30
-- **最后更新时间**：2026-06-08 18:40
+- **最后更新时间**：2026-06-08 19:05
 - **source_of_truth**：`docs/server_next_plan_20260427.md` §6 M-SN-7（CUTOVER 执行门禁版，v2.7）
 - **背景**：功能重现核对（`docs/audit/admin-cutover-parity-2026-06-08.md`）确认旧后台 26 条逻辑路由（28 物理 page.tsx）业务功能 100% 重现/收编/拆分，无业务缺口阻塞退役；v1 E2E 已降冒烟（SEQ-20260606-01）。剩余三项收尾工作收口本序列。
 - **依赖**：CHG-CUTOVER-PLAN-REFRESH ✅（plan v2.7 + 审计文档落地）。
@@ -1612,10 +1612,11 @@
    - 建议模型：sonnet。
    - **完成备注**：新增 10 文件（`dev/fallback-preview/page.tsx` + `dev/design-tokens/page.tsx` + `_components/{DesignTokensView,TokenTable,TokenEditor,DiffPanel,LivePreviewFrame,InheritanceBadge}.tsx` + `_components/{_paths,_diff}.ts`），零改动既有文件、apps/server 未触碰。`/admin/design-tokens/*` API 在 apps/api 共享后端经 `apiClient` 调用，无需迁后端。**关键现实**：server-next 不启用 Tailwind（全仓内联 `React.CSSProperties`）→ 6 个 `.tsx` 由 Tailwind 类转内联样式；`TokenTable` 重写为原生可选品牌列表（去冻结 `ModernDataTable`，守 CLAUDE.md server-next 边界）；`_paths`/`_diff` 纯函数逐字搬（原无单测，无覆盖丢失）。CSS token 全部经 `@resovo/design-tokens/css` 解析（逐个核验）；两页加 `NODE_ENV==='production'→notFound()` 守卫（dev/visual 范式）+ typed `Metadata`（主流约定）。门禁：typecheck 8 workspace ✅ / lint 5/5 零新增告警 ✅ / test:changed 10 非文档改动无关联测试 EXIT=0。执行模型 claude-opus-4-8（主循环续用）；子代理：无。
 
-2. **CHG-CUTOVER-BANNER-OPS-VERIFY** — banner 收编运营等价确认（状态：📋 待启动）
+2. **CHG-CUTOVER-BANNER-OPS-VERIFY** — banner 收编运营等价确认（状态：✅ 已完成 2026-06-08）
    - 范围：对照 ADR-181/182，确认 `/admin/home` 是否提供原 banner 的"时间窗（生效区间）+ 显示顺序拖拽"运营等价能力（#PARITY-BANNER-01）。
    - 完成标准：等价能力确认通过；若有缺口登记为 home 增强卡（非 cutover 阻塞项）。
    - 建议模型：sonnet。
+   - **完成备注**：**完全等价 ✅，无缺口，不登记增强卡**。时间窗 = `BannerDrawer` activeFrom/activeTo（对齐旧 CreateBannerSchema）；拖拽排序 = `BannerOpsSection` DndContext+`reorderBanners`（PATCH /admin/banners/reorder）；全 CRUD/启停/删除齐备，消费既有 /admin/banners 6 端点零新端点（同后端），ADR-181 D-181-1.3 定为唯一推荐运营入口，且增强（BannerImageGuard/多语言/品牌作用域）。测试佐证 `BannerOpsSection.test.tsx`/`banners-client.test.ts`/e2e `home-ops.spec.ts`。落档：审计文档 §2 #PARITY-BANNER-01 勾选 + §4 banner 确认 ⏳→✅；plan §6 M-SN-7 启动准入 banner 确认 ⏳→✅。docs-only。执行模型 claude-opus-4-8；子代理：无。
 
 3. **CHG-CUTOVER-EXECUTE** — 物理 cutover（🔴 高风险不可逆 · 独立门禁 · 待前置满足 + 人工触发）
    - **启动准入（全部满足）**：parity ✅（审计文档）+ v1 E2E 降冒烟 ✅（SEQ-20260606-01）+ 卡 1 QA 工具迁移 ✅ + 卡 2 banner 运营确认 ✅。

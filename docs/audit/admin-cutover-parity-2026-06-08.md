@@ -59,7 +59,12 @@
 
 `banners` 的 CRUD/详情编辑/时间窗/拖拽排序属业务功能。ADR-181 D-181-1 已裁定：`home_modules.slot='banner'` 两段式冻结退役，`home_banners` 维持前台 Hero 唯一真源；ADR-182 提供 `/admin/home/*` 聚合门面 7 端点。即 banner 是**有意收编进 `/admin/home`**，非遗漏。
 
-- [ ] **#PARITY-BANNER-01** cutover 前确认：`/admin/home` 是否提供原 banner 的"时间窗（生效区间）+ 显示顺序拖拽"运营等价能力；若有缺口，登记为 home 增强卡而非 cutover 阻塞项（对照 ADR-181 §时间窗不 rename + 聚合 DTO 统一）。
+- [x] **#PARITY-BANNER-01** ✅ **完全等价确认（CHG-CUTOVER-BANNER-OPS-VERIFY，2026-06-08）**：server-next `/admin/home` `BannerOpsSection` 提供原 banner 全部运营能力——
+  - **时间窗（生效区间）**：`BannerDrawer.tsx` `activeFrom`（生效时间）+ `activeTo`（失效时间）datetime-local，映射 `CreateBannerInput.activeFrom/activeTo`；注释明确"字段集对齐 /admin/banners CreateBannerSchema"。
+  - **显示顺序拖拽**：`DndContext`+`SortableContext`+`handleDragEnd` → `reorderBanners([{id,sortOrder}])`（PATCH /admin/banners/reorder）。
+  - 全 CRUD（创建注入末尾 sortOrder / 编辑 / 删除确认 Modal）+ 启停齐备；**消费既有 /admin/banners 6 端点零新端点**（同后端）；ADR-181 D-181-1.3 定其为唯一推荐运营入口；较旧页**增强**（BannerImageGuard 图片守卫 / 多语言 title / 品牌作用域）。
+  - **测试佐证**：`tests/unit/components/server-next/admin/home/BannerOpsSection.test.tsx` + `tests/unit/server-next/banners-client.test.ts` + e2e `tests/e2e/admin/home/home-ops.spec.ts`。
+  - **裁定**：无缺口，**不登记 home 增强卡**，非 cutover 阻塞项。
 
 ---
 
@@ -81,8 +86,8 @@
 |---|---|---|
 | 业务功能 parity | ✅ 达成 | 本文件 §1 |
 | v1 E2E 降冒烟/退役 | ✅ 完成 | SEQ-20260606-01（admin 域 76/76 EXIT=0，2026-06-06） |
-| QA 工具迁移 dev/ | ⏳ 待执行 | §3（退役序列子卡） |
-| banner 收编运营确认 | ⏳ 待确认 | §2 #PARITY-BANNER-01 |
-| nginx 切流 + 删 apps/server + 改名 apps/admin | ⏳ 待执行（独立门禁） | plan §4.2 / ADR-101 |
+| QA 工具迁移 dev/ | ✅ 完成 | CHG-CUTOVER-QA-DEV-MIGRATE（2026-06-08，server-next `dev/{fallback-preview,design-tokens}`） |
+| banner 收编运营确认 | ✅ 完成 | CHG-CUTOVER-BANNER-OPS-VERIFY（2026-06-08，§2 #PARITY-BANNER-01 完全等价） |
+| nginx 切流 + 删 apps/server + 改名 apps/admin | ⏳ 待执行（独立门禁 + 人工 sign-off） | plan §4.2 / ADR-101 / CHG-CUTOVER-EXECUTE |
 
-**裁定**：旧后台无业务功能缺口阻塞退役；剩余为 QA 工具迁移、banner 运营确认与物理 cutover 三项收尾工作，均登记进退役执行序列。
+**裁定**：旧后台无业务功能缺口阻塞退役；4 项前置已达成 **3 项**（parity / v1 E2E / QA 迁移 / banner 确认），仅余物理 cutover（nginx 切流 + 删 apps/server + 改名）一项独立门禁动作，待人工 final sign-off 触发（CHG-CUTOVER-EXECUTE）。
