@@ -1,11 +1,11 @@
 /**
  * admin/notifications.ts — GET /admin/notifications（ADR-147）
  *
- * ADR-147 §4 端点契约：
+ * ADR-147 §4 端点契约（NTLG-P1-c-C：数据源迁 notifications 新表 + meta.readAt 加性）：
  *   GET /admin/notifications?limit=50&since=ISO8601
  *   preHandler: [authenticate, requireRole(['admin', 'moderator'])]
- *   response: { data: AdminNotificationItem[], meta: { total, limit, since } }
- *   错误码：401 / 403（零新增）
+ *   response: { data: AdminNotificationItem[], meta: { total, limit, since, readAt } }
+ *   错误码：401 / 403 / 422（零新增）
  */
 
 import type { FastifyInstance } from 'fastify'
@@ -42,13 +42,20 @@ export async function adminNotificationRoutes(fastify: FastifyInstance) {
       parsed.data.since ??
       new Date(Date.now() - DEFAULT_WINDOW_DAYS * 24 * 3600_000).toISOString()
 
-    const result = await svc.list({ limit, since })
+    const result = await svc.list({
+      limit,
+      since,
+      userId: request.user!.userId,
+      role: request.user!.role,
+    })
     return reply.send({
       data: result.items,
       meta: {
         total: result.total,
         limit,
         since,
+        // NTLG-P1-c-C：已读高水位线（cursor 单一源）；前端据此对 general+background 合并项统一计算 read。
+        readAt: result.readAt,
       },
     })
   })

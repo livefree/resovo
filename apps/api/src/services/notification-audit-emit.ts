@@ -10,9 +10,14 @@
  * parity 约束：title/level/href 与 NotificationService.list 同一组真源 →
  *   P1-c-C 把 list 切到读 notifications 新表后，通知样貌逐字一致（避免切换漂移）。
  *
- * 映射真源历史归属：原 ADR-147 落在 NotificationService，本卡抽出独立模块——
- *   C 卡将重写 NotificationService.list 并下线 audit 派生，解耦后删派生逻辑不误伤 emit 侧映射。
- *   NotificationService 保留 re-export NOTIFICATION_ACTION_WHITELIST 维持既有 import 兼容。
+ * 映射真源历史归属：原 ADR-147 落在 NotificationService，NTLG-P1-c-B-2 抽出独立模块；
+ *   NTLG-P1-c-C 重写 NotificationService.list 直读 notifications 新表并下线 audit 派生 →
+ *   原 audit 过滤用的 NOTIFICATION_ACTION_WHITELIST（Set）零运行时消费方，已删除；
+ *   NOTIFICATION_ACTION_TYPES（元组）保留——emit 侧穷尽映射 + 8 类白名单语义真源。
+ *
+ * sourceKind 取值集（读写双侧契约）：{ 'admin_action'（本模块 emit 写 + NotificationService.list allowlist 读）,
+ *   'crawler'（crawlerWorker.notifications.ts emit 写，list 不读、经 background lane 入抽屉）}。
+ *   ADMIN_ACTION_SOURCE_KIND 为该契约值单一真源，读写两侧复用避免字面量漂移。
  */
 
 import type { AdminAuditActionType } from '@resovo/types'
@@ -37,9 +42,6 @@ export const NOTIFICATION_ACTION_TYPES = [
 
 /** 白名单事件类型 union（写入点 ctx.actionType 静态约束，恒产出通知无 null 分支） */
 export type NotificationActionType = (typeof NOTIFICATION_ACTION_TYPES)[number]
-
-/** 白名单 ReadonlySet（NotificationService.list 派生过滤 + BackgroundEventService 互斥引用复用） */
-export const NOTIFICATION_ACTION_WHITELIST: ReadonlySet<AdminAuditActionType> = new Set(NOTIFICATION_ACTION_TYPES)
 
 /** title 模板映射（Record 穷尽——比现 list `?? actionType` 回落更强，保证全 8 类有标题） */
 export const NOTIFICATION_TITLE_MAP: Record<NotificationActionType, string> = {
@@ -75,8 +77,13 @@ export const NOTIFICATION_HREF_MAP: ReadonlyMap<NotificationActionType, string> 
 /**
  * sourceKind 象限（ADR-193 D-193-2 「产出象限」）：admin 后台主动操作。
  * 与 crawler worker 的 'crawler'（NTLG-P1-c-B-1）并列；象限取值集 { crawler, admin_action }。
+ *
+ * 读写双侧契约值单一真源（NTLG-P1-c-C）：emit 写侧（本模块）+ NotificationService.list allowlist 读侧复用。
+ * 隐式不变量显式化：本值恒由 8 类白名单 actionType 产出（buildAuditNotificationEmit 入参
+ * `actionType: NotificationActionType` 静态约束只允许 8 类）→ list 按 sourceKind='admin_action' 过滤
+ * 与旧 list 按 8 类 actionType 过滤等价（零漂移 parity 前提）。
  */
-const ADMIN_ACTION_SOURCE_KIND = 'admin_action'
+export const ADMIN_ACTION_SOURCE_KIND = 'admin_action'
 
 export interface AuditNotificationContext {
   /** 白名单 8 类之一（写入点字面量，静态保证恒产出通知） */

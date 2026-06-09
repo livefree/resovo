@@ -15,8 +15,8 @@
 import { describe, it, expect } from 'vitest'
 import {
   buildAuditNotificationEmit,
+  ADMIN_ACTION_SOURCE_KIND,
   NOTIFICATION_ACTION_TYPES,
-  NOTIFICATION_ACTION_WHITELIST,
   NOTIFICATION_TITLE_MAP,
   NOTIFICATION_LEVEL_MAP,
   NOTIFICATION_HREF_MAP,
@@ -24,9 +24,12 @@ import {
 } from '@/api/services/notification-audit-emit'
 
 describe('buildAuditNotificationEmit — 全 8 类映射', () => {
-  it('#1 whitelist 与 NOTIFICATION_ACTION_TYPES 元组同集（8 类）', () => {
+  it('#1 NOTIFICATION_ACTION_TYPES 8 类无重复（防漏注册；NTLG-P1-c-C 删 WHITELIST Set 后唯一真源）', () => {
     expect(NOTIFICATION_ACTION_TYPES).toHaveLength(8)
-    expect([...NOTIFICATION_ACTION_WHITELIST].sort()).toEqual([...NOTIFICATION_ACTION_TYPES].sort())
+    expect(new Set(NOTIFICATION_ACTION_TYPES).size).toBe(8)
+    expect(NOTIFICATION_ACTION_TYPES).toContain('system.webhook_send_failed')
+    // sourceKind 读写双侧契约值导出（list allowlist 复用）
+    expect(ADMIN_ACTION_SOURCE_KIND).toBe('admin_action')
   })
 
   it('#2 每类恒产出 type=actionType / sourceKind=admin_action / scope=broadcast', () => {

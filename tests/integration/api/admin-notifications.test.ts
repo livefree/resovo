@@ -16,8 +16,10 @@ import { createIntegrationPool } from '../../helpers/integration-pg'
 import {
   insertNotification,
   listNotifications,
+  countNotifications,
   countUnreadNotifications,
   getReadCursor,
+  getEffectiveReadCursor,
   upsertReadCursor,
 } from '../../../apps/api/src/db/queries/notifications'
 
@@ -63,6 +65,21 @@ describe('notifications 读路径 SQL 集成（schema 对齐 / 不写库）', ()
   it('getReadCursor 不存在 user 返 null', async () => {
     const cursor = await getReadCursor(db, NONEXISTENT_USER)
     expect(cursor).toBeNull()
+  })
+
+  it('countNotifications 跑通（与 listNotifications 同 WHERE 口径，NTLG-P1-c-C）', async () => {
+    const n = await countNotifications(db, { scopes: ['__no_such_scope__'] })
+    expect(n).toBe(0)
+  })
+
+  it('listNotifications sourceKinds 过滤 SQL 跑通（admin_action allowlist）', async () => {
+    const rows = await listNotifications(db, { scopes: ['__no_such_scope__'], limit: 5, sourceKinds: ['admin_action'] })
+    expect(rows).toEqual([])
+  })
+
+  it('getEffectiveReadCursor 不存在 user 返 null（无 users 行）', async () => {
+    const readAt = await getEffectiveReadCursor(db, NONEXISTENT_USER)
+    expect(readAt).toBeNull()
   })
 })
 
@@ -131,6 +148,42 @@ describe('notifications 写路径 round-trip（BEGIN/ROLLBACK 零污染）', () 
       `SELECT COUNT(*)::text AS c FROM notification_read_cursor WHERE user_id = $1`, [userId],
     )
     expect(rowCount.rows[0]!.c).toBe('1') // 仅一行，无写放大（D-192-3）
+  })
+
+  it('sourceKind allowlist 过滤：admin_action 命中 / crawler 排除（NTLG-P1-c-C 防重复）', async () => {
+    const scope = 'role:p1cc_sourcekind_test'
+    const adminNotif = await insertNotification(client, {
+      type: 'video.merge', level: 'info', title: 'admin 动作', sourceKind: 'admin_action', scope,
+      dedupKey: `test:p1cc:admin:${Date.now()}`,
+    })
+    await insertNotification(client, {
+      type: 'crawler.run.completed', level: 'info', title: 'crawler 完成', sourceKind: 'crawler', scope,
+      dedupKey: `test:p1cc:crawler:${Date.now()}`,
+    })
+    const rows = await listNotifications(client, { scopes: [scope], limit: 50, sourceKinds: ['admin_action'] })
+    expect(rows.map((r) => r.id)).toContain(adminNotif.id)
+    expect(rows.every((r) => r.sourceKind === 'admin_action')).toBe(true)
+    // countNotifications 同口径
+    const cnt = await countNotifications(client, { scopes: [scope], sourceKinds: ['admin_action'] })
+    expect(cnt).toBe(rows.length)
+  })
+
+  it('getEffectiveReadCursor：无 cursor 回落 users.created_at / upsert 后取 cursor.read_at（ISO，D-192-5 同口径）', async () => {
+    // 无 cursor 行（前序 cursor 测试与本测试共享 client/userId 时，确保独立 user 隔离）
+    const fresh = await client.query<{ id: string }>(
+      `INSERT INTO users (username, email, password_hash, role, created_at)
+       VALUES ($1, $2, 'x', 'admin', '2026-01-01T00:00:00Z')
+       RETURNING id::text AS "id"`,
+      [`p1cc_eff_${Date.now()}`, `p1cc_eff_${Date.now()}@test.local`],
+    )
+    const freshId = fresh.rows[0]!.id
+    const baseline = await getEffectiveReadCursor(client, freshId)
+    expect(baseline).toBe(new Date('2026-01-01T00:00:00Z').toISOString())
+    // upsert cursor → 取 cursor.read_at
+    const cursorAt = new Date('2026-06-01T12:00:00Z').toISOString()
+    await upsertReadCursor(client, freshId, cursorAt)
+    const afterUpsert = await getEffectiveReadCursor(client, freshId)
+    expect(afterUpsert).toBe(cursorAt)
   })
 
   it('未读计数 cursor 高水位口径：cursor 之后的通知计未读、之前不计（D-192-5）', async () => {

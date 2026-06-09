@@ -5,8 +5,8 @@
  *
  * 覆盖（10 用例）：
  *   #1 useAdminNotifications mount fetch → general items 填充 + category='general'
- *   #2 lastViewedAt 计算 read 状态（item.createdAt <= lastViewedAt → true）
- *   #3 markAllRead → 写 localStorage + items.read 重算
+ *   #2 服务端 meta.readAt 计算 read 状态（item.createdAt <= readAt → true；NTLG-P1-c-C 替 localStorage）
+ *   #3 markAllRead → POST /admin/notifications/read + 乐观 readAt + reload 重算
  *   #4 markOneRead → 单条 read=true（不影响其他）
  *   #5 useAdminTasks degraded=true → 暴露 degraded 状态
  *   ── ADR-155 D-155-2 EP-2 新增 ──
@@ -20,7 +20,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { renderHook, act, waitFor } from '@testing-library/react'
 
 vi.mock('../../../apps/server-next/src/lib/api-client', () => ({
-  apiClient: { get: vi.fn() },
+  apiClient: { get: vi.fn(), post: vi.fn() },
   ApiClientError: class ApiClientError extends Error {
     constructor(public status: number, message: string) {
       super(message)
@@ -35,6 +35,7 @@ import {
 } from '../../../apps/server-next/src/lib/admin-shell-notifications'
 
 const mockGet = apiClientMod.apiClient.get as ReturnType<typeof vi.fn>
+const mockPost = apiClientMod.apiClient.post as ReturnType<typeof vi.fn>
 
 /** ADR-155 D-155-2 EP-2：两端点 mock router 按 URL 路由 */
 function setupRouterMock(handlers: {
@@ -45,7 +46,7 @@ function setupRouterMock(handlers: {
   mockGet.mockImplementation((url: string) => {
     if (url === '/admin/notifications') {
       return Promise.resolve(
-        handlers.notifications ?? { data: [], meta: { total: 0, limit: 50, since: '' } },
+        handlers.notifications ?? { data: [], meta: { total: 0, limit: 50, since: '', readAt: '' } },
       )
     }
     if (url === '/admin/system/jobs') {
@@ -88,40 +89,52 @@ describe('useAdminNotifications', () => {
     })
   })
 
-  it('#2 lastViewedAt 计算 read 状态（已读判定）', async () => {
-    window.localStorage.setItem('admin_notification_lastViewedAt', '2026-05-21T00:00:00.000Z')
+  it('#2 服务端 meta.readAt 计算 read 状态（已读判定；替 localStorage）', async () => {
     setupRouterMock({
       notifications: {
         data: [
           { id: 'old', title: '旧通知', level: 'info', createdAt: '2026-05-20T10:00:00Z', read: false },
           { id: 'new', title: '新通知', level: 'info', createdAt: '2026-05-22T10:00:00Z', read: false },
         ],
-        meta: { total: 2, limit: 50, since: '2026-05-13T00:00:00Z' },
+        meta: { total: 2, limit: 50, since: '2026-05-13T00:00:00Z', readAt: '2026-05-21T00:00:00.000Z' },
       },
     })
     const { result } = renderHook(() => useAdminNotifications())
     await waitFor(() => expect(result.current.items).toHaveLength(2))
     const oldItem = result.current.items.find((i) => i.id === 'old')
     const newItem = result.current.items.find((i) => i.id === 'new')
-    expect(oldItem?.read).toBe(true)   // createdAt < lastViewedAt
-    expect(newItem?.read).toBe(false)  // createdAt > lastViewedAt
+    expect(oldItem?.read).toBe(true)   // createdAt <= readAt
+    expect(newItem?.read).toBe(false)  // createdAt > readAt
   })
 
-  it('#3 markAllRead → 写 localStorage + items 全部 read=true', async () => {
-    setupRouterMock({
-      notifications: {
-        data: [
-          { id: 'n-1', title: 'A', level: 'info', createdAt: '2026-05-20T10:00:00Z', read: false },
-        ],
-        meta: { total: 1, limit: 50, since: '2026-05-13T00:00:00Z' },
-      },
+  it('#3 markAllRead → POST /admin/notifications/read + 乐观 readAt + reload 重算（替 localStorage）', async () => {
+    // 服务端 cursor 持久：初始 readAt='' 全未读，POST 后服务端 readAt 推进 → reload 后已读
+    let serverReadAt = ''
+    mockGet.mockImplementation((url: string) => {
+      if (url === '/admin/notifications') {
+        return Promise.resolve({
+          data: [{ id: 'n-1', title: 'A', level: 'info', createdAt: '2026-05-20T10:00:00Z', read: false }],
+          meta: { total: 1, limit: 50, since: '2026-05-13T00:00:00Z', readAt: serverReadAt },
+        })
+      }
+      if (url === '/admin/system/background-events') {
+        return Promise.resolve({ data: [], meta: { total: 0, limit: 20, windowHours: 24, generatedAt: '' } })
+      }
+      return Promise.reject(new Error(`unexpected ${url}`))
+    })
+    mockPost.mockImplementation((url: string) => {
+      if (url === '/admin/notifications/read') {
+        serverReadAt = '2026-05-25T00:00:00.000Z'
+        return Promise.resolve({ data: { readAt: serverReadAt } })
+      }
+      return Promise.reject(new Error(`unexpected post ${url}`))
     })
     const { result } = renderHook(() => useAdminNotifications())
     await waitFor(() => expect(result.current.items).toHaveLength(1))
     expect(result.current.items[0]?.read).toBe(false)
-    act(() => result.current.markAllRead())
-    expect(window.localStorage.getItem('admin_notification_lastViewedAt')).toBeTruthy()
-    expect(result.current.items[0]?.read).toBe(true)
+    await act(async () => { result.current.markAllRead() })
+    expect(mockPost).toHaveBeenCalledWith('/admin/notifications/read', {})
+    await waitFor(() => expect(result.current.items[0]?.read).toBe(true))
   })
 
   it('#4 markOneRead → 单条 read=true（其他不变）', async () => {
@@ -230,12 +243,13 @@ describe('useAdminNotifications', () => {
     expect(result.current.items.find((i) => i.id === 'bg-bg1')?.read).toBe(true)
   })
 
-  it('#G-EP2-3b lastViewedAt 对 background finished 自动 mark-read（read 计算覆盖 bg items）', async () => {
-    window.localStorage.setItem('admin_notification_lastViewedAt', '2026-05-23T00:00:00.000Z')
+  it('#G-EP2-3b 服务端 readAt 对 background finished 自动 mark-read（read 计算覆盖 bg items）', async () => {
     setupRouterMock({
+      // readAt 来自 general list meta（即使 general data 空，readAt 仍驱动 background read 计算）
+      notifications: { data: [], meta: { total: 0, limit: 50, since: '', readAt: '2026-05-23T00:00:00.000Z' } },
       background: {
         data: [
-          // finished.finishedAt 早于 lastViewedAt → 应 read=true
+          // finished.finishedAt 早于 readAt → 应 read=true
           {
             lane: 'finished', id: 'old-f', kind: 'crawler_run', status: 'success', level: 'info',
             title: '已完成的旧批次', finishedAt: '2026-05-22T10:00:00Z', runId: 'r-1', href: '/x',
@@ -253,8 +267,8 @@ describe('useAdminNotifications', () => {
     await waitFor(() => expect(result.current.items.length).toBe(2))
     const finishedItem = result.current.items.find((i) => i.id === 'bg-old-f')
     const upcomingItem = result.current.items.find((i) => i.id === 'bg-future-u')
-    expect(finishedItem?.read).toBe(true)  // finishedAt < lastViewedAt
-    expect(upcomingItem?.read).toBe(false) // scheduledAt > lastViewedAt (未来事件永不自动已读)
+    expect(finishedItem?.read).toBe(true)  // finishedAt <= readAt
+    expect(upcomingItem?.read).toBe(false) // scheduledAt > readAt (未来事件永不自动已读)
   })
 
   it('#10 background-events 端点失败 → general items 仍正常显示（Promise.allSettled 容错）', async () => {

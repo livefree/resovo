@@ -6,7 +6,7 @@
 
 ## 当前任务（单任务工作台：同时仅 1 个 🔄 进行中；完成即删卡，历史见 docs/changelog.md）
 
-_（当前无进行中任务。取下一个前先查 `docs/task-queue.md` 是否有 🚨 BLOCKER。**SEQ-20260609-01 进展**：P0 全部 ✅ + P1 地基 ADR（192〔+AMENDMENT〕/193）✅ + **NTLG-P1-a 整卡 ✅** + **NTLG-P1-b ✅** + **NTLG-P1-c-A ✅**（emit/Reporter 地基）+ **NTLG-P1-c-B 整卡 ✅**（-B1 crawler worker digest + -B2 8 类事件 emit 双写全量接入）。**下一可取：NTLG-P1-c-C**（list 迁新表 + 前端 markAllRead 接线〔替 localStorage〕+ 下线 audit 派生旧路径〔删 NOTIFICATION_ACTION_WHITELIST 派生 + list 直读 notifications 新表列〕；破坏性切换、前提 -B 双写已验证 ✅；category/read 投影由本卡处置；依赖 P1-c-B ✅，建议 sonnet）→ 收口 P1。后续 P2（NTLG-ADR-P2 起 ADR-194/195 → P2-a/b/c/d）。SEQ-20260608-01 cutover 剩：卡 4 回滚窗 🔄 ~2026-06-15、卡 5 改名待排期。）_
+_（当前无进行中任务。取下一个前先查 `docs/task-queue.md` 是否有 🚨 BLOCKER。**SEQ-20260609-01 进展**：**P0 全部 ✅ + P1 全部 ✅**（P1 地基 ADR-192〔+AMENDMENT〕/193 + NTLG-P1-a 通知存储+端点 + NTLG-P1-b TaskResultDigest + **NTLG-P1-c 整卡**〔-A emit/Reporter 地基 + -B1 worker digest + -B2 8 类事件双写 + -C list 迁新表收口〕——解耦双写全链路完成、audit 派生旧路径已下线、已读统一服务端 cursor 单一源）。**下一可取：NTLG-ADR-P2**（起 ADR-194 task_runs 统一抽象 + ADR-195 通知 TTL/dedup/scope；建议 opus）→ 解锁 P2-a/b/c/d 增强/自动化终态。SEQ-20260608-01 cutover 剩：卡 4 回滚窗 🔄 ~2026-06-15、卡 5 改名待排期。）_
 
 ---
 

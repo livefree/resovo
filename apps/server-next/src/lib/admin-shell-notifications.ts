@@ -15,7 +15,9 @@
  *     合并 + 按 startedAt DESC 排序
  *
  * 推送模型（ADR-147 D-147-2）：60s 间隔前端 polling
- * read 状态（ADR-147 D-147-4 方案 A）：localStorage lastViewedAt 时间戳
+ * read 状态（NTLG-P1-c-C / D-192-AMD-4）：服务端 cursor 单一已读源——list meta.readAt 高水位线
+ *   （COALESCE(cursor, users.created_at)），对 general + background 合并项统一计算 read（替 localStorage）；
+ *   markAllRead 改调 POST /admin/notifications/read（跨设备持久），markOneRead 仍客户端 ephemeral（逐行 reads deferred P2）
  *
  * 全局 invalidate（ADR-152 Y-152-4 / EP-2 沿用）：useAdminNotifications/Tasks 在 mount 时
  *   注册 reload 到 globalMutateRegistry；CrawlerClient invalidateBackgroundEvents() 调所有 reload。
@@ -28,12 +30,17 @@ import type { AdminBackgroundEvent } from '@resovo/types'
 import { apiClient, ApiClientError } from '@/lib/api-client'
 import { globalMutateRegistry } from '@/lib/admin-shell-background-events'
 
-const LAST_VIEWED_STORAGE_KEY = 'admin_notification_lastViewedAt'
 const POLL_INTERVAL_MS = 60_000
 
 interface NotificationListResponse {
   data: NotificationItem[]
-  meta: { total: number; limit: number; since: string }
+  // NTLG-P1-c-C：meta.readAt = 服务端已读高水位线（cursor 单一源）；缺省（旧 mock / user 防御）→ undefined，前端 ?? '' 兜底
+  meta: { total: number; limit: number; since: string; readAt?: string | null }
+}
+
+/** POST /admin/notifications/read 响应（markAllRead 返回落库高水位线） */
+interface MarkReadResponse {
+  data: { readAt: string }
 }
 
 interface JobsListResponse {
@@ -55,24 +62,6 @@ interface BackgroundEventsResponse {
     windowHours: number
     generatedAt: string
     degraded?: boolean
-  }
-}
-
-function readStoredLastViewedAt(): string {
-  if (typeof window === 'undefined') return ''
-  try {
-    return window.localStorage.getItem(LAST_VIEWED_STORAGE_KEY) ?? ''
-  } catch {
-    return ''
-  }
-}
-
-function writeStoredLastViewedAt(value: string): void {
-  if (typeof window === 'undefined') return
-  try {
-    window.localStorage.setItem(LAST_VIEWED_STORAGE_KEY, value)
-  } catch {
-    // localStorage 不可用（隐私模式）静默
   }
 }
 
@@ -146,11 +135,12 @@ export interface UseAdminNotificationsResult {
   readonly reload: () => Promise<void>
 }
 
-/** ADR-147 EP-B + ADR-155 D-155-2 EP-2：admin shell 通知 polling + localStorage read + background 合并 */
+/** ADR-147 EP-B + ADR-155 D-155-2 EP-2 + NTLG-P1-c-C：admin shell 通知 polling + 服务端 cursor read + background 合并 */
 export function useAdminNotifications(): UseAdminNotificationsResult {
   const [generalItems, setGeneralItems] = useState<readonly NotificationItem[]>([])
   const [backgroundItems, setBackgroundItems] = useState<readonly NotificationItem[]>([])
-  const [lastViewedAt, setLastViewedAt] = useState<string>(readStoredLastViewedAt)
+  // NTLG-P1-c-C：已读高水位线来自服务端 list meta.readAt（cursor 单一源），替 localStorage lastViewedAt
+  const [readAt, setReadAt] = useState<string>('')
   const [readIds, setReadIds] = useState<ReadonlySet<string>>(() => new Set())
 
   const reload = useCallback(async () => {
@@ -160,6 +150,7 @@ export function useAdminNotifications(): UseAdminNotificationsResult {
     ])
     if (generalResult.status === 'fulfilled') {
       setGeneralItems(generalResult.value.data.map((item) => ({ ...item, category: 'general' as const })))
+      setReadAt(generalResult.value.meta.readAt ?? '')
     } else if (
       !(generalResult.reason instanceof ApiClientError && generalResult.reason.status === 401)
     ) {
@@ -195,20 +186,30 @@ export function useAdminNotifications(): UseAdminNotificationsResult {
 
   const items = useMemo<readonly NotificationItem[]>(() => {
     const merged = [...generalItems, ...backgroundItems]
-    // 按 createdAt DESC 排序
+    // 按 createdAt DESC 排序；read 据服务端 readAt 高水位线对 general+background 统一计算（单一已读源）
     return merged
       .map((item) => ({
         ...item,
-        read: readIds.has(item.id) || (lastViewedAt !== '' && item.createdAt <= lastViewedAt),
+        read: readIds.has(item.id) || (readAt !== '' && item.createdAt <= readAt),
       }))
       .sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0))
-  }, [generalItems, backgroundItems, lastViewedAt, readIds])
+  }, [generalItems, backgroundItems, readAt, readIds])
 
+  // NTLG-P1-c-C：markAllRead 改调 POST /admin/notifications/read（cursor 跨设备持久）。
+  // 乐观即时清点（readAt=now）→ 服务端权威基线对齐 → reload 拉取期间新增项；失败仅 warn 降级（乐观态由下次 reload 校正）。
   const markAllRead = useCallback(() => {
-    const now = new Date().toISOString()
-    setLastViewedAt(now)
-    writeStoredLastViewedAt(now)
-  }, [])
+    setReadAt(new Date().toISOString())
+    void (async () => {
+      try {
+        const resp = await apiClient.post<MarkReadResponse>('/admin/notifications/read', {})
+        setReadAt(resp.data.readAt)
+        await reload()
+      } catch (err) {
+        // eslint-disable-next-line no-console -- 客户端 hook 无 logger / degraded mode 留痕到 devtools
+        console.warn('[useAdminNotifications] markAllRead failed (degraded mode):', err)
+      }
+    })()
+  }, [reload])
 
   const markOneRead = useCallback((id: string) => {
     setReadIds((prev) => {

@@ -27,7 +27,7 @@ import * as systemSettingsQueries from '@/api/db/queries/systemSettings'
 import { computeNextTrigger } from '@/api/lib/crawler-scheduling'
 import { getSchedulerStatus } from '@/api/workers/maintenanceScheduler'
 
-/** HIGH_RISK_AUDIT_WHITELIST — Y-152-3：与 NOTIFICATION_ACTION_WHITELIST 真互斥（仅 crawler.freeze） */
+/** HIGH_RISK_AUDIT_WHITELIST — Y-152-3：与 8 类通知白名单（notification-audit-emit NOTIFICATION_ACTION_TYPES）真互斥（仅 crawler.freeze） */
 const HIGH_RISK_AUDIT_WHITELIST: readonly string[] = ['crawler.freeze'] as const
 
 /** 高危审计 title 模板 */

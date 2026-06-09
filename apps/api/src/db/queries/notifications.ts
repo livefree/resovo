@@ -61,6 +61,19 @@ export interface ListNotificationsParams {
   since?: string
   /** 是否包含已过期通知（默认 false，过滤 expires_at <= NOW()） */
   includeExpired?: boolean
+  /**
+   * 限定 source_kind 集合（WHERE source_kind = ANY）；省略则不限。
+   * NTLG-P1-c-C：drawer general lane 限 ['admin_action'] —— crawler 完成仍经 background-events
+   * finished lane 进抽屉（ADR-155），list 读全表会与之重复；admin_action allowlist 保新 list ≡ 旧 audit 派生 list。
+   */
+  sourceKinds?: string[]
+}
+
+export interface CountNotificationsParams {
+  scopes: string[]
+  since?: string
+  includeExpired?: boolean
+  sourceKinds?: string[]
 }
 
 export interface CountUnreadParams {
@@ -106,20 +119,38 @@ export async function insertNotification(db: Queryable, input: InsertNotificatio
 }
 
 /**
- * 列通知（scope 过滤 + 可选时间窗 + limit，按 created_at DESC）。
- * 命中 idx_notifications_scope_created_at（scope 等值 + created_at 排序）。
- * read 状态不在行内计算——由 service 据 cursor（broadcast/role）/ reads（定向）判定。
+ * 共享 WHERE 构造（listNotifications / countNotifications 同口径，避免谓词漂移）。
+ * 返回 { clause, values }；调用方追加 LIMIT 等尾参时基于 values.length 续编号。
  */
-export async function listNotifications(db: Queryable, params: ListNotificationsParams): Promise<NotificationRow[]> {
+function buildNotificationFilter(params: {
+  scopes: string[]
+  since?: string
+  includeExpired?: boolean
+  sourceKinds?: string[]
+}): { clause: string; values: unknown[] } {
   const conds: string[] = ['scope = ANY($1::text[])']
   const values: unknown[] = [params.scopes]
   if (params.since) {
     values.push(params.since)
     conds.push(`created_at >= $${values.length}::timestamptz`)
   }
+  if (params.sourceKinds) {
+    values.push(params.sourceKinds)
+    conds.push(`source_kind = ANY($${values.length}::text[])`)
+  }
   if (!params.includeExpired) {
     conds.push('(expires_at IS NULL OR expires_at > NOW())')
   }
+  return { clause: conds.join(' AND '), values }
+}
+
+/**
+ * 列通知（scope + 可选 source_kind + 可选时间窗 + limit，按 created_at DESC）。
+ * 命中 idx_notifications_scope_created_at（scope 等值 + created_at 排序）。
+ * read 状态不在行内计算——由 service 据 cursor（broadcast/role）/ reads（定向）判定。
+ */
+export async function listNotifications(db: Queryable, params: ListNotificationsParams): Promise<NotificationRow[]> {
+  const { clause, values } = buildNotificationFilter(params)
   values.push(params.limit)
   const limitIdx = values.length
   const res = await db.query<NotificationRow>(
@@ -137,12 +168,25 @@ export async function listNotifications(db: Queryable, params: ListNotifications
        created_at AS "createdAt",
        expires_at AS "expiresAt"
      FROM notifications
-     WHERE ${conds.join(' AND ')}
+     WHERE ${clause}
      ORDER BY created_at DESC
      LIMIT $${limitIdx}`,
     values,
   )
   return res.rows
+}
+
+/**
+ * 计数匹配通知（与 listNotifications 同 WHERE 口径，无 LIMIT；供 list meta.total 保真）。
+ * 命中 idx_notifications_scope_created_at。
+ */
+export async function countNotifications(db: Queryable, params: CountNotificationsParams): Promise<number> {
+  const { clause, values } = buildNotificationFilter(params)
+  const res = await db.query<{ count: string }>(
+    `SELECT COUNT(*)::text AS "count" FROM notifications WHERE ${clause}`,
+    values,
+  )
+  return Number.parseInt(res.rows[0]?.count ?? '0', 10) || 0
 }
 
 /**
@@ -171,6 +215,24 @@ export async function countUnreadNotifications(db: Queryable, params: CountUnrea
     [params.userId, params.broadcastScopes, params.targetedScope],
   )
   return Number.parseInt(res.rows[0]?.count ?? '0', 10) || 0
+}
+
+/**
+ * 取 user 的「有效已读高水位线」= COALESCE(cursor.read_at, users.created_at)（与 countUnreadNotifications D-192-5 同口径）。
+ * NTLG-P1-c-C list 读路径用：客户端据此基线对 general + background 合并项统一计算 read（替 localStorage 单一已读源）。
+ * cursor 缺省回落加入时间（新管理员不回溯历史，D-192-3）；返 ISO 8601 字符串（PG timestamptz→Date 规整为 ISO）。
+ * user 不存在 → null（防御；本查询仅由已鉴权 admin 路径调用，users 行恒存在）。
+ */
+export async function getEffectiveReadCursor(db: Queryable, userId: string): Promise<string | null> {
+  const res = await db.query<{ readAt: Date | string | null }>(
+    `SELECT COALESCE(c.read_at, u.created_at) AS "readAt"
+       FROM users u
+       LEFT JOIN notification_read_cursor c ON c.user_id = u.id
+      WHERE u.id = $1`,
+    [userId],
+  )
+  const raw = res.rows[0]?.readAt
+  return raw != null ? new Date(raw).toISOString() : null
 }
 
 /** 取 user 的已读高水位线（无 cursor 行返 null，service 据 users.created_at 兜底） */

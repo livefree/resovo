@@ -121,13 +121,16 @@ export interface AdminTaskRetryResponse {
   }
 }
 
-/** GET /admin/notifications 响应信封（ADR-147 §4） */
+/** GET /admin/notifications 响应信封（ADR-147 §4 / NTLG-P1-c-C：meta.readAt 加性，API-only 非镜像） */
 export interface AdminNotificationListResponse {
   data: AdminNotificationItem[]
   meta: {
     total: number
     limit: number
     since: string
+    /** 已读高水位线 COALESCE(cursor.read_at, users.created_at) ISO 8601（D-192-AMD-4 cursor 单一已读源）；
+     *  前端据此对 general + background 合并项统一计算 read（替 localStorage）。user 缺省防御性 null。 */
+    readAt: string | null
   }
 }
 

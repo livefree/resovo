@@ -51,12 +51,18 @@ export async function installAdminShellMocks(page: Page) {
       return
     }
 
-    // GET /admin/notifications — useAdminNotifications（data 必须为数组）
+    // GET /admin/notifications — useAdminNotifications（data 必须为数组；NTLG-P1-c-C：meta.readAt 已读高水位线）
     if (path === '/v1/admin/notifications' && method === 'GET') {
       await route.fulfill(json({
         data: [],
-        meta: { total: 0, limit: 20, since: '1970-01-01T00:00:00.000Z' },
+        meta: { total: 0, limit: 20, since: '1970-01-01T00:00:00.000Z', readAt: '1970-01-01T00:00:00.000Z' },
       }))
+      return
+    }
+
+    // POST /admin/notifications/read — markAllRead（NTLG-P1-c-C：cursor 单一已读源，替 localStorage）
+    if (path === '/v1/admin/notifications/read' && method === 'POST') {
+      await route.fulfill(json({ data: { readAt: new Date().toISOString() } }))
       return
     }
 
