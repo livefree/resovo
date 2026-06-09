@@ -3073,3 +3073,17 @@
 - **共享层沉淀评估**：AdminNavCounts DTO 已落 packages/types（跨 api 产出 + server-next 消费的契约真源），符合沉淀要求；NavCountsService 为单消费方编排，暂不需进一步抽象。
 - **后续**：NTLG-P0-1-B 前端 `useAdminNavCounts` 改消费本端点 + admin-nav 去写死 + 回填 ADR-190 D-190-4 定稿角色矩阵（YL3）。
 - **执行模型**：claude-opus-4-8（人工 opus 会话覆盖 sonnet 建议——「由你按规范持续推进」授权同会话连续执行）；**子代理**：无。
+
+## [NTLG-P0-1-B] nav-counts 前端接入 + 侧边栏去写死 + ADR 回填（SEQ-20260609-01）
+
+- **背景**：NTLG-P0-1 拆卡 -B（前端），接续 -A 后端端点完成侧边栏计数端到端去写死（治理方案 §5）。
+- **改动**：
+  - `useAdminNavCounts`（`admin-shell-nav-counts.ts`）从「仅 merge 单查 `/admin/video-merges/candidates`」升级为消费单一聚合端点 `apiClient.get<AdminNavCountsResponse>('/admin/system/nav-counts')`（ADR-190），一次拉全 5 模块计数；按 `KEY_TO_HREF` 映射建 href→count Map（0/缺省〔无权·降级〕不入 Map 无 badge，保留 CHG-VIR-13-A1 降级语义；401/403 静默、其他 warn 留痕）。
+  - `admin-nav.tsx` 删除 4 个写死 `count`（moderation 484 / sources 1939 / imageHealth 597 / userSubmissions 12），保留 `badge` 色调；5 模块计数统一 runtime 注入（countProvider runtime 优先既有逻辑）。
+  - ADR-190 D-190-4 回填**定稿角色矩阵表**（YL3 兑现，advisory→已验证事实，代码真源 `NavCountsService.MODULE_ROLES`）：moderator 命中 moderation/sources/userSubmissions，imageHealth/merge admin-only。
+  - e2e `shell-mocks.ts` 同步：新增 `/admin/system/nav-counts` mock（data map + meta），候选端点 mock 保留供 merge 页 e2e + 注释更正。
+- **门禁**：typecheck/lint EXIT=0 / `verify:adr-contracts` EXIT=0（endpoint-adr ✅ 227 / sql-schema-alignment ✅ / shell-types-mirror ✅）/ 新 hook 测 5 用例（5 模块映射 / 0·缺省不入 Map / null 空 Map / 401·403 静默 / 其他错误 warn）/ test:changed 增量 11 全过。
+- **e2e**：admin 侧边栏真实徽标验收（plan §9 P0「徽标显示真实数」）需真实栈 + 数据，按精确单测覆盖（hook 5 + service 4 + route 3 = 12）+ 既有先例延后为验收步骤；shell-mocks 已同步避免 e2e 漏 mock。
+- **NTLG-P0-1 整卡收口**（-A 后端 + -B 前端）：侧边栏 5 计数端到端去 mock，治理方案 §5 完成。
+- **文件**：`admin-shell-nav-counts.ts` / `admin-nav.tsx` / `docs/decisions.md`（ADR-190 D-190-4）/ +`tests/unit/lib/admin-shell-nav-counts.test.ts` / `tests/e2e/admin/_shared/shell-mocks.ts`。
+- **执行模型**：claude-opus-4-8（人工 opus 会话覆盖 sonnet 建议——「持续推进」授权同会话连续）；**子代理**：无。

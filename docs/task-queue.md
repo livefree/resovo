@@ -1666,9 +1666,11 @@
      - 范围：`GET /admin/system/nav-counts`（NavCountsService 逐模块容错聚合 5 计数 + 角色门控）+ 2 轻量 COUNT query（moderation/userSubmissions）+ AdminNavCounts 类型 + server.ts 注册 + 后端单测/route 测。
      - 依赖：NTLG-ADR-P0（ADR-190 PASS）。建议模型：sonnet。
      - **完成备注**：NavCountsService 逐模块 try/catch + 角色门控（真源快照：moderation/sources/userSubmissions=admin+mod，imageHealth/merge=admin-only）；moderation/userSubmissions 新增轻量 COUNT 落 queries 层；sources=getVideoGroupStats().dead / imageHealth=getImageHealthStats().brokenLast7Days / merge=VideoMergesService.listCandidates total（行为保真）。`GET /admin/system/nav-counts` 注册 server.ts。门禁：typecheck/lint EXIT=0 / verify:adr-contracts EXIT=0（verify-endpoint-adr ✅ 227 路由对齐，新端点匹配 ADR-190 / sql-schema-alignment ✅ / shell-types-mirror ✅）/ test:changed 升全量（packages/types 改动，ADR-180）6834 passed，2 失败均既有 flaky（VideoListClient CSV 导出 + VideoMergesService perf p95 baseline，隔离复跑 39/39 通过，与本卡无关）；新测 7（service 4 + route 3）。执行模型: claude-opus-4-8（人工 opus 会话覆盖 sonnet 建议——「持续推进」授权同会话连续）；子代理: 无。
-   - **-B** 前端接入 + 去写死 + ADR 回填（状态：⬜ 待开始）
+   - **-B** 前端接入 + 去写死 + ADR 回填（状态：✅ 已完成 2026-06-09）
      - 范围：`useAdminNavCounts` 改消费聚合端点（单请求）+ `admin-nav.tsx` 删 4 写死 count（保 badge）+ ADR-190 D-190-4 回填定稿角色矩阵（YL3：mod=moderation/sources/userSubmissions，imageHealth/merge=admin-only）。
      - 依赖：NTLG-P0-1-A。建议模型：sonnet。
+     - **完成备注**：`useAdminNavCounts` 改 `apiClient.get<AdminNavCountsResponse>('/admin/system/nav-counts')`，按 KEY_TO_HREF 映射建 href→count Map（0/缺省不入 Map 无 badge，保留降级语义；401/403 静默）；admin-nav 删 4 写死 count（moderation 484/sources 1939/imageHealth 597/userSubmissions 12）保 badge 色调；ADR-190 D-190-4 回填定稿角色矩阵表（代码真源 NavCountsService.MODULE_ROLES）；e2e shell-mocks 同步 `/admin/system/nav-counts` mock。门禁：typecheck/lint/verify:adr-contracts EXIT=0 / 新 hook 测 5（映射/0 缺省不入/null 空/401 静默/其他 warn）/ test:changed 增量 11 全过。admin e2e（侧边栏真实徽标验收）需真实栈+数据，按精确单测覆盖 + 既有先例延后为验收步骤。执行模型: claude-opus-4-8（人工 opus 覆盖 sonnet 建议——「持续推进」授权）；子代理: 无。
+   - **NTLG-P0-1 整卡 ✅**（-A + -B 收口，侧边栏 5 计数端到端去写死）。
 3. **NTLG-P0-2** — 修 `NotificationsTab.tsx` 陈旧错误注释（状态：⬜ 待开始）
    - 范围：删除"后端不发 webhook"陈旧注释（WebhookDispatcher 已实装）。零 ADR / 零端点 / 零 schema。
    - 依赖：无。建议模型：haiku。

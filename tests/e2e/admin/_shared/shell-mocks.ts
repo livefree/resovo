@@ -23,8 +23,8 @@
  * 容忍路径（warn 降级）；200 + 错误形状才是毒（CHG-VSR-7 既验证范式）。
  *
  * 契约真源：apps/server-next/src/lib/admin-shell-notifications.ts（Notification/
- * Jobs/BackgroundEvents Response interface）+ admin-shell-nav-counts.ts（listCandidates
- * 读 total）+ api-client.ts（RefreshResponse 取 accessToken | data.accessToken）。
+ * Jobs/BackgroundEvents Response interface）+ admin-shell-nav-counts.ts（消费
+ * /admin/system/nav-counts，ADR-190 / NTLG-P0-1-B）+ api-client.ts（RefreshResponse 取 accessToken | data.accessToken）。
  */
 
 import type { Page } from '@playwright/test'
@@ -84,7 +84,13 @@ export async function installAdminShellMocks(page: Page) {
       return
     }
 
-    // GET /admin/video-merges/candidates — useAdminNavCounts（读 total 出 badge）
+    // GET /admin/system/nav-counts — useAdminNavCounts（5 模块计数批量；ADR-190 / NTLG-P0-1-B）
+    if (path === '/v1/admin/system/nav-counts' && method === 'GET') {
+      await route.fulfill(json({ data: {}, meta: { partial: false, omitted: [] } }))
+      return
+    }
+
+    // GET /admin/video-merges/candidates — merge 页候选列表（nav 计数已迁 nav-counts，本 mock 保留供 merge 页 e2e）
     if (path === '/v1/admin/video-merges/candidates' && method === 'GET') {
       await route.fulfill(json({ data: [], total: 0, page: 1, limit: 1, source: 'identity' }))
       return

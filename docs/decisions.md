@@ -21199,7 +21199,15 @@ CREATE TABLE IF NOT EXISTS external_data.bangumi_collection_sync_state (
 1. **端点位置 `/admin/system/nav-counts`**（D-190-1）：归 `/admin/system/` 命名空间（与既有 `GET /admin/system/jobs` 同属"跨模块系统聚合"，非任一业务模块的从属资源），单 `GET` 返回 5 计数批量包。命名 hyphen 形式与既有 admin 路由一致。
 2. **鉴权 `[authenticate, requireRole(['admin','moderator'])]`**（D-190-2）：与 `/admin/system/jobs` / `/admin/notifications` 同级（侧边栏对 admin + moderator 都展示）。**非** admin-only——moderator 也有侧边栏，需要其可见模块的计数。
 3. **逐模块容错（§11 D8）**（D-190-3）：5 计数**各自独立 try/catch**，任一子查询失败或调用方对该模块无权 → **省略该 key**（不返回、不报 500），其余正常返回。`meta.omitted: string[]` 列出被省略的模块键、`meta.partial: true` 标记非全集。**绝不**因单模块失败拖垮整包（避免 moderator 侧边栏全空）。此为对 CHG-VIR-13-A1 现有"前端 401/403 静默降级"语义的服务端收口。
-4. **逐模块鉴权口径**（D-190-4）：每个子计数的可见性与该模块**主读端点鉴权一致**——admin 命中全部 5；moderator 命中其有权模块（默认 `moderation` + `userSubmissions` 审核相关；`sources`/`imageHealth`/`merge` 按各模块现状以 admin 为主导，对 moderator 省略该 key）。实施卡（NTLG-P0-1）以各模块**实际路由 preHandler 角色**为准对齐，ADR 此处锁"无权即省略、不报错"原则（零设计自由度的是容错行为，非角色矩阵的硬编码——角色以现有路由真源为准，防漂移）。
+4. **逐模块鉴权口径**（D-190-4）：每个子计数的可见性与该模块**主读端点鉴权一致**。ADR 锁"无权即省略、不报错"原则（容错行为零设计自由度；角色矩阵以现有路由真源为准，防漂移）。**定稿角色矩阵**（NTLG-P0-1-A 落地以各模块实际 route preHandler 快照回填 / 2026-06-09，YL3 兑现，advisory→已验证事实）：
+   | 模块 | 计数键 | 主读路由 preHandler | admin | moderator |
+   | --- | --- | --- | :-: | :-: |
+   | 内容审核 | `moderation` | `moderation.ts` `requireRole(['moderator','admin'])` | ✅ | ✅ |
+   | 播放线路 | `sources` | `sources-matrix.ts` readAuth `requireRole(['moderator','admin'])` | ✅ | ✅ |
+   | 图片健康 | `imageHealth` | `image-health.ts` `requireRole(['admin'])` | ✅ | — |
+   | 用户投稿 | `userSubmissions` | `userSubmissions.ts` `requireRole(['moderator','admin'])` | ✅ | ✅ |
+   | 合并拆分 | `merge` | `video-merges.ts` `requireRole(['admin'])` | ✅ | — |
+   —— 即 moderator 命中 `moderation`/`sources`/`userSubmissions`（3），`imageHealth`/`merge` 省略（admin-only）。NavCountsService `MODULE_ROLES` 即此矩阵的代码真源。
 5. **5 计数语义=各模块"待处理积压"（actionable backlog）**（D-190-5），与 nav badge 色调语义自洽（warn/danger/info = 需关注量）：
    - `moderation`（badge warn）：pending 内容审核队列总数 — `db/queries/moderation.ts` pending COUNT。
    - `sources`（badge danger）：不健康/失效播放线路数 — `db/queries/sources-matrix.ts` / `sourceHealthEvents` broken 计数。
@@ -21232,7 +21240,7 @@ CREATE TABLE IF NOT EXISTS external_data.bangumi_collection_sync_state (
 ### 评审
 
 - **arch-reviewer (claude-opus-4-8) 结论：AUDIT RESULT: PASS**（无红线；端点契约表可被 `parseEndpointContract` 正确解析，路径 `/admin/system/nav-counts` 与未来 fastify route 字符串逐字一致，鉴权 admin+moderator 对齐 `system-jobs.ts`，§11 D8 逐模块容错忠实落地）。
-- 黄线（转 NTLG-P0-1 实施期处理，不阻断本 ADR Accepted）：① §7 占位 ADR-NN0a→ADR-190 反向映射已由 SEQ-20260609-01 背景登记闭环（ADR 标题亦含 `§7 ADR-NN0a` 正向链）；③ D-190-4 默认角色矩阵为 advisory，NTLG-P0-1 落地时以各模块实际 route preHandler 快照回填定稿，把 advisory 转已验证事实。
+- 黄线（NTLG-P0-1 实施期已处理）：① §7 占位 ADR-NN0a→ADR-190 反向映射已由 SEQ-20260609-01 背景登记闭环（ADR 标题亦含 `§7 ADR-NN0a` 正向链）；③ D-190-4 角色矩阵已于 NTLG-P0-1-A 回填定稿（上表，advisory→已验证事实，代码真源=NavCountsService.MODULE_ROLES）。
 
 ---
 

@@ -66,7 +66,7 @@ export const ADMIN_NAV: readonly AdminNavSection[] = [
     title: '运营中心',
     items: [
       { label: '管理台站', href: '/admin', icon: <Layers />, shortcut: 'mod+1' },
-      { label: '内容审核', href: '/admin/moderation', icon: <Inbox />, count: 484, badge: 'warn', shortcut: 'mod+2' },
+      { label: '内容审核', href: '/admin/moderation', icon: <Inbox />, badge: 'warn', shortcut: 'mod+2' },
       { label: '暂存发布', href: '/admin/staging', icon: <Upload /> },
     ],
   },
@@ -74,21 +74,22 @@ export const ADMIN_NAV: readonly AdminNavSection[] = [
     title: '内容资产',
     items: [
       { label: '视频库', href: '/admin/videos', icon: <Film />, shortcut: 'mod+3' },
-      { label: '播放线路', href: '/admin/sources', icon: <Link2 />, count: 1939, badge: 'danger' },
+      { label: '播放线路', href: '/admin/sources', icon: <Link2 />, badge: 'danger' },
       // CHG-SN-9-LINES-VIEW-UNIFY（2026-05-28）：「线路别名管理」入口收口到「播放线路」页面右上角
       //   原侧边栏入口已移除 / 用户从 /admin/sources → 右上角 "线路别名管理" 按钮进入
-      // CHG-VIR-13-A1：静态 count: 6 假数据移除 — count 由 useAdminNavCounts 60s 轮询
-      // pending 候选总数注入（countProvider runtime 优先；加载中/0 时无 badge）
+      // CHG-VIR-13-A1 + NTLG-P0-1-B：全部静态 count 假数据移除 — 5 模块 count 统一由
+      // useAdminNavCounts 60s 轮询 `/admin/system/nav-counts`（ADR-190）注入
+      // （countProvider runtime 优先；加载中/0/无权/降级时无 badge；保留 badge 仅控色调）
       { label: '合并拆分', href: '/admin/merge', icon: <Merge />, badge: 'warn' },
       { label: '字幕管理', href: '/admin/subtitles', icon: <FileText />, shortcut: 'mod+4' },
-      { label: '图片健康', href: '/admin/image-health', icon: <ImageIcon />, count: 597, badge: 'warn' },
+      { label: '图片健康', href: '/admin/image-health', icon: <ImageIcon />, badge: 'warn' },
     ],
   },
   {
     title: '首页运营',
     items: [
       { label: '首页编辑', href: '/admin/home', icon: <Megaphone /> },
-      { label: '用户投稿', href: '/admin/user-submissions', icon: <Flag />, count: 12, badge: 'info' },
+      { label: '用户投稿', href: '/admin/user-submissions', icon: <Flag />, badge: 'info' },
     ],
   },
   {
