@@ -1,8 +1,8 @@
 {
-  "generatedAt": "2026-06-09T19:25:55.442Z",
+  "generatedAt": "2026-06-09T21:18:37.611Z",
   "summary": {
     "closedTotal": 225,
-    "pendingTotal": 261
+    "pendingTotal": 274
   },
   "perAdr": [
     {
@@ -724,6 +724,33 @@
       "total": 6,
       "closed": 6,
       "pending": []
+    },
+    {
+      "adrId": "ADR-194",
+      "total": 8,
+      "closed": 0,
+      "pending": [
+        "D-194-1",
+        "D-194-2",
+        "D-194-3",
+        "D-194-4",
+        "D-194-5",
+        "D-194-6",
+        "D-194-7",
+        "D-194-8"
+      ]
+    },
+    {
+      "adrId": "ADR-195",
+      "total": 5,
+      "closed": 0,
+      "pending": [
+        "D-195-1",
+        "D-195-2",
+        "D-195-3",
+        "D-195-4",
+        "D-195-5"
+      ]
     }
   ]
 }

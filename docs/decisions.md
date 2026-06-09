@@ -21658,3 +21658,174 @@ interface TaskRunReporter {
 
 - **arch-reviewer (claude-opus-4-8) 结论：AUDIT RESULT: PASS**（无红线；不引技术栈外依赖〔纯 TS interface + 现有 pg/pino 实装，无事件总线〕；emit 入参 11 字段一一落在 ADR-192 notifications schema 列内、补齐 `source_kind` 必填、`payload: unknown` 不用 any；`emit(): void` 与 `write(): void` 逐行同构〔`AuditLogService.ts:278`〕消解领域服务双写失败语义分叉；path A 数据流闭环〔`crawler_runs.summary` 10 个 int key 已落库，P1-b 纯只读投影零 schema 变更〕；`TaskResultDigest` 单点定义于 packages/types、admin-ui 正向 import 复用、`digest?` 双源镜像签名字符串一致过 `verify:admin-shell-types-mirror`；`TaskRunReporter` no-op stub 消解 P1 "TaskRunId 从哪来"张力；确无新 admin route，`verify:endpoint-adr` 不涉及）。
 - 黄线（转 NTLG-P1-b/P1-c 实施期处理，不阻断本 ADR Accepted）：① P1-b 改 `packages/admin-ui/src/shell/types.ts` `TaskItem.digest?` 须与 `AdminTaskItem.digest?` 同 commit 并过 `verify:admin-shell-types-mirror`，commit 须带 `Subagents: arch-reviewer (claude-opus-...)` trailer（CLAUDE.md §绝对禁止"改 admin-ui types.ts 公开 Props 字段须 Opus trailer"）；② 抽屉 metrics chips 的 tone→颜色映射须用 CSS 变量 token，禁止硬编码颜色；③ P1-c emit 写 SQL 必须落 `db/queries/notifications.ts`，不扩大 Service 直写（ADR-192 D-192-7）；④ `dedupKey` 幂等须经 `ON CONFLICT DO NOTHING`（命中 `uq_notifications_dedup_key`），P1-c 补幂等单测。
+
+---
+
+## ADR-194：`task_runs` 统一抽象层 schema + 真源关系裁定（只读投影 / crawler_runs 保持采集批次唯一真源）+ TaskRunReporter 真实 DB 写形态 + TaskAggregator 投影收敛（SEQ-20260609-01 / NTLG-ADR-P2 · ntlg-governance §2.2 + §4.2 + §6 P2-a + §7 ADR-NN3 + §11 D5/D6）
+
+- **日期**：2026-06-09
+- **状态**：**Accepted**（arch-reviewer Opus PASS — 见 §评审）
+- **决策者**：主循环 claude-opus-4-8 / arch-reviewer (claude-opus-4-8)
+- **关联**：ADR-110（ApiResponse / ErrorCode 真源）/ ADR-147（`AdminTaskItem` + `TaskAggregator`〔主源 crawler_runs + 副源 bull active〕+ `GET /admin/system/jobs` 端点契约真源）/ ADR-152（背景事件 + 任务闪电 running 计数）/ ADR-155 D-155-2（`TaskItem` ↔ `AdminTaskItem` 双源镜像 + `verify:admin-shell-types-mirror`）/ ADR-191（`POST /admin/tasks/:id/{cancel,retry}` + `parseTaskId` 分派 crawler runId / `bull-{queue}-{jobId}` + §4.2 P2 re-point task_run_id + D-191-DEV-1 bull active cancel 409）/ ADR-193（`TaskResultDigest` + `TaskRunReporter` 契约 + `NoopTaskRunReporter` + D-193-3 path A no-op stub + D-193-DEV-1「真实 task_runs DB 写待 ADR-194」）/ migration 010（`crawler_runs` 真源 schema：6 态 status + 5 态 control_status + summary JSONB + crawler_tasks 明细）/ 治理方案 `docs/designs/notification-task-log-governance-plan_20260608.md` §2.2 path A/B + §4.2 状态机 + §6 P2-a + §7 ADR-NN3 + §11 D5/D6
+- **对应交付**：SEQ-20260609-01 NTLG-ADR-P2（本 ADR 起草）→ NTLG-P2-a（`task_runs` migration + `db/queries/taskRuns.ts` + `TaskRunReporter` 真实实装替换 Noop + `TaskAggregator` 投影收敛 + 各 bull worker 接入 reporter + ADR-191 `parseTaskId` re-point）
+- **触发**：治理方案 §6「P2-a：`task_runs` 统一抽象层（§2.2 路径 B），所有后台流程统一登记，UI 收敛到单一投影」+ §7「ADR-NN3：`task_runs` 统一抽象层 + 真源关系（只读投影 vs 并行登记）二选一」+ §11 D6（避免双真源风险，本方案不预设）。后台任务数据模型决策 → CLAUDE.md §模型路由「撰写即将成为 ADR 的决策文档」+「设计跨 3+ 消费方 schema / migration 字段」强制 Opus 子代理设计。
+
+### 背景
+
+ADR-193 D-193-3/D-193-DEV-1 把 `TaskRunReporter` 在 P1 落为 `NoopTaskRunReporter`（`start` 返 sentinel `'unlinked'` + log，`progress/finish` log-only），并显式声明「真实 `task_runs` DB 写待 ADR-194（path B）」。本 ADR 把 path B 终态落定。现状（NTLG-P1 落地后）：
+
+1. **任务象限是读时拼接、无跨类型持久登记**：`TaskAggregator.list`（`TaskAggregator.ts:106`）= 主源 `crawler_runs`（最近 N 条）∪ 副源 **bull active jobs 瞬时快照**（`crawlerQueue`/`maintenanceQueue` 的 `getActive`，id 加 `bull-{queue}-` 前缀）。**bull 类作业（enrichment / imageHealth / maintenance / bangumi / douban / homeAutofill / identityCandidate / imageBackfill / imageBlurhash / verify）无任何持久 run 表**——只有运行中的瞬时 bull job 快照，作业一结束即从 active 列表消失，**无终态留存、无 digest、无失败重试锚点**。这是治理方案「为所有后台流程定义统一产出契约（未来自动化预留）」的核心缺口。
+2. **crawler 已有丰富真源**：`crawler_runs`（migration 010）承载采集批次完整生命周期——`status`（6 态 queued/running/success/partial_failed/failed/cancelled）/ `control_status`（5 态，支撑协作式取消）/ `summary JSONB`（digest 底料）/ `crawler_tasks` 逐站明细（`run_id` FK）/ `created_by` / `schedule_id` / 时间戳。crawler 的取消/重试已由 ADR-191 经 crawler runId 分派打通。
+3. **ADR-191 的 P2 衔接待解**：D-191-DEV-1 把「bull active job 协作式取消（现返 409 STATE_CONFLICT）+ `:id` re-point 到统一 `task_run_id`」明确锁给「ADR-194 task_runs + 统一 TaskRunReporter 落地」。
+
+本 ADR 裁定 **task_runs 与 crawler_runs 的真源关系（§11 D6 二选一）**、锁 `task_runs` schema 与 `TaskRunReporter` 真实 DB 写形态、收敛 `TaskAggregator` 单一投影口径、衔接 ADR-191 的 `:id` re-point。**边界**：`TaskResultDigest` / `TaskRunReporter` interface 形状归 ADR-193（已 Accepted，本 ADR 只把 Reporter 从 Noop 升级为真实实装，不改 interface 签名）；notifications 存储 / emit 归 ADR-192/193；通知 TTL/dedup/scope 策略归 ADR-195。**本 ADR 不新增 admin route**（见 D-194-7）。
+
+### 决策要点
+
+1. **真源关系裁定 = 「只读投影」：`crawler_runs` 保持采集批次唯一真源，否决「并行登记」**（D-194-1，§11 D6）：
+   - **裁定**：`task_runs` 是后台作业的**统一只读投影 / 登记层**，**不**取代 `crawler_runs` 成新真源、**不**把 `crawler_runs` 降级为「执行明细」。crawler 的 `status` 6 态机 / `control_status` 协作式取消 / `crawler_tasks` 逐站明细 / `summary` digest 投影**全部保持不动**（零回归关键采集路径——价值排序 1 正确性与稳定性）。
+   - **否决「并行登记」的理由**：① 让 `task_runs` 成真源需重写 crawlerWorker 全部 run 状态写入点（`syncRunStatusFromTasks` 等），对承载断点续采/协作式取消的关键路径引入高回归风险（§11 D5「过早建 task_runs → 地基期重写 crawler/bull」）；② crawler 同时写 `crawler_runs` + `task_runs` = 双写双真源，两表 `status`/`summary` 可能漂移（§11 D6「两可 → 双真源数据不一致」明示风险）。
+   - **经验数据不足下选可逆默认**：治理方案原意「待 2–3 类后台流程接入后再决定」，现实只有 crawler 接入 digest（NTLG-P1-c-B-1）。在仅 1 类流程经验下选**低风险、可逆**的只读投影：未来若更多流程接入后发现并行登记更优，投影层可平滑升级为物化真源（向前兼容）；反之从真源降级回投影是破坏性的。故只读投影是「不锁死未来」的稳健起点。
+
+2. **`task_runs` 承载范围 = 当前无持久 run 表的 bull 作业；crawler 不进 task_runs 物理表，投影发生在聚合读时层**（D-194-2，§2.2）：
+   - `task_runs` 物理表**仅登记** enrichment / imageHealth / maintenance / 未来自动化等**当前无任何持久 run 表**的 bull 作业。对这些作业，`task_runs` 是其**唯一持久记录**（瞬时 bull job 终态后不再留存）——这**不构成双真源**（它们本就无别的真源，task_runs 是其首个、唯一持久层）。
+   - crawler **不写入** `task_runs` 物理表。crawler 在统一视图中的呈现由 `TaskAggregator` 在**读时**对 `crawler_runs` ∪ `task_runs` 做只读 union 投影（D-194-5）实现——投影发生在聚合 DTO 层（`AdminTaskItem`），而非物化复制 crawler 行进 task_runs。**这是最强的反漂移姿态**：crawler 行从不被物理复制，无任何 crawler_runs→task_runs 同步路径，从根上消除双真源漂移。
+   - **考量并搁置的替代（物化投影）**：可改为「crawler_runs 经触发器/应用层单向同步物化进 task_runs，TaskAggregator 只读 task_runs 单表」——优点是跨类型分页/排序走单物理表更省、消费方更纯；缺点是引入单向同步路径（仍是一种受控双写，需保证 crawler_runs 优先 + 幂等 backfill）。裁定 **P2-a 走读时 union（零同步、零物化）**，物化投影留作未来跨类型规模化（task_runs 行数大到读时 union 退化）时的演进项，登记为 D-194-DEV-1。
+
+3. **`task_runs` schema（锁定，NTLG-P2-a 落地）**（D-194-3）：字段对齐 ADR-193 `TaskRunReporter` 三方法入参 + `TaskResultDigest` 终态落库 + §4.2 状态机。`id BIGSERIAL PK`（与 notifications 同范式，`id::text` 序列化对齐 `TaskRunId = string`，ADR-193 D-193-3）；`kind` 作业类型语义键（不写死枚举 DB CHECK，保未来自动化扩展——与 notifications.scope 同「开放前缀/语义键类型层校验」哲学）；`status` 5 态 DB CHECK（pending/running/success/failed/cancelled，统一终态机，§4.2）；`progress SMALLINT` determinate 进度（NULL=indeterminate）；`digest JSONB` 承载 `TaskResultDigest`（ADR-193，finish 时落库）；`error` 失败信息；`title`/`ref`（ref 反查关联实体如 bull jobId）+ 生命周期时间戳。索引见 §schema。
+
+4. **`TaskRunReporter` 升级为真实 DB 写实装（替换 NoopTaskRunReporter，interface 签名不变）**（D-194-4，ADR-193 D-193-3 / §11 D4）：
+   - **interface 零改动**：`start(input): Promise<TaskRunId>` / `progress(id, pct): Promise<void>` / `finish(id, result): Promise<void>`（ADR-193 §契约定义已锁）。P2-a 仅把 `NoopTaskRunReporter` 替换为 `DbTaskRunReporter`（`start` INSERT task_runs 返 `id::text` / `progress` UPDATE progress / `finish` UPDATE status+digest+finished_at），SQL 落 `db/queries/taskRuns.ts`（db-rules，不在 Service/Reporter 直写——与 ADR-192 D-192-7 同约束）。
+   - **start 登记失败仍不阻断作业**（§11 D4 / ADR-193 D-193-3 不变）：`start` 内部 catch DB 错误 → 降级返回 sentinel `'unlinked'` + log warn，后续 `progress/finish` 对 sentinel id no-op。**DB 抖动不拖垮后台作业**——与 audit fire-and-forget 哲学一致。
+   - **crawler 不接 Reporter**：crawler digest 仍走 path A（`crawler_runs.summary` → `TaskAggregator.buildTaskResultDigest` 投影，ADR-193 D-193-4 不变）；Reporter 仅供无持久表的 bull 作业登记（D-194-2）。
+
+5. **`TaskAggregator` 投影收敛 = 主源 `crawler_runs` ∪ 副源 `task_runs`（持久登记替代 bull active 瞬时快照），统一 `AdminTaskItem` 单一投影**（D-194-5，§6 P2-a「UI 收敛单一投影」）：
+   - 副源从「bull active 瞬时快照」**升级**为「`task_runs` 持久登记」：`getActive` 瞬时快照只能见运行中作业、终态即丢；改读 `task_runs`（最近 N 条 + running 全展示）后，bull 作业获得**终态留存 + digest + 失败重试锚点**。`fetchBullSnapshot` 的 queueCounts（waiting/active）仍可保留供任务闪电 running 计数（或改由 `task_runs.status='running'` COUNT，§4.1）。
+   - **id 方案**：crawler 行 id = crawler_runs UUID（不变）；task_runs 行 id = `taskrun-${id}`（前缀避免与 crawler UUID / 旧 `bull-{queue}-{jobId}` 冲突，且供 ADR-191 `parseTaskId` 分派识别，D-194-6）。
+   - **status 映射**：`task_runs.status`（5 态）→ `AdminTaskItem.status`（cancelled→failed，与现 crawler `STATUS_MAP` 同口径，`TaskAggregator.ts:78`）。统一 DTO，消费方（任务抽屉/闪电）零感知数据源差异。
+
+6. **ADR-191 `:id` re-point + bull 协作式取消能力升级（衔接 D-191-DEV-1）**（D-194-6）：
+   - `parseTaskId`（ADR-191）扩分派分支：`taskrun-<id>` → task_runs（cancel = 写 `cancel_requested`/`status='cancelling'` 协作式信号 + worker 侧 abortController 检查；retry = 依 kind 重新 enqueue 对应 bull job）。crawler runId / `bull-{queue}-{jobId}` 旧分派**保留**（向后兼容，未迁移的直读 bull 作业仍可控）。
+   - **bull active 协作式取消**（D-191-DEV-1 解）：task_runs 登记后，bull worker 在 job 处理循环中检查对应 `task_runs.status='cancelling'` 信号实现协作式取消（替代 ADR-191 P0 的 409 STATE_CONFLICT 诚实暴露）。具体 worker 改造清单归 P2-a 实施。
+   - **裁定**：re-point 为**加性**——`AdminTaskControlTarget.kind`（ADR-191）扩 `'task_run'` 值，响应继续标注 target kind；旧 kind（crawler/bull_job）不删，渐进迁移。
+
+7. **本 ADR 不新增 admin route（`verify:endpoint-adr` 不涉及）**（D-194-7）：P2-a 的统一投影**复用既有** `GET /admin/system/jobs`（ADR-147 端点契约真源，响应仍 `{ data: AdminTaskItem[], meta }`，数据源由 bull 快照换 task_runs 属实现内变更、非契约变更）；取消/重试**复用既有** `POST /admin/tasks/:id/{cancel,retry}`（ADR-191，仅扩 `parseTaskId` 分派 + `target.kind` 取值，路径/方法/请求/响应信封不变）。故本 ADR **无端点契约表**（与 ADR-193 同范式）；`TaskRunReporter` 是后端 worker 内枢、非 HTTP 端点。若 P2-a 实施期确需新 route（如独立 `GET /admin/task-runs`），须另起独立端点 ADR（plan §4.5 R7 MUST-8）。
+
+8. **digest 双轨澄清：crawler 走 path A summary 投影、bull 作业走 path B task_runs.digest**（D-194-8，ADR-193 D-193-4/5/6）：
+   - crawler digest = `crawler_runs.summary` → `buildTaskResultDigest` 投影（path A，ADR-193 D-193-4，**不变**，不经 task_runs）。
+   - bull 作业 digest = worker 在 `finish` 时构造 `TaskResultDigest` 经 `reporter.finish(id, { digest })` 落 `task_runs.digest`（path B）。富集成功率 / 合并候选数等 ADR-193 D-193-5 暂缺字段，由对应 worker 在此构造 metric（key 不写死，零类型改动）。
+   - 两轨在 `TaskAggregator` 投影后统一为 `AdminTaskItem.digest`，抽屉渲染 metrics chips 口径一致（ADR-193 D-193-1）。
+
+### schema（migration 编号待 NTLG-P2-a 落地确认下一可用号，当前最新 100_notifications.sql）
+
+```sql
+-- NNN_task_runs.sql（NTLG-P2-a 落地；docs/architecture.md 同步——schema 变更红线）
+-- task_runs = 当前无持久 run 表的 bull 作业统一登记层（ADR-194 D-194-1/D-194-2，只读投影）。
+--   crawler 不写本表（仍以 crawler_runs 为唯一真源，读时 union 投影）。
+
+CREATE TABLE task_runs (
+  id           BIGSERIAL    PRIMARY KEY,
+  kind         TEXT         NOT NULL,                  -- 作业类型语义键 'enrichment' | 'image_health' | 'maintenance' | <future>（不写死 CHECK，类型层校验）
+  title        TEXT         NOT NULL,                  -- 人读标题（→ AdminTaskItem.title）
+  ref          TEXT         NULL,                      -- 关联实体 / 外部 id（bull jobId 等，反查）
+  status       TEXT         NOT NULL DEFAULT 'pending'
+                            CHECK (status IN ('pending','running','success','failed','cancelled')),
+  progress     SMALLINT     NULL CHECK (progress IS NULL OR progress BETWEEN 0 AND 100),  -- determinate；NULL=indeterminate
+  digest       JSONB        NULL,                      -- TaskResultDigest（ADR-193，finish 落库）
+  error        TEXT         NULL,                      -- 失败信息（→ AdminTaskItem.errorMessage）
+  started_at   TIMESTAMPTZ  NULL,
+  finished_at  TIMESTAMPTZ  NULL,
+  created_at   TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+  updated_at   TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+
+-- 索引（db-rules 4 步核验，P2-a 落地补完整注释）
+CREATE INDEX idx_task_runs_created_at ON task_runs (created_at DESC);          -- list 时间倒序分页 + 终态窗口
+CREATE INDEX idx_task_runs_status     ON task_runs (status, created_at DESC);  -- running 计数（status='running'）+ 状态过滤
+```
+
+> **不预建 cancel/heartbeat 字段**：D-194-6 协作式取消复用 `status='cancelling'` 中间态（无需独立 `cancel_requested` 列——与 crawler_tasks 的 `cancel_requested BOOLEAN` 是不同范式，task_runs 走 status 信号简化）。P2-a 实施期若证 worker 检查 status 不够实时，再加列（加性）。
+
+### 影响文件（NTLG-P2-a 落地，本 ADR docs-only 不改代码）
+
+- 新建：`apps/api/src/db/migrations/NNN_task_runs.sql`（上述 DDL）+ `apps/api/src/db/queries/taskRuns.ts`（insert/updateProgress/finish/list SQL 全落此，db-rules）
+- 修改：`apps/api/src/services/TaskRunReporter.ts`（`NoopTaskRunReporter` → `DbTaskRunReporter` 真实实装，interface 签名不变）+ `apps/api/src/services/TaskAggregator.ts`（副源 bull active → task_runs 持久登记 + `taskrun-` id 方案 + status 映射）
+- 修改：各 bull worker（enrichment/imageHealth/maintenance/... 按 P2-a 范围选取）接入 `reporter.start/progress/finish` + `apps/api/src/routes/admin/tasks.ts` `parseTaskId` 扩 `taskrun-` 分派（ADR-191 re-point）
+- 类型：`packages/types/src/admin-shell.types.ts`（`AdminTaskControlTarget.kind` 扩 `'task_run'`；`AdminTaskItem` 已有 digest/status/progress 字段，无需新增）+ `docs/architecture.md`（task_runs schema 同步——schema 变更红线）
+
+### 偏离登记
+
+- **D-194-DEV-1**：P2-a 走读时 union 投影（crawler_runs ∪ task_runs），不物化复制 crawler 行进 task_runs。处置：accept——零同步路径、根除双真源漂移（D-194-2）；物化投影留作未来跨类型规模化演进项（task_runs 行数大到读时 union 退化时再评估，届时单向同步须保 crawler_runs 优先 + 幂等 backfill）。
+- **D-194-DEV-2**：crawler 不接 `TaskRunReporter`（digest 仍走 path A summary 投影）。处置：accept——crawler 已有 crawler_runs 真源 + path A digest 闭环（ADR-193 D-193-4），接 Reporter 会引入对关键路径的冗余写；Reporter 仅服务无持久表的 bull 作业（D-194-2/4）。
+- **D-194-DEV-3**：`kind` 不加 DB CHECK（仅类型层校验）。处置：accept——保未来自动化作业类型扩展性（每加一种 worker 不改 migration），与 notifications.scope「开放前缀类型层校验」同哲学（ADR-192 D-192-6）；脏值风险由 Reporter 入参类型 + worker 注册集收口。
+
+### 评审
+
+- **arch-reviewer (claude-opus-4-8 / agentId af24d2b6d44d50f89) 结论：AUDIT RESULT: PASS**（与 ADR-195 同次评审；无红线，逐项 13 项核验全 ✅）。task_runs 部分核验要点：① **D-194-1 只读投影裁定成立**——crawler_runs 保持唯一真源、零同步路径根除漂移，正面回应 §11 D6「两可→双真源不一致」+ D5「过早建表→重写 crawler/bull 高回归」两风险；在仅 crawler 1 类接入（原计划 2-3 类）的经验不足下选可逆默认更优于「显式 defer」——defer 会让 P2-a 无 schema 可落、阻塞 ADR-191 D-191-DEV-1 的 :id re-point。② **D-194-2「不构成双真源」论证站得住**——独立核验 bull 作业群（enrichment/imageHealth/maintenance/bangumi/douban...）确无任何持久 run 表（仅 `TaskAggregator.ts:165` getActive 瞬时快照），task_runs 是其首个唯一持久层，「无第二真源即无双真源」成立。③ **D-194-3 schema 充分对齐**——逐字段比对 TaskRunReporter 三方法入参（kind/title/ref↔start / pct↔progress / status/digest/error↔finish）+ TaskResultDigest + §4.2 5 态；status 5 态 CHECK / kind 无 CHECK / progress SMALLINT 0-100 / id BIGSERIAL（id::text 对齐 TaskRunId=string）均恰当，不预建 cancel/heartbeat 列是合理 YAGNI。④ **D-194-4/5/6 衔接正确**——Reporter interface 零改动 + start 失败降级 sentinel 'unlinked'（核 `UNLINKED_TASK_RUN_ID`）+ SQL 落 queries 层；`taskrun-${id}` 前缀与 crawler UUID / `bull-{queue}-{jobId}`（核 `tasks.ts:35` 正则）不冲突；`AdminTaskControlTarget.kind` 扩 'task_run' 为加性（核现 `'crawler_run'|'bull_job'` 不删，向后兼容）；协作式取消解 D-191-DEV-1 的 409。⑤ **D-194-7 无新 route 成立**——核 `verify-endpoint-adr.mjs` 仅 route→ADR 单向核验，无新 `fastify.{method}` 即无触发；复用 GET /admin/system/jobs + POST /admin/tasks/:id，数据源/分派属实现内变更非契约变更，不触 CLAUDE.md「新增 admin route 须独立 ADR」红线。
+- 黄线（转 NTLG-P2-a 实施期处理，不阻断本 ADR Accepted）：① **`D-194-DEV-N` 偏离编号不被 `verify-adr-d-numbers` 追踪**——`scripts/lib/adr-parser.mjs:126` 正则 `D-(\d+[a-z]?)-(\d+)` 第三段强制 `\d+`，`DEV` 段不匹配，6 条 DEV 偏离（含 ADR-195）不计入 pending/closed；属**全项目既有约定盲区**（decisions.md 现存 34 处同形式），非本 ADR 引入，主决策号 D-194-1..8 正常解析，登记供后续工具升级一并修。② P2-a 实施期 `parseTaskId` re-point 须保旧 kind（crawler/bull_job）分派不删（加性迁移，D-194-6），bull 协作式取消改造清单（各 worker 检查 `status='cancelling'`）须逐 worker 核 abortController 支持，无则该 worker 退回 ADR-191 P0 的 409 诚实暴露。
+
+---
+
+## ADR-195：通知保留期/TTL 数值 + dedup_key 命名约定 + scope 定向（broadcast/role/user）生命周期规则 + 过期清理 worker 范式（SEQ-20260609-01 / NTLG-ADR-P2 · ntlg-governance §2.1 + §4.3 + §6 P2-d + §7 ADR-NN4 + §11）
+
+- **日期**：2026-06-09
+- **状态**：**Accepted**（arch-reviewer Opus PASS — 见 §评审）
+- **决策者**：主循环 claude-opus-4-8 / arch-reviewer (claude-opus-4-8)
+- **关联**：ADR-192（notifications schema：`expires_at`/`dedup_key`/`scope` 字段存在与类型层约束，D-192-2/6；未读过滤口径 `expires_at IS NULL OR > NOW()` D-192-5；混合已读 cursor + reads，markOneRead/notification_reads 写路径 deferred D-192-DEV-1；AMENDMENT D-192-DEV-4 markOneRead deferred）/ ADR-193（emit 入参含 `dedupKey`/`expiresAt`/`scope` 但不锁策略 D-193-2；crawler dedup `crawler.run.completed:<runId>`）/ ADR-188 D-188-7（`purge-external-fetch-log` 维护清理范式：30 天保留 + maintenanceWorker job type + scheduler 24h tick + `deleteFetchLogBefore` queries 层）/ ADR-146（WebhookDispatcher 多渠道，P2-b 衔接）/ `notification-audit-emit.ts`（8 类 admin_action 事件**不设 dedupKey** + scope='broadcast'）/ 治理方案 `docs/designs/notification-task-log-governance-plan_20260608.md` §2.1 + §4.3 + §6 P2-d + §7 ADR-NN4
+- **对应交付**：SEQ-20260609-01 NTLG-ADR-P2（本 ADR 起草）→ NTLG-P2-d（维护 worker `purge-expired-notifications` 清理 `expires_at` 过期通知）+ NTLG-P2-b/c（dedup/scope 约定供多渠道/定向/消息中心消费）
+- **触发**：治理方案 §6「P2-d：维护 worker 清理 `expires_at` 过期通知」+ §7「ADR-NN4：通知保留期/TTL/去重/scope 定向规则」。ADR-192 D-192-2/6 把 `expires_at`/`dedup_key`/`scope` 的**字段存在与类型层约束**锁定，**显式把策略数值留给本 ADR**。生命周期策略决策 → CLAUDE.md §模型路由「撰写即将成为 ADR 的决策文档」。
+
+### 背景
+
+ADR-192 锁了 notifications schema 三个生命周期字段，但**只锁字段存在与类型层约束、不锁策略数值**（D-192-2 注「TTL 保留期，策略数值留 ADR-195」/ D-192-6 scope 无 CHECK / D-193-2 emit 含 dedupKey/expiresAt/scope 入参不锁策略）。P1 落地后现状：
+
+1. **`expires_at` 无默认、无清理**：emit 不传 `expiresAt` → `notifications.expires_at = NULL`（ADR-192 D-192-5 口径下 NULL = 永不过期）。当前 crawler emit + 8 类 admin_action emit **均不传** expiresAt → 全部永不过期、**无任何清理 worker**（NTLG-P2-d 未落）。通知表只增不减。
+2. **`dedup_key` 命名无统一约定**：crawler 用 `crawler.run.completed:<runId>`（`<type>:<source_ref>` 形态，`crawlerWorker.notifications.ts:42`）；8 类 admin_action 事件**刻意不设** dedupKey（与 audit 一对一不去重，`notification-audit-emit.ts:101`）。约定散落代码注释，未沉淀为规范——未来新 emit 调用方易命名漂移 / 键冲突。
+3. **`scope` 仅用 'broadcast'**：role:*/user:* 前缀类型层预留（ADR-192 D-192-6）但无消费方；定向已读逐行 reads 写路径 deferred（D-192-DEV-1/4，markOneRead 暂留客户端本地 Set）。定向投递的生命周期规则未定。
+
+本 ADR 锁定上述三字段的**策略数值与约定**，并定过期清理 worker 范式。**边界**：notifications schema 字段定义归 ADR-192（本 ADR 只填策略，不改 schema）；emit interface 归 ADR-193（本 ADR 定 Emitter 默认注入策略，不改签名）；多渠道订阅（邮件/webhook）归 P2-b、消息中心归 P2-c（本 ADR 只定其依赖的 dedup/scope 约定）。**本 ADR 不新增 admin route**（清理走 maintenanceWorker，dedup/scope 是约定 — 见 D-195-5）。
+
+### 决策要点
+
+1. **TTL 默认保留期 = 30 天，emit 省略时由 Emitter 注入；per-type 可覆盖；`NULL` 保留为「显式永不过期」**（D-195-1，§4.3「expires_at 默认 30 天」+ 对齐 ADR-188 D-188-7 purge 30 天先例）：
+   - **默认值**：30 天（`created_at + 30d`），与 `purge-external-fetch-log`（ADR-188）保留期一致，统一后台数据保留口径。
+   - **注入点**：在 `NotificationEmitter.emit` 入参 `expiresAt` 省略时，由 **Emitter 按 source_kind/type 策略表注入** `NOW() + 默认 TTL`（落 `db/queries/notifications.ts` 或 Emitter 旁的策略常量模块，**不写死在每个 emit 调用点**）。这样列总被填充、清理是简单 `expires_at <= NOW()` 范围删，无需 cleanup 时重算。
+   - **`NULL` 语义保持 ADR-192 D-192-5 不变 = 永不过期**：用于显式声明长期保留的类型（如高危全局冻结告警 `system.crawl_frozen`）。策略表对这些 type 不注入默认 → 落 NULL。
+   - **per-type 覆盖**：策略表允许个别 type 配更长/更短（如 `webhook.failed`/danger 类配 90 天便于追溯；瞬时 info 类配 7 天）。**首版策略表（保守）**：默认 30 天；`admin_action` 类（与 audit 一对一、audit_log 是永久合规真源）30 天；danger 级（webhook.failed / crawl_frozen）90 天或 NULL（高危显式永久）。具体 type→天数表由 P2-d 落地，本 ADR 锁「默认 30 + 可覆盖 + NULL 永久」三档框架。
+   - **对 P1 现状的策略收敛登记**：当前 emit 不传 expiresAt → NULL → 永不过期。本 ADR 引入 Emitter 默认注入后，**既有 crawler/admin_action emit 将获得 30 天 TTL**（行为变更）。处置：accept（P2-d 落地，登记 D-195-DEV-1）——通知非合规真源（audit_log 才是，解耦后 ADR-192 D-192-1），过期物理清理安全；历史长期检索归「消息中心」P2-c（靠特定类型长 TTL/NULL，非保留全部过期行）。
+
+2. **`dedup_key` 命名约定 = `<type>:<source_ref>`；设 dedupKey ⟺ 事件可幂等重放，离散操作不设**（D-195-2，沉淀 crawler/admin_action 现状为规范）：
+   - **命名格式**：`<type>:<source_ref>`（type = 通知语义键，source_ref = 关联实体 id）。如 `crawler.run.completed:<runId>`（现状，`crawlerWorker.notifications.ts:42`）。`type` 段天然隔离命名空间防跨类冲突；`source_ref` 段保证同类不同实体不互相去重。
+   - **设/不设判据**（锁定）：① **可幂等重放的事件设 dedupKey**——worker 重试、60s 轮询窗口、multi-site 并发 finally 等可能重复 emit 同一逻辑事件（如 crawler run 完成），靠 `uq_notifications_dedup_key` partial unique + `ON CONFLICT DO NOTHING` 幂等（ADR-192 D-192-2）。② **离散一次性操作不设 dedupKey**——每次离散 admin 操作 = 一行 audit + 一条通知，与 audit 一对一、刻意不去重（现状 `notification-audit-emit.ts:101`，8 类 admin_action 不设）。
+   - **保留约定**：未来 emit 调用方按此判据决定设/不设，命名遵 `<type>:<source_ref>`；本 ADR 不预占具体键（避与未来事件冲突），仅锁格式 + 判据。
+
+3. **`scope` 定向三前缀生命周期规则 + 定向 reads 写路径触发条件**（D-195-3，ADR-192 D-192-6 + 衔接 D-192-DEV-1/4）：
+   - **三前缀语义（锁定）**：`broadcast`（全体 admin+moderator 可见，当前唯一在用）/ `role:<role>`（按角色定向，如 `role:moderator` 仅审核员可见）/ `user:<uuid>`（按用户定向，单人可见）。
+   - **类型层校验（锁定，无 DB CHECK 保扩展，ADR-192 D-192-6）**：zod 联合 + 前缀正则 `^(broadcast|role:[a-z_]+|user:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$`（role 段小写下划线、user 段 UUID 格式）。校验落 emit 入参类型层（Emitter 或 queries），防脏 scope 污染。
+   - **已读模型对齐（ADR-192 D-192-3 混合）**：broadcast/role → cursor 高水位线（已落 P1）；user:<id> 定向 → 逐行 `notification_reads`（P1 仅建表预留）。**定向 reads 写路径（markOneRead broadcast 例外位 + 定向逐行）的触发条件 = P2 首次引入 role:/user: 定向 emit 或定向已读交互**（衔接 D-192-DEV-1/4：deferred 解除时机锁定为「定向 scope 实际启用」，非提前落半套 reads 写实现）。具体由 P2-b（多渠道/定向触发点）或 P2-c（消息中心交互）落地。
+   - **未读计数对定向项口径不变**（ADR-192 D-192-5 已锁 `scope='user:'||:uid AND NOT EXISTS reads`）；role 项并入 broadcast/role cursor 分支（cursor 对 role scope 同样高水位）。
+
+4. **过期清理 worker 范式 = maintenanceWorker `purge-expired-notifications` job + scheduler 24h tick；物理删除，否决软隐藏**（D-195-4，§6 P2-d + 复用 ADR-188 D-188-7 范式）：
+   - **范式复用**：新增 `MaintenanceJobType` `'purge-expired-notifications'`（`maintenanceWorker.ts`）+ `maintenanceScheduler` 独立 24h tick（`PURGE_NOTIFICATIONS_TICK_MS = 24 * 3600_000`，与 `purge-external-fetch-log` 同频）+ `deleteExpiredNotifications(db, nowIso): Promise<number>` 落 `db/queries/notifications.ts`——逐字对齐 ADR-188 `purge-external-fetch-log` / `deleteFetchLogBefore` 现成范式（零新机制）。
+   - **删除口径**：`DELETE FROM notifications WHERE expires_at IS NOT NULL AND expires_at <= NOW()`（`expires_at IS NULL` = 永不过期，永不清理 — 对齐 D-195-1 + ADR-192 D-192-5 未读过滤口径）。`notification_reads`/`notification_read_cursor` 经 `ON DELETE CASCADE`（migration 100 FK）自动级联清理 reads，cursor 不受影响（cursor 是 per-user 高水位、不引用具体 notification）。
+   - **物理删除否决软隐藏**（§2.1「物理清理或软隐藏」二选一）：裁定**物理 DELETE**。理由：① 通知**非合规真源**（ADR-192 D-192-1 解耦后 audit_log 才是合规取证真源，永久保留），过期通知无取证价值；② 物理删除与 ADR-188 purge 先例一致、最简、表不无限膨胀；③「消息中心」长期历史（P2-c）需求由**特定类型配长 TTL / NULL 永久**满足，而非保留全部过期行做软隐藏（软隐藏会让未读/列表查询长期背负 tombstone 过滤成本）。
+   - **批量上限保护**：单次 tick `DELETE ... ` 若量大可分批（`LIMIT` + 循环，或直接全删——首版数据量小直接全删，P2-d 实测后定）；登记为实施细节，非本 ADR 锁定项。
+
+5. **本 ADR 不新增 admin route（`verify:endpoint-adr` 不涉及）**（D-195-5）：过期清理走 maintenanceWorker scheduler tick（无 HTTP 端点，同 ADR-188 purge）；dedup_key 命名 / scope 前缀是**约定与类型层校验**，非端点。故本 ADR **无端点契约表**（与 ADR-193/194 同范式）。「消息中心」检索端点（若需）归 P2-c，届时另起独立端点 ADR（plan §4.5 R7 MUST-8）。
+
+### 影响文件（NTLG-P2-d / P2-b/c 落地，本 ADR docs-only 不改代码）
+
+- 新建/修改（P2-d 过期清理）：`apps/api/src/workers/maintenanceWorker.ts`（`MaintenanceJobType` + case `purge-expired-notifications`）+ `apps/api/src/workers/maintenanceScheduler.ts`（独立 24h tick）+ `apps/api/src/db/queries/notifications.ts`（`deleteExpiredNotifications` + TTL 默认注入策略）+ `apps/api/src/services/NotificationEmitter.ts`（expiresAt 省略时按策略表注入默认 TTL）
+- 修改（dedup/scope 约定消费）：`apps/api/src/services/notification-audit-emit.ts` + `apps/api/src/workers/crawlerWorker.notifications.ts`（现状已符约定，P2 校核）+ emit 入参 scope 类型层校验落点
+- 文档：`docs/architecture.md` §5.17（补 TTL 清理 worker + scope 定向 + dedup 约定，schema 字段不变故非红线、属补充说明）
+
+### 偏离登记
+
+- **D-195-DEV-1**：本 ADR 引入 Emitter 默认 TTL 注入后，既有 crawler/admin_action emit（现 expiresAt 不传 = NULL 永不过期）将获 30 天 TTL（行为变更）。处置：accept（P2-d 落地）——通知非合规真源（audit_log 永久保留，解耦 ADR-192 D-192-1），过期物理清理安全；长期检索归消息中心 P2-c 靠特定类型长 TTL/NULL。**P2-d 显式验收项（吸收 arch-reviewer 黄线①，由 accept 备注升级为硬验收）**：首版 per-type TTL 策略表**必须为 `admin_action` 显式配置一个 type→天数条目**（不得默认 30 天落空）——admin 手动合并/上架/回滚通知 30 天后消失是运营可感知的 UX 退化，须由运营追溯诉求显式定值（建议 ≥ 90 天或对照 audit 保留口径），避免「框架已锁、具体值漏配」。
+- **D-195-DEV-2**：定向 reads 写路径（markOneRead 例外位 + 定向逐行）仍 deferred 至「定向 scope 实际启用」（P2-b/c）。处置：accept——与 ADR-192 D-192-DEV-1/4 一致；当前无 role:/user: 定向 emit，提前落 reads 写实现会造无消费方的半套机制（YAGNI）。本 ADR 锁解除触发条件，不提前实装。
+- **D-195-DEV-3**：per-type TTL 策略表具体 type→天数映射留 P2-d 落地（本 ADR 锁「默认 30 + 可覆盖 + NULL 永久」三档框架）。处置：accept——具体数值需 P2-d 实测各类通知留存诉求后定，框架已锁足够 P2-d 实施；避免本 ADR 预设无依据的精确天数。
+
+### 评审
+
+- **arch-reviewer (claude-opus-4-8 / agentId af24d2b6d44d50f89) 结论：AUDIT RESULT: PASS**（与 ADR-194 同次评审；无红线，逐项核验全 ✅）。TTL/dedup/scope 部分核验要点：① **D-195-1 TTL 30 天合理**——对齐 ADR-188 D-188-7（核 `maintenanceWorker.ts:109` `purgeRetentionDays ?? 30`）统一后台保留口径；NULL=永不过期与 ADR-192 D-192-5 **完全一致**（核 `notifications.ts:142/206` `expires_at IS NULL OR expires_at > NOW()`）。② **D-195-2 dedup 约定正确沉淀现状**——`<type>:<source_ref>` 核 `crawlerWorker.notifications.ts:42`（设，幂等重放）+ `notification-audit-emit.ts:101`（不设，离散一对一），判据无矛盾。③ **D-195-3 scope 规则正确**——三前缀正则与 `migration 100:40` 注释 + 现状 scope='broadcast' 一致；定向 reads 解除条件「定向 scope 实际启用」与 ADR-192 D-192-DEV-1（line 21431）/ D-192-DEV-4（line 21488）一致且更精确。④ **D-195-4 物理删除范式精确**——复用 ADR-188 准确（job + 24h tick + queries 层 delete 四要素逐项对应）；物理 DELETE 论证成立（通知非合规真源、audit_log 才是，核 ADR-192 D-192-1 解耦）；**FK CASCADE 精确无误**：`notification_reads.notification_id ON DELETE CASCADE`（`migration 100:90`）级联清理、`notification_read_cursor` 仅 REFERENCES users(id)（:80）不引用 notifications 故 cursor 确不受影响；删除口径 `expires_at IS NOT NULL AND expires_at <= NOW()` 是 D-192-5 未读口径的精确逻辑补集（NULL 永不删正确）。⑤ **D-195-5 无新 route 成立**——清理走 scheduler tick（同 ADR-188 无 HTTP）、dedup/scope 是约定+类型层校验，无端点。横切：边界与 ADR-188/191/192/193 全面对齐，无技术栈外依赖/越层/双真源/硬编码/any/新 route 漏 ADR 红线。
+- 黄线（转 NTLG-P2-d / P2-b/c 实施期处理，不阻断本 ADR Accepted）：① **admin_action per-type TTL 须 P2-d 显式配置**——已吸收升级进 D-195-DEV-1（首版策略表必须为 admin_action 显式配 type→天数条目，建议 ≥ 90 天对照运营追溯诉求，不得默认 30 天落空，防「框架已锁、具体值漏配」）。② `D-195-DEV-N` 偏离编号不被 `verify-adr-d-numbers` 追踪（同 ADR-194 黄线①，全项目既有约定盲区，主决策号 D-195-1..5 正常解析）。③ **P2-d `purge-expired-notifications` tick 须避开 `maintenanceScheduler` 的 early-return 注册陷阱**——现 `maintenanceScheduler.ts` 用一串 `if (timer) return` 顺序守卫注册各 timer，新 tick 若插中段且前一 timer 已存在会被 `return` 短路跳过；ADR「逐字对齐 ADR-188 范式」措辞勿让实施者照抄末位追加而忽略该结构脆弱性，P2-d 须确认新 tick 注册位置不被前序守卫短路。
