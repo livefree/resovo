@@ -23,6 +23,8 @@ import type { CatalogUpdateData } from '@/api/db/queries/mediaCatalog'
 import { VideoIndexSyncService } from '@/api/services/VideoIndexSyncService'
 import { CACHE_PREFIXES } from '@/api/services/CacheService'
 import { AuditLogService } from '@/api/services/AuditLogService'
+import { NotificationEmitter } from '@/api/services/NotificationEmitter'
+import { buildAuditNotificationEmit } from '@/api/services/notification-audit-emit'
 import { normalizeMergeKey } from '@/api/services/TitleNormalizer'
 import { enrichmentQueue } from '@/api/lib/queue'
 import type { EnrichJobData } from '@/api/services/MetadataEnrichService'
@@ -83,6 +85,8 @@ export class VideoService {
   private readonly indexSync?: VideoIndexSyncService
   /** CHG-SN-4-10-A2：admin audit log（fire-and-forget） */
   private readonly auditSvc: AuditLogService
+  /** NTLG-P1-c-B-2：解耦双写 emit 中枢（fire-and-forget） */
+  private readonly notificationEmitter: NotificationEmitter
 
   constructor(
     private db: Pool,
@@ -93,6 +97,7 @@ export class VideoService {
       this.indexSync = new VideoIndexSyncService(db, es)
     }
     this.auditSvc = new AuditLogService(db)
+    this.notificationEmitter = new NotificationEmitter(db)
   }
 
   async list(params: {
@@ -360,6 +365,11 @@ export class VideoService {
         contentRating: input.contentRating ?? 'general',
       },
     })
+
+    // NTLG-P1-c-B-2：解耦双写 emit（与 audit 互不依赖；fire-and-forget）
+    this.notificationEmitter.emit(
+      buildAuditNotificationEmit({ actionType: 'video.manual_add', targetId: video.id }),
+    )
 
     return {
       id: video.id,

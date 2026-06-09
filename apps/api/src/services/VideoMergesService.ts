@@ -69,6 +69,8 @@ import {
   fetchVideoTitles,
 } from '@/api/db/queries/video-merge-mutations'
 import { AuditLogService } from '@/api/services/AuditLogService'
+import { NotificationEmitter } from '@/api/services/NotificationEmitter'
+import { buildAuditNotificationEmit } from '@/api/services/notification-audit-emit'
 import { MediaCatalogService } from '@/api/services/MediaCatalogService'
 // CHG-VIR-9-B / ADR-178：merge 事务挂 decision(confirmed) + unmerge 联动 reverted（R8 / D-105a-11）
 import { IdentityCandidatesService } from '@/api/services/IdentityCandidatesService'
@@ -135,11 +137,14 @@ const MAX_CLOSURE_PAIRS = MAX_COLLAPSE_PAIRS * 3
 export class VideoMergesService {
   private auditSvc: AuditLogService
   private catalogSvc: MediaCatalogService
+  /** NTLG-P1-c-B-2：解耦双写 emit 中枢（fire-and-forget） */
+  private notificationEmitter: NotificationEmitter
 
   constructor(private db: Pool) {
     this.auditSvc = new AuditLogService(db)
     // CHG-VIR-PRE-1: split 新建 video 前需 findOrCreate 作品层 catalog（catalog_id NOT NULL / migration 029）。
     this.catalogSvc = new MediaCatalogService(db)
+    this.notificationEmitter = new NotificationEmitter(db)
   }
 
   async listCandidates(params: ListCandidatesParams): Promise<ListCandidatesResult> {
@@ -545,6 +550,11 @@ export class VideoMergesService {
         ...(dedupedSourceIds.length > 0 ? { dedupedSourceIds } : {}),
       },
     })
+
+    // NTLG-P1-c-B-2：解耦双写 emit（COMMIT 后——与 audit.write 同范式防虚假记录；fire-and-forget）
+    this.notificationEmitter.emit(
+      buildAuditNotificationEmit({ actionType: 'video.merge', targetId: targetVideoId }),
+    )
 
     return {
       auditId,

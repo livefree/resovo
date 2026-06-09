@@ -5,6 +5,9 @@
  * 零写操作 / 零 R-MID-1 新增 / 零 ErrorCode 新增（D-147-7）
  *
  * R-147-1 缓解：白名单为 ReadonlySet 类型安全；新增 actionType 后检查此白名单。
+ *
+ * NTLG-P1-c-B-2：whitelist/title/level/href 映射真源已抽至 notification-audit-emit.ts
+ * （emit 双写侧共享同源 → parity）；本服务 import 复用 + re-export whitelist 维持既有 import 兼容。
  */
 
 import type { Pool } from 'pg'
@@ -16,49 +19,16 @@ import {
   countUnreadNotifications,
   upsertReadCursor,
 } from '@/api/db/queries/notifications'
+import {
+  NOTIFICATION_ACTION_WHITELIST,
+  NOTIFICATION_TITLE_MAP,
+  NOTIFICATION_LEVEL_MAP,
+  NOTIFICATION_HREF_MAP,
+  type NotificationActionType,
+} from '@/api/services/notification-audit-emit'
 
-/** 白名单 actionType（首版 8 类 / ADR-147 D-147-1） */
-export const NOTIFICATION_ACTION_WHITELIST: ReadonlySet<AdminAuditActionType> = new Set([
-  'system.webhook_send_failed',
-  'staging.batch_publish',
-  'video.manual_add',
-  'video.merge',
-  'user_submission.action',
-  'system.cache_clear',
-  'system.settings_update',
-  'system.audit_rollback',
-])
-
-/** level 映射（未列出 → 'info' 默认） */
-const LEVEL_MAP: ReadonlyMap<AdminAuditActionType, AdminNotificationItem['level']> = new Map([
-  ['system.webhook_send_failed', 'danger'],
-  ['system.cache_clear', 'warn'],
-  ['system.audit_rollback', 'warn'],
-])
-
-/** href 跳转映射 */
-const HREF_MAP: ReadonlyMap<AdminAuditActionType, string> = new Map([
-  ['system.webhook_send_failed', '/admin/settings'],
-  ['staging.batch_publish', '/admin/videos'],
-  ['video.manual_add', '/admin/videos'],
-  ['video.merge', '/admin/merge'],
-  ['user_submission.action', '/admin/user-submissions'],
-  ['system.cache_clear', '/admin/settings'],
-  ['system.settings_update', '/admin/settings'],
-  ['system.audit_rollback', '/admin/audit'],
-])
-
-/** title 模板映射 */
-const TITLE_MAP: ReadonlyMap<AdminAuditActionType, string> = new Map([
-  ['system.webhook_send_failed', 'Webhook 投递失败'],
-  ['staging.batch_publish', '批量上架完成'],
-  ['video.manual_add', '手动添加视频'],
-  ['video.merge', '视频合并完成'],
-  ['user_submission.action', '用户投稿处理'],
-  ['system.cache_clear', '缓存已清除'],
-  ['system.settings_update', '系统设置已更新'],
-  ['system.audit_rollback', '审计回滚执行'],
-])
+// re-export 维持既有 import 兼容（BackgroundEventService / 单测仍 import 自本服务）
+export { NOTIFICATION_ACTION_WHITELIST }
 
 interface AuditRow {
   id: string
@@ -102,14 +72,16 @@ export class NotificationService {
     ])
 
     const items: AdminNotificationItem[] = rowsRes.rows.map((row) => {
+      // 行已由 WHERE action_type = ANY(whitelist) 过滤 → 必属 NotificationActionType（窄化复用共享映射）
+      const actionType = row.action_type as NotificationActionType
       const item: AdminNotificationItem = {
         id: row.id,
-        title: TITLE_MAP.get(row.action_type) ?? row.action_type,
-        level: LEVEL_MAP.get(row.action_type) ?? 'info',
+        title: NOTIFICATION_TITLE_MAP[actionType],
+        level: NOTIFICATION_LEVEL_MAP.get(actionType) ?? 'info',
         createdAt: row.created_at.toISOString(),
         read: false,
       }
-      const href = HREF_MAP.get(row.action_type)
+      const href = NOTIFICATION_HREF_MAP.get(actionType)
       if (href) {
         return { ...item, href }
       }

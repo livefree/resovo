@@ -20,6 +20,7 @@ import {
   WishListMetadataSchema,
   MetadataCorrectionMetadataSchema,
 } from '@/api/services/UserSubmissionService'
+import { NotificationEmitter } from '@/api/services/NotificationEmitter'
 
 function makePool(): Pool {
   return { query: vi.fn() } as unknown as Pool
@@ -41,6 +42,7 @@ describe('UserSubmissionService.writeUserSubmissionAction audit shape (REDO-02-A
   })
 
   it('1. process 单条：actionType + targetKind + targetId + afterJsonb.action="process"', () => {
+    const emitSpy = vi.spyOn(NotificationEmitter.prototype, 'emit').mockImplementation(() => {})
     svc.writeUserSubmissionAction({
       actorId: 'actor-1',
       targetId: 'sub-uuid-1',
@@ -61,6 +63,17 @@ describe('UserSubmissionService.writeUserSubmissionAction audit shape (REDO-02-A
         }),
       }),
     )
+    // NTLG-P1-c-B-2：解耦双写 emit（与 audit 互不依赖；sourceRef=targetId）
+    expect(emitSpy).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'user_submission.action',
+      level: 'info',
+      title: '用户投稿处理',
+      sourceKind: 'admin_action',
+      scope: 'broadcast',
+      href: '/admin/user-submissions',
+      sourceRef: 'sub-uuid-1',
+    }))
+    emitSpy.mockRestore()
   })
 
   it('2. reject 单条：afterJsonb.action="reject" + reason 必填', () => {

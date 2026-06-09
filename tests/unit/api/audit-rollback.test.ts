@@ -67,6 +67,7 @@ import Fastify from 'fastify'
 import cookie from '@fastify/cookie'
 import { setupAuthenticate } from '@/api/plugins/authenticate'
 import * as authLib from '@/api/lib/auth'
+import { NotificationEmitter } from '@/api/services/NotificationEmitter'
 
 const mockVerify = authLib.verifyAccessToken as ReturnType<typeof vi.fn>
 
@@ -524,6 +525,53 @@ describe('POST rollback - 权限 + 白名单 (ADR-138 D-138-2/5)', () => {
     )
     // warnings 含 password_hash 被跳过
     expect(res.json().data.warnings.some((w: string) => w.includes('password_hash'))).toBe(true)
+    await app.close()
+  })
+})
+
+// ── NTLG-P1-c-B-2 解耦双写 emit（COMMIT 后 / parity 守护） ──────────────
+describe('POST rollback - 解耦双写 emit (NTLG-P1-c-B-2)', () => {
+  it('#24 回滚成功 → COMMIT 后 emit（system.audit_rollback warn）', async () => {
+    getAdminAuditLogByIdMock.mockResolvedValue({
+      id: '1001', actorId: 'a-1', actionType: 'video.staff_note', targetKind: 'video', targetId: 'v-1',
+      beforeJsonb: { staff_note: '旧' }, afterJsonb: { staff_note: '新' },
+    })
+    const client = buildMockClient()
+    dbConnectMock.mockResolvedValue(client)
+    selectCurrentRowForRollbackMock.mockResolvedValue({ staff_note: '新' })
+    rollbackAuditLogTargetMock.mockResolvedValue({ affectedRows: 1 })
+    const emitSpy = vi.spyOn(NotificationEmitter.prototype, 'emit').mockImplementation(() => {})
+
+    const app = await buildApp()
+    const res = await app.inject({
+      method: 'POST', url: '/admin/audit/logs/1001/rollback', headers: adminAuth(),
+    })
+    expect(res.statusCode).toBe(200)
+    expect(emitSpy).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'system.audit_rollback',
+      level: 'warn',
+      title: '审计回滚执行',
+      sourceKind: 'admin_action',
+      scope: 'broadcast',
+      href: '/admin/audit',
+    }))
+    emitSpy.mockRestore()
+    await app.close()
+  })
+
+  it('#25 UNSUPPORTED（422 / COMMIT 前抛错）→ 不 emit（无幽灵通知）', async () => {
+    getAdminAuditLogByIdMock.mockResolvedValue({
+      id: '1002', actionType: 'system.cache_clear', targetKind: 'system', targetId: null,
+      beforeJsonb: null, afterJsonb: null,
+    })
+    const emitSpy = vi.spyOn(NotificationEmitter.prototype, 'emit').mockImplementation(() => {})
+    const app = await buildApp()
+    const res = await app.inject({
+      method: 'POST', url: '/admin/audit/logs/1002/rollback', headers: adminAuth(),
+    })
+    expect(res.statusCode).toBe(422)
+    expect(emitSpy).not.toHaveBeenCalled()
+    emitSpy.mockRestore()
     await app.close()
   })
 

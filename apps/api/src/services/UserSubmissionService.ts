@@ -20,6 +20,8 @@
 import { z } from 'zod'
 import type { Pool } from 'pg'
 import { AuditLogService } from '@/api/services/AuditLogService'
+import { NotificationEmitter } from '@/api/services/NotificationEmitter'
+import { buildAuditNotificationEmit } from '@/api/services/notification-audit-emit'
 import { AppError } from '@/api/lib/errors'
 import {
   listUserSubmissions as listRaw,
@@ -93,9 +95,12 @@ export interface WriteUserSubmissionActionParams {
  */
 export class UserSubmissionService {
   private auditSvc: AuditLogService
+  /** NTLG-P1-c-B-2：解耦双写 emit 中枢（fire-and-forget） */
+  private notificationEmitter: NotificationEmitter
 
   constructor(private db: Pool) {
     this.auditSvc = new AuditLogService(db)
+    this.notificationEmitter = new NotificationEmitter(db)
   }
 
   /**
@@ -113,6 +118,11 @@ export class UserSubmissionService {
       afterJsonb: params.payload as unknown as Record<string, unknown>,
       requestId: params.requestId ?? null,
     })
+
+    // NTLG-P1-c-B-2：解耦双写 emit（与 audit 互不依赖；fire-and-forget）
+    this.notificationEmitter.emit(
+      buildAuditNotificationEmit({ actionType: 'user_submission.action', targetId: params.targetId }),
+    )
   }
 
   // ── REDO-02-B 6 业务方法（ADR-124 §端点契约 row 1-6）──────────────

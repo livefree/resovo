@@ -51,6 +51,7 @@ import Fastify from 'fastify'
 import cookie from '@fastify/cookie'
 import { setupAuthenticate } from '@/api/plugins/authenticate'
 import * as authLib from '@/api/lib/auth'
+import { NotificationEmitter } from '@/api/services/NotificationEmitter'
 
 const mockVerify = authLib.verifyAccessToken as ReturnType<typeof vi.fn>
 
@@ -258,5 +259,28 @@ describe('DELETE /admin/cache/:type (CHG-30)', () => {
         afterJsonb: expect.objectContaining({ cacheType: 'search', deletedKeys: expect.any(Number) }),
       }),
     )
+  })
+
+  // NTLG-P1-c-B-2：解耦双写 emit（route-local NotificationEmitter；与 audit 互不依赖）
+  it('解耦双写 emit（system.cache_clear / NTLG-P1-c-B-2）', async () => {
+    const emitSpy = vi.spyOn(NotificationEmitter.prototype, 'emit').mockImplementation(() => {})
+    mockScanWithKeys(['search:k1'])
+    const res = await app.inject({
+      method: 'DELETE',
+      url: '/admin/cache/search',
+      headers: authHeader('admin'),
+    })
+    expect(res.statusCode).toBe(200)
+    expect(emitSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'system.cache_clear',
+        level: 'warn',
+        title: '缓存已清除',
+        sourceKind: 'admin_action',
+        scope: 'broadcast',
+        href: '/admin/settings',
+      }),
+    )
+    emitSpy.mockRestore()
   })
 })

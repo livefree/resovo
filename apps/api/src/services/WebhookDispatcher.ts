@@ -18,6 +18,8 @@ import type { WebhookEventType, WebhookDispatchBody } from '@/types'
 import { isAllowedWebhookUrl } from '@/api/lib/ssrf-guard'
 import { createLogger } from '@/api/lib/logger'
 import type { AuditLogService } from './AuditLogService'
+import { NotificationEmitter } from '@/api/services/NotificationEmitter'
+import { buildAuditNotificationEmit } from '@/api/services/notification-audit-emit'
 
 const baseLogger = createLogger({ service: 'webhook-dispatcher' })
 
@@ -88,6 +90,9 @@ export interface DispatchTestResult {
 }
 
 export class WebhookDispatcher {
+  // NTLG-P1-c-B-2：解耦双写 emit 中枢（参数属性先于字段初始化器赋值，this.db 可用）
+  private readonly notificationEmitter = new NotificationEmitter(this.db)
+
   constructor(
     private readonly db: Pool,
     private readonly auditSvc: AuditLogService,
@@ -182,6 +187,11 @@ export class WebhookDispatcher {
         totalDurationMs: Date.now() - startedAt,
       },
     })
+
+    // NTLG-P1-c-B-2：解耦双写 emit（与 audit 互不依赖；fire-and-forget）
+    this.notificationEmitter.emit(
+      buildAuditNotificationEmit({ actionType: 'system.webhook_send_failed', targetId: null }),
+    )
   }
 
   /**

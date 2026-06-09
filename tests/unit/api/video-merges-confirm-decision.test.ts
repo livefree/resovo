@@ -82,6 +82,7 @@ import {
   markDecisionReverted,
 } from '@/api/db/queries/identity-decision'
 import { AuditLogService } from '@/api/services/AuditLogService'
+import { NotificationEmitter } from '@/api/services/NotificationEmitter'
 
 const ACTOR_ID = '00000000-0000-0000-0000-000000000001'
 const TARGET_ID = '00000000-0000-0000-0000-000000000002'
@@ -213,6 +214,7 @@ describe('VideoMergesService.merge + candidateId（ADR-178 D-178-3）', () => {
   it('无 candidateId → 不触发任何 candidate/decision 调用（主路径零变更）', async () => {
     const client = makeMockClient()
     const svc = new VideoMergesService(makeMockPool(client))
+    const emitSpy = vi.spyOn(NotificationEmitter.prototype, 'emit').mockImplementation(() => {})
     arrangeMergeHappyPath()
 
     const result = await svc.merge({ sourceVideoIds: [SOURCE_ID_1], targetVideoId: TARGET_ID }, ACTOR_ID)
@@ -221,6 +223,17 @@ describe('VideoMergesService.merge + candidateId（ADR-178 D-178-3）', () => {
     expect(findCandidateByIdReadonly).not.toHaveBeenCalled()
     expect(updateCandidateStatus).not.toHaveBeenCalled()
     expect(insertIdentityDecision).not.toHaveBeenCalled()
+    // NTLG-P1-c-B-2：解耦双写 emit（COMMIT 后；sourceRef=targetVideoId）
+    expect(emitSpy).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'video.merge',
+      level: 'info',
+      title: '视频合并完成',
+      sourceKind: 'admin_action',
+      scope: 'broadcast',
+      href: '/admin/merge',
+      sourceRef: TARGET_ID,
+    }))
+    emitSpy.mockRestore()
   })
 
   it('有 candidateId（pending + pair⊆集合）→ 单事务挂 candidate confirmed + decision(confirmed, audit_id / R8)', async () => {

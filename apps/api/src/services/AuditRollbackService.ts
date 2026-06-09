@@ -29,6 +29,8 @@ import {
   insertAuditLogInTransaction,
   getAdminAuditLogById,
 } from '@/api/db/queries/auditLog'
+import { NotificationEmitter } from '@/api/services/NotificationEmitter'
+import { buildAuditNotificationEmit } from '@/api/services/notification-audit-emit'
 
 // ── 配置常量 ─────────────────────────────────────────────────────────
 
@@ -251,6 +253,9 @@ export interface RollbackResult {
 // ── Service ──────────────────────────────────────────────────────────
 
 export class AuditRollbackService {
+  // NTLG-P1-c-B-2：解耦双写 emit 中枢（走 this.db 独立 Pool 连接，非事务 client）
+  private readonly notificationEmitter = new NotificationEmitter(this.db)
+
   constructor(private readonly db: Pool) {}
 
   /**
@@ -352,6 +357,12 @@ export class AuditRollbackService {
       })
 
       await client.query('COMMIT')
+
+      // NTLG-P1-c-B-2：解耦双写 emit（**COMMIT 后**——emit 走独立 Pool 连接不参与本事务，
+      // 置 COMMIT 前会在事务回滚时产生幽灵通知；fire-and-forget 与 audit 互不依赖）
+      this.notificationEmitter.emit(
+        buildAuditNotificationEmit({ actionType: 'system.audit_rollback', targetId: null }),
+      )
 
       return {
         rolledBack: true,

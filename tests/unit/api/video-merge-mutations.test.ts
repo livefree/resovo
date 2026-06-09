@@ -63,6 +63,14 @@ vi.mock('@/api/services/AuditLogService', () => ({
   })),
 }))
 
+// NTLG-P1-c-B-2：merge() 解耦双写 emit fire-and-forget——mock 同 AuditLogService 范式，
+// 避免真实 emit→insertNotification 走 bare pool mock（query 返 undefined）触发 .catch 内 baseLogger.warn
+vi.mock('@/api/services/NotificationEmitter', () => ({
+  NotificationEmitter: vi.fn().mockImplementation(() => ({
+    emit: vi.fn(),
+  })),
+}))
+
 vi.mock('@/api/services/TitleNormalizer', () => ({
   normalizeTitle: (t: string) => t.toLowerCase(),
   // ADR-174：VideoMergesService.split 新建 video 归并键改用 normalizeMergeKey（剥标点）

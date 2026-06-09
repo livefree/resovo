@@ -14,6 +14,8 @@ import { db } from '@/api/lib/postgres'
 import { redis } from '@/api/lib/redis'
 import { CacheService } from '@/api/services/CacheService'
 import { AuditLogService } from '@/api/services/AuditLogService'
+import { NotificationEmitter } from '@/api/services/NotificationEmitter'
+import { buildAuditNotificationEmit } from '@/api/services/notification-audit-emit'
 
 const CacheTypeSchema = z.enum(['search', 'video', 'danmaku', 'analytics', 'home', 'all'])
 
@@ -21,6 +23,7 @@ export async function adminCacheRoutes(fastify: FastifyInstance) {
   const auth = [fastify.authenticate, fastify.requireRole(['admin'])]
   const cacheService = new CacheService(redis)
   const auditSvc = new AuditLogService(db)  // CHG-SN-6-RETRO-3-A
+  const notificationEmitter = new NotificationEmitter(db)  // NTLG-P1-c-B-2 解耦双写
 
   // GET /admin/cache/stats
   fastify.get('/admin/cache/stats', { preHandler: auth }, async (_request, reply) => {
@@ -50,6 +53,11 @@ export async function adminCacheRoutes(fastify: FastifyInstance) {
       afterJsonb: { cacheType: parsed.data, deletedKeys: deleted },
       requestId: request.id,
     })
+
+    // NTLG-P1-c-B-2：解耦双写 emit（与 audit 互不依赖；fire-and-forget）
+    notificationEmitter.emit(
+      buildAuditNotificationEmit({ actionType: 'system.cache_clear', targetId: null }),
+    )
 
     return reply.send({ data: { deleted } })
   })

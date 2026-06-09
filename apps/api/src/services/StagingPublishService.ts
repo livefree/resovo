@@ -11,6 +11,8 @@ import * as videoQueries from '@/api/db/queries/videos'
 import * as systemSettingsQueries from '@/api/db/queries/systemSettings'
 import { VideoIndexSyncService } from '@/api/services/VideoIndexSyncService'
 import { AuditLogService } from '@/api/services/AuditLogService'
+import { NotificationEmitter } from '@/api/services/NotificationEmitter'
+import { buildAuditNotificationEmit } from '@/api/services/notification-audit-emit'
 import type { WebhookDispatcher } from '@/api/services/WebhookDispatcher'
 
 export interface ReadinessResult {
@@ -22,6 +24,8 @@ export class StagingPublishService {
   private readonly indexSync?: VideoIndexSyncService
   /** CHG-SN-4-10-A2：admin audit log（fire-and-forget） */
   private readonly auditSvc: AuditLogService
+  /** NTLG-P1-c-B-2：解耦双写 emit 中枢（fire-and-forget） */
+  private readonly notificationEmitter: NotificationEmitter
 
   constructor(
     private readonly db: Pool,
@@ -33,6 +37,7 @@ export class StagingPublishService {
       this.indexSync = new VideoIndexSyncService(db, es)
     }
     this.auditSvc = new AuditLogService(db)
+    this.notificationEmitter = new NotificationEmitter(db)
   }
 
   /** 从 system_settings 读取自动发布规则 */
@@ -171,6 +176,12 @@ export class StagingPublishService {
         afterJsonb: { ids: publishedIds, skipped: skippedIds },
         requestId: audit.requestId,
       })
+
+      // NTLG-P1-c-B-2：解耦双写 emit（**置 if(audit) 内**——系统自动 Job 路径无 audit、
+      // 现派生 list 对自动 Job 无记录，置外会 emit 出 parity 漂移通知；fire-and-forget）
+      this.notificationEmitter.emit(
+        buildAuditNotificationEmit({ actionType: 'staging.batch_publish', targetId: 'batch' }),
+      )
 
       // CHG-SN-8-FUP-WEBHOOK-IMPL-EP-A2 / ADR-146：admin 手动批量发布完成 → 推送 video.batch.complete
       // 系统 Job 触发（无 audit）不推送，避免 cron 高频噪音

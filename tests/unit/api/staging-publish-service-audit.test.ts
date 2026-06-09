@@ -34,6 +34,7 @@ import * as videoQueries from '@/api/db/queries/videos'
 import * as stagingQueries from '@/api/db/queries/staging'
 import { AuditLogService } from '@/api/services/AuditLogService'
 import { StagingPublishService } from '@/api/services/StagingPublishService'
+import { NotificationEmitter } from '@/api/services/NotificationEmitter'
 
 const ACTOR_ID = '00000000-0000-0000-0000-000000000001'
 const VIDEO_ID = '00000000-0000-0000-0000-000000000aaa'
@@ -83,6 +84,7 @@ describe('StagingPublishService.publishReadyBatch — staging.batch_publish audi
 
     const svc = new StagingPublishService(db, {} as unknown as import('@elastic/elasticsearch').Client)
     const auditSvc = (AuditLogService as unknown as ReturnType<typeof vi.fn>).mock.results.at(-1)!.value
+    const emitSpy = vi.spyOn(NotificationEmitter.prototype, 'emit').mockImplementation(() => {})
 
     // 重写 getRules 避免 db 调用
     vi.spyOn(svc, 'getRules').mockResolvedValue({} as unknown as Awaited<ReturnType<typeof svc.getRules>>)
@@ -100,6 +102,18 @@ describe('StagingPublishService.publishReadyBatch — staging.batch_publish audi
       }),
       requestId: 'req-batch-1',
     }))
+
+    // NTLG-P1-c-B-2：解耦双写 emit（if(audit) 内）
+    expect(emitSpy).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'staging.batch_publish',
+      level: 'info',
+      title: '批量上架完成',
+      sourceKind: 'admin_action',
+      scope: 'broadcast',
+      href: '/admin/videos',
+      sourceRef: 'batch',
+    }))
+    emitSpy.mockRestore()
   })
 
   it('audit 上下文缺失（系统 Job 触发）时不写 audit', async () => {
@@ -111,10 +125,14 @@ describe('StagingPublishService.publishReadyBatch — staging.batch_publish audi
 
     const svc = new StagingPublishService(db, {} as unknown as import('@elastic/elasticsearch').Client)
     const auditSvc = (AuditLogService as unknown as ReturnType<typeof vi.fn>).mock.results.at(-1)!.value
+    const emitSpy = vi.spyOn(NotificationEmitter.prototype, 'emit').mockImplementation(() => {})
     vi.spyOn(svc, 'getRules').mockResolvedValue({} as unknown as Awaited<ReturnType<typeof svc.getRules>>)
 
     await svc.publishReadyBatch(50) // 无 audit 参数
 
     expect(auditSvc.write).not.toHaveBeenCalled()
+    // NTLG-P1-c-B-2 parity：系统 Job 无 audit → 也不 emit（置 if(audit) 内守护）
+    expect(emitSpy).not.toHaveBeenCalled()
+    emitSpy.mockRestore()
   })
 })

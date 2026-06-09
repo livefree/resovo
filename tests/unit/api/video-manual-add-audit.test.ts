@@ -85,6 +85,7 @@ import { setupAuthenticate } from '@/api/plugins/authenticate'
 import * as authLib from '@/api/lib/auth'
 import { db } from '@/api/lib/postgres'
 import * as auditLogQueries from '@/api/db/queries/auditLog'
+import { NotificationEmitter } from '@/api/services/NotificationEmitter'
 
 const mockVerify = authLib.verifyAccessToken as ReturnType<typeof vi.fn>
 const mockDbQuery = db.query as ReturnType<typeof vi.fn>
@@ -371,6 +372,7 @@ describe('POST /admin/videos — R-MID-1 第 24 次 audit', () => {
     mockFindOrCreate.mockResolvedValue(newCatalog)
     mockCreateVideo.mockResolvedValue(newVideo)
     mockDbQuery.mockResolvedValue({ rows: [] })
+    const emitSpy = vi.spyOn(NotificationEmitter.prototype, 'emit').mockImplementation(() => {})
     const app = await buildApp()
     await app.inject({
       method: 'POST', url: '/admin/videos',
@@ -398,10 +400,22 @@ describe('POST /admin/videos — R-MID-1 第 24 次 audit', () => {
         }),
       }),
     )
+    // NTLG-P1-c-B-2：解耦双写 emit（sourceRef=新建 video id）
+    expect(emitSpy).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'video.manual_add',
+      level: 'info',
+      title: '手动添加视频',
+      sourceKind: 'admin_action',
+      scope: 'broadcast',
+      href: '/admin/videos',
+      sourceRef: VIDEO_ID,
+    }))
+    emitSpy.mockRestore()
     await app.close()
   })
 
   it('#14 422 不写 audit', async () => {
+    const emitSpy = vi.spyOn(NotificationEmitter.prototype, 'emit').mockImplementation(() => {})
     const app = await buildApp()
     await app.inject({
       method: 'POST', url: '/admin/videos',
@@ -410,6 +424,9 @@ describe('POST /admin/videos — R-MID-1 第 24 次 audit', () => {
     })
     await flush()
     expect(mockInsertAuditLog).not.toHaveBeenCalled()
+    // NTLG-P1-c-B-2 parity：422 短路 → 不 emit
+    expect(emitSpy).not.toHaveBeenCalled()
+    emitSpy.mockRestore()
     await app.close()
   })
 

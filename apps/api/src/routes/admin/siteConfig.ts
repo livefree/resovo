@@ -15,6 +15,8 @@ import * as systemSettingsQueries from '@/api/db/queries/systemSettings'
 import * as crawlerSitesQueries from '@/api/db/queries/crawlerSites'
 import { getSchedulerStatus } from '@/api/workers/maintenanceScheduler'
 import { AuditLogService } from '@/api/services/AuditLogService'
+import { NotificationEmitter } from '@/api/services/NotificationEmitter'
+import { buildAuditNotificationEmit } from '@/api/services/notification-audit-emit'
 import { redactSecretsForAudit, isMaskedPlaceholder } from '@/api/lib/secretRedaction'
 import type { SystemSettingKey } from '@/types'
 
@@ -89,6 +91,7 @@ function isValidHttpUrl(input: string): boolean {
 export async function adminSiteConfigRoutes(fastify: FastifyInstance) {
   const auth = [fastify.authenticate, fastify.requireRole(['admin'])]
   const auditSvc = new AuditLogService(db)  // CHG-SN-6-RETRO-3-A
+  const notificationEmitter = new NotificationEmitter(db)  // NTLG-P1-c-B-2 解耦双写
 
   // ── GET /admin/system/settings ──────────────────────────────
 
@@ -170,6 +173,11 @@ export async function adminSiteConfigRoutes(fastify: FastifyInstance) {
       afterJsonb: redactSecretsForAudit(pairs as Record<string, unknown>),
       requestId: request.id,
     })
+
+    // NTLG-P1-c-B-2：解耦双写 emit（与 audit 互不依赖；fire-and-forget）
+    notificationEmitter.emit(
+      buildAuditNotificationEmit({ actionType: 'system.settings_update', targetId: null }),
+    )
 
     return reply.send({ data: { ok: true } })
   })

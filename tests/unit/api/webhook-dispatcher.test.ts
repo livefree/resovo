@@ -19,6 +19,7 @@ const auditSvc = { write: auditWrite } as unknown as import('@/api/services/Audi
 vi.mock('@/api/lib/postgres', () => ({ db: { query: vi.fn() } }))
 
 import { WebhookDispatcher } from '@/api/services/WebhookDispatcher'
+import { NotificationEmitter } from '@/api/services/NotificationEmitter'
 import { db } from '@/api/lib/postgres'
 
 const mockDbQuery = db.query as ReturnType<typeof vi.fn>
@@ -164,6 +165,35 @@ describe('WebhookDispatcher — 重试 + 4xx + audit', () => {
       payload: { runId: 'r-1', siteKey: 'X' },
       totalDurationMs: expect.any(Number),
     }))
+  })
+
+  // NTLG-P1-c-B-2：解耦双写 emit（service 字段初始化 NotificationEmitter；最终失败 audit 旁 emit）
+  it('#9b 最终失败 → 解耦双写 emit（system.webhook_send_failed danger）', async () => {
+    loadSettings()
+    const emitSpy = vi.spyOn(NotificationEmitter.prototype, 'emit').mockImplementation(() => {})
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('e', { status: 503 }))
+    const dp = new WebhookDispatcher(db as never, auditSvc)
+    dp.enqueue('crawler.run.failed', { runId: 'r-1' }, ACTOR_ID)
+    await vi.runAllTimersAsync()
+    expect(emitSpy).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'system.webhook_send_failed',
+      level: 'danger',
+      title: 'Webhook 投递失败',
+      sourceKind: 'admin_action',
+      scope: 'broadcast',
+      href: '/admin/settings',
+    }))
+  })
+
+  // 订阅过滤/SSRF 拦截路径不写 audit → 也不应 emit（parity 守护）
+  it('#9c 订阅不含 event → 不 emit（与不写 audit 同步）', async () => {
+    mockDbQuery.mockResolvedValueOnce(settingsRows({ enabled: true, url: VALID_URL, secret: 's', events: ['submission.created'] }))
+    const emitSpy = vi.spyOn(NotificationEmitter.prototype, 'emit').mockImplementation(() => {})
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('ok'))
+    const dp = new WebhookDispatcher(db as never, auditSvc)
+    dp.enqueue('crawler.run.failed', { runId: 'r-1' }, ACTOR_ID)
+    await vi.runAllTimersAsync()
+    expect(emitSpy).not.toHaveBeenCalled()
   })
 })
 
