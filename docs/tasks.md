@@ -6,7 +6,7 @@
 
 ## 当前任务（单任务工作台：同时仅 1 个 🔄 进行中；完成即删卡，历史见 docs/changelog.md）
 
-_（当前无进行中任务。取下一个前先查 `docs/task-queue.md` 是否有 🚨 BLOCKER。**SEQ-20260609-01 后台 ntlg 治理已启动**：NTLG-ADR-P0 ✅（ADR-190 nav-counts + ADR-191 tasks cancel·retry，arch-reviewer Opus PASS，P0 端点解禁）。下一可取：NTLG-P0-2（修陈旧注释，无依赖快赢）/ NTLG-P0-1（nav-counts 实施，依赖 ADR-190 已 PASS）/ NTLG-P0-3（tasks 控制端点，依赖 ADR-191 已 PASS）。SEQ-20260608-01 cutover 剩：卡 4 回滚窗 🔄 观察至 ~2026-06-15、卡 5 改名待排期。）_
+_（当前无进行中任务。取下一个前先查 `docs/task-queue.md` 是否有 🚨 BLOCKER。**SEQ-20260609-01 ntlg 治理推进中**：NTLG-ADR-P0 ✅ + NTLG-P0-1-A ✅（nav-counts 后端端点）。下一可取：NTLG-P0-1-B（前端接入 + 去写死 + ADR-190 D-190-4 回填，依赖 -A 已完成）/ NTLG-P0-2（修陈旧注释，无依赖）/ NTLG-P0-3（tasks 控制端点，依赖 ADR-191）。SEQ-20260608-01 cutover 剩：卡 4 回滚窗 🔄 ~2026-06-15、卡 5 改名待排期。）_
 
 ---
 

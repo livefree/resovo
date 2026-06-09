@@ -521,3 +521,16 @@ export async function listSimilarCandidates(
     is_published: Boolean(row.is_published),
   }))
 }
+
+// ── 侧边栏 nav 计数（NTLG-P0-1 / ADR-190）────────────────────────────────────
+
+/**
+ * countPendingModeration — pending 审核积压轻量 COUNT（侧边栏 badge）。
+ * 与 listPendingQueue 主谓词 `review_status='pending_review'` 同口径，但不做其 JOIN/聚合。
+ */
+export async function countPendingModeration(db: Pool): Promise<number> {
+  const r = await db.query<{ count: string }>(
+    `SELECT COUNT(*)::text AS count FROM videos WHERE review_status = 'pending_review'`,
+  )
+  return parseInt(r.rows[0]?.count ?? '0', 10)
+}

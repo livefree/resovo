@@ -3059,3 +3059,17 @@
 - **门禁**：`verify:adr-contracts` EXIT=0（`verify-endpoint-adr ✅ 226 路由全部对齐，114 ADR 端点含本 3 新端点行` / `verify-sql-schema-alignment ✅` / `verify-style-shorthand-conflict ✅` / `verify-admin-shell-types-mirror ✅`）；error-message 194 + enum-ssot 73 + d-numbers 261 均 advisory 既有基线（本卡新增 D-190/191-N 属正常待实施卡闭环，未引入新代码 message/enum）。docs-only，test:changed SKIP。
 - **文件**：`docs/decisions.md`（+ADR-190 +ADR-191）/ `docs/task-queue.md`（+SEQ-20260609-01）/ `docs/tasks.md`（卡片流转）。
 - **执行模型**：claude-opus-4-8；**子代理**：arch-reviewer (claude-opus-4-8)。
+
+## [NTLG-P0-1-A] nav-counts 后端聚合端点（SEQ-20260609-01 · ADR-190 落地）
+
+- **背景**：治理方案 §5 侧边栏计数去写死。NTLG-P0-1 按原子化判据（Q1 改动项 >5 + Q2 跨 api-service/UI 两层）拆 -A（后端）/ -B（前端接入+去写死+ADR 回填）；本条为 -A。
+- **实现 ADR-190** `GET /admin/system/nav-counts`：
+  - `NavCountsService`（`apps/api/src/services/NavCountsService.ts`）逐模块容错聚合 5 计数（各计数独立 try/catch，失败/无权 → `meta.omitted`，不拖垮整包 §11 D8）；角色门控真源=各模块主读路由 preHandler 快照（moderation/sources/userSubmissions=admin+moderator；imageHealth/merge=admin-only）。
+  - 计数口径：moderation=pending 审核（新增轻量 `countPendingModeration`）/ sources=失效线路 `getVideoGroupStats().dead` / imageHealth=`getImageHealthStats().brokenLast7Days` / userSubmissions=pending 投稿（新增轻量 `countPendingSubmissions`）/ merge=`VideoMergesService.listCandidates` total（identity 来源，行为保真）。
+  - 新增 2 轻量 COUNT 落 queries 层（db-rules）；`AdminNavCounts`/`AdminNavCountKey`/`AdminNavCountsResponse` 类型落 `packages/types/src/admin-nav-counts.types.ts` + index 导出；route 注册 `server.ts`。
+- **门禁**：typecheck EXIT=0 / lint EXIT=0（4/4）/ `verify:adr-contracts` EXIT=0（`verify-endpoint-adr ✅ 227 路由对齐`——新端点匹配 ADR-190 解禁 / `verify-sql-schema-alignment ✅` 新 COUNT 列对齐 schema / `verify-admin-shell-types-mirror ✅`）。
+- **测试**：新增 7 用例——`nav-counts-service.test.ts` 4（admin 全集 / moderator 角色门控省略 imageHealth+merge / 单模块失败降级 omitted + baseLogger.warn / merge 取 listCandidates total）+ `nav-counts-route.test.ts` 3（admin 200 透传 / moderator role 透传 + omitted / 无 token 401）。test:changed 因 packages/types 改动升全量（ADR-180）：6834 passed，2 失败均**既有 flaky**（VideoListClient CSV 导出 + VideoMergesService perf p95<200ms baseline，全量并行重载超时），**隔离复跑 39/39 通过**，与本卡无关（本卡未触 listCandidates 逻辑 / CSV 导出）。
+- **文件**：+`services/NavCountsService.ts` / +`routes/admin/system-nav-counts.ts` / `server.ts` / `db/queries/{moderation,userSubmissions}.ts` / +`packages/types/src/admin-nav-counts.types.ts` / `packages/types/src/index.ts` / +`tests/unit/api/nav-counts-{service,route}.test.ts`。
+- **共享层沉淀评估**：AdminNavCounts DTO 已落 packages/types（跨 api 产出 + server-next 消费的契约真源），符合沉淀要求；NavCountsService 为单消费方编排，暂不需进一步抽象。
+- **后续**：NTLG-P0-1-B 前端 `useAdminNavCounts` 改消费本端点 + admin-nav 去写死 + 回填 ADR-190 D-190-4 定稿角色矩阵（YL3）。
+- **执行模型**：claude-opus-4-8（人工 opus 会话覆盖 sonnet 建议——「由你按规范持续推进」授权同会话连续执行）；**子代理**：无。

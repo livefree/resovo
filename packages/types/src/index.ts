@@ -50,6 +50,8 @@ export { SOURCE_QUICK_FILTERS, SOURCE_PROBLEM_KINDS, NEEDS_SOURCE_SEVERITIES } f
 export { MOUNTAIN_CODENAMES, MOUNTAIN_CODENAMES_COUNT } from './route-codenames'
 export type * from './admin-audit.types'
 export type * from './admin-shell.types'
+// ADR-190 / NTLG-P0-1：侧边栏导航计数聚合 DTO
+export type * from './admin-nav-counts.types'
 export type * from './dashboard'
 
 export { DEFAULT_INGEST_POLICY, MASK_PREFIX, SECRET_KEY_PATTERNS, isSecretSettingKey } from './system.types'

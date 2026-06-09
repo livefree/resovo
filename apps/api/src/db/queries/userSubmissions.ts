@@ -288,3 +288,16 @@ export async function batchMarkRejected(
   )
   return res.rows.map((r) => r.id)
 }
+
+// ── 侧边栏 nav 计数（NTLG-P0-1 / ADR-190）────────────────────────────────────
+
+/**
+ * countPendingSubmissions — pending 用户投稿轻量 COUNT（侧边栏 badge）。
+ * 走 AD2 partial index `WHERE status='pending'`。
+ */
+export async function countPendingSubmissions(db: Pool): Promise<number> {
+  const r = await db.query<{ count: string }>(
+    `SELECT COUNT(*)::text AS count FROM user_submissions WHERE status = 'pending'`,
+  )
+  return parseInt(r.rows[0]?.count ?? '0', 10)
+}
