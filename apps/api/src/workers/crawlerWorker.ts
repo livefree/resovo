@@ -17,6 +17,7 @@ import { CrawlerRefetchService } from '@/api/services/CrawlerRefetchService'
 // CHG-SN-8-FUP-WEBHOOK-IMPL-EP-A2.1 / ADR-146：crawler run failed → 触发 webhook
 import { WebhookDispatcher, SYSTEM_ACTOR_ID } from '@/api/services/WebhookDispatcher'
 import { AuditLogService } from '@/api/services/AuditLogService'
+import { NotificationEmitter } from '@/api/services/NotificationEmitter'
 import * as crawlerSitesQueries from '@/api/db/queries/crawlerSites'
 import * as crawlerTasksQueries from '@/api/db/queries/crawlerTasks'
 import { createCrawlerTaskLog } from '@/api/db/queries/crawlerTaskLogs'
@@ -25,8 +26,11 @@ import * as systemSettingsQueries from '@/api/db/queries/systemSettings'
 import * as sourcesQueries from '@/api/db/queries/sources'
 import { syncSourceCheckStatusFromSources, transitionVideoState } from '@/api/db/queries/videos'
 import { getEnabledSources, type CrawlJobData, type CrawlJobResult } from './crawlerWorker.sources'
+import { buildRunCompletedNotification } from './crawlerWorker.notifications'
 
 const workerLog = baseLogger.child({ worker: 'crawler-worker' })
+// NTLG-P1-c-B-1：run 终态 emit 采集完成 digest 通知（解耦双写中枢，ADR-193 D-193-2）
+const notificationEmitter = new NotificationEmitter(db)
 
 // ── 公开 re-export（外部 import 路径保持不变）──────────────────
 export { parseCrawlerSources, getEnabledSources } from './crawlerWorker.sources'
@@ -484,6 +488,10 @@ async function processCrawlJob(job: Bull.Job<CrawlJobData>): Promise<CrawlJobRes
           withJob(workerLog, job).warn({ err, runId }, 'webhook dispatcher trigger failed')
         }
       }
+      // NTLG-P1-c-B-1 / ADR-193 D-193-4：run 终态（含 success）emit 采集完成 digest 通知（解耦双写，
+      // 复用 syncResult run 级 status+summary；非终态返 null 不 emit；emit fire-and-forget 不阻断 worker）
+      const runCompletedNotif = syncResult && buildRunCompletedNotification(syncResult, runId)
+      if (runCompletedNotif) notificationEmitter.emit(runCompletedNotif)
     }
   }
 }
