@@ -3123,3 +3123,13 @@
 - **NTLG-P0-3 整卡收口**（-A 后端 `POST /admin/tasks/:id/{cancel,retry}` + -B topbar 接线）：任务抽屉 cancel/retry 端到端打通，替换 toast stub。
 - **文件**：`apps/server-next/src/app/admin/admin-shell-client.tsx` / `tests/e2e/admin/_shared/shell-mocks.ts`。
 - **执行模型**：claude-opus-4-8（人工 opus 会话覆盖 sonnet 建议——「持续推进」授权同会话连续）；**子代理**：无。
+
+## [NTLG-P0-4] 采集完成 digest 文案（过渡态）（SEQ-20260609-01）
+
+- **背景**：治理方案 §6 P0-4——采集完成事件已映射为 finished lane 通知（标题级），但 `crawler_runs.summary` 的 videosUpserted/sourcesUpserted/failed/errors 指标无处可见（plan §0.2 真实缺口）。补 digest 文案（过渡态，正式结构化 TaskResultDigest 见 ADR-193 / P1-b/c）。
+- **改动**（单文件后端，零类型/零前端改动）：`BackgroundEventService` 加 `buildRunDigest(summary)` helper——从 summary 安全提取数值字段（typeof number + Number.isFinite 守卫）→「新增 N 视频 · M 线路 · K 站点失败 · E 错误」（失败/错误为 0 时省略）；finishedRunEvents 条件设 `description`（`...(digest !== undefined && { description: digest })`，无有效数据不设）。
+- **零类型/前端改动依据**：`AdminBackgroundEventFinished.description?` 字段已存在（packages/types）；前端 `admin-shell-notifications.ts:108` finished lane 映射已消费 `event.description → NotificationItem.body` → digest 直达通知抽屉，无需碰类型或前端。
+- **门禁**：typecheck/lint EXIT=0（4/4）/ test:changed 增量 EXIT=0；新测 2（#5b summary→digest 文案断言「新增 42 视频 · 13 线路 · 1 站点失败 · 2 错误」 / #5c summary=null→description undefined），background-event-service 14 全过。
+- **文件**：`apps/api/src/services/BackgroundEventService.ts` / `tests/unit/api/background-event-service.test.ts`。
+- **P0 阶段收口**：NTLG-ADR-P0（ADR-190/191 Opus PASS）+ P0-1（nav-counts 去写死）+ P0-2（webhook 陈旧警示清理）+ P0-3（tasks cancel/retry 端到端）+ P0-4（采集 digest 文案）全部完成。P1（通知架构升级，ADR-192/193 须 Opus 子代理设计）建议新会话 opus 启动。
+- **执行模型**：claude-opus-4-8（人工 opus 会话覆盖 sonnet 建议——「持续推进」授权同会话连续）；**子代理**：无。

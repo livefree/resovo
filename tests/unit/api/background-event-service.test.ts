@@ -165,6 +165,33 @@ describe('BackgroundEventService.list — finished 源', () => {
     expect(ev?.level).toBe('danger') // failed → danger
   })
 
+  it('#5b finished crawler_run summary → digest description（NTLG-P0-4）', async () => {
+    const finRun = makeRun({
+      id: 'run-fin-digest',
+      status: 'partial_failed',
+      finishedAt: '2026-05-25T09:00:00Z',
+      summary: { videosUpserted: 42, sourcesUpserted: 13, done: 4, failed: 1, errors: 2 },
+    })
+    listRunsMock.mockResolvedValueOnce({ rows: [], total: 0 })          // active
+    listRunsMock.mockResolvedValueOnce({ rows: [finRun], total: 1 })    // finished
+
+    const res = await svc.list({ limit: 20, windowHours: 6 })
+    const ev = res.events.find((e) => e.id === 'crawler_run:run-fin-digest')
+    // @ts-expect-error finished lane 含 description
+    expect(ev?.description).toBe('新增 42 视频 · 13 线路 · 1 站点失败 · 2 错误')
+  })
+
+  it('#5c finished crawler_run summary=null → 无 description', async () => {
+    const finRun = makeRun({ id: 'run-fin-nodigest', status: 'success', finishedAt: '2026-05-25T09:00:00Z', summary: null })
+    listRunsMock.mockResolvedValueOnce({ rows: [], total: 0 })
+    listRunsMock.mockResolvedValueOnce({ rows: [finRun], total: 1 })
+
+    const res = await svc.list({ limit: 20, windowHours: 6 })
+    const ev = res.events.find((e) => e.id === 'crawler_run:run-fin-nodigest')
+    // @ts-expect-error finished lane 含 description
+    expect(ev?.description).toBeUndefined()
+  })
+
   it('#6 audit_log 高危白名单 crawler.freeze → finished high_risk_audit 事件', async () => {
     queryMock.mockResolvedValue({
       rows: [{

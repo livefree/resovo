@@ -157,18 +157,23 @@ export class BackgroundEventService {
     }))
 
     // D — finished crawler_runs
-    const finishedRunEvents: AdminBackgroundEventFinished[] = finishedResult.rows.map((run) => ({
-      lane: 'finished' as const,
-      id: `crawler_run:${run.id}`,
-      kind: 'crawler_run' as const,
-      status: run.status as 'success' | 'failed' | 'partial_failed' | 'cancelled' | 'timeout',
-      level: (run.status === 'success' ? 'info' : run.status === 'partial_failed' ? 'warn' : 'danger') as 'info' | 'warn' | 'danger',
-      title: buildRunTitle(run.crawlMode, run.triggerType),
-      startedAt: run.startedAt ?? undefined,
-      finishedAt: run.finishedAt ?? run.updatedAt,
-      runId: run.id,
-      href: `/admin/crawler/runs/${run.id}`,
-    }))
+    const finishedRunEvents: AdminBackgroundEventFinished[] = finishedResult.rows.map((run) => {
+      // NTLG-P0-4：采集完成结果摘要（过渡态），透出 summary 指标到事件 description
+      const digest = buildRunDigest(run.summary)
+      return {
+        lane: 'finished' as const,
+        id: `crawler_run:${run.id}`,
+        kind: 'crawler_run' as const,
+        status: run.status as 'success' | 'failed' | 'partial_failed' | 'cancelled' | 'timeout',
+        level: (run.status === 'success' ? 'info' : run.status === 'partial_failed' ? 'warn' : 'danger') as 'info' | 'warn' | 'danger',
+        title: buildRunTitle(run.crawlMode, run.triggerType),
+        ...(digest !== undefined && { description: digest }),
+        startedAt: run.startedAt ?? undefined,
+        finishedAt: run.finishedAt ?? run.updatedAt,
+        runId: run.id,
+        href: `/admin/crawler/runs/${run.id}`,
+      }
+    })
 
     // E — audit_log 高危
     const auditEvents: AdminBackgroundEventFinished[] = auditResult.rows.map((row) => ({
@@ -208,4 +213,29 @@ function buildRunTitle(crawlMode: string, triggerType: string): string {
   const modeLabel = crawlMode === 'keyword' ? '关键词采集' : crawlMode === 'source-refetch' ? '补源采集' : '批量采集'
   const triggerLabel = triggerType === 'schedule' ? '定时' : triggerType === 'all' ? '全站' : triggerType === 'single' ? '单站' : '批量'
   return `${triggerLabel}${modeLabel}`
+}
+
+/**
+ * buildRunDigest — 从 crawler_runs.summary 构建采集结果摘要文案（NTLG-P0-4 过渡态）。
+ * summary 键（syncRunStatusFromTasks 落库）：videosUpserted/sourcesUpserted/done/failed/errors。
+ * 正式版结构化 TaskResultDigest（metrics chips）见 ADR-193 / P1-b/c；此处仅产出人读字符串
+ * 透出 finished 事件 description（前端映射已消费 description→NotificationItem.body，无前端改动）。
+ * 无有效数据 → 返回 undefined（不设 description）。
+ */
+function buildRunDigest(summary: Record<string, unknown> | null): string | undefined {
+  if (!summary) return undefined
+  const num = (key: string): number | undefined => {
+    const v = summary[key]
+    return typeof v === 'number' && Number.isFinite(v) ? v : undefined
+  }
+  const parts: string[] = []
+  const videos = num('videosUpserted')
+  if (videos !== undefined) parts.push(`新增 ${videos} 视频`)
+  const sources = num('sourcesUpserted')
+  if (sources !== undefined) parts.push(`${sources} 线路`)
+  const failed = num('failed')
+  if (failed !== undefined && failed > 0) parts.push(`${failed} 站点失败`)
+  const errors = num('errors')
+  if (errors !== undefined && errors > 0) parts.push(`${errors} 错误`)
+  return parts.length > 0 ? parts.join(' · ') : undefined
 }

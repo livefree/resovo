@@ -1685,9 +1685,12 @@
      - 依赖：NTLG-P0-3-A。建议模型：sonnet。
      - **完成备注**：`handleCancelTask`/`handleRetryTask` 改 `apiClient.post('/admin/tasks/:id/{cancel,retry}',{})`→成功 success toast + `reloadTasks()` 刷新抽屉 / 失败 danger toast 透传 `err.message`（含后端 409 文案如「运行中作业不支持取消」）；`useAdminTasks` 解构 `reload`；e2e shell-mocks 加两 POST mock（正则匹配 :id/cancel|retry）。门禁：typecheck/lint/test:changed EXIT=0（增量 6，admin-shell-client 渲染测试持平）。抽屉点击交互按后端 10 测全覆盖 + e2e mock 支持 + 既有 stub 无单测先例，留 e2e/手动验收（plan §9「点取消/重试不再 toast」）。执行模型: claude-opus-4-8（人工 opus 覆盖 sonnet 建议——「持续推进」授权）；子代理: 无。
    - **NTLG-P0-3 整卡 ✅**（-A 后端端点 + -B topbar 接线，cancel/retry 端到端打通）。
-5. **NTLG-P0-4** — 采集完成 digest 文案补全（过渡态）（状态：⬜ 待开始）
+5. **NTLG-P0-4** — 采集完成 digest 文案补全（过渡态）（状态：✅ 已完成 2026-06-09）
    - 范围：`background-events` finished lane 把 `crawler.run.completed` 补结构化 digest 文案（正式版见 P1-b/c）。
    - 依赖：无（与 P1-b 不冲突，过渡态）。建议模型：sonnet。
+   - **完成备注**：`BackgroundEventService` 加 `buildRunDigest(summary)` helper——从 `crawler_runs.summary`（videosUpserted/sourcesUpserted/failed/errors）安全提取 → 「新增 N 视频 · M 线路 · K 站点失败 · E 错误」；finishedRunEvents 条件设 `description`（无有效数据不设）。`AdminBackgroundEventFinished.description?` 字段已存在 + 前端 finished 映射已消费 description→NotificationItem.body（admin-shell-notifications.ts:108）→ 零类型改动、零前端改动，digest 直达通知抽屉。门禁：typecheck/lint/test:changed EXIT=0；新测 2（#5b 有 summary→digest / #5c summary=null→无 description），background-event-service 14 全过。过渡态，正式结构化 TaskResultDigest（metrics chips）见 ADR-193/P1-b/c。执行模型: claude-opus-4-8（人工 opus 覆盖 sonnet 建议——「持续推进」授权）；子代理: 无。
+
+**P0 阶段全部完成**（NTLG-ADR-P0 + P0-1 + P0-2 + P0-3 + P0-4 ✅）：侧边栏去写死 + webhook 陈旧警示清理 + tasks cancel/retry 端到端 + 采集完成 digest 文案。P1 阶段（NTLG-ADR-P1-A/B 起 ADR-192/193 → P1-a/b/c）须 Opus 子代理设计，建议新会话 opus 启动。
 
 ### P1 阶段（通知架构升级 + 任务结果摘要 · 地基）
 
