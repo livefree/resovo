@@ -1839,9 +1839,9 @@
 
 ## [SEQ-20260610-02] 视频/线路/站点健康度与反馈闭环（source-health v2 方案落地）
 
-- **状态**：🔄 执行中（4/16 卡完成：P1-4 ✅ P1-2 ✅ P1-1-A ✅ P1-1-B ✅——B1/B2/B3 三根因全修复；Phase 1 剩 P1-5）
+- **状态**：🔄 执行中（5/16 卡完成：**Phase 1 主线全收口** P1-4/P1-2/P1-1-A/P1-1-B/P1-5 ✅；下一步 P1-3 独立卡〔前置 Opus〕或 Phase 2）
 - **创建时间**：2026-06-10 12:53
-- **最后更新时间**：2026-06-10 13:50
+- **最后更新时间**：2026-06-10 13:55
 - **目标**：落地 `docs/designs/source-health-feedback-loop-plan_20260610.md` v2（两轮独立审核有条件通过，必修全吸收，commit 88893812）：修复「全部探测/试播后状态不更新」三处可见断点（B1/B2/B3）→ 打通反馈闭环（F1–F4）→ 评分进化 + 站点/主机桥接（D3/D4）。
 - **范围**：apps/api（service/queries/routes/lib）+ apps/worker（jobs/lib）+ apps/server-next（sources/videos 模块 UI）+ apps/web-next（PlayerShell）+ packages（media-probe 新包，P1-3）。**方案 §3 为各卡内容真源，§4 为门禁真源**；卡面只记验收口径与文件范围。
 - **依赖**：无 BLOCKER；方案 v2 已批准（用户 2026-06-10）。
@@ -1874,11 +1874,13 @@
    - 文件范围（开工/review 修正后）：`VideoColumns.tsx`、`VideoFilterFields.tsx`、`lib/videos/types.ts`、`lib/videos/columns.ts` + 单测。
    - 依赖：SRCHEALTH-P1-1-A ✅。建议模型：sonnet。
    - **完成备注**：① probe 列占位 cell → `checkStatusToSignal` 四态映射（pending/ok/partial/all_dead → DualSignal 五态，缺失→unknown）双字段真数据 + `enableSorting: true`。② 排序链 4 处同步：VideoFilterFields 白名单 +2 / COMPOSITE_SORT_MAP `probe→source_check_status`（双信号列排序取探测主信号）/ `VideoListFilter.sortField` union +2（**diagnostics 拦截**：初版漏同步致类型错误）/ columns.ts descriptors probe `enableSorting: true`（**Codex stop-time review 拦截**：descriptors 与 buildVideoColumns 不一致致排序指示符状态漂移）。③ 行类型 +`render_check_status?`。**登记**：columns.ts `VIDEO_SORT_FIELDS` 为零消费方死导出（候选清理项，范围外不动）。**B1 收口 = 用户报「探测/试播状态不更新」三根因 B1/B2/B3 全部修复**。门禁：typecheck/lint EXIT=0 / VideoColumns 31/31（新增 5 用例含 descriptors 对齐防漂移守卫）/ test:changed 73 passed / e2e:admin 82/82（descriptors 修复后复跑）。执行模型: claude-fable-5（建议 sonnet，用户会话人工覆盖持续推进授权）；子代理: 无（Codex stop-time review 为 hook 自动触发）。
-5. **SRCHEALTH-P1-5** — feedback recheck 定向化（F2）（状态：⬜ 待开始）
-   - 创建时间：2026-06-10 12:53
-   - 验收口径：feedback recheck 对目标 source 先 level1 再 level2 定向重测（`runLevel2Render` 增可选 `sourceIds`），probe=dead 的失败源不再被静默标 processed。
-   - 文件范围：`apps/worker/src/jobs/feedback-driven-recheck.ts`、`apps/worker/src/jobs/source-health/level2-render.ts`（+ level1-probe 复用入口）。
+5. **SRCHEALTH-P1-5** — feedback recheck 定向化（F2）（状态：✅ 已完成 2026-06-10 13:55）
+   - 创建时间：2026-06-10 12:53 ｜ 实际开始：2026-06-10 13:52 ｜ 完成时间：2026-06-10 13:55
+   - 验收口径：feedback recheck 对信号源先 level1 定向重探、再 level2 定向重测；每个信号源均被真实重测后才标 processed。
+   - 文件范围：`apps/worker/src/jobs/feedback-driven-recheck.ts`、`apps/worker/src/jobs/source-health/{level1-probe,level2-render}.ts`。
    - 依赖：无。建议模型：sonnet。
+   - **完成备注**：① level1-probe +`loadSourcesByIds`（口径同 loadActiveSources + id 过滤）。② level2 `runLevel2Render` 增可选 `{ sourceIds }` 定向分支（省略 → cron 全局行为不变；定向 SQL 保留 `probe_status='ok'` 守卫——recheck 已先跑 level1，probe dead 源连不通无需 render 重测）。③ recheck 编排重写：信号源去重 → level1 定向重探（probe 真相刷新，消 F2-①「probe dead 静默丢信号」）→ aggregateBatch 受影响视频（与 cron 路径同步骤）→ render 重置 pending → level2 定向（消 F2-②「全局 100 条与信号脱钩」）→ 标 processed（语义成立：每源已真实重测，重测仍 dead = 确认失效）。④ 新编排测试 4 用例（定向参数/去重/NULL 信号/空源降级）。worker 改动无对应 e2e 域（ADR-180 域选跑）。门禁：typecheck/lint EXIT=0 / 新测 4/4 + source-health 既有 24/24 / test:changed 19 passed。执行模型: claude-fable-5（建议 sonnet，用户会话人工覆盖持续推进授权）；子代理: 无。
+   - **Phase 1 主线（5 卡）全部收口 ✅ 2026-06-10**。下一步：P1-3 独立卡（前置 Opus 裁决 packages/media-probe 导出面）或 Phase 1 收口复盘（两套聚合语义并存收敛 + videos.ts 拆分 + 排序白名单 4 处收敛三个候选项裁决）。
 
 ### 任务列表（P1-3 独立卡 — 共享解析包）
 

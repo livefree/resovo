@@ -3805,3 +3805,22 @@
   - 排序白名单现有 4 处需同步（route zod SORT_FIELDS / queries SORT_FIELD_WHITELIST / 前端 VIDEO_SORT_FIELD_WHITELIST / VideoListFilter.sortField union）——本卡 2 次被工具拦截均为漏同步，链路收敛为单一真源是候选改进项。
   - `lib/videos/columns.ts` 的 `VIDEO_SORT_FIELDS` 为零消费方死导出（候选清理，范围外不动）。
   - 门禁：typecheck/lint EXIT=0；VideoColumns 31/31；test:changed 73 passed；e2e:admin 82/82（descriptors 修复后复跑）。
+
+## [SRCHEALTH-P1-5] feedback recheck 定向化（F2）
+- **完成时间**：2026-06-10
+- **记录时间**：2026-06-10 13:56
+- **执行模型**：claude-fable-5（建议 sonnet，用户会话人工覆盖——「批准开始 v2 拆卡准备开发」持续推进授权）
+- **子代理**：无
+- **修改文件**：
+  - `apps/worker/src/jobs/source-health/level1-probe.ts` — +`loadSourcesByIds`（定向 level1 入口，口径同 loadActiveSources）
+  - `apps/worker/src/jobs/source-health/level2-render.ts` — `runLevel2Render` 增可选 `{ sourceIds }` 定向分支（省略 → cron 全局行为不变；定向保留 probe='ok' 守卫）
+  - `apps/worker/src/jobs/feedback-driven-recheck.ts` — 编排重写：信号源去重 → level1 定向重探 → aggregateBatch → render 重置 → level2 定向 → 标 processed
+  - `tests/unit/worker/jobs/feedback-driven-recheck.test.ts` — 新建 4 编排用例（定向参数/去重+NULL 滤除/空源降级/no-op）
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - F2 两断点关闭：① probe dead 信号源不再「未重测即标 processed」（level1 必测刷新真相）；② level2 不再依赖全局 100 条 candidates 覆盖信号源（定向直达）。
+  - 标 processed 语义现成立：每信号源均被真实重测；重测仍 dead = 确认失效，结论已产出。
+  - 定向 level1 后同步 aggregateBatch（与 cron 路径 runSourceHealthLevel1 步骤对齐，B2 即时性在 worker 路径同样成立）。
+  - worker 改动无对应 e2e 域（ADR-180 域选跑原则）；门禁：typecheck/lint EXIT=0、新测 4/4 + source-health 既有 24/24、test:changed 19 passed。
+  - **Phase 1 主线（P1-4/P1-2/P1-1-A/P1-1-B/P1-5）全收口**。候选复盘项三件：两套聚合语义并存收敛 / videos.ts 拆分 / 排序白名单 4 处收敛。

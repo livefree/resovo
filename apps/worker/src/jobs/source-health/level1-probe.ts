@@ -182,3 +182,20 @@ export async function loadActiveSources(pool: Pool): Promise<VideoSource[]> {
   )
   return result.rows
 }
+
+/**
+ * SRCHEALTH-P1-5（F2）：按 id 集合加载源 — feedback recheck 定向 level1 重探入口。
+ * 与 loadActiveSources 同口径（is_active + 未删除），仅加 id 过滤。
+ */
+export async function loadSourcesByIds(pool: Pool, sourceIds: readonly string[]): Promise<VideoSource[]> {
+  if (sourceIds.length === 0) return []
+  const result = await pool.query<VideoSource>(
+    `SELECT id, video_id, source_url, type, is_active,
+            probe_status, render_status, quality_detected,
+            last_probed_at, last_rendered_at
+     FROM video_sources
+     WHERE id = ANY($1::uuid[]) AND is_active = true AND deleted_at IS NULL`,
+    [sourceIds],
+  )
+  return result.rows
+}

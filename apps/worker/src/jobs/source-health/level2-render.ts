@@ -17,8 +17,17 @@ type RenderResult = {
   error_detail: string | null
 }
 
-export async function runLevel2Render(pool: Pool, log: pino.Logger): Promise<void> {
-  const sources = await loadLevel2Candidates(pool)
+/**
+ * SRCHEALTH-P1-5（F2）：可选 sourceIds 定向重测——feedback recheck 消费，
+ * 不再依赖全局 candidates（按 last_rendered_at 取 100 条）覆盖信号源。
+ * 省略 opts → 既有 cron 全局行为不变。
+ */
+export async function runLevel2Render(
+  pool: Pool,
+  log: pino.Logger,
+  opts?: { readonly sourceIds?: readonly string[] },
+): Promise<void> {
+  const sources = await loadLevel2Candidates(pool, opts?.sourceIds)
   log.info({ metric: 'render.started', value: sources.length }, 'Level2 render started')
 
   for (const source of sources) {
@@ -177,7 +186,25 @@ async function writeHealthEvent(pool: Pool, source: VideoSource, result: RenderR
   )
 }
 
-async function loadLevel2Candidates(pool: Pool): Promise<VideoSource[]> {
+async function loadLevel2Candidates(pool: Pool, sourceIds?: readonly string[]): Promise<VideoSource[]> {
+  // SRCHEALTH-P1-5：定向模式——仅测指定源（feedback recheck 已先跑 level1，
+  // probe_status='ok' 守卫保留：probe dead 的源连不通，render 重测无意义）
+  if (sourceIds !== undefined) {
+    if (sourceIds.length === 0) return []
+    const result = await pool.query<VideoSource>(
+      `SELECT id, video_id, source_url, type, is_active,
+              probe_status, render_status, quality_detected,
+              last_probed_at, last_rendered_at
+       FROM video_sources
+       WHERE id = ANY($1::uuid[])
+         AND is_active = true
+         AND deleted_at IS NULL
+         AND probe_status = 'ok'`,
+      [sourceIds],
+    )
+    return result.rows
+  }
+
   const result = await pool.query<VideoSource>(
     `SELECT id, video_id, source_url, type, is_active,
             probe_status, render_status, quality_detected,
