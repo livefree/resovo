@@ -53,12 +53,17 @@ export interface NotificationRow {
   expiresAt: string | null
 }
 
-export interface ListNotificationsParams {
+/**
+ * list / count 共享过滤参数（buildNotificationFilter 同口径，避免谓词漂移）。
+ * 消息中心检索/过滤字段（ADR-196 D-196-4）为加性——drawer 省略=旧行为。
+ */
+export interface CountNotificationsParams {
   /** 命中的 scope 集合（broadcast + role:* + user:<当前>），WHERE scope = ANY */
   scopes: string[]
-  limit: number
-  /** ISO 8601 时间下界（含）；省略则不限时间窗 */
+  /** ISO 8601 时间下界（含 created_at >=）；省略则不限时间窗 */
   since?: string
+  /** ISO 8601 时间上界（含 created_at <=）；与 since 组日期范围（ADR-196 D-196-4） */
+  until?: string
   /** 是否包含已过期通知（默认 false，过滤 expires_at <= NOW()） */
   includeExpired?: boolean
   /**
@@ -67,13 +72,22 @@ export interface ListNotificationsParams {
    * finished lane 进抽屉（ADR-155），list 读全表会与之重复；admin_action allowlist 保新 list ≡ 旧 audit 派生 list。
    */
   sourceKinds?: string[]
+  /** 标题 ILIKE 检索（% / _ 转义防通配注入，ADR-196 D-196-4）；省略则不检索 */
+  q?: string
+  /** level 过滤（WHERE level = ANY）；空/省略则不限 */
+  levels?: NotificationLevel[]
+  /** type 过滤（WHERE type = ANY）；空/省略则不限 */
+  types?: string[]
+  /** 已读态过滤（broadcast/role 按 cursorReadAt 比较：unread=created_at>基线 / read=<=）；需 cursorReadAt 才生效 */
+  readState?: 'read' | 'unread'
+  /** readState 比较基线（getEffectiveReadCursor）；readState 设而此缺则跳过该过滤 */
+  cursorReadAt?: string | null
 }
 
-export interface CountNotificationsParams {
-  scopes: string[]
-  since?: string
-  includeExpired?: boolean
-  sourceKinds?: string[]
+export interface ListNotificationsParams extends CountNotificationsParams {
+  limit: number
+  /** keyset 分页游标（上一页末行 created_at+id，ADR-196 D-196-4）；省略=首页 */
+  cursor?: { createdAt: string; id: string }
 }
 
 export interface CountUnreadParams {
@@ -122,21 +136,41 @@ export async function insertNotification(db: Queryable, input: InsertNotificatio
  * 共享 WHERE 构造（listNotifications / countNotifications 同口径，避免谓词漂移）。
  * 返回 { clause, values }；调用方追加 LIMIT 等尾参时基于 values.length 续编号。
  */
-function buildNotificationFilter(params: {
-  scopes: string[]
-  since?: string
-  includeExpired?: boolean
-  sourceKinds?: string[]
-}): { clause: string; values: unknown[] } {
+function buildNotificationFilter(params: CountNotificationsParams): { clause: string; values: unknown[] } {
   const conds: string[] = ['scope = ANY($1::text[])']
   const values: unknown[] = [params.scopes]
   if (params.since) {
     values.push(params.since)
     conds.push(`created_at >= $${values.length}::timestamptz`)
   }
+  if (params.until) {
+    values.push(params.until)
+    conds.push(`created_at <= $${values.length}::timestamptz`)
+  }
   if (params.sourceKinds) {
     values.push(params.sourceKinds)
     conds.push(`source_kind = ANY($${values.length}::text[])`)
+  }
+  if (params.levels && params.levels.length > 0) {
+    values.push(params.levels)
+    conds.push(`level = ANY($${values.length}::text[])`)
+  }
+  if (params.types && params.types.length > 0) {
+    values.push(params.types)
+    conds.push(`type = ANY($${values.length}::text[])`)
+  }
+  if (params.q) {
+    // ILIKE 通配（% _ \）转义防用户输入被当通配符；配合默认 ESCAPE '\'
+    values.push(`%${params.q.replace(/[\\%_]/g, '\\$&')}%`)
+    conds.push(`title ILIKE $${values.length}`)
+  }
+  if (params.readState && params.cursorReadAt) {
+    values.push(params.cursorReadAt)
+    conds.push(
+      params.readState === 'unread'
+        ? `created_at > $${values.length}::timestamptz`
+        : `created_at <= $${values.length}::timestamptz`,
+    )
   }
   if (!params.includeExpired) {
     conds.push('(expires_at IS NULL OR expires_at > NOW())')
@@ -145,12 +179,21 @@ function buildNotificationFilter(params: {
 }
 
 /**
- * 列通知（scope + 可选 source_kind + 可选时间窗 + limit，按 created_at DESC）。
- * 命中 idx_notifications_scope_created_at（scope 等值 + created_at 排序）。
- * read 状态不在行内计算——由 service 据 cursor（broadcast/role）/ reads（定向）判定。
+ * 列通知（scope + 可选过滤 + 可选 keyset 游标 + limit，按 created_at DESC, id DESC）。
+ * 命中 idx_notifications_scope_created_at（scope 等值 + created_at 排序，ADR-196 黄线 2；id 仅同 created_at 平局稳定键）。
+ * read 状态不在行内计算——由 service 据 cursor（broadcast/role）/ reads（定向）判定（readState 过滤为 SQL 侧 created_at 比较，非行内 read）。
  */
 export async function listNotifications(db: Queryable, params: ListNotificationsParams): Promise<NotificationRow[]> {
   const { clause, values } = buildNotificationFilter(params)
+  let where = clause
+  if (params.cursor) {
+    // keyset：DESC 排序下取「严格小于游标」的行（created_at 更早，或同 created_at 而 id 更小），稳定无重无漏
+    values.push(params.cursor.createdAt)
+    const cIdx = values.length
+    values.push(params.cursor.id)
+    const iIdx = values.length
+    where += ` AND (created_at < $${cIdx}::timestamptz OR (created_at = $${cIdx}::timestamptz AND id < $${iIdx}::bigint))`
+  }
   values.push(params.limit)
   const limitIdx = values.length
   const res = await db.query<NotificationRow>(
@@ -168,8 +211,8 @@ export async function listNotifications(db: Queryable, params: ListNotifications
        created_at AS "createdAt",
        expires_at AS "expiresAt"
      FROM notifications
-     WHERE ${clause}
-     ORDER BY created_at DESC
+     WHERE ${where}
+     ORDER BY created_at DESC, id DESC
      LIMIT $${limitIdx}`,
     values,
   )

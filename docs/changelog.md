@@ -3424,3 +3424,18 @@
 - **注意事项**：解锁 **NTLG-P2-c-A**（消息中心页：list 端点扩展 + server-next 页，依赖 D-196-4）/ **-B**（SSE 实装，依赖 D-196-1/2/3）/ **-C**（归档 + 收口 3 项，依赖 -ADR+-A）。归档 v1 不做（用户裁定，延后独立卡）。
 - **文件**：`docs/decisions.md`（+ADR-196）/ `docs/task-queue.md`（P2-c 拆卡蓝图 + -ADR ✅）/ `docs/tasks.md`（卡片流转）/ `docs/audit/adr-d-status.json`（verify-adr-d-numbers 自动重生成，登记 D-196 待闭环）。
 - **执行模型**：claude-opus-4-8（主循环，人工 opus 覆盖——「先推进P2-c」+ AskUserQuestion 选定 F5 v1 不做归档授权）；**子代理**：arch-reviewer (claude-opus-4-8 / agentId ae216f569ae577648)。
+
+## [NTLG-P2-c-A-1] 消息中心 list 端点后端扩展（cursor/q/过滤，ADR-196 D-196-4）（SEQ-20260609-01 P2-c 拆卡）
+
+- **背景**：ADR-196 D-196-4——扩展现 `GET /admin/notifications` 支撑「消息中心」全量历史 + 检索 + 过滤 + keyset 分页，**加性向后兼容**（省略新参=现 drawer 旧行为）。P2-c-A（消息中心）含后端（api-service）+ 前端页（UI）+ >5 改动项 → 拆 -A-1（后端，本卡）/ -A-2（前端页）。
+- **queries（`buildNotificationFilter` 共享扩展）**：+`until`（created_at ≤ 上界）/ `q`（title ILIKE，**% _ \ 转义防通配注入** + 默认 ESCAPE）/ `levels`·`types`（= ANY 过滤）/ `readState`（read/unread 按 cursorReadAt 比较，仅 broadcast/role）。`listNotifications` +**keyset cursor 分页**（`(created_at,id) < (cursorCreatedAt,cursorId)` for DESC + `ORDER BY created_at DESC, id DESC` 稳定排序，黄线 2 id 平局键）。`CountNotificationsParams` 升为 list/count 共享过滤真源、`ListNotificationsParams extends` 之 + limit/cursor。
+- **service（`NotificationService.list` 扩参 + nextCursor）**：可选 since/until/q/levels/types/readState/cursor；**readState 路径先 await readAt 作 cursorReadAt 基线，非 readState 路径保 list/count/readAt 三并行**（既有 query 顺序不变 → 19 既有测零破 + drawer hot path 并行）；返回 `nextCursor`（rows 满 limit → 末行 {createdAt,id}，否则 null=末页）。
+- **route（QuerySchema + cursor 编解码 + history 模式）**：QuerySchema +until/cursor/q/level/type/readState；`encodeCursor`/`decodeCursor`（base64url 不透明串 `<createdAtISO>|<id>` + 严格校验非法→null→422）；**消息中心模式**（cursor/q/level/type/until/readState 任一）→ 不默认 7d 窗（全量历史），drawer 模式默认 7d；`meta.nextCursor` 加性。
+- **门禁**：typecheck（7 ws）EXIT=0 / lint EXIT=0 / `verify:adr-contracts` EXIT=0（endpoint-adr 231 无新 route〔扩展现有〕/ sql 79 / mirror 2）/ **test:changed 55 文件 795 passed** / 集成 admin-notifications 14→15 零回归。
+- **测试**：`notification-service.test.ts` 19→21（+M1 消息中心模式 q→meta.nextCursor 编码满 limit + since=null 无默认窗 / +M2 无效 cursor→422）；`admin-notifications.test.ts` 集成 +1（真 PG：q 标题 ILIKE + **ILIKE 通配转义**〔q='100%' 字面匹配「发布 100% 完成」不当通配〕+ level/type 过滤 + **keyset 分页**〔limit 2 → [C,B]，游标 B → 下一页 [A]〕）。**既有 19 测零破**（非 readState 路径保旧三并行 query 顺序，分支隔离）。
+- **七问自检**：① 整页刷新：N/A（后端）② 重复逻辑/状态：否（buildNotificationFilter 单一 WHERE 真源 list/count 共享、CountNotificationsParams 升共享基类）③ 逻辑应下沉仍留：否（SQL 在 queries、编排在 service、cursor 编解码在 route 边界）④ 破坏分层/复用：否（route→service→queries 未越层）⑤ 需拆分：否（A-1 后端单层 / 前端拆 A-2）⑥ 技术债：否（readState 双路径为保既有测 + 并行权衡，注释说明）⑦ audit payload：N/A。**[AI-CHECK] 结论：SAFE**（加性向后兼容〔省略新参=旧行为〕/ ILIKE 转义防通配 / keyset 稳定排序 / 既有测零破分支隔离 / 真 PG 口径验证）。
+- **新增依赖**：无。
+- **数据库变更**：无（v1 零 schema，复用 idx_notifications_scope_created_at；归档延后 D-196-DEV-1）。
+- **注意事项**：解锁 **NTLG-P2-c-A-2**（server-next 消息中心 admin 页：DataTable 消费扩展后 list + 检索/过滤/分页 UI）。**实施级偏离登记**：includeExpired 保 false（消息中心暂不显已过期未 purge 的 ≤24h 窗通知，与 drawer 一致；如需「全量含过期」属 refinement）。
+- **文件**：`apps/api/src/db/queries/notifications.ts`（共享过滤 + keyset）/ `apps/api/src/services/NotificationService.ts`（list 扩参 + nextCursor + readState 双路径）/ `apps/api/src/routes/admin/notifications.ts`（QuerySchema + cursor 编解码 + history 模式 + meta.nextCursor）/ `tests/unit/api/notification-service.test.ts`（+M1/M2）/ `tests/integration/api/admin-notifications.test.ts`（+消息中心扩展集成）/ `docs/task-queue.md`（P2-c-A 拆 -A-1/-A-2，-A-1 ✅）/ `docs/tasks.md`（卡片流转）。
+- **执行模型**：claude-opus-4-8（主循环，人工 opus 覆盖 sonnet——「先做 A 然后做 B」授权）；**子代理**：无（ADR-196 D-196-4 已锁，纯实施）。

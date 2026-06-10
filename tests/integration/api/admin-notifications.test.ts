@@ -250,4 +250,39 @@ describe('notifications 写路径 round-trip（BEGIN/ROLLBACK 零污染）', () 
     )
     expect(readsLeft.rows[0]!.c).toBe('0')
   })
+
+  it('消息中心扩展：q 检索 / level·type 过滤 / keyset 分页 / ILIKE 转义（ADR-196 D-196-4）', async () => {
+    const scope = 'role:p2ca_msgcenter'
+    const at = (min: number) => new Date(Date.now() - min * 60_000).toISOString()
+    // 3 条：title/level/type/created_at 各异（含 title 带字面 '%' 测转义）
+    await client.query(
+      `INSERT INTO notifications (type, level, title, source_kind, scope, created_at) VALUES
+        ('video.merge','info','合并视频 A','admin_action',$1,$2),
+        ('video.merge','warn','合并视频 B','admin_action',$1,$3),
+        ('staging.batch_publish','danger','发布 100% 完成','admin_action',$1,$4)`,
+      [scope, at(30), at(20), at(10)],
+    )
+
+    // q 标题 ILIKE
+    const q1 = await listNotifications(client, { scopes: [scope], limit: 50, q: '视频' })
+    expect(q1.map((r) => r.title).sort()).toEqual(['合并视频 A', '合并视频 B'])
+    // ILIKE 通配转义：q='100%' 应当字面匹配（% 不当通配），命中「发布 100% 完成」
+    const qEsc = await listNotifications(client, { scopes: [scope], limit: 50, q: '100%' })
+    expect(qEsc.map((r) => r.title)).toEqual(['发布 100% 完成'])
+
+    // level 过滤
+    const lvl = await listNotifications(client, { scopes: [scope], limit: 50, levels: ['danger'] })
+    expect(lvl.map((r) => r.title)).toEqual(['发布 100% 完成'])
+    // type 过滤
+    const typ = await listNotifications(client, { scopes: [scope], limit: 50, types: ['staging.batch_publish'] })
+    expect(typ.length).toBe(1)
+
+    // keyset 分页：created_at DESC → C(10) > B(20) > A(30)；limit 2 取 [C,B]，游标 B → 下一页 [A]
+    const page1 = await listNotifications(client, { scopes: [scope], limit: 2 })
+    expect(page1.map((r) => r.title)).toEqual(['发布 100% 完成', '合并视频 B'])
+    const last = page1[1]!
+    const cursor = { createdAt: new Date(last.createdAt).toISOString(), id: last.id }
+    const page2 = await listNotifications(client, { scopes: [scope], limit: 2, cursor })
+    expect(page2.map((r) => r.title)).toEqual(['合并视频 A'])
+  })
 })

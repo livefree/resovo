@@ -1777,7 +1777,9 @@
         - **F5 归档语义**：broadcast/role 非 per-user 行 → 归档「对谁」非平凡。待 ADR 裁（per-user 归档表似 notification_reads / 全局 archived_at 列 migration 104 / 视图层 only 三选一）。
         - **F6 收口 P1-c-C 3 项**：crawler 移出 background lane（统一进 list）/ 红点改读 unread-count（替 list-derived，BLOCKER-1 回填）/ 定向 scope 逐行 reads 激活（D-192-DEV-1/4）。
         - 依赖：P1-a ✅。建议模型：opus（+ arch-reviewer）。
-      - **NTLG-P2-c-A** — 消息中心页（历史 + 检索）：list 端点扩展（分页/检索/过滤，加性）+ server-next 新 admin 页（DataTable 范式消费）。依赖 -ADR（F4）。建议模型：sonnet。
+      - **NTLG-P2-c-A** — 消息中心页（历史 + 检索）：list 端点扩展（分页/检索/过滤，加性）+ server-next 新 admin 页（DataTable 范式消费）。依赖 -ADR（F4）。建议模型：sonnet。**拆卡（api-service + UI + >5 项）**：
+        - **NTLG-P2-c-A-1** — list 端点后端扩展（buildNotificationFilter +until/q/levels/types/readState + listNotifications keyset cursor 分页 + service/route/meta.nextCursor）。状态：✅ 已完成 2026-06-09。依赖 D-196-4 ✅。建议模型：sonnet。**完成备注**：扩展现 `GET /admin/notifications` 加性向后兼容（详见 changelog [NTLG-P2-c-A-1]）。buildNotificationFilter 共享扩 until/q〔ILIKE 转义防通配〕/levels/types/readState + listNotifications keyset 分页（`(created_at,id)<游标` + ORDER created_at DESC,id DESC 稳定）+ service nextCursor〔readState 双路径保既有并行 query 顺序〕+ route cursor base64url 编解码 + history 模式无默认 7d 窗 + meta.nextCursor。门禁全绿（test:changed 795 / 集成 14→15 / 既有 19 测零破）。无 schema。执行模型 opus；子代理 无。
+        - **NTLG-P2-c-A-2** — server-next 消息中心 admin 页（DataTable 消费扩展后 list + 检索/过滤 UI + 分页）。状态：⬜。依赖 -A-1。建议模型：sonnet。
       - **NTLG-P2-c-B** — SSE 未读实时推送实装：`/admin/notifications/stream` SSE 路由 + Redis pub/sub（emit publish + 端点 subscribe）+ 前端 fetch-stream 客户端（替 60s 轮询，保轮询 fallback）。依赖 -ADR（F1/F2/F3）。建议模型：sonnet（架构已 ADR 锁）。
       - **NTLG-P2-c-C** — 归档 + 收口 P1-c-C 3 项（按 ADR F5/F6 裁定落地）。依赖 -ADR + -A。建议模型：sonnet。
 15. **NTLG-P2-d** — 维护 worker 清理 `expires_at` 过期通知 + TTL 策略注入（状态：✅ 已完成 2026-06-09 — -A/-B 两子卡全收口；过期通知治理端到端，ADR-195 全 5 决策闭环）

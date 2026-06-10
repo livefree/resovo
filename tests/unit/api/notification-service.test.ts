@@ -319,4 +319,55 @@ describe('GET /admin/notifications endpoint — auth + 正常路径', () => {
     expect(typeof body.meta.readAt).toBe('string')
     await app.close()
   })
+
+  it('#M1 消息中心模式（q）→ meta.nextCursor 编码（满 limit）+ since=null（无默认窗，ADR-196 D-196-4）', async () => {
+    queryMock
+      .mockResolvedValueOnce({
+        rows: [{
+          id: '42', type: 'video.merge', level: 'info', title: '合并视频 X', body: null, payload: null,
+          href: null, sourceKind: 'admin_action', sourceRef: null, scope: 'broadcast',
+          createdAt: new Date('2026-06-09T08:00:00Z'), expiresAt: null,
+        }],
+      })
+      .mockResolvedValueOnce({ rows: [{ count: '1' }] })
+      .mockResolvedValueOnce({ rows: [{ readAt: new Date('2026-06-01T00:00:00Z') }] })
+
+    const authLib = await import('@/api/lib/auth')
+    ;(authLib.verifyAccessToken as ReturnType<typeof vi.fn>).mockReturnValue({ userId: 'admin-1', role: 'admin', iat: Math.floor(Date.now() / 1000) })
+    const Fastify = (await import('fastify')).default
+    const cookie = (await import('@fastify/cookie')).default
+    const { setupAuthenticate } = await import('@/api/plugins/authenticate')
+    const { adminNotificationRoutes } = await import('@/api/routes/admin/notifications')
+    const app = Fastify({ logger: false })
+    await app.register(cookie, { secret: 'test-secret' })
+    setupAuthenticate(app)
+    await app.register(adminNotificationRoutes)
+    await app.ready()
+    const res = await app.inject({ method: 'GET', url: '/admin/notifications?q=%E8%A7%86%E9%A2%91&limit=1', headers: { Authorization: 'Bearer t' } })
+    expect(res.statusCode).toBe(200)
+    const body = res.json() as { meta: { since: string | null; nextCursor: string | null } }
+    expect(body.meta.since).toBeNull() // 消息中心模式不默认 7d 窗
+    expect(typeof body.meta.nextCursor).toBe('string') // rows 满 limit → 有下一页游标
+    const decoded = Buffer.from(body.meta.nextCursor as string, 'base64url').toString('utf8')
+    expect(decoded).toContain('42') // 末行 id
+    await app.close()
+  })
+
+  it('#M2 无效 cursor → 422 VALIDATION_ERROR', async () => {
+    const authLib = await import('@/api/lib/auth')
+    ;(authLib.verifyAccessToken as ReturnType<typeof vi.fn>).mockReturnValue({ userId: 'admin-1', role: 'admin', iat: Math.floor(Date.now() / 1000) })
+    const Fastify = (await import('fastify')).default
+    const cookie = (await import('@fastify/cookie')).default
+    const { setupAuthenticate } = await import('@/api/plugins/authenticate')
+    const { adminNotificationRoutes } = await import('@/api/routes/admin/notifications')
+    const app = Fastify({ logger: false })
+    await app.register(cookie, { secret: 'test-secret' })
+    setupAuthenticate(app)
+    await app.register(adminNotificationRoutes)
+    await app.ready()
+    // 'bm9waXBl' = base64url('nopipe')，解码无 '|' 分隔 → decodeCursor 返 null → 422
+    const res = await app.inject({ method: 'GET', url: '/admin/notifications?cursor=bm9waXBl', headers: { Authorization: 'Bearer t' } })
+    expect(res.statusCode).toBe(422)
+    await app.close()
+  })
 })
