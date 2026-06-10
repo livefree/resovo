@@ -1,17 +1,20 @@
 /**
  * TaskAggregator.ts — admin Shell 任务面板聚合（ADR-147）
  *
- * 数据源（D-147-3 方案 C 有主次）：
+ * 数据源（D-147-3 方案 C 有主次 / ADR-194 D-194-5 副源升级）：
  *   主源：crawler_runs 表（最近 N 条按 created_at DESC，可配 since 窗口）
- *   副源：bull queue active jobs（crawlerQueue + maintenanceQueue 仅 active 状态）
- *   合并去重：CrawlerRun 优先（业务语义更丰富）；bull id 加 `bull-${queueName}-` 前缀避免冲突
+ *   副源：task_runs 持久登记（替代旧「bull active 瞬时快照」——终态留存 + digest + 失败锚点）；
+ *         id 加 `taskrun-${id}` 前缀避免与 crawler UUID / bull-{queue}-{jobId} 冲突
+ *   合并：两源 union 按 startedAt 倒序，slice(limit)
  *
- * R-147-3 缓解：bull queue 调用 try-catch 降级 — Redis 不可用时仅返回 CrawlerRun 数据 + degraded=true
+ * R-147-3 缓解：bull getJobCounts（任务闪电 running 计数）try-catch 降级 — Redis 不可用时
+ *   queueCounts 归零 + degraded=true；task_runs/crawler_runs 走同一 DB，DB 不可用则整体失败（口径一致）。
  */
 
 import type { Pool } from 'pg'
 import type { AdminTaskItem, AdminQueueCounts, TaskResultDigest, TaskMetric } from '@resovo/types'
 import { crawlerQueue, maintenanceQueue } from '@/api/lib/queue'
+import { listTaskRuns, type TaskRunRow, type TaskRunStatus } from '@/api/db/queries/taskRuns'
 
 /**
  * buildTaskResultDigest — 从 crawler_runs.summary 投影结构化 TaskResultDigest（ADR-193 D-193-4，path A）。
@@ -87,6 +90,17 @@ const STATUS_MAP: Record<string, AdminTaskItem['status']> = {
 
 const FAILED_STATUSES = new Set(['failed', 'partial_failed', 'cancelled'])
 
+/** task_runs.status（6 态）→ AdminTaskItem.status（4 态）映射（ADR-194 D-194-5）。
+ *  cancelled→failed 与 crawler STATUS_MAP 同口径；cancelling=取消进行中仍在跑 → running（直至 cancelled）。 */
+const TASK_RUN_STATUS_MAP: Record<TaskRunStatus, AdminTaskItem['status']> = {
+  pending: 'pending',
+  running: 'running',
+  cancelling: 'running',
+  success: 'success',
+  failed: 'failed',
+  cancelled: 'failed',
+}
+
 export interface ListTasksParams {
   limit: number
   since: string
@@ -116,9 +130,14 @@ export class TaskAggregator {
 
     const crawlerItems: AdminTaskItem[] = runsRes.rows.map((row) => this.mapCrawlerRun(row))
 
-    const { bullItems, queueCounts, degraded } = await this.fetchBullSnapshot()
+    // ADR-194 D-194-5：副源从「bull active 瞬时快照」升级为「task_runs 持久登记」
+    //   （终态留存 + digest + 失败锚点；同 DB 读，DB 不可用与 crawler_runs 一并失败、口径一致）。
+    const taskRunItems = await this.fetchTaskRuns(params)
 
-    const merged = [...crawlerItems, ...bullItems]
+    // queueCounts 仍取 bull getJobCounts（任务闪电 running 计数，§4.1）；Redis 不可用降级。
+    const { queueCounts, degraded } = await this.fetchQueueCounts()
+
+    const merged = [...crawlerItems, ...taskRunItems]
       .sort((a, b) => b.startedAt.localeCompare(a.startedAt))
       .slice(0, params.limit)
 
@@ -127,6 +146,28 @@ export class TaskAggregator {
       total: merged.length,
       queueCounts,
       degraded,
+    }
+  }
+
+  /** 副源 task_runs 持久登记 → AdminTaskItem（D-194-5；同 since 窗口 + limit，命中 idx_task_runs_created_at）。 */
+  private async fetchTaskRuns(params: ListTasksParams): Promise<AdminTaskItem[]> {
+    const rows = await listTaskRuns(this.db, { limit: params.limit, since: params.since })
+    return rows.map((row) => this.mapTaskRun(row))
+  }
+
+  private mapTaskRun(row: TaskRunRow): AdminTaskItem {
+    const startedAt = (row.startedAt ?? row.createdAt).toISOString()
+    const status = TASK_RUN_STATUS_MAP[row.status] ?? 'pending'
+    const finishedAt = row.finishedAt?.toISOString()
+    return {
+      id: `taskrun-${row.id}`,           // 前缀避免与 crawler UUID / bull-{queue}-{jobId} 冲突，供 -C parseTaskId 分派
+      title: row.title,
+      status,
+      startedAt,
+      ...(finishedAt !== undefined && { finishedAt }),
+      ...(row.error != null && { errorMessage: row.error }),
+      ...(row.digest != null && { digest: row.digest }),
+      ...(row.progress != null && { progress: row.progress }),
     }
   }
 
@@ -153,24 +194,17 @@ export class TaskAggregator {
     }
   }
 
-  private async fetchBullSnapshot(): Promise<{
-    bullItems: AdminTaskItem[]
-    queueCounts: AdminQueueCounts
-    degraded: boolean
-  }> {
+  /**
+   * 取 bull queue 计数供任务闪电 running 计数（§4.1）。R-147-3 缓解：Redis 不可用降级 degraded=true。
+   * 副源 items 已切 task_runs（D-194-5），本方法不再 getActive 拉取 job 明细，仅 getJobCounts。
+   */
+  private async fetchQueueCounts(): Promise<{ queueCounts: AdminQueueCounts; degraded: boolean }> {
     try {
-      const [cCounts, mCounts, cActive, mActive] = await Promise.all([
+      const [cCounts, mCounts] = await Promise.all([
         crawlerQueue.getJobCounts(),
         maintenanceQueue.getJobCounts(),
-        crawlerQueue.getActive(0, 9),
-        maintenanceQueue.getActive(0, 9),
       ])
-      const bullItems: AdminTaskItem[] = [
-        ...cActive.map((job) => this.mapBullJob('crawler', job)),
-        ...mActive.map((job) => this.mapBullJob('maintenance', job)),
-      ]
       return {
-        bullItems,
         queueCounts: {
           crawler: { waiting: cCounts.waiting, active: cCounts.active },
           maintenance: { waiting: mCounts.waiting, active: mCounts.active },
@@ -179,7 +213,6 @@ export class TaskAggregator {
       }
     } catch {
       return {
-        bullItems: [],
         queueCounts: {
           crawler: { waiting: 0, active: 0 },
           maintenance: { waiting: 0, active: 0 },
@@ -187,28 +220,5 @@ export class TaskAggregator {
         degraded: true,
       }
     }
-  }
-
-  private mapBullJob(
-    queueName: 'crawler' | 'maintenance',
-    job: { id: number | string; progress?: () => number | object; processedOn?: number },
-  ): AdminTaskItem {
-    const startedAt = job.processedOn
-      ? new Date(job.processedOn).toISOString()
-      : new Date().toISOString()
-    let progress: number | undefined
-    if (typeof job.progress === 'function') {
-      const raw = job.progress()
-      if (typeof raw === 'number' && Number.isFinite(raw)) {
-        progress = Math.max(0, Math.min(100, raw))
-      }
-    }
-    const item: AdminTaskItem = {
-      id: `bull-${queueName}-${job.id}`,
-      title: `${queueName} queue job`,
-      status: 'running',
-      startedAt,
-    }
-    return progress !== undefined ? { ...item, progress } : item
   }
 }

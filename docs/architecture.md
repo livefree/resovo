@@ -897,11 +897,12 @@ UserPreferences = {
 
 **真源关系（D-194-1，只读投影）：** crawler_runs 唯一真源，task_runs 仅登记无持久表 bull 作业 → 不构成双真源（它们本无别的真源）。crawler 不接 TaskRunReporter（digest 走 path A summary 投影，D-194-DEV-2）。
 
-**应用层（P2-a-A 已落地数据层；worker 接入 + 投影收敛归 P2-a-B / re-point 归 P2-a-C）：**
+**应用层（P2-a-A 数据层 + P2-a-B worker 接入/投影收敛 已落地；re-point 归 P2-a-C）：**
 - 查询层：`apps/api/src/db/queries/taskRuns.ts`（insertTaskRun / updateTaskRunProgress / finishTaskRun / listTaskRuns；SQL 全集中 queries 层，db-rules）
 - 中枢实装：`apps/api/src/services/TaskRunReporter.ts` `DbTaskRunReporter`（替 Noop，interface 零改动 D-194-4；start 失败降级 sentinel 不阻断 §11 D4）
-- worker 接入（→ P2-a-B）：各无持久表 bull worker `reporter.start/progress/finish` + `TaskAggregator` 副源 bull active 瞬时快照 → task_runs 持久登记
-- 控制路径（→ P2-a-C）：ADR-191 `parseTaskId` 扩 `taskrun-` 分派 + bull 协作式取消（status='cancelling'）
+- worker 接入（P2-a-B 已落地）：**代表性 worker = `maintenanceWorker`**（run 级批次作业，`runMaintenanceJobWithReporter` 包裹 start→finish〔success+digest / failed+error〕，digest 由 `maintenanceWorker.taskrun.ts` 投影聚合结果）——enrichment/imageHealth 为逐微作业不接（per-job 接入会以海量微行淹没 task_runs，且其队列原不在副源快照），按价值排序 #1 正确性改选 maintenance（ADR §影响文件候选集内）
+- 投影收敛（P2-a-B 已落地）：`TaskAggregator` 副源由「bull active 瞬时快照」切「task_runs 持久登记」（`listTaskRuns` 读，`taskrun-${id}` 前缀 + `TASK_RUN_STATUS_MAP` 6→4 态〔cancelled→failed / cancelling→running〕）；`queueCounts` 仍取 bull `getJobCounts` 供任务闪电 running 计数（§4.1，Redis 不可用降级）
+- 控制路径（→ P2-a-C）：ADR-191 `parseTaskId` 扩 `taskrun-` 分派 + bull 协作式取消（status='cancelling'）。**-B→-C 间隙已知瞬时态**：maintenance 项以 `taskrun-` id 呈现，parseTaskId 暂不识别 → 落 crawler_run 分支 `getRunById('taskrun-N')`〔crawler_runs.id 为 UUID〕→ 非法 UUID 报错；-C 扩分派后闭环（同序列紧邻卡，无独立部署边界）
 
 ---
 

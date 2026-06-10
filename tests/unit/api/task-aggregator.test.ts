@@ -2,12 +2,15 @@
  * tests/unit/api/task-aggregator.test.ts —
  * ADR-147 / CHG-SN-8-FUP-SHELL-NOTIFICATIONS-EP-A TaskAggregator + endpoint 单测
  *
- * 覆盖（ADR-147 §6 测试 surface #8-11 + #14）：
+ * 覆盖（ADR-147 §6 测试 surface #8-10 + #14 / ADR-194 D-194-5 副源升级）：
  *   #8  CrawlerRun 映射：status=running → TaskItem.status='running'
  *   #9  CrawlerRun 映射：status=failed → TaskItem.status='failed' + errorMessage
- *   #10 bull 降级：Redis 不可用 → 仅 CrawlerRun + meta.degraded=true
- *   #11 bull active job → TaskItem 含 progress（0-100 clamp）
+ *   #10 bull 降级：Redis 不可用 → queueCounts 归零 + meta.degraded=true（task_runs/crawler 仍读 DB）
+ *   #T1-T4 task_runs 副源映射（taskrun- 前缀 + status 6→4 态 + digest 透传 + 两源 union 排序）
  *   #14 端点 jobs：admin GET → 200 + data + meta.queueCounts
+ *
+ * 副源 mock：db.query 按 SQL 内容分支（含 'task_runs' → taskRunRows，否则 crawlerRows），
+ *   order-independent（list 内 crawler_runs / task_runs 两次查询顺序无关）。
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
@@ -15,14 +18,10 @@ const {
   queryMock,
   crawlerGetJobCountsMock,
   maintGetJobCountsMock,
-  crawlerGetActiveMock,
-  maintGetActiveMock,
 } = vi.hoisted(() => ({
   queryMock: vi.fn(),
   crawlerGetJobCountsMock: vi.fn(),
   maintGetJobCountsMock: vi.fn(),
-  crawlerGetActiveMock: vi.fn(),
-  maintGetActiveMock: vi.fn(),
 }))
 
 vi.mock('@/api/lib/postgres', () => ({ db: { query: queryMock } }))
@@ -34,14 +33,8 @@ vi.mock('@/api/lib/auth', () => ({
   blacklistKey: (t: string) => `blacklist:${t}`,
 }))
 vi.mock('@/api/lib/queue', () => ({
-  crawlerQueue: {
-    getJobCounts: () => crawlerGetJobCountsMock(),
-    getActive: (a: number, b: number) => crawlerGetActiveMock(a, b),
-  },
-  maintenanceQueue: {
-    getJobCounts: () => maintGetJobCountsMock(),
-    getActive: (a: number, b: number) => maintGetActiveMock(a, b),
-  },
+  crawlerQueue: { getJobCounts: () => crawlerGetJobCountsMock() },
+  maintenanceQueue: { getJobCounts: () => maintGetJobCountsMock() },
   verifyQueue: {},
   enrichmentQueue: {},
   imageHealthQueue: {},
@@ -50,29 +43,34 @@ vi.mock('@/api/lib/queue', () => ({
 import { TaskAggregator, buildTaskResultDigest } from '@/api/services/TaskAggregator'
 import { db } from '@/api/lib/postgres'
 
+let crawlerRows: Array<Record<string, unknown>>
+let taskRunRows: Array<Record<string, unknown>>
+
 beforeEach(() => {
   vi.clearAllMocks()
-  queryMock.mockReset()
+  crawlerRows = []
+  taskRunRows = []
+  queryMock.mockReset().mockImplementation((sql: unknown) =>
+    Promise.resolve({
+      rows: typeof sql === 'string' && sql.includes('task_runs') ? taskRunRows : crawlerRows,
+    }),
+  )
   crawlerGetJobCountsMock.mockReset().mockResolvedValue({ waiting: 0, active: 0 })
   maintGetJobCountsMock.mockReset().mockResolvedValue({ waiting: 0, active: 0 })
-  crawlerGetActiveMock.mockReset().mockResolvedValue([])
-  maintGetActiveMock.mockReset().mockResolvedValue([])
 })
 
 describe('TaskAggregator.list — CrawlerRun 映射', () => {
   it('#8 status=running → TaskItem.status="running"', async () => {
-    queryMock.mockResolvedValueOnce({
-      rows: [{
-        id: 'run-1',
-        crawl_mode: 'batch',
-        trigger_type: 'single',
-        status: 'running',
-        started_at: new Date('2026-05-20T10:00:00Z'),
-        finished_at: null,
-        created_at: new Date('2026-05-20T10:00:00Z'),
-        summary: null,
-      }],
-    })
+    crawlerRows = [{
+      id: 'run-1',
+      crawl_mode: 'batch',
+      trigger_type: 'single',
+      status: 'running',
+      started_at: new Date('2026-05-20T10:00:00Z'),
+      finished_at: null,
+      created_at: new Date('2026-05-20T10:00:00Z'),
+      summary: null,
+    }]
     const svc = new TaskAggregator(db)
     const result = await svc.list({ limit: 20, since: '2026-05-17T00:00:00Z' })
     expect(result.items[0]?.status).toBe('running')
@@ -80,18 +78,16 @@ describe('TaskAggregator.list — CrawlerRun 映射', () => {
   })
 
   it('#9 status=failed → status="failed" + errorMessage', async () => {
-    queryMock.mockResolvedValueOnce({
-      rows: [{
-        id: 'run-2',
-        crawl_mode: 'batch',
-        trigger_type: 'schedule',
-        status: 'failed',
-        started_at: new Date('2026-05-20T09:00:00Z'),
-        finished_at: new Date('2026-05-20T09:05:00Z'),
-        created_at: new Date('2026-05-20T09:00:00Z'),
-        summary: { error: 'API timeout' },
-      }],
-    })
+    crawlerRows = [{
+      id: 'run-2',
+      crawl_mode: 'batch',
+      trigger_type: 'schedule',
+      status: 'failed',
+      started_at: new Date('2026-05-20T09:00:00Z'),
+      finished_at: new Date('2026-05-20T09:05:00Z'),
+      created_at: new Date('2026-05-20T09:00:00Z'),
+      summary: { error: 'API timeout' },
+    }]
     const svc = new TaskAggregator(db)
     const result = await svc.list({ limit: 20, since: '2026-05-17T00:00:00Z' })
     expect(result.items[0]?.status).toBe('failed')
@@ -99,8 +95,7 @@ describe('TaskAggregator.list — CrawlerRun 映射', () => {
     expect(result.items[0]?.finishedAt).toBeDefined()
   })
 
-  it('#10 Redis 不可用 → degraded=true + 仅 CrawlerRun 数据', async () => {
-    queryMock.mockResolvedValueOnce({ rows: [] })
+  it('#10 Redis 不可用 → degraded=true + queueCounts 归零（DB 数据仍返回）', async () => {
     crawlerGetJobCountsMock.mockRejectedValueOnce(new Error('Redis ECONNREFUSED'))
     const svc = new TaskAggregator(db)
     const result = await svc.list({ limit: 20, since: '2026-05-17T00:00:00Z' })
@@ -110,42 +105,102 @@ describe('TaskAggregator.list — CrawlerRun 映射', () => {
       maintenance: { waiting: 0, active: 0 },
     })
   })
+})
 
-  it('#11 bull active job → TaskItem 含 progress（id 前缀 + clamp）', async () => {
-    queryMock.mockResolvedValueOnce({ rows: [] })
-    crawlerGetActiveMock.mockResolvedValueOnce([
-      {
-        id: 42,
-        progress: () => 65,
-        processedOn: Date.parse('2026-05-20T11:00:00Z'),
-      },
-    ])
-    crawlerGetJobCountsMock.mockResolvedValueOnce({ waiting: 1, active: 1 })
+describe('TaskAggregator.list — task_runs 副源映射 (ADR-194 D-194-5)', () => {
+  it('#T1 running task_run → id="taskrun-N" + status running + progress', async () => {
+    taskRunRows = [{
+      id: '42',
+      kind: 'maintenance',
+      title: '暂存自动发布',
+      ref: 'job-9',
+      status: 'running',
+      progress: 65,
+      digest: null,
+      error: null,
+      startedAt: new Date('2026-05-20T11:00:00Z'),
+      finishedAt: null,
+      createdAt: new Date('2026-05-20T11:00:00Z'),
+    }]
     const svc = new TaskAggregator(db)
     const result = await svc.list({ limit: 20, since: '2026-05-17T00:00:00Z' })
     expect(result.degraded).toBe(false)
     expect(result.items).toHaveLength(1)
-    expect(result.items[0]?.id).toBe('bull-crawler-42')
-    expect(result.items[0]?.progress).toBe(65)
+    expect(result.items[0]?.id).toBe('taskrun-42')
+    expect(result.items[0]?.title).toBe('暂存自动发布')
     expect(result.items[0]?.status).toBe('running')
-    expect(result.queueCounts.crawler).toEqual({ waiting: 1, active: 1 })
+    expect(result.items[0]?.progress).toBe(65)
+  })
+
+  it('#T2 cancelled→failed / cancelling→running 状态映射 + error 透传', async () => {
+    taskRunRows = [
+      {
+        id: '7', kind: 'maintenance', title: '搜索索引校准', ref: 'j7', status: 'cancelled',
+        progress: null, digest: null, error: '手动取消',
+        startedAt: new Date('2026-05-20T10:00:00Z'), finishedAt: new Date('2026-05-20T10:02:00Z'),
+        createdAt: new Date('2026-05-20T10:00:00Z'),
+      },
+      {
+        id: '8', kind: 'maintenance', title: '已发布源校验', ref: 'j8', status: 'cancelling',
+        progress: 30, digest: null, error: null,
+        startedAt: new Date('2026-05-20T09:00:00Z'), finishedAt: null,
+        createdAt: new Date('2026-05-20T09:00:00Z'),
+      },
+    ]
+    const svc = new TaskAggregator(db)
+    const result = await svc.list({ limit: 20, since: '2026-05-17T00:00:00Z' })
+    const byId = Object.fromEntries(result.items.map((i) => [i.id, i]))
+    expect(byId['taskrun-7']?.status).toBe('failed')
+    expect(byId['taskrun-7']?.errorMessage).toBe('手动取消')
+    expect(byId['taskrun-8']?.status).toBe('running')
+  })
+
+  it('#T3 success + digest → digest 透传挂载（path B finish 落库）', async () => {
+    taskRunRows = [{
+      id: '9', kind: 'maintenance', title: '采集流水清理', ref: 'j9', status: 'success',
+      progress: null,
+      digest: { summary: '已删除 120', metrics: [{ key: 'deleted', label: '已删除', value: 120, tone: 'ok' }] },
+      error: null,
+      startedAt: new Date('2026-05-20T08:00:00Z'), finishedAt: new Date('2026-05-20T08:01:00Z'),
+      createdAt: new Date('2026-05-20T08:00:00Z'),
+    }]
+    const svc = new TaskAggregator(db)
+    const result = await svc.list({ limit: 20, since: '2026-05-17T00:00:00Z' })
+    expect(result.items[0]?.status).toBe('success')
+    expect(result.items[0]?.digest?.summary).toBe('已删除 120')
+    expect(result.items[0]?.finishedAt).toBeDefined()
+  })
+
+  it('#T4 两源 union 按 startedAt 倒序合并', async () => {
+    crawlerRows = [{
+      id: 'run-old', crawl_mode: 'batch', trigger_type: 'single', status: 'success',
+      started_at: new Date('2026-05-20T07:00:00Z'), finished_at: new Date('2026-05-20T07:30:00Z'),
+      created_at: new Date('2026-05-20T07:00:00Z'), summary: null,
+    }]
+    taskRunRows = [{
+      id: '99', kind: 'maintenance', title: '暂存源校验', ref: 'j99', status: 'success',
+      progress: null, digest: null, error: null,
+      startedAt: new Date('2026-05-20T12:00:00Z'), finishedAt: new Date('2026-05-20T12:05:00Z'),
+      createdAt: new Date('2026-05-20T12:00:00Z'),
+    }]
+    const svc = new TaskAggregator(db)
+    const result = await svc.list({ limit: 20, since: '2026-05-17T00:00:00Z' })
+    expect(result.items.map((i) => i.id)).toEqual(['taskrun-99', 'run-old'])
   })
 })
 
 describe('GET /admin/system/jobs endpoint', () => {
   it('#14 admin GET → 200 + data + meta.queueCounts', async () => {
-    queryMock.mockResolvedValueOnce({
-      rows: [{
-        id: 'run-x',
-        crawl_mode: 'keyword',
-        trigger_type: 'single',
-        status: 'success',
-        started_at: new Date('2026-05-20T07:00:00Z'),
-        finished_at: new Date('2026-05-20T07:10:00Z'),
-        created_at: new Date('2026-05-20T07:00:00Z'),
-        summary: null,
-      }],
-    })
+    crawlerRows = [{
+      id: 'run-x',
+      crawl_mode: 'keyword',
+      trigger_type: 'single',
+      status: 'success',
+      started_at: new Date('2026-05-20T07:00:00Z'),
+      finished_at: new Date('2026-05-20T07:10:00Z'),
+      created_at: new Date('2026-05-20T07:00:00Z'),
+      summary: null,
+    }]
     crawlerGetJobCountsMock.mockResolvedValueOnce({ waiting: 2, active: 1 })
     maintGetJobCountsMock.mockResolvedValueOnce({ waiting: 0, active: 0 })
 
@@ -226,18 +281,16 @@ describe('buildTaskResultDigest — summary→metrics 投影 (ADR-193 D-193-4)',
 
 describe('TaskAggregator.list — digest 挂载 (ADR-193 D-193-4 path A)', () => {
   it('crawler run summary 有产出 → item.digest 投影挂载', async () => {
-    queryMock.mockResolvedValueOnce({
-      rows: [{
-        id: 'run-d',
-        crawl_mode: 'batch',
-        trigger_type: 'all',
-        status: 'success',
-        started_at: new Date('2026-06-09T07:00:00Z'),
-        finished_at: new Date('2026-06-09T07:30:00Z'),
-        created_at: new Date('2026-06-09T07:00:00Z'),
-        summary: { videosUpserted: 12, sourcesUpserted: 3, failed: 0, errors: 0 },
-      }],
-    })
+    crawlerRows = [{
+      id: 'run-d',
+      crawl_mode: 'batch',
+      trigger_type: 'all',
+      status: 'success',
+      started_at: new Date('2026-06-09T07:00:00Z'),
+      finished_at: new Date('2026-06-09T07:30:00Z'),
+      created_at: new Date('2026-06-09T07:00:00Z'),
+      summary: { videosUpserted: 12, sourcesUpserted: 3, failed: 0, errors: 0 },
+    }]
     const svc = new TaskAggregator(db)
     const result = await svc.list({ limit: 20, since: '2026-06-06T00:00:00Z' })
     expect(result.items[0]?.digest?.metrics.map((m) => m.key)).toEqual(['videos_added', 'sources_added'])
@@ -245,18 +298,16 @@ describe('TaskAggregator.list — digest 挂载 (ADR-193 D-193-4 path A)', () =>
   })
 
   it('summary=null（如 running 态未回填）→ 无 digest 字段（向后兼容）', async () => {
-    queryMock.mockResolvedValueOnce({
-      rows: [{
-        id: 'run-n',
-        crawl_mode: 'keyword',
-        trigger_type: 'single',
-        status: 'running',
-        started_at: new Date('2026-06-09T08:00:00Z'),
-        finished_at: null,
-        created_at: new Date('2026-06-09T08:00:00Z'),
-        summary: null,
-      }],
-    })
+    crawlerRows = [{
+      id: 'run-n',
+      crawl_mode: 'keyword',
+      trigger_type: 'single',
+      status: 'running',
+      started_at: new Date('2026-06-09T08:00:00Z'),
+      finished_at: null,
+      created_at: new Date('2026-06-09T08:00:00Z'),
+      summary: null,
+    }]
     const svc = new TaskAggregator(db)
     const result = await svc.list({ limit: 20, since: '2026-06-06T00:00:00Z' })
     expect(result.items[0]?.digest).toBeUndefined()

@@ -14,6 +14,8 @@ import { VideoIndexSyncService } from '@/api/services/VideoIndexSyncService'
 import { bulkSyncSourceCheckStatus } from '@/api/db/queries/videos'
 import { deleteFetchLogBefore } from '@/api/db/queries/external-fetch-log'
 import { baseLogger, withJob } from '@/api/lib/logger'
+import { DbTaskRunReporter } from '@/api/services/TaskRunReporter'
+import { runMaintenanceJobWithReporter } from '@/api/workers/maintenanceWorker.taskrun'
 import type pino from 'pino'
 
 const workerLog = baseLogger.child({ worker: 'maintenance-worker' })
@@ -120,10 +122,20 @@ async function processMaintenanceJob(
   }
 }
 
+// ADR-194 D-194-5：maintenance 作业 run 级登记 task_runs（模块级单实例，同 worker 用模块级 db 范式）
+const taskRunReporter = new DbTaskRunReporter(db)
+
 export function registerMaintenanceWorker(): void {
   maintenanceQueue.process(1, async (job) => {
     const data = job.data as MaintenanceJobData
-    return processMaintenanceJob(data, withJob(workerLog, job))
+    const jobLog = withJob(workerLog, job)
+    // run 级登记包裹：start→执行→finish(success+digest)/catch-finish(failed)+rethrow（保 bull 失败语义，D-194-5）
+    return runMaintenanceJobWithReporter(
+      taskRunReporter,
+      data.type,
+      String(job.id),
+      () => processMaintenanceJob(data, jobLog),
+    )
   })
   workerLog.info({ concurrency: 1 }, 'registered')
 }
