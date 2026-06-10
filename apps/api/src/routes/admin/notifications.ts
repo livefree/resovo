@@ -30,6 +30,10 @@ const QuerySchema = z.object({
   readState: z.enum(['read', 'unread']).optional(),
 })
 
+// ADR-197 D-197-3：dismiss 软移除入参（item_key 走 body 规避 path param `:` 冲突）。
+const DismissSchema = z.object({ itemKey: z.string().min(1).max(256) })
+const DismissBatchSchema = z.object({ itemKeys: z.array(z.string().min(1).max(256)).min(1).max(200) })
+
 /** keyset 游标编解码（base64url 不透明串 `<createdAtISO>|<id>`）。 */
 function encodeCursor(c: { createdAt: string; id: string }): string {
   return Buffer.from(`${c.createdAt}|${c.id}`, 'utf8').toString('base64url')
@@ -126,6 +130,39 @@ export async function adminNotificationRoutes(fastify: FastifyInstance) {
   // 标记当前登录用户全部 broadcast/role 通知已读：upsert cursor 高水位线（read_at=NOW，服务端取时）。
   fastify.post('/admin/notifications/read', { preHandler: auth }, async (request, reply) => {
     const result = await svc.markAllRead(request.user!.userId)
+    return reply.send({ data: result })
+  })
+
+  // ── POST /admin/notifications/dismiss（ADR-197 D-197-2/3）─────────────────
+  // 单条抽屉级软移除（视图态，非物理删除 / 非已读）：守卫可 dismiss 范围（general \d+ / bg-audit:），
+  // 命中 upcoming/active 不可移除项 → 422 ITEM_NOT_DISMISSABLE。Route 仅校验 + 委托 Service（守分层）。
+  fastify.post('/admin/notifications/dismiss', { preHandler: auth }, async (request, reply) => {
+    const parsed = DismissSchema.safeParse(request.body)
+    if (!parsed.success) {
+      return reply.code(422).send({
+        error: { code: 'VALIDATION_ERROR', message: parsed.error.issues[0]?.message ?? '参数错误', status: 422 },
+      })
+    }
+    const result = await svc.dismiss(request.user!.userId, parsed.data.itemKey)
+    if (!result.ok) {
+      return reply.code(422).send({
+        error: { code: 'ITEM_NOT_DISMISSABLE', message: '该项不支持移除', status: 422 },
+      })
+    }
+    return reply.send({ data: { dismissed: result.dismissed } })
+  })
+
+  // ── POST /admin/notifications/dismiss-batch（ADR-197 D-197-3）─────────────
+  // 批量清空：前端回传当前抽屉可见 item_key 数组（多源不可后端单查复现，D-197-3），逐条守卫部分成功
+  // （可移除批量落库、upcoming/active 跳过计 skipped，不整批失败）。
+  fastify.post('/admin/notifications/dismiss-batch', { preHandler: auth }, async (request, reply) => {
+    const parsed = DismissBatchSchema.safeParse(request.body)
+    if (!parsed.success) {
+      return reply.code(422).send({
+        error: { code: 'VALIDATION_ERROR', message: parsed.error.issues[0]?.message ?? '参数错误', status: 422 },
+      })
+    }
+    const result = await svc.dismissBatch(request.user!.userId, parsed.data.itemKeys)
     return reply.send({ data: result })
   })
 

@@ -19,9 +19,11 @@ import {
   countUnreadNotifications,
   getEffectiveReadCursor,
   upsertReadCursor,
+  insertDismissals,
   type NotificationLevel,
   type NotificationRow,
 } from '@/api/db/queries/notifications'
+import { isDismissableNotificationKey } from '@/api/lib/dismiss-item-key'
 import { ADMIN_ACTION_SOURCE_KIND } from '@/api/services/notification-audit-emit'
 import { CRAWLER_SOURCE_KIND } from '@/api/workers/crawlerWorker.notifications'
 import { publishNotificationChanged } from '@/api/lib/notification-pubsub'
@@ -158,5 +160,27 @@ export class NotificationService {
     // ——「SSE 携带全部未读计数变更」是禁轮询的前提，emit 与 read 须对称 publish（Codex stop-review 修复）。
     publishNotificationChanged(`user:${userId}`)
     return { readAt }
+  }
+
+  /**
+   * 单条 dismiss 软移除（ADR-197 D-197-2/3）：守卫可 dismiss 范围 → 落库（复用 insertDismissals 幂等）。
+   * 不可 dismiss（upcoming/active 瞬时/进行中项）→ `{ ok: false }`（Route 映射 422 ITEM_NOT_DISMISSABLE）。
+   * `dismissed: true` 含已存在幂等（视图态：已移除项再 dismiss 仍是已移除）。dismiss 与 read 正交，
+   * 不写 cursor/reads、不改 unreadCount（D-197-5）。
+   */
+  async dismiss(userId: string, itemKey: string): Promise<{ ok: true; dismissed: boolean } | { ok: false }> {
+    if (!isDismissableNotificationKey(itemKey)) return { ok: false }
+    await insertDismissals(this.db, userId, [itemKey])
+    return { ok: true, dismissed: true }
+  }
+
+  /**
+   * 批量 dismiss（清空当前抽屉可见，D-197-3）：前端回传可见 item_key 数组，逐条守卫，
+   * 可移除的批量落库、不可移除的跳过（部分成功，不整批失败）。返 dismissed（守卫通过数）+ skipped（被拒数）。
+   */
+  async dismissBatch(userId: string, itemKeys: readonly string[]): Promise<{ dismissed: number; skipped: number }> {
+    const allowed = itemKeys.filter(isDismissableNotificationKey)
+    await insertDismissals(this.db, userId, allowed)
+    return { dismissed: allowed.length, skipped: itemKeys.length - allowed.length }
   }
 }

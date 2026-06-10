@@ -229,6 +229,38 @@ describe('NotificationService.unreadCount / markAllRead — cursor 编排（ADR-
   })
 })
 
+describe('NotificationService.dismiss / dismissBatch — 软移除写路径（ADR-197 D-197-2/3）', () => {
+  it('#d1 dismiss general id（\\d+）→ ok + insertDismissals 落库 [userId, [itemKey]]', async () => {
+    queryMock.mockResolvedValueOnce({ rowCount: 1, rows: [] }) // insertDismissals
+    const r = await new NotificationService(db).dismiss('admin-1', '1042')
+    expect(r).toEqual({ ok: true, dismissed: true })
+    const params = queryMock.mock.calls[0][1]
+    expect(params[0]).toBe('admin-1')
+    expect(params[1]).toEqual(['1042'])
+  })
+
+  it('#d2 dismiss bg-audit:<id> → ok', async () => {
+    queryMock.mockResolvedValueOnce({ rowCount: 1, rows: [] })
+    const r = await new NotificationService(db).dismiss('admin-1', 'bg-audit:55')
+    expect(r.ok).toBe(true)
+  })
+
+  it('#d3 dismiss upcoming/active 不可移除 → ok:false 不落库（守卫拦截零 query）', async () => {
+    expect(await new NotificationService(db).dismiss('admin-1', 'bg-scheduler_timer:x')).toEqual({ ok: false })
+    expect(await new NotificationService(db).dismiss('admin-1', 'bg-crawler_run:abc')).toEqual({ ok: false })
+    expect(queryMock).not.toHaveBeenCalled()
+  })
+
+  it('#d4 dismissBatch 部分成功：可移除落库 allowed 子集 + 不可移除计 skipped', async () => {
+    queryMock.mockResolvedValueOnce({ rowCount: 2, rows: [] }) // insertDismissals(allowed)
+    const r = await new NotificationService(db).dismissBatch('admin-1', [
+      '1', 'bg-audit:2', 'bg-crawler_run:x', 'bg-scheduler_timer:y',
+    ])
+    expect(r).toEqual({ dismissed: 2, skipped: 2 })
+    expect(queryMock.mock.calls[0][1][1]).toEqual(['1', 'bg-audit:2']) // 仅 allowed 入库
+  })
+})
+
 describe('GET /admin/notifications/unread-count + POST /admin/notifications/read endpoints（ADR-192 AMENDMENT）', () => {
   async function buildApp() {
     const Fastify = (await import('fastify')).default
@@ -287,6 +319,70 @@ describe('GET /admin/notifications/unread-count + POST /admin/notifications/read
     const app = await buildApp()
     const res = await app.inject({ method: 'POST', url: '/admin/notifications/read' })
     expect(res.statusCode).toBe(401)
+    await app.close()
+  })
+
+  // ── dismiss 端点（ADR-197 D-197-2/3 / NTLG-NTF-DISMISS-B1）──
+  function mockAdmin(authLib: typeof import('@/api/lib/auth')) {
+    ;(authLib.verifyAccessToken as ReturnType<typeof vi.fn>).mockReturnValue({
+      userId: 'admin-1', role: 'admin', iat: Math.floor(Date.now() / 1000),
+    })
+  }
+
+  it('#d5 POST dismiss admin + general id → 200 { dismissed: true }', async () => {
+    queryMock.mockResolvedValueOnce({ rowCount: 1, rows: [] })
+    mockAdmin(await import('@/api/lib/auth'))
+    const app = await buildApp()
+    const res = await app.inject({
+      method: 'POST', url: '/admin/notifications/dismiss',
+      headers: { Authorization: 'Bearer t' }, payload: { itemKey: '1042' },
+    })
+    expect(res.statusCode).toBe(200)
+    expect((res.json() as { data: { dismissed: boolean } }).data.dismissed).toBe(true)
+    await app.close()
+  })
+
+  it('#d6 POST dismiss active 项 → 422 ITEM_NOT_DISMISSABLE', async () => {
+    mockAdmin(await import('@/api/lib/auth'))
+    const app = await buildApp()
+    const res = await app.inject({
+      method: 'POST', url: '/admin/notifications/dismiss',
+      headers: { Authorization: 'Bearer t' }, payload: { itemKey: 'bg-crawler_run:x' },
+    })
+    expect(res.statusCode).toBe(422)
+    expect((res.json() as { error: { code: string } }).error.code).toBe('ITEM_NOT_DISMISSABLE')
+    await app.close()
+  })
+
+  it('#d7 POST dismiss-batch → 200 { dismissed, skipped }（部分成功）', async () => {
+    queryMock.mockResolvedValueOnce({ rowCount: 1, rows: [] })
+    mockAdmin(await import('@/api/lib/auth'))
+    const app = await buildApp()
+    const res = await app.inject({
+      method: 'POST', url: '/admin/notifications/dismiss-batch',
+      headers: { Authorization: 'Bearer t' }, payload: { itemKeys: ['1', 'bg-crawler_run:x'] },
+    })
+    expect(res.statusCode).toBe(200)
+    expect((res.json() as { data: { dismissed: number; skipped: number } }).data).toEqual({ dismissed: 1, skipped: 1 })
+    await app.close()
+  })
+
+  it('#d8 POST dismiss 未登录 → 401', async () => {
+    const app = await buildApp()
+    const res = await app.inject({ method: 'POST', url: '/admin/notifications/dismiss', payload: { itemKey: '1' } })
+    expect(res.statusCode).toBe(401)
+    await app.close()
+  })
+
+  it('#d9 POST dismiss 缺 itemKey → 422 VALIDATION_ERROR', async () => {
+    mockAdmin(await import('@/api/lib/auth'))
+    const app = await buildApp()
+    const res = await app.inject({
+      method: 'POST', url: '/admin/notifications/dismiss',
+      headers: { Authorization: 'Bearer t' }, payload: {},
+    })
+    expect(res.statusCode).toBe(422)
+    expect((res.json() as { error: { code: string } }).error.code).toBe('VALIDATION_ERROR')
     await app.close()
   })
 })

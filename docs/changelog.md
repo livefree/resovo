@@ -3623,3 +3623,20 @@
 - **新增依赖**：无　**数据库变更**：migration 104（新表，已应用 dev DB + architecture.md 同步）　**新端点/ADR**：无
 - **门禁**：migrate 104 应用 ✅ / typecheck（全 ws）/ lint / verify:adr-contracts EXIT=0（**verify-sql-schema-alignment 80 表含新 notification_dismissals** / endpoint-adr 232 路由 119 ADR 端点 / mirror 2 对）/ 集成 admin-notifications 18 passed（15 既有 + 3 新：insertDismissals 幂等+空数组 / excludeDismissedForUser drawer 排除·history 保留·per-user 隔离·count 同口径 / deleteStaleDismissals age 口径）/ test:changed 55 文件 798 passed。
 - **里程碑**：dismiss 持久化地基就绪 → 解锁 -B（api 端点 + 三处过滤接入）。
+
+## [NTLG-NTF-DISMISS-B1] dismiss 端点 + Service 写路径（2 端点 + 白名单守卫 + ErrorCode）（SEQ-20260609-01 P3 · ADR-197 D-197-2/3）
+- **完成时间**：2026-06-10
+- **记录时间**：2026-06-10 02:44
+- **执行模型**：claude-opus-4-8（主循环；建议 sonnet，人工 opus 覆盖 + 持续推进授权）
+- **子代理**：无（端点契约 + 白名单已 ADR-197 D-197-2/3 锁定 + arch-reviewer PASS，新端点本序列 ADR-197 endpoint-ADR 覆盖，纯实施）
+- **拆卡**：原 ADR-197 -B 蓝图 7 改动点 >5 → 拆 -B1（写路径）/ -B2（读过滤+taskrun 终态+清理）。
+- **改动文件**：
+  - `apps/api/src/lib/dismiss-item-key.ts`（新建）— `isDismissableNotificationKey` 守卫纯函数：通知抽屉白名单 general `^\d+$` ∪ `bg-audit:` 可 dismiss；upcoming（`bg-auto_crawl:`/`bg-scheduler_timer:`）+ active（`bg-crawler_run:`）拒（D-197-2）；taskrun- 终态校验归 -B2
+  - `apps/api/src/services/NotificationService.ts` — `dismiss(userId,itemKey)`〔守卫→`insertDismissals`，不可移除 `{ok:false}`，dismiss 与 read 正交不改 unreadCount D-197-5〕 + `dismissBatch(userId,itemKeys)`〔逐条守卫部分成功，返 dismissed+skipped〕
+  - `apps/api/src/routes/admin/notifications.ts` — 2 端点 `POST /admin/notifications/dismiss`（body `{itemKey}`，`{ok:false}`→422 ITEM_NOT_DISMISSABLE）+ `/dismiss-batch`（body `{itemKeys[]}`，前端回传可见集 D-197-3），preHandler admin+moderator，Route 仅校验+委托（守分层）
+  - `packages/types/src/api-errors.ts` — ErrorCode `ITEM_NOT_DISMISSABLE`（422）登记 ADR-110 真源（19→20 码 + 头注释补 COLUMN_NOT_WHITELISTED/dismiss）
+  - `tests/unit/api/dismiss-item-key.test.ts`（新，6）+ `tests/unit/api/notification-service.test.ts`（+9：service #d1-4 + 端点 #d5-9）
+- **分层守恒**：守卫纯函数（可测、零依赖）+ Service 编排（守卫+落库）+ Route 薄层（zod 校验+委托+HTTP 映射），不越层。dismiss 与 read 正交（D-197-5）。
+- **新增依赖**：无　**数据库变更**：无（复用 -A migration 104 + insertDismissals）　**新端点**：2（本序列 ADR-197 endpoint-ADR 覆盖，无另起 ADR）
+- **门禁**：typecheck（全 ws）/ lint / verify:adr-contracts EXIT=0（**verify-endpoint-adr 234 路由含 dismiss 2 匹配 ADR-197** / error-message ITEM_NOT_DISMISSABLE 登记 / sql-schema 80 表 / mirror 2 对）/ test:changed 升全量〔api-errors base 包，ADR-180〕503 文件 7023 passed。
+- **里程碑**：dismiss 写入口就绪（通知抽屉单条/清空可落库）→ 解锁 -B2（读过滤接入 + taskrun 终态 + purge 清理）。

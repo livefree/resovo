@@ -1,7 +1,7 @@
 /**
  * api-errors.ts — ErrorCode 唯一真源（ADR-110）
  *
- * ERRORS 字典：18 码
+ * ERRORS 字典：20 码
  *   通用 7 码：NOT_FOUND / VALIDATION_ERROR / UNAUTHORIZED / FORBIDDEN /
  *             INTERNAL_ERROR / STATE_CONFLICT / INVALID_TRANSITION
  *   业务 6 码（CHG-SN-4-05）：STATE_INVALID / LABEL_UNKNOWN / STAGING_NOT_READY /
@@ -10,6 +10,8 @@
  *   会话失效 1 码（ADR-139 / CHG-SN-8-FUP-USERS-ROLE-INV-EP）：ROLE_CHANGED（admin 改角色后已发 token 失效）
  *   审计回滚 3 码（ADR-138 / CHG-SN-8-FUP-AUDIT-ROLLBACK-EP）：
  *     AUDIT_ROLLBACK_UNSUPPORTED 422 / AUDIT_ROLLBACK_STALE 409 / AUDIT_ROLLBACK_SCHEMA_DRIFT 422
+ *   DataTable 自动过滤 1 码（ADR-150）：COLUMN_NOT_WHITELISTED 403
+ *   抽屉 dismiss 1 码（ADR-197 / NTLG-NTF-DISMISS-B1）：ITEM_NOT_DISMISSABLE 422
  *
  * AppError class 留在 apps/api（class 不可跨 workspace 共享 instanceof）。
  */
@@ -58,6 +60,11 @@ export const ERRORS = {
   // 通用 distinct 端点 /admin/_dt/distinct 表名 + 列名联合白名单 lookup miss 触发；
   // 三重 SQL 注入防御之一（zod table enum + col 后置 lookup + drizzle column reference）
   COLUMN_NOT_WHITELISTED: { code: 'COLUMN_NOT_WHITELISTED', message: '表或列名不在自动过滤白名单内', status: 403 },
+
+  // ── 抽屉 dismiss 软移除 1 码（ADR-197 D-197-2/3 / NTLG-NTF-DISMISS-B1）────────
+  // POST /admin/notifications/dismiss item_key 命中 upcoming/active 不可移除白名单（瞬时/进行中项）；
+  // dismiss-batch 模式逐条 skip 不报错（计入 skipped），仅单条 dismiss 触发本码。
+  ITEM_NOT_DISMISSABLE: { code: 'ITEM_NOT_DISMISSABLE', message: '该项不支持移除', status: 422 },
 } as const satisfies Record<string, ApiErrorBody>
 
 export type ErrorCode = keyof typeof ERRORS
