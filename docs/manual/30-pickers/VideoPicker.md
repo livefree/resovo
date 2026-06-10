@@ -1,6 +1,12 @@
 # VideoPicker · 视频选择器
 
 > status: 🟢 已实装（M-SN-SHARED-04-A / arch-reviewer Opus A−）
+> owner: @engineering
+> scope: 视频选择器组件文档
+> source_of_truth: no
+> supersedes: none
+> superseded_by: none
+> last_reviewed: 2026-06-10
 > 真源：`packages/admin-ui/src/components/pickers/video-picker.tsx`
 > 业务域：videos
 > 核心 API：消费方注入的 `VideoPickerFetcher`（推荐底层调 GET `/admin/videos?q=&limit=&cursor=&type=&...`）

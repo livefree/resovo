@@ -4,6 +4,8 @@
 > owner: @engineering
 > scope: apps/worker auto-retire-line cron job 的运维手册
 > source_of_truth: code（apps/worker/src/jobs/auto-retire-line.ts + apps/api/src/db/queries/auto-retire-line.ts）
+> supersedes: none
+> superseded_by: none
 > related: ADR-164 D-164-8 / Migration 081 / CHG-PRE-DEAD-LINE-AUTO-RETIRE-WORKER（Wave 4 #5）
 > last_reviewed: 2026-05-28
 

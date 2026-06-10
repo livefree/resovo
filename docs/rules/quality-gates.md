@@ -5,6 +5,7 @@
 > scope: pre-dev output, post-dev self-check, deviation detection, AI-CHECK, pollution streak
 > source_of_truth: yes
 > supersedes: CLAUDE.md §"开发门禁与质量机制"（2026-04-12 拆出）
+> superseded_by: none
 > last_reviewed: 2026-04-12
 
 ---

@@ -4,6 +4,8 @@
 > owner: @engineering
 > scope: parallel track lifecycle, conflict zone ownership
 > source_of_truth: yes
+> supersedes: none
+> superseded_by: none
 > last_reviewed: 2026-06-05
 >
 > 协调中枢。规则真源：`docs/rules/parallel-dev-rules.md` v1.1。

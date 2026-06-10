@@ -4,6 +4,8 @@
 > owner: @engineering（生产执行主体：用户/运维）
 > scope: 生产环境 title_observations 全量回填 + identity 候选重算 + 验证报表的运维手册
 > source_of_truth: code（scripts/backfill-title-observations.ts + scripts/report-title-observation-coverage.ts + scripts/enqueue-identity-rescore.ts + scripts/identity-compare-report.ts + apps/api/src/services/identity/offlineRescore.ts）
+> supersedes: none
+> superseded_by: none
 > related: ADR-105a / Migration 085（title_observations）+ 086（identity_candidate）/ CHG-VIR-6（采集链路 shadow 写入）/ CHG-VIR-8（离线候选 job）/ CHG-VIR-9-C（UI 切换，卡面前置"生产切 UI 前须先回填"）/ CHG-VIR-OBS-BACKFILL（本 runbook）
 > last_reviewed: 2026-06-03
 

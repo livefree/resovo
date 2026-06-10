@@ -5,6 +5,7 @@
 > scope: branch strategy, commit format, commit gates, forbidden git operations
 > source_of_truth: yes
 > supersedes: CLAUDE.md §"Git 规范" + §"Git 提交与变更管理规则"（2026-04-12 拆出）
+> superseded_by: none
 > last_reviewed: 2026-04-12
 
 ---

@@ -152,7 +152,7 @@ npm run verify:adr-contracts # ADR 协议合规 3 类核验（端点/错误码/D
 
 - **默认主循环**：`claude-sonnet-4-6`
 - 每个任务卡（tasks.md / task-queue.md）的"建议模型"字段指定启动主循环模型（`opus` / `sonnet` / `haiku`）
-- 会话启动时人工按照建议传 `--model <完整 ID>`（映射表见 `docs/model_routing_patch_20260418.md` 第 3 节）
+- 会话启动时人工按照建议传 `--model <完整 ID>`（映射表见 `docs/archive/2026Q2/model_routing_patch_20260418.md`（已归档）第 3 节）
 - **主循环模型中途不可升级**：执行中发现任务难度高于预期时，必须写 BLOCKER 停止会话，不得擅自 spawn Opus 子代理替主循环做最终决策
 
 ### 强制升 Opus 子代理的情形

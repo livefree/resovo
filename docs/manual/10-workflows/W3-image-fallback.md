@@ -1,6 +1,12 @@
 # W3 · 封面失效 → 切 fallback 域
 
 > status: 🟢 完整定稿（CHG-SN-8-MANUAL-BATCH-3 / 2026-05-21）
+> owner: @engineering
+> scope: 视频封面失效修复工作流 — 破损域识别、fallback CDN 切换
+> source_of_truth: no
+> supersedes: none
+> superseded_by: none
+> last_reviewed: 2026-06-10
 > 触发场景：图片健康页发现 TOP 破损域名累积 / Dashboard AttentionCard 图片告警
 
 ## 0. 元信息

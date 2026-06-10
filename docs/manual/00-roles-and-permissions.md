@@ -1,6 +1,12 @@
 # 00 · 角色矩阵与权限
 
 > status: draft（骨架待 M-SN-8 各业务卡按需回填具体端点的角色限制）
+> owner: @engineering
+> scope: 后台系统 5 角色权限矩阵及页面访问权限表
+> source_of_truth: no
+> supersedes: none
+> superseded_by: none
+> last_reviewed: 2026-06-10
 > 真源：`apps/api/src/routes/admin/*.ts` + `apps/api/src/lib/auth/*`
 
 ## 1. 角色列表（5 类）

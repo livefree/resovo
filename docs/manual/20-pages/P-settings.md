@@ -1,6 +1,12 @@
 # P-settings · 站点设置
 
 > status: 🟢 完整定稿（CHG-SN-8-MANUAL-BATCH-2 / 2026-05-21）
+> owner: @engineering
+> scope: 站点设置页面使用说明 — 8 类系统配置、缓存、监控、API 配置
+> source_of_truth: no
+> supersedes: none
+> superseded_by: none
+> last_reviewed: 2026-06-10
 
 ## 0. 元信息
 

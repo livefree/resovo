@@ -1,6 +1,12 @@
 # Wave 4 验收报告（SEQ-20260528-MOD-WAVE4）
 
 > status: ✅ **完全收官 / 用户验收签字 2026-05-29**
+> owner: @engineering
+> scope: Wave 4 阶段完整验收报告及签字确认
+> source_of_truth: no
+> supersedes: none
+> superseded_by: none
+> last_reviewed: 2026-06-10
 > 收官日期：2026-05-29
 > 验收签字：2026-05-29（用户）
 > plan 依据：W4-务实方案 / Wave 3 验收期推出的 follow-up 卡（CHG-SN-9-REJECTED-ENHANCE-B / -PLAYER-ERROR-CONSUMER-A / -B / -RETRY-CONTROL / PRE-DEAD-LINE-AUTO-RETIRE-WORKER ADR-164 A-164-1）+ Wave 3 验收期补丁 CODENAME-MATRIX e2e

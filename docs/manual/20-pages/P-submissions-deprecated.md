@@ -1,6 +1,12 @@
 # P-submissions-deprecated · （已弃用）旧用户投稿
 
 > status: 🟢 完整定稿（CHG-SN-8-MANUAL-BATCH-3 / 2026-05-21）
+> owner: @engineering
+> scope: 已弃用的旧用户投稿页面说明文档
+> source_of_truth: no
+> supersedes: none
+> superseded_by: none
+> last_reviewed: 2026-06-10
 
 ## 0. 元信息
 

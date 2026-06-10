@@ -1,6 +1,12 @@
 # SourceLinePicker · 播放线路选择器
 
 > status: 🟡 骨架（M-SN-SHARED-04 实装时回填具体 API 字段与截图）
+> owner: @engineering
+> scope: 播放线路选择器组件文档
+> source_of_truth: no
+> supersedes: none
+> superseded_by: none
+> last_reviewed: 2026-06-10
 > 业务域：sources
 > 核心 API：GET /admin/sources?q=&limit=20
 

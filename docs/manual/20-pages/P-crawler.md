@@ -1,6 +1,12 @@
 # P-crawler · 采集控制
 
 > status: 🟢 完整定稿（CHG-SN-8-01/02/03 全闭合后定稿 2026-05-21 / CHG-SN-8-CLOSE-AUDIT-DRIFT-FIX 元信息同步）
+> owner: @engineering
+> scope: 采集控制页面使用说明 — 站点采集触发、采集历史、系统控制
+> source_of_truth: no
+> supersedes: none
+> superseded_by: none
+> last_reviewed: 2026-06-10
 
 ## 0. 元信息
 

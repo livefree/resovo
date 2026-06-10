@@ -1,6 +1,12 @@
 # P-image-health · 图片健康
 
 > status: 🟢 完整定稿（CHG-SN-8-FUP-IMAGE 2026-05-21）
+> owner: @engineering
+> scope: 图片健康监控页面使用说明 — 破损域统计、fallback 域切换、图片重扫
+> source_of_truth: no
+> supersedes: none
+> superseded_by: none
+> last_reviewed: 2026-06-10
 
 ## 0. 元信息
 

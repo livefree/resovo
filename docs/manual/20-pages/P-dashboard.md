@@ -1,6 +1,12 @@
 # P-dashboard · 管理台站（首屏）
 
 > status: 🟢 完整定稿（CHG-SN-8-MANUAL-BATCH-1 / 2026-05-21）
+> owner: @engineering
+> scope: 后台首屏工作台使用说明 — 异常告警、工作流进度、KPI、活动记录
+> source_of_truth: no
+> supersedes: none
+> superseded_by: none
+> last_reviewed: 2026-06-10
 
 ## 0. 元信息
 

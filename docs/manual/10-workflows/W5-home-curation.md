@@ -1,6 +1,12 @@
 # W5 · 首页运营位编排
 
 > status: 🟢 完整定稿（CHG-SN-8-MANUAL-BATCH-3 / 2026-05-21）
+> owner: @engineering
+> scope: 首页运营位编排工作流 — Banner 更新、推荐位调整、Top10 排序、分类入口配置
+> source_of_truth: no
+> supersedes: none
+> superseded_by: none
+> last_reviewed: 2026-06-10
 > 触发场景：周期性更新前台首页 4 类运营位（Banner / 推荐位 / Top10 / 分类入口）
 
 ## 0. 元信息

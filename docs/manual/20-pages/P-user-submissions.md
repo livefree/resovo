@@ -1,6 +1,12 @@
 # P-user-submissions · 用户投稿（Card list · §5.13 真源）
 
 > status: 🟢 完整定稿（CHG-SN-8-MANUAL-BATCH-3 / 2026-05-21）
+> owner: @engineering
+> scope: 用户投稿管理页面使用说明 — 投稿分类、处理审核、反馈响应
+> source_of_truth: no
+> supersedes: none
+> superseded_by: none
+> last_reviewed: 2026-06-10
 
 ## 0. 元信息
 

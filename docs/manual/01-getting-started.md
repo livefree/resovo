@@ -1,6 +1,12 @@
 # 01 · 入门指南
 
 > status: draft（骨架）；M-SN-8 各业务卡按需回填截图与具体步骤。
+> owner: @engineering
+> scope: 后台新员工首次登录指南 / 密码恢复 / 角色查询
+> source_of_truth: no
+> supersedes: none
+> superseded_by: none
+> last_reviewed: 2026-06-10
 
 ## 1. 首次登录
 

@@ -238,7 +238,7 @@ packages/admin-ui/src/components/composite/lines-panel/{lines-panel,aggregate}.t
 | §8 C4 静态反馈权重冷启动劣化 | P3-2 重写：`w_fb = 0.20 × min(1, fb_sample_weight / N)` 动态缩放，未用部分回补 health；Q5 裁决注记"动态权重是根本解，灰度开关不是" |
 | §8 C6 任务卡原子化 | P1-1 行内标注强制拆 -A/-B；Phase 1 增"交付顺序 P1-4 → P1-2 首交付"；§4 第一条改写补"跨 3 层独立触发拆卡" |
 | §8.3 P3-1 衰减时钟 | P3-1 改为双时钟：probe 按 `last_probed_at`、render 按 `last_rendered_at` 分别衰减 |
-| §8.3 审计字段 | 说明：`claude-fable-5` 为本会话运行环境提供的真实模型 ID（Fable 5）；CLAUDE.md §模型路由映射表（`docs/model_routing_patch_20260418.md`）尚未收录 Fable 系列，属路由表滞后而非 ID 失实。拆卡执行时各卡按当时实际执行模型完整记录，ADR 化时沿用真实 ID 并在卡内注明本说明 |
+| §8.3 审计字段 | 说明：`claude-fable-5` 为本会话运行环境提供的真实模型 ID（Fable 5）；CLAUDE.md §模型路由映射表（`docs/archive/2026Q2/model_routing_patch_20260418.md`，已归档）尚未收录 Fable 系列，属路由表滞后而非 ID 失实。拆卡执行时各卡按当时实际执行模型完整记录，ADR 化时沿用真实 ID 并在卡内注明本说明 |
 | §8.4 开放问题改判 | §5 改为"已收敛"对照表：Q2→`packages/media-probe`、Q3→EMA、Q4→双存储分工；Q1/Q5 维持（Q5 强化为硬前置） |
 
 **v2 后续动作**：按 §4 门禁拆卡入队 `task-queue.md`，第一批 = P1-4(B3) + P1-2(B2)（用户可见 bug 直接解药，无 schema 变更）。

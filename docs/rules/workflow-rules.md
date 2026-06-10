@@ -5,6 +5,7 @@
 > scope: task lifecycle, task-queue management, blocker/phase-complete protocols, baseline test ledger protocol, independent auditor protocol, rewrite-era baseline exception
 > source_of_truth: yes
 > supersedes: CLAUDE.md §"第二层：执行流程"（2026-04-12 拆出）
+> superseded_by: none
 > last_reviewed: 2026-04-18
 
 ---

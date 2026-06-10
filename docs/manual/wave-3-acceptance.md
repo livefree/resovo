@@ -1,6 +1,12 @@
 # Wave 3 验收报告（SEQ-20260528-MOD-WAVE3）
 
 > status: 实施期收官 / 等待人工验收
+> owner: @engineering
+> scope: Wave 3 阶段实施验收报告及数据统计
+> source_of_truth: no
+> supersedes: none
+> superseded_by: none
+> last_reviewed: 2026-06-10
 > 收官日期：2026-05-28
 > plan 依据：plan §14 Wave 3 + §17.2 Wave 3 增补
 > 工程约束：plan §16.2 集中验收

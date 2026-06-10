@@ -1,6 +1,12 @@
 # P-home · 首页运营位编辑器
 
 > status: 🟢 完整定稿（CHG-HOME-UX-FUP / 2026-06-05 · SEQ-20260605-01 UI/UX 改造后修订）
+> owner: @engineering
+> scope: 首页运营位编辑器页面使用说明 — 运营位编排、预览、发布
+> source_of_truth: no
+> supersedes: none
+> superseded_by: none
+> last_reviewed: 2026-06-10
 
 ## 0. 元信息
 

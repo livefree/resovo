@@ -6,6 +6,7 @@
 > scope: parallel track lifecycle, conflict zone lock, track registry, integration protocol
 > source_of_truth: yes
 > supersedes: none
+> superseded_by: none
 > last_reviewed: 2026-05-01
 
 ---

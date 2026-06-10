@@ -1,6 +1,12 @@
 # P-merge · 合并 / 拆分工作台
 
 > status: 🟢 完整定稿（CHG-SN-8-MANUAL-BATCH-1 / 2026-05-21）
+> owner: @engineering
+> scope: 视频合并拆分工作台页面使用说明 — 候选管理、合并确认、拆分回滚
+> source_of_truth: no
+> supersedes: none
+> superseded_by: none
+> last_reviewed: 2026-06-10
 
 ## 0. 元信息
 

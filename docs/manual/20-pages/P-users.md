@@ -1,6 +1,12 @@
 # P-users · 用户管理
 
 > status: 🟢 完整定稿（CHG-SN-8-MANUAL-BATCH-2 / 2026-05-21）
+> owner: @engineering
+> scope: 用户管理页面使用说明 — 用户列表、角色变更、权限管理、邀请新员工
+> source_of_truth: no
+> supersedes: none
+> superseded_by: none
+> last_reviewed: 2026-06-10
 
 ## 0. 元信息
 

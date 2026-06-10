@@ -1814,3 +1814,23 @@
       - 依赖：NTLG-P2-d-A。建议模型：sonnet。
       - **完成备注**：ADR-195 D-195-1 + 黄线① 落地（详见 changelog [NTLG-P2-d-B]）。新建 `notification-ttl-policy.ts`（默认 30d / **admin_action 8 类 90d**——从 NOTIFICATION_ACTION_TYPES 真源派生防漂移满足黄线① / crawler 30d / null=永久预留 P2-c）+ `resolveNotificationExpiresAt`（`type in MAP` 区分无条目→默认 vs null→永久）+ NotificationEmitter.emit 注入（`input.expiresAt ?? resolve(type)`，显式优先逃生口）。**行为变更**：emit 现注入 TTL → 通知到期被 P2-d-A purge（audit_log 永久合规真源不受影响 ADR-192 D-192-1）。循环 type-only 安全。门禁：typecheck/lint/verify:adr-contracts EXIT=0 / test:changed 55 文件 778 passed（emit 相关全过零破）/ 集成 62。无 schema 变更。执行模型: claude-opus-4-8（人工 opus 覆盖 sonnet——「持续推进」+ AskUserQuestion 选定）；子代理: 无（D-195-1 + 黄线① 已 arch-reviewer 锁，纯实施）。
     - **NTLG-P2-d 整卡 ✅**（-A purge 机制 + -B TTL 注入激活）。过期通知治理端到端：emit 注入 TTL + daily worker 物理清理 + FK CASCADE，表不再无界增长。**ADR-195 全 5 决策落地闭环**。
+
+---
+
+## [SEQ-20260610-01] 首次文档治理（T1 · doc-governance 规范首跑，用户指令插队）
+
+- **状态**：✅ 已完成（1/1 卡收口 2026-06-10 12:30；活区断链 20+2 处清零 / frontmatter 38 文件补齐 / verify:docs-format 63→25 项〔活区清零〕）
+- **创建时间**：2026-06-10 12:19
+- **最后更新时间**：2026-06-10 12:30
+- **目标**：按 `docs/rules/doc-governance.md` 触发器 T1 执行首次全量治理：活区反引号路径断链 20 处（目标均已归档但引用未改址）修复改指 archive 新路径；活区 frontmatter 存量缺失（§7 已知遗留，manual/ + rules/ + tracks.md）补齐；R1/R2 复扫 + verify 三件套收尾。
+- **范围**：仅 `docs/**` + 仓库根 `CLAUDE.md`（纯文档，零代码改动）。本序列明确标注"更新文档"。
+- **依赖**：无 BLOCKER；SEQ-20260609-01 P3 已收口 ✅。
+- **先例**：SEQ-20260605-02（CHORE-DOCS-CLEANUP-20260605）同范式；本次为 doc-governance.md 规范落盘后首跑。
+
+### 任务列表
+
+1. **CHORE-DOCS-CLEANUP-20260610** — 活区断链修复 + frontmatter 存量补齐 + 引用健康收尾（状态：✅ 已完成）
+   - 创建时间：2026-06-10 12:19
+   - 实际开始：2026-06-10 12:19 ｜ 完成时间：2026-06-10 12:30
+   - 建议模型：haiku（引用修复 + 模板补齐事务性工作；实际 claude-fable-5，用户会话人工覆盖）
+   - 完成备注：3 项全交付，明细见 changelog [CHORE-DOCS-CLEANUP-20260610]。① R2 断链 20 处全修（decisions.md 12 唯一路径仅改路径 / architecture 1 / server_next_plan 3〔含 docs/CLAUDE.md→根 CLAUDE.md 勘误〕/ ui-rules 2 / source-health 方案 1 / CLAUDE.md 1）+ R1 追加 2 处（server_next_plan companion → archive/2026Q2/admin-v1/）；② frontmatter 活区补齐 38 文件（manual 33 + rules 4 + tracks.md，纯增量；archive 内 24 项按 §6 只读不修登记残留）；③ R1/R2 复扫清零 + verify:adr-contracts EXIT=0 + verify:manual-coverage EXIT=0。残留 6 项与 §7 断链计数（第 1 次 ≥3 处）登记于 changelog。子代理偏离 1 项（doc-janitor 误改 manual/README source_of_truth）已回退。执行模型: claude-fable-5（建议 haiku，用户会话人工覆盖）；子代理: doc-janitor (claude-haiku-4-5-20251001)。

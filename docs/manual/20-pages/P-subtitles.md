@@ -1,6 +1,12 @@
 # P-subtitles · 字幕管理
 
 > status: 🟢 完整定稿（CHG-SN-8-MANUAL-BATCH-3 / 2026-05-21）
+> owner: @engineering
+> scope: 字幕管理页面使用说明 — 字幕审核、上传、统计
+> source_of_truth: no
+> supersedes: none
+> superseded_by: none
+> last_reviewed: 2026-06-10
 
 ## 0. 元信息
 

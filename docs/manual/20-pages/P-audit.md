@@ -1,6 +1,12 @@
 # P-audit · 审计日志
 
 > status: 🟢 完整定稿（CHG-SN-8-MANUAL-BATCH-2 / 2026-05-21）
+> owner: @engineering
+> scope: 审计日志页面使用说明 — 操作记录查询、筛选、详情展示、日志导出
+> source_of_truth: no
+> supersedes: none
+> superseded_by: none
+> last_reviewed: 2026-06-10
 
 ## 0. 元信息
 

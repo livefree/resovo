@@ -1,6 +1,12 @@
 # W2 · 线路失效 → 补源 → 复测
 
 > status: 🟢 完整定稿（CHG-SN-8-MANUAL-BATCH-3 / 2026-05-21）
+> owner: @engineering
+> scope: 播放线路失效修复工作流 — 失效源定位、替换、复测
+> source_of_truth: no
+> supersedes: none
+> superseded_by: none
+> last_reviewed: 2026-06-10
 > 触发场景：审核台 / 视频库发现「探测/播放 全失效」或大量「孤岛源」需修复
 
 ## 0. 元信息

@@ -1,6 +1,12 @@
 # P-videos · 视频库（DataTable 标杆页）
 
 > status: 🟢 完整定稿（CHG-SN-8-MANUAL-BATCH-1 / 2026-05-21）
+> owner: @engineering
+> scope: 视频库管理页面使用说明 — 视频检索、编辑、上下架、批量操作
+> source_of_truth: no
+> supersedes: none
+> superseded_by: none
+> last_reviewed: 2026-06-10
 
 ## 0. 元信息
 

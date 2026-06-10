@@ -9,8 +9,8 @@
 > superseded_by: none
 > last_reviewed: 2026-06-08
 > companion:
->   - [admin_audit_20260426.md](./admin_audit_20260426.md)（现状 / 9 痛点）
->   - [admin_design_brief_20260426.md](./admin_design_brief_20260426.md)（design 视角 brief）
+>   - [admin_audit_20260426.md](./archive/2026Q2/admin-v1/admin_audit_20260426.md)（现状 / 9 痛点；已归档）
+>   - [admin_design_brief_20260426.md](./archive/2026Q2/admin-v1/admin_design_brief_20260426.md)（design 视角 brief；已归档）
 >   - [server_next_kickoff_20260427.md](./archive/2026Q2/server_next_kickoff_20260427.md)（R1–R5 决策实录 + 评审报告；2026-05-12 归档）
 >   - [docs/designs/backend_design_v2.1/](./designs/backend_design_v2.1/)（设计稿，仍在补完）
 > generated_at: 2026-04-27（v0）/ revised: 2026-04-27（v1）/ 2026-04-28（v2 / v2.1 / v2.2 / v2.3 / v2.4）/ 2026-05-01（v2.5）/ 2026-05-06（v2.6）/ 2026-06-08（v2.7）
@@ -905,8 +905,8 @@ cutover 验收按上表 21 路由占位逐项 diff（路由文件物理存在）
 
 | # | 操作 | 目标 |
 |---|---|---|
-| D1 | 移 `docs/freeze_notice_20260418.md` → `docs/archive/freeze_notice_20260418.md`，原位 stub | freeze_notice 退役 |
-| D2 | 移 `docs/frontend_redesign_plan_20260418.md` `frontend_phase2_plan_20260424.md` `frontend_design_spec_20260423.md` `image_pipeline_plan_20260418.md` `design_system_plan_20260418.md` → `docs/archive/m0-m6/` | 前端方案归档 |
+| D1 | 移 docs/freeze_notice_20260418.md → `docs/archive/freeze_notice_20260418.md`（已归档执行完毕），原位 stub | freeze_notice 退役 |
+| D2 | 移 docs/frontend_redesign_plan_20260418.md `frontend_phase2_plan_20260424.md` `frontend_design_spec_20260423.md` `image_pipeline_plan_20260418.md` `design_system_plan_20260418.md` → `docs/archive/m0-m6/`（已归档执行完毕） | 前端方案归档 |
 | D3 | 归档 task-queue 历史：移已完成序列到 `docs/archive/task-queue/task-queue_archive_20260427.md`；保留进行中 + 待启动；顶部加约束声明"新任务序列号不与历史重复" | task-queue 收敛 |
 | D4 | 归档 changelog 历史：按里程碑切到 `docs/archive/changelog/changelog_m0-m6.md`；主 changelog 保留 M-SN 之后条目 | changelog 收敛 |
 | D5 | 修正 `docs/architecture.md` §1 漂移（apps/web → apps/server / apps/web-next）；预告 server-next | 真源对齐 |
@@ -931,7 +931,7 @@ cutover 验收按上表 21 路由占位逐项 diff（路由文件物理存在）
 | A2 | 起草 ADR-101（cutover 协议 + nginx 反代 + 7 天保留 + 同 commit 改名 + 回滚预案） | 切流协议固化 |
 | A3 | 起草 ADR-102（token 三层收编 + 设计稿 v2.1 映射表） | token 协议固化 |
 | A4 | 三份 ADR 同时 spawn arch-reviewer (Opus) 评审 | PASS 才进 M-SN-1 |
-| A5 | 评审 PASS 后写入 `docs/decisions.md`；`docs/CLAUDE.md` 索引更新；`docs/rules/git-rules.md` 追认 server-next trailer 扩展 | 真源对齐 |
+| A5 | 评审 PASS 后写入 `docs/decisions.md`；`CLAUDE.md`（仓库根）索引更新；`docs/rules/git-rules.md` 追认 server-next trailer 扩展 | 真源对齐 |
 
 ### 11.4 检查点
 

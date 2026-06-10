@@ -1,6 +1,12 @@
 # Manual GAPS · 实施缺失 / 意义不明模块汇总
 
 > status: active（活跃登记）
+> owner: @engineering
+> scope: 手册定稿过程中发现的功能缺失、意义不明模块的统一登记簿
+> source_of_truth: no
+> supersedes: none
+> superseded_by: none
+> last_reviewed: 2026-06-10
 > 起源：CHG-SN-8-MANUAL-BATCH-1（2026-05-21）
 > 用途：手册定稿过程中发现的「实施已部分落地但功能不全 / 用户无法感知 / 意义不明」模块统一登记；每条对应一个 follow-up 卡待启动
 

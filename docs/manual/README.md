@@ -4,6 +4,8 @@
 > owner: @engineering（开发卡按 page 维护）
 > scope: 后台管理员日常操作指南
 > source_of_truth: yes
+> supersedes: none
+> superseded_by: none
 > last_reviewed: 2026-05-21
 
 本目录是 Resovo 后台（admin console）的**用户使用说明书**，面向运营、审核员、采集运维等**非工程师角色**。

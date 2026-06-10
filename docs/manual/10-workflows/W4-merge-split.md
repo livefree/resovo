@@ -1,6 +1,12 @@
 # W4 · 合并候选 → 确认 / 拒绝 / 回滚
 
 > status: 🟢 完整定稿（CHG-SN-8-MANUAL-BATCH-3 / 2026-05-21）
+> owner: @engineering
+> scope: 重复视频合并工作流 — 候选识别、合并确认、拆分回滚
+> source_of_truth: no
+> supersedes: none
+> superseded_by: none
+> last_reviewed: 2026-06-10
 > 触发场景：审核中发现疑似重复视频 / 或定期清理合并候选
 
 ## 0. 元信息

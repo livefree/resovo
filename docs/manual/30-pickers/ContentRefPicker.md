@@ -1,6 +1,12 @@
 # ContentRefPicker · 内容引用选择器（复合）
 
 > status: 🟢 已实装（CHG-SN-8-FUP-HOME / arch-reviewer Opus A−）
+> owner: @engineering
+> scope: 首页运营位内容引用字段多类型选择器
+> source_of_truth: no
+> supersedes: none
+> superseded_by: none
+> last_reviewed: 2026-06-10
 > 真源：`packages/admin-ui/src/components/pickers/content-ref-picker.tsx`
 > 业务域：home_modules（首页运营位编辑器）
 > 依赖：VideoPicker（type='video' 时）+ AdminSelect（type='video_type'）+ AdminInput（其它类型）

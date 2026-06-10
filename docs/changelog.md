@@ -3707,3 +3707,27 @@
 - **新增依赖**：无
 - **数据库变更**：无
 - **注意事项**：任务抽屉 dismiss 复用通知侧 2 端点（`/admin/notifications/dismiss{,-batch}`，item_key 跨源单表）；终态判定前端用 4 态 status（cancelled 已在 TaskAggregator 映射 failed），服务端写守卫查 task_runs 6 态终态为权威。**dismiss UI 端到端闭环（-A/-B1/-B2/-B3/-C1/-C2 全完成）**。门禁：typecheck/lint EXIT=0，test:changed 80 文件 1026 passed。
+
+## [CHORE-DOCS-CLEANUP-20260610] 首次文档治理（T1 · doc-governance 首跑：活区断链修复 + frontmatter 存量补齐）
+- **完成时间**：2026-06-10
+- **记录时间**：2026-06-10 12:30
+- **执行模型**：claude-fable-5（建议 haiku，用户会话人工覆盖）
+- **子代理**：doc-janitor (claude-haiku-4-5-20251001)
+- **修改文件**：
+  - `docs/decisions.md` — R2 断链 12 个唯一路径（17 行）改指 archive 新路径（ADR 正文仅改路径不改其余文字，§3 Step 5 修复规则）
+  - `docs/architecture.md` — §16 milestone_alignment_20260420 引用改 `docs/archive/2026Q2/` + 补「已归档」
+  - `docs/server_next_plan_20260427.md` — R2 3 处（§11.1 D1/D2 已迁移源路径去反引号 + 补「已归档执行完毕」；§11.3 A5 `docs/CLAUDE.md` 勘误为仓库根 `CLAUDE.md`）+ R1 2 处（头部 companion 链接 admin_audit/admin_design_brief 改 `docs/archive/2026Q2/admin-v1/` + 补「已归档」）
+  - `docs/rules/ui-rules.md` — 2 处（ui_governance_conflicts → `docs/archive/`；frontend_design_spec → `docs/archive/m0-m6/` 完整路径）
+  - `docs/designs/source-health-feedback-loop-plan_20260610.md` — model_routing_patch 引用改 `docs/archive/2026Q2/` + 补「已归档」
+  - `CLAUDE.md` — §模型路由 model_routing_patch 映射表引用改 `docs/archive/2026Q2/` + 补「已归档」
+  - `docs/manual/**`（33 文件：00/01 + W1–W5 + P-* 15 + pickers 5 + GAPS + README + 2 runbook + wave-3/4）— frontmatter 缺失字段补齐（owner/scope/source_of_truth/supersedes/superseded_by/last_reviewed，纯增量；manual 页面类 source_of_truth: no）
+  - `docs/rules/{git-rules,parallel-dev-rules,quality-gates,workflow-rules}.md` — 各补 `superseded_by: none`
+  - `docs/tracks.md` — 补 `supersedes/superseded_by: none`
+  - `docs/tasks.md` / `docs/task-queue.md` — 任务卡流转 + SEQ-20260610-01 登记收口
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - 核验结果：R1/R2 活区断链清零（修复 20 + 2 处）；`verify:docs-format` 63 → 25 项（活区 [4] 清零）；`verify:adr-contracts` EXIT=0；`verify:manual-coverage` EXIT=0。
+  - 残留登记（均为既有项，非本卡引入）：① [4] archive 内 24 项 frontmatter 存量缺失——按规范 §6 archive 只读不修；② [5] README 真源"冲突"（docs/README.md vs docs/manual/README.md）——脚本按文件名判重，人工对照两者 scope 不同（docs 导航索引 vs 后台操作手册），判定非真冲突，待 §7 工具化时按 scope 判重改进；③ [3] SEQ 4 处历史逆序（advisory）；④ manual/_template 占位链接 4 处（P-x/P-y/P-other，模板示例非断链）；⑤ manual-coverage 缺 3 页（P-external-resources / P-messages / P-source-line-aliases，advisory 既有缺口）；⑥ `docs/audit/adr-d-status.json` 工作区改动为核验脚本再生成（仅 generatedAt），生成型文件不纳入本 commit（同 SEQ-20260605-02 先例）。
+  - 规范 §7 工具缺口计数：本次治理 R1/R2 发现 ≥ 3 处断链（第 1 次）；若下次治理再 ≥ 3 处，触发 `scripts/verify-doc-links.mjs` 工具化立卡。
+  - 子代理偏离 1 项已回退：doc-janitor 曾擅自将 `docs/manual/README.md` `source_of_truth: yes→no`（超出"只增不改"指令），主循环已回退为 yes。
