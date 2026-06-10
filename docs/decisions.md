@@ -21922,3 +21922,101 @@ v1 **无新表/列**：消息中心读扩展复用现有 `idx_notifications_crea
   - **黄线 4（吸收 D-196-7）**：`/stream` 鉴权对齐 list 现网 `['admin','moderator']`（核 `notifications.ts:27`，moderator 同渲染铃铛）。
   - **横切对齐确认**：D-196-5 BLOCKER-1 解除事实链成立（`unreadCount` 按 scope 计含 broadcast crawler，`notifications.ts:200-218` 无 sourceKind 过滤 → 红点切 unread-count 后含 crawler）；D-196-6 轮询兜底对 pub/sub 丢信号补偿成立（轮询无条件重拉全量真值，最终一致上界 60s）；D-196-DEV-1/2/3 偏离 accept 理由（归档语义非平凡延后 / 无定向 emit 消费方 YAGNI / 未读非强一致）全成立。
 - **状态 → Accepted**（2 红线已修订 ADR 文本闭环、4 黄线+分层项转 P2-c-A/B/C 实施期登记）。**解锁 NTLG-P2-c-A/B/C 实施**。
+
+## ADR-197：通知 / 任务抽屉 dismiss（软移除）子系统 — per-user `notification_dismissals` + 跨源统一 item_key + 抽屉三处排除 vs 消息中心不排除（SEQ-20260609-01 P3 · 用户裁定 2026-06-10「抽屉级软移除」）
+
+- **状态**：Accepted（arch-reviewer claude-opus-4-8 / agentId a2edc8aa4e6cfa1a9 → **CONDITIONAL PASS**：方案架构成立、守全部 CLAUDE.md 红线与 ADR-192/195/196 兼容；3 HIGH 纠正已并入本 ADR 决策、2 MEDIUM 处置明确 → 采纳）。本 ADR 兼作 `POST /admin/notifications/dismiss` 系列 endpoint-ADR（`verify:endpoint-adr` 守门）。
+- **关联**：ADR-192（已读混合模型 / scope 三前缀 / notifications 真源）、ADR-195（TTL purge / expires_at）、ADR-196（消息中心 history 模式 / SSE pub/sub）、ADR-152/155（background-events 派生）、ADR-147（jobs 抽屉数据流）、ADR-188（物理 DELETE 否决软隐藏范式参照）、ADR-110（ErrorCode 真源）。
+- **SEQ**：SEQ-20260609-01 治理 P3（dismiss，用户裁定增强）。
+
+### 背景
+
+通知抽屉（topbar 铃铛）+ 任务抽屉（topbar 闪电）当前已读=`opacity:0.6` 变淡保留、无用户主动移除，靠 7d 窗 + ADR-195 TTL purge worker 物理收敛。用户新需求：**抽屉级软移除（dismiss）**——单条移除 + 清空，移除后该项不再出现在**抽屉**，但消息中心页 `/admin/messages`（list history 模式）仍按 TTL 常规留存。dismiss ≠ 物理删除（物理删除仍只由 TTL purge worker 做）；dismiss 不得影响 `admin_audit_log`（永久合规真源，ADR-192 D-192-1）。抽屉项来自多源（`admin-shell-notifications.ts:155-159`：notifications 表 + background-events 派生 + jobs 派生），dismiss 锚点须跨源统一编码且稳定。
+
+### 决策
+
+- **D-197-1 新建独立表 `notification_dismissals`，否决扩 `notification_reads` / 否决 notifications 加 `dismissed_at` 列**：dismiss 是离散 per-user per-item 记录（可移除中间项保留更早项），与 cursor 高水位线正交；且须锚定**无 notifications 行**的派生项（audit/task）。`notification_reads` 的 PK `(notification_id BIGINT REFERENCES notifications, user_id)` 无法承载 `bg-audit:123` 派生 key。否决加 `dismissed_at` 列：dismiss 是 per-user 视图态（A 移除不影响 B），非行级软删除，且派生项无行——对称 ADR-188/195「通知非合规真源 → 物理删而非软隐藏」，dismiss 是更上层视图态，连软删除列都不该进真源表。
+- **D-197-2 item_key = 前端抽屉项最终 id 原值，可 dismiss 范围限 3 类，upcoming/active 不可 dismiss**：**否决重发明编码**（`notification:<id>` 等）——前端实际 id 形态为：general 通知 = `<notifications.id>`（纯数字串）/ finished audit = `bg-audit:<id>`（**双前缀**，`admin-shell-notifications.ts:84/98` 在 Service 内层 `audit:<id>` 外再包 `bg-`）/ 终态任务 = `taskrun-<id>` 或 crawler runId。item_key 直采前端项最终 id 原值（即 `data-notification-item={item.id}` / `data-task-item={item.id}`），零映射歧义。**可 dismiss 白名单**（守卫前缀正则）：`^\d+$`（general）∪ `^bg-audit:`（finished 审计，通知抽屉）∪ `^taskrun-` 且终态（任务抽屉）∪ crawler 终态 runId；**拒绝**（422 `ITEM_NOT_DISMISSABLE`）`^bg-auto_crawl:` / `^bg-scheduler_timer:`（upcoming 瞬时、key 含 name 非时间 → dismiss 即永久消失误伤）+ `^bg-crawler_run:` 与 running `taskrun-`（active 进行中、下轮 poll 重派生「删了又回来」破窗）。**MEDIUM-2**：crawler 完成已并入 general lane（`NotificationService.ts:36` CRAWLER_SOURCE_KIND，纯数字 id），`taskrun-` 仅出现在**任务抽屉**——-A/-B 须分别处理通知抽屉（`\d+` ∪ `bg-audit:`）与任务抽屉（`taskrun-` 终态 ∪ crawler 终态）**两套白名单**，不可混。
+- **D-197-3 端点 = 单条 dismiss（item_key 走 body）+ 批量 clear（前端回传可见 item_key 数组）**：**否决 URL 传 item_key**——item_key 含 `:` `bg-` 与 Fastify path param 语法冲突（`/:itemKey` 截断 `bg-audit:5`）→ item_key 一律走 body，路径无动态段（对 `verify:endpoint-adr` 字符串匹配友好）。**clear 须前端回传可见集**（HIGH-3）：「当前抽屉可见」是前端 general+background 合并+7d 窗+排序结果，后端无单一查询能复现（general 在 notifications 表、finished 在 audit_log、active 在内存）→ clear 端点收 `itemKeys[]`，后端逐条守卫 + 部分成功（upcoming/active 误传则 skip 计数）。不做 undismiss 端点（恢复经消息中心 history 视图）。
+- **D-197-4 三处抽屉排除 + 消息中心不排除；general 走 SQL `NOT EXISTS`、派生项走 Service 内存 anti-set**（HIGH-1 分层纠正）：general（list drawer 模式 `isHistoryMode=false`）在 `buildNotificationFilter` 追加可选谓词 `AND NOT EXISTS (SELECT 1 FROM notification_dismissals d WHERE d.user_id=$k AND d.item_key=n.id::text)`，仅当 `excludeDismissedForUser` 入参存在时拼入；**history 模式（消息中心）不传 → 不排除**。**派生项（finished audit / 终态 task）禁止 SQL 拼 `'audit:'||id` anti-join**（谓词漂移 + item_key 编码泄漏进 SQL）→ Service 先 `selectDismissedKeys(db,userId)` 取该 user dismissals item_key Set，在 map 后 `.filter(e => !dismissed.has('bg-'+e.id))` 内存比对；`selectDismissedKeys` 是新 query（落 queries 层纯 SQL），Service 不含 SQL 字面量 → 守 Route→Service→queries。BackgroundEventService/TaskAggregator `list` 入参加 `userId`（route 已有 `request.user!.userId`）。
+- **D-197-5 dismiss 是独立维度，不隐含 read、不影响未读计数**：dismiss 与 read 正交，dismiss 单条不写 cursor/reads、不改 `unreadCount`。理由：未读=尚未「看过」、dismiss=「处理过从抽屉拿走」语义不同；若耦合则污染 ADR-192 cursor 高水位（dismiss 中间一条 cursor 无法表达）。若产品要「dismiss 即清红点」，前端 dismiss 后顺带调既有 `POST /admin/notifications/read`，不在 dismiss 端点内耦合（归 -C）。
+- **D-197-6 dismissal 清理走 purge worker age 兜底（非 FK CASCADE）**：`notification_dismissals` 用 TEXT item_key 跨源**无 FK**（派生项无 notifications 行）→ 不自动级联。ADR-195 purge worker（`maintenanceWorker.ts`）追加 `deleteStaleDismissals(db, cutoff)`：删 `dismissed_at < NOW() - INTERVAL 'N days'`，N ≥ 通知最大 TTL 90 天（对齐 `ADMIN_ACTION_TTL_DAYS`，保证真源项早已 purge 后才清 dismissal；派生 dismissal 因 finished window ≤24h ≪ N 无复现风险）。否决加 notifications FK（派生项无行不可建、混合破坏一致性）。
+- **D-197-7 边界**：① 物理删除仍只 TTL purge；② upcoming/active 不可 dismiss；③ 不做 undismiss；④ **多端同步**：建议 dismiss 后 publish `user:<id>` 复用 ADR-196 SSE pub/sub 驱动其他标签页 reload，但**仅建议不强制纳 -B**——现有 SSE 仅携 unread count（dismiss 不改 unread D-197-5），最低成本依赖既有 60s 轮询 / `globalMutateRegistry` reload 最终一致（上界 60s）；即时跨标签需 -B 外定义 drawer-refresh SSE 事件类型（**MEDIUM-1，单列 follow-up 不阻塞 P3**）；⑤ 不改消息中心 history 行为；⑥ 不改 admin_audit_log。
+
+### 端点契约
+
+| # | 方法 | 路径 | 用途 | Request | Response | 错误码 |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1 | POST | `/admin/notifications/dismiss` | 单条抽屉级软移除（admin+moderator；item_key 走 body 规避 `:` 与 path param 冲突） | body `{ itemKey: string(1-256) }` | 200 `{ data: { dismissed: boolean } }`（含已存在幂等） | 401 / 403 / 422 |
+| 2 | POST | `/admin/notifications/dismiss-batch` | 批量清空（前端回传当前抽屉可见 item_key 数组，D-197-3；逐条守卫部分成功） | body `{ itemKeys: string[](1-200) }` | 200 `{ data: { dismissed: number, skipped: number } }` | 401 / 403 / 422 |
+
+鉴权：`preHandler: [authenticate, requireRole(['admin','moderator'])]`（对齐 `notifications.ts:49`）。
+
+### 错误码
+
+| HTTP | code | message | 触发 |
+| --- | --- | --- | --- |
+| 422 | VALIDATION_ERROR | `'参数校验失败'` | itemKey 空/超长 / itemKeys 非数组或超 200 |
+| 422 | ITEM_NOT_DISMISSABLE | `'该项不支持移除'` | 单条 dismiss item_key 命中 upcoming/active 不可移除白名单（D-197-2）；batch 模式逐条 skip 不报错（计入 `skipped`） |
+| 401 | UNAUTHORIZED | — | 未认证 |
+| 403 | FORBIDDEN | — | 非 admin/moderator |
+
+> **LOW（-B 注意）**：`ITEM_NOT_DISMISSABLE` 是本 ADR 新增语义码，须纳入 ApiResponse ErrorCode 真源（ADR-110）登记，避免 `verify:adr-contracts` 错误码核验漏登。
+
+### schema（migration 104）
+
+> 现有最新 migration `103_task_runs_status_cancelling.sql` → 取 `104_notification_dismissals.sql`。
+
+```sql
+-- 104_notification_dismissals.sql
+-- ADR-197：通知/任务抽屉 dismiss（软移除）子系统 / SEQ-20260609-01 P3
+-- notification_dismissals = per-user per-item 抽屉级软移除（视图态，非物理删除、非已读）。
+--   item_key = 前端抽屉项最终 id 原值（D-197-2）：general 行 id 纯数字串 / finished 'bg-audit:<id>' / 终态 'taskrun-<id>' 或 crawler run id。
+--   跨源统一 TEXT key 故**无 FK**（派生项 audit/task 无 notifications 行可挂）。
+--   dismiss ≠ 物理删除（ADR-195 TTL purge）≠ 已读（ADR-192 cursor/reads 不受影响，D-197-5）。
+--   清理走 ADR-195 purge worker 扩展 deleteStaleDismissals（age N≥90d，D-197-6），非 FK CASCADE。
+-- ⚠️ Down 路径（项目约定）：migrate.ts 整文件单条执行，down 保持注释，回滚手动解注释。
+-- ── up ───────────────────────────────────────────────────────────────────────
+BEGIN;
+CREATE TABLE IF NOT EXISTS notification_dismissals (
+  user_id       UUID          NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  item_key      TEXT          NOT NULL,  -- 抽屉项最终 id 原值（跨源统一 TEXT，无 FK；D-197-2）
+  dismissed_at  TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (user_id, item_key)        -- 同一用户同一项最多一条；幂等 dismiss ON CONFLICT DO NOTHING
+);
+-- 索引 4 步核验：① 键 PK(user_id,item_key) 复合（user_id 等值前导 + item_key 等值）；② 全表无 WHERE；
+-- ③ driving 谓词：(a) drawer NOT EXISTS(user_id=$1 AND item_key=n.id::text) 点查 (b) selectDismissedKeys WHERE user_id=$1
+--    (c) upsert ON CONFLICT(user_id,item_key)——三者均 user_id 前导，PK 复合键完全支撑；
+-- ④ 不补二级索引：item_key 单独查无业务路径；deleteStaleDismissals 按 dismissed_at 范围扫量级小 seq scan 可接受
+--    （对齐 ADR-192 D-192-4「不补 anti-join 索引」克制；膨胀再评估）。
+COMMENT ON TABLE notification_dismissals IS '抽屉级软移除 per-user per-item（ADR-197）；item_key=抽屉项最终 id 原值跨源 TEXT 无 FK；dismiss≠物理删除（ADR-195）≠已读（ADR-192）；清理走 purge worker age N≥90d';
+COMMIT;
+-- ── down ─────────────────────────────────────────────────────────────────────
+-- BEGIN; DROP TABLE IF EXISTS notification_dismissals; COMMIT;
+```
+
+> db-rules 软删除约定核对：软删除约定针对 videos/users 核心真源表用 `deleted_at`；`notification_dismissals` 是「视图态记录表」（INSERT 一条=移除一项，加法记录），非软删除真源行 → 不需 `deleted_at`，与 ADR-188/195「通知非合规真源物理删」一致。PASS。
+
+### 影响文件（NTLG-NTF-DISMISS-A/B/C 落地，本 ADR docs-only）
+
+- **-A schema+queries**：migration 104 + `db/queries/notifications.ts`（`insertDismissals` / `selectDismissedKeys` / `deleteStaleDismissals` + `buildNotificationFilter` 加可选 `excludeDismissedForUser` 谓词）
+- **-B api**：`NotificationService.dismiss/dismissBatch`（白名单守卫）+ list drawer/history 区分 + `routes/admin/notifications.ts` 2 端点 + `BackgroundEventService`/`TaskAggregator` 入参 `userId` 内存 anti-set 过滤 + `systemBackgroundEvents.ts`/`system-jobs.ts` 传 userId + `maintenanceWorker.ts` purge step `deleteStaleDismissals` + ErrorCode `ITEM_NOT_DISMISSABLE` 登记
+- **-C UI**：`notification-drawer.tsx`/`task-drawer.tsx` 项级 onDismiss + 清空按钮（复用 `onItemClick`/`onCancel` 回调注入范式，CSS 变量零硬编码）+ `admin-shell-notifications.ts` `dismiss`/`dismissAll` 接 2 端点 + 乐观移除 + reload；**若动 `packages/admin-ui/src/**/types.ts` 公开 Props（NotificationItem/TaskItem `onDismiss`）→ 触「共享组件 API 契约强制 Opus」红线，-C commit 须带 `Subagents: arch-reviewer` trailer**
+
+### 拆卡建议（范围 13 文件跨 schema/api-service/UI 三层 → 必拆）
+
+- **-A**（sonnet，≤4 项）：migration 104 + 3 query + `buildNotificationFilter` 可选谓词 + 单测（upsert 幂等 / NOT EXISTS 过滤 / history 不过滤 / selectDismissedKeys / deleteStaleDismissals age）。不碰端点/Service 派生。
+- **-B**（sonnet，5 项贴边，若复杂再拆 -B1 端点 / -B2 三处过滤）：2 端点 + 守卫 + Service dismiss/dismissBatch + list drawer/history 区分 + 3 处 userId 内存过滤 + purge 接线 + ErrorCode 登记 + 单测（白名单拒绝 / 部分成功 / 三处过滤 / 消息中心不过滤）。`verify:endpoint-adr` 必绿（path 逐字对齐本 ADR）。
+- **-C**（sonnet + 若动 types.ts Props 须 arch-reviewer trailer，3 项）：抽屉 onDismiss + 清空按钮 + hook 乐观移除 + reload。
+
+### 评审
+
+- **arch-reviewer (claude-opus-4-8 / agentId a2edc8aa4e6cfa1a9) 结论：CONDITIONAL PASS → 3 HIGH 纠正已并入决策 + 2 MEDIUM 处置 + 1 LOW 标注 → Accepted**。子代理主动纠正主循环传入的 3 个事实前提偏差（避免 -B 返工）：
+  - **HIGH-1（item_key 双前缀）**：background 项最终 id 是 `bg-audit:<id>`（双前缀），非 `bg-<id>`；active 是 `bg-crawler_run:<id>` 非 `crawler_run:<id>`（后者是 Service 内层 id，前端从不直接用）→ D-197-2 据此冻结「前端最终 id 原值」编码，通知抽屉(`\d+`∪`bg-audit:`)/任务抽屉(`taskrun-`终态∪crawler终态)两套白名单不可混。
+  - **HIGH-2（派生项过滤分层）**：finished audit / taskrun 的 dismiss 过滤**只能** Service 内存 anti-set，**禁止** SQL 拼 `'audit:'||id` anti-join（谓词漂移 + 索引退化）→ D-197-4 据此裁定 general 走 SQL NOT EXISTS、派生走 Service 内存。
+  - **HIGH-3（clear 入参）**：「当前可见」多源不可单查复现 → dismiss-batch 收前端回传 `itemKeys[]`，部分成功（D-197-3）。
+  - **MEDIUM-1**：跨标签即时同步——现有 SSE 仅携 unread count、dismiss 不改 unread → 走 60s 轮询/globalMutateRegistry 最终一致；即时需 -B 外加 drawer-refresh SSE 事件（单列 follow-up，不阻塞 P3）。
+  - **MEDIUM-2**：finished task 已并入 general lane（纯数字 id），`taskrun-` 仅在任务抽屉 → 两抽屉白名单分别处理。
+  - **LOW**：`ITEM_NOT_DISMISSABLE` 纳 ErrorCode 真源（ADR-110）；`deleteStaleDismissals` age N=90d 与 ADR-195 TTL 交叉确认。
+  - **红线核对全 PASS**：新 route 端点契约登记（path 走 body 规避 `:`）/ 无技术栈外依赖（纯 SQL）/ 不越层（general SQL、派生 Service 内存、selectDismissedKeys 在 queries）/ 不破坏 ADR-192 已读混合（D-197-5 正交）/ ADR-196 SSE+消息中心（history 不过滤）/ audit_log 不受影响（纯视图态表）/ db-rules 索引 4 级文档 + 软删除约定不适用已论证 / 跨 3 层拆 -A/-B/-C。
+- **状态 → Accepted**（3 HIGH 纠正已并入 ADR 决策文本闭环、2 MEDIUM 处置〔MEDIUM-1 follow-up / MEDIUM-2 两白名单〕+ LOW 转 -B 实施期登记）。**解锁 NTLG-NTF-DISMISS-A/B/C 实施**。

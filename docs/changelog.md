@@ -3596,3 +3596,15 @@
 - **新增依赖**：无　**数据库变更**：无　**新端点/ADR**：无　**Props/types 变更**：无
 - **门禁**：typecheck（全 workspace）/ lint FULL TURBO / test:changed 79 文件 1003 passed EXIT=0 + notification-drawer 专项 30（26 + 新 4）。
 - **里程碑**：通知抽屉交互增强轻档落地（用户可一键聚焦未读）；重档 dismiss 软移除 ADR-197 设计完成（CONDITIONAL PASS），待拆 -A/-B/-C 实施。
+
+## [NTLG-NTF-DISMISS-ADR] ADR-197 通知/任务抽屉 dismiss（软移除）子系统起草（SEQ-20260609-01 P3）
+- **完成时间**：2026-06-10
+- **记录时间**：2026-06-10 02:25
+- **执行模型**：claude-opus-4-8（主循环；用户裁定「两者都推」之重档 ADR）
+- **子代理**：arch-reviewer (claude-opus-4-8 / agentId a2edc8aa4e6cfa1a9) — **CONDITIONAL PASS**，独立设计 + 纠正主循环传入 3 个事实前提偏差
+- **背景**：用户要求抽屉级软移除（单条/清空），移除 ≠ 物理删除（消息中心仍按 TTL 留存），不影响 audit_log 永久真源。新 admin route + 跨消费方 schema 双红线 → 强制 Opus 子代理设计 ADR 后方可实施。
+- **ADR-197 决策（D-197-1..7）**：① 独立表 `notification_dismissals(user_id,item_key,dismissed_at)` PK(user_id,item_key)，否决扩 notification_reads / 否决 notifications 加 dismissed_at 列；② item_key=前端抽屉项最终 id 原值 + 可 dismiss 白名单（general `\d+` ∪ `bg-audit:` ∪ 终态 `taskrun-`/crawler；拒 upcoming/active）；③ 2 端点 `POST /admin/notifications/dismiss`+`/dismiss-batch`（item_key 走 body 规避 `:` 冲突，clear 前端回传可见集）；④ 三处抽屉排除（general SQL NOT EXISTS / 派生 Service 内存 anti-set）vs 消息中心 history 不排除；⑤ dismiss 独立维度不隐含 read、不改 unreadCount；⑥ 清理走 purge worker `deleteStaleDismissals` age N≥90d（无 FK CASCADE）；⑦ 边界（物理删除仍 TTL purge / 跨标签同步 MEDIUM-1 follow-up）。
+- **子代理纠正主循环 3 事实前提偏差（避免 -B 返工）**：① item_key 双前缀 `bg-audit:<id>` 非 `bg-<id>`、active `bg-crawler_run:` 非 `crawler_run:` → 直采前端最终 id、两套白名单不可混；② 派生项过滤只能 Service 内存 anti-set、禁 SQL 拼 `'audit:'||id` anti-join（谓词漂移+索引退化）；③ clear 须前端回传 itemKeys[]（多源不可单查复现）。
+- **改动文件**：`docs/decisions.md`（+ADR-197）、`docs/task-queue.md`（dismiss 卡 Accepted + 拆 -A/-B/-C 蓝图）、`docs/tasks.md`。
+- **门禁**：verify:adr-contracts EXIT=0（verify-endpoint-adr 232 路由对齐 / 119 ADR 端点含 dismiss 2 预登记 / verify-adr-d-numbers D-197-1..7 识别 / sql-schema 79 表 / admin-shell-types-mirror 2 对对齐）。docs-only。
+- **里程碑**：dismiss 子系统设计锁定 → 解锁 NTLG-NTF-DISMISS-A/B/C 实施；本 ADR 兼作 dismiss 端点 endpoint-ADR。
