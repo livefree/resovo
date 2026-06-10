@@ -21907,6 +21907,7 @@ v1 **无新表/列**：消息中心读扩展复用现有 `idx_notifications_crea
 - **D-196-DEV-2**：定向 scope 逐行 reads 写路径仍随「定向 scope 实际启用」激活（继承 D-192-DEV-1/4 + D-195-DEV-2）。处置：accept——若 P2-c v1 仍全 broadcast/role-cursor 则无定向 emit 消费方，提前实装 reads 写是无消费方半套机制（YAGNI）；本 ADR 锁解除触发条件。
 - **D-196-DEV-3**：pub/sub fire-and-forget 不持久化（丢信号靠轮询 fallback 最终一致）。处置：accept——未读计数非关键强一致，60s 轮询兜底足够；引入持久队列（Streams/outbox）是过度工程。
 - **D-196-DEV-4**（NTLG-P2-c-B-1 实施期补登）：D-196-3「Redis-down/超限 5xx 优雅失败」具体化为 503 `STREAM_UNAVAILABLE`（Redis subscribe 未就绪）/ `STREAM_AT_CAPACITY`（连接软上限，默认 500）两码（见 §错误码 + §端点契约错误码列已补 503）。处置：accept——属决策体已锚定的「5xx 优雅失败」实施落点，非新增决策；client 收 503 即走 D-196-6 轮询 fallback，与 §端点契约 401/403 同表声明保契约完整。
+- **D-196-DEV-5**（NTLG-P2-c-B-2 实施期补登，Codex stop-review 修复）：D-196-2 publish 时机从「仅 emit 写库成功」**扩为 emit + read 高水位线变更对称 publish**——`NotificationService.markAllRead` 写 `notification_read_cursor` 后 publish `user:<id>` 信号。处置：accept——D-196-6「SSE 连通时停 60s 轮询」的安全前提是「**SSE 携带全部未读计数变更**」；而未读计数受 emit（新增）与 read 游标（已读）**双轴**影响，若仅 emit publish 则 read 变更（如另一标签页/设备 markAllRead）在 SSE 连通且轮询已停时无法同步到本连接的未读计数，破坏前提。对称 publish 修复后 SSE 真正覆盖全部计数变更，停轮询安全。purge 过期通知无需 publish（`countUnreadNotifications` 已 `expires_at > NOW()` 排除过期 → purge 删的是已不计数行，对计数中性）。
 
 ### 评审
 

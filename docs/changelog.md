@@ -3496,3 +3496,17 @@
   - **e2e:admin SSE 端到端验证留 follow-up**（server-next 组件 hook 不做 unit-render，本卡聚焦 client lib 纯函数 + connect 流程测试；真浏览器 EventSource/fetch-stream 行为 + 重连 + 双模式切换待 e2e）。
   - **门禁**：typecheck/lint/verify:adr-contracts（endpoint-adr 232/117、mirror 2 对，B-2 无新 route/错误码）EXIT=0；test:changed（改 api-client.ts 致广泛 dependents 入选）90 文件 1075 passed（含 client 12 新 + hook 12 恢复）。无 schema/新依赖。
   - **P2-c 剩 NTLG-P2-c-C**：归档（v1 deferred）+ 收口 P1-c-C 3 项（crawler 出 background lane 成对移除 BackgroundEventService 派生 / 红点统一 unread-count 解 BLOCKER-1〔F6②〕/ 定向逐行 reads）。
+
+## [NTLG-P2-c-B-2-FIX] markAllRead read 高水位线变更对称 publish（Codex stop-review 修复 SSE 停轮询安全前提）
+- **完成时间**：2026-06-09
+- **记录时间**：2026-06-09 23:04
+- **执行模型**：claude-opus-4-8（主循环）
+- **子代理**：无（Codex stop-time review 反馈，主循环修复）
+- **问题**：B-2「SSE 连通时停 60s 轮询（D-196-6）」的安全前提是「SSE 携带全部未读计数变更」。但 B-1 仅在 `emit` 写库后 publish Redis 信号；**read 高水位线变更（`markAllRead`→`upsertReadCursor`）不 publish** → SSE 连通且轮询已停时，跨标签页/设备的 read 同步丢失（另一标签页标记已读后，本连接未读计数不更新，直到下次 emit）。
+- **根因**：未读计数受 emit（新增）+ read 游标（已读）**双轴**影响，但只有 emit 轴 publish，read 轴静默 → 破坏「SSE 覆盖全部计数变更」不变量。
+- **修复文件**：
+  - `apps/api/src/services/NotificationService.ts` — `markAllRead` upsert 游标后 `publishNotificationChanged('user:'+userId)`（ADR-196 D-196-2 对称 publish，fire-and-forget；该用户全部 SSE 连接重推未读 → 跨标签页/设备 read 同步）
+  - `docs/decisions.md` — ADR-196 +D-196-DEV-5（publish 时机扩为 emit + read 对称；并记 purge 计数中性无需 publish——`countUnreadNotifications` 已 `expires_at > NOW()` 排除过期）
+  - `tests/unit/api/notification-service.test.ts` — redis mock +`publish` + 新增 #u4（markAllRead → publish `notifications:changed` + `{scope:'user:admin-1'}`）
+- **新增依赖**：无　**数据库变更**：无
+- **注意事项**：purge 过期通知**无需** publish（过期行已被 unread count `expires_at > NOW()` 排除，删之对计数中性）。逐行 reads（markOneRead 客户端 ephemeral）不涉服务端游标，无需 publish。门禁：typecheck/lint/verify EXIT=0；test:changed 22 + 集成 admin-notifications 15 + 单测 notification-service/emitter/pubsub 38 全过。

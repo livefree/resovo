@@ -18,7 +18,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 const { queryMock } = vi.hoisted(() => ({ queryMock: vi.fn() }))
 vi.mock('@/api/lib/postgres', () => ({ db: { query: queryMock } }))
 vi.mock('@/api/lib/redis', () => ({
-  redis: { get: vi.fn().mockResolvedValue(null), set: vi.fn().mockResolvedValue('OK') },
+  // publish：markAllRead 现 publish user:<id> 信号（ADR-196 D-196-2 对称）；duplicate 缺省由 stream init try/catch 降级
+  redis: {
+    get: vi.fn().mockResolvedValue(null),
+    set: vi.fn().mockResolvedValue('OK'),
+    publish: vi.fn().mockResolvedValue(1),
+  },
 }))
 vi.mock('@/api/lib/auth', () => ({
   verifyAccessToken: vi.fn(),
@@ -28,6 +33,7 @@ vi.mock('@/api/lib/auth', () => ({
 import { NotificationService } from '@/api/services/NotificationService'
 import { NOTIFICATION_ACTION_TYPES } from '@/api/services/notification-audit-emit'
 import { db } from '@/api/lib/postgres'
+import { redis } from '@/api/lib/redis'
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -189,6 +195,16 @@ describe('NotificationService.unreadCount / markAllRead — cursor 编排（ADR-
     const params = queryMock.mock.calls[0][1]
     expect(params[0]).toBe('admin-1')
     expect(params[1]).toBe(result.readAt)
+  })
+
+  it('#u4 markAllRead → publish `user:<id>` 信号触发 SSE 重推（ADR-196 D-196-2 对称，跨标签页 read 同步）', async () => {
+    queryMock.mockResolvedValueOnce({ rows: [] })
+    await new NotificationService(db).markAllRead('admin-1')
+    const publishMock = vi.mocked(redis.publish)
+    expect(publishMock).toHaveBeenCalledTimes(1)
+    const [channel, payload] = publishMock.mock.calls[0]!
+    expect(channel).toBe('notifications:changed')
+    expect(JSON.parse(payload as string)).toEqual({ scope: 'user:admin-1' })
   })
 })
 

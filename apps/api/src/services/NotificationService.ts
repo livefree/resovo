@@ -23,6 +23,7 @@ import {
   type NotificationRow,
 } from '@/api/db/queries/notifications'
 import { ADMIN_ACTION_SOURCE_KIND } from '@/api/services/notification-audit-emit'
+import { publishNotificationChanged } from '@/api/lib/notification-pubsub'
 
 /**
  * drawer general lane 的 sourceKind allowlist（NTLG-P1-c-C）。
@@ -149,6 +150,10 @@ export class NotificationService {
   async markAllRead(userId: string): Promise<{ readAt: string }> {
     const readAt = new Date().toISOString()
     await upsertReadCursor(this.db, userId, readAt)
+    // ADR-196 D-196-2 对称：read 高水位线变更同样影响该用户未读计数 → publish `user:<id>` 信号
+    // 触发其 SSE 连接重推未读。否则 SSE 连通时（轮询已停 D-196-6）跨标签页/设备的 read 同步会丢失
+    // ——「SSE 携带全部未读计数变更」是禁轮询的前提，emit 与 read 须对称 publish（Codex stop-review 修复）。
+    publishNotificationChanged(`user:${userId}`)
     return { readAt }
   }
 }
