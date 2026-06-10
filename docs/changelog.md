@@ -3531,3 +3531,23 @@
 - **新增依赖**：无　**数据库变更**：无（→ architecture.md 零同步）
 - **门禁**：typecheck/lint/verify:adr-contracts EXIT=0（endpoint-adr 232 路由/117 端点、admin-shell-types-mirror 2 对、sql-schema 79 表全对齐；error-message 195 advisory 未增）/ test:changed 21 文件 309 passed（background-event 12 重写 + notification-service 23 + crawler-worker-notifications 7）。
 - **注意事项**：红点改读 unread-count（F6②，解 BLOCKER-1）归 -C-2——涉 `admin-shell.tsx:175` `notifications.some(!read)` 改 unread-count 数字驱动 → 改 `packages/admin-ui/src/shell/types.ts` 公开 Props 须 arch-reviewer Opus 子代理 + commit `Subagents:` trailer。前端 mock finished crawler 数据一致性清理留 follow-up（非阻塞，映射函数仍有效）。
+
+## [NTLG-P2-c-C-2] F6② 红点改读 unread-count（解 BLOCKER-1 / 替 list-derived）（SEQ-20260609-01 P2-c 拆卡 · ADR-196 D-196-5② · NTLG-P2-c-C 整卡收口 · NTLG-P2-c 整卡收口）
+- **完成时间**：2026-06-09
+- **记录时间**：2026-06-09 23:58
+- **执行模型**：claude-opus-4-8（主循环；建议 sonnet，人工 opus 覆盖 + Opus 子代理设计 Props）
+- **子代理**：arch-reviewer (claude-opus-4-8 / agentId a1d037f0474f41036) — CONDITIONAL PASS → 3 必做修订全吸收（admin-ui shell 红点 Props 契约设计，用户授权 spawn）
+- **背景/根因**：红点此前在 `admin-shell.tsx:175` 内部 `notifications.some(!read)`（list-derived，BLOCKER-1）。P1-c-C 拒绝改 unread-count 因「不含 background lane」；C-1 已把 crawler 并入新表（unread-count 含 crawler），余 background 残留（audit 高危 freeze + upcoming）属 drawer 补充流，按 ADR-196 D-196-5② 口径不计入红点。改 unread-count 后红点实时性更好（SSE 直推数字无需 reload 数 list）+ 修正 list-derived 缺陷（upcoming `createdAt` 未来恒 > readAt → 红点永亮无法清）。
+- **修复文件**：
+  - `packages/admin-ui/src/shell/admin-shell.tsx` — `AdminShellProps` +`notificationUnreadCount?: number`（对称 `runningTaskCount`，消费方传数字、shell 派生）+ 解构 + `notificationDotVisible` 改「`!== undefined ? count > 0 : 回退 some(!read)`」（**0 守卫**：count=0 红点隐藏不回退 list-derived）
+  - `apps/server-next/src/lib/admin-shell-notifications.ts` — `useAdminNotifications` +`unreadCount` state；SSE `onUnread(count)` 实时直驱（替 B-2 丢 count 仅 reload）+ `GET /admin/notifications/unread-count` 端点（reload 第三路 `Promise.allSettled`，覆盖初始/60s 轮询 fallback/markAllRead 后刷新；degraded warn 留痕非空 catch）+ import 既有 `AdminNotificationUnreadCountResponse` DTO
+  - `apps/server-next/src/app/admin/admin-shell-client.tsx` — wire `notificationUnreadCount={unreadCount}`
+  - `tests/unit/components/admin-ui/shell/admin-shell.test.tsx` — 红点 3 用例（新 prop 优先 / **count=0 守卫红点隐藏** / 回退 list-derived 不破）
+  - `tests/unit/lib/admin-shell-notifications.test.ts` — setupRouterMock +unread-count 分支 + #11（端点→unreadCount）+ #12（SSE `onUnread(count)`→实时更新）
+  - `docs/decisions.md` — ADR-196 +D-196-DEV-7（F6② 落点 + arch-reviewer 设计 + 3 必做修订）
+- **arch-reviewer 3 必做修订全吸收**：① `!== undefined` 守卫（非 truthy）+ admin-shell.test count=0 用例 ✅；② SSE `onUnread` 消费 count（`setUnreadCount`）非仅 reload ✅；③ 风险2（crawler finished 双源去重）已由 C-1〔D-196-DEV-6〕解除 ✅。
+- **topbar 不改**：保持无数字 dot 语义（本卡范围仅数据源、不引数字 badge；可扩展性已由 number 契约保住，未来要数字 badge 零契约改动）。
+- **mirror 未触发**：`AdminShellProps` 不在 `verify-admin-shell-types-mirror` 的 NotificationItem/TaskItem 比对对（脚本实证 2 对仍对齐）→ packages/types 零改，复用既有 DTO。
+- **新增依赖**：无　**数据库变更**：无（→ architecture.md 零同步）
+- **门禁**：typecheck/lint/verify:adr-contracts EXIT=0（endpoint-adr 232/117、admin-shell-types-mirror 2 对、sql-schema 79 表全对齐）/ test:changed 78 文件 981 passed（admin-shell 23〔红点 3〕+ hook 14〔#11+#12〕+ 全部 admin-ui shell 消费方零回归）。commit 带 `Subagents: arch-reviewer (claude-opus-4-8)` trailer（admin-ui 公开 Props 红线）。
+- **里程碑**：**BLOCKER-1 解除**；**NTLG-P2-c-C 整卡 ✅**（-C-1 F6①③ + -C-2 F6②）；**NTLG-P2-c 整卡 ✅**（消息中心 + SSE 未读实时推送 + 收口 P1-c-C 端到端）。e2e:admin SSE 端到端验收留 follow-up（单测/集成全绿）。

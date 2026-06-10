@@ -8,7 +8,7 @@ import { describe, it, expect, afterEach, vi } from 'vitest'
 import { render, screen, fireEvent, cleanup, act } from '@testing-library/react'
 import { AdminShell } from '../../../../../packages/admin-ui/src/shell/admin-shell'
 import type { AdminShellProps } from '../../../../../packages/admin-ui/src/shell/admin-shell'
-import type { AdminNavSection, AdminShellUser } from '../../../../../packages/admin-ui/src/shell/types'
+import type { AdminNavSection, AdminShellUser, NotificationItem } from '../../../../../packages/admin-ui/src/shell/types'
 
 afterEach(() => {
   cleanup()
@@ -240,5 +240,28 @@ describe('AdminShell — countProvider 求值', () => {
     // NAV 中 moderation.count=12 静态值
     const item = container.querySelector('[data-sidebar-item="/admin/moderation"]')
     expect(item?.querySelector('[data-sidebar-item-badge]')?.textContent).toBe('12')
+  })
+})
+
+describe('AdminShell — 红点 unread-count 驱动（ADR-196 D-196-5②）', () => {
+  const READ_ITEM: NotificationItem = {
+    id: 'n-read', title: '已读项', level: 'info', createdAt: '2026-01-01T00:00:00Z', read: true, category: 'general',
+  }
+  const UNREAD_ITEM: NotificationItem = { ...READ_ITEM, id: 'n-unread', read: false }
+  const dotSelector = '[data-topbar-icon-btn="notifications"] [data-topbar-icon-dot]'
+
+  it('notificationUnreadCount>0 + 全部 read → 红点显示（新 prop 优先于 list-derived false）', () => {
+    const { container } = renderShell({ notifications: [READ_ITEM], notificationUnreadCount: 3 })
+    expect(container.querySelector(dotSelector)).not.toBeNull()
+  })
+
+  it('notificationUnreadCount=0 + 含未读项 → 红点不显示（0 守卫：新 prop 压过 list-derived true）', () => {
+    const { container } = renderShell({ notifications: [UNREAD_ITEM], notificationUnreadCount: 0 })
+    expect(container.querySelector(dotSelector)).toBeNull()
+  })
+
+  it('不传 notificationUnreadCount + 含未读项 → 红点显示（回退 list-derived 不破）', () => {
+    const { container } = renderShell({ notifications: [UNREAD_ITEM] })
+    expect(container.querySelector(dotSelector)).not.toBeNull()
   })
 })

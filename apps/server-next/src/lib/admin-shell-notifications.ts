@@ -26,7 +26,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { NotificationItem, TaskItem } from '@resovo/admin-ui'
-import type { AdminBackgroundEvent } from '@resovo/types'
+import type { AdminBackgroundEvent, AdminNotificationUnreadCountResponse } from '@resovo/types'
 import { apiClient, ApiClientError } from '@/lib/api-client'
 import { globalMutateRegistry } from '@/lib/admin-shell-background-events'
 import { connectNotificationStream } from '@/lib/notification-stream-client'
@@ -131,6 +131,8 @@ function mapBackgroundEventToTask(event: AdminBackgroundEvent): TaskItem | null 
 
 export interface UseAdminNotificationsResult {
   readonly items: readonly NotificationItem[]
+  /** 未读计数（红点数据源 / ADR-196 D-196-5②）：SSE 实时 onUnread + unread-count 端点初始/轮询 fallback */
+  readonly unreadCount: number
   readonly markAllRead: () => void
   readonly markOneRead: (id: string) => void
   readonly reload: () => Promise<void>
@@ -145,11 +147,14 @@ export function useAdminNotifications(): UseAdminNotificationsResult {
   const [readIds, setReadIds] = useState<ReadonlySet<string>>(() => new Set())
   // ADR-196 D-196-1/6：SSE 连接态（open → 停 60s 轮询，SSE 驱动实时；closed → 轮询 fallback 接管）
   const [sseConnected, setSseConnected] = useState(false)
+  // ADR-196 D-196-5②：红点未读计数（替 list-derived）——SSE onUnread 实时 + unread-count 端点初始/轮询 fallback
+  const [unreadCount, setUnreadCount] = useState(0)
 
   const reload = useCallback(async () => {
-    const [generalResult, bgResult] = await Promise.allSettled([
+    const [generalResult, bgResult, unreadResult] = await Promise.allSettled([
       apiClient.get<NotificationListResponse>('/admin/notifications'),
       apiClient.get<BackgroundEventsResponse>('/admin/system/background-events'),
+      apiClient.get<AdminNotificationUnreadCountResponse>('/admin/notifications/unread-count'),
     ])
     if (generalResult.status === 'fulfilled') {
       setGeneralItems(generalResult.value.data.map((item) => ({ ...item, category: 'general' as const })))
@@ -172,6 +177,16 @@ export function useAdminNotifications(): UseAdminNotificationsResult {
       // eslint-disable-next-line no-console -- 客户端 hook 无 logger / degraded mode 留痕
       console.warn('[useAdminNotifications] /admin/system/background-events failed (degraded mode):', bgResult.reason)
     }
+    // ADR-196 D-196-5②：unread-count 端点为红点数字源（SSE 未连通时 fallback；初始/60s 轮询/markAllRead 后 reload 刷新）。
+    // SSE 连通时 onUnread 实时覆盖本值，此端点结果作基线/兜底（轮询补偿 pub/sub 丢信号，最终一致上界 60s）。
+    if (unreadResult.status === 'fulfilled') {
+      setUnreadCount(unreadResult.value.data.count)
+    } else if (
+      !(unreadResult.reason instanceof ApiClientError && unreadResult.reason.status === 401)
+    ) {
+      // eslint-disable-next-line no-console -- 客户端 hook 无 logger / degraded mode 留痕
+      console.warn('[useAdminNotifications] /admin/notifications/unread-count failed (degraded mode):', unreadResult.reason)
+    }
   }, [])
 
   // 初始加载一次（SSE/轮询之外的首屏拉取）
@@ -183,7 +198,8 @@ export function useAdminNotifications(): UseAdminNotificationsResult {
   // F6② 红点改读 unread-count 归 P2-c-C）。连接态经 onStateChange 暴露供轮询 effect 切 fallback。
   useEffect(() => {
     const ctrl = connectNotificationStream({
-      onUnread: () => { void reload() },
+      // ADR-196 D-196-5②：SSE 推送 count 直驱红点（实时，无需 reload 数 list）；reload 仍触发刷新 drawer items（list-derived read）
+      onUnread: (count) => { setUnreadCount(count); void reload() },
       onStateChange: (state) => { setSseConnected(state === 'open') },
     })
     return () => { ctrl.close() }
@@ -239,7 +255,7 @@ export function useAdminNotifications(): UseAdminNotificationsResult {
     })
   }, [])
 
-  return { items, markAllRead, markOneRead, reload }
+  return { items, unreadCount, markAllRead, markOneRead, reload }
 }
 
 export interface UseAdminTasksResult {

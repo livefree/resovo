@@ -134,7 +134,8 @@ export function AdminShellClient({ defaultCollapsed, initialTheme, initialRole, 
   // ADR-155 D-155-2 / EP-2：notifications + tasks 数据流已合并 background events 三源
   // （upcoming/finished → category='background' / active → source='crawler'），
   // 无需独立 useAdminBackgroundEvents hook + BackgroundEventBell 旁路
-  const { items: notifications, markAllRead, markOneRead } = useAdminNotifications()
+  // ADR-196 D-196-5②：红点改读 unread-count（SSE 实时 + 端点 fallback）；items 仍供 drawer
+  const { items: notifications, unreadCount: notificationUnreadCount, markAllRead, markOneRead } = useAdminNotifications()
   const { items: tasks, reload: reloadTasks } = useAdminTasks()
 
   const handleNotificationItemClick = useCallback((item: NotificationItem) => {
@@ -194,6 +195,7 @@ export function AdminShellClient({ defaultCollapsed, initialTheme, initialRole, 
       theme={theme}
       defaultCollapsed={defaultCollapsed}
       notifications={notifications}
+      notificationUnreadCount={notificationUnreadCount}
       tasks={tasks}
       onNavigate={handleNavigate}
       onThemeToggle={handleThemeToggle}

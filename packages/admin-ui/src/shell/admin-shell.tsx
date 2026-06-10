@@ -83,6 +83,12 @@ export interface AdminShellProps {
   readonly defaultCollapsed?: boolean
   /** 通知数据；undefined 时通知图标禁用，NotificationDrawer 不挂载 */
   readonly notifications?: readonly NotificationItem[]
+  /**
+   * 未读计数（红点数据源 / ADR-196 D-196-5②）：消费方传 unread-count 数字（SSE 实时 + 端点/轮询 fallback），
+   * shell 内 `count > 0` → 红点。**undefined 时回退** `notifications.some(!read)`（向后兼容，旧消费方/stub 不破）。
+   * 与 `tasks` 的 `runningTaskCount` 同范式（消费方传计数、shell 内派生展示）。
+   */
+  readonly notificationUnreadCount?: number
   /** 任务数据；undefined 时任务图标禁用，TaskDrawer 不挂载 */
   readonly tasks?: readonly TaskItem[]
   /** 自定义 CmdK 命令分组；undefined 时从 nav 自动构建导航组 */
@@ -135,7 +141,7 @@ const MAIN_STYLE: CSSProperties = {
 export function AdminShell(props: AdminShellProps) {
   const {
     activeHref, nav, crumbs, topbarIcons, health, countProvider, user, theme,
-    collapsed: controlledCollapsed, defaultCollapsed, notifications, tasks, commandGroups,
+    collapsed: controlledCollapsed, defaultCollapsed, notifications, notificationUnreadCount, tasks, commandGroups,
     onNavigate, onThemeToggle, onUserMenuAction, onCollapsedChange,
     onNotificationItemClick, onMarkAllNotificationsRead, onCancelTask, onRetryTask,
     children,
@@ -172,9 +178,15 @@ export function AdminShell(props: AdminShellProps) {
   // ── 派生值 ─────────────────────────────────────────────
   const counts = useMemo(() => countProvider?.() ?? undefined, [countProvider])
 
+  // ADR-196 D-196-5②：红点优先消费 unread-count 数字（SSE 实时 + 端点/轮询 fallback）；
+  // 未提供时回退 list-derived。守卫用 `!== undefined`（非 truthy）——count=0 须命中「有 prop 无未读→隐藏」，
+  // 不可回退 list-derived（否则 upcoming createdAt 未来恒未读的旧缺陷无法修正）。
   const notificationDotVisible = useMemo(
-    () => (notifications ?? []).some((n) => !n.read),
-    [notifications],
+    () => {
+      if (notificationUnreadCount !== undefined) return notificationUnreadCount > 0
+      return (notifications ?? []).some((n) => !n.read)
+    },
+    [notificationUnreadCount, notifications],
   )
   const runningTaskCount = useMemo(
     () => (tasks ?? []).filter((t) => t.status === 'running').length,

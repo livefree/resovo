@@ -35,6 +35,7 @@ vi.mock('../../../apps/server-next/src/lib/notification-stream-client', () => ({
 }))
 
 import * as apiClientMod from '../../../apps/server-next/src/lib/api-client'
+import { connectNotificationStream } from '../../../apps/server-next/src/lib/notification-stream-client'
 import {
   useAdminNotifications,
   useAdminTasks,
@@ -42,18 +43,24 @@ import {
 
 const mockGet = apiClientMod.apiClient.get as ReturnType<typeof vi.fn>
 const mockPost = apiClientMod.apiClient.post as ReturnType<typeof vi.fn>
+const mockConnect = connectNotificationStream as ReturnType<typeof vi.fn>
 
 /** ADR-155 D-155-2 EP-2：两端点 mock router 按 URL 路由 */
 function setupRouterMock(handlers: {
   notifications?: unknown
   jobs?: unknown
   background?: unknown
+  unreadCount?: unknown
 }) {
   mockGet.mockImplementation((url: string) => {
     if (url === '/admin/notifications') {
       return Promise.resolve(
         handlers.notifications ?? { data: [], meta: { total: 0, limit: 50, since: '', readAt: '' } },
       )
+    }
+    // ADR-196 D-196-5②：红点 unread-count 端点（reload 第三路）；默认 count=0
+    if (url === '/admin/notifications/unread-count') {
+      return Promise.resolve(handlers.unreadCount ?? { data: { count: 0 }, meta: { scope: 'self' } })
     }
     if (url === '/admin/system/jobs') {
       return Promise.resolve(
@@ -125,6 +132,9 @@ describe('useAdminNotifications', () => {
       }
       if (url === '/admin/system/background-events') {
         return Promise.resolve({ data: [], meta: { total: 0, limit: 20, windowHours: 24, generatedAt: '' } })
+      }
+      if (url === '/admin/notifications/unread-count') {
+        return Promise.resolve({ data: { count: 0 }, meta: { scope: 'self' } })
       }
       return Promise.reject(new Error(`unexpected ${url}`))
     })
@@ -290,12 +300,36 @@ describe('useAdminNotifications', () => {
       if (url === '/admin/system/background-events') {
         return Promise.reject(new Error('500 background-events failed'))
       }
+      if (url === '/admin/notifications/unread-count') {
+        return Promise.resolve({ data: { count: 0 }, meta: { scope: 'self' } })
+      }
       return Promise.reject(new Error('unexpected'))
     })
     const { result } = renderHook(() => useAdminNotifications())
     await waitFor(() => expect(result.current.items.length).toBe(1))
     expect(result.current.items[0]?.id).toBe('n-1')
     expect(result.current.items[0]?.category).toBe('general')
+  })
+
+  it('#11 unread-count 端点 → unreadCount 初始值（红点数据源 / ADR-196 D-196-5②）', async () => {
+    setupRouterMock({ unreadCount: { data: { count: 5 }, meta: { scope: 'self' } } })
+    const { result } = renderHook(() => useAdminNotifications())
+    await waitFor(() => expect(result.current.unreadCount).toBe(5))
+  })
+
+  it('#12 SSE onUnread(count) → unreadCount 实时更新（不丢 count / 必做修订2）', async () => {
+    setupRouterMock({})
+    let captured: { onUnread: (n: number) => void } | undefined
+    mockConnect.mockImplementation((handlers: { onUnread: (n: number) => void }) => {
+      captured = handlers
+      return { close: vi.fn() }
+    })
+    const { result } = renderHook(() => useAdminNotifications())
+    await waitFor(() => expect(captured).toBeDefined())
+    act(() => { captured?.onUnread(7) })
+    await waitFor(() => expect(result.current.unreadCount).toBe(7))
+    // 恢复默认 no-op controller，防 mockImpl 泄漏到后续用例
+    mockConnect.mockImplementation(() => ({ close: vi.fn() }))
   })
 })
 
