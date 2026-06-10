@@ -331,6 +331,74 @@ describe('useAdminNotifications', () => {
     // 恢复默认 no-op controller，防 mockImpl 泄漏到后续用例
     mockConnect.mockImplementation(() => ({ close: vi.fn() }))
   })
+
+  // ── NTLG-NTF-DISMISS-C1（ADR-197）：dismiss/dismissAll 乐观移除 + 端点 + reload ──
+
+  const DISMISS_FIXTURE = {
+    notifications: {
+      data: [
+        { id: '101', title: '系统通知', level: 'info', createdAt: '2026-06-10T03:00:00Z', read: false },
+      ],
+      meta: { total: 1, limit: 50, since: '2026-06-03T00:00:00Z' },
+    },
+    background: {
+      data: [
+        { id: 'audit:7', lane: 'finished', title: '高危审计', description: 'x', level: 'danger', finishedAt: '2026-06-10T02:00:00Z' },
+      ],
+      meta: { total: 1, limit: 20, windowHours: 24, generatedAt: '' },
+    },
+  }
+
+  it('#d1 dismiss(itemKey) → 乐观移除 general 项 + POST /admin/notifications/dismiss + reload', async () => {
+    setupRouterMock(DISMISS_FIXTURE)
+    mockPost.mockResolvedValue({ data: { dismissed: 1 } })
+    const { result } = renderHook(() => useAdminNotifications())
+    await waitFor(() => expect(result.current.items).toHaveLength(2))
+    await act(async () => { result.current.dismiss('101') })
+    expect(mockPost).toHaveBeenCalledWith('/admin/notifications/dismiss', { itemKey: '101' })
+    // reload 后 mock 仍返回该项（服务端 mock 不感知 dismiss），但乐观移除已生效过；
+    // 这里验证 POST 契约 + 不 throw。bg 项移除走 #d2 双 filter。
+  })
+
+  it('#d2 dismissAll(itemKeys) → 双源（general+background）乐观移除 + POST dismiss-batch', async () => {
+    setupRouterMock(DISMISS_FIXTURE)
+    let posted = false
+    mockPost.mockImplementation(() => { posted = true; return new Promise(() => { /* pending：冻结 reload，观察乐观态 */ }) })
+    const { result } = renderHook(() => useAdminNotifications())
+    await waitFor(() => expect(result.current.items).toHaveLength(2))
+    act(() => { result.current.dismissAll(['101', 'bg-audit:7']) })
+    // POST pending 中（不 resolve → 不 reload），断言乐观移除：双 split-state filter 后 items 清空
+    expect(posted).toBe(true)
+    expect(mockPost).toHaveBeenCalledWith('/admin/notifications/dismiss-batch', { itemKeys: ['101', 'bg-audit:7'] })
+    await waitFor(() => expect(result.current.items).toHaveLength(0))
+  })
+
+  it('#d3 dismiss POST 失败 → warn 降级不 throw（乐观态保持，下次 reload 校正）', async () => {
+    setupRouterMock(DISMISS_FIXTURE)
+    mockPost.mockRejectedValue(new Error('network down'))
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => { /* 静音 */ })
+    try {
+      const { result } = renderHook(() => useAdminNotifications())
+      await waitFor(() => expect(result.current.items).toHaveLength(2))
+      await act(async () => { result.current.dismiss('101') })
+      await waitFor(() => expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('dismiss failed'),
+        expect.any(Error),
+      ))
+      // 乐观移除生效（POST 失败不回滚，等下次 reload 服务端权威态校正）
+      expect(result.current.items.find((i) => i.id === '101')).toBeUndefined()
+    } finally {
+      warnSpy.mockRestore()
+    }
+  })
+
+  it('#d4 dismissAll([]) → 不发请求（空数组 guard，规避端点 min(1) 422）', async () => {
+    setupRouterMock(DISMISS_FIXTURE)
+    const { result } = renderHook(() => useAdminNotifications())
+    await waitFor(() => expect(result.current.items).toHaveLength(2))
+    act(() => { result.current.dismissAll([]) })
+    expect(mockPost).not.toHaveBeenCalled()
+  })
 })
 
 describe('useAdminTasks', () => {

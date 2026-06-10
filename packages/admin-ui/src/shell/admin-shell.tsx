@@ -105,6 +105,10 @@ export interface AdminShellProps {
   readonly onNotificationItemClick?: (item: NotificationItem) => void
   /** 全部已读回调；undefined 时按钮隐藏 */
   readonly onMarkAllNotificationsRead?: () => void
+  /** 通知单项软移除回调（ADR-197 / NTLG-NTF-DISMISS-C1）；undefined 时移除按钮隐藏 */
+  readonly onDismissNotification?: (itemKey: string) => void
+  /** 通知批量清空回调（回传可见可 dismiss itemKeys）；undefined 时清空按钮隐藏 */
+  readonly onClearAllNotifications?: (itemKeys: readonly string[]) => void
   /** 任务取消回调；undefined 时取消按钮隐藏 */
   readonly onCancelTask?: (taskId: string) => void
   /** 任务重试回调；undefined 时重试按钮隐藏 */
@@ -143,7 +147,8 @@ export function AdminShell(props: AdminShellProps) {
     activeHref, nav, crumbs, topbarIcons, health, countProvider, user, theme,
     collapsed: controlledCollapsed, defaultCollapsed, notifications, notificationUnreadCount, tasks, commandGroups,
     onNavigate, onThemeToggle, onUserMenuAction, onCollapsedChange,
-    onNotificationItemClick, onMarkAllNotificationsRead, onCancelTask, onRetryTask,
+    onNotificationItemClick, onMarkAllNotificationsRead, onDismissNotification, onClearAllNotifications,
+    onCancelTask, onRetryTask,
     children,
   } = props
 
@@ -306,6 +311,8 @@ export function AdminShell(props: AdminShellProps) {
           onClose={handleCloseDrawer}
           onItemClick={onNotificationItemClick}
           onMarkAllRead={onMarkAllNotificationsRead}
+          onDismiss={onDismissNotification}
+          onClearAll={onClearAllNotifications}
         />
       )}
 

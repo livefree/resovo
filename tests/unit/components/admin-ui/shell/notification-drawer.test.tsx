@@ -104,12 +104,12 @@ describe('NotificationDrawer — open=true 渲染（portal + header + items）',
     expect(item1.style.cursor).toBe('pointer')
   })
 
-  it('未读项 opacity=1 / 已读项 opacity=0.6（视觉区分）', () => {
+  it('未读项 opacity=1 / 已读项 opacity=0.6（视觉区分；NTLG-NTF-DISMISS-C1 H-1 上提行容器）', () => {
     render(<NotificationDrawer open items={ITEMS} onClose={vi.fn()} />)
-    const item1 = document.body.querySelector('[data-notification-item="n1"]') as HTMLElement
-    const item2 = document.body.querySelector('[data-notification-item="n2"]') as HTMLElement
-    expect(item1.style.opacity).toBe('1')
-    expect(item2.style.opacity).toBe('0.6')
+    const row1 = document.body.querySelector('[data-notification-row="n1"]') as HTMLElement
+    const row2 = document.body.querySelector('[data-notification-row="n2"]') as HTMLElement
+    expect(row1.style.opacity).toBe('1')
+    expect(row2.style.opacity).toBe('0.6')
   })
 
   it('item title + body + createdAt 渲染', () => {
@@ -290,5 +290,72 @@ describe('NotificationDrawer — NTLG-NTF-UNREAD-FILTER 只看未读切换', () 
     fireEvent.click(document.body.querySelector('[data-notification-unread-toggle]') as HTMLButtonElement)
     expect(document.body.querySelector('[data-notification-empty-unread]')?.textContent).toBe('暂无未读通知')
     expect(document.body.querySelector('[data-notification-empty]')).toBeNull()
+  })
+})
+
+describe('NotificationDrawer — NTLG-NTF-DISMISS-C1 单项移除 + 清空（ADR-197）', () => {
+  // 白名单（D-197-2）：general 纯数字 id ∪ bg-audit: 前缀可 dismiss；upcoming/active 派生项拒
+  const MIXED: readonly NotificationItem[] = [
+    { id: '101', title: '系统通知（可移除）', level: 'info', createdAt: '2026-06-10T03:00:00Z', read: false, category: 'general' },
+    { id: 'bg-audit:7', title: '高危审计（可移除）', level: 'danger', createdAt: '2026-06-10T02:00:00Z', read: true, category: 'background' },
+    { id: 'bg-auto_crawl:next', title: '即将采集（不可移除）', level: 'info', createdAt: '2026-06-10T01:00:00Z', read: false, category: 'background' },
+  ]
+
+  it('onDismiss 提供 → 仅白名单项显示移除按钮（数字 id + bg-audit: 显示；upcoming 派生项隐藏）', () => {
+    render(<NotificationDrawer open items={MIXED} onClose={vi.fn()} onDismiss={vi.fn()} />)
+    expect(document.body.querySelector('[data-notification-item-dismiss="101"]')).toBeTruthy()
+    expect(document.body.querySelector('[data-notification-item-dismiss="bg-audit:7"]')).toBeTruthy()
+    expect(document.body.querySelector('[data-notification-item-dismiss="bg-auto_crawl:next"]')).toBeNull()
+  })
+
+  it('onDismiss 未提供 → 移除按钮全部隐藏', () => {
+    render(<NotificationDrawer open items={MIXED} onClose={vi.fn()} />)
+    expect(document.body.querySelector('[data-notification-item-dismiss]')).toBeNull()
+  })
+
+  it('非数字字母 id（既有 mock 形态）→ 白名单外不显示移除按钮', () => {
+    render(<NotificationDrawer open items={ITEMS} onClose={vi.fn()} onDismiss={vi.fn()} />)
+    expect(document.body.querySelector('[data-notification-item-dismiss]')).toBeNull()
+  })
+
+  it('点击移除按钮 → onDismiss(itemKey)，不触发 onItemClick（行外兄弟节点 H-1）', () => {
+    const onDismiss = vi.fn()
+    const onItemClick = vi.fn()
+    render(<NotificationDrawer open items={MIXED} onClose={vi.fn()} onDismiss={onDismiss} onItemClick={onItemClick} />)
+    fireEvent.click(document.body.querySelector('[data-notification-item-dismiss="101"]') as HTMLButtonElement)
+    expect(onDismiss).toHaveBeenCalledWith('101')
+    expect(onItemClick).not.toHaveBeenCalled()
+  })
+
+  it('H-1：行 main 仍为 button（data-notification-item 选择器保留）且与移除按钮非嵌套', () => {
+    render(<NotificationDrawer open items={MIXED} onClose={vi.fn()} onDismiss={vi.fn()} onItemClick={vi.fn()} />)
+    const main = document.body.querySelector('[data-notification-item="101"]') as HTMLElement
+    expect(main.tagName).toBe('BUTTON')
+    expect(main.querySelector('[data-notification-item-dismiss]')).toBeNull()
+    const row = document.body.querySelector('[data-notification-row="101"]') as HTMLElement
+    expect(row.querySelector('[data-notification-item-dismiss="101"]')).toBeTruthy()
+  })
+
+  it('onClearAll 提供且有可清项 → 「清空」显示；点击回传可见 dismissable itemKeys（白名单外不含）', () => {
+    const onClearAll = vi.fn()
+    render(<NotificationDrawer open items={MIXED} onClose={vi.fn()} onClearAll={onClearAll} />)
+    const btn = document.body.querySelector('[data-notification-clear-all]') as HTMLButtonElement
+    expect(btn.textContent).toBe('清空')
+    fireEvent.click(btn)
+    expect(onClearAll).toHaveBeenCalledWith(['101', 'bg-audit:7'])
+  })
+
+  it('onClearAll 提供但无可清项（全部白名单外）→ 「清空」隐藏', () => {
+    render(<NotificationDrawer open items={ITEMS} onClose={vi.fn()} onClearAll={vi.fn()} />)
+    expect(document.body.querySelector('[data-notification-clear-all]')).toBeNull()
+  })
+
+  it('只看未读时清空 → 仅回传可见（未读）dismissable keys（所见即所清）', () => {
+    const onClearAll = vi.fn()
+    render(<NotificationDrawer open items={MIXED} onClose={vi.fn()} onClearAll={onClearAll} />)
+    fireEvent.click(document.body.querySelector('[data-notification-unread-toggle]') as HTMLButtonElement)
+    fireEvent.click(document.body.querySelector('[data-notification-clear-all]') as HTMLButtonElement)
+    // bg-audit:7 已读 → unreadOnly 下不可见，不回传
+    expect(onClearAll).toHaveBeenCalledWith(['101'])
   })
 })

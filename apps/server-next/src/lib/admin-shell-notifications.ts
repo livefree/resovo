@@ -136,6 +136,10 @@ export interface UseAdminNotificationsResult {
   readonly unreadCount: number
   readonly markAllRead: () => void
   readonly markOneRead: (id: string) => void
+  /** NTLG-NTF-DISMISS-C1（ADR-197）：单项软移除——乐观移除 + POST /admin/notifications/dismiss + reload */
+  readonly dismiss: (itemKey: string) => void
+  /** NTLG-NTF-DISMISS-C1（ADR-197 D-197-3）：批量清空——乐观移除 + POST /admin/notifications/dismiss-batch + reload */
+  readonly dismissAll: (itemKeys: readonly string[]) => void
   readonly reload: () => Promise<void>
 }
 
@@ -256,7 +260,40 @@ export function useAdminNotifications(): UseAdminNotificationsResult {
     })
   }, [])
 
-  return { items, unreadCount, markAllRead, markOneRead, reload }
+  // NTLG-NTF-DISMISS-C1：乐观移除（split-state 双 filter——general 数字 id 在 generalItems、
+  // bg-audit: 在 backgroundItems，双侧 filter 防御覆盖）→ 端点 → reload 对齐服务端权威态；
+  // 失败仅 warn 降级（markAllRead 范式，乐观态由下次 reload 校正）。
+  const dismiss = useCallback((itemKey: string) => {
+    setGeneralItems((prev) => prev.filter((item) => item.id !== itemKey))
+    setBackgroundItems((prev) => prev.filter((item) => item.id !== itemKey))
+    void (async () => {
+      try {
+        await apiClient.post('/admin/notifications/dismiss', { itemKey })
+        await reload()
+      } catch (err) {
+        // eslint-disable-next-line no-console -- 客户端 hook 无 logger / degraded mode 留痕到 devtools
+        console.warn('[useAdminNotifications] dismiss failed (degraded mode):', err)
+      }
+    })()
+  }, [reload])
+
+  const dismissAll = useCallback((itemKeys: readonly string[]) => {
+    if (itemKeys.length === 0) return
+    const keySet = new Set(itemKeys)
+    setGeneralItems((prev) => prev.filter((item) => !keySet.has(item.id)))
+    setBackgroundItems((prev) => prev.filter((item) => !keySet.has(item.id)))
+    void (async () => {
+      try {
+        await apiClient.post('/admin/notifications/dismiss-batch', { itemKeys: [...itemKeys] })
+        await reload()
+      } catch (err) {
+        // eslint-disable-next-line no-console -- 客户端 hook 无 logger / degraded mode 留痕到 devtools
+        console.warn('[useAdminNotifications] dismissAll failed (degraded mode):', err)
+      }
+    })()
+  }, [reload])
+
+  return { items, unreadCount, markAllRead, markOneRead, dismiss, dismissAll, reload }
 }
 
 export interface UseAdminTasksResult {

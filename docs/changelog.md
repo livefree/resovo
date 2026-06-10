@@ -3675,3 +3675,19 @@
 - **新增依赖**：无　**数据库变更**：无（复用 migration 104 + task_runs）　**新端点/ADR**：无
 - **门禁**：typecheck（全 ws）/ lint / verify:adr-contracts EXIT=0 / test:changed 22 文件 330 passed。selectTerminalTaskRunIds 真实 SQL 由单测 mock + typecheck 覆盖（简单 SQL，集成验证留 follow-up）。
 - **里程碑**：**任务抽屉 dismiss 写+读闭环 + dismissal 自动清理**；**dismiss 子系统后端全完成**（-A schema + -B1 写端点 + -B2 通知读过滤 + -B3 任务读+清理）→ 解锁 -C（UI 按钮）。
+
+## [NTLG-NTF-DISMISS-C1] 通知抽屉 dismiss 软移除 UI（单项移除 + 清空 + H-1 行重构）
+- **完成时间**：2026-06-10
+- **记录时间**：2026-06-10 11:00
+- **执行模型**：claude-fable-5
+- **子代理**：无（方案已 arch-reviewer a489b560dbd4f2551 CONDITIONAL PASS 锁定：方案 (b) 组件内部 derive dismissable，零 types.ts 改动、不触 mirror）
+- **修改文件**：
+  - `packages/admin-ui/src/shell/notification-drawer.tsx` — Props 加 `onDismiss?(itemKey)` / `onClearAll?(itemKeys)`（对齐 onCancel 范式）；组件内 `isDismissable`（general 纯数字 id ∪ `bg-audit:`，与 api `isDismissableNotificationKey` 同口径）；H-1 行 button-in-button 重构（行容器 div + main button/article + 行外兄弟「×」移除按钮，`data-notification-item` 保留在 main 上既有选择器零破；read opacity 上提行容器）；headerActions 加「清空」按钮（回传当前可见 dismissable itemKeys，所见即所清）
+  - `packages/admin-ui/src/shell/admin-shell.tsx` — AdminShellProps 加 `onDismissNotification?` / `onClearAllNotifications?` 穿透 NotificationDrawer（admin-shell.tsx 内定义，非 types.ts，无 Opus trailer 红线）
+  - `apps/server-next/src/lib/admin-shell-notifications.ts` — useAdminNotifications 加 `dismiss` / `dismissAll`：乐观移除（split-state 双 filter generalItems+backgroundItems）→ POST `/admin/notifications/dismiss{,-batch}` → reload；失败 catch warn 降级（markAllRead 范式）；dismissAll 空数组 guard（规避端点 zod min(1)）
+  - `apps/server-next/src/app/admin/admin-shell-client.tsx` — wire `handleDismissNotification` / `handleClearAllNotifications`
+  - `tests/unit/components/admin-ui/shell/notification-drawer.test.tsx` — +8 用例（白名单显隐 / onDismiss 回调不串 onItemClick / H-1 非嵌套结构 / 清空回传 keys / unreadOnly 所见即所清 / opacity 断言迁移行容器）
+  - `tests/unit/lib/admin-shell-notifications.test.ts` — +4 用例（#d1 dismiss POST 契约 / #d2 双源乐观移除〔POST pending 冻结观察〕/ #d3 失败 warn 降级 / #d4 空数组 guard）
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：清空按钮语义 = 当前可见（unreadOnly 过滤后）且白名单内项（ADR-197 ③ 前端回传 itemKeys）；upcoming/active 派生项无移除按钮（写守卫 422 同口径）。任务抽屉 dismiss UI 归 -C2。门禁：typecheck/lint EXIT=0，test:changed 80 文件 1029 passed。

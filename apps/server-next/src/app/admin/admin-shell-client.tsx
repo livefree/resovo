@@ -135,7 +135,7 @@ export function AdminShellClient({ defaultCollapsed, initialTheme, initialRole, 
   // （upcoming/finished → category='background' / active → source='crawler'），
   // 无需独立 useAdminBackgroundEvents hook + BackgroundEventBell 旁路
   // ADR-196 D-196-5②：红点改读 unread-count（SSE 实时 + 端点 fallback）；items 仍供 drawer
-  const { items: notifications, unreadCount: notificationUnreadCount, markAllRead, markOneRead } = useAdminNotifications()
+  const { items: notifications, unreadCount: notificationUnreadCount, markAllRead, markOneRead, dismiss: dismissNotification, dismissAll: dismissAllNotifications } = useAdminNotifications()
   const { items: tasks, reload: reloadTasks } = useAdminTasks()
 
   const handleNotificationItemClick = useCallback((item: NotificationItem) => {
@@ -146,6 +146,15 @@ export function AdminShellClient({ defaultCollapsed, initialTheme, initialRole, 
   const handleMarkAllNotificationsRead = useCallback(() => {
     markAllRead()
   }, [markAllRead])
+
+  // NTLG-NTF-DISMISS-C1（ADR-197）：通知抽屉单项移除 + 清空（hook 内乐观移除 + 端点 + reload）
+  const handleDismissNotification = useCallback((itemKey: string) => {
+    dismissNotification(itemKey)
+  }, [dismissNotification])
+
+  const handleClearAllNotifications = useCallback((itemKeys: readonly string[]) => {
+    dismissAllNotifications(itemKeys)
+  }, [dismissAllNotifications])
 
   // NTLG-P0-3-B / ADR-191：CrawlerRun + bull job cancel/retry 真实接线（补 N1-147-4）。
   // POST /admin/tasks/:id/{cancel,retry} 按 id 分派（裸 UUID=crawler run / bull-{queue}-{jobId}=bull job）；
@@ -203,6 +212,8 @@ export function AdminShellClient({ defaultCollapsed, initialTheme, initialRole, 
       onCollapsedChange={handleCollapsedChange}
       onNotificationItemClick={handleNotificationItemClick}
       onMarkAllNotificationsRead={handleMarkAllNotificationsRead}
+      onDismissNotification={handleDismissNotification}
+      onClearAllNotifications={handleClearAllNotifications}
       onCancelTask={handleCancelTask}
       onRetryTask={handleRetryTask}
     >

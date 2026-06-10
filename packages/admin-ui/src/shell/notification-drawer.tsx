@@ -36,6 +36,17 @@ export interface NotificationDrawerProps {
   readonly onClose: () => void
   readonly onItemClick?: (item: NotificationItem) => void
   readonly onMarkAllRead?: () => void
+  /** NTLG-NTF-DISMISS-C1（ADR-197）：单项软移除；仅可 dismiss 项（general 数字 id / bg-audit:）显示移除按钮 */
+  readonly onDismiss?: (itemKey: string) => void
+  /** NTLG-NTF-DISMISS-C1（ADR-197 D-197-3）：批量清空；回传当前可见的可 dismiss itemKeys（多源不可服务端复现） */
+  readonly onClearAll?: (itemKeys: readonly string[]) => void
+}
+
+// ADR-197 D-197-2 通知抽屉可 dismiss 白名单（与 api lib/dismiss-item-key.ts isDismissableNotificationKey 同口径）：
+// general 通知行（纯数字 id）∪ finished 高危审计（bg-audit: 前缀）。
+// upcoming（bg-auto_crawl:/bg-scheduler_timer:）与 active（bg-crawler_run:）瞬时项不可 dismiss。
+function isDismissable(item: NotificationItem): boolean {
+  return /^\d+$/.test(item.id) || item.id.startsWith('bg-audit:')
 }
 
 const MARK_ALL_READ_BTN_STYLE: CSSProperties = {
@@ -62,21 +73,37 @@ const UNREAD_TOGGLE_BTN_STYLE: CSSProperties = {
   flexShrink: 0,
 }
 
+// NTLG-NTF-DISMISS-C1 H-1：行容器（borderBottom 自原 ITEM_STYLE 上提）——main button/article 与
+// 行外兄弟移除按钮并排，规避 button-in-button 嵌套。
+const ROW_STYLE: CSSProperties = {
+  display: 'flex',
+  alignItems: 'stretch',
+  borderBottom: '1px solid var(--border-subtle)',
+}
+
 const ITEM_STYLE: CSSProperties = {
   display: 'flex',
   gap: 'var(--space-3)',
   padding: 'var(--space-3) var(--space-4)',
   background: 'transparent',
-  // CHG-SN-6-RETRO-4：拆 border:0 + borderBottom 冲突
-  borderTop: 0,
-  borderLeft: 0,
-  borderRight: 0,
-  borderBottom: '1px solid var(--border-subtle)',
-  width: '100%',
+  border: 0,
+  flex: 1,
+  minWidth: 0,
   textAlign: 'left',
   cursor: 'pointer',
   fontFamily: 'inherit',
   color: 'var(--fg-default)',
+}
+
+const DISMISS_BTN_STYLE: CSSProperties = {
+  background: 'transparent',
+  border: 0,
+  padding: '0 var(--space-3)',
+  color: 'var(--fg-muted)',
+  cursor: 'pointer',
+  fontFamily: 'inherit',
+  fontSize: 'var(--font-size-sm)',
+  flexShrink: 0,
 }
 
 const LEVEL_BAR_STYLE: CSSProperties = {
@@ -162,13 +189,31 @@ function groupItems(
   return GROUP_ORDER.map((key) => [key, buckets[key]] as const).filter(([, group]) => group.length > 0)
 }
 
-export function NotificationDrawer({ open, items, onClose, onItemClick, onMarkAllRead }: NotificationDrawerProps) {
+export function NotificationDrawer({ open, items, onClose, onItemClick, onMarkAllRead, onDismiss, onClearAll }: NotificationDrawerProps) {
   // NTLG-NTF-UNREAD-FILTER：抽屉内部「只看未读」过滤态（复用既有 read，不改 Props）。
   const [unreadOnly, setUnreadOnly] = useState(false)
   const visibleItems = unreadOnly ? items.filter((item) => !item.read) : items
+  // NTLG-NTF-DISMISS-C1：清空 = 当前可见且可 dismiss 项（所见即所清；ADR-197 ③ 前端回传 itemKeys）
+  const clearableKeys = visibleItems.filter(isDismissable).map((item) => item.id)
   const headerActions = (
     <>
       <span data-notification-count style={COUNT_STYLE}>{items.length}</span>
+      {onClearAll && clearableKeys.length > 0 && (
+        <button
+          type="button"
+          data-notification-clear-all
+          onClick={() => {
+            try {
+              onClearAll(clearableKeys)
+            } finally {
+              // 不自动关闭抽屉（与全部已读一致；剩余不可 dismiss 项仍可浏览）
+            }
+          }}
+          style={{ ...UNREAD_TOGGLE_BTN_STYLE, color: 'var(--fg-muted)' }}
+        >
+          清空
+        </button>
+      )}
       <button
         type="button"
         data-notification-unread-toggle
@@ -205,7 +250,7 @@ export function NotificationDrawer({ open, items, onClose, onItemClick, onMarkAl
         <div data-notification-empty-unread style={EMPTY_STYLE}>暂无未读通知</div>
       ) : (
         groupItems(visibleItems).map(([groupKey, group]) => (
-          <NotificationGroup key={groupKey} groupKey={groupKey} items={group} onItemClick={onItemClick} />
+          <NotificationGroup key={groupKey} groupKey={groupKey} items={group} onItemClick={onItemClick} onDismiss={onDismiss} />
         ))
       )}
     </DrawerShell>
@@ -216,10 +261,11 @@ interface NotificationGroupProps {
   readonly groupKey: NotificationGroupKey
   readonly items: readonly NotificationItem[]
   readonly onItemClick: ((item: NotificationItem) => void) | undefined
+  readonly onDismiss: ((itemKey: string) => void) | undefined
 }
 
 /** 分组区：区头（文案 + 区内计数）+ 该 category 的 item 列表。 */
-function NotificationGroup({ groupKey, items, onItemClick }: NotificationGroupProps) {
+function NotificationGroup({ groupKey, items, onItemClick, onDismiss }: NotificationGroupProps) {
   return (
     <section data-notification-group={groupKey}>
       <div data-notification-group-title style={GROUP_TITLE_STYLE}>
@@ -227,7 +273,7 @@ function NotificationGroup({ groupKey, items, onItemClick }: NotificationGroupPr
         <span data-notification-group-count style={COUNT_STYLE}>{items.length}</span>
       </div>
       {items.map((item) => (
-        <NotificationItemRow key={item.id} item={item} onItemClick={onItemClick} />
+        <NotificationItemRow key={item.id} item={item} onItemClick={onItemClick} onDismiss={onDismiss} />
       ))}
     </section>
   )
@@ -236,15 +282,16 @@ function NotificationGroup({ groupKey, items, onItemClick }: NotificationGroupPr
 interface NotificationItemRowProps {
   readonly item: NotificationItem
   readonly onItemClick: ((item: NotificationItem) => void) | undefined
+  readonly onDismiss: ((itemKey: string) => void) | undefined
 }
 
-function NotificationItemRow({ item, onItemClick }: NotificationItemRowProps) {
+function NotificationItemRow({ item, onItemClick, onDismiss }: NotificationItemRowProps) {
   const slot = LEVEL_TO_SLOT[item.level]
   const interactive = onItemClick !== undefined
+  const dismissVisible = onDismiss !== undefined && isDismissable(item)
   // fix(CHG-SN-2-10) UI/a11y 契约：onItemClick 缺省时渲染为 article（非 button），避免视觉暗示可点击但 no-op
   const itemStyle: CSSProperties = {
     ...ITEM_STYLE,
-    opacity: item.read ? 0.6 : 1,
     cursor: interactive ? 'pointer' : 'default',
   }
   const innerNodes = (
@@ -258,21 +305,9 @@ function NotificationItemRow({ item, onItemClick }: NotificationItemRowProps) {
     </>
   )
 
-  if (!interactive) {
-    return (
-      <article
-        data-notification-item={item.id}
-        data-notification-item-level={item.level}
-        data-notification-item-read={item.read ? 'true' : 'false'}
-        data-notification-item-interactive="false"
-        style={itemStyle}
-      >
-        {innerNodes}
-      </article>
-    )
-  }
-
-  return (
+  // NTLG-NTF-DISMISS-C1 H-1：data-notification-item 及其交互保留在 main button/article 上（既有选择器零破），
+  // 移除按钮为行外兄弟节点；read 降透明度上提行容器（main 与移除按钮一并变淡）。
+  const main = interactive ? (
     <button
       type="button"
       data-notification-item={item.id}
@@ -290,6 +325,39 @@ function NotificationItemRow({ item, onItemClick }: NotificationItemRowProps) {
     >
       {innerNodes}
     </button>
+  ) : (
+    <article
+      data-notification-item={item.id}
+      data-notification-item-level={item.level}
+      data-notification-item-read={item.read ? 'true' : 'false'}
+      data-notification-item-interactive="false"
+      style={itemStyle}
+    >
+      {innerNodes}
+    </article>
+  )
+
+  return (
+    <div data-notification-row={item.id} style={{ ...ROW_STYLE, opacity: item.read ? 0.6 : 1 }}>
+      {main}
+      {dismissVisible && (
+        <button
+          type="button"
+          data-notification-item-dismiss={item.id}
+          aria-label="移除通知"
+          onClick={() => {
+            try {
+              onDismiss(item.id)
+            } finally {
+              // 不自动关闭抽屉
+            }
+          }}
+          style={DISMISS_BTN_STYLE}
+        >
+          ×
+        </button>
+      )}
+    </div>
   )
 }
 
