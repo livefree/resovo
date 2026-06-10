@@ -3439,3 +3439,18 @@
 - **注意事项**：解锁 **NTLG-P2-c-A-2**（server-next 消息中心 admin 页：DataTable 消费扩展后 list + 检索/过滤/分页 UI）。**实施级偏离登记**：includeExpired 保 false（消息中心暂不显已过期未 purge 的 ≤24h 窗通知，与 drawer 一致；如需「全量含过期」属 refinement）。
 - **文件**：`apps/api/src/db/queries/notifications.ts`（共享过滤 + keyset）/ `apps/api/src/services/NotificationService.ts`（list 扩参 + nextCursor + readState 双路径）/ `apps/api/src/routes/admin/notifications.ts`（QuerySchema + cursor 编解码 + history 模式 + meta.nextCursor）/ `tests/unit/api/notification-service.test.ts`（+M1/M2）/ `tests/integration/api/admin-notifications.test.ts`（+消息中心扩展集成）/ `docs/task-queue.md`（P2-c-A 拆 -A-1/-A-2，-A-1 ✅）/ `docs/tasks.md`（卡片流转）。
 - **执行模型**：claude-opus-4-8（主循环，人工 opus 覆盖 sonnet——「先做 A 然后做 B」授权）；**子代理**：无（ADR-196 D-196-4 已锁，纯实施）。
+
+## [NTLG-P2-c-A-2] server-next 消息中心 admin 页（cursor-stack 适配 DataTable，ADR-196 D-196-4）（SEQ-20260609-01 P2-c 拆卡 · P2-c-A 整卡收口）
+
+- **背景**：消费 A-1 扩展后的 `GET /admin/notifications`（cursor/q/过滤）建消息中心 admin 页（全量历史 + 检索 + 过滤）。**设计 fork（A-1 后发现，AskUserQuestion 用户裁定 2026-06-09）**：admin-ui DataTable 用 page/pageSize 偏移分页，A-1 后端用 cursor/keyset 分页 → 阻抗不匹配 → 选 **cursor-stack 适配 DataTable**。
+- **cursor-stack 适配 DataTable**：DataTable 渲染表格保 admin UI 一致性（价值 #4）+ **隐藏内置 page pager**（`pagination={{hidden:true}}`，源码核 `PaginationFoot` `config?.hidden → return null`）+ **外置 AdminInput/AdminSelect 过滤**驱动 server 取数 + **cursor-stack prev/next**（`cursorStack:(string|undefined)[]` 维护各页游标，prev=slice(-1) / next=push(nextCursor)，用 meta.total 显计数、禁随机跳页）。`mode="server"` 直渲服务端当前页行（源码核 `processedRows=rows`）。
+- **文件**：`lib/messages/api.ts`（BFF `listMessages`，URL 参数序列化）/ `app/admin/messages/page.tsx`（Suspense）/ `_client/MessageCenterClient.tsx`（主组件 + cursor-stack + 过滤 + DataTable）/ `_client/MessageColumns.tsx`（列定义 + `computeRead` D-192-AMD-4 已读高水位线判定，CSS 变量零硬编码颜色）/ `lib/admin-nav.tsx`（+「消息中心」入口 `<Bell />`，近审计日志）。
+- **过滤范围（v1）**：q 标题检索（AdminInput type=search，回车提交避逐键取数）+ level（AdminSelect）+ readState（AdminSelect）。**date range 延后**（AdminInput 不支持 type='date'、无独立 date primitive、audit 走 DataTable 列 filter；A-1 后端 since/until 能力保留，前端 refinement）。**type 过滤延后**（AdminNotificationItem 无 type 字段，扩展触发 mirror 守卫 + arch-reviewer，v1 不引入）。
+- **门禁**：typecheck（8 ws）EXIT=0 / lint EXIT=0 / `verify:adr-contracts` EXIT=0 / **test:changed 2 文件 12 passed**（messages 6：listMessages URL 序列化 + computeRead 判定）。**DataTable 运行时安全经源码核实**（mode=server 直渲 + pagination.hidden 不渲 foot）。
+- **测试**：`tests/unit/server-next/messages.test.ts` 6（listMessages 全参透传 cursor/q/level/since/until/readState + 省略不带 + 空 params 无 qs / computeRead readAt=null→未读 + createdAt<=readAt→已读〔边界含〕 + >readAt→未读）。
+- **七问自检**：① 整页刷新：N/A（SPA 路由）② 重复逻辑/状态：否（复用 DataTable/AdminInput/AdminSelect/PageHeader 共享原语 ≥80%、computeRead 单点）③ 逻辑应下沉仍留：否（BFF 在 lib、列在 Columns、cursor-stack 在 client 局部）④ 破坏分层/复用：否（UI→BFF→apiClient 未直调 DB）⑤ 需拆分：否（A-2 单层前端 / 后端拆 A-1）⑥ 技术债：是（date/type 过滤延后 refinement，显式登记）⑦ audit payload：N/A。**[AI-CHECK] 结论：SAFE**（cursor-stack 适配用户裁定 / DataTable 用法源码核实运行时安全 / CSS 变量零硬编码 / ≥80% 共享原语 / 加性 nav 入口零回归）。
+- **新增依赖**：无（lucide-react Bell 已有库内）。
+- **数据库变更**：无（前端页，A-1 已扩展后端）。
+- **NTLG-P2-c-A 整卡收口**（-A-1 后端 list 扩展 + -A-2 前端消息中心页）。消息中心历史+检索端到端落地（cursor 分页 + q/level/readState 过滤）。
+- **注意事项**：**e2e:admin 推荐作 render 验证 follow-up**（server-next 组件项目不做 unit render 测、render 由 e2e 验；本会话因无消息中心 e2e spec + e2e 重起未跑，DataTable 集成已源码核实安全 + 加性 nav 低回归）。剩 **NTLG-P2-c-B**（SSE 实装，ADR-196 D-196-1/2/3 已锁）/ **-C**（归档 + 收口 P1-c-C 3 项）。date/type 过滤 + 行点击已读 留 refinement。
+- **执行模型**：claude-opus-4-8（主循环，人工 opus 覆盖 sonnet——「先做 A 然后做 B」+ AskUserQuestion 选定 cursor-stack 适配授权）；**子代理**：无（ADR-196 D-196-4 已锁，纯实施）。

@@ -6,7 +6,7 @@
 
 ## 当前任务（单任务工作台：同时仅 1 个 🔄 进行中；完成即删卡，历史见 docs/changelog.md）
 
-_（当前无进行中任务。取下一个前先查 `docs/task-queue.md` 是否有 🚨 BLOCKER。**SEQ-20260609-01 进展**：**P0 ✅ + P1 ✅ + NTLG-ADR-P2 ✅ + NTLG-P2-a ✅ + NTLG-P2-d ✅ + NTLG-P2-c-ADR ✅ + NTLG-P2-c-A-1 ✅**（消息中心 list 端点后端扩展：keyset 分页 + q 检索 + level/type/until/readState 过滤，加性向后兼容）。**P2-c 下一可取**：**NTLG-P2-c-A-2**（server-next 消息中心 admin 页：DataTable 消费扩展后 list + 检索/过滤/分页 UI，依赖 -A-1 ✅，sonnet）/ **NTLG-P2-c-B**（SSE 实装：/stream + NotificationStreamService + Redis pub/sub + fetch-stream 客户端 + 轮询 fallback，依赖 D-196-1/2/3，sonnet）。**门控**：**NTLG-P2-b**（邮件）须用户定 provider + 起 ADR。**SEQ-20260608-01** cutover 剩：卡 4 回滚窗 🔄 ~2026-06-15、卡 5 改名待排期。）_
+_（当前无进行中任务。取下一个前先查 `docs/task-queue.md` 是否有 🚨 BLOCKER。**SEQ-20260609-01 进展**：**P0 ✅ + P1 ✅ + NTLG-ADR-P2 ✅ + NTLG-P2-a ✅ + NTLG-P2-d ✅ + NTLG-P2-c-ADR ✅ + NTLG-P2-c-A ✅**（消息中心历史+检索端到端：-A-1 后端 list 扩展 cursor 分页/检索/过滤 + -A-2 前端页 cursor-stack 适配 DataTable）。**P2-c 下一可取**：**NTLG-P2-c-B**（SSE 实装：/stream + NotificationStreamService 共享 subscribe+内存连接表 + Redis pub/sub + fetch-stream 客户端 + 轮询 fallback，依赖 ADR-196 D-196-1/2/3 ✅，sonnet，后端为主）/ **NTLG-P2-c-C**（归档〔v1 deferred〕+ 收口 P1-c-C 3 项）。**门控**：**NTLG-P2-b**（邮件）须用户定 provider + 起 ADR。**P2-c-A-2 follow-up**：e2e:admin render 验证 / date·type 过滤 / 行点击已读。**SEQ-20260608-01** cutover 剩：卡 4 回滚窗 🔄 ~2026-06-15、卡 5 改名待排期。）_
 
 ---
 

@@ -54,6 +54,7 @@ import {
   Globe,
   Users,
   Settings,
+  Bell,
 } from 'lucide-react'
 
 // AdminNavItem / AdminNavSection / AdminNavCountProvider 类型 SSOT 在 packages/admin-ui
@@ -114,6 +115,7 @@ export const ADMIN_NAV: readonly AdminNavSection[] = [
     items: [
       { label: '用户管理', href: '/admin/users', icon: <Users /> },
       { label: '站点设置', href: '/admin/settings', icon: <Settings />, shortcut: 'mod+,' },
+      { label: '消息中心', href: '/admin/messages', icon: <Bell /> },
       { label: '审计日志', href: '/admin/audit', icon: <FileText /> },
     ],
   },
