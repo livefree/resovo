@@ -259,6 +259,28 @@ describe('NotificationService.dismiss / dismissBatch — 软移除写路径（AD
     expect(r).toEqual({ dismissed: 2, skipped: 2 })
     expect(queryMock.mock.calls[0][1][1]).toEqual(['1', 'bg-audit:2']) // 仅 allowed 入库
   })
+
+  it('#d10 dismiss taskrun- 终态（task_runs 查命中）→ ok（ADR-197 D-197-2 / -B3）', async () => {
+    queryMock.mockResolvedValueOnce({ rows: [{ id: '5' }] }) // selectTerminalTaskRunIds 命中终态
+    queryMock.mockResolvedValueOnce({ rowCount: 1, rows: [] }) // insertDismissals
+    const r = await new NotificationService(db).dismiss('admin-1', 'taskrun-5')
+    expect(r.ok).toBe(true)
+  })
+
+  it('#d11 dismiss taskrun- 非终态（task_runs 查空）→ ok:false 不落库', async () => {
+    queryMock.mockResolvedValueOnce({ rows: [] }) // selectTerminalTaskRunIds 空（running/pending 非终态）
+    const r = await new NotificationService(db).dismiss('admin-1', 'taskrun-7')
+    expect(r).toEqual({ ok: false })
+    expect(queryMock).toHaveBeenCalledTimes(1) // 仅查终态、未落库
+  })
+
+  it('#d12 dismissBatch general+taskrun 终态+taskrun 非终态 → 部分成功（单次批量查终态）', async () => {
+    queryMock.mockResolvedValueOnce({ rows: [{ id: '5' }] }) // selectTerminalTaskRunIds: 5 终态 / 7 非终态
+    queryMock.mockResolvedValueOnce({ rowCount: 2, rows: [] }) // insertDismissals
+    const r = await new NotificationService(db).dismissBatch('admin-1', ['1', 'taskrun-5', 'taskrun-7'])
+    expect(r).toEqual({ dismissed: 2, skipped: 1 }) // 1(general)+taskrun-5(终态) 落库；taskrun-7 skip
+    expect(queryMock.mock.calls[1][1][1]).toEqual(['1', 'taskrun-5']) // insertDismissals 仅 allowed
+  })
 })
 
 describe('GET /admin/notifications/unread-count + POST /admin/notifications/read endpoints（ADR-192 AMENDMENT）', () => {

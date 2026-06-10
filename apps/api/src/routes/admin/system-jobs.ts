@@ -42,7 +42,7 @@ export async function adminSystemJobsRoutes(fastify: FastifyInstance) {
       parsed.data.since ??
       new Date(Date.now() - DEFAULT_WINDOW_DAYS * 24 * 3600_000).toISOString()
 
-    const result = await svc.list({ limit, since })
+    const result = await svc.list({ limit, since, userId: request.user!.userId })
     const meta: {
       total: number
       limit: number

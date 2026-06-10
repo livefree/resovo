@@ -45,16 +45,21 @@ import { db } from '@/api/lib/postgres'
 
 let crawlerRows: Array<Record<string, unknown>>
 let taskRunRows: Array<Record<string, unknown>>
+let dismissedRows: Array<Record<string, unknown>>
 
 beforeEach(() => {
   vi.clearAllMocks()
   crawlerRows = []
   taskRunRows = []
-  queryMock.mockReset().mockImplementation((sql: unknown) =>
-    Promise.resolve({
-      rows: typeof sql === 'string' && sql.includes('task_runs') ? taskRunRows : crawlerRows,
-    }),
-  )
+  dismissedRows = []
+  // NTLG-NTF-DISMISS-B3：notification_dismissals（selectDismissedKeys）/ task_runs / crawler_runs 三源按 SQL 分流
+  queryMock.mockReset().mockImplementation((sql: unknown) => {
+    const s = typeof sql === 'string' ? sql : ''
+    const rows = s.includes('notification_dismissals') ? dismissedRows
+      : s.includes('task_runs') ? taskRunRows
+        : crawlerRows
+    return Promise.resolve({ rows })
+  })
   crawlerGetJobCountsMock.mockReset().mockResolvedValue({ waiting: 0, active: 0 })
   maintGetJobCountsMock.mockReset().mockResolvedValue({ waiting: 0, active: 0 })
 })
@@ -311,5 +316,30 @@ describe('TaskAggregator.list — digest 挂载 (ADR-193 D-193-4 path A)', () =>
     const svc = new TaskAggregator(db)
     const result = await svc.list({ limit: 20, since: '2026-06-06T00:00:00Z' })
     expect(result.items[0]?.digest).toBeUndefined()
+  })
+})
+
+describe('TaskAggregator.list — dismiss 过滤（ADR-197 D-197-4 / NTLG-NTF-DISMISS-B3）', () => {
+  const terminalRun = (id: string, title: string) => ({
+    id, kind: 'maintenance', title, ref: null, status: 'success', progress: 100, digest: null, error: null,
+    startedAt: new Date(`2026-06-09T${id.padStart(2, '0')}:00:00Z`), finishedAt: new Date(`2026-06-09T${id.padStart(2, '0')}:05:00Z`),
+    createdAt: new Date(`2026-06-09T${id.padStart(2, '0')}:00:00Z`),
+  })
+
+  it('#T-dismiss 终态 taskrun 项被 dismiss → 内存 anti-set 过滤排除', async () => {
+    taskRunRows = [terminalRun('10', '保留'), terminalRun('11', '移除')]
+    dismissedRows = [{ itemKey: 'taskrun-11' }] // item.id = taskrun-<id>
+    const svc = new TaskAggregator(db)
+    const result = await svc.list({ limit: 20, since: '2026-06-01T00:00:00Z', userId: 'admin-1' })
+    expect(result.items.find((t) => t.id === 'taskrun-10')).toBeDefined()
+    expect(result.items.find((t) => t.id === 'taskrun-11')).toBeUndefined()
+  })
+
+  it('#T-dismiss-2 userId 省略 → 不查 dismissals、不过滤', async () => {
+    taskRunRows = [terminalRun('12', 'X')]
+    dismissedRows = [{ itemKey: 'taskrun-12' }] // 有 dismissal 但不传 userId
+    const svc = new TaskAggregator(db)
+    const result = await svc.list({ limit: 20, since: '2026-06-01T00:00:00Z' })
+    expect(result.items.find((t) => t.id === 'taskrun-12')).toBeDefined()
   })
 })

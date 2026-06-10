@@ -13,7 +13,7 @@ import { SourceVerificationService } from '@/api/services/SourceVerificationServ
 import { VideoIndexSyncService } from '@/api/services/VideoIndexSyncService'
 import { bulkSyncSourceCheckStatus } from '@/api/db/queries/videos'
 import { deleteFetchLogBefore } from '@/api/db/queries/external-fetch-log'
-import { deleteExpiredNotifications } from '@/api/db/queries/notifications'
+import { deleteExpiredNotifications, deleteStaleDismissals } from '@/api/db/queries/notifications'
 import { baseLogger, withJob } from '@/api/lib/logger'
 import { DbTaskRunReporter } from '@/api/services/TaskRunReporter'
 import { runMaintenanceJobWithReporter } from '@/api/workers/maintenanceWorker.taskrun'
@@ -121,8 +121,13 @@ async function processMaintenanceJob(
       // ADR-195 D-195-4：物理删除已过期通知（expires_at IS NOT NULL AND <= NOW()）；
       // notification_reads 经 FK ON DELETE CASCADE 级联、cursor 不受影响。NULL=永久永不删。
       const deleted = await deleteExpiredNotifications(db, new Date().toISOString())
+      // ADR-197 D-197-6：同 job 清理陈旧 dismiss 记录（notification_dismissals 无 FK CASCADE）——
+      // cutoff=NOW-90d 对齐 ADMIN_ACTION_TTL_DAYS，保证被 dismiss 的真源项早已 TTL purge 后才清其 dismissal
+      // （避免项复现；派生项 finished window ≤24h ≪ 90d 安全）。
+      const dismissalCutoff = new Date(Date.now() - 90 * 24 * 3600_000).toISOString()
+      const dismissalsDeleted = await deleteStaleDismissals(db, dismissalCutoff)
       const durationMs = Date.now() - startAt
-      jobLog.info({ stage: 'purge-expired-notifications', deleted, duration_ms: durationMs }, 'job done')
+      jobLog.info({ stage: 'purge-expired-notifications', deleted, dismissalsDeleted, duration_ms: durationMs }, 'job done')
       return { type: data.type, durationMs, deleted }
     }
     default: {

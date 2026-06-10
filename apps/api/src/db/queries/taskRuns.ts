@@ -127,6 +127,22 @@ export async function getTaskRunById(db: Queryable, id: string): Promise<TaskRun
 }
 
 /**
+ * 取 ids 中处于终态（success/failed/cancelled）的 task_run id 集合（ADR-197 D-197-2 taskrun dismiss 守卫）。
+ * 非终态（running/pending/cancelling）不返回 → 不可 dismiss（进行中任务移除会破窗 D-197-2）。
+ * id 来自 `taskrun-<id>` 剥前缀的裸数字值；非数字过滤防 `$1::bigint` 报错（同 getTaskRunById 防御）。
+ */
+export async function selectTerminalTaskRunIds(db: Queryable, ids: readonly string[]): Promise<Set<string>> {
+  const valid = ids.filter((id) => /^\d+$/.test(id))
+  if (valid.length === 0) return new Set()
+  const res = await db.query<{ id: string }>(
+    `SELECT id::text AS "id" FROM task_runs
+      WHERE id = ANY($1::bigint[]) AND status IN ('success', 'failed', 'cancelled')`,
+    [valid],
+  )
+  return new Set(res.rows.map((r) => r.id))
+}
+
+/**
  * 列任务运行（最近 N，按 created_at DESC + 可选时间窗）。供 -B TaskAggregator 副源投影消费。
  * 命中 idx_task_runs_created_at（created_at DESC 排序 + LIMIT）。
  */

@@ -3657,3 +3657,21 @@
 - **新增依赖**：无　**数据库变更**：无　**新端点/ADR**：无
 - **门禁**：typecheck（全 ws）/ lint / verify:adr-contracts EXIT=0（endpoint-adr 234 无新增 / sql-schema 80 表 / mirror 2 对）/ test:changed 2 文件 46 passed（bg-event 14 + notification-service 32）+ -A 集成已验 query 层 excludeDismissedForUser。
 - **里程碑**：**通知抽屉 dismiss 写+读闭环**——general 通知 + bg-audit 高危项移除后不再出现在抽屉，消息中心 history 仍保留（D-197-4 验证）。剩 -B3（任务侧 + purge 清理）+ -C（UI 按钮）。
+
+## [NTLG-NTF-DISMISS-B3] dismiss 任务侧读过滤 + taskrun 终态守卫 + purge 清理（SEQ-20260609-01 P3 · ADR-197 D-197-2/4/6）
+- **完成时间**：2026-06-10
+- **记录时间**：2026-06-10 03:12
+- **执行模型**：claude-opus-4-8（主循环；建议 sonnet，人工 opus 覆盖 + 持续推进授权）
+- **子代理**：无（D-197-2/4/6 已 ADR-197 锁定，纯实施）
+- **改动文件**：
+  - `apps/api/src/db/queries/taskRuns.ts` — +`selectTerminalTaskRunIds(db, ids)`（`id = ANY($1::bigint[]) AND status IN ('success','failed','cancelled')`，`/^\d+$/` 过滤防 `::bigint` 报错，空数组早退）
+  - `apps/api/src/lib/dismiss-item-key.ts` — +`parseTaskRunItemKey`（`^taskrun-(\d+)$` → 裸 id / 否则 null）
+  - `apps/api/src/services/NotificationService.ts` — `dismiss/dismissBatch` 升异步守卫：`isDismissable`（同步白名单 general/bg-audit + taskrun- 查终态）/ `filterDismissable`（同步直通 + taskrun- 单次批量查终态防 N+1）；taskrun- 终态可 dismiss、running/pending/cancelling 拒（D-197-2 破窗防御）
+  - `apps/api/src/services/TaskAggregator.ts` — `ListTasksParams` +`userId?`；list `selectDismissedKeys` 内存 anti-set 过滤终态 task 项（`item.id` = `taskrun-<id>` / crawler runId；**先过滤再 slice 保 limit 条数**）
+  - `apps/api/src/routes/admin/system-jobs.ts` — svc.list 传 `userId: request.user!.userId`
+  - `apps/api/src/workers/maintenanceWorker.ts` — `purge-expired-notifications` case 接 `deleteStaleDismissals`（cutoff=NOW-90d 对齐 ADMIN_ACTION_TTL_DAYS，D-197-6；dismissalsDeleted 进 jobLog）
+  - `tests/unit/api/notification-service.test.ts`（+3 #d10-12 taskrun 守卫）+ `tests/unit/api/task-aggregator.test.ts`（mock +notification_dismissals 分支 + #T-dismiss 过滤 2 用例）
+- **分层守恒**：selectTerminalTaskRunIds/selectDismissedKeys 在 queries 层；Service 调它内存过滤/守卫，不含 SQL 字面量。dismiss 端点统一（taskrun- 走同套 `/dismiss` 端点，后端守卫识别终态）。
+- **新增依赖**：无　**数据库变更**：无（复用 migration 104 + task_runs）　**新端点/ADR**：无
+- **门禁**：typecheck（全 ws）/ lint / verify:adr-contracts EXIT=0 / test:changed 22 文件 330 passed。selectTerminalTaskRunIds 真实 SQL 由单测 mock + typecheck 覆盖（简单 SQL，集成验证留 follow-up）。
+- **里程碑**：**任务抽屉 dismiss 写+读闭环 + dismissal 自动清理**；**dismiss 子系统后端全完成**（-A schema + -B1 写端点 + -B2 通知读过滤 + -B3 任务读+清理）→ 解锁 -C（UI 按钮）。

@@ -14,3 +14,13 @@
 export function isDismissableNotificationKey(itemKey: string): boolean {
   return /^\d+$/.test(itemKey) || itemKey.startsWith('bg-audit:')
 }
+
+/**
+ * taskrun- 前缀项 → task_run 裸数字 id（非 `taskrun-<digits>` 形态返 null）。
+ * 任务抽屉终态 task 项 item_key = `taskrun-<id>`；终态校验（query task_runs status）由
+ * NotificationService 异步守卫（ADR-197 D-197-2：终态 success/failed/cancelled 可 / running 拒）。
+ */
+export function parseTaskRunItemKey(itemKey: string): string | null {
+  const m = /^taskrun-(\d+)$/.exec(itemKey)
+  return m ? m[1]! : null
+}

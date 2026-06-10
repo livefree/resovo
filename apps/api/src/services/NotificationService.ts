@@ -23,7 +23,8 @@ import {
   type NotificationLevel,
   type NotificationRow,
 } from '@/api/db/queries/notifications'
-import { isDismissableNotificationKey } from '@/api/lib/dismiss-item-key'
+import { isDismissableNotificationKey, parseTaskRunItemKey } from '@/api/lib/dismiss-item-key'
+import { selectTerminalTaskRunIds } from '@/api/db/queries/taskRuns'
 import { ADMIN_ACTION_SOURCE_KIND } from '@/api/services/notification-audit-emit'
 import { CRAWLER_SOURCE_KIND } from '@/api/workers/crawlerWorker.notifications'
 import { publishNotificationChanged } from '@/api/lib/notification-pubsub'
@@ -173,7 +174,7 @@ export class NotificationService {
    * 不写 cursor/reads、不改 unreadCount（D-197-5）。
    */
   async dismiss(userId: string, itemKey: string): Promise<{ ok: true; dismissed: boolean } | { ok: false }> {
-    if (!isDismissableNotificationKey(itemKey)) return { ok: false }
+    if (!(await this.isDismissable(itemKey))) return { ok: false }
     await insertDismissals(this.db, userId, [itemKey])
     return { ok: true, dismissed: true }
   }
@@ -183,8 +184,34 @@ export class NotificationService {
    * 可移除的批量落库、不可移除的跳过（部分成功，不整批失败）。返 dismissed（守卫通过数）+ skipped（被拒数）。
    */
   async dismissBatch(userId: string, itemKeys: readonly string[]): Promise<{ dismissed: number; skipped: number }> {
-    const allowed = itemKeys.filter(isDismissableNotificationKey)
+    const allowed = await this.filterDismissable(itemKeys)
     await insertDismissals(this.db, userId, allowed)
     return { dismissed: allowed.length, skipped: itemKeys.length - allowed.length }
+  }
+
+  /**
+   * 单项可 dismiss 判定（ADR-197 D-197-2）：general（\d+）/ 高危审计（bg-audit:）走同步白名单；
+   * taskrun-<id> 查 task_runs 终态（success/failed/cancelled 可 / running·pending·cancelling 拒，破窗防御）。
+   */
+  private async isDismissable(itemKey: string): Promise<boolean> {
+    if (isDismissableNotificationKey(itemKey)) return true
+    const taskRunId = parseTaskRunItemKey(itemKey)
+    if (taskRunId === null) return false
+    const terminal = await selectTerminalTaskRunIds(this.db, [taskRunId])
+    return terminal.has(taskRunId)
+  }
+
+  /** 批量过滤可 dismiss（同步白名单直通 + taskrun- 单次批量查终态防 N+1，D-197-2）。 */
+  private async filterDismissable(itemKeys: readonly string[]): Promise<string[]> {
+    const syncAllowed = itemKeys.filter(isDismissableNotificationKey)
+    const taskRunIdByKey = new Map<string, string>()
+    for (const k of itemKeys) {
+      const id = parseTaskRunItemKey(k)
+      if (id !== null) taskRunIdByKey.set(k, id)
+    }
+    if (taskRunIdByKey.size === 0) return syncAllowed
+    const terminal = await selectTerminalTaskRunIds(this.db, [...taskRunIdByKey.values()])
+    const taskRunAllowed = [...taskRunIdByKey.entries()].filter(([, id]) => terminal.has(id)).map(([k]) => k)
+    return [...syncAllowed, ...taskRunAllowed]
   }
 }

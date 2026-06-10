@@ -15,6 +15,7 @@ import type { Pool } from 'pg'
 import type { AdminTaskItem, AdminQueueCounts, TaskResultDigest, TaskMetric } from '@resovo/types'
 import { crawlerQueue, maintenanceQueue } from '@/api/lib/queue'
 import { listTaskRuns, type TaskRunRow, type TaskRunStatus } from '@/api/db/queries/taskRuns'
+import { selectDismissedKeys } from '@/api/db/queries/notifications'
 
 /**
  * buildTaskResultDigest — 从 crawler_runs.summary 投影结构化 TaskResultDigest（ADR-193 D-193-4，path A）。
@@ -105,6 +106,8 @@ const TASK_RUN_STATUS_MAP: Record<TaskRunStatus, AdminTaskItem['status']> = {
 export interface ListTasksParams {
   limit: number
   since: string
+  /** 当前登录用户（ADR-197 D-197-4：终态 task 项 dismiss 内存 anti-set 过滤）；省略=不过滤 */
+  userId?: string
 }
 
 export interface ListTasksResult {
@@ -138,9 +141,12 @@ export class TaskAggregator {
     // queueCounts 仍取 bull getJobCounts（任务闪电 running 计数，§4.1）；Redis 不可用降级。
     const { queueCounts, degraded } = await this.fetchQueueCounts()
 
-    const merged = [...crawlerItems, ...taskRunItems]
-      .sort((a, b) => b.startedAt.localeCompare(a.startedAt))
-      .slice(0, params.limit)
+    // ADR-197 D-197-4：终态 task 项 dismiss 内存 anti-set 过滤（item.id = taskrun-<id> / crawler runId）。
+    // active/进行中项不可 dismiss（D-197-2）→ dismissals 不含其 key，filter 不影响。先过滤再 slice 保 limit 条数。
+    const dismissed = params.userId ? await selectDismissedKeys(this.db, params.userId) : null
+    const ranked = [...crawlerItems, ...taskRunItems].sort((a, b) => b.startedAt.localeCompare(a.startedAt))
+    const visible = dismissed ? ranked.filter((t) => !dismissed.has(t.id)) : ranked
+    const merged = visible.slice(0, params.limit)
 
     return {
       items: merged,
