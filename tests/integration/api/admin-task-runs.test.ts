@@ -111,6 +111,18 @@ describe('task_runs 写路径 round-trip（BEGIN/ROLLBACK 零污染）', () => {
     expect(hit.digest).toBeNull()
   })
 
+  it('cancelling 中间态被 CHECK 接受（D-194-6 协作式取消 / D-194-DEV-4 修复回归守卫）', async () => {
+    const { id } = await insertTaskRun(client, { kind: 'enrichment', title: '取消流程' })
+    // P2-a-C 控制路径写 cancelling 中间态（worker 轮询信号）——6 态 CHECK 须接受
+    await expect(
+      client.query(`UPDATE task_runs SET status = 'cancelling' WHERE id = $1::bigint`, [id]),
+    ).resolves.toBeDefined()
+    expect((await listTaskRuns(client, { limit: 50 })).find((r) => r.id === id)!.status).toBe('cancelling')
+    // cancelling → cancelled 终态
+    await finishTaskRun(client, id, { status: 'cancelled' })
+    expect((await listTaskRuns(client, { limit: 50 })).find((r) => r.id === id)!.status).toBe('cancelled')
+  })
+
   it('status CHECK 约束拒绝非法值', async () => {
     await expect(
       client.query(`INSERT INTO task_runs (kind, title, status) VALUES ('x', 'y', 'bogus')`),

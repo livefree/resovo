@@ -7,7 +7,7 @@
 --   在读时对 crawler_runs ∪ task_runs 做只读 union 投影（D-194-2，最强反漂移、零同步路径）。
 --   id BIGSERIAL（id::text 序列化对齐 TaskRunId=string，ADR-193 D-193-3）；
 --   kind 无 CHECK（类型层校验，保未来自动化作业类型扩展，D-194-DEV-3，同 notifications.scope 哲学）；
---   status 5 态 DB CHECK（统一终态机 §4.2）；progress SMALLINT 0-100（NULL=indeterminate）；
+--   status 6 态 DB CHECK（统一状态机 §4.2 + cancelling 协作式取消中间态 D-194-6）；progress SMALLINT 0-100（NULL=indeterminate）；
 --   digest JSONB 承载 TaskResultDigest（ADR-193，finish 落库）。
 -- 本卡纯加性空跑兼容：Reporter 有真实写但暂无 worker 调用方（接入归 -B）、TaskAggregator 暂不读（归 -B）。
 --
@@ -26,9 +26,13 @@ CREATE TABLE IF NOT EXISTS task_runs (
   title        TEXT          NOT NULL,
   -- 关联实体 / 外部 id（bull jobId 等，反查）
   ref          TEXT,
-  -- 统一终态机 5 态 DB CHECK（§4.2；cancelled 保真，投影时映射 AdminTaskItem.status='failed'）
+  -- 统一状态机 6 态 DB CHECK：pending / running / cancelling / success / failed / cancelled。
+  --   cancelling = 协作式取消中间态（running→cancelling→cancelled，D-194-6 / P2-a-C 控制路径写入；
+  --     bull 无原生协作取消，worker 轮询本 status 信号实现，替代 ADR-191 P0 的 409）；是 §4.2 直接
+  --     cancel→cancelled 的精化（crawler 走 crawler_runs.control_status='cancelling'，task_runs 统一走 status 信号）。
+  --   cancelled 保真终态，投影时映射 AdminTaskItem.status='failed'（同 crawler STATUS_MAP）。
   status       TEXT          NOT NULL DEFAULT 'pending'
-                             CHECK (status IN ('pending', 'running', 'success', 'failed', 'cancelled')),
+                             CHECK (status IN ('pending', 'running', 'cancelling', 'success', 'failed', 'cancelled')),
   -- determinate 进度 0-100；NULL=indeterminate
   progress     SMALLINT      CHECK (progress IS NULL OR progress BETWEEN 0 AND 100),
   -- TaskResultDigest（ADR-193，finish 落库；已 strip comments 由消费方保证，同 notifications.payload）

@@ -889,7 +889,7 @@ UserPreferences = {
 
 | 表 | 说明 |
 |---|---|
-| `task_runs` | 后台作业统一登记层。`id BIGSERIAL PK`（`id::text` 对齐 `TaskRunId=string` ADR-193）/ `kind TEXT NOT NULL`（作业类型语义键，无 CHECK，类型层校验保扩展 D-194-DEV-3）/ `title TEXT NOT NULL` / `ref TEXT NULL`（关联实体/bull jobId 反查）/ `status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','running','success','failed','cancelled'))`（5 态统一终态机 §4.2；cancelled 保真，投影映射 AdminTaskItem.status='failed'）/ `progress SMALLINT CHECK (0–100 或 NULL)`（NULL=indeterminate）/ `digest JSONB NULL`（承载 TaskResultDigest ADR-193，finish 落库）/ `error TEXT NULL` / `started_at` / `finished_at` / `created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()` / `updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()`。 |
+| `task_runs` | 后台作业统一登记层。`id BIGSERIAL PK`（`id::text` 对齐 `TaskRunId=string` ADR-193）/ `kind TEXT NOT NULL`（作业类型语义键，无 CHECK，类型层校验保扩展 D-194-DEV-3）/ `title TEXT NOT NULL` / `ref TEXT NULL`（关联实体/bull jobId 反查）/ `status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','running','cancelling','success','failed','cancelled'))`（**6 态**统一状态机 §4.2 + `cancelling` 协作式取消中间态〔running→cancelling→cancelled，D-194-6，bull worker 轮询信号；D-194-DEV-4〕；cancelled 保真终态，投影映射 AdminTaskItem.status='failed'）/ `progress SMALLINT CHECK (0–100 或 NULL)`（NULL=indeterminate）/ `digest JSONB NULL`（承载 TaskResultDigest ADR-193，finish 落库）/ `error TEXT NULL` / `started_at` / `finished_at` / `created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()` / `updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()`。 |
 
 **索引（db-rules 4 步核验见 migration 注释）：**
 - `idx_task_runs_created_at` `(created_at DESC)` —— listTaskRuns 时间倒序分页 / 终态窗口 / 无 status 过滤的全量时间线。

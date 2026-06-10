@@ -15,10 +15,13 @@ import type { TaskResultDigest } from '@resovo/types'
 /** 最小查询接口（Pool / PoolClient 皆满足；支持事务内调用与测试 BEGIN/ROLLBACK 零污染，同 notifications.ts） */
 export type Queryable = Pick<Pool, 'query'>
 
-/** task_runs.status 5 态（DB CHECK 收口，§4.2 统一终态机） */
-export type TaskRunStatus = 'pending' | 'running' | 'success' | 'failed' | 'cancelled'
+/**
+ * task_runs.status 6 态（DB CHECK 收口，§4.2 统一状态机 + cancelling 协作式取消中间态 D-194-6）。
+ * cancelling = running→cancelling→cancelled 的中间态（P2-a-C 控制路径写、worker 轮询信号），非 finish 终态。
+ */
+export type TaskRunStatus = 'pending' | 'running' | 'cancelling' | 'success' | 'failed' | 'cancelled'
 
-/** finish 终态三值（ADR-193 TaskRunReporter.finish result.status 对齐） */
+/** finish 终态三值（ADR-193 TaskRunReporter.finish result.status 对齐；cancelling 非终态，不在此列） */
 export type TaskRunFinishStatus = 'success' | 'failed' | 'cancelled'
 
 /** task_runs 行（list 返回；时间戳为 raw Date，消费方投影时 toISOString） */

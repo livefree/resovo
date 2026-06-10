@@ -21692,7 +21692,7 @@ ADR-193 D-193-3/D-193-DEV-1 把 `TaskRunReporter` 在 P1 落为 `NoopTaskRunRepo
    - crawler **不写入** `task_runs` 物理表。crawler 在统一视图中的呈现由 `TaskAggregator` 在**读时**对 `crawler_runs` ∪ `task_runs` 做只读 union 投影（D-194-5）实现——投影发生在聚合 DTO 层（`AdminTaskItem`），而非物化复制 crawler 行进 task_runs。**这是最强的反漂移姿态**：crawler 行从不被物理复制，无任何 crawler_runs→task_runs 同步路径，从根上消除双真源漂移。
    - **考量并搁置的替代（物化投影）**：可改为「crawler_runs 经触发器/应用层单向同步物化进 task_runs，TaskAggregator 只读 task_runs 单表」——优点是跨类型分页/排序走单物理表更省、消费方更纯；缺点是引入单向同步路径（仍是一种受控双写，需保证 crawler_runs 优先 + 幂等 backfill）。裁定 **P2-a 走读时 union（零同步、零物化）**，物化投影留作未来跨类型规模化（task_runs 行数大到读时 union 退化）时的演进项，登记为 D-194-DEV-1。
 
-3. **`task_runs` schema（锁定，NTLG-P2-a 落地）**（D-194-3）：字段对齐 ADR-193 `TaskRunReporter` 三方法入参 + `TaskResultDigest` 终态落库 + §4.2 状态机。`id BIGSERIAL PK`（与 notifications 同范式，`id::text` 序列化对齐 `TaskRunId = string`，ADR-193 D-193-3）；`kind` 作业类型语义键（不写死枚举 DB CHECK，保未来自动化扩展——与 notifications.scope 同「开放前缀/语义键类型层校验」哲学）；`status` 5 态 DB CHECK（pending/running/success/failed/cancelled，统一终态机，§4.2）；`progress SMALLINT` determinate 进度（NULL=indeterminate）；`digest JSONB` 承载 `TaskResultDigest`（ADR-193，finish 时落库）；`error` 失败信息；`title`/`ref`（ref 反查关联实体如 bull jobId）+ 生命周期时间戳。索引见 §schema。
+3. **`task_runs` schema（锁定，NTLG-P2-a 落地）**（D-194-3）：字段对齐 ADR-193 `TaskRunReporter` 三方法入参 + `TaskResultDigest` 终态落库 + §4.2 状态机。`id BIGSERIAL PK`（与 notifications 同范式，`id::text` 序列化对齐 `TaskRunId = string`，ADR-193 D-193-3）；`kind` 作业类型语义键（不写死枚举 DB CHECK，保未来自动化扩展——与 notifications.scope 同「开放前缀/语义键类型层校验」哲学）；`status` **6 态** DB CHECK（pending/running/**cancelling**/success/failed/cancelled，统一状态机 §4.2 + `cancelling` 协作式取消中间态〔running→cancelling→cancelled，D-194-6；bull 无原生协作取消，worker 轮询本 status 信号，替代 ADR-191 P0 的 409〕——是 §4.2 直接 cancel→cancelled 的精化，与 crawler_runs.control_status='cancelling' 同范式）；`progress SMALLINT` determinate 进度（NULL=indeterminate）；`digest JSONB` 承载 `TaskResultDigest`（ADR-193，finish 时落库）；`error` 失败信息；`title`/`ref`（ref 反查关联实体如 bull jobId）+ 生命周期时间戳。索引见 §schema。
 
 4. **`TaskRunReporter` 升级为真实 DB 写实装（替换 NoopTaskRunReporter，interface 签名不变）**（D-194-4，ADR-193 D-193-3 / §11 D4）：
    - **interface 零改动**：`start(input): Promise<TaskRunId>` / `progress(id, pct): Promise<void>` / `finish(id, result): Promise<void>`（ADR-193 §契约定义已锁）。P2-a 仅把 `NoopTaskRunReporter` 替换为 `DbTaskRunReporter`（`start` INSERT task_runs 返 `id::text` / `progress` UPDATE progress / `finish` UPDATE status+digest+finished_at），SQL 落 `db/queries/taskRuns.ts`（db-rules，不在 Service/Reporter 直写——与 ADR-192 D-192-7 同约束）。
@@ -21728,8 +21728,8 @@ CREATE TABLE task_runs (
   kind         TEXT         NOT NULL,                  -- 作业类型语义键 'enrichment' | 'image_health' | 'maintenance' | <future>（不写死 CHECK，类型层校验）
   title        TEXT         NOT NULL,                  -- 人读标题（→ AdminTaskItem.title）
   ref          TEXT         NULL,                      -- 关联实体 / 外部 id（bull jobId 等，反查）
-  status       TEXT         NOT NULL DEFAULT 'pending'
-                            CHECK (status IN ('pending','running','success','failed','cancelled')),
+  status       TEXT         NOT NULL DEFAULT 'pending'                            -- 6 态：cancelling = 协作式取消中间态（running→cancelling→cancelled，D-194-6）
+                            CHECK (status IN ('pending','running','cancelling','success','failed','cancelled')),
   progress     SMALLINT     NULL CHECK (progress IS NULL OR progress BETWEEN 0 AND 100),  -- determinate；NULL=indeterminate
   digest       JSONB        NULL,                      -- TaskResultDigest（ADR-193，finish 落库）
   error        TEXT         NULL,                      -- 失败信息（→ AdminTaskItem.errorMessage）
@@ -21758,6 +21758,7 @@ CREATE INDEX idx_task_runs_status     ON task_runs (status, created_at DESC);  -
 - **D-194-DEV-1**：P2-a 走读时 union 投影（crawler_runs ∪ task_runs），不物化复制 crawler 行进 task_runs。处置：accept——零同步路径、根除双真源漂移（D-194-2）；物化投影留作未来跨类型规模化演进项（task_runs 行数大到读时 union 退化时再评估，届时单向同步须保 crawler_runs 优先 + 幂等 backfill）。
 - **D-194-DEV-2**：crawler 不接 `TaskRunReporter`（digest 仍走 path A summary 投影）。处置：accept——crawler 已有 crawler_runs 真源 + path A digest 闭环（ADR-193 D-193-4），接 Reporter 会引入对关键路径的冗余写；Reporter 仅服务无持久表的 bull 作业（D-194-2/4）。
 - **D-194-DEV-3**：`kind` 不加 DB CHECK（仅类型层校验）。处置：accept——保未来自动化作业类型扩展性（每加一种 worker 不改 migration），与 notifications.scope「开放前缀类型层校验」同哲学（ADR-192 D-192-6）；脏值风险由 Reporter 入参类型 + worker 注册集收口。
+- **D-194-DEV-4（实施期修正 / NTLG-P2-a-A，Codex stop-time review 抓出）**：本 ADR D-194-3 原草 status **5 态** CHECK（`pending/running/success/failed/cancelled`），但 D-194-6 协作式取消明确复用 `status='cancelling'` 中间态——`cancelling` 漏出 CHECK 枚举 → P2-a-C 控制路径写 `status='cancelling'` 时被 DB CHECK 拒绝（schema 与自身设计意图内部矛盾；arch-reviewer 核「对齐 §4.2 5 态」未捕获——§4.2 状态机本无 cancelling，是 D-194-6 引入的精化）。**修正**：CHECK 改 **6 态**（补 `cancelling`），D-194-3 prose + §schema DDL + architecture.md §5.18 + `taskRuns.ts TaskRunStatus` + migration 102 同步为 6 态；`TaskRunFinishStatus`（finish 终态）保 3 值不含 cancelling（cancelling 由 P2-a-C 控制路径写、非 finish）。task_runs dev DB 全新空表（0 行）干净重建。处置：accept——honor D-194-6 既定「status 信号式协作取消」设计（与 crawler_runs.control_status='cancelling' 同范式），最小一致性修复，纯加性扩 CHECK 枚举。
 
 ### 评审
 
