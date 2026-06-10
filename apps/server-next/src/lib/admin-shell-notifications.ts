@@ -74,7 +74,8 @@ interface BackgroundEventsResponse {
  * 语义对应：
  *   - upcoming.scheduledAt → NotificationItem.createdAt（即将发生的事件按"通知"对待）
  *   - finished.finishedAt → NotificationItem.createdAt
- *   - kind → title 前缀（auto_crawl / scheduler_timer / crawler_run / audit_high_risk）
+ *   - kind → title 前缀（upcoming: auto_crawl / scheduler_timer；finished: audit_high_risk）
+ *     注：crawler_run 自 NTLG-P2-c-C-1 起只走 active lane → task（见 mapBackgroundEventToTask），不再入 finished lane
  *   - status → level（success→info / failed/timeout→danger / partial_failed/cancelled→warn / scheduled→info）
  */
 function mapBackgroundEventToNotification(event: AdminBackgroundEvent): NotificationItem | null {

@@ -37,7 +37,7 @@ const json = (body: unknown, status = 200) => ({
   body: JSON.stringify(body),
 })
 
-/** shell 基座 mock：5 个 shell 级端点契约正确形状 + 兜底 404 */
+/** shell 基座 mock：shell 级端点契约正确形状（含 NTLG-P2-c +unread-count/stream）+ 兜底 404 */
 export async function installAdminShellMocks(page: Page) {
   await page.route(`${API_BASE}/**`, async (route) => {
     const request = route.request()
@@ -63,6 +63,21 @@ export async function installAdminShellMocks(page: Page) {
     // POST /admin/notifications/read — markAllRead（NTLG-P1-c-C：cursor 单一已读源，替 localStorage）
     if (path === '/v1/admin/notifications/read' && method === 'POST') {
       await route.fulfill(json({ data: { readAt: new Date().toISOString() } }))
+      return
+    }
+
+    // GET /admin/notifications/unread-count — useAdminNotifications 红点数字源（ADR-196 D-196-5② / NTLG-P2-c-C-2）
+    if (path === '/v1/admin/notifications/unread-count' && method === 'GET') {
+      await route.fulfill(json({ data: { count: 0 }, meta: { scope: 'self' } }))
+      return
+    }
+
+    // GET /admin/notifications/stream — SSE 实时推送（ADR-196 D-196-1 / NTLG-P2-c-B）
+    // 基座不模拟长连接流式 mock（Playwright route.fulfill 返完整响应、非长连接）：返 503
+    // STREAM_UNAVAILABLE → 前端 connectNotificationStream 走 onStateChange(closed) →
+    // 60s 轮询 fallback 接管（B-2 双模式 degraded 路径，与 404 同属已验证安全降级）。
+    if (path === '/v1/admin/notifications/stream' && method === 'GET') {
+      await route.fulfill(json({ error: { code: 'STREAM_UNAVAILABLE', message: 'sse not mocked (e2e shell base)' } }, 503))
       return
     }
 

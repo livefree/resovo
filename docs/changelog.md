@@ -3551,3 +3551,19 @@
 - **新增依赖**：无　**数据库变更**：无（→ architecture.md 零同步）
 - **门禁**：typecheck/lint/verify:adr-contracts EXIT=0（endpoint-adr 232/117、admin-shell-types-mirror 2 对、sql-schema 79 表全对齐）/ test:changed 78 文件 981 passed（admin-shell 23〔红点 3〕+ hook 14〔#11+#12〕+ 全部 admin-ui shell 消费方零回归）。commit 带 `Subagents: arch-reviewer (claude-opus-4-8)` trailer（admin-ui 公开 Props 红线）。
 - **里程碑**：**BLOCKER-1 解除**；**NTLG-P2-c-C 整卡 ✅**（-C-1 F6①③ + -C-2 F6②）；**NTLG-P2-c 整卡 ✅**（消息中心 + SSE 未读实时推送 + 收口 P1-c-C 端到端）。e2e:admin SSE 端到端验收留 follow-up（单测/集成全绿）。
+
+## [NTLG-P2-c-E2E] admin shell 通知链路浏览器级验收（补「e2e:admin SSE 端到端验收」follow-up）（SEQ-20260609-01 P2-c follow-up）
+- **完成时间**：2026-06-10
+- **记录时间**：2026-06-10 01:05
+- **执行模型**：claude-opus-4-8（主循环；建议 sonnet，人工 opus 覆盖 + 持续推进授权）
+- **子代理**：无（e2e 测试非共享组件 API 契约 / 非 schema / 非新 route；shell-mocks 契约补齐属测试基座维护）
+- **背景/根因**：P2-c 的 C-2（红点改读 unread-count）与 B-2（SSE 实时推送）此前仅单测/集成覆盖，缺浏览器级真实链路验收（B-2 当初明确「e2e:admin SSE 留 follow-up」）。实证 `tests/e2e/admin/_shared/shell-mocks.ts` 兜底 404、**未 mock C-2 新增的 `/admin/notifications/unread-count` 与 B-2 的 `/admin/notifications/stream`**——前端 `useAdminNotifications` 现会调这两个，靠 404 降级容忍；且「红点读 unread-count 而非 list-derived」核心行为变更无浏览器级断言守护。
+- **改动文件**：
+  - `tests/e2e/admin/_shared/shell-mocks.ts` — 基座补 `/admin/notifications/unread-count`（200 `{data:{count:0},meta:{scope:'self'}}`）+ `/admin/notifications/stream`（503 `STREAM_UNAVAILABLE` → 前端 `connectNotificationStream` 走 `onStateChange(closed)` → 60s 轮询 fallback，与 404 同属已验证安全降级）；消除全 admin specs 调新端点的 404 噪声、契约补齐
+  - `tests/e2e/admin/notifications-shell.spec.ts`（新建）— 3 用例：① unread-count=3 + 全已读 list（readAt 高水位线设未来）→ 红点 `[data-topbar-icon-dot]` 显示（证 C-2 非 list-derived，旧 `some(!read)=false` 此处无红点）；② unread-count=0 + 未读 list 项（readAt=1970）→ 红点隐藏（**0 守卫**，证由 unread-count 驱动；旧逻辑 `some(!read)=true` 会亮 → 旧逻辑此断言会失败）；③ `/admin/messages` 消息中心 `data-testid="messages-page-header"` render（A-2）
+  - `apps/server-next/src/lib/admin-shell-notifications.ts` — `:77` `mapBackgroundEventToNotification` 注释清陈旧 `crawler_run`（C-1 起 crawler_run 只走 active lane → task，不再入 finished lane；改标 upcoming/finished 各自 kind + 注明迁移）
+- **验收范式**：两个红点断言均设计为**旧 list-derived 逻辑下会失败**（unread>0+全已读 / unread=0+有未读项），是真守护非过拟合；installAdminShellMocks 基座先注册（兜底）+ spec catch-all `route.fallback()` 下沉，覆盖优先匹配（同 dashboard.spec 范式）。
+- **不做（留 follow-up）**：真实 Redis SSE-push 端到端——Playwright `route.fulfill` 返完整响应、不支持长连接流式 mock，需流式 mock harness（独立卡）；date·type 过滤 / 行点击已读 markOneRead（D-192-DEV-4 设计门控）/ 归档 F5（用户门控）各为独立卡。
+- **新增依赖**：无　**数据库变更**：无（→ architecture.md 零同步）　**新端点/ADR**：无
+- **门禁**：typecheck（全 workspace）/ lint（server-next `<img>` warning 既有无关）/ test:changed 20 passed（admin-shell-notifications 14 + admin-shell-client 6，注释改触发）EXIT=0 + **e2e:admin 全套 82 passed（1.8m）零回归**（含 3 新用例 62-64）。
+- **里程碑**：P2-c 通知链路（C-2 红点 unread-count + A-2 消息中心 + B-2 SSE degraded 双模式）补齐浏览器级验收；**SEQ-20260609-01 P0→P2 收官**（除暂缓 P2-b）。
