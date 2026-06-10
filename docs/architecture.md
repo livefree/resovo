@@ -881,9 +881,9 @@ UserPreferences = {
 
 ---
 
-### 5.18 task_runs 统一抽象层（ADR-194 / NTLG-P2-a，Migration 102）
+### 5.18 task_runs 统一抽象层（ADR-194 / NTLG-P2-a，Migration 102 + 103）
 
-来源：ADR-194（task_runs 统一抽象层 path B + 真源关系裁定「只读投影」）/ 治理方案 §2.2。**仅登记当前无持久 run 表的 bull 作业**（enrichment/imageHealth/maintenance/未来自动化）——这些瞬时 bull job 终态即丢、无持久记录；crawler **不写本表**（`crawler_runs` 保持采集批次唯一真源，D-194-1），统一视图由 `TaskAggregator` 读时对 `crawler_runs ∪ task_runs` 做只读 union 投影（D-194-2，零同步路径、最强反漂移）。
+来源：ADR-194（task_runs 统一抽象层 path B + 真源关系裁定「只读投影」）/ 治理方案 §2.2。**Migration 103**（`task_runs_status_cancelling.sql`）幂等补 status CHECK 第 6 态 `cancelling`（D-194-DEV-4，令已应用旧版 102〔5 态〕的库收敛——102 就地补 6 态只惠及 fresh DB，旧库经 migrate 跳过 102 须靠 103 ALTER）。**仅登记当前无持久 run 表的 bull 作业**（enrichment/imageHealth/maintenance/未来自动化）——这些瞬时 bull job 终态即丢、无持久记录；crawler **不写本表**（`crawler_runs` 保持采集批次唯一真源，D-194-1），统一视图由 `TaskAggregator` 读时对 `crawler_runs ∪ task_runs` 做只读 union 投影（D-194-2，零同步路径、最强反漂移）。
 
 **Migration 102 新增 1 表：**
 
