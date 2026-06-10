@@ -44,9 +44,14 @@ export async function runFeedbackDrivenRecheck(pool: Pool, log: pino.Logger): Pr
       await aggregateBatch(pool, log, videoIds)
     }
 
-    // ③ 重置 render 信号 + ④ level2 定向重测（probe=ok 守卫在 candidates SQL 内）
+    // ③ 重置 render 信号 + ④ level2 定向重测
+    // 仅重置 probe_status='ok'（level1 刚刷新的真相）的源：probe dead 的源不会进 level2
+    // candidates（同名守卫），若一并重置会把其 render 真相洗成 stale 'pending'——
+    // 抬高 effective_score（pending 0.3 > dead 0.0）且阻碍 auto-retire 双 dead 判定
+    //（Codex stop-time review 拦截项）
     await pool.query(
-      `UPDATE video_sources SET render_status = 'pending' WHERE id = ANY($1::uuid[])`,
+      `UPDATE video_sources SET render_status = 'pending'
+        WHERE id = ANY($1::uuid[]) AND probe_status = 'ok'`,
       [sourceIds],
     )
     await runLevel2Render(pool, log, { sourceIds })

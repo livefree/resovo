@@ -3824,3 +3824,18 @@
   - 定向 level1 后同步 aggregateBatch（与 cron 路径 runSourceHealthLevel1 步骤对齐，B2 即时性在 worker 路径同样成立）。
   - worker 改动无对应 e2e 域（ADR-180 域选跑原则）；门禁：typecheck/lint EXIT=0、新测 4/4 + source-health 既有 24/24、test:changed 19 passed。
   - **Phase 1 主线（P1-4/P1-2/P1-1-A/P1-1-B/P1-5）全收口**。候选复盘项三件：两套聚合语义并存收敛 / videos.ts 拆分 / 排序白名单 4 处收敛。
+
+## [SRCHEALTH-P1-5-FIX] recheck render 重置加 probe=ok 守卫（Codex stop-time review 拦截）
+- **完成时间**：2026-06-10
+- **记录时间**：2026-06-10 13:59
+- **执行模型**：claude-fable-5
+- **子代理**：无（Codex stop-time review 为 hook 自动触发）
+- **修改文件**：
+  - `apps/worker/src/jobs/feedback-driven-recheck.ts` — render 重置 SQL 加 `AND probe_status = 'ok'`：probe dead 源（level2 候选守卫排除、不会被重测）的 render 真相不再被洗成 stale 'pending'
+  - `tests/unit/worker/jobs/feedback-driven-recheck.test.ts` — 重置 SQL 断言补 probe=ok 守卫
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - 缺陷影响（修复前）：probe dead 源 render 停留 'pending' → effective_score health 项被抬高（pending 0.3 > dead 0.0，render 子项权重 0.6）→ 死源排序上升；且 auto-retire 要求双 dead，render 被洗会推迟死线路退役。
+  - 该缺陷在旧实现即存在（重置无过滤 + 全局 candidates 同守卫），P1-5 重写时被继承，由 Codex stop-time review 第 3 次拦截关闭。
+  - 门禁：typecheck/lint EXIT=0、recheck 测试 4/4、test:changed 通过。
