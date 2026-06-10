@@ -1839,9 +1839,9 @@
 
 ## [SEQ-20260610-02] 视频/线路/站点健康度与反馈闭环（source-health v2 方案落地）
 
-- **状态**：🔄 执行中（1/16 卡完成：P1-4 ✅；下一卡 P1-2）
+- **状态**：🔄 执行中（2/16 卡完成：P1-4 ✅ P1-2 ✅——用户报 bug B2/B3 双解；下一卡 P1-1-A）
 - **创建时间**：2026-06-10 12:53
-- **最后更新时间**：2026-06-10 13:10
+- **最后更新时间**：2026-06-10 13:20
 - **目标**：落地 `docs/designs/source-health-feedback-loop-plan_20260610.md` v2（两轮独立审核有条件通过，必修全吸收，commit 88893812）：修复「全部探测/试播后状态不更新」三处可见断点（B1/B2/B3）→ 打通反馈闭环（F1–F4）→ 评分进化 + 站点/主机桥接（D3/D4）。
 - **范围**：apps/api（service/queries/routes/lib）+ apps/worker（jobs/lib）+ apps/server-next（sources/videos 模块 UI）+ apps/web-next（PlayerShell）+ packages（media-probe 新包，P1-3）。**方案 §3 为各卡内容真源，§4 为门禁真源**；卡面只记验收口径与文件范围。
 - **依赖**：无 BLOCKER；方案 v2 已批准（用户 2026-06-10）。
@@ -1856,11 +1856,12 @@
    - 文件范围：`apps/server-next/src/app/admin/sources/_client/SourceLinesExpand.tsx`、`SourcesClient.tsx`。
    - 依赖：无。建议模型：sonnet。
    - **完成备注**：镜像 CHG-358 审核台范式落地。① `SourceLinesExpandProps` 增可选 `onSourceHealthChanged`（JSDoc 锁口径：probe/render 单集+批量 success 触发；toggle/disableDead 不触发——非 B3 探测口径，与审核台一致）；`handleActionResult` 4 分支 success 调用 + useCallback 依赖补全。② `SourcesClient.renderExpandedRow` 传 `refresh`（与行操作列「刷新」同源 setRetryKey——保持当前页/筛选，展开态 expandedKeys 按 videoId 不丢；不需 api.ts 单行取数，整列表 refresh 范式已被行操作使用，一致性优先）。共享层沉淀：否——触发点本在消费方 handleActionResult，`@resovo/admin-ui` LinesPanel 零改动。门禁：typecheck/lint EXIT=0 / 单测新增 1 用例（展开→全部探测成功→listVideoGroups 重拉）SourcesClient 11/11 / test:changed 13 passed / **e2e:admin 82/82 EXIT=0**。执行模型: claude-fable-5（建议 sonnet，用户会话人工覆盖——「批准开始 v2 拆卡准备开发」持续推进授权）；子代理: 无。
-2. **SRCHEALTH-P1-2** — 手动探测后同步重算视频聚合状态（B2）（状态：⬜ 待开始）
-   - 创建时间：2026-06-10 12:53
-   - 验收口径：`SourceProbeService` probeOne/renderCheckOne/batchProbe/batchRenderCheck 完成后 `videos.source_check_status` 立即与 `video_sources` 现状一致（不再等 6h cron）。
-   - 文件范围：`apps/api/src/services/SourceProbeService.ts`、`apps/api/src/lib/`（computeCheckStatus 共享纯函数抽取）、`apps/worker/src/jobs/source-health/aggregate-source-check-status.ts`（改 import 共享函数或保持双侧同步注释）。跨 api-service+worker 2 层，理由：同一聚合契约的写入方与原消费方对齐。
+2. **SRCHEALTH-P1-2** — 手动探测后同步重算视频聚合状态（B2）（状态：✅ 已完成 2026-06-10 13:20）
+   - 创建时间：2026-06-10 12:53 ｜ 实际开始：2026-06-10 13:13 ｜ 完成时间：2026-06-10 13:20
+   - 验收口径：`SourceProbeService` 手动探测（单源/batch）完成后 `videos.source_check_status` 立即与 `video_sources` 现状一致（不再等 6h cron）。
+   - 文件范围：`apps/api/src/lib/source-check-status.ts`（新）、`apps/api/src/db/queries/video_sources.ts`、`apps/api/src/services/SourceProbeService.ts`、`apps/worker/src/jobs/source-health/aggregate-source-check-status.ts`（注释）。
    - 依赖：无。建议模型：sonnet。
+   - **完成备注**：① `lib/source-check-status.ts` 新建 `computeCheckStatus` 纯函数（worker 并行真源，ADR-107 §4 禁跨 app import → 双副本 + 双向同步注释，auto-retire SQL 先例；**一致性由 85 组全组合对拍单测守卫**，单侧改语义即失败）。② queries `listActiveProbeStatuses`（WHERE 口径与 worker 聚合输入一致）；UPDATE 复用既有 `updateVideoSourceCheckStatus`（videos.status.ts 已 609 行超限不增量）。③ Service `recomputeVideoCheckStatus` 私有方法：probeOne/batchProbe 完成后调用；**render-check 路径不调**（render_status 不进聚合输入，跳过为正确性等价）；失败 catch+warn 不阻断已完成的探测响应（worker cron 兜底）；Q1 裁决 Service 内直算无 advisory-lock（与 worker 并发 last-write-wins 最终一致）。**新发现登记**：`source_check_status` 存在两套语义并存——worker/本卡按 probe_status 聚合 vs `videos.status.ts syncSourceCheckStatusFromSources/bulkSync`（补源/验源路径）按 is_active 聚合，交替覆盖同一字段；收敛裁决留 P1 收口复盘（候选独立卡）。门禁：typecheck/lint EXIT=0 / 新测试 9/9（含对拍 85 组）/ 既有 audit 测试 11/11 零回归 / test:changed 24 文件 277 passed / e2e:admin 82/82 EXIT=0。执行模型: claude-fable-5（建议 sonnet，用户会话人工覆盖持续推进授权）；子代理: 无。
 3. **SRCHEALTH-P1-1-A** — videos 列表 API 补 probe/render 聚合字段（B1 后端）（状态：⬜ 待开始）
    - 创建时间：2026-06-10 12:53
    - 验收口径：`/admin/videos` 列表响应含视频级 probe/render 聚合字段（probe 复用 `source_check_status`，render 新增聚合表达式），支持排序。

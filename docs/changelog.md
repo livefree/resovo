@@ -3748,3 +3748,23 @@
   - 联动口径边界：toggle/disableDead 改变「覆盖/活跃源」聚合但**不触发**外层 refetch（与审核台 CHG-358 口径一致，仅探测/试播信号触发）；若后续需要可在 P1 收口复盘时扩展。
   - 共享层沉淀：否——触发点本在消费方 `handleActionResult`，`@resovo/admin-ui` LinesPanel 零改动。
   - 门禁：typecheck/lint EXIT=0；SourcesClient 单测 11/11；test:changed 13 passed；e2e:admin 82/82 EXIT=0。
+
+## [SRCHEALTH-P1-2] 手动探测后同步重算视频聚合状态（B2）
+- **完成时间**：2026-06-10
+- **记录时间**：2026-06-10 13:21
+- **执行模型**：claude-fable-5（建议 sonnet，用户会话人工覆盖——「批准开始 v2 拆卡准备开发」持续推进授权）
+- **子代理**：无
+- **修改文件**：
+  - `apps/api/src/lib/source-check-status.ts` — 新建 `computeCheckStatus` 纯函数（probe 维度聚合；worker 并行真源双向同步注释，ADR-107 §4 禁跨 app import）
+  - `apps/api/src/db/queries/video_sources.ts` — `+listActiveProbeStatuses`（WHERE 口径与 worker 聚合输入一致：is_active=true AND deleted_at IS NULL）
+  - `apps/api/src/services/SourceProbeService.ts` — `recomputeVideoCheckStatus` 私有方法（probeOne/batchProbe 完成后即时重算 `videos.source_check_status`；失败 catch+warn 不阻断探测响应）；UPDATE 复用 `videos.status.ts updateVideoSourceCheckStatus`
+  - `apps/worker/src/jobs/source-health/aggregate-source-check-status.ts` — 头部补对向并行真源注释
+  - `tests/unit/api/source-check-status.test.ts` — 新建 9 用例（语义镜像 worker 测试 + **85 组全组合双侧对拍守卫**）
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - render-check 路径**不**触发重算：render_status 不进 computeCheckStatus 输入，跳过为正确性等价。
+  - Q1 裁决落地：Service 内直算无 advisory-lock（手动低频；与 worker 并发双方均从 DB 现状重算，last-write-wins 最终一致）。
+  - **新发现（候选独立卡）**：`videos.source_check_status` 两套聚合语义并存——worker/本卡按 `probe_status`，`videos.status.ts syncSourceCheckStatusFromSources/bulkSyncSourceCheckStatus`（crawlerWorker 补源 / verify-sources 任务）按 `is_active`，交替覆盖同一字段。收敛裁决留 Phase 1 收口复盘；方案文档 §2 未含此事实（调研时未覆盖 videos.status.ts）。
+  - videos.status.ts 已 609 行（超 500 红线存量），本卡仅 import 复用未增量。
+  - 门禁：typecheck/lint EXIT=0；新测试 9/9；既有 audit 测试 11/11 零回归；test:changed 24 文件 277 passed；e2e:admin 82/82 EXIT=0。

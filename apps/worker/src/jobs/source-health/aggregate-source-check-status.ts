@@ -1,3 +1,9 @@
+/**
+ * **跨包同步约束（SRCHEALTH-P1-2 / ADR-107 §4 worker 禁止 import apps/api）**：
+ * `apps/api/src/lib/source-check-status.ts` 的 `computeCheckStatus` 是本文件
+ * 同名函数的并行真源（手动探测后即时重算路径）——维护时双侧同步改，
+ * 一致性由 `tests/unit/api/source-check-status.test.ts` 全组合对拍守卫。
+ */
 import type { Pool } from 'pg'
 import type pino from 'pino'
 import { withVideoLock } from '../../lib/advisory-lock'

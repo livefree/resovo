@@ -23,13 +23,17 @@ import type { Pool } from 'pg'
 import {
   findVideoSourceById,
   listVideoSources,
+  listActiveProbeStatuses,
   updateSourceHealthAfterProbe,
   updateSourceHealthAfterRenderCheck,
 } from '@/api/db/queries/video_sources'
 import { insertHealthEvent } from '@/api/db/queries/sourceHealthEvents'
+import { updateVideoSourceCheckStatus } from '@/api/db/queries/videos.status'
 import * as systemSettingsQueries from '@/api/db/queries/systemSettings'
 import { AuditLogService } from '@/api/services/AuditLogService'
 import { AppError } from '@/api/lib/errors'
+import { computeCheckStatus, type ProbeStatus } from '@/api/lib/source-check-status'
+import { baseLogger } from '@/api/lib/logger'
 import type { VideoSourceLine } from '@resovo/types'
 
 // ── 响应类型（公开契约 / ADR-158 AMENDMENT 1+2）─────────────────────
@@ -105,6 +109,31 @@ export class SourceProbeService {
     const freeze = await systemSettingsQueries.getSetting(this.db, 'crawler_global_freeze')
     if (freeze === 'true') {
       throw new AppError('STATE_CONFLICT', '采集已冻结，不可执行线路操作', 409)
+    }
+  }
+
+  // ── 私有：探测后即时重算视频聚合状态（SRCHEALTH-P1-2 / B2）────────
+
+  /**
+   * 重算 videos.source_check_status（probe 维度聚合，与 worker aggregate 同语义）。
+   * - 仅 probe 路径调用：render_status 不进 computeCheckStatus 输入，render-check
+   *   后聚合值不变，跳过为正确性等价（理由记 SEQ-20260610-02 完成备注）。
+   * - 派生状态失败不阻断探测响应（探测 UPDATE + audit 已完成）：catch + warn 日志，
+   *   下一轮 worker level1 cron 兜底收敛。
+   * - Q1 裁决：Service 内直算，不复用 worker advisory-lock（手动操作低频，
+   *   与 worker 并发时双方均从 DB 现状重算，last-write-wins 最终一致）。
+   */
+  private async recomputeVideoCheckStatus(videoId: string): Promise<void> {
+    try {
+      const statuses = await listActiveProbeStatuses(this.db, videoId)
+      // 无 active 源 → 不写（与 worker aggregateVideoSourceCheckStatus rows=0 行为一致）
+      if (statuses.length === 0) return
+      await updateVideoSourceCheckStatus(this.db, videoId, computeCheckStatus(statuses as ProbeStatus[]))
+    } catch (e) {
+      baseLogger.warn(
+        { err: e, videoId },
+        '[SourceProbeService] source_check_status 重算失败（派生状态，worker cron 兜底）',
+      )
     }
   }
 
@@ -239,6 +268,9 @@ export class SourceProbeService {
       requestId,
     })
 
+    // SRCHEALTH-P1-2：探测写入完成 → 即时重算视频聚合（B2，不再等 6h cron）
+    await this.recomputeVideoCheckStatus(source.videoId)
+
     return { sourceId, newProbeStatus, latencyMs, queued: false as const }
   }
 
@@ -318,6 +350,9 @@ export class SourceProbeService {
       },
       requestId: requestId ?? null,
     })
+
+    // SRCHEALTH-P1-2：batch 全部源写入完成 → 重算一次视频聚合（B2，不再等 6h cron）
+    await this.recomputeVideoCheckStatus(videoId)
 
     return { videoId, results, summary }
   }

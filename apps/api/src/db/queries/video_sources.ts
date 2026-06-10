@@ -253,3 +253,20 @@ export async function updateSourceHealthAfterRenderCheck(
     [sourceId, input.renderStatus],
   )
 }
+
+/**
+ * SRCHEALTH-P1-2（B2）：取视频全部 active source 的 probe_status，供探测后即时重算
+ * videos.source_check_status（lib/source-check-status computeCheckStatus 的输入）。
+ * WHERE 口径与 worker aggregate 聚合输入一致（is_active = true AND deleted_at IS NULL）。
+ */
+export async function listActiveProbeStatuses(
+  db: Pool,
+  videoId: string,
+): Promise<string[]> {
+  const result = await db.query<{ probe_status: string }>(
+    `SELECT probe_status FROM video_sources
+      WHERE video_id = $1 AND is_active = true AND deleted_at IS NULL`,
+    [videoId],
+  )
+  return result.rows.map((r) => r.probe_status)
+}
