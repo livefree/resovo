@@ -3768,3 +3768,21 @@
   - **新发现（候选独立卡）**：`videos.source_check_status` 两套聚合语义并存——worker/本卡按 `probe_status`，`videos.status.ts syncSourceCheckStatusFromSources/bulkSyncSourceCheckStatus`（crawlerWorker 补源 / verify-sources 任务）按 `is_active`，交替覆盖同一字段。收敛裁决留 Phase 1 收口复盘；方案文档 §2 未含此事实（调研时未覆盖 videos.status.ts）。
   - videos.status.ts 已 609 行（超 500 红线存量），本卡仅 import 复用未增量。
   - 门禁：typecheck/lint EXIT=0；新测试 9/9；既有 audit 测试 11/11 零回归；test:changed 24 文件 277 passed；e2e:admin 82/82 EXIT=0。
+
+## [SRCHEALTH-P1-1-A] videos 列表 API 补 probe/render 聚合字段（B1 后端）
+- **完成时间**：2026-06-10
+- **记录时间**：2026-06-10 13:34
+- **执行模型**：claude-fable-5（建议 sonnet，用户会话人工覆盖——「批准开始 v2 拆卡准备开发」持续推进授权）
+- **子代理**：无（Codex stop-time review 为 hook 自动触发，非 Task spawn）
+- **修改文件**：
+  - `apps/api/src/db/queries/videos.ts` — `listAdminVideos` SELECT 增 `render_check_status` 聚合子查询（CASE 语义同构 computeCheckStatus，输入口径与 worker 一致）；SORT_FIELD_WHITELIST +`source_check_status`（列直通）/`render_check_status`（SELECT alias，同 source_health 先例）
+  - `apps/api/src/routes/admin/videos.ts` — zod SORT_FIELDS 同步 +2 值（**Codex stop-time review 拦截**：初版漏改导致新 sortField 422，修复后全门禁复跑）
+  - `tests/unit/api/admin-video-list.test.ts` — 新增 1 用例（聚合 SQL 断言 + 双排序路径）
+- **新增依赖**：无
+- **数据库变更**：无（聚合为查询时计算，无 schema 变更）
+- **注意事项**：
+  - probe 维度字段 `v.source_check_status` 已在 VIDEO_FULL_SELECT 直通，本卡未新增；其数据新鲜度由 P1-2（手动探测后即时重算）+ worker cron 双保障。
+  - `render_check_status` 为查询时聚合（非物化列）；无 active 源时返回 'pending'（与 probe 字段 DB 默认值对称）。
+  - **videos.ts 503→516 行**（存量超 500 红线）：本卡为既有函数内最小增量非新概念；文件拆分登记为候选独立重构卡（P1 收口复盘一并评估）。
+  - 前端消费（VideoColumns 探测列接真数据 + 列 id→sortField 映射）在 SRCHEALTH-P1-1-B。
+  - 门禁：typecheck/lint EXIT=0；admin-video-list 4/4；test:changed 978 passed；e2e:admin 82/82（zod 修复后复跑）。

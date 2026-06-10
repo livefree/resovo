@@ -1839,9 +1839,9 @@
 
 ## [SEQ-20260610-02] 视频/线路/站点健康度与反馈闭环（source-health v2 方案落地）
 
-- **状态**：🔄 执行中（2/16 卡完成：P1-4 ✅ P1-2 ✅——用户报 bug B2/B3 双解；下一卡 P1-1-A）
+- **状态**：🔄 执行中（3/16 卡完成：P1-4 ✅ P1-2 ✅ P1-1-A ✅；下一卡 P1-1-B）
 - **创建时间**：2026-06-10 12:53
-- **最后更新时间**：2026-06-10 13:20
+- **最后更新时间**：2026-06-10 13:33
 - **目标**：落地 `docs/designs/source-health-feedback-loop-plan_20260610.md` v2（两轮独立审核有条件通过，必修全吸收，commit 88893812）：修复「全部探测/试播后状态不更新」三处可见断点（B1/B2/B3）→ 打通反馈闭环（F1–F4）→ 评分进化 + 站点/主机桥接（D3/D4）。
 - **范围**：apps/api（service/queries/routes/lib）+ apps/worker（jobs/lib）+ apps/server-next（sources/videos 模块 UI）+ apps/web-next（PlayerShell）+ packages（media-probe 新包，P1-3）。**方案 §3 为各卡内容真源，§4 为门禁真源**；卡面只记验收口径与文件范围。
 - **依赖**：无 BLOCKER；方案 v2 已批准（用户 2026-06-10）。
@@ -1862,11 +1862,12 @@
    - 文件范围：`apps/api/src/lib/source-check-status.ts`（新）、`apps/api/src/db/queries/video_sources.ts`、`apps/api/src/services/SourceProbeService.ts`、`apps/worker/src/jobs/source-health/aggregate-source-check-status.ts`（注释）。
    - 依赖：无。建议模型：sonnet。
    - **完成备注**：① `lib/source-check-status.ts` 新建 `computeCheckStatus` 纯函数（worker 并行真源，ADR-107 §4 禁跨 app import → 双副本 + 双向同步注释，auto-retire SQL 先例；**一致性由 85 组全组合对拍单测守卫**，单侧改语义即失败）。② queries `listActiveProbeStatuses`（WHERE 口径与 worker 聚合输入一致）；UPDATE 复用既有 `updateVideoSourceCheckStatus`（videos.status.ts 已 609 行超限不增量）。③ Service `recomputeVideoCheckStatus` 私有方法：probeOne/batchProbe 完成后调用；**render-check 路径不调**（render_status 不进聚合输入，跳过为正确性等价）；失败 catch+warn 不阻断已完成的探测响应（worker cron 兜底）；Q1 裁决 Service 内直算无 advisory-lock（与 worker 并发 last-write-wins 最终一致）。**新发现登记**：`source_check_status` 存在两套语义并存——worker/本卡按 probe_status 聚合 vs `videos.status.ts syncSourceCheckStatusFromSources/bulkSync`（补源/验源路径）按 is_active 聚合，交替覆盖同一字段；收敛裁决留 P1 收口复盘（候选独立卡）。门禁：typecheck/lint EXIT=0 / 新测试 9/9（含对拍 85 组）/ 既有 audit 测试 11/11 零回归 / test:changed 24 文件 277 passed / e2e:admin 82/82 EXIT=0。执行模型: claude-fable-5（建议 sonnet，用户会话人工覆盖持续推进授权）；子代理: 无。
-3. **SRCHEALTH-P1-1-A** — videos 列表 API 补 probe/render 聚合字段（B1 后端）（状态：⬜ 待开始）
-   - 创建时间：2026-06-10 12:53
+3. **SRCHEALTH-P1-1-A** — videos 列表 API 补 probe/render 聚合字段（B1 后端）（状态：✅ 已完成 2026-06-10 13:33）
+   - 创建时间：2026-06-10 12:53 ｜ 实际开始：2026-06-10 13:22 ｜ 完成时间：2026-06-10 13:33
    - 验收口径：`/admin/videos` 列表响应含视频级 probe/render 聚合字段（probe 复用 `source_check_status`，render 新增聚合表达式），支持排序。
-   - 文件范围：`apps/api/src/db/queries/videos.*`、`apps/api/src/routes/admin/videos.ts`（响应字段加性扩展，无新 route）。
-   - 依赖：建议在 P1-2 后（聚合即时性先就位）。建议模型：sonnet。
+   - 文件范围：`apps/api/src/db/queries/videos.ts`、`apps/api/src/routes/admin/videos.ts`（加性扩展，无新 route，verify:endpoint-adr 不触发）。
+   - 依赖：P1-2 ✅。建议模型：sonnet。
+   - **完成备注**：① `listAdminVideos` SELECT 增 `render_check_status` 聚合子查询（CASE 语义与 computeCheckStatus 同构：all pending→pending〔含空集，与 probe 字段 DB 默认对称〕/all dead→all_dead/all ok→ok/else partial；输入口径 is_active+未删除与 worker 一致）；probe 维度 `v.source_check_status` 已在 VIDEO_FULL_SELECT 直通无需新增。② 排序：queries SORT_FIELD_WHITELIST + route zod SORT_FIELDS 双白名单同步加 `source_check_status`（列直通）/`render_check_status`（SELECT alias，同 source_health 先例）。**Codex stop-time review 拦截 1 处**：初版漏改 route zod SORT_FIELDS → 新 sortField 422 被拒，已修复并复跑全部门禁。**登记**：videos.ts 503→516 行（存量超 500 红线；本卡为既有函数内最小增量非新概念，拆分留独立重构卡）。门禁：typecheck/lint EXIT=0 / admin-video-list 4/4（新增 1 用例断言聚合 SQL + 双排序路径）/ test:changed 978 passed / e2e:admin 82/82（zod 修复后复跑）。执行模型: claude-fable-5（建议 sonnet，用户会话人工覆盖持续推进授权）；子代理: 无（Codex stop-time review 为 hook 自动触发）。
 4. **SRCHEALTH-P1-1-B** — VideoColumns 探测列接真数据（B1 前端）（状态：⬜ 待开始）
    - 创建时间：2026-06-10 12:53
    - 验收口径：`/admin/videos`「探测/播放」列展示真实聚合双信号（不再硬编码 unknown），排序可用。

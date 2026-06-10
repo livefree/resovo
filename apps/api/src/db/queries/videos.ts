@@ -229,6 +229,9 @@ const SORT_FIELD_WHITELIST: Record<string, string> = {
   douban_status: 'v.douban_status',
   meta_score: 'v.meta_score',
   episode_count: 'v.episode_count',     // CHG-VSR-2（§2.5）：集数列排序
+  // SRCHEALTH-P1-1-A（B1）：探测/试播聚合列排序（probe 直通列 / render SELECT alias 同 source_health 先例）
+  source_check_status: 'v.source_check_status',
+  render_check_status: 'render_check_status',
 }
 
 export interface AdminVideoListFilters {
@@ -383,7 +386,7 @@ export async function listAdminVideos(
   const orderByDir = filters.sortDir === 'asc' ? 'ASC' : 'DESC'
 
   const [rows, countResult] = await Promise.all([
-    db.query<DbVideoRow & { active_source_count: string; total_source_count: string }>(
+    db.query<DbVideoRow & { active_source_count: string; total_source_count: string; render_check_status: string }>(
       `SELECT ${VIDEO_FULL_SELECT},
               NULL::text[] AS subtitle_langs,
               (SELECT COUNT(*) FROM video_sources
@@ -391,7 +394,14 @@ export async function listAdminVideos(
               (SELECT COUNT(*) FROM video_sources
                WHERE video_id = v.id AND is_active = true AND deleted_at IS NULL)::text AS active_source_count,
               (SELECT COUNT(*) FROM video_sources
-               WHERE video_id = v.id AND deleted_at IS NULL)::text AS total_source_count
+               WHERE video_id = v.id AND deleted_at IS NULL)::text AS total_source_count,
+              (SELECT CASE
+                 WHEN COUNT(*) FILTER (WHERE render_status <> 'pending') = 0 THEN 'pending'
+                 WHEN COUNT(*) FILTER (WHERE render_status <> 'dead') = 0 THEN 'all_dead'
+                 WHEN COUNT(*) FILTER (WHERE render_status = 'ok') = COUNT(*) THEN 'ok'
+                 ELSE 'partial'
+               END FROM video_sources
+               WHERE video_id = v.id AND is_active = true AND deleted_at IS NULL) AS render_check_status
        ${VIDEO_JOIN}
        LEFT JOIN crawler_sites cs ON cs.key = v.site_key
        WHERE ${where}

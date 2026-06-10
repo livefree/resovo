@@ -150,4 +150,44 @@ describe('listAdminVideos (CHG-209)', () => {
     // 空 types 数组短路：不出现 v.type = ANY
     expect(sql).not.toContain('v.type = ANY')
   })
+
+  // ── SRCHEALTH-P1-1-A（B1 后端）：探测/试播聚合字段 + 排序 ─────────
+  it('SRCHEALTH-P1-1-A: SELECT 含 render_check_status 聚合（语义同构 computeCheckStatus）+ 双字段排序白名单', async () => {
+    query
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ count: '0' }] })
+
+    await listAdminVideos(db, {
+      status: 'all',
+      sortField: 'render_check_status',
+      sortDir: 'asc',
+      page: 1,
+      limit: 20,
+    })
+
+    const [sql] = query.mock.calls[0]
+    // render 聚合子查询（active + 未删除口径，与 worker / api computeCheckStatus 输入一致）
+    expect(sql).toContain('AS render_check_status')
+    expect(sql).toContain("COUNT(*) FILTER (WHERE render_status <> 'pending') = 0 THEN 'pending'")
+    expect(sql).toContain("COUNT(*) FILTER (WHERE render_status <> 'dead') = 0 THEN 'all_dead'")
+    expect(sql).toContain("COUNT(*) FILTER (WHERE render_status = 'ok') = COUNT(*) THEN 'ok'")
+    // probe 字段已在 VIDEO_FULL_SELECT（v.source_check_status 直通列）
+    expect(sql).toContain('v.source_check_status')
+    // render_check_status 排序走 SELECT alias（同 source_health 先例）
+    expect(sql).toContain('ORDER BY render_check_status ASC')
+
+    // probe 排序走列直通
+    query
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ count: '0' }] })
+    await listAdminVideos(db, {
+      status: 'all',
+      sortField: 'source_check_status',
+      sortDir: 'desc',
+      page: 1,
+      limit: 20,
+    })
+    const [sql2] = query.mock.calls[2]
+    expect(sql2).toContain('ORDER BY v.source_check_status DESC')
+  })
 })

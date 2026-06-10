@@ -96,6 +96,8 @@ const SORT_FIELDS = [
   'source_health', 'visibility', 'review_status', 'douban_status', 'meta_score',
   // CHG-VSR-2（§2.5）：集数列排序
   'episode_count',
+  // SRCHEALTH-P1-1-A（B1）：探测/试播聚合列排序（同步 queries SORT_FIELD_WHITELIST）
+  'source_check_status', 'render_check_status',
 ] as const
 
 // CHG-VSR-2：CSV → enum 数组 query 解析（参 SourcesMatrixService / crawler.runs.ts 同范式，各 route 私有 helper）
