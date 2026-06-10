@@ -1,5 +1,8 @@
+import type { QualityDetected } from '@resovo/media-probe'
+
 export type ProbeStatus = 'pending' | 'ok' | 'partial' | 'dead'
-export type QualityDetected = '4K' | '2K' | '1080P' | '720P' | '480P' | '360P' | '240P'
+// SRCHEALTH-P1-3：真源迁 @resovo/media-probe（与判定层 heightToQuality 同源），re-export 消副本
+export type { QualityDetected }
 export type SourceType = 'hls' | 'mp4' | 'dash'
 
 export type VideoSource = {

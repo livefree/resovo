@@ -11,6 +11,7 @@
     "packages/admin-ui",
     "packages/design-tokens",
     "packages/logger",
+    "packages/media-probe",
     "packages/player",
     "packages/player-core",
     "packages/types",

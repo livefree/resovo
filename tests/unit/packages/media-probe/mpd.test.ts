@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseMpd } from '../../../../../apps/worker/src/lib/parsers/mpd'
+import { parseMpd } from '@resovo/media-probe'
 
 const MPD_XML = `<?xml version="1.0"?>
 <MPD>

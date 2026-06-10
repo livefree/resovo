@@ -239,7 +239,8 @@ export interface SingleSourceProbeResult {
 }
 export interface SingleSourceRenderCheckResult {
   readonly sourceId: string
-  readonly newRenderStatus: 'ok' | 'dead'
+  // SRCHEALTH-P1-3：试播升级 manifest 真解析，三态 +'partial'（master 无 variants 等）
+  readonly newRenderStatus: 'ok' | 'partial' | 'dead'
   readonly queued: false
 }
 
@@ -257,13 +258,14 @@ export interface BatchProbeResult {
 }
 export interface BatchRenderCheckResultItem {
   readonly sourceId: string
-  readonly newRenderStatus: 'ok' | 'dead'
+  // SRCHEALTH-P1-3：试播升级 manifest 真解析，三态 +'partial'
+  readonly newRenderStatus: 'ok' | 'partial' | 'dead'
   readonly error?: string
 }
 export interface BatchRenderCheckResult {
   readonly videoId: string
   readonly results: ReadonlyArray<BatchRenderCheckResultItem>
-  readonly summary: { readonly total: number; readonly ok: number; readonly dead: number; readonly failed: number }
+  readonly summary: { readonly total: number; readonly ok: number; readonly partial: number; readonly dead: number; readonly failed: number }
 }
 
 /**

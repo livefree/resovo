@@ -2,12 +2,23 @@ import type { Pool } from 'pg'
 import type pino from 'pino'
 import { config } from '../../config'
 import { shouldSkipSite, recordFailure, recordSuccess } from '../../lib/circuit-breaker'
-import { parseM3u8, parseMp4Moov, parseMpd } from '../../lib/parsers'
+import {
+  parseM3u8,
+  parseMp4Moov,
+  parseMpd,
+  evaluateHls,
+  evaluateMp4,
+  evaluateMpd,
+  type MediaProbeVerdict,
+} from '@resovo/media-probe'
 import { withRetry } from '../../lib/retry-backoff'
 import { emitMetric } from '../../observability/metrics'
 import type { VideoSource, QualityDetected, ProbeStatus } from '../../types'
 
 const TIMEOUT_MS = config.probe.level2TimeoutMs
+
+// manifest 文本（m3u8/mpd）读取上限——正常 manifest 为 KB 级，2MB 防 URL 指向大文件
+const MANIFEST_MAX_BYTES = 2 * 1024 * 1024
 
 type RenderResult = {
   status: ProbeStatus
@@ -95,20 +106,46 @@ async function renderCheck(source: VideoSource): Promise<RenderResult> {
   }
 }
 
+// SRCHEALTH-P1-3：解析 + 判定收口 @resovo/media-probe（api 手动试播同源），
+// 本文件只保留 IO 编排（fetch / timeout / Range / UA）+ verdict → DB 字段映射。
+function verdictToRenderResult(v: MediaProbeVerdict): RenderResult {
+  return {
+    status: v.status,
+    width: v.width,
+    height: v.height,
+    quality_detected: v.quality,
+    error_detail: v.errorDetail,
+  }
+}
+
+// 响应体限量流式读取——与 apps/api/src/lib/render-check-manifest.ts readBodyLimited 双副本同步
+// （IO 编排层，A2 裁决不进 @resovo/media-probe；改动须双向同步，ADR-107 §4 双副本
+// 范式）。读满 maxBytes 即 cancel 流：服务器忽略 Range 返回 200 全量（或 URL 指向
+// 大文件）时，text()/arrayBuffer() 会把整个视频缓冲进内存（Codex review 拦截项）。
+async function readBodyLimited(res: Response, maxBytes: number): Promise<Buffer> {
+  const body = res.body
+  if (body === null) return Buffer.alloc(0)
+  const reader = body.getReader()
+  const chunks: Buffer[] = []
+  let total = 0
+  try {
+    while (total < maxBytes) {
+      const { done, value } = await reader.read()
+      if (done) break
+      chunks.push(Buffer.from(value))
+      total += value.byteLength
+    }
+  } finally {
+    reader.cancel().catch(() => {})
+  }
+  return Buffer.concat(chunks).subarray(0, maxBytes)
+}
+
 async function checkHls(source: VideoSource, signal: AbortSignal): Promise<RenderResult> {
   const res = await fetch(source.source_url, { signal, headers: { 'User-Agent': 'Resovo-HealthWorker/1.0' } })
   if (!res.ok) return { status: 'dead', width: null, height: null, quality_detected: null, error_detail: `HTTP ${res.status}` }
-  const text = await res.text()
-  const { variants, isMaster, maxResolutionHeight } = parseM3u8(text)
-
-  if (isMaster && variants.length === 0) {
-    return { status: 'partial', width: null, height: null, quality_detected: null, error_detail: 'no variants in master' }
-  }
-
-  const height = maxResolutionHeight
-  const quality = height !== null ? heightToQuality(height) : null
-  const width = variants[0]?.resolution ? parseWidth(variants[0].resolution) : null
-  return { status: 'ok', width, height, quality_detected: quality, error_detail: null }
+  const text = (await readBodyLimited(res, MANIFEST_MAX_BYTES)).toString('utf8')
+  return verdictToRenderResult(evaluateHls(parseM3u8(text)))
 }
 
 async function checkMp4(source: VideoSource, signal: AbortSignal): Promise<RenderResult> {
@@ -123,35 +160,15 @@ async function checkMp4(source: VideoSource, signal: AbortSignal): Promise<Rende
   if (!res.ok && res.status !== 206) {
     return { status: 'dead', width: null, height: null, quality_detected: null, error_detail: `HTTP ${res.status}` }
   }
-  const arrayBuf = await res.arrayBuffer()
-  const buf = Buffer.from(arrayBuf)
-  const { width, height } = parseMp4Moov(buf)
-  const quality = height !== null ? heightToQuality(height) : null
-  return { status: 'ok', width, height, quality_detected: quality, error_detail: null }
+  const buf = await readBodyLimited(res, config.probe.mp4RangeBytes)
+  return verdictToRenderResult(evaluateMp4(parseMp4Moov(buf)))
 }
 
 async function checkDash(source: VideoSource, signal: AbortSignal): Promise<RenderResult> {
   const res = await fetch(source.source_url, { signal, headers: { 'User-Agent': 'Resovo-HealthWorker/1.0' } })
   if (!res.ok) return { status: 'dead', width: null, height: null, quality_detected: null, error_detail: `HTTP ${res.status}` }
-  const xml = await res.text()
-  const { maxResolutionHeight } = parseMpd(xml)
-  const quality = maxResolutionHeight !== null ? heightToQuality(maxResolutionHeight) : null
-  return { status: 'ok', width: null, height: maxResolutionHeight, quality_detected: quality, error_detail: null }
-}
-
-export function heightToQuality(height: number): QualityDetected {
-  if (height >= 2160) return '4K'
-  if (height >= 1440) return '2K'
-  if (height >= 1080) return '1080P'
-  if (height >= 720) return '720P'
-  if (height >= 480) return '480P'
-  if (height >= 360) return '360P'
-  return '240P'
-}
-
-function parseWidth(resolution: string): number | null {
-  const m = resolution.match(/^(\d+)x/)
-  return m ? parseInt(m[1], 10) : null
+  const xml = (await readBodyLimited(res, MANIFEST_MAX_BYTES)).toString('utf8')
+  return verdictToRenderResult(evaluateMpd(parseMpd(xml)))
 }
 
 function extractSiteId(url: string): string {

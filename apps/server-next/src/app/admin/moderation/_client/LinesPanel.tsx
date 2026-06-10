@@ -118,8 +118,10 @@ export function LinesPanel({ videoId, selectedKey, onLineSelect, onSourceHealthC
         if (r.status === 'success' && r.summary) {
           onSourceHealthChanged?.()
           const { ok, dead, total, failed } = r.summary
-          if (dead > 0 || failed > 0) {
-            toast.push({ title: '全部试播完成', description: `${ok}/${total} 渲染正常${dead > 0 ? ` · ${dead} 失败` : ''}${failed > 0 ? ` · ${failed} 异常` : ''}`, level: 'warn' })
+          // SRCHEALTH-P1-3：partial（manifest 部分可用）独立分桶，不并入 ok/dead
+          const partial = r.summary.partial ?? 0
+          if (dead > 0 || failed > 0 || partial > 0) {
+            toast.push({ title: '全部试播完成', description: `${ok}/${total} 渲染正常${partial > 0 ? ` · ${partial} 部分可用` : ''}${dead > 0 ? ` · ${dead} 失败` : ''}${failed > 0 ? ` · ${failed} 异常` : ''}`, level: 'warn' })
           } else {
             toast.push({ title: '全部试播完成', description: `${total} 条线路渲染正常`, level: 'success' })
           }

@@ -38,6 +38,20 @@ function spyAuditOnService(svc: SourceProbeService): ReturnType<typeof vi.fn> {
   return writeMock
 }
 
+// SRCHEALTH-P1-3：试播 manifest 真解析的 mock 响应体（非 master → evaluateHls ok）
+const MEDIA_PLAYLIST = '#EXTM3U\n#EXTINF:10,\nseg-0.ts\n#EXT-X-ENDLIST\n'
+
+// SRCHEALTH-P1-3 Codex 拦截修复：实现改为限量流式读取（readBodyLimited），mock 提供
+// body stream；每次 fetch 调用须新建 stream（同一 stream 二次 getReader 会 locked）
+function makeBodyStream(payload: string): ReadableStream<Uint8Array> {
+  return new ReadableStream({
+    start(controller) {
+      controller.enqueue(new TextEncoder().encode(payload))
+      controller.close()
+    },
+  })
+}
+
 const TEST_SOURCE_ID = '00000000-0000-4000-8000-000000000001'
 const TEST_VIDEO_ID = '00000000-0000-4000-8000-000000000002'
 
@@ -51,7 +65,7 @@ function makeSourceRow(): Record<string, unknown> {
     source_site_key: 'jszyapi',
     user_label: null,
     display_name: null,
-    type: 'video',
+    type: 'hls',
     quality: null,
     is_active: true,
     probe_status: 'pending',
@@ -152,11 +166,12 @@ describe('SourceProbeService.probeOne audit + freeze 守卫 (ADR-158 AMENDMENT /
 
 describe('SourceProbeService.renderCheckOne audit + 不守 freeze (ADR-158 AMENDMENT D-158-5)', () => {
   beforeEach(() => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+    // SRCHEALTH-P1-3：试播升级 GET + manifest 真解析 → mock 提供 body stream（media playlist → ok）
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(() => Promise.resolve({
       ok: true,
       status: 200,
-      headers: { get: () => 'application/vnd.apple.mpegurl' },
-    }))
+      body: makeBodyStream(MEDIA_PLAYLIST),
+    })))
   })
 
   it('4. happy path → afterJsonb { action="render_check", newRenderStatus } + beforeJsonb { renderStatus }', async () => {
@@ -206,5 +221,60 @@ describe('SourceProbeService.renderCheckOne audit + 不守 freeze (ADR-158 AMEND
       httpStatus: 404,
     })
     expect(writeMock).not.toHaveBeenCalled()
+  })
+
+  // SRCHEALTH-P1-3（D-1）：manifest 真解析 → 质量字段随 render_status 一并写入
+  it('6. master manifest 解析 → UPDATE 写 resolution/quality（与 worker level2 同款语义）', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(() => Promise.resolve({
+      ok: true,
+      status: 200,
+      body: makeBodyStream('#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=2800000,RESOLUTION=1920x1080\nhigh.m3u8\n'),
+    })))
+    let updateParams: readonly unknown[] = []
+    const pool = makePool((sql, params) => {
+      if (sql.includes('WHERE vs.id = $1')) return { rows: [makeSourceRow()] }
+      if (sql.includes('UPDATE video_sources')) {
+        updateParams = params
+        return { rows: [] }
+      }
+      if (sql.includes('INSERT INTO source_health_events')) return { rows: [{ id: 'evt-3' }] }
+      return { rows: [] }
+    })
+    const svc = new SourceProbeService(pool)
+    spyAuditOnService(svc)
+
+    const result = await svc.renderCheckOne(TEST_SOURCE_ID, 'actor-2', 'req-3')
+
+    expect(result.newRenderStatus).toBe('ok')
+    // updateSourceHealthAfterRenderCheck 参数序：[sourceId, renderStatus, width, height, quality]
+    expect(updateParams).toEqual([TEST_SOURCE_ID, 'ok', 1920, 1080, '1080P'])
+  })
+
+  // SRCHEALTH-P1-3 Codex 拦截守卫：服务器忽略 Range 返回 200 无限流（mp4 大文件场景）
+  // → readBodyLimited 读满上限即 cancel；若实现退回全量 arrayBuffer()/text() 会在此挂死
+  it('7. mp4 服务器忽略 Range 返回 200 无限流 → 限量读取后正常完成（不全量缓冲）', async () => {
+    const CHUNK = new Uint8Array(16 * 1024)
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(() => Promise.resolve({
+      ok: true,
+      status: 200,
+      body: new ReadableStream<Uint8Array>({
+        pull(controller) {
+          controller.enqueue(CHUNK) // 永不 close：全量读取实现会无限缓冲直到测试超时
+        },
+      }),
+    })))
+    const pool = makePool((sql) => {
+      if (sql.includes('WHERE vs.id = $1')) return { rows: [{ ...makeSourceRow(), type: 'mp4' }] }
+      if (sql.includes('UPDATE video_sources')) return { rows: [] }
+      if (sql.includes('INSERT INTO source_health_events')) return { rows: [{ id: 'evt-4' }] }
+      return { rows: [] }
+    })
+    const svc = new SourceProbeService(pool)
+    spyAuditOnService(svc)
+
+    const result = await svc.renderCheckOne(TEST_SOURCE_ID, 'actor-2', 'req-4')
+
+    // 前 64KB 非 moov 数据 → 解析全 null → evaluateMp4 ok（与 worker 既有行为一致）
+    expect(result.newRenderStatus).toBe('ok')
   })
 })

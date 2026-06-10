@@ -89,6 +89,8 @@ export type SourceActionStatus = 'success' | 'race' | 'freeze' | 'failed'
 export interface SourceActionBatchSummary {
   readonly total: number
   readonly ok: number
+  /** SRCHEALTH-P1-3：试播 manifest 真解析三态——仅 renderCheckAll 携带（probe 无此桶） */
+  readonly partial?: number
   readonly dead: number
   readonly failed: number
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseM3u8 } from '../../../../../apps/worker/src/lib/parsers/m3u8'
+import { parseM3u8 } from '@resovo/media-probe'
 
 const MASTER_MANIFEST = `#EXTM3U
 #EXT-X-STREAM-INF:BANDWIDTH=800000,RESOLUTION=640x360

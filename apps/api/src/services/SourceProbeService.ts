@@ -9,6 +9,9 @@
  *   - ADR-158（单源 inline probe + render-check 端点协议）
  *   - ADR-158 AMENDMENT 2026-05-27（CHG-356）：BREAKING 同步快探 + UPDATE DB
  *   - ADR-158 AMENDMENT 2 2026-05-27（CHG-357）：视频级 batch 端点 + 抽 internal 方法
+ *   - SRCHEALTH-P1-3 2026-06-10：试播升级 manifest 真解析（@resovo/media-probe 与
+ *     worker level2 同源判定），newRenderStatus 三态 +'partial'，写质量字段；
+ *     消除原 I3 已知限制（HEAD + Content-Type 仅 reachability）
  *
  * 关键约束：
  *   - probe 守 freeze / render-check 不守（D-158-5 / diagnostic 可用性优先）
@@ -34,6 +37,7 @@ import { AuditLogService } from '@/api/services/AuditLogService'
 import { AppError } from '@/api/lib/errors'
 import { computeCheckStatus, type ProbeStatus } from '@/api/lib/source-check-status'
 import { baseLogger } from '@/api/lib/logger'
+import { renderCheckManifest } from '@/api/lib/render-check-manifest'
 import type { VideoSourceLine } from '@resovo/types'
 
 // ── 响应类型（公开契约 / ADR-158 AMENDMENT 1+2）─────────────────────
@@ -47,7 +51,7 @@ export interface SingleSourceProbeResult {
 
 export interface SingleSourceRenderCheckResult {
   readonly sourceId: string
-  readonly newRenderStatus: 'ok' | 'dead'
+  readonly newRenderStatus: 'ok' | 'partial' | 'dead'
   readonly queued: false
 }
 
@@ -71,7 +75,7 @@ export interface BatchProbeResult {
 
 export interface BatchRenderCheckResultItem {
   readonly sourceId: string
-  readonly newRenderStatus: 'ok' | 'dead'
+  readonly newRenderStatus: 'ok' | 'partial' | 'dead'
   readonly error?: string
 }
 
@@ -81,15 +85,13 @@ export interface BatchRenderCheckResult {
   readonly summary: {
     readonly total: number
     readonly ok: number
+    readonly partial: number
     readonly dead: number
     readonly failed: number
   }
 }
 
 // ── 内部常量 ─────────────────────────────────────────────────────────
-
-// I3 已知限制：HEAD + Content-Type 仅 reachability 强化版，不是 playability
-const VIDEO_CONTENT_TYPE_RE = /video\/|application\/vnd\.apple\.mpegurl|application\/x-mpegurl/i
 
 // F2 并发分批上限（防大视频 100+ source 打爆 / N+1 outbound HEAD）
 const BATCH_CONCURRENCY = 5
@@ -140,12 +142,11 @@ export class SourceProbeService {
   // ── 私有：探测单 URL（probeUrlHead 公共方法 / R2 抽出 / DRY）─────
 
   /**
-   * 探测单个 source URL — R2 公共方法
+   * 探测单个 source URL — R2 公共方法（probe 路径专用；试播已升级 renderCheckManifest）
    * @returns ok=true 时 latencyMs 是测量值；ok=false 时 latencyMs 必为 null（I1 防中位数污染）
    */
   private async probeUrlHead(
     url: string,
-    contentTypeCheck: boolean,
   ): Promise<{ ok: boolean; latencyMs: number | null; httpCode: number | null }> {
     const start = performance.now()
     try {
@@ -156,12 +157,6 @@ export class SourceProbeService {
       const httpStatusOk = res.ok && res.status < 400
       if (!httpStatusOk) {
         return { ok: false, latencyMs: null, httpCode: res.status }
-      }
-      if (contentTypeCheck) {
-        const contentType = res.headers.get('content-type') ?? ''
-        if (!VIDEO_CONTENT_TYPE_RE.test(contentType)) {
-          return { ok: false, latencyMs: null, httpCode: res.status }
-        }
       }
       return { ok: true, latencyMs: Math.round(performance.now() - start), httpCode: res.status }
     } catch {
@@ -181,7 +176,7 @@ export class SourceProbeService {
     actorId: string,
     opts: { skipAudit: boolean; requestId?: string | null },
   ): Promise<{ newProbeStatus: 'ok' | 'dead'; latencyMs: number | null; httpCode: number | null }> {
-    const { ok, latencyMs, httpCode } = await this.probeUrlHead(source.sourceUrl, false)
+    const { ok, latencyMs, httpCode } = await this.probeUrlHead(source.sourceUrl)
     const newProbeStatus: 'ok' | 'dead' = ok ? 'ok' : 'dead'
 
     await updateSourceHealthAfterProbe(this.db, source.id, { probeStatus: newProbeStatus, latencyMs })
@@ -217,11 +212,17 @@ export class SourceProbeService {
     source: VideoSourceLine,
     actorId: string,
     opts: { skipAudit: boolean; requestId?: string | null },
-  ): Promise<{ newRenderStatus: 'ok' | 'dead'; httpCode: number | null }> {
-    const { ok, httpCode } = await this.probeUrlHead(source.sourceUrl, true)
-    const newRenderStatus: 'ok' | 'dead' = ok ? 'ok' : 'dead'
+  ): Promise<{ newRenderStatus: 'ok' | 'partial' | 'dead'; httpCode: number | null }> {
+    // SRCHEALTH-P1-3（D1/D2）：manifest 真解析（lib/render-check-manifest，与 worker 同源判定）
+    const { verdict, httpCode } = await renderCheckManifest(source)
+    const newRenderStatus = verdict.status
 
-    await updateSourceHealthAfterRenderCheck(this.db, source.id, { renderStatus: newRenderStatus })
+    await updateSourceHealthAfterRenderCheck(this.db, source.id, {
+      renderStatus: newRenderStatus,
+      resolutionWidth: verdict.width,
+      resolutionHeight: verdict.height,
+      qualityDetected: verdict.quality,
+    })
 
     await insertHealthEvent(this.db, {
       videoId: source.videoId,
@@ -230,6 +231,7 @@ export class SourceProbeService {
       oldStatus: source.renderStatus,
       newStatus: newRenderStatus,
       triggeredBy: actorId,
+      errorDetail: verdict.errorDetail,
       httpCode,
       processedAt: new Date().toISOString(),
     })
@@ -388,9 +390,10 @@ export class SourceProbeService {
     })
 
     const ok = results.filter((r) => !r.error && r.newRenderStatus === 'ok').length
+    const partial = results.filter((r) => !r.error && r.newRenderStatus === 'partial').length
     const dead = results.filter((r) => !r.error && r.newRenderStatus === 'dead').length
     const failed = results.filter((r) => r.error).length
-    const summary = { total: sources.length, ok, dead, failed }
+    const summary = { total: sources.length, ok, partial, dead, failed }
 
     this.auditSvc.write({
       actorId,

@@ -39,6 +39,20 @@ function spyAuditOnService(svc: SourceProbeService): ReturnType<typeof vi.fn> {
   return writeMock
 }
 
+// SRCHEALTH-P1-3：试播 manifest 真解析的 mock 响应体（非 master → evaluateHls ok）
+const MEDIA_PLAYLIST = '#EXTM3U\n#EXTINF:10,\nseg-0.ts\n#EXT-X-ENDLIST\n'
+
+// SRCHEALTH-P1-3 Codex 拦截修复：实现改为限量流式读取（readBodyLimited），mock 提供
+// body stream；每次 fetch 调用须新建 stream（同一 stream 二次 getReader 会 locked）
+function makeBodyStream(payload: string): ReadableStream<Uint8Array> {
+  return new ReadableStream({
+    start(controller) {
+      controller.enqueue(new TextEncoder().encode(payload))
+      controller.close()
+    },
+  })
+}
+
 const TEST_VIDEO_ID = '00000000-0000-4000-8000-000000000001'
 
 function makeSourceRow(idSuffix: string): Record<string, unknown> {
@@ -51,7 +65,7 @@ function makeSourceRow(idSuffix: string): Record<string, unknown> {
     source_site_key: 'jszyapi',
     user_label: null,
     display_name: null,
-    type: 'video',
+    type: 'hls',
     quality: null,
     is_active: true,
     probe_status: 'pending',
@@ -171,11 +185,12 @@ describe('SourceProbeService.batchProbe audit + freeze 守卫 (ADR-158 AMENDMENT
 
 describe('SourceProbeService.batchRenderCheck audit + 不守 freeze (ADR-158 D-158-5 继承 / CHG-357)', () => {
   beforeEach(() => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+    // SRCHEALTH-P1-3：试播升级 GET + manifest 真解析 → mock 提供 body stream（media playlist → ok）
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(() => Promise.resolve({
       ok: true,
       status: 200,
-      headers: { get: () => 'application/vnd.apple.mpegurl' },
-    }))
+      body: makeBodyStream(MEDIA_PLAYLIST),
+    })))
   })
 
   it('4. happy path → action="batch_render_check" + summary + targetKind="video"', async () => {
@@ -192,7 +207,7 @@ describe('SourceProbeService.batchRenderCheck audit + 不守 freeze (ADR-158 D-1
     const result = await svc.batchRenderCheck(TEST_VIDEO_ID, 'actor-2', 'req-2')
 
     expect(result.videoId).toBe(TEST_VIDEO_ID)
-    expect(result.summary).toEqual({ total: 2, ok: 2, dead: 0, failed: 0 })
+    expect(result.summary).toEqual({ total: 2, ok: 2, partial: 0, dead: 0, failed: 0 })
     expect(writeMock).toHaveBeenCalledOnce()
     expect(writeMock).toHaveBeenCalledWith(
       expect.objectContaining({

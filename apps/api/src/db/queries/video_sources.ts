@@ -233,12 +233,18 @@ export async function updateSourceHealthAfterProbe(
 }
 
 export interface UpdateSourceHealthAfterRenderCheckInput {
-  readonly renderStatus: 'ok' | 'dead'
+  readonly renderStatus: 'ok' | 'partial' | 'dead'
+  readonly resolutionWidth: number | null
+  readonly resolutionHeight: number | null
+  readonly qualityDetected: string | null
 }
 
 /**
  * CHG-356 / ADR-158 AMENDMENT R3：renderCheckOne 同步 UPDATE 信号字段
- * 字段：render_status / last_rendered_at（不更新 latency_ms / Content-Type 检查不计时）
+ * SRCHEALTH-P1-3（D1/D2）：手动试播升级 manifest 真解析 → 三态 render_status +
+ * 质量字段写入。UPDATE 语义与 worker level2-render updateSourceRender 逐条对齐：
+ * width/height/quality_detected 无条件覆盖；quality_source / detected_at 仅在
+ * 解析出尺寸（width 非 NULL）时写 'manifest_parse' / NOW()，否则保留既有值。
  */
 export async function updateSourceHealthAfterRenderCheck(
   db: Pool,
@@ -248,9 +254,14 @@ export async function updateSourceHealthAfterRenderCheck(
   await db.query(
     `UPDATE video_sources
         SET render_status = $2,
+            resolution_width = $3,
+            resolution_height = $4,
+            quality_detected = $5,
+            quality_source = CASE WHEN $3 IS NOT NULL THEN 'manifest_parse' ELSE quality_source END,
+            detected_at = CASE WHEN $3 IS NOT NULL THEN NOW() ELSE detected_at END,
             last_rendered_at = NOW()
       WHERE id = $1 AND deleted_at IS NULL`,
-    [sourceId, input.renderStatus],
+    [sourceId, input.renderStatus, input.resolutionWidth, input.resolutionHeight, input.qualityDetected],
   )
 }
 

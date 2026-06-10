@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseMp4Moov } from '../../../../../apps/worker/src/lib/parsers/mp4-moov'
+import { parseMp4Moov } from '@resovo/media-probe'
 
 function buildMoovBox(width: number, height: number): Buffer {
   const stsdPayload = buildStsdBox(width, height)

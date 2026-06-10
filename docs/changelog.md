@@ -3854,3 +3854,26 @@
   - FIX-1 只对齐了 probe 守卫；停用（is_active=false）或软删（deleted_at 非 NULL）的信号源 probe 旧值可为 'ok'，会被重置却被 level2 跳过 → 同样 stale pending。
   - 不变式（测试守卫锁定）：**render 重置集合 ⊆ level2 定向重测集合**——重置谓词必须与 `loadLevel2Candidates` 定向分支保持逐条对齐，两处任一改动需同步。
   - 门禁：typecheck/lint EXIT=0、recheck 测试 4/4、test:changed 通过。
+
+## [SRCHEALTH-P1-3] packages/media-probe 共享解析包 + 手动试播 manifest 真解析（D1/D2）
+- **完成时间**：2026-06-10
+- **记录时间**：2026-06-10 16:45
+- **执行模型**：claude-fable-5（建议 sonnet，用户会话人工覆盖持续推进授权）
+- **子代理**：arch-reviewer (claude-opus-4-8) — 包导出面裁决（共享组件 API 契约强制 Opus，CLAUDE.md 模型路由）
+- **修改文件**：
+  - `packages/media-probe/`（新建 6 文件）— 解析层（parseM3u8/parseMp4Moov/parseMpd 自 worker 零改动迁入）+ 判定层（evaluateHls/Mp4/Mpd + heightToQuality，自 level2-render 抽出）+ 类型契约（MediaProbeStatus 三态 / QualityDetected / MediaProbeVerdict）；裁决 A2：IO（fetch/timeout/Range/UA）留两端编排不进包
+  - `apps/worker/src/lib/parsers/`（4 文件物理删除，不留 re-export 薄壳）；`level2-render.ts` 判定改调包 + readBodyLimited 限量读取；`level1-probe.ts` import 随迁（**Opus 裁决抓出的范围补漏**——方案文件范围未列该第二消费方）；`types.ts` QualityDetected 改 re-export 消副本；`package.json`/`tsconfig.json` 接线
+  - `apps/api/src/lib/render-check-manifest.ts`（新建）— 手动试播 manifest 真解析 IO 编排（GET + 包判定，三态 ok/partial/dead；独立超时 8s = Opus 裁决 D-2，不复用 worker 30s）+ readBodyLimited（与 worker 双副本双向同步注释）
+  - `apps/api/src/services/SourceProbeService.ts` — renderCheckOneInternal 接 manifest 真解析（消除原 I3「HEAD + Content-Type 仅 reachability」已知限制）；契约 newRenderStatus 三态 +'partial'、batch summary +partial 计数、insertHealthEvent 落 errorDetail；probeUrlHead 删 contentTypeCheck 死分支；超 500 红线拆分后 430 行
+  - `apps/api/src/db/queries/video_sources.ts` — UpdateSourceHealthAfterRenderCheckInput 三态 + 质量字段；UPDATE 与 worker updateSourceRender CASE 防御语义逐条对齐（width/height/quality 无条件覆盖；quality_source='manifest_parse'/detected_at 仅解析出尺寸时写）
+  - `apps/server-next/src/lib/sources/api.ts`（newRenderStatus 双 union + summary partial）+ `lib/sources/types.ts`（SourceActionBatchSummary `partial?`）+ `SourceLinesExpand.tsx`/`moderation/_client/LinesPanel.tsx`（renderCheckAll toast partial 独立分桶——范围增补：原分支 partial>0 且无 dead/failed 时误报「全部正常」）
+  - 接线：根 `package.json` workspaces + `apps/api/tsconfig.json` paths + `vitest.config.ts` alias + `package-lock.json`
+  - 测试：parser 3 文件迁 `tests/unit/packages/media-probe/`（首个 packages 级测试目录）+ 新增 `evaluate.test.ts` 18 用例（heightToQuality 11 自 level2-render.test.ts 迁入后该文件删除）；audit 测试 2 文件 mock 升级 body stream + 新增 UPDATE 质量字段断言 + 无限流截断守卫用例
+- **新增依赖**：无（workspace 内部包，零运行时依赖）
+- **数据库变更**：无（render_status/quality_detected CHECK 既有值域已含 partial/7 值）
+- **注意事项**：
+  - **Codex stop-time review 拦截（序列累计第 5 处）**：「MP4 inline render check can buffer full videos」——res.arrayBuffer()/text() 全量读，服务器忽略 Range 返回 200 全量时整视频缓冲进内存（inline 5 并发 OOM；worker 同款存量缺陷一并修）。修复 = 双端 readBodyLimited（mp4 64KB / manifest 2MB，读满即 cancel 流）+ 200 无限流守卫用例（全量实现会挂死至超时）。
+  - **ADR-158 D-N 偏离登记**：试播协议二值 → 三态（+partial），兼容性 BREAKING 扩展（union 加成员 + summary 加字段），AMENDMENT 候补；verify:adr-contracts ✅ 234 端点对齐。
+  - **已知限制**：partial 集成路径暂不可达——parseM3u8 对 #EXT-X-STREAM-INF 无条件 push variant → isMaster ⇒ variants 非空（worker 既有事实）；三态语义由包测试直接构造 parsed 锁定。
+  - **新发现登记**：renderCheckAll toast 同构 2 处（达 3 处强制提取）；readBodyLimited api/worker 双副本（第三消费方出现时再裁决入包）。
+  - 门禁：typecheck/lint EXIT=0 / test:changed 自动升全量终轮 505 文件 7081 passed / e2e:admin 三轮 exit 0（终轮 70 passed + 1 flaky 已知抖动域）/ verify:adr-contracts ✅。

@@ -149,6 +149,7 @@ export default defineConfig({
       { find: '@resovo/player-core', replacement: path.resolve(__dirname, './packages/player-core/src/index.ts') },
       { find: '@resovo/types',       replacement: path.resolve(__dirname, './packages/types/src/index.ts') },
       { find: '@resovo/logger',      replacement: path.resolve(__dirname, './packages/logger/src/index.ts') },
+      { find: '@resovo/media-probe', replacement: path.resolve(__dirname, './packages/media-probe/src/index.ts') },
       { find: '@resovo/worker',      replacement: path.resolve(__dirname, './apps/worker/src') },
     ],
   },

@@ -1839,9 +1839,9 @@
 
 ## [SEQ-20260610-02] 视频/线路/站点健康度与反馈闭环（source-health v2 方案落地）
 
-- **状态**：🔄 执行中（5/16 卡完成：**Phase 1 主线全收口** P1-4/P1-2/P1-1-A/P1-1-B/P1-5 ✅；下一步 P1-3 独立卡〔前置 Opus〕或 Phase 2）
+- **状态**：🔄 执行中（6/16 卡完成：**Phase 1 全收口（含 P1-3 独立卡）** P1-4/P1-2/P1-1-A/P1-1-B/P1-5/P1-3 ✅；下一步 Phase 2〔P2-1 前台 success 上报 / P2-4-A 可并行〕或 Phase 1 复盘三候选裁决）
 - **创建时间**：2026-06-10 12:53
-- **最后更新时间**：2026-06-10 13:55
+- **最后更新时间**：2026-06-10 16:45
 - **目标**：落地 `docs/designs/source-health-feedback-loop-plan_20260610.md` v2（两轮独立审核有条件通过，必修全吸收，commit 88893812）：修复「全部探测/试播后状态不更新」三处可见断点（B1/B2/B3）→ 打通反馈闭环（F1–F4）→ 评分进化 + 站点/主机桥接（D3/D4）。
 - **范围**：apps/api（service/queries/routes/lib）+ apps/worker（jobs/lib）+ apps/server-next（sources/videos 模块 UI）+ apps/web-next（PlayerShell）+ packages（media-probe 新包，P1-3）。**方案 §3 为各卡内容真源，§4 为门禁真源**；卡面只记验收口径与文件范围。
 - **依赖**：无 BLOCKER；方案 v2 已批准（用户 2026-06-10）。
@@ -1884,12 +1884,13 @@
 
 ### 任务列表（P1-3 独立卡 — 共享解析包）
 
-6. **SRCHEALTH-P1-3** — `packages/media-probe` 共享解析包 + 手动试播升级（D1/D2）（状态：⬜ 待开始）
-   - 创建时间：2026-06-10 12:53
+6. **SRCHEALTH-P1-3** — `packages/media-probe` 共享解析包 + 手动试播升级（D1/D2）（状态：✅ 已完成 2026-06-10 16:45）
+   - 创建时间：2026-06-10 12:53 ｜ 实际开始：2026-06-10 14:05 ｜ 完成时间：2026-06-10 16:45
    - 验收口径：admin 手动「试播」走 manifest 真解析（m3u8/moov/mpd）且支持 partial；worker 与 api 消费同一 `packages/media-probe`，双副本消除。
-   - 文件范围：`packages/media-probe/`（新建）、`apps/worker/src/lib/parsers.ts`（替换为包消费）、`apps/api/src/services/SourceProbeService.ts`。
+   - 文件范围（开工/实施修正：queue 登记 `parsers.ts` 实为 `parsers/` 目录；Opus 裁决补漏 + partial 契约波及增补，见 tasks.md 卡片）：`packages/media-probe/`（新建 6 文件）、worker（`lib/parsers/` 删除 + level1-probe/level2-render import + types.ts re-export + package.json/tsconfig）、api（SourceProbeService + video_sources queries + tsconfig）、server-next（lib/sources api.ts/types.ts + SourceLinesExpand/LinesPanel toast partial 分桶）、根 package.json workspaces + vitest alias、测试迁 `tests/unit/packages/media-probe/`。
    - 依赖：Phase 1 主线（1–5）完成后启动。**前置强制**：spawn Opus 子代理裁决包导出面（共享组件 API 契约，CLAUDE.md 模型路由）。建议模型：sonnet（+Opus 子代理）。
    - 门禁：独立验收 typecheck / lint / worker 测试 / API service 测试 + 双端替换回归（方案 §3 P1-3）。
+   - **完成备注**：① 包导出面 = **arch-reviewer (claude-opus-4-8) 裁决 A2**：解析层（parseM3u8/parseMp4Moov/parseMpd 零改动迁入）+ 判定层（evaluateHls/Mp4/Mpd + heightToQuality 从 level2-render 抽出）+ 类型契约（MediaProbeStatus 三态/QualityDetected/MediaProbeVerdict 包自带，零包间依赖）；IO（fetch/timeout/Range/UA）留两端编排；`lib/parsers/` 物理删除不留薄壳；worker types.ts QualityDetected 改 re-export 消副本。裁决另抓 2 处主循环盲区：**level1-probe.ts:5 范围补漏**（parseM3u8 第二消费方，漏改则删目录即编译红）+ **api 超时禁复用 worker 30s**（inline 端点 5 并发分批最坏 ⌈N/5⌉×30s → 独立 RENDER_CHECK_TIMEOUT_MS=8000）。② api 试播升级（D1/D2 消除）：HEAD+Content-Type → GET manifest + 包判定，三态写 render_status + 质量字段（UPDATE 与 worker updateSourceRender CASE 防御语义逐条对齐：width/height/quality 无条件覆盖，quality_source/detected_at 仅解析出尺寸时写）；契约 BREAKING 兼容扩展：newRenderStatus union +'partial'（Single/BatchItem）+ batch summary +partial 计数 + insertHealthEvent 落 errorDetail——**ADR-158 D-N 偏离登记**：试播协议从二值升三态（原 I3 已知限制按设计消除，AMENDMENT 候补）。③ 前端同步：lib/sources api.ts 双 union + types.ts SourceActionBatchSummary `partial?` + **toast partial 独立分桶 2 处**（SourceLinesExpand/moderation LinesPanel——范围增补，正确性 #1：原分支 partial>0 且无 dead/failed 时误报「全部正常」）；展示层 lines-panel toDisplayState 已支持 partial 零改动。④ **已知限制登记**：partial 集成路径暂不可达——parseM3u8 对 #EXT-X-STREAM-INF 无条件 push variant → isMaster ⇒ variants 非空（worker 既有事实非本卡引入）；三态语义由包测试直接构造 parsed 锁定，未来 parser 增强（过滤无 URI variant）后自然可达。⑤ **Codex stop-time review 拦截（本卡第 1 处，序列累计第 5 处）**：「MP4 inline render check can buffer full videos」——renderCheckManifest 用 `res.arrayBuffer()`/`res.text()` 全量读响应体，服务器忽略 Range 返回 200 全量（或 URL 指向大文件）时整个视频缓冲进内存，inline 端点 5 并发下 OOM；worker checkMp4/checkHls/checkDash 同款存量缺陷（本卡前即存在）。修复 = 双端 `readBodyLimited`（流式读满上限即 cancel；mp4 64KB / manifest 2MB）——IO 编排层依 A2 裁决不进包，api/worker 双副本 + 双向同步注释（ADR-107 §4 范式）；守卫用例：mock 200 无限流，全量读取实现会挂死至超时。随后 SourceProbeService 428→525 行超 500 红线（本卡引入新逻辑阶段非存量豁免）→ 拆 `apps/api/src/lib/render-check-manifest.ts`（renderCheckManifest + readBodyLimited，纯探测 IO 不碰 DB，Service 430 行回红线内；行为等价搬移，单测 7 用例直接覆盖该路径故 e2e 不加跑第四轮）。⑥ **新发现登记**：renderCheckAll toast 同构 2 处（达 3 处时强制提取共享）；readBodyLimited 双副本（第三消费方出现时再裁决入包）。沉淀自答：本卡即沉淀任务（解析判定 → packages 共享层）。门禁：typecheck/lint EXIT=0 / 包测试 28（含迁移 10 + evaluate 18）/ audit 测试 13（含 UPDATE 质量字段断言 + 无限流截断守卫）/ test:changed 自动升全量终轮 505 文件 7081 passed（中间轮 ImageHealthClient 单例与 e2e dev server 并发抖动，单独复跑 18/18 过，与本卡无关）/ verify:adr-contracts ✅ 234 端点对齐 / e2e:admin 三轮 exit 0（首轮 69 passed+4 flaky 已知抖动域 / toast 修复后复跑 ✅ / readBodyLimited 修复后 70 passed+1 flaky ✅）。执行模型: claude-fable-5（建议 sonnet，用户会话人工覆盖持续推进授权）；子代理: arch-reviewer (claude-opus-4-8)。
 
 ### 任务列表（Phase 2 — 反馈闭环；启动前置：Phase 1 收口）
 

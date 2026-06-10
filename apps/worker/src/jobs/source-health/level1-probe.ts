@@ -2,7 +2,7 @@ import type { Pool } from 'pg'
 import type pino from 'pino'
 import { config } from '../../config'
 import { shouldSkipSite, recordFailure, recordSuccess } from '../../lib/circuit-breaker'
-import { parseM3u8 } from '../../lib/parsers'
+import { parseM3u8 } from '@resovo/media-probe'
 import { emitMetric } from '../../observability/metrics'
 import type { VideoSource, ProbeStatus } from '../../types'
 

@@ -12,7 +12,8 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "paths": {
-      "@resovo/logger": ["../../packages/logger/src/index.ts"]
+      "@resovo/logger": ["../../packages/logger/src/index.ts"],
+      "@resovo/media-probe": ["../../packages/media-probe/src/index.ts"]
     }
   },
   "include": ["src/**/*.ts"],
