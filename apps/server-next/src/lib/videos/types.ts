@@ -35,6 +35,8 @@ export interface VideoAdminRow {
   douban_status?: DoubanStatus
   meta_score?: number
   source_check_status?: string
+  /** SRCHEALTH-P1-1-B（B1）：视频级试播聚合（listAdminVideos 查询时聚合，语义同构 source_check_status 四态） */
+  render_check_status?: string
   poster_status?: string | null
   backdrop_status?: string | null
   // ADR-170 C-3：富集摘要派生对象（admin DTO 专属，前端 EnrichmentBadge 消费）
@@ -89,9 +91,10 @@ export interface VideoListFilter {
   episodeMissing?: boolean
   metaIncomplete?: boolean
   pendingReview?: boolean
-  /** AMD2-PATCH-2（2026-05-24）+ CHG-VSR-2（+episode_count）：同步后端 SORT_FIELDS */
+  /** AMD2-PATCH-2（2026-05-24）+ CHG-VSR-2（+episode_count）+ SRCHEALTH-P1-1-B（+探测/试播聚合）：同步后端 SORT_FIELDS */
   sortField?: 'title' | 'type' | 'year' | 'created_at' | 'updated_at'
     | 'source_health' | 'visibility' | 'review_status' | 'douban_status' | 'meta_score' | 'episode_count'
+    | 'source_check_status' | 'render_check_status'
   sortDir?: 'asc' | 'desc'
   page?: number
   limit?: number

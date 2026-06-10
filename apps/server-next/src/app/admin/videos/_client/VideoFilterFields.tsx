@@ -79,6 +79,8 @@ function getTextValue(filters: ReadonlyMap<string, FilterValue>, key: string): s
 const VIDEO_SORT_FIELD_WHITELIST = [
   'created_at', 'updated_at', 'title', 'year', 'type',
   'source_health', 'visibility', 'review_status', 'douban_status', 'meta_score', 'episode_count',
+  // SRCHEALTH-P1-1-B（B1）：探测/试播聚合排序，同步后端 SORT_FIELDS（SRCHEALTH-P1-1-A）
+  'source_check_status', 'render_check_status',
 ] as const
 type VideoSortField = (typeof VIDEO_SORT_FIELD_WHITELIST)[number]
 function isVideoSortField(s: string | undefined): s is VideoSortField {
@@ -94,6 +96,8 @@ const COMPOSITE_SORT_MAP: Readonly<Record<string, VideoSortField>> = {
   episodes: 'episode_count',
   meta: 'meta_score',
   status: 'review_status',
+  // SRCHEALTH-P1-1-B：探测/播放双信号复合列，排序取探测维度主信号
+  probe: 'source_check_status',
 }
 
 export function buildVideoFilter(

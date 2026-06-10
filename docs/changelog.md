@@ -3786,3 +3786,22 @@
   - **videos.ts 503→516 行**（存量超 500 红线）：本卡为既有函数内最小增量非新概念；文件拆分登记为候选独立重构卡（P1 收口复盘一并评估）。
   - 前端消费（VideoColumns 探测列接真数据 + 列 id→sortField 映射）在 SRCHEALTH-P1-1-B。
   - 门禁：typecheck/lint EXIT=0；admin-video-list 4/4；test:changed 978 passed；e2e:admin 82/82（zod 修复后复跑）。
+
+## [SRCHEALTH-P1-1-B] VideoColumns 探测列接真数据（B1 前端）
+- **完成时间**：2026-06-10
+- **记录时间**：2026-06-10 13:51
+- **执行模型**：claude-fable-5（建议 sonnet，用户会话人工覆盖——「批准开始 v2 拆卡准备开发」持续推进授权）
+- **子代理**：无（Codex stop-time review 为 hook 自动触发，非 Task spawn）
+- **修改文件**：
+  - `apps/server-next/src/app/admin/videos/_client/VideoColumns.tsx` — probe 占位列接真数据（`checkStatusToSignal` 四态→DualSignal 五态映射，缺失→unknown）+ `enableSorting: true`；列保持 §2.3 默认隐藏
+  - `apps/server-next/src/app/admin/videos/_client/VideoFilterFields.tsx` — 排序白名单 +`source_check_status`/`render_check_status`；COMPOSITE_SORT_MAP +`probe→source_check_status`（双信号列排序取探测主信号）
+  - `apps/server-next/src/lib/videos/types.ts` — 行类型 +`render_check_status?`；`VideoListFilter.sortField` union +2（diagnostics 拦截的漏同步）
+  - `apps/server-next/src/lib/videos/columns.ts` — descriptors probe +`enableSorting: true`（**Codex stop-time review 拦截**：与 buildVideoColumns 不一致致排序指示符漂移）
+  - `tests/unit/components/server-next/admin/videos/VideoColumns.test.tsx` — 新增 5 用例（四态映射 / 缺失 unknown / partial+pending / 排序链 / descriptors 对齐防漂移守卫）
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - **B1 收口 = 用户报「探测/试播状态不更新」三根因 B1/B2/B3 全部修复**（B3=P1-4 / B2=P1-2 / B1=P1-1-A+B）。
+  - 排序白名单现有 4 处需同步（route zod SORT_FIELDS / queries SORT_FIELD_WHITELIST / 前端 VIDEO_SORT_FIELD_WHITELIST / VideoListFilter.sortField union）——本卡 2 次被工具拦截均为漏同步，链路收敛为单一真源是候选改进项。
+  - `lib/videos/columns.ts` 的 `VIDEO_SORT_FIELDS` 为零消费方死导出（候选清理，范围外不动）。
+  - 门禁：typecheck/lint EXIT=0；VideoColumns 31/31；test:changed 73 passed；e2e:admin 82/82（descriptors 修复后复跑）。

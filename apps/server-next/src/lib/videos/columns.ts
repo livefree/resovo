@@ -17,7 +17,8 @@ export const VIDEO_COLUMN_DESCRIPTORS: readonly ColumnDescriptor[] = [
   { id: 'actions',        header: '操作',          defaultVisible: true  },
   // ── 可选列（§2.3 职责回归降级，默认隐藏）──
   { id: 'source_health',  header: '源活跃',         defaultVisible: false, enableSorting: true },
-  { id: 'probe',          header: '探测/播放',      defaultVisible: false },
+  // SRCHEALTH-P1-1-B：probe 接真数据后恢复排序（与 buildVideoColumns enableSorting 逐列对齐）
+  { id: 'probe',          header: '探测/播放',      defaultVisible: false, enableSorting: true },
   { id: 'image_health',   header: '图片',          defaultVisible: false },
   // ── 默认隐藏原子可筛选列（§2.6②；filter 挂载留 CHG-VSR-4-B）──
   { id: 'year',           header: '年份',          defaultVisible: false },

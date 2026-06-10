@@ -1839,9 +1839,9 @@
 
 ## [SEQ-20260610-02] 视频/线路/站点健康度与反馈闭环（source-health v2 方案落地）
 
-- **状态**：🔄 执行中（3/16 卡完成：P1-4 ✅ P1-2 ✅ P1-1-A ✅；下一卡 P1-1-B）
+- **状态**：🔄 执行中（4/16 卡完成：P1-4 ✅ P1-2 ✅ P1-1-A ✅ P1-1-B ✅——B1/B2/B3 三根因全修复；Phase 1 剩 P1-5）
 - **创建时间**：2026-06-10 12:53
-- **最后更新时间**：2026-06-10 13:33
+- **最后更新时间**：2026-06-10 13:50
 - **目标**：落地 `docs/designs/source-health-feedback-loop-plan_20260610.md` v2（两轮独立审核有条件通过，必修全吸收，commit 88893812）：修复「全部探测/试播后状态不更新」三处可见断点（B1/B2/B3）→ 打通反馈闭环（F1–F4）→ 评分进化 + 站点/主机桥接（D3/D4）。
 - **范围**：apps/api（service/queries/routes/lib）+ apps/worker（jobs/lib）+ apps/server-next（sources/videos 模块 UI）+ apps/web-next（PlayerShell）+ packages（media-probe 新包，P1-3）。**方案 §3 为各卡内容真源，§4 为门禁真源**；卡面只记验收口径与文件范围。
 - **依赖**：无 BLOCKER；方案 v2 已批准（用户 2026-06-10）。
@@ -1868,11 +1868,12 @@
    - 文件范围：`apps/api/src/db/queries/videos.ts`、`apps/api/src/routes/admin/videos.ts`（加性扩展，无新 route，verify:endpoint-adr 不触发）。
    - 依赖：P1-2 ✅。建议模型：sonnet。
    - **完成备注**：① `listAdminVideos` SELECT 增 `render_check_status` 聚合子查询（CASE 语义与 computeCheckStatus 同构：all pending→pending〔含空集，与 probe 字段 DB 默认对称〕/all dead→all_dead/all ok→ok/else partial；输入口径 is_active+未删除与 worker 一致）；probe 维度 `v.source_check_status` 已在 VIDEO_FULL_SELECT 直通无需新增。② 排序：queries SORT_FIELD_WHITELIST + route zod SORT_FIELDS 双白名单同步加 `source_check_status`（列直通）/`render_check_status`（SELECT alias，同 source_health 先例）。**Codex stop-time review 拦截 1 处**：初版漏改 route zod SORT_FIELDS → 新 sortField 422 被拒，已修复并复跑全部门禁。**登记**：videos.ts 503→516 行（存量超 500 红线；本卡为既有函数内最小增量非新概念，拆分留独立重构卡）。门禁：typecheck/lint EXIT=0 / admin-video-list 4/4（新增 1 用例断言聚合 SQL + 双排序路径）/ test:changed 978 passed / e2e:admin 82/82（zod 修复后复跑）。执行模型: claude-fable-5（建议 sonnet，用户会话人工覆盖持续推进授权）；子代理: 无（Codex stop-time review 为 hook 自动触发）。
-4. **SRCHEALTH-P1-1-B** — VideoColumns 探测列接真数据（B1 前端）（状态：⬜ 待开始）
-   - 创建时间：2026-06-10 12:53
+4. **SRCHEALTH-P1-1-B** — VideoColumns 探测列接真数据（B1 前端）（状态：✅ 已完成 2026-06-10 13:50）
+   - 创建时间：2026-06-10 12:53 ｜ 实际开始：2026-06-10 13:35 ｜ 完成时间：2026-06-10 13:50
    - 验收口径：`/admin/videos`「探测/播放」列展示真实聚合双信号（不再硬编码 unknown），排序可用。
-   - 文件范围：`apps/server-next/src/app/admin/videos/_client/VideoColumns.tsx`（+ `src/lib/videos/types.ts` 行类型加字段）。
-   - 依赖：SRCHEALTH-P1-1-A。建议模型：sonnet。
+   - 文件范围（开工/review 修正后）：`VideoColumns.tsx`、`VideoFilterFields.tsx`、`lib/videos/types.ts`、`lib/videos/columns.ts` + 单测。
+   - 依赖：SRCHEALTH-P1-1-A ✅。建议模型：sonnet。
+   - **完成备注**：① probe 列占位 cell → `checkStatusToSignal` 四态映射（pending/ok/partial/all_dead → DualSignal 五态，缺失→unknown）双字段真数据 + `enableSorting: true`。② 排序链 4 处同步：VideoFilterFields 白名单 +2 / COMPOSITE_SORT_MAP `probe→source_check_status`（双信号列排序取探测主信号）/ `VideoListFilter.sortField` union +2（**diagnostics 拦截**：初版漏同步致类型错误）/ columns.ts descriptors probe `enableSorting: true`（**Codex stop-time review 拦截**：descriptors 与 buildVideoColumns 不一致致排序指示符状态漂移）。③ 行类型 +`render_check_status?`。**登记**：columns.ts `VIDEO_SORT_FIELDS` 为零消费方死导出（候选清理项，范围外不动）。**B1 收口 = 用户报「探测/试播状态不更新」三根因 B1/B2/B3 全部修复**。门禁：typecheck/lint EXIT=0 / VideoColumns 31/31（新增 5 用例含 descriptors 对齐防漂移守卫）/ test:changed 73 passed / e2e:admin 82/82（descriptors 修复后复跑）。执行模型: claude-fable-5（建议 sonnet，用户会话人工覆盖持续推进授权）；子代理: 无（Codex stop-time review 为 hook 自动触发）。
 5. **SRCHEALTH-P1-5** — feedback recheck 定向化（F2）（状态：⬜ 待开始）
    - 创建时间：2026-06-10 12:53
    - 验收口径：feedback recheck 对目标 source 先 level1 再 level2 定向重测（`runLevel2Render` 增可选 `sourceIds`），probe=dead 的失败源不再被静默标 processed。

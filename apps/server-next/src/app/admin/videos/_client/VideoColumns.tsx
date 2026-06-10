@@ -23,12 +23,25 @@ import {
   Pill, VisChip, Thumb, DualSignal, EnrichmentBadgeCluster, CountryName,
   type TableColumn,
 } from '@resovo/admin-ui'
-import { VIDEO_STATUSES, DOUBAN_STATUSES, BANGUMI_STATUSES } from '@resovo/types'
+import { VIDEO_STATUSES, DOUBAN_STATUSES, BANGUMI_STATUSES, type DualSignalDisplayState } from '@resovo/types'
 import type {
   VideoAdminRow, VideoType, VideoStatus, VisibilityStatus, DoubanStatus,
 } from '@/lib/videos'
 import type { TabKey } from './_videoEdit/types'
 import { VideoRowActions } from './VideoRowActions'
+
+// ── 探测/试播聚合 → DualSignal 显示态（SRCHEALTH-P1-1-B / B1）──────
+// source_check_status / render_check_status 四态（pending/ok/partial/all_dead）映射显示五态；
+// 字段缺失（旧缓存行 / 无 active 源 NULL）→ unknown
+function checkStatusToSignal(s: string | undefined | null): DualSignalDisplayState {
+  switch (s) {
+    case 'ok':       return 'ok'
+    case 'partial':  return 'partial'
+    case 'all_dead': return 'dead'
+    case 'pending':  return 'pending'
+    default:         return 'unknown'
+  }
+}
 
 // ── 中文标签映射 ──────────────────────────────────────────────────
 
@@ -359,12 +372,19 @@ export function buildVideoColumns(
         )
       },
     },
-    // probe 探测/播放：§2.3 占位（后端字段补齐前排序禁用 / STATS-EXTEND-VIDEOS follow-up）
+    // probe 探测/播放：SRCHEALTH-P1-1-B（B1）接真数据——probe=source_check_status / render=render_check_status
+    // （listAdminVideos 聚合，SRCHEALTH-P1-1-A）；排序经 COMPOSITE_SORT_MAP probe→source_check_status
     {
-      id: 'probe', header: '探测/播放', accessor: () => 'probe-render',
-      width: 110, minWidth: 100, enableResizing: true, enableSorting: false, defaultVisible: false,
+      id: 'probe', header: '探测/播放',
+      accessor: (r) => `${r.source_check_status ?? '-'}/${r.render_check_status ?? '-'}`,
+      width: 110, minWidth: 100, enableResizing: true, enableSorting: true, defaultVisible: false,
       filterable: false,
-      cell: () => <DualSignal probe="unknown" render="unknown" />,
+      cell: ({ row }) => (
+        <DualSignal
+          probe={checkStatusToSignal(row.source_check_status)}
+          render={checkStatusToSignal(row.render_check_status)}
+        />
+      ),
     },
     // image_health 图片：§2.3 P0 复合派生（poster + backdrop），无对应复合 SQL 排序字段 → 禁排序
     {

@@ -15,6 +15,7 @@ import type { ReactNode } from 'react'
 import { buildVideoColumns } from '../../../../../../apps/server-next/src/app/admin/videos/_client/VideoColumns'
 import { buildVideoFilter } from '../../../../../../apps/server-next/src/app/admin/videos/_client/VideoFilterFields'
 import type { VideoAdminRow } from '../../../../../../apps/server-next/src/lib/videos'
+import { VIDEO_COLUMN_DESCRIPTORS } from '../../../../../../apps/server-next/src/lib/videos/columns'
 import type { TableColumn, TableQuerySnapshot } from '../../../../../../packages/admin-ui/src/components/data-table/types'
 
 // ── test helpers ──────────────────────────────────────────────────
@@ -249,5 +250,48 @@ describe('buildVideoFilter — 复合列排序映射', () => {
   it('非白名单 sort.field → undefined（守卫）', () => {
     expect(buildVideoFilter(makeSnapshot('bogus')).sortField).toBeUndefined()
     expect(buildVideoFilter(makeSnapshot(undefined)).sortField).toBeUndefined()
+  })
+})
+
+// ── 7. probe 探测/播放列接真数据（SRCHEALTH-P1-1-B / B1）──────────
+
+describe('probe 列 — 探测/播放双信号接真数据', () => {
+  it('四态映射：source/render_check_status → DualSignal data-state（all_dead→dead）', () => {
+    const { container } = render(
+      <>{renderCell('probe', makeRow({ source_check_status: 'ok', render_check_status: 'all_dead' }))}</>,
+    )
+    expect(container.querySelector('[data-dual-signal-row="probe"]')?.getAttribute('data-state')).toBe('ok')
+    expect(container.querySelector('[data-dual-signal-row="render"]')?.getAttribute('data-state')).toBe('dead')
+    cleanup()
+  })
+
+  it('字段缺失（旧行 / 无 active 源 NULL）→ unknown，不再硬编码占位', () => {
+    const { container } = render(
+      <>{renderCell('probe', makeRow({ source_check_status: undefined, render_check_status: undefined }))}</>,
+    )
+    expect(container.querySelector('[data-dual-signal-row="probe"]')?.getAttribute('data-state')).toBe('unknown')
+    expect(container.querySelector('[data-dual-signal-row="render"]')?.getAttribute('data-state')).toBe('unknown')
+    cleanup()
+  })
+
+  it('partial/pending 直通映射', () => {
+    const { container } = render(
+      <>{renderCell('probe', makeRow({ source_check_status: 'partial', render_check_status: 'pending' }))}</>,
+    )
+    expect(container.querySelector('[data-dual-signal-row="probe"]')?.getAttribute('data-state')).toBe('partial')
+    expect(container.querySelector('[data-dual-signal-row="render"]')?.getAttribute('data-state')).toBe('pending')
+    cleanup()
+  })
+
+  it('排序恢复：enableSorting=true + 复合列映射 probe→source_check_status + render_check_status 直通白名单', () => {
+    expect(colById('probe').enableSorting).toBe(true)
+    expect(buildVideoFilter(makeSnapshot('probe')).sortField).toBe('source_check_status')
+    expect(buildVideoFilter(makeSnapshot('render_check_status')).sortField).toBe('render_check_status')
+  })
+
+  it('descriptors 与 buildVideoColumns enableSorting 逐列对齐（probe 列防漂移，Codex review 拦截项）', () => {
+    const descriptor = VIDEO_COLUMN_DESCRIPTORS.find((d) => d.id === 'probe')
+    expect(descriptor?.enableSorting).toBe(true)
+    expect(descriptor?.enableSorting).toBe(colById('probe').enableSorting)
   })
 })
