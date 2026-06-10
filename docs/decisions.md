@@ -21880,7 +21880,16 @@ ADR-192 锁了 notifications schema 三个生命周期字段，但**只锁字段
 
 | # | 方法 | 路径 | 用途 | Request | Response | 错误码 |
 | --- | --- | --- | --- | --- | --- | --- |
-| 1 | GET | `/admin/notifications/stream` | 未读计数 SSE 实时推送（替代 60s 轮询，admin+moderator） | 无 body；Bearer header（fetch-stream 携带，非 EventSource） | `text/event-stream` 帧（非 JSON 信封）：建连即推当前未读 `event: unread` + `data: {"count":N}`；Redis `notifications:changed` 信号触发推 `unread`；每 25s `: ping` 心跳 keep-alive | 401 / 403 |
+| 1 | GET | `/admin/notifications/stream` | 未读计数 SSE 实时推送（替代 60s 轮询，admin+moderator） | 无 body；Bearer header（fetch-stream 携带，非 EventSource） | `text/event-stream` 帧（非 JSON 信封）：建连即推当前未读 `event: unread` + `data: {"count":N}`；Redis `notifications:changed` 信号触发推 `unread`；每 25s `: ping` 心跳 keep-alive | 401 / 403 / 503 |
+
+### 错误码
+
+503 降级码为 D-196-3「Redis 不可用/超限立即 5xx 优雅失败」的实施期具体化（NTLG-P2-c-B-1，D-196-DEV-4）——client 收 503 即走 D-196-6 60s 轮询 fallback：
+
+| HTTP | code | message | 触发 |
+| --- | --- | --- | --- |
+| 503 | STREAM_UNAVAILABLE | `'SSE 暂不可用，请降级轮询'` | Redis subscribe 连接未就绪（Redis-down，`isAvailable()=false`） |
+| 503 | STREAM_AT_CAPACITY | `'SSE 连接已满，请降级轮询'` | 单实例 SSE 连接达软上限（`isAtCapacity()`，拒新连接） |
 
 ### schema（v1 零变更）
 
@@ -21897,6 +21906,7 @@ v1 **无新表/列**：消息中心读扩展复用现有 `idx_notifications_crea
 - **D-196-DEV-1**：归档 v1 不做（用户裁定）。处置：accept——broadcast/role 共享行的「归档对谁」语义非平凡（per-user 归档表 vs 全局 archived_at 列 vs 视图 only 三选一各有取舍），v1 聚焦架构 novel（SSE）+ 高价值（历史/检索/实时）；归档延后独立 follow-up 卡，届时定语义 + schema。
 - **D-196-DEV-2**：定向 scope 逐行 reads 写路径仍随「定向 scope 实际启用」激活（继承 D-192-DEV-1/4 + D-195-DEV-2）。处置：accept——若 P2-c v1 仍全 broadcast/role-cursor 则无定向 emit 消费方，提前实装 reads 写是无消费方半套机制（YAGNI）；本 ADR 锁解除触发条件。
 - **D-196-DEV-3**：pub/sub fire-and-forget 不持久化（丢信号靠轮询 fallback 最终一致）。处置：accept——未读计数非关键强一致，60s 轮询兜底足够；引入持久队列（Streams/outbox）是过度工程。
+- **D-196-DEV-4**（NTLG-P2-c-B-1 实施期补登）：D-196-3「Redis-down/超限 5xx 优雅失败」具体化为 503 `STREAM_UNAVAILABLE`（Redis subscribe 未就绪）/ `STREAM_AT_CAPACITY`（连接软上限，默认 500）两码（见 §错误码 + §端点契约错误码列已补 503）。处置：accept——属决策体已锚定的「5xx 优雅失败」实施落点，非新增决策；client 收 503 即走 D-196-6 轮询 fallback，与 §端点契约 401/403 同表声明保契约完整。
 
 ### 评审
 

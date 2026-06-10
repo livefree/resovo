@@ -5,9 +5,18 @@
  * 覆盖：emit 入参映射 insertNotification / scope 默认 broadcast / 显式 scope 透传 /
  *       payload JSON 序列化 / 返回 void 同步不抛 / insertNotification reject 被 .catch 吞错（fire-and-forget）
  */
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type { Pool } from 'pg'
+
+// publish 侧用主 redis（lib/redis import 校验 REDIS_URL）→ mock pubsub 隔离 redis + 断言 publish 接线
+vi.mock('@/api/lib/notification-pubsub', () => ({
+  publishNotificationChanged: vi.fn(),
+}))
+
 import { NotificationEmitter } from '@/api/services/NotificationEmitter'
+import { publishNotificationChanged } from '@/api/lib/notification-pubsub'
+
+const mockedPublish = vi.mocked(publishNotificationChanged)
 
 // insertNotification SQL VALUES 参数索引（db/queries/notifications.ts）
 const P = {
@@ -96,5 +105,31 @@ describe('NotificationEmitter.emit — fire-and-forget (ADR-193 D-193-2)', () =>
     await flush()
     const params = queryMock.mock.calls[0]![1] as unknown[]
     expect(params[P.expiresAt]).toBe(explicit)
+  })
+})
+
+describe('NotificationEmitter.emit — SSE publish 接线 (ADR-196 D-196-2 / NTLG-P2-c-B-1)', () => {
+  beforeEach(() => { mockedPublish.mockReset() })
+
+  it('写库成功 → publishNotificationChanged(scope=broadcast 默认)', async () => {
+    const queryMock = vi.fn().mockResolvedValue({ rows: [{ id: '1' }] })
+    makeEmitter(queryMock).emit({ type: 'x', level: 'info', title: 'T', sourceKind: 'system' })
+    await flush()
+    expect(mockedPublish).toHaveBeenCalledTimes(1)
+    expect(mockedPublish).toHaveBeenCalledWith('broadcast')
+  })
+
+  it('写库成功 → publish 用显式 scope（与入库 scope 同源）', async () => {
+    const queryMock = vi.fn().mockResolvedValue({ rows: [{ id: '2' }] })
+    makeEmitter(queryMock).emit({ type: 'x', level: 'warn', title: 'T', sourceKind: 'system', scope: 'role:admin' })
+    await flush()
+    expect(mockedPublish).toHaveBeenCalledWith('role:admin')
+  })
+
+  it('写库失败 → 不 publish（.then 链不执行，丢信号靠轮询 fallback）', async () => {
+    const queryMock = vi.fn().mockRejectedValue(new Error('DB down'))
+    makeEmitter(queryMock).emit({ type: 'x', level: 'danger', title: 'T', sourceKind: 'system' })
+    await flush()
+    expect(mockedPublish).not.toHaveBeenCalled()
   })
 })

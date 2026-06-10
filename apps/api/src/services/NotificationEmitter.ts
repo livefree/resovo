@@ -15,6 +15,7 @@ import type { Pool } from 'pg'
 import { baseLogger } from '@/api/lib/logger'
 import { insertNotification, type NotificationLevel } from '@/api/db/queries/notifications'
 import { resolveNotificationExpiresAt } from '@/api/services/notification-ttl-policy'
+import { publishNotificationChanged } from '@/api/lib/notification-pubsub'
 
 /**
  * emit 入参（ADR-193 D-193-2 契约，11 字段一一对应 notifications schema 列）。
@@ -58,6 +59,7 @@ export class NotificationEmitter {
    * 与 AuditLogService.write(): void 同构——领域服务双写时 audit / notification 失败互不影响、不阻断主操作。
    */
   emit(input: EmitNotificationInput): void {
+    const scope = input.scope ?? DEFAULT_SCOPE
     insertNotification(this.db, {
       type: input.type,
       level: input.level,
@@ -67,12 +69,18 @@ export class NotificationEmitter {
       payload: input.payload,
       href: input.href,
       sourceRef: input.sourceRef,
-      scope: input.scope ?? DEFAULT_SCOPE,
+      scope,
       dedupKey: input.dedupKey,
       // 显式传入优先；省略 → 按 type TTL 策略注入 expires_at（D-195-1，激活 P2-d-A purge）
       expiresAt: input.expiresAt ?? resolveNotificationExpiresAt(input.type),
-    }).catch((err: unknown) => {
-      baseLogger.warn({ err, type: input.type }, '[NotificationEmitter] notification emit failed')
     })
+      .then(() => {
+        // 写库成功 → publish Redis 信号触发各实例 SSE fan-out 重算 unread（ADR-196 D-196-2，
+        // fire-and-forget 同构：失败仅 warn，丢信号由前端 60s 轮询 fallback 兜底 D-196-6）。
+        publishNotificationChanged(scope)
+      })
+      .catch((err: unknown) => {
+        baseLogger.warn({ err, type: input.type }, '[NotificationEmitter] notification emit failed')
+      })
   }
 }

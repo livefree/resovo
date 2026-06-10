@@ -12,6 +12,7 @@ import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { db } from '@/api/lib/postgres'
 import { NotificationService } from '@/api/services/NotificationService'
+import { NotificationStreamService } from '@/api/services/NotificationStreamService'
 
 const DEFAULT_WINDOW_DAYS = 7
 const DEFAULT_LIMIT = 50
@@ -46,6 +47,16 @@ function decodeCursor(s: string): { createdAt: string; id: string } | null {
 export async function adminNotificationRoutes(fastify: FastifyInstance) {
   const svc = new NotificationService(db)
   const auth = [fastify.authenticate, fastify.requireRole(['admin', 'moderator'])]
+
+  // ADR-196 D-196-3：SSE 未读推送连接编排（单实例共享 subscribe + 内存连接表 fan-out）。
+  // init 非阻塞、Redis-down 不抛（available=false → /stream 503 降级）；onClose 优雅关闭。
+  const streamService = new NotificationStreamService({
+    getUnreadCount: (userId, role) => svc.unreadCount(userId, role),
+  })
+  streamService.init()
+  fastify.addHook('onClose', async () => {
+    await streamService.shutdown()
+  })
 
   fastify.get('/admin/notifications', { preHandler: auth }, async (request, reply) => {
     const parsed = QuerySchema.safeParse(request.query)
@@ -116,5 +127,39 @@ export async function adminNotificationRoutes(fastify: FastifyInstance) {
   fastify.post('/admin/notifications/read', { preHandler: auth }, async (request, reply) => {
     const result = await svc.markAllRead(request.user!.userId)
     return reply.send({ data: result })
+  })
+
+  // ── GET /admin/notifications/stream（ADR-196 D-196-1/2/3，全平台首个 SSE）──────
+  // 未读计数实时推送（替 60s 轮询，admin+moderator）：建连即推当前未读 → Redis 信号触发推 unread
+  //   → 25s 心跳 keep-alive。客户端用 fetch-stream（携 Bearer，非 EventSource，D-196-1）。
+  // route 仅 auth + 建流 + 委托（连接编排全在 NotificationStreamService，守 Route→Service 分层）。
+  fastify.get('/admin/notifications/stream', { preHandler: auth }, async (request, reply) => {
+    // Redis-down 优雅降级 / 软上限 → 503（不挂半开连接，client 走 D-196-6 轮询 fallback）
+    if (!streamService.isAvailable()) {
+      return reply.code(503).send({
+        error: { code: 'STREAM_UNAVAILABLE', message: 'SSE 暂不可用，请降级轮询', status: 503 },
+      })
+    }
+    if (streamService.isAtCapacity()) {
+      return reply.code(503).send({
+        error: { code: 'STREAM_AT_CAPACITY', message: 'SSE 连接已满，请降级轮询', status: 503 },
+      })
+    }
+    // 接管 raw response（Fastify 不再管理生命周期）；建流后须靠 client 断连 / onClose 收尾
+    reply.hijack()
+    const raw = reply.raw
+    raw.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache, no-transform',
+      Connection: 'keep-alive',
+      'X-Accel-Buffering': 'no', // 禁反代缓冲（nginx），保 SSE 帧即时下推
+    })
+    const conn = streamService.register({
+      userId: request.user!.userId,
+      role: request.user!.role,
+      sink: { write: (chunk) => { raw.write(chunk) } },
+    })
+    // 客户端断连 → 注销连接防内存泄漏（黄线 3）
+    request.raw.on('close', () => { streamService.unregister(conn) })
   })
 }

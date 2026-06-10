@@ -3454,3 +3454,25 @@
 - **NTLG-P2-c-A 整卡收口**（-A-1 后端 list 扩展 + -A-2 前端消息中心页）。消息中心历史+检索端到端落地（cursor 分页 + q/level/readState 过滤）。
 - **注意事项**：**e2e:admin 推荐作 render 验证 follow-up**（server-next 组件项目不做 unit render 测、render 由 e2e 验；本会话因无消息中心 e2e spec + e2e 重起未跑，DataTable 集成已源码核实安全 + 加性 nav 低回归）。剩 **NTLG-P2-c-B**（SSE 实装，ADR-196 D-196-1/2/3 已锁）/ **-C**（归档 + 收口 P1-c-C 3 项）。date/type 过滤 + 行点击已读 留 refinement。
 - **执行模型**：claude-opus-4-8（主循环，人工 opus 覆盖 sonnet——「先做 A 然后做 B」+ AskUserQuestion 选定 cursor-stack 适配授权）；**子代理**：无（ADR-196 D-196-4 已锁，纯实施）。
+
+## [NTLG-P2-c-B-1] SSE 后端基建：/stream 路由 + NotificationStreamService + Redis pub/sub publish
+- **完成时间**：2026-06-09
+- **记录时间**：2026-06-09 22:42
+- **执行模型**：claude-opus-4-8（主循环，人工 opus 覆盖建议 sonnet——承接「继续推进 B」授权）
+- **子代理**：无（ADR-196 已 Accepted〔arch-reviewer claude-opus-4-8 CONDITIONAL PASS 闭环〕，本卡纯实施，无新 ADR/新共享组件 API 契约 → 无须 Opus 子代理）
+- **修改文件**：
+  - `apps/api/src/lib/notification-pubsub.ts`（新）— Redis pub/sub 信号封装：`NOTIFICATIONS_CHANGED_CHANNEL` 常量 + `publishNotificationChanged(scope)` fire-and-forget（用主 redis 连接 publish）+ `encode/decodeNotificationSignal` codec（非法载荷防御 → null）
+  - `apps/api/src/services/NotificationStreamService.ts`（新，ADR-196 分层项）— SSE 连接编排：内存连接注册表 `Map<scope,Set<conn>>` + 单实例共享 `redis.duplicate()` subscribe（非每连接 duplicate，黄线 3）+ onSignal 按 scope fan-out 重算 unread 推送 + 25s 单 timer 心跳（`.unref()`）+ `connectionCount` metric + `isAtCapacity` 软上限（默认 500）+ `isAvailable` Redis-down 降级 + init（try/catch 不阻塞 route 注册）/shutdown 生命周期；经 `StreamSink { write }` 抽象解耦 Fastify
+  - `apps/api/src/routes/admin/notifications.ts` — +`GET /admin/notifications/stream`（preHandler 复用 `['admin','moderator']`；不可用/超限 → 503 `STREAM_UNAVAILABLE`/`STREAM_AT_CAPACITY`；否则 `reply.hijack()` + writeHead `text/event-stream` + register + `req.raw.on('close')` unregister，route 仅 auth+建流+委托守分层）+ streamService init/onClose 编排
+  - `apps/api/src/services/NotificationEmitter.ts` — emit 写库成功后 `.then(() => publishNotificationChanged(scope))`（fire-and-forget 同构，scope 与入库同源）
+  - `tests/helpers/setup.ts` — +兜底 `REDIS_URL`（lib/redis import 校验存在性；emitter 现传递 import redis → 域服务测试需此；lazyConnect 不真连）
+  - `docs/decisions.md` — ADR-196 +§错误码 表（503 两码）+ §端点契约错误码列补 503 + D-196-DEV-4 偏离登记（503 降级码为 D-196-3「5xx 优雅失败」实施期具体化）
+  - 测试新增：`tests/unit/api/notification-pubsub.test.ts`（6，codec + publish fire-and-forget）、`tests/unit/api/notification-stream-service.test.ts`（15，init/available + register 初始推送 + broadcast/role/user scope fan-out + unregister + 软上限 + 心跳 + 写失败 unregister + Redis-down 降级 + shutdown）；`tests/unit/api/notification-emitter.test.ts`（+3，publish 接线：成功 publish〔默认/显式 scope〕+ 写失败不 publish）
+- **新增依赖**：无（ioredis 已存在；SSE 帧为纯文本，零新 npm 包）
+- **数据库变更**：无（ADR-196 v1 零 schema）
+- **注意事项**：
+  - 本卡 = NTLG-P2-c-B 拆 -B-1（后端 SSE 基建）/ -B-2（前端 fetch-stream + 60s 轮询 fallback）的后端半。**剩 -B-2**：server-next `fetch` + ReadableStream/TextDecoderStream 解析 SSE 帧 + 手动指数退避重连 + `admin-shell-notifications.ts` SSE 优先 + 轮询 fallback 双模式（D-196-6 不删轮询）。
+  - **SSE wire 契约**（`event: unread\ndata: {"count":N}\n\n` + `: ping\n\n`）由 ADR-196 D-196-3 锁定，B-2 据此解析。**SSE 载荷类型未上提 packages/types**（`{count:number}` 平凡 + 避 ADR-180 全量升级；wire 格式即契约，微偏离）。
+  - **fan-out 重算成本**：broadcast 信号触发每连接各重算 unreadCount（per-conn DB 查询）；v1 admin 规模（少量并发 + 低 emit 率）可接受；高并发再评估缓存/批量。
+  - **门禁**：typecheck/lint/verify:adr-contracts（endpoint-adr 232 路由 / 117 ADR 端点含 /stream；error-message 197→195 我 2 条 503 已清；mirror 2 对）EXIT=0；test:changed 全量升级（改 setup.ts 触 ADR-180）6981 中 6980 passed，1 失败为 admin-ui matrix UI flaky（隔离重跑 column-matrix-menu 40 + step-ep4-5 17 + CrawlerRunsView 33 全过，与本卡 redis/SSE 零关联）。**e2e:admin SSE 端到端验证留 -B-2**（前端接入后整体验）。
+  - **健壮性增益**：NotificationStreamService.init() try/catch → Redis 基建 boot 不可用时降级（available=false → /stream 503）而非崩 route 注册。
