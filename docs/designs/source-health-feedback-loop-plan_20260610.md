@@ -1,9 +1,9 @@
 # 视频 / 线路 / 站点三层健康度与反馈闭环优化方案
 
-**状态**：调研完成，方案待独立审核（arch-reviewer / Opus）
-**日期**：2026-06-10
+**状态**：v2 修订版（2026-06-10）——两轮独立审核（§7 / §8）均「有条件通过」，全部必修意见已吸收进 §3–§5（变更对照见 §9）；可按 §4 门禁拆卡执行
+**日期**：2026-06-10（v1 调研稿 + 同日 v2 审核修订）
 **触发背景**：用户报告「点击『全部探测』『全部试播』后状态没有及时更新」；同时要求调研探测分层现状、各层关联，并提出完善健康度 + 反馈闭环的方案，目标是减少前台「无法播放 / 频繁切线」现象。
-**调研方式**：主循环（claude-fable-5）静态代码走查，未运行服务；所有事实均带 `文件:行号` 证据，审核者可直接复核。
+**调研方式**：主循环（claude-fable-5）静态代码走查，未运行服务；所有事实均带 `文件:行号` 证据，审核者可直接复核（§8.1 已逐条核验 10/10 命中）。
 
 ---
 
@@ -83,30 +83,35 @@
 
 ### Phase 1 — 修可见断点（无 schema 变更，低风险）
 
+**交付顺序（§8 C6 裁定）**：P1-4(B3) → P1-2(B2) 首交付——`probeAllSources` 的 `setLines` 已让展开区内部即时更新，用户报告的「不更新」最可能对应 B2/B3 而非默认隐藏的 B1 列；P1-1 随后。
+
 | 项 | 内容 | 涉及文件 | 对应问题 |
 |---|---|---|---|
-| P1-1 | videos 列表 SQL 补 probe/render 聚合字段（复用 `source_check_status` + 新增 render 聚合表达式），`VideoColumns` 探测列接真数据、恢复排序 | `apps/api/src/db/queries/videos.*`、`routes/admin/videos.ts`、`VideoColumns.tsx` | B1 |
+| P1-1 | videos 列表 SQL 补 probe/render 聚合字段（复用 `source_check_status` + 新增 render 聚合表达式），`VideoColumns` 探测列接真数据、恢复排序。**单项横跨 SQL+route+UI 三层，按 CLAUDE.md 原子化判据强制拆 -A（API/SQL）/-B（UI）子卡**（§8 C6） | `apps/api/src/db/queries/videos.*`、`routes/admin/videos.ts`、`VideoColumns.tsx` | B1 |
 | P1-2 | 把 `computeCheckStatus` 提为共享纯函数（建议 `apps/api/src/lib/` 或随 P3-2 入 worker 可复用位置）；`SourceProbeService` 单源/batch 完成后**同步重算**该视频 `source_check_status` | `SourceProbeService.ts`、`aggregate-source-check-status.ts`（抽取） | B2（用户 bug 直接解药） |
-| P1-3 | 手动「试播」升级为 worker level2 同款 manifest 解析：把 m3u8/moov/mpd 解析提为共享 lib（注意 ADR-107 §4 worker 禁止 import apps/api——方向应为 api 侧新建或提至共享包，worker 保持自有副本或同源生成），结果支持 `partial` | `SourceProbeService.ts`、`apps/worker/src/lib/parsers.ts`（同步策略见 §5 开放问题 Q2） | D1、D2 |
 | P1-4 | sources 页探测完成后联动外层聚合行 refetch（`onSourceHealthChanged` 范式已有，CHG-358） | `SourceLinesExpand.tsx`、`SourcesClient` | B3 |
 | P1-5 | recheck 定向化：feedback recheck 先对目标 source 跑 level1（probe），`runLevel2Render` 增加可选 `sourceIds` 参数定向重测；消费多少标记多少 | `feedback-driven-recheck.ts`、`level2-render.ts` | F2 |
 
-### Phase 2 — 反馈闭环（1 个 migration）
+#### P1-3（从 Phase 1 移出 → 独立卡，§7.1-4 裁定）
+
+手动「试播」升级为 worker level2 同款 manifest 解析（m3u8/moov/mpd），结果支持 `partial`，消除 D1/D2。**不与 P1 其余项混做**：涉及跨 API / worker 共享解析器，触碰 ADR-107 §4 边界（worker 禁止 import apps/api，反向同样不可）。共享策略已按 Q2 改判收敛为**新建 `packages/media-probe`**（workspace 内部包非外部依赖；双侧 byte-identical 副本的漂移风险违背价值排序 #2）。执行前置：spawn Opus 子代理裁决包的导出面（解析器纯函数 + 类型契约），落地须独立验收 typecheck / lint / worker 测试 / API service 测试与双端替换回归。涉及：`SourceProbeService.ts`、`apps/worker/src/lib/parsers.ts` → `packages/media-probe`。
+
+### Phase 2 — 反馈闭环（2 个 migration：P2-2 字段 + P2-4 partial index）
 
 | 项 | 内容 | 涉及文件 | 对应问题 |
 |---|---|---|---|
 | P2-1 | 前台补 success 上报：首播成功（`handlePlaySuccess`）即报，per-sourceId 去抖 + 可采样（1/N 配置化）；复用既有 rate-limit | `PlayerShell.tsx` | F1 |
-| P2-2 | Migration：`video_sources` 增 `fb_success_count INT`、`fb_fail_count INT`、`last_feedback_at TIMESTAMPTZ`（滚动窗口语义由消费侧定义，写入侧只累计 + 定期衰减见 Q3）；feedback 写入累计 | migration + `feedback.ts` | F4 前置 |
-| P2-3 | 复活门槛对称化：dead→ok 复活要求窗口内 ≥2 个独立 ipHash 成功（redis 计数，与失败侧同模式） | `feedback.ts` | F3 |
-| P2-4 | 实装 `reprobeRoute`：占位 jobId 改为真实信号——按 (siteKey, sourceName) 批量写 `source_health_events` pending 队列行（复用 `processed_at IS NULL` 消费范式），worker 定向消费（接 P1-5 的定向参数） | `SourcesMatrixService.ts`、worker | §1 线路级假按钮 |
+| P2-2 | Migration（§7.1-2 + Q3 改判重设计）：`video_sources` 增 **EMA 衰减字段** `fb_score NUMERIC`（0–1 平滑成功率）、`fb_sample_weight NUMERIC`（有效样本权重）、`last_feedback_at TIMESTAMPTZ`。写入侧即时衰减：每次反馈先按距 `last_feedback_at` 时长对 `fb_score`/`fb_sample_weight` 施半衰（半衰期常量配置化），再并入本次观测——无 cron、无全表 UPDATE、近期质量主导。**统计语义落地并经影子验证（Q5）前，feedback 只触发 recheck，不进评分**。跨 3+ 消费方字段设计，执行前置 Opus 子代理 | migration + `feedback.ts` | F4 前置 |
+| P2-3 | 复活门槛对称化（§8 C3 修正 redis 原语）：dead→ok 复活要求窗口内 **≥2 个独立 ipHash** 成功——用 **SET 语义**（`SADD` + `SCARD` + TTL）统计独立客户端，**不得照搬失败侧 `INCR`**（那是同一 ipHash 计次，照搬会实现成"同一客户端成功 2 次即复活"）。同卡顺带：失败→recheck 触发（现 `INCR` 3 次/5min，`feedback.ts:56-62`）也迁移为独立 ipHash SET 计数，统一"信任需独立佐证"原则 | `feedback.ts` | F3 |
+| P2-4 | 实装 `reprobeRoute`（§7.1-3 收敛队列语义）：占位 jobId 改为真实信号——按 (siteKey, sourceName) 批量写 `source_health_events` 队列行，**新增 `origin='manual_route_reprobe'`**（不复用 `feedback_driven`，避免混淆真实用户反馈与运营操作）。配套四件：① 新增 partial index `WHERE processed_at IS NULL AND origin='manual_route_reprobe'`；② worker 拉取条件扩展为消费两种 origin（或拆独立定向 job，接 P1-5 的 `sourceIds` 参数）；③ processed 标记语义同现行（消费即 `processed_at=NOW()`，消费多少标多少）；④ audit 口径沿用 `sources.route_action`（afterJsonb 记真实 jobId + queuedCount） | `SourcesMatrixService.ts`、worker、migration（index） | §1 线路级假按钮 |
 
 ### Phase 3 — 评分进化 + 站点/主机桥接（设计审核重点）
 
 | 项 | 内容 | 对应问题 |
 |---|---|---|
-| P3-1 | **新鲜度衰减**：health 项按 `last_probed_at` 距今时长向中性值（0.345）指数回归；旧 ok 不再永久满分，同时自然驱动重探优先级（level1 已按 `last_probed_at ASC` 排队，互补） | D3 |
-| P3-2 | **反馈项进分**：`effective_score` 增第五因子。初始建议权重 health 0.40 / feedback 0.20 / quality 0.25 / latency 0.10 / priority 0.05；feedback 项 = 平滑成功率（Laplace：(succ+1)/(succ+fail+2)），样本 <3 取中性 0.5 | F4 |
-| P3-3 | **`host_health` 落库表**（hostname 维度 + hostname↔site_key 映射列）：熔断器读写从 worker 内存升级为 DB（或 redis）共享；某主机熔断时对该主机全部线路做**软降权**（排序后置，不标 dead），恢复探测通过后自动回升。影响半径从"6 小时逐个发现"压缩到"分钟级整体降权" | D4、§2.4 站点层盲点 |
+| P3-1 | **新鲜度衰减（双时钟，§8.3）**：health 的 probe 子项按 `last_probed_at`、render 子项按 `last_rendered_at` **分别**向中性值（0.345）指数回归——render 在 health 内权重 0.6，共用单时钟会低估高权重子项的陈旧度。旧 ok 不再永久满分，同时自然驱动重探优先级（level1 已按 `last_probed_at ASC` 排队，互补）。配套纯函数单测校准表（§4） | D3 |
+| P3-2 | **反馈项进分（§8 C4 动态权重）**：`effective_score` 增第五因子，feedback 项 = EMA 平滑成功率 `fb_score`（P2-2）。权重**按样本置信度动态缩放**：`w_fb = 0.20 × min(1, fb_sample_weight / N)`，未用部分回补 health——静态 0.20 在 F1 上报冷启动期（样本≈0 全取中性 0.5）会压缩分数区间、稀释 health/quality/latency 区分力，且此劣化是 ramp 窗口真实回归，灰度开关救不了。前置依赖：P2-2 落地 + 影子计算一周（Q5） | F4 |
+| P3-3 | **`host_health` 落库 + join key 补齐（§7.1-1）**：前置 migration 新增 `video_sources.source_hostname`（写路径维护：插入/换源时由 URL 解析写入；存量回填脚本；建索引；解析失败 NULL 容忍），杜绝评分查询 SQL 临时解析 URL 或 Service 逐行解析。`host_health` 表以 **hostname 为主键/唯一键**；hostname↔site_key 为多对多，`site_key` 仅作派生维度（关联经 video_sources 反查，不在 host_health 放单列 site_key）。存储双分工（Q4 改判）：redis/内存扛熔断热路径判定，PG 表存供评分 JOIN 的持久状态。某主机熔断时对该主机全部线路**软降权**（排序后置，不标 dead），恢复探测通过后自动回升。影响半径从"6 小时逐个发现"压缩到"分钟级整体降权" | D4、§2.4 站点层盲点 |
 | P3-4 | 播放端按分切线：`listSources` 响应已含 `effectiveScore`（CHG-352 R1），前台 fatal 切线从数组序环形扫描改为按分数优先 | 体验收口 |
 
 ### 不做什么（范围外）
@@ -120,21 +125,23 @@
 
 ## 4. 阶段门禁与回归点
 
-- 每阶段独立任务卡（范围 >5 项必拆 -A/-B 子卡；P2-2 migration 跨 3+ 消费方字段设计须先 spawn Opus 子代理，CLAUDE.md 模型路由强制项）。
-- P3-2 改 `route-scoring.ts` 权重 = 改前台线路顺序关键路径：必须补純函数单测校准表（对照现有 `max=1.00 / min=0.020 / 中性=0.345` 风格重算）+ PLAYER 域 e2e 回归（断点续播、线路切换不回归）。
-- `verify:adr-contracts` / `verify:endpoint-adr`：P2-4 若新增 admin route 需先起 ADR；feedback 端点扩展沿用 ADR-110 信封。
+- 任务卡原子化（两条规则都触发，§8 C6）：范围 >5 项必拆 -A/-B 子卡；**P1-1 单项跨 SQL+route+UI 三层独立触发拆卡**。Phase 1 首交付顺序 P1-4 → P1-2（见 §3）。
+- 强制 Opus 子代理节点（CLAUDE.md 模型路由）：P1-3 共享包 `packages/media-probe` 导出面裁决；P2-2 EMA 字段（跨 3+ 消费方 migration）设计。
+- P3-2 改 `route-scoring.ts` 权重 = 改前台线路顺序关键路径：必须补纯函数单测校准表（对照现有 `max=1.00 / min=0.020 / 中性=0.345` 风格重算，P3-1 双时钟衰减同要求）+ PLAYER 域 e2e 回归（断点续播、线路切换不回归）+ 影子计算一周后切换（Q5）。
+- `verify:adr-contracts` / `verify:endpoint-adr`：P2-4 若新增 admin route 需先起 ADR；feedback 端点扩展沿用 ADR-110 信封；`manual_route_reprobe` origin 入 types union（`SourceHealthEventOriginWorker` 同位扩展）。
+- 时序硬依赖链：P2-2（统计字段）→ 影子验证 → P3-2（进分）；P3-3 内部 `source_hostname` migration 先于 host_health 表。
 
 ---
 
-## 5. 留给审核者的开放问题
+## 5. 开放问题（v2 已全部收敛）
 
-| # | 问题 | 倾向 |
-|---|---|---|
-| Q1 | P1-2 同步聚合放 Service 内（每次 batch 后 1 条 UPDATE）还是复用 worker advisory-lock 路径？ | Service 内直算（手动操作低频，锁竞争可忽略；worker 侧保留现有路径不动） |
-| Q2 | P1-3 解析器共享策略：ADR-107 禁 worker import apps/api，反向（api import worker）同样不可。提共享包（如 `packages/` 新增）违反"不引入技术栈以外依赖"吗？ | 不违反（workspace 内部包非外部依赖），但包边界值得 Opus 裁决：单独 `packages/media-probe` vs 双侧 byte-identical 副本（auto-retire SQL 已有双侧同步先例） |
-| Q3 | P2-2 成功率计数的时间衰减：定期 cron 半衰（×0.5/周）vs 滚动窗口表？ | cron 半衰（单表无新增行，实现最薄） |
-| Q4 | P3-3 host_health 用 PG 表还是 redis hash？ | PG 表（需进评分查询 JOIN；redis 仅作熔断热路径缓存可选） |
-| Q5 | P3-2 权重调整幅度是否需要灰度（如 feature flag 双算法对照）？ | 建议 system_settings 开关 + 影子计算日志一周后切换 |
+| # | 问题 | v1 倾向 | **v2 裁决（§7/§8 综合）** |
+|---|---|---|---|
+| Q1 | P1-2 同步聚合放 Service 内还是复用 worker advisory-lock 路径？ | Service 内直算 | **维持**：Service 内直算（手动操作低频，锁竞争可忽略；worker 侧现有路径不动；两轮审核均未驳回） |
+| Q2 | P1-3 解析器共享策略：共享包 vs 双侧 byte-identical 副本？ | 包边界留 Opus 裁决 | **改判（§8.4）**：新建 `packages/media-probe`——workspace 内部包非外部依赖，价值排序 #2（边界与复用）优于双副本漂移；导出面细节仍由执行卡前置 Opus 裁决 |
+| Q3 | P2-2 成功率计数的时间衰减机制？ | cron 半衰（实现最薄） | **改判（§8.4）**：单个时间衰减浮点 **EMA**（写入即时衰减，无 cron、无全表 UPDATE）——v1 倾向以"实现最薄"为据倒置价值排序，改动收敛 #5 不应凌驾正确性 #1 |
+| Q4 | P3-3 host_health 用 PG 还是 redis？ | PG 表 | **改判（§8.4）**：**双存储分工**——redis/内存扛熔断热路径判定，PG 仅存供评分 JOIN 的持久状态；非二选一 |
+| Q5 | P3-2 权重调整是否需要灰度？ | system_settings 开关 + 影子计算 | **维持并强化**：影子计算一周为 P3-2 硬前置（§7.2）；另注意 C4 指出冷启动劣化是真实回归，动态权重（非灰度开关）才是根本解 |
 
 ---
 
@@ -155,3 +162,83 @@ apps/server-next/src/app/admin/sources/_client/SourceLinesExpand.tsx
 apps/web-next/src/components/player/PlayerShell.tsx
 packages/admin-ui/src/components/composite/lines-panel/{lines-panel,aggregate}.tsx|ts
 ```
+
+---
+
+## 7. 独立审核结论（2026-06-10）
+
+**结论**：方案方向成立，但当前版本为“有条件通过”。建议先修订以下 4 个点，再拆任务卡执行；不宜直接按当前 Phase 表开工。主要风险不在事实调研，而在数据模型、反馈统计语义和任务边界尚未收敛。
+
+### 7.1 必须修订的问题
+
+1. **P3-3 `host_health` 缺少可索引 join key**
+   - 当前 `video_sources` 只有 `source_url`，没有 `source_hostname` 字段或索引；若评分查询需要 JOIN `host_health`，实现时容易退化为 SQL 临时解析 URL，或只能在 Service 层逐行解析，影响性能与一致性。
+   - 修订建议：P3-3 明确新增 `video_sources.source_hostname`，包含存量回填、URL 写路径维护、索引与空值处理；`host_health` 以 hostname 为主键/唯一键。`site_key` 只能做派生维度，不能用单列表示 hostname 与 site_key 的多对多关系。
+
+2. **P2-2 / P3-2 feedback 计数模型不足以直接进评分**
+   - 当前方案只加累计 `fb_success_count` / `fb_fail_count` / `last_feedback_at`，随后将平滑成功率纳入 `effective_score`。这会把长期历史当成近期质量，也可能被单一客户端长期累积影响排序。
+   - 修订建议：先定义滚动窗口或衰减字段，再允许进评分。可选方案包括 `last_feedback_decay_at` + 半衰任务、按天/小时 bucket 表、或独立近期聚合表。统计语义落地前，feedback 应只触发 recheck，不直接参与排序。
+
+3. **P2-4 复用 `source_health_events` 队列语义不清**
+   - 现有 worker 只消费 `origin='feedback_driven' AND processed_at IS NULL`，索引也只覆盖该 origin。若线路级手动重探继续写 `feedback_driven`，会混淆真实用户反馈与运营操作；若新增 origin，当前 worker 不会消费。
+   - 修订建议：明确新增 `manual_route_reprobe` origin、partial index、worker 查询条件、processed 标记语义和 audit 口径；或独立建 recheck job 表，避免把事件表继续扩成多语义队列表。
+
+4. **P1-3 不应混在“无 schema 变更，低风险”的 Phase 1 内**
+   - 手动试播升级为 worker level2 同款解析，需要跨 API / worker 共享解析器。既有 ADR-107 约束 worker 不 import apps/api；反向 import worker 同样破坏边界。若抽 `packages/media-probe`，会涉及 workspace 包、导出、测试与双端替换，风险明显高于 P1 其他状态刷新修复。
+   - 修订建议：将 P1-3 单独拆卡，先裁决 `packages/media-probe` vs 双侧 byte-identical 副本。若抽共享包，必须独立验收 typecheck / lint / worker 测试 / API service 测试，不与 P1-1/P1-2/P1-4/P1-5 混做。
+
+### 7.2 可先推进范围
+
+- P1-1、P1-2、P1-4、P1-5 方向正确，且直接对应用户可见的“探测/试播后状态不刷新”问题。建议先作为第一批修复卡推进。
+- P2-3 复活门槛对称化合理，但应依赖独立客户端计数语义明确后实施。
+- P3-1 新鲜度衰减方向合理，但需要配套测试校准表，避免线路排序产生不可解释的大幅波动。
+- P3-2 feedback 进分应延后到 feedback 统计模型和灰度/影子计算机制明确之后。
+
+---
+
+## 8. 第二轮独立审核（Opus 主循环，2026-06-10）
+
+**审核者**：本会话 Opus 主循环（`claude-opus-4-8`），即文档头请求的「独立审核（arch-reviewer / Opus）」。
+**与 §7 关系**：独立完成，结论一致（**有条件通过**）。§7 的 4 条必修（P3-3 join key、P2-2 计数模型、P2-4 队列语义、P1-3 拆卡）我**全部确认成立、不重述**；本节只记录 §7 未覆盖的增量：逐条证据核验、3 处新增必修（C3/C4/C6）、2 处次要补全，以及开放问题倾向改判。
+
+### 8.1 证据核验（10/10 命中，零误差）
+
+逐条静态复核文档关键 `文件:行号`，全部精确属实：评分公式（`route-scoring.ts:45-50,68-70`，确认无 `last_probed_at` 输入 → D3 成立）、聚合仅挂 level1 cron 后（`source-health/index.ts:7-12`）、level2 候选要求 `probe_status='ok'`（`level2-render.ts:188`，F2 静默丢信号根因）、B1 硬编码 `probe="unknown"`（`VideoColumns.tsx:367`）、feedback 成功 1 次翻 dead→ok / 失败 3 次入队（`feedback.ts:98-106,134-145`）、recheck 只重置 render_status + 全局 runLevel2Render + 全标 processed（`feedback-driven-recheck.ts:22-34`）、F1 `handlePlaySuccess` 不上报（`PlayerShell.tsx:365-369`）、reprobeRoute 假按钮（`SourcesMatrixService.ts:259-272`）、熔断器纯内存 Map + hostname 聚合（`circuit-breaker.ts:9` + `level1-probe.ts:166-168`）、D4 熔断 skip 只写 event 不改主状态（`level1-probe.ts:19-31` 无 `updateSourceProbe`）、B3 外层 STRING_AGG 不随 setLines 刷新（`source-routes.ts:57-58` + `use-source-lines-controller.ts:303-306`）。诊断可作为后续 ADR 事实基底直接采纳。
+
+### 8.2 §7 未覆盖的新增必修
+
+| # | 等级 | 问题 | 要求 |
+|---|---|---|---|
+| C3 | 🟠 | **P2-3「与失败侧同模式」用错 redis 原语**。失败侧是 `INCR`（`feedback.ts:56-62`，统计同一 ipHash 次数），但 P2-3 目标是「≥2 个**独立 ipHash**」，照搬 INCR 会实现成「同一客户端成功 2 次即复活」，没解决 F3 | 复活计数改用 SET 语义（`SADD`+`SCARD`+TTL）统计独立 ipHash；若「信任需独立佐证」原则成立，失败→recheck 路径也应一并迁移（当前单客户端重复失败 3 次即可强制 recheck）|
+| C4 | 🟠 | **P3-2 静态 0.20 反馈权重在冷启动期劣化排序**。F1 成功上报全新，部署初期样本≈0 → Laplace 取中性 0.5，把 0.20 压在对所有源恒为 0.5 的因子上会压缩分数区间、稀释 health/quality/latency 区分力。此为 ramp 窗口真实回归，比灰度开关更根本（与 §7.2「延后进分」互补：即便延后，进分时也须解决静态权重稀释）| 反馈权重按样本置信度动态缩放（如 `w_fb = 0.20 × min(1, n/N)`，未用部分回补 health），非静态 0.20 |
+| C6 | 🟡 | **任务卡原子化**。P1-1 单项横跨 SQL+route+UI **三层**，独立触发 CLAUDE.md「跨 3 层须拆」；叠加 Phase 1 共 5 项 → 两条规则都要求拆 -A/-B 子卡。文档 §4 只提「>5 项必拆」，漏了 P1-1 跨层触发 | 拆 P1-1 子卡；落地前确认复现面，把 **P1-4(B3)/P1-2(B2) 排为首交付**（`probeAllSources` 的 `setLines` 已让展开区内部即时更新，用户「不更新」最可能是 B2/B3，而非默认隐藏的 B1 列）|
+
+### 8.3 次要补全（不阻塞，记入对应卡）
+
+- **P3-1 衰减时钟**：render 子项（health 内权重 0.6）有独立 `last_rendered_at`，应与 probe 的 `last_probed_at` 分别衰减，否则高权重子项陈旧度被低估。
+- **审计字段**：文档头「主循环 claude-fable-5」不在 CLAUDE.md §模型路由合法 ID 表内，ADR 化时校正为真实 ID。
+
+### 8.4 开放问题倾向改判
+
+综合两轮审核：**Q2→共享包 `packages/media-probe`**（workspace 内部包非外部依赖，价值排序 #2 优于双副本漂移）、**Q3→单个时间衰减浮点 EMA**（写入即时衰减，无 cron、无全表 UPDATE；Q3 原「实现最薄」倒置了价值排序，改动收敛 #5 不应凌驾正确性 #1）、**Q4→双存储分工**（redis/内存扛熔断热判定，PG 仅存供评分 JOIN 的持久 host_health，非二选一）。
+
+---
+
+## 9. 修订记录：v1 → v2（2026-06-10）
+
+§7/§8 审核章节为审核者原文，一字未动；以下为方案正文（§3–§5 及文档头）按审核意见的修订对照。两轮审核全部必修项均已吸收，无保留异议。
+
+| 审核条目 | 修订落点 |
+|---|---|
+| §7.1-1 host_health 缺 join key | P3-3 重写：前置 `video_sources.source_hostname` migration（写路径维护 + 存量回填 + 索引 + NULL 容忍）；host_health 以 hostname 为 PK；site_key 降为派生维度（多对多经 video_sources 反查） |
+| §7.1-2 feedback 计数模型不足以进评分 | P2-2 重写：裸累计 count 字段 → EMA 衰减字段（`fb_score` + `fb_sample_weight` + `last_feedback_at`，写入即时衰减）；明确"统计语义落地 + 影子验证前，feedback 只触发 recheck 不进评分"；§4 增补时序硬依赖链 P2-2 → 影子 → P3-2 |
+| §7.1-3 P2-4 队列语义不清 | P2-4 重写：新增 `origin='manual_route_reprobe'`（不复用 `feedback_driven`）+ partial index + worker 消费条件扩展 + processed 标记语义 + audit 口径四件套；§4 补 origin 入 types union |
+| §7.1-4 P1-3 不属低风险 Phase 1 | P1-3 移出 Phase 1 表，独立成节（独立卡 + 前置 Opus 包边界裁决 + 独立验收清单）；Phase 1 标题"无 schema 变更，低风险"在移出后恢复成立 |
+| §8 C3 复活计数 redis 原语 | P2-3 重写：`SADD`+`SCARD`+TTL 统计独立 ipHash，显式禁止照搬失败侧 `INCR`；失败→recheck 触发同卡迁移为独立 ipHash 计数 |
+| §8 C4 静态反馈权重冷启动劣化 | P3-2 重写：`w_fb = 0.20 × min(1, fb_sample_weight / N)` 动态缩放，未用部分回补 health；Q5 裁决注记"动态权重是根本解，灰度开关不是" |
+| §8 C6 任务卡原子化 | P1-1 行内标注强制拆 -A/-B；Phase 1 增"交付顺序 P1-4 → P1-2 首交付"；§4 第一条改写补"跨 3 层独立触发拆卡" |
+| §8.3 P3-1 衰减时钟 | P3-1 改为双时钟：probe 按 `last_probed_at`、render 按 `last_rendered_at` 分别衰减 |
+| §8.3 审计字段 | 说明：`claude-fable-5` 为本会话运行环境提供的真实模型 ID（Fable 5）；CLAUDE.md §模型路由映射表（`docs/model_routing_patch_20260418.md`）尚未收录 Fable 系列，属路由表滞后而非 ID 失实。拆卡执行时各卡按当时实际执行模型完整记录，ADR 化时沿用真实 ID 并在卡内注明本说明 |
+| §8.4 开放问题改判 | §5 改为"已收敛"对照表：Q2→`packages/media-probe`、Q3→EMA、Q4→双存储分工；Q1/Q5 维持（Q5 强化为硬前置） |
+
+**v2 后续动作**：按 §4 门禁拆卡入队 `task-queue.md`，第一批 = P1-4(B3) + P1-2(B2)（用户可见 bug 直接解药，无 schema 变更）。
