@@ -27,7 +27,8 @@ import { listTaskRuns, type TaskRunRow, type TaskRunStatus } from '@/api/db/quer
  *   - sites_failed（站点失败）：tone='warn'，>0 展示 / =0 省略（不展示「0 失败」噪声）
  *   - errors（错误）：tone='danger'，>0 展示 / =0 省略
  *
- * num 守卫复用 buildRunDigest 口径（BackgroundEventService）：非数字 / 缺字段 → 该 metric 省略，不抛错、不进空 catch。
+ * num 守卫口径：非数字 / 缺字段 → 该 metric 省略，不抛错、不进空 catch
+ *   （NTLG-P2-c-C-1 起本函数为采集 digest 口径唯一承载——BackgroundEventService.buildRunDigest 过渡态已移除）。
  * summary=null 或投影后无任何 metric → 返回 undefined（不挂 digest）。
  */
 export function buildTaskResultDigest(

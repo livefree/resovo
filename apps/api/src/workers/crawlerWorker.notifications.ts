@@ -9,6 +9,15 @@ import type { SyncRunStatusResult } from '@/api/db/queries/crawlerRuns'
 import type { EmitNotificationInput } from '@/api/services/NotificationEmitter'
 import { buildTaskResultDigest } from '@/api/services/TaskAggregator'
 
+/**
+ * sourceKind 象限（ADR-193 D-193-2 「产出象限」）：crawler worker run 完成。
+ * 与 admin 后台主动操作的 `ADMIN_ACTION_SOURCE_KIND`（notification-audit-emit）并列；象限取值集 { crawler, admin_action }。
+ *
+ * 读写双侧契约值单一真源（NTLG-P2-c-C-1 / D-196-5①）：emit 写侧（本模块）+ `NotificationService.list`
+ * allowlist 读侧复用，避免字面量漂移。NTLG-P2-c-C-1 起 crawler 并入主 list（出 ADR-152 background lane）。
+ */
+export const CRAWLER_SOURCE_KIND = 'crawler'
+
 /** run 终态 status → 通知 level/title（仅终态产出通知；非终态不在表内 → buildRunCompletedNotification 返 null） */
 const TERMINAL_NOTIFICATION: Record<string, { readonly level: 'info' | 'warn' | 'danger'; readonly title: string }> = {
   success: { level: 'info', title: '采集完成' },
@@ -33,7 +42,7 @@ export function buildRunCompletedNotification(
     type: 'crawler.run.completed',
     level: meta.level,
     title: meta.title,
-    sourceKind: 'crawler',
+    sourceKind: CRAWLER_SOURCE_KIND,
     ...(digest?.summary !== undefined && { body: digest.summary }),
     ...(digest !== undefined && { payload: digest }),
     href: '/admin/crawler',

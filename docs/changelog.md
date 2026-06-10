@@ -3510,3 +3510,24 @@
   - `tests/unit/api/notification-service.test.ts` — redis mock +`publish` + 新增 #u4（markAllRead → publish `notifications:changed` + `{scope:'user:admin-1'}`）
 - **新增依赖**：无　**数据库变更**：无
 - **注意事项**：purge 过期通知**无需** publish（过期行已被 unread count `expires_at > NOW()` 排除，删之对计数中性）。逐行 reads（markOneRead 客户端 ephemeral）不涉服务端游标，无需 publish。门禁：typecheck/lint/verify EXIT=0；test:changed 22 + 集成 admin-notifications 15 + 单测 notification-service/emitter/pubsub 38 全过。
+
+## [NTLG-P2-c-C-1] F6① crawler 并入 notifications 主 list（成对移除 BackgroundEventService finished crawler 派生）+ F6③ 确认 deferred（SEQ-20260609-01 P2-c 拆卡 · ADR-196 D-196-5①③）
+- **完成时间**：2026-06-09
+- **记录时间**：2026-06-09 23:40
+- **执行模型**：claude-opus-4-8（主循环；建议 sonnet，人工 opus 覆盖——持续推进授权）
+- **子代理**：无（api 内部常量沉淀非共享组件 API 契约 / 无 schema 跨 3+ 消费方 / 无新 ADR）
+- **背景**：收口 P1-c-C 遗留 F6①。crawler run 完成此前「双源」：emit 写 notifications 新表（NTLG-P1-c-B-1，但 `GENERAL_LANE_SOURCE_KINDS` 仅 `admin_action` → 不进 list 防重复）+ BackgroundEventService finished lane 派生（D，走 background 入抽屉）。SSE 统一未读推送（B 卡）落地后并入主 list（亦为 -C-2 红点改 unread-count〔含 crawler〕铺路）。
+- **根因/裁定**：须**成对改动（D-196-5①黄线1）**——扩 allowlist 的同时删 finished crawler 派生，否则同一 run 同时出现 general（新表）+ background（crawler_runs 派生）两源 → 抽屉重复项（id 不同去重无法消除）。
+- **修复文件**：
+  - `apps/api/src/workers/crawlerWorker.notifications.ts` — 沉淀 `export const CRAWLER_SOURCE_KIND='crawler'`（对称 `ADMIN_ACTION_SOURCE_KIND`，读写双侧契约值单一真源防漂移）+ emit 写侧 `sourceKind` 引用常量替字面量
+  - `apps/api/src/services/NotificationService.ts` — `GENERAL_LANE_SOURCE_KINDS` 由 `[admin_action]` 扩 `[admin_action, crawler]`（import 复用常量）
+  - `apps/api/src/services/BackgroundEventService.ts` — 删 finished crawler_run 派生（D 源 + listRuns finished 查询 + finishedAfter 死变量）+ 死代码 `buildRunDigest`；保留 audit 高危（E，`crawler.freeze` 与 8 类白名单互斥）+ active lane（C，映射任务面板 TaskItem）+ upcoming（A/B）
+  - `apps/api/src/services/TaskAggregator.ts` — 删 `buildRunDigest` 后注释悬空引用清理（删除连带，1 行）
+  - `tests/unit/api/notification-service.test.ts` — #8 断言 allowlist=`[admin_action, crawler]` + 新增 #8b（crawler sourceKind 行进 list 直映）
+  - `tests/unit/api/background-event-service.test.ts` — #5 改为「finished lane 不含 crawler_run kind」移除验证 + #8/#10/#12 改 listRuns 仅调一次（active）+ finished 由 audit（E）产生
+  - `docs/decisions.md` — ADR-196 +D-196-DEV-6（F6①③ 实施落点；F6③ grep 实证 v1 全 broadcast → 继续 deferred）
+- **F6③（定向逐行 reads）**：grep 实证 v1 全部 `emit` 调用 `scope='broadcast'`（无 `role:`/`user:` 定向写入点）→ D-196-DEV-2 解除条件（实际引入定向 emit）未满足 → **继续 deferred**，零代码。
+- **前端零改动**：crawler 完成改从 general list（`/admin/notifications`）来、不再从 background-events；前端 hook 数据驱动合并（generalItems + backgroundItems）→ crawler 仅出现于 general 不重复。id 从 `bg-crawler_run:x` 变 notifications 表 id 不影响功能（readIds ephemeral + readAt 时间高水位线不依赖 id）。
+- **新增依赖**：无　**数据库变更**：无（→ architecture.md 零同步）
+- **门禁**：typecheck/lint/verify:adr-contracts EXIT=0（endpoint-adr 232 路由/117 端点、admin-shell-types-mirror 2 对、sql-schema 79 表全对齐；error-message 195 advisory 未增）/ test:changed 21 文件 309 passed（background-event 12 重写 + notification-service 23 + crawler-worker-notifications 7）。
+- **注意事项**：红点改读 unread-count（F6②，解 BLOCKER-1）归 -C-2——涉 `admin-shell.tsx:175` `notifications.some(!read)` 改 unread-count 数字驱动 → 改 `packages/admin-ui/src/shell/types.ts` 公开 Props 须 arch-reviewer Opus 子代理 + commit `Subagents:` trailer。前端 mock finished crawler 数据一致性清理留 follow-up（非阻塞，映射函数仍有效）。

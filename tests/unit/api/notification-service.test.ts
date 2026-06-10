@@ -52,6 +52,7 @@ interface NotifRowOverride {
   title?: string
   body?: string | null
   href?: string | null
+  sourceKind?: string
   createdAt?: Date
 }
 function notifRow(over: NotifRowOverride = {}) {
@@ -63,7 +64,7 @@ function notifRow(over: NotifRowOverride = {}) {
     body: over.body ?? null,
     payload: null,
     href: over.href ?? '/admin/videos',
-    sourceKind: 'admin_action',
+    sourceKind: over.sourceKind ?? 'admin_action',
     sourceRef: 'vid-1',
     scope: 'broadcast',
     createdAt: over.createdAt ?? new Date('2026-05-20T10:00:00Z'),
@@ -146,13 +147,33 @@ describe('NotificationService.list — 新表读 + sourceKind allowlist + readAt
     expect(queryMock.mock.calls[0][1][3]).toBe(25)
   })
 
-  it('#8 scope 按角色派生 + sourceKind allowlist=admin_action 透传', async () => {
+  it('#8 scope 按角色派生 + sourceKind allowlist=[admin_action, crawler] 透传（NTLG-P2-c-C-1 扩纳 crawler）', async () => {
     mockListQueries([])
     const svc = new NotificationService(db)
     await svc.list({ ...LIST_PARAMS, userId: 'mod-9', role: 'moderator' })
     const params = queryMock.mock.calls[0][1]
     expect(params[0]).toEqual(['broadcast', 'role:moderator', 'user:mod-9'])
-    expect(params[2]).toEqual(['admin_action'])
+    // crawler 并入主 list（出 ADR-152 background lane / D-196-5①）→ query 谓词须同时拉 admin_action + crawler
+    expect(params[2]).toEqual(['admin_action', 'crawler'])
+  })
+
+  it('#8b crawler 完成项（sourceKind=crawler）进 list 并直映 NotificationItem（NTLG-P2-c-C-1）', async () => {
+    mockListQueries([notifRow({
+      id: 'crawler-run-1',
+      type: 'crawler.run.completed',
+      title: '采集完成',
+      href: '/admin/crawler',
+      sourceKind: 'crawler',
+    })])
+    const svc = new NotificationService(db)
+    const result = await svc.list(LIST_PARAMS)
+    expect(result.items).toHaveLength(1)
+    expect(result.items[0]).toMatchObject({
+      id: 'crawler-run-1',
+      title: '采集完成',
+      href: '/admin/crawler',
+      read: false,
+    })
   })
 
   it('#9 readAt 为 getEffectiveReadCursor 结果（ISO）；cursor null → readAt null', async () => {

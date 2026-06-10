@@ -7,14 +7,14 @@
  *   #2 upcoming — autoCrawlNext 为空（globalEnabled=false）
  *   #3 upcoming — scheduler timer nextRunAt 在 24h 内才返回
  *   #4 active — crawler_runs status=[queued,running,paused]
- *   #5 finished — crawler_runs 终态 finishedAfter 谓词下推
+ *   #5 finished — crawler_run 派生已移除（NTLG-P2-c-C-1）：finished lane 不含 crawler_run kind
  *   #6 finished — audit_log 高危白名单（crawler.freeze）
  *   #7 finished — audit_log 白名单外 actionType 不出现
- *   #8 id 拼接不重叠（auto_crawl:next / scheduler_timer:X / crawler_run:X / audit:X）
+ *   #8 id 拼接不重叠（auto_crawl:next / scheduler_timer:X / crawler_run:X〔active〕 / audit:X）
  *   #9 degraded 字段缺省时不出现在结果
  *   #10 events 排序：upcoming asc → active → finished desc
  *   #11 meta.generatedAt 为 ISO 字符串
- *   #12 listRuns 被调用两次（active + finished 源）
+ *   #12 listRuns 仅调用一次（active 源；finished crawler 派生 D 已移除）
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
@@ -129,8 +129,7 @@ describe('BackgroundEventService.list — upcoming 源', () => {
 describe('BackgroundEventService.list — active 源', () => {
   it('#4 active crawler_runs 正确映射为 active lane 事件', async () => {
     const run = makeRun({ id: 'run-active-1', status: 'running', startedAt: '2026-05-25T10:00:00Z' })
-    listRunsMock.mockResolvedValueOnce({ rows: [run], total: 1 }) // active
-    listRunsMock.mockResolvedValueOnce({ rows: [], total: 0 })     // finished
+    listRunsMock.mockResolvedValueOnce({ rows: [run], total: 1 }) // active（listRuns 仅调一次 / NTLG-P2-c-C-1）
 
     const res = await svc.list({ limit: 20, windowHours: 6 })
     const ev = res.events.find((e) => e.id === 'crawler_run:run-active-1')
@@ -143,53 +142,23 @@ describe('BackgroundEventService.list — active 源', () => {
 })
 
 describe('BackgroundEventService.list — finished 源', () => {
-  it('#5 finished crawler_runs 正确映射 + finishedAfter 参数透传', async () => {
-    const finRun = makeRun({
-      id: 'run-fin-1',
-      status: 'failed',
-      startedAt: '2026-05-25T08:00:00Z',
-      finishedAt: '2026-05-25T09:00:00Z',
+  it('#5 finished crawler_run 派生已移除：finished lane 不含 crawler_run kind（NTLG-P2-c-C-1）', async () => {
+    // crawler 完成改由 emit → notifications 主 list 承载（出 ADR-152 background lane / D-196-5①黄线1）；
+    // audit 高危（E）成为 finished lane 唯一来源，listRuns 不再查终态 run
+    queryMock.mockResolvedValue({
+      rows: [{
+        id: 'audit-only',
+        action_type: 'crawler.freeze',
+        target_id: null,
+        created_at: new Date('2026-05-25T09:00:00Z'),
+        actor_id: null,
+      }],
     })
-    listRunsMock.mockResolvedValueOnce({ rows: [], total: 0 })        // active
-    listRunsMock.mockResolvedValueOnce({ rows: [finRun], total: 1 }) // finished
-
     const res = await svc.list({ limit: 20, windowHours: 6 })
-
-    // finishedAfter 应被传入 listRuns 第 2 次调用
-    const secondCall = listRunsMock.mock.calls[1]?.[1]
-    expect(secondCall).toBeDefined()
-    expect(secondCall?.finishedAfter).toBeDefined()
-
-    const ev = res.events.find((e) => e.id === 'crawler_run:run-fin-1')
-    expect(ev?.lane).toBe('finished')
-    expect(ev?.level).toBe('danger') // failed → danger
-  })
-
-  it('#5b finished crawler_run summary → digest description（NTLG-P0-4）', async () => {
-    const finRun = makeRun({
-      id: 'run-fin-digest',
-      status: 'partial_failed',
-      finishedAt: '2026-05-25T09:00:00Z',
-      summary: { videosUpserted: 42, sourcesUpserted: 13, done: 4, failed: 1, errors: 2 },
-    })
-    listRunsMock.mockResolvedValueOnce({ rows: [], total: 0 })          // active
-    listRunsMock.mockResolvedValueOnce({ rows: [finRun], total: 1 })    // finished
-
-    const res = await svc.list({ limit: 20, windowHours: 6 })
-    const ev = res.events.find((e) => e.id === 'crawler_run:run-fin-digest')
-    // @ts-expect-error finished lane 含 description
-    expect(ev?.description).toBe('新增 42 视频 · 13 线路 · 1 站点失败 · 2 错误')
-  })
-
-  it('#5c finished crawler_run summary=null → 无 description', async () => {
-    const finRun = makeRun({ id: 'run-fin-nodigest', status: 'success', finishedAt: '2026-05-25T09:00:00Z', summary: null })
-    listRunsMock.mockResolvedValueOnce({ rows: [], total: 0 })
-    listRunsMock.mockResolvedValueOnce({ rows: [finRun], total: 1 })
-
-    const res = await svc.list({ limit: 20, windowHours: 6 })
-    const ev = res.events.find((e) => e.id === 'crawler_run:run-fin-nodigest')
-    // @ts-expect-error finished lane 含 description
-    expect(ev?.description).toBeUndefined()
+    const finished = res.events.filter((e) => e.lane === 'finished')
+    expect(finished.length).toBeGreaterThan(0)
+    expect(finished.every((e) => e.kind === 'audit_high_risk')).toBe(true)
+    expect(res.events.some((e) => e.kind === 'crawler_run' && e.lane === 'finished')).toBe(false)
   })
 
   it('#6 audit_log 高危白名单 crawler.freeze → finished high_risk_audit 事件', async () => {
@@ -227,9 +196,8 @@ describe('BackgroundEventService.list — id 唯一性 + 结构', () => {
     getSchedulerStatusMock.mockReturnValue([
       { name: 'auto-publish-staging', enabled: true, intervalMs: 30 * 60_000, lastRunAt: null, nextRunAt: nextAt },
     ])
-    listRunsMock
-      .mockResolvedValueOnce({ rows: [makeRun({ id: 'run-A', status: 'running', startedAt: '2026-05-25T10:00:00Z' })], total: 1 })
-      .mockResolvedValueOnce({ rows: [makeRun({ id: 'run-B', status: 'success', finishedAt: '2026-05-25T09:00:00Z', startedAt: '2026-05-25T08:00:00Z' })], total: 1 })
+    // active（C）= run-A / finished（E）= audit-Z；crawler 终态不再派生 finished（D 移除）
+    listRunsMock.mockResolvedValueOnce({ rows: [makeRun({ id: 'run-A', status: 'running', startedAt: '2026-05-25T10:00:00Z' })], total: 1 })
     queryMock.mockResolvedValue({
       rows: [{ id: 'audit-Z', action_type: 'crawler.freeze', target_id: null, created_at: new Date(), actor_id: null }],
     })
@@ -237,7 +205,7 @@ describe('BackgroundEventService.list — id 唯一性 + 结构', () => {
     const res = await svc.list({ limit: 20, windowHours: 6 })
     const ids = res.events.map((e) => e.id)
     const unique = new Set(ids)
-    expect(unique.size).toBe(ids.length) // 无重复 id
+    expect(unique.size).toBe(ids.length) // 无重复 id（auto_crawl:next / scheduler_timer:X / crawler_run:run-A / audit:audit-Z）
   })
 
   it('#9 degraded 字段缺省时结果不含 degraded', async () => {
@@ -248,9 +216,11 @@ describe('BackgroundEventService.list — id 唯一性 + 结构', () => {
   it('#10 events 排序：upcoming 在前、finished 在后', async () => {
     const futureAt = new Date(Date.now() + 3600_000).toISOString()
     computeNextTriggerMock.mockReturnValue(futureAt)
-    listRunsMock
-      .mockResolvedValueOnce({ rows: [], total: 0 }) // active
-      .mockResolvedValueOnce({ rows: [makeRun({ id: 'run-fin', status: 'success', finishedAt: '2026-05-25T09:00:00Z', startedAt: '2026-05-25T08:00:00Z' })], total: 1 })
+    listRunsMock.mockResolvedValueOnce({ rows: [], total: 0 }) // active
+    // finished lane 现由 audit 高危（E）产生（crawler 派生 D 已移除）
+    queryMock.mockResolvedValue({
+      rows: [{ id: 'audit-fin', action_type: 'crawler.freeze', target_id: null, created_at: new Date('2026-05-25T09:00:00Z'), actor_id: null }],
+    })
 
     const res = await svc.list({ limit: 20, windowHours: 6 })
     const lanes = res.events.map((e) => e.lane)
@@ -268,14 +238,12 @@ describe('BackgroundEventService.list — id 唯一性 + 结构', () => {
     expect(res.generatedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/)
   })
 
-  it('#12 listRuns 被调用两次（active + finished 各一次）', async () => {
+  it('#12 listRuns 仅调用一次（active 源；finished crawler 派生 D 已移除 / NTLG-P2-c-C-1）', async () => {
     await svc.list({ limit: 20, windowHours: 6 })
-    expect(listRunsMock).toHaveBeenCalledTimes(2)
-    // 第 1 次（active）status 为 active 状态数组
+    expect(listRunsMock).toHaveBeenCalledTimes(1)
+    // 唯一一次为 active（status 为 active 状态数组），无 finishedAfter 终态查询
     const firstCall = listRunsMock.mock.calls[0]?.[1]
     expect(firstCall?.status).toEqual(expect.arrayContaining(['queued', 'running', 'paused']))
-    // 第 2 次（finished）含 finishedAfter
-    const secondCall = listRunsMock.mock.calls[1]?.[1]
-    expect(secondCall?.finishedAfter).toBeDefined()
+    expect(firstCall?.finishedAfter).toBeUndefined()
   })
 })

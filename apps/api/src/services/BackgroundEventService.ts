@@ -2,12 +2,13 @@
  * BackgroundEventService.ts — admin Shell 后台事件铃铛聚合服务（ADR-152）
  * CW1-E-EP step 3
  *
- * 三源聚合（Promise.all 并发）：
+ * 源聚合（Promise.all 并发；NTLG-P2-c-C-1 起 finished crawler_run 派生 D **移除**——crawler 完成并入
+ *   notifications 主 list〔NotificationService.GENERAL_LANE_SOURCE_KINDS += crawler / D-196-5①黄线1〕，
+ *   防 general+background 双源重复）：
  *   A. autoCrawlNext — computeNextTrigger 内存计算（已实装 CW1-A）
  *   B. scheduler timer nextRunAt — getSchedulerStatus intervalMs 推算（CW1-E-EP step 2）
- *   C. active crawler_runs — listRuns status=['queued','running','paused'] 谓词下推
- *   D. finished crawler_runs — listRuns status=终态 + finishedAfter 谓词下推
- *   E. audit_log 高危白名单 — crawler.freeze（Y-152-3 与 NotificationBell 真互斥）
+ *   C. active crawler_runs — listRuns status=['queued','running','paused'] 谓词下推（保留：active 映射任务面板 TaskItem）
+ *   E. audit_log 高危白名单 — crawler.freeze（Y-152-3 与 NotificationBell 真互斥；非 crawler run 派生，保留）
  *
  * 分层约束（ADR-152 §8）：
  *   ✅ Service 不含 SQL（调 queries/helpers）
@@ -65,25 +66,17 @@ export class BackgroundEventService {
 
   async list(params: ListBackgroundEventsParams): Promise<ListBackgroundEventsResult> {
     const { limit, windowHours } = params
-    const finishedAfter = new Date(Date.now() - windowHours * 3600_000).toISOString()
     const generatedAt = new Date().toISOString()
 
-    // 并发查询三 DB 源 + 内存计算两源
-    const [activeResult, finishedResult, auditResult, autoConfig] = await Promise.all([
+    // 并发查询 active(C) + audit(E) 两 DB 源 + 内存计算两源（A/B）；
+    // finished crawler_run 派生（D）已移除（NTLG-P2-c-C-1，crawler 并入 notifications 主 list）
+    const [activeResult, auditResult, autoConfig] = await Promise.all([
       // C — active crawler_runs（谓词下推 / idx_crawler_runs_status）
       listRuns(this.db, {
         status: ['queued', 'running', 'paused'],
         sortField: 'createdAt',
         sortDirection: 'desc',
         limit: 10,
-      }),
-      // D — finished crawler_runs（谓词下推 / idx_crawler_runs_finished_at partial）
-      listRuns(this.db, {
-        status: ['success', 'failed', 'partial_failed', 'cancelled'],
-        finishedAfter,
-        sortField: 'finishedAt',
-        sortDirection: 'desc',
-        limit: Math.floor(limit / 2),
       }),
       // E — audit_log 高危白名单
       this.db.query<AuditHighRiskRow>(
@@ -156,43 +149,20 @@ export class BackgroundEventService {
       href: `/admin/crawler/runs/${run.id}`,
     }))
 
-    // D — finished crawler_runs
-    const finishedRunEvents: AdminBackgroundEventFinished[] = finishedResult.rows.map((run) => {
-      // NTLG-P0-4：采集完成结果摘要（过渡态），透出 summary 指标到事件 description
-      const digest = buildRunDigest(run.summary)
-      return {
+    // E — audit_log 高危（finished lane 唯一来源；finished crawler_run 派生 D 已移除 / NTLG-P2-c-C-1）
+    const finishedEvents: AdminBackgroundEventFinished[] = auditResult.rows
+      .map((row): AdminBackgroundEventFinished => ({
         lane: 'finished' as const,
-        id: `crawler_run:${run.id}`,
-        kind: 'crawler_run' as const,
-        status: run.status as 'success' | 'failed' | 'partial_failed' | 'cancelled' | 'timeout',
-        level: (run.status === 'success' ? 'info' : run.status === 'partial_failed' ? 'warn' : 'danger') as 'info' | 'warn' | 'danger',
-        title: buildRunTitle(run.crawlMode, run.triggerType),
-        ...(digest !== undefined && { description: digest }),
-        startedAt: run.startedAt ?? undefined,
-        finishedAt: run.finishedAt ?? run.updatedAt,
-        runId: run.id,
-        href: `/admin/crawler/runs/${run.id}`,
-      }
-    })
-
-    // E — audit_log 高危
-    const auditEvents: AdminBackgroundEventFinished[] = auditResult.rows.map((row) => ({
-      lane: 'finished' as const,
-      id: `audit:${row.id}`,
-      kind: 'audit_high_risk' as const,
-      status: 'high_risk_audit' as const,
-      level: 'warn' as const,
-      title: HIGH_RISK_TITLE_MAP.get(row.action_type) ?? row.action_type,
-      finishedAt: row.created_at.toISOString(),
-      actorId: row.actor_id ?? undefined,
-      href: HIGH_RISK_HREF_MAP.get(row.action_type),
-    }))
-
-    // D+E merged finished（按 finishedAt desc）
-    const finishedEvents: AdminBackgroundEventFinished[] = [
-      ...finishedRunEvents,
-      ...auditEvents,
-    ].sort((a, b) => b.finishedAt.localeCompare(a.finishedAt))
+        id: `audit:${row.id}`,
+        kind: 'audit_high_risk' as const,
+        status: 'high_risk_audit' as const,
+        level: 'warn' as const,
+        title: HIGH_RISK_TITLE_MAP.get(row.action_type) ?? row.action_type,
+        finishedAt: row.created_at.toISOString(),
+        actorId: row.actor_id ?? undefined,
+        href: HIGH_RISK_HREF_MAP.get(row.action_type),
+      }))
+      .sort((a, b) => b.finishedAt.localeCompare(a.finishedAt))
 
     // 最终排序：upcoming asc scheduledAt → active asc startedAt → finished desc finishedAt
     const events: AdminBackgroundEvent[] = [
@@ -209,33 +179,10 @@ export class BackgroundEventService {
   }
 }
 
+// active lane（C）title 文案；finished crawler_run 派生（D）+ buildRunDigest summary 摘要
+// 已随 NTLG-P2-c-C-1 移除（crawler 完成 digest 改由 emit→notifications 主 list 承载，TaskResultDigest 口径）。
 function buildRunTitle(crawlMode: string, triggerType: string): string {
   const modeLabel = crawlMode === 'keyword' ? '关键词采集' : crawlMode === 'source-refetch' ? '补源采集' : '批量采集'
   const triggerLabel = triggerType === 'schedule' ? '定时' : triggerType === 'all' ? '全站' : triggerType === 'single' ? '单站' : '批量'
   return `${triggerLabel}${modeLabel}`
-}
-
-/**
- * buildRunDigest — 从 crawler_runs.summary 构建采集结果摘要文案（NTLG-P0-4 过渡态）。
- * summary 键（syncRunStatusFromTasks 落库）：videosUpserted/sourcesUpserted/done/failed/errors。
- * 正式版结构化 TaskResultDigest（metrics chips）见 ADR-193 / P1-b/c；此处仅产出人读字符串
- * 透出 finished 事件 description（前端映射已消费 description→NotificationItem.body，无前端改动）。
- * 无有效数据 → 返回 undefined（不设 description）。
- */
-function buildRunDigest(summary: Record<string, unknown> | null): string | undefined {
-  if (!summary) return undefined
-  const num = (key: string): number | undefined => {
-    const v = summary[key]
-    return typeof v === 'number' && Number.isFinite(v) ? v : undefined
-  }
-  const parts: string[] = []
-  const videos = num('videosUpserted')
-  if (videos !== undefined) parts.push(`新增 ${videos} 视频`)
-  const sources = num('sourcesUpserted')
-  if (sources !== undefined) parts.push(`${sources} 线路`)
-  const failed = num('failed')
-  if (failed !== undefined && failed > 0) parts.push(`${failed} 站点失败`)
-  const errors = num('errors')
-  if (errors !== undefined && errors > 0) parts.push(`${errors} 错误`)
-  return parts.length > 0 ? parts.join(' · ') : undefined
 }

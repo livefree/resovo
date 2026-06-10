@@ -23,14 +23,17 @@ import {
   type NotificationRow,
 } from '@/api/db/queries/notifications'
 import { ADMIN_ACTION_SOURCE_KIND } from '@/api/services/notification-audit-emit'
+import { CRAWLER_SOURCE_KIND } from '@/api/workers/crawlerWorker.notifications'
 import { publishNotificationChanged } from '@/api/lib/notification-pubsub'
 
 /**
- * drawer general lane 的 sourceKind allowlist（NTLG-P1-c-C）。
- * 仅 admin_action（= 旧 8 类白名单 admin 动作，等价见 ADMIN_ACTION_SOURCE_KIND 不变量注释）；
- * crawler 走 background lane 不在此（防重复）。新 sourceKind 默认不进 list（封闭集，失败方向=漏显示而非误显示）。
+ * drawer general lane 的 sourceKind allowlist（NTLG-P1-c-C → NTLG-P2-c-C-1 扩纳 crawler）。
+ * admin_action（= 旧 8 类白名单 admin 动作，等价见 ADMIN_ACTION_SOURCE_KIND 不变量注释）
+ * + crawler（采集 run 完成 digest；NTLG-P2-c-C-1 起并入主 list，出 ADR-152 background lane —— 与
+ * BackgroundEventService 删 finished crawler 派生**成对**，否则 general+background 双源重复 / D-196-5①黄线1）。
+ * 新 sourceKind 默认不进 list（封闭集，失败方向=漏显示而非误显示）。
  */
-const GENERAL_LANE_SOURCE_KINDS: readonly string[] = [ADMIN_ACTION_SOURCE_KIND]
+const GENERAL_LANE_SOURCE_KINDS: readonly string[] = [ADMIN_ACTION_SOURCE_KIND, CRAWLER_SOURCE_KIND]
 
 export interface ListNotificationsParams {
   limit: number
