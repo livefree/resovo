@@ -142,6 +142,7 @@ npm run verify:adr-contracts # ADR 协议合规 3 类核验（端点/错误码/D
 | Git 提交     | `docs/rules/git-rules.md`             | commit、branch、merge、TASK-ID                                                 |
 | 质量门禁     | `docs/rules/quality-gates.md`         | 任务完成前、六问、AI-CHECK、偏离检测                                           |
 | 日志相关任务 | `docs/rules/logging-rules.md`         | logger / log / 日志 / pino / request_id / worker job / PII redact / client-log |
+| 文档治理     | `docs/rules/doc-governance.md`        | 文档清理、归档、索引更新、断链 / 错误引用、文档冲突、PHASE COMPLETE 收尾、季度归档 |
 
 ---
 
