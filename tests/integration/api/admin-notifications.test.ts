@@ -22,6 +22,9 @@ import {
   getEffectiveReadCursor,
   upsertReadCursor,
   deleteExpiredNotifications,
+  insertDismissals,
+  selectDismissedKeys,
+  deleteStaleDismissals,
 } from '../../../apps/api/src/db/queries/notifications'
 
 let db: Pool
@@ -284,5 +287,60 @@ describe('notifications 写路径 round-trip（BEGIN/ROLLBACK 零污染）', () 
     const cursor = { createdAt: new Date(last.createdAt).toISOString(), id: last.id }
     const page2 = await listNotifications(client, { scopes: [scope], limit: 2, cursor })
     expect(page2.map((r) => r.title)).toEqual(['合并视频 A'])
+  })
+
+  // ── dismiss 软移除（ADR-197 / NTLG-NTF-DISMISS-A）─────────────────────────
+  it('insertDismissals 落库 + selectDismissedKeys 返 Set + 幂等 ON CONFLICT + 空数组 no-op', async () => {
+    const k1 = `dm:${Date.now()}:general`
+    const k2 = `bg-audit:${Date.now()}`
+    expect(await insertDismissals(client, userId, [k1, k2])).toBe(2)
+    const keys = await selectDismissedKeys(client, userId)
+    expect(keys.has(k1)).toBe(true)
+    expect(keys.has(k2)).toBe(true)
+    // 幂等：重复 dismiss 同 key 不新增（ON CONFLICT DO NOTHING）
+    expect(await insertDismissals(client, userId, [k1])).toBe(0)
+    // 空数组 no-op
+    expect(await insertDismissals(client, userId, [])).toBe(0)
+  })
+
+  it('excludeDismissedForUser：drawer 排除已 dismiss 的 general 项 / history 不传保留全量 / per-user 隔离', async () => {
+    const scope = `role:dismiss_filter_${Date.now()}`
+    const keep = await insertNotification(client, {
+      type: 'test.keep', level: 'info', title: '保留项', sourceKind: 'system', scope,
+      dedupKey: `test:dm:keep:${Date.now()}`,
+    })
+    const dropped = await insertNotification(client, {
+      type: 'test.drop', level: 'info', title: '移除项', sourceKind: 'system', scope,
+      dedupKey: `test:dm:drop:${Date.now()}`,
+    })
+    // dismiss dropped（item_key = general 行 id 纯数字串，D-197-2）
+    await insertDismissals(client, userId, [dropped.id])
+    // drawer 模式（传 excludeDismissedForUser）→ 排除 dropped
+    const drawer = await listNotifications(client, { scopes: [scope], limit: 50, excludeDismissedForUser: userId })
+    expect(drawer.map((r) => r.id)).toContain(keep.id)
+    expect(drawer.map((r) => r.id)).not.toContain(dropped.id)
+    // countNotifications 同口径（meta.total 一致）
+    expect(await countNotifications(client, { scopes: [scope], excludeDismissedForUser: userId })).toBe(drawer.length)
+    // history 模式（不传）→ 保留全量含 dropped（消息中心，D-197-4）
+    expect((await listNotifications(client, { scopes: [scope], limit: 50 })).map((r) => r.id)).toContain(dropped.id)
+    // 另一 user 不受影响（dismiss per-user，D-197-1）
+    const other = await listNotifications(client, { scopes: [scope], limit: 50, excludeDismissedForUser: NONEXISTENT_USER })
+    expect(other.map((r) => r.id)).toContain(dropped.id)
+  })
+
+  it('deleteStaleDismissals：删 dismissed_at < cutoff、保留 >= cutoff（age 口径 D-197-6）', async () => {
+    const staleKey = `dm:stale:${Date.now()}`
+    const freshKey = `dm:fresh:${Date.now()}`
+    // stale：dismissed_at 设 100 天前（< 90 天 cutoff → 应删）
+    await client.query(
+      `INSERT INTO notification_dismissals (user_id, item_key, dismissed_at) VALUES ($1, $2, NOW() - INTERVAL '100 days')`,
+      [userId, staleKey],
+    )
+    await insertDismissals(client, userId, [freshKey]) // dismissed_at = NOW()（>= cutoff → 应留）
+    const cutoff = new Date(Date.now() - 90 * 24 * 3600_000).toISOString()
+    expect(await deleteStaleDismissals(client, cutoff)).toBeGreaterThanOrEqual(1)
+    const keys = await selectDismissedKeys(client, userId)
+    expect(keys.has(staleKey)).toBe(false)
+    expect(keys.has(freshKey)).toBe(true)
   })
 })

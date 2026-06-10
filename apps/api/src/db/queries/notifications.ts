@@ -82,6 +82,13 @@ export interface CountNotificationsParams {
   readState?: 'read' | 'unread'
   /** readState 比较基线（getEffectiveReadCursor）；readState 设而此缺则跳过该过滤 */
   cursorReadAt?: string | null
+  /**
+   * 抽屉 dismiss 排除（ADR-197 D-197-4）：存在 → 拼 NOT EXISTS notification_dismissals
+   * （item_key = notifications.id::text，general 项 item_key=行 id 纯数字串）排除该 user 已软移除项；
+   * 缺省 → 不排除（消息中心 history 模式不传，保留全量）。仅 general SQL 侧排除；派生项（audit/task）
+   * 由 Service 内存 anti-set 过滤（D-197-4，禁 SQL 拼 item_key anti-join）。
+   */
+  excludeDismissedForUser?: string
 }
 
 export interface ListNotificationsParams extends CountNotificationsParams {
@@ -170,6 +177,15 @@ function buildNotificationFilter(params: CountNotificationsParams): { clause: st
       params.readState === 'unread'
         ? `created_at > $${values.length}::timestamptz`
         : `created_at <= $${values.length}::timestamptz`,
+    )
+  }
+  if (params.excludeDismissedForUser) {
+    // ADR-197 D-197-4：drawer 模式排除该 user 已 dismiss 的 general 项（item_key=行 id）；
+    // history 模式不传此入参 → 消息中心保留全量。派生项 dismiss 由 Service 内存过滤（非此处）。
+    values.push(params.excludeDismissedForUser)
+    conds.push(
+      `NOT EXISTS (SELECT 1 FROM notification_dismissals d ` +
+        `WHERE d.user_id = $${values.length}::uuid AND d.item_key = notifications.id::text)`,
     )
   }
   if (!params.includeExpired) {
@@ -312,6 +328,54 @@ export async function deleteExpiredNotifications(db: Queryable, nowIso: string):
   const result = await db.query(
     `DELETE FROM notifications WHERE expires_at IS NOT NULL AND expires_at <= $1::timestamptz`,
     [nowIso],
+  )
+  return result.rowCount ?? 0
+}
+
+// ── dismiss 软移除（ADR-197 / NTLG-NTF-DISMISS-A）────────────────────────────
+
+/**
+ * 批量插入 dismiss 记录（幂等 ON CONFLICT DO NOTHING，D-197-2）。
+ * item_keys = 前端抽屉项最终 id 原值（general 纯数字串 / 'bg-audit:<id>' / 'taskrun-<id>' 等，跨源 TEXT）。
+ * 白名单守卫（可 dismiss 范围 D-197-2）归 Service 层；本 query 仅落库（单条 dismiss 传 [itemKey] 复用）。
+ * 返回实际新插入行数（ON CONFLICT 命中冲突的既存项不计入 rowCount）；空数组 no-op 返 0。
+ */
+export async function insertDismissals(db: Queryable, userId: string, itemKeys: readonly string[]): Promise<number> {
+  if (itemKeys.length === 0) return 0
+  const res = await db.query(
+    `INSERT INTO notification_dismissals (user_id, item_key)
+     SELECT $1::uuid, k FROM unnest($2::text[]) AS k
+     ON CONFLICT (user_id, item_key) DO NOTHING`,
+    [userId, itemKeys as string[]],
+  )
+  return res.rowCount ?? 0
+}
+
+/**
+ * 取该 user 全部 dismiss 的 item_key 集合（D-197-4）。
+ * 供 Service 内存 anti-set 过滤派生项（finished audit 'bg-audit:<id>' / 终态 task 'taskrun-<id>'）——
+ * 派生项无 notifications 行不能走 SQL NOT EXISTS，Service 取本 Set 在 map 后 .filter 比对。
+ * 命中 PK 前缀（user_id 等值）。
+ */
+export async function selectDismissedKeys(db: Queryable, userId: string): Promise<Set<string>> {
+  const res = await db.query<{ itemKey: string }>(
+    `SELECT item_key AS "itemKey" FROM notification_dismissals WHERE user_id = $1`,
+    [userId],
+  )
+  return new Set(res.rows.map((r) => r.itemKey))
+}
+
+/**
+ * 清理陈旧 dismiss 记录（D-197-6，ADR-195 purge worker 接入归 -B）。
+ * 删 dismissed_at < cutoff——cutoff 由调用方按 age N≥90d（对齐 ADMIN_ACTION_TTL_DAYS）计算，
+ * 保证被 dismiss 的真源项早已 TTL purge 后才清其 dismissal（避免项复现；派生项 finished window ≤24h ≪ N 安全）。
+ * notification_dismissals 用 TEXT item_key 跨源无 FK、不随 notifications purge CASCADE → 本兜底独立清理。
+ * 返回删除行数。
+ */
+export async function deleteStaleDismissals(db: Queryable, cutoffIso: string): Promise<number> {
+  const result = await db.query(
+    `DELETE FROM notification_dismissals WHERE dismissed_at < $1::timestamptz`,
+    [cutoffIso],
   )
   return result.rowCount ?? 0
 }

@@ -3608,3 +3608,18 @@
 - **改动文件**：`docs/decisions.md`（+ADR-197）、`docs/task-queue.md`（dismiss 卡 Accepted + 拆 -A/-B/-C 蓝图）、`docs/tasks.md`。
 - **门禁**：verify:adr-contracts EXIT=0（verify-endpoint-adr 232 路由对齐 / 119 ADR 端点含 dismiss 2 预登记 / verify-adr-d-numbers D-197-1..7 识别 / sql-schema 79 表 / admin-shell-types-mirror 2 对对齐）。docs-only。
 - **里程碑**：dismiss 子系统设计锁定 → 解锁 NTLG-NTF-DISMISS-A/B/C 实施；本 ADR 兼作 dismiss 端点 endpoint-ADR。
+
+## [NTLG-NTF-DISMISS-A] dismiss schema + queries 地基（migration 104 notification_dismissals + 3 query + drawer 排除谓词）（SEQ-20260609-01 P3 · ADR-197 D-197-1/4/6）
+- **完成时间**：2026-06-10
+- **记录时间**：2026-06-10 02:32
+- **执行模型**：claude-opus-4-8（主循环；建议 sonnet，人工 opus 覆盖 + 持续推进授权）
+- **子代理**：无（schema 已 ADR-197 arch-reviewer PASS 锁定 D-197-1，纯实施，同 P1-a-A/P2-a-A 纯地基先例）
+- **改动文件**：
+  - `apps/api/src/db/migrations/104_notification_dismissals.sql`（新建）— `notification_dismissals(user_id UUID NOT NULL FK users(id) ON DELETE CASCADE, item_key TEXT NOT NULL, dismissed_at TIMESTAMPTZ DEFAULT NOW(), PK(user_id,item_key))`；item_key 跨源 TEXT **无 FK**（派生项无 notifications 行）；索引 4 步核验注释（PK 复合键支撑三 driving 谓词、不补二级索引对齐 D-192-4 克制）
+  - `apps/api/src/db/queries/notifications.ts` — `CountNotificationsParams` 加可选 `excludeDismissedForUser?: string` + `buildNotificationFilter` 拼 `NOT EXISTS (notification_dismissals d WHERE d.user_id=$k::uuid AND d.item_key=notifications.id::text)`（仅 general，缺省不拼 → history 不排除，D-197-4）+ 3 新 query：`insertDismissals`（unnest+ON CONFLICT DO NOTHING 幂等批量、单条复用、空数组 no-op）/ `selectDismissedKeys`（返 Set 供 Service 内存 anti-set 过滤派生项）/ `deleteStaleDismissals`（dismissed_at<cutoff age 清理，D-197-6）
+  - `docs/architecture.md` §5.17 — 登记 notification_dismissals 表（schema 变更同步）
+  - `tests/integration/api/admin-notifications.test.ts` — +3 集成用例（真实 PG，BEGIN/ROLLBACK 零污染）
+- **分层守恒**：SQL 全集中 queries 层（db-rules）；general 走 SQL NOT EXISTS、派生项 selectDismissedKeys 供 Service 内存过滤（D-197-4 HIGH-1 纠正，禁 SQL 拼 item_key anti-join）。纯数据层**零 API/行为变更**（端点/Service dismiss/派生过滤接入归 -B）。
+- **新增依赖**：无　**数据库变更**：migration 104（新表，已应用 dev DB + architecture.md 同步）　**新端点/ADR**：无
+- **门禁**：migrate 104 应用 ✅ / typecheck（全 ws）/ lint / verify:adr-contracts EXIT=0（**verify-sql-schema-alignment 80 表含新 notification_dismissals** / endpoint-adr 232 路由 119 ADR 端点 / mirror 2 对）/ 集成 admin-notifications 18 passed（15 既有 + 3 新：insertDismissals 幂等+空数组 / excludeDismissedForUser drawer 排除·history 保留·per-user 隔离·count 同口径 / deleteStaleDismissals age 口径）/ test:changed 55 文件 798 passed。
+- **里程碑**：dismiss 持久化地基就绪 → 解锁 -B（api 端点 + 三处过滤接入）。

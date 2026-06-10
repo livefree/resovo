@@ -6,7 +6,17 @@
 
 ## 当前任务（单任务工作台：同时仅 1 个 🔄 进行中；完成即删卡，历史见 docs/changelog.md）
 
-_（当前无进行中任务。取下一个前先查 `docs/task-queue.md` 是否有 🚨 BLOCKER。**SEQ-20260609-01**：P0→P2 收官（除暂缓 P2-b）+ **P2-c 可见性/交互增强**：NTLG-P2-c-E2E ✅ / UI-1 抽屉分组+digest 完整 ✅ / NTLG-NTF-UNREAD-FILTER「只看未读」切换 ✅。**P3 dismiss 软移除**：**ADR-197 ✅ Accepted**（arch-reviewer CONDITIONAL PASS / a2edc8aa4e6cfa1a9，纠正 3 事实前提；notification_dismissals 表 + 跨源 item_key + 2 端点 + 三处排除 vs 消息中心不排除）→ **待实施 NTLG-NTF-DISMISS -A（schema+queries）/ -B（api 端点+三处过滤）/ -C（UI 移除+清空按钮）**，蓝图 task-queue line 1777。**P2-b**（邮件）⏸️ 暂缓。**其他独立卡/门控 follow-up**：结构化 digest chips / 铃铛数字徽标 / 真实 SSE-push e2e / dismiss 跨标签即时同步（MEDIUM-1）/ date·type 过滤 / markOneRead / 归档 F5。**SEQ-20260608-01** cutover：卡 4 回滚窗 🔄 ~2026-06-15、卡 5 改名待排期。）_
+### 🔄 NTLG-NTF-DISMISS-B1 — dismiss 端点 + Service 写路径（ADR-197 D-197-2/3）
+
+- **所属序列**：SEQ-20260609-01 P3 dismiss（ADR-197 ✅ / -A ✅ 已交付 commit 待提）。**建议模型**：sonnet；**本会话执行模型**：claude-opus-4-8（人工覆盖，持续推进授权）。
+- **拆卡依据**：原 ADR-197 -B 蓝图 7 改动点（2 端点+守卫+Service+三处读过滤+purge+ErrorCode）>5 → 拆 **-B1（写路径：端点+Service dismiss）/ -B2（读过滤接入+purge 清理）**（ADR-197 已预留 -B1/-B2 逃生口）。
+- **问题理解**：dismiss 写入口——前端调端点移除单条/清空，后端守卫可 dismiss 范围（D-197-2）+ 落库（复用 -A insertDismissals）。
+- **方案**（按 ADR-197 D-197-2/3）：① `routes/admin/notifications.ts` 加 2 端点 `POST /admin/notifications/dismiss`（body `{itemKey}`）+ `/dismiss-batch`（body `{itemKeys[]}`，前端回传可见集），preHandler admin+moderator；② 白名单守卫（通知抽屉可 dismiss：`^\d+$`〔general〕∪ `^bg-audit:`〔finished 审计〕；拒 upcoming `^bg-auto_crawl:`/`^bg-scheduler_timer:` + active `^bg-crawler_run:` → 422 `ITEM_NOT_DISMISSABLE`；batch 逐条 skip 计 `skipped`）；③ `NotificationService.dismiss(userId,itemKey)`/`dismissBatch(userId,itemKeys)`（守卫 + 复用 `insertDismissals`，Route 无业务逻辑）；④ ErrorCode `ITEM_NOT_DISMISSABLE` 登记 ApiResponse 真源（ADR-110）；⑤ 端点/service 单测。
+- **涉及文件**（范围）：`apps/api/src/routes/admin/notifications.ts`、`apps/api/src/services/NotificationService.ts`、ErrorCode 真源文件（`packages/types` ApiResponse / ADR-110）、`apps/api/src/lib/dismiss-item-key.ts`（白名单守卫纯函数，可测）、对应单测。
+- **不做**：三处读过滤接入（list drawer/history 区分 + BackgroundEventService/TaskAggregator userId 内存过滤）+ purge deleteStaleDismissals 接线（-B2）；UI（-C）。
+- **子代理调用**：无（端点契约 + 白名单已 ADR-197 D-197-2/3 锁定 + arch-reviewer PASS，纯实施；新端点已本序列 ADR-197 endpoint-ADR 覆盖，不另起 ADR）。
+- **原子化**：4 项 ≤5、写路径 api 层 → 单卡。
+- **状态**：🔄 进行中（先 commit -A → 守卫纯函数 → Service → 端点 → ErrorCode → 测试 → 门禁 → commit）
 
 ---
 
