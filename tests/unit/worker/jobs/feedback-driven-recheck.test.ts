@@ -76,10 +76,13 @@ describe('runFeedbackDrivenRecheck — 定向编排（SRCHEALTH-P1-5 / F2）', (
     expect(aggregateBatchMock).toHaveBeenCalledWith(pool, log, ['vid-1', 'vid-2'])
     // level2 定向参数（F2 修复核心：不再全局 candidates）
     expect(runLevel2RenderMock).toHaveBeenCalledWith(pool, log, { sourceIds: ['src-1', 'src-2'] })
-    // render 重置（仅 probe=ok 守卫，防 probe dead 源 render 真相被洗成 stale pending）+ processed 标记
+    // render 重置谓词与 level2 定向 candidates 完全对齐（probe=ok + active + 未删除），
+    // 防任何 level2 会跳过的源（probe dead / 停用 / 软删）render 真相被洗成 stale pending
     const resetSql = sqlCalls.find((s) => s.includes("SET render_status = 'pending'"))
     expect(resetSql).toBeDefined()
     expect(resetSql).toContain("probe_status = 'ok'")
+    expect(resetSql).toContain('is_active = true')
+    expect(resetSql).toContain('deleted_at IS NULL')
     expect(sqlCalls.some((s) => s.includes('SET processed_at = NOW()'))).toBe(true)
   })
 

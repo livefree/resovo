@@ -3839,3 +3839,18 @@
   - 缺陷影响（修复前）：probe dead 源 render 停留 'pending' → effective_score health 项被抬高（pending 0.3 > dead 0.0，render 子项权重 0.6）→ 死源排序上升；且 auto-retire 要求双 dead，render 被洗会推迟死线路退役。
   - 该缺陷在旧实现即存在（重置无过滤 + 全局 candidates 同守卫），P1-5 重写时被继承，由 Codex stop-time review 第 3 次拦截关闭。
   - 门禁：typecheck/lint EXIT=0、recheck 测试 4/4、test:changed 通过。
+
+## [SRCHEALTH-P1-5-FIX-2] recheck render 重置谓词与 level2 定向候选完全对齐（Codex 二轮拦截）
+- **完成时间**：2026-06-10
+- **记录时间**：2026-06-10 14:02
+- **执行模型**：claude-fable-5
+- **子代理**：无（Codex stop-time review 为 hook 自动触发）
+- **修改文件**：
+  - `apps/worker/src/jobs/feedback-driven-recheck.ts` — render 重置 SQL 补 `is_active = true AND deleted_at IS NULL`（与 level2 定向 candidates 三谓词完全对齐）
+  - `tests/unit/worker/jobs/feedback-driven-recheck.test.ts` — 重置 SQL 断言补 active/未删除守卫
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - FIX-1 只对齐了 probe 守卫；停用（is_active=false）或软删（deleted_at 非 NULL）的信号源 probe 旧值可为 'ok'，会被重置却被 level2 跳过 → 同样 stale pending。
+  - 不变式（测试守卫锁定）：**render 重置集合 ⊆ level2 定向重测集合**——重置谓词必须与 `loadLevel2Candidates` 定向分支保持逐条对齐，两处任一改动需同步。
+  - 门禁：typecheck/lint EXIT=0、recheck 测试 4/4、test:changed 通过。

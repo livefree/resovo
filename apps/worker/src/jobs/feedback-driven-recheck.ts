@@ -45,13 +45,17 @@ export async function runFeedbackDrivenRecheck(pool: Pool, log: pino.Logger): Pr
     }
 
     // ③ 重置 render 信号 + ④ level2 定向重测
-    // 仅重置 probe_status='ok'（level1 刚刷新的真相）的源：probe dead 的源不会进 level2
-    // candidates（同名守卫），若一并重置会把其 render 真相洗成 stale 'pending'——
-    // 抬高 effective_score（pending 0.3 > dead 0.0）且阻碍 auto-retire 双 dead 判定
-    //（Codex stop-time review 拦截项）
+    // 重置谓词与 level2 定向 candidates（level2-render.ts loadLevel2Candidates 定向分支）
+    // **完全对齐**（is_active + deleted_at + probe_status='ok'）：任何被 level2 跳过的源
+    //（probe dead / 已停用 / 已软删）都不得被重置，否则其 render 真相被洗成 stale
+    // 'pending'——抬高 effective_score（pending 0.3 > dead 0.0）且阻碍 auto-retire
+    // 双 dead 判定（Codex stop-time review 两轮拦截项：probe 守卫 + active/删除守卫）
     await pool.query(
       `UPDATE video_sources SET render_status = 'pending'
-        WHERE id = ANY($1::uuid[]) AND probe_status = 'ok'`,
+        WHERE id = ANY($1::uuid[])
+          AND is_active = true
+          AND deleted_at IS NULL
+          AND probe_status = 'ok'`,
       [sourceIds],
     )
     await runLevel2Render(pool, log, { sourceIds })
