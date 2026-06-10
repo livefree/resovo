@@ -1767,13 +1767,15 @@
     - 依赖：NTLG-P1-c。建议模型：sonnet。
 14. **NTLG-P2-c** — 「消息中心」页（全量历史 + 检索 + 归档）+ 未读 SSE 实时推送（替代 60s 轮询）（状态：⬜ 待开始）
     - 依赖：NTLG-P1-a。建议模型：sonnet。
-15. **NTLG-P2-d** — 维护 worker 清理 `expires_at` 过期通知 + TTL 策略注入（状态：🔄 进行中 2026-06-09 — 拆 -A/-B，原子化判据 Q2 跨 emit-service/worker/scheduler/queries 4 层）
+15. **NTLG-P2-d** — 维护 worker 清理 `expires_at` 过期通知 + TTL 策略注入（状态：✅ 已完成 2026-06-09 — -A/-B 两子卡全收口；过期通知治理端到端，ADR-195 全 5 决策闭环）
     - 依赖：NTLG-ADR-P2（ADR-195）。建议模型：sonnet。
     - **拆卡判据**：purge 机制（D-195-4）+ TTL 策略注入（D-195-1 + 黄线①）合并跨 4 层违原子化 → 拆 -A/-B（两决策独立、不同层）。
     - **NTLG-P2-d-A** — purge-expired-notifications worker 机制（D-195-4）（状态：✅ 已完成 2026-06-09）
       - 范围：`deleteExpiredNotifications`（queries）+ maintenanceWorker job type `'purge-expired-notifications'` + scheduler 24h tick（避 early-return 陷阱黄线③）。物理删除 `expires_at IS NOT NULL AND <= NOW()`，FK CASCADE 级联 reads。镜像 ADR-188 purge-external-fetch-log 范式。
       - 依赖：ADR-195 ✅。建议模型：sonnet。
       - **完成备注**：ADR-195 D-195-4 落地（详见 changelog [NTLG-P2-d-A]）。`deleteExpiredNotifications`（DELETE WHERE expires_at IS NOT NULL AND <= NOW()，NULL 永不删=D-192-5 补集）+ maintenanceWorker `'purge-expired-notifications'` case（switch+JOB_TITLE 双穷尽性守卫，返 {deleted}→-B digest 自动「已删除 N」）+ scheduler 24h tick **末尾注册避 early-return 陷阱**（黄线③，前序 if(xTimer)return 首次全 null 穿透 / 中段插入会被短路，注释警示）。**现状无人设 expires_at → purge 暂 ready infra（NULL 永不删），待 -B TTL 注入激活**。门禁：typecheck/lint/verify:adr-contracts EXIT=0（endpoint-adr 231 无新 route D-195-5 / sql 79 表无新表 / mirror 2 对）/ test:changed 56 文件 803 passed / 集成 admin-notifications 13→14（新增真 PG 口径：过期删/NULL 不删/未来不删 + FK CASCADE reads 级联验证）。无 schema 变更（复用 migration 100 + FK CASCADE）。执行模型: claude-opus-4-8（人工 opus 覆盖 sonnet——「继续按顺序持续推进」授权）；子代理: 无（D-195-4 已 arch-reviewer PASS，纯实施镜像 ADR-188 范式）。
-    - **NTLG-P2-d-B** — admin_action per-type TTL 策略注入（D-195-1 + 黄线①）（状态：⬜ 待开始）
+    - **NTLG-P2-d-B** — admin_action per-type TTL 策略注入（D-195-1 + 黄线①）（状态：✅ 已完成 2026-06-09）
       - 范围：emit 层 type→days TTL 策略表 + NotificationEmitter 注入（未显式传 expiresAt 时按 type 策略计算）。**黄线① 必做**：admin_action 显式配 ≥90 天（防默认 30 天落空运营追溯）；NULL=永久按需。
       - 依赖：NTLG-P2-d-A。建议模型：sonnet。
+      - **完成备注**：ADR-195 D-195-1 + 黄线① 落地（详见 changelog [NTLG-P2-d-B]）。新建 `notification-ttl-policy.ts`（默认 30d / **admin_action 8 类 90d**——从 NOTIFICATION_ACTION_TYPES 真源派生防漂移满足黄线① / crawler 30d / null=永久预留 P2-c）+ `resolveNotificationExpiresAt`（`type in MAP` 区分无条目→默认 vs null→永久）+ NotificationEmitter.emit 注入（`input.expiresAt ?? resolve(type)`，显式优先逃生口）。**行为变更**：emit 现注入 TTL → 通知到期被 P2-d-A purge（audit_log 永久合规真源不受影响 ADR-192 D-192-1）。循环 type-only 安全。门禁：typecheck/lint/verify:adr-contracts EXIT=0 / test:changed 55 文件 778 passed（emit 相关全过零破）/ 集成 62。无 schema 变更。执行模型: claude-opus-4-8（人工 opus 覆盖 sonnet——「持续推进」+ AskUserQuestion 选定）；子代理: 无（D-195-1 + 黄线① 已 arch-reviewer 锁，纯实施）。
+    - **NTLG-P2-d 整卡 ✅**（-A purge 机制 + -B TTL 注入激活）。过期通知治理端到端：emit 注入 TTL + daily worker 物理清理 + FK CASCADE，表不再无界增长。**ADR-195 全 5 决策落地闭环**。

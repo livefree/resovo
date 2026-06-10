@@ -3393,3 +3393,20 @@
 - **注意事项**：解锁 **NTLG-P2-d-B**（admin_action per-type TTL 策略注入：emit 层 type→days 策略表 + NotificationEmitter 注入，D-195-1 + **黄线① admin_action 须显式配 ≥90 天**防默认 30 天落空运营追溯）。-B 落地后 purge 激活产生实际清理。
 - **文件**：`apps/api/src/db/queries/notifications.ts`（+deleteExpiredNotifications）/ `apps/api/src/workers/maintenanceWorker.ts`（+job type+case）/ `apps/api/src/workers/maintenanceWorker.taskrun.ts`（+JOB_TITLE 条目）/ `apps/api/src/workers/maintenanceScheduler.ts`（+tick+timer+status）/ `tests/integration/api/admin-notifications.test.ts`（+purge 口径+CASCADE 集成）/ `docs/task-queue.md`（P2-d 拆 -A/-B，-A ✅）/ `docs/tasks.md`（卡片回空稳定态）。
 - **执行模型**：claude-opus-4-8（主循环，人工 opus 覆盖 sonnet 建议——「继续按顺序持续推进」授权）；**子代理**：无（设计 ADR-195 D-195-4 已 arch-reviewer PASS 锁定，纯实施镜像现成范式）。
+
+## [NTLG-P2-d-B] admin_action per-type TTL 策略注入（激活 purge / ADR-195 D-195-1 + 黄线①）（SEQ-20260609-01 P2-d 拆卡 · NTLG-P2-d 整卡收口）
+
+- **背景**：ADR-195 D-195-1「Emitter 注入」——emit 未显式传 expiresAt 时按 notification.type 计算 `expires_at`，**激活 P2-d-A 的 purge**（在此之前所有通知 expires_at=NULL 永不过期，purge no-op）。**行为变更卡**：现有 emit 调用方（8 类 admin_action + crawler digest）发出的通知开始带 TTL → 到期被 purge 物理删除。
+- **TTL 策略（D-195-1 + 黄线① / D-195-DEV-1）**：新建 `notification-ttl-policy.ts`——默认 30 天（对齐 ADR-188 后台保留口径）/ **admin_action 8 类 → 90 天**（黄线①「≥90 天对运营追溯」，从 `NOTIFICATION_ACTION_TYPES` 真源派生防漂移：新增 admin_action 类型自动 ≥90，不静默落回 30）/ `crawler.run.completed` → 默认 30 天（瞬时运营信息）/ null 条目=永久（per-type 覆盖预留「消息中心」P2-c 长期历史类型，当前无 null 条目）。**audit_log 才是永久合规取证真源（ADR-192 D-192-1），通知 90 天后被物理删除不损合规**。
+- **resolveNotificationExpiresAt(type, now?)**：`type in MAP ? MAP[type] : DEFAULT` 区分「无条目→默认 30」与「条目为 null→永久」（避免 `?? DEFAULT` 把 null 误落默认）；`now` 参数注入便确定性断言。
+- **NotificationEmitter 接线**：`emit` 的 insertNotification `expiresAt: input.expiresAt ?? resolveNotificationExpiresAt(input.type)`——**显式传入优先**（逃生口）、省略走策略。`EmitNotificationInput.expiresAt` 注释更新（原「策略数值留 ADR-195」→ 注明 P2-d-B 注入）。
+- **循环安全**：`notification-ttl-policy` import `NOTIFICATION_ACTION_TYPES`（value）自 `notification-audit-emit`，后者对 `NotificationEmitter` 仅 `import type EmitNotificationInput`（运行时擦除）→ 无运行时循环（NotificationEmitter→ttl-policy→audit-emit 单向）。
+- **门禁**：typecheck（7 ws）EXIT=0 / lint EXIT=0 / `verify:adr-contracts` EXIT=0（endpoint-adr 231 无新 route / sql 79 表 / mirror 2 对）/ **test:changed 55 文件 778 passed**（含 emit 相关全部：emitter 7 / ttl-policy 4 / video-merges / staging-webhook，行为变更零破）/ 集成 62 零回归。
+- **测试**：`notification-ttl-policy.test.ts` 4（admin_action 8 类全 90d 真源派生穷尽 + crawler/未知 30d + DEFAULT=30 锚定 + now 注入确定性 ISO）；`notification-emitter.test.ts` 4→7（+省略 expiresAt 注入 90d〔admin_action〕/ 30d〔crawler〕容差断言 + 显式 expiresAt 优先不被覆盖）。
+- **七问自检**：① 整页刷新：N/A（emit 服务）② 重复逻辑/状态：否（策略表单一真源 + 真源派生防漂移）③ 逻辑应下沉仍留：否（策略独立文件、emit 仅消费）④ 破坏分层/复用：否（policy 纯函数、emit 注入，未越层；逃生口保留显式覆盖）⑤ 需拆分：否（policy <40 行）⑥ 技术债：否（null 永久条目预留 P2-c 显式登记）⑦ audit payload：N/A。**[AI-CHECK] 结论：SAFE**（行为变更 ADR-195 既定〔通知到期清理、audit_log 永久合规真源不受影响〕/ 真源派生防 admin_action 漏配〔黄线①〕/ 显式逃生口 / 循环 type-only 安全 / 778+62 零回归）。
+- **新增依赖**：无。
+- **数据库变更**：无（复用 notifications.expires_at 列；行为变更=该列从恒 NULL 变按策略填值）。
+- **NTLG-P2-d 整卡收口**（-A purge 机制 + -B TTL 注入激活）：过期通知治理端到端落地——emit 按 type 注入 TTL（admin_action 90d / 默认 30d）+ daily worker 物理清理 + FK CASCADE 级联 reads；表不再无界增长，audit_log 保留永久合规真源。**ADR-195 全 5 决策（D-195-1..5）落地闭环**（dedup/scope 已沉淀现状约定，TTL/purge 本序列实装）。
+- **注意事项**：行为变更上线后通知开始到期清理。「消息中心」P2-c 若需特定类型长期历史 → 在 `NOTIFICATION_TTL_DAYS` 加 `null`（永久）条目（已预留逃生口）。SEQ-20260609-01 P2 剩 **P2-b**（多渠道·邮件，**门控**：无邮件基础设施 + 需单独 ADR + email provider 用户决策）/ **P2-c**（消息中心+SSE，需拆卡 + SSE 设计）。
+- **文件**：`apps/api/src/services/notification-ttl-policy.ts`（新）/ `apps/api/src/services/NotificationEmitter.ts`（emit 注入 + 字段注释）/ `tests/unit/api/notification-ttl-policy.test.ts`（新 4）/ `tests/unit/api/notification-emitter.test.ts`（+3 TTL 注入）/ `docs/task-queue.md`（P2-d-B ✅ + 整卡收口）/ `docs/tasks.md`（卡片回空稳定态）。
+- **执行模型**：claude-opus-4-8（主循环，人工 opus 覆盖 sonnet 建议——「继续按顺序持续推进」+ AskUserQuestion 选定 P2-d-B 授权）；**子代理**：无（设计 ADR-195 D-195-1 已 arch-reviewer PASS 锁定 + 黄线①明确 ≥90，纯实施；策略表非新契约设计）。

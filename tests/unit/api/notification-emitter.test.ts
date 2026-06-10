@@ -64,4 +64,37 @@ describe('NotificationEmitter.emit — fire-and-forget (ADR-193 D-193-2)', () =>
     await flush()
     expect(queryMock).toHaveBeenCalled()
   })
+
+  it('emit 省略 expiresAt → 按 type TTL 策略注入 expires_at（admin_action 90d，P2-d-B 激活 purge）', async () => {
+    const queryMock = vi.fn().mockResolvedValue({ rows: [{ id: '4' }] })
+    const before = Date.now()
+    makeEmitter(queryMock).emit({ type: 'video.merge', level: 'info', title: 'T', sourceKind: 'admin_action' })
+    await flush()
+    const params = queryMock.mock.calls[0]![1] as unknown[]
+    const exp = Date.parse(params[P.expiresAt] as string)
+    const d90 = 90 * 24 * 3600_000
+    expect(exp).toBeGreaterThanOrEqual(before + d90 - 5000)
+    expect(exp).toBeLessThanOrEqual(Date.now() + d90 + 5000)
+  })
+
+  it('emit 省略 expiresAt + crawler type → 默认 30d', async () => {
+    const queryMock = vi.fn().mockResolvedValue({ rows: [{ id: '5' }] })
+    const before = Date.now()
+    makeEmitter(queryMock).emit({ type: 'crawler.run.completed', level: 'info', title: 'T', sourceKind: 'crawler' })
+    await flush()
+    const params = queryMock.mock.calls[0]![1] as unknown[]
+    const exp = Date.parse(params[P.expiresAt] as string)
+    const d30 = 30 * 24 * 3600_000
+    expect(exp).toBeGreaterThanOrEqual(before + d30 - 5000)
+    expect(exp).toBeLessThanOrEqual(Date.now() + d30 + 5000)
+  })
+
+  it('emit 显式 expiresAt → 优先于策略（不被覆盖）', async () => {
+    const queryMock = vi.fn().mockResolvedValue({ rows: [{ id: '6' }] })
+    const explicit = '2099-01-01T00:00:00.000Z'
+    makeEmitter(queryMock).emit({ type: 'video.merge', level: 'info', title: 'T', sourceKind: 'admin_action', expiresAt: explicit })
+    await flush()
+    const params = queryMock.mock.calls[0]![1] as unknown[]
+    expect(params[P.expiresAt]).toBe(explicit)
+  })
 })

@@ -14,6 +14,7 @@
 import type { Pool } from 'pg'
 import { baseLogger } from '@/api/lib/logger'
 import { insertNotification, type NotificationLevel } from '@/api/db/queries/notifications'
+import { resolveNotificationExpiresAt } from '@/api/services/notification-ttl-policy'
 
 /**
  * emit 入参（ADR-193 D-193-2 契约，11 字段一一对应 notifications schema 列）。
@@ -41,7 +42,8 @@ export interface EmitNotificationInput {
   readonly scope?: string
   /** → notifications.dedup_key（partial unique 幂等） */
   readonly dedupKey?: string
-  /** → notifications.expires_at（ISO 8601；TTL 策略数值留 ADR-195） */
+  /** → notifications.expires_at（ISO 8601）。**省略时由 TTL 策略按 type 注入**（ADR-195 D-195-1 / P2-d-B，
+   *  notification-ttl-policy.resolveNotificationExpiresAt：admin_action 90d / crawler·默认 30d）；显式传入则优先。 */
   readonly expiresAt?: string
 }
 
@@ -67,7 +69,8 @@ export class NotificationEmitter {
       sourceRef: input.sourceRef,
       scope: input.scope ?? DEFAULT_SCOPE,
       dedupKey: input.dedupKey,
-      expiresAt: input.expiresAt,
+      // 显式传入优先；省略 → 按 type TTL 策略注入 expires_at（D-195-1，激活 P2-d-A purge）
+      expiresAt: input.expiresAt ?? resolveNotificationExpiresAt(input.type),
     }).catch((err: unknown) => {
       baseLogger.warn({ err, type: input.type }, '[NotificationEmitter] notification emit failed')
     })
