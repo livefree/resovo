@@ -6,7 +6,7 @@
 
 ## 当前任务（单任务工作台：同时仅 1 个 🔄 进行中；完成即删卡，历史见 docs/changelog.md）
 
-_（当前无进行中任务。取下一个前先查 `docs/task-queue.md` 是否有 🚨 BLOCKER。**SEQ-20260609-01 进展**：**P0 全部 ✅ + P1 全部 ✅ + NTLG-ADR-P2 ✅**（ADR-194 task_runs 只读投影真源裁定 + ADR-195 通知 TTL/dedup/scope 策略，arch-reviewer Opus PASS）。**下一可取：NTLG-P2-a**（task_runs migration + DbTaskRunReporter + TaskAggregator 投影收敛 + ADR-191 re-point，依赖 ADR-194 ✅，建议 opus 数据模型）；并行可取 **NTLG-P2-d**（purge-expired-notifications 清理 worker，依赖 ADR-195 ✅，建议 sonnet）/ **NTLG-P2-b**（多渠道订阅，依赖 P1-c ✅）/ **NTLG-P2-c**（消息中心页 + SSE，依赖 P1-a ✅）。SEQ-20260608-01 cutover 剩：卡 4 回滚窗 🔄 ~2026-06-15、卡 5 改名待排期。）_
+_（当前无进行中任务。取下一个前先查 `docs/task-queue.md` 是否有 🚨 BLOCKER。**SEQ-20260609-01 进展**：**P0 ✅ + P1 ✅ + NTLG-ADR-P2 ✅ + NTLG-P2-a-A ✅**（task_runs schema/queries/DbTaskRunReporter 地基，migration 102，纯加性空跑兼容）。**下一可取：NTLG-P2-a-B**（bull worker 接入 reporter + TaskAggregator 投影收敛，依赖 -A ✅，sonnet）；并行待取 **NTLG-P2-d**（purge worker，依赖 ADR-195 ✅，sonnet）/ **P2-b**（多渠道，依赖 P1-c ✅）/ **P2-c**（消息中心+SSE，依赖 P1-a ✅）。**SEQ-20260608-01** cutover 剩：卡 4 回滚窗 🔄 ~2026-06-15、卡 5 改名待排期。）_
 
 ---
 

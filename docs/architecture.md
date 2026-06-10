@@ -881,6 +881,30 @@ UserPreferences = {
 
 ---
 
+### 5.18 task_runs 统一抽象层（ADR-194 / NTLG-P2-a，Migration 102）
+
+来源：ADR-194（task_runs 统一抽象层 path B + 真源关系裁定「只读投影」）/ 治理方案 §2.2。**仅登记当前无持久 run 表的 bull 作业**（enrichment/imageHealth/maintenance/未来自动化）——这些瞬时 bull job 终态即丢、无持久记录；crawler **不写本表**（`crawler_runs` 保持采集批次唯一真源，D-194-1），统一视图由 `TaskAggregator` 读时对 `crawler_runs ∪ task_runs` 做只读 union 投影（D-194-2，零同步路径、最强反漂移）。
+
+**Migration 102 新增 1 表：**
+
+| 表 | 说明 |
+|---|---|
+| `task_runs` | 后台作业统一登记层。`id BIGSERIAL PK`（`id::text` 对齐 `TaskRunId=string` ADR-193）/ `kind TEXT NOT NULL`（作业类型语义键，无 CHECK，类型层校验保扩展 D-194-DEV-3）/ `title TEXT NOT NULL` / `ref TEXT NULL`（关联实体/bull jobId 反查）/ `status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','running','success','failed','cancelled'))`（5 态统一终态机 §4.2；cancelled 保真，投影映射 AdminTaskItem.status='failed'）/ `progress SMALLINT CHECK (0–100 或 NULL)`（NULL=indeterminate）/ `digest JSONB NULL`（承载 TaskResultDigest ADR-193，finish 落库）/ `error TEXT NULL` / `started_at` / `finished_at` / `created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()` / `updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()`。 |
+
+**索引（db-rules 4 步核验见 migration 注释）：**
+- `idx_task_runs_created_at` `(created_at DESC)` —— listTaskRuns 时间倒序分页 / 终态窗口 / 无 status 过滤的全量时间线。
+- `idx_task_runs_status` `(status, created_at DESC)` —— 任务闪电 running 计数（`status='running'`，§4.1）+ 终态列表 status 过滤（status 等值首列 + created_at 排序）。
+
+**真源关系（D-194-1，只读投影）：** crawler_runs 唯一真源，task_runs 仅登记无持久表 bull 作业 → 不构成双真源（它们本无别的真源）。crawler 不接 TaskRunReporter（digest 走 path A summary 投影，D-194-DEV-2）。
+
+**应用层（P2-a-A 已落地数据层；worker 接入 + 投影收敛归 P2-a-B / re-point 归 P2-a-C）：**
+- 查询层：`apps/api/src/db/queries/taskRuns.ts`（insertTaskRun / updateTaskRunProgress / finishTaskRun / listTaskRuns；SQL 全集中 queries 层，db-rules）
+- 中枢实装：`apps/api/src/services/TaskRunReporter.ts` `DbTaskRunReporter`（替 Noop，interface 零改动 D-194-4；start 失败降级 sentinel 不阻断 §11 D4）
+- worker 接入（→ P2-a-B）：各无持久表 bull worker `reporter.start/progress/finish` + `TaskAggregator` 副源 bull active 瞬时快照 → task_runs 持久登记
+- 控制路径（→ P2-a-C）：ADR-191 `parseTaskId` 扩 `taskrun-` 分派 + bull 协作式取消（status='cancelling'）
+
+---
+
 ## 6. 视频状态机（DB 强约束）
 
 来源：Migration `023_enforce_video_state_machine_trigger.sql`（基线）→ `033` → `034` → `053`（M-SN-4 D-01 新增暂存退回）
