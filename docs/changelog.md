@@ -3567,3 +3567,18 @@
 - **新增依赖**：无　**数据库变更**：无（→ architecture.md 零同步）　**新端点/ADR**：无
 - **门禁**：typecheck（全 workspace）/ lint（server-next `<img>` warning 既有无关）/ test:changed 20 passed（admin-shell-notifications 14 + admin-shell-client 6，注释改触发）EXIT=0 + **e2e:admin 全套 82 passed（1.8m）零回归**（含 3 新用例 62-64）。
 - **里程碑**：P2-c 通知链路（C-2 红点 unread-count + A-2 消息中心 + B-2 SSE degraded 双模式）补齐浏览器级验收；**SEQ-20260609-01 P0→P2 收官**（除暂缓 P2-b）。
+
+## [NTLG-P2-c-UI-1] 通知抽屉 category 分组 + digest 摘要完整显示（可见性增强）（SEQ-20260609-01 P2-c follow-up）
+- **完成时间**：2026-06-10
+- **记录时间**：2026-06-10 01:42
+- **执行模型**：claude-opus-4-8（主循环；建议 sonnet，人工 opus 覆盖 + 持续推进授权）
+- **子代理**：无（不改 `NotificationDrawerProps`/`types.ts` 公开 Props，纯组件内部渲染消费既有 `category` 字段，非「定义新共享组件 API 契约」，不触 CLAUDE.md §模型路由红线 1/2）
+- **背景/根因**：用户反馈「UI 显示消息/通知看起来没有多少改善」。核对治理方案完成度 ~90%（P0/P1 全完成 + P2 三卡 + 6 ADR；仅 P2-b 暂缓），但**约 80% 是用户不可见的后端地基**（独立通知存储 + cursor 已读模型 + 解耦双写 emit + task_runs + TTL/purge + SSE），「视觉杠杆」（铃铛形态 / 抽屉布局）未动。实证 `notification-drawer.tsx` 平铺渲染、`NotificationItem.category`（general/background）字段已存在但**完全未消费**；`BODY_TEXT_STYLE` `whiteSpace:nowrap + ellipsis` **单行截断** → 采集 digest 文案（P0-4 已落 body）多 metric 看不全。用户裁定补一轮可见改善 = 抽屉分组 + digest 摘要。
+- **改动文件**：
+  - `packages/admin-ui/src/shell/notification-drawer.tsx` — ① 新增 `GROUP_ORDER`（general 在前 / background 在后）+ `GROUP_LABEL`（系统通知 / 后台动态）+ `groupItems()`（`undefined`→general 默认组、空组剔除）+ `NotificationGroup` 子组件（区头 `data-notification-group-title`：文案 + `data-notification-group-count` 区内计数；`<section data-notification-group>` 包裹）；NotificationDrawer body 由 `items.map` 改 `groupItems(items).map`；② `BODY_TEXT_STYLE` 解除单行截断（`whiteSpace:normal`+`wordBreak:break-word`）；区头底色复用既有 `var(--bg-surface-row)` token，零硬编码色
+  - `tests/unit/components/admin-ui/shell/notification-drawer.test.tsx` — +6 用例（两组顺序 general 在前 / 区头文案+计数 / item 归属对应区 / `undefined`→general / 空组不渲染区头 / digest 摘要完整显示 + `whiteSpace=normal`）
+- **边界守恒**：现有 20 用例零破（均后代 `querySelector`，分组 `<section>` 容器不影响 item row 定位；`onItemClick` 引用不变 `toHaveBeenCalledWith(ITEMS[0])` 仍过）；`category` 是 `NotificationItem` 既有 optional 字段（types.ts:124，未改），消费方 server-next `useAdminNotifications` 已对 general 标 `category:'general'`、background 标 `'background'` → 数据就绪。
+- **不做（留独立卡）**：① **结构化 digest chips**（如 task-drawer `TaskDigestChips`）需扩 `NotificationItem.digest` 字段 → 跨 packages/types + admin-ui types.ts + api emit + UI **4 层** + 触 admin-ui 公开 Props 红线 + 强制 Opus 子代理 + 必拆卡；② 铃铛红点→数字徽标（C-2 已留 `unreadCount:number` 契约 + topbar IconButton 已有 `badgeText` 能力，零契约改动可做，用户本轮未选）；③ date·type 过滤 / markOneRead（各独立卡/门控）。
+- **新增依赖**：无　**数据库变更**：无　**新端点/ADR**：无　**Props/types 变更**：无
+- **门禁**：typecheck（全 workspace）/ lint FULL TURBO / test:changed 79 文件 999 passed（admin-ui 改动触发消费方全跑）EXIT=0 + notification-drawer 专项 26（现有 20 + 新 6）。改动局限抽屉内部渲染、e2e 不打开抽屉断言内部 → e2e 不受影响。
+- **里程碑**：通知抽屉首个用户可见视觉改善（分组分区 + 完整 digest 摘要）；回应「UI 没改善」——明确治理价值在架构正确性/可扩展性，可见杠杆按需增量。

@@ -90,9 +90,10 @@ const TITLE_STYLE: CSSProperties = {
 const BODY_TEXT_STYLE: CSSProperties = {
   color: 'var(--fg-muted)',
   fontSize: 'var(--font-size-xs)',
-  whiteSpace: 'nowrap',
-  overflow: 'hidden',
-  textOverflow: 'ellipsis',
+  // NTLG-P2-c-UI-1：解除单行截断——让采集 digest 摘要（"新增 N 视频 · M 线路 · K 站点失败 · E 错误"）
+  // 完整显示，不再 ellipsis 截断多 metric 文案。
+  whiteSpace: 'normal',
+  wordBreak: 'break-word',
 }
 
 const TIMESTAMP_STYLE: CSSProperties = {
@@ -112,6 +113,40 @@ const EMPTY_STYLE: CSSProperties = {
   color: 'var(--fg-muted)',
   textAlign: 'center',
   fontSize: 'var(--font-size-sm)',
+}
+
+// NTLG-P2-c-UI-1：按既有 NotificationItem.category 分组渲染（general=系统通知 / background=后台动态）。
+// general 在前；category 缺省（undefined）归 general 默认组（与 types.ts 注释「'general'（默认）」一致）。
+const GROUP_ORDER = ['general', 'background'] as const
+type NotificationGroupKey = (typeof GROUP_ORDER)[number]
+
+const GROUP_LABEL: Record<NotificationGroupKey, string> = {
+  general: '系统通知',
+  background: '后台动态',
+}
+
+const GROUP_TITLE_STYLE: CSSProperties = {
+  display: 'flex',
+  alignItems: 'baseline',
+  gap: 'var(--space-2)',
+  padding: 'var(--space-2) var(--space-4)',
+  fontSize: 'var(--font-size-xs)',
+  fontWeight: 600,
+  color: 'var(--fg-muted)',
+  background: 'var(--bg-surface-row)',
+  borderBottom: '1px solid var(--border-subtle)',
+}
+
+/** 按 category 分组（general 在前 / background 在后）；undefined → general；空组剔除。 */
+function groupItems(
+  items: readonly NotificationItem[],
+): ReadonlyArray<readonly [NotificationGroupKey, readonly NotificationItem[]]> {
+  const buckets: Record<NotificationGroupKey, NotificationItem[]> = { general: [], background: [] }
+  for (const item of items) {
+    const key: NotificationGroupKey = item.category === 'background' ? 'background' : 'general'
+    buckets[key].push(item)
+  }
+  return GROUP_ORDER.map((key) => [key, buckets[key]] as const).filter(([, group]) => group.length > 0)
 }
 
 export function NotificationDrawer({ open, items, onClose, onItemClick, onMarkAllRead }: NotificationDrawerProps) {
@@ -142,11 +177,32 @@ export function NotificationDrawer({ open, items, onClose, onItemClick, onMarkAl
       {items.length === 0 ? (
         <div data-notification-empty style={EMPTY_STYLE}>暂无通知</div>
       ) : (
-        items.map((item) => (
-          <NotificationItemRow key={item.id} item={item} onItemClick={onItemClick} />
+        groupItems(items).map(([groupKey, group]) => (
+          <NotificationGroup key={groupKey} groupKey={groupKey} items={group} onItemClick={onItemClick} />
         ))
       )}
     </DrawerShell>
+  )
+}
+
+interface NotificationGroupProps {
+  readonly groupKey: NotificationGroupKey
+  readonly items: readonly NotificationItem[]
+  readonly onItemClick: ((item: NotificationItem) => void) | undefined
+}
+
+/** 分组区：区头（文案 + 区内计数）+ 该 category 的 item 列表。 */
+function NotificationGroup({ groupKey, items, onItemClick }: NotificationGroupProps) {
+  return (
+    <section data-notification-group={groupKey}>
+      <div data-notification-group-title style={GROUP_TITLE_STYLE}>
+        <span>{GROUP_LABEL[groupKey]}</span>
+        <span data-notification-group-count style={COUNT_STYLE}>{items.length}</span>
+      </div>
+      {items.map((item) => (
+        <NotificationItemRow key={item.id} item={item} onItemClick={onItemClick} />
+      ))}
+    </section>
   )
 }
 

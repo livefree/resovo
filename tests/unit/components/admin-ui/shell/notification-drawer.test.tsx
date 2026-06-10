@@ -187,3 +187,68 @@ describe('NotificationDrawer — ESC + backdrop 关闭（DrawerShell base 验证
     expect(onClose).not.toHaveBeenCalled()
   })
 })
+
+describe('NotificationDrawer — NTLG-P2-c-UI-1 category 分组 + digest 摘要完整显示', () => {
+  const GROUPED: readonly NotificationItem[] = [
+    { id: 'g1', title: '审核积压超阈值', level: 'warn', createdAt: '2026-06-09T03:00:00Z', read: false, category: 'general' },
+    { id: 'b1', title: '采集即将开始', level: 'info', createdAt: '2026-06-09T02:00:00Z', read: false, category: 'background' },
+    {
+      id: 'g2',
+      title: '采集完成',
+      body: '新增 12 视频 · 8 线路 · 1 站点失败 · 0 错误',
+      level: 'info',
+      createdAt: '2026-06-09T01:00:00Z',
+      read: false,
+      category: 'general',
+    },
+  ]
+
+  it('两组都有内容 → 渲染 general + background 两区，general 在前', () => {
+    render(<NotificationDrawer open items={GROUPED} onClose={vi.fn()} />)
+    const groups = Array.from(document.body.querySelectorAll('[data-notification-group]'))
+    expect(groups.map((g) => g.getAttribute('data-notification-group'))).toEqual(['general', 'background'])
+  })
+
+  it('区头渲染分组文案 + 区内计数', () => {
+    render(<NotificationDrawer open items={GROUPED} onClose={vi.fn()} />)
+    const generalGroup = document.body.querySelector('[data-notification-group="general"]') as HTMLElement
+    expect(generalGroup.querySelector('[data-notification-group-title]')?.textContent).toContain('系统通知')
+    expect(generalGroup.querySelector('[data-notification-group-count]')?.textContent).toBe('2')
+    const bgGroup = document.body.querySelector('[data-notification-group="background"]') as HTMLElement
+    expect(bgGroup.querySelector('[data-notification-group-title]')?.textContent).toContain('后台动态')
+    expect(bgGroup.querySelector('[data-notification-group-count]')?.textContent).toBe('1')
+  })
+
+  it('item 渲染在对应 category 区内（g1/g2 → general，b1 → background）', () => {
+    render(<NotificationDrawer open items={GROUPED} onClose={vi.fn()} />)
+    expect(document.body.querySelector('[data-notification-group="general"] [data-notification-item="g1"]')).toBeTruthy()
+    expect(document.body.querySelector('[data-notification-group="general"] [data-notification-item="g2"]')).toBeTruthy()
+    expect(document.body.querySelector('[data-notification-group="background"] [data-notification-item="b1"]')).toBeTruthy()
+  })
+
+  it('category undefined → 归 general 默认组', () => {
+    const noCat: readonly NotificationItem[] = [
+      { id: 'x1', title: '无分类项', level: 'info', createdAt: '2026-06-09T00:00:00Z', read: false },
+    ]
+    render(<NotificationDrawer open items={noCat} onClose={vi.fn()} />)
+    expect(document.body.querySelector('[data-notification-group="general"] [data-notification-item="x1"]')).toBeTruthy()
+    expect(document.body.querySelector('[data-notification-group="background"]')).toBeNull()
+  })
+
+  it('空组不渲染区头（仅 background 有内容 → 无 general 区）', () => {
+    const onlyBg: readonly NotificationItem[] = [
+      { id: 'b9', title: '高危冻结', level: 'danger', createdAt: '2026-06-09T00:00:00Z', read: false, category: 'background' },
+    ]
+    render(<NotificationDrawer open items={onlyBg} onClose={vi.fn()} />)
+    expect(document.body.querySelector('[data-notification-group="general"]')).toBeNull()
+    expect(document.body.querySelector('[data-notification-group="background"]')).toBeTruthy()
+  })
+
+  it('digest 摘要完整显示（多 metric body 解除单行截断 whiteSpace=normal）', () => {
+    render(<NotificationDrawer open items={GROUPED} onClose={vi.fn()} />)
+    const body = document.body.querySelector('[data-notification-item="g2"] [data-notification-item-body]') as HTMLElement
+    expect(body.textContent).toBe('新增 12 视频 · 8 线路 · 1 站点失败 · 0 错误')
+    expect(body.style.whiteSpace).toBe('normal')
+    expect(body.style.whiteSpace).not.toBe('nowrap')
+  })
+})
