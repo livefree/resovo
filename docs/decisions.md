@@ -21832,3 +21832,80 @@ ADR-192 锁了 notifications schema 三个生命周期字段，但**只锁字段
 
 - **arch-reviewer (claude-opus-4-8 / agentId af24d2b6d44d50f89) 结论：AUDIT RESULT: PASS**（与 ADR-194 同次评审；无红线，逐项核验全 ✅）。TTL/dedup/scope 部分核验要点：① **D-195-1 TTL 30 天合理**——对齐 ADR-188 D-188-7（核 `maintenanceWorker.ts:109` `purgeRetentionDays ?? 30`）统一后台保留口径；NULL=永不过期与 ADR-192 D-192-5 **完全一致**（核 `notifications.ts:142/206` `expires_at IS NULL OR expires_at > NOW()`）。② **D-195-2 dedup 约定正确沉淀现状**——`<type>:<source_ref>` 核 `crawlerWorker.notifications.ts:42`（设，幂等重放）+ `notification-audit-emit.ts:101`（不设，离散一对一），判据无矛盾。③ **D-195-3 scope 规则正确**——三前缀正则与 `migration 100:40` 注释 + 现状 scope='broadcast' 一致；定向 reads 解除条件「定向 scope 实际启用」与 ADR-192 D-192-DEV-1（line 21431）/ D-192-DEV-4（line 21488）一致且更精确。④ **D-195-4 物理删除范式精确**——复用 ADR-188 准确（job + 24h tick + queries 层 delete 四要素逐项对应）；物理 DELETE 论证成立（通知非合规真源、audit_log 才是，核 ADR-192 D-192-1 解耦）；**FK CASCADE 精确无误**：`notification_reads.notification_id ON DELETE CASCADE`（`migration 100:90`）级联清理、`notification_read_cursor` 仅 REFERENCES users(id)（:80）不引用 notifications 故 cursor 确不受影响；删除口径 `expires_at IS NOT NULL AND expires_at <= NOW()` 是 D-192-5 未读口径的精确逻辑补集（NULL 永不删正确）。⑤ **D-195-5 无新 route 成立**——清理走 scheduler tick（同 ADR-188 无 HTTP）、dedup/scope 是约定+类型层校验，无端点。横切：边界与 ADR-188/191/192/193 全面对齐，无技术栈外依赖/越层/双真源/硬编码/any/新 route 漏 ADR 红线。
 - 黄线（转 NTLG-P2-d / P2-b/c 实施期处理，不阻断本 ADR Accepted）：① **admin_action per-type TTL 须 P2-d 显式配置**——已吸收升级进 D-195-DEV-1（首版策略表必须为 admin_action 显式配 type→天数条目，建议 ≥ 90 天对照运营追溯诉求，不得默认 30 天落空，防「框架已锁、具体值漏配」）。② `D-195-DEV-N` 偏离编号不被 `verify-adr-d-numbers` 追踪（同 ADR-194 黄线①，全项目既有约定盲区，主决策号 D-195-1..5 正常解析）。③ **P2-d `purge-expired-notifications` tick 须避开 `maintenanceScheduler` 的 early-return 注册陷阱**——现 `maintenanceScheduler.ts` 用一串 `if (timer) return` 顺序守卫注册各 timer，新 tick 若插中段且前一 timer 已存在会被 `return` 短路跳过；ADR「逐字对齐 ADR-188 范式」措辞勿让实施者照抄末位追加而忽略该结构脆弱性，P2-d 须确认新 tick 注册位置不被前序守卫短路。
+
+---
+
+## ADR-196：未读 SSE 实时推送（全平台首个 SSE / fetch-stream + Redis pub/sub）+ 「消息中心」读契约（历史 + 检索）+ 收口 P1-c-C 3 项（SEQ-20260609-01 / NTLG-P2-c-ADR · ntlg-governance §卡 P2-c + 推送模型 D-147-2）
+
+- **状态**：Accepted（arch-reviewer CONDITIONAL PASS → 2 红线修订 + 4 黄线/分层项转实施期，见 §评审）
+- **日期**：2026-06-09
+- **关联**：ADR-103a §4.1.5（NotificationDrawer + NotificationItem 展示契约）/ ADR-147 D-147-2（**60s polling 推送模型** + `admin-shell-notifications.ts` POLL_INTERVAL_MS=60_000）/ ADR-152（background-events 独立 lane `GET /admin/system/background-events`，crawler 通知现走此 lane）/ ADR-155 D-155-2（mirror 守卫）/ ADR-192（notifications schema + cursor 已读混合模型 D-192-3/5 + `unread-count` D-192-8 + **D-192-DEV-1/4 定向 reads 写路径 deferred 至「定向 scope 实际启用」** + P1-c-C BLOCKER-1「红点 list-derived」）/ ADR-193（emit 中枢）/ ADR-195 D-195-DEV-2（定向 reads 解除条件）/ 治理方案 §卡 P2-c +「server-next BFF 60s polling / 未来 SSE」拓扑图
+
+### 背景
+
+现状（NTLG-P1 + P2-a/P2-d 落地后）：通知未读计数与列表由 **server-next BFF 60s `setInterval` 轮询**（`admin-shell-notifications.ts`）拉 `GET /admin/notifications/unread-count` + `GET /admin/notifications`。治理方案卡 P2-c 要求：① 升级为「消息中心」页（全量历史 + 检索 + 归档）；② 未读计数升级 **SSE 实时推送替代 60s 轮询**。本 ADR 锁 **SSE 实时推送架构（全平台首个 SSE）** + 消息中心**读契约**（历史/检索）+ 收口 P1-c-C 登记的 3 项（crawler 出 background lane / 红点统一 unread-count / 定向逐行 reads）。
+
+**关键现状实证（2026-06-09 调研，奠定下列裁决）**：① **全平台无 EventSource 用法**（`new EventSource` grep 零命中）——SSE 是全新传输；② admin auth = **Bearer token**（`authenticate.ts` `extractBearerToken` 读 Authorization header）——浏览器原生 `EventSource` **无法设自定义 header**；③ 部署 = **长驻 Node 服务**（`apps/api/package.json` `node src/server.ts`，非 serverless）——SSE 长连接可行无函数超时；④ **emit 当前与 SSE 端点同进程**（worker 经 `server.ts:217-232` 在 Fastify `start()` 内同进程注册、`crawlerWorker.ts:501` 为 in-process Bull processor 非 fork 沙箱）——但 **SSE 长连接绑定单实例**，一旦 API 水平扩展（长驻服务 + 反代后常见多实例），emit 可能落在任意实例而 client 连在另一实例 → 进程内事件总线无法跨实例 fan-out（arch-reviewer 红线 1 更正：依据是多实例连接亲和性，非当前跨进程）；⑤ Redis = **ioredis**（`lib/redis.ts`，bull 已依赖）——subscribe 模式阻塞连接，pub/sub 需 `.duplicate()` 独立连接。
+
+**边界**：① **归档 v1 不做**（F5，用户裁定 2026-06-09 AskUserQuestion——broadcast/role 共享行的「归档对谁」语义非平凡，延后独立 follow-up 卡，D-196-DEV-1）；② 多渠道/邮件归 P2-b；③ 通知 schema/TTL/purge 归 ADR-192/195（本 ADR 不改 schema，v1 零新表/列）；④ 任务象限 SSE（任务面板实时）不在本 ADR 范围（仅未读通知 SSE）。
+
+### 决策
+
+1. **SSE 传输 = fetch-based `ReadableStream`（否决原生 `EventSource`）**（D-196-1，F1）：
+   - 客户端用 `fetch('/admin/notifications/stream', { headers: { Authorization: 'Bearer …' } })` + 读 `response.body` 的 `text/event-stream` 流（`TextDecoderStream` 解析 SSE 帧），**而非浏览器原生 `EventSource`**。
+   - **裁决理由**：原生 `EventSource` 无法设 `Authorization` header（W3C 限制）→ 若用之必须改 **cookie 鉴权**（admin 当前 Bearer，引入 httpOnly 鉴权 cookie 是横切基建变更 + CSRF 面）或 **token 入 query**（`?token=…` 进 access log / Referer 泄露，安全红线）。fetch-stream 可携 Bearer，零鉴权基建变更。代价 = 失去原生自动重连 → 客户端**手动指数退避重连**（D-196-6 fallback 兜底）。
+2. **多实例 fan-out = Redis pub/sub（否决进程内事件总线）**（D-196-2，F2；arch-reviewer 红线 1 论据更正）：
+   - `NotificationEmitter.emit` 写库成功后 **publish 轻量信号**到 Redis channel（如 `notifications:changed`，载荷含 scope 供端点按订阅用户过滤）；每个 API 实例用 **单一共享 `redis.duplicate()` subscribe 连接**（非每条 SSE 连接一个 duplicate，黄线 3）订阅该 channel；实例收信号 → 对**本实例内存连接注册表**中受影响的已连接 client fan-out 推 `unread` 事件。
+   - **裁决理由（更正）**：SSE 长连接绑定单实例，emit 可能落在任意实例（多实例水平扩展时），进程内 EventEmitter 无法跨实例 fan-out → client 连在实例 B 而 emit 落实例 A 必漏推。Redis pub/sub 每实例 subscribe 同 channel → 全实例都收信号 → 各自推本实例持有的连接，语义正确。**当前单实例下进程内总线理论可行，但选 Redis pub/sub 为面向水平扩展的正确默认**（bull 已用 Redis，零新依赖；避免未来多实例时重写）。
+   - **可靠性**：pub/sub 是 fire-and-forget（无持久化）——Redis 抖动/重连窗口丢信号 → 由 **D-196-6 的 60s 轮询 fallback 兜底**（轮询无条件重拉 unread-count 全量真值，覆盖任何丢失信号，最终一致上界 60s），不引入持久队列（YAGNI，未读计数非关键强一致）。
+3. **拓扑 + 端点 = 浏览器 fetch-stream → API `GET /admin/notifications/stream` 直连（新 SSE 路由）+ 单实例共享 subscribe + 内存连接表 fan-out**（D-196-3，F3 + 黄线 3/分层项）：
+   - **新端点 `GET /admin/notifications/stream`**（`Content-Type: text/event-stream`，preHandler 复用 `['admin','moderator']` 鉴权）：连接建立先推一次当前 `unread-count`（初始同步）；后续 Redis 信号触发推 `event: unread\ndata: {"count":N}\n\n`；**心跳** `: ping\n\n` 每 ~25s（keep-alive 防代理断连 + 检测死连接）；连接关闭/`req.raw.on('close')` 时从内存连接表移除（防泄漏）。
+   - **连接治理（黄线 3，全平台首个 SSE 关键护栏）**：**每实例单一共享 `redis.duplicate()` subscribe 连接**（非每条 SSE 一个 duplicate——否则 N 标签页=N Redis 连接放大）+ **内存连接注册表**（`Map<scopeKey, Set<reply>>`，Redis 信号到达后按 scope 路由 fan-out 到本实例持有的连接）；① 单实例 SSE **连接数 metric + 软上限**（超限拒新连接 → client 自动回落轮询）；② Redis 不可用时端点**立即 4xx/5xx 优雅失败**（不挂半开连接，client 走 D-196-6 轮询降级，与 `authenticate.ts` Redis-down 鉴权降级衔接）。
+   - **连接管理 + fan-out 编排沉淀独立 `NotificationStreamService`/`lib/notification-stream`（分层项）**：route handler 仅做 auth + 建流 + 委托，业务逻辑（连接注册表、scope 路由、心跳、Redis subscribe）不下沉 Route（守 Route→Service 分层，CLAUDE.md 后端分层约束）。
+   - **否决 BFF 代理长连接**（浏览器→server-next→API）：多一跳 + BFF 需持有长连接复杂度；浏览器直连 API（admin SPA 已持 Bearer 直调 API）。
+   - 本 ADR **兼作此端点的端点契约 ADR**（CLAUDE.md「新增 admin route 须独立 ADR」R7 MUST-8，见上 §端点契约表 7 列范式，`verify-endpoint-adr` 可识别）。
+4. **「消息中心」读契约 = 扩展现 `GET /admin/notifications`（否决新建 route）**（D-196-4，F4）：
+   - 加性 query 参数：`cursor`（created_at + id keyset 分页）+ `q`（title ILIKE 检索）+ `level`/`type`/`dateFrom`/`dateTo`/`readState` 过滤。**省略新参 = 现 drawer 旧行为**（向后兼容，不破 P1-c-C 调用）。
+   - **索引（黄线 2 纠正）**：list 恒带 scope 过滤 → 命中 **`idx_notifications_scope_created_at`**（migration 100:63，非 `idx_notifications_created_at`）；两索引均无 `id` 列，`id` 仅作同 created_at 的平局稳定排序键（同毫秒行数极少可接受，实施期须 EXPLAIN 实测；若需强 keyset 稳定性再评估复合索引扩 `(scope, created_at, id)`，属 schema 改动走 migration + 同步 architecture.md）。
+   - **否决新建 `/admin/messages`**（与 list 重复读路径，违复用）；消息中心页（server-next admin page，DataTable 范式消费扩展后的 list）归 **P2-c-A**。
+5. **收口 P1-c-C 登记 3 项**（D-196-5，F6，归 P2-c-C 实施）：
+   - ① **crawler 移出 background lane → 统一进 notifications list**：list 的 `sourceKind` allowlist 由 `['admin_action']` 扩纳 `'crawler'`（P1-c-C 为防重复暂留 crawler 在 ADR-152 background lane，SSE 统一后并入主 list）。**必须成对改动（黄线 1，防重复）**：扩 allowlist 的同时从 `BackgroundEventService.list` 移除 **finished crawler_run 派生**（`BackgroundEventService.ts:159-176`，crawler 直接从 crawler_runs 派生 `category='background'`）——否则同一 run 同时出现在 general（notifications 表）+ background（crawler_runs 派生）两源 → 抽屉重复项（id 不同去重无法消除）。**保留 active lane**（active crawler 映射 TaskItem 供任务面板，不受影响）；
+   - ② **红点改读 unread-count**（替 P1-c-C BLOCKER-1 的 list-derived）：SSE 实时推 unread-count 后，bell 红点直接消费 unread-count（含 crawler，bell↔drawer 一致），解 BLOCKER-1「unread-count 不含 background lane」的当时阻碍；
+   - ③ **定向 scope 逐行 reads 写路径**：仅当 P2-c 实际引入 `role:`/`user:` 定向 emit 时激活（D-192-DEV-1/4 + D-195-DEV-2 解除条件）；若 v1 仍全 broadcast 则继续 deferred（D-196-DEV-2）。
+6. **fallback = 保留 60s 轮询作 SSE 降级（双模式，不删轮询）**（D-196-6）：
+   - client SSE 建连失败 / 重连退避耗尽 / Redis 不可用 → 回退现 `setInterval` 60s 轮询 unread-count。SSE 正常时停轮询、降级时启轮询。**不删轮询代码**——SSE 是优化非替代关键路径，降级保未读计数最终可达（pub/sub 丢信号亦由轮询补偿）。
+7. **端点契约**（D-196-7，arch-reviewer 红线 2 格式更正）：唯一**新增** route = `/admin/notifications/stream`（下 §端点契约表，本 ADR 兼作其端点契约 ADR）；`GET /admin/notifications` 为**扩展现有 route**（加性参数 cursor/q/level/type/dateFrom/dateTo/readState，信封不变 `{ data, meta }`、省略新参=旧行为），归属 ADR-147/192 既有覆盖，不在本表重复声明。鉴权角色集对齐 list 现网 `['admin','moderator']`（黄线 4——moderator 同样渲染铃铛/消费 unread-count）。
+
+### 端点契约
+
+| # | 方法 | 路径 | 用途 | Request | Response | 错误码 |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1 | GET | `/admin/notifications/stream` | 未读计数 SSE 实时推送（替代 60s 轮询，admin+moderator） | 无 body；Bearer header（fetch-stream 携带，非 EventSource） | `text/event-stream` 帧（非 JSON 信封）：建连即推当前未读 `event: unread` + `data: {"count":N}`；Redis `notifications:changed` 信号触发推 `unread`；每 25s `: ping` 心跳 keep-alive | 401 / 403 |
+
+### schema（v1 零变更）
+
+v1 **无新表/列**：消息中心读扩展复用现有 `idx_notifications_created_at`（keyset 分页）+ `idx_notifications_scope_created_at`；定向逐行 reads 复用现有 `notification_reads` 表（migration 100 已建）；归档延后（D-196-DEV-1，若做则届时评估 per-user 表 vs 全局列 + migration）。
+
+### 影响文件（NTLG-P2-c-A/B/C 落地，本 ADR docs-only）
+
+- 新建：SSE 路由 handler（`routes/admin/notifications.ts` 加 `/stream`，仅 auth+建流+委托）+ **`NotificationStreamService`/`lib/notification-stream`**（连接注册表 + scope fan-out + 心跳 + 单实例共享 Redis subscribe + 连接数 metric/上限，分层项守 Route→Service）+ `lib/redis` pub/sub helper（publish channel 封装）+ server-next SSE fetch-stream client（含手动重连退避 + 轮询 fallback）+ server-next「消息中心」admin page
+- 修改：`NotificationEmitter.emit`（写库成功后 publish 信号，fire-and-forget 同构）+ `NotificationService.list`（加 cursor/q/过滤）+ `db/queries/notifications.ts` `listNotifications`（keyset 分页 + 检索谓词）+ `admin-shell-notifications.ts`（SSE 优先 + 轮询降级）+ list sourceKind allowlist 扩 crawler（F6①）+ 红点源切 unread-count（F6②）
+- 类型：`packages/types`（list 查询参数 + SSE 事件载荷类型）
+
+### 偏离登记
+
+- **D-196-DEV-1**：归档 v1 不做（用户裁定）。处置：accept——broadcast/role 共享行的「归档对谁」语义非平凡（per-user 归档表 vs 全局 archived_at 列 vs 视图 only 三选一各有取舍），v1 聚焦架构 novel（SSE）+ 高价值（历史/检索/实时）；归档延后独立 follow-up 卡，届时定语义 + schema。
+- **D-196-DEV-2**：定向 scope 逐行 reads 写路径仍随「定向 scope 实际启用」激活（继承 D-192-DEV-1/4 + D-195-DEV-2）。处置：accept——若 P2-c v1 仍全 broadcast/role-cursor 则无定向 emit 消费方，提前实装 reads 写是无消费方半套机制（YAGNI）；本 ADR 锁解除触发条件。
+- **D-196-DEV-3**：pub/sub fire-and-forget 不持久化（丢信号靠轮询 fallback 最终一致）。处置：accept——未读计数非关键强一致，60s 轮询兜底足够；引入持久队列（Streams/outbox）是过度工程。
+
+### 评审
+
+- **arch-reviewer (claude-opus-4-8 / agentId ae216f569ae577648) 结论：CONDITIONAL PASS → 2 红线 + 4 黄线 + 1 分层项全处置 → Accepted**。核心架构裁决（fetch-stream+Bearer / Redis pub/sub / 读契约扩展 / BLOCKER-1 解除 / 双模式降级）方向正确论证扎实，无横切红线（无技术栈外依赖〔ioredis 已存在、fetch-stream/TextDecoderStream 浏览器原生、零新 npm 包〕/ 无 any / 无空 catch / 无越层）。逐项 grep 实证：
+  - **红线 1（已修订 ADR 文本）**：D-196-2 + 实证④ 原断言「emit 跨独立 worker 进程」**与代码不符**——worker 经 `server.ts:217-232` 同进程注册、`crawlerWorker.ts:501` 为 in-process Bull processor（非 fork），grep 无 child_process.fork/cluster.fork。**更正**：Redis pub/sub 真正依据是**多实例水平扩展 SSE 连接亲和性**（长连接绑单实例，emit 落任意实例 → 进程内总线无法跨实例 fan-out），裁决（用 Redis）保留、论据改正。
+  - **红线 2（已修订 ADR 文本）**：D-196-7 原用 bold 内联 + 4 列表，`adr-parser.mjs:41/63` 要求 `### 端点契约` 三级标题 + ≥6 列、path 在 cells[2] → 原格式不被识别，`/stream` 落地会判漏 ADR → gate FAIL（命中红线「新 route 漏 ADR」）。**更正**为标准 `### 端点契约` 7 列范式表。
+  - **黄线 1（吸收 D-196-5①）**：crawler 并入 list 须**成对移除** `BackgroundEventService.ts:159-176` finished crawler_run 派生，否则 general+background 双源重复。
+  - **黄线 2（吸收 D-196-4）**：keyset 命中 `idx_notifications_scope_created_at`（非 created_at 单列）、两索引无 id 列，已纠正断言 + 实施期 EXPLAIN。
+  - **黄线 3 + 分层项（吸收 D-196-3 + 影响文件）**：改单实例**共享 subscribe + 内存连接表 fan-out**（非每连接 duplicate 放大 Redis 连接）+ 连接数 metric/软上限 + Redis-down 优雅降级；连接编排沉淀 `NotificationStreamService` 守 Route 分层。
+  - **黄线 4（吸收 D-196-7）**：`/stream` 鉴权对齐 list 现网 `['admin','moderator']`（核 `notifications.ts:27`，moderator 同渲染铃铛）。
+  - **横切对齐确认**：D-196-5 BLOCKER-1 解除事实链成立（`unreadCount` 按 scope 计含 broadcast crawler，`notifications.ts:200-218` 无 sourceKind 过滤 → 红点切 unread-count 后含 crawler）；D-196-6 轮询兜底对 pub/sub 丢信号补偿成立（轮询无条件重拉全量真值，最终一致上界 60s）；D-196-DEV-1/2/3 偏离 accept 理由（归档语义非平凡延后 / 无定向 emit 消费方 YAGNI / 未读非强一致）全成立。
+- **状态 → Accepted**（2 红线已修订 ADR 文本闭环、4 黄线+分层项转 P2-c-A/B/C 实施期登记）。**解锁 NTLG-P2-c-A/B/C 实施**。

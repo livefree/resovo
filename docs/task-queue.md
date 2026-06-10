@@ -1765,8 +1765,21 @@
       - **NTLG-P2-a 整卡 ✅**（-A schema/queries/DbReporter 地基 + -B worker 接入/投影收敛 + -C re-point/控制路径）。task_runs 统一抽象层端到端落地：maintenance bull 作业获终态留存 + digest + 失败重试锚点，统一 AdminTaskItem 单一投影（crawler_runs ∪ task_runs 只读 union），ADR-191 D-191-DEV-1 的 :id re-point 完成。**解锁 P2 并行剩卡**：NTLG-P2-d（purge worker）/ P2-b（多渠道）/ P2-c（消息中心+SSE）。
 13. **NTLG-P2-b** — 多渠道通知统一订阅（webhook 已有 / 邮件实装 / `submission.created` 补触发点）+ 通知偏好（状态：⬜ 待开始）
     - 依赖：NTLG-P1-c。建议模型：sonnet。
-14. **NTLG-P2-c** — 「消息中心」页（全量历史 + 检索 + 归档）+ 未读 SSE 实时推送（替代 60s 轮询）（状态：⬜ 待开始）
-    - 依赖：NTLG-P1-a。建议模型：sonnet。
+14. **NTLG-P2-c** — 「消息中心」页（全量历史 + 检索 + 归档）+ 未读 SSE 实时推送（替代 60s 轮询）（状态：🔄 进行中 2026-06-09 — 拆 -ADR/-A/-B/-C，原子化判据 Q2 跨 schema/api/service/BFF/UI 多层 + SSE 新传输架构需 ADR）
+    - 依赖：NTLG-P1-a ✅（+ 收口 P1-c-C 登记 3 项：crawler 移出 background lane / 红点统一 unread-count / 逐行 reads）。建议模型：opus（含 SSE 架构裁决）。
+    - **现状实证（2026-06-09 调研）**：① **全平台无 EventSource 用法**（`new EventSource` grep 零命中）→ SSE 是全新传输；② admin auth = **Bearer token**（`authenticate.ts:extractBearerToken` 读 Authorization header）→ 浏览器原生 EventSource **无法设 header** → 鉴权 fork；③ 部署 = **长驻 Node 服务**（`node src/server.ts` 非 serverless）→ SSE 长连接可行；④ emit 发生在 API 服务 + **独立 worker 进程**（crawlerWorker digest）→ 进程内事件总线不可行 → 跨进程推送 fork；⑤ schema **无归档列**；broadcast/role 通知「归档语义」（per-user vs 全局）非平凡；⑥ 现 `admin-shell-notifications.ts` 60s `setInterval` 轮询（POLL_INTERVAL_MS=60_000）；3 路由（list/unread-count/read）。
+    - **拆卡蓝图**：
+      - **NTLG-P2-c-ADR** — SSE 实时推送 + 消息中心契约 + 归档语义 ADR（状态：✅ 已完成 2026-06-09 — ADR-196 Accepted）。**完成备注**：ADR-196 Accepted（arch-reviewer claude-opus-4-8 / ae216f569ae577648 → CONDITIONAL PASS → 2 红线〔D-196-2 worker 同进程事实更正→多实例连接亲和性论据 / D-196-7 端点契约表 4 列 bold→标准 7 列范式，verify-endpoint-adr 识别 116→117〕+ 4 黄线〔crawler 并入成对移除 BackgroundEventService 派生 / keyset 命中 scope_created_at 索引 / SSE 共享 subscribe+内存连接表+metric+Redis-down 降级 / `/stream` 鉴权 admin+moderator〕+ 1 分层项〔NotificationStreamService〕全处置）。F1 fetch-stream / F2 Redis pub/sub / F3 /stream 直连+共享 subscribe / F4 扩展 list / F5 **归档 v1 deferred（用户裁定）** / F6 收口 3 项。门禁 verify:adr-contracts EXIT=0。docs-only。执行模型 opus；子代理 arch-reviewer (claude-opus-4-8 / ae216f569ae577648)。锁以下 fork（ADR-196 已定版）：
+        - **F1 SSE 传输/鉴权**：推荐 **fetch-based ReadableStream**（可设 Authorization Bearer + 手动重连退避）；否决原生 EventSource（无法设 header → 逼 cookie 鉴权基建变更 / query-token 安全风险）。
+        - **F2 跨进程推送机制**：推荐 **Redis pub/sub**（NotificationEmitter emit 时 publish 轻量信号 → SSE 端点 subscribe → push「重算 unread」tick；bull 已有 Redis）；否决进程内事件总线（worker 独立进程不可见）。
+        - **F3 拓扑**：推荐 **浏览器 fetch-stream → API `/admin/notifications/stream`（新 SSE 路由，text/event-stream）直连**（本 ADR 兼作其端点 ADR）；否决 BFF 代理长连接（多一跳 + BFF 持连复杂度）。事件载荷最小化（`{ unreadCount }` 或 tick 触发客户端 refetch）+ 心跳 keep-alive。
+        - **F4 消息中心读契约**：推荐**扩展现 `GET /admin/notifications`**（加 cursor 分页 + q 检索 + level/type/date/read 过滤，加性无新 route）；否决新建 `/admin/messages`（重复）。
+        - **F5 归档语义**：broadcast/role 非 per-user 行 → 归档「对谁」非平凡。待 ADR 裁（per-user 归档表似 notification_reads / 全局 archived_at 列 migration 104 / 视图层 only 三选一）。
+        - **F6 收口 P1-c-C 3 项**：crawler 移出 background lane（统一进 list）/ 红点改读 unread-count（替 list-derived，BLOCKER-1 回填）/ 定向 scope 逐行 reads 激活（D-192-DEV-1/4）。
+        - 依赖：P1-a ✅。建议模型：opus（+ arch-reviewer）。
+      - **NTLG-P2-c-A** — 消息中心页（历史 + 检索）：list 端点扩展（分页/检索/过滤，加性）+ server-next 新 admin 页（DataTable 范式消费）。依赖 -ADR（F4）。建议模型：sonnet。
+      - **NTLG-P2-c-B** — SSE 未读实时推送实装：`/admin/notifications/stream` SSE 路由 + Redis pub/sub（emit publish + 端点 subscribe）+ 前端 fetch-stream 客户端（替 60s 轮询，保轮询 fallback）。依赖 -ADR（F1/F2/F3）。建议模型：sonnet（架构已 ADR 锁）。
+      - **NTLG-P2-c-C** — 归档 + 收口 P1-c-C 3 项（按 ADR F5/F6 裁定落地）。依赖 -ADR + -A。建议模型：sonnet。
 15. **NTLG-P2-d** — 维护 worker 清理 `expires_at` 过期通知 + TTL 策略注入（状态：✅ 已完成 2026-06-09 — -A/-B 两子卡全收口；过期通知治理端到端，ADR-195 全 5 决策闭环）
     - 依赖：NTLG-ADR-P2（ADR-195）。建议模型：sonnet。
     - **拆卡判据**：purge 机制（D-195-4）+ TTL 策略注入（D-195-1 + 黄线①）合并跨 4 层违原子化 → 拆 -A/-B（两决策独立、不同层）。
