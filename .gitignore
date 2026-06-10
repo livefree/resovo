@@ -53,3 +53,4 @@ logs/
 # Playwright visual baseline storageState（admin 登录 cookies 快照；ADR-116 §2.7 / Y-NEW-1）
 # 每个开发者本地生成，含有效 refresh_token，禁止入库
 tests/visual/.auth/
+docs/audit/adr-d-status.json

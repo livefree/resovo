@@ -1834,3 +1834,84 @@
    - 实际开始：2026-06-10 12:19 ｜ 完成时间：2026-06-10 12:30
    - 建议模型：haiku（引用修复 + 模板补齐事务性工作；实际 claude-fable-5，用户会话人工覆盖）
    - 完成备注：3 项全交付，明细见 changelog [CHORE-DOCS-CLEANUP-20260610]。① R2 断链 20 处全修（decisions.md 12 唯一路径仅改路径 / architecture 1 / server_next_plan 3〔含 docs/CLAUDE.md→根 CLAUDE.md 勘误〕/ ui-rules 2 / source-health 方案 1 / CLAUDE.md 1）+ R1 追加 2 处（server_next_plan companion → archive/2026Q2/admin-v1/）；② frontmatter 活区补齐 38 文件（manual 33 + rules 4 + tracks.md，纯增量；archive 内 24 项按 §6 只读不修登记残留）；③ R1/R2 复扫清零 + verify:adr-contracts EXIT=0 + verify:manual-coverage EXIT=0。残留 6 项与 §7 断链计数（第 1 次 ≥3 处）登记于 changelog。子代理偏离 1 项（doc-janitor 误改 manual/README source_of_truth）已回退。执行模型: claude-fable-5（建议 haiku，用户会话人工覆盖）；子代理: doc-janitor (claude-haiku-4-5-20251001)。
+
+---
+
+## [SEQ-20260610-02] 视频/线路/站点健康度与反馈闭环（source-health v2 方案落地）
+
+- **状态**：🔄 执行中
+- **创建时间**：2026-06-10 12:53
+- **最后更新时间**：2026-06-10 12:53
+- **目标**：落地 `docs/designs/source-health-feedback-loop-plan_20260610.md` v2（两轮独立审核有条件通过，必修全吸收，commit 88893812）：修复「全部探测/试播后状态不更新」三处可见断点（B1/B2/B3）→ 打通反馈闭环（F1–F4）→ 评分进化 + 站点/主机桥接（D3/D4）。
+- **范围**：apps/api（service/queries/routes/lib）+ apps/worker（jobs/lib）+ apps/server-next（sources/videos 模块 UI）+ apps/web-next（PlayerShell）+ packages（media-probe 新包，P1-3）。**方案 §3 为各卡内容真源，§4 为门禁真源**；卡面只记验收口径与文件范围。
+- **依赖**：无 BLOCKER；方案 v2 已批准（用户 2026-06-10）。
+- **用户裁定**：批准开始 v2 拆卡开发（2026-06-10）。
+- **拆卡判据执行**：P1-1 跨 SQL+route+UI 三层 → 拆 -A/-B（§8 C6）；P2-4 范围 6 项 > 5 → 拆 -A/-B；P3-3 内部 schema 先行 → 拆 -A/-B。Phase 1 交付顺序 P1-4 → P1-2 首交付（§8 C6：用户报告的「不更新」最可能对应 B3/B2）。
+
+### 任务列表（Phase 1 — 修可见断点，无 schema 变更）
+
+1. **SRCHEALTH-P1-4** — sources 页探测完成后外层聚合行联动刷新（B3）（状态：🔄 进行中 2026-06-10 12:53）
+   - 创建时间：2026-06-10 12:53 ｜ 实际开始：2026-06-10 12:53
+   - 验收口径：在 `/admin/sources` 行展开区点「全部探测/全部试播/单集探测/试播」成功后，外层行的 probe/render 聚合展示与服务端一致（联动 refetch，不需手动刷新）。
+   - 文件范围：`apps/server-next/src/app/admin/sources/_client/SourceLinesExpand.tsx`、`SourcesClient.tsx`（+ 必要时 `src/lib/sources/api.ts` 单行取数）。
+   - 依赖：无。建议模型：sonnet。
+2. **SRCHEALTH-P1-2** — 手动探测后同步重算视频聚合状态（B2）（状态：⬜ 待开始）
+   - 创建时间：2026-06-10 12:53
+   - 验收口径：`SourceProbeService` probeOne/renderCheckOne/batchProbe/batchRenderCheck 完成后 `videos.source_check_status` 立即与 `video_sources` 现状一致（不再等 6h cron）。
+   - 文件范围：`apps/api/src/services/SourceProbeService.ts`、`apps/api/src/lib/`（computeCheckStatus 共享纯函数抽取）、`apps/worker/src/jobs/source-health/aggregate-source-check-status.ts`（改 import 共享函数或保持双侧同步注释）。跨 api-service+worker 2 层，理由：同一聚合契约的写入方与原消费方对齐。
+   - 依赖：无。建议模型：sonnet。
+3. **SRCHEALTH-P1-1-A** — videos 列表 API 补 probe/render 聚合字段（B1 后端）（状态：⬜ 待开始）
+   - 创建时间：2026-06-10 12:53
+   - 验收口径：`/admin/videos` 列表响应含视频级 probe/render 聚合字段（probe 复用 `source_check_status`，render 新增聚合表达式），支持排序。
+   - 文件范围：`apps/api/src/db/queries/videos.*`、`apps/api/src/routes/admin/videos.ts`（响应字段加性扩展，无新 route）。
+   - 依赖：建议在 P1-2 后（聚合即时性先就位）。建议模型：sonnet。
+4. **SRCHEALTH-P1-1-B** — VideoColumns 探测列接真数据（B1 前端）（状态：⬜ 待开始）
+   - 创建时间：2026-06-10 12:53
+   - 验收口径：`/admin/videos`「探测/播放」列展示真实聚合双信号（不再硬编码 unknown），排序可用。
+   - 文件范围：`apps/server-next/src/app/admin/videos/_client/VideoColumns.tsx`（+ `src/lib/videos/types.ts` 行类型加字段）。
+   - 依赖：SRCHEALTH-P1-1-A。建议模型：sonnet。
+5. **SRCHEALTH-P1-5** — feedback recheck 定向化（F2）（状态：⬜ 待开始）
+   - 创建时间：2026-06-10 12:53
+   - 验收口径：feedback recheck 对目标 source 先 level1 再 level2 定向重测（`runLevel2Render` 增可选 `sourceIds`），probe=dead 的失败源不再被静默标 processed。
+   - 文件范围：`apps/worker/src/jobs/feedback-driven-recheck.ts`、`apps/worker/src/jobs/source-health/level2-render.ts`（+ level1-probe 复用入口）。
+   - 依赖：无。建议模型：sonnet。
+
+### 任务列表（P1-3 独立卡 — 共享解析包）
+
+6. **SRCHEALTH-P1-3** — `packages/media-probe` 共享解析包 + 手动试播升级（D1/D2）（状态：⬜ 待开始）
+   - 创建时间：2026-06-10 12:53
+   - 验收口径：admin 手动「试播」走 manifest 真解析（m3u8/moov/mpd）且支持 partial；worker 与 api 消费同一 `packages/media-probe`，双副本消除。
+   - 文件范围：`packages/media-probe/`（新建）、`apps/worker/src/lib/parsers.ts`（替换为包消费）、`apps/api/src/services/SourceProbeService.ts`。
+   - 依赖：Phase 1 主线（1–5）完成后启动。**前置强制**：spawn Opus 子代理裁决包导出面（共享组件 API 契约，CLAUDE.md 模型路由）。建议模型：sonnet（+Opus 子代理）。
+   - 门禁：独立验收 typecheck / lint / worker 测试 / API service 测试 + 双端替换回归（方案 §3 P1-3）。
+
+### 任务列表（Phase 2 — 反馈闭环；启动前置：Phase 1 收口）
+
+7. **SRCHEALTH-P2-1** — 前台 PlayerShell 补 success 上报（F1）（状态：⬜ 待开始）
+   - 创建时间：2026-06-10 12:53 ｜ 验收口径：首播成功上报 success:true（per-sourceId 去抖 + 1/N 采样配置化），PLAYER 域 e2e 不回归。
+   - 文件范围：`apps/web-next/src/components/player/PlayerShell.tsx`。依赖：Phase 1 收口。建议模型：sonnet。
+8. **SRCHEALTH-P2-2** — EMA 反馈统计字段 migration + feedback 写入（F4 前置）（状态：⬜ 待开始）
+   - 创建时间：2026-06-10 12:53 ｜ 验收口径：`video_sources` 增 `fb_score`/`fb_sample_weight`/`last_feedback_at`（写入即时半衰，方案 §3 P2-2），feedback 落账；**本卡不进评分**。
+   - 文件范围：migration + `apps/api/src/routes/feedback.ts` + `docs/architecture.md` 同步。依赖：P2-1。**前置强制**：Opus 子代理（跨 3+ 消费方 schema 字段）。建议模型：sonnet（+Opus 子代理）。
+9. **SRCHEALTH-P2-3** — 复活/recheck 门槛独立 ipHash 化（F3 + §8 C3）（状态：⬜ 待开始）
+   - 创建时间：2026-06-10 12:53 ｜ 验收口径：dead→ok 复活需窗口内 ≥2 独立 ipHash（SADD+SCARD+TTL，禁 INCR）；失败→recheck 同卡迁移同原语。
+   - 文件范围：`apps/api/src/routes/feedback.ts`。依赖：P2-1。建议模型：sonnet。
+10. **SRCHEALTH-P2-4-A** — manual_route_reprobe 信号 API 侧（状态：⬜ 待开始）
+    - 创建时间：2026-06-10 12:53 ｜ 验收口径：`reprobeRoute` 写真实队列信号（`origin='manual_route_reprobe'` + partial index migration + types union + audit 真实 jobId/queuedCount），占位 jobId 消除。
+    - 文件范围：migration（index）、`packages/types`（origin union）、`apps/api/src/services/SourcesMatrixService.ts`、`apps/api/src/db/queries/`。依赖：无硬依赖（可与 P2-1 并行）。建议模型：sonnet。
+11. **SRCHEALTH-P2-4-B** — manual_route_reprobe worker 定向消费（状态：⬜ 待开始）
+    - 创建时间：2026-06-10 12:53 ｜ 验收口径：worker 消费 `manual_route_reprobe` 信号定向 probe+render 对应线路全 source，消费多少标多少 processed。
+    - 文件范围：`apps/worker/src/jobs/`（接 P1-5 定向参数）。依赖：SRCHEALTH-P2-4-A + SRCHEALTH-P1-5。建议模型：sonnet。
+
+### 任务列表（Phase 3 — 评分进化 + 站点/主机桥接；启动前按方案 §4 复核拆卡与时序）
+
+12. **SRCHEALTH-P3-3-A** — `video_sources.source_hostname` migration + 回填 + 写路径维护（状态：🟡 规划）
+    - 依赖：Phase 2 收口。前置：Opus 子代理（schema 字段）。建议模型：sonnet。
+13. **SRCHEALTH-P3-3-B** — `host_health` 表 + 熔断双存储 + 软降权（状态：🟡 规划）
+    - 依赖：P3-3-A。建议模型：opus（架构原语 + 新表设计）。
+14. **SRCHEALTH-P3-1** — 双时钟新鲜度衰减 + 校准表单测（状态：🟡 规划）
+    - 依赖：可与 P3-3 并行。建议模型：sonnet。
+15. **SRCHEALTH-P3-2** — 反馈项动态权重进分（影子计算一周硬前置）（状态：🟡 规划）
+    - 依赖：SRCHEALTH-P2-2 落地 + 影子验证（方案 §4 时序硬依赖链）。建议模型：opus（评分关键路径权重设计）。
+16. **SRCHEALTH-P3-4** — 播放端按 effectiveScore 切线（状态：🟡 规划）
+    - 依赖：P3 评分项收口。建议模型：sonnet。
