@@ -3640,3 +3640,20 @@
 - **新增依赖**：无　**数据库变更**：无（复用 -A migration 104 + insertDismissals）　**新端点**：2（本序列 ADR-197 endpoint-ADR 覆盖，无另起 ADR）
 - **门禁**：typecheck（全 ws）/ lint / verify:adr-contracts EXIT=0（**verify-endpoint-adr 234 路由含 dismiss 2 匹配 ADR-197** / error-message ITEM_NOT_DISMISSABLE 登记 / sql-schema 80 表 / mirror 2 对）/ test:changed 升全量〔api-errors base 包，ADR-180〕503 文件 7023 passed。
 - **里程碑**：dismiss 写入口就绪（通知抽屉单条/清空可落库）→ 解锁 -B2（读过滤接入 + taskrun 终态 + purge 清理）。
+
+## [NTLG-NTF-DISMISS-B2] dismiss 通知侧读过滤（list general SQL 排除 + BackgroundEventService finished 内存过滤）（SEQ-20260609-01 P3 · ADR-197 D-197-4）
+- **完成时间**：2026-06-10
+- **记录时间**：2026-06-10 02:57
+- **执行模型**：claude-opus-4-8（主循环；建议 sonnet，人工 opus 覆盖 + 持续推进授权）
+- **子代理**：无（D-197-4 分层口径已 ADR-197 锁定，纯实施）
+- **拆卡**：原 -B 拆 -B1（写）✅ / **-B2（通知侧读过滤）** / -B3（任务侧 TaskAggregator+taskrun 守卫+purge）。聚焦 -B1 已能 dismiss 的项（general + bg-audit）读路径生效。
+- **改动文件**：
+  - `apps/api/src/services/NotificationService.ts` — `ListNotificationsParams` +`excludeDismissed?: boolean`；`baseFilter` 加 `...(params.excludeDismissed && { excludeDismissedForUser: params.userId })` → 透传 -A 的 `buildNotificationFilter` NOT EXISTS 谓词（general SQL 排除，D-197-4）
+  - `apps/api/src/routes/admin/notifications.ts` — GET list 端点传 `excludeDismissed: !isHistoryMode`（drawer 排除 / 消息中心 history 保留全量）
+  - `apps/api/src/services/BackgroundEventService.ts` — `ListBackgroundEventsParams` +`userId?`；list 加 `selectDismissedKeys` 查询 + finished audit 项内存 anti-set 过滤 `!dismissed.has('bg-'+e.id)`（派生项无 notifications 行、不能 SQL NOT EXISTS → Service 内存过滤，HIGH-1；upcoming/active 不可 dismiss 不过滤）
+  - `apps/api/src/routes/admin/systemBackgroundEvents.ts` — svc.list 传 `userId: request.user!.userId`
+  - `tests/unit/api/background-event-service.test.ts` — +2（#7b dismiss 过滤排除 / #7c 未 dismiss 保留）
+- **分层守恒**：general 走 SQL（queries buildNotificationFilter）、finished audit 派生走 Service 内存 anti-set（selectDismissedKeys 仍在 queries，Service 不含 SQL 字面量）——ADR-197 D-197-4 HIGH-1 纠正落地。
+- **新增依赖**：无　**数据库变更**：无　**新端点/ADR**：无
+- **门禁**：typecheck（全 ws）/ lint / verify:adr-contracts EXIT=0（endpoint-adr 234 无新增 / sql-schema 80 表 / mirror 2 对）/ test:changed 2 文件 46 passed（bg-event 14 + notification-service 32）+ -A 集成已验 query 层 excludeDismissedForUser。
+- **里程碑**：**通知抽屉 dismiss 写+读闭环**——general 通知 + bg-audit 高危项移除后不再出现在抽屉，消息中心 history 仍保留（D-197-4 验证）。剩 -B3（任务侧 + purge 清理）+ -C（UI 按钮）。

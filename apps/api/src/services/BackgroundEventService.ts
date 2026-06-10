@@ -24,6 +24,7 @@ import type {
   AdminBackgroundEventFinished,
 } from '@resovo/types'
 import { listRuns } from '@/api/db/queries/crawlerRuns'
+import { selectDismissedKeys } from '@/api/db/queries/notifications'
 import * as systemSettingsQueries from '@/api/db/queries/systemSettings'
 import { computeNextTrigger } from '@/api/lib/crawler-scheduling'
 import { getSchedulerStatus } from '@/api/workers/maintenanceScheduler'
@@ -52,6 +53,8 @@ interface AuditHighRiskRow {
 export interface ListBackgroundEventsParams {
   limit: number
   windowHours: number
+  /** 当前登录用户（ADR-197 D-197-4：finished audit 项 dismiss 内存 anti-set 过滤）；省略=不过滤 */
+  userId?: string
 }
 
 export interface ListBackgroundEventsResult {
@@ -164,11 +167,19 @@ export class BackgroundEventService {
       }))
       .sort((a, b) => b.finishedAt.localeCompare(a.finishedAt))
 
+    // ADR-197 D-197-4：finished audit 项 dismiss 内存 anti-set 过滤（派生项无 notifications 行、
+    // 不能 SQL NOT EXISTS，HIGH-1）。前端最终 id = `bg-${event.id}` = `bg-audit:<id>`，与 item_key 比对。
+    // upcoming/active 不可 dismiss（D-197-2）→ 不过滤。userId 省略（未鉴权路径）→ 不过滤。
+    const dismissed = params.userId ? await selectDismissedKeys(this.db, params.userId) : null
+    const finishedVisible = dismissed
+      ? finishedEvents.filter((e) => !dismissed.has(`bg-${e.id}`))
+      : finishedEvents
+
     // 最终排序：upcoming asc scheduledAt → active asc startedAt → finished desc finishedAt
     const events: AdminBackgroundEvent[] = [
       ...upcomingEvents,
       ...activeEvents,
-      ...finishedEvents,
+      ...finishedVisible,
     ]
 
     return {

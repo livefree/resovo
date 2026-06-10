@@ -6,17 +6,16 @@
 
 ## 当前任务（单任务工作台：同时仅 1 个 🔄 进行中；完成即删卡，历史见 docs/changelog.md）
 
-### 🔄 NTLG-NTF-DISMISS-B2 — dismiss 读过滤三处接入（ADR-197 D-197-4）
+### 🔄 NTLG-NTF-DISMISS-B3 — dismiss 任务侧读过滤 + taskrun 终态守卫 + purge 清理（ADR-197 D-197-2/4/6）
 
-- **所属序列**：SEQ-20260609-01 P3 dismiss（ADR-197 ✅ / -A ✅ / -B1 ✅ 已交付）。**建议模型**：sonnet；**本会话执行模型**：claude-opus-4-8（人工覆盖，持续推进授权）。
-- **拆卡依据**：原 -B 7 改动点 >5 → -B1（写）✅ / **-B2（读过滤）** / -B3（清理+taskrun 守卫）。
-- **问题理解**：dismiss 落库后须在抽屉读路径排除，移除才"生效"（不再显示）；消息中心 history 不排除（保留全量，D-197-4）。
-- **方案**（按 ADR-197 D-197-4，HIGH-1 分层：general SQL NOT EXISTS、派生 Service 内存 anti-set）：① `routes/admin/notifications.ts` GET list drawer 模式（`!isHistoryMode`）传 `excludeDismissedForUser=userId`、history 模式不传 → `NotificationService.list` 透传到 `buildNotificationFilter`（-A 已备谓词）；② `BackgroundEventService.list` 入参加 `userId` + finished 项 `selectDismissedKeys` 内存 anti-set 过滤（`bg-${event.id}` 比对）；③ `TaskAggregator.list` 入参加 `userId` + 终态项内存过滤；④ 2 route（systemBackgroundEvents/system-jobs）传 `request.user!.userId`；⑤ 单测/集成。
-- **涉及文件**（范围）：`apps/api/src/routes/admin/notifications.ts`、`apps/api/src/services/NotificationService.ts`、`apps/api/src/services/BackgroundEventService.ts`、`apps/api/src/services/TaskAggregator.ts`、`apps/api/src/routes/admin/systemBackgroundEvents.ts`、`apps/api/src/routes/admin/system-jobs.ts`（实际文件名以 grep 为准）、对应单测。
-- **不做**：taskrun- 终态 dismiss 守卫扩展（查 task_runs）+ maintenanceWorker purge deleteStaleDismissals 接线（-B3）；UI（-C）。
-- **子代理调用**：无（D-197-4 分层口径已 ADR-197 锁定，纯实施）。
-- **原子化**：5 项（读过滤同主题强内聚 4 处接入 + 测试）→ 单卡。
-- **状态**：🔄 进行中（先 commit -B1 → list 接入 → BgEvent/TaskAgg userId 过滤 → 2 route → 测试 → 门禁 → commit）
+- **所属序列**：SEQ-20260609-01 P3 dismiss（ADR-197 ✅ / -A ✅ / -B1 ✅ / -B2 ✅ 已交付）。**建议模型**：sonnet；**本会话执行模型**：claude-opus-4-8（人工覆盖，持续推进授权）。
+- **问题理解**：补任务抽屉 dismiss（taskrun- 终态可移除）+ 任务侧读过滤 + 后台 dismissal 清理。
+- **方案**（按 ADR-197 D-197-2/4/6）：① `TaskAggregator.list` +`userId?` + 终态 task 项 `selectDismissedKeys` 内存 anti-set 过滤；② `system-jobs` route 传 userId；③ taskrun- 终态 dismiss 守卫扩展——`NotificationService.dismiss/dismissBatch` 对 `^taskrun-\d+$` 查 task_runs 状态（终态 success/failed/cancelled 可 / running·pending·cancelling 拒），守卫从纯同步前缀升为含异步查库（复用既有 task_runs query）；④ `maintenanceWorker` purge step 接 `deleteStaleDismissals`（cutoff=NOW-90d，对齐 ADMIN_ACTION_TTL_DAYS，避早于真源 purge，黄线③避 early-return）；⑤ 单测。
+- **涉及文件**（范围）：`apps/api/src/services/TaskAggregator.ts`、`apps/api/src/routes/admin/system-jobs.ts`、`apps/api/src/services/NotificationService.ts`、`apps/api/src/lib/dismiss-item-key.ts`（或新 task_runs 终态 query 复用）、`apps/api/src/workers/maintenanceWorker.ts`、对应单测。
+- **不做**：UI（-C）；跨标签即时同步（MEDIUM-1 follow-up）。
+- **子代理调用**：无（D-197-2/4/6 已 ADR-197 锁定，纯实施）。
+- **原子化**：5 项（任务侧读过滤 + taskrun 写守卫 + purge + 测试）→ 单卡。
+- **状态**：🔄 进行中（先 commit -B2 → TaskAgg 过滤 → jobs route → taskrun 守卫 → purge 接线 → 测试 → 门禁 → commit）
 
 ---
 

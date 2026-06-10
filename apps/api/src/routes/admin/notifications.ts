@@ -96,6 +96,8 @@ export async function adminNotificationRoutes(fastify: FastifyInstance) {
       limit,
       userId: request.user!.userId,
       role: request.user!.role,
+      // ADR-197 D-197-4：drawer 模式排除已 dismiss 项；history 模式（消息中心）不排除保留全量
+      excludeDismissed: !isHistoryMode,
       ...(since != null && { since }),
       ...(cursor != null && { cursor }),
       ...(d.until != null && { until: d.until }),

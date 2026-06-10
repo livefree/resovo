@@ -58,6 +58,8 @@ export interface ListNotificationsParams {
   types?: string[]
   /** 已读态过滤（broadcast/role 按 readAt 高水位线比较） */
   readState?: 'read' | 'unread'
+  /** drawer 模式排除该 user 已 dismiss 的 general 项（ADR-197 D-197-4）；history 模式不传 → 保留全量 */
+  excludeDismissed?: boolean
 }
 
 export interface ListNotificationsResult {
@@ -82,6 +84,8 @@ export class NotificationService {
       ...(params.q != null && { q: params.q }),
       ...(params.levels != null && { levels: params.levels }),
       ...(params.types != null && { types: params.types }),
+      // ADR-197 D-197-4：drawer 模式排除该 user 已 dismiss 的 general 项；history 模式 route 不传 → 不拼谓词保留全量
+      ...(params.excludeDismissed && { excludeDismissedForUser: params.userId }),
     }
     const listArgs = (filter: typeof baseFilter): Parameters<typeof listNotifications>[1] => ({
       ...filter,

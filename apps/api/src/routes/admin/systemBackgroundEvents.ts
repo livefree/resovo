@@ -47,7 +47,7 @@ export async function adminSystemBackgroundEventsRoutes(fastify: FastifyInstance
     const limit = parsed.data.limit ?? DEFAULT_LIMIT
     const windowHours = parsed.data.windowHours ?? DEFAULT_WINDOW_HOURS
 
-    const result = await svc.list({ limit, windowHours })
+    const result = await svc.list({ limit, windowHours, userId: request.user!.userId })
 
     // D-152-4：Cache-Control private, max-age=30（per-user 30s 短缓存 / 防重复打 DB）
     void reply.header('Cache-Control', 'private, max-age=30')

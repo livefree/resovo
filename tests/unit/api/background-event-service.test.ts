@@ -187,6 +187,24 @@ describe('BackgroundEventService.list — finished 源', () => {
     const res = await svc.list({ limit: 20, windowHours: 6 })
     expect(res.events.some((e) => e.kind === 'audit_high_risk')).toBe(false)
   })
+
+  it('#7b finished audit 项被 dismiss → 内存 anti-set 过滤排除（ADR-197 D-197-4 / NTLG-NTF-DISMISS-B2）', async () => {
+    queryMock.mockResolvedValueOnce({ // audit query
+      rows: [{ id: 'd1', action_type: 'crawler.freeze', target_id: null, created_at: new Date('2026-06-09T01:00:00Z'), actor_id: 'admin-1' }],
+    })
+    queryMock.mockResolvedValueOnce({ rows: [{ itemKey: 'bg-audit:d1' }] }) // selectDismissedKeys（前端最终 id bg-audit:d1）
+    const res = await svc.list({ limit: 20, windowHours: 6, userId: 'admin-1' })
+    expect(res.events.find((e) => e.id === 'audit:d1')).toBeUndefined() // 被过滤
+  })
+
+  it('#7c userId 传但 dismissals 不含该项 → finished audit 保留', async () => {
+    queryMock.mockResolvedValueOnce({
+      rows: [{ id: 'd2', action_type: 'crawler.freeze', target_id: null, created_at: new Date('2026-06-09T01:00:00Z'), actor_id: 'admin-1' }],
+    })
+    queryMock.mockResolvedValueOnce({ rows: [] }) // selectDismissedKeys 空
+    const res = await svc.list({ limit: 20, windowHours: 6, userId: 'admin-1' })
+    expect(res.events.find((e) => e.id === 'audit:d2')).toBeDefined()
+  })
 })
 
 describe('BackgroundEventService.list — id 唯一性 + 结构', () => {
