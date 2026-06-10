@@ -6,7 +6,14 @@
 
 ## 当前任务（单任务工作台：同时仅 1 个 🔄 进行中；完成即删卡，历史见 docs/changelog.md）
 
-_（当前无进行中任务。取下一个前先查 `docs/task-queue.md` 是否有 🚨 BLOCKER。**SEQ-20260609-01 进展**：P0 ✅ + P1 ✅ + NTLG-ADR-P2 ✅ + P2-a ✅ + P2-d ✅ + **P2-c 整卡 ✅**（-ADR/-A/-B/-C 全收口）+ **Follow-up NTLG-P2-c-E2E ✅**（通知链路浏览器级验收，e2e:admin 82 passed）+ **Follow-up NTLG-P2-c-UI-1 ✅**（2026-06-10 通知抽屉可见性增强：按 category 分组渲染「系统通知/后台动态」+ 解除 body 单行截断让采集 digest 摘要完整显示；notification-drawer 专项 26 测 / test:changed 999 passed；不改 Props 无 Opus）。**P2 剩**：**NTLG-P2-b**（多渠道/邮件）——⏸️ **暂缓**（用户裁定 2026-06-10；实质剩余仅 email 实装〔门控 provider+DNS+ADR〕，蓝图 task-queue line 1766）。**SEQ-20260609-01 实质收官**（P0→P2 除暂缓 P2-b 全收口）。**剩余 follow-up（均独立卡/门控）**：结构化 digest chips（需扩 NotificationItem.digest 跨 4 层 + Opus）/ 铃铛数字徽标（C-2 已留 number 契约）/ 真实 Redis SSE-push 端到端（流式 mock harness）/ date·type 过滤 / 行点击已读 markOneRead（D-192-DEV-4 设计门控）/ 归档 F5 v1 deferred（用户门控）。**SEQ-20260608-01** cutover：卡 4 回滚窗 🔄 ~2026-06-15、卡 5 改名待排期。）_
+### 🔄 NTLG-NTF-DISMISS — 通知/任务抽屉 dismiss 软移除（ADR-197 设计中）
+
+- **所属**：通知抽屉交互增强（用户裁定 2026-06-10「两者都推」之重档；轻档 NTLG-NTF-UNREAD-FILTER ✅ 已交付）
+- **建议模型**：opus（含 schema + 新端点 ADR）
+- **现状**：**ADR-197 dismiss 子系统由 arch-reviewer Opus 子代理设计中**（agentId a2edc8aa4e6cfa1a9，后台运行）。需求：抽屉级软移除（单条/清空），移除 ≠ 物理删除，被移除项在消息中心仍按 TTL 常规留存；外加「只看未读」切换（轻档已做）。
+- **设计难点（已传子代理）**：抽屉项多源（notifications 表行 + audit_log 派生 + task_runs/crawler_runs 派生）→ 需统一 item_key 编码 + per-user `notification_dismissals` 表 + 抽屉三处（list drawer/background-events/jobs）排除 vs 消息中心 history 模式不排除 + 派生项 dismiss 范围裁决（general/finished 可 / upcoming·active 不可）+ dismissal 记录清理（notifications FK CASCADE / 派生项 TTL）。
+- **下一步**：子代理出 ADR-197 草案 → 主循环落 docs/decisions.md（+ arch-reviewer PASS）→ 拆 -A（schema+queries）/ -B（api 端点 + 三处过滤接入）/ -C（UI 抽屉移除/清空按钮）实施。
+- **状态**：🔄 等待子代理设计输出（不抢跑实现——新 admin route + 跨消费方 schema 双红线，须 ADR PASS 后落地）
 
 ---
 

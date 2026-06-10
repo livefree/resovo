@@ -26,6 +26,7 @@
  *   - 不格式化 createdAt（消费方传已格式化字符串；本组件 UTC 字符串原样显示）
  */
 import type { CSSProperties } from 'react'
+import { useState } from 'react'
 import { DrawerShell } from './drawer-shell'
 import type { NotificationItem } from './types'
 
@@ -42,6 +43,18 @@ const MARK_ALL_READ_BTN_STYLE: CSSProperties = {
   border: 0,
   padding: 'var(--space-1) var(--space-2)',
   color: 'var(--accent-default)',
+  cursor: 'pointer',
+  fontFamily: 'inherit',
+  fontSize: 'var(--font-size-xs)',
+  borderRadius: 'var(--radius-sm)',
+  flexShrink: 0,
+}
+
+// NTLG-NTF-UNREAD-FILTER：「只看未读 / 显示全部」切换。激活态（unreadOnly）走 accent，非激活走 muted。
+const UNREAD_TOGGLE_BTN_STYLE: CSSProperties = {
+  background: 'transparent',
+  border: 0,
+  padding: 'var(--space-1) var(--space-2)',
   cursor: 'pointer',
   fontFamily: 'inherit',
   fontSize: 'var(--font-size-xs)',
@@ -150,9 +163,21 @@ function groupItems(
 }
 
 export function NotificationDrawer({ open, items, onClose, onItemClick, onMarkAllRead }: NotificationDrawerProps) {
+  // NTLG-NTF-UNREAD-FILTER：抽屉内部「只看未读」过滤态（复用既有 read，不改 Props）。
+  const [unreadOnly, setUnreadOnly] = useState(false)
+  const visibleItems = unreadOnly ? items.filter((item) => !item.read) : items
   const headerActions = (
     <>
       <span data-notification-count style={COUNT_STYLE}>{items.length}</span>
+      <button
+        type="button"
+        data-notification-unread-toggle
+        data-active={unreadOnly ? 'true' : 'false'}
+        onClick={() => setUnreadOnly((v) => !v)}
+        style={{ ...UNREAD_TOGGLE_BTN_STYLE, color: unreadOnly ? 'var(--accent-default)' : 'var(--fg-muted)' }}
+      >
+        {unreadOnly ? '显示全部' : '只看未读'}
+      </button>
       {onMarkAllRead && (
         <button
           type="button"
@@ -176,8 +201,10 @@ export function NotificationDrawer({ open, items, onClose, onItemClick, onMarkAl
     <DrawerShell open={open} onClose={onClose} title="通知" headerActions={headerActions} variant="notifications">
       {items.length === 0 ? (
         <div data-notification-empty style={EMPTY_STYLE}>暂无通知</div>
+      ) : visibleItems.length === 0 ? (
+        <div data-notification-empty-unread style={EMPTY_STYLE}>暂无未读通知</div>
       ) : (
-        groupItems(items).map(([groupKey, group]) => (
+        groupItems(visibleItems).map(([groupKey, group]) => (
           <NotificationGroup key={groupKey} groupKey={groupKey} items={group} onItemClick={onItemClick} />
         ))
       )}

@@ -252,3 +252,43 @@ describe('NotificationDrawer — NTLG-P2-c-UI-1 category 分组 + digest 摘要�
     expect(body.style.whiteSpace).not.toBe('nowrap')
   })
 })
+
+describe('NotificationDrawer — NTLG-NTF-UNREAD-FILTER 只看未读切换', () => {
+  it('默认显示全部 → 切换按钮文案「只看未读」+ data-active=false + 全部项渲染', () => {
+    render(<NotificationDrawer open items={ITEMS} onClose={vi.fn()} />)
+    const toggle = document.body.querySelector('[data-notification-unread-toggle]') as HTMLButtonElement
+    expect(toggle.textContent).toBe('只看未读')
+    expect(toggle.getAttribute('data-active')).toBe('false')
+    expect(document.body.querySelector('[data-notification-item="n1"]')).toBeTruthy()
+    expect(document.body.querySelector('[data-notification-item="n2"]')).toBeTruthy()
+  })
+
+  it('点击切换 → 仅未读项可见（已读 n2 隐藏）+ 文案「显示全部」+ active=true', () => {
+    render(<NotificationDrawer open items={ITEMS} onClose={vi.fn()} />)
+    const toggle = document.body.querySelector('[data-notification-unread-toggle]') as HTMLButtonElement
+    fireEvent.click(toggle)
+    expect(toggle.textContent).toBe('显示全部')
+    expect(toggle.getAttribute('data-active')).toBe('true')
+    expect(document.body.querySelector('[data-notification-item="n1"]')).toBeTruthy() // 未读保留
+    expect(document.body.querySelector('[data-notification-item="n2"]')).toBeNull() // 已读隐藏
+  })
+
+  it('再次点击 → 恢复显示全部（已读 n2 重现）', () => {
+    render(<NotificationDrawer open items={ITEMS} onClose={vi.fn()} />)
+    const toggle = document.body.querySelector('[data-notification-unread-toggle]') as HTMLButtonElement
+    fireEvent.click(toggle)
+    fireEvent.click(toggle)
+    expect(toggle.textContent).toBe('只看未读')
+    expect(document.body.querySelector('[data-notification-item="n2"]')).toBeTruthy()
+  })
+
+  it('全部已读 + 只看未读 → 显示「暂无未读通知」空态（区别于 items=[] 的「暂无通知」）', () => {
+    const allRead: readonly NotificationItem[] = [
+      { id: 'r1', title: '已读项', level: 'info', createdAt: '2026-06-09T00:00:00Z', read: true },
+    ]
+    render(<NotificationDrawer open items={allRead} onClose={vi.fn()} />)
+    fireEvent.click(document.body.querySelector('[data-notification-unread-toggle]') as HTMLButtonElement)
+    expect(document.body.querySelector('[data-notification-empty-unread]')?.textContent).toBe('暂无未读通知')
+    expect(document.body.querySelector('[data-notification-empty]')).toBeNull()
+  })
+})

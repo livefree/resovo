@@ -3582,3 +3582,17 @@
 - **新增依赖**：无　**数据库变更**：无　**新端点/ADR**：无　**Props/types 变更**：无
 - **门禁**：typecheck（全 workspace）/ lint FULL TURBO / test:changed 79 文件 999 passed（admin-ui 改动触发消费方全跑）EXIT=0 + notification-drawer 专项 26（现有 20 + 新 6）。改动局限抽屉内部渲染、e2e 不打开抽屉断言内部 → e2e 不受影响。
 - **里程碑**：通知抽屉首个用户可见视觉改善（分组分区 + 完整 digest 摘要）；回应「UI 没改善」——明确治理价值在架构正确性/可扩展性，可见杠杆按需增量。
+
+## [NTLG-NTF-UNREAD-FILTER] 通知抽屉「只看未读 / 显示全部」切换（轻档可见增强）
+- **完成时间**：2026-06-10
+- **记录时间**：2026-06-10 02:10
+- **执行模型**：claude-opus-4-8（主循环；建议 sonnet，人工 opus 覆盖 + 持续推进授权）
+- **子代理**：无（不改 `NotificationDrawerProps`/`types.ts` 公开契约，纯组件内部 state 复用既有 `read`，不触模型路由红线）
+- **背景**：用户反馈「通知、后台任务已读还是会留在抽屉中」。核查确认已读=`opacity:0.6` 变淡保留（设计语义，非 bug），但缺「只看未读」聚焦入口。用户裁定「两者都推」之**轻档**（重档 dismiss 软移除经 ADR-197 子代理设计 → 拆卡实施）。
+- **改动文件**：
+  - `packages/admin-ui/src/shell/notification-drawer.tsx` — `useState` 引入 + 组件内部 `unreadOnly` state + headerActions 加切换按钮（`data-notification-unread-toggle` + `data-active`，文案「只看未读」⇆「显示全部」，激活 `var(--accent-default)` / 非激活 `var(--fg-muted)`）+ 渲染 `visibleItems = unreadOnly ? items.filter(!read) : items`（复用 `groupItems` 空组剔除）+ 过滤后空显示「暂无未读通知」（`data-notification-empty-unread`，区别 `items=[]` 的「暂无通知」`data-notification-empty`）
+  - `tests/unit/components/admin-ui/shell/notification-drawer.test.tsx` — +4 用例（默认全部+按钮文案/active / 切换隐藏已读 n2 / 再切恢复 / 全已读切只看未读→空态）
+- **边界守恒**：不改 Props（消费方零改）；`read` 是 `NotificationItem` 既有字段；headerActions count 仍显总数 `items.length`（现有计数测试零破）；现有 26 用例零破。
+- **新增依赖**：无　**数据库变更**：无　**新端点/ADR**：无　**Props/types 变更**：无
+- **门禁**：typecheck（全 workspace）/ lint FULL TURBO / test:changed 79 文件 1003 passed EXIT=0 + notification-drawer 专项 30（26 + 新 4）。
+- **里程碑**：通知抽屉交互增强轻档落地（用户可一键聚焦未读）；重档 dismiss 软移除 ADR-197 设计完成（CONDITIONAL PASS），待拆 -A/-B/-C 实施。
