@@ -256,3 +256,19 @@ export async function upsertReadCursor(db: Queryable, userId: string, readAt: st
     [userId, readAt],
   )
 }
+
+/**
+ * 物理删除已过期通知（ADR-195 D-195-4 / NTLG-P2-d-A），返回删除行数。
+ * 口径 `expires_at IS NOT NULL AND expires_at <= $1`——`expires_at IS NULL`=永不过期永不删
+ *   （对齐 D-195-1 + ADR-192 D-192-5 未读过滤口径，是其精确逻辑补集）。
+ * `notification_reads` 经 FK ON DELETE CASCADE（migration 100）自动级联清理；
+ *   `notification_read_cursor`（per-user 高水位、不引用具体 notification）不受影响。
+ * 镜像 ADR-188 `deleteFetchLogBefore` 范式（物理 DELETE 否决软隐藏 D-195-4：通知非合规真源，audit_log 才是）。
+ */
+export async function deleteExpiredNotifications(db: Queryable, nowIso: string): Promise<number> {
+  const result = await db.query(
+    `DELETE FROM notifications WHERE expires_at IS NOT NULL AND expires_at <= $1::timestamptz`,
+    [nowIso],
+  )
+  return result.rowCount ?? 0
+}

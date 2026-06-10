@@ -13,6 +13,7 @@ import { SourceVerificationService } from '@/api/services/SourceVerificationServ
 import { VideoIndexSyncService } from '@/api/services/VideoIndexSyncService'
 import { bulkSyncSourceCheckStatus } from '@/api/db/queries/videos'
 import { deleteFetchLogBefore } from '@/api/db/queries/external-fetch-log'
+import { deleteExpiredNotifications } from '@/api/db/queries/notifications'
 import { baseLogger, withJob } from '@/api/lib/logger'
 import { DbTaskRunReporter } from '@/api/services/TaskRunReporter'
 import { runMaintenanceJobWithReporter } from '@/api/workers/maintenanceWorker.taskrun'
@@ -28,6 +29,7 @@ export type MaintenanceJobType =
   | 'verify-staging-sources'
   | 'reconcile-search-index'
   | 'purge-external-fetch-log'
+  | 'purge-expired-notifications'
 
 export interface MaintenanceJobData {
   type: MaintenanceJobType
@@ -113,6 +115,14 @@ async function processMaintenanceJob(
       const deleted = await deleteFetchLogBefore(db, cutoff)
       const durationMs = Date.now() - startAt
       jobLog.info({ stage: 'purge-external-fetch-log', deleted, retentionDays, duration_ms: durationMs }, 'job done')
+      return { type: data.type, durationMs, deleted }
+    }
+    case 'purge-expired-notifications': {
+      // ADR-195 D-195-4：物理删除已过期通知（expires_at IS NOT NULL AND <= NOW()）；
+      // notification_reads 经 FK ON DELETE CASCADE 级联、cursor 不受影响。NULL=永久永不删。
+      const deleted = await deleteExpiredNotifications(db, new Date().toISOString())
+      const durationMs = Date.now() - startAt
+      jobLog.info({ stage: 'purge-expired-notifications', deleted, duration_ms: durationMs }, 'job done')
       return { type: data.type, durationMs, deleted }
     }
     default: {

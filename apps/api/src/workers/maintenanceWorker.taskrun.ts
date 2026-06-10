@@ -22,6 +22,7 @@ const JOB_TITLE: Record<MaintenanceJobType, string> = {
   'verify-staging-sources': '暂存源校验',
   'reconcile-search-index': '搜索索引校准',
   'purge-external-fetch-log': '采集流水清理',
+  'purge-expired-notifications': '过期通知清理',
 }
 
 /** MaintenanceJobType → 人读标题（未知类型回退原始键，保健壮性） */

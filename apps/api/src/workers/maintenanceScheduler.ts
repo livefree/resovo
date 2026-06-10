@@ -25,6 +25,7 @@ const VERIFY_TICK_MS = 60 * 60_000           // 60 分钟（verify-published-sou
 const STAGING_VERIFY_TICK_MS = 8 * 3600_000  // 8 小时（verify-staging-sources）
 const RECONCILE_TICK_MS = 24 * 3600_000      // 24 小时（reconcile-search-index）
 const PURGE_FETCH_LOG_TICK_MS = 24 * 3600_000  // 24 小时（external_fetch_log 30 天 purge，ADR-188 D-188-7）
+const PURGE_NOTIFICATIONS_TICK_MS = 24 * 3600_000  // 24 小时（过期通知物理清理，ADR-195 D-195-4，与 fetch-log purge 同频）
 const PENDING_THRESHOLD_TICK_MS = 60 * 60_000  // 1 小时（CHG-SN-8-FUP-WEBHOOK-IMPL-EP-A2.3 / ADR-146）
 const PENDING_THRESHOLD_DEBOUNCE_MS = 60 * 60_000  // 1 小时 debounce（防风暴 ADR-146 R-146-3）
 // CHG-SN-8-FUP-WEBHOOK-IMPL-EP-A2.4 / ADR-146 D-146-7 #2：R2 quota 软上限告警
@@ -41,6 +42,7 @@ let reconcileTimer: NodeJS.Timeout | null = null
 let pendingThresholdTimer: NodeJS.Timeout | null = null
 let r2QuotaTimer: NodeJS.Timeout | null = null
 let purgeFetchLogTimer: NodeJS.Timeout | null = null
+let purgeNotificationsTimer: NodeJS.Timeout | null = null
 let tickRunning = false
 let verifyTickRunning = false
 let stagingVerifyTickRunning = false
@@ -48,6 +50,7 @@ let reconcileTickRunning = false
 let pendingThresholdTickRunning = false
 let r2QuotaTickRunning = false
 let purgeFetchLogTickRunning = false
+let purgeNotificationsTickRunning = false
 
 // CW1-E-EP step 2 / ADR-152 R-152-2：lastRunAt 记录（intervalMs 推算 nextRunAt 用）
 // 各 timer 在执行前赋值；registeredAt 作为 lastRunAt=null 时的回退基准
@@ -60,6 +63,7 @@ const lastRunAt: Record<string, string | null> = {
   'pending-threshold-check': null,
   'r2-quota-check': null,
   'purge-external-fetch-log': null,
+  'purge-expired-notifications': null,
 }
 
 async function runMaintenanceTick(): Promise<void> {
@@ -167,6 +171,29 @@ async function runPurgeFetchLogTick(): Promise<void> {
     schedulerLog.warn({ err, stage: 'purge-external-fetch-log' }, 'tick failed')
   } finally {
     purgeFetchLogTickRunning = false
+  }
+}
+
+/**
+ * ADR-195 D-195-4：过期通知物理清理（expires_at IS NOT NULL AND <= NOW()）。
+ * 入共享 maintenanceQueue（DELETE 短任务，不阻塞 concurrency=1）；daily tick。镜像 fetch-log purge 范式。
+ */
+async function runPurgeNotificationsTick(): Promise<void> {
+  if (purgeNotificationsTickRunning) return
+  purgeNotificationsTickRunning = true
+  lastRunAt['purge-expired-notifications'] = new Date().toISOString()
+  try {
+    const jobData: MaintenanceJobData = { type: 'purge-expired-notifications' }
+    await maintenanceQueue.add(jobData, {
+      jobId: `purge-expired-notifications-${Date.now()}`,
+      removeOnComplete: 10,
+      removeOnFail: 5,
+    })
+    schedulerLog.info({ stage: 'purge-expired-notifications' }, 'enqueued')
+  } catch (err) {
+    schedulerLog.warn({ err, stage: 'purge-expired-notifications' }, 'tick failed')
+  } finally {
+    purgeNotificationsTickRunning = false
   }
 }
 
@@ -326,6 +353,7 @@ export function getSchedulerStatus(): SchedulerInfo[] {
     { name: 'pending-threshold-check',  enabled: globalEnabled && pendingThresholdTimer != null,  intervalMs: PENDING_THRESHOLD_TICK_MS, lastRunAt: lastRunAt['pending-threshold-check'], nextRunAt: computeNextRunAt('pending-threshold-check', PENDING_THRESHOLD_TICK_MS) },
     { name: 'r2-quota-check',           enabled: globalEnabled && r2QuotaTimer != null,           intervalMs: R2_QUOTA_TICK_MS,        lastRunAt: lastRunAt['r2-quota-check'],           nextRunAt: computeNextRunAt('r2-quota-check', R2_QUOTA_TICK_MS) },
     { name: 'purge-external-fetch-log', enabled: globalEnabled && purgeFetchLogTimer != null,     intervalMs: PURGE_FETCH_LOG_TICK_MS, lastRunAt: lastRunAt['purge-external-fetch-log'], nextRunAt: computeNextRunAt('purge-external-fetch-log', PURGE_FETCH_LOG_TICK_MS) },
+    { name: 'purge-expired-notifications', enabled: globalEnabled && purgeNotificationsTimer != null, intervalMs: PURGE_NOTIFICATIONS_TICK_MS, lastRunAt: lastRunAt['purge-expired-notifications'], nextRunAt: computeNextRunAt('purge-expired-notifications', PURGE_NOTIFICATIONS_TICK_MS) },
   ]
 }
 
@@ -374,4 +402,12 @@ export function registerMaintenanceScheduler(): void {
     void runPurgeFetchLogTick()
   }, PURGE_FETCH_LOG_TICK_MS)
   schedulerLog.info({ interval_ms: PURGE_FETCH_LOG_TICK_MS, stage: 'purge-external-fetch-log' }, 'registered')
+
+  // ADR-195 D-195-4：过期通知 daily purge。**末尾追加**——前序各 `if (xTimer) return` 守卫在首次
+  // 注册（全 null）时顺序穿透至此；置中段会被前序已存在 timer 短路跳过（ADR-195 D-195-4 黄线③）。
+  if (purgeNotificationsTimer) return
+  purgeNotificationsTimer = setInterval(() => {
+    void runPurgeNotificationsTick()
+  }, PURGE_NOTIFICATIONS_TICK_MS)
+  schedulerLog.info({ interval_ms: PURGE_NOTIFICATIONS_TICK_MS, stage: 'purge-expired-notifications' }, 'registered')
 }

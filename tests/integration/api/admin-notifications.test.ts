@@ -21,6 +21,7 @@ import {
   getReadCursor,
   getEffectiveReadCursor,
   upsertReadCursor,
+  deleteExpiredNotifications,
 } from '../../../apps/api/src/db/queries/notifications'
 
 let db: Pool
@@ -209,5 +210,44 @@ describe('notifications 写路径 round-trip（BEGIN/ROLLBACK 零污染）', () 
       targetedScope: `user:${userId}`,
     })
     expect(count).toBe(1) // 仅 cursor 之后的「新」计未读（该 scope 隔离）
+  })
+
+  it('deleteExpiredNotifications：过期删 / NULL 永不删 / 未来不删 + FK CASCADE reads（ADR-195 D-195-4）', async () => {
+    const scope = 'role:p2da_purge_test'
+    const past = new Date(Date.now() - 86400_000).toISOString()    // 1 天前
+    const future = new Date(Date.now() + 86400_000).toISOString()  // 1 天后
+    const expired = await insertNotification(client, {
+      type: 'test.expired', level: 'info', title: '过期', sourceKind: 'admin_action', scope,
+      dedupKey: `test:p2da:expired:${Date.now()}`, expiresAt: past,
+    })
+    const permanent = await insertNotification(client, {
+      type: 'test.permanent', level: 'info', title: '永久', sourceKind: 'admin_action', scope,
+      dedupKey: `test:p2da:perm:${Date.now()}`,  // expiresAt 不设 → NULL（永不过期）
+    })
+    const futureNotif = await insertNotification(client, {
+      type: 'test.future', level: 'info', title: '未来', sourceKind: 'admin_action', scope,
+      dedupKey: `test:p2da:future:${Date.now()}`, expiresAt: future,
+    })
+    // 为过期通知插一条 reads（验证 FK ON DELETE CASCADE 级联）
+    await client.query(
+      `INSERT INTO notification_reads (notification_id, user_id) VALUES ($1::bigint, $2)`,
+      [expired.id, userId],
+    )
+
+    const deleted = await deleteExpiredNotifications(client, new Date().toISOString())
+    expect(deleted).toBeGreaterThanOrEqual(1)
+
+    const remaining = await listNotifications(client, { scopes: [scope], limit: 50 })
+    const ids = remaining.map((r) => r.id)
+    expect(ids).not.toContain(expired.id)   // 过期已删
+    expect(ids).toContain(permanent.id)     // NULL 永不删
+    expect(ids).toContain(futureNotif.id)   // 未来不删
+
+    // FK ON DELETE CASCADE：reads 行随 notification 删除（migration 100）
+    const readsLeft = await client.query<{ c: string }>(
+      `SELECT COUNT(*)::text AS c FROM notification_reads WHERE notification_id = $1::bigint`,
+      [expired.id],
+    )
+    expect(readsLeft.rows[0]!.c).toBe('0')
   })
 })
