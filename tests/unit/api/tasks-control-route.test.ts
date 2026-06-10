@@ -8,7 +8,8 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-vi.mock('@/api/lib/postgres', () => ({ db: { query: vi.fn() } }))
+const { dbQueryMock } = vi.hoisted(() => ({ dbQueryMock: vi.fn() }))
+vi.mock('@/api/lib/postgres', () => ({ db: { query: dbQueryMock } }))
 vi.mock('@/api/lib/redis', () => ({
   redis: { get: vi.fn().mockResolvedValue(null), set: vi.fn().mockResolvedValue('OK') },
 }))
@@ -62,7 +63,13 @@ beforeEach(() => {
   maintenanceGetJob.mockReset()
   auditWrite.mockReset()
   createAndEnqueueRun.mockReset()
+  dbQueryMock.mockReset()
 })
+
+/** getTaskRunById 走真实实现 → 返回 db.query 行（taskRuns 未 mock）；NTLG-P2-a-C task_run 分派。 */
+function mockTaskRun(row: Record<string, unknown> | null) {
+  dbQueryMock.mockResolvedValueOnce({ rows: row ? [row] : [] })
+}
 
 async function buildApp() {
   const { adminTaskControlRoutes } = await import('@/api/routes/admin/tasks')
@@ -132,6 +139,38 @@ describe('POST /admin/tasks/:id/cancel', () => {
     expect(maintenanceGetJob).toHaveBeenCalledWith('7')
   })
 
+  it('task_run running → 409 诚实暴露（maintenance 无 abortController，D-194-6 黄线②）', async () => {
+    mockTaskRun({ id: '42', kind: 'maintenance', ref: 'job-9', status: 'running' })
+    const app = await buildApp()
+    const res = await app.inject({ method: 'POST', url: '/admin/tasks/taskrun-42/cancel', headers: authAs('admin') })
+    expect(res.statusCode).toBe(409)
+    expect(auditWrite).not.toHaveBeenCalled()
+  })
+
+  it('task_run 终态（success）→ 幂等 no-op cancelled=false + target.kind=task_run', async () => {
+    mockTaskRun({ id: '42', kind: 'maintenance', ref: 'job-9', status: 'success' })
+    const app = await buildApp()
+    const res = await app.inject({ method: 'POST', url: '/admin/tasks/taskrun-42/cancel', headers: authAs('admin') })
+    expect(res.statusCode).toBe(200)
+    const body = res.json() as { data: { target: { kind: string }; cancelled: boolean } }
+    expect(body.data.target.kind).toBe('task_run')
+    expect(body.data.cancelled).toBe(false)
+  })
+
+  it('task_run 不存在 → 404', async () => {
+    mockTaskRun(null)
+    const app = await buildApp()
+    const res = await app.inject({ method: 'POST', url: '/admin/tasks/taskrun-999/cancel', headers: authAs('admin') })
+    expect(res.statusCode).toBe(404)
+  })
+
+  it('task_run 非数字 id → getTaskRunById 守卫返 null → 404（防非法 ::bigint）', async () => {
+    const app = await buildApp()
+    const res = await app.inject({ method: 'POST', url: '/admin/tasks/taskrun-abc/cancel', headers: authAs('admin') })
+    expect(res.statusCode).toBe(404)
+    expect(dbQueryMock).not.toHaveBeenCalled()  // 守卫提前返回，未触 db
+  })
+
   it('moderator → 403（admin-only）', async () => {
     const app = await buildApp()
     const res = await app.inject({ method: 'POST', url: `/admin/tasks/${RUN_ID}/cancel`, headers: authAs('moderator') })
@@ -178,6 +217,36 @@ describe('POST /admin/tasks/:id/retry', () => {
     vi.mocked(runsQueries.getRunById).mockResolvedValueOnce({ id: RUN_ID, status: 'running' } as never)
     const app = await buildApp()
     const res = await app.inject({ method: 'POST', url: `/admin/tasks/${RUN_ID}/retry`, headers: authAs('admin') })
+    expect(res.statusCode).toBe(409)
+  })
+
+  it('task_run failed → 经 ref 重试 maintenance bull 作业 + retried=true + target.kind=task_run', async () => {
+    mockTaskRun({ id: '42', kind: 'maintenance', ref: 'job-9', status: 'failed' })
+    const job = bullJob('failed')
+    maintenanceGetJob.mockResolvedValueOnce(job)
+    const app = await buildApp()
+    const res = await app.inject({ method: 'POST', url: '/admin/tasks/taskrun-42/retry', headers: authAs('admin') })
+    expect(res.statusCode).toBe(200)
+    const body = res.json() as { data: { target: { kind: string }; retried: boolean } }
+    expect(body.data.target.kind).toBe('task_run')
+    expect(body.data.retried).toBe(true)
+    expect(maintenanceGetJob).toHaveBeenCalledWith('job-9')
+    expect(job.retry).toHaveBeenCalled()
+    expect(auditWrite).toHaveBeenCalledWith(expect.objectContaining({ actionType: 'task.retry' }))
+  })
+
+  it('task_run 非 failed → 409', async () => {
+    mockTaskRun({ id: '42', kind: 'maintenance', ref: 'job-9', status: 'running' })
+    const app = await buildApp()
+    const res = await app.inject({ method: 'POST', url: '/admin/tasks/taskrun-42/retry', headers: authAs('admin') })
+    expect(res.statusCode).toBe(409)
+  })
+
+  it('task_run failed 但原 bull 作业已清理（getJob null）→ 409', async () => {
+    mockTaskRun({ id: '42', kind: 'maintenance', ref: 'job-9', status: 'failed' })
+    maintenanceGetJob.mockResolvedValueOnce(null)
+    const app = await buildApp()
+    const res = await app.inject({ method: 'POST', url: '/admin/tasks/taskrun-42/retry', headers: authAs('admin') })
     expect(res.statusCode).toBe(409)
   })
 })

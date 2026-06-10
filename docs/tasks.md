@@ -6,7 +6,7 @@
 
 ## 当前任务（单任务工作台：同时仅 1 个 🔄 进行中；完成即删卡，历史见 docs/changelog.md）
 
-_（当前无进行中任务。取下一个前先查 `docs/task-queue.md` 是否有 🚨 BLOCKER。**SEQ-20260609-01 进展**：**P0 ✅ + P1 ✅ + NTLG-ADR-P2 ✅ + NTLG-P2-a-A ✅ + NTLG-P2-a-B ✅**（maintenanceWorker 接入 DbTaskRunReporter + TaskAggregator 副源切 task_runs 持久登记，读切换零覆盖回归）。**下一可取：NTLG-P2-a-C**（parseTaskId 扩 taskrun- 分派 + AdminTaskControlTarget.kind 扩 'task_run' + bull 协作式取消 status='cancelling'，依赖 -B ✅，sonnet；**闭环 -B→-C 瞬时态**：taskrun- 项控制路径暂报错待 -C 修）；并行待取 **NTLG-P2-d**（purge worker，依赖 ADR-195 ✅，sonnet）/ **P2-b**（多渠道，依赖 P1-c ✅）/ **P2-c**（消息中心+SSE，依赖 P1-a ✅）。**SEQ-20260608-01** cutover 剩：卡 4 回滚窗 🔄 ~2026-06-15、卡 5 改名待排期。）_
+_（当前无进行中任务。取下一个前先查 `docs/task-queue.md` 是否有 🚨 BLOCKER。**SEQ-20260609-01 进展**：**P0 ✅ + P1 ✅ + NTLG-ADR-P2 ✅ + NTLG-P2-a ✅**（task_runs 统一抽象层端到端：-A schema/queries/DbReporter 地基 + -B maintenanceWorker 接入/TaskAggregator 副源切 task_runs + -C parseTaskId taskrun- re-point/task_run 控制路径，ADR-191 :id re-point 完成）。**下一可取（P2 并行）**：**NTLG-P2-d**（purge-expired-notifications worker，依赖 ADR-195 ✅，sonnet，自包含）/ **P2-b**（多渠道通知，依赖 P1-c ✅）/ **P2-c**（消息中心+SSE，依赖 P1-a ✅）。**SEQ-20260608-01** cutover 剩：卡 4 回滚窗 🔄 ~2026-06-15、卡 5 改名待排期。）_
 
 ---
 

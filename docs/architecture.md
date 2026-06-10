@@ -902,7 +902,7 @@ UserPreferences = {
 - 中枢实装：`apps/api/src/services/TaskRunReporter.ts` `DbTaskRunReporter`（替 Noop，interface 零改动 D-194-4；start 失败降级 sentinel 不阻断 §11 D4）
 - worker 接入（P2-a-B 已落地）：**代表性 worker = `maintenanceWorker`**（run 级批次作业，`runMaintenanceJobWithReporter` 包裹 start→finish〔success+digest / failed+error〕，digest 由 `maintenanceWorker.taskrun.ts` 投影聚合结果）——enrichment/imageHealth 为逐微作业不接（per-job 接入会以海量微行淹没 task_runs，且其队列原不在副源快照），按价值排序 #1 正确性改选 maintenance（ADR §影响文件候选集内）
 - 投影收敛（P2-a-B 已落地）：`TaskAggregator` 副源由「bull active 瞬时快照」切「task_runs 持久登记」（`listTaskRuns` 读，`taskrun-${id}` 前缀 + `TASK_RUN_STATUS_MAP` 6→4 态〔cancelled→failed / cancelling→running〕）；`queueCounts` 仍取 bull `getJobCounts` 供任务闪电 running 计数（§4.1，Redis 不可用降级）
-- 控制路径（→ P2-a-C）：ADR-191 `parseTaskId` 扩 `taskrun-` 分派 + bull 协作式取消（status='cancelling'）。**-B→-C 间隙已知瞬时态**：maintenance 项以 `taskrun-` id 呈现，parseTaskId 暂不识别 → 落 crawler_run 分支 `getRunById('taskrun-N')`〔crawler_runs.id 为 UUID〕→ 非法 UUID 报错；-C 扩分派后闭环（同序列紧邻卡，无独立部署边界）
+- 控制路径（P2-a-C 已落地）：`routes/admin/tasks.ts parseTaskId` 扩 `taskrun-{id}` 分派（bull- → taskrun- → crawler 顺序）+ `AdminTaskControlTarget.kind` 扩 `'task_run'`（加性 D-194-6，未镜像 admin-ui）+ `getTaskRunById`（`/^\d+$/` 守卫防非法 `::bigint`）。**cancel**：终态 no-op cancelled=false / running-ish → **409 诚实暴露**（D-194-6 黄线②：maintenance 批次 service 无 abortController → 退回 ADR-191 P0 的 409，协作式取消 status='cancelling' 待 worker 具备 abortController 后启用，schema 已预留）。**retry**：failed → 经 `run.kind`→queue 映射 + `run.ref`(bull jobId) `getJob().retry()`（作业已清理→409）。**worker 未改**（黄线② fallback）。**-B→-C 瞬时态已闭环**（taskrun- 不再落 crawler 分支 500）
 
 ---
 

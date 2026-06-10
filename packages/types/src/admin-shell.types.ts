@@ -95,7 +95,8 @@ export interface AdminTaskItem {
  * 响应在 data.target 标注真实目标类型，便于 P2 task_runs re-point。
  */
 export interface AdminTaskControlTarget {
-  readonly kind: 'crawler_run' | 'bull_job'
+  /** ADR-194 D-194-6：扩 'task_run'（加性）——TaskAggregator 副源 task_runs 持久登记的 `taskrun-${id}` 项。 */
+  readonly kind: 'crawler_run' | 'bull_job' | 'task_run'
   /** 原始请求 :id（聚合 id 原样回显） */
   readonly id: string
   /** bull_job 时的队列名 */

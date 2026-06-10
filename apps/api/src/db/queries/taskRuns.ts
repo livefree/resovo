@@ -108,6 +108,25 @@ export async function finishTaskRun(db: Queryable, id: string, input: FinishTask
 }
 
 /**
+ * 单行查询（TaskRunReporter 之外的控制路径消费，NTLG-P2-a-C）。
+ * id 来自 `taskrun-<id>` 剥前缀后的裸值——`/^\d+$/` 守卫防非数字值触发 `$1::bigint` 报错（直接返 null → 404），
+ * 与 crawler_runs UUID 列同类防御（避免 -B→-C 间隙的非法转换 500）。
+ */
+export async function getTaskRunById(db: Queryable, id: string): Promise<TaskRunRow | null> {
+  if (!/^\d+$/.test(id)) return null
+  const res = await db.query<TaskRunRow>(
+    `SELECT
+       id::text AS "id", kind AS "kind", title AS "title", ref AS "ref",
+       status AS "status", progress AS "progress", digest AS "digest", error AS "error",
+       started_at AS "startedAt", finished_at AS "finishedAt", created_at AS "createdAt"
+     FROM task_runs
+     WHERE id = $1::bigint`,
+    [id],
+  )
+  return res.rows[0] ?? null
+}
+
+/**
  * 列任务运行（最近 N，按 created_at DESC + 可选时间窗）。供 -B TaskAggregator 副源投影消费。
  * 命中 idx_task_runs_created_at（created_at DESC 排序 + LIMIT）。
  */
