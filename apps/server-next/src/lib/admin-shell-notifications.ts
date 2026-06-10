@@ -29,6 +29,7 @@ import type { NotificationItem, TaskItem } from '@resovo/admin-ui'
 import type { AdminBackgroundEvent } from '@resovo/types'
 import { apiClient, ApiClientError } from '@/lib/api-client'
 import { globalMutateRegistry } from '@/lib/admin-shell-background-events'
+import { connectNotificationStream } from '@/lib/notification-stream-client'
 
 const POLL_INTERVAL_MS = 60_000
 
@@ -142,6 +143,8 @@ export function useAdminNotifications(): UseAdminNotificationsResult {
   // NTLG-P1-c-C：已读高水位线来自服务端 list meta.readAt（cursor 单一源），替 localStorage lastViewedAt
   const [readAt, setReadAt] = useState<string>('')
   const [readIds, setReadIds] = useState<ReadonlySet<string>>(() => new Set())
+  // ADR-196 D-196-1/6：SSE 连接态（open → 停 60s 轮询，SSE 驱动实时；closed → 轮询 fallback 接管）
+  const [sseConnected, setSseConnected] = useState(false)
 
   const reload = useCallback(async () => {
     const [generalResult, bgResult] = await Promise.allSettled([
@@ -171,11 +174,27 @@ export function useAdminNotifications(): UseAdminNotificationsResult {
     }
   }, [])
 
+  // 初始加载一次（SSE/轮询之外的首屏拉取）
   useEffect(() => {
     void reload()
+  }, [reload])
+
+  // ADR-196 D-196-1/6：SSE 实时优先——`unread` 事件触发 reload（红点经 list-derived 实时更新，
+  // F6② 红点改读 unread-count 归 P2-c-C）。连接态经 onStateChange 暴露供轮询 effect 切 fallback。
+  useEffect(() => {
+    const ctrl = connectNotificationStream({
+      onUnread: () => { void reload() },
+      onStateChange: (state) => { setSseConnected(state === 'open') },
+    })
+    return () => { ctrl.close() }
+  }, [reload])
+
+  // ADR-196 D-196-6：60s 轮询 fallback——仅 SSE 未连通时启（SSE open → SSE 驱动实时、停轮询）。不删轮询。
+  useEffect(() => {
+    if (sseConnected) return
     const timer = setInterval(() => { void reload() }, POLL_INTERVAL_MS)
     return () => clearInterval(timer)
-  }, [reload])
+  }, [reload, sseConnected])
 
   // ADR-152 Y-152-4 / EP-2 / N1-EP2-1：注册到 globalMutateRegistry 让 CrawlerClient 触发刷新
   // Map<id, fn>：同 id 重复注册只保留最新 fn（防 StrictMode/HMR stale reference）

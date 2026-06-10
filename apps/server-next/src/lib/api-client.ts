@@ -22,6 +22,9 @@ import type { ApiError } from '@resovo/types'
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/v1'
 
+/** API 基址（含 /v1 前缀）。供 fetch-stream 等绕开 apiClient JSON 封装的长连接复用，避免常量漂移。 */
+export const API_BASE_URL = BASE_URL
+
 export class ApiClientError extends Error {
   constructor(
     public readonly code: string,

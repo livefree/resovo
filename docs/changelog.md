@@ -3476,3 +3476,23 @@
   - **fan-out 重算成本**：broadcast 信号触发每连接各重算 unreadCount（per-conn DB 查询）；v1 admin 规模（少量并发 + 低 emit 率）可接受；高并发再评估缓存/批量。
   - **门禁**：typecheck/lint/verify:adr-contracts（endpoint-adr 232 路由 / 117 ADR 端点含 /stream；error-message 197→195 我 2 条 503 已清；mirror 2 对）EXIT=0；test:changed 全量升级（改 setup.ts 触 ADR-180）6981 中 6980 passed，1 失败为 admin-ui matrix UI flaky（隔离重跑 column-matrix-menu 40 + step-ep4-5 17 + CrawlerRunsView 33 全过，与本卡 redis/SSE 零关联）。**e2e:admin SSE 端到端验证留 -B-2**（前端接入后整体验）。
   - **健壮性增益**：NotificationStreamService.init() try/catch → Redis 基建 boot 不可用时降级（available=false → /stream 503）而非崩 route 注册。
+
+## [NTLG-P2-c-B-2] 前端 SSE fetch-stream 客户端 + admin-shell SSE 优先 + 60s 轮询 fallback 双模式
+- **完成时间**：2026-06-09
+- **记录时间**：2026-06-09 22:55
+- **执行模型**：claude-opus-4-8（主循环，人工 opus 覆盖建议 sonnet——承接「继续推进 B」授权）
+- **子代理**：无（消费 -B-1 已锁 SSE wire 契约〔ADR-196 D-196-3〕，纯前端实施，无新 ADR/共享组件 API 契约）
+- **修改文件**：
+  - `apps/server-next/src/lib/notification-stream-client.ts`（新，framework-agnostic）— fetch-stream SSE 客户端：`parseSSEEvent`（event/data 多行 + `:` 心跳跳过）+ `parseUnreadCount`（`{count}` 守卫 → number|null）+ `connectNotificationStream`（fetch 携 Bearer〔非 EventSource，D-196-1〕直连 /stream → ReadableStream+TextDecoder 增量解析帧 → `unread` 回调 onUnread；非 200/流断 → 指数退避重连 1s→cap 30s；onStateChange connecting/open/closed；close() AbortController 中止 + 清退避 timer + 唤醒 sleep）；deps 注入 fetchImpl/getToken/baseUrl/backoffBaseMs 供测试
+  - `apps/server-next/src/lib/admin-shell-notifications.ts` — `useAdminNotifications` 接入 SSE 双模式：初始 reload effect + SSE effect（`onUnread→reload` 实时触发、`onStateChange→setSseConnected`）+ 轮询 fallback effect（仅 `!sseConnected` 起 60s `setInterval`，SSE open 时停轮询；不删轮询 D-196-6）；`useAdminTasks` 不接 SSE（任务象限不在 ADR-196 范围，边界④）
+  - `apps/server-next/src/lib/api-client.ts` — +`export API_BASE_URL`（fetch-stream 复用 BASE_URL 防常量漂移）
+  - 测试新增：`tests/unit/server-next/notification-stream-client.test.ts`（12：parseSSEEvent 多行/心跳/缺省/空 + parseUnreadCount 守卫 + connect happy-path unread×2/心跳跳过/state open + Bearer header/URL + 无 token 无 header + 503 退避重连 + close 停循环）
+  - 测试修改：`tests/unit/lib/admin-shell-notifications.test.ts` — +mock `notification-stream-client`（SSE no-op controller → sseConnected 恒 false → 走轮询等价旧行为；SSE 自有单测覆盖）
+- **新增依赖**：无（fetch/ReadableStream/TextDecoder/AbortController 浏览器原生，零新 npm 包）
+- **数据库变更**：无
+- **注意事项**：
+  - 完成 NTLG-P2-c-B 整卡（-B-1 后端 SSE 基建 + -B-2 前端消费）。**未读实时推送端到端落地**：emit 写库 → Redis publish → 各实例 subscribe fan-out → SSE 推 `unread` → 前端 reload list → 红点（list-derived）实时更新；SSE 断 → 60s 轮询 fallback。
+  - **红点仍 list-derived**（`admin-shell.tsx:176`）：SSE `unread` 作 reload 触发器，红点改读 unread-count 是 **F6②（P2-c-C）**，本卡零依赖 C。
+  - **e2e:admin SSE 端到端验证留 follow-up**（server-next 组件 hook 不做 unit-render，本卡聚焦 client lib 纯函数 + connect 流程测试；真浏览器 EventSource/fetch-stream 行为 + 重连 + 双模式切换待 e2e）。
+  - **门禁**：typecheck/lint/verify:adr-contracts（endpoint-adr 232/117、mirror 2 对，B-2 无新 route/错误码）EXIT=0；test:changed（改 api-client.ts 致广泛 dependents 入选）90 文件 1075 passed（含 client 12 新 + hook 12 恢复）。无 schema/新依赖。
+  - **P2-c 剩 NTLG-P2-c-C**：归档（v1 deferred）+ 收口 P1-c-C 3 项（crawler 出 background lane 成对移除 BackgroundEventService 派生 / 红点统一 unread-count 解 BLOCKER-1〔F6②〕/ 定向逐行 reads）。

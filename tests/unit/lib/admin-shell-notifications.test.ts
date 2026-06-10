@@ -28,6 +28,12 @@ vi.mock('../../../apps/server-next/src/lib/api-client', () => ({
   },
 }))
 
+// NTLG-P2-c-B-2：useAdminNotifications 新增 SSE effect → mock 为 no-op controller
+// （不调 onStateChange → sseConnected 恒 false → 走 60s 轮询，等价旧行为；SSE 客户端自有单测覆盖）
+vi.mock('../../../apps/server-next/src/lib/notification-stream-client', () => ({
+  connectNotificationStream: vi.fn(() => ({ close: vi.fn() })),
+}))
+
 import * as apiClientMod from '../../../apps/server-next/src/lib/api-client'
 import {
   useAdminNotifications,
