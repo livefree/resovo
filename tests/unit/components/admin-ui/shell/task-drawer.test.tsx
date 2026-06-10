@@ -278,3 +278,57 @@ describe('TaskDrawer — ESC + backdrop 关闭（DrawerShell base 验证）', ()
     expect(onClose).toHaveBeenCalledTimes(1)
   })
 })
+
+describe('TaskDrawer — NTLG-NTF-DISMISS-C2 终态移除 + 清除已完成（ADR-197）', () => {
+  // 白名单（D-197-2）：taskrun- 前缀且终态（success/failed）可 dismiss；
+  // running/pending 拒；crawler 裸 UUID / bg- active 派生项白名单外
+  const MIXED: readonly TaskItem[] = [
+    { id: 'taskrun-1', title: '终态成功（可移除）', status: 'success', startedAt: '2026-06-10T03:00:00Z', finishedAt: '2026-06-10T03:05:00Z' },
+    { id: 'taskrun-2', title: '终态失败（可移除）', status: 'failed', startedAt: '2026-06-10T02:00:00Z', finishedAt: '2026-06-10T02:01:00Z', errorMessage: 'boom' },
+    { id: 'taskrun-3', title: '运行中（不可移除）', status: 'running', startedAt: '2026-06-10T04:00:00Z' },
+    { id: 'a1b2c3d4-0000-0000-0000-000000000000', title: 'crawler 终态（白名单外）', status: 'success', startedAt: '2026-06-10T01:00:00Z' },
+    { id: 'bg-crawler_run:x', title: 'active 派生（白名单外）', status: 'running', startedAt: '2026-06-10T05:00:00Z', source: 'crawler' },
+  ]
+
+  it('onDismiss 提供 → 仅 taskrun- 终态项显示移除按钮（running / crawler UUID / bg- 隐藏）', () => {
+    render(<TaskDrawer open items={MIXED} onClose={vi.fn()} onDismiss={vi.fn()} />)
+    expect(document.body.querySelector('[data-task-item-dismiss="taskrun-1"]')).toBeTruthy()
+    expect(document.body.querySelector('[data-task-item-dismiss="taskrun-2"]')).toBeTruthy()
+    expect(document.body.querySelector('[data-task-item-dismiss="taskrun-3"]')).toBeNull()
+    expect(document.body.querySelector('[data-task-item-dismiss="a1b2c3d4-0000-0000-0000-000000000000"]')).toBeNull()
+    expect(document.body.querySelector('[data-task-item-dismiss="bg-crawler_run:x"]')).toBeNull()
+  })
+
+  it('onDismiss 未提供 → 移除按钮全部隐藏（既有 mock 形态零影响）', () => {
+    render(<TaskDrawer open items={MIXED} onClose={vi.fn()} />)
+    expect(document.body.querySelector('[data-task-item-dismiss]')).toBeNull()
+  })
+
+  it('点击移除 → onDismiss(itemKey)', () => {
+    const onDismiss = vi.fn()
+    render(<TaskDrawer open items={MIXED} onClose={vi.fn()} onDismiss={onDismiss} />)
+    fireEvent.click(document.body.querySelector('[data-task-item-dismiss="taskrun-1"]') as HTMLButtonElement)
+    expect(onDismiss).toHaveBeenCalledWith('taskrun-1')
+  })
+
+  it('失败终态项 → 重试与移除按钮并存（action 横排容器）', () => {
+    render(<TaskDrawer open items={MIXED} onClose={vi.fn()} onDismiss={vi.fn()} onRetry={vi.fn()} />)
+    const row = document.body.querySelector('[data-task-item="taskrun-2"]') as HTMLElement
+    expect(row.querySelector('[data-task-item-retry]')).toBeTruthy()
+    expect(row.querySelector('[data-task-item-dismiss="taskrun-2"]')).toBeTruthy()
+  })
+
+  it('onClearAll 提供且有终态 taskrun 项 → 「清除已完成」显示；点击回传可见 dismissable keys', () => {
+    const onClearAll = vi.fn()
+    render(<TaskDrawer open items={MIXED} onClose={vi.fn()} onClearAll={onClearAll} />)
+    const btn = document.body.querySelector('[data-task-clear-all]') as HTMLButtonElement
+    expect(btn.textContent).toBe('清除已完成')
+    fireEvent.click(btn)
+    expect(onClearAll).toHaveBeenCalledWith(['taskrun-1', 'taskrun-2'])
+  })
+
+  it('onClearAll 提供但无可清项（全部白名单外）→ 「清除已完成」隐藏', () => {
+    render(<TaskDrawer open items={ITEMS} onClose={vi.fn()} onClearAll={vi.fn()} />)
+    expect(document.body.querySelector('[data-task-clear-all]')).toBeNull()
+  })
+})

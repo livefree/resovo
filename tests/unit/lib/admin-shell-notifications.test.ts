@@ -475,4 +475,63 @@ describe('useAdminTasks', () => {
     await waitFor(() => expect(result.current.items.length).toBe(2))
     expect(result.current.items.map((i) => i.id)).toEqual(['bg-newer', 't-old'])
   })
+
+  // ── NTLG-NTF-DISMISS-C2（ADR-197）：任务侧 dismiss/dismissAll ──
+
+  const TASK_DISMISS_FIXTURE = {
+    jobs: {
+      data: [
+        { id: 'taskrun-9', title: '终态任务', status: 'success', startedAt: '2026-06-10T03:00:00Z', finishedAt: '2026-06-10T03:05:00Z' },
+        { id: 'taskrun-10', title: '失败任务', status: 'failed', startedAt: '2026-06-10T02:00:00Z', finishedAt: '2026-06-10T02:01:00Z' },
+      ],
+      meta: { total: 2, limit: 20, since: '', queueCounts: { crawler: { waiting: 0, active: 0 }, maintenance: { waiting: 0, active: 0 } } },
+    },
+  }
+
+  it('#t-d1 dismiss(itemKey) → 乐观移除 + POST /admin/notifications/dismiss（同通知抽屉 2 端点，item_key 跨源）', async () => {
+    setupRouterMock(TASK_DISMISS_FIXTURE)
+    let posted = false
+    mockPost.mockImplementation(() => { posted = true; return new Promise(() => { /* pending：冻结 reload，观察乐观态 */ }) })
+    const { result } = renderHook(() => useAdminTasks())
+    await waitFor(() => expect(result.current.items).toHaveLength(2))
+    act(() => { result.current.dismiss('taskrun-9') })
+    expect(posted).toBe(true)
+    expect(mockPost).toHaveBeenCalledWith('/admin/notifications/dismiss', { itemKey: 'taskrun-9' })
+    await waitFor(() => expect(result.current.items.map((i) => i.id)).toEqual(['taskrun-10']))
+  })
+
+  it('#t-d2 dismissAll(itemKeys) → 乐观移除全部 + POST dismiss-batch', async () => {
+    setupRouterMock(TASK_DISMISS_FIXTURE)
+    mockPost.mockImplementation(() => new Promise(() => { /* pending */ }))
+    const { result } = renderHook(() => useAdminTasks())
+    await waitFor(() => expect(result.current.items).toHaveLength(2))
+    act(() => { result.current.dismissAll(['taskrun-9', 'taskrun-10']) })
+    expect(mockPost).toHaveBeenCalledWith('/admin/notifications/dismiss-batch', { itemKeys: ['taskrun-9', 'taskrun-10'] })
+    await waitFor(() => expect(result.current.items).toHaveLength(0))
+  })
+
+  it('#t-d3 dismiss POST 失败 → warn 降级不 throw', async () => {
+    setupRouterMock(TASK_DISMISS_FIXTURE)
+    mockPost.mockRejectedValue(new Error('network down'))
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => { /* 静音 */ })
+    try {
+      const { result } = renderHook(() => useAdminTasks())
+      await waitFor(() => expect(result.current.items).toHaveLength(2))
+      await act(async () => { result.current.dismiss('taskrun-9') })
+      await waitFor(() => expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('dismiss failed'),
+        expect.any(Error),
+      ))
+    } finally {
+      warnSpy.mockRestore()
+    }
+  })
+
+  it('#t-d4 dismissAll([]) → 不发请求（空数组 guard）', async () => {
+    setupRouterMock(TASK_DISMISS_FIXTURE)
+    const { result } = renderHook(() => useAdminTasks())
+    await waitFor(() => expect(result.current.items).toHaveLength(2))
+    act(() => { result.current.dismissAll([]) })
+    expect(mockPost).not.toHaveBeenCalled()
+  })
 })

@@ -299,6 +299,10 @@ export function useAdminNotifications(): UseAdminNotificationsResult {
 export interface UseAdminTasksResult {
   readonly items: readonly TaskItem[]
   readonly degraded: boolean
+  /** NTLG-NTF-DISMISS-C2（ADR-197）：终态任务单项软移除——乐观移除 + POST /admin/notifications/dismiss + reload */
+  readonly dismiss: (itemKey: string) => void
+  /** NTLG-NTF-DISMISS-C2（ADR-197 D-197-3）：批量清除已完成——乐观移除 + POST dismiss-batch + reload */
+  readonly dismissAll: (itemKeys: readonly string[]) => void
   readonly reload: () => Promise<void>
 }
 
@@ -352,5 +356,37 @@ export function useAdminTasks(): UseAdminTasksResult {
     return merged.sort((a, b) => (a.startedAt < b.startedAt ? 1 : a.startedAt > b.startedAt ? -1 : 0))
   }, [generalItems, backgroundItems])
 
-  return { items, degraded, reload }
+  // NTLG-NTF-DISMISS-C2：乐观移除（taskrun- 终态项在 generalItems〔jobs 端点〕；双 filter 防御覆盖）
+  // → 同通知抽屉 2 端点（item_key 跨源，ADR-197 D-197-1）→ reload；失败 warn 降级（markAllRead 范式）。
+  const dismiss = useCallback((itemKey: string) => {
+    setGeneralItems((prev) => prev.filter((item) => item.id !== itemKey))
+    setBackgroundItems((prev) => prev.filter((item) => item.id !== itemKey))
+    void (async () => {
+      try {
+        await apiClient.post('/admin/notifications/dismiss', { itemKey })
+        await reload()
+      } catch (err) {
+        // eslint-disable-next-line no-console -- 客户端 hook 无 logger / degraded mode 留痕到 devtools
+        console.warn('[useAdminTasks] dismiss failed (degraded mode):', err)
+      }
+    })()
+  }, [reload])
+
+  const dismissAll = useCallback((itemKeys: readonly string[]) => {
+    if (itemKeys.length === 0) return
+    const keySet = new Set(itemKeys)
+    setGeneralItems((prev) => prev.filter((item) => !keySet.has(item.id)))
+    setBackgroundItems((prev) => prev.filter((item) => !keySet.has(item.id)))
+    void (async () => {
+      try {
+        await apiClient.post('/admin/notifications/dismiss-batch', { itemKeys: [...itemKeys] })
+        await reload()
+      } catch (err) {
+        // eslint-disable-next-line no-console -- 客户端 hook 无 logger / degraded mode 留痕到 devtools
+        console.warn('[useAdminTasks] dismissAll failed (degraded mode):', err)
+      }
+    })()
+  }, [reload])
+
+  return { items, degraded, dismiss, dismissAll, reload }
 }

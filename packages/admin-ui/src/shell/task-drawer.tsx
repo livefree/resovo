@@ -38,6 +38,17 @@ export interface TaskDrawerProps {
   readonly onClose: () => void
   readonly onCancel?: (taskId: string) => void
   readonly onRetry?: (taskId: string) => void
+  /** NTLG-NTF-DISMISS-C2（ADR-197）：终态 taskrun 项软移除；仅可 dismiss 项显示移除按钮 */
+  readonly onDismiss?: (itemKey: string) => void
+  /** NTLG-NTF-DISMISS-C2（ADR-197 D-197-3）：批量清除已完成；回传当前可见的可 dismiss itemKeys */
+  readonly onClearAll?: (itemKeys: readonly string[]) => void
+}
+
+// ADR-197 D-197-2 任务抽屉可 dismiss 白名单（与 api parseTaskRunItemKey + 终态查库守卫同口径）：
+// taskrun- 前缀且终态（前端 4 态中 success/failed；task_runs cancelled 已映射 failed）。
+// running/pending 进行中项拒（下轮 poll 重现破窗）；crawler 裸 UUID / bg- active 派生项白名单外。
+function isDismissable(item: TaskItem): boolean {
+  return item.id.startsWith('taskrun-') && (item.status === 'success' || item.status === 'failed')
 }
 
 const ITEM_STYLE: CSSProperties = {
@@ -112,8 +123,14 @@ const ERROR_STYLE: CSSProperties = {
   borderRadius: 'var(--radius-sm)',
 }
 
+// NTLG-NTF-DISMISS-C2：行级 action 收纳容器（取消/重试/移除横排靠右；原单按钮 alignSelf flex-end 上提）
+const ACTION_ROW_STYLE: CSSProperties = {
+  display: 'flex',
+  justifyContent: 'flex-end',
+  gap: 'var(--space-2)',
+}
+
 const ACTION_BTN_STYLE: CSSProperties = {
-  alignSelf: 'flex-end',
   padding: 'var(--space-1) var(--space-3)',
   background: 'transparent',
   border: '1px solid var(--border-default)',
@@ -122,6 +139,25 @@ const ACTION_BTN_STYLE: CSSProperties = {
   cursor: 'pointer',
   fontFamily: 'inherit',
   fontSize: 'var(--font-size-xs)',
+}
+
+// 移除按钮弱化（muted 文字色 + 同 ACTION 形状）：软移除为视图态操作，弱于取消/重试业务操作
+const DISMISS_BTN_STYLE: CSSProperties = {
+  ...ACTION_BTN_STYLE,
+  color: 'var(--fg-muted)',
+}
+
+// 「清除已完成」header 按钮（与通知抽屉「清空」同范式：transparent + muted + xs）
+const CLEAR_ALL_BTN_STYLE: CSSProperties = {
+  background: 'transparent',
+  border: 0,
+  padding: 'var(--space-1) var(--space-2)',
+  color: 'var(--fg-muted)',
+  cursor: 'pointer',
+  fontFamily: 'inherit',
+  fontSize: 'var(--font-size-xs)',
+  borderRadius: 'var(--radius-sm)',
+  flexShrink: 0,
 }
 
 const COUNT_STYLE: CSSProperties = {
@@ -175,10 +211,30 @@ function chipStyle(tone: TaskMetric['tone']): CSSProperties {
   return { ...CHIP_BASE_STYLE, background: `var(--state-${slot}-bg)`, color: `var(--state-${slot}-fg)` }
 }
 
-export function TaskDrawer({ open, items, onClose, onCancel, onRetry }: TaskDrawerProps) {
+export function TaskDrawer({ open, items, onClose, onCancel, onRetry, onDismiss, onClearAll }: TaskDrawerProps) {
   const runningCount = items.filter((t) => t.status === 'running').length
+  // NTLG-NTF-DISMISS-C2：清除已完成 = 当前可见且可 dismiss（taskrun- 终态）项（ADR-197 ③ 前端回传 itemKeys）
+  const clearableKeys = items.filter(isDismissable).map((item) => item.id)
   const headerActions = (
-    <span data-task-running-count style={COUNT_STYLE}>{`运行中 ${runningCount}`}</span>
+    <>
+      <span data-task-running-count style={COUNT_STYLE}>{`运行中 ${runningCount}`}</span>
+      {onClearAll && clearableKeys.length > 0 && (
+        <button
+          type="button"
+          data-task-clear-all
+          onClick={() => {
+            try {
+              onClearAll(clearableKeys)
+            } finally {
+              // 不自动关闭抽屉（进行中任务仍可浏览）
+            }
+          }}
+          style={CLEAR_ALL_BTN_STYLE}
+        >
+          清除已完成
+        </button>
+      )}
+    </>
   )
 
   return (
@@ -187,7 +243,7 @@ export function TaskDrawer({ open, items, onClose, onCancel, onRetry }: TaskDraw
         <div data-task-empty style={EMPTY_STYLE}>暂无任务</div>
       ) : (
         items.map((item) => (
-          <TaskItemRow key={item.id} item={item} onCancel={onCancel} onRetry={onRetry} />
+          <TaskItemRow key={item.id} item={item} onCancel={onCancel} onRetry={onRetry} onDismiss={onDismiss} />
         ))
       )}
     </DrawerShell>
@@ -198,9 +254,10 @@ interface TaskItemRowProps {
   readonly item: TaskItem
   readonly onCancel: ((taskId: string) => void) | undefined
   readonly onRetry: ((taskId: string) => void) | undefined
+  readonly onDismiss: ((itemKey: string) => void) | undefined
 }
 
-function TaskItemRow({ item, onCancel, onRetry }: TaskItemRowProps) {
+function TaskItemRow({ item, onCancel, onRetry, onDismiss }: TaskItemRowProps) {
   const slot = STATUS_TO_SLOT[item.status]
   const statusBadgeStyle: CSSProperties = {
     ...STATUS_BADGE_STYLE,
@@ -216,6 +273,7 @@ function TaskItemRow({ item, onCancel, onRetry }: TaskItemRowProps) {
   const isIndeterminate = isRunning && item.progress === undefined
   const cancelVisible = item.status === 'running' && onCancel !== undefined
   const retryVisible = item.status === 'failed' && onRetry !== undefined
+  const dismissVisible = onDismiss !== undefined && isDismissable(item)
 
   return (
     <div data-task-item={item.id} data-task-item-status={item.status} style={ITEM_STYLE}>
@@ -261,37 +319,57 @@ function TaskItemRow({ item, onCancel, onRetry }: TaskItemRowProps) {
       {item.status === 'failed' && item.errorMessage && (
         <span style={ERROR_STYLE} data-task-item-error>{item.errorMessage}</span>
       )}
-      {cancelVisible && (
-        <button
-          type="button"
-          data-task-item-cancel
-          onClick={() => {
-            try {
-              onCancel?.(item.id)
-            } finally {
-              // 不自动关闭 drawer
-            }
-          }}
-          style={ACTION_BTN_STYLE}
-        >
-          取消
-        </button>
-      )}
-      {retryVisible && (
-        <button
-          type="button"
-          data-task-item-retry
-          onClick={() => {
-            try {
-              onRetry?.(item.id)
-            } finally {
-              // 不自动关闭 drawer
-            }
-          }}
-          style={ACTION_BTN_STYLE}
-        >
-          重试
-        </button>
+      {(cancelVisible || retryVisible || dismissVisible) && (
+        <div style={ACTION_ROW_STYLE}>
+          {cancelVisible && (
+            <button
+              type="button"
+              data-task-item-cancel
+              onClick={() => {
+                try {
+                  onCancel?.(item.id)
+                } finally {
+                  // 不自动关闭 drawer
+                }
+              }}
+              style={ACTION_BTN_STYLE}
+            >
+              取消
+            </button>
+          )}
+          {retryVisible && (
+            <button
+              type="button"
+              data-task-item-retry
+              onClick={() => {
+                try {
+                  onRetry?.(item.id)
+                } finally {
+                  // 不自动关闭 drawer
+                }
+              }}
+              style={ACTION_BTN_STYLE}
+            >
+              重试
+            </button>
+          )}
+          {dismissVisible && (
+            <button
+              type="button"
+              data-task-item-dismiss={item.id}
+              onClick={() => {
+                try {
+                  onDismiss?.(item.id)
+                } finally {
+                  // 不自动关闭 drawer
+                }
+              }}
+              style={DISMISS_BTN_STYLE}
+            >
+              移除
+            </button>
+          )}
+        </div>
       )}
     </div>
   )

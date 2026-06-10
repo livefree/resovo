@@ -113,6 +113,10 @@ export interface AdminShellProps {
   readonly onCancelTask?: (taskId: string) => void
   /** 任务重试回调；undefined 时重试按钮隐藏 */
   readonly onRetryTask?: (taskId: string) => void
+  /** 终态任务软移除回调（ADR-197 / NTLG-NTF-DISMISS-C2）；undefined 时移除按钮隐藏 */
+  readonly onDismissTask?: (itemKey: string) => void
+  /** 任务批量清除已完成回调（回传可见可 dismiss itemKeys）；undefined 时按钮隐藏 */
+  readonly onClearAllTasks?: (itemKeys: readonly string[]) => void
   readonly children: ReactNode
 }
 
@@ -148,7 +152,7 @@ export function AdminShell(props: AdminShellProps) {
     collapsed: controlledCollapsed, defaultCollapsed, notifications, notificationUnreadCount, tasks, commandGroups,
     onNavigate, onThemeToggle, onUserMenuAction, onCollapsedChange,
     onNotificationItemClick, onMarkAllNotificationsRead, onDismissNotification, onClearAllNotifications,
-    onCancelTask, onRetryTask,
+    onCancelTask, onRetryTask, onDismissTask, onClearAllTasks,
     children,
   } = props
 
@@ -323,6 +327,8 @@ export function AdminShell(props: AdminShellProps) {
           onClose={handleCloseDrawer}
           onCancel={onCancelTask}
           onRetry={onRetryTask}
+          onDismiss={onDismissTask}
+          onClearAll={onClearAllTasks}
         />
       )}
 

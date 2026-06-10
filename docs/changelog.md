@@ -3691,3 +3691,19 @@
 - **新增依赖**：无
 - **数据库变更**：无
 - **注意事项**：清空按钮语义 = 当前可见（unreadOnly 过滤后）且白名单内项（ADR-197 ③ 前端回传 itemKeys）；upcoming/active 派生项无移除按钮（写守卫 422 同口径）。任务抽屉 dismiss UI 归 -C2。门禁：typecheck/lint EXIT=0，test:changed 80 文件 1029 passed。
+
+## [NTLG-NTF-DISMISS-C2] 任务抽屉 dismiss 软移除 UI（终态移除 + 清除已完成）
+- **完成时间**：2026-06-10
+- **记录时间**：2026-06-10 11:05
+- **执行模型**：claude-fable-5
+- **子代理**：无（方案已 arch-reviewer a489b560dbd4f2551 CONDITIONAL PASS 锁定，同 -C1 方案 (b)）
+- **修改文件**：
+  - `packages/admin-ui/src/shell/task-drawer.tsx` — Props 加 `onDismiss?(itemKey)` / `onClearAll?(itemKeys)`；组件内 `isDismissable`（`taskrun-` 前缀 ∧ status ∈ {success, failed}，与 api `parseTaskRunItemKey`+终态查库守卫同口径；running/pending 拒、crawler 裸 UUID / bg- 派生项白名单外）；行级 action 收纳横排容器（取消/重试/移除并排靠右，原单按钮 alignSelf flex-end 上提）；「移除」按钮 muted 弱化；headerActions 加「清除已完成」按钮（回传可见 dismissable itemKeys）
+  - `packages/admin-ui/src/shell/admin-shell.tsx` — AdminShellProps 加 `onDismissTask?` / `onClearAllTasks?` 穿透 TaskDrawer
+  - `apps/server-next/src/lib/admin-shell-notifications.ts` — useAdminTasks 加 `dismiss` / `dismissAll`：乐观移除（双 filter）→ 同通知抽屉 2 端点（item_key 跨源 D-197-1）→ reload；失败 catch warn；空数组 guard
+  - `apps/server-next/src/app/admin/admin-shell-client.tsx` — wire `handleDismissTask` / `handleClearAllTasks`
+  - `tests/unit/components/admin-ui/shell/task-drawer.test.tsx` — +6 用例（白名单显隐含 5 形态 / onDismiss 回调 / 重试+移除并存 / 清除已完成回传 keys / 无可清隐藏）
+  - `tests/unit/lib/admin-shell-notifications.test.ts` — +4 用例（#t-d1 POST 契约+乐观移除 / #t-d2 batch / #t-d3 失败 warn / #t-d4 空数组 guard）
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：任务抽屉 dismiss 复用通知侧 2 端点（`/admin/notifications/dismiss{,-batch}`，item_key 跨源单表）；终态判定前端用 4 态 status（cancelled 已在 TaskAggregator 映射 failed），服务端写守卫查 task_runs 6 态终态为权威。**dismiss UI 端到端闭环（-A/-B1/-B2/-B3/-C1/-C2 全完成）**。门禁：typecheck/lint EXIT=0，test:changed 80 文件 1026 passed。

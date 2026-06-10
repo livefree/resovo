@@ -136,7 +136,7 @@ export function AdminShellClient({ defaultCollapsed, initialTheme, initialRole, 
   // 无需独立 useAdminBackgroundEvents hook + BackgroundEventBell 旁路
   // ADR-196 D-196-5②：红点改读 unread-count（SSE 实时 + 端点 fallback）；items 仍供 drawer
   const { items: notifications, unreadCount: notificationUnreadCount, markAllRead, markOneRead, dismiss: dismissNotification, dismissAll: dismissAllNotifications } = useAdminNotifications()
-  const { items: tasks, reload: reloadTasks } = useAdminTasks()
+  const { items: tasks, reload: reloadTasks, dismiss: dismissTask, dismissAll: dismissAllTasks } = useAdminTasks()
 
   const handleNotificationItemClick = useCallback((item: NotificationItem) => {
     markOneRead(item.id)
@@ -191,6 +191,15 @@ export function AdminShellClient({ defaultCollapsed, initialTheme, initialRole, 
     })()
   }, [toast, reloadTasks])
 
+  // NTLG-NTF-DISMISS-C2（ADR-197）：任务抽屉终态项移除 + 清除已完成（hook 内乐观移除 + 端点 + reload）
+  const handleDismissTask = useCallback((itemKey: string) => {
+    dismissTask(itemKey)
+  }, [dismissTask])
+
+  const handleClearAllTasks = useCallback((itemKeys: readonly string[]) => {
+    dismissAllTasks(itemKeys)
+  }, [dismissAllTasks])
+
   return (
     <>
     <AdminShell
@@ -216,6 +225,8 @@ export function AdminShellClient({ defaultCollapsed, initialTheme, initialRole, 
       onClearAllNotifications={handleClearAllNotifications}
       onCancelTask={handleCancelTask}
       onRetryTask={handleRetryTask}
+      onDismissTask={handleDismissTask}
+      onClearAllTasks={handleClearAllTasks}
     >
       {children}
       {/* CHG-SN-8-FUP-USER-MENU：4 noop action 反馈 Modal */}
