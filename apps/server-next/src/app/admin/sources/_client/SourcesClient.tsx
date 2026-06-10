@@ -319,7 +319,10 @@ export function SourcesClient({ isAdmin = false }: SourcesClientProps = {}) {
                 onSelectionChange={(s) => setSelectedKeys(s.selectedKeys)}
                 onRowClick={handleRowClick}
                 expandedKeys={expandedKeys}
-                renderExpandedRow={(row) => <SourceLinesExpand videoId={row.videoId} />}
+                renderExpandedRow={(row) => (
+                  // SRCHEALTH-P1-4（B3）：探测/试播成功 → 外层聚合行联动 refetch（refresh 保持当前页/筛选，与行操作「刷新」同源）
+                  <SourceLinesExpand videoId={row.videoId} onSourceHealthChanged={refresh} />
+                )}
                 toolbar={{
                   search: toolbarSearch,
                   hideFilterChips: true,

@@ -3731,3 +3731,20 @@
   - 残留登记（均为既有项，非本卡引入）：① [4] archive 内 24 项 frontmatter 存量缺失——按规范 §6 archive 只读不修；② [5] README 真源"冲突"（docs/README.md vs docs/manual/README.md）——脚本按文件名判重，人工对照两者 scope 不同（docs 导航索引 vs 后台操作手册），判定非真冲突，待 §7 工具化时按 scope 判重改进；③ [3] SEQ 4 处历史逆序（advisory）；④ manual/_template 占位链接 4 处（P-x/P-y/P-other，模板示例非断链）；⑤ manual-coverage 缺 3 页（P-external-resources / P-messages / P-source-line-aliases，advisory 既有缺口）；⑥ `docs/audit/adr-d-status.json` 工作区改动为核验脚本再生成（仅 generatedAt），生成型文件不纳入本 commit（同 SEQ-20260605-02 先例）。
   - 规范 §7 工具缺口计数：本次治理 R1/R2 发现 ≥ 3 处断链（第 1 次）；若下次治理再 ≥ 3 处，触发 `scripts/verify-doc-links.mjs` 工具化立卡。
   - 子代理偏离 1 项已回退：doc-janitor 曾擅自将 `docs/manual/README.md` `source_of_truth: yes→no`（超出"只增不改"指令），主循环已回退为 yes。
+
+## [SRCHEALTH-P1-4] sources 页探测完成后外层聚合行联动刷新（B3）
+- **完成时间**：2026-06-10
+- **记录时间**：2026-06-10 13:12
+- **执行模型**：claude-fable-5（建议 sonnet，用户会话人工覆盖——「批准开始 v2 拆卡准备开发」持续推进授权）
+- **子代理**：无
+- **修改文件**：
+  - `apps/server-next/src/app/admin/sources/_client/SourceLinesExpand.tsx` — Props 增可选 `onSourceHealthChanged`（JSDoc 锁口径：probe/render 单集+批量 success 触发，toggle/disableDead 不触发，范式对齐审核台 CHG-358）；`handleActionResult` 4 个探测/试播 success 分支调用 + useCallback 依赖补全
+  - `apps/server-next/src/app/admin/sources/_client/SourcesClient.tsx` — `renderExpandedRow` 透传 `onSourceHealthChanged={refresh}`（与行操作列「刷新」同源 setRetryKey，保持当前页/筛选；展开态 expandedKeys 按 videoId 不丢）
+  - `tests/unit/components/server-next/admin/sources/SourcesClient.test.tsx` — 新增 1 用例：展开行 → 点「全部探测」成功 → 外层 `listVideoGroups` 联动重拉
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - 真源：`docs/designs/source-health-feedback-loop-plan_20260610.md` §2.1 B3 + §3 P1-4；SEQ-20260610-02 首卡（§8 C6 裁定的首交付项）。
+  - 联动口径边界：toggle/disableDead 改变「覆盖/活跃源」聚合但**不触发**外层 refetch（与审核台 CHG-358 口径一致，仅探测/试播信号触发）；若后续需要可在 P1 收口复盘时扩展。
+  - 共享层沉淀：否——触发点本在消费方 `handleActionResult`，`@resovo/admin-ui` LinesPanel 零改动。
+  - 门禁：typecheck/lint EXIT=0；SourcesClient 单测 11/11；test:changed 13 passed；e2e:admin 82/82 EXIT=0。

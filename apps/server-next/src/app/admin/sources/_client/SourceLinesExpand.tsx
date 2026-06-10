@@ -66,11 +66,18 @@ const TXT = {
 
 export interface SourceLinesExpandProps {
   readonly videoId: string
+  /**
+   * SRCHEALTH-P1-4（B3）：probe / render-check（单集或批量）成功后通知上游——
+   * 外层 VideoGroupRow 聚合列（探测/试播/最近检测）来自 listVideoGroups 服务端聚合，
+   * 需联动 refetch 才与 video_sources 现状一致。范式对齐审核台 LinesPanel（CHG-358）。
+   * toggle / disableDead 不触发（非探测口径，与审核台一致）。
+   */
+  readonly onSourceHealthChanged?: () => void
 }
 
 // ── Main ────────────────────────────────────────────────────────────────────────
 
-export function SourceLinesExpand({ videoId }: SourceLinesExpandProps) {
+export function SourceLinesExpand({ videoId, onSourceHealthChanged }: SourceLinesExpandProps) {
   const toast = useToast()
   // R4：toggle/disableDead/refetch 失败本地化红条（LinesPanel actionError slot）
   const [actionError, setActionError] = useState<string | null>(null)
@@ -89,6 +96,7 @@ export function SourceLinesExpand({ videoId }: SourceLinesExpandProps) {
         return
       case 'probeEpisode':
         if (r.status === 'success') {
+          onSourceHealthChanged?.()
           if (r.dead) toast.push({ title: '探测', description: TXT.probeDead, level: 'warn' })
         } else {
           toast.push({ title: '探测失败', description: r.status === 'freeze' ? TXT.probeFreeze : TXT.probeFailed, level: 'danger' })
@@ -96,6 +104,7 @@ export function SourceLinesExpand({ videoId }: SourceLinesExpandProps) {
         return
       case 'renderCheckEpisode':
         if (r.status === 'success') {
+          onSourceHealthChanged?.()
           if (r.dead) toast.push({ title: '试播', description: TXT.renderDead, level: 'warn' })
         } else {
           toast.push({ title: '试播失败', description: TXT.renderFailed, level: 'danger' })
@@ -103,6 +112,7 @@ export function SourceLinesExpand({ videoId }: SourceLinesExpandProps) {
         return
       case 'probeAll':
         if (r.status === 'success' && r.summary) {
+          onSourceHealthChanged?.()
           const { ok, dead, total, failed } = r.summary
           if (dead > 0 || failed > 0) {
             toast.push({ title: '全部探测完成', description: `${ok}/${total} 可访问${dead > 0 ? ` · ${dead} 失效` : ''}${failed > 0 ? ` · ${failed} 异常` : ''}`, level: 'warn' })
@@ -115,6 +125,7 @@ export function SourceLinesExpand({ videoId }: SourceLinesExpandProps) {
         return
       case 'renderCheckAll':
         if (r.status === 'success' && r.summary) {
+          onSourceHealthChanged?.()
           const { ok, dead, total, failed } = r.summary
           if (dead > 0 || failed > 0) {
             toast.push({ title: '全部试播完成', description: `${ok}/${total} 渲染正常${dead > 0 ? ` · ${dead} 失败` : ''}${failed > 0 ? ` · ${failed} 异常` : ''}`, level: 'warn' })
@@ -126,7 +137,7 @@ export function SourceLinesExpand({ videoId }: SourceLinesExpandProps) {
         }
         return
     }
-  }, [toast])
+  }, [toast, onSourceHealthChanged])
 
   const [state, actions] = useSourceLinesController(videoId, { onActionResult: handleActionResult })
 

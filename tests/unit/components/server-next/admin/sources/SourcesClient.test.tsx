@@ -77,6 +77,8 @@ vi.mock('../../../../../../apps/server-next/src/lib/api-client', () => {
 })
 
 import { SourcesClient } from '../../../../../../apps/server-next/src/app/admin/sources/_client/SourcesClient'
+// SRCHEALTH-P1-4：经 mock 工厂导出引用（vi.mocked 拿 batch 探测 mock 控制返回值）
+import { batchProbeVideo } from '../../../../../../apps/server-next/src/lib/sources/api'
 
 // ── fixtures ──────────────────────────────────────────────────────
 
@@ -255,6 +257,40 @@ describe('SourcesClient', () => {
       expect(screen.getByTestId('sources-lines-expand')).not.toBeNull()
       expect(screen.getByText('线路A')).not.toBeNull()
       expect(screen.getByText('12/12集')).not.toBeNull()
+    })
+  })
+
+  it('展开区「全部探测」成功 → 外层聚合行联动 refetch listVideoGroups（SRCHEALTH-P1-4 / B3）', async () => {
+    getVideoGroupStatsMock.mockResolvedValueOnce(STATS)
+    listVideoGroupsMock.mockResolvedValue(ONE_GROUP_LIST)
+    fetchVideoSourcesMock.mockResolvedValue([{
+      id: 'src-1',
+      updated_at: '2026-01-01T00:00:00Z',
+      source_site_key: 'bilibili',
+      source_name: '线路A',
+      source_url: 'https://b.com/ep1',
+      episode_number: 1,
+      is_active: true,
+      probe_status: 'pending',
+      render_status: 'pending',
+      latency_ms: null,
+    }])
+    vi.mocked(batchProbeVideo).mockReset().mockResolvedValue({
+      videoId: VIDEO_GROUP_ROW.videoId,
+      results: [{ sourceId: 'src-1', newProbeStatus: 'ok', latencyMs: 50 }],
+      summary: { total: 1, ok: 1, dead: 0, failed: 0 },
+    })
+    render(<SourcesClient />)
+    await waitFor(() => expect(screen.getByText('测试视频')).not.toBeNull())
+    // 展开行 → LinesPanel 渲染（含「全部探测」按钮）
+    fireEvent.click(screen.getByText('测试视频'))
+    await waitFor(() => expect(screen.getByTestId('sources-lines-expand')).not.toBeNull())
+    const callsBefore = listVideoGroupsMock.mock.calls.length
+    // 点「全部探测」→ batchProbeVideo 成功 → onSourceHealthChanged → SourcesClient.refresh → listVideoGroups 重拉
+    fireEvent.click(screen.getByLabelText('全部探测线路'))
+    await waitFor(() => {
+      expect(vi.mocked(batchProbeVideo)).toHaveBeenCalledWith(VIDEO_GROUP_ROW.videoId)
+      expect(listVideoGroupsMock.mock.calls.length).toBeGreaterThan(callsBefore)
     })
   })
 

@@ -1839,9 +1839,9 @@
 
 ## [SEQ-20260610-02] 视频/线路/站点健康度与反馈闭环（source-health v2 方案落地）
 
-- **状态**：🔄 执行中
+- **状态**：🔄 执行中（1/16 卡完成：P1-4 ✅；下一卡 P1-2）
 - **创建时间**：2026-06-10 12:53
-- **最后更新时间**：2026-06-10 12:53
+- **最后更新时间**：2026-06-10 13:10
 - **目标**：落地 `docs/designs/source-health-feedback-loop-plan_20260610.md` v2（两轮独立审核有条件通过，必修全吸收，commit 88893812）：修复「全部探测/试播后状态不更新」三处可见断点（B1/B2/B3）→ 打通反馈闭环（F1–F4）→ 评分进化 + 站点/主机桥接（D3/D4）。
 - **范围**：apps/api（service/queries/routes/lib）+ apps/worker（jobs/lib）+ apps/server-next（sources/videos 模块 UI）+ apps/web-next（PlayerShell）+ packages（media-probe 新包，P1-3）。**方案 §3 为各卡内容真源，§4 为门禁真源**；卡面只记验收口径与文件范围。
 - **依赖**：无 BLOCKER；方案 v2 已批准（用户 2026-06-10）。
@@ -1850,11 +1850,12 @@
 
 ### 任务列表（Phase 1 — 修可见断点，无 schema 变更）
 
-1. **SRCHEALTH-P1-4** — sources 页探测完成后外层聚合行联动刷新（B3）（状态：🔄 进行中 2026-06-10 12:53）
-   - 创建时间：2026-06-10 12:53 ｜ 实际开始：2026-06-10 12:53
+1. **SRCHEALTH-P1-4** — sources 页探测完成后外层聚合行联动刷新（B3）（状态：✅ 已完成 2026-06-10 13:10）
+   - 创建时间：2026-06-10 12:53 ｜ 实际开始：2026-06-10 12:53 ｜ 完成时间：2026-06-10 13:10
    - 验收口径：在 `/admin/sources` 行展开区点「全部探测/全部试播/单集探测/试播」成功后，外层行的 probe/render 聚合展示与服务端一致（联动 refetch，不需手动刷新）。
-   - 文件范围：`apps/server-next/src/app/admin/sources/_client/SourceLinesExpand.tsx`、`SourcesClient.tsx`（+ 必要时 `src/lib/sources/api.ts` 单行取数）。
+   - 文件范围：`apps/server-next/src/app/admin/sources/_client/SourceLinesExpand.tsx`、`SourcesClient.tsx`。
    - 依赖：无。建议模型：sonnet。
+   - **完成备注**：镜像 CHG-358 审核台范式落地。① `SourceLinesExpandProps` 增可选 `onSourceHealthChanged`（JSDoc 锁口径：probe/render 单集+批量 success 触发；toggle/disableDead 不触发——非 B3 探测口径，与审核台一致）；`handleActionResult` 4 分支 success 调用 + useCallback 依赖补全。② `SourcesClient.renderExpandedRow` 传 `refresh`（与行操作列「刷新」同源 setRetryKey——保持当前页/筛选，展开态 expandedKeys 按 videoId 不丢；不需 api.ts 单行取数，整列表 refresh 范式已被行操作使用，一致性优先）。共享层沉淀：否——触发点本在消费方 handleActionResult，`@resovo/admin-ui` LinesPanel 零改动。门禁：typecheck/lint EXIT=0 / 单测新增 1 用例（展开→全部探测成功→listVideoGroups 重拉）SourcesClient 11/11 / test:changed 13 passed / **e2e:admin 82/82 EXIT=0**。执行模型: claude-fable-5（建议 sonnet，用户会话人工覆盖——「批准开始 v2 拆卡准备开发」持续推进授权）；子代理: 无。
 2. **SRCHEALTH-P1-2** — 手动探测后同步重算视频聚合状态（B2）（状态：⬜ 待开始）
    - 创建时间：2026-06-10 12:53
    - 验收口径：`SourceProbeService` probeOne/renderCheckOne/batchProbe/batchRenderCheck 完成后 `videos.source_check_status` 立即与 `video_sources` 现状一致（不再等 6h cron）。
