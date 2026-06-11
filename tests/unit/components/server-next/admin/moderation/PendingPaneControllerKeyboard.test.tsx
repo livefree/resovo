@@ -101,10 +101,12 @@ describe('PendingPaneController · 键盘流（MODUX-P2-3 / item 1）', () => {
     expect(props.setActiveIdx).toHaveBeenCalled()
   })
 
-  it("'shift+?' → help 浮层渲染", async () => {
+  it("'shift+?' → help 浮层渲染（含数字键选线路文档）", async () => {
     renderController()
     dispatchKeydown('?', { shiftKey: true })
     await waitFor(() => expect(screen.getByTestId('moderation-keyboard-help')).toBeTruthy())
     expect(screen.getByText('键盘快捷键')).toBeTruthy()
+    // MODUX-P2-3-FIX：数字键选线路 help 静态文档项（绑定在 LinesPanel）
+    expect(screen.getByText('选择第 N 条线路')).toBeTruthy()
   })
 })

@@ -165,7 +165,11 @@ export function PendingPaneController({
   }, [shortcuts, batchModeOn, helpOpen])
 
   const helpItems = useMemo<KeyboardHelpItem[]>(
-    () => shortcuts.map((s) => ({ displayKey: s.displayKey, label: s.label, group: s.group, batchPaused: !s.batchSafe })),
+    () => [
+      ...shortcuts.map((s) => ({ displayKey: s.displayKey, label: s.label, group: s.group, batchPaused: !s.batchSafe })),
+      // 数字键选线路绑定在 LinesPanel（线路数据所在层）；此处为 help 静态展示项（MODUX-P2-3-FIX）
+      { displayKey: '1–9', label: '选择第 N 条线路', group: '线路', batchPaused: false },
+    ],
     [shortcuts],
   )
 

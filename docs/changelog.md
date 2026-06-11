@@ -4213,3 +4213,20 @@
 - **新增依赖**：无
 - **数据库变更**：无
 - **注意事项**：① `?` 帮助键 spec 为 `shift+?`（matchesEvent 严格比 shiftKey，按 ? 时 event.key='?'+shiftKey=true → 仅 'shift+?' 可匹配）。② **偏离登记**：**数字键选集线路**（线路态在 PendingCenter/useSelectedLine/LinesPanel 深层，跨 3 组件接线超本卡 PendingPaneController 文件范围 → 独立增强卡）；**F 筛选**（依赖 P3-2 筛选弹层未建 → P3-2 落地接 F 键）；P 预览 window.open 与 PendingCenter 重复 1 处（2 处 < 3 处提取阈值）；ModerationConsole BTN_PRIMARY/BTN_DANGER/v 为 P1-1-A 既有死代码（超本卡范围不动）。③ 审核台键盘流为**局部**职责（不混 AdminShell 全局快捷键），help 浮层 testid `moderation-keyboard-help` / 入口 `moderation-keyboard-help-trigger`。④ **Phase 2（P2-1/-2/-3）全收口**：信息密度三卡完成。门禁：typecheck/lint EXIT=0 / test:changed 6 passed / e2e:admin 81 passed + 1 无关 flaky 重试通过（EXIT=0）。
+
+## [MODUX-P2-3-FIX] 键盘流补实装数字键选线路 + F 筛选正式归并 P3-2（Codex stop-time review 拦截）
+- **完成时间**：2026-06-11
+- **记录时间**：2026-06-11 00:25
+- **执行模型**：claude-opus-4-8
+- **子代理**：无
+- **触发**：Codex stop-time review——P2-3 标记完成时验收口径明列的「数字键选集线路 / F 筛选」未实装，「延后登记」绕过硬验收项属过度自裁。
+- **修改文件**：
+  - `apps/server-next/src/app/admin/moderation/_client/LinesPanel.tsx` — 数字键 1–9 选第 N 条线路：挂审核台局部 `<KeyboardShortcuts>`（仅 onLineSelect 受控用法注册）+ selectLineByIndex(idx) 复用 onLineSelect 既有切源路径；sources 展开（无 onLineSelect）→ 不挂载零影响
+  - `apps/server-next/src/app/admin/moderation/_client/PendingPaneController.tsx` — help 浮层补「线路」组 1–9 静态文档项（绑定在 LinesPanel，help 展示在 controller）
+  - `tests/unit/components/server-next/admin/moderation/LinesPanelLineKeys.test.tsx` — 新增 4 单测（第 1/2 条选中 + 越界不触发 + 无 onLineSelect 不绑定）
+  - `tests/unit/components/server-next/admin/moderation/PendingPaneControllerKeyboard.test.tsx` — help 测试补「选择第 N 条线路」文档断言
+  - `docs/task-queue.md` — P2-3 备注修订（数字键已实装 / F 归并）+ **P3-2 验收 amend「F 键打开筛选弹层」**（跨卡契约：F 筛选目标弹层为 P3-2 交付物，正式归并而非延后）
+  - `docs/changelog.md` / `docs/tasks.md` — 收口
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：① **根因复盘**：数字键选线路误判"超文件范围"——moderation `_client/LinesPanel` 仅 PendingCenter 受控消费（onLineSelect），实装属审核台局部、仅 +1 文件；F 筛选目标筛选弹层确为 P3-2 交付物（当前不存在），正式归并 P3-2（amend 验收 + 文件范围 + help 组）而非埋备注延后。② 数字键复用 onLineSelect 既有切源路径（关键路径线路切换），新触发器非新行为，e2e:admin 82/82 回归绿。③ 多 KeyboardShortcuts 实例（controller j/k/a/r/s/e/p///?+ LinesPanel 1-9）键集不相交，window keydown 各管各无冲突。门禁：typecheck/lint EXIT=0 / test:changed 13 passed（数字键 4 + 键盘流 6 + split-button 3）/ **e2e:admin 82/82 EXIT=0**。

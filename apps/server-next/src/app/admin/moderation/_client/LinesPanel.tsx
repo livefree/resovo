@@ -14,9 +14,10 @@ import {
   LinesPanel as LinesPanelUI,
   groupSourcesByLine,
   LineHealthDrawer,
+  KeyboardShortcuts,
   useToast,
 } from '@resovo/admin-ui'
-import type { LineAggregate } from '@resovo/admin-ui'
+import type { LineAggregate, ShortcutBinding } from '@resovo/admin-ui'
 import type { DualSignalDisplayState } from '@resovo/types'
 import { toDisplayState } from '@/lib/sources/api'
 import { useSourceLinesController } from '@/lib/sources/use-source-lines-controller'
@@ -156,6 +157,25 @@ export function LinesPanel({ videoId, selectedKey, onLineSelect, onSourceHealthC
 
   const aggregatedLines = useMemo(() => groupSourcesByLine(state.lines), [state.lines])
 
+  // MODUX-P2-3-FIX：数字键 1–9 选第 N 条线路（复用 onLineSelect 既有切源路径，非新行为）。
+  //   仅受控用法（onLineSelect 存在 = 审核台）注册；sources 展开无 onLineSelect → 不挂载、零影响。
+  const selectLineByIndex = useCallback((idx: number) => {
+    if (!onLineSelect) return
+    const line = aggregatedLines[idx]
+    if (!line) return
+    const firstActiveEp = line.episodes.find((e) => e.isActive)
+    onLineSelect({ lineKey: line.key, line, firstActiveUrl: firstActiveEp?.sourceUrl ?? null })
+  }, [onLineSelect, aggregatedLines])
+
+  const lineKeyBindings = useMemo<ShortcutBinding[]>(() => {
+    if (!onLineSelect) return []
+    return Array.from({ length: 9 }, (_, i) => ({
+      id: `select-line-${i + 1}`,
+      spec: String(i + 1),
+      handler: () => selectLineByIndex(i),
+    }))
+  }, [onLineSelect, selectLineByIndex])
+
   // R4：open 时存快照（title/probe/render 冻结）+ hook 接管取数/并发/分页
   const handleHealthOpen = useCallback(({ episodeId }: { lineKey: string; episodeId: string }) => {
     const src = state.lines.find((l) => l.id === episodeId)
@@ -175,6 +195,8 @@ export function LinesPanel({ videoId, selectedKey, onLineSelect, onSourceHealthC
 
   return (
     <>
+      {/* MODUX-P2-3-FIX：数字键选线路（审核台局部，仅受控用法）*/}
+      <KeyboardShortcuts bindings={lineKeyBindings} />
       <LinesPanelUI
         lines={aggregatedLines}
         density="compact"
