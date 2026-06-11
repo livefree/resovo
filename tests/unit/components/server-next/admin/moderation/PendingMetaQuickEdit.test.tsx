@@ -132,7 +132,7 @@ describe('PendingMetaQuickEdit（MODUX-P3-4-B）', () => {
     await waitFor(() => expect(saveMetaMock).toHaveBeenCalledWith('vid-1', { country: null }))
   })
 
-  it('字段被锁（skippedFields 非空）→ 回滚乐观值 + warn toast + 不调 onSaved（Codex review fix）', async () => {
+  it('该字段被锁（skippedFields 含本字段）→ 回滚乐观值 + warn + 始终调 onSaved（Codex fix2）', async () => {
     saveMetaMock.mockResolvedValueOnce({ skippedFields: ['country'] })
     const { onSaved } = await renderQE()
     const input = screen.getByTestId('quick-edit-country') as HTMLInputElement
@@ -141,7 +141,21 @@ describe('PendingMetaQuickEdit（MODUX-P3-4-B）', () => {
     await waitFor(() => expect(toastPushMock).toHaveBeenCalledWith(expect.objectContaining({ level: 'warn' })))
     // 被锁未写入 → 回滚到 v.country，不可显示未保存的 'JP'
     await waitFor(() => expect(input.value).toBe('US'))
-    expect(onSaved).not.toHaveBeenCalled()
+    // Codex fix2：始终刷新队列（后端真源，反映任何已落库写入，不隐藏）
+    expect(onSaved).toHaveBeenCalled()
+  })
+
+  it('skippedFields 含其他字段（非本次提交字段）→ 本字段视为已保存（不误回滚）+ onSaved（Codex fix2）', async () => {
+    // 提交 country，但后端回 skippedFields=['year']（他字段锁）→ country 实际已写 → 不回滚 country
+    saveMetaMock.mockResolvedValueOnce({ skippedFields: ['year'] })
+    const { onSaved } = await renderQE()
+    const input = screen.getByTestId('quick-edit-country') as HTMLInputElement
+    fireEvent.change(input, { target: { value: 'JP' } })
+    fireEvent.blur(input)
+    await waitFor(() => expect(saveMetaMock).toHaveBeenCalledWith('vid-1', { country: 'JP' }))
+    await waitFor(() => expect(onSaved).toHaveBeenCalled())
+    // country 不在 skippedFields → 已保存 → 不回滚（保留 'JP'）
+    expect(input.value).toBe('JP')
   })
 
   it('保存失败 → 回滚 + danger toast', async () => {

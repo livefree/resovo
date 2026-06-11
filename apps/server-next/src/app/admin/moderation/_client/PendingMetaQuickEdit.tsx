@@ -89,14 +89,17 @@ export function PendingMetaQuickEdit({ v, onSaved }: PendingMetaQuickEditProps):
     async (patch: MetaEditPayload, revert: () => void): Promise<void> => {
       try {
         const res = await saveModerationMeta(v.id, patch)
-        if (res.skippedFields.length > 0) {
-          // 字段被 provenance 锁未写入（commit 单字段 patch → skipped 非空 = 该字段被锁）。
-          //   必须回滚乐观值，否则未保存值显示为已保存；无实际变更 → 不调 onSaved 刷新。
+        // commit 单字段 patch；仅当**该字段**在 skippedFields（被 provenance 锁未写入）时回滚乐观值，
+        //   避免误回滚实际已保存的字段。
+        const key = Object.keys(patch)[0]
+        if (key && res.skippedFields.includes(key)) {
           revert()
           toast.push({ level: 'warn', title: Q.skipped(res.skippedFields.join(', ')) })
-          return
+        } else {
+          toast.push({ level: 'success', title: Q.saved })
         }
-        toast.push({ level: 'success', title: Q.saved })
+        // 始终刷新队列：后端为真源，反映任何已落库写入（含 VideoService.update 的 videos 表冗余副本，
+        //   即便 catalog 字段被锁 skip），避免隐藏真实持久写入。
         onSaved?.()
       } catch {
         revert()

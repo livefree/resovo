@@ -2051,7 +2051,8 @@
     - 文件范围：`apps/server-next/src/app/admin/moderation/_client/PendingCenter.tsx` + 内联快编新组件（审核台局部）。
     - 依赖：MODUX-P3-4-A。建议模型：sonnet。
     - **完成备注（2026-06-11，执行模型 claude-opus-4-8，子代理无）**：新建 PendingMetaQuickEdit（类型 AdminSelect / 年代 number 步进 / 地区 text / 题材 AdminSelect multiple）；type/year/country 由 v 种子，**genres 经既有 getVideo(v.id) lazy-fetch**（VideoQueueRow 无 genres → 不越界改 types/DB）；逐字段乐观更新 + 失败回滚 + toast + year 客户端预校验。api.ts 加 saveModerationMeta（单写路径 /meta）。PendingCenter 插入组件，**复用 onSourceHealthChanged→refetchQueue 联动刷新**（不穿透新 prop）。补 7 单测 + 牵连修 split-button stub。门禁全绿：typecheck/lint/verify:adr-contracts EXIT=0、test:changed 105、e2e:admin 82/82。**SEQ-20260610-03 全收口（15/15）**。
-    - **P3-4-B-FIX（Codex stop-time review 拦截 2026-06-11）**：被锁字段（skippedFields 非空）快编只弹 warn 未回滚乐观值 → 未保存显示为已保存。修复：commit() skipped 分支补 revert() + 不调 onSaved（单字段 patch → skipped 非空即该字段被锁）；type 受控天然正确。+1 单测。门禁全绿（e2e:admin 82/82，首跑 EADDRINUSE 端口占用环境噪声清理后绿）。
+    - **P3-4-B-FIX（Codex stop-time review 拦截 2026-06-11）**：被锁字段（skippedFields 非空）快编只弹 warn 未回滚乐观值 → 未保存显示为已保存。修复：commit() skipped 分支补 revert()；type 受控天然正确。+1 单测。
+    - **P3-4-B-FIX2（Codex stop-time review 第 2 拦截 2026-06-11）**：前次 FIX 在 skipped 时 return 跳过 onSaved，但 VideoService.update 把 type 等冗余写 videos 表副本（不过 catalog 锁）→ catalog 被锁 skip 时 videos 副本可能已落库 → 跳 onSaved 隐藏真实写入。修复：① `skippedFields.includes(key)` 仅回滚确被锁字段（不误回滚已保存字段）；② **始终调 onSaved** 反映真实持久态。+1 单测。门禁全绿（typecheck/lint/verify:adr-contracts EXIT=0、test:changed 21、e2e:admin 82/82；e2e 首跑 EADDRINUSE 环境噪声清理后绿）。
 
 > **SEQ-20260610-03 MODUX 全 15 卡完成（2026-06-11）**：Phase 1（标题治理 P1-0~P1-1-B / DecisionCard P1-2 / 前台预览 404 P1-3 / 线路按钮·预设 P1-4）+ Phase 2（ModListRow 三分区 P2-1 / 详情 Pill 化 P2-2 / 键盘流共享化 P2-3〔Codex 两轮拦截补全〕）+ Phase 3（P3-1-A/-B 后端富集·年代过滤 / P3-2 筛选弹层 / P3-3 类似 tab 阈值折叠 / P3-4-A /meta 补 country / P3-4-B 4 字段内联快编）。PHASE COMPLETE 全量兜底见 changelog。
 

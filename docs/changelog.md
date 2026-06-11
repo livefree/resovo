@@ -4352,3 +4352,15 @@
 - **问题**：Codex review——`commit()` 在 `skippedFields`（字段被 provenance 锁未写入）非空时仅弹 warn toast，**未回滚乐观值**；genres/year/country 本地乐观 state 保留新值 → 未保存显示为已保存（onSaved 刷新也不复位，因 v 对应字段未变、effect deps 不触发）。
 - **修复**：commit 单字段 patch → skipped 非空 = 该字段被锁 → 调 `revert()` 回滚乐观值到持久值 + 不调 onSaved（无实际变更）；warn toast 保留。type 受控 v.type（无本地乐观，revert no-op）天然正确。
 - **门禁**：typecheck/lint/verify:adr-contracts EXIT=0 / test:changed 20 passed / e2e:admin 82/82 EXIT=0（首跑 EADDRINUSE:3000 端口占用环境噪声，清理遗留 dev server 后重跑绿）。
+
+## [MODUX-P3-4-B-FIX2] skipped 路径跳过 onSaved 隐藏真实落库写入（Codex stop-time review 第 2 拦截）
+- **完成时间**：2026-06-11
+- **记录时间**：2026-06-11 03:03
+- **执行模型**：claude-opus-4-8（建议 sonnet）
+- **子代理**：无
+- **修改文件**：
+  - `apps/server-next/src/app/admin/moderation/_client/PendingMetaQuickEdit.tsx` — commit() 判 `skippedFields.includes(key)` 仅回滚确被锁字段 + **始终调 onSaved**
+  - `tests/unit/components/server-next/admin/moderation/PendingMetaQuickEdit.test.tsx` — 被锁用例改（仍回滚但 onSaved 应调）+1 用例（他字段锁不误回滚本字段）
+- **问题**：Codex review——前次 FIX 在 skipped 非空时 `return` 跳过 onSaved。但 `VideoService.update` 把 type 等冗余写入 **videos 表副本（不过 catalog 锁检查，VideoService.ts:419+）**：catalog 字段被锁 skip 时 videos 副本可能已落库 → 跳过 onSaved → 队列不刷新 → 隐藏真实持久写入。
+- **修复**：① `res.skippedFields.includes(key)`（key=单字段 patch 键）仅回滚**确被锁**字段（避免 skippedFields 含他字段时误回滚已保存字段）；② **始终调 onSaved** 刷新队列 → 后端为真源，反映任何已落库写入（含 videos 冗余副本），不隐藏。
+- **门禁**：typecheck/lint/verify:adr-contracts EXIT=0 / test:changed 21 passed / e2e:admin 82/82 EXIT=0。
