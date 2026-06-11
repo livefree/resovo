@@ -3,7 +3,16 @@ export type Mp4ParseResult = {
   height: number | null
   durationSeconds: number | null
   codec: string | null
+  /**
+   * 首 box type 为已知 ISO BMFF 4CC（ftyp/moov/...）——HTML 错误页等非容器内容为
+   * false。注意 moov 不在读取窗口（非 faststart 文件尾部 moov）时 width/height
+   * 仍为 null，但 isValidMp4 为 true（已知限制，不可据 null 判 dead）。
+   */
+  isValidMp4: boolean
 }
+
+// ISO BMFF 顶层常见 box（首 box 校验集合；ftyp 规范上应为首个，放宽兼容直出流）
+const KNOWN_TOP_BOXES = new Set(['ftyp', 'styp', 'moov', 'moof', 'mdat', 'free', 'skip', 'wide', 'pdin', 'sidx'])
 
 const FOUR_CC = (buf: Buffer, offset: number): string =>
   String.fromCharCode(buf[offset], buf[offset + 1], buf[offset + 2], buf[offset + 3])
@@ -15,9 +24,23 @@ const readUint16BE = (buf: Buffer, offset: number): number =>
   ((buf[offset] << 8) | buf[offset + 1]) >>> 0
 
 export function parseMp4Moov(bytes: Buffer): Mp4ParseResult {
-  const result: Mp4ParseResult = { width: null, height: null, durationSeconds: null, codec: null }
+  const result: Mp4ParseResult = {
+    width: null,
+    height: null,
+    durationSeconds: null,
+    codec: null,
+    isValidMp4: isKnownTopBox(bytes),
+  }
   walkBoxes(bytes, 0, bytes.length, result)
   return result
+}
+
+function isKnownTopBox(buf: Buffer): boolean {
+  if (buf.length < 8) return false
+  const size = readUint32BE(buf, 0)
+  // size=1 为 64 位扩展 size box（largesize 随后），同样按 type 校验
+  if (size !== 1 && size < 8) return false
+  return KNOWN_TOP_BOXES.has(FOUR_CC(buf, 4))
 }
 
 function walkBoxes(buf: Buffer, start: number, end: number, result: Mp4ParseResult): void {

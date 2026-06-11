@@ -3877,3 +3877,22 @@
   - **已知限制**：partial 集成路径暂不可达——parseM3u8 对 #EXT-X-STREAM-INF 无条件 push variant → isMaster ⇒ variants 非空（worker 既有事实）；三态语义由包测试直接构造 parsed 锁定。
   - **新发现登记**：renderCheckAll toast 同构 2 处（达 3 处强制提取）；readBodyLimited api/worker 双副本（第三消费方出现时再裁决入包）。
   - 门禁：typecheck/lint EXIT=0 / test:changed 自动升全量终轮 505 文件 7081 passed / e2e:admin 三轮 exit 0（终轮 70 passed + 1 flaky 已知抖动域）/ verify:adr-contracts ✅。
+
+## [SRCHEALTH-P1-3-FIX] 判定层无效 manifest 内容收紧（Codex 二轮拦截）
+- **完成时间**：2026-06-10
+- **记录时间**：2026-06-10 17:05
+- **执行模型**：claude-fable-5
+- **子代理**：无（Codex stop-time review 为 hook 自动触发）
+- **修改文件**：
+  - `packages/media-probe/src/m3u8.ts` — M3u8ParseResult + `isValidM3u8`（首非空行 #EXTM3U）+ `hasSegments`（含 #EXTINF）
+  - `packages/media-probe/src/mpd.ts` — MpdParseResult + `isValidMpd`（<MPD 根元素）
+  - `packages/media-probe/src/mp4-moov.ts` — Mp4ParseResult + `isValidMp4`（首 box ∈ 已知 ISO BMFF 4CC 集合；moov 不在读取窗口时仍 true，不误杀非 faststart）
+  - `packages/media-probe/src/evaluate.ts` — 判定收紧：无效内容 → dead；media playlist 无分片 → dead；MPD 结构有效无 Representation → partial（对齐 HLS master 无 variants 语义）
+  - `tests/unit/packages/media-probe/evaluate.test.ts` — 构造补新字段 + 新增 4 个无效输入守卫用例（HTML 404 页三类型 + 无分片 playlist）
+  - `tests/unit/api/video-source-inline-action-audit.test.ts` — 用例 7 垃圾流断言 ok → dead（语义随收紧修正）
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - 缺陷影响（修复前）：CDN/源站以 HTTP 200 返回 HTML 错误页时，worker level2 与 api 手动试播均误判 render ok——且 api 侧构成行为倒退（旧 HEAD + Content-Type 会把 text/html 判 dead）。
+  - worker level2 同步受益（共享判定层修一处双端生效——P1-3 共享包的直接收益验证）。
+  - 门禁：typecheck/lint EXIT=0、相关测试 96/96、单测全量 7085 中 7084 passed（CrawlerClient 14b 导出用例为 jsdom 并发负载抖动，单独复跑 66/66 过，与本卡无关）。

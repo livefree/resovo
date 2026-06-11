@@ -274,7 +274,8 @@ describe('SourceProbeService.renderCheckOne audit + 不守 freeze (ADR-158 AMEND
 
     const result = await svc.renderCheckOne(TEST_SOURCE_ID, 'actor-2', 'req-4')
 
-    // 前 64KB 非 moov 数据 → 解析全 null → evaluateMp4 ok（与 worker 既有行为一致）
-    expect(result.newRenderStatus).toBe('ok')
+    // 限量读取在 64KB 截断（全量实现会挂死至超时）；全 0 字节非 ISO BMFF 容器
+    // → isValidMp4 false → dead（无效内容不得判 ok，Codex 二轮拦截语义）
+    expect(result.newRenderStatus).toBe('dead')
   })
 })
