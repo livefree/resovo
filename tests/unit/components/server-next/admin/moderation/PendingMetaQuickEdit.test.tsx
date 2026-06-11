@@ -132,6 +132,18 @@ describe('PendingMetaQuickEdit（MODUX-P3-4-B）', () => {
     await waitFor(() => expect(saveMetaMock).toHaveBeenCalledWith('vid-1', { country: null }))
   })
 
+  it('字段被锁（skippedFields 非空）→ 回滚乐观值 + warn toast + 不调 onSaved（Codex review fix）', async () => {
+    saveMetaMock.mockResolvedValueOnce({ skippedFields: ['country'] })
+    const { onSaved } = await renderQE()
+    const input = screen.getByTestId('quick-edit-country') as HTMLInputElement
+    fireEvent.change(input, { target: { value: 'JP' } })
+    fireEvent.blur(input)
+    await waitFor(() => expect(toastPushMock).toHaveBeenCalledWith(expect.objectContaining({ level: 'warn' })))
+    // 被锁未写入 → 回滚到 v.country，不可显示未保存的 'JP'
+    await waitFor(() => expect(input.value).toBe('US'))
+    expect(onSaved).not.toHaveBeenCalled()
+  })
+
   it('保存失败 → 回滚 + danger toast', async () => {
     saveMetaMock.mockRejectedValueOnce(new Error('500'))
     await renderQE()

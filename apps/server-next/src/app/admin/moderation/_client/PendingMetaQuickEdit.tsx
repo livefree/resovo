@@ -90,10 +90,13 @@ export function PendingMetaQuickEdit({ v, onSaved }: PendingMetaQuickEditProps):
       try {
         const res = await saveModerationMeta(v.id, patch)
         if (res.skippedFields.length > 0) {
+          // 字段被 provenance 锁未写入（commit 单字段 patch → skipped 非空 = 该字段被锁）。
+          //   必须回滚乐观值，否则未保存值显示为已保存；无实际变更 → 不调 onSaved 刷新。
+          revert()
           toast.push({ level: 'warn', title: Q.skipped(res.skippedFields.join(', ')) })
-        } else {
-          toast.push({ level: 'success', title: Q.saved })
+          return
         }
+        toast.push({ level: 'success', title: Q.saved })
         onSaved?.()
       } catch {
         revert()

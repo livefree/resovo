@@ -4340,3 +4340,15 @@
   - **99 失败 100% 在 web-chromium / web-mobile（`tests/e2e-next/*`：homepage / mini-player / player / detail / search / browse 全线）**——均匀整项失败，错误一致为「页面渲染零数据」（`episode-btn` 期望 12 收到 0 / video-card 0 / `/en/series` 非 200）。
 - **归因判定：pre-existing 环境性（web-next e2e 缺 seed 数据），非本 SEQ 回归。** 证据：① 本会话 4 卡（P3-2~P3-4-B）改动文件零触 `apps/web-next`（git diff 确认全在 apps/server-next + apps/api + tests + docs）；② 整个 web 前端 e2e 项目（homepage/typography/card 等与审核台无关 spec）齐失败 = 数据/server 缺口而非定向代码回归；③ 失败模式统一为「received 0」= DB 无 seed 已发布视频；④ 该缺口为已登记候选卡「e2e-next seed 基建」（另一 SEQ queue 备注）。
 - **结论**：MODUX SEQ-20260610-03 改动面（admin 域 + 共享类型 + api）经全量单测 7188/7188 + admin 域 e2e 82/82 验证全绿；web-next e2e 红为环境缺口，独立于本 SEQ，建议由「e2e-next seed 基建」候选卡专项处理（不阻塞本 SEQ 收口）。
+
+## [MODUX-P3-4-B-FIX] 被锁字段快编未保存却显示已保存（Codex stop-time review 拦截）
+- **完成时间**：2026-06-11
+- **记录时间**：2026-06-11 02:55
+- **执行模型**：claude-opus-4-8（建议 sonnet）
+- **子代理**：无
+- **修改文件**：
+  - `apps/server-next/src/app/admin/moderation/_client/PendingMetaQuickEdit.tsx` — `commit()` skipped 分支补 `revert()` + `return`（不调 onSaved）
+  - `tests/unit/components/server-next/admin/moderation/PendingMetaQuickEdit.test.tsx` — +1 用例（skippedFields 非空 → 回滚 + warn + 不调 onSaved）
+- **问题**：Codex review——`commit()` 在 `skippedFields`（字段被 provenance 锁未写入）非空时仅弹 warn toast，**未回滚乐观值**；genres/year/country 本地乐观 state 保留新值 → 未保存显示为已保存（onSaved 刷新也不复位，因 v 对应字段未变、effect deps 不触发）。
+- **修复**：commit 单字段 patch → skipped 非空 = 该字段被锁 → 调 `revert()` 回滚乐观值到持久值 + 不调 onSaved（无实际变更）；warn toast 保留。type 受控 v.type（无本地乐观，revert no-op）天然正确。
+- **门禁**：typecheck/lint/verify:adr-contracts EXIT=0 / test:changed 20 passed / e2e:admin 82/82 EXIT=0（首跑 EADDRINUSE:3000 端口占用环境噪声，清理遗留 dev server 后重跑绿）。
