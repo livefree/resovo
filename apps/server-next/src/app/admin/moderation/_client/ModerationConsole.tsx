@@ -2,9 +2,10 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
-import { PageHeader, RejectModal } from '@resovo/admin-ui'
+import { RejectModal } from '@resovo/admin-ui'
 import type { RejectModalSubmitPayload } from '@resovo/admin-ui'
 import type { ReviewLabel } from '@resovo/types'
+import { PanelRightOpen, PanelRightClose } from 'lucide-react'
 import { RejectedTabContent } from './RejectedTabContent'
 import { RunInfoBanner } from './RunInfoBanner'
 import { FilterPresetPopover } from './FilterPresetPopover'
@@ -40,9 +41,20 @@ const BTN_SM: React.CSSProperties = {
 }
 const BTN_PRIMARY: React.CSSProperties = { ...BTN_SM, background: 'var(--accent-default)', color: 'var(--fg-on-accent)', borderColor: 'var(--accent-default)' }
 const BTN_DANGER: React.CSSProperties = { ...BTN_SM, color: 'var(--state-error-fg)', borderColor: 'var(--state-error-border)' }
-// MODUX-P2-1：键盘提示收敛——常驻 J/K/A/R/S 串收为「键盘流」紧凑标记，完整提示经 title hover 透出
-//   （虚线下划线表 affordance；P2-3 将升级为可呼出 help 浮层的入口）。
-const KBD_HINT_STYLE: React.CSSProperties = { color: 'var(--fg-muted)', cursor: 'help', borderBottom: '1px dashed var(--border-default)' }
+// MODUX-ACPT-5：tab 行审核操作条的快捷键徽（A/R/S，从原中栏 header 迁入）
+const KBD: React.CSSProperties = { display: 'inline-block', padding: '1px 5px', border: '1px solid var(--border-default)', borderRadius: 3, fontSize: 'var(--font-size-2xs)', fontFamily: 'monospace', background: 'var(--bg-surface-raised)', color: 'var(--fg-muted)' }
+// MODUX-ACPT-5：详情右栏开合图标按钮（tab 行最右端，lucide PanelRight 风格）
+const ICON_BTN_STYLE: React.CSSProperties = { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 30, height: 28, padding: 0, border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)', background: 'var(--bg-surface-row)', color: 'var(--fg-default)', cursor: 'pointer' }
+// MODUX-ACPT-5：删可见 h1（面包屑作唯一标题），保留 sr-only h1 维持 a11y heading 层级（一页唯一 h1）
+const SR_ONLY_STYLE: React.CSSProperties = {
+  position: 'absolute', width: 1, height: 1, padding: 0, margin: -1,
+  overflow: 'hidden', clip: 'rect(0 0 0 0)', whiteSpace: 'nowrap', border: 0,
+}
+// MODUX-ACPT-5：tab 行内 stats / 键盘流 文案样式（原 PageHeader subtitle 迁入）
+const HEAD_META_STYLE: React.CSSProperties = {
+  display: 'flex', gap: 14, alignItems: 'center', flexWrap: 'wrap',
+  fontSize: 'var(--font-size-xs)', color: 'var(--fg-muted)',
+}
 
 function segBtnStyle(active: boolean, danger?: boolean): React.CSSProperties {
   return {
@@ -133,7 +145,14 @@ export function ModerationConsole(): React.ReactElement {
   const [rejectOpen, setRejectOpen] = useState(false)
   const [rejectSubmitting, setRejectSubmitting] = useState(false)
   const [editVideoId, setEditVideoId] = useState<string | null>(null)
-  // rightOpen state 已下沉至 PendingPaneController（CHG-349 / SPLIT-C）
+  // MODUX-ACPT-5：右详情栏开合 state 上提至此（图标 toggle 在顶部 tab 行最右端；PendingPaneController 仅消费 rightOpen 驱动 pane hidden）
+  const [rightOpen, setRightOpen] = useState(true)
+  useEffect(() => {
+    const update = () => setRightOpen(window.innerWidth >= 1280)
+    update()
+    window.addEventListener('resize', update)
+    return () => window.removeEventListener('resize', update)
+  }, [])
 
   // CHG-SN-4-FIX-F：筛选预设
   const [currentFilters, setCurrentFilters] = useState<FilterPresetQuery>(() => readFiltersFromSearchParams(searchParams))
@@ -402,61 +421,9 @@ export function ModerationConsole(): React.ReactElement {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: PAGE_HEIGHT }} data-moderation-console>
 
-      {/* Page head — 共享 PageHeader（MODUX-P1-1-A，规约 T-1/T-5/T-6：统计+键盘行进 subtitle 槽） */}
-      <div style={{ marginBottom: 8, flexShrink: 0 }}>
-      <PageHeader
-        title={M.title}
-        subtitle={
-          <div style={{ display: 'flex', gap: 14, alignItems: 'center', flexWrap: 'wrap' }}>
-            <span dangerouslySetInnerHTML={{ __html: M.todayStats(todayStats.reviewed, todayStats.approveRate).replace(/(\d+)/g, '<strong style="color:var(--fg-default)">$1</strong>').replace(/\d+%/g, m => `<strong style="color:var(--state-success-fg)">${m}</strong>`) }} />
-            <span style={{ color: 'var(--border-default)' }}>|</span>
-            <span style={KBD_HINT_STYLE} title={M.kbdHint} data-kbd-hint>{M.kbdFlowLabel}</span>
-          </div>
-        }
-        actions={
-        <div ref={presetAnchorRef} style={{ display: 'flex', gap: 8, position: 'relative' }}>
-          <button
-            style={BTN_SM}
-            onClick={() => setPresetPopoverOpen(o => !o)}
-            aria-expanded={presetPopoverOpen}
-            aria-haspopup="dialog"
-            data-filter-preset-trigger
-          >
-            {M.actions.filterPreset}{defaultPreset ? ' ⭐' : ''}
-          </button>
-          <button
-            style={BTN_SM}
-            onClick={() => { setSavePresetOpen(true); setPresetPopoverOpen(false) }}
-            data-save-preset-trigger
-          >
-            {M.actions.savePreset}
-          </button>
-
-          <FilterPresetPopover
-            open={presetPopoverOpen}
-            anchorRef={presetAnchorRef}
-            presets={applicablePresets}
-            onApply={handleApplyPreset}
-            onSetDefault={handleSetPresetDefault}
-            onUnsetDefault={handleUnsetPresetDefault}
-            onRemove={handleRemovePreset}
-            onSaveCurrent={() => { setSavePresetOpen(true); setPresetPopoverOpen(false) }}
-            onClose={() => setPresetPopoverOpen(false)}
-            dataSource={presetDataSource}
-            localPendingCount={presetLocalPendingCount}
-            onImportLocal={async () => {
-              try {
-                const r = await importLocalPresets()
-                setToast({ message: `导入完成：成功 ${r.imported} · 失败 ${r.failed}`, key: Date.now() })
-              } catch (err) {
-                setToast({ message: err instanceof Error ? err.message : '导入失败', key: Date.now() })
-              }
-            }}
-          />
-        </div>
-        }
-      />
-      </div>
+      {/* MODUX-ACPT-5：删可见 h1（top bar 面包屑作唯一标题）；保留 sr-only h1 维持 a11y heading 层级。
+          原 PageHeader 的 stats / 键盘流 / 预设按钮下移到「两个 tab 所在行」（见下方 Segment tabs 行）。 */}
+      <h1 style={SR_ONLY_STYLE}>{M.title}</h1>
 
       {/* Error banner */}
       {error && (
@@ -469,73 +436,163 @@ export function ModerationConsole(): React.ReactElement {
       {/* CHG-SN-8-03：来自采集 run 软深链 banner */}
       {runIdParam && <RunInfoBanner runId={runIdParam} onDismiss={dismissRunBanner} />}
 
-      {/* Segment tabs + 通过即上架 toggle（CHG-SN-8-06）*/}
-      <div style={{ display: 'flex', gap: 1, marginBottom: 10, flexShrink: 0, alignItems: 'center' }}>
-        {tabDefs.map(t => (
-          <button key={t.id} onClick={() => setTab(t.id)} style={segBtnStyle(tab === t.id, t.danger)} aria-pressed={tab === t.id}>
-            {t.label}
-            {tab === 'pending' && t.id === 'pending' && totalPending > 0 && (
-              <span style={badgeStyle(false)}>{totalPending}</span>
-            )}
-            {tab !== 'pending' && tabCounts[t.id] > 0 && (
-              <span style={badgeStyle(t.danger)}>{tabCounts[t.id]}</span>
-            )}
-          </button>
-        ))}
-        {tab === 'pending' && (
-          <label
-            style={{
-              marginLeft: 'auto',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 6,
-              padding: '4px 10px',
-              fontSize: 'var(--font-size-xs)',
-              color: 'var(--fg-default)',
-              cursor: 'pointer',
-              userSelect: 'none',
-            }}
-            data-testid="moderation-approve-publish-toggle"
-            title={approveAndPublishOn
-              ? '通过后将直接发布到前台（跳过暂存）；A 键 / 通过 按钮 同步生效'
-              : '通过后入暂存（staging），需 admin 在暂存页二次发布'}
-          >
-            <input
-              type="checkbox"
-              checked={approveAndPublishOn}
-              onChange={(e) => setApproveAndPublishOn(e.target.checked)}
-              data-testid="moderation-approve-publish-toggle-input"
-              aria-label="通过即上架"
+      {/* MODUX-ACPT-5：tab 行 = 审核台唯一头部行（可见 h1 已删，面包屑作标题）。
+          左：tab 紧凑组；中：stats·键盘流（原 PageHeader subtitle）；
+          右簇 marginLeft:auto：预设按钮（原 PageHeader actions）+ pending 态 通过即上架/批量模式 toggle。
+          flexWrap 窄屏降级。 */}
+      <div style={{ display: 'flex', gap: 14, marginBottom: 10, flexShrink: 0, alignItems: 'center', flexWrap: 'wrap', rowGap: 6 }}>
+        {/* tab 紧凑组（segmented 视觉，gap:1） */}
+        <div style={{ display: 'flex', gap: 1 }}>
+          {tabDefs.map(t => (
+            <button key={t.id} onClick={() => setTab(t.id)} style={segBtnStyle(tab === t.id, t.danger)} aria-pressed={tab === t.id}>
+              {t.label}
+              {tab === 'pending' && t.id === 'pending' && totalPending > 0 && (
+                <span style={badgeStyle(false)}>{totalPending}</span>
+              )}
+              {tab !== 'pending' && tabCounts[t.id] > 0 && (
+                <span style={badgeStyle(t.danger)}>{tabCounts[t.id]}</span>
+              )}
+            </button>
+          ))}
+        </div>
+
+        {/* stats（今日已处理/通过率，原 PageHeader subtitle 迁入）— MODUX-ACPT-5：删「键盘流」提示（? 键仍可呼出 help 浮层） */}
+        <div style={HEAD_META_STYLE}>
+          <span dangerouslySetInnerHTML={{ __html: M.todayStats(todayStats.reviewed, todayStats.approveRate).replace(/(\d+)/g, '<strong style="color:var(--fg-default)">$1</strong>').replace(/\d+%/g, m => `<strong style="color:var(--state-success-fg)">${m}</strong>`) }} />
+        </div>
+
+        {/* MODUX-ACPT-5：审核操作条（进度 + 拒绝/跳过/通过）从中栏 header 上移、tab 行整体居中。
+            flex:1 spacer 同时把右簇推到行尾（替代原 marginLeft:auto）。仅 pending 态有活跃视频时渲染。 */}
+        <div style={{ flex: 1, display: 'flex', justifyContent: 'center', minWidth: 0 }}>
+          {tab === 'pending' && v && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', rowGap: 6, justifyContent: 'center' }}>
+              <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--fg-muted)', whiteSpace: 'nowrap' }}>{M.counter(activeIdx + 1, totalPending)}</span>
+              <div style={{ width: 96, height: 4, background: 'var(--bg-surface-raised)', borderRadius: 2, flexShrink: 0 }}>
+                <div style={{ height: '100%', width: `${Math.min(100, ((activeIdx + 1) / Math.max(1, totalPending)) * 100)}%`, background: 'var(--accent-default)', borderRadius: 2 }} />
+              </div>
+              <button style={BTN_DANGER} onClick={() => setRejectOpen(true)} aria-label={M.aria.consoleRejectVideo}>
+                ✕ {M.actions.reject} <span style={KBD}>R</span>
+              </button>
+              <button style={BTN_SM} onClick={() => setActiveIdx(i => Math.min(i + 1, pendingVideos.length - 1))} aria-label={M.aria.consoleSkipVideo}>
+                {M.actions.skip} <span style={KBD}>S</span>
+              </button>
+              <button style={BTN_PRIMARY} onClick={handleApprove} aria-label={M.aria.consoleApproveVideo}>
+                ✓ {M.actions.approve} <span style={KBD}>A</span>
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* 右簇：预设按钮 + pending 态 toggle（由上方 flex:1 spacer 推到行尾） */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', rowGap: 6 }}>
+          <div ref={presetAnchorRef} style={{ display: 'flex', gap: 8, position: 'relative' }}>
+            <button
+              style={BTN_SM}
+              onClick={() => setPresetPopoverOpen(o => !o)}
+              aria-expanded={presetPopoverOpen}
+              aria-haspopup="dialog"
+              data-filter-preset-trigger
+            >
+              {M.actions.filterPreset}{defaultPreset ? ' ⭐' : ''}
+            </button>
+            <button
+              style={BTN_SM}
+              onClick={() => { setSavePresetOpen(true); setPresetPopoverOpen(false) }}
+              data-save-preset-trigger
+            >
+              {M.actions.savePreset}
+            </button>
+
+            <FilterPresetPopover
+              open={presetPopoverOpen}
+              anchorRef={presetAnchorRef}
+              presets={applicablePresets}
+              onApply={handleApplyPreset}
+              onSetDefault={handleSetPresetDefault}
+              onUnsetDefault={handleUnsetPresetDefault}
+              onRemove={handleRemovePreset}
+              onSaveCurrent={() => { setSavePresetOpen(true); setPresetPopoverOpen(false) }}
+              onClose={() => setPresetPopoverOpen(false)}
+              dataSource={presetDataSource}
+              localPendingCount={presetLocalPendingCount}
+              onImportLocal={async () => {
+                try {
+                  const r = await importLocalPresets()
+                  setToast({ message: `导入完成：成功 ${r.imported} · 失败 ${r.failed}`, key: Date.now() })
+                } catch (err) {
+                  setToast({ message: err instanceof Error ? err.message : '导入失败', key: Date.now() })
+                }
+              }}
             />
-            <span>{approveAndPublishOn ? '✓ 通过即上架' : '通过 → 暂存'}</span>
-          </label>
-        )}
-        {tab === 'pending' && (
-          <label
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 6,
-              padding: '4px 10px',
-              fontSize: 'var(--font-size-xs)',
-              color: 'var(--fg-default)',
-              cursor: 'pointer',
-              userSelect: 'none',
-              marginLeft: 8,
-            }}
-            data-testid="moderation-batch-mode-toggle"
-            title="开启批量模式：左队列改为多选 checkbox，J/K 键盘流暂停"
-          >
-            <input
-              type="checkbox"
-              checked={batchModeOn}
-              onChange={(e) => setBatchModeOn(e.target.checked)}
-              data-testid="moderation-batch-mode-toggle-input"
-              aria-label="批量模式"
-            />
-            <span>{batchModeOn ? `✓ 批量模式（${selectedIds.size}）` : '批量模式'}</span>
-          </label>
-        )}
+          </div>
+
+          {tab === 'pending' && (
+            <label
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '4px 10px',
+                fontSize: 'var(--font-size-xs)',
+                color: 'var(--fg-default)',
+                cursor: 'pointer',
+                userSelect: 'none',
+              }}
+              data-testid="moderation-approve-publish-toggle"
+              title={approveAndPublishOn
+                ? '通过后将直接发布到前台（跳过暂存）；A 键 / 通过 按钮 同步生效'
+                : '通过后入暂存（staging），需 admin 在暂存页二次发布'}
+            >
+              <input
+                type="checkbox"
+                checked={approveAndPublishOn}
+                onChange={(e) => setApproveAndPublishOn(e.target.checked)}
+                data-testid="moderation-approve-publish-toggle-input"
+                aria-label="通过即上架"
+              />
+              <span>{approveAndPublishOn ? '✓ 通过即上架' : '通过 → 暂存'}</span>
+            </label>
+          )}
+          {tab === 'pending' && (
+            <label
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '4px 10px',
+                fontSize: 'var(--font-size-xs)',
+                color: 'var(--fg-default)',
+                cursor: 'pointer',
+                userSelect: 'none',
+              }}
+              data-testid="moderation-batch-mode-toggle"
+              title="开启批量模式：左队列改为多选 checkbox；审核快捷键 A/R/S/E/P 暂停（J/K 导航仍可用）"
+            >
+              <input
+                type="checkbox"
+                checked={batchModeOn}
+                onChange={(e) => setBatchModeOn(e.target.checked)}
+                data-testid="moderation-batch-mode-toggle-input"
+                aria-label="批量模式"
+              />
+              <span>{batchModeOn ? `✓ 批量模式（${selectedIds.size}）` : '批量模式'}</span>
+            </label>
+          )}
+          {/* MODUX-ACPT-5：详情右栏开合图标 toggle（tab 行最右端，lucide PanelRight 风格；rightOpen 真源在此） */}
+          {tab === 'pending' && v && (
+            <button
+              type="button"
+              style={ICON_BTN_STYLE}
+              onClick={() => setRightOpen(o => !o)}
+              aria-expanded={rightOpen}
+              aria-label={rightOpen ? '收起详情栏' : '展开详情栏'}
+              title={rightOpen ? '收起详情栏' : '展开详情栏'}
+              data-testid="moderation-detail-toggle"
+            >
+              {rightOpen ? <PanelRightClose size={18} aria-hidden /> : <PanelRightOpen size={18} aria-hidden />}
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Tab content (CHG-349 / SPLIT-C：pending SplitPane + 键盘流抽至 PendingPaneController) */}
@@ -567,6 +624,7 @@ export function ModerationConsole(): React.ReactElement {
               applyFiltersToUrl({})
             }}
             onApplyFilters={applyFiltersToUrl}
+            rightOpen={rightOpen}
           />
         )}
         {tab === 'rejected' && <RejectedTabContent />}

@@ -50,6 +50,7 @@ function renderController(over: Partial<ControllerProps> = {}): ControllerProps 
     batchModeOn: false, selectedIds: new Set<string>(), onToggleSelect: vi.fn(),
     onApprove: vi.fn(), onRejectOpen: vi.fn(), onEditVideo: vi.fn(), onStaffNoteChange: vi.fn(),
     q: '', onQChange: vi.fn(), currentFilters: {}, onClearAllFilters: vi.fn(), onApplyFilters: vi.fn(),
+    rightOpen: true,
     ...over,
   } as unknown as ControllerProps
   render(<PendingPaneController {...props} />)

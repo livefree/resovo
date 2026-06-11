@@ -4364,3 +4364,24 @@
 - **问题**：Codex review——前次 FIX 在 skipped 非空时 `return` 跳过 onSaved。但 `VideoService.update` 把 type 等冗余写入 **videos 表副本（不过 catalog 锁检查，VideoService.ts:419+）**：catalog 字段被锁 skip 时 videos 副本可能已落库 → 跳过 onSaved → 队列不刷新 → 隐藏真实持久写入。
 - **修复**：① `res.skippedFields.includes(key)`（key=单字段 patch 键）仅回滚**确被锁**字段（避免 skippedFields 含他字段时误回滚已保存字段）；② **始终调 onSaved** 刷新队列 → 后端为真源，反映任何已落库写入（含 videos 冗余副本），不隐藏。
 - **门禁**：typecheck/lint/verify:adr-contracts EXIT=0 / test:changed 21 passed / e2e:admin 82/82 EXIT=0。
+
+## [MODUX-ACPT-5] 审核台头部布局紧凑化（SEQ-20260610-03 人工验收第 5 条纠正 · 检查点）
+- **完成时间**：2026-06-11（验收迭代检查点；用户「先提交再继续修订」）
+- **记录时间**：2026-06-11 12:20
+- **执行模型**：claude-opus-4-8（主循环）
+- **子代理**：无（纯 UI 重排 + 复用既有组件，无 admin-ui 公开 Props 变更 / 无新端点 → 不触发 arch-reviewer）
+- **背景**：SEQ-20260610-03 人工验收不通过，第 5 条「标题重复 + 紧凑化」**完全没有解决**。上轮 P1-0 规约方向选错（保留 body PageHeader 标题、弱化面包屑），与用户意图相反。本卡按用户逐轮交互指令纠正审核台头部布局——4 轮迭代 + 2 轮 Codex stop-time 拦截修复。
+- **修改文件**：
+  - `apps/server-next/src/app/admin/moderation/_client/ModerationConsole.tsx` — 删 PageHeader（h1）+ import / 改 sr-only `<h1>` 保 a11y / stats 并入 tab 行 / 删键盘流 chip + KBD_HINT_STYLE / 批量模式 tooltip 改正 / 审核操作条（计数·进度条·拒绝·跳过·通过）居中入 tab 行 / 详情图标 toggle 入 tab 行最右端 + rightOpen state + 响应式 effect + lucide import
+  - `apps/server-next/src/app/admin/moderation/_client/PendingPaneController.tsx` — 删左队列头部「键盘流」help 按钮 / 删中栏 header（操作条 + 详情 toggle 上移）/ rightOpen 改单向 prop 消费（删本地 state·effect）/ 删孤立 BTN_PRIMARY·BTN_DANGER·KBD + useEffect import
+  - `apps/server-next/src/app/admin/moderation/_client/PendingCenter.tsx` — 删顶部 DecisionCard + VisChip / 信号决策 chip（DecisionCard banner，probe·render 推算）上移到标题行替代删除的「待审」pill
+  - `apps/server-next/src/i18n/messages/zh-CN/moderation.ts` — 删孤立 kbdHint/kbdFlowLabel
+  - `tests/unit/components/server-next/admin/moderation/PendingPaneControllerKeyboard.test.tsx` — defaults 补 rightOpen
+  - `tests/visual/admin-moderation.visual.spec.ts-snapshots/*.png` — 7 张 darwin 视觉快照重生成
+  - `docs/designs/sidebar-icon-website.webp` — 用户提供的详情 toggle 图标风格参考图（lucide PanelRight）
+- **改动要点（4 轮迭代）**：① 删 body h1「内容审核台」→ top bar 面包屑作唯一可见标题（保 sr-only h1）；stats + 预设按钮并入「待审/已拒绝」tab 行；② 删全页「键盘流」（tab 行 chip + 左队列 help 按钮，`?` 键仍可呼出 help 浮层）；③ 删标题行「待审」pill（pending tab reviewStatus 恒 pending_review → 纯冗余），信号决策 chip 上移到此（复用 DecisionCard，零新 admin-ui API）；④ 审核操作条从中栏 header 上移、tab 行整体居中；详情右栏 toggle 移到 tab 行最右端、改 lucide `PanelRight` 图标，rightOpen state 上提到 ModerationConsole（中栏无 header、播放器占满）。
+- **Codex stop-time review 2 拦截修复**：① 「acceptance still leaves 键盘流 user-visible」→ 批量模式 toggle hover tooltip 残留「键盘流」+ 孤立 i18n 键，清零；② 「batch-mode tooltip now gives false user guidance」→ tooltip「J/K 暂停」是事实错误（J/K batchSafe 仍生效，实际暂停 A/R/S/E/P），改正为准确表述。
+- **新增依赖**：无（lucide-react 已是 apps/server-next 既有依赖 ^1.12.0）
+- **数据库变更**：无
+- **门禁**：typecheck EXIT=0 / lint 4·4 successful / test:changed 78 passed / e2e:admin 82/82 / 视觉快照 7 passed regenerate。verify:adr-contracts 无需（纯 UI 无端点/契约变更）。
+- **注意事项**：① 本卡为**验收迭代检查点**，用户「先提交再继续修订」→ tasks.md 卡片保留、后续修订续提交；② 跨后台其余 ~17 页同款 h1 重复「统一治理」为独立 follow-up；③ `docs/designs/moderation-console-ux-plan_20260610.md` 的 P1-0 规约（保留 body 标题、弱化面包屑）已被本卡**反转**，后续铺开以本卡方向为准。

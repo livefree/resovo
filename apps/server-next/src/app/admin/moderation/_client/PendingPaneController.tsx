@@ -8,9 +8,9 @@
  * 职责：
  *   - SplitPane 三栏渲染（左队列 / 中预览 / 右详情）
  *   - 键盘流 J/K/A/R/S（仅 pending tab + 跳过 input 焦点）
- *   - 内部 rightOpen state + responsive（>= 1280px 默认打开）
+ *   - 右详情栏 hidden 由 `rightOpen` prop 驱动（MODUX-ACPT-5：state + 图标 toggle 上提到 ModerationConsole 顶部 tab 行）
  *   - 左队列 loadMore 显示
- *   - 中部 toolbar：counter / progress bar / J/K/A/R/S 按钮
+ *   - 中预览 pane 无 header（MODUX-ACPT-5：counter / progress / 审核按钮已上移到顶部 tab 行）
  *
  * 不在职责：
  *   - tab 切换 / segment tabs / toggles（ModerationConsole 保留）
@@ -26,7 +26,7 @@
  *   - 参考：packages/admin-ui DataTable 真源范式 / search-input.tsx EP-4-HOTFIX 调用方契约
  */
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useMemo, useState } from 'react'
 import { SplitPane, KeyboardShortcuts } from '@resovo/admin-ui'
 import type { ShortcutBinding } from '@resovo/admin-ui'
 import type { VideoQueueRow } from '@resovo/types'
@@ -61,9 +61,6 @@ const BTN_SM: React.CSSProperties = {
   cursor: 'pointer',
   fontSize: 'var(--font-size-xs)',
 }
-const BTN_PRIMARY: React.CSSProperties = { ...BTN_SM, background: 'var(--accent-default)', color: 'var(--fg-on-accent)', borderColor: 'var(--accent-default)' }
-const BTN_DANGER: React.CSSProperties = { ...BTN_SM, color: 'var(--state-error-fg)', borderColor: 'var(--state-error-border)' }
-const KBD: React.CSSProperties = { display: 'inline-block', padding: '1px 5px', border: '1px solid var(--border-default)', borderRadius: 3, fontSize: 'var(--font-size-2xs)', fontFamily: 'monospace', background: 'var(--bg-surface-raised)', color: 'var(--fg-muted)' }
 
 export interface PendingPaneControllerProps {
   readonly videos: readonly VideoQueueRow[]
@@ -90,6 +87,9 @@ export interface PendingPaneControllerProps {
   readonly onClearAllFilters: () => void
   /** MODUX-P3-2：应用筛选弹层结果（ModerationConsole 写 URL → currentFilters 单向回流） */
   readonly onApplyFilters: (next: FilterPresetQuery) => void
+  /** MODUX-ACPT-5：右栏（详情）开合状态——真源上提到 ModerationConsole（图标 toggle 在顶部 tab 行最右端）；
+   *  本控制器仅消费以驱动右栏 pane `hidden` */
+  readonly rightOpen: boolean
 }
 
 export function PendingPaneController({
@@ -114,18 +114,10 @@ export function PendingPaneController({
   currentFilters,
   onClearAllFilters,
   onApplyFilters,
+  rightOpen,
 }: PendingPaneControllerProps): React.ReactElement {
-  const [rightOpen, setRightOpen] = useState(true)
   const [helpOpen, setHelpOpen] = useState(false)
   const [filterPanelOpen, setFilterPanelOpen] = useState(false)
-
-  // responsive right pane
-  useEffect(() => {
-    const update = () => setRightOpen(window.innerWidth >= 1280)
-    update()
-    window.addEventListener('resize', update)
-    return () => window.removeEventListener('resize', update)
-  }, [])
 
   const v = videos[activeIdx] ?? null
   // CHG-355 R2：首次加载（无任何旧数据 + 仍在 loading）才展示加载文案；否则保持旧列表 SWR
@@ -212,22 +204,10 @@ export function PendingPaneController({
         {
           width: 280,
           minWidth: 200,
+          // MODUX-ACPT-5：删左队列头部「键盘流」help 入口（? 键仍可呼出 help 浮层）；仅保留计数
           header: (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--fg-muted)' }}>{M.totalCount(total, 0)}</span>
-              <span style={{ flex: 1 }} />
-              {/* MODUX-P2-3：「键盘流」升级为 help 浮层入口（呼应 P2-1 page-head 提示位）；? 键并行 */}
-              <button
-                type="button"
-                onClick={() => setHelpOpen(true)}
-                title="查看快捷键（?）"
-                aria-haspopup="dialog"
-                data-testid="moderation-keyboard-help-trigger"
-                style={{ display: 'flex', alignItems: 'center', gap: 4, padding: 0, border: 0, background: 'transparent', cursor: 'pointer', fontSize: 'var(--font-size-xxs)', color: 'var(--state-success-fg)' }}
-              >
-                <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--state-success-fg)', display: 'inline-block' }} />
-                {M.kbdFlowLabel}
-              </button>
             </div>
           ),
           noPadding: true,
@@ -283,28 +263,8 @@ export function PendingPaneController({
         {
           width: '1fr',
           minWidth: 400,
-          header: v ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' as const }}>
-              <span style={KBD}>J</span>
-              <span style={KBD}>K</span>
-              <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--fg-muted)' }}>{M.counter(activeIdx + 1, total)}</span>
-              <div style={{ flex: 1, height: 4, background: 'var(--bg-surface-raised)', borderRadius: 2, minWidth: 40 }}>
-                <div style={{ height: '100%', width: `${Math.min(100, ((activeIdx + 1) / Math.max(1, total)) * 100)}%`, background: 'var(--accent-default)', borderRadius: 2 }} />
-              </div>
-              <button style={BTN_DANGER} onClick={onRejectOpen} aria-label={M.aria.consoleRejectVideo}>
-                ✕ {M.actions.reject} <span style={KBD}>R</span>
-              </button>
-              <button style={BTN_SM} onClick={() => setActiveIdx(i => Math.min(i + 1, videos.length - 1))} aria-label={M.aria.consoleSkipVideo}>
-                {M.actions.skip} <span style={KBD}>S</span>
-              </button>
-              <button style={BTN_PRIMARY} onClick={onApprove} aria-label={M.aria.consoleApproveVideo}>
-                ✓ {M.actions.approve} <span style={KBD}>A</span>
-              </button>
-              <button style={BTN_SM} onClick={() => setRightOpen(o => !o)} aria-expanded={rightOpen}>
-                {rightOpen ? '›' : '‹'} {M.actions.detail}
-              </button>
-            </div>
-          ) : <span />,
+          // MODUX-ACPT-5：原中栏 header（counter/进度条/拒绝·跳过·通过 + 详情 toggle）整体上移到
+          //   ModerationConsole 顶部 tab 行；中栏不再有 header，播放器区域占满更宽敞。
           role: 'main',
           'aria-label': M.aria.consolePreviewPane,
           children: v ? (

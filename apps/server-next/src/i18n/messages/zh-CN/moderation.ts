@@ -90,8 +90,7 @@ export const M = {
   },
   todayStats: (reviewed: number, approveRate: number | null) =>
     `今天已处理 ${reviewed} 条 · 通过率 ${approveRate != null ? approveRate.toFixed(0) + '%' : '—'}`,
-  kbdHint: 'J K 切换 · A 通过 · R 拒绝 · S 跳过',
-  kbdFlowLabel: '键盘流',
+  // MODUX-ACPT-5：删孤立的 kbdHint/kbdFlowLabel（「键盘流」提示已全删，? 键 help 浮层为唯一入口）
   counter: (current: number, total: number) => `第 ${current} / ${total}`,
   selectedCount: (count: number) => `${count} 条`,
   totalCount: (total: number, selected: number) => `${total} 条 · 已选 ${selected}`,

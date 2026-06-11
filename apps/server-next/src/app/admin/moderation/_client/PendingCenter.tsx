@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { VisChip, DecisionCard, StaffNoteBar, Thumb } from '@resovo/admin-ui'
+import { DecisionCard, StaffNoteBar, Thumb } from '@resovo/admin-ui'
 import { formatCountryName, type VideoQueueRow } from '@resovo/types'
 import { EpisodeSelector } from './EpisodeSelector'
 import { LinesPanel } from './LinesPanel'
@@ -76,12 +76,8 @@ export function PendingCenter({ v, onStaffNoteChange, onEditVideo, onSourceHealt
 
   return (
     <>
-      <DecisionCard
-        video={v}
-        probeState={v.probe}
-        renderState={v.render}
-        onStaffNoteEdit={() => setNoteEditing(true)}
-      />
+      {/* MODUX-ACPT-5：原顶部 DecisionCard 信号 banner 已上移到标题行（替代删除的「待审」pill）；
+          staffNote 由下方独立可编辑 StaffNoteBar 承载，此处不再重复渲染 DecisionCard。 */}
 
       {/* Staff note bar */}
       <div style={{ marginBottom: 14 }}>
@@ -115,10 +111,12 @@ export function PendingCenter({ v, onStaffNoteChange, onEditVideo, onSourceHealt
           fallback={<span style={{ fontSize: 'var(--font-size-xxs)', color: 'var(--fg-muted)' }}>{v.type}</span>}
         />
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             <h2 style={{ margin: 0, fontSize: 'var(--font-size-xl)', fontWeight: 700, color: 'var(--fg-default)' }}>{v.title}</h2>
             <span style={{ color: 'var(--fg-muted)', fontSize: 'var(--font-size-sm-tight)' }}>{v.year}</span>
-            <VisChip visibility={v.visibilityStatus} review={v.reviewStatus} />
+            {/* MODUX-ACPT-5：删「待审」pill（pending tab reviewStatus 恒为 pending_review → VisChip 恒显「待审」纯冗余）；
+                改挂信号决策 chip（DecisionCard banner，由 probe/render 推算 ok/warn/danger，复用既有组件不重复逻辑） */}
+            <DecisionCard video={v} probeState={v.probe} renderState={v.render} />
           </div>
           <div style={{ marginTop: 4, fontSize: 'var(--font-size-xs)', color: 'var(--fg-muted)' }}>
             {v.type} · {v.episodeCount} 集 · {formatCountryName(v.country, 'zh-CN', '—')} · ⭐ {v.rating ?? '—'} · ID <code style={{ fontFamily: 'monospace', fontSize: 'var(--font-size-xxs)' }}>{v.id}</code>
