@@ -49,7 +49,7 @@ function renderController(over: Partial<ControllerProps> = {}): ControllerProps 
     setActiveIdx: vi.fn(), loadMore: vi.fn(),
     batchModeOn: false, selectedIds: new Set<string>(), onToggleSelect: vi.fn(),
     onApprove: vi.fn(), onRejectOpen: vi.fn(), onEditVideo: vi.fn(), onStaffNoteChange: vi.fn(),
-    q: '', onQChange: vi.fn(), currentFilters: {}, onClearAllFilters: vi.fn(),
+    q: '', onQChange: vi.fn(), currentFilters: {}, onClearAllFilters: vi.fn(), onApplyFilters: vi.fn(),
     ...over,
   } as unknown as ControllerProps
   render(<PendingPaneController {...props} />)
@@ -101,12 +101,40 @@ describe('PendingPaneController · 键盘流（MODUX-P2-3 / item 1）', () => {
     expect(props.setActiveIdx).toHaveBeenCalled()
   })
 
-  it("'shift+?' → help 浮层渲染（含数字键选线路文档）", async () => {
+  it("'shift+?' → help 浮层渲染（含数字键选线路 + 筛选组）", async () => {
     renderController()
     dispatchKeydown('?', { shiftKey: true })
     await waitFor(() => expect(screen.getByTestId('moderation-keyboard-help')).toBeTruthy())
     expect(screen.getByText('键盘快捷键')).toBeTruthy()
     // MODUX-P2-3-FIX：数字键选线路 help 静态文档项（绑定在 LinesPanel）
     expect(screen.getByText('选择第 N 条线路')).toBeTruthy()
+    // MODUX-P3-2：F 筛选项归入 help「筛选」组（组头 + F 行 label 均为「筛选」）
+    expect(screen.getAllByText('筛选').length).toBeGreaterThan(0)
+  })
+
+  // ── MODUX-P3-2：F 键打开筛选弹层 ──
+  it("'f' → 筛选弹层渲染（aria-modal）", async () => {
+    renderController()
+    dispatchKeydown('f')
+    await waitFor(() => expect(screen.getByTestId('moderation-filter-panel')).toBeTruthy())
+    expect(screen.getByText('筛选待审视频')).toBeTruthy()
+  })
+
+  it('筛选弹层打开时审核键 A/R 暂停（交 Modal 关闭，防表单内误触）', async () => {
+    const props = renderController()
+    dispatchKeydown('f')
+    await waitFor(() => expect(screen.getByTestId('moderation-filter-panel')).toBeTruthy())
+    dispatchKeydown('a')
+    dispatchKeydown('r')
+    expect(props.onApprove).not.toHaveBeenCalled()
+    expect(props.onRejectOpen).not.toHaveBeenCalled()
+  })
+
+  it('应用筛选 → onApplyFilters 调用（draft 透传）', async () => {
+    const props = renderController()
+    dispatchKeydown('f')
+    await waitFor(() => expect(screen.getByTestId('moderation-filter-panel')).toBeTruthy())
+    act(() => { screen.getByTestId('filter-apply').click() })
+    expect(props.onApplyFilters).toHaveBeenCalledTimes(1)
   })
 })

@@ -18,6 +18,7 @@
 import React from 'react'
 import { DataTableSearchInput } from '@resovo/admin-ui'
 import type { FilterPresetQuery } from '@/lib/moderation/use-filter-presets'
+import { M } from '@/i18n/messages/zh-CN/moderation'
 
 const TOOLBAR_STYLE: React.CSSProperties = {
   // CHG-350 BUG-FIX：sticky 贴 pane body 顶部，列表滚动时 toolbar 保持可见
@@ -51,6 +52,36 @@ const CLEAR_BTN_STYLE: React.CSSProperties = {
   fontSize: 'var(--font-size-xxs)',
 }
 
+// MODUX-P3-2：筛选弹层入口按钮（active 时高亮 + 维度计数 badge）
+function filterBtnStyle(active: boolean): React.CSSProperties {
+  return {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 4,
+    padding: '4px 8px',
+    border: `1px solid ${active ? 'var(--accent-default)' : 'var(--border-default)'}`,
+    borderRadius: 'var(--radius-sm)',
+    background: active ? 'var(--admin-accent-soft)' : 'var(--bg-surface)',
+    color: active ? 'var(--accent-default)' : 'var(--fg-muted)',
+    cursor: 'pointer',
+    fontSize: 'var(--font-size-xxs)',
+    whiteSpace: 'nowrap',
+    flexShrink: 0,
+  }
+}
+
+const FILTER_COUNT_BADGE_STYLE: React.CSSProperties = {
+  minWidth: 14,
+  height: 14,
+  padding: '0 3px',
+  borderRadius: 999,
+  background: 'var(--accent-default)',
+  color: 'var(--fg-on-accent)',
+  fontSize: 'var(--font-size-3xs, 9px)',
+  lineHeight: '14px',
+  textAlign: 'center',
+}
+
 const CHIPS_ROW_STYLE: React.CSSProperties = {
   display: 'flex',
   flexWrap: 'wrap',
@@ -79,6 +110,8 @@ export interface PendingQueueToolbarProps {
   readonly onQChange: (q: string) => void
   readonly filters: FilterPresetQuery
   readonly onClearAll: () => void
+  /** MODUX-P3-2：打开筛选弹层（按钮触发；本组件不持弹层 state） */
+  readonly onOpenFilters: () => void
   readonly resultCount?: number
 }
 
@@ -87,6 +120,7 @@ export function PendingQueueToolbar({
   onQChange,
   filters,
   onClearAll,
+  onOpenFilters,
   resultCount,
 }: PendingQueueToolbarProps): React.ReactElement {
   const activeFilters = Object.entries(filters).filter(([, v]) => v != null && v !== '')
@@ -95,6 +129,19 @@ export function PendingQueueToolbar({
   return (
     <div style={TOOLBAR_STYLE} data-testid="pending-queue-toolbar">
       <div style={SEARCH_ROW_STYLE}>
+        <button
+          type="button"
+          style={filterBtnStyle(activeFilters.length > 0)}
+          onClick={onOpenFilters}
+          aria-haspopup="dialog"
+          title={M.filterPanel.kbdHint}
+          data-testid="pending-queue-filter-trigger"
+        >
+          {M.filterPanel.triggerLabel}
+          {activeFilters.length > 0 && (
+            <span style={FILTER_COUNT_BADGE_STYLE} data-testid="pending-queue-filter-count">{activeFilters.length}</span>
+          )}
+        </button>
         <div style={{ flex: 1 }}>
           <DataTableSearchInput
             value={q}

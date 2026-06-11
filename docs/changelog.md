@@ -4273,3 +4273,21 @@
 - **新增依赖**：无
 - **数据库变更**：无（查询层过滤，不加列）
 - **注意事项**：① **count 查询原不 JOIN media_catalog**（WHERE 仅 v.*）——加 mc.* 过滤会破坏，故无条件补 `JOIN media_catalog mc ON mc.id=v.catalog_id`（INNER on FK catalog_id NOT NULL → 保数不变）；count 参数切片 `idx-(cursor?3:1)` 不变（新参数均在 cursor 前；enrichmentStatus 0 参数 / year 1 / decade 2）。② **ENRICHMENT_STATUS_SQL 零用户输入零注入**（固定字符串，枚举值 z.enum 上游校验）；语义对齐 P3-1-A/architecture.md §5.12（不异源重复定义派生规则）。③ **预设向后兼容**靠 FilterPresetQuery optional——旧 JSON 快照缺新字段=undefined 自动不参与。④ **本卡后端能力 + 预设类型**，独立可验（mock Pool 捕获 SQL/params）；前端 fetchPendingQueue 序列化 + URL sync(FILTER_KEYS) + 筛选弹层 UI = P3-2。⑤ decade 区间 `[decade, decade+10)`。**P3-1 后端闭环（A 契约 + B 实现）**。门禁：typecheck/lint EXIT=0 / verify:adr-contracts EXIT=0 / test:changed 223 passed / e2e:admin 82/82 EXIT=0。
+
+## [MODUX-P3-2] 待审列表筛选弹层（item 3 前端 / 消费 P3-1-B 后端 + F 键归并）
+- **完成时间**：2026-06-11
+- **记录时间**：2026-06-11 01:58
+- **执行模型**：claude-opus-4-8（建议 sonnet）
+- **子代理**：无（纯前端消费既有契约，不改共享组件 Props）
+- **修改文件**：
+  - `apps/server-next/src/app/admin/moderation/_client/PendingFilterPanel.tsx` — 新建：复用 admin-ui `Modal` + `AdminSelect` + enum options（getVideoTypeOptions/getSourceCheckStatusOptions/getDoubanStatusOptions）+ `ENRICHMENT_STATUSES`（packages/types 真源）；7 维（类型/年代/富集/探测/豆瓣/备注/人工）本地 draft → 应用/清除；年代选项当前十年→1950s 降序
+  - `apps/server-next/src/app/admin/moderation/_client/PendingQueueToolbar.tsx` — 加「筛选」按钮（`onOpenFilters` 回调 + active 维度计数 badge），不破「只显示不改维度」职责（按钮仅触发回调）
+  - `apps/server-next/src/app/admin/moderation/_client/PendingPaneController.tsx` — `filterPanelOpen` state + 渲染弹层 + F 键 binding（group 筛选，batchSafe；弹层开 → bindings=[] 全暂停交 Modal 关闭）；help 列表经 shortcuts 自动补「筛选」组；toolbar 接 `onOpenFilters=openFilter`；新增 `onApplyFilters` prop
+  - `apps/server-next/src/app/admin/moderation/_client/ModerationConsole.tsx` — FILTER_KEYS + readFiltersFromSearchParams + writeFiltersToSearchParams 扩 year/decade/enrichmentStatus（year/decade 正整数校验 + enrichmentStatus 枚举成员校验，防垃圾 URL 打 API 422）；传 `onApplyFilters=applyFiltersToUrl`
+  - `apps/server-next/src/lib/moderation/api.ts` — `fetchPendingQueue` 查询类型 + 序列化扩 year/decade/enrichmentStatus
+  - `apps/server-next/src/i18n/messages/zh-CN/moderation.ts` — 新增 `filterPanel` 文案块（7 维 label + 富集中文 + 应用/清除/F 提示）
+  - `tests/unit/components/server-next/admin/moderation/PendingFilterPanel.test.tsx` — 新增 4 用例（7 字段渲染 / open=false 不渲染 / 应用透传 value / 清除后应用={}）
+  - `tests/unit/components/server-next/admin/moderation/PendingPaneControllerKeyboard.test.tsx` — +3 用例（F 开弹层 aria-modal / 弹层开时 A/R 暂停 / 应用调 onApplyFilters）+ help「筛选」组断言
+- **新增依赖**：无
+- **数据库变更**：无（纯前端消费 P3-1-B 既有 query 契约）
+- **注意事项**：① **F 键归并落账（P2-3-FIX 跨卡契约）**——筛选弹层为 P3-2 交付物，F 键于本卡接入；F=open-only（弹层开时 bindings=[] 故 F 不可达关闭路径，由 Modal Esc/遮罩/按钮关闭）；批量模式仍 batchSafe 可筛选。② **浮层互斥 + 数字键守卫复用**——筛选 Modal 设 aria-modal，LinesPanel `selectLineByIndex` 既有 `[aria-modal]` 守卫自动护住 1–9 选线路（零额外 prop drilling）；help/filter 由 binding 构造保证不同开。③ **URL 单向回流复用既有范式**——onApplyFilters=applyFiltersToUrl 写 URL，既有 useEffect(readFilters) 同步 currentFilters（与预设 apply 同路径）。④ **toolbar 职责未破**——「筛选」按钮仅触发回调，编辑面板独立组件持 draft。⑤ 富集枚举从 packages/types `ENRICHMENT_STATUSES` 单源消费（不异源重定义）。门禁：typecheck/lint EXIT=0 / verify:adr-contracts EXIT=0 / test:changed 95 passed（增量，无基础包改动）/ **e2e:admin 82/82 EXIT=0**。**SEQ-20260610-03 MODUX 12/15（Phase 3 P3-2 ✅）**。

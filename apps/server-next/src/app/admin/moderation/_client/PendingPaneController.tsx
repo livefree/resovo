@@ -34,6 +34,7 @@ import { ModListRow } from './ModListRow'
 import { PendingCenter } from './PendingCenter'
 import { RightPane } from './RightPane'
 import { PendingQueueToolbar } from './PendingQueueToolbar'
+import { PendingFilterPanel } from './PendingFilterPanel'
 import { KeyboardHelpOverlay } from './KeyboardHelpOverlay'
 import type { KeyboardHelpItem } from './KeyboardHelpOverlay'
 import { buildAdminPreviewUrl } from '@/lib/admin-preview-url'
@@ -87,6 +88,8 @@ export interface PendingPaneControllerProps {
   readonly onQChange: (q: string) => void
   readonly currentFilters: FilterPresetQuery
   readonly onClearAllFilters: () => void
+  /** MODUX-P3-2：应用筛选弹层结果（ModerationConsole 写 URL → currentFilters 单向回流） */
+  readonly onApplyFilters: (next: FilterPresetQuery) => void
 }
 
 export function PendingPaneController({
@@ -110,9 +113,11 @@ export function PendingPaneController({
   onQChange,
   currentFilters,
   onClearAllFilters,
+  onApplyFilters,
 }: PendingPaneControllerProps): React.ReactElement {
   const [rightOpen, setRightOpen] = useState(true)
   const [helpOpen, setHelpOpen] = useState(false)
+  const [filterPanelOpen, setFilterPanelOpen] = useState(false)
 
   // responsive right pane
   useEffect(() => {
@@ -143,6 +148,7 @@ export function PendingPaneController({
     window.open(buildAdminPreviewUrl({ type: v.type, slug: v.slug, shortId: v.shortId }), '_blank', 'noopener,noreferrer')
   }, [v])
   const toggleHelp = useCallback(() => setHelpOpen((o) => !o), [])
+  const openFilter = useCallback(() => setFilterPanelOpen(true), [])
 
   // 单一真源：spec + 展示 + 行为 + 批量安全（派生 bindings + help 列表，避免双份漂移）
   const shortcuts = useMemo<readonly ConsoleShortcut[]>(() => [
@@ -154,15 +160,21 @@ export function PendingPaneController({
     { spec: 's', displayKey: 'S', label: M.actions.skip, group: '审核', batchSafe: false, handler: goNext },
     { spec: 'e', displayKey: 'E', label: '编辑视频', group: '审核', batchSafe: false, handler: editActive },
     { spec: 'p', displayKey: 'P', label: '前台预览', group: '审核', batchSafe: false, handler: previewActive },
+    // MODUX-P3-2（P2-3-FIX 归并）：F 打开筛选弹层（批量模式仍可筛选 → batchSafe）
+    { spec: 'f', displayKey: 'F', label: M.filterPanel.triggerLabel, group: '筛选', batchSafe: true, handler: openFilter },
     { spec: 'shift+?', displayKey: '?', label: '打开/关闭此面板', group: '帮助', batchSafe: true, handler: toggleHelp },
-  ], [goNext, goPrev, focusSearch, onApprove, onRejectOpen, editActive, previewActive, toggleHelp])
+  ], [goNext, goPrev, focusSearch, onApprove, onRejectOpen, editActive, previewActive, openFilter, toggleHelp])
 
   const bindings = useMemo<ShortcutBinding[]>(() => {
+    // 浮层互斥：help 开 → 仅 ? 切换；筛选弹层开 → 全部暂停（交 Modal Esc/遮罩/按钮关闭，
+    //   防表单内 F/字母键误触；aria-modal 同步护住 LinesPanel 数字键选线路）。二者由 binding 构造保证不会同开。
     const active = helpOpen
-      ? shortcuts.filter((s) => s.group === '帮助')          // help 打开时仅留 ? 切换（Modal 自处理 Esc/遮罩）
-      : shortcuts.filter((s) => !batchModeOn || s.batchSafe) // 批量模式仅 J/K/`/`/`?` 生效，A/R/S/E/P 暂停
+      ? shortcuts.filter((s) => s.group === '帮助')
+      : filterPanelOpen
+      ? []
+      : shortcuts.filter((s) => !batchModeOn || s.batchSafe) // 批量模式仅 J/K/`/`/F/`?` 生效，A/R/S/E/P 暂停
     return active.map((s) => ({ id: s.spec, spec: s.spec, handler: s.handler }))
-  }, [shortcuts, batchModeOn, helpOpen])
+  }, [shortcuts, batchModeOn, helpOpen, filterPanelOpen])
 
   const helpItems = useMemo<KeyboardHelpItem[]>(
     () => [
@@ -182,6 +194,13 @@ export function PendingPaneController({
         onClose={() => setHelpOpen(false)}
         items={helpItems}
         batchModeOn={batchModeOn}
+      />
+      {/* MODUX-P3-2：待审列表筛选弹层（F 键 / toolbar 按钮入口）*/}
+      <PendingFilterPanel
+        open={filterPanelOpen}
+        onClose={() => setFilterPanelOpen(false)}
+        value={currentFilters}
+        onApply={onApplyFilters}
       />
       <SplitPane
       height="100%"
@@ -223,6 +242,7 @@ export function PendingPaneController({
                 onQChange={onQChange}
                 filters={currentFilters}
                 onClearAll={onClearAllFilters}
+                onOpenFilters={openFilter}
                 resultCount={total}
               />
               <div role="listbox" aria-label={M.aria.consoleQueuePane}>

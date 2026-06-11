@@ -70,6 +70,10 @@ export async function fetchPendingQueue(
     needsManualReview: boolean
     /** CHG-350：title ILIKE 模糊搜索（≤ 200 字符） */
     q: string
+    // MODUX-P3-2：年代 + 富集状态（消费 P3-1-B 后端过滤）
+    year: number
+    decade: number
+    enrichmentStatus: string
   }> = {},
 ): Promise<PendingQueueResponse> {
   const params = new URLSearchParams()
@@ -81,6 +85,9 @@ export async function fetchPendingQueue(
   if (query.hasStaffNote != null)            params.set('hasStaffNote', String(query.hasStaffNote))
   if (query.needsManualReview != null)       params.set('needsManualReview', String(query.needsManualReview))
   if (query.q && query.q.trim())             params.set('q', query.q.trim())
+  if (query.year != null)                    params.set('year', String(query.year))
+  if (query.decade != null)                  params.set('decade', String(query.decade))
+  if (query.enrichmentStatus)                params.set('enrichmentStatus', query.enrichmentStatus)
   const qs = params.toString()
   return apiClient.get<PendingQueueResponse>(`/admin/moderation/pending-queue${qs ? `?${qs}` : ''}`)
 }

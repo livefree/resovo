@@ -18,6 +18,7 @@ import { buildMergeHref } from '@/lib/merge/entry'
 import { M } from '@/i18n/messages/zh-CN/moderation'
 import { useFilterPresets } from '@/lib/moderation/use-filter-presets'
 import type { FilterPreset, FilterPresetQuery, FilterPresetTab } from '@/lib/moderation/use-filter-presets'
+import { ENRICHMENT_STATUSES } from '@resovo/types'
 
 // ── Types & constants ──────────────────────────────────────────────
 
@@ -65,7 +66,15 @@ function badgeStyle(danger?: boolean): React.CSSProperties {
 
 // ── 筛选 URL 同步工具（CHG-SN-4-FIX-F）─────────────────────────────────
 
-const FILTER_KEYS = ['type', 'sourceCheckStatus', 'doubanStatus', 'hasStaffNote', 'needsManualReview'] as const
+// MODUX-P3-2：year/decade/enrichmentStatus 三维并入 URL 同步集（消费 P3-1-B 后端过滤）
+const FILTER_KEYS = ['type', 'sourceCheckStatus', 'doubanStatus', 'hasStaffNote', 'needsManualReview', 'year', 'decade', 'enrichmentStatus'] as const
+
+/** 解析正整数（年/年代）；非法返回 undefined */
+function parseIntParam(raw: string | null): number | undefined {
+  if (!raw) return undefined
+  const n = Number(raw)
+  return Number.isInteger(n) && n > 0 ? n : undefined
+}
 
 function readFiltersFromSearchParams(sp: URLSearchParams | ReturnType<typeof useSearchParams>): FilterPresetQuery {
   const get = (k: string) => sp.get(k)
@@ -78,6 +87,15 @@ function readFiltersFromSearchParams(sp: URLSearchParams | ReturnType<typeof use
   else if (hasStaffNote === 'false') filters.hasStaffNote = false
   const needsManualReview = get('needsManualReview')
   if (needsManualReview === 'true') filters.needsManualReview = true
+  // MODUX-P3-2：year/decade 校验为正整数；enrichmentStatus 校验为枚举成员（防垃圾 URL 值打到 API 422）
+  const year = parseIntParam(get('year'))
+  if (year != null) filters.year = year
+  const decade = parseIntParam(get('decade'))
+  if (decade != null) filters.decade = decade
+  const enrichmentStatus = get('enrichmentStatus')
+  if (enrichmentStatus && (ENRICHMENT_STATUSES as readonly string[]).includes(enrichmentStatus)) {
+    filters.enrichmentStatus = enrichmentStatus
+  }
   return filters
 }
 
@@ -93,6 +111,9 @@ function writeFiltersToSearchParams(sp: URLSearchParams, filters: FilterPresetQu
   if (filters.doubanStatus) next.set('doubanStatus', filters.doubanStatus)
   if (filters.hasStaffNote != null) next.set('hasStaffNote', String(filters.hasStaffNote))
   if (filters.needsManualReview != null) next.set('needsManualReview', String(filters.needsManualReview))
+  if (filters.year != null) next.set('year', String(filters.year))
+  if (filters.decade != null) next.set('decade', String(filters.decade))
+  if (filters.enrichmentStatus) next.set('enrichmentStatus', filters.enrichmentStatus)
   return next
 }
 
@@ -545,6 +566,7 @@ export function ModerationConsole(): React.ReactElement {
               setCurrentFilters({})
               applyFiltersToUrl({})
             }}
+            onApplyFilters={applyFiltersToUrl}
           />
         )}
         {tab === 'rejected' && <RejectedTabContent />}
