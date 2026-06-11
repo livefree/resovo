@@ -4230,3 +4230,17 @@
 - **新增依赖**：无
 - **数据库变更**：无
 - **注意事项**：① **根因复盘**：数字键选线路误判"超文件范围"——moderation `_client/LinesPanel` 仅 PendingCenter 受控消费（onLineSelect），实装属审核台局部、仅 +1 文件；F 筛选目标筛选弹层确为 P3-2 交付物（当前不存在），正式归并 P3-2（amend 验收 + 文件范围 + help 组）而非埋备注延后。② 数字键复用 onLineSelect 既有切源路径（关键路径线路切换），新触发器非新行为，e2e:admin 82/82 回归绿。③ 多 KeyboardShortcuts 实例（controller j/k/a/r/s/e/p///?+ LinesPanel 1-9）键集不相交，window keydown 各管各无冲突。门禁：typecheck/lint EXIT=0 / test:changed 13 passed（数字键 4 + 键盘流 6 + split-button 3）/ **e2e:admin 82/82 EXIT=0**。
+
+## [MODUX-P2-3-FIX-2] 数字键模态守卫（Codex stop-time review 第 2 轮拦截）
+- **完成时间**：2026-06-11
+- **记录时间**：2026-06-11 00:34
+- **执行模型**：claude-opus-4-8
+- **子代理**：无
+- **触发**：Codex stop-time review——「numeric shortcuts stay active behind the help modal」：help 模态打开时 LinesPanel 数字键仍在背后误切线路。
+- **修改文件**：
+  - `apps/server-next/src/app/admin/moderation/_client/LinesPanel.tsx` — selectLineByIndex 前加通用模态守卫：`document.querySelector('[aria-modal="true"]')` 存在则抑制数字键
+  - `tests/unit/components/server-next/admin/moderation/LinesPanelLineKeys.test.tsx` — 补 1 守卫单测（DOM 注入 aria-modal 元素 → 数字键不触发）
+  - `docs/task-queue.md` / `docs/tasks.md` — 收口
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：① **根因**：controller 在 helpOpen 时过滤自身 bindings 为仅 `?`，但数字键 KeyboardShortcuts 在 LinesPanel、不感知 helpOpen（且 window 级监听不感知模态）。② **修复取通用模态守卫而非透传 helpOpen 两层**——一并覆盖 help/拒绝/编辑抽屉等全部审核台浮层（RejectModal/VideoEditDrawer/SavePresetModal/help 均复用 admin-ui Modal/Drawer，皆设 aria-modal=true，已核 grep）；只解 help 的窄修法会漏其余模态。③ 守卫在事件时（handler 内）查 DOM 而非 render 时过滤 binding——因模态开合不在 LinesPanel 的 render 依赖内。门禁：typecheck/lint EXIT=0 / test:changed 14 passed / **e2e:admin 82/82 EXIT=0**。

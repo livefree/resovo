@@ -161,6 +161,9 @@ export function LinesPanel({ videoId, selectedKey, onLineSelect, onSourceHealthC
   //   仅受控用法（onLineSelect 存在 = 审核台）注册；sources 展开无 onLineSelect → 不挂载、零影响。
   const selectLineByIndex = useCallback((idx: number) => {
     if (!onLineSelect) return
+    // MODUX-P2-3-FIX-2（Codex review）：模态浮层（help/拒绝/编辑抽屉等任意 aria-modal）打开时
+    //   抑制数字键——否则会在浮层背后误切线路（数字键挂 window，KeyboardShortcuts 不感知模态）。
+    if (typeof document !== 'undefined' && document.querySelector('[aria-modal="true"]')) return
     const line = aggregatedLines[idx]
     if (!line) return
     const firstActiveEp = line.episodes.find((e) => e.isActive)

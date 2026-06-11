@@ -85,4 +85,18 @@ describe('LinesPanel · 数字键选线路（MODUX-P2-3-FIX / item 1）', () => 
     render(<LinesPanel videoId="v1" />)
     expect(() => dispatchKeydown('1')).not.toThrow()
   })
+
+  it('模态浮层（aria-modal）打开时 → 数字键抑制（MODUX-P2-3-FIX-2，不在浮层后误切线路）', () => {
+    const onLineSelect = vi.fn()
+    render(<LinesPanel videoId="v1" onLineSelect={onLineSelect} />)
+    const modal = document.createElement('div')
+    modal.setAttribute('aria-modal', 'true')
+    document.body.appendChild(modal)
+    try {
+      dispatchKeydown('1')
+      expect(onLineSelect).not.toHaveBeenCalled()
+    } finally {
+      document.body.removeChild(modal)
+    }
+  })
 })
