@@ -53,6 +53,9 @@ export class SourceService {
     // 取含信号字段的 raw rows（不污染 mapSource / arch-reviewer I1）
     const rows = await sourceQueries.findActiveSourcesWithSignalsByVideoId(this.db, video.id, episode)
 
+    // SRCHEALTH-P3-1：单次取 now 全源共用（map 内逐行 Date.now() 会让 age 基准不一致破坏排序稳定性）
+    const now = Date.now()
+
     // 计算 effectiveScore + 合成 VideoSource + 排序（A1 / 稳定排序 by created_at ASC fallback）
     const withScore = rows.map((row) => ({
       source: sourceQueries.mapSourceBase(row),
@@ -66,6 +69,10 @@ export class SourceService {
         //   sla.priority 范围 0-100（DB CHECK 强制 / Migration 079）→ route-scoring 归一化 / 100
         //   LEFT JOIN miss 时 alias_priority 为 null → fallback 0（与 Phase 1 行为一致 / 无回归）
         priorityBonus: row.alias_priority !== null ? row.alias_priority / 100 : 0,
+        // SRCHEALTH-P3-1 双时钟新鲜度衰减（D3）：probe/render 子项分别按各自时间戳衰减
+        lastProbedAt: row.last_probed_at,
+        lastRenderedAt: row.last_rendered_at,
+        now,
       }),
       hostTripped: row.host_tripped,
       createdAt: row.created_at,

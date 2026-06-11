@@ -103,6 +103,10 @@ const MOCK_RAW_ROW = {
   quality_detected: null,
   alias_priority: null,  // CHG-368-B-A3: LEFT JOIN miss / fallback 0（与 Phase 1 行为一致）
   host_tripped: false,   // SRCHEALTH-P3-3-B2: host_health LEFT JOIN（miss → COALESCE false）
+  // SRCHEALTH-P3-1: 近期时间戳（age≈0 落在 grace/零衰减区 → 0.86/0.90 等既有断言不漂移；
+  // null 会与 probe_status='ok' 语义矛盾——null ⇔ 从未探测 ⇔ 必为 pending，裁决 E）
+  last_probed_at: new Date().toISOString(),
+  last_rendered_at: new Date().toISOString(),
 }
 
 // ── 辅助：测试 app ────────────────────────────────────────────────
@@ -239,6 +243,21 @@ describe('GET /v1/videos/:id/sources', () => {
     const res = await app.inject({ method: 'GET', url: '/v1/videos/abCD1234/sources' })
     const body = res.json()
     expect(body.data.map((s: { id: string }) => s.id)).toEqual(['healthy-ok', 'tripped-ok', 'tripped-dead'])
+  })
+
+  it('P3-1 集成：Service 端衰减生效——6 天前 ok 源排在新近 ok 源之后（D3 修复，覆盖 now/时间戳传参链）', async () => {
+    const sixDaysAgo = new Date(Date.now() - 144 * 3_600_000).toISOString()
+    mockSQ.findActiveSourcesWithSignalsByVideoId.mockResolvedValue([
+      { ...MOCK_RAW_ROW, id: 'stale-ok', last_probed_at: sixDaysAgo, last_rendered_at: sixDaysAgo },
+      { ...MOCK_RAW_ROW, id: 'fresh-ok' },
+    ])
+    const res = await app.inject({ method: 'GET', url: '/v1/videos/abCD1234/sources' })
+    const body = res.json()
+    expect(body.data.map((s: { id: string }) => s.id)).toEqual(['fresh-ok', 'stale-ok'])
+    // 衰减后分差显著（fresh 0.86 vs stale ≈0.663，quality=1080P/latency=100 同 Case 8 主验证）
+    const fresh = body.data.find((s: { id: string }) => s.id === 'fresh-ok')
+    const stale = body.data.find((s: { id: string }) => s.id === 'stale-ok')
+    expect(fresh.effectiveScore - stale.effectiveScore).toBeGreaterThan(0.15)
   })
 
   it('P3-3-B2: effectiveScore 透出原值不含降权 + hostTripped 字段透出（裁决 C4——P3-2 影子基线/P3-4 切线语义稳定）', async () => {

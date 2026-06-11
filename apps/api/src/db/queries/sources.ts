@@ -62,6 +62,9 @@ export interface DbSourceRowWithSignals extends DbSourceRow {
   alias_priority: number | null
   /** SRCHEALTH-P3-3-B2：host_health.cooldown_until > NOW()（SQL 内判定布尔）；LEFT JOIN miss / NULL hostname → false */
   host_tripped: boolean
+  /** SRCHEALTH-P3-1 双时钟新鲜度衰减输入（migration 054 列；NULL = 从未探测/渲染 → 衰减短路） */
+  last_probed_at: string | null
+  last_rendered_at: string | null
 }
 
 function mapSource(row: DbSourceRow): VideoSource {
@@ -160,6 +163,7 @@ export async function findActiveSourcesWithSignalsByVideoId(
             vs.is_active, vs.submitted_by, vs.last_checked,
             vs.deleted_at, vs.created_at,
             vs.probe_status, vs.render_status, vs.latency_ms, vs.quality_detected,
+            vs.last_probed_at, vs.last_rendered_at,
             cs.display_name AS site_display_name,
             sla.priority AS alias_priority,
             COALESCE(hh.cooldown_until > NOW(), false) AS host_tripped

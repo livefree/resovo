@@ -15,7 +15,9 @@ import {
   calculateHealthScore,
   calculateQualityScore,
   calculateLatencyScore,
+  applyFreshnessDecay,
   WEIGHTS,
+  FRESHNESS_DECAY,
   PROBE_SCORE_MAP,
   RENDER_SCORE_MAP,
   QUALITY_SCORE_MAP,
@@ -32,6 +34,10 @@ function input(overrides: Partial<EffectiveScoreInput> = {}): EffectiveScoreInpu
     quality: 'quality' in overrides ? overrides.quality ?? null : null,
     qualityDetected: 'qualityDetected' in overrides ? overrides.qualityDetected ?? null : null,
     priorityBonus: overrides.priorityBonus,
+    // SRCHEALTH-P3-1 双时钟衰减输入（Case 8）；省略 → 不衰减（Case 1–7 走 Phase 1 数学）
+    lastProbedAt: overrides.lastProbedAt,
+    lastRenderedAt: overrides.lastRenderedAt,
+    now: overrides.now,
   }
 }
 
@@ -242,3 +248,115 @@ describe('Case 7 — 排序稳定性参考（同 score 数组）', () => {
     // 此 case 文档化期望：score 相等时不应有随机排序
   })
 })
+
+// ── Case 8: 双时钟新鲜度衰减校准（SRCHEALTH-P3-1 / D3，arch-reviewer claude-opus-4-8 裁决）──
+// decayed = STALE_TARGET + (score − STALE_TARGET) × 2^(−max(0, age − grace)/T)
+// 常量锁定：target=0.3（方案 §3「0.345」为轴混淆正名——0.345 是全因子总分中性，子项轴 = pending 档）/
+// T_probe=72h grace=6h / T_render=168h grace=0。任何改动衰减常量或函数形态必须先让本段 RED。
+
+describe('Case 8 — 双时钟新鲜度衰减校准（D3）', () => {
+  const HOUR = 3_600_000
+  const NOW = Date.parse('2026-06-10T12:00:00Z')
+  const at = (hoursAgo: number) => new Date(NOW - hoursAgo * HOUR).toISOString()
+
+  it('FRESHNESS_DECAY 常量锁定（调参须配合 P3-2 影子验证，进代码不进 env）', () => {
+    expect(FRESHNESS_DECAY).toEqual({
+      STALE_TARGET: 0.3,
+      T_PROBE_HOURS: 72,
+      T_RENDER_HOURS: 168,
+      PROBE_GRACE_HOURS: 6,
+      RENDER_GRACE_HOURS: 0,
+    })
+  })
+
+  it('向后兼容：不传 now → 不衰减（Phase 1 数学，Case 1–7 全部依赖此分支）', () => {
+    const fresh = calculateEffectiveScore(input({
+      probeStatus: 'ok', renderStatus: 'ok', latencyMs: 100, quality: '1080P',
+      lastProbedAt: at(144), lastRenderedAt: at(144),  // 久远时间戳但无 now
+    }))
+    expect(fresh).toBeCloseTo(0.86, 3)
+  })
+
+  it('NULL 时间戳短路：从未探测（pending=target）不受 now 影响', () => {
+    const score = calculateEffectiveScore(input({ lastProbedAt: null, lastRenderedAt: null, now: NOW }))
+    expect(score).toBeCloseTo(0.345, 3)  // 全中性锚点不变
+  })
+
+  it('age=0 不衰减：满健康源原值（CHG-352 三锚点定义不变）', () => {
+    const score = calculateEffectiveScore(input({
+      probeStatus: 'ok', renderStatus: 'ok', latencyMs: 100, quality: '1080P',
+      lastProbedAt: at(0), lastRenderedAt: at(0), now: NOW,
+    }))
+    expect(score).toBeCloseTo(0.86, 3)
+  })
+
+  it('D3 修复主验证：6 分钟前 ok = 0.86 vs 6 天前 ok = 0.663（同 ok 新鲜度拉开 ~0.2 分）', () => {
+    const recentOk = calculateEffectiveScore(input({
+      probeStatus: 'ok', renderStatus: 'ok', latencyMs: 100, quality: '1080P',
+      lastProbedAt: at(0.1), lastRenderedAt: at(0.1), now: NOW,
+    }))
+    const staleOk = calculateEffectiveScore(input({
+      probeStatus: 'ok', renderStatus: 'ok', latencyMs: 100, quality: '1080P',
+      lastProbedAt: at(144), lastRenderedAt: at(144), now: NOW,
+    }))
+    expect(recentOk).toBeCloseTo(0.86, 3)
+    // probe: 0.3+0.7×2^(−138/72)=0.485 / render: 0.3+0.7×2^(−144/168)=0.686
+    // health = 0.4×0.485+0.6×0.686 = 0.606 → 总分 0.5×0.606+0.21+0.15 = 0.663
+    expect(staleOk).toBeCloseTo(0.663, 3)
+    expect(recentOk - staleOk).toBeGreaterThan(0.15)
+  })
+
+  it('probe grace 6h：正常 cron 节奏（age<6h）probe 子项零惩罚', () => {
+    const within = calculateHealthScoreDecayed('ok', 'ok', at(5), at(0), NOW)
+    expect(within).toBeCloseTo(1.0, 3)  // probe age 5h < grace 6h 不衰减；render age 0
+  })
+
+  it('dead 对称衰减：6 天前 dead health=0.169 / 30 天前 dead health≈0.291（有界回升，仍低于 partial）', () => {
+    const sixDay = calculateHealthScoreDecayed('dead', 'dead', at(144), at(144), NOW)
+    // probe: 0.3−0.3×2^(−138/72)=0.221 / render: 0.3−0.3×2^(−144/168)=0.134
+    expect(sixDay).toBeCloseTo(0.169, 3)
+    const thirtyDay = calculateHealthScoreDecayed('dead', 'dead', at(720), at(720), NOW)
+    expect(thirtyDay).toBeCloseTo(0.291, 3)
+    // 有界：回升趋近 pending 等价位 0.3，永不越过 partial 0.6
+    expect(thirtyDay).toBeLessThan(0.3)
+  })
+
+  it('负 age 钳制：未来时间戳（feedback 刚刷/时钟漂移）不放大分数越过原档位', () => {
+    const future = calculateEffectiveScore(input({
+      probeStatus: 'ok', renderStatus: 'ok', latencyMs: 100, quality: '1080P',
+      lastProbedAt: at(-2), lastRenderedAt: at(-2), now: NOW,  // 2h 未来
+    }))
+    expect(future).toBeCloseTo(0.86, 3)
+  })
+
+  it('T_render ≫ T_probe 区分力守卫：稳态健康源（render age=100h 实际重测中位）总分 ≈ 0.789 不坍缩', () => {
+    const steady = calculateEffectiveScore(input({
+      probeStatus: 'ok', renderStatus: 'ok', latencyMs: 100, quality: '1080P',
+      lastProbedAt: at(3), lastRenderedAt: at(100), now: NOW,
+    }))
+    // probe 不衰减(grace 内) 1.0 / render 0.3+0.7×2^(−100/168)=0.764 → health 0.858 → 总分 0.789
+    expect(steady).toBeCloseTo(0.789, 3)
+    expect(steady).toBeGreaterThan(0.7)  // 区分力守卫：健康源不被压向中性 0.345
+  })
+
+  it('applyFreshnessDecay 纯函数边界：score=target 恒等 / age→∞ 收敛 target', () => {
+    expect(applyFreshnessDecay(0.3, 1000 * HOUR, 72, 0)).toBe(0.3)
+    expect(applyFreshnessDecay(1.0, 100_000 * HOUR, 72, 0)).toBeCloseTo(0.3, 3)
+    expect(applyFreshnessDecay(0.0, 100_000 * HOUR, 168, 0)).toBeCloseTo(0.3, 3)
+  })
+})
+
+// 辅助：双时钟衰减后 health（Case 8 专用，经 calculateEffectiveScore 反推 health 部分）
+function calculateHealthScoreDecayed(
+  probeStatus: string,
+  renderStatus: string,
+  lastProbedAt: string,
+  lastRenderedAt: string,
+  now: number,
+): number {
+  // 全中性 quality/latency/priority：总分 = 0.5×health + 0.3×0.4 + 0.15×0.5 = 0.5×health + 0.195
+  const total = calculateEffectiveScore(input({
+    probeStatus, renderStatus, lastProbedAt, lastRenderedAt, now,
+  }))
+  return (total - 0.195) / 0.5
+}

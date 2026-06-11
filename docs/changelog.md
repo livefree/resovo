@@ -4060,3 +4060,22 @@
   - e2e 归因：player 23F/13P + video 11F/7P 失败全集 = pre-existing seed 基建欠账（fixture 视频 dev DB 实测 0 行 → watch/detail 404，请求不触达 listSources；P2-1 已登记候选独立卡）+ smoke 14 passed + 空表 COALESCE 行为等价（单测锁定）→ 非本卡回归。
   - 登记：ADR 草稿（双存储分工 + 排序分桶 + 恢复语义三决策，裁决 H-6）PHASE COMPLETE 前补。
   - 门禁：typecheck/lint EXIT=0 / sources 17/17 / test:changed 升全量终轮 508 文件 7128 passed / EXPLAIN ✅ / e2e smoke 14 passed。
+
+## [SRCHEALTH-P3-1] 双时钟新鲜度衰减 + 校准表单测（SEQ-20260610-02 Phase 3 本轮收口）
+- **完成时间**：2026-06-10
+- **记录时间**：2026-06-10 22:40
+- **执行模型**：claude-fable-5（用户会话持续推进授权）
+- **子代理**：arch-reviewer (claude-opus-4-8) — 衰减数学形态裁决 A–F（改 route-scoring = 前台线路顺序关键路径）
+- **修改文件**：
+  - `apps/api/src/lib/route-scoring.ts` — `FRESHNESS_DECAY` 常量（target=0.3 / T_probe=72h grace=6h / T_render=168h grace=0，进代码不进 env）；`applyFreshnessDecay` 纯函数（指数回归 + 负 age 钳制）；`EffectiveScoreInput` +lastProbedAt/lastRenderedAt/now 全可选（undefined→Phase 1 数学零破坏 / null→短路）；calculateEffectiveScore 双子项分别衰减后合成 health
+  - `apps/api/src/db/queries/sources.ts` — SELECT +last_probed_at/last_rendered_at 两列 + row 类型
+  - `apps/api/src/services/SourceService.ts` — map 前单次 Date.now() 全源共用 + 衰减传参
+  - `tests/unit/api/source-effective-score.test.ts` — Case 8 衰减校准 11 用例（D3 主验证：6min ok 0.86 vs 6 天 ok 0.663；dead 对称有界回升；区分力守卫 0.789）
+  - `tests/unit/api/sources.test.ts` — MOCK_RAW_ROW 补近期时间戳（既有断言零漂移）+ P3-1 集成用例
+- **新增依赖**：无 ｜ **数据库变更**：无（054 列仅 SELECT 透出）
+- **注意事项**：
+  - 裁决要点：方案 §3「向 0.345 回归」轴混淆正名 → 子项 target = pending 档 0.3；**dead 对称参与衰减**（auto-retire 180d DB 层兜底 + 回升上限 0.3 有界）；T_render ≫ T_probe（level2 LIMIT 100 重测间隔数百小时，短 T 致区分力坍缩 §7.2）。
+  - **裁决 D 闭环 P2-3 登记项**：feedback success 刷 last_probed_at 维持现状（真实播放 = 最真实探测，防滥用由独立 ipHash 门槛 + EMA 兜底）；登记：success 不刷 last_rendered_at 非对称（合理，另起卡评估）。
+  - **时序（裁决 F-4）**：影子未启动，P3-1 先行让 P3-2 影子从含衰减的最终公式形态起算——奠基非污染。
+  - **Phase 3 本轮可执行范围全部收口（P3-3 三卡 + P3-1）= D3+D4 闭环**；剩余 P3-2（影子一周硬前置 ~06-17）→ P3-4；P3-3 ADR 草稿 PHASE COMPLETE 前补。
+  - 门禁：typecheck/lint EXIT=0 / 校准 38/38 + sources 18/18 / 全量 7139 passed / e2e smoke 10 passed。
