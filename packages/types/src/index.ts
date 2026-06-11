@@ -40,6 +40,8 @@ export {
 export type * from './admin-moderation.types'
 // CHG-360-A / ADR-159：runtime helper（非 type-only）
 export { deriveAggregateState } from './admin-moderation.types'
+// MODUX-P3-1-A：富集状态枚举 const（value 导出，`export type *` 不带 const）
+export { ENRICHMENT_STATUSES } from './admin-moderation.types'
 export type * from './video-merge.types'
 export type * from './identity-evidence.types'
 export type * from './identity-decision.types'

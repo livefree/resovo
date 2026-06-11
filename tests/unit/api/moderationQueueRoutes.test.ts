@@ -132,6 +132,29 @@ describe('GET /admin/moderation/pending-queue', () => {
     })
     expect(res.statusCode).toBe(422)
   })
+
+  // MODUX-P3-1-A：年代 + 富集状态过滤参数（契约层；DB 实现 = P3-1-B）
+  it('MODUX-P3-1-A：year/decade/enrichmentStatus 透传 listPendingQueue', async () => {
+    await app.inject({
+      method: 'GET',
+      url: '/v1/admin/moderation/pending-queue?year=2024&decade=2020&enrichmentStatus=complete',
+      headers: { authorization: await tokenFor('moderator') },
+    })
+    expect(mockListPendingQueue).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ year: 2024, decade: 2020, enrichmentStatus: 'complete' }),
+      expect.any(String),
+    )
+  })
+
+  it('MODUX-P3-1-A：非法 enrichmentStatus → 422 VALIDATION_ERROR', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/admin/moderation/pending-queue?enrichmentStatus=bogus',
+      headers: { authorization: await tokenFor('moderator') },
+    })
+    expect(res.statusCode).toBe(422)
+  })
 })
 
 describe('POST /admin/moderation/:id/reject-labeled', () => {

@@ -4244,3 +4244,18 @@
 - **新增依赖**：无
 - **数据库变更**：无
 - **注意事项**：① **根因**：controller 在 helpOpen 时过滤自身 bindings 为仅 `?`，但数字键 KeyboardShortcuts 在 LinesPanel、不感知 helpOpen（且 window 级监听不感知模态）。② **修复取通用模态守卫而非透传 helpOpen 两层**——一并覆盖 help/拒绝/编辑抽屉等全部审核台浮层（RejectModal/VideoEditDrawer/SavePresetModal/help 均复用 admin-ui Modal/Drawer，皆设 aria-modal=true，已核 grep）；只解 help 的窄修法会漏其余模态。③ 守卫在事件时（handler 内）查 DOM 而非 render 时过滤 binding——因模态开合不在 LinesPanel 的 render 依赖内。门禁：typecheck/lint EXIT=0 / test:changed 14 passed / **e2e:admin 82/82 EXIT=0**。
+
+## [MODUX-P3-1-A] 富集状态枚举语义 + 共享类型 + query schema 契约（item 3 后端上半 / Phase 3 启动）
+- **完成时间**：2026-06-11
+- **记录时间**：2026-06-11 01:10
+- **执行模型**：claude-opus-4-8（建议 sonnet）
+- **子代理**：无（方案「模型/ADR 标记」明列强制 Opus 仅 P1-0/P1-1-A/P1-2 共享组件 Props；P3-1 为加性 query 参数后向兼容、非 migration/新端点/共享组件 API → sonnet）
+- **修改文件**：
+  - `packages/types/src/admin-moderation.types.ts` — 新增 `ENRICHMENT_STATUSES=['missing','partial','complete']`(const) + `EnrichmentStatus`(type)，JSDoc 固化"从 raw 派生"语义；`PendingQueueQuery` 加 `year?`/`decade?`/`enrichmentStatus?`
+  - `packages/types/src/index.ts` — `ENRICHMENT_STATUSES` value 导出（`export type *` 不带 const，仿 deriveAggregateState）
+  - `apps/api/src/routes/admin/moderation.ts` — `PendingQueueQuerySchema` 加 year/decade（z.coerce.number int 1900-2100）+ enrichmentStatus（z.enum(ENRICHMENT_STATUSES)）；import ENRICHMENT_STATUSES
+  - `docs/architecture.md` — §5.12 末补「待审队列过滤维度扩展」段（枚举派生语义 + year/decade）
+  - `tests/unit/api/moderationQueueRoutes.test.ts` — +2 用例（year/decade/enrichmentStatus 透传 + 非法 enrichmentStatus 422）
+- **新增依赖**：无
+- **数据库变更**：无（纯 query 契约 + raw 字段派生，不加列）
+- **注意事项**：① **富集枚举从 raw 派生（不按 enrichmentSummary 反推）**——关键决策：buildEnrichmentSummary 默认填 'pending'/0 会丢失"从未富集"信号（missing/partial 不可分），故 missing/partial/complete 直接从 raw（`meta_quality->>'enriched_at'` + douban_status + 外部 ID）派生，**互斥穷尽**。② **本卡仅契约层**：DB query WHERE 过滤 + use-filter-presets 兼容 = MODUX-P3-1-B；route handler 直传 parsed.data→listPendingQueue，PendingQueueFilters（DB 层独立镜像接口）暂忽略新字段（结构兼容）。③ decade=起始年（`mc.year ∈ [decade,decade+10)`，如 2020→2020s）。④ 非新端点（verify:endpoint-adr 不触发）；加性后向兼容（verify:adr-contracts EXIT=0）。门禁：typecheck/lint EXIT=0 / verify:adr-contracts EXIT=0 / test:changed 升全量 7159 passed 零失败（packages/types 基础包，ADR-180）/ e2e:admin 82/82 EXIT=0。

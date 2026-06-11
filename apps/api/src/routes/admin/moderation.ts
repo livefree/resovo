@@ -18,7 +18,7 @@ import * as videoQueries from '@/api/db/queries/videos'
 import * as moderationQueries from '@/api/db/queries/moderation'
 import * as provenanceQueries from '@/api/db/queries/metadataProvenance'
 import { listLineHealthEvents } from '@/api/db/queries/sourceHealthEvents'
-import { VIDEO_TYPES, DOUBAN_STATUSES, SOURCE_CHECK_STATUSES } from '@resovo/types'
+import { VIDEO_TYPES, DOUBAN_STATUSES, SOURCE_CHECK_STATUSES, ENRICHMENT_STATUSES } from '@resovo/types'
 import { listAuditLogByTarget } from '@/api/db/queries/auditLog'
 import { registerModerationDoubanRoutes } from './moderation.douban'
 import { registerModerationBangumiRoutes } from './moderation.bangumi'
@@ -33,6 +33,10 @@ const PendingQueueQuerySchema = z.object({
   needsManualReview: z.coerce.boolean().optional(),
   // CHG-350：title ILIKE 模糊搜索（≤ 200 字符）
   q: z.string().max(200).optional(),
+  // MODUX-P3-1-A：年代 + 富集状态过滤（加性可选；DB 实现 = P3-1-B）
+  year: z.coerce.number().int().min(1900).max(2100).optional(),
+  decade: z.coerce.number().int().min(1900).max(2100).optional(),
+  enrichmentStatus: z.enum(ENRICHMENT_STATUSES).optional(),
 })
 
 const RejectLabeledBodySchema = z.object({

@@ -467,6 +467,22 @@ export interface StagingRow extends VideoQueueRow {
   readonly qualityHighest: ResolutionTier | null
 }
 
+// ── 富集状态枚举（MODUX-P3-1-A / item 3）────────────────────────────────────
+//
+// 审核台待审队列「富集完整度」过滤维度。**从 raw 字段/provenance 派生**，不按 UI
+// EnrichmentSummary 反推（后者已默认填充 'pending'/0，会丢失"从未富集"信号）。
+//
+// 派生语义（raw 字段：videos.meta_quality->>'enriched_at' / videos.douban_status /
+//   media_catalog.bangumi_subject_id / media_catalog.douban_id·tmdb_id·imdb_id）：
+//   - complete：富集已运行且主源已匹配
+//       enriched_at IS NOT NULL AND (douban_status='matched' OR bangumi_subject_id IS NOT NULL)
+//   - missing：无任何富集痕迹
+//       enriched_at IS NULL AND douban_id/tmdb_id/imdb_id/bangumi_subject_id 全 NULL
+//   - partial：其余（有部分富集证据但主源未确认 / 主源匹配但无富集时间戳）
+//   三态互斥穷尽。SQL 实现见 MODUX-P3-1-B（listPendingQueue WHERE）；同步 architecture.md。
+export const ENRICHMENT_STATUSES = ['missing', 'partial', 'complete'] as const
+export type EnrichmentStatus = typeof ENRICHMENT_STATUSES[number]
+
 // ── 端点 query / body 共享类型 ────────────────────────────────────────────────
 
 export interface PendingQueueQuery {
@@ -477,6 +493,12 @@ export interface PendingQueueQuery {
   readonly doubanStatus?: VideoQueueRow['doubanStatus']
   readonly hasStaffNote?: boolean
   readonly needsManualReview?: boolean
+  // MODUX-P3-1-A：年代 + 富集状态过滤（加性可选；DB 实现 = P3-1-B）
+  /** 精确年份（mc.year = year）*/
+  readonly year?: number
+  /** 年代起始年（mc.year ∈ [decade, decade+10)，如 2020 → 2020s）*/
+  readonly decade?: number
+  readonly enrichmentStatus?: EnrichmentStatus
 }
 
 export interface RejectLabeledBody {

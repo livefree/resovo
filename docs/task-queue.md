@@ -1947,7 +1947,7 @@
 
 ## [SEQ-20260610-03] 内容审核台 UX 优化（MODUX · 信息密度 + 去冗余 + 快速编辑）
 
-- **状态**：🔄 执行中（9/15 卡完成：**Phase 1 全收口 ✅**（P1-0~P1-4）+ **Phase 2 全收口 ✅**（P2-1 列表单元格分区 + page-head 收敛 / P2-2 详情状态三元组+豆瓣→1 行 Pill 组 / P2-3 键盘流共享化+批量守卫+help 浮层）；下一步 Phase 3 功能增强 P3-1-A 起）
+- **状态**：🔄 执行中（10/15 卡完成：**Phase 1 全收口 ✅**（P1-0~P1-4）+ **Phase 2 全收口 ✅**（P2-1/-2/-3）+ **P3-1-A ✅**（富集枚举语义 + query schema 契约）；下一步 Phase 3 P3-1-B Service/DB query 过滤实现 + 预设兼容）
 - **创建时间**：2026-06-10 22:04
 - **最后更新时间**：2026-06-10 23:13
 - **目标**：落地 `docs/designs/moderation-console-ux-plan_20260610.md` v2（两轮独立审核 + 第三轮注册前终审通过，file:line 抽查全部命中）：审核台 12 项问题——去冗余（标题治理/DecisionCard 精简）→ 信息密度（列表单元格/详情 tab/键盘流）→ 功能增强（年代+富集过滤/筛选弹层/类似 tab 阈值/4 字段快速编辑）。
@@ -2020,10 +2020,11 @@
 
 ### 任务列表（Phase 3 — 功能增强，前后端含 ADR 核验）
 
-10. **MODUX-P3-1-A** — 富集状态枚举语义 + 共享类型 + query schema（item 3 后端上半）（状态：⬜ 待开始）
+10. **MODUX-P3-1-A** — 富集状态枚举语义 + 共享类型 + query schema（item 3 后端上半）（状态：✅ 已完成 2026-06-11）
     - 验收口径：定义富集枚举语义（建议 missing/partial/complete，**从 raw 字段/provenance 派生**，不按 UI enrichmentSummary 反推）；`PendingQueueQuerySchema` 加 year/decade + enrichmentStatus；共享类型 `PendingQueueQuery` 同步扩。
-    - 文件范围：`apps/api/src/routes/admin/moderation.ts`（schema 部分）、`packages/types/src/admin-moderation.types.ts`。**非新端点**（verify:endpoint-adr 不触发）；跑 `verify:adr-contracts`；涉枚举派生同步 `docs/architecture.md`。
+    - 文件范围：`apps/api/src/routes/admin/moderation.ts`（schema 部分）、`packages/types/src/admin-moderation.types.ts`、`packages/types/src/index.ts`（value 导出 plumbing）、`docs/architecture.md`（枚举派生同步）、moderationQueueRoutes 单测。**非新端点**（verify:endpoint-adr 不触发）；跑 `verify:adr-contracts`。
     - 依赖：无（Phase 3 启动）。建议模型：sonnet。
+    - **完成备注**：① **富集枚举从 raw 派生（不按 enrichmentSummary 反推）**：`ENRICHMENT_STATUSES=['missing','partial','complete']`（admin-moderation.types.ts 真源 + index.ts value 导出 plumbing——`export type *` 不带 const，仿 deriveAggregateState 先例）。派生语义（raw：`v.meta_quality->>'enriched_at'` / `v.douban_status` / `mc.bangumi_subject_id` / `mc.douban_id·tmdb_id·imdb_id`）：complete=`enriched_at IS NOT NULL AND (douban_status='matched' OR bangumi_subject_id IS NOT NULL)`；missing=`enriched_at IS NULL AND douban_id/tmdb_id/imdb_id/bangumi_subject_id 全 NULL`；partial=其余。**互斥穷尽**（不会同时 missing+complete）。**关键决策**：不复用 buildEnrichmentSummary 派生的 EnrichmentSummary——后者默认填 'pending'/0，会丢失"从未富集"信号（missing/partial 不可区分）。② `PendingQueueQuery` 加 `year?`/`decade?`/`enrichmentStatus?`（加性可选）；`PendingQueueQuerySchema` 加 year/decade（`z.coerce.number().int().min(1900).max(2100)`）+ enrichmentStatus（`z.enum(ENRICHMENT_STATUSES)`）。③ architecture.md §5.12 末补「待审队列过滤维度扩展」段（枚举派生 + year/decade 语义；decade=起始年 `mc.year ∈ [decade,decade+10)`）。④ **本卡仅契约层**：DB query WHERE 过滤 + 预设兼容 = P3-1-B；route handler 已直传 `parsed.data`→`listPendingQueue`，新字段结构兼容（PendingQueueFilters 独立镜像，暂忽略新字段）。⑤ 补 2 单测（year/decade/enrichmentStatus 透传 + 非法 enrichmentStatus 422）。共享层沉淀：是（ENRICHMENT_STATUSES 单一真源跨 API/前端/P3-1-B）。门禁：typecheck/lint EXIT=0 / **verify:adr-contracts EXIT=0**（加性后向兼容）/ test:changed 升全量 **7159 passed 零失败**（packages/types 基础包，ADR-180）/ e2e:admin 82/82 EXIT=0。执行模型: claude-opus-4-8（建议 sonnet）；子代理: 无（方案模型标记 P3-1 非强制 Opus）。
 11. **MODUX-P3-1-B** — Service/DB query 过滤实现 + 预设兼容（item 3 后端下半）（状态：⬜ 待开始）
     - 验收口径：API 按 year/decade/enrichment 过滤正确；筛选预设 JSON 快照新字段保存 + 旧预设缺字段向后兼容（`use-filter-presets.ts` FilterPresetQuery）；契约核验通过。
     - 文件范围：moderation service + DB queries、`apps/server-next/src/app/admin/moderation/_client/use-filter-presets.ts`（兼容层）。
