@@ -4199,3 +4199,17 @@
 - **新增依赖**：无
 - **数据库变更**：无
 - **注意事项**：① 状态类信息 5 行（3 三元组 + 2 豆瓣）→ 1 行 Pill 组，纵向行数显著下降。② **偏离登记**：富集 cluster（即时 v.summary header density）+ 外部源 panel（懒加载 extDetail 完整 compact density）**不深度合并**——数据源/时机/density 不同非纯重复块，深度合并涉 EnrichmentBadgeCluster/ExternalMetaPanel 共享组件职责超本卡 TabDetail 范围。③ isPublished 用中文态、visibility/review 保留英文枚举值（与原 DetailRow value 逐字一致 + 本就语义清晰），与文件既有 inline 中文范式一致。④ 测试契约保留：data-right-detail-enrichment / meta_score 文本 / episodes 三维文案 / moderation-detail-reprobe-all testid 全过。门禁：typecheck/lint EXIT=0 / test:changed 14 passed / e2e:admin 82/82。
+
+## [MODUX-P2-3] 键盘流共享化 KeyboardShortcuts + 批量守卫 + help 浮层（item 1 / Phase 2 收官）
+- **完成时间**：2026-06-11
+- **记录时间**：2026-06-11 00:08
+- **执行模型**：claude-opus-4-8（建议 sonnet，用户会话覆盖持续推进）
+- **子代理**：无（消费既有 admin-ui KeyboardShortcuts/Modal，不改其 API，不触发强制 Opus）
+- **修改文件**：
+  - `apps/server-next/src/app/admin/moderation/_client/PendingPaneController.tsx` — 原生 `window.addEventListener('keydown')`（J/K/A/R/S）→ 共享 `<KeyboardShortcuts bindings>`；单一真源 shortcuts 数组派生 bindings+help；扩 E 编辑/P 预览/`/` 聚焦搜索/`shift+?` help；批量守卫（batchSafe：批量模式仅 J/K/`/`/`?`，A/R/S/E/P 暂停——修复旧实现「批量 A/R/S 仍触发」隐患）；help 打开时仅留 `?` 切换；左 pane「键盘流」label 升级为可点击 help 入口（呼应 P2-1）
+  - `apps/server-next/src/app/admin/moderation/_client/KeyboardHelpOverlay.tsx` — 新增（审核台局部 help 浮层，复用 admin-ui Modal，不手写 backdrop/Esc/Portal；按 group 保序分组 + 批量暂停灰化）
+  - `tests/unit/components/server-next/admin/moderation/PendingPaneControllerKeyboard.test.tsx` — 新增 6 单测（导航/审核/编辑/批量守卫×2/help 浮层；SplitPane mock null 避深树，KeyboardShortcuts+Modal 保真）
+  - `docs/task-queue.md` / `docs/tasks.md` — 卡片收口（9/15，Phase 2 全收口）
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：① `?` 帮助键 spec 为 `shift+?`（matchesEvent 严格比 shiftKey，按 ? 时 event.key='?'+shiftKey=true → 仅 'shift+?' 可匹配）。② **偏离登记**：**数字键选集线路**（线路态在 PendingCenter/useSelectedLine/LinesPanel 深层，跨 3 组件接线超本卡 PendingPaneController 文件范围 → 独立增强卡）；**F 筛选**（依赖 P3-2 筛选弹层未建 → P3-2 落地接 F 键）；P 预览 window.open 与 PendingCenter 重复 1 处（2 处 < 3 处提取阈值）；ModerationConsole BTN_PRIMARY/BTN_DANGER/v 为 P1-1-A 既有死代码（超本卡范围不动）。③ 审核台键盘流为**局部**职责（不混 AdminShell 全局快捷键），help 浮层 testid `moderation-keyboard-help` / 入口 `moderation-keyboard-help-trigger`。④ **Phase 2（P2-1/-2/-3）全收口**：信息密度三卡完成。门禁：typecheck/lint EXIT=0 / test:changed 6 passed / e2e:admin 81 passed + 1 无关 flaky 重试通过（EXIT=0）。

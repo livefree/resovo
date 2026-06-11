@@ -1947,7 +1947,7 @@
 
 ## [SEQ-20260610-03] 内容审核台 UX 优化（MODUX · 信息密度 + 去冗余 + 快速编辑）
 
-- **状态**：🔄 执行中（8/15 卡完成：**Phase 1 全收口 ✅**（P1-0/-1-A/-1-B/-2/-3/-4）+ **P2-1 ✅**（列表单元格分区 + page-head 收敛）+ **P2-2 ✅**（详情状态三元组 + 豆瓣 → 1 行 Pill 组）；下一步 Phase 2 P2-3 键盘流）
+- **状态**：🔄 执行中（9/15 卡完成：**Phase 1 全收口 ✅**（P1-0~P1-4）+ **Phase 2 全收口 ✅**（P2-1 列表单元格分区 + page-head 收敛 / P2-2 详情状态三元组+豆瓣→1 行 Pill 组 / P2-3 键盘流共享化+批量守卫+help 浮层）；下一步 Phase 3 功能增强 P3-1-A 起）
 - **创建时间**：2026-06-10 22:04
 - **最后更新时间**：2026-06-10 23:13
 - **目标**：落地 `docs/designs/moderation-console-ux-plan_20260610.md` v2（两轮独立审核 + 第三轮注册前终审通过，file:line 抽查全部命中）：审核台 12 项问题——去冗余（标题治理/DecisionCard 精简）→ 信息密度（列表单元格/详情 tab/键盘流）→ 功能增强（年代+富集过滤/筛选弹层/类似 tab 阈值/4 字段快速编辑）。
@@ -2009,10 +2009,12 @@
    - 文件范围：`apps/server-next/src/app/admin/moderation/_client/RightPane/TabDetail.tsx`（路径勘误：原写少 RightPane/；复用 `packages/admin-ui/src/components/cell/pill.tsx`，不改 Pill 公开 Props）。
    - 依赖：无。建议模型：sonnet。
    - **完成备注**：① **状态三元组 3 行 → 1 行 Pill 组**：发布/可见性/审核 3 DetailRow（纵向）→ 复用 admin-ui `Pill`（variant ok/warn + 内置 6px dot）横向集约；isPublished 布尔转中文态（已发布/未发布，与文件既有 inline 中文 section header 范式一致），visibility/review 保留枚举值（public/approved，与原 DetailRow value 逐字一致 + 本就语义清晰）；每 Pill 补 ariaLabel（label: value）无障碍。② **豆瓣收敛**：独立 section header「豆瓣状态」+ douban_status DetailRow（2 行）→ 同行第 4 Pill（matched→ok/其它 warn，文案「豆瓣状态 {doubanLabel}」），消除独立块。状态类信息 5 行（3 三元组 + 2 豆瓣）→ 1 行 Pill 组。③ **不改 Pill 公开 Props**（不触发 types.ts Opus trailer）；DetailRow 保留供信息区（type/year/country/episodes/meta_score/source_check）。④ **偏离登记**：富集 cluster（即时 v.summary header density）+ 外部源 panel（懒加载 extDetail 完整 compact density）**不深度合并**——数据源/时机/density 不同，非纯重复块，深度合并涉 EnrichmentBadgeCluster/ExternalMetaPanel 共享组件职责超本卡 TabDetail 范围。测试契约保留：data-right-detail-enrichment / meta_score 文本 / episodes 三维文案 / moderation-detail-reprobe-all testid 全过；新增 data-status-triad 锚点。共享层沉淀：否（TabDetail 仅审核台详情消费）。门禁：typecheck/lint EXIT=0 / test:changed 14 passed（enrichment-cluster + TabDetailEpisodes + TabDetailReprobe）/ **e2e:admin 82/82 EXIT=0**。执行模型: claude-opus-4-8（建议 sonnet，用户会话覆盖持续推进）；子代理: 无。
-9. **MODUX-P2-3** — 键盘流完善（item 1）（状态：⬜ 待开始）
+9. **MODUX-P2-3** — 键盘流完善（item 1）（状态：✅ 已完成 2026-06-11）
    - 验收口径：审核台局部挂载共享无渲染组件 `<KeyboardShortcuts bindings>` 替换原生 keydown（不混入 AdminShell 全局）；扩 E 编辑/P 预览/数字键选集线路/F 筛选/`/` 搜索/`?` 帮助浮层；批量模式守卫 + allowInInput；与全局快捷键无冲突。
-   - 文件范围：`apps/server-next/src/app/admin/moderation/_client/PendingPaneController.tsx`、help 浮层新组件（审核台局部）；消费 `packages/admin-ui/src/shell/keyboard-shortcuts.tsx`（不改其 API）。
-   - 依赖：MODUX-P2-1（快捷键提示位随布局定）。建议模型：sonnet。
+   - 文件范围：`apps/server-next/src/app/admin/moderation/_client/PendingPaneController.tsx`、`KeyboardHelpOverlay.tsx`（新，审核台局部）；消费 `packages/admin-ui/src/shell/keyboard-shortcuts.tsx`（不改其 API）。
+   - 依赖：MODUX-P2-1（快捷键提示位随布局定）✅。建议模型：sonnet。
+   - **完成备注**：① **原生 keydown → 共享 `KeyboardShortcuts`**：删 `PendingPaneController.tsx:110-123` 手写 `window.addEventListener('keydown')`，改挂 `<KeyboardShortcuts bindings>`（不改其 API）；input/mod 守卫由共享组件统一处理（allowInInput 默认 false）。② **单一真源** `shortcuts` 配置数组派生 bindings + help 列表（避免双份漂移）。③ **扩快捷键**：E 编辑（onEditVideo）/ P 预览（buildAdminPreviewUrl 单一收口 + window.open）/ `/` 聚焦搜索（query `pending-queue-search-input` + preventDefault）/ `shift+?` help 浮层（matchesEvent 严格比 shiftKey，按 ? 时 event.key='?' → spec 'shift+?'）。④ **批量守卫**（修复现状隐患——旧实现注释自承「批量模式 A/R/S 仍触发」）：batchSafe 标记，批量模式仅 J/K/`/`/`?` 生效，A/R/S/E/P 暂停；help 浮层打开时仅留 `?` 切换（Modal 自处理 Esc/遮罩）。⑤ **help 浮层** `KeyboardHelpOverlay`（新，审核台局部）复用 admin-ui `Modal`（不手写 backdrop/Esc/Portal）；左 pane「键盘流」label 升级为可点击 help 入口（`?` 键并行，呼应 P2-1 提示位）。⑥ **偏离登记**：**数字键选集线路**（线路态在 PendingCenter/useSelectedLine/LinesPanel 深层，跨 controller↔PendingCenter↔LinesPanel 接线超本卡 PendingPaneController 文件范围 → 独立增强卡）；**F 筛选**（依赖 P3-2 筛选弹层未建 → P3-2 落地时接 F 键）；P 预览 window.open 与 PendingCenter 重复 1 处（2 处 < 3 处提取阈值，未抽 lib）；ModerationConsole BTN_PRIMARY/BTN_DANGER/v 为 P1-1-A 既有死代码（超本卡范围不动，typecheck/lint 绿）。新增 6 单测（导航/审核/编辑/批量守卫×2/help 浮层；SplitPane mock null 避深树，KeyboardShortcuts+Modal 保真）+ 新 testid `moderation-keyboard-help` / `moderation-keyboard-help-trigger`。共享层沉淀：否（审核台局部键盘流，设计明确不混 AdminShell 全局）。门禁：typecheck/lint EXIT=0 / test:changed 6 passed / **e2e:admin 81 passed + 1 无关 flaky 重试通过 EXIT=0**。执行模型: claude-opus-4-8（建议 sonnet，用户会话覆盖持续推进）；子代理: 无。
+   - **Phase 2（P2-1/-2/-3 共 3 卡）全部收口 ✅ 2026-06-11**：信息密度——列表单元格分区（item 4）+ 详情 Pill 化（item 7）+ 键盘流共享化/批量守卫/help 浮层（item 1）。下一步 Phase 3 功能增强（P3-1-A 富集枚举语义 + query schema 起）。
 
 ### 任务列表（Phase 3 — 功能增强，前后端含 ADR 核验）
 

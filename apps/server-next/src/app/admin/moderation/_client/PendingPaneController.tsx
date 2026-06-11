@@ -26,15 +26,30 @@
  *   - 参考：packages/admin-ui DataTable 真源范式 / search-input.tsx EP-4-HOTFIX 调用方契约
  */
 
-import React, { useCallback, useEffect, useState } from 'react'
-import { SplitPane } from '@resovo/admin-ui'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import { SplitPane, KeyboardShortcuts } from '@resovo/admin-ui'
+import type { ShortcutBinding } from '@resovo/admin-ui'
 import type { VideoQueueRow } from '@resovo/types'
 import { ModListRow } from './ModListRow'
 import { PendingCenter } from './PendingCenter'
 import { RightPane } from './RightPane'
 import { PendingQueueToolbar } from './PendingQueueToolbar'
+import { KeyboardHelpOverlay } from './KeyboardHelpOverlay'
+import type { KeyboardHelpItem } from './KeyboardHelpOverlay'
+import { buildAdminPreviewUrl } from '@/lib/admin-preview-url'
 import type { FilterPresetQuery } from '@/lib/moderation/use-filter-presets'
 import { M } from '@/i18n/messages/zh-CN/moderation'
+
+// MODUX-P2-3：审核台快捷键单一真源条目（派生 KeyboardShortcuts bindings + help 列表）
+interface ConsoleShortcut {
+  readonly spec: string
+  readonly displayKey: string
+  readonly label: string
+  readonly group: string
+  /** 批量模式下是否仍生效（false = 批量模式暂停，如 A/R/S/E/P 单条操作） */
+  readonly batchSafe: boolean
+  readonly handler: (event: KeyboardEvent) => void
+}
 
 const BTN_SM: React.CSSProperties = {
   padding: '5px 10px',
@@ -97,6 +112,7 @@ export function PendingPaneController({
   onClearAllFilters,
 }: PendingPaneControllerProps): React.ReactElement {
   const [rightOpen, setRightOpen] = useState(true)
+  const [helpOpen, setHelpOpen] = useState(false)
 
   // responsive right pane
   useEffect(() => {
@@ -106,28 +122,64 @@ export function PendingPaneController({
     return () => window.removeEventListener('resize', update)
   }, [])
 
-  // 键盘流 J/K/A/R/S（pending tab 专属；批量模式开启时由 caller 不渲染或可继续 — 设计保持简单：批量模式下仍允许 J/K 浏览,但 A/R/S 不触发 - 当前实现保留旧行为不区分）
-  const handleKey = useCallback((e: KeyboardEvent) => {
-    if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
-    if (e.metaKey || e.ctrlKey) return
-    if (e.key === 'j' || e.key === 'J') setActiveIdx(i => Math.min(i + 1, videos.length - 1))
-    else if (e.key === 'k' || e.key === 'K') setActiveIdx(i => Math.max(i - 1, 0))
-    else if (e.key === 'a' || e.key === 'A') onApprove()
-    else if (e.key === 'r' || e.key === 'R') onRejectOpen()
-    else if (e.key === 's' || e.key === 'S') setActiveIdx(i => Math.min(i + 1, videos.length - 1))
-  }, [videos.length, setActiveIdx, onApprove, onRejectOpen])
-
-  useEffect(() => {
-    window.addEventListener('keydown', handleKey)
-    return () => window.removeEventListener('keydown', handleKey)
-  }, [handleKey])
-
   const v = videos[activeIdx] ?? null
   // CHG-355 R2：首次加载（无任何旧数据 + 仍在 loading）才展示加载文案；否则保持旧列表 SWR
   const isFirstLoad = loading && videos.length === 0
 
+  // ── 键盘流（MODUX-P2-3 / item 1）：原生 window keydown → 共享 KeyboardShortcuts ──
+  //   修复现状隐患：批量模式下 A/R/S 仍触发（旧实现注释自承）→ batchSafe 守卫；扩 E/P/`/`/`?` + help 浮层。
+  const goNext = useCallback(() => setActiveIdx((i) => Math.min(i + 1, videos.length - 1)), [setActiveIdx, videos.length])
+  const goPrev = useCallback(() => setActiveIdx((i) => Math.max(i - 1, 0)), [setActiveIdx])
+  const focusSearch = useCallback((e: KeyboardEvent) => {
+    e.preventDefault() // 阻止 '/' 落入刚聚焦的搜索框
+    const input = document.querySelector('[data-testid="pending-queue-search-input"]') as HTMLInputElement | null
+    input?.focus()
+  }, [])
+  const editActive = useCallback(() => { if (v) onEditVideo(v.id) }, [v, onEditVideo])
+  const previewActive = useCallback(() => {
+    if (!v) return
+    // P 预览：与 PendingCenter「前台预览」按钮同口径（buildAdminPreviewUrl 单一收口）。
+    // window.open 薄封装此处与 PendingCenter 重复 1 次（2 处 < 3 处提取阈值，未抽 lib）。
+    window.open(buildAdminPreviewUrl({ type: v.type, slug: v.slug, shortId: v.shortId }), '_blank', 'noopener,noreferrer')
+  }, [v])
+  const toggleHelp = useCallback(() => setHelpOpen((o) => !o), [])
+
+  // 单一真源：spec + 展示 + 行为 + 批量安全（派生 bindings + help 列表，避免双份漂移）
+  const shortcuts = useMemo<readonly ConsoleShortcut[]>(() => [
+    { spec: 'j', displayKey: 'J', label: '下一条', group: '导航', batchSafe: true, handler: goNext },
+    { spec: 'k', displayKey: 'K', label: '上一条', group: '导航', batchSafe: true, handler: goPrev },
+    { spec: '/', displayKey: '/', label: '聚焦搜索框', group: '导航', batchSafe: true, handler: focusSearch },
+    { spec: 'a', displayKey: 'A', label: M.actions.approve, group: '审核', batchSafe: false, handler: () => onApprove() },
+    { spec: 'r', displayKey: 'R', label: M.actions.reject, group: '审核', batchSafe: false, handler: () => onRejectOpen() },
+    { spec: 's', displayKey: 'S', label: M.actions.skip, group: '审核', batchSafe: false, handler: goNext },
+    { spec: 'e', displayKey: 'E', label: '编辑视频', group: '审核', batchSafe: false, handler: editActive },
+    { spec: 'p', displayKey: 'P', label: '前台预览', group: '审核', batchSafe: false, handler: previewActive },
+    { spec: 'shift+?', displayKey: '?', label: '打开/关闭此面板', group: '帮助', batchSafe: true, handler: toggleHelp },
+  ], [goNext, goPrev, focusSearch, onApprove, onRejectOpen, editActive, previewActive, toggleHelp])
+
+  const bindings = useMemo<ShortcutBinding[]>(() => {
+    const active = helpOpen
+      ? shortcuts.filter((s) => s.group === '帮助')          // help 打开时仅留 ? 切换（Modal 自处理 Esc/遮罩）
+      : shortcuts.filter((s) => !batchModeOn || s.batchSafe) // 批量模式仅 J/K/`/`/`?` 生效，A/R/S/E/P 暂停
+    return active.map((s) => ({ id: s.spec, spec: s.spec, handler: s.handler }))
+  }, [shortcuts, batchModeOn, helpOpen])
+
+  const helpItems = useMemo<KeyboardHelpItem[]>(
+    () => shortcuts.map((s) => ({ displayKey: s.displayKey, label: s.label, group: s.group, batchPaused: !s.batchSafe })),
+    [shortcuts],
+  )
+
   return (
-    <SplitPane
+    <>
+      {/* MODUX-P2-3：审核台局部键盘流（不混入 AdminShell 全局）+ help 浮层 */}
+      <KeyboardShortcuts bindings={bindings} />
+      <KeyboardHelpOverlay
+        open={helpOpen}
+        onClose={() => setHelpOpen(false)}
+        items={helpItems}
+        batchModeOn={batchModeOn}
+      />
+      <SplitPane
       height="100%"
       gap={12}
       role="region"
@@ -141,10 +193,18 @@ export function PendingPaneController({
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--fg-muted)' }}>{M.totalCount(total, 0)}</span>
               <span style={{ flex: 1 }} />
-              <span style={{ fontSize: 'var(--font-size-xxs)', color: 'var(--state-success-fg)', display: 'flex', alignItems: 'center', gap: 4 }}>
+              {/* MODUX-P2-3：「键盘流」升级为 help 浮层入口（呼应 P2-1 page-head 提示位）；? 键并行 */}
+              <button
+                type="button"
+                onClick={() => setHelpOpen(true)}
+                title="查看快捷键（?）"
+                aria-haspopup="dialog"
+                data-testid="moderation-keyboard-help-trigger"
+                style={{ display: 'flex', alignItems: 'center', gap: 4, padding: 0, border: 0, background: 'transparent', cursor: 'pointer', fontSize: 'var(--font-size-xxs)', color: 'var(--state-success-fg)' }}
+              >
                 <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--state-success-fg)', display: 'inline-block' }} />
                 {M.kbdFlowLabel}
-              </span>
+              </button>
             </div>
           ),
           noPadding: true,
@@ -240,6 +300,7 @@ export function PendingPaneController({
           children: v ? <RightPane v={v} /> : null,
         },
       ]}
-    />
+      />
+    </>
   )
 }
