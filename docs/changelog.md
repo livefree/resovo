@@ -4291,3 +4291,15 @@
 - **新增依赖**：无
 - **数据库变更**：无（纯前端消费 P3-1-B 既有 query 契约）
 - **注意事项**：① **F 键归并落账（P2-3-FIX 跨卡契约）**——筛选弹层为 P3-2 交付物，F 键于本卡接入；F=open-only（弹层开时 bindings=[] 故 F 不可达关闭路径，由 Modal Esc/遮罩/按钮关闭）；批量模式仍 batchSafe 可筛选。② **浮层互斥 + 数字键守卫复用**——筛选 Modal 设 aria-modal，LinesPanel `selectLineByIndex` 既有 `[aria-modal]` 守卫自动护住 1–9 选线路（零额外 prop drilling）；help/filter 由 binding 构造保证不同开。③ **URL 单向回流复用既有范式**——onApplyFilters=applyFiltersToUrl 写 URL，既有 useEffect(readFilters) 同步 currentFilters（与预设 apply 同路径）。④ **toolbar 职责未破**——「筛选」按钮仅触发回调，编辑面板独立组件持 draft。⑤ 富集枚举从 packages/types `ENRICHMENT_STATUSES` 单源消费（不异源重定义）。门禁：typecheck/lint EXIT=0 / verify:adr-contracts EXIT=0 / test:changed 95 passed（增量，无基础包改动）/ **e2e:admin 82/82 EXIT=0**。**SEQ-20260610-03 MODUX 12/15（Phase 3 P3-2 ✅）**。
+
+## [MODUX-P3-3] 类似 tab 合并优先 + 相关度阈值折叠（item 8 / 纯客户端）
+- **完成时间**：2026-06-11
+- **记录时间**：2026-06-11 02:06
+- **执行模型**：claude-opus-4-8（建议 sonnet）
+- **子代理**：无（纯前端，不改共享组件 Props / 不动后端契约）
+- **修改文件**：
+  - `apps/server-next/src/app/admin/moderation/_client/RightPane/TabSimilar.tsx` — 加相关度阈值 Segment（全部=0 / ≥40% / ≥60% / ≥80%，默认 60）+ 客户端高/低相关切分（按统一 similarityScore 0-100）；low 折叠进「显示 N 条低相关候选 ▾」展开器（折叠不丢数据）；提取 `renderRow`（high/low 复用去重）；「发起合并」按钮 variant default→primary（主操作）
+  - `tests/unit/components/server-next/admin/moderation/TabSimilar.test.tsx` — test 3 fixture score 40→78（默认阈值 60 下直显）；+3 用例（11 默认折叠+展开 / 12 切「全部」无折叠 / 13 merge data-variant=primary）
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：① **无需后端加性参数（card「必要时」判定为否）**——关键事实：`similarityScore` 两源统一 0-100 量纲（identity 源 = `round(identityScore×100)`；legacy 源 = computeSimilarityScore 4 维加权 `Math.min(100,…)` clamp，ModerationService.ts:410），且后端已 score DESC 排序 → 单一客户端阈值统一适用，零后端改动（不触发 verify:endpoint-adr）。② **折叠而非硬过滤**——低相关折进展开器（对齐 card「不显示/折叠」），数据不丢；阈值切「全部」(0) 恢复全量直显；新数据/切阈值时折叠态复位。③ 默认 60 改变初始渲染（<60 折叠）——test 3 fixture 同步上调（其测点为 merge 深链，score 非关键）。④ merge 升 primary 经 AdminButton inline style + data-variant（admin-ui 非 className 范式）。门禁：typecheck/lint EXIT=0 / verify:adr-contracts EXIT=0 / test:changed 22 passed / **e2e:admin 82/82 EXIT=0**。**SEQ-20260610-03 MODUX 13/15（Phase 3 P3-3 ✅）**。

@@ -17,7 +17,7 @@
  *  - CHG-SN-4-FIX-C 占位实装；CHG-SN-8-04-VIEW 2026-05-21 真实化；CHG-VIR-9-C 2026-06-03 identity 来源消费
  */
 
-import React, { useCallback, useEffect, useState, type CSSProperties } from 'react'
+import React, { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react'
 import { useRouter } from 'next/navigation'
 import { AdminButton, EmptyState, ErrorState, LoadingState, Segment, useToast, type SegmentItem } from '@resovo/admin-ui'
 import { listSimilarVideos, type SimilarVideoItem } from '@/lib/moderation/api'
@@ -35,6 +35,16 @@ const SOURCE_ITEMS: readonly SegmentItem[] = [
   { value: 'identity', label: '多证据' },
   { value: 'legacy', label: '实时算法' },
 ]
+
+// MODUX-P3-3：相关度阈值（客户端折叠）。两源 similarityScore 统一 0-100 量纲
+//   （identity = round(identityScore×100) / legacy = 4 维加权 clamp 0-100），单一阈值统一适用。
+const THRESHOLD_ITEMS: readonly SegmentItem[] = [
+  { value: '0', label: '全部' },
+  { value: '40', label: '≥40%' },
+  { value: '60', label: '≥60%' },
+  { value: '80', label: '≥80%' },
+]
+const DEFAULT_THRESHOLD = 60
 
 const WRAP_STYLE: CSSProperties = {
   display: 'flex',
@@ -113,6 +123,37 @@ const FALLBACK_NOTE_STYLE: CSSProperties = {
   border: '1px solid var(--state-warning-border)',
 }
 
+// MODUX-P3-3：阈值控制行 + 低相关折叠展开器
+const THRESHOLD_ROW_STYLE: CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 8,
+  fontSize: '11px',
+  color: 'var(--fg-muted)',
+}
+
+const LOW_TOGGLE_STYLE: CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  gap: 4,
+  width: '100%',
+  padding: '6px 10px',
+  background: 'transparent',
+  border: '1px dashed var(--border-default)',
+  borderRadius: 'var(--radius-md)',
+  color: 'var(--fg-muted)',
+  cursor: 'pointer',
+  fontSize: '11px',
+}
+
+const LOW_HINT_STYLE: CSSProperties = {
+  padding: '6px 10px',
+  fontSize: '11px',
+  color: 'var(--fg-muted)',
+  textAlign: 'center',
+}
+
 export function TabSimilar({ videoId }: TabSimilarProps): React.ReactElement {
   const router = useRouter()
   const toast = useToast()
@@ -124,11 +165,15 @@ export function TabSimilar({ videoId }: TabSimilarProps): React.ReactElement {
   const [source, setSource] = useState<CandidateSource>('identity')
   const [effectiveSource, setEffectiveSource] = useState<CandidateSource | null>(null)
   const [rejectingId, setRejectingId] = useState<string | null>(null)
+  // MODUX-P3-3：相关度阈值（客户端折叠，不触发 refetch）+ 低相关展开态
+  const [threshold, setThreshold] = useState<number>(DEFAULT_THRESHOLD)
+  const [showLow, setShowLow] = useState(false)
 
   useEffect(() => {
     let cancelled = false
     setLoading(true)
     setError(null)
+    setShowLow(false) // 新数据回来折叠低相关区
     listSimilarVideos(videoId, { limit: 10, source })
       .then((res) => {
         if (cancelled) return
@@ -172,6 +217,73 @@ export function TabSimilar({ videoId }: TabSimilarProps): React.ReactElement {
     [toast],
   )
 
+  // MODUX-P3-3：按统一 similarityScore（0-100）切高/低相关；high 直显，low 折叠
+  const { highItems, lowItems } = useMemo(() => {
+    if (threshold <= 0) return { highItems: items, lowItems: [] as readonly SimilarVideoItem[] }
+    const high: SimilarVideoItem[] = []
+    const low: SimilarVideoItem[] = []
+    for (const it of items) (it.similarityScore >= threshold ? high : low).push(it)
+    return { highItems: high, lowItems: low }
+  }, [items, threshold])
+
+  const renderRow = useCallback((it: SimilarVideoItem): React.ReactElement => (
+    <div key={it.id} style={ROW_STYLE} data-testid={`tab-similar-row-${it.id}`}>
+      <span style={TITLE_STYLE}>
+        <span style={TITLE_TEXT}>{it.title}</span>
+        <span style={META_STYLE}>
+          {it.type} · {it.year ?? '—'} · {it.country ?? '—'}
+        </span>
+        {it.strongNegativeReasons && it.strongNegativeReasons.length > 0 && (
+          <span data-testid={`tab-similar-veto-${it.id}`}>
+            {it.strongNegativeReasons.map((t) => (
+              <span key={t} style={VETO_CHIP}>{EVIDENCE_LABELS[t]}</span>
+            ))}
+          </span>
+        )}
+      </span>
+      {it.identityScore != null ? (
+        <span style={SCORE_PILL} title={`identityScore = ${it.identityScore}`}>
+          相似度 {(it.identityScore * 100).toFixed(0)}%
+        </span>
+      ) : (
+        <span style={SCORE_PILL} title={`similarityScore = ${it.similarityScore}`}>
+          {it.similarityScore}
+        </span>
+      )}
+      <span style={{ display: 'inline-flex', gap: 6 }}>
+        {it.candidateId && (it.status ?? 'pending') === 'pending' && (
+          <AdminButton
+            size="sm"
+            variant="danger"
+            loading={rejectingId === it.candidateId}
+            onClick={() => void handleReject(it)}
+            data-testid={`tab-similar-reject-${it.id}`}
+          >
+            拒绝
+          </AdminButton>
+        )}
+        {/* MODUX-P3-3：「发起合并」升为主操作（primary）*/}
+        <AdminButton
+          size="sm"
+          variant="primary"
+          onClick={() => {
+            // CHG-VIR-13-A1：buildMergeHref 收口（参数顺序契约见 entry.ts，禁内联拼接）
+            router.push(buildMergeHref({
+              kind: 'merge-pair',
+              candidateA: videoId,
+              candidateB: it.id,
+              ...(it.candidateId ? { candidateId: it.candidateId } : {}),
+              from: 'moderation',
+            }))
+          }}
+          data-testid={`tab-similar-merge-${it.id}`}
+        >
+          发起合并
+        </AdminButton>
+      </span>
+    </div>
+  ), [router, videoId, rejectingId, handleReject])
+
   const body = loading ? (
     <LoadingState variant="spinner" />
   ) : error ? (
@@ -191,62 +303,26 @@ export function TabSimilar({ videoId }: TabSimilarProps): React.ReactElement {
     </div>
   ) : (
     <div style={LIST_STYLE} data-testid="tab-similar-list">
-      {items.map((it) => (
-        <div key={it.id} style={ROW_STYLE} data-testid={`tab-similar-row-${it.id}`}>
-          <span style={TITLE_STYLE}>
-            <span style={TITLE_TEXT}>{it.title}</span>
-            <span style={META_STYLE}>
-              {it.type} · {it.year ?? '—'} · {it.country ?? '—'}
-            </span>
-            {it.strongNegativeReasons && it.strongNegativeReasons.length > 0 && (
-              <span data-testid={`tab-similar-veto-${it.id}`}>
-                {it.strongNegativeReasons.map((t) => (
-                  <span key={t} style={VETO_CHIP}>{EVIDENCE_LABELS[t]}</span>
-                ))}
-              </span>
-            )}
-          </span>
-          {it.identityScore != null ? (
-            <span style={SCORE_PILL} title={`identityScore = ${it.identityScore}`}>
-              相似度 {(it.identityScore * 100).toFixed(0)}%
-            </span>
-          ) : (
-            <span style={SCORE_PILL} title={`similarityScore = ${it.similarityScore}`}>
-              {it.similarityScore}
-            </span>
-          )}
-          <span style={{ display: 'inline-flex', gap: 6 }}>
-            {it.candidateId && (it.status ?? 'pending') === 'pending' && (
-              <AdminButton
-                size="sm"
-                variant="danger"
-                loading={rejectingId === it.candidateId}
-                onClick={() => void handleReject(it)}
-                data-testid={`tab-similar-reject-${it.id}`}
-              >
-                拒绝
-              </AdminButton>
-            )}
-            <AdminButton
-              size="sm"
-              variant="default"
-              onClick={() => {
-                // CHG-VIR-13-A1：buildMergeHref 收口（参数顺序契约见 entry.ts，禁内联拼接）
-                router.push(buildMergeHref({
-                  kind: 'merge-pair',
-                  candidateA: videoId,
-                  candidateB: it.id,
-                  ...(it.candidateId ? { candidateId: it.candidateId } : {}),
-                  from: 'moderation',
-                }))
-              }}
-              data-testid={`tab-similar-merge-${it.id}`}
-            >
-              发起合并
-            </AdminButton>
-          </span>
+      {highItems.map(renderRow)}
+      {highItems.length === 0 && lowItems.length > 0 && (
+        <div style={LOW_HINT_STYLE} data-testid="tab-similar-no-high">
+          当前阈值（≥{threshold}%）下无高相关候选
         </div>
-      ))}
+      )}
+      {lowItems.length > 0 && (
+        <>
+          <button
+            type="button"
+            style={LOW_TOGGLE_STYLE}
+            onClick={() => setShowLow((s) => !s)}
+            aria-expanded={showLow}
+            data-testid="tab-similar-low-toggle"
+          >
+            {showLow ? '收起低相关' : `显示 ${lowItems.length} 条低相关候选`} {showLow ? '▴' : '▾'}
+          </button>
+          {showLow && <div style={LIST_STYLE} data-testid="tab-similar-low-list">{lowItems.map(renderRow)}</div>}
+        </>
+      )}
     </div>
   )
 
@@ -266,6 +342,17 @@ export function TabSimilar({ videoId }: TabSimilarProps): React.ReactElement {
             多证据候选为空，已降级实时算法
           </span>
         )}
+      </div>
+      {/* MODUX-P3-3：相关度阈值（客户端折叠，低于阈值折进展开器）*/}
+      <div style={THRESHOLD_ROW_STYLE}>
+        <span>相关度</span>
+        <Segment
+          items={THRESHOLD_ITEMS}
+          value={String(threshold)}
+          onChange={(v) => { setThreshold(Number(v)); setShowLow(false) }}
+          size="sm"
+          aria-label="相关度阈值"
+        />
       </div>
       {body}
     </div>

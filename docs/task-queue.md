@@ -2036,10 +2036,11 @@
     - 文件范围：`apps/server-next/src/app/admin/moderation/_client/`（PendingQueueToolbar + 筛选弹层新组件 + F 键 binding 接入点〔ModerationConsole 或 PendingPaneController，弹层 state owner 处〕 + help 浮层「筛选」组补项）。
     - 依赖：MODUX-P3-1-B。建议模型：sonnet。
     - **完成备注（2026-06-11，执行模型 claude-opus-4-8，子代理无）**：新建 `PendingFilterPanel.tsx`（复用 admin-ui Modal + AdminSelect + enum options + ENRICHMENT_STATUSES，7 维 draft→应用/清除）；PendingQueueToolbar 加「筛选」按钮（onOpenFilters 回调 + 维度计数 badge，未破「只显示」职责）；PendingPaneController 持 filterPanelOpen + F 键 binding（group 筛选，batchSafe，F=open-only，弹层开→bindings=[] 交 Modal 关闭）+ help 自动补「筛选」组；ModerationConsole FILTER_KEYS/read/write 扩 year/decade/enrichmentStatus（正整数 + 枚举校验防 422）+ onApplyFilters=applyFiltersToUrl；api.ts fetchPendingQueue 序列化扩 3 维；moderation i18n 加 filterPanel 块。**关键复用**：筛选 Modal aria-modal → LinesPanel 既有 `[aria-modal]` 守卫自动护住 1–9 数字键（零额外 prop drilling）；URL 单向回流复用预设 apply 同路径。门禁全绿：typecheck/lint/verify:adr-contracts EXIT=0、test:changed 95、e2e:admin 82/82。剩余 Phase 3：P3-3（类似 tab 阈值）/ P3-4-A·B（/meta 补 country + 4 字段快编）。
-13. **MODUX-P3-3** — 类似 tab 合并优先 + 阈值过滤（item 8）（状态：⬜ 待开始）
+13. **MODUX-P3-3** — 类似 tab 合并优先 + 阈值过滤（item 8）（状态：✅ 已完成 2026-06-11）
     - 验收口径：identityScore/similarityScore 低于阈值不显示/折叠；「发起合并」为主操作（buildMergeHref 已有）；必要时后端 listSimilar 加排序/阈值参数（加性）。
     - 文件范围：`apps/server-next/src/app/admin/moderation/_client/TabSimilar.tsx`（+ 必要时 `apps/api/src/routes/admin/moderation.ts` SimilarQueryParams 加性扩展）。
     - 依赖：无。建议模型：sonnet。
+    - **完成备注（2026-06-11，执行模型 claude-opus-4-8，子代理无）**：纯客户端实现——TabSimilar 加相关度阈值 Segment（全部/≥40/≥60/≥80，默认 60）+ 高/低相关折叠（low 折进展开器，不丢数据，切「全部」恢复全量）+ 「发起合并」升 primary 主操作。**关键判定：无需后端加性参数**——similarityScore 两源统一 0-100 量纲（identity=round(identityScore×100) / legacy=4 维加权 clamp 0-100，ModerationService.ts:410）且后端已 DESC 排序，单一客户端阈值统一适用（不触发 verify:endpoint-adr）。提取 renderRow 去重；补 3 单测（默认折叠+展开 / 全部无折叠 / merge data-variant=primary）。门禁全绿：typecheck/lint/verify:adr-contracts EXIT=0、test:changed 22、e2e:admin 82/82。剩余 Phase 3：P3-4-A（/meta 补 country 后端）+ P3-4-B（4 字段内联快编 UI）。
 14. **MODUX-P3-4-A** — `/meta` 端点补 country（item 9 后端）（状态：⬜ 待开始）
     - 验收口径：**唯一写路径 = `PATCH /admin/moderation/:id/meta`**（保留 pending-only 守卫，不走 videos PATCH）；MetaEditSchema 补 `country` + service/共享类型/测试同步；非新端点。
     - 文件范围：`apps/api/src/routes/admin/moderation.ts`（MetaEditSchema）、moderation service、`packages/types/src/admin-moderation.types.ts`、单测。

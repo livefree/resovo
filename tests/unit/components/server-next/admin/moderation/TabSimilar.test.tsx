@@ -110,7 +110,8 @@ describe('TabSimilar (CHG-SN-8-04-VIEW · ADR-137 / CHG-VIR-9-C identity)', () =
 
   it('3. 「发起合并」点击（legacy 行）→ router.push 携带 candidate_a/b/from（无 candidate_id）', async () => {
     listSimilarVideosMock.mockResolvedValueOnce({
-      items: [{ id: 'sim-1', title: 'X', type: 'movie', year: 2020, country: null, genres: [], coverUrl: null, metaScore: 50, reviewStatus: 'pending_review', isPublished: false, similarityScore: 40 }],
+      // MODUX-P3-3：score≥默认阈值 60（确保行直显，merge 深链为本用例测点）
+      items: [{ id: 'sim-1', title: 'X', type: 'movie', year: 2020, country: null, genres: [], coverUrl: null, metaScore: 50, reviewStatus: 'pending_review', isPublished: false, similarityScore: 78 }],
       source: 'legacy',
     })
     render(<TabSimilar videoId="target-uuid" />)
@@ -194,5 +195,45 @@ describe('TabSimilar (CHG-SN-8-04-VIEW · ADR-137 / CHG-VIR-9-C identity)', () =
     })
     // 请求与回显一致 → 无降级提示
     expect(screen.queryByTestId('tab-similar-fallback-note')).toBeNull()
+  })
+
+  // ── MODUX-P3-3：相关度阈值折叠 + 合并为主操作 ────────────────────────
+
+  const MIXED_ITEMS = [
+    { id: 'hi', title: '高相关片', type: 'movie', year: 2020, country: 'US', genres: ['action'], coverUrl: null, metaScore: 80, reviewStatus: 'approved', isPublished: true, similarityScore: 78 },
+    { id: 'lo', title: '低相关片', type: 'movie', year: 1999, country: null, genres: [], coverUrl: null, metaScore: 40, reviewStatus: 'pending_review', isPublished: false, similarityScore: 50 },
+  ]
+
+  it('11. 默认阈值 60：低相关行折叠（不直显）+ 展开器；点击展开后可见', async () => {
+    listSimilarVideosMock.mockResolvedValueOnce({ items: MIXED_ITEMS, source: 'legacy' })
+    render(<TabSimilar videoId="target-id" />)
+    await waitFor(() => screen.getByTestId('tab-similar-list'))
+    // 高相关（78≥60）直显；低相关（50<60）折叠
+    expect(screen.getByTestId('tab-similar-row-hi')).not.toBeNull()
+    expect(screen.queryByTestId('tab-similar-row-lo')).toBeNull()
+    const toggle = screen.getByTestId('tab-similar-low-toggle')
+    expect(toggle.textContent).toContain('显示 1 条低相关候选')
+    // 展开 → 低相关行可见
+    fireEvent.click(toggle)
+    expect(screen.getByTestId('tab-similar-row-lo')).not.toBeNull()
+  })
+
+  it('12. 阈值切「全部」→ 低相关行直显、无折叠展开器', async () => {
+    listSimilarVideosMock.mockResolvedValueOnce({ items: MIXED_ITEMS, source: 'legacy' })
+    render(<TabSimilar videoId="target-id" />)
+    await waitFor(() => screen.getByTestId('tab-similar-list'))
+    expect(screen.queryByTestId('tab-similar-row-lo')).toBeNull()
+    fireEvent.click(screen.getByRole('tab', { name: '全部' }))
+    // 阈值 0 → 全部直显，无展开器
+    expect(screen.getByTestId('tab-similar-row-lo')).not.toBeNull()
+    expect(screen.queryByTestId('tab-similar-low-toggle')).toBeNull()
+  })
+
+  it('13. 「发起合并」为主操作（AdminButton data-variant=primary）', async () => {
+    listSimilarVideosMock.mockResolvedValueOnce({ items: [MIXED_ITEMS[0]], source: 'legacy' })
+    render(<TabSimilar videoId="target-id" />)
+    await waitFor(() => screen.getByTestId('tab-similar-merge-hi'))
+    // AdminButton 用 inline style + data-variant（非 className）表达 variant
+    expect(screen.getByTestId('tab-similar-merge-hi').getAttribute('data-variant')).toBe('primary')
   })
 })
