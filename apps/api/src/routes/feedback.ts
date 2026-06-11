@@ -98,20 +98,29 @@ async function checkRateLimit(ipHash: string, sourceId: string): Promise<boolean
   return res !== null
 }
 
-async function countRecentFailures(ipHash: string, sourceId: string): Promise<number> {
-  const key = `fb:fail:${ipHash}:${sourceId}`
-  const val = await redis.get(key)
-  return val ? parseInt(val, 10) : 0
+/**
+ * SRCHEALTH-P2-3 / F3 + §8 C3：信任门槛统一「独立佐证」原语——SET 语义（SADD+SCARD+TTL）。
+ * 禁用 INCR：那是同一 ipHash 计次，复活侧照搬会实现成「同一客户端成功 2 次即复活」。
+ *
+ * TTL 设置用 ttl<0 检查而非 scard===1 判断：SADD 不像 INCR 有原子递增返回值——
+ * 两个并发首次 SADD（不同 member）后双方 SCARD 都读到 2，谁都不设 TTL → 永久 key
+ * （复活门槛被脏状态永远满足）。ttl<0（-1=无过期）由任意后续请求自愈，重复 EXPIRE 同值无害。
+ */
+async function countDistinctIps(key: string, ipHash: string, windowSeconds: number): Promise<number> {
+  await redis.sadd(key, ipHash)
+  const ttl = await redis.ttl(key)
+  if (ttl < 0) {
+    await redis.expire(key, windowSeconds)  // 固定窗口（对齐原失败侧 count===1 时设置的语义）
+  }
+  return redis.scard(key)
 }
 
-async function incrementFailureCount(ipHash: string, sourceId: string): Promise<number> {
-  const key = `fb:fail:${ipHash}:${sourceId}`
-  const count = await redis.incr(key)
-  if (count === 1) {
-    await redis.expire(key, 300)  // 5 分钟窗口
-  }
-  return count
-}
+/** 复活门槛：窗口内 ≥2 独立 ipHash 成功才允许 dead→ok（方案 §3 P2-3） */
+const REVIVE_WINDOW_SECONDS = 300
+const REVIVE_DISTINCT_IPS = 2
+/** recheck 触发：窗口内 ≥3 独立 ipHash 失败才入队信号（原 INCR 3 次/5min 迁移，阈值/窗口保留） */
+const FAIL_WINDOW_SECONDS = 300
+const FAIL_DISTINCT_IPS = 3
 
 export async function feedbackRoutes(fastify: FastifyInstance) {
   fastify.post('/feedback/playback', async (request, reply) => {
@@ -146,13 +155,21 @@ export async function feedbackRoutes(fastify: FastifyInstance) {
     const { videoId, sourceId, success, resolutionWidth, resolutionHeight, errorCode, ipHash } = opts
 
     if (success) {
-      await db.query(
-        `UPDATE video_sources
-         SET probe_status = CASE WHEN probe_status = 'dead' THEN 'ok' ELSE probe_status END,
-             last_probed_at = NOW()
-         WHERE id = $1 AND deleted_at IS NULL`,
-        [sourceId],
-      ).catch((e: unknown) => {
+      // SRCHEALTH-P2-3：dead→ok 复活需窗口内 ≥2 独立 ipHash（redis 故障 catch→0 = fail-safe 不复活）；
+      // 未达门槛仅刷 last_probed_at（保留 CHG-SN-4-05 现状「success 反馈视为 probe 信号」，
+      // 该时间戳语义与 P3-1 新鲜度衰减的关系留 P3-1 裁决）
+      const distinctSuccessIps = await countDistinctIps(
+        `fb:revive:${sourceId}`, ipHash, REVIVE_WINDOW_SECONDS,
+      ).catch(() => 0)
+      const reviveSql = distinctSuccessIps >= REVIVE_DISTINCT_IPS
+        ? `UPDATE video_sources
+           SET probe_status = CASE WHEN probe_status = 'dead' THEN 'ok' ELSE probe_status END,
+               last_probed_at = NOW()
+           WHERE id = $1 AND deleted_at IS NULL`
+        : `UPDATE video_sources
+           SET last_probed_at = NOW()
+           WHERE id = $1 AND deleted_at IS NULL`
+      await db.query(reviveSql, [sourceId]).catch((e: unknown) => {
         baseLogger.warn({ err: e, sourceId }, '[feedback] probe update failed')
       })
 
@@ -186,8 +203,12 @@ export async function feedbackRoutes(fastify: FastifyInstance) {
         baseLogger.warn({ err: e, videoId, sourceId }, '[feedback] health event insert failed')
       })
 
-      const failCount = await incrementFailureCount(ipHash, sourceId).catch(() => 0)
-      if (failCount >= 3) {
+      // SRCHEALTH-P2-3：recheck 触发由「同一 ipHash INCR 3 次」迁移为「≥3 独立 ipHash」
+      // （key 族 fb:fail:set:* 新建；旧 fb:fail:{ipHash}:* 不再写入，存量 TTL 300s 自然过期）
+      const distinctFailureIps = await countDistinctIps(
+        `fb:fail:set:${sourceId}`, ipHash, FAIL_WINDOW_SECONDS,
+      ).catch(() => 0)
+      if (distinctFailureIps >= FAIL_DISTINCT_IPS) {
         await insertHealthEvent(db, {
           videoId,
           sourceId,

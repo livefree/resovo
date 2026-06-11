@@ -3933,3 +3933,20 @@
   - **已知限制**：真库并发交错用例（两连接行锁阻塞 → EPQ 重求值）未自动化（单测无真 PG 基建）；并发语义由 SQL 形态守卫用例 + 真库手工对拍锁定，候选集成验证。
   - **登记**：feedback.ts `countRecentFailures` 既有死代码（范围外不动）；feedback route 直接 db.query 为既有范式（服务化重构候选独立卡）。
   - 门禁：typecheck/lint EXIT=0 / feedbackRoute 13/13 / test:changed 升全量 506 文件 7095 passed（首轮 1 failed 并发抖动复跑干净）/ migrate ✅ / e2e:admin 82/82 EXIT=0。
+
+## [SRCHEALTH-P2-3] 复活/recheck 门槛独立 ipHash 化（F3 + §8 C3 / SEQ-20260610-02 Phase 2）
+- **完成时间**：2026-06-10
+- **记录时间**：2026-06-10 19:12
+- **执行模型**：claude-fable-5（建议 sonnet，用户会话人工覆盖持续推进授权）
+- **子代理**：无
+- **修改文件**：
+  - `apps/api/src/routes/feedback.ts` — 共享原语 `countDistinctIps`（SADD+TTL 检查+SCARD，固定窗口）；复活侧 `fb:revive:{sourceId}` ≥2 独立 ipHash 才执行 dead→ok UPDATE（未达门槛仅刷 last_probed_at 保留现状语义；redis 故障 catch→0 fail-safe 不复活）；失败侧 `fb:fail:set:{sourceId}` ≥3 独立 ipHash 入队 recheck 信号（替换同一 ipHash INCR 计次；旧 key 族存量 TTL 自然过期）；删除死代码 `countRecentFailures`（P2-2 登记项闭环）
+  - `tests/unit/api/feedbackRoute.test.ts` — 新增 5 用例（门槛未达/达标/TTL 固定窗口语义/redis fail-safe/失败侧 2 无信号·3 入队 + INCR 退役断言）+ 既有 2 用例适配
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - **TTL 设置原语差异（关键）**：失败侧旧 INCR 用 `count===1` 设 TTL 是安全的（INCR 原子递增必有一个返回 1）；SADD 无此性质——两个并发首次 SADD（不同 member）后双方 SCARD 都读 2，谁都不设 TTL → 永久 key（复活门槛被脏状态永远满足）。本卡用 `ttl<0` 检查（任意后续请求自愈，重复 EXPIRE 同值无害）。
+  - **已知权衡**（方案 §8 C3 已裁决）：失败侧灵敏度下降——单用户反复失败不再触发 recheck，低流量源需 3 个独立客户端佐证；「信任需独立佐证」原则的代价。
+  - **登记留 P3-1**：success 反馈未达复活门槛时仍刷 `last_probed_at`（CHG-SN-4-05 现状保留）——feedback 时间戳会让源在 P3-1 新鲜度衰减中显得「新近探测过」，语义关系留 P3-1 裁决。
+  - 共享层沉淀：否——SET 门槛原语单文件双调用点；第 3 消费方（如 P3-3 host 熔断计数）出现再裁决提取。
+  - 门禁：typecheck/lint EXIT=0 / feedbackRoute 18/18 / test:changed 18 passed（feedback 前台 API 无对应 e2e 域，ADR-180 域选跑 + P1-5 先例）。

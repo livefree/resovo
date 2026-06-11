@@ -13,6 +13,10 @@ const mockRedis = vi.hoisted(() => ({
   get: vi.fn(),
   incr: vi.fn(),
   expire: vi.fn(),
+  // SRCHEALTH-P2-3：独立 ipHash 门槛 SET 原语
+  sadd: vi.fn(),
+  scard: vi.fn(),
+  ttl: vi.fn(),
 }))
 vi.mock('@/api/lib/redis', () => ({
   redis: mockRedis,
@@ -54,6 +58,9 @@ describe('POST /feedback/playback', () => {
     mockRedis.get.mockResolvedValue('0')
     mockRedis.incr.mockResolvedValue(1)
     mockRedis.expire.mockResolvedValue(1)
+    mockRedis.sadd.mockResolvedValue(1)
+    mockRedis.scard.mockResolvedValue(1)   // 默认单独立 ipHash（P2-3 门槛未达）
+    mockRedis.ttl.mockResolvedValue(-1)    // 默认无 TTL → 触发 expire 设置
     mockInsertHealthEvent.mockResolvedValue('ev-1')
     app = await buildApp()
   })
@@ -106,8 +113,8 @@ describe('POST /feedback/playback', () => {
     ))
   })
 
-  it('success=false × ≥3 → 额外插入 queue signal（processedAt=null）', async () => {
-    mockRedis.incr.mockResolvedValue(3)  // 第三次失败
+  it('success=false × ≥3 独立 ipHash → 额外插入 queue signal（processedAt=null）', async () => {
+    mockRedis.scard.mockResolvedValue(3)  // P2-3：第 3 个独立 ipHash 失败（原 INCR 计次迁移）
     const res = await app.inject({
       method: 'POST',
       url: '/v1/feedback/playback',
@@ -188,6 +195,9 @@ describe('POST /feedback/playback — EMA 落账（fb_score / fb_sample_weight /
     mockRedis.get.mockResolvedValue('0')
     mockRedis.incr.mockResolvedValue(1)
     mockRedis.expire.mockResolvedValue(1)
+    mockRedis.sadd.mockResolvedValue(1)
+    mockRedis.scard.mockResolvedValue(1)   // 默认单独立 ipHash（P2-3 门槛未达）
+    mockRedis.ttl.mockResolvedValue(-1)    // 默认无 TTL → 触发 expire 设置
     mockInsertHealthEvent.mockResolvedValue('ev-1')
     mockDb.query.mockResolvedValue({ rows: [] })
     app = await buildApp()
@@ -223,9 +233,9 @@ describe('POST /feedback/playback — EMA 落账（fb_score / fb_sample_weight /
     await vi.waitFor(() => expect(findEmaCall()).toBeDefined())
     const [, params] = findEmaCall() as [string, unknown[]]
     expect(params).toEqual([validBody.sourceId, 0, 7 * 24 * 60 * 60])
-    // EMA 不替代既有 failure 副作用
+    // EMA 不替代既有 failure 副作用（P2-3 后失败计数为 SADD 独立 ipHash）
     await vi.waitFor(() => expect(mockInsertHealthEvent).toHaveBeenCalled())
-    expect(mockRedis.incr).toHaveBeenCalled()
+    expect(mockRedis.sadd).toHaveBeenCalledWith(`fb:fail:set:${validBody.sourceId}`, expect.any(String))
   })
 
   it('SQL 形态守卫：decay 输入必须直接自引用目标表（并发安全；arch-reviewer 二轮裁决）', async () => {
@@ -253,6 +263,7 @@ describe('POST /feedback/playback — EMA 落账（fb_score / fb_sample_weight /
   })
 
   it('EMA UPDATE 失败 → warn 不抛、202 不受影响、复活 UPDATE 仍执行（失败隔离）', async () => {
+    mockRedis.scard.mockResolvedValue(2)  // P2-3 复活门槛达标（≥2 独立 ipHash）
     mockDb.query.mockImplementation((sql: string) =>
       String(sql).includes('fb_score')
         ? Promise.reject(new Error('check violation'))
@@ -275,6 +286,106 @@ describe('POST /feedback/playback — EMA 落账（fb_score / fb_sample_weight /
   })
 })
 
+// SRCHEALTH-P2-3（SEQ-20260610-02）：复活/recheck 门槛独立 ipHash 化（F3 + §8 C3）
+describe('POST /feedback/playback — 独立 ipHash 信任门槛', () => {
+  let app: Awaited<ReturnType<typeof buildApp>>
+  beforeEach(async () => {
+    vi.clearAllMocks()
+    mockRedis.set.mockResolvedValue('OK')
+    mockRedis.get.mockResolvedValue('0')
+    mockRedis.incr.mockResolvedValue(1)
+    mockRedis.expire.mockResolvedValue(1)
+    mockRedis.sadd.mockResolvedValue(1)
+    mockRedis.scard.mockResolvedValue(1)
+    mockRedis.ttl.mockResolvedValue(-1)
+    mockInsertHealthEvent.mockResolvedValue('ev-1')
+    mockDb.query.mockResolvedValue({ rows: [] })
+    app = await buildApp()
+  })
+  afterEach(() => app.close())
+
+  const inject = (body: object) =>
+    app.inject({
+      method: 'POST',
+      url: '/v1/feedback/playback',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+  const findReviveCall = () =>
+    mockDb.query.mock.calls.find((c: unknown[]) =>
+      String(c[0]).includes("probe_status = CASE WHEN probe_status = 'dead'"),
+    )
+  const findProbedAtOnlyCall = () =>
+    mockDb.query.mock.calls.find(
+      (c: unknown[]) =>
+        String(c[0]).includes('last_probed_at = NOW()') && !String(c[0]).includes('probe_status'),
+    )
+
+  it('复活门槛未达（1 独立 ipHash）→ 不复活，仅刷 last_probed_at', async () => {
+    mockRedis.scard.mockResolvedValue(1)
+    expect((await inject(validBody)).statusCode).toBe(202)
+    await vi.waitFor(() => expect(findProbedAtOnlyCall()).toBeDefined())
+    expect(findReviveCall()).toBeUndefined()
+    // SET 原语 key 语义：复活窗口按 sourceId 聚合（独立客户端跨 ipHash 计数）
+    expect(mockRedis.sadd).toHaveBeenCalledWith(`fb:revive:${validBody.sourceId}`, expect.any(String))
+  })
+
+  it('复活门槛达标（2 独立 ipHash）→ 执行 dead→ok 复活 UPDATE', async () => {
+    mockRedis.scard.mockResolvedValue(2)
+    expect((await inject(validBody)).statusCode).toBe(202)
+    await vi.waitFor(() => expect(findReviveCall()).toBeDefined())
+  })
+
+  it('ttl<0 → 设置固定窗口 EXPIRE（SADD 无 INCR 原子返回值，scard===1 判断并发下会漏设致永久 key）', async () => {
+    mockRedis.ttl.mockResolvedValue(-1)
+    await inject(validBody)
+    await vi.waitFor(() =>
+      expect(mockRedis.expire).toHaveBeenCalledWith(`fb:revive:${validBody.sourceId}`, 300),
+    )
+    // 已有 TTL → 不重设（固定窗口非滑动窗口）
+    mockRedis.expire.mockClear()
+    mockRedis.ttl.mockResolvedValue(120)
+    mockRedis.set.mockResolvedValue('OK')
+    await inject({ ...validBody, sourceId: '00000000-0000-0000-0000-000000000003' })
+    await vi.waitFor(() => expect(mockRedis.scard).toHaveBeenCalled())
+    expect(mockRedis.expire).not.toHaveBeenCalledWith(
+      'fb:revive:00000000-0000-0000-0000-000000000003', 300,
+    )
+  })
+
+  it('redis 故障 → fail-safe 不复活（catch→0 < 门槛），202 不受影响', async () => {
+    mockRedis.sadd.mockRejectedValue(new Error('redis down'))
+    expect((await inject(validBody)).statusCode).toBe(202)
+    await vi.waitFor(() => expect(findProbedAtOnlyCall()).toBeDefined())
+    expect(findReviveCall()).toBeUndefined()
+  })
+
+  it('失败侧门槛未达（2 独立 ipHash）→ 无 queue signal；达标（3）→ 入队', async () => {
+    mockRedis.scard.mockResolvedValue(2)
+    await inject({ ...validBody, success: false })
+    // 记录性 health event（processedAt 非 null）仍无条件插入
+    await vi.waitFor(() => expect(mockInsertHealthEvent).toHaveBeenCalled())
+    expect(
+      mockInsertHealthEvent.mock.calls.find((c) => c[1]?.processedAt === null),
+    ).toBeUndefined()
+
+    mockInsertHealthEvent.mockClear()
+    mockRedis.set.mockResolvedValue('OK')
+    mockRedis.scard.mockResolvedValue(3)
+    await inject({ ...validBody, sourceId: '00000000-0000-0000-0000-000000000004', success: false })
+    await vi.waitFor(() => {
+      expect(
+        mockInsertHealthEvent.mock.calls.find((c) => c[1]?.processedAt === null),
+      ).toBeDefined()
+    })
+    expect(mockRedis.sadd).toHaveBeenCalledWith(
+      'fb:fail:set:00000000-0000-0000-0000-000000000004', expect.any(String),
+    )
+    // 旧 INCR 原语不再使用（同一 ipHash 计次 ≠ 独立佐证）
+    expect(mockRedis.incr).not.toHaveBeenCalled()
+  })
+})
+
 // CHG-SN-5-PRE-01-D（DEBT-SN-4-05-B）
 describe('POST /feedback/playback — trustProxy 启用时', () => {
   let app: Awaited<ReturnType<typeof buildApp>>
@@ -284,6 +395,9 @@ describe('POST /feedback/playback — trustProxy 启用时', () => {
     mockRedis.get.mockResolvedValue('0')
     mockRedis.incr.mockResolvedValue(1)
     mockRedis.expire.mockResolvedValue(1)
+    mockRedis.sadd.mockResolvedValue(1)
+    mockRedis.scard.mockResolvedValue(1)   // 默认单独立 ipHash（P2-3 门槛未达）
+    mockRedis.ttl.mockResolvedValue(-1)    // 默认无 TTL → 触发 expire 设置
     mockInsertHealthEvent.mockResolvedValue('ev-1')
     // app.inject 模拟连接来自 127.0.0.1，将其加入信任白名单
     app = await buildApp({ trustProxy: '127.0.0.1' })

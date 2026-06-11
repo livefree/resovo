@@ -1839,9 +1839,9 @@
 
 ## [SEQ-20260610-02] 视频/线路/站点健康度与反馈闭环（source-health v2 方案落地）
 
-- **状态**：🔄 执行中（8/16 卡完成：**Phase 1 全收口** P1-4/P1-2/P1-1-A/P1-1-B/P1-5/P1-3 ✅ + **Phase 2** P2-1/P2-2 ✅；下一步 P2-3（复活门槛 ipHash 化）或 P2-4-A（manual_route_reprobe API 侧）——依赖均已解除）
+- **状态**：🔄 执行中（9/16 卡完成：**Phase 1 全收口** ✅ + **Phase 2** P2-1/P2-2/P2-3 ✅；下一步 P2-4-A（manual_route_reprobe API 侧）→ P2-4-B（worker 定向消费）即 Phase 2 收口）
 - **创建时间**：2026-06-10 12:53
-- **最后更新时间**：2026-06-10 18:50
+- **最后更新时间**：2026-06-10 19:10
 - **目标**：落地 `docs/designs/source-health-feedback-loop-plan_20260610.md` v2（两轮独立审核有条件通过，必修全吸收，commit 88893812）：修复「全部探测/试播后状态不更新」三处可见断点（B1/B2/B3）→ 打通反馈闭环（F1–F4）→ 评分进化 + 站点/主机桥接（D3/D4）。
 - **范围**：apps/api（service/queries/routes/lib）+ apps/worker（jobs/lib）+ apps/server-next（sources/videos 模块 UI）+ apps/web-next（PlayerShell）+ packages（media-probe 新包，P1-3）。**方案 §3 为各卡内容真源，§4 为门禁真源**；卡面只记验收口径与文件范围。
 - **依赖**：无 BLOCKER；方案 v2 已批准（用户 2026-06-10）。
@@ -1904,9 +1904,11 @@
    - 验收口径：`video_sources` 增 `fb_score`/`fb_sample_weight`/`last_feedback_at`（写入即时半衰，方案 §3 P2-2），feedback 落账；**本卡不进评分**。
    - 文件范围（实施修正：+types/queries/测试——Opus 裁决补漏 + types required 字段编译链波及）：`apps/api/src/db/migrations/105_video_sources_feedback_ema.sql`（新）、`apps/api/src/routes/feedback.ts`、`packages/types/src/admin-moderation.types.ts`、`apps/api/src/db/queries/video_sources.ts`、`docs/architecture.md`、`tests/unit/api/feedbackRoute.test.ts`。依赖：P2-1 ✅。建议模型：sonnet（+Opus 子代理）。
    - **完成备注**：① **arch-reviewer (claude-opus-4-8) 两轮裁决**：一轮（A–F）= 裸 NUMERIC 防 round 漂移 / 三列全 NULL 无 DEFAULT（NULL=无样本唯一正确语义）/ fb_score CHECK [0,1] + weight CHECK ≥0 / 不建索引（P3-2 才有读路径）/ 半衰期 7 天代码常量 `FB_HALF_LIFE_SECONDS`（调参须配合影子验证，不进 env）/ EMA 与 redis INCR 正交并行、与复活 UPDATE 分开 fire-and-forget（失败隔离）/ 105 文件不写 BEGIN（054/059/104 内嵌 BEGIN 是既有技术债不复制）。**二轮定点复核（主循环发现一轮输出内部矛盾后回询）**：一轮交付物为 DRY 改写的 `UPDATE…FROM(SELECT w_eff)` 形式被裁定不安全——EvalPlanQual 只刷新加锁目标行、不重跑 FROM/CTE/LATERAL 子计划（旧快照缓存元组）→ 并发反馈 last-write-lost + 新旧版本混合值；终版 SQL = decay 输入列全部**直接自引用目标表 vs**（表达式重复三遍，正确性 #1 > DRY #5），测试以 SQL 形态守卫锁定（含「退回子查询必须 RED」注释）。② 冷启动：last_feedback_at NULL → decay=0 → 首样本 score=obs/weight=1 无先验。③ **真库验证**（migration 实际执行 + 事务回滚对拍）：三列+双 CHECK 落库 ✅；数值三步对拍精确命中（首样本 1/1 → 间隔≈0 并入 obs=0 → 0.5/2 → 回拨一个半衰期 obs=1 → 0.75/2）✅；CHECK 拒 fb_score=1.5 ✅。④ 实施修正（裁决盲区登记）：types 三字段为 required → `video_sources.ts` mapRow 编译链强制波及 → SOURCE_SELECT/row 接口/mapper 三处真实映射（+NUMERIC string→Number 转换；硬编码 null 是潜伏假数据缺陷，按裁决「映射真源完整」内在意图延伸）。⑤ **P3-2 前置警示已沉淀**：migration COMMENT + types 注释 + architecture.md 三处记「消费 min(1,w/N) 须 COALESCE(w,0)——PG LEAST 忽略 NULL 误返 1」。⑥ 已知限制登记：真库并发交错用例（两连接行锁阻塞→EPQ）未自动化（单测无真 PG 基建；并发语义由 SQL 形态守卫 + 真库手工对拍锁定，候选集成验证）；feedback.ts `countRecentFailures` 既有死代码（范围外不动）。共享层沉淀：否——EMA 写入单消费方（feedback route），SQL 形态注释 + 测试守卫已锁不变式；route 直接 db.query 为既有 feedback 范式（服务化重构候选独立卡，本卡不动分层）。门禁：typecheck/lint EXIT=0 / feedbackRoute 13/13（新增 4：obs=1 契约 / obs=0 正交 / SQL 形态守卫 / 失败隔离）/ test:changed 升全量 506 文件 7095 passed（首轮 1 failed 为并发抖动复跑干净）/ migrate 真库 ✅ / e2e:admin 82/82 EXIT=0。执行模型: claude-fable-5（建议 sonnet，用户会话人工覆盖持续推进授权）；子代理: arch-reviewer (claude-opus-4-8) ×2（设计裁决 + 定点复核）。
-9. **SRCHEALTH-P2-3** — 复活/recheck 门槛独立 ipHash 化（F3 + §8 C3）（状态：⬜ 待开始）
-   - 创建时间：2026-06-10 12:53 ｜ 验收口径：dead→ok 复活需窗口内 ≥2 独立 ipHash（SADD+SCARD+TTL，禁 INCR）；失败→recheck 同卡迁移同原语。
-   - 文件范围：`apps/api/src/routes/feedback.ts`。依赖：P2-1。建议模型：sonnet。
+9. **SRCHEALTH-P2-3** — 复活/recheck 门槛独立 ipHash 化（F3 + §8 C3）（状态：✅ 已完成 2026-06-10 19:10）
+   - 创建时间：2026-06-10 12:53 ｜ 实际开始：2026-06-10 19:00 ｜ 完成时间：2026-06-10 19:10
+   - 验收口径：dead→ok 复活需窗口内 ≥2 独立 ipHash（SADD+SCARD+TTL，禁 INCR）；失败→recheck 同卡迁移同原语。
+   - 文件范围：`apps/api/src/routes/feedback.ts`、`tests/unit/api/feedbackRoute.test.ts`。依赖：P2-1 ✅。建议模型：sonnet。
+   - **完成备注**：① 共享原语 `countDistinctIps(key, ipHash, windowSeconds)`（SADD+TTL 检查+SCARD）：**TTL 设置用 ttl<0 检查而非照搬失败侧 `count===1` 判断**——SADD 无 INCR 的原子递增返回值，两个并发首次 SADD（不同 member）后双方 SCARD 都读 2 → 谁都不设 TTL → 永久 key（复活门槛被脏状态永远满足）；ttl<0 由任意后续请求自愈，固定窗口非滑动。② 复活侧：`fb:revive:{sourceId}` 窗口 300s + ≥2 独立 ipHash 才执行 dead→ok UPDATE；未达门槛仅刷 `last_probed_at`（保留 CHG-SN-4-05「success 反馈视为 probe 信号」现状，**该时间戳语义与 P3-1 新鲜度衰减的关系登记留 P3-1 裁决**——feedback 刷 last_probed_at 会让源显得新近探测过）；redis 故障 catch→0 = fail-safe 不复活。③ 失败侧：`fb:fail:set:{sourceId}` 迁移（阈值 3/窗口 300s 保留，语义从「同一客户端 3 次」→「3 个独立客户端」；旧 `fb:fail:{ipHash}:*` 不再写入，存量 TTL 300s 自然过期，无迁移脚本）；同卡删除同 key 族死代码 `countRecentFailures`（P2-2 登记项闭环）。④ 测试 18/18：新增 5 用例（门槛未达仅刷时间戳 / 达标复活 / ttl<0→EXPIRE 设置 + 已有 TTL 不重设〔固定窗口〕/ redis 故障 fail-safe / 失败侧 2 无信号·3 入队 + INCR 不再使用断言）+ 既有 2 用例适配（INCR→SCARD / EMA 正交断言改 sadd）。**已知权衡登记**：低流量源失败侧灵敏度下降（单用户反复失败不再触发 recheck——独立佐证原则的代价，方案 §8 C3 已裁决）。共享层沉淀：否——SET 门槛原语单文件双调用点，第 3 消费方（如 P3-3 host 级熔断计数）出现再裁决提取。门禁：typecheck/lint EXIT=0 / feedbackRoute 18/18 / test:changed 18 passed（feedback 前台 API 无对应 e2e 域，P1-5 同先例）。执行模型: claude-fable-5（建议 sonnet，用户会话人工覆盖持续推进授权）；子代理: 无。
 10. **SRCHEALTH-P2-4-A** — manual_route_reprobe 信号 API 侧（状态：⬜ 待开始）
     - 创建时间：2026-06-10 12:53 ｜ 验收口径：`reprobeRoute` 写真实队列信号（`origin='manual_route_reprobe'` + partial index migration + types union + audit 真实 jobId/queuedCount），占位 jobId 消除。
     - 文件范围：migration（index）、`packages/types`（origin union）、`apps/api/src/services/SourcesMatrixService.ts`、`apps/api/src/db/queries/`。依赖：无硬依赖（可与 P2-1 并行）。建议模型：sonnet。
