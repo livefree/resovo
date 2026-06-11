@@ -1947,9 +1947,9 @@
 
 ## [SEQ-20260610-03] 内容审核台 UX 优化（MODUX · 信息密度 + 去冗余 + 快速编辑）
 
-- **状态**：🔄 执行中（3/15 卡完成：P1-0 ✅ + P1-1-A ✅ + P1-1-B ✅ —— **item 5 标题治理全收口**）
+- **状态**：🔄 执行中（4/15 卡完成：P1-0 ✅ + P1-1-A ✅ + P1-1-B ✅ + P1-2 ✅ —— item 5 标题治理 + item 11/12 播放器上方治理收口）
 - **创建时间**：2026-06-10 22:04
-- **最后更新时间**：2026-06-10 22:31
+- **最后更新时间**：2026-06-10 22:38
 - **目标**：落地 `docs/designs/moderation-console-ux-plan_20260610.md` v2（两轮独立审核 + 第三轮注册前终审通过，file:line 抽查全部命中）：审核台 12 项问题——去冗余（标题治理/DecisionCard 精简）→ 信息密度（列表单元格/详情 tab/键盘流）→ 功能增强（年代+富集过滤/筛选弹层/类似 tab 阈值/4 字段快速编辑）。
 - **范围**：apps/server-next（admin/moderation/_client + 标题治理涉及页）+ packages/admin-ui（PageHeader/DecisionCard/KeyboardShortcuts 消费）+ apps/api（moderation.ts query/meta schema + service/queries）+ packages/types（admin-moderation.types）。**方案文件为各卡内容真源**；卡面只记验收口径与文件范围。
 - **依赖**：无 BLOCKER；工作台空闲（SRCHEALTH 剩余 P3-2 影子验证硬前置 ~06-17 / P3-4 顺延，与本 SEQ 无文件冲突）。
@@ -1977,10 +1977,12 @@
    - 文件范围（实施修正：+2 测试文件选择器同步，P1-1-A 完成备注已预告）：`SettingsContainer.tsx`、`AnalyticsView.tsx`、`DashboardClient.tsx`、`tests/unit/.../DashboardClient.test.tsx`、`tests/e2e/admin/dashboard.spec.ts`。
    - 依赖：MODUX-P1-1-A ✅。建议模型：sonnet。
    - **完成备注**：① **R-1/T-8 难点消解比预期简单**：Dashboard 动态问候 `早上好，Yan — 今天有 {N} 待处理` 用**模板字符串**传 string title → PageHeader 直接渲染 h1，无需 ReactNode 兜底两分支（T-8 自然满足）；AnalyticsView「数据看板」string title 同理；T-9 互斥渲染下任一 tab h1 恰 1 个由结构保证。② 三页手写 HEAD_* 常量组（Settings 4 个/Dashboard 4 个/Analytics 4 个）与 PageHeader 内置逐字或近似等价 → 全部删除（差异按 T-5 归一：Dashboard/Analytics font-size-xl→lg、Settings fontWeight 600→700、subtitle margin 6px→4px、Dashboard paddingTop 4px 丢弃）；Settings actions 槽复用既有 AdminButton 零改动。③ 测试选择器同步：`[data-page-head]` → `[data-page-header]` 单测 8 处 + e2e 2 处 + 头注释 2 处（dashboard.spec.ts:158 为 analytics tab 断言，迁移后由 AnalyticsView 的 PageHeader 输出同名属性继续命中）。④ 规约核对收口：全 admin 非 dev 页 raw `<h1>` **清零**（grep 实证仅剩 dev 5 页豁免）；全 PageHeader 消费方零显式 headingLevel（默认 1，T-4 合规）。**item 5 标题治理（P1-0/-A/-B 三卡）全收口**。共享层沉淀：否——继续收敛手写副本到既有 PageHeader。门禁：typecheck/lint EXIT=0 / test:changed 32 passed（DashboardClient 16 含新选择器断言）/ system 域手动 84 passed / **e2e:admin 82/82 EXIT=0**。执行模型: claude-fable-5（建议 sonnet，用户会话人工覆盖持续推进授权）；子代理: 无。
-4. **MODUX-P1-2** — 播放器上方治理：DecisionCard 精简（item 11+12）（状态：⬜ 待开始）
-   - 验收口径：单视频内标题仅 1 次（PendingCenter h2）；决策 banner 从独占整行降为精简 inline；文案重规划（健康/未就绪/冲突/失效）；`dev/visual` 预览渲染正常；单测同步。
-   - 文件范围：`packages/admin-ui/src/components/cell/decision-card.tsx`（**优先不改 `decision-card.types.ts` 公开 Props**；若改 → Opus + trailer）、`apps/server-next/src/app/admin/moderation/_client/PendingCenter.tsx` + dev/visual registry/mock + 单测。
-   - 依赖：无（可与 P1-1 并行排序）。建议模型：sonnet。
+4. **MODUX-P1-2** — 播放器上方治理：DecisionCard 精简（item 11+12）（状态：✅ 已完成 2026-06-10 22:38）
+   - 创建时间：2026-06-10 22:04 ｜ 实际开始：2026-06-10 22:32 ｜ 完成时间：2026-06-10 22:38
+   - 验收口径：单视频内标题仅 1 次（PendingCenter h2）；决策 banner 从独占整行降为精简 inline；文案重规划；`dev/visual` 预览渲染正常；单测同步。
+   - 文件范围（实施修正：PendingCenter/dev-visual 零改动——纯组件内部布局，消费面无 Props 变化）：`packages/admin-ui/src/components/cell/decision-card.tsx`、`tests/unit/components/admin-ui/cell/decision-card.test.tsx`。
+   - 依赖：无。建议模型：sonnet。
+   - **完成备注**：① **decision-card v1.7（零 `decision-card.types.ts` 变更 → 不触发 Opus trailer 强制项）**：删 h3 标题行 + TITLE_STYLE（item 12——与 PendingCenter:120 h2 重复；`video.title` 保留于 Pick 契约不动 types.ts，头注释登记「不再渲染」）；banner 整行（padding 10×14 / radius-md / 占满行宽）→ **inline chip**（inline-flex + alignSelf:flex-start + padding 3×10 / pill 999 / font-size-xs，item 11 不独占行）；文案精简 5 态（行动指引收为 · 短后缀：`全线路失效 · 建议拒绝` / `信号未就绪 · 等待验证` / `信号冲突 · 需核查` / `部分线路失效 · 需核查` / `信号健康`）；tone 三色 token（state-success/warning/error 三组 bg/border/fg）不变。② 头注释视觉骨架 v1.6→v1.7 同步；文档化 data attribute 契约零变化（`data-decision-card-title` 本就不在契约清单，全仓零残留引用 grep 实证）。③ 单测同步：标题断言反转（getByText→queryByText null + title 钩子 null）+ 新增 inline chip 样式断言（align-self/inline-flex）；既有 5 文案正则（/信号健康/ 等）关键词保留全兼容零改动。④ 消费面核查：PendingCenter 不传 header/actions 零改动；dev/visual registry × 3 状态纯 props 驱动渲染正常（Props 未变）。共享层沉淀：本卡即共享层内部优化。门禁：typecheck/lint EXIT=0 / **test:changed 自动升面 76 文件 964 passed**（admin-ui 包改动，ADR-180）/ e2e:admin 82/82 EXIT=0。执行模型: claude-fable-5（建议 sonnet，用户会话人工覆盖持续推进授权）；子代理: 无。
 5. **MODUX-P1-3** — 前台预览 404 调查 + 修复（item 2）（状态：⬜ 待开始）
    - 验收口径：两根因分开复现（A locale 缺失：已发布视频 `?preview=admin` 无 locale 前缀；B 鉴权降级：未发布视频 preview cookie/token 跨端可达性 → `notFound()`）；新增 **admin preview 专用 URL builder**（server-next lib 层，注入 locale + preview 参数）；`packages/types/src/url-helpers.ts` 纯函数不污染；已发布/未发布预览均非 404。
    - 文件范围：`apps/server-next/src/lib/`（新 URL builder）+ 审核台/视频库预览入口消费点；调查涉读 `apps/web-next/src/app/[locale]/(detail)/_lib/detail-page-factory.tsx`、`apps/web-next/src/middleware.ts`。

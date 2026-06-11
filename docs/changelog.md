@@ -4128,3 +4128,16 @@
 - **新增依赖**：无
 - **数据库变更**：无
 - **注意事项**：item 5 标题治理三卡（P1-0/-A/-B）全收口：全 admin 非 dev 页 raw `<h1>` 清零（仅剩 dev 5 页 T-11 豁免），全 PageHeader 消费方 headingLevel 默认 1。门禁：typecheck/lint EXIT=0 / test:changed 32 / system 域 84 / e2e:admin 82/82。
+
+## [MODUX-P1-2] DecisionCard 精简 v1.7：删冗余标题 + banner 降 inline chip（item 11+12）
+- **完成时间**：2026-06-10
+- **记录时间**：2026-06-10 22:38
+- **执行模型**：claude-fable-5（建议 sonnet，用户会话人工覆盖）
+- **子代理**：无
+- **修改文件**：
+  - `packages/admin-ui/src/components/cell/decision-card.tsx` — v1.7：删 h3 标题行（与消费方 h2 重复）；banner 整行 → inline chip（alignSelf flex-start 不独占行）；5 态文案精简；头注释骨架同步
+  - `tests/unit/components/admin-ui/cell/decision-card.test.tsx` — 标题断言反转 + inline chip 样式断言
+  - `docs/task-queue.md` / `docs/tasks.md` — 卡片收口
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：**零 `decision-card.types.ts` 公开 Props 变更**（video.title 保留于 Pick 契约但不再渲染，避免触发 types.ts Opus trailer 强制项）；`data-decision-card-banner` 等文档化钩子不变；PendingCenter / dev/visual 消费面零改动。门禁：typecheck/lint EXIT=0 / test:changed 升面 76 文件 964 passed / e2e:admin 82/82。

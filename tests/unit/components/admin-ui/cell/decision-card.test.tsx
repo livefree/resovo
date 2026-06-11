@@ -36,12 +36,13 @@ const mkVideo = (overrides: Partial<DecisionCardVideo> = {}): DecisionCardVideo 
 })
 
 describe('DecisionCard — 基础渲染', () => {
-  it('挂载 data-decision-card + 渲染标题', () => {
+  it('挂载 data-decision-card；v1.7 不再渲染标题（消费方 h2 为标题真源，MODUX-P1-2）', () => {
     const { container } = render(
       <DecisionCard video={mkVideo({ title: '测试' })} probeState="ok" renderState="ok" />,
     )
     expect(container.querySelector('[data-decision-card]')).toBeTruthy()
-    expect(screen.getByText('测试')).toBeTruthy()
+    expect(container.querySelector('[data-decision-card-title]')).toBeNull()
+    expect(screen.queryByText('测试')).toBeNull()
   })
 
   it('v1.6 删除 BarSignal 渲染行 — 不渲染任何 [data-bar-signal] 节点', () => {
@@ -57,6 +58,16 @@ describe('DecisionCard — 基础渲染', () => {
       <DecisionCard video={mkVideo()} probeState="ok" renderState="ok" />,
     )
     expect(container.querySelector('[data-decision-card-banner]')).toBeTruthy()
+  })
+
+  it('v1.7 决策条为 inline chip 不独占整行（alignSelf flex-start，MODUX-P1-2 item 11）', () => {
+    const { container } = render(
+      <DecisionCard video={mkVideo()} probeState="ok" renderState="ok" />,
+    )
+    const banner = container.querySelector('[data-decision-card-banner]') as HTMLElement
+    const style = banner.getAttribute('style') ?? ''
+    expect(style).toMatch(/align-self:\s*flex-start/)
+    expect(style).toMatch(/display:\s*inline-flex/)
   })
 })
 

@@ -10,11 +10,16 @@
  *   视频整体信号通过 LinesPanel 头部 + VisChip 表达更直观。probeState/renderState 仍保留，
  *   驱动决策建议 banner 三态。
  *
+ * v1.7 patch（MODUX-P1-2 / SEQ-20260610-03）：① 删除标题 h3 渲染行——与消费方
+ *   （PendingCenter h2）标题重复（item 12）；video.title 仍保留于 Pick 契约不动 types.ts。
+ *   ② 决策建议条从独占整行 banner 降为 inline chip（alignSelf flex-start，不占满行宽，
+ *   item 11）；文案精简（行动指引以 · 短后缀承载）。data-decision-card-banner 钩子不变。
+ *
  * 实装契约（契约一致性硬约束）：
  *   - video Pick 列表 = DecisionCardVideo（id / title / reviewStatus / visibilityStatus /
  *     isPublished / staffNote / reviewLabelKey / sourceCheckStatus / doubanStatus）；
  *     **禁止 ad hoc 接收非 Pick 字段或拓宽为 Partial<VideoQueueRow>**（Opus 观察项硬约束）
- *   - 视觉骨架（v1.6）：header slot → 标题 → 决策建议条（ok/warn/danger 三态）→
+ *   - 视觉骨架（v1.7）：header slot → 决策建议 chip（ok/warn/danger 三态，inline 不独占行）→
  *     StaffNoteBar（仅 staffNote 非空 + onStaffNoteEdit 已传时渲染）→ actions slot
  *   - 决策建议三态推算（基于 probeState + renderState）：
  *     · 'dead' + 'dead'                         → danger（全线路失效——建议拒绝）
@@ -49,18 +54,18 @@ function decideTone(
   render: DualSignalDisplayState,
 ): DecisionResult {
   if (probe === 'dead' && render === 'dead') {
-    return { tone: 'danger', icon: '✕', text: '全线路失效——建议拒绝' }
+    return { tone: 'danger', icon: '✕', text: '全线路失效 · 建议拒绝' }
   }
   if (probe === 'pending' || render === 'pending' || probe === 'unknown' || render === 'unknown') {
-    return { tone: 'warn', icon: '⏳', text: '信号未就绪，建议等待 worker 验证' }
+    return { tone: 'warn', icon: '⏳', text: '信号未就绪 · 等待验证' }
   }
   if (probe !== render) {
-    return { tone: 'warn', icon: '⚠', text: '信号冲突，建议仔细核查后决策' }
+    return { tone: 'warn', icon: '⚠', text: '信号冲突 · 需核查' }
   }
   if (probe === 'partial') {
-    return { tone: 'warn', icon: '⚠', text: '部分线路失效，建议核查' }
+    return { tone: 'warn', icon: '⚠', text: '部分线路失效 · 需核查' }
   }
-  return { tone: 'ok', icon: '✓', text: '信号健康，可通过' }
+  return { tone: 'ok', icon: '✓', text: '信号健康' }
 }
 
 interface ToneStyle {
@@ -93,36 +98,29 @@ const ROOT_STYLE: React.CSSProperties = {
   gap: '12px',
 }
 
-const TITLE_STYLE: React.CSSProperties = {
-  margin: 0,
-  fontSize: 'var(--font-size-sm-loose)',
-  fontWeight: 600,
-  color: 'var(--fg-default)',
-  lineHeight: 1.4,
-  wordBreak: 'break-word',
-}
-
+// v1.7：inline chip（不独占整行）—— alignSelf flex-start 收缩到内容宽
 function bannerStyle(tone: Tone): React.CSSProperties {
   const palette = TONE_STYLES[tone]
   return {
-    display: 'flex',
+    display: 'inline-flex',
     alignItems: 'center',
-    gap: '10px',
-    padding: '10px 14px',
-    borderRadius: 'var(--radius-md)',
+    alignSelf: 'flex-start',
+    gap: '6px',
+    padding: '3px 10px',
+    borderRadius: '999px',
     borderWidth: '1px',
     borderStyle: 'solid',
     borderColor: palette.border,
     background: palette.background,
     color: palette.color,
-    fontSize: 'var(--font-size-sm-tight)',
-    fontWeight: 600,
+    fontSize: 'var(--font-size-xs)',
+    fontWeight: 500,
     lineHeight: 1.4,
   }
 }
 
 const BANNER_ICON_STYLE: React.CSSProperties = {
-  fontSize: 'var(--font-size-base)',
+  fontSize: 'var(--font-size-xs)',
   lineHeight: 1,
 }
 
@@ -156,8 +154,6 @@ export const DecisionCard = forwardRef<Ref, DecisionCardProps>(function Decision
           {header}
         </div>
       )}
-
-      <h3 data-decision-card-title style={TITLE_STYLE}>{video.title}</h3>
 
       <div data-decision-card-banner style={bannerStyle(decision.tone)}>
         <span data-decision-card-icon style={BANNER_ICON_STYLE}>{decision.icon}</span>
