@@ -1947,9 +1947,9 @@
 
 ## [SEQ-20260610-03] 内容审核台 UX 优化（MODUX · 信息密度 + 去冗余 + 快速编辑）
 
-- **状态**：🔄 执行中（4/15 卡完成：P1-0 ✅ + P1-1-A ✅ + P1-1-B ✅ + P1-2 ✅ —— item 5 标题治理 + item 11/12 播放器上方治理收口）
+- **状态**：🔄 执行中（5/15 卡完成：P1-0/-1-A/-1-B/-2/-3 ✅ —— Phase 1 前 5 卡收口，剩 P1-4）
 - **创建时间**：2026-06-10 22:04
-- **最后更新时间**：2026-06-10 22:38
+- **最后更新时间**：2026-06-10 23:05
 - **目标**：落地 `docs/designs/moderation-console-ux-plan_20260610.md` v2（两轮独立审核 + 第三轮注册前终审通过，file:line 抽查全部命中）：审核台 12 项问题——去冗余（标题治理/DecisionCard 精简）→ 信息密度（列表单元格/详情 tab/键盘流）→ 功能增强（年代+富集过滤/筛选弹层/类似 tab 阈值/4 字段快速编辑）。
 - **范围**：apps/server-next（admin/moderation/_client + 标题治理涉及页）+ packages/admin-ui（PageHeader/DecisionCard/KeyboardShortcuts 消费）+ apps/api（moderation.ts query/meta schema + service/queries）+ packages/types（admin-moderation.types）。**方案文件为各卡内容真源**；卡面只记验收口径与文件范围。
 - **依赖**：无 BLOCKER；工作台空闲（SRCHEALTH 剩余 P3-2 影子验证硬前置 ~06-17 / P3-4 顺延，与本 SEQ 无文件冲突）。
@@ -1983,10 +1983,12 @@
    - 文件范围（实施修正：PendingCenter/dev-visual 零改动——纯组件内部布局，消费面无 Props 变化）：`packages/admin-ui/src/components/cell/decision-card.tsx`、`tests/unit/components/admin-ui/cell/decision-card.test.tsx`。
    - 依赖：无。建议模型：sonnet。
    - **完成备注**：① **decision-card v1.7（零 `decision-card.types.ts` 变更 → 不触发 Opus trailer 强制项）**：删 h3 标题行 + TITLE_STYLE（item 12——与 PendingCenter:120 h2 重复；`video.title` 保留于 Pick 契约不动 types.ts，头注释登记「不再渲染」）；banner 整行（padding 10×14 / radius-md / 占满行宽）→ **inline chip**（inline-flex + alignSelf:flex-start + padding 3×10 / pill 999 / font-size-xs，item 11 不独占行）；文案精简 5 态（行动指引收为 · 短后缀：`全线路失效 · 建议拒绝` / `信号未就绪 · 等待验证` / `信号冲突 · 需核查` / `部分线路失效 · 需核查` / `信号健康`）；tone 三色 token（state-success/warning/error 三组 bg/border/fg）不变。② 头注释视觉骨架 v1.6→v1.7 同步；文档化 data attribute 契约零变化（`data-decision-card-title` 本就不在契约清单，全仓零残留引用 grep 实证）。③ 单测同步：标题断言反转（getByText→queryByText null + title 钩子 null）+ 新增 inline chip 样式断言（align-self/inline-flex）；既有 5 文案正则（/信号健康/ 等）关键词保留全兼容零改动。④ 消费面核查：PendingCenter 不传 header/actions 零改动；dev/visual registry × 3 状态纯 props 驱动渲染正常（Props 未变）。共享层沉淀：本卡即共享层内部优化。门禁：typecheck/lint EXIT=0 / **test:changed 自动升面 76 文件 964 passed**（admin-ui 包改动，ADR-180）/ e2e:admin 82/82 EXIT=0。执行模型: claude-fable-5（建议 sonnet，用户会话人工覆盖持续推进授权）；子代理: 无。
-5. **MODUX-P1-3** — 前台预览 404 调查 + 修复（item 2）（状态：⬜ 待开始）
-   - 验收口径：两根因分开复现（A locale 缺失：已发布视频 `?preview=admin` 无 locale 前缀；B 鉴权降级：未发布视频 preview cookie/token 跨端可达性 → `notFound()`）；新增 **admin preview 专用 URL builder**（server-next lib 层，注入 locale + preview 参数）；`packages/types/src/url-helpers.ts` 纯函数不污染；已发布/未发布预览均非 404。
-   - 文件范围：`apps/server-next/src/lib/`（新 URL builder）+ 审核台/视频库预览入口消费点；调查涉读 `apps/web-next/src/app/[locale]/(detail)/_lib/detail-page-factory.tsx`、`apps/web-next/src/middleware.ts`。
+5. **MODUX-P1-3** — 前台预览 404 调查 + 修复（item 2）（状态：✅ 已完成 2026-06-10 23:05）
+   - 创建时间：2026-06-10 22:04 ｜ 实际开始：2026-06-10 22:39 ｜ 完成时间：2026-06-10 23:05
+   - 验收口径：两根因分开复现；新增 admin preview URL builder；`url-helpers.ts` 纯函数不污染；已发布/未发布预览均非 404。
+   - 文件范围（实施修正：根因 B 实为两叠加 bug，波及 web-next middleware + admin-access-token）：`apps/server-next/src/lib/admin-preview-url.ts`（新）、`PendingCenter.tsx`、`apps/web-next/src/middleware.ts`、`apps/web-next/src/lib/admin-access-token.ts` + 3 测试。
    - 依赖：无。建议模型：sonnet。
+   - **完成备注**：**真库 dev 双端口实测复现 → 两根因结论**：① **根因 A（locale 吞 query）= 不成立**——实测 `/movie/x?preview=admin`（无 locale）→ `307 → /en/movie/x?preview=admin` **redirect 完整保留 query**，不致 404（方案预判证伪）；但仍新增 admin preview URL builder（收口 origin+locale+双因素三要素 + 注入 zh-CN 省一跳 307）。② **根因 B（鉴权降级）= 两个叠加 bug**：**B-1（middleware 请求头未转发）**——原 `middleware.ts` 仅 `response.headers.set(x-admin-preview)`（响应头），但 RSC `shouldUsePreview()` 读的是**请求头**（`headers()`）；next-intl rewrite 经 `new Headers(request.headers)` 转发请求头 → 修复 = 在 `intlMiddleware(req)` **之前** `req.headers.set(x-admin-preview,'1')`（响应头同步保留供 curl 排障）；**B-2（token 交换空 body 400）**——`getAdminAccessToken` 调 `/auth/refresh` 发 `content-type: application/json` 但无 body → fastify `FST_ERR_CTP_EMPTY_JSON_BODY` 400 → accessToken null → 永久降级 public → 未发布视频 `notFound()` 404；修复 = 去 content-type（凭 cookie 鉴权无需 body）。**两 bug 叠加致 ADR-160 preview 自上线从未生效**。③ 端到端验证矩阵（dev :3000+:4000，真实 admin cookie）：未发布+preview+双 cookie **404→200** / 无 cookie 正确降级 404 / 已发布 preview 200 / builder zh-CN URL 200。④ 测试：新建 `admin-preview-url.test.ts`（5 用例 segment/slug/locale）+ middleware 测试补 buildRequest 真实 Headers + 正向 case 双面断言（**请求头**为 RSC 读取面）+ admin-access-token 补 content-type 不发 + body undefined 守卫。⑤ **登记**：B-1/B-2 是 ADR-160 实现 bug 非协议语义变更（无需新 ADR / architecture.md schema 同步）；preview 修复波及 web-next 但属审核台预览链路，PLAYER/SEARCH 域无关。共享层沉淀：是——preview URL 派生入 server-next lib 单点（PendingCenter 唯一消费，未来视频库预览入口可复用）。门禁：typecheck/lint EXIT=0 / test:changed 30 passed（含新 22 P1-3 相关）/ e2e:admin 82/82 EXIT=0 / web-next 真库手测矩阵全绿。执行模型: claude-fable-5（建议 sonnet，用户会话人工覆盖持续推进授权）；子代理: 无。
 6. **MODUX-P1-4** — 线路按钮 + 筛选预设调查确认（item 10+6）（状态：⬜ 待开始）
    - 验收口径：结论登记（清除失效/刷新已接通；预设双源已实装）；微调清除失效二次确认/toast 一致性；预设保存/应用/设默认/导入本地手测 + 既有单测通过。
    - 文件范围：`packages/admin-ui/src/components/cell/lines-panel.tsx`（微调）、审核台预设消费点（随 P1-1 page-head 收敛）。

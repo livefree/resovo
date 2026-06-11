@@ -7,6 +7,11 @@
  * - query=admin + cookie role=user → 不注入
  * - 无 query → 不注入
  * - 既有 brand / theme header 注入零破坏
+ *
+ * MODUX-P1-3 根因回归：preview 必须注入「请求头」（req.headers，RSC `headers()`
+ * 的读取面；next-intl rewrite 经 `new Headers(request.headers)` 转发）——
+ * 原实现仅注入响应头导致 shouldUsePreview() 恒 false、未发布视频 preview 404。
+ * 本文件 buildRequest 补真实 Headers，正向 case 双面断言（请求头 + 响应头）。
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
@@ -36,6 +41,7 @@ function buildRequest({
   const cookieJar = new Map(Object.entries(cookies))
   return {
     nextUrl,
+    headers: new Headers(),
     cookies: {
       get(name: string) {
         const value = cookieJar.get(name)
@@ -50,21 +56,24 @@ describe('middleware — admin preview header 注入（ADR-160 D-160-3）', () =
     vi.clearAllMocks()
   })
 
-  it('query=admin + cookie role=admin → 注入 x-admin-preview=1', () => {
+  it('query=admin + cookie role=admin → 注入 x-admin-preview=1（请求头 + 响应头双面）', () => {
     const req = buildRequest({
       url: 'http://example.com/movie/foo-aB3kR9x1?preview=admin',
       cookies: { user_role: 'admin' },
     })
     const res = middleware(req)
+    // MODUX-P1-3 根因回归：请求头是 RSC shouldUsePreview() 的唯一读取面
+    expect(req.headers.get('x-admin-preview')).toBe('1')
     expect(res.headers.get('x-admin-preview')).toBe('1')
   })
 
-  it('query=admin + cookie role=moderator → 注入', () => {
+  it('query=admin + cookie role=moderator → 注入（请求头 + 响应头双面）', () => {
     const req = buildRequest({
       url: 'http://example.com/series/bar-aBcd1234?preview=admin',
       cookies: { user_role: 'moderator' },
     })
     const res = middleware(req)
+    expect(req.headers.get('x-admin-preview')).toBe('1')
     expect(res.headers.get('x-admin-preview')).toBe('1')
   })
 
@@ -74,6 +83,7 @@ describe('middleware — admin preview header 注入（ADR-160 D-160-3）', () =
       cookies: { user_role: 'user' },
     })
     const res = middleware(req)
+    expect(req.headers.get('x-admin-preview')).toBeNull()
     expect(res.headers.get('x-admin-preview')).toBeNull()
   })
 
@@ -83,6 +93,7 @@ describe('middleware — admin preview header 注入（ADR-160 D-160-3）', () =
       cookies: {},
     })
     const res = middleware(req)
+    expect(req.headers.get('x-admin-preview')).toBeNull()
     expect(res.headers.get('x-admin-preview')).toBeNull()
   })
 

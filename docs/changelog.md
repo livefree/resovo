@@ -4141,3 +4141,21 @@
 - **新增依赖**：无
 - **数据库变更**：无
 - **注意事项**：**零 `decision-card.types.ts` 公开 Props 变更**（video.title 保留于 Pick 契约但不再渲染，避免触发 types.ts Opus trailer 强制项）；`data-decision-card-banner` 等文档化钩子不变；PendingCenter / dev/visual 消费面零改动。门禁：typecheck/lint EXIT=0 / test:changed 升面 76 文件 964 passed / e2e:admin 82/82。
+
+## [MODUX-P1-3] 前台预览 404 修复：ADR-160 preview 两叠加 bug（item 2）
+- **完成时间**：2026-06-10
+- **记录时间**：2026-06-10 23:05
+- **执行模型**：claude-fable-5（建议 sonnet，用户会话人工覆盖）
+- **子代理**：无
+- **修改文件**：
+  - `apps/web-next/src/middleware.ts` — B-1 根因：preview 请求头须在 intlMiddleware(req) 前注入 req.headers（RSC headers() 读取面；next-intl rewrite 转发请求头），原仅写响应头
+  - `apps/web-next/src/lib/admin-access-token.ts` — B-2 根因：/auth/refresh 去掉 content-type:json（无 body，避免 fastify FST_ERR_CTP_EMPTY_JSON_BODY 400）
+  - `apps/server-next/src/lib/admin-preview-url.ts` — 新增 admin preview URL builder（origin+locale+双因素三要素收口）
+  - `apps/server-next/src/app/admin/moderation/_client/PendingCenter.tsx` — openAdminPreview 改用 builder（去内联 origin/href 拼装）
+  - `tests/unit/server-next/admin-preview-url.test.ts` — 新增 5 用例
+  - `tests/unit/web-next/middleware-admin-preview.test.ts` — buildRequest 补真实 Headers + 正向 case 请求头/响应头双面断言
+  - `tests/unit/web-next/lib/admin-access-token.test.ts` — 补 content-type 不发 + body undefined 守卫
+  - `docs/task-queue.md` / `docs/tasks.md` — 卡片收口
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：两 bug 叠加致 ADR-160 admin preview 自上线从未生效（B-1 使 shouldUsePreview 恒 false / B-2 使 token 交换恒失败降级）；均为实现 bug 非协议语义变更，无需新 ADR / architecture.md schema 同步。根因 A（locale 吞 query）实测证伪（307 redirect 保留 query）。真库 dev 双端口端到端验证：未发布 preview 404→200。门禁：typecheck/lint EXIT=0 / test:changed 30 / e2e:admin 82/82。

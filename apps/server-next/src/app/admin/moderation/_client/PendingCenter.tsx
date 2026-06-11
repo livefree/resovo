@@ -2,13 +2,14 @@
 
 import React, { useState, useEffect } from 'react'
 import { VisChip, DecisionCard, StaffNoteBar, Thumb } from '@resovo/admin-ui'
-import { formatCountryName, getVideoDetailHref, type VideoQueueRow } from '@resovo/types'
+import { formatCountryName, type VideoQueueRow } from '@resovo/types'
 import { EpisodeSelector } from './EpisodeSelector'
 import { LinesPanel } from './LinesPanel'
 import { AdminPlayer } from './AdminPlayer'
 import { useSelectedLine } from '@/lib/moderation/use-selected-line'
 import * as api from '@/lib/moderation/api'
 import { buildMergeHref } from '@/lib/merge/entry'
+import { buildAdminPreviewUrl } from '@/lib/admin-preview-url'
 import { M } from '@/i18n/messages/zh-CN/moderation'
 
 interface PendingCenterProps {
@@ -19,13 +20,10 @@ interface PendingCenterProps {
   readonly onSourceHealthChanged?: () => void
 }
 
-// ADR-160 D-160-7：跨 app preview URL 派生（getVideoDetailHref + 双因素 query=admin）
-// WEB_NEXT_ORIGIN 复用既有 NEXT_PUBLIC_APP_URL env（dev: http://localhost:3000 / prod: web-next 主域）
-const WEB_NEXT_ORIGIN = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
-
+// ADR-160 D-160-7：preview URL 派生收口到 lib/admin-preview-url（MODUX-P1-3：
+// origin + locale 注入 + 双因素 query 单点维护）
 function openAdminPreview(v: VideoQueueRow): void {
-  const href = getVideoDetailHref({ type: v.type, slug: v.slug, shortId: v.shortId })
-  window.open(`${WEB_NEXT_ORIGIN}${href}?preview=admin`, '_blank', 'noopener,noreferrer')
+  window.open(buildAdminPreviewUrl({ type: v.type, slug: v.slug, shortId: v.shortId }), '_blank', 'noopener,noreferrer')
 }
 
 // CHG-363-A：跳拆分深链 / -B 卡补 MergeClient 接收 query 自动展开拆分 tab + 预填 videoId

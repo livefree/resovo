@@ -87,6 +87,11 @@ describe('getAdminAccessToken — D-160-4b refresh 交换', () => {
     expect((init as RequestInit).headers).toMatchObject({
       cookie: `${COOKIE_REFRESH_TOKEN}=rt-abc-123`,
     })
+    // MODUX-P1-3 根因回归：无 body 不得发 content-type:json，否则 fastify
+    // FST_ERR_CTP_EMPTY_JSON_BODY 400 → token 交换恒失败、preview 永久降级
+    const sentHeaders = (init as RequestInit).headers as Record<string, string>
+    expect(sentHeaders['content-type']).toBeUndefined()
+    expect((init as RequestInit).body).toBeUndefined()
   })
 
   it('refresh 401 → null（不抛异常）', async () => {

@@ -58,11 +58,14 @@ export async function getAdminAccessToken(
 
   let res: Response | null = null
   try {
+    // MODUX-P1-3 根因修复：/auth/refresh 凭 cookie 鉴权、无请求体；原实现发
+    // `content-type: application/json` 但 body 为空 → fastify 抛
+    // FST_ERR_CTP_EMPTY_JSON_BODY 400 → token 交换恒失败、preview 永久降级。
+    // 不带 content-type（无 body 不需要），与端点契约一致。
     res = await fetch(`${API_BASE}/auth/refresh`, {
       method: 'POST',
       headers: {
         cookie: `${COOKIE_REFRESH_TOKEN}=${refreshToken}`,
-        'content-type': 'application/json',
       },
       cache: 'no-store',
     })
