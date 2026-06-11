@@ -6,7 +6,7 @@
 
 import type { Pool } from 'pg'
 import { deriveAggregateState } from '@resovo/types'
-import type { DoubanStatus, BangumiStatus, SourceCheckStatus, VideoMetaQuality } from '@resovo/types'
+import type { DoubanStatus, BangumiStatus, SourceCheckStatus, VideoMetaQuality, EnrichmentStatus } from '@resovo/types'
 // META-12-A / ADR-170 AMENDMENT：复用 admin 路径同一投影逻辑（单一真源，禁止异源重复实现）
 import { buildEnrichmentSummary } from './videos.internal'
 
@@ -98,6 +98,22 @@ export interface PendingQueueFilters {
   needsManualReview?: boolean
   /** CHG-350：title ILIKE 模糊搜索 — trim 后 ≤ 200 字符 */
   q?: string
+  // MODUX-P3-1-B：年代 + 富集状态过滤（契约 = P3-1-A）
+  year?: number
+  decade?: number
+  enrichmentStatus?: EnrichmentStatus
+}
+
+// MODUX-P3-1-B：富集状态派生 SQL 片段（真源语义 = admin-moderation.types.ts ENRICHMENT_STATUSES /
+//   docs/architecture.md §5.12）。**零用户输入零注入**（固定字符串，枚举值由 z.enum 上游校验）。
+//   raw：videos.meta_quality->>'enriched_at' / videos.douban_status / media_catalog.bangumi_subject_id /
+//        media_catalog.douban_id·tmdb_id·imdb_id。partial = NOT complete AND NOT missing（互斥穷尽）。
+const ENRICH_COMPLETE_SQL = `((v.meta_quality->>'enriched_at') IS NOT NULL AND (v.douban_status = 'matched' OR mc.bangumi_subject_id IS NOT NULL))`
+const ENRICH_MISSING_SQL = `((v.meta_quality->>'enriched_at') IS NULL AND mc.douban_id IS NULL AND mc.tmdb_id IS NULL AND mc.imdb_id IS NULL AND mc.bangumi_subject_id IS NULL)`
+const ENRICHMENT_STATUS_SQL: Record<EnrichmentStatus, string> = {
+  complete: ENRICH_COMPLETE_SQL,
+  missing: ENRICH_MISSING_SQL,
+  partial: `(NOT ${ENRICH_COMPLETE_SQL} AND NOT ${ENRICH_MISSING_SQL})`,
 }
 
 // CHG-SN-4-09d hotfix（2026-05-02）：响应字段统一 camelCase（PG 双引号 alias 保留大小写）。
@@ -217,6 +233,21 @@ export async function listPendingQueue(
       params.push(`%${escaped}%`)
     }
   }
+  // MODUX-P3-1-B：年代 + 富集状态过滤（mc.* 需 count 查询补 JOIN，见下）。须在 cursor 前以
+  //   保 count 参数切片 `idx-(cursor?3:1)` 仍提取全部条件参数（enrichmentStatus 0 参数 / year 1 / decade 2）。
+  if (filters.year != null) {
+    conditions.push(`mc.year = $${idx++}`)
+    params.push(filters.year)
+  }
+  if (filters.decade != null) {
+    conditions.push(`mc.year >= $${idx} AND mc.year < $${idx + 1}`)
+    params.push(filters.decade, filters.decade + 10)
+    idx += 2
+  }
+  if (filters.enrichmentStatus) {
+    const frag = ENRICHMENT_STATUS_SQL[filters.enrichmentStatus]
+    if (frag) conditions.push(frag)
+  }
 
   let cursorCond = ''
   if (filters.cursor) {
@@ -327,7 +358,9 @@ export async function listPendingQueue(
       [...params, limit + 1],
     ),
     db.query<{ count: string }>(
-      `SELECT COUNT(*) FROM videos v WHERE ${where}`,
+      // MODUX-P3-1-B：补 mc JOIN（与 main 查询表作用域对齐，支持 mc.* 过滤；INNER JOIN on FK
+      //   catalog_id NOT NULL → 保数不变）。
+      `SELECT COUNT(*) FROM videos v JOIN media_catalog mc ON mc.id = v.catalog_id WHERE ${where}`,
       params.slice(0, idx - (filters.cursor ? 3 : 1)),
     ),
     db.query<{ reviewed: string; approved: string }>(

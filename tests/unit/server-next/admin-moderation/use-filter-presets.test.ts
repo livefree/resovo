@@ -95,4 +95,18 @@ describe('summarizeQuery', () => {
     const s = summarizeQuery({ hasStaffNote: false })
     expect(s).toBe('无筛选')
   })
+
+  // MODUX-P3-1-B：年代 + 富集状态预设兼容
+  it('year/decade/enrichmentStatus 展示', () => {
+    const s = summarizeQuery({ year: 2024, decade: 2020, enrichmentStatus: 'complete' })
+    expect(s).toContain('2024')
+    expect(s).toContain('2020s')
+    expect(s).toContain('富集:complete')
+  })
+
+  it('旧预设缺新字段 → 向后兼容（undefined 不显示）', () => {
+    // 旧预设 JSON 快照仅含旧字段；新字段 undefined 不参与摘要
+    const s = summarizeQuery({ type: 'movie' })
+    expect(s).toBe('movie')
+  })
 })

@@ -37,6 +37,10 @@ export interface FilterPresetQuery {
   doubanStatus?: string
   hasStaffNote?: boolean
   needsManualReview?: boolean
+  // MODUX-P3-1-B：年代 + 富集状态（optional → 旧预设缺字段=undefined 自动向后兼容）
+  year?: number
+  decade?: number
+  enrichmentStatus?: string
 }
 
 export interface FilterPreset {
@@ -287,5 +291,9 @@ export function summarizeQuery(query: FilterPresetQuery): string {
   if (query.doubanStatus) parts.push(`豆瓣:${query.doubanStatus}`)
   if (query.hasStaffNote === true) parts.push('有备注')
   if (query.needsManualReview === true) parts.push('需人工')
+  // MODUX-P3-1-B：年代 + 富集状态
+  if (query.year != null) parts.push(`${query.year}`)
+  if (query.decade != null) parts.push(`${query.decade}s`)
+  if (query.enrichmentStatus) parts.push(`富集:${query.enrichmentStatus}`)
   return parts.length > 0 ? parts.join(' · ') : '无筛选'
 }

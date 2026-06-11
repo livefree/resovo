@@ -4259,3 +4259,17 @@
 - **新增依赖**：无
 - **数据库变更**：无（纯 query 契约 + raw 字段派生，不加列）
 - **注意事项**：① **富集枚举从 raw 派生（不按 enrichmentSummary 反推）**——关键决策：buildEnrichmentSummary 默认填 'pending'/0 会丢失"从未富集"信号（missing/partial 不可分），故 missing/partial/complete 直接从 raw（`meta_quality->>'enriched_at'` + douban_status + 外部 ID）派生，**互斥穷尽**。② **本卡仅契约层**：DB query WHERE 过滤 + use-filter-presets 兼容 = MODUX-P3-1-B；route handler 直传 parsed.data→listPendingQueue，PendingQueueFilters（DB 层独立镜像接口）暂忽略新字段（结构兼容）。③ decade=起始年（`mc.year ∈ [decade,decade+10)`，如 2020→2020s）。④ 非新端点（verify:endpoint-adr 不触发）；加性后向兼容（verify:adr-contracts EXIT=0）。门禁：typecheck/lint EXIT=0 / verify:adr-contracts EXIT=0 / test:changed 升全量 7159 passed 零失败（packages/types 基础包，ADR-180）/ e2e:admin 82/82 EXIT=0。
+
+## [MODUX-P3-1-B] listPendingQueue year/decade/enrichment 过滤 + count 补 mc JOIN + 预设兼容（item 3 后端下半 / P3-1 闭环）
+- **完成时间**：2026-06-11
+- **记录时间**：2026-06-11 01:28
+- **执行模型**：claude-opus-4-8（建议 sonnet）
+- **子代理**：无（沿 P3-1-A，DB query 加性过滤）
+- **修改文件**：
+  - `apps/api/src/db/queries/moderation.ts` — `PendingQueueFilters` 加 year/decade/enrichmentStatus；`ENRICHMENT_STATUS_SQL` const（complete/missing 固定片段 + partial=NOT complete AND NOT missing，零注入）；listPendingQueue WHERE 加 year/decade/enrichmentStatus（q 后 cursor 前）；**count 查询补 `JOIN media_catalog mc`**（支持 mc.* 过滤）
+  - `apps/server-next/src/lib/moderation/use-filter-presets.ts` — `FilterPresetQuery` 加 year/decade/enrichmentStatus（optional 向后兼容）+ summarizeQuery 展示
+  - `tests/unit/api/moderation-pending-queue-filters.test.ts` — 新增 7 用例（year/decade/complete/missing/partial 派生 + count JOIN + 无过滤加性）
+  - `tests/unit/server-next/admin-moderation/use-filter-presets.test.ts` — +2 用例（新字段展示 + 旧预设兼容）
+- **新增依赖**：无
+- **数据库变更**：无（查询层过滤，不加列）
+- **注意事项**：① **count 查询原不 JOIN media_catalog**（WHERE 仅 v.*）——加 mc.* 过滤会破坏，故无条件补 `JOIN media_catalog mc ON mc.id=v.catalog_id`（INNER on FK catalog_id NOT NULL → 保数不变）；count 参数切片 `idx-(cursor?3:1)` 不变（新参数均在 cursor 前；enrichmentStatus 0 参数 / year 1 / decade 2）。② **ENRICHMENT_STATUS_SQL 零用户输入零注入**（固定字符串，枚举值 z.enum 上游校验）；语义对齐 P3-1-A/architecture.md §5.12（不异源重复定义派生规则）。③ **预设向后兼容**靠 FilterPresetQuery optional——旧 JSON 快照缺新字段=undefined 自动不参与。④ **本卡后端能力 + 预设类型**，独立可验（mock Pool 捕获 SQL/params）；前端 fetchPendingQueue 序列化 + URL sync(FILTER_KEYS) + 筛选弹层 UI = P3-2。⑤ decade 区间 `[decade, decade+10)`。**P3-1 后端闭环（A 契约 + B 实现）**。门禁：typecheck/lint EXIT=0 / verify:adr-contracts EXIT=0 / test:changed 223 passed / e2e:admin 82/82 EXIT=0。
