@@ -6,9 +6,12 @@
  * 极简范围：播放/暂停/进度/源切换/错误降级占位 + 手动重试此线路。
  * 不接入 GlobalPlayerHost；独立 admin-only 播放器。
  *
- * feedback 上报（D-17 + DEBT-FIX-D-ERROR 闭环 / Wave 4 #2）：
- *   - 首次播放成功（onPlay）→ POST /v1/feedback/playback {success:true}（fire-and-forget / per-sourceId 去抖）
- *   - 播放失败（onError）→ POST /v1/feedback/playback {success:false, errorCode: event.code}（per-sourceId 去抖防 fatal 循环刷流量）
+ * 真实播放反馈直更 source health（ADR-198：admin 可信单点，绕众包多 IP 门槛 / 替原前台公开 /feedback/playback）：
+ *   - 首次播放成功（onPlay）→ POST /admin/videos/:videoId/sources/:sourceId/playback-verify {success:true}
+ *     （fire-and-forget / per-sourceId 去抖）→ 成功后 onVerified?.() 刷新左队列聚合 pill（D-198-9）
+ *   - 播放失败（onError）→ POST .../playback-verify {success:false, errorCode: event.code}
+ *     （per-sourceId 去抖防 fatal 循环刷流量）→ 服务端记 admin_playback 定向 recheck 信号，不直接置 dead（D-198-2）
+ *   - videoId/sourceId 入**路径**（端点路径参数），body 仅 {success[, errorCode]}
  *
  * 手动重试此线路（ADR-166 §6.4 / Y-166-6 / Wave 4 #4-EP）：
  *   - "重试此线路"按钮 → sourceLoadVersion++ → Player key bump 触发 remount 重载 source
@@ -35,6 +38,9 @@ export interface AdminPlayerProps {
   readonly sourceId: string | null
   readonly title?: string
   readonly testId?: string
+  /** ADR-198 D-198-9：真实播放**成功**直更 source health 后回调，驱动消费方刷新（如左队列聚合 pill）。
+   *  失败为异步 worker 定向 recheck（UI 同步无变化）故不触发。 */
+  readonly onVerified?: () => void
 }
 
 // ── Placeholder ───────────────────────────────────────────────────────────────
@@ -90,6 +96,7 @@ export function AdminPlayer({
   sourceId,
   title,
   testId,
+  onVerified,
 }: AdminPlayerProps): React.ReactElement {
   // per-session, last-active-sourceId 去抖：A→B→A 切换会再次上报（反映"该 source 被再次验证"，非严格 Set 语义）
   const reportedRef = useRef<string | null>(null)
@@ -109,21 +116,21 @@ export function AdminPlayer({
   const handlePlay = () => {
     if (!sourceId || reportedRef.current === sourceId) return
     reportedRef.current = sourceId
-    void apiClient.post('/feedback/playback', {
-      videoId,
-      sourceId,
+    // ADR-198：admin 真实播放成功直更 source health（绕众包门槛）→ 成功后刷新左队列聚合 pill
+    void apiClient.post(`/admin/videos/${videoId}/sources/${sourceId}/playback-verify`, {
       success: true,
+    }).then(() => {
+      onVerified?.()
     }).catch(() => {
-      // fire-and-forget；失败不阻断播放
+      // fire-and-forget；失败不阻断播放（onVerified 不触发，避免误刷）
     })
   }
 
   const handleError = (event: PlayerErrorPayload) => {
     if (!sourceId || errorReportedRef.current === sourceId) return
     errorReportedRef.current = sourceId
-    void apiClient.post('/feedback/playback', {
-      videoId,
-      sourceId,
+    // ADR-198：失败不直接置 dead（D-198-2），服务端记 admin_playback 定向 recheck 信号（异步收敛，不触发 onVerified）
+    void apiClient.post(`/admin/videos/${videoId}/sources/${sourceId}/playback-verify`, {
       success: false,
       errorCode: event.code,
     }).catch(() => {

@@ -3,7 +3,8 @@
  * CHG-SN-4-FIX-D 黄金路径：LinesPanel 选中线路 → AdminPlayer 状态切换
  *
  * FIX-D 修复点：PendingCenter 中的静态 ▶ 占位替换为 AdminPlayer（包装 player-core Player），
- * 通过 useSelectedLine hook 与 LinesPanel 桥接；首次播放上报 POST /v1/feedback/playback。
+ * 通过 useSelectedLine hook 与 LinesPanel 桥接；首次播放上报 POST
+ * /admin/videos/:videoId/sources/:sourceId/playback-verify（ADR-198，替原前台 /feedback/playback）。
  */
 
 import { test, expect } from '@playwright/test'
@@ -50,12 +51,12 @@ test.describe('FIX-D 黄金路径：AdminPlayer 状态切换', () => {
       })
     })
 
-    // feedback 上报 mock（fire-and-forget，不阻断）
-    await page.route(`${API_BASE}/feedback/playback`, async (route) => {
+    // playback-verify 上报 mock（ADR-198，fire-and-forget，不阻断）
+    await page.route(`${API_BASE}/admin/videos/*/sources/*/playback-verify`, async (route) => {
       if (route.request().method() !== 'POST') { await route.continue(); return }
       await route.fulfill({
         contentType: 'application/json',
-        body: JSON.stringify({ data: { ok: true } }),
+        body: JSON.stringify({ data: { sourceId: 'src-d-1', newProbeStatus: 'ok', newRenderStatus: 'ok', verified: true } }),
       })
     })
 

@@ -101,20 +101,41 @@ describe('AdminPlayer — Case 2: 有效 sourceUrl 渲染 Player', () => {
   })
 })
 
-// ── Case 3：首次 onPlay → feedback POST ───────────────────────────────────────
+// ── Case 3：首次 onPlay → playback-verify POST（ADR-198 admin 专用端点）──────────
 
-describe('AdminPlayer — Case 3: 首次播放上报 feedback', () => {
-  it('onPlay 首次调用 → apiClient.post 携带 videoId/sourceId/success:true', () => {
+describe('AdminPlayer — Case 3: 首次播放上报 playback-verify', () => {
+  it('onPlay 首次调用 → apiClient.post 命中 admin 端点（路径化 videoId/sourceId）+ body{success:true}', () => {
     const { container } = render(
       <AdminPlayer videoId="vid-abc" sourceUrl="https://cdn.example.com/v.m3u8" sourceId="src-xyz" />
     )
     fireEvent.click(container.querySelector('[data-mock-play]')!)
     expect(postMock).toHaveBeenCalledTimes(1)
-    expect(postMock).toHaveBeenCalledWith('/feedback/playback', {
-      videoId: 'vid-abc',
-      sourceId: 'src-xyz',
+    expect(postMock).toHaveBeenCalledWith('/admin/videos/vid-abc/sources/src-xyz/playback-verify', {
       success: true,
     })
+  })
+
+  it('onVerified prop 提供 → 成功上报 resolve 后调用（刷新链 ADR-198 D-198-9）', async () => {
+    const onVerified = vi.fn()
+    const { container } = render(
+      <AdminPlayer videoId="vid-1" sourceUrl="https://cdn.example.com/v.m3u8" sourceId="src-1" onVerified={onVerified} />
+    )
+    fireEvent.click(container.querySelector('[data-mock-play]')!)
+    // postMock resolve 后微任务触发 onVerified
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(onVerified).toHaveBeenCalledTimes(1)
+  })
+
+  it('onError（失败）不触发 onVerified（失败为异步 recheck，UI 同步无变化）', async () => {
+    const onVerified = vi.fn()
+    const { container } = render(
+      <AdminPlayer videoId="vid-1" sourceUrl="https://cdn.example.com/v.m3u8" sourceId="src-1" onVerified={onVerified} />
+    )
+    fireEvent.click(container.querySelector('[data-mock-fail-native]')!)
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(onVerified).not.toHaveBeenCalled()
   })
 })
 
@@ -149,9 +170,7 @@ describe('AdminPlayer — Case 5: sourceId 变更重置 feedback ref', () => {
     )
     fireEvent.click(container.querySelector('[data-mock-play]')!)
     expect(postMock).toHaveBeenCalledTimes(2)
-    expect(postMock).toHaveBeenLastCalledWith('/feedback/playback', {
-      videoId: 'vid-1',
-      sourceId: 'src-2',
+    expect(postMock).toHaveBeenLastCalledWith('/admin/videos/vid-1/sources/src-2/playback-verify', {
       success: true,
     })
   })
@@ -166,9 +185,7 @@ describe('AdminPlayer — Case 5b: onError → POST feedback {success:false, err
     )
     fireEvent.click(container.querySelector('[data-mock-fail-native]')!)
     expect(postMock).toHaveBeenCalledTimes(1)
-    expect(postMock).toHaveBeenCalledWith('/feedback/playback', {
-      videoId: 'vid-abc',
-      sourceId: 'src-xyz',
+    expect(postMock).toHaveBeenCalledWith('/admin/videos/vid-abc/sources/src-xyz/playback-verify', {
       success: false,
       errorCode: 'native_media_failed',
     })
@@ -179,9 +196,7 @@ describe('AdminPlayer — Case 5b: onError → POST feedback {success:false, err
       <AdminPlayer videoId="vid-1" sourceUrl="https://cdn.example.com/v.m3u8" sourceId="src-1" />,
     )
     fireEvent.click(container.querySelector('[data-mock-fail-hls]')!)
-    expect(postMock).toHaveBeenLastCalledWith('/feedback/playback', {
-      videoId: 'vid-1',
-      sourceId: 'src-1',
+    expect(postMock).toHaveBeenLastCalledWith('/admin/videos/vid-1/sources/src-1/playback-verify', {
       success: false,
       errorCode: 'hls_fatal',
     })
@@ -212,9 +227,7 @@ describe('AdminPlayer — Case 5c: 同 sourceId 失败上报去抖', () => {
     )
     fireEvent.click(container.querySelector('[data-mock-fail-native]')!)
     expect(postMock).toHaveBeenCalledTimes(2)
-    expect(postMock).toHaveBeenLastCalledWith('/feedback/playback', {
-      videoId: 'vid-1',
-      sourceId: 'src-2',
+    expect(postMock).toHaveBeenLastCalledWith('/admin/videos/vid-1/sources/src-2/playback-verify', {
       success: false,
       errorCode: 'native_media_failed',
     })
@@ -227,11 +240,11 @@ describe('AdminPlayer — Case 5c: 同 sourceId 失败上报去抖', () => {
     // 1. 先播放成功
     fireEvent.click(container.querySelector('[data-mock-play]')!)
     expect(postMock).toHaveBeenCalledTimes(1)
-    expect(postMock).toHaveBeenLastCalledWith('/feedback/playback', expect.objectContaining({ success: true }))
+    expect(postMock).toHaveBeenLastCalledWith('/admin/videos/vid-1/sources/src-1/playback-verify', expect.objectContaining({ success: true }))
     // 2. 同 sourceId 再 onError → 仍上报失败（reportedRef 不阻塞 errorReportedRef）
     fireEvent.click(container.querySelector('[data-mock-fail-native]')!)
     expect(postMock).toHaveBeenCalledTimes(2)
-    expect(postMock).toHaveBeenLastCalledWith('/feedback/playback', expect.objectContaining({ success: false, errorCode: 'native_media_failed' }))
+    expect(postMock).toHaveBeenLastCalledWith('/admin/videos/vid-1/sources/src-1/playback-verify', expect.objectContaining({ success: false, errorCode: 'native_media_failed' }))
   })
 })
 
@@ -270,8 +283,7 @@ describe('AdminPlayer — Case 5d: 手动重试此线路（Y-166-6 key bump remo
     // remount 后 mock player 重新挂载 / 重新拿到 fail 按钮
     fireEvent.click(container.querySelector('[data-mock-fail-native]')!)
     expect(postMock).toHaveBeenCalledTimes(2)
-    expect(postMock).toHaveBeenLastCalledWith('/feedback/playback', expect.objectContaining({
-      sourceId: 'src-1',
+    expect(postMock).toHaveBeenLastCalledWith('/admin/videos/vid-1/sources/src-1/playback-verify', expect.objectContaining({
       success: false,
       errorCode: 'native_media_failed',
     }))

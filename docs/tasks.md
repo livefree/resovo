@@ -6,20 +6,6 @@
 
 ## 当前任务（单任务工作台：同时仅 1 个 🔄 进行中；完成即删卡，历史见 docs/changelog.md）
 
-### 🔄 SRCHEALTH-ADMIN-PLAYBACK-FB-C · UI+worker+e2e · AdminPlayer 切端点 + 刷新链 + admin_playback 定向消费
-
-- **来源 / 依赖**：ADR-198 拆卡 **-C**（依 -B，commit 待填）。前置 -A（commit `b7106b78`）+ -B（service+route+单测）已落地服务端权威写入；本卡接前端反馈源 + worker 消费 + 端到端验证。
-- **问题理解**：当前 AdminPlayer onPlay/onError 报到前台公开 `/feedback/playback`（被众包多 IP 门槛稀释，本 SEQ 根因）；需切到 -B 的 admin 专用端点直更，并刷新左队列聚合 pill；worker `feedback-driven-recheck` 须把 -A 的 `admin_playback` 失败信号纳入定向消费。
-- **方案**（ADR-198 D-198-8/9 + §后果）：
-  1. **AdminPlayer**（`apps/server-next/src/app/admin/moderation/_client/AdminPlayer.tsx`）：`handlePlay`/`handleError` 由 `apiClient.post('/feedback/playback', {videoId, sourceId, success})` 切到 `apiClient.post('/admin/videos/${videoId}/sources/${sourceId}/playback-verify', {success[, errorCode]})`（videoId/sourceId 入**路径**，body 仅 `{success, errorCode?}`）；保留 per-sourceId 去抖（reportedRef/errorReportedRef）；新增 `onVerified?: () => void` prop，**成功**响应后调用（失败为异步 recheck，UI 同步无变化不触发）；头注更新端点说明。
-  2. **PendingCenter**（`PendingCenter.tsx`）：把既有 `onSourceHealthChanged` 透传给 AdminPlayer `onVerified`（现仅透 LinesPanel line 174 + PendingMetaQuickEdit line 126）；终点 ModerationConsole `refetchQueue` 复用既有链刷新左队列聚合 pill（D-198-9）。
-  3. **worker**（`apps/worker/src/jobs/feedback-driven-recheck.ts`）：`fetchUnprocessed` 的 `origin IN ('feedback_driven','manual_route_reprobe')` 增 `'admin_playback'`（消费 -A `idx_health_events_admin_playback_pending` partial index，planner BitmapOr 三索引混批；定向语义同构 source_id→probe+render 重测→标 processed，共用编排不拆 job）+ 头注登记 P3 admin_playback 来源。
-  4. **测试**：AdminPlayer 既有 feedback 单测改断言新端点 URL/body（路径化）+ onVerified 成功回调；worker feedback-driven-recheck 单测补 admin_playback origin 被拉取断言；**e2e**（MODERATION/ADMIN 域）AdminPlayer 播放成功 → 线路 render 状态 + 左队列 pill 联动刷新。
-- **涉及文件**：`AdminPlayer.tsx`（切端点 + onVerified + 头注）、`PendingCenter.tsx`（透传 onVerified）、`apps/worker/src/jobs/feedback-driven-recheck.ts`（IN-list + 头注）、AdminPlayer feedback 单测 + worker recheck 单测 + e2e（moderation/admin 域）。
-- **不做**：实测分辨率驱动 quality 的 player-core 公开 API 改动（-D 可选/旁路，依 player-core 是否暴露 videoWidth/Height；若触发 Opus 强制项独立评估，不阻塞本卡 MVP——本卡 AdminPlayer 暂不携分辨率，success body 仅 `{success}`）。前台公开 `/feedback/playback` 端点**不删**（仍服务真实前台用户，ADR §后果）。
-- **门禁**：`typecheck` / `lint` / `test:changed`（server-next + worker 改动）/ `verify:adr-contracts` / `test:e2e:admin`（+ 如涉播放器路径按域选跑）/ AdminPlayer 既有 feedback 单测须改绿（端点切换）。
-- **执行模型**：claude-opus-4-8（主循环）。**子代理调用**：无（除非 -D 触及 player-core 公开 API → 另起 Opus 强制项；本卡 -C 范围不动 player-core core/shell 接口）。
-
 ### ⏸ MODUX-ACPT-5（暂停 · 检查点已提交）· 验收第 5 条纠正 · 审核台头部去 h1 + 元素并入 tab 行
 
 > 验收迭代已提交 3 检查点：`b6496861`（1-4 轮 + Codex 1·2）/ `587b2999`（5-7 轮快编芯片化）/ `58ca2fc4`（Codex 3 竞态）。用户转入 SRCHEALTH 设计；本卡**暂停待续**（验收若有后续修订可恢复）。下方为完整改动记录。
@@ -43,6 +29,8 @@
 - **验收**：审核台无可见 h1；stats·预设按钮在 tab 行；**全页（含 hover tooltip）无「键盘流」字样**；标题行无「待审」pill、改显信号 chip；预设/批量/通过即上架/键盘 `?` help 无回归；e2e filter-presets 绿。
 - **执行模型**：claude-opus-4-8（主循环）。子代理调用：无（无共享组件 Props 改动 / 无新端点）。
 - **遗留标记**：moderation visual 快照（`tests/visual/admin-moderation.visual.spec.ts`，独立 `admin-visual` project，非必跑门禁）布局变更后需 `npm run test:visual:update` 重生成。
+
+_（**SRCHEALTH-ADMIN-PLAYBACK-FB ✅ MVP 闭环 2026-06-11**（审核验收期用户发现「播放器播放成功/失败不反馈探测」根因）——ADR-198（设计裁决 arch-reviewer claude-opus-4-8 CONDITIONAL PASS + 用户裁定 3 开放项，commit `3a3fd016`）→ **-A** schema+types+architecture.md（migration 109 `last_admin_verified_at` + `admin_playback` origin + partial index，`b7106b78`）→ **-B** API service+route（`recordPlaybackVerify` + `POST /admin/videos/:videoId/sources/:sourceId/playback-verify` + 16 单测，`e464c869`）→ **-C** UI+worker+e2e（AdminPlayer 切端点 + `onVerified` 刷新链 + worker `admin_playback` 定向消费 + e2e，本轮提交）。**成果**：admin 真实播放成功直更 render/probe + 失败定向 recheck，绕众包多 IP 门槛 + 不污染 P2/P3 众包 EMA。主循环全程 claude-opus-4-8；逐卡门禁全绿（含 test:e2e:admin 82/82）。**-D（可选/旁路，未请求）**：AdminPlayer 携实测分辨率驱动 quality，依 player-core 是否暴露 videoWidth/Height（触 player-core 公开 API 则 Opus 强制项）——登记 follow-up。**工作台空闲**——取下一个前先查 `docs/task-queue.md` 是否有 🚨 BLOCKER（当前无）。）_
 
 _（**SEQ-20260610-03 MODUX ✅ 全 15/15 收口 2026-06-11** — Phase 1 ✅（标题治理 P1-0~P1-1-B / DecisionCard P1-2 / 前台预览 404 P1-3 / 线路·预设 P1-4）+ Phase 2 ✅（ModListRow 三分区 P2-1 / 详情 Pill 化 P2-2 / 键盘流共享化 P2-3〔Codex 两轮拦截补全〕）+ Phase 3 ✅（P3-1-A/-B 后端富集·年代过滤 / P3-2 筛选弹层〔F 键归并〕/ P3-3 类似 tab 阈值折叠 + merge 升 primary / P3-4-A /meta 补 country / P3-4-B 4 字段内联快编〔genres lazy-fetch〕）。本轮主循环 claude-opus-4-8 全程；门禁逐卡全绿。**PHASE COMPLETE 全量兜底见 changelog。工作台空闲**——取下一个前先查 `docs/task-queue.md` 是否有 🚨 BLOCKER（当前无）。）_
 

@@ -15,6 +15,11 @@
  *   线路级重探信号，API 侧 P2-4-A 按 active 口径批量入队）——两种信号的定向语义完全同构
  *   （source_id 集合 → probe+render 重测 → 标 processed），共用本编排不拆独立 job。
  *   批量上限 BATCH_LIMIT 共享：大线路信号分多个 cron 周期消费完（信号持久化不丢）。
+ *
+ * SRCHEALTH-ADMIN-PLAYBACK-FB（ADR-198 D-198-8）：再扩消费 origin='admin_playback'（admin 审核台
+ *   真实播放**失败**信号——成功路径直更 render/probe 不入队；失败 processed_at=NULL 入定向 recheck）。
+ *   定向语义同构（source_id → probe+render 重测 → 标 processed）；partial index
+ *   idx_health_events_admin_playback_pending（migration 109）支撑拉取，共用本编排不拆 job。
  */
 
 import type { Pool } from 'pg'
@@ -82,12 +87,13 @@ export async function runFeedbackDrivenRecheck(pool: Pool, log: pino.Logger): Pr
 
 async function fetchUnprocessed(pool: Pool, log: pino.Logger): Promise<FeedbackEvent[] | null> {
   try {
-    // 两种 origin 各有独立 partial index（058a feedback_driven / 106 manual_route_reprobe），
-    // IN 谓词由 planner 展开 OR → BitmapOr 组合两索引；公平按 created_at 全局排序混批消费
+    // 三种 origin 各有独立 partial index（058a feedback_driven / 106 manual_route_reprobe /
+    // 109 admin_playback），IN 谓词由 planner 展开 OR → BitmapOr 组合三索引；公平按 created_at
+    // 全局排序混批消费（定向语义同构，见头注 ADR-198 D-198-8）
     const result = await pool.query<FeedbackEvent>(
       `SELECT id, source_id, video_id, origin
        FROM source_health_events
-       WHERE origin IN ('feedback_driven', 'manual_route_reprobe') AND processed_at IS NULL
+       WHERE origin IN ('feedback_driven', 'manual_route_reprobe', 'admin_playback') AND processed_at IS NULL
        ORDER BY created_at ASC
        LIMIT $1`,
       [BATCH_LIMIT],

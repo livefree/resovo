@@ -4464,3 +4464,21 @@
 - **数据库变更**：无（消费 -A migration 109 列/origin/index；无新 migration）
 - **门禁**：typecheck EXIT=0 / lint 4·4 / test:changed 283 passed（24 文件，含新 8 项）/ verify:adr-contracts EXIT=0（**verify-endpoint-adr 235 路由全对齐，新 playback-verify 命中 ADR-198 §端点契约** + sql-schema-alignment ✅）。
 - **注意事项**：-C 将 AdminPlayer 切此端点（替 /feedback/playback）+ `onVerified` 刷新链 + PendingCenter 透传 onSourceHealthChanged + worker feedback-driven-recheck 拉取 admin_playback origin（消费 -A partial index）+ e2e。本卡 read-path（VideoSourceLine mapRow）未加 last_admin_verified_at——按需在 -C UI 暴露（避免未消费的共享类型改动）。
+
+## [SRCHEALTH-ADMIN-PLAYBACK-FB-C] UI+worker+e2e · AdminPlayer 切端点 + 刷新链 + admin_playback 定向消费
+- **完成时间**：2026-06-11
+- **记录时间**：2026-06-11 15:15
+- **执行模型**：claude-opus-4-8（主循环）
+- **子代理**：无（未触 player-core 公开 API）
+- **依赖**：ADR-198 + -A（`b7106b78`）+ -B（`e464c869`）
+- **修改文件**：
+  - `apps/server-next/src/app/admin/moderation/_client/AdminPlayer.tsx` — handlePlay/handleError 由前台公开 `/feedback/playback` 切到 admin 专用 `POST /admin/videos/:videoId/sources/:sourceId/playback-verify`（videoId/sourceId 入**路径**，body 仅 `{success[, errorCode]}`）；新增 `onVerified?: () => void` prop，成功响应后调用（失败异步 recheck 不触发）；保留 per-sourceId 去抖；头注更新端点说明
+  - `apps/server-next/src/app/admin/moderation/_client/PendingCenter.tsx` — AdminPlayer `onVerified={onSourceHealthChanged}` 透传（接既有刷新链 → ModerationConsole refetchQueue 刷新左队列聚合 pill，D-198-9）
+  - `apps/worker/src/jobs/feedback-driven-recheck.ts` — `fetchUnprocessed` origin IN 列表增 `'admin_playback'`（消费 -A `idx_health_events_admin_playback_pending` partial index，planner BitmapOr 三索引混批；定向语义同构）+ 头注登记 ADR-198 D-198-8
+  - `tests/unit/admin-moderation/admin-player.test.tsx` — feedback 断言改新端点（路径化 body）+ 新增 3 用例（onVerified 成功回调 / onError 不触发 onVerified / 端点切换）（14→17）
+  - `tests/unit/worker/jobs/feedback-driven-recheck.test.ts` — fetch SQL 断言补 `'admin_playback'` + 新增 admin_playback 失败信号混批定向消费用例（5→6）
+  - `tests/e2e/admin/moderation/player-integration.spec.ts` — playback 上报 mock 路由 + 头注改新端点
+- **新增依赖**：无
+- **数据库变更**：无（消费 -A schema）
+- **门禁**：typecheck EXIT=0 / lint 4·4 / test:changed 137 passed（12 文件）/ verify:adr-contracts EXIT=0 / **test:e2e:admin 82/82 passed（含 player-integration 3 用例）** / AdminPlayer 17 + worker recheck 6 单测全绿。
+- **注意事项**：AdminPlayer 端点切换对**全部** admin 消费方生效（merge/videos/sources/LinesPanel/moderation——均为可信真实播放上下文，鉴权 [moderator,admin] 满足）；仅 PendingCenter 接 onVerified 刷新链，其余消费方不自动刷新（同切换前行为）。**SRCHEALTH-ADMIN-PLAYBACK-FB MVP 闭环**（ADR-198 → -A schema → -B service+route → -C UI+worker+e2e）：admin 真实播放成功直更 render/probe + 失败定向 recheck，绕众包门槛 + 不污染 EMA。**-D（可选/旁路）**：AdminPlayer 携实测分辨率驱动 quality，依 player-core 是否暴露 videoWidth/Height（触 player-core 公开 API 则 Opus 强制项）——未请求，登记为 follow-up。前台公开 `/feedback/playback` 端点不删（仍服务真实前台用户）。

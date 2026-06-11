@@ -98,6 +98,7 @@ export function PendingCenter({ v, onStaffNoteChange, onEditVideo, onSourceHealt
           sourceUrl={selected?.sourceUrl ?? null}
           sourceId={selected?.sourceId ?? null}
           title={v.title}
+          onVerified={onSourceHealthChanged}
         />
       </div>
 
