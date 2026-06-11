@@ -33,6 +33,7 @@ import {
   countRouteSources,
   softDeleteRouteBySite,
 } from '@/api/db/queries/source-routes'
+import { enqueueRouteReprobeSignals } from '@/api/db/queries/sourceHealthEvents'
 import { MOUNTAIN_CODENAMES } from '@resovo/types'
 // CHG-VSR-3 Codex review FIX：Zod schema + 结果 DTO + aggregateSignal 拆至 sources-matrix.schemas.ts（解 500 行硬限）
 import {
@@ -240,8 +241,12 @@ export class SourcesMatrixService {
   }
 
   /**
-   * row 8 重新探测：enqueue 全线路 probe job（不修改 video_sources）
+   * row 8 重新探测：真实入队全线路 probe 信号（不修改 video_sources）
    * - Y2：freeze 守卫拦截
+   * - SRCHEALTH-P2-4-A：占位 jobId 消除——每 active 源写一行 source_health_events
+   *   （origin='manual_route_reprobe'，jobId 落 triggered_by 可溯源；worker 定向消费见 P2-4-B）。
+   *   queuedCount 口径 = 实际入队 active 源数（与 worker 消费口径对齐，防入队不消费却标 processed）；
+   *   线路存在但全 inactive → queuedCount=0 正常返回（非 404——404 仅当线路不存在）。
    */
   async reprobeRoute(
     siteKey: string,
@@ -251,13 +256,17 @@ export class SourcesMatrixService {
   ): Promise<RouteReprobeResult> {
     await this.assertNotFrozen()
 
-    const queuedCount = await countRouteSources(this.db, siteKey, sourceName)
-    if (queuedCount === 0) {
+    const routeSourceCount = await countRouteSources(this.db, siteKey, sourceName)
+    if (routeSourceCount === 0) {
       throw new AppError('NOT_FOUND', `线路 ${siteKey}/${sourceName} 不存在`, 404)
     }
 
-    // 占位 probe jobId（与 testRoute 同模式，复用 source-health worker 待 E2 后续完善）
     const probeJobId = `reprobe-${siteKey}-${sourceName}-${Date.now()}`
+    const queuedCount = await enqueueRouteReprobeSignals(this.db, {
+      siteKey,
+      sourceName,
+      jobId: probeJobId,
+    })
 
     this.auditSvc.write({
       actorId,

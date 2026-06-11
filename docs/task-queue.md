@@ -1839,9 +1839,9 @@
 
 ## [SEQ-20260610-02] 视频/线路/站点健康度与反馈闭环（source-health v2 方案落地）
 
-- **状态**：🔄 执行中（9/16 卡完成：**Phase 1 全收口** ✅ + **Phase 2** P2-1/P2-2/P2-3 ✅；下一步 P2-4-A（manual_route_reprobe API 侧）→ P2-4-B（worker 定向消费）即 Phase 2 收口）
+- **状态**：🔄 执行中（10/16 卡完成：**Phase 1 全收口** ✅ + **Phase 2** P2-1/P2-2/P2-3/P2-4-A ✅；下一步 P2-4-B（worker 定向消费，接 P1-5 sourceIds 参数）即 Phase 2 收口）
 - **创建时间**：2026-06-10 12:53
-- **最后更新时间**：2026-06-10 19:10
+- **最后更新时间**：2026-06-10 19:35
 - **目标**：落地 `docs/designs/source-health-feedback-loop-plan_20260610.md` v2（两轮独立审核有条件通过，必修全吸收，commit 88893812）：修复「全部探测/试播后状态不更新」三处可见断点（B1/B2/B3）→ 打通反馈闭环（F1–F4）→ 评分进化 + 站点/主机桥接（D3/D4）。
 - **范围**：apps/api（service/queries/routes/lib）+ apps/worker（jobs/lib）+ apps/server-next（sources/videos 模块 UI）+ apps/web-next（PlayerShell）+ packages（media-probe 新包，P1-3）。**方案 §3 为各卡内容真源，§4 为门禁真源**；卡面只记验收口径与文件范围。
 - **依赖**：无 BLOCKER；方案 v2 已批准（用户 2026-06-10）。
@@ -1909,9 +1909,11 @@
    - 验收口径：dead→ok 复活需窗口内 ≥2 独立 ipHash（SADD+SCARD+TTL，禁 INCR）；失败→recheck 同卡迁移同原语。
    - 文件范围：`apps/api/src/routes/feedback.ts`、`tests/unit/api/feedbackRoute.test.ts`。依赖：P2-1 ✅。建议模型：sonnet。
    - **完成备注**：① 共享原语 `countDistinctIps(key, ipHash, windowSeconds)`（SADD+TTL 检查+SCARD）：**TTL 设置用 ttl<0 检查而非照搬失败侧 `count===1` 判断**——SADD 无 INCR 的原子递增返回值，两个并发首次 SADD（不同 member）后双方 SCARD 都读 2 → 谁都不设 TTL → 永久 key（复活门槛被脏状态永远满足）；ttl<0 由任意后续请求自愈，固定窗口非滑动。② 复活侧：`fb:revive:{sourceId}` 窗口 300s + ≥2 独立 ipHash 才执行 dead→ok UPDATE；未达门槛仅刷 `last_probed_at`（保留 CHG-SN-4-05「success 反馈视为 probe 信号」现状，**该时间戳语义与 P3-1 新鲜度衰减的关系登记留 P3-1 裁决**——feedback 刷 last_probed_at 会让源显得新近探测过）；redis 故障 catch→0 = fail-safe 不复活。③ 失败侧：`fb:fail:set:{sourceId}` 迁移（阈值 3/窗口 300s 保留，语义从「同一客户端 3 次」→「3 个独立客户端」；旧 `fb:fail:{ipHash}:*` 不再写入，存量 TTL 300s 自然过期，无迁移脚本）；同卡删除同 key 族死代码 `countRecentFailures`（P2-2 登记项闭环）。④ 测试 18/18：新增 5 用例（门槛未达仅刷时间戳 / 达标复活 / ttl<0→EXPIRE 设置 + 已有 TTL 不重设〔固定窗口〕/ redis 故障 fail-safe / 失败侧 2 无信号·3 入队 + INCR 不再使用断言）+ 既有 2 用例适配（INCR→SCARD / EMA 正交断言改 sadd）。**已知权衡登记**：低流量源失败侧灵敏度下降（单用户反复失败不再触发 recheck——独立佐证原则的代价，方案 §8 C3 已裁决）。共享层沉淀：否——SET 门槛原语单文件双调用点，第 3 消费方（如 P3-3 host 级熔断计数）出现再裁决提取。门禁：typecheck/lint EXIT=0 / feedbackRoute 18/18 / test:changed 18 passed（feedback 前台 API 无对应 e2e 域，P1-5 同先例）。执行模型: claude-fable-5（建议 sonnet，用户会话人工覆盖持续推进授权）；子代理: 无。
-10. **SRCHEALTH-P2-4-A** — manual_route_reprobe 信号 API 侧（状态：⬜ 待开始）
-    - 创建时间：2026-06-10 12:53 ｜ 验收口径：`reprobeRoute` 写真实队列信号（`origin='manual_route_reprobe'` + partial index migration + types union + audit 真实 jobId/queuedCount），占位 jobId 消除。
-    - 文件范围：migration（index）、`packages/types`（origin union）、`apps/api/src/services/SourcesMatrixService.ts`、`apps/api/src/db/queries/`。依赖：无硬依赖（可与 P2-1 并行）。建议模型：sonnet。
+10. **SRCHEALTH-P2-4-A** — manual_route_reprobe 信号 API 侧（状态：✅ 已完成 2026-06-10 19:35）
+    - 创建时间：2026-06-10 12:53 ｜ 实际开始：2026-06-10 19:20 ｜ 完成时间：2026-06-10 19:35
+    - 验收口径：`reprobeRoute` 写真实队列信号（`origin='manual_route_reprobe'` + partial index migration + types union + audit 真实 jobId/queuedCount），占位 jobId 消除。
+    - 文件范围（实施修正：+architecture.md origin 注释 + 单测）：migration 106、`packages/types/src/admin-moderation.types.ts`、`apps/api/src/db/queries/sourceHealthEvents.ts`、`apps/api/src/services/SourcesMatrixService.ts`、`docs/architecture.md`、`tests/unit/api/sources-routes-mutations-audit.test.ts`。依赖：无硬依赖。建议模型：sonnet。
+    - **完成备注**：① migration 106 partial index `idx_source_health_events_route_reprobe_unprocessed`（`WHERE processed_at IS NULL AND origin='manual_route_reprobe'`，对齐 058a feedback_driven 先例；origin 列无 CHECK 新值零列迁移；已真库执行 ✅）。② types union：`SourceHealthEventOriginWorker` +`'manual_route_reprobe'` 同位扩展（§4 要求）。③ 批量入队 query `enqueueRouteReprobeSignals`（INSERT…SELECT，每 active 源一行；**入队口径 = countRouteSources 线路匹配 + `is_active=true`——与 P2-4-B worker 定向消费（P1-5 loadSourcesByIds active 口径）对齐，防「入队不被消费却标 processed」F2-① 同型**；jobId 落 `triggered_by` 列，audit 的 jobId 可关联到全部信号行真实溯源）。④ Service：占位 jobId 消除——queuedCount 语义从「线路源总数」收紧为「实际入队 active 源数」（更诚实：原值关联的是不存在的队列）；线路存在但全 inactive → queuedCount=0 正常返回非 404（404 仅线路不存在）；audit afterJsonb 契约形状不变（probeJobId+queuedCount）。⑤ 测试 11/11：用例 5 改造（INSERT 路由 mock + SQL 契约断言：origin literal / active 口径 / jobId 参数）+ 新增 5b（全 inactive → queuedCount=0 + audit 记真实 0）。既有端点无新 route（verify:endpoint-adr 234 对齐 ✅ 不触发 ADR 起草）。共享层沉淀：否——批量入队 query 单消费方（reprobeRoute），worker 消费侧 P2-4-B 用读路径（partial index 拉取）非本 query。登记：`makeAuditSpy` 测试文件既有死代码（范围外不动）。门禁：typecheck/lint EXIT=0 / 测试 11/11 / test:changed 升全量 7101 passed / migrate ✅ / verify:adr-contracts ✅ / e2e:admin 82/82 EXIT=0。执行模型: claude-fable-5（建议 sonnet，用户会话人工覆盖持续推进授权）；子代理: 无。
 11. **SRCHEALTH-P2-4-B** — manual_route_reprobe worker 定向消费（状态：⬜ 待开始）
     - 创建时间：2026-06-10 12:53 ｜ 验收口径：worker 消费 `manual_route_reprobe` 信号定向 probe+render 对应线路全 source，消费多少标多少 processed。
     - 文件范围：`apps/worker/src/jobs/`（接 P1-5 定向参数）。依赖：SRCHEALTH-P2-4-A + SRCHEALTH-P1-5。建议模型：sonnet。

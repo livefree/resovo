@@ -95,3 +95,29 @@ export async function insertHealthEvent(
   )
   return result.rows[0]!.id
 }
+
+/**
+ * SRCHEALTH-P2-4-A：reprobeRoute 批量入队 manual_route_reprobe 信号（每 active 源一行）。
+ * 入队口径 = countRouteSources 线路匹配口径 + is_active=true——与 P2-4-B worker 定向消费
+ * （P1-5 loadSourcesByIds 的 active 口径）对齐，防「入队不被消费却标 processed」（F2-① 同型）。
+ * jobId 写入 triggered_by：audit afterJsonb 的 jobId 经此关联到全部信号行（真实可溯源）。
+ * 返回实际入队行数（= audit queuedCount 口径，从「线路源总数」收紧为「实际入队 active 源数」）。
+ */
+export async function enqueueRouteReprobeSignals(
+  db: Pool,
+  input: { siteKey: string; sourceName: string; jobId: string },
+): Promise<number> {
+  const result = await db.query<{ id: string }>(
+    `INSERT INTO source_health_events (video_id, source_id, origin, triggered_by, processed_at)
+     SELECT vs.video_id, vs.id, 'manual_route_reprobe', $3, NULL
+       FROM video_sources vs
+       JOIN videos v ON v.id = vs.video_id
+      WHERE COALESCE(vs.source_site_key, v.site_key) = $1
+        AND vs.source_name = $2
+        AND vs.is_active = true
+        AND vs.deleted_at IS NULL
+     RETURNING id`,
+    [input.siteKey, input.sourceName, input.jobId],
+  )
+  return result.rowCount ?? result.rows.length
+}

@@ -3950,3 +3950,23 @@
   - **登记留 P3-1**：success 反馈未达复活门槛时仍刷 `last_probed_at`（CHG-SN-4-05 现状保留）——feedback 时间戳会让源在 P3-1 新鲜度衰减中显得「新近探测过」，语义关系留 P3-1 裁决。
   - 共享层沉淀：否——SET 门槛原语单文件双调用点；第 3 消费方（如 P3-3 host 熔断计数）出现再裁决提取。
   - 门禁：typecheck/lint EXIT=0 / feedbackRoute 18/18 / test:changed 18 passed（feedback 前台 API 无对应 e2e 域，ADR-180 域选跑 + P1-5 先例）。
+
+## [SRCHEALTH-P2-4-A] manual_route_reprobe 信号 API 侧（SEQ-20260610-02 Phase 2）
+- **完成时间**：2026-06-10
+- **记录时间**：2026-06-10 19:37
+- **执行模型**：claude-fable-5（建议 sonnet，用户会话人工覆盖持续推进授权）
+- **子代理**：无
+- **修改文件**：
+  - `apps/api/src/db/migrations/106_health_events_manual_route_reprobe_index.sql` — 新建 partial index `idx_source_health_events_route_reprobe_unprocessed`（对齐 058a feedback_driven 先例；origin 列无 CHECK 新值零列迁移；已真库执行）
+  - `packages/types/src/admin-moderation.types.ts` — `SourceHealthEventOriginWorker` + `'manual_route_reprobe'`（方案 §4 同位扩展；不复用 feedback_driven 区分用户反馈与运营操作）
+  - `apps/api/src/db/queries/sourceHealthEvents.ts` — `enqueueRouteReprobeSignals` 批量 INSERT…SELECT（每 active 源一行；入队口径 = countRouteSources 线路匹配 + is_active=true，与 P2-4-B worker 定向消费口径对齐防「入队不消费却标 processed」F2-① 同型；jobId 落 triggered_by 真实溯源）
+  - `apps/api/src/services/SourcesMatrixService.ts` — reprobeRoute 占位 jobId 消除；queuedCount 语义收紧为实际入队 active 源数；线路全 inactive → queuedCount=0 正常返回非 404；audit 契约形状不变
+  - `docs/architecture.md` — source_health_events origin 注释 + manual_route_reprobe（Migration 106）
+  - `tests/unit/api/sources-routes-mutations-audit.test.ts` — 用例 5 改造（INSERT mock + SQL 契约断言）+ 新增 5b（全 inactive queuedCount=0）
+- **新增依赖**：无
+- **数据库变更**：Migration 106（partial index，已真库执行 ✅）
+- **注意事项**：
+  - 既有端点无新 route，verify:endpoint-adr 不触发 ADR 起草（234 端点对齐 ✅）。
+  - P2-4-B（worker 定向消费）待开：按 106 索引拉取 manual_route_reprobe 待处理信号 → 接 P1-5 `runLevel2Render({ sourceIds })` 定向参数 → 消费多少标多少 processed。
+  - 登记：测试文件 `makeAuditSpy` 既有死代码（范围外不动）。
+  - 门禁：typecheck/lint EXIT=0 / sources-routes-mutations-audit 11/11 / test:changed 升全量 7101 passed / verify:adr-contracts ✅ / e2e:admin 82/82 EXIT=0。

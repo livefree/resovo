@@ -121,10 +121,14 @@ describe('SourcesMatrixService.reprobeRoute audit + freeze 守卫', () => {
     expect(writeMock).not.toHaveBeenCalled()
   })
 
-  it('5. freeze=false + 有线路 → afterJsonb.action="reprobe" + probeJobId + queuedCount', async () => {
+  it('5. freeze=false + 有线路 → 真实入队信号 + afterJsonb.action="reprobe" + probeJobId + queuedCount', async () => {
+    // SRCHEALTH-P2-4-A：queuedCount 来自 INSERT 实际入队行数（非 countRouteSources 总数）
     const pool = makePool((sql) => {
       if (sql.includes('system_settings')) return UNFROZEN_SETTING_RESULT
-      if (sql.includes('COUNT(*) AS count')) return { rows: [{ count: '7' }] }
+      if (sql.includes('COUNT(*) AS count')) return { rows: [{ count: '9' }] }
+      if (sql.includes('INSERT INTO source_health_events')) {
+        return { rows: Array.from({ length: 7 }, (_, i) => ({ id: `ev-${i}` })) }
+      }
       return { rows: [] }
     })
     const svc = new SourcesMatrixService(pool)
@@ -137,6 +141,37 @@ describe('SourcesMatrixService.reprobeRoute audit + freeze 守卫', () => {
         actionType: 'sources.route_action',
         targetKind: 'source_route',
         afterJsonb: expect.objectContaining({ action: 'reprobe', queuedCount: 7 }),
+      }),
+    )
+    // 入队 SQL 契约：origin literal + jobId 落 triggered_by 参数 + 与 worker 消费一致的 active 口径
+    const insertCall = (pool.query as ReturnType<typeof vi.fn>).mock.calls.find((c: unknown[]) =>
+      String(c[0]).includes('INSERT INTO source_health_events'),
+    )
+    expect(insertCall).toBeDefined()
+    const [insertSql, insertParams] = insertCall as [string, unknown[]]
+    expect(insertSql).toContain("'manual_route_reprobe'")
+    expect(insertSql).toContain('vs.is_active = true')
+    expect(insertSql).toContain('vs.deleted_at IS NULL')
+    expect(insertSql).toContain('COALESCE(vs.source_site_key, v.site_key)')
+    expect(insertParams[0]).toBe('jszyapi')
+    expect(insertParams[1]).toBe('线路1')
+    expect(insertParams[2]).toBe(result.probeJobId)
+  })
+
+  it('5b. 线路存在但全 inactive → queuedCount=0 正常返回（非 404；audit 仍写入真实 0）', async () => {
+    const pool = makePool((sql) => {
+      if (sql.includes('system_settings')) return UNFROZEN_SETTING_RESULT
+      if (sql.includes('COUNT(*) AS count')) return { rows: [{ count: '3' }] }
+      if (sql.includes('INSERT INTO source_health_events')) return { rows: [] }
+      return { rows: [] }
+    })
+    const svc = new SourcesMatrixService(pool)
+    const writeMock = spyAuditOnService(svc)
+    const result = await svc.reprobeRoute('jszyapi', '线路1', 'actor-1')
+    expect(result.queuedCount).toBe(0)
+    expect(writeMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        afterJsonb: expect.objectContaining({ action: 'reprobe', queuedCount: 0 }),
       }),
     )
   })

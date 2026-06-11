@@ -112,6 +112,8 @@ export type SourceHealthEventOriginLegacy =
 
 /**
  * plan §4 worker 新增 origin 值（M-SN-4 启用后开始持久化）。
+ * 'manual_route_reprobe'：106 / SRCHEALTH-P2-4-A 运营线路级重探信号（不复用 feedback_driven，
+ * 区分真实用户反馈与运营操作；API 侧 reprobeRoute 批量入队，worker 定向消费见 P2-4-B）。
  */
 export type SourceHealthEventOriginWorker =
   | 'scheduled_probe'
@@ -119,6 +121,7 @@ export type SourceHealthEventOriginWorker =
   | 'manual_recheck'
   | 'feedback_driven'
   | 'circuit_breaker'
+  | 'manual_route_reprobe'
 
 export type SourceHealthEventOrigin =
   | SourceHealthEventOriginLegacy
