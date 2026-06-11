@@ -1947,9 +1947,9 @@
 
 ## [SEQ-20260610-03] 内容审核台 UX 优化（MODUX · 信息密度 + 去冗余 + 快速编辑）
 
-- **状态**：🔄 执行中（1/15 卡完成：P1-0 ✅）
+- **状态**：🔄 执行中（2/15 卡完成：P1-0 ✅ + P1-1-A ✅）
 - **创建时间**：2026-06-10 22:04
-- **最后更新时间**：2026-06-10 22:12
+- **最后更新时间**：2026-06-10 22:24
 - **目标**：落地 `docs/designs/moderation-console-ux-plan_20260610.md` v2（两轮独立审核 + 第三轮注册前终审通过，file:line 抽查全部命中）：审核台 12 项问题——去冗余（标题治理/DecisionCard 精简）→ 信息密度（列表单元格/详情 tab/键盘流）→ 功能增强（年代+富集过滤/筛选弹层/类似 tab 阈值/4 字段快速编辑）。
 - **范围**：apps/server-next（admin/moderation/_client + 标题治理涉及页）+ packages/admin-ui（PageHeader/DecisionCard/KeyboardShortcuts 消费）+ apps/api（moderation.ts query/meta schema + service/queries）+ packages/types（admin-moderation.types）。**方案文件为各卡内容真源**；卡面只记验收口径与文件范围。
 - **依赖**：无 BLOCKER；工作台空闲（SRCHEALTH 剩余 P3-2 影子验证硬前置 ~06-17 / P3-4 顺延，与本 SEQ 无文件冲突）。
@@ -1965,10 +1965,12 @@
    - 文件范围：docs only（规约写入 `docs/designs/moderation-console-ux-plan_20260610.md` 附录 A）。
    - 依赖：无。建议模型：sonnet（**强制 Opus 子代理**：规约决策，CLAUDE.md 模型路由）。
    - **完成备注**：① 盘点表落账（方案附录 A.1）：PageHeader 页面级消费方实测 **14 处**（grep 误命中纯注释 4 处已排除；crawler/runs/[id] 为 hidden 路由无面包屑先例）；raw `<h1>` 非 dev 5 页确认（VideoListClient 的 PageHeader grep 命中仅为注释）；dev 5 页豁免。② **arch-reviewer (claude-opus-4-8) 裁决 T-1~T-12 + Q1~Q5 + R-1~R-3**（附录 A.2–A.4，P1-1 执行真源），关键裁决：**面包屑零改动**（`<nav>` 内 `<strong>` 充当 h1 违反 heading 语义，末项降级破坏 14 页一致性）；**冗余消解 = 保留标题而非删除**（T-3/T-12——纠正方案原前提：5 迁移页仅 videos/settings 真冗余，Dashboard 问候/Analytics 不冗余）;**Q4 不扩 PageHeaderProps**（现有 title/subtitle/actions ReactNode 三槽全覆盖 → **P1-1-A 不触发 types.ts 强制 Opus trailer 项**；槽不够 → BLOCKER 重新评审）；Moderation 统计+键盘行归 subtitle 槽（T-6）。③ **关键结构发现**：AnalyticsView 非独立路由——是 DashboardClient `activeTab==='analytics'` 互斥 tab（`DashboardClient.tsx:266`），`/admin` 同路由 h1 唯一性走 T-9；ReactNode title 渲染为 div 非 heading → Dashboard/Analytics 迁移需 T-8 h1 兜底（R-1，P1-1-B 实现难点）。④ 拆卡边界修正（Q5）：-A 删除「PageHeader 扩展」项 = 零 admin-ui 改动，纯 server-next 应用层迁移；P1-1-A/-B 卡面已按裁决同步修正。docs-only（test:changed 自动跳过，ADR-180）。执行模型: claude-fable-5（建议 sonnet，用户会话人工覆盖）；子代理: arch-reviewer (claude-opus-4-8)。
-2. **MODUX-P1-1-A** — 审核台/视频库迁移 PageHeader（item 5；P1-0 裁决 Q5 修正：零 admin-ui 改动）（状态：⬜ 待开始）
+2. **MODUX-P1-1-A** — 审核台/视频库迁移 PageHeader（item 5；P1-0 裁决 Q5 修正：零 admin-ui 改动）（状态：✅ 已完成 2026-06-10 22:24）
+   - 创建时间：2026-06-10 22:04 ｜ 实际开始：2026-06-10 22:13 ｜ 完成时间：2026-06-10 22:24
    - 验收口径（真源 = 方案附录 A 规约 T-1~T-6）：`ModerationConsole`（T-5 字号归一 font-size-xl→PageHeader 内置 + **T-6 统计/键盘提示行原样进 subtitle 槽**，R-2：dangerouslySetInnerHTML 原样搬运不得顺手清理）+ `VideoListClient`（T-3 标准三槽迁移，保留标题不删除）改用 PageHeader，移除 raw `<h1>`；headingLevel 默认 1（T-4）；已消费页无回归。
-   - 文件范围（**Q4 裁决：不扩 PageHeaderProps，零 packages/admin-ui 改动，不触发 types.ts Opus trailer 项**；执行中发现槽不够 → BLOCKER 重新 Opus 评审）：`apps/server-next/src/app/admin/moderation/_client/ModerationConsole.tsx`、`apps/server-next/src/app/admin/videos/_client/VideoListClient.tsx`。
+   - 文件范围（**Q4 裁决：不扩 PageHeaderProps，零 packages/admin-ui 改动，不触发 types.ts Opus trailer 项**）：`apps/server-next/src/app/admin/moderation/_client/ModerationConsole.tsx`、`apps/server-next/src/app/admin/videos/_client/VideoListClient.tsx`。
    - 依赖：MODUX-P1-0 ✅。建议模型：sonnet。
+   - **完成备注**：① ModerationConsole：raw `<h1>`(font-size-xl) → `<PageHeader title={M.title}>`（T-5 归一 font-size-lg）；统计+键盘行整体进 subtitle 槽（R-2：dangerouslySetInnerHTML 与全部 CSS 变量逐字原样搬运，内层仅去掉与 SUBTITLE_STYLE 重复的 marginTop/fontSize/color）；preset 按钮区 + FilterPresetPopover（含 anchorRef + position:relative 锚定结构）整体进 actions 槽零行为变化；外包中性 div 保留原 marginBottom:8（该页容器无 gap 体系，不在本卡重排整页间距）。② VideoListClient：**发现 HEAD_STYLE/HEAD_TITLE_STYLE/HEAD_ACTIONS_STYLE 三常量与 PageHeader 内置样式逐字相同（手写副本）→ 删除**，正是 T-1 要收敛的重复实现；quick-filter chips 区进 subtitle 槽（SUBHEAD_STYLE 去 margin 由槽提供，6px→4px 统一到共享契约）；导出 CSV/手动添加按钮进 actions 槽（`videos-export-csv` testid 保留）。③ 选择器迁移核验：`data-page-head` → PageHeader 内置 `data-page-header`；预检 grep 确认 videos/moderation 域测试零依赖旧属性（DashboardClient 测试依赖 data-page-head 属 P1-1-B 范围）；`data-page-head-sub`/chips 的 data-quick-filter 保留在 subtitle 内容上。④ 登记：ModerationConsole 存量 unused BTN_PRIMARY/BTN_DANGER（迁移前已死代码，范围外不动）。共享层沉淀：否——本卡即是把手写副本收敛到既有共享 PageHeader。门禁：typecheck/lint EXIT=0 / test:changed 13 passed / moderation 域单测手动 28 passed / **e2e:admin 82/82 EXIT=0**。执行模型: claude-fable-5（建议 sonnet，用户会话人工覆盖持续推进授权）；子代理: 无。
 3. **MODUX-P1-1-B** — Dashboard/Analytics/Settings 迁移 + 已消费 14 页规约核对（item 5）（状态：⬜ 待开始）
    - 验收口径（真源 = 方案附录 A 规约 T-7~T-12）：Settings（T-3）+ Dashboard/Analytics 迁移（**实现难点 R-1**：两者为 `/admin` 同路由互斥 tab——AnalyticsView 是 DashboardClient 子内容非独立路由；ReactNode title 渲染为 div 非 heading → 须按 **T-8 h1 兜底**〔string 主标题+ReactNode subtitle 或 ReactNode 内自带 h1〕+ **T-9 任一 tab 激活时 h1 恰 1 个**，手测两 tab 验证）；已消费 14 页按规约一致性核对（全 headingLevel=1、无 raw h1 残留）；dev 5 页豁免登记（T-11）。
    - 文件范围：`apps/server-next/src/app/admin/settings/_client/SettingsContainer.tsx`、`apps/server-next/src/app/admin/_client/AnalyticsView.tsx`、`apps/server-next/src/app/admin/_client/DashboardClient.tsx` + 14 已消费页核对清单（方案附录 A.1）。

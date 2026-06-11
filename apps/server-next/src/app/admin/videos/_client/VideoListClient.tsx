@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import type { CSSProperties } from 'react'
 import {
-  DataTable,
+  DataTable, PageHeader,
   EmptyState, ErrorState, LoadingState, useTableQuery,
   type TableQueryPatch, type TableSelectionState,
 } from '@resovo/admin-ui'
@@ -36,27 +36,7 @@ const PAGE_STYLE: CSSProperties = {
   padding: 'var(--page-padding-y) var(--page-padding-x) 0',
 }
 
-// reference §5.3 视频库 page__head：title「视频库」+ sub「N 条视频 · 快捷筛选」+ actions
-const HEAD_STYLE: CSSProperties = {
-  display: 'flex',
-  alignItems: 'flex-start',
-  justifyContent: 'space-between',
-  gap: '16px',
-  flexShrink: 0,
-}
-const HEAD_TITLE_STYLE: CSSProperties = {
-  margin: 0,
-  fontSize: 'var(--font-size-lg)',
-  fontWeight: 700,
-  color: 'var(--fg-default)',
-  lineHeight: 1.3,
-}
-const HEAD_ACTIONS_STYLE: CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: '8px',
-  flexShrink: 0,
-}
+// reference §5.3 视频库 page__head：共享 PageHeader 承载（MODUX-P1-1-A，规约 T-1/T-3）
 const HEAD_BTN_STYLE: CSSProperties = {
   height: '28px',
   padding: '0 var(--button-padding-x)',
@@ -81,13 +61,12 @@ const HEAD_BTN_DISABLED_OVERLAY: CSSProperties = {
   cursor: 'not-allowed',
 }
 
-// ── 快捷筛选(B) 子标题样式（设计 §2.1/§2.6③）─────────────────────
+// ── 快捷筛选(B) 子标题样式（设计 §2.1/§2.6③；外层 margin/字号由 PageHeader subtitle 槽提供）─
 const SUBHEAD_STYLE: CSSProperties = {
   display: 'flex',
   alignItems: 'center',
   flexWrap: 'wrap',
   gap: '8px',
-  margin: '6px 0 0',
 }
 const SUBHEAD_COUNT_STYLE: CSSProperties = {
   fontSize: 'var(--font-size-xs)',
@@ -317,11 +296,11 @@ export function VideoListClient() {
 
   return (
     <div data-video-list-client style={PAGE_STYLE}>
-      {/* reference §5.3 视频库 page__head（CHG-DESIGN-08 8A） */}
-      <header style={HEAD_STYLE} data-page-head>
-        <div>
-          <h1 style={HEAD_TITLE_STYLE}>视频库</h1>
-          {/* 快捷筛选(B)：{total} 条 · 全部 · 待审 N · 元数据缺失 N · 集数不一致 N（§2.1/§2.6③） */}
+      {/* reference §5.3 视频库 page__head — 共享 PageHeader（CHG-DESIGN-08 8A / MODUX-P1-1-A，规约 T-1/T-3） */}
+      <PageHeader
+        title="视频库"
+        subtitle={
+          /* 快捷筛选(B)：{total} 条 · 全部 · 待审 N · 元数据缺失 N · 集数不一致 N（§2.1/§2.6③） */
           <div style={SUBHEAD_STYLE} data-page-head-sub>
             <span style={SUBHEAD_COUNT_STYLE}>{total} 条视频</span>
             <button
@@ -351,30 +330,32 @@ export function VideoListClient() {
               )
             })}
           </div>
-        </div>
-        <div style={HEAD_ACTIONS_STYLE} data-page-head-actions>
-          {/* 导出 CSV：当前页行集导出（rows 空时 disabled） */}
-          <button
-            type="button"
-            style={rows.length === 0 ? { ...HEAD_BTN_STYLE, ...HEAD_BTN_DISABLED_OVERLAY } : HEAD_BTN_STYLE}
-            data-page-action="export-csv"
-            data-testid="videos-export-csv"
-            disabled={rows.length === 0}
-            onClick={handleExportCsv}
-          >
-            导出 CSV
-          </button>
-          <button
-            type="button"
-            style={HEAD_BTN_PRIMARY_STYLE}
-            data-page-action="add-video"
-            onClick={() => { setEditTab(undefined); setDrawerTarget(null) }}
-            title="打开 VideoEditDrawer 创建模式 + POST /admin/videos（ADR-145）"
-          >
-            手动添加视频
-          </button>
-        </div>
-      </header>
+        }
+        actions={
+          <>
+            {/* 导出 CSV：当前页行集导出（rows 空时 disabled） */}
+            <button
+              type="button"
+              style={rows.length === 0 ? { ...HEAD_BTN_STYLE, ...HEAD_BTN_DISABLED_OVERLAY } : HEAD_BTN_STYLE}
+              data-page-action="export-csv"
+              data-testid="videos-export-csv"
+              disabled={rows.length === 0}
+              onClick={handleExportCsv}
+            >
+              导出 CSV
+            </button>
+            <button
+              type="button"
+              style={HEAD_BTN_PRIMARY_STYLE}
+              data-page-action="add-video"
+              onClick={() => { setEditTab(undefined); setDrawerTarget(null) }}
+              title="打开 VideoEditDrawer 创建模式 + POST /admin/videos（ADR-145）"
+            >
+              手动添加视频
+            </button>
+          </>
+        }
+      />
       {loading && rows.length === 0
         ? <LoadingState variant="skeleton" />
         : error

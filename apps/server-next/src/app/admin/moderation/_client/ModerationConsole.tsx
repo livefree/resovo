@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
-import { RejectModal } from '@resovo/admin-ui'
+import { PageHeader, RejectModal } from '@resovo/admin-ui'
 import type { RejectModalSubmitPayload } from '@resovo/admin-ui'
 import type { ReviewLabel } from '@resovo/types'
 import { RejectedTabContent } from './RejectedTabContent'
@@ -379,16 +379,18 @@ export function ModerationConsole(): React.ReactElement {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: PAGE_HEIGHT }} data-moderation-console>
 
-      {/* Page head */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 8, flexShrink: 0 }}>
-        <div>
-          <h1 style={{ margin: 0, fontSize: 'var(--font-size-xl)', fontWeight: 700, color: 'var(--fg-default)' }}>{M.title}</h1>
-          <div style={{ display: 'flex', gap: 14, alignItems: 'center', marginTop: 4, fontSize: 'var(--font-size-xs)', color: 'var(--fg-muted)', flexWrap: 'wrap' }}>
+      {/* Page head — 共享 PageHeader（MODUX-P1-1-A，规约 T-1/T-5/T-6：统计+键盘行进 subtitle 槽） */}
+      <div style={{ marginBottom: 8, flexShrink: 0 }}>
+      <PageHeader
+        title={M.title}
+        subtitle={
+          <div style={{ display: 'flex', gap: 14, alignItems: 'center', flexWrap: 'wrap' }}>
             <span dangerouslySetInnerHTML={{ __html: M.todayStats(todayStats.reviewed, todayStats.approveRate).replace(/(\d+)/g, '<strong style="color:var(--fg-default)">$1</strong>').replace(/\d+%/g, m => `<strong style="color:var(--state-success-fg)">${m}</strong>`) }} />
             <span style={{ color: 'var(--border-default)' }}>|</span>
             <span><span style={KBD}>J</span> <span style={KBD}>K</span> 切换 · <span style={KBD}>A</span> 通过 · <span style={KBD}>R</span> 拒 · <span style={KBD}>S</span> 跳过</span>
           </div>
-        </div>
+        }
+        actions={
         <div ref={presetAnchorRef} style={{ display: 'flex', gap: 8, position: 'relative' }}>
           <button
             style={BTN_SM}
@@ -429,6 +431,8 @@ export function ModerationConsole(): React.ReactElement {
             }}
           />
         </div>
+        }
+      />
       </div>
 
       {/* Error banner */}

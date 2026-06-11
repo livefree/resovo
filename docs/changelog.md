@@ -4100,3 +4100,16 @@
 - **新增依赖**：无
 - **数据库变更**：无
 - **注意事项**：① P1-1 执行真源 = 方案附录 A 规约 T-1~T-12，关键裁决：面包屑零改动（`<nav>` 内 `<strong>` 不充当 h1）/ 冗余消解 = 保留 PageHeader 标题而非删除（仅 videos/settings 字面冗余，Dashboard 问候不冗余）/ **Q4 不扩 PageHeaderProps → P1-1-A 零 admin-ui 改动，不触发 types.ts Opus trailer 项**（槽不够 → BLOCKER 重新评审）。② 结构事实：AnalyticsView 非独立路由，是 DashboardClient `activeTab==='analytics'` 互斥 tab；ReactNode title 渲染为 div 非 heading → P1-1-B 须按 T-8 落实 h1 兜底（R-1 实现难点）。③ ModerationConsole 统计行 dangerouslySetInnerHTML 迁移时原样搬运（R-2，禁止顺手清理）。docs-only，test:changed 自动跳过（ADR-180）。
+
+## [MODUX-P1-1-A] 审核台/视频库迁移共享 PageHeader（item 5，零 admin-ui 改动）
+- **完成时间**：2026-06-10
+- **记录时间**：2026-06-10 22:24
+- **执行模型**：claude-fable-5（建议 sonnet，用户会话人工覆盖）
+- **子代理**：无
+- **修改文件**：
+  - `apps/server-next/src/app/admin/moderation/_client/ModerationConsole.tsx` — raw `<h1>` → PageHeader（T-5 字号归一）；统计+键盘行原样进 subtitle 槽（R-2）；preset 按钮区+popover 进 actions 槽
+  - `apps/server-next/src/app/admin/videos/_client/VideoListClient.tsx` — 删除与 PageHeader 逐字相同的 HEAD_STYLE/HEAD_TITLE_STYLE/HEAD_ACTIONS_STYLE 手写副本；chips 进 subtitle 槽、双按钮进 actions 槽（testid 保留）
+  - `docs/task-queue.md` / `docs/tasks.md` — 卡片收口
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：① `data-page-head` 属性随迁移变为 PageHeader 内置 `data-page-header`，videos/moderation 域测试零依赖已预检；DashboardClient 测试仍断言 `data-page-head`，P1-1-B 迁移 Dashboard 时须同步该测试。② ModerationConsole 存量死代码 BTN_PRIMARY/BTN_DANGER 未动（范围外）。门禁：typecheck/lint EXIT=0 / test:changed 13 passed / moderation 域 28 passed / e2e:admin 82/82。
