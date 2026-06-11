@@ -39,7 +39,9 @@ const BTN_SM: React.CSSProperties = {
 }
 const BTN_PRIMARY: React.CSSProperties = { ...BTN_SM, background: 'var(--accent-default)', color: 'var(--fg-on-accent)', borderColor: 'var(--accent-default)' }
 const BTN_DANGER: React.CSSProperties = { ...BTN_SM, color: 'var(--state-error-fg)', borderColor: 'var(--state-error-border)' }
-const KBD: React.CSSProperties = { display: 'inline-block', padding: '1px 5px', border: '1px solid var(--border-default)', borderRadius: 3, fontSize: 'var(--font-size-2xs)', fontFamily: 'monospace', background: 'var(--bg-surface-raised)', color: 'var(--fg-muted)' }
+// MODUX-P2-1：键盘提示收敛——常驻 J/K/A/R/S 串收为「键盘流」紧凑标记，完整提示经 title hover 透出
+//   （虚线下划线表 affordance；P2-3 将升级为可呼出 help 浮层的入口）。
+const KBD_HINT_STYLE: React.CSSProperties = { color: 'var(--fg-muted)', cursor: 'help', borderBottom: '1px dashed var(--border-default)' }
 
 function segBtnStyle(active: boolean, danger?: boolean): React.CSSProperties {
   return {
@@ -387,7 +389,7 @@ export function ModerationConsole(): React.ReactElement {
           <div style={{ display: 'flex', gap: 14, alignItems: 'center', flexWrap: 'wrap' }}>
             <span dangerouslySetInnerHTML={{ __html: M.todayStats(todayStats.reviewed, todayStats.approveRate).replace(/(\d+)/g, '<strong style="color:var(--fg-default)">$1</strong>').replace(/\d+%/g, m => `<strong style="color:var(--state-success-fg)">${m}</strong>`) }} />
             <span style={{ color: 'var(--border-default)' }}>|</span>
-            <span><span style={KBD}>J</span> <span style={KBD}>K</span> 切换 · <span style={KBD}>A</span> 通过 · <span style={KBD}>R</span> 拒 · <span style={KBD}>S</span> 跳过</span>
+            <span style={KBD_HINT_STYLE} title={M.kbdHint} data-kbd-hint>{M.kbdFlowLabel}</span>
           </div>
         }
         actions={

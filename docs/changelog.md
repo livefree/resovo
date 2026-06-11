@@ -4174,3 +4174,16 @@
 - **新增依赖**：无
 - **数据库变更**：无
 - **注意事项**：调查确认清除失效/刷新已接通后端、筛选预设双源已实装。清除失效**显式不做二次确认**（仅禁用双 dead 不可用线路且可逆，加 confirm 降低审核效率）；不触发 onSourceHealthChanged（遵守 SRCHEALTH-P1-4 裁定）。**Phase 1（P1-0~P1-4 共 6 卡）全收口**。门禁：typecheck/lint EXIT=0 / controller 19/19 / test:changed 59 / e2e:admin 82/82。
+
+## [MODUX-P2-1] 待审列表单元格分区重构 + page-head 键盘提示收敛（item 4）
+- **完成时间**：2026-06-10
+- **记录时间**：2026-06-10 23:36
+- **执行模型**：claude-opus-4-8（建议 sonnet，用户会话覆盖持续推进）
+- **子代理**：无（server-next 应用层 UI 重构，不改 admin-ui 公开 Props，不触发强制 Opus）
+- **修改文件**：
+  - `apps/server-next/src/app/admin/moderation/_client/ModListRow.tsx` — 右侧栏 marginTop 散排 → column+gap 三分区（标题行／元信息行 type·year↔badge space-between／信号富集行）；badge 次要信息收敛（右对齐截断 + 多项折叠「首项 +N」+ title hover 透出，保留 warning 语义色）；DOM 契约全保留 + 新增 data-mod-row-badge
+  - `apps/server-next/src/app/admin/moderation/_client/ModerationConsole.tsx` — page-head subtitle 键盘提示常驻串收敛为 M.kbdFlowLabel chip + title=M.kbdHint hover 透出（硬编码 J/K/A/R/S 收口已有 i18n）；删除收敛后无引用的 KBD 常量；新增 data-kbd-hint 预留 P2-3 提示位
+  - `docs/task-queue.md` / `docs/tasks.md` — 卡片收口（7/15）
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：① badge"次要信息 hover 透出"为折中实现——badge 是审核决策 warning 信号，未做成完全隐藏，保留首项可见 + title 透出完整文案，兼顾收敛与扫视可达性（偏离登记）。② page-head 键盘提示位（data-kbd-hint）为 P2-3 help 浮层预留入口，P2-3 将把虚线下划标记升级为可呼出完整快捷键面板的触发器。③ visual 快照（admin-moderation.visual / moderation.visual）非本卡门禁，列表行布局视觉变更需后续更新基线。门禁：typecheck/lint EXIT=0 / test:changed 10 passed（ModListRow selectionMode + enrichment moderation DOM 契约保留）/ e2e:admin 82/82。

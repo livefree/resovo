@@ -1947,7 +1947,7 @@
 
 ## [SEQ-20260610-03] 内容审核台 UX 优化（MODUX · 信息密度 + 去冗余 + 快速编辑）
 
-- **状态**：🔄 执行中（6/15 卡完成：**Phase 1 全收口 ✅**（P1-0/-1-A/-1-B/-2/-3/-4）；下一步 Phase 2 信息密度 P2-1/-2/-3）
+- **状态**：🔄 执行中（7/15 卡完成：**Phase 1 全收口 ✅**（P1-0/-1-A/-1-B/-2/-3/-4）+ **P2-1 ✅**（列表单元格分区 + page-head 收敛）；下一步 Phase 2 P2-2 详情 tab / P2-3 键盘流）
 - **创建时间**：2026-06-10 22:04
 - **最后更新时间**：2026-06-10 23:13
 - **目标**：落地 `docs/designs/moderation-console-ux-plan_20260610.md` v2（两轮独立审核 + 第三轮注册前终审通过，file:line 抽查全部命中）：审核台 12 项问题——去冗余（标题治理/DecisionCard 精简）→ 信息密度（列表单元格/详情 tab/键盘流）→ 功能增强（年代+富集过滤/筛选弹层/类似 tab 阈值/4 字段快速编辑）。
@@ -1999,10 +1999,11 @@
 
 ### 任务列表（Phase 2 — 信息密度与布局，前端）
 
-7. **MODUX-P2-1** — 待审列表单元格 + page-head 紧凑化（item 4）（状态：⬜ 待开始）
+7. **MODUX-P2-1** — 待审列表单元格 + page-head 紧凑化（item 4）（状态：✅ 已完成 2026-06-10）
    - 验收口径：`ModListRow` 分区重构（封面+标题行+元信息行+信号/富集行），280px 列内层级清晰，次要信息 hover 透出；审核台 page-head 占位/键盘提示收敛。
    - 文件范围：`apps/server-next/src/app/admin/moderation/_client/ModListRow.tsx`、`ModerationConsole.tsx`（page-head 部分）。
    - 依赖：MODUX-P1-1-A。建议模型：sonnet。
+   - **完成备注**：① **ModListRow 分区重构**：右侧栏 `marginTop:2/4` 散排 → `column`+`gap:4` 三分区（标题行／元信息行／信号富集行）；元信息行 `space-between` 让 type·year 与 badge 占满 280px 列宽两端；badge 次要信息收敛——右对齐 `flexShrink:0`+`maxWidth:55%` 截断、多项折叠「首项 +N」、完整文案经 `title` hover 透出（保留 warning 语义色不加突出背景）。DOM 契约 `role=option`/`data-mod-list-row`/`data-video-id`/`data-batch-selected`/`mod-list-checkbox-*`/`aria-selected` 全保留；新增 `data-mod-row-badge` 锚点。② **page-head 收敛**：常驻 `J/K/A/R/S` KBD 串（硬编码）→ 收口已有 i18n，渲染 `M.kbdFlowLabel`「键盘流」紧凑标记（虚线下划 affordance）+ `title=M.kbdHint` hover 透出完整提示；今日统计保留；删除收敛后无引用的 `KBD` 常量；为 P2-3 help 浮层预留提示位（`data-kbd-hint`）。③ **偏离登记**：方案"次要信息 hover 透出"未做成 badge 完全隐藏——badge 是审核决策 warning 信号，折中保留首项可见 + title 透出完整，兼顾收敛与扫视可达性。共享层沉淀：否（ModListRow 仅审核台消费，无跨消费方）。门禁：typecheck/lint EXIT=0 / test:changed 10 passed（ModListRow selectionMode + enrichment moderation DOM 契约保留）/ **e2e:admin 82/82 EXIT=0**。执行模型: claude-opus-4-8（建议 sonnet，用户会话覆盖持续推进）；子代理: 无。
 8. **MODUX-P2-2** — 详情 tab 重设计（item 7）（状态：⬜ 待开始）
    - 验收口径：状态三元组 3 行 DetailRow → 1 行 3 Pill（variant ok/warn + dot）；富集/豆瓣/外部源重叠信息收敛；详情 tab 行数下降无重复信息块。
    - 文件范围：`apps/server-next/src/app/admin/moderation/_client/TabDetail.tsx`（复用 `packages/admin-ui/src/components/cell/pill.tsx`，不改 Pill 公开 Props）。
