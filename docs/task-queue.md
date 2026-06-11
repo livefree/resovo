@@ -1944,3 +1944,93 @@
     - 依赖：SRCHEALTH-P2-2 落地 + 影子验证（方案 §4 时序硬依赖链）。建议模型：opus（评分关键路径权重设计）。
 16. **SRCHEALTH-P3-4** — 播放端按 effectiveScore 切线（状态：🟡 规划）
     - 依赖：P3 评分项收口。建议模型：sonnet。
+
+## [SEQ-20260610-03] 内容审核台 UX 优化（MODUX · 信息密度 + 去冗余 + 快速编辑）
+
+- **状态**：🔄 执行中（1/15 卡完成：P1-0 ✅）
+- **创建时间**：2026-06-10 22:04
+- **最后更新时间**：2026-06-10 22:12
+- **目标**：落地 `docs/designs/moderation-console-ux-plan_20260610.md` v2（两轮独立审核 + 第三轮注册前终审通过，file:line 抽查全部命中）：审核台 12 项问题——去冗余（标题治理/DecisionCard 精简）→ 信息密度（列表单元格/详情 tab/键盘流）→ 功能增强（年代+富集过滤/筛选弹层/类似 tab 阈值/4 字段快速编辑）。
+- **范围**：apps/server-next（admin/moderation/_client + 标题治理涉及页）+ packages/admin-ui（PageHeader/DecisionCard/KeyboardShortcuts 消费）+ apps/api（moderation.ts query/meta schema + service/queries）+ packages/types（admin-moderation.types）。**方案文件为各卡内容真源**；卡面只记验收口径与文件范围。
+- **依赖**：无 BLOCKER；工作台空闲（SRCHEALTH 剩余 P3-2 影子验证硬前置 ~06-17 / P3-4 顺延，与本 SEQ 无文件冲突）。
+- **用户裁定**：①标题治理全后台统一（复用 PageHeader，绝不新建第二套）；②快速编辑 类型+题材+年代+地区 全做；③列表过滤加 年代+富集状态（2026-06-10）。
+- **拆卡判据执行**：P1-1 跨多页 → 前置 P1-0 盘点定调再拆 -A/-B；P3-1 跨 schema/types/service 多层 → 拆 -A/-B；P3-4 跨后端 schema + 前端 UI → 拆 -A/-B。方案「共 12 卡」计数勘误为 **15 卡**（终审第 4 条）。
+- **路径勘误（终审）**：方案正文审核台文件实际位于 `apps/server-next/src/app/admin/moderation/_client/`（方案缺 `_client/` 段，行号全部准确）；本注册各卡文件范围已写全路径。
+
+### 任务列表（Phase 1 — 快速修复与去冗余，前端为主低风险先行）
+
+1. **MODUX-P1-0** — 全后台标题现状盘点 + 规约定调（item 5 前置）（状态：✅ 已完成 2026-06-10 22:12）
+   - 创建时间：2026-06-10 22:04 ｜ 实际开始：2026-06-10 22:04 ｜ 完成时间：2026-06-10 22:12
+   - 验收口径：产出盘点表（已用 PageHeader 页 / raw `<h1>` 5 非 dev 页 / dev 5 页豁免 / 例外页）+ 标题规约（Opus 子代理裁决：面包屑末项 vs 页内标题去留、a11y 唯一 h1 层级）+ P1-1-A/-B 拆卡边界定死。**不写业务代码、不新建 PageHead**。
+   - 文件范围：docs only（规约写入 `docs/designs/moderation-console-ux-plan_20260610.md` 附录 A）。
+   - 依赖：无。建议模型：sonnet（**强制 Opus 子代理**：规约决策，CLAUDE.md 模型路由）。
+   - **完成备注**：① 盘点表落账（方案附录 A.1）：PageHeader 页面级消费方实测 **14 处**（grep 误命中纯注释 4 处已排除；crawler/runs/[id] 为 hidden 路由无面包屑先例）；raw `<h1>` 非 dev 5 页确认（VideoListClient 的 PageHeader grep 命中仅为注释）；dev 5 页豁免。② **arch-reviewer (claude-opus-4-8) 裁决 T-1~T-12 + Q1~Q5 + R-1~R-3**（附录 A.2–A.4，P1-1 执行真源），关键裁决：**面包屑零改动**（`<nav>` 内 `<strong>` 充当 h1 违反 heading 语义，末项降级破坏 14 页一致性）；**冗余消解 = 保留标题而非删除**（T-3/T-12——纠正方案原前提：5 迁移页仅 videos/settings 真冗余，Dashboard 问候/Analytics 不冗余）;**Q4 不扩 PageHeaderProps**（现有 title/subtitle/actions ReactNode 三槽全覆盖 → **P1-1-A 不触发 types.ts 强制 Opus trailer 项**；槽不够 → BLOCKER 重新评审）；Moderation 统计+键盘行归 subtitle 槽（T-6）。③ **关键结构发现**：AnalyticsView 非独立路由——是 DashboardClient `activeTab==='analytics'` 互斥 tab（`DashboardClient.tsx:266`），`/admin` 同路由 h1 唯一性走 T-9；ReactNode title 渲染为 div 非 heading → Dashboard/Analytics 迁移需 T-8 h1 兜底（R-1，P1-1-B 实现难点）。④ 拆卡边界修正（Q5）：-A 删除「PageHeader 扩展」项 = 零 admin-ui 改动，纯 server-next 应用层迁移；P1-1-A/-B 卡面已按裁决同步修正。docs-only（test:changed 自动跳过，ADR-180）。执行模型: claude-fable-5（建议 sonnet，用户会话人工覆盖）；子代理: arch-reviewer (claude-opus-4-8)。
+2. **MODUX-P1-1-A** — 审核台/视频库迁移 PageHeader（item 5；P1-0 裁决 Q5 修正：零 admin-ui 改动）（状态：⬜ 待开始）
+   - 验收口径（真源 = 方案附录 A 规约 T-1~T-6）：`ModerationConsole`（T-5 字号归一 font-size-xl→PageHeader 内置 + **T-6 统计/键盘提示行原样进 subtitle 槽**，R-2：dangerouslySetInnerHTML 原样搬运不得顺手清理）+ `VideoListClient`（T-3 标准三槽迁移，保留标题不删除）改用 PageHeader，移除 raw `<h1>`；headingLevel 默认 1（T-4）；已消费页无回归。
+   - 文件范围（**Q4 裁决：不扩 PageHeaderProps，零 packages/admin-ui 改动，不触发 types.ts Opus trailer 项**；执行中发现槽不够 → BLOCKER 重新 Opus 评审）：`apps/server-next/src/app/admin/moderation/_client/ModerationConsole.tsx`、`apps/server-next/src/app/admin/videos/_client/VideoListClient.tsx`。
+   - 依赖：MODUX-P1-0 ✅。建议模型：sonnet。
+3. **MODUX-P1-1-B** — Dashboard/Analytics/Settings 迁移 + 已消费 14 页规约核对（item 5）（状态：⬜ 待开始）
+   - 验收口径（真源 = 方案附录 A 规约 T-7~T-12）：Settings（T-3）+ Dashboard/Analytics 迁移（**实现难点 R-1**：两者为 `/admin` 同路由互斥 tab——AnalyticsView 是 DashboardClient 子内容非独立路由；ReactNode title 渲染为 div 非 heading → 须按 **T-8 h1 兜底**〔string 主标题+ReactNode subtitle 或 ReactNode 内自带 h1〕+ **T-9 任一 tab 激活时 h1 恰 1 个**，手测两 tab 验证）；已消费 14 页按规约一致性核对（全 headingLevel=1、无 raw h1 残留）；dev 5 页豁免登记（T-11）。
+   - 文件范围：`apps/server-next/src/app/admin/settings/_client/SettingsContainer.tsx`、`apps/server-next/src/app/admin/_client/AnalyticsView.tsx`、`apps/server-next/src/app/admin/_client/DashboardClient.tsx` + 14 已消费页核对清单（方案附录 A.1）。
+   - 依赖：MODUX-P1-1-A。建议模型：sonnet。
+4. **MODUX-P1-2** — 播放器上方治理：DecisionCard 精简（item 11+12）（状态：⬜ 待开始）
+   - 验收口径：单视频内标题仅 1 次（PendingCenter h2）；决策 banner 从独占整行降为精简 inline；文案重规划（健康/未就绪/冲突/失效）；`dev/visual` 预览渲染正常；单测同步。
+   - 文件范围：`packages/admin-ui/src/components/cell/decision-card.tsx`（**优先不改 `decision-card.types.ts` 公开 Props**；若改 → Opus + trailer）、`apps/server-next/src/app/admin/moderation/_client/PendingCenter.tsx` + dev/visual registry/mock + 单测。
+   - 依赖：无（可与 P1-1 并行排序）。建议模型：sonnet。
+5. **MODUX-P1-3** — 前台预览 404 调查 + 修复（item 2）（状态：⬜ 待开始）
+   - 验收口径：两根因分开复现（A locale 缺失：已发布视频 `?preview=admin` 无 locale 前缀；B 鉴权降级：未发布视频 preview cookie/token 跨端可达性 → `notFound()`）；新增 **admin preview 专用 URL builder**（server-next lib 层，注入 locale + preview 参数）；`packages/types/src/url-helpers.ts` 纯函数不污染；已发布/未发布预览均非 404。
+   - 文件范围：`apps/server-next/src/lib/`（新 URL builder）+ 审核台/视频库预览入口消费点；调查涉读 `apps/web-next/src/app/[locale]/(detail)/_lib/detail-page-factory.tsx`、`apps/web-next/src/middleware.ts`。
+   - 依赖：无。建议模型：sonnet。
+6. **MODUX-P1-4** — 线路按钮 + 筛选预设调查确认（item 10+6）（状态：⬜ 待开始）
+   - 验收口径：结论登记（清除失效/刷新已接通；预设双源已实装）；微调清除失效二次确认/toast 一致性；预设保存/应用/设默认/导入本地手测 + 既有单测通过。
+   - 文件范围：`packages/admin-ui/src/components/cell/lines-panel.tsx`（微调）、审核台预设消费点（随 P1-1 page-head 收敛）。
+   - 依赖：MODUX-P1-1-A（page-head 收敛后定按钮排布）。建议模型：sonnet。
+
+### 任务列表（Phase 2 — 信息密度与布局，前端）
+
+7. **MODUX-P2-1** — 待审列表单元格 + page-head 紧凑化（item 4）（状态：⬜ 待开始）
+   - 验收口径：`ModListRow` 分区重构（封面+标题行+元信息行+信号/富集行），280px 列内层级清晰，次要信息 hover 透出；审核台 page-head 占位/键盘提示收敛。
+   - 文件范围：`apps/server-next/src/app/admin/moderation/_client/ModListRow.tsx`、`ModerationConsole.tsx`（page-head 部分）。
+   - 依赖：MODUX-P1-1-A。建议模型：sonnet。
+8. **MODUX-P2-2** — 详情 tab 重设计（item 7）（状态：⬜ 待开始）
+   - 验收口径：状态三元组 3 行 DetailRow → 1 行 3 Pill（variant ok/warn + dot）；富集/豆瓣/外部源重叠信息收敛；详情 tab 行数下降无重复信息块。
+   - 文件范围：`apps/server-next/src/app/admin/moderation/_client/TabDetail.tsx`（复用 `packages/admin-ui/src/components/cell/pill.tsx`，不改 Pill 公开 Props）。
+   - 依赖：无。建议模型：sonnet。
+9. **MODUX-P2-3** — 键盘流完善（item 1）（状态：⬜ 待开始）
+   - 验收口径：审核台局部挂载共享无渲染组件 `<KeyboardShortcuts bindings>` 替换原生 keydown（不混入 AdminShell 全局）；扩 E 编辑/P 预览/数字键选集线路/F 筛选/`/` 搜索/`?` 帮助浮层；批量模式守卫 + allowInInput；与全局快捷键无冲突。
+   - 文件范围：`apps/server-next/src/app/admin/moderation/_client/PendingPaneController.tsx`、help 浮层新组件（审核台局部）；消费 `packages/admin-ui/src/shell/keyboard-shortcuts.tsx`（不改其 API）。
+   - 依赖：MODUX-P2-1（快捷键提示位随布局定）。建议模型：sonnet。
+
+### 任务列表（Phase 3 — 功能增强，前后端含 ADR 核验）
+
+10. **MODUX-P3-1-A** — 富集状态枚举语义 + 共享类型 + query schema（item 3 后端上半）（状态：⬜ 待开始）
+    - 验收口径：定义富集枚举语义（建议 missing/partial/complete，**从 raw 字段/provenance 派生**，不按 UI enrichmentSummary 反推）；`PendingQueueQuerySchema` 加 year/decade + enrichmentStatus；共享类型 `PendingQueueQuery` 同步扩。
+    - 文件范围：`apps/api/src/routes/admin/moderation.ts`（schema 部分）、`packages/types/src/admin-moderation.types.ts`。**非新端点**（verify:endpoint-adr 不触发）；跑 `verify:adr-contracts`；涉枚举派生同步 `docs/architecture.md`。
+    - 依赖：无（Phase 3 启动）。建议模型：sonnet。
+11. **MODUX-P3-1-B** — Service/DB query 过滤实现 + 预设兼容（item 3 后端下半）（状态：⬜ 待开始）
+    - 验收口径：API 按 year/decade/enrichment 过滤正确；筛选预设 JSON 快照新字段保存 + 旧预设缺字段向后兼容（`use-filter-presets.ts` FilterPresetQuery）；契约核验通过。
+    - 文件范围：moderation service + DB queries、`apps/server-next/src/app/admin/moderation/_client/use-filter-presets.ts`（兼容层）。
+    - 依赖：MODUX-P3-1-A。建议模型：sonnet。
+12. **MODUX-P3-2** — 待审列表筛选弹层（item 3 前端）（状态：⬜ 待开始）
+    - 验收口径：toolbar 加筛选按钮开弹层/抽屉（窄列表不内联），覆盖 类型/年代/富集/探测/豆瓣/备注/人工；与 `q` 搜索框 + 预设按钮在 280px 内排布不溢出；URL/预设打通（applyFiltersToUrl）。
+    - 文件范围：`apps/server-next/src/app/admin/moderation/_client/`（PendingQueueToolbar + 筛选弹层新组件）。
+    - 依赖：MODUX-P3-1-B。建议模型：sonnet。
+13. **MODUX-P3-3** — 类似 tab 合并优先 + 阈值过滤（item 8）（状态：⬜ 待开始）
+    - 验收口径：identityScore/similarityScore 低于阈值不显示/折叠；「发起合并」为主操作（buildMergeHref 已有）；必要时后端 listSimilar 加排序/阈值参数（加性）。
+    - 文件范围：`apps/server-next/src/app/admin/moderation/_client/TabSimilar.tsx`（+ 必要时 `apps/api/src/routes/admin/moderation.ts` SimilarQueryParams 加性扩展）。
+    - 依赖：无。建议模型：sonnet。
+14. **MODUX-P3-4-A** — `/meta` 端点补 country（item 9 后端）（状态：⬜ 待开始）
+    - 验收口径：**唯一写路径 = `PATCH /admin/moderation/:id/meta`**（保留 pending-only 守卫，不走 videos PATCH）；MetaEditSchema 补 `country` + service/共享类型/测试同步；非新端点。
+    - 文件范围：`apps/api/src/routes/admin/moderation.ts`（MetaEditSchema）、moderation service、`packages/types/src/admin-moderation.types.ts`、单测。
+    - 依赖：无。建议模型：sonnet。
+15. **MODUX-P3-4-B** — 审核主界面 4 字段内联快编 UI（item 9 前端）（状态：⬜ 待开始）
+    - 验收口径：类型/题材一键切换（Segment/Pill popover + getVideoTypeOptions/getVideoGenreOptions）、年代步进/输入、地区内联输入；乐观更新 + 失败回滚 + 队列/详情联动刷新；4 字段免开面板即改、单写路径。
+    - 文件范围：`apps/server-next/src/app/admin/moderation/_client/PendingCenter.tsx` + 内联快编新组件（审核台局部）。
+    - 依赖：MODUX-P3-4-A。建议模型：sonnet。
+
+### 门禁与验证（每卡）
+
+- 必跑：`npm run typecheck` / `npm run lint` / `npm run test:changed`（commit 前）；审核台改动后 `npm run test:e2e:admin`。
+- **强制 Opus 子代理**：P1-0 规约决策；P1-1-A 若扩 PageHeader 公开 Props；P1-2 若改 DecisionCardProps（`packages/admin-ui/**/types.ts` 强制项 + commit trailer）。
+- **ADR 核验**：P3-1 系列跑 `verify:adr-contracts` + 涉枚举派生同步 `docs/architecture.md`；全程无新增 admin route → `verify:endpoint-adr` 不触发。
+- 手测关键路径清单见方案「验证方式」节。

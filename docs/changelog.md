@@ -4087,3 +4087,16 @@
 - **根因**：P3-1 裁决 C 的「NULL 时间戳 ⇔ status 必为 pending」不变式被 migration 054 存量粗回填破坏——真库实测 **84,648 行 probe ok + 39,761 行 dead 的 last_probed_at IS NULL**（probe_status 按 videos.source_check_status 粗回填、worker 从未真实探测；render 侧 0 行干净）。null 短路分支让这 12.4 万行「最不确定」的状态绕过衰减：迁移 ok 永久满分 1.0，比真实探测过（会衰减）的源排序更高，与衰减语义背反。
 - **修复**：`route-scoring.ts` null 分支语义改判——now 注入时时间戳 NULL → 子项**直接取 STALE_TARGET 0.3**（「无时间戳证据 = 无法证明新鲜 = 完全陈旧」；对 pending 0.3 恒等故全中性锚点 0.345 不变；undefined 兼容分支严格区分不动）。迁移 ok/dead 行统一收敛 0.51 总分（1080P/100ms 口径），低于真实新近 ok 0.86——排序激励偏向有真实探测证据的源；worker level1 按 last_probed_at ASC NULLS FIRST 排队，NULL 行优先重探，状态随 cron 自然转真。
 - **测试**：Case 8 +1 用例（迁移 ok/dead 行收敛断言 + 不虚高守卫），校准 39/39 + sources 18/18；typecheck/lint EXIT=0 / test:changed 165 passed。
+
+## [MODUX-P1-0] 全后台标题现状盘点 + 规约定调（SEQ-20260610-03 首卡）
+- **完成时间**：2026-06-10
+- **记录时间**：2026-06-10 22:12
+- **执行模型**：claude-fable-5（建议 sonnet，用户会话人工覆盖）
+- **子代理**：arch-reviewer (claude-opus-4-8)
+- **修改文件**：
+  - `docs/designs/moderation-console-ux-plan_20260610.md` — 新增（方案 v2 落库 + 第三轮注册前终审记录 + 附录 A：盘点表 / 规约 T-1~T-12 / Q1~Q5 裁决 / 风险 R-1~R-3）
+  - `docs/task-queue.md` — 注册 SEQ-20260610-03（MODUX 共 15 卡）；P1-0 收口；P1-1-A/-B 卡面按裁决 Q4/Q5 修正
+  - `docs/tasks.md` — P1-0 立卡/删卡 + 状态注记更新
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：① P1-1 执行真源 = 方案附录 A 规约 T-1~T-12，关键裁决：面包屑零改动（`<nav>` 内 `<strong>` 不充当 h1）/ 冗余消解 = 保留 PageHeader 标题而非删除（仅 videos/settings 字面冗余，Dashboard 问候不冗余）/ **Q4 不扩 PageHeaderProps → P1-1-A 零 admin-ui 改动，不触发 types.ts Opus trailer 项**（槽不够 → BLOCKER 重新评审）。② 结构事实：AnalyticsView 非独立路由，是 DashboardClient `activeTab==='analytics'` 互斥 tab；ReactNode title 渲染为 div 非 heading → P1-1-B 须按 T-8 落实 h1 兜底（R-1 实现难点）。③ ModerationConsole 统计行 dangerouslySetInnerHTML 迁移时原样搬运（R-2，禁止顺手清理）。docs-only，test:changed 自动跳过（ADR-180）。
