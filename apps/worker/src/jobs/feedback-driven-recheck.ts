@@ -1,5 +1,5 @@
 /**
- * feedback-driven-recheck.ts — 播放失败反馈驱动的定向重测（每分钟 cron）
+ * feedback-driven-recheck.ts — 反馈/运营信号驱动的定向重测（每分钟 cron）
  *
  * SRCHEALTH-P1-5（F2）定向化修复：
  *   旧实现只重置 render_status='pending' 后跑全局 runLevel2Render——两个断点：
@@ -10,6 +10,11 @@
  *   重置 render pending → level2 定向重测（仅 probe=ok 的信号源）→ 标 processed。
  *   每个信号源均被真实重测后才标记；probe 重测仍 dead 的源结论即「确认失效」，
  *   标 processed 语义成立。
+ *
+ * SRCHEALTH-P2-4-B：拉取条件扩展消费 origin='manual_route_reprobe'（admin reprobeRoute
+ *   线路级重探信号，API 侧 P2-4-A 按 active 口径批量入队）——两种信号的定向语义完全同构
+ *   （source_id 集合 → probe+render 重测 → 标 processed），共用本编排不拆独立 job。
+ *   批量上限 BATCH_LIMIT 共享：大线路信号分多个 cron 周期消费完（信号持久化不丢）。
  */
 
 import type { Pool } from 'pg'
@@ -22,6 +27,7 @@ type FeedbackEvent = {
   id: string
   source_id: string | null
   video_id: string
+  origin: string
 }
 
 const BATCH_LIMIT = 100
@@ -30,7 +36,10 @@ export async function runFeedbackDrivenRecheck(pool: Pool, log: pino.Logger): Pr
   const events = await fetchUnprocessed(pool, log)
   if (events === null || events.length === 0) return
 
-  log.info({ count: events.length }, 'feedback-driven recheck: processing events')
+  // origin 分布计数：运营 reprobe 后可据此确认信号被消费（P2-4-B 可观测性）
+  const byOrigin: Record<string, number> = {}
+  for (const e of events) byOrigin[e.origin] = (byOrigin[e.origin] ?? 0) + 1
+  log.info({ count: events.length, byOrigin }, 'feedback-driven recheck: processing events')
 
   const sourceIds = [...new Set(events.map((e) => e.source_id).filter((id): id is string => id !== null))]
 
@@ -73,10 +82,12 @@ export async function runFeedbackDrivenRecheck(pool: Pool, log: pino.Logger): Pr
 
 async function fetchUnprocessed(pool: Pool, log: pino.Logger): Promise<FeedbackEvent[] | null> {
   try {
+    // 两种 origin 各有独立 partial index（058a feedback_driven / 106 manual_route_reprobe），
+    // IN 谓词由 planner 展开 OR → BitmapOr 组合两索引；公平按 created_at 全局排序混批消费
     const result = await pool.query<FeedbackEvent>(
-      `SELECT id, source_id, video_id
+      `SELECT id, source_id, video_id, origin
        FROM source_health_events
-       WHERE origin = 'feedback_driven' AND processed_at IS NULL
+       WHERE origin IN ('feedback_driven', 'manual_route_reprobe') AND processed_at IS NULL
        ORDER BY created_at ASC
        LIMIT $1`,
       [BATCH_LIMIT],

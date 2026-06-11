@@ -1839,9 +1839,9 @@
 
 ## [SEQ-20260610-02] 视频/线路/站点健康度与反馈闭环（source-health v2 方案落地）
 
-- **状态**：🔄 执行中（10/16 卡完成：**Phase 1 全收口** ✅ + **Phase 2** P2-1/P2-2/P2-3/P2-4-A ✅；下一步 P2-4-B（worker 定向消费，接 P1-5 sourceIds 参数）即 Phase 2 收口）
+- **状态**：🔄 执行中（11/16 卡完成：**Phase 1 全收口 ✅ + Phase 2 全收口 ✅**（P2-1/P2-2/P2-3/P2-4-A/P2-4-B）；下一步 Phase 3——启动前按方案 §4 复核拆卡与时序：P3-3-A 前置 Opus / **P3-2 影子验证一周硬前置（P2-2 落地 2026-06-10 起算，最早 ~2026-06-17 后启动）** / P3-1·P3-3 可先行）
 - **创建时间**：2026-06-10 12:53
-- **最后更新时间**：2026-06-10 19:35
+- **最后更新时间**：2026-06-10 19:50
 - **目标**：落地 `docs/designs/source-health-feedback-loop-plan_20260610.md` v2（两轮独立审核有条件通过，必修全吸收，commit 88893812）：修复「全部探测/试播后状态不更新」三处可见断点（B1/B2/B3）→ 打通反馈闭环（F1–F4）→ 评分进化 + 站点/主机桥接（D3/D4）。
 - **范围**：apps/api（service/queries/routes/lib）+ apps/worker（jobs/lib）+ apps/server-next（sources/videos 模块 UI）+ apps/web-next（PlayerShell）+ packages（media-probe 新包，P1-3）。**方案 §3 为各卡内容真源，§4 为门禁真源**；卡面只记验收口径与文件范围。
 - **依赖**：无 BLOCKER；方案 v2 已批准（用户 2026-06-10）。
@@ -1914,9 +1914,12 @@
     - 验收口径：`reprobeRoute` 写真实队列信号（`origin='manual_route_reprobe'` + partial index migration + types union + audit 真实 jobId/queuedCount），占位 jobId 消除。
     - 文件范围（实施修正：+architecture.md origin 注释 + 单测）：migration 106、`packages/types/src/admin-moderation.types.ts`、`apps/api/src/db/queries/sourceHealthEvents.ts`、`apps/api/src/services/SourcesMatrixService.ts`、`docs/architecture.md`、`tests/unit/api/sources-routes-mutations-audit.test.ts`。依赖：无硬依赖。建议模型：sonnet。
     - **完成备注**：① migration 106 partial index `idx_source_health_events_route_reprobe_unprocessed`（`WHERE processed_at IS NULL AND origin='manual_route_reprobe'`，对齐 058a feedback_driven 先例；origin 列无 CHECK 新值零列迁移；已真库执行 ✅）。② types union：`SourceHealthEventOriginWorker` +`'manual_route_reprobe'` 同位扩展（§4 要求）。③ 批量入队 query `enqueueRouteReprobeSignals`（INSERT…SELECT，每 active 源一行；**入队口径 = countRouteSources 线路匹配 + `is_active=true`——与 P2-4-B worker 定向消费（P1-5 loadSourcesByIds active 口径）对齐，防「入队不被消费却标 processed」F2-① 同型**；jobId 落 `triggered_by` 列，audit 的 jobId 可关联到全部信号行真实溯源）。④ Service：占位 jobId 消除——queuedCount 语义从「线路源总数」收紧为「实际入队 active 源数」（更诚实：原值关联的是不存在的队列）；线路存在但全 inactive → queuedCount=0 正常返回非 404（404 仅线路不存在）；audit afterJsonb 契约形状不变（probeJobId+queuedCount）。⑤ 测试 11/11：用例 5 改造（INSERT 路由 mock + SQL 契约断言：origin literal / active 口径 / jobId 参数）+ 新增 5b（全 inactive → queuedCount=0 + audit 记真实 0）。既有端点无新 route（verify:endpoint-adr 234 对齐 ✅ 不触发 ADR 起草）。共享层沉淀：否——批量入队 query 单消费方（reprobeRoute），worker 消费侧 P2-4-B 用读路径（partial index 拉取）非本 query。登记：`makeAuditSpy` 测试文件既有死代码（范围外不动）。门禁：typecheck/lint EXIT=0 / 测试 11/11 / test:changed 升全量 7101 passed / migrate ✅ / verify:adr-contracts ✅ / e2e:admin 82/82 EXIT=0。执行模型: claude-fable-5（建议 sonnet，用户会话人工覆盖持续推进授权）；子代理: 无。
-11. **SRCHEALTH-P2-4-B** — manual_route_reprobe worker 定向消费（状态：⬜ 待开始）
-    - 创建时间：2026-06-10 12:53 ｜ 验收口径：worker 消费 `manual_route_reprobe` 信号定向 probe+render 对应线路全 source，消费多少标多少 processed。
-    - 文件范围：`apps/worker/src/jobs/`（接 P1-5 定向参数）。依赖：SRCHEALTH-P2-4-A + SRCHEALTH-P1-5。建议模型：sonnet。
+11. **SRCHEALTH-P2-4-B** — manual_route_reprobe worker 定向消费（状态：✅ 已完成 2026-06-10 19:50）
+    - 创建时间：2026-06-10 12:53 ｜ 实际开始：2026-06-10 19:40 ｜ 完成时间：2026-06-10 19:50
+    - 验收口径：worker 消费 `manual_route_reprobe` 信号定向 probe+render 对应线路全 source，消费多少标多少 processed。
+    - 文件范围：`apps/worker/src/jobs/feedback-driven-recheck.ts`、`tests/unit/worker/jobs/feedback-driven-recheck.test.ts`。依赖：SRCHEALTH-P2-4-A ✅ + SRCHEALTH-P1-5 ✅。建议模型：sonnet。
+    - **完成备注**：① 取方案 §3 P2-4 ②「拉取条件扩展」选项（vs 拆独立 job）：两种信号定向语义完全同构（source_id 集合 → P1-5 编排 level1 定向→聚合→render 重置→level2 定向→标 processed），复制即重复逻辑（价值排序 #2）。② `fetchUnprocessed` → `origin IN ('feedback_driven','manual_route_reprobe')`（058a/106 两 partial index 由 planner BitmapOr 组合；created_at 全局排序公平混批）。③ SELECT +origin 字段 → log `byOrigin` 分布计数（运营 reprobe 后可观测信号消费）。④ BATCH_LIMIT 100 共享：大线路信号分多 cron 周期消费完（信号持久化不丢，头注释登记）。⑤ 测试 5/5：fixture +origin + 新增混批用例（拉取 SQL 双 origin 断言〔仅 feedback_driven 会让 reprobe 信号永久滞留〕/ 混批定向 loadSourcesByIds+runLevel2Render 参数 / 消费多少标多少 processed 事件 id 全量断言）。共享层沉淀：否——编排复用即本卡实现方式本身。worker 改动无对应 e2e 域（ADR-180 / P1-5 先例）。门禁：typecheck/lint EXIT=0 / recheck 编排 5/5 / test:changed 5 passed。执行模型: claude-fable-5（建议 sonnet，用户会话人工覆盖持续推进授权）；子代理: 无。
+    - **Phase 2（P2-1/P2-2/P2-3/P2-4-A/P2-4-B 共 5 卡）全部收口 ✅ 2026-06-10**。下一步：Phase 3（启动前按方案 §4 复核拆卡与时序：P3-3-A 前置 Opus schema 裁决 / P3-2 受影子验证一周硬前置约束——P2-2 落地日起算）或 Phase 1 复盘三候选裁决。
 
 ### 任务列表（Phase 3 — 评分进化 + 站点/主机桥接；启动前按方案 §4 复核拆卡与时序）
 

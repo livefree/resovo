@@ -37,10 +37,10 @@ function makePool(queryImpl: (sql: string, params?: readonly unknown[]) => { row
 }
 
 const EVENTS = [
-  { id: 'ev-1', source_id: 'src-1', video_id: 'vid-1' },
-  { id: 'ev-2', source_id: 'src-2', video_id: 'vid-2' },
-  { id: 'ev-3', source_id: 'src-1', video_id: 'vid-1' },   // 同源重复信号 → sourceIds 去重
-  { id: 'ev-4', source_id: null,    video_id: 'vid-3' },   // 旧行 source_id NULL → 跳过定向
+  { id: 'ev-1', source_id: 'src-1', video_id: 'vid-1', origin: 'feedback_driven' },
+  { id: 'ev-2', source_id: 'src-2', video_id: 'vid-2', origin: 'feedback_driven' },
+  { id: 'ev-3', source_id: 'src-1', video_id: 'vid-1', origin: 'feedback_driven' },   // 同源重复信号 → sourceIds 去重
+  { id: 'ev-4', source_id: null,    video_id: 'vid-3', origin: 'feedback_driven' },   // 旧行 source_id NULL → 跳过定向
 ]
 
 beforeEach(() => {
@@ -121,5 +121,40 @@ describe('runFeedbackDrivenRecheck — 定向编排（SRCHEALTH-P1-5 / F2）', (
     expect(loadSourcesByIdsMock).not.toHaveBeenCalled()
     expect(runLevel2RenderMock).not.toHaveBeenCalled()
     expect(sqlCalls.some((s) => s.includes('SET processed_at = NOW()'))).toBe(true)
+  })
+
+  // SRCHEALTH-P2-4-B：manual_route_reprobe 信号消费（与 feedback_driven 同编排混批）
+  it('拉取条件覆盖两种 origin；reprobe 信号与 feedback 信号混批定向消费 + 全量标 processed', async () => {
+    const sqlCalls: Array<[string, readonly unknown[] | undefined]> = []
+    const MIXED = [
+      EVENTS[0],
+      { id: 'ev-r1', source_id: 'src-9', video_id: 'vid-9', origin: 'manual_route_reprobe' },
+      { id: 'ev-r2', source_id: 'src-10', video_id: 'vid-9', origin: 'manual_route_reprobe' },
+    ]
+    const pool = makePool((sql, params) => {
+      sqlCalls.push([sql, params])
+      if (sql.includes('FROM source_health_events')) return { rows: MIXED }
+      return { rows: [] }
+    })
+    loadSourcesByIdsMock.mockResolvedValue([
+      { id: 'src-1', video_id: 'vid-1', source_url: 'https://a/1.m3u8', type: 'hls' },
+      { id: 'src-9', video_id: 'vid-9', source_url: 'https://a/9.m3u8', type: 'hls' },
+      { id: 'src-10', video_id: 'vid-9', source_url: 'https://a/10.m3u8', type: 'hls' },
+    ])
+
+    await runFeedbackDrivenRecheck(pool, log)
+
+    // 拉取 SQL 必须同时消费两种 origin（仅 feedback_driven 会让 reprobe 信号永久滞留）
+    const fetchSql = sqlCalls.find(([s]) => s.includes('FROM source_health_events'))![0]
+    expect(fetchSql).toContain("'feedback_driven'")
+    expect(fetchSql).toContain("'manual_route_reprobe'")
+    expect(fetchSql).toContain('processed_at IS NULL')
+    // 混批定向：reprobe 信号源进入同一 level1/level2 定向链
+    expect(loadSourcesByIdsMock).toHaveBeenCalledWith(pool, ['src-1', 'src-9', 'src-10'])
+    expect(runLevel2RenderMock).toHaveBeenCalledWith(pool, log, { sourceIds: ['src-1', 'src-9', 'src-10'] })
+    // 消费多少标多少：三个事件 id 全量标 processed
+    const markCall = sqlCalls.find(([s]) => s.includes('SET processed_at = NOW()'))
+    expect(markCall).toBeDefined()
+    expect(markCall![1]?.[0]).toEqual(['ev-1', 'ev-r1', 'ev-r2'])
   })
 })

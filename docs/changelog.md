@@ -3970,3 +3970,19 @@
   - P2-4-B（worker 定向消费）待开：按 106 索引拉取 manual_route_reprobe 待处理信号 → 接 P1-5 `runLevel2Render({ sourceIds })` 定向参数 → 消费多少标多少 processed。
   - 登记：测试文件 `makeAuditSpy` 既有死代码（范围外不动）。
   - 门禁：typecheck/lint EXIT=0 / sources-routes-mutations-audit 11/11 / test:changed 升全量 7101 passed / verify:adr-contracts ✅ / e2e:admin 82/82 EXIT=0。
+
+## [SRCHEALTH-P2-4-B] manual_route_reprobe worker 定向消费（SEQ-20260610-02 Phase 2 收口）
+- **完成时间**：2026-06-10
+- **记录时间**：2026-06-10 19:52
+- **执行模型**：claude-fable-5（建议 sonnet，用户会话人工覆盖持续推进授权）
+- **子代理**：无
+- **修改文件**：
+  - `apps/worker/src/jobs/feedback-driven-recheck.ts` — 拉取条件扩展 `origin IN ('feedback_driven','manual_route_reprobe')`（058a/106 双 partial index BitmapOr；created_at 全局排序公平混批）；SELECT +origin → log byOrigin 分布计数（运营 reprobe 可观测消费）；头注释登记 BATCH_LIMIT 共享语义（大线路分多 cron 周期消费，信号持久化不丢）
+  - `tests/unit/worker/jobs/feedback-driven-recheck.test.ts` — fixture +origin + 新增混批用例（拉取 SQL 双 origin / 混批定向参数 / 消费多少标多少 processed 全量断言）
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - 取方案 §3 P2-4 ②「拉取条件扩展」选项（vs 拆独立 job）：两种信号定向语义完全同构（source_id 集合 → P1-5 编排），复制即重复逻辑（价值排序 #2）。
+  - **Phase 2（P2-1 success 上报 / P2-2 EMA 统计 / P2-3 独立 ipHash 门槛 / P2-4-A 信号入队 / P2-4-B 定向消费）5 卡全部收口**：F1–F4 反馈闭环按方案 v2 全部打通——前台 success/failure 双向上报 → EMA 落账（暂不进评分）→ 独立佐证门槛 → 定向 recheck；运营线路级 reprobe 假按钮消除（信号真实入队 + worker 定向消费）。
+  - P3-2 影子验证一周硬前置自 P2-2 落地（2026-06-10）起算；worker 改动无对应 e2e 域（ADR-180 / P1-5 先例）。
+  - 门禁：typecheck/lint EXIT=0 / recheck 编排 5/5 / test:changed 5 passed。
