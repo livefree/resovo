@@ -130,6 +130,39 @@ describe('PATCH /v1/admin/moderation/:id/meta', () => {
     expect(mockVideoSvcUpdate).toHaveBeenCalledWith('vid-1', { year: null })
   })
 
+  // ── MODUX-P3-4-A：country ──
+  it('成功更新 country → 200，透传 service（不被 strip）', async () => {
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/v1/admin/moderation/vid-1/meta',
+      headers: { authorization: authHeader, 'content-type': 'application/json' },
+      body: JSON.stringify({ country: 'JP' }),
+    })
+    expect(res.statusCode).toBe(200)
+    expect(mockVideoSvcUpdate).toHaveBeenCalledWith('vid-1', { country: 'JP' })
+  })
+
+  it('country 为 null 合法值（清除地区）→ 200', async () => {
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/v1/admin/moderation/vid-1/meta',
+      headers: { authorization: authHeader, 'content-type': 'application/json' },
+      body: JSON.stringify({ country: null }),
+    })
+    expect(res.statusCode).toBe(200)
+    expect(mockVideoSvcUpdate).toHaveBeenCalledWith('vid-1', { country: null })
+  })
+
+  it('country 超长（> 10）→ 422', async () => {
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/v1/admin/moderation/vid-1/meta',
+      headers: { authorization: authHeader, 'content-type': 'application/json' },
+      body: JSON.stringify({ country: 'X'.repeat(11) }),
+    })
+    expect(res.statusCode).toBe(422)
+  })
+
   it('视频不存在 → 404 NOT_FOUND', async () => {
     mockFindAdminVideoById.mockResolvedValue(null)
     const res = await app.inject({

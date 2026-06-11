@@ -4303,3 +4303,15 @@
 - **新增依赖**：无
 - **数据库变更**：无
 - **注意事项**：① **无需后端加性参数（card「必要时」判定为否）**——关键事实：`similarityScore` 两源统一 0-100 量纲（identity 源 = `round(identityScore×100)`；legacy 源 = computeSimilarityScore 4 维加权 `Math.min(100,…)` clamp，ModerationService.ts:410），且后端已 score DESC 排序 → 单一客户端阈值统一适用，零后端改动（不触发 verify:endpoint-adr）。② **折叠而非硬过滤**——低相关折进展开器（对齐 card「不显示/折叠」），数据不丢；阈值切「全部」(0) 恢复全量直显；新数据/切阈值时折叠态复位。③ 默认 60 改变初始渲染（<60 折叠）——test 3 fixture 同步上调（其测点为 merge 深链，score 非关键）。④ merge 升 primary 经 AdminButton inline style + data-variant（admin-ui 非 className 范式）。门禁：typecheck/lint EXIT=0 / verify:adr-contracts EXIT=0 / test:changed 22 passed / **e2e:admin 82/82 EXIT=0**。**SEQ-20260610-03 MODUX 13/15（Phase 3 P3-3 ✅）**。
+
+## [MODUX-P3-4-A] `/meta` 端点补 country（item 9 后端 / 唯一写路径）
+- **完成时间**：2026-06-11
+- **记录时间**：2026-06-11 02:11
+- **执行模型**：claude-opus-4-8（建议 sonnet）
+- **子代理**：无（非新端点 / 非新共享契约）
+- **修改文件**：
+  - `apps/api/src/routes/admin/moderation.ts` — `MetaEditSchema` 补 `country: z.string().max(10).nullable().optional()`（对齐 videos PATCH videos.ts:71 口径）
+  - `tests/unit/api/moderationMetaEdit.test.ts` — +3 用例（country 透传 / null 清除 / 超长 422）
+- **新增依赖**：无
+- **数据库变更**：无（videos.country 列已存在）
+- **注意事项**：① **VideoService.update 已支持 country**（VideoService.ts:404 已写 catalogFields.country）→ 本卡仅补 schema 声明（Zod `.object()` 默认 strip 未知键，故 country 不声明即被丢弃）。② **无共享 MetaEditInput 类型**（route 用本地 zod）+ VideoQueueRow.country 读模型已在 → packages/types 零改（card「类型同步」此处空满足）。③ **唯一写路径**仍为 `PATCH /admin/moderation/:id/meta`（pending-only 守卫不变，不引第二写路径）。④ **非新端点**——verify:endpoint-adr EXIT=0（234 路由对齐，无新 fastify.{method}）。门禁：typecheck/lint/verify:adr-contracts/verify:endpoint-adr EXIT=0 / test:changed 89 passed / e2e:admin 82/82 EXIT=0。**SEQ-20260610-03 MODUX 14/15（Phase 3 P3-4-A ✅）**。前端 4 字段内联快编 UI = P3-4-B。

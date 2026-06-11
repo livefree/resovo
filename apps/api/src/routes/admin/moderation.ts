@@ -74,6 +74,9 @@ const MetaEditSchema = z.object({
   year: z.number().int().min(1900).max(2100).nullable().optional(),
   type: z.enum(VIDEO_TYPES).optional(),
   genres: z.array(z.string().min(1).max(50)).max(10).optional(),
+  // MODUX-P3-4-A：地区（ISO 3166-1 alpha-2，对齐 videos PATCH videos.ts:71 max(10) nullable 口径）。
+  //   VideoService.update 已支持 country（VideoService.ts:404）；本卡仅补 schema 声明（Zod 默认 strip 未知键）。
+  country: z.string().max(10).nullable().optional(),
 })
 
 const BatchApproveSchema = z.object({

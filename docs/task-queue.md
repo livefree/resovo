@@ -2041,10 +2041,11 @@
     - 文件范围：`apps/server-next/src/app/admin/moderation/_client/TabSimilar.tsx`（+ 必要时 `apps/api/src/routes/admin/moderation.ts` SimilarQueryParams 加性扩展）。
     - 依赖：无。建议模型：sonnet。
     - **完成备注（2026-06-11，执行模型 claude-opus-4-8，子代理无）**：纯客户端实现——TabSimilar 加相关度阈值 Segment（全部/≥40/≥60/≥80，默认 60）+ 高/低相关折叠（low 折进展开器，不丢数据，切「全部」恢复全量）+ 「发起合并」升 primary 主操作。**关键判定：无需后端加性参数**——similarityScore 两源统一 0-100 量纲（identity=round(identityScore×100) / legacy=4 维加权 clamp 0-100，ModerationService.ts:410）且后端已 DESC 排序，单一客户端阈值统一适用（不触发 verify:endpoint-adr）。提取 renderRow 去重；补 3 单测（默认折叠+展开 / 全部无折叠 / merge data-variant=primary）。门禁全绿：typecheck/lint/verify:adr-contracts EXIT=0、test:changed 22、e2e:admin 82/82。剩余 Phase 3：P3-4-A（/meta 补 country 后端）+ P3-4-B（4 字段内联快编 UI）。
-14. **MODUX-P3-4-A** — `/meta` 端点补 country（item 9 后端）（状态：⬜ 待开始）
+14. **MODUX-P3-4-A** — `/meta` 端点补 country（item 9 后端）（状态：✅ 已完成 2026-06-11）
     - 验收口径：**唯一写路径 = `PATCH /admin/moderation/:id/meta`**（保留 pending-only 守卫，不走 videos PATCH）；MetaEditSchema 补 `country` + service/共享类型/测试同步；非新端点。
     - 文件范围：`apps/api/src/routes/admin/moderation.ts`（MetaEditSchema）、moderation service、`packages/types/src/admin-moderation.types.ts`、单测。
     - 依赖：无。建议模型：sonnet。
+    - **完成备注（2026-06-11，执行模型 claude-opus-4-8，子代理无）**：MetaEditSchema 补 `country: z.string().max(10).nullable().optional()`（对齐 videos.ts:71）。**VideoService.update 已支持 country（VideoService.ts:404）→ service 零改**；**无共享 MetaEditInput 类型 + VideoQueueRow.country 读模型已在 → packages/types 零改**（card「类型同步」空满足）。补 3 单测（透传/null/超长 422）。非新端点 verify:endpoint-adr EXIT=0。门禁全绿：typecheck/lint/verify:adr-contracts/verify:endpoint-adr EXIT=0、test:changed 89、e2e:admin 82/82。剩余：P3-4-B 前端 4 字段内联快编 UI（依赖本卡 ✅）。
 15. **MODUX-P3-4-B** — 审核主界面 4 字段内联快编 UI（item 9 前端）（状态：⬜ 待开始）
     - 验收口径：类型/题材一键切换（Segment/Pill popover + getVideoTypeOptions/getVideoGenreOptions）、年代步进/输入、地区内联输入；乐观更新 + 失败回滚 + 队列/详情联动刷新；4 字段免开面板即改、单写路径。
     - 文件范围：`apps/server-next/src/app/admin/moderation/_client/PendingCenter.tsx` + 内联快编新组件（审核台局部）。
