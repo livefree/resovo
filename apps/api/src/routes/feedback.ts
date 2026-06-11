@@ -92,8 +92,16 @@ function mapHeightToQuality(h: number): string {
   return '240P'
 }
 
-async function checkRateLimit(ipHash: string, sourceId: string): Promise<boolean> {
-  const key = `fb:rl:${ipHash}:${sourceId}`
+/**
+ * SRCHEALTH-P2-1-FIX（Codex stop-time review）：success / failure 各自独立 rate-limit bucket。
+ * 共享 bucket 时首播 success 上报（P2-1 接入）会把 60s 内随后的 failure 上报 429 拒掉——
+ * 失败信号全链路丢失（dead 标记 / fb:fail recheck 佐证 / EMA obs=0 落账全部断流）；
+ * 反向「失败后 retry 成功」的复活佐证（fb:revive SADD）同理被顶掉。
+ * rate-limit 的防刷语义是「同类信号重复提交」，跨类信号不应互斥；
+ * 旧 key 格式 fb:rl:{ipHash}:{sourceId} 存量 TTL 60s 自然过期，无迁移。
+ */
+async function checkRateLimit(ipHash: string, sourceId: string, success: boolean): Promise<boolean> {
+  const key = `fb:rl:${ipHash}:${sourceId}:${success ? 's' : 'f'}`
   const res = await redis.set(key, '1', 'EX', 60, 'NX')
   return res !== null
 }
@@ -133,7 +141,7 @@ export async function feedbackRoutes(fastify: FastifyInstance) {
     // request.ip 由 Fastify 根据 trustProxy 白名单解析；未配置时回落到 socket.remoteAddress（XFF 被忽略）
     const ipHash = hashIp(request.ip)
 
-    const allowed = await checkRateLimit(ipHash, sourceId).catch(() => true)
+    const allowed = await checkRateLimit(ipHash, sourceId, success).catch(() => true)
     if (!allowed) {
       return reply.code(429).send({ error: { code: 'RATE_LIMITED', message: '操作过于频繁，请稍候', status: 429 } })
     }

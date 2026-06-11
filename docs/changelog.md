@@ -3986,3 +3986,18 @@
   - **Phase 2（P2-1 success 上报 / P2-2 EMA 统计 / P2-3 独立 ipHash 门槛 / P2-4-A 信号入队 / P2-4-B 定向消费）5 卡全部收口**：F1–F4 反馈闭环按方案 v2 全部打通——前台 success/failure 双向上报 → EMA 落账（暂不进评分）→ 独立佐证门槛 → 定向 recheck；运营线路级 reprobe 假按钮消除（信号真实入队 + worker 定向消费）。
   - P3-2 影子验证一周硬前置自 P2-2 落地（2026-06-10）起算；worker 改动无对应 e2e 域（ADR-180 / P1-5 先例）。
   - 门禁：typecheck/lint EXIT=0 / recheck 编排 5/5 / test:changed 5 passed。
+
+## [SRCHEALTH-P2-1-FIX] feedback rate-limit 按 success/failure 分 bucket（Codex stop-time review）
+- **完成时间**：2026-06-10
+- **记录时间**：2026-06-10 19:58
+- **执行模型**：claude-fable-5
+- **子代理**：无（Codex stop-time review 为 hook 自动触发；SEQ-20260610-02 序列累计第 7 处拦截）
+- **修改文件**：
+  - `apps/api/src/routes/feedback.ts` — `checkRateLimit` 增 success 参数，key 加 `:s`/`:f` 后缀分 bucket（旧 key 格式存量 TTL 60s 自然过期，无迁移）
+  - `tests/unit/api/feedbackRoute.test.ts` — 新增守卫用例：success→failure 连发第二次 202 不被拒 + 双 key 后缀断言 + 同类信号仍共享 bucket（19/19）
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - 缺陷影响（修复前）：P2-1 接入首播 success 上报后，同 (ipHash, sourceId) 的 success 会占用共享 rate-limit bucket，60s 内随后的播放失败上报被 429 拒掉——失败信号全链路丢失（dead 标记 / fb:fail:set recheck 独立佐证 / EMA obs=0 落账全部断流）；反向「失败后 retry 成功」的复活佐证（fb:revive SADD）同理被顶掉。该交互在 P2-1 之前不存在（前端只报失败）。
+  - 修复语义：rate-limit 防刷目标是「同类信号重复提交」（前端去抖为第一层：success per-sourceId / failure per-(sourceId,errorCode)），跨类信号不应互斥；分 bucket 后每类各自每分钟 1 次，防刷强度不降级。
+  - 门禁：typecheck/lint EXIT=0 / feedbackRoute 19/19 / test:changed 通过。

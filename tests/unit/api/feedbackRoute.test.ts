@@ -144,6 +144,32 @@ describe('POST /feedback/playback', () => {
     })
   })
 
+  // SRCHEALTH-P2-1-FIX（Codex stop-time review）：success/failure 独立 bucket——
+  // 共享 bucket 时首播 success 会把 60s 内随后的 failure 上报 429 拒掉（失败信号全链路丢失）
+  it('success 与 failure 各自独立 rate-limit bucket（success 不顶掉随后的 failure）', async () => {
+    await app.inject({
+      method: 'POST',
+      url: '/v1/feedback/playback',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(validBody),
+    })
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/feedback/playback',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ ...validBody, success: false, errorCode: 'ERR_FATAL' }),
+    })
+    // 第二次（failure）不被 success 的 bucket 拒掉
+    expect(res.statusCode).toBe(202)
+    const keys = mockRedis.set.mock.calls.map((c) => c[0] as string)
+    expect(keys).toHaveLength(2)
+    expect(keys[0]).toMatch(/:s$/)
+    expect(keys[1]).toMatch(/:f$/)
+    expect(keys[0]).not.toBe(keys[1])
+    // 同类信号仍共享 bucket（key 除后缀外一致 → NX 重复提交会被拒）
+    expect(keys[0].replace(/:s$/, '')).toBe(keys[1].replace(/:f$/, ''))
+  })
+
   it('IP 地址不存储原值，只使用 hash（8 hex）作为 rate-limit key', async () => {
     await app.inject({
       method: 'POST',
