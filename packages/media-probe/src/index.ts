@@ -22,5 +22,8 @@ export type { MpdParseResult, MpdRepresentation } from './mpd'
 // 判定层
 export { evaluateHls, evaluateMp4, evaluateMpd, heightToQuality } from './evaluate'
 
+// URL 工具（非 manifest 解析；source_hostname 语义真源，SRCHEALTH-P3-3-A）
+export { extractHostname } from './url'
+
 // 类型契约
 export type { MediaProbeStatus, QualityDetected, MediaProbeVerdict } from './types'

@@ -171,6 +171,8 @@ async function checkDash(source: VideoSource, signal: AbortSignal): Promise<Rend
   return verdictToRenderResult(evaluateMpd(parseMpd(xml)))
 }
 
+// TODO(SRCHEALTH-P3-3-B): 与 level1-probe.ts extractSiteId 同款本地副本——
+// 切换到 @resovo/media-probe extractHostname 时一并消除（P3-3-A 裁决 B/C 登记）。
 function extractSiteId(url: string): string {
   try {
     return new URL(url).hostname

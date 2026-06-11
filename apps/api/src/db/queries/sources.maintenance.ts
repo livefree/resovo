@@ -4,6 +4,7 @@
  */
 
 import type { Pool } from 'pg'
+import { extractHostname } from '@resovo/media-probe'
 import type { UpsertSourceInput } from './sources.types'
 
 // ── 投稿审核 ──────────────────────────────────────────────────────
@@ -252,16 +253,19 @@ export async function replaceSourcesForSite(
         continue
       }
       // ON CONFLICT DO UPDATE 同时覆盖软删除行（恢复 deleted_at=NULL, is_active=true）
+      // SRCHEALTH-P3-3-A: DO UPDATE 必须带 source_hostname——恢复的软删行可能是
+      // 回填前 NULL；同 URL 冲突时 EXCLUDED 值与旧值相同，SET 幂等无害（裁决 F）
       const insertResult = await client.query(
         `INSERT INTO video_sources
-           (video_id, season_number, episode_number, source_url, source_name, type, is_active, source_site_key)
-         VALUES ($1, $2, $3, $4, $5, $6, true, $7)
+           (video_id, season_number, episode_number, source_url, source_name, type, is_active, source_site_key, source_hostname)
+         VALUES ($1, $2, $3, $4, $5, $6, true, $7, $8)
          ON CONFLICT ON CONSTRAINT uq_sources_video_episode_url
          DO UPDATE SET deleted_at = NULL, is_active = true,
                        source_name = EXCLUDED.source_name,
                        type = EXCLUDED.type,
-                       source_site_key = EXCLUDED.source_site_key`,
-        [videoId, src.seasonNumber ?? 1, src.episodeNumber, src.sourceUrl, src.sourceName, src.type, src.sourceSiteKey ?? null],
+                       source_site_key = EXCLUDED.source_site_key,
+                       source_hostname = EXCLUDED.source_hostname`,
+        [videoId, src.seasonNumber ?? 1, src.episodeNumber, src.sourceUrl, src.sourceName, src.type, src.sourceSiteKey ?? null, extractHostname(src.sourceUrl)],
       )
       sourcesAdded += insertResult.rowCount ?? 0
     }
@@ -424,6 +428,8 @@ export async function resolveOrphanVideo(
 
 /**
  * 替换播放源 URL（用于 SourceReplaceDialog 确认替换）
+ * SRCHEALTH-P3-3-A: 换源即换主机，source_hostname 必须随 newUrl 重算（裁决 F——
+ * 三处写路径中最不能漏的一处，漏写会导致 hostname 与 source_url 永久不一致）。
  */
 export async function replaceSourceUrl(
   db: Pool,
@@ -432,10 +438,10 @@ export async function replaceSourceUrl(
 ): Promise<boolean> {
   const result = await db.query(
     `UPDATE video_sources
-     SET source_url = $1, is_active = true, last_checked = NOW()
-     WHERE id = $2 AND deleted_at IS NULL
+     SET source_url = $1, source_hostname = $2, is_active = true, last_checked = NOW()
+     WHERE id = $3 AND deleted_at IS NULL
      RETURNING id`,
-    [newUrl, sourceId],
+    [newUrl, extractHostname(newUrl), sourceId],
   )
   return (result.rowCount ?? 0) > 0
 }

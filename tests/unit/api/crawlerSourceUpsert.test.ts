@@ -236,6 +236,86 @@ describe('replaceSourcesForSite — 全量替换策略', () => {
   })
 })
 
+// ── Tests: SRCHEALTH-P3-3-A source_hostname 写路径维护 ────────────
+// 三处写路径全集（worker 无 INSERT）：「写 URL 必同步写 hostname」不变式封闭在
+// query 层；hostname 语义真源 = @resovo/media-probe extractHostname（裁决 C/F）。
+
+describe('SRCHEALTH-P3-3-A — source_hostname 写路径维护', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockConnect.mockResolvedValue(mockClient)
+    mockClient.query.mockResolvedValue({ rowCount: 0, rows: [] })
+  })
+
+  it('upsertSource: INSERT 含 source_hostname 列，参数为解析后的小写 hostname', async () => {
+    const { upsertSource } = await import('@/api/db/queries/sources')
+    mockQuery.mockResolvedValueOnce({ rows: [] })
+
+    await upsertSource(mockDb as unknown as import('pg').Pool, {
+      videoId: 'vid-1',
+      episodeNumber: 1,
+      sourceUrl: 'HTTPS://CDN.Example.COM:8443/ep1.m3u8',
+      sourceName: 'site-a',
+      type: 'hls',
+    })
+
+    const [sql, params] = mockQuery.mock.calls[0] as [string, unknown[]]
+    expect(sql).toContain('source_hostname')
+    // 小写 + 去端口（new URL().hostname 语义）
+    expect(params[7]).toBe('cdn.example.com')
+  })
+
+  it('upsertSource: URL 不可解析时 source_hostname 参数为 null（NULL 容忍）', async () => {
+    const { upsertSource } = await import('@/api/db/queries/sources')
+    mockQuery.mockResolvedValueOnce({ rows: [] })
+
+    await upsertSource(mockDb as unknown as import('pg').Pool, {
+      videoId: 'vid-1',
+      episodeNumber: 1,
+      sourceUrl: 'not a url',
+      sourceName: 'site-a',
+      type: 'mp4',
+    })
+
+    const [, params] = mockQuery.mock.calls[0] as [string, unknown[]]
+    expect(params[7]).toBe(null)
+  })
+
+  it('replaceSourcesForSite: INSERT 含 source_hostname 且 DO UPDATE 带 EXCLUDED.source_hostname（恢复软删行修复回填前 NULL）', async () => {
+    const { replaceSourcesForSite } = await import('@/api/db/queries/sources')
+    mockClient.query
+      .mockResolvedValueOnce({ rows: [] })                // BEGIN
+      .mockResolvedValueOnce({ rows: [] })                // SELECT existing
+      .mockResolvedValueOnce({ rowCount: 1, rows: [] })   // INSERT
+      .mockResolvedValueOnce({ rows: [] })                // COMMIT
+
+    await replaceSourcesForSite(mockDb as unknown as import('pg').Pool, 'vid-1', 'site-a', [
+      { videoId: 'vid-1', episodeNumber: 1, sourceUrl: 'https://用户@v2.Host.COM:80/ep.m3u8', sourceName: 'site-a', type: 'hls' },
+    ])
+
+    const insertCall = mockClient.query.mock.calls.find(
+      (call: unknown[]) => typeof call[0] === 'string' && (call[0] as string).includes('INSERT INTO video_sources')
+    )
+    expect(insertCall).toBeTruthy()
+    const sql = insertCall![0] as string
+    expect(sql).toContain('source_hostname')
+    expect(sql).toContain('source_hostname = EXCLUDED.source_hostname')
+    // 去 userinfo + 去端口 + 小写（裁决 B 规约）；is_active 为 SQL 字面量不占参数位 → $8 = index 7
+    expect((insertCall![1] as unknown[])[7]).toBe('v2.host.com')
+  })
+
+  it('replaceSourceUrl: 换源必须随 newUrl 重算 source_hostname（三处中最不能漏的一处）', async () => {
+    const { replaceSourceUrl } = await import('@/api/db/queries/sources')
+    mockQuery.mockResolvedValueOnce({ rowCount: 1, rows: [{ id: 'src-1' }] })
+
+    await replaceSourceUrl(mockDb as unknown as import('pg').Pool, 'src-1', 'https://new-cdn.example.org/v.m3u8')
+
+    const [sql, params] = mockQuery.mock.calls[0] as [string, unknown[]]
+    expect(sql).toContain('source_hostname = $2')
+    expect(params).toEqual(['https://new-cdn.example.org/v.m3u8', 'new-cdn.example.org', 'src-1'])
+  })
+})
+
 // ── Tests: CrawlerService upsertVideo — append_only 退回策略 ──────
 
 describe('CrawlerService.upsertVideo — source_update 策略', () => {

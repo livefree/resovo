@@ -5,6 +5,7 @@
  */
 
 import type { Pool } from 'pg'
+import { extractHostname } from '@resovo/media-probe'
 import type { VideoSource, VideoQuality, SourceType } from '@/types'
 import type { UpsertSourceInput } from './sources.types'
 
@@ -301,6 +302,8 @@ export async function batchSetSourceStatus(
  * 同一 (video_id, episode_number, source_url) 已存在时跳过（DO NOTHING）。
  * 规则 E(CHG-38): 不覆盖已有播放源，避免误清除 is_active=false 状态。
  * ADR-016: episode_number 统一坐标系，单集/电影为 1（NOT NULL）。
+ * SRCHEALTH-P3-3-A: source_hostname 在 query 层解析写入（「写 URL 必同步写 hostname」
+ * 不变式封闭在 DB 层，新调用方无法漏传）；DO NOTHING 冲突行由回填脚本覆盖。
  */
 export async function upsertSource(
   db: Pool,
@@ -308,12 +311,12 @@ export async function upsertSource(
 ): Promise<VideoSource | null> {
   const result = await db.query<DbSourceRow>(
     `INSERT INTO video_sources
-       (video_id, season_number, episode_number, source_url, source_name, type, is_active, source_site_key)
-     VALUES ($1, $2, $3, $4, $5, $6, true, $7)
+       (video_id, season_number, episode_number, source_url, source_name, type, is_active, source_site_key, source_hostname)
+     VALUES ($1, $2, $3, $4, $5, $6, true, $7, $8)
      ON CONFLICT ON CONSTRAINT uq_sources_video_episode_url
      DO NOTHING
      RETURNING *`,
-    [input.videoId, input.seasonNumber ?? 1, input.episodeNumber, input.sourceUrl, input.sourceName, input.type, input.sourceSiteKey ?? null]
+    [input.videoId, input.seasonNumber ?? 1, input.episodeNumber, input.sourceUrl, input.sourceName, input.type, input.sourceSiteKey ?? null, extractHostname(input.sourceUrl)]
   )
   return result.rows[0] ? mapSource(result.rows[0]) : null
 }

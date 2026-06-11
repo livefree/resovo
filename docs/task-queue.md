@@ -1839,9 +1839,9 @@
 
 ## [SEQ-20260610-02] 视频/线路/站点健康度与反馈闭环（source-health v2 方案落地）
 
-- **状态**：🔄 执行中（11/16 卡完成：**Phase 1 全收口 ✅ + Phase 2 全收口 ✅**（P2-1/P2-2/P2-3/P2-4-A/P2-4-B）；下一步 Phase 3——启动前按方案 §4 复核拆卡与时序：P3-3-A 前置 Opus / **P3-2 影子验证一周硬前置（P2-2 落地 2026-06-10 起算，最早 ~2026-06-17 后启动）** / P3-1·P3-3 可先行）
+- **状态**：🔄 执行中（12/16 卡完成：**Phase 1 全收口 ✅ + Phase 2 全收口 ✅ + P3-3-A ✅**；Phase 3 进行中——开工复核 §4 完成：本轮可执行 P3-3-A ✅ → P3-3-B → P3-1；**P3-2 影子验证一周硬前置（P2-2 落地 2026-06-10 起算，最早 ~2026-06-17 后启动）本轮阻塞**，P3-4 随评分项顺延）
 - **创建时间**：2026-06-10 12:53
-- **最后更新时间**：2026-06-10 19:50
+- **最后更新时间**：2026-06-10 20:20
 - **目标**：落地 `docs/designs/source-health-feedback-loop-plan_20260610.md` v2（两轮独立审核有条件通过，必修全吸收，commit 88893812）：修复「全部探测/试播后状态不更新」三处可见断点（B1/B2/B3）→ 打通反馈闭环（F1–F4）→ 评分进化 + 站点/主机桥接（D3/D4）。
 - **范围**：apps/api（service/queries/routes/lib）+ apps/worker（jobs/lib）+ apps/server-next（sources/videos 模块 UI）+ apps/web-next（PlayerShell）+ packages（media-probe 新包，P1-3）。**方案 §3 为各卡内容真源，§4 为门禁真源**；卡面只记验收口径与文件范围。
 - **依赖**：无 BLOCKER；方案 v2 已批准（用户 2026-06-10）。
@@ -1923,8 +1923,10 @@
 
 ### 任务列表（Phase 3 — 评分进化 + 站点/主机桥接；启动前按方案 §4 复核拆卡与时序）
 
-12. **SRCHEALTH-P3-3-A** — `video_sources.source_hostname` migration + 回填 + 写路径维护（状态：🟡 规划）
-    - 依赖：Phase 2 收口。前置：Opus 子代理（schema 字段）。建议模型：sonnet。
+12. **SRCHEALTH-P3-3-A** — `video_sources.source_hostname` migration + 回填 + 写路径维护（状态：✅ 已完成 2026-06-10 20:20）
+    - 创建时间：2026-06-10 12:53 ｜ 实际开始：2026-06-10 19:55 ｜ 完成时间：2026-06-10 20:20
+    - 开工复核（§4 时序门禁）：P3-2 影子一周硬前置（最早 ~06-17）本轮阻塞；P3-4 随评分项顺延；本轮可执行 P3-3-A → P3-3-B → P3-1。
+    - **完成备注**：① **arch-reviewer (claude-opus-4-8) 裁决 A–H**：TEXT + 小写 CHECK（`IS NULL OR` 对齐 105 先例）+ NULL 唯一语义（不区分解析失败/未回填——回填后后者消失）；**`extractHostname` 入 `packages/media-probe` 新 `src/url.ts` 分区**（裁决抓到 `extractSiteId` 已存在副本漂移：level1-probe exported + level2-render local 双副本——「第三消费方出现即入包」已触发；放 api 单副本会逼 P3-3-B 跨 ADR-107 边界）；**migration 107 不回填（双重否决 SQL 回填）**：IDN→punycode 为 Node URL 专属语义 SQL regex 不可复制（IDN 主机将产生与写路径永久错配的第二 key）+ migrate.ts 单事务 55.7 万行 UPDATE 长锁阻塞爬虫 upsert → 独立脚本 `scripts/backfill-source-hostname.ts`（游标分批 2000/批独立提交 + 幂等 `WHERE source_hostname IS NULL` + 末尾 ANALYZE 喂 planner 直方图）；partial index `WHERE deleted_at IS NULL AND source_hostname IS NOT NULL` **不加 is_active**（P3-3-B 软降权/恢复需反查 inactive 行）；非 CONCURRENTLY 安全成立条件 = 空列 + IS NOT NULL 谓词 → 初始空索引瞬时建完。② 写路径 3 处全集（worker 无 INSERT）：`upsertSource` / `replaceSourcesForSite`（**DO UPDATE SET source_hostname=EXCLUDED**——恢复软删行修复回填前 NULL，同 URL 冲突幂等无害）/ `replaceSourceUrl`（换源重算，三处中最不能漏）；解析封闭 query 层（「写 URL 必同步写 hostname」不变式，新调用方无法漏传）。③ **真库落地**：migration ✅ / 回填实跑 556,892/556,896（4 行垃圾 URL 如 "01"/"25" 保持 NULL = 正确语义；样本登记 P3-3-B 评估无 hostname 源占比）/ 幂等重跑 updated=0 / 对拍 4 项（NULL=4、小写 0 违例、抽样 hostname↔URL 一致、等值查询 Bitmap Index Scan 走 idx_video_sources_hostname）。④ worker 两处 `extractSiteId` 加 TODO(P3-3-B) 注释：`slice(0,64)` fallback 与 NULL 语义冲突不可 JOIN，P3-3-B 切 extractHostname + 持久化前过滤 null（本卡不动 worker 逻辑）。⑤ 登记：source_hostname 暂不进 VideoSource types/mapper——本卡只写不读，P3-3-B JOIN 在 SQL 层；TS 读字段需求出现时加性扩展。共享层沉淀自答：是——本卡即沉淀（hostname 语义真源入 media-probe URL 工具分区，写路径/回填/P3-3-B worker 三方共用）。门禁：typecheck/lint EXIT=0 / extractHostname 边界 10 用例（IDN punycode + IPv6 方括号固化）+ 写路径 SQL 契约 4 用例（crawlerSourceUpsert 13/13）/ test:changed 60 文件 665 passed / 全量 507 文件 7117 passed / e2e:admin 82/82 EXIT=0 / migrate + 回填真库 ✅。执行模型: claude-fable-5（建议 sonnet，用户会话人工覆盖持续推进授权）；子代理: arch-reviewer (claude-opus-4-8)。
 13. **SRCHEALTH-P3-3-B** — `host_health` 表 + 熔断双存储 + 软降权（状态：🟡 规划）
     - 依赖：P3-3-A。建议模型：opus（架构原语 + 新表设计）。
 14. **SRCHEALTH-P3-1** — 双时钟新鲜度衰减 + 校准表单测（状态：🟡 规划）

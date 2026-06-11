@@ -163,6 +163,9 @@ async function writeHealthEvent(
   )
 }
 
+// TODO(SRCHEALTH-P3-3-B): 切换到 @resovo/media-probe extractHostname 并在持久化
+// host_health 前过滤 null——slice(0,64) fallback 与 video_sources.source_hostname
+// 的 NULL 语义冲突，不可 JOIN（P3-3-A arch-reviewer 裁决 B；level2-render 同款副本同切）。
 export function extractSiteId(url: string): string {
   try {
     return new URL(url).hostname

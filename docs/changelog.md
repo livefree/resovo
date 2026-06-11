@@ -4001,3 +4001,24 @@
   - 缺陷影响（修复前）：P2-1 接入首播 success 上报后，同 (ipHash, sourceId) 的 success 会占用共享 rate-limit bucket，60s 内随后的播放失败上报被 429 拒掉——失败信号全链路丢失（dead 标记 / fb:fail:set recheck 独立佐证 / EMA obs=0 落账全部断流）；反向「失败后 retry 成功」的复活佐证（fb:revive SADD）同理被顶掉。该交互在 P2-1 之前不存在（前端只报失败）。
   - 修复语义：rate-limit 防刷目标是「同类信号重复提交」（前端去抖为第一层：success per-sourceId / failure per-(sourceId,errorCode)），跨类信号不应互斥；分 bucket 后每类各自每分钟 1 次，防刷强度不降级。
   - 门禁：typecheck/lint EXIT=0 / feedbackRoute 19/19 / test:changed 通过。
+
+## [SRCHEALTH-P3-3-A] video_sources.source_hostname join key + 回填 + 写路径维护（SEQ-20260610-02 Phase 3 启动）
+- **完成时间**：2026-06-10
+- **记录时间**：2026-06-10 20:20
+- **执行模型**：claude-fable-5（建议 sonnet，用户会话人工覆盖持续推进授权「执行 SEQ-20260610-02 phase 3」）
+- **子代理**：arch-reviewer (claude-opus-4-8) — source_hostname schema 设计裁决 A–H（跨 3+ 消费方 migration 字段 + media-probe 公开导出面双触发强制 Opus）
+- **修改文件**：
+  - `packages/media-probe/src/url.ts`（新）+ `src/index.ts` — `extractHostname(url): string|null` URL 工具分区（非 manifest 解析层）；hostname 语义真源 = `new URL().hostname`（小写/去端口/去 userinfo/IDN punycode/IPv6 含方括号）；裁决 C：入包收敛 `extractSiteId` 既有双副本漂移（level1-probe exported + level2-render local），api 单副本会逼 P3-3-B 跨 ADR-107 边界
+  - `apps/api/src/db/migrations/107_video_sources_source_hostname.sql`（新）— TEXT + 小写 CHECK（IS NULL OR，105 先例）+ COMMENT + partial index `idx_video_sources_hostname WHERE deleted_at IS NULL AND source_hostname IS NOT NULL`（不加 is_active：P3-3-B 软降权恢复需反查 inactive 行）；**不含回填**（裁决 D 双重否决：IDN punycode SQL 不可复制 + migrate.ts 单事务 55.7 万行长锁）；非 CONCURRENTLY 安全 = 空列 + IS NOT NULL 谓词初始空索引
+  - `scripts/backfill-source-hostname.ts`（新）— 游标分批 2000/批独立提交 + 幂等 WHERE IS NULL + 末尾 ANALYZE + unparsable 统计样本日志（数据质量信号登记 P3-3-B）
+  - `apps/api/src/db/queries/sources.ts` / `sources.maintenance.ts` — 写路径 3 处全集维护：`upsertSource` INSERT +$8 / `replaceSourcesForSite` INSERT + **DO UPDATE SET source_hostname=EXCLUDED**（恢复软删行修复回填前 NULL）/ `replaceSourceUrl` 换源重算（三处最不能漏）；解析封闭 query 层（不变式：写 URL 必同步写 hostname）
+  - `apps/worker/src/jobs/source-health/{level1-probe,level2-render}.ts` — 两处 `extractSiteId` 加 TODO(P3-3-B) 注释（slice(0,64) fallback 与 NULL 语义冲突不可 JOIN；本卡不动 worker 逻辑）
+  - `tests/unit/packages/media-probe/url.test.ts`（新，10 用例）+ `tests/unit/api/crawlerSourceUpsert.test.ts`（+4 SQL 契约用例）— IDN punycode / IPv6 方括号语义固化（「退回 SQL regex 实现必 RED」）+ 三写路径 hostname 参数断言
+  - `docs/architecture.md` — §5.2 video_sources 字段表 +source_hostname 行（migration 107 全要素）
+- **新增依赖**：无
+- **数据库变更**：migration 107（已真库执行 ✅）+ 回填实跑 556,892/556,896 行（4 行垃圾 URL 如 "01" 保持 NULL = 正确语义）；幂等重跑 updated=0；真库对拍 4 项 ✅（NULL=4 / 小写 0 违例 / 抽样 hostname↔URL 一致 / 等值查询走 Bitmap Index Scan）
+- **注意事项**：
+  - Phase 3 开工复核（方案 §4）：P3-2 影子验证一周硬前置（P2-2 落地 2026-06-10 起算，最早 ~06-17）本轮阻塞；P3-4 随评分项顺延；本轮可执行 P3-3-A ✅ → P3-3-B → P3-1。
+  - source_hostname 暂不进 VideoSource types/mapper（本卡只写不读，P3-3-B JOIN 在 SQL 层；TS 读字段需求出现时加性扩展）。
+  - 运维 runbook 口径：107 migration 后必跑 `scripts/backfill-source-hostname.ts`（可重入；回填期间无需停写——WHERE IS NULL 谓词不与新行写路径竞争）。
+  - 门禁：typecheck/lint EXIT=0 / url 10 + crawlerSourceUpsert 13/13 / test:changed 60 文件 665 passed / 全量 507 文件 7117 passed / e2e:admin 82/82 EXIT=0。
