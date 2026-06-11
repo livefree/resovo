@@ -4416,3 +4416,18 @@
 - **新增依赖**：无
 - **数据库变更**：无
 - **门禁**：typecheck EXIT=0 / lint 4·4 / test:changed 25 passed（PendingMetaQuickEdit 13）。纯事件处理改动、无视觉变化（不重生成快照）/ e2e 不触及快编芯片（上轮 82/82）。
+
+## [SRCHEALTH-ADMIN-PLAYBACK-FB · 设计裁决 + ADR-198] admin 真实播放反馈并入 source health（设计相，前置 ADR）
+- **完成时间**：2026-06-11（设计/ADR 相完成；实施 -A/-B/-C 待续）
+- **记录时间**：2026-06-11 14:05
+- **执行模型**：claude-opus-4-8（主循环）
+- **子代理**：arch-reviewer (claude-opus-4-8) — 设计裁决 CONDITIONAL PASS
+- **背景**：审核验收期用户发现——AdminPlayer 真实播放成功/失败不更新线路健康度；线路只在主动点「探测/试播」时才更新。主循环只读调查确认健康度 3 路径强度倒挂（真实播放走匿名众包多 IP 门槛被稀释；HEAD 探测/服务端 manifest 解析却直接更新）。
+- **修改文件**：
+  - `docs/decisions.md` — 新增 **ADR-198**（admin 真实播放反馈并入 source health）：9 决策要点 + 端点契约表（`POST /admin/videos/:videoId/sources/:sourceId/playback-verify`）+ migration 109 草案 + 备选/后果/验证/拆卡边界 + 评审（Accepted）
+  - `docs/tasks.md` — SRCHEALTH-ADMIN-PLAYBACK-FB 设计卡（裁决结果 + 拆卡序列录入）；MODUX-ACPT-5 标记暂停（检查点已提交）
+- **决策摘要**：新建 admin 专用端点（不扩前台 /feedback/playback）；成功直更 render_status='ok'+probe 复活+时间戳+quality（无条件覆盖）；失败**不直接置 dead**、改记 health_event(origin=admin_playback) 触发 worker 定向 recheck；绕众包多 IP 门槛；admin 路径**不写 EMA**（不污染 P2/P3 众包统计）。新列 `last_admin_verified_at` + 新 origin `admin_playback`。鉴权 `['moderator','admin']`。
+- **新增依赖**：无
+- **数据库变更**：ADR 锁定（migration 109 草案）；实际 migration 落地在 -A 卡。
+- **门禁**：verify:adr-contracts EXIT=0（ADR-198 合规）。无代码改动。
+- **注意事项**：新 admin route 落地前本 ADR 为 verify:endpoint-adr 硬前置；实施拆卡 ADR✅→-A(schema+types+architecture.md)→-B(service+route+单测)→-C(UI+worker+e2e)→-D(可选携分辨率)。用户已裁定 3 开放项（失败复用 worker 队列 / 鉴权 moderator+admin / quality 无条件覆盖）。

@@ -22020,3 +22020,86 @@ COMMIT;
   - **LOW**：`ITEM_NOT_DISMISSABLE` 纳 ErrorCode 真源（ADR-110）；`deleteStaleDismissals` age N=90d 与 ADR-195 TTL 交叉确认。
   - **红线核对全 PASS**：新 route 端点契约登记（path 走 body 规避 `:`）/ 无技术栈外依赖（纯 SQL）/ 不越层（general SQL、派生 Service 内存、selectDismissedKeys 在 queries）/ 不破坏 ADR-192 已读混合（D-197-5 正交）/ ADR-196 SSE+消息中心（history 不过滤）/ audit_log 不受影响（纯视图态表）/ db-rules 索引 4 级文档 + 软删除约定不适用已论证 / 跨 3 层拆 -A/-B/-C。
 - **状态 → Accepted**（3 HIGH 纠正已并入 ADR 决策文本闭环、2 MEDIUM 处置〔MEDIUM-1 follow-up / MEDIUM-2 两白名单〕+ LOW 转 -B 实施期登记）。**解锁 NTLG-NTF-DISMISS-A/B/C 实施**。
+
+## ADR-198：审核台真实播放反馈并入 source health（admin 可信直更 · 成功/失败不对称 · 绕众包门槛 · 不写 EMA）
+
+> SEQ：SRCHEALTH-ADMIN-PLAYBACK-FB（审核验收期发现）。设计裁决：arch-reviewer claude-opus-4-8（CONDITIONAL PASS）+ 用户裁定 3 开放项。状态：**Accepted**（解锁 -A/-B/-C 实施）。
+
+### 背景 / 问题
+
+审核员在审核台用内嵌播放器 AdminPlayer **真实播放**视频线路验证可播性，但发现**播放成功/失败不更新线路健康度**；线路健康度只在主动点「探测/试播」按钮时才更新。调查确认健康度 3 条更新路径强度倒挂：
+
+- **探测**（LinesPanel 按钮 → `POST /admin/videos/:id/refetch-sources` → `SourceProbeService.probeOne` → HTTP **HEAD**）→ 直接 UPDATE `probe_status`+latency+`last_probed_at`。无门槛即时。**只测可达性**（注释 Y3 自承 403/405 误判）。
+- **试播**（`POST /admin/videos/:videoId/sources/batch-render-check` → `renderCheckManifest` **服务端解析 HLS manifest**，非真实播放）→ 直接 UPDATE `render_status`+分辨率+quality+`last_rendered_at`。无门槛即时。
+- **真实播放**（AdminPlayer onPlay/onError → 前台公开 `POST /v1/feedback/playback`）→ 走**为匿名众包设计的多 IP 信任门槛**：成功仅刷 `last_probed_at`+写 EMA（只写不进评分，P3-2 影子验证硬前置）、dead→ok 复活需 5min 窗口 ≥2 独立 ipHash；失败 recheck 入队需 ≥3 独立 ipHash。端点不区分 admin 登录态。→ **单个 admin 真实播放不翻 probe/render**。
+
+**核心 gap**：最权威信号（admin 在真实播放器端到端验证可播性，走完整 HLS 管线 + 解码 + 防盗链 + CDN 边缘）被最弱管道（匿名众包多 IP 门槛）稀释；可靠性更低的 HEAD 探测 / 服务端 manifest 解析却直接更新。违背 source-health plan §3 第一原则「每一次真实播放都是一次免费且最真实的探测」。
+
+### 决策要点
+
+- **D-198-1（新建 admin 专用端点，不扩 /feedback/playback）**：新建 `POST /admin/videos/:videoId/sources/:sourceId/playback-verify`，**不**在前台公开 `/feedback/playback` 加 admin 分支。理由：① `feedbackRoutes` 无 auth preHandler（只 hash IP），加「登录 admin 豁免」需在匿名公开端点引入 `request.user` 鉴权 + 直更业务分叉，破坏后端边界（价值排序 #2）；② 直更 dead/ok 与门槛逻辑同 handler if/else 分叉，误判即绕过所有门槛（正确性 #1 风险）；③ 新端点 adminOnly preHandler 自然落位，与 `batch-render-check` 同命名空间对称。
+- **D-198-2（成功/失败不对称，红线）**：
+  - **成功** → 直更 `render_status='ok'`（真实播放是 playability 最强证据，应进 render 维度〔health 权重 0.6〕而非只刷时间戳）+ `probe_status` dead→ok 复活 + 写 `last_rendered_at=NOW()`（驱动 ADR P3-1 双时钟 `T_RENDER_HOURS=168` 衰减回升，否则刚验证的源排序不回升）+ `last_admin_verified_at=NOW()`。
+  - **失败** → **不直接置 `render_status='dead'`**（浏览器端失败归因不可靠：本地网络 / autoplay 策略 / 临时 CDN 抖动 / 地域封锁；直接 dead 会误杀 + 联动 `disableDead` 误禁线路 + 误导前台排序）→ 改写 `health_events(origin='admin_playback', new_status='dead', error_detail=errorCode, triggered_by=actorId, processed_at=NULL)` 作**定向 recheck 队列信号**，由服务端可控 probe+render 权威收敛。
+- **D-198-3（绕过众包多 IP 门槛）**：admin = 登录可信单点，「独立佐证」≥2/≥3 IP 是匿名防刷原语，对 adminOnly 端点反模式 → 新端点天然无门槛、单次即生效。
+- **D-198-4（admin 路径不写 EMA 三字段，边界）**：不写 `fb_score`/`fb_sample_weight`/`last_feedback_at`。理由：EMA 真源语义是「跨匿名客户端播放成功率统计量」（半衰 7 天 / 稳态权重量级匹配 P3-2 置信度缩放 N）；admin 验证是**确定性状态写入**非统计采样，混入会用单点高可信事件污染众包分布、破坏 P3-2 `w_fb=0.20×min(1,w/N)` 样本置信假设。admin 信号经 `render_status`/`probe_status` 直接立即体现。→ **P3-2 影子验证硬前置零扰动**（admin 不碰 EMA）。
+- **D-198-5（schema 增量）**：新列 `video_sources.last_admin_verified_at TIMESTAMPTZ NULL`（migration 109，**同步 architecture.md**）；新 origin `admin_playback` 入 `SourceHealthEventOriginWorker` union（origin 列 037 起无 CHECK → 零列迁移，对齐 P2-4 `manual_route_reprobe` 先例）；admin 失败信号供 worker 消费补 partial index（migration 109）；`quality_source='admin_review'` 复用现有 CHECK 值（059 已含）。
+- **D-198-6（鉴权 `['moderator','admin']`，用户裁定）**：playback-verify 是审核动作，鉴权与 moderation 台 toggle 一致（`[authenticate, requireRole(['moderator','admin'])]`），不取 batch-probe 端点的 `['admin']`。
+- **D-198-7（quality 无条件覆盖，用户裁定）**：admin 携实测分辨率时**无条件覆盖** `quality_detected`/`resolution_*`（不同于 feedback.ts 仅 `quality_detected IS NULL` 时写）—— admin 实测比爬虫配置可信。
+- **D-198-8（admin 失败复用 worker 定向 recheck 队列，用户裁定）**：失败 health_event(processed_at=NULL) 复用既有 `feedback-driven-recheck` worker 定向消费（接 P1-5 sourceIds 范式），worker 拉取条件含 `admin_playback` origin。
+- **D-198-9（刷新链）**：`AdminPlayer` 新增 `onVerified?: () => void`，verify 成功后调用；`PendingCenter` 把既有 `onSourceHealthChanged` 透传给 AdminPlayer（现仅透 LinesPanel）→ 终点 `ModerationConsole` `refetchQueue` 刷新左队列聚合 pill。LinesPanel「快照冻结」语义不破（与现探测/试播同模式，drawer 已开期间靠 onSourceHealthChanged→reload 拿新值，不在 AdminPlayer 直接乐观改行 / 零新并发面）。
+
+### 端点契约
+
+| # | 方法 | 路径 | 用途 | Request | Response | 错误码 |
+|---|---|---|---|---|---|---|
+| 1 | POST | `/admin/videos/:videoId/sources/:sourceId/playback-verify` | admin 真实播放反馈直更 source health（成功直更 render ok / 失败入队定向 recheck） | Body: `{ success: boolean, resolutionWidth?: number, resolutionHeight?: number, bufferingCount?: number, errorCode?: string(≤64) }` | 200 `{ data: { sourceId: string, newProbeStatus: 'ok'\|'dead', newRenderStatus: 'ok'\|'partial'\|'dead', verified: true } }` | 404 NOT_FOUND（source 不存在/已删/不属该 video） / 422 VALIDATION_ERROR / 500 INTERNAL_ERROR |
+
+> 鉴权：`[authenticate, requireRole(['moderator','admin'])]`（D-198-6）。审计：`audit_log` actionType `video_source.inline_action`（复用，afterJsonb.action='playback_verify'）。错误码信封沿用 ADR-110 真源，零新 ErrorCode。
+
+### Schema（migration 109 草案）
+
+```sql
+-- 109_video_sources_admin_playback_verify.sql
+ALTER TABLE video_sources ADD COLUMN IF NOT EXISTS last_admin_verified_at TIMESTAMPTZ NULL;
+COMMENT ON COLUMN video_sources.last_admin_verified_at IS 'admin 审核台真实播放亲验时间戳（ADR-198）';
+
+-- admin 失败定向 recheck 信号：worker 拉取未处理 admin_playback 事件（D-198-8）
+CREATE INDEX IF NOT EXISTS idx_health_events_admin_playback_pending
+  ON source_health_events (source_id)
+  WHERE origin = 'admin_playback' AND processed_at IS NULL;
+```
+
+- `architecture.md` 同步：video_sources 字段表加 `last_admin_verified_at` 行；source_health_events origin 注释加 `admin_playback`。
+
+### 备选方案（拒绝）
+
+- **A：扩 `/feedback/playback` 加 admin 豁免分支** — 拒绝（D-198-1 三条理由：匿名端点混入 admin 鉴权 / 直更与门槛同 handler 分叉风险 / 边界污染）。
+- **B：admin 失败直接置 dead** — 拒绝（D-198-2：浏览器端失败归因不可靠，误杀 + 误禁线路，正确性 #1 红线）。
+- **C：admin 反馈写 EMA（与匿名同管道）** — 拒绝（D-198-4：污染众包统计分布，破坏 P3-2 置信度假设）。
+- **D：复用 `last_rendered_at` 不加新列** — 拒绝（语义混淆「谁验证的」，一列成本低换语义清晰，价值排序 #2 > #5）。
+
+### 后果
+
+- ✅ 最强播放证据即时进 render 维度 + 驱动双时钟排序回升；✅ 众包 EMA/门槛/P2·P3 设计意图零污染；✅ 分层不破（Route→SourceProbeService→queries）；✅ schema 增量最小且同步 architecture.md。
+- ⚠️ 新增 admin route → 必经本 ADR（verify:endpoint-adr 门禁）；⚠️ AdminPlayer 由前台 feedback 端点切到 admin 端点 → 前台公开端点 `/feedback/playback` 仍服务真实前台用户（不删）。
+
+### 验证
+
+- `verify:endpoint-adr`：新 route 命中本 §端点契约表。
+- API 单测：成功路径（render ok + probe 复活 + 时间戳 + quality 无条件覆盖 + **不写 EMA 三字段** 断言）/ 失败路径（**不置 dead** + health_event processed_at=NULL 断言）/ 鉴权（非 moderator/admin 403）。
+- e2e（MODERATION/ADMIN 域）：AdminPlayer 播放成功 → 线路 render 状态 + 左队列 pill 联动刷新。
+- migration 真库对拍 + `verify:sql-schema-alignment`（architecture.md 同步）。
+
+### 拆卡边界（CLAUDE.md 跨 3 层 + 新 route 强制拆）
+
+- **-A**（schema+types，可并行）：migration 109 + `admin_playback` origin types union + architecture.md 同步。
+- **-B**（API service+route，依 ADR + -A）：`SourceProbeService.recordPlaybackVerify` + video_sources helper/列映射 + playback-verify route + API 单测。
+- **-C**（UI，依 -B）：AdminPlayer 切端点 + 携分辨率 + `onVerified` + PendingCenter 透传 + worker admin_playback 拉取 + e2e。
+- **-D**（可选/旁路，依 player-core 是否暴露分辨率）：AdminPlayer 携实测分辨率驱动 quality；若需改 player-core 公开 API 触发 Opus 强制项 → 独立评估，不阻塞 MVP。
+
+### 评审
+
+- **设计裁决：arch-reviewer claude-opus-4-8（agentId af08e15d57cabb1db）→ CONDITIONAL PASS**。4 条 PASS 硬前置已全满足：① 本 ADR 起草（解锁 -B）；② migration 同步 architecture.md（-A 落地）；③ 失败不直接置 dead（D-198-2）；④ admin 不写 EMA（D-198-4）。
+- **用户裁定 3 开放项 → 全部并入决策**：失败复用 worker 定向队列（D-198-8）/ 鉴权 `['moderator','admin']`（D-198-6）/ quality 无条件覆盖（D-198-7）。
+- **状态 → Accepted**。解锁 SRCHEALTH-ADMIN-PLAYBACK-FB -A/-B/-C 实施。
