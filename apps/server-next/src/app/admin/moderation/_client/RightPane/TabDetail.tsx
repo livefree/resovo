@@ -11,7 +11,7 @@
  * 信息密度对齐设计稿：DetailRow 单行 < 28px，紧凑（label 等宽字符 + value 右对齐）。
  */
 import React, { useCallback, useEffect, useState } from 'react'
-import { AdminButton, CountryName, useToast, EnrichmentBadgeCluster, ExternalMetaPanel } from '@resovo/admin-ui'
+import { AdminButton, CountryName, Pill, useToast, EnrichmentBadgeCluster, ExternalMetaPanel } from '@resovo/admin-ui'
 import type { VideoQueueRow } from '@resovo/types'
 import type { VideoAdminDetail } from '@/lib/videos'
 import { listVideoSources, getVideo } from '@/lib/videos/api'
@@ -71,6 +71,14 @@ const ACTIONS_ROW_STYLE: React.CSSProperties = {
   gap: 6,
   marginBottom: 10,
   flexWrap: 'wrap',
+}
+
+// MODUX-P2-2：状态三元组 3 行 DetailRow → 1 行 Pill 组（含豆瓣，消除独立 section）
+const STATUS_PILL_ROW_STYLE: React.CSSProperties = {
+  display: 'flex',
+  gap: 6,
+  flexWrap: 'wrap',
+  marginBottom: 3,
 }
 
 export function TabDetail({ v }: TabDetailProps): React.ReactElement {
@@ -148,10 +156,34 @@ export function TabDetail({ v }: TabDetailProps): React.ReactElement {
           重测此视频线路
         </AdminButton>
       </div>
+      {/* MODUX-P2-2：状态三元组 + 豆瓣收敛为 1 行 Pill 组（variant ok/warn + 内置 6px dot）*/}
       <div style={SECTION_HEADER_STYLE}>{M.detail.statusTriad}</div>
-      <DetailRow label={M.detail.isPublished} value={String(v.isPublished)} ok={v.isPublished} />
-      <DetailRow label={M.detail.visibility} value={v.visibilityStatus} ok={v.visibilityStatus === 'public'} />
-      <DetailRow label={M.detail.reviewStatus} value={v.reviewStatus} ok={v.reviewStatus === 'approved'} />
+      <div style={STATUS_PILL_ROW_STYLE} data-status-triad>
+        <Pill
+          variant={v.isPublished ? 'ok' : 'warn'}
+          ariaLabel={`${M.detail.isPublished}: ${v.isPublished ? '已发布' : '未发布'}`}
+        >
+          {v.isPublished ? '已发布' : '未发布'}
+        </Pill>
+        <Pill
+          variant={v.visibilityStatus === 'public' ? 'ok' : 'warn'}
+          ariaLabel={`${M.detail.visibility}: ${v.visibilityStatus}`}
+        >
+          {v.visibilityStatus}
+        </Pill>
+        <Pill
+          variant={v.reviewStatus === 'approved' ? 'ok' : 'warn'}
+          ariaLabel={`${M.detail.reviewStatus}: ${v.reviewStatus}`}
+        >
+          {v.reviewStatus}
+        </Pill>
+        <Pill
+          variant={v.doubanStatus === 'matched' ? 'ok' : 'warn'}
+          ariaLabel={`${M.detail.doubanStatus}: ${doubanLabel}`}
+        >
+          {M.detail.doubanStatus} {doubanLabel}
+        </Pill>
+      </div>
 
       {/* META-12-B / feature-2：富集徽标簇（density='header'）；下方 DetailRow 保留文字态明细 */}
       {v.enrichmentSummary && (
@@ -171,9 +203,6 @@ export function TabDetail({ v }: TabDetailProps): React.ReactElement {
           </div>
         </>
       )}
-
-      <div style={{ ...SECTION_HEADER_STYLE, marginTop: 12 }}>{M.detail.doubanStatus}</div>
-      <DetailRow label="douban_status" value={String(doubanLabel)} ok={v.doubanStatus === 'matched'} />
 
       <div style={{ ...SECTION_HEADER_STYLE, marginTop: 12 }}>信息</div>
       <DetailRow label="type" value={v.type} />

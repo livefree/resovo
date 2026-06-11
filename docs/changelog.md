@@ -4187,3 +4187,15 @@
 - **新增依赖**：无
 - **数据库变更**：无
 - **注意事项**：① badge"次要信息 hover 透出"为折中实现——badge 是审核决策 warning 信号，未做成完全隐藏，保留首项可见 + title 透出完整文案，兼顾收敛与扫视可达性（偏离登记）。② page-head 键盘提示位（data-kbd-hint）为 P2-3 help 浮层预留入口，P2-3 将把虚线下划标记升级为可呼出完整快捷键面板的触发器。③ visual 快照（admin-moderation.visual / moderation.visual）非本卡门禁，列表行布局视觉变更需后续更新基线。门禁：typecheck/lint EXIT=0 / test:changed 10 passed（ModListRow selectionMode + enrichment moderation DOM 契约保留）/ e2e:admin 82/82。
+
+## [MODUX-P2-2] 详情 tab 状态三元组 + 豆瓣 → 1 行 Pill 组（item 7）
+- **完成时间**：2026-06-10
+- **记录时间**：2026-06-10 23:46
+- **执行模型**：claude-opus-4-8（建议 sonnet，用户会话覆盖持续推进）
+- **子代理**：无（消费既有 admin-ui Pill，不改其公开 Props，不触发强制 Opus）
+- **修改文件**：
+  - `apps/server-next/src/app/admin/moderation/_client/RightPane/TabDetail.tsx` — 状态三元组 3 行 DetailRow（发布/可见性/审核）+ 豆瓣独立 section（header+DetailRow 2 行）→ 1 行 Pill 组（4 Pill，variant ok/warn + 内置 6px dot）；复用 admin-ui Pill；isPublished 布尔转中文态（已发布/未发布），visibility/review 保留枚举值；每 Pill 补 ariaLabel；新增 data-status-triad 锚点；DetailRow 保留供信息区
+  - `docs/task-queue.md` / `docs/tasks.md` — 卡片收口（8/15）
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：① 状态类信息 5 行（3 三元组 + 2 豆瓣）→ 1 行 Pill 组，纵向行数显著下降。② **偏离登记**：富集 cluster（即时 v.summary header density）+ 外部源 panel（懒加载 extDetail 完整 compact density）**不深度合并**——数据源/时机/density 不同非纯重复块，深度合并涉 EnrichmentBadgeCluster/ExternalMetaPanel 共享组件职责超本卡 TabDetail 范围。③ isPublished 用中文态、visibility/review 保留英文枚举值（与原 DetailRow value 逐字一致 + 本就语义清晰），与文件既有 inline 中文范式一致。④ 测试契约保留：data-right-detail-enrichment / meta_score 文本 / episodes 三维文案 / moderation-detail-reprobe-all testid 全过。门禁：typecheck/lint EXIT=0 / test:changed 14 passed / e2e:admin 82/82。
