@@ -1839,9 +1839,9 @@
 
 ## [SEQ-20260610-02] 视频/线路/站点健康度与反馈闭环（source-health v2 方案落地）
 
-- **状态**：🔄 执行中（6/16 卡完成：**Phase 1 全收口（含 P1-3 独立卡）** P1-4/P1-2/P1-1-A/P1-1-B/P1-5/P1-3 ✅；下一步 Phase 2〔P2-1 前台 success 上报 / P2-4-A 可并行〕或 Phase 1 复盘三候选裁决）
+- **状态**：🔄 执行中（7/16 卡完成：**Phase 1 全收口** P1-4/P1-2/P1-1-A/P1-1-B/P1-5/P1-3 ✅ + **Phase 2 启动** P2-1 ✅；下一步 P2-4-A（与 P2-2/P2-3 无硬依赖可先行）或 P2-2〔前置 Opus〕/ P2-3——三者均依赖 P2-1 ✅ 已解除）
 - **创建时间**：2026-06-10 12:53
-- **最后更新时间**：2026-06-10 16:45
+- **最后更新时间**：2026-06-10 18:20
 - **目标**：落地 `docs/designs/source-health-feedback-loop-plan_20260610.md` v2（两轮独立审核有条件通过，必修全吸收，commit 88893812）：修复「全部探测/试播后状态不更新」三处可见断点（B1/B2/B3）→ 打通反馈闭环（F1–F4）→ 评分进化 + 站点/主机桥接（D3/D4）。
 - **范围**：apps/api（service/queries/routes/lib）+ apps/worker（jobs/lib）+ apps/server-next（sources/videos 模块 UI）+ apps/web-next（PlayerShell）+ packages（media-probe 新包，P1-3）。**方案 §3 为各卡内容真源，§4 为门禁真源**；卡面只记验收口径与文件范围。
 - **依赖**：无 BLOCKER；方案 v2 已批准（用户 2026-06-10）。
@@ -1894,9 +1894,11 @@
 
 ### 任务列表（Phase 2 — 反馈闭环；启动前置：Phase 1 收口）
 
-7. **SRCHEALTH-P2-1** — 前台 PlayerShell 补 success 上报（F1）（状态：⬜ 待开始）
-   - 创建时间：2026-06-10 12:53 ｜ 验收口径：首播成功上报 success:true（per-sourceId 去抖 + 1/N 采样配置化），PLAYER 域 e2e 不回归。
-   - 文件范围：`apps/web-next/src/components/player/PlayerShell.tsx`。依赖：Phase 1 收口。建议模型：sonnet。
+7. **SRCHEALTH-P2-1** — 前台 PlayerShell 补 success 上报（F1）（状态：✅ 已完成 2026-06-10 18:20）
+   - 创建时间：2026-06-10 12:53 ｜ 实际开始：2026-06-10 17:05 ｜ 完成时间：2026-06-10 18:20
+   - 验收口径：首播成功上报 success:true（per-sourceId 去抖 + 1/N 采样配置化），PLAYER 域 e2e 不回归。
+   - 文件范围（实施修正：+新单测文件）：`apps/web-next/src/components/player/PlayerShell.tsx`、`tests/unit/web-next/player-shell-success-report.test.tsx`（新）。依赖：Phase 1 收口 ✅。建议模型：sonnet。
+   - **完成备注**：① `handlePlaySuccess` 接上报链：previewMode 守卫（ADR-160 D-160-5 `isPlaybackFeedbackEnabled` 首个真实消费方）→ per-sourceId 去抖（`successReportedRef`；**采样未中也记入**——每 source 首播事件恰好掷一次骰，防后续 onPlay 反复掷骰逼近全量、破坏 1/N 语义；与失败侧 errorReportedRef 同范式会话级不清空，sourceId 行级 UUID 跨集/跨视频天然隔离）→ 1/N 采样 → fire-and-forget POST `success:true`（videoId + raw sourceId）。② 采样配置化：`NEXT_PUBLIC_FEEDBACK_SUCCESS_SAMPLE_N`（默认 1 全报；非法值回退 1；Next 编译期内联保持点号静态访问）；`getSuccessSampleN` + `shouldReportPlaySuccess(sampleN, random)` 纯函数同文件导出便于单测（先例 isPlaybackFeedbackEnabled）。③ 后端零改动：`/feedback/playback` success 路径（dead→ok 复活 + quality 回填）与 (ipHash,sourceId)/min rate-limit 既有（feedback.ts），本卡为其接通首个前台消费方——F1 反馈断点闭合，P2-2 EMA / P2-3 复活门槛的 success 样本流就绪。④ **e2e:player 实跑归因（验收口径「不回归」成立）**：35 failed + 1 flaky + 2 passed——失败全集 = **pre-existing 数据基建欠账非回归**（dev DB 零 seed：fixture 视频 `test-movie-aB3kR9x1` 等 videos 表 0 行 → API 404 → watch 页 server 预取 `fetchVideoDetail` notFound() 404〔CHG-361-E3 起 page.route mock 不覆盖 server fetch〕；home_modules 0 行 → 首页 video-card 恒空）；证据链：curl API 直接 404（与前端代码无关）+ smoke 2/2 绿维持 + 先例归因 changelog CHG-VIR-13-PLAY-FIX / 13 系列收口条目（31 failed 同画像同根因）。**候选独立卡登记：e2e-next seed 基建**（player/homepage/detail/card 系 spec 依赖 DB fixture）。⑤ 过程教训：首轮 e2e 因 `npm run … | tail` 管道吞 playwright exit 1（tail exit 0 伪绿）+ reuseExistingServer 复用昨晚 stale :3000 dev server——已杀 stale server 干净复跑取证，后台命令不再用管道包门禁命令。共享层沉淀：否——上报逻辑与 PlayerShell 会话状态（rawSourcesRef/activeSourceIndex/watchdog）强耦合，纯函数已同文件导出；feedback 上报出现第 3 消费方时再裁决提取 usePlaybackFeedback hook。门禁：typecheck/lint EXIT=0（3 warning 均既有）/ 新测 6 用例 + on-error 既有 8 零回归 / test:changed 4 文件 23 passed。执行模型: claude-fable-5（建议 sonnet，用户会话人工覆盖持续推进授权）；子代理: 无。
 8. **SRCHEALTH-P2-2** — EMA 反馈统计字段 migration + feedback 写入（F4 前置）（状态：⬜ 待开始）
    - 创建时间：2026-06-10 12:53 ｜ 验收口径：`video_sources` 增 `fb_score`/`fb_sample_weight`/`last_feedback_at`（写入即时半衰，方案 §3 P2-2），feedback 落账；**本卡不进评分**。
    - 文件范围：migration + `apps/api/src/routes/feedback.ts` + `docs/architecture.md` 同步。依赖：P2-1。**前置强制**：Opus 子代理（跨 3+ 消费方 schema 字段）。建议模型：sonnet（+Opus 子代理）。

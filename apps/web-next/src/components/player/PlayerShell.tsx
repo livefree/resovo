@@ -60,6 +60,24 @@ export function isPlaybackFeedbackEnabled(previewMode: boolean | undefined): boo
   return !previewMode
 }
 
+/**
+ * SRCHEALTH-P2-1 / F1：success 上报 1/N 采样配置。
+ * NEXT_PUBLIC_FEEDBACK_SUCCESS_SAMPLE_N（Next.js 编译期内联，须保持点号静态访问）：
+ * N=1（默认）全量上报；N>1 每个 source 的首播成功事件以 1/N 概率上报。
+ * 非法值（非正整数 / NaN）回退 1，保证上报通路默认打开。
+ */
+export function getSuccessSampleN(): number {
+  const raw = process.env.NEXT_PUBLIC_FEEDBACK_SUCCESS_SAMPLE_N
+  if (!raw) return 1
+  const n = Number(raw)
+  return Number.isInteger(n) && n >= 1 ? n : 1
+}
+
+/** 采样判定纯函数（random ∈ [0,1)，命中概率 1/sampleN）；独立导出便于单测覆盖边界 */
+export function shouldReportPlaySuccess(sampleN: number, random: number = Math.random()): boolean {
+  return random < 1 / sampleN
+}
+
 export function PlayerShell({ slug: slugProp, portalMode = false, previewMode = false, initialVideo, initialSources }: PlayerShellProps) {
   // ADR-160 D-160-5：preview 模式禁用所有 feedback / audit 写入路径
   // 当前 PlayerShell 唯一写路径是 saveProgress（localStorage / 客户端本地）— 不在 D-160-5 屏蔽范围
@@ -287,6 +305,12 @@ export function PlayerShell({ slug: slugProp, portalMode = false, previewMode = 
   const retryAttemptedSetRef = useRef<Set<number>>(new Set())
   const watchdogTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const errorReportedRef = useRef<Set<string>>(new Set())
+  // SRCHEALTH-P2-1 / F1：success 上报 per-sourceId 去抖。
+  //  - onPlay 在 pause→resume / seek 后会重复触发，"首播成功"语义 = 每 sourceId 仅消费首个 onPlay
+  //  - 采样未中也记入：每个 source 的首播事件恰好掷一次骰；否则后续 onPlay 反复掷骰会逼近全量上报，破坏 1/N 语义
+  //  - 不随切集/切视频清空：sourceId 是 video_sources 行级 UUID（跨集/跨视频天然不同），与 errorReportedRef 同范式（会话级）
+  //  - 后端 (ipHash, sourceId) 每分钟 1 次 rate-limit 为第二层兜底（apps/api feedback.ts）
+  const successReportedRef = useRef<Set<string>>(new Set())
 
   const clearWatchdog = useCallback(() => {
     if (watchdogTimerRef.current !== null) {
@@ -362,11 +386,27 @@ export function PlayerShell({ slug: slugProp, portalMode = false, previewMode = 
   )
 
   // onPlay 成功 → cancel watchdog + 清 retry 计数 / 视为本地 retry 修好
+  // SRCHEALTH-P2-1 / F1：附带首播成功上报 success:true（守卫与去抖语义见 successReportedRef 声明处注释）
   const handlePlaySuccess = useCallback(() => {
     setPlaying(true)
     clearWatchdog()
     retryAttemptedSetRef.current.delete(activeSourceIndex)
-  }, [setPlaying, clearWatchdog, activeSourceIndex])
+    if (!isPlaybackFeedbackEnabled(previewMode)) return
+    const playedRawSourceId = rawSourcesRef.current[activeSourceIndex]?.id
+    if (!video || !playedRawSourceId) return
+    if (successReportedRef.current.has(playedRawSourceId)) return
+    successReportedRef.current.add(playedRawSourceId)
+    if (!shouldReportPlaySuccess(getSuccessSampleN())) return
+    void apiClient
+      .post('/feedback/playback', {
+        videoId: video.id,
+        sourceId: playedRawSourceId,
+        success: true,
+      })
+      .catch(() => {
+        // fire-and-forget；与失败上报同范式，后端异常不影响播放
+      })
+  }, [setPlaying, clearWatchdog, activeSourceIndex, previewMode, video])
 
   // activeSourceIndex 变化（切线 / 用户手动选）→ cancel 任何 pending watchdog 防 stale 触发
   useEffect(() => {

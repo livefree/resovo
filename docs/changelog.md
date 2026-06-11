@@ -3896,3 +3896,19 @@
   - 缺陷影响（修复前）：CDN/源站以 HTTP 200 返回 HTML 错误页时，worker level2 与 api 手动试播均误判 render ok——且 api 侧构成行为倒退（旧 HEAD + Content-Type 会把 text/html 判 dead）。
   - worker level2 同步受益（共享判定层修一处双端生效——P1-3 共享包的直接收益验证）。
   - 门禁：typecheck/lint EXIT=0、相关测试 96/96、单测全量 7085 中 7084 passed（CrawlerClient 14b 导出用例为 jsdom 并发负载抖动，单独复跑 66/66 过，与本卡无关）。
+
+## [SRCHEALTH-P2-1] 前台 PlayerShell 补 success 上报（F1 / SEQ-20260610-02 Phase 2）
+- **完成时间**：2026-06-10
+- **记录时间**：2026-06-10 18:25
+- **执行模型**：claude-fable-5（建议 sonnet，用户会话人工覆盖持续推进授权）
+- **子代理**：无
+- **修改文件**：
+  - `apps/web-next/src/components/player/PlayerShell.tsx` — `handlePlaySuccess` 接 success 上报链：previewMode 守卫（ADR-160 D-160-5 `isPlaybackFeedbackEnabled` 首个真实消费方）→ per-sourceId 去抖（`successReportedRef`；采样未中也记入——每 source 首播事件恰好掷一次骰，防反复掷骰逼近全量破坏 1/N 语义；与失败侧 errorReportedRef 同范式会话级不清空）→ 1/N 采样 → fire-and-forget POST `/feedback/playback` success:true；新增同文件导出纯函数 `getSuccessSampleN`（`NEXT_PUBLIC_FEEDBACK_SUCCESS_SAMPLE_N` 配置，默认 1 全报/非法回退 1）+ `shouldReportPlaySuccess(sampleN, random)`
+  - `tests/unit/web-next/player-shell-success-report.test.tsx` — 新建 6 用例：首播 POST 契约 / pause→resume 去抖 / previewMode 守卫 / 切线 per-sourceId 隔离（含切回不重报）/ 采样未中记入去抖集（Math.random 恰好调用 1 次断言）/ 纯函数边界（合法 N / 非法值回退 / N=4 采样阈值）
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - 后端零改动：`/feedback/playback` success 路径（probe dead→ok 复活 + quality 回填）与 (ipHash, sourceId) 每分钟 1 次 rate-limit 既有（feedback.ts），本卡接通其首个前台消费方——F1 反馈断点闭合，P2-2 EMA 统计 / P2-3 复活门槛的 success 样本流就绪。
+  - **e2e:player 实跑归因（验收口径「不回归」成立）**：35 failed + 1 flaky + 2 passed——失败全集 = pre-existing 数据基建欠账非回归（dev DB 零 seed：fixture 视频 videos 表 0 行 → API 404 → watch 页 server 预取 notFound() 404〔CHG-361-E3 server-side hydration 起 page.route mock 不覆盖 server fetch〕；home_modules 0 行 → 首页 video-card 恒空）。证据链：curl API 直接 404（与前端代码无关）+ smoke 2/2 绿维持 + 先例归因 CHG-VIR-13-PLAY-FIX / 13 系列收口条目（31 failed 同画像同根因）。**候选独立卡登记：e2e-next seed 基建**（详见 queue P2-1 备注）。
+  - 过程教训：首轮 e2e `npm run … | tail` 管道吞 playwright exit 1（tail exit 0 伪绿）+ reuseExistingServer 复用 stale :3000 dev server（昨晚遗留进程，watch 路由 404）——已杀 stale server 干净复跑取证；门禁命令不得用管道包裹。
+  - 门禁：typecheck/lint EXIT=0（3 warning 均既有）/ 新测 6 用例 + player-shell-on-error 既有 8 用例零回归 / test:changed 4 文件 23 passed。
