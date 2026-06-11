@@ -4331,3 +4331,12 @@
 - **新增依赖**：无
 - **数据库变更**：无（复用 P3-4-A /meta）
 - **注意事项**：① **VideoQueueRow 无 genres 字段** → genres 经既有 `getVideo(v.id)` lazy-fetch 取当前值（不越界改 packages/types/DB query；type/year/country 队列行已含直接种子）。② **复用既有 onSourceHealthChanged→refetchQueue 做队列联动刷新**（不新增穿透 prop / 不改 PendingPaneController·ModerationConsole，收敛改动半径）。③ **唯一写路径 /meta**（单写路径，复用 P3-4-A schema，含 country）。④ **乐观 + 回滚**：input 字段 blur/Enter 提交且与 v 基线比较防重复保存；非法 year 客户端拦截回滚不发请求；保存失败回滚显示 + danger toast。⑤ 牵连测试修复：pending-center-split-button stub 新子组件（与既有 EpisodeSelector/LinesPanel/AdminPlayer stub 一致范式）。门禁：typecheck/lint EXIT=0 / verify:adr-contracts EXIT=0 / test:changed 105 passed / **e2e:admin 82/82 EXIT=0**。**SEQ-20260610-03 MODUX 15/15 全收口（Phase 1 ✅ + Phase 2 ✅ + Phase 3 ✅）**。
+
+## [MODUX-SEQ-20260610-03] PHASE COMPLETE 全量兜底审计（2026-06-11）
+- **触发**：SEQ-20260610-03 全 15 卡收口（Phase 3 末卡 P3-4-B 完成）→ PHASE COMPLETE 门禁节点。
+- **全量单测**：`npm run test -- --run` → **514 文件 / 7188 passed / EXIT=0**。
+- **全量 e2e**：`npm run test:e2e`（admin-next-chromium / web-chromium / web-mobile 三 project）→ EXIT=1，**86 passed / 99 failed**。
+  - **admin-next-chromium（本 SEQ 全部改动所在域）：0 失败**（同域 `test:e2e:admin` 逐卡 82/82 绿，共 5 次一致）。
+  - **99 失败 100% 在 web-chromium / web-mobile（`tests/e2e-next/*`：homepage / mini-player / player / detail / search / browse 全线）**——均匀整项失败，错误一致为「页面渲染零数据」（`episode-btn` 期望 12 收到 0 / video-card 0 / `/en/series` 非 200）。
+- **归因判定：pre-existing 环境性（web-next e2e 缺 seed 数据），非本 SEQ 回归。** 证据：① 本会话 4 卡（P3-2~P3-4-B）改动文件零触 `apps/web-next`（git diff 确认全在 apps/server-next + apps/api + tests + docs）；② 整个 web 前端 e2e 项目（homepage/typography/card 等与审核台无关 spec）齐失败 = 数据/server 缺口而非定向代码回归；③ 失败模式统一为「received 0」= DB 无 seed 已发布视频；④ 该缺口为已登记候选卡「e2e-next seed 基建」（另一 SEQ queue 备注）。
+- **结论**：MODUX SEQ-20260610-03 改动面（admin 域 + 共享类型 + api）经全量单测 7188/7188 + admin 域 e2e 82/82 验证全绿；web-next e2e 红为环境缺口，独立于本 SEQ，建议由「e2e-next seed 基建」候选卡专项处理（不阻塞本 SEQ 收口）。
