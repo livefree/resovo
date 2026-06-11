@@ -4431,3 +4431,18 @@
 - **数据库变更**：ADR 锁定（migration 109 草案）；实际 migration 落地在 -A 卡。
 - **门禁**：verify:adr-contracts EXIT=0（ADR-198 合规）。无代码改动。
 - **注意事项**：新 admin route 落地前本 ADR 为 verify:endpoint-adr 硬前置；实施拆卡 ADR✅→-A(schema+types+architecture.md)→-B(service+route+单测)→-C(UI+worker+e2e)→-D(可选携分辨率)。用户已裁定 3 开放项（失败复用 worker 队列 / 鉴权 moderator+admin / quality 无条件覆盖）。
+
+## [SRCHEALTH-ADMIN-PLAYBACK-FB-A] schema+types · migration 109 + admin_playback origin + architecture.md 同步
+- **完成时间**：2026-06-11
+- **记录时间**：2026-06-11 14:55
+- **执行模型**：claude-opus-4-8（主循环）
+- **子代理**：无（schema 字段结构已由 ADR-198 / arch-reviewer 锁定，本卡纯落地无新决策）
+- **依赖**：ADR-198（Accepted，commit `3a3fd016`）拆卡 -A
+- **修改文件**：
+  - `apps/api/src/db/migrations/109_video_sources_admin_playback_verify.sql` — 新建：`ALTER TABLE video_sources ADD COLUMN IF NOT EXISTS last_admin_verified_at TIMESTAMPTZ NULL` + COMMENT；`CREATE INDEX IF NOT EXISTS idx_health_events_admin_playback_pending ON source_health_events (source_id) WHERE origin='admin_playback' AND processed_at IS NULL`（D-198-8 worker 定向 recheck 队列）。幂等 + 105 头注（文件内不写 BEGIN/COMMIT；down 注释）
+  - `packages/types/src/admin-moderation.types.ts` — `SourceHealthEventOriginWorker` union 增 `'admin_playback'`（对齐 106 `manual_route_reprobe` 先例 + 注释来由：成功直更不入队 / 失败定向 recheck）
+  - `docs/architecture.md` — ① video_sources 字段表加 `last_admin_verified_at`（109）行；② source_health_events origin 注补 `admin_playback` + 新 partial index 名
+- **新增依赖**：无
+- **数据库变更**：migration 109——`video_sources.last_admin_verified_at TIMESTAMPTZ NULL`（新列）；`source_health_events` 新增 partial index `idx_health_events_admin_playback_pending`。零列迁移 origin 新值 `admin_playback`（037 起无 CHECK）。真库对拍：列/索引落库精确匹配 + 幂等（重跑 0 pending）。
+- **门禁**：typecheck EXIT=0 / lint 4·4（仅既有 warning）/ test:changed 全量 7193 passed（1 flaky `data-table-auto-filter #6c` 计时型，隔离复跑 24/24 绿，与本卡零交集）/ verify:adr-contracts EXIT=0（sql-schema-alignment ✅ / endpoint-adr ✅）/ migrate 真库对拍 ✅。
+- **注意事项**：本卡纯 schema+types+doc，零运行时逻辑。-B 将加 `SourceProbeService.recordPlaybackVerify` + playback-verify route（消费本列/origin/index）；新 route 落地受 ADR-198 §端点契约 + verify:endpoint-adr 门禁约束。

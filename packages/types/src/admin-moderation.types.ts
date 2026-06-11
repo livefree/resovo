@@ -114,6 +114,9 @@ export type SourceHealthEventOriginLegacy =
  * plan §4 worker 新增 origin 值（M-SN-4 启用后开始持久化）。
  * 'manual_route_reprobe'：106 / SRCHEALTH-P2-4-A 运营线路级重探信号（不复用 feedback_driven，
  * 区分真实用户反馈与运营操作；API 侧 reprobeRoute 批量入队，worker 定向消费见 P2-4-B）。
+ * 'admin_playback'：109 / ADR-198 admin 审核台真实播放反馈。成功直更 render/probe（不入此队列）；
+ * 失败不直接置 dead（D-198-2 红线），改记本 origin + processed_at=NULL 作定向 recheck 信号，
+ * 复用 feedback-driven-recheck worker 定向消费（D-198-8）。origin 列无 CHECK → 零列迁移。
  */
 export type SourceHealthEventOriginWorker =
   | 'scheduled_probe'
@@ -122,6 +125,7 @@ export type SourceHealthEventOriginWorker =
   | 'feedback_driven'
   | 'circuit_breaker'
   | 'manual_route_reprobe'
+  | 'admin_playback'
 
 export type SourceHealthEventOrigin =
   | SourceHealthEventOriginLegacy
