@@ -45,6 +45,11 @@ vi.mock(
   '../../../../../../apps/server-next/src/app/admin/moderation/_client/AdminPlayer',
   () => ({ AdminPlayer: () => null })
 )
+// MODUX-P3-4-B：PendingCenter 新增内联快编子组件，非本拆分按钮用例被测目标 → stub null
+vi.mock(
+  '../../../../../../apps/server-next/src/app/admin/moderation/_client/PendingMetaQuickEdit',
+  () => ({ PendingMetaQuickEdit: () => null })
+)
 
 // useSelectedLine + api stubs
 vi.mock(

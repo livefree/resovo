@@ -4315,3 +4315,19 @@
 - **新增依赖**：无
 - **数据库变更**：无（videos.country 列已存在）
 - **注意事项**：① **VideoService.update 已支持 country**（VideoService.ts:404 已写 catalogFields.country）→ 本卡仅补 schema 声明（Zod `.object()` 默认 strip 未知键，故 country 不声明即被丢弃）。② **无共享 MetaEditInput 类型**（route 用本地 zod）+ VideoQueueRow.country 读模型已在 → packages/types 零改（card「类型同步」此处空满足）。③ **唯一写路径**仍为 `PATCH /admin/moderation/:id/meta`（pending-only 守卫不变，不引第二写路径）。④ **非新端点**——verify:endpoint-adr EXIT=0（234 路由对齐，无新 fastify.{method}）。门禁：typecheck/lint/verify:adr-contracts/verify:endpoint-adr EXIT=0 / test:changed 89 passed / e2e:admin 82/82 EXIT=0。**SEQ-20260610-03 MODUX 14/15（Phase 3 P3-4-A ✅）**。前端 4 字段内联快编 UI = P3-4-B。
+
+## [MODUX-P3-4-B] 审核主界面 4 字段内联快编 UI（item 9 前端 / SEQ 末卡）
+- **完成时间**：2026-06-11
+- **记录时间**：2026-06-11 02:24
+- **执行模型**：claude-opus-4-8（建议 sonnet）
+- **子代理**：无（纯前端，复用既有 /meta 契约，不改共享组件 Props）
+- **修改文件**：
+  - `apps/server-next/src/app/admin/moderation/_client/PendingMetaQuickEdit.tsx` — 新建：4 字段内联快编（类型 AdminSelect / 年代 number input 步进 / 地区 text input / 题材 AdminSelect multiple）；type/year/country 由 v 种子，genres 经 `getVideo(v.id)` lazy-fetch；逐字段乐观更新 + 失败回滚 + toast；year 客户端预校验（1900–2100，非法回滚不发请求）
+  - `apps/server-next/src/lib/moderation/api.ts` — 加 `saveModerationMeta(id, payload)` + `MetaEditPayload`/`MetaEditResult` 类型（PATCH /meta，透出 skippedFields）
+  - `apps/server-next/src/app/admin/moderation/_client/PendingCenter.tsx` — 信息区插入 `<PendingMetaQuickEdit v onSaved={onSourceHealthChanged}/>`
+  - `apps/server-next/src/i18n/messages/zh-CN/moderation.ts` — 新增 `quickEdit` 文案块
+  - `tests/unit/components/server-next/admin/moderation/PendingMetaQuickEdit.test.tsx` — 新建 7 用例（渲染+lazy-fetch / type 改 save+onSaved / year 改 / year 非法不保存回滚 / country 改 / country 清空 null / 失败回滚+danger toast）
+  - `tests/unit/components/server-next/admin/moderation/pending-center-split-button.test.tsx` — stub 新子组件 PendingMetaQuickEdit→null（PendingCenter 新依赖牵连，非本测点）
+- **新增依赖**：无
+- **数据库变更**：无（复用 P3-4-A /meta）
+- **注意事项**：① **VideoQueueRow 无 genres 字段** → genres 经既有 `getVideo(v.id)` lazy-fetch 取当前值（不越界改 packages/types/DB query；type/year/country 队列行已含直接种子）。② **复用既有 onSourceHealthChanged→refetchQueue 做队列联动刷新**（不新增穿透 prop / 不改 PendingPaneController·ModerationConsole，收敛改动半径）。③ **唯一写路径 /meta**（单写路径，复用 P3-4-A schema，含 country）。④ **乐观 + 回滚**：input 字段 blur/Enter 提交且与 v 基线比较防重复保存；非法 year 客户端拦截回滚不发请求；保存失败回滚显示 + danger toast。⑤ 牵连测试修复：pending-center-split-button stub 新子组件（与既有 EpisodeSelector/LinesPanel/AdminPlayer stub 一致范式）。门禁：typecheck/lint EXIT=0 / verify:adr-contracts EXIT=0 / test:changed 105 passed / **e2e:admin 82/82 EXIT=0**。**SEQ-20260610-03 MODUX 15/15 全收口（Phase 1 ✅ + Phase 2 ✅ + Phase 3 ✅）**。

@@ -153,6 +153,30 @@ export async function updateStaffNote(id: string, note: string | null): Promise<
   await apiClient.patch<unknown>(`/admin/moderation/${id}/staff-note`, { note })
 }
 
+// ── 元数据内联快编（MODUX-P3-4-B）──────────────────────────────────────
+//   唯一写路径 PATCH /admin/moderation/:id/meta（pending-only；schema 见 P3-4-A：title/year/type/genres/country）
+
+export interface MetaEditPayload {
+  readonly title?: string
+  readonly year?: number | null
+  readonly type?: string
+  readonly genres?: readonly string[]
+  readonly country?: string | null
+}
+
+export interface MetaEditResult {
+  /** ADMIN-14：被锁字段（已有 provenance 高于 manual）未写入；前端据此提示"被锁未保存" */
+  readonly skippedFields: readonly string[]
+}
+
+export async function saveModerationMeta(id: string, payload: MetaEditPayload): Promise<MetaEditResult> {
+  const res = await apiClient.patch<{ data?: { skippedFields?: string[] }; skippedFields?: string[] }>(
+    `/admin/moderation/${id}/meta`,
+    payload,
+  )
+  return { skippedFields: res.skippedFields ?? res.data?.skippedFields ?? [] }
+}
+
 // ── 线路（视频级播放源操作）──────────────────────────────────────────
 // CHG-VSR-PRE-2（R1 方案 B）：实现已移至 `@/lib/sources/api`（单一真源）；端点不变。
 // 唯一历史消费方 moderation/_client/LinesPanel 已迁移至 useSourceLinesController；

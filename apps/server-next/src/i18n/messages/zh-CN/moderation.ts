@@ -131,6 +131,19 @@ export const M = {
     clear: '清除全部',
     kbdHint: '打开筛选（F）',
   },
+  // MODUX-P3-4-B：4 字段内联快编
+  quickEdit: {
+    label: '快速编辑',
+    type: '类型',
+    year: '年代',
+    country: '地区',
+    genres: '题材',
+    countryPlaceholder: '如 JP / US / CN',
+    genresLoading: '加载中…',
+    saved: '已保存',
+    skipped: (fields: string) => `部分字段被锁未保存：${fields}`,
+    saveFailed: '保存失败，已回滚',
+  },
   rejectModal: {
     title: '拒绝该视频',
   },

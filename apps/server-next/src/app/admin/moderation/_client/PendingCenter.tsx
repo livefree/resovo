@@ -6,6 +6,7 @@ import { formatCountryName, type VideoQueueRow } from '@resovo/types'
 import { EpisodeSelector } from './EpisodeSelector'
 import { LinesPanel } from './LinesPanel'
 import { AdminPlayer } from './AdminPlayer'
+import { PendingMetaQuickEdit } from './PendingMetaQuickEdit'
 import { useSelectedLine } from '@/lib/moderation/use-selected-line'
 import * as api from '@/lib/moderation/api'
 import { buildMergeHref } from '@/lib/merge/entry'
@@ -122,6 +123,8 @@ export function PendingCenter({ v, onStaffNoteChange, onEditVideo, onSourceHealt
           <div style={{ marginTop: 4, fontSize: 'var(--font-size-xs)', color: 'var(--fg-muted)' }}>
             {v.type} · {v.episodeCount} 集 · {formatCountryName(v.country, 'zh-CN', '—')} · ⭐ {v.rating ?? '—'} · ID <code style={{ fontFamily: 'monospace', fontSize: 'var(--font-size-xxs)' }}>{v.id}</code>
           </div>
+          {/* MODUX-P3-4-B：4 字段内联快编（类型/题材/年代/地区）— 单写路径 /meta，队列联动刷新 */}
+          <PendingMetaQuickEdit v={v} onSaved={onSourceHealthChanged} />
           {v.badges.length > 0 && (
             <div style={{ marginTop: 8, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
               {v.badges.map(b => (

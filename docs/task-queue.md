@@ -2046,10 +2046,13 @@
     - 文件范围：`apps/api/src/routes/admin/moderation.ts`（MetaEditSchema）、moderation service、`packages/types/src/admin-moderation.types.ts`、单测。
     - 依赖：无。建议模型：sonnet。
     - **完成备注（2026-06-11，执行模型 claude-opus-4-8，子代理无）**：MetaEditSchema 补 `country: z.string().max(10).nullable().optional()`（对齐 videos.ts:71）。**VideoService.update 已支持 country（VideoService.ts:404）→ service 零改**；**无共享 MetaEditInput 类型 + VideoQueueRow.country 读模型已在 → packages/types 零改**（card「类型同步」空满足）。补 3 单测（透传/null/超长 422）。非新端点 verify:endpoint-adr EXIT=0。门禁全绿：typecheck/lint/verify:adr-contracts/verify:endpoint-adr EXIT=0、test:changed 89、e2e:admin 82/82。剩余：P3-4-B 前端 4 字段内联快编 UI（依赖本卡 ✅）。
-15. **MODUX-P3-4-B** — 审核主界面 4 字段内联快编 UI（item 9 前端）（状态：⬜ 待开始）
+15. **MODUX-P3-4-B** — 审核主界面 4 字段内联快编 UI（item 9 前端）（状态：✅ 已完成 2026-06-11）
     - 验收口径：类型/题材一键切换（Segment/Pill popover + getVideoTypeOptions/getVideoGenreOptions）、年代步进/输入、地区内联输入；乐观更新 + 失败回滚 + 队列/详情联动刷新；4 字段免开面板即改、单写路径。
     - 文件范围：`apps/server-next/src/app/admin/moderation/_client/PendingCenter.tsx` + 内联快编新组件（审核台局部）。
     - 依赖：MODUX-P3-4-A。建议模型：sonnet。
+    - **完成备注（2026-06-11，执行模型 claude-opus-4-8，子代理无）**：新建 PendingMetaQuickEdit（类型 AdminSelect / 年代 number 步进 / 地区 text / 题材 AdminSelect multiple）；type/year/country 由 v 种子，**genres 经既有 getVideo(v.id) lazy-fetch**（VideoQueueRow 无 genres → 不越界改 types/DB）；逐字段乐观更新 + 失败回滚 + toast + year 客户端预校验。api.ts 加 saveModerationMeta（单写路径 /meta）。PendingCenter 插入组件，**复用 onSourceHealthChanged→refetchQueue 联动刷新**（不穿透新 prop）。补 7 单测 + 牵连修 split-button stub。门禁全绿：typecheck/lint/verify:adr-contracts EXIT=0、test:changed 105、e2e:admin 82/82。**SEQ-20260610-03 全收口（15/15）**。
+
+> **SEQ-20260610-03 MODUX 全 15 卡完成（2026-06-11）**：Phase 1（标题治理 P1-0~P1-1-B / DecisionCard P1-2 / 前台预览 404 P1-3 / 线路按钮·预设 P1-4）+ Phase 2（ModListRow 三分区 P2-1 / 详情 Pill 化 P2-2 / 键盘流共享化 P2-3〔Codex 两轮拦截补全〕）+ Phase 3（P3-1-A/-B 后端富集·年代过滤 / P3-2 筛选弹层 / P3-3 类似 tab 阈值折叠 / P3-4-A /meta 补 country / P3-4-B 4 字段内联快编）。PHASE COMPLETE 全量兜底见 changelog。
 
 ### 门禁与验证（每卡）
 
