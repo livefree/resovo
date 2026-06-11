@@ -92,11 +92,22 @@ describe('PendingMetaQuickEdit（MODUX-P3-4-B）', () => {
     await waitFor(() => expect(getVideoMock).toHaveBeenCalledWith('vid-1'))
   })
 
-  it('type 改 → saveModerationMeta({type}) + onSaved', async () => {
+  it('type 芯片点击 → saveModerationMeta({type}) + onSaved（一次点击，无下拉）', async () => {
     const { onSaved } = await renderQE()
-    fireEvent.change(screen.getByTestId('quick-edit-type'), { target: { value: 'series' } })
+    // v.type 默认 'movie' → 点击 'series' 芯片切换
+    fireEvent.click(screen.getByTestId('quick-edit-type-series'))
     await waitFor(() => expect(saveMetaMock).toHaveBeenCalledWith('vid-1', { type: 'series' }))
     await waitFor(() => expect(onSaved).toHaveBeenCalled())
+  })
+
+  it('题材芯片点击 → toggle 切换 + saveModerationMeta({genres})（多选一次点击）', async () => {
+    await renderQE() // genres lazy-fetch → ['action']
+    // 点 'comedy'（原未选）→ 加入；点 'action'（原已选）→ 移除
+    fireEvent.click(screen.getByTestId('quick-edit-genre-comedy'))
+    await waitFor(() => expect(saveMetaMock).toHaveBeenCalledWith('vid-1', { genres: ['action', 'comedy'] }))
+    saveMetaMock.mockClear()
+    fireEvent.click(screen.getByTestId('quick-edit-genre-action'))
+    await waitFor(() => expect(saveMetaMock).toHaveBeenCalledWith('vid-1', { genres: ['comedy'] }))
   })
 
   it('year blur 改 → save({year:N})', async () => {
@@ -130,6 +141,21 @@ describe('PendingMetaQuickEdit（MODUX-P3-4-B）', () => {
     fireEvent.change(input, { target: { value: '' } })
     fireEvent.blur(input)
     await waitFor(() => expect(saveMetaMock).toHaveBeenCalledWith('vid-1', { country: null }))
+  })
+
+  it('年代候选芯片点击 → save({year}) + input 同步（一次点击）', async () => {
+    await renderQE() // v.year=2020
+    const thisYear = new Date().getFullYear() // 近几年候选含当年，且 ≠ 2020
+    fireEvent.click(screen.getByTestId(`quick-edit-year-${thisYear}`))
+    await waitFor(() => expect(saveMetaMock).toHaveBeenCalledWith('vid-1', { year: thisYear }))
+    expect((screen.getByTestId('quick-edit-year') as HTMLInputElement).value).toBe(String(thisYear))
+  })
+
+  it('地区候选芯片点击 → save({country}) + input 同步（一次点击）', async () => {
+    await renderQE() // v.country='US'
+    fireEvent.click(screen.getByTestId('quick-edit-country-JP'))
+    await waitFor(() => expect(saveMetaMock).toHaveBeenCalledWith('vid-1', { country: 'JP' }))
+    expect((screen.getByTestId('quick-edit-country') as HTMLInputElement).value).toBe('JP')
   })
 
   it('该字段被锁（skippedFields 含本字段）→ 回滚乐观值 + warn + 始终调 onSaved（Codex fix2）', async () => {

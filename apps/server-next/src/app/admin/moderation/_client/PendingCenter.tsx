@@ -118,8 +118,9 @@ export function PendingCenter({ v, onStaffNoteChange, onEditVideo, onSourceHealt
                 改挂信号决策 chip（DecisionCard banner，由 probe/render 推算 ok/warn/danger，复用既有组件不重复逻辑） */}
             <DecisionCard video={v} probeState={v.probe} renderState={v.render} />
           </div>
+          {/* MODUX-ACPT-5：删 ID（内部标识、审核无用途）；保留 type·集数·地区·评分只读摘要 */}
           <div style={{ marginTop: 4, fontSize: 'var(--font-size-xs)', color: 'var(--fg-muted)' }}>
-            {v.type} · {v.episodeCount} 集 · {formatCountryName(v.country, 'zh-CN', '—')} · ⭐ {v.rating ?? '—'} · ID <code style={{ fontFamily: 'monospace', fontSize: 'var(--font-size-xxs)' }}>{v.id}</code>
+            {v.type} · {v.episodeCount} 集 · {formatCountryName(v.country, 'zh-CN', '—')} · ⭐ {v.rating ?? '—'}
           </div>
           {/* MODUX-P3-4-B：4 字段内联快编（类型/题材/年代/地区）— 单写路径 /meta，队列联动刷新 */}
           <PendingMetaQuickEdit v={v} onSaved={onSourceHealthChanged} />

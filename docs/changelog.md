@@ -4385,3 +4385,20 @@
 - **数据库变更**：无
 - **门禁**：typecheck EXIT=0 / lint 4·4 successful / test:changed 78 passed / e2e:admin 82/82 / 视觉快照 7 passed regenerate。verify:adr-contracts 无需（纯 UI 无端点/契约变更）。
 - **注意事项**：① 本卡为**验收迭代检查点**，用户「先提交再继续修订」→ tasks.md 卡片保留、后续修订续提交；② 跨后台其余 ~17 页同款 h1 重复「统一治理」为独立 follow-up；③ `docs/designs/moderation-console-ux-plan_20260610.md` 的 P1-0 规约（保留 body 标题、弱化面包屑）已被本卡**反转**，后续铺开以本卡方向为准。
+
+## [MODUX-ACPT-5 续] 快速编辑芯片化 + 年代/地区候选 + 删 ID（验收第 5-7 轮 · 检查点 2）
+- **完成时间**：2026-06-11（验收迭代检查点 2）
+- **记录时间**：2026-06-11 13:20
+- **执行模型**：claude-opus-4-8（主循环）
+- **子代理**：无
+- **背景**：承 MODUX-ACPT-5（检查点 1 = commit b6496861）的快速编辑（PendingMetaQuickEdit）继续迭代——用户「快速编辑一次点击、尽量避免点击下拉再选择」。
+- **修改文件**：
+  - `apps/server-next/src/app/admin/moderation/_client/PendingMetaQuickEdit.tsx` — 去「快速编辑」标签；type / 题材 由 AdminSelect 下拉改 inline 芯片一次点击（type 单选 / genres 多选 toggle）；年代 input + 近 6 年候选芯片（动态 CURRENT_YEAR）；地区 input + 常见区域候选芯片（CN/HK/TW/JP/KR/US/GB/TH，精简短名映射，HK=香港 不走 Intl 全称）；候选芯片与 input 共用 state/写路径
+  - `apps/server-next/src/app/admin/moderation/_client/PendingCenter.tsx` — 元信息行删 ID（`<code>{v.id}</code>`，内部标识审核无用途）
+  - `tests/unit/components/server-next/admin/moderation/PendingMetaQuickEdit.test.tsx` — type/题材/年代/地区 改芯片点击驱动 + 候选用例（9→12）
+  - `tests/visual/admin-moderation.visual.spec.ts-snapshots/*.png` — 7 张 darwin 视觉快照重生成
+- **改动要点（验收第 5-7 轮）**：⑤ 去标签 + type/题材 芯片化（去下拉）；⑥ 年代/地区 input 旁加候选芯片（近几年 / 最常见地区，一次点击）；⑦ 地区芯片精简短名（HK=香港）。
+- **新增依赖**：无
+- **数据库变更**：无
+- **门禁**：typecheck EXIT=0 / lint 4·4 / test:changed 24 passed（PendingMetaQuickEdit 12）/ e2e:admin 82/82（第 5-6 轮跑过；第 7 轮纯 label 改动 e2e 不触及快编芯片）/ 视觉快照 7 重生成。
+- **注意事项**：MODUX-ACPT-5 tasks.md 卡片仍保留（验收迭代继续）；近几年候选随 `CURRENT_YEAR` 动态，视觉快照含当年年份、跨年需重生成。
