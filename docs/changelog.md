@@ -4042,3 +4042,21 @@
   - 读侧（listSources LEFT JOIN + 排序分桶 + VideoSource.hostTripped）在 -B2；裁决 C 否决乘法因子——避免与 P3-2 影子验证在同一 effective_score 标量踩踏。
   - 登记：`origin='circuit_breaker'` skip event 噪音（裁决 H-7，P3-x 评估停写）；feedback 加速恢复跨进程设计另起卡（裁决 D）；ADR 草稿 -B2 后 PHASE COMPLETE 前补（裁决 H-6：双存储+排序分桶+恢复语义三决策）。
   - 门禁：typecheck/lint EXIT=0 / worker 全量 9 文件 60 passed 零回归 / test:changed 24 passed / migrate ✅（worker 无对应 e2e 域）。
+
+## [SRCHEALTH-P3-3-B2] listSources JOIN host_health 排序分桶 + hostTripped 透出（SEQ-20260610-02 P3-3 收口）
+- **完成时间**：2026-06-10
+- **记录时间**：2026-06-10 21:50
+- **执行模型**：claude-fable-5（用户会话持续推进授权）
+- **子代理**：arch-reviewer (claude-opus-4-8) — 母卡裁决 A–H 两子卡共用；C4 = VideoSource.hostTripped 契约改动 Opus PASS 依据
+- **修改文件**：
+  - `apps/api/src/db/queries/sources.ts` — `findActiveSourcesWithSignalsByVideoId` +LEFT JOIN host_health + `COALESCE(hh.cooldown_until > NOW(), false) AS host_tripped`（SQL 只透出事实布尔；JOIN miss / NULL hostname → false 不降权）；`DbSourceRowWithSignals` +host_tripped
+  - `apps/api/src/services/SourceService.ts` — 排序分桶（裁决 C2）：hostTripped 第一序键、tripped 桶整体后置、桶内保 effectiveScore DESC + created_at ASC 原序；**effectiveScore 数值零修改**（否决乘法因子——与 P3-2 影子验证数值轴正交，`route-scoring.ts` 明确不改）
+  - `packages/types/src/video.types.ts` — `VideoSource.hostTripped?: boolean` 可选字段（CHG-352 R1 范式；JSDoc 钉死 P3-4 切线消费口径与列表排序同构）
+  - `tests/unit/api/sources.test.ts` — +3 排序校准用例（关键断言：熔断 ok 源排非熔断 dead 之后 / 桶内原序 / effectiveScore 原值 + hostTripped 透出）+ MOCK_RAW_ROW +host_tripped
+- **新增依赖**：无
+- **数据库变更**：无（读侧消费 108 表）
+- **注意事项**：
+  - **P3-3（-A/-B1/-B2）全部收口 = D4 闭环**：熔断信号落库（-B1）+ hostname join key（-A）+ 评分软降权（-B2）；CDN 整体宕掉影响半径「6h cron 逐个发现」→「分钟级整体降权」，评分回升 ≈ cooldown 30min 自然到期（A 裁决事实字段语义，不等 worker 下轮 cron）。
+  - e2e 归因：player 23F/13P + video 11F/7P 失败全集 = pre-existing seed 基建欠账（fixture 视频 dev DB 实测 0 行 → watch/detail 404，请求不触达 listSources；P2-1 已登记候选独立卡）+ smoke 14 passed + 空表 COALESCE 行为等价（单测锁定）→ 非本卡回归。
+  - 登记：ADR 草稿（双存储分工 + 排序分桶 + 恢复语义三决策，裁决 H-6）PHASE COMPLETE 前补。
+  - 门禁：typecheck/lint EXIT=0 / sources 17/17 / test:changed 升全量终轮 508 文件 7128 passed / EXPLAIN ✅ / e2e smoke 14 passed。

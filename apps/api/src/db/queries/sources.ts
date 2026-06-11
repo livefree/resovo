@@ -60,6 +60,8 @@ export interface DbSourceRowWithSignals extends DbSourceRow {
   quality_detected: string | null
   /** CHG-368-B-A3 / ADR-164 D-164-3：source_line_aliases.priority（0-100 / NOT NULL DEFAULT 0 / NULL 仅当无 sla 行 LEFT JOIN 时） */
   alias_priority: number | null
+  /** SRCHEALTH-P3-3-B2：host_health.cooldown_until > NOW()（SQL 内判定布尔）；LEFT JOIN miss / NULL hostname → false */
+  host_tripped: boolean
 }
 
 function mapSource(row: DbSourceRow): VideoSource {
@@ -150,19 +152,24 @@ export async function findActiveSourcesWithSignalsByVideoId(
     //   OR sla.source_site_key IS NULL（LEFT JOIN miss → 行保留）双条件守卫；已退役行不
     //   出现在前台排序池。读 sla.priority 供 SourceService.listSources 传入 route-scoring
     //   priority_bonus 通道（D-164-3 / priority/100 归一化）。
+    // SRCHEALTH-P3-3-B2：LEFT JOIN host_health 取熔断布尔（cooldown_until > NOW() 读时判定，
+    //   裁决 A 事实字段语义）；JOIN miss / source_hostname NULL → COALESCE false 不降权。
+    //   SQL 只透出事实，分桶排序在 SourceService（CHG-352 A1：Service 层 + JS sort）。
     `SELECT vs.id, vs.video_id, vs.season_number, vs.episode_number,
             vs.source_url, vs.source_name, vs.quality, vs.type,
             vs.is_active, vs.submitted_by, vs.last_checked,
             vs.deleted_at, vs.created_at,
             vs.probe_status, vs.render_status, vs.latency_ms, vs.quality_detected,
             cs.display_name AS site_display_name,
-            sla.priority AS alias_priority
+            sla.priority AS alias_priority,
+            COALESCE(hh.cooldown_until > NOW(), false) AS host_tripped
      FROM video_sources vs
      JOIN videos v ON v.id = vs.video_id
      LEFT JOIN crawler_sites cs ON cs.key = COALESCE(vs.source_site_key, v.site_key)
      LEFT JOIN source_line_aliases sla
        ON sla.source_site_key = COALESCE(vs.source_site_key, v.site_key)
       AND sla.source_name = vs.source_name
+     LEFT JOIN host_health hh ON hh.hostname = vs.source_hostname
      WHERE ${conditions.map((c) => `vs.${c}`).join(' AND ')}
        AND (sla.retired_at IS NULL OR sla.source_site_key IS NULL)
      ORDER BY vs.created_at ASC`,

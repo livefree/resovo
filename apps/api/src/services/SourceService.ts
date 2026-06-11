@@ -67,15 +67,22 @@ export class SourceService {
         //   LEFT JOIN miss 时 alias_priority 为 null → fallback 0（与 Phase 1 行为一致 / 无回归）
         priorityBonus: row.alias_priority !== null ? row.alias_priority / 100 : 0,
       }),
+      hostTripped: row.host_tripped,
       createdAt: row.created_at,
     }))
 
-    // 按 effective_score DESC 排序；同分按 created_at ASC 稳定（arch-reviewer A 决策）
+    // SRCHEALTH-P3-3-B2（arch-reviewer claude-opus-4-8 裁决 C2）：熔断排序分桶——
+    //   tripped 桶整体后置（熔断 = 整台 CDN 此刻不可达的强信号，熔断 ok 源排在非熔断
+    //   dead 源之后），桶内保原 effectiveScore 序；不修改 effectiveScore 数值
+    //   （降权在排序维度，与 route-scoring / P3-2 影子验证数值轴完全正交）。
+    // 桶内沿用：effective_score DESC；同分 created_at ASC 稳定（arch-reviewer A 决策）
     withScore.sort((a, b) => {
+      if (a.hostTripped !== b.hostTripped) return a.hostTripped ? 1 : -1
       if (b.effectiveScore !== a.effectiveScore) return b.effectiveScore - a.effectiveScore
       return a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : 0
     })
 
-    return withScore.map(({ source, effectiveScore }) => ({ ...source, effectiveScore }))
+    return withScore.map(({ source, effectiveScore, hostTripped }) =>
+      ({ ...source, effectiveScore, hostTripped }))
   }
 }

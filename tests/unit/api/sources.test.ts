@@ -102,6 +102,7 @@ const MOCK_RAW_ROW = {
   latency_ms: 100,
   quality_detected: null,
   alias_priority: null,  // CHG-368-B-A3: LEFT JOIN miss / fallback 0（与 Phase 1 行为一致）
+  host_tripped: false,   // SRCHEALTH-P3-3-B2: host_health LEFT JOIN（miss → COALESCE false）
 }
 
 // ── 辅助：测试 app ────────────────────────────────────────────────
@@ -211,6 +212,48 @@ describe('GET /v1/videos/:id/sources', () => {
     expect(body.data).toHaveLength(2)
     expect(body.data[0].id).toBe('high-priority-src')
     expect(body.data[1].id).toBe('low-priority-src')
+  })
+
+  // ── SRCHEALTH-P3-3-B2：熔断排序分桶（arch-reviewer claude-opus-4-8 裁决 C2/C3/C4）──
+  // 排序层校准表：route-scoring max=1.00/min=0.020/中性=0.345 三值不变（公式零侵入）；
+  // 分桶不变式 = tripped 桶整体后置、桶内保原 effectiveScore 序。
+
+  it('P3-3-B2 关键校准：熔断 ok 源排在非熔断 dead 源之后（熔断 = 整台 CDN 此刻不可达的强信号）', async () => {
+    mockSQ.findActiveSourcesWithSignalsByVideoId.mockResolvedValue([
+      // 熔断主机上的全 ok 源（原分最高）
+      { ...MOCK_RAW_ROW, id: 'tripped-ok', host_tripped: true },
+      // 非熔断的 dead 源（原分最低）
+      { ...MOCK_RAW_ROW, id: 'healthy-dead', probe_status: 'dead', render_status: 'dead', quality: '240P', latency_ms: 3000 },
+    ])
+    const res = await app.inject({ method: 'GET', url: '/v1/videos/abCD1234/sources' })
+    const body = res.json()
+    expect(body.data.map((s: { id: string }) => s.id)).toEqual(['healthy-dead', 'tripped-ok'])
+  })
+
+  it('P3-3-B2: tripped 桶内保原 effectiveScore 序（桶内 ok > dead）', async () => {
+    mockSQ.findActiveSourcesWithSignalsByVideoId.mockResolvedValue([
+      { ...MOCK_RAW_ROW, id: 'tripped-dead', host_tripped: true, probe_status: 'dead', render_status: 'dead' },
+      { ...MOCK_RAW_ROW, id: 'tripped-ok', host_tripped: true },
+      { ...MOCK_RAW_ROW, id: 'healthy-ok', host_tripped: false },
+    ])
+    const res = await app.inject({ method: 'GET', url: '/v1/videos/abCD1234/sources' })
+    const body = res.json()
+    expect(body.data.map((s: { id: string }) => s.id)).toEqual(['healthy-ok', 'tripped-ok', 'tripped-dead'])
+  })
+
+  it('P3-3-B2: effectiveScore 透出原值不含降权 + hostTripped 字段透出（裁决 C4——P3-2 影子基线/P3-4 切线语义稳定）', async () => {
+    mockSQ.findActiveSourcesWithSignalsByVideoId.mockResolvedValue([
+      { ...MOCK_RAW_ROW, id: 'tripped-ok', host_tripped: true },
+      { ...MOCK_RAW_ROW, id: 'healthy-ok', host_tripped: false },
+    ])
+    const res = await app.inject({ method: 'GET', url: '/v1/videos/abCD1234/sources' })
+    const body = res.json()
+    const tripped = body.data.find((s: { id: string }) => s.id === 'tripped-ok')
+    const healthy = body.data.find((s: { id: string }) => s.id === 'healthy-ok')
+    // 同信号同分：熔断不修改 effectiveScore 数值（降权仅在排序维度）
+    expect(tripped.effectiveScore).toBe(healthy.effectiveScore)
+    expect(tripped.hostTripped).toBe(true)
+    expect(healthy.hostTripped).toBe(false)
   })
 })
 

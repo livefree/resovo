@@ -355,8 +355,18 @@ export interface VideoSource {
    * CHG-352 / route-labeling Phase 1 Layer A：effective_score (0.0–1.0)
    * 后端 SourceService.listSources 计算 + 排序；前台 SourceBar 按此分值渲染主题标签
    * arch-reviewer (claude-opus-4-7) R1：可选字段（防破坏既有 5 处消费方 / mock factory）
+   * SRCHEALTH-P3-3-B2：恒为 route-scoring 原值，**不含熔断降权**（降权在排序分桶维度，
+   * 见 hostTripped）——保持 P3-2 影子验证 / P3-4 按分切线的数值语义稳定。
    */
   effectiveScore?: number
+  /**
+   * SRCHEALTH-P3-3-B2（arch-reviewer claude-opus-4-8 裁决 C4）：所属主机熔断中
+   * （host_health.cooldown_until > NOW()）。listSources 排序分桶：tripped 桶整体
+   * 后置（排所有非熔断源之后，含非熔断 dead），桶内保 effectiveScore 原序。
+   * P3-4 切线消费口径与此同构：先 hostTripped 升序、再 effectiveScore 降序。
+   * 可选字段（CHG-352 R1 同范式防破坏消费方）；缺失视同 false。
+   */
+  hostTripped?: boolean
 }
 
 // ── 字幕 ─────────────────────────────────────────────────────────
