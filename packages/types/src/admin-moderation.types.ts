@@ -444,6 +444,9 @@ export interface VideoSourceLine {
   readonly submittedBy: string | null               // DB: submitted_by UUID NULL
   readonly createdAt: string                        // DB: created_at TIMESTAMPTZ NOT NULL
   readonly updatedAt: string                        // 061 新增：admin 写路径乐观锁版本字段（CHG-SN-5-PRE-01-C / DEBT-SN-4-05-A）
+  readonly fbScore: number | null                   // 105 新增：EMA 平滑播放成功率 [0,1]；NULL=无样本（SRCHEALTH-P2-2）
+  readonly fbSampleWeight: number | null            // 105 新增：EMA 有效样本权重；P3-2 消费须 COALESCE NULL→0（PG LEAST 忽略 NULL 陷阱）
+  readonly lastFeedbackAt: string | null            // 105 新增：最近反馈时间（半衰 decay 基准）
 }
 
 // ── 暂存就绪检查（GET /admin/staging）─────────────────────────────────────────

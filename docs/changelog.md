@@ -3912,3 +3912,24 @@
   - **e2e:player 实跑归因（验收口径「不回归」成立）**：35 failed + 1 flaky + 2 passed——失败全集 = pre-existing 数据基建欠账非回归（dev DB 零 seed：fixture 视频 videos 表 0 行 → API 404 → watch 页 server 预取 notFound() 404〔CHG-361-E3 server-side hydration 起 page.route mock 不覆盖 server fetch〕；home_modules 0 行 → 首页 video-card 恒空）。证据链：curl API 直接 404（与前端代码无关）+ smoke 2/2 绿维持 + 先例归因 CHG-VIR-13-PLAY-FIX / 13 系列收口条目（31 failed 同画像同根因）。**候选独立卡登记：e2e-next seed 基建**（详见 queue P2-1 备注）。
   - 过程教训：首轮 e2e `npm run … | tail` 管道吞 playwright exit 1（tail exit 0 伪绿）+ reuseExistingServer 复用 stale :3000 dev server（昨晚遗留进程，watch 路由 404）——已杀 stale server 干净复跑取证；门禁命令不得用管道包裹。
   - 门禁：typecheck/lint EXIT=0（3 warning 均既有）/ 新测 6 用例 + player-shell-on-error 既有 8 用例零回归 / test:changed 4 文件 23 passed。
+
+## [SRCHEALTH-P2-2] EMA 反馈统计字段 migration + feedback 写入（F4 前置 / SEQ-20260610-02 Phase 2）
+- **完成时间**：2026-06-10
+- **记录时间**：2026-06-10 18:55
+- **执行模型**：claude-fable-5（建议 sonnet，用户会话人工覆盖持续推进授权）
+- **子代理**：arch-reviewer (claude-opus-4-8) ×2 —— 一轮 EMA 字段 schema/半衰公式/常量/副作用关系全裁决（A–F）；二轮定点复核（主循环发现一轮交付物 DRY 改写与其并发安全结论矛盾后回询）：UPDATE…FROM(SELECT) / CTE / LATERAL 取 decay 输入均被裁定不安全（EvalPlanQual 不重跑未加锁子计划 → 并发 last-write-lost + 新旧版本混合值），终版 = decay 输入直接自引用目标表（表达式重复三遍，正确性 #1 > DRY #5）
+- **修改文件**：
+  - `apps/api/src/db/migrations/105_video_sources_feedback_ema.sql` — 新建：`fb_score NUMERIC CHECK [0,1]` / `fb_sample_weight NUMERIC CHECK ≥0` / `last_feedback_at TIMESTAMPTZ`，三列全 NULL（NULL=无样本唯一正确语义，无 DEFAULT 无 backfill 无索引）；COMMENT 沉淀 P3-2 `LEAST(1,NULL)` 陷阱警示；文件内不写 BEGIN/COMMIT（054/059/104 内嵌 BEGIN 为既有技术债，runner 外层事务已包裹，裁决不复制）
+  - `apps/api/src/routes/feedback.ts` — `FB_HALF_LIFE_SECONDS = 7d` 命名常量（推导注释：P2-1 采样频率 × 近期主导 × P3-2 N 量级；调参须配合影子验证故不进 env）+ `recordFeedbackEma(sourceId, obs)` 单条自引用 UPDATE（冷启动 NULL→decay=0→首样本 score=obs/weight=1）+ success 分支 obs=1 / failure 分支 obs=0 各自独立 fire-and-forget（失败隔离：不与复活/quality UPDATE 合并；与 redis INCR 正交——INCR 是瞬时 recheck 触发器，EMA 是持久统计量）
+  - `packages/types/src/admin-moderation.types.ts` — `VideoSourceLine` + `fbScore`/`fbSampleWeight`/`lastFeedbackAt`（105 注释风格对齐 054/059）
+  - `apps/api/src/db/queries/video_sources.ts` — SOURCE_SELECT/row 接口/mapRow 三处真实映射（pg NUMERIC string→Number；实施修正：types required 字段编译链强制波及，硬编码 null 是潜伏假数据缺陷，按裁决「映射真源完整」内在意图延伸）
+  - `docs/architecture.md` — §5.12 video_sources 字段表 +3 行（Migration 105）
+  - `tests/unit/api/feedbackRoute.test.ts` — 新增 4 用例：obs=1 参数契约 / obs=0 与既有 failure 副作用正交 / **SQL 形态守卫**（禁 FROM(SELECT)/WITH/LATERAL + 必须 vs. 直接自引用 + 冷启动分支；注释锁定「退回子查询必须 RED」）/ EMA 失败隔离（复活 UPDATE 不被连累）
+- **新增依赖**：无
+- **数据库变更**：Migration 105（已在本地真库执行 ✅）
+- **注意事项**：
+  - **真库数值对拍**（事务 BEGIN…ROLLBACK 不留痕）：冷启动首样本 → score=1/weight=1；间隔≈0 并入 obs=0 → 0.5/2；回拨一个半衰期再 obs=1 → 0.75/2——三步全部精确命中；CHECK 拒 fb_score=1.5 ✅。
+  - **本卡不进评分**：方案 §4 时序硬依赖链 P2-2（统计字段）→ 影子计算一周 → P3-2（进分）；P3-2 消费 `min(1, fb_sample_weight/N)` 必须先 `COALESCE(w,0)`（PG LEAST 忽略 NULL 误返 1 让无样本源拿满置信度——警示已沉淀 migration COMMENT + types 注释 + architecture.md 三处）。
+  - **已知限制**：真库并发交错用例（两连接行锁阻塞 → EPQ 重求值）未自动化（单测无真 PG 基建）；并发语义由 SQL 形态守卫用例 + 真库手工对拍锁定，候选集成验证。
+  - **登记**：feedback.ts `countRecentFailures` 既有死代码（范围外不动）；feedback route 直接 db.query 为既有范式（服务化重构候选独立卡）。
+  - 门禁：typecheck/lint EXIT=0 / feedbackRoute 13/13 / test:changed 升全量 506 文件 7095 passed（首轮 1 failed 并发抖动复跑干净）/ migrate ✅ / e2e:admin 82/82 EXIT=0。

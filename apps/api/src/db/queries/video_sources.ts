@@ -37,6 +37,9 @@ interface DbVideoSourceLineRow {
   submitted_by: string | null
   created_at: string
   updated_at: string
+  fb_score: string | null
+  fb_sample_weight: string | null
+  last_feedback_at: string | null
 }
 
 function mapRow(row: DbVideoSourceLineRow): VideoSourceLine {
@@ -66,6 +69,10 @@ function mapRow(row: DbVideoSourceLineRow): VideoSourceLine {
     submittedBy: row.submitted_by,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    // 105 新增（SRCHEALTH-P2-2）：pg NUMERIC 驱动层返回 string，转 number 保持 types 契约
+    fbScore: row.fb_score === null ? null : Number(row.fb_score),
+    fbSampleWeight: row.fb_sample_weight === null ? null : Number(row.fb_sample_weight),
+    lastFeedbackAt: row.last_feedback_at,
   }
 }
 
@@ -77,7 +84,8 @@ const SOURCE_SELECT = `
   vs.last_probed_at, vs.last_rendered_at,
   vs.quality_detected, vs.quality_source,
   vs.resolution_width, vs.resolution_height, vs.detected_at,
-  vs.last_checked, vs.submitted_by, vs.created_at, vs.updated_at
+  vs.last_checked, vs.submitted_by, vs.created_at, vs.updated_at,
+  vs.fb_score, vs.fb_sample_weight, vs.last_feedback_at
 `
 
 export async function listVideoSources(

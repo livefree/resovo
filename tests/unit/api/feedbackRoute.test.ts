@@ -179,6 +179,102 @@ describe('POST /feedback/playback', () => {
   })
 })
 
+// SRCHEALTH-P2-2（SEQ-20260610-02）：EMA 反馈落账
+describe('POST /feedback/playback — EMA 落账（fb_score / fb_sample_weight / last_feedback_at）', () => {
+  let app: Awaited<ReturnType<typeof buildApp>>
+  beforeEach(async () => {
+    vi.clearAllMocks()
+    mockRedis.set.mockResolvedValue('OK')
+    mockRedis.get.mockResolvedValue('0')
+    mockRedis.incr.mockResolvedValue(1)
+    mockRedis.expire.mockResolvedValue(1)
+    mockInsertHealthEvent.mockResolvedValue('ev-1')
+    mockDb.query.mockResolvedValue({ rows: [] })
+    app = await buildApp()
+  })
+  afterEach(() => app.close())
+
+  const findEmaCall = () =>
+    mockDb.query.mock.calls.find((c: unknown[]) => String(c[0]).includes('fb_score'))
+
+  it('success=true → EMA UPDATE obs=1（参数 [sourceId, 1, halfLife]）', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/feedback/playback',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(validBody),
+    })
+    expect(res.statusCode).toBe(202)
+    await vi.waitFor(() => expect(findEmaCall()).toBeDefined())
+    const [sql, params] = findEmaCall() as [string, unknown[]]
+    expect(params).toEqual([validBody.sourceId, 1, 7 * 24 * 60 * 60])
+    expect(sql).toContain('last_feedback_at = NOW()')
+    expect(sql).toContain('deleted_at IS NULL')
+  })
+
+  it('success=false → EMA UPDATE obs=0（与 insertHealthEvent / redis INCR 并行正交）', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/feedback/playback',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ ...validBody, success: false, errorCode: 'ERR_NETWORK' }),
+    })
+    expect(res.statusCode).toBe(202)
+    await vi.waitFor(() => expect(findEmaCall()).toBeDefined())
+    const [, params] = findEmaCall() as [string, unknown[]]
+    expect(params).toEqual([validBody.sourceId, 0, 7 * 24 * 60 * 60])
+    // EMA 不替代既有 failure 副作用
+    await vi.waitFor(() => expect(mockInsertHealthEvent).toHaveBeenCalled())
+    expect(mockRedis.incr).toHaveBeenCalled()
+  })
+
+  it('SQL 形态守卫：decay 输入必须直接自引用目标表（并发安全；arch-reviewer 二轮裁决）', async () => {
+    // 本用例验证 RC 下单语句自引用 UPDATE 的 EvalPlanQual 串行化保证赖以成立的 SQL 形态：
+    // 若 SQL 退回任何 FROM / CTE / LATERAL 子查询取 decay 输入（EPQ 不重跑子计划 →
+    // 并发反馈 last-write-lost + 新旧版本混合值），本用例必须 RED。
+    await app.inject({
+      method: 'POST',
+      url: '/v1/feedback/playback',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(validBody),
+    })
+    await vi.waitFor(() => expect(findEmaCall()).toBeDefined())
+    const [sql] = findEmaCall() as [string, unknown[]]
+    // 禁止形态：子查询 / CTE / LATERAL（注意 EXTRACT(EPOCH FROM (...)) 的 "FROM (" 是合法时间表达式，
+    // 子查询指纹是 "FROM (SELECT"）
+    expect(sql).not.toMatch(/FROM\s*\(\s*SELECT/i)
+    expect(sql).not.toMatch(/\bWITH\b/i)
+    expect(sql).not.toMatch(/\bLATERAL\b/i)
+    // 必须形态：decay 输入列直接引用目标表别名 vs + 冷启动 NULL→decay=0 分支
+    expect(sql).toMatch(/CASE WHEN vs\.last_feedback_at IS NULL THEN 0/)
+    expect(sql).toMatch(/COALESCE\(vs\.fb_sample_weight, 0\)/)
+    expect(sql).toMatch(/COALESCE\(vs\.fb_score, 0\)/)
+    expect(sql).toContain('power(0.5, EXTRACT(EPOCH FROM (NOW() - vs.last_feedback_at))')
+  })
+
+  it('EMA UPDATE 失败 → warn 不抛、202 不受影响、复活 UPDATE 仍执行（失败隔离）', async () => {
+    mockDb.query.mockImplementation((sql: string) =>
+      String(sql).includes('fb_score')
+        ? Promise.reject(new Error('check violation'))
+        : Promise.resolve({ rows: [] }),
+    )
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/feedback/playback',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(validBody),
+    })
+    expect(res.statusCode).toBe(202)
+    // 复活 UPDATE（probe_status dead→ok）独立执行不被 EMA 失败连累
+    await vi.waitFor(() => {
+      const reviveCall = mockDb.query.mock.calls.find((c: unknown[]) =>
+        String(c[0]).includes("probe_status = CASE WHEN probe_status = 'dead'"),
+      )
+      expect(reviveCall).toBeDefined()
+    })
+  })
+})
+
 // CHG-SN-5-PRE-01-D（DEBT-SN-4-05-B）
 describe('POST /feedback/playback — trustProxy 启用时', () => {
   let app: Awaited<ReturnType<typeof buildApp>>

@@ -27,8 +27,59 @@ const PlaybackFeedbackBodySchema = z.object({
   errorCode: z.string().max(64).optional(),
 })
 
+/**
+ * SRCHEALTH-P2-2 / F4 前置：EMA 半衰期 7 天（arch-reviewer claude-opus-4-8 裁决 D）。
+ * 推导：P2-1 上报 per-sourceId 去抖 + 1/N 采样 → 单源日均有效样本个位~十位；
+ * 7 天让约一周前样本权重衰减到 0.5（两周前 0.25）——近期质量主导但不健忘；
+ * 稳态权重量级与 P3-2 置信度缩放 N（个位~十位）匹配。
+ * 调参须配合 P3-2 影子验证重新校准（方案 §4 时序硬依赖链），故为代码常量不进 env。
+ */
+const FB_HALF_LIFE_SECONDS = 7 * 24 * 60 * 60
+
 function hashIp(ip: string): string {
   return crypto.createHash('sha256').update(ip).digest('hex').slice(0, 8)
+}
+
+/**
+ * EMA 反馈落账（SRCHEALTH-P2-2）：单条 UPDATE 内完成「读旧值 → 半衰 → 并入观测 → 写回」。
+ *
+ * ⚠️ 并发安全依赖 SQL 形态（arch-reviewer 二轮裁决，勿为 DRY 改写）：
+ * decay 输入列（fb_score / fb_sample_weight / last_feedback_at）必须**直接引用目标表 vs**——
+ * PG READ COMMITTED 下并发 UPDATE 同行经行级锁串行化，EvalPlanQual 重求值会把目标行列
+ * 刷新为最新提交版本，故无 last-write-lost。若改写为 FROM 子查询 / CTE / LATERAL 取
+ * decay 输入，EPQ 不重跑这些子计划（用旧快照缓存元组）→ 并发反馈被部分覆盖且产生
+ * 新旧版本混合值。decay 表达式重复书写三遍是该保证的代价（正确性 #1 > 改动收敛 #5）。
+ *
+ * 冷启动：last_feedback_at IS NULL → decay 强制 0 → 首样本 fb_score=obs / weight=1（无先验）。
+ * 本卡只写不进评分（P3-2 影子验证硬前置）。
+ */
+async function recordFeedbackEma(sourceId: string, obs: 0 | 1): Promise<void> {
+  await db.query(
+    `UPDATE video_sources AS vs
+     SET
+       fb_score =
+         (COALESCE(vs.fb_score, 0)
+            * (CASE WHEN vs.last_feedback_at IS NULL THEN 0
+                    ELSE COALESCE(vs.fb_sample_weight, 0)
+                         * power(0.5, EXTRACT(EPOCH FROM (NOW() - vs.last_feedback_at)) / $3)
+               END)
+          + $2)
+         /
+         ((CASE WHEN vs.last_feedback_at IS NULL THEN 0
+                ELSE COALESCE(vs.fb_sample_weight, 0)
+                     * power(0.5, EXTRACT(EPOCH FROM (NOW() - vs.last_feedback_at)) / $3)
+           END) + 1),
+       fb_sample_weight =
+         (CASE WHEN vs.last_feedback_at IS NULL THEN 0
+               ELSE COALESCE(vs.fb_sample_weight, 0)
+                    * power(0.5, EXTRACT(EPOCH FROM (NOW() - vs.last_feedback_at)) / $3)
+          END) + 1,
+       last_feedback_at = NOW()
+     WHERE vs.id = $1 AND vs.deleted_at IS NULL`,
+    [sourceId, obs, FB_HALF_LIFE_SECONDS],
+  ).catch((e: unknown) => {
+    baseLogger.warn({ err: e, sourceId, obs }, '[feedback] ema update failed')
+  })
 }
 
 function mapHeightToQuality(h: number): string {
@@ -120,6 +171,10 @@ export async function feedbackRoutes(fastify: FastifyInstance) {
           baseLogger.warn({ err: e, sourceId }, '[feedback] quality update failed')
         })
       }
+
+      // SRCHEALTH-P2-2：EMA 落账（obs=1），与复活/quality UPDATE 各自独立 fire-and-forget——
+      // 失败隔离（arch-reviewer 裁决 E）：任一 UPDATE 失败不连累其他（如 CHECK 触发只 warn EMA 条）
+      await recordFeedbackEma(sourceId, 1)
     } else {
       await insertHealthEvent(db, {
         videoId,
@@ -143,6 +198,10 @@ export async function feedbackRoutes(fastify: FastifyInstance) {
           baseLogger.warn({ err: e, videoId, sourceId }, '[feedback] queue signal insert failed')
         })
       }
+
+      // SRCHEALTH-P2-2：EMA 落账（obs=0）。与 redis INCR 正交（arch-reviewer 裁决 E）：
+      // INCR 是同 ipHash 5min 瞬时事件触发器（驱动 recheck），EMA 是跨客户端持久统计量（P3-2 驱动排序）
+      await recordFeedbackEma(sourceId, 0)
     }
   }
 }
