@@ -1947,9 +1947,9 @@
 
 ## [SEQ-20260610-03] 内容审核台 UX 优化（MODUX · 信息密度 + 去冗余 + 快速编辑）
 
-- **状态**：🔄 执行中（2/15 卡完成：P1-0 ✅ + P1-1-A ✅）
+- **状态**：🔄 执行中（3/15 卡完成：P1-0 ✅ + P1-1-A ✅ + P1-1-B ✅ —— **item 5 标题治理全收口**）
 - **创建时间**：2026-06-10 22:04
-- **最后更新时间**：2026-06-10 22:24
+- **最后更新时间**：2026-06-10 22:31
 - **目标**：落地 `docs/designs/moderation-console-ux-plan_20260610.md` v2（两轮独立审核 + 第三轮注册前终审通过，file:line 抽查全部命中）：审核台 12 项问题——去冗余（标题治理/DecisionCard 精简）→ 信息密度（列表单元格/详情 tab/键盘流）→ 功能增强（年代+富集过滤/筛选弹层/类似 tab 阈值/4 字段快速编辑）。
 - **范围**：apps/server-next（admin/moderation/_client + 标题治理涉及页）+ packages/admin-ui（PageHeader/DecisionCard/KeyboardShortcuts 消费）+ apps/api（moderation.ts query/meta schema + service/queries）+ packages/types（admin-moderation.types）。**方案文件为各卡内容真源**；卡面只记验收口径与文件范围。
 - **依赖**：无 BLOCKER；工作台空闲（SRCHEALTH 剩余 P3-2 影子验证硬前置 ~06-17 / P3-4 顺延，与本 SEQ 无文件冲突）。
@@ -1971,10 +1971,12 @@
    - 文件范围（**Q4 裁决：不扩 PageHeaderProps，零 packages/admin-ui 改动，不触发 types.ts Opus trailer 项**）：`apps/server-next/src/app/admin/moderation/_client/ModerationConsole.tsx`、`apps/server-next/src/app/admin/videos/_client/VideoListClient.tsx`。
    - 依赖：MODUX-P1-0 ✅。建议模型：sonnet。
    - **完成备注**：① ModerationConsole：raw `<h1>`(font-size-xl) → `<PageHeader title={M.title}>`（T-5 归一 font-size-lg）；统计+键盘行整体进 subtitle 槽（R-2：dangerouslySetInnerHTML 与全部 CSS 变量逐字原样搬运，内层仅去掉与 SUBTITLE_STYLE 重复的 marginTop/fontSize/color）；preset 按钮区 + FilterPresetPopover（含 anchorRef + position:relative 锚定结构）整体进 actions 槽零行为变化；外包中性 div 保留原 marginBottom:8（该页容器无 gap 体系，不在本卡重排整页间距）。② VideoListClient：**发现 HEAD_STYLE/HEAD_TITLE_STYLE/HEAD_ACTIONS_STYLE 三常量与 PageHeader 内置样式逐字相同（手写副本）→ 删除**，正是 T-1 要收敛的重复实现；quick-filter chips 区进 subtitle 槽（SUBHEAD_STYLE 去 margin 由槽提供，6px→4px 统一到共享契约）；导出 CSV/手动添加按钮进 actions 槽（`videos-export-csv` testid 保留）。③ 选择器迁移核验：`data-page-head` → PageHeader 内置 `data-page-header`；预检 grep 确认 videos/moderation 域测试零依赖旧属性（DashboardClient 测试依赖 data-page-head 属 P1-1-B 范围）；`data-page-head-sub`/chips 的 data-quick-filter 保留在 subtitle 内容上。④ 登记：ModerationConsole 存量 unused BTN_PRIMARY/BTN_DANGER（迁移前已死代码，范围外不动）。共享层沉淀：否——本卡即是把手写副本收敛到既有共享 PageHeader。门禁：typecheck/lint EXIT=0 / test:changed 13 passed / moderation 域单测手动 28 passed / **e2e:admin 82/82 EXIT=0**。执行模型: claude-fable-5（建议 sonnet，用户会话人工覆盖持续推进授权）；子代理: 无。
-3. **MODUX-P1-1-B** — Dashboard/Analytics/Settings 迁移 + 已消费 14 页规约核对（item 5）（状态：⬜ 待开始）
-   - 验收口径（真源 = 方案附录 A 规约 T-7~T-12）：Settings（T-3）+ Dashboard/Analytics 迁移（**实现难点 R-1**：两者为 `/admin` 同路由互斥 tab——AnalyticsView 是 DashboardClient 子内容非独立路由；ReactNode title 渲染为 div 非 heading → 须按 **T-8 h1 兜底**〔string 主标题+ReactNode subtitle 或 ReactNode 内自带 h1〕+ **T-9 任一 tab 激活时 h1 恰 1 个**，手测两 tab 验证）；已消费 14 页按规约一致性核对（全 headingLevel=1、无 raw h1 残留）；dev 5 页豁免登记（T-11）。
-   - 文件范围：`apps/server-next/src/app/admin/settings/_client/SettingsContainer.tsx`、`apps/server-next/src/app/admin/_client/AnalyticsView.tsx`、`apps/server-next/src/app/admin/_client/DashboardClient.tsx` + 14 已消费页核对清单（方案附录 A.1）。
-   - 依赖：MODUX-P1-1-A。建议模型：sonnet。
+3. **MODUX-P1-1-B** — Dashboard/Analytics/Settings 迁移 + 已消费 14 页规约核对（item 5）（状态：✅ 已完成 2026-06-10 22:31）
+   - 创建时间：2026-06-10 22:04 ｜ 实际开始：2026-06-10 22:25 ｜ 完成时间：2026-06-10 22:31
+   - 验收口径（真源 = 方案附录 A 规约 T-7~T-12）：Settings（T-3）+ Dashboard/Analytics 迁移（R-1：`/admin` 同路由互斥 tab，T-8 h1 兜底 + T-9 h1 恰 1 个）；已消费 14 页规约一致性核对；dev 5 页豁免登记（T-11）。
+   - 文件范围（实施修正：+2 测试文件选择器同步，P1-1-A 完成备注已预告）：`SettingsContainer.tsx`、`AnalyticsView.tsx`、`DashboardClient.tsx`、`tests/unit/.../DashboardClient.test.tsx`、`tests/e2e/admin/dashboard.spec.ts`。
+   - 依赖：MODUX-P1-1-A ✅。建议模型：sonnet。
+   - **完成备注**：① **R-1/T-8 难点消解比预期简单**：Dashboard 动态问候 `早上好，Yan — 今天有 {N} 待处理` 用**模板字符串**传 string title → PageHeader 直接渲染 h1，无需 ReactNode 兜底两分支（T-8 自然满足）；AnalyticsView「数据看板」string title 同理；T-9 互斥渲染下任一 tab h1 恰 1 个由结构保证。② 三页手写 HEAD_* 常量组（Settings 4 个/Dashboard 4 个/Analytics 4 个）与 PageHeader 内置逐字或近似等价 → 全部删除（差异按 T-5 归一：Dashboard/Analytics font-size-xl→lg、Settings fontWeight 600→700、subtitle margin 6px→4px、Dashboard paddingTop 4px 丢弃）；Settings actions 槽复用既有 AdminButton 零改动。③ 测试选择器同步：`[data-page-head]` → `[data-page-header]` 单测 8 处 + e2e 2 处 + 头注释 2 处（dashboard.spec.ts:158 为 analytics tab 断言，迁移后由 AnalyticsView 的 PageHeader 输出同名属性继续命中）。④ 规约核对收口：全 admin 非 dev 页 raw `<h1>` **清零**（grep 实证仅剩 dev 5 页豁免）；全 PageHeader 消费方零显式 headingLevel（默认 1，T-4 合规）。**item 5 标题治理（P1-0/-A/-B 三卡）全收口**。共享层沉淀：否——继续收敛手写副本到既有 PageHeader。门禁：typecheck/lint EXIT=0 / test:changed 32 passed（DashboardClient 16 含新选择器断言）/ system 域手动 84 passed / **e2e:admin 82/82 EXIT=0**。执行模型: claude-fable-5（建议 sonnet，用户会话人工覆盖持续推进授权）；子代理: 无。
 4. **MODUX-P1-2** — 播放器上方治理：DecisionCard 精简（item 11+12）（状态：⬜ 待开始）
    - 验收口径：单视频内标题仅 1 次（PendingCenter h2）；决策 banner 从独占整行降为精简 inline；文案重规划（健康/未就绪/冲突/失效）；`dev/visual` 预览渲染正常；单测同步。
    - 文件范围：`packages/admin-ui/src/components/cell/decision-card.tsx`（**优先不改 `decision-card.types.ts` 公开 Props**；若改 → Opus + trailer）、`apps/server-next/src/app/admin/moderation/_client/PendingCenter.tsx` + dev/visual registry/mock + 单测。

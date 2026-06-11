@@ -9,7 +9,7 @@
  *
  * 断言收紧（避免误伤 page__head em-dash 文案）：
  *   - 仅在 [data-card-value] 节点上断言无破折号
- *   - 不在 [data-page-head] 上做破折号断言（合法 em dash）
+ *   - 不在 [data-page-header] 上做破折号断言（合法 em dash）
  *
  * 前提：apps/server-next 运行于 localhost:3003（baseURL 由 admin-next-chromium project 注入）
  * API：page.route 拦截 /v1/admin/videos/moderation-stats，不依赖真实后端；
@@ -90,7 +90,7 @@ test.describe('Dashboard 8 卡片浏览态 — 三 stats 路径 regression gate'
     await expect(page.getByTestId('dashboard-page')).toBeVisible({ timeout: 10000 })
 
     // 4 行布局
-    await expect(page.locator('[data-page-head]')).toBeVisible()
+    await expect(page.locator('[data-page-header]')).toBeVisible()
     await expect(page.locator('[data-dashboard-row="1"]')).toBeVisible()
     await expect(page.locator('[data-dashboard-row="2"]')).toBeVisible()
     await expect(page.locator('[data-dashboard-row="3"]')).toBeVisible()
@@ -155,7 +155,7 @@ test.describe('Dashboard 8 卡片浏览态 — 三 stats 路径 regression gate'
     await expect(page.locator('[data-error-state]')).toBeVisible({ timeout: 5000 })
 
     // page-head 仍渲染（顶部不被替代）
-    await expect(page.locator('[data-page-head]')).toBeVisible()
+    await expect(page.locator('[data-page-header]')).toBeVisible()
 
     // tabs 仍可见
     await expect(page.locator('[data-tab="overview"]')).toBeVisible()

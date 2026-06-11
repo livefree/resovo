@@ -17,7 +17,7 @@
  */
 
 import React, { useState, useEffect, useCallback, useId } from 'react'
-import { KpiCard, Spark, Pill, LoadingState, ErrorState } from '@resovo/admin-ui'
+import { KpiCard, Spark, Pill, LoadingState, ErrorState, PageHeader } from '@resovo/admin-ui'
 import { getDashboardAnalytics } from '@/lib/dashboard/api'
 import type { DashboardAnalyticsPayload, DashboardCrawlerRunBrief, DashboardKpiSnapshot, DashboardSourceTypeStat, DashboardTimelinePoint } from '@resovo/types'
 
@@ -32,33 +32,8 @@ const SPARK_MAP: Record<DashboardKpiSnapshot['key'], { data: readonly number[]; 
 
 // ── styles ────────────────────────────────────────────────────────
 
-const PAGE_HEAD: React.CSSProperties = {
-  display: 'flex',
-  alignItems: 'flex-start',
-  justifyContent: 'space-between',
-  gap: '16px',
-}
-
-const HEAD_TITLE: React.CSSProperties = {
-  margin: 0,
-  fontSize: 'var(--font-size-xl)',
-  fontWeight: 700,
-  color: 'var(--fg-default)',
-  lineHeight: 1.3,
-}
-
-const HEAD_SUB: React.CSSProperties = {
-  margin: '4px 0 0',
-  fontSize: 'var(--font-size-xs)',
-  color: 'var(--fg-muted)',
-}
-
-const HEAD_ACTIONS: React.CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: '8px',
-  flexShrink: 0,
-}
+// page head：共享 PageHeader 承载（MODUX-P1-1-B，规约 T-9：analytics tab 激活时
+// 与 overview 问候 h1 互斥渲染，本标题为 /admin 路由该态下唯一 h1）
 
 const SELECT_STYLE: React.CSSProperties = {
   height: '28px',
@@ -329,28 +304,28 @@ export function AnalyticsView() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }} data-analytics-view>
-      <header style={PAGE_HEAD} data-page-head>
-        <div>
-          <h1 style={HEAD_TITLE}>数据看板</h1>
-          <p style={HEAD_SUB}>视频 · 源 · 用户 · 采集任务 — 多维度运营观测</p>
-        </div>
-        <div style={HEAD_ACTIONS}>
-          <select
-            style={SELECT_STYLE}
-            value={period}
-            onChange={(e) => handlePeriodChange(e.target.value as Period)}
-            aria-label="时间范围"
-            data-analytics-period-select
-          >
-            <option value="7d">7 天</option>
-            <option value="30d">30 天</option>
-            <option value="90d">90 天</option>
-          </select>
-          <button type="button" style={BTN_STYLE} disabled title="功能开发中（follow-up STATS-EXTEND-ANALYTICS）">
-            导出报表
-          </button>
-        </div>
-      </header>
+      <PageHeader
+        title="数据看板"
+        subtitle="视频 · 源 · 用户 · 采集任务 — 多维度运营观测"
+        actions={
+          <>
+            <select
+              style={SELECT_STYLE}
+              value={period}
+              onChange={(e) => handlePeriodChange(e.target.value as Period)}
+              aria-label="时间范围"
+              data-analytics-period-select
+            >
+              <option value="7d">7 天</option>
+              <option value="30d">30 天</option>
+              <option value="90d">90 天</option>
+            </select>
+            <button type="button" style={BTN_STYLE} disabled title="功能开发中（follow-up STATS-EXTEND-ANALYTICS）">
+              导出报表
+            </button>
+          </>
+        }
+      />
 
       {loading && <LoadingState variant="skeleton" />}
       {!loading && error && (

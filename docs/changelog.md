@@ -4113,3 +4113,18 @@
 - **新增依赖**：无
 - **数据库变更**：无
 - **注意事项**：① `data-page-head` 属性随迁移变为 PageHeader 内置 `data-page-header`，videos/moderation 域测试零依赖已预检；DashboardClient 测试仍断言 `data-page-head`，P1-1-B 迁移 Dashboard 时须同步该测试。② ModerationConsole 存量死代码 BTN_PRIMARY/BTN_DANGER 未动（范围外）。门禁：typecheck/lint EXIT=0 / test:changed 13 passed / moderation 域 28 passed / e2e:admin 82/82。
+
+## [MODUX-P1-1-B] Dashboard/Analytics/Settings 迁移 PageHeader + 14 页规约核对（item 5 收口）
+- **完成时间**：2026-06-10
+- **记录时间**：2026-06-10 22:31
+- **执行模型**：claude-fable-5（建议 sonnet，用户会话人工覆盖）
+- **子代理**：无
+- **修改文件**：
+  - `apps/server-next/src/app/admin/settings/_client/SettingsContainer.tsx` — T-3 三槽迁移，删 HEAD_* 手写常量
+  - `apps/server-next/src/app/admin/_client/DashboardClient.tsx` — T-7 动态问候用模板字符串 string title 直接得 h1（T-8 兜底自然满足），删 HEAD_* 常量
+  - `apps/server-next/src/app/admin/_client/AnalyticsView.tsx` — T-9 互斥 tab 唯一 h1，删 PAGE_HEAD/HEAD_* 常量
+  - `tests/unit/components/server-next/admin/dashboard/DashboardClient.test.tsx` / `tests/e2e/admin/dashboard.spec.ts` — `[data-page-head]` → `[data-page-header]` 断言同步（8+2 处）
+  - `docs/task-queue.md` / `docs/tasks.md` — 卡片收口
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：item 5 标题治理三卡（P1-0/-A/-B）全收口：全 admin 非 dev 页 raw `<h1>` 清零（仅剩 dev 5 页 T-11 豁免），全 PageHeader 消费方 headingLevel 默认 1。门禁：typecheck/lint EXIT=0 / test:changed 32 / system 域 84 / e2e:admin 82/82。

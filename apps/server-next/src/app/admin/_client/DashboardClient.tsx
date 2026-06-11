@@ -22,7 +22,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
-import { ErrorState, LoadingState, useToast } from '@resovo/admin-ui'
+import { ErrorState, LoadingState, PageHeader, useToast } from '@resovo/admin-ui'
 import { getModerationStats, type ModerationStats } from '@/lib/videos/api'
 import { buildDashboardStats, type DashboardStats } from '@/lib/dashboard-data'
 import { getDashboardOverview, getDashboardActivities, type DashboardOverviewPayload, type DashboardActivityRow } from '@/lib/dashboard/api'
@@ -56,34 +56,8 @@ const TAB_BAR_STYLE: React.CSSProperties = {
   paddingBottom: 0,
 }
 
-const HEAD_STYLE: React.CSSProperties = {
-  display: 'flex',
-  alignItems: 'flex-start',
-  justifyContent: 'space-between',
-  gap: '16px',
-  paddingTop: '4px',
-}
-
-const HEAD_TITLE_STYLE: React.CSSProperties = {
-  margin: 0,
-  fontSize: 'var(--font-size-xl)',
-  fontWeight: 700,
-  color: 'var(--fg-default)',
-  lineHeight: 1.3,
-}
-
-const HEAD_SUB_STYLE: React.CSSProperties = {
-  margin: '6px 0 0',
-  fontSize: 'var(--font-size-xs)',
-  color: 'var(--fg-muted)',
-}
-
-const HEAD_ACTIONS_STYLE: React.CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: '8px',
-  flexShrink: 0,
-}
+// page head：共享 PageHeader 承载（MODUX-P1-1-B，规约 T-7：动态问候 ≠ nav label 非冗余，
+// 模板字符串 string title 直接得 h1，T-8 兜底自然满足）
 
 const HEAD_BTN_STYLE: React.CSSProperties = {
   height: '28px',
@@ -221,18 +195,18 @@ export function DashboardClient() {
 
       {activeTab === 'overview' && (
         <>
-          <header style={HEAD_STYLE} data-page-head>
-            <div>
-              <h1 style={HEAD_TITLE_STYLE}>早上好，Yan — 今天有 {dashboardStats.kpis[1].value} 待处理</h1>
-              <p style={HEAD_SUB_STYLE} data-page-head-sub>{dashboardStats.headSub}</p>
-            </div>
-            <div style={HEAD_ACTIONS_STYLE} data-page-head-actions>
-              {/* GAPS #G-dashboard-runall：增量为主按钮（高频）+ 全量降级 ghost 双重 confirm（低频危险）*/}
-              <button type="button" style={HEAD_BTN_STYLE} data-page-action="full-crawl" disabled={fullCrawlRunning} onClick={() => void handleFullCrawl()} title="低频危险：批量重抓所有源（需双重确认）">{fullCrawlRunning ? '采集中…' : '全站全量'}</button>
-              <button type="button" style={HEAD_BTN_PRIMARY_STYLE} data-page-action="incremental-crawl" disabled={fullCrawlRunning} onClick={() => void handleIncrementalCrawl()}>全站增量</button>
-              <button type="button" style={HEAD_BTN_PRIMARY_STYLE} data-page-action="enter-moderation" onClick={() => router.push('/admin/moderation')}>进入审核台</button>
-            </div>
-          </header>
+          <PageHeader
+            title={`早上好，Yan — 今天有 ${dashboardStats.kpis[1].value} 待处理`}
+            subtitle={dashboardStats.headSub}
+            actions={
+              <>
+                {/* GAPS #G-dashboard-runall：增量为主按钮（高频）+ 全量降级 ghost 双重 confirm（低频危险）*/}
+                <button type="button" style={HEAD_BTN_STYLE} data-page-action="full-crawl" disabled={fullCrawlRunning} onClick={() => void handleFullCrawl()} title="低频危险：批量重抓所有源（需双重确认）">{fullCrawlRunning ? '采集中…' : '全站全量'}</button>
+                <button type="button" style={HEAD_BTN_PRIMARY_STYLE} data-page-action="incremental-crawl" disabled={fullCrawlRunning} onClick={() => void handleIncrementalCrawl()}>全站增量</button>
+                <button type="button" style={HEAD_BTN_PRIMARY_STYLE} data-page-action="enter-moderation" onClick={() => router.push('/admin/moderation')}>进入审核台</button>
+              </>
+            }
+          />
 
           {/* loading / error 兜底；正常路径渲染 4 行布局（dashboardStats 始终非空） */}
           {statsLoading && stats === null && <LoadingState variant="skeleton" />}

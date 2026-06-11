@@ -8,7 +8,7 @@
  *
  * 断言收紧（避免误伤 page__head em-dash 文案）：
  *   - 仅在 [data-card-value] / [data-workflow-progress-value] / [data-source="mock"] 节点上断言
- *   - 不在 [data-page-head] 内做破折号断言（合法 em dash 文案）
+ *   - 不在 [data-page-header] 内做破折号断言（合法 em dash 文案）
  */
 import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest'
 import { cleanup, fireEvent, render, waitFor } from '@testing-library/react'
@@ -110,7 +110,7 @@ describe('DashboardClient — case A：接口完整成功（reference §5.1.4 �
   it('5 行布局存在（page__head + 4 行 grid，含 CW1-D row="4" auto-crawl 卡）', async () => {
     const { container } = render(<DashboardClient />)
     await waitFor(() => {
-      expect(container.querySelector('[data-page-head]')).toBeTruthy()
+      expect(container.querySelector('[data-page-header]')).toBeTruthy()
       expect(container.querySelector('[data-dashboard-row="1"]')).toBeTruthy()
       // row 2 由 MetricKpiCardRow 组件挂 data-dashboard-row="2"
       expect(container.querySelector('[data-dashboard-row="2"]')).toBeTruthy()
@@ -236,7 +236,7 @@ describe('DashboardClient — case C：接口失败 500（ErrorState + grid 兜�
     await waitFor(() => {
       expect(container.querySelector('[data-error-state]')).toBeTruthy()
     })
-    expect(container.querySelector('[data-page-head]')).toBeTruthy()
+    expect(container.querySelector('[data-page-header]')).toBeTruthy()
   })
 
   it('接口失败 → tabs 仍可见（用户可切换到 analytics tab）', async () => {
@@ -262,7 +262,7 @@ describe('DashboardClient — case D：page head 按钮行为（MISC-DASHBOARD-1
 
   it('"进入审核台"按钮 → router.push("/admin/moderation")', async () => {
     const { container } = render(<DashboardClient />)
-    await waitFor(() => expect(container.querySelector('[data-page-head]')).toBeTruthy())
+    await waitFor(() => expect(container.querySelector('[data-page-header]')).toBeTruthy())
     const btn = container.querySelector('[data-page-action="enter-moderation"]') as HTMLButtonElement
     expect(btn).toBeTruthy()
     fireEvent.click(btn)
@@ -274,7 +274,7 @@ describe('DashboardClient — case D：page head 按钮行为（MISC-DASHBOARD-1
     vi.spyOn(window, 'prompt').mockReturnValue('全量')
     mockRunCrawlerAll.mockResolvedValue({ runId: 'run-42-full' })
     const { container } = render(<DashboardClient />)
-    await waitFor(() => expect(container.querySelector('[data-page-head]')).toBeTruthy())
+    await waitFor(() => expect(container.querySelector('[data-page-header]')).toBeTruthy())
     const btn = container.querySelector('[data-page-action="full-crawl"]') as HTMLButtonElement
     expect(btn).toBeTruthy()
     fireEvent.click(btn)
@@ -288,7 +288,7 @@ describe('DashboardClient — case D：page head 按钮行为（MISC-DASHBOARD-1
     vi.spyOn(window, 'confirm').mockReturnValue(true)
     vi.spyOn(window, 'prompt').mockReturnValue('错的')
     const { container } = render(<DashboardClient />)
-    await waitFor(() => expect(container.querySelector('[data-page-head]')).toBeTruthy())
+    await waitFor(() => expect(container.querySelector('[data-page-header]')).toBeTruthy())
     const btn = container.querySelector('[data-page-action="full-crawl"]') as HTMLButtonElement
     fireEvent.click(btn)
     await new Promise((r) => setTimeout(r, 0))
@@ -299,7 +299,7 @@ describe('DashboardClient — case D：page head 按钮行为（MISC-DASHBOARD-1
     vi.spyOn(window, 'confirm').mockReturnValue(true)
     mockRunCrawlerAll.mockResolvedValue({ runId: 'run-42-inc' })
     const { container } = render(<DashboardClient />)
-    await waitFor(() => expect(container.querySelector('[data-page-head]')).toBeTruthy())
+    await waitFor(() => expect(container.querySelector('[data-page-header]')).toBeTruthy())
     const btn = container.querySelector('[data-page-action="incremental-crawl"]') as HTMLButtonElement
     expect(btn).toBeTruthy()
     expect(btn.textContent).toContain('全站增量')
@@ -311,7 +311,7 @@ describe('DashboardClient — case D：page head 按钮行为（MISC-DASHBOARD-1
     vi.spyOn(window, 'confirm').mockReturnValue(false)
     const promptSpy = vi.spyOn(window, 'prompt')
     const { container } = render(<DashboardClient />)
-    await waitFor(() => expect(container.querySelector('[data-page-head]')).toBeTruthy())
+    await waitFor(() => expect(container.querySelector('[data-page-header]')).toBeTruthy())
     const btn = container.querySelector('[data-page-action="full-crawl"]') as HTMLButtonElement
     fireEvent.click(btn)
     expect(promptSpy).not.toHaveBeenCalled()

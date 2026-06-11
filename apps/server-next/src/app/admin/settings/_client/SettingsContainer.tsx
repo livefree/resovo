@@ -19,7 +19,7 @@
  */
 import React from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
-import { AdminButton } from '@resovo/admin-ui'
+import { AdminButton, PageHeader } from '@resovo/admin-ui'
 import { SettingsTab } from '../_tabs/SettingsTab'
 import { CacheTab } from '../_tabs/CacheTab'
 import { MonitorTab } from '../_tabs/MonitorTab'
@@ -57,33 +57,7 @@ const PAGE_STYLE: React.CSSProperties = {
   padding: '20px 24px',
 }
 
-const HEAD_STYLE: React.CSSProperties = {
-  display: 'flex',
-  alignItems: 'flex-start',
-  justifyContent: 'space-between',
-  gap: '16px',
-}
-
-const HEAD_TITLE_STYLE: React.CSSProperties = {
-  margin: 0,
-  fontSize: 'var(--font-size-lg)',
-  fontWeight: 600,
-  color: 'var(--fg-default)',
-  lineHeight: 1.3,
-}
-
-const HEAD_SUB_STYLE: React.CSSProperties = {
-  margin: '4px 0 0',
-  fontSize: 'var(--font-size-xs)',
-  color: 'var(--fg-muted)',
-}
-
-const HEAD_ACTIONS_STYLE: React.CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: '8px',
-  flexShrink: 0,
-}
+// page head：共享 PageHeader 承载（MODUX-P1-1-B，规约 T-1/T-3）
 
 const GRID_STYLE: React.CSSProperties = {
   display: 'grid',
@@ -152,15 +126,13 @@ export function SettingsContainer() {
 
   return (
     <div style={PAGE_STYLE} data-settings-container>
-      <header style={HEAD_STYLE} data-settings-head>
-        <div>
-          <h1 style={HEAD_TITLE_STYLE}>站点设置</h1>
-          <p style={HEAD_SUB_STYLE}>统一配置中心 · 8 类设置面板（M-SN-6/7 逐步实装）</p>
-        </div>
-        <div style={HEAD_ACTIONS_STYLE} data-settings-head-actions>
-          {/* CHG-SN-6-RETRO-3-B / ultrareview P2-8：
+      <PageHeader
+        title="站点设置"
+        subtitle="统一配置中心 · 8 类设置面板（M-SN-6/7 逐步实装）"
+        actions={
+          /* CHG-SN-6-RETRO-3-B / ultrareview P2-8：
               原生 button + inline style → AdminButton（共享原语率与自报口径 85% 对齐）；
-              "保存所有更改"已删（CHG-SN-6-AUDIT-DEBOUNCE-FIX，5 Tab 各自保存模型下无语义） */}
+              "保存所有更改"已删（CHG-SN-6-AUDIT-DEBOUNCE-FIX，5 Tab 各自保存模型下无语义） */
           <AdminButton
             variant="default"
             size="sm"
@@ -170,8 +142,8 @@ export function SettingsContainer() {
           >
             审计日志
           </AdminButton>
-        </div>
-      </header>
+        }
+      />
       <div style={GRID_STYLE}>
         <aside
           style={CARD_STYLE}
