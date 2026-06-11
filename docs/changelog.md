@@ -4446,3 +4446,21 @@
 - **数据库变更**：migration 109——`video_sources.last_admin_verified_at TIMESTAMPTZ NULL`（新列）；`source_health_events` 新增 partial index `idx_health_events_admin_playback_pending`。零列迁移 origin 新值 `admin_playback`（037 起无 CHECK）。真库对拍：列/索引落库精确匹配 + 幂等（重跑 0 pending）。
 - **门禁**：typecheck EXIT=0 / lint 4·4（仅既有 warning）/ test:changed 全量 7193 passed（1 flaky `data-table-auto-filter #6c` 计时型，隔离复跑 24/24 绿，与本卡零交集）/ verify:adr-contracts EXIT=0（sql-schema-alignment ✅ / endpoint-adr ✅）/ migrate 真库对拍 ✅。
 - **注意事项**：本卡纯 schema+types+doc，零运行时逻辑。-B 将加 `SourceProbeService.recordPlaybackVerify` + playback-verify route（消费本列/origin/index）；新 route 落地受 ADR-198 §端点契约 + verify:endpoint-adr 门禁约束。
+
+## [SRCHEALTH-ADMIN-PLAYBACK-FB-B] API service+route · recordPlaybackVerify + playback-verify 端点 + 单测
+- **完成时间**：2026-06-11
+- **记录时间**：2026-06-11 15:05
+- **执行模型**：claude-opus-4-8（主循环）
+- **子代理**：无（端点契约/字段语义由 ADR-198 锁定，按契约落地）
+- **依赖**：ADR-198 + 前置 -A（commit `b7106b78`，列/origin/index 已落库）
+- **修改文件**：
+  - `apps/api/src/db/queries/video_sources.ts` — 新 helper `recordAdminPlaybackVerifySuccess`：UPDATE render='ok' + probe dead→ok 复活 CASE（仅 dead 翻）+ last_rendered_at/last_admin_verified_at=NOW() + 携分辨率时无条件覆盖 resolution/quality_detected/quality_source='admin_review'/detected_at（D-198-7）；**不写** fb_score/fb_sample_weight/last_feedback_at（D-198-4 红线）；RETURNING probe/render
+  - `apps/api/src/services/SourceProbeService.ts` — 新方法 `recordPlaybackVerify`（成功/失败不对称）+ `heightToQuality`（@resovo/media-probe）映射分辨率→档位 + PlaybackVerifyInput/Result 契约类型。成功→直更+溯源事件(origin=admin_playback,processed_at=NOW)+重算聚合；失败→不改 render/probe、写定向 recheck 信号(origin=admin_playback,new_status=dead,processed_at=NULL,D-198-8)、不重算
+  - `apps/api/src/routes/admin/videoSources.ts` — `POST /admin/videos/:videoId/sources/:sourceId/playback-verify`，`preHandler: auth`（[moderator,admin]，D-198-6）+ PlaybackVerifySchema zod（success 必填 / 分辨率正整数 / errorCode ≤64）+ 路径 uuid 守卫（非法→404 不打 DB）
+  - `tests/unit/api/source-probe-playback-verify.test.ts` — 新建：service 5 用例（NOT_FOUND ×2 / 成功直更+映射+溯源+重算 / 成功无分辨率 qualityDetected=null / 失败不直更+定向recheck+不重算）
+  - `tests/unit/api/video-sources-playback-verify-query.test.ts` — 新建：query SQL 3 用例（render ok+probe复活+双时间戳+**不写 EMA 三字段**断言 / quality 无条件覆盖+params透传 / 行不存在→null）
+  - `tests/unit/api/videoSourcesRoutes.test.ts` — +SourceProbeService mock + 8 路由用例（成功200/失败200/NOT_FOUND404/缺success422/errorCode超长422/非法uuid404/user角色403/未认证401）
+- **新增依赖**：无（@resovo/media-probe 已是 apps/api 依赖）
+- **数据库变更**：无（消费 -A migration 109 列/origin/index；无新 migration）
+- **门禁**：typecheck EXIT=0 / lint 4·4 / test:changed 283 passed（24 文件，含新 8 项）/ verify:adr-contracts EXIT=0（**verify-endpoint-adr 235 路由全对齐，新 playback-verify 命中 ADR-198 §端点契约** + sql-schema-alignment ✅）。
+- **注意事项**：-C 将 AdminPlayer 切此端点（替 /feedback/playback）+ `onVerified` 刷新链 + PendingCenter 透传 onSourceHealthChanged + worker feedback-driven-recheck 拉取 admin_playback origin（消费 -A partial index）+ e2e。本卡 read-path（VideoSourceLine mapRow）未加 last_admin_verified_at——按需在 -C UI 暴露（避免未消费的共享类型改动）。

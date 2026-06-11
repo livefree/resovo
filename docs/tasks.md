@@ -6,19 +6,19 @@
 
 ## 当前任务（单任务工作台：同时仅 1 个 🔄 进行中；完成即删卡，历史见 docs/changelog.md）
 
-### 🔄 SRCHEALTH-ADMIN-PLAYBACK-FB-B · API service+route · recordPlaybackVerify + playback-verify 端点 + 单测
+### 🔄 SRCHEALTH-ADMIN-PLAYBACK-FB-C · UI+worker+e2e · AdminPlayer 切端点 + 刷新链 + admin_playback 定向消费
 
-- **来源 / 依赖**：ADR-198（**Accepted**，commit `3a3fd016`）拆卡 **-B**。前置 **-A**（schema+types+architecture.md，已完成）提供列 `last_admin_verified_at` + origin `admin_playback` + partial index。
-- **问题理解**：admin 真实播放反馈需服务端权威写入——成功直更 render/probe + 时间戳 + quality；失败不直接置 dead、改入 worker 定向 recheck 队列。须经分层（Route→SourceProbeService→queries），新 route 受 ADR-198 §端点契约 + verify:endpoint-adr 门禁约束。
-- **方案**（ADR-198 D-198-2/3/4/6/7/8 + §端点契约）：
-  1. **queries**（`apps/api/src/db/queries/video_sources.ts`）：新 helper `recordAdminPlaybackVerifySuccess`（直更 `render_status='ok'` + `probe_status` dead→ok 复活〔仅当前为 dead 时翻，避免误降 partial〕+ `last_rendered_at=NOW()` + `last_admin_verified_at=NOW()`；携分辨率时**无条件**覆盖 `quality_detected`/`resolution_width`/`resolution_height`/`quality_source='admin_review'`/`detected_at=NOW()`，D-198-7）。**不写** `fb_score`/`fb_sample_weight`/`last_feedback_at`（D-198-4 红线）。列映射加 `last_admin_verified_at`。
-  2. **service**（`apps/api/src/services/SourceProbeService.ts`）：新方法 `recordPlaybackVerify(videoId, sourceId, actorId, { success, resolutionWidth?, resolutionHeight?, bufferingCount?, errorCode? })`——校验 source 属该 video 且未删（否则 NOT_FOUND）；成功→调 helper + `insertHealthEvent(origin='render_check'? 否→不写事件或写溯源事件)` + `recomputeVideoCheckStatus`；失败→**不改 render/probe**，`insertHealthEvent(origin='admin_playback', newStatus='dead', errorDetail=errorCode, triggeredBy=actorId, processed_at=NULL)`（D-198-8 worker 定向 recheck 信号）。返回 `{ sourceId, newProbeStatus, newRenderStatus, verified: true }`。
-  3. **route**（`apps/api/src/routes/admin/videoSources.ts`，batch-render-check 姊妹位）：`POST /admin/videos/:videoId/sources/:sourceId/playback-verify`，`preHandler: [authenticate, requireRole(['moderator','admin'])]`（D-198-6，**不**取 adminOnly）；zod 校验 body（`success:boolean` 必填 / `resolutionWidth?`/`resolutionHeight?`/`bufferingCount?` 正整数 / `errorCode?` ≤64）；调 service；审计 `audit_log` actionType `video_source.inline_action`（afterJsonb.action='playback_verify'）；错误码 404/422/500 沿用 ADR-110 信封。
-  4. **单测**（API）：成功路径（render ok + probe dead→ok 复活 + `last_rendered_at`/`last_admin_verified_at` 写入 + quality **无条件**覆盖 + **不写 EMA 三字段** 断言）/ 失败路径（render/probe **不变**、**不置 dead** + health_event `origin='admin_playback'`/`processed_at=NULL` 断言）/ 鉴权（非 moderator/admin 403）/ NOT_FOUND（source 不属 video）。
-- **涉及文件**：`apps/api/src/db/queries/video_sources.ts`（+helper +列映射）、`apps/api/src/services/SourceProbeService.ts`（+recordPlaybackVerify）、`apps/api/src/routes/admin/videoSources.ts`（+route）、API 单测（新建/扩 `tests/unit/api/...playback-verify`）。
-- **不做**：AdminPlayer 切端点/`onVerified`/PendingCenter 透传/worker `admin_playback` 拉取/e2e（-C）；实测分辨率驱动 quality 的 player-core 改动（-D 可选）。
-- **门禁**：`typecheck` / `lint` / `test:changed`（API 改动）/ `verify:adr-contracts`（**verify:endpoint-adr 须命中 ADR-198 §端点契约** + error-message + sql-schema-alignment）/ 新 route 不得触发 verify:endpoint-adr 失败。
-- **执行模型**：claude-opus-4-8（主循环）。**子代理调用**：无（端点契约/字段语义已由 ADR-198 锁定；本卡按契约落地，无新设计决策。若实现中发现 ADR 未覆盖的接口契约缺口 → 停卡起 Opus，不擅自决策）。
+- **来源 / 依赖**：ADR-198 拆卡 **-C**（依 -B，commit 待填）。前置 -A（commit `b7106b78`）+ -B（service+route+单测）已落地服务端权威写入；本卡接前端反馈源 + worker 消费 + 端到端验证。
+- **问题理解**：当前 AdminPlayer onPlay/onError 报到前台公开 `/feedback/playback`（被众包多 IP 门槛稀释，本 SEQ 根因）；需切到 -B 的 admin 专用端点直更，并刷新左队列聚合 pill；worker `feedback-driven-recheck` 须把 -A 的 `admin_playback` 失败信号纳入定向消费。
+- **方案**（ADR-198 D-198-8/9 + §后果）：
+  1. **AdminPlayer**（`apps/server-next/src/app/admin/moderation/_client/AdminPlayer.tsx`）：`handlePlay`/`handleError` 由 `apiClient.post('/feedback/playback', {videoId, sourceId, success})` 切到 `apiClient.post('/admin/videos/${videoId}/sources/${sourceId}/playback-verify', {success[, errorCode]})`（videoId/sourceId 入**路径**，body 仅 `{success, errorCode?}`）；保留 per-sourceId 去抖（reportedRef/errorReportedRef）；新增 `onVerified?: () => void` prop，**成功**响应后调用（失败为异步 recheck，UI 同步无变化不触发）；头注更新端点说明。
+  2. **PendingCenter**（`PendingCenter.tsx`）：把既有 `onSourceHealthChanged` 透传给 AdminPlayer `onVerified`（现仅透 LinesPanel line 174 + PendingMetaQuickEdit line 126）；终点 ModerationConsole `refetchQueue` 复用既有链刷新左队列聚合 pill（D-198-9）。
+  3. **worker**（`apps/worker/src/jobs/feedback-driven-recheck.ts`）：`fetchUnprocessed` 的 `origin IN ('feedback_driven','manual_route_reprobe')` 增 `'admin_playback'`（消费 -A `idx_health_events_admin_playback_pending` partial index，planner BitmapOr 三索引混批；定向语义同构 source_id→probe+render 重测→标 processed，共用编排不拆 job）+ 头注登记 P3 admin_playback 来源。
+  4. **测试**：AdminPlayer 既有 feedback 单测改断言新端点 URL/body（路径化）+ onVerified 成功回调；worker feedback-driven-recheck 单测补 admin_playback origin 被拉取断言；**e2e**（MODERATION/ADMIN 域）AdminPlayer 播放成功 → 线路 render 状态 + 左队列 pill 联动刷新。
+- **涉及文件**：`AdminPlayer.tsx`（切端点 + onVerified + 头注）、`PendingCenter.tsx`（透传 onVerified）、`apps/worker/src/jobs/feedback-driven-recheck.ts`（IN-list + 头注）、AdminPlayer feedback 单测 + worker recheck 单测 + e2e（moderation/admin 域）。
+- **不做**：实测分辨率驱动 quality 的 player-core 公开 API 改动（-D 可选/旁路，依 player-core 是否暴露 videoWidth/Height；若触发 Opus 强制项独立评估，不阻塞本卡 MVP——本卡 AdminPlayer 暂不携分辨率，success body 仅 `{success}`）。前台公开 `/feedback/playback` 端点**不删**（仍服务真实前台用户，ADR §后果）。
+- **门禁**：`typecheck` / `lint` / `test:changed`（server-next + worker 改动）/ `verify:adr-contracts` / `test:e2e:admin`（+ 如涉播放器路径按域选跑）/ AdminPlayer 既有 feedback 单测须改绿（端点切换）。
+- **执行模型**：claude-opus-4-8（主循环）。**子代理调用**：无（除非 -D 触及 player-core 公开 API → 另起 Opus 强制项；本卡 -C 范围不动 player-core core/shell 接口）。
 
 ### ⏸ MODUX-ACPT-5（暂停 · 检查点已提交）· 验收第 5 条纠正 · 审核台头部去 h1 + 元素并入 tab 行
 

@@ -273,6 +273,59 @@ export async function updateSourceHealthAfterRenderCheck(
   )
 }
 
+export interface RecordAdminPlaybackVerifySuccessInput {
+  /** admin 实测分辨率宽（像素）；NULL = 未携带分辨率 → 保留既有质量字段 */
+  readonly resolutionWidth: number | null
+  /** admin 实测分辨率高（像素）；NULL = 未携带 */
+  readonly resolutionHeight: number | null
+  /** 由 resolutionHeight 经 heightToQuality 映射的档位；NULL = 未携带分辨率（写质量字段的开关） */
+  readonly qualityDetected: string | null
+}
+
+export interface RecordAdminPlaybackVerifySuccessResult {
+  readonly newProbeStatus: 'pending' | 'ok' | 'partial' | 'dead'
+  readonly newRenderStatus: 'pending' | 'ok' | 'partial' | 'dead'
+}
+
+/**
+ * ADR-198 D-198-2/4/7：admin 审核台真实播放**成功** → 直更 source health（可信单点，绕众包门槛）。
+ * - render_status='ok'（真实播放是 playability 最强证据，进 render 维度〔health 权重 0.6〕）。
+ * - probe_status dead→ok 复活（**仅当前为 dead 时翻**；ok/pending/partial 不动——避免误盖既有非 dead 态）。
+ * - last_rendered_at=NOW()（驱动 ADR P3-1 双时钟 render 衰减回升）+ last_admin_verified_at=NOW()（溯源）。
+ * - 携分辨率（qualityDetected 非 NULL）时**无条件**覆盖 resolution_width/height + quality_detected +
+ *   quality_source='admin_review' + detected_at（D-198-7：admin 实测 > 爬虫配置，区别于 feedback.ts 仅 NULL 时写）；
+ *   未携带则保留既有质量字段。
+ * - **不写** fb_score/fb_sample_weight/last_feedback_at（D-198-4 红线：admin 确定性写入不污染众包 EMA 统计）。
+ * RETURNING 新 probe/render 状态供响应（无需 mapRow 全行）；行不存在/已删 → null（404 路径）。
+ */
+export async function recordAdminPlaybackVerifySuccess(
+  db: Pool,
+  sourceId: string,
+  input: RecordAdminPlaybackVerifySuccessInput,
+): Promise<RecordAdminPlaybackVerifySuccessResult | null> {
+  const result = await db.query<{ probe_status: string; render_status: string }>(
+    `UPDATE video_sources
+        SET render_status = 'ok',
+            probe_status = CASE WHEN probe_status = 'dead' THEN 'ok' ELSE probe_status END,
+            last_rendered_at = NOW(),
+            last_admin_verified_at = NOW(),
+            resolution_width = CASE WHEN $4 IS NOT NULL THEN $2 ELSE resolution_width END,
+            resolution_height = CASE WHEN $4 IS NOT NULL THEN $3 ELSE resolution_height END,
+            quality_detected = CASE WHEN $4 IS NOT NULL THEN $4 ELSE quality_detected END,
+            quality_source = CASE WHEN $4 IS NOT NULL THEN 'admin_review' ELSE quality_source END,
+            detected_at = CASE WHEN $4 IS NOT NULL THEN NOW() ELSE detected_at END
+      WHERE id = $1 AND deleted_at IS NULL
+      RETURNING probe_status, render_status`,
+    [sourceId, input.resolutionWidth, input.resolutionHeight, input.qualityDetected],
+  )
+  const row = result.rows[0]
+  if (!row) return null
+  return {
+    newProbeStatus: row.probe_status as RecordAdminPlaybackVerifySuccessResult['newProbeStatus'],
+    newRenderStatus: row.render_status as RecordAdminPlaybackVerifySuccessResult['newRenderStatus'],
+  }
+}
+
 /**
  * SRCHEALTH-P1-2（B2）：取视频全部 active source 的 probe_status，供探测后即时重算
  * videos.source_check_status（lib/source-check-status computeCheckStatus 的输入）。

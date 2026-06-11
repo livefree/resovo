@@ -29,7 +29,9 @@ import {
   listActiveProbeStatuses,
   updateSourceHealthAfterProbe,
   updateSourceHealthAfterRenderCheck,
+  recordAdminPlaybackVerifySuccess,
 } from '@/api/db/queries/video_sources'
+import { heightToQuality } from '@resovo/media-probe'
 import { insertHealthEvent } from '@/api/db/queries/sourceHealthEvents'
 import { updateVideoSourceCheckStatus } from '@/api/db/queries/videos.status'
 import * as systemSettingsQueries from '@/api/db/queries/systemSettings'
@@ -53,6 +55,22 @@ export interface SingleSourceRenderCheckResult {
   readonly sourceId: string
   readonly newRenderStatus: 'ok' | 'partial' | 'dead'
   readonly queued: false
+}
+
+// ── ADR-198：admin 真实播放反馈契约 ─────────────────────────────────
+export interface PlaybackVerifyInput {
+  readonly success: boolean
+  readonly resolutionWidth?: number | null
+  readonly resolutionHeight?: number | null
+  readonly bufferingCount?: number | null
+  readonly errorCode?: string | null
+}
+
+export interface PlaybackVerifyResult {
+  readonly sourceId: string
+  readonly newProbeStatus: 'pending' | 'ok' | 'partial' | 'dead'
+  readonly newRenderStatus: 'pending' | 'ok' | 'partial' | 'dead'
+  readonly verified: true
 }
 
 export interface BatchProbeResultItem {
@@ -292,6 +310,117 @@ export class SourceProbeService {
     })
 
     return { sourceId, newRenderStatus, queued: false as const }
+  }
+
+  // ── 公开：admin 真实播放反馈（ADR-198）──────────────────────────────
+
+  /**
+   * admin 审核台真实播放反馈直更 source health（成功/失败不对称，ADR-198）。
+   * - 校验 source 存在且属于该 video（否则 NOT_FOUND 404）。
+   * - **成功** → recordAdminPlaybackVerifySuccess 直更 render='ok'+probe dead→ok 复活+时间戳+
+   *   （携分辨率时）quality 无条件覆盖（D-198-2/4/7，**不写 EMA**）；写 origin='admin_playback'
+   *   processed_at=NOW() 溯源事件（非 recheck 队列）；重算视频聚合。
+   * - **失败** → **不改 render/probe**（D-198-2 红线：浏览器端失败归因不可靠）；写 origin='admin_playback'
+   *   new_status='dead' processed_at=NULL 定向 recheck 信号（D-198-8，复用 feedback-driven-recheck worker）；
+   *   状态不变 → 不重算聚合。返回当前（未变）状态。
+   * 绕众包多 IP 门槛（admin=可信单点，D-198-3）。
+   */
+  async recordPlaybackVerify(
+    videoId: string,
+    sourceId: string,
+    actorId: string,
+    input: PlaybackVerifyInput,
+    requestId?: string,
+  ): Promise<PlaybackVerifyResult> {
+    const source = await findVideoSourceById(this.db, sourceId)
+    if (!source || source.videoId !== videoId) {
+      throw new AppError('NOT_FOUND', `source ${sourceId} 不存在或不属于 video ${videoId}`, 404)
+    }
+
+    if (input.success) {
+      const height = input.resolutionHeight ?? null
+      const quality = height !== null ? heightToQuality(height) : null
+      const updated = await recordAdminPlaybackVerifySuccess(this.db, sourceId, {
+        resolutionWidth: input.resolutionWidth ?? null,
+        resolutionHeight: height,
+        qualityDetected: quality,
+      })
+      if (!updated) {
+        throw new AppError('NOT_FOUND', `source ${sourceId} 不存在`, 404)
+      }
+
+      // 溯源事件（processed_at=NOW → 不进 admin_playback 定向 recheck 队列，仅 line-health 历史可见）
+      await insertHealthEvent(this.db, {
+        videoId,
+        sourceId,
+        origin: 'admin_playback',
+        oldStatus: source.renderStatus,
+        newStatus: updated.newRenderStatus,
+        triggeredBy: actorId,
+        processedAt: new Date().toISOString(),
+      })
+
+      this.auditSvc.write({
+        actorId,
+        actionType: 'video_source.inline_action',
+        targetKind: 'video_source',
+        targetId: sourceId,
+        beforeJsonb: { renderStatus: source.renderStatus, probeStatus: source.probeStatus },
+        afterJsonb: {
+          action: 'playback_verify',
+          success: true,
+          newRenderStatus: updated.newRenderStatus,
+          newProbeStatus: updated.newProbeStatus,
+          sourceId,
+        },
+        requestId: requestId ?? null,
+      })
+
+      // 成功翻转 probe/render → 重算视频聚合（SRCHEALTH-P1-2 同模式）
+      await this.recomputeVideoCheckStatus(videoId)
+
+      return {
+        sourceId,
+        newProbeStatus: updated.newProbeStatus,
+        newRenderStatus: updated.newRenderStatus,
+        verified: true as const,
+      }
+    }
+
+    // 失败：不改 render/probe（D-198-2 红线），记 admin_playback 定向 recheck 信号（D-198-8）
+    await insertHealthEvent(this.db, {
+      videoId,
+      sourceId,
+      origin: 'admin_playback',
+      oldStatus: source.renderStatus,
+      newStatus: 'dead',
+      triggeredBy: actorId,
+      errorDetail: input.errorCode ?? null,
+      processedAt: null,
+    })
+
+    this.auditSvc.write({
+      actorId,
+      actionType: 'video_source.inline_action',
+      targetKind: 'video_source',
+      targetId: sourceId,
+      beforeJsonb: { renderStatus: source.renderStatus, probeStatus: source.probeStatus },
+      afterJsonb: {
+        action: 'playback_verify',
+        success: false,
+        errorCode: input.errorCode ?? null,
+        queuedRecheck: true,
+        sourceId,
+      },
+      requestId: requestId ?? null,
+    })
+
+    return {
+      sourceId,
+      newProbeStatus: source.probeStatus,
+      newRenderStatus: source.renderStatus,
+      verified: true as const,
+    }
   }
 
   // ── 公开：视频级 batch（CHG-357 / ADR-158 AMENDMENT 2）──

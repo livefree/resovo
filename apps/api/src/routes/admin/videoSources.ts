@@ -27,6 +27,19 @@ const SourcePatchSchema = z.object({
 
 const BatchVideoIdSchema = z.object({ videoId: z.string().uuid() }).strict()
 
+// ADR-198：admin 真实播放反馈 body 契约（success 必填；分辨率/缓冲/错误码可选）
+const PlaybackVerifySchema = z
+  .object({
+    success: z.boolean(),
+    resolutionWidth: z.number().int().positive().optional(),
+    resolutionHeight: z.number().int().positive().optional(),
+    bufferingCount: z.number().int().nonnegative().optional(),
+    errorCode: z.string().max(64).optional(),
+  })
+  .strict()
+
+const UUID_RE = /^[0-9a-f-]{36}$/
+
 export async function adminVideoSourcesRoutes(fastify: FastifyInstance) {
   const auth = [fastify.authenticate, fastify.requireRole(['moderator', 'admin'])]
   const adminOnly = [fastify.authenticate, fastify.requireRole(['admin'])]
@@ -175,4 +188,39 @@ export async function adminVideoSourcesRoutes(fastify: FastifyInstance) {
       return reply.code(500).send({ error: { code: 'INTERNAL_ERROR', message: '服务器内部错误', status: 500 } })
     }
   })
+
+  // ── POST /admin/videos/:videoId/sources/:sourceId/playback-verify（ADR-198）──
+  // admin 真实播放反馈直更 source health（成功直更 render ok / 失败入队定向 recheck）。
+  // 鉴权 auth=[moderator,admin]（D-198-6，审核动作，非 batch 端点的 adminOnly）。
+  fastify.post(
+    '/admin/videos/:videoId/sources/:sourceId/playback-verify',
+    { preHandler: auth },
+    async (request, reply) => {
+      const params = request.params as { videoId: string; sourceId: string }
+      // 路径 id 非法 uuid → 视为不存在（404，与 refetch-sources 一致；避免 PG uuid 语法错 500）
+      if (!UUID_RE.test(params.videoId) || !UUID_RE.test(params.sourceId)) {
+        return reply.code(404).send({ error: { code: 'NOT_FOUND', message: '线路不存在', status: 404 } })
+      }
+      const parsed = PlaybackVerifySchema.safeParse(request.body)
+      if (!parsed.success) {
+        return reply.code(422).send({ error: { code: 'VALIDATION_ERROR', message: '参数错误', status: 422 } })
+      }
+      try {
+        const result = await probeSvc.recordPlaybackVerify(
+          params.videoId,
+          params.sourceId,
+          request.user!.userId,
+          parsed.data,
+          request.id,
+        )
+        return reply.send({ data: result })
+      } catch (err) {
+        if (isAppError(err, 'NOT_FOUND')) {
+          return reply.code(404).send({ error: { code: 'NOT_FOUND', message: err.message, status: 404 } })
+        }
+        request.log.error({ err }, '[admin/videos/:videoId/sources/:sourceId/playback-verify] error')
+        return reply.code(500).send({ error: { code: 'INTERNAL_ERROR', message: '服务器内部错误', status: 500 } })
+      }
+    },
+  )
 }

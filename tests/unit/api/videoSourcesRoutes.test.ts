@@ -36,6 +36,16 @@ vi.mock('@/api/services/ModerationService', () => ({
   ModerationService: vi.fn(() => mockModerationSvc),
 }))
 vi.mock('@/api/services/CrawlerRunService', () => ({ CrawlerRunService: vi.fn(() => ({ createAndEnqueueRun: vi.fn() })) }))
+
+// ADR-198：playback-verify 路由委托 SourceProbeService.recordPlaybackVerify
+const mockProbeSvc = {
+  recordPlaybackVerify: vi.fn(),
+  batchProbe: vi.fn(),
+  batchRenderCheck: vi.fn(),
+}
+vi.mock('@/api/services/SourceProbeService', () => ({
+  SourceProbeService: vi.fn(() => mockProbeSvc),
+}))
 vi.mock('@/api/db/queries/videos', () => ({
   findAdminVideoById: vi.fn().mockResolvedValue(null),
   transitionVideoState: vi.fn(),
@@ -180,6 +190,121 @@ describe('POST /admin/videos/:id/sources/disable-dead', () => {
     const res = await app.inject({
       method: 'POST',
       url: '/v1/admin/videos/vid-1/sources/disable-dead',
+    })
+    expect(res.statusCode).toBe(401)
+  })
+})
+
+// ── ADR-198：admin 真实播放反馈端点 ──
+describe('POST /admin/videos/:videoId/sources/:sourceId/playback-verify（ADR-198）', () => {
+  const VID = '00000000-0000-0000-0000-000000000001'
+  const SID = '00000000-0000-0000-0000-0000000000aa'
+  let app: Awaited<ReturnType<typeof buildApp>>
+  beforeEach(async () => {
+    vi.clearAllMocks()
+    app = await buildApp()
+  })
+  afterEach(() => app.close())
+
+  it('moderator 成功反馈（携分辨率）→ 200 + data.verified，委托 service', async () => {
+    mockProbeSvc.recordPlaybackVerify.mockResolvedValue({
+      sourceId: SID, newProbeStatus: 'ok', newRenderStatus: 'ok', verified: true,
+    })
+    const res = await app.inject({
+      method: 'POST',
+      url: `/v1/admin/videos/${VID}/sources/${SID}/playback-verify`,
+      headers: { authorization: await tokenFor('moderator'), 'content-type': 'application/json' },
+      body: JSON.stringify({ success: true, resolutionWidth: 1920, resolutionHeight: 1080 }),
+    })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.verified).toBe(true)
+    expect(mockProbeSvc.recordPlaybackVerify).toHaveBeenCalledWith(
+      VID, SID, 'u-moderator',
+      expect.objectContaining({ success: true, resolutionWidth: 1920, resolutionHeight: 1080 }),
+      expect.anything(),
+    )
+  })
+
+  it('失败反馈 success:false + errorCode → 200，透传 service', async () => {
+    mockProbeSvc.recordPlaybackVerify.mockResolvedValue({
+      sourceId: SID, newProbeStatus: 'dead', newRenderStatus: 'dead', verified: true,
+    })
+    const res = await app.inject({
+      method: 'POST',
+      url: `/v1/admin/videos/${VID}/sources/${SID}/playback-verify`,
+      headers: { authorization: await tokenFor('admin'), 'content-type': 'application/json' },
+      body: JSON.stringify({ success: false, errorCode: 'MEDIA_ERR_DECODE' }),
+    })
+    expect(res.statusCode).toBe(200)
+    expect(mockProbeSvc.recordPlaybackVerify).toHaveBeenCalledWith(
+      VID, SID, 'u-admin',
+      expect.objectContaining({ success: false, errorCode: 'MEDIA_ERR_DECODE' }),
+      expect.anything(),
+    )
+  })
+
+  it('service 抛 NOT_FOUND → 404', async () => {
+    const { AppError } = await import('@/api/lib/errors')
+    mockProbeSvc.recordPlaybackVerify.mockRejectedValue(new AppError('NOT_FOUND', 'source 不存在', 404))
+    const res = await app.inject({
+      method: 'POST',
+      url: `/v1/admin/videos/${VID}/sources/${SID}/playback-verify`,
+      headers: { authorization: await tokenFor('moderator'), 'content-type': 'application/json' },
+      body: JSON.stringify({ success: true }),
+    })
+    expect(res.statusCode).toBe(404)
+    expect(res.json().error.code).toBe('NOT_FOUND')
+  })
+
+  it('body 缺 success → 422', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: `/v1/admin/videos/${VID}/sources/${SID}/playback-verify`,
+      headers: { authorization: await tokenFor('moderator'), 'content-type': 'application/json' },
+      body: JSON.stringify({ resolutionWidth: 100 }),
+    })
+    expect(res.statusCode).toBe(422)
+    expect(mockProbeSvc.recordPlaybackVerify).not.toHaveBeenCalled()
+  })
+
+  it('errorCode 超 64 字符 → 422', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: `/v1/admin/videos/${VID}/sources/${SID}/playback-verify`,
+      headers: { authorization: await tokenFor('moderator'), 'content-type': 'application/json' },
+      body: JSON.stringify({ success: false, errorCode: 'x'.repeat(65) }),
+    })
+    expect(res.statusCode).toBe(422)
+  })
+
+  it('路径 id 非法 uuid → 404（不打 service/DB）', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: `/v1/admin/videos/bad-id/sources/${SID}/playback-verify`,
+      headers: { authorization: await tokenFor('moderator'), 'content-type': 'application/json' },
+      body: JSON.stringify({ success: true }),
+    })
+    expect(res.statusCode).toBe(404)
+    expect(mockProbeSvc.recordPlaybackVerify).not.toHaveBeenCalled()
+  })
+
+  it('非 moderator/admin 角色（user）→ 403', async () => {
+    const token = `Bearer ${await signAccessToken({ userId: 'u-user', role: 'user' })}`
+    const res = await app.inject({
+      method: 'POST',
+      url: `/v1/admin/videos/${VID}/sources/${SID}/playback-verify`,
+      headers: { authorization: token, 'content-type': 'application/json' },
+      body: JSON.stringify({ success: true }),
+    })
+    expect(res.statusCode).toBe(403)
+  })
+
+  it('未认证 → 401', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: `/v1/admin/videos/${VID}/sources/${SID}/playback-verify`,
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ success: true }),
     })
     expect(res.statusCode).toBe(401)
   })
