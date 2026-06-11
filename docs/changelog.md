@@ -4022,3 +4022,23 @@
   - source_hostname 暂不进 VideoSource types/mapper（本卡只写不读，P3-3-B JOIN 在 SQL 层；TS 读字段需求出现时加性扩展）。
   - 运维 runbook 口径：107 migration 后必跑 `scripts/backfill-source-hostname.ts`（可重入；回填期间无需停写——WHERE IS NULL 谓词不与新行写路径竞争）。
   - 门禁：typecheck/lint EXIT=0 / url 10 + crawlerSourceUpsert 13/13 / test:changed 60 文件 665 passed / 全量 507 文件 7117 passed / e2e:admin 82/82 EXIT=0。
+
+## [SRCHEALTH-P3-3-B1] host_health 表 + worker 熔断翻转持久化 + extractHostname 切换（SEQ-20260610-02 Phase 3）
+- **完成时间**：2026-06-10
+- **记录时间**：2026-06-10 21:05
+- **执行模型**：claude-fable-5（用户会话持续推进授权；母卡 P3-3-B 建议 opus → 架构决策全部由 Opus 子代理出具后实施）
+- **子代理**：arch-reviewer (claude-opus-4-8) — host_health schema + 双存储 + 软降权机制裁决 A–H（母卡触发，-B1/-B2 两子卡共用；裁决 G 强制拆卡：5 项踩线 + schema/worker/api-service 跨 3 层）
+- **修改文件**：
+  - `apps/api/src/db/migrations/108_host_health.sql`（新）— hostname TEXT PK + 小写 CHECK；只存「可被 NOW() 自然过期的事实字段」（cooldown_until 等 6 列），**无 state 枚举无后台翻转**——熔断判定 = `cooldown_until > NOW()` 读时计算，cooldown 到期评分侧自动回升不等 cron（裁决 A/D）；site_key 不入表（多对多经 video_sources.source_hostname 反查）；已真库执行 ✅
+  - `apps/worker/src/lib/circuit-breaker.ts` — recordFailure/recordSuccess 返回 `CircuitTransition`（'tripped'|'recovered'|null，仅翻转事件触发落库防写放大）；recordFailure 入口清过期 cooldown 防误吞 tripped；模块保持纯逻辑不 import pg（裁决 B）；siteId→hostname 改名
+  - `apps/worker/src/jobs/source-health/host-health.ts`（新）— `persistCircuitTransition` 翻转 UPSERT（tripped: cooldown+trip_count+1 / recovered: cooldown=NULL）；失败 catch+warn 不阻断探测；ON CONFLICT 幂等
+  - `apps/worker/src/jobs/source-health/{level1-probe,level2-render}.ts` — 删两处 `extractSiteId` 副本（P3-3-A TODO 闭环）→ `@resovo/media-probe extractHostname`（与 source_hostname byte-identical 方可 JOIN）；null hostname 跳过熔断统计直接探测不落库（裁决 E）；transition 落库接线
+  - `docs/architecture.md` — +5.2a host_health 表章节
+  - 测试：circuit-breaker +4 transition 用例 / host-health 4 用例（新）/ level1-probe 编排 4 用例（重写）
+- **新增依赖**：无
+- **数据库变更**：migration 108（已真库执行 ✅，host_health 0 行——行由 worker 翻转事件按需创建）
+- **注意事项**：
+  - 双存储分工（方案 Q4）：内存 Map 扛热路径判定（重启失忆可接受、不回灌），PG 存评分 JOIN 持久态——评分侧完全不受 worker 重启影响。
+  - 读侧（listSources LEFT JOIN + 排序分桶 + VideoSource.hostTripped）在 -B2；裁决 C 否决乘法因子——避免与 P3-2 影子验证在同一 effective_score 标量踩踏。
+  - 登记：`origin='circuit_breaker'` skip event 噪音（裁决 H-7，P3-x 评估停写）；feedback 加速恢复跨进程设计另起卡（裁决 D）；ADR 草稿 -B2 后 PHASE COMPLETE 前补（裁决 H-6：双存储+排序分桶+恢复语义三决策）。
+  - 门禁：typecheck/lint EXIT=0 / worker 全量 9 文件 60 passed 零回归 / test:changed 24 passed / migrate ✅（worker 无对应 e2e 域）。

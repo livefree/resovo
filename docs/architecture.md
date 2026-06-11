@@ -355,6 +355,17 @@ META-06 新增字段：
   - 路由契约：`PATCH /admin/videos/:id/sources/:sourceId` 接受可选 `expectedUpdatedAt`（ISO 8601）。
 - 唯一去重约束：`uq_sources_video_episode_url`
 
+### 5.2a host_health（Migration 108，SRCHEALTH-P3-3-B1）
+
+hostname 维度熔断持久状态——双存储分工（source-health 方案 §8.4 Q4 / arch-reviewer claude-opus-4-8 裁决）：worker 内存 Map 扛熔断热路径判定（重启失忆可接受），本表存供评分 JOIN 的持久态。
+
+- `hostname TEXT PK`（CHECK 小写）：与 `video_sources.source_hostname` byte-identical（同一 `@resovo/media-probe` `extractHostname` 真源）方可 JOIN；site_key **不入表**（多对多经 video_sources 反查）。
+- `cooldown_until TIMESTAMPTZ NULL`：**评分侧唯一熔断判定 = `cooldown_until > NOW()`**（读时计算，无 state 枚举、无后台翻转任务、无脏状态窗口）；到期自然失效——评分回升不等 worker 下轮 cron（真实恢复延迟 ≈ cooldown 30min）。
+- `last_failure_at` / `last_success_at` / `last_tripped_at` / `trip_count`：运营观测（CDN 反复抖动），不进评分路径。
+- **写路径**：仅熔断**翻转事件**级 UPSERT（`recordFailure`/`recordSuccess` 返回 `CircuitTransition`，level1/level2 job 拿信号调 `persistCircuitTransition`；逐次探测不写库防写放大）；落库失败 catch+warn 不阻断探测。worker 重启不回灌内存。null hostname 源不进熔断统计直接探测。
+- 行数上界 = DISTINCT hostname 基数（落地实测 278）；recovered 不删行（trip_count 累积观测价值）。
+- 读消费方：-B2 `listSources` LEFT JOIN 软降权（**排序分桶**：tripped 桶整体后置、桶内保原 effectiveScore 序，不动 route-scoring 数值轴——与 P3-2 影子验证正交）。
+
 ### 5.3 crawler_sites
 
 - 主键是 `key VARCHAR(100)`，不是 UUID。

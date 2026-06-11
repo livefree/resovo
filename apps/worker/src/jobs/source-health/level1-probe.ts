@@ -2,7 +2,8 @@ import type { Pool } from 'pg'
 import type pino from 'pino'
 import { config } from '../../config'
 import { shouldSkipSite, recordFailure, recordSuccess } from '../../lib/circuit-breaker'
-import { parseM3u8 } from '@resovo/media-probe'
+import { persistCircuitTransition } from './host-health'
+import { extractHostname, parseM3u8 } from '@resovo/media-probe'
 import { emitMetric } from '../../observability/metrics'
 import type { VideoSource, ProbeStatus } from '../../types'
 
@@ -15,9 +16,12 @@ export async function runLevel1Probe(pool: Pool, log: pino.Logger, input: Level1
   log.info({ metric: 'probe.started', value: sources.length }, 'Level1 probe started')
 
   for (const source of sources) {
-    const siteId = extractSiteId(source.source_url)
-    if (shouldSkipSite(siteId)) {
-      log.warn({ source_id: source.id, site_id: siteId }, 'circuit breaker active, skipping source')
+    // P3-3-B1 裁决 E：hostname 语义真源 = extractHostname（与 video_sources.source_hostname
+    // byte-identical 方可 JOIN host_health）；null（无有效 hostname）不进熔断统计直接探测——
+    // 不可 JOIN 的孤儿 key 会污染内存 Map 与 host_health
+    const hostname = extractHostname(source.source_url)
+    if (hostname !== null && shouldSkipSite(hostname)) {
+      log.warn({ source_id: source.id, site_id: hostname }, 'circuit breaker active, skipping source')
       await writeHealthEvent(pool, {
         source_id: source.id,
         video_id: source.video_id,
@@ -27,11 +31,11 @@ export async function runLevel1Probe(pool: Pool, log: pino.Logger, input: Level1
         latency_ms: null,
         new_status: 'dead',
       })
-      emitMetric(log, 'probe.skipped_circuit', 1, { site_id: siteId })
+      emitMetric(log, 'probe.skipped_circuit', 1, { site_id: hostname })
       continue
     }
 
-    await probeOneSource(pool, log, source, siteId)
+    await probeOneSource(pool, log, source, hostname)
   }
 }
 
@@ -39,17 +43,16 @@ async function probeOneSource(
   pool: Pool,
   log: pino.Logger,
   source: VideoSource,
-  siteId: string,
+  hostname: string | null,
 ): Promise<void> {
   const start = Date.now()
   try {
     const { httpCode, latencyMs, newStatus } = await fetchProbeStatus(source)
     const latency = latencyMs ?? Date.now() - start
 
-    if (newStatus === 'ok') {
-      recordSuccess(siteId)
-    } else {
-      recordFailure(siteId)
+    if (hostname !== null) {
+      const transition = newStatus === 'ok' ? recordSuccess(hostname) : recordFailure(hostname)
+      await persistCircuitTransition(pool, log, hostname, transition)
     }
 
     await updateSourceProbe(pool, source.id, newStatus, latency)
@@ -70,7 +73,9 @@ async function probeOneSource(
     })
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
-    recordFailure(siteId)
+    if (hostname !== null) {
+      await persistCircuitTransition(pool, log, hostname, recordFailure(hostname))
+    }
     await updateSourceProbe(pool, source.id, 'dead', null)
     await writeHealthEvent(pool, {
       source_id: source.id,
@@ -161,17 +166,6 @@ async function writeHealthEvent(
       event.latency_ms,
     ],
   )
-}
-
-// TODO(SRCHEALTH-P3-3-B): 切换到 @resovo/media-probe extractHostname 并在持久化
-// host_health 前过滤 null——slice(0,64) fallback 与 video_sources.source_hostname
-// 的 NULL 语义冲突，不可 JOIN（P3-3-A arch-reviewer 裁决 B；level2-render 同款副本同切）。
-export function extractSiteId(url: string): string {
-  try {
-    return new URL(url).hostname
-  } catch {
-    return url.slice(0, 64)
-  }
 }
 
 export async function loadActiveSources(pool: Pool): Promise<VideoSource[]> {

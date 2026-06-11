@@ -2,7 +2,9 @@ import type { Pool } from 'pg'
 import type pino from 'pino'
 import { config } from '../../config'
 import { shouldSkipSite, recordFailure, recordSuccess } from '../../lib/circuit-breaker'
+import { persistCircuitTransition } from './host-health'
 import {
+  extractHostname,
   parseM3u8,
   parseMp4Moov,
   parseMpd,
@@ -42,14 +44,15 @@ export async function runLevel2Render(
   log.info({ metric: 'render.started', value: sources.length }, 'Level2 render started')
 
   for (const source of sources) {
-    const siteId = extractSiteId(source.source_url)
-    if (shouldSkipSite(siteId)) {
-      log.warn({ source_id: source.id, site_id: siteId }, 'circuit breaker active, skipping render')
-      emitMetric(log, 'probe.skipped_circuit', 1, { site_id: siteId, level: 2 })
+    // P3-3-B1 裁决 E：同 level1——hostname 真源 extractHostname，null 不进熔断统计直接探测
+    const hostname = extractHostname(source.source_url)
+    if (hostname !== null && shouldSkipSite(hostname)) {
+      log.warn({ source_id: source.id, site_id: hostname }, 'circuit breaker active, skipping render')
+      emitMetric(log, 'probe.skipped_circuit', 1, { site_id: hostname, level: 2 })
       continue
     }
 
-    await renderOneSource(pool, log, source, siteId)
+    await renderOneSource(pool, log, source, hostname)
   }
 }
 
@@ -57,7 +60,7 @@ async function renderOneSource(
   pool: Pool,
   log: pino.Logger,
   source: VideoSource,
-  siteId: string,
+  hostname: string | null,
 ): Promise<void> {
   try {
     const result = await withRetry(
@@ -65,10 +68,9 @@ async function renderOneSource(
       (attempt, err) => log.warn({ source_id: source.id, attempt, err }, 'render retry'),
     )
 
-    if (result.status === 'ok') {
-      recordSuccess(siteId)
-    } else {
-      recordFailure(siteId)
+    if (hostname !== null) {
+      const transition = result.status === 'ok' ? recordSuccess(hostname) : recordFailure(hostname)
+      await persistCircuitTransition(pool, log, hostname, transition)
     }
 
     await updateSourceRender(pool, source.id, result)
@@ -80,7 +82,9 @@ async function renderOneSource(
     })
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
-    recordFailure(siteId)
+    if (hostname !== null) {
+      await persistCircuitTransition(pool, log, hostname, recordFailure(hostname))
+    }
     await updateSourceRender(pool, source.id, {
       status: 'dead',
       width: null,
@@ -169,16 +173,6 @@ async function checkDash(source: VideoSource, signal: AbortSignal): Promise<Rend
   if (!res.ok) return { status: 'dead', width: null, height: null, quality_detected: null, error_detail: `HTTP ${res.status}` }
   const xml = (await readBodyLimited(res, MANIFEST_MAX_BYTES)).toString('utf8')
   return verdictToRenderResult(evaluateMpd(parseMpd(xml)))
-}
-
-// TODO(SRCHEALTH-P3-3-B): 与 level1-probe.ts extractSiteId 同款本地副本——
-// 切换到 @resovo/media-probe extractHostname 时一并消除（P3-3-A 裁决 B/C 登记）。
-function extractSiteId(url: string): string {
-  try {
-    return new URL(url).hostname
-  } catch {
-    return url.slice(0, 64)
-  }
 }
 
 async function updateSourceRender(pool: Pool, sourceId: string, result: RenderResult): Promise<void> {
