@@ -277,9 +277,28 @@ describe('Case 8 — 双时钟新鲜度衰减校准（D3）', () => {
     expect(fresh).toBeCloseTo(0.86, 3)
   })
 
-  it('NULL 时间戳短路：从未探测（pending=target）不受 now 影响', () => {
+  it('NULL 时间戳 → 子项取 STALE_TARGET：pending 行为恒等（全中性锚点不变）', () => {
     const score = calculateEffectiveScore(input({ lastProbedAt: null, lastRenderedAt: null, now: NOW }))
-    expect(score).toBeCloseTo(0.345, 3)  // 全中性锚点不变
+    expect(score).toBeCloseTo(0.345, 3)  // pending 0.3 = target，与修复前后均一致
+  })
+
+  it('Codex FIX：迁移粗回填行（status=ok 但时间戳 NULL）不得绕过衰减——health 收敛 target 而非虚高满分', () => {
+    // migration 054 存量回填真库实测：84,648 行 probe ok + 39,761 行 dead 的 last_probed_at IS NULL
+    // （worker 从未真实探测）。无时间戳证据 = 完全陈旧，否则迁移 ok 比真实探测过的源永久更高分。
+    const migratedOk = calculateEffectiveScore(input({
+      probeStatus: 'ok', renderStatus: 'ok', latencyMs: 100, quality: '1080P',
+      lastProbedAt: null, lastRenderedAt: null, now: NOW,
+    }))
+    // health = 0.3 → 总分 0.5×0.3 + 0.3×0.7 + 0.15×1.0 = 0.51（≠ 0.86 满健康）
+    expect(migratedOk).toBeCloseTo(0.51, 3)
+    // 对称：迁移 dead + NULL 时间戳 → 同样收敛 target（不再永久钉死 0.0 档）
+    const migratedDead = calculateEffectiveScore(input({
+      probeStatus: 'dead', renderStatus: 'dead', latencyMs: 100, quality: '1080P',
+      lastProbedAt: null, lastRenderedAt: null, now: NOW,
+    }))
+    expect(migratedDead).toBeCloseTo(0.51, 3)
+    // 真实新近探测的 ok 源（0.86）仍显著高于迁移行——激励排序偏向有真实证据的源
+    expect(migratedOk).toBeLessThan(0.86)
   })
 
   it('age=0 不衰减：满健康源原值（CHG-352 三锚点定义不变）', () => {

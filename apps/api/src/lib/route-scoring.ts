@@ -39,9 +39,11 @@ export interface EffectiveScoreInput {
   /** priority_bonus（0-100 归一化到 0-1 / Migration 064 未落地默认 0）*/
   readonly priorityBonus?: number
   /**
-   * SRCHEALTH-P3-1 双时钟新鲜度衰减（arch-reviewer claude-opus-4-8 裁决 C）：
+   * SRCHEALTH-P3-1 双时钟新鲜度衰减（arch-reviewer claude-opus-4-8 裁决 C + Codex FIX）：
    * undefined = 调用方未传（向后兼容，不衰减 = Phase 1 数学）；
-   * null = 从未探测/渲染（status 必为 pending 0.3 = STALE_TARGET，短路恒等）。
+   * null = 无时间戳证据 → 子项直接取 STALE_TARGET 0.3——不可假设「null ⇔ pending」：
+   * migration 054 存量粗回填存在 12.4 万行 status=ok/dead 但时间戳 NULL（从未真实探测），
+   * 保留原档位会让迁移 ok 永久虚高满分绕过衰减（Codex stop-time review 拦截）。
    */
   readonly lastProbedAt?: string | null
   readonly lastRenderedAt?: string | null
@@ -186,22 +188,30 @@ export function calculateEffectiveScore(input: EffectiveScoreInput): number {
   let render = renderScore(input.renderStatus)
 
   if (input.now !== undefined) {
-    // null（从未探测 ⇒ pending 0.3 = target 恒等）与 undefined（未传）统一跳过
-    if (input.lastProbedAt != null) {
-      probe = applyFreshnessDecay(
-        probe,
-        Math.max(0, input.now - Date.parse(input.lastProbedAt)),
-        FRESHNESS_DECAY.T_PROBE_HOURS,
-        FRESHNESS_DECAY.PROBE_GRACE_HOURS,
-      )
+    // 时间戳 NULL ≠ 「必为 pending」——migration 054 存量粗回填产生 12.4 万行
+    // status=ok/dead 但 last_probed_at IS NULL（worker 从未真实探测，Codex 拦截）。
+    // 无时间戳证据 = 无法证明新鲜 = 取完全陈旧值 STALE_TARGET（对 pending 0.3 恒等；
+    // 比保留原档位更保守正确：迁移 ok 不再虚高满分、迁移 dead 对称回升）。
+    // undefined（调用方未传字段）仍跳过 = Phase 1 兼容，与 null 语义严格区分。
+    if (input.lastProbedAt !== undefined) {
+      probe = input.lastProbedAt === null
+        ? FRESHNESS_DECAY.STALE_TARGET
+        : applyFreshnessDecay(
+            probe,
+            Math.max(0, input.now - Date.parse(input.lastProbedAt)),
+            FRESHNESS_DECAY.T_PROBE_HOURS,
+            FRESHNESS_DECAY.PROBE_GRACE_HOURS,
+          )
     }
-    if (input.lastRenderedAt != null) {
-      render = applyFreshnessDecay(
-        render,
-        Math.max(0, input.now - Date.parse(input.lastRenderedAt)),
-        FRESHNESS_DECAY.T_RENDER_HOURS,
-        FRESHNESS_DECAY.RENDER_GRACE_HOURS,
-      )
+    if (input.lastRenderedAt !== undefined) {
+      render = input.lastRenderedAt === null
+        ? FRESHNESS_DECAY.STALE_TARGET
+        : applyFreshnessDecay(
+            render,
+            Math.max(0, input.now - Date.parse(input.lastRenderedAt)),
+            FRESHNESS_DECAY.T_RENDER_HOURS,
+            FRESHNESS_DECAY.RENDER_GRACE_HOURS,
+          )
     }
   }
 

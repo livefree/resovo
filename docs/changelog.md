@@ -4079,3 +4079,11 @@
   - **时序（裁决 F-4）**：影子未启动，P3-1 先行让 P3-2 影子从含衰减的最终公式形态起算——奠基非污染。
   - **Phase 3 本轮可执行范围全部收口（P3-3 三卡 + P3-1）= D3+D4 闭环**；剩余 P3-2（影子一周硬前置 ~06-17）→ P3-4；P3-3 ADR 草稿 PHASE COMPLETE 前补。
   - 门禁：typecheck/lint EXIT=0 / 校准 38/38 + sources 18/18 / 全量 7139 passed / e2e smoke 10 passed。
+
+### [SRCHEALTH-P3-1-FIX] 迁移粗回填行绕过新鲜度衰减（Codex stop-time review，序列累计第 8 处拦截）
+- **完成时间**：2026-06-10 23:00
+- **执行模型**：claude-fable-5（Codex stop-time review 为 hook 自动触发）
+- **触发**：Codex 指出「stale migrated probe statuses bypass the new freshness decay」。
+- **根因**：P3-1 裁决 C 的「NULL 时间戳 ⇔ status 必为 pending」不变式被 migration 054 存量粗回填破坏——真库实测 **84,648 行 probe ok + 39,761 行 dead 的 last_probed_at IS NULL**（probe_status 按 videos.source_check_status 粗回填、worker 从未真实探测；render 侧 0 行干净）。null 短路分支让这 12.4 万行「最不确定」的状态绕过衰减：迁移 ok 永久满分 1.0，比真实探测过（会衰减）的源排序更高，与衰减语义背反。
+- **修复**：`route-scoring.ts` null 分支语义改判——now 注入时时间戳 NULL → 子项**直接取 STALE_TARGET 0.3**（「无时间戳证据 = 无法证明新鲜 = 完全陈旧」；对 pending 0.3 恒等故全中性锚点 0.345 不变；undefined 兼容分支严格区分不动）。迁移 ok/dead 行统一收敛 0.51 总分（1080P/100ms 口径），低于真实新近 ok 0.86——排序激励偏向有真实探测证据的源；worker level1 按 last_probed_at ASC NULLS FIRST 排队，NULL 行优先重探，状态随 cron 自然转真。
+- **测试**：Case 8 +1 用例（迁移 ok/dead 行收敛断言 + 不虚高守卫），校准 39/39 + sources 18/18；typecheck/lint EXIT=0 / test:changed 165 passed。
