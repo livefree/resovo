@@ -4402,3 +4402,17 @@
 - **数据库变更**：无
 - **门禁**：typecheck EXIT=0 / lint 4·4 / test:changed 24 passed（PendingMetaQuickEdit 12）/ e2e:admin 82/82（第 5-6 轮跑过；第 7 轮纯 label 改动 e2e 不触及快编芯片）/ 视觉快照 7 重生成。
 - **注意事项**：MODUX-ACPT-5 tasks.md 卡片仍保留（验收迭代继续）；近几年候选随 `CURRENT_YEAR` 动态，视觉快照含当年年份、跨年需重生成。
+
+## [MODUX-ACPT-5 续-FIX] 候选芯片与 input blur 提交竞态（Codex stop-time review 第 3 拦截）
+- **完成时间**：2026-06-11
+- **记录时间**：2026-06-11 13:25
+- **执行模型**：claude-opus-4-8（主循环）
+- **子代理**：无
+- **修改文件**：
+  - `apps/server-next/src/app/admin/moderation/_client/PendingMetaQuickEdit.tsx` — 年代/地区候选芯片 `onMouseDown` 加 `e.preventDefault()`
+  - `tests/unit/components/server-next/admin/moderation/PendingMetaQuickEdit.test.tsx` — +1 单测（候选芯片 mousedown defaultPrevented）（12→13）
+- **问题**：Codex review——年代/地区**同时有 input（onBlur 提交）+ 候选芯片（onClick 提交）**。用户在输入框改值未失焦时点候选芯片：点击的 mousedown 致 input 失焦 → `onBlur`/`commitYear|commitCountry` 先用 **stale 输入值**提交，随后芯片 `onClick`/`pickYear|pickCountry` 提交芯片值 → 同字段两个 PATCH 竞态，网络乱序时 stale 值可能后落库 → **存错 year/country**。
+- **修复**：候选芯片 `onMouseDown={(e) => e.preventDefault()}` 阻止按钮抢焦点 → input 不失焦 → 不触发 stale blur 提交，仅芯片值单次提交；keyboard（Tab+Enter）与 input 自身 blur-to-save 不受影响。type/genres 芯片无关联 input，无此竞态。
+- **新增依赖**：无
+- **数据库变更**：无
+- **门禁**：typecheck EXIT=0 / lint 4·4 / test:changed 25 passed（PendingMetaQuickEdit 13）。纯事件处理改动、无视觉变化（不重生成快照）/ e2e 不触及快编芯片（上轮 82/82）。

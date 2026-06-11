@@ -255,6 +255,8 @@ export function PendingMetaQuickEdit({ v, onSaved }: PendingMetaQuickEditProps):
             <button
               key={y}
               type="button"
+              // preventDefault：阻止 input 失焦 → 不触发 onBlur 用 stale 输入值抢先提交（与芯片提交竞态）
+              onMouseDown={(e) => e.preventDefault()}
               style={chipStyle(year === String(y))}
               aria-pressed={year === String(y)}
               onClick={() => pickYear(y)}
@@ -285,6 +287,8 @@ export function PendingMetaQuickEdit({ v, onSaved }: PendingMetaQuickEditProps):
             <button
               key={r.code}
               type="button"
+              // preventDefault：阻止 input 失焦 → 不触发 onBlur 用 stale 输入值抢先提交（与芯片提交竞态）
+              onMouseDown={(e) => e.preventDefault()}
               style={chipStyle(country === r.code)}
               aria-pressed={country === r.code}
               onClick={() => pickCountry(r.code)}

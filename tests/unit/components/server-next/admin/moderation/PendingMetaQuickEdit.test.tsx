@@ -9,7 +9,7 @@
  *   - 保存失败 → 回滚 + danger toast
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, createEvent, fireEvent, render, screen, waitFor } from '@testing-library/react'
 
 const getVideoMock = vi.fn()
 const saveMetaMock = vi.fn()
@@ -156,6 +156,16 @@ describe('PendingMetaQuickEdit（MODUX-P3-4-B）', () => {
     fireEvent.click(screen.getByTestId('quick-edit-country-JP'))
     await waitFor(() => expect(saveMetaMock).toHaveBeenCalledWith('vid-1', { country: 'JP' }))
     expect((screen.getByTestId('quick-edit-country') as HTMLInputElement).value).toBe('JP')
+  })
+
+  it('年代/地区候选芯片 mousedown 阻止默认（防 input blur 用 stale 值与芯片提交竞态，Codex fix）', async () => {
+    await renderQE()
+    for (const tid of [`quick-edit-year-${new Date().getFullYear()}`, 'quick-edit-country-JP']) {
+      const chip = screen.getByTestId(tid)
+      const ev = createEvent.mouseDown(chip) // cancelable mousedown
+      fireEvent(chip, ev)
+      expect(ev.defaultPrevented).toBe(true) // 阻止失焦 → blur 不会用 stale 输入值抢先提交
+    }
   })
 
   it('该字段被锁（skippedFields 含本字段）→ 回滚乐观值 + warn + 始终调 onSaved（Codex fix2）', async () => {
