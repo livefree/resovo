@@ -259,14 +259,16 @@ export async function updateSourceHealthAfterRenderCheck(
   sourceId: string,
   input: UpdateSourceHealthAfterRenderCheckInput,
 ): Promise<void> {
+  // 显式 cast：$3/$4/$5 可空且 $3 用于裸 CASE WHEN IS NOT NULL，无类型 OID 时 PG 无法推断
+  // → 'could not determine data type of parameter $3'（对齐 videos.mutations.ts:300 等既有 cast 约定）
   await db.query(
     `UPDATE video_sources
         SET render_status = $2,
-            resolution_width = $3,
-            resolution_height = $4,
-            quality_detected = $5,
-            quality_source = CASE WHEN $3 IS NOT NULL THEN 'manifest_parse' ELSE quality_source END,
-            detected_at = CASE WHEN $3 IS NOT NULL THEN NOW() ELSE detected_at END,
+            resolution_width = $3::int,
+            resolution_height = $4::int,
+            quality_detected = $5::text,
+            quality_source = CASE WHEN $3::int IS NOT NULL THEN 'manifest_parse' ELSE quality_source END,
+            detected_at = CASE WHEN $3::int IS NOT NULL THEN NOW() ELSE detected_at END,
             last_rendered_at = NOW()
       WHERE id = $1 AND deleted_at IS NULL`,
     [sourceId, input.renderStatus, input.resolutionWidth, input.resolutionHeight, input.qualityDetected],
@@ -303,17 +305,19 @@ export async function recordAdminPlaybackVerifySuccess(
   sourceId: string,
   input: RecordAdminPlaybackVerifySuccessInput,
 ): Promise<RecordAdminPlaybackVerifySuccessResult | null> {
+  // 显式 cast：gate $4(qualityDetected)/$2/$3 可空且 $4 用于裸 CASE WHEN IS NOT NULL，无类型 OID 时
+  // PG 无法推断 → 'could not determine data type of parameter $4'（对齐既有 cast 约定）
   const result = await db.query<{ probe_status: string; render_status: string }>(
     `UPDATE video_sources
         SET render_status = 'ok',
             probe_status = CASE WHEN probe_status = 'dead' THEN 'ok' ELSE probe_status END,
             last_rendered_at = NOW(),
             last_admin_verified_at = NOW(),
-            resolution_width = CASE WHEN $4 IS NOT NULL THEN $2 ELSE resolution_width END,
-            resolution_height = CASE WHEN $4 IS NOT NULL THEN $3 ELSE resolution_height END,
-            quality_detected = CASE WHEN $4 IS NOT NULL THEN $4 ELSE quality_detected END,
-            quality_source = CASE WHEN $4 IS NOT NULL THEN 'admin_review' ELSE quality_source END,
-            detected_at = CASE WHEN $4 IS NOT NULL THEN NOW() ELSE detected_at END
+            resolution_width = CASE WHEN $4::text IS NOT NULL THEN $2::int ELSE resolution_width END,
+            resolution_height = CASE WHEN $4::text IS NOT NULL THEN $3::int ELSE resolution_height END,
+            quality_detected = CASE WHEN $4::text IS NOT NULL THEN $4::text ELSE quality_detected END,
+            quality_source = CASE WHEN $4::text IS NOT NULL THEN 'admin_review' ELSE quality_source END,
+            detected_at = CASE WHEN $4::text IS NOT NULL THEN NOW() ELSE detected_at END
       WHERE id = $1 AND deleted_at IS NULL
       RETURNING probe_status, render_status`,
     [sourceId, input.resolutionWidth, input.resolutionHeight, input.qualityDetected],

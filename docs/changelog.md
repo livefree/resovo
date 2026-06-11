@@ -4482,3 +4482,20 @@
 - **数据库变更**：无（消费 -A schema）
 - **门禁**：typecheck EXIT=0 / lint 4·4 / test:changed 137 passed（12 文件）/ verify:adr-contracts EXIT=0 / **test:e2e:admin 82/82 passed（含 player-integration 3 用例）** / AdminPlayer 17 + worker recheck 6 单测全绿。
 - **注意事项**：AdminPlayer 端点切换对**全部** admin 消费方生效（merge/videos/sources/LinesPanel/moderation——均为可信真实播放上下文，鉴权 [moderator,admin] 满足）；仅 PendingCenter 接 onVerified 刷新链，其余消费方不自动刷新（同切换前行为）。**SRCHEALTH-ADMIN-PLAYBACK-FB MVP 闭环**（ADR-198 → -A schema → -B service+route → -C UI+worker+e2e）：admin 真实播放成功直更 render/probe + 失败定向 recheck，绕众包门槛 + 不污染 EMA。**-D（可选/旁路）**：AdminPlayer 携实测分辨率驱动 quality，依 player-core 是否暴露 videoWidth/Height（触 player-core 公开 API 则 Opus 强制项）——未请求，登记为 follow-up。前台公开 `/feedback/playback` 端点不删（仍服务真实前台用户）。
+
+## [BUGFIX-RENDERCHECK-PLAYBACK-SQL-CAST] 「全部试播」线路不更新 · PG 类型推断 + ADR-198 -B 回归同根因
+- **完成时间**：2026-06-11
+- **记录时间**：2026-06-11 16:35
+- **执行模型**：claude-opus-4-8（主循环）
+- **子代理**：无
+- **来源**：用户报告——审核台「全部试播」点击后线路不更新，toast「全部试播完成 0/1 渲染正常 · 1 异常」，无论视频能否播放原「待测」都不更新（admin 登录）。
+- **根因（实测复现确认）**：`renderCheckManifest` 不抛错（fetch/超时/解析失败均 catch 成 dead verdict；实测该源服务端 GET 返回 HTTP 403 防盗链）；真正抛点 = `updateSourceHealthAfterRenderCheck` 抛 PG `could not determine data type of parameter $3`。`renderCheckOneInternal` 抛错 → batch 计为「异常」(failed) → controller 乐观更新 `r.error` 跳过该行 → render_status 停在「待测」。**SQL 类型推断 bug**：可空 `$3` 用于裸 `CASE WHEN $3 IS NOT NULL`，node-postgres 不带类型 OID → PG parse 阶段无法推断 → 每次必抛（与值无关；mock 单测从未暴露）。**同根因回归**：本会话 -B（`e464c869`）的 `recordAdminPlaybackVerifySuccess` 用同款 `CASE WHEN $4 IS NOT NULL`，实测携不携分辨率都抛 `parameter $4` → admin 真实播放成功路径每次 500。全仓扫描：其余所有 `CASE WHEN $N` 均已显式 cast，仅这两条违反约定。
+- **修改文件**：
+  - `apps/api/src/db/queries/video_sources.ts` — `updateSourceHealthAfterRenderCheck` `$3::int`/`$4::int`/`$5::text`；`recordAdminPlaybackVerifySuccess` gate `$4::text` + `$2::int`/`$3::int`（对齐 `videos.mutations.ts:300` 等既有 cast 约定）
+  - `tests/integration/api/render-check-playback-verify-sql.test.ts` — 新建真库回归：两 query 各 2 用例（全 null / 携分辨率），不存在 uuid（parse 阶段错即触发，零副作用）断言 resolves 不抛——补 mock 单测的真 SQL 盲区
+  - `vitest.integration.config.ts` — resolve.alias 补 `@/api`（启用带 @/api 传递依赖的 query 真库测试，镜像 unit config）
+- **新增依赖**：无
+- **数据库变更**：无（仅 query SQL cast；schema 不变）
+- **门禁**：typecheck EXIT=0 / lint 4·4 / test:changed 全量 7213 passed（516 文件，含 playback-verify mock 单测）/ test:integration 70 passed（含新 4）/ verify:adr-contracts EXIT=0 / 复现临时文件已删。
+- **影响**：修复后「全部试播」正常回填 render_status（该源服务端 403 → 置 dead，待测会更新）；admin 真实播放成功路径恢复（playback-verify success 不再 500，onVerified 刷新链生效）。**深层**：服务端试播 403/防盗链 → 即便浏览器能播服务端也判 dead，正是 SRCHEALTH-ADMIN-PLAYBACK-FB（admin 真实播放反馈）的设计针对项——admin 在 AdminPlayer 实际播放成功会 override 回 ok（绕服务端不可达）。
+- **注意事项**：mock DB 单测无法捕获 PG 类型推断错——新增 query 含 `CASE WHEN $N IS NOT NULL` 等需显式 cast，并挂 `tests/integration/api` 真库回归（本次补齐两 query + 集成 config @/api 别名基建）。
