@@ -1947,9 +1947,9 @@
 
 ## [SEQ-20260610-03] 内容审核台 UX 优化（MODUX · 信息密度 + 去冗余 + 快速编辑）
 
-- **状态**：🔄 执行中（5/15 卡完成：P1-0/-1-A/-1-B/-2/-3 ✅ —— Phase 1 前 5 卡收口，剩 P1-4）
+- **状态**：🔄 执行中（6/15 卡完成：**Phase 1 全收口 ✅**（P1-0/-1-A/-1-B/-2/-3/-4）；下一步 Phase 2 信息密度 P2-1/-2/-3）
 - **创建时间**：2026-06-10 22:04
-- **最后更新时间**：2026-06-10 23:05
+- **最后更新时间**：2026-06-10 23:13
 - **目标**：落地 `docs/designs/moderation-console-ux-plan_20260610.md` v2（两轮独立审核 + 第三轮注册前终审通过，file:line 抽查全部命中）：审核台 12 项问题——去冗余（标题治理/DecisionCard 精简）→ 信息密度（列表单元格/详情 tab/键盘流）→ 功能增强（年代+富集过滤/筛选弹层/类似 tab 阈值/4 字段快速编辑）。
 - **范围**：apps/server-next（admin/moderation/_client + 标题治理涉及页）+ packages/admin-ui（PageHeader/DecisionCard/KeyboardShortcuts 消费）+ apps/api（moderation.ts query/meta schema + service/queries）+ packages/types（admin-moderation.types）。**方案文件为各卡内容真源**；卡面只记验收口径与文件范围。
 - **依赖**：无 BLOCKER；工作台空闲（SRCHEALTH 剩余 P3-2 影子验证硬前置 ~06-17 / P3-4 顺延，与本 SEQ 无文件冲突）。
@@ -1989,10 +1989,13 @@
    - 文件范围（实施修正：根因 B 实为两叠加 bug，波及 web-next middleware + admin-access-token）：`apps/server-next/src/lib/admin-preview-url.ts`（新）、`PendingCenter.tsx`、`apps/web-next/src/middleware.ts`、`apps/web-next/src/lib/admin-access-token.ts` + 3 测试。
    - 依赖：无。建议模型：sonnet。
    - **完成备注**：**真库 dev 双端口实测复现 → 两根因结论**：① **根因 A（locale 吞 query）= 不成立**——实测 `/movie/x?preview=admin`（无 locale）→ `307 → /en/movie/x?preview=admin` **redirect 完整保留 query**，不致 404（方案预判证伪）；但仍新增 admin preview URL builder（收口 origin+locale+双因素三要素 + 注入 zh-CN 省一跳 307）。② **根因 B（鉴权降级）= 两个叠加 bug**：**B-1（middleware 请求头未转发）**——原 `middleware.ts` 仅 `response.headers.set(x-admin-preview)`（响应头），但 RSC `shouldUsePreview()` 读的是**请求头**（`headers()`）；next-intl rewrite 经 `new Headers(request.headers)` 转发请求头 → 修复 = 在 `intlMiddleware(req)` **之前** `req.headers.set(x-admin-preview,'1')`（响应头同步保留供 curl 排障）；**B-2（token 交换空 body 400）**——`getAdminAccessToken` 调 `/auth/refresh` 发 `content-type: application/json` 但无 body → fastify `FST_ERR_CTP_EMPTY_JSON_BODY` 400 → accessToken null → 永久降级 public → 未发布视频 `notFound()` 404；修复 = 去 content-type（凭 cookie 鉴权无需 body）。**两 bug 叠加致 ADR-160 preview 自上线从未生效**。③ 端到端验证矩阵（dev :3000+:4000，真实 admin cookie）：未发布+preview+双 cookie **404→200** / 无 cookie 正确降级 404 / 已发布 preview 200 / builder zh-CN URL 200。④ 测试：新建 `admin-preview-url.test.ts`（5 用例 segment/slug/locale）+ middleware 测试补 buildRequest 真实 Headers + 正向 case 双面断言（**请求头**为 RSC 读取面）+ admin-access-token 补 content-type 不发 + body undefined 守卫。⑤ **登记**：B-1/B-2 是 ADR-160 实现 bug 非协议语义变更（无需新 ADR / architecture.md schema 同步）；preview 修复波及 web-next 但属审核台预览链路，PLAYER/SEARCH 域无关。共享层沉淀：是——preview URL 派生入 server-next lib 单点（PendingCenter 唯一消费，未来视频库预览入口可复用）。门禁：typecheck/lint EXIT=0 / test:changed 30 passed（含新 22 P1-3 相关）/ e2e:admin 82/82 EXIT=0 / web-next 真库手测矩阵全绿。执行模型: claude-fable-5（建议 sonnet，用户会话人工覆盖持续推进授权）；子代理: 无。
-6. **MODUX-P1-4** — 线路按钮 + 筛选预设调查确认（item 10+6）（状态：⬜ 待开始）
-   - 验收口径：结论登记（清除失效/刷新已接通；预设双源已实装）；微调清除失效二次确认/toast 一致性；预设保存/应用/设默认/导入本地手测 + 既有单测通过。
-   - 文件范围：`packages/admin-ui/src/components/cell/lines-panel.tsx`（微调）、审核台预设消费点（随 P1-1 page-head 收敛）。
-   - 依赖：MODUX-P1-1-A（page-head 收敛后定按钮排布）。建议模型：sonnet。
+6. **MODUX-P1-4** — 线路按钮 + 筛选预设调查确认（item 10+6）（状态：✅ 已完成 2026-06-10 23:13）
+   - 创建时间：2026-06-10 22:04 ｜ 实际开始：2026-06-10 23:06 ｜ 完成时间：2026-06-10 23:13
+   - 验收口径：结论登记（清除失效/刷新已接通；预设双源已实装）；微调清除失效 toast 一致性；既有单测通过。
+   - 文件范围（实施修正：lines-panel 实际在 `composite/lines-panel/`；微调含 controller + types + LinesPanel 三处加性）：`apps/server-next/src/lib/sources/types.ts`、`use-source-lines-controller.ts`、`apps/server-next/src/app/admin/moderation/_client/LinesPanel.tsx` + controller 单测。
+   - 依赖：MODUX-P1-1-A ✅。建议模型：sonnet。
+   - **完成备注**：**调查结论登记**：① 清除失效（`disableDead`）/刷新（`refetch`）均已接通后端（`useSourceLinesController` → `disableDeadSources`/`refetchSources`，结构化 `SourceActionResult` 反馈）；P1-1-A 已确认审核台 page-head（含 preset 按钮）随 PageHeader 收敛。② 筛选预设双源已完整实装（`use-filter-presets.ts` + `FilterPresetPopover` + `SavePresetModal`，DB+localStorage）。**微调（item 10 反馈一致性）**：`disableDead` 原仅失败红条、成功静默（与批量探测/试播成功 toast 不一致）→ 加性扩 `SourceActionResult.disabledCount?`（optional，sources 模块类型非 admin-ui 公开 Props 不触发 Opus）+ controller success 携带 `res.disabled` + LinesPanel 补成功 toast（禁用 N 条 success / 无失效 info）。**显式不做二次确认**：清除失效仅禁用 probe+render 双 dead 线路（已不可用）且可逆（toggle 恢复），加 confirm 与「提升审核效率」冲突——方案"二次确认"项判定不采纳（登记理由）。**不触发 onSourceHealthChanged**：遵守 SRCHEALTH-P1-4 裁定。③ 登记：IDE 报 test:374 batchRenderCheckVideo mock summary 缺 partial 为 pre-existing（全量 typecheck EXIT=0 未纳入，范围外不动）。共享层沉淀：否。门禁：typecheck/lint EXIT=0 / controller 19/19 / test:changed 59 passed / e2e:admin 82/82 EXIT=0。执行模型: claude-fable-5（建议 sonnet，用户会话人工覆盖持续推进授权）；子代理: 无。
+   - **Phase 1（P1-0~P1-4 共 6 卡）全部收口 ✅ 2026-06-10**：标题治理（item 5）+ DecisionCard 精简（item 11/12）+ 前台预览 404 修复（item 2，ADR-160 两叠加 bug）+ 线路按钮/预设确认（item 10/6）。下一步 Phase 2 信息密度（P2-1 列表单元格 / P2-2 详情 tab / P2-3 键盘流）。
 
 ### 任务列表（Phase 2 — 信息密度与布局，前端）
 

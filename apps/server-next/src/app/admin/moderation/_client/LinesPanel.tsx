@@ -80,7 +80,18 @@ export function LinesPanel({ videoId, selectedKey, onLineSelect, onSourceHealthC
         setActionError(r.status === 'race' ? M.lines.toggleRace : r.status === 'failed' ? M.lines.toggleFailed : null)
         return
       case 'disableDead':
-        if (r.status === 'failed') setActionError(M.lines.disableDeadFailed)
+        if (r.status === 'failed') {
+          setActionError(M.lines.disableDeadFailed)
+          return
+        }
+        // MODUX-P1-4 反馈一致性：disableDead 成功补 toast（原仅失败红条、成功静默，
+        // 与批量探测/试播反馈口径不一致）。不触发 onSourceHealthChanged——SRCHEALTH-P1-4
+        // 裁定 toggle/disableDead 非 B3 探测口径，不联动聚合刷新。
+        if (r.disabledCount && r.disabledCount > 0) {
+          toast.push({ title: '清除失效', description: `已禁用 ${r.disabledCount} 条失效线路`, level: 'success' })
+        } else {
+          toast.push({ title: '清除失效', description: '当前无失效线路', level: 'info' })
+        }
         return
       case 'refetch':
         if (r.status === 'failed') setActionError(M.lines.refetchFailed)

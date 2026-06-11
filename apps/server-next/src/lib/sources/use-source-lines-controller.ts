@@ -241,7 +241,7 @@ export function useSourceLinesController(
           return l
         }))
       }
-      emit({ action: 'disableDead', status: 'success' })
+      emit({ action: 'disableDead', status: 'success', disabledCount: res.disabled })
     } catch {
       emit({ action: 'disableDead', status: 'failed' })
     } finally {

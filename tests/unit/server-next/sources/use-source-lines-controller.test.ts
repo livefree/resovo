@@ -284,7 +284,8 @@ describe('useSourceLinesController', () => {
     expect(result.current[0].lines.find((l) => l.id === 'dead1')!.is_active).toBe(false)
     expect(result.current[0].lines.find((l) => l.id === 'ok1')!.is_active).toBe(true)
     expect(api.disableDeadSources).toHaveBeenCalledWith('v1')
-    expect(results).toContainEqual({ action: 'disableDead', status: 'success' })
+    // MODUX-P1-4：success 携带 disabledCount（反馈一致性）
+    expect(results).toContainEqual({ action: 'disableDead', status: 'success', disabledCount: 1 })
   })
 
   it('refetch：成功 + 失败分别 onActionResult success / failed', async () => {

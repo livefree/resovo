@@ -106,6 +106,8 @@ export interface SourceActionResult {
   readonly dead?: boolean
   /** 批量 probe/render-check summary（probeAll / renderCheckAll success 时携带） */
   readonly summary?: SourceActionBatchSummary
+  /** disableDead success 携带本次禁用的失效线路条数（MODUX-P1-4 反馈一致性；0 = 无失效线路） */
+  readonly disabledCount?: number
   /**
    * 失败原始错误码（status='failed' 时携带 ApiClientError.code，供消费方精确映射 i18n）。
    * 例：TabLines 据 `STATE_INVALID` 区分提示；审核台忽略。

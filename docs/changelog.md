@@ -4159,3 +4159,18 @@
 - **新增依赖**：无
 - **数据库变更**：无
 - **注意事项**：两 bug 叠加致 ADR-160 admin preview 自上线从未生效（B-1 使 shouldUsePreview 恒 false / B-2 使 token 交换恒失败降级）；均为实现 bug 非协议语义变更，无需新 ADR / architecture.md schema 同步。根因 A（locale 吞 query）实测证伪（307 redirect 保留 query）。真库 dev 双端口端到端验证：未发布 preview 404→200。门禁：typecheck/lint EXIT=0 / test:changed 30 / e2e:admin 82/82。
+
+## [MODUX-P1-4] 线路按钮 + 筛选预设调查确认 + 清除失效成功 toast（item 10+6）
+- **完成时间**：2026-06-10
+- **记录时间**：2026-06-10 23:13
+- **执行模型**：claude-fable-5（建议 sonnet，用户会话人工覆盖）
+- **子代理**：无
+- **修改文件**：
+  - `apps/server-next/src/lib/sources/types.ts` — SourceActionResult 加 optional disabledCount（反馈一致性）
+  - `apps/server-next/src/lib/sources/use-source-lines-controller.ts` — disableDead success 携带 res.disabled
+  - `apps/server-next/src/app/admin/moderation/_client/LinesPanel.tsx` — disableDead 补成功 toast（禁用 N 条 / 无失效）
+  - `tests/unit/server-next/sources/use-source-lines-controller.test.ts` — disabledCount 断言更新
+  - `docs/task-queue.md` / `docs/tasks.md` — 卡片收口
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：调查确认清除失效/刷新已接通后端、筛选预设双源已实装。清除失效**显式不做二次确认**（仅禁用双 dead 不可用线路且可逆，加 confirm 降低审核效率）；不触发 onSourceHealthChanged（遵守 SRCHEALTH-P1-4 裁定）。**Phase 1（P1-0~P1-4 共 6 卡）全收口**。门禁：typecheck/lint EXIT=0 / controller 19/19 / test:changed 59 / e2e:admin 82/82。
