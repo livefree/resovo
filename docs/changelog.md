@@ -4595,3 +4595,14 @@
 - **拦截内容**：「migration still misses persisted banner short_id references in JSONB configs」——FIX1 只同步了 `home_banners.link_target` 直存列，漏掉草稿/版本快照两处整页 HomePageConfig JSONB 内嵌的 banner 引用。
 - **损害对账**：dev 实证 drafts 0 行 / versions 5 行 0 stale——初版/FIX1/FIX2 在 dev 语义等价、无数据修复缺口；prod 未跑 110，FIX2 完整版生效。
 - **验证**：事务内构造（视频改含 `-` short_id + banner 行 + draft JSONB 双条目 + version JSONB）→ 跑 110 → 断言四处同步到同一新值 + external 条目未误改 + 零残留 → ROLLBACK 不留痕。门禁三件套 EXIT=0。
+
+## [BUGFIX-SHORTID-DASH-B-FIX3] Codex 第 3 拦截：草稿 JSONB 同步推进 updated_at 掩盖陈旧草稿
+- **完成时间**：2026-06-11
+- **记录时间**：2026-06-11 22:40
+- **执行模型**：claude-fable-5
+- **子代理**：无
+- **修改文件**：
+  - `apps/api/src/db/migrations/110_videos_short_id_dash_cleanup.sql` — FIX3 修订：DO 块前后 DISABLE/ENABLE `home_config_drafts_set_updated_at_trg`（098 BEFORE UPDATE trigger 强制推进 updated_at），草稿 UPDATE 保持 updated_at/updated_by 原值；头注补「陈旧性信号保护」段。
+- **拦截内容**：「home_config_drafts update advances draft.updated_at and can hide stale drafts」——staleness 双信号之 `tablesNewer = max(三真源表 updated_at) > draft.updatedAt`（`HomePublishService.getDraftWithStaleness`）；FIX2 的草稿 UPDATE 经 trigger 推进 updated_at → 本应 stale 的草稿翻回不陈旧 → 编辑者可能发布过期草稿全量覆盖正式表新改动。机械 ID 重映射不是编辑动作，不得扰动陈旧性判定。
+- **边界裁定**：`home_publish_versions` 无 updated_at 列不受影响；`home_banners` 行真实变更且无 trigger，显式推进 updated_at 属诚实信号——方向保守（只会让引用该 banner 的草稿显 stale，误报可复核 vs 掩盖丢数据）。
+- **验证**：事务内构造陈旧草稿（updated_at=2026-06-01）→ 跑 110 → 断言 config 已同步 + updated_at 保持原值 + migration 后普通 UPDATE trigger 正常推进 → ROLLBACK 不留痕。门禁三件套 EXIT=0。

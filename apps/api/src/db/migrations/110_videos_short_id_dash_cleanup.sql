@@ -38,6 +38,18 @@
 --   banner 0 行、drafts 0 行、versions 5 行 0 stale，初版与修订版在 dev 语义等价、
 --   无对账缺口；修订版供 prod/后续环境完整执行。教训沉淀：重写被外部引用的 ID 的
 --   migration，必须先排查并同事务同步全部持久化引用方——含直存列与 JSONB 配置快照。
+--
+-- 陈旧性信号保护（FIX3 / Codex 第 3 拦截「draft update advances updated_at and can
+--   hide stale drafts」）：staleness 双信号之 tablesNewer = max(三真源表 updated_at)
+--   > draft.updatedAt（HomePublishService.getDraftWithStaleness）。098 trigger 强制
+--   BEFORE UPDATE 推进 draft.updated_at → 本应 stale 的草稿被掩盖 → 编辑者可能发布
+--   过期草稿全量覆盖正式表新改动。机械 ID 重映射不是编辑动作，不得扰动陈旧性判定：
+--   draft UPDATE 期间禁用该 trigger、不触碰 updated_at/updated_by。
+--   （home_publish_versions 无 updated_at 列；home_banners 行真实变更且无 trigger，
+--   显式推进 updated_at 属诚实信号——方向保守：只会让引用该 banner 的草稿显 stale。）
+
+-- 草稿 updated_at 保持原值（见头注「陈旧性信号保护」；migrate.ts 单事务内禁用安全）
+ALTER TABLE home_config_drafts DISABLE TRIGGER home_config_drafts_set_updated_at_trg;
 
 DO $$
 DECLARE
@@ -103,3 +115,5 @@ BEGIN
     );
   END LOOP;
 END $$;
+
+ALTER TABLE home_config_drafts ENABLE TRIGGER home_config_drafts_set_updated_at_trg;
