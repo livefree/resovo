@@ -130,6 +130,17 @@ describe('CrawlerService.upsertVideo — 标准标题入库', () => {
     )
   })
 
+  it('括号内季标参与 catalog 按季匹配（1.2.0 / Codex 拦截：不随括号丢弃）', async () => {
+    const service = new CrawlerService(makeDb(), {} as import('@elastic/elasticsearch').Client)
+    await service.upsertVideo(makeParsed('斗罗大陆（第三季） 国语'))
+
+    expect(findOrCreateWithMatchMock).toHaveBeenCalledWith(expect.objectContaining({
+      title: '斗罗大陆 第3季',
+      titleNormalized: '斗罗大陆',
+      seasonNumber: 3,
+    }))
+  })
+
   it('剧场版保留发布形态，国语不进入显示标题', async () => {
     const service = new CrawlerService(makeDb(), {} as import('@elastic/elasticsearch').Client)
     await service.upsertVideo(makeParsed('某番 剧场版 国语'))

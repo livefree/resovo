@@ -31,8 +31,11 @@ import { isPinyin } from './PinyinDetector'
  * 非内容变化（注释 / 重构）不 bump。
  * 1.1.0（ADR-199 D-199-4）：languageVariant 单值 facet 拆分为 audioLanguage +
  * subtitleMarker/subtitleLanguages 双维度；规则表拆 AUDIO/SUBTITLE 两张。
+ * 1.2.0（Codex 拦截 / VIDEO-NAMING-STANDARD-A-FIX）：结构化 token（季/发布形态/
+ * 版本/语言）先于括号剥离抽取——`斗罗大陆（第二季）`的季号不再随括号丢弃，
+ * 修 catalog 按季匹配漏配；bracketTokens 仅收纳残余装饰内容。
  */
-export const TITLE_PARSER_VERSION = '1.1.0'
+export const TITLE_PARSER_VERSION = '1.2.0'
 
 // ── 类型契约（ADR-105a D-105a-1 / 设计 §4.1）─────────────────────────────────
 
@@ -371,16 +374,20 @@ function extractNoiseTokens(
  * 流水线（每步把命中的 token 抽到 facets 后从工作串剥离）：
  *   1. 剥 HTML 标签 / 实体
  *   2. 全角折叠（数字 / 字母 / 空格）
- *   3. 提取括号 token → bracketTokens，剥离括号
- *   4. 季 / 部 / 卷序号 → seasonNumber（**仅显式季标记**；裸序号如「复仇者联盟4」保留）
- *   5. 发布形态 → releaseMarker
- *   6. 版本标记 → edition
- *   7. 语言 / 字幕变体 → languageVariant
- *   8. 画质噪声 → qualityNoise[]
- *   9. 源站噪声 → sourceNoise[]
- *  10. 折叠空白 → lower → 剥标点/符号 ⇒ coreTitleKey
+ *   3. 季 / 部 / 卷序号 → seasonNumber（**仅显式季标记**；裸序号如「复仇者联盟4」保留）
+ *   4. 发布形态 → releaseMarker
+ *   5. 版本标记 → edition
+ *   6. 语音变体 → audioLanguage / 7. 字幕变体 → subtitleMarker+subtitleLanguages
+ *   8. 提取**残余**括号 token → bracketTokens，剥离括号
+ *   9. 画质噪声 → qualityNoise[]
+ *  10. 源站噪声 → sourceNoise[]
+ *  11. 折叠空白 → lower → 剥标点/符号 ⇒ coreTitleKey
  *
- * Y4 护栏（D-105a-13）：第 4 步只剥「有显式季/部/卷关键词」的序号；裸尾随数字
+ * 结构化 token 先于括号剥离（1.2.0 / Codex 拦截）：`斗罗大陆（第二季）`「你的名字
+ * 【剧场版】」的季号/发布形态必须进 facets 参与 catalog 匹配，不得随括号整体丢弃；
+ * bracketTokens 仅收纳抽取后的残余装饰（年份/源站水印等）。
+ *
+ * Y4 护栏（D-105a-13）：第 3 步只剥「有显式季/部/卷关键词」的序号；裸尾随数字
  * （序号即作品身份，如《复仇者联盟 4》）保留进 coreTitleKey，使不同序号 → 不同 key。
  */
 export function parseTitle(raw: string): ParsedTitle {
@@ -414,14 +421,8 @@ export function parseTitle(raw: string): ParsedTitle {
   // 2. 全角折叠
   s = foldFullwidth(s)
 
-  // 3. 括号 token 提取 + 剥离
-  s = s.replace(BRACKET_WITH_CONTENT, (match) => {
-    const inner = match.slice(1, -1).trim()
-    if (inner !== '') pushUnique(facets.bracketTokens, inner)
-    return ' '
-  })
-
-  // 4. 季 / 部 / 卷序号（仅显式标记；首个命中定 seasonNumber）
+  // 3. 季 / 部 / 卷序号（仅显式标记；首个命中定 seasonNumber）——先于括号剥离，
+  //    使「斗罗大陆（第二季）」的括号内季标进 facets 参与 catalog 匹配（1.2.0）
   for (const pattern of SEASON_PATTERNS) {
     s = s.replace(pattern, (_match, num: string) => {
       if (facets.seasonNumber === null) {
@@ -432,7 +433,7 @@ export function parseTitle(raw: string): ParsedTitle {
     })
   }
 
-  // 5. 发布形态 / 6. 版本标记 / 7a. 语音变体 / 7b. 字幕变体（单值，首个命中规则胜出）
+  // 4. 发布形态 / 5. 版本标记 / 6. 语音变体 / 7. 字幕变体（单值，首个命中规则胜出）
   s = extractSingleMarker(s, RELEASE_MARKER_RULES, (c) => { facets.releaseMarker = c })
   s = extractSingleMarker(s, EDITION_RULES, (c) => { facets.edition = c })
   s = extractSingleMarker(s, AUDIO_VARIANT_RULES, (c) => { facets.audioLanguage = c })
@@ -441,11 +442,18 @@ export function parseTitle(raw: string): ParsedTitle {
     facets.subtitleLanguages = [...languages]
   })
 
-  // 8. 画质噪声 / 9. 源站噪声（多值，去重收集）
+  // 8. 残余括号 token 提取 + 剥离（结构化 token 已在 3-7 抽走；空壳括号一并消除）
+  s = s.replace(BRACKET_WITH_CONTENT, (match) => {
+    const inner = match.slice(1, -1).trim()
+    if (inner !== '') pushUnique(facets.bracketTokens, inner)
+    return ' '
+  })
+
+  // 9. 画质噪声 / 10. 源站噪声（多值，去重收集）
   s = extractNoiseTokens(s, QUALITY_NOISE_PATTERNS, facets.qualityNoise, (m) => m.toLowerCase())
   s = extractNoiseTokens(s, SOURCE_NOISE_PATTERNS, facets.sourceNoise, (m) => m.replace(/\s+/g, ''))
 
-  // 10. 折叠空白 → lower → 剥标点/符号
+  // 11. 折叠空白 → lower → 剥标点/符号
   const coreTitleKey = s
     .replace(/\s+/g, ' ')
     .trim()
@@ -506,15 +514,17 @@ function appendDisplaySuffix(base: string, suffix: string | null): string {
 export function buildStandardVideoTitle(raw: string): StandardVideoTitle {
   const parsed = parseTitle(raw)
 
+  // 结构化 token 先剥（与 parseTitle 1.2.0 同序）：括号内季标/发布形态/语言抽走后，
+  // 空壳与残余装饰括号再整体剥离——「斗罗大陆（第二季）」→ base「斗罗大陆」+ 季 2
   let base = raw
   base = base.replace(/<[^>]*>/g, ' ').replace(/&[a-z]+;/gi, ' ')
   base = foldDisplayWidth(base)
-  base = base.replace(BRACKET_WITH_CONTENT, ' ')
   base = stripPatterns(base, SEASON_PATTERNS)
   base = stripRules(base, RELEASE_MARKER_RULES)
   base = stripRules(base, EDITION_RULES)
   base = stripRules(base, AUDIO_VARIANT_RULES)
   base = stripRules(base, SUBTITLE_VARIANT_RULES)
+  base = base.replace(BRACKET_WITH_CONTENT, ' ')
   base = stripPatterns(base, QUALITY_NOISE_PATTERNS)
   base = stripPatterns(base, SOURCE_NOISE_PATTERNS)
 

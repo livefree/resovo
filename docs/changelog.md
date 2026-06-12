@@ -4764,3 +4764,18 @@
 - **e2e:player 实跑与定性**：26 failed —— **预先存在，与本卡无关**（已 stash 本卡改动复现 + git worktree 基线 `9a2df4b2`〔今日全部提交之前〕原样复现同一失败）。根因：mock-slug 播放页用例（PLAYER-10/card-to-watch/card-dual-exit 等）与 ADR-160 AMD2 服务端 hydration 结构冲突——watch/detail 页服务端 `fetchVideoDetail` 命中常驻 :4000 真实 API 得真 404 → notFound()，Playwright 页面级 mock 无法拦截服务端 fetch；API 离线走同一 notFound() 分支。= 既有候选卡「e2e-next seed 基建」（SEQ-20260610-02 P2-1 备注）的具体根因，已在 queue 补记 + 提级建议。环境处置：清理 00:21 残留 wedged `next dev` ×2（3000/3003，重跑前验证非其所致）；基线 worktree 已删除。
 - **注意事项**：① SEQ-20260612-02 全 4 卡收口——语言从「标题噪声」到「前台可见结构化维度」端到端闭环（采集写入/存量回填/读侧/UI/粘性）；② 真实多语音视频（如 重案解密 国语+粤语）需等 C 卡之后的视频合并（VIDEO-NAMING-STANDARD-C 盘点 → 合并）才会在同一播放页展示双语言线路，当前各自单语音不显示后缀（符合裁定 D）；③ admin 线路面板语言列 = follow-up（评审 R2）。
 - **[AI-CHECK]**：六问过——①零回归（单语音 label 逐字符不变断言；粘性仅在既有 fallback 0 路径前插入；mapSource 加性字段）；②不越界（PlayerShell/admin 未动）；③沉淀（hasMultipleAudioLanguages 独立纯函数）；④无 any/空 catch/硬编码颜色；⑤一致性（可选字段范式 + ThemedSource 形状对齐）；⑥未超限。
+
+## [VIDEO-NAMING-STANDARD-A-FIX] 括号内结构化 token 先抽取再剥括号（Codex 拦截）
+- **完成时间**：2026-06-12
+- **记录时间**：2026-06-12 15:30
+- **执行模型**：claude-fable-5
+- **子代理**：无
+- **拦截内容**：「bracketed season/release markers are dropped before catalog matching」——`parseTitle` 与 `buildStandardVideoTitle` 的流水线都在季标/发布形态/版本/语言抽取**之前**整体剥离括号（BRACKET_WITH_CONTENT），`斗罗大陆（第二季）`「你的名字【剧场版】」的结构化身份随括号一起进 bracketTokens 丢弃 → `seasonNumber=null` / `releaseMarker=null` 进 Step 5 catalog 匹配，恰好复现 A 卡要修的「同名不同季/正篇与剧场版误归并」。
+- **修复**：两函数流水线同序重排——季/发布形态/版本/语音/字幕 token 抽取先行，括号剥离移至其后（仅收纳残余装饰：年份/源站水印等；token 抽取后的空壳括号一并消除）。`TITLE_PARSER_VERSION` 1.1.0→1.2.0（facet 抽取语义变化，经 evidence_hash superseded 受控）。
+- **修改文件**：
+  - `apps/api/src/services/TitleIdentityParser.ts` — parseTitle 步骤 3↔8 重排 + buildStandardVideoTitle 同步 + 版本 bump + 流水线注释更新。
+  - `tests/unit/api/title-identity-parser.test.ts` — +3 用例组：括号季标（中文/`[S03]`）/ 括号发布形态·语言 + 混合残余 / buildStandardVideoTitle 括号身份进标准标题 + 纯装饰括号行为不变守卫。
+  - `tests/unit/api/crawlerNamingStandard.test.ts` — +1 端到端：`斗罗大陆（第三季） 国语` → findOrCreateWithMatch seasonNumber=3。
+- **存量损伤审计**（修复前实测，dev 库）：括号季标 **0 行**（B 卡清洗与既有采集均未遇到此形态，无数据修复需求）；括号发布形态 1 行（`魔法使俱乐部(OVA)`——显示标题未损，但其 `title_normalized=魔法使俱乐部` 与正篇撞 key 系旧 normalizeMergeKey 路径产物，归 VIDEO-NAMING-STANDARD-C 盘点范围，已知悉）。
+- **质量门禁**：typecheck/lint EXIT=0 / test:changed 54 文件 741 passed。
+- **[AI-CHECK]**：六问过——①零回归（纯装饰括号/年份 bracketTokens 既有断言全绿；coreTitleKey 对受影响标题不变〔季标无论从括号剥或 token 剥，core 同为作品名〕）；②不越界（仅 parser + 测试）；③无新依赖；④确定性保持（纯字符串流水线重排）；⑤TitleNormalizer 未触碰（回归守卫绿）；⑥版本 bump 合规。

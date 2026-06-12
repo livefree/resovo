@@ -262,6 +262,33 @@ describe('TitleIdentityParser — 多噪声组合', () => {
     expect(r.coreTitleKey).toBe('盗梦空间')
     expect(r.facets.bracketTokens).toContain('2010')
   })
+
+  // ── 1.2.0（Codex 拦截）：括号内结构化 token 先抽取再剥括号 ──────────────
+
+  it('括号内季标 → seasonNumber 进 facets（不随括号丢弃，catalog 按季匹配依赖）', () => {
+    const r = parseTitle('斗罗大陆（第二季）')
+    expect(r.facets.seasonNumber).toBe(2)
+    expect(r.coreTitleKey).toBe('斗罗大陆')
+    expect(parseTitle('Westworld [S03]').facets.seasonNumber).toBe(3)
+  })
+
+  it('括号内发布形态 / 语言 → 对应 facets；残余装饰仍进 bracketTokens', () => {
+    const movie = parseTitle('你的名字【剧场版】')
+    expect(movie.facets.releaseMarker).toBe('剧场版')
+    expect(movie.coreTitleKey).toBe('你的名字')
+
+    const ova = parseTitle('魔法使俱乐部(OVA)')
+    expect(ova.facets.releaseMarker).toBe('OVA')
+    expect(ova.coreTitleKey).toBe('魔法使俱乐部')
+
+    const lang = parseTitle('叶问（粤语）')
+    expect(lang.facets.audioLanguage).toBe('粤语')
+    expect(lang.coreTitleKey).toBe('叶问')
+
+    const mixed = parseTitle('某剧（第三季 高清影院）')
+    expect(mixed.facets.seasonNumber).toBe(3)
+    expect(mixed.facets.bracketTokens).toContain('高清影院')
+  })
 })
 
 describe('buildStandardVideoTitle — 入库/显示标准标题', () => {
@@ -300,6 +327,20 @@ describe('buildStandardVideoTitle — 入库/显示标准标题', () => {
     const r = buildStandardVideoTitle('某剧　第２季　１０８０ｐ')
     expect(r.displayTitle).toBe('某剧 第2季')
     expect(r.seasonNumber).toBe(2)
+  })
+
+  it('括号内季标/发布形态进标准标题（1.2.0 / Codex 拦截）', () => {
+    const season = buildStandardVideoTitle('斗罗大陆（第二季）')
+    expect(season.displayTitle).toBe('斗罗大陆 第2季')
+    expect(season.seasonNumber).toBe(2)
+
+    const ova = buildStandardVideoTitle('魔法使俱乐部(OVA)')
+    expect(ova.displayTitle).toBe('魔法使俱乐部 OVA')
+    expect(ova.identityTitle).toBe('魔法使俱乐部 OVA')
+    expect(ova.releaseMarker).toBe('OVA')
+
+    // 纯装饰括号行为不变：整体剥离
+    expect(buildStandardVideoTitle('庆余年（高清影院）').displayTitle).toBe('庆余年')
   })
 })
 
