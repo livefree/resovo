@@ -4747,3 +4747,20 @@
 - **质量门禁**：typecheck/lint EXIT=0 / test:changed 71 文件 951 passed / **test:integration 70 passed（真库，覆盖 sources SQL cast 口径）**
 - **注意事项**：① 读侧 mapSource/前台 DTO 仍未透出（LANG-DIM-C）；② subtitle 维度覆盖率极低（标题/线路名字幕 token 罕见），真实提升靠后续 vod_lang 重爬；③ parser 1.1.0 会使新观测 evidence_hash 变化，旧 observations 待重爬自然替换。
 - **[AI-CHECK]**：六问过——①零回归（TitleNormalizer 逐字符回归守卫绿；upsertSource 返回语义经 xmax 保持；integration 真库验证）；②偏离已声明（subtitleMarker）；③沉淀（resolver 独立 service + SQL 片段共享防三处复刻漂移）；④无 any/空 catch；⑤一致性（显式 cast / dry-run 范式 / 双形态枚举均对齐先例）；⑥SourceLanguageResolver 195 行未超限。
+
+## [LANG-DIM-C] 读侧 DTO 透出 + 前台 ≥2 语音才显示 + 跨集语言粘性
+- **完成时间**：2026-06-12
+- **记录时间**：2026-06-12 15:05
+- **执行模型**：claude-fable-5
+- **子代理**：无（契约由 ADR-199 D-199-7 锁定）
+- **修改文件**：
+  - `apps/api/src/db/queries/sources.ts` — `DbSourceRow`/`mapSource` + `findActiveSourcesByVideoId`/`findActiveSourcesWithSignalsByVideoId` 双 SELECT 透出 `audio_language`/`subtitle_languages`（provenance 双列不透前台，写侧治理用）；SourceService 经 mapSourceBase 自动携带。
+  - `apps/web-next/src/lib/line-display-name.ts` — ① `hasMultipleAudioLanguages`（distinct 非空 ≥2，用户裁定 D）；② `buildThemedSources` 多语音时 label 追加 ` · 语言`（仅有语音标记的行；单语音/全未知**逐字符零变化**）+ `ThemedSource.audioLanguage` 结构化透传（a11y/后续消费口）；③ `matchActiveSourceIndex` 新增优先级 3 语言粘性——复合 (site,name) / 单 name 命中仍优先，仅线路丢失时按 prev.audioLanguage 找同语音首行，修「粤语线路缺集静默切国语」（评审 R1）。
+  - `tests/unit/web-next/lib/line-display-name-themes.test.ts` — +8 用例（多/单语音边界 / label 后缀 / 粘性三态：同语音命中 / 无同语音 fallback 0 / 同名优先于粘性）。
+  - PlayerShell **零改动**：传 `VideoSource[]`（LANG-DIM-A 可选契约字段）结构化类型自动透传。
+- **新增依赖**：无
+- **数据库变更**：无
+- **质量门禁**：typecheck/lint EXIT=0 / test:changed 56 文件 685 passed / 前端单测 40 passed（含新增 8）。
+- **e2e:player 实跑与定性**：26 failed —— **预先存在，与本卡无关**（已 stash 本卡改动复现 + git worktree 基线 `9a2df4b2`〔今日全部提交之前〕原样复现同一失败）。根因：mock-slug 播放页用例（PLAYER-10/card-to-watch/card-dual-exit 等）与 ADR-160 AMD2 服务端 hydration 结构冲突——watch/detail 页服务端 `fetchVideoDetail` 命中常驻 :4000 真实 API 得真 404 → notFound()，Playwright 页面级 mock 无法拦截服务端 fetch；API 离线走同一 notFound() 分支。= 既有候选卡「e2e-next seed 基建」（SEQ-20260610-02 P2-1 备注）的具体根因，已在 queue 补记 + 提级建议。环境处置：清理 00:21 残留 wedged `next dev` ×2（3000/3003，重跑前验证非其所致）；基线 worktree 已删除。
+- **注意事项**：① SEQ-20260612-02 全 4 卡收口——语言从「标题噪声」到「前台可见结构化维度」端到端闭环（采集写入/存量回填/读侧/UI/粘性）；② 真实多语音视频（如 重案解密 国语+粤语）需等 C 卡之后的视频合并（VIDEO-NAMING-STANDARD-C 盘点 → 合并）才会在同一播放页展示双语言线路，当前各自单语音不显示后缀（符合裁定 D）；③ admin 线路面板语言列 = follow-up（评审 R2）。
+- **[AI-CHECK]**：六问过——①零回归（单语音 label 逐字符不变断言；粘性仅在既有 fallback 0 路径前插入；mapSource 加性字段）；②不越界（PlayerShell/admin 未动）；③沉淀（hasMultipleAudioLanguages 独立纯函数）；④无 any/空 catch/硬编码颜色；⑤一致性（可选字段范式 + ThemedSource 形状对齐）；⑥未超限。

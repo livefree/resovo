@@ -244,6 +244,8 @@ export interface ThemedSource {
   readonly quality?: string | null
   readonly isDead?: boolean
   readonly isPending?: boolean
+  /** ADR-199 D-199-7：语音规范词透传（label 后缀之外的结构化消费口，如 a11y） */
+  readonly audioLanguage?: string | null
 }
 
 /** RawSourceForTheme — buildThemedSources 输入需要的 VideoSource 字段子集 */
@@ -254,6 +256,21 @@ export interface RawSourceForTheme {
   readonly siteDisplayName: string | null
   readonly quality: string | null
   readonly effectiveScore?: number
+  /** ADR-199 D-199-7：语音规范词（国语/粤语/日语…）。缺失视同 null */
+  readonly audioLanguage?: string | null
+}
+
+/**
+ * 同视频当前 sources 是否存在 ≥2 种语音版本（ADR-199 用户裁定 D）。
+ * 仅统计非空 audioLanguage 的 distinct 值——单语音 / 全未知不显示语言区分。
+ */
+export function hasMultipleAudioLanguages(raw: ReadonlyArray<RawSourceForTheme>): boolean {
+  const langs = new Set<string>()
+  for (const s of raw) {
+    if (s.audioLanguage) langs.add(s.audioLanguage)
+    if (langs.size >= 2) return true
+  }
+  return false
 }
 
 /**
@@ -262,10 +279,12 @@ export interface RawSourceForTheme {
  * 集数切换时保持"同一线路"语义；用 raw source 的稳定 key 而非 label 匹配
  * （label 是主题派生不稳定 — 主题切换会改写 / 闭包会 stale）。
  *
- * 匹配优先级（Codex #14：sourceName-only 在多站点同名时可能切错源 → 升级复合匹配）：
+ * 匹配优先级（Codex #14：sourceName-only 在多站点同名时可能切错源 → 升级复合匹配；
+ * ADR-199 LANG-DIM-C：+语言粘性级，修「粤语线路缺集静默切国语」）：
  *   1. `(siteDisplayName, sourceName)` 复合精确命中
  *   2. siteDisplayName 缺失 / 复合无命中时 → 单 sourceName 兜底（兼容历史 null siteDisplayName）
- *   3. 找不到 → fallback 0（第一条）
+ *   3. 线路丢失但上一集线路有语音标记 → 新数组中首条同 audioLanguage 行（保语言一致优先于保位次）
+ *   4. 找不到 → fallback 0（第一条）
  *
  * @param prevRawSources 上一集的原始 sources 数组
  * @param prevIndex 上一集的 activeSourceIndex
@@ -293,13 +312,23 @@ export function matchActiveSourceIndex(
 
   // 优先级 2：单 sourceName 兜底（兼容历史 siteDisplayName=null / 新数组未配 site_display_name）
   const byName = newRawSources.findIndex((s) => s.sourceName === prevName)
-  return byName >= 0 ? byName : 0
+  if (byName >= 0) return byName
+
+  // 优先级 3：语言粘性（ADR-199）——线路丢失时不静默跨语言跳变
+  if (prev.audioLanguage) {
+    const byLanguage = newRawSources.findIndex((s) => s.audioLanguage === prev.audioLanguage)
+    if (byLanguage >= 0) return byLanguage
+  }
+
+  return 0
 }
 
 /**
  * 把原始 sources 数组按当前主题派生为 ThemedSource[]
  * - effectiveScore 存在 → applyThemeLabels 输出主题标签
  * - effectiveScore 缺失（老后端兜底）→ buildLineDisplayName fallback
+ * - ADR-199 用户裁定 D：同视频 distinct 非空语音 ≥2 时，有语音标记的行 label
+ *   追加 ` · 语言`；单语音 / 全未知零变化（不显示语言区分）
  * - 输出经 deduplicateLabels 去重（同名加 -1/-2 后缀）
  */
 export function buildThemedSources(
@@ -310,21 +339,26 @@ export function buildThemedSources(
     raw.map((s) => ({ effectiveScore: s.effectiveScore, quality: s.quality })),
     theme,
   )
+  const showLanguage = hasMultipleAudioLanguages(raw)
   return deduplicateLabels(
-    raw.map((s, index) => ({
-      src: s.sourceUrl,
-      type: s.type,
-      label: s.effectiveScore !== undefined
+    raw.map((s, index) => {
+      const baseLabel = s.effectiveScore !== undefined
         ? themed[index].themeLabel
         : buildLineDisplayName({
             rawName: s.sourceName,
             siteDisplayName: s.siteDisplayName,
             fallbackIndex: index,
             quality: s.quality,
-          }),
-      quality: s.quality,
-      isDead: themed[index].isDead,
-      isPending: themed[index].isPending,
-    })),
+          })
+      return {
+        src: s.sourceUrl,
+        type: s.type,
+        label: showLanguage && s.audioLanguage ? `${baseLabel} · ${s.audioLanguage}` : baseLabel,
+        quality: s.quality,
+        isDead: themed[index].isDead,
+        isPending: themed[index].isPending,
+        audioLanguage: s.audioLanguage ?? null,
+      }
+    }),
   )
 }

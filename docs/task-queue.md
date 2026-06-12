@@ -2187,5 +2187,6 @@
    - 结果：CONDITIONAL PASS → 全修订采纳后 Accepted。BLOCKER 分叉主循环裁定方案 B（source 行级 + sourceName token 步骤 0，合并端态理由，D-176-12 不需 AMEND）；provenance 双列；subtitle NULL 三态；拆两规则表 + 封闭枚举；复用 COUNTRY_MAP；HK→粤语/TW→国语 采纳；TITLE_PARSER_VERSION 1.1.0；补 D-199-7 DTO 契约。详见 decisions.md ADR-199 + changelog [LANG-DIM-ADR]。
 2. **LANG-DIM-A** — Migration 112（video_sources 4 列：audio_language / subtitle_languages / 双 provenance）+ `@resovo/types` + architecture.md §5.2 同步（状态：✅ 已完成 2026-06-12，真库对拍 + 幂等 + 全量 7237 passed；详见 changelog [LANG-DIM-A]）
 3. **LANG-DIM-B** — D-199-2/3/4/5：规则表拆分（AUDIO/SUBTITLE_VARIANT_RULES + 封闭枚举）+ 归一函数 + 五级推断链写入（vod_lang 透传 + sourceName token + 地区推断）+ 存量回填脚本（状态：✅ 已完成 2026-06-12，回填 482,090 行 / audio 覆盖率 85.5% / 幂等复跑 0；详见 changelog [LANG-DIM-B]）
-4. **LANG-DIM-C** — D-199-7：API 透出 + 前台线路 UI（≥2 语音才显示语言 badge）+ `matchActiveSourceIndex` 跨集语言粘性 + e2e（状态：📋 待开始，依赖 B）
+4. **LANG-DIM-C** — D-199-7：API 透出 + 前台线路 UI（≥2 语音才显示语言 badge）+ `matchActiveSourceIndex` 跨集语言粘性（状态：✅ 已完成 2026-06-12；详见 changelog [LANG-DIM-C]）
    - follow-up 另起卡（评审 R2）：admin 线路面板 / 合并预选 UI 语言列展示。
+   - ⚠️ e2e:player 预先存在环境耦合失败（与本卡无关，worktree 基线 9a2df4b2 复现）：mock-slug 播放页测试（player.spec PLAYER-10 / card-to-watch / card-dual-exit 等 26 例）在 :4000 真实 API 在线时必 404——watch/detail 页服务端 `fetchVideoDetail`（ADR-160 AMD2 hydration）拿到真 404 触发 notFound()，Playwright 页面级 mock 无法拦截服务端 fetch；API 离线同样 notFound()（网络错误同分支）。**即既有候选卡「e2e-next seed 基建」（SEQ-20260610-02 P2-1 备注）的具体根因**——修复方向：e2e 种子数据（真库种子 + 服务端可命中）或 server-side fetch 的 e2e 旁路。该卡提级建议：PLAYER 域 e2e 门禁在 seed 基建落地前对 mock-slug 用例无效。

@@ -378,3 +378,81 @@ describe('matchActiveSourceIndex — 复合 (siteDisplayName, sourceName) 防多
     expect(result).toBe(0)  // sourceName 兜底命中首位
   })
 })
+
+// ── ADR-199 LANG-DIM-C：语音版本区分 + 跨集语言粘性 ──────────────────────────
+
+import { hasMultipleAudioLanguages } from '../../../../apps/web-next/src/lib/line-display-name'
+
+describe('hasMultipleAudioLanguages — ≥2 distinct 非空语音才显示（用户裁定 D）', () => {
+  it('两种语音 → true；单语音 / 全未知 / 单语音+未知混合 → false', () => {
+    expect(hasMultipleAudioLanguages([
+      makeRaw({ id: 1, audioLanguage: '国语' }),
+      makeRaw({ id: 2, audioLanguage: '粤语' }),
+    ])).toBe(true)
+    expect(hasMultipleAudioLanguages([
+      makeRaw({ id: 1, audioLanguage: '国语' }),
+      makeRaw({ id: 2, audioLanguage: '国语' }),
+    ])).toBe(false)
+    expect(hasMultipleAudioLanguages([
+      makeRaw({ id: 1, audioLanguage: null }),
+      makeRaw({ id: 2, audioLanguage: null }),
+    ])).toBe(false)
+    expect(hasMultipleAudioLanguages([
+      makeRaw({ id: 1, audioLanguage: '国语' }),
+      makeRaw({ id: 2, audioLanguage: null }),
+    ])).toBe(false)
+  })
+})
+
+describe('buildThemedSources — 多语音 label 后缀（单语音零变化）', () => {
+  it('≥2 语音：有语音标记的行追加 · 语言，未知行不追加', () => {
+    const sources = buildThemedSources([
+      makeRaw({ id: 1, audioLanguage: '国语' }),
+      makeRaw({ id: 2, audioLanguage: '粤语' }),
+      makeRaw({ id: 3, audioLanguage: null }),
+    ], THEME_JIE_QI)
+    expect(sources[0].label).toBe('立春 · 国语')
+    expect(sources[1].label).toBe('雨水 · 粤语')
+    expect(sources[2].label).toBe('惊蛰')
+  })
+
+  it('单语音：label 与既有行为逐字符一致（零变化）+ audioLanguage 结构化透传', () => {
+    const sources = buildThemedSources([
+      makeRaw({ id: 1, audioLanguage: '国语' }),
+      makeRaw({ id: 2, audioLanguage: '国语' }),
+    ], THEME_JIE_QI)
+    expect(sources[0].label).toBe('立春')
+    expect(sources[1].label).toBe('雨水')
+    expect(sources[0].audioLanguage).toBe('国语')
+  })
+})
+
+describe('matchActiveSourceIndex — 语言粘性（ADR-199：粤语缺集不静默切国语）', () => {
+  it('线路丢失但存在同语音行 → 切到同语音首行而非 index 0', () => {
+    const prev = [
+      makeRaw({ id: 1, sourceName: '国语线', audioLanguage: '国语' }),
+      makeRaw({ id: 2, sourceName: '粤语线', audioLanguage: '粤语' }),
+    ]
+    const next = [
+      makeRaw({ id: 10, sourceName: '国语线A', audioLanguage: '国语' }),
+      makeRaw({ id: 20, sourceName: '粤语线B', audioLanguage: '粤语' }),
+    ]
+    // 上一集选中粤语线（index 1），新集数无同名线路 → 语言粘性命中 index 1
+    expect(matchActiveSourceIndex(prev, 1, next)).toBe(1)
+  })
+
+  it('线路丢失且无同语音行 → 维持 fallback 0（既有行为）', () => {
+    const prev = [makeRaw({ id: 1, sourceName: '粤语线', audioLanguage: '粤语' })]
+    const next = [makeRaw({ id: 10, sourceName: '国语线', audioLanguage: '国语' })]
+    expect(matchActiveSourceIndex(prev, 0, next)).toBe(0)
+  })
+
+  it('同名命中优先于语言粘性（粘性只在线路丢失时介入）', () => {
+    const prev = [makeRaw({ id: 1, sourceName: '线路1', audioLanguage: '粤语' })]
+    const next = [
+      makeRaw({ id: 10, sourceName: '线路X', audioLanguage: '粤语' }),
+      makeRaw({ id: 20, sourceName: '线路1', audioLanguage: '国语' }),
+    ]
+    expect(matchActiveSourceIndex(prev, 0, next)).toBe(1)
+  })
+})

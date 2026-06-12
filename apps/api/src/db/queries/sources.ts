@@ -47,6 +47,10 @@ interface DbSourceRow {
   last_checked: string | null
   deleted_at: string | null
   created_at: string
+  /** ADR-199 D-199-7：语音规范词。provenance 列不透出前台（写侧治理用） */
+  audio_language: string | null
+  /** ADR-199 三态（null/[]/具体语言），pg TEXT[] 自动映射 JS 数组 */
+  subtitle_languages: string[] | null
 }
 
 /**
@@ -80,6 +84,8 @@ function mapSource(row: DbSourceRow): VideoSource {
     type: row.type as SourceType,
     isActive: row.is_active,
     lastChecked: row.last_checked,
+    audioLanguage: row.audio_language ?? null,
+    subtitleLanguages: row.subtitle_languages ?? null,
   }
 }
 
@@ -117,6 +123,7 @@ export async function findActiveSourcesByVideoId(
             vs.source_url, vs.source_name, vs.quality, vs.type,
             vs.is_active, vs.submitted_by, vs.last_checked,
             vs.deleted_at, vs.created_at,
+            vs.audio_language, vs.subtitle_languages,
             cs.display_name AS site_display_name
      FROM video_sources vs
      JOIN videos v ON v.id = vs.video_id
@@ -163,6 +170,7 @@ export async function findActiveSourcesWithSignalsByVideoId(
             vs.source_url, vs.source_name, vs.quality, vs.type,
             vs.is_active, vs.submitted_by, vs.last_checked,
             vs.deleted_at, vs.created_at,
+            vs.audio_language, vs.subtitle_languages,
             vs.probe_status, vs.render_status, vs.latency_ms, vs.quality_detected,
             vs.last_probed_at, vs.last_rendered_at,
             cs.display_name AS site_display_name,
