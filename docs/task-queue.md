@@ -2171,9 +2171,7 @@
 
 4. **VIDEO-NAMING-STANDARD-D** — B 类 355 例 season_number 回填（状态：✅ 已完成 2026-06-12）
    - 实跑：回填 352 catalog / catalog 内分歧跳过 2（星辰变 第六季、师兄啊师兄 → E 卡）/ 批内互撞 0 / 槽位已占 0 / 失败 0；幂等复跑 0；审计 B 类 355 → 3（残余即 2 个分歧 catalog 下的视频，预期）。活跃重复实体风险解除。详见 changelog [VIDEO-NAMING-STANDARD-D]。
-5. **VIDEO-NAMING-STANDARD-E** — A 类 6 例拆分核对 + C 类 1 例 normalized 修正（候补/人工，状态：📋 待开始）
-   - 实体手术：逐例核对 sources 集数段归属定「真混挂 vs 别名噪声」→ 拆分/合并（含动物管制官双实体）+ 魔法使俱乐部(OVA) normalized 修正。生产执行前必须重跑审计脚本（watch_history 影响面）。
-   - 依赖：D 卡完成后（季槽位干净便于核对）。建议模型：sonnet + 用户逐例确认。
+5. **VIDEO-NAMING-STANDARD-E** — （已并入 SEQ-20260612-03 **GOV-6**，2026-06-12；本条仅存指针不再独立跟踪）
 
 ## [SEQ-20260612-02] 播放源语言双维度（语音/字幕）结构化
 
@@ -2194,3 +2192,25 @@
 4. **LANG-DIM-C** — D-199-7：API 透出 + 前台线路 UI（≥2 语音才显示语言 badge）+ `matchActiveSourceIndex` 跨集语言粘性（状态：✅ 已完成 2026-06-12；详见 changelog [LANG-DIM-C]）
    - follow-up 另起卡（评审 R2）：admin 线路面板 / 合并预选 UI 语言列展示。
    - ⚠️ e2e PLAYER + VIDEO 双域预先存在环境耦合失败（与本卡无关，worktree 基线 9a2df4b2 复现）：mock-slug 测试（player.spec PLAYER-10 / card-to-watch / card-dual-exit 26 例 + **detail.spec 13 例，2026-06-12 补充确认同 MOCK_MOVIE fixture 同 404 签名**）在 :4000 真实 API 在线时必 404——watch/detail 页服务端 `fetchVideoDetail`（ADR-160 AMD2 hydration，video-detail.ts 共用 helper）拿到真 404 触发 notFound()，Playwright 页面级 mock 无法拦截服务端 fetch；API 离线同样 notFound()（网络错误同分支）。**即既有候选卡「e2e-next seed 基建」（SEQ-20260610-02 P2-1 备注）的具体根因**——修复方向：e2e 种子数据（真库种子 + 服务端可命中）或 server-side fetch 的 e2e 旁路。该卡提级建议：PLAYER / VIDEO 两域 e2e 门禁在 seed 基建落地前对 mock-slug 用例无效（仅真种子用例有效，e2e:video 实测 5 passed 即此类）。
+
+## [SEQ-20260612-03] 合并候选与视频标题综合治理
+
+- **状态**：🔄 执行中
+- **创建时间**：2026-06-12 17:30
+- **最后更新时间**：2026-06-12 17:30
+- **目标**：收口本日两轮诊断暴露的合并候选检测体系缺陷（缺陷清单 A-F，见 2026-06-12 会话评审）+ 视频标题存量手术残余，使「标题标准化 → 候选检测 → 人工合并」成为可持续闭环。
+- **治理原则**：① **变更传播完备性**——parser/scorer 版本变更、标题变更、时间三类信号都必须能触达候选重评（缺陷 A/B/C）；② **消费侧诚实降级**——identity 空态显式提示而非静默换口径（缺陷 F）；③ **存量手术人工闸门**——实体级合并/拆分逐例附证据经用户确认。
+- **背景缺陷清单**（2026-06-12 实证）：A 版本耦合三连（bump 搁浅 207 pending + 召回数据源同钉版本 + 无自动联动）/ B 标题变更无 hook（admin 编辑 + 批量清洗均不触发）/ C 无周期兜底 + fire-and-forget 无补偿 / D 召回仅等值桶（无模糊层 + 单桶 50 截断）/ E 阈值 0.75 单点无灰区观测 / F legacy 静默降级 + filter-after-paginate total 失真（9-C FIX-2 债）。
+- **依赖**：SEQ-20260612-01/-02 已收口；GOV-6 吸收原 VIDEO-NAMING-STANDARD-E 卡。
+
+### 任务列表
+
+1. **GOV-1** — 止血：观测重写 + 候选重扫 + 旧版本候选 hygiene（状态：✅ 已完成 2026-06-12）
+   - 实跑：4405 条 1.2.0 观测 → 重扫 696 桶/1061 对（created 10 / superseded 205 / blocked 190 / low-score 842）→ 残留 2 死对子（对侧已软删）显式 superseded → 当前版本 pending 215 / 旧版本残留 0；重案解密 0.9 入候选（标题标准化→语言变体合并闭环打通）。详见 changelog [GOV-1]。
+2. **GOV-2** — 消费侧诚实化：identity 空态显式信号 + legacy total 口径修复（9-C FIX-2 收口）（状态：📋 待开始，依赖 GOV-1）
+   - identity probe 0 且存在旧版本 pending → 响应带 staleVersion 标记，UI 显示「候选待重评」而非静默 legacy；legacy 路径过滤先于分页（或 total 改计过滤后），消除「共 N 条但行散落分页」。
+3. **GOV-3** — 版本 bump 联动自动化（状态：📋 待开始；**需 arch-reviewer (Opus) 裁决触发策略**——自动全量重扫的成本护栏 / 检测位点〔worker 启动 vs cron〕/ 观测重写编排）
+4. **GOV-4** — 标题变更重评 hook（状态：📋 待开始）：migration 113 `trigger_source` CHECK +'title_change' + VideoService 标题更新位点 enqueueVideoRescore + 批量清洗脚本钩子 + architecture.md 同步。
+5. **GOV-5** — 周期重扫 scheduler（状态：📋 待开始）：worker node-cron 低峰全量重扫兜底（advisory lock / MAX_BUCKET 护栏已有）+ fire-and-forget 失败计数可观测。
+6. **GOV-6** — 存量实体手术（候补/人工闸门，吸收原 VIDEO-NAMING-STANDARD-E）：6 例跨季混挂核对拆分 + 2 分歧 catalog（星辰变/师兄啊师兄）+ 魔法使俱乐部(OVA) normalized 修正 + 动物管制官双实体合并；逐例附 sources 集数段证据交用户确认后执行；生产前重跑审计脚本。
+7. **GOV-7** — 召回增强（候补后排）：模糊召回层（titleEn/简繁桶）评估 + 0.75 阈值灰区报表。

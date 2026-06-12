@@ -4824,3 +4824,23 @@
 - **新增依赖**：无；**数据库变更**：无 DDL（352 行 season_number NULL→N 数据回填；media_catalog.updated_at 经既有触发器 bump，内容确变语义成立——B 卡同口径）。
 - **质量门禁**：typecheck/lint EXIT=0 / test:changed scripts-only 空集放行（脚本经真库 dry-run + 执行 + 幂等复跑 + 审计收敛断言四重验证）。
 - **[AI-CHECK]**：六问过——①守卫保守（任何歧义跳过不猜）；②可回滚（season_number 置回 NULL 即还原）；③复用审计同一解析真源防口径漂移；④无 any/空 catch（失败逐行收集报告）；⑤幂等可生产照搬（先 --dry-run）；⑥范围未超（未动 title_normalized/videos/ES）。
+
+## [GOV-1] 版本搁浅止血：观测重写 + 候选重扫 + 旧版本 hygiene（SEQ-20260612-03 治理序列首卡）
+- **完成时间**：2026-06-12
+- **记录时间**：2026-06-12 17:50
+- **执行模型**：claude-fable-5
+- **子代理**：无
+- **背景**：用户报告合并工作区「共 46 条仅显示 3 条且散落分页」。诊断：parser 1.0.0→1.2.0（本日两次语义升级）搁浅全部 207 条 pending 候选——identity 探测按当前版本精确匹配 → 0 → 静默降级 legacy（filter-after-paginate total 失真暴露）；且 blocking 召回数据源 title_observations 同按版本过滤，直接重扫会召回 0 桶，必须先重写观测。
+- **修改文件**：
+  - `scripts/run-identity-rescore-inline.ts`（新增）— 直调 `runIdentityRescore` 单进程重扫（advisory lock 与 worker 互斥），免 Redis/worker 依赖；与 enqueue-identity-rescore（队列版）互补，版本升级止血/运维一次性重扫场景用。头注钉死前置：升版本必先 backfill-title-observations。
+  - `docs/task-queue.md` — SEQ-20260612-03 治理序列登记（GOV-1~7，治理原则三条 + 缺陷清单 A-F）；原 VIDEO-NAMING-STANDARD-E 并入 GOV-6 留指针。
+- **实跑链路**（dev 库）：
+  1. `backfill-title-observations.ts` → 4405 条 1.2.0 观测（真幂等 DO NOTHING，1.0.0 旧观测 7726 条保留）。
+  2. 内联重扫 → 696 桶（external_id 11）/ 1061 对：created 10 / **superseded 205**（candidateUpsert hash 变更自动腾位，覆盖绝大多数旧 pending）/ blocked 190（强负拦截）/ skippedLowScore 842 / 2.1s。
+  3. 残留 2 行 1.0.0 pending = 对侧已软删的死对子（召回排除已删视频故未再生）→ 显式 UPDATE superseded（confirmed 28 / rejected 4 审计行不动）。
+  4. 收敛断言：工作区探测口径（status='pending' AND parser=1.2.0 AND scorer=1.0.0）= **215**；旧版本 pending 残留 = 0；「重案解密」对子 identity_score=0.9 pending 在列——B 卡标题标准化 → 语言变体进合并候选的闭环首次端到端打通。
+- **效果**：合并工作区 identity 路径恢复（刷新即生效），「共 46 条散落 3 行」的 legacy 降级态消除。
+- **新增依赖**：无；**数据库变更**：无 DDL（候选行重评 + 2 行状态 hygiene）。
+- **质量门禁**：typecheck/lint EXIT=0 / test:changed scripts+docs-only 空集放行（重扫链路经真库四步收敛断言验证）。
+- **注意事项**：① 本卡是手工止血，「版本 bump → 自动观测重写+重扫」联动归 GOV-3（需 arch-reviewer 裁决触发策略）；② identity 空态静默降级仍在（再发版本搁浅仍会复现 46/3 表象）——GOV-2 收口；③ 215 pending 中含强负拦截/低分灰区之外的真候选，工作区人工裁定消化。
+- **[AI-CHECK]**：六问过——①只读+幂等工具链，hygiene 仅动 2 行且语义诚实（superseded=被新版口径取代）；②修复链（观测→重扫→hygiene→断言）四步可在生产照搬；③runner 沉淀为与队列版互补的 ops 工具；④无 any/空 catch；⑤审计行（confirmed/rejected）零触碰；⑥范围未超。
