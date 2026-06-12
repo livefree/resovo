@@ -4518,3 +4518,20 @@
 - **数据库变更**：无
 - **门禁**：typecheck EXIT=0 / lint 4·4 / test:changed 194 passed（19 文件）/ verify:adr-contracts EXIT=0 / test:e2e:admin 82/82（player-integration 不回归）/ AdminPlayer 17 + controller 21 单测绿。
 - **注意事项**：probe 从 pending 不强制置 ok（沿用 ADR-198 D-198-2：仅 dead→ok 复活；外科更新照搬 response 的 newProbeStatus 正确值，不擅自升级）。AdminPlayer 仍用于 merge/videos/sources 等消费方（onVerified 可选，不传则无外科同步，行为同前）。本卡完成后「实际播放」pill 在播放成功即变「可用」，无需手动刷新。
+
+## [BUGFIX-SHORTID-DASH-A] short_id 生成收口：排除 `-`/`_` 字母表 + 三处重复生成点合一
+- **完成时间**：2026-06-11
+- **记录时间**：2026-06-11 21:00
+- **执行模型**：claude-fable-5（用户会话人工覆盖 sonnet 建议）
+- **子代理**：无
+- **修改文件**：
+  - `apps/api/src/lib/short-id.ts` — 新建 short_id 生成唯一真源：`generateShortId()`（nanoid `customAlphabet`，62 字符 `[0-9A-Za-z]` 定长 8），头注锁死两条契约（字母表禁 `-`/`_` 防 extractShortId 切坏 / 定长 8 适配 CHAR(8) 列）
+  - `apps/api/src/services/CrawlerService.ts` — `nanoid(8)`（默认字母表含 `-`/`_`，404 根因）→ `generateShortId()`
+  - `apps/api/src/db/queries/videos.mutations.ts` — `Math.random().toString(36).slice(2,10)`（偶发 <8 位 → CHAR(8) 右补空格隐患）→ `generateShortId()`
+  - `apps/api/src/services/VideoMergesService.ts` — 同上替换（拆分新建 video 路径）
+  - `apps/api/src/templates/queries.template.ts` — 模板示例同步（bug 传播媒介，执行中补入卡面文件范围）
+  - `tests/unit/api/short-id-generate.test.ts` — 新建 4 用例契约锁死（定长/字母表/常量防改坏/与 extractShortId 分隔协议往返兼容）
+  - `tests/unit/api/ingestPolicy.test.ts` — nanoid mock 跟随 customAlphabet 形态
+- **背景**：用户报告「后台预览视频播放页/详情页有时 404」+「前台已公开视频同样 404」。调查实证：`extractShortId` 按最后一个 `-` 切分 `<slug>-<shortId>`（ADR-002），nanoid 默认字母表含 `-` → 约 11.8% 理论概率切坏；dev 库 4337 视频 526 个（12.1%）命中、9 个已公开前台必现 404。存量清洗归 -B 卡（migration 110）。
+- **门禁**：typecheck EXIT=0 / lint EXIT=0 / test:changed 84 文件 1227 passed。无新增 admin route / 无 schema DDL / 不动 admin-ui Props。
+- **遗留**：web-next `extractShortId` 与 api `SHORT_ID_ALPHABET` 的协议契合靠双侧注释 + 单测复刻锁定（跨 app 无共享 import；2 消费方未达 3 处提取线，未来可沉淀 packages/types）。

@@ -2062,3 +2062,43 @@
 - **强制 Opus 子代理**：P1-0 规约决策；P1-1-A 若扩 PageHeader 公开 Props；P1-2 若改 DecisionCardProps（`packages/admin-ui/**/types.ts` 强制项 + commit trailer）。
 - **ADR 核验**：P3-1 系列跑 `verify:adr-contracts` + 涉枚举派生同步 `docs/architecture.md`；全程无新增 admin route → `verify:endpoint-adr` 不触发。
 - 手测关键路径清单见方案「验证方式」节。
+
+---
+
+## [SEQ-20260611-01] 视频详情/播放页 404 修复（shortId 字母表冲突 + admin preview 链路收口遗漏）
+
+- **状态**：🔄 执行中（1/4 卡完成：-A ✅）
+- **创建时间**：2026-06-11
+- **最后更新时间**：2026-06-11
+- **目标**：修复用户报告「后台预览视频播放页/详情页有时 404」+「前台已公开视频同样 404」。调查实证四根因（本会话调查记录）：① 视频库「查看详情（前台）」相对路径开后台域 + 缺 `?preview=admin`；② 前台详情页跳 watch 丢 `?preview=admin`；③ refresh_token 过期静默降级（ADR-160 D-160-4b 设计内，不修）；④ **`CrawlerService` 用 nanoid 默认字母表（含 `-`/`_`）生成 short_id，与 `extractShortId`「最后一个 `-` 分隔」协议冲突——dev 库 4337 视频 526 个（12.1%）命中，含 9 个已公开视频前台必现 404**。
+- **范围**：apps/api（生成收口 + migration 110 + resync 脚本）/ apps/server-next（VideoRowActions 链接收口）/ apps/web-next（watch 跳转 preview 透传）。
+- **依赖**：无 BLOCKER。关联 ADR-002（Slug + 短 ID 混合 URL）/ ADR-160（Admin Preview，本序列不改其协议，仅消费）。
+- **不做**：根因 ③（设计内降级，改善可观测性候补）；`VideoDetailHero`/`EpisodeGrid`/`VideoCardWide` 三个零消费方死代码组件（独立 CHORE 候补）；含 `_` 的 516 个存量 short_id（URL 合法且解析无损，改之反断既有公开链接）。
+
+### 任务列表
+
+1. **BUGFIX-SHORTID-DASH-A** — short_id 生成收口：排除 `-`/`_` 字母表 + 三处重复生成点合一（状态：✅ 已完成 2026-06-11）
+   - 创建时间：2026-06-11 ｜ 实际开始：2026-06-11 ｜ 完成时间：2026-06-11
+   - 验收口径：所有新生成 short_id 恒为 8 位 `[0-9A-Za-z]`（与 `extractShortId` 分隔协议、`CHAR(8)` 定长列双兼容），生成逻辑全仓唯一真源。
+   - 文件范围：`apps/api/src/lib/short-id.ts`（新建 `generateShortId`）、`apps/api/src/services/CrawlerService.ts:217`、`apps/api/src/db/queries/videos.mutations.ts:28`、`apps/api/src/services/VideoMergesService.ts:805`、`apps/api/src/templates/queries.template.ts`（执行中补入，bug 传播媒介）、`tests/unit/api/short-id-generate.test.ts`（新建）。
+   - 依赖：无。建议模型：sonnet。
+   - **完成备注（2026-06-11，执行模型 claude-fable-5，子代理无）**：lib/short-id.ts 唯一真源（customAlphabet 62 字符定长 8，头注锁双契约）；三处生成点 + 模板替换；+4 契约单测（含 extractShortId 往返）+ ingestPolicy.test nanoid mock 跟随。门禁：typecheck/lint EXIT=0、test:changed 84 文件 1227 passed。明细见 changelog [BUGFIX-SHORTID-DASH-A]。
+2. **BUGFIX-SHORTID-DASH-B** — 存量清洗：migration 110 重新生成含 `-` 的 short_id + ES 重同步脚本（状态：⬜ 待开始）
+   - 验收口径：DB 零行 `short_id LIKE '%-%'`（幂等可重跑），受影响行 ES 文档 short_id 同步更新，9 个公开视频前台详情可达。
+   - 文件范围：`apps/api/src/db/migrations/110_videos_short_id_dash_cleanup.sql`（新建，DO 块逐行重生成 + 唯一重试 + `updated_at` touch）、`scripts/resync-es-short-id.ts`（新建一次性脚本，复用 `VideoIndexSyncService.syncVideo`）。
+   - 依赖：BUGFIX-SHORTID-DASH-A（先收口生成侧防爬虫续产坏数据）。建议模型：sonnet。
+3. **BUGFIX-PREVIEW-LINK-A** — 视频库「查看详情（前台）」改走 buildAdminPreviewUrl 收口（状态：⬜ 待开始）
+   - 验收口径：视频库行操作打开的前台详情 URL = `WEB_NEXT_ORIGIN + /locale + detailHref + ?preview=admin`（与 moderation「前台预览」同口径），本地 `getDetailHref` 重复实现删除。
+   - 文件范围：`apps/server-next/src/app/admin/videos/_client/VideoRowActions.tsx`（slug 投影缺失传 `null`，detail 页裸 shortId 兼容）。
+   - 依赖：无（与 -A/-B 正交）。建议模型：sonnet。
+4. **BUGFIX-PREVIEW-LINK-B** — 前台详情页 → watch 跳转透传 `?preview=admin`（状态：⬜ 待开始）
+   - 验收口径：preview 模式打开的详情页内全部 watch 跳转（立即播放 + 选集）URL 携带 `?preview=admin`；public 普通访问零行为变化。
+   - 文件范围：`apps/web-next/src/lib/admin-preview-query.ts`（新建纯函数，复用 `admin-access-token.ts` 协议常量）、`apps/web-next/src/components/detail/DetailHero.tsx`、`apps/web-next/src/components/detail/EpisodePicker.tsx` + 单测。
+   - 依赖：无。建议模型：sonnet。
+
+### 门禁与验证（每卡）
+
+- 必跑：`npm run typecheck` / `npm run lint` / `npm run test:changed`（commit 前）。
+- 卡 2 追加：`npm run migrate` 真库对拍（含幂等重跑）+ resync 脚本实跑 + DB 断言零残留。
+- 卡 3 追加：`npm run test:e2e:admin`（ADMIN 域）；卡 4 追加：`npm run test:e2e:video`（VIDEO 域）。
+- 全程无新增 admin route（`verify:endpoint-adr` 不触发）/ 无 schema DDL（architecture.md 不需同步，migration 110 为纯数据迁移）/ 不动 `packages/admin-ui/**/types.ts`。

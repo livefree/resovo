@@ -7,6 +7,7 @@ import type { Pool, PoolClient } from 'pg'
 import type { VideoType, ReviewStatus, VisibilityStatus } from '@/types'
 import type { DbVideoRow } from './videos.internal'
 import { AppError } from '@/api/lib/errors'
+import { generateShortId } from '@/api/lib/short-id'
 
 // ── 创建 ─────────────────────────────────────────────────────────
 
@@ -25,7 +26,7 @@ export async function createVideo(
   db: Pool,
   input: CreateVideoInput
 ): Promise<DbVideoRow> {
-  const shortId = Math.random().toString(36).slice(2, 10)
+  const shortId = generateShortId()
   const result = await db.query<DbVideoRow>(
     `INSERT INTO videos
        (short_id, catalog_id, title, type, episode_count,

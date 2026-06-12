@@ -5,7 +5,8 @@
  */
 
 import type { Pool } from 'pg'
-import { nanoid } from 'nanoid'
+// short_id 生成必须走唯一真源（字母表禁 `-`/`_`，URL slug 分隔协议约束，见 lib/short-id.ts 头注）
+import { generateShortId } from '@/api/lib/short-id'
 // TODO: 替换为实际类型
 import type { [Resource], Create[Resource]Input } from '@/types/[resource].types'
 
@@ -77,7 +78,7 @@ export async function create(
     `INSERT INTO [resource]s (id, short_id, owner_id, title, created_at)
      VALUES (gen_random_uuid(), $1, $2, $3, NOW())
      RETURNING *`,
-    [nanoid(8), input.ownerId, input.title],
+    [generateShortId(), input.ownerId, input.title],
   )
   return result.rows[0]
 }

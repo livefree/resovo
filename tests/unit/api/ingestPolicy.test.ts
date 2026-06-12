@@ -50,8 +50,9 @@ vi.mock('@/api/lib/config', () => ({
   config: { AUTO_PUBLISH_CRAWLED: 'false' },
 }))
 
+// BUGFIX-SHORTID-DASH-A：CrawlerService 经 lib/short-id 改用 customAlphabet（字母表禁 `-`/`_`）
 vi.mock('nanoid', () => ({
-  nanoid: vi.fn(() => 'testid12'),
+  customAlphabet: vi.fn(() => vi.fn(() => 'testid12')),
 }))
 
 import * as videosQueries from '@/api/db/queries/videos'

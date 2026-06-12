@@ -6,6 +6,18 @@
 
 ## 当前任务（单任务工作台：同时仅 1 个 🔄 进行中；完成即删卡，历史见 docs/changelog.md）
 
+### 🔄 BUGFIX-SHORTID-DASH-B · 存量清洗：migration 110 重新生成含 `-` 的 short_id + ES 重同步脚本
+
+- **来源**：SEQ-20260611-01（依赖 -A ✅ 生成侧已收口，爬虫不再续产坏数据）。
+- **实际开始时间**：2026-06-11
+- **问题理解**：dev 库 526 个视频 short_id 含 `-`（nanoid 默认字母表遗留），`extractShortId` 切坏 → 详情/播放页必现 404（含 9 个已公开视频）。生成侧已收口（-A），存量数据需一次性清洗；这些行的现有 URL 本来就 404，改 ID 无断链成本。
+- **根因判断**：同 -A（字母表与 URL 分隔符协议冲突的存量遗留）。
+- **方案**：① migration `110_videos_short_id_dash_cleanup.sql`：DO 块逐行重生成（62 字符字母表 PL/pgSQL 实现 + 唯一冲突重试 + `updated_at` touch），`WHERE short_id LIKE '%-%'` 天然幂等；② `scripts/resync-es-short-id.ts` 一次性脚本：对清洗行调 `VideoIndexSyncService.syncVideo`（ES 文档以 `v.id` 为主键，upsert 即覆盖旧 short_id）——migration 无法感知 ES，故拆脚本；以 `updated_at` 触达窗口圈定受影响行。
+- **涉及文件**：`apps/api/src/db/migrations/110_videos_short_id_dash_cleanup.sql`（新）、`scripts/resync-es-short-id.ts`（新）。
+- **验收口径**：DB 零行 `short_id LIKE '%-%'`（幂等可重跑），受影响行 ES 文档 short_id 同步更新，9 个公开视频前台详情可达。
+- **不做**：含 `_` 的 516 个存量（URL 合法且解析无损，改之反断既有公开链接）；schema DDL（纯数据迁移，architecture.md 不需同步）。
+- **执行模型**：claude-fable-5（用户会话人工覆盖 sonnet 建议）。子代理调用：无。
+
 ### ⏸ MODUX-ACPT-5（暂停 · 检查点已提交）· 验收第 5 条纠正 · 审核台头部去 h1 + 元素并入 tab 行
 
 > 验收迭代已提交 3 检查点：`b6496861`（1-4 轮 + Codex 1·2）/ `587b2999`（5-7 轮快编芯片化）/ `58ca2fc4`（Codex 3 竞态）。用户转入 SRCHEALTH 设计；本卡**暂停待续**（验收若有后续修订可恢复）。下方为完整改动记录。

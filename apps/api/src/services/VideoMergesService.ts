@@ -112,6 +112,7 @@ import {
 // CHG-VIR-7 Phase 2a：多证据身份评分（identityScore/evidence，与 legacyScore 分离 / R3）
 import { scoreGroup, SCORER_VERSION } from './identity'
 import { TITLE_PARSER_VERSION } from './TitleIdentityParser'
+import { generateShortId } from '@/api/lib/short-id'
 
 // ── 公开 re-export（外部 import 路径保持不变）──────────────────
 export {
@@ -802,7 +803,7 @@ export class VideoMergesService {
           allTargetVideoIds.push(group.targetVideoId)
           continue
         }
-        const shortId = Math.random().toString(36).slice(2, 10)
+        const shortId = generateShortId()
         const newVideoId = await insertNewVideo(client, {
           shortId,
           catalogId: group.catalogId,

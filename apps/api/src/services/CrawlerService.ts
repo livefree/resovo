@@ -19,7 +19,7 @@ import { recordTitleObservation } from '@/api/db/queries/titleObservations'
 import { buildTitleObservation } from './titleObservation.builder'
 import { runIngestShadowScoring } from './identity/ingestShadow'
 import { baseLogger } from '@/api/lib/logger'
-import { nanoid } from 'nanoid'
+import { generateShortId } from '@/api/lib/short-id'
 import { config } from '@/api/lib/config'
 import { enrichmentQueue, imageHealthQueue } from '@/api/lib/queue'
 
@@ -214,7 +214,7 @@ export class CrawlerService {
       // crawler 优先级最低（1），不覆盖 catalog 元数据
     } else {
       // Step 4: 新建 videos 实例
-      const shortId = nanoid(8)
+      const shortId = generateShortId()
       const autoPublish = ingestPolicy
         ? ingestPolicy.allow_auto_publish
         : config.AUTO_PUBLISH_CRAWLED === 'true'
