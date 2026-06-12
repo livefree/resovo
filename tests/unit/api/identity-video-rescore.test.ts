@@ -78,6 +78,24 @@ describe('runVideoRescore', () => {
     expect(result.counterparts).toBe(1)
   })
 
+  it('GOV-4：triggerSource 参数化——title_change 透传 scoreAndPersistPairs，缺省仍 enrichment', async () => {
+    const vidB = 'c5bbe74a-0000-0000-0000-000000000002'
+    const vidA = '6f2493a5-0000-0000-0000-000000000001'
+    mockBuildSides
+      .mockResolvedValueOnce(new Map([[vidB, side(vidB)]]))
+      .mockResolvedValueOnce(new Map([[vidB, side(vidB)], [vidA, side(vidA)]]))
+    mockRecallCore.mockResolvedValue([vidA])
+    mockRecallExt.mockResolvedValue([])
+
+    await runVideoRescore(db, log, [vidB], 'title_change')
+
+    expect(mockScoreAndPersist).toHaveBeenCalledWith(
+      db, expect.any(Map), expect.any(Array),
+      expect.objectContaining({ triggerSource: 'title_change' }),
+      expect.any(Object),
+    )
+  })
+
   it('软删/不存在输入（buildSides 无返回）→ 跳过不评分', async () => {
     mockBuildSides.mockResolvedValueOnce(new Map())
     const result = await runVideoRescore(db, log, ['gone-0000-0000-0000-000000000000'])
@@ -121,7 +139,8 @@ describe('identityCandidateWorker job 分发', () => {
     expect(handler).toBeDefined()
 
     await handler!({ data: { type: 'video-rescore', videoIds: ['v1'] } })
-    expect(runVideo).toHaveBeenCalledWith({}, expect.anything(), ['v1'])
+    // GOV-4：缺省 triggerSource='enrichment'（兼容旧 payload 无该字段）
+    expect(runVideo).toHaveBeenCalledWith({}, expect.anything(), ['v1'], 'enrichment')
     expect(runFull).not.toHaveBeenCalled()
 
     await handler!({ data: { type: 'full-rescan', batchSize: 10 } })
@@ -142,7 +161,7 @@ describe('enqueueIdentityVideoRescore', () => {
     const { enqueueIdentityVideoRescore } = await import('@/api/services/identity/enqueueVideoRescore')
     enqueueIdentityVideoRescore('v-123')
     expect(add).toHaveBeenCalledWith(
-      { type: 'video-rescore', videoIds: ['v-123'] },
+      { type: 'video-rescore', videoIds: ['v-123'], triggerSource: 'enrichment' },
       expect.not.objectContaining({ jobId: expect.anything() }),
     )
 

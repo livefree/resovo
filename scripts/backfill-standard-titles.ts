@@ -33,6 +33,10 @@
 import { Pool } from 'pg'
 import { buildStandardVideoTitle } from '@/api/services/TitleIdentityParser'
 import { upsertVideoAliases } from '@/api/db/queries/videos'
+// GOV-4（SEQ-20260612-03 缺陷 B）：批量标题清洗 = 制造合并候选的时机——新标题写当前
+// 版本观测使 blocking 召回可命中（每日 reconcile 重扫自动消化；急需则手动 inline 重扫）
+import { insertObservationIfAbsent } from '@/api/db/queries/titleObservations'
+import { buildTitleObservation } from '@/api/services/titleObservation.builder'
 import { es, ES_INDEX } from '@/api/lib/elasticsearch'
 import { VideoIndexSyncService } from '@/api/services/VideoIndexSyncService'
 
@@ -126,6 +130,8 @@ async function main(): Promise<void> {
           `UPDATE videos SET title = $2 WHERE id = $1 AND title IS DISTINCT FROM $2`,
           [c.id, c.newTitle],
         )
+        // GOV-4：新标题观测（identity blocking 召回数据源；DO NOTHING 幂等）
+        await insertObservationIfAbsent(pool, buildTitleObservation(c.id, c.newTitle, null))
         videosUpdated++
       } catch (err) {
         videoFailures.push({ id: c.id, error: err instanceof Error ? err.message : String(err) })
@@ -180,6 +186,14 @@ async function main(): Promise<void> {
     } else {
       console.log(
         `[backfill-standard-titles] 收敛断言通过（退化跳过 ${residualSuspects.length} 为预期，已逐行打印）`,
+      )
+    }
+    // GOV-4：标题清洗后合并候选消化提示（观测已随更新写入；候选经每日 reconcile 自动重扫，
+    // 急需立即可见则手动 run-identity-rescore-inline）
+    if (videosUpdated > 0) {
+      console.log(
+        `[backfill-standard-titles] 提示：${videosUpdated} 个新标题观测已写入；合并候选将由每日` +
+        ' identity-reconcile 重扫消化（立即消化：node --env-file=.env.local --import tsx scripts/run-identity-rescore-inline.ts）',
       )
     }
   } finally {

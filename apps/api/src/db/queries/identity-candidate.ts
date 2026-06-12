@@ -17,7 +17,7 @@ import type { Pool, PoolClient } from 'pg'
  * 候选触发来源（migration 086 CHECK 真源；111 扩 'enrichment'——外部 ID 绑定后定向重评，
  * BUGFIX-IDENTITY-ENRICH-RESCORE）。本 alias 为 TS 侧唯一收口，扩值须同步 CHECK migration。
  */
-export type IdentityTriggerSource = 'ingest' | 'offline-rescore' | 'manual-search' | 'enrichment'
+export type IdentityTriggerSource = 'ingest' | 'offline-rescore' | 'manual-search' | 'enrichment' | 'title_change'
 
 export interface IdentityCandidateRow {
   readonly id: string

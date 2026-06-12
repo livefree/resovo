@@ -33,6 +33,8 @@ export async function runVideoRescore(
   db: Pool,
   log: pino.Logger,
   videoIds: readonly string[],
+  // GOV-4：触发来源参数化（缺省 'enrichment' 兼容既有调用方；标题变更传 'title_change'）
+  triggerSource: 'enrichment' | 'title_change' = 'enrichment',
 ): Promise<VideoRescoreResult> {
   const startAt = Date.now()
   const parserVersion = TITLE_PARSER_VERSION
@@ -80,7 +82,7 @@ export async function runVideoRescore(
 
     await scoreAndPersistPairs(
       db, sideMap, pairs,
-      { parserVersion, scorerVersion, triggerSource: 'enrichment' },
+      { parserVersion, scorerVersion, triggerSource },
       counters,
     )
   }

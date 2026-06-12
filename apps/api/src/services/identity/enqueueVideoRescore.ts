@@ -20,16 +20,20 @@
 import { identityCandidateQueue } from '@/api/lib/queue'
 import { baseLogger } from '@/api/lib/logger'
 
-export function enqueueIdentityVideoRescore(videoId: string): void {
+export function enqueueIdentityVideoRescore(
+  videoId: string,
+  // GOV-4：标题变更位点传 'title_change'（migration 113）；缺省 'enrichment' 兼容既有调用方
+  triggerSource: 'enrichment' | 'title_change' = 'enrichment',
+): void {
   identityCandidateQueue
     .add(
-      { type: 'video-rescore' as const, videoIds: [videoId] },
+      { type: 'video-rescore' as const, videoIds: [videoId], triggerSource },
       { removeOnComplete: 20, removeOnFail: 10 },
     )
     .catch((err: unknown) => {
       baseLogger.warn(
-        { err, video_id: videoId },
-        '[identity] enqueue video-rescore failed (enrichment 主流程不受影响)',
+        { err, video_id: videoId, trigger_source: triggerSource },
+        '[identity] enqueue video-rescore failed (调用方主流程不受影响)',
       )
     })
 }

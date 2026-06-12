@@ -19,6 +19,11 @@ import type {
   PendingReviewVideoRow,
 } from '@/api/db/queries/videos'
 import { MediaCatalogService } from '@/api/services/MediaCatalogService'
+// GOV-4（SEQ-20260612-03）：标题实变 → 当前版本观测 + 定向重评 hook
+import { insertObservationIfAbsent } from '@/api/db/queries/titleObservations'
+import { buildTitleObservation } from '@/api/services/titleObservation.builder'
+import { enqueueIdentityVideoRescore } from '@/api/services/identity/enqueueVideoRescore'
+import { baseLogger } from '@/api/lib/logger'
 import type { CatalogUpdateData } from '@/api/db/queries/mediaCatalog'
 import { VideoIndexSyncService } from '@/api/services/VideoIndexSyncService'
 import { CACHE_PREFIXES } from '@/api/services/CacheService'
@@ -425,6 +430,18 @@ export class VideoService {
     }
     const row = await videoQueries.updateVideoMeta(this.db, id, adaptedInput)
     if (row) void this.indexSync?.syncVideo(id)
+
+    // GOV-4（SEQ-20260612-03 缺陷 B）：标题**实变**时写当前版本观测 + 定向重评——
+    // 标题修正恰是制造合并候选的时机（标准化趋同案例：重案解密们），此前无任何触达机制。
+    // fire-and-forget 容错（沿 ingestShadow 范式：失败仅 warn 不阻断 admin 主流程）。
+    const newTitle = input.title !== undefined ? String(input.title) : null
+    if (row && newTitle !== null && newTitle !== video.title) {
+      void insertObservationIfAbsent(this.db, buildTitleObservation(id, newTitle, null))
+        .then(() => enqueueIdentityVideoRescore(id, 'title_change'))
+        .catch((err: unknown) => {
+          baseLogger.warn({ err, video_id: id }, '[identity] title_change observation/rescore hook failed')
+        })
+    }
 
     // ADR-161 决策要点 6：改类型为 anime（原非 anime）时入队 Bangumi 丰富（去重 jobId，延迟 5min）
     // 经 enrichmentQueue 直接入队（与 CrawlerService 同模式），避免引入 worker 模块的 db 单例

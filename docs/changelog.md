@@ -4885,3 +4885,21 @@
 - **质量门禁**：typecheck/lint EXIT=0 / test:changed 58 文件 737 passed。
 - **注意事项**：① scheduler 随 api 进程下次重启生效（dev watch 模式热加载不重跑启动注册块）；② 端到端 job 消费需 Redis 在线——编排体已由 GOV-1 真库实证 + 本卡单测覆盖分支；③ GOV-2 stale 警示文案「手工修复链指引」可在自动化验证一个周期后改为「自动重评将于下个周期执行」（独立小改，未顺手动 UI——评审提醒勿越文件范围）。
 - **[AI-CHECK]**：六问过——①BLOCKER 修订后零 ADR 冲突（api 进程内 + 既有四 scheduler 同范式）；②单真源三处收口（观测 SQL/重扫管线/ hygiene 查询层）；③幂等可重入（每步独立可恢复）；④无 any/空 catch（scheduler catch+warn 不阻塞进程，范式一致）；⑤版本参数恒运行时常量；⑥文件未超限。
+
+## [GOV-4] 标题变更重评 hook（migration 113 / 治理序列主线完结）
+- **完成时间**：2026-06-12
+- **记录时间**：2026-06-12 19:30
+- **执行模型**：claude-fable-5
+- **子代理**：无（CHECK 扩值对齐 migration 111「无新表无端点」先例）
+- **修改文件**：
+  - `apps/api/src/db/migrations/113_identity_candidate_trigger_source_title_change.sql`（新增）— trigger_source CHECK +'title_change'（DROP IF EXISTS + ADD 幂等；真库对拍 + 重跑 ✅）。
+  - `apps/api/src/db/queries/identity-candidate.ts` — `IdentityTriggerSource` 扩值。
+  - `apps/api/src/services/identity/videoRescore.ts` / `enqueueVideoRescore.ts` / `apps/api/src/workers/identityCandidateWorker.ts` — triggerSource 全链参数化（缺省 'enrichment'，既有六个 enrichment 位点零改动；job payload 可选字段向后兼容旧队列消息）。
+  - `apps/api/src/services/VideoService.ts` — 标题**实变**（新值 ≠ 原值）时 fire-and-forget：`insertObservationIfAbsent`（当前版本观测，blocking 召回可命中）→ `enqueueIdentityVideoRescore(id, 'title_change')`；失败仅 warn 不阻断 admin 主流程（ingestShadow 容错范式）。
+  - `scripts/backfill-standard-titles.ts` — 逐行补新标题观测（DO NOTHING 幂等）+ 收尾重扫提示（批量路径由每日 identity-reconcile 兜底，急需手动 inline 重扫）。
+  - `docs/architecture.md` — §identity_candidate trigger_source 值清单（111+113）+ 离线生成段补「标题变更定向重评 + 版本对账/周期重扫（GOV-3）」链路。
+  - `tests/unit/api/identity-video-rescore.test.ts` — +2 用例（title_change 透传 / worker 缺省回退）+ 2 断言更新至新契约。
+- **效果**：治理缺陷 B 收口——admin 改标题与运维批量清洗（重案解密类标准化趋同）不再是候选检测盲区；至此**变更传播三角闭合**：版本变更（GOV-3 自动对账）/ 标题变更（本卡 hook）/ 时间兜底（GOV-3 每日重扫）。
+- **新增依赖**：无；**数据库变更**：Migration 113（CHECK 扩值，零数据迁移）。
+- **质量门禁**：typecheck/lint EXIT=0 / test:changed 67 文件 928 passed。
+- **[AI-CHECK]**：六问过——①向后兼容三层（函数默认参/job 可选字段/六位点零改）；②实变判定防 no-op 风暴；③观测写入复用 GOV-3 查询层单真源；④fire-and-forget 容错范式一致；⑤architecture.md 同步（绝对禁止 #1）；⑥范围未超。

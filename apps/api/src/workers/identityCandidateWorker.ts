@@ -24,7 +24,8 @@ export type IdentityCandidateJobData =
       scorerVersion?: string
     }
   // BUGFIX-IDENTITY-ENRICH-RESCORE：外部 ID 绑定后定向重评（enqueueVideoRescore 入队）
-  | { type: 'video-rescore'; videoIds: string[] }
+  // GOV-4：+triggerSource（'title_change' 标题变更位点；缺省 'enrichment'）
+  | { type: 'video-rescore'; videoIds: string[]; triggerSource?: 'enrichment' | 'title_change' }
   // GOV-3（SEQ-20260612-03）：版本对账 + 周期重扫二合一（identityReconcileScheduler 入队）
   | { type: 'version-reconcile-rescan' }
 
@@ -35,7 +36,7 @@ export function registerIdentityCandidateWorker(): void {
     const jobLog = withJob(workerLog, job)
 
     if (data.type === 'video-rescore') {
-      return runVideoRescore(db, jobLog, data.videoIds)
+      return runVideoRescore(db, jobLog, data.videoIds, data.triggerSource ?? 'enrichment')
     }
 
     if (data.type === 'version-reconcile-rescan') {
