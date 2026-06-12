@@ -2160,12 +2160,11 @@
    - 范围（5 项）：① 标准标题派生纯函数（复用 `TitleIdentityParser` facets，不改 `normalizeMergeKey`）② `MediaCatalogService.findOrCreateWithMatch` 可选 season-aware Step 5 ③ `CrawlerService.upsertVideo` 使用标准标题/seasonNumber 入 catalog/video ④ 单测覆盖 parser/naming/crawler/catalog ⑤ ADR/architecture 同步。
    - 依赖：无。建议模型：sonnet。实现 gpt-5-codex / 门禁+收口 claude-fable-5。详见 changelog [VIDEO-NAMING-STANDARD-A]。
 
-2. **VIDEO-NAMING-STANDARD-B** — 存量显示标题清洗：季标间隔 + 噪声剥离（状态：📋 待开始）
+2. **VIDEO-NAMING-STANDARD-B** — 存量显示标题清洗：季标间隔 + 噪声剥离（状态：✅ 已完成 2026-06-12）
    - 来源：用户 2026-06-12 验收反馈「标题后第几季字样中间没有间隔，添加间隔方便查看」。新写入路径 A 卡已带空格（`作品名 第N季`），缺口在存量数据。
-   - 数据规模实测（2026-06-12 dev 库）：videos 季标粘连 257 / 含语言·画质·更新态噪声 15（共 4405）；media_catalog 季标粘连 232（共 4396）。
-   - 范围（4 项）：① 清洗脚本 `scripts/backfill-standard-titles.ts`（复用 `buildStandardVideoTitle` 重派生 `videos.title` / `media_catalog.title`；**只动显示标题**——不动 `title_normalized`、不回填 `season_number`、不拆已合并实体，规避唯一键冲突与误合并连带）② dry-run 报告（全量改动行清单 + 抽样人工核对）③ 执行 + ES 重同步（沿用 SEQ-20260611-01 resync 通路）④ changelog/备注。
-   - 验收：`title ~ '[^[:space:]]第[一二三四五六七八九十0-9]+季'` 在 videos/media_catalog 计数归零；噪声 15 行清洗后语言 token 仍可在 `video_aliases`/`title_observations` 溯源；ES 搜索标题与 DB 一致。
-   - 依赖：A 卡（已完成）。建议模型：sonnet。
+   - 实跑结果：videos 284 + media_catalog 260 行清洗（选行含语言/画质 token 故高于预估 257+232）；旧标题 313 条入 video_aliases；ES syncVideo 284 + 收敛断言通过；幂等重跑 0 行。粘连计数归零验收通过。
+   - 偏离（已记 changelog）：dry-run 拦截 A 卡 parser 显示层 2 缺陷溯源修复——displayTitle 全角标点保留（foldDisplayWidth）+ `普通话版` 规则补全；文件范围扩 `TitleIdentityParser.ts` + 测试。
+   - 依赖：A 卡（已完成）。建议模型：sonnet。执行 claude-fable-5。详见 changelog [VIDEO-NAMING-STANDARD-B]。
 
 3. **VIDEO-NAMING-STANDARD-C** — 跨季误合并存量盘点（候补/调查卡，状态：📋 待开始）
    - 背景：A 卡之前旧三元组匹配把「同名不同季」归并同一 catalog/video（sources 跨季混挂、续播进度共享）。拆分涉及 sources 重新挂载 + 用户观看进度归属，风险高于 B 卡数量级。

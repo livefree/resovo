@@ -4672,3 +4672,20 @@
 - **质量门禁**：typecheck 全 workspace EXIT=0 / lint FULL TURBO EXIT=0 / test:changed 70 文件 970 passed（1 失败为 `video-merge-candidates.test.ts` listCandidates perf 基准 p95 并发负载抖动，与本卡文件零交集，隔离重跑 697ms PASS）/ verify:adr-contracts EXIT=0。
 - **注意事项**：① 存量数据未清洗（videos 257 + media_catalog 232 行季标粘连、15 行含噪声）——B 卡承接；② 旧三元组期跨季误合并实体未拆——C 卡盘点；③ `languageVariant` facet 当前仅入 `title_observations.parsed_facets_jsonb` 审计层，source 层结构化字段由 SEQ-20260612-02 承接（标题剥语言后的服务层可见性窗口期）；④ `normalizeMergeKey` 未改（ADR-174 不变量守住），剧场版不在其剥离词表、与正篇不撞 key 已验证。
 - **[AI-CHECK]**：六问过——①零回归（未传 seasonNumber 的旧调用方行为零变更，TitleNormalizer 回归守卫未动）；②不越界（未触 schema DDL/前后台 UI/admin route）；③沉淀（标题派生沉淀为 TitleIdentityParser 纯函数共享真源）；④无 any/空 catch/硬编码颜色；⑤一致性（IS NOT DISTINCT FROM 对齐既有 NULL 匹配口径）；⑥文件未超限。
+
+## [VIDEO-NAMING-STANDARD-B] 存量显示标题清洗：季标间隔 + 噪声剥离
+- **完成时间**：2026-06-12
+- **记录时间**：2026-06-12 13:48
+- **执行模型**：claude-fable-5
+- **子代理**：无
+- **背景**：用户验收反馈「标题后第几季字样中间没有间隔」。A 卡已让新写入带空格（`作品名 第N季`），缺口在存量：实测 videos 季标粘连 257 / 噪声 15，media_catalog 粘连 232。
+- **修改文件**：
+  - `scripts/backfill-standard-titles.ts`（新增）— 仿 backfill-merge-key（dry-run/幂等/TS 调 parser 防 SQL 复刻漂移）+ resync-es-short-id（ES 收敛断言）双先例：圈定季标粘连 + 高置信噪声 token 行 → `buildStandardVideoTitle` 重派生 → **只更新 `videos.title` / `media_catalog.title`**（不动 `title_normalized`〔ADR-174 归并键〕/ `season_number` / slug / short_id，不拆旧三元组期误合并实体）；videos 旧标题先 upsert 入 `video_aliases` 溯源；改动行 `VideoIndexSyncService.syncVideo` 重同步；退化派生守卫（空/单字/季标开头）跳过待人工。
+  - `apps/api/src/services/TitleIdentityParser.ts` — **偏离：dry-run 拦截 A 卡 2 个显示层缺陷，溯源修复**（消费时发现、修在真源，价值排序 #2）：① displayTitle 全角标点被 foldFullwidth 折半角（「这！就是街舞」→「这!就是街舞」、「：起源」→「:起源」，与 normalizeDisplayTitle 全角标点收空格规则自相矛盾）→ 新增 `foldDisplayWidth` 仅折全角数字/字母/空格、保留全角标点，识别/归一路径仍走 foldFullwidth 不受影响；② LANGUAGE_VARIANT_RULES `普通话` 不含 `普通话版` → 「假面骑士ZZZ 普通话版」残留孤立「版」，规则补全。
+  - `tests/unit/api/title-identity-parser.test.ts` — +2 用例：全角标点保留 + 季标补间隔；全角数字/字母仍折叠（ASCII 噪声可命中）。
+- **实跑结果**（dev 库 2026-06-12）：dry-run 全量清单人工核对（544 行，无误伤；最短派生结果为完整作品名）→ 实跑 videos 284/284 + media_catalog 260/260（选行正则含语言/画质 token 故高于预估）；video_aliases 留存旧标题 313 条；ES syncVideo 284 条 + refresh 后收敛断言通过；粘连正则计数双表归零；幂等复跑圈定 0 行。
+- **新增依赖**：无
+- **数据库变更**：无 DDL（纯数据清洗，media_catalog.updated_at 经既有触发器 bump——标题确为内容变更，语义成立）
+- **质量门禁**：typecheck EXIT=0 / lint EXIT=0 / test:changed 711 passed（1 失败为 `video-merge-candidates.test.ts` listCandidates perf 基准并发抖动，与 A 卡同一已知项，隔离重跑 36/36 PASS）
+- **注意事项**：① 语言变体行（重案解密 国语/粤语/普通话 ×3、冲上云霄 ×2 等）清洗后标题趋同——视觉去重依赖 SEQ-20260612-02 语言字段落地 + C 卡误合并盘点（标题对齐后恰好利于 identity 合并候选识别）；② 选行正则刻意不含 `英语`/`字幕` 等可能撞作品名的低置信词，残留长尾交后续按需扩充；③ 脚本幂等可重入，可在生产库照搬执行（先 --dry-run 核对）。
+- **[AI-CHECK]**：六问过——①零回归（parser 修复仅影响 displayTitle 展示层，identity/归一路径 foldFullwidth 未动，A 卡既有用例 53/53 PASS）；②偏离已声明（文件范围扩 parser+测试，缺陷溯源修复非顺手优化）；③沉淀（修在 parser 真源而非脚本内打补丁）；④无 any/空 catch/硬编码（ES_INDEX 用常量）；⑤一致性（dry-run/幂等/收敛断言对齐两既有 backfill 先例）；⑥脚本 195 行未超限。

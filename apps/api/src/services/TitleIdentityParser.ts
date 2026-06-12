@@ -134,7 +134,7 @@ const RELEASE_MARKER_RULES: ReadonlyArray<{ canonical: string; pattern: RegExp }
 
 /** 语言 / 字幕变体 → facets.languageVariant（规范词 + 匹配别名）。顺序即优先级。 */
 const LANGUAGE_VARIANT_RULES: ReadonlyArray<{ canonical: string; pattern: RegExp }> = [
-  { canonical: '国语', pattern: /国语版|國語版|国语|國語|普通话/gi },
+  { canonical: '国语', pattern: /国语版|國語版|普通话版|国语|國語|普通话/gi },
   { canonical: '粤语', pattern: /粤语版|粵語版|粤语|粵語/gi },
   { canonical: '英语', pattern: /英语版|英語版|英语|英語/gi },
   { canonical: '国配', pattern: /国配版|国配/gi },
@@ -227,6 +227,18 @@ function parseSeasonNumeral(raw: string): number | null {
 /** 把全角字符折叠为半角（数字 / 字母 / 空格），便于 ASCII 模式匹配。确定性。 */
 function foldFullwidth(input: string): string {
   return input.replace(/[！-～]/g, (ch) =>
+    String.fromCharCode(ch.charCodeAt(0) - 0xfee0),
+  ).replace(/　/g, ' ')
+}
+
+/**
+ * 显示标题专用折叠：仅折叠全角数字/字母与全角空格（ASCII 噪声模式可命中），
+ * **保留全角标点**——中文显示标题惯例用全角标点（「这！就是街舞」「：起源」），
+ * 与 normalizeDisplayTitle 的全角标点收空格规则配套。识别/归一路径仍走
+ * foldFullwidth 全折叠，不受影响。
+ */
+function foldDisplayWidth(input: string): string {
+  return input.replace(/[０-９ａ-ｚＡ-Ｚ]/g, (ch) =>
     String.fromCharCode(ch.charCodeAt(0) - 0xfee0),
   ).replace(/　/g, ' ')
 }
@@ -421,7 +433,7 @@ export function buildStandardVideoTitle(raw: string): StandardVideoTitle {
 
   let base = raw
   base = base.replace(/<[^>]*>/g, ' ').replace(/&[a-z]+;/gi, ' ')
-  base = foldFullwidth(base)
+  base = foldDisplayWidth(base)
   base = base.replace(BRACKET_WITH_CONTENT, ' ')
   base = stripPatterns(base, SEASON_PATTERNS)
   base = stripRules(base, RELEASE_MARKER_RULES)

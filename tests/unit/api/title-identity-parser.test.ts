@@ -263,6 +263,18 @@ describe('buildStandardVideoTitle — 入库/显示标准标题', () => {
     expect(r.displayTitle).toBe('叶问')
     expect(r.languageVariant).toBe('国语')
   })
+
+  it('显示标题保留全角标点（中文显示惯例），季标粘连补空格间隔', () => {
+    expect(buildStandardVideoTitle('这！就是街舞第三季').displayTitle).toBe('这！就是街舞 第3季')
+    expect(buildStandardVideoTitle('海军罪案调查处：起源第二季').displayTitle).toBe('海军罪案调查处：起源 第2季')
+    expect(buildStandardVideoTitle('入间同学入魔了！第四季').displayTitle).toBe('入间同学入魔了！ 第4季')
+  })
+
+  it('显示标题仍折叠全角数字/字母（ASCII 噪声可命中）', () => {
+    const r = buildStandardVideoTitle('某剧　第２季　１０８０ｐ')
+    expect(r.displayTitle).toBe('某剧 第2季')
+    expect(r.seasonNumber).toBe(2)
+  })
 })
 
 describe('TitleIdentityParser — titleKind 罗马音 / 分类辅助', () => {
