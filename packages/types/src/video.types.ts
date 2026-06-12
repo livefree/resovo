@@ -252,6 +252,21 @@ export type VideoQuality = typeof VIDEO_QUALITIES[number]
 export const SOURCE_TYPES = ['hls', 'mp4', 'dash'] as const
 export type SourceType = typeof SOURCE_TYPES[number]
 
+/**
+ * 语音维度 provenance（ADR-199 D-199-3 五级推断链，Migration 112）。
+ * 顺序即优先级：行级线路名 token > 上游 vod_lang > 标题 token > 地区推断 > 未知。
+ * 升级规则：region_inferred/unknown 可被前三者覆盖，反向禁止（数据优先于推断）。
+ */
+export const AUDIO_LANGUAGE_SOURCES = ['source_name_token', 'vod_lang', 'title_token', 'region_inferred', 'unknown'] as const
+export type AudioLanguageSource = typeof AUDIO_LANGUAGE_SOURCES[number]
+
+/**
+ * 字幕维度 provenance（ADR-199 D-199-3）。比 audio 少 region_inferred——
+ * 字幕无可靠地区先验，不做推断。
+ */
+export const SUBTITLE_LANGUAGE_SOURCES = ['source_name_token', 'vod_lang', 'title_token', 'unknown'] as const
+export type SubtitleLanguageSource = typeof SUBTITLE_LANGUAGE_SOURCES[number]
+
 // ── 视频实体 ─────────────────────────────────────────────────────
 
 export interface Video {
@@ -367,6 +382,19 @@ export interface VideoSource {
    * 可选字段（CHG-352 R1 同范式防破坏消费方）；缺失视同 false。
    */
   hostTripped?: boolean
+  /**
+   * ADR-199 D-199-7（DTO 契约先行）：语音规范词（国语/粤语/日语…，封闭枚举）。
+   * null=未知。前台仅在同视频 ≥2 种语音版本时显示语言区分（用户裁定 D，UI 层派生）；
+   * matchActiveSourceIndex 跨集语言粘性 LANG-DIM-C 实装。
+   * 可选字段（CHG-352 R1 同范式防破坏消费方）；缺失视同 null。
+   */
+  audioLanguage?: string | null
+  /**
+   * ADR-199 D-199-7：字幕语言数组三态（与 DB 列同义，勿 COALESCE 抹平）：
+   * null=未知（含双语未知具体）/ []=明确无字幕 / ['中文','英文']=已知具体语言。
+   * 可选字段；缺失视同 null。
+   */
+  subtitleLanguages?: string[] | null
 }
 
 // ── 字幕 ─────────────────────────────────────────────────────────

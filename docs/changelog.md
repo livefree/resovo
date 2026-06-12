@@ -4708,3 +4708,19 @@
 - **质量门禁**：verify:adr-contracts EXIT=0（docs-only，test:changed 自动跳过口径）
 - **注意事项**：LANG-DIM-A 实施时 migration 编号 112（当前最新 111）；architecture.md §5.2 同步是绝对禁止项第 1 条强制副产物。
 - **[AI-CHECK]**：六问过——①零回归（纯 docs）；②不越界（未动代码）；③流程合规（ADR 经 Opus 子代理裁决后产出，未违反「主循环直接产出 ADR」禁令）；④BLOCKER 分叉留有完整双方案论证记录；⑤评审修订逐条可追溯；⑥拆卡边界与原子化判据一致。
+
+## [LANG-DIM-A] Migration 112 语言双维度 4 列 + types 契约 + architecture.md 同步
+- **完成时间**：2026-06-12
+- **记录时间**：2026-06-12 14:20
+- **执行模型**：claude-fable-5
+- **子代理**：无（schema 结构裁决已由 LANG-DIM-ADR 的 arch-reviewer claude-opus-4-8 锁定，commit trailer 引用之；对齐 SRCHEALTH-ADMIN-PLAYBACK-FB-A「ADR 裁决先行、实施卡免重复评审」先例）
+- **修改文件**：
+  - `apps/api/src/db/migrations/112_video_sources_language_dimensions.sql`（新增）— video_sources 4 列：`audio_language TEXT NULL`（规范词单值）/ `subtitle_languages TEXT[] NULL`（**三态**：NULL=未知含双语未知具体 / `{}`=明确无字幕 / `{中文,英文}`=已知；COMMENT 写明勿 COALESCE 抹平）/ `audio_language_source` CHECK 5 值 / `subtitle_language_source` CHECK 4 值（无 region_inferred）。幂等 ADD COLUMN IF NOT EXISTS；无 backfill（存量回填归 LANG-DIM-B 脚本）。
+  - `packages/types/src/video.types.ts` — `VideoSource` 加可选契约字段 `audioLanguage?: string | null` / `subtitleLanguages?: string[] | null`（D-199-7 契约先行，CHG-352 R1 可选字段范式防破坏消费方）+ `AUDIO_LANGUAGE_SOURCES` / `SUBTITLE_LANGUAGE_SOURCES` 双形态枚举（ADR-157）。
+  - `packages/types/src/index.ts` — 2 新枚举 const value re-export（ADR-157 硬约束，CHG-VSR-1 BLOCKER A-1 同位）。
+  - `docs/architecture.md` — §5.2 新增「语言双维度」小节 + `video_sources` 新增字段表 +4 行（112）。
+- **新增依赖**：无
+- **数据库变更**：Migration 112（上述 4 列；dev 真库对拍 ✅ + 幂等重跑 ✅ + information_schema 断言 4 列 ✅）
+- **质量门禁**：typecheck EXIT=0 / lint EXIT=0 / **test:changed 升全量 7237 passed 0 failed**（packages/types 基础包改动触发 ADR-180 自动升级；本次含此前抖动的 perf 基准在内全绿）
+- **注意事项**：① 4 列当前全为 DEFAULT 值（unknown/NULL），写入链路（五级推断链）与存量回填在 LANG-DIM-B；② 读侧 mapSource 尚未透出新列（D-199-7 契约已定，LANG-DIM-C 接通）；③ provenance 升级规则（region_inferred/unknown 可被前三级覆盖、反向禁止）是应用层守卫，DB 不强制。
+- **[AI-CHECK]**：六问过——①零回归（纯加列 + 可选契约字段，全量 7237 绿）；②不越界（未动写入/读取链路）；③沉淀（枚举入 @resovo/types 真源 + 双形态范式）；④无 any/空 catch；⑤一致性（COMMENT/CHECK/可选字段均对齐 109/059/CHG-352 先例）；⑥声明性文件未超限。
