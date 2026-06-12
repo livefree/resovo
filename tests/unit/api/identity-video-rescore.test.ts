@@ -132,7 +132,7 @@ describe('identityCandidateWorker job 分发', () => {
 // ── enqueue fire-and-forget ───────────────────────────────────────
 
 describe('enqueueIdentityVideoRescore', () => {
-  it('入队 payload + jobId 去抖形态；add 失败不抛（fire-and-forget）', async () => {
+  it('入队 payload 且不设固定 jobId（防 Bull completed 历史吞 add 抑制后续重评）；add 失败不抛', async () => {
     vi.resetModules()
     const add = vi.fn().mockResolvedValue({ id: 'j1' })
     vi.doMock('@/api/lib/queue', () => ({ identityCandidateQueue: { add } }))
@@ -143,8 +143,12 @@ describe('enqueueIdentityVideoRescore', () => {
     enqueueIdentityVideoRescore('v-123')
     expect(add).toHaveBeenCalledWith(
       { type: 'video-rescore', videoIds: ['v-123'] },
-      expect.objectContaining({ jobId: 'video-rescore-v-123' }),
+      expect.not.objectContaining({ jobId: expect.anything() }),
     )
+
+    // 同视频再次入队（后续 enrichment 触发）→ 必须再次 add，不被去抖吞掉
+    enqueueIdentityVideoRescore('v-123')
+    expect(add).toHaveBeenCalledTimes(2)
 
     add.mockRejectedValueOnce(new Error('redis down'))
     expect(() => enqueueIdentityVideoRescore('v-456')).not.toThrow()

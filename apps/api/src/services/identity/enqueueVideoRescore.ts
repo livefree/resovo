@@ -10,8 +10,11 @@
  * （externalIdLoader 双源——catalog 外部 ID 列 + is_primary manual_confirmed refs——
  * 均不认 candidate，证据面不变，重评必 noop）。
  *
- * jobId 按 videoId 固定：同视频短窗内重复绑定（如 douban+bangumi 接连 enrich）
- * 在前一 job 未完成时自动去抖；removeOnComplete 后可再次入队。
+ * 不设固定 jobId 去抖（Codex stop-time review FIX）：Bull 固定 jobId 在该 job 仍存于
+ * completed/failed 历史时（removeOnComplete: N 为「保留最近 N 个」，低流量下长期驻留）
+ * 会静默吞掉后续 add → 同视频后续绑定（douban 先 / bangumi 后等）不再触发重评，
+ * 变相复现本卡要修的空窗。重评为幂等 upsert（hash noop）且单视频 ≤50 对侧轻量，
+ * 重复跑成本可忽略——正确性（每次证据变化必触发）优先于去抖节省。
  */
 
 import { identityCandidateQueue } from '@/api/lib/queue'
@@ -21,7 +24,7 @@ export function enqueueIdentityVideoRescore(videoId: string): void {
   identityCandidateQueue
     .add(
       { type: 'video-rescore' as const, videoIds: [videoId] },
-      { jobId: `video-rescore-${videoId}`, removeOnComplete: 20, removeOnFail: 10 },
+      { removeOnComplete: 20, removeOnFail: 10 },
     )
     .catch((err: unknown) => {
       baseLogger.warn(

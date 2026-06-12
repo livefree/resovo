@@ -4637,3 +4637,15 @@
 - **端到端实证**：对本案两 videoId 实跑 runVideoRescore → `created:1 / noop:1`（幂等顺带实证）→ 候选行 status=pending / **identity_score=0.9500** / exact_id_hits=1 / trigger_source='enrichment' → 合并预选可见。
 - **门禁**：typecheck/lint EXIT=0 / test:changed 58 文件 840 passed / migration 真库对拍 + 幂等 ✓ / 无新增 admin route。
 - **遗留**：① admin 手动编辑 catalog 外部 ID 列（绕过六挂钩点的直写路径）不触发重评——候补评估；② 离线 full-rescan 自动 scheduler 候补（卡面「不做」，面向 scorer 升级等另类场景）。
+
+## [BUGFIX-IDENTITY-ENRICH-RESCORE-FIX] Codex 拦截：固定 jobId 抑制后续重评
+- **完成时间**：2026-06-11
+- **记录时间**：2026-06-11 23:40
+- **执行模型**：claude-fable-5
+- **子代理**：无
+- **修改文件**：
+  - `apps/api/src/services/identity/enqueueVideoRescore.ts` — 去掉固定 jobId（`video-rescore-${videoId}`），头注改为「不设固定 jobId」裁定
+  - `tests/unit/api/identity-video-rescore.test.ts` — 用例改断言不传 jobId + 同视频二次入队必再 add
+- **拦截内容**：「fixed video-rescore jobId can suppress later rescans」——Bull 固定 jobId 在该 job 仍存于 completed/failed 历史时静默吞掉后续 add；`removeOnComplete: 20` 是「保留最近 20 个」而非时间窗，低流量下完成 job 长期驻留 → 同视频后续绑定（douban 先 / bangumi 几分钟后）不再触发重评，**变相复现本卡要修的空窗**。
+- **裁定**：正确性（每次证据变化必触发）优先于去抖节省——重评为幂等 upsert（hash noop）且单视频 ≤50 对侧轻量，重复跑成本可忽略；备选「removeOnComplete: true 即时清除」仍残留 job 执行中 add 被吞的竞态窗口，弃用。
+- **门禁**：typecheck/lint EXIT=0 / test:changed 14 文件 260 passed。
