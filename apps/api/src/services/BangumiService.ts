@@ -23,6 +23,7 @@ import { getSubject, getEpisodes, getCharacters, searchSubjects, searchSubjectsS
 import type { BangumiClientConfig } from '@/api/lib/bangumi'
 import type { FetchSource } from '@/api/db/queries/external-fetch-log'
 import { normalizeForExternalMatch, stripExternalMatchPunct } from './TitleNormalizer'
+import { enqueueIdentityVideoRescore } from './identity/enqueueVideoRescore'
 import {
   computeLocalBangumiConfidence,
   computeRestBangumiConfidence,
@@ -319,6 +320,8 @@ export class BangumiService {
       // ADR-170 D-170-4：手动确认 → matched（与 catalog+ref 同事务）
       await videosQueries.updateVideoBangumiStatus(client, videoId, 'matched')
       await client.query('COMMIT')
+      // BUGFIX-IDENTITY-ENRICH-RESCORE：必须在 COMMIT 后入队（worker 读已提交证据面）
+      enqueueIdentityVideoRescore(videoId)
       return { updated: true }
     } catch (err) {
       try { await client.query('ROLLBACK') } catch { /* connection may already be lost */ }
@@ -548,6 +551,11 @@ export class BangumiService {
       // ADR-170 R-3：status 写入与 catalog+ref 同事务（消除「已提交但 status 未写」窗口）
       await videosQueries.updateVideoBangumiStatus(client, videoId, conflict ? 'unmatched' : 'matched')
       await client.query('COMMIT')
+      // BUGFIX-IDENTITY-ENRICH-RESCORE：COMMIT 后入队；conflict 降级（candidate ref +
+      // catalog 未写 bangumi 列）证据面不变 → 不入队
+      if (!conflict) {
+        enqueueIdentityVideoRescore(videoId)
+      }
       return { episodes: conflict ? 0 : result.episodes, dedupConflict: conflict, effectiveCatalogId: result.effectiveCatalogId }
     } catch (err) {
       try { await client.query('ROLLBACK') } catch { /* connection may already be lost */ }
@@ -576,6 +584,10 @@ export class BangumiService {
         linkedBy: 'auto',
         notes: JSON.stringify(breakdown),
       })
+      // BUGFIX-IDENTITY-ENRICH-RESCORE：candidate 不入队（证据面不变，见 enqueueVideoRescore 头注）
+      if (matchStatus === 'auto_matched') {
+        enqueueIdentityVideoRescore(videoId)
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       process.stderr.write(`[BangumiService] writeRef failed for ${videoId}: ${msg}\n`)

@@ -9,23 +9,32 @@
 import { identityCandidateQueue } from '@/api/lib/queue'
 import { db } from '@/api/lib/postgres'
 import { runIdentityRescore, type IdentityRescoreOptions } from '@/api/services/identity'
+import { runVideoRescore } from '@/api/services/identity/videoRescore'
 import { baseLogger, withJob } from '@/api/lib/logger'
 
 const workerLog = baseLogger.child({ worker: 'identity-candidate-worker' })
 
-export interface IdentityCandidateJobData {
-  type: 'full-rescan'
-  batchSize?: number
-  maxBucket?: number
-  parserVersion?: string
-  scorerVersion?: string
-}
+export type IdentityCandidateJobData =
+  | {
+      type: 'full-rescan'
+      batchSize?: number
+      maxBucket?: number
+      parserVersion?: string
+      scorerVersion?: string
+    }
+  // BUGFIX-IDENTITY-ENRICH-RESCORE：外部 ID 绑定后定向重评（enqueueVideoRescore 入队）
+  | { type: 'video-rescore'; videoIds: string[] }
 
 export function registerIdentityCandidateWorker(): void {
   // concurrency 1：advisory lock 已保证单实例，并发设 1 避免 Redis 侧浪费
   identityCandidateQueue.process(1, async (job) => {
     const data = job.data as IdentityCandidateJobData
     const jobLog = withJob(workerLog, job)
+
+    if (data.type === 'video-rescore') {
+      return runVideoRescore(db, jobLog, data.videoIds)
+    }
+
     const opts: IdentityRescoreOptions = {
       batchSize: data.batchSize,
       maxBucket: data.maxBucket,

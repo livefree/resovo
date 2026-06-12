@@ -42,6 +42,8 @@ vi.mock('@/api/lib/genreMapper', () => ({
 
 vi.mock('@/api/lib/queue', () => ({
   enrichmentQueue: { add: vi.fn().mockResolvedValue(undefined) },
+  // BUGFIX-IDENTITY-ENRICH-RESCORE：DoubanService 经 enqueueVideoRescore 引入
+  identityCandidateQueue: { add: vi.fn().mockResolvedValue({ id: 'j1' }) },
 }))
 
 // ── 真实导入（mocks 完成后）──────────────────────────────────────────

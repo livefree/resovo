@@ -2107,6 +2107,33 @@
    - **完成备注（2026-06-11，执行模型 claude-fable-5，子代理无）**：carryAdminPreview 纯函数沉淀 + DetailHero/EpisodePicker 两跳转点接入 + 4 单测。门禁：typecheck/lint EXIT=0、test:changed 4、e2e:video 5/5。明细见 changelog [BUGFIX-PREVIEW-LINK-B]。
    - **序列候补登记**：① ES 幽灵文档成因调查（-B 实测 2327 条 DB 已删行残留 ES，reconcileStale 仅 7 天窗）；② 零消费方死代码清理 CHORE（VideoDetailHero/EpisodeGrid/VideoCardWide）；③ 根因 ③ preview 凭证过期静默降级的可观测性增强（操作员提示 / 服务端 log）。
 
+---
+
+## [SEQ-20260611-02] identity 候选 enrichment 空窗修复（外部 ID 绑定后定向重评）
+
+- **状态**：✅ 已完成（1/1 卡收口 2026-06-11；本案对入候选 identity_score=0.95 实证）
+- **创建时间**：2026-06-11
+- **最后更新时间**：2026-06-11
+- **目标**：修复用户报告「两部同名『佐贺偶像是传奇 梦想银河乐园』bangumi id 相同却不在合并预选」的机制缺口。调查实证（本会话）：ingest shadow 评分时 enrichment 尚未绑外部 ID（实测晚 5-9 分钟）→ 纯标题分低于 0.75 候选门槛 `skippedLowScore` 不落行；外部 ID 绑定后**无任何重评机制**（ingest 一生一次；离线 full-rescan 手动触发、上次 06-03 早于两视频入库 06-07）；merge 预选默认 source=identity 且表非空不降级 legacy → 该对永久缺席。
+- **范围**：apps/api（migration 111 CHECK 扩值 / identity 定向重评 / worker job type / enrichment 挂钩）+ architecture.md 同步。无新端点（对齐 CHG-VIR-10「无新表无端点」先例，ADR-105a D-105a-16/17 体系延伸实施）。
+- **依赖**：无 BLOCKER。关联 ADR-105a（identity 管线）/ CHG-VIR-8/-10（基建复用）。
+
+### 任务列表
+
+1. **BUGFIX-IDENTITY-ENRICH-RESCORE** — 外部 ID 绑定后定向重评入 identity 候选（状态：✅ 已完成 2026-06-11）
+   - 创建时间：2026-06-11 ｜ 实际开始：2026-06-11 ｜ 完成时间：2026-06-11
+   - **完成备注（2026-06-11，执行模型 claude-fable-5，子代理无）**：5 项全交付——migration 111（CHECK 扩 'enrichment' + architecture.md 两处同步）/ videoRescore 定向重评（复用 blockingRecall·buildSides·scoreAndPersistPairs，IdentityTriggerSource alias 收口 5 处重复 union）/ worker 'video-rescore' union + enqueueVideoRescore（fire-and-forget + jobId 去抖）/ 六挂钩点（事务路径 COMMIT 后入队；candidate 降级不入队——externalIdLoader 双源不认）/ +5 单测 + 2 既有 queue mock 跟随。端到端实证：本案两视频实跑 → created:1/noop:1（幂等）→ 候选 pending / identity_score=0.9500 / exact_id_hits=1 → 合并预选可见。门禁：typecheck/lint EXIT=0、test:changed 840、migration 对拍+幂等 ✓。遗留：admin 直写 catalog 外部 ID 列不触发重评候补 + full-rescan scheduler 候补。明细见 changelog [BUGFIX-IDENTITY-ENRICH-RESCORE]。
+   - 验收口径：外部 ID 绑定落库后受影响视频自动定向重评入 identity 候选（`trigger_source='enrichment'`）；本案两部视频重评后出现在合并预选。
+   - 范围（5 项）：① migration 111 `identity_candidate.trigger_source` CHECK +'enrichment' + architecture.md 同步 ② `services/identity/videoRescore.ts` 定向重评（复用 blockingRecall/buildSides/scoreAndPersistPairs 共享层）+ pairScoringPersist triggerSource 类型扩值 ③ `identityCandidateWorker` job union +'video-rescore' + queue helper `enqueueIdentityVideoRescore`（fire-and-forget + jobId 去抖） ④ enrichment ref 写入完成位点挂钩（MetadataEnrichService ×1 / DoubanService ×2 / BangumiService ×3） ⑤ 单测 + 端到端验证（本案两视频 rescore 后入候选）。
+   - 跨层理由：CHECK 枚举扩值与其唯一消费方（pairScoringPersist）同一契约闭环，无 UI 层。
+   - 依赖：无。建议模型：sonnet。
+
+### 门禁与验证（每卡）
+
+- 必跑：`npm run typecheck` / `npm run lint` / `npm run test:changed`；migration 真库对拍 + 幂等重跑。
+- 无新增 admin route（`verify:endpoint-adr` 不触发）；CHECK 扩值同步 architecture.md（schema 同步红线）。
+- 端到端：对本案两 videoId 跑 video-rescore → `identity_candidate` 出现该对（exact bangumi 353181 证据）→ `GET /admin/video-merges/candidates` 可见。
+
 ### 门禁与验证（每卡）
 
 - 必跑：`npm run typecheck` / `npm run lint` / `npm run test:changed`（commit 前）。

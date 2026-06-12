@@ -13,6 +13,12 @@ import type { Pool, PoolClient } from 'pg'
 
 // ── 行类型 ────────────────────────────────────────────────────────
 
+/**
+ * 候选触发来源（migration 086 CHECK 真源；111 扩 'enrichment'——外部 ID 绑定后定向重评，
+ * BUGFIX-IDENTITY-ENRICH-RESCORE）。本 alias 为 TS 侧唯一收口，扩值须同步 CHECK migration。
+ */
+export type IdentityTriggerSource = 'ingest' | 'offline-rescore' | 'manual-search' | 'enrichment'
+
 export interface IdentityCandidateRow {
   readonly id: string
   readonly left_video_id: string
@@ -26,7 +32,7 @@ export interface IdentityCandidateRow {
   readonly legacy_score: string | null
   readonly identity_score: string
   readonly strong_negative_reasons: string[]
-  readonly trigger_source: 'ingest' | 'offline-rescore' | 'manual-search'
+  readonly trigger_source: IdentityTriggerSource
   readonly group_key: string | null
   readonly revived_from_candidate_id: string | null
   readonly superseded_by_candidate_id: string | null
@@ -46,7 +52,7 @@ export interface IdentityCandidateInsert {
   legacyScore: number | null
   identityScore: number
   strongNegativeReasons: readonly string[]
-  triggerSource: 'ingest' | 'offline-rescore' | 'manual-search'
+  triggerSource: IdentityTriggerSource
   groupKey: string | null
   revivedFromCandidateId?: string | null
 }
@@ -182,7 +188,7 @@ export async function listForCompareReport(
     limit: number
     offset: number
     /** CHG-VIR-10：可选 trigger_source 切片（ingest vs offline-rescore）；缺省全量 */
-    triggerSource?: 'ingest' | 'offline-rescore' | 'manual-search'
+    triggerSource?: IdentityTriggerSource
   },
 ): Promise<IdentityCandidateCompareRow[]> {
   const r = await db.query<IdentityCandidateCompareRow>(
@@ -358,7 +364,7 @@ export async function countCompareBuckets(
 
 /** 三桶按 trigger_source 切片（CHG-VIR-10 shadow precision/recall 报表：ingest vs offline 分布）。 */
 export interface CompareBucketsBySourceRow {
-  readonly triggerSource: 'ingest' | 'offline-rescore' | 'manual-search'
+  readonly triggerSource: IdentityTriggerSource
   readonly pendingTotal: number
   readonly blockedTotal: number
   readonly crossGroupTotal: number

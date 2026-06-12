@@ -40,6 +40,8 @@ vi.mock('@/api/lib/queue', () => ({
   enrichmentQueue: {
     add: vi.fn().mockResolvedValue({}),
   },
+  // BUGFIX-IDENTITY-ENRICH-RESCORE：DoubanService 经 enqueueVideoRescore 引入
+  identityCandidateQueue: { add: vi.fn().mockResolvedValue({ id: 'j1' }) },
 }))
 
 vi.mock('@/api/lib/postgres', () => ({

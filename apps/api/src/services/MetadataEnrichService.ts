@@ -28,6 +28,7 @@ import * as sourcesQueries from '@/api/db/queries/sources'
 import * as videosQueries from '@/api/db/queries/videos'
 import * as catalogQueries from '@/api/db/queries/mediaCatalog'
 import type { DoubanEntryMatch } from '@/api/db/queries/externalData'
+import { enqueueIdentityVideoRescore } from './identity/enqueueVideoRescore'
 
 // ── 公开接口 ──────────────────────────────────────────────────────
 
@@ -398,6 +399,11 @@ export class MetadataEnrichService {
         linkedBy: 'auto',
         notes: JSON.stringify(breakdown),
       })
+      // BUGFIX-IDENTITY-ENRICH-RESCORE：外部 ID 证据面变化 → 定向重评入 identity 候选。
+      // candidate 不入队（externalIdLoader 双源均不认 candidate，证据面不变）。
+      if (matchStatus === 'auto_matched') {
+        enqueueIdentityVideoRescore(videoId)
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       process.stderr.write(`[MetadataEnrichService] writeExternalRef failed for ${videoId}: ${msg}\n`)

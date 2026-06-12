@@ -4616,3 +4616,24 @@
   - `apps/api/src/db/migrations/110_videos_short_id_dash_cleanup.sql` — FIX4 勘误：home_banners 实有 049 创建的 `home_banners_set_updated_at_trg`（BEFORE UPDATE，pg_trigger 实查启用中），FIX3 头注「无 trigger」为事实错误（当时仅读 049 前 48 行漏过 50-62 行 trigger 段）。头注改为「各表 trigger 实况」三条勘正（banners 有 / videos 仅状态机 trigger 故显式 SET updated_at 必要 / versions 无）；banner UPDATE 删冗余显式 `SET updated_at = NOW()`（trigger 强制覆盖，显式写法徒留误导）。
 - **行为影响**：零——显式 SET 与 trigger 净效果一致，错的是论述与冗余代码；「banner updated_at 推进 = 诚实保守信号」裁定保留（论据从「无 trigger 显式推进」勘正为「049 trigger 自然推进」）。
 - **验证**：事务内构造（banner updated_at=2026-06-01 过去值）→ 跑 110 → 断言 banner 同步 + updated_at 由 trigger 推进至 NOW + 草稿时间戳保持 → ROLLBACK 不留痕。门禁三件套 EXIT=0。
+
+## [BUGFIX-IDENTITY-ENRICH-RESCORE] 外部 ID 绑定后定向重评入 identity 候选
+- **完成时间**：2026-06-11
+- **记录时间**：2026-06-11 23:20
+- **执行模型**：claude-fable-5（用户会话人工覆盖 sonnet 建议）
+- **子代理**：无
+- **修改文件**：
+  - `apps/api/src/db/migrations/111_identity_candidate_trigger_source_enrichment.sql` — 新建：trigger_source CHECK 扩 `'enrichment'`（DROP IF EXISTS + ADD 幂等；真库对拍 + 幂等重放 ✓）
+  - `docs/architecture.md` — identity_candidate trigger_source 枚举 + enrichment 定向重评机制两处同步（任务卡标注"更新文档"）
+  - `apps/api/src/db/queries/identity-candidate.ts` — 新 `IdentityTriggerSource` alias 收口 4 处重复 union + 扩值
+  - `apps/api/src/services/identity/videoRescore.ts` — 新建 `runVideoRescore`：单视频双键召回（复用 recallCoreKeyCounterparts/recallExternalIdCounterparts）→ buildSides → scoreAndPersistPairs（triggerSource='enrichment'）；与 ingestShadow 共用底层原语、无 bind 判定（编排器各自轻薄）
+  - `apps/api/src/services/identity/enqueueVideoRescore.ts` — 新建 fire-and-forget 入队 helper（jobId=`video-rescore-${videoId}` 短窗去抖；失败仅 warn 不阻断 enrichment）
+  - `apps/api/src/services/identity/pairScoringPersist.ts` — triggerSource 改用共享 alias
+  - `apps/api/src/workers/identityCandidateWorker.ts` — job data 改 union +`{type:'video-rescore', videoIds}` 分支
+  - `apps/api/src/services/MetadataEnrichService.ts` / `DoubanService.ts`（×2）/ `BangumiService.ts`（×3） — 六个 ref 写入完成位点挂钩；**事务路径（Bangumi confirmMatch / applyAutoMatchAtomic）在 COMMIT 后入队**（worker 读已提交证据面）；candidate 降级不入队（externalIdLoader 双源——catalog 外部 ID 列 + is_primary manual_confirmed refs——均不认 candidate，证据面不变）
+  - `tests/unit/api/identity-video-rescore.test.ts` — 新建 5 用例（编排/canonical 排序/triggerSource/软删跳过/无对侧/worker 分发/enqueue 容错+去抖）
+  - `tests/unit/api/doubanService-manual.test.ts` / `stagingDouban.test.ts` — queue mock 补 identityCandidateQueue 导出
+- **背景**：用户报告两部同名「佐贺偶像是传奇 梦想银河乐园」（bangumi 353181 相同、同 catalog 双站点实例）不在合并预选。调查实证：ingest shadow 评分时 enrichment 尚未绑外部 ID（晚 5-9 分钟）→ 纯标题分 < 0.75 门槛不落行；绑定后无重评机制（ingest 一生一次 / 离线 full-rescan 手动、上次 06-03 早于入库 06-07）；merge 预选默认 identity 源不降级 legacy → 永久缺席。
+- **端到端实证**：对本案两 videoId 实跑 runVideoRescore → `created:1 / noop:1`（幂等顺带实证）→ 候选行 status=pending / **identity_score=0.9500** / exact_id_hits=1 / trigger_source='enrichment' → 合并预选可见。
+- **门禁**：typecheck/lint EXIT=0 / test:changed 58 文件 840 passed / migration 真库对拍 + 幂等 ✓ / 无新增 admin route。
+- **遗留**：① admin 手动编辑 catalog 外部 ID 列（绕过六挂钩点的直写路径）不触发重评——候补评估；② 离线 full-rescan 自动 scheduler 候补（卡面「不做」，面向 scorer 升级等另类场景）。

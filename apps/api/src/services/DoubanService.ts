@@ -22,6 +22,7 @@ import type { DoubanPreviewFound, DoubanPreviewMiss, DoubanPreview } from '@/typ
 import type { EnrichJobData } from './MetadataEnrichService'
 import { buildManualMetaQuality } from './MetadataEnrichService'
 import { updateVideoEpisodes } from '@/api/db/queries/videos'
+import { enqueueIdentityVideoRescore } from './identity/enqueueVideoRescore'
 
 // ── 类型 ──────────────────────────────────────────────────────────
 
@@ -209,6 +210,8 @@ export class DoubanService {
       isPrimary: true,
       linkedBy: 'moderator',
     })
+    // BUGFIX-IDENTITY-ENRICH-RESCORE：外部 ID 证据面变化 → 定向重评（fire-and-forget）
+    enqueueIdentityVideoRescore(videoId)
 
     // 读取最新 catalog 计算 meta_score
     const catalog = await catalogQueries.findCatalogById(this.db, video.catalog_id)
@@ -394,6 +397,8 @@ export class DoubanService {
       isPrimary: true,
       linkedBy: 'moderator',
     })
+    // BUGFIX-IDENTITY-ENRICH-RESCORE：外部 ID 证据面变化 → 定向重评（fire-and-forget）
+    enqueueIdentityVideoRescore(videoId)
 
     const catalog = await catalogQueries.findCatalogById(this.db, video.catalog_id)
     const metaScore = calcMetaScore(catalog)

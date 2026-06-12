@@ -30,6 +30,8 @@
 - **执行模型**：claude-opus-4-8（主循环）。子代理调用：无（无共享组件 Props 改动 / 无新端点）。
 - **遗留标记**：moderation visual 快照（`tests/visual/admin-moderation.visual.spec.ts`，独立 `admin-visual` project，非必跑门禁）布局变更后需 `npm run test:visual:update` 重生成。
 
+_（**SEQ-20260611-02 identity 候选 enrichment 空窗修复 ✅ 1/1 卡收口 2026-06-11**（用户报告两部同名「佐贺偶像是传奇 梦想银河乐园」bangumi id 相同不在合并预选）——根因 = ingest shadow 一次性快照 vs enrichment 异步证据时差（bangumi id 晚 5-9 分钟绑定 → 纯标题分 < 0.75 不落行）+ 绑定后无重评机制 + 离线 rescan 手动无 scheduler。修复 = migration 111 trigger_source +'enrichment' / videoRescore 定向重评 / worker 'video-rescore' job / 六 enrichment 完成位点 fire-and-forget 挂钩（事务路径 COMMIT 后）。端到端实证本案对入候选 identity_score=0.95 合并预选可见。主循环 claude-fable-5；门禁全绿。**工作台空闲**。）_
+
 _（**SEQ-20260611-01 视频详情/播放页 404 修复 ✅ 全 4 卡收口 2026-06-11**（用户报告「后台预览播放页/详情页有时 404」+「前台已公开视频同样 404」）——调查实证四根因：④ **short_id 字母表冲突**（nanoid 默认字母表含 `-` 被 extractShortId 切坏，dev 库 12.1% 视频必现 404）→ -A 生成收口（lib/short-id.ts 唯一真源）+ -B migration 110 清洗 526 行 + ES 重同步（附带清理 2327 条幽灵文档，端到端抽验 HTTP 200）；① 视频库「查看详情（前台）」相对路径开后台域 → LINK-A buildAdminPreviewUrl 收口；② 详情页跳 watch 丢 `?preview=admin` → LINK-B carryAdminPreview 透传；③ refresh 过期静默降级 = ADR-160 设计内（可观测性增强候补）。主循环 claude-fable-5 全程；逐卡门禁全绿（e2e:admin 82/82 + e2e:video 5/5）。候补登记见 task-queue 序列。**工作台空闲**。）_
 
 _（**BUGFIX-PLAYBACK-VERIFY-LINE-REFRESH ✅ 2026-06-11**（用户报告实际播放成功后线路仍显「待测」）——DB 实测确认后端在生效（`last_admin_verified_at`+`render_status=ok`），纯前端刷新链断点：`onVerified→refetchQueue` 只刷左队列、不 reload LinesPanel `state.lines`；不能用全量 reload（Y4 自动选首行打断播放）。修：controller 新 `applyExternalHealthUpdate` **外科式**只改被播放线路 render/probe（不 reload/不动选中）+ AdminPlayer onVerified 带回 verify 结果 + PendingCenter `verifySignal`(nonce) 中转 + LinesPanel effect 应用。门禁全绿（test:changed 194 / e2e:admin 82/82 / +4 单测）。「实际播放」pill 播放成功即变「可用」。**工作台空闲**。）_

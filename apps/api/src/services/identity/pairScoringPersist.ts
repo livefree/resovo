@@ -10,6 +10,7 @@
 
 import type { Pool } from 'pg'
 import type { PairScore } from '@resovo/types'
+import type { IdentityTriggerSource } from '@/api/db/queries/identity-candidate'
 import { parseTitle } from '../TitleIdentityParser'
 import { fetchVideoDetailsForCandidates } from '@/api/db/queries/video-merge-candidates'
 import { computeEvidenceHash, type PairFieldSnapshot } from './evidenceHash'
@@ -92,7 +93,7 @@ function sharedExternalBucketKeys(left: PairSideInput, right: PairSideInput): st
 export interface PersistPairsOptions {
   readonly parserVersion: string
   readonly scorerVersion: string
-  readonly triggerSource: 'ingest' | 'offline-rescore' | 'manual-search'
+  readonly triggerSource: IdentityTriggerSource
 }
 
 /**
