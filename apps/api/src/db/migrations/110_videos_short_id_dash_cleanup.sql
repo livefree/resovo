@@ -45,8 +45,14 @@
 --   BEFORE UPDATE 推进 draft.updated_at → 本应 stale 的草稿被掩盖 → 编辑者可能发布
 --   过期草稿全量覆盖正式表新改动。机械 ID 重映射不是编辑动作，不得扰动陈旧性判定：
 --   draft UPDATE 期间禁用该 trigger、不触碰 updated_at/updated_by。
---   （home_publish_versions 无 updated_at 列；home_banners 行真实变更且无 trigger，
---   显式推进 updated_at 属诚实信号——方向保守：只会让引用该 banner 的草稿显 stale。）
+--   各表 trigger 实况（FIX4 勘误——FIX3 曾误记 home_banners「无 trigger」）：
+--   - home_banners：**有** 049 同款 BEFORE UPDATE trigger（home_banners_set_updated_at_trg）
+--     → updated_at 由 trigger 自然推进，UPDATE 不显式 SET（写了也会被 trigger 覆盖，
+--     徒留误导）。推进本身是裁定保留的诚实信号——行真实变更，方向保守：只会让
+--     引用该 banner 的草稿显 stale（误报可复核 vs 掩盖丢数据）。
+--   - videos：仅 trg_videos_state_machine（状态守卫，无 updated_at trigger）
+--     → 显式 SET updated_at 必要（reconcile 回溯感知依赖）。
+--   - home_publish_versions：无 trigger、无 updated_at 列。
 
 -- 草稿 updated_at 保持原值（见头注「陈旧性信号保护」；migrate.ts 单事务内禁用安全）
 ALTER TABLE home_config_drafts DISABLE TRIGGER home_config_drafts_set_updated_at_trg;
@@ -73,10 +79,10 @@ BEGIN
         updated_at = NOW()
     WHERE id = r.id;
 
-    -- 引用方同步 ①：video banner 的 link_target 直存 short_id（见头注排查结论）
+    -- 引用方同步 ①：video banner 的 link_target 直存 short_id（见头注排查结论）。
+    -- updated_at 由 049 trigger 自然推进（见头注「各表 trigger 实况」），不显式 SET。
     UPDATE home_banners
-    SET link_target = new_id,
-        updated_at = NOW()
+    SET link_target = new_id
     WHERE link_type = 'video'
       AND link_target = r.short_id;
 

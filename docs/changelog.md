@@ -4606,3 +4606,13 @@
 - **拦截内容**：「home_config_drafts update advances draft.updated_at and can hide stale drafts」——staleness 双信号之 `tablesNewer = max(三真源表 updated_at) > draft.updatedAt`（`HomePublishService.getDraftWithStaleness`）；FIX2 的草稿 UPDATE 经 trigger 推进 updated_at → 本应 stale 的草稿翻回不陈旧 → 编辑者可能发布过期草稿全量覆盖正式表新改动。机械 ID 重映射不是编辑动作，不得扰动陈旧性判定。
 - **边界裁定**：`home_publish_versions` 无 updated_at 列不受影响；`home_banners` 行真实变更且无 trigger，显式推进 updated_at 属诚实信号——方向保守（只会让引用该 banner 的草稿显 stale，误报可复核 vs 掩盖丢数据）。
 - **验证**：事务内构造陈旧草稿（updated_at=2026-06-01）→ 跑 110 → 断言 config 已同步 + updated_at 保持原值 + migration 后普通 UPDATE trigger 正常推进 → ROLLBACK 不留痕。门禁三件套 EXIT=0。
+
+## [BUGFIX-SHORTID-DASH-B-FIX4] Codex 第 4 拦截：FIX3 头注误记 home_banners「无 trigger」
+- **完成时间**：2026-06-11
+- **记录时间**：2026-06-11 22:55
+- **执行模型**：claude-fable-5
+- **子代理**：无
+- **修改文件**：
+  - `apps/api/src/db/migrations/110_videos_short_id_dash_cleanup.sql` — FIX4 勘误：home_banners 实有 049 创建的 `home_banners_set_updated_at_trg`（BEFORE UPDATE，pg_trigger 实查启用中），FIX3 头注「无 trigger」为事实错误（当时仅读 049 前 48 行漏过 50-62 行 trigger 段）。头注改为「各表 trigger 实况」三条勘正（banners 有 / videos 仅状态机 trigger 故显式 SET updated_at 必要 / versions 无）；banner UPDATE 删冗余显式 `SET updated_at = NOW()`（trigger 强制覆盖，显式写法徒留误导）。
+- **行为影响**：零——显式 SET 与 trigger 净效果一致，错的是论述与冗余代码；「banner updated_at 推进 = 诚实保守信号」裁定保留（论据从「无 trigger 显式推进」勘正为「049 trigger 自然推进」）。
+- **验证**：事务内构造（banner updated_at=2026-06-01 过去值）→ 跑 110 → 断言 banner 同步 + updated_at 由 trigger 推进至 NOW + 草稿时间戳保持 → ROLLBACK 不留痕。门禁三件套 EXIT=0。
