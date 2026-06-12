@@ -2207,8 +2207,8 @@
 
 1. **GOV-1** — 止血：观测重写 + 候选重扫 + 旧版本候选 hygiene（状态：✅ 已完成 2026-06-12）
    - 实跑：4405 条 1.2.0 观测 → 重扫 696 桶/1061 对（created 10 / superseded 205 / blocked 190 / low-score 842）→ 残留 2 死对子（对侧已软删）显式 superseded → 当前版本 pending 215 / 旧版本残留 0；重案解密 0.9 入候选（标题标准化→语言变体合并闭环打通）。详见 changelog [GOV-1]。
-2. **GOV-2** — 消费侧诚实化：identity 空态显式信号 + legacy total 口径修复（9-C FIX-2 收口）（状态：📋 待开始，依赖 GOV-1）
-   - identity probe 0 且存在旧版本 pending → 响应带 staleVersion 标记，UI 显示「候选待重评」而非静默 legacy；legacy 路径过滤先于分页（或 total 改计过滤后），消除「共 N 条但行散落分页」。
+2. **GOV-2** — 消费侧诚实化：identity 空态显式信号 + legacy total 口径修复（9-C FIX-2 收口）（状态：✅ 已完成 2026-06-12）
+   - 落地：staleIdentityPending 信封字段 + UI「候选待重评」警示条；legacy 有界全量重构（cap=2000 + truncated 复用），total=过滤后组数与 identity 语义统一。全量 7275/7275。详见 changelog [GOV-2]。
 3. **GOV-3** — 版本 bump 联动自动化（状态：📋 待开始；**需 arch-reviewer (Opus) 裁决触发策略**——自动全量重扫的成本护栏 / 检测位点〔worker 启动 vs cron〕/ 观测重写编排）
 4. **GOV-4** — 标题变更重评 hook（状态：📋 待开始）：migration 113 `trigger_source` CHECK +'title_change' + VideoService 标题更新位点 enqueueVideoRescore + 批量清洗脚本钩子 + architecture.md 同步。
 5. **GOV-5** — 周期重扫 scheduler（状态：📋 待开始）：worker node-cron 低峰全量重扫兜底（advisory lock / MAX_BUCKET 护栏已有）+ fire-and-forget 失败计数可观测。

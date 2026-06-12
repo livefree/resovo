@@ -4844,3 +4844,19 @@
 - **质量门禁**：typecheck/lint EXIT=0 / test:changed scripts+docs-only 空集放行（重扫链路经真库四步收敛断言验证）。
 - **注意事项**：① 本卡是手工止血，「版本 bump → 自动观测重写+重扫」联动归 GOV-3（需 arch-reviewer 裁决触发策略）；② identity 空态静默降级仍在（再发版本搁浅仍会复现 46/3 表象）——GOV-2 收口；③ 215 pending 中含强负拦截/低分灰区之外的真候选，工作区人工裁定消化。
 - **[AI-CHECK]**：六问过——①只读+幂等工具链，hygiene 仅动 2 行且语义诚实（superseded=被新版口径取代）；②修复链（观测→重扫→hygiene→断言）四步可在生产照搬；③runner 沉淀为与队列版互补的 ops 工具；④无 any/空 catch；⑤审计行（confirmed/rejected）零触碰；⑥范围未超。
+
+## [GOV-2] 消费侧诚实化：identity 版本搁浅显式信号 + legacy total 口径修复（9-C FIX-2 收口）
+- **完成时间**：2026-06-12
+- **记录时间**：2026-06-12 18:25
+- **执行模型**：claude-fable-5
+- **子代理**：无（信封加性可选字段走 CHG-352 R1 范式，非组件 Props 契约不触发强制 Opus 情形；偏离说明：@resovo/types 改动未过 Opus——对照 CHG-VSR-1 先例为 12 枚举 30 字段契约地基，本卡为单一可选观测布尔，比例原则下判定不需）
+- **修改文件**：
+  - `packages/types/src/video-merge.types.ts` — `ListCandidatesResult.staleIdentityPending?`（identity 空且存在旧版本 pending → true）；`truncated` 注释更新（legacy 同语义复用）。
+  - `apps/api/src/db/queries/identity-candidate.ts` — `hasStaleVersionPending`（EXISTS 探测非当前版本 pending）。
+  - `apps/api/src/services/VideoMergesService.ts` — ① identity 空表降级前探测 stale，flag 随 legacy 数据透出；② **legacy 路径重构**：废 SQL offset 分页，改「有界全量取组（cap=MAX_COLLAPSE_PAIRS=2000，超 cap 标 truncated）→ 组装+minScore+组级谓词过滤 → 排序 → total=过滤后组数 → 内存切片」——filter-after-paginate 结构性消除，与 identity 路径 stage 5 同构。
+  - `apps/server-next/src/app/admin/merge/_client/MergeCandidatesSection.tsx` — stale 警示条（含修复链指引），stale 态替换泛用降级提示防双条。
+  - `tests/unit/api/video-merge-candidates.test.ts` — 旧分页用例改锁新契约（offset 恒 0 / total=过滤后）+4 新用例（过滤先于分页自洽 / stale 双态）；`identity-source-switch.test.ts` mock 补 hasStaleVersionPending。
+- **新增依赖**：无；**数据库变更**：无。
+- **质量门禁**：typecheck/lint EXIT=0 / **types 基础包升全量 7275/7275 全绿**（ADR-180；本轮含此前 listCandidates perf 与 CSV 导出两个抖动用例在内零失败）。
+- **注意事项**：① legacy 全量重构使单次请求 hydrate 上限从 limit(≤100) 组升至 cap(2000) 组——legacy 仅降级态可接受，生产 identity 主路径不受影响；② stale 警示条文案含脚本名，GOV-3 自动化落地后可改为「自动重评进行中」。
+- **[AI-CHECK]**：六问过——①双路径 total 语义统一（页内自洽消除散落）；②可选字段范式防破坏消费方（5 处既有消费零改动）；③谓词复用 groupMatchesFilters 单真源；④无 any/空 catch；⑤偏离（types 未过 Opus）已声明并论证；⑥范围未超。

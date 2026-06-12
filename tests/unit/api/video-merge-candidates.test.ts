@@ -225,16 +225,59 @@ describe('VideoMergesService.listCandidates', () => {
     expect(args2[0]).toBe('anime')
   })
 
-  it('分页：page=2, limit=10 → offset=10', async () => {
+  it('分页（GOV-2 过滤先于分页）：SQL 恒取有界全量（offset=0），total=过滤后组数', async () => {
     mockQuery
       .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rows: [{ total: '25' }] })
     const res = await svc.listCandidates({ source: 'legacy', type: undefined, minScore: 0.6, limit: 10, page: 2 })
     const args: unknown[] = mockQuery.mock.calls[0][1] as unknown[]
-    expect(args[2]).toBe(10)   // offset
+    expect(args[2]).toBe(0)     // offset 恒 0（有界全量，切片在内存过滤排序后）
+    expect(args[1]).toBe(2000)  // limit = MAX_COLLAPSE_PAIRS cap
     expect(res.page).toBe(2)
     expect(res.limit).toBe(10)
-    expect(res.total).toBe(25)
+    expect(res.total).toBe(0)   // 无组 → total=0（不再回显未过滤 raw 计数 25）
+    expect(res.truncated).toBeUndefined() // 25 < cap 不截断
+  })
+
+  // ── GOV-2（SEQ-20260612-03）：legacy filter-before-paginate + 截断/版本搁浅信号 ──
+
+  it('GOV-2：过滤先于分页——total=过滤后组数、切片在排序后（消除「共 N 条散落分页」）', async () => {
+    const passGroup = (key: string, ids: [string, string]) =>
+      ({ title_normalized: key, year: 2024, type: 'movie', video_ids: ids, video_count: '2' })
+    const failGroup = (key: string, id: string) =>
+      ({ title_normalized: key, year: 2024, type: 'movie', video_ids: [id], video_count: '1' })
+    mockQuery
+      .mockResolvedValueOnce({ rows: [
+        passGroup('aa', ['v1', 'v2']), failGroup('bb', 'v3'),
+        passGroup('cc', ['v4', 'v5']), failGroup('dd', 'v6'),
+      ] })
+      .mockResolvedValueOnce({ rows: [{ total: '4' }] })
+      .mockResolvedValueOnce({ rows: ['v1', 'v2', 'v4', 'v5'].map((id) => makeVideoRow(id, ['site-a', 'site-b'])) })
+    const res = await svc.listCandidates({ source: 'legacy', type: undefined, minScore: 0, limit: 1, page: 2 })
+    expect(res.total).toBe(2)          // 过滤后 2 组（单视频组剔除；不是 raw 4）
+    expect(res.data).toHaveLength(1)   // page=2/limit=1 → 切片在过滤排序后，页内自洽
+    expect(res.source).toBe('legacy')
+  })
+
+  it('GOV-2：identity 空 + 存在旧版本 pending → staleIdentityPending=true 随 legacy 透出', async () => {
+    mockQuery
+      .mockResolvedValueOnce({ rows: [] })                    // identity probe（轻列）空
+      .mockResolvedValueOnce({ rows: [{ exists: true }] })    // hasStaleVersionPending
+      .mockResolvedValueOnce({ rows: [] })                    // legacy raw groups
+      .mockResolvedValueOnce({ rows: [{ total: '0' }] })      // legacy count
+    const res = await svc.listCandidates({ source: 'identity', type: undefined, minScore: 0.6, limit: 20, page: 1 })
+    expect(res.source).toBe('legacy')
+    expect(res.staleIdentityPending).toBe(true)
+  })
+
+  it('GOV-2：identity 空且无旧版本 pending（真空表）→ 不带 staleIdentityPending', async () => {
+    mockQuery
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ exists: false }] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ total: '0' }] })
+    const res = await svc.listCandidates({ source: 'identity', type: undefined, minScore: 0.6, limit: 20, page: 1 })
+    expect(res.staleIdentityPending).toBeUndefined()
   })
 
   // ADR-150 阶段 5 EP-4 follow-up（2026-05-25）：Merge sort 全栈打通 / Service 层 sort 单测

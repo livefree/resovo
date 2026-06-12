@@ -78,6 +78,28 @@ const SELECT_COLS = `
   trigger_source, group_key, revived_from_candidate_id, superseded_by_candidate_id,
   created_at::text, updated_at::text`
 
+// ── ⓪ 旧版本 pending 探测（GOV-2 消费侧诚实化 / SEQ-20260612-03）────────
+
+/**
+ * 是否存在**非当前版本**的 pending 候选——identity 当前版本空表时区分
+ * 「真空表（可静默降级 legacy）」vs「版本搁浅（升级后未重扫，需 UI 警示）」。
+ * 2026-06-12 实证：parser bump 搁浅 207 pending → 工作区静默降级被用户当 bug 报告。
+ */
+export async function hasStaleVersionPending(
+  db: Pool,
+  current: { parserVersion: string; scorerVersion: string },
+): Promise<boolean> {
+  const r = await db.query<{ exists: boolean }>(
+    `SELECT EXISTS(
+       SELECT 1 FROM identity_candidate
+       WHERE status = 'pending'
+         AND (parser_version <> $1 OR scorer_version <> $2)
+     ) AS exists`,
+    [current.parserVersion, current.scorerVersion],
+  )
+  return r.rows[0]?.exists ?? false
+}
+
 // ── ① 查当前 pending（先比 hash no-op 判定 / R5）─────────────────────
 
 export async function findPendingByPairKey(

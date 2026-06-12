@@ -21,6 +21,8 @@ vi.mock('@/api/db/queries/identity-candidate', () => ({
   listPendingCandidatePairsLight: vi.fn(),
   listPendingPairsLightByVideoIds: vi.fn(),
   listPendingPairsByIds: vi.fn(),
+  // GOV-2：identity 空表降级前版本搁浅探测（默认 false=真空表静默降级）
+  hasStaleVersionPending: vi.fn().mockResolvedValue(false),
 }))
 vi.mock('@/api/db/queries/video-merge-candidates', () => ({
   fetchRawCandidateGroups: vi.fn(),

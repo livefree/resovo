@@ -82,6 +82,8 @@ export function CandidatesSection() {
   const [total, setTotal] = useState(0)
   // D-105a-19：identity 路径 cap 截断回显（警示条消费）
   const [truncated, setTruncated] = useState(false)
+  // GOV-2：版本搁浅信号（identity 空 + 旧版本 pending 存在 → 警示「候选待重评」）
+  const [staleIdentityPending, setStaleIdentityPending] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<Error | null>(null)
   const [expandedKeys, setExpandedKeys] = useState<ReadonlySet<string>>(new Set())
@@ -110,6 +112,7 @@ export function CandidatesSection() {
         setData(res.data)
         setTotal(res.total)
         setTruncated(res.truncated === true)
+        setStaleIdentityPending(res.staleIdentityPending === true)
         setEffectiveSource(res.source ?? null)
       })
       .catch((e: unknown) => setError(e instanceof Error ? e : new Error('加载失败')))
@@ -340,9 +343,16 @@ export function CandidatesSection() {
   const sourceToolbar = (
     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
       <MergeSearchInput filters={filters} onCommit={handleFiltersChange} />
-      {effectiveSource === 'legacy' && !loading && (
+      {effectiveSource === 'legacy' && !staleIdentityPending && !loading && (
         <span style={FALLBACK_NOTE_STYLE} data-testid="merge-source-fallback-note">
           多证据候选为空，已降级实时聚合
+        </span>
+      )}
+      {/* GOV-2（SEQ-20260612-03）：版本搁浅显式警示——identity 空非真空表，而是升级后未重扫 */}
+      {staleIdentityPending && !loading && (
+        <span style={FALLBACK_NOTE_STYLE} data-testid="merge-stale-identity-note">
+          候选待重评：存在旧版本身份候选（解析器/评分器升级后未重扫），当前为降级口径——请执行
+          backfill-title-observations + run-identity-rescore-inline 恢复
         </span>
       )}
       {/* D-105a-19：cap 截断警示（仅 identity 路径 pending 超折叠上限时回显） */}

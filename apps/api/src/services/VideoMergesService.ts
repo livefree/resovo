@@ -40,6 +40,8 @@ import {
   listPendingCandidatePairsLight,
   listPendingPairsLightByVideoIds,
   listPendingPairsByIds,
+  // GOV-2（SEQ-20260612-03）：identity 空表降级前区分「真空表 vs 版本搁浅」
+  hasStaleVersionPending,
   type PendingCandidatePairLightRow,
   type PendingCandidatePairRow,
 } from '@/api/db/queries/identity-candidate'
@@ -154,21 +156,32 @@ export class VideoMergesService {
 
     // CHG-VIR-9-A：source=identity 读 identity_candidate 候选；空表自动降级 legacy。
     // CHG-VIR-9-D / D-105a-18：默认翻 identity（zod default 与 Service 兜底两处一致）。
+    // GOV-2：降级前区分「真空表」vs「版本搁浅（parser/scorer 升级后未重扫）」——后者
+    // 随 legacy 数据透出 staleIdentityPending，UI 警示「候选待重评」而非静默换口径
+    // （2026-06-12 实证：bump 搁浅 207 pending 被用户当 bug 报告）。
+    let staleIdentityPending = false
     if ((params.source ?? 'identity') === 'identity') {
       const identityResult = await this.listIdentityCandidates(params)
       if (identityResult) return identityResult
       // identity 候选空 → 落回 legacy
+      staleIdentityPending = await hasStaleVersionPending(this.db, {
+        parserVersion: TITLE_PARSER_VERSION,
+        scorerVersion: SCORER_VERSION,
+      })
     }
+    const staleFlag = staleIdentityPending ? { staleIdentityPending: true as const } : {}
 
-    // 两步查询：先取候选组，再批量取 video 详情
-    const offset = (page - 1) * limit
-    const [rawGroups, total] = await Promise.all([
-      fetchRawCandidateGroups(this.db, { type: typeFilter, offset, limit }),
+    // GOV-2（9-C FIX-2 收口）：legacy 改「有界全量取组 → 过滤 → 排序 → total=过滤后 → 切片」，
+    // 消除 filter-after-paginate（minScore/组级谓词在 SQL 分页后执行 → total 失真、行散落分页）。
+    // cap 复用 MAX_COLLAPSE_PAIRS 口径（legacy 仅降级态，超 cap 标 truncated 警示条）。
+    const [rawGroups, rawTotal] = await Promise.all([
+      fetchRawCandidateGroups(this.db, { type: typeFilter, offset: 0, limit: MAX_COLLAPSE_PAIRS }),
       countRawCandidateGroups(this.db, { type: typeFilter }),
     ])
+    const legacyTruncated = rawTotal > MAX_COLLAPSE_PAIRS
 
     if (rawGroups.length === 0) {
-      return { data: [], total, page, limit, source: 'legacy' }
+      return { data: [], total: 0, page, limit, source: 'legacy', ...staleFlag }
     }
 
     // 批量获取所有相关 video 的详情
@@ -203,8 +216,7 @@ export class VideoMergesService {
     }
 
     // D-105a-19（CHG-VIR-16-TBL-BE）：组级筛选/搜索——与 identity 路径共用谓词纯函数。
-    // legacy SQL 组级分页在前 → 页内近似（与 minScore 既有过滤同源同阶，AMENDMENT 已登记；
-    // total 不计新谓词；legacy 仅 identity 空表降级态）
+    // GOV-2：过滤已先于分页（有界全量在手），total = 过滤后组数（与 identity 路径同语义）。
     const filteredGroups = groups.filter((g) => groupMatchesFilters({
       identityScore: g.identity?.identityScore ?? 0,
       videoCount: g.videos.length,
@@ -243,7 +255,16 @@ export class VideoMergesService {
       return a.groupKey.localeCompare(b.groupKey)
     })
 
-    return { data: filteredGroups, total, page, limit, source: 'legacy' }
+    // GOV-2：排序后切片（identity 路径 stage 5 同构）——页内填满、total 与行数自洽
+    const total = filteredGroups.length
+    const offset = (page - 1) * limit
+    const pageGroups = filteredGroups.slice(offset, offset + limit)
+
+    return {
+      data: pageGroups, total, page, limit, source: 'legacy',
+      ...(legacyTruncated ? { truncated: true as const } : {}),
+      ...staleFlag,
+    }
   }
 
   /**

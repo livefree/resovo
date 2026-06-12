@@ -112,9 +112,17 @@ export interface ListCandidatesResult {
   readonly source?: 'identity' | 'legacy'
   /**
    * ADR-105a AMENDMENT 2026-06-05 D-105a-19：identity 路径 pending pair 超 cap（2000）截断时 true
-   * （仅最高分前 cap 对参与折叠 + 闭包补全；UI 警示条消费）。非截断态与 legacy 路径不填。
+   * （仅最高分前 cap 对参与折叠 + 闭包补全；UI 警示条消费）。非截断态不填。
+   * GOV-2（SEQ-20260612-03）起 legacy 路径同语义复用：原始组超 cap 有界全量截断时 true。
    */
   readonly truncated?: boolean
+  /**
+   * SEQ-20260612-03 GOV-2（消费侧诚实化）：identity 当前版本候选为空但存在**旧版本**
+   * pending（parser/scorer 升级后未重扫，2026-06-12 版本搁浅实证）→ true，随 legacy
+   * 降级数据返回；UI 警示条提示「候选待重评」而非静默换口径。修复链见
+   * run-identity-rescore-inline.ts 头注。可选字段（CHG-352 R1 范式防破坏消费方）。
+   */
+  readonly staleIdentityPending?: boolean
 }
 
 // ── CHG-SN-5-10：mutation 端点类型 ───────────────────────────────────
