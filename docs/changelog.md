@@ -4584,3 +4584,14 @@
 - **拦截内容**：「migration leaves persisted banner short_id references stale」——初版 110 重写 526 个 short_id 未排查引用方，video banner 的 link_target 会指向不存在的旧值 → 解引用断链。
 - **损害对账**：dev 实证 `link_type='video'` banner = **0 行**（video banner 功能零使用），初版与修订版在 dev 语义等价、无数据修复缺口；修订版供 prod/后续环境完整执行（prod 未跑 110，修订无 drift 风险）。dev 重放修订版：语法 ✓ / 幂等 0 行命中 ✓。
 - **教训沉淀**：重写被外部引用的 ID 的 migration，必须先排查并同事务同步全部持久化引用方（已写入 110 头注）。
+
+## [BUGFIX-SHORTID-DASH-B-FIX2] Codex 第 2 拦截：migration 110 漏同步 JSONB 配置内 banner 引用
+- **完成时间**：2026-06-11
+- **记录时间**：2026-06-11 22:25
+- **执行模型**：claude-fable-5
+- **子代理**：无
+- **修改文件**：
+  - `apps/api/src/db/migrations/110_videos_short_id_dash_cleanup.sql` — FIX2 修订：重写循环内补两处 JSONB 同步——② `home_config_drafts.config->'banners'[].linkTarget`（098 草稿；发布全量替换会把 stale 值写回正式表）③ `home_publish_versions.config->'banners'[].linkTarget`（097 版本快照；回滚按快照恢复三表同理）。WITH ORDINALITY + ORDER BY 保数组序（jsonb_agg 不保证默认序，banner 顺序业务相关）。头注补「不可变归档例外」论证（097 不可变指业务操作不删改历史；实体 ID 重写属 schema 级数据迁移，快照引用追随更新才保回滚语义有效）+ 排查结论扩 autofill candidates（videoId UUID + videoSummary.slug 为 title slug → 不受影响）。
+- **拦截内容**：「migration still misses persisted banner short_id references in JSONB configs」——FIX1 只同步了 `home_banners.link_target` 直存列，漏掉草稿/版本快照两处整页 HomePageConfig JSONB 内嵌的 banner 引用。
+- **损害对账**：dev 实证 drafts 0 行 / versions 5 行 0 stale——初版/FIX1/FIX2 在 dev 语义等价、无数据修复缺口；prod 未跑 110，FIX2 完整版生效。
+- **验证**：事务内构造（视频改含 `-` short_id + banner 行 + draft JSONB 双条目 + version JSONB）→ 跑 110 → 断言四处同步到同一新值 + external 条目未误改 + 零残留 → ROLLBACK 不留痕。门禁三件套 EXIT=0。
