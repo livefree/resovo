@@ -4499,3 +4499,22 @@
 - **门禁**：typecheck EXIT=0 / lint 4·4 / test:changed 全量 7213 passed（516 文件，含 playback-verify mock 单测）/ test:integration 70 passed（含新 4）/ verify:adr-contracts EXIT=0 / 复现临时文件已删。
 - **影响**：修复后「全部试播」正常回填 render_status（该源服务端 403 → 置 dead，待测会更新）；admin 真实播放成功路径恢复（playback-verify success 不再 500，onVerified 刷新链生效）。**深层**：服务端试播 403/防盗链 → 即便浏览器能播服务端也判 dead，正是 SRCHEALTH-ADMIN-PLAYBACK-FB（admin 真实播放反馈）的设计针对项——admin 在 AdminPlayer 实际播放成功会 override 回 ok（绕服务端不可达）。
 - **注意事项**：mock DB 单测无法捕获 PG 类型推断错——新增 query 含 `CASE WHEN $N IS NOT NULL` 等需显式 cast，并挂 `tests/integration/api` 真库回归（本次补齐两 query + 集成 config @/api 别名基建）。
+
+## [BUGFIX-PLAYBACK-VERIFY-LINE-REFRESH] 实际播放成功后线路仍显「待测」· 刷新链断点（外科同步）
+- **完成时间**：2026-06-11
+- **记录时间**：2026-06-11 17:10
+- **执行模型**：claude-opus-4-8（主循环）
+- **子代理**：无
+- **来源**：用户报告——AdminPlayer 实际播放成功后，线路「实际播放」pill 仍显「待测」而非「可用」。
+- **根因（DB 实测确认后端在生效）**：DB 已有 `last_admin_verified_at` + `render_status='ok'`（playback-verify 后端 + 前番 SQL cast 修复均生效）→ 纯前端刷新链断点。`onVerified → onSourceHealthChanged = refetchQueue`（ModerationConsole:617）只刷左队列 pill，不 reload LinesPanel 的 `state.lines`；AdminPlayer 是 LinesPanel 兄弟组件、拿不到 controller `setLines` → 被播放线路 render_status 不更新 → DualSignal「实际播放」pill 停在 pending（标签「待测」；ok→「可用」）。不能用全量 `reload()`：LinesPanel `handleLoaded`（Y4）每次 reload 后自动选首行，会切回首行打断播放。
+- **修改文件**：
+  - `apps/server-next/src/lib/sources/use-source-lines-controller.ts` — 新 action `applyExternalHealthUpdate(sourceId, { probeStatus?, renderStatus? })`（`setLines(prev.map(...))` 外科改指定行，不 reload/不触发 onLoaded）+ 加入 `SourceLinesActions`
+  - `apps/server-next/src/app/admin/moderation/_client/AdminPlayer.tsx` — `onVerified` 签名带回 verify 结果 `AdminPlaybackVerifyResult { sourceId, newProbeStatus, newRenderStatus }`（`apiClient.post<{data}>` 取 `res.data`）
+  - `apps/server-next/src/app/admin/moderation/_client/PendingCenter.tsx` — `verifySignal`（含递增 nonce）中转：AdminPlayer onVerified → setVerifySignal(result) + onSourceHealthChanged（左队列仍刷）→ 透传 LinesPanel
+  - `apps/server-next/src/app/admin/moderation/_client/LinesPanel.tsx` — 新 prop `verifySignal` + 导出 `LineVerifySignal` 类型 + effect（按 nonce，ref 取最新 action）→ `applyExternalHealthUpdate`
+  - `tests/unit/server-next/sources/use-source-lines-controller.test.ts` — +2 用例（外科改指定源不重 fetch/不动他行 / 只传 renderStatus 不动 probe）
+  - `tests/unit/admin-moderation/admin-player.test.tsx` — onVerified 用例改断言收到 verify 结果对象
+- **新增依赖**：无
+- **数据库变更**：无
+- **门禁**：typecheck EXIT=0 / lint 4·4 / test:changed 194 passed（19 文件）/ verify:adr-contracts EXIT=0 / test:e2e:admin 82/82（player-integration 不回归）/ AdminPlayer 17 + controller 21 单测绿。
+- **注意事项**：probe 从 pending 不强制置 ok（沿用 ADR-198 D-198-2：仅 dead→ok 复活；外科更新照搬 response 的 newProbeStatus 正确值，不擅自升级）。AdminPlayer 仍用于 merge/videos/sources 等消费方（onVerified 可选，不传则无外科同步，行为同前）。本卡完成后「实际播放」pill 在播放成功即变「可用」，无需手动刷新。

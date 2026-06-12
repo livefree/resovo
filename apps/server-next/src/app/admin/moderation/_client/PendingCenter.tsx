@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react'
 import { DecisionCard, StaffNoteBar, Thumb } from '@resovo/admin-ui'
 import { formatCountryName, type VideoQueueRow } from '@resovo/types'
 import { EpisodeSelector } from './EpisodeSelector'
-import { LinesPanel } from './LinesPanel'
+import { LinesPanel, type LineVerifySignal } from './LinesPanel'
 import { AdminPlayer } from './AdminPlayer'
 import { PendingMetaQuickEdit } from './PendingMetaQuickEdit'
 import { useSelectedLine } from '@/lib/moderation/use-selected-line'
@@ -53,6 +53,9 @@ const SECTION: React.CSSProperties = {
 export function PendingCenter({ v, onStaffNoteChange, onEditVideo, onSourceHealthChanged }: PendingCenterProps): React.ReactElement {
   const [currentEp, setCurrentEp] = useState(1)
   const [noteEditing, setNoteEditing] = useState(false)
+  // BUGFIX-PLAYBACK-VERIFY-LINE-REFRESH：AdminPlayer 真实播放成功 → 把 verify 结果（含 nonce）
+  // 中转给 LinesPanel，对被播放线路做 render/probe 外科同步（不 reload，不扰动选中/播放）。
+  const [verifySignal, setVerifySignal] = useState<LineVerifySignal | null>(null)
   const { selected, onLineSelect, clearSelection } = useSelectedLine(currentEp)
   const [noteSubmitting, setNoteSubmitting] = useState(false)
 
@@ -98,7 +101,17 @@ export function PendingCenter({ v, onStaffNoteChange, onEditVideo, onSourceHealt
           sourceUrl={selected?.sourceUrl ?? null}
           sourceId={selected?.sourceId ?? null}
           title={v.title}
-          onVerified={onSourceHealthChanged}
+          onVerified={(r) => {
+            // 被播放线路 render/probe 外科同步（DualSignal「实际播放」pill 待测→可用）
+            setVerifySignal((prev) => ({
+              sourceId: r.sourceId,
+              probeStatus: r.newProbeStatus,
+              renderStatus: r.newRenderStatus,
+              nonce: (prev?.nonce ?? 0) + 1,
+            }))
+            // 左队列聚合 pill 仍刷（recomputeVideoCheckStatus 已改 videos.source_check_status）
+            onSourceHealthChanged?.()
+          }}
         />
       </div>
 
@@ -173,6 +186,7 @@ export function PendingCenter({ v, onStaffNoteChange, onEditVideo, onSourceHealt
           selectedKey={selected?.lineKey ?? null}
           onLineSelect={onLineSelect}
           onSourceHealthChanged={onSourceHealthChanged}
+          verifySignal={verifySignal}
         />
       </div>
     </>

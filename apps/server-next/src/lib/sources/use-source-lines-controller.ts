@@ -67,6 +67,15 @@ export interface SourceLinesActions {
   readonly renderCheckEpisode: (episodeId: string) => Promise<void>
   readonly probeAllSources: () => Promise<void>
   readonly renderCheckAllSources: () => Promise<void>
+  /**
+   * 外部健康信号外科更新（BUGFIX-PLAYBACK-VERIFY-LINE-REFRESH）：仅改指定源行的
+   * probe_status/render_status，**不 reload / 不触发 onLoaded**（避免 Y4 首行自动选打断当前播放）。
+   * 用于 AdminPlayer 真实播放反馈（playback-verify 成功后 source health 已落库，UI 同步该行）。
+   */
+  readonly applyExternalHealthUpdate: (
+    sourceId: string,
+    patch: { readonly probeStatus?: string; readonly renderStatus?: string },
+  ) => void
   /** 取线路健康事件（drawer 状态留消费方，R5） */
   readonly fetchHealth: (sourceId: string, page?: number) => Promise<LineHealthPage>
 }
@@ -330,6 +339,26 @@ export function useSourceLinesController(
     }
   }, [videoId, emit])
 
+  // ── 外部健康信号外科更新（BUGFIX-PLAYBACK-VERIFY-LINE-REFRESH）──────────
+  // AdminPlayer 真实播放反馈：playback-verify 成功后该源 render/probe 已落库，
+  // 仅同步对应行（不 reload / 不触发 Y4 首行自动选，避免打断当前播放线路）。
+  const applyExternalHealthUpdate = useCallback(
+    (sourceId: string, patch: { probeStatus?: string; renderStatus?: string }) => {
+      setLines((prev) =>
+        prev.map((l) =>
+          l.id === sourceId
+            ? {
+                ...l,
+                ...(patch.probeStatus !== undefined ? { probe_status: patch.probeStatus } : {}),
+                ...(patch.renderStatus !== undefined ? { render_status: patch.renderStatus } : {}),
+              }
+            : l,
+        ),
+      )
+    },
+    [],
+  )
+
   // ── health（仅取数，R5 drawer 留消费方）──────────────────────────────
   const fetchHealth = useCallback((sourceId: string, page = 1): Promise<LineHealthPage> => {
     return fetchLineHealth(videoId, sourceId, page)
@@ -345,6 +374,7 @@ export function useSourceLinesController(
   const actions: SourceLinesActions = {
     reload, toggleEpisode, disableDead, refetch,
     probeEpisode, renderCheckEpisode, probeAllSources, renderCheckAllSources,
+    applyExternalHealthUpdate,
     fetchHealth,
   }
 

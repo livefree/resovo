@@ -115,7 +115,11 @@ describe('AdminPlayer — Case 3: 首次播放上报 playback-verify', () => {
     })
   })
 
-  it('onVerified prop 提供 → 成功上报 resolve 后调用（刷新链 ADR-198 D-198-9）', async () => {
+  it('onVerified prop 提供 → 成功上报 resolve 后携 verify 结果调用（刷新链 + 线路外科同步）', async () => {
+    // playback-verify 200 响应 { data: {...} }；AdminPlayer 取 res.data 透传 onVerified
+    postMock.mockResolvedValueOnce({
+      data: { sourceId: 'src-1', newProbeStatus: 'ok', newRenderStatus: 'ok', verified: true },
+    })
     const onVerified = vi.fn()
     const { container } = render(
       <AdminPlayer videoId="vid-1" sourceUrl="https://cdn.example.com/v.m3u8" sourceId="src-1" onVerified={onVerified} />
@@ -125,6 +129,7 @@ describe('AdminPlayer — Case 3: 首次播放上报 playback-verify', () => {
     await Promise.resolve()
     await Promise.resolve()
     expect(onVerified).toHaveBeenCalledTimes(1)
+    expect(onVerified).toHaveBeenCalledWith({ sourceId: 'src-1', newProbeStatus: 'ok', newRenderStatus: 'ok', verified: true })
   })
 
   it('onError（失败）不触发 onVerified（失败为异步 recheck，UI 同步无变化）', async () => {

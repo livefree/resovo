@@ -28,6 +28,16 @@ import { apiClient } from '@/lib/api-client'
 // 通过 PlayerProps['onError'] 函数签名反推参数类型 / 与 onError public API 同源 / 升级 player-core 时自动跟随
 type PlayerErrorPayload = Parameters<NonNullable<PlayerProps['onError']>>[0]
 
+/**
+ * playback-verify 成功响应（ADR-198 §端点契约 data 字段子集）。
+ * 供 onVerified 携带回消费方做被播放线路的外科式 health 同步（BUGFIX-PLAYBACK-VERIFY-LINE-REFRESH）。
+ */
+export interface AdminPlaybackVerifyResult {
+  readonly sourceId: string
+  readonly newProbeStatus: string
+  readonly newRenderStatus: string
+}
+
 // ── Props ─────────────────────────────────────────────────────────────────────
 
 export interface AdminPlayerProps {
@@ -38,9 +48,9 @@ export interface AdminPlayerProps {
   readonly sourceId: string | null
   readonly title?: string
   readonly testId?: string
-  /** ADR-198 D-198-9：真实播放**成功**直更 source health 后回调，驱动消费方刷新（如左队列聚合 pill）。
-   *  失败为异步 worker 定向 recheck（UI 同步无变化）故不触发。 */
-  readonly onVerified?: () => void
+  /** ADR-198 D-198-9：真实播放**成功**直更 source health 后回调，携 verify 结果驱动消费方刷新
+   *  （左队列聚合 pill + 被播放线路 render/probe 外科同步）。失败为异步 worker 定向 recheck 故不触发。 */
+  readonly onVerified?: (result: AdminPlaybackVerifyResult) => void
 }
 
 // ── Placeholder ───────────────────────────────────────────────────────────────
@@ -116,14 +126,19 @@ export function AdminPlayer({
   const handlePlay = () => {
     if (!sourceId || reportedRef.current === sourceId) return
     reportedRef.current = sourceId
-    // ADR-198：admin 真实播放成功直更 source health（绕众包门槛）→ 成功后刷新左队列聚合 pill
-    void apiClient.post(`/admin/videos/${videoId}/sources/${sourceId}/playback-verify`, {
-      success: true,
-    }).then(() => {
-      onVerified?.()
-    }).catch(() => {
-      // fire-and-forget；失败不阻断播放（onVerified 不触发，避免误刷）
-    })
+    // ADR-198：admin 真实播放成功直更 source health（绕众包门槛）→ 成功后携 verify 结果刷新
+    // （左队列聚合 pill + 被播放线路 render/probe 外科同步，BUGFIX-PLAYBACK-VERIFY-LINE-REFRESH）
+    void apiClient
+      .post<{ data: AdminPlaybackVerifyResult }>(
+        `/admin/videos/${videoId}/sources/${sourceId}/playback-verify`,
+        { success: true },
+      )
+      .then((res) => {
+        onVerified?.(res.data)
+      })
+      .catch(() => {
+        // fire-and-forget；失败不阻断播放（onVerified 不触发，避免误刷）
+      })
   }
 
   const handleError = (event: PlayerErrorPayload) => {

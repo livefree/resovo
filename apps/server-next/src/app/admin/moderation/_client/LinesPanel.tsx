@@ -9,7 +9,7 @@
  *   - 结构化反馈经 controller `onActionResult` → 映射 useToast 浮层 + actionError 红条（R4 i18n 留消费方）
  *   - LineHealthDrawer 开合/分页/标题留本地（R5）；取数走 actions.fetchHealth
  */
-import React, { useState, useCallback, useMemo } from 'react'
+import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react'
 import {
   LinesPanel as LinesPanelUI,
   groupSourcesByLine,
@@ -36,6 +36,18 @@ interface HealthSnapshot {
 
 // ── Props ────────────────────────────────────────────────────────────────────
 
+/**
+ * BUGFIX-PLAYBACK-VERIFY-LINE-REFRESH：AdminPlayer 真实播放成功的 verify 结果（含递增 nonce）。
+ * 由 PendingCenter 中转下行，驱动被播放线路 render/probe 外科同步（不 reload，不扰动选中/播放）。
+ */
+export interface LineVerifySignal {
+  readonly sourceId: string
+  readonly probeStatus: string
+  readonly renderStatus: string
+  /** 递增计数：同一源连播也能触发 effect 重跑（值相同则不重应用） */
+  readonly nonce: number
+}
+
 export interface LinesPanelProps {
   readonly videoId: string
   /** FIX-D AdminPlayer 桥接：受控选中线路 key */
@@ -51,11 +63,13 @@ export interface LinesPanelProps {
    * 调用方式：每次 single / batch probe 或 render-check 成功（含全 dead）后触发 1 次
    */
   readonly onSourceHealthChanged?: () => void
+  /** BUGFIX-PLAYBACK-VERIFY-LINE-REFRESH：AdminPlayer 真实播放成功反馈 → 被播放线路外科同步 */
+  readonly verifySignal?: LineVerifySignal | null
 }
 
 // ── Main ─────────────────────────────────────────────────────────────────────
 
-export function LinesPanel({ videoId, selectedKey, onLineSelect, onSourceHealthChanged }: LinesPanelProps): React.ReactElement {
+export function LinesPanel({ videoId, selectedKey, onLineSelect, onSourceHealthChanged, verifySignal }: LinesPanelProps): React.ReactElement {
   const toast = useToast()
   // R4：localized 红条留消费方（toggle race/fail + disableDead/refetch fail）
   const [actionError, setActionError] = useState<string | null>(null)
@@ -148,6 +162,20 @@ export function LinesPanel({ videoId, selectedKey, onLineSelect, onSourceHealthC
     onLoaded: handleLoaded,
     onActionResult: handleActionResult,
   })
+
+  // BUGFIX-PLAYBACK-VERIFY-LINE-REFRESH：AdminPlayer 真实播放成功 → 被播放线路外科同步。
+  //   ref 取最新 action（actions 每渲染新身份，不入 deps）；按 verifySignal.nonce 重跑（同源连播也生效）。
+  const applyHealthRef = useRef(actions.applyExternalHealthUpdate)
+  applyHealthRef.current = actions.applyExternalHealthUpdate
+  useEffect(() => {
+    if (!verifySignal) return
+    applyHealthRef.current(verifySignal.sourceId, {
+      probeStatus: verifySignal.probeStatus,
+      renderStatus: verifySignal.renderStatus,
+    })
+    // 仅 nonce 变化时重应用（verifySignal 每次为新对象，含递增 nonce）
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [verifySignal?.nonce])
 
   // R3：loadFailedText 必传 → 保留 error 红条 + retry（审核台现有能力）
   const [health, healthActions] = useLineHealthDrawer({

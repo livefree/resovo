@@ -68,6 +68,43 @@ describe('useSourceLinesController', () => {
     expect(onLoaded).toHaveBeenCalledWith(rows)
   })
 
+  it('applyExternalHealthUpdate：外科改指定源 probe/render，不重 fetch、不动其他行（playback-verify 同步）', async () => {
+    vi.mocked(api.fetchVideoSources).mockResolvedValue([
+      makeRow({ id: 's1', probe_status: 'pending', render_status: 'pending' }),
+      makeRow({ id: 's2', probe_status: 'dead', render_status: 'dead' }),
+    ])
+    const { result } = renderHook(() => useSourceLinesController('v1'))
+    await flush()
+    const fetchCallsBefore = vi.mocked(api.fetchVideoSources).mock.calls.length
+
+    act(() => {
+      result.current[1].applyExternalHealthUpdate('s1', { renderStatus: 'ok', probeStatus: 'ok' })
+    })
+
+    const lines = result.current[0].lines
+    expect(lines.find((l) => l.id === 's1')!.render_status).toBe('ok')
+    expect(lines.find((l) => l.id === 's1')!.probe_status).toBe('ok')
+    // 不动其他行
+    expect(lines.find((l) => l.id === 's2')!.render_status).toBe('dead')
+    // 外科更新非 reload → 不重 fetch（不触发 Y4 首行自动选，不打断播放）
+    expect(vi.mocked(api.fetchVideoSources).mock.calls.length).toBe(fetchCallsBefore)
+  })
+
+  it('applyExternalHealthUpdate：只传 renderStatus → probe_status 不动', async () => {
+    vi.mocked(api.fetchVideoSources).mockResolvedValue([
+      makeRow({ id: 's1', probe_status: 'pending', render_status: 'pending' }),
+    ])
+    const { result } = renderHook(() => useSourceLinesController('v1'))
+    await flush()
+
+    act(() => {
+      result.current[1].applyExternalHealthUpdate('s1', { renderStatus: 'ok' })
+    })
+
+    expect(result.current[0].lines[0]!.render_status).toBe('ok')
+    expect(result.current[0].lines[0]!.probe_status).toBe('pending') // 未传 → 不动
+  })
+
   it('reload 失败 → state.error 就位（原始 Error / R4 本地化留消费方）', async () => {
     vi.mocked(api.fetchVideoSources).mockRejectedValue(new Error('网络错误'))
 
