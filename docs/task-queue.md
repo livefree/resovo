@@ -2166,11 +2166,17 @@
    - 偏离（已记 changelog）：dry-run 拦截 A 卡 parser 显示层 2 缺陷溯源修复——displayTitle 全角标点保留（foldDisplayWidth）+ `普通话版` 规则补全；文件范围扩 `TitleIdentityParser.ts` + 测试。
    - 依赖：A 卡（已完成）。建议模型：sonnet。执行 claude-fable-5。详见 changelog [VIDEO-NAMING-STANDARD-B]。
 
-3. **VIDEO-NAMING-STANDARD-C** — 跨季误合并存量盘点（候补/调查卡，状态：📋 待开始）
-   - 背景：A 卡之前旧三元组匹配把「同名不同季」归并同一 catalog/video（sources 跨季混挂、续播进度共享）。拆分涉及 sources 重新挂载 + 用户观看进度归属，风险高于 B 卡数量级。
-   - 范围：纯盘点——跨季混挂实体规模 SQL 审计 + 拆分方案草案（不执行拆分）；产出决定是否起独立序列。
-   - **初步规模实测（2026-06-12，aliases 季标 regexp 粗审计）**：24 个视频的别名含 ≥2 个不同季号（如 全职法师 第7季 / 半熟恋人 第5季 / 古战场传奇 第8季 各混 2 季）——规模有限，逐个人工核对可行；精确口径（sources 集数分布交叉验证 + parseSeasonNumeral 中文数字归一防 regexp 误差）留正式盘点。
-   - 依赖：B 卡完成后启动（✅ 已满足）。建议模型：sonnet。
+3. **VIDEO-NAMING-STANDARD-C** — 跨季误合并存量盘点（状态：✅ 已完成 2026-06-12）
+   - 产出：`docs/audit/cross-season-merge-audit-20260612.md` + 只读审计脚本 `scripts/audit-cross-season-merge.ts`（parseTitle 1.2.0 精确口径）。三类问题：**A 跨季混挂仅 6 例**（regexp 粗审计 24 例多为别名噪声；含「动物管制官」中文/阿拉伯季号双实体）；**B 季槽位错位 355 例**（catalog.season_number NULL + 标题唯一季号——A 卡四元组对 NULL 永不命中 → 每次重爬造重复实体的**活跃风险**；回填撞键预检 0 冲突可直接修）；**C 发布形态撞键 1 例**（魔法使俱乐部 OVA 与正篇同 key 并存）。watch_history 0 行（dev 拆分零进度影响）。详见 changelog [VIDEO-NAMING-STANDARD-C]。
+
+4. **VIDEO-NAMING-STANDARD-D** — B 类 355 例 season_number 回填（状态：📋 待开始）
+   - 来源：C 卡盘点判定的活跃风险止血——四元组匹配对 NULL 槽位永不命中，重爬即造重复 catalog/video。
+   - 范围（3 项）：① 回填脚本（复用审计解析口径；dry-run/幂等；仅 `UPDATE media_catalog SET season_number = N WHERE season_number IS NULL` 单一季号确定行）② 执行 + 复跑审计 B 类归零断言 ③ changelog/备注。撞键预检已由 C 卡完成（0 冲突）。
+   - 不做：A 类 6 例混挂行（季号不唯一，归 E 卡）；不动 title_normalized / videos / ES。
+   - 依赖：C 卡 ✅。建议模型：sonnet。
+5. **VIDEO-NAMING-STANDARD-E** — A 类 6 例拆分核对 + C 类 1 例 normalized 修正（候补/人工，状态：📋 待开始）
+   - 实体手术：逐例核对 sources 集数段归属定「真混挂 vs 别名噪声」→ 拆分/合并（含动物管制官双实体）+ 魔法使俱乐部(OVA) normalized 修正。生产执行前必须重跑审计脚本（watch_history 影响面）。
+   - 依赖：D 卡完成后（季槽位干净便于核对）。建议模型：sonnet + 用户逐例确认。
 
 ## [SEQ-20260612-02] 播放源语言双维度（语音/字幕）结构化
 

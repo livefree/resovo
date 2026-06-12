@@ -4793,3 +4793,21 @@
   - `test:integration` 70/70（LANG-DIM-B 收口时已跑，含 sources SQL 真库口径）。
 - **结论**：本会话 8 个 commit（76f09275→ad40906e）的代码门禁全绿；e2e mock-slug 双域失败为预先存在基建缺口（基线复现 + 根因定位 + queue 登记三件齐备），不阻塞收口。
 - **修改文件**：`docs/task-queue.md`（seed 基建备注扩展 VIDEO 域）、`docs/changelog.md`（本条）。
+
+## [VIDEO-NAMING-STANDARD-C] 跨季误合并存量盘点（只读调查）
+- **完成时间**：2026-06-12
+- **记录时间**：2026-06-12 16:20
+- **执行模型**：claude-fable-5
+- **子代理**：无
+- **修改文件**：
+  - `scripts/audit-cross-season-merge.ts`（新增）— 只读审计：TS 调 parseTitle 1.2.0 精确口径（中文数字/括号季标），三类问题 + 回填撞键预检 + watch_history 影响面。
+  - `docs/audit/cross-season-merge-audit-20260612.md`（新增）— 盘点报告真源 + 处置建议拆卡。
+- **盘点结论**（dev 库 2026-06-12）：
+  - **A 跨季混挂 6 例**（粗 regexp 审计 24 例中 18 例为别名噪声）——含「动物管制官」中文/阿拉伯季号裂双实体 + 各自混挂，典型双重历史问题；需逐例核对 sources 集数段归属再拆。
+  - **B 季槽位错位 355 例（活跃风险，盘点最重要发现）**：标题唯一季号 N 但 catalog.season_number NULL——A 卡四元组匹配 `IS NOT DISTINCT FROM N` 对 NULL 永不命中 → **这批视频每次重爬都会新建重复 catalog/video**。B 卡当时刻意不回填规避唯一键风险，本次逐例撞键预检 **0 冲突**，可直接回填。
+  - **C 发布形态撞键 1 例**：魔法使俱乐部(OVA) normalized 与正篇 catalog 同 key 并存（旧 normalizeMergeKey 剥括号产物；1.2.0 新路径不再产生）。
+  - watch_history 0 行——dev 拆分零进度迁移；生产执行前必须重跑审计。
+- **后续登记**：D 卡（355 例 season_number 回填，止血优先）→ E 卡（A 类 6 例 + C 类 1 例人工核对手术，候补，依赖 D）。
+- **新增依赖**：无；**数据库变更**：无（只读）。
+- **质量门禁**：docs+脚本只读卡——审计脚本实跑无异常；不触增量测试范围（test:changed docs-only 口径）。
+- **[AI-CHECK]**：六问过——①只读零风险；②脚本沉淀可重跑（生产前置审计复用）；③B 类风险定性把「历史遗留盘点」升级为「活跃回归风险止血」，价值排序 #1 正确性驱动 D 卡优先级；④无 any/空 catch；⑤audit 文档 frontmatter 合规 + git add 入库；⑥范围未超。
