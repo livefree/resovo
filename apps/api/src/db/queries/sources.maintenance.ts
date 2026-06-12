@@ -6,6 +6,7 @@
 import type { Pool } from 'pg'
 import { extractHostname } from '@resovo/media-probe'
 import type { UpsertSourceInput } from './sources.types'
+import { languageSourceRankSql, languageUpgradeSetSql } from './sources.types'
 
 // ── 投稿审核 ──────────────────────────────────────────────────────
 
@@ -227,6 +228,7 @@ export async function replaceSourcesForSite(
     )
 
     const existingUrls = new Set(existing.rows.map((r) => r.source_url))
+    const existingIdByUrl = new Map(existing.rows.map((r) => [r.source_url, r.id]))
     const newUrls = new Set(newSources.map((s) => s.sourceUrl))
 
     // 软删除不再出现的旧源
@@ -247,27 +249,77 @@ export async function replaceSourcesForSite(
     // 插入新增的源（包含恢复曾被软删除的同 URL 行）
     let sourcesAdded = 0
     let sourcesKept = 0
+    const keptForLanguageUpgrade: Array<{ id: string; src: UpsertSourceInput }> = []
     for (const src of newSources) {
       if (existingUrls.has(src.sourceUrl)) {
         sourcesKept++
+        const keptId = existingIdByUrl.get(src.sourceUrl)
+        if (keptId) keptForLanguageUpgrade.push({ id: keptId, src })
         continue
       }
       // ON CONFLICT DO UPDATE 同时覆盖软删除行（恢复 deleted_at=NULL, is_active=true）
       // SRCHEALTH-P3-3-A: DO UPDATE 必须带 source_hostname——恢复的软删行可能是
       // 回填前 NULL；同 URL 冲突时 EXCLUDED 值与旧值相同，SET 幂等无害（裁决 F）
+      // ADR-199: 语言四列入 INSERT；复活路径 DO UPDATE 经 provenance 等级守卫升级
       const insertResult = await client.query(
         `INSERT INTO video_sources
-           (video_id, season_number, episode_number, source_url, source_name, type, is_active, source_site_key, source_hostname)
-         VALUES ($1, $2, $3, $4, $5, $6, true, $7, $8)
+           (video_id, season_number, episode_number, source_url, source_name, type, is_active, source_site_key, source_hostname,
+            audio_language, subtitle_languages, audio_language_source, subtitle_language_source)
+         VALUES ($1, $2, $3, $4, $5, $6, true, $7, $8, $9::text, $10::text[], $11::text, $12::text)
          ON CONFLICT ON CONSTRAINT uq_sources_video_episode_url
          DO UPDATE SET deleted_at = NULL, is_active = true,
                        source_name = EXCLUDED.source_name,
                        type = EXCLUDED.type,
                        source_site_key = EXCLUDED.source_site_key,
-                       source_hostname = EXCLUDED.source_hostname`,
-        [videoId, src.seasonNumber ?? 1, src.episodeNumber, src.sourceUrl, src.sourceName, src.type, src.sourceSiteKey ?? null, extractHostname(src.sourceUrl)],
+                       source_hostname = EXCLUDED.source_hostname,
+                       ${languageUpgradeSetSql()}`,
+        [
+          videoId, src.seasonNumber ?? 1, src.episodeNumber, src.sourceUrl, src.sourceName, src.type,
+          src.sourceSiteKey ?? null, extractHostname(src.sourceUrl),
+          src.audioLanguage ?? null, src.subtitleLanguages ?? null,
+          src.audioLanguageSource ?? 'unknown', src.subtitleLanguageSource ?? 'unknown',
+        ],
       )
       sourcesAdded += insertResult.rowCount ?? 0
+    }
+
+    // ADR-199 D-199-1：kept 行（重爬同 URL）语言四列经 provenance 等级守卫升级——
+    // 否则升级规则在全量替换主路径永不生效（vod_lang 晚到 / 线路名变化无法落库）。
+    // 按语言元组分组批量 UPDATE（同 vod 各行多为同值，通常 1~2 组）；裸参数显式 cast。
+    if (keptForLanguageUpgrade.length > 0) {
+      const groups = new Map<string, { ids: string[]; src: UpsertSourceInput }>()
+      for (const { id, src } of keptForLanguageUpgrade) {
+        const key = JSON.stringify([
+          src.audioLanguage ?? null, src.audioLanguageSource ?? 'unknown',
+          src.subtitleLanguages ?? null, src.subtitleLanguageSource ?? 'unknown',
+        ])
+        const group = groups.get(key)
+        if (group) group.ids.push(id)
+        else groups.set(key, { ids: [id], src })
+      }
+      const newAudioRank = languageSourceRankSql('$2::text')
+      const oldAudioRank = languageSourceRankSql('audio_language_source')
+      const newSubRank = languageSourceRankSql('$4::text')
+      const oldSubRank = languageSourceRankSql('subtitle_language_source')
+      for (const { ids, src } of groups.values()) {
+        await client.query(
+          `UPDATE video_sources SET
+             audio_language = CASE WHEN ${newAudioRank} >= ${oldAudioRank} THEN $1::text ELSE audio_language END,
+             audio_language_source = CASE WHEN ${newAudioRank} >= ${oldAudioRank} THEN $2::text ELSE audio_language_source END,
+             subtitle_languages = CASE WHEN ${newSubRank} >= ${oldSubRank} THEN $3::text[] ELSE subtitle_languages END,
+             subtitle_language_source = CASE WHEN ${newSubRank} >= ${oldSubRank} THEN $4::text ELSE subtitle_language_source END
+           WHERE id = ANY($5::uuid[])
+             AND (${newAudioRank} > ${oldAudioRank}
+               OR (${newAudioRank} = ${oldAudioRank} AND ${newAudioRank} > 0 AND $1::text IS DISTINCT FROM audio_language)
+               OR ${newSubRank} > ${oldSubRank}
+               OR (${newSubRank} = ${oldSubRank} AND ${newSubRank} > 0 AND $3::text[] IS DISTINCT FROM subtitle_languages))`,
+          [
+            src.audioLanguage ?? null, src.audioLanguageSource ?? 'unknown',
+            src.subtitleLanguages ?? null, src.subtitleLanguageSource ?? 'unknown',
+            ids,
+          ],
+        )
+      }
     }
 
     await client.query('COMMIT')

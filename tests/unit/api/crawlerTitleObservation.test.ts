@@ -58,6 +58,7 @@ vi.mock('@/api/db/queries/titleObservations', () => ({
 }))
 
 import { CrawlerService } from '@/api/services/CrawlerService'
+import { TITLE_PARSER_VERSION } from '@/api/services/TitleIdentityParser'
 
 const mockDb = { query: vi.fn().mockResolvedValue({ rows: [] }) } as unknown as import('pg').Pool
 const mockEs = {} as unknown as import('@elastic/elasticsearch').Client
@@ -104,7 +105,7 @@ describe('CrawlerService — CHG-VIR-6 title_observations shadow 写入', () => 
       sourceSiteKey: 'site-a',
       sourceName: null,
       rawTitle: '斗罗大陆 第4季 更新至30集',
-      parserVersion: '1.0.0',
+      parserVersion: TITLE_PARSER_VERSION,
     })
     // raw_title_hash = sha256 hex（64 位）
     expect(input.rawTitleHash).toMatch(/^[0-9a-f]{64}$/)

@@ -11,6 +11,7 @@ import type { Client as ESClient } from '@elastic/elasticsearch'
 import { parseXmlResponse, parseJsonResponse, parseVodItem } from './SourceParserService'
 import { normalizeMergeKey } from './TitleNormalizer'
 import { buildStandardVideoTitle } from './TitleIdentityParser'
+import { resolveSourceLanguages } from './SourceLanguageResolver'
 import { MediaCatalogService } from './MediaCatalogService'
 import { VideoIndexSyncService } from './VideoIndexSyncService'
 import * as crawlerTasksQueries from '@/api/db/queries/crawlerTasks'
@@ -298,14 +299,33 @@ export class CrawlerService {
 
     // Step 6: 写入播放源
     // CRAWLER-02: 默认全量替换策略（同站点全量替换）；ingest_policy.source_update='append_only' 退回旧策略
-    const sourceMappings = sources.map((s) => ({
-      videoId,
-      episodeNumber: s.episodeNumber,
-      sourceUrl: s.sourceUrl,
-      sourceName: s.sourceName,
-      type: s.type,
-      sourceSiteKey: siteKey ?? null,
-    }))
+    // ADR-199 D-199-3: 语言双维度五级推断链逐行求值（行级线路名 token > vod 级
+    // vod_lang/标题 facets > 地区先验）；同 vod 各行仅 sourceName 信号可产生行间差异
+    const titleLanguageFacets = {
+      audioLanguage: standardTitle.audioLanguage,
+      subtitleMarker: standardTitle.subtitleMarker,
+      subtitleLanguages: standardTitle.subtitleLanguages,
+    }
+    const sourceMappings = sources.map((s) => {
+      const lang = resolveSourceLanguages({
+        sourceName: s.sourceName,
+        vodLang: video.vodLang,
+        titleFacets: titleLanguageFacets,
+        country: video.country,
+      })
+      return {
+        videoId,
+        episodeNumber: s.episodeNumber,
+        sourceUrl: s.sourceUrl,
+        sourceName: s.sourceName,
+        type: s.type,
+        sourceSiteKey: siteKey ?? null,
+        audioLanguage: lang.audioLanguage,
+        audioLanguageSource: lang.audioLanguageSource,
+        subtitleLanguages: lang.subtitleLanguages,
+        subtitleLanguageSource: lang.subtitleLanguageSource,
+      }
+    })
 
     const useAppendOnly = ingestPolicy?.source_update === 'append_only'
     let sourcesAdded = 0

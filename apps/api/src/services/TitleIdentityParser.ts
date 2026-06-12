@@ -29,8 +29,10 @@ import { isPinyin } from './PinyinDetector'
  * 解析器版本号。语义升级（归一规则 / facet 抽取规则变化）必须 bump，驱动
  * `evidence_hash` 变化 → 受控触发 `superseded` + 新 pending（Phase 2b）。
  * 非内容变化（注释 / 重构）不 bump。
+ * 1.1.0（ADR-199 D-199-4）：languageVariant 单值 facet 拆分为 audioLanguage +
+ * subtitleMarker/subtitleLanguages 双维度；规则表拆 AUDIO/SUBTITLE 两张。
  */
-export const TITLE_PARSER_VERSION = '1.0.0'
+export const TITLE_PARSER_VERSION = '1.1.0'
 
 // ── 类型契约（ADR-105a D-105a-1 / 设计 §4.1）─────────────────────────────────
 
@@ -43,8 +45,21 @@ export interface TitleFacets {
   seasonNumber: number | null
   /** 版本标记：加长版 / 导演剪辑版 / 完整版 / 精编版 / 正片 等（取首个命中的规范词）。null=无 */
   edition: string | null
-  /** 语言变体：国语 / 粤语 / 英语 / 字幕 / 国配 等配音·字幕变体（取首个命中规范词）。null=无 */
-  languageVariant: string | null
+  /**
+   * 语音（配音）变体（ADR-199 D-199-4，1.1.0 起替代旧单值 languageVariant）：
+   * 国语 / 粤语 / 日语 / 韩语 / 英语 等规范词，取首个命中。null=无语音 token。
+   * 旧 parsed_facets_jsonb 快照仍含 languageVariant 键（读侧兜底，无生产消费方）。
+   */
+  audioLanguage: string | null
+  /**
+   * 字幕 token 规范词（中字 / 中英字幕 / 双语字幕 / 内嵌字幕 / 无字幕 / 字幕），
+   * 取首个命中。null=标题无字幕 token。与 subtitleLanguages 配合表达 DB 三态
+   * （D-199-1）：marker=无字幕 → `{}`；subtitleLanguages 非空 → 数组；
+   * marker 非 null 但 languages 空（双语/内嵌/裸字幕）→ NULL（已知有字幕但具体未知）。
+   */
+  subtitleMarker: string | null
+  /** 字幕已知具体语言：中字→['中文']，中英字幕→['中文','英文']；未知具体或无 token→[] */
+  subtitleLanguages: string[]
   /** 发布形态：SP / OVA / 剧场版 / 番外 等（取首个命中规范词）。null=无 */
   releaseMarker: string | null
   /** 画质 / 编码噪声 token（4k / 1080p / bluray / hevc …），去重有序 */
@@ -94,7 +109,12 @@ export interface StandardVideoTitle {
   identityTitle: string
   seasonNumber: number | null
   releaseMarker: string | null
-  languageVariant: string | null
+  /** 语音变体（ADR-199 双维度，1.1.0 起替代旧 languageVariant）。供 source 层语言推断链 title_token 级消费 */
+  audioLanguage: string | null
+  /** 字幕 token 规范词（语义见 TitleFacets.subtitleMarker） */
+  subtitleMarker: string | null
+  /** 字幕已知具体语言（语义见 TitleFacets.subtitleLanguages） */
+  subtitleLanguages: string[]
   edition: string | null
   coreTitleKey: string
 }
@@ -132,13 +152,37 @@ const RELEASE_MARKER_RULES: ReadonlyArray<{ canonical: string; pattern: RegExp }
   { canonical: '番外', pattern: /番外篇|番外/gi },
 ]
 
-/** 语言 / 字幕变体 → facets.languageVariant（规范词 + 匹配别名）。顺序即优先级。 */
-const LANGUAGE_VARIANT_RULES: ReadonlyArray<{ canonical: string; pattern: RegExp }> = [
-  { canonical: '国语', pattern: /国语版|國語版|普通话版|国语|國語|普通话/gi },
+/**
+ * 语音（配音）变体 → facets.audioLanguage（ADR-199 D-199-2 规则表拆分）。
+ * 顺序即优先级。规范词 = 封闭枚举（AUDIO_LANGUAGE_CANONICALS 真源在
+ * SourceLanguageResolver）。「国配」并入「国语」规范词——语义同为中文配音，
+ * 分立会让前台「≥2 语音才显示」误判多语音。供 SourceLanguageResolver 复用
+ * （D-199-3 步骤 0 线路名 token / vod_lang token）。
+ */
+export const AUDIO_VARIANT_RULES: ReadonlyArray<{ canonical: string; pattern: RegExp }> = [
+  { canonical: '国语', pattern: /国语版|國語版|普通话版|国配版|国语|國語|普通话|国配/gi },
   { canonical: '粤语', pattern: /粤语版|粵語版|粤语|粵語/gi },
+  { canonical: '日语', pattern: /日语版|日語版|日语|日語/gi },
+  { canonical: '韩语', pattern: /韩语版|韓語版|韩语|韓語/gi },
   { canonical: '英语', pattern: /英语版|英語版|英语|英語/gi },
-  { canonical: '国配', pattern: /国配版|国配/gi },
-  { canonical: '字幕', pattern: /中英字幕|双语字幕|中字|无字幕|內嵌字幕|内嵌字幕|字幕/gi },
+]
+
+/**
+ * 字幕变体 → facets.subtitleMarker + facets.subtitleLanguages（ADR-199 D-199-2）。
+ * 顺序即优先级（复合 token 先于裸「字幕」）。languages = 可解析的具体语言
+ * （空数组=有字幕但具体语言未知，与「无字幕」marker 区分，见 TitleFacets 注释）。
+ */
+export const SUBTITLE_VARIANT_RULES: ReadonlyArray<{
+  canonical: string
+  pattern: RegExp
+  languages: ReadonlyArray<string>
+}> = [
+  { canonical: '中英字幕', pattern: /中英字幕|中英双字/gi, languages: ['中文', '英文'] },
+  { canonical: '双语字幕', pattern: /双语字幕|雙語字幕/gi, languages: [] },
+  { canonical: '内嵌字幕', pattern: /內嵌字幕|内嵌字幕/gi, languages: [] },
+  { canonical: '无字幕', pattern: /无字幕|無字幕/gi, languages: [] },
+  { canonical: '中字', pattern: /中字/gi, languages: ['中文'] },
+  { canonical: '字幕', pattern: /字幕/gi, languages: [] },
 ]
 
 /** 画质 / 编码噪声 → facets.qualityNoise[]（不影响身份）。 */
@@ -275,6 +319,31 @@ function extractSingleMarker(
 }
 
 /**
+ * 字幕变体抽取（D-199-2）：与 extractSingleMarker 同构，但首个命中同时携带
+ * languages 数组（SUBTITLE_VARIANT_RULES 形状不同，无法直接共用）。
+ * 所有规则命中文本均剥离，仅首个命中触发 assign。
+ */
+function extractSubtitleMarker(
+  input: string,
+  assign: (canonical: string, languages: ReadonlyArray<string>) => void,
+): string {
+  let s = input
+  let assigned = false
+  for (const { canonical, pattern, languages } of SUBTITLE_VARIANT_RULES) {
+    let hit = false
+    s = s.replace(pattern, () => {
+      hit = true
+      return ' '
+    })
+    if (hit && !assigned) {
+      assign(canonical, languages)
+      assigned = true
+    }
+  }
+  return s
+}
+
+/**
  * 噪声 token 抽取（qualityNoise / sourceNoise 共用）：所有命中文本经 normalizeMatch
  * 去重收集到 list，并从串剥离。返回剥离后的串。
  */
@@ -318,7 +387,9 @@ export function parseTitle(raw: string): ParsedTitle {
   const facets: TitleFacets = {
     seasonNumber: null,
     edition: null,
-    languageVariant: null,
+    audioLanguage: null,
+    subtitleMarker: null,
+    subtitleLanguages: [],
     releaseMarker: null,
     qualityNoise: [],
     sourceNoise: [],
@@ -361,10 +432,14 @@ export function parseTitle(raw: string): ParsedTitle {
     })
   }
 
-  // 5. 发布形态 / 6. 版本标记 / 7. 语言 · 字幕变体（单值，首个命中规则胜出）
+  // 5. 发布形态 / 6. 版本标记 / 7a. 语音变体 / 7b. 字幕变体（单值，首个命中规则胜出）
   s = extractSingleMarker(s, RELEASE_MARKER_RULES, (c) => { facets.releaseMarker = c })
   s = extractSingleMarker(s, EDITION_RULES, (c) => { facets.edition = c })
-  s = extractSingleMarker(s, LANGUAGE_VARIANT_RULES, (c) => { facets.languageVariant = c })
+  s = extractSingleMarker(s, AUDIO_VARIANT_RULES, (c) => { facets.audioLanguage = c })
+  s = extractSubtitleMarker(s, (canonical, languages) => {
+    facets.subtitleMarker = canonical
+    facets.subtitleLanguages = [...languages]
+  })
 
   // 8. 画质噪声 / 9. 源站噪声（多值，去重收集）
   s = extractNoiseTokens(s, QUALITY_NOISE_PATTERNS, facets.qualityNoise, (m) => m.toLowerCase())
@@ -438,7 +513,8 @@ export function buildStandardVideoTitle(raw: string): StandardVideoTitle {
   base = stripPatterns(base, SEASON_PATTERNS)
   base = stripRules(base, RELEASE_MARKER_RULES)
   base = stripRules(base, EDITION_RULES)
-  base = stripRules(base, LANGUAGE_VARIANT_RULES)
+  base = stripRules(base, AUDIO_VARIANT_RULES)
+  base = stripRules(base, SUBTITLE_VARIANT_RULES)
   base = stripPatterns(base, QUALITY_NOISE_PATTERNS)
   base = stripPatterns(base, SOURCE_NOISE_PATTERNS)
 
@@ -454,7 +530,9 @@ export function buildStandardVideoTitle(raw: string): StandardVideoTitle {
     identityTitle,
     seasonNumber: parsed.facets.seasonNumber,
     releaseMarker: parsed.facets.releaseMarker,
-    languageVariant: parsed.facets.languageVariant,
+    audioLanguage: parsed.facets.audioLanguage,
+    subtitleMarker: parsed.facets.subtitleMarker,
+    subtitleLanguages: parsed.facets.subtitleLanguages,
     edition: parsed.facets.edition,
     coreTitleKey: parsed.coreTitleKey,
   }
@@ -469,7 +547,9 @@ export function buildStandardVideoTitle(raw: string): StandardVideoTitle {
 export function classifyTitleKind(coreTitleKey: string, facets: TitleFacets): TitleKind {
   if (facets.sourceNoise.length > 0) return 'crawler'
   if (facets.edition !== null) return 'edition'
-  if (facets.languageVariant !== null) return 'localized'
+  // D-199-4：双维度任一非空即 localized（subtitleMarker 覆盖「双语/内嵌/裸字幕」等
+  // languages 不可解析的 token，比仅看 subtitleLanguages.length 召回完整）
+  if (facets.audioLanguage !== null || facets.subtitleMarker !== null) return 'localized'
   if (isPinyin(coreTitleKey)) return 'romanized'
   return 'original'
 }

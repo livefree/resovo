@@ -69,24 +69,48 @@ describe('TitleIdentityParser — 书名号 / 全半角 / 标点', () => {
   })
 })
 
-describe('TitleIdentityParser — 语言 / 字幕变体 → facets.languageVariant', () => {
-  it('国语 → languageVariant=国语，titleKind=localized', () => {
+describe('TitleIdentityParser — 语言双维度 → facets.audioLanguage / subtitleMarker（ADR-199 D-199-4）', () => {
+  it('国语 → audioLanguage=国语，titleKind=localized', () => {
     const r = parseTitle('叶问 国语')
     expect(r.coreTitleKey).toBe('叶问')
-    expect(r.facets.languageVariant).toBe('国语')
+    expect(r.facets.audioLanguage).toBe('国语')
+    expect(r.facets.subtitleMarker).toBeNull()
     expect(r.titleKind).toBe('localized')
   })
 
-  it('粤语版 → languageVariant=粤语', () => {
+  it('粤语版 → audioLanguage=粤语', () => {
     const r = parseTitle('无间道 粤语版')
     expect(r.coreTitleKey).toBe('无间道')
-    expect(r.facets.languageVariant).toBe('粤语')
+    expect(r.facets.audioLanguage).toBe('粤语')
   })
 
-  it('中英字幕 → languageVariant=字幕', () => {
+  it('国配版 → 并入 audioLanguage=国语（避免误判多语音）', () => {
+    expect(parseTitle('某片 国配版').facets.audioLanguage).toBe('国语')
+  })
+
+  it('中英字幕 → subtitleMarker=中英字幕 + subtitleLanguages=[中文,英文]，titleKind=localized', () => {
     const r = parseTitle('神探夏洛克 中英字幕')
     expect(r.coreTitleKey).toBe('神探夏洛克')
-    expect(r.facets.languageVariant).toBe('字幕')
+    expect(r.facets.audioLanguage).toBeNull()
+    expect(r.facets.subtitleMarker).toBe('中英字幕')
+    expect(r.facets.subtitleLanguages).toEqual(['中文', '英文'])
+    expect(r.titleKind).toBe('localized')
+  })
+
+  it('中字 → subtitleLanguages=[中文]；双语字幕 → 具体语言未知（空数组 + marker）', () => {
+    expect(parseTitle('某剧 中字').facets.subtitleLanguages).toEqual(['中文'])
+    const dual = parseTitle('某剧 双语字幕')
+    expect(dual.facets.subtitleMarker).toBe('双语字幕')
+    expect(dual.facets.subtitleLanguages).toEqual([])
+  })
+
+  it('无字幕 → marker=无字幕（DB 三态映射为 {} 由 resolver 承接）', () => {
+    expect(parseTitle('某片 无字幕').facets.subtitleMarker).toBe('无字幕')
+  })
+
+  it('日语 / 韩语 token（1.1.0 新增规则）', () => {
+    expect(parseTitle('某番 日语版').facets.audioLanguage).toBe('日语')
+    expect(parseTitle('某剧 韩语').facets.audioLanguage).toBe('韩语')
   })
 })
 
@@ -227,7 +251,7 @@ describe('TitleIdentityParser — 多噪声组合', () => {
     const r = parseTitle('斗破苍穹 第5季 国语 1080p 更新至30集')
     expect(r.coreTitleKey).toBe('斗破苍穹')
     expect(r.facets.seasonNumber).toBe(5)
-    expect(r.facets.languageVariant).toBe('国语')
+    expect(r.facets.audioLanguage).toBe('国语')
     expect(r.facets.qualityNoise).toContain('1080p')
     expect(r.facets.sourceNoise).toContain('更新至30集')
     expect(r.titleKind).toBe('crawler') // 源站噪声优先
@@ -246,7 +270,7 @@ describe('buildStandardVideoTitle — 入库/显示标准标题', () => {
     expect(r.identityTitle).toBe('斗罗大陆')
     expect(r.displayTitle).toBe('斗罗大陆 第4季')
     expect(r.seasonNumber).toBe(4)
-    expect(r.languageVariant).toBe('国语')
+    expect(r.audioLanguage).toBe('国语')
   })
 
   it('剧场版：发布形态保留进 identityTitle/displayTitle', () => {
@@ -254,14 +278,16 @@ describe('buildStandardVideoTitle — 入库/显示标准标题', () => {
     expect(r.identityTitle).toBe('某番 剧场版')
     expect(r.displayTitle).toBe('某番 剧场版')
     expect(r.releaseMarker).toBe('剧场版')
-    expect(r.languageVariant).toBe('国语')
+    expect(r.audioLanguage).toBe('国语')
   })
 
   it('国语/字幕/画质/更新态不污染显示标题', () => {
     const r = buildStandardVideoTitle('叶问 国语 中英字幕 1080p 更新至1集')
     expect(r.identityTitle).toBe('叶问')
     expect(r.displayTitle).toBe('叶问')
-    expect(r.languageVariant).toBe('国语')
+    expect(r.audioLanguage).toBe('国语')
+    expect(r.subtitleMarker).toBe('中英字幕')
+    expect(r.subtitleLanguages).toEqual(['中文', '英文'])
   })
 
   it('显示标题保留全角标点（中文显示惯例），季标粘连补空格间隔', () => {
@@ -290,7 +316,9 @@ describe('TitleIdentityParser — titleKind 罗马音 / 分类辅助', () => {
     const facets = {
       seasonNumber: null,
       edition: '加长版',
-      languageVariant: '国语',
+      audioLanguage: '国语',
+      subtitleMarker: null,
+      subtitleLanguages: [],
       releaseMarker: null,
       qualityNoise: [],
       sourceNoise: ['更新至10集'],
@@ -305,7 +333,7 @@ describe('TitleIdentityParser — titleKind 罗马音 / 分类辅助', () => {
   })
 
   it('computeConfidence：空 core=0.1，源站噪声 -0.15', () => {
-    const empty = { seasonNumber: null, edition: null, languageVariant: null, releaseMarker: null, qualityNoise: [], sourceNoise: [], bracketTokens: [] }
+    const empty = { seasonNumber: null, edition: null, audioLanguage: null, subtitleMarker: null, subtitleLanguages: [], releaseMarker: null, qualityNoise: [], sourceNoise: [], bracketTokens: [] }
     expect(computeConfidence('', empty)).toBe(0.1)
     expect(computeConfidence('某剧', empty)).toBe(1)
     expect(computeConfidence('某剧', { ...empty, sourceNoise: ['更新至1集'] })).toBe(0.85)

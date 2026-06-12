@@ -62,7 +62,7 @@ function makeObservation(
       facets: {
         seasonNumber: opts.seasonNumber ?? null,
         edition: opts.edition ?? null,
-        languageVariant: null,
+        audioLanguage: null, subtitleMarker: null, subtitleLanguages: [],
         releaseMarker: opts.releaseMarker ?? null,
         qualityNoise: [],
         sourceNoise: [],

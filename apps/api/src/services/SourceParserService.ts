@@ -53,6 +53,8 @@ export interface ParsedVideo {
   contentRating: 'general' | 'adult' // 内容分级（Migration 020）
   year: number | null
   country: string | null
+  /** ADR-199：上游 vod_lang 原文透传（vod 级语言信号，推断链第 1 级输入）。null=上游未提供 */
+  vodLang: string | null
   cast: string[]
   director: string[]
   writers: string[]
@@ -258,6 +260,7 @@ export function parseVodItem(item: RawVodItem): {
     contentRating: parseContentRating(rawCategory),
     year: parseYear(item.vod_year),
     country: parseCountry(item.vod_area),
+    vodLang: item.vod_lang?.trim() || null,
     cast: splitNames(item.vod_actor),
     director: splitNames(item.vod_director),
     writers: splitNames(item.vod_writer),

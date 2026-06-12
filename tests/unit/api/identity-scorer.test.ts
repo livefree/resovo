@@ -27,7 +27,7 @@ function facets(over: Partial<TitleFacets> = {}): TitleFacets {
   return {
     seasonNumber: null,
     edition: null,
-    languageVariant: null,
+    audioLanguage: null, subtitleMarker: null, subtitleLanguages: [],
     releaseMarker: null,
     qualityNoise: [],
     sourceNoise: [],

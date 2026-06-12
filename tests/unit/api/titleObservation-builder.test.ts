@@ -21,7 +21,7 @@ describe('buildTitleObservation — 解析透传 + 去重 hash', () => {
     const facets = input.parsedFacets as Record<string, unknown>
     expect(facets.coreTitleKey).toBe('斗罗大陆')
     expect(facets.titleKind).toBe('crawler')
-    expect(facets.facets).toMatchObject({ seasonNumber: 4, languageVariant: '国语' })
+    expect(facets.facets).toMatchObject({ seasonNumber: 4, audioLanguage: '国语' })
   })
 
   it('raw_title_hash = sha256(raw_title) hex，确定性（跨 video/site 同标题同 hash）', () => {

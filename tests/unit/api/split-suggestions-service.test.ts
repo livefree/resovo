@@ -74,12 +74,12 @@ describe('SplitSuggestionsService.getSuggestions', () => {
       {
         siteKey: 'site-a', rawTitle: '作品A', rawTitleHash: 'h1', observedCount: 3,
         lastSeenAt: '2026-06-01T00:00:00Z',
-        parsedFacets: { coreTitleKey: 'a', titleKind: 'original', confidence: 1, facets: { seasonNumber: null, edition: null, languageVariant: null, releaseMarker: null, qualityNoise: [], sourceNoise: [], bracketTokens: [] } },
+        parsedFacets: { coreTitleKey: 'a', titleKind: 'original', confidence: 1, facets: { seasonNumber: null, edition: null, audioLanguage: null, subtitleMarker: null, subtitleLanguages: [], releaseMarker: null, qualityNoise: [], sourceNoise: [], bracketTokens: [] } },
       },
       {
         siteKey: 'site-b', rawTitle: '作品B', rawTitleHash: 'h2', observedCount: 2,
         lastSeenAt: '2026-06-01T00:00:00Z',
-        parsedFacets: { coreTitleKey: 'b', titleKind: 'original', confidence: 1, facets: { seasonNumber: null, edition: null, languageVariant: null, releaseMarker: null, qualityNoise: [], sourceNoise: [], bracketTokens: [] } },
+        parsedFacets: { coreTitleKey: 'b', titleKind: 'original', confidence: 1, facets: { seasonNumber: null, edition: null, audioLanguage: null, subtitleMarker: null, subtitleLanguages: [], releaseMarker: null, qualityNoise: [], sourceNoise: [], bracketTokens: [] } },
       },
     ])
     vi.mocked(listExternalIdConflictProviders).mockResolvedValueOnce(['douban'])

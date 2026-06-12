@@ -4724,3 +4724,26 @@
 - **质量门禁**：typecheck EXIT=0 / lint EXIT=0 / **test:changed 升全量 7237 passed 0 failed**（packages/types 基础包改动触发 ADR-180 自动升级；本次含此前抖动的 perf 基准在内全绿）
 - **注意事项**：① 4 列当前全为 DEFAULT 值（unknown/NULL），写入链路（五级推断链）与存量回填在 LANG-DIM-B；② 读侧 mapSource 尚未透出新列（D-199-7 契约已定，LANG-DIM-C 接通）；③ provenance 升级规则（region_inferred/unknown 可被前三级覆盖、反向禁止）是应用层守卫，DB 不强制。
 - **[AI-CHECK]**：六问过——①零回归（纯加列 + 可选契约字段，全量 7237 绿）；②不越界（未动写入/读取链路）；③沉淀（枚举入 @resovo/types 真源 + 双形态范式）；④无 any/空 catch；⑤一致性（COMMENT/CHECK/可选字段均对齐 109/059/CHG-352 先例）；⑥声明性文件未超限。
+
+## [LANG-DIM-B] 规则表拆分 + 归一函数 + 五级推断链写入 + 存量回填
+- **完成时间**：2026-06-12
+- **记录时间**：2026-06-12 14:25
+- **执行模型**：claude-fable-5
+- **子代理**：无（设计由 ADR-199 D-199-2/3/4/5 锁定）
+- **修改文件**：
+  - `apps/api/src/services/TitleIdentityParser.ts` — `LANGUAGE_VARIANT_RULES` 拆为 `AUDIO_VARIANT_RULES`（+日语/韩语规则；「国配」并入「国语」规范词——分立会让前台「≥2 语音才显示」误判多语音）+ `SUBTITLE_VARIANT_RULES`（携 languages 数组）；facets 双维度（`audioLanguage` + `subtitleMarker`/`subtitleLanguages`）；`TITLE_PARSER_VERSION` 1.0.0→1.1.0（经 evidence_hash superseded 受控）；`classifyTitleKind` localized 判定升级；`StandardVideoTitle` 同步。
+  - `apps/api/src/services/SourceLanguageResolver.ts`（新增）— 封闭枚举（`AUDIO_LANGUAGE_CANONICALS` 5 值）+ `normalizeAudioLanguage`（vod_lang 别名映射：汉语普通话/国粤双语/中文→国语 等 exact 命中优先于 token 扫描）+ `matchSubtitleToken` + `normalizeCountryCode`（ISO 直通 / 中文名复用 `COUNTRY_MAP`，禁新建映射）+ `resolveSourceLanguages` 五级推断链主入口（两维度独立短路；地区映射 CN·TW→国语/HK→粤语/JP→日语/KR→韩语，仅 audio）。
+  - `apps/api/src/services/SourceParserService.ts` — `ParsedVideo.vodLang` 透传（vod_lang 自 CRAWLER-07 解析后首次有下游消费）。
+  - `apps/api/src/services/CrawlerService.ts` — Step 6 逐 source 行调 `resolveSourceLanguages`（行级 sourceName token > vod 级 vodLang/标题 facets > catalog.country）。
+  - `apps/api/src/db/queries/sources.types.ts` — `UpsertSourceInput` +4 语言字段；`languageSourceRankSql`/`languageUpgradeSetSql` SQL 片段共享（provenance 等级 4>3>2>1>0 升级规则机器可执行表达；裸参数显式 cast，BUGFIX-RENDERCHECK-PLAYBACK-SQL-CAST 教训）。
+  - `apps/api/src/db/queries/sources.ts` — `upsertSource` DO NOTHING → 守卫式 DO UPDATE（仅语言四列按等级升级 + WHERE 防纯 no-op 写放大；`xmax=0` 判定保持「新插入 | null」返回语义不破坏 upsertSources 计数）。
+  - `apps/api/src/db/queries/sources.maintenance.ts` — `replaceSourcesForSite` 三路径接通：INSERT 带 4 列 / 复活 DO UPDATE 守卫升级 / **kept 行（重爬同 URL）按语言元组分组批量守卫 UPDATE**——否则升级规则在全量替换主路径永不生效（vod_lang 晚到无法落库）。
+  - `scripts/backfill-source-languages.ts`（新增）— D-199-5 存量回填：vod_lang 历史不可得（如实建模）→ source_name token + `video_aliases` 原文重 parse（B 卡清洗后原文在别名层）+ 地区推断；按 video 分组 / 推断元组批量 UPDATE / provenance 守卫幂等。
+  - 测试：`source-language-resolver.test.ts`（新增 17 用例）/ `title-identity-parser.test.ts`（语言双维度 describe 重写 +5 用例）/ `crawlerNamingStandard.test.ts`（+4 推断链端到端）/ `titleObservation-builder` `crawlerTitleObservation`（版本/facets 断言更新，硬编码 1.0.0 改引常量）/ `identity-scorer` `split-suggestions` ×2（fixture facets 形状同步）。
+- **实跑结果**（dev 库）：dry-run 核对后回填 **482,090 行**（region_inferred 475,620 / title_token 6,470），audio 覆盖率 85.5%（剩余 = country NULL/US 等无先验）；幂等复跑 0 行；「重案解密」国语/粤语两视频 sources 分别落 国语/粤语 + title_token——合并端态（评审 BLOCKER 方案 B 理由）实证成立。
+- **偏离说明**：facets 增 `subtitleMarker`（ADR D-199-4 字面只列 audioLanguage+subtitleLanguages）——「双语字幕/内嵌字幕/裸字幕」languages 不可解析时仅靠数组无法区分「有字幕但未知」vs「无 token」，marker 同时保 localized 分类召回；DB 三态映射由 resolver 收口，ADR 实质语义不变。
+- **新增依赖**：无
+- **数据库变更**：无 DDL（112 列数据回填 48.2 万行）
+- **质量门禁**：typecheck/lint EXIT=0 / test:changed 71 文件 951 passed / **test:integration 70 passed（真库，覆盖 sources SQL cast 口径）**
+- **注意事项**：① 读侧 mapSource/前台 DTO 仍未透出（LANG-DIM-C）；② subtitle 维度覆盖率极低（标题/线路名字幕 token 罕见），真实提升靠后续 vod_lang 重爬；③ parser 1.1.0 会使新观测 evidence_hash 变化，旧 observations 待重爬自然替换。
+- **[AI-CHECK]**：六问过——①零回归（TitleNormalizer 逐字符回归守卫绿；upsertSource 返回语义经 xmax 保持；integration 真库验证）；②偏离已声明（subtitleMarker）；③沉淀（resolver 独立 service + SQL 片段共享防三处复刻漂移）；④无 any/空 catch；⑤一致性（显式 cast / dry-run 范式 / 双形态枚举均对齐先例）；⑥SourceLanguageResolver 195 行未超限。

@@ -68,7 +68,7 @@ function makeDb() {
   } as unknown as import('pg').Pool
 }
 
-function makeParsed(title: string) {
+function makeParsed(title: string, overrides?: { vodLang?: string | null; sourceName?: string }) {
   return {
     video: {
       title,
@@ -82,6 +82,7 @@ function makeParsed(title: string) {
       contentRating: 'general' as const,
       year: 2024,
       country: 'JP',
+      vodLang: overrides?.vodLang ?? null,
       cast: [],
       director: [],
       writers: [],
@@ -93,7 +94,7 @@ function makeParsed(title: string) {
       {
         episodeNumber: 1,
         sourceUrl: 'https://cdn.example.com/ep1.m3u8',
-        sourceName: 'line-a',
+        sourceName: overrides?.sourceName ?? 'line-a',
         type: 'hls' as const,
       },
     ],
@@ -141,5 +142,49 @@ describe('CrawlerService.upsertVideo — 标准标题入库', () => {
     expect(insertCrawledVideoMock).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
       title: '某番 剧场版',
     }))
+  })
+
+  // ── ADR-199 D-199-3：语言双维度五级推断链写入 ──────────────────────────────
+
+  it('标题含国语 → source 行 audioLanguage=国语 / title_token（剥出标题后沉淀 source 层）', async () => {
+    const service = new CrawlerService(makeDb(), {} as import('@elastic/elasticsearch').Client)
+    await service.upsertVideo(makeParsed('斗罗大陆 第2季 国语 1080p 更新至30集'))
+
+    expect(upsertSourcesMock).toHaveBeenCalledWith(expect.anything(), [expect.objectContaining({
+      audioLanguage: '国语',
+      audioLanguageSource: 'title_token',
+      subtitleLanguages: null,
+      subtitleLanguageSource: 'unknown',
+    })])
+  })
+
+  it('vod_lang 优先于地区推断；汉语普通话归一为国语', async () => {
+    const service = new CrawlerService(makeDb(), {} as import('@elastic/elasticsearch').Client)
+    await service.upsertVideo(makeParsed('某番', { vodLang: '汉语普通话' }))
+
+    expect(upsertSourcesMock).toHaveBeenCalledWith(expect.anything(), [expect.objectContaining({
+      audioLanguage: '国语',
+      audioLanguageSource: 'vod_lang',
+    })])
+  })
+
+  it('无语言信号 → country=JP 地区推断 日语 / region_inferred', async () => {
+    const service = new CrawlerService(makeDb(), {} as import('@elastic/elasticsearch').Client)
+    await service.upsertVideo(makeParsed('某番'))
+
+    expect(upsertSourcesMock).toHaveBeenCalledWith(expect.anything(), [expect.objectContaining({
+      audioLanguage: '日语',
+      audioLanguageSource: 'region_inferred',
+    })])
+  })
+
+  it('线路名行级 token 最高优先级（粤语线路盖过 vod_lang 国语）', async () => {
+    const service = new CrawlerService(makeDb(), {} as import('@elastic/elasticsearch').Client)
+    await service.upsertVideo(makeParsed('某剧', { vodLang: '国语', sourceName: '粤语线路' }))
+
+    expect(upsertSourcesMock).toHaveBeenCalledWith(expect.anything(), [expect.objectContaining({
+      audioLanguage: '粤语',
+      audioLanguageSource: 'source_name_token',
+    })])
   })
 })

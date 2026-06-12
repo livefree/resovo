@@ -8,6 +8,7 @@ import type { Pool } from 'pg'
 import { extractHostname } from '@resovo/media-probe'
 import type { VideoSource, VideoQuality, SourceType } from '@/types'
 import type { UpsertSourceInput } from './sources.types'
+import { languageSourceRankSql, languageUpgradeSetSql } from './sources.types'
 
 export type { UpsertSourceInput } from './sources.types'
 export type {
@@ -310,26 +311,44 @@ export async function batchSetSourceStatus(
 
 /**
  * 播放源去重 upsert：
- * 同一 (video_id, episode_number, source_url) 已存在时跳过（DO NOTHING）。
- * 规则 E(CHG-38): 不覆盖已有播放源，避免误清除 is_active=false 状态。
+ * 同一 (video_id, episode_number, source_url) 已存在时不覆盖既有播放源状态
+ * （规则 E(CHG-38)：避免误清除 is_active=false），**仅语言四列按 provenance
+ * 等级守卫升级**（ADR-199 D-199-1：region_inferred/unknown 可被高级别证据覆盖，
+ * 反向禁止；同级最新观测胜）——WHERE 守卫使纯 no-op 冲突不产生写放大。
  * ADR-016: episode_number 统一坐标系，单集/电影为 1（NOT NULL）。
  * SRCHEALTH-P3-3-A: source_hostname 在 query 层解析写入（「写 URL 必同步写 hostname」
- * 不变式封闭在 DB 层，新调用方无法漏传）；DO NOTHING 冲突行由回填脚本覆盖。
+ * 不变式封闭在 DB 层，新调用方无法漏传）。
+ * 返回值语义保持「新插入行 | null」：语言升级的冲突行经 xmax=0 判定不计入插入。
  */
 export async function upsertSource(
   db: Pool,
   input: UpsertSourceInput
 ): Promise<VideoSource | null> {
-  const result = await db.query<DbSourceRow>(
+  const newAudioRank = languageSourceRankSql('EXCLUDED.audio_language_source')
+  const oldAudioRank = languageSourceRankSql('video_sources.audio_language_source')
+  const newSubRank = languageSourceRankSql('EXCLUDED.subtitle_language_source')
+  const oldSubRank = languageSourceRankSql('video_sources.subtitle_language_source')
+  const result = await db.query<DbSourceRow & { inserted: boolean }>(
     `INSERT INTO video_sources
-       (video_id, season_number, episode_number, source_url, source_name, type, is_active, source_site_key, source_hostname)
-     VALUES ($1, $2, $3, $4, $5, $6, true, $7, $8)
+       (video_id, season_number, episode_number, source_url, source_name, type, is_active, source_site_key, source_hostname,
+        audio_language, subtitle_languages, audio_language_source, subtitle_language_source)
+     VALUES ($1, $2, $3, $4, $5, $6, true, $7, $8, $9::text, $10::text[], $11::text, $12::text)
      ON CONFLICT ON CONSTRAINT uq_sources_video_episode_url
-     DO NOTHING
-     RETURNING *`,
-    [input.videoId, input.seasonNumber ?? 1, input.episodeNumber, input.sourceUrl, input.sourceName, input.type, input.sourceSiteKey ?? null, extractHostname(input.sourceUrl)]
+     DO UPDATE SET ${languageUpgradeSetSql()}
+     WHERE ${newAudioRank} > ${oldAudioRank}
+        OR (${newAudioRank} = ${oldAudioRank} AND ${newAudioRank} > 0 AND EXCLUDED.audio_language IS DISTINCT FROM video_sources.audio_language)
+        OR ${newSubRank} > ${oldSubRank}
+        OR (${newSubRank} = ${oldSubRank} AND ${newSubRank} > 0 AND EXCLUDED.subtitle_languages IS DISTINCT FROM video_sources.subtitle_languages)
+     RETURNING *, (xmax = 0) AS inserted`,
+    [
+      input.videoId, input.seasonNumber ?? 1, input.episodeNumber, input.sourceUrl, input.sourceName, input.type,
+      input.sourceSiteKey ?? null, extractHostname(input.sourceUrl),
+      input.audioLanguage ?? null, input.subtitleLanguages ?? null,
+      input.audioLanguageSource ?? 'unknown', input.subtitleLanguageSource ?? 'unknown',
+    ]
   )
-  return result.rows[0] ? mapSource(result.rows[0]) : null
+  const row = result.rows[0]
+  return row && row.inserted ? mapSource(row) : null
 }
 
 /** 批量 upsert 播放源（爬虫采集后批量写入）。返回实际插入数量（跳过的不计入）。 */
