@@ -4535,3 +4535,15 @@
 - **背景**：用户报告「后台预览视频播放页/详情页有时 404」+「前台已公开视频同样 404」。调查实证：`extractShortId` 按最后一个 `-` 切分 `<slug>-<shortId>`（ADR-002），nanoid 默认字母表含 `-` → 约 11.8% 理论概率切坏；dev 库 4337 视频 526 个（12.1%）命中、9 个已公开前台必现 404。存量清洗归 -B 卡（migration 110）。
 - **门禁**：typecheck EXIT=0 / lint EXIT=0 / test:changed 84 文件 1227 passed。无新增 admin route / 无 schema DDL / 不动 admin-ui Props。
 - **遗留**：web-next `extractShortId` 与 api `SHORT_ID_ALPHABET` 的协议契合靠双侧注释 + 单测复刻锁定（跨 app 无共享 import；2 消费方未达 3 处提取线，未来可沉淀 packages/types）。
+
+## [BUGFIX-SHORTID-DASH-B] 存量清洗：migration 110 重新生成含 `-` 的 short_id + ES 重同步脚本
+- **完成时间**：2026-06-11
+- **记录时间**：2026-06-11 21:10
+- **执行模型**：claude-fable-5（用户会话人工覆盖 sonnet 建议）
+- **子代理**：无
+- **修改文件**：
+  - `apps/api/src/db/migrations/110_videos_short_id_dash_cleanup.sql` — 新建：DO 块逐行重生成含 `-` 的 short_id（62 字符字母表 + 唯一冲突重试 + `updated_at` touch），`LIKE '%-%'` 谓词天然幂等；纯数据迁移无 DDL（architecture.md 不需同步）；Down 不可逆（旧值随机串无业务语义，受影响 URL 本来就 404 零断链成本）
+  - `scripts/resync-es-short-id.ts` — 新建一次性脚本：ES 侧 `short_id: *-*` wildcard 圈定旧值文档 → DB 存活行 `syncVideo` 覆盖 / 已删行 `unindexVideo` 清理；收敛断言前显式 `indices.refresh`（首跑实测 near-real-time 窗口致 count 误报 221 残留）
+- **真库实测**：migration 应用 526 行清洗（DB 断言零残留 + 零畸形）；DO 块手动重放幂等 0 行命中；ES 实跑 2768 条命中（syncVideo 441 / unindexVideo 2327——**附带清理 2327 条 DB 已删的幽灵文档**，ES↔DB 漂移远超本 bug 范围）；复跑收敛断言通过零残留；端到端抽验原 `CrLh-aL0`（公开视频必现 404）新 short_id `odgAm4fM` → `GET /v1/videos/odgAm4fM` HTTP 200。
+- **门禁**：typecheck/lint/test:changed EXIT=0。
+- **遗留**：ES 幽灵文档成因（unindex 链路历史漏删）未根因调查——reconcileStale 仅 7 天回溯窗，建议候补独立卡评估全量 reconcile 周期任务。

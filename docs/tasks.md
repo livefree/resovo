@@ -6,16 +6,16 @@
 
 ## 当前任务（单任务工作台：同时仅 1 个 🔄 进行中；完成即删卡，历史见 docs/changelog.md）
 
-### 🔄 BUGFIX-SHORTID-DASH-B · 存量清洗：migration 110 重新生成含 `-` 的 short_id + ES 重同步脚本
+### 🔄 BUGFIX-PREVIEW-LINK-A · 视频库「查看详情（前台）」改走 buildAdminPreviewUrl 收口
 
-- **来源**：SEQ-20260611-01（依赖 -A ✅ 生成侧已收口，爬虫不再续产坏数据）。
+- **来源**：SEQ-20260611-01 根因 ①（与 -A/-B 正交）。
 - **实际开始时间**：2026-06-11
-- **问题理解**：dev 库 526 个视频 short_id 含 `-`（nanoid 默认字母表遗留），`extractShortId` 切坏 → 详情/播放页必现 404（含 9 个已公开视频）。生成侧已收口（-A），存量数据需一次性清洗；这些行的现有 URL 本来就 404，改 ID 无断链成本。
-- **根因判断**：同 -A（字母表与 URL 分隔符协议冲突的存量遗留）。
-- **方案**：① migration `110_videos_short_id_dash_cleanup.sql`：DO 块逐行重生成（62 字符字母表 PL/pgSQL 实现 + 唯一冲突重试 + `updated_at` touch），`WHERE short_id LIKE '%-%'` 天然幂等；② `scripts/resync-es-short-id.ts` 一次性脚本：对清洗行调 `VideoIndexSyncService.syncVideo`（ES 文档以 `v.id` 为主键，upsert 即覆盖旧 short_id）——migration 无法感知 ES，故拆脚本；以 `updated_at` 触达窗口圈定受影响行。
-- **涉及文件**：`apps/api/src/db/migrations/110_videos_short_id_dash_cleanup.sql`（新）、`scripts/resync-es-short-id.ts`（新）。
-- **验收口径**：DB 零行 `short_id LIKE '%-%'`（幂等可重跑），受影响行 ES 文档 short_id 同步更新，9 个公开视频前台详情可达。
-- **不做**：含 `_` 的 516 个存量（URL 合法且解析无损，改之反断既有公开链接）；schema DDL（纯数据迁移，architecture.md 不需同步）。
+- **问题理解**：`VideoRowActions.tsx:169` 用 `window.open(getDetailHref(row), '_blank')` 打开**相对路径** `/${segment}/${short_id}` → 在 server-next 自身 origin（dev `localhost:3003` / prod admin 子域）解析，后台无前台详情路由 → 该入口必现 404；且缺 `?preview=admin`，即使到达前台，未公开视频走 public 路径仍 404。
+- **根因判断**：ADR-160 D-160-7 / MODUX-P1-3 收口时遗漏的散点——moderation 模块已用 `buildAdminPreviewUrl`（`WEB_NEXT_ORIGIN + locale + ?preview=admin`）正确实现；`VideoRowActions` 本地 `getDetailHref` 还重复实现了 `getVideoDetailHref`（packages/types）的 type→segment 映射，违反复用约束。
+- **方案**：删除本地 `getDetailHref` + `PRIMARY_TYPES`/`TYPE_SEGMENT` 重复实现；「查看详情（前台）」改 `window.open(buildAdminPreviewUrl({ type: row.type, slug: null, shortId: row.short_id }), '_blank', 'noopener,noreferrer')`（`VideoAdminRow` 无 slug 投影，detail 页裸 shortId 兼容；与 moderation 同口径单一收口）。
+- **涉及文件**：`apps/server-next/src/app/admin/videos/_client/VideoRowActions.tsx`（+ 既有单测若覆盖该 action 则同步）。
+- **验收口径**：视频库行操作打开的前台详情 URL = `WEB_NEXT_ORIGIN + /locale + detailHref + ?preview=admin`（与 moderation「前台预览」同口径），本地重复实现删除。
+- **不做**：扩 `GET /admin/videos` 投影加 slug（preview 场景裸 shortId 足够，零 API 改动）。
 - **执行模型**：claude-fable-5（用户会话人工覆盖 sonnet 建议）。子代理调用：无。
 
 ### ⏸ MODUX-ACPT-5（暂停 · 检查点已提交）· 验收第 5 条纠正 · 审核台头部去 h1 + 元素并入 tab 行
