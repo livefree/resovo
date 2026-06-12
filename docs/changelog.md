@@ -4913,3 +4913,21 @@
 - **修复**：步骤 ④ 增加 `!rescore.lockSkipped` 守卫——lock-skipped 时 hygiene 顺延（stale 信号仍在，下一 tick 失配检测幂等重入）+ 显式日志；编排头注同步。
 - **修改文件**：`apps/api/src/services/identity/versionReconcile.ts`、`tests/unit/api/identity-version-reconcile.test.ts`（+1 守卫用例，5/5）。
 - **质量门禁**：typecheck/lint EXIT=0 / test:changed 383 passed。
+
+## [GOV-6] 存量实体手术：4 项批准处置执行 + 审计 B/C 类清零
+- **完成时间**：2026-06-12
+- **记录时间**：2026-06-12 20:30
+- **执行模型**：claude-fable-5
+- **子代理**：无（人工闸门 = 用户逐例批准，2026-06-12 批准全部 4 项高置信处置）
+- **取证**（归档 `docs/audit/cross-season-merge-audit-20260612.md` §GOV-6）：aliases（全 6 例双季中文+拼音别名 = 真混挂非噪声）/ 站点级 title_observations（掌心饵 dbzy.tv=第二季直接归属证据；宠妻单站先后双季观测 + 全量替换已软删 S1 批 38 行）/ sources 集数段分布。
+- **修改文件**：`scripts/gov6-entity-surgery.ts`（新增，逐例 guard 幂等；生产前必须重跑审计脚本）。
+- **执行结果**（dev 库）：
+  - ①掌心饵，驯娇记：`VideoMergesService.split` 全划分（audit 213de8d7 可 unmerge）→ S1 新实体（mtzy 2 行）+ S2 新实体（dbzy 2 行）→ 原 catalog season=1 + S2 迁独立 (掌心饵驯娇记,S2) catalog。
+  - ②宠妻成瘾动态漫画：catalog season=2 落位（存活 sources 已纯 S2，零拆分；S1 待重爬自然建独立实体）。
+  - ⑥星辰变：catalog 改题「星辰变 第5季」+season=5（留 S5 video 28 集）；S7 video（12 集）迁新 (星辰变,S7) catalog——原「第六季」题名与 S5/S7 内容双错位纠正。
+  - ⑦师兄啊师兄：第2季 video（144 集）迁新 (师兄啊师兄,S2) catalog；正篇（143 集连续话数）留原 catalog NULL 槽位。
+  - ⑧魔法使俱乐部(OVA)：catalog normalized 改「魔法使俱乐部 ova」+ 标题双端标准化「魔法使俱乐部 OVA」——与正篇撞 key 消除。
+- **收敛断言**（audit 复跑）：B 类季槽位错位 **355→0** / C 类发布形态撞键 **1→0**；A 类余 5 = 暂缓 4 例（偶滴歌神啊/恶搞之家/动物管制官 ×2，缺站点归属证据，GOV-4 后重爬观测自然累积后重新取证）+ 宠妻历史别名残留（审计层保留，预期）。手术脚本幂等复跑全例跳过。
+- **新增依赖**：无；**数据库变更**：无 DDL（实体级数据手术：1 split + 4 catalog 落位/迁移 + 1 normalized 修正；catalog 迁移后外部 ID 绑定由 enrichment 自然重建）。
+- **质量门禁**：typecheck/lint EXIT=0 / test:changed scripts+docs-only 空集放行（手术经 split 服务审计路径 + 审计脚本收敛断言 + 幂等复跑三重验证）。
+- **[AI-CHECK]**：六问过——①复用 split 服务（审计可 unmerge / ES 同步 / 新 video 字段完整性）而非裸 SQL 造实体；②catalog 迁移用 findOrCreateWithMatch 四元组（季位语义与采集路径同源）；③逐例 guard 幂等可生产照搬；④暂缓例不强行猜归属（证据优先于进度）；⑤取证归档审计真源；⑥人工闸门流程完整（取证→批准→执行→收敛断言）。

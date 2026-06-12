@@ -2213,5 +2213,5 @@
    - arch-reviewer (claude-opus-4-8) BLOCKER：cron 必须 api 进程内（ADR-107 §4 worker 禁 import api Bull）→ identityReconcileScheduler（boot 自愈 + 每日兜底，不固定 jobId）；versionReconcile 四步幂等编排 = GOV-1 手工链固化；观测 SQL 下沉查询层单真源。详见 changelog [GOV-3]。
 4. **GOV-4** — 标题变更重评 hook（状态：✅ 已完成 2026-06-12）：migration 113 +'title_change' / triggerSource 全链参数化 / VideoService 实变位点观测+重评 / 批量脚本逐行观测+提醒 / architecture.md 同步。**主线 GOV-1~5 完结**，余 GOV-6（人工闸门）/ GOV-7（后排）。详见 changelog [GOV-4]。
 5. **GOV-5** — （已并入 GOV-3 同卡裁决落地：每日兜底 tick 即周期重扫；fire-and-forget 失败补偿由每日 reconcile 兜底覆盖）
-6. **GOV-6** — 存量实体手术（候补/人工闸门，吸收原 VIDEO-NAMING-STANDARD-E）：6 例跨季混挂核对拆分 + 2 分歧 catalog（星辰变/师兄啊师兄）+ 魔法使俱乐部(OVA) normalized 修正 + 动物管制官双实体合并；逐例附 sources 集数段证据交用户确认后执行；生产前重跑审计脚本。
+6. **GOV-6** — 存量实体手术（状态：✅ 批准范围收口 2026-06-12）：用户批准 4 项高置信处置全部执行（掌心饵 split〔审计可 unmerge〕/ 宠妻 season 落位 / 星辰变·师兄啊师兄 catalog 重排 / OVA normalized 修正）；审计收敛 B=0 / C=0。**暂缓 4 例**（偶滴歌神啊 / 恶搞之家 / 动物管制官 ×2）登记候补——缺站点级归属证据，GOV-4 后重爬观测自然累积，证据齐后重新取证交用户批准。详见 changelog [GOV-6]。
 7. **GOV-7** — 召回增强（候补后排）：模糊召回层（titleEn/简繁桶）评估 + 0.75 阈值灰区报表。
