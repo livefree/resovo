@@ -4903,3 +4903,13 @@
 - **新增依赖**：无；**数据库变更**：Migration 113（CHECK 扩值，零数据迁移）。
 - **质量门禁**：typecheck/lint EXIT=0 / test:changed 67 文件 928 passed。
 - **[AI-CHECK]**：六问过——①向后兼容三层（函数默认参/job 可选字段/六位点零改）；②实变判定防 no-op 风暴；③观测写入复用 GOV-3 查询层单真源；④fire-and-forget 容错范式一致；⑤architecture.md 同步（绝对禁止 #1）；⑥范围未超。
+
+## [GOV-3-FIX] lock-skipped 重扫不得 supersede 旧版本 pending（Codex 拦截）
+- **完成时间**：2026-06-12
+- **记录时间**：2026-06-12 19:45
+- **执行模型**：claude-fable-5
+- **子代理**：无
+- **拦截内容**：「lock-skipped reconcile can still supersede stale pending」——`reconcileIdentityVersions` 步骤 ③ runIdentityRescore 被 advisory lock 跳过（并发实例持锁，`lockSkipped=true` 空计数早退）时，步骤 ④ 仍无条件 supersede 旧版本 pending：本轮未实际重评、新版本候选未腾位即标旧行 → **候选真空窗**（工作区瞬时无候选，直到下一次成功重扫）。
+- **修复**：步骤 ④ 增加 `!rescore.lockSkipped` 守卫——lock-skipped 时 hygiene 顺延（stale 信号仍在，下一 tick 失配检测幂等重入）+ 显式日志；编排头注同步。
+- **修改文件**：`apps/api/src/services/identity/versionReconcile.ts`、`tests/unit/api/identity-version-reconcile.test.ts`（+1 守卫用例，5/5）。
+- **质量门禁**：typecheck/lint EXIT=0 / test:changed 383 passed。

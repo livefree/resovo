@@ -81,6 +81,15 @@ describe('reconcileIdentityVersions — 条件编排', () => {
     expect(runIdentityRescoreMock).toHaveBeenCalledTimes(1)
   })
 
+  it('Codex 拦截守卫：重扫被 advisory lock 跳过 → 不 supersede（防候选真空窗），留下一 tick', async () => {
+    mockQuery.mockResolvedValueOnce({ rows: [{ exists: false }] })
+    hasStaleMock.mockResolvedValueOnce(true)
+    runIdentityRescoreMock.mockResolvedValueOnce({ ...RESCORE_RESULT, lockSkipped: true })
+    const r = await reconcileIdentityVersions(mockDb, log)
+    expect(supersedeStaleMock).not.toHaveBeenCalled()
+    expect(r.stalePendingSuperseded).toBe(0)
+  })
+
   it('stale pending → 重扫后显式 supersede 并透出计数', async () => {
     mockQuery.mockResolvedValueOnce({ rows: [{ exists: false }] })
     hasStaleMock.mockResolvedValueOnce(true)

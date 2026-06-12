@@ -11,7 +11,8 @@
  *   ② 观测重写（仅当有缺口）：videos cursor 分批 → buildTitleObservation →
  *      insertObservationIfAbsent（查询层真源，DO NOTHING 不累加 observed_count）
  *   ③ runIdentityRescore（既有 advisory lock 'worker:identity-rescore' 单实例）
- *   ④ 旧版本 pending 显式 supersede（仅当 ① 检出残留；confirmed/rejected 审计行不动）
+ *   ④ 旧版本 pending 显式 supersede（仅当 ① 检出残留 **且 ③ 未被 lock 跳过**——
+ *      lock-skipped 表示本轮未实际重评，supersede 会造成候选真空窗，留下一 tick 重入）
  *
  * 版本参数恒取运行时常量（TITLE_PARSER_VERSION / SCORER_VERSION），不得写死
  * （arch-reviewer GOV-3 遗漏风险 2）。observations 旧版本行不删（审计保留），表随
@@ -109,12 +110,20 @@ export async function reconcileIdentityVersions(
 
   const rescore = await runIdentityRescore(db, log)
 
+  // 步骤 ④ 守卫（Codex 拦截）：重扫被 advisory lock 跳过 = 本轮未实际重评 →
+  // 不得 supersede 旧版本 pending（新版本候选未腾位即标旧行 → 候选真空窗）。
+  // 留待下一 tick 失配检测重入（stale 信号仍在，编排幂等）。
   let stalePendingSuperseded = 0
-  if (mismatch.stalePending) {
+  if (mismatch.stalePending && !rescore.lockSkipped) {
     stalePendingSuperseded = await supersedeStaleVersionPending(db, {
       parserVersion: TITLE_PARSER_VERSION,
       scorerVersion: SCORER_VERSION,
     })
+  } else if (mismatch.stalePending && rescore.lockSkipped) {
+    log.info(
+      { stage: 'identity-version-reconcile', step: 'hygiene' },
+      'identity-version-reconcile: rescore lock-skipped — stale pending hygiene deferred to next tick',
+    )
   }
 
   const result: VersionReconcileResult = {
