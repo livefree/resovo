@@ -44,6 +44,16 @@ _（**SEQ-20260610-03 MODUX ✅ 全 15/15 收口 2026-06-11** — Phase 1 ✅（
 
 _（**SEQ-20260610-02 source-health v2 落地 🔄 15/17 — Phase 1 ✅ + Phase 2 ✅ + Phase 3 本轮可执行范围全收口 ✅ 2026-06-10**（P3-3-A/-B1/-B2 + P3-1 共 4 卡：source_hostname join key + host_health 熔断持久化 + 排序分桶软降权 + 双时钟新鲜度衰减——**D3+D4 闭环**；三轮 arch-reviewer claude-opus-4-8 裁决；母卡拆分序列 16→17）。**剩余 2 卡时序阻塞**：P3-2 影子验证一周硬前置（P2-2 落地 2026-06-10 起算，**最早 ~06-17 后启动**）→ P3-4 依赖评分项收口随后。登记：P3-3 ADR 草稿（双存储分工/排序分桶/恢复语义三决策）PHASE COMPLETE 前补；feedback success 不刷 last_rendered_at 非对称候选卡（P3-1 裁决 D 登记）。**Phase 1 全收口 ✅ + Phase 2 全收口 ✅ 2026-06-10**（P2-1：F1 断点闭合，PlayerShell 首播成功上报；P2-2：migration 105 EMA 三字段 + 写入侧即时半衰〔arch-reviewer claude-opus-4-8 两轮裁决 + 真库对拍〕；P2-3：复活/recheck 独立 ipHash SET 门槛；P2-4-A：migration 106 + manual_route_reprobe 真实信号入队；P2-4-B：worker 双 origin 混批定向消费）。下一步：Phase 3——P3-3-A 前置 Opus / **P3-2 影子验证一周硬前置（P2-2 落地 2026-06-10 起算）** / P3-1·P3-3 可先行；或 Phase 1 复盘三候选裁决（见 queue P1-2/P1-5 备注）。候选独立卡：e2e-next seed 基建（queue P2-1 备注）。取下一个前先查 `docs/task-queue.md` 是否有 🚨 BLOCKER。**SEQ-20260610-01 首次文档治理 T1 ✅ 2026-06-10**（CHORE-DOCS-CLEANUP-20260610：活区断链 20+2 处清零 + frontmatter 38 文件补齐，残留登记见 changelog）。**SEQ-20260609-01 P3 dismiss 软移除 ✅ 端到端闭环 2026-06-10**（ADR-197 + -A/-B1/-B2/-B3/-C1/-C2 全完成：schema / 写端点+守卫 / 双侧读过滤+purge 清理 / 通知+任务抽屉 UI〔单项移除 + 清空/清除已完成 + H-1 行重构〕）。**可选 follow-up**：selectTerminalTaskRunIds 真实 SQL 集成验证 + 跨标签即时同步（MEDIUM-1，drawer-refresh SSE 事件独立卡）。**SEQ-20260609-01 其余**：P0→P2 收官（除暂缓 P2-b）+ P2-c 可见性增强（UI-1 分组/UNREAD-FILTER 只看未读）✅。**SEQ-20260608-01** cutover：卡 4 回滚窗 🔄 ~2026-06-15、卡 5 改名待排期。）_
 
+### GOV-6 — 存量实体手术：逐例取证阶段（执行需用户逐例批准）
+- **状态**：🔄 进行中（取证阶段；手术执行待用户闸门）
+- **来源序列**：SEQ-20260612-03（吸收原 VIDEO-NAMING-STANDARD-E）
+- **建议模型**：sonnet + 用户逐例确认
+- **执行模型**：claude-fable-5
+- **子代理调用**：无
+- **实际开始**：2026-06-12 20:00
+- **范围**：A 类 6 例跨季混挂 + 2 分歧 catalog（星辰变/师兄啊师兄）+ 魔法使俱乐部(OVA) normalized + 动物管制官双实体——逐例取证（aliases / 站点观测 / sources 集数段）→ 证据清单 + 处置建议 → **用户逐例批准后**才执行手术。
+- **完成备注**：_（完成后填写）_
+
 _（**SEQ-20260612-03 GOV-4 ✅ 收口 2026-06-12**（标题变更重评 hook，**治理序列主线 GOV-1~5 完结**）——migration 113 trigger_source +'title_change'（真库对拍幂等）；runVideoRescore/enqueue/worker triggerSource 参数化（缺省 'enrichment' 兼容既有六位点）；VideoService 标题实变 → 当前版本观测写入 + 定向重评（fire-and-forget，标题修正=制造合并候选时机的缺陷 B 收口）；backfill-standard-titles 逐行补观测 + 重扫提醒（批量路径每日 reconcile 兜底）；architecture.md §identity 同步（111/113 + GOV-3/4 链路）。门禁 typecheck/lint EXIT=0 / test:changed 928（断言更新至新契约 +2 用例）。**候补余卡**：GOV-6 存量手术（用户逐例确认闸门）/ GOV-7 召回增强（后排）。）_
 
 _（**SEQ-20260612-03 GOV-3 ✅ 收口 2026-06-12**（版本 bump 联动自动化，GOV-5 周期重扫并入）——arch-reviewer claude-opus-4-8（agentId a367b4327d17d58cd）裁决「需修改含 1 BLOCKER」全部采纳：**BLOCKER** 原提案 apps/worker cron 违反 ADR-107 §4（worker 禁 import api Bull 队列，编译期不可行）→ 修订为 api 进程内 `identityReconcileScheduler`（bangumiCollectionsScheduler 范式：boot 自愈 tick〔仅失配入队〕+ 每日兜底 tick〔无条件入队〕，全链不固定 jobId + tickRunning 去抖 + advisory lock 防并发）；**必改 1** 观测 INSERT SQL 下沉查询层 `insertObservationIfAbsent`（migration 085 唯一键 COALESCE 单真源，脚本薄壳化）；**必改 2** 失配检测版本精确（运行时常量）+ observationsInserted 膨胀监控。`versionReconcile.ts` 四步幂等编排（检测→观测重写→重扫→残留 supersede）= GOV-1 手工链固化；job union +'version-reconcile-rescan'；server.ts opt-out 注册。+4 编排单测；门禁 typecheck/lint EXIT=0 / test:changed 737。剩 GOV-4（标题变更 hook）。）_
