@@ -2169,11 +2169,8 @@
 3. **VIDEO-NAMING-STANDARD-C** — 跨季误合并存量盘点（状态：✅ 已完成 2026-06-12）
    - 产出：`docs/audit/cross-season-merge-audit-20260612.md` + 只读审计脚本 `scripts/audit-cross-season-merge.ts`（parseTitle 1.2.0 精确口径）。三类问题：**A 跨季混挂仅 6 例**（regexp 粗审计 24 例多为别名噪声；含「动物管制官」中文/阿拉伯季号双实体）；**B 季槽位错位 355 例**（catalog.season_number NULL + 标题唯一季号——A 卡四元组对 NULL 永不命中 → 每次重爬造重复实体的**活跃风险**；回填撞键预检 0 冲突可直接修）；**C 发布形态撞键 1 例**（魔法使俱乐部 OVA 与正篇同 key 并存）。watch_history 0 行（dev 拆分零进度影响）。详见 changelog [VIDEO-NAMING-STANDARD-C]。
 
-4. **VIDEO-NAMING-STANDARD-D** — B 类 355 例 season_number 回填（状态：📋 待开始）
-   - 来源：C 卡盘点判定的活跃风险止血——四元组匹配对 NULL 槽位永不命中，重爬即造重复 catalog/video。
-   - 范围（3 项）：① 回填脚本（复用审计解析口径；dry-run/幂等；仅 `UPDATE media_catalog SET season_number = N WHERE season_number IS NULL` 单一季号确定行）② 执行 + 复跑审计 B 类归零断言 ③ changelog/备注。撞键预检已由 C 卡完成（0 冲突）。
-   - 不做：A 类 6 例混挂行（季号不唯一，归 E 卡）；不动 title_normalized / videos / ES。
-   - 依赖：C 卡 ✅。建议模型：sonnet。
+4. **VIDEO-NAMING-STANDARD-D** — B 类 355 例 season_number 回填（状态：✅ 已完成 2026-06-12）
+   - 实跑：回填 352 catalog / catalog 内分歧跳过 2（星辰变 第六季、师兄啊师兄 → E 卡）/ 批内互撞 0 / 槽位已占 0 / 失败 0；幂等复跑 0；审计 B 类 355 → 3（残余即 2 个分歧 catalog 下的视频，预期）。活跃重复实体风险解除。详见 changelog [VIDEO-NAMING-STANDARD-D]。
 5. **VIDEO-NAMING-STANDARD-E** — A 类 6 例拆分核对 + C 类 1 例 normalized 修正（候补/人工，状态：📋 待开始）
    - 实体手术：逐例核对 sources 集数段归属定「真混挂 vs 别名噪声」→ 拆分/合并（含动物管制官双实体）+ 魔法使俱乐部(OVA) normalized 修正。生产执行前必须重跑审计脚本（watch_history 影响面）。
    - 依赖：D 卡完成后（季槽位干净便于核对）。建议模型：sonnet + 用户逐例确认。

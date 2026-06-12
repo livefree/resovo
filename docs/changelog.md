@@ -4811,3 +4811,16 @@
 - **新增依赖**：无；**数据库变更**：无（只读）。
 - **质量门禁**：docs+脚本只读卡——审计脚本实跑无异常；不触增量测试范围（test:changed docs-only 口径）。
 - **[AI-CHECK]**：六问过——①只读零风险；②脚本沉淀可重跑（生产前置审计复用）；③B 类风险定性把「历史遗留盘点」升级为「活跃回归风险止血」，价值排序 #1 正确性驱动 D 卡优先级；④无 any/空 catch；⑤audit 文档 frontmatter 合规 + git add 入库；⑥范围未超。
+
+## [VIDEO-NAMING-STANDARD-D] B 类 352 catalog season_number 回填（活跃重复实体风险止血）
+- **完成时间**：2026-06-12
+- **记录时间**：2026-06-12 16:40
+- **执行模型**：claude-fable-5
+- **子代理**：无
+- **修改文件**：
+  - `scripts/backfill-catalog-season-number.ts`(新增) — 三重守卫回填：① 标题+别名解析出**唯一**季号（A 类 ≥2 季混挂不碰）② 同 catalog 多视频季号一致（分歧整 catalog 跳过）③ 执行时四元组撞键复检 + 批内同槽位互撞检测 + 逐行 try/catch；dry-run/幂等（`WHERE season_number IS NULL`）。
+- **实跑结果**（dev 库）：回填 **352 catalog** / 分歧跳过 2（星辰变 第六季、师兄啊师兄 ——多视频季号分歧，归 E 卡）/ 互撞 0 / 占位 0 / 失败 0；幂等复跑 0；审计脚本复跑 B 类 **355 → 3**（残余 3 视频全部属 2 个分歧 catalog，预期收敛）。
+- **效果**：A 卡四元组匹配对存量季播 catalog 恢复可命中——「同名同季重爬新建重复 catalog/video」的活跃风险解除；新旧数据匹配口径对齐。
+- **新增依赖**：无；**数据库变更**：无 DDL（352 行 season_number NULL→N 数据回填；media_catalog.updated_at 经既有触发器 bump，内容确变语义成立——B 卡同口径）。
+- **质量门禁**：typecheck/lint EXIT=0 / test:changed scripts-only 空集放行（脚本经真库 dry-run + 执行 + 幂等复跑 + 审计收敛断言四重验证）。
+- **[AI-CHECK]**：六问过——①守卫保守（任何歧义跳过不猜）；②可回滚（season_number 置回 NULL 即还原）；③复用审计同一解析真源防口径漂移；④无 any/空 catch（失败逐行收集报告）；⑤幂等可生产照搬（先 --dry-run）；⑥范围未超（未动 title_normalized/videos/ES）。
