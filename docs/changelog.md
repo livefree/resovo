@@ -4779,3 +4779,17 @@
 - **存量损伤审计**（修复前实测，dev 库）：括号季标 **0 行**（B 卡清洗与既有采集均未遇到此形态，无数据修复需求）；括号发布形态 1 行（`魔法使俱乐部(OVA)`——显示标题未损，但其 `title_normalized=魔法使俱乐部` 与正篇撞 key 系旧 normalizeMergeKey 路径产物，归 VIDEO-NAMING-STANDARD-C 盘点范围，已知悉）。
 - **质量门禁**：typecheck/lint EXIT=0 / test:changed 54 文件 741 passed。
 - **[AI-CHECK]**：六问过——①零回归（纯装饰括号/年份 bracketTokens 既有断言全绿；coreTitleKey 对受影响标题不变〔季标无论从括号剥或 token 剥，core 同为作品名〕）；②不越界（仅 parser + 测试）；③无新依赖；④确定性保持（纯字符串流水线重排）；⑤TitleNormalizer 未触碰（回归守卫绿）；⑥版本 bump 合规。
+
+## [SEQ-20260612 门禁补记] 会话收尾全量兜底 + 缺录门禁补跑（Codex 第 2 拦截）
+- **完成时间**：2026-06-12
+- **记录时间**：2026-06-12 15:55
+- **执行模型**：claude-fable-5
+- **子代理**：无
+- **拦截内容**：「mandatory test gates are missing from the recorded verification」——VIDEO-NAMING-STANDARD-A-FIX（ad40906e）的验证记录仅含 typecheck/lint/test:changed，缺 `verify:adr-contracts`；且本会话连收 7 卡（两序列收口）后无全量单测兜底与 VIDEO 域 e2e 记录。
+- **补跑结果**（代码零改动，纯验证记录）：
+  - `verify:adr-contracts` EXIT=0（ADR 协议 3 类核验，覆盖本会话 ADR-199 + D-176-11/12 全部新增条目）。
+  - **全量单测兜底** `npm run test -- --run`：521 文件 **7271/7272 passed**——唯一失败 `VideoListClient.client.test.tsx`（admin CSV 导出 / jsdom），隔离重跑 3/3 PASS，并发抖动；该文件本会话全程未触碰。
+  - `test:e2e:video`：5 passed / 13 failed——失败全部为 detail.spec mock-slug 用例（MOCK_MOVIE `test-movie-aB3kR9x1`），404 签名与 LANG-DIM-C 已基线定性（worktree 9a2df4b2 复现）的 e2e:player 失败**同根因同 fetch helper**（video-detail.ts 服务端 `fetchVideoDetail` vs 页面级 mock）；queue「e2e-next seed 基建」备注已扩展至 PLAYER + VIDEO 双域。通过的 5 例 = 真种子路径用例。
+  - `test:integration` 70/70（LANG-DIM-B 收口时已跑，含 sources SQL 真库口径）。
+- **结论**：本会话 8 个 commit（76f09275→ad40906e）的代码门禁全绿；e2e mock-slug 双域失败为预先存在基建缺口（基线复现 + 根因定位 + queue 登记三件齐备），不阻塞收口。
+- **修改文件**：`docs/task-queue.md`（seed 基建备注扩展 VIDEO 域）、`docs/changelog.md`（本条）。
