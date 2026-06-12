@@ -4558,3 +4558,18 @@
   - `tests/unit/components/server-next/admin/videos/VideoRowActions.test.tsx` — +1 用例断言绝对 origin + locale + `?preview=admin` 完整 URL（variety→tvshow segment 映射顺带覆盖）；头注过时 getDetailHref 行更新
 - **不做**：扩 `GET /admin/videos` 投影加 slug（preview 场景裸 shortId 足够，detail 页 extractShortId 兼容，零 API 改动）。
 - **门禁**：typecheck/lint EXIT=0 / test:changed 5 文件 64 passed / test:e2e:admin 82/82 passed EXIT=0。
+
+## [BUGFIX-PREVIEW-LINK-B] 前台详情页 → watch 跳转透传 `?preview=admin`
+- **完成时间**：2026-06-11
+- **记录时间**：2026-06-11 21:45
+- **执行模型**：claude-fable-5（用户会话人工覆盖 sonnet 建议）
+- **子代理**：无
+- **修改文件**：
+  - `apps/web-next/src/lib/admin-preview-query.ts` — 新建纯函数 `carryAdminPreview(href, searchParams)`：当前 URL 含 `preview=admin` 时给目标 href 追加同款 query，否则原样返回；复用 `admin-access-token.ts` 协议常量（ADR-160 D-160-1 magic string 集中点）；结构类型入参兼容 ReadonlyURLSearchParams/URLSearchParams（单测免 mock）
+  - `apps/web-next/src/components/detail/DetailHero.tsx` — handlePlay watchHref 接 carryAdminPreview（+useSearchParams，client 组件已在 Suspense 内）
+  - `apps/web-next/src/components/detail/EpisodePicker.tsx` — handleSelect router.push 接 carryAdminPreview（复用既有 searchParams）
+  - `tests/unit/web-next/admin-preview-query.test.ts` — 新建 4 用例（&/? 追加 / public 原样 / 伪值不透传）
+- **背景**：根因 ②——middleware 只在 `?preview=admin` query 存在时注入 `x-admin-preview` 请求头（D-160-1 双因素），详情页内跳 /watch 只拼 `?ep=N` → preview 上下文丢失 → 未公开视频播放页 404。CHG-361-B 实施时只覆盖「直接打开」遗漏「页内续跳」。query 透传无内容安全风险（D-160-1：被分享方无 cookie 仍 404）。
+- **不做**：`VideoDetailHero`/`EpisodeGrid`/`VideoCardWide` 零消费方死代码（候补 CHORE）；watch 页内播放器集间切换（client state 不改 URL，Y-AMD2-2 已知限制）。
+- **门禁**：typecheck/lint EXIT=0 / test:changed 4 passed / test:e2e:video 5/5 passed。
+- **序列收口**：SEQ-20260611-01 全 4 卡完成——404 调查四根因中 ①②④ 已修复（③ refresh 过期静默降级为 ADR-160 设计内行为，可观测性增强候补）。

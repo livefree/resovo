@@ -6,18 +6,6 @@
 
 ## 当前任务（单任务工作台：同时仅 1 个 🔄 进行中；完成即删卡，历史见 docs/changelog.md）
 
-### 🔄 BUGFIX-PREVIEW-LINK-B · 前台详情页 → watch 跳转透传 `?preview=admin`
-
-- **来源**：SEQ-20260611-01 根因 ②。
-- **实际开始时间**：2026-06-11
-- **问题理解**：ADR-160 D-160-1 双因素中 query 是显式触发因子，middleware（`apps/web-next/src/middleware.ts:32-37`）只在 `?preview=admin` 存在时注入 `x-admin-preview` 请求头。详情页内跳 /watch 的两个真实跳转点（`DetailHero.tsx` handlePlay / `EpisodePicker.tsx` handleSelect）只拼 `?ep=N` 不透传 preview → preview 上下文丢失 → 未公开视频播放页 `fetchVideoDetail` 走 public 路径 404。
-- **根因判断**：CHG-361-B 实施 preview 派发链时只覆盖了「直接打开」场景，遗漏「页内续跳」的 query 延续。
-- **方案**：新建 `apps/web-next/src/lib/admin-preview-query.ts` 纯函数 `carryAdminPreview(href, searchParams)`（复用 `admin-access-token.ts` 协议常量；当前 URL 含 `preview=admin` 时给 href 追加同款 query，否则原样返回）；DetailHero/EpisodePicker 两处接入（均 client 组件，EpisodePicker 已有 useSearchParams，DetailHero 增加）。
-- **涉及文件**：`apps/web-next/src/lib/admin-preview-query.ts`（新）、`apps/web-next/src/components/detail/DetailHero.tsx`、`apps/web-next/src/components/detail/EpisodePicker.tsx`、`tests/unit/web-next/admin-preview-query.test.ts`（新）。
-- **验收口径**：preview 模式打开的详情页内全部 watch 跳转（立即播放 + 选集）URL 携带 `?preview=admin`；public 普通访问零行为变化。
-- **不做**：`VideoDetailHero`/`EpisodeGrid`/`VideoCardWide` 零消费方死代码（独立 CHORE 候补）；watch 页内播放器集间切换（client state 不改 URL，Y-AMD2-2 已知限制范围）。
-- **执行模型**：claude-fable-5（用户会话人工覆盖 sonnet 建议）。子代理调用：无。
-
 ### ⏸ MODUX-ACPT-5（暂停 · 检查点已提交）· 验收第 5 条纠正 · 审核台头部去 h1 + 元素并入 tab 行
 
 > 验收迭代已提交 3 检查点：`b6496861`（1-4 轮 + Codex 1·2）/ `587b2999`（5-7 轮快编芯片化）/ `58ca2fc4`（Codex 3 竞态）。用户转入 SRCHEALTH 设计；本卡**暂停待续**（验收若有后续修订可恢复）。下方为完整改动记录。
@@ -41,6 +29,8 @@
 - **验收**：审核台无可见 h1；stats·预设按钮在 tab 行；**全页（含 hover tooltip）无「键盘流」字样**；标题行无「待审」pill、改显信号 chip；预设/批量/通过即上架/键盘 `?` help 无回归；e2e filter-presets 绿。
 - **执行模型**：claude-opus-4-8（主循环）。子代理调用：无（无共享组件 Props 改动 / 无新端点）。
 - **遗留标记**：moderation visual 快照（`tests/visual/admin-moderation.visual.spec.ts`，独立 `admin-visual` project，非必跑门禁）布局变更后需 `npm run test:visual:update` 重生成。
+
+_（**SEQ-20260611-01 视频详情/播放页 404 修复 ✅ 全 4 卡收口 2026-06-11**（用户报告「后台预览播放页/详情页有时 404」+「前台已公开视频同样 404」）——调查实证四根因：④ **short_id 字母表冲突**（nanoid 默认字母表含 `-` 被 extractShortId 切坏，dev 库 12.1% 视频必现 404）→ -A 生成收口（lib/short-id.ts 唯一真源）+ -B migration 110 清洗 526 行 + ES 重同步（附带清理 2327 条幽灵文档，端到端抽验 HTTP 200）；① 视频库「查看详情（前台）」相对路径开后台域 → LINK-A buildAdminPreviewUrl 收口；② 详情页跳 watch 丢 `?preview=admin` → LINK-B carryAdminPreview 透传；③ refresh 过期静默降级 = ADR-160 设计内（可观测性增强候补）。主循环 claude-fable-5 全程；逐卡门禁全绿（e2e:admin 82/82 + e2e:video 5/5）。候补登记见 task-queue 序列。**工作台空闲**。）_
 
 _（**BUGFIX-PLAYBACK-VERIFY-LINE-REFRESH ✅ 2026-06-11**（用户报告实际播放成功后线路仍显「待测」）——DB 实测确认后端在生效（`last_admin_verified_at`+`render_status=ok`），纯前端刷新链断点：`onVerified→refetchQueue` 只刷左队列、不 reload LinesPanel `state.lines`；不能用全量 reload（Y4 自动选首行打断播放）。修：controller 新 `applyExternalHealthUpdate` **外科式**只改被播放线路 render/probe（不 reload/不动选中）+ AdminPlayer onVerified 带回 verify 结果 + PendingCenter `verifySignal`(nonce) 中转 + LinesPanel effect 应用。门禁全绿（test:changed 194 / e2e:admin 82/82 / +4 单测）。「实际播放」pill 播放成功即变「可用」。**工作台空闲**。）_
 

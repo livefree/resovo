@@ -15,6 +15,7 @@ import { useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils'
+import { carryAdminPreview } from '@/lib/admin-preview-query'
 import { Skeleton } from '@/components/primitives/feedback/Skeleton'
 import type { Video } from '@resovo/types'
 
@@ -68,7 +69,8 @@ export function EpisodePicker({ video, watchBase, onEpisodeChange }: EpisodePick
   function handleSelect(ep: number) {
     setActiveEp(ep)
     onEpisodeChange?.(ep)
-    router.push(`${watchBase}?ep=${ep}`)
+    // BUGFIX-PREVIEW-LINK-B：preview 模式透传 ?preview=admin，否则未公开视频 watch 页 404
+    router.push(carryAdminPreview(`${watchBase}?ep=${ep}`, searchParams))
   }
 
   function handleRangeChange(start: number) {

@@ -2067,7 +2067,7 @@
 
 ## [SEQ-20260611-01] 视频详情/播放页 404 修复（shortId 字母表冲突 + admin preview 链路收口遗漏）
 
-- **状态**：🔄 执行中（3/4 卡完成：-A ✅ / -B ✅ / LINK-A ✅）
+- **状态**：✅ 已完成（4/4 卡收口 2026-06-11；404 四根因中 ①②④ 修复，③ 为 ADR-160 设计内降级——可观测性增强候补）
 - **创建时间**：2026-06-11
 - **最后更新时间**：2026-06-11
 - **目标**：修复用户报告「后台预览视频播放页/详情页有时 404」+「前台已公开视频同样 404」。调查实证四根因（本会话调查记录）：① 视频库「查看详情（前台）」相对路径开后台域 + 缺 `?preview=admin`；② 前台详情页跳 watch 丢 `?preview=admin`；③ refresh_token 过期静默降级（ADR-160 D-160-4b 设计内，不修）；④ **`CrawlerService` 用 nanoid 默认字母表（含 `-`/`_`）生成 short_id，与 `extractShortId`「最后一个 `-` 分隔」协议冲突——dev 库 4337 视频 526 个（12.1%）命中，含 9 个已公开视频前台必现 404**。
@@ -2095,10 +2095,13 @@
    - 文件范围：`apps/server-next/src/app/admin/videos/_client/VideoRowActions.tsx`（slug 投影缺失传 `null`，detail 页裸 shortId 兼容）。
    - 依赖：无（与 -A/-B 正交）。建议模型：sonnet。
    - **完成备注（2026-06-11，执行模型 claude-fable-5，子代理无）**：buildAdminPreviewUrl 收口 + 删本地 getDetailHref 重复实现；+1 完整 URL 断言用例。门禁：typecheck/lint EXIT=0、test:changed 64、e2e:admin 82/82。明细见 changelog [BUGFIX-PREVIEW-LINK-A]。
-4. **BUGFIX-PREVIEW-LINK-B** — 前台详情页 → watch 跳转透传 `?preview=admin`（状态：⬜ 待开始）
+4. **BUGFIX-PREVIEW-LINK-B** — 前台详情页 → watch 跳转透传 `?preview=admin`（状态：✅ 已完成 2026-06-11）
+   - 创建时间：2026-06-11 ｜ 实际开始：2026-06-11 ｜ 完成时间：2026-06-11
    - 验收口径：preview 模式打开的详情页内全部 watch 跳转（立即播放 + 选集）URL 携带 `?preview=admin`；public 普通访问零行为变化。
    - 文件范围：`apps/web-next/src/lib/admin-preview-query.ts`（新建纯函数，复用 `admin-access-token.ts` 协议常量）、`apps/web-next/src/components/detail/DetailHero.tsx`、`apps/web-next/src/components/detail/EpisodePicker.tsx` + 单测。
    - 依赖：无。建议模型：sonnet。
+   - **完成备注（2026-06-11，执行模型 claude-fable-5，子代理无）**：carryAdminPreview 纯函数沉淀 + DetailHero/EpisodePicker 两跳转点接入 + 4 单测。门禁：typecheck/lint EXIT=0、test:changed 4、e2e:video 5/5。明细见 changelog [BUGFIX-PREVIEW-LINK-B]。
+   - **序列候补登记**：① ES 幽灵文档成因调查（-B 实测 2327 条 DB 已删行残留 ES，reconcileStale 仅 7 天窗）；② 零消费方死代码清理 CHORE（VideoDetailHero/EpisodeGrid/VideoCardWide）；③ 根因 ③ preview 凭证过期静默降级的可观测性增强（操作员提示 / 服务端 log）。
 
 ### 门禁与验证（每卡）
 

@@ -1,7 +1,8 @@
 'use client'
 
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { MetaChip } from '@/components/search/MetaChip'
+import { carryAdminPreview } from '@/lib/admin-preview-query'
 import { SafeImage } from '@/components/media'
 import { SharedElement as SharedElementBase } from '@/components/primitives/shared-element/SharedElement'
 import type { SharedElementComponent } from '@/components/primitives/shared-element/types'
@@ -106,11 +107,14 @@ interface DetailHeroProps {
 export function DetailHero({ video, episode = 1, sources = [], activeSourceId, onSourceChange }: DetailHeroProps) {
   const enter = usePlayerStore((s) => s.enter)
   const router = useRouter()
+  const searchParams = useSearchParams()
 
   function handlePlay() {
-    const watchHref = video.slug
+    const base = video.slug
       ? `/watch/${video.slug}-${video.shortId}?ep=${episode}`
       : `/watch/${video.shortId}?ep=${episode}`
+    // BUGFIX-PREVIEW-LINK-B：preview 模式透传 ?preview=admin，否则未公开视频 watch 页 404
+    const watchHref = carryAdminPreview(base, searchParams)
     enter({ shortId: video.shortId, slug: video.slug, episode, transition: 'standard-takeover' })
     router.push(watchHref)
   }
