@@ -4689,3 +4689,22 @@
 - **质量门禁**：typecheck EXIT=0 / lint EXIT=0 / test:changed 711 passed（1 失败为 `video-merge-candidates.test.ts` listCandidates perf 基准并发抖动，与 A 卡同一已知项，隔离重跑 36/36 PASS）
 - **注意事项**：① 语言变体行（重案解密 国语/粤语/普通话 ×3、冲上云霄 ×2 等）清洗后标题趋同——视觉去重依赖 SEQ-20260612-02 语言字段落地 + C 卡误合并盘点（标题对齐后恰好利于 identity 合并候选识别）；② 选行正则刻意不含 `英语`/`字幕` 等可能撞作品名的低置信词，残留长尾交后续按需扩充；③ 脚本幂等可重入，可在生产库照搬执行（先 --dry-run 核对）。
 - **[AI-CHECK]**：六问过——①零回归（parser 修复仅影响 displayTitle 展示层，identity/归一路径 foldFullwidth 未动，A 卡既有用例 53/53 PASS）；②偏离已声明（文件范围扩 parser+测试，缺陷溯源修复非顺手优化）；③沉淀（修在 parser 真源而非脚本内打补丁）；④无 any/空 catch/硬编码（ES_INDEX 用常量）；⑤一致性（dry-run/幂等/收敛断言对齐两既有 backfill 先例）；⑥脚本 195 行未超限。
+
+## [LANG-DIM-ADR] ADR-199 播放源语言双维度（语音/字幕）结构化 — 起草 + Opus 裁决
+- **完成时间**：2026-06-12
+- **记录时间**：2026-06-12 14:05
+- **执行模型**：claude-fable-5（主循环：调研 + 提案 + 分叉裁定 + ADR 转写）
+- **子代理**：arch-reviewer (claude-opus-4-8，agentId addcfc5f12f9ca1f2) — schema 跨 3+ 消费方 + ADR 决策强制 Opus，CONDITIONAL PASS
+- **背景**：SEQ-20260612-02。用户裁定：语音/字幕分两维度；语音缺失按地区推断（大陆→国语/日本→日语/韩国→韩语）但源数据优先；字幕「双语」可落两具体语言可缺失；前台 ≥2 语音才显示。D-176-12 已定语言归 source 层但字段从未实装，vod_lang 解析后即丢。
+- **修改文件**：
+  - `docs/decisions.md` — 新增 ADR-199（D-199-1~7），状态 Accepted。
+  - `docs/audit/adr-d-status.json` — verify-adr-d-numbers 重新生成。
+- **评审关键结论**：
+  - **BLOCKER（粒度错配）**：vod_lang/标题 token 都是 vod 级信号，ParsedSource 无 per-line 语言——source 行级列在采集路径退化为 vod 级冗余。主循环裁定**方案 B**：保留 source 行级 + 新增 sourceName 行级 token 提取（推断链步骤 0）。决定性理由 = 合并端态：「重案解密 国语/粤语/普通话」3 个独立 videos 合并为一个 video 后，同 video 下 sources 语言必然异构，video 级列在合并瞬间丢失区分能力；入库时同 vod 各行同值是合法去范式化。D-176-12 字面归属不变，无需 AMEND。
+  - **REVISE 全采纳**：① provenance 拆双列（audio 可 region_inferred / subtitle 不可，单列无法表达）；② 删 `['双语']` 占位——subtitle_languages NULL 三态（NULL=未知含双语未知 / {}=明确无字幕 / {具体语言}）；③ LANGUAGE_VARIANT_RULES 拆 AUDIO+SUBTITLE 两表 + 封闭枚举常量；④ country 规整强制复用 COUNTRY_MAP 禁止新建映射；⑤ HK→粤语 / TW→国语 采纳；⑥ TITLE_PARSER_VERSION bump 1.1.0 点名 evidence_hash superseded 链路。
+  - **R1 吸收为 D-199-7**：source 读侧 DTO 透出 audioLanguage/subtitleLanguages 契约先行，语言粘性（粤语缺集静默切国语）LANG-DIM-C 实装；**R2**：admin 消费侧另起 follow-up 卡防范围蔓延。
+- **新增依赖**：无
+- **数据库变更**：无（本卡纯决策；Migration 112 归 LANG-DIM-A）
+- **质量门禁**：verify:adr-contracts EXIT=0（docs-only，test:changed 自动跳过口径）
+- **注意事项**：LANG-DIM-A 实施时 migration 编号 112（当前最新 111）；architecture.md §5.2 同步是绝对禁止项第 1 条强制副产物。
+- **[AI-CHECK]**：六问过——①零回归（纯 docs）；②不越界（未动代码）；③流程合规（ADR 经 Opus 子代理裁决后产出，未违反「主循环直接产出 ADR」禁令）；④BLOCKER 分叉留有完整双方案论证记录；⑤评审修订逐条可追溯；⑥拆卡边界与原子化判据一致。

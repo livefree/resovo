@@ -22120,3 +22120,68 @@ CREATE INDEX IF NOT EXISTS idx_health_events_admin_playback_pending
 - **设计裁决：arch-reviewer claude-opus-4-8（agentId af08e15d57cabb1db）→ CONDITIONAL PASS**。4 条 PASS 硬前置已全满足：① 本 ADR 起草（解锁 -B）；② migration 同步 architecture.md（-A 落地）；③ 失败不直接置 dead（D-198-2）；④ admin 不写 EMA（D-198-4）。
 - **用户裁定 3 开放项 → 全部并入决策**：失败复用 worker 定向队列（D-198-8）/ 鉴权 `['moderator','admin']`（D-198-6）/ quality 无条件覆盖（D-198-7）。
 - **状态 → Accepted**。解锁 SRCHEALTH-ADMIN-PLAYBACK-FB -A/-B/-C 实施。
+
+---
+
+## ADR-199：播放源语言双维度（语音/字幕）结构化 — source 行级四列 + 五级 provenance 推断链 + 规则表拆分
+
+> 状态：Accepted（2026-06-12）
+> 序列：SEQ-20260612-02 / 用户裁定驱动（2026-06-12：语音字幕分维度 / 地区推断 fallback / 双语可落两具体语言 / 前台 ≥2 语音才显示）
+> 评审：arch-reviewer claude-opus-4-8（agentId addcfc5f12f9ca1f2）CONDITIONAL PASS，1 BLOCKER 分叉主循环裁定 + 3 REVISE 全采纳
+
+### 背景
+
+D-176-12 已裁定「语言变体归 source 层，不进 catalog/video 显示标题、不参与 identity」，但字段从未实装。VIDEO-NAMING-STANDARD-A/B 把语言 token 从显示标题剥离后，语言信息在服务层完全不可见（仅存 `title_observations.parsed_facets_jsonb` 审计层与 `video_aliases` 原文）。上游 `vod_lang`（SourceParserService.ts:350）解析后即丢、无下游消费。
+
+**评审 BLOCKER 与裁定（粒度错配 → 方案 B）**：`vod_lang` 与标题 token 都是 **vod 级**信号，`ParsedSource` 无 per-line 语言——评审指出若无行级信号补充，source 行级列在采集路径上退化为 vod 级冗余。主循环裁定保留 **source 行级**（方案 B）并新增行级信号提取：决定性理由是**合并端态**——「重案解密 国语/粤语/普通话」现为 3 个独立 videos，端态是合并为一个 video、不同语言线路共存；合并后同一 video 下 sources 来自不同 vod，语言必然异构，video 级列在合并瞬间丢失区分能力。入库时同 vod 各行同值是「合并后变异构」的合法去范式化，非冗余。选 B 后 D-176-12 字面归属不变，无需 AMEND。
+
+### D-199-1（schema：video_sources 新增 4 列，Migration 112）
+
+- `audio_language TEXT NULL` — 语音规范词单值（封闭枚举，见 D-199-2）；NULL=未知。**不建数组**（「国粤双语」归一取首个规范词；双音轨场景无前台交互，评审判 over-modeling）。
+- `subtitle_languages TEXT[] NULL` — 字幕语言数组，**三态语义**（列注释必须写明）：`NULL`=未知（含「知道双语但不知具体哪两种」——对消费方不可执行，与纯未知等价，评审裁定不引入 `['双语']` 占位污染数组语义、不建 `subtitle_kind` 列）；`{}`=明确无字幕（对应「无字幕」token，与 NULL 区分有观测价值）；`{具体语言...}`=已知（如 `{中文,英文}`=中英双语）。
+- `audio_language_source TEXT NOT NULL DEFAULT 'unknown' CHECK IN ('source_name_token','vod_lang','title_token','region_inferred','unknown')` — 语音 provenance。
+- `subtitle_language_source TEXT NOT NULL DEFAULT 'unknown' CHECK IN ('source_name_token','vod_lang','title_token','unknown')` — 字幕 provenance（**无 region_inferred**——字幕不做地区推断）。
+- provenance 双列而非单列（评审 REVISE）：audio 可 region_inferred 而 subtitle 不可，单列无法表达「audio=region_inferred, subtitle=vod_lang」。仿 quality/quality_detected/quality_source（migration 059）先例。
+- **升级规则（数据优先于推断的机器可执行表达）**：`region_inferred`/`unknown` 可被 `source_name_token`/`vod_lang`/`title_token` 覆盖；反向禁止；同级重爬覆盖（最新观测胜）。
+
+### D-199-2（规范词表 + 归一函数 + 规则表拆分）
+
+- `TitleIdentityParser.LANGUAGE_VARIANT_RULES`（现混装语音+字幕单值）**拆为两张表**：`AUDIO_VARIANT_RULES`（国语/粤语/日语/韩语/英语/国配…）+ `SUBTITLE_VARIANT_RULES`（中字/中英字幕/双语字幕/内嵌字幕/无字幕…）——D-199-4 前置交付物。
+- 规范词用**中文 + 封闭枚举常量**（`AUDIO_LANGUAGE_CANONICALS` / `SUBTITLE_LANGUAGE_CANONICALS` as const）：上游 token 全中文 + 用户面直接展示；i18n display 映射在 UI 层。DB 存枚举键非自由文本，防漂移。
+- 新建纯函数 `normalizeAudioLanguage(raw)` / `normalizeSubtitleLanguages(raw)`（services 层）：vod_lang 自由文本（「汉语普通话」「国粤双语」）经词表映射；映射不到 → NULL（原文留观测层）。
+
+### D-199-3（五级推断优先级链，写入时逐 source 行求值）
+
+0. **`sourceName` 行级 token**（「国语线路」等，复用 AUDIO/SUBTITLE_VARIANT_RULES）→ source='source_name_token'（行级最精确，评审 BLOCKER 方案 B 新增）
+1. `vod_lang` 归一命中 → source='vod_lang'
+2. 原始标题 token（parser 双维度 facets）→ source='title_token'
+3. **仅 audio**：仍 NULL 且 catalog.country 规整后命中地区映射 → source='region_inferred'。映射：CN→国语 / JP→日语 / KR→韩语 / **HK→粤语 / TW→国语**（评审采纳）；其余不推断。
+4. 全不命中 → NULL + source='unknown'
+
+- country 规整**必须复用 `SourceParserService.maps.COUNTRY_MAP`**（已有 '中国大陆'/'大陆'/'国产'→'CN' 全套，评审 REVISE 禁止新建映射）；存量 country ISO/中文双形态：已是 ISO code 直接用，否则过 COUNTRY_MAP；**不回写规整存量 country 数据**（独立治理）。
+
+### D-199-4（parser 双维度拆分）
+
+- `facets.languageVariant` 单值 → `facets.audioLanguage: string | null` + `facets.subtitleLanguages: string[]`。
+- `TITLE_PARSER_VERSION` bump `1.0.0 → 1.1.0`（facet 语义升级），经既有 evidence_hash superseded 流程受控触发新观测重写（评审 REVISE：点名下游链路已知）。
+- `titleKind='localized'` 判定改为两维度任一非空（`audioLanguage !== null || subtitleLanguages.length > 0`），逻辑等价升级。
+- `parsed_facets_jsonb` 旧快照向后兼容：读侧 languageVariant（旧）/ 双键（新）并存兜底。
+
+### D-199-5（存量回填）
+
+- 脚本仿 backfill-merge-key 范式（dry-run / 幂等 / TS 调归一函数防 SQL 复刻漂移）。vod_lang 历史未存储不可得 → 回填走 title token（video_aliases / title_observations 原文重 parse）+ region 推断，provenance **如实标** 'title_token'/'region_inferred'——后续真实 vod_lang 重爬依 D-199-1 升级规则覆盖。
+- 分批 + 可重入（sources 行数 55 万级，评审补充）。
+
+### D-199-6（不变量）
+
+- 语言字段不参与 catalog identity / 归并键 / identity 评分（D-176-12 重申）；不改 `normalizeMergeKey`（ADR-174）/ 不触碰 `TitleNormalizer`（与 TitleIdentityParser 本就解耦）；「TitleNormalizer 输出逐字符不变」回归守卫保留。
+- 前台展示规则（用户裁定：同视频 ≥2 语音版本才显示语言区分，单语音不显示）是 UI 层派生，不落 DB。
+
+### D-199-7（读侧 DTO 契约先行，评审 R1 吸收）
+
+- source 读侧 DTO（`mapSource` / 前台 `RawSourceForTheme`）透出 `audioLanguage` + `subtitleLanguages`——**本 ADR 仅定契约**；`matchActiveSourceIndex` 跨集语言粘性（修「粤语缺集静默切国语」）与前台 badge/分组在 LANG-DIM-C 卡实装。
+- admin 线路面板 / 合并预选 UI 的语言列展示 = 独立 follow-up 卡（评审 R2，防范围蔓延），本序列不改 admin UI。
+
+### 拆卡
+
+LANG-DIM-A（Migration 112 + types + architecture.md §5.2 同步）→ LANG-DIM-B（D-199-2/3/4/5：规则表拆分 + 归一函数 + 写入链路 + 回填）→ LANG-DIM-C（D-199-7：API 透出 + 前台 UI + 语言粘性 + e2e）。

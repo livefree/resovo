@@ -2183,9 +2183,9 @@
 
 ### 任务列表
 
-1. **LANG-DIM-ADR** — ADR 起草 + arch-reviewer (Opus) 裁决（状态：📋 待开始）
-   - 决策点：① 字段建模（`audio_language TEXT NULL` 单值 vs 数组；`subtitle_languages TEXT[] NULL` 承载双语两具体值、空数组语义）② 规范词表（国语/粤语/日语/韩语/英语… + 字幕语言词表）与归一函数归属 ③ 推断优先级链 `vod_lang → 标题 facet → country 地区映射 → NULL` 及 country 取值规整（ISO code 与中文名混杂）④ 存量回填策略与可回溯性（aliases/observations 溯源）⑤ provenance 是否需要（参考 `quality`/`quality_detected`/`quality_source` 既有先例）。
-   - 产出：ADR-NNN 草稿 + Opus PASS。建议模型：主循环现行 + arch-reviewer (Opus)。
-2. **LANG-DIM-A** — schema migration + `@resovo/types` + architecture.md 同步（状态：📋 待开始，依赖 ADR）
-3. **LANG-DIM-B** — parser 双维度拆分（`LANGUAGE_VARIANT_RULES` → 语音/字幕两组 facets）+ 爬虫写入链路（`vod_lang` 透传 + 地区推断 fallback）+ 存量回填脚本（状态：📋 待开始，依赖 A）
-4. **LANG-DIM-C** — API 透出 + 前台线路 UI（≥2 语音才显示语言 badge）+ `matchActiveSourceIndex` 跨集语言粘性 + e2e（状态：📋 待开始，依赖 B）
+1. **LANG-DIM-ADR** — ADR-199 起草 + arch-reviewer (Opus) 裁决（状态：✅ 已完成 2026-06-12）
+   - 结果：CONDITIONAL PASS → 全修订采纳后 Accepted。BLOCKER 分叉主循环裁定方案 B（source 行级 + sourceName token 步骤 0，合并端态理由，D-176-12 不需 AMEND）；provenance 双列；subtitle NULL 三态；拆两规则表 + 封闭枚举；复用 COUNTRY_MAP；HK→粤语/TW→国语 采纳；TITLE_PARSER_VERSION 1.1.0；补 D-199-7 DTO 契约。详见 decisions.md ADR-199 + changelog [LANG-DIM-ADR]。
+2. **LANG-DIM-A** — Migration 112（video_sources 4 列：audio_language / subtitle_languages / 双 provenance）+ `@resovo/types` + architecture.md §5.2 同步（状态：📋 待开始，依赖 ADR ✅）
+3. **LANG-DIM-B** — D-199-2/3/4/5：规则表拆分（AUDIO/SUBTITLE_VARIANT_RULES + 封闭枚举）+ 归一函数 + 五级推断链写入（vod_lang 透传 + sourceName token + 地区推断）+ 存量回填脚本（状态：📋 待开始，依赖 A）
+4. **LANG-DIM-C** — D-199-7：API 透出 + 前台线路 UI（≥2 语音才显示语言 badge）+ `matchActiveSourceIndex` 跨集语言粘性 + e2e（状态：📋 待开始，依赖 B）
+   - follow-up 另起卡（评审 R2）：admin 线路面板 / 合并预选 UI 语言列展示。
