@@ -2067,7 +2067,7 @@
 
 ## [SEQ-20260611-01] 视频详情/播放页 404 修复（shortId 字母表冲突 + admin preview 链路收口遗漏）
 
-- **状态**：🔄 执行中（2/4 卡完成：-A ✅ / -B ✅）
+- **状态**：🔄 执行中（3/4 卡完成：-A ✅ / -B ✅ / LINK-A ✅）
 - **创建时间**：2026-06-11
 - **最后更新时间**：2026-06-11
 - **目标**：修复用户报告「后台预览视频播放页/详情页有时 404」+「前台已公开视频同样 404」。调查实证四根因（本会话调查记录）：① 视频库「查看详情（前台）」相对路径开后台域 + 缺 `?preview=admin`；② 前台详情页跳 watch 丢 `?preview=admin`；③ refresh_token 过期静默降级（ADR-160 D-160-4b 设计内，不修）；④ **`CrawlerService` 用 nanoid 默认字母表（含 `-`/`_`）生成 short_id，与 `extractShortId`「最后一个 `-` 分隔」协议冲突——dev 库 4337 视频 526 个（12.1%）命中，含 9 个已公开视频前台必现 404**。
@@ -2089,10 +2089,12 @@
    - 文件范围：`apps/api/src/db/migrations/110_videos_short_id_dash_cleanup.sql`（新建，DO 块逐行重生成 + 唯一重试 + `updated_at` touch）、`scripts/resync-es-short-id.ts`（新建一次性脚本，复用 `VideoIndexSyncService.syncVideo`）。
    - 依赖：BUGFIX-SHORTID-DASH-A（先收口生成侧防爬虫续产坏数据）。建议模型：sonnet。
    - **完成备注（2026-06-11，执行模型 claude-fable-5，子代理无）**：真库实测 526 行清洗 + 幂等重放 0 命中；ES 实跑 2768 条（sync 441 / unindex 2327 幽灵文档附带清理）复跑收敛零残留；端到端抽验原必现 404 公开视频 HTTP 200。遗留：ES 幽灵文档成因候补卡（reconcileStale 仅 7 天窗）。明细见 changelog [BUGFIX-SHORTID-DASH-B]。
-3. **BUGFIX-PREVIEW-LINK-A** — 视频库「查看详情（前台）」改走 buildAdminPreviewUrl 收口（状态：⬜ 待开始）
+3. **BUGFIX-PREVIEW-LINK-A** — 视频库「查看详情（前台）」改走 buildAdminPreviewUrl 收口（状态：✅ 已完成 2026-06-11）
+   - 创建时间：2026-06-11 ｜ 实际开始：2026-06-11 ｜ 完成时间：2026-06-11
    - 验收口径：视频库行操作打开的前台详情 URL = `WEB_NEXT_ORIGIN + /locale + detailHref + ?preview=admin`（与 moderation「前台预览」同口径），本地 `getDetailHref` 重复实现删除。
    - 文件范围：`apps/server-next/src/app/admin/videos/_client/VideoRowActions.tsx`（slug 投影缺失传 `null`，detail 页裸 shortId 兼容）。
    - 依赖：无（与 -A/-B 正交）。建议模型：sonnet。
+   - **完成备注（2026-06-11，执行模型 claude-fable-5，子代理无）**：buildAdminPreviewUrl 收口 + 删本地 getDetailHref 重复实现；+1 完整 URL 断言用例。门禁：typecheck/lint EXIT=0、test:changed 64、e2e:admin 82/82。明细见 changelog [BUGFIX-PREVIEW-LINK-A]。
 4. **BUGFIX-PREVIEW-LINK-B** — 前台详情页 → watch 跳转透传 `?preview=admin`（状态：⬜ 待开始）
    - 验收口径：preview 模式打开的详情页内全部 watch 跳转（立即播放 + 选集）URL 携带 `?preview=admin`；public 普通访问零行为变化。
    - 文件范围：`apps/web-next/src/lib/admin-preview-query.ts`（新建纯函数，复用 `admin-access-token.ts` 协议常量）、`apps/web-next/src/components/detail/DetailHero.tsx`、`apps/web-next/src/components/detail/EpisodePicker.tsx` + 单测。

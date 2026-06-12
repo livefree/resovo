@@ -6,16 +6,16 @@
 
 ## 当前任务（单任务工作台：同时仅 1 个 🔄 进行中；完成即删卡，历史见 docs/changelog.md）
 
-### 🔄 BUGFIX-PREVIEW-LINK-A · 视频库「查看详情（前台）」改走 buildAdminPreviewUrl 收口
+### 🔄 BUGFIX-PREVIEW-LINK-B · 前台详情页 → watch 跳转透传 `?preview=admin`
 
-- **来源**：SEQ-20260611-01 根因 ①（与 -A/-B 正交）。
+- **来源**：SEQ-20260611-01 根因 ②。
 - **实际开始时间**：2026-06-11
-- **问题理解**：`VideoRowActions.tsx:169` 用 `window.open(getDetailHref(row), '_blank')` 打开**相对路径** `/${segment}/${short_id}` → 在 server-next 自身 origin（dev `localhost:3003` / prod admin 子域）解析，后台无前台详情路由 → 该入口必现 404；且缺 `?preview=admin`，即使到达前台，未公开视频走 public 路径仍 404。
-- **根因判断**：ADR-160 D-160-7 / MODUX-P1-3 收口时遗漏的散点——moderation 模块已用 `buildAdminPreviewUrl`（`WEB_NEXT_ORIGIN + locale + ?preview=admin`）正确实现；`VideoRowActions` 本地 `getDetailHref` 还重复实现了 `getVideoDetailHref`（packages/types）的 type→segment 映射，违反复用约束。
-- **方案**：删除本地 `getDetailHref` + `PRIMARY_TYPES`/`TYPE_SEGMENT` 重复实现；「查看详情（前台）」改 `window.open(buildAdminPreviewUrl({ type: row.type, slug: null, shortId: row.short_id }), '_blank', 'noopener,noreferrer')`（`VideoAdminRow` 无 slug 投影，detail 页裸 shortId 兼容；与 moderation 同口径单一收口）。
-- **涉及文件**：`apps/server-next/src/app/admin/videos/_client/VideoRowActions.tsx`（+ 既有单测若覆盖该 action 则同步）。
-- **验收口径**：视频库行操作打开的前台详情 URL = `WEB_NEXT_ORIGIN + /locale + detailHref + ?preview=admin`（与 moderation「前台预览」同口径），本地重复实现删除。
-- **不做**：扩 `GET /admin/videos` 投影加 slug（preview 场景裸 shortId 足够，零 API 改动）。
+- **问题理解**：ADR-160 D-160-1 双因素中 query 是显式触发因子，middleware（`apps/web-next/src/middleware.ts:32-37`）只在 `?preview=admin` 存在时注入 `x-admin-preview` 请求头。详情页内跳 /watch 的两个真实跳转点（`DetailHero.tsx` handlePlay / `EpisodePicker.tsx` handleSelect）只拼 `?ep=N` 不透传 preview → preview 上下文丢失 → 未公开视频播放页 `fetchVideoDetail` 走 public 路径 404。
+- **根因判断**：CHG-361-B 实施 preview 派发链时只覆盖了「直接打开」场景，遗漏「页内续跳」的 query 延续。
+- **方案**：新建 `apps/web-next/src/lib/admin-preview-query.ts` 纯函数 `carryAdminPreview(href, searchParams)`（复用 `admin-access-token.ts` 协议常量；当前 URL 含 `preview=admin` 时给 href 追加同款 query，否则原样返回）；DetailHero/EpisodePicker 两处接入（均 client 组件，EpisodePicker 已有 useSearchParams，DetailHero 增加）。
+- **涉及文件**：`apps/web-next/src/lib/admin-preview-query.ts`（新）、`apps/web-next/src/components/detail/DetailHero.tsx`、`apps/web-next/src/components/detail/EpisodePicker.tsx`、`tests/unit/web-next/admin-preview-query.test.ts`（新）。
+- **验收口径**：preview 模式打开的详情页内全部 watch 跳转（立即播放 + 选集）URL 携带 `?preview=admin`；public 普通访问零行为变化。
+- **不做**：`VideoDetailHero`/`EpisodeGrid`/`VideoCardWide` 零消费方死代码（独立 CHORE 候补）；watch 页内播放器集间切换（client state 不改 URL，Y-AMD2-2 已知限制范围）。
 - **执行模型**：claude-fable-5（用户会话人工覆盖 sonnet 建议）。子代理调用：无。
 
 ### ⏸ MODUX-ACPT-5（暂停 · 检查点已提交）· 验收第 5 条纠正 · 审核台头部去 h1 + 元素并入 tab 行

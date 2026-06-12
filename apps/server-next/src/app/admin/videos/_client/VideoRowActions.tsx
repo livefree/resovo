@@ -8,18 +8,7 @@ import type { TabKey } from './_videoEdit/types'
 import { updateVisibility, stateTransition, doubanSync, refetchSources } from '@/lib/videos/api'
 import { buildMergeHref } from '@/lib/merge/entry'
 import { buildHomeAddHref } from '@/lib/home-modules/entry'
-
-// ── helpers ───────────────────────────────────────────────────────
-
-const PRIMARY_TYPES = new Set(['movie', 'series', 'anime', 'variety'])
-const TYPE_SEGMENT: Partial<Record<string, string>> = { variety: 'tvshow' }
-
-function getDetailHref(row: VideoAdminRow): string {
-  const segment = PRIMARY_TYPES.has(row.type)
-    ? (TYPE_SEGMENT[row.type] ?? row.type)
-    : 'others'
-  return `/${segment}/${row.short_id}`
-}
+import { buildAdminPreviewUrl } from '@/lib/admin-preview-url'
 
 // ── types ─────────────────────────────────────────────────────────
 
@@ -166,7 +155,17 @@ export function VideoRowActions({ row, isAdmin, onRowUpdate, onEditRequest }: Vi
     },
     () => withSimple(() => doubanSync(row.id)),
     () => withSimple(() => refetchSources(row.id)),
-    () => { setOpen(false); window.open(getDetailHref(row), '_blank') },
+    // BUGFIX-PREVIEW-LINK-A：原相对路径在 server-next 自身 origin 解析（后台无前台路由必 404）
+    // 且缺 ?preview=admin；改 buildAdminPreviewUrl 单一收口（与 moderation「前台预览」同口径，
+    // ADR-160 D-160-7）。VideoAdminRow 无 slug 投影 → 传 null（detail 页裸 shortId 兼容）。
+    () => {
+      setOpen(false)
+      window.open(
+        buildAdminPreviewUrl({ type: row.type, slug: null, shortId: row.short_id }),
+        '_blank',
+        'noopener,noreferrer',
+      )
+    },
     // CHG-SN-8-08：发起合并 → 深链（CHG-VIR-13-A1：buildMergeHref 收口，禁内联拼接）
     () => {
       setOpen(false)

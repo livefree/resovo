@@ -4547,3 +4547,14 @@
 - **真库实测**：migration 应用 526 行清洗（DB 断言零残留 + 零畸形）；DO 块手动重放幂等 0 行命中；ES 实跑 2768 条命中（syncVideo 441 / unindexVideo 2327——**附带清理 2327 条 DB 已删的幽灵文档**，ES↔DB 漂移远超本 bug 范围）；复跑收敛断言通过零残留；端到端抽验原 `CrLh-aL0`（公开视频必现 404）新 short_id `odgAm4fM` → `GET /v1/videos/odgAm4fM` HTTP 200。
 - **门禁**：typecheck/lint/test:changed EXIT=0。
 - **遗留**：ES 幽灵文档成因（unindex 链路历史漏删）未根因调查——reconcileStale 仅 7 天回溯窗，建议候补独立卡评估全量 reconcile 周期任务。
+
+## [BUGFIX-PREVIEW-LINK-A] 视频库「查看详情（前台）」改走 buildAdminPreviewUrl 收口
+- **完成时间**：2026-06-11
+- **记录时间**：2026-06-11 21:30
+- **执行模型**：claude-fable-5（用户会话人工覆盖 sonnet 建议）
+- **子代理**：无
+- **修改文件**：
+  - `apps/server-next/src/app/admin/videos/_client/VideoRowActions.tsx` — 「查看详情（前台）」原 `window.open` 相对路径在 server-next 自身 origin 解析（后台无前台路由必 404）且缺 `?preview=admin`；改 `buildAdminPreviewUrl({ type, slug: null, shortId })` 单一收口（与 moderation「前台预览」同口径，ADR-160 D-160-7）+ `noopener,noreferrer`；删除本地 `getDetailHref` + `PRIMARY_TYPES`/`TYPE_SEGMENT`（重复实现 packages/types `getVideoDetailHref` 的 type→segment 映射）
+  - `tests/unit/components/server-next/admin/videos/VideoRowActions.test.tsx` — +1 用例断言绝对 origin + locale + `?preview=admin` 完整 URL（variety→tvshow segment 映射顺带覆盖）；头注过时 getDetailHref 行更新
+- **不做**：扩 `GET /admin/videos` 投影加 slug（preview 场景裸 shortId 足够，detail 页 extractShortId 兼容，零 API 改动）。
+- **门禁**：typecheck/lint EXIT=0 / test:changed 5 文件 64 passed / test:e2e:admin 82/82 passed EXIT=0。

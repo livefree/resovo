@@ -5,7 +5,7 @@
  * - buildItems（通过 VideoRowActions 间接覆盖）的条件显示逻辑
  * - 乐观更新：onRowUpdate 先于 API 被调用，失败时回滚
  * - admin-only 禁用：isAdmin=false 时豆瓣同步项 disabled
- * - getDetailHref：链接格式正确
+ * - 查看详情（前台）：buildAdminPreviewUrl 收口（BUGFIX-PREVIEW-LINK-A）
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
@@ -308,6 +308,21 @@ describe('VideoRowActions — 合并/拆分深链 (CHG-VIR-13-A1/A2)', () => {
     clickItem('add-to-home')
     expect(openSpy).toHaveBeenCalledWith(
       '/admin/home?add_ids=v1&from=videos',
+      '_blank',
+      'noopener,noreferrer',
+    )
+    openSpy.mockRestore()
+  })
+
+  // BUGFIX-PREVIEW-LINK-A：查看详情（前台）→ buildAdminPreviewUrl 收口
+  // （原相对路径在 server-next origin 解析必 404 + 缺 ?preview=admin）
+  it('点击"查看详情（前台）" → window.open 绝对 origin + locale + ?preview=admin', () => {
+    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null)
+    renderActions(makeRow({ type: 'variety', short_id: 'abc12345' }))
+    openDropdown()
+    clickItem('view-detail')
+    expect(openSpy).toHaveBeenCalledWith(
+      'http://localhost:3000/zh-CN/tvshow/abc12345?preview=admin',
       '_blank',
       'noopener,noreferrer',
     )
