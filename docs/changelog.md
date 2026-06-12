@@ -4573,3 +4573,14 @@
 - **不做**：`VideoDetailHero`/`EpisodeGrid`/`VideoCardWide` 零消费方死代码（候补 CHORE）；watch 页内播放器集间切换（client state 不改 URL，Y-AMD2-2 已知限制）。
 - **门禁**：typecheck/lint EXIT=0 / test:changed 4 passed / test:e2e:video 5/5 passed。
 - **序列收口**：SEQ-20260611-01 全 4 卡完成——404 调查四根因中 ①②④ 已修复（③ refresh 过期静默降级为 ADR-160 设计内行为，可观测性增强候补）。
+
+## [BUGFIX-SHORTID-DASH-B-FIX] Codex stop-time review 拦截：migration 110 漏同步 banner 持久化引用
+- **完成时间**：2026-06-11
+- **记录时间**：2026-06-11 22:05
+- **执行模型**：claude-fable-5
+- **子代理**：无
+- **修改文件**：
+  - `apps/api/src/db/migrations/110_videos_short_id_dash_cleanup.sql` — FIX 修订：重写循环内同事务同步 `home_banners.link_target`（`link_type='video'` 时直存 video short_id，`home-banners.ts:96` JOIN 契约）；头注补全仓持久化引用排查结论（home_modules.content_ref_id = UUID 不受影响 / 快照·audit JSONB 不解引用）
+- **拦截内容**：「migration leaves persisted banner short_id references stale」——初版 110 重写 526 个 short_id 未排查引用方，video banner 的 link_target 会指向不存在的旧值 → 解引用断链。
+- **损害对账**：dev 实证 `link_type='video'` banner = **0 行**（video banner 功能零使用），初版与修订版在 dev 语义等价、无数据修复缺口；修订版供 prod/后续环境完整执行（prod 未跑 110，修订无 drift 风险）。dev 重放修订版：语法 ✓ / 幂等 0 行命中 ✓。
+- **教训沉淀**：重写被外部引用的 ID 的 migration，必须先排查并同事务同步全部持久化引用方（已写入 110 头注）。

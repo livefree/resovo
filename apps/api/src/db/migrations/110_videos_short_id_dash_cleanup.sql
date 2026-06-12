@@ -18,6 +18,17 @@
 -- ES 跟进：short_id 进 resovo_videos 索引（VideoIndexSyncService），migration 无法触达 ES，
 --   由 scripts/resync-es-short-id.ts 在 migrate 后一次性重同步（按 ES 侧旧值含 `-` 圈定）。
 -- updated_at touch：使 reconcile 类回溯任务（CHG-411 reconcileStale 等）能感知本次变更。
+--
+-- 引用方同步（2026-06-11 FIX 修订 / Codex stop-time review 拦截「persisted banner
+--   short_id references stale」）：全仓持久化 video short_id 引用排查结论——
+--   - home_banners.link_target（link_type='video' 时直存 short_id，home-banners.ts:96
+--     JOIN 契约）→ **必须同事务同步**，否则重写后 banner 解引用断链；
+--   - home_modules.content_ref_id = video.id UUID（HomeService.ts:43）不受影响；
+--   - autofill 快照 / audit JSONB 不以 short_id 解引用，历史 stale 可接受。
+--   修订时序说明：dev 已以初版应用（applied 不重跑）——dev 实证 link_type='video'
+--   banner 为 0 行，初版与修订版在 dev 语义等价、无对账缺口；修订版供 prod/后续
+--   环境完整执行。教训沉淀：重写被外部引用的 ID 的 migration，必须先排查并同事务
+--   同步全部持久化引用方。
 
 DO $$
 DECLARE
@@ -26,7 +37,7 @@ DECLARE
   -- 与 apps/api/src/lib/short-id.ts SHORT_ID_ALPHABET 一致（62 字符，禁 `-`/`_`）
   alphabet CONSTANT TEXT := '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
 BEGIN
-  FOR r IN SELECT id FROM videos WHERE short_id LIKE '%-%' LOOP
+  FOR r IN SELECT id, short_id FROM videos WHERE short_id LIKE '%-%' LOOP
     -- 唯一冲突重试（videos_short_id_key UNIQUE；62^8 空间下碰撞概率可忽略，循环为防御性兜底）
     LOOP
       new_id := '';
@@ -40,5 +51,12 @@ BEGIN
     SET short_id = new_id,
         updated_at = NOW()
     WHERE id = r.id;
+
+    -- 引用方同步：video banner 的 link_target 直存 short_id（见头注排查结论）
+    UPDATE home_banners
+    SET link_target = new_id,
+        updated_at = NOW()
+    WHERE link_type = 'video'
+      AND link_target = r.short_id;
   END LOOP;
 END $$;

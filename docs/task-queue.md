@@ -2089,6 +2089,7 @@
    - 文件范围：`apps/api/src/db/migrations/110_videos_short_id_dash_cleanup.sql`（新建，DO 块逐行重生成 + 唯一重试 + `updated_at` touch）、`scripts/resync-es-short-id.ts`（新建一次性脚本，复用 `VideoIndexSyncService.syncVideo`）。
    - 依赖：BUGFIX-SHORTID-DASH-A（先收口生成侧防爬虫续产坏数据）。建议模型：sonnet。
    - **完成备注（2026-06-11，执行模型 claude-fable-5，子代理无）**：真库实测 526 行清洗 + 幂等重放 0 命中；ES 实跑 2768 条（sync 441 / unindex 2327 幽灵文档附带清理）复跑收敛零残留；端到端抽验原必现 404 公开视频 HTTP 200。遗留：ES 幽灵文档成因候补卡（reconcileStale 仅 7 天窗）。明细见 changelog [BUGFIX-SHORTID-DASH-B]。
+   - **-B-FIX（Codex stop-time review 拦截 2026-06-11）**：「migration leaves persisted banner short_id references stale」——初版 110 重写 short_id 未同步引用方；`home_banners.link_target`（link_type='video'）直存 short_id 会断链。修订 110：重写循环内同事务 UPDATE banner 引用 + 头注全仓引用排查结论（home_modules=UUID 不受影响）。dev 对账 video banner **0 行**（初版/修订版语义等价无数据缺口）；prod 未跑 110，修订版完整生效。教训：ID 重写 migration 必须同事务同步全部持久化引用方。明细见 changelog [BUGFIX-SHORTID-DASH-B-FIX]。
 3. **BUGFIX-PREVIEW-LINK-A** — 视频库「查看详情（前台）」改走 buildAdminPreviewUrl 收口（状态：✅ 已完成 2026-06-11）
    - 创建时间：2026-06-11 ｜ 实际开始：2026-06-11 ｜ 完成时间：2026-06-11
    - 验收口径：视频库行操作打开的前台详情 URL = `WEB_NEXT_ORIGIN + /locale + detailHref + ?preview=admin`（与 moderation「前台预览」同口径），本地 `getDetailHref` 重复实现删除。
