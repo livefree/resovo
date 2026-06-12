@@ -137,8 +137,22 @@ export async function findCatalogByNormalizedKey(
   db: Pool | PoolClient,
   titleNormalized: string,
   year: number | null,
-  type: string
+  type: string,
+  seasonNumber?: number | null,
 ) {
+  if (seasonNumber !== undefined) {
+    const result = await db.query<DbMediaCatalogRow>(
+      `${CATALOG_SELECT}
+       WHERE title_normalized = $1
+         AND type = $2
+         AND year IS NOT DISTINCT FROM $3
+         AND season_number IS NOT DISTINCT FROM $4
+       LIMIT 1`,
+      [titleNormalized, type, year, seasonNumber]
+    )
+    return result.rows[0] ? mapCatalogRow(result.rows[0]) : null
+  }
+
   const result = await db.query<DbMediaCatalogRow>(
     `${CATALOG_SELECT}
      WHERE title_normalized = $1

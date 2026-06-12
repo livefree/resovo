@@ -298,7 +298,7 @@ Migration 026 建表，Migration 042（META-06）新增 6 个扩展字段：
 
 核心字段：
 - `title` / `title_en` / `title_original` / `title_normalized`：标题四形态。
-  - `title`：原始标题，**保留标点空格**（展示 + 前台搜索 `videos.title ILIKE`）。
+  - `title`：标准显示标题，**保留标点空格**（展示 + 前台搜索 `videos.title ILIKE`）。采集路径自 2026-06-12 起先经 `buildStandardVideoTitle` 派生：`国语/粤语/字幕/画质/更新态` 等语言变体与源站噪声不进入显示标题；`第N季` 统一显示为 `作品名 第N季`；`剧场版/OVA/SP` 等发布形态保留在显示标题。
   - `title_normalized`：**归并去重键**。**ADR-174（2026-06-01）起改为剥标点**（`normalizeMergeKey` = `stripExternalMatchPunct(normalizeTitle)`，剥 `\p{P}/\p{S}`），与外部源匹配键 `normalizeForExternalMatch` 对齐 —— 使「当前，正被打扰中！」与「当前正被打扰中」归并同一作品，根治同番裂多 catalog 行→抢绑同一 Bangumi subject 撞 `bangumi_subject_id` 唯一约束。**语义变更**（列 DDL 不变，内容契约从「保留标点」变「剥标点」）；存量 3124 行由 migration 084 + `scripts/backfill-merge-key.ts` 重算 + `scripts/dedup-catalog-084.ts` 合并 52 冗余行（删行前快照至 `_bak_*_084` 系列表，R4 可回滚）。写入入口统一 `normalizeMergeKey`（CrawlerService / VideoService / VideoMergesService / BangumiSeedService / buildMatchKey）。注意：`normalizeTitle`（保留标点）仍供 CrawlerRefetchService 相似度计算；dump 表 `external_data.*.title_normalized` 是独立基准（`[^\p{L}\p{N}]`），不受本变更影响。
 - `type`：作品类型（与 videos.type 一致）
 - `genres TEXT[]` / `genres_raw TEXT[]`：平台题材 / 原始题材
@@ -338,9 +338,9 @@ META-06 新增字段：
 
 > 当前现状：`season_number` 列 + 唯一键改造 + `catalog_relations` 表已落地（Migration 090）；`media_catalog` 仍**无 `deleted_at`**（删行回滚范式为契约，实施 = catalog-catalog 合并卡 CHG-VIR-12-F）。真源详见 `docs/decisions.md` ADR-176 + AMENDMENT（2026-06-03 / D-176-7~10）。
 
-- **`media_catalog.season_number INT NULL`**（D-176-2 / **Migration 090 已落地**）：正篇季号 1/2/…；NULL=非分季/单季/电影/特别篇；`CHECK >0`（`ck_media_catalog_season_number_positive`——唯一键哨兵 0 的正确性依赖此约束，**禁放宽 `>=0`**）。已纳入 `CatalogUpdateData`（safeUpdate 三重保护自动覆盖；**`CatalogInsertData` 不扩** = findOrCreate 不纳入 season 匹配 D-176-7）。存量 3585 行全 NULL **不批量回填**（D-176-9：建立首个显式分季 catalog 时执行「系列归位」，半回填态扫描脚本 = 12-C 交付）。
+- **`media_catalog.season_number INT NULL`**（D-176-2 / **Migration 090 已落地**）：正篇季号 1/2/…；NULL=非分季/单季/电影/特别篇；`CHECK >0`（`ck_media_catalog_season_number_positive`——唯一键哨兵 0 的正确性依赖此约束，**禁放宽 `>=0`**）。已纳入 `CatalogUpdateData`（safeUpdate 三重保护自动覆盖）与 `CatalogInsertData`（采集路径显式写入，D-176-11）。存量 3585 行全 NULL **不批量回填**（D-176-9：建立首个显式分季 catalog 时执行「系列归位」，半回填态扫描脚本 = 12-C 交付）。
 - **唯一键改造已执行**（Migration 090）：`uq_catalog_title_year_type` → `uq_catalog_title_year_type_season`（`(title_normalized, year, type, COALESCE(season_number,0)) WHERE 四外部 ID 全 NULL`）。存量 NULL→槽位 0 **逐值等价旧键**（真实 DB 验证：NULL 双行阻断 / season=2 与 NULL 共存解阻塞 / 同季双行阻断 / 带外部 ID 行不受约束）；**不改 `normalizeTitle` 剥季语义**，季由显式列承载。
-- **catalog 按季粒度**：正篇第 N 季 / 剧场版 / SP / OVA 各独立 catalog；SP/OVA/剧场版用 `catalog_relations` 关联正篇（不塞 `season_number`）。`edition`（加长/导剪）仍归 video 层、`language_variant`（国语/粤语/字幕）仍归 source 层，不受影响。
+- **catalog 按季粒度**：正篇第 N 季 / 剧场版 / SP / OVA 各独立 catalog；SP/OVA/剧场版用 `catalog_relations` 关联正篇（不塞 `season_number`）。`edition`（加长/导剪）仍归 video 层、`language_variant`（国语/粤语/字幕）仍归 source 层，不受影响。采集新写入显式传入 `season_number` 做 Step 5 匹配（同名不同季不再复用同一 catalog/video）；未传 `season_number` 的旧调用方仍保持旧三元组回退行为。
 - **`catalog_relations` 表**（D-176-3 / **Migration 090 已落地** / catalog-catalog 关系**单一真源**有向图）：`from_catalog_id`/`to_catalog_id`/`relation`（`season_of`/`edition_of`/`remake_of`/`spinoff_of`/`same_work_candidate`）/`confidence`/`source`(auto/manual) + `UNIQUE(from,to,relation)` + `from≠to` CHECK + **`same_work_candidate` 有序对 CHECK**（`ck_catalog_relations_swc_ordered`：from<to 文本序，防 (A,B)/(B,A) 双行）+ `idx_catalog_relations_to` 反查 + ON DELETE CASCADE。反对称四 relation 单向 + `season_of`/`edition_of` DAG 为**跨行不变量**，应用层守卫随首个写入卡（12-F）实装。**`series_group` 不建表**（D-176-8：`season_of`/`edition_of` 连通分量动态派生；锚 = DAG 入度 0 正篇节点，多锚歧义报告不猜测）。当前**零写入方**（写路径 = 12-F / 上卷 job）。
 - **catalog 删行回滚范式**（`media_catalog` 无 `deleted_at`，删行不可逆 / 实施 = 12-F 运维脚本，**不起 admin 端点** D-176-10）：catalog-catalog 合并删行前全字段快照到 `_bak_*_<migration>`（继承 migration 084 / ADR-174 D-174-6），主表 + CASCADE 子表（catalog_episodes/characters）+ 孙表（catalog_character_actors）+ `catalog_relations`（端点命中被删 catalog 须**重指向 survivor** + old/new 双列快照回滚复位，类比 084 videos 指向）+ `catalog_external_refs` + provenance/locks + `videos.catalog_id` 指向全快照；provenance/locks 类子表**只插不删**（来源不可精确区分、信息论不可逆 / R11/R12 继承）。
 

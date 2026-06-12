@@ -4649,3 +4649,26 @@
 - **拦截内容**：「fixed video-rescore jobId can suppress later rescans」——Bull 固定 jobId 在该 job 仍存于 completed/failed 历史时静默吞掉后续 add；`removeOnComplete: 20` 是「保留最近 20 个」而非时间窗，低流量下完成 job 长期驻留 → 同视频后续绑定（douban 先 / bangumi 几分钟后）不再触发重评，**变相复现本卡要修的空窗**。
 - **裁定**：正确性（每次证据变化必触发）优先于去抖节省——重评为幂等 upsert（hash noop）且单视频 ≤50 对侧轻量，重复跑成本可忽略；备选「removeOnComplete: true 即时清除」仍残留 job 执行中 add 被吞的竞态窗口，弃用。
 - **门禁**：typecheck/lint EXIT=0 / test:changed 14 文件 260 passed。
+
+## [VIDEO-NAMING-STANDARD-A] 采集入库标题标准化 + catalog 按季匹配
+- **完成时间**：2026-06-12
+- **记录时间**：2026-06-12 13:35
+- **执行模型**：gpt-5-codex（实现）+ claude-fable-5（门禁验证 + 收口）
+- **子代理**：无
+- **背景**：SEQ-20260612-01。架构层（ADR-176 12-B）已支持同名不同季独立 catalog（season_number 列 + 四元组唯一键），但采集主路径仍按 D-176-7 旧三元组 `normalizeMergeKey(video.title)` 匹配——季标被剥后「某剧 第1季/第2季」命中同一 catalog，且 `SELECT id FROM videos WHERE catalog_id=... LIMIT 1` 复用同一视频实例；同时 `国语/中字/1080p/更新至30集` 等 token 直接污染 `videos.title` / `media_catalog.title` 显示。
+- **修改文件**：
+  - `apps/api/src/services/TitleIdentityParser.ts` — 新增 `StandardVideoTitle` 接口 + `buildStandardVideoTitle` 纯函数：三层标题派生（原始观测保留 / 标准显示标题 `作品名 第N季`（带空格间隔）/ 结构化 seasonNumber+releaseMarker+languageVariant+edition facets）；剧场版/OVA/SP 作为发布形态保留进 identityTitle，语言/画质/更新态/源站噪声剥出显示标题。
+  - `apps/api/src/services/CrawlerService.ts` — Step 1 改用 `buildStandardVideoTitle`：`titleNormalized = normalizeMergeKey(identityTitle)`、catalog/video 写入 `displayTitle`、显式传 `seasonNumber`；aliases 改为去重集合（displayTitle + 原始标题 + titleEn），原文保留供搜索召回/溯源；enrichment 队列改传 displayTitle。
+  - `apps/api/src/services/MediaCatalogService.ts` — `CatalogLookupKey`/`FindOrCreateCatalogInput` 加可选 `seasonNumber`；**仅当调用方显式传入该属性**时 Step 5 从三元组扩为 `(title_normalized, year, type, season_number)` 四元组（含 advisory-lock 重试路径），未传属性的旧调用方保持 D-176-7 行为零变更。
+  - `apps/api/src/db/queries/mediaCatalog.ts` — `findCatalogByNormalizedKey` 可选第 5 参 seasonNumber（`IS NOT DISTINCT FROM` 匹配 NULL 槽位）。
+  - `apps/api/src/db/queries/mediaCatalog.mutations.ts` / `mediaCatalog.internal.ts` — `insertCatalog` 写入 `season_number`；`CatalogInsertData.seasonNumber` 类型扩展。
+  - `tests/unit/api/crawlerNamingStandard.test.ts`（新增）— 端到端断言：`斗罗大陆 第2季 国语 1080p 更新至30集` → catalog 按季匹配（seasonNumber=2）+ 显示标题 `斗罗大陆 第2季` + aliases 保原文；`某番 剧场版 国语` → 发布形态保留、语言剥离。
+  - `tests/unit/api/title-identity-parser.test.ts` / `tests/unit/api/mediaCatalogFindOrCreate.test.ts` — buildStandardVideoTitle 用例 + season-aware Step 5 四元组/旧行为兼容用例。
+  - `docs/decisions.md` — ADR-176 AMENDMENT：D-176-11（采集路径显式 season-aware 匹配，局部 supersede D-176-7）+ D-176-12（标题 token 存储/显示归属四分类）。
+  - `docs/architecture.md` — §media_catalog「catalog 按季粒度」段落同步采集写入行为。
+  - `docs/audit/adr-d-status.json` — D-176-11/12 登记。
+- **新增依赖**：无
+- **数据库变更**：无 DDL（season_number 列与四元组唯一键 ADR-176 12-B 已存在，本卡仅接通写入/匹配路径）
+- **质量门禁**：typecheck 全 workspace EXIT=0 / lint FULL TURBO EXIT=0 / test:changed 70 文件 970 passed（1 失败为 `video-merge-candidates.test.ts` listCandidates perf 基准 p95 并发负载抖动，与本卡文件零交集，隔离重跑 697ms PASS）/ verify:adr-contracts EXIT=0。
+- **注意事项**：① 存量数据未清洗（videos 257 + media_catalog 232 行季标粘连、15 行含噪声）——B 卡承接；② 旧三元组期跨季误合并实体未拆——C 卡盘点；③ `languageVariant` facet 当前仅入 `title_observations.parsed_facets_jsonb` 审计层，source 层结构化字段由 SEQ-20260612-02 承接（标题剥语言后的服务层可见性窗口期）；④ `normalizeMergeKey` 未改（ADR-174 不变量守住），剧场版不在其剥离词表、与正篇不撞 key 已验证。
+- **[AI-CHECK]**：六问过——①零回归（未传 seasonNumber 的旧调用方行为零变更，TitleNormalizer 回归守卫未动）；②不越界（未触 schema DDL/前后台 UI/admin route）；③沉淀（标题派生沉淀为 TitleIdentityParser 纯函数共享真源）；④无 any/空 catch/硬编码颜色；⑤一致性（IS NOT DISTINCT FROM 对齐既有 NULL 匹配口径）；⑥文件未超限。

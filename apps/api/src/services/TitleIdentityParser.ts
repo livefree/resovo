@@ -81,6 +81,24 @@ export interface ParsedTitle {
   confidence: number
 }
 
+/**
+ * 面向入库/展示的标准标题包。
+ *
+ * 存储分工：
+ * - `displayTitle`：写 `videos.title` / `media_catalog.title` 的标准显示标题。
+ * - `identityTitle`：参与 `title_normalized` 的标题基底；保留发布形态，排除季号。
+ * - `seasonNumber`：写 `media_catalog.season_number`，由唯一键显式承载。
+ */
+export interface StandardVideoTitle {
+  displayTitle: string
+  identityTitle: string
+  seasonNumber: number | null
+  releaseMarker: string | null
+  languageVariant: string | null
+  edition: string | null
+  coreTitleKey: string
+}
+
 // ── 抽取规则常量（解析器自有真源，与 TitleNormalizer 解耦）─────────────────────
 
 /** 季 / 部 / 卷 序号模式 → facets.seasonNumber（「序号即季/卷」，从 core 剥离）。 */
@@ -355,6 +373,78 @@ export function parseTitle(raw: string): ParsedTitle {
     titleKind: classifyTitleKind(coreTitleKey, facets),
     parserVersion: TITLE_PARSER_VERSION,
     confidence: computeConfidence(coreTitleKey, facets),
+  }
+}
+
+function stripRules(
+  input: string,
+  rules: ReadonlyArray<{ canonical: string; pattern: RegExp }>,
+): string {
+  let s = input
+  for (const { pattern } of rules) {
+    s = s.replace(pattern, ' ')
+  }
+  return s
+}
+
+function stripPatterns(input: string, patterns: ReadonlyArray<RegExp>): string {
+  let s = input
+  for (const pattern of patterns) {
+    s = s.replace(pattern, ' ')
+  }
+  return s
+}
+
+function normalizeDisplayTitle(input: string): string {
+  return input
+    .replace(/\s+/g, ' ')
+    .replace(/\s+([，。！？、：；）》】])/g, '$1')
+    .replace(/([（《【])\s+/g, '$1')
+    .trim()
+}
+
+function appendDisplaySuffix(base: string, suffix: string | null): string {
+  return suffix ? `${base} ${suffix}` : base
+}
+
+/**
+ * 从采集原始标题派生标准存储/显示标题。
+ *
+ * 规则：
+ * - `第x季` / `Sx` / `Part x` 是结构化身份：从显示基底剥离，写 `seasonNumber`，
+ *   展示统一追加 `第N季`。
+ * - `剧场版` / `OVA` / `SP` 是发布形态身份：保留进 `identityTitle` 和展示标题。
+ * - `国语` / `粤语` / 字幕、画质、更新态是 source 层或噪声：不进入 catalog/video 标题。
+ */
+export function buildStandardVideoTitle(raw: string): StandardVideoTitle {
+  const parsed = parseTitle(raw)
+
+  let base = raw
+  base = base.replace(/<[^>]*>/g, ' ').replace(/&[a-z]+;/gi, ' ')
+  base = foldFullwidth(base)
+  base = base.replace(BRACKET_WITH_CONTENT, ' ')
+  base = stripPatterns(base, SEASON_PATTERNS)
+  base = stripRules(base, RELEASE_MARKER_RULES)
+  base = stripRules(base, EDITION_RULES)
+  base = stripRules(base, LANGUAGE_VARIANT_RULES)
+  base = stripPatterns(base, QUALITY_NOISE_PATTERNS)
+  base = stripPatterns(base, SOURCE_NOISE_PATTERNS)
+
+  const fallbackTitle = normalizeDisplayTitle(parsed.coreTitleKey || raw)
+  const baseTitle = normalizeDisplayTitle(base) || fallbackTitle
+  const identityTitle = appendDisplaySuffix(baseTitle, parsed.facets.releaseMarker)
+  const displayTitle = parsed.facets.seasonNumber === null
+    ? identityTitle
+    : `${identityTitle} 第${parsed.facets.seasonNumber}季`
+
+  return {
+    displayTitle,
+    identityTitle,
+    seasonNumber: parsed.facets.seasonNumber,
+    releaseMarker: parsed.facets.releaseMarker,
+    languageVariant: parsed.facets.languageVariant,
+    edition: parsed.facets.edition,
+    coreTitleKey: parsed.coreTitleKey,
   }
 }
 

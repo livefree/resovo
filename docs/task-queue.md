@@ -2141,3 +2141,52 @@
 - 卡 2 追加：`npm run migrate` 真库对拍（含幂等重跑）+ resync 脚本实跑 + DB 断言零残留。
 - 卡 3 追加：`npm run test:e2e:admin`（ADMIN 域）；卡 4 追加：`npm run test:e2e:video`（VIDEO 域）。
 - 全程无新增 admin route（`verify:endpoint-adr` 不触发）/ 无 schema DDL（architecture.md 不需同步，migration 110 为纯数据迁移）/ 不动 `packages/admin-ui/**/types.ts`。
+
+## [SEQ-20260612-01] 视频命名标准化：采集存储与显示规则收口
+
+- **状态**：🔄 执行中
+- **创建时间**：2026-06-12 11:38
+- **最后更新时间**：2026-06-12 13:30
+- **目标**：设计并落地视频标题标准化规则：同名不同季按独立视频/catalog 存储；`第x季` 结构化入 `season_number`，`剧场版` 保留为发布形态身份，`国语/字幕/画质/更新态` 不污染 catalog/video 显示标题。
+- **范围**：apps/api 采集入库命名派生、media_catalog 按季匹配查询、对应单测；同步 ADR-176 AMENDMENT 与 architecture 标题规则。A 卡**不做** schema migration、不改前台/后台 UI 组件、不批量清洗存量数据；存量清洗由 B 卡承接（用户 2026-06-12 验收追加：存量标题季标无间隔需修复）。
+- **依赖**：无 BLOCKER；关联 ADR-176（catalog 按季粒度）/ ADR-105a（TitleIdentityParser facets）/ ADR-174（normalizeMergeKey 不改）。
+- **跨层理由**：标题标准化必须在 Service 层派生并传给 DB query 的匹配键；文档同步是对既有 ADR-176 D-176-7 的行为修订说明。
+
+### 任务列表
+
+1. **VIDEO-NAMING-STANDARD-A** — 采集入库标题标准化 + catalog 按季匹配（状态：✅ 已完成 2026-06-12）
+   - 创建时间：2026-06-12 11:38 ｜ 实际开始：2026-06-12 11:38 ｜ 完成：2026-06-12 13:30
+   - 验收口径：`某剧 第2季/第3季` 入库得到不同 `media_catalog`/`videos`；`某片 国语 1080p` 复用同一 catalog 且显示标题为 `某片`；`某番 剧场版` 作为独立发布形态保留在显示标题与 `title_normalized` 中。
+   - 范围（5 项）：① 标准标题派生纯函数（复用 `TitleIdentityParser` facets，不改 `normalizeMergeKey`）② `MediaCatalogService.findOrCreateWithMatch` 可选 season-aware Step 5 ③ `CrawlerService.upsertVideo` 使用标准标题/seasonNumber 入 catalog/video ④ 单测覆盖 parser/naming/crawler/catalog ⑤ ADR/architecture 同步。
+   - 依赖：无。建议模型：sonnet。实现 gpt-5-codex / 门禁+收口 claude-fable-5。详见 changelog [VIDEO-NAMING-STANDARD-A]。
+
+2. **VIDEO-NAMING-STANDARD-B** — 存量显示标题清洗：季标间隔 + 噪声剥离（状态：📋 待开始）
+   - 来源：用户 2026-06-12 验收反馈「标题后第几季字样中间没有间隔，添加间隔方便查看」。新写入路径 A 卡已带空格（`作品名 第N季`），缺口在存量数据。
+   - 数据规模实测（2026-06-12 dev 库）：videos 季标粘连 257 / 含语言·画质·更新态噪声 15（共 4405）；media_catalog 季标粘连 232（共 4396）。
+   - 范围（4 项）：① 清洗脚本 `scripts/backfill-standard-titles.ts`（复用 `buildStandardVideoTitle` 重派生 `videos.title` / `media_catalog.title`；**只动显示标题**——不动 `title_normalized`、不回填 `season_number`、不拆已合并实体，规避唯一键冲突与误合并连带）② dry-run 报告（全量改动行清单 + 抽样人工核对）③ 执行 + ES 重同步（沿用 SEQ-20260611-01 resync 通路）④ changelog/备注。
+   - 验收：`title ~ '[^[:space:]]第[一二三四五六七八九十0-9]+季'` 在 videos/media_catalog 计数归零；噪声 15 行清洗后语言 token 仍可在 `video_aliases`/`title_observations` 溯源；ES 搜索标题与 DB 一致。
+   - 依赖：A 卡（已完成）。建议模型：sonnet。
+
+3. **VIDEO-NAMING-STANDARD-C** — 跨季误合并存量盘点（候补/调查卡，状态：📋 待开始）
+   - 背景：A 卡之前旧三元组匹配把「同名不同季」归并同一 catalog/video（sources 跨季混挂、续播进度共享）。拆分涉及 sources 重新挂载 + 用户观看进度归属，风险高于 B 卡数量级。
+   - 范围：纯盘点——跨季混挂实体规模 SQL 审计 + 拆分方案草案（不执行拆分）；产出决定是否起独立序列。
+   - 依赖：B 卡完成后启动（清洗后的标题便于审计识别）。建议模型：sonnet。
+
+## [SEQ-20260612-02] 播放源语言双维度（语音/字幕）结构化
+
+- **状态**：📋 排队中
+- **创建时间**：2026-06-12 13:30
+- **最后更新时间**：2026-06-12 13:30
+- **目标**：语言信息从标题噪声沉淀为 `video_sources` 结构化字段，消除「标题剥掉国语后语言信息在服务层不可见」的窗口期。用户裁定（2026-06-12）：① 语音与字幕**分两个维度**；② 语音缺失时按地区推断（大陆→国语、日本→日语、韩国→韩语），**源数据（vod_lang / 标题 token）优先于推断**；③ 字幕「双语」支持落两个具体语言，可缺失；④ 前台线路**仅在同视频存在 ≥2 语音版本时**显示语言区分，单语音不显示。
+- **背景事实**（2026-06-12 调研）：`video_sources` 无任何语言列；上游 `vod_lang` 在 `SourceParserService.ts:350` 已解析但无下游消费；`TitleIdentityParser.facets.languageVariant` 现混装语音（国语/粤语/英语/国配）与字幕（中字/字幕）单值，仅持久化到 `title_observations.parsed_facets_jsonb` 审计层；既有裁决 D-176-12 已定「语言变体归 source 层」但字段未实装；`media_catalog.country` 值混杂（`CN` 2218 / `中国大陆` 44 / NULL 1086），地区推断需先规整取值口径。
+- **范围**：schema migration（video_sources 语言双维度字段）→ parser 双维度拆分 + 爬虫写入链路 → API 透出 + 前台线路 UI。跨 schema/api-service/UI 三层，按原子化判据拆 4 卡。
+- **依赖**：SEQ-20260612-01 A 卡（buildStandardVideoTitle facets 基础，已完成）。schema 字段跨 3+ 消费方（爬虫写入/admin 线路面板/前台播放页/识别层），**ADR 卡强制 arch-reviewer (Opus) 裁决**。
+
+### 任务列表
+
+1. **LANG-DIM-ADR** — ADR 起草 + arch-reviewer (Opus) 裁决（状态：📋 待开始）
+   - 决策点：① 字段建模（`audio_language TEXT NULL` 单值 vs 数组；`subtitle_languages TEXT[] NULL` 承载双语两具体值、空数组语义）② 规范词表（国语/粤语/日语/韩语/英语… + 字幕语言词表）与归一函数归属 ③ 推断优先级链 `vod_lang → 标题 facet → country 地区映射 → NULL` 及 country 取值规整（ISO code 与中文名混杂）④ 存量回填策略与可回溯性（aliases/observations 溯源）⑤ provenance 是否需要（参考 `quality`/`quality_detected`/`quality_source` 既有先例）。
+   - 产出：ADR-NNN 草稿 + Opus PASS。建议模型：主循环现行 + arch-reviewer (Opus)。
+2. **LANG-DIM-A** — schema migration + `@resovo/types` + architecture.md 同步（状态：📋 待开始，依赖 ADR）
+3. **LANG-DIM-B** — parser 双维度拆分（`LANGUAGE_VARIANT_RULES` → 语音/字幕两组 facets）+ 爬虫写入链路（`vod_lang` 透传 + 地区推断 fallback）+ 存量回填脚本（状态：📋 待开始，依赖 A）
+4. **LANG-DIM-C** — API 透出 + 前台线路 UI（≥2 语音才显示语言 badge）+ `matchActiveSourceIndex` 跨集语言粘性 + e2e（状态：📋 待开始，依赖 B）

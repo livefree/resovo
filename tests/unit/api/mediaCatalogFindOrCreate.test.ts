@@ -85,6 +85,21 @@ describe('MediaCatalogService.findOrCreateWithMatch — matchedStep（CHG-VIR-10
     expect(r.matchedStep).toBe('title_triple')
   })
 
+  it('显式 seasonNumber 输入 → Step 5 按季匹配', async () => {
+    const existing = { id: 'c-season-2', seasonNumber: 2 }
+    ;(catQ.findCatalogByNormalizedKey as ReturnType<typeof vi.fn>).mockResolvedValueOnce(existing)
+    const svc = new MediaCatalogService(db)
+    const r = await svc.findOrCreateWithMatch({ ...baseInput, title: 'CLANNAD 第2季', seasonNumber: 2 })
+    expect(r.catalog).toEqual(existing)
+    expect(catQ.findCatalogByNormalizedKey).toHaveBeenCalledWith(
+      client,
+      'clannad',
+      2007,
+      'anime',
+      2,
+    )
+  })
+
   it('全部未命中 INSERT 成功 → matchedStep=created', async () => {
     const inserted = { id: 'c-3' }
     mInsert.mockResolvedValueOnce(inserted)

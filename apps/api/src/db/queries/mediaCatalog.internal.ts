@@ -130,6 +130,8 @@ export interface CatalogInsertData {
   title: string
   titleEn?: string | null
   titleOriginal?: string | null
+  /** 正篇季号；NULL=非分季/单季/电影/特别篇。采集写入显式传入以支持同名不同季独立 catalog。 */
+  seasonNumber?: number | null
   titleNormalized: string
   type: string
   genres?: string[]

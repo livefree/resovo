@@ -71,6 +71,7 @@ export interface CatalogLookupKey {
   titleNormalized?: string
   year?: number | null
   type?: VideoType
+  seasonNumber?: number | null
 }
 
 // ── findOrCreate 输入 ─────────────────────────────────────────────
@@ -169,6 +170,7 @@ export class MediaCatalogService {
     const client: PoolClient = await this.db.connect()
     try {
       await client.query('BEGIN')
+      const hasSeasonScope = Object.prototype.hasOwnProperty.call(input, 'seasonNumber')
 
       // Step 1: imdb_id
       if (input.imdbId) {
@@ -211,7 +213,8 @@ export class MediaCatalogService {
         client,
         input.titleNormalized,
         input.year ?? null,
-        input.type
+        input.type,
+        hasSeasonScope ? input.seasonNumber ?? null : undefined,
       )
       if (found5) {
         await client.query('COMMIT')
@@ -237,7 +240,8 @@ export class MediaCatalogService {
           client,
           input.titleNormalized,
           input.year ?? null,
-          input.type
+          input.type,
+          hasSeasonScope ? input.seasonNumber ?? null : undefined,
         )
 
       if (!retry) {

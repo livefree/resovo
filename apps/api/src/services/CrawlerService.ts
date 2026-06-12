@@ -10,6 +10,7 @@ import type { Pool } from 'pg'
 import type { Client as ESClient } from '@elastic/elasticsearch'
 import { parseXmlResponse, parseJsonResponse, parseVodItem } from './SourceParserService'
 import { normalizeMergeKey } from './TitleNormalizer'
+import { buildStandardVideoTitle } from './TitleIdentityParser'
 import { MediaCatalogService } from './MediaCatalogService'
 import { VideoIndexSyncService } from './VideoIndexSyncService'
 import * as crawlerTasksQueries from '@/api/db/queries/crawlerTasks'
@@ -175,15 +176,17 @@ export class CrawlerService {
       ? Math.max(...sources.map((s) => s.episodeNumber ?? 1))
       : 1
 
-    // Step 1: 生成归并键（ADR-174 D-174-1：剥标点，使同番不同标点写法归并同一 catalog）
-    const titleNormalized = normalizeMergeKey(video.title)
+    // Step 1: 标题标准化。季由 season_number 承载；剧场版等发布形态保留进归并标题。
+    const standardTitle = buildStandardVideoTitle(video.title)
+    const titleNormalized = normalizeMergeKey(standardTitle.identityTitle)
 
     // Step 2: 找到或创建 media_catalog 条目（爬虫来源，最低优先级）
     // CHG-VIR-10：withMatch 变体额外透出 matchedStep（仅供 ingest shadow 对比，绑定语义零变更）
     const catalogService = new MediaCatalogService(this.db)
     const { catalog, matchedStep } = await catalogService.findOrCreateWithMatch({
-      title: video.title,
+      title: standardTitle.displayTitle,
       titleEn: video.titleEn ?? null,
+      seasonNumber: standardTitle.seasonNumber,
       titleNormalized,
       type: video.type,
       year: video.year ?? null,
@@ -221,7 +224,7 @@ export class CrawlerService {
       const inserted = await videosQueries.insertCrawledVideo(this.db, {
         catalogId: catalog.id,
         shortId,
-        title: video.title,
+        title: standardTitle.displayTitle,
         type: video.type,
         sourceCategory: video.category ?? null,
         contentRating: video.contentRating ?? 'general',
@@ -263,8 +266,9 @@ export class CrawlerService {
     }
 
     // Step 5: 写入别名（video_aliases 保持不变，供爬虫归并参考）
-    const aliases: string[] = [video.title]
-    if (video.titleEn) aliases.push(video.titleEn)
+    const aliases = Array.from(
+      new Set([standardTitle.displayTitle, video.title, video.titleEn].filter((v): v is string => Boolean(v))),
+    )
     await videosQueries.upsertVideoAliases(this.db, videoId, aliases)
 
     // Phase 1b (CHG-VIR-6 / SEQ-20260602-03): shadow 写入 title_observations（去重聚合）。
@@ -331,7 +335,7 @@ export class CrawlerService {
     void this.indexSync.syncVideo(videoId)
     // 入库完成后延迟 5 分钟触发元数据丰富（等待来源写库稳定）
     void enrichmentQueue.add(
-      { videoId, catalogId: catalog.id, title: video.title, year: video.year ?? null, type: video.type },
+      { videoId, catalogId: catalog.id, title: standardTitle.displayTitle, year: video.year ?? null, type: video.type },
       { delay: 300_000, jobId: `enrich-${videoId}` }
     ).catch((err: unknown) => {
       process.stderr.write(

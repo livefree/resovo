@@ -12,6 +12,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   parseTitle,
+  buildStandardVideoTitle,
   classifyTitleKind,
   computeConfidence,
   TITLE_PARSER_VERSION,
@@ -236,6 +237,31 @@ describe('TitleIdentityParser — 多噪声组合', () => {
     const r = parseTitle('盗梦空间（2010）')
     expect(r.coreTitleKey).toBe('盗梦空间')
     expect(r.facets.bracketTokens).toContain('2010')
+  })
+})
+
+describe('buildStandardVideoTitle — 入库/显示标准标题', () => {
+  it('第N季：季号结构化，displayTitle 统一追加季，identityTitle 不含季', () => {
+    const r = buildStandardVideoTitle('斗罗大陆 第四季 国语 1080p 更新至30集')
+    expect(r.identityTitle).toBe('斗罗大陆')
+    expect(r.displayTitle).toBe('斗罗大陆 第4季')
+    expect(r.seasonNumber).toBe(4)
+    expect(r.languageVariant).toBe('国语')
+  })
+
+  it('剧场版：发布形态保留进 identityTitle/displayTitle', () => {
+    const r = buildStandardVideoTitle('某番 剧场版 国语')
+    expect(r.identityTitle).toBe('某番 剧场版')
+    expect(r.displayTitle).toBe('某番 剧场版')
+    expect(r.releaseMarker).toBe('剧场版')
+    expect(r.languageVariant).toBe('国语')
+  })
+
+  it('国语/字幕/画质/更新态不污染显示标题', () => {
+    const r = buildStandardVideoTitle('叶问 国语 中英字幕 1080p 更新至1集')
+    expect(r.identityTitle).toBe('叶问')
+    expect(r.displayTitle).toBe('叶问')
+    expect(r.languageVariant).toBe('国语')
   })
 })
 

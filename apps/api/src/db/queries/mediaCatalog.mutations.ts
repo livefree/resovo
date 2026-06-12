@@ -20,7 +20,7 @@ export async function insertCatalog(
 ): Promise<MediaCatalogRow | null> {
   const result = await db.query<DbMediaCatalogRow>(
     `INSERT INTO media_catalog (
-       title, title_en, title_original, title_normalized,
+       title, title_en, title_original, season_number, title_normalized,
        type, genres, genres_raw, year, release_date, country, runtime_minutes,
        status, description, cover_url, rating, rating_votes,
        director, "cast", writers,
@@ -28,13 +28,13 @@ export async function insertCatalog(
        metadata_source,
        aliases, languages, official_site, tags, backdrop_url, trailer_url
      ) VALUES (
-       $1, $2, $3, $4,
-       $5, $6, $7, $8, $9, $10, $11,
-       $12, $13, $14, $15, $16,
-       $17, $18, $19,
-       $20, $21, $22, $23,
-       $24,
-       $25, $26, $27, $28, $29, $30
+       $1, $2, $3, $4, $5,
+       $6, $7, $8, $9, $10, $11, $12,
+       $13, $14, $15, $16, $17,
+       $18, $19, $20,
+       $21, $22, $23, $24,
+       $25,
+       $26, $27, $28, $29, $30, $31
      )
      ON CONFLICT DO NOTHING
      RETURNING
@@ -56,6 +56,7 @@ export async function insertCatalog(
       data.title,
       data.titleEn ?? null,
       data.titleOriginal ?? null,
+      data.seasonNumber ?? null,
       data.titleNormalized,
       data.type,
       data.genres ?? [],
