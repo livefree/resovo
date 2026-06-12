@@ -82,3 +82,10 @@ export {
   recallExternalIdCounterparts,
   type BlockingBucket,
 } from './blockingRecall'
+// GOV-3（SEQ-20260612-03）：版本对账 + 周期重扫编排
+export {
+  reconcileIdentityVersions,
+  detectVersionMismatch,
+  type VersionMismatch,
+  type VersionReconcileResult,
+} from './versionReconcile'

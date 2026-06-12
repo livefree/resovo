@@ -16,33 +16,9 @@
 
 import { db } from '@/api/lib/postgres'
 import { buildTitleObservation } from '@/api/services/titleObservation.builder'
-import type { TitleObservationInput } from '@/api/db/queries/titleObservations'
-
-/** 回填专用：已存在则跳过（DO NOTHING），不累加 observed_count → 重跑真幂等。 */
-async function insertObservationIfAbsent(input: TitleObservationInput): Promise<void> {
-  await db.query(
-    `INSERT INTO title_observations
-       (video_id, source_site_key, source_name, raw_title, raw_title_hash, parser_version, parsed_facets_jsonb)
-     VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb)
-     ON CONFLICT (
-       video_id,
-       COALESCE(source_site_key, ''),
-       COALESCE(source_name, ''),
-       raw_title_hash,
-       parser_version
-     )
-     DO NOTHING`,
-    [
-      input.videoId,
-      input.sourceSiteKey,
-      input.sourceName,
-      input.rawTitle,
-      input.rawTitleHash,
-      input.parserVersion,
-      JSON.stringify(input.parsedFacets),
-    ],
-  )
-}
+// GOV-3：内联 SQL 下沉查询层真源（migration 085 唯一键 COALESCE 并行真源集中一处），
+// 本脚本改薄壳；versionReconcile 服务层编排复用同一函数。
+import { insertObservationIfAbsent } from '@/api/db/queries/titleObservations'
 
 async function main(): Promise<void> {
   let cursor = '00000000-0000-0000-0000-000000000000'
@@ -57,7 +33,7 @@ async function main(): Promise<void> {
     if (r.rows.length === 0) break
     for (const v of r.rows) {
       // site 级观测（source_site_key=null）：同一 video.title 对全源一致（CHG-VIR-6 范式）
-      await insertObservationIfAbsent(buildTitleObservation(v.id, v.title, null))
+      await insertObservationIfAbsent(db, buildTitleObservation(v.id, v.title, null))
       total++
     }
     cursor = r.rows[r.rows.length - 1]!.id

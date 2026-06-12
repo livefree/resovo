@@ -10,6 +10,7 @@ import { identityCandidateQueue } from '@/api/lib/queue'
 import { db } from '@/api/lib/postgres'
 import { runIdentityRescore, type IdentityRescoreOptions } from '@/api/services/identity'
 import { runVideoRescore } from '@/api/services/identity/videoRescore'
+import { reconcileIdentityVersions } from '@/api/services/identity/versionReconcile'
 import { baseLogger, withJob } from '@/api/lib/logger'
 
 const workerLog = baseLogger.child({ worker: 'identity-candidate-worker' })
@@ -24,6 +25,8 @@ export type IdentityCandidateJobData =
     }
   // BUGFIX-IDENTITY-ENRICH-RESCORE：外部 ID 绑定后定向重评（enqueueVideoRescore 入队）
   | { type: 'video-rescore'; videoIds: string[] }
+  // GOV-3（SEQ-20260612-03）：版本对账 + 周期重扫二合一（identityReconcileScheduler 入队）
+  | { type: 'version-reconcile-rescan' }
 
 export function registerIdentityCandidateWorker(): void {
   // concurrency 1：advisory lock 已保证单实例，并发设 1 避免 Redis 侧浪费
@@ -33,6 +36,10 @@ export function registerIdentityCandidateWorker(): void {
 
     if (data.type === 'video-rescore') {
       return runVideoRescore(db, jobLog, data.videoIds)
+    }
+
+    if (data.type === 'version-reconcile-rescan') {
+      return reconcileIdentityVersions(db, jobLog)
     }
 
     const opts: IdentityRescoreOptions = {

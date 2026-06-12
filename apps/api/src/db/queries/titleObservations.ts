@@ -64,6 +64,40 @@ export async function recordTitleObservation(db: Pool, input: TitleObservationIn
   )
 }
 
+/**
+ * 回填/版本对账专用写入（GOV-3 / SEQ-20260612-03，自 backfill-title-observations 脚本下沉）：
+ * `ON CONFLICT DO NOTHING`——已存在则跳过，**不累加 observed_count**（与 recordTitleObservation
+ * 的 DO UPDATE +1 语义刻意不同：回填=补历史观测，非新观测事件，重跑真幂等）。
+ * ⚠️ ON CONFLICT 的 COALESCE 表达式 = migration 085 去重唯一键的并行真源——改 migration
+ * 须同步本函数与 recordTitleObservation 两处（evi: arch-reviewer GOV-3 必改 1，消除脚本内联副本）。
+ * @returns 是否实际插入（false=已存在跳过）
+ */
+export async function insertObservationIfAbsent(db: Pool, input: TitleObservationInput): Promise<boolean> {
+  const result = await db.query(
+    `INSERT INTO title_observations
+       (video_id, source_site_key, source_name, raw_title, raw_title_hash, parser_version, parsed_facets_jsonb)
+     VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb)
+     ON CONFLICT (
+       video_id,
+       COALESCE(source_site_key, ''),
+       COALESCE(source_name, ''),
+       raw_title_hash,
+       parser_version
+     )
+     DO NOTHING`,
+    [
+      input.videoId,
+      input.sourceSiteKey,
+      input.sourceName,
+      input.rawTitle,
+      input.rawTitleHash,
+      input.parserVersion,
+      JSON.stringify(input.parsedFacets),
+    ],
+  )
+  return (result.rowCount ?? 0) > 0
+}
+
 // ── 只读：拆分建议 facet 信号源（ADR-105 AMENDMENT 2026-06-03 D-105-1）──────────
 
 /** 单 video 观测行（site 级口径：source_name 写入恒 NULL，COALESCE('') 聚合） */

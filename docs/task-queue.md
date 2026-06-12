@@ -2209,8 +2209,9 @@
    - 实跑：4405 条 1.2.0 观测 → 重扫 696 桶/1061 对（created 10 / superseded 205 / blocked 190 / low-score 842）→ 残留 2 死对子（对侧已软删）显式 superseded → 当前版本 pending 215 / 旧版本残留 0；重案解密 0.9 入候选（标题标准化→语言变体合并闭环打通）。详见 changelog [GOV-1]。
 2. **GOV-2** — 消费侧诚实化：identity 空态显式信号 + legacy total 口径修复（9-C FIX-2 收口）（状态：✅ 已完成 2026-06-12）
    - 落地：staleIdentityPending 信封字段 + UI「候选待重评」警示条；legacy 有界全量重构（cap=2000 + truncated 复用），total=过滤后组数与 identity 语义统一。全量 7275/7275。详见 changelog [GOV-2]。
-3. **GOV-3** — 版本 bump 联动自动化（状态：📋 待开始；**需 arch-reviewer (Opus) 裁决触发策略**——自动全量重扫的成本护栏 / 检测位点〔worker 启动 vs cron〕/ 观测重写编排）
+3. **GOV-3** — 版本 bump 联动自动化（状态：✅ 已完成 2026-06-12，**GOV-5 并入**）
+   - arch-reviewer (claude-opus-4-8) BLOCKER：cron 必须 api 进程内（ADR-107 §4 worker 禁 import api Bull）→ identityReconcileScheduler（boot 自愈 + 每日兜底，不固定 jobId）；versionReconcile 四步幂等编排 = GOV-1 手工链固化；观测 SQL 下沉查询层单真源。详见 changelog [GOV-3]。
 4. **GOV-4** — 标题变更重评 hook（状态：📋 待开始）：migration 113 `trigger_source` CHECK +'title_change' + VideoService 标题更新位点 enqueueVideoRescore + 批量清洗脚本钩子 + architecture.md 同步。
-5. **GOV-5** — 周期重扫 scheduler（状态：📋 待开始）：worker node-cron 低峰全量重扫兜底（advisory lock / MAX_BUCKET 护栏已有）+ fire-and-forget 失败计数可观测。
+5. **GOV-5** — （已并入 GOV-3 同卡裁决落地：每日兜底 tick 即周期重扫；fire-and-forget 失败补偿由每日 reconcile 兜底覆盖）
 6. **GOV-6** — 存量实体手术（候补/人工闸门，吸收原 VIDEO-NAMING-STANDARD-E）：6 例跨季混挂核对拆分 + 2 分歧 catalog（星辰变/师兄啊师兄）+ 魔法使俱乐部(OVA) normalized 修正 + 动物管制官双实体合并；逐例附 sources 集数段证据交用户确认后执行；生产前重跑审计脚本。
 7. **GOV-7** — 召回增强（候补后排）：模糊召回层（titleEn/简繁桶）评估 + 0.75 阈值灰区报表。

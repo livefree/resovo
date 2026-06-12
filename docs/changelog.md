@@ -4860,3 +4860,28 @@
 - **质量门禁**：typecheck/lint EXIT=0 / **types 基础包升全量 7275/7275 全绿**（ADR-180；本轮含此前 listCandidates perf 与 CSV 导出两个抖动用例在内零失败）。
 - **注意事项**：① legacy 全量重构使单次请求 hydrate 上限从 limit(≤100) 组升至 cap(2000) 组——legacy 仅降级态可接受，生产 identity 主路径不受影响；② stale 警示条文案含脚本名，GOV-3 自动化落地后可改为「自动重评进行中」。
 - **[AI-CHECK]**：六问过——①双路径 total 语义统一（页内自洽消除散落）；②可选字段范式防破坏消费方（5 处既有消费零改动）；③谓词复用 groupMatchesFilters 单真源；④无 any/空 catch；⑤偏离（types 未过 Opus）已声明并论证；⑥范围未超。
+
+## [GOV-3] 版本 bump 联动自动化 + 周期重扫 scheduler（GOV-5 并入）
+- **完成时间**：2026-06-12
+- **记录时间**：2026-06-12 19:00
+- **执行模型**：claude-fable-5
+- **子代理**：arch-reviewer (claude-opus-4-8，agentId a367b4327d17d58cd) — 触发策略/编排/护栏裁决，「需修改含 1 BLOCKER」全部采纳
+- **评审关键裁决**：
+  - **BLOCKER（触发拓扑）**：原提案 apps/worker node-cron 入队违反 ADR-107 §4（worker 禁 import apps/api，无 @/api alias 编译期即不可行；既有 cron 全部内联 SQL 无一入队 Bull）→ 修订为 **apps/api 进程内 scheduler**（bangumiCollectionsScheduler setInterval 范式）。
+  - **必改 1**：观测回填 INSERT SQL 从脚本内联下沉 `db/queries/titleObservations.insertObservationIfAbsent`——migration 085 唯一键 COALESCE 表达式集中单真源（防第三处副本漂移），脚本薄壳化。
+  - **必改 2**：失配检测按运行时版本常量精确统计（observations 跨版本累积不删）+ observationsInserted 计数透出供膨胀监控（生产首次 bump 回填 = O(active videos) 全量）。
+  - **jobId 统一裁定**：identity-reconcile 全链不固定 jobId（BUGFIX-IDENTITY-ENRICH-RESCORE-FIX 教训），tickRunning 内存去抖 + advisory lock 防跨触发源并发。
+- **修改文件**：
+  - `apps/api/src/services/identity/versionReconcile.ts`（新增）— 四步幂等编排（GOV-1 手工链固化）：① 廉价失配检测（观测覆盖缺口 EXISTS + 旧版本 pending EXISTS）② 缺口观测重写（cursor 500/批）③ runIdentityRescore（恒执行=周期兜底语义）④ 残留旧版本 pending 显式 supersede。各步真幂等，失败重入安全。
+  - `apps/api/src/workers/identityReconcileScheduler.ts`（新增）— boot 自愈 tick（延迟 5min，仅失配入队 → bump 部署后小时级自愈）+ 每日兜底 tick（无条件入队）；IDENTITY_RECONCILE_TICK_MS env 可覆盖。
+  - `apps/api/src/db/queries/titleObservations.ts` — `insertObservationIfAbsent`（DO NOTHING 真幂等，返回是否实际插入）。
+  - `apps/api/src/db/queries/identity-candidate.ts` — `supersedeStaleVersionPending`（GOV-1 步骤 ④ 固化，confirmed/rejected 审计行不动）。
+  - `apps/api/src/workers/identityCandidateWorker.ts` — job union +'version-reconcile-rescan' 分支。
+  - `apps/api/src/server.ts` — opt-out 注册（IDENTITY_RECONCILE_SCHEDULER_ENABLED!=='false'，maintenance 范式）。
+  - `scripts/backfill-title-observations.ts` — 薄壳化（内联 SQL 移除，调查询层真源）。
+  - `apps/api/src/services/identity/index.ts` — reconcile 导出。
+  - `tests/unit/api/identity-version-reconcile.test.ts`（新增 4 用例）— 双信号独立 / 三分支编排 / 重扫恒执行 / supersede 时序在重扫后。
+- **新增依赖**：无；**数据库变更**：无 DDL。
+- **质量门禁**：typecheck/lint EXIT=0 / test:changed 58 文件 737 passed。
+- **注意事项**：① scheduler 随 api 进程下次重启生效（dev watch 模式热加载不重跑启动注册块）；② 端到端 job 消费需 Redis 在线——编排体已由 GOV-1 真库实证 + 本卡单测覆盖分支；③ GOV-2 stale 警示文案「手工修复链指引」可在自动化验证一个周期后改为「自动重评将于下个周期执行」（独立小改，未顺手动 UI——评审提醒勿越文件范围）。
+- **[AI-CHECK]**：六问过——①BLOCKER 修订后零 ADR 冲突（api 进程内 + 既有四 scheduler 同范式）；②单真源三处收口（观测 SQL/重扫管线/ hygiene 查询层）；③幂等可重入（每步独立可恢复）；④无 any/空 catch（scheduler catch+warn 不阻塞进程，范式一致）；⑤版本参数恒运行时常量；⑥文件未超限。

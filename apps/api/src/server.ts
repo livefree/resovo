@@ -39,6 +39,7 @@ import { registerImageHealthWorker } from '@/api/workers/imageHealthWorker'
 import { registerBlurhashWorker } from '@/api/workers/imageBlurhashWorker'
 import { registerBackfillWorker } from '@/api/workers/imageBackfillWorker'
 import { registerIdentityCandidateWorker } from '@/api/workers/identityCandidateWorker'
+import { registerIdentityReconcileScheduler } from '@/api/workers/identityReconcileScheduler'
 import { registerHomeAutofillWorker } from '@/api/workers/homeAutofillWorker'
 import { registerHomeAutofillScheduler } from '@/api/workers/homeAutofillScheduler'
 import { registerDoubanCollectionsWorker } from '@/api/workers/doubanCollectionsWorker'
@@ -221,9 +222,16 @@ async function start() {
   registerImageHealthWorker()
   registerBlurhashWorker()
   registerBackfillWorker()
-  // CHG-VIR-8 Phase 2b：身份候选离线重算 worker（消费者）。无自动 scheduler——
-  // shadow 对照阶段手动 enqueue（scripts/enqueue-identity-rescore.ts），自动周期留 Phase 2c。
+  // CHG-VIR-8 Phase 2b：身份候选离线重算 worker（消费者）。
   registerIdentityCandidateWorker()
+  // GOV-3（SEQ-20260612-03）：版本对账 + 周期重扫调度（boot 自愈 + 每日兜底；
+  // opt-out 同 maintenance 范式）。arch-reviewer 裁决：必须 api 进程内（ADR-107 §4）。
+  const identityReconcileSchedulerEnabled = process.env.IDENTITY_RECONCILE_SCHEDULER_ENABLED !== 'false'
+  if (identityReconcileSchedulerEnabled) {
+    registerIdentityReconcileScheduler()
+  } else {
+    fastify.log.info({ worker: 'identity-reconcile-scheduler' }, 'disabled (IDENTITY_RECONCILE_SCHEDULER_ENABLED=false)')
+  }
   // CHG-HOME-AUTOFILL-REFRESH / ADR-183 D-183-3：首页自动填充候选重算（消费者）
   registerHomeAutofillWorker()
   // ADR-187 D-187-8：豆瓣热门合集采集（消费者，独立队列隔离背压）

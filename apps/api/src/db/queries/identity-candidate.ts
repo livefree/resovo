@@ -100,6 +100,25 @@ export async function hasStaleVersionPending(
   return r.rows[0]?.exists ?? false
 }
 
+/**
+ * 旧版本 pending 残留显式 supersede（GOV-3 / GOV-1 步骤 ④ 固化）：重扫 candidateUpsert
+ * 只对再次评出的 pair 自动腾位，召回不到的旧 pending（对侧已软删等死对子）残留旧版本，
+ * 对工作区不可见且语义过时 → 标 superseded。confirmed/rejected 审计行不动。
+ * @returns 受影响行数
+ */
+export async function supersedeStaleVersionPending(
+  db: Pool,
+  current: { parserVersion: string; scorerVersion: string },
+): Promise<number> {
+  const r = await db.query(
+    `UPDATE identity_candidate SET status = 'superseded'
+     WHERE status = 'pending'
+       AND (parser_version <> $1 OR scorer_version <> $2)`,
+    [current.parserVersion, current.scorerVersion],
+  )
+  return r.rowCount ?? 0
+}
+
 // ── ① 查当前 pending（先比 hash no-op 判定 / R5）─────────────────────
 
 export async function findPendingByPairKey(
