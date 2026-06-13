@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import dynamic from 'next/dynamic'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
@@ -9,7 +9,7 @@ import { usePlayerStore } from '@/stores/playerStore'
 import { apiClient } from '@/lib/api-client'
 import { extractShortId } from '@/lib/short-id'
 import { getVideoDetailHref } from '@/lib/video-route'
-import { buildThemedSources, matchActiveSourceIndex } from '@/lib/line-display-name'
+import { buildLineMatrix, buildThemedLines, type VideoLine } from '@/lib/line-matrix'
 import { useRouteTheme } from '@/lib/route-theme-storage'
 import { RouteThemeSelector } from './RouteThemeSelector'
 import { CustomThemeDialog } from './CustomThemeDialog'
@@ -37,24 +37,22 @@ interface PlayerShellProps {
    * ADR-160 D-160-5：admin preview 模式（管理员通过 PendingCenter "↗ 前台预览" 进入）
    * - true: 屏蔽所有 feedback / audit / view_count 写入路径（GET 纯只读）
    * - false（默认）: 公开访问，正常上报
-   * 当前实装：尚未接入 feedback hook（D-160-5 实证审查是前瞻性 advisory），
-   *           本 Props 为未来 watch 页接入 usePlaybackFeedback / view_count 写入时的统一屏蔽闸门。
-   *           调用方应通过 `isPlaybackFeedbackEnabled(previewMode)` 派生开关。
    */
   previewMode?: boolean
   /**
    * ADR-160 AMENDMENT 2 D-160-AMD2-3：server-side hydration
    * watch page server component 预取的视频数据 / 有值时 useEffect 跳过 client video fetch
-   * （Y-AMD2-1 早返回 pattern）
    */
   initialVideo?: Video
-  /** server-side 预取的第 1 集 raw sources（仍走 client themed pipeline / 仅替换 fetch 源 / Y-AMD2-2 episode 切换限制） */
+  /**
+   * PLAYER-LINE-BOUND-EP：server-side 预取的**全集** raw sources（省略 episode）。
+   * 仅在 initialVideo.shortId === 当前 shortId 时复用（防客户端切视频后 stale 命中）。
+   */
   initialSources?: VideoSource[]
 }
 
 /**
  * ADR-160 D-160-5 写入开关派生：preview 模式禁用 feedback / audit / view_count 等写入。
- * 未来 web-next 接入 usePlaybackFeedback / 推荐写回时统一通过本 helper 决定是否启用。
  */
 export function isPlaybackFeedbackEnabled(previewMode: boolean | undefined): boolean {
   return !previewMode
@@ -64,7 +62,6 @@ export function isPlaybackFeedbackEnabled(previewMode: boolean | undefined): boo
  * SRCHEALTH-P2-1 / F1：success 上报 1/N 采样配置。
  * NEXT_PUBLIC_FEEDBACK_SUCCESS_SAMPLE_N（Next.js 编译期内联，须保持点号静态访问）：
  * N=1（默认）全量上报；N>1 每个 source 的首播成功事件以 1/N 概率上报。
- * 非法值（非正整数 / NaN）回退 1，保证上报通路默认打开。
  */
 export function getSuccessSampleN(): number {
   const raw = process.env.NEXT_PUBLIC_FEEDBACK_SUCCESS_SAMPLE_N
@@ -80,10 +77,9 @@ export function shouldReportPlaySuccess(sampleN: number, random: number = Math.r
 
 export function PlayerShell({ slug: slugProp, portalMode = false, previewMode = false, initialVideo, initialSources }: PlayerShellProps) {
   // ADR-160 D-160-5：preview 模式禁用所有 feedback / audit 写入路径
-  // 当前 PlayerShell 唯一写路径是 saveProgress（localStorage / 客户端本地）— 不在 D-160-5 屏蔽范围
-  // 未来 feedback hook 接入时按本变量守卫
   const feedbackEnabled = isPlaybackFeedbackEnabled(previewMode)
   void feedbackEnabled  // 显式保留：未来 usePlaybackFeedback / view_count 写入引用
+  void portalMode
   const hostOriginSlug = usePlayerStore((s) => s.hostOrigin?.slug)
   const slug = slugProp ?? hostOriginSlug ?? ''
   const searchParams = useSearchParams()
@@ -97,25 +93,22 @@ export function PlayerShell({ slug: slugProp, portalMode = false, previewMode = 
     setPlaying,
     setCurrentTime,
     setDuration,
-    activeSourceIndex,
-    setActiveSourceIndex,
+    activeLineKey,
+    setActiveLineKey,
   } = usePlayerStore()
 
-  // ADR-160 AMENDMENT 2 D-160-AMD2-3：state init 用 server-side hydrated video
-  // sources 仍走 client themed pipeline（applyThemeLabels 依赖 useLocale）→ state init 用 []
+  // PLAYER-LINE-BOUND-EP：state 从 per-episode sources 改为稳定线路矩阵（一次拉全集源构建）
   const [video, setVideo] = useState<Video | null>(initialVideo ?? null)
-  const [sources, setSources] = useState<Array<{ src: string; type: string; label?: string; quality?: string | null; isDead?: boolean; isPending?: boolean }>>([])
-  // CHG-369 Codex stop-time review #11：原始 sources 留 ref，使主题切换可重新 relabel
-  // 不放 state（避免重渲染 / 切主题时由 useEffect 触发 setSources 即可）
-  const rawSourcesRef = useRef<VideoSource[]>([])
+  const [lineMatrix, setLineMatrix] = useState<VideoLine[]>([])
+  // 运行时报错置 dead 的线路 key（当前集维度，切集/切视频重置——同线路他集可重试）
+  const [deadLineKeys, setDeadLineKeys] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(true)
   const [startTime, setStartTime] = useState<number | undefined>(undefined)
   const [playerVersion, setPlayerVersion] = useState(0)
   const [activePanelTab, setActivePanelTab] = useState<'episodes' | 'sources'>('episodes')
 
   // CHG-353 默认主题（zh-CN → 节气 / en → NATO）+ CHG-369 localStorage 持久化（用户选择优先）
-  // CHG-369-B：自定义主题 state + dialog 开关
-  // ADR-165 / CHG-SN-9-ROUTE-LABEL-D-A2：跨设备同步 syncing 状态透到 RouteThemeSelector disable 切换器
+  // ADR-165 / CHG-SN-9-ROUTE-LABEL-D-A2：跨设备同步 syncing 状态透到 RouteThemeSelector
   const locale = useLocale()
   const {
     theme: routeTheme,
@@ -126,148 +119,108 @@ export function PlayerShell({ slug: slugProp, portalMode = false, previewMode = 
     clearCustomTheme,
   } = useRouteTheme(locale)
   const [customDialogOpen, setCustomDialogOpen] = useState(false)
-  // CHG-369 Codex stop-time review #12：fetch then 读 ref 而非 closure capture，
-  // 防止 fetch 进行中用户切主题 → fetch 完成时用旧主题覆盖最新选择。
-  // 直接在 render body 同步赋值（无副作用 / 严格模式安全），避免 useEffect 同步
-  // ref 与 fetch.then 微任务的时序竞态（commit phase 后 effect 在 next macrotask 才执行，
-  // 而 fetch.then microtask 可能在 effect 之前执行 → ref 仍是旧值）
-  const routeThemeRef = useRef(routeTheme)
-  routeThemeRef.current = routeTheme
 
   const shortId = extractShortId(slug)
 
-  // ADR-160 AMENDMENT 2 D-160-AMD2-3：fetchedEpisodeRef 记录"已 fetch / 正在 fetch 的 episode"
-  // - 初始 fetch useEffect 在 setVideo 同时 claim ref = initial ep（不等 sources 完成 / 防 episode-switch 双拉）
-  // - 初始 sources 完成时做 stale check：ep ≠ store.currentEpisode → 不 setSources（用户在 fetch 期间切集 / 让 episode-switch 接手最新 ep）
-  // - episode-switch useEffect 依赖 [currentEpisode, video]：video 变化后重跑兜住 "在 sources fetch 期间切集" 时序；
-  //   基于 ref 判定避免重复 fetch（claim before fetch）
-  const fetchedEpisodeRef = useRef<number | null>(null)
-
+  // ── 初始拉取：一次性取全集源 → 构建线路矩阵（Y6：保留 shortId stale-check，移除 per-episode 双拉竞态）──
+  const initTokenRef = useRef(0)
   useEffect(() => {
-    // Snapshot all mini player state BEFORE initPlayer resets them to defaults
     const snap = usePlayerStore.getState()
     const isSameVideo = snap.shortId === shortId
-    // Episode: URL param wins if explicit; otherwise inherit from mini player (same video)
     const urlEp = searchParams.get('ep')
-    const ep = urlEp ? (Number(urlEp) || 1) : (isSameVideo ? snap.currentEpisode : 1)
-    // currentTime and activeSourceIndex are zeroed by initPlayer — must capture now
+    const desiredEp = urlEp ? (Number(urlEp) || 1) : (isSameVideo ? snap.currentEpisode : 1)
     const priorTime = isSameVideo ? snap.currentTime : 0
-    const priorSourceIndex = isSameVideo ? snap.activeSourceIndex : 0
+    const priorLineKey = isSameVideo ? snap.activeLineKey : null
     setLoading(true)
-    // 同步 claim ref = initial ep / 在 videoPromise 异步链之前就标记 / 避免 episode-switch effect
-    // 在 useEffect 1 异步链解析前先发起 fetch 造成双拉（initialVideo 场景 video 已非 null）
-    fetchedEpisodeRef.current = ep
-    // 同步 initPlayer 让 store.currentEpisode 立即对齐 URL ep（urlEp ≠ store default 1 时尤为重要 /
-    // 否则 useEffect 2 在 mount 时看到 store.currentEpisode=stale → ref ≠ currentEpisode → fetch stale ep）
-    initPlayer(shortId, ep)
-    // ADR-160 AMENDMENT 2 Y-AMD2-1：派发 video fetch 源 — server-side hydrated 或 client fetch
-    const videoPromise = initialVideo
-      ? Promise.resolve<ApiResponse<Video>>({ data: initialVideo })
+    const token = ++initTokenRef.current
+    // initPlayer 重置 activeLineKey=null + 对齐 currentEpisode（URL ep 优先）
+    initPlayer(shortId, desiredEp)
+
+    // initial props 仅当对应当前 shortId 时复用（防客户端切视频后命中 SSR stale 数据）
+    const canUseInitial = !!initialVideo && initialVideo.shortId === shortId
+    const videoPromise: Promise<ApiResponse<Video>> = canUseInitial
+      ? Promise.resolve({ data: initialVideo! })
       : apiClient.get<ApiResponse<Video>>(`/videos/${shortId}`, { skipAuth: true })
-    // sources 仅当 ep === 第 1 集 + 有 initialSources 时复用（Y-AMD2-2 episode 切换走 client）
-    const useInitialSources = !!initialSources && ep === 1
-    videoPromise
-      .then((res) => {
-        setVideo(res.data)
-        // Promise.resolve 用宽松 shape（{ data }）匹配 ApiListResponse 子集；then 仅消费 r.data
-        const sourcesPromise: Promise<{ data: VideoSource[] }> = useInitialSources
-          ? Promise.resolve({ data: initialSources! })
-          : apiClient.get<ApiListResponse<VideoSource>>(
-              `/videos/${shortId}/sources?episode=${ep}`,
-              { skipAuth: true }
-            )
-        sourcesPromise
-          .then((r) => {
-            // stale check：用户在 fetch 期间切集 → episode 不再是 initial ep → 丢弃响应，让 episode-switch effect 拉最新 ep
-            if (ep !== usePlayerStore.getState().currentEpisode) {
-              fetchedEpisodeRef.current = null
-              return
-            }
-            // CHG-353：按主题赋标签（后端已按 effective_score 排序 / CHG-352）
-            // CHG-369 Codex #11：原始 sources 同步写入 ref，使主题切换可重新 relabel
-            // CHG-369 Codex #12：用 routeThemeRef.current 而非 closure capture，
-            // 防 fetch 进行中用户切主题 → fetch 完成时用旧主题覆盖最新选择
-            rawSourcesRef.current = r.data
-            const newSources = buildThemedSources(r.data, routeThemeRef.current)
-            setSources(newSources)
-            // Restore source index from snapshot (initPlayer already zeroed it)
-            setActiveSourceIndex(priorSourceIndex < newSources.length ? priorSourceIndex : 0)
-            // mini→full：仅设 startTime 让 video 暂停在 priorTime，不 autoplay
-            // 不调 clearProgress，让 ResumePrompt 自然弹出，由用户点击继续触发 user-gesture
-            // （否则 player-core useSourceLoader 在 autoplay 失败时会自动 muted=true 重试，造成静音 bug）
-            // 未来共享 video 实例落地后再做无缝衔接
-            if (priorTime > 30) {
-              setStartTime(priorTime)
-              setPlayerVersion((v) => v + 1)
-            }
-          })
-          .catch(() => {
-            // sources 失败的 stale check 同 then 分支
-            if (ep !== usePlayerStore.getState().currentEpisode) {
-              fetchedEpisodeRef.current = null
-              return
-            }
-            setSources([])
-          })
+    const sourcesPromise: Promise<{ data: VideoSource[] }> = canUseInitial && initialSources
+      ? Promise.resolve({ data: initialSources })
+      : apiClient.get<ApiListResponse<VideoSource>>(`/videos/${shortId}/sources`, { skipAuth: true })
+
+    Promise.all([videoPromise, sourcesPromise])
+      .then(([vRes, sRes]) => {
+        if (token !== initTokenRef.current) return  // shortId stale-check（切视频丢弃旧响应）
+        setVideo(vRes.data)
+        const matrix = buildLineMatrix(sRes.data ?? [])
+        setLineMatrix(matrix)
+        setDeadLineKeys(new Set())
+        // 选线路：同视频沿用 priorLineKey（存在于矩阵）/ 否则最优线路（首条，复用后端排序）
+        const restoredLine =
+          (priorLineKey ? matrix.find((l) => l.key === priorLineKey) : undefined) ?? matrix[0]
+        setActiveLineKey(restoredLine?.key ?? null)
+        // 收敛集：活跃线路不含 desiredEp → 该线路第 1 集（用户裁定）
+        if (restoredLine && !restoredLine.episodes.has(desiredEp)) {
+          const firstEp = restoredLine.episodeNumbers[0]
+          if (firstEp !== undefined && firstEp !== desiredEp) setEpisode(firstEp)
+        }
+        // mini→full：设 startTime 让 video 暂停在 priorTime，不 autoplay（ResumePrompt 自然弹出）
+        if (priorTime > 30) {
+          setStartTime(priorTime)
+          setPlayerVersion((v) => v + 1)
+        }
       })
-      .catch(() => setVideo(null))
-      .finally(() => setLoading(false))
-    // 技术债(NEW-P0-B)：依赖故意收敛到 shortId，initPlayer/searchParams 等引用稳定引用
-    // 修复方案：提取 fetchVideoAndSources(shortId, ep) 为 useCallback 后移除此 disable
+      .catch(() => {
+        if (token !== initTokenRef.current) return
+        setVideo((prev) => (canUseInitial ? prev : null))
+        setLineMatrix([])
+      })
+      .finally(() => {
+        if (token === initTokenRef.current) setLoading(false)
+      })
+    // 依赖收敛到 shortId：initPlayer/searchParams/setEpisode 等引用稳定；切视频由 shortId 变化重跑
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shortId])
 
-  useEffect(() => {
-    if (!shortId || !video) return
-    // 直接读 store 最新 currentEpisode / 避免 closure capture 的 stale 值（useEffect 1 同步 initPlayer
-    // 改 store 不会触发 re-render → effect closure 仍是 mount render 时的旧 ep / 会触发 stale fetch）
-    const latestEpisode = usePlayerStore.getState().currentEpisode
-    // fetchedEpisodeRef === latestEpisode → 已 fetch / 正在 fetch（初始 useEffect 已 claim）→ 跳过避免双拉；
-    // 不等 → 用户切集（或在初始 fetch 期间已切但被 stale 丢弃），claim 当前 ep 再 fetch
-    if (fetchedEpisodeRef.current === latestEpisode) return
-    fetchedEpisodeRef.current = latestEpisode
-    setStartTime(undefined)
-    const targetEp = latestEpisode
-    apiClient
-      .get<ApiListResponse<VideoSource>>(
-        `/videos/${shortId}/sources?episode=${targetEp}`,
-        { skipAuth: true }
-      )
-      .then((res) => {
-        // stale check：fetch 期间用户又切集 → 丢弃响应让下次 effect 接手
-        if (targetEp !== usePlayerStore.getState().currentEpisode) return
-        // CHG-353：切集后重新按主题赋标签（保持与初始 fetch 一致）
-        // CHG-369 Codex #11：同步写入 ref，使主题切换可重新 relabel
-        // CHG-369 Codex #12：用 routeThemeRef.current 而非 closure capture（同初始 fetch）
-        // CHG-369 Codex #13：用 raw sourceName 跨集数稳定匹配，替代 label（label 是主题派生
-        // 不稳定 — 若用户在 fetch 期间切主题 → relabel effect 改写 sources label →
-        // closure 中读 sources[i]?.label 与新数组 label 都失配 → 重置为 0 ❌）
-        // matchActiveSourceIndex 必须在覆盖 ref 前调用（用上一集 raw sources 做 prev key）
-        const matched = matchActiveSourceIndex(rawSourcesRef.current, activeSourceIndex, res.data)
-        rawSourcesRef.current = res.data
-        const newSources = buildThemedSources(res.data, routeThemeRef.current)
-        setSources(newSources)
-        setActiveSourceIndex(matched)
-      })
-      .catch(() => {
-        // stale 时不能复位 ref（已被后续 effect 占用）；否则会让用户切回该 ep 时无法重拉
-        if (targetEp === usePlayerStore.getState().currentEpisode) {
-          fetchedEpisodeRef.current = null
-        }
-      })
-    // 技术债(NEW-P0-B)：依赖收敛到 currentEpisode + video；sources/activeSourceIndex 通过闭包读取快照
-    // video 加入依赖：兜住 "在初始 sources fetch 期间切集" 时序（video 变化触发 effect 重跑 → ref 判定 fetch 最新 ep）
-    // 修复方案：改用 useRef(sources)/useRef(activeSourceIndex) 读取最新值，移除此 disable
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentEpisode, video])
+  // ── 派生（线路优先）────────────────────────────────────────────
+  const isTheater = mode === 'theater'
+  const activeLineIndex = lineMatrix.length > 0
+    ? Math.max(0, lineMatrix.findIndex((l) => l.key === activeLineKey))
+    : -1
+  const activeLine: VideoLine | undefined =
+    activeLineIndex >= 0 ? lineMatrix[activeLineIndex] : undefined
+  const episodeNumbers = activeLine?.episodeNumbers ?? []
+  const activeSrc = activeLine?.episodes.get(currentEpisode)?.sourceUrl ?? ''
+  const hasEpisodes = episodeNumbers.length > 1
+  const hasSources = lineMatrix.length > 0
+  const activeEpisodeIndex = episodeNumbers.indexOf(currentEpisode)
+  const nextEpisode = activeEpisodeIndex >= 0 ? episodeNumbers[activeEpisodeIndex + 1] : undefined
+  const hasNext = nextEpisode !== undefined
+  const inlineEpisodes = getInlineEpisodes(isTheater, episodeNumbers)
 
-  // CHG-369 Codex stop-time review #11：主题切换后重新 relabel 已加载的 sources
-  // 不重新 fetch（rawSourcesRef 已存最新原始数据 / 仅 label / isDead / isPending 重算）
-  // activeSourceIndex 保持不变（用户切主题不应改变正在播放的线路）
-  useEffect(() => {
-    if (rawSourcesRef.current.length === 0) return
-    setSources(buildThemedSources(rawSourcesRef.current, routeTheme))
-  }, [routeTheme])
+  // CHG-353：SourceBar 线路标签按主题派生（每线路代表源喂 buildThemedLines）；
+  // 运行时报错 dead 的线路合并 isDead（黄线 3：themed dead/pending 用代表源口径）
+  const baseThemedLines = useMemo(
+    () => buildThemedLines(lineMatrix, routeTheme),
+    [lineMatrix, routeTheme],
+  )
+  const themedLines = useMemo(
+    () =>
+      baseThemedLines.map((s, i) => {
+        const key = lineMatrix[i]?.key
+        return key && deadLineKeys.has(key) ? { ...s, isDead: true } : s
+      }),
+    [baseThemedLines, deadLineKeys, lineMatrix],
+  )
+
+  // 闭包/watchdog 读取最新值的 ref（避免 stale；lineMatrix 加载后稳定）
+  const lineMatrixRef = useRef(lineMatrix)
+  lineMatrixRef.current = lineMatrix
+  const activeLineIndexRef = useRef(activeLineIndex)
+  activeLineIndexRef.current = activeLineIndex
+  const activeLineRef = useRef<VideoLine | undefined>(activeLine)
+  activeLineRef.current = activeLine
+  const deadLineKeysRef = useRef(deadLineKeys)
+  deadLineKeysRef.current = deadLineKeys
+  const videoIdRef = useRef<string | null>(video?.id ?? null)
+  videoIdRef.current = video?.id ?? null
 
   const handleTimeUpdate = useCallback(
     (t: number, d: number) => {
@@ -279,37 +232,41 @@ export function PlayerShell({ slug: slugProp, portalMode = false, previewMode = 
   )
 
   const handleTheaterChange = useCallback(
-    (isTheater: boolean) => {
-      setMode(isTheater ? 'theater' : 'default')
+    (theater: boolean) => {
+      setMode(theater ? 'theater' : 'default')
     },
     [setMode]
   )
 
-  const handleEpisodeChange = useCallback(
-    (index: number) => {
-      setEpisode(index + 1)
+  // 选集（活跃线路内，网格仅列该线路有的集 → 恒有效）
+  const handleEpisodeSelect = useCallback(
+    (ep: number) => {
+      setEpisode(ep)
+      setStartTime(undefined)
     },
     [setEpisode]
   )
 
-  // CHG-SN-9-PLAYER-ERROR-CONSUMER-B / Wave 4 #3 + RETRY-CONTROL-EP / Wave 4 #4-EP / ADR-166 Y-166-3：
-  //  - 失败上报 /v1/feedback/playback (受 isPlaybackFeedbackEnabled(previewMode) 守卫)
-  //  - per-(sourceId, errorCode) 去抖 防 fatal 反复触发刷流量 + redis fb:fail:* 干扰
-  //  - R-N-3 警告闭环：不使用 event.src 做匹配键；用 activeSourceIndex 关联外部 React state
-  //
-  //  ADR-166 §6.4 / Y-166-3 retry 策略（Wave 4 #4-EP）：
-  //    - 首次 fatal：同 tick 调 controls.retry() + retryAttemptedSetRef 记 failedIdx + 启动 3s watchdog
-  //    - watchdog 内 onPlay 成功 → cancel + 清 retryAttemptedSet → 视为本地 retry 修好
-  //    - watchdog 内再 fatal → cancel watchdog + 立即切线（标 dead + 环形扫 + 上报）
-  //    - watchdog 超时（3s 无 onPlay 无 fatal）→ 视为 retry 卡死 → 主动切线
-  const retryAttemptedSetRef = useRef<Set<number>>(new Set())
+  // 切线路：setActiveLineKey；新线路不含当前集 → 收敛到该线路第 1 集（用户裁定）
+  const handleLineChange = useCallback(
+    (index: number) => {
+      const line = lineMatrix[index]
+      if (!line) return
+      setActiveLineKey(line.key)
+      setStartTime(undefined)
+      if (!line.episodes.has(currentEpisode)) {
+        const firstEp = line.episodeNumbers[0]
+        if (firstEp !== undefined) setEpisode(firstEp)
+      }
+      setPlayerVersion((v) => v + 1)
+    },
+    [lineMatrix, currentEpisode, setActiveLineKey, setEpisode]
+  )
+
+  // ── 报错驱动切换（ADR-166 watchdog/retry 沿用；线路键化）──────────
+  const retryAttemptedSetRef = useRef<Set<string>>(new Set())
   const watchdogTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const errorReportedRef = useRef<Set<string>>(new Set())
-  // SRCHEALTH-P2-1 / F1：success 上报 per-sourceId 去抖。
-  //  - onPlay 在 pause→resume / seek 后会重复触发，"首播成功"语义 = 每 sourceId 仅消费首个 onPlay
-  //  - 采样未中也记入：每个 source 的首播事件恰好掷一次骰；否则后续 onPlay 反复掷骰会逼近全量上报，破坏 1/N 语义
-  //  - 不随切集/切视频清空：sourceId 是 video_sources 行级 UUID（跨集/跨视频天然不同），与 errorReportedRef 同范式（会话级）
-  //  - 后端 (ipHash, sourceId) 每分钟 1 次 rate-limit 为第二层兜底（apps/api feedback.ts）
   const successReportedRef = useRef<Set<string>>(new Set())
 
   const clearWatchdog = useCallback(() => {
@@ -319,110 +276,104 @@ export function PlayerShell({ slug: slugProp, portalMode = false, previewMode = 
     }
   }, [])
 
-  // 切线 + 标 dead + feedback POST（提到 handlePlayerError 外便于 watchdog 复用）
+  // 切线 + 标 dead + feedback POST（环形扫描"含当前集且非 dead"的其它线路，保持同集换线）
   const switchAwayFromFailedSource = useCallback(
-    (failedIdx: number, failedRawSourceId: string | null, errorCode: string) => {
-      setSources(prev =>
-        prev.map((s, i) => (i === failedIdx ? { ...s, isDead: true } : s)),
-      )
-      const total = sources.length
+    (failedLineIndex: number, failedLineKey: string, failedSourceId: string | null, errorCode: string) => {
+      setDeadLineKeys((prev) => {
+        const next = new Set(prev)
+        next.add(failedLineKey)
+        return next
+      })
+      const matrix = lineMatrixRef.current
+      const ep = usePlayerStore.getState().currentEpisode
+      const dead = new Set(deadLineKeysRef.current)
+      dead.add(failedLineKey)
+      const total = matrix.length
       let next: number | null = null
       for (let step = 1; step < total; step++) {
-        const candidate = (failedIdx + step) % total
-        const candidateSource = sources[candidate]
-        if (candidateSource && !candidateSource.isDead && !candidateSource.isPending) {
-          next = candidate
+        const cand = (failedLineIndex + step) % total
+        const line = matrix[cand]
+        if (line && !dead.has(line.key) && line.episodes.has(ep)) {
+          next = cand
           break
         }
       }
       if (next !== null) {
-        setActiveSourceIndex(next)
-        setPlayerVersion(v => v + 1)
+        setActiveLineKey(matrix[next]!.key)
+        setPlayerVersion((v) => v + 1)
       }
       // feedback 上报 — 受 previewMode 守卫 + per-(sourceId, errorCode) 去抖 + 需要 sourceId
       if (!isPlaybackFeedbackEnabled(previewMode)) return
-      if (!video || !failedRawSourceId) return
-      const dedupeKey = `${failedRawSourceId}|${errorCode}`
+      const videoId = videoIdRef.current
+      if (!videoId || !failedSourceId) return
+      const dedupeKey = `${failedSourceId}|${errorCode}`
       if (errorReportedRef.current.has(dedupeKey)) return
       errorReportedRef.current.add(dedupeKey)
       void apiClient
-        .post('/feedback/playback', {
-          videoId: video.id,
-          sourceId: failedRawSourceId,
-          success: false,
-          errorCode,
-        })
+        .post('/feedback/playback', { videoId, sourceId: failedSourceId, success: false, errorCode })
         .catch(() => {
           // fire-and-forget；后端 5xx 不阻断切线
         })
     },
-    [sources, video, previewMode, setActiveSourceIndex],
+    [previewMode, setActiveLineKey]
   )
 
   const handlePlayerError = useCallback(
     (event: PlayerErrorPayload, controls?: { retry: () => void }) => {
-      const failedIdx = activeSourceIndex
-      const failedRawSource = rawSourcesRef.current[failedIdx]
-      const failedRawSourceId = failedRawSource?.id ?? null
+      const failedLineIndex = activeLineIndexRef.current
+      const line = activeLineRef.current
+      const failedLineKey = line?.key ?? ''
+      const ep = usePlayerStore.getState().currentEpisode
+      const failedSourceId = line?.episodes.get(ep)?.id ?? null
 
-      // 首次 fatal → 调 controls.retry 在 onError 同 tick（ADR-166 R-166-2 active 守卫合法窗口）+ 启动 watchdog
-      if (controls && !retryAttemptedSetRef.current.has(failedIdx)) {
-        retryAttemptedSetRef.current.add(failedIdx)
+      // 首次 fatal → 同 tick 调 controls.retry + 启 watchdog（ADR-166 R-166-2）
+      if (controls && failedLineKey && !retryAttemptedSetRef.current.has(failedLineKey)) {
+        retryAttemptedSetRef.current.add(failedLineKey)
         controls.retry()
         clearWatchdog()
         watchdogTimerRef.current = setTimeout(() => {
-          // 3s 无 onPlay 也无 fatal → retry 卡死 → 主动切线
           watchdogTimerRef.current = null
-          switchAwayFromFailedSource(failedIdx, failedRawSourceId, event.code)
+          switchAwayFromFailedSource(failedLineIndex, failedLineKey, failedSourceId, event.code)
         }, 3000)
         return
       }
 
-      // 第二次 fatal（或无 controls 边界）→ cancel watchdog + 立即切线
+      // 第二次 fatal（或无 controls）→ cancel watchdog + 立即切线
       clearWatchdog()
-      switchAwayFromFailedSource(failedIdx, failedRawSourceId, event.code)
+      switchAwayFromFailedSource(failedLineIndex, failedLineKey, failedSourceId, event.code)
     },
-    [activeSourceIndex, clearWatchdog, switchAwayFromFailedSource],
+    [clearWatchdog, switchAwayFromFailedSource]
   )
 
-  // onPlay 成功 → cancel watchdog + 清 retry 计数 / 视为本地 retry 修好
-  // SRCHEALTH-P2-1 / F1：附带首播成功上报 success:true（守卫与去抖语义见 successReportedRef 声明处注释）
+  // onPlay 成功 → cancel watchdog + 清该线路 retry 计数 + 首播成功上报
   const handlePlaySuccess = useCallback(() => {
     setPlaying(true)
     clearWatchdog()
-    retryAttemptedSetRef.current.delete(activeSourceIndex)
+    const line = activeLineRef.current
+    if (line) retryAttemptedSetRef.current.delete(line.key)
     if (!isPlaybackFeedbackEnabled(previewMode)) return
-    const playedRawSourceId = rawSourcesRef.current[activeSourceIndex]?.id
-    if (!video || !playedRawSourceId) return
-    if (successReportedRef.current.has(playedRawSourceId)) return
-    successReportedRef.current.add(playedRawSourceId)
+    const ep = usePlayerStore.getState().currentEpisode
+    const playedId = line?.episodes.get(ep)?.id
+    const videoId = videoIdRef.current
+    if (!videoId || !playedId) return
+    if (successReportedRef.current.has(playedId)) return
+    successReportedRef.current.add(playedId)
     if (!shouldReportPlaySuccess(getSuccessSampleN())) return
     void apiClient
-      .post('/feedback/playback', {
-        videoId: video.id,
-        sourceId: playedRawSourceId,
-        success: true,
-      })
+      .post('/feedback/playback', { videoId, sourceId: playedId, success: true })
       .catch(() => {
-        // fire-and-forget；与失败上报同范式，后端异常不影响播放
+        // fire-and-forget
       })
-  }, [setPlaying, clearWatchdog, activeSourceIndex, previewMode, video])
+  }, [setPlaying, clearWatchdog, previewMode])
 
-  // activeSourceIndex 变化（切线 / 用户手动选）→ cancel 任何 pending watchdog 防 stale 触发
+  // 切线路（activeLineKey 变化）→ cancel 任何 pending watchdog 防 stale 触发
   useEffect(() => {
     return () => clearWatchdog()
-  }, [activeSourceIndex, clearWatchdog])
+  }, [activeLineKey, clearWatchdog])
 
-  // currentEpisode / shortId 变化（用户切集 OR 切视频）→ cancel watchdog + 清空 retry 计数
-  //   - FIX-2：currentEpisode 变化（切集 / 同视频不同集）
-  //   - FIX-3：shortId 变化（切视频 / 即"同一集索引但不同视频"场景 / Codex stop-time review 2nd）
-  // 否则旧上下文 watchdog 闭包持有 failedIdx + failedRawSourceId / 3s 后会在新集/新视频 sources 上：
-  //   ① 误标 dead（旧 idx 映射到新 sources 数组指向无关 source）
-  //   ② 误切线（环形扫新 sources / 用户选择本意被破坏）
-  //   ③ 用 stale failedRawSourceId POST feedback（旧视频 source 的失败被错记到当前会话）
-  // shortId 优于 video?.id：shortId 同步从 slug prop 派生 / 切视频时立即变化；video.id 要等 fetch 完成
-  // retryAttemptedSetRef 同步清空：新上下文的 idx 应允许新一轮独立 retry 不继承旧上下文"已尝试"状态
+  // 切集 / 切视频 → cancel watchdog + 清 retry 计数 + 重置 dead（同线路他集可重试）
   useEffect(() => {
+    setDeadLineKeys(new Set())
     return () => {
       clearWatchdog()
       retryAttemptedSetRef.current.clear()
@@ -433,14 +384,6 @@ export function PlayerShell({ slug: slugProp, portalMode = false, previewMode = 
   useEffect(() => {
     return () => clearWatchdog()
   }, [clearWatchdog])
-
-  // hasEpisodes / hasSources 必须在 useEffect 前声明，避免 TDZ 风险并确保依赖数组可直接引用
-  const isTheater = mode === 'theater'
-  const activeSrc = sources[activeSourceIndex]?.src ?? ''
-  const hasEpisodes = !!video && video.episodeCount > 1
-  const hasSources = sources.length > 0
-  const inlineEpisodes = getInlineEpisodes(isTheater, video?.episodeCount ?? 0)
-  const hasNext = !!video && video.episodeCount > 1 && currentEpisode < video.episodeCount
 
   useEffect(() => {
     if (hasEpisodes && activePanelTab !== 'episodes' && !hasSources) {
@@ -536,20 +479,19 @@ export function PlayerShell({ slug: slugProp, portalMode = false, previewMode = 
           </div>
         )}
 
-        {/* 选集网格：gap/maxHeight 使用 player tokens */}
+        {/* 选集网格：渲染活跃线路实际集号（PLAYER-LINE-BOUND-EP / 非连续集号安全） */}
         {hasEpisodes && activePanelTab === 'episodes' ? (
           <div
             className="p-2 grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-4 xl:grid-cols-5 overflow-y-auto scrollbar-thin"
             style={{ gap: 'var(--player-ep-gap)', maxHeight: 'var(--player-panel-max-h)' }}
           >
-            {Array.from({ length: video!.episodeCount }).map((_, i) => {
-              const epNum = i + 1
+            {episodeNumbers.map((epNum) => {
               const isActive = currentEpisode === epNum
               return (
                 <button
                   key={epNum}
                   type="button"
-                  onClick={() => setEpisode(epNum)}
+                  onClick={() => handleEpisodeSelect(epNum)}
                   className="flex items-center justify-center text-sm rounded transition-colors"
                   style={{
                     height: 'var(--player-ep-h)',
@@ -569,7 +511,6 @@ export function PlayerShell({ slug: slugProp, portalMode = false, previewMode = 
 
         {hasSources && activePanelTab === 'sources' ? (
           <div className="p-2">
-            {/* CHG-369 / plan §17.2 #16：主题选择器 + localStorage 持久化 + CHG-369-B 自定义主题 + ADR-165 跨设备同步 syncing disable */}
             <RouteThemeSelector
               currentTheme={routeTheme}
               customTheme={customTheme}
@@ -579,9 +520,9 @@ export function PlayerShell({ slug: slugProp, portalMode = false, previewMode = 
             />
             <div className="rounded-md overflow-hidden" style={{ background: 'var(--bg-surface-sunken)' }}>
               <SourceBar
-                sources={sources}
-                activeIndex={activeSourceIndex}
-                onSourceChange={setActiveSourceIndex}
+                sources={themedLines}
+                activeIndex={activeLineIndex}
+                onSourceChange={handleLineChange}
               />
             </div>
           </div>
@@ -630,7 +571,7 @@ export function PlayerShell({ slug: slugProp, portalMode = false, previewMode = 
             >
               {video.title}
             </Link>
-            {video.episodeCount > 1 && (
+            {hasEpisodes && (
               <span className="ml-2 font-medium text-lg" style={{ color: 'var(--fg-muted)' }}>
                 第 {currentEpisode} 集
               </span>
@@ -664,13 +605,20 @@ export function PlayerShell({ slug: slugProp, portalMode = false, previewMode = 
               {activeSrc ? (
                 <>
                   <VideoPlayer
-                    key={`player-${shortId}-${currentEpisode}-${activeSourceIndex}-${playerVersion}`}
+                    key={`player-${shortId}-${currentEpisode}-${activeLineIndex}-${playerVersion}`}
                     src={activeSrc}
                     title={video.title}
                     episodes={inlineEpisodes}
-                    activeEpisodeIndex={currentEpisode - 1}
-                    onEpisodeChange={inlineEpisodes ? handleEpisodeChange : undefined}
-                    onNext={hasNext ? () => setEpisode(currentEpisode + 1) : undefined}
+                    activeEpisodeIndex={activeEpisodeIndex}
+                    onEpisodeChange={
+                      inlineEpisodes
+                        ? (index: number) => {
+                            const ep = episodeNumbers[index]
+                            if (ep !== undefined) handleEpisodeSelect(ep)
+                          }
+                        : undefined
+                    }
+                    onNext={hasNext ? () => handleEpisodeSelect(nextEpisode!) : undefined}
                     onTimeUpdate={handleTimeUpdate}
                     onPlay={handlePlaySuccess}
                     onPause={() => setPlaying(false)}
@@ -698,11 +646,11 @@ export function PlayerShell({ slug: slugProp, portalMode = false, previewMode = 
                 >
                   <span className="text-4xl">▶</span>
                   <span className="text-sm">{video.title}</span>
-                  {video.episodeCount > 1 && (
+                  {hasEpisodes && (
                     <span className="text-xs">第 {currentEpisode} 集</span>
                   )}
                   <span className="text-xs mt-1">
-                    {sources.length === 0 ? '暂无可用播放源' : '播放源暂时不可用，请切换线路'}
+                    {lineMatrix.length === 0 ? '暂无可用播放源' : '播放源暂时不可用，请切换线路'}
                   </span>
                 </div>
               )}

@@ -1,21 +1,22 @@
 /**
- * player-shell-hydration.test.tsx — CHG-361-E3 / ADR-160 AMENDMENT 2 D-160-AMD2-3
+ * player-shell-hydration.test.tsx — PLAYER-LINE-BOUND-EP（重写）/ ADR-160 AMENDMENT 2 D-160-AMD2-3
  *
- * 覆盖 PlayerShell initialVideo + initialSources props 的 server-side hydration 行为：
- * - 有 initialVideo → 跳过 client video fetch（apiClient.get videos 不调）
- * - 无 initialVideo → 走 client video fetch（apiClient.get videos 调 1 次）
- * - 有 initialSources + ep=1 → 跳过 sources fetch（仅 1 次 apiClient.get）
- * - 有 initialVideo + 无 initialSources → sources 仍走 client fetch
+ * 线路优先模型下的 server-side hydration 拉取行为：
+ * - initialVideo + initialSources（shortId 匹配）→ 完全跳过 client fetch
+ * - 无 initialVideo → 走 client video fetch + 全集 sources fetch
+ * - initialVideo + 无 initialSources → sources 走 client fetch `/sources`（省略 episode / 取全集）
+ * - initialVideo.shortId ≠ 当前 shortId → 不复用 stale props，client 全拉（防客户端切视频命中 SSR stale）
+ *
+ * 关键：新模型一次拉全集源（`/sources` 无 `?episode`），不再 per-episode 重拉。
+ * line-matrix / line-display-name 为纯函数，本测试直接用真实实现（无需 mock）。
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
-// dynamic VideoPlayer mock：避免 SSR-only import
 vi.mock('next/dynamic', () => ({
   default: () => () => null,
 }))
 
-// next/navigation mock
 const searchParamsGet = vi.fn().mockReturnValue(null)
 vi.mock('next/navigation', () => ({
   useSearchParams: () => ({ get: searchParamsGet }),
@@ -25,15 +26,11 @@ vi.mock('next-intl', () => ({
   useLocale: () => 'zh-CN',
 }))
 
-// playerStore + apiClient mock — vi.hoisted 保证在 vi.mock 工厂之前初始化
-// mockState 暴露为可变，模拟切集时由测试代码改写 currentEpisode + rerender 触发 episode-switch effect
-// initPlayer mock 真实改 mockState.{shortId,currentEpisode}（模拟生产 store action 语义 / 否则
-// 测试看不到 store.currentEpisode 对齐到 URL ep / Codex stop-time review #3 必需）
 const { initPlayerMock, apiGetMock, mockState } = vi.hoisted(() => {
   const state = {
     mode: 'default',
     currentEpisode: 1,
-    activeSourceIndex: 0,
+    activeLineKey: null as string | null,
     shortId: '',
     currentTime: 0,
     setMode: vi.fn(),
@@ -41,7 +38,7 @@ const { initPlayerMock, apiGetMock, mockState } = vi.hoisted(() => {
       state.shortId = shortId
       state.currentEpisode = ep
       state.currentTime = 0
-      state.activeSourceIndex = 0
+      state.activeLineKey = null
     }),
     setEpisode: vi.fn((ep: number) => {
       state.currentEpisode = ep
@@ -49,8 +46,8 @@ const { initPlayerMock, apiGetMock, mockState } = vi.hoisted(() => {
     setPlaying: vi.fn(),
     setCurrentTime: vi.fn(),
     setDuration: vi.fn(),
-    setActiveSourceIndex: vi.fn((i: number) => {
-      state.activeSourceIndex = i
+    setActiveLineKey: vi.fn((k: string | null) => {
+      state.activeLineKey = k
     }),
     hostOrigin: null,
   }
@@ -69,38 +66,20 @@ vi.mock('@/stores/playerStore', () => {
 })
 
 vi.mock('@/lib/api-client', () => ({
-  apiClient: { get: apiGetMock },
+  apiClient: { get: apiGetMock, post: vi.fn() },
 }))
 
-// brand / route 工具
 vi.mock('@/lib/video-route', () => ({
   getVideoDetailHref: () => '/movie/test-slug-aB3kR9x1',
-}))
-
-vi.mock('@/lib/line-display-name', () => ({
-  applyThemeLabels: (arr: unknown[]) => arr.map(() => ({ themeLabel: 'L1', isDead: false, isPending: false })),
-  buildLineDisplayName: () => 'L1',
-  deduplicateLabels: (arr: unknown[]) => arr,
-  getDefaultTheme: () => ({ labels: ['立春'], deadLabel: '已断', pendingLabel: '未测' }),
-  // PlayerShell.tsx 静态 import buildThemedSources / matchActiveSourceIndex（line 12）→
-  // 不在 mock 中提供时，vitest 严格代理在被访问的瞬间抛 "No export defined"。
-  matchActiveSourceIndex: () => 0,
-  buildThemedSources: (raw: Array<{ sourceUrl: string; type: string }>) =>
-    (raw ?? []).map((s) => ({ src: s.sourceUrl, type: s.type, label: 'L1' })),
 }))
 
 vi.mock('@/lib/short-id', () => ({
   extractShortId: (slug: string) => slug.split('-').pop() ?? slug,
 }))
 
-// useRouteTheme mock（ADR-165 / CHG-SN-9-ROUTE-LABEL-D-A2）：
-// 真 hook 内部 useUserPreferencesSync 会在 mount 时 apiClient.get('/users/me/preferences')，
-// 会污染本测试"apiClient.get 仅 videos/sources"的断言（甚至在 apiGetMock 无 implementation 时
-// .then 于 undefined 上崩溃）。本测试只关心 fetch 行为，故 stub 掉主题/偏好同步子系统。
+// useRouteTheme：本测试只关心 fetch 行为，stub 主题/偏好同步子系统（提供有效 RouteTheme 供真实 buildThemedLines 消费）
 vi.mock('@/lib/route-theme-storage', () => {
-  // 稳定引用：与真 hook（useState）一致，theme 标识不每次 render 变 → 不重复触发
-  // PlayerShell 主题切换 effect（line 249）。否则 routeTheme 每渲染换引用会反复 relabel。
-  const theme = { id: 'jie_qi', displayName: '节气', labels: ['立春'], deadLabel: '已断', fallbackPrefix: '线路' }
+  const theme = { id: 'jie_qi', displayName: '节气', labels: ['立春', '雨水'], deadLabel: '已断', fallbackPrefix: '线路' }
   const noop = () => {}
   return {
     useRouteTheme: () => ({
@@ -114,17 +93,14 @@ vi.mock('@/lib/route-theme-storage', () => {
   }
 })
 
-// SourceBar / ResumePrompt / playerShell.layout 等 UI 组件简化 mock
 vi.mock('@/components/player/SourceBar', () => ({ SourceBar: () => null }))
-// RouteThemeSelector：本测试只关心 fetch 行为，不渲染主题选择器 UI（其内部 import
-// ALL_THEMES / route-theme-storage 命名导出，本测试均已精简 mock → 渲染会触发严格代理报错）
 vi.mock('@/components/player/RouteThemeSelector', () => ({ RouteThemeSelector: () => null }))
 vi.mock('@/components/player/ResumePrompt', () => ({
   ResumePrompt: () => null,
   saveProgress: vi.fn(),
 }))
 vi.mock('@/components/player/playerShell.layout', () => ({
-  getInlineEpisodes: () => null,
+  getInlineEpisodes: () => undefined,
   getPlayerLayoutClass: () => '',
   getSidePanelClass: () => '',
 }))
@@ -176,21 +152,18 @@ const MOCK_SOURCE: VideoSource = {
   type: 'hls',
   episodeNumber: 1,
   isActive: true,
+  effectiveScore: 0.8,
 } as unknown as VideoSource
 
-describe('PlayerShell server-side hydration (ADR-160 AMENDMENT 2 D-160-AMD2-3)', () => {
+describe('PlayerShell hydration（PLAYER-LINE-BOUND-EP / 线路优先一次拉全集）', () => {
   beforeEach(() => {
-    // 用 mockClear（仅清 calls）避免清掉 initPlayer/setEpisode/setActiveSourceIndex 的 implementation；
-    // 这些 mock 持有真实修改 mockState 的 fn，被 mockReset 会让 store action 失效
     initPlayerMock.mockClear()
-    apiGetMock.mockClear()
-    apiGetMock.mockReset() // apiGetMock 没有持久 implementation / 安全 reset
+    apiGetMock.mockReset()
     searchParamsGet.mockReset()
     searchParamsGet.mockReturnValue(null)
-    // 完整复位 mockState（避免 case 间 shortId/episode 污染）
     mockState.mode = 'default'
     mockState.currentEpisode = 1
-    mockState.activeSourceIndex = 0
+    mockState.activeLineKey = null
     mockState.shortId = ''
     mockState.currentTime = 0
   })
@@ -199,111 +172,46 @@ describe('PlayerShell server-side hydration (ADR-160 AMENDMENT 2 D-160-AMD2-3)',
     cleanup()
   })
 
-  it('有 initialVideo + initialSources → 完全跳过 client fetch（apiClient.get 不调）', async () => {
+  it('有 initialVideo + initialSources（shortId 匹配）→ 完全跳过 client fetch', async () => {
     render(<PlayerShell slug="test-aB3kR9x1" initialVideo={MOCK_VIDEO} initialSources={[MOCK_SOURCE]} />)
     await waitFor(() => expect(initPlayerMock).toHaveBeenCalled())
     expect(apiGetMock).not.toHaveBeenCalled()
   })
 
-  it('无 initialVideo → 走 client video fetch（apiClient.get 至少调 1 次）', async () => {
-    apiGetMock.mockResolvedValue({ data: MOCK_VIDEO })
+  it('无 initialVideo → 走 client video fetch', async () => {
+    apiGetMock.mockImplementation((url: string) =>
+      url.includes('/sources') ? Promise.resolve({ data: [MOCK_SOURCE] }) : Promise.resolve({ data: MOCK_VIDEO })
+    )
     render(<PlayerShell slug="test-aB3kR9x1" />)
     await waitFor(() => expect(apiGetMock).toHaveBeenCalled())
     const calls = apiGetMock.mock.calls.map((c) => c[0] as string)
     expect(calls.some((url) => url.includes('/videos/aB3kR9x1') && !url.includes('/sources'))).toBe(true)
   })
 
-  it('有 initialVideo + 无 initialSources → 跳过 video fetch / sources 仅 1 次 client（防止双拉回归）', async () => {
+  it('有 initialVideo + 无 initialSources → sources 走 client fetch `/sources`（无 ?episode / 全集）', async () => {
     apiGetMock.mockResolvedValue({ data: [MOCK_SOURCE] })
     render(<PlayerShell slug="test-aB3kR9x1" initialVideo={MOCK_VIDEO} />)
     await waitFor(() => expect(apiGetMock).toHaveBeenCalled())
     const calls = apiGetMock.mock.calls.map((c) => c[0] as string)
-    // video fetch 不调（无 /sources 后缀的 video URL）
+    // 不调裸 video fetch
     expect(calls.some((url) => url.endsWith('/videos/aB3kR9x1'))).toBe(false)
-    // sources fetch 调（含 /sources?episode=1）
-    expect(calls.some((url) => url.includes('/sources?episode=1'))).toBe(true)
-    // 仅初始 fetch effect 拉一次，episode-switch effect 跳过首次挂载 → 共 1 次 sources fetch
-    expect(calls.filter((url) => url.includes('/sources?episode=')).length).toBe(1)
+    // 调 sources fetch（全集 / 无 ?episode）
+    expect(calls.some((url) => url.includes('/videos/aB3kR9x1/sources'))).toBe(true)
+    // 不再 per-episode 拉取
+    expect(calls.some((url) => url.includes('?episode='))).toBe(false)
+    // 仅 1 次 sources fetch（无双拉）
+    expect(calls.filter((url) => url.includes('/sources')).length).toBe(1)
   })
 
-  it('有 initialVideo + initialSources + url ep=2 → 仅 1 次 ep=2 fetch / 无 stale ep=1（Codex stop-time review #3 回归防御）', async () => {
-    apiGetMock.mockResolvedValue({ data: [MOCK_SOURCE] })
-    searchParamsGet.mockImplementation((key: string) => (key === 'ep' ? '2' : null))
-    render(<PlayerShell slug="test-aB3kR9x1" initialVideo={MOCK_VIDEO} initialSources={[MOCK_SOURCE]} />)
-    await waitFor(() => expect(initPlayerMock).toHaveBeenCalled())
-    await waitFor(() => {
-      const calls = apiGetMock.mock.calls.map((c) => c[0] as string)
-      expect(calls.some((url) => url.includes('/sources?episode=2'))).toBe(true)
-    })
+  it('initialVideo.shortId ≠ 当前 shortId → 不复用 stale props，client 全拉（切视频防 stale）', async () => {
+    apiGetMock.mockImplementation((url: string) =>
+      url.includes('/sources') ? Promise.resolve({ data: [MOCK_SOURCE] }) : Promise.resolve({ data: MOCK_VIDEO })
+    )
+    // initialVideo 是 aB3kR9x1，但当前路由 slug 是另一个 shortId
+    render(<PlayerShell slug="other-CCCCCCCC" initialVideo={MOCK_VIDEO} initialSources={[MOCK_SOURCE]} />)
+    await waitFor(() => expect(apiGetMock).toHaveBeenCalled())
     const calls = apiGetMock.mock.calls.map((c) => c[0] as string)
-    // ep=2 → 不复用 initialSources（仅 ep=1 时复用）
-    expect(calls.some((url) => url.includes('/sources?episode=2'))).toBe(true)
-    // 无 stale ep=1 fetch（修复前 initPlayer 在 .then 内 / useEffect 2 mount 时
-    // store.currentEpisode=stale 1 ≠ ref=2 → 错误 fetch ep=1）
-    expect(calls.some((url) => url.includes('/sources?episode=1'))).toBe(false)
-    // 整体 sources fetch 仅 1 次（mount 流程不应触发重复/stale fetch）
-    expect(calls.filter((url) => url.includes('/sources?episode=')).length).toBe(1)
-  })
-
-  it('初始 sources fetch 期间用户切集 → 切集不被吞掉（Codex stop-time review #2 回归防御）', async () => {
-    // 场景：用户公开访问 watch 页 → useEffect 1 启动 sources fetch for ep=1
-    // 在 sources promise resolve 之前，用户切到 ep=2 → useEffect 2 应触发 fetch for ep=2
-    // 修复前：fetchedEpisodeRef 在 sources 完成后才设 / 此期间 useEffect 2 看 ref=null 但
-    //         也不会因 sources 完成而重跑（依赖未变）→ 用户切集被吞掉
-    // 修复后：ref 在 useEffect 1 入口同步 claim = initial ep / useEffect 2 依赖 [currentEpisode, video] /
-    //         切集时 ref ≠ currentEpisode → fetch + claim 新 ep / 初始 sources stale check 丢弃旧响应
-    let resolveSources!: (val: unknown) => void
-    const sourcesPromise = new Promise((resolve) => {
-      resolveSources = resolve
-    })
-    apiGetMock.mockImplementation((url: string) =>
-      url.includes('/sources') ? sourcesPromise : Promise.resolve({ data: MOCK_VIDEO })
-    )
-
-    const { rerender } = render(<PlayerShell slug="test-aB3kR9x1" />)
-    // 等到 video fetch 完成（initPlayer 调用，sources fetch 已发起但未 resolve）
-    await waitFor(() => expect(initPlayerMock).toHaveBeenCalled())
-    await waitFor(() => {
-      const calls = apiGetMock.mock.calls.map((c) => c[0] as string)
-      expect(calls.some((url) => url.includes('/sources?episode=1'))).toBe(true)
-    })
-    apiGetMock.mockClear()
-    // 用户在 sources fetch 期间切到 ep=2
-    mockState.currentEpisode = 2
-    apiGetMock.mockImplementation(() => Promise.resolve({ data: [MOCK_SOURCE] }))
-    rerender(<PlayerShell slug="test-aB3kR9x1" />)
-    // 切集应触发 ep=2 fetch（不被吞掉）
-    await waitFor(() => {
-      const calls = apiGetMock.mock.calls.map((c) => c[0] as string)
-      expect(calls.some((url) => url.includes('/sources?episode=2'))).toBe(true)
-    })
-    // 旧的 ep=1 sources 现在 resolve → stale check 丢弃（不覆盖 ep=2 状态）
-    resolveSources({ data: [MOCK_SOURCE] })
-  })
-
-  it('非 hydrated + 首次切集 → episode-switch effect 正常 fetch（Codex stop-time review 回归防御）', async () => {
-    // 场景：用户公开访问 watch 页（无 initialVideo / initialSources）→ useEffect 1 完成
-    // 后用户切到 ep=2 → episode-switch effect 应触发 sources fetch（修复前 ref 错误时序
-    // 会让首次切集被跳过；修复后 ref 在 useEffect 1 sources 处理完成后设 true，确保首次切集正常）
-    apiGetMock.mockImplementation((url: string) =>
-      url.includes('/sources')
-        ? Promise.resolve({ data: [MOCK_SOURCE] })
-        : Promise.resolve({ data: MOCK_VIDEO })
-    )
-    const { rerender } = render(<PlayerShell slug="test-aB3kR9x1" />)
-    // 等待初始 fetch 完成（video + sources 都拉过）
-    await waitFor(() => {
-      const calls = apiGetMock.mock.calls.map((c) => c[0] as string)
-      expect(calls.some((url) => url.includes('/sources?episode=1'))).toBe(true)
-    })
-    apiGetMock.mockClear()
-    // 模拟用户切集：改 store currentEpisode → rerender PlayerShell 触发 useEffect 2
-    mockState.currentEpisode = 2
-    rerender(<PlayerShell slug="test-aB3kR9x1" />)
-    // 首次切集不应被跳过 → 应看到 ep=2 的 sources fetch
-    await waitFor(() => {
-      const calls = apiGetMock.mock.calls.map((c) => c[0] as string)
-      expect(calls.some((url) => url.includes('/sources?episode=2'))).toBe(true)
-    })
+    expect(calls.some((url) => url.includes('/videos/CCCCCCCC') && !url.includes('/sources'))).toBe(true)
+    expect(calls.some((url) => url.includes('/videos/CCCCCCCC/sources'))).toBe(true)
   })
 })

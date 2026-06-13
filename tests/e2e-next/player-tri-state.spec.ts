@@ -4,12 +4,12 @@
  *
  * 覆盖缺陷：
  *   #3 播放页呈现"弹窗 + 可关闭/mini 化"→ CLEANUP-06 修复：watch page 内控制栏隐藏
- *   #4 线路切换后状态错乱 → activeSourceIndex 入 store 跨切换持久
+ *   #4 线路切换后状态错乱 → activeLineKey 入 store 跨切换持久（PLAYER-LINE-BOUND-EP 由 index 升级为稳定 key）
  *
  * 断言：
  *   - 进入 /watch/:slug 后 player-shell 内嵌（inline 模式，nav/footer 可见）
  *   - /watch/* 内**不**渲染"关闭播放器"/"缩小为迷你播放器"按钮（GlobalPlayerFullFrame 在 watch 路由返回 null）
- *   - 切换线路后 source-btn-N 高亮状态稳定（颜色与 accent-default 一致，证明 activeSourceIndex 被应用）
+ *   - 切换线路后 source-btn-N 高亮状态稳定（颜色与 accent-default 一致，证明 activeLineKey 被应用）
  */
 
 import { test, expect } from './_fixtures'

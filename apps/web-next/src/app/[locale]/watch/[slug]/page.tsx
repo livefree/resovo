@@ -21,9 +21,9 @@ export default async function WatchPage({ params }: Props) {
   const { slug } = await params
 
   // server-side hydration (D-160-AMD2-1)
-  // 首集（第 1 集）作为 initial sources / episode 切换走 client（Y-AMD2-2 internal 视频限制）
+  // PLAYER-LINE-BOUND-EP：拉取全集源（省略 episode），供 PlayerShell 一次性构建线路矩阵
   const initialVideo = await fetchVideoDetail(slug)
-  const initialSources = await fetchVideoSources(slug, 1)
+  const initialSources = await fetchVideoSources(slug)
 
   return (
     <div data-testid="watch-page" className="flex-1 flex flex-col">

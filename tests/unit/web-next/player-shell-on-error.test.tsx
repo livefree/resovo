@@ -1,19 +1,22 @@
 /**
  * @vitest-environment jsdom
  *
- * player-shell-on-error.test.tsx — CHG-SN-9-PLAYER-ERROR-CONSUMER-B / Wave 4 #3
+ * player-shell-on-error.test.tsx — PLAYER-LINE-BOUND-EP（重写）/ ADR-166 retry-control
  *
- * 覆盖 PlayerShell 接入 player-core onError 后的自动切线 + 标 dead-source + feedback 失败上报：
- *   #1 onError 触发 → 当前 source 标 isDead（SourceBar 渲染 dead 视觉）+ 切到下一非 dead source
- *   #2 全部 source 已 dead → 不切换（保持原 idx）但 feedback 仍上报
- *   #3 previewMode=true → 不调 apiClient.post（D-160-5 守卫）
- *   #4 feedback POST 携带 errorCode + 同 (sourceId, errorCode) 去抖
- *   #5 R-N-3 警告闭环：sources 切线后 event.src 失效 / 关联仍按 activeSourceIndex 稳定
+ * 线路优先模型下的自动切线 + 标 dead 线路 + feedback 失败上报：
+ *   #1 首次 fatal → controls.retry() + 3s watchdog；超时切线（环形扫含当前集线路）+ POST
+ *   #1b watchdog 内第二次 fatal → 立即切线 + cancel watchdog + POST
+ *   #2 previewMode → 切线但不 POST（D-160-5 守卫）
+ *   #3 同 (sourceId, errorCode) 去抖不重复 POST
+ *   #4 切线后失败上报用新线路当前集 sourceId 关联
+ *   #5b 切集 → stale watchdog 取消 + retry 计数清空
+ *   #5  retry 后 onPlay 成功 → cancel watchdog + 重置 retry 计数
+ *
+ * 切线/切集语义键化为 activeLineKey（红线 1）；line-matrix/line-display-name 用真实实现。
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-
-// ── Mock next/dynamic + next/navigation + next-intl ──────────────────────────
+import React from 'react'
 
 vi.mock('next/navigation', () => ({
   useSearchParams: () => ({ get: () => null }),
@@ -23,13 +26,8 @@ vi.mock('next-intl', () => ({
   useLocale: () => 'zh-CN',
 }))
 
-// ── Mock VideoPlayer：暴露 onError 给测试触发 ────────────────────────────────
-// dynamic import 在 dynamic mock 之外 → 用 path mock 直接替换 VideoPlayer 模块
-import React from 'react'
-
 vi.mock('next/dynamic', () => ({
   default: (_loader: unknown) => {
-    // 返回一个组件，转发 props 到 testCapturedProps 暴露
     return function MockVideoPlayer(props: Record<string, unknown>) {
       testCapturedProps = props
       return React.createElement('div', { 'data-mock-video-player': '' })
@@ -37,16 +35,13 @@ vi.mock('next/dynamic', () => ({
   },
 }))
 
-// 测试期 prop 捕获
 let testCapturedProps: Record<string, unknown> = {}
-
-// ── playerStore mock ─────────────────────────────────────────────────────────
 
 const { initPlayerMock, apiGetMock, apiPostMock, mockState } = vi.hoisted(() => {
   const state = {
     mode: 'default' as 'default' | 'theater',
     currentEpisode: 1,
-    activeSourceIndex: 0,
+    activeLineKey: null as string | null,
     shortId: '',
     currentTime: 0,
     setMode: vi.fn(),
@@ -54,7 +49,7 @@ const { initPlayerMock, apiGetMock, apiPostMock, mockState } = vi.hoisted(() => 
       state.shortId = shortId
       state.currentEpisode = ep
       state.currentTime = 0
-      state.activeSourceIndex = 0
+      state.activeLineKey = null
     }),
     setEpisode: vi.fn((ep: number) => {
       state.currentEpisode = ep
@@ -62,8 +57,8 @@ const { initPlayerMock, apiGetMock, apiPostMock, mockState } = vi.hoisted(() => 
     setPlaying: vi.fn(),
     setCurrentTime: vi.fn(),
     setDuration: vi.fn(),
-    setActiveSourceIndex: vi.fn((i: number) => {
-      state.activeSourceIndex = i
+    setActiveLineKey: vi.fn((k: string | null) => {
+      state.activeLineKey = k
     }),
     hostOrigin: null,
   }
@@ -90,21 +85,13 @@ vi.mock('@/lib/video-route', () => ({
   getVideoDetailHref: () => '/movie/test-slug-aB3kR9x1',
 }))
 
-// buildThemedSources：每条 source 透传 src/type/quality + 标签默认 'L1'
-vi.mock('@/lib/line-display-name', () => ({
-  buildThemedSources: (sources: Array<{ id: string; sourceUrl: string; type: string; quality: string | null }>) =>
-    sources.map((s) => ({ src: s.sourceUrl, type: s.type, label: `L-${s.id}`, quality: s.quality, isDead: false, isPending: false })),
-  matchActiveSourceIndex: () => 0,
-  applyThemeLabels: (arr: unknown[]) => arr,
-  buildLineDisplayName: () => 'L1',
-}))
-
 vi.mock('@/lib/short-id', () => ({
   extractShortId: (slug: string) => slug.split('-').pop() ?? slug,
 }))
 
-// 稳定单例 mock：useRouteTheme 每次必须返回同引用，否则 PlayerShell useEffect([routeTheme]) 依赖每渲染失配 → 无限重渲染 → OOM
-const STABLE_ROUTE_THEME = Object.freeze({ labels: ['立春'], deadLabel: '已断', pendingLabel: '未测' })
+const STABLE_ROUTE_THEME = Object.freeze({
+  id: 'jie_qi', displayName: '节气', labels: ['立春', '雨水', '惊蛰'], deadLabel: '已断', fallbackPrefix: '线路',
+})
 const STABLE_ROUTE_THEME_RESULT = Object.freeze({
   theme: STABLE_ROUTE_THEME,
   customTheme: null,
@@ -122,14 +109,10 @@ vi.mock('@/components/player/ResumePrompt', () => ({
   ResumePrompt: () => null,
   saveProgress: vi.fn(),
 }))
-vi.mock('@/components/player/RouteThemeSelector', () => ({
-  RouteThemeSelector: () => null,
-}))
-vi.mock('@/components/player/CustomThemeDialog', () => ({
-  CustomThemeDialog: () => null,
-}))
+vi.mock('@/components/player/RouteThemeSelector', () => ({ RouteThemeSelector: () => null }))
+vi.mock('@/components/player/CustomThemeDialog', () => ({ CustomThemeDialog: () => null }))
 vi.mock('@/components/player/playerShell.layout', () => ({
-  getInlineEpisodes: () => null,
+  getInlineEpisodes: () => undefined,
   getPlayerLayoutClass: () => '',
   getSidePanelClass: () => '',
 }))
@@ -139,6 +122,7 @@ vi.mock('@/lib/utils', () => ({
 
 import { render, waitFor, cleanup, act } from '@testing-library/react'
 import { PlayerShell } from '../../../apps/web-next/src/components/player/PlayerShell'
+import { buildLineKey } from '../../../apps/web-next/src/lib/line-display-name'
 import type { Video, VideoSource } from '@resovo/types'
 
 const MOCK_VIDEO: Video = {
@@ -146,11 +130,11 @@ const MOCK_VIDEO: Video = {
   shortId: 'aB3kR9x1',
   slug: 'test-slug',
   title: '测试视频',
-  type: 'movie',
+  type: 'series',
   year: 2026,
   country: 'CN',
   rating: 8.5,
-  episodeCount: 1,
+  episodeCount: 2,
   coverUrl: null,
   description: '测试',
   category: null,
@@ -163,42 +147,40 @@ const MOCK_VIDEO: Video = {
   reviewStatus: 'pending_review',
   doubanId: null,
   doubanStatus: 'pending',
-  sourceCount: 3,
+  sourceCount: 6,
   status: 'completed',
   metaScore: 80,
   createdAt: '2026-05-01T00:00:00Z',
   updatedAt: '2026-05-01T00:00:00Z',
 } as unknown as Video
 
-const makeSource = (id: string, sourceUrl: string): VideoSource =>
+const makeSource = (lineId: string, ep: number): VideoSource =>
   ({
-    id,
+    id: `${lineId}-e${ep}`,
     videoId: 'uuid-video-1',
-    sourceUrl,
-    sourceName: id,
-    siteDisplayName: id,
+    sourceUrl: `https://example.com/${lineId}-e${ep}.m3u8`,
+    sourceName: lineId,
+    siteDisplayName: lineId,
     quality: '1080P',
     type: 'hls',
-    episodeNumber: 1,
+    episodeNumber: ep,
     isActive: true,
+    effectiveScore: 0.5,
   }) as unknown as VideoSource
 
-const MOCK_SOURCES = [
-  makeSource('src-1', 'https://example.com/v1.m3u8'),
-  makeSource('src-2', 'https://example.com/v2.m3u8'),
-  makeSource('src-3', 'https://example.com/v3.m3u8'),
-]
+// 3 条线路，每条含 ep1/ep2（切集后 VideoPlayer 仍挂载）
+const LINE_IDS = ['lineA', 'lineB', 'lineC']
+const MOCK_SOURCES = LINE_IDS.flatMap((id) => [makeSource(id, 1), makeSource(id, 2)])
+const LINE_KEY = (i: number) => buildLineKey({ siteDisplayName: LINE_IDS[i], sourceName: LINE_IDS[i]! })
 
 beforeEach(() => {
   initPlayerMock.mockClear()
-  apiGetMock.mockClear()
   apiGetMock.mockReset()
-  apiPostMock.mockClear()
   apiPostMock.mockReset()
   apiPostMock.mockResolvedValue({})
   mockState.mode = 'default'
   mockState.currentEpisode = 1
-  mockState.activeSourceIndex = 0
+  mockState.activeLineKey = null
   mockState.shortId = ''
   mockState.currentTime = 0
   testCapturedProps = {}
@@ -217,47 +199,41 @@ async function renderShellAndWaitForPlayer(options?: { previewMode?: boolean }) 
       previewMode={options?.previewMode}
     />,
   )
-  // 等到 VideoPlayer mount + onError prop 可用
   await waitFor(() => {
     expect(testCapturedProps.onError).toBeTypeOf('function')
   })
+  // 初始活跃线路 = 首条（line0）
+  await waitFor(() => expect(mockState.activeLineKey).toBe(LINE_KEY(0)))
   return view
 }
 
-// 模拟 controls 工厂（ADR-166 / Wave 4 #4-EP）：每次 onError 调用需注入 controls 第 2 参
 function makeControls() {
   return { retry: vi.fn() }
 }
 
-describe('PlayerShell onError — CHG-SN-9-PLAYER-ERROR-CONSUMER-B / Wave 4 #3 + RETRY-CONTROL-EP / Wave 4 #4-EP', () => {
-  it('#1 首次 fatal → 调 controls.retry()（不切线 / 启 watchdog）+ 3s 超时后才切线 + POST', async () => {
+describe('PlayerShell onError（PLAYER-LINE-BOUND-EP / 线路键化切线）', () => {
+  it('#1 首次 fatal → retry + 3s watchdog 超时切线（line0→line1）+ POST(line0 当前集 sourceId)', async () => {
     await renderShellAndWaitForPlayer()
     vi.useFakeTimers()
     try {
-      expect(mockState.activeSourceIndex).toBe(0)
-
       const onError = testCapturedProps.onError as (e: unknown, c: unknown) => void
       const controls = makeControls()
       await act(async () => {
-        onError({ code: 'hls_fatal', src: MOCK_SOURCES[0].sourceUrl, fatal: true }, controls)
+        onError({ code: 'hls_fatal', src: null, fatal: true }, controls)
       })
-
-      // 首次 fatal → 调 retry / 不切线 / 不 POST（watchdog 内未超时）
       expect(controls.retry).toHaveBeenCalledTimes(1)
-      expect(mockState.activeSourceIndex).toBe(0)
+      expect(mockState.activeLineKey).toBe(LINE_KEY(0))
       expect(apiPostMock).not.toHaveBeenCalled()
 
-      // 推进 3s watchdog 超时 / act flush React 同步
       await act(async () => {
         vi.advanceTimersByTime(3000)
         await Promise.resolve()
       })
 
-      // 切线 + POST（fake timers 下用 sync expect / waitFor 内部 setTimeout 会被冻结）
-      expect(mockState.activeSourceIndex).toBe(1)
+      expect(mockState.activeLineKey).toBe(LINE_KEY(1))
       expect(apiPostMock).toHaveBeenCalledWith('/feedback/playback', {
         videoId: 'uuid-video-1',
-        sourceId: 'src-1',
+        sourceId: 'lineA-e1',
         success: false,
         errorCode: 'hls_fatal',
       })
@@ -266,131 +242,100 @@ describe('PlayerShell onError — CHG-SN-9-PLAYER-ERROR-CONSUMER-B / Wave 4 #3 +
     }
   })
 
-  it('#1b 首次 fatal → retry / 第二次 fatal（watchdog 内）→ 立即切线 + cancel watchdog + POST', async () => {
+  it('#1b watchdog 内第二次 fatal → 立即切线 + cancel watchdog + POST', async () => {
     await renderShellAndWaitForPlayer()
     vi.useFakeTimers()
     try {
-      const onError = testCapturedProps.onError as (e: unknown, c: unknown) => void
-
       const c1 = makeControls()
       await act(async () => {
-        onError({ code: 'hls_fatal', src: null, fatal: true }, c1)
+        ;(testCapturedProps.onError as (e: unknown, c: unknown) => void)({ code: 'hls_fatal', src: null, fatal: true }, c1)
       })
       expect(c1.retry).toHaveBeenCalledTimes(1)
-      expect(mockState.activeSourceIndex).toBe(0)
+      expect(mockState.activeLineKey).toBe(LINE_KEY(0))
 
-      // 1s 内第二次 fatal（watchdog 未超时）→ 立即切线 / 第二次不再 retry
       vi.advanceTimersByTime(1000)
-      const onError2 = testCapturedProps.onError as (e: unknown, c: unknown) => void
       const c2 = makeControls()
       await act(async () => {
-        onError2({ code: 'hls_fatal', src: null, fatal: true }, c2)
+        ;(testCapturedProps.onError as (e: unknown, c: unknown) => void)({ code: 'hls_fatal', src: null, fatal: true }, c2)
       })
-
       expect(c2.retry).not.toHaveBeenCalled()
-      expect(mockState.activeSourceIndex).toBe(1)
+      expect(mockState.activeLineKey).toBe(LINE_KEY(1))
       expect(apiPostMock).toHaveBeenCalledTimes(1)
 
-      // 推进时间到 watchdog 应触发的点 → watchdog 已 cancel / 不应再切线
-      const switchCountBefore = mockState.activeSourceIndex
+      const keyBefore = mockState.activeLineKey
       vi.advanceTimersByTime(5000)
       await act(async () => { await Promise.resolve() })
-      expect(mockState.activeSourceIndex).toBe(switchCountBefore)
+      expect(mockState.activeLineKey).toBe(keyBefore)
     } finally {
       vi.useRealTimers()
     }
   })
 
-  it('#2 previewMode=true → retry + watchdog 3s 后切线，但不 POST feedback（D-160-5 守卫）', async () => {
+  it('#2 previewMode=true → retry + 切线，但不 POST（D-160-5 守卫）', async () => {
     await renderShellAndWaitForPlayer({ previewMode: true })
     vi.useFakeTimers()
     try {
-      const onError = testCapturedProps.onError as (e: unknown, c: unknown) => void
       const controls = makeControls()
       await act(async () => {
-        onError({ code: 'native_media_failed', src: null, fatal: true }, controls)
+        ;(testCapturedProps.onError as (e: unknown, c: unknown) => void)({ code: 'native_media_failed', src: null, fatal: true }, controls)
       })
       expect(controls.retry).toHaveBeenCalledTimes(1)
-
       await act(async () => {
         vi.advanceTimersByTime(3000)
         await Promise.resolve()
       })
-      expect(mockState.activeSourceIndex).toBe(1)
+      expect(mockState.activeLineKey).toBe(LINE_KEY(1))
       expect(apiPostMock).not.toHaveBeenCalled()
     } finally {
       vi.useRealTimers()
     }
   })
 
-  it('#3 同 (sourceId, errorCode) 第二次 onError 不重复 POST（去抖 / 防 fatal 刷流量）', async () => {
-    await renderShellAndWaitForPlayer()
+  it('#3 同 (sourceId, errorCode) 去抖不重复 POST', async () => {
+    const { rerender } = await renderShellAndWaitForPlayer()
     vi.useFakeTimers()
     try {
       const onError = testCapturedProps.onError as (e: unknown, c: unknown) => void
+      await act(async () => { onError({ code: 'hls_fatal', src: null, fatal: true }, makeControls()) })
+      await act(async () => { onError({ code: 'hls_fatal', src: null, fatal: true }, makeControls()) })
+      expect(apiPostMock).toHaveBeenCalledTimes(1) // POST lineA-e1，切到 line1
 
-      // 首次 fatal + 立即第二次 fatal（绕 retry）→ 切线 + POST 1 次
-      const c1 = makeControls()
+      // 复位活跃线路到 line0 + rerender（同步 activeLineRef）构造"lineA-e1 重复失败"场景
+      mockState.activeLineKey = LINE_KEY(0)
       await act(async () => {
-        onError({ code: 'hls_fatal', src: null, fatal: true }, c1)
+        rerender(<PlayerShell slug="test-aB3kR9x1" initialVideo={MOCK_VIDEO} initialSources={MOCK_SOURCES} />)
       })
-      const c2 = makeControls()
-      await act(async () => {
-        onError({ code: 'hls_fatal', src: null, fatal: true }, c2)
-      })
-      expect(apiPostMock).toHaveBeenCalledTimes(1)
-
-      // 复位 activeSourceIndex=0 构造"src-1 重复失败"场景
-      mockState.activeSourceIndex = 0
-      // 两次 fatal 触发切线但 dedupe 拦截
-      const c3 = makeControls()
-      await act(async () => {
-        onError({ code: 'hls_fatal', src: null, fatal: true }, c3)
-      })
-      const c4 = makeControls()
-      await act(async () => {
-        onError({ code: 'hls_fatal', src: null, fatal: true }, c4)
-      })
-      // 仍只 1 次 POST（dedupe 命中）
+      const onError2 = testCapturedProps.onError as (e: unknown, c: unknown) => void
+      await act(async () => { onError2({ code: 'hls_fatal', src: null, fatal: true }, makeControls()) })
+      await act(async () => { onError2({ code: 'hls_fatal', src: null, fatal: true }, makeControls()) })
+      // lineA-e1|hls_fatal 已上报 → 去抖命中 → 仍 1 次
       expect(apiPostMock).toHaveBeenCalledTimes(1)
     } finally {
       vi.useRealTimers()
     }
   })
 
-  it('#4 切线后新 source 的失败上报用最新 activeSourceIndex 关联（R-N-3 闭环 / sourceId=src-2）', async () => {
+  it('#4 切线后失败上报用新线路当前集 sourceId（lineB-e1）', async () => {
     await renderShellAndWaitForPlayer()
     vi.useFakeTimers()
     try {
-      const onError1 = testCapturedProps.onError as (e: unknown, c: unknown) => void
-      const c1 = makeControls()
-      await act(async () => {
-        onError1({ code: 'hls_fatal', src: null, fatal: true }, c1)
-      })
-      const c2 = makeControls()
-      await act(async () => {
-        onError1({ code: 'hls_fatal', src: null, fatal: true }, c2)
-      })
+      const onError = testCapturedProps.onError as (e: unknown, c: unknown) => void
+      await act(async () => { onError({ code: 'hls_fatal', src: null, fatal: true }, makeControls()) })
+      await act(async () => { onError({ code: 'hls_fatal', src: null, fatal: true }, makeControls()) })
       expect(apiPostMock).toHaveBeenCalledTimes(1)
-      expect(apiPostMock).toHaveBeenLastCalledWith('/feedback/playback', expect.objectContaining({ sourceId: 'src-1' }))
-      expect(mockState.activeSourceIndex).toBe(1)
+      expect(apiPostMock).toHaveBeenLastCalledWith('/feedback/playback', expect.objectContaining({ sourceId: 'lineA-e1' }))
+      expect(mockState.activeLineKey).toBe(LINE_KEY(1))
 
-      // 切线后 PlayerShell 重渲染 → onError 新闭包绑 activeSourceIndex=1 → src-2
+      // 切线后重渲染 → onError 新闭包绑 line1 → lineB-e1
       const onError2 = testCapturedProps.onError as (e: unknown, c: unknown) => void
       const c3 = makeControls()
-      await act(async () => {
-        onError2({ code: 'hls_fatal', src: null, fatal: true }, c3)
-      })
-      // 新 source / 新 idx / 算首次 fatal → retry + watchdog
+      await act(async () => { onError2({ code: 'hls_fatal', src: null, fatal: true }, c3) })
       expect(c3.retry).toHaveBeenCalledTimes(1)
-      const c4 = makeControls()
-      await act(async () => {
-        onError2({ code: 'hls_fatal', src: null, fatal: true }, c4)
-      })
+      await act(async () => { onError2({ code: 'hls_fatal', src: null, fatal: true }, makeControls()) })
       expect(apiPostMock).toHaveBeenCalledTimes(2)
       expect(apiPostMock).toHaveBeenLastCalledWith('/feedback/playback', {
         videoId: 'uuid-video-1',
-        sourceId: 'src-2',
+        sourceId: 'lineB-e1',
         success: false,
         errorCode: 'hls_fatal',
       })
@@ -399,61 +344,34 @@ describe('PlayerShell onError — CHG-SN-9-PLAYER-ERROR-CONSUMER-B / Wave 4 #3 +
     }
   })
 
-  it('#5b 切集（currentEpisode 变化）→ stale watchdog 被取消 / retry 计数清空（Codex FIX-2）', async () => {
-    // 切集会触发 episode-switch useEffect 调 apiClient.get / mock 返回空 sources Promise 避免 undefined.then crash
-    apiGetMock.mockResolvedValue({ data: MOCK_SOURCES })
-    const { rerender } = await (async () => {
-      const view = render(
-        <PlayerShell
-          slug="test-aB3kR9x1"
-          initialVideo={MOCK_VIDEO}
-          initialSources={MOCK_SOURCES}
-        />,
-      )
-      await waitFor(() => {
-        expect(testCapturedProps.onError).toBeTypeOf('function')
-      })
-      return view
-    })()
+  it('#5b 切集 → stale watchdog 取消 + retry 计数清空 + 活跃线路不变', async () => {
+    const { rerender } = await renderShellAndWaitForPlayer()
     vi.useFakeTimers()
     try {
       const onError = testCapturedProps.onError as (e: unknown, c: unknown) => void
       const c1 = makeControls()
-      // 在 ep=1 上触发 fatal → 启 3s watchdog
-      await act(async () => {
-        onError({ code: 'hls_fatal', src: null, fatal: true }, c1)
-      })
+      await act(async () => { onError({ code: 'hls_fatal', src: null, fatal: true }, c1) })
       expect(c1.retry).toHaveBeenCalledTimes(1)
-      expect(mockState.activeSourceIndex).toBe(0)
       const postCountBefore = apiPostMock.mock.calls.length
 
-      // 1s 后用户切到 ep=2 / mockState 同步 + rerender 触发 useEffect deps 检测
+      // 1s 后切到 ep=2（line0 含 ep2 → VideoPlayer 仍挂载）
       vi.advanceTimersByTime(1000)
       mockState.currentEpisode = 2
       await act(async () => {
-        rerender(
-          <PlayerShell
-            slug="test-aB3kR9x1"
-            initialVideo={MOCK_VIDEO}
-            initialSources={MOCK_SOURCES}
-          />,
-        )
+        rerender(<PlayerShell slug="test-aB3kR9x1" initialVideo={MOCK_VIDEO} initialSources={MOCK_SOURCES} />)
         await Promise.resolve()
       })
 
-      // 推进时间到原 watchdog 应触发的点 → stale watchdog 已被取消 / 不切线 / 不 POST
+      // stale watchdog 取消 → 不切线 / 不 POST
       vi.advanceTimersByTime(5000)
       await act(async () => { await Promise.resolve() })
-
-      // activeSourceIndex 仍为 0（切集不改 idx / 也不被 stale watchdog 错切）
-      expect(mockState.activeSourceIndex).toBe(0)
-      // 不应有 stale POST 用旧集 sourceId
+      expect(mockState.activeLineKey).toBe(LINE_KEY(0))
       expect(apiPostMock.mock.calls.length).toBe(postCountBefore)
 
-      // retry 计数清空 → 新集上同 idx 再 fatal 仍允许 retry（不是被旧集 retryAttemptedSet 拦截）
+      // retry 计数清空 → 新集再 fatal 仍允许 retry
       const c2 = makeControls()
       await act(async () => {
-        onError({ code: 'hls_fatal', src: null, fatal: true }, c2)
+        ;(testCapturedProps.onError as (e: unknown, c: unknown) => void)({ code: 'hls_fatal', src: null, fatal: true }, c2)
       })
       expect(c2.retry).toHaveBeenCalledTimes(1)
     } finally {
@@ -461,67 +379,7 @@ describe('PlayerShell onError — CHG-SN-9-PLAYER-ERROR-CONSUMER-B / Wave 4 #3 +
     }
   })
 
-  it('#5c 切视频但同集（shortId 变化 / currentEpisode 不变）→ stale watchdog 被取消（Codex FIX-3）', async () => {
-    // FIX-2 仅守 currentEpisode 漏了"切视频同一集 idx"场景 — shortId 是从 slug prop 同步派生的视频标识
-    apiGetMock.mockResolvedValue({ data: MOCK_SOURCES })
-    const { rerender } = await (async () => {
-      const view = render(
-        <PlayerShell
-          slug="test-aB3kR9x1"
-          initialVideo={MOCK_VIDEO}
-          initialSources={MOCK_SOURCES}
-        />,
-      )
-      await waitFor(() => {
-        expect(testCapturedProps.onError).toBeTypeOf('function')
-      })
-      return view
-    })()
-    vi.useFakeTimers()
-    try {
-      const onError = testCapturedProps.onError as (e: unknown, c: unknown) => void
-      const c1 = makeControls()
-      // 在 video A 上触发 fatal → 启 3s watchdog
-      await act(async () => {
-        onError({ code: 'hls_fatal', src: null, fatal: true }, c1)
-      })
-      expect(c1.retry).toHaveBeenCalledTimes(1)
-      const postCountBefore = apiPostMock.mock.calls.length
-
-      // 1s 后用户切到新视频（同一集 idx 不变）/ slug 改 → shortId 改
-      // mockState.currentEpisode 保持 1（同集）
-      vi.advanceTimersByTime(1000)
-      await act(async () => {
-        rerender(
-          <PlayerShell
-            slug="other-zzzzNEW1"
-            initialVideo={MOCK_VIDEO}
-            initialSources={MOCK_SOURCES}
-          />,
-        )
-        await Promise.resolve()
-      })
-
-      // 推进时间到原 watchdog 应触发的点 → stale watchdog 已被取消
-      vi.advanceTimersByTime(5000)
-      await act(async () => { await Promise.resolve() })
-
-      expect(mockState.activeSourceIndex).toBe(0)
-      // 不应有 stale POST 用旧视频 sourceId
-      expect(apiPostMock.mock.calls.length).toBe(postCountBefore)
-
-      // 新视频上同 idx fatal → 允许 retry（计数已清空）
-      const c2 = makeControls()
-      await act(async () => {
-        onError({ code: 'hls_fatal', src: null, fatal: true }, c2)
-      })
-      expect(c2.retry).toHaveBeenCalledTimes(1)
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('#5 retry 后 onPlay 成功 → cancel watchdog + 重置 retry 计数 / 下一次 fatal 仍允许 retry', async () => {
+  it('#5 retry 后 onPlay 成功 → cancel watchdog + 重置 retry 计数', async () => {
     await renderShellAndWaitForPlayer()
     vi.useFakeTimers()
     try {
@@ -529,23 +387,16 @@ describe('PlayerShell onError — CHG-SN-9-PLAYER-ERROR-CONSUMER-B / Wave 4 #3 +
       const onPlay = testCapturedProps.onPlay as () => void
 
       const c1 = makeControls()
-      await act(async () => {
-        onError({ code: 'hls_fatal', src: null, fatal: true }, c1)
-      })
+      await act(async () => { onError({ code: 'hls_fatal', src: null, fatal: true }, c1) })
       expect(c1.retry).toHaveBeenCalledTimes(1)
 
-      // 模拟 retry 后播放成功 → cancel watchdog + 清 retry 计数
       await act(async () => { onPlay() })
-      // 推进时间到 watchdog 应触发的点 → 已 cancel / 不切线
       vi.advanceTimersByTime(5000)
       await act(async () => { await Promise.resolve() })
-      expect(mockState.activeSourceIndex).toBe(0)
+      expect(mockState.activeLineKey).toBe(LINE_KEY(0))
 
-      // 同 idx 再 fatal → 允许 retry 一次（计数已清空）
       const c2 = makeControls()
-      await act(async () => {
-        onError({ code: 'hls_fatal', src: null, fatal: true }, c2)
-      })
+      await act(async () => { onError({ code: 'hls_fatal', src: null, fatal: true }, c2) })
       expect(c2.retry).toHaveBeenCalledTimes(1)
     } finally {
       vi.useRealTimers()

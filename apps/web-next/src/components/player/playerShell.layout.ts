@@ -19,10 +19,15 @@ export function getSidePanelClass(isTheater: boolean): string {
   return cn('player-side-panel', isTheater && 'player-side-panel--theater')
 }
 
+/**
+ * PLAYER-LINE-BOUND-EP（红线 3）：inline 选集改为接收"活跃线路实际集号数组"，
+ * 渲染真实集号文案（非连续集号 / 不再假设连续 1..N）。player-core onEpisodeChange(index)
+ * 的 index 须经调用方映射回 episodeNumbers[index]，activeEpisodeIndex 用 indexOf 反查。
+ */
 export function getInlineEpisodes(
   isTheater: boolean,
-  episodeCount: number
+  episodeNumbers: readonly number[]
 ): PlayerEpisodeItem[] | undefined {
-  if (!isTheater || episodeCount <= 1) return undefined
-  return Array.from({ length: episodeCount }, (_, i) => ({ title: `第${i + 1}集` }))
+  if (!isTheater || episodeNumbers.length <= 1) return undefined
+  return episodeNumbers.map((ep) => ({ title: `第${ep}集` }))
 }

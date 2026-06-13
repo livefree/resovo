@@ -62,9 +62,12 @@ interface PlayerState {
   transition: 'fast-takeover' | 'standard-takeover' | null
   enter: (params: { shortId: string; slug: string | null; episode?: number; transition: 'fast-takeover' | 'standard-takeover' }) => void
 
-  // === M5-CLEANUP-06 新增：选中线路 index，跨 mini↔full 切换持久 ===
-  activeSourceIndex: number
-  setActiveSourceIndex: (index: number) => void
+  // === PLAYER-LINE-BOUND-EP（取代 M5-CLEANUP-06 activeSourceIndex）===
+  // 选中线路的稳定 key（buildLineKey 口径），跨 mini↔full 持久。
+  // 用 key 而非 index：line-matrix（PlayerShell）与 per-episode 拉取（MiniPlayer）数据形态不同，
+  // index 坐标系不通用会串台（arch-reviewer 红线 1）；key 在两种形态下语义一致。null = 未选/取最优线路。
+  activeLineKey: string | null
+  setActiveLineKey: (key: string | null) => void
 
   // === HANDOFF-31 新增：完整关闭 + 清零 mini 播放状态 ===
   releaseMiniPlayer: () => void
@@ -105,14 +108,14 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   geometry: null,
   takeoverActive: false,
   transition: null,
-  activeSourceIndex: 0,
+  activeLineKey: null,
   isMuted: false,
   volume: 1,
   flipOrigin: null,
   miniAutoplay: false,
   miniResumeTime: 0,
 
-  setActiveSourceIndex: (index) => set({ activeSourceIndex: index }),
+  setActiveLineKey: (key) => set({ activeLineKey: key }),
   setMiniAutoplay: (v) => set({ miniAutoplay: v }),
   setMiniResumeTime: (t) => set({ miniResumeTime: t }),
   setIsMuted: (muted) => set({ isMuted: muted }),
@@ -120,12 +123,12 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   setFlipOrigin: (rect) => set({ flipOrigin: rect }),
 
   releaseMiniPlayer: () => {
-    set({ shortId: null, currentTime: 0, duration: 0, isPlaying: false, activeSourceIndex: 0, miniAutoplay: false, miniResumeTime: 0 })
+    set({ shortId: null, currentTime: 0, duration: 0, isPlaying: false, activeLineKey: null, miniAutoplay: false, miniResumeTime: 0 })
     get().closeHost()
   },
 
   initPlayer: (shortId, episode) =>
-    set({ shortId, currentEpisode: episode, isPlaying: false, currentTime: 0, duration: 0, activeSourceIndex: 0 }),
+    set({ shortId, currentEpisode: episode, isPlaying: false, currentTime: 0, duration: 0, activeLineKey: null }),
 
   setEpisode: (episode) => set({ currentEpisode: episode, currentTime: 0 }),
   setPlaying: (playing) => set({ isPlaying: playing }),
@@ -197,7 +200,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
             currentTime: parsed.currentTime ?? 0,
             isMuted: parsed.isMuted ?? false,
             volume: parsed.volume ?? 1,
-            activeSourceIndex: parsed.activeSourceIndex ?? 0,
+            activeLineKey: parsed.activeLineKey ?? null,
           }
         }
       }
@@ -232,7 +235,7 @@ function persistToSession(state: PlayerState) {
       currentTime: state.currentTime,
       isMuted: state.isMuted,
       volume: state.volume,
-      activeSourceIndex: state.activeSourceIndex,
+      activeLineKey: state.activeLineKey,
     }
     sessionStorage.setItem(STORAGE_KEY, JSON.stringify(payload))
   } catch {

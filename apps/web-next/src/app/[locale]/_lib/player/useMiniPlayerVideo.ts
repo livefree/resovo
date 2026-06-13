@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { usePlayerStore } from '@/stores/playerStore'
 import { apiClient } from '@/lib/api-client'
 import { saveProgress } from '@/components/player/ResumePrompt'
+import { buildLineKey } from '@/lib/line-display-name'
 import type { Video, VideoSource, ApiResponse, ApiListResponse } from '@resovo/types'
 
 export type VideoStatus = 'no-src' | 'loading' | 'error' | 'autoplay-blocked' | 'idle'
@@ -39,7 +40,9 @@ export function useMiniPlayerVideo(
   const currentEpisode = usePlayerStore((s) => s.currentEpisode)
   const isPlayingStore = usePlayerStore((s) => s.isPlaying)
   const currentTimeStore = usePlayerStore((s) => s.currentTime)
-  const activeSourceIndex = usePlayerStore((s) => s.activeSourceIndex)
+  // PLAYER-LINE-BOUND-EP（红线 1）：按稳定 activeLineKey 解析当前线路源，
+  // 不再用 activeSourceIndex 索引 per-episode 数组（mini 与 full 数据形态不同，index 坐标系不通用）
+  const activeLineKey = usePlayerStore((s) => s.activeLineKey)
   const setCurrentTime = usePlayerStore((s) => s.setCurrentTime)
   const setDuration = usePlayerStore((s) => s.setDuration)
   const setPlaying = usePlayerStore((s) => s.setPlaying)
@@ -126,8 +129,11 @@ export function useMiniPlayerVideo(
           updateVideoStatus('no-src')
           return
         }
-        const idx = activeSourceIndex < sources.length ? activeSourceIndex : 0
-        const url = sources[idx]?.sourceUrl ?? sources[0]?.sourceUrl ?? null
+        // 按 activeLineKey 匹配当前线路在本集的源；找不到（该线路缺此集 / 无 key）→ 取首条（最优线路）
+        const matched = activeLineKey
+          ? sources.find((s) => buildLineKey(s) === activeLineKey)
+          : undefined
+        const url = (matched ?? sources[0])?.sourceUrl ?? null
         setActiveSrc(url)
         if (!url) updateVideoStatus('no-src')
         // keep 'loading' until canplay fires
@@ -138,7 +144,7 @@ export function useMiniPlayerVideo(
         updateVideoStatus('no-src')
       })
     return () => { cancelled = true }
-  // activeSourceIndex intentionally excluded — resolved per episode load, not per user switch
+  // activeLineKey intentionally excluded — resolved per episode load, not per user switch
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shortId, currentEpisode])
 

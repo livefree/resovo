@@ -103,6 +103,38 @@ describe('fetchVideoSources — D-160-AMD2-2 派发', () => {
     })
   })
 
+  it('省略 episode（全集源）→ public path URL 无 ?episode（PLAYER-LINE-BOUND-EP）', async () => {
+    setupHeaders(false)
+    setupCookies(null)
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ data: [{ id: 's1', isActive: true }] }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })
+    )
+
+    await fetchVideoSources('test-slug-aB3kR9x1')
+
+    const [url] = fetchMock.mock.calls[0]!
+    expect(url).toMatch(/\/videos\/aB3kR9x1\/sources$/)
+    expect(url).not.toContain('episode=')
+  })
+
+  it('省略 episode + preview → preview query 以 ? 起始（无 episode 前缀，PLAYER-LINE-BOUND-EP）', async () => {
+    setupHeaders(true)
+    setupCookies('rt-abc')
+    mockGetAdminAccessToken.mockResolvedValueOnce('access-token-xyz')
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ data: [] }), { status: 200, headers: { 'content-type': 'application/json' } })
+    )
+
+    await fetchVideoSources('foo-aB3kR9x1')
+
+    const [url] = fetchMock.mock.calls[0]!
+    expect(url).toMatch(/\/videos\/aB3kR9x1\/sources\?preview=admin$/)
+    expect(url).not.toContain('episode=')
+  })
+
   it('preview header + refresh 失败 → 自动降级 public path', async () => {
     setupHeaders(true)
     setupCookies('rt-expired')

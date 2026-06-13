@@ -5073,3 +5073,27 @@
 - **质量门禁**：typecheck EXIT=0 / lint EXIT=0 / test:changed 21 文件 321 passed / verify:adr-contracts EXIT=0（advisory baseline 无关）/ migrate 成功 + 真库 before·after 取证。
 - **注意事项**：unmerge 撤销后 target `episode_count` 不回退（与爬虫高水位语义一致），over-count 集落「暂无可用播放源」，与现有行为同型；recalc 口径含 `submitted_by IS NULL`（对齐 024），用户投稿已退役（CHG-VSR-8）实际无影响。
 - **[AI-CHECK]**：六问过——①修复维护 episode_count 不变量、零回归（93 merge 簇测试 + 全量 321 绿）；②与既有写入路径（爬虫 GREATEST / 024）口径逐字统一，沉淀为 `recalcEpisodeCountFromSources` 单一通道；③改动收敛在 Service + query + migration，前端无需改（其读 episodeCount 行为本正确）；④遵 db-rules「冗余计数器维护」+ migration 024 先例；⑤测试 query 级 + service 级双覆盖 + 真库取证；⑥不碰 unmerge/前端，决策留痕。
+
+## [PLAYER-LINE-BOUND-EP] 播放器选集绑定线路（集数优先 → 线路优先模型重构）
+- **完成时间**：2026-06-12
+- **记录时间**：2026-06-12 23:50
+- **执行模型**：claude-opus-4-8
+- **子代理**：arch-reviewer (claude-opus-4-8) — 设计评审 CONDITIONAL → 3 红线全部吸收（CLAUDE.md 模型路由 #4 播放器 shell 重构强制）
+- **来源**：用户指令插队（SEQ-20260612-FIX2，FIX-MERGE-EPCOUNT 续）。修数据后全局 `episodeCount=4` 让所有线路都显示 4 格选集，但仅一条线路真有 4 集。用户裁定：改"集数绑定线路"，切到不含当前集的线路 → 收敛该线路第 1 集。
+- **根因**：旧模型"集数优先"——选集网格按全局 `video.episodeCount` 渲染，线路按 `?episode=N` 每集重算；全局集数无法表达每线路集数差异，切集被迫跨线路自动切换（语言粘性仅尽力而为、字幕未接入）。
+- **方案（线路优先）**：watch 一次拉全集源（`/sources` 省略 episode）→ `buildLineMatrix` 按 `(siteDisplayName, sourceName)` 分组为稳定线路（各含 episodeNumbers + episodes 映射 + 代表源）→ 选集网格 = 活跃线路集号；播放源 = 活跃线路当前集源；SourceBar = 稳定线路列表。切线路：含当前集则保留，否则收敛第 1 集；报错切换：环形扫"含当前集且非 dead"线路（保持同集换线）。
+- **修改文件**：
+  - `apps/web-next/src/lib/line-matrix.ts`（新建）— `buildLineMatrix` O(n) 分组（线路首次出现序 / 同集保最高分 / representative=最高分集源）+ `buildThemedLines`（复用 buildThemedSources）。
+  - `apps/web-next/src/lib/line-display-name.ts` — 新增 `buildLineKey`（共享分组键，红线 2：复合 (site,name)，null 站点降级 sourceName，` ` 分隔防串台）。
+  - `apps/web-next/src/components/player/PlayerShell.tsx` — 数据流从 per-episode sources 重构为稳定 `lineMatrix` + `activeLineIndex`（由 activeLineKey 派生）；移除 per-episode 重拉 + matchActiveSourceIndex + fetchedEpisodeRef 切集竞态（Y6，保留 shortId stale-check + initToken）；运行时 dead 线路用 `deadLineKeys`（按集重置）；报错 watchdog/retry 键化为线路 key。
+  - `apps/web-next/src/stores/playerStore.ts` + `_lib/player/types.ts` — `activeSourceIndex`（易变 index）→ `activeLineKey`（稳定 key，红线 1：mini/full 数据形态不同，index 坐标系不通用会串台）；persist/hydrate/initPlayer/release 同步；加性可选不升版本号。
+  - `apps/web-next/src/app/[locale]/_lib/player/useMiniPlayerVideo.ts` — mini 按 activeLineKey 解析当前线路源（红线 1 跨消费方对齐），找不到回退首条。
+  - `apps/web-next/src/components/player/playerShell.layout.ts` — `getInlineEpisodes(isTheater, episodeNumbers[])`（红线 3：实际集号文案，配套 PlayerShell `activeEpisodeIndex=indexOf` + `onEpisodeChange→episodeNumbers[index]`）。
+  - `apps/web-next/src/lib/video-detail.ts` + `watch/[slug]/page.tsx` — `fetchVideoSources(slug, episode?)` 省略 episode 取全集；watch SSR 拉全集。
+  - 测试：新增 `line-matrix.test.ts`（11）；重写 `player-shell-hydration/on-error/success-report`（线路键化 + 真实 line-matrix）；`video-detail-fetch-sources` +2 全集用例；`player-tri-state` e2e 注释同步。
+- **新增依赖**：无。**数据库变更**：无（API `?episode` 已可选，后端不改）。
+- **范围声明**：仅 watch 播放器。详情页 EpisodePicker/EpisodeGrid 维持全局 episodeCount（浏览=已收录总集数）；字幕仍不接入（与现状一致）。
+- **质量门禁**：typecheck EXIT=0 / lint EXIT=0 / test:changed 17 文件 215 passed（含重写 3 player-shell + 新 line-matrix 11 + fetchVideoSources 7）。**e2e PLAYER 本地未能运行**——smoke 同样 20/21 失败（首页/导航/主题/语言/next-placeholder 全挂，与播放器无关），确认本地 e2e-next 环境/seed 基建缺口（task-queue 已登记"e2e-next seed 基建"独立卡），非本改动；e2e PLAYER 待 CI seed 环境验证。
+- **黄线回应**（arch-reviewer 6 条）：Y1 一次拉全集 + SourceBar 渲染量由 per-source 降为 per-line（红利）；Y2 线路序用首次出现序（复用后端排序）；Y3 representative 取最高分集源（dead/pending 不被首集误判）+ 多音轨在 per-line 代表集判定；Y4 切线收敛第 1 集仅在新线路不含当前集时触发，ResumePrompt 按 (shortId,episode) 仍正确；Y5 matchActiveSourceIndex 保留（keying 回归护栏，PlayerShell 不再调用）；Y6 切集不再 refetch，删切集竞态防护，保留初始 fetch shortId stale-check。
+- **注意事项**：unmerge 不在本卡；详情页选集仍全局（浏览语义）；初始深链 `?ep=N` 若默认最优线路不含该集会收敛第 1 集（深链指定集为罕见，不在本卡范围）。
+- **[AI-CHECK]**：六问过——①线路优先彻底解决"切集被迫跨线路/静默换语言"，单测覆盖切线/切集/报错切线/上报四路径全绿；②`buildLineKey` 沉淀为共享 keying 单一真源（line-matrix + mini player + 与 matchActiveSourceIndex 口径一致）；③改动收敛在 player shell 链路，未碰 player-core 公共 API / 后端 / 详情页；④遵 arch-reviewer 3 红线裁决 + CLAUDE.md 播放器关键路径约束；⑤测试 pure（line-matrix）+ 组件（3 player-shell 重写）双层 + e2e 环境缺口如实留痕；⑥store 原语语义变更经 arch-reviewer + Opus 主循环定稿，跨消费方（mini）显式对齐。

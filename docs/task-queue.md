@@ -80,6 +80,30 @@
 
 ---
 
+## [SEQ-20260612-FIX2] PLAYER-LINE-BOUND-EP — 播放器选集绑定线路（线路优先模型）
+
+- **状态**：✅ 已完成（2026-06-12）
+- **创建时间**：2026-06-12
+- **最后更新时间**：2026-06-12 23:50
+- **目标**：播放器由"集数优先（全局 episodeCount）"改为"线路优先（集数绑定线路）"，切线路联动选集，杜绝切集时静默跨线路/跨语言跳变
+- **范围**：`apps/web-next` watch 播放器（PlayerShell 数据流 + 新 line-matrix helper）；不改 API（`?episode` 已可选）；不含详情页 EpisodePicker/EpisodeGrid
+- **依赖**：FIX-MERGE-EPCOUNT（已完成）
+
+### 任务列表（按执行顺序）
+
+1. PLAYER-LINE-BOUND-EP — 选集绑定线路重构（状态：✅ 2026-06-12）
+   - 创建时间：2026-06-12
+   - 实际开始：2026-06-12
+   - 完成时间：2026-06-12 23:50
+   - 验收要点：每线路独立选集；切线路有当前集则保留、否则收敛第 1 集；报错切换保持同集换线；arch-reviewer (Opus) CONDITIONAL → 3 红线全吸收。门禁 typecheck/lint/test:changed 215 passed。**e2e PLAYER 本地未运行**（smoke 同 20/21 失败 = e2e-next seed/环境缺口，非本改动；待 CI 验证）。详见 changelog [PLAYER-LINE-BOUND-EP]。
+
+### 后续卡登记（本序列产出，不在本序列内执行）
+
+- **E2E-NEXT-SEED-INFRA**（已在 queue 早前登记，本卡再确认必要性）：web-next e2e-next 本地无 seed 数据，homepage/player 全域 e2e 本地不可跑；需建 seed 基建后方能本地回归 PLAYER 域。
+- **PLAYER-DEEPLINK-EP-LINE**（可选）：初始深链 `?ep=N` 优先选含该集的线路（当前默认最优线路 + 收敛第 1 集）。
+
+---
+
 ## [SEQ-20260612-FIX] FIX-MERGE-EPCOUNT — 合并/拆分后 episode_count 不推进导致播放页选集丢失
 
 - **状态**：✅ 已完成（2026-06-12）

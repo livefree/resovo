@@ -74,6 +74,26 @@ export function resolveSourceDisplayName(
   return normalizeProviderName(sourceName) ?? '未知线路'
 }
 
+/**
+ * 线路稳定分组键（PLAYER-LINE-BOUND-EP / arch-reviewer 红线 2）。
+ *
+ * 口径与 matchActiveSourceIndex 复合匹配（优先级 1）一致：siteDisplayName 非空 →
+ * 复合 `(siteDisplayName, sourceName)`；为 null/空 → 降级 sourceName 单键（同 matchActiveSourceIndex
+ * 优先级 2 "单 sourceName 兜底"，兼容历史 siteDisplayName=null / CHG-412 未配置 display_name）。
+ *
+ * 用 U+0000 作分隔符（业务文案不会出现），避免 "site"+"name" 与 "sitename" 串台。
+ * VideoSource 不暴露 source_site_key，故以 siteDisplayName 为站点维度（前台唯一可用站点标识）。
+ *
+ * line-matrix 分组 + MiniPlayer 跨消费方按 key 解析当前线路共用本函数（唯一真源）。
+ */
+export function buildLineKey(source: {
+  readonly siteDisplayName?: string | null
+  readonly sourceName: string
+}): string {
+  const site = source.siteDisplayName?.trim()
+  return site ? `${site}\u0000${source.sourceName}` : source.sourceName
+}
+
 export function deduplicateLabels<T extends { label: string }>(items: T[]): T[] {
   const counts = new Map<string, number>()
   const seen = new Map<string, number>()

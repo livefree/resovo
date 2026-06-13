@@ -109,16 +109,24 @@ export async function fetchVideoDetail(slug: string): Promise<Video> {
  * 公开路径：维持 `next: { revalidate: 60 }`（ISR 60s）
  * 失败（404 / 网络 / refresh 失败）→ 返回空数组（不抛错 / VideoDetailClient 渲染"暂无可用播放源"占位）
  */
-export async function fetchVideoSources(slug: string, episode = 1): Promise<VideoSource[]> {
+/**
+ * PLAYER-LINE-BOUND-EP：episode 省略时拉取该视频**全集源**（所有集 × 所有线路），
+ * 供"线路优先"模型一次性构建线路矩阵（后端 ?episode 可选 / 省略即全集，API 无需改）。
+ * 传 episode 时维持单集行为（兼容既有调用）。
+ */
+export async function fetchVideoSources(slug: string, episode?: number): Promise<VideoSource[]> {
   const shortId = extractShortId(slug)
-  const baseUrl = `${API_BASE}/videos/${shortId}/sources?episode=${episode}`
+  const query = new URLSearchParams()
+  if (episode !== undefined) query.set('episode', String(episode))
+  const baseUrl = `${API_BASE}/videos/${shortId}/sources${query.size > 0 ? `?${query}` : ''}`
 
   let url = baseUrl
   let init: RequestInit = { next: { revalidate: 60 } }
   if (await shouldUsePreview()) {
     const previewInit = await buildPreviewFetchInit()
     if (previewInit) {
-      url = `${baseUrl}&${PREVIEW_QUERY_KEY}=${PREVIEW_QUERY_VALUE}`
+      const sep = query.size > 0 ? '&' : '?'
+      url = `${baseUrl}${sep}${PREVIEW_QUERY_KEY}=${PREVIEW_QUERY_VALUE}`
       init = previewInit
     }
   }
