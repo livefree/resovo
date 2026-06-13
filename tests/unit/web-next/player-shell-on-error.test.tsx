@@ -154,7 +154,7 @@ const MOCK_VIDEO: Video = {
   updatedAt: '2026-05-01T00:00:00Z',
 } as unknown as Video
 
-const makeSource = (lineId: string, ep: number): VideoSource =>
+const makeSource = (lineId: string, ep: number, score = 0.5): VideoSource =>
   ({
     id: `${lineId}-e${ep}`,
     videoId: 'uuid-video-1',
@@ -165,7 +165,7 @@ const makeSource = (lineId: string, ep: number): VideoSource =>
     type: 'hls',
     episodeNumber: ep,
     isActive: true,
-    effectiveScore: 0.5,
+    effectiveScore: score,
   }) as unknown as VideoSource
 
 // 3 条线路，每条含 ep1/ep2（切集后 VideoPlayer 仍挂载）
@@ -374,6 +374,31 @@ describe('PlayerShell onError（PLAYER-LINE-BOUND-EP / 线路键化切线）', (
         ;(testCapturedProps.onError as (e: unknown, c: unknown) => void)({ code: 'hls_fatal', src: null, fatal: true }, c2)
       })
       expect(c2.retry).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('#6 自动兜底跳过 route-scoring 已判 dead 的线路（known bad，Codex stop-time review）', async () => {
+    // line0 健康（active 失败）/ line1 effectiveScore=0.05 → themed dead / line2 健康
+    const lineKey = (id: string) => buildLineKey({ siteDisplayName: id, sourceName: id })
+    const sources = [
+      makeSource('lineGood0', 1, 0.8),
+      makeSource('lineDead1', 1, 0.05),
+      makeSource('lineGood2', 1, 0.8),
+    ]
+    render(<PlayerShell slug="test-aB3kR9x1" initialVideo={MOCK_VIDEO} initialSources={sources} />)
+    await waitFor(() => expect(testCapturedProps.onError).toBeTypeOf('function'))
+    await waitFor(() => expect(mockState.activeLineKey).toBe(lineKey('lineGood0')))
+    vi.useFakeTimers()
+    try {
+      const onError = testCapturedProps.onError as (e: unknown, c: unknown) => void
+      // 两次 fatal 立即切线（绕 watchdog）
+      await act(async () => { onError({ code: 'hls_fatal', src: null, fatal: true }, makeControls()) })
+      await act(async () => { onError({ code: 'hls_fatal', src: null, fatal: true }, makeControls()) })
+      // 跳过 dead 的 line1，切到 line2（不是 line1）
+      expect(mockState.activeLineKey).toBe(lineKey('lineGood2'))
+      expect(mockState.activeLineKey).not.toBe(lineKey('lineDead1'))
     } finally {
       vi.useRealTimers()
     }
