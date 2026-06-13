@@ -6,6 +6,8 @@
 
 ## 当前任务（单任务工作台：同时仅 1 个 🔄 进行中；完成即删卡，历史见 docs/changelog.md）
 
+_（**CHORE-E2E-WATCH-SSR-SEED ✅ 收口 2026-06-13**（PLAYER-11 衍生 e2e 基建 follow-up）——watch 页 SSR hydration（ADR-160 AMD2）与客户端-mock 旧 spec 不兼容致 test:e2e:player 23 用例预存全红。① 新增 `tests/e2e-next/_seed/{fixtures,db,global-setup,global-teardown}.ts` + playwright.config 接线（仅 web 域），直连 pg 落库 5 seed 视频（复用 catalog + approved|internal→public 发布路径绕状态机触发器 + 源 source_name 分线路/episode_number 分集；事务幂等 + CASCADE teardown）→ **修复 15 个 watch-SSR 失败**（player.spec 10 + tri-state 3 + option-tabs 2 + cinema 2）。② 残留 8 个 triage 确认全为预存陈旧测试（测已删/改名功能），用户批准清理：theater testid 改名+视口 1280→1600×900（short-height 边界）/ 删 danmaku（功能已删）/ 删 mini-player §3 展开（HANDOFF-36 几何固定高度）/ mini §4 几何 y 断言放宽（tl dock 含 header 偏移）。**player/tri-state/option-tabs/cinema/mini-player/smoke 隔离全绿**；门禁 typecheck/lint EXIT=0；teardown 自动清库。唯一一致残留 **card-dual-exit:99**（首页 VideoCard TagLayer，预存+seed 无关 → follow-up 卡 CHORE-VIDEOCARD-TAGLAYER-E2E）；card-*/mini:152 在 3-worker 并行下负载性 flaky（隔离/retry 过）。主循环 claude-opus-4-8；子代理无。详见 changelog [CHORE-E2E-WATCH-SSR-SEED]。**工作台空闲**。）_
+
 _（**HDR-DEDUP ✅ 全 4 卡收口 2026-06-13**（MODUX-ACPT-5 登记的「跨后台页面统一治理」follow-up）——审核台样板（删可见 h1→sr-only / 删装饰提示 / 留计数）推广到全后台。PageHeader 新增 `titleVisuallyHidden?: boolean`（arch-reviewer claude-opus-4-8 CONDITIONAL PASS，C1/C2/C3 全采纳：仅 string title 生效 / sr-only 样式沉淀共享常量 `VISUALLY_HIDDEN_STYLE` SSOT / ReactNode title 不受影响）。A 组 14 处正文标题降 sr-only + 清装饰留计数；B 组隐藏路由 4 处保留可见标题仅清装饰；C 组例外（dashboard 动态问候 / system·crawler-runs 列表无 PageHeader）。用户两项决策：删装饰·留计数 + 一律以面包屑为唯一标题。门禁全绿（typecheck/lint EXIT=0 / 全量单测 7286 / test:e2e:admin 82/82）。后续清理卡：ModerationConsole 手写 SR_ONLY_STYLE 收敛到共享常量（R1 范围外）。详见 changelog [HDR-DEDUP]。**工作台空闲**。）_
 
 ### ⏸ MODUX-ACPT-5（暂停 · 检查点已提交）· 验收第 5 条纠正 · 审核台头部去 h1 + 元素并入 tab 行

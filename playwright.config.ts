@@ -31,8 +31,14 @@ const ADMIN_VISUAL_TEST_MATCH = '**/*.visual.spec.ts'
 //          (2) 本 env gate 防 `npx playwright test` 默认拉 admin-visual
 const VISUAL_ENABLED = process.env.PLAYWRIGHT_VISUAL === '1'
 
+// CHORE-E2E-WATCH-SSR-SEED：watch 页 SSR `fetchVideoDetail` 直连 api，spec 引用视频须真实
+// 存在于 DB（公开可见）SSR 才不 404。仅 web 域跑时落库固定 seed 集（admin-only 跑跳过，零开销）。
+const WEB_SEED_ENABLED = SERVERS.includes('web')
+
 export default defineConfig({
   testDir: './tests/e2e',
+  globalSetup: WEB_SEED_ENABLED ? './tests/e2e-next/_seed/global-setup.ts' : undefined,
+  globalTeardown: WEB_SEED_ENABLED ? './tests/e2e-next/_seed/global-teardown.ts' : undefined,
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 1,

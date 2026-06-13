@@ -82,46 +82,9 @@ test.describe('MiniPlayer · §2 关闭', () => {
 })
 
 // ─── §3 折叠/展开（HANDOFF-31 语义变更：展开按钮改为折叠/展开 isExpanded 切换）────
-// 产品决策 2026-04-24：原"展开全屏"改为 mini 内部双态；返回全屏由"返回播放页"← 按钮实现
-test.describe('MiniPlayer · §3 折叠/展开', () => {
-  test('hover → 展开按钮点击 → 控制栏可见，高度增加', async ({ page }) => {
-    await seedMiniMode(page)
-    const mini = page.getByTestId('mini-player')
-    await expect(mini).toBeVisible()
-
-    const boxBefore = await mini.boundingBox()
-    expect(boxBefore).not.toBeNull()
-
-    // hover 使 header 可见，点击展开按钮
-    await mini.hover()
-    await page.getByTestId('mini-player-toggle-expand').click()
-
-    // Expanded 后高度应增加约 44px
-    const boxAfter = await mini.boundingBox()
-    expect(boxAfter).not.toBeNull()
-    expect(boxAfter!.height).toBeGreaterThan(boxBefore!.height + 30)
-
-    // 控制栏中进度条应可见
-    await expect(page.getByTestId('mini-player-progress')).toBeVisible()
-  })
-
-  test('展开后再次点击折叠 → 高度恢复', async ({ page }) => {
-    await seedMiniMode(page)
-    const mini = page.getByTestId('mini-player')
-    const boxCollapsed = await mini.boundingBox()
-
-    // 展开
-    await mini.hover()
-    await page.getByTestId('mini-player-toggle-expand').click()
-    const boxExpanded = await mini.boundingBox()
-    expect(boxExpanded!.height).toBeGreaterThan(boxCollapsed!.height)
-
-    // 折叠
-    await page.getByTestId('mini-player-toggle-expand').click()
-    const boxBack = await mini.boundingBox()
-    expect(boxBack!.height).toBeCloseTo(boxCollapsed!.height, 0)
-  })
-})
+// 注：原 §3「折叠/展开」两用例已退役删除——HANDOFF-36（commit 2fd2eb16）将 MiniPlayer 几何
+// 简化为「高度恒为 videoH（width×9/16）」，移除了"点击展开增高"行为及 mini-player-toggle-expand /
+// mini-player-progress testid；Header/Controls 改为 hover 叠加层不改变容器高度。
 
 // ─── §4 localStorage 几何持久化 ─────────────────────────────────
 test.describe('MiniPlayer · §4 几何持久化', () => {
@@ -142,9 +105,11 @@ test.describe('MiniPlayer · §4 几何持久化', () => {
     const box = await mini.boundingBox()
     expect(box).not.toBeNull()
     expect(box!.width).toBeCloseTo(360, 0)
-    // corner=tl 时浮窗左上 ≈ (16, 16)（DOCK_MARGIN=16）
+    // corner=tl 时浮窗吸附左上角。x ≈ DOCK_MARGIN(16)；y = DOCK_MARGIN + header 安全区高度
+    // （MiniPlayer dockMargins.top 含 --header-height 偏移，避让固定头部，故 ≈88 而非 16）。
+    // 用宽松上界区分"顶部 dock"(≈88) vs 默认 br 底部 dock(≈viewportH-h-16≈502)。
     expect(box!.x).toBeLessThan(40)
-    expect(box!.y).toBeLessThan(40)
+    expect(box!.y).toBeLessThan(200)
 
     // 加分建议 C：reload 后 localStorage 仍含原几何（持久化双向一致，未被意外清除）
     const persisted = await page.evaluate(

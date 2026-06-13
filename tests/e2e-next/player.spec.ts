@@ -118,9 +118,15 @@ test.describe('播放页（PlayerShell）', () => {
   })
 
   test('剧场模式切换按钮可见（大屏设备）', async ({ page }) => {
-    await page.setViewportSize({ width: 1280, height: 720 })
-    const theaterBtn = page.getByTestId('theater-mode-btn')
-    await expect(theaterBtn).toBeAttached()
+    // 用真正大视口：嵌入式 player 宽≈1136 → 高≈639 > SHORT_HEIGHT(460)，避免落入 short-height
+    // profile（collapsePolicy 在 player 高 ≤460px 时移除 theater；1280×720 下 player 仅 459px 高，
+    // 正好卡边界 → flaky）。1600×900 让 player 进入 wide profile，theater 稳定保留。
+    await page.setViewportSize({ width: 1600, height: 900 })
+    // 先等播放器挂载（dynamic ssr:false + 源加载需时；并行负载下 >5s 默认超时会 flaky）
+    await expect(page.getByTestId('player-shell')).toBeVisible({ timeout: 10_000 })
+    // player-core theater 控件以 data-ytp-component="theater-btn" 标识（原 testid theater-mode-btn 已退役）
+    const theaterBtn = page.locator('[data-ytp-component="theater-btn"]')
+    await expect(theaterBtn).toBeAttached({ timeout: 10_000 })
   })
 })
 
@@ -180,13 +186,6 @@ const MOCK_MULTI_SOURCES = [
   { ...MOCK_HLS_SOURCE, id: 'src-3', sourceName: '线路3', sourceUrl: 'https://example.com/test3.m3u8' },
 ]
 
-const MOCK_DANMAKU_RESPONSE = {
-  data: [
-    { time: 10, type: 0, color: '#ffffff', text: '测试弹幕' },
-  ],
-  pagination: { total: 1, page: 1, limit: 100 },
-}
-
 async function mockMultiSources(page: Parameters<typeof test>[1] extends { page: infer P } ? P : never) {
   await page.route(`${API_BASE}/videos/${MOCK_MOVIE.shortId}/sources*`, (route) => {
     route.fulfill({
@@ -196,16 +195,6 @@ async function mockMultiSources(page: Parameters<typeof test>[1] extends { page:
         data: MOCK_MULTI_SOURCES,
         pagination: { total: 3, page: 1, limit: 20, hasNext: false },
       }),
-    })
-  })
-}
-
-async function mockDanmakuApi(page: Parameters<typeof test>[1] extends { page: infer P } ? P : never) {
-  await page.route(`${API_BASE}/videos/${MOCK_MOVIE.shortId}/danmaku*`, (route) => {
-    route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify(MOCK_DANMAKU_RESPONSE),
     })
   })
 }
@@ -248,20 +237,5 @@ test.describe('PLAYER-10: 播放页完整链路', () => {
     await expect(page.getByTestId('player-shell')).toBeVisible()
   })
 
-  test('DanmakuBar 存在于播放页中（data-testid=danmaku-bar）', async ({ page }) => {
-    await mockVideoApi(page, MOCK_MOVIE)
-    await mockDanmakuApi(page)
-    await page.route(`${API_BASE}/videos/${MOCK_MOVIE.shortId}/sources*`, (route) => {
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ data: [MOCK_HLS_SOURCE], pagination: { total: 1, page: 1, limit: 20 } }),
-      })
-    })
-    await page.goto(`/en/watch/${MOCK_MOVIE.slug}`)
-    await page.waitForTimeout(500)
-    await expect(page.getByTestId('danmaku-bar')).toBeVisible()
-    await expect(page.getByTestId('danmaku-toggle')).toBeVisible()
-    await expect(page.getByTestId('danmaku-input')).toBeAttached()
-  })
+  // 注：原「DanmakuBar 存在于播放页」用例已随前台弹幕功能移除（commit e601ea2b）退役删除。
 })

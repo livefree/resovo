@@ -2359,12 +2359,20 @@
 
 > **Follow-up（衍生 / 待排期）** — PLAYER-11 调查暴露的 e2e 基建债，与播放器 bug 修复正交：
 >
-> #### CHORE-E2E-WATCH-SSR-SEED — e2e watch/homepage/detail SSR seed fixture
-> - **状态**：⬜ 待开始
+> #### CHORE-E2E-WATCH-SSR-SEED — e2e watch SSR seed fixture + player 域陈旧测试清理
+> - **状态**：✅ 已完成（2026-06-13）
 > - **创建时间**：2026-06-13 13:05
 > - **建议模型**：sonnet
 > - **变更原因**：ADR-160 AMD2 给 watch 页加 SSR hydration（`fetchVideoDetail`/`fetchVideoSources` 服务端直连 api）后，基于客户端 `page.route` mock 的 e2e-next 旧 spec 全部在「整页 SSR 404」处失败（`watch-page` 不渲染）。仓库无任何 e2e seed 脚本/globalSetup/CI seed，`resovo_dev` 无 `test-*` 视频 → test:e2e:player 8 spec 23 用例预存全红（基线复现）。
-> - **影响的已完成任务**：PLAYER-11（验证仅靠单测）+ 所有 e2e-next watch/detail/homepage spec
-> - **文件范围**：新增 e2e seed 脚本（7 视频：aB3kR9x1/bC4lS0y2/TriState/TabsTest/CinemaM1/DxMovie1/DxSerie1 + 各自源/集数匹配断言）+ `playwright.config.ts` globalSetup 接线；可能需评估 spec 改造（SSR-aware）替代纯客户端 mock。
-> - **变更内容**：建 globalSetup 通过 api/db 层插入固定 seed 集（事务幂等 + teardown 清理），使 SSR fetch 命中；对齐各 spec 断言（source-btn-N / side-episode-N / 集数）。
-> - **完成备注**：_（AI 填写，含"执行模型: <完整 ID>"一行）_
+> - **影响的已完成任务**：PLAYER-11（验证仅靠单测）+ 所有 e2e-next watch spec
+> - **文件范围**：新增 `tests/e2e-next/_seed/{fixtures,db,global-setup,global-teardown}.ts` + `playwright.config.ts` globalSetup/teardown 接线（仅 web 域）；清理 `player.spec.ts` / `mini-player.spec.ts` 陈旧用例。
+> - **变更内容**：globalSetup 直连 pg 落库 5 seed 视频（aB3kR9x1/bC4lS0y2/TriState/TabsTest/CinemaM1，复用 catalog + approved|internal→public 发布路径绕状态机触发器 + 源 source_name 分线路/episode_number 分集匹配断言；事务幂等 + teardown CASCADE 清理）使 SSR fetch 命中。
+> - **完成备注**：执行模型: claude-opus-4-8。子代理: 无。**seed 修复 watch-SSR 失败 15 个**（player.spec 10/12 + tri-state 3 + option-tabs 2 + cinema 2；**DxMovie1/DxSerie1 经实证不需 seed**）。残留 8 个 triage 后**确认全为预存陈旧测试**（测已删/改名功能），用户批准一并清理：① theater testid `theater-mode-btn`→`data-ytp-component="theater-btn"` + 视口 1280×720→1600×900（1280 下嵌入 player 高 459px≤SHORT_HEIGHT(460) 落 short-height profile 移除 theater，边界 flaky）；② 删 danmaku 用例（commit e601ea2b 前台移除弹幕）；③ 删 mini-player §3 展开/折叠两用例（HANDOFF-36 commit 2fd2eb16 几何固定高度，toggle-expand/progress testid 移除）；④ mini-player §4 几何 `y<40`→`y<200`（tl dock 含 header 安全区偏移 y≈88）。**最终隔离跑 player/tri-state/option-tabs/cinema/mini-player/smoke 全绿**；门禁 typecheck/lint EXIT=0；teardown 自动清库（DB count=0）。唯一一致残留 card-dual-exit:99（首页 VideoCard，预存+seed 无关 → 拆 follow-up）；card-* / mini:152 在 3-worker 全量并行下负载性 flaky（隔离/retry 通过）。
+>
+> #### CHORE-VIDEOCARD-TAGLAYER-E2E — card-dual-exit:99 TagLayer 布局断言修复
+> - **状态**：⬜ 待开始
+> - **创建时间**：2026-06-13 14:10
+> - **建议模型**：sonnet
+> - **变更原因**：`card-dual-exit.spec.ts:99`「TagLayer 左上象限垂直位于 title 上方（tagBox.y ≤ titleBox.y）」隔离一致失败、最初基线即在、与 player/seed/PLAYER-11 无关（测有 tag 的真实首页卡，跳过无 tag 的 seed 卡）。需查 VideoCard StackedPosterFrame TagLayer 与 title 实际相对布局判定真布局 bug vs 陈旧断言。
+> - **文件范围**：`tests/e2e-next/card-dual-exit.spec.ts` + 可能 VideoCard/StackedPosterFrame 组件
+> - **完成备注**：_（AI 填写）_
