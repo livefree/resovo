@@ -4985,3 +4985,18 @@
 - **质量门禁**：typecheck/lint EXIT=0 / test:changed 679 passed / verify:adr-contracts EXIT=0（D-105a-20 登记）。
 - **注意事项**：① rejected 压制既有行为（candidateUpsert findLatestRejectedByPairKey）保证人工已拒的灰区对无新 exact 证据不复活——准入不会重新骚扰已裁定对；② ingest 路径即时灰准入（新爬同名同年对入库即进候选）；③ 回滚路径 = revert 谓词 + bump version + 跑 rollback-gray-slice-pendings。
 - **[AI-CHECK]**：六问过——①ADR 治理前置（AMENDMENT→实施）；②谓词单一真源三处共用；③identity_score 不虚标、人工闸门不变、自动合并零变更；④三路径一致无分叉；⑤回滚演练实证 658 行可收口；⑥counter 全链四处一个不漏（评审清单逐项核对）。
+
+## [MODUX-SIMILAR-UX] 审核台「类似」Tab 来源更名 + 行布局窄栏挤压修复
+- **完成时间**：2026-06-12
+- **记录时间**：2026-06-12 22:40
+- **执行模型**：claude-opus-4-8
+- **子代理**：无
+- **背景**：用户审视审核台「类似」Tab 的来源 Segment 段控件——identity 召回的是疑似相同视频（=合并候选）、legacy 4 维加权召回更接近「相关推荐」，原标签「多证据 / 实时算法」语义不直观；且「多证据」模式下行内相似度 pill + 拒绝 + 发起合并三元素在窄右栏挤占标题列致视频信息不可见。
+- **修改文件**：
+  - `apps/server-next/src/app/admin/moderation/_client/RightPane/TabSimilar.tsx` — ① 来源 Segment 标签按语义更名（identity 多证据→**合并候选** / legacy 实时算法→**相关推荐**）+ 补来源语义注释；降级提示文案「多证据候选为空，已降级实时算法」→「暂无合并候选，已展示相关推荐」。② 行布局从 grid `'1fr auto auto'` 改纵向两段式（标题/meta/拦截 chips 占满整行 + 底部 `ROW_FOOT_STYLE` flex 行放相似度 pill 与操作按钮，`justify-content: space-between` + `flex-wrap`），修窄栏下标题列被压至近 0 宽问题。testid 全保留。
+  - `tests/unit/components/server-next/admin/moderation/TabSimilar.test.tsx` — 用例 10 source toggle 标签断言同步「实时算法」→「相关推荐」。
+- **新增依赖**：无；**数据库变更**：无（纯前端展示层）。
+- **范围裁定**：仅 moderation TabSimilar 更名；**merge 模块「多证据 / 实时聚合」未动**——语境不同（描述候选生成方式，legacy 输出仍是合并候选组而非相关推荐），改动会语义错配并挂 MergeCandidatesSection 测试断言。
+- **注意事项**：merge 模块「实时聚合」来源已是降级兜底标识（请求恒 identity，toggle 在 CHG-VIR-15-UX-A 退役），其移除为独立后续任务。
+- **质量门禁**：typecheck EXIT=0 / lint EXIT=0（无新增 warning）/ TabSimilar.test.tsx 13/13 passed。
+- **[AI-CHECK]**：六问过——①纯展示层零回归，召回/降级链路与端点契约未触；②更名沉淀来源语义注释，避免后人误读；③布局两段式收敛在组件内，未外溢共享层；④遵范围红线未越界改 merge 模块；⑤测试断言同步改名无遗漏；⑥与 merge 模块语义差异显式记录防一致性误判。

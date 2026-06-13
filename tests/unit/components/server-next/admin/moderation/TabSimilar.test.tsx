@@ -185,11 +185,11 @@ describe('TabSimilar (CHG-SN-8-04-VIEW · ADR-137 / CHG-VIR-9-C identity)', () =
     expect(screen.getByTestId('tab-similar-fallback-note')).not.toBeNull()
   })
 
-  it('10. source toggle 切「实时算法」→ listSimilarVideos 收到 source=legacy（无降级提示）', async () => {
+  it('10. source toggle 切「相关推荐」→ listSimilarVideos 收到 source=legacy（无降级提示）', async () => {
     listSimilarVideosMock.mockResolvedValue({ items: LEGACY_ITEMS, source: 'legacy' })
     render(<TabSimilar videoId="target-id" />)
     await waitFor(() => screen.getByTestId('tab-similar-list'))
-    fireEvent.click(screen.getByRole('tab', { name: '实时算法' }))
+    fireEvent.click(screen.getByRole('tab', { name: '相关推荐' }))
     await waitFor(() => {
       expect(listSimilarVideosMock).toHaveBeenLastCalledWith('target-id', expect.objectContaining({ source: 'legacy' }))
     })
