@@ -70,9 +70,14 @@ test.describe('详情页选集链路（BLOCKER #9 固化）', () => {
     )
     await expect(page.getByTestId('episode-picker')).toBeVisible({ timeout: 10_000 })
 
+    // 规范 watch 链接 = /watch/{base-slug}-{shortId}?ep=3（EpisodePicker watchBase）。精确匹配
+    // base-shortId 段后紧跟 ?ep/&ep——畸形双 shortId（slug 误含 shortId）会因后随 '-' 不匹配。
+    const watchEp3 = new RegExp(
+      `/watch/${MOCK_DETAIL_ANIME.slug}-${MOCK_DETAIL_ANIME.shortId}[?&]ep=3`,
+    )
     await page.getByTestId('episode-btn-3').click()
-    await page.waitForURL(/\/watch\/.*[?&]ep=3/, { timeout: 5_000 })
-    expect(page.url()).toMatch(/\/watch\/.*[?&]ep=3/)
+    await page.waitForURL(watchEp3, { timeout: 5_000 })
+    expect(page.url()).toMatch(watchEp3)
   })
 
   test('点击选集 5 → 跳转 watch 页 /watch/...?ep=5', async ({ page }) => {
@@ -81,8 +86,11 @@ test.describe('详情页选集链路（BLOCKER #9 固化）', () => {
     )
     await expect(page.getByTestId('episode-picker')).toBeVisible({ timeout: 10_000 })
 
+    const watchEp5 = new RegExp(
+      `/watch/${MOCK_DETAIL_ANIME.slug}-${MOCK_DETAIL_ANIME.shortId}[?&]ep=5`,
+    )
     await page.getByTestId('episode-btn-5').click()
-    await page.waitForURL(/\/watch\/.*[?&]ep=5/, { timeout: 5_000 })
-    expect(page.url()).toMatch(/\/watch\/.*[?&]ep=5/)
+    await page.waitForURL(watchEp5, { timeout: 5_000 })
+    expect(page.url()).toMatch(watchEp5)
   })
 })

@@ -5329,3 +5329,18 @@
 - **数据库变更**：无 schema；运行期 seed 6 video + 6 专属 catalog（全部 web 域 e2e），teardown 全清。
 - **验证**：① detail 域（全局 seed，无 env）**16 passed**（detail.spec 10/10 + detail-episode-pick 2/2 + brand-detection 4/4）。② `test:e2e:player`（全局 seed）此前 33 passed（机制不变，仅触发条件改为 web 域）。③ typecheck/lint EXIT=0。
 - **注意事项**：① **homepage.spec / search-page.spec 仍有失败，但经基线对照（无 seed 同样红）确认为预存、与 seed 无关**（search 客户端 mock、seed 独立）→ 拆 follow-up CHORE-E2E-HOMEPAGE-SEARCH-E2E。② 全局 seed 后全量 `test:e2e` 的 player + detail 域均 seed 通过（净改善）；唯一 player 域一致残留 card-dual-exit:99（CHORE-VIDEOCARD-TAGLAYER-E2E）。③ 加了 1 处 production testid（VideoDetailClient DescriptionBlock，纯加性，是详情页规范的可见描述元素应有的 testid）；其余均测试侧。④ 本条 FIX 2 取代 FIX 1（域隔离）的方向——seed 现为全局，FIX 1 changelog 条目的"收窄"描述以本条为准。
+
+## [CHORE-E2E-WATCH-SSR-SEED · Codex stop-time review FIX 3] 规范 seed slug + 锚定 watch URL 断言
+- **完成时间**：2026-06-13
+- **记录时间**：2026-06-13 16:10
+- **执行模型**：claude-opus-4-8（主循环）
+- **子代理**：无
+- **背景**：Codex 第三轮拦截「seeded slugs are non-canonical and the new test assertion hides malformed watch URLs」。① seed slug 误含 shortId（如 `test-movie-aB3kR9x1`）→ DetailHero/EpisodePicker watchSlug=`{slug}-{shortId}` 产出 `/watch/test-movie-aB3kR9x1-aB3kR9x1` **双 shortId 畸形**；② FIX 2 把 detail.spec:109 放宽为 `/watch/[^?#]*{shortId}` 子串匹配，**掩盖了该畸形**。
+- **修改文件**：
+  - `tests/e2e-next/_seed/fixtures.ts` — 6 seed slug 改为**规范 base（去 shortId 后缀）**：test-movie / test-anime / tri-state-movie / tabs-stable-anime / cinema-mode-movie / detail-episode-anime；SeedVideo.slug 注释说明"必须 base，否则双 shortId 畸形"。
+  - `tests/e2e-next/detail.spec.ts` — :109 断言由子串放宽改 **锚定** `new RegExp('/watch/' + MOCK_MOVIE.slug + '(?:[?#/]|$)')`：精确匹配规范 watch 段 `/watch/test-movie-aB3kR9x1` 后紧跟 ?/#// 或结尾；双 shortId 畸形因 slug 段后随 '-' 不匹配 → **不再掩盖畸形**。
+  - `tests/e2e-next/detail-episode-pick.spec.ts` — :64/:79 由 `/watch/.*[?&]ep=N` 改锚定 `/watch/{slug}-{shortId}[?&]ep=N`（精确 base-shortId 段后紧跟 ?ep/&ep）。
+- **新增依赖**：无。
+- **数据库变更**：无 schema；seed slug 列改规范 base（运行期 + teardown）。
+- **验证**：① api 返回 `slug='test-movie'`（base）→ 实测 watch 链接 `/watch/test-movie-aB3kR9x1`（无双 shortId）。② detail.spec + detail-episode-pick **12 passed**（锚定断言通过）；player.spec **11 passed**（规范 slug 不破 player 域）；typecheck/lint EXIT=0。
+- **注意事项**：锚定断言现具回归防护——若 seed slug 再误含 shortId，watch 链接畸形会让 :109/:64/:79 失败（不被掩盖）。

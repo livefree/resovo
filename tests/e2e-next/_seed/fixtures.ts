@@ -42,6 +42,11 @@ export interface SeedCatalog {
 
 export interface SeedVideo {
   readonly shortId: string
+  /**
+   * **规范 base slug（不含 shortId）**。路由由 api 按 short_id 取（slug 不参与路由），但详情页 watch
+   * 链接为 `/watch/{slug}-{shortId}`（DetailHero/EpisodePicker watchSlug）——slug 若误含 shortId 会
+   * 产出 `/watch/{base}-{shortId}-{shortId}` 双 shortId 畸形。故此处必须是 base（无 shortId 后缀）。
+   */
   readonly slug: string
   readonly title: string
   readonly type: 'movie' | 'anime' | 'tv' | 'variety'
@@ -101,7 +106,7 @@ const MINIMAL_CATALOG: SeedCatalog = {
 export const E2E_SEED_VIDEOS: readonly SeedVideo[] = [
   {
     shortId: 'aB3kR9x1',
-    slug: 'test-movie-aB3kR9x1',
+    slug: 'test-movie',
     title: '测试电影',
     type: 'movie',
     episodeCount: 1,
@@ -127,7 +132,7 @@ export const E2E_SEED_VIDEOS: readonly SeedVideo[] = [
   },
   {
     shortId: 'bC4lS0y2',
-    slug: 'test-anime-bC4lS0y2',
+    slug: 'test-anime',
     title: '测试动漫',
     type: 'anime',
     episodeCount: 12,
@@ -153,7 +158,7 @@ export const E2E_SEED_VIDEOS: readonly SeedVideo[] = [
   },
   {
     shortId: 'TriState',
-    slug: 'tri-state-movie-TriState',
+    slug: 'tri-state-movie',
     title: '三态测试电影',
     type: 'movie',
     episodeCount: 1,
@@ -164,7 +169,7 @@ export const E2E_SEED_VIDEOS: readonly SeedVideo[] = [
   },
   {
     shortId: 'TabsTest',
-    slug: 'tabs-stable-anime-TabsTest',
+    slug: 'tabs-stable-anime',
     title: 'Tab 稳定性动漫',
     type: 'anime',
     episodeCount: 12,
@@ -175,7 +180,7 @@ export const E2E_SEED_VIDEOS: readonly SeedVideo[] = [
   },
   {
     shortId: 'CinemaM1',
-    slug: 'cinema-mode-movie-CinemaM1',
+    slug: 'cinema-mode-movie',
     title: '影院模式测试电影',
     type: 'movie',
     episodeCount: 1,
@@ -187,7 +192,7 @@ export const E2E_SEED_VIDEOS: readonly SeedVideo[] = [
   {
     // detail-episode-pick.spec MOCK_DETAIL_ANIME：详情页选集链路
     shortId: 'DetailEp',
-    slug: 'detail-episode-anime-DetailEp',
+    slug: 'detail-episode-anime',
     title: '详情选集测试动漫',
     type: 'anime',
     episodeCount: 12,

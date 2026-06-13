@@ -110,9 +110,11 @@ test.describe('电影详情页', () => {
     const playBtn = page.getByTestId('detail-play-btn')
     await expect(playBtn).toBeVisible()
     await playBtn.click()
-    // watch 链接为 /watch/{slug}-{shortId}?ep=1（slug 存在时含 slug 前缀，DetailHero 既有格式），
-    // 故按"路径段内包含 shortId"匹配（而非紧跟 /watch/ 后）
-    await expect(page).toHaveURL(new RegExp(`/watch/[^?#]*${MOCK_MOVIE.shortId}`))
+    // 规范 watch 链接 = /watch/{base-slug}-{shortId}?ep=1（DetailHero watchSlug）。MOCK_MOVIE.slug
+    // 已是 base-shortId 形式（= seed DB slug 'test-movie' + shortId），故精确匹配该段；锚定
+    // (?:[?#/]|$) 确保 slug 段后紧跟 ?/#// 或结尾——畸形如双 shortId `/watch/...-{shortId}-{shortId}`
+    // 会因 slug 段后随 '-' 而不匹配，**不掩盖 watch URL 畸形**（Codex 复审）。
+    await expect(page).toHaveURL(new RegExp(`/watch/${MOCK_MOVIE.slug}(?:[?#/]|$)`))
   })
 
   test('电影类型不显示选集选择器', async ({ page }) => {
