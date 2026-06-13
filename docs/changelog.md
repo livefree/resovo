@@ -4931,3 +4931,13 @@
 - **新增依赖**：无；**数据库变更**：无 DDL（实体级数据手术：1 split + 4 catalog 落位/迁移 + 1 normalized 修正；catalog 迁移后外部 ID 绑定由 enrichment 自然重建）。
 - **质量门禁**：typecheck/lint EXIT=0 / test:changed scripts+docs-only 空集放行（手术经 split 服务审计路径 + 审计脚本收敛断言 + 幂等复跑三重验证）。
 - **[AI-CHECK]**：六问过——①复用 split 服务（审计可 unmerge / ES 同步 / 新 video 字段完整性）而非裸 SQL 造实体；②catalog 迁移用 findOrCreateWithMatch 四元组（季位语义与采集路径同源）；③逐例 guard 幂等可生产照搬；④暂缓例不强行猜归属（证据优先于进度）；⑤取证归档审计真源；⑥人工闸门流程完整（取证→批准→执行→收敛断言）。
+
+## [GOV-6-FIX] 手术脚本部分执行后重跑安全（Codex 拦截）
+- **完成时间**：2026-06-12
+- **记录时间**：2026-06-12 20:45
+- **执行模型**：claude-fable-5
+- **子代理**：无
+- **拦截内容**：「GOV-6 surgery script is not safe to rerun after partial execution」——手术 1 的拆后修正（catalog season=1 + S2 video 迁移）嵌在 split 的 guard 分支内：split 成功但修正中断后重跑，原 video 已软删 → guard 判「已执行过」整段跳过 → **修正永久缺失**（catalog 留 NULL 槽位 + S1/S2 双新实体同 catalog 混挂）。连带两处：S2 查找用全局标题匹配可误伤同名无关视频；手术 8 的 ES 同步仅在 title UPDATE rowCount>0 时执行，UPDATE 成功后 sync 前中断 → 重跑永不再 sync（ES 永久陈旧）。
+- **修复**：① 拆后修正移出 split guard **独立执行**，各自幂等 guard（season=1 带 `IS NULL` 守卫 / S2 查找限定 `catalog_id = 原 catalog`——已迁出自然查不到）；② 手术 8 ES 同步改无条件（单视频幂等廉价，恒跑收口）。
+- **修改文件**：`scripts/gov6-entity-surgery.ts`。
+- **验证**：全量已执行态实跑——split 跳过 / 修正各自跳过 / ES 恒同步无副作用；typecheck/lint EXIT=0。dev 库本轮手术结果不受影响（修复面向生产 replay 的中断恢复场景）。

@@ -73,7 +73,7 @@ async function main(): Promise<void> {
       `SELECT deleted_at IS NOT NULL AS deleted FROM videos WHERE id = $1`, [CASE1_VIDEO],
     )
     if (!c1Video || c1Video.deleted) {
-      console.log('[手术1] 原 video 已软删/不存在 → 跳过（已执行过）')
+      console.log('[手术1] 原 video 已软删/不存在 → split 跳过（已执行过）')
     } else {
       const { rows: allSources } = await pool.query<{ id: string }>(
         `SELECT id FROM video_sources WHERE video_id = $1 AND deleted_at IS NULL`, [CASE1_VIDEO],
@@ -88,21 +88,28 @@ async function main(): Promise<void> {
         ],
       }, ACTOR_ADMIN_ID)
       console.log(`[手术1] split 完成 audit=${result.auditId} 新 videos=${result.newVideoIds.join(',')}`)
+    }
 
-      // 拆后季位修正：原 catalog season=1；S2 video 迁独立季 catalog
-      await pool.query(
-        `UPDATE media_catalog SET season_number = 1 WHERE id = $1 AND season_number IS NULL`, [CASE1_CATALOG],
-      )
-      const { rows: [s2Video] } = await pool.query<{ id: string }>(
-        `SELECT id FROM videos WHERE title = '掌心饵，驯娇记 第2季' AND deleted_at IS NULL LIMIT 1`,
-      )
-      if (s2Video) {
-        const catId = await moveVideoToSeasonCatalog({
-          videoId: s2Video.id, title: '掌心饵，驯娇记 第2季',
-          titleNormalized: '掌心饵驯娇记', type: 'short', year: 2026, seasonNumber: 2,
-        })
-        console.log(`[手术1] S2 video ${s2Video.id} → catalog ${catId}（season=2）`)
-      }
+    // 拆后季位修正**独立于 split guard 执行**（Codex 拦截：split 成功但修正中断后重跑，
+    // split guard 会整段跳过 → 修正永久缺失。各自幂等 guard 自行收口）
+    await pool.query(
+      `UPDATE media_catalog SET season_number = 1 WHERE id = $1 AND season_number IS NULL`, [CASE1_CATALOG],
+    )
+    // S2 查找限定在原 catalog（split 的 findOrCreate 按旧三元组命中原 catalog）：
+    // 已迁出 → 查不到 → 跳过；全局标题匹配会误伤同名无关视频（Codex 拦截一并修）
+    const { rows: [s2Video] } = await pool.query<{ id: string }>(
+      `SELECT id FROM videos
+       WHERE catalog_id = $1 AND title = '掌心饵，驯娇记 第2季' AND deleted_at IS NULL LIMIT 1`,
+      [CASE1_CATALOG],
+    )
+    if (s2Video) {
+      const catId = await moveVideoToSeasonCatalog({
+        videoId: s2Video.id, title: '掌心饵，驯娇记 第2季',
+        titleNormalized: '掌心饵驯娇记', type: 'short', year: 2026, seasonNumber: 2,
+      })
+      console.log(`[手术1] S2 video ${s2Video.id} → catalog ${catId}（season=2）`)
+    } else {
+      console.log('[手术1] 无待迁 S2 video（已迁出或 split 未产出）→ 修正跳过')
     }
 
     // ── 手术 2：宠妻成瘾动态漫画 season=2 落位 ──
@@ -152,8 +159,10 @@ async function main(): Promise<void> {
     const c8b = await pool.query(
       `UPDATE videos SET title = '魔法使俱乐部 OVA' WHERE id = $1 AND title = '魔法使俱乐部(OVA)'`, [CASE8_VIDEO],
     )
-    if ((c8b.rowCount ?? 0) > 0) await indexSync.syncVideo(CASE8_VIDEO)
-    console.log(`[手术8] OVA catalog/video 修正（catalog ${c8a.rowCount} / video ${c8b.rowCount} 行）`)
+    // ES 同步无条件执行（Codex 拦截：title UPDATE 成功后 sync 前中断 → 重跑 rowCount=0
+    // 不再 sync → ES 永久陈旧。单视频 sync 幂等且廉价，恒跑收口）
+    await indexSync.syncVideo(CASE8_VIDEO)
+    console.log(`[手术8] OVA catalog/video 修正（catalog ${c8a.rowCount} / video ${c8b.rowCount} 行；ES 恒同步）`)
 
     console.log('[gov6-entity-surgery] 全部手术完成；请复跑 audit-cross-season-merge 验证收敛')
   } finally {
