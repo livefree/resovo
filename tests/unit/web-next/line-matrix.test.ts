@@ -7,7 +7,7 @@
 
 import { describe, it, expect } from 'vitest'
 import type { VideoSource } from '@resovo/types'
-import { buildLineKey } from '../../../apps/web-next/src/lib/line-display-name'
+import { buildLineKey, classifyRouteHealth } from '../../../apps/web-next/src/lib/line-display-name'
 import { buildLineMatrix, buildThemedLines } from '../../../apps/web-next/src/lib/line-matrix'
 import { THEME_NUMBERS } from '../../../apps/web-next/src/lib/line-display-name'
 
@@ -105,6 +105,26 @@ describe('buildLineMatrix', () => {
 
   it('空输入 → 空矩阵', () => {
     expect(buildLineMatrix([])).toEqual([])
+  })
+})
+
+describe('classifyRouteHealth（兜底切线当前集源健康口径）', () => {
+  it('0 < score < 0.1 → dead（isPending 恒 false）', () => {
+    expect(classifyRouteHealth(0.05)).toEqual({ isDead: true, isPending: false })
+    expect(classifyRouteHealth(0.099)).toEqual({ isDead: true, isPending: false })
+  })
+  it('0.3 ≤ score < 0.4 → pending', () => {
+    expect(classifyRouteHealth(0.3)).toEqual({ isDead: false, isPending: true })
+    expect(classifyRouteHealth(0.399)).toEqual({ isDead: false, isPending: true })
+  })
+  it('score=0 / undefined / null → 既非 dead 也非 pending（信息不足不判坏）', () => {
+    expect(classifyRouteHealth(0)).toEqual({ isDead: false, isPending: false })
+    expect(classifyRouteHealth(undefined)).toEqual({ isDead: false, isPending: false })
+    expect(classifyRouteHealth(null)).toEqual({ isDead: false, isPending: false })
+  })
+  it('健康分数（≥0.4，≠pending 区间）→ 健康', () => {
+    expect(classifyRouteHealth(0.8)).toEqual({ isDead: false, isPending: false })
+    expect(classifyRouteHealth(0.4)).toEqual({ isDead: false, isPending: false })
   })
 })
 

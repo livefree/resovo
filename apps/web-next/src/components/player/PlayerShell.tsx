@@ -10,6 +10,7 @@ import { apiClient } from '@/lib/api-client'
 import { extractShortId } from '@/lib/short-id'
 import { getVideoDetailHref } from '@/lib/video-route'
 import { buildLineMatrix, buildThemedLines, type VideoLine } from '@/lib/line-matrix'
+import { classifyRouteHealth } from '@/lib/line-display-name'
 import { useRouteTheme } from '@/lib/route-theme-storage'
 import { RouteThemeSelector } from './RouteThemeSelector'
 import { CustomThemeDialog } from './CustomThemeDialog'
@@ -221,10 +222,6 @@ export function PlayerShell({ slug: slugProp, portalMode = false, previewMode = 
   deadLineKeysRef.current = deadLineKeys
   const videoIdRef = useRef<string | null>(video?.id ?? null)
   videoIdRef.current = video?.id ?? null
-  // 自动兜底切线时读 route-scoring 派生的 dead/pending（与 lineMatrix 同序）——
-  // 用 baseThemedLines（不含运行时 deadLineKeys，运行时失败由本地 dead 集覆盖）
-  const themedLinesRef = useRef(baseThemedLines)
-  themedLinesRef.current = baseThemedLines
 
   const handleTimeUpdate = useCallback(
     (t: number, d: number) => {
@@ -289,7 +286,6 @@ export function PlayerShell({ slug: slugProp, portalMode = false, previewMode = 
         return next
       })
       const matrix = lineMatrixRef.current
-      const themed = themedLinesRef.current
       const ep = usePlayerStore.getState().currentEpisode
       const dead = new Set(deadLineKeysRef.current)
       dead.add(failedLineKey)
@@ -298,10 +294,13 @@ export function PlayerShell({ slug: slugProp, portalMode = false, previewMode = 
       for (let step = 1; step < total; step++) {
         const cand = (failedLineIndex + step) % total
         const line = matrix[cand]
-        const t = themed[cand]
-        // 跳过：本会话运行时已失败（dead 集）/ route-scoring 已判 dead 或 pending（known bad，
-        // 恢复旧 PlayerShell `!isDead && !isPending` 守卫，避免自动兜底切入已知坏线路）/ 不含当前集
-        if (line && !dead.has(line.key) && !t?.isDead && !t?.isPending && line.episodes.has(ep)) {
+        if (!line || dead.has(line.key)) continue
+        // 候选必须含当前集；且按**当前集源**的 effectiveScore 判健康（Codex review：
+        // 不能用线路 representative/最高分集——某集坏但他集健康的线路会被误判可切入）。
+        const candSource = line.episodes.get(ep)
+        if (!candSource) continue
+        const { isDead, isPending } = classifyRouteHealth(candSource.effectiveScore)
+        if (!isDead && !isPending) {
           next = cand
           break
         }

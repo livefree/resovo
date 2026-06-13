@@ -230,14 +230,30 @@ const DEAD_THRESHOLD = 0.1
 const PENDING_MIN = 0.3
 const PENDING_MAX = 0.4
 
+/**
+ * 单个 effectiveScore → dead/pending 分类（applyThemeLabels 与自动兜底切线守卫共用唯一真源）。
+ * dead 优先（命中 dead 即 isPending=false，与 applyThemeLabels 原行为一致）。
+ * 口径：dead = 0 < score < DEAD_THRESHOLD；pending = PENDING_MIN ≤ score < PENDING_MAX。
+ * 注意：score=0 / undefined（未探测）既非 dead 也非 pending（信息不足不判坏）。
+ *
+ * PLAYER-LINE-BOUND-EP（Codex stop-time review）：兜底切线须用**候选线路当前集源**的
+ * effectiveScore 判健康，而非线路 representative（最高分集源）——否则"某集坏但 representative
+ * 是另一健康集"的线路会被误判可切入。
+ */
+export function classifyRouteHealth(
+  effectiveScore: number | null | undefined,
+): { isDead: boolean; isPending: boolean } {
+  const score = effectiveScore ?? 0
+  if (score > 0 && score < DEAD_THRESHOLD) return { isDead: true, isPending: false }
+  return { isDead: false, isPending: score >= PENDING_MIN && score < PENDING_MAX }
+}
+
 export function applyThemeLabels(
   routes: ReadonlyArray<ThemedRouteInput>,
   theme: RouteTheme,
 ): ThemedRouteOutput[] {
   return routes.map((route, index) => {
-    const score = route.effectiveScore ?? 0
-    const isDead = score > 0 && score < DEAD_THRESHOLD
-    const isPending = score >= PENDING_MIN && score < PENDING_MAX
+    const { isDead, isPending } = classifyRouteHealth(route.effectiveScore)
     const isFallback = index >= theme.labels.length
 
     if (isDead) {
