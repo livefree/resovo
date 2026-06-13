@@ -3,8 +3,9 @@
 /**
  * MergeCandidatesSection.tsx — `/admin/merge` 待审候选 Segment（CHG-VIR-9-C 拆自 MergeClient 500 行红线）
  *
- * 范围：CandidatesSection — DataTable 一体化 + source toggle（legacy 实时聚合 / identity 多证据）
- *   + 降级回显提示 + merge（identity 来源透传 candidateId / ADR-178 D-178-3 confirm 语义）
+ * 范围：CandidatesSection — DataTable 一体化（CHG-VIR-18：source 恒 identity 唯一来源；
+ *   legacy 实时聚合 / 降级提示 / source 列 / minScore 控件均退役）+ merge（identity 来源透传
+ *   candidateId / ADR-178 D-178-3 confirm 语义）+ reject。GOV-2 版本搁浅警示保留。
  *   + reject（POST /admin/identity-candidates/:id/reject）。
  *   行展开 panel 见 ./MergeCandidateExpand（500 行 budget 再拆）。
  *
@@ -15,7 +16,6 @@
 import { useState, useEffect, useCallback, useMemo, type CSSProperties } from 'react'
 import {
   AdminButton,
-  AdminInput,
   LoadingState,
   ErrorState,
   EmptyState,
@@ -39,7 +39,7 @@ import { buildCandidateSearchParams, MergeSearchInput } from './MergeCandidatesF
 
 // ── 样式（CSS 变量零硬编码颜色）────────────────────────────────────
 
-// CHG-VIR-9-C：identity→legacy 降级回显提示条
+// GOV-2 / D-105a-19：版本搁浅警示 + cap 截断警示条样式（CHG-VIR-18 后 legacy 降级提示退役，共用此样式）
 const FALLBACK_NOTE_STYLE: CSSProperties = {
   padding: '4px 10px',
   borderRadius: '6px',
@@ -49,28 +49,12 @@ const FALLBACK_NOTE_STYLE: CSSProperties = {
   border: '1px solid var(--state-warning-border)',
 }
 
-// CHG-VIR-15-UX-A（用户裁定 ①）：来源 Segment toggle 退役——请求固定 identity
-//（identity 空表自动降级 legacy，CHG-VIR-9-A 降级链路保留），来源改行级列呈现
-//（行级真源 = g.identity 有无：多证据评分存在 → 多证据；降级 legacy → 实时聚合）。
-type CandidateSource = 'legacy' | 'identity'
-
-/** 来源列 chip（CSS 变量零硬编码） */
-const SOURCE_CHIP_STYLE: CSSProperties = {
-  display: 'inline-flex',
-  alignItems: 'center',
-  padding: '1px 8px',
-  borderRadius: 999,
-  fontSize: '11px',
-  border: '1px solid var(--border-subtle)',
-  background: 'var(--bg-subtle)',
-  color: 'var(--fg-muted)',
-}
+// CHG-VIR-18（ADR-105 AMENDMENT 2026-06-12 / D-105-20）：来源维度退役——source 恒 identity 唯一来源，
+// 行级「来源」列零区分性信息整列删除；CandidateSource type + SOURCE_CHIP_STYLE 随之移除。
 
 // ── Candidates section ────────────────────────────────────────────
 
 export function CandidatesSection() {
-  const [minScore, setMinScore] = useState(0.6)
-  const [pendingMinScore, setPendingMinScore] = useState('0.6')
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
   // ADR-150 阶段 5 EP-4 follow-up（2026-05-25）：Merge sort 全栈打通 / Service 层 sort
@@ -87,8 +71,6 @@ export function CandidatesSection() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<Error | null>(null)
   const [expandedKeys, setExpandedKeys] = useState<ReadonlySet<string>>(new Set())
-  // CHG-VIR-15-UX-A：请求固定 identity（toggle 退役）；服务端回显（空表降级 legacy 时不一致）
-  const [effectiveSource, setEffectiveSource] = useState<CandidateSource | null>(null)
   const toast = useToast()
 
   const load = useCallback(() => {
@@ -103,7 +85,8 @@ export function CandidatesSection() {
         ? sort.field
         : undefined
     listCandidates({
-      minScore, limit: pageSize, page, source: 'identity',
+      // CHG-VIR-18 D-105-19：identity 路径后端不消费 minScore（按 identity_score 排序），传 default 口径占位
+      minScore: 0.6, limit: pageSize, page, source: 'identity',
       ...(sortFieldGuarded ? { sortField: sortFieldGuarded, sortDir: sort.direction } : {}),
       // D-105a-19：filters Map → 检索参数（相似度 % → 0..1；候选数整数 ≥2；q 文本）
       ...buildCandidateSearchParams(filters),
@@ -113,11 +96,10 @@ export function CandidatesSection() {
         setTotal(res.total)
         setTruncated(res.truncated === true)
         setStaleIdentityPending(res.staleIdentityPending === true)
-        setEffectiveSource(res.source ?? null)
       })
       .catch((e: unknown) => setError(e instanceof Error ? e : new Error('加载失败')))
       .finally(() => setLoading(false))
-  }, [minScore, page, pageSize, sort, filters])
+  }, [page, pageSize, sort, filters])
 
   useEffect(() => { load() }, [load])
 
@@ -248,23 +230,8 @@ export function CandidatesSection() {
       filterable: true, filterFieldName: 'videoCount', filterKind: 'number',
       cell: ({ row }) => <span>{row.videos.length} 条</span>,
     },
-    // CHG-VIR-15-UX-A（用户裁定 ①）：来源列——tab 退役后行级呈现。
-    // 判定真源 = 服务端回显 effectiveSource（Codex review FIX：legacy 分支也实时填
-    // identity 评分〔CHG-VIR-7 scoreGroup〕，按 row.identity 有无判定会把降级行
-    // 全部误标「多证据」；单查询单来源，回显即行级真值）。
-    {
-      id: 'source',
-      kind: 'computed',
-      header: '来源',
-      accessor: () => effectiveSource ?? '',
-      width: 110, minWidth: 90,
-      cell: ({ row }) => (
-        <span style={SOURCE_CHIP_STYLE} data-testid={`candidate-source-${row.groupKey}`}>
-          {effectiveSource === 'legacy' ? '实时聚合' : '多证据'}
-        </span>
-      ),
-    },
-    // CHG-VIR-15-UX-A（用户裁定 ②）：相似度列（identityScore；legacy 行无评分 '—'）
+    // CHG-VIR-18（D-105-20）：来源列退役（source 恒 identity → 整列零区分性信息）。
+    // CHG-VIR-15-UX-A（用户裁定 ②）：相似度列（identityScore）
     // D-105a-19（CHG-VIR-16-TBL-FE）：开 sort（后端白名单扩 identityScore）+ 区间筛选
     // （accessor/筛选 UI 均百分比口径与 cell 显示一致，请求映射 ÷100 → identityScoreMin/Max）
     {
@@ -317,7 +284,7 @@ export function CandidatesSection() {
         </span>
       ),
     },
-  ], [handleMerge, handleReject, effectiveSource])
+  ], [handleMerge, handleReject])
 
   // D-105a-19：筛选/搜索 commit（翻页重置 page=1）
   const handleFiltersChange = useCallback((next: ReadonlyMap<string, FilterValue>) => {
@@ -338,59 +305,25 @@ export function CandidatesSection() {
   // D-105a-19：筛选/搜索激活判定（激活时空结果保持 DataTable 渲染，chip/搜索框可清除条件）
   const hasActiveCriteria = filters.size > 0
 
-  // CHG-VIR-15-UX-A：toggle 退役后的工具条（降级提示 + 降级态 minScore 控件 + 计数）
-  // CHG-VIR-16-TBL-FE：+搜索框（→ filters['q']）+ truncated 警示条
+  // CHG-VIR-18：工具条（搜索框 + GOV-2 版本搁浅警示 + cap 截断警示 + 计数）。
+  // legacy 降级提示条 + minScore 控件随 source=legacy 退役删除（D-105-20）。
   const sourceToolbar = (
     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
       <MergeSearchInput filters={filters} onCommit={handleFiltersChange} />
-      {effectiveSource === 'legacy' && !staleIdentityPending && !loading && (
-        <span style={FALLBACK_NOTE_STYLE} data-testid="merge-source-fallback-note">
-          多证据候选为空，已降级实时聚合
-        </span>
-      )}
-      {/* GOV-2（SEQ-20260612-03）：版本搁浅显式警示——identity 空非真空表，而是升级后未重扫 */}
+      {/* GOV-2（SEQ-20260612-03）：版本搁浅显式警示——identity 空非真空表，而是升级后未重扫（route 透传 staleIdentityPending / D-105-22） */}
       {staleIdentityPending && !loading && (
         <span style={FALLBACK_NOTE_STYLE} data-testid="merge-stale-identity-note">
-          候选待重评：存在旧版本身份候选（解析器/评分器升级后未重扫），当前为降级口径——请执行
+          候选待重评：存在旧版本身份候选（解析器/评分器升级后未重扫）——请执行
           backfill-title-observations + run-identity-rescore-inline 恢复
         </span>
       )}
-      {/* D-105a-19：cap 截断警示（仅 identity 路径 pending 超折叠上限时回显） */}
+      {/* D-105a-19：cap 截断警示（identity 路径 pending 超折叠上限时回显） */}
       {truncated && !loading && (
         <span style={FALLBACK_NOTE_STYLE} data-testid="merge-truncated-note">
           pending 候选超折叠上限，仅展示最高分候选对的折叠结果
         </span>
       )}
-      {/* identity 来源后端不消费 minScore（按 identity_score 排序）→ 仅降级 legacy 后显示 */}
-      {effectiveSource === 'legacy' && (
-        <>
-          <span style={SECONDARY_TEXT}>minScore</span>
-          <AdminInput
-            size="sm"
-            type="number"
-            step="0.05"
-            min="0"
-            max="1"
-            value={pendingMinScore}
-            onChange={(e) => setPendingMinScore(e.target.value)}
-            style={{ width: '100px' }}
-          />
-          <AdminButton
-            size="sm"
-            variant="secondary"
-            onClick={() => {
-              const v = parseFloat(pendingMinScore)
-              if (!Number.isNaN(v) && v >= 0 && v <= 1) {
-                setMinScore(v)
-                setPage(1)
-              }
-            }}
-          >
-            应用
-          </AdminButton>
-        </>
-      )}
-      {/* D-105a-19：total 语义 = 过滤后组数（identity/legacy 统一；曾为 pending pair 数「共 N 对候选」） */}
+      {/* D-105a-19：total 语义 = 过滤后组数（曾为 pending pair 数「共 N 对候选」） */}
       <span style={{ ...SECONDARY_TEXT, marginLeft: 'auto' }}>
         共 {total} 组
       </span>
@@ -421,9 +354,7 @@ export function CandidatesSection() {
         {sourceToolbar}
         <EmptyState
           title="无合并候选"
-          description={effectiveSource === 'legacy'
-            ? '当前没有符合条件的实时聚合候选组；调整 minScore 重试。'
-            : '当前没有 pending 多证据候选；等待离线 job 生成或在视频库发起合并。'}
+          description="当前没有 pending 多证据候选；等待离线 job 生成或在视频库发起合并。"
         />
       </div>
     )

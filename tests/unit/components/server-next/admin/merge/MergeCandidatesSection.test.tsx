@@ -1,15 +1,16 @@
 /**
  * MergeCandidatesSection.test.tsx — CHG-VIR-9-C（拆自 MergeClient 的待审候选 Segment）
  *
- * 范围（CHG-VIR-9-D 默认翻 identity + 折叠组 candidateIds 后更新）：
- *  1. 默认 source=identity（9-D 翻转）→ listCandidates 收到 source:'identity' + minScore 控件隐藏
- *  2a/2b/2c. CHG-VIR-15-UX-A：来源/相似度列 + 操作列快捷合并/拒绝（toggle 退役 → 列化）
- *  3. 降级回显：默认 identity 返回 source=legacy → 提示条渲染
+ * 范围（CHG-VIR-9-D 默认翻 identity；CHG-VIR-18 D-105-20 来源列/降级提示/minScore 控件退役）：
+ *  1. 默认 source=identity → listCandidates 收到 source:'identity'；minScore 控件 / 降级提示恒隐藏
+ *  2a/2b/2c. 相似度列 + 操作列快捷合并/拒绝（来源列退役，不再渲染 candidate-source chip）
+ *  （原用例 3「降级回显」随 legacy 退役删除；GOV-2 版本搁浅警示见用例 10h）
  *  4. identity group（candidateId 存在）展开 → 「拒绝候选」按钮渲染
  *  5. 拒绝候选 → rejectIdentityCandidate 调用 + success toast + 列表刷新
  *  6. identity group「执行合并」→ mergeVideos 透传 candidateIds（confirm 语义 / D-178-3 + 9-D 数组化）
- *  7. legacy group（无 candidateId）展开 → 无拒绝按钮 + mergeVideos 不带 candidateId(s)
+ *  7. 无 identity 评分组（无 candidateId）展开 → 无拒绝按钮 + mergeVideos 不带 candidateId(s)
  *  8. 折叠组（N=3 多 pair）→ candidateIds 全锚点 + EvidencePanel 逐 pair 拒绝按钮（D-105a-18）
+ *  10f/10h. truncated 截断警示 / GOV-2 版本搁浅警示（staleIdentityPending 透传 D-105-22）
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -125,34 +126,22 @@ afterEach(() => {
 })
 
 describe('MergeCandidatesSection (CHG-VIR-9-C)', () => {
-  it('1. 默认 source=identity（CHG-VIR-9-D 翻转）：listCandidates 收到 identity + minScore 控件隐藏', async () => {
+  it('1. 默认 source=identity（CHG-VIR-9-D 翻转）：listCandidates 收到 identity + minScore 控件 / 降级提示恒隐藏（CHG-VIR-18）', async () => {
     listCandidatesMock.mockResolvedValueOnce(IDENTITY_RES)
     render(<CandidatesSection />)
     await waitFor(() => screen.getByText('復仇者聯盟'))
     expect(listCandidatesMock).toHaveBeenCalledWith(expect.objectContaining({ source: 'identity' }))
+    // CHG-VIR-18 D-105-20：minScore 控件 + legacy 降级提示退役 → 恒不渲染
     expect(screen.queryByText('minScore')).toBeNull()
     expect(screen.queryByTestId('merge-source-fallback-note')).toBeNull()
   })
 
-  it('2a. 来源/相似度列（CHG-VIR-15-UX-A）：identity 回显 → 全行「多证据」+ 相似度 91.0%', async () => {
+  it('2a. 相似度列：identity 评分 → 91.0%（CHG-VIR-18：来源列退役，不再渲染 candidate-source chip）', async () => {
     listCandidatesMock.mockResolvedValue(IDENTITY_RES)
     render(<CandidatesSection />)
     await waitFor(() => screen.getByText('復仇者聯盟'))
-    expect(screen.getByTestId(`candidate-source-${IDENTITY_GROUP.groupKey}`).textContent).toBe('多证据')
-    expect(screen.getByText('91.0%')).not.toBeNull()
-  })
-
-  it('2a-fix. 降级 legacy 回显（Codex FIX）：行虽带实时 identity 评分仍标「实时聚合」（真源 = effectiveSource）', async () => {
-    // 真实契约：legacy 分支也实时填 identity（CHG-VIR-7 scoreGroup）——按 row.identity
-    // 有无判定会全表误标「多证据」；本用例 fixture 对齐该形态防回归
-    const legacyWithIdentity = { ...LEGACY_GROUP, identity: IDENTITY_GROUP.identity }
-    listCandidatesMock.mockResolvedValue({
-      data: [legacyWithIdentity], total: 1, page: 1, limit: 20, source: 'legacy' as const,
-    })
-    render(<CandidatesSection />)
-    await waitFor(() => screen.getByText('復仇者聯盟'))
-    expect(screen.getByTestId(`candidate-source-${LEGACY_GROUP.groupKey}`).textContent).toBe('实时聚合')
-    // 相似度列仍显示实时评分（评分真实计算，与来源标签解耦）
+    // D-105-20：来源列整列退役
+    expect(screen.queryByTestId(`candidate-source-${IDENTITY_GROUP.groupKey}`)).toBeNull()
     expect(screen.getByText('91.0%')).not.toBeNull()
   })
 
@@ -194,15 +183,8 @@ describe('MergeCandidatesSection (CHG-VIR-9-C)', () => {
     })
   })
 
-  it('3. 降级回显：identity 返回 source=legacy → 提示条渲染 + minScore 控件可见（UX-A 降级态）', async () => {
-    listCandidatesMock.mockResolvedValue(LEGACY_RES)
-    render(<CandidatesSection />)
-    await waitFor(() => screen.getByText('復仇者聯盟'))
-    await waitFor(() => {
-      expect(screen.getByTestId('merge-source-fallback-note')).not.toBeNull()
-    })
-    expect(screen.getByText('minScore')).not.toBeNull()
-  })
+  // CHG-VIR-18 D-105-20：原用例 3「降级回显 → 提示条 + minScore 控件」随 legacy 退役删除
+  // （source 恒 identity，无降级；GOV-2 版本搁浅警示另测，见用例 10g 后 stale 用例）。
 
   it('4. identity group 展开：「拒绝候选」按钮 + 相似度 pill 渲染', async () => {
     listCandidatesMock.mockResolvedValueOnce(IDENTITY_RES)
@@ -504,6 +486,14 @@ describe('MergeCandidatesSection (CHG-VIR-9-C)', () => {
     render(<CandidatesSection />)
     await waitFor(() => screen.getByText('復仇者聯盟'))
     await waitFor(() => expect(screen.getByTestId('merge-truncated-note')).not.toBeNull())
+  })
+
+  it('10h. GOV-2 版本搁浅：staleIdentityPending 回显 → 「候选待重评」警示渲染（CHG-VIR-18 D-105-21/22 保留 + route 透传）', async () => {
+    listCandidatesMock.mockResolvedValue({ data: [], total: 0, page: 1, limit: 20, source: 'identity' as const, staleIdentityPending: true })
+    render(<CandidatesSection />)
+    await waitFor(() => expect(screen.getByTestId('merge-stale-identity-note')).not.toBeNull())
+    // 无降级提示（legacy 退役）
+    expect(screen.queryByTestId('merge-source-fallback-note')).toBeNull()
   })
 
   it('10g. 筛选/搜索空结果：保持 DataTable + 表内空态（搜索框可清除条件，不切整页 EmptyState）', async () => {

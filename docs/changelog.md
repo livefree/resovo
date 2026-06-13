@@ -5037,3 +5037,18 @@
 - **质量门禁**：typecheck/lint EXIT=0 / 受影响 7 文件 136 passed / test:changed 全量 7264 passed（1 例 StagingPageClient 并发抖动、隔离重跑 8 passed，与本改动无关）/ verify:adr-contracts EXIT=0。
 - **注意事项**：B 卡（前端 MergeCandidatesSection）清 legacy UI 触点（source 列/降级提示/minScore 控件/空态文案）+ 保留 GOV-2 警示（读独立 staleIdentityPending），完成后该前端边界（source 列退役）闭环。
 - **[AI-CHECK]**：六问过——①删检索路径不删 score/legacy_score/schema，identity 路径回归零；②GOV-2 解耦使空态语义诚实 + route 透传修既有缺口；③identity 唯一来源边界清晰，6 共用函数（pickRecommendedTarget/mapVideoRow/groupMatchesFilters/buildGroupFromCluster/scoreGroup/fetchVideoDetailsForCandidates）保留；④遵 ADR 删除/保留清单逐条；⑤测试改写后受影响全绿 + 新增 GOV-2 解耦/route 透传覆盖；⑥legacy 死代码零残留（grep 仅注释）。
+
+## [CHG-VIR-18-B] merge 来源单一化 · 前端实施（清 legacy UI 触点 + 来源列退役）
+- **完成时间**：2026-06-13
+- **记录时间**：2026-06-13 00:10
+- **执行模型**：claude-opus-4-8
+- **子代理**：无（前端 UI 清理，无共享组件 Props 改动 / 无新端点）
+- **序列**：SEQ-20260612-04（merge 候选来源单一化）卡 3/3——**序列完结**。
+- **修改文件**：
+  - `apps/server-next/src/app/admin/merge/_client/MergeCandidatesSection.tsx` — 来源列整列退役（D-105-20，source 恒 identity 零信息量）+ 删 `effectiveSource`/`CandidateSource`/`SOURCE_CHIP_STYLE` + 删 legacy 降级提示条 + 删 minScore 控件（连 minScore/pendingMinScore state，load 传固定 0.6 占位——identity 后端不消费）+ 空态文案统一 identity 口径 + 删 `AdminInput` import；**保留** GOV-2 stale 警示（读独立 staleIdentityPending）+ truncated 警示。
+  - `tests/unit/components/server-next/admin/merge/MergeCandidatesSection.test.tsx` — 删用例 2a-fix（source 列 + legacy 降级回显）+ 用例 3（降级提示 + minScore 控件）；改用例 2a（来源列退役→断言 candidate-source chip 不渲染）+ 用例 1（minScore/降级提示恒隐藏）；新增 10h GOV-2 staleIdentityPending → 「候选待重评」警示渲染用例（26 passed）。
+- **D-N 闭环**：D-105-20（source 列整列退役）落地闭环 → ADR-105 本卡 D-105-17~22 全闭环（pending 仅余 merge-dedup 历史 advisory 项，与本序列无关）。
+- **新增依赖**：无；**数据库变更**：无（纯前端展示层）。
+- **质量门禁**：typecheck/lint EXIT=0 / test:changed 增量 6 文件 76 passed（merge 全簇绿）/ verify:adr-contracts EXIT=0。
+- **注意事项**：source 字段壳保留（types union + zod 422，回滚平滑）；前端忽略 source 回显值。merge 模块 legacy 实时聚合来源至此前后端完全退役，identity 多证据为唯一来源。
+- **[AI-CHECK]**：六问过——①纯前端清理零回归（merge/reject/折叠/筛选/排序全绿）；②GOV-2 警示保留 + 端到端覆盖（A2 route 透传 → B 前端渲染 10h）；③来源列退役收敛在组件内，未外溢共享层；④遵 ADR D-105-20；⑤测试删/改/增对齐 UI 变更；⑥legacy UI 触点零残留（grep e2e/server-next 清零）。

@@ -2234,5 +2234,7 @@
    - **解锁**：A1 ADR PASS（用户授权持续实施）→ A2 启动。
 2. **CHG-VIR-18-A2** — 后端实施（状态：✅ 已完成 2026-06-12）
    - 落地：listCandidates 删 legacy 分支 + GOV-2 解耦（identity 空态独立查 hasStaleVersionPending）+ route 透传 staleIdentityPending（D-105-22）+ 删 fetchRaw/countRaw/computeOverlapScore + source z.enum(['identity']) + types 注释 + 8 测试文件改写（生产 5 + 测试 8）。门禁：typecheck/lint EXIT=0 / 受影响 7 文件 136 passed / test:changed 全量 7264 passed（1 staging flaky 隔离 PASS）/ verify EXIT=0。后端 D-105-17/18/19/21/22 闭环。详见 changelog [CHG-VIR-18-A2]。
-3. **CHG-VIR-18-B** — 前端 + 测试（状态：🔄 进行中 2026-06-12 23:55，依赖 A2 已完成）
-   - MergeCandidatesSection 清 legacy 触点（source 列整列退役 / 降级提示条 / minScore 控件 / 空态文案统一 identity 口径）+ 保留 GOV-2 stale 警示（改读独立 staleIdentityPending）+ MergeCandidatesSection.test.tsx 2a/2a-fix/3 用例重构。单文件 UI，不再拆。
+3. **CHG-VIR-18-B** — 前端 + 测试（状态：✅ 已完成 2026-06-13）
+   - 落地：MergeCandidatesSection 来源列整列退役 + 删 effectiveSource/CandidateSource/SOURCE_CHIP_STYLE/降级提示条/minScore 控件 + 空态统一 identity + 保留 GOV-2 stale 警示；测试删 2a-fix/3 + 改 2a/1 + 新增 10h stale 警示（26 passed）。门禁：typecheck/lint EXIT=0 / test:changed 6 文件 76 passed / verify EXIT=0。**D-105-20 闭环 → 本卡 D-105-17~22 全闭环**。详见 changelog [CHG-VIR-18-B]。
+
+> **SEQ-20260612-04 完结**（2026-06-13）：merge 候选来源单一化三卡（A1 ADR / A2 后端 / B 前端）全部完成。legacy 实时聚合来源前后端完全退役，identity 多证据为唯一来源；GOV-2 既有 route 透传缺口顺带修复。ADR-105 本序列 D-105-17~22 全闭环。
