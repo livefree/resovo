@@ -11,13 +11,9 @@ import type { VideoType, ReviewStatus, VisibilityStatus } from '@/types'
 
 // ── 原始 DB 行类型 ────────────────────────────────────────────────
 
-export interface RawCandidateGroupRow {
-  readonly title_normalized: string
-  readonly year: number | null
-  readonly type: VideoType
-  readonly video_ids: string[]
-  readonly video_count: string   // COUNT(*) 返回 bigint → string
-}
+// CHG-VIR-18（ADR-105 AMENDMENT 2026-06-12 / D-105-17）：RawCandidateGroupRow +
+// fetchRawCandidateGroups + countRawCandidateGroups（legacy 实时聚合检索）随 source=legacy 退役删除。
+// identity 候选来源走 identity-candidate.ts 轻列折叠管线（D-105a-19），不经此文件聚合。
 
 export interface RawVideoDetailRow {
   readonly id: string
@@ -40,68 +36,7 @@ export interface RawVideoDetailRow {
   readonly external_ids: { readonly provider: string; readonly externalId: string }[]
 }
 
-// ── 查询：候选组（按三元组 GROUP BY HAVING COUNT > 1）────────────────
-
-/**
- * 按 title_normalized + year + type 聚合找出同作品多 video 行候选组。
- * 不含评分；评分由 Service 层基于 video_sources 数据计算。
- *
- * @param type   可选过滤 VideoType（若 null 则不过滤）
- * @param offset SQL OFFSET
- */
-export async function fetchRawCandidateGroups(
-  db: Pool,
-  params: { type: VideoType | null; offset: number; limit: number },
-): Promise<RawCandidateGroupRow[]> {
-  const { type, offset, limit } = params
-  // CHG-SN-5-13-PATCH-2: title_normalized + year 已 migration 029 迁移到 media_catalog
-  // 需 JOIN media_catalog（参 videos.ts:169 VIDEO_JOIN 标准范式）
-  const result = await db.query<RawCandidateGroupRow>(
-    `SELECT
-       mc.title_normalized,
-       mc.year,
-       v.type,
-       ARRAY_AGG(v.id ORDER BY v.created_at ASC) AS video_ids,
-       COUNT(*)::text AS video_count
-     FROM videos v
-     JOIN media_catalog mc ON mc.id = v.catalog_id
-     WHERE v.deleted_at IS NULL
-       AND mc.title_normalized IS NOT NULL
-       AND ($1::text IS NULL OR v.type = $1)
-     GROUP BY mc.title_normalized, mc.year, v.type
-     HAVING COUNT(*) > 1
-     ORDER BY COUNT(*) DESC, mc.title_normalized ASC
-     LIMIT $2 OFFSET $3`,
-    [type ?? null, limit, offset],
-  )
-  return result.rows
-}
-
-/**
- * 候选组总数（按相同过滤条件）。
- * 注：这是"符合条件的组数"，不是 video 总数。
- */
-export async function countRawCandidateGroups(
-  db: Pool,
-  params: { type: VideoType | null },
-): Promise<number> {
-  const { type } = params
-  const result = await db.query<{ total: string }>(
-    `SELECT COUNT(*)::text AS total
-     FROM (
-       SELECT 1
-       FROM videos v
-       JOIN media_catalog mc ON mc.id = v.catalog_id
-       WHERE v.deleted_at IS NULL
-         AND mc.title_normalized IS NOT NULL
-         AND ($1::text IS NULL OR v.type = $1)
-       GROUP BY mc.title_normalized, mc.year, v.type
-       HAVING COUNT(*) > 1
-     ) sub`,
-    [type ?? null],
-  )
-  return parseInt(result.rows[0]?.total ?? '0', 10)
-}
+// ── 查询：候选 video 详情（identity 折叠管线 stage 5 回查消费）────────────
 
 /**
  * 批量拉取 video 详情 + source 摘要（用于评分计算）。

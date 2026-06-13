@@ -5,11 +5,10 @@
  * 根因：Service 返回 `source` 但 route 重组响应时丢字段 → 前端 effectiveSource 恒 null →
  * merge 工作台降级提示永不显示（lib 层单测 mock 在 api 客户端，漏过 route 缺口）。
  *
- * 覆盖（2 + 2 用例）：
- *   #1 source=identity 且 Service 降级返回 legacy → body.source='legacy'（降级回显可达前端）
- *   #2 Service 返回 identity → body.source='identity' + query source 透传给 Service
- *   #3/#4 CHG-VIR-16-TBL FIX（Codex review，同型缺口复发）：truncated 透传（D-105a-19）
- *     + 检索参数 zod 解析透传 Service / 非截断态不携带 truncated 键
+ * 覆盖（route envelope 字段透传机制——同型「字段丢弃」缺口三次防御）：
+ *   #1/#2 source 回显透传（CHG-VIR-9-C FIX；CHG-VIR-18 后 Service 恒 identity，#1 mock 验证 route 不挑值）
+ *   #3/#4 truncated 透传（CHG-VIR-16-TBL FIX / D-105a-19）+ 检索参数 zod 解析透传 / 非截断态不携带键
+ *   #5/#6 staleIdentityPending 透传（CHG-VIR-18 D-105-22 / GOV-2 修缺口）+ 正常态不携带键
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
@@ -125,6 +124,37 @@ describe('GET /admin/video-merges/candidates — source 回显透传（CHG-VIR-9
     })
     expect(res.statusCode).toBe(200)
     expect(res.json()).not.toHaveProperty('truncated')
+    await app.close()
+  })
+
+  // ── CHG-VIR-18 D-105-22（GOV-2 修缺口）：staleIdentityPending 透传（同型字段丢弃缺口第三次防御）──
+
+  it('#5 Service identity 空态返回 staleIdentityPending:true → body.staleIdentityPending=true（GOV-2 警示可达前端）', async () => {
+    listCandidatesMock.mockResolvedValueOnce({
+      data: [], total: 0, page: 1, limit: 20, source: 'identity', staleIdentityPending: true,
+    })
+    const app = await buildApp()
+    const res = await app.inject({
+      method: 'GET',
+      url: '/admin/video-merges/candidates?source=identity',
+      headers: adminAuth(),
+    })
+    expect(res.statusCode).toBe(200)
+    const body = res.json() as { staleIdentityPending?: boolean }
+    expect(body.staleIdentityPending).toBe(true)
+    await app.close()
+  })
+
+  it('#6 Service 未填 staleIdentityPending（正常 identity 候选）→ body 不携带该键', async () => {
+    listCandidatesMock.mockResolvedValueOnce({ data: [], total: 1, page: 1, limit: 20, source: 'identity' })
+    const app = await buildApp()
+    const res = await app.inject({
+      method: 'GET',
+      url: '/admin/video-merges/candidates',
+      headers: adminAuth(),
+    })
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).not.toHaveProperty('staleIdentityPending')
     await app.close()
   })
 })

@@ -42,11 +42,14 @@ export async function adminVideoMergesRoutes(fastify: FastifyInstance) {
       })
     }
     const result = await svc.listCandidates(parsed.data)
-    // CHG-VIR-9-C FIX（Codex review）：source 回显透传（identity 空表降级 legacy 时 UI 据此提示 / ADR-105a AMENDMENT 2026-06-03）
+    // CHG-VIR-9-C FIX（Codex review）：source 回显透传（CHG-VIR-18 起恒 identity / ADR-105a AMENDMENT 2026-06-03）
     // CHG-VIR-16-TBL FIX（Codex review）：truncated 透传（D-105a-19 cap 截断警示条消费——route 手工构造响应曾把该字段丢弃）
+    // CHG-VIR-18 D-105-22（GOV-2 修缺口）：staleIdentityPending 透传——identity 空态版本搁浅信号，
+    // 前端「候选待重评」警示消费；此前 route 手工构造响应丢弃该字段致 merge 警示恒失效。
     return reply.send({
       data: result.data, total: result.total, page: result.page, limit: result.limit, source: result.source,
       ...(result.truncated !== undefined ? { truncated: result.truncated } : {}),
+      ...(result.staleIdentityPending !== undefined ? { staleIdentityPending: result.staleIdentityPending } : {}),
     })
   })
 

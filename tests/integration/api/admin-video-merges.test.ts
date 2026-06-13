@@ -10,8 +10,6 @@ import type { Pool } from 'pg'
 import { createIntegrationPool } from '../../helpers/integration-pg'
 
 import {
-  fetchRawCandidateGroups,
-  countRawCandidateGroups,
   fetchVideoDetailsForCandidates,
 } from '../../../apps/api/src/db/queries/video-merge-candidates'
 import {
@@ -32,22 +30,7 @@ afterAll(async () => {
   await db.end()
 })
 
-describe('video-merge-candidates SQL 集成', () => {
-  it('fetchRawCandidateGroups({type: null}) JOIN media_catalog 跑通', async () => {
-    const rows = await fetchRawCandidateGroups(db, { type: null, offset: 0, limit: 20 })
-    expect(rows).toBeInstanceOf(Array)
-  })
-
-  it('fetchRawCandidateGroups({type: movie}) type 过滤跑通', async () => {
-    const rows = await fetchRawCandidateGroups(db, { type: 'movie', offset: 0, limit: 20 })
-    expect(rows).toBeInstanceOf(Array)
-  })
-
-  it('countRawCandidateGroups 子查询跑通（mc.title_normalized GROUP BY）', async () => {
-    const count = await countRawCandidateGroups(db, { type: null })
-    expect(count).toBeGreaterThanOrEqual(0)
-  })
-
+describe('video-merge-candidates SQL 集成（CHG-VIR-18：legacy 聚合 query 退役，仅 detail 回查保留）', () => {
   it('fetchVideoDetailsForCandidates([nonexistent uuid]) 返回空数组', async () => {
     const rows = await fetchVideoDetailsForCandidates(db, ['00000000-0000-0000-0000-000000000000'])
     expect(rows).toEqual([])

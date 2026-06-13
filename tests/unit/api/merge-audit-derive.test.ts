@@ -31,8 +31,6 @@ vi.mock('@/api/db/queries/video-merge-mutations', () => ({
 }))
 
 vi.mock('@/api/db/queries/video-merge-candidates', () => ({
-  fetchRawCandidateGroups: vi.fn(),
-  countRawCandidateGroups: vi.fn(),
   fetchVideoDetailsForCandidates: vi.fn(),
 }))
 

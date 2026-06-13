@@ -25,8 +25,6 @@ vi.mock('@/api/db/queries/identity-candidate', () => ({
   hasStaleVersionPending: vi.fn().mockResolvedValue(false),
 }))
 vi.mock('@/api/db/queries/video-merge-candidates', () => ({
-  fetchRawCandidateGroups: vi.fn(),
-  countRawCandidateGroups: vi.fn(),
   fetchVideoDetailsForCandidates: vi.fn(),
   fetchVideoMetaLight: vi.fn(),
 }))
@@ -39,10 +37,10 @@ import {
   listPendingCandidatePairsLight,
   listPendingPairsLightByVideoIds,
   listPendingPairsByIds,
+  // CHG-VIR-18 D-105-21：merge identity 真空表 → 空态独立查版本搁浅（GOV-2 解耦）
+  hasStaleVersionPending,
 } from '@/api/db/queries/identity-candidate'
 import {
-  fetchRawCandidateGroups,
-  countRawCandidateGroups,
   fetchVideoDetailsForCandidates,
   fetchVideoMetaLight,
 } from '@/api/db/queries/video-merge-candidates'
@@ -150,37 +148,34 @@ describe('VideoMergesService.listCandidates — source 切换 + D-105a-19 组级
     expect(r.truncated).toBeUndefined() // 非截断态不填
     expect(r.data[0]!.videos).toHaveLength(2)
     expect(r.data[0]!.identity!.identityScore).toBe(0.9)
-    expect(fetchRawCandidateGroups).not.toHaveBeenCalled()
     expect(fetchVideoMetaLight).not.toHaveBeenCalled() // 无 q / title·year 排序不拉 meta
   })
 
-  it('source=identity 真空表（轻列空）→ 降级 legacy', async () => {
+  it('source=identity 真空表（轻列空）→ identity 空 envelope（CHG-VIR-18 D-105-21：不再降级 legacy）', async () => {
     vi.mocked(listPendingCandidatePairsLight).mockResolvedValue([] as never)
-    vi.mocked(fetchRawCandidateGroups).mockResolvedValue([] as never)
-    vi.mocked(countRawCandidateGroups).mockResolvedValue(0 as never)
     const r = await svc().listCandidates({ minScore: 0, limit: 20, page: 1, source: 'identity' })
-    expect(r.source).toBe('legacy')
-    expect(fetchRawCandidateGroups).toHaveBeenCalled()
+    expect(r.source).toBe('identity')
+    expect(r.data).toHaveLength(0)
+    expect(r.total).toBe(0)
+    expect(r.staleIdentityPending).toBeUndefined() // hasStaleVersionPending 默认 false → 不填字段
   })
 
-  it('source=identity total>0 但本页空（offset 超尾）→ 空 data 保持 identity 不悄降 legacy（FIX-2）', async () => {
+  it('source=identity total>0 但本页空（offset 超尾）→ 空 data 保持 identity（FIX-2）', async () => {
     vi.mocked(listPendingCandidatePairsLight).mockResolvedValue([lightRow('c1', 'a', 'b')] as never)
     const r = await svc().listCandidates({ minScore: 0, limit: 20, page: 99, source: 'identity' })
     expect(r.source).toBe('identity')
     expect(r.data).toHaveLength(0)
     expect(r.total).toBe(1)
-    expect(fetchRawCandidateGroups).not.toHaveBeenCalled()
     expect(listPendingPairsByIds).not.toHaveBeenCalled() // 页空短路零回查
   })
 
-  it('默认（无 source）→ identity（CHG-VIR-9-D 翻转；空表仍降级 legacy）', async () => {
+  it('默认（无 source）→ identity（CHG-VIR-9-D 翻转；真空表 identity 空 envelope）', async () => {
     vi.mocked(listPendingCandidatePairsLight).mockResolvedValue([] as never)
-    vi.mocked(fetchRawCandidateGroups).mockResolvedValue([] as never)
-    vi.mocked(countRawCandidateGroups).mockResolvedValue(0 as never)
     const r = await svc().listCandidates({ minScore: 0, limit: 20, page: 1 })
-    // 默认先查 identity_candidate（翻转生效），真空表自动降级 legacy 回显
+    // 默认先查 identity_candidate（翻转生效）；CHG-VIR-18 真空表返回 identity 空态不再降级
     expect(listPendingCandidatePairsLight).toHaveBeenCalled()
-    expect(r.source).toBe('legacy')
+    expect(r.source).toBe('identity')
+    expect(r.data).toHaveLength(0)
   })
 
   // ── CHG-VIR-9-D / D-105a-18 → 19：connected components 折叠（全量） ────────
@@ -304,7 +299,6 @@ describe('VideoMergesService.listCandidates — source 切换 + D-105a-19 组级
     expect(miss.source).toBe('identity') // 筛选空不降级（D-105a-19 降级判定收窄）
     expect(miss.data).toHaveLength(0)
     expect(miss.total).toBe(0)
-    expect(fetchRawCandidateGroups).not.toHaveBeenCalled()
   })
 
   // ── D-105a-19：cap 截断 + 闭包补全（评审红线 R-1 方案 b） ──────────────
@@ -333,5 +327,17 @@ describe('VideoMergesService.listCandidates — source 切换 + D-105a-19 组级
     expect(g.groupKey).toBe('v0|v1|vz')
     expect(g.videos).toHaveLength(3) // videoCount 可信（闭包补全后）
     expect(g.candidateIds).toEqual(['c0', 'cb']) // confirm 锚点不漏桥接 pair
+  })
+
+  // ── CHG-VIR-18 D-105-21/22：GOV-2 解耦——真空表 + 版本搁浅 → identity 空 + staleIdentityPending ──
+
+  it('真空表 + 版本搁浅 → identity 空 envelope + staleIdentityPending:true（GOV-2 解耦，不借 legacy 通道）', async () => {
+    vi.mocked(listPendingCandidatePairsLight).mockResolvedValue([] as never)
+    vi.mocked(hasStaleVersionPending).mockResolvedValue(true as never)
+    const r = await svc().listCandidates({ minScore: 0, limit: 20, page: 1, source: 'identity' })
+    expect(r.source).toBe('identity')
+    expect(r.data).toHaveLength(0)
+    expect(r.total).toBe(0)
+    expect(r.staleIdentityPending).toBe(true)
   })
 })

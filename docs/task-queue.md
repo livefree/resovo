@@ -2232,7 +2232,7 @@
 1. **CHG-VIR-18-A1** — ADR-105 AMENDMENT 2026-06-12 起草（source 退化单一 identity + 端点契约表 row 1 历史欠账补登 source/sortField/sortDir/identityScoreMin/Max(0..1)/videoCountMin/Max/q + 6 边界声明 D-105-17~22 + 主体段 D-N 登记块 + 回滚路径）（状态：🔄 进行中，创建 2026-06-12 23:00，实际开始 2026-06-12 23:00）
    - **状态：✅ 已完成 2026-06-12**（commit 见下；用户走读 REVISE×2 全采纳；verify:adr-contracts EXIT=0 / adr-d-status ADR-105 total 22）。详见 changelog [CHG-VIR-18-A1]。
    - **解锁**：A1 ADR PASS（用户授权持续实施）→ A2 启动。
-2. **CHG-VIR-18-A2** — 后端实施（状态：🔄 进行中 2026-06-12 23:30）
-   - listCandidates 删 legacy 分支 + GOV-2 解耦（hasStaleVersionPending 重挂 identity 空态独立信号）+ **route envelope 透传 staleIdentityPending（D-105-22 修 GOV-2 既有透传缺口）+ route 单测** + 删 fetchRawCandidateGroups/countRawCandidateGroups/computeOverlapScore（legacy 专属）+ schemas source 收敛/types 注释口径 + 3 测试文件 ≥6 用例改写（identity-source-switch.test.ts 整组重构 = 最高风险）。**保留**：score 字段 / legacy_score 列 / minScore zod / identityScore(0..1)·videoCount·q 筛选 / truncated / pickRecommendedTarget·mapVideoRow·groupMatchesFilters·buildGroupFromCluster·scoreGroup（共用或 identity API）。
-3. **CHG-VIR-18-B** — 前端 + 测试（状态：📋 待启动，依赖 A2）
+2. **CHG-VIR-18-A2** — 后端实施（状态：✅ 已完成 2026-06-12）
+   - 落地：listCandidates 删 legacy 分支 + GOV-2 解耦（identity 空态独立查 hasStaleVersionPending）+ route 透传 staleIdentityPending（D-105-22）+ 删 fetchRaw/countRaw/computeOverlapScore + source z.enum(['identity']) + types 注释 + 8 测试文件改写（生产 5 + 测试 8）。门禁：typecheck/lint EXIT=0 / 受影响 7 文件 136 passed / test:changed 全量 7264 passed（1 staging flaky 隔离 PASS）/ verify EXIT=0。后端 D-105-17/18/19/21/22 闭环。详见 changelog [CHG-VIR-18-A2]。
+3. **CHG-VIR-18-B** — 前端 + 测试（状态：🔄 进行中 2026-06-12 23:55，依赖 A2 已完成）
    - MergeCandidatesSection 清 legacy 触点（source 列整列退役 / 降级提示条 / minScore 控件 / 空态文案统一 identity 口径）+ 保留 GOV-2 stale 警示（改读独立 staleIdentityPending）+ MergeCandidatesSection.test.tsx 2a/2a-fix/3 用例重构。单文件 UI，不再拆。

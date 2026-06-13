@@ -5018,3 +5018,22 @@
 - **关键边界**（A2 必须遵守）：删 `source=legacy` 检索路径 ≠ 删 `score` 字段 ≠ 删 `legacy_score` 列——identity 路径也填充 score，误删任一即回归。
 - **质量门禁**：verify:adr-contracts EXIT=0（endpoint-adr ✅ 235 路由 / sql-schema ✅ / shell-types ✅ / adr-d-numbers 主体段识别新 6 条 pending）。docs-only（test:changed 自动跳过）。
 - **[AI-CHECK]**：六问过——①纯文档零代码零回归；②ADR 治理前置（先契约后实施，A1 PASS 解锁 A2）；③复用 `### AMENDMENT 2026-06-05` D-N 登记范式 + 主体段识别机制；④遵 ADR 红线（删路径不删字段/列/schema）；⑤用户 3 项 P1 走读修订逐条核验真源后全采纳；⑥主体段登记块解决审计盲区，total 22 可追踪闭环。
+
+## [CHG-VIR-18-A2] merge 来源单一化 · 后端实施（移除 legacy 实时聚合检索路径）
+- **完成时间**：2026-06-12
+- **记录时间**：2026-06-12 23:55
+- **执行模型**：claude-opus-4-8
+- **子代理**：arch-reviewer (claude-opus-4-8, agentId add53ee9b2c536ecc) — A1 移除方案评审（A2 按其结论 + 用户 REVISE×2 落地）
+- **序列**：SEQ-20260612-04（merge 候选来源单一化）卡 2/3。
+- **修改文件**（生产 5 + 测试 8）：
+  - `apps/api/src/services/VideoMergesService.ts` — `listCandidates` 删 legacy 分支（~110 行：fetchRawCandidateGroups/computeOverlapScore/minScore 过滤/排序/分页）；identity 五阶段管线为唯一来源；真空表 → identity 空 envelope + 独立查 `hasStaleVersionPending`（GOV-2 解耦 D-105-21，不再降级 legacy）；清 imports。
+  - `apps/api/src/services/VideoMergesService.schemas.ts` — `source: z.enum(['identity']).default('identity')`（D-105-18，传 legacy → 422）；删 `computeOverlapScore`（保留 pickRecommendedTarget/mapVideoRow/buildGroupFromCluster 及其读 legacy_score 列填充 score）。
+  - `apps/api/src/routes/admin/video-merges.ts` — envelope 透传 `staleIdentityPending`（D-105-22，修 GOV-2 既有缺口：route 此前丢弃该字段致 merge 警示恒失效）。
+  - `apps/api/src/db/queries/video-merge-candidates.ts` — 删 `RawCandidateGroupRow`/`fetchRawCandidateGroups`/`countRawCandidateGroups`（保留 fetchVideoDetailsForCandidates/fetchVideoMetaLight）。
+  - `packages/types/src/video-merge.types.ts` — source/truncated/staleIdentityPending 注释去 legacy 语义（type union 保留壳供回滚，零类型契约变更）。
+  - 测试：`identity-source-switch`（legacy 降级用例改 identity 空态 + 新增 GOV-2 解耦 stale 用例，17 passed）/ `video-merge-candidates`（收缩：删 legacy 评分/排序/perf，保留 SQL+zod+mapVideoRow，18 passed）/ `video-merges-identity`（改 identity 折叠 mock，4 passed）/ `video-merges-candidates-route`（+#5/#6 staleIdentityPending 透传，6 passed）/ 3 factory 清理（confirm-decision/mutations/merge-audit-derive）/ `admin-video-merges` integration（删 legacy SQL 用例）。
+- **D-N 闭环**：后端边界 D-105-17（删路径保 score 字段/legacy_score 列）、D-105-18（source enum 收敛）、D-105-19（minScore 保留）、D-105-21（GOV-2 解耦 + truncated 原生语义）、D-105-22（route 透传）已落地闭环；source 列整列退役（前端边界，编号见 ADR）尚属 pending，随 B 卡闭环。
+- **新增依赖**：无；**数据库变更**：无（删检索路径，零 DB schema / 零 legacy_score 列变更）。
+- **质量门禁**：typecheck/lint EXIT=0 / 受影响 7 文件 136 passed / test:changed 全量 7264 passed（1 例 StagingPageClient 并发抖动、隔离重跑 8 passed，与本改动无关）/ verify:adr-contracts EXIT=0。
+- **注意事项**：B 卡（前端 MergeCandidatesSection）清 legacy UI 触点（source 列/降级提示/minScore 控件/空态文案）+ 保留 GOV-2 警示（读独立 staleIdentityPending），完成后该前端边界（source 列退役）闭环。
+- **[AI-CHECK]**：六问过——①删检索路径不删 score/legacy_score/schema，identity 路径回归零；②GOV-2 解耦使空态语义诚实 + route 透传修既有缺口；③identity 唯一来源边界清晰，6 共用函数（pickRecommendedTarget/mapVideoRow/groupMatchesFilters/buildGroupFromCluster/scoreGroup/fetchVideoDetailsForCandidates）保留；④遵 ADR 删除/保留清单逐条；⑤测试改写后受影响全绿 + 新增 GOV-2 解耦/route 透传覆盖；⑥legacy 死代码零残留（grep 仅注释）。

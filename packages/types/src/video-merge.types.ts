@@ -86,15 +86,16 @@ export interface ListCandidatesParams {
   readonly sortField?: 'score' | 'videoCount' | 'year' | 'titleNormalized' | 'identityScore'
   readonly sortDir?: 'asc' | 'desc'
   /**
-   * CHG-VIR-9-A：候选来源。`legacy`（默认）=实时 group-by（ADR-105 v1）；
-   * `identity`=读 identity_candidate（多证据候选，空表自动降级 legacy）。
+   * 候选来源。CHG-VIR-18（ADR-105 AMENDMENT 2026-06-12 / D-105-18）：`identity`（多证据离线候选）
+   * 为唯一来源；zod 收敛 `z.enum(['identity'])`，传 `legacy` → 422。type union 保留 `legacy` 字段壳
+   * 供回滚平滑（CHG-VIR-9-A 历史值，实时 group-by 聚合检索路径已退役）。
    */
   readonly source?: 'identity' | 'legacy'
   /**
    * ADR-105a AMENDMENT 2026-06-05 D-105a-19（CHG-VIR-16-TBL）：组级筛选 + 标题搜索。
    * 相似度区间（组分 = min over pair identity_score，0..1）/ 候选数区间（折叠后成员数 ≥2）/
    * q = 组任一成员标题双口径 contains（title lower-case 为主 + normalizeMergeKey(q)/title_normalized 辅召回）。
-   * identity 路径全量折叠后组级精确；legacy 降级路径页内近似（已登记，与 minScore 同源同阶）。
+   * identity 路径全量折叠后组级精确（CHG-VIR-18 起为唯一路径，legacy 近似随 source=legacy 退役）。
    */
   readonly identityScoreMin?: number
   readonly identityScoreMax?: number
@@ -108,19 +109,19 @@ export interface ListCandidatesResult {
   readonly total: number
   readonly page: number
   readonly limit: number
-  /** 回显实际使用来源（identity 空表降级时为 legacy / CHG-VIR-9-A）。 */
+  /** 回显实际使用来源。CHG-VIR-18 起恒 `'identity'`（含空态）；`legacy` 仅历史回滚保留。 */
   readonly source?: 'identity' | 'legacy'
   /**
    * ADR-105a AMENDMENT 2026-06-05 D-105a-19：identity 路径 pending pair 超 cap（2000）截断时 true
    * （仅最高分前 cap 对参与折叠 + 闭包补全；UI 警示条消费）。非截断态不填。
-   * GOV-2（SEQ-20260612-03）起 legacy 路径同语义复用：原始组超 cap 有界全量截断时 true。
+   * CHG-VIR-18 D-105-21：legacy 路径退役后回归 identity 原生语义，与 legacy 无关。
    */
   readonly truncated?: boolean
   /**
    * SEQ-20260612-03 GOV-2（消费侧诚实化）：identity 当前版本候选为空但存在**旧版本**
-   * pending（parser/scorer 升级后未重扫，2026-06-12 版本搁浅实证）→ true，随 legacy
-   * 降级数据返回；UI 警示条提示「候选待重评」而非静默换口径。修复链见
-   * run-identity-rescore-inline.ts 头注。可选字段（CHG-352 R1 范式防破坏消费方）。
+   * pending（parser/scorer 升级后未重扫，2026-06-12 版本搁浅实证）→ true。CHG-VIR-18 D-105-21：
+   * identity 空态**独立返回**该字段（不再随 legacy 降级数据，legacy 已退役）；route 透传（D-105-22），
+   * UI 警示「候选待重评」。修复链见 run-identity-rescore-inline.ts 头注。可选字段（CHG-352 R1 范式）。
    */
   readonly staleIdentityPending?: boolean
 }

@@ -33,9 +33,9 @@ export const ListCandidatesSchema = z.object({
   // ADR-105a AMENDMENT 2026-06-05 D-105a-19（CHG-VIR-16-TBL）：扩 identityScore
   sortField: z.enum(['score', 'videoCount', 'year', 'titleNormalized', 'identityScore']).optional(),
   sortDir: z.enum(['asc', 'desc']).optional(),
-  // CHG-VIR-9-A：候选来源（identity 读 candidate 表，空表降级 legacy）
-  // CHG-VIR-9-D / D-105a-18：默认翻 identity（9-A AMENDMENT「待 shadow 稳定后另起小卡翻默认」兑现）
-  source: z.enum(['identity', 'legacy']).default('identity'),
+  // CHG-VIR-18（ADR-105 AMENDMENT 2026-06-12 / D-105-18）：source 收敛单一 identity——
+  // legacy 实时聚合检索路径退役；传 legacy → 422 显式拒绝（不删字段壳，回滚平滑）。
+  source: z.enum(['identity']).default('identity'),
   // D-105a-19（CHG-VIR-16-TBL）：组级筛选 + 标题搜索（min > max → 422 refine，显式拒绝优于静默交换）
   identityScoreMin: z.coerce.number().min(0).max(1).optional(),
   identityScoreMax: z.coerce.number().min(0).max(1).optional(),
@@ -134,31 +134,9 @@ export const ListAuditSchema = z.object({
 
 // ── 评分算法 v1（ADR-105 §4）──────────────────────────────────────
 
-/**
- * 计算 source_overlap_ratio：
- * 组内 ≥2 个 video 共享的 source_site_key 数 / 组内所有 unique site_key 数
- * ∈ [0, 1]；空 site_keys 时 score = 0。
- */
-export function computeOverlapScore(videos: readonly VideoSummaryForMerge[]): number {
-  const allKeys = new Set<string>()
-  const keyCount = new Map<string, number>()
-
-  for (const v of videos) {
-    for (const key of v.sourceSiteKeys) {
-      allKeys.add(key)
-      keyCount.set(key, (keyCount.get(key) ?? 0) + 1)
-    }
-  }
-
-  if (allKeys.size === 0) return 0
-
-  let sharedCount = 0
-  for (const count of keyCount.values()) {
-    if (count >= 2) sharedCount++
-  }
-
-  return sharedCount / allKeys.size
-}
+// CHG-VIR-18（ADR-105 AMENDMENT 2026-06-12 / D-105-17）：computeOverlapScore（legacyScore
+// 实时聚合算法）随 legacy 检索路径退役删除。注意 `CandidateGroup.score` 字段与 identity_candidate
+// .legacy_score 列**保留**——identity 路径经 buildGroupFromCluster 从 legacy_score 列填充 score。
 
 /**
  * 推荐合并 target：source 最多的 video；同等时取最早 createdAt。

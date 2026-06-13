@@ -15,7 +15,6 @@ import type {
   ListCandidatesParams,
   ListCandidatesResult,
   CandidateGroup,
-  VideoSummaryForMerge,
   MergeParams,
   MergeResult,
   UnmergeResult,
@@ -27,13 +26,11 @@ import type {
   StatusTransitionOutcome,
 } from '@resovo/types'
 import {
-  fetchRawCandidateGroups,
-  countRawCandidateGroups,
   fetchVideoDetailsForCandidates,
   // D-105a-19（CHG-VIR-16-TBL-BE）：q 搜索 / title·year 排序用轻元数据（videos JOIN media_catalog）
   fetchVideoMetaLight,
 } from '@/api/db/queries/video-merge-candidates'
-// CHG-VIR-9-A：merge source=identity 读 identity_candidate 候选（空表降级 legacy）
+// CHG-VIR-18（ADR-105 AMENDMENT 2026-06-12）：source 恒 identity，legacy 实时聚合检索路径退役。
 // ADR-105a AMENDMENT 2026-06-05 D-105a-19（CHG-VIR-16-TBL-BE）：有界全量轻列折叠管线
 // （listPendingCandidatePairs / countPendingCandidatePairs 在列表路径退役，函数本体保留供报表/测试）
 import {
@@ -98,8 +95,6 @@ import {
   type TargetStatusBefore,
 } from './VideoMergesService.status-helpers'
 import {
-  computeOverlapScore,
-  pickRecommendedTarget,
   mapVideoRow,
   buildGroupFromCluster,
 } from './VideoMergesService.schemas'
@@ -111,8 +106,8 @@ import {
   clusterTitles,
   sortIdentityClusterEntries,
 } from './identity/groupFilters'
-// CHG-VIR-7 Phase 2a：多证据身份评分（identityScore/evidence，与 legacyScore 分离 / R3）
-import { scoreGroup, SCORER_VERSION } from './identity'
+// CHG-VIR-7 Phase 2a：多证据身份评分版本常量（identity 空态降级判定 hasStaleVersionPending 消费）
+import { SCORER_VERSION } from './identity'
 import { TITLE_PARSER_VERSION } from './TitleIdentityParser'
 import { generateShortId } from '@/api/lib/short-id'
 
@@ -151,119 +146,25 @@ export class VideoMergesService {
   }
 
   async listCandidates(params: ListCandidatesParams): Promise<ListCandidatesResult> {
-    const { type = null, minScore, limit, page } = params
-    const typeFilter = type ?? null
+    // CHG-VIR-18（ADR-105 AMENDMENT 2026-06-12 / D-105-18）：source 恒 identity——
+    // legacy 实时聚合检索路径退役，identity 五阶段管线（listIdentityCandidates）为唯一来源。
+    const identityResult = await this.listIdentityCandidates(params)
+    if (identityResult) return identityResult
 
-    // CHG-VIR-9-A：source=identity 读 identity_candidate 候选；空表自动降级 legacy。
-    // CHG-VIR-9-D / D-105a-18：默认翻 identity（zod default 与 Service 兜底两处一致）。
-    // GOV-2：降级前区分「真空表」vs「版本搁浅（parser/scorer 升级后未重扫）」——后者
-    // 随 legacy 数据透出 staleIdentityPending，UI 警示「候选待重评」而非静默换口径
-    // （2026-06-12 实证：bump 搁浅 207 pending 被用户当 bug 报告）。
-    let staleIdentityPending = false
-    if ((params.source ?? 'identity') === 'identity') {
-      const identityResult = await this.listIdentityCandidates(params)
-      if (identityResult) return identityResult
-      // identity 候选空 → 落回 legacy
-      staleIdentityPending = await hasStaleVersionPending(this.db, {
-        parserVersion: TITLE_PARSER_VERSION,
-        scorerVersion: SCORER_VERSION,
-      })
-    }
-    const staleFlag = staleIdentityPending ? { staleIdentityPending: true as const } : {}
-
-    // GOV-2（9-C FIX-2 收口）：legacy 改「有界全量取组 → 过滤 → 排序 → total=过滤后 → 切片」，
-    // 消除 filter-after-paginate（minScore/组级谓词在 SQL 分页后执行 → total 失真、行散落分页）。
-    // cap 复用 MAX_COLLAPSE_PAIRS 口径（legacy 仅降级态，超 cap 标 truncated 警示条）。
-    const [rawGroups, rawTotal] = await Promise.all([
-      fetchRawCandidateGroups(this.db, { type: typeFilter, offset: 0, limit: MAX_COLLAPSE_PAIRS }),
-      countRawCandidateGroups(this.db, { type: typeFilter }),
-    ])
-    const legacyTruncated = rawTotal > MAX_COLLAPSE_PAIRS
-
-    if (rawGroups.length === 0) {
-      return { data: [], total: 0, page, limit, source: 'legacy', ...staleFlag }
-    }
-
-    // 批量获取所有相关 video 的详情
-    const allVideoIds = rawGroups.flatMap(g => g.video_ids)
-    const videoDetails = await fetchVideoDetailsForCandidates(this.db, allVideoIds)
-    const videoMap = new Map(videoDetails.map(v => [v.id, mapVideoRow(v)]))
-
-    // 组装候选组 + 计算评分 + 过滤
-    const groups: CandidateGroup[] = []
-    for (const raw of rawGroups) {
-      const videos = raw.video_ids
-        .map(id => videoMap.get(id))
-        .filter((v): v is VideoSummaryForMerge => v !== undefined)
-
-      if (videos.length < 2) continue
-
-      const score = computeOverlapScore(videos)
-      if (score < minScore) continue
-
-      groups.push({
-        groupKey: `${raw.title_normalized}|${raw.year ?? ''}|${raw.type}`,
-        titleNormalized: raw.title_normalized,
-        year: raw.year,
-        type: raw.type,
-        videos,
-        score: Math.round(score * 10000) / 10000,  // 4 位小数（legacyScore）
-        recommendedTargetVideoId: pickRecommendedTarget(videos),
-        // CHG-VIR-7：附加多证据身份评分（D-105a-9/15）。纯 CPU 无新 DB 往返；
-        // minScore 过滤/排序/分页仍只看 legacyScore（Y-105a-1，候选数量/排序逐值不变）
-        identity: scoreGroup(videos),
-      })
-    }
-
-    // D-105a-19（CHG-VIR-16-TBL-BE）：组级筛选/搜索——与 identity 路径共用谓词纯函数。
-    // GOV-2：过滤已先于分页（有界全量在手），total = 过滤后组数（与 identity 路径同语义）。
-    const filteredGroups = groups.filter((g) => groupMatchesFilters({
-      identityScore: g.identity?.identityScore ?? 0,
-      videoCount: g.videos.length,
-      titles: g.videos.map((v) => ({ title: v.title, titleNormalized: v.titleNormalized })),
-    }, params))
-
-    // ADR-150 阶段 5 EP-4 follow-up（2026-05-25）：sort 全栈打通 / Service 层白名单
-    // D-105a-19：扩 identityScore case（CHG-VIR-7 起 legacy 组恒有 identity 字段）
-    // 默认 score DESC（保持向后兼容）/ tiebreaker groupKey ASC（CHG-SN-5-10-PATCH P2）
-    const sortField = params.sortField ?? 'score'
-    const sortDir = params.sortDir ?? 'desc'
-    const dirSign = sortDir === 'asc' ? 1 : -1
-    filteredGroups.sort((a, b) => {
-      let cmp: number
-      switch (sortField) {
-        case 'score':
-          cmp = a.score - b.score
-          break
-        case 'videoCount':
-          cmp = a.videos.length - b.videos.length
-          break
-        case 'year':
-          cmp = (a.year ?? 0) - (b.year ?? 0)
-          break
-        case 'titleNormalized':
-          cmp = a.titleNormalized.localeCompare(b.titleNormalized)
-          break
-        case 'identityScore':
-          cmp = (a.identity?.identityScore ?? 0) - (b.identity?.identityScore ?? 0)
-          break
-        default:
-          cmp = a.score - b.score
-      }
-      if (cmp !== 0) return cmp * dirSign
-      // tiebreaker：groupKey 升序（分页幂等）
-      return a.groupKey.localeCompare(b.groupKey)
+    // D-105-21（GOV-2 解耦）：identity 真空表 → 直接返回 identity 空 envelope，不再降级 legacy。
+    // 版本搁浅信号（staleIdentityPending）随空态独立返回，不借 legacy 数据通道（GOV-2 实证：
+    // bump 搁浅 207 pending 被当 bug——降级链路本身是语义漂移源，移除后空态语义诚实）。
+    const staleIdentityPending = await hasStaleVersionPending(this.db, {
+      parserVersion: TITLE_PARSER_VERSION,
+      scorerVersion: SCORER_VERSION,
     })
-
-    // GOV-2：排序后切片（identity 路径 stage 5 同构）——页内填满、total 与行数自洽
-    const total = filteredGroups.length
-    const offset = (page - 1) * limit
-    const pageGroups = filteredGroups.slice(offset, offset + limit)
-
     return {
-      data: pageGroups, total, page, limit, source: 'legacy',
-      ...(legacyTruncated ? { truncated: true as const } : {}),
-      ...staleFlag,
+      data: [],
+      total: 0,
+      page: params.page,
+      limit: params.limit,
+      source: 'identity',
+      ...(staleIdentityPending ? { staleIdentityPending: true as const } : {}),
     }
   }
 
