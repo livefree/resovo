@@ -120,6 +120,9 @@ const EXPECTED_ACTION_TYPES = [
   // （整页发布治理 2 项 / targetKind 'home_page'；rollback 写入位点归卡 26，enums 先行）
   'home_page.publish',
   'home_page.rollback',
+  // ADR-173 / META-30：API 凭证统一管理（2 项 / targetKind 复用 'system'）
+  'integration.credential_update',
+  'integration.credential_test',
 ] as const
 
 const EXPECTED_TARGET_KINDS = [

@@ -275,6 +275,10 @@ export type AdminAuditActionType =
   | 'home_page.publish'   // POST /admin/home/publish
   | 'home_page.rollback'  // POST /admin/home/versions/:versionNo/rollback（卡 26 实装）
 
+  // ADR-173 / META-30：API 凭证统一管理（targetKind 复用 'system'，targetId=null，provider 入 payload）
+  | 'integration.credential_update'  // PUT  /admin/integrations/credentials/:provider
+  | 'integration.credential_test'    // POST /admin/integrations/credentials/:provider/test
+
 export type AdminAuditTargetKind =
   | 'video'
   | 'video_source'

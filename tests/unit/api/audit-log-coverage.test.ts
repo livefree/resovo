@@ -130,6 +130,9 @@ const REQUIRED_ACTION_TYPES = [
   // CHG-HOME-AUDIT-ROLLBACK / ADR-185 D-185-3.4：版本回滚（R-MID-1 第 39 次系统化；
   // afterJsonb 同构 publish + targetVersionNo；roll-forward 自记新版本）
   'home_page.rollback',                 // POST /admin/home/versions/:versionNo/rollback
+  // ADR-173 / META-30：API 凭证统一管理（2 项 / targetKind 复用 'system'）
+  'integration.credential_update',      // PUT  /admin/integrations/credentials/:provider
+  'integration.credential_test',        // POST /admin/integrations/credentials/:provider/test
 ] as const
 
 const ACTION_TYPE_REGEX = /actionType:\s*['"]([a-z_.]+)['"]/g
@@ -242,6 +245,9 @@ const PAYLOAD_ASSERTION_REQUIRED = [
   'home_page.publish',
   // CHG-HOME-AUDIT-ROLLBACK / ADR-185 D-185-3.4：版本回滚 audit payload 内容断言（R-MID-1 第 39 次 / tests/unit/api/home-publish.test.ts）
   'home_page.rollback',
+  // ADR-173 / META-30：API 凭证统一管理 audit payload 内容断言（tests/unit/api/integration-credentials-service.test.ts）
+  'integration.credential_update',
+  'integration.credential_test',
 ] as const
 
 // CHG-SN-6-10：plan v1.4 §3.0.5 M-SN-4 legacy 11 项已迁移至 PAYLOAD_ASSERTION_REQUIRED

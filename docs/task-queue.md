@@ -2326,9 +2326,10 @@
    - 建议模型：opus ／执行模型：claude-opus-4-8
    - 落地：`lib/bangumi.testConnection`（/v0/me valid·invalid / 无 token /calendar not_required）+ `lib/tmdb.testConnection`（Bearer /authentication）+ `integration-credential-testers.CREDENTIAL_TESTERS`（douban/imdb unsupported）+ `apiCredentials` list/upsert（JSONB `||` 合并）/updateTestStatus（仅 UPDATE）+ 14 单测（fetch mock + db mock）。门禁 typecheck/lint EXIT=0 / test:changed 20 文件 323 passed。详见 changelog [META-27]。
    - 解锁：→ META-30（Card B2 Service + 路由 + 审计）。
-5. **META-30** — Card B2：`IntegrationCredentialsService`（list/save/test）+ 3 admin 路由 + 2 审计 action type（4 处同步）+ 路由/服务测试（状态：⬜ 待启动）
-   - 建议模型：opus（新增 admin route → ADR-173 §端点契约表已就位 + Opus PASS，verify:endpoint-adr）
-   - 验收要点：草稿 vs 已存持久化两分 / 候选 secret 不落库不入审计 / set-equal + audit-coverage payload 断言通过 / verify:endpoint-adr EXIT=0
+5. **META-30** — Card B2：`IntegrationCredentialsService`（list/save/test）+ 3 admin 路由 + 2 审计 action type（4 处同步）+ 路由/服务测试（状态：✅ 已完成 2026-06-13）
+   - 建议模型：opus ／执行模型：claude-opus-4-8（新增 admin route + @resovo/types 公开类型 → Opus + trailer）
+   - 落地：`IntegrationCredentialsService`（list 遮罩视图 / save 占位跳过+JSONB+审计 redact / test 三态+草稿不污染+不落候选 secret）+ 3 路由（GET/PUT/POST，provider z.enum 守门→404）+ server.ts 注册 + 2 审计 action type（admin-moderation union/AuditLogService/set-equal/coverage 4 处同步）+ 13 单测。门禁 typecheck/lint/verify:adr-contracts EXIT=0（endpoint-adr 238 路由对齐）/ 全量单测 529 文件 7326 passed。详见 changelog [META-30]。
+   - 解锁：→ META-28（Card C UI）。
 6. **META-28** — Card C：UI `ExternalCredentialsCard`（注册表驱动）+ integrations api client + SettingsTab 切换（过渡，不删旧契约）（状态：⬜ 待启动）
    - 建议模型：sonnet
    - 验收要点：bangumi/tmdb 卡可填可测可存 + 遮罩/已配置/上次测试态 / e2e:admin 绿

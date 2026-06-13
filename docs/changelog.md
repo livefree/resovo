@@ -5195,6 +5195,25 @@
 - **注意事项**：① 测试适配器/查询为 B2 服务编排的底层构件，本卡不接路由/审计；② tmdb testConnection 完整客户端后续立项；③ updateTestStatus 仅记录已保存配置（草稿测试在 B2 服务层不调用）。
 - **[AI-CHECK]**：六问过——①authStatus 区分 token 有效 vs API 可用（避免误读），正确性优先；②测试适配器经注册表分派（接新源加一条），复用 ResolvedCredential 契约；③改动收敛构件层 4 文件 + 2 测试，未碰路由/UI；④遵两阶段 + Bearer 主契约（Codex 必修 1）；⑤fetch mock + db mock 覆盖 valid/invalid/not_required/unsupported + JSONB 合并；⑥source-agnostic 适配器守边界（候选与已存同入口）。
 
+---
+
+## [META-30] Card B2：IntegrationCredentialsService + 3 admin 路由 + 2 审计 action type（ADR-173 / SEQ-20260613-01 第 5 卡）
+- **完成时间**：2026-06-13
+- **记录时间**：2026-06-13 13:20
+- **执行模型**：claude-opus-4-8（新增 admin route + `@resovo/types` 公开类型新增 → CLAUDE.md 强制 Opus + commit trailer）
+- **子代理**：无（端点契约决策已锁定于 ADR-173，本卡按 ADR §端点契约表实施）
+- **来源**：ADR-173 D-173-4/5 编排层 + §端点契约 3 路由。Card B 拆 B1/B2 之 **B2**（编排 + 路由 + 审计）。
+- **产出**：
+  - `apps/api/src/services/IntegrationCredentialsService.ts`（新）：`listForAdmin`（注册表 × 行 → secret 遮罩 + configured + 测试状态）/ `save`（占位回提跳过 + 空串清空 + 非 secret 入 config + JSONB 合并 upsert + 审计 redact `<set>`/`<cleared>` 以注册表 secret flag 为准）/ `test`（三态取值 候选→已存→env、`draft=false` 才持久化 last_test_*、审计不落候选 secret）。
+  - `apps/api/src/routes/admin/integrationCredentials.ts`（新）：GET/PUT/POST 3 路由，admin only，`provider` 经 `z.enum(可配源)` 守门（未知→404，D-173-9）。server.ts 注册（prefix /v1）。
+  - 2 审计 action type `integration.credential_update` / `integration.credential_test`（targetKind 复用 'system'，targetId=null，provider 入 payload）→ **4 处同步**：`admin-moderation.types` union + `AuditLogService.ACTION_TYPES` + `audit-log-service-enums-set-equal` EXPECTED + `audit-log-coverage` REQUIRED + PAYLOAD_ASSERTION_REQUIRED。
+  - 单测：service（7 例，含 audit payload 内容断言满足 R-MID-1 守卫）+ route（6 例，鉴权/404/信封）。
+- **新增依赖**：无。
+- **数据库变更**：无（DDL 在 META-25）。
+- **质量门禁**：typecheck EXIT=0 / lint EXIT=0 / **verify:adr-contracts EXIT=0**（verify-endpoint-adr 238 admin 路由全部对齐 ADR §端点契约，含新 3 端点；set-equal + audit-coverage payload 守卫通过）/ 全量单测 **529 文件 7326 passed**。
+- **注意事项**：① 3 端点路径与 ADR-173 §端点契约表逐字对齐（无 /v1 字面量，注册时加 prefix）；② save 三态（占位跳过/空串清空/明文覆盖）复用 ADR-168 `isMaskedPlaceholder`；③ test 草稿不污染已存状态（Codex 必修 4）+ 审计不落候选 secret。
+- **[AI-CHECK]**：六问过——①草稿不污染 + 审计零候选 secret + 占位跳过防保存即清空，正确性/安全优先；②编排复用 B1 testers + A2 resolver + ADR-168 遮罩纯函数，零重复；③路由仅信封+鉴权+404，业务在 service（不越层）；④新 admin route 经 ADR-173 §端点契约 + verify-endpoint-adr 守卫 + 4 处审计同步 + Opus trailer；⑤service payload 断言 + route 鉴权/404 + 全量回归；⑥provider z.enum 守门 + targetKind 复用 system（不改 052 CHECK）守边界。
+
 ## [HDR-DEDUP] 后台页面去重复标题 + 装饰提示统一治理（MODUX-ACPT-5 follow-up，4 卡序列）
 - **完成时间**：2026-06-13
 - **记录时间**：2026-06-13 01:18

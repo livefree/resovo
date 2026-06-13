@@ -137,6 +137,9 @@ export const ACTION_TYPES: readonly AdminAuditActionType[] = [
   // （rollback 写入位点归卡 26 CHG-HOME-AUDIT-ROLLBACK；enums 同卡先行，audit 筛选器即时可过滤）
   'home_page.publish',
   'home_page.rollback',
+  // ADR-173 / META-30：API 凭证统一管理（targetKind 复用 'system'）
+  'integration.credential_update',
+  'integration.credential_test',
 ]
 export const TARGET_KINDS: readonly AdminAuditTargetKind[] = [
   'video',
