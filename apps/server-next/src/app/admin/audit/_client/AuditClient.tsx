@@ -292,9 +292,10 @@ export function AuditClient() {
     <div data-audit-client style={PAGE_STYLE}>
       <PageHeader
         title="审计日志"
+        titleVisuallyHidden
         subtitle={isModerator
           ? `${total} 条记录 · 仅显示你的操作`
-          : `${total} 条记录 · admin_audit_log 全局写操作流水`}
+          : `${total} 条记录`}
         actions={
           <AdminButton
             variant="default"

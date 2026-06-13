@@ -242,6 +242,7 @@ export function SourcesClient({ isAdmin = false }: SourcesClientProps = {}) {
       {/* 顶栏 + 别名管理跳转（CHG-SN-9-LINES-VIEW-UNIFY） */}
       <PageHeader
         title="播放线路"
+        titleVisuallyHidden
         actions={
           <AdminButton
             size="sm"

@@ -152,7 +152,8 @@ export function MessageCenterClient() {
     <div data-message-center style={PAGE_STYLE}>
       <PageHeader
         title="消息中心"
-        subtitle={`${total} 条记录 · 全量历史检索`}
+        titleVisuallyHidden
+        subtitle={`${total} 条记录`}
         actions={
           <AdminButton variant="default" size="sm" onClick={refresh} data-testid="messages-refresh">
             刷新

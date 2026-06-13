@@ -21,6 +21,7 @@
  */
 
 import React from 'react'
+import { VISUALLY_HIDDEN_STYLE } from './visually-hidden'
 
 export interface PageHeaderProps {
   /** 主标题。string 渲染成 <h{headingLevel}>；ReactNode 直接渲染 */
@@ -35,6 +36,17 @@ export interface PageHeaderProps {
    * 嵌套子区块请显式传 2-6。
    */
   readonly headingLevel?: 1 | 2 | 3 | 4 | 5 | 6
+  /**
+   * 视觉隐藏主标题（保留 a11y）。默认 false。
+   * - **仅对 string title（`<h{headingLevel}>` 分支）生效**：标题仍渲染于 DOM 与
+   *   可访问性树（维持「一页一个 h{headingLevel}」WCAG heading-order），但套用
+   *   sr-only 样式（VISUALLY_HIDDEN_STYLE）使其视觉不可见。用于「顶栏面包屑已作
+   *   可见标题，h1 仅供屏幕阅读器 / heading 导航」的页面。
+   * - **ReactNode title 不受此 prop 影响**（保持可见渲染；ReactNode 容器非语义标题，
+   *   且常承载交互内容如快捷筛选 / 动态问候，不应隐藏）。
+   * - **不影响 subtitle / actions**（照常正常可见渲染）。
+   */
+  readonly titleVisuallyHidden?: boolean
   /**
    * 容器标签。默认 `'header'`（语义元素，对齐 reference §5 既有消费方）。
    * 嵌套区块或主区域内子页头建议传 `'section'` / `'div'`（避免 nested header）。
@@ -91,12 +103,15 @@ export function PageHeader({
   subtitle,
   actions,
   headingLevel = 1,
+  titleVisuallyHidden = false,
   as: As = 'header',
   role,
   'aria-label': ariaLabel,
   'data-testid': testId,
 }: PageHeaderProps): React.ReactElement {
   const HeadingTag = (`h${headingLevel}` as unknown) as keyof React.JSX.IntrinsicElements
+  // C3：titleVisuallyHidden 仅作用于 string title（heading 分支）；ReactNode title 不受影响
+  const headingStyle = titleVisuallyHidden ? { ...TITLE_STYLE, ...VISUALLY_HIDDEN_STYLE } : TITLE_STYLE
   return (
     <As
       data-page-header
@@ -107,7 +122,7 @@ export function PageHeader({
     >
       <div data-page-header-main style={MAIN_STYLE}>
         {typeof title === 'string'
-          ? <HeadingTag style={TITLE_STYLE} data-page-header-title>{title}</HeadingTag>
+          ? <HeadingTag style={headingStyle} data-page-header-title>{title}</HeadingTag>
           : <div style={TITLE_STYLE} data-page-header-title>{title}</div>}
         {subtitle !== undefined && subtitle !== null && (
           typeof subtitle === 'string'

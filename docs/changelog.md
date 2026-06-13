@@ -5118,3 +5118,24 @@
 - **质量门禁**：typecheck EXIT=0 / lint EXIT=0（4/4）/ 本地路径与 `CI=1` 路径 vitest 配置均加载正常、单文件 15/15 passed（确认 CI 行为零变化）/ commit 前 test:changed 升全量（config 改动命中 forceRerunTriggers）。
 - **注意事项**：① 杠杆 A（把测试搬上 P 核）需用户在启动入口执行——**从原生终端（Terminal.app/iTerm2/Ghostty/Warp）跑测试，勿用 Electron 编辑器集成终端**；进阶可在原生终端起 tmux 服务后于会话内跑测。② 验证 QoS：在真实测试终端跑校准探针，~3050ms=P 核（正常）/ ~7500ms=被降级到 E 核（需换终端）。③ 未动态读 `sysctl` P 核数（用户选固定值，换机器需手调）；未改 `vitest.integration.config.ts`（已 `fileParallelism:false` 串行）。
 - **[AI-CHECK]**：六问过——①两杠杆正交且必须结合，本卡落地可配置化的杠杆 B、杠杆 A 以文档指引交付（实测证明代码层无法可逆修 QoS）；②无共享组件/无新端点/无 schema，CI 门控复用 playwright 既有 `process.env.CI` 范式；③改动收敛在 2 个测试配置文件，零运行时/业务代码触碰；④对齐 CLAUDE.md 必跑命令与 test-rules；⑤CI 与本地双路径均验证配置加载（防 CI 默认污染回归）；⑥Codex 复审拦截的 CI 默认污染已闭环修复。
+
+## [HDR-DEDUP] 后台页面去重复标题 + 装饰提示统一治理（MODUX-ACPT-5 follow-up，4 卡序列）
+- **完成时间**：2026-06-13
+- **记录时间**：2026-06-13 01:18
+- **执行模型**：claude-opus-4-8（主循环）
+- **子代理**：arch-reviewer (claude-opus-4-8) — PageHeader 公开 Props 契约新增（`titleVisuallyHidden`）CONDITIONAL PASS，C1/C2/C3 三必改项全采纳，R1/R2/R3 偏离风险已转达落实
+- **背景**：MODUX-ACPT-5 把「审核台去重复标题（删可见 h1→sr-only / 删装饰提示 / 留计数）」作为样板，并登记「跨后台其余页面统一治理」为独立 follow-up。本序列即执行该 follow-up。根因：顶栏面包屑 `[section.title]/[item.label]`（`admin-shell-client.tsx:85` inferBreadcrumbs）已含页面名，各页 body `PageHeader` 又渲染同名 h1 → 标题双重堆叠 + 多数 subtitle 纯装饰。用户决策：① 删装饰·留计数；② 一律以面包屑为唯一标题（正文标题降 sr-only）。
+- **修改文件**：
+  - `packages/admin-ui/src/components/page-header/visually-hidden.ts`（新建）— sr-only 视觉隐藏样式唯一真源 `VISUALLY_HIDDEN_STYLE`（clip-rect 方案，零硬编码颜色 / Edge 兼容，C2）。
+  - `packages/admin-ui/src/components/page-header/page-header.tsx` — PageHeaderProps 新增 `titleVisuallyHidden?: boolean`（默认 false）；**仅对 string title（h{headingLevel} 分支）套 sr-only**，ReactNode title 不受影响（C3）；JSDoc 写清「元素留 DOM·a11y 树 / 不影响 subtitle·actions」（C1）。纯加性，未传 prop 行为 100% 不变。
+  - `packages/admin-ui/src/components/page-header/index.ts` — 导出 `visually-hidden`。
+  - A 组 14 处 PageHeader（有面包屑→正文标题降 sr-only）：`videos`(保留快捷筛选 subtitle)/`sources`/`staging`(×2,含 err 态)/`image-health`(删装饰)/`merge`(删装饰)/`home`/`user-submissions`/`crawler`/`external-resources`(删装饰)/`users`/`settings`(删装饰)/`messages`(留计数·删「全量历史检索」)/`audit`(留计数+作用域·删技术尾)/`subtitles`(留计数·删「通过/拒绝」) 各 `_client/*.tsx`。
+  - B 组隐藏路由 4 处（无面包屑→保留可见标题，仅清装饰 subtitle）：`analytics`/`submissions`(留计数)/`source-line-aliases`/`crawler/runs/[id]` 各 `_client/*.tsx`。
+  - `tests/unit/components/admin-ui/page-header/page-header.test.tsx` — +5 用例（titleVisuallyHidden 默认/string sr-only/subtitle·actions 不受影响/ReactNode 不受影响/共享常量校验）。
+  - `tests/unit/components/server-next/admin/dashboard/AnalyticsView.test.tsx` — 装饰副标已删，断言从「存在」改为「不存在」。
+- **C 组例外（不改）**：`/admin` 管理台站（动态个性化问候，规约 T-7 既定 ≠ nav label，保留可见）；`crawler/runs` 列表 / `system/*`（不使用 PageHeader）。
+- **新增依赖**：无。
+- **数据库变更**：无。
+- **质量门禁**：typecheck EXIT=0（全 workspace）/ lint EXIT=0（仅预存在 warning）/ 全量单测 **524 文件 7286 passed**（admin-ui 基础包改动按 ADR-180 升全量）/ **test:e2e:admin 82/82 passed**（含 `/admin/messages page-header 可见` 验证 sr-only 改造后页面正常挂载）。既有按可见标题文本断言的单测（图片健康/审计日志/播放线路/采集控制/首页运营位等）均通过——sr-only 保留 textContent + RTL getByText 不按 CSS 可见性过滤，预判得证。
+- **注意事项**：① 偏离风险 R1 已遵守——`ModerationConsole.tsx` 仍持手写 `SR_ONLY_STYLE`（先例），收敛到共享 `VISUALLY_HIDDEN_STYLE` 属后续清理卡，不在本序列文件范围；② R2 逐页核验「页面唯一 h1」——各页原即单 PageHeader headingLevel=1，titleVisuallyHidden 保留该 h1 元素，未增减；③ admin-visual 快照（非必跑门禁）覆盖 moderation 页 + 个别 admin-ui 组件，本序列未触碰这些目标，无需重生成。
+- **[AI-CHECK]**：六问过——①纯加性 prop（默认 false 零行为变化）+ 逐页按用户两项决策落地，全量+e2e 门禁绿；②sr-only 样式沉淀 admin-ui 共享 SSOT（满足 3+ 处提取），未在 14 页重复手写；③改动收敛每页 1–3 行，未碰 ModerationConsole / 后端 / schema；④遵 arch-reviewer C1/C2/C3 裁决 + CLAUDE.md 共享组件 API 强制 Opus；⑤测试覆盖共享组件新分支 + 既有可见文本断言回归确认 + e2e 页面挂载；⑥公开 Props 契约变更经 arch-reviewer 独立评审定稿，commit 带 trailer。

@@ -109,10 +109,11 @@ describe('AnalyticsView — 基础渲染', () => {
     expect(container.querySelector('[data-analytics-view]')).not.toBeNull()
   })
 
-  it('5. 渲染页头：标题"数据看板" + 副标', async () => {
-    const { getByText } = render(<AnalyticsView />)
+  it('5. 渲染页头：标题"数据看板"（HDR-DEDUP：装饰副标已删）', async () => {
+    const { getByText, queryByText } = render(<AnalyticsView />)
     await waitFor(() => expect(getByText('数据看板')).toBeTruthy())
-    expect(getByText(/视频 · 源 · 用户 · 采集任务/)).not.toBeNull()
+    // HDR-DEDUP 卡4：装饰性副标题「视频 · 源 · 用户 · 采集任务 — 多维度运营观测」已移除
+    expect(queryByText(/视频 · 源 · 用户 · 采集任务/)).toBeNull()
   })
 
   it('6. 渲染 4 KPI 卡片（KPI grid 含 4 个子节点）', async () => {

@@ -206,7 +206,8 @@ export function SubtitlesListClient() {
     <div data-subtitles-list-client style={PAGE_STYLE}>
       <PageHeader
         title="字幕审核"
-        subtitle={`${total} 条待审 · 通过 / 拒绝`}
+        titleVisuallyHidden
+        subtitle={`${total} 条待审`}
         actions={
           <>
             <AdminButton

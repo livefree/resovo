@@ -128,7 +128,7 @@ export function SettingsContainer() {
     <div style={PAGE_STYLE} data-settings-container>
       <PageHeader
         title="站点设置"
-        subtitle="统一配置中心 · 8 类设置面板（M-SN-6/7 逐步实装）"
+        titleVisuallyHidden
         actions={
           /* CHG-SN-6-RETRO-3-B / ultrareview P2-8：
               原生 button + inline style → AdminButton（共享原语率与自报口径 85% 对齐）；

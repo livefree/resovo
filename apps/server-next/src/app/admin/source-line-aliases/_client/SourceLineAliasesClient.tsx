@@ -402,7 +402,6 @@ export function SourceLineAliasesClient() {
     <div style={PAGE_STYLE}>
       <PageHeader
         title="线路别名管理"
-        subtitle="所有线路（含未分配别名）/ Layer B 山名代号 / 退役治理"
       />
 
       {/* CHG-SN-9-CODENAME-MATRIX：字库 52 山名预览（mini grid）+ KPI */}

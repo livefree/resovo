@@ -306,7 +306,6 @@ export function AnalyticsView() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }} data-analytics-view>
       <PageHeader
         title="数据看板"
-        subtitle="视频 · 源 · 用户 · 采集任务 — 多维度运营观测"
         actions={
           <>
             <select

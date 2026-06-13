@@ -380,7 +380,7 @@ export function SubmissionsListClient() {
     <div data-submissions-list-client style={PAGE_STYLE}>
       <PageHeader
         title="用户投稿"
-        subtitle={`${total} 条待审 · 通过 / 拒绝 / 批量审核`}
+        subtitle={`${total} 条待审`}
         actions={
           <AdminButton
             variant="default"

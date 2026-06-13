@@ -6,6 +6,8 @@
 
 ## 当前任务（单任务工作台：同时仅 1 个 🔄 进行中；完成即删卡，历史见 docs/changelog.md）
 
+_（**HDR-DEDUP ✅ 全 4 卡收口 2026-06-13**（MODUX-ACPT-5 登记的「跨后台页面统一治理」follow-up）——审核台样板（删可见 h1→sr-only / 删装饰提示 / 留计数）推广到全后台。PageHeader 新增 `titleVisuallyHidden?: boolean`（arch-reviewer claude-opus-4-8 CONDITIONAL PASS，C1/C2/C3 全采纳：仅 string title 生效 / sr-only 样式沉淀共享常量 `VISUALLY_HIDDEN_STYLE` SSOT / ReactNode title 不受影响）。A 组 14 处正文标题降 sr-only + 清装饰留计数；B 组隐藏路由 4 处保留可见标题仅清装饰；C 组例外（dashboard 动态问候 / system·crawler-runs 列表无 PageHeader）。用户两项决策：删装饰·留计数 + 一律以面包屑为唯一标题。门禁全绿（typecheck/lint EXIT=0 / 全量单测 7286 / test:e2e:admin 82/82）。后续清理卡：ModerationConsole 手写 SR_ONLY_STYLE 收敛到共享常量（R1 范围外）。详见 changelog [HDR-DEDUP]。**工作台空闲**。）_
+
 ### ⏸ MODUX-ACPT-5（暂停 · 检查点已提交）· 验收第 5 条纠正 · 审核台头部去 h1 + 元素并入 tab 行
 
 > 验收迭代已提交 3 检查点：`b6496861`（1-4 轮 + Codex 1·2）/ `587b2999`（5-7 轮快编芯片化）/ `58ca2fc4`（Codex 3 竞态）。用户转入 SRCHEALTH 设计；本卡**暂停待续**（验收若有后续修订可恢复）。下方为完整改动记录。

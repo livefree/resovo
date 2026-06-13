@@ -6,6 +6,7 @@ import { describe, it, expect } from 'vitest'
 import { render } from '@testing-library/react'
 import React from 'react'
 import { PageHeader } from '../../../../../packages/admin-ui/src/components/page-header/page-header'
+import { VISUALLY_HIDDEN_STYLE } from '../../../../../packages/admin-ui/src/components/page-header/visually-hidden'
 
 // ── 基础渲染 ─────────────────────────────────────────────────────
 
@@ -115,6 +116,60 @@ describe('PageHeader — a11y', () => {
   it('data-testid 传递', () => {
     const { container } = render(<PageHeader title="t" data-testid="ph-videos" />)
     expect(container.querySelector('[data-testid="ph-videos"]')).toBeTruthy()
+  })
+})
+
+// ── titleVisuallyHidden（HDR-DEDUP 卡1 / arch-reviewer C1·C3） ───
+
+describe('PageHeader — titleVisuallyHidden', () => {
+  it('默认不传 → heading 不套 sr-only 样式（向后兼容）', () => {
+    const { container } = render(<PageHeader title="视频库" />)
+    const heading = container.querySelector('[data-page-header-title]') as HTMLElement
+    expect(heading.style.position).not.toBe('absolute')
+    expect(heading.style.overflow).not.toBe('hidden')
+  })
+
+  it('true + string title → heading 仍渲染、文本不变、套 sr-only 样式（保 a11y）', () => {
+    const { container } = render(<PageHeader title="视频库" titleVisuallyHidden />)
+    const heading = container.querySelector('[data-page-header-title]') as HTMLElement
+    // 元素仍在 DOM + 仍是 h1 + 文本不变（屏幕阅读器 / heading 导航可达）
+    expect(heading.tagName).toBe('H1')
+    expect(heading.textContent).toBe('视频库')
+    // 套 sr-only 视觉隐藏样式（jsdom CSSOM 不反射 clip 简写，断言可靠反射的属性）
+    expect(heading.style.position).toBe('absolute')
+    expect(heading.style.overflow).toBe('hidden')
+    expect(heading.style.width).toBe('1px')
+  })
+
+  it('true + string title → subtitle / actions 仍正常可见渲染（不受影响）', () => {
+    const { container } = render(
+      <PageHeader
+        title="视频库"
+        titleVisuallyHidden
+        subtitle="共 120 位用户"
+        actions={<button data-testid="ph-act">刷新</button>}
+      />,
+    )
+    const sub = container.querySelector('[data-page-header-subtitle]') as HTMLElement
+    expect(sub.style.position).not.toBe('absolute')
+    expect(sub.textContent).toContain('共 120 位用户')
+    expect(container.querySelector('[data-testid="ph-act"]')).toBeTruthy()
+  })
+
+  it('C3：true + ReactNode title → 不套 sr-only（ReactNode title 不受影响）', () => {
+    const { container } = render(
+      <PageHeader title={<span>动态问候</span>} titleVisuallyHidden />,
+    )
+    const titleEl = container.querySelector('[data-page-header-title]') as HTMLElement
+    expect(titleEl.tagName).toBe('DIV')
+    expect(titleEl.style.position).not.toBe('absolute')
+  })
+
+  it('C2：VISUALLY_HIDDEN_STYLE 共享常量为视觉隐藏方案且零颜色字段', () => {
+    expect(VISUALLY_HIDDEN_STYLE.position).toBe('absolute')
+    expect(VISUALLY_HIDDEN_STYLE.overflow).toBe('hidden')
+    expect(VISUALLY_HIDDEN_STYLE.width).toBe(1)
+    expect('color' in VISUALLY_HIDDEN_STYLE).toBe(false)
   })
 })
 

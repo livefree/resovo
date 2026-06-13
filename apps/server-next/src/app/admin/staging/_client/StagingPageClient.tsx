@@ -417,7 +417,7 @@ export function StagingPageClient() {
   if (error && !rows.length) {
     return (
       <div style={PAGE_STYLE}>
-        <PageHeader title="暂存发布" />
+        <PageHeader title="暂存发布" titleVisuallyHidden />
         <ErrorState error={error} title="加载失败" onRetry={refresh} />
       </div>
     )
@@ -427,6 +427,7 @@ export function StagingPageClient() {
     <div style={PAGE_STYLE} data-testid="staging-page">
       <PageHeader
         title="暂存发布"
+        titleVisuallyHidden
         subtitle={`${total} 条待发布`}
         actions={
           <AdminButton variant="primary" size="sm" loading={batchPublishing} onClick={() => void handleBatchPublish()}>

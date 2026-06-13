@@ -238,7 +238,7 @@ export function ImageHealthClient() {
     <div data-image-health-client style={PAGE_STYLE}>
       <PageHeader
         title="图片健康"
-        subtitle="poster / backdrop 覆盖率 · 破损域名 TOP · 缺图视频治理"
+        titleVisuallyHidden
         actions={
           <span style={{ display: 'inline-flex', gap: '8px' }}>
             <AdminButton

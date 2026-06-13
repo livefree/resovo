@@ -391,6 +391,7 @@ export function UsersListClient() {
     <div data-users-list-client style={PAGE_STYLE}>
       <PageHeader
         title="用户管理"
+        titleVisuallyHidden
         subtitle={`共 ${total} 位用户`}
         actions={
           <span style={{ display: 'inline-flex', gap: '8px' }}>

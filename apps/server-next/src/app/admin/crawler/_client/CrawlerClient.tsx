@@ -479,6 +479,7 @@ export function CrawlerClient() {
     <div data-crawler-client style={PAGE_STYLE}>
       <PageHeader
         title="采集控制"
+        titleVisuallyHidden
         subtitle={`${sites.length} 个站点 · ${status?.freezeEnabled ? '采集已关闭' : '实时'} · ${schedulerSegment}`}
         actions={
           <span style={ACTIONS_STYLE}>

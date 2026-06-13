@@ -229,6 +229,7 @@ export function HomeOpsClient() {
     <div data-home-ops-client style={PAGE_STYLE}>
       <PageHeader
         title="首页运营位"
+        titleVisuallyHidden
         subtitle={`共 ${modules.length} 个模块`}
         actions={
           <>

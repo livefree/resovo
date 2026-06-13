@@ -36,7 +36,6 @@ export function CrawlerRunDetailView({ runId }: CrawlerRunDetailViewProps) {
     <div data-crawler-run-detail style={SECTION_STYLE}>
       <PageHeader
         title={`批次 ${runId.slice(0, 8)}…`}
-        subtitle="批次执行详情（含基础信息与任务列表）"
       />
       <RunInlinePanel runId={runId} />
     </div>

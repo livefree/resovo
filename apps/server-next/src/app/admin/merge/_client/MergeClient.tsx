@@ -197,7 +197,7 @@ export function MergeClient() {
     <div style={PAGE_STYLE}>
       <PageHeader
         title="合并 / 拆分工作台"
-        subtitle="候选审阅 · 合并 · 拆分 · 操作记录 — 单一活动工作区（ADR-105 五端点消费）"
+        titleVisuallyHidden
       />
 
       {/* CHG-VIR-13-A1：来源回链栏（深链进入时渲染；label/backHref 真源 = entry.ts） */}

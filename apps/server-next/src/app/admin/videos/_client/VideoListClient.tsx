@@ -299,6 +299,7 @@ export function VideoListClient() {
       {/* reference §5.3 视频库 page__head — 共享 PageHeader（CHG-DESIGN-08 8A / MODUX-P1-1-A，规约 T-1/T-3） */}
       <PageHeader
         title="视频库"
+        titleVisuallyHidden
         subtitle={
           /* 快捷筛选(B)：{total} 条 · 全部 · 待审 N · 元数据缺失 N · 集数不一致 N（§2.1/§2.6③） */
           <div style={SUBHEAD_STYLE} data-page-head-sub>

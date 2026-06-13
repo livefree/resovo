@@ -188,7 +188,7 @@ function ExtHeader() {
   return (
     <PageHeader
       title="外部资源"
-      subtitle="provider 无关治理框架 · 采集观测 / 热门资源 / 资源搜索（豆瓣 · Bangumi 接入）"
+      titleVisuallyHidden
       data-testid="ext-page-header"
     />
   )

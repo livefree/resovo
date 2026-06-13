@@ -134,6 +134,7 @@ export function UserSubmissionsClient() {
     <div data-user-submissions-client style={PAGE_STYLE}>
       <PageHeader
         title="用户投稿 / 纠错"
+        titleVisuallyHidden
         subtitle={
           loading && !data
             ? '加载中…'
