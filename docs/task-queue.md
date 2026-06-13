@@ -2337,3 +2337,34 @@
 7. **META-29** — Card D：清理卡（线上稳定后单独排期）退役 system_settings bangumi*/tmdb* 旧契约 + 删解析器旧 KV fallback（状态：⏸ 后排，依赖 A1–C 线上稳定）
    - 建议模型：sonnet
    - 验收要点：rollback 窗确认后执行 / system-config 测试断言迁移
+
+---
+
+## [SEQ-20260613-02] 播放器多尺寸控件修复（音量键 + 默认模式选集入口）
+
+- **状态**：✅ 已完成（PLAYER-11 收口 2026-06-13；衍生 e2e-infra follow-up 见下）
+- **创建时间**：2026-06-13 12:56
+- **最后更新时间**：2026-06-13 13:05
+- **目标**：修复用户「播放器多尺寸交互调查」发现的两处控件显隐缺陷——① ≤960px 桌面播放器音量键消失；② PC 默认模式控制条无内嵌选集按钮。
+- **背景**：调查实证根因——① `collapsePolicy.ts` 把 volume 当低优先级在 medium/compact/narrow 三档一律删除，而音量控件静止态仅图标、任何桌面宽度都不缺空间（阈值过激）；② `getInlineEpisodes` 以 `!isTheater` 门控使默认模式 `episodes` 恒空、控制条选集按钮不渲染。用户两项裁定：音量键起卡修复；选集控制条也加入口（与侧栏共存）。
+- **范围**：纯 UI/布局层（packages/player-core 内部 collapse 行为 + web-next 本地 helper），无 schema/api、无共享组件公开 Props 改动 → 单卡。
+
+### 任务列表
+
+1. **PLAYER-11** — 删 collapse 音量删除（桌面全宽度保留）+ getInlineEpisodes 去 theater 门 + 双向单测（状态：✅ 已完成 2026-06-13）
+   - 创建时间：2026-06-13 12:56 ／ 实际开始：2026-06-13 12:56 ／ 完成时间：2026-06-13 13:05
+   - 建议模型：sonnet ／执行模型：claude-opus-4-8
+   - 文件：`collapsePolicy.ts` / `playerShell.layout.ts` / `PlayerShell.tsx` / 新增 `tests/unit/player-core/collapse-policy.test.ts` + `tests/unit/web-next/player-shell-layout.test.ts`
+   - 完成备注：执行模型: claude-opus-4-8。子代理: 无。collapsePolicy 删 `removeControl(volume)` → 桌面指针全宽度保留音量图标；getInlineEpisodes 去 `!isTheater` 门 + 去形参 → 默认/影院两模式控制条均有选集入口。门禁 typecheck/lint EXIT=0、test:changed 自动升全量 **532 文件 / 7358 passed**（含新增 28 定向单测）。**test:e2e:player 未跑绿**——预存系统性基建阻塞（watch 页 SSR `fetchVideoDetail` 直连 api，`resovo_dev` 无 `aB3kR9x1` 等 7 seed 视频 + 客户端 page.route mock 拦不住 SSR fetch；干净基线同样全挂），与本改动无关 → 拆 follow-up 卡 CHORE-E2E-WATCH-SSR-SEED。
+
+> **Follow-up（衍生 / 待排期）** — PLAYER-11 调查暴露的 e2e 基建债，与播放器 bug 修复正交：
+>
+> #### CHORE-E2E-WATCH-SSR-SEED — e2e watch/homepage/detail SSR seed fixture
+> - **状态**：⬜ 待开始
+> - **创建时间**：2026-06-13 13:05
+> - **建议模型**：sonnet
+> - **变更原因**：ADR-160 AMD2 给 watch 页加 SSR hydration（`fetchVideoDetail`/`fetchVideoSources` 服务端直连 api）后，基于客户端 `page.route` mock 的 e2e-next 旧 spec 全部在「整页 SSR 404」处失败（`watch-page` 不渲染）。仓库无任何 e2e seed 脚本/globalSetup/CI seed，`resovo_dev` 无 `test-*` 视频 → test:e2e:player 8 spec 23 用例预存全红（基线复现）。
+> - **影响的已完成任务**：PLAYER-11（验证仅靠单测）+ 所有 e2e-next watch/detail/homepage spec
+> - **文件范围**：新增 e2e seed 脚本（7 视频：aB3kR9x1/bC4lS0y2/TriState/TabsTest/CinemaM1/DxMovie1/DxSerie1 + 各自源/集数匹配断言）+ `playwright.config.ts` globalSetup 接线；可能需评估 spec 改造（SSR-aware）替代纯客户端 mock。
+> - **变更内容**：建 globalSetup 通过 api/db 层插入固定 seed 集（事务幂等 + teardown 清理），使 SSR fetch 命中；对齐各 spec 断言（source-btn-N / side-episode-N / 集数）。
+> - **完成备注**：_（AI 填写，含"执行模型: <完整 ID>"一行）_

@@ -194,7 +194,7 @@ export function PlayerShell({ slug: slugProp, portalMode = false, previewMode = 
   const activeEpisodeIndex = episodeNumbers.indexOf(currentEpisode)
   const nextEpisode = activeEpisodeIndex >= 0 ? episodeNumbers[activeEpisodeIndex + 1] : undefined
   const hasNext = nextEpisode !== undefined
-  const inlineEpisodes = getInlineEpisodes(isTheater, episodeNumbers)
+  const inlineEpisodes = getInlineEpisodes(episodeNumbers)
 
   // CHG-353：SourceBar 线路标签按主题派生（每线路代表源喂 buildThemedLines）；
   // 运行时报错 dead 的线路合并 isDead（黄线 3：themed dead/pending 用代表源口径）

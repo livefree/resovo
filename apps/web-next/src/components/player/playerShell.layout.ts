@@ -23,11 +23,13 @@ export function getSidePanelClass(isTheater: boolean): string {
  * PLAYER-LINE-BOUND-EP（红线 3）：inline 选集改为接收"活跃线路实际集号数组"，
  * 渲染真实集号文案（非连续集号 / 不再假设连续 1..N）。player-core onEpisodeChange(index)
  * 的 index 须经调用方映射回 episodeNumbers[index]，activeEpisodeIndex 用 indexOf 反查。
+ *
+ * PLAYER-11：去掉 `!isTheater` 门控——默认模式与影院模式控制条均提供内嵌选集按钮
+ * （默认模式与右侧栏选集面板共存，用户裁定），仅保留"单集不渲染"守卫。
  */
 export function getInlineEpisodes(
-  isTheater: boolean,
   episodeNumbers: readonly number[]
 ): PlayerEpisodeItem[] | undefined {
-  if (!isTheater || episodeNumbers.length <= 1) return undefined
+  if (episodeNumbers.length <= 1) return undefined
   return episodeNumbers.map((ep) => ({ title: `第${ep}集` }))
 }

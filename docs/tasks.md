@@ -104,6 +104,10 @@ _（**SEQ-20260613-01 META-28 ✅ 收口 2026-06-13**（Card C：UI ExternalCred
 
 ---
 
+_（**SEQ-20260613-02 PLAYER-11 ✅ 收口 2026-06-13**（用户「播放器多尺寸交互调查」发现两缺陷）——① `collapsePolicy.ts` 删 `removeControl(volume)`：桌面指针 medium/compact/narrow（≤960px，含 1280/1366 笔记本）不再丢音量键（音量静止态仅图标、无空间依据可删）；② `getInlineEpisodes` 去 `!isTheater` 门 + 去形参：默认/影院两模式控制条均提供内嵌选集入口（默认与右侧栏共存，用户裁定）。+28 定向单测（collapse-policy 24 / getInlineEpisodes 4）。门禁 typecheck/lint EXIT=0 / test:changed 升全量 532 文件 7358 passed。主循环 claude-opus-4-8；子代理无。**test:e2e:player 未跑绿 = 预存基建阻塞**（watch SSR `fetchVideoDetail` 直连 api、`resovo_dev` 无 7 seed 视频、客户端 page.route 拦不住 SSR fetch；干净基线同样全红，与本改动无关）→ 衍生 follow-up 卡 CHORE-E2E-WATCH-SSR-SEED 登记于 task-queue SEQ-20260613-02。详见 changelog [PLAYER-11]。**工作台空闲**。）_
+
+---
+
 ## 工作流提示
 
 - 取新任务前先查 `docs/task-queue.md` 是否有 `🚨 BLOCKER`（当前无）。

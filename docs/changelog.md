@@ -5259,3 +5259,21 @@
 - **质量门禁**：typecheck EXIT=0（全 workspace）/ lint EXIT=0（仅预存在 warning）/ 全量单测 **524 文件 7286 passed**（admin-ui 基础包改动按 ADR-180 升全量）/ **test:e2e:admin 82/82 passed**（含 `/admin/messages page-header 可见` 验证 sr-only 改造后页面正常挂载）。既有按可见标题文本断言的单测（图片健康/审计日志/播放线路/采集控制/首页运营位等）均通过——sr-only 保留 textContent + RTL getByText 不按 CSS 可见性过滤，预判得证。
 - **注意事项**：① 偏离风险 R1 已遵守——`ModerationConsole.tsx` 仍持手写 `SR_ONLY_STYLE`（先例），收敛到共享 `VISUALLY_HIDDEN_STYLE` 属后续清理卡，不在本序列文件范围；② R2 逐页核验「页面唯一 h1」——各页原即单 PageHeader headingLevel=1，titleVisuallyHidden 保留该 h1 元素，未增减；③ admin-visual 快照（非必跑门禁）覆盖 moderation 页 + 个别 admin-ui 组件，本序列未触碰这些目标，无需重生成。
 - **[AI-CHECK]**：六问过——①纯加性 prop（默认 false 零行为变化）+ 逐页按用户两项决策落地，全量+e2e 门禁绿；②sr-only 样式沉淀 admin-ui 共享 SSOT（满足 3+ 处提取），未在 14 页重复手写；③改动收敛每页 1–3 行，未碰 ModerationConsole / 后端 / schema；④遵 arch-reviewer C1/C2/C3 裁决 + CLAUDE.md 共享组件 API 强制 Opus；⑤测试覆盖共享组件新分支 + 既有可见文本断言回归确认 + e2e 页面挂载；⑥公开 Props 契约变更经 arch-reviewer 独立评审定稿，commit 带 trailer。
+
+## [PLAYER-11] 播放器多尺寸控件修复（音量键消失 + 默认模式补选集入口）
+- **完成时间**：2026-06-13
+- **记录时间**：2026-06-13 13:05
+- **执行模型**：claude-opus-4-8（主循环）
+- **子代理**：无（无共享组件公开 Props/事件签名改动；`LayoutDecision` 公开类型不变，仅 collapsePolicy 内部行为 + web-next 本地 helper / 无新端点 → 未触发强制 Opus 子代理项）
+- **背景**：用户「播放器多尺寸交互调查」发现两处控件显隐缺陷。调查实证根因——① 缺陷（音量）：`collapsePolicy.ts` 对所有非 default/非 short-height 桌面 profile（narrow/compact/medium）一律 `removeControl(volume)`，播放器宽度 ≤960px 即丢音量；而音量控件静止态仅扬声器图标（`.ytpVolumePanel{width:0}`，hover 才展开滑块），任何桌面宽度都不缺空间，删除无空间依据。命中面：浏览器窗口 < ~1425px（侧栏 360 + gap 24 + px-10 共 ~464，player ≈ min(W,1600)−464）即落 medium 档，含 1280/1366 主流笔记本。② 缺陷（选集）：`getInlineEpisodes` 以 `!isTheater` 门控使默认模式 `episodes` prop 恒 undefined → player-core `hasEpisodes=false`（`usePlayerOrchestration.ts:87`）→ 控制条选集按钮不渲染（默认靠右侧栏、仅影院模式有内嵌按钮）。用户两项裁定：音量键修复；选集控制条也加入口（与侧栏共存）。
+- **修改文件**：
+  - `packages/player-core/src/hooks/useLayoutDecision/collapsePolicy.ts` — 删除 `removeControl(slots, "volume")` 行（保留 chapter/theater/narrow 既有删除），桌面指针全宽度保留音量图标；加注释说明依据。
+  - `apps/web-next/src/components/player/playerShell.layout.ts` — `getInlineEpisodes` 去掉 `!isTheater` 门（仅留 `length<=1` 守卫）+ 移除 `isTheater` 形参；更新 JSDoc。
+  - `apps/web-next/src/components/player/PlayerShell.tsx` — `getInlineEpisodes(episodeNumbers)` 调用点更新（去 isTheater 实参）。
+  - `tests/unit/player-core/collapse-policy.test.ts`（新建）— 24 用例固化「各 profile 音量保留（PLAYER-11 回归）+ chapter/theater/narrow 既有删除不回归 + promoteCompactControls」。
+  - `tests/unit/web-next/player-shell-layout.test.ts`（新建）— 4 用例固化 getInlineEpisodes 去 theater 门后契约（多集双模式返回 / 单集·空守卫 / 非连续集号文案）。
+- **新增依赖**：无。
+- **数据库变更**：无。
+- **质量门禁**：typecheck EXIT=0（全 workspace）/ lint EXIT=0（仅预存在 warning）/ test:changed 自动升全量（player-core 基础包）**532 文件 7358 passed**（含新增 28 定向单测）。**test:e2e:player 未跑绿——预存系统性基建阻塞，非本次回归**：watch 页为 server component，SSR `fetchVideoDetail(slug)` 直连 api(:4000)，本地 `resovo_dev` 无 `aB3kR9x1`/`bC4lS0y2`/`TriState`/`TabsTest`/`CinemaM1`/`DxMovie1`/`DxSerie1` 7 个 seed 视频 → `notFound()` → `watch-page` 不渲染；e2e spec 用客户端 `page.route` mock 拦不住 Next 服务端 fetch，且 SSR 提供 initialVideo 后 PlayerShell 绕过客户端 mock。干净基线（git stash 去本改动）复跑同一用例同样失败，证与 PLAYER-11 无关。已拆 follow-up 卡 **CHORE-E2E-WATCH-SSR-SEED**（task-queue SEQ-20260613-02）。
+- **注意事项**：① 音量保留范围扩到全桌面宽度（含 narrow ≤560，原仅 default/short-height 保留）= 有意取「正确性·一致性」优先于「改动收敛」（价值排序 1·4 > 5）；音量图标态零额外占位，narrow 底部条仍宽裕（play/next/volume/time）。② 默认模式现控制条选集按钮与右侧栏选集面板并存（用户裁定）；medium/compact 档 episodes 随 promoteCompactControls 落 top-right、wide 档落 bottom-left（沿用既有提升逻辑，未改）。③ 触摸/全屏布局未动（触摸槽位本就无 volume）。④ e2e:player 验证缺口由单测层补偿——两处改动逻辑均为纯函数，已被新增 28 用例直接覆盖。
+- **[AI-CHECK]**：六问过——①两处定向 bug 修复，typecheck/lint/全量单测全绿 + 28 定向单测直证修复逻辑；②collapsePolicy 内部行为修正、getInlineEpisodes 局部 helper，无可沉淀共享层新逻辑（音量/选集显隐策略本就在共享 layout decision 内）；③改动 3 文件 + 2 新测试，未碰 player-core 公开 Props/事件签名/`LayoutDecision` 类型，未越层；④无 `any`/空 catch/硬编码颜色；⑤新增单测覆盖音量保留 + 选集双模式两条改动路径，含回归守卫；⑥e2e:player 环境阻塞已如实记录并拆 follow-up 卡，未瞒报为通过。
