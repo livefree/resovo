@@ -66,6 +66,13 @@ export default defineConfig({
         functions: 60,
       },
     },
+    // 本地并发封顶（CHORE-TEST-CPU-CONCURRENCY）：默认 fork 池会用到逻辑核-1（M2 上 ≈7），
+    // 把 4P+4E 全占满 → 调度器轮转抹平、E 核被饿死 → 其他应用卡顿。本地封顶到 P 核数（4），
+    // 让单测集中在 P 核、给 E 核留系统响应余量。顶层 maxWorkers/minWorkers（Vitest 3.x）对全
+    // projects 生效；CI 走默认（undefined 不封顶，与改动前完全一致），仅影响本地——对齐
+    // playwright.config.ts `workers` 的 CI 门控，不改 CI 行为。
+    maxWorkers: process.env.CI ? undefined : 4,
+    minWorkers: process.env.CI ? undefined : 1,
     // 测试超时：单个测试 10 秒，集成测试 30 秒
     testTimeout: 10000,
     hookTimeout: 30000,

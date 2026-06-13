@@ -5100,3 +5100,21 @@
   - 轮 2：轮 1 用 `baseThemedLines` 的 dead/pending，但那是按线路 **representative（最高分集源）** 算的——"某集坏但他集健康"的线路会被误判可切入。**终修**：抽出 `classifyRouteHealth(effectiveScore)` 纯函数（line-display-name 单一真源，applyThemeLabels 同步复用），兜底环形扫描改按**候选线路当前集源** `line.episodes.get(ep).effectiveScore` 判健康；移除 representative 口径的 themedLinesRef。新增 on-error #6（current-ep 坏但 representative 健康的线路被跳过）+ classifyRouteHealth 边界单测。
 - **注意事项**：unmerge 不在本卡；详情页选集仍全局（浏览语义）；初始深链 `?ep=N` 若默认最优线路不含该集会收敛第 1 集（深链指定集为罕见，不在本卡范围）。
 - **[AI-CHECK]**：六问过——①线路优先彻底解决"切集被迫跨线路/静默换语言"，单测覆盖切线/切集/报错切线/上报四路径全绿；②`buildLineKey` 沉淀为共享 keying 单一真源（line-matrix + mini player + 与 matchActiveSourceIndex 口径一致）；③改动收敛在 player shell 链路，未碰 player-core 公共 API / 后端 / 详情页；④遵 arch-reviewer 3 红线裁决 + CLAUDE.md 播放器关键路径约束；⑤测试 pure（line-matrix）+ 组件（3 player-shell 重写）双层 + e2e 环境缺口如实留痕；⑥store 原语语义变更经 arch-reviewer + Opus 主循环定稿，跨消费方（mini）显式对齐。
+
+## [CHORE-TEST-CPU-CONCURRENCY] 本地测试并发封顶（Apple Silicon P/E 核响应性）
+- **完成时间**：2026-06-13
+- **记录时间**：2026-06-13 00:20
+- **执行模型**：claude-opus-4-8
+- **子代理**：无（Codex stop-time review 为 hook 复审，非 Task 工具 spawn 子代理）
+- **来源**：用户报告本地跑测试（尤其 e2e）时 E 核满载 / P 核空闲、系统总占用未满却其他应用卡顿（机器 Apple M2，4 P 核 + 4 E 核）。
+- **实测调查**（校准探针，P 核基准≈3050ms / E 核≈7500ms）：两个正交问题叠加——① **「E 核满 / P 核空」= QoS 降级**：macOS 在 Apple Silicon 上把 `UTILITY`/`BACKGROUND` QoS 线程硬性限定到 E 核簇；项目脚本零 `nice`/`taskpolicy`（进程实测 nice=0/PRI=31），降级来自**启动环境**（典型：Electron 编辑器集成终端子进程继承 UTILITY QoS），且实测验证**事后用户态不可逆**（`taskpolicy -B -p $$`/`nice`/QoS clamp 全失败仍留 E 核）→ 只能换原生终端启动（操作指引，非代码）。② **「其他应用卡顿」= 并发过度订阅**：8 并行实测调度器把所有线程在 4P+4E 上轮转抹平、连 E 核也占满 → macOS 偏好跑 E 核的 UI/后台被饿死。
+- **方案**（杠杆 B，仅本地并发封顶；杠杆 A 的 QoS 修复为终端操作指引）：固定推荐值针对 4P+4E，**两处 CI 门控对齐**保证 CI 行为零变化。
+- **修改文件**：
+  - `playwright.config.ts` — 本地 `workers` 由 `undefined` → `3`（`process.env.CI ? 1 : 3`，≈P 核-1 占住 P 核、留 E 核余量；CI 仍 1；CLI `--workers=N` 可覆盖）。
+  - `vitest.config.ts` — `test` 顶层补 `maxWorkers: process.env.CI ? undefined : 4` / `minWorkers: process.env.CI ? undefined : 1`（Vitest 3.2.4 顶层 API，全 projects 生效；仅本地封顶到 P 核数，CI 走默认 undefined 不封顶）。
+- **新增依赖**：无。
+- **数据库变更**：无。
+- **Codex stop-time review FIX**：初版 Vitest `maxWorkers:4`/`minWorkers:1` 无条件生效会污染 CI 默认值（任务要求仅本地）→ 改为 `process.env.CI ? undefined : N`，与 playwright `workers` 同款 CI 门控；CI 路径 worker 数回到 Vitest 默认。
+- **质量门禁**：typecheck EXIT=0 / lint EXIT=0（4/4）/ 本地路径与 `CI=1` 路径 vitest 配置均加载正常、单文件 15/15 passed（确认 CI 行为零变化）/ commit 前 test:changed 升全量（config 改动命中 forceRerunTriggers）。
+- **注意事项**：① 杠杆 A（把测试搬上 P 核）需用户在启动入口执行——**从原生终端（Terminal.app/iTerm2/Ghostty/Warp）跑测试，勿用 Electron 编辑器集成终端**；进阶可在原生终端起 tmux 服务后于会话内跑测。② 验证 QoS：在真实测试终端跑校准探针，~3050ms=P 核（正常）/ ~7500ms=被降级到 E 核（需换终端）。③ 未动态读 `sysctl` P 核数（用户选固定值，换机器需手调）；未改 `vitest.integration.config.ts`（已 `fileParallelism:false` 串行）。
+- **[AI-CHECK]**：六问过——①两杠杆正交且必须结合，本卡落地可配置化的杠杆 B、杠杆 A 以文档指引交付（实测证明代码层无法可逆修 QoS）；②无共享组件/无新端点/无 schema，CI 门控复用 playwright 既有 `process.env.CI` 范式；③改动收敛在 2 个测试配置文件，零运行时/业务代码触碰；④对齐 CLAUDE.md 必跑命令与 test-rules；⑤CI 与本地双路径均验证配置加载（防 CI 默认污染回归）；⑥Codex 复审拦截的 CI 默认污染已闭环修复。

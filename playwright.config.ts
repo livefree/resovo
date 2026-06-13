@@ -36,7 +36,11 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 1,
-  workers: process.env.CI ? 1 : undefined,
+  // 本地并发封顶（CHORE-TEST-CPU-CONCURRENCY）：Apple Silicon（如 M2 4P+4E）上 worker=undefined
+  // 默认取逻辑核半数，叠加 3 个 dev server + 每 worker 一个 Chromium 后会把 E 核也占满，
+  // 抢占 macOS 偏好跑 E 核的 UI/后台 → 系统总占用未满却卡。固定 3 ≈ P 核数-1，占住 P 核、
+  // 给 E 核留响应余量；CI 仍 1 不变，CLI `--workers=N` 可覆盖。
+  workers: process.env.CI ? 1 : 3,
   reporter: [['html', { open: 'never' }], ['line']],
 
   use: {

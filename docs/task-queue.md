@@ -2281,3 +2281,12 @@
    - 落地：MergeCandidatesSection 来源列整列退役 + 删 effectiveSource/CandidateSource/SOURCE_CHIP_STYLE/降级提示条/minScore 控件 + 空态统一 identity + 保留 GOV-2 stale 警示；测试删 2a-fix/3 + 改 2a/1 + 新增 10h stale 警示（26 passed）。门禁：typecheck/lint EXIT=0 / test:changed 6 文件 76 passed / verify EXIT=0。**D-105-20 闭环 → 本卡 D-105-17~22 全闭环**。详见 changelog [CHG-VIR-18-B]。
 
 > **SEQ-20260612-04 完结**（2026-06-13）：merge 候选来源单一化三卡（A1 ADR / A2 后端 / B 前端）全部完成。legacy 实时聚合来源前后端完全退役，identity 多证据为唯一来源；GOV-2 既有 route 透传缺口顺带修复。ADR-105 本序列 D-105-17~22 全闭环。
+
+---
+
+## [CHORE-TEST-CPU-CONCURRENCY] 本地测试并发封顶（Apple Silicon P/E 核响应性）
+
+- **状态**：✅ 已完成 2026-06-13（用户直接指令，非队列序列；调查 + 杠杆 B 落地）
+- **来源**：用户报告本地跑测试（尤其 e2e）E 核满载 / P 核空闲、系统总占用未满却其他应用卡顿（Apple M2，4P+4E）。
+- **结论**（校准探针实测）：两正交问题——① QoS 降级（启动环境继承 UTILITY QoS → Apple Silicon 硬限 E 核，事后用户态不可逆）= 杠杆 A 终端操作指引；② 并发过度订阅占满含 E 核全部核心 = 杠杆 B 配置封顶。
+- **落地**：`playwright.config.ts` 本地 `workers` undefined→3；`vitest.config.ts` 顶层 `maxWorkers/minWorkers` = `process.env.CI ? undefined : 4/1`（仅本地，CI 门控对齐 playwright，零变化）。Codex 复审拦截「CI 默认污染」并修复。门禁全过；commit 前 test:changed 升全量（config 命中 forceRerunTriggers）。详见 changelog [CHORE-TEST-CPU-CONCURRENCY]。
