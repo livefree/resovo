@@ -25,6 +25,7 @@ vi.mock('@/api/db/queries/video-merge-mutations', () => ({
   insertNewVideo: vi.fn(),
   assignSourcesToVideo: vi.fn(),
   updateAuditTargetIds: vi.fn(),
+  recalcEpisodeCountFromSources: vi.fn(),  // FIX-MERGE-EPCOUNT
   listAuditTimeline: vi.fn(),
   countAuditTimeline: vi.fn(),
   fetchVideoTitles: vi.fn(),

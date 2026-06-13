@@ -39,6 +39,7 @@ vi.mock('@/api/db/queries/video-merge-mutations', () => ({
   insertNewVideo: vi.fn(),
   assignSourcesToVideo: vi.fn(),
   updateAuditTargetIds: vi.fn(),  // CHG-SN-5-10-PATCH P2
+  recalcEpisodeCountFromSources: vi.fn(),  // FIX-MERGE-EPCOUNT
 }))
 
 vi.mock('@/api/db/queries/video-merge-candidates', () => ({
@@ -263,6 +264,12 @@ describe('VideoMergesService.merge', () => {
     // 零去重 → 不写 snapshot 字段 + 响应无 dedupedCount
     expect(mutations.setAuditDedupedSourceIds).not.toHaveBeenCalled()
     expect('dedupedCount' in result).toBe(false)
+
+    // FIX-MERGE-EPCOUNT：转移后推进 target episode_count（仅 target / 事务内 / transfer 之后）
+    expect(mutations.recalcEpisodeCountFromSources).toHaveBeenCalledWith(mockClient, [TARGET_ID])
+    const transferOrder2 = vi.mocked(mutations.transferSourcesToTarget).mock.invocationCallOrder[0]!
+    const recalcOrder = vi.mocked(mutations.recalcEpisodeCountFromSources).mock.invocationCallOrder[0]!
+    expect(recalcOrder).toBeGreaterThan(transferOrder2)
 
     // 事务正确开始和提交
     expect(mockClient.query).toHaveBeenCalledWith('BEGIN')
@@ -573,6 +580,12 @@ describe('VideoMergesService.split', () => {
     )
     expect(mutations.assignSourcesToVideo).toHaveBeenCalledWith(
       mockClient, [SRC_2, SRC_4], NEW_VIDEO_ID_2,
+    )
+
+    // FIX-MERGE-EPCOUNT：拆分后对全部 target（新建 video）推进 episode_count
+    // （新建 video DB 默认 1，必须补齐为分配线路的实际集数）
+    expect(mutations.recalcEpisodeCountFromSources).toHaveBeenCalledWith(
+      mockClient, [NEW_VIDEO_ID_1, NEW_VIDEO_ID_2],
     )
 
     // 原 video 软删除

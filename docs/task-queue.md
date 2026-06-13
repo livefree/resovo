@@ -80,6 +80,25 @@
 
 ---
 
+## [SEQ-20260612-FIX] FIX-MERGE-EPCOUNT — 合并/拆分后 episode_count 不推进导致播放页选集丢失
+
+- **状态**：✅ 已完成（2026-06-12）
+- **创建时间**：2026-06-12
+- **最后更新时间**：2026-06-12 22:55
+- **目标**：合并/拆分转移 source 后同步推进 target 的 `episode_count`（已收录最大集数高水位），并修复历史漂移数据，恢复播放页/详情页选集到正常值
+- **范围**：`apps/api` Service（VideoMergesService merge/split）+ DB query（video-merge-mutations）+ 数据修复 migration 114；不碰前端（前端读 `episodeCount` 行为正确）
+- **依赖**：无
+
+### 任务列表（按执行顺序）
+
+1. FIX-MERGE-EPCOUNT — 合并/拆分 episode_count 不变量维护 + 历史数据修复（状态：✅ 2026-06-12）
+   - 创建时间：2026-06-12
+   - 实际开始：2026-06-12
+   - 完成时间：2026-06-12 22:55
+   - 验收要点：merge/split 后 target `episode_count = GREATEST(原值, MAX 活跃非投稿源 ep)`（query+service 双测覆盖）；migration 114 幂等修复全部漂移视频——真库验证「医到孤岛爱上你」2→4 / 全库漂移 4→0；门禁 typecheck/lint EXIT=0 + test:changed 321 passed。详见 changelog [FIX-MERGE-EPCOUNT]。
+
+---
+
 ## [SEQ-20260607-02] DOUBAN-SEARCH-RESOLVER-WIRE — 移除失效豆瓣搜索链路，接入 douban-adapter resolver
 
 - **状态**：✅ 已完成（1/1 卡收口 2026-06-07 14:15）

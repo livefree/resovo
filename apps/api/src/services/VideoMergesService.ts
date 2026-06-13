@@ -62,6 +62,8 @@ import {
   markAuditReverted,
   insertNewVideo,
   assignSourcesToVideo,
+  // FIX-MERGE-EPCOUNT：source 转移后推进 target episode_count（已收录最大集数高水位，只增不减）
+  recalcEpisodeCountFromSources,
   updateAuditTargetIds,
   listAuditTimeline,
   countAuditTimeline,
@@ -373,6 +375,9 @@ export class VideoMergesService {
       }
 
       await transferSourcesToTarget(client, sourceVideoIds, targetVideoId)
+      // FIX-MERGE-EPCOUNT：并入更高集数线路后推进 target episode_count（去重软删行已被
+      // deleted_at IS NULL 排除 / 只增不减），否则前台选集网格按陈旧 episodeCount 丢集
+      await recalcEpisodeCountFromSources(client, [targetVideoId])
       await softDeleteVideos(client, sourceVideoIds)
 
       for (const candidateId of candidateIds) {
@@ -737,6 +742,10 @@ export class VideoMergesService {
         createdVideoIdByGroup[i] = newVideoId
         await assignSourcesToVideo(client, [...group.sourceIds], newVideoId)
       }
+
+      // FIX-MERGE-EPCOUNT：拆分把线路分配到新建/已有 video 后推进各 target episode_count
+      // （新建 video DB 默认 episode_count=1 / 已有 target GREATEST 只增不减；去重软删行已排除）
+      await recalcEpisodeCountFromSources(client, allTargetVideoIds)
 
       // 回填 target_video_ids + snapshot.created_target_video_ids（D-105-4 / 零 DDL 自由字段）
       await updateAuditTargetIds(client, auditId, allTargetVideoIds, newVideoIds)

@@ -5052,3 +5052,24 @@
 - **质量门禁**：typecheck/lint EXIT=0 / test:changed 增量 6 文件 76 passed（merge 全簇绿）/ verify:adr-contracts EXIT=0。
 - **注意事项**：source 字段壳保留（types union + zod 422，回滚平滑）；前端忽略 source 回显值。merge 模块 legacy 实时聚合来源至此前后端完全退役，identity 多证据为唯一来源。
 - **[AI-CHECK]**：六问过——①纯前端清理零回归（merge/reject/折叠/筛选/排序全绿）；②GOV-2 警示保留 + 端到端覆盖（A2 route 透传 → B 前端渲染 10h）；③来源列退役收敛在组件内，未外溢共享层；④遵 ADR D-105-20；⑤测试删/改/增对齐 UI 变更；⑥legacy UI 触点零残留（grep e2e/server-next 清零）。
+
+## [FIX-MERGE-EPCOUNT] 合并/拆分后 episode_count 不推进导致播放页选集丢失（含历史数据修复）
+- **完成时间**：2026-06-12
+- **记录时间**：2026-06-12 22:55
+- **执行模型**：claude-opus-4-8
+- **子代理**：无
+- **来源**：用户指令插队（SEQ-20260612-FIX）。报例「医到孤岛爱上你」合并后某线路 4 集、其余各 2 集，播放页所有线路只显示 2 集。
+- **根因**：客户端播放页/详情页选集网格完全由视频级 `video.episodeCount` 驱动（`PlayerShell.tsx:440/545`、`EpisodePicker.tsx`、`EpisodeGrid.tsx`）。`VideoMergesService.runMergeTransaction` 仅 dedupe→`transferSourcesToTarget`→`softDeleteVideos`，**不重算 target `episode_count`**；split 的 `assignSourcesToVideo`（含 `insertNewVideo` 默认 1）同缺。`episode_count` 平时仅由爬虫 `bumpEpisodeCountIfHigher`（GREATEST 单向递增）维护——合并/拆分重新制造了 migration 024 当年修复的「主表集数 < 实际源集数」漂移，无 DB 触发器兜底。
+- **修改文件**：
+  - `apps/api/src/db/queries/video-merge-mutations.ts` — 新增 `recalcEpisodeCountFromSources(client, videoIds[])`：活跃非投稿源 `MAX(COALESCE(episode_number,1))` + `GREATEST(episode_count, max)` 单向递增（口径逐字对齐 migration 024 / bumpEpisodeCountIfHigher）；空数组短路；参数化批量；含 `v.deleted_at IS NULL` 守卫。
+  - `apps/api/src/services/VideoMergesService.ts` — merge：`transferSourcesToTarget` 后对 `[targetVideoId]` 调用；split：循环填充 `allTargetVideoIds`（新建 + 已有 target）后统一调用。不改 unmerge（高水位单向语义 / snapshot 未存旧值）。
+  - `apps/api/src/db/migrations/114_repair_videos_episode_count_after_merge.sql` — 幂等数据修复，re-run 024 口径修复全部漂移视频。
+  - `tests/unit/api/episode-count-recalc.test.ts`（新建）— query 级 SQL 口径 + 参数 + 空数组短路。
+  - `tests/unit/api/video-merge-mutations.test.ts` — merge/split happy path 加 recalc 调用断言（merge 在 transfer 之后调用序断言）+ 工厂补 key。
+  - `tests/unit/api/video-merges-confirm-decision.test.ts` / `merge-audit-derive.test.ts` — 全量工厂补 `recalcEpisodeCountFromSources` key（避免 import undefined 潜伏；6 个部分 mock 工厂不走 merge/split 全路径，无需改）。
+  - `docs/architecture.md` — episode_count 写入路径枚举补合并/拆分 recalc + Migration 024/114（不动 drift-acknowledged 迁移基线清单，102–113 同未列）。
+- **新增依赖**：无。
+- **数据库变更**：Migration 114（仅数据 UPDATE，无 DDL；幂等）。**已应用并验证**：报例「医到孤岛爱上你」(GXhsSj4e) `episode_count` 2→4；全库漂移视频 4→0（残余 0）。
+- **质量门禁**：typecheck EXIT=0 / lint EXIT=0 / test:changed 21 文件 321 passed / verify:adr-contracts EXIT=0（advisory baseline 无关）/ migrate 成功 + 真库 before·after 取证。
+- **注意事项**：unmerge 撤销后 target `episode_count` 不回退（与爬虫高水位语义一致），over-count 集落「暂无可用播放源」，与现有行为同型；recalc 口径含 `submitted_by IS NULL`（对齐 024），用户投稿已退役（CHG-VSR-8）实际无影响。
+- **[AI-CHECK]**：六问过——①修复维护 episode_count 不变量、零回归（93 merge 簇测试 + 全量 321 绿）；②与既有写入路径（爬虫 GREATEST / 024）口径逐字统一，沉淀为 `recalcEpisodeCountFromSources` 单一通道；③改动收敛在 Service + query + migration，前端无需改（其读 episodeCount 行为本正确）；④遵 db-rules「冗余计数器维护」+ migration 024 先例；⑤测试 query 级 + service 级双覆盖 + 真库取证；⑥不碰 unmerge/前端，决策留痕。

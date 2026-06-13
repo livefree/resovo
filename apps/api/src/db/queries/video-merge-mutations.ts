@@ -491,6 +491,48 @@ export async function assignSourcesToVideo(
   )
 }
 
+/**
+ * 合并/拆分转移 source 后，按"已收录最大集数"口径推进受影响 video 的 `episode_count`
+ * （冗余计数器维护 / db-rules）。
+ *
+ * 背景：merge.transferSourcesToTarget / split.assignSourcesToVideo 仅改 `video_sources.video_id`，
+ * 不动 `videos.episode_count`。若并入的线路集数高于 target 现值，主表集数会落后于实际源集数
+ * （= migration 024 当年修复的同型漂移），导致前台选集网格（`PlayerShell.tsx` 按 episodeCount
+ * 渲染）丢集。本函数在转移后于同事务内重算补齐。
+ *
+ * 口径与 migration 024 / `videos.crawler.ts` bumpEpisodeCountIfHigher 完全一致：
+ *   - 取该 video 活跃（`deleted_at IS NULL`）非投稿（`submitted_by IS NULL`）源的
+ *     `MAX(COALESCE(episode_number, 1))`；
+ *   - `GREATEST(episode_count, max)` 单向递增（只增不减，不与高水位语义 / unmerge 撤销冲突）。
+ *
+ * 必须在 dedupe / transfer / assign **之后**调用（去重软删行已被 `deleted_at IS NULL` 排除）。
+ */
+export async function recalcEpisodeCountFromSources(
+  client: PoolClient,
+  videoIds: string[],
+): Promise<void> {
+  if (videoIds.length === 0) return
+  await client.query(
+    `WITH source_max AS (
+       SELECT s.video_id,
+              MAX(COALESCE(s.episode_number, 1))::int AS max_episode
+         FROM video_sources s
+        WHERE s.video_id = ANY($1::uuid[])
+          AND s.deleted_at IS NULL
+          AND s.submitted_by IS NULL
+        GROUP BY s.video_id
+     )
+     UPDATE videos v
+        SET episode_count = GREATEST(v.episode_count, sm.max_episode),
+            updated_at = NOW()
+       FROM source_max sm
+      WHERE v.id = sm.video_id
+        AND v.deleted_at IS NULL
+        AND sm.max_episode > v.episode_count`,
+    [videoIds],
+  )
+}
+
 // ── CHG-SN-6-AUDIT-TIMELINE (RETRO 4/7) — GET /admin/video-merges/audit ─────────
 
 interface RawAuditTimelineRow {
