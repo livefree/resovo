@@ -251,6 +251,11 @@ vi.mock('@/api/db/queries/videos', () => ({
 vi.mock('@/api/db/queries/systemSettings', () => ({
   getAllSettings: vi.fn().mockResolvedValue({}),
 }))
+// META-26 / ADR-173 D-173-3：loadBangumiClientConfig 现经 loadProviderCredential 先读 api_credentials；
+// getApiCredentialRow → null 使解析器回退已 mock 的 getAllSettings（避免 db.query is not a function）
+vi.mock('@/api/db/queries/apiCredentials', () => ({
+  getApiCredentialRow: vi.fn().mockResolvedValue(null),
+}))
 vi.mock('@/api/db/queries/mediaCatalog', () => ({
   findCatalogById: vi.fn(),
   // D-174-3：默认无他行占用该 subject → resolveBangumiBinding 返回 safe（既有用例不受影响）

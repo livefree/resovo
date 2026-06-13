@@ -2317,9 +2317,10 @@
    - 建议模型：opus（`@resovo/types` 公开类型 → commit Opus trailer）／执行模型：claude-opus-4-8
    - 落地：`integration-credentials.types.ts` `PROVIDER_CREDENTIAL_SPECS`（bangumi 3 + tmdb Bearer 3 字段）+ index 导出；migration 115 真库对拍（表结构/FK SET NULL/bangumi 现值回填 secrets.token+config/旧 KV 保留/幂等复跑行数不变）；architecture.md 表段 + migration 列表。门禁 typecheck/lint/verify:adr-contracts EXIT=0 / 全量单测 524 文件 7286 passed。详见 changelog [META-25]。
    - 解锁：→ META-26（Card A2 读取路径迁移）。
-3. **META-26** — Card A2：读取路径迁移（`loadProviderCredential` 优先新表→fallback 旧 KV→env + enabled 语义）+ bangumi-config 薄封装（状态：⬜ 待启动）
-   - 建议模型：sonnet
-   - 验收要点：优先级/回退/enabled 压 env 单测 / Bangumi 富集回归不破
+3. **META-26** — Card A2：读取路径迁移（`loadProviderCredential` 优先新表→fallback 旧 KV→env + enabled 语义）+ bangumi-config 薄封装（状态：✅ 已完成 2026-06-13）
+   - 建议模型：sonnet ／执行模型：claude-opus-4-8（主循环连续推进）
+   - 落地：`apiCredentials.ts` `getApiCredentialRow` + `integration-credentials-config.ts` `loadProviderCredential`（新表→旧 KV〔LEGACY_KV_MAP〕→env + enabled 压 env）+ bangumi-config 薄封装（签名不变，BangumiService/Adapter 零改）+ 9 单测。受影响 metadataEnrich/bangumi-service 测试补 `apiCredentials` mock。门禁 typecheck/lint EXIT=0 / test:changed 16 文件 283 passed。详见 changelog [META-26]。
+   - 解锁：→ META-27（Card B service + 端点 + 测试适配器）。
 4. **META-27** — Card B：`IntegrationCredentialsService` + 测试适配器（bangumi authStatus / tmdb Bearer）+ 3 admin 路由 + 2 审计 action type（状态：⬜ 待启动）
    - 建议模型：opus（新增 admin route → 独立 ADR + Opus PASS，verify:endpoint-adr）
    - 验收要点：草稿 vs 已存持久化两分 / 候选 secret 不落库不入审计 / set-equal 通过 / verify:endpoint-adr EXIT=0

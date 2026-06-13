@@ -1,20 +1,24 @@
 /**
- * bangumi-config.ts — Bangumi 凭证解析（ADR-168 D-168-5）
+ * bangumi-config.ts — Bangumi 凭证解析薄封装（ADR-173 D-173-3，原 ADR-168 D-168-5 升级）
  *
- * 从 system_settings 解析 token/UA/timeout，仅注入 DB 有值字段（缺省由 lib/bangumi 回退 process.env）。
- * BangumiService（60s 缓存包裹）与 BangumiResourceAdapter（治理在线搜索）共享，避免逻辑重复。
+ * loadBangumiClientConfig 现委托通用 loadProviderCredential('bangumi')：
+ *   api_credentials 行优先 → 缺行 fallback 旧 system_settings KV → env（向后兼容）。
+ * 映射为 BangumiClientConfig（仅注入有值字段，缺省由 lib/bangumi 回退默认 UA/timeout）。
+ * 签名不变 → BangumiService（60s 缓存）/ BangumiResourceAdapter 共享消费零改动。
  */
 
 import type { Pool } from 'pg'
-import * as systemSettingsQueries from '@/api/db/queries/systemSettings'
 import type { BangumiClientConfig } from '@/api/lib/bangumi'
+import { loadProviderCredential } from './integration-credentials-config'
 
 export async function loadBangumiClientConfig(db: Pool): Promise<BangumiClientConfig> {
-  const raw = await systemSettingsQueries.getAllSettings(db)
+  const resolved = await loadProviderCredential(db, 'bangumi')
   const cfg: BangumiClientConfig = {}
-  if (raw.bangumi_api_token) cfg.token = raw.bangumi_api_token
-  if (raw.bangumi_user_agent) cfg.userAgent = raw.bangumi_user_agent
-  const t = Number(raw.bangumi_api_timeout_ms)
-  if (Number.isFinite(t) && t > 0) cfg.timeoutMs = t
+  const token = resolved.fields.token
+  if (typeof token === 'string' && token) cfg.token = token
+  const userAgent = resolved.fields.userAgent
+  if (typeof userAgent === 'string' && userAgent) cfg.userAgent = userAgent
+  const timeoutMs = resolved.fields.timeoutMs
+  if (typeof timeoutMs === 'number' && timeoutMs > 0) cfg.timeoutMs = timeoutMs
   return cfg
 }

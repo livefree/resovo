@@ -5155,6 +5155,26 @@
 - **注意事项**：① 本卡仅地基——读取路径迁移（`loadProviderCredential` 优先新表→fallback 旧 KV→env）在 META-26；端点/UI 在 META-27/28；② tmdb 凭证位就绪但消费管线后续单独立项（ADR-172-AMD3-C）；③ 旧 KV 物理退役推迟 META-29（Card D，线上稳定后）。
 - **[AI-CHECK]**：六问过——①回填保留旧 KV + 真库对拍验证现值不丢，正确性优先；②注册表 SSOT 沉淀 `@resovo/types` 跨 api/server-next 共享，复用 external.types 范式；③改动收敛 4 文件（1 新类型 + index + migration + architecture），未碰消费方；④遵 CLAUDE.md `@resovo/types` 公开类型强制 Opus + trailer；⑤全量单测 + 真库对拍 + 幂等验证覆盖；⑥schema 同步 architecture（绝对禁止违反项已守）。
 
+---
+
+## [META-26] Card A2：读取路径迁移（loadProviderCredential + bangumi-config 薄封装）（ADR-173 / SEQ-20260613-01 第 3 卡）
+- **完成时间**：2026-06-13
+- **记录时间**：2026-06-13 12:30
+- **执行模型**：claude-opus-4-8（主循环连续推进；建议模型 sonnet）
+- **子代理**：无
+- **来源**：ADR-173 D-173-3 落地。把单源 `bangumi-config` 直读 system_settings KV 通用化为 `loadProviderCredential`（**只新增读取路径，不退役旧契约**——退役在 META-29/Card D）。
+- **产出**：
+  - `apps/api/src/db/queries/apiCredentials.ts`（新）：`getApiCredentialRow(db, provider)` 读单行（snake→camel 映射；无行 null）。
+  - `apps/api/src/services/integration-credentials-config.ts`（新）：`loadProviderCredential(db, provider)` —— 按 `PROVIDER_CREDENTIAL_SPECS` 逐字段解析，优先级 api_credentials 行（secrets/config）→ 缺行 fallback 旧 KV（`LEGACY_KV_MAP`，过渡期，Card D 删）→ env（spec.envVar）；`enabled=false` 压过 env 回退（返回空 fields）；number 字段强转；仅返回有值字段（缺省 default 由消费方应用）。
+  - `apps/api/src/services/bangumi-config.ts`（重写薄封装）：`loadBangumiClientConfig` 委托 `loadProviderCredential('bangumi')` 映射 token/userAgent/timeoutMs，**签名不变** → BangumiService（60s 缓存）/ BangumiResourceAdapter 零改动。
+  - 单测 `tests/unit/api/integration-credentials-config.test.ts`（新，9 例）：行优先/disabled 压 env/缺行旧 KV/全缺 env/单字段 env 补/number 强转/bangumi 映射三态。
+  - 受影响测试 `metadataEnrich.test.ts` + `bangumi-service.test.ts` 补 `vi.mock('@/api/db/queries/apiCredentials', getApiCredentialRow→null)`（新路径先读 api_credentials → null 回退已 mock 的 getAllSettings，修 `db.query is not a function`）。
+- **新增依赖**：无。
+- **数据库变更**：无（仅读取路径；表在 META-25）。
+- **质量门禁**：typecheck EXIT=0 / lint EXIT=0 / test:changed **16 文件 283 passed**（含新 9 例 + 修复 metadataEnrich 18 + bangumi-service 45 回归）。
+- **注意事项**：① 旧 KV fallback 是过渡期兼容（D-173-8），Card D 退役；② BangumiService/BangumiResourceAdapter 消费签名不变，富集链路回归（bangumi-service 72 例全绿）；③ tmdb 解析就绪但无消费方（后续立项）。
+- **[AI-CHECK]**：六问过——①保留旧 KV fallback + bangumi 富集回归全绿，正确性/稳定性优先；②解析逻辑下沉通用 `loadProviderCredential`，bangumi-config 收为薄封装（消除单源重复，复用注册表 SSOT）；③改动收敛读取层 3 文件 + 2 测试补 mock，未碰端点/UI；④遵两阶段迁移（不删旧契约）+ git-rules；⑤单测覆盖优先级/enabled/回退全分支 + 修复既有测试回归；⑥薄封装签名不变守消费方边界（BangumiService 零改）。
+
 ## [HDR-DEDUP] 后台页面去重复标题 + 装饰提示统一治理（MODUX-ACPT-5 follow-up，4 卡序列）
 - **完成时间**：2026-06-13
 - **记录时间**：2026-06-13 01:18
