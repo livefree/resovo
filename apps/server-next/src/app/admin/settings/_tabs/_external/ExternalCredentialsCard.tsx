@@ -70,9 +70,11 @@ function authStatusLabel(s: CredentialTestResult['authStatus']): string {
 interface ProviderCardProps {
   spec: ProviderCredentialSpec
   view: IntegrationCredentialView
+  /** 保存成功后回调父级刷新（重取遮罩值 + configured/状态，并重挂本卡，防 stale 误导态） */
+  onSaved: () => Promise<void>
 }
 
-function ProviderCredentialCard({ spec, view }: ProviderCardProps) {
+function ProviderCredentialCard({ spec, view, onSaved }: ProviderCardProps) {
   const toast = useToast()
   const initValues = useCallback((): Record<string, string> => {
     const v: Record<string, string> = {}
@@ -94,12 +96,16 @@ function ProviderCredentialCard({ spec, view }: ProviderCardProps) {
     try {
       await saveIntegrationCredential(spec.provider, buildPatch(spec, values, enabled))
       toast.push({ title: '已保存', description: `${spec.label} 凭证已更新`, level: 'success' })
+      setTestResult(null) // 清除上次「未保存输入」测试结果，避免与已保存态混淆
+      // 刷新父级：重取遮罩值 + configured/状态行，并以 nonce key 重挂本卡（输入框回显遮罩值，
+      // 修「保存成功却仍显未配置 / 残留明文 token」的 stale 误导态，Codex stop-time review）
+      await onSaved()
     } catch (err) {
       toast.push({ title: '保存失败', description: err instanceof Error ? err.message : '请稍后重试', level: 'danger' })
     } finally {
       setSaving(false)
     }
-  }, [spec, values, enabled, toast])
+  }, [spec, values, enabled, toast, onSaved])
 
   const handleTest = useCallback(async () => {
     setTesting(true)
@@ -226,10 +232,14 @@ function ProviderCredentialCard({ spec, view }: ProviderCardProps) {
 }
 
 export function ExternalCredentialsCard() {
+  const toast = useToast()
   const [views, setViews] = useState<IntegrationCredentialView[] | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<Error | null>(null)
   const [retryKey, setRetryKey] = useState(0)
+  // 每源「已保存」次数：保存后 +1 → 作为该卡 remount key，强制以最新遮罩值/状态重挂（仅重挂被保存卡，
+  // 不影响其它源的未保存编辑）
+  const [savedNonce, setSavedNonce] = useState<Record<string, number>>({})
 
   useEffect(() => {
     let cancelled = false
@@ -242,6 +252,18 @@ export function ExternalCredentialsCard() {
     return () => { cancelled = true }
   }, [retryKey])
 
+  // 保存成功后刷新：先重取（更新 views）再 bump nonce（同批 → 重挂卡读到最新遮罩值/状态）。
+  const handleSaved = useCallback(async (provider: string) => {
+    try {
+      const fresh = await getIntegrationCredentials()
+      setViews(fresh)
+    } catch {
+      // 刷新失败不回滚已成功的保存；保留旧视图（下次进入页面自然刷新）+ 轻提示
+      toast.push({ title: '状态刷新失败', description: '凭证已保存，但列表状态未能刷新', level: 'warn' })
+    }
+    setSavedNonce((prev) => ({ ...prev, [provider]: (prev[provider] ?? 0) + 1 }))
+  }, [toast])
+
   if (loading && !views) return <LoadingState variant="skeleton" />
   if (error) return <ErrorState error={error} title="加载失败" onRetry={() => setRetryKey((k) => k + 1)} />
   if (!views) return null
@@ -252,7 +274,14 @@ export function ExternalCredentialsCard() {
       {PROVIDER_CREDENTIAL_SPECS.map((spec) => {
         const view = byProvider.get(spec.provider)
         if (!view) return null
-        return <ProviderCredentialCard key={spec.provider} spec={spec} view={view} />
+        return (
+          <ProviderCredentialCard
+            key={`${spec.provider}-${savedNonce[spec.provider] ?? 0}`}
+            spec={spec}
+            view={view}
+            onSaved={() => handleSaved(spec.provider)}
+          />
+        )
       })}
     </div>
   )

@@ -83,7 +83,7 @@ describe('ExternalCredentialsCard', () => {
   })
 
   it('保存：调用 saveIntegrationCredential(provider, patch 含 enabled)', async () => {
-    getMock.mockResolvedValueOnce([BANGUMI_VIEW, TMDB_VIEW])
+    getMock.mockResolvedValue([BANGUMI_VIEW, TMDB_VIEW]) // 初次 + 保存后刷新
     saveMock.mockResolvedValueOnce(undefined)
     render(<ExternalCredentialsCard />)
     await waitFor(() => screen.getByTestId('integration-bangumi-save'))
@@ -91,6 +91,24 @@ describe('ExternalCredentialsCard', () => {
     await waitFor(() => expect(saveMock).toHaveBeenCalled())
     expect(saveMock.mock.calls[0][0]).toBe('bangumi')
     expect(saveMock.mock.calls[0][1]).toMatchObject({ enabled: true, userAgent: 'resovo/1.0', timeoutMs: 8000 })
+  })
+
+  it('保存成功后刷新视图（防 stale 误导态）：重取凭证 + 回显最新遮罩值/状态', async () => {
+    // 初次未配置（token 空）→ 保存后刷新返回已配置（遮罩值）
+    getMock.mockResolvedValueOnce([{ ...BANGUMI_VIEW, values: { ...BANGUMI_VIEW.values, token: '' }, configured: false }, TMDB_VIEW])
+    saveMock.mockResolvedValueOnce(undefined)
+    getMock.mockResolvedValueOnce([{ ...BANGUMI_VIEW, values: { ...BANGUMI_VIEW.values, token: '••••9999' }, configured: true }, TMDB_VIEW])
+    render(<ExternalCredentialsCard />)
+    await waitFor(() => expect(screen.getByTestId('integration-bangumi-status').textContent).toContain('未配置'))
+    fireEvent.click(screen.getByTestId('integration-bangumi-save'))
+    // 保存后重取 → 状态行刷新为「已配置」+ 输入框回显最新遮罩值（重挂卡）
+    await waitFor(() => expect(getMock).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(screen.getByTestId('integration-bangumi-status').textContent).toContain('已配置'))
+    await waitFor(() =>
+      expect(
+        (screen.getByTestId('integration-bangumi-token').querySelector('input') as HTMLInputElement).value,
+      ).toBe('••••9999'),
+    )
   })
 
   it('测试连接：draft=true 调用 + 展示结果', async () => {

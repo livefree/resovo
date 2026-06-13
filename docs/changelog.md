@@ -5230,6 +5230,7 @@
 - **新增依赖**：无。
 - **数据库变更**：无。
 - **质量门禁**：typecheck EXIT=0 / lint EXIT=0 / test:changed 2 文件 20 passed / **test:e2e:admin 82/82 passed**（admin 域无回归，含 /admin/messages page-header + 视频库黄金路径等）。
+- **Codex stop-time review FIX**：「Saved credentials leave the admin UI in a stale/misleading state」——`ExternalCredentialsCard` 保存后不刷新：`view.configured`/遮罩值/状态行仍为初次拉取旧值 + 输入框残留明文 token → 「保存成功却仍显未配置 / 明文」误导态。修复：保存成功后父级 `handleSaved` 重取凭证（更新 views）+ bump 每源 `savedNonce`（作 remount key，仅重挂被保存卡 → 输入框回显最新遮罩值、状态行刷新，不影响其它源未保存编辑）；保存后清 `testResult`（避免与已保存态混淆）；刷新失败 warn 提示不回滚已保存。+1 单测（未配置→保存→刷新已配置+回显遮罩值）。门禁 typecheck/lint EXIT=0 / test:changed 21 passed。
 - **注意事项**：① 过渡期——后端 system_settings bangumi*/tmdb* 旧契约 + system/api SiteSettings 字段保留（Card D/META-29 清理）；② SettingsTab 不再经 /admin/system/settings 提交 bangumi（凭证走专用端点），GeneralSettingsPatch 旧 bangumi 键 Card D 删；③ tmdb 卡可填可测可存，消费管线后续立项。
 - **[AI-CHECK]**：六问过——①UI 切新卡但后端旧契约保留（两阶段，rollback 安全），e2e 全绿无回归；②注册表驱动渲染（接新源零 UI 改）+ 复用 admin-ui 原语不新增 Props；③改动收敛 server-next 3 文件 + 2 测试，未碰后端；④遵 ADR-173 D-173-10 + 不删旧契约底线 + apiClient 唯一出口（ADR-003）；⑤组件单测（渲染/保存/测试/失败）+ SettingsTab 隔离 stub + e2e:admin 域门禁；⑥凭证管理与通用站点设置保存流解耦（专用端点），职责单一。
 
