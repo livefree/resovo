@@ -5119,6 +5119,22 @@
 - **注意事项**：① 杠杆 A（把测试搬上 P 核）需用户在启动入口执行——**从原生终端（Terminal.app/iTerm2/Ghostty/Warp）跑测试，勿用 Electron 编辑器集成终端**；进阶可在原生终端起 tmux 服务后于会话内跑测。② 验证 QoS：在真实测试终端跑校准探针，~3050ms=P 核（正常）/ ~7500ms=被降级到 E 核（需换终端）。③ 未动态读 `sysctl` P 核数（用户选固定值，换机器需手调）；未改 `vitest.integration.config.ts`（已 `fileParallelism:false` 串行）。
 - **[AI-CHECK]**：六问过——①两杠杆正交且必须结合，本卡落地可配置化的杠杆 B、杠杆 A 以文档指引交付（实测证明代码层无法可逆修 QoS）；②无共享组件/无新端点/无 schema，CI 门控复用 playwright 既有 `process.env.CI` 范式；③改动收敛在 2 个测试配置文件，零运行时/业务代码触碰；④对齐 CLAUDE.md 必跑命令与 test-rules；⑤CI 与本地双路径均验证配置加载（防 CI 默认污染回归）；⑥Codex 复审拦截的 CI 默认污染已闭环修复。
 
+---
+
+## [META-24] ADR-173 起草：API 凭证统一管理框架 + 连接测试协议（SEQ-20260613-01 第 1 卡）
+- **完成时间**：2026-06-13
+- **记录时间**：2026-06-13 11:30
+- **执行模型**：claude-opus-4-8（主循环；撰写即将成为 ADR 的决策文档 + 跨 3+ 消费方契约，CLAUDE.md 强制 Opus）
+- **子代理**：无（设计 plan 经 Codex hook 复审出具 6 必修 + 5 建议并入，非 Task 工具 spawn 子代理）
+- **来源**：用户「为 API token 设计统一管理方式（添加/保存/更新/测试）」。ADR-168 已奠基外部数据源凭证治理但明确「测试连接 NOT in scope（依赖 ADR-173/F-A）」而 ADR-173 至今未落笔——本卡落地该 F-A。
+- **产出**：`docs/decisions.md` 新增 `## ADR-173`（状态 Accepted）。决策要点 D-173-1..11：新建 `api_credentials` 表（secrets/config 物理分列）/ `@resovo/types` provider 凭证注册表 SSOT / 统一解析器 `loadProviderCredential`（DB 优先→旧 KV→env + enabled 压 env）/ 注册表 `secret` flag 驱动遮罩 redact / 3 端点契约 + 测试三态取值 + draft 不污染 saved / 测试适配器（bangumi authStatus / tmdb Bearer）/ 2 审计 action type（targetKind='system'）/ 两阶段迁移（保留旧 KV，物理退役推迟 Card D）/ provider 开放字符串 + zod 守门 / UI 注册表驱动 / updated_by 保 FK + admin-only。偏离登记 D-173-A..E（at-rest 加密延续 NEGATED + dump 边界 / 缓存一致性 / draft 非对称 / targetKind 复用 system / 独立表不删旧 KV 兼容）。
+- **设计真源 / 决策依据**：plan `~/.claude/plans/sorted-cooking-feigenbaum.md`（用户已批准 + Codex 审核 v2 全部落实：TMDb Bearer 主契约 / 两阶段迁移顺序 / draft test 不污染 saved status / disabled 压 env fallback / 审计真源具体文件 / Card A 拆分）。
+- **新增依赖**：无。
+- **数据库变更**：无（本卡仅 ADR 定契约；migration 115 在 META-25 落地）。
+- **质量门禁**：`npm run verify:adr-contracts` EXIT=0（`verify:endpoint-adr` 235 admin 路由对齐 123 ADR 端点含新 3 端点 / `verify:adr-d-numbers` ADR-173 D-173-1..11 列入待闭环，advisory 非阻塞）；docs-only → `test:changed` SKIP（exit 0，ADR-180）。
+- **注意事项**：① 3 端点（`GET/PUT/POST /admin/integrations/credentials[/:provider][/test]`）已入 ADR-173 §端点契约表,路由 META-27 落地时逐字对齐供 `verify:endpoint-adr` 核验；② D-173-1..11 闭环标识随 META-25..28 各卡补 changelog；③ Card D（META-29 清理）线上稳定后单独排期,不在本批。
+- **[AI-CHECK]**：六问过——①正确性优先,严守 Codex 审核底线（同批不删旧 KV 兼容、两阶段迁移保 rollback）;②注册表 SSOT 沉淀 `@resovo/types`、复用 ADR-168 secret 纯函数与 ADR-188 注册表范式,不重造;③本卡 docs-only 改动收敛 decisions.md 单文件;④遵 CLAUDE.md 强制 Opus 起草 ADR + git-rules trailer;⑤门禁 verify:adr-contracts EXIT=0;⑥拆卡原子化（A1/A2/B/C/D）符合 M-SN-5 跨层拆分判据。
+
 ## [HDR-DEDUP] 后台页面去重复标题 + 装饰提示统一治理（MODUX-ACPT-5 follow-up，4 卡序列）
 - **完成时间**：2026-06-13
 - **记录时间**：2026-06-13 01:18

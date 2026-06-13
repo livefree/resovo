@@ -22289,3 +22289,89 @@ D-176-12 已裁定「语言变体归 source 层，不进 catalog/video 显示标
 ### 拆卡
 
 LANG-DIM-A（Migration 112 + types + architecture.md §5.2 同步）→ LANG-DIM-B（D-199-2/3/4/5：规则表拆分 + 归一函数 + 写入链路 + 回填）→ LANG-DIM-C（D-199-7：API 透出 + 前台 UI + 语言粘性 + e2e）。
+
+---
+
+## ADR-173：API 凭证统一管理框架 + 连接测试协议（SEQ-20260613-01 / META-24，落地 ADR-168 遗留 F-A）
+
+- **状态**：**Accepted**（claude-opus-4-8 主循环起草 + 自审；设计 plan 经 Codex 审核出具 6 必修 + 5 建议，全部并入并经用户批准 `~/.claude/plans/sorted-cooking-feigenbaum.md`。触发多条 CLAUDE.md 强制 Opus：新共享契约 / 跨 3+ 消费方 schema / 新 admin route / 即将成为 ADR 的决策文档）。
+- **来源**：产品需从多站点取影视数据,其中一路为 API 访问（已接 Bangumi,未来接 TMDb）。用户要求「为 API token 设计统一管理方式（添加 / 保存 / 更新 / 测试）」。ADR-168 已奠基「外部数据源凭证统一管理 + Secret Redaction 协议」,但仅做 bangumi 单源凭证下沉,且明确「**测试连接按钮 NOT in scope（依赖 ADR-173/F-A）**」——本 ADR 即落地该长期被引用却未写的 F-A,并把单源硬编码升级为注册表驱动框架。
+
+### 背景
+
+ADR-168 落地后现状（已逐行核实）:
+1. **单源硬编码,不可扩展**:凭证以扁平 KV（`bangumi_api_token` 等）混在 `system_settings`,经 `deserializeSiteSettings` 拼进 `SiteSettings`；解析器 `apps/api/src/services/bangumi-config.ts` 只认 bangumi；UI `SettingsTab.tsx` 把 bangumi 卡字段写死。每加一源都要改 types / deserialize / siteConfig schema / UI 多处。
+2. **测试能力缺失**:运营保存 token 后无法验证其真实可用,只能靠富集失败间接发现。`SettingsTab` 的「✅ 已配置 / 未配置」仅反映 token 是否存在,非是否有效。
+3. **占位已就绪**:`tmdb_api_key` 已入 `SystemSettingKey` union + 遮罩管线（ADR-168 D-168-7,占位不消费）；provider 注册表 `EXTERNAL_PROVIDERS`（ADR-188,`packages/types/src/external.types.ts`）已声明 bangumi=active / tmdb=planned。
+
+本 ADR 定契约:新建 `api_credentials` 表 + provider 凭证注册表 SSOT + 统一解析器/服务/端点/UI + 连接测试协议。**复用** ADR-168 secret 三道治理纯函数（`apps/api/src/lib/secretRedaction.ts`）与 ADR-188 注册表范式,不重造。**本 ADR 定契约,实施拆 META-25（A1）/-26（A2）/-27（B）/-28（C）/-29（D）**。
+
+### 决策要点
+
+1. **（D-173-1）新建 `api_credentials` 表（migration 115）**:一源一行,敏感/非敏感字段**物理分列**（使遮罩/redact 不依赖 key 名正则,比 ADR-168 KV 的 `SECRET_KEY_PATTERNS` 更稳）。列:`provider TEXT PRIMARY KEY` / `secrets JSONB NOT NULL DEFAULT '{}'`（敏感 map: `{token?,...}`）/ `config JSONB NOT NULL DEFAULT '{}'`（非敏感 map: `{userAgent?,timeoutMs?,baseUrl?,language?}`）/ `enabled BOOLEAN NOT NULL DEFAULT TRUE` / `last_tested_at TIMESTAMPTZ` / `last_test_ok BOOLEAN` / `last_test_latency_ms INTEGER` / `last_test_error TEXT` / `updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()` / `updated_by UUID REFERENCES users(id) ON DELETE SET NULL`。`last_test_*` **仅记录「已保存配置」测试**（草稿测试不写,见 D-173-5）。
+
+2. **（D-173-2）provider 凭证注册表 SSOT（`@resovo/types` 跨消费方共享）**:新建 `packages/types/src/integration-credentials.types.ts`,对齐 `EXTERNAL_PROVIDERS` 范式（类型 + runtime const 同居,api 校验 + server-next UI 同源消费）。`CredentialFieldSpec { key, label, secret: boolean, input: 'text'|'password'|'number', required, default?, min?, max?, placeholder?, help?, envVar? }` + `ProviderCredentialSpec { provider: ProviderKey, label, fields }` + `PROVIDER_CREDENTIAL_SPECS` + `getProviderCredentialSpec(p)`。注册项:
+   - **bangumi**:`token`(secret/password, envVar=`BANGUMI_API_TOKEN`) / `userAgent`(default `resovo/1.0 (+https://github.com/resovo)`, envVar=`BANGUMI_USER_AGENT`) / `timeoutMs`(number default 8000, min 1000 max 60000, envVar=`BANGUMI_API_TIMEOUT_MS`)。
+   - **tmdb**:`token`(secret/password, label "API Read Access Token", envVar=`TMDB_READ_ACCESS_TOKEN`) / `baseUrl`(default `https://api.themoviedb.org/3`, envVar=`TMDB_BASE_URL`) / `language`(default `zh-CN`)。
+
+3. **（D-173-3）统一解析器 + bangumi-config 薄封装 + enabled 语义 + env 回退**:新建 `apps/api/src/services/integration-credentials-config.ts` 的 `loadProviderCredential(db, provider)`:读 `api_credentials` 行 → **缺行 fallback 旧 `system_settings` KV → env（D-173-8 两阶段过渡）** → 按 spec 合并 default → 返回 `{ secrets, config }`。`bangumi-config.ts` 的 `loadBangumiClientConfig` 改薄封装 `loadProviderCredential('bangumi') → BangumiClientConfig`（保 `BangumiService` 60s 缓存,向后兼容）。**enabled 语义**:`enabled=false` **压过 env 回退**——解析器对 disabled 源不注入任何凭证（返回空 cfg,等同未配置）,否则开关形同虚设；但测试不受 enabled 影响（仍可测候选/已存值）。
+
+4. **（D-173-4）secret 治理复用 + 注册表 `secret` flag 为遮罩真源**:复用 ADR-168 `maskSecret` / `isMaskedPlaceholder`。GET 对 `secrets.*` 逐字段 `maskSecret`、`config.*` 明文；PUT 对 secret 字段 `isMaskedPlaceholder→跳过写入`（保留原值,防「保存即清空」）、JSONB **合并**写入（不清掉同源未提交字段）；审计 redaction **以注册表 `secret: boolean` 为准**（不依赖 key 名正则,因新表字段为 camelCase 如 `token` 不命中 `(^|_)api_key$`）,命中值非空→`<set>` / 空→`<cleared>`。
+
+5. **（D-173-5）端点契约 + 测试三态取值 + draft 不污染 saved 状态**:见 §端点契约。`POST .../test` 有效配置 = 候选值（传入且非遮罩占位）→ 否则已存值 → 否则 env 回退;持久化**两分**:`draft=false`(测已保存)→ 持久化 `last_test_*`;`draft=true`(测未保存候选输入)→ 仅返回结果不更新行级 `last_test_*`(UI 标注「未保存输入测试」)。两路均 redacted 审计,**不持久化候选 secret**。
+
+6. **（D-173-6）测试适配器（server 侧）**:新建 `apps/api/src/services/integration-credential-testers.ts` 的 `CREDENTIAL_TESTERS: Record<ProviderKey, (resolved)=>Promise<CredentialTestResult>>`,`CredentialTestResult = { ok, latencyMs, error?, authStatus?: 'valid'|'invalid'|'not_required' }`:
+   - bangumi:`lib/bangumi.ts` 加 `testConnection(cfg)`——有 token 走 `GET /v0/me`(200→`valid` / 401→`invalid`),无 token 走 `GET /calendar` 验连通+UA(ok 但 `not_required`,**避免「无 token calendar ok」被误读为凭证有效**);计延迟。
+   - tmdb:新建薄 `apps/api/src/lib/tmdb.ts`,**本期仅含 `testConnection(cfg)`**——`GET {baseUrl}/authentication` 头 `Authorization: Bearer <token>`(Bearer 覆盖 v3/v4,不绑 v3 query key;若日后兼容 `api_key` 作 `authMode` 扩展,非主契约);完整客户端待富集立项。
+   - 未接源(douban/imdb)返回 `{ ok:false, error:'unsupported' }`。
+
+7. **（D-173-7）审计（2 action type,真源具体文件）**:新增 `integration.credential_update`（PUT）/ `integration.credential_test`（POST）。真源 `packages/types/src/admin-audit.types.ts` + 写服务 `apps/api/src/services/AuditLogService.ts`;set-equal 守卫 `tests/unit/api/audit-log-service-enums-set-equal.test.ts`（如有前端 audit label 映射一并补）。**targetKind 用 `'system'`**——migration 052 `admin_audit_log.target_kind` CHECK 仅含 `video/video_source/staging/review_label/crawler_site/system`,用 `'integration'` 会被拒（需改 DDL,本期不做）;`targetId: null`,provider 入 payload。
+
+8. **（D-173-8）两阶段迁移（不同卡删旧 KV,保 rollback）**:migration 115 回填 `system_settings` 现值入 `api_credentials`（`bangumi_api_token→secrets.token` / `bangumi_user_agent→config.userAgent` / `bangumi_api_timeout_ms→config.timeoutMs` / `tmdb_api_key→secrets.token`）但**保留旧 KV 值只读**。**过渡期**(Card A2–C):解析器缺行 fallback 旧 KV;UI 切新卡但后端旧契约(`SystemSettingKey`/`SiteSettings`/siteConfig schema/system api 字段)全保留。**清理期**(Card D,线上稳定后单独排期):退役旧契约 + 删解析器旧 KV fallback + 删旧 KV 值 + 迁 system-config 测试断言。
+
+9. **（D-173-9）provider DB 开放字符串 + zod 守门**:不加 `CHECK (provider IN ...)`(避免每加一源改 DDL);route/service `z.enum(PROVIDER_KEYS)` 为唯一约束。
+
+10. **（D-173-10）UI 注册表驱动 + 后续 IA**:升级 `SettingsTab` 硬编码「外部数据源」卡为注册表驱动 `ExternalCredentialsCard`(按 `PROVIDER_CREDENTIAL_SPECS` 每源一卡:字段 + 保存 + 测试连接 + 状态行 + enabled 开关),复用 admin-ui 原语**不新增公开 Props**。后续 IA(本期不做):`/admin/external-resources` 治理页可加凭证状态入口。
+
+11. **（D-173-11）updated_by 保 FK**:与 `admin_audit_log.actor_id`(migration 052,`UUID NOT NULL REFERENCES users(id)`)惯例一致。`api_credentials` 为 **admin-only 配置表**,所有读写仅经鉴权 route(`fastify.authenticate + requireRole(['admin'])`),**不在未登录路径访问**(守 CLAUDE.md「未登录请求路径不得访问 users 表」红线);route preHandler 鉴权测试覆盖。`ON DELETE SET NULL`(回填行 updated_by 可空)。
+
+### 端点契约
+
+> 新建 `apps/api/src/routes/admin/integrationCredentials.ts`,注册进路由 bootstrap。全部 `admin` 角色（`fastify.authenticate + requireRole(['admin'])`）。Card B（META-27）落地;路由 path 与下表逐字对齐供 `verify:endpoint-adr` 核验。
+
+| # | 方法 | 路径 | 用途 | Request | Response |
+| --- | --- | --- | --- | --- | --- |
+| 1 | GET | `/admin/integrations/credentials` | 列出所有 provider 凭证视图（spec + 遮罩值 + configured + 测试状态 + enabled） | — | 200 `{ data: { providers } }` |
+| 2 | PUT | `/admin/integrations/credentials/:provider` | 保存/更新某源凭证（占位跳过 + JSONB 合并 + 审计） | `{ 按 spec 动态字段 }` | 200 `{ data: { ok } }` |
+| 3 | POST | `/admin/integrations/credentials/:provider/test` | 测试连接（draft=候选输入 / 已存值,三态取值） | `{ draft, 候选字段 }` | 200 `{ data: { ok, latencyMs, authStatus } }` |
+
+错误码沿用既有约定:`VALIDATION_ERROR`(zod 失败,400) / `NOT_FOUND`(未知 provider,404)。
+
+### 影响文件
+
+- **新建**:`apps/api/src/db/migrations/115_api_credentials.sql`、`packages/types/src/integration-credentials.types.ts`、`apps/api/src/db/queries/apiCredentials.ts`、`apps/api/src/services/IntegrationCredentialsService.ts`、`apps/api/src/services/integration-credentials-config.ts`、`apps/api/src/services/integration-credential-testers.ts`、`apps/api/src/lib/tmdb.ts`、`apps/api/src/routes/admin/integrationCredentials.ts`、`apps/server-next/src/app/admin/settings/_tabs/_external/ExternalCredentialsCard.tsx`、`apps/server-next/src/lib/integrations/api.ts`
+- **修改（本批 A1–C）**:`apps/api/src/lib/bangumi.ts`(+`testConnection`)、`apps/api/src/services/bangumi-config.ts`(薄封装)、`packages/types/src/index.ts`(runtime export 注册表)、`apps/server-next/src/app/admin/settings/_tabs/SettingsTab.tsx`(切新卡)、`packages/types/src/admin-audit.types.ts` + `apps/api/src/services/AuditLogService.ts` + `tests/unit/api/audit-log-service-enums-set-equal.test.ts`(2 action type)、`docs/architecture.md`(api_credentials 表段 + migration 115)
+- **Card D 才改（清理期）**:`packages/types/src/system.types.ts`、`apps/api/src/db/queries/systemSettings.ts`、`apps/api/src/routes/admin/siteConfig.ts`、`apps/server-next/src/lib/system/api.ts`、`tests/unit/api/system-config.test.ts`
+- **复用不改**:`apps/api/src/lib/secretRedaction.ts`、`packages/types/src/external.types.ts`
+- **注**:AuditLogService 审计 redaction 在 route 落点（同 ADR-168）;前端 `apiClient` 唯一出口（ADR-003）。
+
+### 实施拆卡（M-SN-5:跨 ADR/types/schema/service/route/UI 多层 + ≥5 项,须拆）
+
+- **META-25（Card A1）**:`@resovo/types` `PROVIDER_CREDENTIAL_SPECS`+类型 + index runtime export;migration 115（建表 + 回填,**保留旧 KV**）+ 真库对拍幂等 + 回填验证;`architecture.md`。（Opus trailer:`@resovo/types` 公开类型）
+- **META-26（Card A2）**:`apiCredentials.ts` queries + `loadProviderCredential`（优先新表→fallback 旧 KV→env + enabled 压 env）+ `bangumi-config` 薄封装 + 单测（优先级/回退/enabled）。**不删**旧 Settings 契约。
+- **META-27（Card B）**:`IntegrationCredentialsService` + `lib/bangumi.testConnection`(authStatus) + `lib/tmdb.testConnection`(Bearer) + `CREDENTIAL_TESTERS` + 3 路由 + 2 审计 action type(targetKind='system') + 单测（草稿 vs 已存持久化、候选 secret 不落库不入审计、set-equal）。（Opus:新 admin 路由）
+- **META-28（Card C）**:`ExternalCredentialsCard`(注册表驱动) + `lib/integrations/api.ts` + `SettingsTab` 切新卡 + e2e:admin。**不删**后端旧契约/system api 字段。
+- **META-29（Card D,后排）**:线上稳定后退役 system_settings bangumi*/tmdb* 旧契约 + 删解析器旧 KV fallback + 删旧 KV 值 + 迁 system-config 测试断言。
+
+### 偏离登记
+
+- **D-173-A（at-rest 加密 NEGATED 延续 ADR-168 D-168-6）**:`secrets JSONB` 明文,redaction/masking 已覆盖日志/响应主威胁。**补边界**:DB dump / 备份 / 错误上报链路不得外发明文 secret。处置:accept;follow-up 触发不变（合规要求 / dump 外发链路）。
+- **D-173-B（解析器 60s 缓存一致性,延续 ADR-168 D-168-5）**:`BangumiService` 缓存窗口内旧凭证可能短暂沿用。处置:accept（凭证低频变更 / 富集最终一致）。
+- **D-173-C（draft test 不持久化 vs 已存 test 持久化不对称）**:有意——草稿成功不代表已存凭证有效,持久化会误导。处置:accept,UI 标注区分。
+- **D-173-D（targetKind 复用 'system' 而非新增 'integration'）**:避免改 migration 052 CHECK DDL。处置:accept,provider 入 payload 可辨识。
+- **D-173-E（独立表 vs ADR-168 KV）**:本 ADR 改存独立表（用户裁定,长期扩展性更好）;严守 Codex 审核底线——同批次不移除旧 KV 兼容读写,物理退役推迟 Card D。
+
+### 回归红线
+
+- 既有必过:Bangumi 富集链路（`BangumiService` 经新解析器仍取到 token,migration 回填后 auto/手动匹配不回归）;ADR-168 secret 治理单测不破。
+- 新增测试要点:解析器 env 回退 + DB 优先 + 缺行 fallback 旧 KV + enabled 压 env;逐字段 `maskSecret` + `isMaskedPlaceholder` 占位跳过 + JSONB 合并不误清;test 三态取值 + 草稿/已存持久化两分 + 候选 secret 不落库不入审计;migration 回填 bangumi 现值不丢;2 审计 action type 被 redact + set-equal;`verify:endpoint-adr` 对 3 路由 EXIT=0。

@@ -2290,3 +2290,41 @@
 - **来源**：用户报告本地跑测试（尤其 e2e）E 核满载 / P 核空闲、系统总占用未满却其他应用卡顿（Apple M2，4P+4E）。
 - **结论**（校准探针实测）：两正交问题——① QoS 降级（启动环境继承 UTILITY QoS → Apple Silicon 硬限 E 核，事后用户态不可逆）= 杠杆 A 终端操作指引；② 并发过度订阅占满含 E 核全部核心 = 杠杆 B 配置封顶。
 - **落地**：`playwright.config.ts` 本地 `workers` undefined→3；`vitest.config.ts` 顶层 `maxWorkers/minWorkers` = `process.env.CI ? undefined : 4/1`（仅本地，CI 门控对齐 playwright，零变化）。Codex 复审拦截「CI 默认污染」并修复。门禁全过；commit 前 test:changed 升全量（config 命中 forceRerunTriggers）。详见 changelog [CHORE-TEST-CPU-CONCURRENCY]。
+
+---
+
+## [SEQ-20260613-01] API 凭证统一管理框架 + 连接测试协议（落地 ADR-173）
+
+- **状态**：🔄 执行中
+- **创建时间**：2026-06-13 11:00
+- **最后更新时间**：2026-06-13 11:00
+- **目标**：把单源硬编码的外部数据源凭证管理（bangumi）通用化为**注册表驱动框架**（新建 `api_credentials` 表 + provider 注册表 SSOT + 统一解析器/端点/UI），并补上 ADR-168 明确遗留的「测试连接」能力（即落地长期被引用却未写的 ADR-173）。bangumi 迁入框架、tmdb 凭证位就绪，未来任何源「加一条注册 + 一个测试适配器」即可接入。
+- **背景**：ADR-168 已奠基 secret 三道治理（审计/GET/PATCH）+ 通用化 `SECRET_KEY_PATTERNS` + tmdb 占位，但凭证以扁平 KV 混在 `system_settings`、解析器 `bangumi-config.ts` 单源硬编码、`SettingsTab` 写死 bangumi 卡；且明确「测试连接 NOT in scope（依赖 ADR-173/F-A）」而 ADR-173 至今未落笔。
+- **依赖**：ADR-168（secret 治理纯函数 `secretRedaction.ts`）+ ADR-188（provider 注册表范式 `external.types.ts`）。
+- **设计真源**：plan 文件 `~/.claude/plans/sorted-cooking-feigenbaum.md`（已含 Codex 审核意见 + v2 落实，用户已批准）。
+- **用户已锁决策**：① 新建 `api_credentials` 表（非沿用 KV）；② 测试「待保存的输入值」（草稿测试不污染已存状态）；③ UI 升级现有「外部数据源」卡为注册表驱动；④ 范围 = 框架 + bangumi 接入 + tmdb 凭证位就绪（TMDb 富集消费后续单独立项）。
+- **审核底线（Codex）**：TMDb Bearer 主契约 / 两阶段迁移不同卡删旧 KV / draft test 不污染 saved status / disabled 压过 env fallback / 审计真源具体文件 / Card A 拆分。
+- **范围**：跨 ADR/types/schema/service/route/UI 多层 + ≥5 项 → 按原子化判据拆 6 卡（A1/A2/B/C + 后排 D 清理）。
+
+### 任务列表（按执行顺序）
+
+1. **META-24** — ADR-173 起草（API 凭证统一管理框架 + 连接测试协议）（状态：✅ 已完成 2026-06-13）
+   - 创建时间：2026-06-13 11:00 ／ 实际开始：2026-06-13 11:00 ／ 完成时间：2026-06-13 11:30
+   - 建议模型：opus（撰写即将成为 ADR 的决策文档 + 跨 3+ 消费方契约，CLAUDE.md 强制 Opus）／执行模型：claude-opus-4-8
+   - 落地：`docs/decisions.md` `## ADR-173`（Accepted）D-173-1..11 + 偏离 D-173-A..E + 3 端点契约表。Codex 审核 6 必修 + 5 建议全部并入。门禁 verify:adr-contracts EXIT=0 / docs-only test:changed SKIP。详见 changelog [META-24]。
+   - 解锁：ADR PASS → META-25（Card A1）启动。
+2. **META-25** — Card A1：`@resovo/types` 注册表 + migration 115（建表+回填，保留旧 KV）+ architecture（状态：⬜ 待启动）
+   - 建议模型：opus（`@resovo/types` 公开类型 → commit Opus trailer）
+   - 验收要点：`PROVIDER_CREDENTIAL_SPECS` SSOT / migration 真库对拍幂等 + bangumi 现值回填不丢 / architecture.md 表段 + migration 列表同步
+3. **META-26** — Card A2：读取路径迁移（`loadProviderCredential` 优先新表→fallback 旧 KV→env + enabled 语义）+ bangumi-config 薄封装（状态：⬜ 待启动）
+   - 建议模型：sonnet
+   - 验收要点：优先级/回退/enabled 压 env 单测 / Bangumi 富集回归不破
+4. **META-27** — Card B：`IntegrationCredentialsService` + 测试适配器（bangumi authStatus / tmdb Bearer）+ 3 admin 路由 + 2 审计 action type（状态：⬜ 待启动）
+   - 建议模型：opus（新增 admin route → 独立 ADR + Opus PASS，verify:endpoint-adr）
+   - 验收要点：草稿 vs 已存持久化两分 / 候选 secret 不落库不入审计 / set-equal 通过 / verify:endpoint-adr EXIT=0
+5. **META-28** — Card C：UI `ExternalCredentialsCard`（注册表驱动）+ integrations api client + SettingsTab 切换（过渡，不删旧契约）（状态：⬜ 待启动）
+   - 建议模型：sonnet
+   - 验收要点：bangumi/tmdb 卡可填可测可存 + 遮罩/已配置/上次测试态 / e2e:admin 绿
+6. **META-29** — Card D：清理卡（线上稳定后单独排期）退役 system_settings bangumi*/tmdb* 旧契约 + 删解析器旧 KV fallback（状态：⏸ 后排，依赖 A1–C 线上稳定）
+   - 建议模型：sonnet
+   - 验收要点：rollback 窗确认后执行 / system-config 测试断言迁移

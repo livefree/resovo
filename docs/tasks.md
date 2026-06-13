@@ -82,6 +82,10 @@ _（**SEQ-20260612-04 merge 来源单一化 ✅ 序列完结 2026-06-13**（A1 A
 
 ---
 
+_（**SEQ-20260613-01 META-24 ✅ 收口 2026-06-13**（ADR-173 起草：API 凭证统一管理框架 + 连接测试协议）——落地 ADR-168 遗留 F-A。`docs/decisions.md` `## ADR-173`（Accepted）D-173-1..11 + 偏离 D-173-A..E + 3 端点契约表；用户批准 plan + Codex 审核 6 必修（TMDb Bearer / 两阶段迁移 / draft 不污染 saved / disabled 压 env / 审计真源具体文件 / Card A 拆分）+ 5 建议全部并入。门禁 verify:adr-contracts EXIT=0 / docs-only test:changed SKIP。**下一卡 META-25（Card A1：types 注册表 + migration 115 + architecture）**。详见 changelog [META-24]。）_
+
+---
+
 ## 工作流提示
 
 - 取新任务前先查 `docs/task-queue.md` 是否有 `🚨 BLOCKER`（当前无）。
