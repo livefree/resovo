@@ -56,6 +56,12 @@ vi.mock('../../../../../../apps/server-next/src/lib/api-client', () => {
   }
 })
 
+// ADR-173 / META-28：外部数据源凭证卡已抽离为注册表驱动独立组件（自取数），
+// 其行为由 ExternalCredentialsCard.test 单独覆盖；此处 stub 隔离 SettingsTab 测试。
+vi.mock('../../../../../../apps/server-next/src/app/admin/settings/_tabs/_external/ExternalCredentialsCard', () => ({
+  ExternalCredentialsCard: () => null,
+}))
+
 import { SettingsTab } from '../../../../../../apps/server-next/src/app/admin/settings/_tabs/SettingsTab'
 import { ApiClientError } from '../../../../../../apps/server-next/src/lib/api-client'
 
@@ -103,33 +109,7 @@ describe('SettingsTab', () => {
     })
   })
 
-  it('1b. 外部数据源卡（ADR-168）：token password 默认隐藏 + 显隐切换 + 未配置状态行', async () => {
-    getSiteSettingsMock.mockResolvedValueOnce(FIXTURE)
-    const { container } = render(<SettingsTab />)
-    await waitFor(() => expect(screen.getByTestId('settings-card-external')).not.toBeNull())
-    const token = container.querySelector('[data-testid="setting-bangumiApiToken"] input') as HTMLInputElement
-    expect(token.getAttribute('type')).toBe('password')
-    // 未配置状态行
-    expect(screen.getByTestId('setting-bangumi-status').textContent).toContain('未配置')
-    // 显隐切换 → type=text
-    fireEvent.click(screen.getByTestId('setting-bangumiToken-toggle'))
-    await waitFor(() => {
-      const t2 = container.querySelector('[data-testid="setting-bangumiApiToken"] input') as HTMLInputElement
-      expect(t2.getAttribute('type')).toBe('text')
-    })
-  })
-
-  it('1c. 外部数据源卡：已配置 → 状态行绿条 + 新 token 保存发明文', async () => {
-    getSiteSettingsMock.mockResolvedValueOnce({ ...FIXTURE, bangumiApiToken: '••••wxyz', bangumiApiTokenSet: true })
-    saveSiteSettingsMock.mockResolvedValueOnce({ ok: true })
-    const { container } = render(<SettingsTab />)
-    await waitFor(() => expect(screen.getByTestId('setting-bangumi-status').textContent).toContain('已配置'))
-    const token = container.querySelector('[data-testid="setting-bangumiApiToken"] input') as HTMLInputElement
-    fireEvent.change(token, { target: { value: 'new-real-token' } })
-    fireEvent.click(screen.getByTestId('settings-save'))
-    await waitFor(() => expect(saveSiteSettingsMock).toHaveBeenCalled())
-    expect(saveSiteSettingsMock.mock.calls[0][0]).toMatchObject({ bangumiApiToken: 'new-real-token' })
-  })
+  // 1b/1c（外部数据源卡 token 显隐 + 保存）已随凭证卡抽离迁至 ExternalCredentialsCard.test（ADR-173 / META-28）
 
   it('1d. 只提交改动过的字段（不全量覆盖其它 Tab 配置 / FIX-SETTINGS-PARTIAL-SAVE）', async () => {
     getSiteSettingsMock.mockResolvedValueOnce(FIXTURE)

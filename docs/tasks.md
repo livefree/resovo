@@ -100,6 +100,10 @@ _（**SEQ-20260613-01 META-30 ✅ 收口 2026-06-13**（Card B2：IntegrationCre
 
 ---
 
+_（**SEQ-20260613-01 META-28 ✅ 收口 2026-06-13**（Card C：UI ExternalCredentialsCard 注册表驱动 + integrations api client + SettingsTab 切换）——`lib/integrations/api`（get/save/test）+ `ExternalCredentialsCard`（按 PROVIDER_CREDENTIAL_SPECS 渲染多源卡：字段+保存+测试连接 draft+状态行+enabled）+ SettingsTab 删硬编码 bangumi 卡改渲染新组件 + 5 组件单测 + SettingsTab.test stub。门禁 typecheck/lint EXIT=0 / test:changed 20 passed / **test:e2e:admin 82/82 passed**。**SEQ-20260613-01 API 凭证统一管理框架闭环**（添加/保存/更新/测试四操作齐备，bangumi 已接、tmdb 凭证位就绪）；剩 META-29（Card D 清理）后排。详见 changelog [META-28] + PHASE 小结。）_
+
+---
+
 ## 工作流提示
 
 - 取新任务前先查 `docs/task-queue.md` 是否有 `🚨 BLOCKER`（当前无）。

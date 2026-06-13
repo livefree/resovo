@@ -2330,9 +2330,10 @@
    - 建议模型：opus ／执行模型：claude-opus-4-8（新增 admin route + @resovo/types 公开类型 → Opus + trailer）
    - 落地：`IntegrationCredentialsService`（list 遮罩视图 / save 占位跳过+JSONB+审计 redact / test 三态+草稿不污染+不落候选 secret）+ 3 路由（GET/PUT/POST，provider z.enum 守门→404）+ server.ts 注册 + 2 审计 action type（admin-moderation union/AuditLogService/set-equal/coverage 4 处同步）+ 13 单测。门禁 typecheck/lint/verify:adr-contracts EXIT=0（endpoint-adr 238 路由对齐）/ 全量单测 529 文件 7326 passed。详见 changelog [META-30]。
    - 解锁：→ META-28（Card C UI）。
-6. **META-28** — Card C：UI `ExternalCredentialsCard`（注册表驱动）+ integrations api client + SettingsTab 切换（过渡，不删旧契约）（状态：⬜ 待启动）
-   - 建议模型：sonnet
-   - 验收要点：bangumi/tmdb 卡可填可测可存 + 遮罩/已配置/上次测试态 / e2e:admin 绿
+6. **META-28** — Card C：UI `ExternalCredentialsCard`（注册表驱动）+ integrations api client + SettingsTab 切换（过渡，不删旧契约）（状态：✅ 已完成 2026-06-13）
+   - 建议模型：sonnet ／执行模型：claude-opus-4-8
+   - 落地：`lib/integrations/api.ts`（get/save/test）+ `_external/ExternalCredentialsCard.tsx`（注册表驱动多源卡：字段+保存+测试连接 draft+状态行+enabled）+ SettingsTab 删硬编码 bangumi 卡改渲染新组件；SettingsTab.test stub 新组件 + 删迁出用例，新增 ExternalCredentialsCard.test（5 例）。门禁 typecheck/lint EXIT=0 / test:changed 20 passed / **test:e2e:admin 82/82 passed**。详见 changelog [META-28]。
+   - 解锁：**框架闭环（META-24..28+30 完成）**；剩 META-29（Card D 清理）后排。
 7. **META-29** — Card D：清理卡（线上稳定后单独排期）退役 system_settings bangumi*/tmdb* 旧契约 + 删解析器旧 KV fallback（状态：⏸ 后排，依赖 A1–C 线上稳定）
    - 建议模型：sonnet
    - 验收要点：rollback 窗确认后执行 / system-config 测试断言迁移

@@ -5214,6 +5214,30 @@
 - **注意事项**：① 3 端点路径与 ADR-173 §端点契约表逐字对齐（无 /v1 字面量，注册时加 prefix）；② save 三态（占位跳过/空串清空/明文覆盖）复用 ADR-168 `isMaskedPlaceholder`；③ test 草稿不污染已存状态（Codex 必修 4）+ 审计不落候选 secret。
 - **[AI-CHECK]**：六问过——①草稿不污染 + 审计零候选 secret + 占位跳过防保存即清空，正确性/安全优先；②编排复用 B1 testers + A2 resolver + ADR-168 遮罩纯函数，零重复；③路由仅信封+鉴权+404，业务在 service（不越层）；④新 admin route 经 ADR-173 §端点契约 + verify-endpoint-adr 守卫 + 4 处审计同步 + Opus trailer；⑤service payload 断言 + route 鉴权/404 + 全量回归；⑥provider z.enum 守门 + targetKind 复用 system（不改 052 CHECK）守边界。
 
+---
+
+## [META-28] Card C：UI ExternalCredentialsCard 注册表驱动 + integrations api client + SettingsTab 切换（ADR-173 / SEQ-20260613-01 第 6 卡）
+- **完成时间**：2026-06-13
+- **记录时间**：2026-06-13 13:50
+- **执行模型**：claude-opus-4-8（建议 sonnet；主循环连续推进）
+- **子代理**：无（复用现有 admin-ui 原语，不新增公开 Props → 无 admin-ui Opus trailer）
+- **来源**：ADR-173 D-173-10。把 SettingsTab 硬编码 bangumi「外部数据源」卡升级为注册表驱动多源凭证卡（过渡期：UI 切新卡，不删后端旧契约）。
+- **产出**：
+  - `apps/server-next/src/lib/integrations/api.ts`（新）：getIntegrationCredentials / saveIntegrationCredential / testIntegrationCredential（经 apiClient，镜像后端响应形态，对齐 external-resources/api 范式）。
+  - `apps/server-next/src/app/admin/settings/_tabs/_external/ExternalCredentialsCard.tsx`（新）：按 `PROVIDER_CREDENTIAL_SPECS` 注册表渲染多源卡——字段（secret 字段 password + 显隐）+ 保存 + 测试连接（draft=true 测待保存输入值）+ 状态行（已配置 / 上次测试时间·结果·延迟 / enabled 开关）+ 本次测试结果（含 authStatus + 「未保存输入测试」标注）；复用 AdminCard/AdminInput/AdminButton/AdminCheckbox/useToast/Loading/Error，自管取数。
+  - `SettingsTab.tsx`：删硬编码 bangumi 卡 + showBangumiToken state → 渲染 `<ExternalCredentialsCard />`。
+  - 测试：`ExternalCredentialsCard.test`（5 例：多源渲染/显隐/保存/测试 draft+结果/加载失败）；`SettingsTab.test` stub 新组件 + 删迁出的 1b/1c bangumi 卡用例。
+- **新增依赖**：无。
+- **数据库变更**：无。
+- **质量门禁**：typecheck EXIT=0 / lint EXIT=0 / test:changed 2 文件 20 passed / **test:e2e:admin 82/82 passed**（admin 域无回归，含 /admin/messages page-header + 视频库黄金路径等）。
+- **注意事项**：① 过渡期——后端 system_settings bangumi*/tmdb* 旧契约 + system/api SiteSettings 字段保留（Card D/META-29 清理）；② SettingsTab 不再经 /admin/system/settings 提交 bangumi（凭证走专用端点），GeneralSettingsPatch 旧 bangumi 键 Card D 删；③ tmdb 卡可填可测可存，消费管线后续立项。
+- **[AI-CHECK]**：六问过——①UI 切新卡但后端旧契约保留（两阶段，rollback 安全），e2e 全绿无回归；②注册表驱动渲染（接新源零 UI 改）+ 复用 admin-ui 原语不新增 Props；③改动收敛 server-next 3 文件 + 2 测试，未碰后端；④遵 ADR-173 D-173-10 + 不删旧契约底线 + apiClient 唯一出口（ADR-003）；⑤组件单测（渲染/保存/测试/失败）+ SettingsTab 隔离 stub + e2e:admin 域门禁；⑥凭证管理与通用站点设置保存流解耦（专用端点），职责单一。
+
+---
+
+## SEQ-20260613-01 PHASE 小结（API 凭证统一管理框架）
+- **2026-06-13**：ADR-173 落地，API token 统一管理框架闭环（META-24 ADR / 25 types+migration / 26 resolver / 27 testers+queries / 30 service+routes+audit / 28 UI）。bangumi 迁入框架（添加/保存/更新/测试四操作齐备），tmdb 凭证位就绪（Bearer，消费后续立项），未来源「加一条注册 + 一个测试适配器」即可接入。**剩 META-29（Card D 清理：退役 system_settings 旧 KV 契约）后排，线上稳定后单独排期。**
+
 ## [HDR-DEDUP] 后台页面去重复标题 + 装饰提示统一治理（MODUX-ACPT-5 follow-up，4 卡序列）
 - **完成时间**：2026-06-13
 - **记录时间**：2026-06-13 01:18
