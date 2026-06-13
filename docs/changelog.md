@@ -5296,3 +5296,18 @@
 - **质量门禁**：typecheck EXIT=0（全 workspace；e2e specs 不在 typecheck 范围）/ lint EXIT=0。**test:e2e:player 结果**：seed 修复 watch-SSR 15 失败 + 陈旧清理 8 失败 → **player.spec / player-tri-state / player-option-tabs-stable / cinema-mode-size / mini-player / smoke 隔离（workers=1）全绿**。3-worker 全量并行下 card-* / mini-player:152 呈负载性 flaky（隔离 + retry 通过，非本改动回归）。
 - **注意事项**：① **唯一一致残留 card-dual-exit.spec.ts:99**（首页 VideoCard TagLayer `tagBox.y ≤ titleBox.y` 布局断言）——隔离一致失败、最初基线即在、与 player/seed/PLAYER-11 无关（测有 tag 的真实首页卡，跳过无 tag 的 seed 卡）→ 已拆 follow-up 卡 **CHORE-VIDEOCARD-TAGLAYER-E2E**（task-queue）。② **DxMovie1/DxSerie1 经实证不需 seed**（card-dual-exit TagLayer 是首页布局不跳 /watch；card-to-watch 走真实首页数据）。③ seed 视频 created_at=now() 会短暂出现在首页 latest，但隔离跑证实不破坏 card-* 用例（teardown 清理）。④ production 代码零改动（保 watch 页 SSR 404 语义不变）。
 - **[AI-CHECK]**：六问过——①纯测试基建 + 测试维护，watch-SSR 失败由 seed 修复、陈旧测试经 git/HANDOFF 证据确认后清理，player 域 spec 隔离全绿；②seed fixture 集中真源（fixtures.ts）+ db helper 单一落库/清理路径，无重复；③改动收敛于 tests/ + playwright.config，零 production 改动、零 schema；④无 `any`/空 catch/硬编码颜色（db.ts try/catch 均有处理或注释）；⑤每处陈旧清理都附 commit/HANDOFF 退役依据注释；⑥card-dual-exit:99 残留如实拆 follow-up，未瞒报为通过。
+
+## [CHORE-E2E-WATCH-SSR-SEED · Codex stop-time review FIX] seed 收窄到 player 域 + 专属 catalog
+- **完成时间**：2026-06-13
+- **记录时间**：2026-06-13 14:40
+- **执行模型**：claude-opus-4-8（主循环）
+- **子代理**：无
+- **背景**：Codex stop-time review 拦截「global e2e seed breaks web video/detail specs」。根因实证：seed 视频 shortId（aB3kR9x1/bC4lS0y2）与 `detail.spec` 共用，且 detail 页同 watch 为 SSR server component；原 globalSetup 对**所有 web 域 e2e** 生效（`test:e2e:video`/`search`/全量 `test:e2e` 均 `PLAYWRIGHT_SERVERS=web` → 触发 seed），导致 detail 页 SSR 命中 seed 视频但渲染数据/testid 与 detail.spec 断言不匹配 → 误失败；且 seed 公开视频污染首页/列表共享数据。
+- **修改文件**：
+  - `playwright.config.ts` — globalSetup/teardown 门控由 `SERVERS.includes('web')` 收紧为 `SERVERS.includes('web') && process.env.E2E_SEED_WATCH === '1'`，使 seed **仅 player 域启用**。
+  - `package.json` — `test:e2e:player` 脚本加 `E2E_SEED_WATCH=1`（唯一触发 seed 的脚本）；其余 web 域脚本不带 env → 不 seed。
+  - `tests/e2e-next/_seed/fixtures.ts` / `db.ts` — seed 改为**每视频建专属 media_catalog**（填全 description/director/cast/year/rating/genres，title_normalized=`e2e-seed-{shortId}` marker），替代复用随机 catalog（避免把 seed 视频塞进真实 catalog 的副作用）；teardown 删视频 CASCADE 后再删专属 catalog（marker 识别）。
+- **新增依赖**：无。
+- **数据库变更**：无 schema 变更；运行期落库改为 5 video + 5 专属 catalog（仅 test:e2e:player），teardown 全清（实证 count=0）。
+- **验证**：① `test:e2e:player`（带 `E2E_SEED_WATCH=1`）**33 passed**（唯一残留 card-dual-exit:99，已拆 follow-up）。② `detail.spec`（无 env）跑后 DB seed 视频 **count=0**（门控生效、seed 未运行）→ detail/video 域回到基线（detail.spec 基线即因 SSR-404 大面积失败 = 预存，与本卡无关 → 拆 follow-up CHORE-E2E-DETAIL-SSR-SEED）。typecheck/lint EXIT=0。
+- **注意事项**：① 全量 `npm run test:e2e`（PHASE COMPLETE 门禁）**不带 `E2E_SEED_WATCH`** → 其 player 域 spec 仍因无 seed 失败（**预存**，本改动前即如此，非回归）；player 域的全量 seed 化需与 video 域 seed + detail 陈旧测试清理一并在 follow-up 处理（避免全量跑里 player seed 又污染 video/detail）。② seed 仍是「测试侧 DB 落库」，production 代码零改动。

@@ -2366,8 +2366,9 @@
 > - **变更原因**：ADR-160 AMD2 给 watch 页加 SSR hydration（`fetchVideoDetail`/`fetchVideoSources` 服务端直连 api）后，基于客户端 `page.route` mock 的 e2e-next 旧 spec 全部在「整页 SSR 404」处失败（`watch-page` 不渲染）。仓库无任何 e2e seed 脚本/globalSetup/CI seed，`resovo_dev` 无 `test-*` 视频 → test:e2e:player 8 spec 23 用例预存全红（基线复现）。
 > - **影响的已完成任务**：PLAYER-11（验证仅靠单测）+ 所有 e2e-next watch spec
 > - **文件范围**：新增 `tests/e2e-next/_seed/{fixtures,db,global-setup,global-teardown}.ts` + `playwright.config.ts` globalSetup/teardown 接线（仅 web 域）；清理 `player.spec.ts` / `mini-player.spec.ts` 陈旧用例。
-> - **变更内容**：globalSetup 直连 pg 落库 5 seed 视频（aB3kR9x1/bC4lS0y2/TriState/TabsTest/CinemaM1，复用 catalog + approved|internal→public 发布路径绕状态机触发器 + 源 source_name 分线路/episode_number 分集匹配断言；事务幂等 + teardown CASCADE 清理）使 SSR fetch 命中。
-> - **完成备注**：执行模型: claude-opus-4-8。子代理: 无。**seed 修复 watch-SSR 失败 15 个**（player.spec 10/12 + tri-state 3 + option-tabs 2 + cinema 2；**DxMovie1/DxSerie1 经实证不需 seed**）。残留 8 个 triage 后**确认全为预存陈旧测试**（测已删/改名功能），用户批准一并清理：① theater testid `theater-mode-btn`→`data-ytp-component="theater-btn"` + 视口 1280×720→1600×900（1280 下嵌入 player 高 459px≤SHORT_HEIGHT(460) 落 short-height profile 移除 theater，边界 flaky）；② 删 danmaku 用例（commit e601ea2b 前台移除弹幕）；③ 删 mini-player §3 展开/折叠两用例（HANDOFF-36 commit 2fd2eb16 几何固定高度，toggle-expand/progress testid 移除）；④ mini-player §4 几何 `y<40`→`y<200`（tl dock 含 header 安全区偏移 y≈88）。**最终隔离跑 player/tri-state/option-tabs/cinema/mini-player/smoke 全绿**；门禁 typecheck/lint EXIT=0；teardown 自动清库（DB count=0）。唯一一致残留 card-dual-exit:99（首页 VideoCard，预存+seed 无关 → 拆 follow-up）；card-* / mini:152 在 3-worker 全量并行下负载性 flaky（隔离/retry 通过）。
+> - **变更内容**：globalSetup 直连 pg 落库 5 seed 视频（aB3kR9x1/bC4lS0y2/TriState/TabsTest/CinemaM1，**每视频建专属 media_catalog**〔填全 description/director/cast/year/rating/genres，title_normalized=marker〕 + approved|internal→public 发布路径绕状态机触发器 + 源 source_name 分线路/episode_number 分集匹配断言；事务幂等 + teardown 删视频 CASCADE + 删专属 catalog）使 SSR fetch 命中。
+> - **完成备注**：执行模型: claude-opus-4-8。子代理: 无。**seed 修复 watch-SSR 失败 15 个**（player.spec 10/12 + tri-state 3 + option-tabs 2 + cinema 2；**DxMovie1/DxSerie1 经实证不需 seed**）。残留 8 个 triage 后**确认全为预存陈旧测试**（测已删/改名功能），用户批准一并清理：① theater testid `theater-mode-btn`→`data-ytp-component="theater-btn"` + 视口 1280×720→1600×900（1280 下嵌入 player 高 459px≤SHORT_HEIGHT(460) 落 short-height profile 移除 theater，边界 flaky）；② 删 danmaku 用例（commit e601ea2b 前台移除弹幕）；③ 删 mini-player §3 展开/折叠两用例（HANDOFF-36 commit 2fd2eb16 几何固定高度，toggle-expand/progress testid 移除）；④ mini-player §4 几何 `y<40`→`y<200`（tl dock 含 header 安全区偏移 y≈88）。**最终 test:e2e:player 33 passed**（唯一一致残留 card-dual-exit:99 → 拆 follow-up；mini/card 负载性 flaky retry 过）；门禁 typecheck/lint EXIT=0；teardown 自动清库（DB count=0）。
+> - **Codex stop-time review FIX**（「global e2e seed breaks web video/detail specs」）：① **seed 收窄到 player 域**——`playwright.config` globalSetup 门控加 `process.env.E2E_SEED_WATCH === '1'`，仅 `test:e2e:player` 脚本显式置该 env；`test:e2e:video`/`search`/`smoke`/全量 `test:e2e` 不 seed → detail/video/browse spec 回到基线、不被 seed 影响（detail.spec 与 player 共用 aB3kR9x1/bC4lS0y2，全局 seed 会让 detail 页 SSR 命中 seed 视频但渲染数据/testid 不匹配 → 误失败）。② **复用随机 catalog → 专属 catalog**——避免把 seed 视频塞进真实 catalog 的副作用。实证：`test:e2e:player`（带 env）33 passed；`detail.spec`（无 env）跑后 DB seed 视频 count=0（门控生效、seed 未运行）。
 >
 > #### CHORE-VIDEOCARD-TAGLAYER-E2E — card-dual-exit:99 TagLayer 布局断言修复
 > - **状态**：⬜ 待开始
@@ -2375,4 +2376,12 @@
 > - **建议模型**：sonnet
 > - **变更原因**：`card-dual-exit.spec.ts:99`「TagLayer 左上象限垂直位于 title 上方（tagBox.y ≤ titleBox.y）」隔离一致失败、最初基线即在、与 player/seed/PLAYER-11 无关（测有 tag 的真实首页卡，跳过无 tag 的 seed 卡）。需查 VideoCard StackedPosterFrame TagLayer 与 title 实际相对布局判定真布局 bug vs 陈旧断言。
 > - **文件范围**：`tests/e2e-next/card-dual-exit.spec.ts` + 可能 VideoCard/StackedPosterFrame 组件
+> - **完成备注**：_（AI 填写）_
+>
+> #### CHORE-E2E-DETAIL-SSR-SEED — video/detail 域 SSR seed + 陈旧测试清理（平行 player 域）
+> - **状态**：⬜ 待开始
+> - **创建时间**：2026-06-13 14:40
+> - **建议模型**：sonnet
+> - **变更原因**：detail 页同 watch 为 SSR server component；`detail.spec`/`detail-episode-pick.spec` 在基线（无 seed）即因 SSR-404（DB 无 aB3kR9x1/bC4lS0y2/DetailEp）大面积失败——预存，与本卡无关（本卡已用 `E2E_SEED_WATCH` 门控把 player 域 seed 隔离开，不触碰 video 域）。需为 video 域建平行 seed（test:e2e:video 置 `E2E_SEED_WATCH=1` 复用现有 fixture，并补 DetailEp）+ 清理 detail.spec 陈旧 testid（如 `detail-description` 渲染条件 / episode-picker 集数口径 / detail-play-btn 链路）。
+> - **文件范围**：`package.json`（test:e2e:video 加 env）+ `tests/e2e-next/_seed/fixtures.ts`（补 DetailEp 等）+ `detail.spec.ts`/`detail-episode-pick.spec.ts`（陈旧断言）。
 > - **完成备注**：_（AI 填写）_
