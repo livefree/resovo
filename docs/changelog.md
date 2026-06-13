@@ -5000,3 +5000,21 @@
 - **注意事项**：merge 模块「实时聚合」来源已是降级兜底标识（请求恒 identity，toggle 在 CHG-VIR-15-UX-A 退役），其移除为独立后续任务。
 - **质量门禁**：typecheck EXIT=0 / lint EXIT=0（无新增 warning）/ TabSimilar.test.tsx 13/13 passed。
 - **[AI-CHECK]**：六问过——①纯展示层零回归，召回/降级链路与端点契约未触；②更名沉淀来源语义注释，避免后人误读；③布局两段式收敛在组件内，未外溢共享层；④遵范围红线未越界改 merge 模块；⑤测试断言同步改名无遗漏；⑥与 merge 模块语义差异显式记录防一致性误判。
+
+## [CHG-VIR-18-A1] merge 来源单一化 · ADR-105 AMENDMENT 2026-06-12 起草（移除 legacy 实时聚合降级）
+- **完成时间**：2026-06-12
+- **记录时间**：2026-06-12 23:30
+- **执行模型**：claude-opus-4-8
+- **子代理**：arch-reviewer (claude-opus-4-8, agentId add53ee9b2c536ecc) — 移除方案独立评审（REVISE → 方向 PASS + 5 边界修正）
+- **序列**：SEQ-20260612-04（merge 候选来源单一化）卡 1/3；SEQ-20260612-03 缺陷 F「legacy 静默降级」终极收口。
+- **背景**：用户裁定彻底移除 merge `source=legacy`（实时聚合）降级链路，identity（多证据离线候选）成唯一来源。legacy 降级非安全网而是语义漂移源（GOV-2 实证 207 pending 被当 bug）；GRAY-SLICE 后 identity 覆盖度提升使兜底边际化。
+- **修改文件**：
+  - `docs/decisions.md` — ADR-105 AMENDMENT 2026-06-12（详节 + 主体段 D-N 登记块）：source 退化 `z.enum(['identity'])`（传 legacy → 422）/ 端点契约表 row 1 补登历史欠账（sortField/sortDir/identityScore 0..1/videoCount/q + 两 refine，零行为变更）/ 6 条决策边界（编号续 D-105-16）/ 删除·保留清单 / 回滚路径。
+  - `docs/task-queue.md` — 新序列 SEQ-20260612-04 + CHG-VIR-18-A1/-A2/-B。
+  - `docs/tasks.md` — A1 卡（完成即删，切 A2）。
+  - `docs/audit/adr-d-status.json` — verify 生成产物（ADR-105 total 16→22，新 6 条按 pending 出现，待 A2/B 实施闭环）。
+- **走读修订（用户 REVISE×2 全采纳）**：① identityScoreMin/Max 口径 0..1（非百分比，对齐 schemas.ts:40 + Filters.tsx:41）；② schema 块补全 videoCountMin/Max + q.max(100) + 两 refine（防 A2 误删候选数筛选能力）；③ 新增边界「route envelope 透传 staleIdentityPending」修复 GOV-2 既有缺口（route:47-50 当前丢弃该字段致 merge 警示恒失效）；④ D-N 登记块落主体段（修复 AMENDMENT 详节被 splitAdrSections 误归 ADR-117 段致 verify-adr-d-numbers 审计盲区）。
+- **新增依赖**：无；**数据库变更**：无（纯文档；ADR 明确删检索路径不删 `score` 字段 / `legacy_score` 列 / DB schema）。
+- **关键边界**（A2 必须遵守）：删 `source=legacy` 检索路径 ≠ 删 `score` 字段 ≠ 删 `legacy_score` 列——identity 路径也填充 score，误删任一即回归。
+- **质量门禁**：verify:adr-contracts EXIT=0（endpoint-adr ✅ 235 路由 / sql-schema ✅ / shell-types ✅ / adr-d-numbers 主体段识别新 6 条 pending）。docs-only（test:changed 自动跳过）。
+- **[AI-CHECK]**：六问过——①纯文档零代码零回归；②ADR 治理前置（先契约后实施，A1 PASS 解锁 A2）；③复用 `### AMENDMENT 2026-06-05` D-N 登记范式 + 主体段识别机制；④遵 ADR 红线（删路径不删字段/列/schema）；⑤用户 3 项 P1 走读修订逐条核验真源后全采纳；⑥主体段登记块解决审计盲区，total 22 可追踪闭环。

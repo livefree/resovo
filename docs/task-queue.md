@@ -2215,3 +2215,24 @@
 5. **GOV-5** — （已并入 GOV-3 同卡裁决落地：每日兜底 tick 即周期重扫；fire-and-forget 失败补偿由每日 reconcile 兜底覆盖）
 6. **GOV-6** — 存量实体手术（状态：✅ 批准范围收口 2026-06-12）：用户批准 4 项高置信处置全部执行（掌心饵 split〔审计可 unmerge〕/ 宠妻 season 落位 / 星辰变·师兄啊师兄 catalog 重排 / OVA normalized 修正）；审计收敛 B=0 / C=0。**暂缓 4 例**（偶滴歌神啊 / 恶搞之家 / 动物管制官 ×2）登记候补——缺站点级归属证据，GOV-4 后重爬观测自然累积，证据齐后重新取证交用户批准。详见 changelog [GOV-6]。
 7. **GOV-7** — 召回增强评估（状态：✅ 已完成 2026-06-12）：灰区报表（1061 对：候选区 96 / 灰区 99 全为高置信真重复 / 0.50-0.55 噪声海 581——结论=窄切片而非降阈值）+ titleEn 缺口 17 组 + 简繁不立案。评估真源 `docs/audit/identity-recall-grayzone-assessment-20260612.md`。**产出候选实施卡**：GRAY-SLICE（✅ 已实施 2026-06-12，D-105a-20，详见 changelog [GRAY-SLICE]）/ TITLEEN-BUCKET（第三 blocking 键，低风险小卡，📋 待用户决定启动）。详见 changelog [GOV-7]。
+
+## [SEQ-20260612-04] merge 候选来源单一化（移除 legacy 实时聚合降级）
+
+- **状态**：🔄 执行中
+- **创建时间**：2026-06-12 23:00
+- **最后更新时间**：2026-06-12 23:30
+- **目标**：彻底移除 `/admin/video-merges/candidates` 的 `source=legacy`（实时聚合）降级链路，identity（多证据离线候选）成为唯一来源。这是 SEQ-20260612-03 缺陷 F「legacy 静默降级」的终极收口——GOV-2 实证「bump 搁浅 207 pending 被用户当 bug 报告」证明降级链路本身是语义漂移源而非安全网。
+- **背景**：前端恒请求 identity（CHG-VIR-15-UX-A toggle 退役），legacy 仅服务端空表兜底，前端从不主动请求；GRAY-SLICE（D-105a-20）灰区真重复入候选后 identity 召回覆盖度提升，legacy 兜底边际化；legacyScore/重合度列已退役（CHG-VIR-14-SCORE-UI）。
+- **依赖**：SEQ-20260612-03 GOV-2（identity 空态 staleIdentityPending 信号已建）+ GRAY-SLICE（identity 召回增强）。
+- **评审**：arch-reviewer (claude-opus-4-8, agentId add53ee9b2c536ecc) REVISE → 方向 PASS + 用户走读 REVISE×2（3 项 P1：identityScore 0..1 口径 / schema 补全 videoCount+q.max+两 refine / staleIdentityPending route 透传缺口）全采纳。**6** 边界 D-105-17~22（删路径≠删字段≠删列 / source enum 收敛 422 / minScore 保留 / source 列退役 / GOV-2 解耦+truncated 保留 / route 透传 staleIdentityPending 修 GOV-2 缺口）。
+- **范围**：跨 ADR/schemas/service/queries/types/test 5 层，按原子化判据（跨 3 层 + 范围 ≥5）拆 3 卡。
+
+### 任务列表
+
+1. **CHG-VIR-18-A1** — ADR-105 AMENDMENT 2026-06-12 起草（source 退化单一 identity + 端点契约表 row 1 历史欠账补登 source/sortField/sortDir/identityScoreMin/Max(0..1)/videoCountMin/Max/q + 6 边界声明 D-105-17~22 + 主体段 D-N 登记块 + 回滚路径）（状态：🔄 进行中，创建 2026-06-12 23:00，实际开始 2026-06-12 23:00）
+   - **状态：✅ 已完成 2026-06-12**（commit 见下；用户走读 REVISE×2 全采纳；verify:adr-contracts EXIT=0 / adr-d-status ADR-105 total 22）。详见 changelog [CHG-VIR-18-A1]。
+   - **解锁**：A1 ADR PASS（用户授权持续实施）→ A2 启动。
+2. **CHG-VIR-18-A2** — 后端实施（状态：🔄 进行中 2026-06-12 23:30）
+   - listCandidates 删 legacy 分支 + GOV-2 解耦（hasStaleVersionPending 重挂 identity 空态独立信号）+ **route envelope 透传 staleIdentityPending（D-105-22 修 GOV-2 既有透传缺口）+ route 单测** + 删 fetchRawCandidateGroups/countRawCandidateGroups/computeOverlapScore（legacy 专属）+ schemas source 收敛/types 注释口径 + 3 测试文件 ≥6 用例改写（identity-source-switch.test.ts 整组重构 = 最高风险）。**保留**：score 字段 / legacy_score 列 / minScore zod / identityScore(0..1)·videoCount·q 筛选 / truncated / pickRecommendedTarget·mapVideoRow·groupMatchesFilters·buildGroupFromCluster·scoreGroup（共用或 identity API）。
+3. **CHG-VIR-18-B** — 前端 + 测试（状态：📋 待启动，依赖 A2）
+   - MergeCandidatesSection 清 legacy 触点（source 列整列退役 / 降级提示条 / minScore 控件 / 空态文案统一 identity 口径）+ 保留 GOV-2 stale 警示（改读独立 staleIdentityPending）+ MergeCandidatesSection.test.tsx 2a/2a-fix/3 用例重构。单文件 UI，不再拆。
