@@ -31,6 +31,11 @@ interface GrayPair {
   strongNegative: readonly string[]
 }
 
+/** GRAY-SLICE 谓词模拟（Opus 裁决事实输入）：同 coreTitleKey + 无强负 + 阈下。 */
+interface SlicePair extends GrayPair {
+  blockingReasons: readonly string[]
+}
+
 async function main(): Promise<void> {
   const databaseUrl = process.env.DATABASE_URL
   if (!databaseUrl) throw new Error('DATABASE_URL 未设置')
@@ -41,8 +46,9 @@ async function main(): Promise<void> {
     let pairsScored = 0
     let blocked = 0
     let candidateZone = 0 // ≥ 0.75（既有候选区）
-    const bins = new Map<string, number>() // 0.05 步长直方
+    const bins = new Map<number, number>() // 整数化分箱（×100 / 5 步长，修浮点误差）
     const grayPairs: GrayPair[] = []
+    const slicePairs: SlicePair[] = [] // 切片谓词命中（阈下 + 同 key + 无强负）
     let oversizeBuckets = 0
 
     const processBuckets = async (buckets: BlockingBucket[]): Promise<void> => {
@@ -70,11 +76,23 @@ async function main(): Promise<void> {
           const s = scorePair(left, right)
           pairsScored++
           if (s.strongNegativeReasons.length > 0) blocked++
-          const bin = (Math.floor(s.identityScore / 0.05) * 0.05).toFixed(2)
-          bins.set(bin, (bins.get(bin) ?? 0) + 1)
+          // 整数化分箱（修 0.60/0.05 浮点 floor 误降箱）
+          const binKey = Math.floor(Math.round(s.identityScore * 100) / 5) * 5
+          bins.set(binKey, (bins.get(binKey) ?? 0) + 1)
           if (s.identityScore >= CANDIDATE_MIN_THRESHOLD) candidateZone++
           else if (s.identityScore >= GRAY_MIN) {
             grayPairs.push({ left: l, right: r, score: s.identityScore, strongNegative: s.strongNegativeReasons })
+          }
+          // GRAY-SLICE 谓词模拟：阈下 + core_title_key_equal + 无强负（year 冲突已被强负覆盖）
+          if (
+            s.identityScore < CANDIDATE_MIN_THRESHOLD
+            && s.strongNegativeReasons.length === 0
+            && s.blockingReasons.includes('core_title_key_equal')
+          ) {
+            slicePairs.push({
+              left: l, right: r, score: s.identityScore,
+              strongNegative: s.strongNegativeReasons, blockingReasons: s.blockingReasons,
+            })
           }
         }
       }
@@ -97,8 +115,32 @@ async function main(): Promise<void> {
 
     console.log('═══ 1. identityScore 分布（blocking 可达 pair 全集，只读不持久化）═══')
     console.log(`pair 总数=${pairsScored} / 强负拦截=${blocked} / 候选区 ≥${CANDIDATE_MIN_THRESHOLD}=${candidateZone} / 灰区 [${GRAY_MIN},${CANDIDATE_MIN_THRESHOLD})=${grayPairs.length}`)
-    for (const [bin, n] of [...bins.entries()].sort((a, b) => Number(b[0]) - Number(a[0]))) {
-      console.log(`  [${bin}, ${(Number(bin) + 0.05).toFixed(2)}): ${n}`)
+    for (const [bin, n] of [...bins.entries()].sort((a, b) => b[0] - a[0])) {
+      console.log(`  [${(bin / 100).toFixed(2)}, ${((bin + 5) / 100).toFixed(2)}): ${n}`)
+    }
+
+    console.log('\n═══ 1b. GRAY-SLICE 谓词模拟（阈下 + 同 coreTitleKey + 无强负）═══')
+    const byScore = new Map<number, SlicePair[]>()
+    for (const p of slicePairs) {
+      const k = Math.round(p.score * 100)
+      const list = byScore.get(k)
+      if (list) list.push(p)
+      else byScore.set(k, [p])
+    }
+    console.log(`谓词命中总数=${slicePairs.length}`)
+    const sliceTitleIds = [...new Set(slicePairs.flatMap((p) => [p.left, p.right]))]
+    const sliceTitleMap = new Map<string, string>()
+    for (let i = 0; i < sliceTitleIds.length; i += 500) {
+      const { rows } = await pool.query<{ id: string; title: string }>(
+        `SELECT id, title FROM videos WHERE id = ANY($1::uuid[])`, [sliceTitleIds.slice(i, i + 500)],
+      )
+      for (const r of rows) sliceTitleMap.set(r.id, r.title)
+    }
+    for (const [k, list] of [...byScore.entries()].sort((a, b) => b[0] - a[0])) {
+      console.log(`  score=${(k / 100).toFixed(2)}：${list.length} 对；证据形态=${list[0]!.blockingReasons.join('+')}`)
+      for (const p of list.slice(0, 5)) {
+        console.log(`    「${sliceTitleMap.get(p.left) ?? p.left}」↔「${sliceTitleMap.get(p.right) ?? p.right}」`)
+      }
     }
 
     console.log(`\n═══ 2. 灰区近阈值 top ${TOP_N}（阈值调优事实输入）═══`)

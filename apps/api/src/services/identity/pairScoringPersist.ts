@@ -17,7 +17,7 @@ import { computeEvidenceHash, type PairFieldSnapshot } from './evidenceHash'
 import { upsertIdentityCandidate } from './candidateUpsert'
 import { loadExternalIdSummaries } from './externalIdLoader'
 import { scorePair, type PairSideInput } from './scorePair'
-import { THRESHOLD_CONFIG_VERSION, CANDIDATE_MIN_THRESHOLD } from './weights'
+import { THRESHOLD_CONFIG_VERSION, CANDIDATE_MIN_THRESHOLD, isGraySliceAdmissible } from './weights'
 
 /** upsert 结果计数（IdentityRescoreResult 与 ingest shadow 共用子集）。 */
 export interface PairPersistCounters {
@@ -29,10 +29,12 @@ export interface PairPersistCounters {
   skippedRejected: number
   skippedLowScore: number
   blocked: number
+  /** D-105a-20：灰区窄切片准入数（阈下 + 同 key + 年±1 + 无强负 → 仍落候选） */
+  grayAdmitted: number
 }
 
 export function emptyPairPersistCounters(): PairPersistCounters {
-  return { pairs: 0, created: 0, superseded: 0, noop: 0, revived: 0, skippedRejected: 0, skippedLowScore: 0, blocked: 0 }
+  return { pairs: 0, created: 0, superseded: 0, noop: 0, revived: 0, skippedRejected: 0, skippedLowScore: 0, blocked: 0, grayAdmitted: 0 }
 }
 
 /**
@@ -119,10 +121,16 @@ export async function scoreAndPersistPairs(
     counters.pairs++
     const blocked = ps.strongNegativeReasons.length > 0
     if (blocked) counters.blocked++
-    // D-105a-4：identityScore < 0.75 且无强负 → 'none'，不生成候选
+    // D-105a-4（D-105a-20 修订）：identityScore < 0.75 且无强负 → 灰区谓词判定——
+    // 同 coreTitleKey + 年±1 双锚点命中则仍落候选（identity_score 如实存储，消费侧
+    // 按分值沉底 + 人工裁定闸门）；不命中 → none 区不生成候选。三路径（offline /
+    // ingest shadow / video-rescore）共用本判定，行为一致（D-105a-16 同口径）。
     if (ps.identityScore < CANDIDATE_MIN_THRESHOLD && !blocked) {
-      counters.skippedLowScore++
-      continue
+      if (!isGraySliceAdmissible(ps)) {
+        counters.skippedLowScore++
+        continue
+      }
+      counters.grayAdmitted++
     }
     const left = sideMap.get(ps.leftVideoId)
     const right = sideMap.get(ps.rightVideoId)

@@ -40,6 +40,8 @@ export interface IdentityRescoreResult {
   skippedLowScore: number
   bucketsSkippedOversize: number
   blocked: number
+  /** D-105a-20：灰区窄切片准入数 */
+  grayAdmitted: number
   durationMs: number
   lockSkipped?: boolean
 }
@@ -68,7 +70,7 @@ export async function runIdentityRescore(
   const startAt = Date.now()
   const result: IdentityRescoreResult = {
     buckets: 0, externalIdBuckets: 0, pairs: 0, created: 0, superseded: 0, noop: 0, revived: 0,
-    skippedRejected: 0, skippedLowScore: 0, bucketsSkippedOversize: 0, blocked: 0, durationMs: 0,
+    skippedRejected: 0, skippedLowScore: 0, bucketsSkippedOversize: 0, blocked: 0, grayAdmitted: 0, durationMs: 0,
   }
   const parserVersion = opts.parserVersion ?? TITLE_PARSER_VERSION
   const scorerVersion = opts.scorerVersion ?? SCORER_VERSION

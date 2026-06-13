@@ -14,7 +14,7 @@ export const SCORER_VERSION = '1.0.0'
  * 阈值/权重配置版本号（D-105a-8 evidence_hash 输入域 ⑧）。
  * 随权重/阈值结构变更 bump；KV 接入后改读 KV version（forward-compat）。
  */
-export const THRESHOLD_CONFIG_VERSION = '1.0.0'
+export const THRESHOLD_CONFIG_VERSION = '1.1.0'
 
 /** 非 exact 路径封顶（< 0.92 阈值 → 永不自动绑定 / D-105a-3）。 */
 export const NON_EXACT_CAP = 0.9
@@ -95,4 +95,24 @@ export function evidenceWeightTag(type: EvidenceType): number | 'saturating' | '
   if (type === 'external_exact_id_match') return 'saturating'
   if (STRONG_NEGATIVE_SET.has(type)) return 'veto'
   return POSITIVE_WEIGHTS[type] ?? 0
+}
+
+// ── GRAY-SLICE（D-105a-20 / ADR-105a AMENDMENT 2026-06-12）────────────────────
+
+/**
+ * 灰区窄切片准入谓词（D-105a-20 规范定义的**单一真源**——pairScoringPersist 准入
+ * 与回滚 hygiene 脚本必须共用本函数，防准入/清理口径漂移）：
+ *   同 coreTitleKey + 年份 ±1 双锚点 + 无强负 → 阈下（<0.75）仍落 pending 候选。
+ *
+ * 年未知层（双方任一 year 为 null → evalYear 不产 year_equal_or_off_by_one）
+ * 天然不命中——通用名撞车无年份兜底，留待外部 ID/重爬证据自然升分。
+ * identity_score 如实存储不虚标；人工裁定仍是最终闸门。
+ */
+export function isGraySliceAdmissible(ps: {
+  readonly strongNegativeReasons: readonly string[]
+  readonly blockingReasons: readonly string[]
+}): boolean {
+  return ps.strongNegativeReasons.length === 0
+    && ps.blockingReasons.includes('core_title_key_equal')
+    && ps.blockingReasons.includes('year_equal_or_off_by_one')
 }

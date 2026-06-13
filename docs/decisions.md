@@ -19504,6 +19504,21 @@ D-105a-1 ~ D-105a-13 共 13 条，随 Phase 1a/2a/2b/2c 实施卡（CHG-VIR-5/7/
 
 **D-N 偏离登记更新**：本 AMENDMENT 新增 D-105a-19，ADR-105a 偏离编号扩为 **D-105a-1 ~ D-105a-19 共 19 条**（19 随 CHG-VIR-16-TBL-BE 实施闭环）。
 
+### AMENDMENT（2026-06-12 / GRAY-SLICE：灰区窄切片准入，修订 D-105a-4 none 区边界）
+
+**触发**：GOV-7 灰区评估（`docs/audit/identity-recall-grayzone-assessment-20260612.md`）实证——0.75 阈值要求「名+年+型+集结构+元数据」全证据满配，任一证据缺失的同名对结构性出局；阈下同名无强负对 843 对中「名+年±1」双锚点层（0.50×571 + 0.60×88 = 659 对）抽样均为真重复形态。用户批准启动；arch-reviewer claude-opus-4-8（agentId a561e01de390b7591）REVISE 裁决 5 前置项全部吸收，其中本 AMENDMENT 即第一前置（修订已采纳决策点必须落 ADR，不得仅以代码 + version bump 承载）。
+
+**D-105a-20（灰区窄切片准入）**
+- **准入谓词**（规范定义，真源 = `weights.ts isGraySliceAdmissible` 命名纯函数，persist 与回滚 hygiene 共用同一口径）：`strongNegativeReasons 为空 ∧ core_title_key_equal ∈ blockingReasons ∧ year_equal_or_off_by_one ∈ blockingReasons`。
+- **显式排除年未知层**（0.45/0.35 共 184 对）：`evalYear` 仅在双方 year 非 null 且差 ≤1 时产出该证据——年缺失天然不命中谓词；通用名撞车（短剧库形态）无年份兜底时不可区分，留待外部 ID / 重爬证据自然升分。
+- **D-105a-4 边界修订**：none 区（`identityScore < 0.75 且无强负 → 不生成候选`）收窄为「谓词不命中的阈下对」；谓词命中者落 pending 候选，`identity_score` 如实存储（0.50/0.60 不虚标），消费侧按既有分值排序沉底 + 区间筛选承载，人工裁定仍是最终闸门（不自动合并）。manual-search 例外（D-105a-4 原文）不受影响。
+- **三路径一致准入**（D-105a-16 同口径原则）：offline-rescore / ingest shadow / video-rescore 共享 `scoreAndPersistPairs`，谓词在 persist 层判定 → 三路径行为一致，不分叉。ingest 即时灰准入为显式裁定而非隐式副作用。
+- **版本治理**：`THRESHOLD_CONFIG_VERSION 1.0.0 → 1.1.0`（准入规则属阈值语义）→ evidence_hash 变 → 每日 reconcile 重扫受控 supersede+重建（量级 dev 实测 1061 对 2.1s）。
+- **护栏与回滚**：① `grayAdmitted` 计数入 PairPersistCounters 全链（offline/ingest/video-rescore 日志）；② 回滚不对称性——revert 谓词后已准入 pending 不会自动 supersede（低分对回到 skip 分支不触达 upsert）→ 配套 hygiene 脚本同卡交付（`WHERE status='pending' AND identity_score < 0.75 AND trigger_source <> 'manual-search' AND 强负为空`——排除 manual-search 合法例外与强负审查行）；③ rejected 压制保持：人工已拒对无新 exact 强正不复活（candidateUpsert 第一步 findLatestRejectedByPairKey 既有行为）。
+- **量纲**：准入后 pending ≈ 215+659 < MAX_COLLAPSE_PAIRS 2000，折叠/排序消费侧零改动。
+
+**D-N 偏离登记更新**：本 AMENDMENT 新增 D-105a-20，ADR-105a 偏离编号扩为 **D-105a-1 ~ D-105a-20 共 20 条**（20 随 GRAY-SLICE 实施闭环）。
+
 ---
 
 ## ADR-175：多语种标题模型 — 字段语义收紧 + media_catalog_aliases 结构化升级 + locale fallback + 匹配分层（SEQ-20260602-03 / CHG-VIR-2 / Phase 0）

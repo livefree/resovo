@@ -130,11 +130,24 @@ describe('runIngestShadowScoring', () => {
     expect(r.candidatesUpserted).toBe(1)
   })
 
-  it('none：对侧低分（0.60）→ 不写候选不绑定', async () => {
+  it('D-105a-20：对侧低分但同 key + 年±1 双锚点 → 灰区准入（candidate-only，三路径一致）', async () => {
     vi.mocked(recallCoreKeyCounterparts).mockResolvedValue(['b'])
     vi.mocked(fetchVideoDetailsForCandidates).mockResolvedValue([
       videoRow('self', '某科幻动画', []),
       videoRow('b', '某科幻动画', []),
+    ])
+    vi.mocked(upsertIdentityCandidate).mockResolvedValue({ kind: 'created', id: 'c-1' } as never)
+    const r = await runIngestShadowScoring(mockDb, log, baseInput)
+    expect(r.outcome).toBe('candidate-only')
+    expect(r.candidatesUpserted).toBe(1)
+    expect(upsertIdentityCandidate).toHaveBeenCalledTimes(1)
+  })
+
+  it('none：对侧低分且年未知（灰区谓词不命中）→ 不写候选不绑定', async () => {
+    vi.mocked(recallCoreKeyCounterparts).mockResolvedValue(['b'])
+    vi.mocked(fetchVideoDetailsForCandidates).mockResolvedValue([
+      videoRow('self', '某科幻动画', []),
+      { ...videoRow('b', '某科幻动画', []), year: null },
     ])
     const r = await runIngestShadowScoring(mockDb, log, baseInput)
     expect(r.outcome).toBe('none')

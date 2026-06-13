@@ -73,17 +73,19 @@ describe('runIdentityRescore', () => {
     expect(vi.mocked(upsertIdentityCandidate).mock.calls[0]![1]).toMatchObject({ triggerSource: 'offline-rescore' })
   })
 
-  it('低分 pair（0.60 < 0.75 且无强负）→ skippedLowScore，不 upsert', async () => {
+  it('D-105a-20：低分 pair（0.60，同 key + 年±1 双锚点）→ 灰区准入 grayAdmitted + upsert', async () => {
     mockLockQuery.mockResolvedValueOnce({ rows: [{ acquired: true }] }).mockResolvedValue({ rows: [] })
     mockDbQuery
       .mockResolvedValueOnce({ rows: [{ bucket_key: 'k', video_ids: ['a', 'b'] }] })
     vi.mocked(fetchVideoDetailsForCandidates).mockResolvedValue([
-      videoRow('a', '某科幻动画', []), // 无 source 重合 → 仅 core+year+type = 0.60
+      videoRow('a', '某科幻动画', []), // 无 source 重合 → core+year+type = 0.60 命中灰区谓词
       videoRow('b', '某科幻动画', []),
     ])
+    vi.mocked(upsertIdentityCandidate).mockResolvedValue({ kind: 'created', id: 'c-1' } as never)
     const r = await runIdentityRescore(mockDb, log)
-    expect(r.skippedLowScore).toBe(1)
-    expect(upsertIdentityCandidate).not.toHaveBeenCalled()
+    expect(r.grayAdmitted).toBe(1)
+    expect(r.skippedLowScore).toBe(0)
+    expect(upsertIdentityCandidate).toHaveBeenCalledTimes(1)
   })
 
   it('空桶立即 break（两段均无 buckets）→ 零处理', async () => {

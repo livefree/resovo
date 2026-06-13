@@ -106,6 +106,7 @@ export async function runVideoRescore(
       noop: counters.noop,
       skipped_low_score: counters.skippedLowScore,
       blocked: counters.blocked,
+      gray_admitted: counters.grayAdmitted,
       duration_ms: result.durationMs,
     },
     'video-rescore: done',

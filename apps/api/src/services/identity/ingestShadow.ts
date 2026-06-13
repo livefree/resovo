@@ -157,7 +157,7 @@ export async function runIngestShadowScoring(
       && s.evidence.some((e) => e.type === 'external_exact_id_match' && e.hit))
     .sort((a, b) => b.identityScore - a.identityScore || a.leftVideoId.localeCompare(b.leftVideoId))
 
-  const extraLog = { blocked: counters.blocked, skipped_low_score: counters.skippedLowScore }
+  const extraLog = { blocked: counters.blocked, skipped_low_score: counters.skippedLowScore, gray_admitted: counters.grayAdmitted }
 
   if (exactClean.length > 0) {
     const best = exactClean[0]!

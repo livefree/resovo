@@ -131,8 +131,26 @@ describe('scoreAndPersistPairs — blockingKeys 并集（D-105a-17）', () => {
     expect(input.evidenceHash).toBe(expected)
   })
 
-  it('低分且无强负 → 返回 PairScore 但不持久化（skippedLowScore）', async () => {
-    const a = side('a', '某科幻动画', { sourceSiteKeys: [] }) // 无指纹重合 → 0.60
+  it('D-105a-20：低分但同 key + 年±1 双锚点（灰区谓词命中）→ 准入候选（grayAdmitted）', async () => {
+    const a = side('a', '某科幻动画', { sourceSiteKeys: [] }) // 同名 + year 2020 双方 → 0.60 命中谓词
+    const b = side('b', '某科幻动画', { sourceSiteKeys: [] })
+    const counters = emptyPairPersistCounters()
+    vi.mocked(upsertIdentityCandidate).mockResolvedValue({ kind: 'created', id: 'c-1' } as never)
+    const scores = await scoreAndPersistPairs(
+      mockDb, new Map([['a', a], ['b', b]]), [['a', 'b']],
+      { ...versions, triggerSource: 'ingest' }, counters,
+    )
+    expect(scores).toHaveLength(1)
+    expect(counters.grayAdmitted).toBe(1)
+    expect(counters.skippedLowScore).toBe(0)
+    expect(upsertIdentityCandidate).toHaveBeenCalledTimes(1)
+    // identity_score 如实存储不虚标（仍 < 0.75）
+    const input = vi.mocked(upsertIdentityCandidate).mock.calls[0]![1] as { identityScore: number }
+    expect(input.identityScore).toBeLessThan(0.75)
+  })
+
+  it('D-105a-20：低分且年未知（单锚点）→ none 区不持久化（skippedLowScore，通用名撞车防线）', async () => {
+    const a = side('a', '某科幻动画', { sourceSiteKeys: [], year: null }) // 年缺失 → 无 year 证据
     const b = side('b', '某科幻动画', { sourceSiteKeys: [] })
     const counters = emptyPairPersistCounters()
     const scores = await scoreAndPersistPairs(
@@ -141,6 +159,7 @@ describe('scoreAndPersistPairs — blockingKeys 并集（D-105a-17）', () => {
     )
     expect(scores).toHaveLength(1) // ingest shadow bind 对比需要全量 scores
     expect(counters.skippedLowScore).toBe(1)
+    expect(counters.grayAdmitted).toBe(0)
     expect(upsertIdentityCandidate).not.toHaveBeenCalled()
   })
 })

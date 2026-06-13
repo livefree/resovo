@@ -4965,3 +4965,23 @@
 - **新增依赖**：无；**数据库变更**：无（只读）。
 - **质量门禁**：typecheck/lint EXIT=0 / test:changed scripts+docs-only 口径（脚本经真库实跑产出验证）。
 - **[AI-CHECK]**：六问过——①只读零风险；②评估先于实施（数据驱动两案分级 + 一案不立案）；③脚本沉淀可周期复跑（阈值调优观测工具）；④遵 BLOCKER 红线未引入依赖；⑤audit 归档 git add；⑥SEQ-20260612-03 全 7 卡完结。
+
+## [GRAY-SLICE] 灰区窄切片准入（ADR-105a AMENDMENT D-105a-20）
+- **完成时间**：2026-06-12
+- **记录时间**：2026-06-12 22:10
+- **执行模型**：claude-fable-5
+- **子代理**：arch-reviewer (claude-opus-4-8，agentId a561e01de390b7591) — 评分体系语义变更强制裁决，REVISE 五前置全采纳
+- **评审关键裁决**：① 本变更修订已采纳 D-105a-4 none 区边界，**必须落 ADR AMENDMENT 不得仅以代码+version bump 承载**（CLAUDE.md「未经 ADR 改动架构级原语」）；② 谓词沉淀命名真源防准入/回滚口径漂移；③ counter 属三消费方共享结构需四处同步 + ingest 隐式准入显式化为「三路径一致」（D-105a-16）；④ 回滚不对称性（revert 后低分对不触达 upsert → 残留 pending）→ hygiene 脚本同卡交付且 WHERE 必须排除 manual-search 合法例外与强负审查行；⑤ 一步到位 659 对（分期治理成本 > 收益，双锚点层精度悬崖在被排除的年未知层）。
+- **修改文件**：
+  - `docs/decisions.md` — ADR-105a AMENDMENT D-105a-20（准入谓词规范定义 / none 区收窄 / 三路径一致 / 版本治理 / 护栏回滚）。
+  - `apps/api/src/services/identity/weights.ts` — `THRESHOLD_CONFIG_VERSION` 1.0.0→1.1.0 + `isGraySliceAdmissible` 谓词单一真源（同 coreTitleKey + 年±1 双锚点 + 无强负；年未知层天然不命中=通用名撞车防线）。
+  - `apps/api/src/services/identity/pairScoringPersist.ts` — skip 分支前谓词判定（命中走正常 upsert，identity_score 如实存储）+ PairPersistCounters.grayAdmitted。
+  - `apps/api/src/services/identity/{offlineRescore,videoRescore,ingestShadow}.ts` — counter/日志全链同步（gray_admitted）。
+  - `scripts/rollback-gray-slice-pendings.ts`（新增，备而不用）— 回滚 hygiene：dry-run 演练 658 行可收口；WHERE 排除 manual-search 与强负行。
+  - `scripts/identity-grayzone-report.ts` — 浮点分箱修复（0.60 误落 0.55 箱）+ 切片谓词模拟段（Opus 事实输入）。
+  - 测试 ×3 文件——旧「低分不持久化」用例改写至 D-105a-20 契约 + 双锚点准入/年未知 none 正反例（persist 12/12、offline、ingest-shadow 8/8）。
+- **物化结果**（dev 库重扫，与模拟预测精确吻合）：grayAdmitted **659**（0.60×88 + 0.50×571）/ 年未知层 skippedLowScore 184 / pending 总量 873 < MAX_COLLAPSE_PAIRS 2000 / 旧 hash 行受控 superseded 215 / 3.99s。合并工作区即刻可见灰区候选（按分值沉底 + 区间筛选承载）。
+- **新增依赖**：无；**数据库变更**：无 DDL（候选行重建 + 659 新准入）。
+- **质量门禁**：typecheck/lint EXIT=0 / test:changed 679 passed / verify:adr-contracts EXIT=0（D-105a-20 登记）。
+- **注意事项**：① rejected 压制既有行为（candidateUpsert findLatestRejectedByPairKey）保证人工已拒的灰区对无新 exact 证据不复活——准入不会重新骚扰已裁定对；② ingest 路径即时灰准入（新爬同名同年对入库即进候选）；③ 回滚路径 = revert 谓词 + bump version + 跑 rollback-gray-slice-pendings。
+- **[AI-CHECK]**：六问过——①ADR 治理前置（AMENDMENT→实施）；②谓词单一真源三处共用；③identity_score 不虚标、人工闸门不变、自动合并零变更；④三路径一致无分叉；⑤回滚演练实证 658 行可收口；⑥counter 全链四处一个不漏（评审清单逐项核对）。
