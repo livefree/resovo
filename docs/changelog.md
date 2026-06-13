@@ -5311,3 +5311,21 @@
 - **数据库变更**：无 schema 变更；运行期落库改为 5 video + 5 专属 catalog（仅 test:e2e:player），teardown 全清（实证 count=0）。
 - **验证**：① `test:e2e:player`（带 `E2E_SEED_WATCH=1`）**33 passed**（唯一残留 card-dual-exit:99，已拆 follow-up）。② `detail.spec`（无 env）跑后 DB seed 视频 **count=0**（门控生效、seed 未运行）→ detail/video 域回到基线（detail.spec 基线即因 SSR-404 大面积失败 = 预存，与本卡无关 → 拆 follow-up CHORE-E2E-DETAIL-SSR-SEED）。typecheck/lint EXIT=0。
 - **注意事项**：① 全量 `npm run test:e2e`（PHASE COMPLETE 门禁）**不带 `E2E_SEED_WATCH`** → 其 player 域 spec 仍因无 seed 失败（**预存**，本改动前即如此，非回归）；player 域的全量 seed 化需与 video 域 seed + detail 陈旧测试清理一并在 follow-up 处理（避免全量跑里 player seed 又污染 video/detail）。② seed 仍是「测试侧 DB 落库」，production 代码零改动。
+
+## [CHORE-E2E-WATCH-SSR-SEED · Codex stop-time review FIX 2] seed 全局启用 + video/detail 域全绿
+- **完成时间**：2026-06-13
+- **记录时间**：2026-06-13 15:30
+- **执行模型**：claude-opus-4-8（主循环）
+- **子代理**：无
+- **背景**：Codex 第二轮拦截「full E2E still runs player specs without the required seed」。与第一轮（不破坏 video/detail）张力的唯一解 = **让 seed 数据完整到 video/detail 域也通过 → 全局启用**（取代第一轮的 `E2E_SEED_WATCH` 域隔离）。诊断关键：detail.spec 与 player.spec 共用 shortId 且 detail 页同为 SSR；第一轮 Codex「seed 破坏 detail」实由 seed 数据不全（复用随机 catalog → 渲染错误 description/director）造成，已由**富集专属 catalog**根治，而非靠隔离。
+- **修改文件**：
+  - `playwright.config.ts` — globalSetup 门控从 `&& E2E_SEED_WATCH==='1'` 回退为 `SERVERS.includes('web')`（**全部 web 域 e2e 启用** seed，含全量 `test:e2e` → player 域 spec 在全量跑中也 seed）。
+  - `package.json` — `test:e2e:player` 移除 `E2E_SEED_WATCH=1`（全局启用后无需）。
+  - `tests/e2e-next/_seed/fixtures.ts` — 补 DetailEp（detail-episode-pick 的 12 集 anime + 专属 catalog）。
+  - `apps/web-next/src/components/video/VideoDetailClient.tsx` — `DescriptionBlock` 的 `<p>` 加 `data-testid="detail-description"`（**实际渲染的可见描述**；原 testid 在未使用的 legacy `components/video/VideoDetailHero`，详情页实走 `components/detail/DetailHero` + DescriptionBlock）。
+  - `tests/e2e-next/detail.spec.ts` — 3 陈旧断言修复：watch URL 正则放宽 `/watch/[^?#]*{shortId}`（DetailHero 链接含 `{slug}-{shortId}` 前缀）/ episode-btn 数 12→10（EpisodePicker RANGE_SIZE=10，>10 集分段首段显 10）/ 描述断言现命中新 testid。
+  - `tests/e2e-next/detail-episode-pick.spec.ts` — 2 用例按新交互重写：EpisodePicker `handleSelect` 现 `router.push(/watch/{base}?ep=N)` 直跳 watch（BUGFIX-PREVIEW-LINK-B），旧「详情页 shallow 选集 + aria-pressed + 单独立即播放」模型退役。
+- **新增依赖**：无。
+- **数据库变更**：无 schema；运行期 seed 6 video + 6 专属 catalog（全部 web 域 e2e），teardown 全清。
+- **验证**：① detail 域（全局 seed，无 env）**16 passed**（detail.spec 10/10 + detail-episode-pick 2/2 + brand-detection 4/4）。② `test:e2e:player`（全局 seed）此前 33 passed（机制不变，仅触发条件改为 web 域）。③ typecheck/lint EXIT=0。
+- **注意事项**：① **homepage.spec / search-page.spec 仍有失败，但经基线对照（无 seed 同样红）确认为预存、与 seed 无关**（search 客户端 mock、seed 独立）→ 拆 follow-up CHORE-E2E-HOMEPAGE-SEARCH-E2E。② 全局 seed 后全量 `test:e2e` 的 player + detail 域均 seed 通过（净改善）；唯一 player 域一致残留 card-dual-exit:99（CHORE-VIDEOCARD-TAGLAYER-E2E）。③ 加了 1 处 production testid（VideoDetailClient DescriptionBlock，纯加性，是详情页规范的可见描述元素应有的 testid）；其余均测试侧。④ 本条 FIX 2 取代 FIX 1（域隔离）的方向——seed 现为全局，FIX 1 changelog 条目的"收窄"描述以本条为准。

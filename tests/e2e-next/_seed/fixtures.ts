@@ -184,6 +184,32 @@ export const E2E_SEED_VIDEOS: readonly SeedVideo[] = [
     catalog: MINIMAL_CATALOG,
     sources: buildSources('CinemaM1', ['线路1'], [1]),
   },
+  {
+    // detail-episode-pick.spec MOCK_DETAIL_ANIME：详情页选集链路
+    shortId: 'DetailEp',
+    slug: 'detail-episode-anime-DetailEp',
+    title: '详情选集测试动漫',
+    type: 'anime',
+    episodeCount: 12,
+    contentFormat: 'episodic',
+    episodePattern: 'multi',
+    catalog: {
+      titleEn: 'Detail Episode Anime',
+      description: '测试详情简介',
+      year: 2024,
+      country: 'CN',
+      rating: 8.3,
+      ratingVotes: 500,
+      runtimeMinutes: 24,
+      status: 'ongoing',
+      director: ['张导'],
+      cast: ['李演员'],
+      writers: [],
+      genres: ['anime'],
+      languages: ['zh-CN'],
+    },
+    sources: buildSources('DetailEp', ['线路1'], range(12)),
+  },
 ]
 
 export const E2E_SEED_SHORT_IDS: readonly string[] = E2E_SEED_VIDEOS.map((v) => v.shortId)

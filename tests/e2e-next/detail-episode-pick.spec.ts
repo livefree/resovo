@@ -61,34 +61,27 @@ test.describe('详情页选集链路（BLOCKER #9 固化）', () => {
     )
   })
 
-  test('点击选集 3 → URL 追加 ?ep=3 且该集 aria-pressed=true', async ({ page }) => {
+  // 注：EpisodePicker `handleSelect` 现直接 `router.push(/watch/{base}?ep=N)`（BUGFIX-PREVIEW-LINK-B
+  // 携 preview 透传），即详情页点选集 = 直接跳对应集 watch 页。原固化的「点选集留在详情页 shallow
+  // ?ep + aria-pressed，再点立即播放」旧交互模型已退役，下方两用例按新行为重写。
+  test('点击选集 3 → 跳转 watch 页 /watch/...?ep=3', async ({ page }) => {
     await page.goto(
       `/en/anime/${MOCK_DETAIL_ANIME.slug}-${MOCK_DETAIL_ANIME.shortId}`,
     )
     await expect(page.getByTestId('episode-picker')).toBeVisible({ timeout: 10_000 })
 
-    const btn3 = page.getByTestId('episode-btn-3')
-    await expect(btn3).toBeVisible()
-    await btn3.click()
-
-    await page.waitForURL(/[?&]ep=3/, { timeout: 5_000 })
-    expect(page.url()).toMatch(/[?&]ep=3/)
-    await expect(btn3).toHaveAttribute('aria-pressed', 'true')
+    await page.getByTestId('episode-btn-3').click()
+    await page.waitForURL(/\/watch\/.*[?&]ep=3/, { timeout: 5_000 })
+    expect(page.url()).toMatch(/\/watch\/.*[?&]ep=3/)
   })
 
-  test('选 5 → 点"立即播放" → URL 跳到 /watch/...?ep=5', async ({ page }) => {
+  test('点击选集 5 → 跳转 watch 页 /watch/...?ep=5', async ({ page }) => {
     await page.goto(
       `/en/anime/${MOCK_DETAIL_ANIME.slug}-${MOCK_DETAIL_ANIME.shortId}`,
     )
     await expect(page.getByTestId('episode-picker')).toBeVisible({ timeout: 10_000 })
 
     await page.getByTestId('episode-btn-5').click()
-    await page.waitForURL(/[?&]ep=5/, { timeout: 5_000 })
-
-    const playBtn = page.getByTestId('detail-play-btn')
-    await expect(playBtn).toBeVisible()
-    await playBtn.click()
-
     await page.waitForURL(/\/watch\/.*[?&]ep=5/, { timeout: 5_000 })
     expect(page.url()).toMatch(/\/watch\/.*[?&]ep=5/)
   })

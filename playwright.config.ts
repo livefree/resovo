@@ -31,12 +31,13 @@ const ADMIN_VISUAL_TEST_MATCH = '**/*.visual.spec.ts'
 //          (2) 本 env gate 防 `npx playwright test` 默认拉 admin-visual
 const VISUAL_ENABLED = process.env.PLAYWRIGHT_VISUAL === '1'
 
-// CHORE-E2E-WATCH-SSR-SEED：watch 页 SSR `fetchVideoDetail` 直连 api，player 域 spec 引用视频须
-// 真实存在于 DB（公开可见）SSR 才不 404。seed 集仅供 player 域（player/tri-state/option-tabs/
-// cinema/mini-player/card），故**仅 test:e2e:player 显式 `E2E_SEED_WATCH=1` 时启用**——避免污染
-// 共享 DB 上的 detail/video/search/browse 等其他 web 域 spec（它们与 player 共用 shortId 或依赖
-// 列表数据；全局 seed 会让其 SSR 命中 seed 视频或列表多出 5 条 → 误失败）。Codex 复审拦截项。
-const WEB_SEED_ENABLED = SERVERS.includes('web') && process.env.E2E_SEED_WATCH === '1'
+// CHORE-E2E-WATCH-SSR-SEED：watch / detail 页均为 SSR server component，`fetchVideoDetail` 直连
+// api、404 即 notFound()，故 player + detail 域 spec 引用的视频须真实存在于 DB（公开可见 + 完整
+// 元数据）SSR 才不 404 且渲染数据与断言一致。seed 集（fixtures.ts）已**完整对齐 player.spec /
+// detail.spec / detail-episode-pick MOCK**（专属 catalog 填全 description/director/cast/year/rating
+// + 源分线路/集），故对**全部 web 域 e2e 启用**（admin-only 跑跳过，零开销）。Codex 两轮复审：
+// 第一轮（数据正确性）由富集 catalog 解决、第二轮（全量 test:e2e 须 seed player）由全局启用解决。
+const WEB_SEED_ENABLED = SERVERS.includes('web')
 
 export default defineConfig({
   testDir: './tests/e2e',

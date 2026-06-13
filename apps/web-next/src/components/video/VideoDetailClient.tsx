@@ -53,6 +53,7 @@ function DescriptionBlock({ description }: { description: string | null }) {
       </h3>
       <p
         ref={clampRef}
+        data-testid="detail-description"
         style={{
           fontSize: '14px',
           lineHeight: '1.7',

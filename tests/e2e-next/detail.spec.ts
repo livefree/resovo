@@ -110,7 +110,9 @@ test.describe('电影详情页', () => {
     const playBtn = page.getByTestId('detail-play-btn')
     await expect(playBtn).toBeVisible()
     await playBtn.click()
-    await expect(page).toHaveURL(new RegExp(`/watch/${MOCK_MOVIE.shortId}`))
+    // watch 链接为 /watch/{slug}-{shortId}?ep=1（slug 存在时含 slug 前缀，DetailHero 既有格式），
+    // 故按"路径段内包含 shortId"匹配（而非紧跟 /watch/ 后）
+    await expect(page).toHaveURL(new RegExp(`/watch/[^?#]*${MOCK_MOVIE.shortId}`))
   })
 
   test('电影类型不显示选集选择器', async ({ page }) => {
@@ -136,8 +138,10 @@ test.describe('动漫详情页（多集）', () => {
   })
 
   test('选集按钮数量正确', async ({ page }) => {
+    // EpisodePicker RANGE_SIZE=10：>10 集分段，首段显前 10 集按钮（其余经分段选择器切换）。
+    // 12 集 → 首段 10 个 episode-btn（侧栏 side-episode 才显全 12，见 player.spec）。
     const episodes = page.getByTestId(/^episode-btn-\d+$/)
-    await expect(episodes).toHaveCount(12)
+    await expect(episodes).toHaveCount(10)
   })
 
   test('点击第 3 集更新 URL ep=3（不重载页面）', async ({ page }) => {
