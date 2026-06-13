@@ -86,6 +86,10 @@ _（**SEQ-20260613-01 META-24 ✅ 收口 2026-06-13**（ADR-173 起草：API 凭
 
 ---
 
+_（**SEQ-20260613-01 META-25 ✅ 收口 2026-06-13**（Card A1：provider 凭证注册表 + migration 115 + architecture）——`integration-credentials.types.ts` `PROVIDER_CREDENTIAL_SPECS`（bangumi 3 + tmdb Bearer 3 字段）+ index 导出；migration 115 真库对拍（表结构/FK SET NULL/bangumi 现值回填 secrets.token+config/旧 KV 保留/幂等复跑行数不变）；architecture.md 同步。门禁 typecheck/lint/verify:adr-contracts EXIT=0 / 全量单测 524 文件 7286 passed。**下一卡 META-26（Card A2：读取路径迁移 loadProviderCredential 优先新表→旧 KV→env + enabled 压 env）**。详见 changelog [META-25]。）_
+
+---
+
 ## 工作流提示
 
 - 取新任务前先查 `docs/task-queue.md` 是否有 `🚨 BLOCKER`（当前无）。

@@ -2313,9 +2313,10 @@
    - 建议模型：opus（撰写即将成为 ADR 的决策文档 + 跨 3+ 消费方契约，CLAUDE.md 强制 Opus）／执行模型：claude-opus-4-8
    - 落地：`docs/decisions.md` `## ADR-173`（Accepted）D-173-1..11 + 偏离 D-173-A..E + 3 端点契约表。Codex 审核 6 必修 + 5 建议全部并入。门禁 verify:adr-contracts EXIT=0 / docs-only test:changed SKIP。详见 changelog [META-24]。
    - 解锁：ADR PASS → META-25（Card A1）启动。
-2. **META-25** — Card A1：`@resovo/types` 注册表 + migration 115（建表+回填，保留旧 KV）+ architecture（状态：⬜ 待启动）
-   - 建议模型：opus（`@resovo/types` 公开类型 → commit Opus trailer）
-   - 验收要点：`PROVIDER_CREDENTIAL_SPECS` SSOT / migration 真库对拍幂等 + bangumi 现值回填不丢 / architecture.md 表段 + migration 列表同步
+2. **META-25** — Card A1：`@resovo/types` 注册表 + migration 115（建表+回填，保留旧 KV）+ architecture（状态：✅ 已完成 2026-06-13）
+   - 建议模型：opus（`@resovo/types` 公开类型 → commit Opus trailer）／执行模型：claude-opus-4-8
+   - 落地：`integration-credentials.types.ts` `PROVIDER_CREDENTIAL_SPECS`（bangumi 3 + tmdb Bearer 3 字段）+ index 导出；migration 115 真库对拍（表结构/FK SET NULL/bangumi 现值回填 secrets.token+config/旧 KV 保留/幂等复跑行数不变）；architecture.md 表段 + migration 列表。门禁 typecheck/lint/verify:adr-contracts EXIT=0 / 全量单测 524 文件 7286 passed。详见 changelog [META-25]。
+   - 解锁：→ META-26（Card A2 读取路径迁移）。
 3. **META-26** — Card A2：读取路径迁移（`loadProviderCredential` 优先新表→fallback 旧 KV→env + enabled 语义）+ bangumi-config 薄封装（状态：⬜ 待启动）
    - 建议模型：sonnet
    - 验收要点：优先级/回退/enabled 压 env 单测 / Bangumi 富集回归不破

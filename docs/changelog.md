@@ -5135,6 +5135,26 @@
 - **注意事项**：① 3 端点（`GET/PUT/POST /admin/integrations/credentials[/:provider][/test]`）已入 ADR-173 §端点契约表,路由 META-27 落地时逐字对齐供 `verify:endpoint-adr` 核验；② D-173-1..11 闭环标识随 META-25..28 各卡补 changelog；③ Card D（META-29 清理）线上稳定后单独排期,不在本批。
 - **[AI-CHECK]**：六问过——①正确性优先,严守 Codex 审核底线（同批不删旧 KV 兼容、两阶段迁移保 rollback）;②注册表 SSOT 沉淀 `@resovo/types`、复用 ADR-168 secret 纯函数与 ADR-188 注册表范式,不重造;③本卡 docs-only 改动收敛 decisions.md 单文件;④遵 CLAUDE.md 强制 Opus 起草 ADR + git-rules trailer;⑤门禁 verify:adr-contracts EXIT=0;⑥拆卡原子化（A1/A2/B/C/D）符合 M-SN-5 跨层拆分判据。
 
+---
+
+## [META-25] Card A1：provider 凭证注册表 + migration 115 + architecture（ADR-173 / SEQ-20260613-01 第 2 卡）
+- **完成时间**：2026-06-13
+- **记录时间**：2026-06-13 12:10
+- **执行模型**：claude-opus-4-8（`@resovo/types` 公开类型新增 → CLAUDE.md 强制 Opus + commit trailer）
+- **子代理**：无
+- **来源**：ADR-173 D-173-1（表 schema）/ D-173-2（注册表 SSOT）/ D-173-8（两阶段迁移回填保留旧 KV）落地。SEQ-20260613-01 第 2 卡（框架地基）。
+- **产出**：
+  - `packages/types/src/integration-credentials.types.ts`（新）：`CredentialFieldSpec`/`ProviderCredentialSpec` + `PROVIDER_CREDENTIAL_SPECS`（bangumi: token〔secret/envVar BANGUMI_API_TOKEN〕+ userAgent + timeoutMs〔min 1000 max 60000〕；tmdb: token〔secret/Bearer/envVar TMDB_READ_ACCESS_TOKEN〕+ baseUrl + language）+ `getProviderCredentialSpec`。类型 + runtime const 同居，对齐 external.types `EXTERNAL_PROVIDERS` 范式。
+  - `packages/types/src/index.ts`：`PROVIDER_CREDENTIAL_SPECS`/`getProviderCredentialSpec` runtime export + type re-export。
+  - `apps/api/src/db/migrations/115_api_credentials.sql`（新）：建表（secrets/config JSONB 分列 + enabled + last_test_* + updated_by UUID FK ON DELETE SET NULL）+ 幂等回填 DO 块（system_settings bangumi_api_token→secrets.token / user_agent→config.userAgent / timeout_ms→config.timeoutMs / tmdb_api_key→tmdb.secrets.token，ON CONFLICT DO NOTHING）。
+  - `docs/architecture.md`：api_credentials 表段 + migration 115 入列表。
+- **新增依赖**：无。
+- **数据库变更**：新建 `api_credentials` 表（migration 115）。架构文档已同步。
+- **真库对拍验证**：列结构正确（secrets/config NOT NULL、last_test_* nullable）；FK `api_credentials_updated_by_fkey` ON DELETE SET NULL；回填 bangumi 行 secrets=[token] + config={timeoutMs:8000,userAgent:...}（本地现值不丢）；tmdb 空值未建行（正确）；旧 system_settings KV 保留只读；直接重放 SQL 幂等复跑 before=after=1。
+- **质量门禁**：typecheck EXIT=0（全 workspace）/ lint EXIT=0（仅预存在 warning）/ verify:adr-contracts EXIT=0（sql-schema-alignment 82 表对齐）/ 全量单测 **524 文件 7286 passed**（types 基础包改动按 ADR-180 升全量）。
+- **注意事项**：① 本卡仅地基——读取路径迁移（`loadProviderCredential` 优先新表→fallback 旧 KV→env）在 META-26；端点/UI 在 META-27/28；② tmdb 凭证位就绪但消费管线后续单独立项（ADR-172-AMD3-C）；③ 旧 KV 物理退役推迟 META-29（Card D，线上稳定后）。
+- **[AI-CHECK]**：六问过——①回填保留旧 KV + 真库对拍验证现值不丢，正确性优先；②注册表 SSOT 沉淀 `@resovo/types` 跨 api/server-next 共享，复用 external.types 范式；③改动收敛 4 文件（1 新类型 + index + migration + architecture），未碰消费方；④遵 CLAUDE.md `@resovo/types` 公开类型强制 Opus + trailer；⑤全量单测 + 真库对拍 + 幂等验证覆盖；⑥schema 同步 architecture（绝对禁止违反项已守）。
+
 ## [HDR-DEDUP] 后台页面去重复标题 + 装饰提示统一治理（MODUX-ACPT-5 follow-up，4 卡序列）
 - **完成时间**：2026-06-13
 - **记录时间**：2026-06-13 01:18

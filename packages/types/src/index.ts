@@ -36,6 +36,9 @@ export {
   EXTERNAL_PROVIDERS,
   getExternalProvider,
 } from './external.types'
+export type * from './integration-credentials.types'
+// ADR-173 D-173-2：provider 凭证注册表 runtime exports（const + helper，非 type-only）
+export { PROVIDER_CREDENTIAL_SPECS, getProviderCredentialSpec } from './integration-credentials.types'
 
 export type * from './admin-moderation.types'
 // CHG-360-A / ADR-159：runtime helper（非 type-only）

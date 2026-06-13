@@ -1122,6 +1122,9 @@ UserPreferences = {
 - `099_douban_collection_items.sql`（ADR-187 / CHG-DOUBAN-HOT-STORE-A：新建 external_data.douban_collection_items 豆瓣 subject_collection 实时热度榜单切片 + external_data.douban_collection_sync_state 合集级新鲜度状态；084–098 列表 drift 同上待清理卡补全）
 - `100_external_fetch_log.sql`（ADR-188 / CHG-EXT-RES-STORE-A：新建 external_data.external_fetch_log provider 无关采集操作流水——外部资源治理框架观测基石；在线出口埋点 + offline 不入表 + 30天 purge）
 - `101_bangumi_collection_items.sql`（ADR-189 / CHG-BNG-RES-STORE-2A：新建 external_data.bangumi_collection_items Bangumi 派生近期新番/排行/每日放送切片〔GET /v0/subjects sort=date/rank + GET /calendar；D-189-2 AMENDMENT browse 非 search〕+ external_data.bangumi_collection_sync_state 合集级新鲜度；分表非并表 + air_weekday 仅 calendar CHECK + calendar 一拉七写原子）
+- `115_api_credentials.sql`（ADR-173 / META-25：新建 api_credentials 外部数据源 API 凭证统一管理表 + 从 system_settings 回填 bangumi/tmdb 现值；102–114 列表 drift 待清理卡补全）
+
+> **api_credentials 表**（ADR-173 D-173-1，API 凭证统一管理框架）：外部数据源 API 凭证一源一行，取代 system_settings 扁平 KV 单源硬编码（bangumi 现 / tmdb Bearer 就绪 / 未来源）。列：`provider TEXT PK`（ProviderKey，DB 开放字符串 + route/service `z.enum(PROVIDER_KEYS)` 守门，D-173-9）、`secrets JSONB`（敏感字段 map `{token?,...}`，GET 遮罩 / PUT 占位跳过 / 审计 redact，遮罩真源 = 注册表 secret flag D-173-4，明文存储延续 ADR-168 D-168-6 NEGATED）、`config JSONB`（非敏感 `{userAgent?,timeoutMs?,baseUrl?,language?}`，明文回传）、`enabled BOOLEAN`（false 压过 env 回退 D-173-3）、`last_tested_at/last_test_ok/last_test_latency_ms/last_test_error`（仅记录已保存配置测试，草稿测试不写 D-173-5）、`updated_at`、`updated_by UUID FK→users(id) ON DELETE SET NULL`（admin-only 配置表 D-173-11）。字段注册表真源 `packages/types/src/integration-credentials.types.ts` `PROVIDER_CREDENTIAL_SPECS`（D-173-2）。**两阶段迁移**（D-173-8）：回填保留旧 system_settings KV 只读，物理退役推迟 META-29（Card D）。
 
 > **MediaCatalogService.CATALOG_SOURCE_PRIORITY 调整**（ADR-161 决策要点 2）：`bangumi` 优先级 3 → 4（> douban:3，= tmdb:4，< manual:5）。anime 下 Bangumi 优先于豆瓣；bangumi 来源仅对 anime 写入，非 anime 不受影响。
 
