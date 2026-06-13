@@ -4941,3 +4941,13 @@
 - **修复**：① 拆后修正移出 split guard **独立执行**，各自幂等 guard（season=1 带 `IS NULL` 守卫 / S2 查找限定 `catalog_id = 原 catalog`——已迁出自然查不到）；② 手术 8 ES 同步改无条件（单视频幂等廉价，恒跑收口）。
 - **修改文件**：`scripts/gov6-entity-surgery.ts`。
 - **验证**：全量已执行态实跑——split 跳过 / 修正各自跳过 / ES 恒同步无副作用；typecheck/lint EXIT=0。dev 库本轮手术结果不受影响（修复面向生产 replay 的中断恢复场景）。
+
+## [GOV-6-FIX2] 受术视频 ES 收口重同步（Codex 第 2 拦截）
+- **完成时间**：2026-06-12
+- **记录时间**：2026-06-12 20:55
+- **执行模型**：claude-fable-5
+- **子代理**：无
+- **拦截内容**：「S2 migration retry can still leave ES stale」——FIX1 只修了手术 8 的 ES 同步，但 `moveVideoToSeasonCatalog`（掌心饵 S2 / 星辰变 S7 / 师兄啊师兄 S2 三处迁移）同构缺陷仍在：`UPDATE catalog_id` 成功后、`syncVideo` 前中断 → 重跑时业务 guard（`catalog_id = 原catalog`）已不命中 → 跳过 → ES 永久陈旧。
+- **修复**：脚本尾部「ES 收口重同步」段——受术视频全集（3 个固定 id + 掌心饵 S1/S2 动态产物按标题收集）**无条件重同步**，与各业务 guard 解耦；手术 8 的内联同步并入该段。多同步为幂等 no-op 无副作用。
+- **修改文件**：`scripts/gov6-entity-surgery.ts`。
+- **验证**：已执行态实跑——各 guard 正确跳过 + 收口段重同步 5 个受术视频；typecheck/lint EXIT=0。

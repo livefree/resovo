@@ -159,10 +159,23 @@ async function main(): Promise<void> {
     const c8b = await pool.query(
       `UPDATE videos SET title = '魔法使俱乐部 OVA' WHERE id = $1 AND title = '魔法使俱乐部(OVA)'`, [CASE8_VIDEO],
     )
-    // ES 同步无条件执行（Codex 拦截：title UPDATE 成功后 sync 前中断 → 重跑 rowCount=0
-    // 不再 sync → ES 永久陈旧。单视频 sync 幂等且廉价，恒跑收口）
-    await indexSync.syncVideo(CASE8_VIDEO)
-    console.log(`[手术8] OVA catalog/video 修正（catalog ${c8a.rowCount} / video ${c8b.rowCount} 行；ES 恒同步）`)
+    console.log(`[手术8] OVA catalog/video 修正（catalog ${c8a.rowCount} / video ${c8b.rowCount} 行）`)
+
+    // ── ES 收口重同步（Codex 第 2 拦截：任何「DB 写成功 → sync 前中断」的组合，重跑时
+    // 业务 guard 已不命中而跳过 → ES 永久陈旧。受术视频全集无条件重同步，幂等廉价；
+    // 掌心饵 S1/S2 为 split 动态产物按标题收集——此处仅 ES 刷新，多同步无副作用）──
+    const { rows: dynamicIds } = await pool.query<{ id: string }>(
+      `SELECT id FROM videos
+       WHERE deleted_at IS NULL AND title IN ('掌心饵，驯娇记 第1季', '掌心饵，驯娇记 第2季')`,
+    )
+    const resyncIds = [...new Set([
+      ...dynamicIds.map((r) => r.id),
+      CASE6_S7_VIDEO, CASE7_S2_VIDEO, CASE8_VIDEO,
+    ])]
+    for (const id of resyncIds) {
+      await indexSync.syncVideo(id)
+    }
+    console.log(`[gov6-entity-surgery] ES 收口重同步 ${resyncIds.length} 个受术视频（无条件幂等）`)
 
     console.log('[gov6-entity-surgery] 全部手术完成；请复跑 audit-cross-season-merge 验证收敛')
   } finally {
