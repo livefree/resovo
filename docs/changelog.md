@@ -5175,6 +5175,26 @@
 - **注意事项**：① 旧 KV fallback 是过渡期兼容（D-173-8），Card D 退役；② BangumiService/BangumiResourceAdapter 消费签名不变，富集链路回归（bangumi-service 72 例全绿）；③ tmdb 解析就绪但无消费方（后续立项）。
 - **[AI-CHECK]**：六问过——①保留旧 KV fallback + bangumi 富集回归全绿，正确性/稳定性优先；②解析逻辑下沉通用 `loadProviderCredential`，bangumi-config 收为薄封装（消除单源重复，复用注册表 SSOT）；③改动收敛读取层 3 文件 + 2 测试补 mock，未碰端点/UI；④遵两阶段迁移（不删旧契约）+ git-rules；⑤单测覆盖优先级/enabled/回退全分支 + 修复既有测试回归；⑥薄封装签名不变守消费方边界（BangumiService 零改）。
 
+---
+
+## [META-27] Card B1：lib testConnection + 测试适配器注册表 + queries mutations（ADR-173 / SEQ-20260613-01 第 4 卡）
+- **完成时间**：2026-06-13
+- **记录时间**：2026-06-13 12:55
+- **执行模型**：claude-opus-4-8（主循环连续推进）
+- **子代理**：无
+- **来源**：ADR-173 D-173-6（连接测试适配器）+ queries 写路径。Card B 按原子化判据（范围 > 5 项 + 含新 admin 路由）拆 B1/B2 之 **B1**（纯 service 层构件，无审计/无路由）。
+- **产出**：
+  - `apps/api/src/lib/bangumi.ts`：`testConnection(cfg)` —— 有 token `GET /v0/me`（200→authStatus valid / 401→invalid）；无 token `GET /calendar` 验连通+UA（ok 但 not_required，避免公开端点 ok 被误读为凭证有效）；计延迟，不走 recordFetch 埋点。
+  - `apps/api/src/lib/tmdb.ts`（新）：`testConnection(cfg)` —— `GET {baseUrl}/authentication` 头 `Authorization: Bearer <token>`（覆盖 v3/v4，不绑 query api_key）；本期仅测试，完整客户端待富集立项。
+  - `apps/api/src/services/integration-credential-testers.ts`（新）：`CREDENTIAL_TESTERS: Record<ProviderKey, Tester>` + `testProviderCredential`，source-agnostic（候选/已存值均经 ResolvedCredential 传入）；douban/imdb → unsupported。
+  - `apps/api/src/db/queries/apiCredentials.ts`：`listApiCredentialRows` / `upsertApiCredential`（JSONB 顶层 `||` 合并，不误清同源未提交字段 + enabled COALESCE 保留）/ `updateApiCredentialTestStatus`（仅 UPDATE 已存行，草稿测试不污染）。
+  - 单测 `integration-credential-testers.test.ts`（10 例，fetch mock）+ `apiCredentials-queries.test.ts`（4 例，db mock）。
+- **新增依赖**：无。
+- **数据库变更**：无（仅写查询函数；表在 META-25）。
+- **质量门禁**：typecheck EXIT=0 / lint EXIT=0 / test:changed **20 文件 323 passed**。
+- **注意事项**：① 测试适配器/查询为 B2 服务编排的底层构件，本卡不接路由/审计；② tmdb testConnection 完整客户端后续立项；③ updateTestStatus 仅记录已保存配置（草稿测试在 B2 服务层不调用）。
+- **[AI-CHECK]**：六问过——①authStatus 区分 token 有效 vs API 可用（避免误读），正确性优先；②测试适配器经注册表分派（接新源加一条），复用 ResolvedCredential 契约；③改动收敛构件层 4 文件 + 2 测试，未碰路由/UI；④遵两阶段 + Bearer 主契约（Codex 必修 1）；⑤fetch mock + db mock 覆盖 valid/invalid/not_required/unsupported + JSONB 合并；⑥source-agnostic 适配器守边界（候选与已存同入口）。
+
 ## [HDR-DEDUP] 后台页面去重复标题 + 装饰提示统一治理（MODUX-ACPT-5 follow-up，4 卡序列）
 - **完成时间**：2026-06-13
 - **记录时间**：2026-06-13 01:18

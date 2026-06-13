@@ -2321,12 +2321,17 @@
    - 建议模型：sonnet ／执行模型：claude-opus-4-8（主循环连续推进）
    - 落地：`apiCredentials.ts` `getApiCredentialRow` + `integration-credentials-config.ts` `loadProviderCredential`（新表→旧 KV〔LEGACY_KV_MAP〕→env + enabled 压 env）+ bangumi-config 薄封装（签名不变，BangumiService/Adapter 零改）+ 9 单测。受影响 metadataEnrich/bangumi-service 测试补 `apiCredentials` mock。门禁 typecheck/lint EXIT=0 / test:changed 16 文件 283 passed。详见 changelog [META-26]。
    - 解锁：→ META-27（Card B service + 端点 + 测试适配器）。
-4. **META-27** — Card B：`IntegrationCredentialsService` + 测试适配器（bangumi authStatus / tmdb Bearer）+ 3 admin 路由 + 2 审计 action type（状态：⬜ 待启动）
-   - 建议模型：opus（新增 admin route → 独立 ADR + Opus PASS，verify:endpoint-adr）
-   - 验收要点：草稿 vs 已存持久化两分 / 候选 secret 不落库不入审计 / set-equal 通过 / verify:endpoint-adr EXIT=0
-5. **META-28** — Card C：UI `ExternalCredentialsCard`（注册表驱动）+ integrations api client + SettingsTab 切换（过渡，不删旧契约）（状态：⬜ 待启动）
+  > **Card B 拆分（原子化判据：范围 > 5 项 + 含新 admin 路由）**：B1（纯 service 层构件）→ B2（编排 + 路由 + 审计）。
+4. **META-27** — Card B1：lib testConnection（bangumi authStatus / tmdb Bearer）+ `CREDENTIAL_TESTERS` 注册表 + queries mutations（list/upsert/updateTestStatus）+ 单测（状态：✅ 已完成 2026-06-13）
+   - 建议模型：opus ／执行模型：claude-opus-4-8
+   - 落地：`lib/bangumi.testConnection`（/v0/me valid·invalid / 无 token /calendar not_required）+ `lib/tmdb.testConnection`（Bearer /authentication）+ `integration-credential-testers.CREDENTIAL_TESTERS`（douban/imdb unsupported）+ `apiCredentials` list/upsert（JSONB `||` 合并）/updateTestStatus（仅 UPDATE）+ 14 单测（fetch mock + db mock）。门禁 typecheck/lint EXIT=0 / test:changed 20 文件 323 passed。详见 changelog [META-27]。
+   - 解锁：→ META-30（Card B2 Service + 路由 + 审计）。
+5. **META-30** — Card B2：`IntegrationCredentialsService`（list/save/test）+ 3 admin 路由 + 2 审计 action type（4 处同步）+ 路由/服务测试（状态：⬜ 待启动）
+   - 建议模型：opus（新增 admin route → ADR-173 §端点契约表已就位 + Opus PASS，verify:endpoint-adr）
+   - 验收要点：草稿 vs 已存持久化两分 / 候选 secret 不落库不入审计 / set-equal + audit-coverage payload 断言通过 / verify:endpoint-adr EXIT=0
+6. **META-28** — Card C：UI `ExternalCredentialsCard`（注册表驱动）+ integrations api client + SettingsTab 切换（过渡，不删旧契约）（状态：⬜ 待启动）
    - 建议模型：sonnet
    - 验收要点：bangumi/tmdb 卡可填可测可存 + 遮罩/已配置/上次测试态 / e2e:admin 绿
-6. **META-29** — Card D：清理卡（线上稳定后单独排期）退役 system_settings bangumi*/tmdb* 旧契约 + 删解析器旧 KV fallback（状态：⏸ 后排，依赖 A1–C 线上稳定）
+7. **META-29** — Card D：清理卡（线上稳定后单独排期）退役 system_settings bangumi*/tmdb* 旧契约 + 删解析器旧 KV fallback（状态：⏸ 后排，依赖 A1–C 线上稳定）
    - 建议模型：sonnet
    - 验收要点：rollback 窗确认后执行 / system-config 测试断言迁移

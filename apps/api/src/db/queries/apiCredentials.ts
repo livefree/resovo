@@ -63,3 +63,64 @@ export async function getApiCredentialRow(db: Pool, provider: string): Promise<A
   const row = res.rows[0]
   return row ? mapRow(row) : null
 }
+
+/** 读全部源凭证行（供 GET 列表端点遍历注册表 + 行数据合并）。 */
+export async function listApiCredentialRows(db: Pool): Promise<ApiCredentialRow[]> {
+  const res = await db.query<DbRow>(`SELECT ${SELECT_COLUMNS} FROM api_credentials`)
+  return res.rows.map(mapRow)
+}
+
+export interface UpsertApiCredentialInput {
+  provider: string
+  /** 本次要写入的敏感字段（占位跳过/清空三态由服务层决定后传入；空对象=不动 secrets） */
+  secrets?: Record<string, unknown>
+  /** 本次要写入的非敏感字段（空对象=不动 config） */
+  config?: Record<string, unknown>
+  /** 省略=保持原值（新行默认 true） */
+  enabled?: boolean
+  updatedBy: string | null
+}
+
+/**
+ * 保存/更新单源凭证（ADR-173 D-173-4）：JSONB 顶层 `||` 合并——只覆盖本次提交的字段，
+ * 同源未提交字段保留（防「保存即清空」）。enabled 省略时保持原值（新行默认 true）。
+ */
+export async function upsertApiCredential(db: Pool, input: UpsertApiCredentialInput): Promise<void> {
+  await db.query(
+    `INSERT INTO api_credentials (provider, secrets, config, enabled, updated_at, updated_by)
+     VALUES ($1, $2::jsonb, $3::jsonb, COALESCE($4, TRUE), NOW(), $5)
+     ON CONFLICT (provider) DO UPDATE SET
+       secrets    = api_credentials.secrets || $2::jsonb,
+       config     = api_credentials.config  || $3::jsonb,
+       enabled    = COALESCE($4, api_credentials.enabled),
+       updated_at = NOW(),
+       updated_by = $5`,
+    [
+      input.provider,
+      JSON.stringify(input.secrets ?? {}),
+      JSON.stringify(input.config ?? {}),
+      input.enabled ?? null,
+      input.updatedBy,
+    ],
+  )
+}
+
+export interface TestStatusInput {
+  provider: string
+  ok: boolean
+  latencyMs: number
+  error: string | null
+}
+
+/**
+ * 持久化「已保存配置」的连接测试状态（ADR-173 D-173-5）：仅 UPDATE 已存在行。
+ * 草稿（未保存候选）测试不调用此函数（不污染行级状态）；无行时 UPDATE 0 行（env-only 源无处记录，可接受）。
+ */
+export async function updateApiCredentialTestStatus(db: Pool, input: TestStatusInput): Promise<void> {
+  await db.query(
+    `UPDATE api_credentials
+        SET last_tested_at = NOW(), last_test_ok = $2, last_test_latency_ms = $3, last_test_error = $4
+      WHERE provider = $1`,
+    [input.provider, input.ok, input.latencyMs, input.error],
+  )
+}

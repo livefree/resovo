@@ -413,3 +413,46 @@ export async function browseSubjects(
 export function isBangumiApiConfigured(cfg?: BangumiClientConfig): boolean {
   return Boolean(apiToken(cfg))
 }
+
+/** 连接测试结果（ADR-173 D-173-6）：authStatus 区分 token 有效性 vs API 可用性。 */
+export interface BangumiTestResult {
+  ok: boolean
+  latencyMs: number
+  error?: string
+  /** 'valid'=token 有效 / 'invalid'=token 无效(401) / 'not_required'=无 token 仅验连通 */
+  authStatus?: 'valid' | 'invalid' | 'not_required'
+}
+
+/**
+ * 连接测试（ADR-173 D-173-6）：有 token → GET /v0/me 验 token 有效性（200=valid / 401=invalid）；
+ * 无 token → GET /calendar 验连通 + UA（ok 但 authStatus='not_required'，避免「公开端点 ok」被误读为凭证有效）。
+ * 不走 recordFetch 埋点（连接测试非采集出口）。
+ */
+export async function testConnection(cfg?: BangumiClientConfig): Promise<BangumiTestResult> {
+  const startedAt = Date.now()
+  const token = apiToken(cfg)
+  const path = token ? '/v0/me' : '/calendar'
+  try {
+    const res = await fetch(`${API_BASE}${path}`, {
+      headers: buildHeaders(cfg),
+      signal: AbortSignal.timeout(timeoutMs(cfg)),
+    })
+    const latencyMs = Date.now() - startedAt
+    if (!token) {
+      return res.ok
+        ? { ok: true, latencyMs, authStatus: 'not_required' }
+        : { ok: false, latencyMs, authStatus: 'not_required', error: `HTTP ${res.status}` }
+    }
+    if (res.ok) return { ok: true, latencyMs, authStatus: 'valid' }
+    if (res.status === 401) return { ok: false, latencyMs, authStatus: 'invalid', error: 'Token 无效（401 未授权）' }
+    // 其他非 2xx：可能瞬时故障，不断言 token 有效性
+    return { ok: false, latencyMs, error: `HTTP ${res.status}` }
+  } catch (err) {
+    return {
+      ok: false,
+      latencyMs: Date.now() - startedAt,
+      authStatus: token ? undefined : 'not_required',
+      error: fetchErrorSummary(err),
+    }
+  }
+}
