@@ -4951,3 +4951,17 @@
 - **修复**：脚本尾部「ES 收口重同步」段——受术视频全集（3 个固定 id + 掌心饵 S1/S2 动态产物按标题收集）**无条件重同步**，与各业务 guard 解耦；手术 8 的内联同步并入该段。多同步为幂等 no-op 无副作用。
 - **修改文件**：`scripts/gov6-entity-surgery.ts`。
 - **验证**：已执行态实跑——各 guard 正确跳过 + 收口段重同步 5 个受术视频；typecheck/lint EXIT=0。
+
+## [GOV-7] 召回增强评估：灰区报表 + titleEn 缺口量化（治理序列全 7 卡完结）
+- **完成时间**：2026-06-12
+- **记录时间**：2026-06-12 21:15
+- **执行模型**：claude-fable-5
+- **子代理**：无（纯只读评估，不动评分管线/阈值/依赖）
+- **修改文件**：
+  - `scripts/identity-grayzone-report.ts`（新增）— 只读评估：镜像 offlineRescore blocking 遍历（双键桶 + MAX_BUCKET 护栏 + 全局 seen），逐 pair scorePair 不持久化；分布直方 + 灰区 top 清单 + titleEn 缺口 SQL。
+  - `docs/audit/identity-recall-grayzone-assessment-20260612.md`（新增）— 评估真源（4 发现 + 3 实施建议）。
+- **关键发现**（dev 库 1061 对）：F1 灰区 [0.55,0.75) 99 对的 top 全为高置信真重复（同名异标点/「中配」后缀/完全同名 year 缺失恒 0.60），但 [0.50,0.55) 噪声海 581 对 → **窄切片准入而非降阈值**；F2 强负拦截（解说vs正片/跨季）工作正常；F3 titleEn 缺口仅 17 组、可低成本第三 blocking 键；F4 简繁折叠数据不支持引入 OpenCC（技术栈外依赖 BLOCKER 级），不立案。
+- **产出候选实施卡（待用户决定启动）**：GRAY-SLICE（灰区窄切片准入——评分体系变更强制 Opus 裁决）/ TITLEEN-BUCKET（第三 blocking 键，纯加性召回低风险小卡）。
+- **新增依赖**：无；**数据库变更**：无（只读）。
+- **质量门禁**：typecheck/lint EXIT=0 / test:changed scripts+docs-only 口径（脚本经真库实跑产出验证）。
+- **[AI-CHECK]**：六问过——①只读零风险；②评估先于实施（数据驱动两案分级 + 一案不立案）；③脚本沉淀可周期复跑（阈值调优观测工具）；④遵 BLOCKER 红线未引入依赖；⑤audit 归档 git add；⑥SEQ-20260612-03 全 7 卡完结。
