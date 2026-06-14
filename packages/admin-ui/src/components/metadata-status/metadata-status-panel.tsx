@@ -83,7 +83,9 @@ export function MetadataStatusPanel({
   const issuesToShow = (isCompact ? summary.issues.slice(0, MAX_COMPACT_ISSUES) : summary.issues).filter(
     (i) => i.level !== 'none',
   )
-  const showNextAction = summary.nextAction !== 'none'
+  // 下一步主按钮仅在「有动作 + 上层接线 onAction」时渲染：无 handler 不渲染死按钮（避免 no-op 主操作，
+  // 与来源卡 per-card 动作同口径；只读用法下状态信息仍由 Header + 问题列表承载）。
+  const showNextAction = summary.nextAction !== 'none' && !!onAction
 
   return (
     <div data-metadata-status-panel data-variant={variant} data-testid={testId} style={ROOT_STYLE}>

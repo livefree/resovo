@@ -91,6 +91,12 @@ describe('MetadataStatusPanel — onAction', () => {
     expect(panel(container).querySelector('[data-panel-next-action]')).toBeNull()
   })
 
+  it('nextAction != none 但未传 onAction → 不渲染死按钮（避免 no-op 主操作）', () => {
+    const s = makeSummary({}, { nextAction: 'run_enrichment' })
+    const { container } = render(<MetadataStatusPanel summary={s} variant="detail" />)
+    expect(panel(container).querySelector('[data-panel-next-action]')).toBeNull()
+  })
+
   it('per-provider：candidate 来源卡动作 → onAction(confirm_candidate, provider)', () => {
     const onAction = vi.fn()
     const s = makeSummary({ bangumi: { state: 'candidate', externalId: '123' } })
