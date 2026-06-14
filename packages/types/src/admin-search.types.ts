@@ -10,7 +10,12 @@
  *   - reason / kind 为闭合 union（不留 string 兜底，对齐 ADR-103a §4.1.1）
  *   - DTO 真源在 @resovo/types（API SSOT），admin-ui 正向 import 复用、不复制类型体
  *   - 分组/排序/精确命中置顶为服务端职责；前端只做 DTO→CommandGroup 展示映射
+ *   - **枚举字段一律引用既有 SSOT union（不退化成 string）**（Codex 复审 + ADR-103a §4.1.1）
  */
+import type { VideoType, VideoStatus, ReviewStatus, VisibilityStatus } from './video.types'
+import type { UserRole } from './user.types'
+import type { UserSubmissionStatus } from './admin-moderation.types'
+import type { AdminTaskItem } from './admin-shell.types'
 
 /** 顶栏全局搜索覆盖实体（P1: video/source/user/task；P1.5: submission） */
 export type AdminSearchKind = 'video' | 'source' | 'user' | 'task' | 'submission'
@@ -39,11 +44,11 @@ interface AdminSearchResultBase {
 
 export interface AdminSearchVideoPayload {
   readonly shortId: string
-  readonly type: string
+  readonly type: VideoType
   readonly year: number | null
-  readonly status: string
-  readonly reviewStatus: string
-  readonly visibilityStatus: string
+  readonly status: VideoStatus
+  readonly reviewStatus: ReviewStatus
+  readonly visibilityStatus: VisibilityStatus
 }
 export interface AdminSearchVideoResult extends AdminSearchResultBase {
   readonly kind: 'video'
@@ -65,7 +70,7 @@ export interface AdminSearchSourceResult extends AdminSearchResultBase {
 export interface AdminSearchUserPayload {
   readonly username: string
   readonly email: string
-  readonly role: string
+  readonly role: UserRole
 }
 export interface AdminSearchUserResult extends AdminSearchResultBase {
   readonly kind: 'user'
@@ -73,7 +78,8 @@ export interface AdminSearchUserResult extends AdminSearchResultBase {
 }
 
 export interface AdminSearchTaskPayload {
-  readonly status: string
+  /** admin 面向任务状态（与 AdminTaskItem.status SSOT 一致，由 TaskRunStatus 经 TaskAggregator 映射） */
+  readonly status: AdminTaskItem['status']
   /** 最近运行时间 ISO（无则 null） */
   readonly lastRunAt: string | null
 }
@@ -83,7 +89,7 @@ export interface AdminSearchTaskResult extends AdminSearchResultBase {
 }
 
 export interface AdminSearchSubmissionPayload {
-  readonly status: string
+  readonly status: UserSubmissionStatus
   readonly submittedBy: string | null
   /** 投稿时间 ISO */
   readonly createdAt: string
