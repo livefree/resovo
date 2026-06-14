@@ -18996,6 +18996,7 @@ BANGUMI_USER_AGENT:     z.string().default('resovo/1.0 (https://github.com/...)'
 ### AMENDMENT 2（META-14 / 2026-05-30）：富集徽标重设计 — 彩点+文字 → 外部源品牌 Logo
 
 - **状态**：Accepted（arch-reviewer claude-opus-4-8 CONDITIONAL → 主循环消化红线 R-AMD2-1 后等同 PASS；共享组件 API 契约变更，CLAUDE.md 强制 Opus 评审）
+- **被修订（2026-06-14 / META-31-FIX）**：`SourceLogoBadge` 的 `SourceMatchState`（matched|candidate|absent）状态承载由 **ADR-201** 修订——映射为 `MetadataProviderState`（matched→applied / candidate→candidate〔黄点推广到四源含 tmdb/imdb〕/ absent→missing〔类型不适用归 not_applicable〕），并新增 `problem`（红点）。映射表见 ADR-201 §取代/修订关系。
 - **触发**：P3（META-11/12）落地后用户走读反馈 3 点 —— ①列表无文字彩点不可读、无 hover tooltip；②source 徽标与既有 DualSignal/source_health 列重复；③抽屉「富集时间」与「豆瓣未匹配」文字并列语义矛盾。
 - **性质**：**破坏性重构（非 additive）**。删除 `kind='source'` + 重设单徽标视觉范式（Pill→品牌 Logo）+ 扩展 `EnrichmentSummary` 3 字段。4 消费面已在线消费 `EnrichmentBadgeCluster`（P3 已落 / 调用签名不变），现有单测已对拍旧 5-kind 映射 → 本 AMENDMENT 同步重写消费面 visual 回归 + 单测（非回归，属契约改写）。
 - **用户已批准决策（R1）**：①4 源品牌 Logo（douban/bangumi(anime)/tmdb/imdb）②Logo 资源方案 A（admin-ui 内 data-URI 自包含）③TMDB+IMDb 纳入（未来富集补全英文标题后落实数据）④meta_score 仅 header 显示⑤未命中：row 不显 / header 灰显。
@@ -19098,6 +19099,7 @@ Bangumi token 现直读 `process.env.BANGUMI_API_TOKEN`（`lib/bangumi.ts:15`）
 ## ADR-172 AMENDMENT 3（META-18 / 2026-05-30）：外部元数据真源并集视图 — 条目级展示层
 
 - **状态**：Accepted（arch-reviewer claude-opus-4-8 CONDITIONAL → 主循环满足 3 条件后等同 PASS；admin-ui 公开 Props 新增 + `@resovo/types` 公开类型新增，双触发 CLAUDE.md 强制 Opus 评审）
+- **被取代（2026-06-14 / META-31-FIX）**：`ExternalMetaPanel` 的审核详情/编辑抽屉展示职责由 **ADR-201** 统一「元数据状态」section + `MetadataStatusPanel` 取代；META-33/34 后 `ExternalMetaPanel`/`SourceLogoBadge` 进入兼容或退役路径（不得新增消费点，与 ADR-201 D-201-2 一致）。
 - **触发**：用户走读反馈 —— 动漫类型视频详情/编辑页未消费已回填的 Bangumi 条目级字段（日文原名/放送日/排名/评分），且无「多源并集总览」（命中了哪些源/外部 ID/置信度/链接）→ 运营无法判定富集回填质量。
 - **性质**：**additive（纯展示层）**。新增展示组件 + 详情 DTO 扩展，不动富集管线、不改 public 路径、不改既有徽标契约。
 - **用户已锁决策**：①展示界面 = 视频编辑抽屉 + 审核台详情 两处 ②深度 = **仅条目级**（不含逐集放送 catalog_episodes）③设计原则 = 以 `media_catalog` 真源为中心 + 所有命中源**并集**展示（非每源孤岛 tab）④CV/角色管线记为 META-19 后续。
@@ -22295,6 +22297,7 @@ LANG-DIM-A（Migration 112 + types + architecture.md §5.2 同步）→ LANG-DIM
 ## ADR-173：API 凭证统一管理框架 + 连接测试协议（SEQ-20260613-01 / META-24，落地 ADR-168 遗留 F-A）
 
 - **状态**：**Accepted**（claude-opus-4-8 主循环起草 + 自审；设计 plan 经 Codex 审核出具 6 必修 + 5 建议，全部并入并经用户批准 `~/.claude/plans/sorted-cooking-feigenbaum.md`。触发多条 CLAUDE.md 强制 Opus：新共享契约 / 跨 3+ 消费方 schema / 新 admin route / 即将成为 ADR 的决策文档）。
+- **修订（2026-06-14 / META-31-FIX）**：D-173-2 `PROVIDER_CREDENTIAL_SPECS.tmdb` 字段语义由 **ADR-201 D-201-7** amend —— `token` 拆为 `read_access_token`（Bearer 首选）+ `api_key`（v3 query 兼容），旧 `tmdb.token → tmdb_api_key` 映射废止；详见 ADR-201 §API 凭证与 TMDB 接入。
 - **来源**：产品需从多站点取影视数据,其中一路为 API 访问（已接 Bangumi,未来接 TMDb）。用户要求「为 API token 设计统一管理方式（添加 / 保存 / 更新 / 测试）」。ADR-168 已奠基「外部数据源凭证统一管理 + Secret Redaction 协议」,但仅做 bangumi 单源凭证下沉,且明确「**测试连接按钮 NOT in scope（依赖 ADR-173/F-A）**」——本 ADR 即落地该长期被引用却未写的 F-A,并把单源硬编码升级为注册表驱动框架。
 
 ### 背景
@@ -22650,6 +22653,8 @@ export interface MetadataStatusSummary {
 
 服务端集中派生 `MetadataStatusSummary`，不得在 React cell 或 tooltip 内临时计算核心状态。
 
+`providers` 为 `Record<MetadataProvider, MetadataProviderStatus>`，派生服务必须对全部四来源（含未接入的 IMDb）产出 entry（未获取归 `missing`、类型不适用归 `not_applicable`），不得缺 key。四来源**显示顺序**由常量 `METADATA_PROVIDER_ORDER = ['douban','bangumi','tmdb','imdb']` 固定（与 ADR-172 AMD2 logo 行顺序一致），UI 与服务端均不得依赖 Record key 迭代序；注意现状 `EXTERNAL_REF_PROVIDERS`（`packages/types/src/video.types.ts`）顺序为 `douban/tmdb/bangumi/imdb`，与显示顺序不同，不可直接复用。
+
 输入来源：
 
 - `videos.meta_quality->>'enriched_at'`、`videos.meta_score`、`videos.douban_status`、`videos.bangumi_status`。
@@ -22735,14 +22740,12 @@ IMDb：未获取
 
 #### 视频编辑抽屉
 
-目标 tab：
+目标 tab（对齐现状 `VideoEditDrawer.tsx` 实际 tab；本 ADR 仅 `external`→`元数据` + 删 `豆瓣·元数据`，不新增 tab）：
 
 - `基础信息`
 - `播放线路`
 - `元数据`
 - `图片`
-- `审核`
-- `历史`
 
 调整：
 
@@ -22794,12 +22797,13 @@ Douban 行为：
 - 列表接口必须返回 `metadataStatus` 或可展开字段，不允许表格 cell N+1 请求。
 - provider state 与 sort rank 由服务端查询/服务层给出；UI 只传筛选条件。
 - 隐藏列 `douban_status`、`bangumi_status` 可保留过渡期，但新筛选入口不能再围绕单 provider 命名。
+- **OPEN（交 META-32 决策）**：`overall` / `issueRank` / provider state 是跨 `videos.meta_quality` + `media_catalog` + `video_external_refs` 的派生量。服务端排序过滤需在「动态 JOIN 计算（无 schema 改动，大数据量可能慢）」与「物化派生列（migration + 回填 + 写入更新，排序快）」间定夺；若选物化须同步 `docs/architecture.md`。本 ADR 不预设结论。
 
 ### API 凭证与 TMDB 接入
 
 #### 凭证语义
 
-ADR-173 保持为统一凭证框架，本 ADR 对 TMDB 字段作约束：
+本节构成对 **ADR-173 D-173-2**（`PROVIDER_CREDENTIAL_SPECS` 注册表 SSOT）的 amend：ADR-173 保持统一凭证框架，本 ADR 修订其 TMDB 字段定义如下（现状 `packages/types/src/integration-credentials.types.ts` 仅有单字段 `token`，需拆分）：
 
 - `tmdb.read_access_token`：API Read Access Token，写入 Authorization Bearer header，首选。
 - `tmdb.api_key`：v3 API Key，写入 query `api_key`，兼容。
@@ -22811,6 +22815,12 @@ ADR-173 保持为统一凭证框架，本 ADR 对 TMDB 字段作约束：
 - 禁止把 `read_access_token` 存入名为 `api_key` 的字段。
 - 禁止旧 `tmdb.token` 继续映射为 `tmdb_api_key`。
 - 禁止在 UI 文案中只写“Token”而不区分 Bearer/API Key。
+
+存量迁移（META-37 实施）：
+
+- 现状 `api_credentials.secrets.token`（label「API Read Access Token」）→ 默认迁入 `read_access_token`（语义即 Bearer，用途不变）。
+- legacy `system_settings.tmdb_api_key`（ADR-173 D-173-3 旧 KV fallback）→ 迁入 `api_key`，不再回填为 Bearer `token`。
+- 迁移须幂等、可回滚；过渡期允许新旧字段并存读取，写入只走新字段。注册表/loader 改 key 须同步新增 `loadTmdbClientConfig`（对齐 `loadBangumiClientConfig`）与连接测试取值（`integration-credentials-config.ts` legacy fallback 映射一并修正）。
 
 连接测试：
 
@@ -22845,6 +22855,21 @@ ADR-173 保持为统一凭证框架，本 ADR 对 TMDB 字段作约束：
 6. `META-37`：TMDB 凭证语义修订，与 META-29 旧 KV 清理协调。
 7. `META-38`：TMDB API client/search/detail MVP。
 8. `META-39`：TMDB 候选确认与应用。
+
+### 取代/修订关系
+
+- **取代 ADR-172 AMENDMENT 3（`ExternalMetaPanel` 展示职责）**：审核详情/编辑抽屉的「外部元数据并集视图」由本 ADR 统一「元数据状态」section + `MetadataStatusPanel` + `MetadataSourceIconCluster` 承载；`ExternalMetaPanel` 在 META-33/34 后进入兼容或退役路径。
+- **修订 ADR-172 AMENDMENT 2（`SourceLogoBadge` 状态承载）**：`SourceMatchState` → `MetadataProviderState` 映射如下，并新增 `problem` 态：
+
+  | ADR-172 `SourceMatchState` | ADR-201 `MetadataProviderState` | 说明 |
+  | --- | --- | --- |
+  | `matched` | `applied` | 已应用到 video/catalog。 |
+  | `candidate` | `candidate` | 候选黄点；ADR-201 从「仅 douban/bangumi」推广到四源（含 tmdb/imdb）。 |
+  | `absent` | `missing` | 未获取；按内容类型规则可归 `not_applicable`。 |
+  | （无对应） | `problem` | **新增**红点：冲突 / 被拒重现 / 低置信阻断 / 覆盖人工字段等需复核。 |
+
+- **修订 ADR-173 D-173-2（凭证注册表 SSOT）**：`PROVIDER_CREDENTIAL_SPECS.tmdb` 字段由本 ADR §API 凭证与 TMDB 接入约束（`read_access_token` + `api_key` 分离）。
+- 旧 `EnrichmentBadgeCluster` / `ExternalMetaPanel` / `SourceLogoBadge` 不得新增消费点（与 D-201-2 一致）。
 
 ### 迁移与兼容
 

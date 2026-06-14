@@ -5533,3 +5533,28 @@
 - **质量门禁**：verify:adr-contracts EXIT=0；typecheck/lint/test 未运行（docs-only 设计落库，无 TS/运行时代码变更）。
 - **后续**：META-32 先做统一 DTO + 派生服务/查询；META-33 做 admin-ui 原语；随后按审核详情、编辑抽屉、视频库、TMDB 凭证、TMDB API、候选应用顺序推进。
 - **[AI-CHECK]**：六问过——①无运行时代码变更，回归面由 ADR 契约约束；②状态模型沉淀到共享 DTO 与 admin-ui 原语，避免三处 UI 重复临时计算；③扩展性覆盖 provider state、issue、nextAction、排序过滤字段，TMDB/IMDb 可增量接入；④无 any/空 catch/硬编码色（docs，且 ADR 明确颜色必须走 token）；⑤改动收敛于任务/队列/ADR/changelog；⑥TMDB 不越界为播放源，凭证语义明确 Bearer/API Key，Douban 不再独占顶级 IA。
+
+## [META-31-FIX] ADR-201 审核修订（元数据状态治理 + TMDB 接入前置契约）
+- **完成时间**：2026-06-14
+- **记录时间**：2026-06-14
+- **执行模型**：claude-opus-4-8
+- **子代理**：无
+- **背景**：META-31 落库的 ADR-201（commit `5f73dd30`）经独立审核——结论为方案整体可批准、质量高，但存在 1 处事实错误 + 3 处 ADR 关系/迁移缺口 + 2 个未标注实施 open question。用户确认全部修订落库（不改动 `5f73dd30`）+ 给 META-32 加 arch-reviewer(Opus) 契约评审前置 gate。
+- **修改文件**：
+  - `docs/decisions.md` — ADR-201 订正视频编辑 tab、新增「取代/修订关系」小节、§凭证语义补 ADR-173 amend 声明 + TMDB 存量迁移路径、§视频库数据支撑补服务端排序 OPEN、§派生规则补 providers 4-key + 顺序常量；ADR-172 AMD2/AMD3 + ADR-173 各挂修订指针（零删除原文）。
+  - `docs/task-queue.md` — META-32 加 Opus 评审前置 gate + 服务端排序物化决策 + providers 常量两项；META-37 补存量迁移项；SEQ-20260614-01 登记 META-31-FIX 子项并收口。
+  - `docs/tasks.md` — 写卡并收口 META-31-FIX，工作台空闲。
+  - `docs/changelog.md` — 本记录。
+- **审核发现与修订（1–7）**：
+  - 修订 1（必改）：ADR-201 §视频编辑抽屉目标 tab 含「审核/历史」两个现状不存在 tab（`VideoEditDrawer.tsx:72-78` 仅 basic/lines/images/douban/external），与 META-35 范围冲突 → 订正为 `基础信息/播放线路/元数据/图片`。
+  - 修订 2（ADR-172 关系）：取代 AMD3 `ExternalMetaPanel` 展示职责 + 修订 AMD2 `SourceLogoBadge` 状态承载（SourceMatchState matched→applied / candidate→candidate〔黄点推广四源〕/ absent→missing〔不适用归 not_applicable〕 + 新增 problem 红点）。
+  - 修订 3（ADR-173 amend）：D-201-7 修订 D-173-2 `PROVIDER_CREDENTIAL_SPECS.tmdb` 字段（`token`→`read_access_token`+`api_key`）。
+  - 修订 4（迁移路径）：现状 `secrets.token`→`read_access_token`、legacy `system_settings.tmdb_api_key`→`api_key`，幂等可回滚 + 新增 `loadTmdbClientConfig`。
+  - 修订 5（OPEN）：服务端排序「动态 JOIN vs 物化派生列」交 META-32 定夺。
+  - 修订 6（约束）：`providers` Record 必须 4-key 恒在 + `METADATA_PROVIDER_ORDER` 常量固定显示顺序（注意与 `EXTERNAL_REF_PROVIDERS` 顺序不同）。
+  - 修订 7（流程 gate）：META-32 启动前补 arch-reviewer(Opus) 对 DTO + admin-ui Props 契约定稿评审（ADR-201 原由 GPT-5 Codex 产出未过 Opus 的补救）。
+- **新增依赖**：无。
+- **数据库变更**：无（docs-only）。
+- **测试覆盖**：无代码改动；`verify:adr-contracts` EXIT=0（endpoint-adr 240 路由对齐 / sql-schema / style / shell-types-mirror 全 ✅；仅既有错误码消息 + enum-ssot advisory，与 META-31 基线一致，无新增偏离）。
+- **质量门禁**：verify:adr-contracts EXIT=0；docs-only 无 TS/运行时改动，typecheck/lint/test:changed 不涉及（自动跳过）。
+- **[AI-CHECK]**：六问过——①仅修订已 Accepted 的 ADR 与队列，零删除原文挂指针，无运行时代码变更，回归面由 ADR 契约约束；②审核结论沉淀到 ADR/队列，避免后续实施卡临时决策；③providers 4-key 恒在 + 顺序常量保障四源稳定扩展；④无 any/空 catch/硬编码色（docs）；⑤改动收敛于 docs（decisions/task-queue/tasks/changelog）；⑥未越界改代码、未改动 5f73dd30、Opus gate 补足治理合规。

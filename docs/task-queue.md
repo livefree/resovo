@@ -2456,9 +2456,12 @@
    - 验收要点：统一术语、状态枚举、provider 图标状态、tooltip 摘要、审核详情、视频编辑、视频库排序过滤、API 凭证修订、TMDB 能力边界、后续拆卡顺序全部明确；不写代码。
    - 完成备注：执行模型 GPT-5 Codex。docs-only 落地 ADR-201：统一“元数据状态”术语与 `MetadataStatusSummary` DTO；定义 `overall/provider/issue/nextAction/sort` 状态模型；四来源图标固定 Douban/Bangumi/TMDB/IMDb（已应用=正常、未获取/不适用=灰、候选=黄点、异常=红点）；审核详情合并为单一 `元数据状态` section；视频编辑删除顶级 `豆瓣·元数据` tab、改统一 `元数据` tab；视频库元数据列服务端排序过滤字段定稿；TMDB 凭证区分 `read_access_token` vs `api_key` 且首选 Bearer；TMDB 只作为元数据 provider，不作为播放源。门禁 `npm run verify:adr-contracts` EXIT=0（仅既有 advisory warning）。详见 changelog [META-31]。
    - 解锁：META-32。
+   - **META-31-FIX**（审核修订 · ✅ 已完成 2026-06-14）：独立审核 ADR-201 发现 1 事实错误 + 3 关系/迁移缺口 + 2 实施 open-q，按修订 1–7 落库——订正视频编辑 tab；ADR-172 AMD2/AMD3 + ADR-173 挂修订指针；ADR-201 补取代关系/TMDB 迁移路径/服务端排序 open-q/providers 4-key 常量；META-32 加 Opus 评审 gate + 两决策项、META-37 补迁移项。docs-only，不改动 commit 5f73dd30。执行模型 claude-opus-4-8。
 2. **META-32** — Phase 1：统一元数据状态 DTO + 派生服务/查询（状态：⬜ 后排，依 META-31）
    - 建议模型：opus（`@resovo/types` 公开类型 + 多消费方契约）
+   - **前置 gate**：启动前先经 `arch-reviewer`(Opus) 对 ADR-201 `MetadataStatusSummary` DTO + admin-ui 原语 Props 契约做定稿评审（ADR-201 由 GPT-5 Codex 产出未过 Opus 的补救 + CLAUDE.md 强制升 Opus #1/#2）；子代理模型 ID 记入卡片。
    - 范围：新增 `MetadataStatusSummary` / `MetadataProviderStatus` / `MetadataStatusIssue` 类型；在服务/查询层集中派生，现有 `EnrichmentSummary` 过渡兼容；为视频库提供 `metadata_status_rank`、`metadata_issue_level`、provider state、`metadata_updated_at` 等排序过滤字段。
+   - **决策项**：① 服务端排序过滤实现「动态 JOIN 计算 vs 物化派生列」定夺（ADR-201 §视频库数据支撑 OPEN；选物化须同步 `docs/architecture.md`）；② `providers` 为 `Record<MetadataProvider,…>` 必须 4-key 恒在 + 定义 `METADATA_PROVIDER_ORDER` 常量固定显示顺序，不依赖 Record 迭代序。
 3. **META-33** — Phase 2：admin-ui `MetadataSourceIconCluster` + `MetadataStatusPanel` 原语（状态：⬜ 后排，依 META-32）
    - 建议模型：opus（admin-ui 公开 Props）
    - 范围：四来源图标、灰态、黄/红点、紧凑/抽屉密度、hover tooltip、a11y 文案；现有 `EnrichmentBadgeCluster` 进入兼容或退役路径。
@@ -2473,7 +2476,8 @@
    - 范围：`元数据` 列使用四来源图标；支持 overall/provider/issue/score/updatedAt 过滤；默认排序改为运营优先级，完整度数值另保留专用排序字段。
 7. **META-37** — Phase 4：API 凭证 TMDB 语义修订（状态：⬜ 后排，依 META-31；需协调 META-29）
    - 建议模型：opus（凭证公开类型 + 旧 KV 清理边界）
-   - 范围：`tmdb.read_access_token` 与 `tmdb.api_key` 字段分离；Bearer 为首选；连接测试与 UI 文案同步；修正旧 `tmdb.token -> tmdb_api_key` 语义错配。
+   - 范围：`tmdb.read_access_token` 与 `tmdb.api_key` 字段分离；Bearer 为首选；连接测试与 UI 文案同步；修正旧 `tmdb.token -> tmdb_api_key` 语义错配；新增 `loadTmdbClientConfig`（对齐 `loadBangumiClientConfig`）。
+   - **存量迁移**：`api_credentials.secrets.token` → `read_access_token`（默认）；legacy `system_settings.tmdb_api_key` → `api_key`（不再回填 Bearer）；迁移幂等可回滚、过渡期新旧并存读取 / 写入只走新字段（详见 ADR-201 §凭证语义「存量迁移」）。
 8. **META-38** — Phase 5A：TMDB API client + search/detail MVP（状态：⬜ 后排，依 META-37）
    - 建议模型：sonnet
    - 范围：官方 API search/movie/tv + detail + external_ids + images + append_to_response；限速/429 尊重；不接播放源。
