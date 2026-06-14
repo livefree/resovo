@@ -70,7 +70,7 @@ function buildMeta(result: AdminSearchResult): string | undefined {
   }
 }
 
-function mapItem(result: AdminSearchResult): CommandItem {
+function mapItem(result: AdminSearchResult, rank: number, globalRank: number): CommandItem {
   return {
     // namespace 防与本地 nav href（id=href）撞键（CommandItem.id 全局唯一约束，ADR-200 D-200-1）
     id: `search:${result.kind}:${result.id}`,
@@ -78,17 +78,21 @@ function mapItem(result: AdminSearchResult): CommandItem {
     meta: buildMeta(result),
     kind: 'navigate',
     href: result.href,
+    // D-200-10.4：映射期预存点击埋点 rank（组内 1-based / globalRank prefiltered 扁平 1-based）。
+    // 在此预存而非消费方点击时现算——避免点击瞬间 prefilteredGroups 已被新 in-flight 结果回填的竞态。
+    telemetry: { kind: result.kind, rank, globalRank },
   }
 }
 
 /** DTO → CommandGroup（服务端已分组/排序，前端仅展示映射；空组保留以承载 degraded 提示文案） */
 export function mapAdminSearchToCommandGroups(data: AdminSearchResponseData): CommandGroup[] {
+  let globalRank = 0 // prefiltered 扁平计数（仅命中项、跨组累加；degraded 空组不计）
   return data.groups
     .filter((group) => group.items.length > 0 || group.degraded === true)
     .map((group) => ({
       id: `search:${group.kind}`,
       label: group.degraded ? `${KIND_GROUP_LABEL[group.kind]}（部分不可用）` : KIND_GROUP_LABEL[group.kind],
-      items: group.items.map(mapItem),
+      items: group.items.map((item, idx) => mapItem(item, idx + 1, (globalRank += 1))),
     }))
 }
 
@@ -98,11 +102,15 @@ export interface AdminGlobalSearch {
   readonly loading: boolean
   /** 传 CommandPalette.onCommandQueryChange（已 memoize） */
   readonly onQueryChange: (q: string) => void
+  /** 当前结果对应的查询词（trim 后）；点击埋点 POST 明文 query 来源（D-200-10.4）。空查询时 '' */
+  readonly query: string
 }
 
 export function useAdminGlobalSearch(): AdminGlobalSearch {
   const [prefilteredGroups, setPrefilteredGroups] = useState<readonly CommandGroup[] | undefined>(undefined)
   const [loading, setLoading] = useState(false)
+  // 当前结果对应的查询词（与 prefilteredGroups 同步）；点击埋点 POST 明文 query 来源（D-200-10.4）
+  const [query, setQuery] = useState('')
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const abortRef = useRef<AbortController | null>(null)
   // 单调请求 token（latest-wins）：每次输入变更即自增 → 旧在途请求 resolve 时若 token 已被更新输入推进则丢弃。
@@ -121,6 +129,7 @@ export function useAdminGlobalSearch(): AdminGlobalSearch {
       abortRef.current?.abort()
       abortRef.current = null
       setPrefilteredGroups(undefined)
+      setQuery('')
       setLoading(false)
       return
     }
@@ -139,6 +148,7 @@ export function useAdminGlobalSearch(): AdminGlobalSearch {
           // latest-wins：更新的输入已发生（token 推进）→ 丢弃此 stale 结果（不依赖 abort 时序）
           if (myId !== requestIdRef.current) return
           setPrefilteredGroups(mapAdminSearchToCommandGroups(res.data))
+          setQuery(q) // 与结果同步提交（点击埋点明文 query 来源）
           setLoading(false)
         } catch {
           if (myId !== requestIdRef.current) return // 被更晚输入取代（含 AbortError），不更新
@@ -150,5 +160,5 @@ export function useAdminGlobalSearch(): AdminGlobalSearch {
     }, DEBOUNCE_MS)
   }, [])
 
-  return { prefilteredGroups, loading, onQueryChange }
+  return { prefilteredGroups, loading, onQueryChange, query }
 }

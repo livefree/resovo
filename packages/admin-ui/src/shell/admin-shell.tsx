@@ -105,6 +105,12 @@ export interface AdminShellProps {
   readonly commandPrefilteredGroups?: readonly CommandGroup[]
   readonly commandLoading?: boolean
   readonly commandEmptyState?: ReactNode
+  /**
+   * CmdK 命令执行回调（ADR-200 D-200-10 / SEARCH-03-PRE-IMPL）：在现有导航行为**之后**额外触发，
+   * 消费方据 `item.telemetry` 发 admin_search_click 埋点（fire-and-forget）。
+   * **语义差异**：undefined 时命令仍可执行、仅不埋点（区别于其它 `undefined→UI 隐藏` 回调）；向后兼容。
+   */
+  readonly onCommandAction?: (item: CommandItem) => void
   /** 路由跳转回调（注入 Next.js router.push 等）*/
   readonly onNavigate: (href: string) => void
   /** 主题切换回调 */
@@ -162,7 +168,7 @@ export function AdminShell(props: AdminShellProps) {
   const {
     activeHref, nav, crumbs, topbarIcons, health, countProvider, user, theme,
     collapsed: controlledCollapsed, defaultCollapsed, notifications, notificationUnreadCount, tasks, commandGroups,
-    onCommandQueryChange, commandPrefilteredGroups, commandLoading, commandEmptyState,
+    onCommandQueryChange, commandPrefilteredGroups, commandLoading, commandEmptyState, onCommandAction,
     onNavigate, onThemeToggle, onUserMenuAction, onCollapsedChange,
     onNotificationItemClick, onMarkAllNotificationsRead, onDismissNotification, onClearAllNotifications,
     onCancelTask, onRetryTask, onDismissTask, onClearAllTasks,
@@ -255,8 +261,10 @@ export function AdminShell(props: AdminShellProps) {
   const handleOpenSettings = useCallback(() => onNavigate('/admin/system/settings'), [onNavigate])
 
   const handleCommandAction = useCallback((item: CommandItem) => {
+    // 先导航（用户主诉求、不被埋点阻塞），再回传埋点（D-200-10.4：undefined 时 no-op、零行为变化）
     if (item.kind === 'navigate' && item.href) onNavigate(item.href)
-  }, [onNavigate])
+    onCommandAction?.(item)
+  }, [onNavigate, onCommandAction])
 
   // ── 键盘快捷键 ─────────────────────────────────────────
   const shortcutBindings = useMemo<readonly ShortcutBinding[]>(() => {

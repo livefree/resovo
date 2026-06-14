@@ -223,6 +223,46 @@ describe('AdminShell — onNavigate 回调', () => {
   })
 })
 
+describe('AdminShell — onCommandAction 回调（ADR-200 D-200-10.4）', () => {
+  // 带 telemetry 的远程搜索结果组（消费方注入）
+  const SEARCH_GROUPS = [{
+    id: 'search:video',
+    label: '视频',
+    items: [{
+      id: 'search:video:v1', label: '钢铁侠', kind: 'navigate' as const, href: '/admin/videos?v.f.q=钢铁侠',
+      telemetry: { kind: 'video' as const, rank: 1, globalRank: 1 },
+    }],
+  }]
+
+  function openAndClickItem() {
+    const searchBtn = document.querySelector('[data-topbar-search]')
+    act(() => { fireEvent.click(searchBtn!) })
+    const item = document.body.querySelector('[data-command-palette-item="search:video:v1"]')
+    act(() => { fireEvent.click(item!) })
+  }
+
+  it('点击搜索结果 → 先 onNavigate(href) 再 onCommandAction(item) 双触发', () => {
+    const onNavigate = vi.fn()
+    const onCommandAction = vi.fn()
+    renderShell({ commandGroups: SEARCH_GROUPS, onNavigate, onCommandAction })
+    openAndClickItem()
+    expect(onNavigate).toHaveBeenCalledWith('/admin/videos?v.f.q=钢铁侠')
+    expect(onCommandAction).toHaveBeenCalledWith(expect.objectContaining({
+      id: 'search:video:v1',
+      telemetry: { kind: 'video', rank: 1, globalRank: 1 },
+    }))
+  })
+
+  it('onCommandAction undefined（向后兼容）→ 点击仍触发 onNavigate、不抛', () => {
+    const onNavigate = vi.fn()
+    expect(() => {
+      renderShell({ commandGroups: SEARCH_GROUPS, onNavigate }) // 不传 onCommandAction
+      openAndClickItem()
+    }).not.toThrow()
+    expect(onNavigate).toHaveBeenCalledWith('/admin/videos?v.f.q=钢铁侠')
+  })
+})
+
 describe('AdminShell — countProvider 求值', () => {
   it('countProvider 返回 Map → Sidebar 显示运行时计数（覆盖静态值）', () => {
     const countProvider = vi.fn(() => new Map([

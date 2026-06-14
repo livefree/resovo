@@ -21,7 +21,7 @@
  * 使用；apps/web-next / apps/api 不消费（admin 专属）。
  */
 import type { ReactNode } from 'react'
-import type { TaskResultDigest } from '@resovo/types'
+import type { TaskResultDigest, AdminSearchKind } from '@resovo/types'
 
 // ADR-193 D-193-1：TaskResultDigest（+ 子接口 TaskMetric）单点定义于 packages/types
 // （API SSOT 侧），admin-ui 正向 import 复用同一类型定义、不复制类型体；
@@ -167,6 +167,15 @@ export interface CommandItem {
   /** kind='navigate' 时必填（运行时由消费方负责校验，搜索结果项可能 href 异步注入故未用 discriminated union；
    *  若 M-SN-3+ 需要强约束，可升级为 discriminated union 不破坏 SSOT 兼容性） */
   readonly href?: string
+  /** 搜索结果点击埋点载荷（ADR-200 D-200-10）。**仅远程搜索结果项携带**——本地 nav/快捷命令为 undefined（不埋点）。
+   *  rank/globalRank 由消费方 `mapAdminSearchToCommandGroups` 映射期预存（组内 1-based / prefiltered 扁平 1-based）；
+   *  AdminShell 经 `onCommandAction(item)` 原样回传，消费方据此发 admin_search_click。
+   *  与 `id` 解耦（不靠 `search:kind:id` 前缀字符串反解）→ 保护 id 语义纯净（D-200-1）。 */
+  readonly telemetry?: {
+    readonly kind: AdminSearchKind
+    readonly rank: number
+    readonly globalRank: number
+  }
 }
 
 /** CommandPalette 命令分组（ADR-103a §4.1.6）

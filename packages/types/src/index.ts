@@ -43,6 +43,8 @@ export { PROVIDER_CREDENTIAL_SPECS, getProviderCredentialSpec } from './integrat
 export type * from './admin-moderation.types'
 // SEARCH-01 / ADR-200：后台全局搜索统一结果 DTO（GET /admin/search）
 export type * from './admin-search.types'
+// SEARCH-03-PRE-IMPL / D-200-10：kind 枚举 const（value 导出，`export type *` 不带 const）
+export { ADMIN_SEARCH_KINDS } from './admin-search.types'
 // CHG-360-A / ADR-159：runtime helper（非 type-only）
 export { deriveAggregateState } from './admin-moderation.types'
 // MODUX-P3-1-A：富集状态枚举 const（value 导出，`export type *` 不带 const）

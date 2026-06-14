@@ -17,8 +17,10 @@ import type { UserRole } from './user.types'
 import type { UserSubmissionStatus } from './admin-moderation.types'
 import type { AdminTaskItem } from './admin-shell.types'
 
-/** 顶栏全局搜索覆盖实体（P1: video/source/user/task；P1.5: submission） */
-export type AdminSearchKind = 'video' | 'source' | 'user' | 'task' | 'submission'
+/** 顶栏全局搜索覆盖实体（P1: video/source/user/task；P1.5: submission）。
+ *  SSOT const（D-200-10：telemetry 端点 `z.enum` + CommandItem.telemetry 复用，不内联字面量）。 */
+export const ADMIN_SEARCH_KINDS = ['video', 'source', 'user', 'task', 'submission'] as const
+export type AdminSearchKind = (typeof ADMIN_SEARCH_KINDS)[number]
 
 /** 命中原因（闭合 union；服务端排序/置顶依据） */
 export type AdminSearchReason =

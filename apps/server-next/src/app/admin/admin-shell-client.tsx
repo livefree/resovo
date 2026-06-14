@@ -17,7 +17,7 @@ import { useCallback, useContext, useMemo, useState } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import type { ReactNode } from 'react'
 import { AdminShell, inferBreadcrumbs, useToast } from '@resovo/admin-ui'
-import type { AdminNavSection, AdminShellUser, NotificationItem, UserMenuAction } from '@resovo/admin-ui'
+import type { AdminNavSection, AdminShellUser, CommandItem, NotificationItem, UserMenuAction } from '@resovo/admin-ui'
 // CHG-SN-8-FUP-SHELL-NOTIFICATIONS-EP-B / ADR-147：admin shell 通知 + 任务真端点
 // ADR-155 D-155-2 / EP-2：useAdminNotifications + useAdminTasks 内部已合并 background events
 // （并发 GET /admin/notifications + /admin/system/background-events），不再需要独立 BackgroundEventBell
@@ -97,6 +97,24 @@ export function AdminShellClient({ defaultCollapsed, initialTheme, initialRole, 
   const handleNavigate = useCallback((href: string) => {
     router.push(href)
   }, [router])
+
+  // ADR-200 D-200-10.4：搜索结果点击埋点。仅远程结果项（item.telemetry 存在）上报；本地 nav/快捷命令不埋点。
+  // **同步** fire-and-forget POST（不 await、不放 effect）——handleCommandAction 在 onNavigate(router.push) 之后触发、
+  // 路由切换会很快卸载 CommandPalette，异步/effect 发起会丢请求。埋点失败静默吞（搜索点击体验优先）。
+  const handleCommandAction = useCallback((item: CommandItem) => {
+    const t = item.telemetry
+    if (!t) return
+    void apiClient
+      .post('/admin/search/telemetry', {
+        query: globalSearch.query,
+        clickedKind: t.kind,
+        clickedRank: t.rank,
+        clickedGlobalRank: t.globalRank,
+      })
+      .catch(() => {
+        /* 埋点失败不影响导航，静默吞 */
+      })
+  }, [globalSearch.query])
 
   const handleThemeToggle = useCallback(() => {
     themeContext?.setTheme(theme === 'dark' ? 'light' : 'dark')
@@ -223,6 +241,7 @@ export function AdminShellClient({ defaultCollapsed, initialTheme, initialRole, 
       onCommandQueryChange={globalSearch.onQueryChange}
       commandPrefilteredGroups={globalSearch.prefilteredGroups}
       commandLoading={globalSearch.loading}
+      onCommandAction={handleCommandAction}
       onNavigate={handleNavigate}
       onThemeToggle={handleThemeToggle}
       onUserMenuAction={handleUserMenuAction}

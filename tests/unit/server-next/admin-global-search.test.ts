@@ -59,6 +59,13 @@ describe('mapAdminSearchToCommandGroups', () => {
     expect(groups[1]!.items[0]!.meta).toBe('t@x.io · 管理员')
   })
 
+  it('映射期预存 telemetry：组内 rank 1-based + globalRank 跨组累加（D-200-10.4）', () => {
+    const groups = mapAdminSearchToCommandGroups(RESP)
+    // video 组第 1 项：rank=1 globalRank=1；user 组第 1 项：rank=1 globalRank=2（跨组扁平累加）
+    expect(groups[0]!.items[0]!.telemetry).toEqual({ kind: 'video', rank: 1, globalRank: 1 })
+    expect(groups[1]!.items[0]!.telemetry).toEqual({ kind: 'user', rank: 1, globalRank: 2 })
+  })
+
   it('degraded 组 label 带"（部分不可用）"后缀', () => {
     const groups = mapAdminSearchToCommandGroups({
       query: 'x',

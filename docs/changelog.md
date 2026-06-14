@@ -5480,3 +5480,36 @@
 - **质量门禁**：verify:adr-contracts EXIT=0（verify-endpoint-adr 239 路由对齐、端点契约 row 2 限流/SSOT enum 已补）；docs-only test:changed 自动跳过。
 - **流程说明**：原 arch-reviewer（agentId ad4632c17c1773830）经 SendMessage 续接在本环境不可用 → 新 spawn 同 arch-reviewer 预设、自带完整上下文（已落地 5 子决策 + 3 findings + 我的修订裁定）复核。
 - **[AI-CHECK]**：六问过——①无回归（docs-only，verify EXIT=0）；②修订消除 P1 失真根因、复用既有 pass-through 范式 + client-log 限流范式、零另立模式；③扩展性（onCommandAction 传完整 item + telemetry 结构化字段为未来埋点维度留口）；④PII 守门扩到请求体路径、无 any·空 catch·硬编码色（docs）；⑤改动收敛于 D-200-10.4 重写 + 2 偏离 + 端点表 1 行 + 实施卡范围；⑥强制 Opus 子代理（修订 ADR + 定义共享组件 API 契约 onCommandAction/CommandItem.telemetry）已 spawn arch-reviewer PASS-with-changes、(a)(b)(c)+二阶全采纳，实施卡门禁正确升 Opus + trailer。
+
+## [SEARCH-03-PRE-IMPL] Phase 1 搜索可观测埋点实施 — ADR-200 D-200-10 落地
+- **完成时间**：2026-06-13
+- **记录时间**：2026-06-13 23:20
+- **执行模型**：claude-opus-4-8（主循环；改 admin-ui 公开 Props）
+- **子代理**：arch-reviewer (claude-opus-4-8, agentId a2e9de39d3e541d46) — 契约由 SEARCH-03-PRE-FIX 阶段 PASS-with-changes 定稿；实施未偏离设计故未再 spawn（admin-ui 公开 Props 改动 → commit 带 Subagents trailer）
+- **背景**：SEARCH-03（Phase 2 统一 admin_search ES 索引）后排「依 Phase 1 埋点数据」。落地 D-200-10 telemetry 采集，上线收数据后解锁 Phase 2「统一 vs 多索引 + 是否扩 ES」决策。
+- **修改文件**：
+  - `apps/api/src/lib/searchTelemetry.ts`（新）— `hashQuery(raw): string|null`（加盐 sha256 截断 16hex、每次读 `SEARCH_TELEMETRY_SALT` env、盐缺失 fail-closed 返 null）+ `checkTelemetryLimit(userId)`（进程内桶 60s/60，client-log 同款范式）。
+  - `apps/api/src/routes/admin/search.ts` — GET 加 `admin_search_query` emit（route 层 request.log + performance.now latency + group_counts/degraded_kinds/result_total、422 不 emit、盐缺失 warn 仅一次）+ 新 `POST /admin/search/telemetry`（zod body：query≤200/clickedKind=`z.enum(ADMIN_SEARCH_KINDS)`/rank≥1 → hashQuery → emit `admin_search_click`、204、限流 429 不 emit、role 取 request.user 不信 body）。
+  - `packages/types/src/admin-search.types.ts` + `index.ts` — `ADMIN_SEARCH_KINDS` const SSOT（派生 AdminSearchKind 类型不变）+ barrel 值导出（供 zod enum + CommandItem.telemetry）。
+  - `packages/admin-ui/src/shell/types.ts`〔**公开 Props**〕— `CommandItem.telemetry?: {kind: AdminSearchKind; rank; globalRank}`。
+  - `packages/admin-ui/src/shell/admin-shell.tsx`〔**公开 Props**〕— `AdminShellProps.onCommandAction?: (item)=>void` + handleCommandAction 先 onNavigate 再 `onCommandAction?.(item)`（undefined 零行为变化）。
+  - `apps/server-next/src/lib/admin-global-search.ts` — mapAdminSearchToCommandGroups 映射期预存 telemetry（rank 组内 1-based / globalRank 跨组累加）+ hook 暴露 `query`（点击埋点明文来源）。
+  - `apps/server-next/src/app/admin/admin-shell-client.tsx` — 注入 onCommandAction：item.telemetry 存在 → **同步** fire-and-forget `apiClient.post('/admin/search/telemetry')`（不 await/不放 effect 防 router.push 卸载丢请求、catch 静默）。
+  - `.env.example` — 加 `SEARCH_TELEMETRY_SALT`（说明 fail-closed 降级 + 生产须注入）。
+- **PII 守门关键发现**：telemetry route 测试初版用裸 pino logger，暴露 GET `?q=明文` 进 Fastify access log（`incoming request` 的 `req.url`）。改用**真实** `createFastifyLoggerOptions`（含 `serializeReq` 截断 url.query，logging-rules §3.2/§4.1）忠实复现 prod PII 姿态 → 验证明文搜索词永不落任何日志行（佐证 arch-reviewer 二阶问题 #6）。
+- **新增依赖**：无。**新 env**：`SEARCH_TELEMETRY_SALT`。
+- **数据库变更**：无（纯日志/端点）。`docs/architecture.md` 不同步（无 schema）。
+- **测试覆盖**：+20 单测——`searchTelemetry.test.ts`（hashQuery 加盐/盐缺失/归一一致/不含明文 5 + checkTelemetryLimit 桶逻辑 3）/ `adminSearchTelemetryRoute.test.ts`（GET emit 字段 + PII 守门 2 + POST 204/422×2/role 不信 body/429/403 6）/ admin-global-search telemetry 预存 1 / admin-shell onCommandAction 双触发 + undefined 回归 2。
+- **质量门禁**：typecheck/lint EXIT=0 / test:changed 升全量 7416 passed（4 个 Unhandled Error = `use-filter-presets.test.ts` 并行 teardown 计时 flake，隔离 9/9 通过、零引用本卡符号、与改动无关，同既有 jsdom flaky 模式）/ verify:adr-contracts EXIT=0（verify-endpoint-adr **240 admin 路由全对齐**，含新 `POST /admin/search/telemetry`）/ e2e global-search 2/2（点击多发 telemetry POST fire-and-forget 不破导航）。
+- **日志格式样例（logging-rules §6 守门 D；真实捕获、ISO timestamp / hash 真值）**：
+  ```
+  // warn（盐缺失 fail-closed，D-200-10-A；仅发一次，无 query_hash）
+  {"level":40,"time":"2026-06-14T06:03:18.263Z","service":"api","request_id":"req-1","metric":"admin_search_query","salt_missing":true,"msg":"SEARCH_TELEMETRY_SALT 未配置，query_hash 降级为仅 query_len（D-200-10-A fail-closed）"}
+  // info（admin_search_query；盐缺失态下无 query_hash、仅 query_len）
+  {"level":30,"time":"2026-06-14T06:03:18.263Z","service":"api","request_id":"req-1","metric":"admin_search_query","value":2,"query_len":7,"role":"admin","result_total":2,"group_counts":{"video":2,"user":0},"degraded_kinds":["user"],"latency_ms":0,"msg":"admin search query"}
+  // info（admin_search_click；带盐 → query_hash 16hex、明文 query 不在其中）
+  {"level":30,"time":"2026-06-14T06:03:18.268Z","service":"api","request_id":"req-2","metric":"admin_search_click","query_hash":"17313e5d5e94d77b","clicked_kind":"video","clicked_rank":1,"clicked_global_rank":1,"role":"admin","msg":"admin search click"}
+  ```
+  error 级**无样例**：本埋点 emit 路径结构上不产 error（D-200-10-C：同步日志写入无 error 分支 / allSettled 降级进 degraded_kinds / route 级异常走全局 errorHandler 属基础设施流非 metric 域）；error 级豁免不强造（§6.1 禁编造）。
+- **后续**：Phase 1 telemetry 端到端打通 → **上线收集足够数据后**解锁 SEARCH-03（Phase 2）+ SEARCH-04（Phase 3）。
+- **[AI-CHECK]**：六问过——①无回归（7416 全过 + e2e 2/2 + onCommandAction undefined 向后兼容回归绿）；②复用 ADR-107 §6 metric 范式 + client-log 限流范式 + 既有 SSOT enum 范式、telemetry 结构化字段沉淀；③扩展性（ADMIN_SEARCH_KINDS const + telemetry 字段为未来维度留口）；④**PII 红线**（加盐 hash + fail-closed + serializeReq 截断 url.query 双覆盖明文不落日志）/ 无 any（zod 推导）/ 无空 catch（fire-and-forget catch 带注释）/ 无硬编码色；⑤改动收敛于设计定稿文件清单、零额外发挥；⑥改 admin-ui 公开 Props（onCommandAction + CommandItem.telemetry）契约已 arch-reviewer 定稿、实施未偏离、commit 带 Subagents trailer 满足门禁；新端点入 ADR-200 表 verify:endpoint-adr 对齐。
