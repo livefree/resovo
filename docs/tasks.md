@@ -6,6 +6,19 @@
 
 ## 当前任务（单任务工作台：同时仅 1 个 🔄 进行中；完成即删卡，历史见 docs/changelog.md）
 
+### 🔄 META-32 — Phase 1：统一元数据状态 DTO + 派生服务/查询（SEQ-20260614-01）
+
+- **状态**：🔄 进行中（2026-06-14）— 当前阶段：**META-32-B 实施**（META-32-A ✅ 已收口；前置 gate ✅ CONDITIONAL-PASS）
+- **序列**：SEQ-20260614-01 / Phase 1（依 META-31）
+- **建议模型**：opus（`@resovo/types` 公开类型 + 跨 3+ 消费方契约 + 服务端派生）／执行模型：claude-opus-4-8
+- **文件范围**（待评审确认，可能拆 -A/-B）：`packages/types/src/metadata-status.types.ts`（新）+ `packages/types/src/index.ts`；`apps/api/src/db/queries/videos.internal.ts`（派生）、`videos.ts` / `VideoService`、`apps/api/src/routes/admin/videos.ts`（视频库排序过滤字段）。现状对照：`EnrichmentSummary`（`video.types.ts:128-156`）、`buildEnrichmentSummary`、`video_external_refs`/`media_catalog`/`meta_quality`。
+- **问题理解**：ADR-201 定义了 `MetadataStatusSummary` 统一状态契约，但尚无代码实现；需在 `@resovo/types` 落公开类型 + 服务端集中派生 + 视频库排序过滤字段，`EnrichmentSummary` 过渡兼容。
+- **前置 gate（✅ 完成）**：arch-reviewer **CONDITIONAL-PASS**——C1 五枚举 const+type；C2 无源字段占位 + JSDoc；C3 真源优先级 `catalog_external_refs`>`video_external_refs`>`media_catalog` cache；C4 动态 JOIN 不物化；C5 拆 -A/-B。新发现 D-201-E 已登记 ADR-201。
+- **决策裁定**：① 动态 JOIN + SQL CASE alias（不物化）；② `Record` 四 key 恒在 + `METADATA_PROVIDER_ORDER` const+type。
+- **META-32-A ✅ 已收口**（commit）：类型 + `buildMetadataStatusSummary` 派生 + `getMetadataProviderRefs` 批量 refs + Service 注入并返 + server-next 镜像 + 17 单测；门禁全绿（typecheck/lint/test:changed 全量 7432 passed/verify:adr-contracts）。详见 changelog [META-32-A]。
+- **当前实施**：META-32-B（视频库 `元数据` 列动态 SQL 排序过滤接入；建议 sonnet）。
+- **子代理调用**：arch-reviewer (claude-opus-4-8, agentId a9a76572f8b5f83ae) — 契约定稿评审 CONDITIONAL-PASS。
+
 _（**META-31-FIX ✅ 收口 2026-06-14**（独立审核 META-31 落库的 ADR-201 commit `5f73dd30`）——审核结论：方案整体可批准、质量高，但发现 1 处事实错误 + 3 处 ADR 关系/迁移缺口 + 2 个未标注实施 open question，按修订 1–7 docs-only 落库（不改动 5f73dd30）。① 订正 ADR-201 §视频编辑抽屉目标 tab（删凭空多出的「审核」「历史」，对齐现状 `VideoEditDrawer.tsx` 仅 basic/lines/images/metadata，external→元数据 + 删 douban）；② ADR-201 新增「取代/修订关系」小节——取代 ADR-172 AMD3 `ExternalMetaPanel` 展示职责、修订 AMD2 `SourceLogoBadge` 状态承载（给出 SourceMatchState→MetadataProviderState 映射 + 新增 problem 红点），并在 ADR-172 AMD2/AMD3 + ADR-173 各挂修订指针；③ ADR-201 §凭证语义声明对 ADR-173 D-173-2 注册表 SSOT 的 amend + 补 TMDB 存量迁移路径（secrets.token→read_access_token / 旧 KV tmdb_api_key→api_key）；④ ADR-201 §视频库数据支撑补服务端排序「动态计算 vs 物化列」OPEN（交 META-32）；⑤ ADR-201 §派生规则补 providers Record 4-key 恒在 + METADATA_PROVIDER_ORDER 顺序常量。task-queue：META-32 加 arch-reviewer(Opus) 契约评审前置 gate + 两决策项、META-37 补存量迁移项。门禁 `verify:adr-contracts` EXIT=0（endpoint-adr 240 路由对齐，仅既有 advisory）。执行模型 claude-opus-4-8；子代理无。详见 changelog [META-31-FIX]。**工作台空闲**。）_
 
 _（**META-31 ✅ 收口 2026-06-14**（用户要求“将详细方案落库，包括完整 UI/UX，避免开发临时决策”）——新增 ADR-201「元数据状态综合治理 + TMDB 接入前置 UI/UX 契约」：统一“元数据状态”术语与 `MetadataStatusSummary` DTO；四来源图标 Douban/Bangumi/TMDB/IMDb 定义已应用/未获取/候选/异常；审核详情合并单一 `元数据状态` section；视频编辑删除顶级 `豆瓣·元数据` tab、改统一 `元数据` tab；视频库元数据列服务端排序过滤字段定稿；TMDB 凭证明确 `read_access_token` vs `api_key` 且首选 Bearer；TMDB 只作为元数据 provider，不作为播放源。`docs/task-queue.md` 登记 META-32..39 后续拆卡。门禁 `npm run verify:adr-contracts` EXIT=0（仅既有 advisory warning）。详见 changelog [META-31]。**工作台空闲**。）_

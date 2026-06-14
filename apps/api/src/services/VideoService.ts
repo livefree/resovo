@@ -13,6 +13,10 @@ import * as externalDataQueries from '@/api/db/queries/externalData'
 import type { VideoExternalRef } from '@/api/db/queries/externalData'
 // ADR-161 AMENDMENT / META-19：admin 详情注入 bangumi 角色 + CV
 import * as catalogCharacterQueries from '@/api/db/queries/catalogCharacters'
+// ADR-201 / META-32-A：统一 metadataStatus 派生（列表/详情注入，与 enrichmentSummary 并返）
+import {
+  getMetadataProviderRefs, buildMetadataStatusSummary, toMetadataStatusSourceRow,
+} from '@/api/db/queries/metadata-status.derive'
 import type {
   UpdateVideoMetaInput,
   ModerationStats,
@@ -218,7 +222,15 @@ export class VideoService {
     })
 
     // ADR-170 C-3 / R-5：admin 路径注入 enrichmentSummary（raw 行，不经 public mapVideoRow）
-    const data = rows.map((r) => ({ ...r, enrichmentSummary: videoQueries.buildEnrichmentSummary(r) }))
+    // ADR-201 / META-32-A：并注入统一 metadataStatus（按页批量 refs，避免 cell N+1）
+    const refsMap = await getMetadataProviderRefs(
+      this.db, rows.map((r) => ({ id: r.id, catalogId: r.catalog_id })),
+    )
+    const data = rows.map((r) => ({
+      ...r,
+      enrichmentSummary: videoQueries.buildEnrichmentSummary(r),
+      metadataStatus: buildMetadataStatusSummary(toMetadataStatusSourceRow(r, refsMap.get(r.id) ?? [])),
+    }))
     return { data, total, page, limit }
   }
 
@@ -241,9 +253,12 @@ export class VideoService {
     const bangumiCharacters = row.type === 'anime'
       ? await catalogCharacterQueries.listCatalogCharactersForDisplay(this.db, row.catalog_id, 'bangumi')
       : []
+    // ADR-201 / META-32-A：详情注入统一 metadataStatus（单视频 refs）
+    const refsMap = await getMetadataProviderRefs(this.db, [{ id: row.id, catalogId: row.catalog_id }])
     return {
       ...row,
       enrichmentSummary: videoQueries.buildEnrichmentSummary(row),
+      metadataStatus: buildMetadataStatusSummary(toMetadataStatusSourceRow(row, refsMap.get(row.id) ?? [])),
       externalRefs,
       ...(bangumiInfo ? { bangumiInfo } : {}),
       ...(bangumiCharacters.length > 0 ? { bangumiCharacters } : {}),

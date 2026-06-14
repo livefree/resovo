@@ -22659,7 +22659,7 @@ export interface MetadataStatusSummary {
 
 - `videos.meta_quality->>'enriched_at'`、`videos.meta_score`、`videos.douban_status`、`videos.bangumi_status`。
 - `media_catalog` 的 `douban_id`、`bangumi_subject_id`、`tmdb_id`、`imdb_id` 等外部 ID cache。
-- `video_external_refs` / `catalog_external_refs` 的 provider、externalId、matchStatus、matchMethod、confidence、isPrimary。
+- `catalog_external_refs`（ADR-177 canonical 真源，**最高优先级**）/ `video_external_refs`（video 级关系）的 provider、externalId、matchStatus、matchMethod、confidence、isPrimary；`media_catalog` 四 ID 列仅作读优化 cache 兜底（ADR-177 D-177-5 降级），不得作为 `applied` 主判据（见 D-201-E）。
 - provider fetch/enrichment logs（如存在）中的最近错误、拉取时间、候选创建时间。
 - 人工编辑标记、字段 provenance、拒绝记录（如已有或后续新增）。
 
@@ -22894,3 +22894,4 @@ Douban 行为：
 - **D-201-B（Bangumi 非动画仍显示图标）**：视频库始终显示四来源图标，包括非动画的 Bangumi `not_applicable`。处置：accept；理由是列宽、扫描路径、tooltip 结构稳定优先，不适用不计入缺失惩罚。
 - **D-201-C（完整度阈值暂定 80）**：`complete` 的 score 阈值暂定 80，后续可由真实数据校准。处置：accept；阈值必须集中在派生服务，不得散落 UI。
 - **D-201-D（旧字段过渡保留）**：`douban_status`、`bangumi_status`、`meta_score` 过渡期保留。处置：accept；禁止新 UI 直接消费它们做最终状态，避免一次性迁移风险。
+- **D-201-E（派生真源优先级，META-32 评审补登记 / arch-reviewer claude-opus-4-8）**：外部身份与应用判定取数优先级固定为 `catalog_external_refs`（ADR-177 canonical）> `video_external_refs`（video 级）> `media_catalog` 四 ID 列（仅 cache 兜底，ADR-177 D-177-5 已降级）。处置：accept；`applied` 判定不得仅据 `media_catalog.*_id IS NOT NULL`，须以 refs 表 relation/match_status 为准，避免与 ADR-177 治理口径分裂。派生函数注释固化优先级 + 单测覆盖「refs 存在 / cache 空」「cache 有值 / refs rejected」冲突态。

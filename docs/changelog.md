@@ -5558,3 +5558,25 @@
 - **测试覆盖**：无代码改动；`verify:adr-contracts` EXIT=0（endpoint-adr 240 路由对齐 / sql-schema / style / shell-types-mirror 全 ✅；仅既有错误码消息 + enum-ssot advisory，与 META-31 基线一致，无新增偏离）。
 - **质量门禁**：verify:adr-contracts EXIT=0；docs-only 无 TS/运行时改动，typecheck/lint/test:changed 不涉及（自动跳过）。
 - **[AI-CHECK]**：六问过——①仅修订已 Accepted 的 ADR 与队列，零删除原文挂指针，无运行时代码变更，回归面由 ADR 契约约束；②审核结论沉淀到 ADR/队列，避免后续实施卡临时决策；③providers 4-key 恒在 + 顺序常量保障四源稳定扩展；④无 any/空 catch/硬编码色（docs）；⑤改动收敛于 docs（decisions/task-queue/tasks/changelog）；⑥未越界改代码、未改动 5f73dd30、Opus gate 补足治理合规。
+
+## [META-32-A] 统一元数据状态 DTO + 派生服务（类型 + builder + 兼容并返）
+- **完成时间**：2026-06-14
+- **记录时间**：2026-06-14
+- **执行模型**：claude-opus-4-8
+- **子代理**：arch-reviewer (claude-opus-4-8, agentId a9a76572f8b5f83ae) — META-32 前置 gate 契约定稿评审，CONDITIONAL-PASS（C1–C5）
+- **背景**：ADR-201 定义 `MetadataStatusSummary` 统一管理端契约但无代码实现。META-32 经 Opus 前置 gate 评审拆 -A/-B；本卡（-A）落类型 + 服务端集中派生 + 兼容并返，不动视频库排序过滤（归 -B）。
+- **修改文件**：
+  - `packages/types/src/metadata-status.types.ts`（新）— 5 枚举 const+type 双形态（`METADATA_PROVIDERS`/`METADATA_STATUS_OVERALLS`/`METADATA_PROVIDER_STATES`/`METADATA_ISSUE_LEVELS`/`METADATA_NEXT_ACTIONS`）+ `METADATA_PROVIDER_ORDER` 显示顺序常量 + DTO（`MetadataStatusSummary`/`MetadataProviderStatus`/`MetadataStatusIssue`）；无源字段（`fetchedAt`/`reasonCodes`/tmdb·imdb 的 `confidence`/`matchMethod`/`appliedAt`）逐字段 JSDoc 标注 Phase 1 占位（评审 C2）；`tooltipLines` 标注 i18n 不下沉、UI 拼装（评审 T1 风险 3）。
+  - `packages/types/src/index.ts` — barrel type + const 双形态导出。
+  - `apps/api/src/db/queries/metadata-status.derive.ts`（新）— 纯 `buildMetadataStatusSummary`（overall 优先级 1–6 + 阈值 80 `METADATA_COMPLETE_SCORE_THRESHOLD` + provider state 派生 + issues/nextAction/primaryProvider/sort）；`getMetadataProviderRefs` 按页批量 refs 查询（两条批量 SQL + JS 组装，避免 cell N+1）；真源优先级 `catalog_external_refs`(canonical) > `video_external_refs` > `media_catalog` cache（ADR-201 D-201-E）；`toMetadataStatusSourceRow` 投影。
+  - `apps/api/src/services/VideoService.ts` — `adminList`（按页批量 refs）/`adminFindById`（单视频 refs）注入 `metadataStatus`，与 `enrichmentSummary` 并返（D-201-D 兼容期）。
+  - `apps/server-next/src/lib/videos/types.ts` — `VideoAdminRow` 镜像 `metadataStatus?` + re-export `MetadataStatusSummary`。
+  - `tests/unit/api/metadata-status-derive.test.ts`（新）— 17 单测。
+  - `docs/decisions.md`（ADR-201 §派生规则真源优先级 + §偏离登记 D-201-E）/ `docs/task-queue.md`（META-32 拆 -A/-B + 评审结论 + 决策裁定）/ `docs/tasks.md` / `docs/audit/adr-d-status.json`（D-201-E 自动登记）。
+- **决策裁定（前置 gate）**：① 服务端排序过滤 = 动态 JOIN + SQL CASE alias（不物化，复用 `render_check_status`/`source_health` 先例，零 schema/零 architecture.md 同步；归 META-32-B）；② `providers` Record 四 key 恒在 + `METADATA_PROVIDER_ORDER` const+type（与 `EXTERNAL_REF_PROVIDERS` 异名 + JSDoc 警示 + 集合相等单测防误用）。
+- **新增依赖**：无。
+- **数据库变更**：无（动态派生，零 migration；media_catalog 四列继续 cache）。
+- **测试覆盖**：17 新单测（providers 四 key 恒在 / overall 优先级 1–6 / 阈值 80 边界 / not_applicable·missing / tmdb·imdb cache-only + 占位恒 null·空 / 真源优先级 catalog>video>cache 冲突态 / primaryProvider / `getMetadataProviderRefs` 批量组装含 NUMERIC 转 number / 空输入不查库）。
+- **质量门禁**：typecheck 全工作区 EXIT=0 / lint EXIT=0 / test:changed 升全量（packages/types 基础包触发）7432 passed（唯一失败 `UserSubmissionsClient.test.tsx` 隔离 12/12 通过 = 既有全量并行 flake，与本卡无关）/ verify:adr-contracts EXIT=0。
+- **后续**：META-32-B 视频库 `元数据` 列动态 SQL 排序过滤接入（依本卡类型 + 派生 SQL 口径）。
+- **[AI-CHECK]**：六问过——①派生纯函数 + 批量查询避免 N+1，`enrichmentSummary` 并返不破旧消费方，回归面由 17 单测 + 全量守护；②状态派生集中服务端（D-201-2），UI 不现算，避免三处重复；③五枚举 const+type + providers 四 key 恒在 + 顺序常量保障四源/TMDB 增量扩展；④无 any（refs 行显式类型 + NUMERIC toNum）/无空 catch/无硬编码色（types·api 层不涉色，色 token 归 META-33）；⑤改动收敛于类型 + 派生 + Service 注入 + 镜像 + 单测，未碰视频库排序过滤（-B）/UI（META-33+）；⑥真源优先级守 ADR-177 canonical（D-201-E），不仅据 cache 判 applied，tmdb·imdb 占位不伪造数据。

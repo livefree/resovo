@@ -76,6 +76,13 @@ export {
   AUDIO_LANGUAGE_SOURCES, SUBTITLE_LANGUAGE_SOURCES,
 } from './video.types'
 
+// ── ADR-201 / META-32-A 统一元数据状态契约（类型 + 枚举双形态）─────
+export type * from './metadata-status.types'
+export {
+  METADATA_PROVIDERS, METADATA_PROVIDER_ORDER, METADATA_STATUS_OVERALLS,
+  METADATA_PROVIDER_STATES, METADATA_ISSUE_LEVELS, METADATA_NEXT_ACTIONS,
+} from './metadata-status.types'
+
 // ── ADR-157 D-157-1 类型守卫工具 ────────────────────────────────
 export * from './utils/exhaustive'
 

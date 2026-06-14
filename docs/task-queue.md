@@ -2457,11 +2457,18 @@
    - 完成备注：执行模型 GPT-5 Codex。docs-only 落地 ADR-201：统一“元数据状态”术语与 `MetadataStatusSummary` DTO；定义 `overall/provider/issue/nextAction/sort` 状态模型；四来源图标固定 Douban/Bangumi/TMDB/IMDb（已应用=正常、未获取/不适用=灰、候选=黄点、异常=红点）；审核详情合并为单一 `元数据状态` section；视频编辑删除顶级 `豆瓣·元数据` tab、改统一 `元数据` tab；视频库元数据列服务端排序过滤字段定稿；TMDB 凭证区分 `read_access_token` vs `api_key` 且首选 Bearer；TMDB 只作为元数据 provider，不作为播放源。门禁 `npm run verify:adr-contracts` EXIT=0（仅既有 advisory warning）。详见 changelog [META-31]。
    - 解锁：META-32。
    - **META-31-FIX**（审核修订 · ✅ 已完成 2026-06-14）：独立审核 ADR-201 发现 1 事实错误 + 3 关系/迁移缺口 + 2 实施 open-q，按修订 1–7 落库——订正视频编辑 tab；ADR-172 AMD2/AMD3 + ADR-173 挂修订指针；ADR-201 补取代关系/TMDB 迁移路径/服务端排序 open-q/providers 4-key 常量；META-32 加 Opus 评审 gate + 两决策项、META-37 补迁移项。docs-only，不改动 commit 5f73dd30。执行模型 claude-opus-4-8。
-2. **META-32** — Phase 1：统一元数据状态 DTO + 派生服务/查询（状态：⬜ 后排，依 META-31）
-   - 建议模型：opus（`@resovo/types` 公开类型 + 多消费方契约）
-   - **前置 gate**：启动前先经 `arch-reviewer`(Opus) 对 ADR-201 `MetadataStatusSummary` DTO + admin-ui 原语 Props 契约做定稿评审（ADR-201 由 GPT-5 Codex 产出未过 Opus 的补救 + CLAUDE.md 强制升 Opus #1/#2）；子代理模型 ID 记入卡片。
-   - 范围：新增 `MetadataStatusSummary` / `MetadataProviderStatus` / `MetadataStatusIssue` 类型；在服务/查询层集中派生，现有 `EnrichmentSummary` 过渡兼容；为视频库提供 `metadata_status_rank`、`metadata_issue_level`、provider state、`metadata_updated_at` 等排序过滤字段。
-   - **决策项**：① 服务端排序过滤实现「动态 JOIN 计算 vs 物化派生列」定夺（ADR-201 §视频库数据支撑 OPEN；选物化须同步 `docs/architecture.md`）；② `providers` 为 `Record<MetadataProvider,…>` 必须 4-key 恒在 + 定义 `METADATA_PROVIDER_ORDER` 常量固定显示顺序，不依赖 Record 迭代序。
+2. **META-32** — Phase 1：统一元数据状态 DTO + 派生服务/查询（状态：🔄 进行中 2026-06-14，依 META-31）→ 前置 gate arch-reviewer(claude-opus-4-8, agentId a9a76572f8b5f83ae) **CONDITIONAL-PASS**，已拆 -A/-B
+   - **评审放行条件（C1–C5）**：C1 五枚举（provider/state/issueLevel/nextAction/overall）落 const+type 双形态（对齐 `EXTERNAL_REF_PROVIDERS`）；C2 无源字段（`fetchedAt`/`reasonCodes` 全源、`confidence`/`matchMethod`/`appliedAt` 对 tmdb·imdb）Phase 1 恒占位 + DTO JSDoc 逐字段标注；C3 派生取数真源优先级 `catalog_external_refs`(ADR-177 canonical) > `video_external_refs` > `media_catalog` 四列(仅 cache 兜底)；C4 决策项①=动态 JOIN；C5 拆 -A/-B。
+   - **决策裁定**：① 服务端排序过滤 = 动态 JOIN + SQL CASE alias（复用 `render_check_status`/`source_health` 先例；零 schema / 零 architecture.md 同步；性能瓶颈再起独立物化 ADR）；② `providers: Record<MetadataProvider,…>` 四 key 恒在 + `METADATA_PROVIDER_ORDER=['douban','bangumi','tmdb','imdb']` 显示顺序常量（const+type，barrel value 导出，与 `EXTERNAL_REF_PROVIDERS` 异名 + JSDoc 警示 + 集合相等单测防误用）。
+   - **新发现（D-201-E）**：ADR-201 §派生规则真源优先级未显式排序（`media_catalog` 已被 ADR-177 降级 cache）→ 已在 ADR-201 §派生规则 + §偏离登记补登记。
+   - 2a. **META-32-A** — 类型 + 派生 builder + 兼容并返（状态：✅ 已完成 2026-06-14）
+     - 建议模型：opus（`@resovo/types` 公开类型契约；commit 须带 `Subagents: arch-reviewer` trailer）／执行模型：claude-opus-4-8
+     - 文件：`packages/types/src/metadata-status.types.ts`(新) + `packages/types/src/index.ts`；`apps/api/src/db/queries/metadata-status.derive.ts`(新，`buildMetadataStatusSummary` + 派生算法 + 阈值 80 常量 + SQL CASE 片段)；`apps/api/src/services/VideoService.ts`(adminList/adminFindById 注入 `metadataStatus` 与 `enrichmentSummary` 并返)；`apps/api/src/db/queries/videos.ts`/`videos.internal.ts`(补 refs 聚合取数，不加排序过滤入参)；`apps/server-next/src/lib/videos/types.ts`(镜像 `metadataStatus?` + re-export)；单测(overall 优先级 1–6 / 阈值 80 边界 / 四 key 恒在 / not_applicable·missing / tmdb·imdb 占位恒 null·空 / refs 与 cache 冲突态)。
+     - 协调点：`tooltipLines` i18n 文案不下沉后端 DTO（评审 T1 风险 3）→ 结构化字段为主，UI 拼装归 META-33。
+     - 完成备注：执行模型 claude-opus-4-8；子代理 arch-reviewer (claude-opus-4-8, agentId a9a76572f8b5f83ae) 前置契约评审 CONDITIONAL-PASS。新增 `metadata-status.types.ts`（5 枚举 const+type + `METADATA_PROVIDER_ORDER` + DTO，无源字段 JSDoc 标注 C2）+ barrel；`metadata-status.derive.ts`（纯 `buildMetadataStatusSummary` + `getMetadataProviderRefs` 按页批量 refs + 真源优先级 catalog>video>cache，D-201-E）；`VideoService.adminList/adminFindById` 注入 `metadataStatus` 与 `enrichmentSummary` 并返；server-next `VideoAdminRow` 镜像 `metadataStatus?`；17 新单测。门禁 typecheck/lint EXIT=0 + test:changed 升全量 7432 passed（唯一失败 `UserSubmissionsClient` 隔离 12/12 = 既有全量 flake，无关）+ verify:adr-contracts EXIT=0。**解锁 META-32-B**。
+   - 2b. **META-32-B** — 视频库排序过滤接入（动态 SQL）（状态：⬜ 后排，依 32-A ✅ 已解锁）
+     - 建议模型：sonnet（动态方案，无新端点/无 schema）
+     - 文件：`apps/api/src/db/queries/videos.ts`(SORT_FIELD_WHITELIST 加 metadata_status/metadata_score alias + AdminVideoListFilters + WHERE 谓词 + 快捷筛选)；`apps/api/src/routes/admin/videos.ts`(ListQuerySchema + SORT_FIELDS，`csvEnum(METADATA_*)`)；`VideoService.ts`(透传)；`apps/server-next/src/lib/videos/types.ts`(filter/sortField 补值)；单测(过滤/排序 SQL + 大数据集排序性能用例)。
 3. **META-33** — Phase 2：admin-ui `MetadataSourceIconCluster` + `MetadataStatusPanel` 原语（状态：⬜ 后排，依 META-32）
    - 建议模型：opus（admin-ui 公开 Props）
    - 范围：四来源图标、灰态、黄/红点、紧凑/抽屉密度、hover tooltip、a11y 文案；现有 `EnrichmentBadgeCluster` 进入兼容或退役路径。

@@ -10,9 +10,10 @@ import type {
   ExternalRefSummary,
   BangumiEntrySummary,
   CatalogCharacterSummary,
+  MetadataStatusSummary,
 } from '@resovo/types'
 
-export type { VideoType, VideoStatus, VideoGenre, ReviewStatus, VisibilityStatus, DoubanStatus, BangumiStatus, EnrichmentSummary, ExternalRefSummary, BangumiEntrySummary, CatalogCharacterSummary }
+export type { VideoType, VideoStatus, VideoGenre, ReviewStatus, VisibilityStatus, DoubanStatus, BangumiStatus, EnrichmentSummary, ExternalRefSummary, BangumiEntrySummary, CatalogCharacterSummary, MetadataStatusSummary }
 
 // ── 列表行（对应 GET /admin/videos 响应结构）─────────────────────
 
@@ -41,6 +42,8 @@ export interface VideoAdminRow {
   backdrop_status?: string | null
   // ADR-170 C-3：富集摘要派生对象（admin DTO 专属，前端 EnrichmentBadge 消费）
   enrichmentSummary?: EnrichmentSummary
+  // ADR-201 / META-32-A：统一元数据状态（列表/详情注入；前端 MetadataSourceIconCluster〔META-33〕消费 / 兼容期与 enrichmentSummary 并存）
+  metadataStatus?: MetadataStatusSummary
   // ── CHG-VSR-1（设计 §2.2/§2.4）：视频库重设计展示字段（加性 optional，卡 2 API 填充；与 VideoAdminDetail 同名字段签名一致）──
   /** 原名（§2.2 副行 `{title_en ?? title_original}` + 搜索 q 扩面）。与 VideoAdminDetail.title_original 同型 */
   title_original?: string | null
