@@ -2392,3 +2392,26 @@
 > - **变更原因**：`homepage.spec`（HeroBanner CTA/指示点 / 语言切换 / 免责声明）+ `search-page.spec`（结果网格/数量/清除/q 透传）在**基线（无 seed）即失败**（对照跑确认 search-page:104/108/116/136/158 无 seed 同样红）——与 CHORE-E2E-WATCH-SSR-SEED 的 seed 无关（search 客户端 mock、seed 独立），是独立预存问题（疑 search 页 SSR 化 / banner 数据 / 语言切换链路漂移）。需单独 triage：判 SSR-seed 缺口 vs 陈旧断言。
 > - **文件范围**：`tests/e2e-next/homepage.spec.ts` / `search-page.spec.ts` + 可能 search/homepage SSR + seed fixture 扩展。
 > - **完成备注**：_（AI 填写）_
+
+---
+
+## [SEQ-20260613-03] 后台独立搜索模块（顶栏全局搜索切入，ES 主线）
+
+- **状态**：🔄 执行中
+- **创建时间**：2026-06-13 17:00
+- **最后更新时间**：2026-06-13 17:00
+- **目标**：兑现"顶栏全局搜索"未接后端的承诺，沿 ES 主线建独立搜索模块。计划真源 = `~/.claude/plans/top-bar-lively-marble.md`（用户已批准 + 3 轮复审 + 4 硬约束）。
+- **范围**：Phase 0 契约/ADR → Phase 1 顶栏 MVP（/admin/search + CommandPalette 接线）→ Phase 2 统一 admin_search 索引 → Phase 3 预测/多语言。+ 独立并行卡 videos 搜索框收编。
+- **硬约束**：① videos 后台专用 ES 查询不调公开 SearchService；② sources P1 直接搜 source_name/source_url/站点；③ CommandPalette 远程结果不被 label substring 二次误过滤；④ tasks 为新增 q 能力、限近期窗口。
+- **决策记录**：顶栏 P1=videos/sources/users/tasks、P1.5=submissions、页内限定=audit/messages/external-resources/notifications；非 videos 兜底先 ILIKE 留 pg_trgm 切换口；Phase 2 优先统一索引非多索引。
+
+### 任务列表
+
+1. **SEARCH-01** — Phase 0：ADR-200 契约定稿（CommandPalette API + /admin/search DTO + AdminSearchService 边界 + entitySearcher）（状态：✅ 已完成 2026-06-13）
+   - 建议模型：opus（撰写 ADR + 共享组件公开 API 契约 → 强制 arch-reviewer Opus）／执行模型：claude-opus-4-8
+   - 文件：`docs/decisions.md`（ADR-200 D-200-1..9 + §4.1.6 AMENDMENT + 端点契约表）+ `packages/types/src/admin-search.types.ts`（新建 DTO）+ index barrel。
+   - 完成备注：执行模型 claude-opus-4-8；子代理 arch-reviewer (claude-opus-4-8, agentId a8bc2b8e22de61843) **CONDITIONAL PASS**，M-1/M-2/M-3 + 7 补充全采纳（M-2 用户裁定尽力而为 + follow-up）。门禁 typecheck/lint/verify:adr-contracts EXIT=0（verify-endpoint-adr 238 路由含 GET /admin/search）。解锁 SEARCH-02。
+2. **SEARCH-02** — Phase 1：顶栏全局搜索 MVP（后端 + 前端接线 + e2e）（状态：⬜ 待开始，blocked by SEARCH-01）
+3. **SEARCH-03** — Phase 2：统一 admin_search ES 索引（状态：⬜ 后排，依 Phase 1 埋点）
+4. **SEARCH-04** — Phase 3：预测/多语言（search_as_you_type + 拼音/aliases）（状态：⬜ 后排）
+5. **SEARCH-05**（独立并行）— videos VideoFilterBar → DataTableSearchInput 收编（状态：⬜ 可先行，不混主卡）

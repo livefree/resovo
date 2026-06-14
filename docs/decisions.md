@@ -22375,3 +22375,62 @@ ADR-168 落地后现状（已逐行核实）:
 
 - 既有必过:Bangumi 富集链路（`BangumiService` 经新解析器仍取到 token,migration 回填后 auto/手动匹配不回归）;ADR-168 secret 治理单测不破。
 - 新增测试要点:解析器 env 回退 + DB 优先 + 缺行 fallback 旧 KV + enabled 压 env;逐字段 `maskSecret` + `isMaskedPlaceholder` 占位跳过 + JSONB 合并不误清;test 三态取值 + 草稿/已存持久化两分 + 候选 secret 不落库不入审计;migration 回填 bangumi 现值不丢;2 审计 action type 被 redact + set-equal;`verify:endpoint-adr` 对 3 路由 EXIT=0。
+
+## ADR-200: 后台独立搜索模块 — CommandPalette 远程搜索 API + GET /admin/search 契约
+
+- **状态**：Accepted（arch-reviewer claude-opus-4-8〔agentId a8bc2b8e22de61843〕CONDITIONAL PASS，M-1/M-2/M-3 + 7 补充全采纳；用户裁定 M-2 = 尽力而为）
+- **日期**：2026-06-13
+- **关联**：ADR-103a（topbar/CommandPalette 公开 API §4.1.6，本 ADR 修订其搜索结果承载方式）/ ADR-004（videos 复用 ES）/ ADR-110（ApiResponse 信封）/ ADR-149（过滤下沉服务端）/ ADR-175（多语种别名，Phase 3 索引源）
+
+### 背景
+
+后台顶栏有"搜索视频 / 播放源 / 任务…" + ⌘K 按钮（`topbar.tsx`）→ `CommandPalette`，但 server-next `admin-shell-client.tsx` 未注入 `commandGroups`，CommandPalette 回退仅渲染导航命令（`admin-shell.tsx:205-218`），**全局搜索是已画 UI、未接后端的承诺**。ADR-103a §4.1.6 明确 CommandPalette "不实现远程搜索，搜索结果组由消费方异步注入"，但消费方至今未注入，且现有 `filterAndFlatten` 对**所有** group 做 `label.includes(query)` 本地过滤（`command-palette.tsx:188,433`）——直接注入远程结果会被二次误杀（ES 命中拼音/别名/分词时 label 文本未必含 query 子串）。本 ADR 为独立搜索模块 Phase 0 定稿契约：① CommandPalette 公开 API 扩展（远程结果承载 + 不被本地过滤）；② `GET /admin/search` 端点 + 统一结果 DTO；③ AdminSearchService 后台可见性边界；④ entitySearcher 适配。计划真源 `~/.claude/plans/top-bar-lively-marble.md`（用户批准 + 4 硬约束）。技术主线 ES（pg_trgm/ILIKE 仅兜底）。
+
+### 决策要点
+
+- **D-200-1（CommandPalette 公开 API 扩展）**：`CommandPaletteProps` 加 4 字段（纯加性、现有 `groups` 行为零变化）：
+  - `onQueryChange?: (q: string) => void`——发**原始** query（每 keystroke）；**组件因 `open=false` 内部重置 query 时也须触发 `onQueryChange('')`**（否则下次打开闪现上次远程结果 = stale 缺陷，同 commit ac5d187c 类型）。防抖 + AbortController 取消在途请求由消费方做（组件保持纯）。
+  - `prefilteredGroups?: readonly CommandGroup[]`——消费方注入的**已由服务端过滤**的结果组，**跳过本地 `label.includes` 过滤、原样展示**；flatItems 顺序 = 本地 `groups` 在前、`prefilteredGroups` 在后，activeIndex 跨全部。命名用语义「prefiltered」（非 remote），未来本地预过滤结果（如最近访问）也可复用此通道。
+  - `loading?: boolean`（远程请求中；输入框**永不因 loading unmount**）。
+  - `emptyRemoteState?: ReactNode`。空态优先级：**`loading` > `emptyRemoteState` > 内置"无匹配结果"**。
+  - `prefilteredGroups` 异步到达**不改变**已落在本地组项上的 activeId（不打断键盘操作）。
+- **D-200-2（GET /admin/search 端点 + 统一 DTO）**：见 §端点契约。DTO 真源 `packages/types/src/admin-search.types.ts`——**discriminated union（kind 判别式）+ 每 kind typed payload**（不退化成 subtitle+badges string 袋子），`kind`/`reason` 为**闭合 union**（不留 string 兜底，对齐 ADR-103a §4.1.1）。响应套 ADR-110 信封 `{ data }`，**服务端**分组（按 kind）+ 组内 top-N + **精确 id/short_id 命中置顶**；`score` **仅组内可比**，跨 kind 顺序由**固定 kind 优先级**（video > source > user > task > submission）决定。admin-ui 正向 import 该 DTO 并**映射**成 `CommandItem`（DTO 本体不直接当 CommandItem）。
+- **D-200-3（AdminSearchService 后台可见性边界 + 共享 query builder〔强制〕）**：新 `AdminSearchService.searchVideos()` 复用 `resovo_videos` 索引/analyzer，但用**后台可见性规则**（含待审/草稿/隐藏/受限），**禁止调公开 `SearchService.search()`**（其 `:47-52` 写死 `is_published/visibility=public/review=approved/content_rating=general` 四过滤，管理员需找的恰是这些非公开内容）。**强制**抽 `buildVideoMatchQuery(q): EsBoolMust`（仅产匹配 must/should、**不含可见性 filter**），`SearchService` 与 `AdminSearchService` 各拼自己的 filter——字段权重/fuzziness/分词单一真源，可见性分治，避免两套 ES query 漂移。**ES 索引完整性前提（M-2，用户裁定尽力而为）**：逐次 `syncVideo` 全状态写入（管理员能搜到正常写入的待审/草稿）；但 reconcile 兜底（`reconcilePublished`/`reconcileStale`）只补已发布/近期下架，**漂移的老草稿无全量 reindex 兜底、可能漏召回**——本期接受，拆 follow-up 卡按需扩 reconcile/全量 reindex。
+- **D-200-4（entitySearcher 适配 + fan-out）**：`interface EntitySearcher { kind; search(q, opts): Promise<AdminSearchResult[]> }`，`/admin/search` fan-out 到启用的 searcher、**`Promise.allSettled` 合并**（某 searcher 失败不 500、返回其余 kind + 该组 `degraded` 标记，沿用 TaskAggregator 降级范式）。各实体：① videos = AdminSearchService ES；② sources = **直接搜**（新建轻量 `searchAdminSources(q,limit)` 查 source_url/source_name/站点/v.title，复用 `sources.ts:407` 谓词，不塞进 `listAdminSources` 列表函数）；③ users/submissions = ILIKE，文本匹配走可替换 **`TextMatchStrategy`**（首版 `ilike`，**pg_trgm 为后续 migration 决策、踢出本 ADR、只留接口缝**）；④ tasks = **新增 q 能力**（现 `taskRuns.ts:149`/`TaskAggregator` 无 q 谓词），`searchTaskRuns(q,{sinceDays<=N,limit})` 命中 title，**强制 `created_at >= NOW()-interval` 下界**（命中 `idx_task_runs_created_at`）+ 默认窗口 30 天 + 硬上限 limit，**禁裸全表 `title ILIKE`**。
+- **D-200-5（权限分级，防越权）**：`/admin/search` fan-out 按调用者 role 过滤 kind——moderator（`admin-shell-client.tsx:33` `ADMIN_ONLY_HREFS` 含 `/admin/users`）**不返 `kind:'user'` 结果**（否则可搜到无权访问用户 = 信息泄露）。各 searcher 启用与否由 role 决定。
+- **D-200-6（highlight 分 kind）**：videos 走 ES highlight 透传（复用 `SearchService:103-114` `<em>` 范式）；ILIKE 类 kind（source/user/task/submission）`highlight` 为 `undefined`，**前端按 query 做轻量客户端高亮兜底**（显式预期，非遗漏）。
+- **D-200-7（零结果 / 错误 / ES 宕机）**：全 searcher 空 → `emptyRemoteState`；部分失败 → 局部结果 + `degraded`；**ES 完全宕机 → videos 组 `degraded`（本期 videos 无 pg 兜底，ES 主线既定）**，不让其余 kind 受影响。
+- **D-200-8（瞬态、无 URL 同步）**：搜索为浮层瞬态——**不进 URL、不持久化 query 历史**（对齐 ADR-103a §4.4-2 Edge 兼容 + `command-palette.tsx:40` 现状）。
+- **D-200-9（a11y）**：`loading=true` 用 `aria-busy`；结果计数用 live region 播报；复用现有 combobox/listbox 骨架（`command-palette.tsx:327-341`）。
+
+### 端点契约
+
+| # | 方法 | 路径 | 用途 | Request | Response | 错误码 |
+|---|---|---|---|---|---|---|
+| 1 | GET | `/admin/search` | 后台全局搜索 fan-out（videos/sources/users/tasks〔P1〕+ submissions〔P1.5〕），按 kind 分组 + 组内 top-N + 精确命中置顶 + 权限分级（D-200-5） | Query: `q`(≤200) / `limit?=8`（每组上限） | 200 `{ data: AdminSearchResponseData }`（即 `{ query, groups }`，groups 项含 `kind, items, degraded?`） | 422 VALIDATION_ERROR |
+
+### 实体范围
+
+- **顶栏 P1**：videos / sources / users / tasks（首批）
+- **顶栏 P1.5**：submissions（次批）
+- **仅页内搜索（不进顶栏）**：audit / messages / external-resources / notifications
+
+### ADR-103a §4.1.6 AMENDMENT（CommandPalette 搜索结果承载方式修订）
+
+ADR-103a §4.1.6 原定"搜索结果作为第三个普通 group 注入、由本组件客户端过滤"。本 ADR 修订为：**远程/服务端已过滤的搜索结果走专用 `prefilteredGroups` 通道，跳过本地 `label.includes` 过滤**（D-200-1）。理由：服务端命中（ES 拼音/别名/分词、ILIKE 命中 url/short_id/email）的 label 文本未必含 query 子串，作为普通 group 注入会被本地过滤全部误杀。`groups`（本地 nav/快捷操作）继续客户端过滤；`prefilteredGroups`（已过滤结果）原样展示。§4.1.6 "搜索结果组由消费方异步注入" 仍成立，仅承载通道从 `groups` 改为 `prefilteredGroups`。
+
+### 影响文件
+
+- **本 ADR（Phase 0）落地**：`packages/types/src/admin-search.types.ts`（新建 DTO）+ `packages/types/src/index.ts`（barrel 注册）+ `docs/decisions.md`（本 ADR）。
+- **Phase 1 触点（实施卡 SEARCH-02，非本卡）**：`packages/admin-ui/src/shell/{command-palette.tsx,types.ts}`（CommandPaletteProps 扩展 + prefilteredGroups 过滤拆分，**改 admin-ui 公开 Props → Opus + commit trailer**）+ `admin-shell.tsx`（组合流）+ `apps/server-next/.../admin-shell-client.tsx`（接线）+ 新 `apps/api/src/routes/admin/search.ts`（**新 admin route，本 ADR 端点契约覆盖**）+ `apps/api/src/services/AdminSearchService.ts` + `buildVideoMatchQuery` 共享 + `searchAdminSources`/`searchTaskRuns` 等 queries。
+
+### 偏离登记
+
+- **D-200-A（M-2 ES 索引完整性尽力而为）**：admin ES 视频搜索对漂移的老草稿可能漏召回（reconcile 兜底仅覆盖已发布/近期）。处置：accept（逐次写入已覆盖全状态、管理员能搜到正常写入内容）；follow-up 触发 = 出现深史草稿漏召回投诉时扩 reconcile/全量 reindex。
+- **D-200-B（ES 宕机 videos 无 pg 兜底）**：ES 完全宕机时 videos 组 degraded、无 PostgreSQL 兜底。处置：accept（ES 主线既定，其余 kind 不受影响）；可观测性告警覆盖 ES 健康。
+- **D-200-C（pg_trgm 踢出本 ADR）**：users/submissions 文本匹配首版 `ilike`，pg_trgm 仅留 `TextMatchStrategy` 接口缝、为后续 migration 独立 ADR 决策。
+
+### 回归红线
+
+- 既有必过：CommandPalette 现有 `groups`（导航命令）行为零变化（向后兼容）；公开 `SearchService.search()` 不被 admin 复用、其 public 过滤不动；ADR-103a §4.4 四硬约束（Provider 不下沉 / Edge 兼容 / 零硬编码色 / 零图标库）不破。
+- 新增测试要点（Phase 1）：prefilteredGroups 跳过本地过滤（label 不含 query 的命中仍展示）；`open=false` 触发 `onQueryChange('')` 防 stale；空态优先级 loading>empty>内置；fan-out allSettled 局部降级；moderator 不返 users；tasks q 带 created_at 下界；exact short_id 置顶；`verify:endpoint-adr` 对 `GET /admin/search` EXIT=0（Phase 1 加 route 后）。

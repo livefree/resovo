@@ -5344,3 +5344,21 @@
 - **数据库变更**：无 schema；seed slug 列改规范 base（运行期 + teardown）。
 - **验证**：① api 返回 `slug='test-movie'`（base）→ 实测 watch 链接 `/watch/test-movie-aB3kR9x1`（无双 shortId）。② detail.spec + detail-episode-pick **12 passed**（锚定断言通过）；player.spec **11 passed**（规范 slug 不破 player 域）；typecheck/lint EXIT=0。
 - **注意事项**：锚定断言现具回归防护——若 seed slug 再误含 shortId，watch 链接畸形会让 :109/:64/:79 失败（不被掩盖）。
+
+## [SEARCH-01] 后台独立搜索模块 Phase 0 — ADR-200 契约定稿
+- **完成时间**：2026-06-13
+- **记录时间**：2026-06-13 17:30
+- **执行模型**：claude-opus-4-8（主循环）
+- **子代理**：arch-reviewer (claude-opus-4-8, agentId a8bc2b8e22de61843) — ADR-200 契约 CONDITIONAL PASS，M-1/M-2/M-3 + 7 补充全采纳
+- **背景**：后台顶栏"搜索视频/播放源/任务…" + ⌘K 是已画 UI、未接后端的承诺（`admin-shell-client` 未注入 commandGroups → CommandPalette 仅渲染导航命令；现有 `filterAndFlatten` 对所有 group 做 `label.includes` 本地过滤，直接注入远程结果会被二次误杀）。Phase 0 为独立搜索模块定稿契约（不实装业务逻辑）。计划真源 `~/.claude/plans/top-bar-lively-marble.md`（用户批准 + 4 硬约束 + 3 轮复审）。
+- **修改文件**：
+  - `docs/decisions.md` — 新增 **ADR-200**（Accepted）D-200-1..9 + 端点契约表（`GET /admin/search`）+ 实体范围表 + **ADR-103a §4.1.6 AMENDMENT**（搜索结果承载从"普通 group 被本地过滤"改为"专用 prefilteredGroups 跳过本地过滤"）+ 偏离登记 D-200-A/B/C + 回归红线。
+  - `packages/types/src/admin-search.types.ts`（新建）— 统一结果 DTO：`AdminSearchResult` discriminated union（kind 判别式 + 每 kind typed payload）+ `AdminSearchReason`/`AdminSearchKind` 闭合 union + `AdminSearchGroup`（含 degraded）+ `AdminSearchResponseData` + query 参数。
+  - `packages/types/src/index.ts` — barrel 注册 `admin-search.types`。
+  - `docs/audit/adr-d-status.json` — verify-adr-d-numbers 脚本随 ADR-200 D 号重算（生成物）。
+- **新增依赖**：无。
+- **数据库变更**：无（Phase 0 仅契约）。
+- **核心决策**：① CommandPalette 公开 API 扩 `onQueryChange`(发原始 query + onClose 触发 '')/`prefilteredGroups`(跳本地过滤)/`loading`/`emptyRemoteState`（空态优先级 loading>empty>内置）；② `GET /admin/search` 套 ADR-110 信封、服务端分组+组内 top-N+精确命中置顶、score 仅组内·跨 kind 固定优先级（video>source>user>task>submission）；③ `AdminSearchService` 后台可见性（禁调公开 `SearchService.search()` 的 public 过滤）+ **强制共享 `buildVideoMatchQuery`**（匹配共享、可见性分治防漂移）+ ES 全状态逐次写入·reconcile 尽力而为（M-2 用户裁定，老草稿漏召回拆 follow-up）；④ `entitySearcher` + `Promise.allSettled` 降级（videos ES / sources 直接搜 / users·submissions ILIKE 留 `TextMatchStrategy` 切换口、pg_trgm 踢出本 ADR / tasks 新增 q 带 `created_at` 下界 + 30 天窗口）；⑤ 权限分级 moderator 不返 `kind:'user'` 防越权；⑥~⑨ highlight 分 kind（ES 透传 vs ILIKE 客户端兜底）/ ES 宕机 videos degraded / 无 URL 同步·不持久化 / a11y aria-busy+live。
+- **质量门禁**：typecheck EXIT=0（全 workspace，含新 DTO）/ lint EXIT=0（4/4）/ **verify:adr-contracts EXIT=0**（verify-endpoint-adr 238 admin 路由全对齐、含 ADR-200 `GET /admin/search`；error-message/D 号警告为预存 advisory 非阻塞）。
+- **注意事项**：① Phase 0 不实装 `/admin/search` 后端与 CommandPalette 实现（均 Phase 1 SEARCH-02）；Phase 1 改 `packages/admin-ui` CommandPaletteProps 为共享组件公开 API 改动 → 须 Opus + commit `Subagents: arch-reviewer` trailer。② 新 admin route `GET /admin/search` 由本 ADR 端点契约覆盖，Phase 1 加 route 后 verify-endpoint-adr 继续对齐。③ M-2 偏离（admin ES 漏召回漂移老草稿）= 尽力而为，登记 follow-up 按需扩 reconcile/全量 reindex。
+- **[AI-CHECK]**：六问过——①Phase 0 纯契约/设计，门禁全绿，arch-reviewer Opus 裁决全采纳；②DTO 沉淀 `@resovo/types` 单一真源（admin-ui 正向 import 复用，对齐 TaskResultDigest 范式），不双源；③改动收敛于 docs + types，零业务实装、零 schema；④DTO 用闭合 union 非 any，无空 catch/硬编码色；⑤回归红线列 Phase 1 测试要点（prefiltered 跳过滤/防 stale/allSettled 降级/权限分级/tasks 窗口/精确置顶）；⑥共享组件 API 契约 + 新 admin route 经 arch-reviewer Opus 定稿，commit 带 trailer。
