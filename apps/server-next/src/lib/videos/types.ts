@@ -11,9 +11,12 @@ import type {
   BangumiEntrySummary,
   CatalogCharacterSummary,
   MetadataStatusSummary,
+  MetadataStatusOverall,
+  MetadataProviderState,
+  MetadataIssueLevel,
 } from '@resovo/types'
 
-export type { VideoType, VideoStatus, VideoGenre, ReviewStatus, VisibilityStatus, DoubanStatus, BangumiStatus, EnrichmentSummary, ExternalRefSummary, BangumiEntrySummary, CatalogCharacterSummary, MetadataStatusSummary }
+export type { VideoType, VideoStatus, VideoGenre, ReviewStatus, VisibilityStatus, DoubanStatus, BangumiStatus, EnrichmentSummary, ExternalRefSummary, BangumiEntrySummary, CatalogCharacterSummary, MetadataStatusSummary, MetadataStatusOverall, MetadataProviderState, MetadataIssueLevel }
 
 // ── 列表行（对应 GET /admin/videos 响应结构）─────────────────────
 
@@ -94,10 +97,25 @@ export interface VideoListFilter {
   episodeMissing?: boolean
   metaIncomplete?: boolean
   pendingReview?: boolean
-  /** AMD2-PATCH-2（2026-05-24）+ CHG-VSR-2（+episode_count）+ SRCHEALTH-P1-1-B（+探测/试播聚合）：同步后端 SORT_FIELDS */
+  // ── META-32-B（ADR-201 §视频库 过滤）：元数据状态筛选（镜像后端 AdminVideoListFilters；CSV 多选由 api 层序列化）──
+  /** 整体状态多选（overall） */
+  metadataOverall?: readonly MetadataStatusOverall[]
+  /** 单源状态多选（任一 provider state ∈ 集合） */
+  metadataProviderState?: readonly MetadataProviderState[]
+  /** 问题等级多选 */
+  metadataIssueLevel?: readonly MetadataIssueLevel[]
+  /** 最近增强时间范围（enriched_at，ISO8601） */
+  metadataUpdatedFrom?: string
+  metadataUpdatedTo?: string
+  /** 元数据快捷筛选派生 boolean（仅 true 生效） */
+  metadataNeedsReview?: boolean
+  metadataHasCandidate?: boolean
+  metadataMissing?: boolean
+  metadataTmdbPending?: boolean
+  /** AMD2-PATCH-2（2026-05-24）+ CHG-VSR-2（+episode_count）+ SRCHEALTH-P1-1-B（+探测/试播聚合）+ META-32-B（+元数据）：同步后端 SORT_FIELDS */
   sortField?: 'title' | 'type' | 'year' | 'created_at' | 'updated_at'
     | 'source_health' | 'visibility' | 'review_status' | 'douban_status' | 'meta_score' | 'episode_count'
-    | 'source_check_status' | 'render_check_status'
+    | 'source_check_status' | 'render_check_status' | 'metadata_status' | 'metadata_score'
   sortDir?: 'asc' | 'desc'
   page?: number
   limit?: number

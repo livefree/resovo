@@ -56,8 +56,10 @@ export interface MetadataStatusSourceRow {
   providerRefs: readonly ProviderRefAggregate[]
 }
 
-const ISSUE_RANK: Record<MetadataIssueLevel, number> = { none: 0, info: 1, warn: 2, danger: 3 }
-const OVERALL_RANK: Record<MetadataStatusOverall, number> = {
+/** issue 等级 → 排序键（视频库 SQL `metadata_issue_rank` 与 JS `sort.issueRank` 共用真源，META-32-B）。 */
+export const METADATA_ISSUE_RANK: Record<MetadataIssueLevel, number> = { none: 0, info: 1, warn: 2, danger: 3 }
+/** overall → 运营优先级排序键（视频库 SQL `metadata_status_rank` 与 JS `sort.statusRank` 共用真源，META-32-B）。 */
+export const METADATA_OVERALL_RANK: Record<MetadataStatusOverall, number> = {
   needs_review: 1, candidate: 2, missing: 3, partial: 4, complete: 5,
 }
 const NEXT_ACTION_BY_OVERALL: Record<MetadataStatusOverall, MetadataNextAction> = {
@@ -219,7 +221,7 @@ export function buildMetadataStatusSummary(row: MetadataStatusSourceRow): Metada
   const overall = deriveOverall(providerList, enrichedAt, score)
   const issues = collectIssues(providerList)
   const issueLevel = providerList.reduce<MetadataIssueLevel>(
-    (acc, p) => (ISSUE_RANK[p.issueLevel] > ISSUE_RANK[acc] ? p.issueLevel : acc), 'none',
+    (acc, p) => (METADATA_ISSUE_RANK[p.issueLevel] > METADATA_ISSUE_RANK[acc] ? p.issueLevel : acc), 'none',
   )
 
   return {
@@ -232,8 +234,8 @@ export function buildMetadataStatusSummary(row: MetadataStatusSourceRow): Metada
     issues,
     nextAction: NEXT_ACTION_BY_OVERALL[overall],
     sort: {
-      statusRank: OVERALL_RANK[overall],
-      issueRank: ISSUE_RANK[issueLevel],
+      statusRank: METADATA_OVERALL_RANK[overall],
+      issueRank: METADATA_ISSUE_RANK[issueLevel],
       scoreRank: score,
       updatedAt: enrichedAt,
     },
@@ -373,3 +375,149 @@ export function toMetadataStatusSourceRow(
     providerRefs,
   }
 }
+
+// ── 服务端排序过滤 SQL 派生（META-32-B / ADR-201 D-201-6 + 决策裁定①）──────────
+//
+// 视频库 `元数据` 列的服务端排序/过滤需要 overall 运营优先级 + issue 等级 + per-provider state
+// 作为可 ORDER BY / WHERE 的量。这些是跨 `meta_quality` + `media_catalog` cache + `video_external_refs`
+// + `catalog_external_refs` 的派生量，DB 无物化列 → 动态 LATERAL JOIN 在查询时复现（零 schema /
+// 零 architecture.md 同步；性能瓶颈再起独立物化 ADR）。
+//
+// ⚠ 口径一致性红线：下方每个 CASE 分支与上方 JS 派生 **逐分支镜像**：
+//   - providerStateBranches ↔ deriveProviderStatus + mapCatalogRelation + mapVideoMatchStatus
+//     + statusColumnState + cache 兜底（顺序：bangumi 不适用 → catalog ref → video ref → status 列 → cache）。
+//   - overall rank ↔ deriveOverall（needs_review/candidate/missing/partial/complete 优先级 1–6）。
+//   - issue rank ↔ METADATA_ISSUE_RANK（none/info/warn/danger）。
+//   改其一必须同步另一；metadata-status-derive 单测双向守护（JS 值 + SQL 结构）。
+//
+// 安全：仅引用硬编码 provider/列名/字面量常量，不拼接任何用户输入（用户值经 videos.ts 参数化 $n 进入）。
+// 输出列（外层别名 `md`）：md_<provider>_state / metadata_status_rank / metadata_issue_rank。
+
+interface ProviderSqlSpec {
+  provider: MetadataProvider
+  /** cache external id 存在性谓词（rejected+cache → problem / cache-only → applied）。 */
+  cacheNotNull: string
+  /** douban/bangumi 有 status 列兜底；tmdb/imdb 无（恒 null）。 */
+  statusCol: string | null
+}
+
+const PROVIDER_SQL_SPECS: readonly ProviderSqlSpec[] = [
+  { provider: 'douban', cacheNotNull: 'mc.douban_id IS NOT NULL', statusCol: 'v.douban_status' },
+  { provider: 'bangumi', cacheNotNull: 'mc.bangumi_subject_id IS NOT NULL', statusCol: 'v.bangumi_status' },
+  { provider: 'tmdb', cacheNotNull: 'mc.tmdb_id IS NOT NULL', statusCol: null },
+  { provider: 'imdb', cacheNotNull: 'mc.imdb_id IS NOT NULL', statusCol: null },
+]
+
+interface SqlStateBranch { cond: string; state: MetadataProviderState; issueRank: number }
+
+/** 单 provider 的派生分支（顺序即优先级，镜像 `deriveProviderStatus` 判断顺序）。 */
+function providerStateBranches(spec: ProviderSqlSpec): SqlStateBranch[] {
+  const cr = `cr_${spec.provider}`
+  const vr = `vr_${spec.provider}`
+  const cache = spec.cacheNotNull
+  const branches: SqlStateBranch[] = []
+  if (spec.provider === 'bangumi') {
+    // D-201-B：bangumi 仅 anime 适用（不计缺失惩罚）
+    branches.push({ cond: `v.type <> 'anime'`, state: 'not_applicable', issueRank: METADATA_ISSUE_RANK.info })
+  }
+  // catalog ref（ADR-177 canonical 真源，最高优先级）
+  branches.push(
+    { cond: `${cr} IN ('exact','parent')`, state: 'applied', issueRank: METADATA_ISSUE_RANK.none },
+    { cond: `${cr} = 'candidate'`, state: 'candidate', issueRank: METADATA_ISSUE_RANK.warn },
+    { cond: `${cr} = 'rejected' AND ${cache}`, state: 'problem', issueRank: METADATA_ISSUE_RANK.danger },
+    { cond: `${cr} = 'rejected'`, state: 'missing', issueRank: METADATA_ISSUE_RANK.none },
+  )
+  // video ref（video 级关系）
+  branches.push(
+    { cond: `${vr} IN ('auto_matched','manual_confirmed')`, state: 'applied', issueRank: METADATA_ISSUE_RANK.none },
+    { cond: `${vr} = 'candidate'`, state: 'candidate', issueRank: METADATA_ISSUE_RANK.warn },
+    { cond: `${vr} = 'rejected' AND ${cache}`, state: 'problem', issueRank: METADATA_ISSUE_RANK.danger },
+    { cond: `${vr} = 'rejected'`, state: 'missing', issueRank: METADATA_ISSUE_RANK.none },
+  )
+  // douban/bangumi status 列兜底
+  if (spec.statusCol) {
+    branches.push(
+      { cond: `${spec.statusCol} = 'matched'`, state: 'applied', issueRank: METADATA_ISSUE_RANK.none },
+      { cond: `${spec.statusCol} = 'candidate'`, state: 'candidate', issueRank: METADATA_ISSUE_RANK.warn },
+      { cond: `${spec.statusCol} IN ('unmatched','pending')`, state: 'missing', issueRank: METADATA_ISSUE_RANK.none },
+    )
+  }
+  // cache-only 兜底（无 ref/status 命中但 cache id 存在 → applied/info，对齐 JS `cache_only_no_ref`）
+  branches.push({ cond: cache, state: 'applied', issueRank: METADATA_ISSUE_RANK.info })
+  return branches
+}
+
+/** 把分支表渲染成 CASE（state 文本 / issueRank 整数两形态共用同一分支条件，防漂移）。 */
+function renderCase(branches: readonly SqlStateBranch[], pick: 'state' | 'issueRank'): string {
+  const lines = branches.map((b) =>
+    pick === 'state'
+      ? `          WHEN ${b.cond} THEN '${b.state}'`
+      : `          WHEN ${b.cond} THEN ${b.issueRank}`,
+  )
+  const elseVal = pick === 'state' ? `'missing'` : '0'
+  return `CASE\n${lines.join('\n')}\n          ELSE ${elseVal}\n        END`
+}
+
+/** 每 (catalog, provider) 取最强 relation（镜像 getMetadataProviderRefs 的 catalog DISTINCT ON）。 */
+function catalogRefSubquery(provider: MetadataProvider): string {
+  return `(SELECT cer.relation FROM catalog_external_refs cer
+          WHERE cer.catalog_id = v.catalog_id AND cer.provider = '${provider}'
+          ORDER BY CASE cer.relation WHEN 'exact' THEN 0 WHEN 'parent' THEN 1 WHEN 'candidate' THEN 2 WHEN 'rejected' THEN 3 ELSE 4 END,
+                   cer.confidence DESC NULLS LAST
+          LIMIT 1)`
+}
+
+/** 每 (video, provider) 取最强 match_status（镜像 getMetadataProviderRefs 的 video DISTINCT ON）。 */
+function videoRefSubquery(provider: MetadataProvider): string {
+  return `(SELECT ver.match_status FROM video_external_refs ver
+          WHERE ver.video_id = v.id AND ver.provider = '${provider}'
+          ORDER BY ver.is_primary DESC,
+                   CASE ver.match_status WHEN 'manual_confirmed' THEN 0 WHEN 'auto_matched' THEN 1 WHEN 'candidate' THEN 2 WHEN 'rejected' THEN 3 ELSE 4 END,
+                   ver.confidence DESC NULLS LAST
+          LIMIT 1)`
+}
+
+function buildMetadataStatusJoinSql(): string {
+  const refsSelect = METADATA_PROVIDERS.map((p) =>
+    `        ${catalogRefSubquery(p)} AS cr_${p},\n        ${videoRefSubquery(p)} AS vr_${p}`,
+  ).join(',\n')
+  const stateSelect = PROVIDER_SQL_SPECS.map((spec) => {
+    const branches = providerStateBranches(spec)
+    return `        ${renderCase(branches, 'state')} AS md_${spec.provider}_state,\n` +
+           `        ${renderCase(branches, 'issueRank')} AS md_${spec.provider}_issue_rank`
+  }).join(',\n')
+  const stateCols = METADATA_PROVIDERS.map((p) => `p.md_${p}_state`).join(', ')
+  const issueCols = METADATA_PROVIDERS.map((p) => `p.md_${p}_issue_rank`).join(', ')
+  const T = METADATA_COMPLETE_SCORE_THRESHOLD
+  const R = METADATA_OVERALL_RANK
+  // overall 运营优先级（镜像 deriveOverall 1–6；enriched_at 空串按缺失处理对齐 JS `!enrichedAt`）
+  const overallRank = `CASE
+          WHEN 'problem' IN (${stateCols}) THEN ${R.needs_review}
+          WHEN 'candidate' IN (${stateCols}) THEN ${R.candidate}
+          WHEN 'applied' NOT IN (${stateCols}) AND NULLIF(v.meta_quality->>'enriched_at', '') IS NULL THEN ${R.missing}
+          WHEN 'applied' IN (${stateCols}) AND (v.meta_score IS NULL OR v.meta_score < ${T}) THEN ${R.partial}
+          WHEN 'applied' IN (${stateCols}) AND v.meta_score >= ${T} THEN ${R.complete}
+          ELSE ${R.partial}
+        END`
+  return `LEFT JOIN LATERAL (
+      SELECT
+        ${stateCols},
+        ${overallRank} AS metadata_status_rank,
+        GREATEST(${issueCols}) AS metadata_issue_rank
+      FROM (
+        SELECT
+${stateSelect}
+        FROM (
+          SELECT
+${refsSelect}
+        ) refs
+      ) p
+    ) md ON true`
+}
+
+/**
+ * 视频库元数据排序/过滤的动态 LATERAL JOIN 子句（外层别名 `md`，左侧需 `videos v JOIN media_catalog mc`）。
+ * 仅在 `sortField=metadata_status` 或带 metadata 过滤时拼入（`videos.ts` listAdminVideos 动态决定，
+ * 默认列表路径零额外成本）。
+ */
+export const METADATA_STATUS_JOIN_SQL = buildMetadataStatusJoinSql()

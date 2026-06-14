@@ -187,6 +187,16 @@ export class VideoService {
     episodeMissing?: boolean
     metaIncomplete?: boolean
     pendingReview?: boolean
+    // META-32-B（ADR-201 §视频库 过滤）：元数据状态服务端过滤（加性透传）
+    metadataOverall?: readonly import('@/types').MetadataStatusOverall[]
+    metadataProviderState?: readonly import('@/types').MetadataProviderState[]
+    metadataIssueLevel?: readonly import('@/types').MetadataIssueLevel[]
+    metadataUpdatedFrom?: string
+    metadataUpdatedTo?: string
+    metadataNeedsReview?: boolean
+    metadataHasCandidate?: boolean
+    metadataMissing?: boolean
+    metadataTmdbPending?: boolean
     page?: number
     limit?: number
   }): Promise<{ data: unknown[]; total: number; page: number; limit: number }> {
@@ -217,6 +227,15 @@ export class VideoService {
       episodeMissing: params.episodeMissing,
       metaIncomplete: params.metaIncomplete,
       pendingReview: params.pendingReview,
+      metadataOverall: params.metadataOverall,
+      metadataProviderState: params.metadataProviderState,
+      metadataIssueLevel: params.metadataIssueLevel,
+      metadataUpdatedFrom: params.metadataUpdatedFrom,
+      metadataUpdatedTo: params.metadataUpdatedTo,
+      metadataNeedsReview: params.metadataNeedsReview,
+      metadataHasCandidate: params.metadataHasCandidate,
+      metadataMissing: params.metadataMissing,
+      metadataTmdbPending: params.metadataTmdbPending,
       page,
       limit,
     })

@@ -27,6 +27,9 @@ export default defineConfig({
   resolve: {
     alias: [
       { find: '@resovo/types', replacement: path.resolve(__dirname, './packages/types/src/index.ts') },
+      // @/types：apps/api 内部消费 packages/types barrel（META-32-B metadata-status.derive → @/types）
+      // 镜像 vitest.config.ts unit 别名（apps/api 唯一消费 packages/types，无 web-next fallback 需求）
+      { find: /^@\/types(\/.*)?$/, replacement: path.resolve(__dirname, './packages/types/src') + '$1' },
       // @/api：启用对带 @/api 传递依赖的 query（如 video_sources.ts → @/api/lib/errors）的真库集成测试
       // （BUGFIX-RENDERCHECK-PLAYBACK-SQL-CAST，镜像 vitest.config.ts unit 别名）
       { find: '@/api', replacement: path.resolve(__dirname, './apps/api/src') },

@@ -190,4 +190,105 @@ describe('listAdminVideos (CHG-209)', () => {
     const [sql2] = query.mock.calls[2]
     expect(sql2).toContain('ORDER BY v.source_check_status DESC')
   })
+
+  // ── META-32-B（ADR-201 §视频库 排序过滤）：元数据状态动态 SQL ─────
+  it('META-32-B: 无 metadata 条件时不挂 LATERAL（默认列表路径零额外成本）', async () => {
+    query
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ count: '0' }] })
+
+    await listAdminVideos(db, { status: 'all', sortField: 'updated_at', sortDir: 'desc', page: 1, limit: 20 })
+
+    const [sql] = query.mock.calls[0]
+    const [countSql] = query.mock.calls[1]
+    expect(sql).not.toContain('LEFT JOIN LATERAL')
+    expect(sql).not.toContain('md.metadata_status_rank')
+    expect(countSql).not.toContain('LEFT JOIN LATERAL')
+  })
+
+  it('META-32-B: sortField=metadata_status 时主查询挂 LATERAL + ORDER BY md.metadata_status_rank；count 不挂', async () => {
+    query
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ count: '0' }] })
+
+    await listAdminVideos(db, { status: 'all', sortField: 'metadata_status', sortDir: 'asc', page: 1, limit: 20 })
+
+    const [sql] = query.mock.calls[0]
+    const [countSql] = query.mock.calls[1]
+    expect(sql).toContain('LEFT JOIN LATERAL')
+    expect(sql).toContain('ORDER BY md.metadata_status_rank ASC')
+    // 纯排序无过滤 → count 查询无需 JOIN
+    expect(countSql).not.toContain('LEFT JOIN LATERAL')
+  })
+
+  it('META-32-B: metadata_score 排序走 v.meta_score 直通（不挂 LATERAL）', async () => {
+    query
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ count: '0' }] })
+
+    await listAdminVideos(db, { status: 'all', sortField: 'metadata_score', sortDir: 'desc', page: 1, limit: 20 })
+
+    const [sql] = query.mock.calls[0]
+    expect(sql).toContain('ORDER BY v.meta_score DESC')
+    expect(sql).not.toContain('LEFT JOIN LATERAL')
+  })
+
+  it('META-32-B: overall/issue 多选映射 rank = ANY($::int[]) + provider state 四源 OR；主+count 均挂 LATERAL', async () => {
+    query
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ count: '0' }] })
+
+    await listAdminVideos(db, {
+      status: 'all',
+      metadataOverall: ['needs_review', 'candidate'],
+      metadataIssueLevel: ['danger'],
+      metadataProviderState: ['candidate', 'problem'],
+      page: 1,
+      limit: 20,
+    })
+
+    const [sql, params] = query.mock.calls[0]
+    const [countSql] = query.mock.calls[1]
+    expect(sql).toContain('md.metadata_status_rank = ANY($')
+    expect(sql).toContain('md.metadata_issue_rank = ANY($')
+    expect(sql).toContain('md.md_douban_state = ANY($')
+    expect(sql).toContain('md.md_tmdb_state = ANY($')
+    expect(sql).toContain('::int[]')
+    // overall 文本经 METADATA_OVERALL_RANK 映射成 int rank（needs_review=1 / candidate=2）
+    expect(params).toContainEqual([1, 2])
+    // issue danger=3
+    expect(params).toContainEqual([3])
+    // provider state 文本数组直传
+    expect(params).toContainEqual(['candidate', 'problem'])
+    // 带过滤 → count 也挂 LATERAL
+    expect(countSql).toContain('LEFT JOIN LATERAL')
+  })
+
+  it('META-32-B: 元数据快捷筛选 + updated 范围（rank 字面量来自常量 / 时间走参数化 timestamptz）', async () => {
+    query
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ count: '0' }] })
+
+    await listAdminVideos(db, {
+      status: 'all',
+      metadataNeedsReview: true,
+      metadataHasCandidate: true,
+      metadataMissing: true,
+      metadataTmdbPending: true,
+      metadataUpdatedFrom: '2026-01-01T00:00:00Z',
+      metadataUpdatedTo: '2026-06-14T00:00:00Z',
+      page: 1,
+      limit: 20,
+    })
+
+    const [sql, params] = query.mock.calls[0]
+    expect(sql).toContain('md.metadata_status_rank = 1')  // needs_review
+    expect(sql).toContain('md.metadata_status_rank = 3')  // missing
+    expect(sql).toContain("'candidate' IN (md.md_douban_state, md.md_bangumi_state, md.md_tmdb_state, md.md_imdb_state)")
+    expect(sql).toContain("md.md_tmdb_state IN ('candidate','problem','missing')")
+    expect(sql).toContain("::timestamptz >= $")
+    expect(sql).toContain("::timestamptz <= $")
+    expect(params).toContain('2026-01-01T00:00:00Z')
+    expect(params).toContain('2026-06-14T00:00:00Z')
+  })
 })

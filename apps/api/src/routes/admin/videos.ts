@@ -20,7 +20,7 @@ import { ModerationService } from '@/api/services/ModerationService'
 import * as systemSettingsQueries from '@/api/db/queries/systemSettings'
 import { isAppError } from '@/api/lib/errors'
 import type { VisibilityStatus } from '@/types'
-import { VIDEO_TYPES, VIDEO_STATUSES, REVIEW_STATUSES, VISIBILITY_STATUSES, DOUBAN_STATUSES, BANGUMI_STATUSES, SOURCE_CHECK_STATUSES } from '@resovo/types'
+import { VIDEO_TYPES, VIDEO_STATUSES, REVIEW_STATUSES, VISIBILITY_STATUSES, DOUBAN_STATUSES, BANGUMI_STATUSES, SOURCE_CHECK_STATUSES, METADATA_STATUS_OVERALLS, METADATA_PROVIDER_STATES, METADATA_ISSUE_LEVELS } from '@resovo/types'
 
 // ── Zod Schema ────────────────────────────────────────────────────
 
@@ -98,6 +98,8 @@ const SORT_FIELDS = [
   'episode_count',
   // SRCHEALTH-P1-1-A（B1）：探测/试播聚合列排序（同步 queries SORT_FIELD_WHITELIST）
   'source_check_status', 'render_check_status',
+  // META-32-B（ADR-201 §视频库 排序）：元数据运营优先级 + 完整度独立字段（同步 SORT_FIELD_WHITELIST）
+  'metadata_status', 'metadata_score',
 ] as const
 
 // CHG-VSR-2：CSV → enum 数组 query 解析（参 SourcesMatrixService / crawler.runs.ts 同范式，各 route 私有 helper）
@@ -152,6 +154,16 @@ const ListQuerySchema = z.object({
   episodeMissing: queryBool,
   metaIncomplete: queryBool,
   pendingReview: queryBool,
+  // ── META-32-B（ADR-201 §视频库 过滤）：元数据状态筛选（CSV 多选 + 范围 + 快捷 bool）──
+  metadataOverall: csvEnum(METADATA_STATUS_OVERALLS),
+  metadataProviderState: csvEnum(METADATA_PROVIDER_STATES),
+  metadataIssueLevel: csvEnum(METADATA_ISSUE_LEVELS),
+  metadataUpdatedFrom: z.string().datetime().optional(),
+  metadataUpdatedTo: z.string().datetime().optional(),
+  metadataNeedsReview: queryBool,
+  metadataHasCandidate: queryBool,
+  metadataMissing: queryBool,
+  metadataTmdbPending: queryBool,
   page: z.coerce.number().int().min(1).optional().default(1),
   limit: z.coerce.number().int().min(1).max(100).optional().default(20),
   q: z.string().max(100).optional(),
@@ -197,6 +209,8 @@ export async function adminVideoRoutes(fastify: FastifyInstance) {
       status, type, types, visibilityStatus, reviewStatus, page, limit, q, site, sortField, sortDir,
       yearMin, yearMax, country, catalogStatus, isPublished, doubanStatus, bangumiStatus,
       metaScoreMin, metaScoreMax, episodeMismatch, episodeMissing, metaIncomplete, pendingReview,
+      metadataOverall, metadataProviderState, metadataIssueLevel, metadataUpdatedFrom, metadataUpdatedTo,
+      metadataNeedsReview, metadataHasCandidate, metadataMissing, metadataTmdbPending,
     } = parsed.data
     const includeAdult = await shouldIncludeAdultInAdminContent()
     const result = await videoService.adminList({
@@ -225,6 +239,15 @@ export async function adminVideoRoutes(fastify: FastifyInstance) {
       episodeMissing,
       metaIncomplete,
       pendingReview,
+      metadataOverall,
+      metadataProviderState,
+      metadataIssueLevel,
+      metadataUpdatedFrom,
+      metadataUpdatedTo,
+      metadataNeedsReview,
+      metadataHasCandidate,
+      metadataMissing,
+      metadataTmdbPending,
     })
     return reply.send(result)
   })

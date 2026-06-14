@@ -6,13 +6,17 @@
  */
 
 import type { Pool } from 'pg'
-import type { Video, VideoCard, VideoType, VisibilityStatus, ReviewStatus, VideoStatus, DoubanStatus, BangumiStatus } from '@/types'
+import type {
+  Video, VideoCard, VideoType, VisibilityStatus, ReviewStatus, VideoStatus, DoubanStatus, BangumiStatus,
+  MetadataStatusOverall, MetadataProviderState, MetadataIssueLevel,
+} from '@/types'
 import type { DbVideoRow } from './videos.internal'
 import {
   mapVideoRow, mapVideoCard,
   VIDEO_FULL_SELECT, VIDEO_JOIN,
   SOURCE_COUNT_SUBQUERY, SUBTITLE_LANGS_SUBQUERY,
 } from './videos.internal'
+import { METADATA_STATUS_JOIN_SQL, METADATA_OVERALL_RANK, METADATA_ISSUE_RANK } from './metadata-status.derive'
 
 export type { DbVideoRow } from './videos.internal'
 export { buildEnrichmentSummary } from './videos.internal'
@@ -232,6 +236,10 @@ const SORT_FIELD_WHITELIST: Record<string, string> = {
   // SRCHEALTH-P1-1-A（B1）：探测/试播聚合列排序（probe 直通列 / render SELECT alias 同 source_health 先例）
   source_check_status: 'v.source_check_status',
   render_check_status: 'render_check_status',
+  // META-32-B（ADR-201 §视频库 排序）：元数据运营优先级（动态 LATERAL md.metadata_status_rank，
+  // ASC=needs_review→complete）+ 完整度独立字段（v.meta_score，不复用 meta composite）
+  metadata_status: 'md.metadata_status_rank',
+  metadata_score: 'v.meta_score',
 }
 
 export interface AdminVideoListFilters {
@@ -271,6 +279,25 @@ export interface AdminVideoListFilters {
   metaIncomplete?: boolean
   /** 快捷筛选：待审（review_status='pending_review'）。仅 true 生效 */
   pendingReview?: boolean
+  // ── META-32-B（ADR-201 §视频库 过滤 / D-201-6）：元数据状态服务端过滤（动态 LATERAL `md`）──
+  // 注：元数据完整度范围复用上方 metaScoreMin/metaScoreMax（同列 v.meta_score），不另设入口。
+  /** 整体状态多选（overall；映射 md.metadata_status_rank = ANY） */
+  metadataOverall?: readonly MetadataStatusOverall[]
+  /** 单源状态多选（任一 provider state ∈ 集合） */
+  metadataProviderState?: readonly MetadataProviderState[]
+  /** 问题等级多选（映射 md.metadata_issue_rank = ANY） */
+  metadataIssueLevel?: readonly MetadataIssueLevel[]
+  /** 最近增强时间范围（meta_quality.enriched_at；含端点，ISO8601） */
+  metadataUpdatedFrom?: string
+  metadataUpdatedTo?: string
+  /** 快捷筛选：需复核（overall=needs_review）。仅 true 生效 */
+  metadataNeedsReview?: boolean
+  /** 快捷筛选：有候选（任一 provider state=candidate）。仅 true 生效 */
+  metadataHasCandidate?: boolean
+  /** 快捷筛选：未增强（overall=missing）。仅 true 生效 */
+  metadataMissing?: boolean
+  /** 快捷筛选：TMDB 待处理（tmdb state ∈ candidate/problem/missing）。仅 true 生效 */
+  metadataTmdbPending?: boolean
   sortField?: string
   sortDir?: 'asc' | 'desc'
   page: number
@@ -380,10 +407,61 @@ export async function listAdminVideos(
     conditions.push(`v.review_status = 'pending_review'`)
   }
 
+  // ── META-32-B（ADR-201 §视频库 过滤）：元数据状态谓词（引用动态 LATERAL `md`，下方按需拼 JOIN）──
+  if (filters.metadataOverall?.length) {
+    conditions.push(`md.metadata_status_rank = ANY($${idx++}::int[])`)
+    params.push(filters.metadataOverall.map((o) => METADATA_OVERALL_RANK[o]))
+  }
+  if (filters.metadataIssueLevel?.length) {
+    conditions.push(`md.metadata_issue_rank = ANY($${idx++}::int[])`)
+    params.push(filters.metadataIssueLevel.map((l) => METADATA_ISSUE_RANK[l]))
+  }
+  if (filters.metadataProviderState?.length) {
+    // 任一 provider state ∈ 选中集（四源 OR，复用单参数）
+    conditions.push(
+      `(md.md_douban_state = ANY($${idx}::text[]) OR md.md_bangumi_state = ANY($${idx}::text[])`
+      + ` OR md.md_tmdb_state = ANY($${idx}::text[]) OR md.md_imdb_state = ANY($${idx}::text[]))`,
+    )
+    idx++
+    params.push(filters.metadataProviderState)
+  }
+  if (filters.metadataUpdatedFrom !== undefined) {
+    conditions.push(`NULLIF(v.meta_quality->>'enriched_at','')::timestamptz >= $${idx++}::timestamptz`)
+    params.push(filters.metadataUpdatedFrom)
+  }
+  if (filters.metadataUpdatedTo !== undefined) {
+    conditions.push(`NULLIF(v.meta_quality->>'enriched_at','')::timestamptz <= $${idx++}::timestamptz`)
+    params.push(filters.metadataUpdatedTo)
+  }
+  // 元数据快捷筛选（仅 true 追加；rank 字面量来自代码常量非用户输入）
+  if (filters.metadataNeedsReview === true) {
+    conditions.push(`md.metadata_status_rank = ${METADATA_OVERALL_RANK.needs_review}`)
+  }
+  if (filters.metadataMissing === true) {
+    conditions.push(`md.metadata_status_rank = ${METADATA_OVERALL_RANK.missing}`)
+  }
+  if (filters.metadataHasCandidate === true) {
+    conditions.push(`'candidate' IN (md.md_douban_state, md.md_bangumi_state, md.md_tmdb_state, md.md_imdb_state)`)
+  }
+  if (filters.metadataTmdbPending === true) {
+    conditions.push(`md.md_tmdb_state IN ('candidate','problem','missing')`)
+  }
+
   const where = conditions.join(' AND ')
   const offset = (filters.page - 1) * filters.limit
   const orderByCol = SORT_FIELD_WHITELIST[filters.sortField ?? ''] ?? 'v.created_at'
   const orderByDir = filters.sortDir === 'asc' ? 'ASC' : 'DESC'
+
+  // 动态 LATERAL：仅当按 metadata_status 排序或带 metadata 过滤时才挂（默认列表路径零额外成本）
+  const hasMetadataFilter =
+    !!filters.metadataOverall?.length || !!filters.metadataIssueLevel?.length
+    || !!filters.metadataProviderState?.length
+    || filters.metadataUpdatedFrom !== undefined || filters.metadataUpdatedTo !== undefined
+    || filters.metadataNeedsReview === true || filters.metadataMissing === true
+    || filters.metadataHasCandidate === true || filters.metadataTmdbPending === true
+  const sortByMetadataStatus = filters.sortField === 'metadata_status'
+  const mainMetadataJoin = hasMetadataFilter || sortByMetadataStatus ? `\n       ${METADATA_STATUS_JOIN_SQL}` : ''
+  const countMetadataJoin = hasMetadataFilter ? `\n       ${METADATA_STATUS_JOIN_SQL}` : ''
 
   const [rows, countResult] = await Promise.all([
     db.query<DbVideoRow & { active_source_count: string; total_source_count: string; render_check_status: string }>(
@@ -403,7 +481,7 @@ export async function listAdminVideos(
                END FROM video_sources
                WHERE video_id = v.id AND is_active = true AND deleted_at IS NULL) AS render_check_status
        ${VIDEO_JOIN}
-       LEFT JOIN crawler_sites cs ON cs.key = v.site_key
+       LEFT JOIN crawler_sites cs ON cs.key = v.site_key${mainMetadataJoin}
        WHERE ${where}
        ORDER BY ${orderByCol} ${orderByDir}
        LIMIT $${idx} OFFSET $${idx + 1}`,
@@ -411,7 +489,7 @@ export async function listAdminVideos(
     ),
     db.query<{ count: string }>(
       `SELECT COUNT(*) ${VIDEO_JOIN}
-       LEFT JOIN crawler_sites cs ON cs.key = v.site_key
+       LEFT JOIN crawler_sites cs ON cs.key = v.site_key${countMetadataJoin}
        WHERE ${where}`,
       params
     ),

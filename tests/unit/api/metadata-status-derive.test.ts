@@ -12,6 +12,9 @@ import {
   buildMetadataStatusSummary,
   getMetadataProviderRefs,
   METADATA_COMPLETE_SCORE_THRESHOLD,
+  METADATA_OVERALL_RANK,
+  METADATA_ISSUE_RANK,
+  METADATA_STATUS_JOIN_SQL,
   type MetadataStatusSourceRow,
   type ProviderRefAggregate,
 } from '@/api/db/queries/metadata-status.derive'
@@ -198,5 +201,61 @@ describe('getMetadataProviderRefs — 批量组装', () => {
     expect(douban?.videoConfidence).toBe(0.8)
     expect(tmdb?.catalogRelation).toBe('exact')
     expect(tmdb?.catalogConfidence).toBe(0.9)
+  })
+})
+
+describe('METADATA_STATUS_JOIN_SQL — 服务端排序过滤 SQL 派生（META-32-B）', () => {
+  it('排序键常量与 JS sort 口径同一真源', () => {
+    // 这两个 Record 同时驱动 JS sort.statusRank/issueRank 与 SQL metadata_status_rank/issue_rank
+    expect(METADATA_OVERALL_RANK).toEqual({ needs_review: 1, candidate: 2, missing: 3, partial: 4, complete: 5 })
+    expect(METADATA_ISSUE_RANK).toEqual({ none: 0, info: 1, warn: 2, danger: 3 })
+  })
+
+  it('是动态 LATERAL JOIN，外层别名 md', () => {
+    expect(METADATA_STATUS_JOIN_SQL).toContain('LEFT JOIN LATERAL')
+    expect(METADATA_STATUS_JOIN_SQL).toMatch(/\)\s*md ON true\s*$/)
+  })
+
+  it('四源 state 列齐全（供 provider state / 快捷筛选过滤）', () => {
+    for (const p of METADATA_PROVIDERS) {
+      expect(METADATA_STATUS_JOIN_SQL).toContain(`AS md_${p}_state`)
+      expect(METADATA_STATUS_JOIN_SQL).toContain(`AS md_${p}_issue_rank`)
+    }
+    expect(METADATA_STATUS_JOIN_SQL).toContain('AS metadata_status_rank')
+    expect(METADATA_STATUS_JOIN_SQL).toContain('AS metadata_issue_rank')
+  })
+
+  it('catalog ref 优先级 + video ref 谓词镜像 getMetadataProviderRefs DISTINCT ON', () => {
+    expect(METADATA_STATUS_JOIN_SQL).toContain('FROM catalog_external_refs cer')
+    expect(METADATA_STATUS_JOIN_SQL).toContain('cer.catalog_id = v.catalog_id')
+    expect(METADATA_STATUS_JOIN_SQL).toContain('FROM video_external_refs ver')
+    expect(METADATA_STATUS_JOIN_SQL).toContain('ver.video_id = v.id')
+    expect(METADATA_STATUS_JOIN_SQL).toContain('ver.is_primary DESC')
+  })
+
+  it('overall rank 口径镜像 deriveOverall（needs_review/candidate/missing/partial/complete + 阈值 80）', () => {
+    expect(METADATA_STATUS_JOIN_SQL).toContain(`THEN ${METADATA_OVERALL_RANK.needs_review}`)
+    expect(METADATA_STATUS_JOIN_SQL).toContain(`THEN ${METADATA_OVERALL_RANK.candidate}`)
+    expect(METADATA_STATUS_JOIN_SQL).toContain(`THEN ${METADATA_OVERALL_RANK.missing}`)
+    expect(METADATA_STATUS_JOIN_SQL).toContain(`v.meta_score < ${METADATA_COMPLETE_SCORE_THRESHOLD}`)
+    expect(METADATA_STATUS_JOIN_SQL).toContain(`v.meta_score >= ${METADATA_COMPLETE_SCORE_THRESHOLD}`)
+    // missing 判定与 JS `!enrichedAt` 一致（空串按缺失）
+    expect(METADATA_STATUS_JOIN_SQL).toContain(`NULLIF(v.meta_quality->>'enriched_at', '') IS NULL`)
+  })
+
+  it('bangumi not_applicable 分支仅对非 anime（D-201-B）', () => {
+    expect(METADATA_STATUS_JOIN_SQL).toContain(`WHEN v.type <> 'anime' THEN 'not_applicable'`)
+    // douban/tmdb/imdb 无 not_applicable 分支（只有 bangumi 一处）
+    expect(METADATA_STATUS_JOIN_SQL.match(/'not_applicable'/g)?.length).toBe(1)
+  })
+
+  it('rejected + cache 冲突态 → problem/danger（镜像 mapCatalogRelation/mapVideoMatchStatus）', () => {
+    expect(METADATA_STATUS_JOIN_SQL).toContain(`= 'rejected' AND mc.douban_id IS NOT NULL THEN 'problem'`)
+    expect(METADATA_STATUS_JOIN_SQL).toContain(`THEN ${METADATA_ISSUE_RANK.danger}`)
+  })
+
+  it('不拼接用户输入（纯静态常量 SQL）', () => {
+    expect(METADATA_STATUS_JOIN_SQL).not.toContain('$')
+    expect(METADATA_STATUS_JOIN_SQL).not.toContain('undefined')
   })
 })

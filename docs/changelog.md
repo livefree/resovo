@@ -5580,3 +5580,27 @@
 - **质量门禁**：typecheck 全工作区 EXIT=0 / lint EXIT=0 / test:changed 升全量（packages/types 基础包触发）7432 passed（唯一失败 `UserSubmissionsClient.test.tsx` 隔离 12/12 通过 = 既有全量并行 flake，与本卡无关）/ verify:adr-contracts EXIT=0。
 - **后续**：META-32-B 视频库 `元数据` 列动态 SQL 排序过滤接入（依本卡类型 + 派生 SQL 口径）。
 - **[AI-CHECK]**：六问过——①派生纯函数 + 批量查询避免 N+1，`enrichmentSummary` 并返不破旧消费方，回归面由 17 单测 + 全量守护；②状态派生集中服务端（D-201-2），UI 不现算，避免三处重复；③五枚举 const+type + providers 四 key 恒在 + 顺序常量保障四源/TMDB 增量扩展；④无 any（refs 行显式类型 + NUMERIC toNum）/无空 catch/无硬编码色（types·api 层不涉色，色 token 归 META-33）；⑤改动收敛于类型 + 派生 + Service 注入 + 镜像 + 单测，未碰视频库排序过滤（-B）/UI（META-33+）；⑥真源优先级守 ADR-177 canonical（D-201-E），不仅据 cache 判 applied，tmdb·imdb 占位不伪造数据。
+
+## [META-32-B] 视频库元数据状态服务端排序/过滤接入（动态 LATERAL SQL）
+- **完成时间**：2026-06-14
+- **记录时间**：2026-06-14
+- **执行模型**：claude-opus-4-8（主循环连续推进；偏离 sonnet 建议，无强制升降触发——非新共享组件 API / 非 schema / 非 ADR / 非 player / 非 token）
+- **子代理**：无（方案由 META-32 前置 gate arch-reviewer (claude-opus-4-8, agentId a9a76572f8b5f83ae) CONDITIONAL-PASS 决策裁定①已定，实施未偏离故未再 spawn）
+- **背景**：META-32-A 已让 `VideoService.adminList/adminFindById` 返回 JS 派生 `metadataStatus`（列表行已带，无 cell N+1），但视频库 `元数据` 列的**服务端排序/过滤**尚无字段。本卡按 ADR-201 D-201-6 + 决策裁定①（动态 JOIN + SQL CASE，零 schema / 零 architecture.md 同步）补排序键与过滤谓词。
+- **修改文件**：
+  - `apps/api/src/db/queries/metadata-status.derive.ts` — 导出 `METADATA_OVERALL_RANK`/`METADATA_ISSUE_RANK`（与 JS `sort.statusRank/issueRank` 共用真源，原 module-private const 提升）；新增 `METADATA_STATUS_JOIN_SQL`（动态 `LEFT JOIN LATERAL` 子句，别名 `md`）：3 层 derived table（内层 8 子查询取 4 源 catalog 最强 relation + video 最强 match_status → 中层 per-provider `state`/`issue_rank` CASE → 外层 `metadata_status_rank`/`metadata_issue_rank` + 透出四源 state）。**口径一致性红线**：每分支与 JS `deriveProviderStatus`/`mapCatalogRelation`/`mapVideoMatchStatus`/`statusColumnState`/`deriveOverall` **逐分支镜像**，`providerStateBranches` 单一分支表同时渲染 state/issue 两 CASE（结构性防漂移）；纯静态常量 SQL 不拼用户输入。
+  - `apps/api/src/db/queries/videos.ts` — `SORT_FIELD_WHITELIST` +`metadata_status`(`md.metadata_status_rank`)/`metadata_score`(`v.meta_score`)；`AdminVideoListFilters` +9 字段（overall/providerState/issueLevel 多选 + updatedFrom/To + 4 快捷）；`listAdminVideos` WHERE 谓词（overall/issue 经 rank 映射 `= ANY($::int[])`、provider state 四源 OR 复用单参、updated `::timestamptz` 范围、快捷 rank 字面量来自常量）；**动态 JOIN**：仅 `sortField=metadata_status` 或带 metadata 过滤时挂 LATERAL（主查询/count 各按需），默认列表路径零额外成本。
+  - `apps/api/src/routes/admin/videos.ts` — `SORT_FIELDS` +2；`ListQuerySchema` + `csvEnum(METADATA_STATUS_OVERALLS/PROVIDER_STATES/ISSUE_LEVELS)` + `z.string().datetime()` 范围 + 快捷 `queryBool`；GET handler 解构 + 透传。
+  - `apps/api/src/services/VideoService.ts` — `adminList` 入参 +9 加性透传。
+  - `apps/server-next/src/lib/videos/types.ts` — `VideoListFilter.sortField` +`metadata_status`/`metadata_score` + 9 过滤字段镜像 + re-export 3 枚举类型。
+  - `vitest.integration.config.ts` — 补 `@/types` 别名（镜像 unit 配置；`metadata-status.derive` 内部消费 packages/types barrel，集成测试需解析）。
+  - `tests/unit/api/metadata-status-derive.test.ts` — +8 SQL 派生结构断言（LATERAL/四源 state 列/catalog·video ref 谓词/overall rank 阈值 80/bangumi not_applicable 仅非 anime/rejected+cache→problem/排序键常量同真源/不拼用户输入）。
+  - `tests/unit/api/admin-video-list.test.ts` — +5（无 metadata 条件不挂 LATERAL / sortField=metadata_status 挂 LATERAL + count 不挂 / metadata_score 直通 / overall·issue·providerState 多选谓词 + 主+count 挂 JOIN / 快捷 + updated 范围）。
+  - `tests/integration/api/metadata-status-sort-filter-sql.test.ts`（新）— 真实 PG 集成：listAdminVideos 各 metadata 排序/过滤组合可执行性（防 LATERAL 嵌套引用/`::int[]`/`::timestamptz` cast 偏离，mock 盲区）+ **SQL↔JS 口径一致性守卫**（现有行抽样 rank/issueRank/四源 state 逐值相等）。
+- **边界裁定**：① 元数据完整度范围复用既有 `metaScoreMin/metaScoreMax`（同列 `v.meta_score`），不另设入口；② `metadataProvider` 单列多选（ADR 未明确与 providerState 的组合规则）暂不做 → 登记 META-36 follow-up（后端 provider state 列已暴露，META-36 仅补谓词、零回头改派生）。
+- **新增依赖**：无。
+- **数据库变更**：无（动态 LATERAL 派生，零 migration / 零 architecture.md 同步——决策裁定①）。
+- **测试覆盖**：单测 +13（derive SQL 结构 8 + listAdminVideos 5）；集成 +1 文件 5 用例（4 可执行性 + 1 SQL↔JS 一致性）。**真库一致性实证**：200 行抽样 rank/issueRank/四源 state 0 失配。
+- **质量门禁**：typecheck 全工作区 EXIT=0 / lint EXIT=0 / test:changed 升全量（config + core query 触发）7445 passed（唯一失败 `DailyAnimeRow.test.tsx` web-next jsdom 隔离 4/4 通过 = 既有全量并发抖动，与本卡 apps/api node 域零关联）/ test:integration 全量 72/72（含新增守卫 + `@/types` 别名加性零回归）/ verify:adr-contracts EXIT=0（仅既有 enum SSOT advisory）。
+- **后续**：META-32 Phase 1 全收口（-A 类型/派生 + -B 排序过滤）→ 解锁 META-33（admin-ui `MetadataSourceIconCluster`/`MetadataStatusPanel` 原语，Opus）；META-36（视频库元数据列 UI 排序过滤改造）消费本卡后端字段，并补 `metadataProvider` 单列 facet 谓词。
+- **[AI-CHECK]**：六问过——①SQL 派生与 JS `buildMetadataStatusSummary` **逐分支镜像 + 真库 200 抽样 0 失配**实证口径一致，动态 JOIN 仅按需挂不动默认列表路径，回归面由 13 单测 + 5 集成 + 全量守护；②Route→Service→queries 分层不破，SQL 派生集中 derive.ts 单一真源（与 JS 同文件并列，防双口径漂移）；③排序键/阈值全引用 `METADATA_OVERALL_RANK`/`METADATA_ISSUE_RANK`/`METADATA_COMPLETE_SCORE_THRESHOLD` 常量，provider/列名/字面量为代码常量（zero 用户输入拼接），四源经 `METADATA_PROVIDERS` 遍历可增量扩展；④无 any / 无空 catch / 无硬编码色（API 层不涉色）；⑤改动收敛于排序过滤字段链（query+route+service+镜像+测试）+ 必要的集成测试别名，未碰 UI（META-33+）/未物化 schema；⑥用户值全经参数化 `$n` + 显式 cast（`::int[]`/`::text[]`/`::timestamptz`）进入，规避 PG 类型推断偏离（BUGFIX-RENDERCHECK 教训），集成测试真库执行守护。

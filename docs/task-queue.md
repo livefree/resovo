@@ -2457,7 +2457,7 @@
    - 完成备注：执行模型 GPT-5 Codex。docs-only 落地 ADR-201：统一“元数据状态”术语与 `MetadataStatusSummary` DTO；定义 `overall/provider/issue/nextAction/sort` 状态模型；四来源图标固定 Douban/Bangumi/TMDB/IMDb（已应用=正常、未获取/不适用=灰、候选=黄点、异常=红点）；审核详情合并为单一 `元数据状态` section；视频编辑删除顶级 `豆瓣·元数据` tab、改统一 `元数据` tab；视频库元数据列服务端排序过滤字段定稿；TMDB 凭证区分 `read_access_token` vs `api_key` 且首选 Bearer；TMDB 只作为元数据 provider，不作为播放源。门禁 `npm run verify:adr-contracts` EXIT=0（仅既有 advisory warning）。详见 changelog [META-31]。
    - 解锁：META-32。
    - **META-31-FIX**（审核修订 · ✅ 已完成 2026-06-14）：独立审核 ADR-201 发现 1 事实错误 + 3 关系/迁移缺口 + 2 实施 open-q，按修订 1–7 落库——订正视频编辑 tab；ADR-172 AMD2/AMD3 + ADR-173 挂修订指针；ADR-201 补取代关系/TMDB 迁移路径/服务端排序 open-q/providers 4-key 常量；META-32 加 Opus 评审 gate + 两决策项、META-37 补迁移项。docs-only，不改动 commit 5f73dd30。执行模型 claude-opus-4-8。
-2. **META-32** — Phase 1：统一元数据状态 DTO + 派生服务/查询（状态：🔄 进行中 2026-06-14，依 META-31）→ 前置 gate arch-reviewer(claude-opus-4-8, agentId a9a76572f8b5f83ae) **CONDITIONAL-PASS**，已拆 -A/-B
+2. **META-32** — Phase 1：统一元数据状态 DTO + 派生服务/查询（状态：✅ 已完成 2026-06-14，依 META-31）→ 前置 gate arch-reviewer(claude-opus-4-8, agentId a9a76572f8b5f83ae) **CONDITIONAL-PASS**，已拆 -A ✅/-B ✅ 全收口 → 解锁 META-33
    - **评审放行条件（C1–C5）**：C1 五枚举（provider/state/issueLevel/nextAction/overall）落 const+type 双形态（对齐 `EXTERNAL_REF_PROVIDERS`）；C2 无源字段（`fetchedAt`/`reasonCodes` 全源、`confidence`/`matchMethod`/`appliedAt` 对 tmdb·imdb）Phase 1 恒占位 + DTO JSDoc 逐字段标注；C3 派生取数真源优先级 `catalog_external_refs`(ADR-177 canonical) > `video_external_refs` > `media_catalog` 四列(仅 cache 兜底)；C4 决策项①=动态 JOIN；C5 拆 -A/-B。
    - **决策裁定**：① 服务端排序过滤 = 动态 JOIN + SQL CASE alias（复用 `render_check_status`/`source_health` 先例；零 schema / 零 architecture.md 同步；性能瓶颈再起独立物化 ADR）；② `providers: Record<MetadataProvider,…>` 四 key 恒在 + `METADATA_PROVIDER_ORDER=['douban','bangumi','tmdb','imdb']` 显示顺序常量（const+type，barrel value 导出，与 `EXTERNAL_REF_PROVIDERS` 异名 + JSDoc 警示 + 集合相等单测防误用）。
    - **新发现（D-201-E）**：ADR-201 §派生规则真源优先级未显式排序（`media_catalog` 已被 ADR-177 降级 cache）→ 已在 ADR-201 §派生规则 + §偏离登记补登记。
@@ -2466,9 +2466,10 @@
      - 文件：`packages/types/src/metadata-status.types.ts`(新) + `packages/types/src/index.ts`；`apps/api/src/db/queries/metadata-status.derive.ts`(新，`buildMetadataStatusSummary` + 派生算法 + 阈值 80 常量 + SQL CASE 片段)；`apps/api/src/services/VideoService.ts`(adminList/adminFindById 注入 `metadataStatus` 与 `enrichmentSummary` 并返)；`apps/api/src/db/queries/videos.ts`/`videos.internal.ts`(补 refs 聚合取数，不加排序过滤入参)；`apps/server-next/src/lib/videos/types.ts`(镜像 `metadataStatus?` + re-export)；单测(overall 优先级 1–6 / 阈值 80 边界 / 四 key 恒在 / not_applicable·missing / tmdb·imdb 占位恒 null·空 / refs 与 cache 冲突态)。
      - 协调点：`tooltipLines` i18n 文案不下沉后端 DTO（评审 T1 风险 3）→ 结构化字段为主，UI 拼装归 META-33。
      - 完成备注：执行模型 claude-opus-4-8；子代理 arch-reviewer (claude-opus-4-8, agentId a9a76572f8b5f83ae) 前置契约评审 CONDITIONAL-PASS。新增 `metadata-status.types.ts`（5 枚举 const+type + `METADATA_PROVIDER_ORDER` + DTO，无源字段 JSDoc 标注 C2）+ barrel；`metadata-status.derive.ts`（纯 `buildMetadataStatusSummary` + `getMetadataProviderRefs` 按页批量 refs + 真源优先级 catalog>video>cache，D-201-E）；`VideoService.adminList/adminFindById` 注入 `metadataStatus` 与 `enrichmentSummary` 并返；server-next `VideoAdminRow` 镜像 `metadataStatus?`；17 新单测。门禁 typecheck/lint EXIT=0 + test:changed 升全量 7432 passed（唯一失败 `UserSubmissionsClient` 隔离 12/12 = 既有全量 flake，无关）+ verify:adr-contracts EXIT=0。**解锁 META-32-B**。
-   - 2b. **META-32-B** — 视频库排序过滤接入（动态 SQL）（状态：⬜ 后排，依 32-A ✅ 已解锁）
-     - 建议模型：sonnet（动态方案，无新端点/无 schema）
+   - 2b. **META-32-B** — 视频库排序过滤接入（动态 SQL）（状态：✅ 已完成 2026-06-14，依 32-A ✅）
+     - 建议模型：sonnet（动态方案，无新端点/无 schema）／执行模型：claude-opus-4-8（主循环连续推进）
      - 文件：`apps/api/src/db/queries/videos.ts`(SORT_FIELD_WHITELIST 加 metadata_status/metadata_score alias + AdminVideoListFilters + WHERE 谓词 + 快捷筛选)；`apps/api/src/routes/admin/videos.ts`(ListQuerySchema + SORT_FIELDS，`csvEnum(METADATA_*)`)；`VideoService.ts`(透传)；`apps/server-next/src/lib/videos/types.ts`(filter/sortField 补值)；单测(过滤/排序 SQL + 大数据集排序性能用例)。
+     - 完成备注：`metadata-status.derive.ts` 导出 `METADATA_OVERALL_RANK`/`METADATA_ISSUE_RANK` + `METADATA_STATUS_JOIN_SQL`（动态 `LEFT JOIN LATERAL` 3 层 derived table，per-provider state/issue CASE **逐分支镜像** JS `buildMetadataStatusSummary`，单一分支表 `providerStateBranches` 喂 state/issue 双 CASE 防漂移，纯静态常量 SQL）；`videos.ts` SORT +metadata_status(`md.metadata_status_rank`)/metadata_score(`v.meta_score`) + 9 过滤谓词（overall/providerState/issue 多选经 rank 映射 `=ANY($::int[])` + 四源 OR + `::timestamptz` 范围 + 4 快捷）+ **动态 JOIN 仅 sortField=metadata_status 或带 metadata 过滤时挂**（默认列表零成本，主/count 各按需）；route csvEnum + 透传；server-next 镜像。**口径一致性实证**：真库 200 抽样 SQL↔JS rank/issueRank/四源 state 0 失配 + 新增集成测试守卫。**边界裁定**：metadataScoreMin/Max 复用既有 / `metadataProvider` 单列 facet 延 META-36。门禁 typecheck/lint EXIT=0 + test:changed 升全量 7445 passed（唯一失败 DailyAnimeRow web-next jsdom 隔离 4/4 = 既有并发抖动）+ test:integration 72/72 + verify:adr-contracts EXIT=0。子代理无（方案由前置 gate 已定）。详见 changelog [META-32-B]。
 3. **META-33** — Phase 2：admin-ui `MetadataSourceIconCluster` + `MetadataStatusPanel` 原语（状态：⬜ 后排，依 META-32）
    - 建议模型：opus（admin-ui 公开 Props）
    - 范围：四来源图标、灰态、黄/红点、紧凑/抽屉密度、hover tooltip、a11y 文案；现有 `EnrichmentBadgeCluster` 进入兼容或退役路径。
@@ -2478,9 +2479,10 @@
 5. **META-35** — Phase 3B：视频编辑抽屉去 Douban 独占 tab + 元数据工作台（状态：⬜ 后排，依 META-33）
    - 建议模型：sonnet
    - 范围：删除顶级 `豆瓣·元数据` tab，`外部元数据` 改为 `元数据`；Douban/Bangumi/TMDB/IMDb 作为来源卡进入同一 tab；旧 `tab=douban` 深链兼容到 `metadata#douban`。
-6. **META-36** — Phase 3C：视频库元数据列排序过滤改造（状态：⬜ 后排，依 META-32 + META-33）
+6. **META-36** — Phase 3C：视频库元数据列排序过滤改造（状态：⬜ 后排，依 META-32 ✅ + META-33）
    - 建议模型：sonnet
    - 范围：`元数据` 列使用四来源图标；支持 overall/provider/issue/score/updatedAt 过滤；默认排序改为运营优先级，完整度数值另保留专用排序字段。
+   - **META-32-B 衔接**：后端排序/过滤字段已备齐（`metadata_status`/`metadata_score` 排序 + overall/providerState/issueLevel 多选 + updated 范围 + needs_review/has_candidate/missing/tmdb_pending 快捷；动态 LATERAL `md.*`）；本卡为 UI 消费。**待补后端**：`metadataProvider` 单列 facet 谓词（META-32-B 边界裁定暂未做，ADR 未明确与 providerState 组合规则；provider state 列 `md.md_<p>_state` 已暴露，仅需补 WHERE 谓词 + route csvEnum，零回头改 SQL 派生）。
 7. **META-37** — Phase 4：API 凭证 TMDB 语义修订（状态：⬜ 后排，依 META-31；需协调 META-29）
    - 建议模型：opus（凭证公开类型 + 旧 KV 清理边界）
    - 范围：`tmdb.read_access_token` 与 `tmdb.api_key` 字段分离；Bearer 为首选；连接测试与 UI 文案同步；修正旧 `tmdb.token -> tmdb_api_key` 语义错配；新增 `loadTmdbClientConfig`（对齐 `loadBangumiClientConfig`）。
