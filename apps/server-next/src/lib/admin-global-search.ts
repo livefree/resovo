@@ -105,9 +105,15 @@ export function useAdminGlobalSearch(): AdminGlobalSearch {
   const [loading, setLoading] = useState(false)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const abortRef = useRef<AbortController | null>(null)
+  // 单调请求 token（latest-wins）：每次输入变更即自增 → 旧在途请求 resolve 时若 token 已被更新输入推进则丢弃。
+  // 不依赖 AbortController 的 abort 时序：abort 推迟到下一个 debounce setTimeout 才执行，存在「旧请求在新输入后、
+  // abort 前就 resolve」的窗口，仅靠 `signal.aborted` 会漏过 → 提交 stale（Codex stop-time review）。
+  const requestIdRef = useRef(0)
 
   const onQueryChange = useCallback((raw: string) => {
     const q = raw.trim()
+    // 每次输入变更（含清空）即推进 token，作废所有更早的在途/将发请求
+    const myId = ++requestIdRef.current
     if (debounceRef.current) clearTimeout(debounceRef.current)
 
     // 空查询 → 取消在途 + 清空结果（与 CommandPalette open=false 发 '' 端到端闭环，防 stale）
@@ -130,11 +136,12 @@ export function useAdminGlobalSearch(): AdminGlobalSearch {
             `/admin/search?q=${encodeURIComponent(q)}`,
             { signal: ctrl.signal },
           )
-          if (ctrl.signal.aborted) return // 被更晚请求取代，丢弃
+          // latest-wins：更新的输入已发生（token 推进）→ 丢弃此 stale 结果（不依赖 abort 时序）
+          if (myId !== requestIdRef.current) return
           setPrefilteredGroups(mapAdminSearchToCommandGroups(res.data))
           setLoading(false)
         } catch {
-          if (ctrl.signal.aborted) return // AbortError：被取消，不更新
+          if (myId !== requestIdRef.current) return // 被更晚输入取代（含 AbortError），不更新
           // 其余错误（ES 宕机/网络）→ 空结果兜底，不崩 shell（ADR-200 D-200-7 前端容忍）
           setPrefilteredGroups([])
           setLoading(false)

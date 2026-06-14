@@ -130,4 +130,28 @@ describe('useAdminGlobalSearch', () => {
     expect(result.current.loading).toBe(false)
     expect(result.current.prefilteredGroups).toEqual([])
   })
+
+  it('旧在途请求在新输入后、abort 窗口前 resolve → 丢弃 stale（Codex stop-time review 回归）', async () => {
+    // A 请求挂起（手动 resolve），模拟「T_a 已触发、A 在途、尚未被下一个 setTimeout abort」
+    let resolveA: ((v: unknown) => void) | undefined
+    const STALE = {
+      data: { query: 'a', groups: [{ kind: 'video', items: [{ kind: 'video', id: 'stale', title: 'STALE', href: '/x', score: 1, reason: 'fuzzy', payload: { shortId: 's', type: 'movie', year: null, status: 'completed', reviewStatus: 'approved', visibilityStatus: 'public' } }] }] },
+    }
+    mockGet
+      .mockImplementationOnce(() => new Promise((r) => { resolveA = r }))
+      .mockResolvedValueOnce({ data: RESP })
+
+    const { result } = renderHook(() => useAdminGlobalSearch())
+    act(() => result.current.onQueryChange('a'))
+    await act(async () => { await vi.advanceTimersByTimeAsync(250) }) // T_a fires → fetch A 在途（ctrlA 未 abort）
+    act(() => result.current.onQueryChange('ab')) // token 推进；T_ab 计划中，ctrlA 仍未 abort
+
+    // A 在 abort 窗口前 resolve → token 已 stale → 必须丢弃（旧代码靠 signal.aborted 会误提交 STALE）
+    await act(async () => { resolveA?.(STALE); await Promise.resolve() })
+    expect(result.current.prefilteredGroups).toBeUndefined()
+
+    // T_ab 触发 → B resolve → 提交最新结果
+    await act(async () => { await vi.advanceTimersByTimeAsync(250) })
+    expect(result.current.prefilteredGroups?.[0]?.id).toBe('search:video')
+  })
 })
