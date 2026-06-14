@@ -5426,3 +5426,20 @@
 - **后续**：SEARCH-03（Phase 2 统一 admin_search ES 索引，依 Phase 1 埋点）/ SEARCH-04（Phase 3 预测·多语言）/ SEARCH-05（独立 videos 搜索框收编）后排；submission searcher（P1.5）+ siteDisplayName display name 解析 + source/video 深链 + ES highlight 客户端渲染为登记 follow-up。
 - **[AI-CHECK]**：六问过——①无回归（test:e2e:admin 84/84 全绿，admin-shell-client 加性 props）；②映射逻辑沉淀纯函数可测、hook 防抖/取消单一职责；③扩展性（mapping 覆盖全 5 kind、hook 与端点解耦）；④无 any/空 catch（catch 注释静默 abort）/硬编码色（无新样式）；⑤改动收敛于 1 新 lib + 1 接线 + 2 测试；⑥纯前端接线、无新共享 API（消费 B 的公开 Props）、无新端点（消费 A 的 /admin/search），无强制 Opus 触发。
 - **Codex stop-time review FIX（SEARCH-02-C，2026-06-13）**：「global search can commit stale results from an older in-flight query」——`useAdminGlobalSearch` 旧实现仅靠 `AbortController.signal.aborted` guard 防 stale，但 abort 推迟到**下一个 debounce setTimeout 触发时**才执行；存在「旧在途请求在新输入发生后、abort 窗口前就 resolve」的竞态（此刻 `signal.aborted` 仍为 false，guard 漏过 → 提交 stale 'a' 结果，而输入已是 'ab'）。修复：引入单调 `requestIdRef` token（每次 `onQueryChange` 输入变更即 `++`），fetch resolve 后比对 `myId !== requestIdRef.current` 则丢弃——**latest-wins 不依赖 abort 时序**；AbortController 保留用于取消网络。+1 回归单测（旧在途请求在 abort 窗口前 resolve 必须丢弃；旧代码会因 STALE 提交而失败）。门禁 typecheck/lint EXIT=0 + test:changed 15 passed（hook 9）+ e2e global-search 2 passed。
+
+## [SEARCH-05] 后台独立搜索模块（独立并行卡）— videos `VideoFilterBar` → `DataTableSearchInput` 收编
+- **完成时间**：2026-06-13
+- **记录时间**：2026-06-13 22:05
+- **执行模型**：claude-opus-4-8（主循环；连续推进序列，偏离卡片 sonnet 建议——无强制升降触发，消费方收编、未改共享公开 Props）
+- **子代理**：无
+- **背景**：SEQ-20260613-03 搜索模块的独立并行卡（计划真源 `~/.claude/plans/top-bar-lively-marble.md` §收编 / 决策④），与搜索模块主卡解耦、低风险、可先行（不依赖 Phase 1 埋点）。后台各列表页搜索框 ~90% 已统一用共享原语 `DataTableSearchInput`（ADR-149 D-149-8/D-149-13），唯独 videos 页是异类：`VideoFilterBar` 自写裸 `<input type="search">` + 自管 `draft` state + 自写 300ms debounce + 手动 sync useEffect + unmount 清 timer，重复实现共享原语既有能力（且缺 IME composition 防中断 / Enter 立即提交 / 半 uncontrolled 焦点稳定）。属价值排序②「边界与复用」债务。
+- **修改文件**：
+  - `apps/server-next/src/app/admin/videos/_client/VideoFilterFields.tsx` — `VideoFilterBar` 内部实现收编到 `DataTableSearchInput`：删 `draft` useState / `timerRef` 300ms debounce / committedQ→draft sync useEffect / unmount timer cleanup / `onChange` / `INPUT_STYLE` 常量 / `SEARCH_DEBOUNCE_MS` 常量 / 悬空 `data-interactive="input"`（无任何匹配 CSS 规则）；留 `filtersRef`（read-modify-write 保最新 filters 不丢并发列筛选，patch.filters 全替换语义）+ `commit`（trim→set/delete `q`→onPatch）+ `currentQ`（snapshot→受控 value）；改 `<DataTableSearchInput value={committedQ} onChange={commit} size="md" placeholder aria-label data-testid="videos-search-input"/>`。import：`react` 去 `useEffect/useState` + 删 `CSSProperties` type；`@resovo/admin-ui` 加 `DataTableSearchInput`。`buildVideoFilter` / options 常量 / quick filters 段不动。
+- **公开契约零变更**：`VideoFilterBarProps {snapshot,onPatch}` + testid `videos-search-input` + onPatch q set/delete 语义 + placeholder「标题 / 英文名 / 原名 / 短ID」+ aria-label「搜索视频」全保留 → 消费方 `VideoListClient` 与 e2e 不破。
+- **新增依赖**：无。
+- **数据库变更**：无。
+- **测试覆盖**：无新增测试（纯内部实现收编、公开契约不变，由既有 e2e 守护）。回归：test:changed 73 passed（videos 5 文件零回归）+ **admin videos.spec 5/5 passed**（含 `:237` 搜索过滤 `videos-search-input` fill→q=E2E 请求→URL 含 q 端到端链路）。
+- **质量门禁**：typecheck EXIT=0 / lint EXIT=0（仅无关既存 img warning）/ test:changed 73 passed / admin videos.spec 5/5。verify:adr-contracts 不适用（纯 UI、无 route/端点/错误码/schema 变更）。
+- **收益**：后台搜索框收编后 ~95% 统一 `DataTableSearchInput`；videos 页白嫖 IME composition 防中断 + Enter 立即提交 + 半 uncontrolled 焦点稳定（CHG-355 复盘的焦点稳定保障），删 ~40 行重复实现。
+- **后续**：SEARCH-03（Phase 2 统一 admin_search ES 索引，依 Phase 1 埋点）/ SEARCH-04（Phase 3 预测·多语言）后排。
+- **[AI-CHECK]**：六问过——①无回归（admin videos.spec 5/5 + test:changed 73 全绿）；②收编消除重复实现、复用单一共享原语；③扩展性（DataTableSearchInput 是后台搜索框 SSOT，未来 IME/debounce 改进自动惠及 videos）；④无 any/空 catch/硬编码色（删的正是手写 INPUT_STYLE，改用原语 CSS 变量样式）；⑤改动收敛于单文件 `VideoFilterBar` 段；⑥消费方收编、未改 admin-ui 公开 Props（无 arch-reviewer/trailer 触发），无新端点/schema。

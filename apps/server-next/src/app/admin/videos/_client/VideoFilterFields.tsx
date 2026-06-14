@@ -1,7 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
-import type { CSSProperties } from 'react'
+import { useCallback, useRef } from 'react'
 import type {
   TableQuerySnapshot,
   FilterValue,
@@ -9,7 +8,7 @@ import type {
 } from '@resovo/admin-ui'
 import type { VideoListFilter } from '@/lib/videos'
 import type { VideoType, VideoStatus, VisibilityStatus, ReviewStatus, DoubanStatus, BangumiStatus } from '@resovo/types'
-import { getVideoTypeOptions } from '@resovo/admin-ui'
+import { DataTableSearchInput, getVideoTypeOptions } from '@resovo/admin-ui'
 
 // ── filter option constants ───────────────────────────────────────
 
@@ -145,24 +144,15 @@ export function buildVideoFilter(
 // 表格头部左侧唯一筛选入口 = q 搜索框（后端 ILIKE 多列 OR：title / title_en / title_original / short_id）。
 // 旧 status/site 下拉 + FilterChipBar 退场（§1.1：头部仅搜索 + 列设置；列筛选走列头菜单；
 // 已选过滤激活态在列头指示符体现，不出现已选过滤 chip 条）。
+//
+// SEARCH-05 收编（2026-06-13）：内部裸 <input> + 自管 draft/debounce/sync 收编到共享原语
+// `DataTableSearchInput`（ADR-149 D-149-8/D-149-13：IME composition 防中断 + 300ms debounce
+// + Enter 立即提交 + 半 uncontrolled 焦点稳定 + 外部 value 同步），公开契约 Props/testid 不变。
 
 export interface VideoFilterBarProps {
   readonly snapshot: TableQuerySnapshot
   readonly onPatch: (next: TableQueryPatch) => void
 }
-
-const INPUT_STYLE: CSSProperties = {
-  padding: '4px 10px',
-  borderRadius: 'var(--radius-sm)',
-  border: '1px solid var(--border-subtle)',
-  background: 'var(--bg-surface-row)',
-  color: 'var(--fg-default)',
-  fontSize: 'var(--font-size-sm)',
-  // outline 由 InteractionStyles §5 focus-visible 兜底（CHG-UX-06）
-  minWidth: '260px',
-}
-
-const SEARCH_DEBOUNCE_MS = 300
 
 function currentQ(filters: ReadonlyMap<string, FilterValue>): string {
   const v = filters.get('q')
@@ -171,17 +161,12 @@ function currentQ(filters: ReadonlyMap<string, FilterValue>): string {
 
 export function VideoFilterBar({ snapshot, onPatch }: VideoFilterBarProps) {
   const committedQ = currentQ(snapshot.filters)
-  const [draft, setDraft] = useState(committedQ)
-  // filtersRef 保最新 filters，debounce commit 时 read-modify-write 不丢并发列筛选（patch.filters 全替换语义）
+  // filtersRef 保最新 filters，commit（debounce/Enter 后由原语触发）read-modify-write 不丢并发列筛选
+  // （patch.filters 全替换语义；列头菜单/URL 反序列化的并发列筛选必须保留）
   const filtersRef = useRef(snapshot.filters)
   filtersRef.current = snapshot.filters
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // 外部 q 变化（列头菜单清除 / URL 反序列化 / 全部清空）同步回输入框
-  useEffect(() => { setDraft(committedQ) }, [committedQ])
-  // 卸载清理 pending timer（防 setState-after-unmount）
-  useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current) }, [])
-
+  // 原语内置 debounce/IME/Enter/焦点稳定 → 此处仅做 trim + q set/delete + onPatch
   const commit = useCallback((value: string) => {
     const next = new Map(filtersRef.current)
     const trimmed = value.trim()
@@ -190,22 +175,14 @@ export function VideoFilterBar({ snapshot, onPatch }: VideoFilterBarProps) {
     onPatch({ filters: next })
   }, [onPatch])
 
-  const onChange = useCallback((value: string) => {
-    setDraft(value)
-    if (timerRef.current) clearTimeout(timerRef.current)
-    timerRef.current = setTimeout(() => commit(value), SEARCH_DEBOUNCE_MS)
-  }, [commit])
-
   return (
-    <input
-      type="search"
-      value={draft}
-      onChange={(e) => onChange(e.target.value)}
+    <DataTableSearchInput
+      value={committedQ}
+      onChange={commit}
       placeholder="标题 / 英文名 / 原名 / 短ID"
       aria-label="搜索视频"
       data-testid="videos-search-input"
-      data-interactive="input"
-      style={INPUT_STYLE}
+      size="md"
     />
   )
 }

@@ -2423,4 +2423,5 @@
      - 完成备注：执行模型 claude-opus-4-8（连续推序列，偏离 sonnet 建议，无强制升降触发）；子代理无。门禁 typecheck/lint EXIT=0 + test:changed 14 passed + e2e global-search 2 passed + **test:e2e:admin 84/84**（全 admin 域零回归）。详见 changelog [SEARCH-02-C]。
 3. **SEARCH-03** — Phase 2：统一 admin_search ES 索引（状态：⬜ 后排，依 Phase 1 埋点）
 4. **SEARCH-04** — Phase 3：预测/多语言（search_as_you_type + 拼音/aliases）（状态：⬜ 后排）
-5. **SEARCH-05**（独立并行）— videos VideoFilterBar → DataTableSearchInput 收编（状态：⬜ 可先行，不混主卡）
+5. **SEARCH-05**（独立并行）— videos VideoFilterBar → DataTableSearchInput 收编（状态：✅ 已完成 2026-06-13）
+   - 完成备注：执行模型 claude-opus-4-8（连续推序列，偏离 sonnet 建议，无强制升降触发）；子代理无（消费方收编、未改 admin-ui 公开 Props）。`VideoFilterBar` 内部裸 input + 自管 draft/debounce/sync 全收编到共享原语 `DataTableSearchInput`（ADR-149 D-149-8/D-149-13 IME+debounce+Enter+焦点稳定），公开契约/testid/onPatch 语义零变更；filtersRef read-modify-write 保留不丢并发列筛选。门禁 typecheck/lint EXIT=0 + test:changed 73 passed + admin videos.spec 5/5（含搜索过滤链路守护）。后台搜索框收编后 ~95% 统一 DataTableSearchInput。详见 changelog [SEARCH-05]。
