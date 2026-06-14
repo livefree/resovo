@@ -5513,3 +5513,23 @@
   error 级**无样例**：本埋点 emit 路径结构上不产 error（D-200-10-C：同步日志写入无 error 分支 / allSettled 降级进 degraded_kinds / route 级异常走全局 errorHandler 属基础设施流非 metric 域）；error 级豁免不强造（§6.1 禁编造）。
 - **后续**：Phase 1 telemetry 端到端打通 → **上线收集足够数据后**解锁 SEARCH-03（Phase 2）+ SEARCH-04（Phase 3）。
 - **[AI-CHECK]**：六问过——①无回归（7416 全过 + e2e 2/2 + onCommandAction undefined 向后兼容回归绿）；②复用 ADR-107 §6 metric 范式 + client-log 限流范式 + 既有 SSOT enum 范式、telemetry 结构化字段沉淀；③扩展性（ADMIN_SEARCH_KINDS const + telemetry 字段为未来维度留口）；④**PII 红线**（加盐 hash + fail-closed + serializeReq 截断 url.query 双覆盖明文不落日志）/ 无 any（zod 推导）/ 无空 catch（fire-and-forget catch 带注释）/ 无硬编码色；⑤改动收敛于设计定稿文件清单、零额外发挥；⑥改 admin-ui 公开 Props（onCommandAction + CommandItem.telemetry）契约已 arch-reviewer 定稿、实施未偏离、commit 带 Subagents trailer 满足门禁；新端点入 ADR-200 表 verify:endpoint-adr 对齐。
+
+## [META-31] 元数据状态综合治理 + TMDB 接入 UI/UX 契约落库
+- **完成时间**：2026-06-14
+- **记录时间**：2026-06-14
+- **执行模型**：GPT-5 Codex（docs-only 方案设计）
+- **背景**：近期讨论确认元数据增强已通过 Douban/Bangumi 等路径分散落地，但审核详情、视频编辑、视频库仍混用“匹配 / 富集 / 外部元数据 / 豆瓣绑定 / 豆瓣·元数据”等标签；TMDB 接入前必须先统一状态、命名、DTO、UI/UX 与凭证语义。
+- **修改文件**：
+  - `docs/tasks.md` — 登记并收口 META-31 当前任务卡。
+  - `docs/task-queue.md` — 新增 SEQ-20260614-01，拆分 META-31..39：状态 DTO、admin-ui 原语、审核详情、编辑抽屉、视频库排序过滤、TMDB 凭证、TMDB API、候选应用。
+  - `docs/decisions.md` — 新增 **ADR-201：元数据状态综合治理 + TMDB 接入前置 UI/UX 契约**。
+  - `docs/changelog.md` — 本记录。
+- **决策摘要**：D-201-1 统一管理入口命名为“元数据状态”；D-201-2 `MetadataStatusSummary` 成为管理端唯一输出契约；D-201-3 四来源图标固定 Douban / Bangumi / TMDB / IMDb，正常=已应用、灰=未获取/不适用、黄点=候选待确认、红点=异常需复核；D-201-4 “获取”与“应用”分离；D-201-5 Douban 去特权化，移除顶级“豆瓣绑定”和独立 `豆瓣·元数据` tab；D-201-6 视频库排序过滤服务端化；D-201-7 TMDB 凭证区分 `read_access_token` 与 `api_key`，首选 Bearer；D-201-8 TMDB 只作为元数据 provider，不作为播放源。
+- **UI/UX 定稿**：审核详情合并为单一 `元数据状态` section；视频编辑抽屉改为统一 `元数据` tab + 四来源卡；视频库 `元数据` 列使用紧凑四图标 + hover/focus tooltip，并支持 overall/provider/issue/score/updatedAt 排序过滤。
+- **TMDB 官方能力边界**：Search→Detail 是接入主线；允许 detail、external_ids、images、videos trailers、credits/aggregate_credits、content rating、translations、configuration；Daily ID Export 只作为 ID 预筛辅助；禁止把 TMDB videos/watch providers 转成播放线路。
+- **新增依赖**：无。
+- **数据库变更**：无（docs-only；后续如新增派生列/schema 必须同步 `docs/architecture.md`）。
+- **测试覆盖**：无代码改动；执行 `verify:adr-contracts`。
+- **质量门禁**：verify:adr-contracts EXIT=0；typecheck/lint/test 未运行（docs-only 设计落库，无 TS/运行时代码变更）。
+- **后续**：META-32 先做统一 DTO + 派生服务/查询；META-33 做 admin-ui 原语；随后按审核详情、编辑抽屉、视频库、TMDB 凭证、TMDB API、候选应用顺序推进。
+- **[AI-CHECK]**：六问过——①无运行时代码变更，回归面由 ADR 契约约束；②状态模型沉淀到共享 DTO 与 admin-ui 原语，避免三处 UI 重复临时计算；③扩展性覆盖 provider state、issue、nextAction、排序过滤字段，TMDB/IMDb 可增量接入；④无 any/空 catch/硬编码色（docs，且 ADR 明确颜色必须走 token）；⑤改动收敛于任务/队列/ADR/changelog；⑥TMDB 不越界为播放源，凭证语义明确 Bearer/API Key，Douban 不再独占顶级 IA。

@@ -2430,3 +2430,53 @@
 4. **SEARCH-04** — Phase 3：预测/多语言（search_as_you_type + 拼音/aliases）（状态：⬜ 后排）
 5. **SEARCH-05**（独立并行）— videos VideoFilterBar → DataTableSearchInput 收编（状态：✅ 已完成 2026-06-13）
    - 完成备注：执行模型 claude-opus-4-8（连续推序列，偏离 sonnet 建议，无强制升降触发）；子代理无（消费方收编、未改 admin-ui 公开 Props）。`VideoFilterBar` 内部裸 input + 自管 draft/debounce/sync 全收编到共享原语 `DataTableSearchInput`（ADR-149 D-149-8/D-149-13 IME+debounce+Enter+焦点稳定），公开契约/testid/onPatch 语义零变更；filtersRef read-modify-write 保留不丢并发列筛选。门禁 typecheck/lint EXIT=0 + test:changed 73 passed + admin videos.spec 5/5（含搜索过滤链路守护）。后台搜索框收编后 ~95% 统一 DataTableSearchInput。详见 changelog [SEARCH-05]。
+
+---
+
+## [SEQ-20260614-01] 元数据状态综合治理 + TMDB 接入前置设计
+
+- **状态**：⏸ 后排（META-31 Phase 0 设计已完成；后续实现卡待排期）
+- **创建时间**：2026-06-14
+- **最后更新时间**：2026-06-14
+- **目标**：在 TMDB 真接入前，先统一元数据增强的命名、状态输出、管理 UI/UX、排序过滤数据支撑与 API 凭证语义，避免后续开发继续沿“匹配 / 富集 / 外部元数据 / 豆瓣绑定”多套概念分叉。
+- **背景**：项目已通过 Douban、Bangumi 做了元数据增强；已有实现分散在 `MetadataEnrichService`、Bangumi 本地 dump/API、Douban 网络/离线、`ExternalResourcesService`、旧 TMDB CSV import、凭证管理等路径。审核详情、视频编辑、视频库分别暴露“匹配”“富集”“外部元数据”“豆瓣绑定”“豆瓣·元数据”标签，语义混乱且 Douban 被过度特化。TMDB 官方 API 支持搜索、详情、图片、视频预告、watch provider 等元数据能力，不提供播放源；认证同时支持 Bearer Read Access Token 与 `api_key`，现有凭证管理需要明确字段语义。
+- **范围**：Phase 0 设计落库 → Phase 1 统一状态 DTO/派生查询 → Phase 2 admin-ui 图标与 tooltip 原语 → Phase 3 审核详情/编辑抽屉/视频库改造 → Phase 4 凭证语义修订 → Phase 5 TMDB 接入。
+- **硬约束**：
+  - 四来源顺序固定为 Douban / Bangumi / TMDB / IMDb；Douban 不再拥有顶级“绑定”入口或独立编辑 tab。
+  - 管理端只消费 `MetadataStatusSummary` 统一状态，不直接拼 `douban_status`、`bangumi_status`、`meta_score` 形成临时 UI。
+  - “获取到数据”与“成功应用到视频”必须分离；候选/冲突不能被显示为已增强。
+  - TMDB 只作为外部元数据来源，不进入播放源、线路、source health。
+  - API 凭证字段必须区分 TMDB `read_access_token` 与 `api_key`，首选 Bearer；旧 KV fallback 清理仍服从 META-29。
+
+### 任务列表
+
+1. **META-31** — Phase 0：ADR-201 元数据状态综合治理 + TMDB 接入 UI/UX 契约落库（状态：✅ 已完成 2026-06-14）
+   - 建议模型：opus（撰写 ADR + 跨审核页/视频编辑/视频库/凭证/TMDB 多契约）／执行模型：GPT-5 Codex
+   - 文件：`docs/decisions.md`（ADR-201）+ `docs/task-queue.md` + `docs/tasks.md` + `docs/changelog.md`
+   - 验收要点：统一术语、状态枚举、provider 图标状态、tooltip 摘要、审核详情、视频编辑、视频库排序过滤、API 凭证修订、TMDB 能力边界、后续拆卡顺序全部明确；不写代码。
+   - 完成备注：执行模型 GPT-5 Codex。docs-only 落地 ADR-201：统一“元数据状态”术语与 `MetadataStatusSummary` DTO；定义 `overall/provider/issue/nextAction/sort` 状态模型；四来源图标固定 Douban/Bangumi/TMDB/IMDb（已应用=正常、未获取/不适用=灰、候选=黄点、异常=红点）；审核详情合并为单一 `元数据状态` section；视频编辑删除顶级 `豆瓣·元数据` tab、改统一 `元数据` tab；视频库元数据列服务端排序过滤字段定稿；TMDB 凭证区分 `read_access_token` vs `api_key` 且首选 Bearer；TMDB 只作为元数据 provider，不作为播放源。门禁 `npm run verify:adr-contracts` EXIT=0（仅既有 advisory warning）。详见 changelog [META-31]。
+   - 解锁：META-32。
+2. **META-32** — Phase 1：统一元数据状态 DTO + 派生服务/查询（状态：⬜ 后排，依 META-31）
+   - 建议模型：opus（`@resovo/types` 公开类型 + 多消费方契约）
+   - 范围：新增 `MetadataStatusSummary` / `MetadataProviderStatus` / `MetadataStatusIssue` 类型；在服务/查询层集中派生，现有 `EnrichmentSummary` 过渡兼容；为视频库提供 `metadata_status_rank`、`metadata_issue_level`、provider state、`metadata_updated_at` 等排序过滤字段。
+3. **META-33** — Phase 2：admin-ui `MetadataSourceIconCluster` + `MetadataStatusPanel` 原语（状态：⬜ 后排，依 META-32）
+   - 建议模型：opus（admin-ui 公开 Props）
+   - 范围：四来源图标、灰态、黄/红点、紧凑/抽屉密度、hover tooltip、a11y 文案；现有 `EnrichmentBadgeCluster` 进入兼容或退役路径。
+4. **META-34** — Phase 3A：审核详情元数据状态统一展示（状态：⬜ 后排，依 META-33）
+   - 建议模型：sonnet
+   - 范围：`TabDetail` 移除散落的 Douban pill / “富集” / “外部元数据”并列展示，合并为 `元数据状态` 区块；保留发布/审核/可见性 triad 的业务边界。
+5. **META-35** — Phase 3B：视频编辑抽屉去 Douban 独占 tab + 元数据工作台（状态：⬜ 后排，依 META-33）
+   - 建议模型：sonnet
+   - 范围：删除顶级 `豆瓣·元数据` tab，`外部元数据` 改为 `元数据`；Douban/Bangumi/TMDB/IMDb 作为来源卡进入同一 tab；旧 `tab=douban` 深链兼容到 `metadata#douban`。
+6. **META-36** — Phase 3C：视频库元数据列排序过滤改造（状态：⬜ 后排，依 META-32 + META-33）
+   - 建议模型：sonnet
+   - 范围：`元数据` 列使用四来源图标；支持 overall/provider/issue/score/updatedAt 过滤；默认排序改为运营优先级，完整度数值另保留专用排序字段。
+7. **META-37** — Phase 4：API 凭证 TMDB 语义修订（状态：⬜ 后排，依 META-31；需协调 META-29）
+   - 建议模型：opus（凭证公开类型 + 旧 KV 清理边界）
+   - 范围：`tmdb.read_access_token` 与 `tmdb.api_key` 字段分离；Bearer 为首选；连接测试与 UI 文案同步；修正旧 `tmdb.token -> tmdb_api_key` 语义错配。
+8. **META-38** — Phase 5A：TMDB API client + search/detail MVP（状态：⬜ 后排，依 META-37）
+   - 建议模型：sonnet
+   - 范围：官方 API search/movie/tv + detail + external_ids + images + append_to_response；限速/429 尊重；不接播放源。
+9. **META-39** — Phase 5B：TMDB 候选确认与应用流程（状态：⬜ 后排，依 META-38 + META-32）
+   - 建议模型：opus（跨增强流程、外部 ref 写入、审核 UI）
+   - 范围：TMDB candidate/ref 写入，人工确认后应用到 catalog/video；状态进入 `MetadataStatusSummary`；冲突/低置信走需复核。
