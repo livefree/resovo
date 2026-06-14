@@ -40,6 +40,10 @@ const DOT_STYLE: React.CSSProperties = {
   pointerEvents: 'none',
 }
 
+/**
+ * @deprecated 自 ADR-201（META-33）：`SourceMatchState` 仅 3 态（无 problem 红点 / not_applicable）。
+ * 新代码改用 `MetadataProviderIcon`（承载 `MetadataProviderState` 五态）。不得新增消费点（D-201-2 / §取代关系）。
+ */
 export function SourceLogoBadge({
   source,
   state,

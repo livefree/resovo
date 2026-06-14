@@ -77,7 +77,12 @@ export * from './components/enrichment-badge'
 
 // ExternalMetaPanel 外部元数据真源并集视图（META-18 / ADR-172 AMENDMENT 3；arch-reviewer Opus PASS）
 // 条目级展示：源并集总览 + 真源字段区 + Bangumi 条目块（anime-only）
+// ⚠ @deprecated 自 ADR-201：审核详情/编辑抽屉展示职责由 MetadataStatusPanel 取代（META-33+）；不得新增消费点。
 export * from './components/external-meta-panel'
+
+// MetadataStatusDisplay 元数据状态展示原语（META-33 / ADR-201；arch-reviewer Opus CONDITIONAL-PASS）
+// 统一消费 MetadataStatusSummary：四来源图标簇 + 受控 tooltip（-A）+ 状态面板（-B）。取代 EnrichmentBadgeCluster。
+export * from './components/metadata-status'
 
 // VideoPicker 业务级选择器（M-SN-SHARED-04-A / CHG-SN-8 SEQ-20260521-02 / arch-reviewer Opus A−）
 // 消灭 UUID 输入；fetcher 注入实现 admin-ui ↔ apps/* 隔离（ADR-103b）

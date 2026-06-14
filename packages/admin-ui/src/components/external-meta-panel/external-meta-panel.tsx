@@ -250,6 +250,10 @@ function CharactersBlock({
 
 // ── 主组件 ───────────────────────────────────────────────────────────
 
+/**
+ * @deprecated 自 ADR-201（META-33）：审核详情/编辑抽屉的「外部元数据并集视图」展示职责由统一
+ * `MetadataStatusPanel`（消费 `MetadataStatusSummary`）取代。新代码不得新增消费点（D-201-2 / §取代关系）。
+ */
 export function ExternalMetaPanel(props: ExternalMetaPanelProps): React.ReactElement {
   const { type, catalogFields, bangumiInfo, characters, enrichedAtLabel, density = 'drawer', testId } = props
   const size: SourceLogoSize = density === 'drawer' ? 'md' : 'sm'

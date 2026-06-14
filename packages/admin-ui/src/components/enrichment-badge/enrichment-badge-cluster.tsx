@@ -47,6 +47,11 @@ interface LogoEntry {
   readonly href?: string
 }
 
+/**
+ * @deprecated 自 ADR-201（META-33）：消费旧 `EnrichmentSummary`、仅 matched/candidate/absent 三态、
+ * 无 problem 红点与统一 tooltip。新代码改用 `MetadataSourceIconCluster`（消费统一 `MetadataStatusSummary`，
+ * 五态 + 受控 tooltip）。兼容期保留既有消费点，**不得新增**消费点（D-201-2）。
+ */
 export function EnrichmentBadgeCluster({
   summary,
   type,
