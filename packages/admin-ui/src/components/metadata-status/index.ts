@@ -11,6 +11,8 @@
 // ── 组件 ──────────────────────────────────────────────────────────────────────
 export { MetadataProviderIcon } from './metadata-provider-icon'
 export { MetadataSourceIconCluster } from './metadata-source-icon-cluster'
+export { MetadataStatusPanel } from './metadata-status-panel'
+export { MetadataSourceCard } from './metadata-source-card'
 
 // ── 共享 tooltip 构造器 ───────────────────────────────────────────────────────
 export { buildMetadataTooltip } from './metadata-tooltip'
@@ -36,4 +38,8 @@ export type {
   MetadataSourceIconClusterProps,
   MetadataTooltipOptions,
   MetadataTooltipModel,
+  MetadataPanelVariant,
+  MetadataActionHandler,
+  MetadataSourceCardProps,
+  MetadataStatusPanelProps,
 } from './metadata-status.types'

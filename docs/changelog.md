@@ -5628,3 +5628,23 @@
 - **质量门禁**：typecheck 全工作区 EXIT=0 / lint 4 successful（仅既有 web-next exhaustive-deps 警告）/ test:changed 86 文件 1085 passed（admin-ui 依赖图含退役 source-logo-badge 12 + 消费方 VideoColumns/enrichment-cluster-moderation 零回归）/ **全量单测 543 文件 7493 passed 零失败**（退役标记对消费方零回归）/ verify:adr-contracts EXIT=0（仅既有 enum SSOT advisory）。test:integration N/A（无 API/DB/SQL）。
 - **后续**：META-33-B `MetadataStatusPanel`（variant detail/drawer/compact，复用本卡 IconCluster + tooltip + 文案常量 + 本 gate arch-reviewer 契约，无需再 spawn）。
 - **[AI-CHECK]**：六问过——①纯展示原语 + 受控 tooltip，退役旧组件仅加 @deprecated 注释零行为变化，回归面由 46 单测 + 全量 7493 守护（零失败）；②两原语下沉 admin-ui（ADR-201 共享组件契约），三处消费方统一消费，避免重复实现；③五态/三密度/文案常量经 `Record<Enum,string>` 派生 + `METADATA_PROVIDER_ORDER` 遍历，provider/state 增量编译期强制补全（可扩展性）；④无 any / 无空 catch / **零硬编码色**（角标用 `--state-warning-fg`/`--state-error-fg` token，灰显 grayscale+`--logo-absent-opacity`，全 var()）；⑤改动收敛于新建 metadata-status 目录 + barrel + 退役标记 + 单测，零消费方接线（归 META-34/35/36）；⑥红线 R1 守住（不 import 退役组件，仅复用 logo 数据资产）/R2（红点 error 非 danger）/R3（hover+focus 受控 tooltip 非裸 title），arch-reviewer 契约逐条落地。
+
+## [META-33-B] admin-ui `MetadataStatusPanel` 状态面板原语（→ META-33 Phase 2 全收口）
+- **完成时间**：2026-06-14
+- **记录时间**：2026-06-14
+- **执行模型**：claude-opus-4-8（主循环连续推进）
+- **子代理**：无（复用 META-33-A 前置 gate arch-reviewer (claude-opus-4-8, agentId a910e6bb5fa5df2a7) §5 panel 契约，实施未偏离故未再 spawn；commit 仍带 Subagents trailer——admin-ui 新公开 Props）
+- **背景**：META-33-A 已落图标簇 + tooltip + 文案常量。本卡（-B）落 `MetadataStatusPanel` 展开式状态面板，供审核详情（META-34）/ 编辑抽屉（META-35）消费方卡（均 sonnet，不能建新共享组件）使用。**仅建原语，零消费方接线**。
+- **修改文件**：
+  - `packages/admin-ui/src/components/metadata-status/metadata-status-panel.tsx`（新，154 行）— `MetadataStatusPanel`：Header（overall 文案 + 内嵌 `<MetadataSourceIconCluster>` + 完整度 + 最近增强）+ 四来源卡（detail/drawer 展开，compact 折叠为簇）+ 问题列表（复用 cell `Pill`，issueLevel→variant danger/warn/info，level=none 过滤；compact top-3）+ 下一步动作主按钮（`AdminButton primary` → `onAction(nextAction)`）+ 来源证据子区（`sourceEvidence` slot，detail/drawer + 注入时渲染，compact 不渲染）。**簇不 showScore**（panel 用带标签「完整度」单独显示，避免裸 score 重复）。
+  - `metadata-source-card.tsx`（新，81 行）— `MetadataSourceCard` 单来源卡子组件（C1 拆分）：复用 `MetadataProviderIcon`(md) + provider 名 + state 文案 + externalId 外链(`SOURCE_HREF_BUILDERS`) + matchMethod(`MATCH_METHOD_LABEL`) + 置信度(`%`)；candidate→「确认候选」/ problem→「复核冲突」(danger) per-card 动作 `AdminButton` → `onAction(action, provider)`；applied/missing/not_applicable 无动作。
+  - `metadata-status.types.ts` — 补 panel 段：`MetadataPanelVariant`('detail'|'drawer'|'compact') / `MetadataActionHandler`(`(action, provider?)`) / `MetadataSourceCardProps` / `MetadataStatusPanelProps`（onAction/enrichedAtLabel/sourceEvidence ReactNode slot 守单向依赖）。
+  - `metadata-status/index.ts` — barrel 导出 `MetadataStatusPanel`/`MetadataSourceCard` + 4 panel 类型。
+  - `tests/unit/components/admin-ui/metadata-status/metadata-status-panel.test.tsx`（新）— 17 单测。
+- **决策落地（DEV-33-3）**：panel `onAction` 仅承载 `MetadataNextAction` 枚举（provider 省略=整体级 / 带=来源卡级）；编辑抽屉细粒度操作（拒绝候选/应用字段/仅保存ID）不归 panel、归 META-35，**不擅自扩 `@resovo/types` 枚举**（如 META-35 确需则另起类型变更卡 + Opus gate）。
+- **新增依赖**：无。
+- **数据库变更**：无（纯 admin-ui UI 原语）。
+- **测试覆盖**：17 新单测（三 variant 结构 detail/drawer/compact / 四来源卡固定顺序 / 问题列表 Pill 映射 + level=none 过滤 + compact top-3 / onAction 整体级主按钮 + per-provider candidate·problem / applied·missing 无动作 / sourceEvidence slot detail vs compact / 来源卡外链+matchMethod+置信度 / nextAction=none 无主按钮 / SSR）。
+- **质量门禁**：typecheck 全工作区 EXIT=0 / lint 4 successful / **全量单测 544 文件 7510 passed 零失败**（含 -A+-B 共 80 metadata-status 测试 + 消费方零回归）/ verify:adr-contracts EXIT=0（仅既有 advisory）。test:integration N/A（无 API/DB/SQL）。
+- **后续**：**META-33 Phase 2 全收口**（-A 图标簇+tooltip + -B 状态面板）→ 解锁 META-34（审核详情 TabDetail 元数据状态统一展示，sonnet，消费两原语）/ META-35（编辑抽屉去 Douban 独占 tab + 元数据工作台，sonnet）/ META-36（视频库元数据列 UI 排序过滤，sonnet，消费 -A 图标簇 + 复用文案常量筛选项）。
+- **[AI-CHECK]**：六问过——①纯展示面板复用 -A 原语（IconCluster/ProviderIcon/tooltip/labels）+ cell Pill + AdminButton，不重绘不自算，回归面由 17 单测 + 全量 7510 守护（零失败）；②panel 下沉 admin-ui 供 META-34/35 复用，避免审核详情/编辑抽屉各自实现；③variant/issueLevel/action 经 `Record<Enum,_>` 派生 + `METADATA_PROVIDER_ORDER` 遍历，枚举增量编译期补全；④无 any / 无空 catch / **零硬编码色**（Pill variant token + AdminButton token + 卡片 `--border-default`/`--accent-default` 等 var()）；⑤改动收敛于 panel + source-card + 类型 + barrel + 单测，零消费方接线（归 META-34/35）+ 不扩 @resovo/types 枚举（DEV-33-3）；⑥文件 154/81 行 < 500、函数 < 80（C1 拆 source-card 子组件），onAction 只回传意图不执行 provider API（守 panel 纯展示边界）。

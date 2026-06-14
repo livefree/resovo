@@ -20,7 +20,14 @@
  * 数据资产（data-URI / label / href builder），但**不复用退役组件**（DEV-33-1 / 红线 R1）。
  */
 
-import type { MetadataProvider, MetadataProviderState, MetadataStatusSummary } from '@resovo/types'
+import type { ReactNode } from 'react'
+import type {
+  MetadataNextAction,
+  MetadataProvider,
+  MetadataProviderState,
+  MetadataProviderStatus,
+  MetadataStatusSummary,
+} from '@resovo/types'
 
 // ── 单图标原语（MetadataProviderIcon）─────────────────────────────────────────
 
@@ -97,4 +104,44 @@ export interface MetadataTooltipModel {
   readonly issueLines: readonly string[]
   /** 下一步：`下一步：{nextAction}`；nextAction==='none' → undefined（不渲染）。 */
   readonly nextActionLine?: string
+}
+
+// ── 状态面板原语（MetadataStatusPanel / META-33-B）────────────────────────────
+
+/** 面板上下文 variant：detail=审核详情展开 / drawer=编辑抽屉 / compact=折叠摘要。 */
+export type MetadataPanelVariant = 'detail' | 'drawer' | 'compact'
+
+/** 动作回调（面板不执行 provider API，仅回传意图）。provider 省略=整体级 / 带=来源卡级。 */
+export type MetadataActionHandler = (action: MetadataNextAction, provider?: MetadataProvider) => void
+
+/**
+ * 单来源卡 Props（面板内四来源同级展示；复用 MetadataProviderIcon + 真源字段）。
+ * 内部子组件契约，随 panel 一并导出供测试/高级消费方。
+ */
+export interface MetadataSourceCardProps {
+  readonly status: MetadataProviderStatus
+  /** 来源卡级动作回调（candidate/problem 态附操作按钮时触发）。 */
+  readonly onAction?: MetadataActionHandler
+  readonly testId?: string
+}
+
+/**
+ * 元数据状态面板 Props（ADR-201 §审核详情 / §视频编辑；arch-reviewer §5 契约）。
+ *
+ * 展示整体状态 + 完整度 + 最近增强 + 四来源卡 + 问题列表 + 下一步动作。**不执行 provider API**，
+ * 动作仅经 `onAction` 回传上层（DEV-33-3：仅承载 `MetadataNextAction`，编辑细粒度操作归 META-35）。
+ */
+export interface MetadataStatusPanelProps {
+  readonly summary: MetadataStatusSummary
+  readonly variant: MetadataPanelVariant
+  /** 动作回调（整体级 nextAction 主按钮 + 来源卡级 per-provider 动作）。 */
+  readonly onAction?: MetadataActionHandler
+  /** enrichedAt 格式化文案；消费方注入（i18n/时间库不下沉）。 */
+  readonly enrichedAtLabel?: string
+  /**
+   * 「来源证据」子区内容（原始外部 ref 展示，ADR-201 §审核详情）。消费方注入 ReactNode，
+   * admin-ui 不内嵌 externalRefs 取数/类型（守单向依赖）。省略 / variant='compact' → 不渲染。
+   */
+  readonly sourceEvidence?: ReactNode
+  readonly testId?: string
 }
