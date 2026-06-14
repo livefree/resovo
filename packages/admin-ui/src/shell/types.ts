@@ -152,6 +152,9 @@ export interface TaskItem {
 /** CommandPalette 单条命令（ADR-103a §4.1.6 / CHG-SN-2-11 SSOT 上提）
  *  消费方（server-next）按 ADMIN_NAV + 自定义 actions 组装；M-SN-2 stub 用 mock */
 export interface CommandItem {
+  /** 唯一身份键（activeId / React key / aria-activedescendant `command-option-${id}` 均以此为准）。
+   *  **消费方须保证在 CommandPalette 的 groups + prefilteredGroups 间全局唯一**（ADR-200 D-200-1）；
+   *  远程搜索结果应 namespace（如 `search:video:${id}`）避免与本地 nav href 撞键。 */
   readonly id: string
   readonly label: string
   readonly icon?: ReactNode

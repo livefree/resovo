@@ -2399,7 +2399,7 @@
 
 - **状态**：🔄 执行中
 - **创建时间**：2026-06-13 17:00
-- **最后更新时间**：2026-06-13 19:25
+- **最后更新时间**：2026-06-13 19:35
 - **目标**：兑现"顶栏全局搜索"未接后端的承诺，沿 ES 主线建独立搜索模块。计划真源 = `~/.claude/plans/top-bar-lively-marble.md`（用户已批准 + 3 轮复审 + 4 硬约束）。
 - **范围**：Phase 0 契约/ADR → Phase 1 顶栏 MVP（/admin/search + CommandPalette 接线）→ Phase 2 统一 admin_search 索引 → Phase 3 预测/多语言。+ 独立并行卡 videos 搜索框收编。
 - **硬约束**：① videos 后台专用 ES 查询不调公开 SearchService；② sources P1 直接搜 source_name/source_url/站点；③ CommandPalette 远程结果不被 label substring 二次误过滤；④ tasks 为新增 q 能力、限近期窗口。
@@ -2415,8 +2415,9 @@
    - **SEARCH-02-A** — 后端 `GET /admin/search`（AdminSearchService fan-out + buildVideoMatchQuery 共享抽取 + searchAdminSources/searchAdminUsers/searchTaskRuns queries + 权限分级 + 单测）（状态：✅ 已完成 2026-06-13）
      - 建议模型：opus（端点契约已由 ADR-200 + arch-reviewer Opus 定稿，本卡纯实施后端、不改共享组件 Props → 无需新 spawn）
      - 完成备注：执行模型 claude-opus-4-8；子代理无。门禁 typecheck/lint/verify:adr-contracts/verify:endpoint-adr（239 路由对齐）EXIT=0 + test:changed 804 passed（+20 新测试）。复用沉淀 TASK_RUN_STATUS_MAP 单一真源。偏离：siteDisplayName 暂用 site_key / source href 裸列表页（MVP）。详见 changelog [SEARCH-02-A]。
-   - **SEARCH-02-B** — admin-ui CommandPalette Props 扩展（onQueryChange/prefilteredGroups/loading/emptyRemoteState + filterAndFlatten 拆分 + admin-shell 透传 + 单测）（状态：⬜ 待开始，可与 A 并行）
+   - **SEARCH-02-B** — admin-ui CommandPalette Props 扩展（onQueryChange/prefilteredGroups/loading/emptyRemoteState + filterAndFlatten 拆分 + admin-shell 透传 + 单测）（状态：✅ 已完成 2026-06-13）
      - 建议模型：opus（**改 admin-ui 公开 Props → 强制 arch-reviewer Opus + commit trailer**）
+     - 完成备注：执行模型 claude-opus-4-8；子代理 arch-reviewer (claude-opus-4-8, agentId ae0fbd23a5c95ba9a) **PASS**（无红线；D-200-1 五项 + §4.1.6 AMENDMENT 落地；Y-1 CommandItem.id 唯一性 JSDoc 已纳）。门禁 typecheck/lint EXIT=0 + test:changed 86 文件 1073 passed。commit 带 Subagents trailer。详见 changelog [SEARCH-02-B]。
    - **SEARCH-02-C** — server-next 接线（admin-shell-client debounce+AbortController 调 /admin/search + DTO→CommandGroup 映射）+ e2e（状态：⬜ 待开始，依赖 A+B）
      - 建议模型：sonnet（接线 + e2e，无新共享 API / 无新端点）
 3. **SEARCH-03** — Phase 2：统一 admin_search ES 索引（状态：⬜ 后排，依 Phase 1 埋点）

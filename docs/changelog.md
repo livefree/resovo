@@ -5387,3 +5387,22 @@
 - **质量门禁**：typecheck EXIT=0（全 workspace）/ lint EXIT=0（4/4）/ verify:adr-contracts EXIT=0 / **verify:endpoint-adr EXIT=0（239 admin 路由全对齐，新增 GET /admin/search 纳入 ADR-200 契约）** / test:changed 65 文件 804 passed。
 - **偏离登记**：① `siteDisplayName` 暂用 `site_key`（code 非 display name）—— MVP 接受，display name 解析为 follow-up；② source 结果 href 落裸 `/admin/sources`（SourcesClient 用本地 keyword state 非 URL 同步，深链待 Phase 2）；③ submission searcher 未实装（P1.5，DTO 已支持、本卡 P1 仅 video/source/user/task）。
 - **[AI-CHECK]**：六问过——①无回归（SearchService/TaskAggregator 重构经既有测试守护全绿，公开搜索可见性 filter 不动）；②复用沉淀到位（buildVideoMatchQuery + TASK_RUN_STATUS_MAP 单一真源、searchAdminSources 复用既有谓词、TextMatchStrategy 缝）；③可扩展（entitySearcher 可加 submission、TextMatchStrategy 可切 pg_trgm、KIND_PRIORITY 可扩）；④无 any/空 catch/硬编码色，DTO 引用 SSOT union；⑤改动收敛于 apps/api 后端，未触前端/共享组件；⑥后台可见性边界（不调公开 SearchService）+ 权限分级（moderator 不返 user）+ 任务窗口下界三红线均落地并测。
+
+## [SEARCH-02-B] 后台独立搜索模块 Phase 1 — admin-ui CommandPalette 远程结果承载
+- **完成时间**：2026-06-13
+- **记录时间**：2026-06-13 19:35
+- **执行模型**：claude-opus-4-8（主循环）
+- **子代理**：arch-reviewer (claude-opus-4-8, agentId ae0fbd23a5c95ba9a) — **PASS**（改 admin-ui 公开 Props 强制 Opus 评审；无红线；D-200-1 五项子要求 + §4.1.6 AMENDMENT 逐条核对落地；Y-1 已纳 / Y-2 登记）
+- **背景**：SEARCH-02 拆 -A/-B/-C，本卡为 admin-ui 共享组件 API。远程搜索结果需注入 CommandPalette，但现 `filterAndFlatten` 对所有 group 做 `label.includes(query)` 本地过滤 → ES/ILIKE 命中拼音/url/short_id 但 label 不含 query 子串会被二次误杀。按 ADR-200 D-200-1 扩 CommandPaletteProps 4 字段 + §4.1.6 AMENDMENT 改搜索结果承载通道。
+- **修改文件**：
+  - `packages/admin-ui/src/shell/command-palette.tsx` — `CommandPaletteProps` 纯加性扩 4 字段（`onQueryChange?`/`prefilteredGroups?`/`loading?`/`emptyRemoteState?`）；`filterAndFlatten` 拆分（本地 groups 客户端过滤 / prefilteredGroups 跳过滤、拼在后、空组隐藏）；新增 `onQueryChangeRef` + 单一 `[query]` effect（覆盖 keystroke + open=false 重置发 ''）；render 加 dialog/input/listbox aria-busy + 结果计数 live region（role=status aria-live，D-200-9）+ 空态优先级（loading>emptyRemoteState>内置）；模块级 `EMPTY_GROUPS` 稳定空引用 + `SR_ONLY_STYLE`。
+  - `packages/admin-ui/src/shell/admin-shell.tsx` — `AdminShellProps` 加 4 个 pass-through（`onCommandQueryChange?`/`commandPrefilteredGroups?`/`commandLoading?`/`commandEmptyState?`）转发 CommandPalette（组合流）。
+  - `packages/admin-ui/src/shell/types.ts` — Y-1：`CommandItem.id` JSDoc 补「groups + prefilteredGroups 间全局唯一」约束（SSOT 收敛）。
+  - `tests/unit/components/admin-ui/shell/command-palette-remote.test.tsx`（新）— +10 测试。
+- **新增依赖**：无。
+- **数据库变更**：无（纯前端共享组件）。
+- **测试覆盖**：+10 单测——onQueryChange keystroke + open=false 发 ''（2）/ prefiltered 跳本地过滤 + flatItems 顺序 + 异步不重置 activeId（3）/ 空态优先级 loading>emptyRemoteState>内置 + loading aria-busy + live region 计数（5）。既有 command-palette 全 52 测试（含 keyboard 29 / ssr 5 / base 18）行为保持。
+- **质量门禁**：typecheck EXIT=0（全 workspace）/ lint EXIT=0（4/4）/ test:changed 86 文件 1073 passed（admin-ui base 包改动升全量域，含 admin-shell 消费方零回归）。
+- **D-200-1 / §4.1.6 AMENDMENT 符合性**（arch-reviewer 逐条核对）：① onQueryChange 含 open=false 发 '' ✅；② prefilteredGroups 跳过滤 + 顺序 + activeIndex 跨全部 ✅；③ loading 输入框不 unmount ✅；④ emptyRemoteState 优先级 ✅；⑤ prefiltered 异步不改 activeId ✅。
+- **偏离登记**：① 空态 loading 文案内置「搜索中…」非可定制（emptyRemoteState 仅非 loading 空态生效，arch-reviewer 确认可接受）；② mount 时以 query='' 触发一次 onQueryChange（幂等无害，Y-2 登记）。
+- **[AI-CHECK]**：六问过——①纯加性 Props，现有 groups-only 消费方零行为变化（向后兼容，既有 52 测试 + admin-shell 消费方全绿）；②filterAndFlatten 拆分单一职责、EMPTY_GROUPS 稳定引用避免 churn、id 唯一性约束 SSOT 收敛到 types.ts；③扩展性（prefilteredGroups 通道未来可复用本地预过滤、4 Props 全 optional）；④无 any/空 catch（catch 均带注释）/硬编码色（全 CSS 变量）；⑤改动收敛于 3 个 shell 文件 + 1 测试；⑥共享组件公开 Props 改动经 arch-reviewer Opus PASS，commit 带 Subagents trailer。

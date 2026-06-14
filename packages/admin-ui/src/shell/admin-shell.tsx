@@ -93,6 +93,18 @@ export interface AdminShellProps {
   readonly tasks?: readonly TaskItem[]
   /** 自定义 CmdK 命令分组；undefined 时从 nav 自动构建导航组 */
   readonly commandGroups?: readonly CommandGroup[]
+  /**
+   * CmdK 远程搜索接线（ADR-200 / SEARCH-02）——透传到 CommandPalette：
+   *   - onCommandQueryChange：输入词变更（消费方注入 debounce + AbortController 调 /admin/search；应 memoize）
+   *   - commandPrefilteredGroups：服务端已过滤的结果组（跳本地过滤、原样展示）
+   *   - commandLoading：远程请求中（驱动 aria-busy + 空态优先级）
+   *   - commandEmptyState：自定义空态节点（优先级 loading > emptyState > 内置）
+   * 均 undefined 时 CommandPalette 退化为纯本地命令面板（向后兼容）。
+   */
+  readonly onCommandQueryChange?: (q: string) => void
+  readonly commandPrefilteredGroups?: readonly CommandGroup[]
+  readonly commandLoading?: boolean
+  readonly commandEmptyState?: ReactNode
   /** 路由跳转回调（注入 Next.js router.push 等）*/
   readonly onNavigate: (href: string) => void
   /** 主题切换回调 */
@@ -150,6 +162,7 @@ export function AdminShell(props: AdminShellProps) {
   const {
     activeHref, nav, crumbs, topbarIcons, health, countProvider, user, theme,
     collapsed: controlledCollapsed, defaultCollapsed, notifications, notificationUnreadCount, tasks, commandGroups,
+    onCommandQueryChange, commandPrefilteredGroups, commandLoading, commandEmptyState,
     onNavigate, onThemeToggle, onUserMenuAction, onCollapsedChange,
     onNotificationItemClick, onMarkAllNotificationsRead, onDismissNotification, onClearAllNotifications,
     onCancelTask, onRetryTask, onDismissTask, onClearAllTasks,
@@ -304,6 +317,10 @@ export function AdminShell(props: AdminShellProps) {
       <CommandPalette
         open={storeState.cmdkOpen}
         groups={resolvedGroups}
+        prefilteredGroups={commandPrefilteredGroups}
+        loading={commandLoading}
+        emptyRemoteState={commandEmptyState}
+        onQueryChange={onCommandQueryChange}
         onClose={handleCloseCmdk}
         onAction={handleCommandAction}
       />

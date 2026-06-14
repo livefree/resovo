@@ -39,7 +39,7 @@
  *   - 不与路由耦合（onAction 触发后消费方决定 router.push / invoke）
  *   - 不持久化 query 历史 / 不实现 fuzzy match（M-SN-3+ 业务卡视需求扩展）
  */
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { OverlayBackdrop } from '../components/overlay/overlay-backdrop'
 import { useFormatShortcut } from './platform'
@@ -47,10 +47,28 @@ import type { CommandGroup, CommandItem } from './types'
 
 export interface CommandPaletteProps {
   readonly open: boolean
+  /** 本地命令分组（导航/快捷操作）；**继续**走客户端 `label.includes(query)` 过滤 */
   readonly groups: readonly CommandGroup[]
   readonly onClose: () => void
   readonly onAction: (item: CommandItem) => void
   readonly placeholder?: string
+  /**
+   * 输入词变更回调（ADR-200 D-200-1）：发**原始** query（每 keystroke）。
+   * 组件因 `open=false` 内部重置 query（→ ''）时也会触发 `onQueryChange('')`（防下次打开闪现上次远程结果 = stale）。
+   * 防抖 + AbortController 取消在途请求由消费方负责（组件保持纯）。消费方应 memoize 此回调。
+   */
+  readonly onQueryChange?: (q: string) => void
+  /**
+   * 已由**服务端过滤**的结果组（ADR-200 D-200-1 / §4.1.6 AMENDMENT）：**跳过本地 `label.includes` 过滤、原样展示**
+   * （服务端命中拼音/别名/url/short_id 时 label 未必含 query 子串，作为普通 `groups` 注入会被本地过滤误杀）。
+   * flatItems 顺序 = 本地 `groups` 在前、`prefilteredGroups` 在后，activeIndex 跨全部；异步到达不改变已落在本地组项上的 activeId。
+   * **消费方须保证 item.id 在 groups + prefilteredGroups 间全局唯一**（activeId/key 以 id 为身份）。
+   */
+  readonly prefilteredGroups?: readonly CommandGroup[]
+  /** 远程请求中（ADR-200 D-200-1）；输入框**永不因 loading unmount**；驱动 aria-busy + 空态优先级最高 */
+  readonly loading?: boolean
+  /** 空态自定义节点（ADR-200 D-200-1）；空态优先级：`loading` > `emptyRemoteState` > 内置"无匹配结果" */
+  readonly emptyRemoteState?: ReactNode
 }
 
 const PANEL_WRAPPER_STYLE: CSSProperties = {
@@ -157,6 +175,22 @@ const EMPTY_STYLE: CSSProperties = {
   fontSize: 'var(--font-size-sm)',
 }
 
+/** 稳定空引用，避免 prefilteredGroups 默认值每次新建数组触发 useMemo 重算 */
+const EMPTY_GROUPS: readonly CommandGroup[] = []
+
+/** 视觉隐藏（保留可访问性，供 live region 计数播报 D-200-9） */
+const SR_ONLY_STYLE: CSSProperties = {
+  position: 'absolute',
+  width: '1px',
+  height: '1px',
+  padding: 0,
+  margin: '-1px',
+  overflow: 'hidden',
+  clip: 'rect(0, 0, 0, 0)',
+  whiteSpace: 'nowrap',
+  border: 0,
+}
+
 const FOOTER_STYLE: CSSProperties = {
   padding: 'var(--space-2) var(--space-4)',
   borderTop: '1px solid var(--border-subtle)',
@@ -168,7 +202,10 @@ const FOOTER_STYLE: CSSProperties = {
   flexShrink: 0,
 }
 
-export function CommandPalette({ open, groups, onClose, onAction, placeholder = '输入命令…' }: CommandPaletteProps) {
+export function CommandPalette({
+  open, groups, onClose, onAction, placeholder = '输入命令…',
+  onQueryChange, prefilteredGroups, loading = false, emptyRemoteState,
+}: CommandPaletteProps) {
   const [query, setQuery] = useState('')
   // 选中项以"id"为身份（不以数值索引为身份），消费方异步替换/收缩/扩张/重排 groups 时
   // 自动按 id 重定位；id 在新 flatItems 中不存在 → 回退到首项（fix(CHG-SN-2-11) Codex 边界）
@@ -180,15 +217,22 @@ export function CommandPalette({ open, groups, onClose, onAction, placeholder = 
   const titleId = 'command-palette-title'
   const listboxId = 'command-palette-listbox'
 
+  // onQueryChange 经 ref 持最新引用：在 [query] effect 中调用而不污染依赖，
+  // 避免消费方未 memoize 回调时 effect 重跑误发重复 query（ADR-200 D-200-1 组件保持纯）
+  const onQueryChangeRef = useRef(onQueryChange)
+  useEffect(() => {
+    onQueryChangeRef.current = onQueryChange
+  }, [onQueryChange])
+
   // mounted SSR-safe（CHG-SN-2-10 DrawerShell 范式复用：React 18 server 不支持 createPortal）
   useEffect(() => {
     setMounted(true)
   }, [])
 
-  // 过滤 + 扁平化
+  // 过滤 + 扁平化：本地 groups 走客户端过滤；prefilteredGroups（服务端已过滤）跳过本地过滤、原样拼接在后
   const { visibleGroups, flatItems } = useMemo(
-    () => filterAndFlatten(groups, query),
-    [groups, query],
+    () => filterAndFlatten(groups, prefilteredGroups ?? EMPTY_GROUPS, query),
+    [groups, prefilteredGroups, query],
   )
 
   // 派生 activeIndex：按 activeId 在新 flatItems 中定位；id 缺省或不在列表 → 0（首项）
@@ -205,7 +249,14 @@ export function CommandPalette({ open, groups, onClose, onAction, placeholder = 
     setActiveId(undefined)
   }, [query])
 
-  // open=false → 重置 query（下次 open 时从空查询开始）
+  // query 变化 → 通知消费方（发原始 query）。同一 effect 覆盖两条 ADR-200 D-200-1 要求：
+  //   ① 每 keystroke（query 增量变化）；② open=false 内部重置 query→'' 时发 onQueryChange('')
+  //      （消费方据此清远程结果，防下次打开闪现上次结果 = stale）
+  useEffect(() => {
+    onQueryChangeRef.current?.(query)
+  }, [query])
+
+  // open=false → 重置 query（下次 open 时从空查询开始）；query→'' 经上方 effect 触发 onQueryChange('')
   useEffect(() => {
     if (!open) {
       setQuery('')
@@ -316,7 +367,9 @@ export function CommandPalette({ open, groups, onClose, onAction, placeholder = 
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
+        aria-busy={loading || undefined}
         data-command-palette
+        data-command-palette-loading={loading || undefined}
         onKeyDown={handleKeyDown}
         style={PANEL_WRAPPER_STYLE}
       >
@@ -329,16 +382,24 @@ export function CommandPalette({ open, groups, onClose, onAction, placeholder = 
           aria-controls={listboxId}
           aria-activedescendant={activeOptionId}
           aria-label="命令搜索"
+          aria-busy={loading || undefined}
           data-command-palette-input
           placeholder={placeholder}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           style={INPUT_STYLE}
         />
+        {/* 结果计数 live region（D-200-9）：loading 中播报"搜索中"，否则播报结果条数 */}
+        <span role="status" aria-live="polite" data-command-palette-status style={SR_ONLY_STYLE}>
+          {loading ? '搜索中' : `${flatItems.length} 条结果`}
+        </span>
         {flatItems.length === 0 ? (
-          <div data-command-palette-empty style={EMPTY_STYLE}>无匹配结果</div>
+          // 空态优先级（D-200-1）：loading > emptyRemoteState > 内置"无匹配结果"
+          <div data-command-palette-empty style={EMPTY_STYLE}>
+            {loading ? '搜索中…' : (emptyRemoteState ?? '无匹配结果')}
+          </div>
         ) : (
-          <ul role="listbox" id={listboxId} data-command-palette-listbox style={LISTBOX_STYLE}>
+          <ul role="listbox" id={listboxId} data-command-palette-listbox aria-busy={loading || undefined} style={LISTBOX_STYLE}>
             {visibleGroups.map((group) => (
               <li key={group.id} data-command-palette-group={group.id}>
                 <div data-command-palette-group-label style={GROUP_LABEL_STYLE}>{group.label}</div>
@@ -430,21 +491,40 @@ interface FilterResult {
   readonly flatItems: readonly CommandItem[]
 }
 
-/** 过滤 + 扁平化：query 不区分大小写 + label.includes(query)；空 group 自动过滤；扁平 items 按 group 顺序排列 */
-function filterAndFlatten(groups: readonly CommandGroup[], query: string): FilterResult {
+/**
+ * 过滤 + 扁平化（ADR-200 §4.1.6 AMENDMENT）：
+ *   - 本地 `groups`（导航/快捷操作）：query 不区分大小写 + `label.includes(query)` 客户端过滤（空 group 自动隐藏）
+ *   - `prefilteredGroups`（服务端已过滤）：**跳过本地过滤、原样展示**（仅隐藏空 group）
+ *   - flatItems 顺序 = 本地过滤结果在前、prefiltered 在后；activeIndex 跨全部
+ */
+function filterAndFlatten(
+  groups: readonly CommandGroup[],
+  prefilteredGroups: readonly CommandGroup[],
+  query: string,
+): FilterResult {
   const normalized = query.trim().toLowerCase()
-  if (normalized === '') {
-    const flat = groups.flatMap((g) => g.items)
-    return { visibleGroups: groups.filter((g) => g.items.length > 0), flatItems: flat }
-  }
   const visibleGroups: CommandGroup[] = []
   const flatItems: CommandItem[] = []
+
+  // 本地 groups：客户端过滤（query='' → 全显示）
   for (const group of groups) {
-    const filtered = group.items.filter((item) => item.label.toLowerCase().includes(normalized))
+    const filtered =
+      normalized === ''
+        ? group.items
+        : group.items.filter((item) => item.label.toLowerCase().includes(normalized))
     if (filtered.length > 0) {
-      visibleGroups.push({ ...group, items: filtered })
+      visibleGroups.push(filtered === group.items ? group : { ...group, items: filtered })
       flatItems.push(...filtered)
     }
   }
+
+  // prefilteredGroups：服务端已过滤，跳过本地 label.includes，原样拼接在后
+  for (const group of prefilteredGroups) {
+    if (group.items.length > 0) {
+      visibleGroups.push(group)
+      flatItems.push(...group.items)
+    }
+  }
+
   return { visibleGroups, flatItems }
 }
