@@ -51,6 +51,8 @@ import {
 // CHG-VIR-13-A1：countProvider 实接（merge pending 候选总数 60s 轮询，替换 stub）
 import { useAdminNavCounts } from '@/lib/admin-shell-nav-counts'
 import { apiClient } from '@/lib/api-client'
+// ADR-200 / SEARCH-02-C：顶栏全局搜索接线（debounce + AbortController 调 /admin/search）
+import { useAdminGlobalSearch } from '@/lib/admin-global-search'
 
 export interface AdminShellClientProps {
   readonly defaultCollapsed: boolean
@@ -88,6 +90,9 @@ export function AdminShellClient({ defaultCollapsed, initialTheme, initialRole, 
 
   // CHG-VIR-13-A1：merge pending 候选总数 60s 轮询 → countProvider（runtime 优先于静态 count）
   const navCountProvider = useAdminNavCounts()
+
+  // ADR-200 / SEARCH-02-C：顶栏全局搜索（debounce + AbortController + DTO→CommandGroup）
+  const globalSearch = useAdminGlobalSearch()
 
   const handleNavigate = useCallback((href: string) => {
     router.push(href)
@@ -215,6 +220,9 @@ export function AdminShellClient({ defaultCollapsed, initialTheme, initialRole, 
       notifications={notifications}
       notificationUnreadCount={notificationUnreadCount}
       tasks={tasks}
+      onCommandQueryChange={globalSearch.onQueryChange}
+      commandPrefilteredGroups={globalSearch.prefilteredGroups}
+      commandLoading={globalSearch.loading}
       onNavigate={handleNavigate}
       onThemeToggle={handleThemeToggle}
       onUserMenuAction={handleUserMenuAction}

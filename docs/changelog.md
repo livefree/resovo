@@ -5406,3 +5406,22 @@
 - **D-200-1 / §4.1.6 AMENDMENT 符合性**（arch-reviewer 逐条核对）：① onQueryChange 含 open=false 发 '' ✅；② prefilteredGroups 跳过滤 + 顺序 + activeIndex 跨全部 ✅；③ loading 输入框不 unmount ✅；④ emptyRemoteState 优先级 ✅；⑤ prefiltered 异步不改 activeId ✅。
 - **偏离登记**：① 空态 loading 文案内置「搜索中…」非可定制（emptyRemoteState 仅非 loading 空态生效，arch-reviewer 确认可接受）；② mount 时以 query='' 触发一次 onQueryChange（幂等无害，Y-2 登记）。
 - **[AI-CHECK]**：六问过——①纯加性 Props，现有 groups-only 消费方零行为变化（向后兼容，既有 52 测试 + admin-shell 消费方全绿）；②filterAndFlatten 拆分单一职责、EMPTY_GROUPS 稳定引用避免 churn、id 唯一性约束 SSOT 收敛到 types.ts；③扩展性（prefilteredGroups 通道未来可复用本地预过滤、4 Props 全 optional）；④无 any/空 catch（catch 均带注释）/硬编码色（全 CSS 变量）；⑤改动收敛于 3 个 shell 文件 + 1 测试；⑥共享组件公开 Props 改动经 arch-reviewer Opus PASS，commit 带 Subagents trailer。
+
+## [SEARCH-02-C] 后台独立搜索模块 Phase 1 — server-next 顶栏全局搜索接线 + e2e（Phase 1 MVP 闭环）
+- **完成时间**：2026-06-13
+- **记录时间**：2026-06-13 19:50
+- **执行模型**：claude-opus-4-8（主循环；连续推进序列，偏离卡片 sonnet 建议——无强制升降触发，纯接线 + e2e）
+- **子代理**：无
+- **背景**：SEARCH-02 拆 -A/-B/-C 末卡。A（后端 GET /admin/search）+ B（CommandPalette prefilteredGroups API）已就绪，本卡在 server-next 把二者接通，打通顶栏全局搜索端到端链路。
+- **修改文件**：
+  - `apps/server-next/src/lib/admin-global-search.ts`（新）— `useAdminGlobalSearch` hook（debounce 250ms + AbortController 取消在途 + loading 态 + 错误兜底空数组不崩 shell + 空查询清空 prefilteredGroups〔与 CommandPalette open=false 发 onQueryChange('') 端到端闭环防 stale〕）+ 纯 `mapAdminSearchToCommandGroups`（DTO→CommandGroup：id namespace `search:kind:id` 防与本地 nav href 撞键 + 自然显示 meta + degraded 组 label 后缀 + 空组过滤）。
+  - `apps/server-next/src/app/admin/admin-shell-client.tsx` — 接线 `useAdminGlobalSearch` → 传 AdminShell `onCommandQueryChange`/`commandPrefilteredGroups`/`commandLoading`。
+  - `tests/unit/server-next/admin-global-search.test.ts`（新）— +8 测试。
+  - `tests/e2e/admin/global-search.spec.ts`（新）— +2 e2e。
+- **新增依赖**：无。
+- **数据库变更**：无。
+- **测试覆盖**：+8 单测（mapAdminSearchToCommandGroups 分组/namespace/meta/degraded/空组过滤 4 + useAdminGlobalSearch debounce 合并/空查询清空/错误兜底 4）+ +2 e2e（⌘K 触发器→输入→mock /admin/search→prefiltered 结果组〔拼音 query 跳本地过滤验证 §4.1.6 AMENDMENT〕/ 点击结果跳转 href）。既有 admin-shell-client.test 6 零回归。
+- **质量门禁**：typecheck EXIT=0 / lint EXIT=0 / test:changed 14 passed / **test:e2e:admin 84/84 passed**（全 admin 域零回归，验 admin-shell-client 挂载点改动无破坏）。
+- **Phase 1 顶栏 MVP 闭环**：videos 后台可见性 ES（不调公开 SearchService）+ sources/users/tasks fan-out（Promise.allSettled 降级 + 权限分级）+ CommandPalette 远程结果跳本地过滤承载 + debounce/AbortController/loading UX + 自然显示 + 点击跳转，端到端打通「已画 UI、未接后端」的顶栏全局搜索承诺。
+- **后续**：SEARCH-03（Phase 2 统一 admin_search ES 索引，依 Phase 1 埋点）/ SEARCH-04（Phase 3 预测·多语言）/ SEARCH-05（独立 videos 搜索框收编）后排；submission searcher（P1.5）+ siteDisplayName display name 解析 + source/video 深链 + ES highlight 客户端渲染为登记 follow-up。
+- **[AI-CHECK]**：六问过——①无回归（test:e2e:admin 84/84 全绿，admin-shell-client 加性 props）；②映射逻辑沉淀纯函数可测、hook 防抖/取消单一职责；③扩展性（mapping 覆盖全 5 kind、hook 与端点解耦）；④无 any/空 catch（catch 注释静默 abort）/硬编码色（无新样式）；⑤改动收敛于 1 新 lib + 1 接线 + 2 测试；⑥纯前端接线、无新共享 API（消费 B 的公开 Props）、无新端点（消费 A 的 /admin/search），无强制 Opus 触发。
