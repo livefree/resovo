@@ -164,6 +164,17 @@ describe('buildMetadataStatusSummary — provider state', () => {
     expect(s.providers.douban.confidence).toBe(0.6)
   })
 
+  it('catalog ref 非空即终态：rejected（无 cache）即便有强 video ref auto_matched 仍 missing（SQL IS NOT NULL 兜底镜像）', () => {
+    // 镜像 JS `if (ref?.catalogRelation)` 终态 + mapCatalogRelation rejected 无 cache → missing；绝不回落 video ref
+    const s = buildMetadataStatusSummary(makeRow({
+      doubanStatus: 'matched',  // status 列亦不应被消费（catalog 终态）
+      providerRefs: [makeRef({
+        provider: 'douban', catalogRelation: 'rejected', videoMatchStatus: 'auto_matched', videoExternalId: 'v-3',
+      })],
+    }))
+    expect(s.providers.douban.state).toBe('missing')
+  })
+
   it('primaryProvider = 显示顺序首个 applied', () => {
     const s = buildMetadataStatusSummary(makeRow({
       type: 'anime', doubanStatus: 'matched', bangumiStatus: 'matched',
@@ -249,9 +260,14 @@ describe('METADATA_STATUS_JOIN_SQL — 服务端排序过滤 SQL 派生（META-3
     expect(METADATA_STATUS_JOIN_SQL.match(/'not_applicable'/g)?.length).toBe(1)
   })
 
-  it('rejected + cache 冲突态 → problem/danger（镜像 mapCatalogRelation/mapVideoMatchStatus）', () => {
-    expect(METADATA_STATUS_JOIN_SQL).toContain(`= 'rejected' AND mc.douban_id IS NOT NULL THEN 'problem'`)
+  it('ref 非空即终态 + 兜底走 rejected 行为（IS NOT NULL 兜底，镜像 mapCatalogRelation/mapVideoMatchStatus；防未知值穿透 cache）', () => {
+    // catch-all 用 `IS NOT NULL AND cache → problem` / `IS NOT NULL → missing`，而非字面量 `= 'rejected'`
+    expect(METADATA_STATUS_JOIN_SQL).toContain(`cr_douban IS NOT NULL AND mc.douban_id IS NOT NULL THEN 'problem'`)
+    expect(METADATA_STATUS_JOIN_SQL).toContain(`cr_douban IS NOT NULL THEN 'missing'`)
+    expect(METADATA_STATUS_JOIN_SQL).toContain(`vr_douban IS NOT NULL AND mc.douban_id IS NOT NULL THEN 'problem'`)
     expect(METADATA_STATUS_JOIN_SQL).toContain(`THEN ${METADATA_ISSUE_RANK.danger}`)
+    // 不再用字面量 = 'rejected' 兜底（未知 relation/match_status 会与 JS 分歧）
+    expect(METADATA_STATUS_JOIN_SQL).not.toContain(`= 'rejected'`)
   })
 
   it('不拼接用户输入（纯静态常量 SQL）', () => {

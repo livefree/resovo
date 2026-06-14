@@ -421,18 +421,21 @@ function providerStateBranches(spec: ProviderSqlSpec): SqlStateBranch[] {
     branches.push({ cond: `v.type <> 'anime'`, state: 'not_applicable', issueRank: METADATA_ISSUE_RANK.info })
   }
   // catalog ref（ADR-177 canonical 真源，最高优先级）
+  // ⚠ 镜像 JS `if (ref?.catalogRelation)` 的**终态**语义：catalogRelation 非空即终态（绝不回落 video ref/status/cache）；
+  //   exact/parent→applied、candidate→candidate，**其余一切**（rejected 或未来新增/未知值）→ mapCatalogRelation 兜底
+  //   = cache present 则 problem 否则 missing。故用 `IS NOT NULL` 兜底而非字面量 `= 'rejected'`（防未知值穿透到 cache 误判 applied）。
   branches.push(
     { cond: `${cr} IN ('exact','parent')`, state: 'applied', issueRank: METADATA_ISSUE_RANK.none },
     { cond: `${cr} = 'candidate'`, state: 'candidate', issueRank: METADATA_ISSUE_RANK.warn },
-    { cond: `${cr} = 'rejected' AND ${cache}`, state: 'problem', issueRank: METADATA_ISSUE_RANK.danger },
-    { cond: `${cr} = 'rejected'`, state: 'missing', issueRank: METADATA_ISSUE_RANK.none },
+    { cond: `${cr} IS NOT NULL AND ${cache}`, state: 'problem', issueRank: METADATA_ISSUE_RANK.danger },
+    { cond: `${cr} IS NOT NULL`, state: 'missing', issueRank: METADATA_ISSUE_RANK.none },
   )
-  // video ref（video 级关系）
+  // video ref（video 级关系；同上终态语义，镜像 JS `else if (ref?.videoMatchStatus)` + mapVideoMatchStatus 兜底）
   branches.push(
     { cond: `${vr} IN ('auto_matched','manual_confirmed')`, state: 'applied', issueRank: METADATA_ISSUE_RANK.none },
     { cond: `${vr} = 'candidate'`, state: 'candidate', issueRank: METADATA_ISSUE_RANK.warn },
-    { cond: `${vr} = 'rejected' AND ${cache}`, state: 'problem', issueRank: METADATA_ISSUE_RANK.danger },
-    { cond: `${vr} = 'rejected'`, state: 'missing', issueRank: METADATA_ISSUE_RANK.none },
+    { cond: `${vr} IS NOT NULL AND ${cache}`, state: 'problem', issueRank: METADATA_ISSUE_RANK.danger },
+    { cond: `${vr} IS NOT NULL`, state: 'missing', issueRank: METADATA_ISSUE_RANK.none },
   )
   // douban/bangumi status 列兜底
   if (spec.statusCol) {
