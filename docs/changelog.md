@@ -5352,7 +5352,7 @@
 - **子代理**：arch-reviewer (claude-opus-4-8, agentId a8bc2b8e22de61843) — ADR-200 契约 CONDITIONAL PASS，M-1/M-2/M-3 + 7 补充全采纳
 - **背景**：后台顶栏"搜索视频/播放源/任务…" + ⌘K 是已画 UI、未接后端的承诺（`admin-shell-client` 未注入 commandGroups → CommandPalette 仅渲染导航命令；现有 `filterAndFlatten` 对所有 group 做 `label.includes` 本地过滤，直接注入远程结果会被二次误杀）。Phase 0 为独立搜索模块定稿契约（不实装业务逻辑）。计划真源 `~/.claude/plans/top-bar-lively-marble.md`（用户批准 + 4 硬约束 + 3 轮复审）。
 - **修改文件**：
-  - `docs/decisions.md` — 新增 **ADR-200**（Accepted）D-200-1..9 + 端点契约表（`GET /admin/search`）+ 实体范围表 + **ADR-103a §4.1.6 AMENDMENT**（搜索结果承载从"普通 group 被本地过滤"改为"专用 prefilteredGroups 跳过本地过滤"）+ 偏离登记 D-200-A/B/C + 回归红线。
+  - `docs/decisions.md` — 新增 **ADR-200**（Accepted）9 项决策要点（D-200 系列，**契约定稿、未实现，待 Phase 1+ 落地时再于 changelog 逐条闭环**）+ 端点契约表（`GET /admin/search`）+ 实体范围表 + **ADR-103a §4.1.6 AMENDMENT**（搜索结果承载从"普通 group 被本地过滤"改为"专用 prefilteredGroups 跳过本地过滤"）+ 偏离登记（D-200 系列 A/B/C）+ 回归红线。
   - `packages/types/src/admin-search.types.ts`（新建）— 统一结果 DTO：`AdminSearchResult` discriminated union（kind 判别式 + 每 kind typed payload）+ `AdminSearchReason`/`AdminSearchKind` 闭合 union + `AdminSearchGroup`（含 degraded）+ `AdminSearchResponseData` + query 参数。
   - `packages/types/src/index.ts` — barrel 注册 `admin-search.types`。
   - `docs/audit/adr-d-status.json` — verify-adr-d-numbers 脚本随 ADR-200 D 号重算（生成物）。
