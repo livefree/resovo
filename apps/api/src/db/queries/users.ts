@@ -5,6 +5,7 @@
 
 import type { Pool } from 'pg'
 import type { User, UserRole } from '@/types'
+import { ilikeStrategy, type TextMatchStrategy } from './text-match-strategy'
 
 // ── 内部 DB 行类型（snake_case → camelCase 映射在 mapUser 中完成）
 
@@ -161,6 +162,38 @@ export async function listAdminUsers(
     rows: rows.rows,
     total: parseInt(countResult.rows[0]?.count ?? '0'),
   }
+}
+
+/** 后台全局搜索 user 命中行（ADR-200 D-200-4）。 */
+export interface AdminUserSearchRow {
+  id: string
+  username: string
+  email: string
+  role: UserRole
+}
+
+/**
+ * 后台搜索用户（ADR-200 D-200-4 / D-200-5）：文本匹配走可替换 `TextMatchStrategy`（首版 ILIKE，
+ * pg_trgm 为后续 migration 独立决策、仅留接口缝）。仅 admin 角色可调（moderator 不返 user，权限分级
+ * 在路由/服务层把关）。
+ */
+export async function searchAdminUsers(
+  db: Pool,
+  q: string,
+  limit: number,
+  matchStrategy: TextMatchStrategy = ilikeStrategy
+): Promise<AdminUserSearchRow[]> {
+  const condition = matchStrategy(['username', 'email'], '$1')
+  const res = await db.query<AdminUserSearchRow>(
+    `SELECT id::text AS id, username, email, role
+       FROM users
+      WHERE deleted_at IS NULL
+        AND ${condition}
+      ORDER BY username ASC
+      LIMIT $2`,
+    [`%${q}%`, limit]
+  )
+  return res.rows
 }
 
 export async function findAdminUserById(

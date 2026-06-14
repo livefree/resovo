@@ -5362,3 +5362,28 @@
 - **质量门禁**：typecheck EXIT=0（全 workspace，含新 DTO）/ lint EXIT=0（4/4）/ **verify:adr-contracts EXIT=0**（verify-endpoint-adr 238 admin 路由全对齐、含 ADR-200 `GET /admin/search`；error-message/D 号警告为预存 advisory 非阻塞）。
 - **注意事项**：① Phase 0 不实装 `/admin/search` 后端与 CommandPalette 实现（均 Phase 1 SEARCH-02）；Phase 1 改 `packages/admin-ui` CommandPaletteProps 为共享组件公开 API 改动 → 须 Opus + commit `Subagents: arch-reviewer` trailer。② 新 admin route `GET /admin/search` 由本 ADR 端点契约覆盖，Phase 1 加 route 后 verify-endpoint-adr 继续对齐。③ M-2 偏离（admin ES 漏召回漂移老草稿）= 尽力而为，登记 follow-up 按需扩 reconcile/全量 reindex。
 - **[AI-CHECK]**：六问过——①Phase 0 纯契约/设计，门禁全绿，arch-reviewer Opus 裁决全采纳；②DTO 沉淀 `@resovo/types` 单一真源（admin-ui 正向 import 复用，对齐 TaskResultDigest 范式），不双源；③改动收敛于 docs + types，零业务实装、零 schema；④DTO 用闭合 union 非 any，无空 catch/硬编码色；⑤回归红线列 Phase 1 测试要点（prefiltered 跳过滤/防 stale/allSettled 降级/权限分级/tasks 窗口/精确置顶）；⑥共享组件 API 契约 + 新 admin route 经 arch-reviewer Opus 定稿，commit 带 trailer。
+
+## [SEARCH-02-A] 后台独立搜索模块 Phase 1 — 后端 `GET /admin/search` fan-out
+- **完成时间**：2026-06-13
+- **记录时间**：2026-06-13 19:25
+- **执行模型**：claude-opus-4-8（主循环）
+- **子代理**：无（端点契约 ADR-200 已由 arch-reviewer Opus 定稿于 SEARCH-01；本卡纯后端实施、不改共享组件 Props / 无新 ADR / 无 migration）
+- **背景**：SEARCH-02（Phase 1 顶栏 MVP）按原子化判据拆 -A/-B/-C（改动项 >5 + 跨 api-service/admin-ui/server-next 多层）。本卡为后端：落地 ADR-200 端点契约 `GET /admin/search`，产出统一 DTO 供 SEARCH-02-C 前端接线消费。
+- **修改文件**：
+  - `apps/api/src/services/buildVideoMatchQuery.ts`（新）— videos ES 匹配子句单一真源（multi_match must、字段权重/fuzziness，**不含可见性 filter**，ADR-200 D-200-3）。
+  - `apps/api/src/services/SearchService.ts` — 公开搜索 `search()` 复用 `buildVideoMatchQuery`，可见性 filter 仍本服务内拼接（行为零变化，search.test 13 绿）。
+  - `apps/api/src/services/AdminSearchService.ts`（新）— fan-out 编排：videos 后台可见性 ES（**不加** publish/review/visibility filter、禁调公开 SearchService）+ entitySearcher + Promise.allSettled 局部降级（degraded）+ 固定 kind 优先级（video>source>user>task）+ 组内 reason 精确命中置顶 + moderator 不返 user（D-200-5）+ 各 kind row→DTO 映射。
+  - `apps/api/src/db/queries/text-match-strategy.ts`（新）— `TextMatchStrategy` 接口缝 + `ilikeStrategy` 默认实现（pg_trgm 切换口，ADR-200 D-200-C 踢出本期）。
+  - `apps/api/src/db/queries/sources.ts` — `searchAdminSources`（直接搜 source_url/source_name/v.title，复用 listAdminSources keyword 谓词 + 非投稿未软删边界，ADR-200 D-200-4）。
+  - `apps/api/src/db/queries/users.ts` — `searchAdminUsers`（经 `ilikeStrategy` 搜 username/email + deleted_at 守卫；matchStrategy 可注入切 pg_trgm）。
+  - `apps/api/src/db/queries/taskRuns.ts` — `searchTaskRuns`（title ILIKE + `make_interval(days)` 30 天窗口下界 + limit 上限，命中 idx_task_runs_created_at，禁裸全表扫历史）+ **导出 `TASK_RUN_STATUS_MAP`**（6 态→4 态映射单一真源上提）。
+  - `apps/api/src/services/TaskAggregator.ts` — 删本地 `TASK_RUN_STATUS_MAP` 定义，改 import queries/taskRuns 复用（消除重复，task-aggregator.test 18 绿）。
+  - `apps/api/src/routes/admin/search.ts`（新）— GET /admin/search，requireRole(['admin','moderator']) + q≤200/limit≤20 默认 8 + role 映射 + ADR-110 {data} 信封。
+  - `apps/api/src/server.ts` — 注册 adminSearchRoutes。
+  - `tests/unit/api/{adminSearchQueries,adminSearchService,adminSearchRoute}.test.ts`（新）— +20 测试。
+- **新增依赖**：无。
+- **数据库变更**：无（复用既有索引 idx_task_runs_created_at；videos 复用 resovo_videos ES）。
+- **测试覆盖**：+20 单测——buildVideoMatchQuery/ilikeStrategy(3) + searchAdminSources/Users/TaskRuns(5) + AdminSearchService fan-out/降级/kind 优先级/精确置顶/权限分级/空 query 短路/limit 截断/href(8) + route 422 校验/角色映射/信封/requireRole 403(4)。既有 search.test(13) + task-aggregator.test(18) 行为保持。
+- **质量门禁**：typecheck EXIT=0（全 workspace）/ lint EXIT=0（4/4）/ verify:adr-contracts EXIT=0 / **verify:endpoint-adr EXIT=0（239 admin 路由全对齐，新增 GET /admin/search 纳入 ADR-200 契约）** / test:changed 65 文件 804 passed。
+- **偏离登记**：① `siteDisplayName` 暂用 `site_key`（code 非 display name）—— MVP 接受，display name 解析为 follow-up；② source 结果 href 落裸 `/admin/sources`（SourcesClient 用本地 keyword state 非 URL 同步，深链待 Phase 2）；③ submission searcher 未实装（P1.5，DTO 已支持、本卡 P1 仅 video/source/user/task）。
+- **[AI-CHECK]**：六问过——①无回归（SearchService/TaskAggregator 重构经既有测试守护全绿，公开搜索可见性 filter 不动）；②复用沉淀到位（buildVideoMatchQuery + TASK_RUN_STATUS_MAP 单一真源、searchAdminSources 复用既有谓词、TextMatchStrategy 缝）；③可扩展（entitySearcher 可加 submission、TextMatchStrategy 可切 pg_trgm、KIND_PRIORITY 可扩）；④无 any/空 catch/硬编码色，DTO 引用 SSOT union；⑤改动收敛于 apps/api 后端，未触前端/共享组件；⑥后台可见性边界（不调公开 SearchService）+ 权限分级（moderator 不返 user）+ 任务窗口下界三红线均落地并测。

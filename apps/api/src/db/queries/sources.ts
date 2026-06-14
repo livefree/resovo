@@ -530,3 +530,42 @@ export async function batchDeleteSources(
   return result.rowCount ?? 0
 }
 
+/** 后台全局搜索 source 命中行（ADR-200 D-200-4）。 */
+export interface AdminSourceSearchRow {
+  id: string
+  source_name: string
+  source_url: string
+  video_id: string
+  video_title: string | null
+  site_key: string | null
+}
+
+/**
+ * 后台搜索播放源（ADR-200 D-200-4）：直接搜 source_url / source_name / 关联视频标题（不经 videos ES）。
+ * 复用 listAdminSources `keyword` 同口径谓词 + 同可见性边界（非投稿、未软删）；按 is_active 优先 +
+ * 最近创建排序，硬上限 limit。**不塞进列表函数**，独立轻量查询保职责单一。
+ */
+export async function searchAdminSources(
+  db: Pool,
+  q: string,
+  limit: number
+): Promise<AdminSourceSearchRow[]> {
+  const res = await db.query<AdminSourceSearchRow>(
+    `SELECT s.id::text AS id,
+            s.source_name AS source_name,
+            s.source_url AS source_url,
+            s.video_id::text AS video_id,
+            v.title AS video_title,
+            COALESCE(s.source_site_key, v.site_key) AS site_key
+       FROM video_sources s
+       LEFT JOIN videos v ON s.video_id = v.id
+      WHERE s.deleted_at IS NULL
+        AND s.submitted_by IS NULL
+        AND (s.source_url ILIKE $1 OR s.source_name ILIKE $1 OR v.title ILIKE $1)
+      ORDER BY s.is_active DESC, s.created_at DESC, s.id ASC
+      LIMIT $2`,
+    [`%${q}%`, limit]
+  )
+  return res.rows
+}
+

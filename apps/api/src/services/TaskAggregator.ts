@@ -14,7 +14,7 @@
 import type { Pool } from 'pg'
 import type { AdminTaskItem, AdminQueueCounts, TaskResultDigest, TaskMetric } from '@resovo/types'
 import { crawlerQueue, maintenanceQueue } from '@/api/lib/queue'
-import { listTaskRuns, type TaskRunRow, type TaskRunStatus } from '@/api/db/queries/taskRuns'
+import { listTaskRuns, TASK_RUN_STATUS_MAP, type TaskRunRow } from '@/api/db/queries/taskRuns'
 import { selectDismissedKeys } from '@/api/db/queries/notifications'
 
 /**
@@ -92,16 +92,8 @@ const STATUS_MAP: Record<string, AdminTaskItem['status']> = {
 
 const FAILED_STATUSES = new Set(['failed', 'partial_failed', 'cancelled'])
 
-/** task_runs.status（6 态）→ AdminTaskItem.status（4 态）映射（ADR-194 D-194-5）。
- *  cancelled→failed 与 crawler STATUS_MAP 同口径；cancelling=取消进行中仍在跑 → running（直至 cancelled）。 */
-const TASK_RUN_STATUS_MAP: Record<TaskRunStatus, AdminTaskItem['status']> = {
-  pending: 'pending',
-  running: 'running',
-  cancelling: 'running',
-  success: 'success',
-  failed: 'failed',
-  cancelled: 'failed',
-}
+// task_runs.status（6 态）→ AdminTaskItem.status（4 态）映射单一真源迁至 queries/taskRuns.ts
+// （TASK_RUN_STATUS_MAP，与 AdminSearchService 共用，ADR-200 复用沉淀），本处直接 import 复用。
 
 export interface ListTasksParams {
   limit: number

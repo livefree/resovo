@@ -10,7 +10,7 @@
  */
 
 import type { Pool } from 'pg'
-import type { TaskResultDigest } from '@resovo/types'
+import type { TaskResultDigest, AdminTaskItem } from '@resovo/types'
 
 /** 最小查询接口（Pool / PoolClient 皆满足；支持事务内调用与测试 BEGIN/ROLLBACK 零污染，同 notifications.ts） */
 export type Queryable = Pick<Pool, 'query'>
@@ -174,6 +174,61 @@ export async function listTaskRuns(db: Queryable, params: ListTaskRunsParams): P
      ORDER BY created_at DESC
      LIMIT $${limitIdx}`,
     values,
+  )
+  return res.rows
+}
+
+/**
+ * task_runs.status（6 态）→ AdminTaskItem.status（4 态）映射单一真源（ADR-194 D-194-5）。
+ * cancelling 折叠为 running（非 finish 终态）；cancelled 折叠为 failed。
+ * TaskAggregator 与 AdminSearchService 共用本表，避免两处状态映射漂移。
+ */
+export const TASK_RUN_STATUS_MAP: Record<TaskRunStatus, AdminTaskItem['status']> = {
+  pending: 'pending',
+  running: 'running',
+  cancelling: 'running',
+  success: 'success',
+  failed: 'failed',
+  cancelled: 'failed',
+}
+
+/** 后台全局搜索 task 入参（ADR-200 D-200-4：q + 近期窗口下界 + limit 上限）。 */
+export interface SearchTaskRunsParams {
+  q: string
+  /** 时间窗下界（天）；命中 idx_task_runs_created_at，默认 30 天 */
+  sinceDays?: number
+  limit: number
+}
+
+/**
+ * 后台搜索任务运行（ADR-200 D-200-4，task 为**新增 q 能力**）：title ILIKE +
+ * **强制 `created_at >= NOW()-interval` 下界**（默认 30 天，命中 idx_task_runs_created_at）+ 硬上限 limit，
+ * 禁裸全表 title ILIKE 无界扫历史。
+ */
+export async function searchTaskRuns(
+  db: Queryable,
+  params: SearchTaskRunsParams
+): Promise<TaskRunRow[]> {
+  const sinceDays = params.sinceDays ?? 30
+  const res = await db.query<TaskRunRow>(
+    `SELECT
+       id::text AS "id",
+       kind AS "kind",
+       title AS "title",
+       ref AS "ref",
+       status AS "status",
+       progress AS "progress",
+       digest AS "digest",
+       error AS "error",
+       started_at AS "startedAt",
+       finished_at AS "finishedAt",
+       created_at AS "createdAt"
+     FROM task_runs
+     WHERE created_at >= NOW() - make_interval(days => $1::int)
+       AND title ILIKE $2
+     ORDER BY created_at DESC
+     LIMIT $3`,
+    [sinceDays, `%${params.q}%`, params.limit],
   )
   return res.rows
 }

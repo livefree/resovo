@@ -7,6 +7,7 @@
 import type { Client } from '@elastic/elasticsearch'
 import type { SearchResult, SearchSuggestion, VideoCard, Pagination } from '@/types'
 import { ES_INDEX } from '@/api/lib/elasticsearch'
+import { buildVideoMatchQuery } from './buildVideoMatchQuery'
 
 // ── 内部 ES 查询类型（用 unknown 避免 ES SDK 复杂 overload）─────
 
@@ -43,28 +44,15 @@ export class SearchService {
     data: SearchResult[]
     pagination: Pagination
   }> {
-    const must: EsFilter[] = []
+    // 全文匹配子句走共享 buildVideoMatchQuery（ADR-200 D-200-3，字段权重/分词单一真源）；
+    // 公开侧可见性 filter 在本服务内拼接（与后台 AdminSearchService 分治）。
+    const must: EsFilter[] = buildVideoMatchQuery(filters.q ?? '')
     const filter: EsFilter[] = [
       { term: { is_published: true } },
       { term: { visibility_status: 'public' } },
       { term: { review_status: 'approved' } },
       { term: { content_rating: 'general' } },
     ]
-
-    // 全文搜索
-    if (filters.q) {
-      must.push({
-        multi_match: {
-          query: filters.q,
-          fields: [
-            'title^3', 'title.pinyin', 'title_en^2', 'title_original^2',
-            'aliases^2', 'tags', 'description',
-          ],
-          type: 'best_fields',
-          fuzziness: 'AUTO',
-        },
-      })
-    }
 
     // 精确过滤
     if (filters.type) filter.push({ term: { type: filters.type } })
