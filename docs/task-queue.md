@@ -2421,7 +2421,12 @@
    - **SEARCH-02-C** — server-next 接线（admin-shell-client debounce+AbortController 调 /admin/search + DTO→CommandGroup 映射）+ e2e（状态：✅ 已完成 2026-06-13 → **SEARCH-02 Phase 1 顶栏 MVP 全 3 子卡闭环**）
      - 建议模型：sonnet（接线 + e2e，无新共享 API / 无新端点）
      - 完成备注：执行模型 claude-opus-4-8（连续推序列，偏离 sonnet 建议，无强制升降触发）；子代理无。门禁 typecheck/lint EXIT=0 + test:changed 14 passed + e2e global-search 2 passed + **test:e2e:admin 84/84**（全 admin 域零回归）。详见 changelog [SEARCH-02-C]。
-3. **SEARCH-03** — Phase 2：统一 admin_search ES 索引（状态：⬜ 后排，依 Phase 1 埋点）
+3. **SEARCH-03** — Phase 2：统一 admin_search ES 索引（状态：⬜ 后排，依 Phase 1 埋点**数据**）
+   - **SEARCH-03-PRE** — Phase 2 前置埋点设计（ADR-200 AMENDMENT D-200-10）（状态：✅ 已完成 2026-06-13）
+     - 完成备注：执行模型 claude-opus-4-8；子代理 arch-reviewer (claude-opus-4-8, agentId ad4632c17c1773830) 设计裁定。ADR-200 AMENDMENT D-200-10.1~.5 Accepted：两类 metric（admin_search_query 服务端 + admin_search_click 客户端，关联键 query_hash）/ PII 红线（加盐 sha256 截断 16hex、盐缺失 fail-closed、明文 query 不落日志）/ route 层 emit（横切关注点不破分层）/ 新端点 POST /admin/search/telemetry（client 传明文 query→服务端加盐 hash、零改 admin-ui Props/跨消费方 DTO）/ 推导口径写死。纠 3 前提（metric 范式=ADR-107 §6 非 NEGATED 的 ADR-119 / admin_search 字符串已占用加后缀区分 / onAction 跨 hook+shell-client 接线）。门禁 verify:adr-contracts EXIT=0。docs-only。详见 changelog [SEARCH-03-PRE]。
+   - **SEARCH-03-PRE-IMPL** — 埋点实施（route emit admin_search_query + 新 POST /admin/search/telemetry 端点 + searchTelemetry.ts hashQuery + server-next onAction 点击接线 + PII 守门单测 + changelog 真实日志样例）（状态：⬜ 待开始，依 SEARCH-03-PRE 设计 ✅）
+     - 文件范围：`apps/api/src/routes/admin/search.ts` + 新 `apps/api/src/lib/searchTelemetry.ts` + `apps/server-next/src/lib/admin-global-search.ts` + `apps/server-next/src/app/admin/admin-shell-client.tsx` + 单测；`packages/admin-ui/**` 零改动。新 env `SEARCH_TELEMETRY_SALT` 进部署/env 文档。建议模型：sonnet（设计已定稿、纯实施；新端点契约已入 ADR-200 表无需再 spawn Opus）。
+   - **依赖链**：SEARCH-03-PRE-IMPL 上线收集埋点数据 → 数据足够后 SEARCH-03（Phase 2 统一索引决策）才解锁。
 4. **SEARCH-04** — Phase 3：预测/多语言（search_as_you_type + 拼音/aliases）（状态：⬜ 后排）
 5. **SEARCH-05**（独立并行）— videos VideoFilterBar → DataTableSearchInput 收编（状态：✅ 已完成 2026-06-13）
    - 完成备注：执行模型 claude-opus-4-8（连续推序列，偏离 sonnet 建议，无强制升降触发）；子代理无（消费方收编、未改 admin-ui 公开 Props）。`VideoFilterBar` 内部裸 input + 自管 draft/debounce/sync 全收编到共享原语 `DataTableSearchInput`（ADR-149 D-149-8/D-149-13 IME+debounce+Enter+焦点稳定），公开契约/testid/onPatch 语义零变更；filtersRef read-modify-write 保留不丢并发列筛选。门禁 typecheck/lint EXIT=0 + test:changed 73 passed + admin videos.spec 5/5（含搜索过滤链路守护）。后台搜索框收编后 ~95% 统一 DataTableSearchInput。详见 changelog [SEARCH-05]。

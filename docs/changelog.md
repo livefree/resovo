@@ -5443,3 +5443,20 @@
 - **收益**：后台搜索框收编后 ~95% 统一 `DataTableSearchInput`；videos 页白嫖 IME composition 防中断 + Enter 立即提交 + 半 uncontrolled 焦点稳定（CHG-355 复盘的焦点稳定保障），删 ~40 行重复实现。
 - **后续**：SEARCH-03（Phase 2 统一 admin_search ES 索引，依 Phase 1 埋点）/ SEARCH-04（Phase 3 预测·多语言）后排。
 - **[AI-CHECK]**：六问过——①无回归（admin videos.spec 5/5 + test:changed 73 全绿）；②收编消除重复实现、复用单一共享原语；③扩展性（DataTableSearchInput 是后台搜索框 SSOT，未来 IME/debounce 改进自动惠及 videos）；④无 any/空 catch/硬编码色（删的正是手写 INPUT_STYLE，改用原语 CSS 变量样式）；⑤改动收敛于单文件 `VideoFilterBar` 段；⑥消费方收编、未改 admin-ui 公开 Props（无 arch-reviewer/trailer 触发），无新端点/schema。
+
+## [SEARCH-03-PRE] 后台独立搜索模块 Phase 2 前置埋点设计 — ADR-200 AMENDMENT（D-200-10）
+- **完成时间**：2026-06-13
+- **记录时间**：2026-06-13 22:30
+- **执行模型**：claude-opus-4-8（主循环；ADR 决策文档 + 端点契约，对齐卡片 opus 建议）
+- **子代理**：arch-reviewer (claude-opus-4-8, agentId ad4632c17c1773830) — 设计裁定
+- **背景**：SEARCH-03（Phase 2 统一 `admin_search` ES 索引 vs 多索引、是否把 ILIKE 类 kind 迁 ES）后排「依 Phase 1 埋点」。计划真源 §81 定判据 = **query 数 / 各组点击率 / 零结果率**。Phase 1（SEARCH-02）MVP 零产品级埋点 → Phase 2 无数据可依。本卡补 telemetry **设计**（docs-only），实施另立 SEARCH-03-PRE-IMPL。
+- **修改文件**：
+  - `docs/decisions.md` — ADR-200 追加「AMENDMENT 2026-06-13 / D-200-10 Phase 1 搜索可观测埋点」段（D-200-10.1~.5 + 2 偏离登记）+ §端点契约表加 row 2（`POST /admin/search/telemetry`）。
+- **决策摘要（D-200-10.1~.5）**：① 两类 metric 事件（`admin_search_query` 服务端 emit / `admin_search_click` 服务端 emit，关联键 `query_hash`，复用 **ADR-107 §6** metric 范式）；② **PII 红线** `query_hash=sha256(SEARCH_TELEMETRY_SALT+rawQuery.trim().toLowerCase()).slice(0,16)`、盐缺失 fail-closed 仅写 `query_len`、明文 query 永不落日志（对齐 logging-rules §3.3 hash 脱敏 + 避 INFRA-16 同义异名绕 redact）；③ route 层 emit（`request.log` 带 request_id + `performance.now()` 测 latency，422 不 emit，emit 为横切关注点不破 Route→Service 分层）；④ **新端点 `POST /admin/search/telemetry`**（否决复用 `/internal/client-log`〔触 logging-rules 决策 5 业务/技术日志混流〕+ 否决 click 延后〔CTR 是 Phase 2 核心判据〕；client 传明文 query→服务端加盐 hash 保一致性 + **零改跨消费方 DTO `AdminSearchResponseData`** + 点击接线全在 server-next〔rank 取自 useAdminGlobalSearch.prefilteredGroups + 入口 admin-shell-client.onAction〕**零改 admin-ui 公开 Props**）；⑤ 推导口径写死（query 数=distinct query_hash + 总量；per-kind CTR 分母=该 kind 出现且未降级的 query 数〔避 moderator 永无 user 组压低 user CTR + 剔 degraded〕+ rank 分布单列；零结果率全量分母 + 净〔剔 degraded〕双报）。
+- **子代理纠 3 前提（主循环逐一核实通过）**：① metric 范式实为 **ADR-107 §6**（决策点 6），**非 ADR-119**（已 **NEGATED**，图表库 recharts/visx）→ 引用改 ADR-107 §6；② `admin_search` 字符串已被 ADR-189 D-189-6 用作 fetch_log 调用方 source 标签 → metric 名加 `_query`/`_click` 后缀区分语义域；③ `useAdminGlobalSearch` 只导出 `{prefilteredGroups,loading,onQueryChange}`、无 onAction（onAction 在 admin-shell-client）→ 点击埋点跨 hook+shell-client 两文件接线（仍零改 admin-ui Props）。
+- **新增依赖**：无。**新 env**：`SEARCH_TELEMETRY_SALT`（进程级、部署注入、不进库/不进日志；实施卡进 env 文档）。
+- **数据库变更**：无（纯日志/端点设计）。`docs/architecture.md` 不同步（无 schema 变更）。
+- **测试覆盖**：无（docs-only 设计卡）。logging-rules §6 守门 D「≥3 行真实日志样例」顺延 SEARCH-03-PRE-IMPL——本卡无日志 emit、§6.1 明禁编造样例。
+- **质量门禁**：verify:adr-contracts EXIT=0（verify-endpoint-adr 239 admin 路由全对齐、125 ADR 端点含新 telemetry 契约行；新 route 待 IMPL 落地，ADR 端点无 route 不报错）；docs-only test:changed 自动跳过。
+- **后续**：**SEARCH-03-PRE-IMPL**（埋点实施：route emit + 新 telemetry 端点 + `searchTelemetry.ts` hashQuery + server-next 点击接线 + PII 守门单测 + 真实日志样例；建议 sonnet，设计已定稿、契约已入 ADR-200 表无需再 spawn Opus）→ 上线收集数据 → 数据足够后 SEARCH-03（Phase 2 统一索引决策）解锁。
+- **[AI-CHECK]**：六问过——①无回归（docs-only，verify:adr-contracts EXIT=0）；②设计沉淀复用 ADR-107 §6 metric 范式 + logging-rules 既有红线、零另立第二套日志格式；③扩展性（telemetry schema 覆盖全 kind、推导口径直接支撑 Phase 2「统一 vs 多索引/是否扩 ES」）；④PII 红线显式裁定（加盐 hash + fail-closed + 明文不落日志）/ 无 any·空 catch·硬编码色（docs）；⑤改动收敛于 ADR-200 AMENDMENT 单段 + 端点表 1 行；⑥强制 Opus 子代理（撰写 ADR 决策文档）已 spawn arch-reviewer、结论逐条核实落地，新端点契约入 ADR-200 表满足 verify:endpoint-adr，零改 admin-ui 公开 Props 不触 Opus-Props 门禁。
