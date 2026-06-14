@@ -5460,3 +5460,23 @@
 - **质量门禁**：verify:adr-contracts EXIT=0（verify-endpoint-adr 239 admin 路由全对齐、125 ADR 端点含新 telemetry 契约行；新 route 待 IMPL 落地，ADR 端点无 route 不报错）；docs-only test:changed 自动跳过。
 - **后续**：**SEARCH-03-PRE-IMPL**（埋点实施：route emit + 新 telemetry 端点 + `searchTelemetry.ts` hashQuery + server-next 点击接线 + PII 守门单测 + 真实日志样例；建议 sonnet，设计已定稿、契约已入 ADR-200 表无需再 spawn Opus）→ 上线收集数据 → 数据足够后 SEARCH-03（Phase 2 统一索引决策）解锁。
 - **[AI-CHECK]**：六问过——①无回归（docs-only，verify:adr-contracts EXIT=0）；②设计沉淀复用 ADR-107 §6 metric 范式 + logging-rules 既有红线、零另立第二套日志格式；③扩展性（telemetry schema 覆盖全 kind、推导口径直接支撑 Phase 2「统一 vs 多索引/是否扩 ES」）；④PII 红线显式裁定（加盐 hash + fail-closed + 明文不落日志）/ 无 any·空 catch·硬编码色（docs）；⑤改动收敛于 ADR-200 AMENDMENT 单段 + 端点表 1 行；⑥强制 Opus 子代理（撰写 ADR 决策文档）已 spawn arch-reviewer、结论逐条核实落地，新端点契约入 ADR-200 表满足 verify:endpoint-adr，零改 admin-ui 公开 Props 不触 Opus-Props 门禁。
+
+## [SEARCH-03-PRE-FIX] 埋点设计审核修订 — ADR-200 D-200-10 P1+2×P2 修正
+- **完成时间**：2026-06-13
+- **记录时间**：2026-06-13 23:10
+- **执行模型**：claude-opus-4-8（主循环；修订 ADR 决策 + 共享组件 API 契约）
+- **子代理**：arch-reviewer (claude-opus-4-8, agentId a2e9de39d3e541d46) — 修订复核 PASS-with-changes
+- **背景**：SEARCH-03-PRE 收口后独立审核（1 P1 + 2 P2）判「不建议直接进实施」。本卡修订 ADR-200 D-200-10、重走 arch-reviewer Opus 复核。docs-only。
+- **修改文件**：
+  - `docs/decisions.md` — D-200-10.4 重写（点击事件接线契约）+ §端点契约 row 2 补限流 + 偏离登记加 D-200-10-C/D + D-200-10.5 口径注 + 实施卡文件清单修订。
+  - `docs/task-queue.md` — SEARCH-03-PRE-IMPL 范围/模型修订（admin-ui Props 改动 + Opus + trailer）。
+- **P1（核心裁定证伪 → 修正）**：原 D-200-10.4「点击埋点零改 admin-ui Props」**前提不成立**——核实 `admin-shell.tsx:257` `handleCommandAction` 在 **AdminShell 内部**消费 CommandPalette `onAction`、只把 `item.href` 交 `onNavigate`；`AdminShellProps` 无外层 onAction，消费方仅见 `onNavigate:(href:string)=>void` 拿不到 `CommandItem`；且 source(`/admin/sources`)/task(`/admin/crawler/runs`) href 裸列表页**不唯一** → href 反推 kind/rank 结构性失真、与本地 nav 混。**修订（arch-reviewer 收敛 (a)(b)(c)）**：① 新增公开 Props `AdminShellProps.onCommandAction?:(item:CommandItem)=>void`（传**完整** item、对齐 onNotificationItemClick 范式、先 onNavigate 再 onCommandAction、undefined 零行为变化〔语义差异：undefined 命令仍可执行仅不埋点〕）；② 新增 `CommandItem.telemetry?:{kind:AdminSearchKind,rank,globalRank}` 结构化字段（**否决 id 前缀 `search:kind:id` 字符串解析**——耦合埋点语义进 id 格式会静默打断 CTR + 无类型保护 + rank 不在 id 里；结构化强类型保护 D-200-1 id 语义纯净，AdminSearchKind 自 @resovo/types admin-ui 已 import）；③ rank/globalRank 在 `mapAdminSearchToCommandGroups` **映射期预存**（否决消费方 onCommandAction 现算——避免点击瞬间 prefilteredGroups 被新 in-flight 回填的竞态 + **hook 无需新增导出**）；④ fire-and-forget POST **同步发起**（不 await/不放 useEffect，防 router.push 卸载 CommandPalette 丢请求）。**门禁升级**：改 admin-ui 公开 Props（onCommandAction + CommandItem.telemetry）→ 命中 CLAUDE.md「公开 Props 缺 arch-reviewer trailer」禁止项 → **实施卡 SEARCH-03-PRE-IMPL 改 Opus + commit trailer**（原 sonnet 作废）。
+- **P2-1（429 无策略 → 补）**：复用 client-log 同款进程内内存桶范式，**key=`request.user.id`**（端点已登录、比 IP 精准）/ 60s / 60（实施卡可降 30）、超限 429 **不 emit metric**；偏离 **D-200-10-D**（进程级近似、横向扩容 per-instance、不参与数据正确性）。
+- **P2-2（样例门禁冲突 → 补偏离 D-200-10-C）**：logging-rules §6 要求 info/warn/error 三级真实样例、但本埋点 emit 路径不产 error——四点论证（① emit 同步日志写入无 error 分支 ② svc.search allSettled 降级进 degraded_kinds 不升 error ③ route 级异常走全局 errorHandler、属基础设施流非 `admin_search_*` metric 域、与 ADR-189 D-189-6 域隔离一致）；error 级样例**豁免不强造**（强造违 §6.1）、守门 D 实质=info×2+warn×1 真实样例。**否决「盐缺失改 error」**（配置降级可恢复、非请求失败 → warn 语义）。+口径注：`admin_search_click` 含键盘 Enter 确认非仅 pointer click。
+- **二阶问题（采纳入实施卡）**：onCommandAction 与 onNavigate 调用顺序 / undefined 回归测试（点击 navigate 仅触发 onNavigate 不抛）/ SSR 安全（salt 只在 api 侧不进 client bundle）/ **PII 守门双覆盖**（注入 secret 搜索词后 grep logs 0 命中——含 emit ctx **与请求体不进 access log** 两条路径，INFRA-16 同义异名延伸面）。
+- **新增依赖**：无。
+- **数据库变更**：无。
+- **测试覆盖**：无（docs-only 修订）。
+- **质量门禁**：verify:adr-contracts EXIT=0（verify-endpoint-adr 239 路由对齐、端点契约 row 2 限流/SSOT enum 已补）；docs-only test:changed 自动跳过。
+- **流程说明**：原 arch-reviewer（agentId ad4632c17c1773830）经 SendMessage 续接在本环境不可用 → 新 spawn 同 arch-reviewer 预设、自带完整上下文（已落地 5 子决策 + 3 findings + 我的修订裁定）复核。
+- **[AI-CHECK]**：六问过——①无回归（docs-only，verify EXIT=0）；②修订消除 P1 失真根因、复用既有 pass-through 范式 + client-log 限流范式、零另立模式；③扩展性（onCommandAction 传完整 item + telemetry 结构化字段为未来埋点维度留口）；④PII 守门扩到请求体路径、无 any·空 catch·硬编码色（docs）；⑤改动收敛于 D-200-10.4 重写 + 2 偏离 + 端点表 1 行 + 实施卡范围；⑥强制 Opus 子代理（修订 ADR + 定义共享组件 API 契约 onCommandAction/CommandItem.telemetry）已 spawn arch-reviewer PASS-with-changes、(a)(b)(c)+二阶全采纳，实施卡门禁正确升 Opus + trailer。
