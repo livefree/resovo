@@ -198,7 +198,8 @@ export class IntegrationCredentialsService {
     if (!spec) throw new UnknownCredentialProviderError(provider)
 
     const draft = body.draft === true
-    const base = await loadProviderCredential(this.db, provider) // 已存值（→env 回退）
+    // includeDisabled：禁用但已保存的源仍须能测试其凭证（P2 修复，否则测空凭证误报失败）。
+    const base = await loadProviderCredential(this.db, provider, { includeDisabled: true }) // 已存值（→env 回退）
     let resolved: ResolvedCredential = base
     if (draft) {
       // 候选值（传入且非遮罩占位 / 非空）覆盖已存；遮罩占位或空 → 保留已存/env（D-173-5）

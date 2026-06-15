@@ -43,16 +43,28 @@ function isBlank(v: unknown): boolean {
   return v === undefined || v === null || v === ''
 }
 
+/** loadProviderCredential 选项。 */
+export interface LoadProviderCredentialOptions {
+  /**
+   * 加载「已保存但禁用」行的字段（绕过 enabled=false 抑制）。仅连接测试路径传 true——
+   * disabled 源应可测试其保存的凭证（migration 注释「但仍允许测试」），返回的 `enabled` 仍如实
+   * 反映禁用态。解析器（实际 API 调用）路径**不传**，保持 D-173-3「disabled 不注入凭证」。
+   */
+  includeDisabled?: boolean
+}
+
 export async function loadProviderCredential(
   db: Pool,
   provider: ProviderKey,
+  opts?: LoadProviderCredentialOptions,
 ): Promise<ResolvedCredential> {
   const spec = getProviderCredentialSpec(provider)
   if (!spec) return { enabled: true, fields: {} }
 
   const row = await getApiCredentialRow(db, provider)
-  // D-173-3：enabled=false 压过 env 回退——不注入任何凭证
-  if (row && !row.enabled) return { enabled: false, fields: {} }
+  // D-173-3：enabled=false 压过 env 回退——不注入任何凭证（解析器路径）。
+  // includeDisabled（test 路径）例外：仍加载已存字段以测试禁用但已配置的凭证。
+  if (row && !row.enabled && !opts?.includeDisabled) return { enabled: false, fields: {} }
 
   // 行内旧 secret key 兼容（ADR-201 22823）：读路径统一规范化（旧→新 in-memory），单一真源 apiCredentials
   const rowSecrets = row ? normalizeRowSecrets(provider, row.secrets) : null

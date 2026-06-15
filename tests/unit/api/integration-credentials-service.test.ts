@@ -227,4 +227,17 @@ describe('IntegrationCredentialsService.test', () => {
     await svc.test('bangumi', { draft: true, token: '••••1234' }, 'admin-1', 'req-1')
     expect(mTest).toHaveBeenCalledWith('bangumi', expect.objectContaining({ fields: expect.objectContaining({ token: 'stored' }) }))
   })
+
+  it('P2 修复：以 includeDisabled 加载凭证 → 禁用但已保存的源仍测真实凭证（非空）', async () => {
+    // enabled=false 但有已存字段：test() 须传 includeDisabled 让解析器加载存值，否则测空凭证误报失败。
+    mLoad.mockResolvedValue({ enabled: false, fields: { token: 'stored' } })
+    mTest.mockResolvedValue({ ok: true, latencyMs: 80, authStatus: 'valid' })
+    const svc = new IntegrationCredentialsService(db)
+    const r = await svc.test('bangumi', {}, 'admin-1', 'req-1')
+
+    expect(mLoad).toHaveBeenCalledWith(expect.anything(), 'bangumi', { includeDisabled: true })
+    // 测的是已存凭证（token=stored）而非空集
+    expect(mTest).toHaveBeenCalledWith('bangumi', expect.objectContaining({ fields: expect.objectContaining({ token: 'stored' }) }))
+    expect(r.ok).toBe(true)
+  })
 })

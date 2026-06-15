@@ -76,6 +76,15 @@ describe('loadProviderCredential（ADR-173 D-173-3）', () => {
     expect(res.fields).toEqual({})
   })
 
+  it('P2 修复：enabled=false + includeDisabled → 加载已存字段（enabled 仍如实为 false）', async () => {
+    // 禁用但已保存的源仍须能测试其凭证（test 路径传 includeDisabled）；解析器路径不传则照常抑制。
+    const db = makeDb({ credRow: { secrets: { token: 'row-token' }, config: { userAgent: 'UA/row' }, enabled: false } })
+    const res = await loadProviderCredential(db, 'bangumi', { includeDisabled: true })
+    expect(res.enabled).toBe(false)
+    expect(res.fields.token).toBe('row-token')
+    expect(res.fields.userAgent).toBe('UA/row')
+  })
+
   it('缺行：fallback 旧 system_settings KV', async () => {
     const db = makeDb({
       credRow: null,
