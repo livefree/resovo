@@ -39,6 +39,19 @@ const LEGACY_KV_MAP: Record<string, Partial<Record<string, SystemSettingKey>>> =
   },
 }
 
+/**
+ * 过渡期 api_credentials 行内旧 secret key 兼容（ADR-201 22823「过渡期允许新旧字段并存读取」）。
+ * tmdb read_access_token ← 旧 secrets.token：migration 116 把行内 secrets.token 改名 read_access_token，
+ * 但代码可能先于 migration 部署 / migration 回滚 → 未迁移旧行 secrets.token 仍需可读（语义即 Bearer，
+ * ADR-201 22821）。新 key 有值时不触发；全量迁移后旧 key 不存在，fallback 自然失效。
+ * 与 LEGACY_KV_MAP（system_settings KV fallback）平行互补；写入仍只走新字段（save 按 spec）。
+ */
+const LEGACY_ROW_SECRET_MAP: Record<string, Partial<Record<string, string>>> = {
+  tmdb: {
+    read_access_token: 'token',
+  },
+}
+
 function isBlank(v: unknown): boolean {
   return v === undefined || v === null || v === ''
 }
@@ -63,6 +76,12 @@ export async function loadProviderCredential(
     let raw: unknown
     if (row) {
       raw = field.secret ? row.secrets[field.key] : row.config[field.key]
+      // 过渡期兼容（ADR-201 22823）：secret 字段新 key 缺失 → fallback 行内旧 secret key
+      // （未迁移旧行 secrets.token 仍可读；全量迁移后旧 key 不存在，fallback 自然失效）
+      if (field.secret && isBlank(raw)) {
+        const legacyRowKey = LEGACY_ROW_SECRET_MAP[provider]?.[field.key]
+        if (legacyRowKey) raw = row.secrets[legacyRowKey]
+      }
     } else if (legacyKv) {
       const kvKey = LEGACY_KV_MAP[provider]?.[field.key]
       raw = kvKey ? legacyKv[kvKey] : undefined

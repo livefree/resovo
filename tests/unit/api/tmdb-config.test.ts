@@ -76,6 +76,13 @@ describe('loadTmdbClientConfig 薄封装映射（ADR-201 / META-37-B）', () => 
     expect(cfg.readAccessToken).toBeUndefined()
   })
 
+  it('旧行兼容：未迁移 secrets.token → readAccessToken（ADR-201 22823 过渡期并存读取）', async () => {
+    vi.stubEnv('TMDB_READ_ACCESS_TOKEN', '')
+    const db = makeDb({ credRow: { secrets: { token: 'old-bearer' } } })
+    const cfg = await loadTmdbClientConfig(db)
+    expect(cfg.readAccessToken).toBe('old-bearer')
+  })
+
   it('disabled 行：返回空 cfg（凭证不注入，压过 env）', async () => {
     vi.stubEnv('TMDB_READ_ACCESS_TOKEN', 'env-rat')
     const db = makeDb({ credRow: { secrets: { read_access_token: 'rat' }, enabled: false } })

@@ -158,6 +158,20 @@ describe('tmdb 凭证解析（ADR-201 字段拆分 / META-37-A）', () => {
     expect(res.fields.api_key).toBe('legacy-key')
     expect(res.fields.read_access_token).toBeUndefined() // Bearer 无 legacy KV 来源
   })
+
+  it('旧行兼容：未迁移 secrets.token → fields.read_access_token（ADR-201 22823 过渡期并存读取）', async () => {
+    vi.stubEnv('TMDB_READ_ACCESS_TOKEN', '')
+    // migration 116 未跑 / 回滚：行内仍是旧 secrets.token，须仍可读为 Bearer
+    const db = makeDb({ credRow: { secrets: { token: 'old-bearer' } } })
+    const res = await loadProviderCredential(db, 'tmdb')
+    expect(res.fields.read_access_token).toBe('old-bearer')
+  })
+
+  it('新 key 优先旧 key：secrets 同时有 read_access_token + token → 取新', async () => {
+    const db = makeDb({ credRow: { secrets: { read_access_token: 'new-rat', token: 'old' } } })
+    const res = await loadProviderCredential(db, 'tmdb')
+    expect(res.fields.read_access_token).toBe('new-rat')
+  })
 })
 
 describe('tmdb 凭证契约守卫（ADR-201 §凭证语义 / META-37-A）', () => {

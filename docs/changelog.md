@@ -5786,3 +5786,18 @@
 - **复用 gate**：META-37-A arch-reviewer (claude-opus-4-8, agentId a6c0adf46c51267c5) CONDITIONAL-PASS 已覆盖整体 A+B 方案（lib 双路 / loadTmdbClientConfig / tmdbTester / UI auth_method 在评审 prompt B 卡方案段已审），B 未偏离故未再 spawn。
 - **META-37 全收口**：-A（字段拆分+迁移+KV 映射）+ -B（lib 双路+loader+tester+UI auth_method）闭环。**Phase 4 TMDB 凭证语义修订完成**：read_access_token（Bearer 首选）/ api_key（v3 兼容）分离、连接测试双路 + 429 warn、loadTmdbClientConfig 对齐 bangumi、UI 区分认证方式；协调 META-29（旧 KV 物理退役仍归 Card D，A/B 仅修正映射不删 KV）。后续 META-38（TMDB API client search/detail MVP）。
 - **[AI-CHECK]**：六问过——①根因=A 卡拆字段后 lib/服务/UI 需接新字段并实现 Bearer/API Key 双路 + auth_method 展示；②零回归（typecheck 全绿验证 TmdbClientConfig 重构无遗漏消费方、test:changed 52 passed、SettingsTab 零回归）；③边界=B 消费层不改 packages 公开契约/admin-ui Props/无端点、UI auth_method 前端派生不扩后端 DTO；④复用=loadProviderCredential 通用解析器 + bangumi-config 薄封装范式 + 共享 makeDb fixture；⑤无 any / 无空 catch / api_key query encodeURIComponent 防注入 / 零硬编码色（auth_method span 用既有 HINT_STYLE token）；⑥范围 lib+loader+tester+UI 四点单一验收口径（按 Bearer 首选/API Key 兼容取新字段 + 展示 auth_method），全落地。
+
+## [META-37-A-FIX] TMDB 旧行兼容——loader 读取层 fallback 未迁移 secrets.token
+- **完成时间**：2026-06-14
+- **记录时间**：2026-06-14 20:00
+- **执行模型**：claude-opus-4-8
+- **子代理**：无（Codex stop-time review 拦截后修复）
+- **触发**：Codex stop-time review「TMDB old-row compatibility contract is not honored」。
+- **修改文件**：
+  - `apps/api/src/services/integration-credentials-config.ts` — 加 `LEGACY_ROW_SECRET_MAP`（行内旧 secret key 兼容，tmdb `read_access_token` ← `token`）+ 解析循环 secret 字段新 key 缺失时 fallback 行内旧 key。
+  - `tests/unit/api/integration-credentials-config.test.ts` — +2 it（旧行 `secrets.token`→`read_access_token` / 新 key 优先旧 key）。
+  - `tests/unit/api/tmdb-config.test.ts` — +1 it（旧行 `secrets.token`→`readAccessToken`）。
+- **根因**：META-37-A 只做 migration 116（一次性数据迁移）+ `LEGACY_KV_MAP`（system_settings KV fallback），遗漏 ADR-201 **22823「过渡期允许新旧字段并存读取」**对 api_credentials 行内旧 `secrets.token` 的读取兼容。代码先于 migration 部署 / migration 回滚时，未迁移旧行 `secrets.token` 仍在，loader 按新 spec 只读 `read_access_token` → 读不到值（Bearer 凭证丢失）。
+- **修复机制**：`LEGACY_ROW_SECRET_MAP`（与 `LEGACY_KV_MAP` 平行互补）——secret 字段新 key 缺失时 fallback 行内旧 key。新 key 有值不触发；全量迁移后旧 key 不存在，fallback 自然失效；写入仍只走新字段（save 按 spec，不写 token）。arch-reviewer 评审时聚焦 migration 幂等/回滚，未显式核对 22823 读取兼容，故遗漏（评审信息不全的实质缺口）。
+- **质量门禁**：typecheck EXIT=0 / test:changed 增量 19 文件 306 passed / verify:adr-contracts EXIT=0。+3 单测。
+- **[AI-CHECK]**：六问过——①根因=读取层遗漏过渡期旧行兼容（ADR-201 22823）；②零回归（306 passed，新增 fallback 仅在新 key 缺失时触发，已迁移行/新 key 优先用例守护）；③边界=纯 loader 读取兼容，不改 packages 契约/migration/写入路径；④复用=与 LEGACY_KV_MAP 同范式平行；⑤无 any / 无空 catch / 无硬编码；⑥单一验收口径（未迁移旧行 secrets.token 仍可读为 Bearer），落地。
