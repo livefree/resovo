@@ -5801,3 +5801,20 @@
 - **修复机制**：`LEGACY_ROW_SECRET_MAP`（与 `LEGACY_KV_MAP` 平行互补）——secret 字段新 key 缺失时 fallback 行内旧 key。新 key 有值不触发；全量迁移后旧 key 不存在，fallback 自然失效；写入仍只走新字段（save 按 spec，不写 token）。arch-reviewer 评审时聚焦 migration 幂等/回滚，未显式核对 22823 读取兼容，故遗漏（评审信息不全的实质缺口）。
 - **质量门禁**：typecheck EXIT=0 / test:changed 增量 19 文件 306 passed / verify:adr-contracts EXIT=0。+3 单测。
 - **[AI-CHECK]**：六问过——①根因=读取层遗漏过渡期旧行兼容（ADR-201 22823）；②零回归（306 passed，新增 fallback 仅在新 key 缺失时触发，已迁移行/新 key 优先用例守护）；③边界=纯 loader 读取兼容，不改 packages 契约/migration/写入路径；④复用=与 LEGACY_KV_MAP 同范式平行；⑤无 any / 无空 catch / 无硬编码；⑥单一验收口径（未迁移旧行 secrets.token 仍可读为 Bearer），落地。
+
+## [META-37-A-FIX-2] TMDB 旧行 view/save 路径安全——统一 normalizeRowSecrets + 固化迁移
+- **完成时间**：2026-06-14
+- **记录时间**：2026-06-14 20:15
+- **执行模型**：claude-opus-4-8
+- **子代理**：无（Codex stop-time review 第二轮拦截后修复）
+- **触发**：Codex stop-time review「legacy TMDB rows are still unsafe through the admin view/save path」。
+- **修改文件**：
+  - `apps/api/src/db/queries/apiCredentials.ts` — 新增 `LEGACY_ROW_SECRET_KEYS`（新 key→旧 key 映射，单一真源）+ `normalizeRowSecrets`（读路径规范化，旧→新 in-memory，新 key 非空保留/旧 key 剔除）；`upsertApiCredential` 加 `dropSecretKeys`（SQL `(secrets - $6::text[]) || $2`，写路径删旧 key）。
+  - `apps/api/src/services/integration-credentials-config.ts` — loader 移除上轮局部 fallback（`LEGACY_ROW_SECRET_MAP`），改用 `normalizeRowSecrets`（统一单一真源）。
+  - `apps/api/src/services/IntegrationCredentialsService.ts` — toView + redactAuditState 用 `normalizeRowSecrets`（旧行 configured/遮罩/审计正确）；save 固化迁移（旧值→新 key + `dropSecretKeys` 删旧 key；`submittedSecretKeys` 守审计 afterJsonb 不计固化迁移）。
+  - `tests/unit/api/apiCredentials-queries.test.ts` — +7 it（normalizeRowSecrets 5 + upsert dropSecretKeys 2）+ SQL 断言更新。
+  - `tests/unit/api/integration-credentials-service.test.ts` — mock 改 importOriginal（保留真实 normalizeRowSecrets/LEGACY_ROW_SECRET_KEYS）+ toView 旧行 configured 1 + save 固化迁移/清空 2。
+- **根因**：上轮（META-37-A-FIX）只修 loader 读取兼容（fallback），但 admin view（GET listForAdmin）/ save（PUT）路径对旧行仍不安全。① **view**：toView 循环 spec.fields（read_access_token/api_key），未迁移旧行 `secrets.token` 不被识别 → `configured=false` 显示「未配置」+ auth_method 误判（误导管理员凭证丢失）。② **save 清空**：`upsertApiCredential` 是 JSONB `||` merge（不删 key），清空 `read_access_token=''` 后旧 token 残留 DB → loader fallback 仍读旧凭证 → 清空无效/泄露。loader/view/save 三路径不一致 = 不安全。
+- **修复机制**：旧行兼容收敛为 queries 层单一真源——读路径 `normalizeRowSecrets`（loader/toView/redactAuditState 共用，旧→新 in-memory）+ 写路径 `upsertApiCredential.dropSecretKeys`（save 固化迁移：本次未提交新 key 时旧值迁入新 key 防丢失，提交了/清空用提交值，旧 key 一律删除）。**场景全覆盖**：旧行只读 / 只改 baseUrl（固化迁移保 Bearer）/ 改 read_access_token / 清空（真清空）/ 已迁移行（不触发）/ bangumi 无映射（原样），均测试守护。移除上轮 loader 局部 fallback（统一单一真源，消除双真源）。
+- **质量门禁**：typecheck EXIT=0 / test:changed 增量 20 文件 319 passed / verify:adr-contracts EXIT=0（endpoint 240 对齐 + sql-schema 对齐，upsert `secrets - $6::text[]` 仍对齐）。+10 单测。
+- **[AI-CHECK]**：六问过——①根因=view/save 路径旧行兼容缺失致 configured 误判 + 清空无效；②零回归（319 passed，bangumi/已迁移行用例守护；`submittedSecretKeys` 守审计语义不被固化迁移污染）；③边界=旧行兼容单一真源 queries 层，loader/view/save 统一消费，不改 packages 契约/migration/端点；④复用=normalizeRowSecrets 单点 + LEGACY_ROW_SECRET_KEYS 单常量三路径共享；⑤无 any / 无空 catch / SQL `- $6::text[]` 参数化无注入 / 审计 redact 守 secret 不泄露；⑥单一验收口径（旧行经 view/save/loader 三路径均安全），全覆盖。

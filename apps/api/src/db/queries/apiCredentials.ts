@@ -39,6 +39,40 @@ export interface ApiCredentialRow {
 const SELECT_COLUMNS =
   'provider, secrets, config, enabled, last_tested_at, last_test_ok, last_test_latency_ms, last_test_error, updated_at, updated_by'
 
+/**
+ * 过渡期行内旧 secret key 兼容（ADR-201 22823「过渡期允许新旧字段并存读取」）：新 key → 旧 key 映射。
+ * tmdb read_access_token ← 旧 secrets.token（migration 116 把 secrets.token 改名 read_access_token，
+ * 但代码可能先于 migration 部署 / migration 回滚 → 未迁移旧行 secrets.token 仍存）。
+ *
+ * 单一真源：读路径经 `normalizeRowSecrets`（旧→新 in-memory，统一 loader/view 视角），
+ * 写路径（save）经 `upsertApiCredential.dropSecretKeys` 固化迁移并删旧 key（写入只走新字段）。
+ * 全量迁移后旧 key 不存在，规范化/删除均自然失效。`mapRow` 保留原始 secrets（save 需原始旧值固化迁移）。
+ */
+export const LEGACY_ROW_SECRET_KEYS: Record<string, Partial<Record<string, string>>> = {
+  tmdb: { read_access_token: 'token' },
+}
+
+/**
+ * 读路径规范化：把行内旧 secret key 即时映射为新 key（in-memory，不写 DB）。
+ * 新 key 已有非空值时保留新（迁移优先），旧 key 一律从视图剔除。无旧 key 命中时返回原引用。
+ */
+export function normalizeRowSecrets(
+  provider: string,
+  secrets: Record<string, unknown>,
+): Record<string, unknown> {
+  const map = LEGACY_ROW_SECRET_KEYS[provider]
+  if (!map) return secrets
+  let out: Record<string, unknown> | null = null
+  for (const [newKey, oldKey] of Object.entries(map)) {
+    if (!oldKey || secrets[oldKey] === undefined) continue
+    out ??= { ...secrets }
+    const newVal = out[newKey]
+    if (newVal === undefined || newVal === null || newVal === '') out[newKey] = out[oldKey]
+    delete out[oldKey]
+  }
+  return out ?? secrets
+}
+
 function mapRow(r: DbRow): ApiCredentialRow {
   return {
     provider: r.provider,
@@ -78,19 +112,23 @@ export interface UpsertApiCredentialInput {
   config?: Record<string, unknown>
   /** 省略=保持原值（新行默认 true） */
   enabled?: boolean
+  /** 合并前先从 secrets 删除的旧 key（过渡期旧 secret key 固化迁移，ADR-201 22823；省略=不删） */
+  dropSecretKeys?: readonly string[]
   updatedBy: string | null
 }
 
 /**
  * 保存/更新单源凭证（ADR-173 D-173-4）：JSONB 顶层 `||` 合并——只覆盖本次提交的字段，
  * 同源未提交字段保留（防「保存即清空」）。enabled 省略时保持原值（新行默认 true）。
+ * `dropSecretKeys`（ADR-201 22823）：合并前先 `secrets - dropKeys`，固化迁移旧 secret key（写入只走新字段，
+ * 避免旧 token 残留致 loader fallback 读旧值 / 清空无效）；空数组等价不删。
  */
 export async function upsertApiCredential(db: Pool, input: UpsertApiCredentialInput): Promise<void> {
   await db.query(
     `INSERT INTO api_credentials (provider, secrets, config, enabled, updated_at, updated_by)
      VALUES ($1, $2::jsonb, $3::jsonb, COALESCE($4, TRUE), NOW(), $5)
      ON CONFLICT (provider) DO UPDATE SET
-       secrets    = api_credentials.secrets || $2::jsonb,
+       secrets    = (api_credentials.secrets - $6::text[]) || $2::jsonb,
        config     = api_credentials.config  || $3::jsonb,
        enabled    = COALESCE($4, api_credentials.enabled),
        updated_at = NOW(),
@@ -101,6 +139,7 @@ export async function upsertApiCredential(db: Pool, input: UpsertApiCredentialIn
       JSON.stringify(input.config ?? {}),
       input.enabled ?? null,
       input.updatedBy,
+      input.dropSecretKeys ?? [],
     ],
   )
 }

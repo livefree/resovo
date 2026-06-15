@@ -17,6 +17,8 @@ import {
   getApiCredentialRow,
   upsertApiCredential,
   updateApiCredentialTestStatus,
+  normalizeRowSecrets,
+  LEGACY_ROW_SECRET_KEYS,
   type ApiCredentialRow,
 } from '@/api/db/queries/apiCredentials'
 import { loadProviderCredential, type ResolvedCredential } from './integration-credentials-config'
@@ -72,10 +74,13 @@ export class IntegrationCredentialsService {
   }
 
   private toView(spec: ProviderCredentialSpec, row: ApiCredentialRow | null): IntegrationCredentialView {
+    // 行内旧 secret key 兼容（ADR-201 22823）：读路径规范化（旧 token→read_access_token），
+    // 使未迁移旧行 configured/遮罩值正确显示（否则误显示「未配置」+ auth_method 误判）
+    const secrets = row ? normalizeRowSecrets(spec.provider, row.secrets) : null
     const values: Record<string, string> = {}
     let configured = false
     for (const field of spec.fields) {
-      const raw = row ? (field.secret ? row.secrets[field.key] : row.config[field.key]) : undefined
+      const raw = row ? (field.secret ? secrets![field.key] : row.config[field.key]) : undefined
       if (field.secret) {
         const s = typeof raw === 'string' ? raw : ''
         values[field.key] = maskSecret(s)
@@ -129,11 +134,27 @@ export class IntegrationCredentialsService {
     const before = await getApiCredentialRow(this.db, provider)
     const beforeJsonb = this.redactAuditState(spec, before, Object.keys({ ...secrets, ...config }))
 
-    await upsertApiCredential(this.db, { provider, secrets, config, enabled, updatedBy: actorId })
+    // 用户本次提交的 secret 字段（固化迁移注入的字段不计入审计/afterJsonb，属系统自动迁移）
+    const submittedSecretKeys = new Set(Object.keys(secrets))
+
+    // 旧 secret key 固化迁移（ADR-201 22823「写入只走新字段」）：DB 残留旧 key（如 tmdb.token）→
+    // upsert 一律删旧 key；本次未提交新 key 时把旧值迁入新 key（防删旧 key 后凭证丢失，或清空仍被
+    // loader fallback 读旧值致清空无效）。本次提交了新 key（含清空）则用提交值，旧 key 仅删除。
+    const dropSecretKeys: string[] = []
+    const beforeSecrets = before?.secrets ?? {}
+    for (const [newKey, oldKey] of Object.entries(LEGACY_ROW_SECRET_KEYS[provider] ?? {})) {
+      if (!oldKey || beforeSecrets[oldKey] === undefined) continue
+      dropSecretKeys.push(oldKey)
+      if (!(newKey in secrets) && typeof beforeSecrets[oldKey] === 'string') {
+        secrets[newKey] = beforeSecrets[oldKey]
+      }
+    }
+
+    await upsertApiCredential(this.db, { provider, secrets, config, enabled, dropSecretKeys, updatedBy: actorId })
 
     const afterJsonb: Record<string, unknown> = { provider }
     for (const field of spec.fields) {
-      if (field.secret && field.key in secrets) {
+      if (field.secret && submittedSecretKeys.has(field.key)) {
         afterJsonb[field.key] = (secrets[field.key] as string).length > 0 ? '<set>' : '<cleared>'
       } else if (!field.secret && field.key in config) {
         afterJsonb[field.key] = config[field.key]
@@ -158,10 +179,11 @@ export class IntegrationCredentialsService {
     row: ApiCredentialRow | null,
     changedKeys: string[],
   ): Record<string, unknown> {
+    const secrets = row ? normalizeRowSecrets(spec.provider, row.secrets) : null
     const out: Record<string, unknown> = { provider: spec.provider }
     for (const field of spec.fields) {
       if (!changedKeys.includes(field.key)) continue
-      const raw = row ? (field.secret ? row.secrets[field.key] : row.config[field.key]) : undefined
+      const raw = row ? (field.secret ? secrets![field.key] : row.config[field.key]) : undefined
       if (field.secret) {
         out[field.key] = typeof raw === 'string' && raw.length > 0 ? '<set>' : '<cleared>'
       } else {

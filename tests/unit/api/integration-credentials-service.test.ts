@@ -9,12 +9,16 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type { Pool } from 'pg'
 
-vi.mock('@/api/db/queries/apiCredentials', () => ({
-  listApiCredentialRows: vi.fn(),
-  getApiCredentialRow: vi.fn(),
-  upsertApiCredential: vi.fn().mockResolvedValue(undefined),
-  updateApiCredentialTestStatus: vi.fn().mockResolvedValue(undefined),
-}))
+vi.mock('@/api/db/queries/apiCredentials', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/api/db/queries/apiCredentials')>()
+  return {
+    ...actual, // 保留真实 normalizeRowSecrets / LEGACY_ROW_SECRET_KEYS（纯函数/常量）
+    listApiCredentialRows: vi.fn(),
+    getApiCredentialRow: vi.fn(),
+    upsertApiCredential: vi.fn().mockResolvedValue(undefined),
+    updateApiCredentialTestStatus: vi.fn().mockResolvedValue(undefined),
+  }
+})
 vi.mock('@/api/services/integration-credentials-config', () => ({
   loadProviderCredential: vi.fn(),
 }))
@@ -79,6 +83,16 @@ describe('IntegrationCredentialsService.listForAdmin', () => {
     expect(tmdb.values.api_key).toBe('')
     expect(tmdb.configured).toBe(false)
   })
+
+  it('旧行兼容：tmdb 仅 secrets.token（未迁移）→ read_access_token 遮罩 + configured（ADR-201 22823）', async () => {
+    mList.mockResolvedValue([makeRow({ provider: 'tmdb', secrets: { token: 'old-bearer' }, config: {} }) as never])
+    const svc = new IntegrationCredentialsService(db)
+    const views = await svc.listForAdmin()
+    const tmdb = views.find((v) => v.provider === 'tmdb')!
+    expect(tmdb.configured).toBe(true) // 旧行有 Bearer → 已配置（不误显示「未配置」）
+    expect(tmdb.values.read_access_token).not.toBe('') // 遮罩值（来自旧 token）
+    expect(tmdb.values.api_key).toBe('')
+  })
 })
 
 describe('IntegrationCredentialsService.save', () => {
@@ -126,6 +140,25 @@ describe('IntegrationCredentialsService.save', () => {
         afterJsonb: expect.objectContaining({ token: '<cleared>' }),
       }),
     )
+  })
+
+  it('旧行固化迁移：DB secrets.token 残留 + 只改 baseUrl → upsert 删 token + 旧值迁入 read_access_token', async () => {
+    mGetRow.mockResolvedValue(makeRow({ provider: 'tmdb', secrets: { token: 'old-bearer' }, config: {} }) as never)
+    const svc = new IntegrationCredentialsService(db)
+    await svc.save('tmdb', { baseUrl: 'https://x/3' }, 'admin-1', 'req-1')
+    const arg = mUpsert.mock.calls[0]![1]
+    expect(arg.dropSecretKeys).toEqual(['token']) // 删旧 key（写入只走新字段）
+    expect(arg.secrets).toEqual({ read_access_token: 'old-bearer' }) // 未提交新 key → 固化迁移旧值（防凭证丢失）
+    expect(arg.config).toEqual({ baseUrl: 'https://x/3' })
+  })
+
+  it('旧行清空：DB secrets.token 残留 + 提交 read_access_token=空 → 删 token + 不固化（真清空，杜绝 fallback 残留）', async () => {
+    mGetRow.mockResolvedValue(makeRow({ provider: 'tmdb', secrets: { token: 'old-bearer' }, config: {} }) as never)
+    const svc = new IntegrationCredentialsService(db)
+    await svc.save('tmdb', { read_access_token: '' }, 'admin-1', 'req-1')
+    const arg = mUpsert.mock.calls[0]![1]
+    expect(arg.dropSecretKeys).toEqual(['token'])
+    expect(arg.secrets).toEqual({ read_access_token: '' }) // 提交空 → 不固化，token 删除 → loader 读不到 → 真清空
   })
 })
 

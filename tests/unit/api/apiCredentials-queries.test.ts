@@ -10,6 +10,7 @@ import {
   listApiCredentialRows,
   upsertApiCredential,
   updateApiCredentialTestStatus,
+  normalizeRowSecrets,
 } from '@/api/db/queries/apiCredentials'
 
 function makeDb(rows: unknown[] = []) {
@@ -35,7 +36,7 @@ describe('upsertApiCredential（ADR-173 D-173-4 JSONB 合并）', () => {
     })
     const [sql, params] = callOf(query)
     expect(sql).toContain('ON CONFLICT (provider) DO UPDATE')
-    expect(sql).toContain('api_credentials.secrets || $2::jsonb')
+    expect(sql).toContain('(api_credentials.secrets - $6::text[]) || $2::jsonb')
     expect(sql).toContain('api_credentials.config  || $3::jsonb')
     expect(params[0]).toBe('bangumi')
     expect(JSON.parse(params[1] as string)).toEqual({ token: 'new-tok' })
@@ -50,6 +51,20 @@ describe('upsertApiCredential（ADR-173 D-173-4 JSONB 合并）', () => {
     expect(sql).toContain('COALESCE($4, api_credentials.enabled)')
     expect(params[3]).toBeNull()
     expect(JSON.parse(params[2] as string)).toEqual({}) // config 缺省空对象 → 不动
+    expect(params[5]).toEqual([]) // dropSecretKeys 省略 → 空数组（不删任何 key）
+  })
+
+  it('dropSecretKeys → 合并前 `secrets - $6::text[]` 删旧 key（固化迁移，ADR-201 22823）', async () => {
+    const { db, query } = makeDb()
+    await upsertApiCredential(db, {
+      provider: 'tmdb',
+      secrets: { read_access_token: 'rat' },
+      dropSecretKeys: ['token'],
+      updatedBy: 'admin-1',
+    })
+    const [sql, params] = callOf(query)
+    expect(sql).toContain('(api_credentials.secrets - $6::text[]) || $2::jsonb')
+    expect(params[5]).toEqual(['token'])
   })
 })
 
@@ -92,5 +107,29 @@ describe('listApiCredentialRows', () => {
       lastTestLatencyMs: 200,
       updatedBy: 'admin-1',
     })
+  })
+})
+
+describe('normalizeRowSecrets（ADR-201 22823 行内旧 secret key 兼容）', () => {
+  it('tmdb 旧行 secrets.token → read_access_token（旧 key 剔除）', () => {
+    expect(normalizeRowSecrets('tmdb', { token: 'old' })).toEqual({ read_access_token: 'old' })
+  })
+  it('新 key 已有非空值 → 保留新值，旧 key 剔除（迁移优先）', () => {
+    expect(normalizeRowSecrets('tmdb', { token: 'old', read_access_token: 'new' })).toEqual({
+      read_access_token: 'new',
+    })
+  })
+  it('新 key 空串 → 用旧值回填', () => {
+    expect(normalizeRowSecrets('tmdb', { token: 'old', read_access_token: '' })).toEqual({
+      read_access_token: 'old',
+    })
+  })
+  it('无旧 key 命中 → 原引用返回（零拷贝）', () => {
+    const input = { read_access_token: 'rat' }
+    expect(normalizeRowSecrets('tmdb', input)).toBe(input)
+  })
+  it('无映射 provider（bangumi）→ 原样返回', () => {
+    const input = { token: 't' }
+    expect(normalizeRowSecrets('bangumi', input)).toBe(input)
   })
 })

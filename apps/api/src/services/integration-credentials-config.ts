@@ -11,7 +11,7 @@
 import type { Pool } from 'pg'
 import { getProviderCredentialSpec } from '@resovo/types'
 import type { ProviderKey, SystemSettingKey } from '@resovo/types'
-import { getApiCredentialRow } from '@/api/db/queries/apiCredentials'
+import { getApiCredentialRow, normalizeRowSecrets } from '@/api/db/queries/apiCredentials'
 import * as systemSettingsQueries from '@/api/db/queries/systemSettings'
 
 export interface ResolvedCredential {
@@ -39,19 +39,6 @@ const LEGACY_KV_MAP: Record<string, Partial<Record<string, SystemSettingKey>>> =
   },
 }
 
-/**
- * 过渡期 api_credentials 行内旧 secret key 兼容（ADR-201 22823「过渡期允许新旧字段并存读取」）。
- * tmdb read_access_token ← 旧 secrets.token：migration 116 把行内 secrets.token 改名 read_access_token，
- * 但代码可能先于 migration 部署 / migration 回滚 → 未迁移旧行 secrets.token 仍需可读（语义即 Bearer，
- * ADR-201 22821）。新 key 有值时不触发；全量迁移后旧 key 不存在，fallback 自然失效。
- * 与 LEGACY_KV_MAP（system_settings KV fallback）平行互补；写入仍只走新字段（save 按 spec）。
- */
-const LEGACY_ROW_SECRET_MAP: Record<string, Partial<Record<string, string>>> = {
-  tmdb: {
-    read_access_token: 'token',
-  },
-}
-
 function isBlank(v: unknown): boolean {
   return v === undefined || v === null || v === ''
 }
@@ -67,6 +54,9 @@ export async function loadProviderCredential(
   // D-173-3：enabled=false 压过 env 回退——不注入任何凭证
   if (row && !row.enabled) return { enabled: false, fields: {} }
 
+  // 行内旧 secret key 兼容（ADR-201 22823）：读路径统一规范化（旧→新 in-memory），单一真源 apiCredentials
+  const rowSecrets = row ? normalizeRowSecrets(provider, row.secrets) : null
+
   // D-173-8 过渡期：缺行才读旧 KV（一次性全量读，避免逐键多查；缺行属罕见路径）
   const legacyKv: Record<string, string> | null =
     !row && LEGACY_KV_MAP[provider] ? await systemSettingsQueries.getAllSettings(db) : null
@@ -75,13 +65,7 @@ export async function loadProviderCredential(
   for (const field of spec.fields) {
     let raw: unknown
     if (row) {
-      raw = field.secret ? row.secrets[field.key] : row.config[field.key]
-      // 过渡期兼容（ADR-201 22823）：secret 字段新 key 缺失 → fallback 行内旧 secret key
-      // （未迁移旧行 secrets.token 仍可读；全量迁移后旧 key 不存在，fallback 自然失效）
-      if (field.secret && isBlank(raw)) {
-        const legacyRowKey = LEGACY_ROW_SECRET_MAP[provider]?.[field.key]
-        if (legacyRowKey) raw = row.secrets[legacyRowKey]
-      }
+      raw = field.secret ? rowSecrets![field.key] : row.config[field.key]
     } else if (legacyKv) {
       const kvKey = LEGACY_KV_MAP[provider]?.[field.key]
       raw = kvKey ? legacyKv[kvKey] : undefined
