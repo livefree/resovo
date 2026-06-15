@@ -134,6 +134,88 @@ export function mapTmdbGenres(genreIds: number[]): VideoGenre[] {
   return [...result]
 }
 
+// ── Bangumi 标签映射（开放词表 → VideoGenre，保守白名单，META-41-A）──────────
+//
+// Bangumi 标签是用户自由打的**开放词表**（噪声高：混制作公司/年份/「TV」「漫改」「补番」
+// 「神作」等非题材标签），不能像 douban genres / tmdb id 那样整表信任。故两层保守去噪：
+//   1) 白名单 BANGUMI_TAG_MAP —— 仅收录语义可靠的题材标签，未知标签静默跳过；
+//   2) 计数下限 MIN_TAG_VOTE_COUNT —— 标签 count（打标用户数）过低视为偶发噪声跳过。
+// 政策敏感的取向标签（百合/耽美/后宫等）**不入表**（对齐 douban「同性/情色 → 不映射」），
+// 原始标签仍保留在 catalog.tags 供人工审核。null 语义由「不在表中」承载（开放词表无万能标签，
+// 故不像 douban/tmdb 表那样显式列 null 项）。
+
+/** 标签计数下限：count（打标用户数）< 3 视为偶发噪声 —— 开放词表下单/双用户标签不可靠。 */
+const MIN_TAG_VOTE_COUNT = 3
+
+const BANGUMI_TAG_MAP: Record<string, VideoGenre> = {
+  // 动作 / 热血 / 战斗（热血是动漫「战斗/动作」的规范标签）
+  '热血': 'action', '战斗': 'action', '动作': 'action', '格斗': 'action',
+  // 喜剧
+  '搞笑': 'comedy', '喜剧': 'comedy',
+  // 爱情（仅中性题材标签；取向标签 百合/耽美/后宫 不入表）
+  '恋爱': 'romance', '爱情': 'romance',
+  // 科幻（机甲 mecha 归 sci_fi）
+  '科幻': 'sci_fi', '机战': 'sci_fi', '机器人': 'sci_fi', '机甲': 'sci_fi',
+  // 奇幻 / 魔法 / 异世界
+  '奇幻': 'fantasy', '魔幻': 'fantasy', '魔法': 'fantasy', '魔法少女': 'fantasy', '异世界': 'fantasy',
+  // 悬疑 / 推理
+  '悬疑': 'mystery', '推理': 'mystery',
+  // 恐怖
+  '恐怖': 'horror',
+  // 惊悚
+  '惊悚': 'thriller', '悬念': 'thriller',
+  // 历史
+  '历史': 'history',
+  // 战争 / 军事
+  '战争': 'war', '军事': 'war',
+  // 运动
+  '运动': 'sport', '体育': 'sport',
+  // 音乐
+  '音乐': 'musical',
+  // 冒险
+  '冒险': 'adventure',
+  // 犯罪
+  '犯罪': 'crime',
+  // 家庭 / 亲情
+  '家庭': 'family', '亲情': 'family',
+  // 武侠
+  '武侠': 'martial_arts',
+  // 灾难
+  '灾难': 'disaster',
+}
+
+/** mapBangumiTags 返回：归一 genres + 命中映射的原始标签子集（喂 catalog.genres_raw 供审核溯源）。 */
+export interface BangumiGenreResult {
+  genres: VideoGenre[]
+  /** 命中白名单且过计数下限的原始 bangumi 标签名（保留输入顺序，去重无需——同源标签名唯一）。 */
+  raw: string[]
+}
+
+/**
+ * 将 Bangumi 开放词表标签保守归一到 VideoGenre（META-41-A）。
+ * 与 mapDoubanGenres/mapTmdbGenres 不同（其原始输入本身已是干净的题材列表），bangumi tags 是
+ * 混杂的开放词表，故本函数**同时**产出归一 genres 与命中的原始标签子集（raw），后者喂 genres_raw
+ * 供审核溯源「哪些原始标签驱动了 genres」——因而返回结构体而非裸数组。
+ *
+ * 双重保守：① count < MIN_TAG_VOTE_COUNT 的偶发标签跳过；② 仅 BANGUMI_TAG_MAP 白名单命中。
+ * genres 去重（多个原始标签可映射同一 genre，如 热血+战斗→action）；raw 保留全部命中原始名。
+ */
+export function mapBangumiTags(
+  tags: ReadonlyArray<{ name: string; count: number }>,
+): BangumiGenreResult {
+  const genres = new Set<VideoGenre>()
+  const raw: string[] = []
+  for (const tag of tags) {
+    const name = tag?.name?.trim()
+    if (!name || tag.count < MIN_TAG_VOTE_COUNT) continue
+    const mapped = BANGUMI_TAG_MAP[name]
+    if (!mapped) continue
+    genres.add(mapped)
+    raw.push(name)
+  }
+  return { genres: [...genres], raw }
+}
+
 // ── source_category 映射（低置信度）─────────────────────────────
 
 const SOURCE_CATEGORY_MAP: Record<string, VideoGenre> = {

@@ -2537,7 +2537,7 @@
 
 ## [SEQ-20260615-01] 元数据字段枚举兼容性治理
 
-- **状态**：🔄 进行中（META-40 ✅ 2026-06-15 → 下一 META-41-A）
+- **状态**：🔄 进行中（META-40 ✅ + META-41-A ✅ 2026-06-15 → 下一 META-41-B〔Bangumi country，依 META-40 真源〕）
 - **创建时间**：2026-06-15 00:30
 - **最后更新时间**：2026-06-15 01:10（用户评审 B+ 后修订：范围补 server-next / META-40 收敛真源 / META-41·44 拆 -A/-B / cast 后排 / META-43 source 口径 / 逐卡门禁）
 - **目标**：修复 douban/bangumi/tmdb 三源元数据字段（类型/题材/地区/图片）与本地枚举的兼容缺口——含 1 项数据正确性 bug（实证）+ 4 项能力闲置 + 1 项设计权衡。
@@ -2562,7 +2562,8 @@
    - **门禁**：typecheck + lint + test:changed + **migration 真库验证**（清洗幂等 + COUNTRY_MAP 收敛后既有 SourceParser/Language 测零回归）。
    - **依赖**：无（最高优先，且为 META-41-B / META-42 复用归一真源的前置）。
 
-2. **META-41-A** — Bangumi 细分标签 → genre 映射（🔴 高 / 信息全丢）（状态：⬜ 待办）
+2. **META-41-A** — Bangumi 细分标签 → genre 映射（🔴 高 / 信息全丢）（状态：✅ 已完成 2026-06-15）
+   - **完成备注**：✅ 2026-06-15。genreMapper.ts 新增 `mapBangumiTags`（genre 映射第 4 个范式，对齐 mapDoubanGenres/mapTmdbGenres/mapSourceCategory）——**两层保守去噪**：白名单 `BANGUMI_TAG_MAP`（~35 高频可靠题材标签 → 17 VideoGenre）+ `MIN_TAG_VOTE_COUNT=3` 计数下限（去开放词表单/双用户偶发标签）；政策敏感取向标签（百合/耽美/后宫）不入表（对齐 douban「同性/情色→不映射」），原始标签仍留 catalog.tags 供审核；未知标签静默跳过。返回 `{genres, raw}`（结构体而非裸数组——bangumi 开放词表需同产归一 genres + 命中原始标签子集喂 genres_raw 溯源，JSDoc 论证）。`mapSubjectToCatalogFields` 用全量 subject.tags 产 genres/genresRaw。**scope 修正**：卡片引用 `BangumiService.ts:430-434` 实为 dump 降级分支（local dump `BangumiEntryMatch` 无 tags 字段，物理无源）→ 真落点改 `BangumiService.utils.ts`。门禁 typecheck/lint EXIT=0 + test:changed 43 文件 636 passed（未升全量）。+14 新断言（genreMapper.test 12 新 + bangumi-service mapSubjectToCatalogFields genres 2）。执行模型 claude-opus-4-8；子代理无（lib 纯函数非 admin-ui Props/新端点/跨消费方 schema）。详见 changelog [META-41-A]。
    - 创建时间：2026-06-15 00:30
    - 建议模型：opus（细分标签 → genre 映射设计需判断；bangumi tags 为开放词表）
    - **问题（核验）**：`BangumiService.ts:430-434` 仅写 `title/titleOriginal/description/rating/coverUrl`，**零 genres**。bangumi 动漫细分标签（百合/治愈/热血/日常/校园/废萌…）**全部丢弃**，且无任何 `bangumi→genre` 映射表（对比 douban 40 词表 / tmdb 27 id 表）。

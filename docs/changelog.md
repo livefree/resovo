@@ -5938,3 +5938,20 @@
 - **测试覆盖**：+9 新单测（country-to-iso 7 + doubanService confirmFields country 2）；**test:changed 升全量**（packages/types helper 改动 ADR-180）**553 文件 7627 passed 零失败**（source-language-resolver 17 / crawler parseCountry 98 / format-country-name 7 / metadataEnrich 35 / douban 全回归零失败）。
 - **质量门禁**：typecheck 全工作区 EXIT=0 / lint 通过（仅既有 warning 非本卡文件）/ test:changed 全量 7627 passed / **migration 117 真库 dry-run 124→0 残留 + 幂等 UPDATE 0**。test:e2e N/A（API/lib 层无 UI 消费方改动；TabDouban/TabTmdb 未改，META-42/43 才动 UI）。
 - **[AI-CHECK]**：六问过——①根因=douban 写入侧直写中文国家名无 ISO 转换 → 同国裂两值致视频库 distinct/筛选/分组失效（dev 库实证 124 行污染）；②零回归（typecheck 全绿 + test:changed 全量 7627 passed + 既有 normalizeCountryCode/parseCountry/format-country-name 零破坏 + migration ROLLBACK 不改库）；③边界=videos 无 country 列收窄单表、preview 段不归一、归一不到不写保列纯净、正式 apply 留标准流程不连带 116；④复用=收敛既有 COUNTRY_MAP+normalizeCountryCode 上提 packages/types 单一真源（评审 #2 禁第二套表）、与 format-country-name 双向真源、写入侧复用 genres 特殊分支范式；⑤无 any / 无空 catch / migration 幂等可复跑 / 无硬编码色；⑥范围 真源 helper + 收敛引用 + 写入侧 6 处归一 + 存量清洗 单一验收口径，全落地。**SEQ-20260615-01 META-40 收口，解锁 META-41-B/META-42（复用 country 归一真源）。**
+
+## [META-41-A] Bangumi 细分标签 → genre 映射（SEQ-20260615-01）— 2026-06-15
+
+**类型**：fix（信息全丢修复）｜**优先级**：🔴 高｜**执行模型**：claude-opus-4-8（主循环，opus 会话覆盖）｜**子代理**：无
+
+- **问题**：`BangumiService.utils.ts` 的 `mapSubjectToCatalogFields`（REST 富集字段构造真源）只写 title/titleOriginal/description/cover/rating/date/director/writers/tags，**零 genres**——bangumi 动漫细分标签（热血/异世界/悬疑/机甲…）全部丢弃，且无任何 `bangumi→genre` 映射（对比 douban 词表 / tmdb id 表的能力缺口）。
+- **根因**：bangumi 标签是用户自由打的**开放词表**（噪声高：混制作公司/年份/「TV」「漫改」「补番」「神作」等非题材标签），不能像 douban genres / tmdb id 那样整表信任 → 历史实现索性不映射，致 genre 信息全丢。
+- **方案**：`genreMapper.ts` 新增 `mapBangumiTags`（genre 映射第 4 个范式，与 mapDoubanGenres/mapTmdbGenres/mapSourceCategory 同文件）——**两层保守去噪**：① 白名单 `BANGUMI_TAG_MAP`（~35 高频可靠题材标签 → 17 VideoGenre：热血/战斗/格斗→action、机战/机器人/机甲→sci_fi、异世界/魔法少女→fantasy、军事→war 等），未知标签静默跳过；② `MIN_TAG_VOTE_COUNT=3` 计数下限——标签 count（打标用户数）< 3 视偶发噪声跳过（开放词表单/双用户标签不可靠）。
+- **政策对齐**：取向标签（百合/耽美/后宫）**不入表**（对齐 VideoGenre 注释「豆瓣同性/情色不纳入枚举」），原始标签仍保留在 `catalog.tags` 供人工审核（不丢数据，仅不进 genre 维度）。
+- **返回契约**：`mapBangumiTags(tags): { genres: VideoGenre[]; raw: string[] }` —— 区别于 siblings 的裸数组返回，因 bangumi 开放词表需**同时**产归一 genres 与命中的原始标签子集（raw 喂 `catalog.genres_raw` 供审核溯源「哪些原始标签驱动了 genres」），结构体返回经 JSDoc 论证。genres 去重（热血+战斗→单 action）；raw 保留全部命中原始名。
+- **集成**：`mapSubjectToCatalogFields` 用**全量** subject.tags（非 top-N slice，因 mapBangumiTags 内含 count 下限 + 白名单双重去噪覆盖更全）产 genres/genresRaw，与既有 douban genres/genresRaw 写入范式对齐。
+- **scope 修正（开工调查）**：卡片引用的 `BangumiService.ts:430-434` 实为 **dump 降级分支**——该分支用 `BangumiEntryMatch`（local dump，**无 tags 字段**，已核 externalData.ts:40），物理无法产 genres；genre 唯一来源是 REST `subject.tags`，真落点在 `BangumiService.utils.ts` 的 `mapSubjectToCatalogFields`。文件范围由 `BangumiService.ts` 修正为 `BangumiService.utils.ts`（类比 META-40「5 写点实为 6」的调查修正）。
+- **不做**：country（归 META-41-B，依 META-40 真源）/ cast（CV 不在 infobox，属 /characters，后排登记）/ dump 降级分支 genres（local dump 无 tags，物理无源）。
+- **涉及文件**：`apps/api/src/lib/genreMapper.ts`（+BANGUMI_TAG_MAP + MIN_TAG_VOTE_COUNT + mapBangumiTags + BangumiGenreResult）/ `apps/api/src/services/BangumiService.utils.ts`（import + mapSubjectToCatalogFields 补 genres/genresRaw）。
+- **测试覆盖**：+14 新断言——`tests/unit/api/genreMapper.test.ts`（新，mapBangumiTags 12：白名单/去重/机甲科幻/异世界奇幻/count 下限/未知跳过/政策跳过/混杂滤噪/空数组/trim/军事战争/合法 VideoGenre）+ `tests/unit/api/bangumi-service.test.ts`（mapSubjectToCatalogFields genres 集成 2：题材标签归一 + 无可映射不写）。
+- **质量门禁**：typecheck 全工作区 EXIT=0 / lint EXIT=0（apps/api tsc）/ **test:changed 43 文件 636 passed**（未升全量——genreMapper 为域 lib 非 helpers/基础包，ADR-180）。无 migration → 无真库验证；test:e2e N/A（lib 纯函数无 UI 消费方改动）。
+- **[AI-CHECK]**：六问过——①根因=bangumi 开放词表标签无映射致 genre 全丢，保守白名单 + 计数下限两层去噪；②零回归（typecheck/lint EXIT=0 + test:changed 636 passed + 默认 fixture 治愈/催泪不入表故既有 mapSubjectToCatalogFields 测试零破坏）；③边界=仅 tags→genre 不碰 country/cast、dump 分支无 tags 排除、政策敏感标签不映射留 catalog.tags、count 下限去噪；④复用=genreMapper 同文件第 4 个映射范式、集成对齐 douban genres/genresRaw 配对、结构体返回经论证非随意偏离；⑤无 any / 无空 catch / 无硬编码色（非 UI）/ 无越层（lib←service 单向）；⑥范围 mapBangumiTags + 集成 + 单测 单一验收口径，全落地。**SEQ-20260615-01 META-41-A 收口，下一 META-41-B（Bangumi country，依 META-40 真源）。**

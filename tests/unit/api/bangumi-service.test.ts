@@ -161,6 +161,27 @@ describe('mapSubjectToCatalogFields', () => {
     expect(f.rating).toBeUndefined()
     expect(f.coverUrl).toBeUndefined()
   })
+  it('META-41-A：题材标签经白名单归一 → genres + genresRaw（噪声/情绪标签滤除）', () => {
+    const f = mapSubjectToCatalogFields(subject({
+      tags: [
+        { name: '热血', count: 500 },   // action ✓
+        { name: '校园', count: 480 },   // 设定，跳过
+        { name: '战斗', count: 300 },   // action（与热血去重）
+        { name: '科幻', count: 200 },   // sci_fi ✓
+        { name: '治愈', count: 100 },   // 情绪，跳过
+      ],
+    }))
+    expect(f.genres).toEqual(['action', 'sci_fi'])
+    expect(f.genresRaw).toEqual(['热血', '战斗', '科幻'])
+    // tags 字段仍保留全部原始标签（含未映射的设定/情绪标签）供审核
+    expect(f.tags).toContain('校园')
+    expect(f.tags).toContain('治愈')
+  })
+  it('META-41-A：无可映射题材标签 → 不写 genres/genresRaw（默认 fixture 治愈/催泪不入表）', () => {
+    const f = mapSubjectToCatalogFields(subject())
+    expect(f.genres).toBeUndefined()
+    expect(f.genresRaw).toBeUndefined()
+  })
 })
 
 describe('mapEpisodes', () => {

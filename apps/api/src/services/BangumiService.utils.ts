@@ -9,6 +9,7 @@ import type { BangumiSubject, BangumiEpisode, BangumiInfoboxItem, BangumiSearchI
 import type { CatalogEpisodeInput } from '@/api/db/queries/catalogEpisodes'
 import type { CatalogCharacterInput } from '@/api/db/queries/catalogCharacters'
 import { normalizeForExternalMatch } from './TitleNormalizer'
+import { mapBangumiTags } from '@/api/lib/genreMapper'
 
 // ── 有损键歧义守卫（META-22 三次修订 / Codex stop-time review）──────────
 
@@ -227,12 +228,19 @@ export function mapSubjectToCatalogFields(subject: BangumiSubject): CatalogUpdat
   if (info.writers.length > 0) fields.writers = info.writers
 
   // tags：作品标签 top N + 动画制作公司（前缀 制作:，ADR-161 A1，不入 aliases）
-  const tagNames = Array.isArray(subject.tags)
-    ? subject.tags.filter((t) => t?.name).slice(0, MAX_TAGS).map((t) => t.name)
-    : []
+  const allTags = Array.isArray(subject.tags) ? subject.tags : []
+  const tagNames = allTags.filter((t) => t?.name).slice(0, MAX_TAGS).map((t) => t.name)
   const studioTags = info.studios.map((s) => `制作:${s}`)
   const tags = [...tagNames, ...studioTags]
   if (tags.length > 0) fields.tags = tags
+
+  // genres（META-41-A）：开放词表标签经白名单 + 计数下限保守归一；命中的原始标签喂 genres_raw 供审核溯源。
+  // 用全量 allTags（非 top-N slice）—— mapBangumiTags 内含 count 下限 + 白名单双重去噪，覆盖更全。
+  const { genres, raw: genresRaw } = mapBangumiTags(allTags)
+  if (genres.length > 0) {
+    fields.genres = genres
+    fields.genresRaw = genresRaw
+  }
 
   return fields
 }
