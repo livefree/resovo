@@ -585,11 +585,22 @@ describe('BangumiService.matchAndEnrich', () => {
     const r = await svc.matchAndEnrich({ videoId: VID, catalogId: CID, titleNorm: 'x', year: 2007 })
     expect(r).toMatchObject({ matched: 'auto', degraded: true, episodes: 0 })
     expect(mGetSubject).not.toHaveBeenCalled()
-    // META-49-B1（方案 X）：auto defer → safeUpdate 只写身份 bangumiSubjectId（留事务触发 catalog ref/cache）；
-    // 内容字段 title 进 proposedFields，由 enrich 层立即 safeUpdate（bangumi-service 不直接写内容）。
+    // META-49-B1：matchAndEnrich 默认 inline（bangumi-sync 等直调消费方）→ 内部写全部 scalar（含内容 title），
+    // 不丢字段（Codex stop-time review 回归守卫）；proposedFields 不上抛。
     expect(mUpdateCatalog).toHaveBeenCalledWith(expect.anything(), CID, expect.objectContaining({
-      bangumiSubjectId: 51, metadataSource: 'bangumi',
+      bangumiSubjectId: 51, title: '团子大家族', metadataSource: 'bangumi',
     }))
+    expect((r as { matched: 'auto'; proposedFields?: unknown }).proposedFields).toBeUndefined()
+  })
+
+  it('B1 defer：deferContentFields=true（enrich 路径）→ safeUpdate 只写身份、内容上抛 proposedFields', async () => {
+    mConfigured.mockReturnValue(false)
+    mFindByTitle.mockResolvedValue([entry({ year: 2007 })])
+
+    const r = await svc.matchAndEnrich({ videoId: VID, catalogId: CID, titleNorm: 'x', year: 2007, deferContentFields: true })
+    expect(r).toMatchObject({ matched: 'auto' })
+    // defer：身份 bangumiSubjectId 留事务写，内容 title 上抛 proposedFields（enrich 层立即 safeUpdate）
+    expect(mUpdateCatalog).toHaveBeenCalledWith(expect.anything(), CID, expect.objectContaining({ bangumiSubjectId: 51 }))
     expect(mUpdateCatalog.mock.calls[0][2]).not.toHaveProperty('title')
     expect((r as { matched: 'auto'; proposedFields?: Record<string, unknown> }).proposedFields).toMatchObject({ title: '团子大家族' })
   })

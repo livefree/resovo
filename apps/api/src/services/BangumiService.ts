@@ -69,6 +69,9 @@ export interface MatchAndEnrichInput {
   catalogId: string
   titleNorm: string
   year: number | null
+  /** META-49-B1：true → auto 流内容标量字段上抛 proposedFields（供 enrich/reconcile 立即写，方案 X）；
+   *  默认 false → inline 内部写全部 scalar（bangumi-sync 等直调消费方零变化，否则丢内容字段）。 */
+  deferContentFields?: boolean
 }
 
 // gather/apply 两段拆分（Codex stop-time review FIX）：REST 收集在 Phase 1（无 DB 锁），
@@ -109,7 +112,7 @@ export class BangumiService {
    * 对单视频做 Bangumi 匹配 + 丰富（供 MetadataEnrichService.step3 与后台手动调用）。
    * 仅本地 dump 召回；auto 命中后按需拉 REST 详情（Token 缺失/失败则降级用本地 dump 字段）。
    */
-  async matchAndEnrich({ videoId, catalogId, titleNorm, year }: MatchAndEnrichInput): Promise<BangumiEnrichResult> {
+  async matchAndEnrich({ videoId, catalogId, titleNorm, year, deferContentFields = false }: MatchAndEnrichInput): Promise<BangumiEnrichResult> {
     // ADR-170 D-170-4：状态投影下沉本方法，统一覆盖 step3 自动流 / bangumi-sync 直调 / 改类型→anime 三路径。
     // 命中来源双轨：① 本地 dump 精确召回（毫秒级）② META-17 方案 A：dump 空/低置信时 REST 精确兜底。
     const cfg = await this.getBangumiConfig()   // ADR-168：凭证（DB system_settings 优先，回退 env）
@@ -181,6 +184,7 @@ export class BangumiService {
     }
     const apply = await this.applyAutoMatchAtomic(
       videoId, catalogId, bangumiId, confidence, breakdown, data,
+      deferContentFields ? 'defer' : 'inline',
     )
     if (apply.dedupConflict) {
       // D-174-3 ③：subject 已被他行占用且重指向不安全 → 已在事务内降级 candidate ref + unmatched
@@ -559,11 +563,13 @@ export class BangumiService {
     confidence: number,
     breakdown: Record<string, number>,
     data: EnrichmentData,
+    // META-49-B1：defer → 内容标量上抛 proposedFields（enrich/reconcile 写）；inline → 内部写全部（直调零变化）
+    mode: 'inline' | 'defer',
   ): Promise<{ episodes: number; dedupConflict: boolean; effectiveCatalogId: string; proposedFields?: CatalogUpdateData }> {
     const client = await this.db.connect()
     try {
       await client.query('BEGIN')
-      const result = await this.applyEnrichmentDb(client, videoId, catalogId, bangumiId, data, 'defer')
+      const result = await this.applyEnrichmentDb(client, videoId, catalogId, bangumiId, data, mode)
       const conflict = result.dedupConflict
       // conflict → candidate/非 primary/unmatched（降级）；否则 auto_matched/primary/matched（正常）
       await externalDataQueries.upsertVideoExternalRef(client, {

@@ -406,7 +406,9 @@ export class MetadataEnrichService {
     year: number | null,
   ): Promise<{ effectiveCatalogId: string; proposedFields?: CatalogUpdateData; bangumiSubjectId?: number }> {
     // ADR-161：置信度评分 + video_external_refs(provider='bangumi') + auto 命中拉 REST rich 详情 + 逐集
-    const result = await this.bangumiService.matchAndEnrich({ videoId, catalogId, titleNorm, year })
+    // META-49-B1（方案 X）：enrich 走 defer——auto 内容标量上抛 proposedFields 由 enrich 层立即 safeUpdate
+    // （bangumi-sync 等直调不传 → 默认 inline 内部写全部，不丢内容字段）。
+    const result = await this.bangumiService.matchAndEnrich({ videoId, catalogId, titleNorm, year, deferContentFields: true })
     // ADR-174 D-174-3：仅 auto 写入路径可能 redirect 真去重 → 返回有效 catalogId；
     // candidate/none 无 catalog 写入与重指向，沿用入参 catalogId。
     // META-49-B1（方案 X）：auto 流内容标量字段（proposedFields）上抛由 enrich 层立即 safeUpdate；
