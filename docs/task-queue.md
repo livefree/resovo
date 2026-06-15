@@ -2641,9 +2641,9 @@
 
 ## [SEQ-20260615-02] 多源交叉验证编排 + TMDB 自动链路 + douban 降级
 
-- **状态**：🔄 执行中（META-46-A ✅ ADR-205 / META-47 ✅ TMDB auto 方法 / META-48 ✅ enrich 接 TMDB Step / META-49-A ✅ proposals 表+queries 2026-06-15；解锁 META-49-B reconcile 编排相位）。**经两轮用户审核修订 + arch-reviewer CONDITIONAL-PASS**。
+- **状态**：✅ **全序列完成（2026-06-15）**——META-46-A ✅ ADR-205 / 47 ✅ TMDB auto 方法 / 48 ✅ enrich 接 TMDB Step / 49-A ✅ proposals 表 / 49-B1 ✅ 标量接口剥离 / 49-B2 ✅ reconcile 裁决核心 / 49-C ✅ 冲突注入 derive / 49-D1 ✅ douban cutover / 49-D2 ✅ 审核台冲突 UI。**经两轮用户审核修订 + arch-reviewer CONDITIONAL-PASS + 3 次 Codex stop-time review FIX（preserveMetadataSource / bangumi-sync defer / stale proposal 清除）**。三源（douban/bangumi/tmdb）gather→reconcile→write 加权裁决 + 字段级 proposal 载体 + TMDB 自动链路 + douban 投票降级 + 跨源冲突 needs_review 端到端打通。
 - **创建时间**：2026-06-15 11:00
-- **最后更新时间**：2026-06-15 16:10（META-49-D1 ✅ douban cutover 收口：方案 X 三写点拆分 + writeDoubanAuto 助手 + 三源 reconcile + finalize 零变化；下一卡 META-49-D2 审核台 review_conflict UI，序列收官）
+- **最后更新时间**：2026-06-15 16:40（META-49-D2 ✅ 审核台冲突 UI 收官——field_conflict 中文 label + issueText 字段名拼接；**SEQ-20260615-02 全序列完成**）
 - **目标**：补齐三源最大不对称——TMDB 接入自动富集链路（当前零自动）；引入多源逐字段交叉验证（一致性加权 + 冲突挂人工复核）；豆瓣由「单独 auto 写权威字段」退为「补空 + 投票源」。
 - **范围**：`apps/api`（`MetadataEnrichService` 编排 / `TmdbConfirmService` **新建 auto 专用方法**〔非参数化 confirm〕 / `enrichmentWorker` 新 Step / `MediaCatalogService.CATALOG_SOURCE_PRIORITY` **仅 META-49 cutover 修改**〔46-B 不碰，见复核补订〕 / **新增字段级 proposal·conflict 载体**〔provenance 现表不支撑，见审核修订 P1〕）+ migration（字段级冲突载体，由 ADR 定形）+ `apps/server-next`（审核台冲突复核呈现，归末卡）。**不动**播放器/前台/搜索。
 - **依赖**：SEQ-20260615-01 ✅（标量/枚举治理稳定后再动编排与优先级）。
@@ -2715,7 +2715,8 @@
    - **META-49-D**（原子化拆 -D1/-D2：api cutover 与 server-next UI 两层 deliverable，对齐 49-B 拆卡先例）：
      - **META-49-D1**（✅ 已完成 2026-06-15，主循环 opus）：douban cutover——把 douban Step1/2 三处 safeUpdate 按**方案 X**拆分：身份 `doubanId` 留 douban 路径 safeUpdate（驱动 `finalizeDoubanAutoWrite` refStatus/recordDoubanSignal/writeExternalRef 零变化）+ 内容上抛 → enrich 收集为第三 ReconcileSource 交 reconcile 加权。
        - **完成备注**：新私有助手 `writeDoubanAuto`（身份 `safeUpdate({doubanId})` + finalize + 内容去 undefined 构造 douban ReconcileSource）；step1 imdb/title-alias + step2 network 三写点改造、step1/2 返 `{status, proposal?}`；enrich `reconcileSources` 提前到 step1 之前、douban/bangumi/tmdb 三源一并 push reconcile（effectiveCatalogId）。**douban 降级天然由 reconcile 框架承载**（D-205-3 trust douban:3 < 4 永不盖、一致背书、冲突挂复核）；episodes/recordDoubanSignal 留 douban 路径（与 catalog 内容正交）；无活表 CATALOG_SOURCE_PRIORITY 数值改（M5）。**偏离**：anime + bangumi redirect 时 douban 内容落 surviving catalog（reconcile 用 effectiveCatalogId）反比 pre-D1 落 orphan 更正确；非 anime 无 redirect 零变化。门禁全绿：typecheck 7ws EXIT=0 / lint 4ok / test:changed 13 文件 204 passed + 定向回归 8 文件 219 passed（bangumi/tmdb/douban/reconcile/derive/bangumiRoutes 零回归）/ verify EXIT=0；metadataEnrich 42（+1 D1 身份/内容分离 + douban auto 既有断言零改 objectContaining 兼容）。执行模型 claude-opus-4-8；子代理无（方案 X 已 B1/B2 验证 + D-205-8 定形纯落地）。详见 changelog [META-49-D1]。**解锁 META-49-D2（审核台 review_conflict UI）。**
-     - **META-49-D2**（⬜ 规划中，依 -D1）：server-next 审核台 `review_conflict` 冲突展示 UI（消费 derive 的 field_conflict issue + overall needs_review）。**若改 admin-ui 公开 Props → 强制 arch-reviewer Opus + commit trailer**（先评估 MetadataStatusPanel 现有 review_conflict 渲染能力，能复用则纯 server-next 接线）。
+     - **META-49-D2**（✅ 已完成 2026-06-15，主循环 opus；**用户裁定最小收官无 Opus**）：审核台 review_conflict 冲突展示 UI。**评估结论**：MetadataStatusPanel 已通用渲染 summary.issues + review_conflict nextAction 按钮，唯一缺口=field_conflict 中文 label → 纯 admin-ui 内部 label（非 Props，无 Opus）+ server-next 自动消费。
+       - **完成备注**：① derive `collectIssues` field_conflict message 净化为纯字段名数据（`fieldConflicts.join(', ')`，i18n 下沉 UI）；② admin-ui `ISSUE_CODE_LABEL` += `field_conflict:'多源字段冲突'` + `issueText` 对 field_conflict 拼 `label：message` → 「多源字段冲突：title, rating」；③ server-next 审核台（TabDetail/TabMetadata）经 summary.issues 自动渲染冲突（零接线改动），review_conflict 按钮需 onAction（TabDetail 只读 = follow-up，不强接导航）。门禁全绿：typecheck 7ws EXIT=0 / lint 4ok / test:changed 升全量 162 文件 2150 passed / verify EXIT=0；+1 panel 单测（field_conflict「多源字段冲突：…」）。执行模型 claude-opus-4-8；子代理无（最小收官无 Props 变更）。**follow-up**：onAction review_conflict 导航到冲突字段编辑（需交互设计）+ 结构化 conflictFields DTO（如需点击跳字段，触发 Opus）。详见 changelog [META-49-D2]。**META-49 全收口（-A~-D2 六子卡）。SEQ-20260615-02 收官。**
 
 ### 备注
 

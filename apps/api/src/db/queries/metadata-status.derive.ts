@@ -196,11 +196,12 @@ function collectIssues(
   providers: readonly MetadataProviderStatus[], fieldConflicts: readonly string[],
 ): MetadataStatusIssue[] {
   const issues: MetadataStatusIssue[] = []
-  // ADR-205 M3：跨源逐字段冲突（provider:null 跨源问题；字段名结构化进 message，UI 展示留 49-D）
+  // ADR-205 M3：跨源逐字段冲突（provider:null 跨源问题；message=冲突字段名数据，中文 label 在 admin-ui
+  // ISSUE_CODE_LABEL['field_conflict'] + issueText 拼接，i18n 文案不下沉后端）
   if (fieldConflicts.length > 0) {
     issues.push({
       code: 'field_conflict', level: 'danger', provider: null,
-      message: `field conflict: ${[...fieldConflicts].join(', ')}`, action: 'review_conflict',
+      message: [...fieldConflicts].join(', '), action: 'review_conflict',
     })
   }
   for (const p of providers) {

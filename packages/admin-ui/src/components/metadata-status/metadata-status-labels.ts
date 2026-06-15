@@ -78,6 +78,8 @@ export const ISSUE_CODE_LABEL: Record<string, string> = {
   candidate_unconfirmed: '候选尚未应用',
   provider_conflict: '来源冲突需复核',
   ref_rejected_cache_present: '候选被拒但缓存存在',
+  // ADR-205 M3（reconcile 跨源逐字段冲突）：message 携冲突字段名，issueText 拼「label：字段名」
+  field_conflict: '多源字段冲突',
   // 前瞻（TMDB/冲突治理接入后产出）：
   id_conflict: '外部 ID 冲突',
   cache_without_ref: '仅缓存无来源关系',

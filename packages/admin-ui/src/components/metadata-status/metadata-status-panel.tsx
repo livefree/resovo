@@ -68,7 +68,11 @@ const ISSUE_PILL_VARIANT: Record<Exclude<MetadataIssueLevel, 'none'>, PillVarian
 
 function issueText(issue: MetadataStatusIssue): string {
   const providerPart = issue.provider ? `${SOURCE_LABEL[issue.provider]} ` : ''
-  return `${providerPart}${ISSUE_CODE_LABEL[issue.code] ?? issue.message}`
+  const label = ISSUE_CODE_LABEL[issue.code]
+  if (!label) return `${providerPart}${issue.message}`
+  // field_conflict（ADR-205 M3）：label 后附冲突字段名（message=字段名数据，i18n 文案在 label）
+  if (issue.code === 'field_conflict' && issue.message) return `${providerPart}${label}：${issue.message}`
+  return `${providerPart}${label}`
 }
 
 export function MetadataStatusPanel({

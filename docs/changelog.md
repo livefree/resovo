@@ -6253,3 +6253,24 @@
 - **质量门禁**：typecheck 7ws EXIT=0 / lint 4 successful / test:changed 13 文件 204 passed + 定向回归 8 文件 219 passed（bangumi-service 84 / tmdb-confirm 44 / douban 12 / doubanService-manual 11 / reconcile 16 / derive 29 / bangumiRoutes 12 / proposals 11 零回归）/ verify:adr-contracts EXIT=0；e2e N/A（纯 service）。metadataEnrich 42（+1 D1）。
 - **偏离登记**：anime + bangumi redirect（ADR-174 D-174-3 真去重）场景，douban 内容经 reconcile 落 `effectiveCatalogId`（surviving catalog），而 pre-D1 直写 `catalogId`（redirect 后成 orphan）→ **post-D1 反更正确**（内容随 video 落存活 catalog）；douban 身份 doubanId cache 仍写原 catalogId（step1/2 在 redirect 前，与 bangumi/tmdb 身份留各自路径一致）；非 anime 无 redirect → effectiveCatalogId==catalogId 零行为变化（douban 相关绝大多数为 movie/series）。
 - **[AI-CHECK]**：六问过——①根因=douban 内容盲写绕过 reconcile 加权 → 方案 X 拆身份/内容、内容交 reconcile（与 B1/B2 一致）；②零回归（finalizeDoubanAutoWrite 驱动逻辑零变化 + douban auto 既有 objectContaining 断言天然兼容 + 8 文件定向回归绿）；③边界=只做 api cutover，审核台 review_conflict UI 留 -D2；④复用=reconcile 框架（B2）+ splitReconcilePassthrough（director/cast/writers passthrough）+ finalizeDoubanAutoWrite/recordDoubanSignal 全保留；⑤守 ADR-186 fill-if-empty（doubanId cache 身份写）/ ADR-163 episodes 正交 / ADR-174 redirect effectiveCatalogId / D-205-8 douban cutover 在 49-D；⑥范围=1 助手 + 3 写点 + enrich gather + 1 测试文件，无 schema/migration/端点/Props/UI。解锁 META-49-D2（审核台 review_conflict UI，SEQ 收官）。
+
+## [META-49-D2] 审核台 review_conflict 冲突展示 UI（最小收官：field_conflict 中文 label + 字段名拼接）（SEQ-20260615-02 第 10 卡收官，META-49 拆四子卡 D 再拆 -D1/-D2 第 6 子卡）— 2026-06-15
+
+**类型**：feat（admin-ui label + apps/api derive message + 审核台消费 / ADR-205 M3 冲突展示）｜**优先级**：🟡 中（收官 UI，冲突信号已由 -C 流到 DTO）｜**执行模型**：claude-opus-4-8（主循环）｜**子代理**：无（**用户 AskUserQuestion 裁定最小收官**：admin-ui ISSUE_CODE_LABEL 内部 label 常量非公开 Props → 不触发 arch-reviewer Opus）
+
+- **问题**：-C 已让跨源冲突流到 DTO（overall=needs_review + `field_conflict` issue + nextAction review_conflict），`MetadataStatusPanel`（META-33）已通用渲染 `summary.issues` + review_conflict nextAction 按钮。唯一缺口：`ISSUE_CODE_LABEL` 无 `field_conflict` 键 → `issueText` 回退显示英文 message。本卡补中文 label + 冲突字段名展示。
+- **用户裁定（AskUserQuestion 2026-06-15）**：最小收官 vs 结构化 DTO（Opus）→ 选**最小收官**——纯 admin-ui 内部 label + issueText，无 DTO/Props 变更、不触发 Opus；结构化 conflictFields（点击跳字段）归 follow-up。
+- **方案**：
+  - **derive** `metadata-status.derive.ts` `collectIssues`：`field_conflict` issue message 净化为**纯字段名数据** `[...fieldConflicts].join(', ')`（i18n 文案不下沉后端，中文 label 在 UI）。
+  - **admin-ui** `metadata-status-labels.ts`：`ISSUE_CODE_LABEL` += `field_conflict: '多源字段冲突'`；`metadata-status-panel.tsx` `issueText`：有 label 时一般只显 label，**field_conflict 特例**拼 `${label}：${message}`（字段名）→「多源字段冲突：title, rating」，保留冲突字段可见性。
+  - **server-next 消费**：审核台 TabDetail（variant detail）/ TabMetadata 经 `summary.issues` 自动渲染 field_conflict issue（**零接线改动**——issues 始终渲染，与 onAction 无关）。review_conflict 主按钮需 onAction（TabDetail META-34 只读不接 → follow-up，本卡不强接导航）。
+- **修改文件**：
+  - `apps/api/src/db/queries/metadata-status.derive.ts` — field_conflict message 净化
+  - `packages/admin-ui/src/components/metadata-status/metadata-status-labels.ts` — ISSUE_CODE_LABEL += field_conflict
+  - `packages/admin-ui/src/components/metadata-status/metadata-status-panel.tsx` — issueText field_conflict 拼接
+  - `tests/unit/components/admin-ui/metadata-status/metadata-status-panel.test.tsx` — field_conflict「多源字段冲突：…」渲染
+- **新增依赖**：无
+- **数据库变更**：无
+- **质量门禁**：typecheck 7ws EXIT=0 / lint 4 successful / test:changed 升全量（admin-ui 基础包改动，ADR-180）162 文件 2150 passed / verify:adr-contracts EXIT=0（admin-shell-types-mirror 对齐 + enum-ssot 既有 advisory）；+1 panel 单测（derive message 净化既有 toContain 断言兼容）。
+- **偏离/follow-up**：① review_conflict 按钮 onAction 导航到冲突字段编辑（需交互设计：跳哪个 tab/字段高亮）；② 结构化 conflictFields DTO（若要点击逐字段跳转，扩 MetadataStatusSummary 跨 3 消费方 → 触发 Opus arch-reviewer）。均归 follow-up，本卡 MVP 仅展示冲突信号 + 字段名。
+- **[AI-CHECK]**：六问过——①根因=ISSUE_CODE_LABEL 缺 field_conflict → 补 label + issueText 拼接；②零回归（issues 通用渲染 + derive message 净化既有断言兼容 + 全量 2150 passed）；③边界=最小展示，onAction 导航 + 结构化 DTO 留 follow-up；④复用=MetadataStatusPanel 通用 issues 渲染 + ISSUE_CODE_LABEL 既有范式 + review_conflict nextAction 既存；⑤守 i18n 文案不下沉后端（message=数据、label 在 UI）/ admin-ui 内部 label 非 Props 不触发 Opus；⑥范围=1 derive message + 2 admin-ui label/issueText + 1 测试，无 DTO/Props/schema/migration/端点。**META-49 全收口（-A/-B1/-B2/-C/-D1/-D2）。SEQ-20260615-02「多源交叉验证编排 + TMDB 自动链路 + douban 降级」全序列完成**——三源 gather→reconcile→write 加权裁决 + 字段级 proposal 载体 + TMDB 自动富集 + douban 投票降级 + 跨源冲突 needs_review 审核台展示端到端打通（含 3 次 Codex stop-time review FIX）。

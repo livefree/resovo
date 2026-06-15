@@ -61,6 +61,19 @@ describe('MetadataStatusPanel — 问题列表（Pill 映射）', () => {
     expect(issues[0].textContent).toContain('Bangumi 候选尚未应用')
   })
 
+  it('field_conflict（ADR-205 M3 / META-49-D2）→「多源字段冲突：<字段名>」（label + message 字段名拼接）', () => {
+    const s = makeSummary({}, {
+      overall: 'needs_review',
+      issues: [
+        { code: 'field_conflict', level: 'danger', provider: null, message: 'title, rating', action: 'review_conflict' },
+      ],
+    })
+    const { container } = render(<MetadataStatusPanel summary={s} variant="detail" />)
+    const issues = panel(container).querySelectorAll('[data-panel-issue]')
+    expect(issues).toHaveLength(1)
+    expect(issues[0].textContent).toContain('多源字段冲突：title, rating')
+  })
+
   it('compact 仅 top-3 问题', () => {
     const many = Array.from({ length: 5 }, (_, i) => ({
       code: 'candidate_unconfirmed', level: 'warn' as const, provider: 'bangumi' as const, message: `m${i}`, action: 'confirm_candidate' as const,
