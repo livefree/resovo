@@ -5969,3 +5969,15 @@
 - **测试覆盖**：+2 单测——`integration-credentials-config.test.ts`（enabled=false + includeDisabled → 加载已存字段、enabled 仍 false）+ `integration-credentials-service.test.ts`（test() 以 includeDisabled 调用 + 禁用源测真实凭证非空）。
 - **质量门禁**：typecheck 全工作区 EXIT=0（0 error TS）/ lint EXIT=0 / test:changed 21 文件 338 passed / **migration 118 真库 synthetic dry-run 四场景全验 + ROLLBACK 还原**。
 - **[AI-CHECK]**：六问过——①根因=115 早于 22822 决策把 v3 key 误填 Bearer 槽（P2-1）+ test 路径误用解析器禁用抑制（P2-2）；②零回归（typecheck/lint EXIT=0 + test:changed 338 passed + includeDisabled 纯加性默认零变化 + 两 resolver 路径不变 + migration ROLLBACK 不改库）；③边界=migration 仅订正精确 legacy-backfill 信号行 + 3 守卫防误伤、includeDisabled 仅 test 路径、resolver 保持 D-173-3 抑制；④复用=复用既有凭证解析 + migration 反向订正 115/116 语义、不新建第二套解析；⑤无 any / 无空 catch / migration 幂等可复跑 / 无硬编码色；⑥范围 migration 118 + loadProviderCredential opts + test 接线 + 单测 单一验收口径，全落地。**Codex P2×2 收口，回到 SEQ-20260615-01 序列下一 META-41-B。**
+
+## [META-41-B] Bangumi country 写入——保守仅显式产地（SEQ-20260615-01）— 2026-06-15
+
+**类型**：feat（依 META-40 真源）｜**优先级**：🟡 中｜**执行模型**：claude-opus-4-8（主循环）｜**子代理**：无
+
+- **数据裁定**：开工调查实证 bangumi 匹配作品 country 现状分布 **JP 85 / CN 70 / null 31 / US 5 / HK 1**——**CN ~36% 国创**。卡片隐含「anime 缺省 JP」会把 ~70 部国创误标 JP（META-40 同类「错国」污染），且 country 已被 douban/tmdb 充分填充（仅 31 null）、bangumi infobox 产地信号弱（dump 表无 infobox / REST infobox 以话数·制作·放送为主）。经 AskUserQuestion，**用户裁定保守：仅 infobox 显式产地键写，无盲目缺省**（安全 > 覆盖）。
+- **方案**：① `BangumiService.utils.ts` 新增 `parseInfoboxCountry`——仅命中显式产地键（`国家/地区`·`制作国家/地区`·`产地`·`国家`·`地区` + 繁体变体 `國家/地區` 等）时返回首值，无则 `null`（复用既有 `infoboxValues` 摊平，结构对齐 `parseInfobox`/`parseInfoboxAliases`）；② `mapSubjectToCatalogFields` 经 META-40 `countryToIso`（packages/types 单一真源）把解析值归一 ISO 后写 `fields.country`——**无产地键 / 归一不到（表外生僻名）则不写**，绝不盲目缺省 JP、绝不裸写中文国家名（保 catalog.country 列纯净，对齐 META-40 写入侧「归一不到不写」范式）。
+- **不做**：盲目 JP 缺省（用户否决，误伤 CN 国创）/ broadcast-station 等脆弱日本信号推断 / cast（CV 不在 infobox，后排）。
+- **涉及文件**：`apps/api/src/services/BangumiService.utils.ts`（+COUNTRY_INFOBOX_KEYS + parseInfoboxCountry + mapSubjectToCatalogFields 补 country + import countryToIso）。
+- **测试覆盖**：+9 单测——`bangumi-service.test.ts`：parseInfoboxCountry 6（显式键命中/制作国家·产地/繁体变体/数组取首/无产地键 null/非数组 null）+ mapSubjectToCatalogFields country 集成 3（中国大陆→CN / 日本→JP·无产地键不写 / 归一不到不写）。
+- **质量门禁**：typecheck 全工作区 EXIT=0（0 error TS）/ lint EXIT=0 / test:changed 14 文件 276 passed。无 migration（仅写侧逻辑）→ 无真库验证；test:e2e N/A（lib 纯函数无 UI 消费方改动）。
+- **[AI-CHECK]**：六问过——①根因=bangumi 不写 country + 卡片缺省 JP 思路被数据证伪（36% CN）→ 保守仅显式产地；②零回归（typecheck/lint EXIT=0 + test:changed 276 passed + 默认 fixture 无产地键故 country 不写、既有 mapSubjectToCatalogFields 测试零破坏）；③边界=仅显式产地键、无盲目缺省、归一不到不写、不裸写中文名；④复用=countryToIso（META-40 单一真源）+ infoboxValues + 对齐 parseInfoboxAliases 结构，不新建第二套；⑤无 any / 无空 catch / 无硬编码色 / 无越层（utils←@/types 单向）；⑥范围 parseInfoboxCountry + 集成 + 单测 单一验收口径，全落地。**SEQ-20260615-01 META-41-B 收口（用户裁定保守），下一 META-42（TMDB country 应用，依 META-40 真源）。**

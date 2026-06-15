@@ -2537,7 +2537,7 @@
 
 ## [SEQ-20260615-01] 元数据字段枚举兼容性治理
 
-- **状态**：🔄 进行中（META-40 ✅ + META-41-A ✅ 2026-06-15 → 下一 META-41-B〔Bangumi country，依 META-40 真源〕）
+- **状态**：🔄 进行中（META-40 ✅ + META-41-A ✅ + META-41-B ✅ 2026-06-15〔+ 旁路 META-37-A-FIX Codex P2×2〕 → 下一 META-42〔TMDB country 应用，依 META-40 真源〕）
 - **创建时间**：2026-06-15 00:30
 - **最后更新时间**：2026-06-15 01:10（用户评审 B+ 后修订：范围补 server-next / META-40 收敛真源 / META-41·44 拆 -A/-B / cast 后排 / META-43 source 口径 / 逐卡门禁）
 - **目标**：修复 douban/bangumi/tmdb 三源元数据字段（类型/题材/地区/图片）与本地枚举的兼容缺口——含 1 项数据正确性 bug（实证）+ 4 项能力闲置 + 1 项设计权衡。
@@ -2572,7 +2572,8 @@
    - **门禁**：typecheck + lint + test:changed。
    - **依赖**：**可与 META-40 并行**（不碰 country）。
 
-3. **META-41-B** — Bangumi country 写入（🟡 中）（状态：⬜ 待办，依赖 META-40）
+3. **META-41-B** — Bangumi country 写入（🟡 中）（状态：✅ 已完成 2026-06-15 · 保守仅显式产地）
+   - **完成备注**：✅ 2026-06-15。开工调查实证 bangumi 匹配作品 country 分布 **JP 85 / CN 70 / null 31 / US 5 / HK 1**（CN ~36% 国创）→ 卡片隐含「缺省 JP」会误标 ~70 部国创（META-40 同类错国 bug）→ **用户裁定保守**：新增 `parseInfoboxCountry`（仅 infobox 显式产地键：国家/地区·制作国家/地区·产地·国家·地区 + 繁体变体；无则 null），`mapSubjectToCatalogFields` 经 META-40 `countryToIso` 真源归一 ISO 后写 `fields.country`，**绝不盲目缺省 JP**（归一不到/无产地键不写，保列纯净）。门禁 typecheck/lint EXIT=0 + test:changed 14 文件 276 passed。+9 新单测（parseInfoboxCountry 6 + country 集成 3）。执行模型 claude-opus-4-8；子代理无。详见 changelog [META-41-B]。
    - 创建时间：2026-06-15 01:10
    - 建议模型：sonnet
    - **问题**：bangumi 自动增强不写 country；anime 来源国通常 JP 但需走统一 ISO 真源保一致（不可再裸写）。

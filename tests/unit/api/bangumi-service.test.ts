@@ -13,6 +13,7 @@ import {
   isAmbiguousLocalMatch,
   parseInfobox,
   parseInfoboxAliases,
+  parseInfoboxCountry,
   mapSubjectToCatalogFields,
   mapEpisodes,
   mapCharacters,
@@ -129,6 +130,29 @@ describe('parseInfobox', () => {
   })
 })
 
+describe('parseInfoboxCountry（META-41-B：仅显式产地键，不盲目缺省）', () => {
+  it('命中显式产地键「国家/地区」→ 返回首值', () => {
+    expect(parseInfoboxCountry([{ key: '国家/地区', value: '中国大陆' }])).toBe('中国大陆')
+  })
+  it('命中「制作国家/地区」/「产地」', () => {
+    expect(parseInfoboxCountry([{ key: '制作国家/地区', value: '日本' }])).toBe('日本')
+    expect(parseInfoboxCountry([{ key: '产地', value: '美国' }])).toBe('美国')
+  })
+  it('繁体键变体「國家/地區」', () => {
+    expect(parseInfoboxCountry([{ key: '國家/地區', value: '香港' }])).toBe('香港')
+  })
+  it('数组型 value 取首值', () => {
+    expect(parseInfoboxCountry([{ key: '国家/地区', value: [{ v: '日本' }, { v: '美国' }] }])).toBe('日本')
+  })
+  it('无产地键 → null（绝不盲目缺省 JP）', () => {
+    expect(parseInfoboxCountry([{ key: '导演', value: '石原立也' }, { key: '动画制作', value: '京都动画' }])).toBeNull()
+  })
+  it('非数组 infobox → null（不抛）', () => {
+    expect(parseInfoboxCountry(null)).toBeNull()
+    expect(parseInfoboxCountry(undefined)).toBeNull()
+  })
+})
+
 function subject(p: Partial<BangumiSubject> = {}): BangumiSubject {
   return {
     id: 51, type: 2, name: 'CLANNAD', name_cn: '团子大家族', summary: '简介',
@@ -181,6 +205,21 @@ describe('mapSubjectToCatalogFields', () => {
     const f = mapSubjectToCatalogFields(subject())
     expect(f.genres).toBeUndefined()
     expect(f.genresRaw).toBeUndefined()
+  })
+  it('META-41-B：infobox 显式产地键 → country 经 countryToIso 归一 ISO（中国大陆→CN）', () => {
+    const f = mapSubjectToCatalogFields(subject({
+      infobox: [{ key: '导演', value: '石原立也' }, { key: '国家/地区', value: '中国大陆' }],
+    }))
+    expect(f.country).toBe('CN')
+  })
+  it('META-41-B：日本产地 → JP；无产地键 → 不写 country（绝不盲目缺省 JP）', () => {
+    expect(mapSubjectToCatalogFields(subject({ infobox: [{ key: '产地', value: '日本' }] })).country).toBe('JP')
+    // 默认 fixture infobox 仅 导演/动画制作，无产地键 → country 不写
+    expect(mapSubjectToCatalogFields(subject()).country).toBeUndefined()
+  })
+  it('META-41-B：产地值 countryToIso 归一不到（表外生僻名）→ 不写 country（保列纯净）', () => {
+    const f = mapSubjectToCatalogFields(subject({ infobox: [{ key: '国家/地区', value: '火星国' }] }))
+    expect(f.country).toBeUndefined()
   })
 })
 

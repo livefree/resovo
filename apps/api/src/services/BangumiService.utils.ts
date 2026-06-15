@@ -10,6 +10,7 @@ import type { CatalogEpisodeInput } from '@/api/db/queries/catalogEpisodes'
 import type { CatalogCharacterInput } from '@/api/db/queries/catalogCharacters'
 import { normalizeForExternalMatch } from './TitleNormalizer'
 import { mapBangumiTags } from '@/api/lib/genreMapper'
+import { countryToIso } from '@/types'
 
 // ── 有损键歧义守卫（META-22 三次修订 / Codex stop-time review）──────────
 
@@ -155,6 +156,32 @@ export function parseInfoboxAliases(infobox: BangumiInfoboxItem[] | undefined | 
   return out
 }
 
+/**
+ * infobox 显式产地/来源国键（META-41-B）。bangumi 多数 anime infobox 无产地键——仅三次元/部分条目有。
+ * 简繁变体并收；值（如「日本」「中国大陆」）由 countryToIso 归一为 ISO。
+ */
+const COUNTRY_INFOBOX_KEYS = new Set<string>([
+  '国家/地区', '制作国家/地区', '国家', '地区', '产地',
+  '國家/地區', '製作國家/地區', '國家', '地區', '產地',
+])
+
+/**
+ * 从 infobox 提取来源国/地区原始值（META-41-B）。仅命中显式产地键时返回首值，无则 null
+ * ——**绝不盲目缺省 JP**（bangumi 含 ~36% CN 国创，盲目缺省会误标，用户裁定保守）。
+ * 归一交由调用方经 countryToIso（META-40 真源）处理。
+ */
+export function parseInfoboxCountry(infobox: BangumiInfoboxItem[] | undefined | null): string | null {
+  if (!Array.isArray(infobox)) return null
+  for (const item of infobox) {
+    if (!item || typeof item.key !== 'string') continue
+    if (COUNTRY_INFOBOX_KEYS.has(item.key.trim())) {
+      const vals = infoboxValues(item.value)
+      if (vals.length > 0) return vals[0]
+    }
+  }
+  return null
+}
+
 export interface ParsedInfobox {
   directors: string[]
   writers: string[]
@@ -240,6 +267,14 @@ export function mapSubjectToCatalogFields(subject: BangumiSubject): CatalogUpdat
   if (genres.length > 0) {
     fields.genres = genres
     fields.genresRaw = genresRaw
+  }
+
+  // country（META-41-B）：仅从 infobox 显式产地键经 countryToIso（META-40 真源）归一为 ISO 后写；
+  // 无显式产地键 / 归一不到则不写——**绝不盲目缺省 JP**（bangumi 含 ~36% CN 国创，缺省会误标，用户裁定保守）。
+  const rawCountry = parseInfoboxCountry(subject.infobox)
+  if (rawCountry) {
+    const iso = countryToIso(rawCountry)
+    if (iso) fields.country = iso
   }
 
   return fields
