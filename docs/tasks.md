@@ -6,6 +6,32 @@
 
 ## 当前任务（单任务工作台：同时仅 1 个 🔄 进行中；完成即删卡，历史见 docs/changelog.md）
 
+### META-39-A — TMDB 候选确认/应用后端 + ADR-202 落库（Phase 5B）
+
+- **状态**：🔄 进行中
+- **建议模型**：opus
+- **执行模型**：claude-opus-4-8
+- **子代理调用**：arch-reviewer (claude-opus-4-8, a2afa5615397986dd〔ADR-202 D-1~7〕), arch-reviewer (claude-opus-4-8, a7c8e6a117a6ecc4d〔D-8 多语言〕)
+- **开始时间**：2026-06-14
+- **依赖**：META-38 ✅（client）+ META-32 ✅（DTO）；ADR-202 已落库
+- **文件范围**：
+  - `docs/decisions.md`（ADR-202 ✅ 已落库，首 commit）
+  - `apps/api/src/routes/admin/moderation.tmdb.ts`（新：3 端点）
+  - `apps/api/src/services/TmdbConfirmService.ts`（新：search/confirm/reject）
+  - `apps/api/src/lib/genreMapper.ts`（新增 `mapTmdbGenres`，movie+tv 两套 id）
+  - `apps/api/src/server.ts`（注册路由）
+  - 单测 + 集成测（`tests/unit/api/` / `tests/integration/`）
+- **契约**：ADR-202 D-202-1~8 + 端点契约表（`/admin/videos/:id/tmdb-{search,confirm,reject}`）。
+- **关键约束**（吸收双轮 arch-reviewer 红线）：
+  - external_kind 仅 movie→exact / tv-season→exact 两路径，tv-show-root 落 candidate（D-202-1）
+  - confirm 三写单事务（safeUpdate provenanceCtx.db，D-202-2）
+  - 冲突走 422 CONFIRM_FAILED 不 409，低置信不阻断（D-202-4）
+  - fields 省略/[] = 仅绑 ID（D-202-5），无 pending 守卫（D-202-6）
+  - 多语言核心标量 M1/M3/M4/M5：title 简中/title_original/original_language(BCP47 zh)/description/genres-by-id/imdb_id cache-only fill-if-empty（D-202-8）
+  - title_en + translations→aliases 移出（FU-202-1/2），零 migration
+- **问题理解**：ADR-202 落库后实现 TMDB 候选确认/应用后端，复用现有写侧原语，零 migration。
+- **方案**：moderation.tmdb.ts 3 端点（对齐 bangumi 拆分）→ TmdbConfirmService 单事务编排 → mapTmdbGenres + 核心标量 safeUpdate → 测试。
+
 _（**META-38 ✅ Phase 5A 收口 2026-06-14**（TMDB API client + search/detail MVP，依 META-37 ✅）——`lib/tmdb.ts`（现仅连接测试）补全只读 client：私有 `tmdbGet<T>`（Bearer/api_key 双路鉴权复用 `applyAuth` + 超时 + **429 退避重试**〔Retry-After 优先 / 指数退避封顶 10s / ≤maxRetries〕 + **进程内串行最小间隔节流** throttle 保守 ~50req/s）+ `TmdbHttpError`；出口 `searchMovie`/`searchTv`（strict 抛错版供调用方区分「真无结果」vs「瞬时失败」，year→primary_release_year/first_air_date_year）+ `getMovieDetail`/`getTvDetail`（append_to_response 拼接 + 404 valid-negative 返 null，对齐 bangumi.getSubject）+ `getConfiguration`；每出口旁路 `recordFetch`（provider=tmdb method=api，复用 external-fetch-recorder，填 DTO `fetchedAt` 埋点 + `source?` 预留）。新 `lib/tmdb.types.ts`（search/detail/append〔external_ids·images·videos·credits·aggregate_credits·release_dates·content_ratings·translations〕/configuration 响应类型子集，对标 bangumi「schema 子集」哲学）。`testConnection` 重构复用 `applyAuth`（URL 版，13 回归测试零破坏）。**边界裁定**：零 route/migration/UI/worker（候选确认·应用 + UI 归 META-39 → 首个新增 admin route 卡，届时起独立端点 ADR + Opus PASS，MUST-8）；external_fetch_log provider TEXT 无 CHECK + PROVIDER_KEYS 已含 tmdb → 埋点零 migration；EXTERNAL_PROVIDERS.tmdb planned→active 归 ADR-188 external-resources，不在本卡；不做账号/session、不转 video_sources、不驱动首页（ADR-201 §不做）。门禁 typecheck EXIT=0 + lint EXIT=0（仅既有 warning）+ test:changed 45 passed（tmdb 14 新 + 凭证服务/路由零回归）+ verify:adr-contracts EXIT=0；test:e2e N/A（纯 lib 无 spec，META-34/37-B 先例）。14 新单测。执行模型 claude-opus-4-8（偏离 sonnet 建议、opus 会话覆盖连续推进、无强制升降触发）；子代理无（lib client 非 admin-ui 共享 Props + 有 bangumi/douban 范本）。详见 changelog [META-38]。**解锁 META-39（TMDB 候选确认与应用，opus）。工作台空闲。**）_
 
 _（**META-34 ✅ 收口 2026-06-14**（Phase 3A 审核详情元数据状态统一展示，依 META-33 ✅；首个消费两原语的卡）——`TabDetail`（审核台 RightPane 详情）按 ADR-201 §审核详情（decisions.md 22723–22739）把元数据散落 4 处收敛为单一「元数据状态」section：① 内容治理 triad 仅留发布/可见性/审核 3 Pill（删 douban pill + `doubanLabel`，douban 去特化）；② 删「富集」section（`EnrichmentBadgeCluster`）+ 裸 `meta_score` 行 + 独立「外部元数据」section（`ExternalMetaPanel`）；③ triad 之后新增「元数据状态」section 用 `MetadataStatusPanel variant="detail"` 消费 `extDetail.metadataStatus`（沿用既有懒加载 `getVideo`→adminFindById，META-32-A 注入；`VideoQueueRow` 无 metadataStatus 不污染 queue list query），三态降级（加载中/失败/已加载无 metadataStatus）不阻断重测按钮与信息区。**边界裁定**：只读不接 onAction（增强动作归 META-35；读-only 下 panel 零死按钮，Codex fix 保障）/ 不构造 sourceEvidence（bangumi 富视图归 META-35；四来源卡已覆盖 externalId 外链+matchMethod+置信度）/ 退役 `EnrichmentBadgeCluster`·`ExternalMetaPanel` 在 TabDetail 移除消费点（D-201-2；EnrichmentBadgeCluster 审核台仅余 ModListRow）。退役测试更新 `enrichment-cluster-moderation.test.tsx`（TabDetail 富集簇块退役、ModListRow 块保留）。门禁 typecheck/lint EXIT=0 + test:changed 29 passed（既有 reprobe/episodes 零回归）+ verify:adr-contracts EXIT=0；test:e2e:admin N/A（无 moderation RightPane spec，回归面为单测 83 passed）。8 新单测。执行模型 claude-opus-4-8（偏离 sonnet 建议、连续推进、无强制升降触发）；子代理无（纯消费不改 admin-ui 公开 Props）。详见 changelog [META-34]。**解锁 META-35（编辑抽屉）/ META-36（视频库列 UI）。工作台空闲。**）_

@@ -22895,3 +22895,78 @@ Douban 行为：
 - **D-201-C（完整度阈值暂定 80）**：`complete` 的 score 阈值暂定 80，后续可由真实数据校准。处置：accept；阈值必须集中在派生服务，不得散落 UI。
 - **D-201-D（旧字段过渡保留）**：`douban_status`、`bangumi_status`、`meta_score` 过渡期保留。处置：accept；禁止新 UI 直接消费它们做最终状态，避免一次性迁移风险。
 - **D-201-E（派生真源优先级，META-32 评审补登记 / arch-reviewer claude-opus-4-8）**：外部身份与应用判定取数优先级固定为 `catalog_external_refs`（ADR-177 canonical）> `video_external_refs`（video 级）> `media_catalog` 四 ID 列（仅 cache 兜底，ADR-177 D-177-5 已降级）。处置：accept；`applied` 判定不得仅据 `media_catalog.*_id IS NOT NULL`，须以 refs 表 relation/match_status 为准，避免与 ADR-177 治理口径分裂。派生函数注释固化优先级 + 单测覆盖「refs 存在 / cache 空」「cache 有值 / refs rejected」冲突态。
+
+## ADR-202：TMDB 候选确认与应用流程 + 端点契约
+
+> 状态：Accepted（2026-06-14）
+> 关联：ADR-201（§实施顺序 Phase 5B）/ ADR-176（按季粒度）/ ADR-177（catalog_external_refs 真源 + D-177-11 external_kind 映射 + R3/R10 守卫）/ ADR-175（多语言结构化别名 + title_en 收紧 + 简繁 R1）/ ADR-186（safeUpdate fill-if-empty）/ ADR-173（凭证）/ ADR-110（信封/错误码 SSOT）
+> 评审：arch-reviewer (claude-opus-4-8, agentId a2afa5615397986dd〔D-202-1~7 主体〕) + arch-reviewer (claude-opus-4-8, agentId a7c8e6a117a6ecc4d〔D-202-8 多语言〕) 双轮 CONDITIONAL-PASS，全部红线已吸收。
+
+### 背景
+
+ADR-201 §实施顺序 Phase 5B：META-38（TMDB 只读 client，已完成）→ META-39（候选确认与应用）。本 ADR 是 TMDB 接入线**首个新增 admin route** 的端点契约，按 plan §4.5 R7 MUST-8（新 admin route 须先起独立 ADR + Opus PASS）立此 ADR。
+
+写侧接缝已就绪（**零新 migration**）：`video_external_refs.provider` CHECK 含 tmdb（migration 041）、`safeUpdate` 来源优先级 tmdb=4（与 bangumi 同级，高于 douban=3，低于 manual=5）、`resolveAndWriteExactRef`/`insertCandidateRef`/`demoteExactRef` 写侧原语、`media_catalog.tmdb_id` cache 列。本 ADR 定档候选→确认→应用流程、external_kind 判定（D-177-11 遗留决策点）、字段应用语义与多语言映射。TMDB 仅作元数据 provider，**不接播放源**（ADR-201 §不做）。
+
+### 决策要点
+
+- **D-202-1（external_kind 判定，闭合 D-177-11 imdb/tmdb 遗留）**：confirm 的 `external_kind` 由 `mediaType` 决定，严格遵循 D-177-11 取值域——`movie`→`'movie'`（exact 域，走 `resolveAndWriteExactRef`）；`tv` 选定具体季（带 `seasonNumber`）→`'season'`+season_number（exact 域）；`tv` 仅 series 根（无季维度）→`'show'`（parent 域，**只落 `insertCandidateRef` candidate，不升 exact**——按季粒度 D-176-1 下 show 级 ID 一对多无法 exact 绑单 catalog，同 douban 保守 candidate 范式）。**首版（META-39-A）只实现 movie→exact 与 tv-season→exact 两条 exact 路径**；tv-show-root 落 candidate + cache 回填标注 follow-up。不得按 catalog 季语义事后推断（违 R10 取值域互斥）。
+
+- **D-202-2（候选写入语义 + 单事务，红线）**：`tmdb-search` 命中→写 `video_external_refs`(provider=tmdb, match_status=candidate, match_method='manual_search', confidence)；`tmdb-confirm`→升 manual_confirmed + `resolveAndWriteExactRef`（exact 路径）/`insertCandidateRef`（show 路径）+ `safeUpdate(catalog, fields, 'tmdb')` 应用字段 + `media_catalog.tmdb_id` cache。**confirm 的三写（ref 升级 + exact/candidate + cache）必须共享同一 PoolClient 单事务**（复用 `MediaCatalogService.safeUpdate` 的 `provenanceCtx.db` 参数，对齐 BangumiService.confirmMatch；**不继承 DoubanService.confirmFields 的无事务技术债**——TMDB exact 路径涉全局唯一索引，无事务会产生「ref 升了但 cache 没回填」孤儿 cache，违 D-177-12 口径③）。
+
+- **D-202-3（字段应用 + 同级争用）**：confirm 字段应用复用 `safeUpdate(catalog, fields, 'tmdb')` 同级（tmdb=4 vs bangumi=4）后写赢语义，**不引入 provider 间字段仲裁**。anime 下 tmdb confirm 覆盖 bangumi 已写字段是人工权威表达（仍低于 manual=5 的 locked_fields）。覆盖 bangumi/locked 字段的风险由 confirm 对比 UI 显式标 `danger`（归 META-39-B，对齐 ADR-201 22757「标记会覆盖人工字段的项」），人工勾选即授权。
+
+- **D-202-4（冲突处置，对齐 R3/D-177-4 降级范式，红线）**：`video_external_refs` 的 `(provider,external_id)` **非唯一索引**，「同 tmdbId 被多 video 绑定」不触发 DB 冲突；真正闸门是 catalog_external_refs exact 索引，由 `resolveAndWriteExactRef` 软降级（**不抛**）。故端点**无 409**：① exact 归属冲突（同 tmdbId+kind 的 exact 已被他 catalog 持有）→ 原语返回降级 candidate，confirm 不应用字段/不回填 cache，Service 返 `{updated:false, reason:'tmdb_exact_conflict', holderCatalogId}`，Route 转 **422 CONFIRM_FAILED**；② kind 冲突（同 tmdbId 既有 external_kind 不一致）→ reason='tmdb_kind_conflict' → 422。③ **低置信不阻断 confirm**（confirm 是人工动作，置信只影响 search 阶段 candidate 的 confidence 与 UI 黄点）。
+
+- **D-202-5（仅存 ID 合并入 confirm）**：不设独立 `tmdb-save-id` 端点。`tmdb-confirm` 的 `fields` 省略或为 `[]` = 仅绑定外部 ID（写 video_external_refs.manual_confirmed + catalog_external_refs ref + tmdb_id/imdb_id cache）**不应用任何 catalog 内容字段**；`fields` 非空 = 绑定 + 应用选中字段。zod schema 用 `fields: z.array(z.enum(TMDB_APPLIABLE_FIELDS)).optional()`（**非 .min(1)**，与 douban confirmFields 的 no_fields 短路语义相反）。
+
+- **D-202-6（无 review_status 守卫，红线）**：TMDB 三端点**不设 `review_status !== 'pending_review'` 守卫**（取 bangumi-confirm 范式，非 douban 范式）。理由：落点是视频编辑抽屉（适用任意状态视频），pending 守卫会在编辑非待审视频时产生死按钮，违 META-33-B 无死按钮原则。
+
+- **D-202-7（拆卡）**：**META-39-A**（端点 ADR + 后端实现）= 本 ADR 落 decisions.md（**-A 第一个 commit，先于任何 route 代码**，verify-endpoint-adr 门禁）→ `routes/admin/moderation.tmdb.ts`（3 端点，对齐 bangumi/douban 拆分文件范式）→ `TmdbConfirmService`（search/confirm/reject）→ 复用 resolveAndWriteExactRef/insertCandidateRef/safeUpdate/upsertVideoExternalRef + 新增 `mapTmdbGenres` → 单测 + 集成测。**META-39-B**（UI）= `TabMetadata` 接 `MetadataStatusPanel.onAction`（confirm_candidate/review_conflict）+ 候选搜索/对比/确认/拒绝交互 + 覆盖标记（D-202-3）+ e2e。
+
+- **D-202-8（TMDB 多语言字段映射 — 核心标量优先 / translations→aliases 留 follow-up）**：confirm 用 `language=zh-CN` 单次请求（append `external_ids`+`translations`），核心标量经 `safeUpdate(...,'tmdb')` 写入，遵 ADR-175 字段语义与红线：
+  - **M1 核心标量**：`title`(zh-CN)→`title`；`original_title`/`original_name`+`original_language`→`title_original`+`original_language`；`overview`(zh-CN)→`description`。zh-CN `title` 缺失回退 `original_title`，**不写英文进 title**（ADR-175 D-175-3）。**空 zh-CN 文本不写**（undefined 跳过，避免空串覆盖既有 description / overview 回退英文污染）。
+  - **M2 title_en（移出首版 → FU-202-2）**：TMDB `translations` 的 en 条目对华语片常为罗马拼音转写，直写 `title_en` 会重引 ADR-175 R5 拼音污染；纯净写入须 catalog 级独立 `isPinyin` 判定，归 follow-up。META-39-A **不写 title_en**。
+  - **M3 original_language 格式（BCP47）**：非中文直接存 TMDB ISO 639-1（`ja`/`ko`/`en`，= BCP47 无歧义）；中文（TMDB `'zh'` 不分简繁）存 **language-only BCP47 `zh`**（不强推 script），script 细化（zh-Hans/zh-Hant/zh-HK）待 title_original 字形检测随 FU-202-3。**不得用 origin_country 推断转换 title_original 文本字形**（ADR-175 R1 不 OpenCC / 红线）。
+  - **M4 imdb_id 间接填充 = cache-only（闭合 D-177-11 imdb 遗留 + D-186-2 follow-up）**：`external_ids.imdb_id` 仅写 `media_catalog.imdb_id` cache，**不写 catalog_external_refs imdb exact**（imdb 不在 EXTERNAL_KIND_BY_PROVIDER，external_kind 无可靠来源 / D-177-11 + YY-D；D-201-A IMDb 首批不主动抓取，cache 足够支撑图标+外链）。写入遵 D-186-2 **fill-if-empty**（`imdb_id IS NULL` 才填，非 NULL 不覆盖）——本决策为 D-186-2「imdb/tmdb 接入自动写入时纳入 fill-if-empty」follow-up 的兑现点。`tmdb_id` 按 confirm 确认语义写入（confirm 主键，非间接填充，区分于 imdb）。
+  - **M5 genres**：用 TMDB genre **数值 id**（稳定 key，不随 language 变）经**新增 `mapTmdbGenres()`**（`genreMapper.ts`，与 `mapDoubanGenres` 并列，**覆盖 movie + tv 两套 id 体系**）映射到 `VideoGenre` 写 `genres`；TMDB 本地化 genre name 写 `genres_raw`（调试）；**不用本地化 name 做归一**（避免 'Sci-Fi & Fantasy' 等英文回退污染，实测证据）。`description` 维持单语言现状，多语言 `overview` 随 FU-202-1。
+
+**TMDB → catalog 字段映射（`TMDB_APPLIABLE_FIELDS` confirm 白名单）**：`title`/`title_original`/`original_language`/`description`/`genres`（+genres_raw）/`rating`(vote_average)/`cover_url`(poster_path 拼 configuration base)/`director`·`cast`(credits)/`country`(origin_country/production_countries)。`imdb_id`/`tmdb_id` 为绑定附带 cache（不在用户可勾选 fields 内，随 confirm 必写）。
+
+### 端点契约
+
+| # | 方法 | 路径 | 用途 | Request | Response | 错误码 |
+|---|---|---|---|---|---|---|
+| 1 | POST | `/admin/videos/:id/tmdb-search` | 手动搜 TMDB 候选 | Body: `{ query?: string, mediaType: 'movie'\|'tv', year?: number }`（query 省略时取 catalog.title） | 200 `{ data: { candidates } }` | 422 VALIDATION_ERROR / 404 NOT_FOUND / 500 |
+| 2 | POST | `/admin/videos/:id/tmdb-confirm` | 确认候选→绑定+应用字段 | Body: `{ tmdbId: number, mediaType: 'movie'\|'tv', seasonNumber?: number, fields?: string[] }`（fields 省略/[] = 仅绑 ID） | 200 `{ data: { id, confirmed, applied } }` | 422 VALIDATION_ERROR·CONFIRM_FAILED（含 tmdb_exact_conflict / tmdb_kind_conflict）/ 404 NOT_FOUND / 500 |
+| 3 | POST | `/admin/videos/:id/tmdb-reject` | 拒绝候选 | Body: `{ tmdbId: number }` | 200 `{ data: { id, rejected } }` | 422 VALIDATION_ERROR / 404 NOT_FOUND / 500 |
+
+错误码引 ADR-110 SSOT（VALIDATION_ERROR 422 / NOT_FOUND 404 / INTERNAL_ERROR 500）；`CONFIRM_FAILED`（422）沿用 DoubanService confirm 既有 inline 范式（SSOT 无此码，登记 follow-up 统一）。信封 `{ data }`（ADR-110）。端点前缀统一 `/admin/videos/:id/`（弃 douban 的 `/admin/moderation/:id/` 历史前缀，对齐 bangumi）。
+
+### 迁移与兼容
+
+**无新 migration**：`video_external_refs.provider` CHECK 已含 tmdb（041）；`media_catalog` 的 `title`/`title_original`/`original_language`/`description`/`genres`/`genres_raw`/`imdb_id`/`tmdb_id` 列全部已存在且 `CatalogUpdateData` fieldMap 已支持；`catalog_external_refs` PRECISE_KINDS 含 movie/season。`mapTmdbGenres` 为代码层映射函数（非 schema）。
+
+### 验收标准
+
+- TMDB 搜索返回候选，confirm 后 video 元数据状态进入 `MetadataStatusSummary`（applied/candidate/problem，ADR-201 D-201-E 派生）。
+- movie/tv-season confirm 升 catalog_external_refs exact + 应用核心标量（title 简中/title_original/original_language/description/genres-by-id）+ imdb_id cache 间接填充。
+- exact/kind 冲突走 422 CONFIRM_FAILED 不报 409；低置信不阻断 confirm。
+- confirm 三写单事务，无孤儿 cache。
+- 编辑非待审视频时端点不因 pending 守卫失败（无死按钮）。
+
+### 偏离登记
+
+- **D-202-α（tv-show-root 落 candidate + cache 近似）**：tv 仅 series 根（无季）confirm 落 candidate 不升 exact，cache `media_catalog.tmdb_id` 回填到当前 season catalog 是已知近似。处置：accept；同 douban candidate cache 留值范式，标 follow-up。
+- **D-202-β（CONFIRM_FAILED 非 SSOT 码）**：沿用 douban inline 范式，登记 follow-up 统一收敛至 api-errors SSOT。处置：accept。
+- **D-202-γ（description 单语言）**：TMDB overview 按 language 返回，写入单语言 `description`；多语言 overview 数据在 translations，随 FU-202-1 处理。处置：accept；schema 多语言 description 容器超本阶段范围。
+
+### Follow-up 登记（不在 META-39 范围）
+
+- **FU-202-1（translations → media_catalog_aliases 全量结构化）**：TMDB translations 49 语言（含 zh-CN/zh-TW/zh-HK 三变体，实测标题各异）经 `upsertStructuredCatalogAlias` 写入，lang/region/script/kind/source/confidence 按 ADR-175 D-175-2 维度；is_primary_for_locale 选举遵 Y-175-2（先回填维度再选举）。
+- **FU-202-2（title_en 纯净写入）**：从 translations en 条目取标题，catalog 级 `isPinyin` 判定；非拼音写 title_en，拼音投 aliases(kind='romanization', lang='en', script='Latn')。归 FU-202-1 同卡。
+- **FU-202-3（original_language 中文 script 细化）**：对 title_original 字形检测将 `zh` 细化为 zh-Hans/zh-Hant/zh-HK；不转换文本字形（R1）。
+
+### 关联 ADR
+
+ADR-201（TMDB 接入前置 UI/UX + 实施顺序）/ ADR-176（按季粒度 catalog）/ ADR-177（catalog_external_refs 真源 + D-177-11 external_kind + R3/R10 + D-177-5 cache）/ ADR-175（多语言别名 + title_en 收紧 + 简繁 R1）/ ADR-186（fill-if-empty）/ ADR-173（凭证）/ ADR-110（信封 + 错误码 SSOT）/ ADR-170（bangumi anime 门控背景）。

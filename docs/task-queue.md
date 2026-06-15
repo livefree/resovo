@@ -2519,6 +2519,14 @@
    - 范围：官方 API search/movie/tv + detail + external_ids + images + append_to_response；限速/429 尊重；不接播放源。
    - 完成备注：执行模型 claude-opus-4-8（偏离 sonnet 建议，opus 会话覆盖连续推进；lib client 非共享 UI Props + 有 bangumi/douban 范本，未触发强制升 Opus，无子代理）。`lib/tmdb.ts` 补全只读 client：私有 `tmdbGet<T>`（Bearer/api_key 双路鉴权复用 `applyAuth` + 超时 + **429 退避重试**〔Retry-After 优先 / 指数退避封顶 10s / ≤maxRetries〕 + **进程内串行最小间隔节流** throttle）+ `TmdbHttpError`；出口 `searchMovie`/`searchTv`（strict 抛错版，year→primary_release_year/first_air_date_year）+ `getMovieDetail`/`getTvDetail`（append_to_response 拼接 + 404 valid-negative 返 null，对齐 bangumi.getSubject）+ `getConfiguration`；每出口旁路 `recordFetch`（provider=tmdb method=api，复用 external-fetch-recorder，填 DTO fetchedAt 埋点 + source 预留）。新 `lib/tmdb.types.ts`（search/detail/append〔external_ids/images/videos/credits/aggregate_credits/release_dates/content_ratings/translations〕/configuration 响应类型子集）。`testConnection` 重构复用 `applyAuth`（URL 版，13 回归测试零破坏）。**边界裁定**：零 route/migration/UI/worker（候选确认·应用归 META-39 → 届时起独立端点 ADR + Opus PASS，MUST-8）；external_fetch_log provider TEXT 无 CHECK + PROVIDER_KEYS 已含 tmdb → 埋点零 migration；EXTERNAL_PROVIDERS.tmdb planned→active 归 ADR-188 external-resources。门禁 typecheck EXIT=0 + lint EXIT=0（仅既有 warning）+ test:changed 45 passed（tmdb 14 新 + 凭证服务/路由零回归）+ verify:adr-contracts EXIT=0；test:e2e N/A（纯 lib 无 spec，META-34/37-B 先例）。14 新单测。详见 changelog [META-38]。执行模型: claude-opus-4-8
    - 解锁：META-39（TMDB 候选确认与应用，opus；首个新增 admin route 卡 → 起独立端点 ADR）。
-9. **META-39** — Phase 5B：TMDB 候选确认与应用流程（状态：⬜ 后排，依 META-38 + META-32）
+9. **META-39** — Phase 5B：TMDB 候选确认与应用流程（状态：🔄 进行中 2026-06-14，依 META-38 ✅ + META-32 ✅；ADR-202 已落库 + 双轮 arch-reviewer CONDITIONAL-PASS；拆 -A/-B）
    - 建议模型：opus（跨增强流程、外部 ref 写入、审核 UI）
    - 范围：TMDB candidate/ref 写入，人工确认后应用到 catalog/video；状态进入 `MetadataStatusSummary`；冲突/低置信走需复核。
+   - **前置 ADR-202 已落库**（decisions.md，D-202-1~8 + 3 端点契约 + FU-202-1/2/3）；子代理 arch-reviewer (claude-opus-4-8, a2afa5615397986dd〔D-1~7〕 + a7c8e6a117a6ecc4d〔D-8 多语言〕)；真实 API 实测验证 TMDB 多语言三变体（zh-CN/zh-TW/zh-HK）对应 ADR-174/175 简繁结构。
+   - 9a. **META-39-A** — 端点 ADR 落库 + 后端 search/confirm/reject + TmdbConfirmService + 核心标量应用 + mapTmdbGenres（状态：🔄 进行中 2026-06-14）
+     - 建议模型：opus
+     - 范围：ADR-202 落库（首 commit ✅）→ `routes/admin/moderation.tmdb.ts`（3 端点 `/admin/videos/:id/tmdb-{search,confirm,reject}`）→ `TmdbConfirmService`（search/confirm/reject，单事务 D-202-2）→ 复用 resolveAndWriteExactRef/insertCandidateRef/safeUpdate/upsertVideoExternalRef + 新增 `mapTmdbGenres`（movie+tv 两套 id）+ 核心标量映射 D-202-8（M1/M3/M4/M5，imdb cache-only fill-if-empty）→ 单测 + 集成测。零 migration。
+     - 边界：external_kind 仅 movie→exact / tv-season→exact 两路径，tv-show-root 落 candidate（D-202-1）；无 pending 守卫（D-202-6）；冲突走 422 不 409（D-202-4）；title_en/translations→aliases 移出（FU-202-1/2）。
+   - 9b. **META-39-B** — 审核 UI：TabMetadata onAction 接线 + 候选搜索/对比/确认/拒绝（状态：⬜ 待 -A）
+     - 建议模型：opus
+     - 范围：`TabMetadata` 接 `MetadataStatusPanel.onAction`（confirm_candidate/review_conflict）+ 候选搜索/对比/确认/拒绝交互 + 覆盖 bangumi/locked 字段标 danger（D-202-3）+ e2e。
