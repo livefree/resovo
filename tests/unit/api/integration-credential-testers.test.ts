@@ -3,7 +3,7 @@
  * ADR-173 D-173-6 provider 连接测试适配器 + lib testConnection 单测（META-27 / Card B1）
  *
  * 覆盖：bangumi（/v0/me valid·invalid / 无 token /calendar not_required / 网络错误）
- *       tmdb（Bearer /authentication valid·invalid / 无 token）
+ *       tmdb（Bearer /authentication valid·invalid / api_key query 兼容 / Bearer 优先 / 429 warn / 皆缺 none）
  *       testers 注册表分派（bangumi/tmdb 路由 + douban/imdb unsupported）
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
@@ -58,27 +58,58 @@ describe('bangumi.testConnection（ADR-173 D-173-6）', () => {
   })
 })
 
-describe('tmdb.testConnection（ADR-173 D-173-6 Bearer）', () => {
-  it('有 token + 200：valid，发送 Authorization: Bearer', async () => {
+describe('tmdb.testConnection（ADR-201 Bearer 首选 / API Key 兼容）', () => {
+  it('有 read_access_token + 200：valid，发送 Authorization: Bearer', async () => {
     fetchMock.mockResolvedValue(res({ ok: true }))
-    const r = await tmdbTest({ token: 'rat' })
+    const r = await tmdbTest({ readAccessToken: 'rat' })
     expect(r.ok).toBe(true)
     expect(r.authStatus).toBe('valid')
+    expect(r.authMethod).toBe('bearer')
     const headers = fetchMock.mock.calls[0][1].headers as Record<string, string>
     expect(headers.Authorization).toBe('Bearer rat')
     expect(String(fetchMock.mock.calls[0][0])).toContain('/authentication')
   })
 
-  it('有 token + 401：invalid', async () => {
+  it('有 read_access_token + 401：invalid', async () => {
     fetchMock.mockResolvedValue(res({ ok: false, status: 401 }))
-    const r = await tmdbTest({ token: 'bad' })
+    const r = await tmdbTest({ readAccessToken: 'bad' })
     expect(r.ok).toBe(false)
     expect(r.authStatus).toBe('invalid')
   })
 
-  it('无 token：ok=false 且不发请求', async () => {
+  it('仅 api_key + 200：valid，走 query ?api_key=（不发 Authorization）', async () => {
+    fetchMock.mockResolvedValue(res({ ok: true }))
+    const r = await tmdbTest({ apiKey: 'k3' })
+    expect(r.ok).toBe(true)
+    expect(r.authMethod).toBe('api_key')
+    const url = String(fetchMock.mock.calls[0][0])
+    expect(url).toContain('api_key=k3')
+    expect(url).toContain('/authentication')
+    const headers = (fetchMock.mock.calls[0][1].headers ?? {}) as Record<string, string>
+    expect(headers.Authorization).toBeUndefined()
+  })
+
+  it('read_access_token 与 api_key 并存：Bearer 优先（不拼 api_key query）', async () => {
+    fetchMock.mockResolvedValue(res({ ok: true }))
+    const r = await tmdbTest({ readAccessToken: 'rat', apiKey: 'k3' })
+    expect(r.authMethod).toBe('bearer')
+    const headers = fetchMock.mock.calls[0][1].headers as Record<string, string>
+    expect(headers.Authorization).toBe('Bearer rat')
+    expect(String(fetchMock.mock.calls[0][0])).not.toContain('api_key=')
+  })
+
+  it('429：warn 不标 invalid（provider 暂时不可用，ADR-201 §连接测试）', async () => {
+    fetchMock.mockResolvedValue(res({ ok: false, status: 429 }))
+    const r = await tmdbTest({ readAccessToken: 'rat' })
+    expect(r.ok).toBe(false)
+    expect(r.authStatus).toBeUndefined() // 不标记凭证无效
+    expect(r.error).toContain('429')
+  })
+
+  it('read_access_token 与 api_key 皆缺：ok=false 且不发请求', async () => {
     const r = await tmdbTest({})
     expect(r.ok).toBe(false)
+    expect(r.authMethod).toBe('none')
     expect(r.error).toBeTruthy()
     expect(fetchMock).not.toHaveBeenCalled()
   })
@@ -94,10 +125,12 @@ describe('testProviderCredential 注册表分派', () => {
     expect(String(fetchMock.mock.calls[0][0])).toContain('/v0/me')
   })
 
-  it('tmdb → 分派到 tmdb 适配器（Bearer）', async () => {
+  it('tmdb → 分派到 tmdb 适配器（read_access_token Bearer）', async () => {
     fetchMock.mockResolvedValue(res({ ok: true }))
-    const r = await testProviderCredential('tmdb', resolved({ token: 'rat' }))
+    const r = await testProviderCredential('tmdb', resolved({ read_access_token: 'rat' }))
     expect(r.authStatus).toBe('valid')
+    const headers = fetchMock.mock.calls[0][1].headers as Record<string, string>
+    expect(headers.Authorization).toBe('Bearer rat')
     expect(String(fetchMock.mock.calls[0][0])).toContain('/authentication')
   })
 

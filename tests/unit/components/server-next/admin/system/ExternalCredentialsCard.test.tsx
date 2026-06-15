@@ -72,6 +72,19 @@ describe('ExternalCredentialsCard', () => {
     expect(tokenInput().getAttribute('type')).toBe('password')
     expect(screen.getByTestId('integration-bangumi-status').textContent).toContain('已配置')
     expect(screen.getByTestId('integration-tmdb-status').textContent).toContain('未配置')
+    // tmdb auth_method：双 secret 字段皆空 → 未配置（ADR-201 22811）
+    expect(screen.getByTestId('integration-tmdb-auth-method').textContent).toContain('未配置')
+  })
+
+  it('tmdb 已配 read_access_token：auth_method 显示 Bearer 首选', async () => {
+    getMock.mockResolvedValueOnce([
+      BANGUMI_VIEW,
+      { ...TMDB_VIEW, values: { ...TMDB_VIEW.values, read_access_token: '••••rat9' }, configured: true },
+    ])
+    render(<ExternalCredentialsCard />)
+    await waitFor(() => screen.getByTestId('integration-card-tmdb'))
+    expect(screen.getByTestId('integration-tmdb-auth-method').textContent).toContain('Bearer')
+    expect(screen.getByTestId('integration-tmdb-status').textContent).toContain('已配置')
   })
 
   it('secret 字段显隐切换', async () => {

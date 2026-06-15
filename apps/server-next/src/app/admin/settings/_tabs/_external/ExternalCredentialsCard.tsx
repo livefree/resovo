@@ -67,6 +67,16 @@ function authStatusLabel(s: CredentialTestResult['authStatus']): string {
   return ''
 }
 
+/**
+ * tmdb 专属：从已保存遮罩 values 派生当前生效认证方式（Bearer 优先，ADR-201 22811）。
+ * read_access_token / api_key 遮罩值非空即代表该字段已配置。
+ */
+function tmdbAuthMethodLabel(values: Record<string, string>): string {
+  if (values.read_access_token) return 'Bearer Read Access Token（首选）'
+  if (values.api_key) return 'API Key（v3 兼容）'
+  return '未配置'
+}
+
 interface ProviderCardProps {
   spec: ProviderCredentialSpec
   view: IntegrationCredentialView
@@ -177,6 +187,11 @@ function ProviderCredentialCard({ spec, view, onSaved }: ProviderCardProps) {
         <span style={{ color: view.configured ? 'var(--state-success-fg)' : 'var(--fg-muted)' }}>
           {view.configured ? '✅ 已配置' : '未配置'}
         </span>
+        {spec.provider === 'tmdb' && (
+          <span style={{ marginLeft: '12px' }} data-testid="integration-tmdb-auth-method">
+            认证方式：{tmdbAuthMethodLabel(view.values)}
+          </span>
+        )}
         {view.lastTestedAt && (
           <span style={{ marginLeft: '12px' }}>
             上次测试：{new Date(view.lastTestedAt).toLocaleString()} ·{' '}

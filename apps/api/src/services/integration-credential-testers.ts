@@ -36,7 +36,8 @@ const bangumiTester: Tester = (resolved) =>
 
 const tmdbTester: Tester = (resolved) =>
   tmdbLib.testConnection({
-    token: str(resolved.fields.token),
+    readAccessToken: str(resolved.fields.read_access_token),
+    apiKey: str(resolved.fields.api_key),
     baseUrl: str(resolved.fields.baseUrl),
     language: str(resolved.fields.language),
   })

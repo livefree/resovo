@@ -5765,3 +5765,24 @@
 - **arch-reviewer gate**：CONDITIONAL-PASS，C1（migration 空串守卫）/C2（LEGACY_KV_MAP 改 api_key）/C3（测试 fixture 同步）/C4（清陈旧注释）+ Y1（key 风格注释）/Y2（KV 意图注释）/Y3（spec 描述更新）全采纳；裁定 snake_case 字段 key 维持（遵循 ADR 字面 + TMDB 官方协议名 + 与 B 卡 `?api_key=` 零转换）。复用同一 gate 到 META-37-B。
 - **解锁**：META-37-B（lib·tmdb 双路 testConnection + loadTmdbClientConfig + tmdbTester + UI auth_method 展示）。
 - **[AI-CHECK]**：六问过——①根因=TMDB 凭证沿用 ADR-173 占位单字段 token（语义即 Bearer）与 legacy tmdb_api_key（实为 v3 key）错配映射，无法表达 Bearer/API Key 双认证；②零回归（test:changed 全量 7551 passed，service/UI spec 驱动自动适配双字段）；③边界=A 仅契约+迁移两层，不删旧 KV（归 META-29）、不改 service/UI 逻辑、architecture.md 不改（非 schema 变更）；④复用=spec+secret flag 既有遮罩/占位/审计管线零改、共享 makeDb fixture；⑤无 any / 无空 catch / 迁移纯静态 SQL 无用户输入拼接 / snake_case key 经 arch-reviewer 裁定；⑥范围契约+迁移单一验收口径，C1–C4+Y1–Y3 全落地。
+
+## [META-37-B] lib·tmdb 双路 testConnection + loadTmdbClientConfig + tmdbTester + UI auth_method 展示
+- **完成时间**：2026-06-14
+- **记录时间**：2026-06-14 19:50
+- **执行模型**：claude-opus-4-8（主循环连续推进，偏离卡片 sonnet 建议、无强制升降触发；复用 META-37-A arch-reviewer gate）
+- **子代理**：无（TmdbClientConfig 为 apps/api 内部接口非 packages 公开契约 / ExternalCredentialsCard 为 server-next app 组件非 admin-ui Props / 无新端点）
+- **修改文件**：
+  - `apps/api/src/lib/tmdb.ts` — `TmdbClientConfig.token` → `readAccessToken`(v4 Bearer) + `apiKey`(v3)；`testConnection` 双路：Bearer 首选（Authorization: Bearer）/ api_key 兼容（query `?api_key=`，encodeURIComponent）/ 429 warn 不标 invalid / 皆缺→none；导出 `resolveTmdbAuthMethod`（Bearer>api_key>none）+ `TmdbAuthMethod` 类型 + `TmdbTestResult.authMethod`。
+  - `apps/api/src/services/tmdb-config.ts` — 新建 `loadTmdbClientConfig`（对齐 bangumi-config.ts，委托 `loadProviderCredential('tmdb')`，read_access_token/api_key/baseUrl/language 仅注入有值字段，Bearer+api_key 并存交消费点 `resolveTmdbAuthMethod` 派生）。
+  - `apps/api/src/services/integration-credential-testers.ts` — tmdbTester 取 `read_access_token`/`api_key`（替原 `token`）。
+  - `apps/server-next/src/app/admin/settings/_tabs/_external/ExternalCredentialsCard.tsx` — tmdb 卡状态行派生 auth_method badge（`tmdbAuthMethodLabel`：read_access_token→Bearer 首选 / api_key→API Key v3 / 皆空→未配置，基于已保存 view.values；`provider==='tmdb'` 特化，server-next app 内非 admin-ui Props，testid `integration-tmdb-auth-method`）。
+  - `tests/unit/api/integration-credential-testers.test.ts` — tmdb describe 重写（read_access_token Bearer valid/invalid + api_key query 兼容 + Bearer 优先 + 429 warn + 皆缺 none）+ 分派 tmdb 取 read_access_token 断言 Authorization。
+  - `tests/unit/api/tmdb-config.test.ts` — 新建（loadTmdbClientConfig 映射 / Bearer+api_key 并存 / 缺行 legacy KV→apiKey 不回填 Bearer / disabled 返回空）。
+  - `tests/unit/components/server-next/admin/system/ExternalCredentialsCard.test.tsx` — auth_method 断言（皆空→未配置 + 已配 read_access_token→Bearer）。
+- **数据库变更**：无（B 纯服务/客户端/UI 消费层，复用 META-37-A 契约+迁移）。
+- **架构发现/边界**：① UI auth_method 不经后端透传——前端从遮罩 view.values 派生（read_access_token/api_key 遮罩值非空即已配置），CredentialTestResult/View 不扩 authMethod（lib `TmdbTestResult.authMethod` 仅供测试断言 + META-38 透传储备），避免跨 DTO 加未消费字段；② `TmdbClientConfig` 重构（token→readAccessToken）经 typecheck 全量验证无遗漏消费方（仅 tmdbTester + tmdb-config）；③ `resolveTmdbAuthMethod` 导出供服务端消费点（loadTmdbClientConfig 后 + 测试）；④ `provider==='tmdb'` 特化属 server-next app 内（非 admin-ui 共享 Props，不污染共享层）。
+- **测试覆盖**：+9 it（testers tmdb 双路重写净 +4〔api_key/Bearer 优先/429/none 拆分〕 + tmdb-config 新 4 + ExternalCredentialsCard auth_method 新 1）；integration-credentials + tmdb-config 6 文件 52 passed（SettingsTab 15 零回归）。
+- **质量门禁**：typecheck 全工作区 EXIT=0（TmdbClientConfig 重构无破坏消费方） / lint 零本卡警告 / test:changed 增量 6 文件 52 passed / verify:adr-contracts EXIT=0（endpoint-adr 240 对齐〔无新端点〕 + sql-schema-alignment 对齐 + admin-shell-types-mirror 对齐）。test:integration N/A（无新 query/SQL）；**test:e2e:admin N/A**（无 settings/凭证卡 e2e spec，回归面为单测，与 META-34 先例一致）。
+- **复用 gate**：META-37-A arch-reviewer (claude-opus-4-8, agentId a6c0adf46c51267c5) CONDITIONAL-PASS 已覆盖整体 A+B 方案（lib 双路 / loadTmdbClientConfig / tmdbTester / UI auth_method 在评审 prompt B 卡方案段已审），B 未偏离故未再 spawn。
+- **META-37 全收口**：-A（字段拆分+迁移+KV 映射）+ -B（lib 双路+loader+tester+UI auth_method）闭环。**Phase 4 TMDB 凭证语义修订完成**：read_access_token（Bearer 首选）/ api_key（v3 兼容）分离、连接测试双路 + 429 warn、loadTmdbClientConfig 对齐 bangumi、UI 区分认证方式；协调 META-29（旧 KV 物理退役仍归 Card D，A/B 仅修正映射不删 KV）。后续 META-38（TMDB API client search/detail MVP）。
+- **[AI-CHECK]**：六问过——①根因=A 卡拆字段后 lib/服务/UI 需接新字段并实现 Bearer/API Key 双路 + auth_method 展示；②零回归（typecheck 全绿验证 TmdbClientConfig 重构无遗漏消费方、test:changed 52 passed、SettingsTab 零回归）；③边界=B 消费层不改 packages 公开契约/admin-ui Props/无端点、UI auth_method 前端派生不扩后端 DTO；④复用=loadProviderCredential 通用解析器 + bangumi-config 薄封装范式 + 共享 makeDb fixture；⑤无 any / 无空 catch / api_key query encodeURIComponent 防注入 / 零硬编码色（auth_method span 用既有 HINT_STYLE token）；⑥范围 lib+loader+tester+UI 四点单一验收口径（按 Bearer 首选/API Key 兼容取新字段 + 展示 auth_method），全落地。
