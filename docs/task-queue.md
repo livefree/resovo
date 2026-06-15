@@ -2537,7 +2537,7 @@
 
 ## [SEQ-20260615-01] 元数据字段枚举兼容性治理
 
-- **状态**：🔄 进行中（META-40 ✅ + META-41-A ✅ + META-41-B ✅ + META-42 ✅ + META-43 ✅ + META-44-A ✅ + META-44-B ✅ 2026-06-15〔+ 旁路 META-37-A-FIX Codex P2×2〕 → 下一 META-45〔Genre 颗粒度增强，🟢 低，需 ADR + 扩枚举跨 3+ 消费方强制 Opus 子代理〕）
+- **状态**：🔄 进行中（META-40~44-B ✅ + META-45-A ✅ 2026-06-15〔+ 旁路 META-37-A-FIX Codex P2×2〕 → 下一 META-45-B〔仅 Part A 实施，用户拍板不加 drama〕，序列末张）
 - **创建时间**：2026-06-15 00:30
 - **最后更新时间**：2026-06-15 01:10（用户评审 B+ 后修订：范围补 server-next / META-40 收敛真源 / META-41·44 拆 -A/-B / cast 后排 / META-43 source 口径 / 逐卡门禁）
 - **目标**：修复 douban/bangumi/tmdb 三源元数据字段（类型/题材/地区/图片）与本地枚举的兼容缺口——含 1 项数据正确性 bug（实证）+ 4 项能力闲置 + 1 项设计权衡。
@@ -2623,11 +2623,15 @@
    - **门禁**：typecheck + lint + test:changed（type 经 safeUpdate 不改归并 SQL → 单测足够，无需 e2e；集成测覆盖锁/优先级/provenance）。
    - **依赖**：**META-44-A ✅**（ADR-203 Accepted）。
 
-8. **META-45** — Genre 颗粒度增强（🟢 低 / 设计权衡，需 ADR）（状态：⬜ 待办）
-   - 创建时间：2026-06-15 00:30
-   - 建议模型：opus（扩 VIDEO_GENRES 枚举跨多消费方，须 ADR）
-   - **问题**：① drama/剧情 三源全丢（本地无对应 genre，被设计为「万能标签」，但确实丢信息）；② TMDB 组合类目损半（`Action & Adventure(10759)→action` 丢 adventure / `Sci-Fi & Fantasy(10765)→sci_fi` 丢 fantasy / `War & Politics→war`）；③ 多对一坍缩普遍降颗粒度。
-   - **方案**：① 评估是否扩 `VIDEO_GENRES`（加 `drama`？——跨前台筛选/后台/admin-ui 多消费方 + ADR-157 枚举 SSOT，**须起 ADR**）；② TMDB 组合类目可否拆双 genre（10759→[action,adventure]，不扩枚举可先做）；③ 决策「保持坍缩 vs 扩枚举」权衡。
-   - **文件范围**：待 ADR 定（`packages/types/src/video.types.ts` VIDEO_GENRES + genreMapper 三表 + 全消费方）。
-   - **门禁**：verify:adr-contracts（ADR）；若扩枚举 → 全消费方 typecheck + lint + test:changed。
-   - **依赖**：最低优先；扩枚举须先起 ADR（跨 3+ 消费方，CLAUDE.md 强制 Opus 子代理）。
+8. **META-45-A** — Genre 颗粒度 ADR-204（🟢 低 / 设计权衡，强制 ADR）（状态：✅ 已完成 2026-06-15）
+   - **完成备注**：✅ 2026-06-15。**ADR-204 Accepted**（docs/decisions.md）。spawn arch-reviewer (claude-opus-4-8, agentId a5d9c4c0d1e25ffdc) CONDITIONAL PASS。D-204-1 **Part A 采纳**（TMDB 组合类目拆双：10759→[action,adventure]/10765→[sci_fi,fantasy]/10768→war，映射已有枚举零枚举改，TMDB_GENRE_MAP 单值→`VideoGenre|VideoGenre[]|null` + mapTmdbGenres 展开分支）/ D-204-2 **Part B drama 不加**（**用户拍板**，arch-reviewer 同向：drama 信息熵接近零稀释筛选维度 / 损失被兜底吸收 / 爆炸半径 9 处 vs 收益不对称 / 不加可逆 + follow-up 触发条件 + 加 drama 完整蓝图备查）/ D-204-3 其余坍缩合理 / D-204-4 META-45-B 蓝图（仅 Part A，7 单测覆盖点）/ D-204-5 边界 + O-204-1/2/3 观察登记。**arch-reviewer 补出 3 处遗漏消费方**（verify-enum-ssot.mjs:32 守卫 / web-next 两份 GENRE_LABELS 仅 15 值 / route-codenames 非 genre 消费方 prompt 误列）。零 migration（genres text[] 无 CHECK）。门禁 verify:adr-contracts EXIT=0（243 路由对齐，docs-only 无新端点）。docs-only。执行模型 claude-opus-4-8；子代理 arch-reviewer (claude-opus-4-8, a5d9c4c0d1e25ffdc)。详见 changelog [META-45-A]。**解锁 META-45-B（仅 Part A 实施）。**
+   - 创建时间：2026-06-15 00:30（拆 -A/-B 2026-06-15）
+   - 建议模型：opus（**强制 arch-reviewer**）
+
+9. **META-45-B** — Genre 颗粒度实施（🟢 低）（状态：⬜ 待办，依赖 META-45-A ✅ ADR-204 PASS）
+   - 创建时间：2026-06-15（拆卡）
+   - 建议模型：sonnet（仅 Part A，零枚举改、单文件 + 单测，无强制 Opus 触发——用户已拍板不加 drama，无跨消费方扩枚举）
+   - **范围（仅 Part A，D-204-4）**：`genreMapper.ts`——`TMDB_GENRE_MAP` 值类型改 `VideoGenre | VideoGenre[] | null`（非 readonly 规避 Array.isArray 窄化）+ 10759→[action,adventure] / 10765→[sci_fi,fantasy]（10768→war 保单值）+ `mapTmdbGenres` 循环加数组展开分支；单测 7 覆盖点（拆双 ×2 + 10768 单值 + 28+10759 去重 + 10759+12 去重 + 单值回归 35 + null 回归 [18,16,99]）。**不加 drama**（用户拍板，D-204-2）。
+   - **文件范围**：`apps/api/src/lib/genreMapper.ts` / 单测（扩 genreMapper.test 或 tmdb-confirm-service.test mapTmdbGenres 块）。
+   - **门禁**：typecheck + lint + test:changed（零枚举改 → 仅 api，无跨消费方）。
+   - **依赖**：**META-45-A ✅**（ADR-204 PASS）。

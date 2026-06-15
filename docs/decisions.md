@@ -23025,3 +23025,37 @@ ADR-201（TMDB 接入前置 UI/UX + 实施顺序）/ ADR-176（按季粒度 cata
 ### 关联 ADR
 
 ADR-186（fill-if-empty 同源保守哲学，但语义不同：186 是「列 NULL 才填」外部 ID cache、203 是「值 other 兜底才填」枚举字段，D-203-4 边界隔离不混通路）/ ADR-202（D-202-3 同级争用 + D-202-8 mapTmdbGenres 复用 genre 表 SSOT）/ ADR-174（D-174-3 redirect 真去重 + isRedirectSafe，D-203-3 红线①正面处理 type 守卫二阶耦合）/ ADR-176（按季粒度，Step-5 含 season_number，type 写回不触及季维度）/ ADR-157（VIDEO_TYPES 枚举 SSOT）/ ADR-170（bangumi anime 门控背景，D-203-7.7 不即时回灌）。
+
+---
+
+## ADR-204：Genre 颗粒度增强 — TMDB 组合类目拆双 genre（采纳）+ drama 枚举（不加，保守坍缩）
+
+**状态**：Accepted（2026-06-15）｜**决策者**：arch-reviewer (claude-opus-4-8, agentId a5d9c4c0d1e25ffdc) CONDITIONAL PASS｜**主循环**：claude-opus-4-8｜**产品裁定**：用户拍板「不加 drama」（2026-06-15）｜**序列**：SEQ-20260615-01 META-45-A（实施 META-45-B）
+
+### 背景
+
+`VIDEO_GENRES`（`packages/types/src/video.types.ts`）20 值无 drama。genre 映射真源 `genreMapper.ts` 现状两处颗粒度损失：① TMDB 组合类目损半（`10759 Action&Adventure→action` 丢 adventure / `10765 Sci-Fi&Fantasy→sci_fi` 丢 fantasy / `10768 War&Politics→war`，politics 无对应 genre）；② drama/剧情 三源全丢（mapTmdbGenres `18→null` / mapDoubanGenres `剧情·Drama→null`，注释「万能标签 不携带信息」）。
+
+**事实核验关键结论**（arch-reviewer）：adventure/fantasy/war 均已在 VIDEO_GENRES（Part A 零枚举改）；mapTmdbGenres 返回 `VideoGenre[]` 已支持多值；`TMDB_GENRE_MAP` 是单值 `Record<number, VideoGenre|null>` 需改结构才能一 id→多 genre；`media_catalog.genres` 是 `text[]` 无 CHECK → 加枚举值零 migration。**消费方清单（含 arch-reviewer 补出的 3 处遗漏）**：加 drama 需同步 9 处——VIDEO_GENRES 枚举 / genreMapper 两表 / admin-ui videoGenreOptions FALLBACK + i18n key / web-next DetailHero + VideoDetailHero 两份 GENRE_LABELS（当前仅 15 值靠 `?? genre` 回退）/ **`scripts/verify-enum-ssot.mjs:32` SSOT 守卫脚本（遗漏项，不改则守卫漏检漂移）**；route-codenames **非** genre 消费方（prompt 误列）；web-next genre 仅详情页展示 chip 无 URL 筛选维度。
+
+### 决策
+
+**D-204-1（Part A：TMDB 组合类目拆双 genre，采纳，零枚举改）**：`mapTmdbGenres` 改 `10759→[action,adventure]` / `10765→[sci_fi,fantasy]` / `10768→war`（politics 无 genre 保单值）。`TMDB_GENRE_MAP` 值类型 `VideoGenre | VideoGenre[] | null`，`mapTmdbGenres` 循环加数组展开分支（Set 去重已保证 28+10759 不重复 action）。目标 genre 全已在枚举 → 零消费方影响、返回类型不变、向后兼容（ADR-202 D-202-8 调用契约不破）。**风险低**——唯一注意 `Array.isArray` 对 readonly 数组不窄化，用非 readonly `VideoGenre[]` 值类型规避 + 单值/数组/null 三路径单测全覆盖。
+
+**D-204-2（Part B：drama 枚举，裁定不加，保持坍缩）**：**用户拍板不加 drama**（arch-reviewer 评估同向）。论证：① drama 信息熵接近零（TMDB 18 覆盖率最高 / 豆瓣「剧情」几乎贴所有非纯类型片）→ 加入后成最高频最无区分度值，**稀释 genre 筛选维度价值**（正是原设计刻意 null 的根因，今日依然成立）；② 纯剧情作品 genres 空的损失被现有兜底吸收（VideoType 承载形式 + web-next `genres.length>0` 守卫 + `videos.internal.ts` `?? []`），仅「详情页少一 chip」，产品价值 < 全局维度被稀释代价；③ 爆炸半径 9 处 vs 收益不对称；④ 不加可逆、加后撤回需清洗存量 drama 单向成本更高；⑤ web-next genre 当前仅展示 chip 无可筛选维度，drama 加入也非可浏览档。**follow-up 触发条件（满足任一起卡重评）**：web-next 上线 genre 可筛选/可浏览维度且产品要求「剧情」作为一档 / 数据观测纯剧情向作品（genres 空 + type∈{movie,series}）占比显著被运营反馈 / 出现「drama 需作为正交标签独立共存」明确产品语义（届时评估走 tags 而非 genre）。**加 drama 完整蓝图（备查，本期不执行）**：VIDEO_GENRES +`'drama'` → genreMapper 两表 `剧情/Drama/18→'drama'` → admin-ui FALLBACK + i18n `videoGenre.drama` → web-next 两份 GENRE_LABELS + 补 `verify-enum-ssot.mjs:32` SSOT 脚本 + 单测，零 migration。
+
+**D-204-3（其余过度坍缩扫描）**：除 Part A 三项外，TMDB_GENRE_MAP 其余组合/null 项合理（10770 TV Movie / 10762 Kids / 10763 News / 10764 Reality / 10766 Soap / 10767 Talk 是形式非题材或由 VideoType 承载，type 修正属 ADR-203/META-44 范畴不在本 ADR）；DOUBAN_GENRE_MAP 无组合类目损半（Thriller/Mystery→mystery、黑色电影→mystery 是可接受近似归并）。本期不产生额外改动。
+
+**D-204-4（META-45-B 实施蓝图）**：仅 Part A（D-204-2 不加 drama 故无 Part B 代码）——`genreMapper.ts` TMDB_GENRE_MAP 值类型 + 10759/10765 改数组 + mapTmdbGenres 展开分支；单测 7 覆盖点（10759→[action,adventure] / 10765→[sci_fi,fantasy] / 10768→[war] / 28+10759 去重 / 10759+12 adventure 去重 / 单值回归 35→[comedy] / null 回归 [18,16,99]→[]）。
+
+**D-204-5（边界）**：① 不加 drama 枚举；② 不回填存量 catalog.genres（仅新富集生效，对齐 ADR-203 不跑存量；Part A 只影响新走 mapTmdbGenres 的富集）；③ 不动 mapSourceCategory / `SourceParserService.maps.ts '剧情片'→'other'`（越界）；④ 不动 VideoType 修正（ADR-203 范畴）；⑤ 不引入 genre URL segment / 可筛选维度（drama follow-up 前置）；⑥ 不补 web-next 两份 GENRE_LABELS 的 5 个存量缺失值（adventure/disaster/musical/western/sport，靠 `?? genre` 回退不破坏渲染，另起独立卡，O-204-3）。
+
+### Observation 登记（不阻塞）
+
+- **O-204-1**：DOUBAN_GENRE_MAP `黑色电影/Film-Noir→mystery`、`Thriller/Mystery→mystery` 是可接受近似归并，无信息损半。
+- **O-204-2**：`SourceParserService.maps.ts '剧情片'→'other'` 与 drama 决策间接相关——若未来加 drama 应一并评估，本期不加故保持 other 不动。
+- **O-204-3**：web-next DetailHero/VideoDetailHero 两份 GENRE_LABELS 仅 15 值（缺 adventure/disaster/musical/western/sport），既有 debt，靠 `?? genre` 回退，另起独立卡治理（不在本 ADR 范围，避免顺手优化范围外文件）。
+
+### 关联 ADR
+
+ADR-157（VIDEO_GENRES SSOT，D-204-1 不碰枚举完全合规 / D-204-2 不加枚举避免触发跨层改造与 D-157-4 守卫同步成本）/ ADR-202（D-202-8 M5 mapTmdbGenres 来源，Part A 在其内增强不改调用契约）/ ADR-203（META-44 富集不跑存量，D-204-5 不回填对齐）。
