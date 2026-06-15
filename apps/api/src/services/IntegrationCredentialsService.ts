@@ -138,15 +138,18 @@ export class IntegrationCredentialsService {
     const submittedSecretKeys = new Set(Object.keys(secrets))
 
     // 旧 secret key 固化迁移（ADR-201 22823「写入只走新字段」）：DB 残留旧 key（如 tmdb.token）→
-    // upsert 一律删旧 key；本次未提交新 key 时把旧值迁入新 key（防删旧 key 后凭证丢失，或清空仍被
-    // loader fallback 读旧值致清空无效）。本次提交了新 key（含清空）则用提交值，旧 key 仅删除。
+    // upsert 一律删旧 key；本次未提交新 key 时，把「规范化后」的新 key 值写回固化。规范化（normalizeRowSecrets）
+    // 保证新 key 优先——DB 已有较新 read_access_token 时不被陈旧 token 覆盖，仅当新 key 缺失/空才用旧 token 值。
+    // 本次提交了新 key（含清空）则用提交值，旧 key 仅删除。
     const dropSecretKeys: string[] = []
     const beforeSecrets = before?.secrets ?? {}
+    const beforeNormalized = before ? normalizeRowSecrets(provider, beforeSecrets) : {}
     for (const [newKey, oldKey] of Object.entries(LEGACY_ROW_SECRET_KEYS[provider] ?? {})) {
       if (!oldKey || beforeSecrets[oldKey] === undefined) continue
       dropSecretKeys.push(oldKey)
-      if (!(newKey in secrets) && typeof beforeSecrets[oldKey] === 'string') {
-        secrets[newKey] = beforeSecrets[oldKey]
+      if (!(newKey in secrets)) {
+        const normVal = beforeNormalized[newKey]
+        if (typeof normVal === 'string' && normVal !== '') secrets[newKey] = normVal
       }
     }
 

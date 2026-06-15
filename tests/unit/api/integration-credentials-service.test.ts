@@ -160,6 +160,19 @@ describe('IntegrationCredentialsService.save', () => {
     expect(arg.dropSecretKeys).toEqual(['token'])
     expect(arg.secrets).toEqual({ read_access_token: '' }) // 提交空 → 不固化，token 删除 → loader 读不到 → 真清空
   })
+
+  it('旧+新并存行：DB token(陈旧) + read_access_token(较新) + 只改 baseUrl → 删 token，不用陈旧 token 覆盖较新凭证', async () => {
+    mGetRow.mockResolvedValue(
+      makeRow({ provider: 'tmdb', secrets: { token: 'stale-old', read_access_token: 'fresh-new' }, config: {} }) as never,
+    )
+    const svc = new IntegrationCredentialsService(db)
+    await svc.save('tmdb', { baseUrl: 'https://x/3' }, 'admin-1', 'req-1')
+    const arg = mUpsert.mock.calls[0]![1]
+    expect(arg.dropSecretKeys).toEqual(['token'])
+    // 规范化优先新值：read_access_token 保留 'fresh-new'，绝不被陈旧 token 'stale-old' 覆盖
+    expect(arg.secrets).toEqual({ read_access_token: 'fresh-new' })
+    expect(arg.config).toEqual({ baseUrl: 'https://x/3' })
+  })
 })
 
 describe('IntegrationCredentialsService.test', () => {
