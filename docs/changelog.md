@@ -5670,3 +5670,30 @@
 - **质量门禁**：typecheck 全工作区 EXIT=0 / lint 4 successful（4 warning 全既有文件 AuditClient/CrawlerRunsView/SourcesClient/TabImages，非本卡）/ test:changed 5 文件 29 passed（依赖图含既有 TabDetail 测试零回归）/ verify:adr-contracts EXIT=0（endpoint-adr 240 对齐，仅既有 advisory）。**test:e2e:admin N/A**（`tests/e2e/admin` 仅 dashboard/global-search/notifications-shell/videos/videos-column-resize，无 moderation RightPane spec → 本卡无 e2e 验证增量，回归面为单测；14 moderation 测试文件 83 passed 全绿）。test:integration N/A（无 API/DB/SQL）。
 - **后续**：解锁 META-35（编辑抽屉去 Douban 独占 tab + 元数据工作台，sonnet，消费两原语 + 承接增强动作 onAction）/ META-36（视频库元数据列 UI 排序过滤，sonnet，消费 -A 图标簇 + 文案常量筛选项）。
 - **[AI-CHECK]**：六问过——①纯消费复用 META-33 `MetadataStatusPanel` 原语 + 既有懒加载链路，不重绘不自拼 douban_status/meta_score，回归面由 8 新单测 + 既有 reprobe/episodes/enrichment-cluster 守护（test:changed 29 passed）；②无新共享层（消费 META-33 已沉淀原语，避免审核详情自实现）；③数据源沿用 `extDetail.metadataStatus`（META-32-A 注入），`VideoQueueRow` 形状不变不污染 queue list query，单向依赖 server-next→admin-ui；④无 any / 无空 catch / **零硬编码色**（`META_HINT_STYLE` 用 `var(--font-size-xxs)`/`var(--fg-muted)`，panel 内部 token）；⑤改动收敛于 TabDetail.tsx + 1 新测试 + 1 退役测试更新（必要后果），不改任务范围外文件、不改 admin-ui Props；⑥三态降级守门（懒加载未就绪/失败/空）不阻断其余详情，只读展示不接 onAction（守审核详情状态快查边界，增强动作隔离到 META-35）。
+
+## [META-35] 视频编辑抽屉去 Douban 独占 tab + 元数据状态整合（Phase 3B · IA 整合）
+- **完成时间**：2026-06-14
+- **记录时间**：2026-06-15 09:00
+- **执行模型**：claude-opus-4-8（用户明示自实现，不 spawn sonnet；建议模型 sonnet）
+- **子代理**：无（不改 admin-ui 公开 Props / 不新增端点 → 无强制升 Opus 触发）
+- **背景**：ADR-201 §视频编辑抽屉（decisions.md 22741–22764）+ §实施顺序 4 + META-34 交接（“增强细操作 / bangumi 富视图归 META-35”）。依 META-33 ✅（两原语已建）/ META-32 ✅（`metadataStatus` 已注入 `adminFindById`）。用户范围裁定 = **选项 A「IA 整合 + 复用现有能力」→ 落定 A1**。
+- **修改文件**：
+  - `apps/server-next/src/app/admin/videos/_client/_videoEdit/types.ts` — `TabKey` 去 `douban`/`external` + 加 `metadata`；新增 `normalizeTabKey`（旧深链 `douban`/`external` → `metadata`，ADR-201 §迁移与兼容）。
+  - `apps/server-next/src/app/admin/videos/_client/_videoEdit/TabMetadata.tsx`（新）— 统一「元数据」tab 编排：① `MetadataStatusPanel variant="drawer"` 消费 `video.metadataStatus`（**不传 onAction**）；② `sourceEvidence`=`MetaSourceEvidence`（有证据才注入）；③「Douban 来源关系」区复用 `TabDouban`；`metadataStatus` 缺失三态降级（兜底文案 + 证据/Douban 区不阻断）。
+  - `apps/server-next/src/app/admin/videos/_client/_videoEdit/MetaSourceEvidence.tsx`（新）— server-next 自建「来源证据」块，仅复刻退役 `ExternalMetaPanel` 的 ②真源字段 ③Bangumi 条目 ④角色·声优（主角+配角，cap 8，CV `/` 连接），**不含①四源总览**（与 panel 四来源卡重复）；导出 `hasMetaSourceEvidence` 谓词；零硬编码色。
+  - `apps/server-next/src/app/admin/videos/_client/VideoEditDrawer.tsx` — TABS 5→4（删 `douban`、`external`→`{id:'metadata',label:'元数据'}`）；删 `TabDouban`/`ExternalMetaPanel` 顶级渲染 import → 改渲染 `<TabMetadata>`；`initialTab` 经 `normalizeTabKey` 归一；QUICK_HEAD 头部簇维持既有 `EnrichmentBadgeCluster`（ADR-201 过渡期新旧共存）。
+  - `apps/server-next/src/app/admin/videos/_client/VideoRowActions.tsx` — 行操作「外部元数据」深链 `external`→`metadata` + label 改「元数据」；`douban-sync`（行级豆瓣同步，与 douban tab 无关）不动。
+  - `tests/unit/components/server-next/admin/videos/VideoEditDrawer.test.tsx`（更新）— 扩 api mock（douban fns）；既有「非 basic disabled」断言改 4 tab + metadata；+ META-35 describe（tab 列表去 douban/external、initialTab=metadata 渲染 panel+Douban 区、metadataStatus 缺失三态、旧深链 douban→metadata 选中）+ normalizeTabKey 单测。
+  - `tests/unit/components/server-next/admin/videos/MetaSourceEvidence.test.tsx`（新）— `hasMetaSourceEvidence` 谓词 7 例 + 渲染 4 例（空→null / catalog 字段 / bangumi 条目 / 角色 relation 过滤·CV 连接）。
+- **边界裁定**：
+  - **panel 不传 onAction**——Phase 1 无「重新增强 / 跨源应用字段」端点，`missing→run_enrichment` / `partial→improve_fields` 主按钮 + bangumi 候选 per-card 动作均无支撑；传 onAction 会生死按钮（违反 META-33-B `showNextAction = nextAction!=='none' && !!onAction` + per-card `action && onAction` 原则）。对齐 META-34 detail 只读先例。Douban confirm/ignore 经保留的 `TabDouban` 原生按钮承载，等价满足选项 A「接 douban confirm/ignore」且零回归。
+  - **不改 admin-ui 公开 Props**——用现有 `sourceEvidence` slot；不导出 admin-ui 内部 `BangumiBlock`/`CharactersBlock`（MetaSourceEvidence 自建）→ 无 arch-reviewer / 无 Subagents trailer。
+  - **不新增端点**——重新增强 / 跨源应用字段 / 仅存外部 ID 延后 TMDB phase（META-37+）。
+  - **不越范围（自纠一处）**——QUICK_HEAD 头部四源簇迁移（D-201-3）不在书面方案内，实现时一度迁 `MetadataSourceIconCluster` 触发 `enrichment-cluster-faces` Face 2 失败 → 回退保留 `EnrichmentBadgeCluster`（ADR-201 允许过渡期新旧共存）；头部/视频库列四源簇迁移连同 META-36 一并处理。
+  - `ExternalMetaPanel` 在抽屉的最后消费点移除（组件仍 `@deprecated` 保留供历史引用；不得新增消费点，D-201-2 / §取代关系）。
+- **新增依赖**：无。
+- **数据库变更**：无（纯 server-next UI 消费方接线，复用 META-32-A 注入的 `metadataStatus` + 既有 bangumi/catalog 字段）。
+- **测试覆盖**：+17 新单测（VideoEditDrawer META-35 6 + normalizeTabKey 1 + MetaSourceEvidence 10）；既有 36（VideoEditDrawer 10 + enrichment-cluster-faces 9 + …）零回归。
+- **质量门禁**：typecheck 全工作区 EXIT=0 / lint 4 successful（warning 全既有文件，新文件零警告）/ test:changed 7 文件 91 passed / verify:adr-contracts EXIT=0 / **test:e2e:admin 84/84 passed**（含 `videos.spec` 编辑 Drawer 黄金路径，drawer 结构改动零回归）。test:integration N/A（无 API/DB/SQL）。
+- **后续**：解锁 META-36（视频库元数据列 UI 排序过滤，sonnet）——含 QUICK_HEAD 头部簇 + 视频库列簇从 `EnrichmentBadgeCluster` 迁 `MetadataSourceIconCluster`（D-201-3，本卡定向延后避免越范围）。
+- **[AI-CHECK]**：六问过——①根因=去「每源一 tab」拼装，统一 `MetadataStatusPanel` 四源同级（ADR-201）；②零回归（Douban search/confirm/diff 原样复用 TabDouban，bangumi 富视图等价由 MetaSourceEvidence 承载，basic/lines/images 未动，e2e 黄金路径绿）；③边界=纯 server-next UI 层，不改 admin-ui Props（用 sourceEvidence + 不传 onAction）、不新增端点，**自纠头部簇越范围回退**；④复用 MetadataStatusPanel/TabDouban，MetaSourceEvidence 镜像退役 ExternalMetaPanel ②③④（1 处非 3+ 重复，退役中）；⑤无 any / 无空 catch / 零硬编码色（仅 CSS 变量 token）；⑥死按钮防护=panel 不传 onAction → 主按钮与 per-card 动作均不渲染，对齐 META-33-B。

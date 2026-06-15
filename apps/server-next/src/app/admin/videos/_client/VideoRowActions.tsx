@@ -42,7 +42,8 @@ function buildItems(
   const items: AdminDropdownItem[] = [
     { key: 'edit', label: '编辑基础信息', onClick: onEdit },
     { key: 'images', label: '图片素材', onClick: onImages },
-    { key: 'external', label: '外部元数据', onClick: onExternal },
+    // META-35 / ADR-201：原「外部元数据」深链 external tab → 统一「元数据」tab
+    { key: 'metadata', label: '元数据', onClick: onExternal },
     { key: 'view-lines', label: '查看播放线路', onClick: onViewLines },
   ]
 
@@ -140,7 +141,7 @@ export function VideoRowActions({ row, isAdmin, onRowUpdate, onEditRequest }: Vi
     isAdmin,
     () => { setOpen(false); onEditRequest(row.id) },
     () => { setOpen(false); onEditRequest(row.id, 'images') },
-    () => { setOpen(false); onEditRequest(row.id, 'external') },
+    () => { setOpen(false); onEditRequest(row.id, 'metadata') },
     () => { setOpen(false); onEditRequest(row.id, 'lines') },
     (v) => withOptimistic({ visibility_status: v }, () => updateVisibility(row.id, v)),
     (action) => {

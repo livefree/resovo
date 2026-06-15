@@ -20,6 +20,11 @@ vi.mock('@/lib/videos/api', () => ({
   patchVideoMeta: vi.fn(),
   // CHG-SN-8-FUP-VIDEO-MANUAL-ADD-EP-B / ADR-145：创建模式新增
   createVideo: vi.fn(),
+  // META-35：元数据 tab 内复用 TabDouban（useDoubanTab → 下列 api）。默认 resolve 防 effect 抛错。
+  searchDoubanForVideo: vi.fn().mockResolvedValue({ candidates: [] }),
+  confirmDoubanMatch: vi.fn().mockResolvedValue(undefined),
+  ignoreDoubanMatch: vi.fn().mockResolvedValue(undefined),
+  getDoubanCandidate: vi.fn().mockResolvedValue(null),
 }))
 
 vi.mock('@resovo/admin-ui', async () => {
@@ -33,7 +38,10 @@ vi.mock('@resovo/admin-ui', async () => {
 
 import * as videoApi from '@/lib/videos/api'
 import { VideoEditDrawer } from '../../../../../../apps/server-next/src/app/admin/videos/_client/VideoEditDrawer'
+import { normalizeTabKey } from '../../../../../../apps/server-next/src/app/admin/videos/_client/_videoEdit/types'
+import type { TabKey } from '../../../../../../apps/server-next/src/app/admin/videos/_client/_videoEdit/types'
 import type { VideoAdminDetail } from '../../../../../../apps/server-next/src/lib/videos/types'
+import type { MetadataProvider, MetadataProviderStatus, MetadataStatusSummary } from '@resovo/types'
 
 // ── helpers ───────────────────────────────────────────────────────
 
@@ -61,6 +69,32 @@ function makeVideo(overrides: Partial<VideoAdminDetail> = {}): VideoAdminDetail 
     visibility_status: 'public',
     review_status: 'approved',
     created_at: '2024-01-01T00:00:00Z',
+    ...overrides,
+  }
+}
+
+// META-35：构造合法 MetadataStatusSummary（四 provider key 恒在）供「元数据」tab 测试。
+function pstatus(provider: MetadataProvider, state: MetadataProviderStatus['state'] = 'missing'): MetadataProviderStatus {
+  return {
+    provider, state, issueLevel: 'none', externalId: null, label: null,
+    confidence: null, matchMethod: null, appliedAt: null, fetchedAt: null,
+    reasonCodes: [], tooltipLines: [],
+  }
+}
+
+function makeMetadataStatus(overrides: Partial<MetadataStatusSummary> = {}): MetadataStatusSummary {
+  return {
+    overall: 'partial', issueLevel: 'none', score: 72, enrichedAt: '2026-06-10T00:00:00Z',
+    primaryProvider: 'douban',
+    providers: {
+      douban: pstatus('douban', 'applied'),
+      bangumi: pstatus('bangumi'),
+      tmdb: pstatus('tmdb'),
+      imdb: pstatus('imdb'),
+    },
+    issues: [],
+    nextAction: 'none',
+    sort: { statusRank: 4, issueRank: 0, scoreRank: 72, updatedAt: '2026-06-10T00:00:00Z' },
     ...overrides,
   }
 }
@@ -219,15 +253,81 @@ describe('VideoEditDrawer — 创建模式 (ADR-145)', () => {
     expect(onClose).toHaveBeenCalled()
   })
 
-  it('videoId=null → 非 basic tab 按钮 disabled（lines/images/douban 需先创建）', async () => {
+  it('videoId=null → 非 basic tab 按钮 disabled（lines/images/metadata 需先创建）', async () => {
     renderDrawer(null)
     await waitFor(() => screen.getByText('+ 添加视频'))
     const tabBtns = document.querySelectorAll('[role="tab"]')
-    expect(tabBtns.length).toBeGreaterThanOrEqual(4)
+    // META-35：5 tab → 4 tab（去 douban/external，合并 metadata）
+    expect(tabBtns.length).toBe(4)
     // basic 不 disabled / 其他 disabled
     const basicBtn = Array.from(tabBtns).find((b) => b.textContent?.includes('基础信息'))!
     const linesBtn = Array.from(tabBtns).find((b) => b.textContent?.includes('线路管理'))!
+    const metaBtn = Array.from(tabBtns).find((b) => b.textContent?.includes('元数据'))!
     expect(basicBtn.hasAttribute('disabled')).toBe(false)
     expect(linesBtn.hasAttribute('disabled')).toBe(true)
+    expect(metaBtn.hasAttribute('disabled')).toBe(true)
+  })
+})
+
+// META-35：视频编辑抽屉去 Douban 独占 tab + 元数据状态整合（ADR-201 §视频编辑抽屉）
+describe('VideoEditDrawer — META-35 元数据 tab IA', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('tab 列表去 douban/external，仅 4 tab 且含「元数据」', async () => {
+    vi.mocked(videoApi.getVideo).mockResolvedValue(makeVideo({ metadataStatus: makeMetadataStatus() }))
+    renderDrawer()
+    await waitFor(() => screen.getByTestId('edit-title'))
+    const labels = Array.from(document.querySelectorAll('[role="tab"]')).map((b) => b.textContent)
+    expect(labels).toEqual(['基础信息', '线路管理', '图片素材', '元数据'])
+    expect(screen.queryByText('豆瓣·元数据')).toBeNull()
+    expect(screen.queryByText('外部元数据')).toBeNull()
+  })
+
+  it('initialTab=metadata → 渲染 MetadataStatusPanel + Douban 来源关系区', async () => {
+    vi.mocked(videoApi.getVideo).mockResolvedValue(makeVideo({ metadataStatus: makeMetadataStatus() }))
+    render(
+      <VideoEditDrawer open videoId="v1" initialTab="metadata" onClose={vi.fn()} onSaved={vi.fn()} />,
+    )
+    await waitFor(() => screen.getByTestId('data-video-tab-metadata'))
+    // 统一状态面板（META-33-B 原语，纯展示）
+    expect(screen.getByTestId('data-video-metadata-status')).toBeTruthy()
+    // Douban 富交互区保留（零回归）
+    expect(screen.getByText('Douban 来源关系')).toBeTruthy()
+  })
+
+  it('metadataStatus 缺失 → 兜底文案，不渲染 panel，但 Douban 区仍在', async () => {
+    vi.mocked(videoApi.getVideo).mockResolvedValue(makeVideo({ metadataStatus: undefined }))
+    render(
+      <VideoEditDrawer open videoId="v1" initialTab="metadata" onClose={vi.fn()} onSaved={vi.fn()} />,
+    )
+    await waitFor(() => screen.getByTestId('data-video-tab-metadata'))
+    expect(screen.getByTestId('data-video-metadata-empty')).toBeTruthy()
+    expect(screen.queryByTestId('data-video-metadata-status')).toBeNull()
+    expect(screen.getByText('Douban 来源关系')).toBeTruthy()
+  })
+
+  it('旧深链 initialTab=douban / external 经 normalizeTabKey 落到 metadata tab', async () => {
+    vi.mocked(videoApi.getVideo).mockResolvedValue(makeVideo({ metadataStatus: makeMetadataStatus() }))
+    // 运行时兼容路径（旧 URL / 外部入口可能传 cast 值）
+    render(
+      <VideoEditDrawer open videoId="v1" initialTab={'douban' as unknown as TabKey} onClose={vi.fn()} onSaved={vi.fn()} />,
+    )
+    await waitFor(() => screen.getByTestId('data-video-tab-metadata'))
+    const metaTab = Array.from(document.querySelectorAll('[role="tab"]')).find((b) => b.textContent === '元数据')!
+    expect(metaTab.getAttribute('aria-selected')).toBe('true')
+  })
+})
+
+describe('normalizeTabKey（META-35 旧深链兼容）', () => {
+  it('douban / external → metadata；其余原样；undefined 透传', () => {
+    expect(normalizeTabKey('douban')).toBe('metadata')
+    expect(normalizeTabKey('external')).toBe('metadata')
+    expect(normalizeTabKey('metadata')).toBe('metadata')
+    expect(normalizeTabKey('basic')).toBe('basic')
+    expect(normalizeTabKey('lines')).toBe('lines')
+    expect(normalizeTabKey('images')).toBe('images')
+    expect(normalizeTabKey(undefined)).toBeUndefined()
   })
 })

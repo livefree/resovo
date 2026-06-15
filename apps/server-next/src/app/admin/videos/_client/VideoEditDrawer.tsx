@@ -1,17 +1,17 @@
 'use client'
 
 import React, { useState, useEffect, useCallback } from 'react'
-import { Drawer, LoadingState, ErrorState, VisChip, DualSignal, Thumb, EnrichmentBadgeCluster, ExternalMetaPanel } from '@resovo/admin-ui'
+import { Drawer, LoadingState, ErrorState, VisChip, DualSignal, Thumb, EnrichmentBadgeCluster } from '@resovo/admin-ui'
 import type { VideoAdminDetail } from '@/lib/videos'
 import { getVideo, patchVideoMeta, createVideo } from '@/lib/videos/api'
 import type { VideoType } from '@resovo/types'
 import type { TabKey, FormState } from './_videoEdit/types'
-import { EMPTY_FORM } from './_videoEdit/types'
+import { EMPTY_FORM, normalizeTabKey } from './_videoEdit/types'
 import { videoToForm, formToPatch, splitComma } from './_videoEdit/form-helpers'
 import { TabBasicInfo } from './_videoEdit/TabBasicInfo'
 import { TabLines } from './_videoEdit/TabLines'
 import { TabImages } from './_videoEdit/TabImages'
-import { TabDouban } from './_videoEdit/TabDouban'
+import { TabMetadata } from './_videoEdit/TabMetadata'
 
 // ── styles ──────────────────────────────────────────────────────────
 
@@ -73,8 +73,8 @@ const TABS: ReadonlyArray<{ id: TabKey; label: string }> = [
   { id: 'basic', label: '基础信息' },
   { id: 'lines', label: '线路管理' },
   { id: 'images', label: '图片素材' },
-  { id: 'douban', label: '豆瓣·元数据' },
-  { id: 'external', label: '外部元数据' },
+  // META-35 / ADR-201：去 Douban 独占 tab + external→统一「元数据」tab（四源同级）
+  { id: 'metadata', label: '元数据' },
 ]
 
 export function VideoEditDrawer({ open, videoId, onClose, onSaved, initialTab }: VideoEditDrawerProps) {
@@ -96,7 +96,8 @@ export function VideoEditDrawer({ open, videoId, onClose, onSaved, initialTab }:
     setSkippedFields([])
     setSubmitError(undefined)
     // CHG-VSR-4-B：创建模式（videoId=null）强制 basic（其余 tab 需 videoId）；编辑模式用 initialTab 深链
-    setTab(videoId === null ? 'basic' : (initialTab ?? 'basic'))
+    // META-35：旧深链取值 'douban' / 'external' 经 normalizeTabKey 归一到 'metadata'
+    setTab(videoId === null ? 'basic' : (normalizeTabKey(initialTab) ?? 'basic'))
     if (videoId === null) {
       // 创建模式：清空表单 + 不 fetch
       setVideo(null)
@@ -257,6 +258,8 @@ export function VideoEditDrawer({ open, videoId, onClose, onSaved, initialTab }:
                 <VisChip visibility={visibility} review={review} />
                 <DualSignal probe="unknown" render="unknown" />
                 {/* META-11 / feature-2：富集徽标簇（density='header'：含 label + 富集时间）*/}
+                {/* META-35 边界：头部簇维持既有 EnrichmentBadgeCluster（ADR-201 过渡期新旧共存允许）；
+                    四来源图标簇头部迁移（D-201-3）连同视频库列簇一并归 follow-up/META-36，避免本卡越范围。 */}
                 {video.enrichmentSummary && (
                   <EnrichmentBadgeCluster
                     summary={video.enrichmentSummary}
@@ -287,37 +290,9 @@ export function VideoEditDrawer({ open, videoId, onClose, onSaved, initialTab }:
                 )}
                 {tab === 'lines' && videoId && <TabLines videoId={videoId} />}
                 {tab === 'images' && videoId && <TabImages videoId={videoId} />}
-                {tab === 'douban' && videoId && video && (
-                  <TabDouban
-                    videoId={videoId}
-                    doubanStatus={video.douban_status}
-                    doubanId={video.douban_id}
-                    reviewStatus={video.review_status}
-                    onRefresh={onSaved}
-                  />
-                )}
-                {/* META-18 / ADR-172 AMENDMENT 3：外部元数据真源并集视图（条目级） */}
-                {tab === 'external' && video && video.enrichmentSummary && (
-                  <ExternalMetaPanel
-                    summary={video.enrichmentSummary}
-                    type={video.type}
-                    externalRefs={video.externalRefs}
-                    bangumiInfo={video.bangumiInfo}
-                    characters={video.bangumiCharacters}
-                    catalogFields={{
-                      titleOriginal: video.title_original,
-                      rating: video.rating,
-                      ratingVotes: video.rating_votes,
-                      metadataSource: video.metadata_source,
-                    }}
-                    enrichedAtLabel={
-                      video.enrichmentSummary.enrichedAt
-                        ? `富集 ${video.enrichmentSummary.enrichedAt.slice(0, 10)}`
-                        : undefined
-                    }
-                    density="drawer"
-                    testId="data-video-external-meta"
-                  />
+                {/* META-35 / ADR-201：统一「元数据」tab（MetadataStatusPanel 四源同级 + 来源证据 + Douban 来源关系收纳）*/}
+                {tab === 'metadata' && videoId && video && (
+                  <TabMetadata videoId={videoId} video={video} onRefresh={onSaved} />
                 )}
               </div>
               <div style={FOOTER}>
