@@ -12,6 +12,8 @@ import type {
   VideoImageKind,
   DoubanSuggestItem,
   DoubanCandidateData,
+  TmdbCandidate,
+  TmdbMediaType,
 } from './types'
 import type { SourceHealthEvent } from '@resovo/types'
 import { formatCountryName } from '@resovo/types'
@@ -304,6 +306,34 @@ export async function getDoubanCandidate(videoId: string): Promise<DoubanCandida
   } catch {
     return null
   }
+}
+
+// ── TMDB 候选确认/应用（ADR-202 §端点契约 / META-39-B）─────────────────────────
+
+export async function tmdbSearchForVideo(
+  videoId: string,
+  params: { query?: string; mediaType: TmdbMediaType; year?: number },
+): Promise<{ candidates: TmdbCandidate[] }> {
+  const res = await apiClient.post<{ data: { candidates: TmdbCandidate[] } }>(
+    `/admin/videos/${videoId}/tmdb-search`,
+    params,
+  )
+  return res.data
+}
+
+export async function tmdbConfirmForVideo(
+  videoId: string,
+  params: { tmdbId: number; mediaType: TmdbMediaType; seasonNumber?: number; fields?: string[] },
+): Promise<{ id: string; confirmed: boolean; applied: string[] }> {
+  const res = await apiClient.post<{ data: { id: string; confirmed: boolean; applied: string[] } }>(
+    `/admin/videos/${videoId}/tmdb-confirm`,
+    params,
+  )
+  return res.data
+}
+
+export async function tmdbRejectForVideo(videoId: string, tmdbId: number): Promise<void> {
+  await apiClient.post(`/admin/videos/${videoId}/tmdb-reject`, { tmdbId })
 }
 
 // ── 审核统计（dashboard 用；CHG-DESIGN-07 7C 步骤 1）───────────────────────────────────────

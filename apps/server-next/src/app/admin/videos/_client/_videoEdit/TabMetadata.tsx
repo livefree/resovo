@@ -19,6 +19,7 @@ import { MetadataStatusPanel } from '@resovo/admin-ui'
 import type { VideoAdminDetail } from '@/lib/videos'
 import { MetaSourceEvidence, hasMetaSourceEvidence } from './MetaSourceEvidence'
 import { TabDouban } from './TabDouban'
+import { TabTmdb } from './TabTmdb'
 
 const ROOT_STYLE: React.CSSProperties = { display: 'flex', flexDirection: 'column', gap: '20px' }
 const SECTION_TITLE_STYLE: React.CSSProperties = {
@@ -78,7 +79,12 @@ export function TabMetadata({ videoId, video, onRefresh }: TabMetadataProps): Re
         </div>
       )}
 
-      {/* ③ Douban 来源关系（保留原有富交互；不再占顶级 IA） */}
+      {/* ③ TMDB 来源关系（META-39-B：候选搜索/确认/拒绝，四源同级不孤岛） */}
+      <div data-meta-tmdb-relation>
+        <TabTmdb videoId={videoId} video={video} onRefresh={onRefresh} />
+      </div>
+
+      {/* ④ Douban 来源关系（保留原有富交互；不再占顶级 IA） */}
       <div data-meta-douban-relation>
         <div style={SECTION_TITLE_STYLE}>Douban 来源关系</div>
         <TabDouban

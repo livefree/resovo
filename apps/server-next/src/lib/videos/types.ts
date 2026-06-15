@@ -257,6 +257,19 @@ export interface DoubanSuggestItem {
   readonly sub_title: string
 }
 
+// ── TMDB 候选（POST /admin/videos/:id/tmdb-search 响应，ADR-202 / META-39-B；镜像后端 TmdbCandidate）
+export type TmdbMediaType = 'movie' | 'tv'
+export interface TmdbCandidate {
+  readonly tmdbId: number
+  readonly mediaType: TmdbMediaType
+  readonly title: string
+  readonly originalTitle: string
+  readonly originalLanguage: string
+  readonly year: string | null
+  readonly overview: string
+  readonly posterUrl: string | null
+}
+
 // ── 豆瓣字段对比（GET /admin/moderation/:id/douban-candidate 响应）
 
 export interface DoubanFieldDiff {

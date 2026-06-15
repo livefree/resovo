@@ -5894,3 +5894,24 @@
 - **测试覆盖**：+21 新单测（service 13 + route 8）；test:changed 41 文件 548 passed（douban/bangumi/genreMapper 消费方零回归）。**集成测边界**：confirm 复用的写侧原语各有既存集成测，新增仅 cache UPDATE 简单 SQL；confirm 端到端集成（真实 video/catalog seed）归 META-39-B e2e。
 - **质量门禁**：typecheck 全工作区 EXIT=0 / lint 通过（无本卡 error）/ **verify-endpoint-adr ✅ 243 admin 路由对齐**（3 新 tmdb 端点对齐 ADR-202 §端点契约，240→243）/ test:changed 548 passed。test:integration N/A（无新 query SQL，复用既有原语集成测）；e2e 归 META-39-B。
 - **[AI-CHECK]**：六问过——①根因=ADR-202 落库后实现 TMDB 候选确认/应用后端；②零回归（typecheck 全绿 + test:changed 548 passed + douban/bangumi 端点零破坏）；③边界=复用写侧原语零 migration、search 只读、imdb cache-only、title_en/aliases 移出 FU；④复用=resolveAndWriteExactRef/insertCandidateRef/safeUpdate/upsertVideoExternalRef + BangumiService.confirmMatch 单事务范式 + bangumi route 拆分范式 + genreMapper 双写 genres/genresRaw 范式；⑤无 any（测试 fixture as any 局部 + eslint-disable）/ 无空 catch（ROLLBACK catch 有注释）/ cache SQL 参数化防注入 / 无硬编码色；⑥范围 3 端点 + service 单事务 + mapTmdbGenres + 核心标量 单一验收口径，全落地。解锁 META-39-B（审核 UI）。
+
+## [META-39-B] TMDB 审核 UI：TabTmdb 候选搜索/确认/拒绝（Phase 5B，ADR-202）
+- **完成时间**：2026-06-14
+- **记录时间**：2026-06-14 23:30
+- **执行模型**：claude-opus-4-8
+- **子代理**：无（纯前端接线，消费 META-39-A 端点 + admin-ui 现有 Props，不改 admin-ui 公开契约）
+- **修改文件**：
+  - `apps/server-next/src/lib/videos/types.ts` — +`TmdbMediaType` + `TmdbCandidate`（镜像后端 TmdbConfirmService.TmdbCandidate）。
+  - `apps/server-next/src/lib/videos/api.ts` — +`tmdbSearchForVideo`/`tmdbConfirmForVideo`/`tmdbRejectForVideo`（apiClient.post 至 /admin/videos/:id/tmdb-{search,confirm,reject}）。
+  - `apps/server-next/src/lib/videos/use-tmdb.ts` — 新建。`useTmdbTab(videoId, onConfirmed)` hook（对齐 use-douban）：state〔searchResults/searching/searchError/confirming/rejecting/actionError〕 + actions〔search/confirm〔返 boolean，冲突→actionError=reason〕/reject〔移除对应候选〕/clear〕。
+  - `apps/server-next/src/app/admin/videos/_client/_videoEdit/TabTmdb.tsx` — 新建。mediaType movie/tv 切换〔默认据 video.type〕+ 搜索框 + year〔数字过滤〕+ 候选列表〔CandidateRow：title/原始标题/年份·语言 + 确认·拒绝〕+ **fields 多选**〔默认全选 7 字段 TMDB_APPLIABLE_FIELDS，取消勾选→confirm fields 不含→不应用，D-202-5〕+ 覆盖提示 + actionError 友好文案。零硬编码色（CSS 变量）。
+  - `apps/server-next/src/app/admin/videos/_client/_videoEdit/TabMetadata.tsx` — 挂 `TabTmdb` 作 ④「TMDB 来源关系」区（与 Douban 区并列，四源同级不孤岛）+ import。
+  - `apps/server-next/src/i18n/messages/zh-CN/videos-edit.ts` — +`VE.tmdb`（sectionTitle/mediaType/searchPlaceholder/fieldLabels/overwriteHint/actions/candidateMeta + errors〔含 tmdb_exact_conflict/tmdb_kind_conflict/tmdb_fetch_failed reason→友好文案〕）。
+  - `tests/unit/server-next/videos/video-edit-drawer/use-tmdb.test.ts` — 新建。5 it（search 填充+透传 / search 失败 / confirm 成功 onConfirmed+清空+true / confirm 冲突 reason+false / reject 移除候选）。
+  - `tests/unit/components/server-next/admin/videos/TabTmdb.test.tsx` — 新建。5 it（mediaType 默认 / 搜索渲染候选+fields / 确认调 api+onRefresh / 取消勾选 title→fields 不含 / 冲突 reason 友好文案）。
+- **新增依赖**：无。
+- **数据库变更**：无（纯前端，消费 META-39-A 端点）。
+- **架构发现/边界**：① **tv 首版不选 season**——TabTmdb confirm 不传 seasonNumber，tv 落 show candidate（D-202-1，仍绑定+应用字段+cache）；season 精确绑定需展示 TMDB seasons 列表，UI 复杂度归 follow-up。② **per-field 精确 danger 覆盖标记**（D-202-3 覆盖 bangumi/locked 字段标 danger）需字段级 provenance，首版用通用「确认后将覆盖选中字段现有值」提示 + fields 多选让用户控制，精确 per-field danger 留 follow-up。③ **冲突 reason→友好文案**：confirm 422 CONFIRM_FAILED 的 message=reason（tmdb_exact_conflict 等），UI 经 VE.tmdb.errors[reason] 映射中文，fallback 原 reason。④ **MetadataStatusPanel.onAction 未接**：TMDB 候选交互走独立 TabTmdb 区（类比 TabDouban），onAction 整体级主按钮接线（如点 TMDB 卡 candidate→聚焦 TabTmdb）属增量优化，首版候选搜索/确认入口已完整，留 follow-up。
+- **测试覆盖**：+10 新单测（use-tmdb 5 + TabTmdb 5）；test:changed 31 文件 335 passed（use-douban/VideoEditDrawer 16/VideoColumns 42 零回归）；**test:e2e:admin 84/84**（videos.spec 编辑 Drawer 黄金路径 TabTmdb 挂载零回归）。
+- **质量门禁**：typecheck 全工作区 EXIT=0 / lint 通过（无本卡 error）/ test:changed 335 passed / **test:e2e:admin 84/84**。test:integration N/A（纯前端）。
+- **[AI-CHECK]**：六问过——①根因=META-39-A 端点就绪后接前端审核 UI；②零回归（typecheck 全绿 + test:changed 335 + e2e:admin 84/84 + VideoEditDrawer/use-douban 零破坏）；③边界=纯前端不改 admin-ui Props、tv 不选 season/per-field danger/season 选择器/e2e seed 留 follow-up；④复用=TabDouban/use-douban 范式〔hook+CandidateRow+VE 文案〕+ apiClient.post + VideoAdminDetail 类型；⑤无 any（测试 fixture as unknown as 局部）/ 无空 catch / 零硬编码色〔CSS 变量〕/ year 输入 \D 过滤；⑥范围 TabTmdb + use-tmdb + api + 文案 + 挂载 单一验收口径，全落地。**META-39 全收口（-A 后端 + -B UI）。TMDB 接入 Phase 5 端到端完成。**
