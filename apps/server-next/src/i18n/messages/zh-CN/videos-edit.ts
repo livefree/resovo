@@ -127,6 +127,7 @@ export const VE = {
       original_language: '原始语言',
       description: '简介',
       genres: '题材',
+      country: '地区',
       rating: '评分',
       cover_url: '封面',
     },

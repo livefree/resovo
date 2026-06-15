@@ -36,13 +36,24 @@ describe('TabTmdb', () => {
     expect(screen.getByTestId('tmdb-mediatype-tv')).toBeTruthy()
   })
 
-  it('搜索 → 渲染候选 + fields 多选 + 透传 fallback title', async () => {
+  it('搜索 → 渲染候选 + fields 多选（含 country，META-42）+ 透传 fallback title', async () => {
     vi.mocked(api.tmdbSearchForVideo).mockResolvedValue({ candidates: [CAND] })
     render(<TabTmdb videoId="v1" video={VIDEO} onRefresh={vi.fn()} />)
     await doSearch()
     expect(screen.getByTestId('tmdb-field-title')).toBeTruthy()
     expect(screen.getByTestId('tmdb-field-genres')).toBeTruthy()
+    expect(screen.getByTestId('tmdb-field-country')).toBeTruthy()
     expect(api.tmdbSearchForVideo).toHaveBeenCalledWith('v1', expect.objectContaining({ mediaType: 'movie' }))
+  })
+
+  it('默认全选 → confirm fields 含 country（META-42）', async () => {
+    vi.mocked(api.tmdbSearchForVideo).mockResolvedValue({ candidates: [CAND] })
+    vi.mocked(api.tmdbConfirmForVideo).mockResolvedValue({ id: 'v1', confirmed: true, applied: ['country'] })
+    render(<TabTmdb videoId="v1" video={VIDEO} onRefresh={vi.fn()} />)
+    await doSearch()
+    await act(async () => { fireEvent.click(screen.getAllByText('确认并应用')[0]) })
+    const call = vi.mocked(api.tmdbConfirmForVideo).mock.calls[0][1]
+    expect(call.fields).toContain('country')
   })
 
   it('确认候选 → confirm 调 api（mediaType + 选中 fields）+ onRefresh', async () => {

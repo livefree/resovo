@@ -130,6 +130,28 @@ describe('confirm', () => {
     expect(safeUpdateMock).not.toHaveBeenCalled()
     expect(externalData.upsertVideoExternalRef).toHaveBeenCalledWith(client, expect.objectContaining({ matchStatus: 'manual_confirmed' }))
   })
+
+  // META-42：country 应用（movie production_countries[0] / tv origin_country[0]，经 countryToIso 防御归一）
+  it('movie + country 选中 → production_countries[0].iso_3166_1 经 countryToIso 写 ISO', async () => {
+    vi.mocked(tmdbLib.getMovieDetail).mockResolvedValue({ ...MOVIE, production_countries: [{ iso_3166_1: 'jp', name: 'Japan' }] })
+    await svc.confirm('vid', 'cat', { tmdbId: 129, mediaType: 'movie', fields: ['country'] })
+    // 防御性归一：小写 'jp' → 'JP'（实证 countryToIso 真被调用而非裸透传）
+    expect(safeUpdateMock).toHaveBeenCalledWith('cat', expect.objectContaining({ country: 'JP' }), 'tmdb', expect.objectContaining({ db: client }))
+  })
+
+  it('tv + country 选中 → origin_country[0] 经 countryToIso 写 ISO', async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    vi.mocked(tmdbLib.getTvDetail).mockResolvedValue({ id: 1429, name: 'X', original_name: 'X', original_language: 'ja', overview: '', genres: [], origin_country: ['US'], external_ids: {} } as any)
+    await svc.confirm('vid', 'cat', { tmdbId: 1429, mediaType: 'tv', seasonNumber: 1, fields: ['country'] })
+    expect(safeUpdateMock).toHaveBeenCalledWith('cat', expect.objectContaining({ country: 'US' }), 'tmdb', expect.objectContaining({ db: client }))
+  })
+
+  it('country 选中但 production_countries 空 → 不写 country（updateFields 空 → 不调 safeUpdate，保列纯净）', async () => {
+    vi.mocked(tmdbLib.getMovieDetail).mockResolvedValue({ ...MOVIE, production_countries: [] })
+    const r = await svc.confirm('vid', 'cat', { tmdbId: 129, mediaType: 'movie', fields: ['country'] })
+    expect(r).toMatchObject({ updated: true, applied: [] })
+    expect(safeUpdateMock).not.toHaveBeenCalled()
+  })
 })
 
 describe('reject', () => {

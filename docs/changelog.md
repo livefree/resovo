@@ -5981,3 +5981,18 @@
 - **测试覆盖**：+9 单测——`bangumi-service.test.ts`：parseInfoboxCountry 6（显式键命中/制作国家·产地/繁体变体/数组取首/无产地键 null/非数组 null）+ mapSubjectToCatalogFields country 集成 3（中国大陆→CN / 日本→JP·无产地键不写 / 归一不到不写）。
 - **质量门禁**：typecheck 全工作区 EXIT=0（0 error TS）/ lint EXIT=0 / test:changed 14 文件 276 passed。无 migration（仅写侧逻辑）→ 无真库验证；test:e2e N/A（lib 纯函数无 UI 消费方改动）。
 - **[AI-CHECK]**：六问过——①根因=bangumi 不写 country + 卡片缺省 JP 思路被数据证伪（36% CN）→ 保守仅显式产地；②零回归（typecheck/lint EXIT=0 + test:changed 276 passed + 默认 fixture 无产地键故 country 不写、既有 mapSubjectToCatalogFields 测试零破坏）；③边界=仅显式产地键、无盲目缺省、归一不到不写、不裸写中文名；④复用=countryToIso（META-40 单一真源）+ infoboxValues + 对齐 parseInfoboxAliases 结构，不新建第二套；⑤无 any / 无空 catch / 无硬编码色 / 无越层（utils←@/types 单向）；⑥范围 parseInfoboxCountry + 集成 + 单测 单一验收口径，全落地。**SEQ-20260615-01 META-41-B 收口（用户裁定保守），下一 META-42（TMDB country 应用，依 META-40 真源）。**
+
+---
+
+## [META-42] TMDB country 应用——干净 ISO 经 META-40 真源防御归一接入 confirm（SEQ-20260615-01）— 2026-06-15
+
+**类型**：feat（依 META-40 真源）｜**优先级**：🟡 中（能力闲置）｜**执行模型**：claude-opus-4-8（主循环）｜**子代理**：无
+
+- **问题（核验）**：TMDB `origin_country`（tv）/`production_countries[].iso_3166_1`（movie）本是干净 ISO alpha-2（JP/US/CN），与本地 `media_catalog.country` 格式完美匹配，但 META-39 `TMDB_APPLIABLE_FIELDS`（`TmdbConfirmService.ts:29`）未含 `country` → 确认应用时干净源白白不写，反而 douban 中文国名脏数据在污染该列（META-40 已治理存量与 douban/bangumi 写入侧，但 TMDB 干净源一直未接入 confirm 应用白名单）。
+- **根因判断**：META-39 confirm 应用字段白名单遗漏 country（当时聚焦 title/genres/rating 等标量，未把 ISO 地区纳入）；`buildCatalogFields` 无 country 分支；`tmdb.types.ts` `TmdbMovieDetail` 未声明 `production_countries`；server-next `TabTmdb` fields 多选镜像常量同步缺该项。
+- **方案**：① `tmdb.types.ts` `TmdbMovieDetail` 补 `production_countries: { iso_3166_1: string; name: string }[]`（tv `origin_country: string[]` 已存在）；② `TmdbConfirmService.ts` `TMDB_APPLIABLE_FIELDS` 加 `'country'`、`buildCatalogFields` 加 country 分支——movie 取 `production_countries[0].iso_3166_1` / tv 取 `origin_country[0]`，经 META-40 `countryToIso`（`@/types` 单一真源）**防御性归一**（TMDB 已 ISO，countryToIso 对 2 字母输入大写归一证 helper 真被调用；归一不到 / 空数组则不写 → updateFields 空时不调 safeUpdate，**保 catalog.country 列纯净，对齐 META-41-B 保守口径**）；③ server-next `TabTmdb.tsx` 本地镜像 `TMDB_APPLIABLE_FIELDS` 加 `'country'`（自动产 `tmdb-field-country` checkbox，默认全选）；④ `VE.tmdb.fieldLabels` 补 `country: '地区'`。
+- **不做**：type/genres 既有逻辑不动；backdrop/logo 图片接入（归 META-43）；TMDB 候选自动富集态（worker follow-up）；season 精确绑定（META-39-B 已登记 follow-up）。
+- **涉及文件**：`apps/api/src/lib/tmdb.types.ts`（movie production_countries 补类型）/ `apps/api/src/services/TmdbConfirmService.ts`（白名单 + buildCatalogFields country 分支 + import countryToIso）/ `apps/server-next/src/app/admin/videos/_client/_videoEdit/TabTmdb.tsx`（镜像常量加 country）/ `apps/server-next/src/i18n/messages/zh-CN/videos-edit.ts`（fieldLabels.country='地区'）。
+- **测试覆盖**：+5 单测——`tmdb-confirm-service.test.ts` 3（movie production_countries 小写 'jp'→'JP' 证防御归一 / tv origin_country 'US'→'US' / country 选中但 production_countries 空 → updateFields 空不调 safeUpdate）+ `TabTmdb.test.tsx` 2（country checkbox 渲染 + 默认全选 confirm fields 含 country）。
+- **质量门禁**：typecheck 全工作区 EXIT=0（0 error TS）/ lint EXIT=0 / test:changed 12 文件 148 passed（+5 新）/ **test:e2e:admin 84/84**（videos.spec:261 编辑 Drawer 黄金路径 TabTmdb 挂载 + fields 改动零回归）。无 migration（仅写侧白名单 + 类型 + UI）→ 无真库验证。
+- **[AI-CHECK]**：六问过——①根因=confirm 白名单遗漏 country + buildCatalogFields 无分支 + 类型缺 production_countries + UI 镜像缺项 → 全补齐；②零回归（typecheck/lint EXIT=0 + test:changed 148 passed + e2e:admin 84/84）；③边界=仅 country 标量、防御归一、归一不到/空不写、不动 type/genres；④复用=countryToIso（META-40 单一真源，不建第二套）+ 既有 buildCatalogFields/TMDB_APPLIABLE_FIELDS/UI 镜像范式；⑤无 any / 无空 catch / 无硬编码色 / 无越层（service←@/types 单向）；⑥范围=4 源文件 + 2 测试，精确等于卡片范围，无范围外改动。**SEQ-20260615-01 META-42 收口，下一 META-43（TMDB 图片接入，独立于 country/genre）。**

@@ -223,6 +223,7 @@ export interface TmdbMovieDetail {
   runtime: number | null
   status: string
   genres: TmdbGenre[]
+  production_countries: { iso_3166_1: string; name: string }[]
   poster_path: string | null
   backdrop_path: string | null
   popularity: number

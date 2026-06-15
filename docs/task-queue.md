@@ -2537,7 +2537,7 @@
 
 ## [SEQ-20260615-01] 元数据字段枚举兼容性治理
 
-- **状态**：🔄 进行中（META-40 ✅ + META-41-A ✅ + META-41-B ✅ 2026-06-15〔+ 旁路 META-37-A-FIX Codex P2×2〕 → 下一 META-42〔TMDB country 应用，依 META-40 真源〕）
+- **状态**：🔄 进行中（META-40 ✅ + META-41-A ✅ + META-41-B ✅ + META-42 ✅ 2026-06-15〔+ 旁路 META-37-A-FIX Codex P2×2〕 → 下一 META-43〔TMDB 图片接入，独立于 country/genre〕）
 - **创建时间**：2026-06-15 00:30
 - **最后更新时间**：2026-06-15 01:10（用户评审 B+ 后修订：范围补 server-next / META-40 收敛真源 / META-41·44 拆 -A/-B / cast 后排 / META-43 source 口径 / 逐卡门禁）
 - **目标**：修复 douban/bangumi/tmdb 三源元数据字段（类型/题材/地区/图片）与本地枚举的兼容缺口——含 1 项数据正确性 bug（实证）+ 4 项能力闲置 + 1 项设计权衡。
@@ -2582,7 +2582,8 @@
    - **门禁**：typecheck + lint + test:changed。
    - **依赖**：**META-40**（country 归一真源）。
 
-4. **META-42** — TMDB country 应用（🟡 中 / 能力闲置）（状态：⬜ 待办，依赖 META-40）
+4. **META-42** — TMDB country 应用（🟡 中 / 能力闲置）（状态：✅ 已完成 2026-06-15）
+   - **完成备注**：✅ 2026-06-15。`TMDB_APPLIABLE_FIELDS` 加 `country`；`buildCatalogFields` 加 country 分支——movie 取 `production_countries[0].iso_3166_1` / tv 取 `origin_country[0]`，经 META-40 `countryToIso`（`@/types`）防御性归一（TMDB 已 ISO，countryToIso 对 2 字母输入大写归一；归一不到/空数组不写 → updateFields 空则不调 safeUpdate，保列纯净，对齐 META-41-B 保守口径）；`tmdb.types.ts` `TmdbMovieDetail` 补 `production_countries` 类型（tv `origin_country` 已存在）。server-next：`TabTmdb` 镜像 `TMDB_APPLIABLE_FIELDS` 加 country（自动产 `tmdb-field-country` checkbox 默认全选）+ `VE.tmdb.fieldLabels.country='地区'`。门禁 typecheck/lint EXIT=0 + test:changed 12 文件 148 passed（+5：tmdb-confirm-service 3〔movie production_countries / tv origin_country / 空数组不写〕 + TabTmdb 2〔country checkbox 渲染 + 默认 confirm fields 含 country〕）+ **test:e2e:admin 84/84**（videos.spec:261 编辑 Drawer 黄金路径零回归）。执行模型 claude-opus-4-8；子代理无（既有白名单/buildCatalogFields/UI 镜像各加 1 项，非 admin-ui 公开 Props/新端点/跨消费方 schema）。详见 changelog [META-42]。
    - 创建时间：2026-06-15 00:30
    - 建议模型：sonnet
    - **问题**：TMDB `origin_country`（tv）/`production_countries`（movie）本是**干净 ISO alpha-2**（JP/US），与本地格式完美匹配，但 META-39 `TMDB_APPLIABLE_FIELDS` 未含 country → 白白不用（反而 douban 脏数据在污染）。

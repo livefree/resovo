@@ -19,6 +19,7 @@ import type { TmdbMovieDetail, TmdbTvDetail, TmdbMovieSearchItem, TmdbTvSearchIt
 import { resolveAndWriteExactRef, insertCandidateRef, type ExternalRefKind } from '@/api/db/queries/catalogExternalRefs'
 import { upsertVideoExternalRef } from '@/api/db/queries/externalData'
 import { mapTmdbGenres } from '@/api/lib/genreMapper'
+import { countryToIso } from '@/types'
 import { MediaCatalogService } from '@/api/services/MediaCatalogService'
 import type { CatalogUpdateData } from '@/api/db/queries/mediaCatalog'
 
@@ -26,7 +27,7 @@ import type { CatalogUpdateData } from '@/api/db/queries/mediaCatalog'
 const TMDB_IMAGE_BASE = 'https://image.tmdb.org/t/p/w500'
 
 /** confirm 可应用的 catalog 字段白名单（ADR-202 D-202-8；fields 省略/[] = 仅绑 ID 不应用）。 */
-export const TMDB_APPLIABLE_FIELDS = ['title', 'title_original', 'original_language', 'description', 'genres', 'rating', 'cover_url'] as const
+export const TMDB_APPLIABLE_FIELDS = ['title', 'title_original', 'original_language', 'description', 'genres', 'country', 'rating', 'cover_url'] as const
 export type TmdbAppliableField = typeof TMDB_APPLIABLE_FIELDS[number]
 
 export type TmdbMediaType = 'movie' | 'tv'
@@ -80,6 +81,15 @@ function buildCatalogFields(detail: TmdbMovieDetail | TmdbTvDetail, mediaType: T
   if (sel.has('genres') && detail.genres.length > 0) {
     out.genres = mapTmdbGenres(detail.genres.map((g) => g.id)) // M5：用稳定数值 id，不用本地化 name
     out.genresRaw = detail.genres.map((g) => g.name)
+  }
+  // country（META-42）：TMDB origin_country/production_countries 本是干净 ISO alpha-2，仍经 META-40
+  // countryToIso 真源防御性归一（已 ISO → 大写归一；归一不到/空数组不写，保列纯净，对齐 META-41-B 保守口径）。
+  if (sel.has('country')) {
+    const rawCountry = isMovie
+      ? (detail as TmdbMovieDetail).production_countries?.[0]?.iso_3166_1
+      : (detail as TmdbTvDetail).origin_country?.[0]
+    const iso = countryToIso(rawCountry)
+    if (iso) out.country = iso
   }
   if (sel.has('rating') && typeof detail.vote_average === 'number') out.rating = detail.vote_average
   if (sel.has('cover_url') && detail.poster_path) out.coverUrl = `${TMDB_IMAGE_BASE}${detail.poster_path}`
