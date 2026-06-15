@@ -547,6 +547,24 @@ describe('MetadataEnrichService.enrich → step3.5 TMDB (META-48)', () => {
     await expect(service.enrich(makeJobData({ type: 'movie' }))).resolves.toBeUndefined()
     expect(videosQueries.updateVideoEnrichStatus).toHaveBeenCalled()
   })
+
+  it('B1 auto scalar 等价：autoMatch 返回 proposedFields → enrich 层立即 safeUpdate(内容, tmdb, {preserveMetadataSource})', async () => {
+    mockAutoMatch.mockResolvedValue({
+      matched: true, tier: 'auto_matched', tmdbId: 555, confidence: 1, applied: ['tmdbId'],
+      proposedFields: { title: 'TMDB标题', description: 'TMDB简介' },
+      preserveMetadataSource: false,
+    })
+    await service.enrich(makeJobData({ type: 'movie' }))
+    // B1（方案 X）：autoMatch 内只写身份/type + ref/cache，内容字段经 proposedFields 由 enrich 层立即
+    // safeUpdate（effectiveCatalogId='c1'，sourceRef=tmdbId，透传 preserveMetadataSource）。
+    const safeUpdate = (MediaCatalogService as ReturnType<typeof vi.fn>).mock.results.at(-1)?.value.safeUpdate
+    expect(safeUpdate).toHaveBeenCalledWith(
+      'c1',
+      { title: 'TMDB标题', description: 'TMDB简介' },
+      'tmdb',
+      expect.objectContaining({ sourceRef: '555', preserveMetadataSource: false }),
+    )
+  })
 })
 
 // ── episodesByStatus + step2/step3 集成（CHG-367-B-A / ADR-163 D-163-5/6）─────

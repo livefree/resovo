@@ -26,6 +26,7 @@ import { findCatalogById } from '@/api/db/queries/mediaCatalog'
 import type { CatalogUpdateData, MediaCatalogRow } from '@/api/db/queries/mediaCatalog'
 import { baseLogger } from '@/api/lib/logger'
 import { similarity, normalizeForMatch, parseYear } from '@/api/lib/textMatch'
+import { splitIdentityScalarFields } from '@/api/services/metadata/fieldSplit'
 
 /** search 候选预览缩略图 base（base+w500；与 confirm 富图片应用的 configuration base 不同关注点，META-43）。 */
 const TMDB_PREVIEW_IMAGE_BASE = 'https://image.tmdb.org/t/p/w500'
@@ -71,7 +72,17 @@ export type TmdbConfirmResult =
 
 /** auto 匹配结果（META-47）：成功分两档（auto_matched 写字段 / candidate 仅绑）；失败带原因。 */
 export type TmdbAutoMatchResult =
-  | { matched: true; tier: 'auto_matched' | 'candidate'; tmdbId: number; confidence: number; applied: string[] }
+  | {
+      matched: true
+      tier: 'auto_matched' | 'candidate'
+      tmdbId: number
+      confidence: number
+      applied: string[]
+      /** META-49-B1：内容标量字段上抛 enrich 层立即 safeUpdate（行为等价过渡，B2 换 reconcile 加权）。 */
+      proposedFields?: CatalogUpdateData
+      /** META-48 interim 交叉验证模式标志，透传给 enrich 层 safeUpdate（保 metadata_source 不翻）。 */
+      preserveMetadataSource?: boolean
+    }
   | {
       matched: false
       reason: 'no_credentials' | 'no_candidate' | 'tmdb_unavailable' | 'tmdb_exact_conflict' | 'tmdb_kind_conflict'
@@ -472,11 +483,20 @@ export class TmdbConfirmService {
         await insertCandidateRef(client, { catalogId, provider: 'tmdb', externalId: String(tmdbId), externalKind, source: 'auto', linkedBy: 'auto' })
       }
 
+      // META-49-B1（ADR-205 方案 X）：身份+type 字段（tmdbId/imdbId cache + type ADR-203）留本事务写
+      //（触发 catalog ref/cache 同事务，受上方 ref 成功约束）；内容标量字段上抛 proposedFields 由
+      // enrich 层立即 safeUpdate（行为等价过渡，B2 换 reconcile 加权）。interim preserveMetadataSource
+      // 已在拆分前对完整 updateFields 跑过 filterCrossValidation，两段共用同一标志。
       let applied: string[] = []
+      let proposedFields: CatalogUpdateData | undefined
       if (tier === 'auto_matched' && Object.keys(updateFields).length > 0) {
-        const catalogService = new MediaCatalogService(this.db)
-        const { skippedFields } = await catalogService.safeUpdate(catalogId, updateFields, 'tmdb', { sourceRef: String(tmdbId), db: client, preserveMetadataSource })
-        applied = Object.keys(updateFields).filter((k) => !skippedFields.includes(k))
+        const { identityFields, contentFields } = splitIdentityScalarFields(updateFields)
+        if (Object.keys(identityFields).length > 0) {
+          const catalogService = new MediaCatalogService(this.db)
+          const { skippedFields } = await catalogService.safeUpdate(catalogId, identityFields, 'tmdb', { sourceRef: String(tmdbId), db: client, preserveMetadataSource })
+          applied = Object.keys(identityFields).filter((k) => !skippedFields.includes(k))
+        }
+        if (Object.keys(contentFields).length > 0) proposedFields = contentFields
       }
 
       await upsertVideoExternalRef(client, {
@@ -485,7 +505,7 @@ export class TmdbConfirmService {
       })
 
       await client.query('COMMIT')
-      return { matched: true, tier, tmdbId, confidence: score, applied }
+      return { matched: true, tier, tmdbId, confidence: score, applied, proposedFields, preserveMetadataSource }
     } catch (err) {
       try { await client.query('ROLLBACK') } catch { /* connection may already be lost */ }
       throw err

@@ -6156,3 +6156,31 @@
 - **质量门禁**：typecheck 7 workspace 全过 / lint 4 successful / test:changed 7 passed（识别 3 个非文档改动 → metadataFieldProposalsQueries.test.ts）/ **verify:adr-contracts EXIT=0**（verify-endpoint-adr 243 路由对齐无新端点 + **verify-sql-schema-alignment 通过：queries SQL 引用列全部对齐 migration 全集 schema**；其余 ⚠️ 为既有 advisory baseline）；e2e N/A（纯数据层无 UI/route，对齐 META-09 provenance 范式）。
 - **注意事项**：① 本卡仅写侧 upsert + 单 catalog 读；reconcile 编排重构 + M1 方案 A + M2 事务/redirect/effectiveCatalogId + type 专属路径 + rescore 迁移归 **META-49-B**；冲突行批量多 catalog LATERAL 读注入 `derive.ts` fieldConflicts + JOIN_SQL 镜像同步归 **META-49-C**；douban cutover + 审核台 review_conflict UI 归 **META-49-D**。② 不改任何写路径/优先级/worker/safeUpdate（gated by 49-B/-D，D-205-8）。③ `conflict_state`/`source_kind` 为开放字符串（对齐 provenance 无 CHECK + ADR 未定枚举），取值由 49-B reconcile 落定。
 - **[AI-CHECK]**：六问过——①根因=provenance 单行 last-writer 无字段级多源比对载体（F1/P1-A）→ 新表 metadata_field_proposals（D-205-2，否决扩 provenance/否决 JSON 列）；②零回归（纯新增表+queries+test，无既有文件改；typecheck/lint/test:changed/verify 全绿 + 真库对拍吻合）；③边界=纯数据层，不碰 reconcile 编排/derive/写路径/优先级/worker（严格归后续子卡）；④复用=queries 对齐 metadataProvenance.ts 范式（行类型+mapper+batchUpsert）、trust 派生 CATALOG_SOURCE_PRIORITY 单真源（schema COMMENT 显式禁另立平行硬编码）；⑤守 ADR-205 D-205-2（schema 逐字段吻合 + M6 PK 不变量 + is_winner/applied 双列）/ ADR-186 provenance 正交不动 last-writer SSOT；⑥范围=2 新建源文件（migration+queries）+ 1 新建测试 + 2 docs，无 admin-ui Props / 无端点 / 无既有文件逻辑改。**schema 已 ADR-205 arch-reviewer PASS，本卡纯落地（对齐 META-47「实施 Opus-reviewed ADR-205 蓝图无强制升 Opus」）**。解锁 META-49-B（reconcile 编排相位）。
+
+## [META-49-B1] 标量写入接口剥离（bangumi/tmdb safeUpdate → proposedFields，方案 X 行为等价过渡）— 2026-06-15
+
+**类型**：refactor（apps/api service 接口 / 方案 X 事务边界）｜**优先级**：🔴 高（reconcile 核心，改写所有入库视频富集写路径）｜**执行模型**：claude-opus-4-8（主循环）｜**子代理**：arch-reviewer (claude-opus-4-8, a2eb1cd50a6e28838) 设计 gate CONDITIONAL-PASS（强制拆 -B1/-B2 + 方案 X 一票否决裁定）
+
+- **问题**：META-49-B（reconcile 编排）经 arch-reviewer 强制拆 -B1/-B2。本卡 -B1 = 建立 ADR-205 方案 X 事务边界——把 bangumi/tmdb 自包含 service 的**内容标量字段写入**从其内部事务剥离为「返回 proposedFields」，enrich 层立即按现优先级 safeUpdate（行为等价过渡，无 reconcile 加权）；身份副作用（ref/cache/redirect/episodes/characters/type）留各 service 自有事务。方案 X 否决方案 Y（拆 applyEnrichmentDb 到外层单事务 → 违反 ADR-174 redirect/ADR-177 exact 冲突「真源不外迁」+ confirmMatch 共享回归面爆炸）。
+- **用户设计门禁（两硬约束 + B2 边界裁定）**：① **TMDB cache/type 显式拆出**（不丢 tmdbId/imdbId/type 内部写入）；② **Bangumi wrote 语义重定义**（confirm/refresh inline 零变化 + auto defer 身份/scalar 分离）；③ **B2 范围方案 (a)**：B2 只做 bangumi/tmdb reconcile core，douban Step1/2 留 49-D cutover（忠于 ADR-205 D-205-8 不提前改活表；否决方案 b 提前 cutover）。
+- **方案**：
+  - **共享原语** `services/metadata/fieldSplit.ts`：`splitIdentityScalarFields` 把 CatalogUpdateData 拆「身份/type（doubanId/bangumiSubjectId/tmdbId/imdbId + type）」与「内容标量」（cache 触发 catalog_external_refs 留事务 + type 走 ADR-203，均不进 reconcile）。
+  - **tmdb** `autoMatch`：拆 updateFields → 身份+type `safeUpdate` 留事务（受 ref 成功约束）+ 内容 `proposedFields` 上抛 + 透传 `preserveMetadataSource`（filterCrossValidation 在拆分前对完整 updateFields 跑、两段共用标志）；`TmdbAutoMatchResult` matched 分支加 proposedFields/preserveMetadataSource。
+  - **bangumi** `applyEnrichmentDb` 加 `mode: 'inline'|'defer'`：inline（confirmMatch/refreshExistingMatch 默认）内部写全部 scalar、wrote=updated≠null **零变化**（ADR-202 confirm 零改）；defer（applyAutoMatchAtomic auto 流）只写身份 bangumiSubjectId（留事务触发 catalog ref/cache + redirect）+ 内容 proposedFields 上抛、wrote 表身份副作用成功；`BangumiEnrichResult` auto + applyAutoMatchAtomic + matchAndEnrich 透传 proposedFields。
+  - **enrich** `MetadataEnrichService`：step3Bangumi 返回 {effectiveCatalogId, proposedFields, bangumiSubjectId}、stepTmdb 用 result.proposedFields + preserveMetadataSource → enrich 用 effectiveCatalogId 立即 safeUpdate(内容, source)（行为等价；B2 换 reconcile collector）。
+- **修改文件**：
+  - `apps/api/src/services/metadata/fieldSplit.ts` — 新建（splitIdentityScalarFields）
+  - `apps/api/src/services/TmdbConfirmService.ts` — autoMatch 拆身份/内容 + 类型扩 proposedFields/preserveMetadataSource
+  - `apps/api/src/services/BangumiService.ts` — applyEnrichmentDb mode + defer 拆分 + applyAutoMatchAtomic/matchAndEnrich 透传
+  - `apps/api/src/services/MetadataEnrichService.ts` — step3Bangumi 返回 proposedFields + enrich/stepTmdb 立即 safeUpdate
+  - `tests/unit/api/metadataFieldSplit.test.ts` — 新建（4 拆分用例）
+  - `tests/unit/api/tmdb-confirm-service.test.ts` — 2 交叉验证测试改 proposedFields 断言 + 新增 cache/type retained 测试
+  - `tests/unit/api/bangumi-service.test.ts` — auto defer proposedFields 断言 + confirm scalar unchanged 明确断言
+  - `tests/unit/api/metadataEnrich.test.ts` — 新增 enrich 端到端 auto scalar 等价（proposedFields → safeUpdate）
+- **新增依赖**：无
+- **数据库变更**：无（proposals 表 49-A 已建；本卡纯 service 接口/事务边界）
+- **质量门禁**：typecheck 7ws 全过 / lint 4 successful / test:changed 16 文件 334 passed（bangumi 83 + metadataEnrich 41 + tmdb-confirm 44 + fieldSplit 4 + douban/staging/moderation 零回归）/ verify:adr-contracts EXIT=0（endpoint-adr 243 对齐无新端点 + sql-schema-alignment 通过）；e2e N/A（纯 service 无 UI/route，对齐 META-47/48）。+8 新单测。
+- **门禁三项守卫（用户）**：① confirm scalar unchanged（confirmMatch inline 写全部 scalar 含 title）；② auto scalar 等价（tmdb/bangumi auto 身份内部写 + 内容 proposedFields enrich 层写，端到端 safeUpdate 断言）；③ TMDB tmdbId/imdbId/type retained（拆出后仍身份 safeUpdate 内写）。
+- **方案 X 偏离登记（arch-reviewer 澄清，非 AMENDMENT）**：① O-205-3「采集层零改」= fetch/search/score/detail，service 标量 safeUpdate 不属采集层、改返 proposedFields；② 两阶段非原子（身份先落、内容后写）等价现有 enrich 中途崩溃语义，去重守卫 + refresh 收敛，不违 ADR 不变量；③ **实施精化**：仅剥「内容标量」，身份字段（bangumiSubjectId/tmdbId/imdbId/type）留 service 事务（忠于 cache 不进 reconcile 白名单 + 方案 X 身份留事务），比 arch-reviewer 粗描述「整体移除 :508/:478 safeUpdate」更精确（防 cache/ref/type 丢失）。
+- **注意事项**：interim `filterCrossValidation`/tmdb 内 `preserveMetadataSource` 调用 **-B1 保留**（维持行为等价），-B2 随 reconcile 同步退场；tmdb autoMatch rescore 既存遗漏归 -B2 补。
+- **[AI-CHECK]**：六问过——①根因=bangumi/tmdb 自包含 service 标量与身份揉同事务 → 剥离内容标量建方案 X 边界（arch-reviewer gate）；②零回归（3 既有交叉验证测试适配新契约 + 全套门禁绿 + confirm/auto scalar 等价守卫）；③边界=仅接口剥离+行为等价过渡，不做 reconcile 加权（49-B2）/interim 退场（49-B2）/douban（49-D）；④复用=splitIdentityScalarFields 共享原语（bangumi/tmdb + B2 复用）、enrich 复用 this.catalogService；⑤守 ADR-202 confirm 零改（inline 默认）/ ADR-174 redirect 留事务 / ADR-177 ref 真源留事务 / ADR-203 type 留 autoMatch / ADR-186 fill-if-empty 不变；⑥范围=1 新原语 + 3 service 接口 + 4 测试，无 admin-ui Props/无端点/无 schema。**arch-reviewer (a2eb1cd50a6e28838) gate PASS + 用户两硬约束全纳入**。解锁 META-49-B2（reconcile 裁决核心）。

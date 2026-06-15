@@ -585,9 +585,13 @@ describe('BangumiService.matchAndEnrich', () => {
     const r = await svc.matchAndEnrich({ videoId: VID, catalogId: CID, titleNorm: 'x', year: 2007 })
     expect(r).toMatchObject({ matched: 'auto', degraded: true, episodes: 0 })
     expect(mGetSubject).not.toHaveBeenCalled()
+    // META-49-B1（方案 X）：auto defer → safeUpdate 只写身份 bangumiSubjectId（留事务触发 catalog ref/cache）；
+    // 内容字段 title 进 proposedFields，由 enrich 层立即 safeUpdate（bangumi-service 不直接写内容）。
     expect(mUpdateCatalog).toHaveBeenCalledWith(expect.anything(), CID, expect.objectContaining({
-      bangumiSubjectId: 51, title: '团子大家族', metadataSource: 'bangumi',
+      bangumiSubjectId: 51, metadataSource: 'bangumi',
     }))
+    expect(mUpdateCatalog.mock.calls[0][2]).not.toHaveProperty('title')
+    expect((r as { matched: 'auto'; proposedFields?: Record<string, unknown> }).proposedFields).toMatchObject({ title: '团子大家族' })
   })
 
   it('auto + getSubject 失败 → 降级本地 dump 字段', async () => {
@@ -928,7 +932,11 @@ describe('BangumiService.confirmMatch', () => {
     const r = await svc.confirmMatch(VID, CID, 99999)
     expect(r).toEqual({ updated: true })
     expect(mGetSubject).toHaveBeenCalledWith(99999, expect.any(Object), 'enrich_worker')
-    expect(mUpdateCatalog).toHaveBeenCalled()
+    // META-49-B1 confirm scalar unchanged：confirmMatch 走 inline 模式（默认），仍在事务内写全部 scalar
+    // （含内容字段 title，非仅身份）——ADR-202 confirm 零改红线守卫。
+    expect(mUpdateCatalog).toHaveBeenCalledWith(expect.anything(), CID, expect.objectContaining({
+      bangumiSubjectId: 99999, title: '团子大家族',
+    }))
     expect(mUpsertRef).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
       provider: 'bangumi', matchStatus: 'manual_confirmed', isPrimary: true,
     }))

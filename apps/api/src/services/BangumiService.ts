@@ -33,6 +33,7 @@ import {
   mapEpisodes,
   mapCharacters,
 } from './BangumiService.utils'
+import { splitIdentityScalarFields } from './metadata/fieldSplit'
 
 function parseYear(date: string | null | undefined): number | null {
   if (!date) return null
@@ -59,7 +60,7 @@ export function clearBangumiConfigCache(): void {
 // 真去重 redirect 时为重指向后的 existing catalog。调用方（MetadataEnrichService.step5MetaScore）
 // 必须用它而非入参 catalogId，否则在 redirect 后会对已弃置的 orphan catalog 算 meta_score。
 export type BangumiEnrichResult =
-  | { matched: 'auto'; bangumiSubjectId: number; confidence: number; episodes: number; degraded: boolean; catalogId: string }
+  | { matched: 'auto'; bangumiSubjectId: number; confidence: number; episodes: number; degraded: boolean; catalogId: string; proposedFields?: CatalogUpdateData }
   | { matched: 'candidate'; bangumiSubjectId: number; confidence: number }
   | { matched: 'none'; reason: 'no_local_match' | 'low_confidence' }
 
@@ -192,6 +193,7 @@ export class BangumiService {
       episodes: apply.episodes,
       degraded: data.degraded,
       catalogId: apply.effectiveCatalogId,
+      proposedFields: apply.proposedFields,
     }
   }
 
@@ -457,7 +459,12 @@ export class BangumiService {
     catalogId: string,
     bangumiId: number,
     data: EnrichmentData,
-  ): Promise<{ episodes: number; wrote: boolean; dedupConflict: boolean; effectiveCatalogId: string }> {
+    // META-49-B1（ADR-205 方案 X）：scalar 写入模式。
+    //   'inline'（默认，confirmMatch/refreshExistingMatch）：内部 safeUpdate 全部 fields，wrote=updated≠null（零变化）。
+    //   'defer'（applyAutoMatchAtomic auto 流）：只写身份字段 bangumiSubjectId（留事务触发 catalog ref/cache），
+    //     内容标量上抛 proposedFields 由 enrich 层立即 safeUpdate；wrote 表「身份副作用写入成功」（与 scalar 解耦）。
+    mode: 'inline' | 'defer' = 'inline',
+  ): Promise<{ episodes: number; wrote: boolean; dedupConflict: boolean; effectiveCatalogId: string; proposedFields?: CatalogUpdateData }> {
     if (!data.fields) return { episodes: 0, wrote: false, dedupConflict: false, effectiveCatalogId: catalogId }
 
     // safeUpdate 接受 PoolClient（共享事务）或不传（走 service 自带 this.db）
@@ -505,9 +512,31 @@ export class BangumiService {
       )
     }
 
+    const safeUpdateClient = isClient ? (db as PoolClient) : undefined
+    if (mode === 'defer') {
+      // auto 流（方案 X）：身份字段 bangumiSubjectId 留本事务写（触发 catalog_external_refs + cache）；
+      // 内容标量上抛 proposedFields 由 enrich 层立即 safeUpdate（行为等价过渡，B2 换 reconcile 加权）。
+      const { identityFields, contentFields } = splitIdentityScalarFields(data.fields)
+      let wrote = false
+      if (Object.keys(identityFields).length > 0) {
+        const { updated } = await this.catalogService.safeUpdate(targetCatalogId, identityFields, 'bangumi', {
+          sourceRef: String(bangumiId),
+          db: safeUpdateClient,
+        })
+        wrote = updated !== null
+      }
+      return {
+        episodes: episodesWritten,
+        wrote,
+        dedupConflict: false,
+        effectiveCatalogId: targetCatalogId,
+        proposedFields: Object.keys(contentFields).length > 0 ? contentFields : undefined,
+      }
+    }
+    // inline（confirmMatch/refreshExistingMatch）：内部写全部 fields，行为零变化
     const { updated } = await this.catalogService.safeUpdate(targetCatalogId, data.fields, 'bangumi', {
       sourceRef: String(bangumiId),
-      db: isClient ? (db as PoolClient) : undefined,
+      db: safeUpdateClient,
     })
     return { episodes: episodesWritten, wrote: updated !== null, dedupConflict: false, effectiveCatalogId: targetCatalogId }
   }
@@ -530,11 +559,11 @@ export class BangumiService {
     confidence: number,
     breakdown: Record<string, number>,
     data: EnrichmentData,
-  ): Promise<{ episodes: number; dedupConflict: boolean; effectiveCatalogId: string }> {
+  ): Promise<{ episodes: number; dedupConflict: boolean; effectiveCatalogId: string; proposedFields?: CatalogUpdateData }> {
     const client = await this.db.connect()
     try {
       await client.query('BEGIN')
-      const result = await this.applyEnrichmentDb(client, videoId, catalogId, bangumiId, data)
+      const result = await this.applyEnrichmentDb(client, videoId, catalogId, bangumiId, data, 'defer')
       const conflict = result.dedupConflict
       // conflict → candidate/非 primary/unmatched（降级）；否则 auto_matched/primary/matched（正常）
       await externalDataQueries.upsertVideoExternalRef(client, {
@@ -556,7 +585,7 @@ export class BangumiService {
       if (!conflict) {
         enqueueIdentityVideoRescore(videoId)
       }
-      return { episodes: conflict ? 0 : result.episodes, dedupConflict: conflict, effectiveCatalogId: result.effectiveCatalogId }
+      return { episodes: conflict ? 0 : result.episodes, dedupConflict: conflict, effectiveCatalogId: result.effectiveCatalogId, proposedFields: conflict ? undefined : result.proposedFields }
     } catch (err) {
       try { await client.query('ROLLBACK') } catch { /* connection may already be lost */ }
       throw err

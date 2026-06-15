@@ -406,28 +406,57 @@ describe('autoMatch', () => {
     vi.mocked(tmdbLib.getMovieDetail).mockResolvedValue({ ...MOVIE, id: 555 } as any)
     const r = await svc.autoMatch('vid', 'cat', { title: 'abcdef', year: 2023, mediaType: 'movie' })
     expect(r).toMatchObject({ matched: true, tier: 'auto_matched' })
-    const arg = safeUpdateMock.mock.calls[0][1] as Record<string, unknown>
-    expect(arg.title).toBeUndefined() // bangumi title 非空 → 不覆盖
-    expect(arg.genres).toBeUndefined() // bangumi genres 非空 → 不覆盖
-    expect(arg.description).toBe('小女孩千寻被困在精灵世界') // bangumi description 空 → 补
-    expect(arg.tmdbId).toBe(555) // ref/cache 身份仍写
+    // META-49-B1（方案 X）：filterCrossValidation 在 autoMatch 内对内容字段跑（剔除等/高优先级源已写者）→
+    // 剩余内容进 proposedFields（enrich 层立即 safeUpdate）；身份 tmdbId/imdb 留 autoMatch 事务内写。
+    const proposed = (r.matched ? r.proposedFields : undefined) ?? {}
+    expect(proposed.title).toBeUndefined() // bangumi title 非空 → 剔除不覆盖
+    expect(proposed.genres).toBeUndefined() // bangumi genres 非空 → 剔除不覆盖
+    expect(proposed.description).toBe('小女孩千寻被困在精灵世界') // bangumi description 空 → 补
+    const idArg = safeUpdateMock.mock.calls[0][1] as Record<string, unknown>
+    expect(idArg.tmdbId).toBe(555) // ref/cache 身份仍写（留事务）
+    expect(idArg.title).toBeUndefined() // 内容不在身份 safeUpdate（已剥离到 proposedFields）
     expect(catalogRefs.resolveAndWriteExactRef).toHaveBeenCalled()
-    // Codex FIX：交叉验证 fill 须保留 metadata_source（不让 TMDB 同级接管 bangumi 主权）
+    // Codex FIX + B1：交叉验证 fill 须保留 metadata_source（透传到身份 safeUpdate + proposedFields）
+    expect(r.matched ? r.preserveMetadataSource : undefined).toBe(true)
     const ctx = safeUpdateMock.mock.calls[0][3] as Record<string, unknown>
     expect(ctx.preserveMetadataSource).toBe(true)
   })
 
-  it('current=douban(低于 tmdb) → 不过滤，内容字段全覆盖 + preserveMetadataSource=false（权威写）', async () => {
+  it('current=douban(低于 tmdb) → 不过滤，内容字段全进 proposedFields + preserveMetadataSource=false（权威写）', async () => {
     vi.mocked(findCatalogById).mockResolvedValue(catalogWith({ metadataSource: 'douban', title: 'D 标题', genres: ['g'], description: 'D 简介' }))
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     vi.mocked(tmdbLib.searchMovie).mockResolvedValue(search([movieItem()]) as any)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     vi.mocked(tmdbLib.getMovieDetail).mockResolvedValue({ ...MOVIE, id: 555 } as any)
-    await svc.autoMatch('vid', 'cat', { title: 'abcdef', year: 2023, mediaType: 'movie' })
-    const arg = safeUpdateMock.mock.calls[0][1] as Record<string, unknown>
-    expect(arg.title).toBe('千与千寻') // douban<tmdb → 覆盖
-    expect(arg.description).toBe('小女孩千寻被困在精灵世界')
-    const ctx = safeUpdateMock.mock.calls[0][3] as Record<string, unknown>
-    expect(ctx.preserveMetadataSource).toBe(false) // 权威写 → 正常翻 metadata_source
+    const r = await svc.autoMatch('vid', 'cat', { title: 'abcdef', year: 2023, mediaType: 'movie' })
+    // B1：douban<tmdb 不过滤 → 内容字段全进 proposedFields（enrich 层覆盖写）
+    const proposed = (r.matched ? r.proposedFields : undefined) ?? {}
+    expect(proposed.title).toBe('千与千寻') // douban<tmdb → 覆盖
+    expect(proposed.description).toBe('小女孩千寻被困在精灵世界')
+    expect(r.matched ? r.preserveMetadataSource : undefined).toBe(false) // 权威写 → 正常翻 metadata_source
+  })
+
+  it('B1 cache/type retained：身份(tmdbId/imdbId/type)留事务 safeUpdate、内容进 proposedFields（不丢 cache/type）', async () => {
+    // type='other' → tmdb movie 信号可写 type（ADR-203 fill-if-default）
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    vi.mocked(findCatalogById).mockResolvedValue({ type: 'other' } as any)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    vi.mocked(tmdbLib.searchMovie).mockResolvedValue(search([movieItem()]) as any)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    vi.mocked(tmdbLib.getMovieDetail).mockResolvedValue({ ...MOVIE, id: 555 } as any)
+    const r = await svc.autoMatch('vid', 'cat', { title: 'abcdef', year: 2023, mediaType: 'movie' })
+    expect(r.matched).toBe(true)
+    // 身份 safeUpdate（留事务）含 tmdbId/imdbId/type，不含内容字段
+    const idArg = safeUpdateMock.mock.calls[0][1] as Record<string, unknown>
+    expect(idArg.tmdbId).toBe(555)
+    expect(idArg.imdbId).toBe('tt0245429')
+    expect(idArg.type).toBe('movie') // ADR-203 type 留 autoMatch 内写（retained）
+    expect(idArg.title).toBeUndefined()
+    // 内容进 proposedFields，不含身份/type（cache/type retained 在身份 safeUpdate）
+    const proposed = (r.matched ? r.proposedFields : undefined) ?? {}
+    expect(proposed.title).toBe('千与千寻')
+    expect(proposed.tmdbId).toBeUndefined()
+    expect(proposed.imdbId).toBeUndefined()
+    expect(proposed.type).toBeUndefined()
   })
 })
