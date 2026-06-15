@@ -15,6 +15,7 @@ import { describe, it, expect, vi } from 'vitest'
 import type { Pool } from 'pg'
 import {
   batchUpsertFieldProposals,
+  deleteFieldProposalsByFields,
   getFieldProposalsByCatalogId,
 } from '@/api/db/queries/metadata-field-proposals'
 
@@ -98,6 +99,22 @@ describe('batchUpsertFieldProposals — INSERT 形状 / jsonb cast / ON CONFLICT
   it('空数组：不调用 db.query', async () => {
     const m = makeMockDb()
     await batchUpsertFieldProposals(m.db, CID, [])
+    expect((m.db.query as ReturnType<typeof vi.fn>)).not.toHaveBeenCalled()
+  })
+})
+
+describe('deleteFieldProposalsByFields — 决出字段清旧（Codex FIX stale）', () => {
+  it('DELETE WHERE catalog_id + field_name = ANY($2::text[])', async () => {
+    const m = makeMockDb()
+    await deleteFieldProposalsByFields(m.db, CID, ['title', 'description'])
+    expect(m.sql).toContain('DELETE FROM metadata_field_proposals')
+    expect(m.sql).toContain('WHERE catalog_id = $1 AND field_name = ANY($2::text[])')
+    expect(m.params).toEqual([CID, ['title', 'description']])
+  })
+
+  it('空字段数组：不调用 db.query', async () => {
+    const m = makeMockDb()
+    await deleteFieldProposalsByFields(m.db, CID, [])
     expect((m.db.query as ReturnType<typeof vi.fn>)).not.toHaveBeenCalled()
   })
 })

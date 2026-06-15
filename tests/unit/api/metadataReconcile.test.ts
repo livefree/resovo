@@ -9,9 +9,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type { Pool } from 'pg'
 
-const { safeUpdateMock, batchUpsertMock } = vi.hoisted(() => ({
+const { safeUpdateMock, batchUpsertMock, deleteMock } = vi.hoisted(() => ({
   safeUpdateMock: vi.fn(),
   batchUpsertMock: vi.fn(),
+  deleteMock: vi.fn(),
 }))
 
 // MediaCatalogService 类 mock；保留真 CATALOG_SOURCE_PRIORITY（reconcile trust 派生真源，禁另立硬编码）
@@ -19,7 +20,10 @@ vi.mock('@/api/services/MediaCatalogService', async (orig) => {
   const actual = await orig<typeof import('@/api/services/MediaCatalogService')>()
   return { ...actual, MediaCatalogService: vi.fn().mockImplementation(() => ({ safeUpdate: safeUpdateMock })) }
 })
-vi.mock('@/api/db/queries/metadata-field-proposals', () => ({ batchUpsertFieldProposals: batchUpsertMock }))
+vi.mock('@/api/db/queries/metadata-field-proposals', () => ({
+  batchUpsertFieldProposals: batchUpsertMock,
+  deleteFieldProposalsByFields: deleteMock,
+}))
 
 import { reconcileMetadata, type ReconcileSource } from '@/api/services/metadata/reconcile'
 import { splitReconcilePassthrough, canonicalizeValue } from '@/api/services/metadata/reconcile.canonical'
@@ -179,6 +183,22 @@ describe('reconcileMetadata', () => {
     await reconcileMetadata(pool, 'cat', sources)
     const titleP = lastProposals().find((p) => p.fieldName === 'title')
     expect(titleP).toMatchObject({ isWinner: true, applied: false }) // winner 但未落 catalog
+  })
+
+  it('Codex FIX stale 清除：决出字段先 deleteFieldProposalsByFields（同事务）再 batchUpsert（杜绝跨 run 残留）', async () => {
+    const { pool } = makePool()
+    await reconcileMetadata(pool, 'cat', [
+      { source: 'tmdb', sourceRef: '5', confidence: 0.9, fields: { title: 'X', description: 'D', releaseDate: '2020' } },
+    ])
+    // 决出字段（白名单）先删旧 proposal——title/description（releaseDate 是 passthrough 不进 proposals）
+    expect(deleteMock).toHaveBeenCalledTimes(1)
+    const [, catalogArg, fieldsArg] = deleteMock.mock.calls[0]
+    expect(catalogArg).toBe('cat')
+    expect([...(fieldsArg as string[])].sort()).toEqual(['description', 'title'])
+    expect(fieldsArg).not.toContain('releaseDate') // passthrough 不落 proposals → 不需清
+    expect(batchUpsertMock).toHaveBeenCalled()
+    // 顺序：delete 在 upsert 之前（先删后插同事务）
+    expect(deleteMock.mock.invocationCallOrder[0]).toBeLessThan(batchUpsertMock.mock.invocationCallOrder[0])
   })
 
   it('事务边界：BEGIN → safeUpdate → batchUpsert → COMMIT + release', async () => {

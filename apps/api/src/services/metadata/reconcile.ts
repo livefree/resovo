@@ -15,7 +15,7 @@
 
 import type { Pool } from 'pg'
 import type { CatalogUpdateData } from '@/api/db/queries/mediaCatalog'
-import { batchUpsertFieldProposals, type FieldProposalInput } from '@/api/db/queries/metadata-field-proposals'
+import { batchUpsertFieldProposals, deleteFieldProposalsByFields, type FieldProposalInput } from '@/api/db/queries/metadata-field-proposals'
 import { baseLogger } from '@/api/lib/logger'
 import { MediaCatalogService, CATALOG_SOURCE_PRIORITY, type CatalogMetadataSource } from '../MediaCatalogService'
 import { RECONCILE_GROUPS, splitReconcilePassthrough, canonicalizeValue, type ReconcileGroup } from './reconcile.canonical'
@@ -183,6 +183,9 @@ export async function reconcileMetadata(
         })
       }
     }
+    // Codex FIX：先删本次决出字段的旧 proposal（同事务）再插——杜绝跨 run winner 翻转/冲突消解后
+    // 旧 is_winner/conflict_state 残留（双 winner / 幽灵冲突）。decisions 一字段一项 → 决出字段全集。
+    await deleteFieldProposalsByFields(client, catalogId, decisions.map((d) => d.field))
     await batchUpsertFieldProposals(client, catalogId, proposals)
 
     await client.query('COMMIT')

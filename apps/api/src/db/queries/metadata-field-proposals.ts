@@ -133,6 +133,29 @@ export async function batchUpsertFieldProposals(
   )
 }
 
+/**
+ * 删除指定字段的全部 proposal（reconcile 逐字段全量重算前清旧）。
+ *
+ * META-49-B2（Codex stop-time review FIX「stale proposal rows never cleared」）：`batchUpsert` 只
+ * upsert 不删——重 enrich/refresh 时若某字段 winner 翻转（旧 winner 源不再提案）或冲突消解（旧 conflict
+ * 源退出），旧行 `is_winner=true`/`conflict_state='conflict'` 残留 → 双 winner / 幽灵冲突
+ * （49-C derive 经 partial index `WHERE conflict_state IS NOT NULL` 读到永不清除的假冲突）。
+ *
+ * reconcile 对本次**决出的字段**先删后插（同事务）：每字段 proposal 行 = 本次 reconcile 的候选全集，
+ * 杜绝跨 run 残留。未决字段（本 run 无源提案）的历史 proposal 保留（未被重新评估）。
+ */
+export async function deleteFieldProposalsByFields(
+  db: Pool | PoolClient,
+  catalogId: string,
+  fieldNames: string[],
+): Promise<void> {
+  if (fieldNames.length === 0) return
+  await db.query(
+    `DELETE FROM metadata_field_proposals WHERE catalog_id = $1 AND field_name = ANY($2::text[])`,
+    [catalogId, fieldNames],
+  )
+}
+
 // ── 读侧（单 catalog，独立验证 / 49-B 调试；批量多 catalog conflict 读归 49-C）──────
 
 /** 查询单 catalog 全部字段 proposal（按 field_name, source_kind 稳定排序）。 */
