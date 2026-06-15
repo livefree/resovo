@@ -158,6 +158,32 @@ export async function deleteFieldProposalsByFields(
 
 // ── 读侧（单 catalog，独立验证 / 49-B 调试；批量多 catalog conflict 读归 49-C）──────
 
+/**
+ * 批量取一组 catalog 的「冲突字段名」（conflict_state 非空，走 partial index
+ * `idx_metadata_field_proposals_conflict`，避免 cell N+1）。META-49-C derive 注入：有冲突字段的
+ * catalog → overall 派为 needs_review。返回 `Map<catalogId, 冲突字段名[]>`（去重升序）。
+ */
+export async function getConflictFieldsByCatalogIds(
+  db: Pool | PoolClient,
+  catalogIds: string[],
+): Promise<Map<string, string[]>> {
+  const result = new Map<string, string[]>()
+  if (catalogIds.length === 0) return result
+  const res = await db.query<{ catalog_id: string; field_name: string }>(
+    `SELECT DISTINCT catalog_id, field_name
+       FROM metadata_field_proposals
+      WHERE catalog_id = ANY($1::uuid[]) AND conflict_state IS NOT NULL
+      ORDER BY catalog_id, field_name`,
+    [catalogIds],
+  )
+  for (const r of res.rows) {
+    const list = result.get(r.catalog_id) ?? []
+    list.push(r.field_name)
+    result.set(r.catalog_id, list)
+  }
+  return result
+}
+
 /** 查询单 catalog 全部字段 proposal（按 field_name, source_kind 稳定排序）。 */
 export async function getFieldProposalsByCatalogId(
   db: Pool | PoolClient,

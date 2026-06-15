@@ -17,6 +17,8 @@ import * as catalogCharacterQueries from '@/api/db/queries/catalogCharacters'
 import {
   getMetadataProviderRefs, buildMetadataStatusSummary, toMetadataStatusSourceRow,
 } from '@/api/db/queries/metadata-status.derive'
+// ADR-205 M3 / META-49-C：跨源逐字段冲突批量注入（conflict_state → overall needs_review）
+import { getConflictFieldsByCatalogIds } from '@/api/db/queries/metadata-field-proposals'
 import type {
   UpdateVideoMetaInput,
   ModerationStats,
@@ -248,10 +250,16 @@ export class VideoService {
     const refsMap = await getMetadataProviderRefs(
       this.db, rows.map((r) => ({ id: r.id, catalogId: r.catalog_id })),
     )
+    // ADR-205 M3：批量取冲突字段（按 catalog 去重，走 partial index 避 N+1）→ 冲突 catalog 浮 needs_review
+    const conflictsMap = await getConflictFieldsByCatalogIds(
+      this.db, [...new Set(rows.map((r) => r.catalog_id))],
+    )
     const data = rows.map((r) => ({
       ...r,
       enrichmentSummary: videoQueries.buildEnrichmentSummary(r),
-      metadataStatus: buildMetadataStatusSummary(toMetadataStatusSourceRow(r, refsMap.get(r.id) ?? [])),
+      metadataStatus: buildMetadataStatusSummary(
+        toMetadataStatusSourceRow(r, refsMap.get(r.id) ?? [], conflictsMap.get(r.catalog_id) ?? []),
+      ),
     }))
     return { data, total, page, limit }
   }
@@ -275,12 +283,15 @@ export class VideoService {
     const bangumiCharacters = row.type === 'anime'
       ? await catalogCharacterQueries.listCatalogCharactersForDisplay(this.db, row.catalog_id, 'bangumi')
       : []
-    // ADR-201 / META-32-A：详情注入统一 metadataStatus（单视频 refs）
+    // ADR-201 / META-32-A：详情注入统一 metadataStatus（单视频 refs）+ ADR-205 M3 冲突字段
     const refsMap = await getMetadataProviderRefs(this.db, [{ id: row.id, catalogId: row.catalog_id }])
+    const conflictsMap = await getConflictFieldsByCatalogIds(this.db, [row.catalog_id])
     return {
       ...row,
       enrichmentSummary: videoQueries.buildEnrichmentSummary(row),
-      metadataStatus: buildMetadataStatusSummary(toMetadataStatusSourceRow(row, refsMap.get(row.id) ?? [])),
+      metadataStatus: buildMetadataStatusSummary(
+        toMetadataStatusSourceRow(row, refsMap.get(row.id) ?? [], conflictsMap.get(row.catalog_id) ?? []),
+      ),
       externalRefs,
       ...(bangumiInfo ? { bangumiInfo } : {}),
       ...(bangumiCharacters.length > 0 ? { bangumiCharacters } : {}),

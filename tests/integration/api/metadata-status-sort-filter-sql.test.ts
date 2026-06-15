@@ -20,6 +20,7 @@ import {
   buildMetadataStatusSummary,
   toMetadataStatusSourceRow,
 } from '@/api/db/queries/metadata-status.derive'
+import { getConflictFieldsByCatalogIds } from '@/api/db/queries/metadata-field-proposals'
 import { VIDEO_FULL_SELECT, VIDEO_JOIN } from '@/api/db/queries/videos.internal'
 import { METADATA_PROVIDERS } from '@resovo/types'
 
@@ -109,8 +110,18 @@ describe('SQL 派生 ↔ JS 派生口径一致（METADATA_STATUS_JOIN_SQL vs bui
     const refsMap = await getMetadataProviderRefs(
       db, rowsRes.rows.map((r) => ({ id: r.id, catalogId: r.catalog_id })),
     )
+    // ADR-205 M3：JS 侧也消费真库冲突字段（与 SQL conflictExists 同源），否则若 dev DB 已有 conflict 行
+    // 则 SQL=needs_review 而 JS≠ → 误报 mismatch。两侧同口径 = 诚实双向守护。
+    const conflictsMap = await getConflictFieldsByCatalogIds(
+      db, [...new Set(rowsRes.rows.map((r) => r.catalog_id))],
+    )
     const jsById = new Map(
-      rowsRes.rows.map((row) => [row.id, buildMetadataStatusSummary(toMetadataStatusSourceRow(row, refsMap.get(row.id) ?? []))]),
+      rowsRes.rows.map((row) => [
+        row.id,
+        buildMetadataStatusSummary(
+          toMetadataStatusSourceRow(row, refsMap.get(row.id) ?? [], conflictsMap.get(row.catalog_id) ?? []),
+        ),
+      ]),
     )
 
     const mismatches: string[] = []

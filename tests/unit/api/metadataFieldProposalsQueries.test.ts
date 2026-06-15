@@ -16,6 +16,7 @@ import type { Pool } from 'pg'
 import {
   batchUpsertFieldProposals,
   deleteFieldProposalsByFields,
+  getConflictFieldsByCatalogIds,
   getFieldProposalsByCatalogId,
 } from '@/api/db/queries/metadata-field-proposals'
 
@@ -116,6 +117,35 @@ describe('deleteFieldProposalsByFields — 决出字段清旧（Codex FIX stale�
     const m = makeMockDb()
     await deleteFieldProposalsByFields(m.db, CID, [])
     expect((m.db.query as ReturnType<typeof vi.fn>)).not.toHaveBeenCalled()
+  })
+})
+
+describe('getConflictFieldsByCatalogIds — 批量冲突字段（ADR-205 M3，partial index）', () => {
+  it('DISTINCT catalog_id/field_name WHERE conflict_state IS NOT NULL → Map<catalogId, fields[]>', async () => {
+    const db = {
+      query: vi.fn(async (sql: string, params: unknown[]) => {
+        expect(sql).toContain('WHERE catalog_id = ANY($1::uuid[]) AND conflict_state IS NOT NULL')
+        expect(params).toEqual([['c1', 'c2']])
+        return {
+          rows: [
+            { catalog_id: 'c1', field_name: 'rating' },
+            { catalog_id: 'c1', field_name: 'title' },
+            { catalog_id: 'c2', field_name: 'description' },
+          ],
+        }
+      }),
+    } as unknown as Pool
+    const map = await getConflictFieldsByCatalogIds(db, ['c1', 'c2'])
+    expect(map.get('c1')).toEqual(['rating', 'title'])
+    expect(map.get('c2')).toEqual(['description'])
+    expect(map.has('c3')).toBe(false)
+  })
+
+  it('空 catalogIds：不调用 db.query', async () => {
+    const db = { query: vi.fn() } as unknown as Pool
+    const map = await getConflictFieldsByCatalogIds(db, [])
+    expect(map.size).toBe(0)
+    expect((db.query as ReturnType<typeof vi.fn>)).not.toHaveBeenCalled()
   })
 })
 

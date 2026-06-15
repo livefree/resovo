@@ -54,6 +54,12 @@ export interface MetadataStatusSourceRow {
   bangumiSubjectId: number | null
   /** 四源 refs 聚合（每 provider ≤1 条；缺则该 provider 走 status 列 / cache 兜底）。 */
   providerRefs: readonly ProviderRefAggregate[]
+  /**
+   * 跨源冲突字段名（META-49-C / ADR-205 M3）：`metadata_field_proposals.conflict_state` 非空的字段。
+   * 非空 → overall 派为 needs_review（最高运营优先级）+ danger issue。空 = 无冲突。
+   * 由 `getConflictFieldsByCatalogIds` 批量注入（缺省 [] 兼容非 metadata 路径）。
+   */
+  fieldConflicts: readonly string[]
 }
 
 /** issue 等级 → 排序键（视频库 SQL `metadata_issue_rank` 与 JS `sort.issueRank` 共用真源，META-32-B）。 */
@@ -164,10 +170,14 @@ function mapVideoMatchStatus(
   return { state: 'missing', issueLevel: 'none' }
 }
 
-/** 整体状态派生（ADR-201 §派生规则 1–6；禁静默归 complete）。 */
+/** 整体状态派生（ADR-201 §派生规则 1–6 + ADR-205 M3 跨源冲突；禁静默归 complete）。 */
 function deriveOverall(
   providers: readonly MetadataProviderStatus[], enrichedAt: string | null, score: number | null,
+  hasFieldConflict: boolean,
 ): MetadataStatusOverall {
+  // ADR-205 M3：跨源逐字段冲突（reconcile 写 conflict_state）→ needs_review（最高优先级，先于 provider 态判定）
+  if (hasFieldConflict) return 'needs_review'
+
   const hasDanger = providers.some((p) => p.issueLevel === 'danger')
   const hasWarn = providers.some((p) => p.issueLevel === 'warn')
   const hasApplied = providers.some((p) => p.state === 'applied')
@@ -182,8 +192,17 @@ function deriveOverall(
   return 'partial'  // 边界默认 partial + issue（ADR 规则 6）
 }
 
-function collectIssues(providers: readonly MetadataProviderStatus[]): MetadataStatusIssue[] {
+function collectIssues(
+  providers: readonly MetadataProviderStatus[], fieldConflicts: readonly string[],
+): MetadataStatusIssue[] {
   const issues: MetadataStatusIssue[] = []
+  // ADR-205 M3：跨源逐字段冲突（provider:null 跨源问题；字段名结构化进 message，UI 展示留 49-D）
+  if (fieldConflicts.length > 0) {
+    issues.push({
+      code: 'field_conflict', level: 'danger', provider: null,
+      message: `field conflict: ${[...fieldConflicts].join(', ')}`, action: 'review_conflict',
+    })
+  }
   for (const p of providers) {
     if (p.state === 'candidate') {
       issues.push({ code: 'candidate_unconfirmed', level: 'warn', provider: p.provider, message: `${p.provider} candidate not applied`, action: 'confirm_candidate' })
@@ -218,11 +237,14 @@ export function buildMetadataStatusSummary(row: MetadataStatusSourceRow): Metada
 
   const score = row.metaScore ?? null
   const enrichedAt = row.metaQuality?.enriched_at ?? null
-  const overall = deriveOverall(providerList, enrichedAt, score)
-  const issues = collectIssues(providerList)
-  const issueLevel = providerList.reduce<MetadataIssueLevel>(
+  const hasFieldConflict = row.fieldConflicts.length > 0
+  const overall = deriveOverall(providerList, enrichedAt, score, hasFieldConflict)
+  const issues = collectIssues(providerList, row.fieldConflicts)
+  const providerIssueLevel = providerList.reduce<MetadataIssueLevel>(
     (acc, p) => (METADATA_ISSUE_RANK[p.issueLevel] > METADATA_ISSUE_RANK[acc] ? p.issueLevel : acc), 'none',
   )
+  // 冲突为 danger（最高），并入 issueLevel（与 SQL `GREATEST(issueCols, conflict?danger:0)` 镜像）
+  const issueLevel: MetadataIssueLevel = hasFieldConflict ? 'danger' : providerIssueLevel
 
   return {
     overall,
@@ -361,6 +383,7 @@ export function toMetadataStatusSourceRow(
     bangumi_subject_id: number | null
   },
   providerRefs: readonly ProviderRefAggregate[],
+  fieldConflicts: readonly string[] = [],
 ): MetadataStatusSourceRow {
   return {
     type: row.type,
@@ -373,6 +396,7 @@ export function toMetadataStatusSourceRow(
     imdbId: row.imdb_id,
     bangumiSubjectId: row.bangumi_subject_id,
     providerRefs,
+    fieldConflicts,
   }
 }
 
@@ -493,8 +517,11 @@ function buildMetadataStatusJoinSql(): string {
   const issueCols = METADATA_PROVIDERS.map((p) => `p.md_${p}_issue_rank`).join(', ')
   const T = METADATA_COMPLETE_SCORE_THRESHOLD
   const R = METADATA_OVERALL_RANK
-  // overall 运营优先级（镜像 deriveOverall 1–6；enriched_at 空串按缺失处理对齐 JS `!enrichedAt`）
+  // ADR-205 M3：跨源逐字段冲突存在性（reconcile 写 conflict_state，走 partial index；镜像 JS hasFieldConflict）
+  const conflictExists = `EXISTS (SELECT 1 FROM metadata_field_proposals mfp WHERE mfp.catalog_id = v.catalog_id AND mfp.conflict_state IS NOT NULL)`
+  // overall 运营优先级（镜像 deriveOverall：冲突优先 → 1–6；enriched_at 空串按缺失处理对齐 JS `!enrichedAt`）
   const overallRank = `CASE
+          WHEN ${conflictExists} THEN ${R.needs_review}
           WHEN 'problem' IN (${stateCols}) THEN ${R.needs_review}
           WHEN 'candidate' IN (${stateCols}) THEN ${R.candidate}
           WHEN 'applied' NOT IN (${stateCols}) AND NULLIF(v.meta_quality->>'enriched_at', '') IS NULL THEN ${R.missing}
@@ -506,7 +533,7 @@ function buildMetadataStatusJoinSql(): string {
       SELECT
         ${stateCols},
         ${overallRank} AS metadata_status_rank,
-        GREATEST(${issueCols}) AS metadata_issue_rank
+        GREATEST(${issueCols}, CASE WHEN ${conflictExists} THEN ${METADATA_ISSUE_RANK.danger} ELSE 0 END) AS metadata_issue_rank
       FROM (
         SELECT
 ${stateSelect}

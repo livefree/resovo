@@ -31,6 +31,7 @@ function makeRow(over: Partial<MetadataStatusSourceRow> = {}): MetadataStatusSou
     imdbId: null,
     bangumiSubjectId: null,
     providerRefs: [],
+    fieldConflicts: [],
     ...over,
   }
 }
@@ -108,6 +109,25 @@ describe('buildMetadataStatusSummary — overall 优先级 1–6', () => {
     expect(s.sort.statusRank).toBe(1)
     expect(s.nextAction).toBe('review_conflict')
     expect(s.issues.some((i) => i.level === 'danger')).toBe(true)
+  })
+
+  it('字段冲突（ADR-205 M3）→ needs_review（最高优先级，即便其余 complete）+ danger issue + review_conflict', () => {
+    const s = buildMetadataStatusSummary(makeRow({ doubanStatus: 'matched', metaScore: 90, fieldConflicts: ['title', 'rating'] }))
+    expect(s.overall).toBe('needs_review')   // 冲突先于 provider 态 → 压过 complete
+    expect(s.sort.statusRank).toBe(1)
+    expect(s.issueLevel).toBe('danger')
+    expect(s.sort.issueRank).toBe(METADATA_ISSUE_RANK.danger)
+    expect(s.nextAction).toBe('review_conflict')
+    const conflict = s.issues.find((i) => i.code === 'field_conflict')
+    expect(conflict).toMatchObject({ level: 'danger', provider: null, action: 'review_conflict' })
+    expect(conflict?.message).toContain('title')
+    expect(conflict?.message).toContain('rating')
+  })
+
+  it('无冲突（fieldConflicts 空）→ 不注入 field_conflict issue（默认行为不变）', () => {
+    const s = buildMetadataStatusSummary(makeRow({ doubanStatus: 'matched', metaScore: 90 }))
+    expect(s.overall).toBe('complete')
+    expect(s.issues.some((i) => i.code === 'field_conflict')).toBe(false)
   })
 })
 
@@ -268,6 +288,19 @@ describe('METADATA_STATUS_JOIN_SQL — 服务端排序过滤 SQL 派生（META-3
     expect(METADATA_STATUS_JOIN_SQL).toContain(`THEN ${METADATA_ISSUE_RANK.danger}`)
     // 不再用字面量 = 'rejected' 兜底（未知 relation/match_status 会与 JS 分歧）
     expect(METADATA_STATUS_JOIN_SQL).not.toContain(`= 'rejected'`)
+  })
+
+  it('字段冲突镜像（ADR-205 M3）：conflict EXISTS + needs_review 首位分支 + issue GREATEST conflict danger', () => {
+    // 镜像 JS hasFieldConflict：metadata_field_proposals.conflict_state 非空 → needs_review
+    expect(METADATA_STATUS_JOIN_SQL).toContain('FROM metadata_field_proposals mfp')
+    expect(METADATA_STATUS_JOIN_SQL).toContain('mfp.catalog_id = v.catalog_id')
+    expect(METADATA_STATUS_JOIN_SQL).toContain('mfp.conflict_state IS NOT NULL')
+    // overallRank 首个 WHEN = conflict EXISTS → needs_review（最高优先级，先于 problem）
+    expect(METADATA_STATUS_JOIN_SQL).toMatch(
+      new RegExp(`WHEN EXISTS \\(SELECT 1 FROM metadata_field_proposals[\\s\\S]*?THEN ${METADATA_OVERALL_RANK.needs_review}\\s*\\n\\s*WHEN 'problem'`),
+    )
+    // issue rank GREATEST 含 conflict danger 分支
+    expect(METADATA_STATUS_JOIN_SQL).toContain(`THEN ${METADATA_ISSUE_RANK.danger} ELSE 0 END) AS metadata_issue_rank`)
   })
 
   it('不拼接用户输入（纯静态常量 SQL）', () => {
