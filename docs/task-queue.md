@@ -2532,3 +2532,66 @@
      - 建议模型：opus
      - 范围：新建 `TabTmdb`（mediaType 切换 + 搜索框 + 候选列表 + fields 多选 + 确认/拒绝，对齐 TabDouban/use-douban 范式）+ `use-tmdb` hook + server-next api 3 函数 + VE.tmdb 文案；挂 `TabMetadata` 作 TMDB 来源关系区。覆盖 bangumi/locked 字段精确 danger（D-202-3）首版用通用提示，精确标记 + e2e（需 seed 基建）留 follow-up。
      - 完成备注：执行模型 claude-opus-4-8；子代理无（纯前端接线，不改 admin-ui 公开 Props）。新建 `TabTmdb`（mediaType movie/tv 切换〔默认据 video.type〕 + 搜索框 + year + 候选列表 + fields 多选〔默认全选 7 字段，取消勾选→confirm fields 不含〕 + 确认/拒绝，对齐 TabDouban）+ `use-tmdb` hook（search/confirm/reject state，confirm 返 boolean）+ api 3 函数（tmdbSearchForVideo/tmdbConfirmForVideo/tmdbRejectForVideo）+ `types.ts` TmdbCandidate 镜像 + `VE.tmdb` 文案（冲突 reason→友好文案映射）；挂 `TabMetadata` 作「TMDB 来源关系」区（④，与 Douban 区并列）。tv 首版不选 season（落 show candidate，仍绑定+应用字段+cache）；season 选择 + per-field 精确 danger + e2e seed 留 follow-up。门禁 typecheck/lint EXIT=0 + test:changed 31 文件 335 passed（TabTmdb 5 + use-tmdb 5 + use-douban/VideoEditDrawer 零回归）+ **test:e2e:admin 84/84**（videos.spec 编辑 Drawer 黄金路径 TabTmdb 挂载零回归）。+10 新单测。详见 changelog [META-39-B]。执行模型: claude-opus-4-8
+
+---
+
+## [SEQ-20260615-01] 元数据字段枚举兼容性治理
+
+- **状态**：🟡 规划中
+- **创建时间**：2026-06-15 00:30
+- **最后更新时间**：2026-06-15 00:30
+- **目标**：修复 douban/bangumi/tmdb 三源元数据字段（类型/题材/地区/图片）与本地枚举的兼容缺口——含 1 项数据正确性 bug（实证）+ 4 项能力闲置 + 1 项设计权衡。
+- **范围**：`apps/api`（三 Service + genreMapper + 地区归一 + 图片应用）+ `packages/types`（枚举/country 归一）+ migration（存量清洗）；不动播放器/前台核心。
+- **依赖**：META-38/39 ✅（TMDB 接入）；调查证据见本会话（DB 实证 country 污染、genreMapper/三 Service 源码核验）。
+- **优先级裁定**：🔴 META-40 / META-41（高，数据正确性 + 信息全丢）> 🟡 META-42 / META-43 / META-44（中，能力闲置）> 🟢 META-45（低，需 ADR 评估扩枚举）。
+
+### 任务列表（按严重度优先级）
+
+1. **META-40** — Country 格式归一治理（🔴 高 / 数据正确性 bug）（状态：⬜ 待办）
+   - 创建时间：2026-06-15 00:30
+   - 建议模型：sonnet
+   - **问题（实证）**：`media_catalog.country` 应存 ISO 3166-1 alpha-2，但 dev 库实测同列混入中文名——`CN`(2363) 与 `中国大陆`(52) 并存、`US`/`美国`(18)、`JP`/`日本`(23)、`印度`(7) 等。根因 `DoubanService.ts:121/195` `updateFields.country = detail.countries[0]` 直接写 douban 中文名（`douban_entries.country` 全中文），无 ISO 转换。`formatCountryName('美国')` 降级返回原值故显示不报错，但同国裂两值 → 视频库 distinct/筛选/分组失效（筛「美国」匹配不到「US」行）；douban 仅取 `countries[0]` 丢合拍片多地区。
+   - **方案**：① 新增 `countryNameToIso` 归一表/helper（中文名 + 英文名 → ISO alpha-2，`packages/types` 共享，供三源复用）；② douban 写入侧（DoubanService step1/2 + MetadataEnrichService）`country` 经归一后写；③ migration 存量清洗（中文名 → ISO，幂等 + 不可归一的登记）；④ 单测覆盖归一表 + 清洗脚本。
+   - **文件范围**：`packages/types/src/`（country 归一 helper）/ `apps/api/src/services/DoubanService.ts` + `MetadataEnrichService.ts`（写入侧归一）/ `apps/api/src/db/migrations/NNN_*.sql`（存量清洗）/ 单测。
+   - **依赖**：无（最高优先，且为 META-42 TMDB country 复用归一表的前置）。
+
+2. **META-41** — Bangumi 细分标签 → genre 映射 + country/cast 接入（🔴 高 / 信息全丢）（状态：⬜ 待办）
+   - 创建时间：2026-06-15 00:30
+   - 建议模型：opus（细分标签 → genre 映射设计需判断；bangumi tags 为开放词表）
+   - **问题（核验）**：`BangumiService.ts:430-434` 仅写 `title/titleOriginal/description/rating/coverUrl`，**零 genres/country/cast**。bangumi 富有的动漫细分标签（百合/治愈/热血/日常/校园/废萌…）+ infobox 制作信息**全部丢弃**，且无任何 `bangumi→genre` 映射表（对比 douban 40 词表 / tmdb 27 id 表）。
+   - **方案**：① 新建 `mapBangumiTags`（`genreMapper.ts`，bangumi tags/infobox 类型字段 → VideoGenre，保守映射避免开放词表噪声）；② BangumiService.applyEnrichment 字段构造补 `genres/genresRaw`（+ country 恒 JP for anime / cast 经 infobox staff 评估）；③ 单测。
+   - **文件范围**：`apps/api/src/lib/genreMapper.ts`（+mapBangumiTags）/ `apps/api/src/services/BangumiService.ts` + `BangumiService.utils.ts`（字段构造 + infobox 解析）/ 单测。
+   - **依赖**：可与 META-40 并行（country 写 JP 仍走 META-40 归一表保 ISO 一致）。
+   - **协调**：与「Bangumi 候选无审核 UI」缺口（上一轮调查缺口 1，未编卡）正交——本卡只补自动增强字段，UI 闭环另议。
+
+3. **META-42** — TMDB country 应用（🟡 中 / 能力闲置）（状态：⬜ 待办）
+   - 创建时间：2026-06-15 00:30
+   - 建议模型：sonnet
+   - **问题**：TMDB `origin_country`（tv）/`production_countries`（movie）本是**干净 ISO alpha-2**（JP/US），与本地格式完美匹配，但 META-39 `TMDB_APPLIABLE_FIELDS` 未含 country → 白白不用（反而 douban 脏数据在污染）。
+   - **方案**：`TmdbConfirmService.buildCatalogFields` + `TMDB_APPLIABLE_FIELDS` 补 `country`（tv 取 origin_country[0] / movie 取 production_countries[0]，经 META-40 归一表防御性校验）；TabTmdb fields 多选 + VE 文案补一项；单测。
+   - **文件范围**：`apps/api/src/services/TmdbConfirmService.ts` / `apps/api/src/lib/tmdb.types.ts`（movie production_countries 若未定义则补）/ TabTmdb + VE.tmdb / 单测。
+   - **依赖**：META-40（复用 country 归一表，虽 TMDB 已 ISO 但统一入口）。
+
+4. **META-43** — TMDB 图片全类别接入（🟡 中 / 能力闲置）（状态：⬜ 待办）
+   - 创建时间：2026-06-15 00:30
+   - 建议模型：sonnet
+   - **问题**：本地图片体系（migration 048）有 poster(cover_url)/backdrop(backdrop_url)/**logo(logo_url)**/banner_backdrop 四类 + status/source（CHECK 已预留 `tmdb`）/blurhash/尺寸。TMDB `images` append 提供 backdrops[]/posters[]/logos[] **多语言（iso_639_1）+ 质量 vote + 尺寸**。但 META-39 仅应用 `cover_url ← detail.poster_path`（默认语言、w500、硬编码 base），**完全没用** backdrop / **logo**（`decisions.md:763` 早规划 TMDB logos→logo_url 未兑现，logo 是最难素材）/ 语言偏好（zh 海报）/ 质量 vote 选最佳 / `poster_source='tmdb'`（字段就绪）/ width·height·blurhash。
+   - **方案**：① confirm append `images`；② 图片选择 helper（按 zh-CN 语言偏好 + vote_average 排序选最佳，per kind）；③ 应用 cover_url/backdrop_url/logo_url + 写 `*_source='tmdb'` + 尺寸；④ 复用 configuration base（getConfiguration）替代硬编码；⑤ TabTmdb fields 多选补图片项 + 单测。
+   - **文件范围**：`apps/api/src/services/TmdbConfirmService.ts`（append images + 图片选择 + 多 kind 写入）/ `apps/api/src/lib/tmdb.ts`（configuration base 缓存）/ TabTmdb + VE.tmdb / 单测。
+   - **依赖**：无（独立于 country/genre）。
+
+5. **META-44** — VideoType 富集修正（🟡 中 / 信息丢失）（状态：⬜ 待办）
+   - 创建时间：2026-06-15 00:30
+   - 建议模型：opus（type 近 identity，误改风险高，需谨慎设计触发条件 + 可能起 ADR）
+   - **问题**：`catalog.type`（VideoType 11 种）仅爬虫入库时设定，**任何 provider 增强都不修正**（三 Service 只读 type 做匹配，从不写回）。而 provider 携带类型判别信号被丢弃：TMDB genre 16(动画)/99(纪录)/10762(儿童)/10763(新闻)/10764(真人秀→综艺)、douban 动画/纪录片/短片/儿童 → 全映射 null。TMDB `tv` 无法区分本地 series/anime/variety/documentary；入库判错后富集不纠。
+   - **方案**：① 设计保守的 type 修正规则（仅高置信信号纠正，如 TMDB Animation genre + mediaType=tv → anime；避免误改已人工校正 type）；② 评估是否起 ADR（type 修正影响身份/归并）；③ 接入 confirm/enrich 路径 + 锁保护；④ 单测。**风险登记**：type 是身份性字段，误改影响 catalog 归并键，须 arch-reviewer 评审触发条件。
+   - **文件范围**：待 ADR 定（可能 `TmdbConfirmService` + `MetadataEnrichService` + type 修正 helper）/ 单测。
+   - **依赖**：建议在 META-40~43 之后（标量字段治理稳定后再动身份性字段）。
+
+6. **META-45** — Genre 颗粒度增强（🟢 低 / 设计权衡）（状态：⬜ 待办）
+   - 创建时间：2026-06-15 00:30
+   - 建议模型：opus（扩 VIDEO_GENRES 枚举跨多消费方，需 ADR）
+   - **问题**：① drama/剧情 三源全丢（本地无对应 genre，被设计为「万能标签」，但确实丢信息）；② TMDB 组合类目损半（`Action & Adventure(10759)→action` 丢 adventure / `Sci-Fi & Fantasy(10765)→sci_fi` 丢 fantasy / `War & Politics→war`）；③ 多对一坍缩普遍降颗粒度。
+   - **方案**：① 评估是否扩 `VIDEO_GENRES`（加 `drama`？——跨前台筛选/后台/admin-ui 多消费方 + ADR-157 枚举 SSOT，须起 ADR）；② TMDB 组合类目可否拆双 genre（10759→[action,adventure]）；③ 决策「保持坍缩 vs 扩枚举」权衡。
+   - **文件范围**：待 ADR 定（`packages/types/src/video.types.ts` VIDEO_GENRES + genreMapper 三表 + 全消费方）。
+   - **依赖**：最低优先；扩枚举须先起 ADR（跨 3+ 消费方，CLAUDE.md 强制 Opus 子代理）。
