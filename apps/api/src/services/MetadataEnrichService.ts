@@ -21,7 +21,9 @@ import { getDoubanDetailRich } from '@/api/lib/doubanAdapter'
 import { mapDoubanGenres } from '@/api/lib/genreMapper'
 import { MediaCatalogService } from './MediaCatalogService'
 import { BangumiService } from './BangumiService'
+import { TmdbConfirmService, type TmdbMediaType } from './TmdbConfirmService'
 import { isAmbiguousLocalMatch } from './BangumiService.utils'
+import { baseLogger } from '@/api/lib/logger'
 import { normalizeForExternalMatch } from './TitleNormalizer'
 import { isPinyin } from './PinyinDetector'
 import * as externalDataQueries from '@/api/db/queries/externalData'
@@ -65,10 +67,12 @@ const SOURCE_CHECK_LIMIT = 20
 export class MetadataEnrichService {
   private catalogService: MediaCatalogService
   private bangumiService: BangumiService
+  private tmdbConfirmService: TmdbConfirmService
 
   constructor(private db: Pool) {
     this.catalogService = new MediaCatalogService(db)
     this.bangumiService = new BangumiService(db, this.catalogService)
+    this.tmdbConfirmService = new TmdbConfirmService(db)
   }
 
   async enrich(data: EnrichJobData): Promise<void> {
@@ -121,6 +125,11 @@ export class MetadataEnrichService {
       effectiveCatalogId = await this.step3Bangumi(videoId, catalogId, titleNorm, year)
     }
 
+    // Step 3.5: TMDB 全类型自动富集（META-48 / ADR-205 D-205-7）——用 step3 后 effectiveCatalogId
+    // （含 bangumi redirect 真去重场景，防写 orphan）；交叉验证语义（等/高优先级源不覆盖内容、仅补空）
+    // 在 autoMatch 内（用户 Option A）。仍是 sequential-write，reconcile 加权归 META-49。
+    await this.stepTmdb(videoId, effectiveCatalogId, title, year, type)
+
     // Step 4: 源 HEAD 检验
     const sourceStatus = await this.step4SourceCheck(videoId)
 
@@ -133,6 +142,49 @@ export class MetadataEnrichService {
       doubanStatus, metaScore, metaQuality,
     })
     await videosQueries.updateVideoSourceCheckStatus(this.db, videoId, sourceStatus)
+  }
+
+  /**
+   * Step 3.5（META-48 / ADR-205 D-205-7）：TMDB 全类型自动富集（sequential-write，调 autoMatch）。
+   *
+   * - **去重守卫**：已有 primary tmdb 绑定（auto_matched/manual_confirmed）→ skip 不重配
+   *   （对齐 bangumi D-170-4-AMD，避免覆盖人工确认 + 省 API）。
+   * - **全类型**（D-用户-1）：`type==='movie'?'movie':'tv'`（series/anime/variety → tv）。
+   * - **凭证/限流**：autoMatch 内已 graceful skip；本层 try/catch 保 TMDB 失败不阻断 enrich 主流程
+   *   （douban/bangumi 已写、step4/5 仍跑）。交叉验证（等/高优先级源仅补空）在 autoMatch 内（Option A）。
+   */
+  private async stepTmdb(
+    videoId: string,
+    effectiveCatalogId: string,
+    title: string,
+    year: number | null,
+    type: string,
+  ): Promise<void> {
+    const tmdbLog = baseLogger.child({ module: 'enrich-tmdb', video_id: videoId })
+    try {
+      const tmdbRefs = await externalDataQueries.listVideoExternalRefs(this.db, videoId, 'tmdb')
+      const alreadyBound = tmdbRefs.some(
+        (r) => r.isPrimary && (r.matchStatus === 'auto_matched' || r.matchStatus === 'manual_confirmed'),
+      )
+      if (alreadyBound) {
+        tmdbLog.info({ outcome: 'skip_already_bound' }, 'tmdb auto skipped: already bound')
+        return
+      }
+
+      const mediaType: TmdbMediaType = type === 'movie' ? 'movie' : 'tv'
+      const result = await this.tmdbConfirmService.autoMatch(videoId, effectiveCatalogId, { title, year, mediaType })
+      if (result.matched) {
+        tmdbLog.info(
+          { outcome: 'matched', tier: result.tier, tmdb_id: result.tmdbId, confidence: result.confidence, applied: result.applied.length },
+          'tmdb auto matched',
+        )
+      } else {
+        tmdbLog.info({ outcome: 'skip', reason: result.reason }, 'tmdb auto no write')
+      }
+    } catch (err) {
+      // TMDB 为补充源，失败不阻断 enrich（douban/bangumi 已写、step4/5 仍跑）
+      tmdbLog.warn({ err }, 'tmdb auto step failed (non-blocking)')
+    }
   }
 
   /**

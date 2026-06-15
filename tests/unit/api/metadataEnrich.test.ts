@@ -16,11 +16,20 @@ vi.mock('@/api/db/queries/externalData', () => ({
   findBangumiByTitleNorm: vi.fn(),
   // META-15-C FIX：BangumiService.matchAndEnrich 守卫调用；默认无既有绑定 → 走正常匹配
   findPrimaryVideoExternalRef: vi.fn().mockResolvedValue(null),
+  // META-48：stepTmdb 去重守卫调用 listVideoExternalRefs（默认无 tmdb 绑定 → 走 autoMatch）
+  listVideoExternalRefs: vi.fn().mockResolvedValue([]),
   upsertVideoExternalRef: vi.fn().mockResolvedValue({
     id: 'ref1', videoId: 'v1', provider: 'douban', externalId: 'd1',
     matchStatus: 'auto_matched', matchMethod: 'title', confidence: 0.92,
     isPrimary: true, linkedBy: 'auto', linkedAt: '2024-01-01T00:00:00Z', notes: null,
   }),
+}))
+
+// META-48：TmdbConfirmService 注入 MetadataEnrichService 构造；mock autoMatch 控分支（不触网络/db）
+vi.mock('@/api/services/TmdbConfirmService', () => ({
+  TmdbConfirmService: vi.fn().mockImplementation(() => ({
+    autoMatch: vi.fn().mockResolvedValue({ matched: false, reason: 'no_candidate' }),
+  })),
 }))
 
 vi.mock('@/api/db/queries/videos', () => ({
@@ -99,6 +108,7 @@ import * as catalogQueries from '@/api/db/queries/mediaCatalog'
 import { searchDouban } from '@/api/lib/douban'
 import { getDoubanDetailRich } from '@/api/lib/doubanAdapter'
 import { MediaCatalogService } from '@/api/services/MediaCatalogService'
+import { TmdbConfirmService } from '@/api/services/TmdbConfirmService'
 import type { DoubanEntryMatch } from '@/api/db/queries/externalData'
 
 // ── Helpers ────────────────────────────────────────────────────────
@@ -479,6 +489,63 @@ describe('MetadataEnrichService.enrich()', () => {
       douban_match_method: 'title',
       douban_match_status: 'auto_matched',
     })
+  })
+})
+
+// ── META-48：enrich → Step 3.5 TMDB（全类型 + 去重守卫 + type→mediaType + 失败非阻断）────────
+describe('MetadataEnrichService.enrich → step3.5 TMDB (META-48)', () => {
+  let service: MetadataEnrichService
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let mockAutoMatch: any
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.mocked(externalDataQueries.findDoubanByTitleNorm).mockResolvedValue([])
+    vi.mocked(externalDataQueries.findDoubanByAlias).mockResolvedValue([])
+    vi.mocked(externalDataQueries.findBangumiByTitleNorm).mockResolvedValue([])
+    vi.mocked(externalDataQueries.listVideoExternalRefs).mockResolvedValue([])
+    vi.mocked(searchDouban).mockResolvedValue([])
+    vi.mocked(sourcesQueries.listSourcesForBatchVerify).mockResolvedValue([])
+    vi.mocked(catalogQueries.findCatalogById).mockResolvedValue({
+      id: 'c1', title: '某片', year: 2020, type: 'movie',
+    } as Parameters<typeof catalogQueries.findCatalogById>[1] extends infer R ? R : never)
+    service = new MetadataEnrichService(makeMockPool())
+    mockAutoMatch = (TmdbConfirmService as ReturnType<typeof vi.fn>).mock.results.at(-1)?.value.autoMatch
+  })
+
+  it('movie → autoMatch(mediaType=movie, effectiveCatalogId, title/year)', async () => {
+    await service.enrich(makeJobData({ type: 'movie', title: '电影名', year: 2020 }))
+    expect(mockAutoMatch).toHaveBeenCalledWith('v1', 'c1', { title: '电影名', year: 2020, mediaType: 'movie' })
+  })
+
+  it('series/variety → mediaType=tv（全类型 D-用户-1）', async () => {
+    await service.enrich(makeJobData({ type: 'series' }))
+    expect(mockAutoMatch).toHaveBeenCalledWith('v1', expect.any(String), expect.objectContaining({ mediaType: 'tv' }))
+    mockAutoMatch.mockClear()
+    await service.enrich(makeJobData({ type: 'variety' }))
+    expect(mockAutoMatch).toHaveBeenCalledWith('v1', expect.any(String), expect.objectContaining({ mediaType: 'tv' }))
+  })
+
+  it('去重守卫：已有 primary tmdb auto_matched ref → 不调 autoMatch（不重配）', async () => {
+    vi.mocked(externalDataQueries.listVideoExternalRefs).mockResolvedValue([
+      { id: 'r', videoId: 'v1', provider: 'tmdb', externalId: '5', matchStatus: 'auto_matched', matchMethod: 'auto', confidence: 1, isPrimary: true, linkedBy: 'auto', linkedAt: 'x', notes: null },
+    ])
+    await service.enrich(makeJobData({ type: 'movie' }))
+    expect(mockAutoMatch).not.toHaveBeenCalled()
+  })
+
+  it('candidate（非 primary）tmdb ref 不算已绑定 → 仍调 autoMatch', async () => {
+    vi.mocked(externalDataQueries.listVideoExternalRefs).mockResolvedValue([
+      { id: 'r', videoId: 'v1', provider: 'tmdb', externalId: '5', matchStatus: 'candidate', matchMethod: 'auto', confidence: 0.7, isPrimary: false, linkedBy: 'auto', linkedAt: 'x', notes: null },
+    ])
+    await service.enrich(makeJobData({ type: 'movie' }))
+    expect(mockAutoMatch).toHaveBeenCalled()
+  })
+
+  it('autoMatch 抛错 → 非阻断，enrich 仍完成（updateVideoEnrichStatus 调用）', async () => {
+    mockAutoMatch.mockRejectedValue(new Error('boom'))
+    await expect(service.enrich(makeJobData({ type: 'movie' }))).resolves.toBeUndefined()
+    expect(videosQueries.updateVideoEnrichStatus).toHaveBeenCalled()
   })
 })
 

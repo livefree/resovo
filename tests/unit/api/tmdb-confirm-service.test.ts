@@ -28,7 +28,11 @@ const safeUpdateMock = vi.fn(
   async (_catalogId: string, _fields: Record<string, unknown>, _source: string, _ctx: unknown) =>
     ({ updated: true, skippedFields: [] as string[] }),
 )
-vi.mock('@/api/services/MediaCatalogService', () => ({ MediaCatalogService: vi.fn(() => ({ safeUpdate: safeUpdateMock })) }))
+// CATALOG_SOURCE_PRIORITY 真值同源（META-48 filterCrossValidation 消费）
+vi.mock('@/api/services/MediaCatalogService', () => ({
+  MediaCatalogService: vi.fn(() => ({ safeUpdate: safeUpdateMock })),
+  CATALOG_SOURCE_PRIORITY: { manual: 5, tmdb: 4, bangumi: 4, douban: 3, crawler: 1 },
+}))
 // META-44-B：confirm 在选中 genres 时读 catalog 现值做 type 富集修正（ADR-203）
 vi.mock('@/api/db/queries/mediaCatalog', () => ({ findCatalogById: vi.fn(async () => ({ type: 'other' })) }))
 import { findCatalogById } from '@/api/db/queries/mediaCatalog'
@@ -385,5 +389,40 @@ describe('autoMatch', () => {
     expect(catalogRefs.resolveAndWriteExactRef).not.toHaveBeenCalled()
     expect(safeUpdateMock).toHaveBeenCalled()
     expect(externalData.upsertVideoExternalRef).toHaveBeenCalledWith(client, expect.objectContaining({ matchStatus: 'auto_matched', isPrimary: true }))
+  })
+
+  // ── META-48：interim 交叉验证（Option A）——等/高优先级源已写内容不覆盖、仅补空，ref/cache 仍写 ──
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const catalogWith = (over: Record<string, unknown>): any => ({
+    type: 'series', metadataSource: 'bangumi', title: null, titleOriginal: null, originalLanguage: null,
+    description: null, genres: [], genresRaw: [], country: null, rating: null, coverUrl: null, backdropUrl: null, logoUrl: null, ...over,
+  })
+
+  it('current=bangumi(同级) 已有 title/genres → 剔除不覆盖，但 tmdbId/imdb 仍写 + ref 仍写（交叉验证）', async () => {
+    vi.mocked(findCatalogById).mockResolvedValue(catalogWith({ metadataSource: 'bangumi', title: 'B 标题', genres: ['g'], description: null }))
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    vi.mocked(tmdbLib.searchMovie).mockResolvedValue(search([movieItem()]) as any)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    vi.mocked(tmdbLib.getMovieDetail).mockResolvedValue({ ...MOVIE, id: 555 } as any)
+    const r = await svc.autoMatch('vid', 'cat', { title: 'abcdef', year: 2023, mediaType: 'movie' })
+    expect(r).toMatchObject({ matched: true, tier: 'auto_matched' })
+    const arg = safeUpdateMock.mock.calls[0][1] as Record<string, unknown>
+    expect(arg.title).toBeUndefined() // bangumi title 非空 → 不覆盖
+    expect(arg.genres).toBeUndefined() // bangumi genres 非空 → 不覆盖
+    expect(arg.description).toBe('小女孩千寻被困在精灵世界') // bangumi description 空 → 补
+    expect(arg.tmdbId).toBe(555) // ref/cache 身份仍写
+    expect(catalogRefs.resolveAndWriteExactRef).toHaveBeenCalled()
+  })
+
+  it('current=douban(低于 tmdb) → 不过滤，内容字段全覆盖（权威写）', async () => {
+    vi.mocked(findCatalogById).mockResolvedValue(catalogWith({ metadataSource: 'douban', title: 'D 标题', genres: ['g'], description: 'D 简介' }))
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    vi.mocked(tmdbLib.searchMovie).mockResolvedValue(search([movieItem()]) as any)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    vi.mocked(tmdbLib.getMovieDetail).mockResolvedValue({ ...MOVIE, id: 555 } as any)
+    await svc.autoMatch('vid', 'cat', { title: 'abcdef', year: 2023, mediaType: 'movie' })
+    const arg = safeUpdateMock.mock.calls[0][1] as Record<string, unknown>
+    expect(arg.title).toBe('千与千寻') // douban<tmdb → 覆盖
+    expect(arg.description).toBe('小女孩千寻被困在精灵世界')
   })
 })
