@@ -2537,7 +2537,7 @@
 
 ## [SEQ-20260615-01] 元数据字段枚举兼容性治理
 
-- **状态**：🔄 进行中（META-40 ✅ + META-41-A ✅ + META-41-B ✅ + META-42 ✅ + META-43 ✅ 2026-06-15〔+ 旁路 META-37-A-FIX Codex P2×2〕 → 下一 META-44-A〔VideoType 富集修正 ADR，强制 arch-reviewer Opus〕）
+- **状态**：🔄 进行中（META-40 ✅ + META-41-A ✅ + META-41-B ✅ + META-42 ✅ + META-43 ✅ + META-44-A ✅ 2026-06-15〔+ 旁路 META-37-A-FIX Codex P2×2〕 → 下一 META-44-B〔VideoType 修正实施，依 ADR-203 PASS〕）
 - **创建时间**：2026-06-15 00:30
 - **最后更新时间**：2026-06-15 01:10（用户评审 B+ 后修订：范围补 server-next / META-40 收敛真源 / META-41·44 拆 -A/-B / cast 后排 / META-43 source 口径 / 逐卡门禁）
 - **目标**：修复 douban/bangumi/tmdb 三源元数据字段（类型/题材/地区/图片）与本地枚举的兼容缺口——含 1 项数据正确性 bug（实证）+ 4 项能力闲置 + 1 项设计权衡。
@@ -2603,7 +2603,8 @@
    - **门禁**：typecheck + lint + test:changed + **test:e2e:admin**（TabTmdb fields 改动黄金路径零回归）。
    - **依赖**：无（独立于 country/genre）。
 
-6. **META-44-A** — VideoType 富集修正 ADR（🟡 中 / 身份性字段，强制 ADR）（状态：⬜ 待办）
+6. **META-44-A** — VideoType 富集修正 ADR（🟡 中 / 身份性字段，强制 ADR）（状态：✅ 已完成 2026-06-15）
+   - **完成备注**：✅ 2026-06-15。**ADR-203「VideoType provider 富集修正」Accepted**（docs/decisions.md）。spawn arch-reviewer (claude-opus-4-8, agentId a4f44fcfad64fa9fb) **CONDITIONAL PASS → 2 红线吸收落库**：① 红线①（主循环背景未识别的二阶耦合）——`isRedirectSafe` 的 `current.type !== existing.type` 是 type 第二身份触点，type 写回必须并入富集 safeUpdate **单事务**不得做异步 job；② D-203-7.7 enrich anime 门控不即时回灌时序偏离登记。决策正文 D-203-1（信号→type 高置信映射，仅形式判别 tv+16→anime/99→documentary/tv+10762→kids/tv+10763→news + douban 动画/纪录片/短片/儿童；明确不映射 family/reality/music 等低置信）/ D-203-2（**fill-if-default 绝不覆盖具体 type**，仅 other→具体）/ D-203-3（other-only 使归并分裂风险与 fill-if-default 闸门坍缩为同一条件自动消解 + 红线①）/ D-203-4（经 safeUpdate 白嫖三层锁 + provenance，闸门留 caller 不污染通用引擎，不改 CATALOG_SOURCE_PRIORITY/fieldMap）/ D-203-5（provenance 自动记 + 冲突未改记观测日志）/ D-203-6（META-44-B 蓝图）/ D-203-7（边界）。**关键核验**：F6 type 写回通道已就绪（CatalogUpdateData.type? + fieldMap type:'type'）→ **零 migration**；F3 风险窗口=四外部 ID 全 NULL 的 catalog。门禁 verify:adr-contracts EXIT=0（endpoint-adr 243 路由对齐，docs-only 无新端点）。docs-only。执行模型 claude-opus-4-8；子代理 arch-reviewer (claude-opus-4-8, a4f44fcfad64fa9fb)。详见 changelog [META-44-A]。**解锁 META-44-B（实施，依 ADR PASS）。**
    - 创建时间：2026-06-15 01:10
    - 建议模型：opus（**强制 arch-reviewer**，评审 #6）
    - **问题**：`catalog.type`（VideoType 11 种）仅爬虫入库时设定，**任何 provider 增强都不修正**（三 Service 只读 type 做匹配，从不写回）。provider 携带类型判别信号被丢弃：TMDB genre 16(动画)/99(纪录)/10762(儿童)/10763(新闻)/10764(真人秀→综艺)、douban 动画/纪录片/短片/儿童。但 `type` 是**身份性字段**，影响 catalog 归并键、搜索筛选、身份候选 → **误改风险高**。
@@ -2612,13 +2613,14 @@
    - **门禁**：verify:adr-contracts + arch-reviewer PASS。
    - **依赖**：建议 META-40~43 之后（标量治理稳定后再动身份性字段）。
 
-7. **META-44-B** — VideoType 修正实施（🟡 中）（状态：⬜ 待办，依赖 META-44-A ADR PASS）
+7. **META-44-B** — VideoType 修正实施（🟡 中）（状态：⬜ 待办，依赖 META-44-A ✅ ADR-203 PASS）
    - 创建时间：2026-06-15 01:10
    - 建议模型：opus
-   - **范围**：按 META-44-A ADR 实现 type 修正规则 + 接入 confirm/enrich 写路径 + 锁保护 + 单测。
-   - **文件范围**：待 ADR 定（可能 `TmdbConfirmService` + `MetadataEnrichService` + type 修正 helper）/ 单测。
-   - **门禁**：typecheck + lint + test:changed（type 改归并键 → 视需要 integration/e2e，ADR 定）。
-   - **依赖**：**META-44-A**（ADR PASS）。
+   - **范围（按 ADR-203 D-203-6 蓝图）**：① 新建纯函数 helper `apps/api/src/lib/typeFromProvider.ts`——`tmdbTypeSignal(mediaType, genreIds): VideoType|null`（D-203-1 TMDB 表：tv+16→anime / 99→documentary / tv+10762→kids / tv+10763→news / movie→movie / tv→series）+ `doubanTypeSignal(genres: string[]): VideoType|null`（动画/纪录片/短片/儿童）+ `resolveTypeFillIfDefault(currentType, candidate): VideoType|null`（D-203-2 闸门，`TYPE_LOW_CONFIDENCE_DEFAULTS=new Set(['other'])`，仅 other→具体、不覆盖、幂等）；② `TmdbConfirmService.confirm`——type 推断在 confirm 内 buildCatalogFields 之外（**type 不入 TMDB_APPLIABLE_FIELDS**），读 catalog 现值 → resolveTypeFillIfDefault → 非 null 并入 updateFields **同 safeUpdate 事务**（红线①）；③ `DoubanService` 三处 safeUpdate caller（enrich/confirmSubject/confirmFields）——读 **catalog 现值**（非 video.type）→ doubanTypeSignal → 闸门 → 并入；冲突未改记 D-203-5 观测日志（`module:'catalog-type-signal'`，`type_conflict_skipped`，幂等不记）。
+   - **红线（ADR-203，必守）**：🔴 红线① type 写回必须**并入富集 safeUpdate 单事务**，不得脱离主事务做异步 job（否则 isRedirectSafe type 守卫读不一致快照）；不覆盖具体 type（仅 other→具体）；不改 Step-5 SQL / CATALOG_SOURCE_PRIORITY / fieldMap（F6 通道已就绪，零 migration）；不改 enrich anime 门控（D-203-7.7 不即时回灌）。
+   - **文件范围**：`apps/api/src/lib/typeFromProvider.ts`（新建 helper）/ `apps/api/src/services/TmdbConfirmService.ts`（confirm type 推断）/ `apps/api/src/services/DoubanService.ts`（三处 caller）/ 单测（`tests/unit/api/typeFromProvider.test.ts` + 扩展 safeUpdate 集成测〔硬锁/软锁/manual 优先级拦截/provenance 记 type〕 + Douban·Tmdb service 测〔other→具体写入 / 具体值不覆盖 + 冲突日志〕）。
+   - **门禁**：typecheck + lint + test:changed（type 经 safeUpdate 不改归并 SQL → 单测足够，无需 e2e；集成测覆盖锁/优先级/provenance）。
+   - **依赖**：**META-44-A ✅**（ADR-203 Accepted）。
 
 8. **META-45** — Genre 颗粒度增强（🟢 低 / 设计权衡，需 ADR）（状态：⬜ 待办）
    - 创建时间：2026-06-15 00:30

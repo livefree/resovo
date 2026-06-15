@@ -22970,3 +22970,58 @@ ADR-201 §实施顺序 Phase 5B：META-38（TMDB 只读 client，已完成）→
 ### 关联 ADR
 
 ADR-201（TMDB 接入前置 UI/UX + 实施顺序）/ ADR-176（按季粒度 catalog）/ ADR-177（catalog_external_refs 真源 + D-177-11 external_kind + R3/R10 + D-177-5 cache）/ ADR-175（多语言别名 + title_en 收紧 + 简繁 R1）/ ADR-186（fill-if-empty）/ ADR-173（凭证）/ ADR-110（信封 + 错误码 SSOT）/ ADR-170（bangumi anime 门控背景）。
+
+---
+
+## ADR-203：VideoType provider 富集修正 — 保守 fill-if-default + 单事务 redirect 守卫不变性
+
+**状态**：Accepted（2026-06-15）｜**决策者**：arch-reviewer (claude-opus-4-8, agentId a4f44fcfad64fa9fb) CONDITIONAL PASS → 2 红线吸收落库｜**主循环**：claude-opus-4-8｜**序列**：SEQ-20260615-01 META-44-A（实施 META-44-B）
+
+### 背景
+
+`catalog.type`（VideoType 11 种：movie/series/anime/variety/documentary/short/sports/music/news/kids/other）目前**仅在爬虫 ingest 时设定**（`CrawlerService.ts:192/229`，`type: video.type` 来自源站分类），三个 provider 增强服务（Douban/Bangumi/Tmdb/Enrich）只读 type 做匹配、**从不写回修正**。provider 携带的类型判别信号（TMDB genre 16/99/10762/10763、douban 动画/纪录片/短片/儿童——这些形式类别在 `mapTmdbGenres`/`DOUBAN_GENRE_MAP` 中已被标 null 丢弃）被全部丢弃。
+
+**type 是身份性字段（双重身份触点，误改风险高）**：① `findOrCreate` Step-5 模糊归并键 `findCatalogByNormalizedKey(title_normalized, year, type, seasonNumber)`（`mediaCatalog.ts:147/160` SQL `AND type = $2` 精确相等）；② `MediaCatalogService.isRedirectSafe`（`:129`）首行 `if (current.type !== existing.type) return false`——外部 ref 重指向时 type 不同必拒。故 type 修正须正面处理「归并分裂」与「redirect 守卫判定漂移」两重风险。
+
+**事实核验关键结论**（arch-reviewer 核验）：
+- **F3 风险窗口精确化**：Step 1-4（精确 ID）命中即返回不经 Step-5 → 已绑任一外部 ID 的 catalog，type 改动对归并**安全**；风险窗口 = 「四个外部 ID 全 NULL 的 catalog」。
+- **F6 写回通道已就绪（零 migration）**：`CatalogUpdateData.type?`（`mediaCatalog.internal.ts:175`）+ `updateCatalogFields.fieldMap` 含 `type:'type'`（`mediaCatalog.mutations.ts:113`）——safeUpdate 管道**已具备写 type 能力**，仅无人触发。
+- **F4 二阶耦合（主循环背景未识别）**：type 写回会改变 `isRedirectSafe` 的 type 守卫判定结果 → 红线①。
+
+### 决策
+
+**D-203-1（信号→type 高置信映射，仅形式判别）**：仅采纳跨 provider 一致的「形式判别」信号，白名单单向映射，产出**候选 type**（是否落库由 D-203-2/3 闸门决定）。
+- **TMDB**：tv+genre16→`anime` / genre99(任意)→`documentary` / tv+10762→`kids` / tv+10763→`news` / movie 无形式 genre→`movie`（中置信，闸门兜底）/ tv 无形式 genre→`series`（中置信）。
+- **Douban**（从 `genres` 字符串提取，douban detail 无独立 subtype）：`动画`→`anime` / `纪录片`→`documentary` / `短片`→`short` / `儿童`→`kids`。
+- **明确不映射（红线）**：TMDB 10751(Family)〔题材非形式，误伤合家欢电影〕/ 10764(Reality)·10767(Talk)·10766(Soap)〔综艺边界糊，本期不碰 variety〕/ 10765·10759〔纯题材〕；**movie+genre16 不推 anime**〔剧场版口径未定 + anime 与 bangumi 门控耦合，避免误开富集通道〕；douban 音乐/歌舞→不推 music。
+
+**D-203-2（触发条件，核心保守裁定）**：**fill-if-default，绝不覆盖已有具体 type**。`TYPE_LOW_CONFIDENCE_DEFAULTS = {'other'}`。
+- 现 type === `'other'` → 允许写回 D-203-1 候选；现 type 为任意具体值 → **一律不写回**（即便信号冲突，仅记审计 D-203-5 不改库）；候选===现值 → 幂等无操作。
+- 理由：爬虫已能解析多数具体 type，现具体值通常是真实判别非兜底；type 冲突更可能是「同名不同作品归并错误」征兆而非 type 标错，盲改会掩盖归并 bug，冲突处置归人工（manual 优先级最高）。
+
+**D-203-3（归并键分裂防护 + 红线①）**：
+- 因 D-203-2 强制现 type === `'other'`，而 `other` 在 Step-5 `AND type='other'` 命中价值极低（爬虫几乎不以 other 兜底命中同三元组）→ **归并分裂风险被 D-203-2 自动消解**（`other`-only 使「fill-if-default」与「归并安全」两闸门坍缩为同一条件，无需额外查外部 ID）。
+- **🔴 红线①（redirect 守卫不变性 + 单事务约束，必守）**：type 写回**必须在富集 safeUpdate 的同一事务内完成**，不得脱离富集主事务单独成异步 job——否则 `isRedirectSafe` 的 type 守卫（F4）会读到「type 已改、外部 ID 绑定未提交」的不一致快照。D-203-4 走 safeUpdate（manual/provenance 在单事务内）天然满足，但 ADR 显式声明此约束防 META-44-B 误做异步。
+- **偏离登记**：若后续放宽 D-203-2 允许「覆盖具体 type」，则「已绑对应外部 ID」必须重启为硬前置，且 redirect 守卫不变性升级为「写回前后对所有引用该 catalog 的 redirect 候选重新评估」。本期不做。
+
+**D-203-4（写入路径，红线②）**：**经 `safeUpdate`，以各 provider 自己 source（'tmdb'/'douban'）写入，type 并入现有 `updateFields` 同批，单事务**。
+- **不改** `CATALOG_SOURCE_PRIORITY`（type 复用字段所属 source 优先级）/ **不改** `CatalogUpdateData`·`fieldMap`（F6 就绪）/ **不新建独立守卫路径**。
+- **fill-if-default 闸门在 caller 层（provider service）实现，不入 safeUpdate**：caller 先读 `catalog.type`，仅 === `'other'` 且候选不同才把 type 放进 updateFields。理由：safeUpdate 是通用引擎，fill-if-default 是 type 专属业务规则，放进通用层污染边界（异于 ADR-186 fill-if-empty——后者是通用外部 ID cache 规则已沉淀，type 是单字段特例留 caller）。
+- **继承保护（白嫖三层锁）**：硬锁 type 后 provider 不能改；manual 改过 type → 进 locked_fields → 后续 provider 富集被软锁挡（人工校正自动受保护）；metadata_source=manual(5) > douban(3)/tmdb(4) → `isLowerPriority` 整段拦截。后者**正是期望行为**（高优先级源已定 type，低优先级不覆盖），与 D-203-2 一致。
+
+**D-203-5（审计/provenance）**：
+- 写回成功 → `finishSafeUpdate.batchUpsertFieldProvenance` **自动记 `type` 字段 source/sourceRef 入 video_metadata_provenance**（零额外代码，身份字段可溯源）。
+- 信号冲突未改（现具体值 ≠ 候选）→ **不入 provenance**（未写库），改 `baseLogger.child({module:'catalog-type-signal'})` 记 `outcome:'type_conflict_skipped'`（catalogId/currentType/candidateType/provider/externalId），fire-and-forget，供 D-203-7 follow-up 统计冲突率决定是否放宽。**幂等情形（候选===现值）不记日志**，只记真冲突。
+
+**D-203-6（META-44-B 实施蓝图）**：
+- 新建纯函数 helper `apps/api/src/lib/typeFromProvider.ts`：`tmdbTypeSignal(mediaType, genreIds): VideoType|null` / `doubanTypeSignal(genres): VideoType|null` / `resolveTypeFillIfDefault(currentType, candidate): VideoType|null`（闸门单点，`TYPE_LOW_CONFIDENCE_DEFAULTS=new Set(['other'])`）。
+- `TmdbConfirmService.confirm`：type 推断在 confirm 内、`buildCatalogFields` 之外（type **不入** `TMDB_APPLIABLE_FIELDS`，身份字段不让人工 confirm 误勾）；读 catalog 现值 → `resolveTypeFillIfDefault(current, tmdbTypeSignal(mediaType, detail.genres.map(g=>g.id)))` → 非 null 并入 updateFields，**同 safeUpdate 事务**（`:234` 已传 `db:client`，满足红线①）。
+- `DoubanService` 三处 safeUpdate caller（enrich/confirmSubject/confirmFields）：读 **catalog 现值**（非 video.type，可能不同步）→ `resolveTypeFillIfDefault(catalog.type, doubanTypeSignal(detail.genres))` → 并入；冲突未改记 D-203-5 日志。
+- 单测：`typeFromProvider.test.ts`（tmdb/douban/闸门各分支）+ 扩展 safeUpdate 集成测（硬锁/软锁/manula 优先级拦截/provenance 记 type）+ DoubanService·TmdbConfirmService（other→具体写入 / 具体值不覆盖 + 冲突日志）。
+- 顺序：ADR-203 入库（本卡）→ helper+单测 → 接 Douban 三处 → 接 Tmdb confirm → 集成测。
+
+**D-203-7（边界声明，本期不做）**：① 不覆盖具体 type（仅 other→具体，放宽须 D-203-5 数据 + 独立卡 + 重启 D-203-3 条件）；② 不映射 variety/music/sports（信号不可靠）；③ 不跑存量 backfill（仅在线增量富集时顺带，存量重富集归独立卡，避原子化拆卡红线）；④ 不改 Step-5 `AND type=$2` 精确语义（type 仍归并键）；⑤ 不引入 type 专属优先级；⑥ 不在 confirm UI 暴露 type 可勾选字段；⑦ **🔴 偏离登记**：MetadataEnrichService anime 门控（`:120` `if(type==='anime')`）不依赖本次写回——本卡不改 enrich type 分支，若 douban 把 other→anime，下一次重富集才触发 bangumi 步骤，本期不强制即时回灌（避免单次 enrich 内 type 自改后又据新 type 走分支的时序复杂度）。
+
+### 关联 ADR
+
+ADR-186（fill-if-empty 同源保守哲学，但语义不同：186 是「列 NULL 才填」外部 ID cache、203 是「值 other 兜底才填」枚举字段，D-203-4 边界隔离不混通路）/ ADR-202（D-202-3 同级争用 + D-202-8 mapTmdbGenres 复用 genre 表 SSOT）/ ADR-174（D-174-3 redirect 真去重 + isRedirectSafe，D-203-3 红线①正面处理 type 守卫二阶耦合）/ ADR-176（按季粒度，Step-5 含 season_number，type 写回不触及季维度）/ ADR-157（VIDEO_TYPES 枚举 SSOT）/ ADR-170（bangumi anime 门控背景，D-203-7.7 不即时回灌）。
