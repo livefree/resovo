@@ -309,3 +309,24 @@ export async function getConfiguration(
     return null
   }
 }
+
+/** image base URL 稳定回退（TMDB 文档长期稳定值；configuration 不可用时使用，META-43）。 */
+export const TMDB_IMAGE_BASE_FALLBACK = 'https://image.tmdb.org/t/p/'
+let cachedImageBaseUrl: string | null = null
+
+/**
+ * configuration.images.secure_base_url（不含 size token，形如 `https://image.tmdb.org/t/p/`）。
+ * 进程级缓存——首调拉 /configuration，失败回退稳定默认；后续命中缓存零网络（META-43）。
+ * 构造完整图片 URL = `${base}${size}${file_path}`（file_path 以 `/` 开头）。
+ */
+export async function getImageBaseUrl(cfg?: TmdbClientConfig, source?: FetchSource | null): Promise<string> {
+  if (cachedImageBaseUrl) return cachedImageBaseUrl
+  const config = await getConfiguration(cfg, source)
+  cachedImageBaseUrl = config?.images.secure_base_url || TMDB_IMAGE_BASE_FALLBACK
+  return cachedImageBaseUrl
+}
+
+/** 测试用：重置 image base 缓存（仅供单测隔离，生产路径不调用）。 */
+export function __resetImageBaseCacheForTest(): void {
+  cachedImageBaseUrl = null
+}

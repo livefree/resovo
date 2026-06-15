@@ -43,6 +43,10 @@ describe('TabTmdb', () => {
     expect(screen.getByTestId('tmdb-field-title')).toBeTruthy()
     expect(screen.getByTestId('tmdb-field-genres')).toBeTruthy()
     expect(screen.getByTestId('tmdb-field-country')).toBeTruthy()
+    // META-43：图片字段 backdrop/logo（cover_url 已存在）
+    expect(screen.getByTestId('tmdb-field-cover_url')).toBeTruthy()
+    expect(screen.getByTestId('tmdb-field-backdrop')).toBeTruthy()
+    expect(screen.getByTestId('tmdb-field-logo')).toBeTruthy()
     expect(api.tmdbSearchForVideo).toHaveBeenCalledWith('v1', expect.objectContaining({ mediaType: 'movie' }))
   })
 

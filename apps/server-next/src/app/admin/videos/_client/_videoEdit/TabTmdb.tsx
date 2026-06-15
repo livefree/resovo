@@ -15,7 +15,7 @@ import { useTmdbTab } from '@/lib/videos/use-tmdb'
 import type { TmdbCandidate, TmdbMediaType } from '@/lib/videos/use-tmdb'
 import type { VideoAdminDetail } from '@/lib/videos'
 
-const TMDB_APPLIABLE_FIELDS = ['title', 'title_original', 'original_language', 'description', 'genres', 'country', 'rating', 'cover_url'] as const
+const TMDB_APPLIABLE_FIELDS = ['title', 'title_original', 'original_language', 'description', 'genres', 'country', 'rating', 'cover_url', 'backdrop', 'logo'] as const
 type TmdbField = typeof TMDB_APPLIABLE_FIELDS[number]
 
 const SECTION_TITLE: React.CSSProperties = { fontSize: 'var(--font-size-sm-tight)', fontWeight: 600, color: 'var(--fg-default)', marginBottom: '10px' }

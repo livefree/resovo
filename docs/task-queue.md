@@ -2537,7 +2537,7 @@
 
 ## [SEQ-20260615-01] 元数据字段枚举兼容性治理
 
-- **状态**：🔄 进行中（META-40 ✅ + META-41-A ✅ + META-41-B ✅ + META-42 ✅ 2026-06-15〔+ 旁路 META-37-A-FIX Codex P2×2〕 → 下一 META-43〔TMDB 图片接入，独立于 country/genre〕）
+- **状态**：🔄 进行中（META-40 ✅ + META-41-A ✅ + META-41-B ✅ + META-42 ✅ + META-43 ✅ 2026-06-15〔+ 旁路 META-37-A-FIX Codex P2×2〕 → 下一 META-44-A〔VideoType 富集修正 ADR，强制 arch-reviewer Opus〕）
 - **创建时间**：2026-06-15 00:30
 - **最后更新时间**：2026-06-15 01:10（用户评审 B+ 后修订：范围补 server-next / META-40 收敛真源 / META-41·44 拆 -A/-B / cast 后排 / META-43 source 口径 / 逐卡门禁）
 - **目标**：修复 douban/bangumi/tmdb 三源元数据字段（类型/题材/地区/图片）与本地枚举的兼容缺口——含 1 项数据正确性 bug（实证）+ 4 项能力闲置 + 1 项设计权衡。
@@ -2592,7 +2592,8 @@
    - **门禁**：typecheck + lint + test:changed + **test:e2e:admin**（TabTmdb fields 改动，videos.spec 编辑 Drawer 黄金路径零回归）。
    - **依赖**：**META-40**（复用 country 归一真源，统一入口）。
 
-5. **META-43** — TMDB 图片接入（🟡 中 / 能力闲置）（状态：⬜ 待办）
+5. **META-43** — TMDB 图片接入（🟡 中 / 能力闲置）（状态：✅ 已完成 2026-06-15）
+   - **完成备注**：✅ 2026-06-15。**关键设计裁定（调查实证）**：图片治理批量 sweep（`imageHealth.ts` listPendingImageUrls/listMissingBlurhashUrls）拾取条件=`url IS NOT NULL AND status='pending_review'`（全 4 kind）→ 写 URL + 重置 status='pending_review' 即被既有 sweep 自动接管 health-check + blurhash，**无需在 TmdbConfirmService 接 imageHealthQueue / 不改构造签名 / 不跨 worker 层**（CrawlerService 定向 enqueue 仅即时优化，sweep 是安全网同终点）。实现：① `lib/tmdb.ts` `getImageBaseUrl`（进程级缓存 configuration.images.secure_base_url，失败回退稳定默认 `https://image.tmdb.org/t/p/`，替代硬编码）；② `TmdbConfirmService` confirm append `['external_ids','images']` + 纯 helper `pickBestImage`（语言优先级 zh>null>en → vote_average → vote_count）+ 纯 helper `buildImageFields`（poster=cover_url 优先 images.posters 最佳回退 poster_path，写 coverUrl+posterStatus='pending_review'+posterSource='tmdb'+尺寸；backdrop/logo 写 url+status，无 source 列）+ `TMDB_APPLIABLE_FIELDS` 加 backdrop/logo + buildCatalogFields 委托 + 仅选中图片字段才拉 imageBase；③ server-next TabTmdb 镜像加 backdrop/logo + VE.tmdb.fieldLabels（背景图/台标）。**边界**：poster 写 source='tmdb'（字段就绪）；backdrop/logo/banner 无 source 列不承诺溯源（产品要求→升 schema 任务独立 migration）；blurhash/primaryColor 不从 TMDB 写（交 sweep）；search 候选预览保留硬编码 base（不同关注点）。门禁 typecheck/lint EXIT=0 + test:changed 16 文件 198 passed（+8：tmdb-confirm 8〔cover_url zh 选/回退 poster_path/backdrop+logo/无图不拉 config + pickBestImage 语言优先压 vote〕 + TabTmdb 3 字段断言）+ **test:e2e:admin 84/84**（videos.spec:261 编辑 Drawer 黄金路径零回归）。执行模型 claude-opus-4-8；子代理无（service+lib 内部逻辑 + UI 镜像，非 admin-ui Props/新端点/跨消费方 schema）。详见 changelog [META-43]。
    - 创建时间：2026-06-15 00:30
    - 建议模型：sonnet
    - **问题**：本地图片体系（migration 048）有 poster(cover_url)/backdrop(backdrop_url)/**logo(logo_url)**/banner_backdrop 四类 + status/blurhash/尺寸；**仅 poster 有 `poster_source` 列**（CHECK 含 tmdb），backdrop/logo/banner **无 source 列**（实证 048:17/24/30/37）。TMDB `images` append 提供 backdrops[]/posters[]/logos[] **多语言（iso_639_1）+ 质量 vote + 尺寸**。但 META-39 仅应用 `cover_url ← detail.poster_path`（默认语言、w500、硬编码 base），**完全没用** backdrop / **logo**（`decisions.md:763` 早规划 TMDB logos→logo_url 未兑现）/ 语言偏好（zh 海报）/ 质量 vote / 尺寸 / `poster_source`。

@@ -14,8 +14,8 @@
 
 import type { Pool } from 'pg'
 import { loadTmdbClientConfig } from '@/api/services/tmdb-config'
-import { searchMovie, searchTv, getMovieDetail, getTvDetail } from '@/api/lib/tmdb'
-import type { TmdbMovieDetail, TmdbTvDetail, TmdbMovieSearchItem, TmdbTvSearchItem } from '@/api/lib/tmdb.types'
+import { searchMovie, searchTv, getMovieDetail, getTvDetail, getImageBaseUrl, TMDB_IMAGE_BASE_FALLBACK } from '@/api/lib/tmdb'
+import type { TmdbMovieDetail, TmdbTvDetail, TmdbMovieSearchItem, TmdbTvSearchItem, TmdbImage } from '@/api/lib/tmdb.types'
 import { resolveAndWriteExactRef, insertCandidateRef, type ExternalRefKind } from '@/api/db/queries/catalogExternalRefs'
 import { upsertVideoExternalRef } from '@/api/db/queries/externalData'
 import { mapTmdbGenres } from '@/api/lib/genreMapper'
@@ -23,11 +23,20 @@ import { countryToIso } from '@/types'
 import { MediaCatalogService } from '@/api/services/MediaCatalogService'
 import type { CatalogUpdateData } from '@/api/db/queries/mediaCatalog'
 
-/** TMDB image base（= configuration.images.secure_base_url + w500，稳定值；校准见 lib/tmdb.getConfiguration）。 */
-const TMDB_IMAGE_BASE = 'https://image.tmdb.org/t/p/w500'
+/** search 候选预览缩略图 base（base+w500；与 confirm 富图片应用的 configuration base 不同关注点，META-43）。 */
+const TMDB_PREVIEW_IMAGE_BASE = 'https://image.tmdb.org/t/p/w500'
+
+/** confirm 富图片应用 size token（per kind；base 来自 getImageBaseUrl configuration 缓存，META-43）。 */
+const IMAGE_SIZE = { poster: 'w500', backdrop: 'w1280', logo: 'w500' } as const
+/** 图片素材语言偏好：zh 文字版 > null 无字/透明 > en > 其他（按 vote 平手降级，META-43）。 */
+const POSTER_LANG_PREF: readonly (string | null)[] = ['zh', null, 'en']
+const BACKDROP_LANG_PREF: readonly (string | null)[] = [null, 'zh', 'en']
+const LOGO_LANG_PREF: readonly (string | null)[] = ['zh', null, 'en']
+/** 触发 getImageBaseUrl 的图片字段（仅选中其一才拉 configuration，避免无谓请求）。 */
+const IMAGE_FIELDS: readonly string[] = ['cover_url', 'backdrop', 'logo']
 
 /** confirm 可应用的 catalog 字段白名单（ADR-202 D-202-8；fields 省略/[] = 仅绑 ID 不应用）。 */
-export const TMDB_APPLIABLE_FIELDS = ['title', 'title_original', 'original_language', 'description', 'genres', 'country', 'rating', 'cover_url'] as const
+export const TMDB_APPLIABLE_FIELDS = ['title', 'title_original', 'original_language', 'description', 'genres', 'country', 'rating', 'cover_url', 'backdrop', 'logo'] as const
 export type TmdbAppliableField = typeof TMDB_APPLIABLE_FIELDS[number]
 
 export type TmdbMediaType = 'movie' | 'tv'
@@ -58,12 +67,75 @@ function toCandidate(item: TmdbMovieSearchItem | TmdbTvSearchItem, mediaType: Tm
     originalLanguage: item.original_language,
     year: date ? date.slice(0, 4) : null,
     overview: item.overview,
-    posterUrl: item.poster_path ? `${TMDB_IMAGE_BASE}${item.poster_path}` : null,
+    posterUrl: item.poster_path ? `${TMDB_PREVIEW_IMAGE_BASE}${item.poster_path}` : null,
   }
 }
 
-/** detail → CatalogUpdateData（仅 fields 选中字段；ADR-202 D-202-8 M1/M3/M5）。 */
-function buildCatalogFields(detail: TmdbMovieDetail | TmdbTvDetail, mediaType: TmdbMediaType, fields: readonly string[]): CatalogUpdateData {
+/**
+ * 从同 kind 候选图中选最佳（META-43）：语言优先级 → vote_average → vote_count。
+ * langPrefs 命中索引越小越优先；未命中（含 langPrefs 外语言）排在末尾。
+ */
+function pickBestImage(images: TmdbImage[] | undefined, langPrefs: readonly (string | null)[]): TmdbImage | null {
+  if (!images || images.length === 0) return null
+  const rank = (lang: string | null): number => {
+    const i = langPrefs.indexOf(lang)
+    return i === -1 ? langPrefs.length : i
+  }
+  return [...images].sort(
+    (a, b) =>
+      rank(a.iso_639_1) - rank(b.iso_639_1) ||
+      b.vote_average - a.vote_average ||
+      b.vote_count - a.vote_count,
+  )[0]
+}
+
+/**
+ * 图片字段应用（META-43）：poster/backdrop/logo 三 kind，URL = base+size+file_path。
+ * 写 url + status='pending_review'（触发既有治理 sweep 重探测 + blurhash，imageHealth.ts），
+ * poster 额外写 source='tmdb' + 尺寸；backdrop/logo 无 source 列。blurhash/primaryColor 不从 TMDB 写（交 sweep）。
+ */
+function buildImageFields(detail: TmdbMovieDetail | TmdbTvDetail, imageBase: string, sel: Set<string>): CatalogUpdateData {
+  const out: CatalogUpdateData = {}
+  const images = detail.images
+
+  if (sel.has('cover_url')) {
+    // 优先 images.posters 多语言最佳（zh 海报），回退 detail.poster_path（默认海报）
+    const best = pickBestImage(images?.posters, POSTER_LANG_PREF)
+    const path = best?.file_path ?? detail.poster_path
+    if (path) {
+      out.coverUrl = `${imageBase}${IMAGE_SIZE.poster}${path}`
+      out.posterStatus = 'pending_review'
+      out.posterSource = 'tmdb'
+      if (best) {
+        out.posterWidth = best.width
+        out.posterHeight = best.height
+      }
+    }
+  }
+  if (sel.has('backdrop')) {
+    const best = pickBestImage(images?.backdrops, BACKDROP_LANG_PREF)
+    if (best) {
+      out.backdropUrl = `${imageBase}${IMAGE_SIZE.backdrop}${best.file_path}`
+      out.backdropStatus = 'pending_review'
+    }
+  }
+  if (sel.has('logo')) {
+    const best = pickBestImage(images?.logos, LOGO_LANG_PREF)
+    if (best) {
+      out.logoUrl = `${imageBase}${IMAGE_SIZE.logo}${best.file_path}`
+      out.logoStatus = 'pending_review'
+    }
+  }
+  return out
+}
+
+/** detail → CatalogUpdateData（仅 fields 选中字段；ADR-202 D-202-8 M1/M3/M5 + META-42 country + META-43 图片）。 */
+function buildCatalogFields(
+  detail: TmdbMovieDetail | TmdbTvDetail,
+  mediaType: TmdbMediaType,
+  fields: readonly string[],
+  imageBase: string,
+): CatalogUpdateData {
   const sel = new Set(fields)
   const out: CatalogUpdateData = {}
   const isMovie = mediaType === 'movie'
@@ -92,8 +164,8 @@ function buildCatalogFields(detail: TmdbMovieDetail | TmdbTvDetail, mediaType: T
     if (iso) out.country = iso
   }
   if (sel.has('rating') && typeof detail.vote_average === 'number') out.rating = detail.vote_average
-  if (sel.has('cover_url') && detail.poster_path) out.coverUrl = `${TMDB_IMAGE_BASE}${detail.poster_path}`
-  return out
+  // 图片（META-43）：poster(cover_url)/backdrop/logo 经 images append 选最佳，委托 buildImageFields
+  return { ...out, ...buildImageFields(detail, imageBase, sel) }
 }
 
 export class TmdbConfirmService {
@@ -122,16 +194,21 @@ export class TmdbConfirmService {
     params: { tmdbId: number; mediaType: TmdbMediaType; seasonNumber?: number; fields?: readonly string[] },
   ): Promise<TmdbConfirmResult> {
     const { tmdbId, mediaType, seasonNumber } = params
+    const fields = params.fields ?? []
     const cfg = await loadTmdbClientConfig(this.db)
-    // Phase 1：REST 事务外
+    // Phase 1：REST 事务外。append images（META-43）供图片应用；仅选中图片字段才拉 image base configuration。
     const detail =
       mediaType === 'movie'
-        ? await getMovieDetail(tmdbId, { language: 'zh-CN', append: ['external_ids'] }, cfg)
-        : await getTvDetail(tmdbId, { language: 'zh-CN', append: ['external_ids'] }, cfg)
+        ? await getMovieDetail(tmdbId, { language: 'zh-CN', append: ['external_ids', 'images'] }, cfg)
+        : await getTvDetail(tmdbId, { language: 'zh-CN', append: ['external_ids', 'images'] }, cfg)
     if (!detail) return { updated: false, reason: 'tmdb_fetch_failed' }
 
+    const imageBase = fields.some((f) => IMAGE_FIELDS.includes(f))
+      ? await getImageBaseUrl(cfg, 'admin_search')
+      : TMDB_IMAGE_BASE_FALLBACK
+
     const externalKind: ExternalRefKind = mediaType === 'movie' ? 'movie' : seasonNumber != null ? 'season' : 'show'
-    const updateFields = buildCatalogFields(detail, mediaType, params.fields ?? [])
+    const updateFields = buildCatalogFields(detail, mediaType, fields, imageBase)
     const imdbId = detail.external_ids?.imdb_id ?? null
 
     // Phase 2：DB 写入单事务（ref + 字段 + cache + video ref 共享 client，D-202-2）

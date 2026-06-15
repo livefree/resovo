@@ -16,11 +16,17 @@ import * as externalData from '@/api/db/queries/externalData'
 
 vi.mock('@/api/lib/tmdb', () => ({
   searchMovie: vi.fn(), searchTv: vi.fn(), getMovieDetail: vi.fn(), getTvDetail: vi.fn(),
+  // META-43：confirm 图片应用经 getImageBaseUrl 拉 configuration base（mock 返稳定 base）
+  getImageBaseUrl: vi.fn(async () => 'https://image.tmdb.org/t/p/'),
+  TMDB_IMAGE_BASE_FALLBACK: 'https://image.tmdb.org/t/p/',
 }))
 vi.mock('@/api/services/tmdb-config', () => ({ loadTmdbClientConfig: vi.fn(async () => ({ readAccessToken: 'x' })) }))
 vi.mock('@/api/db/queries/catalogExternalRefs', () => ({ resolveAndWriteExactRef: vi.fn(), insertCandidateRef: vi.fn(async () => true) }))
 vi.mock('@/api/db/queries/externalData', () => ({ upsertVideoExternalRef: vi.fn(async () => undefined) }))
-const safeUpdateMock = vi.fn(async () => ({ updated: true, skippedFields: [] as string[] }))
+const safeUpdateMock = vi.fn(
+  async (_catalogId: string, _fields: Record<string, unknown>, _source: string, _ctx: unknown) =>
+    ({ updated: true, skippedFields: [] as string[] }),
+)
 vi.mock('@/api/services/MediaCatalogService', () => ({ MediaCatalogService: vi.fn(() => ({ safeUpdate: safeUpdateMock })) }))
 
 const clientQuery = vi.fn(async () => ({ rows: [] }))
@@ -33,6 +39,20 @@ const MOVIE: any = {
   id: 129, title: '千与千寻', original_title: '千と千尋', original_language: 'ja',
   overview: '小女孩千寻被困在精灵世界', genres: [{ id: 16, name: '动画' }, { id: 14, name: '奇幻' }],
   vote_average: 8.5, poster_path: '/p.jpg', external_ids: { imdb_id: 'tt0245429' },
+}
+
+// META-43 图片 fixture：posters 含 en（高 vote）+ zh（低 vote）→ 验证语言优先级压过 vote
+const IMAGES = {
+  posters: [
+    { file_path: '/en.jpg', width: 500, height: 750, aspect_ratio: 0.667, vote_average: 9.0, vote_count: 99, iso_639_1: 'en' },
+    { file_path: '/zh.jpg', width: 600, height: 900, aspect_ratio: 0.667, vote_average: 4.0, vote_count: 8, iso_639_1: 'zh' },
+  ],
+  backdrops: [
+    { file_path: '/bd.jpg', width: 1920, height: 1080, aspect_ratio: 1.778, vote_average: 7.0, vote_count: 20, iso_639_1: null },
+  ],
+  logos: [
+    { file_path: '/logo.png', width: 800, height: 300, aspect_ratio: 2.667, vote_average: 6.0, vote_count: 5, iso_639_1: 'zh' },
+  ],
 }
 
 beforeEach(() => {
@@ -151,6 +171,43 @@ describe('confirm', () => {
     const r = await svc.confirm('vid', 'cat', { tmdbId: 129, mediaType: 'movie', fields: ['country'] })
     expect(r).toMatchObject({ updated: true, applied: [] })
     expect(safeUpdateMock).not.toHaveBeenCalled()
+  })
+
+  // META-43：图片应用（poster/backdrop/logo 经 images append 选最佳 + 重置 status='pending_review' 触发治理 sweep）
+  it('cover_url 选中 → images.posters 选 zh 海报（语言优先压过 en 高 vote）+ source=tmdb + status + 尺寸', async () => {
+    vi.mocked(tmdbLib.getMovieDetail).mockResolvedValue({ ...MOVIE, images: IMAGES })
+    await svc.confirm('vid', 'cat', { tmdbId: 129, mediaType: 'movie', fields: ['cover_url'] })
+    expect(tmdbLib.getImageBaseUrl).toHaveBeenCalled()
+    expect(safeUpdateMock).toHaveBeenCalledWith('cat', expect.objectContaining({
+      coverUrl: 'https://image.tmdb.org/t/p/w500/zh.jpg', // zh（vote 4）压过 en（vote 9）
+      posterStatus: 'pending_review', posterSource: 'tmdb', posterWidth: 600, posterHeight: 900,
+    }), 'tmdb', expect.objectContaining({ db: client }))
+  })
+
+  it('cover_url 选中但无 images → 回退 detail.poster_path（仍写 source=tmdb + status）', async () => {
+    vi.mocked(tmdbLib.getMovieDetail).mockResolvedValue(MOVIE) // 无 images 字段
+    await svc.confirm('vid', 'cat', { tmdbId: 129, mediaType: 'movie', fields: ['cover_url'] })
+    const applied = safeUpdateMock.mock.calls[0][1] as Record<string, unknown>
+    expect(applied.coverUrl).toBe('https://image.tmdb.org/t/p/w500/p.jpg')
+    expect(applied.posterSource).toBe('tmdb')
+    expect(applied.posterStatus).toBe('pending_review')
+    expect(applied.posterWidth).toBeUndefined() // 回退路径无 best image → 不写尺寸
+  })
+
+  it('backdrop + logo 选中 → 各写 url（base+size+path）+ status，无 source 列', async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    vi.mocked(tmdbLib.getTvDetail).mockResolvedValue({ id: 1429, name: 'X', original_name: 'X', original_language: 'ja', overview: '', genres: [], external_ids: {}, images: IMAGES } as any)
+    await svc.confirm('vid', 'cat', { tmdbId: 1429, mediaType: 'tv', seasonNumber: 1, fields: ['backdrop', 'logo'] })
+    expect(safeUpdateMock).toHaveBeenCalledWith('cat', expect.objectContaining({
+      backdropUrl: 'https://image.tmdb.org/t/p/w1280/bd.jpg', backdropStatus: 'pending_review',
+      logoUrl: 'https://image.tmdb.org/t/p/w500/logo.png', logoStatus: 'pending_review',
+    }), 'tmdb', expect.anything())
+  })
+
+  it('无图片字段选中 → 不拉 image base configuration（避免无谓请求）', async () => {
+    vi.mocked(tmdbLib.getMovieDetail).mockResolvedValue(MOVIE)
+    await svc.confirm('vid', 'cat', { tmdbId: 129, mediaType: 'movie', fields: ['title'] })
+    expect(tmdbLib.getImageBaseUrl).not.toHaveBeenCalled()
   })
 })
 

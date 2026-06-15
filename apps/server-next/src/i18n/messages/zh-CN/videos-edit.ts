@@ -130,6 +130,8 @@ export const VE = {
       country: '地区',
       rating: '评分',
       cover_url: '封面',
+      backdrop: '背景图',
+      logo: '台标',
     },
     overwriteHint: '确认后将用 TMDB 数据覆盖选中字段的现有值',
     candidateMeta: (year: string | null, lang: string): string => `${year ?? '—'} · ${lang}`,
