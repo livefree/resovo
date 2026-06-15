@@ -22,8 +22,10 @@ const SECTION_TITLE: React.CSSProperties = { fontSize: 'var(--font-size-sm-tight
 const ROW: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '10px' }
 const INPUT: React.CSSProperties = { flex: 1, minWidth: '160px', padding: '6px 10px', fontSize: 'var(--font-size-xs)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)', background: 'var(--bg-input)', color: 'var(--fg-default)' }
 const BTN: React.CSSProperties = { padding: '6px 12px', fontSize: 'var(--font-size-xs)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)', background: 'var(--bg-surface)', color: 'var(--fg-default)', cursor: 'pointer' }
-const BTN_PRIMARY: React.CSSProperties = { ...BTN, background: 'var(--accent-default)', color: 'var(--accent-fg)', borderColor: 'var(--accent-default)' }
-const SEG_ON: React.CSSProperties = { ...BTN, background: 'var(--accent-subtle)', borderColor: 'var(--accent-default)', color: 'var(--accent-default)' }
+// 覆盖用完整 border shorthand（勿用 borderColor）：BTN 用 border shorthand，叠加 borderColor 会在
+// SEG_ON↔BTN 切换时触发「移除 borderColor 但 border 仍在」的 React 警告（verify-style-shorthand-conflict 同源）。
+const BTN_PRIMARY: React.CSSProperties = { ...BTN, background: 'var(--accent-default)', color: 'var(--accent-fg)', border: '1px solid var(--accent-default)' }
+const SEG_ON: React.CSSProperties = { ...BTN, background: 'var(--accent-subtle)', border: '1px solid var(--accent-default)', color: 'var(--accent-default)' }
 const ERROR_STYLE: React.CSSProperties = { fontSize: 'var(--font-size-2xs)', color: 'var(--state-error-fg)', marginTop: '4px' }
 const HINT_STYLE: React.CSSProperties = { fontSize: 'var(--font-size-2xs)', color: 'var(--fg-muted)', marginTop: '4px' }
 
