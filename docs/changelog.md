@@ -5915,3 +5915,26 @@
 - **测试覆盖**：+10 新单测（use-tmdb 5 + TabTmdb 5）；test:changed 31 文件 335 passed（use-douban/VideoEditDrawer 16/VideoColumns 42 零回归）；**test:e2e:admin 84/84**（videos.spec 编辑 Drawer 黄金路径 TabTmdb 挂载零回归）。
 - **质量门禁**：typecheck 全工作区 EXIT=0 / lint 通过（无本卡 error）/ test:changed 335 passed / **test:e2e:admin 84/84**。test:integration N/A（纯前端）。
 - **[AI-CHECK]**：六问过——①根因=META-39-A 端点就绪后接前端审核 UI；②零回归（typecheck 全绿 + test:changed 335 + e2e:admin 84/84 + VideoEditDrawer/use-douban 零破坏）；③边界=纯前端不改 admin-ui Props、tv 不选 season/per-field danger/season 选择器/e2e seed 留 follow-up；④复用=TabDouban/use-douban 范式〔hook+CandidateRow+VE 文案〕+ apiClient.post + VideoAdminDetail 类型；⑤无 any（测试 fixture as unknown as 局部）/ 无空 catch / 零硬编码色〔CSS 变量〕/ year 输入 \D 过滤；⑥范围 TabTmdb + use-tmdb + api + 文案 + 挂载 单一验收口径，全落地。**META-39 全收口（-A 后端 + -B UI）。TMDB 接入 Phase 5 端到端完成。**
+
+## [META-40] Country 格式归一治理（SEQ-20260615-01 / 数据正确性 bug）
+- **完成时间**：2026-06-15
+- **记录时间**：2026-06-15 01:05
+- **执行模型**：claude-opus-4-8
+- **子代理**：无（country 归一是既有 API-local 逻辑收敛上提 packages/types，非新建组件 Props/非新 route/非 ADR；opus 主循环亲定 helper 契约）
+- **修改文件**：
+  - `packages/types/src/country-to-iso.ts` — 新建。country 归一正向真源：`COUNTRY_NAME_TO_ISO`（中文/线路别名→ISO，覆盖原 COUNTRY_MAP 8 国全部别名 + media_catalog 实测 14 种〔含「中国香港/中国台湾」豆瓣前缀〕+ 常见影视产出国）+ `countryToIso(raw)`（双形态：已 ISO 2 位 alpha→大写返回 / 否则查表 / 不可归一→null）。与 format-country-name（出）构成 country 双向真源。
+  - `packages/types/src/index.ts` — barrel +`countryToIso`/`COUNTRY_NAME_TO_ISO`。
+  - `apps/api/src/services/SourceParserService.maps.ts` — 删本地 `COUNTRY_MAP` 字面量（8 国），改 `export { COUNTRY_NAME_TO_ISO as COUNTRY_MAP } from '@/types'`（保符号名，零改 parseCountry:162 消费者）。评审 #2「禁止新建第二套国家表」。
+  - `apps/api/src/services/SourceLanguageResolver.ts` — `normalizeCountryCode` 改委托 `countryToIso`（薄 wrapper 保函数名 + region 推断:160 消费者零改）；删 COUNTRY_MAP import；注释更新。
+  - `apps/api/src/services/DoubanService.ts` — **3 处** country 写入经 countryToIso 归一：`enrichVideo:121` / `confirmSubject:195`（`if(iso) updateFields.country=iso`）+ **`confirmFields` 通用字段循环**新增 country 分支（f==='country'→归一，归一不到跳过保列纯净）。
+  - `apps/api/src/services/MetadataEnrichService.ts` — **3 处**：imdb 路径:190 `countryToIso(imdbMatch.country)??undefined` / 本地 auto:238 `countryToIso(best.country)??undefined` / 网络 auto:292 `if(iso) updateFields.country=iso`。
+  - `apps/api/src/db/migrations/117_media_catalog_country_iso_normalize.sql` — 新建。存量清洗 media_catalog.country 中文名→ISO（VALUES 表为 COUNTRY_NAME_TO_ISO point-in-time 快照；幂等 WHERE country=中文 → 复跑 UPDATE 0；不可归一保留原值）。
+  - `tests/unit/types/country-to-iso.test.ts` — 新建。7 it（已 ISO 直通+trim / 中文规范名 / 「中国X」前缀分别归一 CN-HK-TW-MO / media_catalog 实测扩充 / 线路别名保留 / 不可归一 null / 全映射值合法 alpha-2）。
+  - `tests/unit/api/doubanService-manual.test.ts` — +2 it（confirmFields 含 country→safeUpdate 写归一「美国」→「US」/ 归一不到「火星国」→updateFields 不含 country）；makeDetail overrides +countries。
+- **新增依赖**：无。
+- **数据库变更**：migration 117（**数据清洗，非 schema 变更**——media_catalog.country 中文名→ISO，列定义不变，architecture.md 无需同步）。**真库验证**：dev 库事务 dry-run（BEGIN/ROLLBACK 不改库）——清洗前 124 行非 ISO → apply 后 **0 残留**（14 种中文名全归一，无遗漏）→ 第二次 apply **UPDATE 0**（幂等）→ distinct 同国合并（CN:2415/JP:370/US:310/KR:180/HK:20/TW:43…无中文名）。**正式 COMMIT apply 留标准 `npm run migrate`**（dev 库 116 META-37-A 凭证迁移亦 pending，runner 按序连带 apply 触碰用户凭证表，超本卡范围 → 不在 META-40 越界 COMMIT）。
+- **裁定 A（D-199-3 显式例外）**：本卡清洗回写存量与 ADR-199 D-199-3「不回写存量数据」有张力——D-199-3 语境是 SourceLanguageResolver 不回溯改写既有行；本卡是定向修复 douban 引入的 catalog.country 污染（非全表语义回溯），用户批准作 **D-199-3 显式例外**，commit/changelog 记录，不新起 ADR。
+- **架构发现/边界**：① **写入侧实为 6 处（卡片记 5 处）**——开工调查补出 `DoubanService.confirmFields` 通用字段循环（META-07 手动 fields 应用，用户在 TabDouban 勾选 country 字段时的实际写入路径）第 6 处，已补归一分支。② **videos 表无 country 列**（实证），清洗收窄 media_catalog 单表。③ **写入侧「归一不到则不写」**——不可归一（表外生僻国）跳过该字段不写，保 catalog.country 列纯净（杜绝新增中文污染）；存量罕见名静默保留可 `SELECT country !~ '^[A-Z]{2}$'` 审计、映射补全后下次 enrich 自洁。④ **真源收敛非新建**——countryToIso/COUNTRY_NAME_TO_ISO 取代原 API-local COUNTRY_MAP（8 国）+ normalizeCountryCode，全仓单一国家映射真源；preview/diff 展示段（DoubanService:277-374）不归一（展示用途经 formatCountryName，非入库）。
+- **测试覆盖**：+9 新单测（country-to-iso 7 + doubanService confirmFields country 2）；**test:changed 升全量**（packages/types helper 改动 ADR-180）**553 文件 7627 passed 零失败**（source-language-resolver 17 / crawler parseCountry 98 / format-country-name 7 / metadataEnrich 35 / douban 全回归零失败）。
+- **质量门禁**：typecheck 全工作区 EXIT=0 / lint 通过（仅既有 warning 非本卡文件）/ test:changed 全量 7627 passed / **migration 117 真库 dry-run 124→0 残留 + 幂等 UPDATE 0**。test:e2e N/A（API/lib 层无 UI 消费方改动；TabDouban/TabTmdb 未改，META-42/43 才动 UI）。
+- **[AI-CHECK]**：六问过——①根因=douban 写入侧直写中文国家名无 ISO 转换 → 同国裂两值致视频库 distinct/筛选/分组失效（dev 库实证 124 行污染）；②零回归（typecheck 全绿 + test:changed 全量 7627 passed + 既有 normalizeCountryCode/parseCountry/format-country-name 零破坏 + migration ROLLBACK 不改库）；③边界=videos 无 country 列收窄单表、preview 段不归一、归一不到不写保列纯净、正式 apply 留标准流程不连带 116；④复用=收敛既有 COUNTRY_MAP+normalizeCountryCode 上提 packages/types 单一真源（评审 #2 禁第二套表）、与 format-country-name 双向真源、写入侧复用 genres 特殊分支范式；⑤无 any / 无空 catch / migration 幂等可复跑 / 无硬编码色；⑥范围 真源 helper + 收敛引用 + 写入侧 6 处归一 + 存量清洗 单一验收口径，全落地。**SEQ-20260615-01 META-40 收口，解锁 META-41-B/META-42（复用 country 归一真源）。**

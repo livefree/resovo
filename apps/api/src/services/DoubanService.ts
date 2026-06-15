@@ -13,6 +13,7 @@ import type { Pool } from 'pg'
 import { searchDouban } from '@/api/lib/douban'
 import { getDoubanDetailRich } from '@/api/lib/doubanAdapter'
 import { mapDoubanGenres } from '@/api/lib/genreMapper'
+import { countryToIso } from '@/types'
 import * as videoQueries from '@/api/db/queries/videos'
 import * as catalogQueries from '@/api/db/queries/mediaCatalog'
 import * as externalDataQueries from '@/api/db/queries/externalData'
@@ -118,7 +119,10 @@ export class DoubanService {
       const mapped = mapDoubanGenres(detail.genres)
       if (mapped.length > 0) updateFields.genres = mapped
     }
-    if (detail.countries.length > 0) updateFields.country = detail.countries[0]
+    if (detail.countries.length > 0) {
+      const iso = countryToIso(detail.countries[0])
+      if (iso) updateFields.country = iso
+    }
 
     const { updated } = await catalogService.safeUpdate(catalog.id, updateFields, 'douban', { sourceRef: detail.id })
     if (!updated) return { updated: false, reason: 'fetch_failed' }
@@ -192,7 +196,10 @@ export class DoubanService {
       const mapped = mapDoubanGenres(detail.genres)
       if (mapped.length > 0) updateFields.genres = mapped
     }
-    if (detail.countries.length > 0) updateFields.country = detail.countries[0]
+    if (detail.countries.length > 0) {
+      const iso = countryToIso(detail.countries[0])
+      if (iso) updateFields.country = iso
+    }
 
     const { updated, skippedFields } = await catalogService.safeUpdate(video.catalog_id, updateFields, 'douban', { sourceRef: subjectId })
     if (!updated) return { updated: false, reason: 'catalog_update_rejected' }
@@ -376,6 +383,11 @@ export class DoubanService {
         updateFields.genresRaw = val as string[]
         const mapped = mapDoubanGenres(val as string[])
         if (mapped.length > 0) updateFields.genres = mapped
+      } else if (f === 'country') {
+        // META-40：country 经 countryToIso 归一为 ISO（douban proposed.country 为中文名）；
+        // 归一不到（表外生僻国）则跳过该字段，保 catalog.country 列纯净（不写中文污染）。
+        const iso = countryToIso(typeof val === 'string' ? val : null)
+        if (iso) updateFields.country = iso
       } else {
         (updateFields as Record<string, unknown>)[catalogKey] = val
       }

@@ -2537,7 +2537,7 @@
 
 ## [SEQ-20260615-01] 元数据字段枚举兼容性治理
 
-- **状态**：🟡 规划中
+- **状态**：🔄 进行中（META-40 ✅ 2026-06-15 → 下一 META-41-A）
 - **创建时间**：2026-06-15 00:30
 - **最后更新时间**：2026-06-15 01:10（用户评审 B+ 后修订：范围补 server-next / META-40 收敛真源 / META-41·44 拆 -A/-B / cast 后排 / META-43 source 口径 / 逐卡门禁）
 - **目标**：修复 douban/bangumi/tmdb 三源元数据字段（类型/题材/地区/图片）与本地枚举的兼容缺口——含 1 项数据正确性 bug（实证）+ 4 项能力闲置 + 1 项设计权衡。
@@ -2551,7 +2551,8 @@
 
 ### 任务列表（按严重度优先级）
 
-1. **META-40** — Country 格式归一治理（🔴 高 / 数据正确性 bug）（状态：⬜ 待办）
+1. **META-40** — Country 格式归一治理（🔴 高 / 数据正确性 bug）（状态：✅ 已完成 2026-06-15）
+   - **完成备注**：✅ 2026-06-15。country 归一真源 `countryToIso`/`COUNTRY_NAME_TO_ISO` 沉淀 packages/types（收敛原 API-local COUNTRY_MAP 8 国 + normalizeCountryCode，禁第二套表，评审 #2）+ 与 format-country-name 构成双向真源；写入侧 **6 处**归一（卡片记 5，开工调查补出 `DoubanService.confirmFields` 第 6 处——META-07 手动 fields 应用路径）；migration 117 存量清洗（真库 dry-run **124→0 残留** + 幂等 **UPDATE 0**；正式 COMMIT apply 留 `npm run migrate`，因 116 META-37-A 凭证迁移亦 pending、runner 连带 apply 超本卡范围）；裁定 A（D-199-3 显式例外，定向修复非全表回溯）。门禁 typecheck/lint EXIT=0 + test:changed 升全量 **7627 passed** + migration 真库验证。+9 新单测。执行模型 claude-opus-4-8；子代理无。详见 changelog [META-40]。
    - 创建时间：2026-06-15 00:30
    - 建议模型：sonnet
    - **问题（实证）**：`media_catalog.country` 应存 ISO 3166-1 alpha-2，但 dev 库实测同列混入中文名——`CN`(2363) 与 `中国大陆`(52) 并存、`US`/`美国`(18)、`JP`/`日本`(23)、`印度`(7) 等。根因 `DoubanService.ts:121/195` `updateFields.country = detail.countries[0]` 直接写 douban 中文名（`douban_entries.country` 全中文），无 ISO 转换。`formatCountryName('美国')` 降级返回原值故显示不报错，但同国裂两值 → 视频库 distinct/筛选/分组失效（筛「美国」匹配不到「US」行）；douban 仅取 `countries[0]` 丢合拍片多地区。

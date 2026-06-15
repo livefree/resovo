@@ -85,13 +85,6 @@ export const ADULT_CATEGORIES = new Set<string>([
   '女优系列',
 ])
 
-export const COUNTRY_MAP: Record<string, string> = {
-  '中国大陆': 'CN', '大陆': 'CN', '国产': 'CN', '华语': 'CN',
-  '香港': 'HK', '港剧': 'HK',
-  '台湾': 'TW',
-  '日本': 'JP', '日剧': 'JP',
-  '韩国': 'KR', '韩剧': 'KR',
-  '美国': 'US', '美剧': 'US',
-  '英国': 'GB',
-  '泰国': 'TH',
-}
+// COUNTRY_MAP 单一真源已上提 packages/types（META-40，评审 #2「禁止新建第二套国家表」）。
+// 此处保留符号名 re-export，零改 parseCountry(:162) / normalizeCountryCode 等下游消费者。
+export { COUNTRY_NAME_TO_ISO as COUNTRY_MAP } from '@/types'

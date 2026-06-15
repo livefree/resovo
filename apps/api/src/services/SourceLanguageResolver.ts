@@ -12,13 +12,13 @@
  *   4. unknown
  *
  * 字幕维度无地区推断（无可靠先验，provenance CHECK 同步少 region_inferred）。
- * country 规整复用 SourceParserService 的 COUNTRY_MAP（评审 REVISE：禁止新建映射）；
- * 存量 country ISO/中文双形态：已是 ISO code 直接用，否则过 COUNTRY_MAP。
+ * country 规整委托 packages/types `countryToIso` 单一真源（META-40 收敛，原 COUNTRY_MAP
+ * 已上提）；双形态：已是 ISO code 直接用，否则过中文/别名表。
  */
 
 import type { AudioLanguageSource, SubtitleLanguageSource } from '@/types'
+import { countryToIso } from '@/types'
 import { AUDIO_VARIANT_RULES, SUBTITLE_VARIANT_RULES } from './TitleIdentityParser'
-import { COUNTRY_MAP } from './SourceParserService.maps'
 
 // ── 封闭枚举规范词（D-199-2 真源；扩词改这里 + AUDIO_VARIANT_RULES）──────────────
 
@@ -89,14 +89,11 @@ export function matchSubtitleToken(raw: string | null | undefined): SubtitleToke
 }
 
 /**
- * country 双形态规整：已是 ISO 2 位 code 直接用（大写），否则过 COUNTRY_MAP
- * （'中国大陆'/'大陆'/'国产'→'CN' 等）。不回写存量数据（D-199-3）。
+ * country 双形态规整：委托 packages/types `countryToIso` 单一真源（META-40 收敛）。
+ * 保留本符号供 region 推断（:160）与既有消费者；语义不变（已 ISO 直接用，否则查表）。
  */
 export function normalizeCountryCode(raw: string | null | undefined): string | null {
-  const s = raw?.trim()
-  if (!s) return null
-  if (/^[A-Za-z]{2}$/.test(s)) return s.toUpperCase()
-  return COUNTRY_MAP[s] ?? null
+  return countryToIso(raw)
 }
 
 // ── 五级推断链主入口（D-199-3）────────────────────────────────────────────────

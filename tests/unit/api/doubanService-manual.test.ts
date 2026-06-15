@@ -49,6 +49,7 @@ vi.mock('@/api/lib/queue', () => ({
 // ── 真实导入（mocks 完成后）──────────────────────────────────────────
 
 import { DoubanService } from '@/api/services/DoubanService'
+import { MediaCatalogService } from '@/api/services/MediaCatalogService'
 import * as videoQueries from '@/api/db/queries/videos'
 import * as catalogQueries from '@/api/db/queries/mediaCatalog'
 import * as externalDataQueries from '@/api/db/queries/externalData'
@@ -58,7 +59,7 @@ const VIDEO_ID = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'
 const CATALOG_ID = 'cccccccc-dddd-eeee-ffff-111111111111'
 const SUBJECT_ID = '26266893'
 
-function makeDetail(overrides: Partial<{ episodes: number }> = {}) {
+function makeDetail(overrides: Partial<{ episodes: number; countries: string[] }> = {}) {
   return {
     id: SUBJECT_ID,
     title: '某剧集',
@@ -147,6 +148,30 @@ describe('DoubanService.confirmFields — Y2 fields 含 episodes', () => {
     await service.confirmFields(VIDEO_ID, SUBJECT_ID, ['title', 'rating'])
 
     expect(videoQueries.updateVideoEpisodes).not.toHaveBeenCalled()
+  })
+
+  it('META-40: fields 含 "country" → safeUpdate 写归一 ISO（detail.countries 中文名「美国」→「US」）', async () => {
+    vi.mocked(getDoubanDetailRich).mockResolvedValue(makeDetail({ countries: ['美国'] }) as never)
+
+    await service.confirmFields(VIDEO_ID, SUBJECT_ID, ['country'])
+
+    const safeUpdate = vi.mocked(MediaCatalogService).mock.results.at(-1)?.value.safeUpdate
+    expect(safeUpdate).toHaveBeenCalledWith(
+      CATALOG_ID,
+      expect.objectContaining({ country: 'US' }),
+      'douban',
+      expect.anything(),
+    )
+  })
+
+  it('META-40: fields 含 "country" 但归一不到（表外生僻名）→ updateFields 不含 country（保列纯净）', async () => {
+    vi.mocked(getDoubanDetailRich).mockResolvedValue(makeDetail({ countries: ['火星国'] }) as never)
+
+    await service.confirmFields(VIDEO_ID, SUBJECT_ID, ['country'])
+
+    const safeUpdate = vi.mocked(MediaCatalogService).mock.results.at(-1)?.value.safeUpdate
+    const updateArg = safeUpdate.mock.calls.at(-1)?.[1] as Record<string, unknown>
+    expect(updateArg).not.toHaveProperty('country')
   })
 
   it('localEntry 命中（本地 dump）+ fields 含 "episodes" → 跳过（A3 advisory：dump 无 episodes 真源）', async () => {

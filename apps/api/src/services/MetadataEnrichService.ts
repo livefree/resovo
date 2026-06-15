@@ -15,6 +15,7 @@
 
 import type { Pool } from 'pg'
 import type { DoubanStatus, DoubanMatchMethod, SourceCheckStatus, VideoMetaQuality } from '@/types'
+import { countryToIso } from '@/types'
 import { searchDouban } from '@/api/lib/douban'
 import { getDoubanDetailRich } from '@/api/lib/doubanAdapter'
 import { mapDoubanGenres } from '@/api/lib/genreMapper'
@@ -187,7 +188,7 @@ export class MetadataEnrichService {
           writers: imdbMatch.writers,
           genres: imdbMatch.genres.length > 0 ? mapDoubanGenres(imdbMatch.genres) : undefined,
           genresRaw: imdbMatch.genres.length > 0 ? imdbMatch.genres : undefined,
-          country: imdbMatch.country ?? undefined,
+          country: countryToIso(imdbMatch.country) ?? undefined,
         }, 'douban', { sourceRef: imdbMatch.doubanId })
         return this.finalizeDoubanAutoWrite({
           videoId, doubanId: imdbMatch.doubanId, skippedFields,
@@ -235,7 +236,7 @@ export class MetadataEnrichService {
       writers: best.writers,
       genres: best.genres.length > 0 ? mapDoubanGenres(best.genres) : undefined,
       genresRaw: best.genres.length > 0 ? best.genres : undefined,
-      country: best.country ?? undefined,
+      country: countryToIso(best.country) ?? undefined,
     }, 'douban', { sourceRef: best.doubanId })
     return this.finalizeDoubanAutoWrite({
       videoId, doubanId: best.doubanId, skippedFields,
@@ -289,7 +290,10 @@ export class MetadataEnrichService {
           const mapped = mapDoubanGenres(detail.genres)
           if (mapped.length > 0) updateFields.genres = mapped
         }
-        if (detail.countries[0]) updateFields.country = detail.countries[0]
+        if (detail.countries[0]) {
+          const iso = countryToIso(detail.countries[0])
+          if (iso) updateFields.country = iso
+        }
 
         // ADR-186 D-186-4：先 safeUpdate，据 doubanId 落地结果决定 status / refStatus
         const { skippedFields } = await this.catalogService.safeUpdate(catalogId, updateFields, 'douban', { sourceRef: detail.id })

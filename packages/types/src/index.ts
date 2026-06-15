@@ -91,3 +91,6 @@ export { getVideoDetailHref } from './url-helpers'
 
 // ── plan §10.4.3 国家代码显示 helper（CHG-366 META-COUNTRY-DISPLAY）─
 export { formatCountryName } from './format-country-name'
+
+// ── country 归一真源（META-40，与 format-country-name 构成双向真源）─
+export { countryToIso, COUNTRY_NAME_TO_ISO } from './country-to-iso'
