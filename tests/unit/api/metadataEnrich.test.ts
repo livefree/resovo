@@ -61,15 +61,21 @@ vi.mock('@/api/db/queries/mediaCatalog', () => ({
   findCatalogById: vi.fn(),
 }))
 
-vi.mock('@/api/services/MediaCatalogService', () => ({
-  MediaCatalogService: vi.fn().mockImplementation(() => ({
-    // ADMIN-14: safeUpdate 返回 { updated, skippedFields }
-    safeUpdate: vi.fn().mockResolvedValue({ updated: { id: 'catalog-1' }, skippedFields: [] }),
-    // ADR-174 D-174-3：BangumiService.applyEnrichmentDb 写 subject 前查重判定（默认无冲突 safe）
-    resolveBangumiBinding: vi.fn().mockResolvedValue({ kind: 'safe' }),
-    linkVideo: vi.fn().mockResolvedValue(undefined),
-  })),
-}))
+// META-49-D1：reconcile 经 CATALOG_SOURCE_PRIORITY 派生 trust（douban 内容进 reconcile 后触发）→
+// 保留真常量（importOriginal），仅 mock MediaCatalogService 类
+vi.mock('@/api/services/MediaCatalogService', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/api/services/MediaCatalogService')>()
+  return {
+    ...actual,
+    MediaCatalogService: vi.fn().mockImplementation(() => ({
+      // ADMIN-14: safeUpdate 返回 { updated, skippedFields }
+      safeUpdate: vi.fn().mockResolvedValue({ updated: { id: 'catalog-1' }, skippedFields: [] }),
+      // ADR-174 D-174-3：BangumiService.applyEnrichmentDb 写 subject 前查重判定（默认无冲突 safe）
+      resolveBangumiBinding: vi.fn().mockResolvedValue({ kind: 'safe' }),
+      linkVideo: vi.fn().mockResolvedValue(undefined),
+    })),
+  }
+})
 
 vi.mock('@/api/lib/douban', () => ({
   searchDouban: vi.fn(),
@@ -179,6 +185,20 @@ describe('MetadataEnrichService.enrich()', () => {
     expect(mockSafeUpdate).toHaveBeenCalledWith('c1', expect.objectContaining({ doubanId: 'd1' }), 'douban', { sourceRef: 'd1' })
     const call = vi.mocked(videosQueries.updateVideoEnrichStatus).mock.calls[0]
     expect(call[2]).toMatchObject({ doubanStatus: 'matched' })
+  })
+
+  it('D1（方案 X）：douban auto → 身份 doubanId 留路径 safeUpdate（内容剥离）+ 内容交 reconcile', async () => {
+    vi.mocked(externalDataQueries.findDoubanByTitleNorm).mockResolvedValue([makeDoubanMatch()])
+    await service.enrich(makeJobData())
+    // 身份 safeUpdate（this.catalogService=首个实例）：douban 调用**仅含 doubanId**（内容已剥离到 reconcile）
+    const doubanIdentity = mockSafeUpdate.mock.calls.find((c: unknown[]) => c[2] === 'douban')
+    expect(doubanIdentity?.[1]).toEqual({ doubanId: 'd1' })
+    // 内容经 reconcile（最后构造的实例）以 'douban' safeUpdate（rating/description/genres winner + cast/director passthrough）
+    const reconcileSafeUpdate = (MediaCatalogService as ReturnType<typeof vi.fn>).mock.results.at(-1)?.value.safeUpdate
+    const reconcileDouban = reconcileSafeUpdate.mock.calls.find((c: unknown[]) => c[2] === 'douban')
+    expect(reconcileDouban?.[1]).toMatchObject({ rating: 9.5, description: '一段关于巨人的故事', cast: ['梶裕贵'] })
+    // 身份 safeUpdate 不含内容（剥离证据）
+    expect(doubanIdentity?.[1]).not.toHaveProperty('rating')
   })
 
   it('META-22: Step1 有损键命中多条同年份不同 douban → 歧义降级 candidate（不写 catalog）', async () => {

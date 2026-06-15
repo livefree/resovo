@@ -98,20 +98,27 @@ export class MetadataEnrichService {
       title_en_is_pinyin: isPinyin(titleEn),
     }
 
-    // Step 1: 本地豆瓣多字段召回
+    // ADR-205 D-205-1（gather → reconcile → write）：三源（douban/bangumi/tmdb）内容标量 proposedFields
+    // 先收集、再逐字段加权裁决（reconcileMetadata），不再各自直接 safeUpdate。身份副作用（ref/cache/
+    // doubanId/bangumiSubjectId/tmdbId/redirect/episodes/type）留各源自有路径（方案 X，B1/B2/D1）。
+    const reconcileSources: ReconcileSource[] = []
+
+    // Step 1: 本地豆瓣多字段召回（META-49-D1：身份 doubanId 留路径 + 内容上抛 reconcile）
     // 注：DoubanEntryMatch 本地 dump 无 episodes 字段 / 不写 total/current_episodes
     // （ADR-163 §11 A3 advisory / 留给 step2 网络搜索补 + step3 bangumi 补）
     const step1 = await this.step1LocalDouban(
       videoId, catalogId, titleNorm, title, year, imdbId, metaQuality,
     )
-    if (step1 !== null) {
-      doubanStatus = step1
+    if (step1.status !== null) {
+      doubanStatus = step1.status
+      if (step1.proposal) reconcileSources.push(step1.proposal)
     } else {
       // Step 2: 本地无任何匹配，fallback 至网络搜索
       const step2 = await this.step2NetworkSearch(
         videoId, catalogId, title, year, metaQuality, catalogStatus,
       )
-      if (step2 !== null) doubanStatus = step2
+      if (step2.status !== null) doubanStatus = step2.status
+      if (step2.proposal) reconcileSources.push(step2.proposal)
     }
 
     // 豆瓣未命中（Step1/Step2 均未写信号）→ 显式标记 unmatched 便于审核台筛选
@@ -122,12 +129,9 @@ export class MetadataEnrichService {
     // Step 3: 动画类型补充 Bangumi 数据（ADR-161：委托 BangumiService，含置信度 + ref + rich 详情 + 逐集）
     // ADR-174 D-174-3：bangumi 真去重可能把 video.catalog_id 重指向到 existing catalog →
     // 返回有效 catalogId 供 step5 使用（用旧入参 catalogId 会对已弃置 orphan catalog 算分）。
-    // ADR-205 D-205-1（gather → reconcile → write，META-49-B2）：bangumi/tmdb 内容标量 proposedFields
-    // 先收集、再逐字段加权裁决（reconcileMetadata），不再各自立即 safeUpdate。身份副作用（ref/cache/
-    // redirect/episodes/type）已在各源自有事务写（方案 X）。douban Step1/2 不进 gather（留 49-D），其
-    // 已写内容由 reconcile winner 经优先级闸门覆盖。
+    // bangumi 内容标量 proposedFields 收集进 reconcileSources（与 douban/tmdb 一并裁决）；身份副作用
+    // （ref/cache/redirect/episodes/type）已在各源自有事务写（方案 X）。
     let effectiveCatalogId = catalogId
-    const reconcileSources: ReconcileSource[] = []
     if (type === 'anime') {
       const bangumiResult = await this.step3Bangumi(videoId, catalogId, titleNorm, year)
       effectiveCatalogId = bangumiResult.effectiveCatalogId
@@ -147,8 +151,10 @@ export class MetadataEnrichService {
     const tmdbSource = await this.stepTmdb(videoId, effectiveCatalogId, title, year, type)
     if (tmdbSource) reconcileSources.push(tmdbSource)
 
-    // reconcile：bangumi/tmdb 内容标量逐字段 canonical 加权裁决 + winner 写 catalog + proposals 落表
-    //（含 conflict_state，49-C derive 消费）。单源（如非 anime 仅 tmdb）退化为按 confidence 直接 winner。
+    // reconcile：douban/bangumi/tmdb 内容标量逐字段 canonical 加权裁决 + winner 写 catalog + proposals
+    // 落表（含 conflict_state，49-C derive 消费）。单源退化为按 confidence 直接 winner；trust douban:3 天然
+    // 降级（永不盖 tmdb/bangumi:4、一致背书、冲突挂复核）。用 effectiveCatalogId（含 bangumi redirect 后
+    // surviving catalog；非 anime 无 redirect → ==catalogId 零变化）。
     if (reconcileSources.length > 0) {
       await reconcileMetadata(this.db, effectiveCatalogId, reconcileSources)
     }
@@ -242,6 +248,38 @@ export class MetadataEnrichService {
     return landed ? 'matched' : 'candidate'
   }
 
+  /**
+   * douban auto 写入（方案 X，META-49-D1）：身份 `doubanId` 留 douban 路径 safeUpdate（驱动
+   * `finalizeDoubanAutoWrite` 的 skippedFields 判定 refStatus/recordDoubanSignal/writeExternalRef
+   * **零变化**）+ 内容标量（白名单 + director/cast/writers passthrough，**不含 doubanId**）上抛为
+   * `douban` ReconcileSource 交 reconcile 加权（trust douban:3 天然降级：永不盖更高源、一致背书、冲突挂复核）。
+   * @returns `{ status, proposal? }` —— proposal 由 enrich 收集进 reconcileSources；content 全 undefined 则省略。
+   */
+  private async writeDoubanAuto(params: {
+    videoId: string
+    catalogId: string
+    doubanId: string
+    content: CatalogUpdateData
+    confidence: number
+    method: DoubanMatchMethod
+    breakdown: Record<string, number>
+    metaQuality: VideoMetaQuality
+  }): Promise<{ status: DoubanStatus; proposal?: ReconcileSource }> {
+    const { videoId, catalogId, doubanId, content, confidence, method, breakdown, metaQuality } = params
+    // 身份 safeUpdate（仅 doubanId，cache fill-if-empty）→ skippedFields 驱动 finalize 判定（零变化）
+    const { skippedFields } = await this.catalogService.safeUpdate(catalogId, { doubanId }, 'douban', { sourceRef: doubanId })
+    const status = await this.finalizeDoubanAutoWrite({ videoId, doubanId, skippedFields, confidence, method, breakdown, metaQuality })
+    // 内容去 undefined（step1 对象字面量含 `?? undefined` 槽位）→ 交 reconcile
+    const cleanContent: CatalogUpdateData = {}
+    for (const [k, v] of Object.entries(content)) {
+      if (v !== undefined) (cleanContent as Record<string, unknown>)[k] = v
+    }
+    const proposal = Object.keys(cleanContent).length > 0
+      ? { source: 'douban' as const, sourceRef: doubanId, confidence, fields: cleanContent }
+      : undefined
+    return { status, proposal }
+  }
+
   // ── Step 1 ───────────────────────────────────────────────────────
 
   private async step1LocalDouban(
@@ -252,27 +290,25 @@ export class MetadataEnrichService {
     year: number | null,
     imdbId: string | null,
     metaQuality: VideoMetaQuality,
-  ): Promise<DoubanStatus | null> {
+  ): Promise<{ status: DoubanStatus | null; proposal?: ReconcileSource }> {
     // 1a: imdb_id 精确匹配（最高置信度，auto 候选）
     if (imdbId) {
       const imdbMatch = await externalDataQueries.findDoubanByImdbId(this.db, imdbId)
       if (imdbMatch) {
-        // ADR-186 D-186-4：先 safeUpdate，据 doubanId 是否真正落地决定 status / refStatus
-        // （避免 catalog 未绑定却虚标 matched）。
-        const { skippedFields } = await this.catalogService.safeUpdate(catalogId, {
-          doubanId: imdbMatch.doubanId,
-          rating: imdbMatch.rating ?? undefined,
-          description: imdbMatch.description ?? undefined,
-          coverUrl: imdbMatch.coverUrl ?? undefined,
-          director: imdbMatch.directors,
-          cast: imdbMatch.cast,
-          writers: imdbMatch.writers,
-          genres: imdbMatch.genres.length > 0 ? mapDoubanGenres(imdbMatch.genres) : undefined,
-          genresRaw: imdbMatch.genres.length > 0 ? imdbMatch.genres : undefined,
-          country: countryToIso(imdbMatch.country) ?? undefined,
-        }, 'douban', { sourceRef: imdbMatch.doubanId })
-        return this.finalizeDoubanAutoWrite({
-          videoId, doubanId: imdbMatch.doubanId, skippedFields,
+        // META-49-D1（方案 X）：身份 doubanId 留路径 safeUpdate（驱动 finalize 零变化）+ 内容交 reconcile
+        return this.writeDoubanAuto({
+          videoId, catalogId, doubanId: imdbMatch.doubanId,
+          content: {
+            rating: imdbMatch.rating ?? undefined,
+            description: imdbMatch.description ?? undefined,
+            coverUrl: imdbMatch.coverUrl ?? undefined,
+            director: imdbMatch.directors,
+            cast: imdbMatch.cast,
+            writers: imdbMatch.writers,
+            genres: imdbMatch.genres.length > 0 ? mapDoubanGenres(imdbMatch.genres) : undefined,
+            genresRaw: imdbMatch.genres.length > 0 ? imdbMatch.genres : undefined,
+            country: countryToIso(imdbMatch.country) ?? undefined,
+          },
           confidence: 1.0, method: 'imdb_id', breakdown: { imdb_id: 1.0 }, metaQuality,
         })
       }
@@ -288,39 +324,38 @@ export class MetadataEnrichService {
       matchBy = 'alias'
     }
 
-    if (matches.length === 0) return null
+    if (matches.length === 0) return { status: null }
 
     const best = matches[0]
     const { confidence, breakdown } = computeLocalDoubanConfidence(best, matchBy, year)
 
-    if (confidence < CONFIDENCE_CANDIDATE) return null
+    if (confidence < CONFIDENCE_CANDIDATE) return { status: null }
 
     // META-22：本地有损键命中多条不同 douban 记录且年份同档 → 歧义，禁止 auto 绑定（降级候选人工确认）
     const ambiguous = isAmbiguousLocalMatch(matches, year)
     const wantAuto = confidence >= CONFIDENCE_AUTO_MATCH && !ambiguous
 
-    // 置信度未达 auto（或歧义）→ candidate（不写 catalog，行为不变）
+    // 置信度未达 auto（或歧义）→ candidate（不写 catalog，行为不变；无内容 proposal）
     if (!wantAuto) {
       recordDoubanSignal(metaQuality, confidence, matchBy, 'candidate')
       await this.writeExternalRef(videoId, best.doubanId, 'candidate', confidence, breakdown, matchBy)
-      return 'candidate'
+      return { status: 'candidate' }
     }
 
-    // auto 候选：ADR-186 D-186-4 先 safeUpdate，据 doubanId 落地结果决定最终 status / refStatus
-    const { skippedFields } = await this.catalogService.safeUpdate(catalogId, {
-      doubanId: best.doubanId,
-      rating: best.rating ?? undefined,
-      description: best.description ?? undefined,
-      coverUrl: best.coverUrl ?? undefined,
-      director: best.directors,
-      cast: best.cast,
-      writers: best.writers,
-      genres: best.genres.length > 0 ? mapDoubanGenres(best.genres) : undefined,
-      genresRaw: best.genres.length > 0 ? best.genres : undefined,
-      country: countryToIso(best.country) ?? undefined,
-    }, 'douban', { sourceRef: best.doubanId })
-    return this.finalizeDoubanAutoWrite({
-      videoId, doubanId: best.doubanId, skippedFields,
+    // auto 候选：方案 X 身份留路径 + 内容交 reconcile（D1）
+    return this.writeDoubanAuto({
+      videoId, catalogId, doubanId: best.doubanId,
+      content: {
+        rating: best.rating ?? undefined,
+        description: best.description ?? undefined,
+        coverUrl: best.coverUrl ?? undefined,
+        director: best.directors,
+        cast: best.cast,
+        writers: best.writers,
+        genres: best.genres.length > 0 ? mapDoubanGenres(best.genres) : undefined,
+        genresRaw: best.genres.length > 0 ? best.genres : undefined,
+        country: countryToIso(best.country) ?? undefined,
+      },
       confidence, method: matchBy, breakdown, metaQuality,
     })
   }
@@ -334,63 +369,55 @@ export class MetadataEnrichService {
     year: number | null,
     metaQuality: VideoMetaQuality,
     catalogStatus: string | null,
-  ): Promise<DoubanStatus | null> {
+  ): Promise<{ status: DoubanStatus | null; proposal?: ReconcileSource }> {
     let candidates: Awaited<ReturnType<typeof searchDouban>>
     try {
       // ADR-188 D-188-4：采集埋点归因 source=enrich_worker（透传至 searchDoubanRich HTTP 出口）
       candidates = await searchDouban(title, year ?? undefined, 'enrich_worker')
     } catch {
-      return null
+      return { status: null }
     }
-    if (candidates.length === 0) return 'unmatched'
+    if (candidates.length === 0) return { status: 'unmatched' }
 
     const best = pickBestCandidate(title, year, candidates)
-    if (!best) return 'unmatched'
+    if (!best) return { status: 'unmatched' }
 
     if (best.score >= MATCH_THRESHOLD) {
       const detail = await getDoubanDetailRich(best.id, 'enrich_worker')
       if (detail) {
-        // CHORE-11 (2026-05-29) — 改条件赋值范式（同 step1 imdb / step1b title_norm /
-        //   DoubanService 既有正确模式），消除 step2 之前用三元 `: undefined` 模式：
-        //   `{writers: undefined}` 在 JS 中 property 真实存在 → safeUpdate/updateCatalogFields
-        //   无 undefined skip → `undefined ?? null` → SQL `writers = null` → 违反
-        //   `writers TEXT[] NOT NULL` 等 5 列约束。详 docs/decisions.md ADR-167 (TBD) /
-        //   PR #4 SEQ-20260529-01 / 修法 (b) updateCatalogFields 同 commit 加 undefined skip 防御
+        // CHORE-11：条件赋值范式（property 不存在而非 `=undefined`，防 `undefined ?? null` 违反
+        //   `writers TEXT[] NOT NULL` 等约束）。META-49-D1：content 不含 doubanId（身份留 writeDoubanAuto）。
         const ratingNum = detail.rate ? parseFloat(detail.rate) : NaN
-        const updateFields: import('@/api/db/queries/mediaCatalog').CatalogUpdateData = {
-          doubanId: detail.id,
-        }
-        if (!isNaN(ratingNum)) updateFields.rating = ratingNum
-        if (detail.plotSummary) updateFields.description = detail.plotSummary
-        if (detail.poster) updateFields.coverUrl = detail.poster
-        if (detail.directors.length > 0) updateFields.director = detail.directors
-        if (detail.cast.length > 0) updateFields.cast = detail.cast
-        if (detail.screenwriters.length > 0) updateFields.writers = detail.screenwriters
+        const content: import('@/api/db/queries/mediaCatalog').CatalogUpdateData = {}
+        if (!isNaN(ratingNum)) content.rating = ratingNum
+        if (detail.plotSummary) content.description = detail.plotSummary
+        if (detail.poster) content.coverUrl = detail.poster
+        if (detail.directors.length > 0) content.director = detail.directors
+        if (detail.cast.length > 0) content.cast = detail.cast
+        if (detail.screenwriters.length > 0) content.writers = detail.screenwriters
         if (detail.genres.length > 0) {
-          updateFields.genresRaw = detail.genres
+          content.genresRaw = detail.genres
           const mapped = mapDoubanGenres(detail.genres)
-          if (mapped.length > 0) updateFields.genres = mapped
+          if (mapped.length > 0) content.genres = mapped
         }
         if (detail.countries[0]) {
           const iso = countryToIso(detail.countries[0])
-          if (iso) updateFields.country = iso
+          if (iso) content.country = iso
         }
 
-        // ADR-186 D-186-4：先 safeUpdate，据 doubanId 落地结果决定 status / refStatus
-        const { skippedFields } = await this.catalogService.safeUpdate(catalogId, updateFields, 'douban', { sourceRef: detail.id })
-        const doubanStatus = await this.finalizeDoubanAutoWrite({
-          videoId, doubanId: detail.id, skippedFields,
+        // META-49-D1（方案 X）：身份 doubanId 留路径 + 内容交 reconcile（finalize 零变化）
+        const { status, proposal } = await this.writeDoubanAuto({
+          videoId, catalogId, doubanId: detail.id, content,
           confidence: best.score, method: 'network', breakdown: { network_score: best.score }, metaQuality,
         })
-        // ADR-163 D-163-5/6：豆瓣 detail.episodes 按 catalog.status 写入 total / current
-        // auto 模式：仅当目标列 NULL 时写入（不覆盖人工校正值）。episodes 与 douban 绑定状态正交，
-        // 即便 doubanId 未落地（降级 candidate）仍是有效集数信号，照写（沿既有口径）。
+        // ADR-163 D-163-5/6：豆瓣 detail.episodes 按 catalog.status 写 total/current（auto 仅填空）。
+        // episodes 与 douban 绑定状态正交（即便 doubanId 降级 candidate 仍有效），留 douban 路径不进 reconcile。
         if (typeof detail.episodes === 'number' && detail.episodes > 0) {
           await videosQueries.updateVideoEpisodes(
             this.db, videoId, episodesByStatus(catalogStatus, detail.episodes), 'auto',
           )
         }
-        return doubanStatus
+        return { status, proposal }
       }
     }
 
@@ -402,7 +429,7 @@ export class MetadataEnrichService {
         best.score, { network_score: best.score }, 'network'
       )
     }
-    return status
+    return { status }
   }
 
   // ── Step 3 ───────────────────────────────────────────────────────
