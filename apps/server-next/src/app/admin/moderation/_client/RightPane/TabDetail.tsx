@@ -7,11 +7,15 @@
  *                 作为 RightPane 三 Tab 的 detail 槽位。
  * CHG-SN-8-05（2026-05-21）：顶部加 actions row「重测此视频线路」批量按钮
  *                 （W1 金票反例 #4 部分修复；per-line inline 重测推 -05-B follow-up）
+ * META-34 / ADR-201 §审核详情（2026-06-14）：元数据散落 4 处收敛为单一「元数据状态」section
+ *                 （`MetadataStatusPanel variant="detail"` 消费 `extDetail.metadataStatus`）——
+ *                 删 triad 内 douban pill / 「富集」section / 裸 meta_score 行 / 独立「外部元数据」section；
+ *                 triad 仅留发布/审核/可见性业务边界。只读展示不接 onAction（增强动作归 META-35）。
  *
  * 信息密度对齐设计稿：DetailRow 单行 < 28px，紧凑（label 等宽字符 + value 右对齐）。
  */
 import React, { useCallback, useEffect, useState } from 'react'
-import { AdminButton, CountryName, Pill, useToast, EnrichmentBadgeCluster, ExternalMetaPanel } from '@resovo/admin-ui'
+import { AdminButton, CountryName, Pill, useToast, MetadataStatusPanel } from '@resovo/admin-ui'
 import type { VideoQueueRow } from '@resovo/types'
 import type { VideoAdminDetail } from '@/lib/videos'
 import { listVideoSources, getVideo } from '@/lib/videos/api'
@@ -73,7 +77,7 @@ const ACTIONS_ROW_STYLE: React.CSSProperties = {
   flexWrap: 'wrap',
 }
 
-// MODUX-P2-2：状态三元组 3 行 DetailRow → 1 行 Pill 组（含豆瓣，消除独立 section）
+// MODUX-P2-2：内容治理 triad 1 行 Pill 组（META-34 后仅发布/可见性/审核，豆瓣移入元数据状态）
 const STATUS_PILL_ROW_STYLE: React.CSSProperties = {
   display: 'flex',
   gap: 6,
@@ -81,13 +85,19 @@ const STATUS_PILL_ROW_STYLE: React.CSSProperties = {
   marginBottom: 3,
 }
 
+// META-34：元数据状态 section 加载/空/错误态提示文字（懒加载未就绪时降级，不阻断其余详情）
+const META_HINT_STYLE: React.CSSProperties = {
+  marginTop: 8,
+  fontSize: 'var(--font-size-xxs)',
+  color: 'var(--fg-muted)',
+}
+
 export function TabDetail({ v }: TabDetailProps): React.ReactElement {
   const toast = useToast()
-  const doubanLabel = M.detail[v.doubanStatus as keyof typeof M.detail] ?? v.doubanStatus
   const [reprobePending, setReprobePending] = useState(false)
 
-  // META-18 / ADR-172 AMENDMENT 3：懒加载扩展详情（externalRefs + bangumiInfo），
-  // 复用 GET /admin/videos/:id（不污染 queue list query）。失败仅降级，不阻断其余详情。
+  // META-18 / ADR-172 AMD3 + META-34 / ADR-201：懒加载扩展详情，消费 `metadataStatus`（META-32-A 注入）
+  // 渲染统一「元数据状态」section。复用 GET /admin/videos/:id（不污染 queue list query）。失败仅降级，不阻断其余详情。
   const [extDetail, setExtDetail] = useState<VideoAdminDetail | null>(null)
   const [extError, setExtError] = useState<string | null>(null)
   useEffect(() => {
@@ -156,7 +166,7 @@ export function TabDetail({ v }: TabDetailProps): React.ReactElement {
           重测此视频线路
         </AdminButton>
       </div>
-      {/* MODUX-P2-2：状态三元组 + 豆瓣收敛为 1 行 Pill 组（variant ok/warn + 内置 6px dot）*/}
+      {/* MODUX-P2-2：内容治理 triad（发布/可见性/审核）1 行 Pill 组；META-34：豆瓣移入「元数据状态」section（去特化） */}
       <div style={SECTION_HEADER_STYLE}>{M.detail.statusTriad}</div>
       <div style={STATUS_PILL_ROW_STYLE} data-status-triad>
         <Pill
@@ -177,31 +187,32 @@ export function TabDetail({ v }: TabDetailProps): React.ReactElement {
         >
           {v.reviewStatus}
         </Pill>
-        <Pill
-          variant={v.doubanStatus === 'matched' ? 'ok' : 'warn'}
-          ariaLabel={`${M.detail.doubanStatus}: ${doubanLabel}`}
-        >
-          {M.detail.doubanStatus} {doubanLabel}
-        </Pill>
       </div>
 
-      {/* META-12-B / feature-2：富集徽标簇（density='header'）；下方 DetailRow 保留文字态明细 */}
-      {v.enrichmentSummary && (
-        <>
-          <div style={{ ...SECTION_HEADER_STYLE, marginTop: 12 }}>富集</div>
-          <div style={{ padding: '4px 8px' }} data-right-detail-enrichment>
-            <EnrichmentBadgeCluster
-              summary={v.enrichmentSummary}
-              type={v.type}
-              density="header"
+      {/* META-34 / ADR-201 §审核详情：单一「元数据状态」section（取代 douban pill / 富集 / 裸 meta_score / 外部元数据并列展示）。
+          数据源 = 懒加载 extDetail.metadataStatus（getVideo→adminFindById，META-32-A 注入）。只读展示不接 onAction（增强动作归 META-35）。 */}
+      <div style={{ ...SECTION_HEADER_STYLE, marginTop: 12 }}>元数据状态</div>
+      {extError ? (
+        <div style={META_HINT_STYLE}>元数据状态加载失败：{extError}</div>
+      ) : extDetail ? (
+        extDetail.metadataStatus ? (
+          <div data-right-detail-metadata-status>
+            <MetadataStatusPanel
+              summary={extDetail.metadataStatus}
+              variant="detail"
               enrichedAtLabel={
-                v.enrichmentSummary.enrichedAt
-                  ? `富集 ${v.enrichmentSummary.enrichedAt.slice(0, 10)}`
+                extDetail.metadataStatus.enrichedAt
+                  ? extDetail.metadataStatus.enrichedAt.slice(0, 10)
                   : undefined
               }
+              testId="moderation-detail-metadata-status"
             />
           </div>
-        </>
+        ) : (
+          <div style={META_HINT_STYLE}>暂无元数据状态</div>
+        )
+      ) : (
+        <div style={META_HINT_STYLE}>加载中…</div>
       )}
 
       <div style={{ ...SECTION_HEADER_STYLE, marginTop: 12 }}>信息</div>
@@ -209,35 +220,7 @@ export function TabDetail({ v }: TabDetailProps): React.ReactElement {
       <DetailRow label="year" value={String(v.year ?? '—')} />
       <DetailRow label="country" value={<CountryName code={v.country} />} />
       <DetailRow label={M.detail.episodesTriad} value={formatEpisodesTriad(v)} />
-      <DetailRow label="meta_score" value={String(v.metaScore)} />
       <DetailRow label="source_check" value={v.sourceCheckStatus} />
-
-      {/* META-18 / ADR-172 AMENDMENT 3：外部元数据真源并集（懒加载详情，density='compact'） */}
-      {extDetail?.enrichmentSummary && (
-        <div style={{ marginTop: 12 }} data-right-detail-external-meta>
-          <div style={SECTION_HEADER_STYLE}>外部元数据</div>
-          <ExternalMetaPanel
-            summary={extDetail.enrichmentSummary}
-            type={extDetail.type}
-            externalRefs={extDetail.externalRefs}
-            bangumiInfo={extDetail.bangumiInfo}
-            characters={extDetail.bangumiCharacters}
-            catalogFields={{
-              titleOriginal: extDetail.title_original,
-              rating: extDetail.rating,
-              ratingVotes: extDetail.rating_votes,
-              metadataSource: extDetail.metadata_source,
-            }}
-            density="compact"
-            testId="moderation-detail-external-meta"
-          />
-        </div>
-      )}
-      {extError && (
-        <div style={{ marginTop: 8, fontSize: 'var(--font-size-xxs)', color: 'var(--fg-muted)' }}>
-          外部元数据加载失败：{extError}
-        </div>
-      )}
     </div>
   )
 }
