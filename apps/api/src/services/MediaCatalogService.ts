@@ -336,7 +336,10 @@ export class MediaCatalogService {
     catalogId: string,
     fields: CatalogUpdateData,
     source: CatalogMetadataSource,
-    provenanceCtx?: { sourceRef?: string; db?: Pool | PoolClient }
+    // preserveMetadataSource（META-48 FIX）：等优先级交叉验证 fill 场景（如 TMDB 对 bangumi-owned
+    // anime 仅补空）opt-in 保留现 metadata_source——把 ADR-186 D-186-3「fill 不改 metadata_source」
+    // 扩展到 incoming==current 优先级；字段级 provenance 仍如实记 source。默认 off → 既有调用零变化。
+    provenanceCtx?: { sourceRef?: string; db?: Pool | PoolClient; preserveMetadataSource?: boolean }
   ): Promise<{ updated: MediaCatalogRow | null; skippedFields: string[] }> {
     // 可选 db：调用方在外部事务（如 BangumiService.confirmMatch）时传入 PoolClient
     // 共享同一连接确保原子性；默认走 this.db 与现有调用方零兼容性破坏
@@ -468,9 +471,12 @@ export class MediaCatalogService {
       // ADR-186 D-186-3（硬约束 / 一票否决项）：fill-if-empty（低优先级填充）绝不更新
       // metadata_source——否则低优先级源接管 catalog 元数据主权、削弱后续所有字段保护，把
       // 显示 bug 升级为数据正确性事故。字段级来源仍如实记 provenance（finishSafeUpdate）。
+      // META-48 FIX：preserveMetadataSource（等优先级交叉验证 fill，如 TMDB 对 bangumi anime 仅补空）
+      // 同样不翻 metadata_source——否则 TMDB 在同级仍「接管」provenance 主权，违反用户 Option A。
+      const keepSource = isLowerPriority || provenanceCtx?.preserveMetadataSource === true
       const updated = await catalogQueries.updateCatalogFields(client, catalogId, {
         ...filteredFields,
-        ...(isLowerPriority ? {} : { metadataSource: source }),
+        ...(keepSource ? {} : { metadataSource: source }),
       })
       if (ownTx) await client.query('COMMIT')
       return this.finishSafeUpdate(db, catalogId, filteredFields, source, provenanceCtx, updated, skippedFields)

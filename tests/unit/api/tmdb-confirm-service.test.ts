@@ -412,9 +412,12 @@ describe('autoMatch', () => {
     expect(arg.description).toBe('小女孩千寻被困在精灵世界') // bangumi description 空 → 补
     expect(arg.tmdbId).toBe(555) // ref/cache 身份仍写
     expect(catalogRefs.resolveAndWriteExactRef).toHaveBeenCalled()
+    // Codex FIX：交叉验证 fill 须保留 metadata_source（不让 TMDB 同级接管 bangumi 主权）
+    const ctx = safeUpdateMock.mock.calls[0][3] as Record<string, unknown>
+    expect(ctx.preserveMetadataSource).toBe(true)
   })
 
-  it('current=douban(低于 tmdb) → 不过滤，内容字段全覆盖（权威写）', async () => {
+  it('current=douban(低于 tmdb) → 不过滤，内容字段全覆盖 + preserveMetadataSource=false（权威写）', async () => {
     vi.mocked(findCatalogById).mockResolvedValue(catalogWith({ metadataSource: 'douban', title: 'D 标题', genres: ['g'], description: 'D 简介' }))
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     vi.mocked(tmdbLib.searchMovie).mockResolvedValue(search([movieItem()]) as any)
@@ -424,5 +427,7 @@ describe('autoMatch', () => {
     const arg = safeUpdateMock.mock.calls[0][1] as Record<string, unknown>
     expect(arg.title).toBe('千与千寻') // douban<tmdb → 覆盖
     expect(arg.description).toBe('小女孩千寻被困在精灵世界')
+    const ctx = safeUpdateMock.mock.calls[0][3] as Record<string, unknown>
+    expect(ctx.preserveMetadataSource).toBe(false) // 权威写 → 正常翻 metadata_source
   })
 })

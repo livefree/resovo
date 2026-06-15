@@ -258,16 +258,20 @@ function isEmptyValue(v: unknown): boolean {
  * 对每个内容字段组，若 current 已有非空主值则整组从 updateFields 剔除（不覆盖等/高优先级源内容，
  * 防 ADR-161 anime bangumi 优先被 sequential-write 同级后写覆盖削弱）。current 低于 tmdb → 不过滤
  * （权威写，如覆盖 douban:3）。tmdbId/imdbId/type 始终保留 → ref/cache 仍写、交叉验证身份不丢。
+ *
+ * @returns 是否进入交叉验证模式（current 源优先级 ≥ tmdb）。为 true 时调用方须以
+ *   `preserveMetadataSource` 调 safeUpdate，避免 fill 在同级仍翻 metadata_source（Codex FIX）。
  */
-function filterCrossValidation(updateFields: CatalogUpdateData, current: MediaCatalogRow): void {
+function filterCrossValidation(updateFields: CatalogUpdateData, current: MediaCatalogRow): boolean {
   const currentPriority = CATALOG_SOURCE_PRIORITY[current.metadataSource] ?? 0
   const tmdbPriority = CATALOG_SOURCE_PRIORITY.tmdb ?? 0
-  if (currentPriority < tmdbPriority) return
+  if (currentPriority < tmdbPriority) return false
   for (const group of CROSS_VALIDATION_GROUPS) {
     if (!isEmptyValue(current[group.currentKey])) {
       for (const f of group.fields) delete (updateFields as Record<string, unknown>)[f]
     }
   }
+  return true
 }
 
 export class TmdbConfirmService {
@@ -428,6 +432,7 @@ export class TmdbConfirmService {
 
     // auto_matched：构造应用字段（事务外预读 type 信号，复用 confirm 的 ADR-203 逻辑）
     const updateFields: CatalogUpdateData = {}
+    let preserveMetadataSource = false // 交叉验证模式（等/高优先级源）→ safeUpdate 不翻 metadata_source
     if (detail) {
       Object.assign(updateFields, buildCatalogFields(detail, mediaType, TMDB_APPLIABLE_FIELDS, imageBase))
       updateFields.tmdbId = tmdbId // 经 safeUpdate fill-if-empty 白名单（M4），受下方 ref 成功约束
@@ -443,8 +448,9 @@ export class TmdbConfirmService {
             'tmdb auto type signal conflict with existing concrete type, skipped (ADR-203 D-203-5)',
           )
         }
-        // interim 交叉验证（META-48 / Option A）：等/高优先级源已写的内容字段不覆盖（仅补空）
-        filterCrossValidation(updateFields, currentCatalog)
+        // interim 交叉验证（META-48 / Option A）：等/高优先级源已写的内容字段不覆盖（仅补空）；
+        // 进入交叉验证模式时 safeUpdate 须保留现 metadata_source（不让 TMDB 同级接管，Codex FIX）
+        preserveMetadataSource = filterCrossValidation(updateFields, currentCatalog)
       }
     }
 
@@ -469,7 +475,7 @@ export class TmdbConfirmService {
       let applied: string[] = []
       if (tier === 'auto_matched' && Object.keys(updateFields).length > 0) {
         const catalogService = new MediaCatalogService(this.db)
-        const { skippedFields } = await catalogService.safeUpdate(catalogId, updateFields, 'tmdb', { sourceRef: String(tmdbId), db: client })
+        const { skippedFields } = await catalogService.safeUpdate(catalogId, updateFields, 'tmdb', { sourceRef: String(tmdbId), db: client, preserveMetadataSource })
         applied = Object.keys(updateFields).filter((k) => !skippedFields.includes(k))
       }
 

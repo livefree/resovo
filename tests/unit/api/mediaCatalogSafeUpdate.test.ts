@@ -592,4 +592,29 @@ describe('safeUpdate — ADR-186 fill-if-empty 外部 ID（低优先级补空缺
     expect(written).not.toHaveProperty('rating')
     expect(written).not.toHaveProperty('metadataSource')
   })
+
+  // ── META-48 Codex FIX：preserveMetadataSource——等优先级交叉验证 fill 不翻 metadata_source ──
+
+  it('⑬ preserveMetadataSource=true + 同级源(tmdb→bangumi) → 字段照写但不翻 metadata_source', async () => {
+    vi.mocked(catalogQueries.findCatalogById).mockResolvedValue(
+      makeCatalog({ metadataSource: 'bangumi' }) as never, // bangumi(4) == tmdb(4) 同级
+    )
+    const svc = new MediaCatalogService(mockDb)
+    await svc.safeUpdate('cat-1', { description: '新简介' } as never, 'tmdb', { preserveMetadataSource: true })
+
+    const written = vi.mocked(catalogQueries.updateCatalogFields).mock.calls[0]![2] as Record<string, unknown>
+    expect(written).toHaveProperty('description', '新简介') // 内容（已上层过滤为补空）照写
+    expect(written).not.toHaveProperty('metadataSource') // 但 metadata_source 保留 bangumi 不翻 tmdb
+  })
+
+  it('⑭ 对照：preserveMetadataSource 缺省 + 同级源 → 正常翻 metadata_source（默认零回归）', async () => {
+    vi.mocked(catalogQueries.findCatalogById).mockResolvedValue(
+      makeCatalog({ metadataSource: 'bangumi' }) as never,
+    )
+    const svc = new MediaCatalogService(mockDb)
+    await svc.safeUpdate('cat-1', { description: '新简介' } as never, 'tmdb')
+
+    const written = vi.mocked(catalogQueries.updateCatalogFields).mock.calls[0]![2] as Record<string, unknown>
+    expect(written).toHaveProperty('metadataSource', 'tmdb')
+  })
 })
