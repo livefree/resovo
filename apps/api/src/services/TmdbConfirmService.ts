@@ -21,12 +21,13 @@ import { upsertVideoExternalRef } from '@/api/db/queries/externalData'
 import { mapTmdbGenres } from '@/api/lib/genreMapper'
 import { tmdbTypeSignal, resolveTypeSignal } from '@/api/lib/typeFromProvider'
 import { countryToIso } from '@/types'
-import { MediaCatalogService, CATALOG_SOURCE_PRIORITY } from '@/api/services/MediaCatalogService'
+import { MediaCatalogService } from '@/api/services/MediaCatalogService'
 import { findCatalogById } from '@/api/db/queries/mediaCatalog'
-import type { CatalogUpdateData, MediaCatalogRow } from '@/api/db/queries/mediaCatalog'
+import type { CatalogUpdateData } from '@/api/db/queries/mediaCatalog'
 import { baseLogger } from '@/api/lib/logger'
 import { similarity, normalizeForMatch, parseYear } from '@/api/lib/textMatch'
 import { splitIdentityScalarFields } from '@/api/services/metadata/fieldSplit'
+import { enqueueIdentityVideoRescore } from '@/api/services/identity/enqueueVideoRescore'
 
 /** search 候选预览缩略图 base（base+w500；与 confirm 富图片应用的 configuration base 不同关注点，META-43）。 */
 const TMDB_PREVIEW_IMAGE_BASE = 'https://image.tmdb.org/t/p/w500'
@@ -78,10 +79,8 @@ export type TmdbAutoMatchResult =
       tmdbId: number
       confidence: number
       applied: string[]
-      /** META-49-B1：内容标量字段上抛 enrich 层立即 safeUpdate（行为等价过渡，B2 换 reconcile 加权）。 */
+      /** META-49-B1/B2：内容标量字段上抛 enrich 层交 reconcile 多源加权裁决（白名单组 RECONCILE_GROUPS）。 */
       proposedFields?: CatalogUpdateData
-      /** META-48 interim 交叉验证模式标志，透传给 enrich 层 safeUpdate（保 metadata_source 不翻）。 */
-      preserveMetadataSource?: boolean
     }
   | {
       matched: false
@@ -238,52 +237,9 @@ function buildCatalogFields(
   return { ...out, ...buildImageFields(detail, imageBase, sel) }
 }
 
-/**
- * 交叉验证内容字段组（META-48 / 用户 Option A）：current 源优先级 ≥ tmdb 时仅当 current 对应主字段
- * 为空才让 TMDB 补该组、否则整组剔除（保护 bangumi 等同/高优先级源已写内容）。`currentKey` 为
- * MediaCatalogRow 上判空主字段，`fields` 为随其一并取舍的 CatalogUpdateData 键（图片含 status/尺寸）。
- * tmdbId/imdbId/type 不在任何组 → 恒保留（ref/cache 绑定 + type fill-if-default 自守）。
- */
-const CROSS_VALIDATION_GROUPS: ReadonlyArray<{
-  readonly currentKey: keyof MediaCatalogRow
-  readonly fields: readonly (keyof CatalogUpdateData)[]
-}> = [
-  { currentKey: 'title', fields: ['title'] },
-  { currentKey: 'titleOriginal', fields: ['titleOriginal'] },
-  { currentKey: 'originalLanguage', fields: ['originalLanguage'] },
-  { currentKey: 'description', fields: ['description'] },
-  { currentKey: 'genres', fields: ['genres', 'genresRaw'] },
-  { currentKey: 'country', fields: ['country'] },
-  { currentKey: 'rating', fields: ['rating'] },
-  { currentKey: 'coverUrl', fields: ['coverUrl', 'posterStatus', 'posterSource', 'posterWidth', 'posterHeight'] },
-  { currentKey: 'backdropUrl', fields: ['backdropUrl', 'backdropStatus'] },
-  { currentKey: 'logoUrl', fields: ['logoUrl', 'logoStatus'] },
-]
-
-function isEmptyValue(v: unknown): boolean {
-  return v == null || v === '' || (Array.isArray(v) && v.length === 0)
-}
-
-/**
- * 交叉验证过滤（META-48 / 用户 Option A，interim reconcile 前）：current 源优先级 ≥ tmdb(4) 时，
- * 对每个内容字段组，若 current 已有非空主值则整组从 updateFields 剔除（不覆盖等/高优先级源内容，
- * 防 ADR-161 anime bangumi 优先被 sequential-write 同级后写覆盖削弱）。current 低于 tmdb → 不过滤
- * （权威写，如覆盖 douban:3）。tmdbId/imdbId/type 始终保留 → ref/cache 仍写、交叉验证身份不丢。
- *
- * @returns 是否进入交叉验证模式（current 源优先级 ≥ tmdb）。为 true 时调用方须以
- *   `preserveMetadataSource` 调 safeUpdate，避免 fill 在同级仍翻 metadata_source（Codex FIX）。
- */
-function filterCrossValidation(updateFields: CatalogUpdateData, current: MediaCatalogRow): boolean {
-  const currentPriority = CATALOG_SOURCE_PRIORITY[current.metadataSource] ?? 0
-  const tmdbPriority = CATALOG_SOURCE_PRIORITY.tmdb ?? 0
-  if (currentPriority < tmdbPriority) return false
-  for (const group of CROSS_VALIDATION_GROUPS) {
-    if (!isEmptyValue(current[group.currentKey])) {
-      for (const f of group.fields) delete (updateFields as Record<string, unknown>)[f]
-    }
-  }
-  return true
-}
+// interim 交叉验证（filterCrossValidation/isEmptyValue/CROSS_VALIDATION_GROUPS）已随 reconcile 上线退场
+// （META-49-B2）：内容标量多源加权裁决移至 services/metadata/reconcile.ts（白名单组真源为 reconcile.canonical
+// RECONCILE_GROUPS）；autoMatch 不再 interim 过滤，content proposedFields 全量上抛由 reconcile 裁决。
 
 export class TmdbConfirmService {
   constructor(private readonly db: Pool) {}
@@ -443,7 +399,6 @@ export class TmdbConfirmService {
 
     // auto_matched：构造应用字段（事务外预读 type 信号，复用 confirm 的 ADR-203 逻辑）
     const updateFields: CatalogUpdateData = {}
-    let preserveMetadataSource = false // 交叉验证模式（等/高优先级源）→ safeUpdate 不翻 metadata_source
     if (detail) {
       Object.assign(updateFields, buildCatalogFields(detail, mediaType, TMDB_APPLIABLE_FIELDS, imageBase))
       updateFields.tmdbId = tmdbId // 经 safeUpdate fill-if-empty 白名单（M4），受下方 ref 成功约束
@@ -459,10 +414,8 @@ export class TmdbConfirmService {
             'tmdb auto type signal conflict with existing concrete type, skipped (ADR-203 D-203-5)',
           )
         }
-        // interim 交叉验证（META-48 / Option A）：等/高优先级源已写的内容字段不覆盖（仅补空）；
-        // 进入交叉验证模式时 safeUpdate 须保留现 metadata_source（不让 TMDB 同级接管，Codex FIX）
-        preserveMetadataSource = filterCrossValidation(updateFields, currentCatalog)
       }
+      // META-49-B2：interim 交叉验证退场——content proposedFields 全量上抛，多源加权由 reconcile 裁决。
     }
 
     // ── Phase 2：DB 写入单事务（ref → 字段/cache → video ref）──
@@ -483,17 +436,17 @@ export class TmdbConfirmService {
         await insertCandidateRef(client, { catalogId, provider: 'tmdb', externalId: String(tmdbId), externalKind, source: 'auto', linkedBy: 'auto' })
       }
 
-      // META-49-B1（ADR-205 方案 X）：身份+type 字段（tmdbId/imdbId cache + type ADR-203）留本事务写
-      //（触发 catalog ref/cache 同事务，受上方 ref 成功约束）；内容标量字段上抛 proposedFields 由
-      // enrich 层立即 safeUpdate（行为等价过渡，B2 换 reconcile 加权）。interim preserveMetadataSource
-      // 已在拆分前对完整 updateFields 跑过 filterCrossValidation，两段共用同一标志。
+      // META-49-B2（ADR-205 方案 X）：身份+type 字段（tmdbId/imdbId cache + type ADR-203）留本事务写
+      //（触发 catalog ref/cache 同事务，受上方 ref 成功约束）。`preserveMetadataSource: true` 固定——
+      // 身份/cache/type 写入不接管 catalog.metadata_source（内容来源由 reconcile winner 裁决，避免
+      // tmdb 仅写 cache 就把 anime bangumi 内容来源翻成 tmdb）。内容标量全量上抛 proposedFields 交 reconcile。
       let applied: string[] = []
       let proposedFields: CatalogUpdateData | undefined
       if (tier === 'auto_matched' && Object.keys(updateFields).length > 0) {
         const { identityFields, contentFields } = splitIdentityScalarFields(updateFields)
         if (Object.keys(identityFields).length > 0) {
           const catalogService = new MediaCatalogService(this.db)
-          const { skippedFields } = await catalogService.safeUpdate(catalogId, identityFields, 'tmdb', { sourceRef: String(tmdbId), db: client, preserveMetadataSource })
+          const { skippedFields } = await catalogService.safeUpdate(catalogId, identityFields, 'tmdb', { sourceRef: String(tmdbId), db: client, preserveMetadataSource: true })
           applied = Object.keys(identityFields).filter((k) => !skippedFields.includes(k))
         }
         if (Object.keys(contentFields).length > 0) proposedFields = contentFields
@@ -505,7 +458,11 @@ export class TmdbConfirmService {
       })
 
       await client.query('COMMIT')
-      return { matched: true, tier, tmdbId, confidence: score, applied, proposedFields, preserveMetadataSource }
+
+      // META-49-B2：auto_matched primary ref 写入后定向重评（外部 ID 证据面变化，对齐 bangumi
+      // applyAutoMatchAtomic:592；META-48 遗漏补齐）。fire-and-forget，失败仅 warn 不阻断。
+      if (tier === 'auto_matched') enqueueIdentityVideoRescore(videoId)
+      return { matched: true, tier, tmdbId, confidence: score, applied, proposedFields }
     } catch (err) {
       try { await client.query('ROLLBACK') } catch { /* connection may already be lost */ }
       throw err

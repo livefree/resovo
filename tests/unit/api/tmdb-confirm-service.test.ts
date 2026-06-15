@@ -391,14 +391,14 @@ describe('autoMatch', () => {
     expect(externalData.upsertVideoExternalRef).toHaveBeenCalledWith(client, expect.objectContaining({ matchStatus: 'auto_matched', isPrimary: true }))
   })
 
-  // ── META-48：interim 交叉验证（Option A）——等/高优先级源已写内容不覆盖、仅补空，ref/cache 仍写 ──
+  // ── META-49-B2：interim 交叉验证退场——autoMatch 不再按 current 源过滤内容，全量上抛交 reconcile 加权 ──
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const catalogWith = (over: Record<string, unknown>): any => ({
     type: 'series', metadataSource: 'bangumi', title: null, titleOriginal: null, originalLanguage: null,
     description: null, genres: [], genresRaw: [], country: null, rating: null, coverUrl: null, backdropUrl: null, logoUrl: null, ...over,
   })
 
-  it('current=bangumi(同级) 已有 title/genres → 剔除不覆盖，但 tmdbId/imdb 仍写 + ref 仍写（交叉验证）', async () => {
+  it('current=bangumi(同级) 已有 title/genres → 内容仍全量进 proposedFields（不再 interim 过滤，交 reconcile）+ 身份 safeUpdate 固定 preserveMetadataSource=true', async () => {
     vi.mocked(findCatalogById).mockResolvedValue(catalogWith({ metadataSource: 'bangumi', title: 'B 标题', genres: ['g'], description: null }))
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     vi.mocked(tmdbLib.searchMovie).mockResolvedValue(search([movieItem()]) as any)
@@ -406,34 +406,36 @@ describe('autoMatch', () => {
     vi.mocked(tmdbLib.getMovieDetail).mockResolvedValue({ ...MOVIE, id: 555 } as any)
     const r = await svc.autoMatch('vid', 'cat', { title: 'abcdef', year: 2023, mediaType: 'movie' })
     expect(r).toMatchObject({ matched: true, tier: 'auto_matched' })
-    // META-49-B1（方案 X）：filterCrossValidation 在 autoMatch 内对内容字段跑（剔除等/高优先级源已写者）→
-    // 剩余内容进 proposedFields（enrich 层立即 safeUpdate）；身份 tmdbId/imdb 留 autoMatch 事务内写。
+    // B2：filterCrossValidation 退场——内容字段不再按 current 源剔除，全量上抛 proposedFields（bangumi vs
+    // tmdb winner 由 reconcile 加权裁决，不在 autoMatch 内提前过滤）。
     const proposed = (r.matched ? r.proposedFields : undefined) ?? {}
-    expect(proposed.title).toBeUndefined() // bangumi title 非空 → 剔除不覆盖
-    expect(proposed.genres).toBeUndefined() // bangumi genres 非空 → 剔除不覆盖
-    expect(proposed.description).toBe('小女孩千寻被困在精灵世界') // bangumi description 空 → 补
+    expect(proposed.title).toBe('千与千寻') // 不再剔除（即便 current=bangumi 已有 title）
+    expect(proposed.genres).toEqual(['fantasy']) // 不再剔除（16→null/14→fantasy）
+    expect(proposed.description).toBe('小女孩千寻被困在精灵世界')
+    // 身份 tmdbId/imdb 留 autoMatch 事务内写；preserveMetadataSource 固定 true（cache/type 不接管内容来源）
     const idArg = safeUpdateMock.mock.calls[0][1] as Record<string, unknown>
     expect(idArg.tmdbId).toBe(555) // ref/cache 身份仍写（留事务）
-    expect(idArg.title).toBeUndefined() // 内容不在身份 safeUpdate（已剥离到 proposedFields）
+    expect(idArg.title).toBeUndefined() // 内容已剥离到 proposedFields
     expect(catalogRefs.resolveAndWriteExactRef).toHaveBeenCalled()
-    // Codex FIX + B1：交叉验证 fill 须保留 metadata_source（透传到身份 safeUpdate + proposedFields）
-    expect(r.matched ? r.preserveMetadataSource : undefined).toBe(true)
     const ctx = safeUpdateMock.mock.calls[0][3] as Record<string, unknown>
-    expect(ctx.preserveMetadataSource).toBe(true)
+    expect(ctx.preserveMetadataSource).toBe(true) // 身份/cache 写入固定不翻 metadata_source（reconcile winner 定来源）
+    // B2：autoMatch 不再透传 preserveMetadataSource（reconcile winner 自裁 source）
+    expect('preserveMetadataSource' in r).toBe(false)
   })
 
-  it('current=douban(低于 tmdb) → 不过滤，内容字段全进 proposedFields + preserveMetadataSource=false（权威写）', async () => {
+  it('current=douban(低于 tmdb) → 内容同样全量进 proposedFields（退场源无关）+ 身份 safeUpdate 固定 preserveMetadataSource=true', async () => {
     vi.mocked(findCatalogById).mockResolvedValue(catalogWith({ metadataSource: 'douban', title: 'D 标题', genres: ['g'], description: 'D 简介' }))
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     vi.mocked(tmdbLib.searchMovie).mockResolvedValue(search([movieItem()]) as any)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     vi.mocked(tmdbLib.getMovieDetail).mockResolvedValue({ ...MOVIE, id: 555 } as any)
     const r = await svc.autoMatch('vid', 'cat', { title: 'abcdef', year: 2023, mediaType: 'movie' })
-    // B1：douban<tmdb 不过滤 → 内容字段全进 proposedFields（enrich 层覆盖写）
     const proposed = (r.matched ? r.proposedFields : undefined) ?? {}
-    expect(proposed.title).toBe('千与千寻') // douban<tmdb → 覆盖
+    expect(proposed.title).toBe('千与千寻')
     expect(proposed.description).toBe('小女孩千寻被困在精灵世界')
-    expect(r.matched ? r.preserveMetadataSource : undefined).toBe(false) // 权威写 → 正常翻 metadata_source
+    const ctx = safeUpdateMock.mock.calls[0][3] as Record<string, unknown>
+    expect(ctx.preserveMetadataSource).toBe(true) // 退场后固定 true，与 current 源无关
+    expect('preserveMetadataSource' in r).toBe(false)
   })
 
   it('B1 cache/type retained：身份(tmdbId/imdbId/type)留事务 safeUpdate、内容进 proposedFields（不丢 cache/type）', async () => {

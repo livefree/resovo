@@ -33,6 +33,7 @@ import * as catalogQueries from '@/api/db/queries/mediaCatalog'
 import type { DoubanEntryMatch } from '@/api/db/queries/externalData'
 import type { CatalogUpdateData } from '@/api/db/queries/mediaCatalog'
 import { enqueueIdentityVideoRescore } from './identity/enqueueVideoRescore'
+import { reconcileMetadata, type ReconcileSource } from './metadata/reconcile'
 
 // ── 公开接口 ──────────────────────────────────────────────────────
 
@@ -121,23 +122,36 @@ export class MetadataEnrichService {
     // Step 3: 动画类型补充 Bangumi 数据（ADR-161：委托 BangumiService，含置信度 + ref + rich 详情 + 逐集）
     // ADR-174 D-174-3：bangumi 真去重可能把 video.catalog_id 重指向到 existing catalog →
     // 返回有效 catalogId 供 step5 使用（用旧入参 catalogId 会对已弃置 orphan catalog 算分）。
+    // ADR-205 D-205-1（gather → reconcile → write，META-49-B2）：bangumi/tmdb 内容标量 proposedFields
+    // 先收集、再逐字段加权裁决（reconcileMetadata），不再各自立即 safeUpdate。身份副作用（ref/cache/
+    // redirect/episodes/type）已在各源自有事务写（方案 X）。douban Step1/2 不进 gather（留 49-D），其
+    // 已写内容由 reconcile winner 经优先级闸门覆盖。
     let effectiveCatalogId = catalogId
+    const reconcileSources: ReconcileSource[] = []
     if (type === 'anime') {
       const bangumiResult = await this.step3Bangumi(videoId, catalogId, titleNorm, year)
       effectiveCatalogId = bangumiResult.effectiveCatalogId
-      // META-49-B1（ADR-205 方案 X 过渡）：bangumi 内容标量字段由 enrich 层立即 safeUpdate（身份
-      // bangumiSubjectId/ref/redirect/episodes 已在 service 事务内写）。行为等价，B2 换 reconcile 加权裁决。
       if (bangumiResult.proposedFields && bangumiResult.bangumiSubjectId != null) {
-        await this.catalogService.safeUpdate(effectiveCatalogId, bangumiResult.proposedFields, 'bangumi', {
+        reconcileSources.push({
+          source: 'bangumi',
           sourceRef: String(bangumiResult.bangumiSubjectId),
+          confidence: bangumiResult.confidence ?? 0,
+          fields: bangumiResult.proposedFields,
         })
       }
     }
 
     // Step 3.5: TMDB 全类型自动富集（META-48 / ADR-205 D-205-7）——用 step3 后 effectiveCatalogId
-    // （含 bangumi redirect 真去重场景，防写 orphan）；交叉验证语义（等/高优先级源不覆盖内容、仅补空）
-    // 在 autoMatch 内（用户 Option A）。仍是 sequential-write，reconcile 加权归 META-49。
-    await this.stepTmdb(videoId, effectiveCatalogId, title, year, type)
+    // （含 bangumi redirect 真去重场景，防写 orphan）；身份/ref/cache/type 在 autoMatch 自有事务写，
+    // 内容标量上抛交 reconcile 加权（interim 交叉验证已退场）。
+    const tmdbSource = await this.stepTmdb(videoId, effectiveCatalogId, title, year, type)
+    if (tmdbSource) reconcileSources.push(tmdbSource)
+
+    // reconcile：bangumi/tmdb 内容标量逐字段 canonical 加权裁决 + winner 写 catalog + proposals 落表
+    //（含 conflict_state，49-C derive 消费）。单源（如非 anime 仅 tmdb）退化为按 confidence 直接 winner。
+    if (reconcileSources.length > 0) {
+      await reconcileMetadata(this.db, effectiveCatalogId, reconcileSources)
+    }
 
     // Step 4: 源 HEAD 检验
     const sourceStatus = await this.step4SourceCheck(videoId)
@@ -168,7 +182,7 @@ export class MetadataEnrichService {
     title: string,
     year: number | null,
     type: string,
-  ): Promise<void> {
+  ): Promise<ReconcileSource | null> {
     const tmdbLog = baseLogger.child({ module: 'enrich-tmdb', video_id: videoId })
     try {
       const tmdbRefs = await externalDataQueries.listVideoExternalRefs(this.db, videoId, 'tmdb')
@@ -177,34 +191,28 @@ export class MetadataEnrichService {
       )
       if (alreadyBound) {
         tmdbLog.info({ outcome: 'skip_already_bound' }, 'tmdb auto skipped: already bound')
-        return
+        return null
       }
 
       const mediaType: TmdbMediaType = type === 'movie' ? 'movie' : 'tv'
       const result = await this.tmdbConfirmService.autoMatch(videoId, effectiveCatalogId, { title, year, mediaType })
       if (result.matched) {
-        // META-49-B1（ADR-205 方案 X 过渡）：tmdb 内容标量字段由 enrich 层立即 safeUpdate（身份
-        // tmdbId/imdbId + type + ref/cache 已在 service 事务内写）。行为等价，B2 换 reconcile 加权。
-        let contentApplied = 0
-        if (result.proposedFields && Object.keys(result.proposedFields).length > 0) {
-          const { skippedFields } = await this.catalogService.safeUpdate(
-            effectiveCatalogId,
-            result.proposedFields,
-            'tmdb',
-            { sourceRef: String(result.tmdbId), preserveMetadataSource: result.preserveMetadataSource },
-          )
-          contentApplied = Object.keys(result.proposedFields).filter((k) => !skippedFields.includes(k)).length
-        }
         tmdbLog.info(
-          { outcome: 'matched', tier: result.tier, tmdb_id: result.tmdbId, confidence: result.confidence, applied: result.applied.length + contentApplied },
+          { outcome: 'matched', tier: result.tier, tmdb_id: result.tmdbId, confidence: result.confidence, applied: result.applied.length },
           'tmdb auto matched',
         )
-      } else {
-        tmdbLog.info({ outcome: 'skip', reason: result.reason }, 'tmdb auto no write')
+        // META-49-B2（方案 X）：身份/ref/cache/type 已在 autoMatch 自有事务写；内容标量上抛交 reconcile 加权。
+        if (result.proposedFields && Object.keys(result.proposedFields).length > 0) {
+          return { source: 'tmdb', sourceRef: String(result.tmdbId), confidence: result.confidence, fields: result.proposedFields }
+        }
+        return null
       }
+      tmdbLog.info({ outcome: 'skip', reason: result.reason }, 'tmdb auto no write')
+      return null
     } catch (err) {
       // TMDB 为补充源，失败不阻断 enrich（douban/bangumi 已写、step4/5 仍跑）
       tmdbLog.warn({ err }, 'tmdb auto step failed (non-blocking)')
+      return null
     }
   }
 
@@ -404,17 +412,17 @@ export class MetadataEnrichService {
     catalogId: string,
     titleNorm: string,
     year: number | null,
-  ): Promise<{ effectiveCatalogId: string; proposedFields?: CatalogUpdateData; bangumiSubjectId?: number }> {
+  ): Promise<{ effectiveCatalogId: string; proposedFields?: CatalogUpdateData; bangumiSubjectId?: number; confidence?: number }> {
     // ADR-161：置信度评分 + video_external_refs(provider='bangumi') + auto 命中拉 REST rich 详情 + 逐集
-    // META-49-B1（方案 X）：enrich 走 defer——auto 内容标量上抛 proposedFields 由 enrich 层立即 safeUpdate
+    // META-49-B1（方案 X）：enrich 走 defer——auto 内容标量上抛 proposedFields 交 reconcile 加权
     // （bangumi-sync 等直调不传 → 默认 inline 内部写全部，不丢内容字段）。
     const result = await this.bangumiService.matchAndEnrich({ videoId, catalogId, titleNorm, year, deferContentFields: true })
     // ADR-174 D-174-3：仅 auto 写入路径可能 redirect 真去重 → 返回有效 catalogId；
     // candidate/none 无 catalog 写入与重指向，沿用入参 catalogId。
-    // META-49-B1（方案 X）：auto 流内容标量字段（proposedFields）上抛由 enrich 层立即 safeUpdate；
-    // refresh 路径走 inline（service 内已写）→ 无 proposedFields，enrich 层不再写（避免重复）。
+    // META-49-B2（方案 X）：auto 流内容标量（proposedFields）+ confidence 上抛由 enrich 收集交 reconcile；
+    // refresh 路径走 inline（service 内已写）→ 无 proposedFields，不进 reconcile（避免重复）。
     if (result.matched === 'auto') {
-      return { effectiveCatalogId: result.catalogId, proposedFields: result.proposedFields, bangumiSubjectId: result.bangumiSubjectId }
+      return { effectiveCatalogId: result.catalogId, proposedFields: result.proposedFields, bangumiSubjectId: result.bangumiSubjectId, confidence: result.confidence }
     }
     return { effectiveCatalogId: catalogId }
   }

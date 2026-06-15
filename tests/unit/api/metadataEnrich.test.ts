@@ -548,22 +548,25 @@ describe('MetadataEnrichService.enrich → step3.5 TMDB (META-48)', () => {
     expect(videosQueries.updateVideoEnrichStatus).toHaveBeenCalled()
   })
 
-  it('B1 auto scalar 等价：autoMatch 返回 proposedFields → enrich 层立即 safeUpdate(内容, tmdb, {preserveMetadataSource})', async () => {
+  it('B2 reconcile auto scalar 等价：autoMatch proposedFields → reconcile 单源 winner safeUpdate(内容, tmdb, {sourceRef, db:client})', async () => {
     mockAutoMatch.mockResolvedValue({
       matched: true, tier: 'auto_matched', tmdbId: 555, confidence: 1, applied: ['tmdbId'],
       proposedFields: { title: 'TMDB标题', description: 'TMDB简介' },
-      preserveMetadataSource: false,
     })
     await service.enrich(makeJobData({ type: 'movie' }))
-    // B1（方案 X）：autoMatch 内只写身份/type + ref/cache，内容字段经 proposedFields 由 enrich 层立即
-    // safeUpdate（effectiveCatalogId='c1'，sourceRef=tmdbId，透传 preserveMetadataSource）。
+    // B2（方案 X）：autoMatch 内只写身份/type + ref/cache；内容字段经 proposedFields 由 enrich 收集交
+    // reconcileMetadata；movie 单源 tmdb 即 winner → reconcile 事务内 safeUpdate('c1', {内容}, 'tmdb', {db:client})。
+    // results.at(-1) = reconcile 内 new MediaCatalogService(db) 实例。
     const safeUpdate = (MediaCatalogService as ReturnType<typeof vi.fn>).mock.results.at(-1)?.value.safeUpdate
     expect(safeUpdate).toHaveBeenCalledWith(
       'c1',
       { title: 'TMDB标题', description: 'TMDB简介' },
       'tmdb',
-      expect.objectContaining({ sourceRef: '555', preserveMetadataSource: false }),
+      expect.objectContaining({ sourceRef: '555' }),
     )
+    // B2：reconcile winner 不传 preserveMetadataSource（winner 自裁 metadata_source）
+    const ctx = safeUpdate.mock.calls.at(-1)?.[3] as Record<string, unknown>
+    expect(ctx.preserveMetadataSource).toBeUndefined()
   })
 })
 
