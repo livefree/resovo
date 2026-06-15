@@ -6066,3 +6066,25 @@
 - **测试覆盖**：更新既有 `[10759,10765,16]→['action','sci_fi']` 为拆双 `['action','adventure','sci_fi','fantasy']`（旧断言会被破坏，已改）；+6 新断言——10759→[action,adventure] / 10765→[sci_fi,fantasy] / 10768→[war] / 28+10759 去重 / 10759+12 去重 / 单值回归 35→[comedy] + null 回归 [18,16,99]→[]。
 - **质量门禁**：typecheck 全工作区 EXIT=0（0 error TS）/ lint EXIT=0 / test:changed 43 文件 663 passed（genreMapper 核心 lib 按 ADR-180 升全量 → 全 genre 消费方 sourceParser/douban/bangumi/视频库零回归）。零枚举改 / 零 migration。
 - **[AI-CHECK]**：六问过——①根因=组合类目损半 → 拆双；②零回归（663 passed，组合类目断言更新 + 单值/null 路径回归 + 全消费方绿）；③边界=仅 Part A、不加 drama、不回填存量、不动 douban/source 表；④复用=mapTmdbGenres VideoGenre[] 多值能力 + 已有枚举值（零扩展、零消费方影响）；⑤无 any（union 类型 + Array.isArray 窄化）/ 无空 catch / 无硬编码色 / 无越层；⑥范围=单文件 + 单测，精确等于卡片范围。**SEQ-20260615-01 META-45-B 收口，META-45 全收口（-A ADR + -B Part A）。SEQ-20260615-01 元数据字段枚举兼容性治理全 9 卡完成（country 真源 + bangumi genre + bangumi/TMDB country + TMDB 图片 + VideoType 修正 ADR-203 + genre 拆双 ADR-204）+ 旁路 META-37-A-FIX Codex P2×2。后续 follow-up（Bangumi cast / 候选审核 UI / GENRE_LABELS 补值 O-204-3 / drama 触发条件）待另编序列。**
+
+---
+
+## [META-46-A] ADR-205 起草——多源元数据交叉验证编排 + TMDB 自动链路 + douban 投票降级（SEQ-20260615-02 首卡）— 2026-06-15
+
+**类型**：docs（起 ADR-205）｜**优先级**：🔴 高｜**执行模型**：claude-opus-4-8（主循环）｜**子代理**：arch-reviewer (claude-opus-4-8, agentId aa7acbacca478ea7c) CONDITIONAL-PASS
+
+- **问题**：TMDB 零自动富集（仅人工 confirm）；三源各自盲写 catalog（`safeUpdate` 行级优先级），无逐字段交叉验证；douban 网络链路实测被反爬封死却仍以优先级 3 自动写权威字段。用户裁定（AskUserQuestion 三问）：TMDB 全类型并行 / 一致性加权挂复核 / douban 退补空+投票。
+- **方案（本卡=ADR 起草，零代码）**：经两轮用户审核修订（P1 provenance 载体不足·P1 douban 不可独立先落·P2 TMDB auto 不可复用 confirm）+ arch-reviewer CONDITIONAL-PASS，**ADR-205 Accepted**，6 必修条件 M1–M6 全数吸收为决策：
+  - **D-205-1**：编排 gather→reconcile→write（各源 fetch 产 `FieldProposal` 入收集器，全源后 reconcile 逐字段裁决；fetch 逻辑零改，仅末端替换；否决 sequential+事后检测）。
+  - **D-205-2**：字段级载体=新表 `metadata_field_proposals`（Migration **119**，每字段多行 + `is_winner`/`applied` 双列 + PK(catalog_id,field_name,source_kind) 同源同字段单 proposal 不变量；否决扩 provenance/JSON 列）。
+  - **D-205-3**：trust 派生 `CATALOG_SOURCE_PRIORITY`（禁平行硬编码）+ canonical 比较（数组归一排序集合相等/字符串归一/数值容差，防假 needs_review）+ douban 永不盖非空高 trust、仅填空或背书。
+  - **D-205-4（M1，一票否决）**：winner 以**自身 source** 调 safeUpdate + 预读 metadataSource，低于现 source 降 proposal-only（不伪造 provenance source，守 ADR-186 D-186-3）。
+  - **D-205-5（M2，最高风险）**：reconcile 在 step3 redirect 后用 `effectiveCatalogId` + 多源 winner 按 source 分组共享外层 PoolClient 单事务 + type 走 ADR-203 caller 层专属路径不进加权 + rescore 入队迁移。
+  - **D-205-6（M3）**：冲突注入 `MetadataStatusSourceRow` + `deriveOverall` 分支 + **`METADATA_STATUS_JOIN_SQL` 镜像同步**（遗漏消费方）+ 双向守护单测。
+  - **D-205-7（④+M4）**：TMDB Step（全类型）调 META-47 新建 auto 专用方法（不复用 confirm）产 proposal；tmdb/imdb 纳 fill-if-empty 白名单 + `EXTERNAL_KIND_BY_PROVIDER` 补 tmdb（跨 ADR-186/177）。
+  - **D-205-8（M5）**：`CATALOG_SOURCE_PRIORITY` douban 数值不变（3<4 已满足），降级=reconcile 层语义；fill-if-empty 收编为空字段填充规则；cutover 在 49-D。
+  - **D-205-9**：拆卡——META-46-B 取消（shadow 常量无内容）/ 47 TMDB auto 方法 / 48 worker 接 Step / 49 强制拆 -A migration+architecture.md / -B reconcile / -C 冲突注入 / -D cutover+UI。
+  - **D-205-10**：不破坏 ADR-186/177/202/203/174；本期不做存量 backfill / 不改归并键 / 不引 reconcile 专属优先级真源。
+- **涉及文件**：`docs/decisions.md`（+ADR-205）/ `docs/task-queue.md`（SEQ-20260615-02 吸收 M1–M6 + META-49 拆 -A~D + META-46-B 取消）。docs-only。
+- **质量门禁**：verify:adr-contracts EXIT=0（verify-endpoint-adr 243 admin 路由全对齐，ADR-205 docs-only 无新端点；D-205-* 待实施卡闭环 / error-message·enum-ssot 既有 advisory）。docs-only → typecheck/lint/test:changed 自动跳过。
+- **[AI-CHECK]**：六问过——①根因=sequential-write 无 proposal 汇聚 → gather-reconcile + 新表载体；②零回归（docs-only）；③边界=仅 ADR 不写代码、不动写路径/优先级/worker（ADR PASS 前禁止）；④复用=reconcile 经 safeUpdate 复用优先级/锁/provenance/refs 写侧、trust 派生 CATALOG_SOURCE_PRIORITY 单真源、proposals 表正交 refs；⑤决策守 ADR-186/177/202/203/174 不变量 + CLAUDE.md 分层 + schema 同步 architecture.md（M5）；⑥范围=ADR-205 + task-queue 拆卡细化，docs-only。**arch-reviewer 纠 strawman 三处遗漏（JOIN_SQL 镜像 / redirect 时序 / tmdb 纳 fill-if-empty）。SEQ-20260615-02 META-46-A 收口，解锁 META-47（TMDB auto 专用方法）。**

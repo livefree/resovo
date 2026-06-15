@@ -2636,3 +2636,66 @@
    - **文件范围**：`apps/api/src/lib/genreMapper.ts` / 单测（扩 genreMapper.test 或 tmdb-confirm-service.test mapTmdbGenres 块）。
    - **门禁**：typecheck + lint + test:changed（零枚举改 → 仅 api，无跨消费方）。
    - **依赖**：**META-45-A ✅**（ADR-204 PASS）。
+
+---
+
+## [SEQ-20260615-02] 多源交叉验证编排 + TMDB 自动链路 + douban 降级
+
+- **状态**：🔄 执行中（META-46-A ✅ ADR-205 Accepted 2026-06-15；解锁 META-47）。**经两轮用户审核修订 + arch-reviewer CONDITIONAL-PASS**。
+- **创建时间**：2026-06-15 11:00
+- **最后更新时间**：2026-06-15 12:20（META-46-A 收口：ADR-205 落库，6 必修条件 M1–M6 → D-205-1~10；META-46-B 取消 / META-49 拆 -A~D）
+- **目标**：补齐三源最大不对称——TMDB 接入自动富集链路（当前零自动）；引入多源逐字段交叉验证（一致性加权 + 冲突挂人工复核）；豆瓣由「单独 auto 写权威字段」退为「补空 + 投票源」。
+- **范围**：`apps/api`（`MetadataEnrichService` 编排 / `TmdbConfirmService` **新建 auto 专用方法**〔非参数化 confirm〕 / `enrichmentWorker` 新 Step / `MediaCatalogService.CATALOG_SOURCE_PRIORITY` **仅 META-49 cutover 修改**〔46-B 不碰，见复核补订〕 / **新增字段级 proposal·conflict 载体**〔provenance 现表不支撑，见审核修订 P1〕）+ migration（字段级冲突载体，由 ADR 定形）+ `apps/server-next`（审核台冲突复核呈现，归末卡）。**不动**播放器/前台/搜索。
+- **依赖**：SEQ-20260615-01 ✅（标量/枚举治理稳定后再动编排与优先级）。
+- **用户决策（2026-06-15，AskUserQuestion 三问全采纳推荐）**：
+  - D-用户-1：TMDB 触发范围 = **全类型并行**（movie/tv/anime 均自动跑 TMDB，与 douban/bangumi 并行产出，交叉验证 + 优先级裁决落地；anime 与 Bangumi 互补补 imdb/图片）。
+  - D-用户-2：冲突处理 = **一致性加权 + 冲突挂复核**（多源一致 → 高置信自动写；冲突字段 → needs_review 挂起人工）。⚠️ 载体修订见审核 P1：`video_metadata_provenance` PK=(catalog_id,field_name) 仅记**最后写入来源**，无候选/败选/冲突态 → **不能复用做逐字段比对**；`needs_review`/`review_conflict` 枚举虽已存在于 derive.ts 但无字段级输入。**字段级 proposal/conflict 持久化方案由 META-46-A ADR 必裁。**
+  - D-用户-3：douban 降级 = **退为补空 + 投票源**（不再单独 auto 写权威内容字段；仅 fill-if-empty + 作交叉验证投票源之一；数值上明确低于 tmdb/bangumi）。⚠️ 时序修订见审核 P1：投票语义依赖 reconcile 层存在；reconcile 上线前下调行级优先级 = 纯削现有覆盖。**实际写行为切换 gated by META-49。**
+
+### 审核修订（2026-06-15，用户红线前提）
+
+- **P1-A（必修，载体）**：ADR 必须新增或明确选择**字段级 proposal/conflict 载体**（候选值 + 败选值 + 多源 proposal + conflict 状态）；不得只写「复用 provenance」。现表 `043_video_metadata_provenance.sql` PK=(catalog_id,field_name) 单行记最后写入，`metadata-status.derive.ts` 仅从 refs/cache/status 派生 provider 状态，**均无字段级冲突输入**。
+- **P1-B（必修，时序）**：douban 降级**不可独立先落**。当前 douban Step1/2 经 `safeUpdate`（行级 `metadata_source` 优先级，非字段级投票）直写 rating/description/cover/genres/country。先降级而 TMDB auto + reconcile 未上线 → 直接削弱现有自动富集覆盖。→ `META-46-B` 改为**仅 ADR 常量/观测准备，运行时写行为零变化**；真正的 fill-only/投票切换并入 `META-49`（reconcile 上线时一并 cutover）。
+- **P2（必修，语义）**：TMDB auto **不可直接复用 manual confirm**。`confirm` 现为 `source:'manual'`/`linkedBy:'moderator'`/`manual_confirmed` 且**无条件写 tmdb_id cache**（TmdbConfirmService.ts:259）。→ `META-47` 明确**新建 auto 专用方法**（candidate/auto_matched 区分 + 置信度 + 冲突降级 + 字段 apply 策略）；**cache 写入受 reconcile/refs 成功结果约束**，不得无条件写。
+- **保留正确项**：ADR 前置 gate / 强制 Opus arch-reviewer / ADR PASS 前不动写路径——三条不变。
+
+### 任务列表（按执行顺序；ADR 卡为前置 gate，实施卡蓝图由 ADR 定稿）
+
+1. **META-46-A** — ADR 起草：多源交叉验证编排 + TMDB 自动链路接入 + douban 降级语义（🔴 高 / **强制 arch-reviewer Opus**）（状态：✅ 已完成 2026-06-15 12:20）
+   - 创建时间：2026-06-15 11:00 ｜ 实际开始：2026-06-15 11:55 ｜ 完成时间：2026-06-15 12:20 ｜ 建议模型：opus（强制 arch-reviewer gate）
+   - **完成备注**：✅ **ADR-205 Accepted**（docs/decisions.md）。arch-reviewer (claude-opus-4-8, agentId aa7acbacca478ea7c) CONDITIONAL-PASS，6 必修条件 M1–M6 全数吸收为 D-205-1~10。D-205-1 gather→reconcile→write / D-205-2 新表 `metadata_field_proposals`（Migration **119**，is_winner+applied 双列 + PK 同源同字段单 proposal 不变量）/ D-205-3 trust 派生 CATALOG_SOURCE_PRIORITY + canonical 集合相等比较（防假 needs_review）/ D-205-4 M1 方案 A（winner 自身 source + 预读 metadataSource 降 proposal-only）/ D-205-5 M2（redirect 后 effectiveCatalogId + source 分组共享事务 + type 走 ADR-203 专属路径 + rescore 迁移）/ D-205-6 M3（冲突注入 derive + JOIN_SQL 镜像）/ D-205-7 TMDB auto + M4（tmdb/imdb 纳 fill-if-empty/EXTERNAL_KIND_BY_PROVIDER）/ D-205-8 douban 数值不变·reconcile 层降级 / D-205-9 拆卡（46-B 取消 / 49 拆 -A~D）/ D-205-10 边界 + 不破坏 ADR-186/177/202/203/174。门禁 verify:adr-contracts EXIT=0（endpoint-adr 243 对齐无新端点；D-205-* 待实施卡 changelog 闭环 / 仅既有 advisory）。docs-only。执行模型 claude-opus-4-8；子代理 arch-reviewer (claude-opus-4-8, aa7acbacca478ea7c)。详见 changelog [META-46-A]。**解锁 META-47（TMDB auto 方法）→ 48 → 49-A~D。**
+   - **决策待定档**：① 编排模型——sequential-write（现状，各源独立 safeUpdate）改为 **gather-all-proposals → 逐字段 reconcile → write**，还是保 sequential + 事后冲突检测？（核心架构分叉；D-用户-2 一致性加权实质要求 gather-reconcile，盲写无法比较）② **字段级 proposal/conflict 持久化载体（必裁，审核 P1-A）**——新建表 vs 扩 `video_metadata_provenance`（现 PK 单行仅记最后写入，需加候选/败选/冲突列）vs catalog JSON 列；须承载候选值·败选值·多源 proposal·conflict 态，喂入既有 `needs_review`/`review_conflict` 枚举（derive.ts 已有词汇无输入）③ 一致性加权规则（几源一致才高置信？douban 投票权重）④ TMDB auto 接入点（enrich worker 新 Step vs 独立 worker）+ 凭证/限流守卫 ⑤ douban 新优先级数值 + 「投票源不写权威」与 fill-if-empty（ADR-186）衔接 + **降级 cutover 时序（审核 P1-B：必在 reconcile 上线后）**。
+   - **必复用/不破坏**：ADR-186（fill-if-empty 不变量）/ ADR-177（`catalog_external_refs` 真源）/ ADR-202（TMDB confirm 流程）/ ADR-201（metadata 状态治理 DTO，`needs_review`/`review_conflict` 已定义）/ ADR-203（type 修正单事务红线）。
+   - **文件范围**：`docs/decisions.md`（新 ADR）/ `docs/task-queue.md`（实施卡 -B/47/48/49 细化）。
+   - **门禁**：verify:adr-contracts + arch-reviewer PASS。**ADR PASS 前不得动任何写路径 / 优先级 / worker。**
+   - **依赖**：无（本序列首卡）。
+   - **arch-reviewer 评审结论（claude-opus-4-8, agentId aa7acbacca478ea7c，2026-06-15 CONDITIONAL-PASS）**：strawman 五项核心方向（①gather-reconcile ②新表 ③一致性加权 ④TMDB auto 经 proposal ⑤douban cutover 延后）架构正确、不破坏任何已采纳 ADR 硬不变量。**6 项必修条件，ADR 落库前全闭合**：
+     - **M1（一票否决）**：reconcile winner 与 `safeUpdate` 行级优先级闸门**双重裁决**冲突——采**方案 A**：winner 以**自身 source** 调 safeUpdate + 预读 `catalog.metadataSource`，低于现 source 的 winner 降级 proposal-only（不写 cache，落表+标 candidate），不伪造 provenance source（守 ADR-186 D-186-3）。
+     - **M2（最高实施风险）**：reconcile 必须在 **step3 bangumi redirect 之后**、全程用 `effectiveCatalogId`（ADR-174 真去重）；多源 winner 写入按 **source 分组多次 safeUpdate 共享外层 PoolClient 单事务**（保原子 + provenance 不失真，复用 `provenanceCtx.db`）。
+     - **M3**：冲突注入 `MetadataStatusSourceRow` 新增 fieldConflicts 输入 + `deriveOverall` 冲突→problem/danger 分支 + **`METADATA_STATUS_JOIN_SQL` 镜像同步**（strawman 遗漏的关键消费方，否则视频库元数据列服务端排序漂移）+ 双向守护单测扩冲突用例。
+     - **M4**：tmdb/imdb 接入 auto 写入 → 同步 `EXTERNAL_KIND_BY_PROVIDER` 补 tmdb + fill-if-empty 白名单纳 tmdbId/imdbId（ADR-186 自留 follow-up 锚点，跨 ADR-177/186）。
+     - **M5**：`docs/architecture.md` 同步新表（绝对禁止项，参 :437/:468/:1114 范式）+ migration 编号 **119**（最新 118，arch-reviewer 044+ 系基于 043 误判，O-205-1）+ 遗漏消费方（JOIN_SQL / `enqueueIdentityVideoRescore` 触发时机随 reconcile 迁移 / **type 字段走 ADR-203 caller 层 fill-if-default 专属路径不进 trust 加权**）+ **澄清 douban「下调」语义**（数值已 3<4 满足 D-用户-3，主循环裁定：不改 `CATALOG_SOURCE_PRIORITY` 数值，降级=reconcile 层「不单独写非空权威字段」语义 → META-46-B shadow 常量大概率无内容，并入 49）。
+     - **M6**：proposals 表「同源同字段单 proposal」写为显式不变量（douban step1/2 互斥当前安全）+ `proposed_value` JSONB **canonical 比较规则定死**（数组归一排序集合相等 / 字符串 trim+大小写归一 / 数值容差——决定冲突率，防 genres 顺序差异制造假 needs_review）+ `is_winner`（逻辑 winner）增 `applied`（实际落 catalog）列区分 M1 skip 场景。
+   - **拆卡修订（arch-reviewer）**：META-49 跨 schema+service+query+UI 四层超 3 层红线 → **强制拆 -A/-B/-C/-D**（见下）；META-46-B 必要性随 M5 douban 语义重估。
+
+2. **META-46-B** — douban 降级**准备**（reconcile 专用 shadow 候选权重常量 + 投票源标记 + 观测日志；**运行时写行为零变化**）（🟢 低）（状态：⬜ 规划中，依 ADR）
+   - **审核 P1-B 修订**：不再「先落降级」。本卡仅新增 **reconcile 专用候选权重/shadow 常量**（独立新常量）+ 投票源标记 + 观测埋点。
+   - **🔴 复核补订**：**严禁修改现有 `MediaCatalogService.CATALOG_SOURCE_PRIORITY`**——该常量由 `safeUpdate` 行级消费（MediaCatalogService.ts:345），改它即改运行时写行为，与「准备态」矛盾。`CATALOG_SOURCE_PRIORITY` 的任何下调归 **META-49 cutover**（reconcile 上线一并切）。本卡 shadow 常量仅供未来 reconcile 读取，不接入 safeUpdate。
+   - **⚠️ arch-reviewer 重估（M5）**：douban 数值 3 已 < tmdb/bangumi 4，D-用户-3「数值低于」现状已满足；主循环裁定降级=reconcile 层语义（不单独写非空权威字段）而非改活表数值 → **本卡 shadow 常量大概率无实际内容，待 ADR 定稿后大概率并入 META-49-D 取消本卡**。最终去留由 META-46-A ADR 裁定。
+
+3. **META-47** — TMDB 自动候选打分 + **auto 专用方法**（lib + service，不接 worker）（🟡 中）（状态：⬜ 规划中，依 ADR）
+   - 新 `pickBestTmdbCandidate`（仿 douban `pickBestCandidate` title/year 相似度）+ `TmdbConfirmService` **新建 auto 专用方法**（**非参数化 confirm**，审核 P2）：candidate/auto_matched 区分 + 置信度来自打分 + 冲突降级 + 字段 apply 策略；`linkedBy:'auto'`（区别于现硬编码 moderator/manual_confirmed/confidence:1）。**tmdb_id cache 写入受 reconcile/refs 成功结果约束，不得无条件写**（区别于 confirm:259）。
+
+4. **META-48** — enrich worker 接入 TMDB Step（全类型并行）+ 凭证/限流/去重守卫（🟡 中）（状态：⬜ 规划中，依 META-47）
+   - `MetadataEnrichService` 新增 TMDB Step（全类型，D-用户-1）+ `enrichmentWorker` 触发埋点；TMDB 实时 API 凭证缺失/限流降级守卫。
+
+5. **META-49** — reconcile 编排 + 冲突 needs_review + douban cutover + 审核台（🔴 高 / 编排核心，**arch-reviewer 强制拆四子卡**——跨 schema+service+query+UI 四层超 3 层红线）（状态：⬜ 规划中，依 ADR + 47/48）
+   - **META-49-A**：migration（`metadata_field_proposals` 建表，编号 **119**）+ proposals 写侧 queries + **`docs/architecture.md` 同步**（M5，:468 表清单 + :1114 migration 清单）。纯数据层可独立验证。
+   - **META-49-B**：reconcile 编排相位（gather→reconcile→write 重构 + **M1 方案 A** winner 自身 source 调用 + **M2** redirect 后 effectiveCatalogId + source 分组共享事务 + **ADR-203 type 专属路径**）+ rescore 入队时机迁移（M5）+ Service 单测。
+   - **META-49-C**：冲突注入 `derive.ts`（`MetadataStatusSourceRow` 扩 fieldConflicts + `deriveOverall` 分支 + **`METADATA_STATUS_JOIN_SQL` 镜像同步** + 批量 proposals 查询避 N+1 + 双向守护单测，M3）。
+   - **META-49-D**：douban cutover（按 M5 裁定大概率仅 reconcile 层语义，无活表数值改）+ server-next 审核台 `review_conflict` 冲突展示 UI（消费 needs_review）。
+
+### 备注
+
+- 本序列产出于 docs/audit/metadata-enrichment-investigation-20260615.md 第五节 follow-up「TMDB 自动链路」。
+- 原子化：实施卡 -B/47/48/49 为 ADR 定稿前的蓝图占位，最终拆分（尤其 META-49 -A/-B）以 META-46-A ADR 蓝图为准。
