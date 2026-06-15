@@ -142,14 +142,23 @@ describe('IntegrationCredentialsService.save', () => {
     )
   })
 
-  it('旧行固化迁移：DB secrets.token 残留 + 只改 baseUrl → upsert 删 token + 旧值迁入 read_access_token', async () => {
+  it('旧行只改 baseUrl：save 不碰 secrets（不删/不迁 token）→ token 保留由读路径兜底，不写回快照值', async () => {
     mGetRow.mockResolvedValue(makeRow({ provider: 'tmdb', secrets: { token: 'old-bearer' }, config: {} }) as never)
     const svc = new IntegrationCredentialsService(db)
     await svc.save('tmdb', { baseUrl: 'https://x/3' }, 'admin-1', 'req-1')
     const arg = mUpsert.mock.calls[0]![1]
-    expect(arg.dropSecretKeys).toEqual(['token']) // 删旧 key（写入只走新字段）
-    expect(arg.secrets).toEqual({ read_access_token: 'old-bearer' }) // 未提交新 key → 固化迁移旧值（防凭证丢失）
+    expect(arg.dropSecretKeys).toEqual([]) // 未提交 read_access_token → 不删 token
+    expect(arg.secrets).toEqual({}) // 不碰 secrets（token 保留，读路径 normalizeRowSecrets 兜底）
     expect(arg.config).toEqual({ baseUrl: 'https://x/3' })
+  })
+
+  it('旧行提交新 read_access_token：删 token + 写新值（凭证切换到新字段，杜绝旧 token fallback 残留）', async () => {
+    mGetRow.mockResolvedValue(makeRow({ provider: 'tmdb', secrets: { token: 'old-bearer' }, config: {} }) as never)
+    const svc = new IntegrationCredentialsService(db)
+    await svc.save('tmdb', { read_access_token: 'new-rat' }, 'admin-1', 'req-1')
+    const arg = mUpsert.mock.calls[0]![1]
+    expect(arg.dropSecretKeys).toEqual(['token']) // 提交新 key → 删旧 token
+    expect(arg.secrets).toEqual({ read_access_token: 'new-rat' })
   })
 
   it('旧行清空：DB secrets.token 残留 + 提交 read_access_token=空 → 删 token + 不固化（真清空，杜绝 fallback 残留）', async () => {
@@ -161,16 +170,17 @@ describe('IntegrationCredentialsService.save', () => {
     expect(arg.secrets).toEqual({ read_access_token: '' }) // 提交空 → 不固化，token 删除 → loader 读不到 → 真清空
   })
 
-  it('旧+新并存行：DB token(陈旧) + read_access_token(较新) + 只改 baseUrl → 删 token，不用陈旧 token 覆盖较新凭证', async () => {
+  it('并发安全：DB token(陈旧) + read_access_token(较新) + 只改 baseUrl → 不碰 secrets（零覆盖风险，含并发）', async () => {
+    // 竞态：A 读 before 后 B 并发写 read_access_token；A 只改 baseUrl 时不触碰 secrets/不写回快照 →
+    // upsert merge 仅动 config，B 的较新凭证绝不被 A 的陈旧快照覆盖。
     mGetRow.mockResolvedValue(
       makeRow({ provider: 'tmdb', secrets: { token: 'stale-old', read_access_token: 'fresh-new' }, config: {} }) as never,
     )
     const svc = new IntegrationCredentialsService(db)
     await svc.save('tmdb', { baseUrl: 'https://x/3' }, 'admin-1', 'req-1')
     const arg = mUpsert.mock.calls[0]![1]
-    expect(arg.dropSecretKeys).toEqual(['token'])
-    // 规范化优先新值：read_access_token 保留 'fresh-new'，绝不被陈旧 token 'stale-old' 覆盖
-    expect(arg.secrets).toEqual({ read_access_token: 'fresh-new' })
+    expect(arg.dropSecretKeys).toEqual([]) // 未提交 read_access_token → 不删 token
+    expect(arg.secrets).toEqual({}) // 不碰 secrets → 较新凭证零覆盖（读路径 normalizeRowSecrets 仍优先新值）
     expect(arg.config).toEqual({ baseUrl: 'https://x/3' })
   })
 })

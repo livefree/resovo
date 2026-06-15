@@ -134,30 +134,21 @@ export class IntegrationCredentialsService {
     const before = await getApiCredentialRow(this.db, provider)
     const beforeJsonb = this.redactAuditState(spec, before, Object.keys({ ...secrets, ...config }))
 
-    // 用户本次提交的 secret 字段（固化迁移注入的字段不计入审计/afterJsonb，属系统自动迁移）
-    const submittedSecretKeys = new Set(Object.keys(secrets))
-
-    // 旧 secret key 固化迁移（ADR-201 22823「写入只走新字段」）：DB 残留旧 key（如 tmdb.token）→
-    // upsert 一律删旧 key；本次未提交新 key 时，把「规范化后」的新 key 值写回固化。规范化（normalizeRowSecrets）
-    // 保证新 key 优先——DB 已有较新 read_access_token 时不被陈旧 token 覆盖，仅当新 key 缺失/空才用旧 token 值。
-    // 本次提交了新 key（含清空）则用提交值，旧 key 仅删除。
+    // 旧 secret key 清理（ADR-201 22823「写入只走新字段」）：仅当本次**提交了对应新 key**（新值或清空）
+    // → 删 DB 残留旧 key（凭证切换到新字段，杜绝清空后旧 token 被 loader fallback 残留读取）。
+    // 未提交新 key（如只改 baseUrl）→ secrets 不含该字段、dropSecretKeys 不含旧 key，save **完全不触碰
+    // secrets**——旧 token 由读路径 normalizeRowSecrets 兜底。绝不写回 before 快照值，从而保留 upsert
+    // merge 的天然并发安全：A 改无关字段不会用陈旧快照覆盖 B 并发写入的较新凭证。
     const dropSecretKeys: string[] = []
-    const beforeSecrets = before?.secrets ?? {}
-    const beforeNormalized = before ? normalizeRowSecrets(provider, beforeSecrets) : {}
     for (const [newKey, oldKey] of Object.entries(LEGACY_ROW_SECRET_KEYS[provider] ?? {})) {
-      if (!oldKey || beforeSecrets[oldKey] === undefined) continue
-      dropSecretKeys.push(oldKey)
-      if (!(newKey in secrets)) {
-        const normVal = beforeNormalized[newKey]
-        if (typeof normVal === 'string' && normVal !== '') secrets[newKey] = normVal
-      }
+      if (oldKey && newKey in secrets) dropSecretKeys.push(oldKey)
     }
 
     await upsertApiCredential(this.db, { provider, secrets, config, enabled, dropSecretKeys, updatedBy: actorId })
 
     const afterJsonb: Record<string, unknown> = { provider }
     for (const field of spec.fields) {
-      if (field.secret && submittedSecretKeys.has(field.key)) {
+      if (field.secret && field.key in secrets) {
         afterJsonb[field.key] = (secrets[field.key] as string).length > 0 ? '<set>' : '<cleared>'
       } else if (!field.secret && field.key in config) {
         afterJsonb[field.key] = config[field.key]

@@ -5832,3 +5832,17 @@
 - **修复机制**：固化迁移改用 `normalizeRowSecrets(provider, before.secrets)` 的规范化结果（已内置「新 key 非空 > 旧 key」优先级）——DB 已有非空 read_access_token 时规范化保留新值、固化写回新值（不覆盖）；仅当新 key 缺失/空时规范化才回填旧 token 值。读路径与写路径优先级统一。
 - **质量门禁**：typecheck EXIT=0 / test:changed 17 passed / verify:adr-contracts EXIT=0。+1 回归单测。
 - **[AI-CHECK]**：六问过——①根因=固化迁移无条件用旧 token 致陈旧覆盖较新凭证；②零回归（service 11 passed，旧行只读/只改/清空/已迁移/并存全场景守护）；③边界=仅 save 固化迁移取值改规范化，不改读路径/migration/端点；④复用=normalizeRowSecrets 统一读写优先级（消除手动判断）；⑤无 any / 无空 catch / 无硬编码；⑥单一验收口径（陈旧 token 绝不覆盖较新 read_access_token），落地。
+
+## [META-37-A-FIX-4] TMDB save 杜绝并发覆盖——未提交字段不触碰 secrets
+- **完成时间**：2026-06-14
+- **记录时间**：2026-06-14 20:25
+- **执行模型**：claude-opus-4-8
+- **子代理**：无（Codex stop-time review 第四轮拦截后修复）
+- **触发**：Codex stop-time review「unrelated config save can still overwrite a concurrent newer TMDB credential」。
+- **修改文件**：
+  - `apps/api/src/services/IntegrationCredentialsService.ts` — save 移除「固化迁移写回 before 快照值」；`dropSecretKeys` 改为仅当本次提交了对应新 key（新值/清空）时才删旧 token；afterJsonb 回归 `field.key in secrets`（secrets 不再被固化注入污染，移除 submittedSecretKeys）。
+  - `tests/unit/api/integration-credentials-service.test.ts` — 改 2 it（只改 baseUrl 不碰 secrets / 并发安全断言 dropSecretKeys=[] + secrets={}）+ 加 1 it（提交新 read_access_token → 删 token 切换）。
+- **根因**：FIX-2/FIX-3 的「固化迁移」在本次未提交新 key 时用 `before` 快照值写回 read_access_token，引入 **TOCTOU 并发竞态**——请求 A（只改 baseUrl）读 before={token:'old'} 后，请求 B 并发写 read_access_token='fresh'，A 随后用陈旧快照 'old' 写回 read_access_token → 覆盖 B 的较新凭证（upsert `(secrets - token) || {read_access_token:'old'}`）。
+- **修复机制**：移除固化迁移写回——save 对**未提交的字段完全不触碰**：`dropSecretKeys` 仅当本次提交了对应新 key（read_access_token 新值/清空）时才删旧 token；只改 baseUrl 时 `secrets={}`、`dropSecretKeys=[]`，upsert merge 仅动 config（`(DB.secrets - []) || {}` = secrets 不变），旧 token 由读路径 `normalizeRowSecrets` 兜底。恢复 upsert merge 天然并发安全（每次只改自己提交的字段，不写回任何快照）。凭证彻底切换发生在用户主动改 read_access_token 时（删 token + 写新值）；批量迁移仍归 migration 116。
+- **质量门禁**：typecheck EXIT=0 / test:changed 18 passed / lint 无 error / verify:adr-contracts EXIT=0。
+- **[AI-CHECK]**：六问过——①根因=固化迁移写回快照值引入 TOCTOU 并发覆盖；②零回归（service 12 passed，只改 baseUrl/提交新值/清空/旧+新并存全场景守护）；③边界=仅 save 写策略改「未提交不触碰」，读路径 normalizeRowSecrets 兜底不变、不改 migration/端点；④复用=upsert merge 天然并发安全 + dropSecretKeys 单机制；⑤无 any / 无空 catch / 无硬编码；⑥单一验收口径（无关 config save 绝不覆盖并发较新凭证），落地。
