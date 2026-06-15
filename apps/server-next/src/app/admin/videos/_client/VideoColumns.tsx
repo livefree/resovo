@@ -20,7 +20,7 @@
 
 import type { CSSProperties, ReactElement } from 'react'
 import {
-  Pill, VisChip, Thumb, DualSignal, EnrichmentBadgeCluster, CountryName,
+  Pill, VisChip, Thumb, DualSignal, MetadataSourceIconCluster, CountryName,
   OVERALL_LABEL, ISSUE_LEVEL_LABEL,
   type TableColumn,
 } from '@resovo/admin-ui'
@@ -345,15 +345,15 @@ export function buildVideoColumns(
       filterable: false,
       cell: ({ row }) => <EpisodesCell row={row} />,
     },
-    // meta 元数据（复合，§2.6 只读不挂筛选）：sortable→meta_score
-    // EnrichmentBadgeCluster density='row'；anime-only bangumi 门控由 Cluster 内部依 row.type 处理；
-    // enrichmentSummary 缺省（旧行/未注入）→ 不渲染
+    // meta 元数据（复合，§2.6 只读不挂筛选）：sortable→metadata_status（META-36-A 运营优先级）
+    // META-36-B（D-201-3）：四来源图标簇 density='table'（固定顺序四源、空态四灰图标 + tooltip，
+    // 取代退役 EnrichmentBadgeCluster）；metadataStatus 缺省（旧行/未派生）→ 不渲染兜底。
     {
       id: 'meta', header: '元数据', accessor: (r) => r.meta_score ?? '',
       width: 170, minWidth: 140, enableResizing: true, enableSorting: true, defaultVisible: true,
       filterable: false,
-      cell: ({ row }) => row.enrichmentSummary
-        ? <EnrichmentBadgeCluster summary={row.enrichmentSummary} type={row.type} density="row" />
+      cell: ({ row }) => row.metadataStatus
+        ? <MetadataSourceIconCluster summary={row.metadataStatus} density="table" />
         : null,
     },
     // status 内容状态（复合，§2.6 只读不挂筛选）：sortable→review_status

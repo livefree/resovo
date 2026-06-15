@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useEffect, useCallback } from 'react'
-import { Drawer, LoadingState, ErrorState, VisChip, DualSignal, Thumb, EnrichmentBadgeCluster } from '@resovo/admin-ui'
+import { Drawer, LoadingState, ErrorState, VisChip, DualSignal, Thumb, MetadataSourceIconCluster } from '@resovo/admin-ui'
 import type { VideoAdminDetail } from '@/lib/videos'
 import { getVideo, patchVideoMeta, createVideo } from '@/lib/videos/api'
 import type { VideoType } from '@resovo/types'
@@ -257,17 +257,16 @@ export function VideoEditDrawer({ open, videoId, onClose, onSaved, initialTab }:
                 </div>
                 <VisChip visibility={visibility} review={review} />
                 <DualSignal probe="unknown" render="unknown" />
-                {/* META-11 / feature-2：富集徽标簇（density='header'：含 label + 富集时间）*/}
-                {/* META-35 边界：头部簇维持既有 EnrichmentBadgeCluster（ADR-201 过渡期新旧共存允许）；
-                    四来源图标簇头部迁移（D-201-3）连同视频库列簇一并归 follow-up/META-36，避免本卡越范围。 */}
-                {video.enrichmentSummary && (
-                  <EnrichmentBadgeCluster
-                    summary={video.enrichmentSummary}
-                    type={video.type}
+                {/* META-36-B（D-201-3）：头部四来源图标簇 density='header'（含完整度微文案 + 最近增强时间），
+                    取代退役 EnrichmentBadgeCluster；消费 META-32-A 注入的 metadataStatus。 */}
+                {video.metadataStatus && (
+                  <MetadataSourceIconCluster
+                    summary={video.metadataStatus}
                     density="header"
+                    showScore
                     enrichedAtLabel={
-                      video.enrichmentSummary.enrichedAt
-                        ? `富集 ${video.enrichmentSummary.enrichedAt.slice(0, 10)}`
+                      video.metadataStatus.enrichedAt
+                        ? `增强 ${video.metadataStatus.enrichedAt.slice(0, 10)}`
                         : undefined
                     }
                   />

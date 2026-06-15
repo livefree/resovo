@@ -5729,3 +5729,19 @@
 - **执行模型**：claude-opus-4-8（主循环连续推进，偏离卡片 sonnet 建议、无强制升降触发）；子代理无。
 - **后续**：解锁 META-36-B（`meta` 列 cell + 编辑抽屉 QUICK_HEAD 头部簇 `EnrichmentBadgeCluster→MetadataSourceIconCluster`，D-201-3）。
 - **[AI-CHECK]**：六问过——①根因=META-32-B 把 `metadataProvider` facet + UI 消费延后，本卡补后端单谓词 + 修 api.ts 零序列化断点 + 排序/过滤/快捷全接线；②零回归（test:changed 1363 + e2e 84 + integration 6 全绿，meta 列 cell 未动）；③边界=不越层（Route→Service→queries / UI 经 api.ts）、不改 admin-ui Props、无新 route/schema，providerState 与图标簇迁移定向延后；④复用 admin-ui barrel 文案 + @resovo/types 常量 + 既有 providerState 谓词/序列化范式，`METADATA_PROVIDER_LABELS` 本地镜像（SOURCE_LABEL 未 barrel 导出）；⑤无 any / 无空 catch / 零硬编码色（cell 用 MUTED_TEXT_STYLE CSS var）、SQL 状态字面量为代码常量非用户输入；⑥范围 ≤5 项单一验收口径（拆卡后），必要联动 columns.ts/VideoListClient.tsx 已透明登记。
+
+## [META-36-B] 四来源图标簇消费迁移（Phase 3C，ADR-201 D-201-3 / META-36 全收口）
+
+- **任务**：META-36 拆 -A/-B 的第 2 子卡。`MetadataSourceIconCluster`（META-33-A 已建）取代退役 `EnrichmentBadgeCluster` 成为视频库 `元数据` 列与编辑抽屉头部的紧凑元数据显示原语。依 META-36-A ✅。
+- **迁移（纯消费，不改 admin-ui 公开 Props）**：
+  - `VideoColumns.tsx`：meta 列 cell `EnrichmentBadgeCluster summary={enrichmentSummary} type density="row"` → `MetadataSourceIconCluster summary={row.metadataStatus} density="table"`。新原语三密度均渲染**全部四源图标**（含 missing/not_applicable 灰显，D-201-B：列宽/扫描稳定，ADR-201「空态不显示未富集长 pill，用四灰图标 + tooltip」），无旧 anime-only bangumi 门控；`row.metadataStatus` 缺省（旧行/未派生）→ null 兜底。import 换 MetadataSourceIconCluster。
+  - `VideoEditDrawer.tsx`：QUICK_HEAD 头部 `EnrichmentBadgeCluster density="header"` → `MetadataSourceIconCluster summary={video.metadataStatus} density="header" showScore enrichedAtLabel={enrichedAt ? '增强 '+slice(0,10) : undefined}`（完整度微文案 + 最近增强 tooltip 时间行；消费 META-32-A 注入的 metadataStatus；sliced 日期沿用既有约定）。import 换 MetadataSourceIconCluster。
+- **退役彻底**：迁移后 `EnrichmentBadgeCluster` 全仓非 test 消费点仅余审核台 `ModListRow`（保留 @deprecated，审核台簇迁移非本卡范围）；视频库列 + 编辑抽屉头部两处过渡期消费点清退完毕（META-35 显式延后到本卡的 D-201-3 头部簇迁移闭环）。
+- **测试迁移**：`enrichment-cluster-faces.test.tsx`（原断言退役 `EnrichmentBadgeCluster`）改断言新原语——Face1（视频库行 density=table + 固定四 `data-provider` 图标 + table 密度无完整度微文案 + movie 行同渲四源〔无 anime 门控〕 + 无 metadataStatus→null）+ Face2（抽屉头部 density=header + 四图标 + showScore 完整度微文案 72 + score=null 无微文案 + 无 metadataStatus→无簇）；复用共享 `tests/unit/components/admin-ui/metadata-status/_fixtures.ts` 的 `makeSummary`（四 provider key 恒在工厂），不重复构造 DTO。
+- **边界裁定**：ModListRow（审核台）不动；仅消费既有原语零改 admin-ui Props → 无 arch-reviewer gate、无 Subagents trailer；cell 不挂 onAction（簇内置 hover/focus tooltip，列内不挂动作，对齐 META-34 detail 只读先例）。
+- **数据库变更**：无（纯 server-next UI 消费方迁移，复用 META-32-A 注入的 `metadataStatus`）。
+- **测试覆盖**：9 单测（enrichment-cluster-faces 迁移：列注册 2 + Face1 4 + Face2 3）；同目录 168 测试零回归。
+- **质量门禁**：typecheck 全工作区 EXIT=0 / lint 4 successful（新改动零警告） / test:changed 5 文件 71 passed / verify:adr-contracts EXIT=0 / **test:e2e:admin 84/84 passed**（videos.spec 黄金路径——列表加载/搜索/编辑 Drawer/上架/批量下架——渲染图标簇零回归 + videos-column-resize 零回归）。test:integration N/A（无 API/DB/SQL）。
+- **执行模型**：claude-opus-4-8（主循环连续推进，偏离卡片 sonnet 建议、无强制升降触发）；子代理无。
+- **META-36 全收口**：-A（视频库元数据列服务端排序/过滤 + metadataProvider facet）+ -B（四来源图标簇消费迁移）闭环。**Phase 3 三消费面元数据状态展示统一完成**：审核详情（META-34）/ 编辑抽屉（META-35）/ 视频库列 + 头部簇（META-36）均消费 ADR-201 统一原语（`MetadataStatusPanel` / `MetadataSourceIconCluster`）。后续 Phase 4 = META-37（TMDB 凭证语义修订）。
+- **[AI-CHECK]**：六问过——①根因=过渡期视频库两处仍用退役 EnrichmentBadgeCluster，迁 D-201-3 唯一紧凑原语；②零回归（test:changed 71 + e2e 84 全绿，ModListRow 未动、admin-ui Props 未改）；③边界=纯 server-next UI 消费层、不改 admin-ui Props、不接 onAction、审核台簇定向保留；④复用 MetadataSourceIconCluster（META-33-A）+ 共享 _fixtures makeSummary（不重复构造 DTO）；⑤无 any / 无空 catch / 零硬编码色（簇内 token） / 无 enrichmentSummary 残引；⑥范围 3 项单一验收口径，退役彻底（仅余 ModListRow 单点，已登记）。
