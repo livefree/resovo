@@ -2641,9 +2641,9 @@
 
 ## [SEQ-20260615-02] 多源交叉验证编排 + TMDB 自动链路 + douban 降级
 
-- **状态**：🔄 执行中（META-46-A ✅ ADR-205 Accepted 2026-06-15；解锁 META-47）。**经两轮用户审核修订 + arch-reviewer CONDITIONAL-PASS**。
+- **状态**：🔄 执行中（META-46-A ✅ ADR-205 / META-47 ✅ TMDB auto 方法 2026-06-15；解锁 META-48）。**经两轮用户审核修订 + arch-reviewer CONDITIONAL-PASS**。
 - **创建时间**：2026-06-15 11:00
-- **最后更新时间**：2026-06-15 12:20（META-46-A 收口：ADR-205 落库，6 必修条件 M1–M6 → D-205-1~10；META-46-B 取消 / META-49 拆 -A~D）
+- **最后更新时间**：2026-06-15 12:35（META-47 收口：lib textMatch 下沉 + tmdb 打分 + autoMatch 专用方法 + M4 fill-if-empty 白名单解耦；M4「补 tmdb 映射」偏离登记）
 - **目标**：补齐三源最大不对称——TMDB 接入自动富集链路（当前零自动）；引入多源逐字段交叉验证（一致性加权 + 冲突挂人工复核）；豆瓣由「单独 auto 写权威字段」退为「补空 + 投票源」。
 - **范围**：`apps/api`（`MetadataEnrichService` 编排 / `TmdbConfirmService` **新建 auto 专用方法**〔非参数化 confirm〕 / `enrichmentWorker` 新 Step / `MediaCatalogService.CATALOG_SOURCE_PRIORITY` **仅 META-49 cutover 修改**〔46-B 不碰，见复核补订〕 / **新增字段级 proposal·conflict 载体**〔provenance 现表不支撑，见审核修订 P1〕）+ migration（字段级冲突载体，由 ADR 定形）+ `apps/server-next`（审核台冲突复核呈现，归末卡）。**不动**播放器/前台/搜索。
 - **依赖**：SEQ-20260615-01 ✅（标量/枚举治理稳定后再动编排与优先级）。
@@ -2683,8 +2683,9 @@
    - **🔴 复核补订**：**严禁修改现有 `MediaCatalogService.CATALOG_SOURCE_PRIORITY`**——该常量由 `safeUpdate` 行级消费（MediaCatalogService.ts:345），改它即改运行时写行为，与「准备态」矛盾。`CATALOG_SOURCE_PRIORITY` 的任何下调归 **META-49 cutover**（reconcile 上线一并切）。本卡 shadow 常量仅供未来 reconcile 读取，不接入 safeUpdate。
    - **⚠️ arch-reviewer 重估（M5）**：douban 数值 3 已 < tmdb/bangumi 4，D-用户-3「数值低于」现状已满足；主循环裁定降级=reconcile 层语义（不单独写非空权威字段）而非改活表数值 → **本卡 shadow 常量大概率无实际内容，待 ADR 定稿后大概率并入 META-49-D 取消本卡**。最终去留由 META-46-A ADR 裁定。
 
-3. **META-47** — TMDB 自动候选打分 + **auto 专用方法**（lib + service，不接 worker）（🟡 中）（状态：⬜ 规划中，依 ADR）
+3. **META-47** — TMDB 自动候选打分 + **auto 专用方法**（lib + service，不接 worker）（🟡 中）（状态：✅ 已完成 2026-06-15，主循环 opus）
    - 新 `pickBestTmdbCandidate`（仿 douban `pickBestCandidate` title/year 相似度）+ `TmdbConfirmService` **新建 auto 专用方法**（**非参数化 confirm**，审核 P2）：candidate/auto_matched 区分 + 置信度来自打分 + 冲突降级 + 字段 apply 策略；`linkedBy:'auto'`（区别于现硬编码 moderator/manual_confirmed/confidence:1）。**tmdb_id cache 写入受 reconcile/refs 成功结果约束，不得无条件写**（区别于 confirm:259）。
+   - **完成备注**：① **lib 下沉** `apps/api/src/lib/textMatch.ts`（`similarity`/`normalizeForMatch`/`parseYear` 从 `DoubanService.utils` 迁出，后者 import+re-export 零行为变化，避免 tmdb→douban 坏依赖）。② **打分** `tmdbCandidateScore`+`pickBestTmdbCandidate`（title/originalTitle max 相似度 + year ±0/±1 加权 + 0.45 兜底，复用 textMatch）+ 阈值 `CONFIDENCE_AUTO_MATCH=0.85`/`CANDIDATE=0.6`。③ **`autoMatch(videoId,catalogId,{title,year,mediaType,seasonNumber?})`**：search→pickBest→分档单事务——`<0.6` 不写 / `[0.6,0.85)` candidate 仅绑（不拉 detail/不应用字段）/ `≥0.85` auto_matched（movie·season exact ref · show candidate ref，`source/linkedBy:'auto'`，exact 冲突 ROLLBACK 不写 cache = **受 refs 成功约束** 区别 confirm:259）+ `buildCatalogFields` 复用 + `tmdbId`/`imdbId` 经 `safeUpdate(...,'tmdb')` fill-if-empty + type 走 ADR-203 `resolveTypeSignal`；video ref `matchStatus:tier`/`confidence:score`/`linkedBy:'auto'`；凭证缺失·限流·网络 graceful skip（返 matched:false 不抛）。④ **M4 白名单解耦** `MediaCatalogService.EXTERNAL_REF_FIELD_KEYS` = 2 字段 + tmdbId/imdbId superset（cache→ref 自动写仍仅 douban/bangumi）。**⚠️ 偏离登记（M4「补 tmdb 映射」）**：不给 `EXTERNAL_KIND_BY_PROVIDER` 加 tmdb 固定 kind——该常量仅 MediaCatalogService:427 cache→ref 路径消费而 tmdb 不在其中，且 kind 数据形态判定 movie/season/show（confirm:213 + catalogExternalRefs:23-28「不提供默认值防误用」），加固定 kind 会误判 TV；M4 实质=白名单解耦（已做），tmdb ref 由 autoMatch 显式写正确 kind。**测试偏离**：autoMatch+打分单测并入既有 `tmdb-confirm-service.test.ts`（复用 40 行 mock 基建 DRY，非另建 tmdb-auto-match.test.ts）。门禁全绿：typecheck 7ws / lint 4ok / test:changed 59 文件 880 passed（douban·bangumi·enrich 22 文件 287 零回归 + 新单测 textMatch 11 + tmdb-confirm 41〔含 autoMatch 8 + pickBest 6〕 + safeUpdate ⑨⑩⑪⑫ tmdb/imdb fill-if-empty 4）/ verify:adr-contracts REAL_EXIT=0（无新端点）；e2e N/A（纯 service/lib，同 META-38）。执行模型 claude-opus-4-8；子代理无（无 admin-ui 共享 Props / 无 schema·migration / 实施 Opus-reviewed ADR-205 蓝图，M4 偏离有 file:line 证据，无强制升 Opus 触发）。详见 changelog [META-47]。**解锁 META-48（worker 接入 TMDB Step）。**
 
 4. **META-48** — enrich worker 接入 TMDB Step（全类型并行）+ 凭证/限流/去重守卫（🟡 中）（状态：⬜ 规划中，依 META-47）
    - `MetadataEnrichService` 新增 TMDB Step（全类型，D-用户-1）+ `enrichmentWorker` 触发埋点；TMDB 实时 API 凭证缺失/限流降级守卫。

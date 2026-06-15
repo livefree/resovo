@@ -25,9 +25,19 @@ import { MediaCatalogService } from '@/api/services/MediaCatalogService'
 import { findCatalogById } from '@/api/db/queries/mediaCatalog'
 import type { CatalogUpdateData } from '@/api/db/queries/mediaCatalog'
 import { baseLogger } from '@/api/lib/logger'
+import { similarity, normalizeForMatch, parseYear } from '@/api/lib/textMatch'
 
 /** search 候选预览缩略图 base（base+w500；与 confirm 富图片应用的 configuration base 不同关注点，META-43）。 */
 const TMDB_PREVIEW_IMAGE_BASE = 'https://image.tmdb.org/t/p/w500'
+
+/**
+ * auto 匹配置信度阈值（META-47，复用 MetadataEnrichService douban 同款语义）：
+ *   score ≥ AUTO_MATCH → auto_matched（写 catalog 字段 + cache）；
+ *   [CANDIDATE, AUTO_MATCH) → candidate（仅写 refs，不应用字段）；
+ *   < CANDIDATE → 丢弃不写。
+ */
+const CONFIDENCE_AUTO_MATCH = 0.85
+const CONFIDENCE_CANDIDATE = 0.6
 
 /** confirm 富图片应用 size token（per kind；base 来自 getImageBaseUrl configuration 缓存，META-43）。 */
 const IMAGE_SIZE = { poster: 'w500', backdrop: 'w1280', logo: 'w500' } as const
@@ -59,6 +69,15 @@ export type TmdbConfirmResult =
   | { updated: true; applied: string[] }
   | { updated: false; reason: string; holderCatalogId?: string }
 
+/** auto 匹配结果（META-47）：成功分两档（auto_matched 写字段 / candidate 仅绑）；失败带原因。 */
+export type TmdbAutoMatchResult =
+  | { matched: true; tier: 'auto_matched' | 'candidate'; tmdbId: number; confidence: number; applied: string[] }
+  | {
+      matched: false
+      reason: 'no_credentials' | 'no_candidate' | 'tmdb_unavailable' | 'tmdb_exact_conflict' | 'tmdb_kind_conflict'
+      holderCatalogId?: string
+    }
+
 function toCandidate(item: TmdbMovieSearchItem | TmdbTvSearchItem, mediaType: TmdbMediaType): TmdbCandidate {
   const isMovie = mediaType === 'movie'
   const date = isMovie ? (item as TmdbMovieSearchItem).release_date : (item as TmdbTvSearchItem).first_air_date
@@ -72,6 +91,43 @@ function toCandidate(item: TmdbMovieSearchItem | TmdbTvSearchItem, mediaType: Tm
     overview: item.overview,
     posterUrl: item.poster_path ? `${TMDB_PREVIEW_IMAGE_BASE}${item.poster_path}` : null,
   }
+}
+
+/**
+ * TMDB 候选打分（META-47，仿 douban candidateScore）：title 与 originalTitle 取 max 归一相似度，
+ * 再按年份匹配加权（同年 +0.2 / 相邻年 +0.1，封顶 1）。目标/候选年份任一缺失则仅用标题分。
+ */
+function tmdbCandidateScore(targetTitle: string, targetYear: number | null, cand: TmdbCandidate): number {
+  const titleScore = similarity(normalizeForMatch(targetTitle), normalizeForMatch(cand.title))
+  const origScore = similarity(normalizeForMatch(targetTitle), normalizeForMatch(cand.originalTitle))
+  const baseScore = Math.max(titleScore, origScore)
+
+  const candYear = parseYear(cand.year)
+  if (targetYear == null || candYear == null) return baseScore
+  if (targetYear === candYear) return Math.min(1, baseScore + 0.2)
+  if (Math.abs(targetYear - candYear) === 1) return Math.min(1, baseScore + 0.1)
+  return baseScore
+}
+
+/**
+ * 从候选列表选最佳（META-47，仿 douban pickBestCandidate）：取最高分，≥0.45 兜底阈值才返回
+ * （过严会漏召回，由 detail + 上层置信度分档再兜底）。返回最佳候选与其分数，无合格候选返 null。
+ */
+export function pickBestTmdbCandidate(
+  targetTitle: string,
+  targetYear: number | null,
+  candidates: TmdbCandidate[],
+): { candidate: TmdbCandidate; score: number } | null {
+  let best: TmdbCandidate | null = null
+  let bestScore = 0
+  for (const cand of candidates) {
+    const score = tmdbCandidateScore(targetTitle, targetYear, cand)
+    if (score > bestScore) {
+      bestScore = score
+      best = cand
+    }
+  }
+  return best && bestScore >= 0.45 ? { candidate: best, score: bestScore } : null
 }
 
 /**
@@ -266,6 +322,119 @@ export class TmdbConfirmService {
 
       await client.query('COMMIT')
       return { updated: true, applied }
+    } catch (err) {
+      try { await client.query('ROLLBACK') } catch { /* connection may already be lost */ }
+      throw err
+    } finally {
+      client.release()
+    }
+  }
+
+  /**
+   * auto 富集匹配（META-47 / ADR-205 D-205-7）——**非参数化 confirm**，供 worker（META-48）调用。
+   *
+   * 区别于 confirm：source/linkedBy='auto'、置信度来自打分（非 1）、按分档（auto_matched 写字段 /
+   * candidate 仅绑）、tmdb_id cache 经 safeUpdate 受 ref 成功约束（非 confirm:259 无条件写）。
+   * 凭证缺失/限流/网络失败 → graceful skip（返 matched:false，不抛）。
+   */
+  async autoMatch(
+    videoId: string,
+    catalogId: string,
+    params: { title: string; year?: number | null; mediaType: TmdbMediaType; seasonNumber?: number },
+  ): Promise<TmdbAutoMatchResult> {
+    const { mediaType, seasonNumber } = params
+    const title = params.title?.trim()
+    if (!title) return { matched: false, reason: 'no_candidate' }
+    const targetYear = params.year ?? null
+
+    // ── Phase 0：凭证 + 检索 + （auto_matched 档）detail，全在 REST（事务外）。失败 graceful skip ──
+    let tmdbId: number
+    let score: number
+    let detail: TmdbMovieDetail | TmdbTvDetail | null = null
+    let imageBase = TMDB_IMAGE_BASE_FALLBACK
+    try {
+      const cfg = await loadTmdbClientConfig(this.db)
+      if (!cfg.readAccessToken && !cfg.apiKey) return { matched: false, reason: 'no_credentials' }
+
+      const opts = { language: 'zh-CN', year: targetYear ?? undefined }
+      const candidates =
+        mediaType === 'movie'
+          ? (await searchMovie(title, opts, cfg, 'enrich_worker')).results.map((r) => toCandidate(r, 'movie'))
+          : (await searchTv(title, opts, cfg, 'enrich_worker')).results.map((r) => toCandidate(r, 'tv'))
+      const best = pickBestTmdbCandidate(title, targetYear, candidates)
+      if (!best || best.score < CONFIDENCE_CANDIDATE) return { matched: false, reason: 'no_candidate' }
+      tmdbId = best.candidate.tmdbId
+      score = best.score
+
+      // 仅 auto_matched 档才拉 detail + 应用字段；candidate 档仅绑 ref（省一次 detail 请求）
+      if (score >= CONFIDENCE_AUTO_MATCH) {
+        detail =
+          mediaType === 'movie'
+            ? await getMovieDetail(tmdbId, { language: 'zh-CN', append: ['external_ids', 'images'] }, cfg, 'enrich_worker')
+            : await getTvDetail(tmdbId, { language: 'zh-CN', append: ['external_ids', 'images'] }, cfg, 'enrich_worker')
+        if (!detail) return { matched: false, reason: 'no_candidate' }
+        imageBase = await getImageBaseUrl(cfg, 'enrich_worker')
+      }
+    } catch {
+      // 凭证错误 / 429 退避耗尽 / 网络 → 不写、不抛，等下次 worker 重试
+      return { matched: false, reason: 'tmdb_unavailable' }
+    }
+
+    const tier: 'auto_matched' | 'candidate' = detail ? 'auto_matched' : 'candidate'
+    const externalKind: ExternalRefKind = mediaType === 'movie' ? 'movie' : seasonNumber != null ? 'season' : 'show'
+
+    // auto_matched：构造应用字段（事务外预读 type 信号，复用 confirm 的 ADR-203 逻辑）
+    const updateFields: CatalogUpdateData = {}
+    if (detail) {
+      Object.assign(updateFields, buildCatalogFields(detail, mediaType, TMDB_APPLIABLE_FIELDS, imageBase))
+      updateFields.tmdbId = tmdbId // 经 safeUpdate fill-if-empty 白名单（M4），受下方 ref 成功约束
+      const imdbId = detail.external_ids?.imdb_id ?? null
+      if (imdbId) updateFields.imdbId = imdbId
+      const currentCatalog = await findCatalogById(this.db, catalogId)
+      if (currentCatalog) {
+        const outcome = resolveTypeSignal(currentCatalog.type, tmdbTypeSignal(mediaType, detail.genres.map((g) => g.id)))
+        if (outcome.typeToWrite) updateFields.type = outcome.typeToWrite
+        else if (outcome.conflict) {
+          baseLogger.child({ module: 'catalog-type-signal' }).info(
+            { outcome: 'type_conflict_skipped', catalogId, provider: 'tmdb', externalId: String(tmdbId), ...outcome.conflict },
+            'tmdb auto type signal conflict with existing concrete type, skipped (ADR-203 D-203-5)',
+          )
+        }
+      }
+    }
+
+    // ── Phase 2：DB 写入单事务（ref → 字段/cache → video ref）──
+    const client = await this.db.connect()
+    try {
+      await client.query('BEGIN')
+
+      if (tier === 'auto_matched' && (externalKind === 'movie' || externalKind === 'season')) {
+        // 精确级 exact：冲突 = 归并信号 → ROLLBACK 不写 cache（D-205-7「受 refs 成功约束」）
+        const ref = await resolveAndWriteExactRef(client, {
+          catalogId, provider: 'tmdb', externalId: String(tmdbId), externalKind,
+          source: 'auto', linkedBy: 'auto', seasonNumber: externalKind === 'season' ? seasonNumber : null,
+        })
+        if (ref.outcome === 'conflict_candidate') { await client.query('ROLLBACK'); return { matched: false, reason: 'tmdb_exact_conflict', holderCatalogId: ref.holderCatalogId } }
+        if (ref.outcome === 'kind_conflict') { await client.query('ROLLBACK'); return { matched: false, reason: 'tmdb_kind_conflict' } }
+      } else {
+        // candidate 档（任意 kind）或 auto_matched tv-show-root（D-202-1 never exact）→ candidate ref
+        await insertCandidateRef(client, { catalogId, provider: 'tmdb', externalId: String(tmdbId), externalKind, source: 'auto', linkedBy: 'auto' })
+      }
+
+      let applied: string[] = []
+      if (tier === 'auto_matched' && Object.keys(updateFields).length > 0) {
+        const catalogService = new MediaCatalogService(this.db)
+        const { skippedFields } = await catalogService.safeUpdate(catalogId, updateFields, 'tmdb', { sourceRef: String(tmdbId), db: client })
+        applied = Object.keys(updateFields).filter((k) => !skippedFields.includes(k))
+      }
+
+      await upsertVideoExternalRef(client, {
+        videoId, provider: 'tmdb', externalId: String(tmdbId),
+        matchStatus: tier, matchMethod: 'auto', confidence: score, isPrimary: tier === 'auto_matched', linkedBy: 'auto',
+      })
+
+      await client.query('COMMIT')
+      return { matched: true, tier, tmdbId, confidence: score, applied }
     } catch (err) {
       try { await client.query('ROLLBACK') } catch { /* connection may already be lost */ }
       throw err

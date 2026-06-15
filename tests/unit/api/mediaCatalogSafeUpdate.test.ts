@@ -51,6 +51,8 @@ function makeCatalog(
     metadataSource: string
     doubanId: string | null
     bangumiSubjectId: number | null
+    tmdbId: number | null
+    imdbId: string | null
   }> = {},
 ) {
   return {
@@ -64,6 +66,9 @@ function makeCatalog(
     // ADR-186 fill-if-empty 判定读 current 外部 ID cache 列（默认 NULL = 可填充）
     doubanId: overrides.doubanId ?? null,
     bangumiSubjectId: overrides.bangumiSubjectId ?? null,
+    // META-47 D-205-7 M4：tmdb/imdb 纳入 fill-if-empty 白名单
+    tmdbId: overrides.tmdbId ?? null,
+    imdbId: overrides.imdbId ?? null,
   } as unknown as Awaited<ReturnType<typeof catalogQueries.findCatalogById>>
 }
 
@@ -530,5 +535,61 @@ describe('safeUpdate — ADR-186 fill-if-empty 外部 ID（低优先级补空缺
 
     const written = vi.mocked(catalogQueries.updateCatalogFields).mock.calls[0]![2] as Record<string, unknown>
     expect(written).toHaveProperty('metadataSource', 'douban')
+  })
+
+  // ── META-47（D-205-7 M4）：tmdb/imdb 纳入 fill-if-empty 白名单（与 cache→ref 自动写解耦）──
+
+  it('⑨ tmdb：低优先级 + tmdbId 当前 NULL → fill 写 cache，但不触发 cache→ref（tmdb 不在 CATALOG_EXTERNAL_REF_FIELDS）', async () => {
+    vi.mocked(catalogQueries.findCatalogById).mockResolvedValue(
+      makeCatalog({ metadataSource: 'manual', tmdbId: null }) as never,
+    )
+    const svc = new MediaCatalogService(mockDb)
+    const result = await svc.safeUpdate('cat-1', { tmdbId: 555 } as never, 'tmdb')
+
+    expect(result.skippedFields).toEqual([]) // 白名单放行（无此白名单则 tmdbId 会被当内容字段 skip）
+    const written = vi.mocked(catalogQueries.updateCatalogFields).mock.calls[0]![2] as Record<string, unknown>
+    expect(written).toHaveProperty('tmdbId', 555)
+    expect(written).not.toHaveProperty('metadataSource') // fill 不降级（D-186-3）
+    // 解耦实证：tmdb 不进通用 cache→ref 路径（ref 由 autoMatch 按数据形态显式写正确 kind）
+    expect(externalRefQueries.resolveAndWriteExactRef).not.toHaveBeenCalled()
+  })
+
+  it('⑩ imdb：低优先级 + imdbId 当前 NULL → fill 写 cache（cache-only，无 ref）', async () => {
+    vi.mocked(catalogQueries.findCatalogById).mockResolvedValue(
+      makeCatalog({ metadataSource: 'manual', imdbId: null }) as never,
+    )
+    const svc = new MediaCatalogService(mockDb)
+    const result = await svc.safeUpdate('cat-1', { imdbId: 'tt0245429' } as never, 'tmdb')
+
+    expect(result.skippedFields).toEqual([])
+    const written = vi.mocked(catalogQueries.updateCatalogFields).mock.calls[0]![2] as Record<string, unknown>
+    expect(written).toHaveProperty('imdbId', 'tt0245429')
+    expect(externalRefQueries.resolveAndWriteExactRef).not.toHaveBeenCalled()
+  })
+
+  it('⑪ tmdbId 当前非 NULL → 不 fill（低优先级保护，skippedFields 含 tmdbId）', async () => {
+    vi.mocked(catalogQueries.findCatalogById).mockResolvedValue(
+      makeCatalog({ metadataSource: 'manual', tmdbId: 100 }) as never,
+    )
+    const svc = new MediaCatalogService(mockDb)
+    const result = await svc.safeUpdate('cat-1', { tmdbId: 999 } as never, 'tmdb')
+
+    expect(result.skippedFields).toEqual(['tmdbId'])
+    expect(catalogQueries.updateCatalogFields).not.toHaveBeenCalled()
+  })
+
+  it('⑫ tmdb fill + 内容字段混批 → 仅 tmdbId 写入，内容 skip，metadata_source 不降级', async () => {
+    vi.mocked(catalogQueries.findCatalogById).mockResolvedValue(
+      makeCatalog({ metadataSource: 'manual', tmdbId: null }) as never,
+    )
+    const svc = new MediaCatalogService(mockDb)
+    const result = await svc.safeUpdate('cat-1', { tmdbId: 555, rating: 9.9 } as never, 'tmdb')
+
+    expect(result.skippedFields).toContain('rating')
+    expect(result.skippedFields).not.toContain('tmdbId')
+    const written = vi.mocked(catalogQueries.updateCatalogFields).mock.calls[0]![2] as Record<string, unknown>
+    expect(written).toHaveProperty('tmdbId', 555)
+    expect(written).not.toHaveProperty('rating')
+    expect(written).not.toHaveProperty('metadataSource')
   })
 })

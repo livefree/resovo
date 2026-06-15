@@ -5,6 +5,11 @@
 
 import { searchDouban } from '@/api/lib/douban'
 import type { MediaCatalogRow } from '@/api/db/queries/mediaCatalog'
+import { similarity, normalizeForMatch, parseYear } from '@/api/lib/textMatch'
+
+// 通用文本/年份相似度工具已下沉至 lib/textMatch（META-47）；此处 re-export 保留既有
+// import 路径（DoubanService.ts 等消费方零改动），candidateScore 内部继续引用。
+export { similarity, normalizeForMatch, parseYear }
 
 // ── 内部私有类型 ──────────────────────────────────────────────────
 
@@ -19,42 +24,6 @@ export interface CandidateProposed {
   cast: string[]
   genres: string[]
   country: string | null
-}
-
-// ── 字符串相似度（简易 Jaccard 字符二元组） ──────────────────────
-
-export function similarity(a: string, b: string): number {
-  if (!a || !b) return 0
-  const normalize = (s: string) => s.toLowerCase().replace(/\s+/g, '')
-  const na = normalize(a)
-  const nb = normalize(b)
-  if (na === nb) return 1
-
-  const bigrams = (s: string) => {
-    const set = new Set<string>()
-    for (let i = 0; i < s.length - 1; i++) set.add(s.slice(i, i + 2))
-    return set
-  }
-  const sa = bigrams(na)
-  const sb = bigrams(nb)
-  let intersection = 0
-  for (const g of sa) if (sb.has(g)) intersection++
-  return (2 * intersection) / (sa.size + sb.size)
-}
-
-export function normalizeForMatch(input: string): string {
-  return input
-    .toLowerCase()
-    .replace(/[（(][^）)]*[）)]/g, '')
-    .replace(/[^\p{L}\p{N}]/gu, '')
-}
-
-export function parseYear(value: string | number | null | undefined): number | null {
-  if (value == null) return null
-  const match = String(value).match(/\d{4}/)
-  if (!match) return null
-  const year = Number.parseInt(match[0], 10)
-  return Number.isFinite(year) ? year : null
 }
 
 type Candidate = Awaited<ReturnType<typeof searchDouban>>[number]

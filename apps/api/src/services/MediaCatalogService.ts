@@ -37,12 +37,17 @@ const CATALOG_EXTERNAL_REF_FIELDS: ReadonlyArray<{
   { field: 'doubanId', provider: 'douban' },
 ]
 
-// ADR-186 D-186-2：fill-if-empty 判定用——外部 ID cache 列键集（优先级闸门放行白名单，
-// 与上方 CATALOG_EXTERNAL_REF_FIELDS 单一真源派生）。imdb/tmdb 当前零自动写入方不纳入
-// （D-186-1 follow-up：接入自动写入时随 EXTERNAL_KIND_BY_PROVIDER 同步扩面）。
-const EXTERNAL_REF_FIELD_KEYS = new Set<string>(
-  CATALOG_EXTERNAL_REF_FIELDS.map((f) => f.field as string),
-)
+// ADR-186 D-186-2：fill-if-empty 判定用——外部 ID cache 列键集（优先级闸门放行白名单）。
+// META-47（D-205-7 M4）：TMDB auto 接入后 tmdb_id/imdb_id 有了自动写入方（TmdbConfirmService.autoMatch
+// 经 safeUpdate 写这两列），故纳入 fill-if-empty 白名单，兑现 ADR-186 D-186-1 自留 follow-up。
+// **与 CATALOG_EXTERNAL_REF_FIELDS 解耦**：后者是「cache→ref 自动写」映射，仍仅 douban/bangumi
+// （tmdb ref 由 autoMatch 按数据形态显式写正确 kind movie/season/show，不进此通用 cache→ref 路径；
+// imdb 为 cache-only 无 ref，ADR-202 M4）；白名单是「fill-if-empty 可填列」超集，二者职责不同。
+const EXTERNAL_REF_FIELD_KEYS = new Set<string>([
+  ...CATALOG_EXTERNAL_REF_FIELDS.map((f) => f.field as string),
+  'tmdbId',
+  'imdbId',
+])
 
 // ── 元数据来源优先级 ──────────────────────────────────────────────
 

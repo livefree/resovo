@@ -6088,3 +6088,28 @@
 - **涉及文件**：`docs/decisions.md`（+ADR-205）/ `docs/task-queue.md`（SEQ-20260615-02 吸收 M1–M6 + META-49 拆 -A~D + META-46-B 取消）。docs-only。
 - **质量门禁**：verify:adr-contracts EXIT=0（verify-endpoint-adr 243 admin 路由全对齐，ADR-205 docs-only 无新端点；D-205-* 待实施卡闭环 / error-message·enum-ssot 既有 advisory）。docs-only → typecheck/lint/test:changed 自动跳过。
 - **[AI-CHECK]**：六问过——①根因=sequential-write 无 proposal 汇聚 → gather-reconcile + 新表载体；②零回归（docs-only）；③边界=仅 ADR 不写代码、不动写路径/优先级/worker（ADR PASS 前禁止）；④复用=reconcile 经 safeUpdate 复用优先级/锁/provenance/refs 写侧、trust 派生 CATALOG_SOURCE_PRIORITY 单真源、proposals 表正交 refs；⑤决策守 ADR-186/177/202/203/174 不变量 + CLAUDE.md 分层 + schema 同步 architecture.md（M5）；⑥范围=ADR-205 + task-queue 拆卡细化，docs-only。**arch-reviewer 纠 strawman 三处遗漏（JOIN_SQL 镜像 / redirect 时序 / tmdb 纳 fill-if-empty）。SEQ-20260615-02 META-46-A 收口，解锁 META-47（TMDB auto 专用方法）。**
+
+## [META-47] TMDB 自动候选打分 + auto 专用方法（lib + service，不接 worker）（SEQ-20260615-02 第 3 卡）— 2026-06-15
+
+**类型**：feat（apps/api service+lib）｜**优先级**：🟡 中｜**执行模型**：claude-opus-4-8（主循环，建议 sonnet，opus 会话覆盖连续推进沿 META-38/34 先例）｜**子代理**：无
+
+- **问题**：ADR-205 D-205-7/D-205-9 落地第 1 步——需可被 worker（META-48）调用的 TMDB auto 专用方法 + douban 风格候选打分器。`confirm` 为 manual 语义（硬编码 `source:'manual'`/`linkedBy:'moderator'`/`confidence:1` + `:259` 无条件写 tmdb_id cache）不可复用于 auto（审核 P2）；douban 相似度工具锁在 service 模块不可被 tmdb 干净复用。
+- **方案**：
+  - **lib 下沉**：新建 `apps/api/src/lib/textMatch.ts`（`similarity` bigram Jaccard / `normalizeForMatch` 去括号+仅 alnum / `parseYear`），从 `DoubanService.utils.ts` 迁出（后者 import + re-export，DoubanService.ts 既有 import 路径 + `candidateScore` 内部引用零破坏）。避免 tmdb→douban 坏依赖方向 + 不重复实现（CLAUDE.md 价值排序 #2）。
+  - **打分**：`TmdbConfirmService.ts` 内 `tmdbCandidateScore`（title/originalTitle 取 max 归一相似度 + year 同年 +0.2/相邻 +0.1 封顶）+ `pickBestTmdbCandidate`（取最高分 ≥0.45 兜底，仿 douban `pickBestCandidate`）+ 阈值 `CONFIDENCE_AUTO_MATCH=0.85`/`CONFIDENCE_CANDIDATE=0.6`（复用 MetadataEnrichService 同款语义）。
+  - **auto 专用方法** `autoMatch(videoId, catalogId, {title, year, mediaType, seasonNumber?})`：search→pickBest→分档单事务——`<0.6` 不写返 `{matched:false}` / `[0.6,0.85)` **candidate 档**（仅 `insertCandidateRef` + video ref `candidate`，不拉 detail/不应用字段，仿 douban）/ `≥0.85` **auto_matched 档**（movie·season → `resolveAndWriteExactRef`、show → `insertCandidateRef`，`source/linkedBy:'auto'`；exact 冲突 ROLLBACK 不写 cache = **受 refs 成功约束** 区别 confirm:259）+ `buildCatalogFields` 复用 + `tmdbId`/`imdbId` 经 `safeUpdate(...,'tmdb',{db:client})` 单事务（M4 fill-if-empty）+ type 走 ADR-203 `resolveTypeSignal`；video ref `matchStatus:tier`/`confidence:score`/`isPrimary:tier==='auto_matched'`/`matchMethod:'auto'`/`linkedBy:'auto'`；凭证缺失（无 token/key）→ `no_credentials` 不调 search、限流/网络抛错 → `tmdb_unavailable`，均 graceful skip 不抛。
+  - **M4 白名单解耦**：`MediaCatalogService.EXTERNAL_REF_FIELD_KEYS` 从「`CATALOG_EXTERNAL_REF_FIELDS` 派生」改为「2 字段 + `tmdbId`/`imdbId`」superset（cache→ref 自动写仍仅 douban/bangumi；tmdb ref 由 autoMatch 显式写、imdb cache-only），兑现 ADR-186 D-186-1 follow-up。
+- **⚠️ 偏离登记（M4 / D-205-7「补 tmdb 映射」）**：**不**给 `EXTERNAL_KIND_BY_PROVIDER` 加 tmdb 固定 kind。证据：该常量仅 `MediaCatalogService.ts:427` cache→ref 路径消费而 tmdb 不在 `CATALOG_EXTERNAL_REF_FIELDS`，且 tmdb kind 数据形态判定 movie/season/show（`TmdbConfirmService.ts:213` + `catalogExternalRefs.ts:23-28`「不提供默认值防误用」）→ 加固定会误判 TV。M4 实质=白名单解耦（已做）。**测试偏离**：autoMatch+打分单测并入既有 `tmdb-confirm-service.test.ts`（复用 40 行 mock 基建 DRY，非另建 tmdb-auto-match.test.ts）。
+- **修改文件**：
+  - `apps/api/src/lib/textMatch.ts` — 新建通用文本/年份相似度工具（3 函数下沉）
+  - `apps/api/src/services/DoubanService.utils.ts` — 改 import + re-export textMatch（零行为变化）
+  - `apps/api/src/services/TmdbConfirmService.ts` — 新增 `tmdbCandidateScore`/`pickBestTmdbCandidate`/`autoMatch`/`TmdbAutoMatchResult` + 阈值常量
+  - `apps/api/src/services/MediaCatalogService.ts` — `EXTERNAL_REF_FIELD_KEYS` 解耦纳 tmdbId/imdbId
+  - `tests/unit/api/textMatch.test.ts` — 新建（similarity/normalize/parseYear 11 测试）
+  - `tests/unit/api/tmdb-confirm-service.test.ts` — 追加 `pickBestTmdbCandidate`（6）+ `autoMatch`（8）测试
+  - `tests/unit/api/mediaCatalogSafeUpdate.test.ts` — `makeCatalog` 扩 tmdbId/imdbId + 补 fill-if-empty ⑨⑩⑪⑫（4）
+- **新增依赖**：无
+- **数据库变更**：无（proposals 表归 META-49-A；本卡仅服务层逻辑）
+- **质量门禁**：typecheck 7 workspace 全过 / lint 4 successful（仅既有 web-next warning）/ test:changed 59 文件 880 passed（douban·bangumi·enrich 22 文件 287 零回归 + 新单测 textMatch 11 + tmdb-confirm 41〔含 autoMatch 8 + pickBest 6〕 + safeUpdate tmdb/imdb fill 4）/ verify:adr-contracts REAL_EXIT=0（无新端点，仅既有 enum-ssot·error-message advisory）；e2e N/A（纯 service/lib 无 UI/route，同 META-38 先例）。
+- **注意事项**：autoMatch **未接 worker**（META-48 接 enrichmentWorker/MetadataEnrichService TMDB Step + 触发埋点）；当前架构下 autoMatch 是 sequential-write（直写 catalog，由 safeUpdate 优先级闸门守），META-49-B reconcile 上线后各源（含 tmdb）统一改产 proposal（D-205-1）。`tmdbId`/`imdbId` 经 safeUpdate fill-if-empty：低优先级写仅填空（NULL）、同/更高优先级正常写。
+- **[AI-CHECK]**：六问过——①根因=confirm manual 语义不可复用 + 相似度工具坏依赖 → auto 专用方法 + lib 下沉；②零回归（douban/bangumi/enrich 287 + test:changed 880 全绿）；③边界=Service/lib 层不越层、不接 worker（48）、不建 migration（49-A）、不改 confirm/CATALOG_SOURCE_PRIORITY/EXTERNAL_KIND_BY_PROVIDER；④复用=textMatch 下沉中立 lib 双源共用、autoMatch 复用 buildCatalogFields/resolveTypeSignal/写侧原语/safeUpdate；⑤守 ADR-186 fill-if-empty（白名单解耦不破 cache→ref）/ ADR-177 ref 真源（tmdb 显式写正确 kind）/ ADR-202 confirm 零改 / ADR-203 type 专属路径；⑥范围=4 源文件 + 3 测试文件，无 admin-ui Props / 无 schema。**偏离 2 处均有 file:line 证据**（EXTERNAL_KIND_BY_PROVIDER 不加 tmdb / 测试并入）。解锁 META-48。

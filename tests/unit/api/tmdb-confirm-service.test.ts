@@ -8,7 +8,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type { Pool } from 'pg'
-import { TmdbConfirmService } from '@/api/services/TmdbConfirmService'
+import { TmdbConfirmService, pickBestTmdbCandidate, type TmdbCandidate } from '@/api/services/TmdbConfirmService'
 import { mapTmdbGenres } from '@/api/lib/genreMapper'
 import * as tmdbLib from '@/api/lib/tmdb'
 import * as catalogRefs from '@/api/db/queries/catalogExternalRefs'
@@ -21,6 +21,7 @@ vi.mock('@/api/lib/tmdb', () => ({
   TMDB_IMAGE_BASE_FALLBACK: 'https://image.tmdb.org/t/p/',
 }))
 vi.mock('@/api/services/tmdb-config', () => ({ loadTmdbClientConfig: vi.fn(async () => ({ readAccessToken: 'x' })) }))
+import { loadTmdbClientConfig } from '@/api/services/tmdb-config'
 vi.mock('@/api/db/queries/catalogExternalRefs', () => ({ resolveAndWriteExactRef: vi.fn(), insertCandidateRef: vi.fn(async () => true) }))
 vi.mock('@/api/db/queries/externalData', () => ({ upsertVideoExternalRef: vi.fn(async () => undefined) }))
 const safeUpdateMock = vi.fn(
@@ -258,5 +259,131 @@ describe('reject', () => {
     const r = await svc.reject('vid', 129)
     expect(r).toEqual({ rejected: true })
     expect(externalData.upsertVideoExternalRef).toHaveBeenCalledWith(db, expect.objectContaining({ provider: 'tmdb', externalId: '129', matchStatus: 'rejected', isPrimary: false }))
+  })
+})
+
+// ── META-47：auto 候选打分 + auto 专用方法（ADR-205 D-205-7）──────────────
+// 打分用纯 ASCII 串精确控制 bigram Jaccard 分值：'abcdef'≡'abcdef'=1.0 / 'abcdef'~'abcdeg'=0.8（candidate
+// 档）/ 'abcdefghij'~'abcdefxyzw'≈0.556（召回但<0.60）/ 'abcdef'~'zzzzzz'=0（<0.45 不召回）。
+
+function cand(over: Partial<TmdbCandidate>): TmdbCandidate {
+  return { tmdbId: 1, mediaType: 'movie', title: '', originalTitle: '', originalLanguage: 'en', year: null, overview: '', posterUrl: null, ...over }
+}
+
+describe('pickBestTmdbCandidate', () => {
+  it('完全同名 + 同年 → score 1.0（标题 1 + 年份 +0.2 封顶）', () => {
+    const r = pickBestTmdbCandidate('abcdef', 2023, [cand({ tmdbId: 7, title: 'abcdef', originalTitle: 'abcdef', year: '2023' })])
+    expect(r).toMatchObject({ candidate: { tmdbId: 7 }, score: 1 })
+  })
+  it('多候选取最高分（abcdeg=0.8 胜出）', () => {
+    const r = pickBestTmdbCandidate('abcdef', null, [
+      cand({ tmdbId: 1, title: 'zzzzzz' }),
+      cand({ tmdbId: 2, title: 'abcdeg' }),
+      cand({ tmdbId: 3, title: 'abcxyz' }),
+    ])
+    expect(r?.candidate.tmdbId).toBe(2)
+  })
+  it('originalTitle 命中也算（title/originalTitle 取 max）', () => {
+    const r = pickBestTmdbCandidate('abcdef', null, [cand({ tmdbId: 9, title: 'zzz', originalTitle: 'abcdef' })])
+    expect(r?.score).toBe(1)
+  })
+  it('相邻年 +0.1 / 同年 +0.2（年份加权差异；base=0.8 来自 abcdef~abcdeg）', () => {
+    const same = pickBestTmdbCandidate('abcdef', 2023, [cand({ title: 'abcdeg', year: '2023' })])
+    const adj = pickBestTmdbCandidate('abcdef', 2023, [cand({ title: 'abcdeg', year: '2022' })])
+    expect(same?.score).toBeCloseTo(1.0) // 0.8 + 0.2（封顶）
+    expect(adj?.score).toBeCloseTo(0.9) // 0.8 + 0.1
+  })
+  it('最高分 < 0.45 → null（兜底阈值）', () => {
+    expect(pickBestTmdbCandidate('abcdef', null, [cand({ title: 'zzzzzz' })])).toBeNull()
+  })
+  it('空候选 → null', () => {
+    expect(pickBestTmdbCandidate('abcdef', 2023, [])).toBeNull()
+  })
+})
+
+describe('autoMatch', () => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const search = (items: any[]) => ({ page: 1, total_pages: 1, total_results: items.length, results: items })
+  const movieItem = (over: Record<string, unknown> = {}) => ({
+    id: 555, title: 'abcdef', original_title: 'abcdef', original_language: 'en', overview: 'x', release_date: '2023-01-01', poster_path: '/p.jpg', ...over,
+  })
+
+  it('auto_matched（score≥0.85）→ exact ref(auto) + safeUpdate(含 tmdbId/imdb) + video ref auto_matched + COMMIT', async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    vi.mocked(tmdbLib.searchMovie).mockResolvedValue(search([movieItem()]) as any)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    vi.mocked(tmdbLib.getMovieDetail).mockResolvedValue({ ...MOVIE, id: 555 } as any)
+    const r = await svc.autoMatch('vid', 'cat', { title: 'abcdef', year: 2023, mediaType: 'movie' })
+    expect(r).toMatchObject({ matched: true, tier: 'auto_matched', tmdbId: 555, confidence: 1 })
+    expect(catalogRefs.resolveAndWriteExactRef).toHaveBeenCalledWith(client, expect.objectContaining({ provider: 'tmdb', externalId: '555', externalKind: 'movie', source: 'auto', linkedBy: 'auto' }))
+    // M4：tmdbId/imdbId 经 safeUpdate（fill-if-empty 白名单），非裸 UPDATE（区别 confirm:259/260）
+    expect(safeUpdateMock).toHaveBeenCalledWith('cat', expect.objectContaining({ tmdbId: 555, imdbId: 'tt0245429' }), 'tmdb', expect.objectContaining({ db: client }))
+    expect(externalData.upsertVideoExternalRef).toHaveBeenCalledWith(client, expect.objectContaining({ matchStatus: 'auto_matched', matchMethod: 'auto', isPrimary: true, linkedBy: 'auto', confidence: 1 }))
+    expect(clientQuery).toHaveBeenCalledWith('COMMIT')
+  })
+
+  it('candidate（0.60≤score<0.85）→ candidate ref(auto)，不拉 detail/不应用字段，video ref candidate', async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    vi.mocked(tmdbLib.searchMovie).mockResolvedValue(search([movieItem({ title: 'abcdeg', original_title: 'abcdeg', release_date: null })]) as any)
+    const r = await svc.autoMatch('vid', 'cat', { title: 'abcdef', year: null, mediaType: 'movie' })
+    expect(r).toMatchObject({ matched: true, tier: 'candidate' })
+    expect(catalogRefs.insertCandidateRef).toHaveBeenCalledWith(client, expect.objectContaining({ provider: 'tmdb', source: 'auto', linkedBy: 'auto' }))
+    expect(catalogRefs.resolveAndWriteExactRef).not.toHaveBeenCalled()
+    expect(tmdbLib.getMovieDetail).not.toHaveBeenCalled()
+    expect(safeUpdateMock).not.toHaveBeenCalled()
+    expect(externalData.upsertVideoExternalRef).toHaveBeenCalledWith(client, expect.objectContaining({ matchStatus: 'candidate', isPrimary: false }))
+  })
+
+  it('召回但 score<0.60（≈0.556）→ no_candidate，不开事务', async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    vi.mocked(tmdbLib.searchMovie).mockResolvedValue(search([movieItem({ title: 'abcdefxyzw', original_title: 'abcdefxyzw', release_date: null })]) as any)
+    const r = await svc.autoMatch('vid', 'cat', { title: 'abcdefghij', year: null, mediaType: 'movie' })
+    expect(r).toEqual({ matched: false, reason: 'no_candidate' })
+    expect(db.connect).not.toHaveBeenCalled()
+  })
+
+  it('无合格候选（score<0.45）→ no_candidate', async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    vi.mocked(tmdbLib.searchMovie).mockResolvedValue(search([movieItem({ title: 'zzzzzz', original_title: 'zzzzzz', release_date: null })]) as any)
+    const r = await svc.autoMatch('vid', 'cat', { title: 'abcdef', year: null, mediaType: 'movie' })
+    expect(r).toEqual({ matched: false, reason: 'no_candidate' })
+  })
+
+  it('凭证缺失（无 token/key）→ no_credentials，不调 search（graceful skip）', async () => {
+    vi.mocked(loadTmdbClientConfig).mockResolvedValueOnce({})
+    const r = await svc.autoMatch('vid', 'cat', { title: 'abcdef', year: 2023, mediaType: 'movie' })
+    expect(r).toEqual({ matched: false, reason: 'no_credentials' })
+    expect(tmdbLib.searchMovie).not.toHaveBeenCalled()
+  })
+
+  it('search 抛错（限流/网络）→ tmdb_unavailable，不抛', async () => {
+    vi.mocked(tmdbLib.searchMovie).mockRejectedValue(new Error('429'))
+    const r = await svc.autoMatch('vid', 'cat', { title: 'abcdef', year: 2023, mediaType: 'movie' })
+    expect(r).toEqual({ matched: false, reason: 'tmdb_unavailable' })
+  })
+
+  it('auto_matched movie 但 exact 冲突 → ROLLBACK + tmdb_exact_conflict + holderCatalogId，不写 cache/safeUpdate', async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    vi.mocked(tmdbLib.searchMovie).mockResolvedValue(search([movieItem()]) as any)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    vi.mocked(tmdbLib.getMovieDetail).mockResolvedValue({ ...MOVIE, id: 555 } as any)
+    vi.mocked(catalogRefs.resolveAndWriteExactRef).mockResolvedValue({ outcome: 'conflict_candidate', holderCatalogId: 'other' })
+    const r = await svc.autoMatch('vid', 'cat', { title: 'abcdef', year: 2023, mediaType: 'movie' })
+    expect(r).toEqual({ matched: false, reason: 'tmdb_exact_conflict', holderCatalogId: 'other' })
+    expect(clientQuery).toHaveBeenCalledWith('ROLLBACK')
+    expect(safeUpdateMock).not.toHaveBeenCalled()
+  })
+
+  it('auto_matched tv 无 season → insertCandidateRef(show) 仍应用字段 + video ref auto_matched（D-202-1）', async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    vi.mocked(tmdbLib.searchTv).mockResolvedValue(search([{ id: 99, name: 'abcdef', original_name: 'abcdef', original_language: 'ja', overview: 'x', first_air_date: '2023-01-01', poster_path: '/p.jpg' }]) as any)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    vi.mocked(tmdbLib.getTvDetail).mockResolvedValue({ id: 99, name: 'abcdef', original_name: 'abcdef', original_language: 'ja', overview: 'x', genres: [], external_ids: {} } as any)
+    const r = await svc.autoMatch('vid', 'cat', { title: 'abcdef', year: 2023, mediaType: 'tv' })
+    expect(r).toMatchObject({ matched: true, tier: 'auto_matched' })
+    expect(catalogRefs.insertCandidateRef).toHaveBeenCalledWith(client, expect.objectContaining({ externalKind: 'show', source: 'auto' }))
+    expect(catalogRefs.resolveAndWriteExactRef).not.toHaveBeenCalled()
+    expect(safeUpdateMock).toHaveBeenCalled()
+    expect(externalData.upsertVideoExternalRef).toHaveBeenCalledWith(client, expect.objectContaining({ matchStatus: 'auto_matched', isPrimary: true }))
   })
 })
