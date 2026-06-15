@@ -2539,11 +2539,15 @@
 
 - **状态**：🟡 规划中
 - **创建时间**：2026-06-15 00:30
-- **最后更新时间**：2026-06-15 00:30
+- **最后更新时间**：2026-06-15 01:10（用户评审 B+ 后修订：范围补 server-next / META-40 收敛真源 / META-41·44 拆 -A/-B / cast 后排 / META-43 source 口径 / 逐卡门禁）
 - **目标**：修复 douban/bangumi/tmdb 三源元数据字段（类型/题材/地区/图片）与本地枚举的兼容缺口——含 1 项数据正确性 bug（实证）+ 4 项能力闲置 + 1 项设计权衡。
-- **范围**：`apps/api`（三 Service + genreMapper + 地区归一 + 图片应用）+ `packages/types`（枚举/country 归一）+ migration（存量清洗）；不动播放器/前台核心。
+- **范围**：`apps/api`（三 Service + genreMapper + 图片应用）+ `packages/types`（枚举/country 归一真源）+ migration（存量清洗）+ **`apps/server-next`（管理端 UI：TabTmdb + VE.tmdb，META-42/43 fields 多选与文案）**；不动播放器/前台核心。
 - **依赖**：META-38/39 ✅（TMDB 接入）；调查证据见本会话（DB 实证 country 污染、genreMapper/三 Service 源码核验）。
-- **优先级裁定**：🔴 META-40 / META-41（高，数据正确性 + 信息全丢）> 🟡 META-42 / META-43 / META-44（中，能力闲置）> 🟢 META-45（低，需 ADR 评估扩枚举）。
+- **优先级裁定**：🔴 META-40 / META-41-A（高，数据正确性 + 信息全丢）> 🟡 META-41-B / META-42 / META-43 / META-44（中）> 🟢 META-45（低，需 ADR 扩枚举）。
+- **门禁基线（逐卡至少）**：`typecheck` + `lint` + `test:changed`；涉 migration 卡加真库验证（清洗幂等）；涉 `TabTmdb` 卡（META-42/43）加 `test:e2e:admin`（videos.spec 编辑 Drawer 黄金路径）；ADR 卡加 `verify:adr-contracts`。
+- **后续卡登记（本序列产出，不在本期）**：
+  - **Bangumi cast 接入**（后排，独立评估）：CV 声优**不在 infobox**（`BangumiService.utils.ts:166` 明确「CV 属 /characters，不解析 cast 避免写错」），故 cast 不并入 META-41；须基于 `bangumi_characters`/getCharacters CV 数据另起卡评估写入路径与置信。
+  - **Bangumi 候选审核 UI 闭环**（缺口，正交本序列）：上一轮调查的状态机 4 缺口（bangumi 无 confirm UI/无 reject/TMDB 候选无加载入口/onAction 未接线）属审核闭环，非字段兼容，待另编序列。
 
 ### 任务列表（按严重度优先级）
 
@@ -2551,47 +2555,71 @@
    - 创建时间：2026-06-15 00:30
    - 建议模型：sonnet
    - **问题（实证）**：`media_catalog.country` 应存 ISO 3166-1 alpha-2，但 dev 库实测同列混入中文名——`CN`(2363) 与 `中国大陆`(52) 并存、`US`/`美国`(18)、`JP`/`日本`(23)、`印度`(7) 等。根因 `DoubanService.ts:121/195` `updateFields.country = detail.countries[0]` 直接写 douban 中文名（`douban_entries.country` 全中文），无 ISO 转换。`formatCountryName('美国')` 降级返回原值故显示不报错，但同国裂两值 → 视频库 distinct/筛选/分组失效（筛「美国」匹配不到「US」行）；douban 仅取 `countries[0]` 丢合拍片多地区。
-   - **方案**：① 新增 `countryNameToIso` 归一表/helper（中文名 + 英文名 → ISO alpha-2，`packages/types` 共享，供三源复用）；② douban 写入侧（DoubanService step1/2 + MetadataEnrichService）`country` 经归一后写；③ migration 存量清洗（中文名 → ISO，幂等 + 不可归一的登记）；④ 单测覆盖归一表 + 清洗脚本。
-   - **文件范围**：`packages/types/src/`（country 归一 helper）/ `apps/api/src/services/DoubanService.ts` + `MetadataEnrichService.ts`（写入侧归一）/ `apps/api/src/db/migrations/NNN_*.sql`（存量清洗）/ 单测。
-   - **依赖**：无（最高优先，且为 META-42 TMDB country 复用归一表的前置）。
+   - **方案（统一真源约束，评审 #2）**：① **不新建第二套表**——仓库已有 API-local `COUNTRY_MAP`（`SourceParserService.maps.ts:88` 中国大陆→CN…）+ `SourceLanguageResolver`（双形态规整：已 ISO 直接用、否则过 COUNTRY_MAP，且有「禁止新建映射」评审先例）。本卡把 country 归一**真源沉淀到 `packages/types`**（`countryToIso` 双形态 helper），**收敛/替换** API-local `COUNTRY_MAP` 引用，避免两套国家表。② douban 写入侧（DoubanService step1/2 + MetadataEnrichService）`country` 经归一后写。③ migration 存量清洗（中文名 → ISO，幂等 + 不可归一登记）。④ 单测 + 清洗脚本测。
+   - **裁定点（须先决）**：清洗 migration 回写存量与 **`D-199-3「不回写存量数据」**有张力——D-199-3 语境是 SourceLanguageResolver 不回溯改写既有行；本卡是修 douban 引入的 `catalog.country` 污染（定向数据修复）。开工前明确：本卡清洗是 **D-199-3 的显式例外**（定向修复非全表回溯），或独立小决策记录。
+   - **文件范围**：`packages/types/src/`（country 归一真源 helper）/ `apps/api/src/services/SourceParserService.maps.ts` + `SourceLanguageResolver.ts`（收敛引用）/ `DoubanService.ts` + `MetadataEnrichService.ts`（写入侧归一）/ `apps/api/src/db/migrations/NNN_*.sql`（存量清洗）/ 单测。
+   - **门禁**：typecheck + lint + test:changed + **migration 真库验证**（清洗幂等 + COUNTRY_MAP 收敛后既有 SourceParser/Language 测零回归）。
+   - **依赖**：无（最高优先，且为 META-41-B / META-42 复用归一真源的前置）。
 
-2. **META-41** — Bangumi 细分标签 → genre 映射 + country/cast 接入（🔴 高 / 信息全丢）（状态：⬜ 待办）
+2. **META-41-A** — Bangumi 细分标签 → genre 映射（🔴 高 / 信息全丢）（状态：⬜ 待办）
    - 创建时间：2026-06-15 00:30
    - 建议模型：opus（细分标签 → genre 映射设计需判断；bangumi tags 为开放词表）
-   - **问题（核验）**：`BangumiService.ts:430-434` 仅写 `title/titleOriginal/description/rating/coverUrl`，**零 genres/country/cast**。bangumi 富有的动漫细分标签（百合/治愈/热血/日常/校园/废萌…）+ infobox 制作信息**全部丢弃**，且无任何 `bangumi→genre` 映射表（对比 douban 40 词表 / tmdb 27 id 表）。
-   - **方案**：① 新建 `mapBangumiTags`（`genreMapper.ts`，bangumi tags/infobox 类型字段 → VideoGenre，保守映射避免开放词表噪声）；② BangumiService.applyEnrichment 字段构造补 `genres/genresRaw`（+ country 恒 JP for anime / cast 经 infobox staff 评估）；③ 单测。
-   - **文件范围**：`apps/api/src/lib/genreMapper.ts`（+mapBangumiTags）/ `apps/api/src/services/BangumiService.ts` + `BangumiService.utils.ts`（字段构造 + infobox 解析）/ 单测。
-   - **依赖**：可与 META-40 并行（country 写 JP 仍走 META-40 归一表保 ISO 一致）。
-   - **协调**：与「Bangumi 候选无审核 UI」缺口（上一轮调查缺口 1，未编卡）正交——本卡只补自动增强字段，UI 闭环另议。
+   - **问题（核验）**：`BangumiService.ts:430-434` 仅写 `title/titleOriginal/description/rating/coverUrl`，**零 genres**。bangumi 动漫细分标签（百合/治愈/热血/日常/校园/废萌…）**全部丢弃**，且无任何 `bangumi→genre` 映射表（对比 douban 40 词表 / tmdb 27 id 表）。
+   - **方案**：① 新建 `mapBangumiTags`（`genreMapper.ts`，bangumi tags → VideoGenre，**保守映射**避免开放词表噪声——仅高频可靠标签入表，未知标签静默跳过）；② BangumiService 字段构造补 `genres/genresRaw`；③ 单测。**仅 tags→genre，不含 country（归 -B）/不含 cast（后排登记）。**
+   - **文件范围**：`apps/api/src/lib/genreMapper.ts`（+mapBangumiTags）/ `apps/api/src/services/BangumiService.ts`（字段构造补 genres）/ 单测。
+   - **门禁**：typecheck + lint + test:changed。
+   - **依赖**：**可与 META-40 并行**（不碰 country）。
 
-3. **META-42** — TMDB country 应用（🟡 中 / 能力闲置）（状态：⬜ 待办）
+3. **META-41-B** — Bangumi country 写入（🟡 中）（状态：⬜ 待办，依赖 META-40）
+   - 创建时间：2026-06-15 01:10
+   - 建议模型：sonnet
+   - **问题**：bangumi 自动增强不写 country；anime 来源国通常 JP 但需走统一 ISO 真源保一致（不可再裸写）。
+   - **方案**：BangumiService 字段构造补 `country`（经 META-40 `packages/types` 归一真源写 ISO，anime 缺省 origin 评估）；单测。
+   - **文件范围**：`apps/api/src/services/BangumiService.ts` + `BangumiService.utils.ts`（infobox 来源国解析，若 infobox 无则缺省策略）/ 单测。
+   - **门禁**：typecheck + lint + test:changed。
+   - **依赖**：**META-40**（country 归一真源）。
+
+4. **META-42** — TMDB country 应用（🟡 中 / 能力闲置）（状态：⬜ 待办，依赖 META-40）
    - 创建时间：2026-06-15 00:30
    - 建议模型：sonnet
    - **问题**：TMDB `origin_country`（tv）/`production_countries`（movie）本是**干净 ISO alpha-2**（JP/US），与本地格式完美匹配，但 META-39 `TMDB_APPLIABLE_FIELDS` 未含 country → 白白不用（反而 douban 脏数据在污染）。
-   - **方案**：`TmdbConfirmService.buildCatalogFields` + `TMDB_APPLIABLE_FIELDS` 补 `country`（tv 取 origin_country[0] / movie 取 production_countries[0]，经 META-40 归一表防御性校验）；TabTmdb fields 多选 + VE 文案补一项；单测。
-   - **文件范围**：`apps/api/src/services/TmdbConfirmService.ts` / `apps/api/src/lib/tmdb.types.ts`（movie production_countries 若未定义则补）/ TabTmdb + VE.tmdb / 单测。
-   - **依赖**：META-40（复用 country 归一表，虽 TMDB 已 ISO 但统一入口）。
+   - **方案**：`TmdbConfirmService.buildCatalogFields` + `TMDB_APPLIABLE_FIELDS` 补 `country`（tv 取 origin_country[0] / movie 取 production_countries[0]，经 META-40 归一真源防御性校验）；**TabTmdb fields 多选 + VE.tmdb 文案补一项（server-next UI）**；单测。
+   - **文件范围**：`apps/api/src/services/TmdbConfirmService.ts` / `apps/api/src/lib/tmdb.types.ts`（movie production_countries 若未定义则补）/ **`apps/server-next` TabTmdb + VE.tmdb** / 单测。
+   - **门禁**：typecheck + lint + test:changed + **test:e2e:admin**（TabTmdb fields 改动，videos.spec 编辑 Drawer 黄金路径零回归）。
+   - **依赖**：**META-40**（复用 country 归一真源，统一入口）。
 
-4. **META-43** — TMDB 图片全类别接入（🟡 中 / 能力闲置）（状态：⬜ 待办）
+5. **META-43** — TMDB 图片接入（🟡 中 / 能力闲置）（状态：⬜ 待办）
    - 创建时间：2026-06-15 00:30
    - 建议模型：sonnet
-   - **问题**：本地图片体系（migration 048）有 poster(cover_url)/backdrop(backdrop_url)/**logo(logo_url)**/banner_backdrop 四类 + status/source（CHECK 已预留 `tmdb`）/blurhash/尺寸。TMDB `images` append 提供 backdrops[]/posters[]/logos[] **多语言（iso_639_1）+ 质量 vote + 尺寸**。但 META-39 仅应用 `cover_url ← detail.poster_path`（默认语言、w500、硬编码 base），**完全没用** backdrop / **logo**（`decisions.md:763` 早规划 TMDB logos→logo_url 未兑现，logo 是最难素材）/ 语言偏好（zh 海报）/ 质量 vote 选最佳 / `poster_source='tmdb'`（字段就绪）/ width·height·blurhash。
-   - **方案**：① confirm append `images`；② 图片选择 helper（按 zh-CN 语言偏好 + vote_average 排序选最佳，per kind）；③ 应用 cover_url/backdrop_url/logo_url + 写 `*_source='tmdb'` + 尺寸；④ 复用 configuration base（getConfiguration）替代硬编码；⑤ TabTmdb fields 多选补图片项 + 单测。
-   - **文件范围**：`apps/api/src/services/TmdbConfirmService.ts`（append images + 图片选择 + 多 kind 写入）/ `apps/api/src/lib/tmdb.ts`（configuration base 缓存）/ TabTmdb + VE.tmdb / 单测。
+   - **问题**：本地图片体系（migration 048）有 poster(cover_url)/backdrop(backdrop_url)/**logo(logo_url)**/banner_backdrop 四类 + status/blurhash/尺寸；**仅 poster 有 `poster_source` 列**（CHECK 含 tmdb），backdrop/logo/banner **无 source 列**（实证 048:17/24/30/37）。TMDB `images` append 提供 backdrops[]/posters[]/logos[] **多语言（iso_639_1）+ 质量 vote + 尺寸**。但 META-39 仅应用 `cover_url ← detail.poster_path`（默认语言、w500、硬编码 base），**完全没用** backdrop / **logo**（`decisions.md:763` 早规划 TMDB logos→logo_url 未兑现）/ 语言偏好（zh 海报）/ 质量 vote / 尺寸 / `poster_source`。
+   - **方案（验收口径修正，评审 #5）**：① confirm append `images`；② 图片选择 helper（按 zh-CN 语言偏好 + vote_average 排序选最佳，per kind）；③ 应用 cover_url/backdrop_url/logo_url + 尺寸/status；④ **poster 写 `posterSource='tmdb'`（字段就绪）；backdrop/logo/banner 仅写 url/status/尺寸/blurhash（无 source 列，不承诺 `*_source`）**；⑤ 复用 configuration base（getConfiguration）替代硬编码；⑥ TabTmdb fields 多选补图片项 + 单测。
+   - **边界裁定**：若产品要求 backdrop/logo 也记 source 溯源 → **升级为 schema 任务**（独立 migration 加 `backdrop_source`/`logo_source` 列 + `architecture.md` 同步），不在本卡；本卡按现有 schema 能力交付。
+   - **文件范围**：`apps/api/src/services/TmdbConfirmService.ts`（append images + 选择 + 多 kind 写入）/ `apps/api/src/lib/tmdb.ts`（configuration base 缓存）/ **`apps/server-next` TabTmdb + VE.tmdb** / 单测。
+   - **门禁**：typecheck + lint + test:changed + **test:e2e:admin**（TabTmdb fields 改动黄金路径零回归）。
    - **依赖**：无（独立于 country/genre）。
 
-5. **META-44** — VideoType 富集修正（🟡 中 / 信息丢失）（状态：⬜ 待办）
-   - 创建时间：2026-06-15 00:30
-   - 建议模型：opus（type 近 identity，误改风险高，需谨慎设计触发条件 + 可能起 ADR）
-   - **问题**：`catalog.type`（VideoType 11 种）仅爬虫入库时设定，**任何 provider 增强都不修正**（三 Service 只读 type 做匹配，从不写回）。而 provider 携带类型判别信号被丢弃：TMDB genre 16(动画)/99(纪录)/10762(儿童)/10763(新闻)/10764(真人秀→综艺)、douban 动画/纪录片/短片/儿童 → 全映射 null。TMDB `tv` 无法区分本地 series/anime/variety/documentary；入库判错后富集不纠。
-   - **方案**：① 设计保守的 type 修正规则（仅高置信信号纠正，如 TMDB Animation genre + mediaType=tv → anime；避免误改已人工校正 type）；② 评估是否起 ADR（type 修正影响身份/归并）；③ 接入 confirm/enrich 路径 + 锁保护；④ 单测。**风险登记**：type 是身份性字段，误改影响 catalog 归并键，须 arch-reviewer 评审触发条件。
-   - **文件范围**：待 ADR 定（可能 `TmdbConfirmService` + `MetadataEnrichService` + type 修正 helper）/ 单测。
-   - **依赖**：建议在 META-40~43 之后（标量字段治理稳定后再动身份性字段）。
+6. **META-44-A** — VideoType 富集修正 ADR（🟡 中 / 身份性字段，强制 ADR）（状态：⬜ 待办）
+   - 创建时间：2026-06-15 01:10
+   - 建议模型：opus（**强制 arch-reviewer**，评审 #6）
+   - **问题**：`catalog.type`（VideoType 11 种）仅爬虫入库时设定，**任何 provider 增强都不修正**（三 Service 只读 type 做匹配，从不写回）。provider 携带类型判别信号被丢弃：TMDB genre 16(动画)/99(纪录)/10762(儿童)/10763(新闻)/10764(真人秀→综艺)、douban 动画/纪录片/短片/儿童。但 `type` 是**身份性字段**，影响 catalog 归并键、搜索筛选、身份候选 → **误改风险高**。
+   - **方案**：起 ADR 定档——保守 type 修正规则（仅高置信信号纠正触发条件、避免误改人工校正/影响归并键的边界）；arch-reviewer (Opus) 评审。**ADR PASS 前不得动任何 type 写路径。**
+   - **文件范围**：`docs/decisions.md`（ADR）/ `docs/task-queue.md`（-B 卡细化）。
+   - **门禁**：verify:adr-contracts + arch-reviewer PASS。
+   - **依赖**：建议 META-40~43 之后（标量治理稳定后再动身份性字段）。
 
-6. **META-45** — Genre 颗粒度增强（🟢 低 / 设计权衡）（状态：⬜ 待办）
+7. **META-44-B** — VideoType 修正实施（🟡 中）（状态：⬜ 待办，依赖 META-44-A ADR PASS）
+   - 创建时间：2026-06-15 01:10
+   - 建议模型：opus
+   - **范围**：按 META-44-A ADR 实现 type 修正规则 + 接入 confirm/enrich 写路径 + 锁保护 + 单测。
+   - **文件范围**：待 ADR 定（可能 `TmdbConfirmService` + `MetadataEnrichService` + type 修正 helper）/ 单测。
+   - **门禁**：typecheck + lint + test:changed（type 改归并键 → 视需要 integration/e2e，ADR 定）。
+   - **依赖**：**META-44-A**（ADR PASS）。
+
+8. **META-45** — Genre 颗粒度增强（🟢 低 / 设计权衡，需 ADR）（状态：⬜ 待办）
    - 创建时间：2026-06-15 00:30
-   - 建议模型：opus（扩 VIDEO_GENRES 枚举跨多消费方，需 ADR）
+   - 建议模型：opus（扩 VIDEO_GENRES 枚举跨多消费方，须 ADR）
    - **问题**：① drama/剧情 三源全丢（本地无对应 genre，被设计为「万能标签」，但确实丢信息）；② TMDB 组合类目损半（`Action & Adventure(10759)→action` 丢 adventure / `Sci-Fi & Fantasy(10765)→sci_fi` 丢 fantasy / `War & Politics→war`）；③ 多对一坍缩普遍降颗粒度。
-   - **方案**：① 评估是否扩 `VIDEO_GENRES`（加 `drama`？——跨前台筛选/后台/admin-ui 多消费方 + ADR-157 枚举 SSOT，须起 ADR）；② TMDB 组合类目可否拆双 genre（10759→[action,adventure]）；③ 决策「保持坍缩 vs 扩枚举」权衡。
+   - **方案**：① 评估是否扩 `VIDEO_GENRES`（加 `drama`？——跨前台筛选/后台/admin-ui 多消费方 + ADR-157 枚举 SSOT，**须起 ADR**）；② TMDB 组合类目可否拆双 genre（10759→[action,adventure]，不扩枚举可先做）；③ 决策「保持坍缩 vs 扩枚举」权衡。
    - **文件范围**：待 ADR 定（`packages/types/src/video.types.ts` VIDEO_GENRES + genreMapper 三表 + 全消费方）。
+   - **门禁**：verify:adr-contracts（ADR）；若扩枚举 → 全消费方 typecheck + lint + test:changed。
    - **依赖**：最低优先；扩枚举须先起 ADR（跨 3+ 消费方，CLAUDE.md 强制 Opus 子代理）。
