@@ -69,6 +69,18 @@ describe('listAdminVideos 元数据动态 SQL 可执行性（真实 PG 不抛）
       expect(Array.isArray(res.rows)).toBe(true)
     }
   })
+
+  it('META-36-A: metadataProvider facet（单选 / 四源全选，md_<p>_state IN ... OR 合流）执行不抛', async () => {
+    const single = await listAdminVideos(db, { status: 'all', metadataProvider: ['tmdb'], page: 1, limit: 5 })
+    expect(Array.isArray(single.rows)).toBe(true)
+    const all = await listAdminVideos(db, {
+      status: 'all',
+      metadataProvider: ['douban', 'bangumi', 'tmdb', 'imdb'],
+      page: 1,
+      limit: 5,
+    })
+    expect(Array.isArray(all.rows)).toBe(true)
+  })
 })
 
 describe('SQL 派生 ↔ JS 派生口径一致（METADATA_STATUS_JOIN_SQL vs buildMetadataStatusSummary）', () => {

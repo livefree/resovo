@@ -82,4 +82,46 @@ describe('listVideos 过滤序列化（CHG-VSR-2 / ADR-150 AMENDMENT 3）', () =
     expect(p.get('sortField')).toBe('episode_count')
     expect(p.get('sortDir')).toBe('asc')
   })
+
+  it('META-36-A: 元数据多维过滤序列化（enum→CSV / date→string / 快捷仅 true）', async () => {
+    await listVideos({
+      metadataOverall: ['needs_review', 'candidate'],
+      metadataProvider: ['douban', 'tmdb'],
+      metadataProviderState: ['applied'],
+      metadataIssueLevel: ['danger', 'warn'],
+      metadataUpdatedFrom: '2026-01-01T00:00:00Z',
+      metadataUpdatedTo: '2026-06-14T00:00:00Z',
+      metadataNeedsReview: true,
+      metadataHasCandidate: false,
+      metadataMissing: true,
+      metadataTmdbPending: true,
+    })
+    const p = calledParams()
+    expect(p.get('metadataOverall')).toBe('needs_review,candidate')
+    expect(p.get('metadataProvider')).toBe('douban,tmdb')
+    expect(p.get('metadataProviderState')).toBe('applied')
+    expect(p.get('metadataIssueLevel')).toBe('danger,warn')
+    expect(p.get('metadataUpdatedFrom')).toBe('2026-01-01T00:00:00Z')
+    expect(p.get('metadataUpdatedTo')).toBe('2026-06-14T00:00:00Z')
+    expect(p.get('metadataNeedsReview')).toBe('true')
+    expect(p.get('metadataMissing')).toBe('true')
+    expect(p.get('metadataTmdbPending')).toBe('true')
+    // 仅 true 发送：metadataHasCandidate=false 不出现
+    expect(p.has('metadataHasCandidate')).toBe(false)
+  })
+
+  it('META-36-A: metadata 排序字段（metadata_status / metadata_score）可达', async () => {
+    await listVideos({ sortField: 'metadata_status', sortDir: 'asc' })
+    expect(calledParams().get('sortField')).toBe('metadata_status')
+    mockedGet.mockClear()
+    await listVideos({ sortField: 'metadata_score', sortDir: 'desc' })
+    expect(calledParams().get('sortField')).toBe('metadata_score')
+  })
+
+  it('META-36-A: 空 metadata 过滤不污染 query', async () => {
+    await listVideos({ metadataOverall: [], metadataProvider: [] })
+    const p = calledParams()
+    expect(p.has('metadataOverall')).toBe(false)
+    expect(p.has('metadataProvider')).toBe(false)
+  })
 })

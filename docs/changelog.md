@@ -5697,3 +5697,35 @@
 - **质量门禁**：typecheck 全工作区 EXIT=0 / lint 4 successful（warning 全既有文件，新文件零警告）/ test:changed 7 文件 91 passed / verify:adr-contracts EXIT=0 / **test:e2e:admin 84/84 passed**（含 `videos.spec` 编辑 Drawer 黄金路径，drawer 结构改动零回归）。test:integration N/A（无 API/DB/SQL）。
 - **后续**：解锁 META-36（视频库元数据列 UI 排序过滤，sonnet）——含 QUICK_HEAD 头部簇 + 视频库列簇从 `EnrichmentBadgeCluster` 迁 `MetadataSourceIconCluster`（D-201-3，本卡定向延后避免越范围）。
 - **[AI-CHECK]**：六问过——①根因=去「每源一 tab」拼装，统一 `MetadataStatusPanel` 四源同级（ADR-201）；②零回归（Douban search/confirm/diff 原样复用 TabDouban，bangumi 富视图等价由 MetaSourceEvidence 承载，basic/lines/images 未动，e2e 黄金路径绿）；③边界=纯 server-next UI 层，不改 admin-ui Props（用 sourceEvidence + 不传 onAction）、不新增端点，**自纠头部簇越范围回退**；④复用 MetadataStatusPanel/TabDouban，MetaSourceEvidence 镜像退役 ExternalMetaPanel ②③④（1 处非 3+ 重复，退役中）；⑤无 any / 无空 catch / 零硬编码色（仅 CSS 变量 token）；⑥死按钮防护=panel 不传 onAction → 主按钮与 per-card 动作均不渲染，对齐 META-33-B。
+
+## [META-36-A] 视频库元数据列排序/过滤服务端接线（Phase 3C，ADR-201 §视频库 / D-201-6）
+
+- **任务**：META-36 拆 -A/-B 的第 1 子卡（CHG-CARD-ATOM 第 1 问改动项 > 5 → 拆卡）。补齐 META-32-B 边界裁定延后的 `metadataProvider` 单列 facet + 视频库元数据列的全链路排序/过滤 UI 接线。依 META-32 ✅（后端派生/排序字段）+ META-33 ✅（图标簇原语，本卡未消费 cell，归 -B）。
+- **后端（apps/api）**：
+  - `routes/admin/videos.ts`：`ListQuerySchema +metadataProvider: csvEnum(METADATA_PROVIDERS)` + 解构透传 `adminList`（镜像既有 metadataProviderState 范式）。
+  - `db/queries/videos.ts`：`AdminVideoListFilters +metadataProvider?` + 新 module-const `PROVIDER_STATE_COL`（provider→`md.md_<p>_state` 列映射，与 `METADATA_STATUS_JOIN_SQL` 暴露列对齐）+ WHERE 谓词（选中 provider 经映射取列，`md_<p>_state IN ('applied','candidate','problem')` OR 合流；列名来自校验后枚举、状态字面量内联常量 → 零用户输入拼接）+ 纳入 `hasMetadataFilter`（动态 LATERAL 仅按需挂，默认列表零成本）。
+  - `services/VideoService.ts`：`adminList` 参数 `+metadataProvider` 透传。
+- **server-next 类型 + API 序列化**：
+  - `lib/videos/types.ts`：`VideoListFilter +metadataProvider?: readonly MetadataProvider[]` + import/re-export `MetadataProvider`。
+  - `lib/videos/api.ts`：**断点修复**——`listVideos` 原**零序列化**任何 `metadata*` 过滤参数（META-32-B 仅加了后端 + 类型，UI 未接），补全量序列化：overall/provider/providerState/issue 数组→CSV + updatedFrom/To string + needsReview/hasCandidate/missing/tmdbPending 仅 true 发送。
+- **UI 排序改造（ADR-201「不能继续把 meta composite sort 简化为 meta_score」）**：
+  - `VideoFilterFields.tsx`：`COMPOSITE_SORT_MAP meta: 'meta_score' → 'metadata_status'`（`元数据` 列默认按运营处理优先级 needs_review→complete）+ `meta_score: 'metadata_score'`（完整度数值独立排序字段）；`VIDEO_SORT_FIELD_WHITELIST +'metadata_status'/'metadata_score'`。
+  - `VideoColumns.tsx`：隐藏 `meta_score` 列 `enableSorting:false→true`（完整度专用排序）。
+- **UI 过滤接线（卡面范围 overall/provider/issue/score/updatedAt）**：
+  - `VideoColumns.tsx`：+4 隐藏 filter-only 列——`metadata_overall`/`metadata_provider`/`metadata_issue_level`（filterKind enum）+ `metadata_updated`（filterKind date / date-range）。filterOptions label 复用 admin-ui metadata-status barrel（`OVERALL_LABEL`/`ISSUE_LEVEL_LABEL`）+ 本地 `METADATA_PROVIDER_LABELS`（镜像 enrichment-logos `SOURCE_LABEL`，后者未 barrel 导出）；值域取 `@resovo/types` SSOT 常量。cell 渲染 overall/issue 单值标签、provider「有数据」来源列表（`METADATA_PRESENT_STATES` 与后端谓词同口径）、updated 日期。score 维度复用既有 `meta_score` number 列。
+  - `VideoFilterFields.tsx`：新增 `getDateRange` helper（`date-range` FilterValue → from/to）；`buildVideoFilter` 映射 metadataOverall/Provider/IssueLevel（enum→数组）+ metadataUpdatedFrom/To（date-range）+ 4 元数据快捷 boolean。
+  - `VIDEO_QUICK_FILTERS +4`：需复核（metadataNeedsReview）/有候选（metadataHasCandidate）/未增强（metadataMissing）/TMDB 待处理（metadataTmdbPending）。
+- **必要联动（非顺手优化，in-scope 特性强制）**：
+  - `lib/videos/columns.ts`：`VIDEO_COLUMN_DESCRIPTORS` 同步 4 新列描述符 + meta_score `enableSorting:true`（descriptor↔buildVideoColumns 逐列对齐，VideoColumns.test 有守卫）。
+  - `VideoListClient.tsx`：`QUICK_COUNT_FILTERS: Record<VideoQuickFilterKey>` 穷举 4 新键（Record 全键约束，typecheck 强制）。
+- **边界裁定 / 偏离登记**：
+  - `metadataProvider` 语义（ADR-201 留 OPEN）取保守可扩展解：选中 provider 中任一 `state ∈ {applied,candidate,problem}`（有数据）OR 合流，与其余过滤正交 AND；复用 `md_<p>_state` 列零新派生、对齐 providerState 四源 OR 范式。
+  - `metadataProviderState` UI 不接：卡面范围明列 overall/provider/issue/score/updatedAt（不含 providerState），后端能力 META-32-B 已就绪，留 follow-up（且无单行自然 cell 值）。
+  - 四来源图标簇 cell/头部迁移（D-201-3）归 META-36-B：本卡 `meta` 列 cell 仍 `EnrichmentBadgeCluster`（过渡期），仅改排序映射 + 列头过滤。
+  - 无新 admin route（向既有 `GET /admin/videos` 加 query 字段，ADR-201 §视频库已定）/ 无 schema / 不改 admin-ui 公开 Props → 无 arch-reviewer gate、无 Subagents trailer。
+- **数据库变更**：无（动态 LATERAL 复用 META-32-B 既有 `METADATA_STATUS_JOIN_SQL`，零 migration / 零 architecture.md 同步）。
+- **测试覆盖**：+14 新单测——后端 route facet 谓词 1（admin-video-list）+ integration facet 可执行性 1（metadata-status-sort-filter-sql，真实 PG）+ 列接线 5（filterKind/filterFieldName/filterOptions + 隐藏/不可排序）+ buildVideoFilter 映射 5（enum/date-range/空/快捷 + VIDEO_QUICK_FILTERS）+ api 序列化 2（VideoColumns.test meta→metadata_status / meta_score→metadata_score 含其中）。更新既有：VideoColumns.test 筛选面集 + meta 排序映射、VideoListClient.test QUICK_FILTERS 集 + meta sort、api 序列化 test。
+- **质量门禁**：typecheck 全工作区 EXIT=0 / lint 4 successful（warning 全既有文件，新改动零警告）/ test:changed 104 文件 1363 passed / test:integration metadata SQL 6/6 passed（真实 PG）/ verify:adr-contracts EXIT=0 / **test:e2e:admin 84/84 passed**（videos.spec 黄金路径 + videos-column-resize 零回归）。
+- **执行模型**：claude-opus-4-8（主循环连续推进，偏离卡片 sonnet 建议、无强制升降触发）；子代理无。
+- **后续**：解锁 META-36-B（`meta` 列 cell + 编辑抽屉 QUICK_HEAD 头部簇 `EnrichmentBadgeCluster→MetadataSourceIconCluster`，D-201-3）。
+- **[AI-CHECK]**：六问过——①根因=META-32-B 把 `metadataProvider` facet + UI 消费延后，本卡补后端单谓词 + 修 api.ts 零序列化断点 + 排序/过滤/快捷全接线；②零回归（test:changed 1363 + e2e 84 + integration 6 全绿，meta 列 cell 未动）；③边界=不越层（Route→Service→queries / UI 经 api.ts）、不改 admin-ui Props、无新 route/schema，providerState 与图标簇迁移定向延后；④复用 admin-ui barrel 文案 + @resovo/types 常量 + 既有 providerState 谓词/序列化范式，`METADATA_PROVIDER_LABELS` 本地镜像（SOURCE_LABEL 未 barrel 导出）；⑤无 any / 无空 catch / 零硬编码色（cell 用 MUTED_TEXT_STYLE CSS var）、SQL 状态字面量为代码常量非用户输入；⑥范围 ≤5 项单一验收口径（拆卡后），必要联动 columns.ts/VideoListClient.tsx 已透明登记。

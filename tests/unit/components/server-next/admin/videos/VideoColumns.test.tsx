@@ -113,13 +113,14 @@ describe('buildVideoColumns — 筛选面（§2.6）', () => {
     }
   })
 
-  it('4-B 筛选面 = title/type + 原子列(year/country/catalog_status/is_published/douban/bangumi/meta_score/visibility/review)', () => {
+  it('筛选面 = title/type + 原子列 + META-36-A 元数据多维列(metadata_overall/provider/issue_level/updated)', () => {
     const filterable = cols()
       .filter((c) => (c as { filterable?: boolean }).filterable === true)
       .map((c) => c.id)
     expect(filterable.sort()).toEqual([
       'bangumi_status', 'catalog_status', 'country', 'douban_status', 'is_published',
-      'meta_score', 'review_status', 'title', 'type', 'visibility', 'year',
+      'meta_score', 'metadata_issue_level', 'metadata_overall', 'metadata_provider', 'metadata_updated',
+      'review_status', 'title', 'type', 'visibility', 'year',
     ])
   })
 
@@ -233,8 +234,11 @@ describe('buildVideoFilter — 复合列排序映射', () => {
   it('episodes → episode_count', () => {
     expect(buildVideoFilter(makeSnapshot('episodes')).sortField).toBe('episode_count')
   })
-  it('meta → meta_score', () => {
-    expect(buildVideoFilter(makeSnapshot('meta')).sortField).toBe('meta_score')
+  it('META-36-A: meta → metadata_status（运营优先级，不再简化为 meta_score）', () => {
+    expect(buildVideoFilter(makeSnapshot('meta')).sortField).toBe('metadata_status')
+  })
+  it('META-36-A: meta_score → metadata_score（完整度数值独立排序字段）', () => {
+    expect(buildVideoFilter(makeSnapshot('meta_score')).sortField).toBe('metadata_score')
   })
   it('status → review_status', () => {
     expect(buildVideoFilter(makeSnapshot('status')).sortField).toBe('review_status')
@@ -250,6 +254,94 @@ describe('buildVideoFilter — 复合列排序映射', () => {
   it('非白名单 sort.field → undefined（守卫）', () => {
     expect(buildVideoFilter(makeSnapshot('bogus')).sortField).toBeUndefined()
     expect(buildVideoFilter(makeSnapshot(undefined)).sortField).toBeUndefined()
+  })
+})
+
+// ── META-36-A: 元数据多维过滤列 + buildVideoFilter 映射 ──────────────
+
+import type { FilterValue } from '../../../../../../packages/admin-ui/src/components/data-table/types'
+import { VIDEO_QUICK_FILTERS, type VideoQuickFilterKey } from '../../../../../../apps/server-next/src/app/admin/videos/_client/VideoFilterFields'
+
+function snapshotWithFilters(filters: Map<string, FilterValue>): TableQuerySnapshot {
+  return {
+    pagination: { page: 1, pageSize: 20 },
+    sort: { field: undefined, direction: 'desc' },
+    filters,
+    columns: new Map(),
+    selection: { selectedKeys: new Set(), mode: 'page' },
+  }
+}
+
+describe('META-36-A 元数据过滤列接线（filterKind/filterFieldName/filterOptions）', () => {
+  type FCol = { filterKind?: string; filterFieldName?: string; filterOptions?: readonly { value: string }[] }
+  it('metadata_overall = enum/metadataOverall + 5 态选项', () => {
+    const c = colById('metadata_overall') as FCol
+    expect(c).toMatchObject({ filterKind: 'enum', filterFieldName: 'metadataOverall' })
+    expect(c.filterOptions?.map((o) => o.value)).toEqual(['needs_review', 'candidate', 'missing', 'partial', 'complete'])
+  })
+  it('metadata_provider = enum/metadataProvider + 四源选项（固定顺序）', () => {
+    const c = colById('metadata_provider') as FCol
+    expect(c).toMatchObject({ filterKind: 'enum', filterFieldName: 'metadataProvider' })
+    expect(c.filterOptions?.map((o) => o.value)).toEqual(['douban', 'bangumi', 'tmdb', 'imdb'])
+  })
+  it('metadata_issue_level = enum/metadataIssueLevel + 4 级选项', () => {
+    const c = colById('metadata_issue_level') as FCol
+    expect(c).toMatchObject({ filterKind: 'enum', filterFieldName: 'metadataIssueLevel' })
+    expect(c.filterOptions?.map((o) => o.value)).toEqual(['none', 'info', 'warn', 'danger'])
+  })
+  it('metadata_updated = date/metadataUpdated（date-range）', () => {
+    expect(colById('metadata_updated') as FCol).toMatchObject({ filterKind: 'date', filterFieldName: 'metadataUpdated' })
+  })
+  it('4 个元数据过滤列默认隐藏 + 不可排序（filter-only）', () => {
+    for (const id of ['metadata_overall', 'metadata_provider', 'metadata_issue_level', 'metadata_updated']) {
+      expect(colById(id).defaultVisible).toBe(false)
+      expect(colById(id).enableSorting).toBe(false)
+    }
+  })
+})
+
+describe('META-36-A buildVideoFilter — 元数据过滤映射', () => {
+  it('overall/provider/issue enum 多选 → 数组透传', () => {
+    const filters = new Map<string, FilterValue>([
+      ['metadataOverall', { kind: 'enum', value: ['needs_review', 'candidate'] }],
+      ['metadataProvider', { kind: 'enum', value: ['douban', 'tmdb'] }],
+      ['metadataIssueLevel', { kind: 'enum', value: ['danger'] }],
+    ])
+    const f = buildVideoFilter(snapshotWithFilters(filters))
+    expect(f.metadataOverall).toEqual(['needs_review', 'candidate'])
+    expect(f.metadataProvider).toEqual(['douban', 'tmdb'])
+    expect(f.metadataIssueLevel).toEqual(['danger'])
+  })
+  it('metadataUpdated date-range → metadataUpdatedFrom/To', () => {
+    const filters = new Map<string, FilterValue>([
+      ['metadataUpdated', { kind: 'date-range', from: '2026-01-01T00:00:00Z', to: '2026-06-14T00:00:00Z' }],
+    ])
+    const f = buildVideoFilter(snapshotWithFilters(filters))
+    expect(f.metadataUpdatedFrom).toBe('2026-01-01T00:00:00Z')
+    expect(f.metadataUpdatedTo).toBe('2026-06-14T00:00:00Z')
+  })
+  it('空过滤 → 元数据字段全 undefined（不污染默认查询）', () => {
+    const f = buildVideoFilter(snapshotWithFilters(new Map()))
+    expect(f.metadataOverall).toBeUndefined()
+    expect(f.metadataProvider).toBeUndefined()
+    expect(f.metadataIssueLevel).toBeUndefined()
+    expect(f.metadataUpdatedFrom).toBeUndefined()
+    expect(f.metadataUpdatedTo).toBeUndefined()
+  })
+  it('元数据快捷筛选 Set → 派生 boolean（仅命中 true，未命中 undefined）', () => {
+    const quick = new Set<VideoQuickFilterKey>(['metadataNeedsReview', 'metadataHasCandidate'])
+    const f = buildVideoFilter(snapshotWithFilters(new Map()), quick)
+    expect(f.metadataNeedsReview).toBe(true)
+    expect(f.metadataHasCandidate).toBe(true)
+    expect(f.metadataMissing).toBeUndefined()
+    expect(f.metadataTmdbPending).toBeUndefined()
+  })
+  it('VIDEO_QUICK_FILTERS 含 4 个元数据运营快捷入口', () => {
+    const keys = VIDEO_QUICK_FILTERS.map((q) => q.key)
+    expect(keys).toContain('metadataNeedsReview')
+    expect(keys).toContain('metadataHasCandidate')
+    expect(keys).toContain('metadataMissing')
+    expect(keys).toContain('metadataTmdbPending')
   })
 })
 

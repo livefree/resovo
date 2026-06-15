@@ -8,7 +8,7 @@
 import type { Pool } from 'pg'
 import type {
   Video, VideoCard, VideoType, VisibilityStatus, ReviewStatus, VideoStatus, DoubanStatus, BangumiStatus,
-  MetadataStatusOverall, MetadataProviderState, MetadataIssueLevel,
+  MetadataStatusOverall, MetadataProvider, MetadataProviderState, MetadataIssueLevel,
 } from '@/types'
 import type { DbVideoRow } from './videos.internal'
 import {
@@ -283,6 +283,11 @@ export interface AdminVideoListFilters {
   // 注：元数据完整度范围复用上方 metaScoreMin/metaScoreMax（同列 v.meta_score），不另设入口。
   /** 整体状态多选（overall；映射 md.metadata_status_rank = ANY） */
   metadataOverall?: readonly MetadataStatusOverall[]
+  /**
+   * 单列 provider facet 多选（META-36-A / ADR-201 §视频库）：选中 provider 中任一「有数据」
+   * （`md_<p>_state ∈ applied/candidate/problem`）即命中，OR 合流；与 providerState 正交 AND。
+   */
+  metadataProvider?: readonly MetadataProvider[]
   /** 单源状态多选（任一 provider state ∈ 集合） */
   metadataProviderState?: readonly MetadataProviderState[]
   /** 问题等级多选（映射 md.metadata_issue_rank = ANY） */
@@ -302,6 +307,17 @@ export interface AdminVideoListFilters {
   sortDir?: 'asc' | 'desc'
   page: number
   limit: number
+}
+
+/**
+ * META-36-A：provider → 动态 LATERAL `md` 单源 state 列映射（与 METADATA_STATUS_JOIN_SQL 暴露列对齐）。
+ * 列名为代码常量，metadataProvider facet 谓词据 csvEnum 校验后的枚举值取列，无用户输入拼接。
+ */
+const PROVIDER_STATE_COL: Record<MetadataProvider, string> = {
+  douban: 'md.md_douban_state',
+  bangumi: 'md.md_bangumi_state',
+  tmdb: 'md.md_tmdb_state',
+  imdb: 'md.md_imdb_state',
 }
 
 export async function listAdminVideos(
@@ -416,6 +432,12 @@ export async function listAdminVideos(
     conditions.push(`md.metadata_issue_rank = ANY($${idx++}::int[])`)
     params.push(filters.metadataIssueLevel.map((l) => METADATA_ISSUE_RANK[l]))
   }
+  if (filters.metadataProvider?.length) {
+    // META-36-A facet：选中 provider 中任一「有数据」(state ∈ applied/candidate/problem) 即命中，OR 合流。
+    // 列名经 PROVIDER_STATE_COL 由校验后枚举映射、状态字面量为代码常量 → 无用户输入拼接（对齐 metadataTmdbPending 内联范式）。
+    const cols = filters.metadataProvider.map((p) => PROVIDER_STATE_COL[p])
+    conditions.push(`(${cols.map((c) => `${c} IN ('applied','candidate','problem')`).join(' OR ')})`)
+  }
   if (filters.metadataProviderState?.length) {
     // 任一 provider state ∈ 选中集（四源 OR，复用单参数）
     conditions.push(
@@ -455,7 +477,7 @@ export async function listAdminVideos(
   // 动态 LATERAL：仅当按 metadata_status 排序或带 metadata 过滤时才挂（默认列表路径零额外成本）
   const hasMetadataFilter =
     !!filters.metadataOverall?.length || !!filters.metadataIssueLevel?.length
-    || !!filters.metadataProviderState?.length
+    || !!filters.metadataProvider?.length || !!filters.metadataProviderState?.length
     || filters.metadataUpdatedFrom !== undefined || filters.metadataUpdatedTo !== undefined
     || filters.metadataNeedsReview === true || filters.metadataMissing === true
     || filters.metadataHasCandidate === true || filters.metadataTmdbPending === true

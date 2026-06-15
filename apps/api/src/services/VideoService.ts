@@ -189,6 +189,8 @@ export class VideoService {
     pendingReview?: boolean
     // META-32-B（ADR-201 §视频库 过滤）：元数据状态服务端过滤（加性透传）
     metadataOverall?: readonly import('@/types').MetadataStatusOverall[]
+    // META-36-A：单列 provider facet（加性透传）
+    metadataProvider?: readonly import('@/types').MetadataProvider[]
     metadataProviderState?: readonly import('@/types').MetadataProviderState[]
     metadataIssueLevel?: readonly import('@/types').MetadataIssueLevel[]
     metadataUpdatedFrom?: string
@@ -228,6 +230,7 @@ export class VideoService {
       metaIncomplete: params.metaIncomplete,
       pendingReview: params.pendingReview,
       metadataOverall: params.metadataOverall,
+      metadataProvider: params.metadataProvider,
       metadataProviderState: params.metadataProviderState,
       metadataIssueLevel: params.metadataIssueLevel,
       metadataUpdatedFrom: params.metadataUpdatedFrom,

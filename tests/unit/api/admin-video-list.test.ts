@@ -291,4 +291,29 @@ describe('listAdminVideos (CHG-209)', () => {
     expect(params).toContain('2026-01-01T00:00:00Z')
     expect(params).toContain('2026-06-14T00:00:00Z')
   })
+
+  it('META-36-A: metadataProvider facet 谓词——选中 provider 任一有数据(IN applied/candidate/problem) OR 合流；主+count 均挂 LATERAL', async () => {
+    query
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ count: '0' }] })
+
+    await listAdminVideos(db, {
+      status: 'all',
+      metadataProvider: ['douban', 'tmdb'],
+      page: 1,
+      limit: 20,
+    })
+
+    const [sql] = query.mock.calls[0]
+    const [countSql] = query.mock.calls[1]
+    // 选中 provider 映射各自 md_<p>_state 列 + 状态字面量内联（无用户输入拼接）
+    expect(sql).toContain("md.md_douban_state IN ('applied','candidate','problem')")
+    expect(sql).toContain("md.md_tmdb_state IN ('applied','candidate','problem')")
+    expect(sql).toContain(' OR ')
+    // 未选中的 provider 列不应出现在 facet 谓词
+    expect(sql).not.toContain("md.md_bangumi_state IN ('applied','candidate','problem')")
+    // facet 也是 metadata 过滤 → 主 + count 均挂 LATERAL
+    expect(sql).toContain('LEFT JOIN LATERAL')
+    expect(countSql).toContain('LEFT JOIN LATERAL')
+  })
 })

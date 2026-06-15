@@ -20,7 +20,7 @@ import { ModerationService } from '@/api/services/ModerationService'
 import * as systemSettingsQueries from '@/api/db/queries/systemSettings'
 import { isAppError } from '@/api/lib/errors'
 import type { VisibilityStatus } from '@/types'
-import { VIDEO_TYPES, VIDEO_STATUSES, REVIEW_STATUSES, VISIBILITY_STATUSES, DOUBAN_STATUSES, BANGUMI_STATUSES, SOURCE_CHECK_STATUSES, METADATA_STATUS_OVERALLS, METADATA_PROVIDER_STATES, METADATA_ISSUE_LEVELS } from '@resovo/types'
+import { VIDEO_TYPES, VIDEO_STATUSES, REVIEW_STATUSES, VISIBILITY_STATUSES, DOUBAN_STATUSES, BANGUMI_STATUSES, SOURCE_CHECK_STATUSES, METADATA_STATUS_OVERALLS, METADATA_PROVIDERS, METADATA_PROVIDER_STATES, METADATA_ISSUE_LEVELS } from '@resovo/types'
 
 // ── Zod Schema ────────────────────────────────────────────────────
 
@@ -156,6 +156,8 @@ const ListQuerySchema = z.object({
   pendingReview: queryBool,
   // ── META-32-B（ADR-201 §视频库 过滤）：元数据状态筛选（CSV 多选 + 范围 + 快捷 bool）──
   metadataOverall: csvEnum(METADATA_STATUS_OVERALLS),
+  // META-36-A（ADR-201 §视频库 过滤）：单列 provider facet（选中 provider 任一有数据 OR 合流）
+  metadataProvider: csvEnum(METADATA_PROVIDERS),
   metadataProviderState: csvEnum(METADATA_PROVIDER_STATES),
   metadataIssueLevel: csvEnum(METADATA_ISSUE_LEVELS),
   metadataUpdatedFrom: z.string().datetime().optional(),
@@ -209,7 +211,7 @@ export async function adminVideoRoutes(fastify: FastifyInstance) {
       status, type, types, visibilityStatus, reviewStatus, page, limit, q, site, sortField, sortDir,
       yearMin, yearMax, country, catalogStatus, isPublished, doubanStatus, bangumiStatus,
       metaScoreMin, metaScoreMax, episodeMismatch, episodeMissing, metaIncomplete, pendingReview,
-      metadataOverall, metadataProviderState, metadataIssueLevel, metadataUpdatedFrom, metadataUpdatedTo,
+      metadataOverall, metadataProvider, metadataProviderState, metadataIssueLevel, metadataUpdatedFrom, metadataUpdatedTo,
       metadataNeedsReview, metadataHasCandidate, metadataMissing, metadataTmdbPending,
     } = parsed.data
     const includeAdult = await shouldIncludeAdultInAdminContent()
@@ -240,6 +242,7 @@ export async function adminVideoRoutes(fastify: FastifyInstance) {
       metaIncomplete,
       pendingReview,
       metadataOverall,
+      metadataProvider,
       metadataProviderState,
       metadataIssueLevel,
       metadataUpdatedFrom,

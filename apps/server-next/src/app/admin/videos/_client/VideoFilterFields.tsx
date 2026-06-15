@@ -7,7 +7,10 @@ import type {
   TableQueryPatch,
 } from '@resovo/admin-ui'
 import type { VideoListFilter } from '@/lib/videos'
-import type { VideoType, VideoStatus, VisibilityStatus, ReviewStatus, DoubanStatus, BangumiStatus } from '@resovo/types'
+import type {
+  VideoType, VideoStatus, VisibilityStatus, ReviewStatus, DoubanStatus, BangumiStatus,
+  MetadataStatusOverall, MetadataProvider, MetadataIssueLevel,
+} from '@resovo/types'
 import { DataTableSearchInput, getVideoTypeOptions } from '@resovo/admin-ui'
 
 // ── filter option constants ───────────────────────────────────────
@@ -46,6 +49,11 @@ export const VIDEO_QUICK_FILTERS = [
   { key: 'pendingReview', label: '待审' },
   { key: 'metaIncomplete', label: '元数据缺失' },
   { key: 'episodeMismatch', label: '集数不一致' },
+  // META-36-A（ADR-201 §视频库 快捷筛选）：元数据运营快捷入口（映射 metadata* 派生 boolean）
+  { key: 'metadataNeedsReview', label: '需复核' },
+  { key: 'metadataHasCandidate', label: '有候选' },
+  { key: 'metadataMissing', label: '未增强' },
+  { key: 'metadataTmdbPending', label: 'TMDB 待处理' },
 ] as const
 export type VideoQuickFilterKey = (typeof VIDEO_QUICK_FILTERS)[number]['key']
 
@@ -66,6 +74,12 @@ function getRange(filters: ReadonlyMap<string, FilterValue>, key: string): { min
   return v?.kind === 'range' ? { min: v.min, max: v.max } : undefined
 }
 
+// META-36-A：date-range filter（filterKind 'date' → FilterValue kind 'date-range' from/to ISO 字符串）
+function getDateRange(filters: ReadonlyMap<string, FilterValue>, key: string): { from?: string; to?: string } | undefined {
+  const v = filters.get(key)
+  return v?.kind === 'date-range' ? { from: v.from, to: v.to } : undefined
+}
+
 function getTextValue(filters: ReadonlyMap<string, FilterValue>, key: string): string | undefined {
   const v = filters.get(key)
   return v?.kind === 'text' && v.value ? v.value : undefined
@@ -80,6 +94,8 @@ const VIDEO_SORT_FIELD_WHITELIST = [
   'source_health', 'visibility', 'review_status', 'douban_status', 'meta_score', 'episode_count',
   // SRCHEALTH-P1-1-B（B1）：探测/试播聚合排序，同步后端 SORT_FIELDS（SRCHEALTH-P1-1-A）
   'source_check_status', 'render_check_status',
+  // META-36-A（ADR-201 §视频库 排序）：元数据运营优先级 + 完整度独立字段（同步后端 SORT_FIELDS）
+  'metadata_status', 'metadata_score',
 ] as const
 type VideoSortField = (typeof VIDEO_SORT_FIELD_WHITELIST)[number]
 function isVideoSortField(s: string | undefined): s is VideoSortField {
@@ -93,7 +109,10 @@ function isVideoSortField(s: string | undefined): s is VideoSortField {
 const COMPOSITE_SORT_MAP: Readonly<Record<string, VideoSortField>> = {
   release: 'year',
   episodes: 'episode_count',
-  meta: 'meta_score',
+  // META-36-A（ADR-201 §视频库 排序）：`元数据` 复合列默认按运营处理优先级（needs_review→complete），
+  // 不再简化为 meta_score；完整度数值排序由隐藏列 meta_score → 独立字段 metadata_score 承担。
+  meta: 'metadata_status',
+  meta_score: 'metadata_score',
   status: 'review_status',
   // SRCHEALTH-P1-1-B：探测/播放双信号复合列，排序取探测维度主信号
   probe: 'source_check_status',
@@ -112,6 +131,8 @@ export function buildVideoFilter(
   const yearRange = getRange(filters, 'year')
   const metaRange = getRange(filters, 'metaScore')
   const isPub = getEnumFirst(filters, 'isPublished')
+  // META-36-A：元数据多维过滤（enum 多选 → 数组 / date-range → from/to / 快捷 → 派生 boolean）
+  const metadataUpdated = getDateRange(filters, 'metadataUpdated')
   return {
     q: getTextValue(filters, 'q'),
     type: getEnumFirst(filters, 'type') as VideoType | undefined,
@@ -129,10 +150,21 @@ export function buildVideoFilter(
     bangumiStatus: getEnumArray(filters, 'bangumiStatus') as readonly BangumiStatus[] | undefined,
     metaScoreMin: metaRange?.min,
     metaScoreMax: metaRange?.max,
+    // ── META-36-A 元数据多维过滤（overall/provider/issue enum 多选 + updatedAt date-range；score 复用上方 metaScore）──
+    metadataOverall: getEnumArray(filters, 'metadataOverall') as readonly MetadataStatusOverall[] | undefined,
+    metadataProvider: getEnumArray(filters, 'metadataProvider') as readonly MetadataProvider[] | undefined,
+    metadataIssueLevel: getEnumArray(filters, 'metadataIssueLevel') as readonly MetadataIssueLevel[] | undefined,
+    metadataUpdatedFrom: metadataUpdated?.from,
+    metadataUpdatedTo: metadataUpdated?.to,
     // ── CHG-VSR-4-B 页面级快捷筛选（B 方案 / 派生 boolean，仅 true 发送，api 层 === true 才追加谓词）──
     pendingReview: quickFilters?.has('pendingReview') || undefined,
     metaIncomplete: quickFilters?.has('metaIncomplete') || undefined,
     episodeMismatch: quickFilters?.has('episodeMismatch') || undefined,
+    // META-36-A 元数据运营快捷筛选（映射后端 metadata* 派生 boolean）
+    metadataNeedsReview: quickFilters?.has('metadataNeedsReview') || undefined,
+    metadataHasCandidate: quickFilters?.has('metadataHasCandidate') || undefined,
+    metadataMissing: quickFilters?.has('metadataMissing') || undefined,
+    metadataTmdbPending: quickFilters?.has('metadataTmdbPending') || undefined,
     sortField,
     sortDir: sortField ? sort.direction : undefined,
     page: pagination.page,

@@ -107,6 +107,11 @@ const QUICK_COUNT_FILTERS: Record<VideoQuickFilterKey, VideoListFilter> = {
   pendingReview: { pendingReview: true, page: 1, limit: 1 },
   metaIncomplete: { metaIncomplete: true, page: 1, limit: 1 },
   episodeMismatch: { episodeMismatch: true, page: 1, limit: 1 },
+  // META-36-A（ADR-201 §视频库 快捷筛选）：元数据运营快捷入口计数
+  metadataNeedsReview: { metadataNeedsReview: true, page: 1, limit: 1 },
+  metadataHasCandidate: { metadataHasCandidate: true, page: 1, limit: 1 },
+  metadataMissing: { metadataMissing: true, page: 1, limit: 1 },
+  metadataTmdbPending: { metadataTmdbPending: true, page: 1, limit: 1 },
 }
 
 export function VideoListClient() {

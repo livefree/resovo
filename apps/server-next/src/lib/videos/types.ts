@@ -12,11 +12,12 @@ import type {
   CatalogCharacterSummary,
   MetadataStatusSummary,
   MetadataStatusOverall,
+  MetadataProvider,
   MetadataProviderState,
   MetadataIssueLevel,
 } from '@resovo/types'
 
-export type { VideoType, VideoStatus, VideoGenre, ReviewStatus, VisibilityStatus, DoubanStatus, BangumiStatus, EnrichmentSummary, ExternalRefSummary, BangumiEntrySummary, CatalogCharacterSummary, MetadataStatusSummary, MetadataStatusOverall, MetadataProviderState, MetadataIssueLevel }
+export type { VideoType, VideoStatus, VideoGenre, ReviewStatus, VisibilityStatus, DoubanStatus, BangumiStatus, EnrichmentSummary, ExternalRefSummary, BangumiEntrySummary, CatalogCharacterSummary, MetadataStatusSummary, MetadataStatusOverall, MetadataProvider, MetadataProviderState, MetadataIssueLevel }
 
 // ── 列表行（对应 GET /admin/videos 响应结构）─────────────────────
 
@@ -100,6 +101,8 @@ export interface VideoListFilter {
   // ── META-32-B（ADR-201 §视频库 过滤）：元数据状态筛选（镜像后端 AdminVideoListFilters；CSV 多选由 api 层序列化）──
   /** 整体状态多选（overall） */
   metadataOverall?: readonly MetadataStatusOverall[]
+  /** 单列 provider facet 多选（META-36-A：选中 provider 任一有数据 OR 合流） */
+  metadataProvider?: readonly MetadataProvider[]
   /** 单源状态多选（任一 provider state ∈ 集合） */
   metadataProviderState?: readonly MetadataProviderState[]
   /** 问题等级多选 */

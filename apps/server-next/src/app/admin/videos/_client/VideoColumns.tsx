@@ -21,11 +21,16 @@
 import type { CSSProperties, ReactElement } from 'react'
 import {
   Pill, VisChip, Thumb, DualSignal, EnrichmentBadgeCluster, CountryName,
+  OVERALL_LABEL, ISSUE_LEVEL_LABEL,
   type TableColumn,
 } from '@resovo/admin-ui'
-import { VIDEO_STATUSES, DOUBAN_STATUSES, BANGUMI_STATUSES, type DualSignalDisplayState } from '@resovo/types'
+import {
+  VIDEO_STATUSES, DOUBAN_STATUSES, BANGUMI_STATUSES,
+  METADATA_PROVIDERS, METADATA_STATUS_OVERALLS, METADATA_ISSUE_LEVELS,
+  type DualSignalDisplayState, type MetadataProviderState,
+} from '@resovo/types'
 import type {
-  VideoAdminRow, VideoType, VideoStatus, VisibilityStatus, DoubanStatus,
+  VideoAdminRow, VideoType, VideoStatus, VisibilityStatus, DoubanStatus, MetadataProvider,
 } from '@/lib/videos'
 import type { TabKey } from './_videoEdit/types'
 import { VideoRowActions } from './VideoRowActions'
@@ -73,6 +78,15 @@ const MATCH_STATUS_LABELS: Record<DoubanStatus, string> = {
   matched: '已匹配',
   candidate: '候选',
   unmatched: '未匹配',
+}
+
+// META-36-A：元数据 provider 显示名（镜像 admin-ui enrichment-logos SOURCE_LABEL；后者未 barrel 导出，
+// 仅用于 metadataProvider facet 过滤项 label，cell 图标簇命名由 -B MetadataSourceIconCluster 内部承担）。
+const METADATA_PROVIDER_LABELS: Record<MetadataProvider, string> = {
+  douban: '豆瓣',
+  bangumi: 'Bangumi',
+  tmdb: 'TMDB',
+  imdb: 'IMDb',
 }
 
 // ── 样式常量 ──────────────────────────────────────────────────────
@@ -260,6 +274,21 @@ const IS_PUBLISHED_OPTIONS: readonly { value: string; label: string }[] = [
   { value: 'published', label: '已上架' },
   { value: 'draft', label: '草稿' },
 ]
+
+// META-36-A（ADR-201 §视频库 过滤）：元数据状态多维过滤项（卡面范围 overall/provider/issue/updatedAt；
+// score 由既有 meta_score 列承担；providerState 后端已就绪但本卡 UI 不接，留 follow-up）。
+// 值域取 @resovo/types SSOT 常量，label 复用 admin-ui metadata-status barrel 文案（OVERALL/ISSUE_LEVEL）
+// + 本地 provider 显示名，避免与图标簇 tooltip 文案漂移。
+const METADATA_OVERALL_OPTIONS: readonly { value: string; label: string }[] =
+  METADATA_STATUS_OVERALLS.map((v) => ({ value: v, label: OVERALL_LABEL[v] }))
+const METADATA_PROVIDER_OPTIONS: readonly { value: string; label: string }[] =
+  METADATA_PROVIDERS.map((v) => ({ value: v, label: METADATA_PROVIDER_LABELS[v] }))
+const METADATA_ISSUE_LEVEL_OPTIONS: readonly { value: string; label: string }[] =
+  METADATA_ISSUE_LEVELS.map((v) => ({ value: v, label: ISSUE_LEVEL_LABEL[v] }))
+
+// provider「有数据」判定（state ∈ applied/candidate/problem，与后端 metadataProvider facet 谓词同口径）；
+// 仅用于 metadata_provider 列被取消隐藏时的 cell 显示提示（哪些来源已有数据）。
+const METADATA_PRESENT_STATES: ReadonlySet<MetadataProviderState> = new Set(['applied', 'candidate', 'problem'])
 
 // ── column definitions（设计 §2.2 默认可见 + §2.3/§2.6② 默认隐藏）────
 // CHG-VSR-4-B：onEditRequest 扩 tab 参（图片/外部元数据/查看播放线路 深链 VideoEditDrawer tab）。
@@ -472,12 +501,58 @@ export function buildVideoColumns(
         </span>
       ),
     },
-    // meta_score 元数据完整度：number-range 筛选（→ metaScoreMin/metaScoreMax）；排序由 meta 复合列承担 → 禁排序
+    // meta_score 元数据完整度：number-range 筛选（→ metaScoreMin/metaScoreMax）；
+    // META-36-A：解禁排序 → 完整度数值专用排序字段（COMPOSITE_SORT_MAP meta_score→metadata_score，
+    // ADR-201「完整度数值排序保留为独立字段」；与 meta 复合列的运营优先级 metadata_status 排序分离）
     {
       id: 'meta_score', header: '元数据完整度', accessor: (r) => r.meta_score ?? '',
-      width: 140, minWidth: 120, enableResizing: true, enableSorting: false, defaultVisible: false,
+      width: 140, minWidth: 120, enableResizing: true, enableSorting: true, defaultVisible: false,
       filterable: true, filterFieldName: 'metaScore', filterKind: 'number',
       cell: ({ row }) => <span style={MUTED_TEXT_STYLE}>{row.meta_score ?? '—'}</span>,
+    },
+    // ════ META-36-A：元数据状态多维过滤列（默认隐藏、filter-only；ADR-201 §视频库 过滤）════
+    // metadata_overall 整体状态：enum 多选（→ metadataOverall[]，经 md.metadata_status_rank 服务端过滤）
+    {
+      id: 'metadata_overall', header: '元数据状态', accessor: (r) => r.metadataStatus?.overall ?? '',
+      width: 120, minWidth: 100, enableResizing: true, enableSorting: false, defaultVisible: false,
+      filterable: true, filterFieldName: 'metadataOverall', filterKind: 'enum', filterOptions: METADATA_OVERALL_OPTIONS,
+      cell: ({ row }) => (
+        <span style={MUTED_TEXT_STYLE}>{row.metadataStatus ? OVERALL_LABEL[row.metadataStatus.overall] : '—'}</span>
+      ),
+    },
+    // metadata_provider 来源 facet：enum 多选（→ metadataProvider[]，选中 provider 任一有数据 OR 合流）
+    {
+      id: 'metadata_provider', header: '元数据来源', accessor: (r) => r.metadataStatus?.primaryProvider ?? '',
+      width: 130, minWidth: 110, enableResizing: true, enableSorting: false, defaultVisible: false,
+      filterable: true, filterFieldName: 'metadataProvider', filterKind: 'enum', filterOptions: METADATA_PROVIDER_OPTIONS,
+      cell: ({ row }) => {
+        const s = row.metadataStatus
+        if (!s) return <span style={MUTED_TEXT_STYLE}>—</span>
+        const present = METADATA_PROVIDERS.filter((p) => METADATA_PRESENT_STATES.has(s.providers[p].state))
+        return (
+          <span style={MUTED_TEXT_STYLE}>
+            {present.length ? present.map((p) => METADATA_PROVIDER_LABELS[p]).join('·') : '—'}
+          </span>
+        )
+      },
+    },
+    // metadata_issue_level 问题等级：enum 多选（→ metadataIssueLevel[]，经 md.metadata_issue_rank 服务端过滤）
+    {
+      id: 'metadata_issue_level', header: '元数据问题', accessor: (r) => r.metadataStatus?.issueLevel ?? '',
+      width: 120, minWidth: 100, enableResizing: true, enableSorting: false, defaultVisible: false,
+      filterable: true, filterFieldName: 'metadataIssueLevel', filterKind: 'enum', filterOptions: METADATA_ISSUE_LEVEL_OPTIONS,
+      cell: ({ row }) => (
+        <span style={MUTED_TEXT_STYLE}>{row.metadataStatus ? ISSUE_LEVEL_LABEL[row.metadataStatus.issueLevel] : '—'}</span>
+      ),
+    },
+    // metadata_updated 最近增强：date-range 筛选（→ metadataUpdatedFrom/To，enriched_at 服务端范围）
+    {
+      id: 'metadata_updated', header: '元数据更新', accessor: (r) => r.metadataStatus?.enrichedAt ?? '',
+      width: 120, minWidth: 100, enableResizing: true, enableSorting: false, defaultVisible: false,
+      filterable: true, filterFieldName: 'metadataUpdated', filterKind: 'date',
+      cell: ({ row }) => (
+        <span style={MUTED_TEXT_STYLE}>{row.metadataStatus?.enrichedAt ? row.metadataStatus.enrichedAt.slice(0, 10) : '—'}</span>
+      ),
     },
     // created_at 创建时间：§2.3 既有隐藏列保留排序（sortable→created_at 直通）
     {

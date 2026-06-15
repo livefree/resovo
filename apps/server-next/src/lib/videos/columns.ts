@@ -29,7 +29,13 @@ export const VIDEO_COLUMN_DESCRIPTORS: readonly ColumnDescriptor[] = [
   { id: 'is_published',   header: '发布',          defaultVisible: false },
   { id: 'douban_status',  header: '豆瓣状态',       defaultVisible: false },
   { id: 'bangumi_status', header: 'Bangumi',      defaultVisible: false },
-  { id: 'meta_score',     header: '元数据完整度',    defaultVisible: false },
+  // META-36-A：元数据完整度解禁排序（→ metadata_score 独立字段，与 meta 复合列运营优先级排序分离）
+  { id: 'meta_score',     header: '元数据完整度',    defaultVisible: false, enableSorting: true },
+  // META-36-A：元数据状态多维过滤列（filter-only，默认隐藏；ADR-201 §视频库 过滤）
+  { id: 'metadata_overall',     header: '元数据状态', defaultVisible: false },
+  { id: 'metadata_provider',    header: '元数据来源', defaultVisible: false },
+  { id: 'metadata_issue_level', header: '元数据问题', defaultVisible: false },
+  { id: 'metadata_updated',     header: '元数据更新', defaultVisible: false },
   { id: 'created_at',     header: '创建时间',       defaultVisible: false, enableSorting: true },
 ]
 

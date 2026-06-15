@@ -78,6 +78,17 @@ export async function listVideos(filter: VideoListFilter = {}): Promise<VideoLis
   if (filter.episodeMissing)        params.set('episodeMissing', 'true')
   if (filter.metaIncomplete)        params.set('metaIncomplete', 'true')
   if (filter.pendingReview)         params.set('pendingReview', 'true')
+  // ── META-36-A（ADR-201 §视频库 过滤）：元数据状态多维过滤入参序列化（数组→CSV / 范围→string / 快捷→仅 true）──
+  if (filter.metadataOverall?.length)       params.set('metadataOverall', filter.metadataOverall.join(','))
+  if (filter.metadataProvider?.length)      params.set('metadataProvider', filter.metadataProvider.join(','))
+  if (filter.metadataProviderState?.length) params.set('metadataProviderState', filter.metadataProviderState.join(','))
+  if (filter.metadataIssueLevel?.length)    params.set('metadataIssueLevel', filter.metadataIssueLevel.join(','))
+  if (filter.metadataUpdatedFrom)           params.set('metadataUpdatedFrom', filter.metadataUpdatedFrom)
+  if (filter.metadataUpdatedTo)             params.set('metadataUpdatedTo', filter.metadataUpdatedTo)
+  if (filter.metadataNeedsReview)           params.set('metadataNeedsReview', 'true')
+  if (filter.metadataHasCandidate)          params.set('metadataHasCandidate', 'true')
+  if (filter.metadataMissing)               params.set('metadataMissing', 'true')
+  if (filter.metadataTmdbPending)           params.set('metadataTmdbPending', 'true')
   return apiClient.get<VideoListResult>(`/admin/videos?${params}`)
 }
 

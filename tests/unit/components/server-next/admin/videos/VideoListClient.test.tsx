@@ -188,7 +188,8 @@ describe('buildVideoFilter — 快捷筛选 Set 合流（§2.6③）', () => {
     })
     const filter = buildVideoFilter(snapshot, new Set<VideoQuickFilterKey>(['metaIncomplete']))
     expect(filter.type).toBe('anime')
-    expect(filter.sortField).toBe('meta_score')
+    // META-36-A：meta 复合列默认按运营优先级 metadata_status 排序（不再 meta_score）
+    expect(filter.sortField).toBe('metadata_status')
     expect(filter.metaIncomplete).toBe(true)
   })
 })
@@ -235,8 +236,13 @@ describe('filter option 常量', () => {
     expect(values).toEqual(expect.arrayContaining(['pending_review', 'approved', 'rejected']))
   })
 
-  it('VIDEO_QUICK_FILTERS = 待审/元数据缺失/集数不一致（B 方案 §2.6③）', () => {
-    expect(VIDEO_QUICK_FILTERS.map((q) => q.key)).toEqual(['pendingReview', 'metaIncomplete', 'episodeMismatch'])
-    expect(VIDEO_QUICK_FILTERS.map((q) => q.label)).toEqual(['待审', '元数据缺失', '集数不一致'])
+  it('VIDEO_QUICK_FILTERS = 待审/元数据缺失/集数不一致 + META-36-A 元数据运营快捷（需复核/有候选/未增强/TMDB 待处理）', () => {
+    expect(VIDEO_QUICK_FILTERS.map((q) => q.key)).toEqual([
+      'pendingReview', 'metaIncomplete', 'episodeMismatch',
+      'metadataNeedsReview', 'metadataHasCandidate', 'metadataMissing', 'metadataTmdbPending',
+    ])
+    expect(VIDEO_QUICK_FILTERS.map((q) => q.label)).toEqual([
+      '待审', '元数据缺失', '集数不一致', '需复核', '有候选', '未增强', 'TMDB 待处理',
+    ])
   })
 })
