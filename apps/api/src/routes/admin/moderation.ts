@@ -22,6 +22,7 @@ import { VIDEO_TYPES, DOUBAN_STATUSES, SOURCE_CHECK_STATUSES, ENRICHMENT_STATUSE
 import { listAuditLogByTarget } from '@/api/db/queries/auditLog'
 import { registerModerationDoubanRoutes } from './moderation.douban'
 import { registerModerationBangumiRoutes } from './moderation.bangumi'
+import { registerModerationTmdbRoutes } from './moderation.tmdb'
 
 const PendingQueueQuerySchema = z.object({
   cursor: z.string().optional(),
@@ -432,4 +433,5 @@ export async function adminModerationRoutes(fastify: FastifyInstance) {
   // ── 子路由注册 ──────────────────────────────────────────────
   await registerModerationDoubanRoutes(fastify)
   await registerModerationBangumiRoutes(fastify)
+  await registerModerationTmdbRoutes(fastify)
 }

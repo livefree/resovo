@@ -5863,3 +5863,34 @@
 - **测试覆盖**：+14 it（tmdb.test.ts）；test:changed 4 文件 45 passed（tmdb 14 新 + integration-credential-testers 13 + integration-credentials-service 12 + route 6 零回归）。
 - **质量门禁**：typecheck 全工作区 EXIT=0 / lint EXIT=0（仅既有 web-next warning，非本卡）/ test:changed 45 passed / verify:adr-contracts EXIT=0（endpoint-adr 240 对齐〔无新端点〕，仅既有 enum baseline advisory）。test:integration N/A（无新 query/SQL）；**test:e2e N/A**（纯 lib 无 spec，回归面为单测，META-34/37-B 先例）。
 - **[AI-CHECK]**：六问过——①根因=ADR-201 Phase 5A 要求把 lib/tmdb.ts〔仅连接测试〕补成完整只读 client 为 META-39 备料；②零回归（typecheck 全绿 + testConnection 重构 13 回归测试零破坏 + test:changed 45 passed）；③边界=纯 lib client 零 route/migration/UI/worker，候选确认应用归 META-39；④复用=applyAuth 鉴权单一真源 + recordFetch 埋点 + bangumi get 原子/strict/null 降级范式 + 类型拆分；⑤无 any / 无空 catch / api_key 经 URL.searchParams 编码防注入 / 429 退避封顶防长阻塞；⑥范围 search+detail+append+configuration+限速 单一 client 概念内聚验收，全落地。解锁 META-39。
+
+## [ADR-202] TMDB 候选确认与应用流程 + 端点契约（META-39 前置，docs-only）
+- **完成时间**：2026-06-14
+- **记录时间**：2026-06-14 22:40
+- **执行模型**：claude-opus-4-8
+- **子代理**：arch-reviewer (claude-opus-4-8, a2afa5615397986dd〔D-202-1~7 主体〕), arch-reviewer (claude-opus-4-8, a7c8e6a117a6ecc4d〔D-202-8 多语言〕)
+- **修改文件**：
+  - `docs/decisions.md` — 新增 ADR-202（背景 / D-202-1~8 / §端点契约表 3 端点 / 迁移与兼容〔无 migration〕/ 验收 / 偏离 α·β·γ / FU-202-1·2·3 / 关联）。双轮 Opus 评审 CONDITIONAL-PASS 全红线吸收 + 真实 TMDB API 实测（zh-CN/zh-TW/zh-HK 三变体验证对应 ADR-174/175 简繁结构）。
+  - `docs/task-queue.md` / `docs/tasks.md` — META-39 拆 -A/-B + META-39-A 卡。
+- **新增依赖**：无。
+- **数据库变更**：无（写侧原语 + schema 全就绪，零 migration）。
+- **注意事项**：ADR-202 是新 admin route 的端点契约真源（MUST-8），先于 route 代码 commit（verify-endpoint-adr 门禁）。
+
+## [META-39-A] TMDB 候选确认/应用后端 + mapTmdbGenres（Phase 5B，ADR-202）
+- **完成时间**：2026-06-14
+- **记录时间**：2026-06-14 23:10
+- **执行模型**：claude-opus-4-8
+- **子代理**：arch-reviewer (claude-opus-4-8, a2afa5615397986dd), arch-reviewer (claude-opus-4-8, a7c8e6a117a6ecc4d)（ADR-202 双轮评审契约，实现未偏离复用同 gate）
+- **修改文件**：
+  - `apps/api/src/routes/admin/moderation.tmdb.ts` — 新建。3 端点（tmdb-search/confirm/reject，挂 /admin/videos/:id/，zod + 404 + Service 委托）；confirm `updated:false`→**422 CONFIRM_FAILED**（D-202-4 不 409）；**无 review_status pending 守卫**（D-202-6，取 bangumi 范式）。
+  - `apps/api/src/routes/admin/moderation.ts` — 聚合注册 `registerModerationTmdbRoutes`。
+  - `apps/api/src/services/TmdbConfirmService.ts` — 新建。search（只读返候选，query 省略取 catalog.title，strict）；**confirm 单事务**（Phase1 REST 事务外拉 detail〔zh-CN + external_ids〕→ Phase2 BEGIN → `resolveAndWriteExactRef`〔movie→movie / tv-season→season〕或 `insertCandidateRef`〔tv-show-root→show candidate，D-202-1〕→ exact/kind 冲突 ROLLBACK 返 reason〔D-202-4〕→ `safeUpdate` 核心标量〔传 client provenanceCtx.db 同事务，D-202-2〕→ tmdb_id cache〔确认语义〕+ imdb_id cache〔fill-if-empty，M4〕→ `upsertVideoExternalRef` manual_confirmed → COMMIT）；reject→rejected。`buildCatalogFields` D-202-8 M1/M3/M5（title 简中缺失回退 original·空不写 / original_language 存 BCP47 language-only / genres-by-id / fields=[] 仅绑 ID）。`TMDB_APPLIABLE_FIELDS` 白名单。
+  - `apps/api/src/lib/genreMapper.ts` — 新增 `mapTmdbGenres`（`TMDB_GENRE_MAP` 数值 id→VideoGenre，覆盖 movie+tv 两套 id 体系，null 跳过由 VideoType 承载的 Animation/Drama 等；M5：用稳定 id 不用本地化 name 避免 'Sci-Fi & Fantasy' 回退英文污染）。
+  - `tests/unit/api/tmdb-confirm-service.test.ts` — 新建。13 it（mapTmdbGenres 3 / search 2 / confirm 7〔movie exact+核心标量+双 cache+manual_confirmed / tv-season / tv-show candidate / exact·kind 冲突 ROLLBACK / detail null / fields=[] 仅绑 ID〕/ reject 1）。
+  - `tests/unit/api/moderation-tmdb-route.test.ts` — 新建。8 it（search happy/422 / confirm happy/404/CONFIRM_FAILED/非法 fields / reject / 401）。
+- **新增依赖**：无。
+- **数据库变更**：无（复用 resolveAndWriteExactRef/insertCandidateRef/safeUpdate/upsertVideoExternalRef + media_catalog 既有列，零 migration）。
+- **架构发现/边界**：① **search 只读不落 candidate**——D-202-2 字面「search 写 candidate」主要服务自动富集；手动 search→confirm 即时流程不经中间 candidate 态（多候选无法都落），candidate 态归自动富集 worker follow-up（实施细化登记）。② **imdb cache-only fill-if-empty**（M4）：imdb_id 经显式 `UPDATE ... WHERE imdb_id IS NULL` 写（不丢 safeUpdate fields，因 CATALOG_EXTERNAL_REF_FIELDS 不含 imdb/tmdb，丢进去会走优先级覆盖非 fill-if-empty）；tmdb_id 按 confirm 确认语义直写。③ cache UPDATE 内联事务编排（BangumiService.applyEnrichmentDb 先例，事务内原子同步，未抽 queries——2 行简单 SQL 与 BEGIN/COMMIT 紧耦合）。④ title_en + translations→全量结构化别名移出（FU-202-1/2，需 isPinyin 守卫，属 aliases 范畴）。
+- **测试覆盖**：+21 新单测（service 13 + route 8）；test:changed 41 文件 548 passed（douban/bangumi/genreMapper 消费方零回归）。**集成测边界**：confirm 复用的写侧原语各有既存集成测，新增仅 cache UPDATE 简单 SQL；confirm 端到端集成（真实 video/catalog seed）归 META-39-B e2e。
+- **质量门禁**：typecheck 全工作区 EXIT=0 / lint 通过（无本卡 error）/ **verify-endpoint-adr ✅ 243 admin 路由对齐**（3 新 tmdb 端点对齐 ADR-202 §端点契约，240→243）/ test:changed 548 passed。test:integration N/A（无新 query SQL，复用既有原语集成测）；e2e 归 META-39-B。
+- **[AI-CHECK]**：六问过——①根因=ADR-202 落库后实现 TMDB 候选确认/应用后端；②零回归（typecheck 全绿 + test:changed 548 passed + douban/bangumi 端点零破坏）；③边界=复用写侧原语零 migration、search 只读、imdb cache-only、title_en/aliases 移出 FU；④复用=resolveAndWriteExactRef/insertCandidateRef/safeUpdate/upsertVideoExternalRef + BangumiService.confirmMatch 单事务范式 + bangumi route 拆分范式 + genreMapper 双写 genres/genresRaw 范式；⑤无 any（测试 fixture as any 局部 + eslint-disable）/ 无空 catch（ROLLBACK catch 有注释）/ cache SQL 参数化防注入 / 无硬编码色；⑥范围 3 端点 + service 单事务 + mapTmdbGenres + 核心标量 单一验收口径，全落地。解锁 META-39-B（审核 UI）。

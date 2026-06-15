@@ -81,6 +81,59 @@ export function mapDoubanGenres(genresRaw: string[]): VideoGenre[] {
   return [...result]
 }
 
+// ── TMDB 题材映射（数值 genre id → VideoGenre，ADR-202 D-202-8 M5）──────────
+//
+// 用 TMDB **数值 genre id**（稳定 key，不随 language 变）而非本地化 name——TMDB zh-CN 下
+// 部分 genre 不翻译会回退英文（实测 tv 'Sci-Fi & Fantasy' 未翻译），用 name 会污染。
+// 单表覆盖 movie + tv 两套 id 体系：共享 id 含义一致，各自特有 id 不冲突。
+// null = 不归类 genre（由 VideoType 承载 / 万能标签 / 形式非题材）。
+
+const TMDB_GENRE_MAP: Record<number, VideoGenre | null> = {
+  // movie + tv 共享 id（含义一致）
+  16: null,          // Animation（由 VideoType=anime 承载）
+  35: 'comedy',      // Comedy
+  80: 'crime',       // Crime
+  99: null,          // Documentary（由 VideoType 承载）
+  18: null,          // Drama（万能标签，不携带信息）
+  37: 'western',     // Western
+  9648: 'mystery',   // Mystery
+  10751: 'family',   // Family
+  // movie 特有
+  28: 'action',      // Action
+  12: 'adventure',   // Adventure
+  14: 'fantasy',     // Fantasy
+  27: 'horror',      // Horror
+  36: 'history',     // History
+  53: 'thriller',    // Thriller
+  878: 'sci_fi',     // Science Fiction
+  10402: 'musical',  // Music
+  10749: 'romance',  // Romance
+  10752: 'war',      // War
+  10770: null,       // TV Movie（形式非题材）
+  // tv 特有
+  10759: 'action',   // Action & Adventure（组合类目取 action）
+  10762: null,       // Kids（由 VideoType=kids 承载）
+  10763: null,       // News
+  10764: null,       // Reality
+  10765: 'sci_fi',   // Sci-Fi & Fantasy（组合类目取 sci_fi）
+  10766: null,       // Soap
+  10767: null,       // Talk
+  10768: 'war',      // War & Politics
+}
+
+/**
+ * 将 TMDB genre id 列表映射到规范 VideoGenre 枚举数组（ADR-202 D-202-8 M5）。
+ * 不可映射 / 由 VideoType 承载的 id（如 Animation 16 / Drama 18）静默跳过。去重返回。
+ */
+export function mapTmdbGenres(genreIds: number[]): VideoGenre[] {
+  const result = new Set<VideoGenre>()
+  for (const id of genreIds) {
+    const mapped = TMDB_GENRE_MAP[id]
+    if (mapped) result.add(mapped)
+  }
+  return [...result]
+}
+
 // ── source_category 映射（低置信度）─────────────────────────────
 
 const SOURCE_CATEGORY_MAP: Record<string, VideoGenre> = {
