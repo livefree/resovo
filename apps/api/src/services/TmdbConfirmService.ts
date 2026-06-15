@@ -19,9 +19,12 @@ import type { TmdbMovieDetail, TmdbTvDetail, TmdbMovieSearchItem, TmdbTvSearchIt
 import { resolveAndWriteExactRef, insertCandidateRef, type ExternalRefKind } from '@/api/db/queries/catalogExternalRefs'
 import { upsertVideoExternalRef } from '@/api/db/queries/externalData'
 import { mapTmdbGenres } from '@/api/lib/genreMapper'
+import { tmdbTypeSignal, resolveTypeSignal } from '@/api/lib/typeFromProvider'
 import { countryToIso } from '@/types'
 import { MediaCatalogService } from '@/api/services/MediaCatalogService'
+import { findCatalogById } from '@/api/db/queries/mediaCatalog'
 import type { CatalogUpdateData } from '@/api/db/queries/mediaCatalog'
+import { baseLogger } from '@/api/lib/logger'
 
 /** search 候选预览缩略图 base（base+w500；与 confirm 富图片应用的 configuration base 不同关注点，META-43）。 */
 const TMDB_PREVIEW_IMAGE_BASE = 'https://image.tmdb.org/t/p/w500'
@@ -210,6 +213,23 @@ export class TmdbConfirmService {
     const externalKind: ExternalRefKind = mediaType === 'movie' ? 'movie' : seasonNumber != null ? 'season' : 'show'
     const updateFields = buildCatalogFields(detail, mediaType, fields, imageBase)
     const imdbId = detail.external_ids?.imdb_id ?? null
+
+    // type 富集修正（ADR-203 D-203-2/4）：仅 current==='other' 才写 provider 形式信号，绝不覆盖具体 type；
+    // type 不入 TMDB_APPLIABLE_FIELDS（身份字段不让人工勾选），随 'genres'（type 信号源）opt-in——fields=[] 仅绑 ID 不改 type；
+    // 并入 updateFields 同 safeUpdate 单事务（红线①）。
+    if (fields.includes('genres')) {
+      const currentCatalog = await findCatalogById(this.db, catalogId)
+      if (currentCatalog) {
+        const outcome = resolveTypeSignal(currentCatalog.type, tmdbTypeSignal(mediaType, detail.genres.map((g) => g.id)))
+        if (outcome.typeToWrite) updateFields.type = outcome.typeToWrite
+        else if (outcome.conflict) {
+          baseLogger.child({ module: 'catalog-type-signal' }).info(
+            { outcome: 'type_conflict_skipped', catalogId, provider: 'tmdb', externalId: String(tmdbId), ...outcome.conflict },
+            'tmdb type signal conflict with existing concrete type, skipped (ADR-203 D-203-5)',
+          )
+        }
+      }
+    }
 
     // Phase 2：DB 写入单事务（ref + 字段 + cache + video ref 共享 client，D-202-2）
     const client = await this.db.connect()

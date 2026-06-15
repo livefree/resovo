@@ -13,7 +13,9 @@ import type { Pool } from 'pg'
 import { searchDouban } from '@/api/lib/douban'
 import { getDoubanDetailRich } from '@/api/lib/doubanAdapter'
 import { mapDoubanGenres } from '@/api/lib/genreMapper'
+import { doubanTypeSignal, resolveTypeSignal } from '@/api/lib/typeFromProvider'
 import { countryToIso } from '@/types'
+import { baseLogger } from '@/api/lib/logger'
 import * as videoQueries from '@/api/db/queries/videos'
 import * as catalogQueries from '@/api/db/queries/mediaCatalog'
 import * as externalDataQueries from '@/api/db/queries/externalData'
@@ -72,6 +74,27 @@ import {
 export class DoubanService {
   constructor(private db: Pool) {}
 
+  /**
+   * type 富集修正（ADR-203 D-203-2/4/5）：仅 current==='other' 才写 douban 形式信号，绝不覆盖具体 type；
+   * 命中 → 并入 updateFields（caller 同 safeUpdate 单事务，红线①）；冲突未改 → 记 D-203-5 观测日志。
+   */
+  private applyDoubanTypeSignal(
+    updateFields: import('@/api/db/queries/mediaCatalog').CatalogUpdateData,
+    currentType: string,
+    genres: readonly string[],
+    ctx: { catalogId: string; subjectId: string },
+  ): void {
+    const outcome = resolveTypeSignal(currentType, doubanTypeSignal(genres))
+    if (outcome.typeToWrite) {
+      updateFields.type = outcome.typeToWrite
+    } else if (outcome.conflict) {
+      baseLogger.child({ module: 'catalog-type-signal' }).info(
+        { outcome: 'type_conflict_skipped', catalogId: ctx.catalogId, provider: 'douban', externalId: ctx.subjectId, ...outcome.conflict },
+        'douban type signal conflict with existing concrete type, skipped (ADR-203 D-203-5)',
+      )
+    }
+  }
+
   async syncVideo(videoId: string): Promise<SyncResult | SyncSkipped> {
     // 1. 获取视频基本信息（含 catalog JOIN 字段）
     const video = await videoQueries.findAdminVideoById(this.db, videoId)
@@ -123,6 +146,8 @@ export class DoubanService {
       const iso = countryToIso(detail.countries[0])
       if (iso) updateFields.country = iso
     }
+    // type 富集修正（ADR-203，全量应用路径无条件 gate；并入同 safeUpdate 单事务）
+    this.applyDoubanTypeSignal(updateFields, catalog.type, detail.genres, { catalogId: catalog.id, subjectId: detail.id })
 
     const { updated } = await catalogService.safeUpdate(catalog.id, updateFields, 'douban', { sourceRef: detail.id })
     if (!updated) return { updated: false, reason: 'fetch_failed' }
@@ -200,6 +225,9 @@ export class DoubanService {
       const iso = countryToIso(detail.countries[0])
       if (iso) updateFields.country = iso
     }
+    // type 富集修正（ADR-203，全量应用路径）：读 catalog 现值（非 video.type，可能不同步）→ 闸门 → 并入同 safeUpdate 单事务
+    const currentCatalog = await catalogQueries.findCatalogById(this.db, video.catalog_id)
+    if (currentCatalog) this.applyDoubanTypeSignal(updateFields, currentCatalog.type, detail.genres, { catalogId: video.catalog_id, subjectId })
 
     const { updated, skippedFields } = await catalogService.safeUpdate(video.catalog_id, updateFields, 'douban', { sourceRef: subjectId })
     if (!updated) return { updated: false, reason: 'catalog_update_rejected' }
@@ -391,6 +419,12 @@ export class DoubanService {
       } else {
         (updateFields as Record<string, unknown>)[catalogKey] = val
       }
+    }
+
+    // type 富集修正（ADR-203）：per-field opt-in 路径——仅当用户选中 'genres'（type 信号源）时随动，尊重逐字段意图。
+    if (fields.includes('genres') && Array.isArray(proposed.genres)) {
+      const currentCatalog = await catalogQueries.findCatalogById(this.db, video.catalog_id)
+      if (currentCatalog) this.applyDoubanTypeSignal(updateFields, currentCatalog.type, proposed.genres, { catalogId: video.catalog_id, subjectId })
     }
 
     const catalogService = new MediaCatalogService(this.db)

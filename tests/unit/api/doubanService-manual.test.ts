@@ -59,7 +59,7 @@ const VIDEO_ID = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'
 const CATALOG_ID = 'cccccccc-dddd-eeee-ffff-111111111111'
 const SUBJECT_ID = '26266893'
 
-function makeDetail(overrides: Partial<{ episodes: number; countries: string[] }> = {}) {
+function makeDetail(overrides: Partial<{ episodes: number; countries: string[]; genres: string[] }> = {}) {
   return {
     id: SUBJECT_ID,
     title: '某剧集',
@@ -188,5 +188,59 @@ describe('DoubanService.confirmFields — Y2 fields 含 episodes', () => {
     expect(videoQueries.updateVideoEpisodes).not.toHaveBeenCalled()
     // 网络 fallback 也不应被触发
     expect(getDoubanDetailRich).not.toHaveBeenCalled()
+  })
+})
+
+// META-44-B：type 富集修正（ADR-203，fill-if-default 仅 other→具体）
+describe('DoubanService type 富集修正（ADR-203）', () => {
+  let service: DoubanService
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.mocked(videoQueries.findAdminVideoById).mockResolvedValue({
+      id: VIDEO_ID, catalog_id: CATALOG_ID, title: '某动画', year: 2024, meta_quality: {},
+    } as never)
+    vi.mocked(externalDataQueries.findDoubanEntryById).mockResolvedValue(null)
+    service = new DoubanService({} as never)
+  })
+
+  const lastSafeUpdate = () => vi.mocked(MediaCatalogService).mock.results.at(-1)?.value.safeUpdate
+
+  it("confirmSubject + catalog type='other' + douban genres 含「动画」→ safeUpdate 写 type='anime'", async () => {
+    vi.mocked(catalogQueries.findCatalogById).mockResolvedValue({ id: CATALOG_ID, type: 'other' } as never)
+    vi.mocked(getDoubanDetailRich).mockResolvedValue(makeDetail({ genres: ['动画', '冒险'] }) as never)
+
+    await service.confirmSubject(VIDEO_ID, SUBJECT_ID)
+
+    expect(lastSafeUpdate()).toHaveBeenCalledWith(CATALOG_ID, expect.objectContaining({ type: 'anime' }), 'douban', expect.anything())
+  })
+
+  it("confirmSubject + catalog type='series'（具体值）+ 动画信号 → 不写 type（绝不覆盖）", async () => {
+    vi.mocked(catalogQueries.findCatalogById).mockResolvedValue({ id: CATALOG_ID, type: 'series' } as never)
+    vi.mocked(getDoubanDetailRich).mockResolvedValue(makeDetail({ genres: ['动画'] }) as never)
+
+    await service.confirmSubject(VIDEO_ID, SUBJECT_ID)
+
+    const arg = lastSafeUpdate().mock.calls.at(-1)?.[1] as Record<string, unknown>
+    expect(arg).not.toHaveProperty('type')
+  })
+
+  it("confirmFields 未选 'genres' → 不应用 type 修正（尊重逐字段 opt-in）", async () => {
+    vi.mocked(catalogQueries.findCatalogById).mockResolvedValue({ id: CATALOG_ID, type: 'other' } as never)
+    vi.mocked(getDoubanDetailRich).mockResolvedValue(makeDetail({ genres: ['动画'] }) as never)
+
+    await service.confirmFields(VIDEO_ID, SUBJECT_ID, ['title', 'rating'])
+
+    const arg = lastSafeUpdate().mock.calls.at(-1)?.[1] as Record<string, unknown>
+    expect(arg).not.toHaveProperty('type')
+  })
+
+  it("confirmFields 选中 'genres' + type='other' + 动画 → 写 type='anime'（随 genres opt-in）", async () => {
+    vi.mocked(catalogQueries.findCatalogById).mockResolvedValue({ id: CATALOG_ID, type: 'other' } as never)
+    vi.mocked(getDoubanDetailRich).mockResolvedValue(makeDetail({ genres: ['动画'] }) as never)
+
+    await service.confirmFields(VIDEO_ID, SUBJECT_ID, ['genres'])
+
+    expect(lastSafeUpdate()).toHaveBeenCalledWith(CATALOG_ID, expect.objectContaining({ type: 'anime' }), 'douban', expect.anything())
   })
 })

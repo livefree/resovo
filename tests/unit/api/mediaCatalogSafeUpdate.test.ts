@@ -140,6 +140,29 @@ describe('MediaCatalogService.safeUpdate — ADMIN-14 规则', () => {
     expect(writtenArg).toHaveProperty('genres')
   })
 
+  it('META-44-B/ADR-203：硬锁 type → provider 写 type 被阻挡（身份字段继承三层锁，D-203-4）', async () => {
+    vi.mocked(catalogQueries.findCatalogById).mockResolvedValue(
+      makeCatalog({ lockedFields: [], metadataSource: 'crawler' }) as never,
+    )
+    vi.mocked(provenanceQueries.getHardLockedFields).mockResolvedValue(['type'])
+
+    const svc = new MediaCatalogService(mockDb)
+    const result = await svc.safeUpdate(
+      'cat-1',
+      { type: 'anime', genres: ['action'] } as never,
+      'douban',
+    )
+
+    // type 与普通内容字段一样被硬锁阻挡（safeUpdate 字段无关，type 非特例绕过）
+    expect(result.skippedFields).toEqual(['type'])
+    const writtenArg = vi.mocked(catalogQueries.updateCatalogFields).mock.calls[0][2] as Record<string, unknown>
+    expect(writtenArg).not.toHaveProperty('type')
+    expect(writtenArg).toHaveProperty('genres')
+    // provenance 不记被锁的 type 字段
+    const provArg = vi.mocked(provenanceQueries.batchUpsertFieldProvenance).mock.calls[0]?.[2] as string[] | undefined
+    if (provArg) expect(provArg).not.toContain('type')
+  })
+
   it('来源优先级低于当前 → 全部 skipped（不写入，返回原 catalog）', async () => {
     vi.mocked(catalogQueries.findCatalogById).mockResolvedValue(
       makeCatalog({ metadataSource: 'manual' }) as never,  // priority 5

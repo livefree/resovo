@@ -28,6 +28,9 @@ const safeUpdateMock = vi.fn(
     ({ updated: true, skippedFields: [] as string[] }),
 )
 vi.mock('@/api/services/MediaCatalogService', () => ({ MediaCatalogService: vi.fn(() => ({ safeUpdate: safeUpdateMock })) }))
+// META-44-B：confirm 在选中 genres 时读 catalog 现值做 type 富集修正（ADR-203）
+vi.mock('@/api/db/queries/mediaCatalog', () => ({ findCatalogById: vi.fn(async () => ({ type: 'other' })) }))
+import { findCatalogById } from '@/api/db/queries/mediaCatalog'
 
 const clientQuery = vi.fn(async () => ({ rows: [] }))
 const client = { query: clientQuery, release: vi.fn() }
@@ -208,6 +211,30 @@ describe('confirm', () => {
     vi.mocked(tmdbLib.getMovieDetail).mockResolvedValue(MOVIE)
     await svc.confirm('vid', 'cat', { tmdbId: 129, mediaType: 'movie', fields: ['title'] })
     expect(tmdbLib.getImageBaseUrl).not.toHaveBeenCalled()
+  })
+
+  // META-44-B：type 富集修正（ADR-203，随 genres opt-in；fill-if-default 仅 other→具体）
+  it("genres 选中 + catalog type='other' + tv anime genre → updateFields.type='anime'", async () => {
+    vi.mocked(findCatalogById).mockResolvedValue({ type: 'other' } as never)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    vi.mocked(tmdbLib.getTvDetail).mockResolvedValue({ id: 1, name: 'X', original_name: 'X', original_language: 'ja', overview: '', genres: [{ id: 16, name: '动画' }], external_ids: {} } as any)
+    await svc.confirm('vid', 'cat', { tmdbId: 1, mediaType: 'tv', seasonNumber: 1, fields: ['genres'] })
+    expect(safeUpdateMock).toHaveBeenCalledWith('cat', expect.objectContaining({ type: 'anime' }), 'tmdb', expect.anything())
+  })
+
+  it('catalog type 为具体值（series）→ 不写 type（绝不覆盖具体 type）', async () => {
+    vi.mocked(findCatalogById).mockResolvedValue({ type: 'series' } as never)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    vi.mocked(tmdbLib.getTvDetail).mockResolvedValue({ id: 1, name: 'X', original_name: 'X', original_language: 'ja', overview: '', genres: [{ id: 16, name: '动画' }], external_ids: {} } as any)
+    await svc.confirm('vid', 'cat', { tmdbId: 1, mediaType: 'tv', seasonNumber: 1, fields: ['genres'] })
+    const arg = safeUpdateMock.mock.calls[0][1]
+    expect(arg.type).toBeUndefined()
+  })
+
+  it('未选 genres → 不读 catalog、不写 type（尊重 opt-in / fields=[] 仅绑 ID）', async () => {
+    vi.mocked(tmdbLib.getMovieDetail).mockResolvedValue(MOVIE)
+    await svc.confirm('vid', 'cat', { tmdbId: 129, mediaType: 'movie', fields: ['title'] })
+    expect(findCatalogById).not.toHaveBeenCalled()
   })
 })
 

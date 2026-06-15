@@ -2537,7 +2537,7 @@
 
 ## [SEQ-20260615-01] 元数据字段枚举兼容性治理
 
-- **状态**：🔄 进行中（META-40 ✅ + META-41-A ✅ + META-41-B ✅ + META-42 ✅ + META-43 ✅ + META-44-A ✅ 2026-06-15〔+ 旁路 META-37-A-FIX Codex P2×2〕 → 下一 META-44-B〔VideoType 修正实施，依 ADR-203 PASS〕）
+- **状态**：🔄 进行中（META-40 ✅ + META-41-A ✅ + META-41-B ✅ + META-42 ✅ + META-43 ✅ + META-44-A ✅ + META-44-B ✅ 2026-06-15〔+ 旁路 META-37-A-FIX Codex P2×2〕 → 下一 META-45〔Genre 颗粒度增强，🟢 低，需 ADR + 扩枚举跨 3+ 消费方强制 Opus 子代理〕）
 - **创建时间**：2026-06-15 00:30
 - **最后更新时间**：2026-06-15 01:10（用户评审 B+ 后修订：范围补 server-next / META-40 收敛真源 / META-41·44 拆 -A/-B / cast 后排 / META-43 source 口径 / 逐卡门禁）
 - **目标**：修复 douban/bangumi/tmdb 三源元数据字段（类型/题材/地区/图片）与本地枚举的兼容缺口——含 1 项数据正确性 bug（实证）+ 4 项能力闲置 + 1 项设计权衡。
@@ -2613,7 +2613,8 @@
    - **门禁**：verify:adr-contracts + arch-reviewer PASS。
    - **依赖**：建议 META-40~43 之后（标量治理稳定后再动身份性字段）。
 
-7. **META-44-B** — VideoType 修正实施（🟡 中）（状态：⬜ 待办，依赖 META-44-A ✅ ADR-203 PASS）
+7. **META-44-B** — VideoType 修正实施（🟡 中）（状态：✅ 已完成 2026-06-15）
+   - **完成备注**：✅ 2026-06-15。按 ADR-203 D-203-6 蓝图实施。新建纯函数 `apps/api/src/lib/typeFromProvider.ts`（`tmdbTypeSignal` tv+16→anime/99→documentary/tv+10762→kids/tv+10763→news/media_type 兜底，movie+16 不推 anime + family/reality 不映射 / `doubanTypeSignal` 动画·纪录片·短片·儿童顺序优先 / `resolveTypeSignal` fill-if-default 闸门返 `{typeToWrite, conflict}`）。接线：`TmdbConfirmService.confirm`（读 catalog 现值 → tmdbTypeSignal → 闸门 → 并入 updateFields **同 safeUpdate 单事务红线①**，type 不入 TMDB_APPLIABLE_FIELDS，随 'genres' opt-in）+ `DoubanService` 私有 `applyDoubanTypeSignal`（三处复用）接 syncVideo〔enrich，全量无条件〕/confirmSubject〔全量，补读 catalog 现值〕/confirmFields〔per-field，仅 fields 含 'genres' 随动〕，冲突未改记 D-203-5 观测日志。**实施细化**：confirmFields/TMDB confirm 的 type 修正 gate 于 `fields.includes('genres')`（尊重逐字段 opt-in，ADR「三处统一」未顾及该语义的保守细化）；未触 MetadataEnrichService（D-203-7.7 守）。**红线全守**：单事务、仅 other→具体不覆盖、零 migration（F6 通道就绪）、不改归并 SQL/优先级、不改 enrich anime 门控。门禁 typecheck/lint EXIT=0 + test:changed 15 文件 226 passed（+27：typeFromProvider 14 + tmdb-confirm type 3 + douban-manual type 4 + safeUpdate type 硬锁守护 1 + douban syncVideo/manual 回归零破坏）。执行模型 claude-opus-4-8；子代理无（实施 ADR-203 既定决策，纯函数 + caller 接线）。详见 changelog [META-44-B]。**META-44 全收口（-A ADR + -B 实施）。**
    - 创建时间：2026-06-15 01:10
    - 建议模型：opus
    - **范围（按 ADR-203 D-203-6 蓝图）**：① 新建纯函数 helper `apps/api/src/lib/typeFromProvider.ts`——`tmdbTypeSignal(mediaType, genreIds): VideoType|null`（D-203-1 TMDB 表：tv+16→anime / 99→documentary / tv+10762→kids / tv+10763→news / movie→movie / tv→series）+ `doubanTypeSignal(genres: string[]): VideoType|null`（动画/纪录片/短片/儿童）+ `resolveTypeFillIfDefault(currentType, candidate): VideoType|null`（D-203-2 闸门，`TYPE_LOW_CONFIDENCE_DEFAULTS=new Set(['other'])`，仅 other→具体、不覆盖、幂等）；② `TmdbConfirmService.confirm`——type 推断在 confirm 内 buildCatalogFields 之外（**type 不入 TMDB_APPLIABLE_FIELDS**），读 catalog 现值 → resolveTypeFillIfDefault → 非 null 并入 updateFields **同 safeUpdate 事务**（红线①）；③ `DoubanService` 三处 safeUpdate caller（enrich/confirmSubject/confirmFields）——读 **catalog 现值**（非 video.type）→ doubanTypeSignal → 闸门 → 并入；冲突未改记 D-203-5 观测日志（`module:'catalog-type-signal'`，`type_conflict_skipped`，幂等不记）。
