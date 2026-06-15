@@ -75,7 +75,8 @@ describe('IntegrationCredentialsService.listForAdmin', () => {
     expect(bangumi.configured).toBe(true)
     expect(bangumi.lastTestOk).toBe(true)
     const tmdb = views.find((v) => v.provider === 'tmdb')!
-    expect(tmdb.values.token).toBe('') // 无行 → 空
+    expect(tmdb.values.read_access_token).toBe('') // 无行 → 空（ADR-201 字段拆分：read_access_token / api_key）
+    expect(tmdb.values.api_key).toBe('')
     expect(tmdb.configured).toBe(false)
   })
 })

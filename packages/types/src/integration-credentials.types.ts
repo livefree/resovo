@@ -15,7 +15,11 @@ import type { ProviderKey } from './external.types'
 
 /** 单个凭证字段声明（驱动 UI 渲染 + zod 校验 + 解析器分列 + env 回退）。 */
 export interface CredentialFieldSpec {
-  /** 字段键（同时是 secrets/config JSONB 内的 key）：'token' | 'userAgent' | 'timeoutMs' | 'baseUrl' | 'language' 等 */
+  /**
+   * 字段键（同时是 secrets/config JSONB 内的 key）：如 'token' | 'userAgent' | 'timeoutMs' | 'baseUrl' | 'read_access_token' | 'api_key' 等。
+   * 命名风格随 provider 协议惯例：bangumi 沿 camelCase；tmdb 沿 ADR-201 §凭证语义 + TMDB 官方字段名 snake_case（read_access_token / api_key）。
+   * 遮罩/redact 由 `secret` flag 驱动（非 key 名正则，D-173-4），故风格混用无副作用，勿擅自统一。
+   */
   readonly key: string
   /** UI 标签 */
   readonly label: string
@@ -51,8 +55,8 @@ export interface ProviderCredentialSpec {
  * 仅声明「有凭证可配」的源；douban（scrape，cookie 仍走 system_settings）/ imdb（未接）不在此表。
  *
  * - bangumi（ADR-161/189，active）：Bearer Token + 描述性 UA + 超时。
- * - tmdb（ADR-173 占位就绪，consumption 后续）：API Read Access Token（Bearer，覆盖 v3/v4，
- *   不绑 v3 query api_key）+ baseUrl + 默认语言。
+ * - tmdb（ADR-173 占位就绪 → ADR-201 §凭证语义 amend）：read_access_token（v4 Bearer，首选）
+ *   + api_key（v3 query 兼容）+ baseUrl + 默认语言。Bearer 与 API Key 双认证，auth_method 由保存字段派生。
  */
 export const PROVIDER_CREDENTIAL_SPECS: readonly ProviderCredentialSpec[] = [
   {
@@ -99,14 +103,24 @@ export const PROVIDER_CREDENTIAL_SPECS: readonly ProviderCredentialSpec[] = [
     label: 'TMDb',
     fields: [
       {
-        key: 'token',
-        label: 'API Read Access Token',
+        key: 'read_access_token',
+        label: 'API Read Access Token (Bearer)',
         secret: true,
         input: 'password',
         required: false,
         placeholder: '粘贴 TMDb API Read Access Token',
-        help: 'TMDb 设置 > API > API Read Access Token（Bearer，覆盖 v3/v4）；富集消费后续立项',
+        help: 'TMDb 设置 > API > API Read Access Token（v4，写入 Authorization: Bearer，首选）',
         envVar: 'TMDB_READ_ACCESS_TOKEN',
+      },
+      {
+        key: 'api_key',
+        label: 'API Key (v3 兼容)',
+        secret: true,
+        input: 'password',
+        required: false,
+        placeholder: '粘贴 TMDb v3 API Key',
+        help: 'TMDb 设置 > API > API Key（v3，作为 query api_key 兼容；优先使用上方 Bearer Read Access Token）',
+        envVar: 'TMDB_API_KEY',
       },
       {
         key: 'baseUrl',

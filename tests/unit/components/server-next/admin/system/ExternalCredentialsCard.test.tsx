@@ -42,7 +42,7 @@ const BANGUMI_VIEW = {
 const TMDB_VIEW = {
   provider: 'tmdb',
   label: 'TMDb',
-  values: { token: '', baseUrl: 'https://api.themoviedb.org/3', language: 'zh-CN' },
+  values: { read_access_token: '', api_key: '', baseUrl: 'https://api.themoviedb.org/3', language: 'zh-CN' },
   configured: false,
   enabled: true,
   lastTestedAt: null,

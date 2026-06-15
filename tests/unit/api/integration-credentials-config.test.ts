@@ -11,6 +11,7 @@
  */
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import type { Pool } from 'pg'
+import { getProviderCredentialSpec } from '@resovo/types'
 import { loadProviderCredential } from '@/api/services/integration-credentials-config'
 import { loadBangumiClientConfig } from '@/api/services/bangumi-config'
 
@@ -139,5 +140,34 @@ describe('loadBangumiClientConfig 薄封装映射', () => {
     const db = makeDb({ credRow: { secrets: { token: 'row-token' }, enabled: false } })
     const cfg = await loadBangumiClientConfig(db)
     expect(cfg).toEqual({})
+  })
+})
+
+describe('tmdb 凭证解析（ADR-201 字段拆分 / META-37-A）', () => {
+  it('已迁移行：secrets.read_access_token → fields.read_access_token（Bearer 首选）', async () => {
+    const db = makeDb({ credRow: { secrets: { read_access_token: 'rat-row' } } })
+    const res = await loadProviderCredential(db, 'tmdb')
+    expect(res.fields.read_access_token).toBe('rat-row')
+  })
+
+  it('缺行：legacy KV tmdb_api_key → fields.api_key（不回填 Bearer read_access_token，ADR-201 22822）', async () => {
+    vi.stubEnv('TMDB_READ_ACCESS_TOKEN', '')
+    vi.stubEnv('TMDB_API_KEY', '')
+    const db = makeDb({ credRow: null, kv: { tmdb_api_key: 'legacy-key' } })
+    const res = await loadProviderCredential(db, 'tmdb')
+    expect(res.fields.api_key).toBe('legacy-key')
+    expect(res.fields.read_access_token).toBeUndefined() // Bearer 无 legacy KV 来源
+  })
+})
+
+describe('tmdb 凭证契约守卫（ADR-201 §凭证语义 / META-37-A）', () => {
+  it('spec 含 read_access_token + api_key 两 secret 字段，不含旧 token', () => {
+    const tmdb = getProviderCredentialSpec('tmdb')!
+    const keys = tmdb.fields.map((f) => f.key)
+    expect(keys).toContain('read_access_token')
+    expect(keys).toContain('api_key')
+    expect(keys).not.toContain('token') // 旧单字段已拆，防回归
+    expect(tmdb.fields.find((f) => f.key === 'read_access_token')?.secret).toBe(true)
+    expect(tmdb.fields.find((f) => f.key === 'api_key')?.secret).toBe(true)
   })
 })

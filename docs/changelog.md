@@ -5745,3 +5745,23 @@
 - **执行模型**：claude-opus-4-8（主循环连续推进，偏离卡片 sonnet 建议、无强制升降触发）；子代理无。
 - **META-36 全收口**：-A（视频库元数据列服务端排序/过滤 + metadataProvider facet）+ -B（四来源图标簇消费迁移）闭环。**Phase 3 三消费面元数据状态展示统一完成**：审核详情（META-34）/ 编辑抽屉（META-35）/ 视频库列 + 头部簇（META-36）均消费 ADR-201 统一原语（`MetadataStatusPanel` / `MetadataSourceIconCluster`）。后续 Phase 4 = META-37（TMDB 凭证语义修订）。
 - **[AI-CHECK]**：六问过——①根因=过渡期视频库两处仍用退役 EnrichmentBadgeCluster，迁 D-201-3 唯一紧凑原语；②零回归（test:changed 71 + e2e 84 全绿，ModListRow 未动、admin-ui Props 未改）；③边界=纯 server-next UI 消费层、不改 admin-ui Props、不接 onAction、审核台簇定向保留；④复用 MetadataSourceIconCluster（META-33-A）+ 共享 _fixtures makeSummary（不重复构造 DTO）；⑤无 any / 无空 catch / 零硬编码色（簇内 token） / 无 enrichmentSummary 残引；⑥范围 3 项单一验收口径，退役彻底（仅余 ModListRow 单点，已登记）。
+
+## [META-37-A] TMDB 凭证字段拆分 + 存量迁移 + 旧 KV 映射修正
+- **完成时间**：2026-06-14
+- **记录时间**：2026-06-14 19:40
+- **执行模型**：claude-opus-4-8
+- **子代理**：arch-reviewer (claude-opus-4-8, agentId a6c0adf46c51267c5) — 前置契约+迁移评审 CONDITIONAL-PASS
+- **修改文件**：
+  - `packages/types/src/integration-credentials.types.ts` — tmdb spec 单字段 `token` 拆为 `read_access_token`（secret/Bearer 首选/envVar `TMDB_READ_ACCESS_TOKEN`）+ `api_key`（secret/v3 兼容/envVar `TMDB_API_KEY`），保留 baseUrl/language；`CredentialFieldSpec.key` JSDoc 补 key 风格治理注释（Y1：bangumi camelCase / tmdb snake_case，secret flag 驱动遮罩故混用无副作用，勿擅自统一）；spec 块注释去除「不绑 v3 query api_key」陈旧描述（Y3，ADR-201 amend ADR-173 D-173-2）。
+  - `apps/api/src/db/migrations/116_tmdb_credentials_token_split.sql` — 新建数据迁移：api_credentials tmdb 行 `secrets.token` → `read_access_token`（语义即 Bearer，用途不变，ADR-201 22821）；幂等守卫 `secrets ? 'token' AND NOT secrets ? 'read_access_token' AND secrets->>'token' <> ''`（C1 空串守卫 + 并存守卫防覆盖已有 Bearer）；无 BEGIN/COMMIT（外层 migrate.ts 包裹，115 先例）；down 路径注释对称。
+  - `apps/api/src/services/integration-credentials-config.ts` — `LEGACY_KV_MAP.tmdb` `token: 'tmdb_api_key'` → `api_key: 'tmdb_api_key'`（R2/C2：legacy v3 key 映射兼容字段，不回填 Bearer，ADR-201 22822）；补 Y2 意图注释（read_access_token 无 legacy KV 来源属预期，勿擅自回填）。
+  - `tests/unit/api/integration-credentials-config.test.ts` — 新增 tmdb 解析 describe（已迁移行 `secrets.read_access_token`→fields / 缺行 legacy KV `tmdb_api_key`→`api_key` 且 read_access_token undefined 不回填 Bearer）+ tmdb 契约守卫 describe（spec 含 read_access_token+api_key 两 secret 字段、不含 token 防回归）。
+  - `tests/unit/api/integration-credentials-service.test.ts` — tmdb 视图断言 `values.token` → `read_access_token`/`api_key`（C3，spec 字段拆分连带，原断言会真红）。
+  - `tests/unit/components/server-next/admin/system/ExternalCredentialsCard.test.tsx` — TMDB_VIEW fixture `values.token` → `read_access_token`/`api_key`（C3，spec 驱动渲染）。
+- **数据库变更**：migration 116（数据迁移，非 schema DDL）——api_credentials.secrets JSONB 内 tmdb key 改名 token→read_access_token；表结构不变，verify-sql-schema-alignment 通过；architecture.md 不改（字段真源委托 PROVIDER_CREDENTIAL_SPECS）。
+- **架构发现/边界**：① IntegrationCredentialsService（遮罩/占位跳过/configured/审计 redact）+ ExternalCredentialsCard 输入框**全由 spec.fields + secret flag 驱动** → 双 secret 字段拆出后自动处理，service/UI 逻辑零改（A 仅契约+迁移两层）；② siteConfig.ts:153 确有 tmdb_api_key 写入路径，但 ADR 22821/22822 deliberate 区分「表内 secrets.token（label Bearer）→read_access_token」vs「旧 KV fallback→api_key」两互斥数据位置，116 符合 22821——旧 KV 经 115 回填进 secrets.token 的环境其 v3 key 当 Bearer 属 ADR 接受边界（"用途不变"），META-38 真消费时连接测试暴露自愈；③ 协调 META-29：A 仅修正映射不删旧 KV（过渡期新旧并存读取，物理退役归 Card D）。
+- **测试覆盖**：+3 新 it（config tmdb 解析 2 + 契约守卫 1）+ 2 断言修订（service/card fixture 同步）；integration-credentials 6 文件 45 测试全绿。
+- **质量门禁**：typecheck 全工作区 EXIT=0 / lint 仅既有 warning（非本卡文件） / test:changed 升全量（packages/types 基础包改动，ADR-180）546 文件 7551 passed 零失败 / verify:adr-contracts EXIT=0（endpoint-adr 240 路由对齐〔无新端点〕 + sql-schema-alignment 通过〔116 零 schema drift〕）。test:integration N/A（迁移逻辑由 config 单测覆盖，无新 query）。
+- **arch-reviewer gate**：CONDITIONAL-PASS，C1（migration 空串守卫）/C2（LEGACY_KV_MAP 改 api_key）/C3（测试 fixture 同步）/C4（清陈旧注释）+ Y1（key 风格注释）/Y2（KV 意图注释）/Y3（spec 描述更新）全采纳；裁定 snake_case 字段 key 维持（遵循 ADR 字面 + TMDB 官方协议名 + 与 B 卡 `?api_key=` 零转换）。复用同一 gate 到 META-37-B。
+- **解锁**：META-37-B（lib·tmdb 双路 testConnection + loadTmdbClientConfig + tmdbTester + UI auth_method 展示）。
+- **[AI-CHECK]**：六问过——①根因=TMDB 凭证沿用 ADR-173 占位单字段 token（语义即 Bearer）与 legacy tmdb_api_key（实为 v3 key）错配映射，无法表达 Bearer/API Key 双认证；②零回归（test:changed 全量 7551 passed，service/UI spec 驱动自动适配双字段）；③边界=A 仅契约+迁移两层，不删旧 KV（归 META-29）、不改 service/UI 逻辑、architecture.md 不改（非 schema 变更）；④复用=spec+secret flag 既有遮罩/占位/审计管线零改、共享 makeDb fixture；⑤无 any / 无空 catch / 迁移纯静态 SQL 无用户输入拼接 / snake_case key 经 arch-reviewer 裁定；⑥范围契约+迁移单一验收口径，C1–C4+Y1–Y3 全落地。

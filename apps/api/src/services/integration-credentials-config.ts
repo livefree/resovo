@@ -30,8 +30,12 @@ const LEGACY_KV_MAP: Record<string, Partial<Record<string, SystemSettingKey>>> =
     userAgent: 'bangumi_user_agent',
     timeoutMs: 'bangumi_api_timeout_ms',
   },
+  // tmdb：legacy system_settings.tmdb_api_key 实为 v3 API Key → 映射新 api_key（非 Bearer），
+  // 对齐 ADR-201 §凭证语义（22822「不再回填为 Bearer token」）。read_access_token 无 legacy KV 来源
+  // 属预期——旧 KV 仅有 tmdb_api_key；Bearer 仅来自 api_credentials 行或 env TMDB_READ_ACCESS_TOKEN。
+  // 勿擅自补 read_access_token: 'tmdb_api_key' 回填，否则违反 22822。
   tmdb: {
-    token: 'tmdb_api_key',
+    api_key: 'tmdb_api_key',
   },
 }
 
