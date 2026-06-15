@@ -2537,7 +2537,7 @@
 
 ## [SEQ-20260615-01] 元数据字段枚举兼容性治理
 
-- **状态**：🔄 进行中（META-40~44-B ✅ + META-45-A ✅ 2026-06-15〔+ 旁路 META-37-A-FIX Codex P2×2〕 → 下一 META-45-B〔仅 Part A 实施，用户拍板不加 drama〕，序列末张）
+- **状态**：✅ 全收口（META-40 / 41-A / 41-B / 42 / 43 / 44-A / 44-B / 45-A / 45-B ✅ 2026-06-15〔+ 旁路 META-37-A-FIX Codex P2×2〕）。元数据字段枚举兼容性治理全 9 卡完成：country 归一真源 + bangumi tags→genre + bangumi/TMDB country + TMDB 图片 + VideoType provider 修正（ADR-203）+ genre 拆双（ADR-204，drama 用户拍板不加）。后续 follow-up（Bangumi cast / 候选审核 UI 闭环 / web-next GENRE_LABELS 补值 O-204-3 / drama follow-up 触发条件）已登记，待另编序列。
 - **创建时间**：2026-06-15 00:30
 - **最后更新时间**：2026-06-15 01:10（用户评审 B+ 后修订：范围补 server-next / META-40 收敛真源 / META-41·44 拆 -A/-B / cast 后排 / META-43 source 口径 / 逐卡门禁）
 - **目标**：修复 douban/bangumi/tmdb 三源元数据字段（类型/题材/地区/图片）与本地枚举的兼容缺口——含 1 项数据正确性 bug（实证）+ 4 项能力闲置 + 1 项设计权衡。
@@ -2628,7 +2628,8 @@
    - 创建时间：2026-06-15 00:30（拆 -A/-B 2026-06-15）
    - 建议模型：opus（**强制 arch-reviewer**）
 
-9. **META-45-B** — Genre 颗粒度实施（🟢 低）（状态：⬜ 待办，依赖 META-45-A ✅ ADR-204 PASS）
+9. **META-45-B** — Genre 颗粒度实施（🟢 低）（状态：✅ 已完成 2026-06-15）
+   - **完成备注**：✅ 2026-06-15。按 ADR-204 D-204-1 实施 Part A（仅，用户拍板不加 drama）。`genreMapper.ts` TMDB_GENRE_MAP 值类型 `VideoGenre | VideoGenre[] | null`（非 readonly 规避 Array.isArray 窄化坑）+ `10759→['action','adventure']` / `10765→['sci_fi','fantasy']`（10768→'war' 保单值）+ mapTmdbGenres 循环加数组展开分支（Set 去重）。门禁 typecheck/lint EXIT=0 + test:changed 43 文件 663 passed（genreMapper 核心 lib 按 ADR-180 升全量；更新既有 `[10759,10765,16]` 断言为拆双 + 全 genre 消费方零回归）。+6 新断言（拆双 ×2 + 10768 单值 + 去重 ×2 + 单值/null 回归）。零枚举改 / 零 migration。执行模型 claude-opus-4-8；子代理无。详见 changelog [META-45-B]。**META-45 全收口（-A ADR + -B Part A）。SEQ-20260615-01 全 9 卡完成。**
    - 创建时间：2026-06-15（拆卡）
    - 建议模型：sonnet（仅 Part A，零枚举改、单文件 + 单测，无强制 Opus 触发——用户已拍板不加 drama，无跨消费方扩枚举）
    - **范围（仅 Part A，D-204-4）**：`genreMapper.ts`——`TMDB_GENRE_MAP` 值类型改 `VideoGenre | VideoGenre[] | null`（非 readonly 规避 Array.isArray 窄化）+ 10759→[action,adventure] / 10765→[sci_fi,fantasy]（10768→war 保单值）+ `mapTmdbGenres` 循环加数组展开分支；单测 7 覆盖点（拆双 ×2 + 10768 单值 + 28+10759 去重 + 10759+12 去重 + 单值回归 35 + null 回归 [18,16,99]）。**不加 drama**（用户拍板，D-204-2）。

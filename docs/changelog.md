@@ -6053,3 +6053,16 @@
 - **涉及文件**：`docs/decisions.md`（+ADR-204，关联 ADR-157/202/203）/ `docs/task-queue.md`（META-45-B 据 D-204-4 蓝图细化 + 降建议模型 sonnet〔不加 drama 故无跨消费方扩枚举〕）。docs-only。
 - **质量门禁**：verify:adr-contracts EXIT=0（verify-endpoint-adr 243 admin 路由全对齐，ADR-204 docs-only 无新端点；enum SSOT 既有 baseline advisory）。docs-only → typecheck/lint/test:changed 自动跳过。
 - **[AI-CHECK]**：六问过——①根因=genre 颗粒度损失 → Part A 拆双采纳 + drama 经评估不加；②零回归（docs-only）；③边界=仅 ADR 不写代码（归 META-45-B）、不加 drama、不回填存量；④复用=Part A 复用 mapTmdbGenres VideoGenre[] 多值能力 + 已有枚举值（零扩展）；⑤决策合 ADR-157 枚举 SSOT 谨慎扩展精神 + ADR-203 不跑存量 + CLAUDE.md 分层；⑥范围=ADR-204 + META-45-B 细化，docs-only。**产品分类法决策（drama）经 arch-reviewer 评估 + 用户拍板「不加」。SEQ-20260615-01 META-45-A 收口，解锁 META-45-B（仅 Part A 实施）。**
+
+---
+
+## [META-45-B] Genre 颗粒度实施——TMDB 组合类目拆双 genre（仅 Part A，SEQ-20260615-01 末张）— 2026-06-15
+
+**类型**：feat（实施 ADR-204 D-204-1）｜**优先级**：🟢 低｜**执行模型**：claude-opus-4-8（主循环）｜**子代理**：无
+
+- **问题**：ADR-204 D-204-1 定 TMDB 组合类目拆双——`10759 Action&Adventure→action`（丢 adventure）/ `10765 Sci-Fi&Fantasy→sci_fi`（丢 fantasy）当前损半，目标 genre adventure/fantasy 已在 VIDEO_GENRES。
+- **方案（仅 Part A，用户拍板不加 drama）**：`genreMapper.ts`——① `TMDB_GENRE_MAP` 值类型 `VideoGenre | VideoGenre[] | null`（**非 readonly** 规避 Array.isArray 对 readonly tuple 不窄化的 TS 坑，arch-reviewer 风险①）；② `10759→['action','adventure']` / `10765→['sci_fi','fantasy']`（`10768→'war'` 保单值，politics 无对应 genre）；③ `mapTmdbGenres` 循环加数组展开分支（`Array.isArray` → 逐个 add，Set 去重保 28+10759 不重复 action）。**不加 drama**（ADR-204 D-204-2 用户拍板，18 仍 null）。
+- **涉及文件**：`apps/api/src/lib/genreMapper.ts`（TMDB_GENRE_MAP 值类型 + 两组合类目改数组 + mapTmdbGenres 展开分支）/ `tests/unit/api/tmdb-confirm-service.test.ts`（mapTmdbGenres 块更新 + 新断言）。
+- **测试覆盖**：更新既有 `[10759,10765,16]→['action','sci_fi']` 为拆双 `['action','adventure','sci_fi','fantasy']`（旧断言会被破坏，已改）；+6 新断言——10759→[action,adventure] / 10765→[sci_fi,fantasy] / 10768→[war] / 28+10759 去重 / 10759+12 去重 / 单值回归 35→[comedy] + null 回归 [18,16,99]→[]。
+- **质量门禁**：typecheck 全工作区 EXIT=0（0 error TS）/ lint EXIT=0 / test:changed 43 文件 663 passed（genreMapper 核心 lib 按 ADR-180 升全量 → 全 genre 消费方 sourceParser/douban/bangumi/视频库零回归）。零枚举改 / 零 migration。
+- **[AI-CHECK]**：六问过——①根因=组合类目损半 → 拆双；②零回归（663 passed，组合类目断言更新 + 单值/null 路径回归 + 全消费方绿）；③边界=仅 Part A、不加 drama、不回填存量、不动 douban/source 表；④复用=mapTmdbGenres VideoGenre[] 多值能力 + 已有枚举值（零扩展、零消费方影响）；⑤无 any（union 类型 + Array.isArray 窄化）/ 无空 catch / 无硬编码色 / 无越层；⑥范围=单文件 + 单测，精确等于卡片范围。**SEQ-20260615-01 META-45-B 收口，META-45 全收口（-A ADR + -B Part A）。SEQ-20260615-01 元数据字段枚举兼容性治理全 9 卡完成（country 真源 + bangumi genre + bangumi/TMDB country + TMDB 图片 + VideoType 修正 ADR-203 + genre 拆双 ADR-204）+ 旁路 META-37-A-FIX Codex P2×2。后续 follow-up（Bangumi cast / 候选审核 UI / GENRE_LABELS 补值 O-204-3 / drama 触发条件）待另编序列。**

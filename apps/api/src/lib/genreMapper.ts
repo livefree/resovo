@@ -88,13 +88,15 @@ export function mapDoubanGenres(genresRaw: string[]): VideoGenre[] {
 // 单表覆盖 movie + tv 两套 id 体系：共享 id 含义一致，各自特有 id 不冲突。
 // null = 不归类 genre（由 VideoType 承载 / 万能标签 / 形式非题材）。
 
-const TMDB_GENRE_MAP: Record<number, VideoGenre | null> = {
+// 值为数组 = 组合类目拆双 genre（ADR-204 D-204-1，目标 genre 均已在 VIDEO_GENRES）；
+// 非 readonly 数组类型——规避 Array.isArray 对 readonly tuple 不窄化的 TS 坑（arch-reviewer 风险①）。
+const TMDB_GENRE_MAP: Record<number, VideoGenre | VideoGenre[] | null> = {
   // movie + tv 共享 id（含义一致）
   16: null,          // Animation（由 VideoType=anime 承载）
   35: 'comedy',      // Comedy
   80: 'crime',       // Crime
   99: null,          // Documentary（由 VideoType 承载）
-  18: null,          // Drama（万能标签，不携带信息）
+  18: null,          // Drama（万能标签，不携带信息；ADR-204 D-204-2 用户拍板不加 drama 枚举）
   37: 'western',     // Western
   9648: 'mystery',   // Mystery
   10751: 'family',   // Family
@@ -111,25 +113,28 @@ const TMDB_GENRE_MAP: Record<number, VideoGenre | null> = {
   10752: 'war',      // War
   10770: null,       // TV Movie（形式非题材）
   // tv 特有
-  10759: 'action',   // Action & Adventure（组合类目取 action）
+  10759: ['action', 'adventure'], // Action & Adventure（组合类目拆双，ADR-204 D-204-1）
   10762: null,       // Kids（由 VideoType=kids 承载）
   10763: null,       // News
   10764: null,       // Reality
-  10765: 'sci_fi',   // Sci-Fi & Fantasy（组合类目取 sci_fi）
+  10765: ['sci_fi', 'fantasy'],   // Sci-Fi & Fantasy（组合类目拆双，ADR-204 D-204-1）
   10766: null,       // Soap
   10767: null,       // Talk
-  10768: 'war',      // War & Politics
+  10768: 'war',      // War & Politics（politics 无对应 genre，保单值 war）
 }
 
 /**
- * 将 TMDB genre id 列表映射到规范 VideoGenre 枚举数组（ADR-202 D-202-8 M5）。
- * 不可映射 / 由 VideoType 承载的 id（如 Animation 16 / Drama 18）静默跳过。去重返回。
+ * 将 TMDB genre id 列表映射到规范 VideoGenre 枚举数组（ADR-202 D-202-8 M5 / ADR-204 D-204-1）。
+ * 不可映射 / 由 VideoType 承载的 id（如 Animation 16 / Drama 18）静默跳过。
+ * 组合类目（10759/10765）拆为双 genre。Set 去重（如 28+10759 不重复 action）。
  */
 export function mapTmdbGenres(genreIds: number[]): VideoGenre[] {
   const result = new Set<VideoGenre>()
   for (const id of genreIds) {
     const mapped = TMDB_GENRE_MAP[id]
-    if (mapped) result.add(mapped)
+    if (!mapped) continue
+    if (Array.isArray(mapped)) for (const g of mapped) result.add(g)
+    else result.add(mapped)
   }
   return [...result]
 }

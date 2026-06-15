@@ -67,8 +67,23 @@ describe('mapTmdbGenres', () => {
   it('movie id 映射 + null 跳过（16 Animation / 18 Drama → 跳过）', () => {
     expect(mapTmdbGenres([28, 18, 878, 16])).toEqual(['action', 'sci_fi'])
   })
-  it('tv 组合类目（10759→action / 10765→sci_fi）', () => {
-    expect(mapTmdbGenres([10759, 10765, 16])).toEqual(['action', 'sci_fi'])
+  it('单值回归 + null 回归（结构改造不破坏单值/null 路径，ADR-204 D-204-1）', () => {
+    expect(mapTmdbGenres([35])).toEqual(['comedy'])
+    expect(mapTmdbGenres([18, 16, 99])).toEqual([]) // drama/animation/documentary 仍 null
+  })
+  // ADR-204 D-204-1：组合类目拆双 genre
+  it('10759 Action&Adventure → [action, adventure]（拆双）', () => {
+    expect(mapTmdbGenres([10759])).toEqual(['action', 'adventure'])
+  })
+  it('10765 Sci-Fi&Fantasy → [sci_fi, fantasy]（拆双）', () => {
+    expect(mapTmdbGenres([10765])).toEqual(['sci_fi', 'fantasy'])
+  })
+  it('10768 War&Politics → [war]（politics 无 genre，保单值）', () => {
+    expect(mapTmdbGenres([10768])).toEqual(['war'])
+  })
+  it('拆双后 Set 去重：28(action)+10759 不重复 action / 10759+12(adventure) 不重复 adventure', () => {
+    expect(mapTmdbGenres([28, 10759])).toEqual(['action', 'adventure'])
+    expect(mapTmdbGenres([10759, 12])).toEqual(['action', 'adventure'])
   })
   it('去重', () => {
     expect(mapTmdbGenres([28, 28, 12])).toEqual(['action', 'adventure'])
