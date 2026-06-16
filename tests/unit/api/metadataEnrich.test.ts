@@ -621,6 +621,20 @@ describe('MetadataEnrichService.enrich → step3.5 TMDB (META-48)', () => {
     await service.enrich(makeJobData({ type: 'movie' }))
     expect(videosQueries.updateVideoEpisodes).not.toHaveBeenCalled()
   })
+
+  // review P2-3：季级 provenance sourceRef 用 externalRefId（season id），非 show tmdbId
+  it('季级 proposedFields → reconcile winner safeUpdate 用 externalRefId(季 id) 作 sourceRef（非 show tmdbId）', async () => {
+    vi.mocked(catalogQueries.findCatalogById).mockResolvedValue({
+      id: 'c1', title: '某剧', year: 2011, type: 'series', seasonNumber: 1, status: 'completed',
+    } as Parameters<typeof catalogQueries.findCatalogById>[1] extends infer R ? R : never)
+    mockAutoMatch.mockResolvedValue({
+      matched: true, tier: 'auto_matched', tmdbId: 1399, confidence: 1, applied: [],
+      externalRefId: '3624', proposedFields: { description: '第一季简介' },
+    })
+    await service.enrich(makeJobData({ type: 'series', title: '某剧', year: 2011 }))
+    const safeUpdate = (MediaCatalogService as ReturnType<typeof vi.fn>).mock.results.at(-1)?.value.safeUpdate
+    expect(safeUpdate).toHaveBeenCalledWith('c1', { description: '第一季简介' }, 'tmdb', expect.objectContaining({ sourceRef: '3624' }))
+  })
 })
 
 // ── episodesByStatus + step2/step3 集成（CHG-367-B-A / ADR-163 D-163-5/6）─────

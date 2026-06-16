@@ -186,7 +186,34 @@ describe('confirm', () => {
     await svc.confirm('vid', 'cat', { tmdbId: 1429, mediaType: 'tv', seasonNumber: 1, fields: ['title', 'description'] })
     const arg = safeUpdateMock.mock.calls[0]?.[1] as Record<string, unknown> | undefined
     expect(arg?.title).toBeUndefined() // title 被剔除（季路径）
-    expect(arg?.description).toBe('x') // 非标题三件套，仍可写
+    expect(arg?.description).toBe('x') // 非标题三件套，仍可写（季简介空 → 回退 show 简介）
+  })
+
+  // review P1-2：confirm 季级写**季级**字段（简介/海报来自季 summary，非整剧），尊重 moderator 选的 fields
+  it('confirm 季级 description 取季简介（≠ 整剧简介）+ cover 取季海报（buildSeasonCatalogFields）', async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    vi.mocked(tmdbLib.getTvDetail).mockResolvedValue({
+      id: 1429, name: '进击的巨人', original_name: '進撃の巨人', original_language: 'ja', overview: '整剧简介', genres: [], external_ids: {}, poster_path: '/show.jpg',
+      seasons: [{ id: 60001, season_number: 1, name: 'S1', overview: '第一季简介', poster_path: '/s1.jpg', air_date: null, episode_count: 25, vote_average: 8 }],
+    } as any)
+    await svc.confirm('vid', 'cat', { tmdbId: 1429, mediaType: 'tv', seasonNumber: 1, fields: ['description', 'cover_url'] })
+    const arg = safeUpdateMock.mock.calls[0]?.[1] as Record<string, unknown> | undefined
+    expect(arg?.description).toBe('第一季简介') // 季简介（非「整剧简介」）
+    expect(arg?.coverUrl).toBe('https://image.tmdb.org/t/p/w500/s1.jpg') // 季海报（非 show /show.jpg）
+    expect(arg?.posterSource).toBe('tmdb')
+  })
+
+  it('confirm 季级未选某字段 → 不写（尊重 moderator fields opt-in）', async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    vi.mocked(tmdbLib.getTvDetail).mockResolvedValue({
+      id: 1429, name: 'X', original_name: 'X', original_language: 'ja', overview: '整剧简介', genres: [{ id: 16, name: '动画' }], external_ids: {}, poster_path: '/show.jpg',
+      seasons: [{ id: 60001, season_number: 1, name: 'S1', overview: '第一季简介', poster_path: '/s1.jpg', air_date: null, episode_count: 25, vote_average: 8 }],
+    } as any)
+    await svc.confirm('vid', 'cat', { tmdbId: 1429, mediaType: 'tv', seasonNumber: 1, fields: ['description'] }) // 仅选 description
+    const arg = safeUpdateMock.mock.calls[0]?.[1] as Record<string, unknown> | undefined
+    expect(arg?.description).toBe('第一季简介')
+    expect(arg?.coverUrl).toBeUndefined() // 未选 cover_url → 不写
+    expect(arg?.genres).toBeUndefined() // 未选 genres → 不写
   })
 
   it('tv 无 seasonNumber → externalKind=show 走 insertCandidateRef（不升 exact）', async () => {
@@ -664,6 +691,31 @@ describe('autoMatch 季级路径（ADR-207）', () => {
     expect(catalogRefs.insertCandidateRef).toHaveBeenCalledWith(client, expect.objectContaining({ externalKind: 'show', externalId: '1399' }))
     expect(catalogRefs.resolveAndWriteExactRef).not.toHaveBeenCalled()
     expect(tmdbLib.getTvSeasonDetail).not.toHaveBeenCalled()
+  })
+
+  // review P1-1：季级搜剧不按季年份过滤（catalog.year 是季年份，非 show first_air_date_year）
+  it('季级路径 searchTv 不带 year（year=2011 是季年份，传 first_air_date_year 会漏非首播季 show）', async () => {
+    await svc.autoMatch('vid', 'cat', { title: 'abcdef', year: 2013, mediaType: 'tv', seasonNumber: 2 })
+    const opts = vi.mocked(tmdbLib.searchTv).mock.calls[0]?.[1] as Record<string, unknown> | undefined
+    expect(opts?.year).toBeUndefined() // 季级路径不传 catalog 季年份
+  })
+
+  // review P2-3：provenance externalRefId 用 season id（非 show id）
+  it('返回 externalRefId=season id 3624（季级 provenance 准确指向季，非 show 1399）', async () => {
+    const r = await svc.autoMatch('vid', 'cat', { title: 'abcdef', year: 2011, mediaType: 'tv', seasonNumber: 1 })
+    expect(r.matched && r.externalRefId).toBe('3624')
+  })
+
+  // review P2-4 / D-207-10：逐集 upsert 失败用 SAVEPOINT 隔离，不回滚已写 season exact，主事务仍 COMMIT
+  it('逐集 upsert 失败 → ROLLBACK TO SAVEPOINT 保留 season exact + 主事务 COMMIT（D-207-10）', async () => {
+    vi.mocked(catalogEpisodes.upsertCatalogEpisodes).mockRejectedValueOnce(new Error('episode db error'))
+    const r = await svc.autoMatch('vid', 'cat', { title: 'abcdef', year: 2011, mediaType: 'tv', seasonNumber: 1 })
+    expect(r.matched).toBe(true)
+    expect(catalogRefs.resolveAndWriteExactRef).toHaveBeenCalledWith(client, expect.objectContaining({ externalId: '3624', externalKind: 'season' }))
+    expect(clientQuery).toHaveBeenCalledWith('SAVEPOINT tmdb_episodes')
+    expect(clientQuery).toHaveBeenCalledWith('ROLLBACK TO SAVEPOINT tmdb_episodes')
+    expect(clientQuery).toHaveBeenCalledWith('COMMIT') // 主事务仍提交（季 exact 保留）
+    expect(clientQuery).not.toHaveBeenCalledWith('ROLLBACK') // 不整事务回滚
   })
 })
 

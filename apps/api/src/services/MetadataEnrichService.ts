@@ -234,7 +234,9 @@ export class MetadataEnrichService {
         }
         // META-49-B2（方案 X）：身份/ref/cache/type 已在 autoMatch 自有事务写；内容标量上抛交 reconcile 加权。
         if (result.proposedFields && Object.keys(result.proposedFields).length > 0) {
-          return { source: 'tmdb', sourceRef: String(result.tmdbId), confidence: result.confidence, fields: result.proposedFields }
+          // review P2-3：季级内容来自季 detail + exact ref 为 season id → provenance sourceRef 用 externalRefId（季=season id），
+          // 准确指向季而非整剧；movie/show 路径 externalRefId==tmdbId（缺省回退 tmdbId 兼容旧调用）。
+          return { source: 'tmdb', sourceRef: result.externalRefId ?? String(result.tmdbId), confidence: result.confidence, fields: result.proposedFields }
         }
         return null
       }

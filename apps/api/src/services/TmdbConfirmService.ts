@@ -91,6 +91,8 @@ export type TmdbAutoMatchResult =
       proposedFields?: CatalogUpdateData
       /** ADR-207 D-207-7：季级命中时的季集数（season.episode_count > 0）→ 交卡 C stepTmdb 经 episodesByStatus 派发 total/current_episodes。 */
       seasonEpisodeCount?: number
+      /** review P2-3：本次写入的 external ref id（季级=season id / movie·show=tmdbId）——供 provenance sourceRef 准确指向季而非整剧。 */
+      externalRefId?: string
     }
   | {
       matched: false
@@ -331,34 +333,43 @@ function buildSeasonCatalogFields(
   season: TmdbTvSeason,
   seasonDetail: TmdbSeasonDetail | null,
   imageBase: string,
+  sel: Set<string>,
 ): CatalogUpdateData {
   const out: CatalogUpdateData = {}
-  const description = (seasonDetail?.overview?.trim() || season.overview?.trim()) || show.overview?.trim()
-  if (description) out.description = description
-  const seasonRating = seasonDetail?.vote_average ?? season.vote_average
-  const rating = typeof seasonRating === 'number' && seasonRating > 0 ? seasonRating : show.vote_average
-  if (typeof rating === 'number' && rating > 0) out.rating = rating
-  if (show.genres.length > 0) {
+  if (sel.has('description')) {
+    const description = (seasonDetail?.overview?.trim() || season.overview?.trim()) || show.overview?.trim()
+    if (description) out.description = description
+  }
+  if (sel.has('rating')) {
+    const seasonRating = seasonDetail?.vote_average ?? season.vote_average
+    const rating = typeof seasonRating === 'number' && seasonRating > 0 ? seasonRating : show.vote_average
+    if (typeof rating === 'number' && rating > 0) out.rating = rating
+  }
+  if (sel.has('genres') && show.genres.length > 0) {
     out.genres = mapTmdbGenres(show.genres.map((g) => g.id)) // M5：稳定数值 id
     out.genresRaw = show.genres.map((g) => g.name)
   }
-  const iso = countryToIso(show.origin_country?.[0])
-  if (iso) out.country = iso
-  if (show.original_language) out.originalLanguage = show.original_language
-  // cover：季海报多语言择优（复用 pickBestImage）→ 季 poster_path → show 海报（三级回退，D-207-4）
-  const seasonPoster = pickBestImage(seasonDetail?.images?.posters, POSTER_LANG_PREF)
-  const posterPath = seasonPoster?.file_path ?? season.poster_path ?? show.poster_path
-  if (posterPath) {
-    out.coverUrl = `${imageBase}${IMAGE_SIZE.poster}${posterPath}`
-    out.posterStatus = 'pending_review'
-    out.posterSource = 'tmdb'
-    if (seasonPoster) {
-      out.posterWidth = seasonPoster.width
-      out.posterHeight = seasonPoster.height
+  if (sel.has('country')) {
+    const iso = countryToIso(show.origin_country?.[0])
+    if (iso) out.country = iso
+  }
+  if (sel.has('original_language') && show.original_language) out.originalLanguage = show.original_language
+  if (sel.has('cover_url')) {
+    // cover：季海报多语言择优（复用 pickBestImage）→ 季 poster_path → show 海报（三级回退，D-207-4）
+    const seasonPoster = pickBestImage(seasonDetail?.images?.posters, POSTER_LANG_PREF)
+    const posterPath = seasonPoster?.file_path ?? season.poster_path ?? show.poster_path
+    if (posterPath) {
+      out.coverUrl = `${imageBase}${IMAGE_SIZE.poster}${posterPath}`
+      out.posterStatus = 'pending_review'
+      out.posterSource = 'tmdb'
+      if (seasonPoster) {
+        out.posterWidth = seasonPoster.width
+        out.posterHeight = seasonPoster.height
+      }
     }
   }
-  // backdrop/logo：season 无独立素材 → 取 show 级（季共享）。复用 buildImageFields 仅 backdrop+logo（cover 已季级处理，不重算）
-  Object.assign(out, buildImageFields(show, imageBase, new Set(['backdrop', 'logo'])))
+  // backdrop/logo：season 无独立素材 → 取 show 级（季共享）。复用 buildImageFields，按 sel 过滤（cover 已季级处理，不重算）
+  Object.assign(out, buildImageFields(show, imageBase, new Set(['backdrop', 'logo'].filter((f) => sel.has(f)))))
   return out
 }
 
@@ -426,15 +437,21 @@ export class TmdbConfirmService {
     // 未命中季 → 降级 show candidate（D-207-10 level ①）。
     const isSeasonCatalog = mediaType === 'tv' && seasonNumber != null
     let seasonRefId: number | null = null
+    let confirmSeason: TmdbTvSeason | null = null
     let confirmKind: ExternalRefKind = mediaType === 'movie' ? 'movie' : seasonNumber != null ? 'season' : 'show'
     if (confirmKind === 'season') {
-      const season = (detail as TmdbTvDetail).seasons?.find((s) => s.season_number === seasonNumber) ?? null
-      if (season) seasonRefId = season.id
+      confirmSeason = (detail as TmdbTvDetail).seasons?.find((s) => s.season_number === seasonNumber) ?? null
+      if (confirmSeason) seasonRefId = confirmSeason.id
       else confirmKind = 'show'
     }
     // 季 catalog 剔标题三件套（D-207-5：不用季名覆盖 catalog 标题；仅季路径，show/movie 路径不变）
     const applicableFields = isSeasonCatalog ? fields.filter((f) => !SEASON_TITLE_TRIPLE.includes(f)) : fields
-    const updateFields = buildCatalogFields(detail, mediaType, applicableFields, imageBase)
+    // 字段构建（review P1-2）：season 命中 → **季级字段**（人工确认季也用季简介/季海报/季评分，复用 buildSeasonCatalogFields，
+    // 与 auto 路径对称；season summary 已含 overview/poster_path → seasonDetail=null 零额外 REST），尊重 moderator 选的 fields；
+    // 非季级 → show/movie 路径不变。
+    const updateFields = (confirmKind === 'season' && confirmSeason)
+      ? buildSeasonCatalogFields(detail as TmdbTvDetail, confirmSeason, null, imageBase, new Set(applicableFields))
+      : buildCatalogFields(detail, mediaType, applicableFields, imageBase)
     const imdbId = detail.external_ids?.imdb_id ?? null
 
     // type 富集修正（ADR-203 D-203-2/4）：仅 current==='other' 才写 provider 形式信号，绝不覆盖具体 type；
@@ -602,7 +619,11 @@ export class TmdbConfirmService {
       const knownNames = await loadKnownNames(this.db, catalogId)
       const searchTerms = buildTmdbSearchTerms(knownNames, title)
       const scoreTargets = buildTmdbScoreTargets(knownNames, title)
-      const best = await this.multiTermSearch(searchTerms, scoreTargets, targetYear, mediaType, cfg)
+      // review P1-1：季级 catalog 的 year 是**该季年份**（非 show first_air_date_year）；若传给 searchTv（映射 first_air_date_year）
+      // 会把 S2/S3 等非首播季的正确 show 直接过滤掉。季级路径搜剧不带 year（也不按季年份打分），命中后由 resolveSeason
+      // 对 season.air_date 做弱校验（软 warn 不阻断，ADR-207 D-207-3）。movie/show 路径 year 行为不变。
+      const searchYear = mediaType === 'tv' && seasonNumber != null ? null : targetYear
+      const best = await this.multiTermSearch(searchTerms, scoreTargets, searchYear, mediaType, cfg)
       if (!best || best.score < CONFIDENCE_CANDIDATE) return { matched: false, reason: 'no_candidate' }
       tmdbId = best.candidate.tmdbId
       score = best.score
@@ -637,8 +658,9 @@ export class TmdbConfirmService {
     const updateFields: CatalogUpdateData = {}
     if (detail) {
       if (seasonResolved && season) {
-        // 季级字段：季回退 show（D-207-4）+ 剔标题三件套（D-207-5）+ **不并入 tmdbId/imdbId cache**（D-207-6，季 catalog 保持 NULL）
-        Object.assign(updateFields, buildSeasonCatalogFields(detail as TmdbTvDetail, season, seasonDetail, imageBase))
+        // 季级字段：季回退 show（D-207-4）+ 剔标题三件套（D-207-5）+ **不并入 tmdbId/imdbId cache**（D-207-6，季 catalog 保持 NULL）。
+        // auto 路径应用全部可应用字段（sel = 全集）。
+        Object.assign(updateFields, buildSeasonCatalogFields(detail as TmdbTvDetail, season, seasonDetail, imageBase, new Set(TMDB_APPLIABLE_FIELDS)))
       } else {
         Object.assign(updateFields, buildCatalogFields(detail, mediaType, TMDB_APPLIABLE_FIELDS, imageBase))
         // D-207-6：季 catalog（season_number != null）即便降级 show candidate 也不写 cache（多季写同一 show id 撞 026 列级 UNIQUE）
@@ -697,10 +719,18 @@ export class TmdbConfirmService {
         if (Object.keys(contentFields).length > 0) proposedFields = contentFields
       }
 
-      // 逐集（D-207-7）：季详情 episodes → catalog_episodes(source='tmdb')，复用 Phase 2 同一 client（D-207-10 单事务；
-      // upsert 失败不回滚已写 season exact——由整事务边界承载，逐集与 ref 同 client 故同 COMMIT/ROLLBACK）
+      // 逐集（D-207-7）：季详情 episodes → catalog_episodes(source='tmdb')，复用 Phase 2 同一 client。
+      // review P2-4 / ADR-207 D-207-10「逐集 upsert 失败不回滚已写 season exact」：用 SAVEPOINT 隔离——
+      // 逐集失败仅 ROLLBACK TO SAVEPOINT（弃逐集），season exact / 字段 / video ref 已写部分保留并随主事务 COMMIT。
       if (seasonResolved && seasonDetail?.episodes?.length) {
-        await upsertCatalogEpisodes(client, catalogId, seasonDetail.episodes.map(toTmdbEpisodeInput))
+        await client.query('SAVEPOINT tmdb_episodes')
+        try {
+          await upsertCatalogEpisodes(client, catalogId, seasonDetail.episodes.map(toTmdbEpisodeInput))
+          await client.query('RELEASE SAVEPOINT tmdb_episodes')
+        } catch (epErr) {
+          await client.query('ROLLBACK TO SAVEPOINT tmdb_episodes')
+          baseLogger.warn({ err: epErr, catalogId, videoId }, '[tmdb-season] episode upsert failed, season exact retained (ADR-207 D-207-10)')
+        }
       }
 
       // video ref：季路径写季自身 id（D-207-6：不同季 video 不跨季过并）；movie/show 路径写 tmdbId
@@ -718,6 +748,8 @@ export class TmdbConfirmService {
         matched: true, tier, tmdbId, confidence: score, applied, proposedFields,
         // 季集数交卡 C stepTmdb 经 episodesByStatus 派发 total/current_episodes（D-207-7；此处仅回传，避免 service↔enrich 循环 import）
         seasonEpisodeCount: seasonResolved && season && season.episode_count > 0 ? season.episode_count : undefined,
+        // review P2-3：provenance 用本次实际 ref id（季级=season id），stepTmdb 取作 sourceRef，准确指向季而非 show
+        externalRefId: refExternalId,
       }
     } catch (err) {
       try { await client.query('ROLLBACK') } catch { /* connection may already be lost */ }

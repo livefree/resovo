@@ -6710,3 +6710,20 @@
   - 门禁：typecheck exit=0（apps/api/src 改动覆盖；scripts/tests 按根 tsconfig include 既有约定不入 tsc 门禁，经 vitest esbuild 运行）/ lint exit=0 / `npm run test:changed` 1336 passed（92 文件，videos.ts 基础改动按 ADR-180 升全量）。
   - **运行顺序（运维）**：① `node --env-file=.env.local --import tsx scripts/reenrich-backfill.ts --mode tmdb-season`（写正确 season exact 季 id + 逐集）→ ② `scripts/cleanup-tmdb-season-refs.ts --dry-run`（复核 stale 报表）→ ③ 去 --dry-run 正式跑（降级 stale show-id 行）。dry-run 优先，规避季 id↔show id 罕见碰撞误判。
   - **SEQ-20260616-03 全交付 ✅**：ADR-207 + 实现卡 A（客户端/类型）/B（service 季级路径+confirm 纠偏）/C（stepTmdb 接线）/D（清理+回填）全完成；前向生效（A/B/C）+ 存量纠偏（D BLOCKER 闭合）端到端闭环。闭合 ADR-202 D-202-α + 兑现 ADR-177 D-177-11。
+
+## [META-53-E] SEQ-20260616-03 code review 返工 — 4 finding（P1×2 季级召回/字段 + P2×2 provenance/事务）
+- **完成时间**：2026-06-16
+- **记录时间**：2026-06-16 16:45
+- **执行模型**：claude-opus-4-8（建议 sonnet；人工以 Opus 启动 SEQ-20260616-03，向上覆盖、不阻断）
+- **子代理**：无（外部 code review 反馈返工；设计仍归 ADR-207）
+- **修改文件**：
+  - `apps/api/src/services/TmdbConfirmService.ts` — **P1-1**：autoMatch 季级路径 `multiTermSearch` 传 `searchYear=null`（`mediaType==='tv' ∧ seasonNumber!=null` 时）——catalog.year 是该季年份非 show first_air_date_year，传 year 经 searchTv 映射 first_air_date_year 会漏掉 S2/S3 的正确 show；季级不按季年份过滤/打分，air_date 弱校验由 resolveSeason 软校验承载（movie/show 路径不变）。**P1-2**：`buildSeasonCatalogFields` 加 `sel: Set<string>` 参数（按字段名 opt-in：description/rating/genres/country/original_language/cover_url/backdrop/logo）；confirm 季级（confirmKind==='season'∧命中季）改用 `buildSeasonCatalogFields(detail, season, null, imageBase, new Set(applicableFields))`——人工确认季也得季简介/季海报/季评分（season summary 已含 overview/poster_path，seasonDetail=null 零额外 REST），尊重 moderator fields；autoMatch 调用传 `new Set(TMDB_APPLIABLE_FIELDS)` 全集（行为不变）。**P2-3**：`TmdbAutoMatchResult` matched 变体加 `externalRefId?`（季=season id / movie·show=tmdbId），autoMatch 返回 `refExternalId`。**P2-4**：逐集 upsert 包 `SAVEPOINT tmdb_episodes`，失败 `ROLLBACK TO SAVEPOINT` 仅弃逐集、保留 season exact（对齐 ADR-207 D-207-10「逐集失败不回滚 season exact」），修正此前自相矛盾注释
+  - `apps/api/src/services/MetadataEnrichService.ts` — **P2-3**：stepTmdb provenance `sourceRef: result.externalRefId ?? String(result.tmdbId)`——季级内容来自季 detail + exact ref 为 season id，sourceRef 准确指向季而非整剧；movie/show externalRefId==tmdbId，缺省回退兼容
+  - `tests/unit/api/tmdb-confirm-service.test.ts`（67→72，+5）— P1-1 季级 searchTv 不带 year / P2-3 返回 externalRefId=季 id 3624 / P2-4 逐集失败 ROLLBACK TO SAVEPOINT 保留 season exact + COMMIT 不整事务回滚 / P1-2 confirm 季级 description 取季简介(≠整剧)+cover 取季海报 / confirm 季级尊重 fields opt-in（未选不写）
+  - `tests/unit/api/metadataEnrich.test.ts`（46→47，+1）— P2-3 季级 proposedFields → reconcile winner safeUpdate 用 externalRefId(季 id 3624) 作 sourceRef
+- **新增依赖**：无
+- **数据库变更**：无（SAVEPOINT 为事务内子事务，非 schema）
+- **注意事项**：
+  - 门禁：typecheck exit=0 / lint exit=0 / `npm run test:changed` 286 passed（14 文件）。
+  - 4 finding 全属实并修复；P1-2 此前卡 B 标 follow-up，本轮按 reviewer 意见纳入（人工确认季级语义对齐 ADR-207）。
+  - SEQ-20260616-03 含本返工后端到端达标：季级自动召回不再因季年份漏 show（P1-1）、人工/自动季字段均季级化（P1-2）、provenance 准确（P2-3）、逐集失败不破坏 season exact（P2-4）。
