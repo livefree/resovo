@@ -576,9 +576,14 @@ export async function findAdminVideoById(
  * never=从未富集（meta_quality NULL）
  * unmatched=douban|bangumi 未命中（跑过但未命中，可重试）
  * missing-characters=anime 且无 catalog_characters（含已 matched anime → META-19 角色回填关键）
- * all=以上三者并集（默认；覆盖既有 matched anime 的角色缺口）
+ * tmdb-missing=catalog 无 tmdb_id 且类型可匹配 TMDB（META-51-B）——TMDB 实装后存量首次回填用，
+ *   独立档因 never/unmatched/all 基于 douban/bangumi 状态，会漏掉「douban 已匹配且 meta_quality 非空但无 TMDB」的视频
+ * all=never∪unmatched∪missing-characters（默认；不含 tmdb-missing，避免重跑全量误带短剧/other）
  */
-export type BackfillEnrichMode = 'never' | 'unmatched' | 'missing-characters' | 'all'
+export type BackfillEnrichMode = 'never' | 'unmatched' | 'missing-characters' | 'tmdb-missing' | 'all'
+
+/** TMDB 可匹配类型（META-51-B）：short/other 基本不在 TMDB，tmdb-missing 模式内即收敛排除。 */
+const TMDB_MATCHABLE_TYPES = ['movie', 'series', 'anime', 'variety', 'documentary'] as const
 
 /** backfill 入队所需最小字段（对齐 EnrichJobData：videoId/catalogId/title/year/type）。 */
 export interface BackfillEnrichRow {
@@ -618,6 +623,11 @@ export async function listVideosForBackfillEnrich(
     conditions.push("(v.douban_status = 'unmatched' OR v.bangumi_status = 'unmatched')")
   } else if (mode === 'missing-characters') {
     conditions.push(ANIME_MISSING_CHARS)
+  } else if (mode === 'tmdb-missing') {
+    // META-51-B：catalog 无 tmdb_id 且类型可匹配 TMDB（短剧/other 排除）。类型字面量为代码常量，参数化 IN。
+    conditions.push('mc.tmdb_id IS NULL')
+    conditions.push(`v.type = ANY($${idx++}::text[])`)
+    params.push(TMDB_MATCHABLE_TYPES)
   } else {
     conditions.push(
       "(v.meta_quality IS NULL OR v.douban_status = 'unmatched' OR v.bangumi_status = 'unmatched' OR " +

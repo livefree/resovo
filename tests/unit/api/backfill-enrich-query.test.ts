@@ -50,6 +50,18 @@ describe('listVideosForBackfillEnrich (META-15-C)', () => {
     expect(sql).toContain('NOT EXISTS')
   })
 
+  it('mode=tmdb-missing → catalog 无 tmdb_id + 类型收敛可匹配（META-51-B）', async () => {
+    await listVideosForBackfillEnrich(db, { mode: 'tmdb-missing' })
+    const [sql, params] = query.mock.calls[0]
+    expect(sql).toContain('mc.tmdb_id IS NULL')
+    // 类型收敛参数化（短剧/other 排除）
+    expect(sql).toContain('v.type = ANY($1::text[])')
+    expect(params[0]).toEqual(['movie', 'series', 'anime', 'variety', 'documentary'])
+    // 不混入 douban/bangumi 状态条件（独立档）
+    expect(sql).not.toContain("v.douban_status = 'unmatched'")
+    expect(sql).not.toContain('v.meta_quality IS NULL')
+  })
+
   it('type + limit 参数化', async () => {
     await listVideosForBackfillEnrich(db, { mode: 'never', type: 'anime', limit: 50 })
     const [sql, params] = query.mock.calls[0]

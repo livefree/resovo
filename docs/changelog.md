@@ -6545,3 +6545,14 @@
 - **新增依赖**：无｜**数据库变更**：无｜**新端点**：无｜**admin-ui Props**：无｜**architecture.md**：无需同步（TMDB 字段映射属 ADR-202 范畴，未在 architecture 文档化）
 - **质量门禁全绿**：typecheck 7ws EXIT=0 / lint 4ok / test:changed 14 文件 264 passed（tmdb-confirm-service 55）；e2e N/A（富集服务层）。
 - **[AI-CHECK]**：六问过——①根因=管线不写 title_en，拼音无修复路径；②零回归（title_en 仅 sel.has 选中且真英文时写，既有字段不变，55 passed）；③边界=TmdbConfirmService 单文件 + 测试，passthrough 复用既有 reconcile 写路径；④复用=translations append 键/类型既有、safeUpdate 优先级覆盖既有；⑤守=CJK 守卫防中文误写英文字段、单源 passthrough 不扰 RECONCILE_GROUPS；⑥范围=抽取 1 项。**后续**：卡 B（tmdb-missing 回填模式）+ 运维执行回填/cleanup（plan Phase B/C/D）。
+
+## [META-51-B] tmdb-missing 回填模式（库存回填 / plan Phase B）— 2026-06-16
+
+**类型**：feat（批量回填模式扩展，库存回填计划 Phase B / META-15-C 谱系）｜**优先级**：🟡 中｜**执行模型**：claude-opus-4-8（Opus 主循环）｜**子代理**：无（无新端点 / 无 migration / 无 admin-ui Props）
+
+- **背景**：计划 Phase B。`reenrich-backfill.ts` 现有模式（never/unmatched/missing-characters/all）均基于 douban/bangumi 状态，**无「缺 TMDB」档**——「douban 已匹配且 meta_quality 非空但无 tmdb_id」的视频被 all 漏掉，无法靠现有模式回填 TMDB（TMDB 实装后首次回填的核心需求）。
+- **方案**：`listVideosForBackfillEnrich`（`apps/api/src/db/queries/videos.ts`）`BackfillEnrichMode` 加 `'tmdb-missing'`，条件 `mc.tmdb_id IS NULL AND v.type = ANY(TMDB_MATCHABLE_TYPES)`（`['movie','series','anime','variety','documentary']` 模式内收敛，short/other 不在 TMDB 不回填）；类型字面量代码常量参数化 IN 无注入。`all` 不含 tmdb-missing（避免重跑全量误带短剧/other）。`scripts/reenrich-backfill.ts` CLI `--mode` 白名单 + 用法注释同步。
+- **修改文件**：`apps/api/src/db/queries/videos.ts`（BackfillEnrichMode + TMDB_MATCHABLE_TYPES + 分支 + doc）、`scripts/reenrich-backfill.ts`（CLI 校验 + 注释）、`tests/unit/api/backfill-enrich-query.test.ts`（+1：tmdb-missing 条件 + 类型收敛参数化 + 不混 douban/meta_quality）。
+- **新增依赖**：无｜**数据库变更**：无｜**新端点**：无｜**admin-ui Props**：无｜**architecture.md**：无需同步
+- **质量门禁全绿**：typecheck 7ws EXIT=0 / lint 4ok / test:changed（backfill-enrich-query 7 passed）；real-data 语义验证：tmdb-missing 命中 1832 视频（resovo_dev，无 tmdb_id + 可匹配类型，对齐预期）。
+- **[AI-CHECK]**：六问过——①根因=现有模式漏「缺 TMDB」视频；②零回归（新增独立 else-if 分支，既有模式 SQL 不变，7 passed）；③边界=query 模式 + CLI 白名单，无新写路径；④复用=既有 reenrich-backfill 入队/worker 链路全复用；⑤守=类型字面量代码常量参数化 IN、all 不并入 tmdb-missing；⑥范围=模式 1 项。**后续（运维，非代码卡）**：Phase C 执行回填（`--mode tmdb-missing` dry-run→小批→全量，需 Redis+worker+TMDB 配额）+ Phase D `catalog-multilingual-cleanup.ts --apply` 清未命中拼音。
