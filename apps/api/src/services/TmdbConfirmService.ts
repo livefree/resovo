@@ -14,9 +14,10 @@
 
 import type { Pool } from 'pg'
 import { loadTmdbClientConfig } from '@/api/services/tmdb-config'
-import { searchMovie, searchTv, getMovieDetail, getTvDetail, getImageBaseUrl, TMDB_IMAGE_BASE_FALLBACK } from '@/api/lib/tmdb'
-import type { TmdbMovieDetail, TmdbTvDetail, TmdbMovieSearchItem, TmdbTvSearchItem, TmdbImage } from '@/api/lib/tmdb.types'
+import { searchMovie, searchTv, getMovieDetail, getTvDetail, getTvSeasonDetail, getImageBaseUrl, TMDB_IMAGE_BASE_FALLBACK } from '@/api/lib/tmdb'
+import type { TmdbMovieDetail, TmdbTvDetail, TmdbMovieSearchItem, TmdbTvSearchItem, TmdbImage, TmdbTvSeason, TmdbSeasonDetail, TmdbSeasonEpisode } from '@/api/lib/tmdb.types'
 import { resolveAndWriteExactRef, insertCandidateRef, type ExternalRefKind } from '@/api/db/queries/catalogExternalRefs'
+import { upsertCatalogEpisodes, type CatalogEpisodeInput } from '@/api/db/queries/catalogEpisodes'
 import { upsertVideoExternalRef } from '@/api/db/queries/externalData'
 import { mapTmdbGenres } from '@/api/lib/genreMapper'
 import { tmdbTypeSignal, resolveTypeSignal } from '@/api/lib/typeFromProvider'
@@ -88,6 +89,8 @@ export type TmdbAutoMatchResult =
       applied: string[]
       /** META-49-B1/B2：内容标量字段上抛 enrich 层交 reconcile 多源加权裁决（白名单组 RECONCILE_GROUPS）。 */
       proposedFields?: CatalogUpdateData
+      /** ADR-207 D-207-7：季级命中时的季集数（season.episode_count > 0）→ 交卡 C stepTmdb 经 episodesByStatus 派发 total/current_episodes。 */
+      seasonEpisodeCount?: number
     }
   | {
       matched: false
@@ -313,6 +316,68 @@ function buildCatalogFields(
   return { ...out, ...buildImageFields(detail, imageBase, sel) }
 }
 
+/** 季路径剔除的标题三件套（D-207-5：季名常为「Season N/第N季」噪声，不覆盖 catalog 作品核心标题；仅季路径）。 */
+const SEASON_TITLE_TRIPLE: readonly string[] = ['title', 'title_en', 'title_original']
+
+/**
+ * 季级 catalog 字段（ADR-207 D-207-4/5/6）——季回退 show：
+ *   description = 季简介 ?? show 简介；rating = 季 vote ?? show；cover = 季海报(pickBestImage) ?? 季 poster_path ?? show 海报（三级回退）；
+ *   genres / country / original_language / backdrop / logo 取 **show 级**（季共享，复用 buildImageFields 仅 backdrop+logo）。
+ * **剔标题三件套**（D-207-5：不写 title/title_en/title_original）+ **不并入 tmdbId/imdbId cache**（D-207-6，季 catalog 保持 NULL）。
+ * 返回纯内容标量（无身份键）→ autoMatch 经 splitIdentityScalarFields 全量上抛 proposedFields 交 reconcile（与 show/movie 路径对称）。
+ */
+function buildSeasonCatalogFields(
+  show: TmdbTvDetail,
+  season: TmdbTvSeason,
+  seasonDetail: TmdbSeasonDetail | null,
+  imageBase: string,
+): CatalogUpdateData {
+  const out: CatalogUpdateData = {}
+  const description = (seasonDetail?.overview?.trim() || season.overview?.trim()) || show.overview?.trim()
+  if (description) out.description = description
+  const seasonRating = seasonDetail?.vote_average ?? season.vote_average
+  const rating = typeof seasonRating === 'number' && seasonRating > 0 ? seasonRating : show.vote_average
+  if (typeof rating === 'number' && rating > 0) out.rating = rating
+  if (show.genres.length > 0) {
+    out.genres = mapTmdbGenres(show.genres.map((g) => g.id)) // M5：稳定数值 id
+    out.genresRaw = show.genres.map((g) => g.name)
+  }
+  const iso = countryToIso(show.origin_country?.[0])
+  if (iso) out.country = iso
+  if (show.original_language) out.originalLanguage = show.original_language
+  // cover：季海报多语言择优（复用 pickBestImage）→ 季 poster_path → show 海报（三级回退，D-207-4）
+  const seasonPoster = pickBestImage(seasonDetail?.images?.posters, POSTER_LANG_PREF)
+  const posterPath = seasonPoster?.file_path ?? season.poster_path ?? show.poster_path
+  if (posterPath) {
+    out.coverUrl = `${imageBase}${IMAGE_SIZE.poster}${posterPath}`
+    out.posterStatus = 'pending_review'
+    out.posterSource = 'tmdb'
+    if (seasonPoster) {
+      out.posterWidth = seasonPoster.width
+      out.posterHeight = seasonPoster.height
+    }
+  }
+  // backdrop/logo：season 无独立素材 → 取 show 级（季共享）。复用 buildImageFields 仅 backdrop+logo（cover 已季级处理，不重算）
+  Object.assign(out, buildImageFields(show, imageBase, new Set(['backdrop', 'logo'])))
+  return out
+}
+
+/** TMDB 季逐集 → CatalogEpisodeInput（source='tmdb'、ep_type=0 本篇，D-207-7）；runtime 分钟 → 秒。 */
+function toTmdbEpisodeInput(ep: TmdbSeasonEpisode): CatalogEpisodeInput {
+  return {
+    source: 'tmdb',
+    externalEpisodeId: String(ep.id),
+    epType: 0,
+    sort: ep.episode_number ?? null,
+    ep: ep.episode_number ?? null,
+    name: ep.name?.trim() || null,
+    nameCn: null,
+    airdate: ep.air_date || null,
+    durationSeconds: typeof ep.runtime === 'number' && ep.runtime > 0 ? ep.runtime * 60 : null,
+    description: ep.overview?.trim() || null,
+  }
+}
+
 // interim 交叉验证（filterCrossValidation/isEmptyValue/CROSS_VALIDATION_GROUPS）已随 reconcile 上线退场
 // （META-49-B2）：内容标量多源加权裁决移至 services/metadata/reconcile.ts（白名单组真源为 reconcile.canonical
 // RECONCILE_GROUPS）；autoMatch 不再 interim 过滤，content proposedFields 全量上抛由 reconcile 裁决。
@@ -356,8 +421,20 @@ export class TmdbConfirmService {
       ? await getImageBaseUrl(cfg, 'admin_search')
       : TMDB_IMAGE_BASE_FALLBACK
 
-    const externalKind: ExternalRefKind = mediaType === 'movie' ? 'movie' : seasonNumber != null ? 'season' : 'show'
-    const updateFields = buildCatalogFields(detail, mediaType, fields, imageBase)
+    // D-207-9a：season 分支内部解析季 id（detail.seasons[] 按 season_number 命中；seasons 为 /tv/{id} 默认字段，
+    // 无需额外 REST）——闭合 show-id-as-season 误写源头（external_id 改用季自身 id，与 autoMatch 对称，端点 Body/UI 不变）；
+    // 未命中季 → 降级 show candidate（D-207-10 level ①）。
+    const isSeasonCatalog = mediaType === 'tv' && seasonNumber != null
+    let seasonRefId: number | null = null
+    let confirmKind: ExternalRefKind = mediaType === 'movie' ? 'movie' : seasonNumber != null ? 'season' : 'show'
+    if (confirmKind === 'season') {
+      const season = (detail as TmdbTvDetail).seasons?.find((s) => s.season_number === seasonNumber) ?? null
+      if (season) seasonRefId = season.id
+      else confirmKind = 'show'
+    }
+    // 季 catalog 剔标题三件套（D-207-5：不用季名覆盖 catalog 标题；仅季路径，show/movie 路径不变）
+    const applicableFields = isSeasonCatalog ? fields.filter((f) => !SEASON_TITLE_TRIPLE.includes(f)) : fields
+    const updateFields = buildCatalogFields(detail, mediaType, applicableFields, imageBase)
     const imdbId = detail.external_ids?.imdb_id ?? null
 
     // type 富集修正（ADR-203 D-203-2/4）：仅 current==='other' 才写 provider 形式信号，绝不覆盖具体 type；
@@ -382,13 +459,14 @@ export class TmdbConfirmService {
     try {
       await client.query('BEGIN')
 
-      if (externalKind === 'show') {
-        // tv-show-root：parent 域不进 exact，落 candidate（D-202-1）
+      if (confirmKind === 'show') {
+        // tv-show-root（或季未命中降级）：parent 域不进 exact，落 candidate（D-202-1 / D-207-10 level ①）
         await insertCandidateRef(client, { catalogId, provider: 'tmdb', externalId: String(tmdbId), externalKind: 'show', source: 'manual', linkedBy: 'moderator' })
       } else {
+        // movie → tmdbId；season → 季自身 id（D-207-2；confirmKind==='season' 时 seasonRefId 必非空）
         const ref = await resolveAndWriteExactRef(client, {
-          catalogId, provider: 'tmdb', externalId: String(tmdbId), externalKind,
-          source: 'manual', linkedBy: 'moderator', seasonNumber: externalKind === 'season' ? seasonNumber : null,
+          catalogId, provider: 'tmdb', externalId: confirmKind === 'season' ? String(seasonRefId) : String(tmdbId), externalKind: confirmKind,
+          source: 'manual', linkedBy: 'moderator', seasonNumber: confirmKind === 'season' ? seasonNumber : null,
         })
         if (ref.outcome === 'conflict_candidate') { await client.query('ROLLBACK'); return { updated: false, reason: 'tmdb_exact_conflict', holderCatalogId: ref.holderCatalogId } }
         if (ref.outcome === 'kind_conflict') { await client.query('ROLLBACK'); return { updated: false, reason: 'tmdb_kind_conflict' } }
@@ -401,12 +479,17 @@ export class TmdbConfirmService {
         applied = Object.keys(updateFields).filter((k) => !skippedFields.includes(k))
       }
 
-      // cache：tmdb_id 按确认语义写；imdb_id 间接填充走 fill-if-empty（D-202-8 M4 / D-186-2）
-      await client.query('UPDATE media_catalog SET tmdb_id = $1 WHERE id = $2', [tmdbId, catalogId])
-      if (imdbId) await client.query('UPDATE media_catalog SET imdb_id = $1 WHERE id = $2 AND imdb_id IS NULL', [imdbId, catalogId])
+      // cache：tmdb_id 按确认语义写；imdb_id 间接填充走 fill-if-empty（D-202-8 M4 / D-186-2）。
+      // D-207-6：季 catalog（season_number != null）**不写** tmdb_id/imdb_id cache（保持 NULL）——多季写同一 show id 撞
+      // 026 列级 UNIQUE + findCatalogByTmdbId 误命中后续季；季身份由 season exact ref（+ video ref 季 id）承载。
+      if (!isSeasonCatalog) {
+        await client.query('UPDATE media_catalog SET tmdb_id = $1 WHERE id = $2', [tmdbId, catalogId])
+        if (imdbId) await client.query('UPDATE media_catalog SET imdb_id = $1 WHERE id = $2 AND imdb_id IS NULL', [imdbId, catalogId])
+      }
 
+      // video ref：季路径写季自身 id（D-207-6：不同季 video 不跨季过并）；movie/show 路径写 tmdbId
       await upsertVideoExternalRef(client, {
-        videoId, provider: 'tmdb', externalId: String(tmdbId),
+        videoId, provider: 'tmdb', externalId: confirmKind === 'season' ? String(seasonRefId) : String(tmdbId),
         matchStatus: 'manual_confirmed', matchMethod: 'manual', confidence: 1, isPrimary: true, linkedBy: 'moderator',
       })
 
@@ -456,6 +539,37 @@ export class TmdbConfirmService {
   }
 
   /**
+   * 季解析（ADR-207 D-207-3/10）：`detail.seasons[]` 按 season_number 命中 → 取季摘要 + `getTvSeasonDetail`（逐集/季海报）。
+   * 软校验（episode_count=0 / air_date 年份偏离 catalog year >2）记 warn **不阻断**（季 ref 比 show candidate 更精确）。
+   * 季详情 REST 失败 → 返 `seasonDetail=null`（level ②：仍可写 season exact，仅跳逐集/季海报）；未命中季 → 返 `null`（level ①：上层降级 show candidate）。
+   * 全程 REST 在事务外（autoMatch Phase 0 调用），失败由调用方 graceful skip 包裹。
+   */
+  private async resolveSeason(
+    show: TmdbTvDetail,
+    showId: number,
+    seasonNumber: number,
+    catalogYear: number | null,
+    catalogId: string,
+    cfg: Awaited<ReturnType<typeof loadTmdbClientConfig>>,
+  ): Promise<{ season: TmdbTvSeason; seasonDetail: TmdbSeasonDetail | null } | null> {
+    const season = show.seasons?.find((s) => s.season_number === seasonNumber) ?? null
+    if (!season) return null
+    const airYear = season.air_date ? Number(season.air_date.slice(0, 4)) : null
+    const yearOff = airYear !== null && Number.isFinite(airYear) && catalogYear !== null && Math.abs(airYear - catalogYear) > 2
+    if (season.episode_count === 0 || yearOff) {
+      baseLogger.child({ module: 'tmdb-season' }).warn(
+        { catalogId, seasonNumber, seasonId: season.id, episodeCount: season.episode_count, airDate: season.air_date, catalogYear },
+        'tmdb season soft validation warn (still writing season exact, ADR-207 D-207-3)',
+      )
+    }
+    const seasonDetail = await getTvSeasonDetail(
+      showId, seasonNumber,
+      { language: 'zh-CN', append: ['external_ids', 'images', 'translations', 'credits'] }, cfg, 'enrich_worker',
+    )
+    return { season, seasonDetail }
+  }
+
+  /**
    * auto 富集匹配（META-47 / ADR-205 D-205-7）——**非参数化 confirm**，供 worker（META-48）调用。
    *
    * 区别于 confirm：source/linkedBy='auto'、置信度来自打分（非 1）、按分档（auto_matched 写字段 /
@@ -477,6 +591,8 @@ export class TmdbConfirmService {
     let score: number
     let detail: TmdbMovieDetail | TmdbTvDetail | null = null
     let imageBase = TMDB_IMAGE_BASE_FALLBACK
+    let season: TmdbTvSeason | null = null
+    let seasonDetail: TmdbSeasonDetail | null = null
     try {
       const cfg = await loadTmdbClientConfig(this.db)
       if (!cfg.readAccessToken && !cfg.apiKey) return { matched: false, reason: 'no_credentials' }
@@ -499,6 +615,11 @@ export class TmdbConfirmService {
             : await getTvDetail(tmdbId, { language: 'zh-CN', append: ['external_ids', 'images', 'translations'] }, cfg, 'enrich_worker')
         if (!detail) return { matched: false, reason: 'no_candidate' }
         imageBase = await getImageBaseUrl(cfg, 'enrich_worker')
+        // 季级解析（D-207-3）：tv + seasonNumber → seasons[] 命中 + getTvSeasonDetail（逐集/季海报），REST 事务外
+        if (mediaType === 'tv' && seasonNumber != null) {
+          const resolved = await this.resolveSeason(detail as TmdbTvDetail, tmdbId, seasonNumber, targetYear, catalogId, cfg)
+          if (resolved) { season = resolved.season; seasonDetail = resolved.seasonDetail }
+        }
       }
     } catch {
       // 凭证错误 / 429 退避耗尽 / 网络 → 不写、不抛，等下次 worker 重试
@@ -506,15 +627,27 @@ export class TmdbConfirmService {
     }
 
     const tier: 'auto_matched' | 'candidate' = detail ? 'auto_matched' : 'candidate'
-    const externalKind: ExternalRefKind = mediaType === 'movie' ? 'movie' : seasonNumber != null ? 'season' : 'show'
+    const seasonResolved = season != null
+    const isSeasonCatalog = mediaType === 'tv' && seasonNumber != null
+    // season 命中 → 'season'（external_id=季 id，D-207-2）；季 catalog 未命中季 / tv show-root → 'show'（D-207-10 level ①）；movie → 'movie'
+    const externalKind: ExternalRefKind = mediaType === 'movie' ? 'movie' : seasonResolved ? 'season' : 'show'
+    const refExternalId = seasonResolved && season ? String(season.id) : String(tmdbId)
 
     // auto_matched：构造应用字段（事务外预读 type 信号，复用 confirm 的 ADR-203 逻辑）
     const updateFields: CatalogUpdateData = {}
     if (detail) {
-      Object.assign(updateFields, buildCatalogFields(detail, mediaType, TMDB_APPLIABLE_FIELDS, imageBase))
-      updateFields.tmdbId = tmdbId // 经 safeUpdate fill-if-empty 白名单（M4），受下方 ref 成功约束
-      const imdbId = detail.external_ids?.imdb_id ?? null
-      if (imdbId) updateFields.imdbId = imdbId
+      if (seasonResolved && season) {
+        // 季级字段：季回退 show（D-207-4）+ 剔标题三件套（D-207-5）+ **不并入 tmdbId/imdbId cache**（D-207-6，季 catalog 保持 NULL）
+        Object.assign(updateFields, buildSeasonCatalogFields(detail as TmdbTvDetail, season, seasonDetail, imageBase))
+      } else {
+        Object.assign(updateFields, buildCatalogFields(detail, mediaType, TMDB_APPLIABLE_FIELDS, imageBase))
+        // D-207-6：季 catalog（season_number != null）即便降级 show candidate 也不写 cache（多季写同一 show id 撞 026 列级 UNIQUE）
+        if (!isSeasonCatalog) {
+          updateFields.tmdbId = tmdbId // 经 safeUpdate fill-if-empty 白名单（M4），受下方 ref 成功约束
+          const imdbId = detail.external_ids?.imdb_id ?? null
+          if (imdbId) updateFields.imdbId = imdbId
+        }
+      }
       const currentCatalog = await findCatalogById(this.db, catalogId)
       if (currentCatalog) {
         const outcome = resolveTypeSignal(currentCatalog.type, tmdbTypeSignal(mediaType, detail.genres.map((g) => g.id)))
@@ -535,9 +668,10 @@ export class TmdbConfirmService {
       await client.query('BEGIN')
 
       if (tier === 'auto_matched' && (externalKind === 'movie' || externalKind === 'season')) {
-        // 精确级 exact：冲突 = 归并信号 → ROLLBACK 不写 cache（D-205-7「受 refs 成功约束」）
+        // 精确级 exact：冲突 = 归并信号 → ROLLBACK 不写 cache（D-205-7「受 refs 成功约束」）。
+        // season → 季自身 id（D-207-2，refExternalId）；movie → tmdbId
         const ref = await resolveAndWriteExactRef(client, {
-          catalogId, provider: 'tmdb', externalId: String(tmdbId), externalKind,
+          catalogId, provider: 'tmdb', externalId: refExternalId, externalKind,
           source: 'auto', linkedBy: 'auto', seasonNumber: externalKind === 'season' ? seasonNumber : null,
         })
         if (ref.outcome === 'conflict_candidate') { await client.query('ROLLBACK'); return { matched: false, reason: 'tmdb_exact_conflict', holderCatalogId: ref.holderCatalogId } }
@@ -563,8 +697,15 @@ export class TmdbConfirmService {
         if (Object.keys(contentFields).length > 0) proposedFields = contentFields
       }
 
+      // 逐集（D-207-7）：季详情 episodes → catalog_episodes(source='tmdb')，复用 Phase 2 同一 client（D-207-10 单事务；
+      // upsert 失败不回滚已写 season exact——由整事务边界承载，逐集与 ref 同 client 故同 COMMIT/ROLLBACK）
+      if (seasonResolved && seasonDetail?.episodes?.length) {
+        await upsertCatalogEpisodes(client, catalogId, seasonDetail.episodes.map(toTmdbEpisodeInput))
+      }
+
+      // video ref：季路径写季自身 id（D-207-6：不同季 video 不跨季过并）；movie/show 路径写 tmdbId
       await upsertVideoExternalRef(client, {
-        videoId, provider: 'tmdb', externalId: String(tmdbId),
+        videoId, provider: 'tmdb', externalId: refExternalId,
         matchStatus: tier, matchMethod: 'auto', confidence: score, isPrimary: tier === 'auto_matched', linkedBy: 'auto',
       })
 
@@ -573,7 +714,11 @@ export class TmdbConfirmService {
       // META-49-B2：auto_matched primary ref 写入后定向重评（外部 ID 证据面变化，对齐 bangumi
       // applyAutoMatchAtomic:592；META-48 遗漏补齐）。fire-and-forget，失败仅 warn 不阻断。
       if (tier === 'auto_matched') enqueueIdentityVideoRescore(videoId)
-      return { matched: true, tier, tmdbId, confidence: score, applied, proposedFields }
+      return {
+        matched: true, tier, tmdbId, confidence: score, applied, proposedFields,
+        // 季集数交卡 C stepTmdb 经 episodesByStatus 派发 total/current_episodes（D-207-7；此处仅回传，避免 service↔enrich 循环 import）
+        seasonEpisodeCount: seasonResolved && season && season.episode_count > 0 ? season.episode_count : undefined,
+      }
     } catch (err) {
       try { await client.query('ROLLBACK') } catch { /* connection may already be lost */ }
       throw err

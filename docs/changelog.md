@@ -6659,3 +6659,19 @@
   - 门禁：typecheck exit=0 / lint exit=0（无 error，warnings 为预存 react-hooks/img 与本卡无关）/ `npm run test:changed` 318 passed（含 tmdb.test 18 + tmdb-confirm-service 59 等关联）。
   - 季 images 类型用 `TmdbImages` 复用——TMDB `/tv/{id}/season/{n}?append=images` 实际仅返回 posters（无 backdrops/logos），卡 B 季海报仅取 `images?.posters` 经 pickBestImage，运行时安全；不改 TmdbImages 以免影响 movie/tv detail。
   - 季级路径接线/字段/逐集/season exact ref/confirm 纠偏由 **-B** 承载（依赖本卡），-C 接线 stepTmdb，-D 清理+回填。
+
+## [META-53-B] TmdbConfirmService 季级路径 — autoMatch 季解析 + season exact(季 id) + 逐集 + confirm 源头纠偏（SEQ-20260616-03 / ADR-207 D-207-2/3/4/5/6/7/9a/10）
+- **完成时间**：2026-06-16
+- **记录时间**：2026-06-16 15:40
+- **执行模型**：claude-opus-4-8（建议 sonnet；人工以 Opus 启动 SEQ-20260616-03，向上覆盖、不阻断、质量更高）
+- **子代理**：无（设计已经 ADR-207 arch-reviewer claude-opus-4-8 CONDITIONAL-PASS 裁定；落地不重复升 Opus）
+- **修改文件**：
+  - `apps/api/src/services/TmdbConfirmService.ts` — ① 新增 `buildSeasonCatalogFields`（季回退 show：description=季简介??show / rating=季??show / cover=季海报(pickBestImage)??季 poster??show 三级回退 / genres·country·original_language·backdrop·logo 取 show 级；**剔标题三件套** D-207-5；**不并入 tmdbId/imdbId cache** D-207-6）+ `toTmdbEpisodeInput`（TMDB 季逐集→CatalogEpisodeInput，source=tmdb·ep_type=0·runtime 分→秒）+ `SEASON_TITLE_TRIPLE` 常量 + 私有 `resolveSeason`（detail.seasons[] 按 season_number 命中 + 软校验 warn〔episode_count=0/air_date 偏离>2 年，不阻断〕+ getTvSeasonDetail）；② **autoMatch 季级路径**：season exact ref external_id=季自身 id（D-207-2，refExternalId）/ video ref 写季 id（D-207-6）/ 逐集 upsertCatalogEpisodes 复用 Phase 2 同一 client 单事务（D-207-7/10）/ 季 catalog（season_number!=null）即便降级 show candidate 也永不写 tmdbId/imdbId cache（D-207-6，规避 026 列级 UNIQUE）/ 失败降级分层（getTvSeasonDetail 失败仍写 season exact 仅跳逐集，D-207-10 level ②；未命中季降级 show candidate，level ①）/ 返回 `seasonEpisodeCount` 交卡 C 派发集数；③ **confirm 源头纠偏 D-207-9a**（season 分支内部 detail.seasons[] 解析季 id 作 external_id，闭合 show-id-as-season 误写；季 catalog skip tmdb_id/imdb_id cache；video ref 写季 id；剔标题三件套）。`TmdbAutoMatchResult` matched 变体 +`seasonEpisodeCount?`
+  - `tests/unit/api/tmdb-confirm-service.test.ts` — vi.mock tmdb 补 getTvSeasonDetail + mock catalogEpisodes；confirm season 测试改断言季 id 解析（external_id=季 id 60001 非 show 1429）+ 不写 cache + video ref 季 id；新增 confirm 未命中季降级 + 剔标题三件套；新增 `autoMatch 季级路径` describe（7 用例：S1 季 id ref+不写 cache+video ref 季 id / S1·S2 不同 ref 互不冲突 / 逐集 source=tmdb+runtime 秒+seasonEpisodeCount / 季简介回退 show / getTvSeasonDetail 失败仍写 exact 跳逐集 / 未命中季降级 show candidate）。59→67 passed
+- **新增依赖**：无
+- **数据库变更**：无（复用 catalog_external_refs season exact / catalog_episodes source=tmdb / video_external_refs；无 migration）
+- **注意事项**：
+  - 门禁：typecheck exit=0 / lint exit=0 / `npm run test:changed` 276 passed（14 文件，含 tmdb-confirm-service 67 + metadataEnrich 42）。
+  - **架构决策（重要）**：季集数 `episodesByStatus`→`updateVideoEpisodes`（写 videos 表 total/current）**留卡 C stepTmdb**——episodesByStatus 定义在 MetadataEnrichService，TmdbConfirmService 直接 import 会形成循环依赖；改由 autoMatch 返回 `seasonEpisodeCount`、卡 C 调 episodesByStatus 派发（与 douban 集数写在 enrich step 范式一致）。逐集 catalog_episodes upsert 仍在 autoMatch 内（D-207-10 同事务硬要求）。
+  - **confirm 字段范围（follow-up 候选）**：confirm season 路径仅做 D-207-9a 必需的 external_id 纠偏 + skip cache + 剔标题三件套；非标题字段仍走 buildCatalogFields（show 级值，moderator 选）——manual 季字段季级化（季简介/季海报）非本卡 BLOCKER 范围，autoMatch auto 路径已完整季级化。
+  - 卡 C（stepTmdb 透传 seasonNumber + catalogStatus 派发 seasonEpisodeCount）依赖本卡；卡 D 存量清理 + 回填依赖 -B/-C。

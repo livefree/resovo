@@ -16,6 +16,8 @@ import * as externalData from '@/api/db/queries/externalData'
 
 vi.mock('@/api/lib/tmdb', () => ({
   searchMovie: vi.fn(), searchTv: vi.fn(), getMovieDetail: vi.fn(), getTvDetail: vi.fn(),
+  // ADR-207 D-207-3：季级路径拉 /tv/{id}/season/{n}（逐集 + 季海报）
+  getTvSeasonDetail: vi.fn(),
   // META-43：confirm 图片应用经 getImageBaseUrl 拉 configuration base（mock 返稳定 base）
   getImageBaseUrl: vi.fn(async () => 'https://image.tmdb.org/t/p/'),
   TMDB_IMAGE_BASE_FALLBACK: 'https://image.tmdb.org/t/p/',
@@ -24,6 +26,9 @@ vi.mock('@/api/services/tmdb-config', () => ({ loadTmdbClientConfig: vi.fn(async
 import { loadTmdbClientConfig } from '@/api/services/tmdb-config'
 vi.mock('@/api/db/queries/catalogExternalRefs', () => ({ resolveAndWriteExactRef: vi.fn(), insertCandidateRef: vi.fn(async () => true) }))
 vi.mock('@/api/db/queries/externalData', () => ({ upsertVideoExternalRef: vi.fn(async () => undefined) }))
+// ADR-207 D-207-7：季级逐集 upsert（source='tmdb'）
+vi.mock('@/api/db/queries/catalogEpisodes', () => ({ upsertCatalogEpisodes: vi.fn(async () => 0) }))
+import * as catalogEpisodes from '@/api/db/queries/catalogEpisodes'
 const safeUpdateMock = vi.fn(
   async (_catalogId: string, _fields: Record<string, unknown>, _source: string, _ctx: unknown) =>
     ({ updated: true, skippedFields: [] as string[] }),
@@ -145,11 +150,43 @@ describe('confirm', () => {
     expect(recomputeCatalogBlockingKeys).not.toHaveBeenCalled()
   })
 
-  it('tv + seasonNumber → externalKind=season', async () => {
+  it('tv + seasonNumber + seasons[] 命中 → season exact external_id=季自身 id（D-207-2）+ 不写 cache（D-207-6）+ video ref 季 id', async () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    vi.mocked(tmdbLib.getTvDetail).mockResolvedValue({ id: 1429, name: '进击的巨人', original_name: '進撃の巨人', original_language: 'ja', overview: 'x', genres: [], external_ids: {} } as any)
+    vi.mocked(tmdbLib.getTvDetail).mockResolvedValue({
+      id: 1429, name: '进击的巨人', original_name: '進撃の巨人', original_language: 'ja', overview: 'x', genres: [], external_ids: { imdb_id: 'tt1' },
+      seasons: [{ id: 60001, season_number: 1, name: 'Season 1', overview: '', poster_path: null, air_date: '2013-04-07', episode_count: 25, vote_average: 8 }],
+    } as any)
     await svc.confirm('vid', 'cat', { tmdbId: 1429, mediaType: 'tv', seasonNumber: 1, fields: [] })
-    expect(catalogRefs.resolveAndWriteExactRef).toHaveBeenCalledWith(client, expect.objectContaining({ externalKind: 'season', seasonNumber: 1 }))
+    // external_id = 季自身 id 60001（绝非 show id 1429，D-207-2）
+    expect(catalogRefs.resolveAndWriteExactRef).toHaveBeenCalledWith(client, expect.objectContaining({ externalId: '60001', externalKind: 'season', seasonNumber: 1 }))
+    // D-207-6：季 catalog 不写 tmdb_id/imdb_id cache（无裸 UPDATE media_catalog SET tmdb_id）
+    const cacheCall = clientQuery.mock.calls.find((c) => typeof c[0] === 'string' && c[0].includes('SET tmdb_id'))
+    expect(cacheCall).toBeUndefined()
+    // video ref 写季 id 60001（不同季 video 不跨季过并）
+    expect(externalData.upsertVideoExternalRef).toHaveBeenCalledWith(client, expect.objectContaining({ externalId: '60001', matchStatus: 'manual_confirmed' }))
+  })
+
+  it('tv + seasonNumber 但 seasons[] 未命中季 → 降级 show candidate（D-207-10 level ①），不升 exact', async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    vi.mocked(tmdbLib.getTvDetail).mockResolvedValue({
+      id: 1429, name: 'X', original_name: 'X', original_language: 'ja', overview: '', genres: [], external_ids: {},
+      seasons: [{ id: 60002, season_number: 2, name: 'S2', overview: '', poster_path: null, air_date: null, episode_count: 12, vote_average: 0 }],
+    } as any)
+    await svc.confirm('vid', 'cat', { tmdbId: 1429, mediaType: 'tv', seasonNumber: 1, fields: [] }) // 请求 S1，mock 仅 S2
+    expect(catalogRefs.insertCandidateRef).toHaveBeenCalledWith(client, expect.objectContaining({ externalKind: 'show', externalId: '1429' }))
+    expect(catalogRefs.resolveAndWriteExactRef).not.toHaveBeenCalled()
+  })
+
+  it('季路径剔标题三件套（D-207-5）：选 title 也不写 title（季名噪声不覆盖 catalog 标题），description 仍写', async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    vi.mocked(tmdbLib.getTvDetail).mockResolvedValue({
+      id: 1429, name: 'Season 1', original_name: 'Season 1', original_language: 'ja', overview: 'x', genres: [], external_ids: {},
+      seasons: [{ id: 60001, season_number: 1, name: 'Season 1', overview: '', poster_path: null, air_date: null, episode_count: 25, vote_average: 8 }],
+    } as any)
+    await svc.confirm('vid', 'cat', { tmdbId: 1429, mediaType: 'tv', seasonNumber: 1, fields: ['title', 'description'] })
+    const arg = safeUpdateMock.mock.calls[0]?.[1] as Record<string, unknown> | undefined
+    expect(arg?.title).toBeUndefined() // title 被剔除（季路径）
+    expect(arg?.description).toBe('x') // 非标题三件套，仍可写
   })
 
   it('tv 无 seasonNumber → externalKind=show 走 insertCandidateRef（不升 exact）', async () => {
@@ -540,6 +577,93 @@ describe('autoMatch', () => {
     expect(r).toMatchObject({ matched: true, tmdbId: 555 })
     expect(tmdbLib.searchMovie).toHaveBeenCalledTimes(1)
     expect(vi.mocked(tmdbLib.searchMovie).mock.calls[0][0]).toBe('abcdef') // 兜底视频标题
+  })
+})
+
+// ADR-207 D-207-2/3/4/5/6/7/10：autoMatch 季级路径（季解析 / season exact=季 id / 逐集 source=tmdb / 失败降级分层）
+describe('autoMatch 季级路径（ADR-207）', () => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const search = (items: any[]) => ({ page: 1, total_pages: 1, total_results: items.length, results: items })
+  const tvItem = () => ({ id: 1399, name: 'abcdef', original_name: 'abcdef', original_language: 'en', overview: 'show overview', first_air_date: '2011-04-17', poster_path: '/show.jpg' })
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const tvDetail = (over: Record<string, unknown> = {}): any => ({
+    id: 1399, name: 'abcdef', original_name: 'abcdef', original_language: 'en', overview: 'show overview',
+    genres: [{ id: 18, name: 'Drama' }], origin_country: ['US'], vote_average: 9, poster_path: '/show.jpg', external_ids: { imdb_id: 'tt0944947' },
+    seasons: [
+      { id: 3624, season_number: 1, name: 'Season 1', overview: 'S1 overview', poster_path: '/s1.jpg', air_date: '2011-04-17', episode_count: 10, vote_average: 8.3 },
+      { id: 3625, season_number: 2, name: 'Season 2', overview: '', poster_path: '/s2.jpg', air_date: '2012-04-01', episode_count: 10, vote_average: 8.5 },
+    ],
+    ...over,
+  })
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const seasonDetail = (over: Record<string, unknown> = {}): any => ({
+    id: 3624, name: 'Season 1', overview: 'S1 detail overview', poster_path: '/s1.jpg', air_date: '2011-04-17', season_number: 1, vote_average: 8.3,
+    episodes: [
+      { id: 63056, episode_number: 1, name: 'Ep1', overview: 'e1', air_date: '2011-04-17', runtime: 62, still_path: '/e1.jpg', vote_average: 8 },
+      { id: 63057, episode_number: 2, name: 'Ep2', overview: 'e2', air_date: '2011-04-24', runtime: 56, still_path: '/e2.jpg', vote_average: 8 },
+    ],
+    ...over,
+  })
+
+  beforeEach(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    vi.mocked(tmdbLib.searchTv).mockResolvedValue(search([tvItem()]) as any)
+    vi.mocked(tmdbLib.getTvDetail).mockResolvedValue(tvDetail())
+    vi.mocked(tmdbLib.getTvSeasonDetail).mockResolvedValue(seasonDetail())
+  })
+
+  it('S1 命中 → season exact external_id=季 id 3624 + season_number=1（D-207-2）+ 不写 tmdbId/imdbId cache（D-207-6）+ video ref 季 id', async () => {
+    const r = await svc.autoMatch('vid', 'cat', { title: 'abcdef', year: 2011, mediaType: 'tv', seasonNumber: 1 })
+    expect(r).toMatchObject({ matched: true, tier: 'auto_matched', tmdbId: 1399 })
+    expect(catalogRefs.resolveAndWriteExactRef).toHaveBeenCalledWith(client, expect.objectContaining({ externalId: '3624', externalKind: 'season', seasonNumber: 1 }))
+    const idArg = (safeUpdateMock.mock.calls[0]?.[1] ?? {}) as Record<string, unknown>
+    expect(idArg.tmdbId).toBeUndefined() // 季 catalog 不写 cache
+    expect(idArg.imdbId).toBeUndefined()
+    expect(externalData.upsertVideoExternalRef).toHaveBeenCalledWith(client, expect.objectContaining({ externalId: '3624', matchStatus: 'auto_matched' }))
+  })
+
+  it('S1/S2 写出不同 season exact ref（external_id=各季 id，互不冲突，D-207-2）', async () => {
+    await svc.autoMatch('vid', 'cat', { title: 'abcdef', year: 2011, mediaType: 'tv', seasonNumber: 1 })
+    vi.mocked(tmdbLib.getTvSeasonDetail).mockResolvedValue(seasonDetail({ id: 3625, season_number: 2, episodes: [] }))
+    await svc.autoMatch('vid2', 'cat2', { title: 'abcdef', year: 2012, mediaType: 'tv', seasonNumber: 2 })
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const ids = vi.mocked(catalogRefs.resolveAndWriteExactRef).mock.calls.map((c) => (c[1] as any).externalId)
+    expect(ids).toContain('3624')
+    expect(ids).toContain('3625')
+  })
+
+  it('逐集 upsert source=tmdb + ep_type=0 + externalEpisodeId=String(id) + runtime 分钟→秒（D-207-7）+ 返回 seasonEpisodeCount', async () => {
+    const r = await svc.autoMatch('vid', 'cat', { title: 'abcdef', year: 2011, mediaType: 'tv', seasonNumber: 1 })
+    expect(catalogEpisodes.upsertCatalogEpisodes).toHaveBeenCalledWith(client, 'cat', expect.arrayContaining([
+      expect.objectContaining({ source: 'tmdb', externalEpisodeId: '63056', epType: 0, ep: 1, durationSeconds: 62 * 60 }),
+    ]))
+    expect(r.matched && r.seasonEpisodeCount).toBe(10)
+  })
+
+  it('季简介缺失（季 detail + 季摘要均空）→ description 回退 show 简介（D-207-4）', async () => {
+    vi.mocked(tmdbLib.getTvDetail).mockResolvedValue(tvDetail({
+      seasons: [{ id: 3624, season_number: 1, name: 'S1', overview: '', poster_path: null, air_date: '2011-04-17', episode_count: 10, vote_average: 0 }],
+    }))
+    vi.mocked(tmdbLib.getTvSeasonDetail).mockResolvedValue(seasonDetail({ overview: '', episodes: [] }))
+    const r = await svc.autoMatch('vid', 'cat', { title: 'abcdef', year: 2011, mediaType: 'tv', seasonNumber: 1 })
+    const proposed = (r.matched ? r.proposedFields : undefined) ?? {}
+    expect(proposed.description).toBe('show overview')
+  })
+
+  it('getTvSeasonDetail 失败（null）→ 仍写 season exact，仅跳逐集（D-207-10 level ②）', async () => {
+    vi.mocked(tmdbLib.getTvSeasonDetail).mockResolvedValue(null)
+    const r = await svc.autoMatch('vid', 'cat', { title: 'abcdef', year: 2011, mediaType: 'tv', seasonNumber: 1 })
+    expect(r.matched).toBe(true)
+    expect(catalogRefs.resolveAndWriteExactRef).toHaveBeenCalledWith(client, expect.objectContaining({ externalId: '3624', externalKind: 'season' }))
+    expect(catalogEpisodes.upsertCatalogEpisodes).not.toHaveBeenCalled() // 季详情失败 → 无逐集
+  })
+
+  it('seasons[] 未命中季 → 降级 show candidate（D-207-10 level ①），不升 exact、不调 getTvSeasonDetail', async () => {
+    const r = await svc.autoMatch('vid', 'cat', { title: 'abcdef', year: 2011, mediaType: 'tv', seasonNumber: 9 }) // 仅有 S1/S2
+    expect(r.matched).toBe(true)
+    expect(catalogRefs.insertCandidateRef).toHaveBeenCalledWith(client, expect.objectContaining({ externalKind: 'show', externalId: '1399' }))
+    expect(catalogRefs.resolveAndWriteExactRef).not.toHaveBeenCalled()
+    expect(tmdbLib.getTvSeasonDetail).not.toHaveBeenCalled()
   })
 })
 
