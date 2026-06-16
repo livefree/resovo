@@ -102,6 +102,10 @@ test.describe('Dashboard 8 卡片浏览态 — 三 stats 路径 regression gate'
     await expect(page.locator('[data-card="recent-activity"]')).toBeVisible()
     await expect(page.locator('[data-card="site-health"]')).toBeVisible()
 
+    // DASH-QUEUE-HEALTH-B：队列健康卡 row5 可见 + 全 9 队列行渲染（防回归：旧 2 队列 mock 缺键崩卡）
+    await expect(page.locator('[data-card="queue-health"]')).toBeVisible()
+    expect(await page.locator('[data-card="queue-health"] [data-queue-row]').count()).toBe(9)
+
     // reference §5.1.4 守门：4 张 KPI [data-card-value] 全部非破折号
     const kpiValues = await page.locator('[data-kpi-card] [data-card-value]').allTextContents()
     expect(kpiValues.length).toBe(4)

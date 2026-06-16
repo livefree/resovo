@@ -90,15 +90,20 @@ export async function installAdminShellMocks(page: Page) {
       return
     }
 
-    // GET /admin/system/jobs — useAdminTasks（data 数组 + meta.degraded 双必需）
+    // GET /admin/system/jobs — useAdminTasks（data 数组 + meta.degraded）+ 仪表盘 QueueHealthCard
+    // 消费 meta.queueCounts（ADR-147 AMENDMENT：全 9 队列 × 4 计数，缺队列键会令卡 c.active 崩）
     if (path === '/v1/admin/system/jobs' && method === 'GET') {
+      const zero = { waiting: 0, active: 0, completed: 0, failed: 0 }
       await route.fulfill(json({
         data: [],
         meta: {
           total: 0,
           limit: 20,
           since: '1970-01-01T00:00:00.000Z',
-          queueCounts: { crawler: { waiting: 0, active: 0 }, maintenance: { waiting: 0, active: 0 } },
+          queueCounts: {
+            crawler: zero, verify: zero, enrichment: zero, imageHealth: zero, maintenance: zero,
+            identityCandidate: zero, homeAutofill: zero, doubanCollections: zero, bangumiCollections: zero,
+          },
           degraded: false,
         },
       }))

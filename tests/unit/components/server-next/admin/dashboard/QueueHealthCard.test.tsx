@@ -93,4 +93,17 @@ describe('QueueHealthCard', () => {
     render(<QueueHealthCard />)
     await waitFor(() => expect(card().querySelector('[data-queue-degraded]')).not.toBeNull())
   })
+
+  it('partial/陈旧响应缺队列键 → 跳过缺失行不崩（防御 guard）', async () => {
+    // 模拟陈旧 mock 仅返 crawler/maintenance（缺 enrichment 等 7 队列）；类型断言绕过契约
+    mockGetQueueHealth.mockResolvedValue({
+      queueCounts: { crawler: Q(1, 0, 0, 0), maintenance: Q(0, 0, 0, 0) } as unknown as AdminQueueCounts,
+      degraded: false,
+    })
+    render(<QueueHealthCard />)
+    await waitFor(() => expect(card().querySelector('[data-queue-row="crawler"]')).not.toBeNull())
+    // 缺失队列跳过而非崩整卡：仅渲染在场的 2 行
+    expect(card().querySelectorAll('[data-queue-row]')).toHaveLength(2)
+    expect(card().querySelector('[data-queue-row="enrichment"]')).toBeNull()
+  })
 })

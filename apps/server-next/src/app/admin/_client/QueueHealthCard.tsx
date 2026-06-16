@@ -130,7 +130,9 @@ export function QueueHealthCard({ className }: QueueHealthCardProps) {
       {counts !== null && (
         <div style={BODY_STYLE} data-card-body>
           {QUEUE_META.map(({ key, label }, idx) => {
+            // 防御：契约保证全 9 队列在场，但 partial/陈旧响应缺键时跳过该行而非崩整卡（优雅降级）
             const c = counts[key]
+            if (!c) return null
             return (
               <div
                 key={key}
