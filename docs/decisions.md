@@ -23219,3 +23219,50 @@ D-206-5「经 normalizeForExternalMatch 归一」未闭合**实现架构**：`no
 - **Q5 hash 不漂移（M-2A-4/M-2A-6）**：`sharedAliasBucketKeys(left,right)` = 双方 `aliasBlockingKeys` **交集**（对齐 sharedExternalBucketKeys 交集 + blockingKeys「该 pair 命中桶」语义）；**交集为空即不注入**（不塞占位符）→ 未命中 alias 桶的既有 pair blockingKeys 不变、evidence_hash 不漂移，避免 candidate 表全量 re-upsert 风暴。
 - **Q6 拆卡（M-2A-7）**：2A-1（migration 120 + queries + 写键 service〔含哨兵恒进〕+ 写路径接线〔加性，不改 reconcile/safeUpdate〕+ 回填 + architecture.md，**schema 卡 commit 带 Subagents trailer**）→ 2A-2（段③ recall + buildSides + 四口径 + sharedAliasBucketKeys + scorePair/weights 零 diff 守护）→ 2B。M-2A-8：migration 120 幂等 + CASCADE + 验证块对齐 089 + architecture.md schema 同步 git add。
 - **范围蔓延守护**：写键接线只在**现有**别名/标题落表位点后追加加性 `upsertCatalogBlockingAliasKeys(catalogId)` 调用，**不改** reconcile/safeUpdate/CrawlerService 既有写语义（D-206-8 不开第二写入方）、**不接线** `upsertStructuredCatalogAlias` 生产调用（那是 WS3-3A/D-206-9）。
+
+---
+
+## ADR-207：TMDB 季粒度自动富集 — 分季 catalog 季级匹配 + 季 exact ref + 逐集 source=tmdb + 存量纠偏（SEQ-20260616-03 / META-53）
+
+**状态**：Accepted（arch-reviewer (claude-opus-4-8, agentId a98bf3dfbab2c993d) CONDITIONAL-PASS：核验全部核心断言属实，1 BLOCKER + 3 HIGH + 5 MEDIUM 条件全数吸收为 D-207-2~10）。
+
+**背景/问题（真实案例驱动）**：以 2011 首播《权力的游戏》（TMDB tv id 1399）为例，TMDB 把一部剧建模为**单一 TV 实体**，季是子资源——`/tv/{id}` 默认返回 `seasons[]` 摘要（每季含独立 `id`/`name`/`overview`/`poster_path`/`air_date`/`episode_count`/`season_number`），`/tv/{id}/season/{n}` 返回季详情 + `episodes[]`（即网站「查看全部季」数据）。而本项目按 **ADR-176 季粒度**把同一剧拆成多个独立 `media_catalog`（每季一条，列 `season_number` 承载季号，由 `TitleIdentityParser`「第N季/Season N/Part N」解析 → `CrawlerService.ts:197 findOrCreateWithMatch({ seasonNumber })` 入库填充）。
+
+二者建模错位导致：`MetadataEnrichService.stepTmdb`（:213）调 `TmdbConfirmService.autoMatch` **从不传 `seasonNumber`** → TV 恒走 `externalKind='show'`（:509 三态恒落 'show'）：① 同剧 S1/S2/S3 各分季 catalog 被套上**完全相同的整剧元数据**（整剧标题/简介/海报），季级差异丢失；② TMDB 季级数据（季名/简介/海报/首播/集数/逐集）完全未取用；③ show ref 只能落 candidate（ADR-202 D-202-1 show 永不 exact），无精确季级身份绑定。
+
+**本 ADR 是 ADR-202 D-202-α「tv-show-root 落 candidate / cache 近似 / 标 follow-up」与 ADR-177 D-177-11（:20155「tmdb season ID → season exact + season_number」）预定档方向的兑现闭合**，非新方向、非偏离。`autoMatch` 入参 `seasonNumber?`、`externalKind` 三态（:509）、季 exact 写入分支（:537-548）、`catalog_external_refs` PRECISE_KINDS 含 'season'、`catalog_episodes.source` 列（ADR-161）、`mapCatalogRow.seasonNumber`（:230）均**已就绪**——本 ADR 补齐上游传参 + 季解析 + 季端点 + 逐集 + 存量纠偏。**无新 migration**（schema 全就绪）。
+
+### 决策
+
+- **D-207-1（季级路径触发 + 总流程）**：仅 `mediaType==='tv' ∧ catalog.seasonNumber != null` 进季级路径；`seasonNumber IS NULL`（单季/无显式季标记，ADR-176「NULL=非分季」）→ **保持现状 show 级行为**（externalKind='show' candidate + show 级标量），零回归。`stepTmdb` 把 `enrich` 已预取的 `catalogSnapshot.seasonNumber`（:89）透传 `autoMatch`。电影路径（movie→exact）完全不变。
+
+- **D-207-2（季级 ref `external_id` = TMDB 季自身 `id`，BLOCKER 依据）**：季 ref 写 `{ externalId: String(season.id), externalKind:'season', seasonNumber:n, relation:'exact' }`，**external_id 取季对象的 `id`，绝非 show id**。依据：exact 全局唯一索引 `uq_catalog_external_refs_exact (provider, external_id, external_kind) WHERE relation='exact'`（091:46）+ `resolveAndWriteExactRef` 预检（:92）**均不含 season_number** → 若用 show id，则同剧 S1/S2/S3 对同一 `(tmdb, showId, 'season')` 三元组互撞索引①，**第二季起必降 conflict_candidate**。TMDB 季 id 与 show id 全局不同命名空间，季 id 天然全局唯一、且只以 `season` kind 出现满足 R10 守卫（:78）。`season_number` 列仍按 D-177-3 同步写入（供报表/上卷区分，非唯一性来源）。
+
+- **D-207-3（季解析算法 + 客户端增量，HIGH）**：show 匹配（`multiTermSearch` 不变，knownNames 驱动）拿 show id → `getTvDetail` 取 **`seasons[]` 摘要**按 `season.season_number === catalog.seasonNumber` 命中 → 取 `season.id`；命中后调新增 `getTvSeasonDetail(showId, n)` 取逐集 + 季海报。**命中不到对应季 / 季详情 REST 失败 → 降级 show candidate（不写 season exact，不误绑）**。客户端增量（lib 层）：①`tmdb.types.ts` 新增 `TmdbTvSeason`（id/name/overview/poster_path/air_date/episode_count/season_number/vote_average）+ `TmdbTvDetail.seasons?: TmdbTvSeason[]`（来自 `/tv/{id}` **默认摘要，无需 append**）+ `TmdbSeasonDetail`/`TmdbSeasonEpisode`；②`tmdb.ts` 新增 `getTvSeasonDetail(seriesId, seasonNumber, opts, cfg, source)` → `GET /tv/{id}/season/{n}`（append `external_ids`/`images`/`translations`/`credits`），失败/404→null（对齐 `getDetail` :285 范式），埋点 `operation='detail'`。**软校验（不阻断）**：命中后若 `season.episode_count===0` 或 `season.air_date` 与 `catalog.year` 偏离 >2 年 → 记 warn 仍写（季级 ref 比 show candidate 更精确，不因软信号放弃）；TMDB `season_number=0`=Specials 不会命中（catalog season_number CHECK>0）。
+
+- **D-207-4（字段来源优先级 + 图片复用，MEDIUM）**：季回退 show——`description`=季简介 ?? show 简介；`cover_url`=季海报 ?? show 海报；`rating`=季 `vote_average` ?? show；`genres`/`country`/`original_language`/`backdrop`/`logo` 取 **show 级**（季共享）。季海报**复用** `pickBestImage(POSTER_LANG_PREF)`（:198/:54）+ `buildImageFields` + `getImageBaseUrl` 缓存——**禁新写图片选择逻辑**（守「同 UI 模式提取共享层」+ 零硬编码色）。
+
+- **D-207-5（title 不覆盖，MEDIUM）**：**不**用 TMDB 季名覆盖 catalog title（季名常为「Season N/第N季」噪声，与 ADR-176「season_number 列承载季号、title_normalized 保作品核心」一致）。落地点：季路径的 applied fields 白名单**剔除 `title`/`title_en`/`title_original` 三件套**（**仅季路径**；show/movie 路径不变，否则会用 show detail 标题覆盖）。
+
+- **D-207-6（tmdb_id cache 写 show id + 一致性校验例外簇，HIGH）**：`media_catalog.tmdb_id` cache 写 **show id**（cross-link / IMDb external_ids 派生锚点），季精度由 season exact ref 承载（D-177-5 四列降级 cache + D-202-α「cache 近似已知」延续）。**张力闭合**：同 show 下 S1/S2/S3 三 catalog 的 `tmdb_id` cache 均为同一 show id 而 season exact ref 各异 → 天然破坏 D-177-12 一致性校验口径①「cache↔exact primary 双向一致」。**显式登记 TMDB 季场景为 D-177-12 的「已知例外簇」**（类比口径②douban candidate 清单豁免），一致性报表须排除 `provider='tmdb' ∧ external_kind='season'` 行的双向相等断言，否则全 TMDB 季行误报孤儿/错绑。
+
+- **D-207-7（逐集 source=tmdb + 读侧优先级，HIGH）**：`getTvSeasonDetail` 的 `episodes[]` → `upsertCatalogEpisodes(client, catalogId, eps)` 传 `source='tmdb'`、`ep_type=0`（本篇）、`externalEpisodeId=String(episode.id)`，与 Bangumi 逐集（source='bangumi'）经唯一键 `(catalog_id, source, external_episode_id)`（077:40）天然共存。季 `episode_count` → `episodesByStatus(catalogStatus, season.episode_count)`（:574，**第二参数是集数非季号**）写 `total/current_episodes`。逐集**不进** reconcile（reconcile 仅裁内容标量，episodes 走各源自有路径，同 :422-428 douban）。**读侧逐集 source 优先级**：anime `bangumi > tmdb`、非 anime 仅 tmdb——消费方按 catalog 聚合逐集时须按此选 source，避免双 source 重复集（读侧规则登记；UI 接线若拆独立卡须显式标 follow-up，不得默认全 source 并列）。
+
+- **D-207-8（show parent ref 延后）**：本期**不写** show 级 `relation='parent', external_kind='show'` ref（show 级只能走 parent 域 / 上卷 job 路径，`resolveAndWriteExactRef` :70 传 show 即 throw）。season exact ref 已独立支撑季级精确召回，show→season rollup 关联是 Phase 5 系列归位输入、**当前无消费方**，不写零回归。留 Phase 5 rollup job。
+
+- **D-207-9（confirm 源头纠偏 + 存量清理，BLOCKER）**：两面闭合，缺一则 show-id-as-season 错绑行持续产生/残留、cache 一致性硬校验无法绿（违价值排序 1 正确性）：
+  - **(a) confirm 内部解析季 id**：manual `confirm`（:340）在 `seasonNumber!=null` 时**不再**用入参 `tmdbId`（运营从端点 Body 传的 show id）直接作 season externalId（:359/:391 现隐患源头），改为内部拉 `getTvDetail`→`seasons[]`→取 `season.id` 作 externalId，与 autoMatch 对称——**从源头消除**新错绑行（端点 Body 契约/前端 UI 不变）。
+  - **(b) 存量清理脚本**：检出 `provider='tmdb' ∧ external_kind='season' ∧ relation='exact'` 且 `external_id` ≠ 该 catalog 回填后正确季 id 的行 → **`demoteExactRef` 范式降级 `relation='candidate'`**（非 DELETE，保审计痕迹 R2）+ notes 标 `demoted: stale show-id-as-season`；脚本**幂等** + 产出可观测报表（命中行数/catalog 簇）。
+
+- **D-207-10（事务边界 + 失败降级 + 拆卡）**：
+  - **事务边界**：`getTvDetail`/`getTvSeasonDetail`（REST）必须在 autoMatch **Phase 0 事务外**（对齐 :475-506「REST 全在事务外，失败 graceful skip」）；逐集 `upsertCatalogEpisodes` + season exact ref 共享 **Phase 2 同一 `client`**（:533-571 单事务 BEGIN/COMMIT；`upsertCatalogEpisodes` :38 已支持传 PoolClient 复用事务，传 `client` 非 `this.db`）。**禁事务内调 REST**。
+  - **失败降级**：季详情/逐集失败**非阻断**（TMDB 补充源，沿 stepTmdb :227 + autoMatch :503 graceful skip）——季 REST 在 Phase 0 失败 → 该季降级 show candidate（不写 season exact）；逐集失败不回滚已成功的 season exact ref。
+  - **拆卡定型**（每卡 ≤5 项 / 跨层须拆，CLAUDE.md 原子化）：**-A** TMDB 客户端 + 类型（`tmdb.ts`+`tmdb.types.ts`：季端点 + TmdbTvSeason/TmdbSeasonDetail + seasons?）→ **-B** `TmdbConfirmService` 季级路径（autoMatch 季解析 + buildSeasonCatalogFields〔D-207-4/5〕+ season exact〔D-207-2〕+ 逐集〔D-207-7〕+ 软校验 + confirm 源头纠偏〔D-207-9a〕）→ **-C** `stepTmdb` 接线（透传 seasonNumber，D-207-1 分支）→ **-D** 存量清理脚本（D-207-9b）+ 回填脚本（前向 + 回填，复用 `enqueueEnrichJob`/`batchEnqueueEnrich` 以 `trigger='backfill'` 入 enrichment-queue，选 type∈TV 家族 ∧ season_number IS NOT NULL，**不新增 admin route**免触 verify:endpoint-adr）。依赖序：-A→-B→-C；-D 依赖 -B/-C 落地后跑。
+
+### 关联 ADR
+
+ADR-176（季粒度 catalog / season_number 列承载 = D-207-1/2/5 直接落实）/ ADR-177（D-177-11:20155 「tmdb season ID→season exact」预定档 = D-207-2 兑现 / D-177-5 cache 降级 = D-207-6 / **D-177-12 一致性校验 → D-207-6 登记 TMDB 例外簇** / R10 守卫 = D-207-2 满足 / show→parent 域 = D-207-8）/ ADR-202（D-202-1 show 永不 exact / **D-202-α tv-show-root follow-up = 本 ADR 闭合** / 端点 Body 契约不变 = D-207-9a）/ ADR-205（D-205-7 TMDB auto 接入 / 方案 X 内容标量上抛 reconcile = D-207-4 不破坏）/ ADR-161（catalog_episodes source 列「便于将来 TMDB 写入」= D-207-7 兑现）/ ADR-163（episodesByStatus total/current 派发 = D-207-7）/ ADR-206（knownNames 多词搜索 = 季级 show 匹配复用，不改）。
+
+### arch-reviewer 裁定摘要 2026-06-16（claude-opus-4-8 / agentId a98bf3dfbab2c993d）
+
+CONDITIONAL-PASS。核验确认：① 索引①不含 season_number（D-207-2 核心依据真实）；② autoMatch 接口已就绪仅缺上游传参；③ catalog.seasonNumber 数据源（TitleIdentityParser→CrawlerService:197）真实可用；④ 与 ADR-176/177/202/205/161 全线对齐、为 D-202-α + D-177-11 预定档兑现。**放行条件全吸收**：**BLOCKER**（D-207-9 confirm 源头纠偏 + 存量清理，否则错绑持续/cache 校验不绿）；**HIGH**（D-207-3 新增 TmdbTvSeason+seasons? / D-207-6 cache 例外簇登记 / D-207-7 读侧 source 优先级防重复集）；**MEDIUM**（D-207-4 图片复用 pickBestImage / D-207-5 季路径剔标题三件套 / D-207-3 软校验 warn 不阻断 / D-207-10 事务边界 + REST 事务外 / 措辞 `episodesByStatus(status, episodeCount)` 第二参数为集数）。决策 1/3〔骨架〕/4/7〔触发〕/8 直接 PASS，2/5/6/9 携修订 PASS。勘误吸收：旧 stale show-id-as-season 行因 external_id 不同**不触发 R10 冲突 → 并存**，故 D-207-9b 必须主动降级（非依赖唯一索引兜底）。

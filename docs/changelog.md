@@ -6624,3 +6624,21 @@
   - **排序口径保留**：meta 列排序仍走 `metadata_matched_count`（已应用源数量，META-36-C），未随过滤改为「有数据数量」——用户仅要求调整「过滤条件」，记为有意边界；如需排序同口径化，独立 follow-up。
   - **隐藏列 `metadata_provider` 未动**：其「有数据」facet 与本列改后重叠（visible 元数据列已覆盖且多 none 哨兵），属可选 follow-up，由用户决定是否合并/移除；本卡不做跨 3 层（types/api/server-next）字段删除以收敛回归面（价值排序 #1 稳定优先）。
   - 门禁：typecheck 8ws / lint 4 successful（零本卡新警告）/ test:changed 82 文件 1119 passed / 集成 metadata SQL 6 passed（真库）/ verify:adr-contracts EXIT=0 / test:e2e:admin 84 passed（videos.spec 黄金路径零回归）。
+
+## [META-53-ADR] ADR-207 TMDB 季粒度自动富集决策 — 季级匹配 + 季 exact ref + 逐集 source=tmdb + 存量纠偏（SEQ-20260616-03 / META-53）
+- **完成时间**：2026-06-16
+- **记录时间**：2026-06-16 14:43
+- **执行模型**：claude-opus-4-8
+- **子代理**：arch-reviewer (claude-opus-4-8, agentId a98bf3dfbab2c993d) — ADR-207 设计独立裁定 CONDITIONAL-PASS（核验全部核心断言属实；1 BLOCKER + 3 HIGH + 5 MEDIUM 条件全数吸收为 D-207-2~10）
+- **修改文件**：
+  - `docs/decisions.md` — 新增 **ADR-207**（D-207-1~10）：分季 catalog 季级 TMDB 自动富集决策。核心——① 季 ref `external_id`=TMDB 季自身 id（避 exact 唯一索引 091:46 不含 season_number 致同剧多季互撞）② 季解析 seasons[] 命中 season_number + 新增 `getTvSeasonDetail`/`TmdbTvSeason` ③ 字段季回退 show + 季海报复用 pickBestImage ④ 不覆盖 catalog title（剔标题三件套）⑤ tmdb_id cache 存 show id + 登记 D-177-12 一致性「已知例外簇」⑥ 逐集 source=tmdb + 读侧 anime bangumi>tmdb 优先级 ⑦ season_number IS NULL 走现状 show 级 ⑧ show parent ref 延后 Phase 5 ⑨ **BLOCKER** confirm 源头纠偏内部解析季 id + 存量 show-id-as-season 清理脚本（demote 非 DELETE）⑩ 事务边界 REST 事务外/逐集 Phase2 同 client + 拆卡。闭合 ADR-202 D-202-α + 兑现 ADR-177 D-177-11:20155。
+  - `docs/task-queue.md` — 登记 **SEQ-20260616-03（META-53）** + 实现卡 -A（客户端/类型）/-B（Service 季级路径）/-C（stepTmdb 接线）/-D（清理+回填脚本），含 BLOCKER 红线与关键约束登记。
+  - `docs/tasks.md` — ADR 卡完成删除（工作台恢复仅剩暂停 MODUX-ACPT-5）。
+  - `docs/audit/adr-d-status.json` — `verify:adr-d-numbers` 重算含 D-207-1~10（advisory 模式，非阻塞）。
+- **新增依赖**：无
+- **数据库变更**：无（schema 全就绪——`catalog_external_refs` PRECISE_KINDS 含 'season'、`catalog_episodes.source` 列、`media_catalog.season_number`/episodes 列均已存在；实现卡 -A~-D 亦无 migration）
+- **注意事项**：
+  - **doc-only 卡**（仅决策文档 + 序列登记，无代码）；typecheck/test 由实现卡 -A~-D 承载。
+  - **实现卡建议另起 sonnet 会话**（用户裁定「先提交 ADR，实现卡另起会话」），依赖序 -A→-B→-C，-D 依赖 -B/-C。
+  - **BLOCKER（D-207-9）**：-B 必含 confirm 内部解析季 id（消除 show-id-as-season 误写源头）+ -D 必含存量清理脚本，缺一则错绑持续/cache 一致性硬校验无法绿。
+  - 完整执行档：`~/.claude/plans/tmdb-joyful-mochi.md`（plan mode 已批准，含逐集 + 前向+回填范围裁定）。

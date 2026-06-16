@@ -2752,3 +2752,24 @@
 - **WS2 最高风险**：别名 blocking 误并——M1 三红线（仅扩召回永不成正证据 / 来源置信门槛 / 自动合并仍受 ADR-105a 闸门）+ ADR-105a 自动合并 Phase 1-4 默认 OFF 安全网双重兜底。
 - **关键事实**（arch-reviewer 校正）：① title_original/originalLanguage 已在 ADR-205 RECONCILE_GROUPS，knownNames 只读消费不开第二写入方；② alias blocking 用独立桶不写 title_observations；③ romanization 仅召回不拉分（ADR-175 D-175-4）；④ external_id 桶已召回同 ID pair，别名 blocking 价值仅在"译名桥接、ID 未都填"场景。
 - **第二轮审核 R1–R4 闭合**（ADR-206 REVISE 2026-06-16）：R1 alias 桶数据源改 knownNames 投影（CrawlerService 不写 media_catalog_aliases 实证，仅读别名表会一侧化召回）；R2 `external_alias_match` 当前休眠（aliasKeys 无人 populate），WS2 不激活、启用另开 amendment；R3 置信阈值定可执行口径（manual=1.0/NULL+非manual排除/非manual≥0.80）；R4 2A 须落四处召回消费者 + alias 桶 key 纳入 evidence_hash。
+
+---
+
+## SEQ-20260616-03 — TMDB 季粒度自动富集（剧集/动漫/综艺 季级匹配）｜META-53
+
+- **创建时间**：2026-06-16｜**最后更新**：2026-06-16
+- **来源**：用户「TMDB 对剧集/动漫等按条目分类、库内按季划分，建模错位致元数据增强未自动应用到电影外类型；以《权力的游戏》分季为例，扩展 TMDB 增强到分季类型」。plan mode 设计已批准（含逐集元数据 + 前向生效 + 存量回填，用户 AskUserQuestion 裁定）。
+- **设计真源**：ADR-207（decisions.md，D-207-1~10）。arch-reviewer (claude-opus-4-8, agentId a98bf3dfbab2c993d) CONDITIONAL-PASS，1 BLOCKER + 3 HIGH + 5 MEDIUM 全吸收。闭合 **ADR-202 D-202-α**（tv-show-root follow-up）+ 兑现 **ADR-177 D-177-11:20155**（tmdb season ID→season exact）。完整执行档：`~/.claude/plans/tmdb-joyful-mochi.md`。
+- **依赖序**：ADR → -A → -B → -C；-D 依赖 -B/-C 落地后跑。**无新 migration**（catalog_external_refs/catalog_episodes/media_catalog schema 全就绪）。
+- **实现卡建议另起 sonnet 会话**（用户裁定「先提交 ADR，实现卡另起会话」；本会话 Opus 仅交付 ADR）。
+
+| 卡 | 内容 | 状态 | 门禁 |
+|---|---|---|---|
+| **META-53-ADR** | ADR-207 起草 + arch-reviewer Opus 裁定（9 决策 → D-207-1~10）+ 本序列登记 | ✅ 已完成（2026-06-16，arch-reviewer claude-opus-4-8 CONDITIONAL-PASS） | ADR-level Opus ✅ |
+| **META-53-A** | TMDB 客户端 + 类型（`tmdb.ts` 新增 `getTvSeasonDetail` `/tv/{id}/season/{n}` append+404→null + `tmdb.types.ts` 新增 `TmdbTvSeason`/`TmdbSeasonDetail`/`TmdbSeasonEpisode` + `TmdbTvDetail.seasons?`）D-207-3 | ⬜ 待执行 | sonnet 可起 |
+| **META-53-B** | `TmdbConfirmService` 季级路径（autoMatch 季解析 seasons[]→season.id + `buildSeasonCatalogFields`〔季回退 show D-207-4 + 剔标题三件套 D-207-5〕+ season exact ref〔external_id=季 id D-207-2〕+ 逐集 upsertCatalogEpisodes(source=tmdb) + episodesByStatus〔D-207-7〕+ 软校验 warn〔D-207-3〕+ **confirm 源头纠偏内部解析季 id D-207-9a**〔BLOCKER〕+ 事务边界 REST 事务外/逐集用 Phase2 client D-207-10）+ 单测 | ⬜ 待执行（依赖 -A） | sonnet 可起 |
+| **META-53-C** | `MetadataEnrichService.stepTmdb` 接线（透传 `catalogSnapshot.seasonNumber` → autoMatch；season_number!=null→季级 / null→现状 show 级 D-207-1）+ 单测 | ⬜ 待执行（依赖 -B） | sonnet 可起 |
+| **META-53-D** | **存量清理脚本 D-207-9b**〔BLOCKER：检出 tmdb season exact 中 external_id≠正确季 id 行→demote candidate，幂等可观测，非 DELETE〕+ 回填脚本（前向+回填，复用 enqueueEnrichJob/batchEnqueueEnrich trigger=backfill，选 type∈TV 家族∧season_number IS NOT NULL，**不新增 admin route**）+ 文档 | ⬜ 待执行（依赖 -B/-C） | sonnet 可起 |
+
+- **BLOCKER 红线登记（D-207-9）**：confirm 路径是 show-id-as-season 误写源头——**-B 必含 confirm 内部解析季 id**（消除新错绑产生）+ **-D 必含存量清理脚本**（降级旧错绑行）；二者缺一则错绑持续/cache 一致性硬校验无法绿（arch-reviewer BLOCKER）。
+- **关键约束**（arch-reviewer 校正）：① 季 ref external_id=TMDB 季自身 id（索引①不含 season_number，用 show id 则同剧多季互撞）；② tmdb_id cache 写 show id 须登记 D-177-12 cache 一致性「已知例外簇」（D-207-6）；③ 逐集读侧 source 优先级 anime bangumi>tmdb 防重复集（D-207-7，UI 接线若拆卡须标 follow-up）；④ 季海报复用 pickBestImage/buildImageFields 禁新写（D-207-4）。
