@@ -84,6 +84,7 @@ export async function listVideos(filter: VideoListFilter = {}): Promise<VideoLis
   if (filter.metadataOverall?.length)       params.set('metadataOverall', filter.metadataOverall.join(','))
   if (filter.metadataProvider?.length)      params.set('metadataProvider', filter.metadataProvider.join(','))
   if (filter.metadataProviderState?.length) params.set('metadataProviderState', filter.metadataProviderState.join(','))
+  if (filter.metadataMatched?.length)       params.set('metadataMatched', filter.metadataMatched.join(','))
   if (filter.metadataIssueLevel?.length)    params.set('metadataIssueLevel', filter.metadataIssueLevel.join(','))
   if (filter.metadataUpdatedFrom)           params.set('metadataUpdatedFrom', filter.metadataUpdatedFrom)
   if (filter.metadataUpdatedTo)             params.set('metadataUpdatedTo', filter.metadataUpdatedTo)

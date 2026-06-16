@@ -20,6 +20,19 @@ export const METADATA_PROVIDERS = ['douban', 'bangumi', 'tmdb', 'imdb'] as const
 export type MetadataProvider = typeof METADATA_PROVIDERS[number]
 
 /**
+ * 视频库「已匹配源」过滤哨兵（META-36-C）：未匹配任何源（四 provider state 皆非 `applied`）。
+ * 「已匹配」严格指 provider state=`applied`（区别于 `metadataProvider` facet 的「有数据」含 candidate/problem）。
+ */
+export const METADATA_MATCHED_NONE = 'none' as const
+
+/**
+ * 「已匹配源」过滤值域 = 四 provider（选中即「该源 state=applied」命中，OR 合流）∪ `none`（四源皆非 applied）。
+ * 后端 route `csvEnum` 校验 + 前端 filterOptions 单一真源（避免 route/UI 值域漂移，META-36-C）。
+ */
+export const METADATA_MATCHED_FILTER_VALUES = [...METADATA_PROVIDERS, METADATA_MATCHED_NONE] as const
+export type MetadataMatchedFilterValue = typeof METADATA_MATCHED_FILTER_VALUES[number]
+
+/**
  * 四来源**显示顺序**常量（ADR-201 D-201-3，对齐 ADR-172 AMD2 logo 行：Douban / Bangumi / TMDB / IMDb）。
  *
  * ⚠ 这是**显示顺序**，**勿**与 `EXTERNAL_REF_PROVIDERS`（`['douban','tmdb','bangumi','imdb']`，

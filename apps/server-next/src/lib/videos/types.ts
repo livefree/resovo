@@ -15,9 +15,10 @@ import type {
   MetadataProvider,
   MetadataProviderState,
   MetadataIssueLevel,
+  MetadataMatchedFilterValue,
 } from '@resovo/types'
 
-export type { VideoType, VideoStatus, VideoGenre, ReviewStatus, VisibilityStatus, DoubanStatus, BangumiStatus, EnrichmentSummary, ExternalRefSummary, BangumiEntrySummary, CatalogCharacterSummary, MetadataStatusSummary, MetadataStatusOverall, MetadataProvider, MetadataProviderState, MetadataIssueLevel }
+export type { VideoType, VideoStatus, VideoGenre, ReviewStatus, VisibilityStatus, DoubanStatus, BangumiStatus, EnrichmentSummary, ExternalRefSummary, BangumiEntrySummary, CatalogCharacterSummary, MetadataStatusSummary, MetadataStatusOverall, MetadataProvider, MetadataProviderState, MetadataIssueLevel, MetadataMatchedFilterValue }
 
 // ── 列表行（对应 GET /admin/videos 响应结构）─────────────────────
 
@@ -105,6 +106,8 @@ export interface VideoListFilter {
   metadataProvider?: readonly MetadataProvider[]
   /** 单源状态多选（任一 provider state ∈ 集合） */
   metadataProviderState?: readonly MetadataProviderState[]
+  /** META-36-C：「已匹配源」OR 过滤（四源 state=applied + `none` 哨兵；区别于 metadataProvider 的「有数据」） */
+  metadataMatched?: readonly MetadataMatchedFilterValue[]
   /** 问题等级多选 */
   metadataIssueLevel?: readonly MetadataIssueLevel[]
   /** 最近增强时间范围（enriched_at，ISO8601） */
@@ -115,10 +118,10 @@ export interface VideoListFilter {
   metadataHasCandidate?: boolean
   metadataMissing?: boolean
   metadataTmdbPending?: boolean
-  /** AMD2-PATCH-2（2026-05-24）+ CHG-VSR-2（+episode_count）+ SRCHEALTH-P1-1-B（+探测/试播聚合）+ META-32-B（+元数据）：同步后端 SORT_FIELDS */
+  /** AMD2-PATCH-2（2026-05-24）+ CHG-VSR-2（+episode_count）+ SRCHEALTH-P1-1-B（+探测/试播聚合）+ META-32-B（+元数据）+ META-36-C（+已匹配源数）：同步后端 SORT_FIELDS */
   sortField?: 'title' | 'type' | 'year' | 'created_at' | 'updated_at'
     | 'source_health' | 'visibility' | 'review_status' | 'douban_status' | 'meta_score' | 'episode_count'
-    | 'source_check_status' | 'render_check_status' | 'metadata_status' | 'metadata_score'
+    | 'source_check_status' | 'render_check_status' | 'metadata_status' | 'metadata_score' | 'metadata_matched_count'
   sortDir?: 'asc' | 'desc'
   page?: number
   limit?: number

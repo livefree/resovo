@@ -9,7 +9,7 @@ import type {
 import type { VideoListFilter } from '@/lib/videos'
 import type {
   VideoType, VideoStatus, VisibilityStatus, ReviewStatus, DoubanStatus, BangumiStatus,
-  MetadataStatusOverall, MetadataProvider, MetadataIssueLevel,
+  MetadataStatusOverall, MetadataProvider, MetadataIssueLevel, MetadataMatchedFilterValue,
 } from '@resovo/types'
 import { DataTableSearchInput, getVideoTypeOptions } from '@resovo/admin-ui'
 
@@ -96,6 +96,8 @@ const VIDEO_SORT_FIELD_WHITELIST = [
   'source_check_status', 'render_check_status',
   // META-36-A（ADR-201 §视频库 排序）：元数据运营优先级 + 完整度独立字段（同步后端 SORT_FIELDS）
   'metadata_status', 'metadata_score',
+  // META-36-C：`元数据`列改按已匹配源数量排序（同步后端 SORT_FIELDS）
+  'metadata_matched_count',
 ] as const
 type VideoSortField = (typeof VIDEO_SORT_FIELD_WHITELIST)[number]
 function isVideoSortField(s: string | undefined): s is VideoSortField {
@@ -109,9 +111,9 @@ function isVideoSortField(s: string | undefined): s is VideoSortField {
 const COMPOSITE_SORT_MAP: Readonly<Record<string, VideoSortField>> = {
   release: 'year',
   episodes: 'episode_count',
-  // META-36-A（ADR-201 §视频库 排序）：`元数据` 复合列默认按运营处理优先级（needs_review→complete），
-  // 不再简化为 meta_score；完整度数值排序由隐藏列 meta_score → 独立字段 metadata_score 承担。
-  meta: 'metadata_status',
+  // META-36-C（ADR-201 §视频库 排序偏离）：`元数据` 复合列改按「已匹配源数量」（applied 计数）排序，
+  // 取代意义不明的运营优先级 metadata_status；完整度数值排序仍由隐藏列 meta_score → metadata_score 承担。
+  meta: 'metadata_matched_count',
   meta_score: 'metadata_score',
   status: 'review_status',
   // SRCHEALTH-P1-1-B：探测/播放双信号复合列，排序取探测维度主信号
@@ -153,6 +155,8 @@ export function buildVideoFilter(
     // ── META-36-A 元数据多维过滤（overall/provider/issue enum 多选 + updatedAt date-range；score 复用上方 metaScore）──
     metadataOverall: getEnumArray(filters, 'metadataOverall') as readonly MetadataStatusOverall[] | undefined,
     metadataProvider: getEnumArray(filters, 'metadataProvider') as readonly MetadataProvider[] | undefined,
+    // META-36-C：`元数据`列「已匹配源」OR 过滤（四源 applied + none 哨兵，enum 多选 → 数组）
+    metadataMatched: getEnumArray(filters, 'metadataMatched') as readonly MetadataMatchedFilterValue[] | undefined,
     metadataIssueLevel: getEnumArray(filters, 'metadataIssueLevel') as readonly MetadataIssueLevel[] | undefined,
     metadataUpdatedFrom: metadataUpdated?.from,
     metadataUpdatedTo: metadataUpdated?.to,

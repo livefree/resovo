@@ -26,7 +26,7 @@ import {
 } from '@resovo/admin-ui'
 import {
   VIDEO_STATUSES, DOUBAN_STATUSES, BANGUMI_STATUSES,
-  METADATA_PROVIDERS, METADATA_STATUS_OVERALLS, METADATA_ISSUE_LEVELS,
+  METADATA_PROVIDERS, METADATA_STATUS_OVERALLS, METADATA_ISSUE_LEVELS, METADATA_MATCHED_NONE,
   type DualSignalDisplayState, type MetadataProviderState,
 } from '@resovo/types'
 import type {
@@ -283,6 +283,12 @@ const METADATA_OVERALL_OPTIONS: readonly { value: string; label: string }[] =
   METADATA_STATUS_OVERALLS.map((v) => ({ value: v, label: OVERALL_LABEL[v] }))
 const METADATA_PROVIDER_OPTIONS: readonly { value: string; label: string }[] =
   METADATA_PROVIDERS.map((v) => ({ value: v, label: METADATA_PROVIDER_LABELS[v] }))
+// META-36-C：`元数据` 列「已匹配源」过滤项 = 四源（state=applied 命中，OR 合流）+ 哨兵「未匹配任何源」。
+// label 复用 provider 显示名，避免与图标簇 tooltip 漂移；值域 = @resovo/types METADATA_MATCHED_FILTER_VALUES。
+const METADATA_MATCHED_OPTIONS: readonly { value: string; label: string }[] = [
+  ...METADATA_PROVIDERS.map((v) => ({ value: v, label: METADATA_PROVIDER_LABELS[v] })),
+  { value: METADATA_MATCHED_NONE, label: '未匹配任何源' },
+]
 const METADATA_ISSUE_LEVEL_OPTIONS: readonly { value: string; label: string }[] =
   METADATA_ISSUE_LEVELS.map((v) => ({ value: v, label: ISSUE_LEVEL_LABEL[v] }))
 
@@ -345,13 +351,14 @@ export function buildVideoColumns(
       filterable: false,
       cell: ({ row }) => <EpisodesCell row={row} />,
     },
-    // meta 元数据（复合，§2.6 只读不挂筛选）：sortable→metadata_status（META-36-A 运营优先级）
+    // meta 元数据（复合）：META-36-C sortable→metadata_matched_count（已匹配源数）+ 「已匹配源」OR 过滤
+    // （四源 state=applied + 未匹配哨兵；区别于隐藏列 metadata_provider 的「有数据」facet）。
     // META-36-B（D-201-3）：四来源图标簇 density='table'（固定顺序四源、空态四灰图标 + tooltip，
     // 取代退役 EnrichmentBadgeCluster）；metadataStatus 缺省（旧行/未派生）→ 不渲染兜底。
     {
       id: 'meta', header: '元数据', accessor: (r) => r.meta_score ?? '',
       width: 170, minWidth: 140, enableResizing: true, enableSorting: true, defaultVisible: true,
-      filterable: false,
+      filterable: true, filterFieldName: 'metadataMatched', filterKind: 'enum', filterOptions: METADATA_MATCHED_OPTIONS,
       cell: ({ row }) => row.metadataStatus
         ? <MetadataSourceIconCluster summary={row.metadataStatus} density="table" />
         : null,

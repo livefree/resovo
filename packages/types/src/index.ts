@@ -81,6 +81,8 @@ export type * from './metadata-status.types'
 export {
   METADATA_PROVIDERS, METADATA_PROVIDER_ORDER, METADATA_STATUS_OVERALLS,
   METADATA_PROVIDER_STATES, METADATA_ISSUE_LEVELS, METADATA_NEXT_ACTIONS,
+  // META-36-C：「已匹配源」过滤值域哨兵 + 全集（value re-export，type-only `export type *` 不透出 const）
+  METADATA_MATCHED_NONE, METADATA_MATCHED_FILTER_VALUES,
 } from './metadata-status.types'
 
 // ── ADR-157 D-157-1 类型守卫工具 ────────────────────────────────

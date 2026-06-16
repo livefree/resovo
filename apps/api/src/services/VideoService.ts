@@ -204,6 +204,8 @@ export class VideoService {
     metadataHasCandidate?: boolean
     metadataMissing?: boolean
     metadataTmdbPending?: boolean
+    // META-36-C：「已匹配源」OR 过滤（四源 applied + none 哨兵，加性透传）
+    metadataMatched?: readonly import('@/types').MetadataMatchedFilterValue[]
     page?: number
     limit?: number
   }): Promise<{ data: unknown[]; total: number; page: number; limit: number }> {
@@ -244,6 +246,7 @@ export class VideoService {
       metadataHasCandidate: params.metadataHasCandidate,
       metadataMissing: params.metadataMissing,
       metadataTmdbPending: params.metadataTmdbPending,
+      metadataMatched: params.metadataMatched,
       page,
       limit,
     })

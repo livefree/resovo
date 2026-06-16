@@ -110,6 +110,20 @@ describe('listVideos 过滤序列化（CHG-VSR-2 / ADR-150 AMENDMENT 3）', () =
     expect(p.has('metadataHasCandidate')).toBe(false)
   })
 
+  it('META-36-C: metadataMatched「已匹配源」过滤序列化（四源 + none 哨兵 → CSV）', async () => {
+    await listVideos({ metadataMatched: ['tmdb', 'douban', 'none'] })
+    expect(calledParams().get('metadataMatched')).toBe('tmdb,douban,none')
+    // 空数组不发送
+    mockedGet.mockClear()
+    await listVideos({ metadataMatched: [] })
+    expect(calledParams().has('metadataMatched')).toBe(false)
+  })
+
+  it('META-36-C: metadata_matched_count 排序字段可达（`元数据`列新排序）', async () => {
+    await listVideos({ sortField: 'metadata_matched_count', sortDir: 'desc' })
+    expect(calledParams().get('sortField')).toBe('metadata_matched_count')
+  })
+
   it('META-36-A: metadata 排序字段（metadata_status / metadata_score）可达', async () => {
     await listVideos({ sortField: 'metadata_status', sortDir: 'asc' })
     expect(calledParams().get('sortField')).toBe('metadata_status')

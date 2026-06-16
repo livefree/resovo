@@ -316,4 +316,50 @@ describe('listAdminVideos (CHG-209)', () => {
     expect(sql).toContain('LEFT JOIN LATERAL')
     expect(countSql).toContain('LEFT JOIN LATERAL')
   })
+
+  it('META-36-C: metadataMatched 过滤——选中源 state=applied OR 合流 + none 哨兵(四源 IS DISTINCT FROM applied)', async () => {
+    query
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ count: '0' }] })
+
+    await listAdminVideos(db, {
+      status: 'all',
+      metadataMatched: ['tmdb', 'none'],
+      page: 1,
+      limit: 20,
+    })
+
+    const [sql] = query.mock.calls[0]
+    const [countSql] = query.mock.calls[1]
+    // 选中 provider → 严格 applied（区别于 metadataProvider facet 的 IN applied/candidate/problem）
+    expect(sql).toContain("md.md_tmdb_state = 'applied'")
+    // none 哨兵 → 四源皆 IS DISTINCT FROM applied（NULL 安全）AND 合流
+    expect(sql).toContain("md.md_douban_state IS DISTINCT FROM 'applied'")
+    expect(sql).toContain("md.md_imdb_state IS DISTINCT FROM 'applied'")
+    expect(sql).toContain(' OR ')
+    // 是 metadata 过滤 → 主 + count 均挂 LATERAL
+    expect(sql).toContain('LEFT JOIN LATERAL')
+    expect(countSql).toContain('LEFT JOIN LATERAL')
+  })
+
+  it('META-36-C: sortField=metadata_matched_count → ORDER BY applied 计数表达式 + 主查询挂 LATERAL', async () => {
+    query
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ count: '0' }] })
+
+    await listAdminVideos(db, {
+      status: 'all',
+      sortField: 'metadata_matched_count',
+      sortDir: 'desc',
+      page: 1,
+      limit: 20,
+    })
+
+    const [sql] = query.mock.calls[0]
+    // 计数表达式 = 四源 CASE WHEN =applied THEN 1 ELSE 0（NULL 安全），ORDER BY 引用之
+    expect(sql).toContain("CASE WHEN md.md_douban_state = 'applied' THEN 1 ELSE 0 END")
+    expect(sql).toContain('ORDER BY')
+    // 排序依赖 md LATERAL（即使无 metadata 过滤）
+    expect(sql).toContain('LEFT JOIN LATERAL')
+  })
 })

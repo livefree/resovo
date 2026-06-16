@@ -8,8 +8,9 @@
 import type { Pool } from 'pg'
 import type {
   Video, VideoCard, VideoType, VisibilityStatus, ReviewStatus, VideoStatus, DoubanStatus, BangumiStatus,
-  MetadataStatusOverall, MetadataProvider, MetadataProviderState, MetadataIssueLevel,
+  MetadataStatusOverall, MetadataProvider, MetadataProviderState, MetadataIssueLevel, MetadataMatchedFilterValue,
 } from '@/types'
+import { METADATA_PROVIDERS, METADATA_MATCHED_NONE } from '@/types'
 import type { DbVideoRow } from './videos.internal'
 import {
   mapVideoRow, mapVideoCard,
@@ -220,6 +221,28 @@ export async function listTrendingVideos(
 // AMD2-PATCH-2（2026-05-24）：扩展 SORT_FIELDS 白名单 / 兑现 ADR-150 AMD2 D-150-AMD2-1
 // "所有有数据的列默认可排序"原则 / 解决 R-A2-2 sort 422 / 前端禁用反范式
 // 字段命名约定：key = column.id（前端列 id）/ value = SQL 表达式（含表前缀或 SELECT alias）
+
+/**
+ * META-36-A：provider → 动态 LATERAL `md` 单源 state 列映射（与 METADATA_STATUS_JOIN_SQL 暴露列对齐）。
+ * 列名为代码常量，metadataProvider facet 谓词据 csvEnum 校验后的枚举值取列，无用户输入拼接。
+ */
+const PROVIDER_STATE_COL: Record<MetadataProvider, string> = {
+  douban: 'md.md_douban_state',
+  bangumi: 'md.md_bangumi_state',
+  tmdb: 'md.md_tmdb_state',
+  imdb: 'md.md_imdb_state',
+}
+
+// META-36-C：已匹配源数量（state=applied 计数 0–4）排序表达式。md.* 为 LEFT JOIN LATERAL，
+// 无 catalog 视频列值 NULL → `CASE WHEN =applied THEN 1 ELSE 0` NULL 安全（计 0）。列名/字面量皆代码常量。
+const METADATA_MATCHED_COUNT_EXPR = `(${METADATA_PROVIDERS
+  .map((p) => `CASE WHEN ${PROVIDER_STATE_COL[p]} = 'applied' THEN 1 ELSE 0 END`)
+  .join(' + ')})`
+// 「未匹配任何源」谓词：四源皆非 applied。NULL 安全用 IS DISTINCT FROM（NULL/missing/not_applicable 均判 true）。
+const NO_PROVIDER_APPLIED_SQL = `(${METADATA_PROVIDERS
+  .map((p) => `${PROVIDER_STATE_COL[p]} IS DISTINCT FROM 'applied'`)
+  .join(' AND ')})`
+
 const SORT_FIELD_WHITELIST: Record<string, string> = {
   created_at: 'v.created_at',
   updated_at: 'v.updated_at',
@@ -240,6 +263,9 @@ const SORT_FIELD_WHITELIST: Record<string, string> = {
   // ASC=needs_review→complete）+ 完整度独立字段（v.meta_score，不复用 meta composite）
   metadata_status: 'md.metadata_status_rank',
   metadata_score: 'v.meta_score',
+  // META-36-C（ADR-201 §视频库 排序偏离）：`meta` 复合列改按「已匹配源数量」（applied 计数）；
+  // metadata_status 运营优先级排序保留可用（API 后向兼容，UI 不再指向）。
+  metadata_matched_count: METADATA_MATCHED_COUNT_EXPR,
 }
 
 export interface AdminVideoListFilters {
@@ -290,6 +316,11 @@ export interface AdminVideoListFilters {
   metadataProvider?: readonly MetadataProvider[]
   /** 单源状态多选（任一 provider state ∈ 集合） */
   metadataProviderState?: readonly MetadataProviderState[]
+  /**
+   * META-36-C：「已匹配源」多选过滤（OR 合流）。值 ∈ 四 provider（该源 `state=applied` 命中）∪ `none`
+   * （四源皆非 applied）。区别于 `metadataProvider`「有数据」facet，本过滤严格 `applied`（已匹配）。
+   */
+  metadataMatched?: readonly MetadataMatchedFilterValue[]
   /** 问题等级多选（映射 md.metadata_issue_rank = ANY） */
   metadataIssueLevel?: readonly MetadataIssueLevel[]
   /** 最近增强时间范围（meta_quality.enriched_at；含端点，ISO8601） */
@@ -307,17 +338,6 @@ export interface AdminVideoListFilters {
   sortDir?: 'asc' | 'desc'
   page: number
   limit: number
-}
-
-/**
- * META-36-A：provider → 动态 LATERAL `md` 单源 state 列映射（与 METADATA_STATUS_JOIN_SQL 暴露列对齐）。
- * 列名为代码常量，metadataProvider facet 谓词据 csvEnum 校验后的枚举值取列，无用户输入拼接。
- */
-const PROVIDER_STATE_COL: Record<MetadataProvider, string> = {
-  douban: 'md.md_douban_state',
-  bangumi: 'md.md_bangumi_state',
-  tmdb: 'md.md_tmdb_state',
-  imdb: 'md.md_imdb_state',
 }
 
 export async function listAdminVideos(
@@ -438,6 +458,14 @@ export async function listAdminVideos(
     const cols = filters.metadataProvider.map((p) => PROVIDER_STATE_COL[p])
     conditions.push(`(${cols.map((c) => `${c} IN ('applied','candidate','problem')`).join(' OR ')})`)
   }
+  if (filters.metadataMatched?.length) {
+    // META-36-C：已匹配源 OR 合流——选中 provider 谓词 `<col>='applied'`；哨兵 none 谓词「四源皆非 applied」。
+    // 列名经 PROVIDER_STATE_COL 由校验后枚举映射、'applied'/none 谓词为代码常量 → 无用户输入拼接。
+    const preds = filters.metadataMatched.map((v) =>
+      v === METADATA_MATCHED_NONE ? NO_PROVIDER_APPLIED_SQL : `${PROVIDER_STATE_COL[v]} = 'applied'`,
+    )
+    conditions.push(`(${preds.join(' OR ')})`)
+  }
   if (filters.metadataProviderState?.length) {
     // 任一 provider state ∈ 选中集（四源 OR，复用单参数）
     conditions.push(
@@ -478,11 +506,14 @@ export async function listAdminVideos(
   const hasMetadataFilter =
     !!filters.metadataOverall?.length || !!filters.metadataIssueLevel?.length
     || !!filters.metadataProvider?.length || !!filters.metadataProviderState?.length
+    || !!filters.metadataMatched?.length
     || filters.metadataUpdatedFrom !== undefined || filters.metadataUpdatedTo !== undefined
     || filters.metadataNeedsReview === true || filters.metadataMissing === true
     || filters.metadataHasCandidate === true || filters.metadataTmdbPending === true
-  const sortByMetadataStatus = filters.sortField === 'metadata_status'
-  const mainMetadataJoin = hasMetadataFilter || sortByMetadataStatus ? `\n       ${METADATA_STATUS_JOIN_SQL}` : ''
+  // META-36-C：metadata_matched_count 排序同 metadata_status 依赖动态 `md` LATERAL（其余排序路径零额外成本）。
+  const sortNeedsMetadataJoin =
+    filters.sortField === 'metadata_status' || filters.sortField === 'metadata_matched_count'
+  const mainMetadataJoin = hasMetadataFilter || sortNeedsMetadataJoin ? `\n       ${METADATA_STATUS_JOIN_SQL}` : ''
   const countMetadataJoin = hasMetadataFilter ? `\n       ${METADATA_STATUS_JOIN_SQL}` : ''
 
   const [rows, countResult] = await Promise.all([

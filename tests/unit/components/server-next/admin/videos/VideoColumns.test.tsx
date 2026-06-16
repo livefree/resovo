@@ -101,10 +101,20 @@ describe('buildVideoColumns — 列集结构', () => {
 // ── 2/3. 筛选面收敛（§2.6 复合列只读）────────────────────────────
 
 describe('buildVideoColumns — 筛选面（§2.6）', () => {
-  it('复合显示列 release/episodes/meta/status 只读不挂筛选（filterable:false）', () => {
-    for (const id of ['release', 'episodes', 'meta', 'status']) {
+  it('复合显示列 release/episodes/status 只读不挂筛选（filterable:false）', () => {
+    // META-36-C：meta 列改为可筛选（「已匹配源」OR 过滤），不再属只读复合列。
+    for (const id of ['release', 'episodes', 'status']) {
       expect((colById(id) as { filterable?: boolean }).filterable).toBe(false)
     }
+  })
+
+  it('META-36-C: meta 列挂「已匹配源」enum 过滤（metadataMatched，四源 + 未匹配哨兵）', () => {
+    type FCol = { filterable?: boolean; filterKind?: string; filterFieldName?: string; filterOptions?: readonly { value: string }[] }
+    const meta = colById('meta') as FCol
+    expect(meta.filterable).toBe(true)
+    expect(meta).toMatchObject({ filterKind: 'enum', filterFieldName: 'metadataMatched' })
+    const values = (meta.filterOptions ?? []).map((o) => o.value)
+    expect(values).toEqual(['douban', 'bangumi', 'tmdb', 'imdb', 'none'])
   })
 
   it('复合显示列 release/episodes/meta/status 可排序（enableSorting:true）', () => {
@@ -119,7 +129,7 @@ describe('buildVideoColumns — 筛选面（§2.6）', () => {
       .map((c) => c.id)
     expect(filterable.sort()).toEqual([
       'bangumi_status', 'catalog_status', 'country', 'douban_status', 'is_published',
-      'meta_score', 'metadata_issue_level', 'metadata_overall', 'metadata_provider', 'metadata_updated',
+      'meta', 'meta_score', 'metadata_issue_level', 'metadata_overall', 'metadata_provider', 'metadata_updated',
       'review_status', 'title', 'type', 'visibility', 'year',
     ])
   })
@@ -234,8 +244,8 @@ describe('buildVideoFilter — 复合列排序映射', () => {
   it('episodes → episode_count', () => {
     expect(buildVideoFilter(makeSnapshot('episodes')).sortField).toBe('episode_count')
   })
-  it('META-36-A: meta → metadata_status（运营优先级，不再简化为 meta_score）', () => {
-    expect(buildVideoFilter(makeSnapshot('meta')).sortField).toBe('metadata_status')
+  it('META-36-C: meta → metadata_matched_count（已匹配源数量，取代运营优先级 metadata_status）', () => {
+    expect(buildVideoFilter(makeSnapshot('meta')).sortField).toBe('metadata_matched_count')
   })
   it('META-36-A: meta_score → metadata_score（完整度数值独立排序字段）', () => {
     expect(buildVideoFilter(makeSnapshot('meta_score')).sortField).toBe('metadata_score')

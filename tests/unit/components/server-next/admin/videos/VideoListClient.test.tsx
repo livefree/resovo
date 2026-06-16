@@ -188,8 +188,8 @@ describe('buildVideoFilter — 快捷筛选 Set 合流（§2.6③）', () => {
     })
     const filter = buildVideoFilter(snapshot, new Set<VideoQuickFilterKey>(['metaIncomplete']))
     expect(filter.type).toBe('anime')
-    // META-36-A：meta 复合列默认按运营优先级 metadata_status 排序（不再 meta_score）
-    expect(filter.sortField).toBe('metadata_status')
+    // META-36-C：meta 复合列改按「已匹配源数量」metadata_matched_count 排序（取代运营优先级 metadata_status）
+    expect(filter.sortField).toBe('metadata_matched_count')
     expect(filter.metaIncomplete).toBe(true)
   })
 })

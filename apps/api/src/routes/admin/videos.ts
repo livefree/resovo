@@ -20,7 +20,7 @@ import { ModerationService } from '@/api/services/ModerationService'
 import * as systemSettingsQueries from '@/api/db/queries/systemSettings'
 import { isAppError } from '@/api/lib/errors'
 import type { VisibilityStatus } from '@/types'
-import { VIDEO_TYPES, VIDEO_STATUSES, REVIEW_STATUSES, VISIBILITY_STATUSES, DOUBAN_STATUSES, BANGUMI_STATUSES, SOURCE_CHECK_STATUSES, METADATA_STATUS_OVERALLS, METADATA_PROVIDERS, METADATA_PROVIDER_STATES, METADATA_ISSUE_LEVELS } from '@resovo/types'
+import { VIDEO_TYPES, VIDEO_STATUSES, REVIEW_STATUSES, VISIBILITY_STATUSES, DOUBAN_STATUSES, BANGUMI_STATUSES, SOURCE_CHECK_STATUSES, METADATA_STATUS_OVERALLS, METADATA_PROVIDERS, METADATA_PROVIDER_STATES, METADATA_ISSUE_LEVELS, METADATA_MATCHED_FILTER_VALUES } from '@resovo/types'
 
 // ── Zod Schema ────────────────────────────────────────────────────
 
@@ -115,6 +115,8 @@ const SORT_FIELDS = [
   'source_check_status', 'render_check_status',
   // META-32-B（ADR-201 §视频库 排序）：元数据运营优先级 + 完整度独立字段（同步 SORT_FIELD_WHITELIST）
   'metadata_status', 'metadata_score',
+  // META-36-C：`元数据`列改按已匹配源数量排序（同步 SORT_FIELD_WHITELIST）
+  'metadata_matched_count',
 ] as const
 
 // CHG-VSR-2：CSV → enum 数组 query 解析（参 SourcesMatrixService / crawler.runs.ts 同范式，各 route 私有 helper）
@@ -174,6 +176,8 @@ const ListQuerySchema = z.object({
   // META-36-A（ADR-201 §视频库 过滤）：单列 provider facet（选中 provider 任一有数据 OR 合流）
   metadataProvider: csvEnum(METADATA_PROVIDERS),
   metadataProviderState: csvEnum(METADATA_PROVIDER_STATES),
+  // META-36-C：「已匹配源」过滤（四源 state=applied OR 合流 + none 哨兵=四源皆非 applied）
+  metadataMatched: csvEnum(METADATA_MATCHED_FILTER_VALUES),
   metadataIssueLevel: csvEnum(METADATA_ISSUE_LEVELS),
   metadataUpdatedFrom: z.string().datetime().optional(),
   metadataUpdatedTo: z.string().datetime().optional(),
@@ -227,7 +231,7 @@ export async function adminVideoRoutes(fastify: FastifyInstance) {
       yearMin, yearMax, country, catalogStatus, isPublished, doubanStatus, bangumiStatus,
       metaScoreMin, metaScoreMax, episodeMismatch, episodeMissing, metaIncomplete, pendingReview,
       metadataOverall, metadataProvider, metadataProviderState, metadataIssueLevel, metadataUpdatedFrom, metadataUpdatedTo,
-      metadataNeedsReview, metadataHasCandidate, metadataMissing, metadataTmdbPending,
+      metadataNeedsReview, metadataHasCandidate, metadataMissing, metadataTmdbPending, metadataMatched,
     } = parsed.data
     const includeAdult = await shouldIncludeAdultInAdminContent()
     const result = await videoService.adminList({
@@ -266,6 +270,7 @@ export async function adminVideoRoutes(fastify: FastifyInstance) {
       metadataHasCandidate,
       metadataMissing,
       metadataTmdbPending,
+      metadataMatched,
     })
     return reply.send(result)
   })
