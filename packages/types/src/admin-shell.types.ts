@@ -148,10 +148,28 @@ export interface AdminNotificationMarkReadResponse {
   data: { readAt: string }
 }
 
-/** bull queue 计数概览（ADR-147 §D-147-6） */
+/** 单队列 bull 计数（ADR-147 §D-147-6 + AMENDMENT「队列健康卡」）
+ *  waiting=积压等待 / active=正在执行 / completed·failed=Bull removeOn{Complete,Fail} 保留窗口内的封顶值
+ *  （非历史累计总量——如 enrichment 上限 200/50；仅作健康概览，不可当吞吐量统计）。 */
+export interface AdminQueueCount {
+  readonly waiting: number
+  readonly active: number
+  readonly completed: number
+  readonly failed: number
+}
+
+/** bull queue 计数概览（ADR-147 §D-147-6 + AMENDMENT：9 队列全覆盖 + 4 计数）。
+ *  键 = `apps/api/src/lib/queue.ts` 注册的全部 Bull 队列；新增队列时此处加性扩展（与 queue.ts 同步）。 */
 export interface AdminQueueCounts {
-  crawler: { waiting: number; active: number }
-  maintenance: { waiting: number; active: number }
+  readonly crawler: AdminQueueCount
+  readonly verify: AdminQueueCount
+  readonly enrichment: AdminQueueCount
+  readonly imageHealth: AdminQueueCount
+  readonly maintenance: AdminQueueCount
+  readonly identityCandidate: AdminQueueCount
+  readonly homeAutofill: AdminQueueCount
+  readonly doubanCollections: AdminQueueCount
+  readonly bangumiCollections: AdminQueueCount
 }
 
 /** GET /admin/system/jobs 响应信封（ADR-147 §4） */

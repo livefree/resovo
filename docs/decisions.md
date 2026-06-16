@@ -12211,6 +12211,18 @@ TARGET_KINDS 不需改动（复用 `'system'` CHECK 13 种已含）。
 - response 200: `{ data: TaskItem[], meta: { total, limit, since, queueCounts: { crawler: {waiting, active}, maintenance: {waiting, active} } } }`
 - 错误码：401 / 403 / 503（Redis 不可用降级：仅返回 CrawlerRun 数据 + meta.degraded=true）
 
+##### AMENDMENT 2026-06-16（DASH-QUEUE-HEALTH-A / 仪表盘队列健康卡）— queueCounts 全队列 + 四计数
+
+**触发**：原 `queueCounts` 仅覆盖 `crawler` + `maintenance` 两队列 × `{waiting, active}`，导致 `enrichment`（元数据回填）/ `imageHealth` / `verify` / `identityCandidate` / `homeAutofill` / `douban·bangumiCollections` 等后台队列在 admin UI **完全不可观测**（如批量回填 4507 条仅能 redis-cli 旁观）。
+
+**修订**（纯加性，非破坏）：
+- `AdminQueueCount`（新接口）= `{ waiting, active, completed, failed }`；`completed`/`failed` 为 Bull `removeOn{Complete,Fail}` 保留窗口内**封顶值**（非历史累计，仅健康概览）。
+- `AdminQueueCounts` 由 2 队列扩为 `apps/api/src/lib/queue.ts` 注册的**全 9 队列**（crawler/verify/enrichment/imageHealth/maintenance/identityCandidate/homeAutofill/doubanCollections/bangumiCollections）；新增队列时此处与 `TaskAggregator.fetchQueueCounts` 同步加性扩展。
+- **零新端点 / 零 migration**：复用 `GET /admin/system/jobs`（route 经 `typeof result.queueCounts` 自动跟随）；`TaskAggregator.fetchQueueCounts` 改 9 路 `getJobCounts()`，degraded 降级全队列归零口径不变。
+- **消费方非破坏**：`apps/server-next/.../admin-shell-notifications.ts` 用自有 subset 局部类型（不 import `AdminQueueCounts`），既有任务抽屉读 crawler/maintenance 行为零变化；新队列消费由 server-next 仪表盘队列健康卡（-B）承接。
+
+**评级**：加性 DTO 扩展（`packages/types`，非 admin-ui Props、非 DB schema、非新契约）→ 不触发强制 Opus 子代理；ADR-147 治理契约故补本 AMENDMENT 留痕。
+
 #### D-147-7 R-MID-1 范式应用
 
 **方案 A 纯 audit_log 映射 → 零 R-MID-1 新增**。不新增 actionType / targetKind / migration。两个端点均为纯读取，无写操作。

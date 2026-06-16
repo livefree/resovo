@@ -6274,3 +6274,21 @@
 - **质量门禁**：typecheck 7ws EXIT=0 / lint 4 successful / test:changed 升全量（admin-ui 基础包改动，ADR-180）162 文件 2150 passed / verify:adr-contracts EXIT=0（admin-shell-types-mirror 对齐 + enum-ssot 既有 advisory）；+1 panel 单测（derive message 净化既有 toContain 断言兼容）。
 - **偏离/follow-up**：① review_conflict 按钮 onAction 导航到冲突字段编辑（需交互设计：跳哪个 tab/字段高亮）；② 结构化 conflictFields DTO（若要点击逐字段跳转，扩 MetadataStatusSummary 跨 3 消费方 → 触发 Opus arch-reviewer）。均归 follow-up，本卡 MVP 仅展示冲突信号 + 字段名。
 - **[AI-CHECK]**：六问过——①根因=ISSUE_CODE_LABEL 缺 field_conflict → 补 label + issueText 拼接；②零回归（issues 通用渲染 + derive message 净化既有断言兼容 + 全量 2150 passed）；③边界=最小展示，onAction 导航 + 结构化 DTO 留 follow-up；④复用=MetadataStatusPanel 通用 issues 渲染 + ISSUE_CODE_LABEL 既有范式 + review_conflict nextAction 既存；⑤守 i18n 文案不下沉后端（message=数据、label 在 UI）/ admin-ui 内部 label 非 Props 不触发 Opus；⑥范围=1 derive message + 2 admin-ui label/issueText + 1 测试，无 DTO/Props/schema/migration/端点。**META-49 全收口（-A/-B1/-B2/-C/-D1/-D2）。SEQ-20260615-02「多源交叉验证编排 + TMDB 自动链路 + douban 降级」全序列完成**——三源 gather→reconcile→write 加权裁决 + 字段级 proposal 载体 + TMDB 自动富集 + douban 投票降级 + 跨源冲突 needs_review 审核台展示端到端打通（含 3 次 Codex stop-time review FIX）。
+
+## [DASH-QUEUE-HEALTH-A] 仪表盘队列健康卡 — 后端契约 + TaskAggregator 全队列聚合扩展 — 2026-06-16
+
+**类型**：feat（packages/types DTO 加性扩展 + apps/api 聚合服务 / ADR-147 AMENDMENT）｜**优先级**：🟡 中（后台可观测性，方案 A 后端）｜**执行模型**：claude-opus-4-8（主循环）｜**子代理**：无（加性 DTO 非 admin-ui Props/非 DB schema/非新契约 → 不触发强制 Opus）
+
+- **来源**：用户「管理台站添加实时监控后台任务卡片，支持查看后台任务进度」。调查实证 `enrichment`/`imageHealth`/`verify`/`identityCandidate`/`homeAutofill`/`douban·bangumiCollections` 等后台队列在 admin UI **完全不可观测**（批量回填 4507 条仅能 redis-cli 旁观）。用户 AskUserQuestion 选定方案 A·队列健康卡（全 9 队列 + 4 计数）；拆 -A 后端 / -B 前端。
+- **问题**：`AdminQueueCounts`（ADR-147 §D-147-6）仅 `{crawler, maintenance}×{waiting,active}`；`TaskAggregator.fetchQueueCounts` 仅取 2 队列 → enrichment 等队列从未纳入聚合。
+- **方案**（加性，非破坏）：
+  - **packages/types** `admin-shell.types.ts`：新 `AdminQueueCount{waiting,active,completed,failed}`（completed/failed = Bull removeOn{Complete,Fail} 保留窗口封顶值，非累计）；`AdminQueueCounts` 由 2 队列扩为 `queue.ts` 注册全 **9 队列**。
+  - **apps/api** `TaskAggregator.fetchQueueCounts`：改 9 路 `Promise.all(getJobCounts())` + `pick` 映射四计数；degraded 降级全队列归零口径不变（Redis 不可用 try-catch）。
+  - **system-jobs 路由零改**：`meta.queueCounts` 经 `typeof result.queueCounts` 自动跟随新形状。
+  - **ADR-147 AMENDMENT**（decisions.md §D-147-6 后）：留痕 queueCounts 扩展 + 非破坏论证。
+- **消费方非破坏**：`apps/server-next/.../admin-shell-notifications.ts` 用自有 subset 局部类型（不 import `AdminQueueCounts`）→ 既有任务抽屉读 crawler/maintenance 行为零变化；e2e shell-mocks 为运行时 JSON（不绑类型）；新队列消费由 -B 仪表盘卡承接。
+- **修改文件**：`packages/types/src/admin-shell.types.ts`、`apps/api/src/services/TaskAggregator.ts`、`tests/unit/api/task-aggregator.test.ts`、`docs/decisions.md`（ADR-147 AMENDMENT）、`docs/tasks.md`、`docs/changelog.md`。
+- **新增依赖**：无｜**数据库变更**：无｜**新端点**：无（复用 GET /admin/system/jobs）
+- **质量门禁**：typecheck 7ws EXIT=0 / lint 4 successful / test:changed 升全量（packages/types 基础包改动，ADR-180）**559 文件 7764 passed** / verify:adr-contracts EXIT=0（endpoint-adr 无新端点对齐 + admin-shell-types-mirror 对齐）；task-aggregator +1 单测（#10b 全 9 队列 + 四计数）+ #10 degraded 断言扩 9 队列。
+- **偏离/流程**：本卡实施先于 tasks.md 卡片写入（违 workflow「先写卡再执行」），补记。**follow-up = DASH-QUEUE-HEALTH-B**（server-next QueueHealthCard 组件 + DashboardClient 接线 + 轮询 live + 消费方 JobsListResponse 局部类型扩 9 队列 + 单测）。
+- **[AI-CHECK]**：六问过——①根因=AdminQueueCounts/fetchQueueCounts 仅 2 队列 → 加性扩 9 队列 + 4 计数；②零回归（system-jobs typeof 自动跟随 + 消费方 subset 类型不受影响 + typecheck 全 workspace EXIT=0 + 全量 7764 passed）；③边界=仅后端契约+聚合，UI 卡归 -B、单任务进度归 ADR-194 path B；④复用=复用 system/jobs 端点 + getJobCounts + degraded 范式，零新端点；⑤守加性非破坏（packages/types 非 admin-ui Props，补 ADR-147 AMENDMENT 留痕）；⑥范围=1 类型 + 1 服务 + 1 测试 + 1 ADR，无 migration/端点/worker。

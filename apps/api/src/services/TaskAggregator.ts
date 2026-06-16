@@ -12,8 +12,11 @@
  */
 
 import type { Pool } from 'pg'
-import type { AdminTaskItem, AdminQueueCounts, TaskResultDigest, TaskMetric } from '@resovo/types'
-import { crawlerQueue, maintenanceQueue } from '@/api/lib/queue'
+import type { AdminTaskItem, AdminQueueCount, AdminQueueCounts, TaskResultDigest, TaskMetric } from '@resovo/types'
+import {
+  crawlerQueue, verifyQueue, enrichmentQueue, imageHealthQueue, maintenanceQueue,
+  identityCandidateQueue, homeAutofillQueue, doubanCollectionsQueue, bangumiCollectionsQueue,
+} from '@/api/lib/queue'
 import { listTaskRuns, TASK_RUN_STATUS_MAP, type TaskRunRow } from '@/api/db/queries/taskRuns'
 import { selectDismissedKeys } from '@/api/db/queries/notifications'
 
@@ -198,23 +201,37 @@ export class TaskAggregator {
    * 副源 items 已切 task_runs（D-194-5），本方法不再 getActive 拉取 job 明细，仅 getJobCounts。
    */
   private async fetchQueueCounts(): Promise<{ queueCounts: AdminQueueCounts; degraded: boolean }> {
+    const pick = (c: { waiting: number; active: number; completed: number; failed: number }): AdminQueueCount => ({
+      waiting: c.waiting, active: c.active, completed: c.completed, failed: c.failed,
+    })
     try {
-      const [cCounts, mCounts] = await Promise.all([
-        crawlerQueue.getJobCounts(),
-        maintenanceQueue.getJobCounts(),
-      ])
+      const [crawler, verify, enrichment, imageHealth, maintenance, identityCandidate, homeAutofill, doubanCollections, bangumiCollections] =
+        await Promise.all([
+          crawlerQueue.getJobCounts(),
+          verifyQueue.getJobCounts(),
+          enrichmentQueue.getJobCounts(),
+          imageHealthQueue.getJobCounts(),
+          maintenanceQueue.getJobCounts(),
+          identityCandidateQueue.getJobCounts(),
+          homeAutofillQueue.getJobCounts(),
+          doubanCollectionsQueue.getJobCounts(),
+          bangumiCollectionsQueue.getJobCounts(),
+        ])
       return {
         queueCounts: {
-          crawler: { waiting: cCounts.waiting, active: cCounts.active },
-          maintenance: { waiting: mCounts.waiting, active: mCounts.active },
+          crawler: pick(crawler), verify: pick(verify), enrichment: pick(enrichment),
+          imageHealth: pick(imageHealth), maintenance: pick(maintenance), identityCandidate: pick(identityCandidate),
+          homeAutofill: pick(homeAutofill), doubanCollections: pick(doubanCollections), bangumiCollections: pick(bangumiCollections),
         },
         degraded: false,
       }
     } catch {
+      // Redis 不可用 → 全队列归零 + degraded=true（task_runs/crawler_runs 走 DB 仍返回，口径一致）
+      const zero: AdminQueueCount = { waiting: 0, active: 0, completed: 0, failed: 0 }
       return {
         queueCounts: {
-          crawler: { waiting: 0, active: 0 },
-          maintenance: { waiting: 0, active: 0 },
+          crawler: zero, verify: zero, enrichment: zero, imageHealth: zero, maintenance: zero,
+          identityCandidate: zero, homeAutofill: zero, doubanCollections: zero, bangumiCollections: zero,
         },
         degraded: true,
       }

@@ -18,10 +18,12 @@ const {
   queryMock,
   crawlerGetJobCountsMock,
   maintGetJobCountsMock,
+  otherGetJobCountsMock,
 } = vi.hoisted(() => ({
   queryMock: vi.fn(),
   crawlerGetJobCountsMock: vi.fn(),
   maintGetJobCountsMock: vi.fn(),
+  otherGetJobCountsMock: vi.fn(),
 }))
 
 vi.mock('@/api/lib/postgres', () => ({ db: { query: queryMock } }))
@@ -32,13 +34,22 @@ vi.mock('@/api/lib/auth', () => ({
   verifyAccessToken: vi.fn(),
   blacklistKey: (t: string) => `blacklist:${t}`,
 }))
-vi.mock('@/api/lib/queue', () => ({
-  crawlerQueue: { getJobCounts: () => crawlerGetJobCountsMock() },
-  maintenanceQueue: { getJobCounts: () => maintGetJobCountsMock() },
-  verifyQueue: {},
-  enrichmentQueue: {},
-  imageHealthQueue: {},
-}))
+vi.mock('@/api/lib/queue', () => {
+  // 队列健康卡：fetchQueueCounts 现调全 9 队列 getJobCounts；crawler/maintenance 保留专属 mock，
+  // 其余 7 队列共用 otherGetJobCountsMock（断言聚焦 crawler/maintenance + enrichment 代表项）。
+  const other = { getJobCounts: () => otherGetJobCountsMock() }
+  return {
+    crawlerQueue: { getJobCounts: () => crawlerGetJobCountsMock() },
+    maintenanceQueue: { getJobCounts: () => maintGetJobCountsMock() },
+    verifyQueue: other,
+    enrichmentQueue: other,
+    imageHealthQueue: other,
+    identityCandidateQueue: other,
+    homeAutofillQueue: other,
+    doubanCollectionsQueue: other,
+    bangumiCollectionsQueue: other,
+  }
+})
 
 import { TaskAggregator, buildTaskResultDigest } from '@/api/services/TaskAggregator'
 import { db } from '@/api/lib/postgres'
@@ -60,8 +71,10 @@ beforeEach(() => {
         : crawlerRows
     return Promise.resolve({ rows })
   })
-  crawlerGetJobCountsMock.mockReset().mockResolvedValue({ waiting: 0, active: 0 })
-  maintGetJobCountsMock.mockReset().mockResolvedValue({ waiting: 0, active: 0 })
+  const zero = { waiting: 0, active: 0, completed: 0, failed: 0 }
+  crawlerGetJobCountsMock.mockReset().mockResolvedValue(zero)
+  maintGetJobCountsMock.mockReset().mockResolvedValue(zero)
+  otherGetJobCountsMock.mockReset().mockResolvedValue(zero)
 })
 
 describe('TaskAggregator.list — CrawlerRun 映射', () => {
@@ -100,15 +113,28 @@ describe('TaskAggregator.list — CrawlerRun 映射', () => {
     expect(result.items[0]?.finishedAt).toBeDefined()
   })
 
-  it('#10 Redis 不可用 → degraded=true + queueCounts 归零（DB 数据仍返回）', async () => {
+  it('#10 Redis 不可用 → degraded=true + queueCounts 全 9 队列归零（DB 数据仍返回）', async () => {
     crawlerGetJobCountsMock.mockRejectedValueOnce(new Error('Redis ECONNREFUSED'))
     const svc = new TaskAggregator(db)
     const result = await svc.list({ limit: 20, since: '2026-05-17T00:00:00Z' })
     expect(result.degraded).toBe(true)
+    const zero = { waiting: 0, active: 0, completed: 0, failed: 0 }
     expect(result.queueCounts).toEqual({
-      crawler: { waiting: 0, active: 0 },
-      maintenance: { waiting: 0, active: 0 },
+      crawler: zero, verify: zero, enrichment: zero, imageHealth: zero, maintenance: zero,
+      identityCandidate: zero, homeAutofill: zero, doubanCollections: zero, bangumiCollections: zero,
     })
+  })
+
+  it('#10b 队列健康卡：queueCounts 含全 9 队列 + waiting/active/completed/failed 四计数', async () => {
+    crawlerGetJobCountsMock.mockResolvedValueOnce({ waiting: 3, active: 1, completed: 10, failed: 2 })
+    otherGetJobCountsMock.mockResolvedValue({ waiting: 5, active: 2, completed: 200, failed: 50 })
+    const svc = new TaskAggregator(db)
+    const result = await svc.list({ limit: 20, since: '2026-05-17T00:00:00Z' })
+    expect(result.degraded).toBe(false)
+    expect(Object.keys(result.queueCounts)).toHaveLength(9)
+    expect(result.queueCounts.crawler).toEqual({ waiting: 3, active: 1, completed: 10, failed: 2 })
+    // enrichment 走 otherGetJobCountsMock —— 验证回填队列计数已暴露（completed/failed 封顶值如实透传）
+    expect(result.queueCounts.enrichment).toEqual({ waiting: 5, active: 2, completed: 200, failed: 50 })
   })
 })
 
