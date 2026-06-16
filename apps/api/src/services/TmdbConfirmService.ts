@@ -492,7 +492,11 @@ export class TmdbConfirmService {
       let applied: string[] = []
       if (Object.keys(updateFields).length > 0) {
         const catalogService = new MediaCatalogService(this.db)
-        const { skippedFields } = await catalogService.safeUpdate(catalogId, updateFields, 'tmdb', { sourceRef: String(tmdbId), db: client })
+        // review P2-3（confirm 侧补齐）：季级 updateFields 内容来自季 summary + exact ref 为 season id →
+        // provenance sourceRef 用 season id（confirmKind==='season' 时 seasonRefId 必非空），准确指向季而非整剧；
+        // movie/show 路径仍用 tmdbId。
+        const sourceRef = confirmKind === 'season' && seasonRefId != null ? String(seasonRefId) : String(tmdbId)
+        const { skippedFields } = await catalogService.safeUpdate(catalogId, updateFields, 'tmdb', { sourceRef, db: client })
         applied = Object.keys(updateFields).filter((k) => !skippedFields.includes(k))
       }
 

@@ -201,6 +201,8 @@ describe('confirm', () => {
     expect(arg?.description).toBe('第一季简介') // 季简介（非「整剧简介」）
     expect(arg?.coverUrl).toBe('https://image.tmdb.org/t/p/w500/s1.jpg') // 季海报（非 show /show.jpg）
     expect(arg?.posterSource).toBe('tmdb')
+    // review（Codex）：季级 provenance sourceRef 用 season id 60001（非 show id 1429）
+    expect(safeUpdateMock.mock.calls[0]?.[3]).toMatchObject({ sourceRef: '60001' })
   })
 
   it('confirm 季级未选某字段 → 不写（尊重 moderator fields opt-in）', async () => {

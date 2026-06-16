@@ -6727,3 +6727,11 @@
   - 门禁：typecheck exit=0 / lint exit=0 / `npm run test:changed` 286 passed（14 文件）。
   - 4 finding 全属实并修复；P1-2 此前卡 B 标 follow-up，本轮按 reviewer 意见纳入（人工确认季级语义对齐 ADR-207）。
   - SEQ-20260616-03 含本返工后端到端达标：季级自动召回不再因季年份漏 show（P1-1）、人工/自动季字段均季级化（P1-2）、provenance 准确（P2-3）、逐集失败不破坏 season exact（P2-4）。
+
+## [META-53-E·FU] confirm 季级 provenance 补齐 — safeUpdate sourceRef 用 season id（Codex stop-time review）
+- **完成时间**：2026-06-16 ｜ **记录时间**：2026-06-16 16:49 ｜ **执行模型**：claude-opus-4-8 ｜ **子代理**：无
+- **修改文件**：
+  - `apps/api/src/services/TmdbConfirmService.ts` — confirm 路径 safeUpdate 的 `sourceRef`：`confirmKind==='season' ? String(seasonRefId) : String(tmdbId)`——P2-3 此前仅修 auto/stepTmdb 路径，遗漏人工 confirm 路径仍用 show id 记录季级字段 provenance；现 confirm 季级字段（季简介/季海报来自季 summary，exact ref 为 season id）provenance 准确指向季而非整剧（line 716 autoMatch identity safeUpdate 仅写 type〔show 级分类〕，sourceRef 保 show id 合理；季内容走 proposedFields→reconcile 已用 externalRefId）
+  - `tests/unit/api/tmdb-confirm-service.test.ts` — confirm 季级字段测试补断言 safeUpdate sourceRef='60001'(季 id，非 show 1429)
+- **数据库变更**：无 ｜ **新增依赖**：无
+- **注意事项**：typecheck/lint exit=0 / test:changed 286 passed。补齐后 SEQ-20260616-03 季级 provenance（auto + manual confirm 双路径）全部指向 season id。
