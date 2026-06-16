@@ -39,6 +39,9 @@ import { findCatalogById } from '@/api/db/queries/mediaCatalog'
 // META-50-1B：autoMatch 内 loadKnownNames → listCatalogAliases（默认空，多词测试按需覆盖 findCatalogById/别名）
 vi.mock('@/api/db/queries/catalogAliases', () => ({ listCatalogAliases: vi.fn(async () => []) }))
 import { listCatalogAliases } from '@/api/db/queries/catalogAliases'
+// META-50-2A-2 前置：confirm 应用 title/title_original 后重算 blocking 键（mock 断言调用，不实跑）
+vi.mock('@/api/services/metadata/catalogBlockingKeys', () => ({ recomputeCatalogBlockingKeys: vi.fn(async () => undefined) }))
+import { recomputeCatalogBlockingKeys } from '@/api/services/metadata/catalogBlockingKeys'
 
 const clientQuery = vi.fn(async () => ({ rows: [] }))
 const client = { query: clientQuery, release: vi.fn() }
@@ -129,6 +132,17 @@ describe('confirm', () => {
     expect(clientQuery).toHaveBeenCalledWith(expect.stringContaining('imdb_id IS NULL'), ['tt0245429', 'cat'])
     expect(externalData.upsertVideoExternalRef).toHaveBeenCalledWith(client, expect.objectContaining({ provider: 'tmdb', matchStatus: 'manual_confirmed', isPrimary: true }))
     expect(clientQuery).toHaveBeenCalledWith('COMMIT')
+    // META-50-2A-2 前置：title 应用 → COMMIT 后重算 blocking 键（fire-and-forget）
+    await Promise.resolve()
+    expect(recomputeCatalogBlockingKeys).toHaveBeenCalledWith(db, 'cat')
+  })
+
+  it('META-50-2A-2：fields 不含 title/title_original（仅 genres）→ 不触发 blocking 键重算', async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    vi.mocked(tmdbLib.getMovieDetail).mockResolvedValue(MOVIE)
+    await svc.confirm('vid', 'cat', { tmdbId: 129, mediaType: 'movie', fields: ['genres'] })
+    await Promise.resolve()
+    expect(recomputeCatalogBlockingKeys).not.toHaveBeenCalled()
   })
 
   it('tv + seasonNumber → externalKind=season', async () => {

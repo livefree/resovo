@@ -46,10 +46,16 @@ vi.mock('@/api/lib/queue', () => ({
   identityCandidateQueue: { add: vi.fn().mockResolvedValue({ id: 'j1' }) },
 }))
 
+// META-50-2A-2 前置：confirmFields 选中 title 实写入后重算 blocking 键（mock 断言调用）
+vi.mock('@/api/services/metadata/catalogBlockingKeys', () => ({
+  recomputeCatalogBlockingKeys: vi.fn().mockResolvedValue(undefined),
+}))
+
 // ── 真实导入（mocks 完成后）──────────────────────────────────────────
 
 import { DoubanService } from '@/api/services/DoubanService'
 import { MediaCatalogService } from '@/api/services/MediaCatalogService'
+import { recomputeCatalogBlockingKeys } from '@/api/services/metadata/catalogBlockingKeys'
 import * as videoQueries from '@/api/db/queries/videos'
 import * as catalogQueries from '@/api/db/queries/mediaCatalog'
 import * as externalDataQueries from '@/api/db/queries/externalData'
@@ -140,6 +146,9 @@ describe('DoubanService.confirmFields — Y2 fields 含 episodes', () => {
     expect(videoQueries.updateVideoEpisodes).toHaveBeenCalledWith(
       expect.anything(), VIDEO_ID, { totalEpisodes: 12, currentEpisodes: 12 }, 'manual',
     )
+    // META-50-2A-2 前置：选中 title 实写入 → 重算 blocking 键（fire-and-forget）
+    await Promise.resolve()
+    expect(recomputeCatalogBlockingKeys).toHaveBeenCalledWith(expect.anything(), CATALOG_ID)
   })
 
   it('fields 不含 "episodes" → 不调用 updateVideoEpisodes（仅写 catalog 字段）', async () => {
@@ -148,6 +157,15 @@ describe('DoubanService.confirmFields — Y2 fields 含 episodes', () => {
     await service.confirmFields(VIDEO_ID, SUBJECT_ID, ['title', 'rating'])
 
     expect(videoQueries.updateVideoEpisodes).not.toHaveBeenCalled()
+  })
+
+  it('META-50-2A-2：fields 不含 title（仅 rating）→ 不触发 blocking 键重算', async () => {
+    vi.mocked(getDoubanDetailRich).mockResolvedValue(makeDetail({ episodes: 12 }) as never)
+
+    await service.confirmFields(VIDEO_ID, SUBJECT_ID, ['rating'])
+    await Promise.resolve()
+
+    expect(recomputeCatalogBlockingKeys).not.toHaveBeenCalled()
   })
 
   it('META-40: fields 含 "country" → safeUpdate 写归一 ISO（detail.countries 中文名「美国」→「US」）', async () => {

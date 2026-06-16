@@ -329,6 +329,10 @@ vi.mock('@/api/db/queries/metadataProvenance', () => ({
   getHardLockedFields: vi.fn().mockResolvedValue([]),
   batchUpsertFieldProvenance: vi.fn().mockResolvedValue(undefined),
 }))
+// META-50-2A-2 前置：confirmMatch 写 catalog 已知名字段后重算 blocking 键（mock 断言调用）
+vi.mock('@/api/services/metadata/catalogBlockingKeys', () => ({
+  recomputeCatalogBlockingKeys: vi.fn().mockResolvedValue(undefined),
+}))
 // CHG-VIR-12-D：catalog 层冲突双写 + safeUpdate 写侧接线（YY-C）—— mock 写原语
 vi.mock('@/api/db/queries/catalogExternalRefs', async (importOriginal) => {
   const orig = await importOriginal<typeof import('@/api/db/queries/catalogExternalRefs')>()
@@ -342,6 +346,7 @@ vi.mock('@/api/db/queries/catalogExternalRefs', async (importOriginal) => {
 
 import * as externalRefQueries from '@/api/db/queries/catalogExternalRefs'
 import { BangumiService, clearBangumiConfigCache } from '@/api/services/BangumiService'
+import { recomputeCatalogBlockingKeys } from '@/api/services/metadata/catalogBlockingKeys'
 import * as bangumiLib from '@/api/lib/bangumi'
 import * as extQ from '@/api/db/queries/externalData'
 import * as epQ from '@/api/db/queries/catalogEpisodes'
@@ -933,6 +938,8 @@ describe('BangumiService.confirmMatch', () => {
     expect(mockPool.connect).not.toHaveBeenCalled()
     expect(clientQueries).toEqual([])
     expect(clientReleased).toBe(false)
+    // 未 COMMIT → 不重算 blocking 键
+    expect(recomputeCatalogBlockingKeys).not.toHaveBeenCalled()
   })
 
   it('subject 不在 dump 但有 Token → 用显式 bangumiId 拉 rich，updated:true + 写 manual_confirmed ref（P1）', async () => {
@@ -957,6 +964,9 @@ describe('BangumiService.confirmMatch', () => {
     expect(clientQueries[0]).toBe('BEGIN')
     expect(clientQueries[clientQueries.length - 1]).toBe('COMMIT')
     expect(clientReleased).toBe(true)
+    // META-50-2A-2 前置：data.fields 含 title → COMMIT 后用 effectiveCatalogId 重算 blocking 键（fire-and-forget）
+    await Promise.resolve()
+    expect(recomputeCatalogBlockingKeys).toHaveBeenCalledWith(mockPool, CID)
   })
 
   // ── Codex stop-time review FIX-1（P2）：REST 必须在 BEGIN 前，防 idle-in-transaction ──

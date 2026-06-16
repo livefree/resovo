@@ -24,6 +24,8 @@ import type { BangumiClientConfig } from '@/api/lib/bangumi'
 import type { FetchSource } from '@/api/db/queries/external-fetch-log'
 import { normalizeForExternalMatch, stripExternalMatchPunct } from './TitleNormalizer'
 import { enqueueIdentityVideoRescore } from './identity/enqueueVideoRescore'
+import { recomputeCatalogBlockingKeys } from './metadata/catalogBlockingKeys'
+import { baseLogger } from '@/api/lib/logger'
 import {
   computeLocalBangumiConfidence,
   computeRestBangumiConfidence,
@@ -328,6 +330,13 @@ export class BangumiService {
       await client.query('COMMIT')
       // BUGFIX-IDENTITY-ENRICH-RESCORE：必须在 COMMIT 后入队（worker 读已提交证据面）
       enqueueIdentityVideoRescore(videoId)
+      // META-50-2A-2 前置：confirm 写 catalog 已知名字段（title/title_original）后重算 blocking 归一键
+      //（fire-and-forget 非阻断；用 effectiveCatalogId 防 redirect 后落错 catalog，沿 rescore 入队范式）。
+      if (data.fields.title !== undefined || data.fields.titleOriginal !== undefined) {
+        void recomputeCatalogBlockingKeys(this.db, result.effectiveCatalogId).catch((err: unknown) => {
+          baseLogger.warn({ err, catalog_id: result.effectiveCatalogId }, '[blocking-keys] bangumi confirm recompute failed')
+        })
+      }
       return { updated: true }
     } catch (err) {
       try { await client.query('ROLLBACK') } catch { /* connection may already be lost */ }

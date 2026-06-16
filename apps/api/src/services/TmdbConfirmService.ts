@@ -25,6 +25,7 @@ import { MediaCatalogService } from '@/api/services/MediaCatalogService'
 import { findCatalogById } from '@/api/db/queries/mediaCatalog'
 import type { CatalogUpdateData } from '@/api/db/queries/mediaCatalog'
 import { baseLogger } from '@/api/lib/logger'
+import { recomputeCatalogBlockingKeys } from '@/api/services/metadata/catalogBlockingKeys'
 import { similarity, normalizeForMatch, parseYear } from '@/api/lib/textMatch'
 import { splitIdentityScalarFields } from '@/api/services/metadata/fieldSplit'
 import { enqueueIdentityVideoRescore } from '@/api/services/identity/enqueueVideoRescore'
@@ -384,6 +385,13 @@ export class TmdbConfirmService {
       })
 
       await client.query('COMMIT')
+      // META-50-2A-2 前置：confirm 应用 catalog 已知名字段（title/title_original）后重算 blocking
+      // 归一键——否则派生表 stale、段③ 召回口径漂移（fire-and-forget 非阻断，沿 VideoService.update 范式）。
+      if (applied.includes('title') || applied.includes('titleOriginal')) {
+        void recomputeCatalogBlockingKeys(this.db, catalogId).catch((err: unknown) => {
+          baseLogger.warn({ err, catalog_id: catalogId }, '[blocking-keys] tmdb confirm recompute failed')
+        })
+      }
       return { updated: true, applied }
     } catch (err) {
       try { await client.query('ROLLBACK') } catch { /* connection may already be lost */ }

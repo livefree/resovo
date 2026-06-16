@@ -16,6 +16,7 @@ import { mapDoubanGenres } from '@/api/lib/genreMapper'
 import { doubanTypeSignal, resolveTypeSignal } from '@/api/lib/typeFromProvider'
 import { countryToIso } from '@/types'
 import { baseLogger } from '@/api/lib/logger'
+import { recomputeCatalogBlockingKeys } from '@/api/services/metadata/catalogBlockingKeys'
 import * as videoQueries from '@/api/db/queries/videos'
 import * as catalogQueries from '@/api/db/queries/mediaCatalog'
 import * as externalDataQueries from '@/api/db/queries/externalData'
@@ -432,6 +433,14 @@ export class DoubanService {
     if (!updated) return { updated: false, reason: 'catalog_update_rejected' }
     // ADR-186 INV-1：doubanId 未落地（exact 冲突——该豆瓣条目已绑定其他作品）→ 不虚标 matched
     if (skippedFields.includes('doubanId')) return { updated: false, reason: 'douban_id_conflict' }
+
+    // META-50-2A-2 前置：confirmFields 选中 title 字段并实写入后重算 blocking 归一键（fire-and-forget
+    // 非阻断，沿 VideoService.update 范式）。confirmSubject 不写 title 故无需；douban 仅写 title 无 titleOriginal。
+    if (updateFields.title !== undefined && !skippedFields.includes('title')) {
+      void recomputeCatalogBlockingKeys(this.db, video.catalog_id).catch((err: unknown) => {
+        baseLogger.warn({ err, catalog_id: video.catalog_id }, '[blocking-keys] douban confirmFields recompute failed')
+      })
+    }
 
     // 标记 manual_confirmed
     await externalDataQueries.upsertVideoExternalRef(this.db, {
