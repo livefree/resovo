@@ -34,6 +34,7 @@ import type { DoubanEntryMatch } from '@/api/db/queries/externalData'
 import type { CatalogUpdateData } from '@/api/db/queries/mediaCatalog'
 import { enqueueIdentityVideoRescore } from './identity/enqueueVideoRescore'
 import { reconcileMetadata, type ReconcileSource } from './metadata/reconcile'
+import { recomputeCatalogBlockingKeys } from './metadata/catalogBlockingKeys'
 
 // ── 公开接口 ──────────────────────────────────────────────────────
 
@@ -157,6 +158,14 @@ export class MetadataEnrichService {
     // surviving catalog；非 anime 无 redirect → ==catalogId 零变化）。
     if (reconcileSources.length > 0) {
       await reconcileMetadata(this.db, effectiveCatalogId, reconcileSources)
+    }
+
+    // META-50-2A-1：catalog 标题/别名经 reconcile settle 后重算 blocking 归一键（加性，不改 reconcile/
+    // safeUpdate 既有语义，D-206-8）。失败不阻断 enrich——blocking 键是辅助召回索引，回填脚本兜底。
+    try {
+      await recomputeCatalogBlockingKeys(this.db, effectiveCatalogId)
+    } catch (err) {
+      baseLogger.warn({ err, catalog_id: effectiveCatalogId }, 'recomputeCatalogBlockingKeys failed (non-blocking)')
     }
 
     // Step 4: 源 HEAD 检验
