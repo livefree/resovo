@@ -287,7 +287,10 @@ export function isLikelyPinyinSlug(input: string | null | undefined): boolean {
   //    （含数字词 或 无小写的纯大写词，如 "VS"/"V3"/"20260523"，Codex stop-time review），再要求剩余每词
   //    恰为 1 个拼音音节——借此排除多音节真英文词（"Running"=run-ning 2 音节）→ 真英文多词标题保留（收敛）。
   if (/\s/.test(trimmed)) {
-    const isDropToken = (w: string): boolean => /[0-9]/.test(w) || !/[a-z]/.test(w)
+    // 丢 token：含数字（版本/日期）或「纯大写且不可分解为单音节」（"VS"/"WWE"/"N"）——但**全大写拼音音节**
+    // （"WO"/"HU"，分解为 1 音节）不丢（Codex stop-time review）；decomposeSyllableCount 内部已小写。
+    const isDropToken = (w: string): boolean =>
+      /[0-9]/.test(w) || (!/[a-z]/.test(w) && decomposeSyllableCount(w) !== 1)
     const words = trimmed.split(/\s+/).filter((w) => w && !isDropToken(w))
     return words.length > 1 && words.every((w) => w.length >= 2 && decomposeSyllableCount(w) === 1)
   }

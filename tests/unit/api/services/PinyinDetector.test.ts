@@ -304,6 +304,13 @@ describe('isLikelyPinyinSlug — 激进拼音判定（门禁专用）', () => {
     expect(isLikelyPinyinSlug('Running Man VS Game')).toBe(false)             // Running 2 音节 → 仍 false
   })
 
+  it('全大写空格拼音 → true（Codex stop-time review：WO/HU 是拼音音节，不当 token 丢）', () => {
+    expect(isLikelyPinyinSlug('WO CAI BU HUI XIN DONG NE')).toBe(true) // 全大写逐音节拼音
+    expect(isLikelyPinyinSlug('HU HE HAO TE')).toBe(true)              // 呼和浩特 全大写
+    // 对照：全大写非拼音 token 仍丢/不误判
+    expect(isLikelyPinyinSlug('VS WWE')).toBe(false)                   // 全是 token → 无剩余拼音词
+  })
+
   it('能分解为拼音的真英文 → true（用户裁定可接受的误拦）', () => {
     expect(isLikelyPinyinSlug('banana')).toBe(true) // ba-na-na 可分解（罕见误拦，title_en→null 可恢复）
   })
