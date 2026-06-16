@@ -13,7 +13,7 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { isPinyin, isConcatenatedPinyin, isPinyinTitle } from '../../../../apps/api/src/services/PinyinDetector'
+import { isPinyin, isConcatenatedPinyin, isPinyinTitle, isLikelyPinyinSlug } from '../../../../apps/api/src/services/PinyinDetector'
 
 describe('PinyinDetector.isPinyin', () => {
   describe('典型拼音（plan §10.4.1 示例）', () => {
@@ -249,5 +249,40 @@ describe('isPinyinTitle — isPinyin ∪ isConcatenatedPinyin', () => {
     expect(isPinyinTitle('miqing2025')).toBe(false) // 迷情：剥→miqing 2 音节，短
     expect(isPinyinTitle('se7en')).toBe(false)       // 真英文含数字：剥→seen 非拼音
     expect(isPinyinTitle('2012')).toBe(false)        // 纯数字
+  })
+})
+
+// CHG-VIR-11-F：入库门禁激进谓词——保守谓词漏判的真拼音（短/无 distinctive/嵌大写）全命中
+describe('isLikelyPinyinSlug — 激进拼音判定（门禁专用）', () => {
+  it('① <4 音节短拼音 → true（保守 isConcatenatedPinyin 漏）', () => {
+    expect(isLikelyPinyinSlug('jianan')).toBe(true)   // 迦南 jia-nan 2 音节
+    expect(isLikelyPinyinSlug('chixia')).toBe(true)   // 炽夏 chi-xia
+    expect(isLikelyPinyinSlug('chaociyuan')).toBe(true) // 超次元 chao-ci-yuan 3 音节
+  })
+
+  it('② 无 distinctive 特征拼音 → true（保守漏）', () => {
+    expect(isLikelyPinyinSlug('womenyukuaidehaorizi')).toBe(true) // 我们愉快的好日子 8 音节
+    expect(isLikelyPinyinSlug('laopainanyou')).toBe(true)         // 老派男友
+    expect(isLikelyPinyinSlug('sihuonianhua')).toBe(true)         // 似火年华
+    expect(isLikelyPinyinSlug('wocaibuhuixindongne')).toBe(true)  // 我才不会心动呢（含 'ne'，补音节表后命中）
+  })
+
+  it('③ 嵌入大写字母（版本/VS token）→ true（剥大写当分词符）', () => {
+    expect(isLikelyPinyinSlug('jiamianqishiV3')).toBe(true)  // 假面骑士V3
+    expect(isLikelyPinyinSlug('jiaNcifang')).toBe(true)      // 家N次方
+    expect(isLikelyPinyinSlug('shijiebeixiaozusaibilishiVSaiji20260616')).toBe(true) // 世界杯…比利时VS埃及
+  })
+
+  it('真英文 → false（不误伤）', () => {
+    expect(isLikelyPinyinSlug('Inception')).toBe(false)   // 不可分解
+    expect(isLikelyPinyinSlug('The Avengers')).toBe(false) // 分词 avengers 不可分解
+    expect(isLikelyPinyinSlug('Joy of Life')).toBe(false)  // oy/ife 不可分解
+    expect(isLikelyPinyinSlug('time')).toBe(false)         // 4 字符 < 6 阈值
+    expect(isLikelyPinyinSlug(null)).toBe(false)
+    expect(isLikelyPinyinSlug('')).toBe(false)
+  })
+
+  it('能分解为拼音的真英文 → true（用户裁定可接受的误拦）', () => {
+    expect(isLikelyPinyinSlug('banana')).toBe(true) // ba-na-na 可分解（罕见误拦，title_en→null 可恢复）
   })
 })

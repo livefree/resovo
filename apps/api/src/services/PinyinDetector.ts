@@ -41,7 +41,8 @@ const PINYIN_SYLLABLES: ReadonlySet<string> = new Set([
   'ta', 'te', 'tai', 'tao', 'tou', 'tan', 'tang', 'teng', 'tong',
   'ti', 'tie', 'tiao', 'tian', 'ting', 'tu', 'tuo', 'tui', 'tuan', 'tun',
   // n
-  'na', 'nai', 'nei', 'nao', 'nou', 'nan', 'nen', 'nang', 'neng', 'nong',
+  'na', 'ne', 'nai', 'nei', 'nao', 'nou', 'nan', 'nen', 'nang', 'neng', 'nong', // CHG-VIR-11-F：补遗漏 'ne'（呢/讷，me/le/de/te 皆在独缺）
+
   'ni', 'nie', 'niao', 'niu', 'nian', 'nin', 'niang', 'ning', 'nu', 'nuo', 'nuan',
   'nü', 'nv', 'nüe', 'nue',
   // l
@@ -260,4 +261,35 @@ export function isPinyinTitle(input: string | null | undefined): boolean {
     if (stripped.length !== trimmed.length && (isPinyin(stripped) || isConcatenatedPinyin(stripped))) return true
   }
   return false
+}
+
+/** isLikelyPinyinSlug 连写最短长度（CHG-VIR-11-F）：≥6 覆盖 2 音节拼音（"jianan"/"chixia"），
+ *  又排除 4–5 字符真英文短词（"time"=ti-me）误拦。 */
+const MIN_AGGRESSIVE_SLUG_LENGTH = 6
+
+/**
+ * **入库门禁专用激进拼音判定**（CHG-VIR-11-F）——采集源 `vod_en` 结构上几乎总是中文标题拼音，门禁
+ * 宁误拦（title_en→NULL 可恢复）也不漏。剥数字 + 大写字母（季数/年份/版本/VS 等 token，当作分词符）
+ * 后，小写核**能完整分解为合法拼音音节**即判：连写形态 ≥{@link MIN_AGGRESSIVE_SLUG_LENGTH} 字符、
+ * 空格分词每词 ≥2 字符。**去掉** `isConcatenatedPinyin` 的「≥4 音节 + distinctive 特征」阈值——那是为
+ * 「低误判」调的保守启发式，用作门禁漏判率太高（无 distinctive 的 "womenyukuaidehaorizi" / 短的 "jianan"
+ * / 嵌大写的 "jiamianqishiV3" 全漏）。
+ *
+ * **仅入库门禁 + cleanup 用**；共享 {@link isPinyin}/{@link isConcatenatedPinyin}/{@link isPinyinTitle}
+ * 保守语义不变（knownNames 分类 / blocking 召回不受影响）。极少数能分解为拼音的真英文（"banana"=ba-na-na /
+ * "manganese"）误拦可接受（用户裁定）。
+ */
+export function isLikelyPinyinSlug(input: string | null | undefined): boolean {
+  if (isPinyinTitle(input)) return true
+  if (!input) return false
+  // 剥数字 + 大写字母 → 当作分词符（"jiaNcifang"→"jia cifang"、"...VSaiji..."→分词）；保留小写 + 原空格。
+  const core = input.trim().replace(/[0-9A-Z]/g, ' ').replace(/\s+/g, ' ').trim()
+  if (!core) return false
+  const words = core.split(' ').filter(Boolean)
+  if (words.length > 1) {
+    // 空格/分词形态：每词 ≥2 字符且能完整分解为拼音音节（不要求 distinctive / 词数）
+    return words.every((w) => w.length >= 2 && canDecomposeAsPinyin(w))
+  }
+  // 连写单词：长度 ≥ 阈值且能完整分解
+  return core.length >= MIN_AGGRESSIVE_SLUG_LENGTH && canDecomposeAsPinyin(core)
 }

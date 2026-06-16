@@ -6588,3 +6588,18 @@
 - **质量门禁全绿**：typecheck 7ws EXIT=0 / lint 4ok / test:changed passed（PinyinDetector 45）。
 - **[AI-CHECK]**：六问过——①根因=检测器拒数字串致数字拼音漏判（清理+门禁同盲区）；②零回归（仅扩 isPinyinTitle 组合谓词加性分支，isConcatenatedPinyin/isPinyin 严格语义不变，45 passed）；③边界=单谓词扩展 + cleanup 统一口径，未碰严格底层；④复用=isPinyinTitle 单一真源，cleanup 与入库门禁同源；⑤守=strip 后仍走 isConcatenatedPinyin 全阈值（长度/音节/distinctive），短串与真英文不误伤；⑥范围=检测扩展 1 项。
 - **Codex stop-time review FIX**：「numbered space-separated pinyin still bypasses the title_en gate」——初版 strip-digit 分支只喂 `isConcatenatedPinyin`（要求无空格），但**空格分词拼音含数字**（如 `Wei Xian Guan Xi 2023`=危险关系2023）剥数字后仍有空格过不了，而 `isPinyin` 本身遇数字直接 false → 漏网。修复：strip 分支**两形态都测**——`isPinyin(stripped) || isConcatenatedPinyin(stripped)`，空格分词数字拼音经 isPinyin 命中。+2 测试（`Wei Xian Guan Xi 2023` / `Ge Lei Si Di 2 Ji`）。存量 cleanup dry-run 0 新命中（库内 691 english_like 是真英文不含此类），但闭合**入库门禁**对空格数字拼音的盲区。门禁复跑 typecheck/lint EXIT=0 + test:changed passed（PinyinDetector 46）。
+
+## [CHG-VIR-11-F] 入库门禁激进拼音判定（隔离专用谓词）+ 音节表补 'ne' — 2026-06-16
+
+**类型**：fix（入库门禁拼音屏蔽，CHG-VIR-11 谱系）｜**优先级**：🟡 中｜**执行模型**：claude-opus-4-8（Opus 主循环）｜**子代理**：无（无新端点 / 无 migration / 无 admin-ui Props）
+
+- **背景**：用户增量采集后实测——门禁在执行但 `isConcatenatedPinyin` 太保守，今天 20 个新 title_en 里 14 个拼音全漏判（实跑 isPinyinTitle 确认）。三类漏判：① <4 音节（`jianan`=迦南2音节）；② 无 distinctive 特征（`womenyukuaidehaorizi`=我们愉快的好日子 8 音节）；③ 嵌入大写字母（`jiamianqishiV3`=假面骑士V3）。根因：保守谓词为「低误判」调，用作门禁漏判率太高。用户裁定 (A) 激进。
+- **方案**：新增 `isLikelyPinyinSlug`（门禁 + cleanup 专用）——剥数字 + 大写字母（当分词符）→ 小写核**能完整分解为拼音音节即判**（连写 ≥6 字符 / 空格逐词 ≥2 字符），**去掉** `isConcatenatedPinyin` 的「≥4 音节 + distinctive 特征」阈值。极少数能分解的真英文（`banana`/`manganese`）误拦可接受（title_en→NULL 可恢复，用户裁定）。**不动** isPinyin/isConcatenatedPinyin/isPinyinTitle 保守语义（knownNames 分类 / blocking 召回不受影响）。附带补音节表遗漏 `'ne'`（呢/讷，me/le/de/te 皆在独缺；纯正确性，"…呢"类拼音得以分解）。
+- **接线**：`CrawlerService` 门禁 + `catalog-multilingual-cleanup` 判定均改用 `isLikelyPinyinSlug`（同源）。
+- **存量补清（运维）**：激进 cleanup dry-run 命中 406（样本「可疑误判」=含大写的全为拼音+token：`WWEduishoudierji`/`...huhehaoteVSyanbian`，零真英文误判）→ --apply 406；ne 补齐后再 +3（"…呢"类）。**四轮共清 1575**（864+302+406+3）；真英文标题全保留。
+- **关键发现（管线端到端验证）**：今天漏入的拼音中，已被 enrichment worker 匹配 TMDB 后由 **META-51-A 用真英文覆盖**（迦南→Canaan / 炽夏→Never-Ending Summer / 超次元→Transcending Dimensions），cleanup 只清没拿到 TMDB 英文的——「采集漏拼音 → TMDB 富集补英文 → cleanup 清残留」三段闭环工作。
+- **残留（已知边缘，未追）**：短拼音+年份剥后 <6（`moli2026`→`moli`）/ 嵌入真英文词破坏分解（`...vlog`/`...boss`）——量极小，进一步追将增 FP 风险，留作已知限制。
+- **修改文件**：`apps/api/src/services/PinyinDetector.ts`（+isLikelyPinyinSlug + 'ne'）、`apps/api/src/services/CrawlerService.ts`（门禁改用）、`scripts/catalog-multilingual-cleanup.ts`（判定改用）、`tests/unit/api/services/PinyinDetector.test.ts`（+isLikelyPinyinSlug 三类命中/真英文不误伤/banana FP）。
+- **新增依赖**：无｜**数据库变更**：无（cleanup 数据迁出）｜**新端点**：无｜**admin-ui Props**：无
+- **质量门禁全绿**：typecheck 7ws EXIT=0 / lint 4ok / test:changed 72 文件 1023 passed（PinyinDetector 51）。
+- **[AI-CHECK]**：六问过——①根因=保守谓词漏判率高，门禁不适用；②零回归（新增独立激进谓词 + 'ne' 纯增音节，共享保守语义不变，1023 passed）；③边界=门禁/cleanup 专用谓词，共享 isPinyin/isConcatenatedPinyin/isPinyinTitle 不动；④复用=isLikelyPinyinSlug 单一真源，门禁与 cleanup 同源；⑤守=隔离激进于入库（FP 可恢复）、保守留 knownNames/blocking、min-6 排短英文；⑥范围=激进谓词 1 项 + 'ne' 修订。

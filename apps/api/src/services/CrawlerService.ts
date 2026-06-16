@@ -9,7 +9,7 @@
 import type { Pool } from 'pg'
 import type { Client as ESClient } from '@elastic/elasticsearch'
 import { parseXmlResponse, parseJsonResponse, parseVodItem } from './SourceParserService'
-import { isPinyinTitle } from './PinyinDetector'
+import { isLikelyPinyinSlug } from './PinyinDetector'
 import { normalizeMergeKey } from './TitleNormalizer'
 import { buildStandardVideoTitle } from './TitleIdentityParser'
 import { resolveSourceLanguages } from './SourceLanguageResolver'
@@ -184,11 +184,12 @@ export class CrawlerService {
 
     // Step 2: 找到或创建 media_catalog 条目（爬虫来源，最低优先级）
     // CHG-VIR-10：withMatch 变体额外透出 matchedStep（仅供 ingest shadow 对比，绑定语义零变更）
-    // CHG-VIR-11-D 拼音门禁（catalog 写入边界）：苹果CMS `vod_en`（英文名）约定填中文标题全拼
+    // CHG-VIR-11-D/F 拼音门禁（catalog 写入边界）：苹果CMS `vod_en`（英文名）约定填中文标题全拼
     // （slug，如 "tabiqiannanyouzhire"）。拼音冒充英文官方名会污染 catalog.title_en → knownNames
     // 标 official/en/conf=1.0 → 误导 TMDB tier-1 搜索 + 误拉分。仅在写 catalog 字段处过滤（真英文
     // 如 "The Avengers" 保留）；原始 video.titleEn 仍进 Step 5 video_aliases 兜底跨站召回不丢。
-    const catalogTitleEn = video.titleEn && !isPinyinTitle(video.titleEn) ? video.titleEn : null
+    // F：用激进 isLikelyPinyinSlug（能分解为拼音即拦），vod_en 结构上几乎总是拼音，宁误拦（null 可恢复）不漏。
+    const catalogTitleEn = video.titleEn && !isLikelyPinyinSlug(video.titleEn) ? video.titleEn : null
     const catalogService = new MediaCatalogService(this.db)
     const { catalog, matchedStep } = await catalogService.findOrCreateWithMatch({
       title: standardTitle.displayTitle,
