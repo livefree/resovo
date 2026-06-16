@@ -162,6 +162,9 @@ export interface MetaEditPayload {
   readonly type?: string
   readonly genres?: readonly string[]
   readonly country?: string | null
+  // ADR-206 D-206-9（3B-3）：原名 + 别名（aka）。VideoService.update 已支持（3A），仅补声明透传。
+  readonly titleOriginal?: string | null
+  readonly aliases?: readonly string[]
 }
 
 export interface MetaEditResult {

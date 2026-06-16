@@ -6481,3 +6481,18 @@
 - **[AI-CHECK]**：六问过——①根因=编辑抽屉缺三字段输入/回填/提交；②零回归（FormState 加性，formToPatch diff 守卫未改不入 patch，VideoEditDrawer 16 既有 passed）；③边界=UI 消费层，formToPatch 纯函数 diff，不碰 api/schema；④复用=videoToForm/formToPatch/splitComma 既有范式 + 逗号分隔 input 范式（genres/director）；⑤守 D-206-9 替换语义（清空→[]）+ create 路径不受影响（createVideo 不传三字段，3A omit）；⑥范围=4 server-next 文件 + 1 测试。**解锁 META-50-3B-3（快编 moderation meta 扩 + 视频库列）。**
 
   > 流程说明：3B-2 与 3B-1 连续落地，未单独写 tasks.md「进行中」卡（连续执行偏差，task-queue 三子卡登记可追溯）；3B-3 恢复先写卡。
+
+## [META-50-3B-3] 快编 moderation meta 扩 titleOriginal/aliases + 视频库原名列（SEQ-20260616-01 / WS3 收官 / D-206-9）— 2026-06-15
+
+**类型**：feat（快编 + 视频库 UI，ADR-206 D-206-9）｜**优先级**：🟡 中（3B 收官，用户裁定纳入完整三面含快编可编辑）｜**执行模型**：claude-opus-4-8（主循环 opus 直接落地）｜**子代理**：无（复用既有写路径，server-next 消费层，不碰 admin-ui Props）
+
+- **关键发现**：`PATCH /admin/moderation/:id/meta` 调 `videoSvc.update`（moderation.ts:272）——**复用 VideoService.update**（3A 已扩 titleOriginal/originalLanguage/aliases）→ moderation 写逻辑**已支持**，api 侧仅需 `MetaEditSchema` 补 schema 声明（类比 country，Zod strip 未知键 + pending-only 守卫已有）。
+- **产出**：
+  - ① api：`MetaEditSchema`（moderation.ts:73）+`titleOriginal`/`aliases`（纯 schema 透传，零写逻辑——videoSvc.update 已处理）。
+  - ② server-next：`MetaEditPayload` +`titleOriginal`/`aliases`；`PendingMetaQuickEdit` lazy-fetch detail 回填 title_original/aliases（沿既有 genres lazy-fetch 范式 + `baseRef` 存基线避重复提交）+ 原名/别名 input（blur 提交，别名 splitComma 替换语义）+ i18n（titleOriginal/aliases/aliasesPlaceholder）。
+  - ③ `VideoColumns` +「原名」列（title_original，VideoAdminRow 已有；defaultVisible:false 按需显示，title 副行已含兜底）。
+- **关键决策**：快编不加 originalLanguage（轻量，编辑抽屉 3B-2 已有）；别名替换语义（splitComma → 完整 manual aka 集，对齐 3A replaceManualAkaAliases）；快编基线用 lazy-fetch detail（VideoQueueRow 无原名/别名）存 baseRef。
+- **修改/新增文件**：`apps/api/src/routes/admin/moderation.ts`（MetaEditSchema）、`apps/server-next/src/lib/moderation/api.ts`（MetaEditPayload）、`apps/server-next/src/app/admin/moderation/_client/PendingMetaQuickEdit.tsx`、`apps/server-next/src/app/admin/videos/_client/VideoColumns.tsx`、`apps/server-next/src/i18n/messages/zh-CN/moderation.ts`、`tests/unit/api/moderationMetaEdit.test.ts`（+4）、`tests/unit/components/server-next/admin/moderation/PendingMetaQuickEdit.test.tsx`（+4）。
+- **新增依赖**：无｜**数据库变更**：无｜**新端点**：无（复用 PATCH /admin/moderation/:id/meta，verify:endpoint-adr 不触发）｜**admin-ui Props**：无｜**architecture.md**：无需同步
+- **质量门禁全绿**：typecheck 7ws EXIT=0 / lint 4ok / test:changed 26 文件 274 passed / verify:adr-contracts EXIT=0；e2e N/A（快编/列消费层，留 PHASE 节点回归）。
+- **[AI-CHECK]**：六问过——①根因=快编/视频库缺三字段暴露；②零回归（MetaEditSchema 加性透传 + 快编既有 13 + VideoColumns 列声明性，274 passed）；③边界=schema 透传不改 moderation 写逻辑（复用 videoSvc.update）、UI 消费层；④复用=**videoSvc.update 复用**（零新写路径）+ country schema 透传范式 + genres lazy-fetch 范式 + country 列模板；⑤守 pending-only 守卫 + 别名替换语义对齐 3A + 不碰 admin-ui Props；⑥范围=5 文件 + 2 测试。**WS3 收官 → SEQ-20260616-01 全交付**：跨译名「海贼王/航海王」主修复端到端贯通——WS1（TMDB autoMatch 多词 search）+ WS2（identity 段③ alias_normalized blocking 召回 + 误并三红线）+ WS3（字段漂移 UI：3A 写路径 / 3B-1 读路径 / 3B-2 编辑抽屉 / 3B-3 快编+视频库）。

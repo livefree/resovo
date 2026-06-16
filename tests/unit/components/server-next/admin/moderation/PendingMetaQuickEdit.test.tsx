@@ -158,6 +158,39 @@ describe('PendingMetaQuickEdit（MODUX-P3-4-B）', () => {
     expect((screen.getByTestId('quick-edit-country') as HTMLInputElement).value).toBe('JP')
   })
 
+  // ── ADR-206 D-206-9（3B-3）：原名 / 别名（lazy-fetch detail 回填 + blur 提交）──
+  it('原名/别名回填（lazy-fetch detail → input value，结构化 manual aka join）', async () => {
+    getVideoMock.mockResolvedValue({ id: 'vid-1', genres: ['action'], title_original: 'ONE PIECE', aliases: ['航海王', '海盗王'] })
+    await renderQE()
+    await waitFor(() => expect((screen.getByTestId('quick-edit-title-original') as HTMLInputElement).value).toBe('ONE PIECE'))
+    expect((screen.getByTestId('quick-edit-aliases') as HTMLInputElement).value).toBe('航海王, 海盗王')
+  })
+
+  it('原名 blur 改 → save({titleOriginal})', async () => {
+    await renderQE() // 基线空（getVideoMock 默认无 title_original）
+    const input = screen.getByTestId('quick-edit-title-original')
+    fireEvent.change(input, { target: { value: 'ONE PIECE' } })
+    fireEvent.blur(input)
+    await waitFor(() => expect(saveMetaMock).toHaveBeenCalledWith('vid-1', { titleOriginal: 'ONE PIECE' }))
+  })
+
+  it('别名 blur 改 → save({aliases: splitComma})（替换语义）', async () => {
+    await renderQE()
+    const input = screen.getByTestId('quick-edit-aliases')
+    fireEvent.change(input, { target: { value: '航海王, ONE PIECE ,' } })
+    fireEvent.blur(input)
+    await waitFor(() => expect(saveMetaMock).toHaveBeenCalledWith('vid-1', { aliases: ['航海王', 'ONE PIECE'] }))
+  })
+
+  it('原名未改 blur → 不保存（baseRef 基线守卫）', async () => {
+    getVideoMock.mockResolvedValue({ id: 'vid-1', genres: [], title_original: 'ONE PIECE', aliases: [] })
+    await renderQE()
+    await waitFor(() => expect((screen.getByTestId('quick-edit-title-original') as HTMLInputElement).value).toBe('ONE PIECE'))
+    saveMetaMock.mockClear()
+    fireEvent.blur(screen.getByTestId('quick-edit-title-original')) // 未改
+    expect(saveMetaMock).not.toHaveBeenCalled()
+  })
+
   it('年代/地区候选芯片 mousedown 阻止默认（防 input blur 用 stale 值与芯片提交竞态，Codex fix）', async () => {
     await renderQE()
     for (const tid of [`quick-edit-year-${new Date().getFullYear()}`, 'quick-edit-country-JP']) {

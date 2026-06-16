@@ -17,7 +17,7 @@
  * 交互：逐字段乐观更新 + 失败/被锁回滚 + toast；保存成功回调 onSaved（队列联动刷新）。
  */
 
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { useToast, getVideoTypeOptions, getVideoGenreOptions } from '@resovo/admin-ui'
 import type { VideoQueueRow } from '@resovo/types'
 import { getVideo } from '@/lib/videos/api'
@@ -115,6 +115,10 @@ export function PendingMetaQuickEdit({ v, onSaved }: PendingMetaQuickEditProps):
   const [country, setCountry] = useState<string>(v.country ?? '')
   const [genres, setGenres] = useState<readonly string[]>([])
   const [genresLoading, setGenresLoading] = useState(true)
+  // ADR-206 D-206-9（3B-3）：原名 / 别名（VideoQueueRow 无 → lazy-fetch detail 回填；baseRef 存基线避重复提交）
+  const [titleOriginal, setTitleOriginal] = useState<string>('')
+  const [aliasesStr, setAliasesStr] = useState<string>('')
+  const baseRef = useRef<{ titleOriginal: string; aliases: string }>({ titleOriginal: '', aliases: '' })
 
   const typeOptions = getVideoTypeOptions()
   const genreOptions = getVideoGenreOptions()
@@ -126,7 +130,16 @@ export function PendingMetaQuickEdit({ v, onSaved }: PendingMetaQuickEditProps):
     let cancelled = false
     setGenresLoading(true)
     getVideo(v.id)
-      .then((detail) => { if (!cancelled) setGenres(detail.genres) })
+      .then((detail) => {
+        if (cancelled) return
+        setGenres(detail.genres)
+        // ADR-206 D-206-9（3B-3）：回填结构化 manual aka（3B-1 注入）+ 原名，存基线
+        const to = detail.title_original ?? ''
+        const al = (detail.aliases ?? []).join(', ')
+        setTitleOriginal(to)
+        setAliasesStr(al)
+        baseRef.current = { titleOriginal: to, aliases: al }
+      })
       .catch(() => { if (!cancelled) setGenres([]) })
       .finally(() => { if (!cancelled) setGenresLoading(false) })
     return () => { cancelled = true }
@@ -208,6 +221,30 @@ export function PendingMetaQuickEdit({ v, onSaved }: PendingMetaQuickEditProps):
     setCountry(code)
     if (code !== (v.country ?? null)) void commit({ country: code }, () => setCountry(v.country ?? ''))
   }, [v.country, commit])
+
+  // ADR-206 D-206-9（3B-3）：原名 / 别名 blur 提交（基线来自 lazy-fetch detail，存 baseRef 避重复提交）。
+  // 别名替换语义（splitComma → 完整 manual aka 集，对齐 3A replaceManualAkaAliases）。
+  const commitTitleOriginal = useCallback((): void => {
+    const next = titleOriginal.trim()
+    const base = baseRef.current.titleOriginal.trim()
+    if (next === base) return
+    baseRef.current.titleOriginal = next
+    void commit({ titleOriginal: next || null }, () => {
+      baseRef.current.titleOriginal = base
+      setTitleOriginal(base)
+    })
+  }, [titleOriginal, commit])
+
+  const commitAliases = useCallback((): void => {
+    if (aliasesStr === baseRef.current.aliases) return
+    const base = baseRef.current.aliases
+    const arr = aliasesStr.split(',').map((x) => x.trim()).filter(Boolean)
+    baseRef.current.aliases = aliasesStr
+    void commit({ aliases: arr }, () => {
+      baseRef.current.aliases = base
+      setAliasesStr(base)
+    })
+  }, [aliasesStr, commit])
 
   const onInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>): void => {
     if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
@@ -322,6 +359,38 @@ export function PendingMetaQuickEdit({ v, onSaved }: PendingMetaQuickEditProps):
             )
           })}
         </div>
+      </div>
+
+      {/* 原名：input（blur 提交，无候选芯片）*/}
+      <div style={{ ...ROW_STYLE, alignItems: 'center' }}>
+        <span style={{ ...CAPTION_STYLE, paddingTop: 0 }}>{Q.titleOriginal}</span>
+        <input
+          type="text"
+          value={titleOriginal}
+          onChange={(e) => setTitleOriginal(e.target.value)}
+          onBlur={commitTitleOriginal}
+          onKeyDown={onInputKeyDown}
+          maxLength={200}
+          style={{ ...INPUT_STYLE, flex: 1, minWidth: 160 }}
+          aria-label={Q.titleOriginal}
+          data-testid="quick-edit-title-original"
+        />
+      </div>
+
+      {/* 别名：input（aka 逗号分隔，blur 提交，替换语义）*/}
+      <div style={{ ...ROW_STYLE, alignItems: 'center' }}>
+        <span style={{ ...CAPTION_STYLE, paddingTop: 0 }}>{Q.aliases}</span>
+        <input
+          type="text"
+          value={aliasesStr}
+          onChange={(e) => setAliasesStr(e.target.value)}
+          onBlur={commitAliases}
+          onKeyDown={onInputKeyDown}
+          placeholder={Q.aliasesPlaceholder}
+          style={{ ...INPUT_STYLE, flex: 1, minWidth: 160 }}
+          aria-label={Q.aliases}
+          data-testid="quick-edit-aliases"
+        />
       </div>
     </div>
   )

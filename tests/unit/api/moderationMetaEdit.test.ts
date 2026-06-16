@@ -153,6 +153,50 @@ describe('PATCH /v1/admin/moderation/:id/meta', () => {
     expect(mockVideoSvcUpdate).toHaveBeenCalledWith('vid-1', { country: null })
   })
 
+  // ── ADR-206 D-206-9（3B-3）：titleOriginal / aliases（复用 videoSvc.update，schema 透传）──
+  it('成功更新 titleOriginal → 200，透传 service（不被 strip）', async () => {
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/v1/admin/moderation/vid-1/meta',
+      headers: { authorization: authHeader, 'content-type': 'application/json' },
+      body: JSON.stringify({ titleOriginal: 'ONE PIECE' }),
+    })
+    expect(res.statusCode).toBe(200)
+    expect(mockVideoSvcUpdate).toHaveBeenCalledWith('vid-1', { titleOriginal: 'ONE PIECE' })
+  })
+
+  it('成功更新 aliases（数组）→ 200，透传 service', async () => {
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/v1/admin/moderation/vid-1/meta',
+      headers: { authorization: authHeader, 'content-type': 'application/json' },
+      body: JSON.stringify({ aliases: ['航海王', 'ONE PIECE'] }),
+    })
+    expect(res.statusCode).toBe(200)
+    expect(mockVideoSvcUpdate).toHaveBeenCalledWith('vid-1', { aliases: ['航海王', 'ONE PIECE'] })
+  })
+
+  it('aliases 为空数组（清空别名替换语义）→ 200 透传', async () => {
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/v1/admin/moderation/vid-1/meta',
+      headers: { authorization: authHeader, 'content-type': 'application/json' },
+      body: JSON.stringify({ aliases: [] }),
+    })
+    expect(res.statusCode).toBe(200)
+    expect(mockVideoSvcUpdate).toHaveBeenCalledWith('vid-1', { aliases: [] })
+  })
+
+  it('titleOriginal 超长（> 200）→ 422', async () => {
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/v1/admin/moderation/vid-1/meta',
+      headers: { authorization: authHeader, 'content-type': 'application/json' },
+      body: JSON.stringify({ titleOriginal: 'X'.repeat(201) }),
+    })
+    expect(res.statusCode).toBe(422)
+  })
+
   it('country 超长（> 10）→ 422', async () => {
     const res = await app.inject({
       method: 'PATCH',

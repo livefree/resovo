@@ -78,6 +78,10 @@ const MetaEditSchema = z.object({
   // MODUX-P3-4-A：地区（ISO 3166-1 alpha-2，对齐 videos PATCH videos.ts:71 max(10) nullable 口径）。
   //   VideoService.update 已支持 country（VideoService.ts:404）；本卡仅补 schema 声明（Zod 默认 strip 未知键）。
   country: z.string().max(10).nullable().optional(),
+  // ADR-206 D-206-9（3B-3）：原名 + 别名（aka）。同 country 范式——VideoService.update 已支持（3A
+  //   titleOriginal/aliases），快编经 videoSvc.update 透传，本卡仅补 schema 声明（pending-only 守卫已有）。
+  titleOriginal: z.string().max(200).nullable().optional(),
+  aliases: z.array(z.string().min(1).max(200)).max(50).optional(),
 })
 
 const BatchApproveSchema = z.object({

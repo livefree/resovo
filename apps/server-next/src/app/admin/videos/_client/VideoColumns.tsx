@@ -445,6 +445,13 @@ export function buildVideoColumns(
       filterable: true, filterFieldName: 'country', filterKind: 'enum', filterDistinctTable: 'media_catalog',
       cell: ({ row }) => <CountryName code={row.country} muted />,
     },
+    // ADR-206 D-206-9（3B-3）：原名独立列（默认隐藏，按需显示；title 副行已含 title_original 兜底）
+    {
+      id: 'title_original', header: '原名', accessor: (r) => r.title_original ?? '',
+      width: 160, minWidth: 120, enableResizing: true, enableSorting: false, defaultVisible: false,
+      filterable: false,
+      cell: ({ row }) => <span style={TITLE_META_STYLE}>{row.title_original ?? '—'}</span>,
+    },
     // catalog_status 连载状态：Pill 完结/连载/未知（mc.status）；enum filter（→ catalogStatus[]）
     {
       id: 'catalog_status', header: '连载状态', accessor: (r) => r.status ?? '',
