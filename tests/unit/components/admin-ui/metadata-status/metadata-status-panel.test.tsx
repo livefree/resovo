@@ -181,4 +181,22 @@ describe('MetadataStatusPanel — 来源卡字段 + SSR', () => {
     expect(html).toContain('data-metadata-status-panel')
     expect((html.match(/data-metadata-source-card/g) ?? []).length).toBe(4)
   })
+
+  // CHG-TMDB-HREF-KIND（闭合 D-172-AMD2-C）：面板按 summary.tmdbHrefKind 给 tmdb 卡 /movie÷/tv 外链
+  describe('tmdb 卡外链按 media-type 分流', () => {
+    function tmdbHref(container: HTMLElement): string | null {
+      const card = panel(container).querySelector('[data-metadata-source-card][data-provider="tmdb"]') as HTMLElement
+      return card.querySelector('a')?.getAttribute('href') ?? null
+    }
+    it('tmdbHrefKind=tv（剧集）→ tmdb 外链走 /tv/（修复跳错电影）', () => {
+      const s = makeSummary({ tmdb: { state: 'applied', externalId: '323486' } }, { tmdbHrefKind: 'tv' })
+      const { container } = render(<MetadataStatusPanel summary={s} variant="detail" />)
+      expect(tmdbHref(container)).toBe('https://www.themoviedb.org/tv/323486')
+    })
+    it('tmdbHrefKind=movie（电影）→ tmdb 外链走 /movie/', () => {
+      const s = makeSummary({ tmdb: { state: 'applied', externalId: '19898' } }, { tmdbHrefKind: 'movie' })
+      const { container } = render(<MetadataStatusPanel summary={s} variant="detail" />)
+      expect(tmdbHref(container)).toBe('https://www.themoviedb.org/movie/19898')
+    })
+  })
 })

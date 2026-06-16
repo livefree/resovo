@@ -308,3 +308,15 @@ describe('METADATA_STATUS_JOIN_SQL — 服务端排序过滤 SQL 派生（META-3
     expect(METADATA_STATUS_JOIN_SQL).not.toContain('undefined')
   })
 })
+
+describe('buildMetadataStatusSummary — tmdbHrefKind（CHG-TMDB-HREF-KIND / 闭合 D-172-AMD2-C）', () => {
+  it('movie → tmdbHrefKind=movie（外链走 /movie/）', () => {
+    expect(buildMetadataStatusSummary(makeRow({ type: 'movie' })).tmdbHrefKind).toBe('movie')
+  })
+
+  it('series/anime/variety/documentary → tmdbHrefKind=tv（外链走 /tv/，修复跳错电影）', () => {
+    for (const t of ['series', 'anime', 'variety', 'documentary'] as const) {
+      expect(buildMetadataStatusSummary(makeRow({ type: t })).tmdbHrefKind).toBe('tv')
+    }
+  })
+})

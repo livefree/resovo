@@ -48,6 +48,7 @@ export function makeSummary(
     providers,
     issues: [],
     nextAction: 'none',
+    tmdbHrefKind: 'tv',
     sort: { statusRank: 3, issueRank: 0, scoreRank: null, updatedAt: null },
     ...summaryOverrides,
   }

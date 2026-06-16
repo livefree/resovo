@@ -13,6 +13,8 @@
  * （META-32-B）/ 单测对拍复用。
  */
 
+import type { VideoType } from './video.types'
+
 // ── 四来源（ADR-201 D-201-3 / 与 EXTERNAL_REF_PROVIDERS 成员集合相等）──────────
 
 /** 元数据来源（四源，与 `EXTERNAL_REF_PROVIDERS` 成员集合相等，但顺序语义不同——见 `METADATA_PROVIDER_ORDER`）。 */
@@ -143,6 +145,12 @@ export interface MetadataStatusSummary {
   providers: Record<MetadataProvider, MetadataProviderStatus>
   issues: MetadataStatusIssue[]
   nextAction: MetadataNextAction
+  /**
+   * TMDB 外链命名空间（CHG-TMDB-HREF-KIND / 闭合 D-172-AMD2-C）：TMDB 的 movie 与 tv id 命名空间
+   * **独立**，同一数字 id 两边是不同作品。UI 据此选 `/movie/` 或 `/tv/` 路径段（`buildTmdbHref`）。
+   * 服务端据 video type 派生（movie→'movie'，其余→'tv'，`tmdbHrefKindOf`）。**必填**——杜绝"忘传即默认 movie"跳错。
+   */
+  tmdbHrefKind: 'movie' | 'tv'
   /** 服务端派生的排序键（视频库服务端排序消费；META-32-B 走动态 SQL 同口径）。 */
   sort: {
     /** 整体状态排序键（1=needs_review … 5=complete，运营处理优先级）。 */
@@ -154,4 +162,12 @@ export interface MetadataStatusSummary {
     /** 更新时间（= enrichedAt，二级排序）。 */
     updatedAt: string | null
   }
+}
+
+/**
+ * video type → TMDB 外链命名空间（CHG-TMDB-HREF-KIND）：`movie`→`'movie'`，其余全部→`'tv'`
+ * （series/anime/variety/documentary/short/… 在 TMDB 皆属 tv）。派生侧填 `MetadataStatusSummary.tmdbHrefKind`。
+ */
+export function tmdbHrefKindOf(type: VideoType): 'movie' | 'tv' {
+  return type === 'movie' ? 'movie' : 'tv'
 }

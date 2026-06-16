@@ -20,7 +20,7 @@ import type {
   MetadataIssueLevel, MetadataStatusIssue, MetadataStatusOverall,
   MetadataNextAction, MetadataStatusSummary,
 } from '@/types'
-import { METADATA_PROVIDERS, METADATA_PROVIDER_ORDER } from '@/types'
+import { METADATA_PROVIDERS, METADATA_PROVIDER_ORDER, tmdbHrefKindOf } from '@/types'
 
 /** complete 完整度阈值（ADR-201 D-201-C，暂定 80；后续按真实数据校准，禁散落 UI）。 */
 export const METADATA_COMPLETE_SCORE_THRESHOLD = 80
@@ -256,6 +256,9 @@ export function buildMetadataStatusSummary(row: MetadataStatusSourceRow): Metada
     providers: byProvider,
     issues,
     nextAction: NEXT_ACTION_BY_OVERALL[overall],
+    // CHG-TMDB-HREF-KIND：纯展示字段（UI 选 /movie÷/tv 外链路径段），不进 SQL ORDER BY/WHERE
+    // → METADATA_STATUS_JOIN_SQL 无需镜像此字段（与 state/rank 的 JS↔SQL 对拍义务正交）。
+    tmdbHrefKind: tmdbHrefKindOf(row.type),
     sort: {
       statusRank: METADATA_OVERALL_RANK[overall],
       issueRank: METADATA_ISSUE_RANK[issueLevel],

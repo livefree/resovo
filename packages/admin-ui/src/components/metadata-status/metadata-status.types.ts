@@ -120,6 +120,11 @@ export type MetadataActionHandler = (action: MetadataNextAction, provider?: Meta
  */
 export interface MetadataSourceCardProps {
   readonly status: MetadataProviderStatus
+  /**
+   * 外链 href（CHG-TMDB-HREF-KIND）：由面板预构造透传——tmdb 经 `buildTmdbHref(id, summary.tmdbHrefKind)`
+   * 按 movie/tv 命名空间分流，其余 `SOURCE_HREF_BUILDERS[provider]`。中性可选：未传时卡回退自建（向后兼容）。
+   */
+  readonly href?: string
   /** 来源卡级动作回调（candidate/problem 态附操作按钮时触发）。 */
   readonly onAction?: MetadataActionHandler
   readonly testId?: string

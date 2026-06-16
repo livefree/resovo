@@ -38,9 +38,10 @@ function cardAction(state: MetadataProviderState): MetadataNextAction | null {
   return null
 }
 
-export function MetadataSourceCard({ status, onAction, testId }: MetadataSourceCardProps): React.ReactElement {
+export function MetadataSourceCard({ status, href: hrefProp, onAction, testId }: MetadataSourceCardProps): React.ReactElement {
   const { provider, state, externalId, label, matchMethod, confidence } = status
-  const href = externalId ? SOURCE_HREF_BUILDERS[provider](externalId) : undefined
+  // CHG-TMDB-HREF-KIND：优先用面板预构造的 href（tmdb 已按 movie/tv 分流）；未传则回退自建（向后兼容）。
+  const href = hrefProp ?? (externalId ? SOURCE_HREF_BUILDERS[provider](externalId) : undefined)
   const linked = !!href && state !== 'missing' && state !== 'not_applicable'
   const idText = label ?? externalId
   const methodText = matchMethod ? (MATCH_METHOD_LABEL[matchMethod] ?? matchMethod) : null

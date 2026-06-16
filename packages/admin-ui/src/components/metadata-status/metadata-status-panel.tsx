@@ -19,7 +19,7 @@ import type { MetadataIssueLevel, MetadataStatusIssue } from '@resovo/types'
 import { Pill } from '../cell'
 import type { PillVariant } from '../cell'
 import { AdminButton } from '../admin-button'
-import { SOURCE_LABEL } from '../enrichment-badge/enrichment-logos'
+import { SOURCE_LABEL, SOURCE_HREF_BUILDERS, buildTmdbHref } from '../enrichment-badge/enrichment-logos'
 import { MetadataSourceIconCluster } from './metadata-source-icon-cluster'
 import { MetadataSourceCard } from './metadata-source-card'
 import { ISSUE_CODE_LABEL, NEXT_ACTION_LABEL, OVERALL_LABEL } from './metadata-status-labels'
@@ -109,14 +109,24 @@ export function MetadataStatusPanel({
       {/* 四来源卡（detail/drawer 展开；compact 折叠为 Header 簇，不渲染卡） */}
       {!isCompact && (
         <div data-panel-source-cards style={CARDS_STYLE}>
-          {METADATA_PROVIDER_ORDER.map((provider) => (
-            <MetadataSourceCard
-              key={provider}
-              status={summary.providers[provider]}
-              onAction={onAction}
-              testId={testId ? `${testId}-card-${provider}` : undefined}
-            />
-          ))}
+          {METADATA_PROVIDER_ORDER.map((provider) => {
+            // CHG-TMDB-HREF-KIND：面板预构造外链——tmdb 按 summary.tmdbHrefKind 选 /movie÷/tv，
+            // 其余沿 SOURCE_HREF_BUILDERS；卡只读 href（不再自持 media-type / provider 特殊性）。
+            const externalId = summary.providers[provider].externalId
+            const href = externalId == null ? undefined
+              : provider === 'tmdb'
+                ? buildTmdbHref(externalId, summary.tmdbHrefKind)
+                : SOURCE_HREF_BUILDERS[provider](externalId)
+            return (
+              <MetadataSourceCard
+                key={provider}
+                status={summary.providers[provider]}
+                href={href}
+                onAction={onAction}
+                testId={testId ? `${testId}-card-${provider}` : undefined}
+              />
+            )
+          })}
         </div>
       )}
 

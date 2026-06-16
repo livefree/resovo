@@ -28,12 +28,21 @@ export const SOURCE_LABEL: Readonly<Record<SourceLogoKind, string>> = {
 }
 
 /**
+ * TMDB 外链构造（CHG-TMDB-HREF-KIND / 闭合 D-172-AMD2-C）：TMDB 的 movie 与 tv id 命名空间**独立**，
+ * 同一数字 id 两边是不同作品——必须据 catalog 类型选 `/movie/` 或 `/tv/`。活跃消费方（MetadataStatusPanel）
+ * 经 `MetadataStatusSummary.tmdbHrefKind` 显式传 kind；`SOURCE_HREF_BUILDERS.tmdb` 遗留入口默认 movie。
+ */
+export function buildTmdbHref(id: string | number, kind: 'movie' | 'tv'): string {
+  return `https://www.themoviedb.org/${kind}/${id}`
+}
+
+/**
  * 外部页 href 构造（命中且 id 非空时用）。
- * 注：tmdb 用 /movie/ 路径段，对 tv 类型不精确（D-172-AMD2-C 已登记偏离 / 首版）。
+ * 注：tmdb 此遗留入口默认 /movie/（仅退役消费点用）；活跃路径用 `buildTmdbHref(id, kind)` 按类型分流。
  */
 export const SOURCE_HREF_BUILDERS: Readonly<Record<SourceLogoKind, (id: string | number) => string>> = {
   douban: (id) => `https://movie.douban.com/subject/${id}/`,
   bangumi: (id) => `https://bgm.tv/subject/${id}`,
-  tmdb: (id) => `https://www.themoviedb.org/movie/${id}`,
+  tmdb: (id) => buildTmdbHref(id, 'movie'),
   imdb: (id) => `https://www.imdb.com/title/${id}/`,
 }

@@ -6557,3 +6557,19 @@
 - **新增依赖**：无｜**数据库变更**：无｜**新端点**：无｜**admin-ui Props**：无｜**architecture.md**：无需同步
 - **质量门禁全绿**：typecheck 7ws EXIT=0 / lint 4ok / test:changed（backfill-enrich-query 7 passed）；real-data 语义验证：tmdb-missing 命中 1832 视频（resovo_dev，无 tmdb_id + 可匹配类型，对齐预期）。
 - **[AI-CHECK]**：六问过——①根因=现有模式漏「缺 TMDB」视频；②零回归（新增独立 else-if 分支，既有模式 SQL 不变，7 passed）；③边界=query 模式 + CLI 白名单，无新写路径；④复用=既有 reenrich-backfill 入队/worker 链路全复用；⑤守=类型字面量代码常量参数化 IN、all 不并入 tmdb-missing；⑥范围=模式 1 项。**后续（运维，非代码卡）**：Phase C 执行回填（`--mode tmdb-missing` dry-run→小批→全量，需 Redis+worker+TMDB 配额）+ Phase D `catalog-multilingual-cleanup.ts --apply` 清未命中拼音。
+
+## [CHG-TMDB-HREF-KIND] TMDB 外链按 media-type 分流 /movie÷/tv（闭合 D-172-AMD2-C）— 2026-06-16
+
+**类型**：fix（共享契约 + admin-ui 外链正确性，ADR-201/ADR-172 AMD2）｜**优先级**：🔴 高（回填后 445 个剧集外链全跳错）｜**执行模型**：claude-opus-4-8（Opus 主循环）｜**子代理**：arch-reviewer (claude-opus-4-8) — 共享组件 API 契约强制评审，CONDITIONAL PASS + 3 项强制修订全采纳
+
+- **背景**：用户抽查发现全量回填后**剧集类型 tmdb_id 外链跳到完全无关的电影**（电影类型正确）。根因 = `SOURCE_HREF_BUILDERS.tmdb` 硬编码 `/movie/{id}`（D-172-AMD2-C 已登记偏离）；TMDB 的 movie 与 tv id 命名空间**独立**，同号是不同作品。回填前仅 47 命中无人注意，回填后 445 个非 movie 命中全暴露。活跃链接 = 编辑抽屉 `TabMetadata` → `MetadataStatusPanel` → `MetadataSourceCard` → builder。
+- **arch-reviewer 裁决（CONDITIONAL PASS）3 修订全采纳**：① `mediaType` 只进数据契约不进卡 Props——`MetadataStatusSummary` 加 purpose-built **必填** `tmdbHrefKind:'movie'|'tv'`，面板预构造 href 经中性可选 `MetadataSourceCardProps.href` 透传（卡不持 media-type/provider 特殊性）；② 不污染 `SOURCE_HREF_BUILDERS` 统一签名，单独导出 `buildTmdbHref(id, kind)`，tmdb builder 委托默认 movie（遗留入口）；③ 映射 helper `tmdbHrefKindOf(type)` 落 @resovo/types，derive 调用；必填消除「忘传即默认 movie」跳错风险；不碰已 @deprecated 的 external-meta-panel / enrichment-badge-cluster（出范围）。
+- **产出**：
+  - `@resovo/types`：`MetadataStatusSummary` +`tmdbHrefKind`（必填）+ 导出 `tmdbHrefKindOf`；barrel value re-export。
+  - `metadata-status.derive.ts`：`buildMetadataStatusSummary` 填 `tmdbHrefKind: tmdbHrefKindOf(row.type)` + 注释点明纯展示字段无需 SQL JOIN 镜像（与 state/rank 对拍正交）。
+  - `admin-ui`：`enrichment-logos.ts` 导出 `buildTmdbHref` + tmdb builder 委托 + 偏离注释更新；`enrichment-badge/index.ts` 导出；`MetadataSourceCardProps` +中性可选 `href`；`metadata-source-card` 优先用传入 href（未传回退自建，向后兼容）；`metadata-status-panel` 面板预构造 href（tmdb 走 buildTmdbHref+tmdbHrefKind）。
+  - 测试：`build-tmdb-href.test.ts`（movie/tv 分流 + 委托）、derive `tmdbHrefKind`（movie→movie / series·anime·variety·doc→tv）、面板端到端（tmdb 卡链接随 tmdbHrefKind 走 /tv÷/movie）；fixture `makeSummary` 补默认。
+- **新增依赖**：无｜**数据库变更**：无（纯展示 TS 字段，非 schema）｜**新端点**：无｜**architecture.md**：无需同步
+- **共享契约门禁**：改了 admin-ui 公开 Props（`MetadataSourceCardProps.href`）+ @resovo/types 跨 3 消费方字段（`MetadataStatusSummary.tmdbHrefKind`）→ 经 arch-reviewer(Opus) 评审，commit 带 `Subagents:` trailer。
+- **质量门禁全绿**：typecheck 7ws EXIT=0 / lint 4ok / test:changed 全量 passed（基础包改动自动升全量）/ verify:adr-contracts / verify:endpoint-adr EXIT=0。
+- **[AI-CHECK]**：六问过——①根因=tmdb 外链硬编码 /movie 无视命名空间；②零回归（href 中性可选+回退、必填字段经 fixture+derive 全覆盖，全量 passed）；③边界=按 arch-reviewer 收敛，卡不持 media-type、不碰退役组件；④复用=builder 委托、helper 单一真源、面板预构造统一口径；⑤守=必填消除跳错默认、纯展示字段不进 SQL 镜像；⑥范围=外链分流 1 项。**闭合 D-172-AMD2-C**。问题2（stills/多图相册）= 未来扩展仅记录。

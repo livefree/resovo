@@ -12,7 +12,7 @@ export { EnrichmentBadgeCluster } from './enrichment-badge-cluster'
 
 // ── 外部源 Logo 徽标（ADR-172 AMENDMENT 2 / META-14-A）──────────────
 export { SourceLogoBadge } from './source-logo-badge'
-export { SOURCE_LOGO_DATA_URI, SOURCE_LABEL, SOURCE_HREF_BUILDERS } from './enrichment-logos'
+export { SOURCE_LOGO_DATA_URI, SOURCE_LABEL, SOURCE_HREF_BUILDERS, buildTmdbHref } from './enrichment-logos'
 export type {
   SourceLogoBadgeProps,
   SourceLogoKind,
