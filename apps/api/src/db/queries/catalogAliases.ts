@@ -32,6 +32,68 @@ export const ALIAS_KINDS = [
   'official', 'localized', 'romanization', 'abbreviation', 'aka', 'original',
 ] as const
 
+/** 结构化别名读出行（snake→camel；confidence NUMERIC→number 收口，MUST-1A-5）。 */
+export interface CatalogAliasRow {
+  readonly alias: string
+  /** BCP47 language subtag（NULL=未知） */
+  readonly lang: string | null
+  /** ISO 3166-1 region subtag（NULL=不限地区） */
+  readonly region: string | null
+  /** ISO 15924 script（Hans/Hant/Jpan/Latn/Kore；NULL=未知，简繁不归一） */
+  readonly script: string | null
+  /** ALIAS_KINDS 之一（NULL=未标） */
+  readonly kind: string | null
+  /** 置信度 [0,1]（NULL=无来源置信） */
+  readonly confidence: number | null
+  /** douban/bangumi/tmdb/crawler/manual */
+  readonly source: string
+  readonly isPrimaryForLocale: boolean
+}
+
+interface DbCatalogAliasRow {
+  alias: string
+  lang: string | null
+  region: string | null
+  script: string | null
+  kind: string | null
+  confidence: string | null
+  source: string
+  is_primary_for_locale: boolean
+}
+
+/**
+ * 列出某 catalog 的结构化别名（ADR-206 D-206-1 / META-50-1A，knownNames 共享原语数据源之一）。
+ * 排序 `confidence DESC NULLS LAST, alias ASC`（确定性 + 高置信优先，供 filterForSearchQueries 同档复用）。
+ *
+ * **kinds 过滤语义警示（MUST-1A-6）**：传入 `kinds` 时走 `kind = ANY($2)`，**`kind IS NULL` 行不返回**。
+ * loadKnownNames 取全量（不传 kinds），NULL kind 在 TS 层 `kind ?? 'aka'` 兜底，故不受影响。
+ */
+export async function listCatalogAliases(
+  db: Pool | PoolClient,
+  catalogId: string,
+  kinds?: readonly string[],
+): Promise<CatalogAliasRow[]> {
+  const whereKind = kinds && kinds.length > 0 ? ' AND kind = ANY($2)' : ''
+  const params: unknown[] = kinds && kinds.length > 0 ? [catalogId, kinds] : [catalogId]
+  const result = await db.query<DbCatalogAliasRow>(
+    `SELECT alias, lang, region, script, kind, confidence, source, is_primary_for_locale
+       FROM media_catalog_aliases
+      WHERE catalog_id = $1${whereKind}
+      ORDER BY confidence DESC NULLS LAST, alias ASC`,
+    params,
+  )
+  return result.rows.map((row) => ({
+    alias: row.alias,
+    lang: row.lang,
+    region: row.region,
+    script: row.script,
+    kind: row.kind,
+    confidence: row.confidence == null ? null : Number(row.confidence),
+    source: row.source,
+    isPrimaryForLocale: row.is_primary_for_locale,
+  }))
+}
+
 /**
  * upsert 一条结构化别名：
  * - 新行直接插入；

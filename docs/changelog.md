@@ -6309,6 +6309,23 @@
 - **[AI-CHECK]**：六问过——①根因=A 卡后端契约无 UI 消费 → 建自取数轮询卡接入 row5；②零回归（DashboardClient 16 + 既有卡零改；补 stub mock 消 act 警告 + typecheck EXIT=0）；③边界=纯监控只读，操作/单任务进度留后续；④复用=复用 system/jobs 端点 + AutoCrawlScheduleCard 自取数范式 + SiteHealthCard 卡片壳样式；⑤守颜色零硬编码（全 CSS 变量、仅用已验证 token）+ 不改 admin-ui Props；⑥范围=1 api + 1 新组件 + 1 接线 + 2 测试，无端点/schema/migration。**DASH-QUEUE-HEALTH 全收口（-A 后端 + -B 前端）。用户「管理台站实时监控后台任务卡片」端到端交付**——仪表盘 row5 实时显示全 9 队列 waiting/active/completed/failed + 8s 轮询 + Redis 降级兜底。
 - **Codex stop-time review FIX**：「Dashboard E2E mock 仍返旧 queueCounts 形状 → 崩新卡」——`tests/e2e/admin/_shared/shell-mocks.ts` 的 `/admin/system/jobs` mock 仅返 crawler/maintenance 2 队列，QueueHealthCard 遍历 9 队列访问 `counts.enrichment.active` → `undefined.active` TypeError 崩卡（fetch 解析后首次重渲染触发）。修复：① mock 补全 9 队列 × 4 计数（契约对齐）；② QueueHealthCard 加防御 guard（`if (!c) return null` 跳过缺键队列，partial/陈旧响应优雅降级不崩仪表盘）；③ dashboard.spec.ts +断言队列卡可见 + 9 行（防回归）；④ +1 单测（partial 响应仅渲在场行）。门禁：typecheck EXIT=0 / lint 4ok / QueueHealthCard 单测 6 passed / **test:e2e:admin dashboard.spec 3 passed**。
 
+## [META-50-1A] knownNames 共享原语 + listCatalogAliases query（SEQ-20260616-01 第 2 卡 / WS1 起点 / 强制 Opus）— 2026-06-16
+
+**类型**：feat（services/metadata 新共享原语 + db query / ADR-206 D-206-1）｜**优先级**：🟡 中（WS1 前置地基，1B/1C/2A 依赖）｜**执行模型**：claude-opus-4-8（主循环）｜**子代理**：arch-reviewer (claude-opus-4-8, agentId ad3d3a55ce1579c70) 契约 gate（CLAUDE.md 模型路由强制升 Opus #1 新共享组件 API 契约）
+
+- **来源**：SEQ-20260616-01「原名/别名驱动的外部匹配」，ADR-206 D-206-1。四方（TMDB/bangumi/identity/enrich）此前各自从单 `catalog.title` 取匹配 target → 丢 title_original/title_en/别名 → 海贼王/航海王跨译名召回缺信号。
+- **产出**：① `db/queries/catalogAliases.ts` 新增 `listCatalogAliases(db, catalogId, kinds?)`（补 R1 缺口——此前只有 upsert 缺 list；snake→camel + NUMERIC confidence `Number()` 收口 + `ORDER BY confidence DESC NULLS LAST, alias ASC`）；② 新建 `services/metadata/knownNames.ts`（与 reconcile.canonical.ts 同层）：`KnownName{value,kind,source,lang,confidence}` + `loadKnownNames`（findCatalogById 四标题字段 ∪ listCatalogAliases 合成去重）+ 两纯函数投影 `filterForMatchScore` / `filterForSearchQueries`。
+- **arch-reviewer CONDITIONAL-PASS 7 MUST 全落实**：
+  - **MUST-1A-1（P0）**：四标题字段**不继承行级 `metadata_source`**，用哨兵 `source='catalog'`（导出 `CATALOG_FIELD_SOURCE`）+ confidence=1.0 → 防 2A 桶门槛「crawler 一律不进桶」误伤 crawler catalog 的 canonical 主标题（复活 R1 一侧化召回）。`KnownName.source` 取值域 = `CatalogMetadataSource ∪ {'catalog'}`（保持 string，非 any）。
+  - **MUST-1A-2（P0）**：`filterForMatchScore` 在 kind 白名单 `{title,official,original,localized}` 外**额外排 `source='crawler'` 别名**（crawler 可能写非-aka kind，D-206-3 红线"crawler 泛词不进打分集"）；source='catalog' 标题字段不受此排除。
+  - **MUST-1A-3/4/5/6/7**：去重 `KIND_POLARITY_RANK`（title>official>original>localized>romanization>aka/abbr）+ confidence tiebreak / 搜索同档 `confidence DESC NULLS LAST, value ASC` / NUMERIC `Number()` 收口 + 单测断言 typeof / 3 处 JSDoc（'title' 合成 kind、source 取值域、kinds 传参排 NULL 行）/ filterForMatchScore max 语义 localized 仅抬分 + 投影不二次归一。
+- **极性口径（D-206-3 / ADR-175 D-175-4）**：matchScore 仅 title/official/original/localized（romanization 仅召回不拉分、aka/abbreviation 不进打分集、crawler 别名排除）；searchQueries 优先级序 `[original, title_en(official+en), official-alias, romanization, title]`（abbreviation/aka/localized 不进搜索词集，crawler **不**排——搜索是召回）。N≤3 配额/逐词早停/去重发词在 1B；门槛过滤在 2A——**本卡只产数据不接线**。
+- **简繁不归一守护（ADR-175 R1）**：去重用 `normalizeForExternalMatch`（不转简繁），「海贼王/航海王」归一后不同 → 不误并（单测覆盖）。
+- **修改/新增文件**：`apps/api/src/db/queries/catalogAliases.ts`（+list query）、`apps/api/src/services/metadata/knownNames.ts`（新建）、`tests/unit/api/catalogAliasesList.test.ts`（新建 4 测试）、`tests/unit/api/knownNames.test.ts`（新建 12 测试）。
+- **新增依赖**：无｜**数据库变更**：无（纯只读 query）｜**新端点**：无｜**admin-ui Props**：无（零消费方接线）
+- **质量门禁全绿**：typecheck 7ws EXIT=0 / lint 4ok / test:changed 2 文件 16 passed（catalogAliasesList 4 + knownNames 12）/ verify:adr-contracts EXIT=0（无新端点；advisory 为既有 ADR-157 baseline）；e2e N/A（纯 service/query）。
+- **[AI-CHECK]**：六问过——①根因=匹配 target 以单 title 为主键丢原名别名 → knownNames 合成四标题字段+结构化别名；②零回归（纯加性 export+新建，无现有 export 变更，全门禁绿）；③边界=只读原语+派生纯函数，零消费方接线（TMDB 多词/打分归 1B、alias 桶归 2A、bangumi 评估归 1C），不写路径/不改 reconcile/safeUpdate/优先级；④复用=findCatalogById + normalizeForExternalMatch + listCatalogAliases 编排，不重复实现取数/归一；⑤守 ADR-206 D-206-1/3 + ADR-175 D-175-4 极性 + R1 哨兵 source 防 crawler 闸门误伤 + 简繁不归一；⑥范围=2 源 + 2 测试 = 4 文件 ≤5 项，无 Props/schema/端点。**强制 Opus 契约 gate 经 arch-reviewer 7 MUST 全数核对落实。解锁 META-50-1B（enrich 预取+TMDB 多词 search+打分用 knownNames）/ 1C（bangumi 评估）/ 2A（alias_normalized 桶，依 1A 归一口径）。**
+
 ## [META-50-A] ADR-206 起草：原名/别名驱动的外部匹配 + 跨译名查重 + 字段漂移 UI（设计先行）— 2026-06-16
 
 **类型**：docs（ADR-206 新增 + ADR-105a AMENDMENT / SEQ-20260616-01 第 1 卡）｜**优先级**：🟡 中（大初始设计地基）｜**执行模型**：claude-opus-4-8（主循环）｜**子代理**：arch-reviewer (claude-opus-4-8, agentId ad0578cea5038ec95) 设计 gate（撰写 ADR → CLAUDE.md 模型路由强制升 Opus #3）
