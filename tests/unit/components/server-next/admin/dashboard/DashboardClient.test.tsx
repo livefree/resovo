@@ -55,6 +55,26 @@ vi.mock('../../../../../../apps/server-next/src/lib/crawler/api', () => ({
   getCrawlerSystemStatus: (...args: unknown[]) => mockGetCrawlerSystemStatus(...args),
 }))
 
+// DASH-QUEUE-HEALTH-B：row 5 QueueHealthCard 自取数；stub getQueueHealth 让卡确定性降级态，
+// 不经 api-client mock 的 undefined 抛错路径（保留 dashboard/api 其余真实，overview/activities 不受影响）
+vi.mock('../../../../../../apps/server-next/src/lib/dashboard/api', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../../../../../apps/server-next/src/lib/dashboard/api')>()),
+  getQueueHealth: vi.fn().mockResolvedValue({
+    queueCounts: {
+      crawler: { waiting: 0, active: 0, completed: 0, failed: 0 },
+      verify: { waiting: 0, active: 0, completed: 0, failed: 0 },
+      enrichment: { waiting: 0, active: 0, completed: 0, failed: 0 },
+      imageHealth: { waiting: 0, active: 0, completed: 0, failed: 0 },
+      maintenance: { waiting: 0, active: 0, completed: 0, failed: 0 },
+      identityCandidate: { waiting: 0, active: 0, completed: 0, failed: 0 },
+      homeAutofill: { waiting: 0, active: 0, completed: 0, failed: 0 },
+      doubanCollections: { waiting: 0, active: 0, completed: 0, failed: 0 },
+      bangumiCollections: { waiting: 0, active: 0, completed: 0, failed: 0 },
+    },
+    degraded: false,
+  }),
+}))
+
 // ── mock @resovo/admin-ui useToast ───────────────────────────────
 
 const toastPushMock = vi.fn()

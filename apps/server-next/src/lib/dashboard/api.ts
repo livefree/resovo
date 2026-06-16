@@ -13,9 +13,11 @@ import type {
   DashboardSparkPoint,
   DashboardAnalyticsPayload,
   DashboardActivityRow,
+  AdminQueueCounts,
 } from '@resovo/types'
 
 export type { DashboardOverviewPayload, DashboardSparkPoint, DashboardAnalyticsPayload, DashboardActivityRow }
+export type { AdminQueueCounts }
 
 export type SparkMetric = 'videoTotal' | 'pendingStaging' | 'sourceReachableRate' | 'inactiveSources'
 export type AnalyticsPeriod = '7d' | '30d' | '90d'
@@ -51,4 +53,13 @@ export async function getDashboardActivities(limit = 10): Promise<readonly Dashb
     `/admin/dashboard/activities?limit=${limit}`,
   )
   return res.data
+}
+
+// DASH-QUEUE-HEALTH-B：复用 ADR-147 `/admin/system/jobs` 的 meta.queueCounts（全 9 队列 + 4 计数，
+// ADR-147 AMENDMENT）。limit=1 仅为取 meta（data 任务项卡片不消费）；degraded=Redis 不可用降级标记。
+export async function getQueueHealth(): Promise<{ queueCounts: AdminQueueCounts; degraded: boolean }> {
+  const res = await apiClient.get<{ meta: { queueCounts: AdminQueueCounts; degraded?: boolean } }>(
+    '/admin/system/jobs?limit=1',
+  )
+  return { queueCounts: res.meta.queueCounts, degraded: res.meta.degraded ?? false }
 }

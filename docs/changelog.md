@@ -6292,3 +6292,18 @@
 - **质量门禁**：typecheck 7ws EXIT=0 / lint 4 successful / test:changed 升全量（packages/types 基础包改动，ADR-180）**559 文件 7764 passed** / verify:adr-contracts EXIT=0（endpoint-adr 无新端点对齐 + admin-shell-types-mirror 对齐）；task-aggregator +1 单测（#10b 全 9 队列 + 四计数）+ #10 degraded 断言扩 9 队列。
 - **偏离/流程**：本卡实施先于 tasks.md 卡片写入（违 workflow「先写卡再执行」），补记。**follow-up = DASH-QUEUE-HEALTH-B**（server-next QueueHealthCard 组件 + DashboardClient 接线 + 轮询 live + 消费方 JobsListResponse 局部类型扩 9 队列 + 单测）。
 - **[AI-CHECK]**：六问过——①根因=AdminQueueCounts/fetchQueueCounts 仅 2 队列 → 加性扩 9 队列 + 4 计数；②零回归（system-jobs typeof 自动跟随 + 消费方 subset 类型不受影响 + typecheck 全 workspace EXIT=0 + 全量 7764 passed）；③边界=仅后端契约+聚合，UI 卡归 -B、单任务进度归 ADR-194 path B；④复用=复用 system/jobs 端点 + getJobCounts + degraded 范式，零新端点；⑤守加性非破坏（packages/types 非 admin-ui Props，补 ADR-147 AMENDMENT 留痕）；⑥范围=1 类型 + 1 服务 + 1 测试 + 1 ADR，无 migration/端点/worker。
+
+## [DASH-QUEUE-HEALTH-B] 仪表盘队列健康卡 — 前端 QueueHealthCard + DashboardClient 接线 + 轮询 live — 2026-06-16
+
+**类型**：feat（server-next 仪表盘 UI 消费 / 用户「实时监控后台任务卡片」最终交付物）｜**优先级**：🟡 中（DASH-QUEUE-HEALTH-A 后端契约的可见 UI）｜**执行模型**：claude-opus-4-8（主循环）｜**子代理**：无（纯 server-next 前端消费，不改 admin-ui Props / 不新增端点 / packages/types A 卡已扩）
+
+- **问题**：A 卡已让 `GET /admin/system/jobs` `meta.queueCounts` 含全 9 队列 + 4 计数，但仪表盘无消费方；`enrichment`（回填 4507 条）等队列仍不可视。
+- **方案**（仿 `AutoCrawlScheduleCard` 自取数自轮询范式，隔离 live 不扰其它一次性加载卡）：
+  - **`lib/dashboard/api.ts`** 加 `getQueueHealth()`：复用 `/admin/system/jobs?limit=1` 取 `meta.queueCounts`（data 任务项不消费），类型用 `@resovo/types` `AdminQueueCounts` 真源 + re-export；degraded 透传。
+  - **`_client/QueueHealthCard.tsx`**（新，'use client'）：mount fetch + `setInterval(8s)` 轮询 + `clearInterval` 卸载清理；9 队列行（中文 label + 待/跑/完/败 四 StatCell，`active>0` success 绿高亮 / `failed>0` error 红 / 其余 muted）+ degraded 兜底条（Redis 降级保留上次快照不清空）+ loading 占位；颜色**全 CSS 变量**（仅用 SiteHealthCard 已验证 token，规避掩码不确定的 `--accent-fg`/`--fg-subtle`）。
+  - **`DashboardClient`** row 5 全宽接入（自取数无需 prop 传递）。
+- **修改文件**：`apps/server-next/src/lib/dashboard/api.ts`、`apps/server-next/src/app/admin/_client/QueueHealthCard.tsx`（新）、`apps/server-next/src/app/admin/_client/DashboardClient.tsx`、`tests/unit/components/server-next/admin/dashboard/QueueHealthCard.test.tsx`（新 5 测试）、`tests/unit/components/server-next/admin/dashboard/DashboardClient.test.tsx`（补 getQueueHealth stub mock 消除 row5 自取数 act 非确定性）。
+- **新增依赖**：无｜**数据库变更**：无｜**新端点**：无（复用 GET /admin/system/jobs）
+- **质量门禁**：typecheck 7ws EXIT=0 / lint 4 successful / test:changed 3 文件 37 passed（QueueHealthCard 5 + DashboardClient 16 零回归 + dashboard/api）/ verify:adr-contracts EXIT=0。
+- **偏离/follow-up**：① 轮询固定 8s（未做可见性暂停/window blur 节流，MVP）；② 仅监控只读无队列操作按钮（取消/重试归 admin/tasks 既有能力或 ADR-194）；③ 单任务级进度（每个 job 进度条）归 ADR-194 path B（enrichment 写 task_runs）独立后续。
+- **[AI-CHECK]**：六问过——①根因=A 卡后端契约无 UI 消费 → 建自取数轮询卡接入 row5；②零回归（DashboardClient 16 + 既有卡零改；补 stub mock 消 act 警告 + typecheck EXIT=0）；③边界=纯监控只读，操作/单任务进度留后续；④复用=复用 system/jobs 端点 + AutoCrawlScheduleCard 自取数范式 + SiteHealthCard 卡片壳样式；⑤守颜色零硬编码（全 CSS 变量、仅用已验证 token）+ 不改 admin-ui Props；⑥范围=1 api + 1 新组件 + 1 接线 + 2 测试，无端点/schema/migration。**DASH-QUEUE-HEALTH 全收口（-A 后端 + -B 前端）。用户「管理台站实时监控后台任务卡片」端到端交付**——仪表盘 row5 实时显示全 9 队列 waiting/active/completed/failed + 8s 轮询 + Redis 降级兜底。

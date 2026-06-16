@@ -35,6 +35,7 @@ import { RecentActivityCard } from '@/components/admin/dashboard/RecentActivityC
 import { SiteHealthCard } from '@/components/admin/dashboard/SiteHealthCard'
 import { AnalyticsView } from './AnalyticsView'
 import { AutoCrawlScheduleCard } from './AutoCrawlScheduleCard'
+import { QueueHealthCard } from './QueueHealthCard'
 
 // ── types ─────────────────────────────────────────────────────────
 
@@ -231,6 +232,11 @@ export function DashboardClient() {
               {/* CW1-D：自动采集状态卡（full width 单卡 row） */}
               <div data-dashboard-row="4">
                 <AutoCrawlScheduleCard />
+              </div>
+
+              {/* DASH-QUEUE-HEALTH-B：后台任务队列健康卡（full width，自取数 + 8s 轮询 live） */}
+              <div data-dashboard-row="5">
+                <QueueHealthCard />
               </div>
             </>
           )}
