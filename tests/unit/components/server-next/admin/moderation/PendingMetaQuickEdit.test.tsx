@@ -191,6 +191,27 @@ describe('PendingMetaQuickEdit（MODUX-P3-4-B）', () => {
     expect(saveMetaMock).not.toHaveBeenCalled()
   })
 
+  it('切视频：原名/别名即时同步重置 + pending 期间不写 stale 旧值到新视频（Codex stop-time fix）', async () => {
+    // video A：getVideo 回填 title_original='A原名' / aliases=['A别名']
+    getVideoMock.mockResolvedValueOnce({ id: 'A', genres: [], title_original: 'A原名', aliases: ['A别名'] })
+    const { rerender } = render(<PendingMetaQuickEdit v={makeVideo({ id: 'A' })} onSaved={vi.fn()} />)
+    await act(async () => {})
+    await waitFor(() => expect((screen.getByTestId('quick-edit-title-original') as HTMLInputElement).value).toBe('A原名'))
+
+    // 切到 video B：getVideo(B) 永不 resolve（模拟 lazy-fetch pending 窗口）
+    getVideoMock.mockImplementationOnce(() => new Promise(() => {}))
+    saveMetaMock.mockClear()
+    await act(async () => { rerender(<PendingMetaQuickEdit v={makeVideo({ id: 'B' })} onSaved={vi.fn()} />) })
+
+    // effect 同步清空 → 立即为空（不残留 A 的原名/别名，不等 getVideo B resolve）
+    expect((screen.getByTestId('quick-edit-title-original') as HTMLInputElement).value).toBe('')
+    expect((screen.getByTestId('quick-edit-aliases') as HTMLInputElement).value).toBe('')
+    // pending 期间 blur → base='' value='' 相等 → 不提交（绝不把 A 的 stale 值写到 B）
+    fireEvent.blur(screen.getByTestId('quick-edit-title-original'))
+    fireEvent.blur(screen.getByTestId('quick-edit-aliases'))
+    expect(saveMetaMock).not.toHaveBeenCalled()
+  })
+
   it('年代/地区候选芯片 mousedown 阻止默认（防 input blur 用 stale 值与芯片提交竞态，Codex fix）', async () => {
     await renderQE()
     for (const tid of [`quick-edit-year-${new Date().getFullYear()}`, 'quick-edit-country-JP']) {

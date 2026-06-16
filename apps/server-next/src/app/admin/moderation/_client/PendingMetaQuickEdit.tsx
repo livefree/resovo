@@ -127,6 +127,12 @@ export function PendingMetaQuickEdit({ v, onSaved }: PendingMetaQuickEditProps):
   useEffect(() => {
     setYear(v.year != null ? String(v.year) : '')
     setCountry(v.country ?? '')
+    // META-50-3B-3 FIX（Codex stop-time review）：原名/别名无 props 种子（靠 getVideo lazy-fetch），
+    // 须在切视频时**同步**清空 state + baseRef——否则 getVideo(新视频) pending 窗口残留旧视频值，
+    // 期间 blur 会用 stale 值 commit 到新视频（把上一视频的原名/别名误写入新视频）。
+    setTitleOriginal('')
+    setAliasesStr('')
+    baseRef.current = { titleOriginal: '', aliases: '' }
     let cancelled = false
     setGenresLoading(true)
     getVideo(v.id)
