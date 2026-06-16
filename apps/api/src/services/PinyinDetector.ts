@@ -279,24 +279,22 @@ const MIN_AGGRESSIVE_SLUG_LENGTH = 6
  * 保守语义不变（knownNames 分类 / blocking 召回不受影响）。极少数能分解为拼音的真英文（"banana"=ba-na-na /
  * "manganese"）误拦可接受（用户裁定）。
  */
-/** 归一串（已去数字/token）能否整体判为拼音 slug：连写 ≥阈值、空格逐词 ≥2，均能完整分解为拼音音节。 */
-function decomposesAsPinyinSlug(normalized: string): boolean {
-  const core = normalized.replace(/\s+/g, ' ').trim()
-  if (!core) return false
-  const words = core.split(' ').filter(Boolean)
-  // 空格/分词形态：每词 ≥2 字符且能完整分解（canDecomposeAsPinyin 内部已小写，故 title-case 自然兼容）。
-  if (words.length > 1) return words.every((w) => w.length >= 2 && canDecomposeAsPinyin(w))
-  // 连写单词：长度 ≥ 阈值且能完整分解。
-  return core.length >= MIN_AGGRESSIVE_SLUG_LENGTH && canDecomposeAsPinyin(core)
-}
-
 export function isLikelyPinyinSlug(input: string | null | undefined): boolean {
   if (isPinyinTitle(input)) return true
   if (!input) return false
   const trimmed = input.trim()
-  // 两种归一互补（Codex stop-time review：title-case 拼音首字母大写是拼音一部分，不可剥）：
-  //  (a) 仅去数字 → 覆盖 title-case（"Chixia"/"Wo Cai Bu"，canDecomposeAsPinyin 内部小写）+ pinyin+digit；
-  //  (b) 去数字 + 大写字母当分词符 → 覆盖嵌入版本/VS token（"jiamianqishiV3"/"...VSaiji"，大写非拼音首字母）。
-  return decomposesAsPinyinSlug(trimmed.replace(/[0-9]/g, ' '))
-      || decomposesAsPinyinSlug(trimmed.replace(/[0-9A-Z]/g, ' '))
+  // ── 有真空格 → 拼音「逐音节分词」惯例（"Wo Cai Bu"=每词 1 音节）：要求每词恰为 1 个拼音音节，
+  //    借此排除多音节真英文词（"Running"=run-ning 2 音节 / "Game"=ga-me）→ 真英文多词标题保留（CHG-VIR-11-F 收敛）。
+  if (/\s/.test(trimmed)) {
+    const words = trimmed.replace(/[0-9]/g, ' ').split(/\s+/).filter(Boolean)
+    return words.length > 1 && words.every((w) => w.length >= 2 && decomposeSyllableCount(w) === 1)
+  }
+  // ── 无真空格连写：两路互补（Codex stop-time review：title-case 首字母大写是拼音一部分，不可剥）──
+  //   (a) 仅去数字整体分解 → 覆盖 title-case（"Chixia"，canDecomposeAsPinyin 内部小写）+ pinyin+digit；
+  const noDigits = trimmed.replace(/[0-9]/g, '')
+  if (noDigits.length >= MIN_AGGRESSIVE_SLUG_LENGTH && canDecomposeAsPinyin(noDigits)) return true
+  //   (b) 去数字 + 大写 token（版本/VS）→ 剩余拼音片段各自完整分解（多音节 OK，"jiamianqishiV3"→"jiamianqishi"）。
+  const frags = trimmed.replace(/[0-9A-Z]/g, ' ').split(/\s+/).filter(Boolean)
+  return frags.join('').length >= MIN_AGGRESSIVE_SLUG_LENGTH && frags.length > 0
+    && frags.every((f) => canDecomposeAsPinyin(f))
 }

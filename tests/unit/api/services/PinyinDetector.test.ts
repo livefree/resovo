@@ -290,6 +290,13 @@ describe('isLikelyPinyinSlug — 激进拼音判定（门禁专用）', () => {
     expect(isLikelyPinyinSlug('')).toBe(false)
   })
 
+  it('多词真英文（逐词单音节收敛）→ false（CHG-VIR-11-F：Running=run-ning 2 音节非逐音节拼音）', () => {
+    expect(isLikelyPinyinSlug('Running Man')).toBe(false)  // running 2 音节 → 保留真英文
+    expect(isLikelyPinyinSlug('Game of Identity')).toBe(false)
+    // 对照：逐音节空格拼音仍命中（每词 1 音节）
+    expect(isLikelyPinyinSlug('Wo Cai Bu Hui Xin Dong Ne')).toBe(true)
+  })
+
   it('能分解为拼音的真英文 → true（用户裁定可接受的误拦）', () => {
     expect(isLikelyPinyinSlug('banana')).toBe(true) // ba-na-na 可分解（罕见误拦，title_en→null 可恢复）
   })
