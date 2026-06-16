@@ -37,6 +37,13 @@ export interface PairSideInput {
   readonly sourceSiteKeys: readonly string[]
   /** Phase 2a 省略（标 evaluated=false）；Phase 2b 填实 */
   readonly externalIds?: ExternalIdSummary
+  /**
+   * 段③ alias_normalized blocking 桶键（ADR-206 D-206-5 / M-2A-3，2A-2）。**独立字段**——
+   * 仅供 pairScoringPersist.sharedAliasBucketKeys 交集 → evidence_hash blockingKeys 并集
+   * （扩召回面）；**scorePair 评分逻辑绝不读取本字段**（不激活休眠 external_alias_match，
+   * 误并由 D-206-6 三红线 + 自动合并 OFF 双重兜底）。与 externalIds.aliasKeys 解耦勿混用。
+   */
+  readonly aliasBlockingKeys?: readonly string[]
 }
 
 // ── EvidenceItem 构造 helper ─────────────────────────────────────────

@@ -15,9 +15,11 @@ import type pino from 'pino'
 
 const mockRecallCore = vi.fn()
 const mockRecallExt = vi.fn()
+const mockRecallAlias = vi.fn()
 vi.mock('@/api/services/identity/blockingRecall', () => ({
   recallCoreKeyCounterparts: (...a: unknown[]) => mockRecallCore(...a),
   recallExternalIdCounterparts: (...a: unknown[]) => mockRecallExt(...a),
+  recallAliasNormCounterparts: (...a: unknown[]) => mockRecallAlias(...a),
 }))
 
 const mockBuildSides = vi.fn()
@@ -50,6 +52,7 @@ beforeEach(() => {
   mockScoreAndPersist.mockResolvedValue([])
   mockRecallCore.mockResolvedValue([])
   mockRecallExt.mockResolvedValue([])
+  mockRecallAlias.mockResolvedValue([])
 })
 
 describe('runVideoRescore', () => {
@@ -75,6 +78,27 @@ describe('runVideoRescore', () => {
       expect.any(Object),
     )
     expect(result.videos).toBe(1)
+    expect(result.counterparts).toBe(1)
+  })
+
+  it('段③ ADR-206：self 别名键 → recallAliasNormCounterparts 召回跨译名对侧', async () => {
+    const vidB = 'c5bbe74a-0000-0000-0000-000000000002'
+    const vidA = '6f2493a5-0000-0000-0000-000000000001'
+    const selfWithAlias = { ...side(vidB), aliasBlockingKeys: ['航海王', 'one piece'] }
+    mockBuildSides
+      .mockResolvedValueOnce(new Map([[vidB, selfWithAlias]])) // self（含 alias 桶键）
+      .mockResolvedValueOnce(new Map([[vidB, side(vidB)], [vidA, side(vidA)]]))
+    mockRecallCore.mockResolvedValue([]) // core 桶无对侧（译名不同）
+    mockRecallExt.mockResolvedValue([])
+    mockRecallAlias.mockResolvedValue([vidA]) // alias 桶召回对侧
+
+    const result = await runVideoRescore(db, log, [vidB])
+
+    expect(mockRecallAlias).toHaveBeenCalledWith(db, ['航海王', 'one piece'], vidB, expect.any(Number))
+    expect(mockScoreAndPersist).toHaveBeenCalledWith(
+      db, expect.any(Map), [[vidA, vidB]],
+      expect.objectContaining({ triggerSource: 'enrichment' }), expect.any(Object),
+    )
     expect(result.counterparts).toBe(1)
   })
 

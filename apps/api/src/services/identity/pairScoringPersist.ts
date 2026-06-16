@@ -16,6 +16,7 @@ import { fetchVideoDetailsForCandidates } from '@/api/db/queries/video-merge-can
 import { computeEvidenceHash, type PairFieldSnapshot } from './evidenceHash'
 import { upsertIdentityCandidate } from './candidateUpsert'
 import { loadExternalIdSummaries } from './externalIdLoader'
+import { loadVideoAliasBlockingKeys } from './blockingRecall'
 import { scorePair, type PairSideInput } from './scorePair'
 import { THRESHOLD_CONFIG_VERSION, CANDIDATE_MIN_THRESHOLD, isGraySliceAdmissible } from './weights'
 
@@ -42,9 +43,10 @@ export function emptyPairPersistCounters(): PairPersistCounters {
  * → PairSideInput Map（offline job 与 ingest shadow 共用，口径一致）。
  */
 export async function buildSides(db: Pool, videoIds: string[]): Promise<Map<string, PairSideInput>> {
-  const [details, extMap] = await Promise.all([
+  const [details, extMap, aliasMap] = await Promise.all([
     fetchVideoDetailsForCandidates(db, videoIds),
     loadExternalIdSummaries(db, videoIds),
+    loadVideoAliasBlockingKeys(db, videoIds), // 段③ self 别名归一键（ADR-206 / M-2A-4）
   ])
   const map = new Map<string, PairSideInput>()
   for (const d of details) {
@@ -57,6 +59,7 @@ export async function buildSides(db: Pool, videoIds: string[]): Promise<Map<stri
       type: d.type,
       sourceSiteKeys: d.site_keys,
       externalIds: extMap.get(d.id),
+      aliasBlockingKeys: aliasMap.get(d.id) ?? [],
     })
   }
   return map
@@ -88,6 +91,24 @@ function sharedExternalBucketKeys(left: PairSideInput, right: PairSideInput): st
   const re = right.externalIds?.exactIds ?? {}
   for (const [p, id] of Object.entries(left.externalIds?.exactIds ?? {})) {
     if (re[p] === id) out.push(`${p}:${id}`)
+  }
+  return out
+}
+
+/**
+ * 双方共享的 alias_normalized 桶 key（归一键交集 ⟺ 同 alias 桶 / ADR-206 D-206-5 / M-2A-4）。
+ * **交集为空即返回空数组**（M-2A-6：spread 空 → 既有未命中 alias 桶的 pair blockingKeys 不变、
+ * evidence_hash 不漂移，避免 candidate 表全量 re-upsert 风暴）。**用原始归一键不加前缀**——
+ * computeEvidenceHash 的 dedupeSort 折叠与 coreTitleKey 偶然相等键、最小化漂移（加前缀会令同标题
+ * pair 全量 supersede）。alias 键无 `provider:` 形态，与 external 桶键不碰撞。仅扩召回不成正证据。
+ */
+function sharedAliasBucketKeys(left: PairSideInput, right: PairSideInput): string[] {
+  const ra = right.aliasBlockingKeys ?? []
+  if (ra.length === 0) return []
+  const rset = new Set(ra)
+  const out: string[] = []
+  for (const k of left.aliasBlockingKeys ?? []) {
+    if (rset.has(k)) out.push(k)
   }
   return out
 }
@@ -145,6 +166,7 @@ export async function scoreAndPersistPairs(
         left.coreTitleKey,
         right.coreTitleKey,
         ...sharedExternalBucketKeys(left, right),
+        ...sharedAliasBucketKeys(left, right), // 段③（M-2A-4/6：空交集不注入 → 既有 pair 零漂移）
       ],
       fieldSnapshot: { left: snapshot(left), right: snapshot(right) },
       externalRefSummary: externalRefSummary(left, right),

@@ -13,11 +13,19 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 vi.mock('@/api/db/queries/video-merge-candidates', () => ({ fetchVideoDetailsForCandidates: vi.fn() }))
 vi.mock('@/api/services/identity/candidateUpsert', () => ({ upsertIdentityCandidate: vi.fn() }))
 vi.mock('@/api/services/identity/externalIdLoader', () => ({ loadExternalIdSummaries: vi.fn() }))
+// 段③（ADR-206）：buildSides 的 alias 自键载入是数据源函数（同 loadExternalIdSummaries 定位），
+// 部分 mock 之以免在 buildSides 内插入真实 db.query 打乱分桶 mockResolvedValueOnce 序；
+// fetchCoreKeyBuckets/fetchExternalIdBuckets/fetchAliasNormBuckets 仍真实运行（走 mockDbQuery）。
+vi.mock('@/api/services/identity/blockingRecall', async (orig) => ({
+  ...(await orig<typeof import('@/api/services/identity/blockingRecall')>()),
+  loadVideoAliasBlockingKeys: vi.fn(),
+}))
 
 import { runIdentityRescore } from '@/api/services/identity/offlineRescore'
 import { fetchVideoDetailsForCandidates } from '@/api/db/queries/video-merge-candidates'
 import { upsertIdentityCandidate } from '@/api/services/identity/candidateUpsert'
 import { loadExternalIdSummaries } from '@/api/services/identity/externalIdLoader'
+import { loadVideoAliasBlockingKeys } from '@/api/services/identity/blockingRecall'
 
 const log = { info: vi.fn(), warn: vi.fn() } as unknown as import('pino').Logger
 
@@ -36,7 +44,8 @@ function videoRow(id: string, title: string, siteKeys: string[]) {
 beforeEach(() => {
   vi.clearAllMocks()
   vi.mocked(loadExternalIdSummaries).mockResolvedValue(new Map())
-  // 默认：两段召回均空（单测按需 mockResolvedValueOnce 覆盖前几次调用）
+  vi.mocked(loadVideoAliasBlockingKeys).mockResolvedValue(new Map())
+  // 默认：三段召回均空（单测按需 mockResolvedValueOnce 覆盖前几次调用）
   mockDbQuery.mockResolvedValue({ rows: [] })
 })
 
@@ -88,14 +97,15 @@ describe('runIdentityRescore', () => {
     expect(upsertIdentityCandidate).toHaveBeenCalledTimes(1)
   })
 
-  it('空桶立即 break（两段均无 buckets）→ 零处理', async () => {
+  it('空桶立即 break（三段均无 buckets）→ 零处理', async () => {
     mockLockQuery.mockResolvedValueOnce({ rows: [{ acquired: true }] }).mockResolvedValue({ rows: [] })
     const r = await runIdentityRescore(mockDb, log)
     expect(r.buckets).toBe(0)
     expect(r.externalIdBuckets).toBe(0)
+    expect(r.aliasNormBuckets).toBe(0)
     expect(r.pairs).toBe(0)
-    // 段 ① + 段 ② 各发起一次空召回
-    expect(mockDbQuery).toHaveBeenCalledTimes(2)
+    // 段 ① + 段 ② + 段 ③ 各发起一次空召回
+    expect(mockDbQuery).toHaveBeenCalledTimes(3)
   })
 
   it('段 ② external_id 桶召回：标题异/外部 ID 同 pair 仍召回评分（D-105a-17 缺口治理）', async () => {
@@ -117,6 +127,27 @@ describe('runIdentityRescore', () => {
     expect(r.externalIdBuckets).toBe(1)
     expect(r.buckets).toBe(1)
     expect(r.created).toBe(1)
+  })
+
+  it('段 ③ alias_normalized 桶召回：跨译名（海贼王/航海王，core key 异、别名桥接）pair 进评分；别名非正证据（D-206-6a）→ 无其它信号不自动建候选', async () => {
+    mockLockQuery.mockResolvedValueOnce({ rows: [{ acquired: true }] }).mockResolvedValue({ rows: [] })
+    mockDbQuery
+      .mockResolvedValueOnce({ rows: [] }) // 段 ① core 桶：空（海贼王≠航海王 coreTitleKey 不同）
+      .mockResolvedValueOnce({ rows: [] }) // 段 ② ext 桶：空（ID 未都填）
+      .mockResolvedValueOnce({ rows: [{ bucket_key: '航海王', video_ids: ['a', 'b'] }] }) // 段 ③ alias 桶
+    vi.mocked(fetchVideoDetailsForCandidates).mockResolvedValue([
+      videoRow('a', '海贼王', ['s1', 's2']),
+      videoRow('b', '航海王', ['s1', 's2']),
+    ])
+    const r = await runIdentityRescore(mockDb, log)
+    expect(r.aliasNormBuckets).toBe(1)
+    expect(r.buckets).toBe(1) // 仅段 ③ 桶
+    expect(r.externalIdBuckets).toBe(0)
+    expect(r.pairs).toBe(1) // 段 ③ 召回 → pair 进入评分（核心机制：扩召回面）
+    // year+type+source = 0.55 < 0.75，core 不等 → 灰区谓词不命中（别名永不成正证据 D-206-6a）→ 不建候选
+    expect(r.created).toBe(0)
+    expect(r.skippedLowScore).toBe(1)
+    expect(upsertIdentityCandidate).not.toHaveBeenCalled()
   })
 
   it('段 ① 已召回的 pair 段 ② 重复出现 → 全局 seen 去重，只评分一次', async () => {

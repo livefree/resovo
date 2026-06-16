@@ -1,20 +1,21 @@
 /**
  * offlineRescore.ts — 离线候选重算 job pipeline（ADR-105a D-105a-10 + D-105a-17 / CHG-VIR-8 + CHG-VIR-10）
  *
- * Blocking 多 key 并集召回（段 ① core_title_key 分桶 + 段 ② external_id 分桶，禁 pairwise 全量）
- * → 候选集收敛去重（全局 seen + MAX_BUCKET 护栏）→ 批量拉详情+facets+externalIds
- * → scorePair 评分 → 单事务幂等 upsert（pairScoringPersist 共享层，与 ingest shadow 同口径）。
- * advisory lock 单实例（参 auto-retire-line 范式）。cursor keyset 分批（防漂移）。
+ * Blocking 多 key 并集召回（段 ① core_title_key 分桶 + 段 ② external_id 分桶 + 段 ③ alias_normalized
+ * 分桶，禁 pairwise 全量）→ 候选集收敛去重（全局 seen + MAX_BUCKET 护栏）→ 批量拉详情+facets+
+ * externalIds+aliasKeys → scorePair 评分 → 单事务幂等 upsert（pairScoringPersist 共享层，与 ingest
+ * shadow 同口径）。advisory lock 单实例（参 auto-retire-line 范式）。cursor keyset 分批（防漂移）。
  *
  * blocking 数据源：① title_observations.parsed_facets_jsonb->>'coreTitleKey'（migration 085
  * shadow 写入 + 086 表达式索引）；② media_catalog 外部 ID 列 ∪ video_external_refs
- * manual_confirmed（Y-105a-4 双源 / blockingRecall.ts 真源）。
+ * manual_confirmed（Y-105a-4 双源）；③ catalog_blocking_alias_keys 预计算归一键（ADR-206 D-206-5 /
+ * migration 120，跨译名桥接召回）——均 blockingRecall.ts 真源。
  */
 
 import type { Pool, PoolClient } from 'pg'
 import type pino from 'pino'
 import { TITLE_PARSER_VERSION } from '../TitleIdentityParser'
-import { fetchCoreKeyBuckets, fetchExternalIdBuckets, type BlockingBucket } from './blockingRecall'
+import { fetchCoreKeyBuckets, fetchExternalIdBuckets, fetchAliasNormBuckets, type BlockingBucket } from './blockingRecall'
 import { scoreAndPersistPairs, buildSides } from './pairScoringPersist'
 import { SCORER_VERSION } from './weights'
 
@@ -31,6 +32,8 @@ export interface IdentityRescoreResult {
   buckets: number
   /** 段 ② external_id 桶数（D-105a-17；含在 buckets 总数内） */
   externalIdBuckets: number
+  /** 段 ③ alias_normalized 桶数（ADR-206 D-206-5；含在 buckets 总数内） */
+  aliasNormBuckets: number
   pairs: number
   created: number
   superseded: number
@@ -69,7 +72,7 @@ export async function runIdentityRescore(
 ): Promise<IdentityRescoreResult> {
   const startAt = Date.now()
   const result: IdentityRescoreResult = {
-    buckets: 0, externalIdBuckets: 0, pairs: 0, created: 0, superseded: 0, noop: 0, revived: 0,
+    buckets: 0, externalIdBuckets: 0, aliasNormBuckets: 0, pairs: 0, created: 0, superseded: 0, noop: 0, revived: 0,
     skippedRejected: 0, skippedLowScore: 0, bucketsSkippedOversize: 0, blocked: 0, grayAdmitted: 0, durationMs: 0,
   }
   const parserVersion = opts.parserVersion ?? TITLE_PARSER_VERSION
@@ -96,10 +99,11 @@ export async function runIdentityRescore(
 
     const seen = new Set<string>()
 
-    const processBuckets = async (buckets: BlockingBucket[], external: boolean): Promise<void> => {
+    const processBuckets = async (buckets: BlockingBucket[], kind: 'core' | 'external' | 'alias'): Promise<void> => {
       for (const bucket of buckets) {
         result.buckets++
-        if (external) result.externalIdBuckets++
+        if (kind === 'external') result.externalIdBuckets++
+        else if (kind === 'alias') result.aliasNormBuckets++
         if (bucket.videoIds.length > maxBucket) {
           result.bucketsSkippedOversize++
           log.warn({ bucket_key: bucket.bucketKey, size: bucket.videoIds.length, max: maxBucket },
@@ -119,7 +123,7 @@ export async function runIdentityRescore(
     for (;;) {
       const buckets = await fetchCoreKeyBuckets(db, parserVersion, cursor, batchSize)
       if (buckets.length === 0) break
-      await processBuckets(buckets, false)
+      await processBuckets(buckets, 'core')
       cursor = buckets[buckets.length - 1]!.bucketKey
     }
 
@@ -128,8 +132,18 @@ export async function runIdentityRescore(
     for (;;) {
       const buckets = await fetchExternalIdBuckets(db, extCursor, batchSize)
       if (buckets.length === 0) break
-      await processBuckets(buckets, true)
+      await processBuckets(buckets, 'external')
       extCursor = buckets[buckets.length - 1]!.bucketKey
+    }
+
+    // 段 ③（ADR-206 D-206-5）：alias_normalized 桶并集（seen 全局去重 → 段 ①② 已覆盖 pair 自动跳过，
+    // 仅 coreTitleKey 不同、别名/原名桥接的跨译名 pair 在此新增召回）
+    let aliasCursor = ''
+    for (;;) {
+      const buckets = await fetchAliasNormBuckets(db, aliasCursor, batchSize)
+      if (buckets.length === 0) break
+      await processBuckets(buckets, 'alias')
+      aliasCursor = buckets[buckets.length - 1]!.bucketKey
     }
   } finally {
     if (acquired) {

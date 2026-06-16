@@ -10,6 +10,9 @@ import {
   fetchExternalIdBuckets,
   recallCoreKeyCounterparts,
   recallExternalIdCounterparts,
+  fetchAliasNormBuckets,
+  recallAliasNormCounterparts,
+  loadVideoAliasBlockingKeys,
 } from '@/api/services/identity/blockingRecall'
 
 const mockQuery = vi.fn()
@@ -87,6 +90,70 @@ describe('recallExternalIdCounterparts', () => {
   it('bucketKeys 为空 → 不发查询直接返回 []', async () => {
     const r = await recallExternalIdCounterparts(mockDb, [], 'self-id', 50)
     expect(r).toEqual([])
+    expect(mockQuery).not.toHaveBeenCalled()
+  })
+})
+
+describe('fetchAliasNormBuckets（段③ ADR-206 D-206-5）', () => {
+  it('catalog_blocking_alias_keys 经 catalog_id 上卷 + 软删过滤 + keyset + HAVING>1（阈值不在 SQL）', async () => {
+    await fetchAliasNormBuckets(mockDb, 'cursor-a', 500)
+    const sql = lastSql()
+    expect(sql).toContain('catalog_blocking_alias_keys cbak')
+    expect(sql).toContain('cbak.catalog_id = v.catalog_id')
+    expect(sql).toContain('cbak.normalized_key AS bucket_key')
+    expect(sql).toContain('v.deleted_at IS NULL')
+    expect(sql).toContain('HAVING COUNT(DISTINCT video_id) > 1')
+    expect(sql).toContain('bucket_key > $1')
+    // 阈值（confidence/kind）已在写键时筛 → SQL 不含（M-2A-5）
+    expect(sql).not.toContain('confidence')
+    expect(lastParams()).toEqual(['cursor-a', 500])
+  })
+
+  it('行映射 bucketKey/videoIds', async () => {
+    mockQuery.mockResolvedValueOnce({ rows: [{ bucket_key: '航海王', video_ids: ['a', 'b'] }] })
+    const r = await fetchAliasNormBuckets(mockDb, '', 500)
+    expect(r).toEqual([{ bucketKey: '航海王', videoIds: ['a', 'b'] }])
+  })
+})
+
+describe('recallAliasNormCounterparts（段③单 video 召回）', () => {
+  it('bucket_key ANY + 排除自身 + 与分桶同数据源（catalog_blocking_alias_keys）', async () => {
+    await recallAliasNormCounterparts(mockDb, ['航海王', '海贼王'], 'self-id', 50)
+    const sql = lastSql()
+    expect(sql).toContain('catalog_blocking_alias_keys cbak')
+    expect(sql).toContain('alias.bucket_key = ANY($1::text[])')
+    expect(sql).toContain('alias.video_id <> $2::uuid')
+    expect(lastParams()).toEqual([['航海王', '海贼王'], 'self-id', 50])
+  })
+
+  it('bucketKeys 为空 → 不发查询直接返回 []', async () => {
+    const r = await recallAliasNormCounterparts(mockDb, [], 'self-id', 50)
+    expect(r).toEqual([])
+    expect(mockQuery).not.toHaveBeenCalled()
+  })
+})
+
+describe('loadVideoAliasBlockingKeys（buildSides self 键批量载入）', () => {
+  it('video_id ANY 批量 + 每 video 聚合键到 Map（无键则空数组）', async () => {
+    mockQuery.mockResolvedValueOnce({
+      rows: [
+        { video_id: 'v1', bucket_key: '航海王' },
+        { video_id: 'v1', bucket_key: '海贼王' },
+        { video_id: 'v2', bucket_key: '海贼王' },
+      ],
+    })
+    const map = await loadVideoAliasBlockingKeys(mockDb, ['v1', 'v2', 'v3'])
+    const sql = lastSql()
+    expect(sql).toContain('catalog_blocking_alias_keys cbak')
+    expect(sql).toContain('alias.video_id = ANY($1::uuid[])')
+    expect(map.get('v1')).toEqual(['航海王', '海贼王'])
+    expect(map.get('v2')).toEqual(['海贼王'])
+    expect(map.get('v3')).toEqual([]) // 无键 video 仍在 Map（空数组）
+  })
+
+  it('videoIds 为空 → 不发查询返回空 Map', async () => {
+    const map = await loadVideoAliasBlockingKeys(mockDb, [])
+    expect(map.size).toBe(0)
     expect(mockQuery).not.toHaveBeenCalled()
   })
 })

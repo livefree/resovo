@@ -18,13 +18,20 @@ vi.mock('@/api/services/identity/externalIdLoader', () => ({ loadExternalIdSumma
 vi.mock('@/api/services/identity/blockingRecall', () => ({
   recallCoreKeyCounterparts: vi.fn(),
   recallExternalIdCounterparts: vi.fn(),
+  recallAliasNormCounterparts: vi.fn(),
+  loadVideoAliasBlockingKeys: vi.fn(), // ingestShadow self 别名键 + buildSides（真实）共用
 }))
 
 import { runIngestShadowScoring } from '@/api/services/identity/ingestShadow'
 import { fetchVideoDetailsForCandidates } from '@/api/db/queries/video-merge-candidates'
 import { upsertIdentityCandidate } from '@/api/services/identity/candidateUpsert'
 import { loadExternalIdSummaries } from '@/api/services/identity/externalIdLoader'
-import { recallCoreKeyCounterparts, recallExternalIdCounterparts } from '@/api/services/identity/blockingRecall'
+import {
+  recallCoreKeyCounterparts,
+  recallExternalIdCounterparts,
+  recallAliasNormCounterparts,
+  loadVideoAliasBlockingKeys,
+} from '@/api/services/identity/blockingRecall'
 
 const logInfo = vi.fn()
 const log = { info: logInfo, warn: vi.fn() } as unknown as import('pino').Logger
@@ -62,6 +69,8 @@ beforeEach(() => {
   mockDbQuery.mockResolvedValue({ rows: [] })
   vi.mocked(recallCoreKeyCounterparts).mockResolvedValue([])
   vi.mocked(recallExternalIdCounterparts).mockResolvedValue([])
+  vi.mocked(recallAliasNormCounterparts).mockResolvedValue([])
+  vi.mocked(loadVideoAliasBlockingKeys).mockResolvedValue(new Map())
   vi.mocked(upsertIdentityCandidate).mockResolvedValue({ kind: 'created', candidateId: 'c1' })
   mockExternalIds({})
 })
@@ -128,6 +137,22 @@ describe('runIngestShadowScoring', () => {
     expect(r.outcome).toBe('candidate-only')
     expect(r.shadowCatalogId).toBeNull()
     expect(r.candidatesUpserted).toBe(1)
+  })
+
+  it('段③ ADR-206：self 别名键 → recallAliasNormCounterparts 召回跨译名对侧（扩召回；别名非正证据 D-206-6a）', async () => {
+    vi.mocked(loadVideoAliasBlockingKeys).mockResolvedValue(new Map([['self', ['航海王', 'one piece']]]))
+    vi.mocked(recallAliasNormCounterparts).mockResolvedValue(['b']) // alias 桶召回（core/ext 均空）
+    vi.mocked(fetchVideoDetailsForCandidates).mockResolvedValue([
+      videoRow('self', '海贼王', ['s1', 's2']),
+      videoRow('b', '航海王', ['s1', 's2']),
+    ])
+    const r = await runIngestShadowScoring(mockDb, log, baseInput)
+    // self 别名键经 loadVideoAliasBlockingKeys 取出 → recallAliasNormCounterparts（段③ 召回口径）
+    expect(recallAliasNormCounterparts).toHaveBeenCalledWith(mockDb, ['航海王', 'one piece'], 'self', expect.any(Number))
+    expect(r.counterparts).toBe(1) // 跨译名对侧被召回进评分
+    // year+type+source=0.55 < 0.75，core 不等（别名永不成正证据）→ none 区不绑定不建候选
+    expect(r.outcome).toBe('none')
+    expect(r.candidatesUpserted).toBe(0)
   })
 
   it('D-105a-20：对侧低分但同 key + 年±1 双锚点 → 灰区准入（candidate-only，三路径一致）', async () => {

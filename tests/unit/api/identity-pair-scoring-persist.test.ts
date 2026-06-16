@@ -131,6 +131,86 @@ describe('scoreAndPersistPairs — blockingKeys 并集（D-105a-17）', () => {
     expect(input.evidenceHash).toBe(expected)
   })
 
+  it('段③ ADR-206：共享 alias 桶键 → blockingKeys 含别名键（与期望 hash 逐字节一致）', async () => {
+    // 同标题 pair（0.90 ≥ 0.75 必持久化）+ 额外共享别名归一键（≠ coreTitleKey，验证别名键确入并集）
+    const a = side('a', '某科幻动画', { aliasBlockingKeys: ['航海王', 'one piece', 'extra-a'] })
+    const b = side('b', '某科幻动画', { aliasBlockingKeys: ['航海王', 'one piece', 'extra-b'] })
+    const counters = emptyPairPersistCounters()
+    await scoreAndPersistPairs(
+      mockDb, new Map([['a', a], ['b', b]]), [['a', 'b']],
+      { ...versions, triggerSource: 'offline-rescore' }, counters,
+    )
+    const input = vi.mocked(upsertIdentityCandidate).mock.calls[0]![1]
+    const ps = scorePair(a, b)
+    const expected = computeEvidenceHash({
+      canonicalPairKey: 'a|b',
+      parserVersion: versions.parserVersion,
+      scorerVersion: versions.scorerVersion,
+      thresholdConfigVersion: THRESHOLD_CONFIG_VERSION,
+      // sharedAliasBucketKeys 交集 = ['航海王', 'one piece']（extra-a/extra-b 非共享被滤）；dedupeSort 内排序去重
+      blockingKeys: [a.coreTitleKey, b.coreTitleKey, '航海王', 'one piece'],
+      fieldSnapshot: { left: snapshotOf(a), right: snapshotOf(b) },
+      externalRefSummary: [],
+      strongNegativeReasons: ps.strongNegativeReasons,
+    })
+    expect(input.evidenceHash).toBe(expected)
+  })
+
+  it('段③ M-2A-6：alias 桶无交集 → blockingKeys 不注入（与无 aliasBlockingKeys 时 hash 逐字节一致，零漂移）', async () => {
+    // 既有 pair：双方有别名键但无交集 → 不得改变 hash（避免 candidate 表全量 re-upsert 风暴）
+    const a = side('a', '某科幻动画', { aliasBlockingKeys: ['alpha'] })
+    const b = side('b', '某科幻动画', { aliasBlockingKeys: ['beta'] })
+    const counters = emptyPairPersistCounters()
+    await scoreAndPersistPairs(
+      mockDb, new Map([['a', a], ['b', b]]), [['a', 'b']],
+      { ...versions, triggerSource: 'offline-rescore' }, counters,
+    )
+    const input = vi.mocked(upsertIdentityCandidate).mock.calls[0]![1]
+    // 期望 = 完全不含 alias 维度的旧 hash（仅双方 core key）
+    const aNoAlias = side('a', '某科幻动画')
+    const bNoAlias = side('b', '某科幻动画')
+    const ps = scorePair(aNoAlias, bNoAlias)
+    const expected = computeEvidenceHash({
+      canonicalPairKey: 'a|b',
+      parserVersion: versions.parserVersion,
+      scorerVersion: versions.scorerVersion,
+      thresholdConfigVersion: THRESHOLD_CONFIG_VERSION,
+      blockingKeys: [aNoAlias.coreTitleKey, bNoAlias.coreTitleKey],
+      fieldSnapshot: { left: snapshotOf(aNoAlias), right: snapshotOf(bNoAlias) },
+      externalRefSummary: [],
+      strongNegativeReasons: ps.strongNegativeReasons,
+    })
+    expect(input.evidenceHash).toBe(expected)
+  })
+
+  it('段③ 防风暴：共享别名键恰等于 coreTitleKey → dedupeSort 折叠 → hash 与无 alias 时一致', async () => {
+    // 同标题 pair 的别名键含 coreTitleKey 本身（normalizeForExternalMatch 与 coreTitleKey 偶然相等）→
+    // 原始键注入后被 dedupeSort 折叠 → 既有同标题 pair 不漂移（不加前缀的关键收益）
+    const aNoAlias = side('a', '某科幻动画')
+    const coreKey = aNoAlias.coreTitleKey
+    const a = side('a', '某科幻动画', { aliasBlockingKeys: [coreKey] })
+    const b = side('b', '某科幻动画', { aliasBlockingKeys: [coreKey] })
+    const counters = emptyPairPersistCounters()
+    await scoreAndPersistPairs(
+      mockDb, new Map([['a', a], ['b', b]]), [['a', 'b']],
+      { ...versions, triggerSource: 'offline-rescore' }, counters,
+    )
+    const input = vi.mocked(upsertIdentityCandidate).mock.calls[0]![1]
+    const bNoAlias = side('b', '某科幻动画')
+    const ps = scorePair(aNoAlias, bNoAlias)
+    const expected = computeEvidenceHash({
+      canonicalPairKey: 'a|b',
+      parserVersion: versions.parserVersion,
+      scorerVersion: versions.scorerVersion,
+      thresholdConfigVersion: THRESHOLD_CONFIG_VERSION,
+      blockingKeys: [aNoAlias.coreTitleKey, bNoAlias.coreTitleKey], // 别名键 = coreKey → 折叠后无新键
+      fieldSnapshot: { left: snapshotOf(aNoAlias), right: snapshotOf(bNoAlias) },
+      externalRefSummary: [],
+      strongNegativeReasons: ps.strongNegativeReasons,
+    })
+    expect(input.evidenceHash).toBe(expected)
+  })
+
   it('D-105a-20：低分但同 key + 年±1 双锚点（灰区谓词命中）→ 准入候选（grayAdmitted）', async () => {
     const a = side('a', '某科幻动画', { sourceSiteKeys: [] }) // 同名 + year 2020 双方 → 0.60 命中谓词
     const b = side('b', '某科幻动画', { sourceSiteKeys: [] })

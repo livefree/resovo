@@ -14,7 +14,7 @@
 import type { Pool } from 'pg'
 import type pino from 'pino'
 import { TITLE_PARSER_VERSION } from '../TitleIdentityParser'
-import { recallCoreKeyCounterparts, recallExternalIdCounterparts } from './blockingRecall'
+import { recallCoreKeyCounterparts, recallExternalIdCounterparts, recallAliasNormCounterparts } from './blockingRecall'
 import { scoreAndPersistPairs, buildSides, emptyPairPersistCounters } from './pairScoringPersist'
 import type { PairPersistCounters } from './pairScoringPersist'
 import { SCORER_VERSION } from './weights'
@@ -64,6 +64,10 @@ export async function runVideoRescore(
       }
     }
     for (const vid of await recallExternalIdCounterparts(db, extBucketKeys, videoId, MAX_COUNTERPARTS)) {
+      counterpartIds.add(vid)
+    }
+    // 段③（ADR-206 D-206-5）：alias_normalized 桶对侧（buildSides 已载入 self.aliasBlockingKeys）
+    for (const vid of await recallAliasNormCounterparts(db, self.aliasBlockingKeys ?? [], videoId, MAX_COUNTERPARTS)) {
       counterpartIds.add(vid)
     }
     if (counterpartIds.size === 0) continue

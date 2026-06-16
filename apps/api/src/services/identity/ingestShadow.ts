@@ -18,7 +18,7 @@ import type { Pool } from 'pg'
 import type pino from 'pino'
 import { parseTitle, TITLE_PARSER_VERSION } from '../TitleIdentityParser'
 import type { CatalogMatchStep } from '../MediaCatalogService'
-import { recallCoreKeyCounterparts, recallExternalIdCounterparts } from './blockingRecall'
+import { recallCoreKeyCounterparts, recallExternalIdCounterparts, recallAliasNormCounterparts, loadVideoAliasBlockingKeys } from './blockingRecall'
 import { scoreAndPersistPairs, buildSides, emptyPairPersistCounters } from './pairScoringPersist'
 import { loadExternalIdSummaries } from './externalIdLoader'
 import { SCORER_VERSION } from './weights'
@@ -86,8 +86,9 @@ export async function runIngestShadowScoring(
   const selfIds = selfExt.get(input.videoId)?.exactIds ?? {}
   const extBucketKeys = Object.entries(selfIds).map(([p, id]) => `${p}:${id}`)
 
-  // 2. blocking 双键并集召回对侧（与离线 job 同口径 / D-105a-17）
+  // 2. blocking 三键并集召回对侧（与离线 job 同口径 / D-105a-17 + ADR-206 D-206-5）
   const parsed = parseTitle(input.title)
+  const selfAliasKeys = (await loadVideoAliasBlockingKeys(db, [input.videoId])).get(input.videoId) ?? []
   const counterpartIds = new Set<string>()
   if (parsed.coreTitleKey !== '') {
     for (const vid of await recallCoreKeyCounterparts(db, parserVersion, parsed.coreTitleKey, input.videoId, MAX_COUNTERPARTS)) {
@@ -95,6 +96,10 @@ export async function runIngestShadowScoring(
     }
   }
   for (const vid of await recallExternalIdCounterparts(db, extBucketKeys, input.videoId, MAX_COUNTERPARTS)) {
+    counterpartIds.add(vid)
+  }
+  // 段③：alias_normalized 桶对侧（跨译名桥接召回）
+  for (const vid of await recallAliasNormCounterparts(db, selfAliasKeys, input.videoId, MAX_COUNTERPARTS)) {
     counterpartIds.add(vid)
   }
 

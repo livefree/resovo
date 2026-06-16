@@ -304,3 +304,32 @@ describe('scoreGroup — 端到端 D-105a-14 核心场景', () => {
     expect(scoreGroup(vids)).toEqual(scoreGroup(vids))
   })
 })
+
+// ── ADR-206 M-2A-3：aliasBlockingKeys 对评分零影响（休眠 external_alias_match 不激活的代码级保证）──
+
+describe('scorePair — aliasBlockingKeys 零 diff 守护（M-2A-3）', () => {
+  it('有/无 aliasBlockingKeys → PairScore 逐字段恒等（评分逻辑绝不读取段③字段）', () => {
+    const baseA = side({ videoId: 'a', coreTitleKey: '海贼王', sourceSiteKeys: ['s1'] })
+    const baseB = side({ videoId: 'b', coreTitleKey: '航海王', sourceSiteKeys: ['s1'] })
+    const withAlias = scorePair(
+      { ...baseA, aliasBlockingKeys: ['海贼王', '航海王', 'one piece'] },
+      { ...baseB, aliasBlockingKeys: ['航海王', 'one piece'] },
+    )
+    const without = scorePair(baseA, baseB)
+    // identityScore / evidence / strongNegativeReasons / blockingReasons 全等
+    expect(withAlias).toEqual(without)
+  })
+
+  it('含 externalIds + aliasBlockingKeys → 与仅 externalIds 评分恒等（别名键不串入 external_alias_match）', () => {
+    const a = side({ videoId: 'a', coreTitleKey: 'k', externalIds: exactIds({ imdb: 'tt1' }) })
+    const b = side({ videoId: 'b', coreTitleKey: 'k', externalIds: exactIds({ imdb: 'tt1' }) })
+    const withAlias = scorePair(
+      { ...a, aliasBlockingKeys: ['x', 'y'] },
+      { ...b, aliasBlockingKeys: ['x', 'y'] },
+    )
+    const without = scorePair(a, b)
+    expect(withAlias).toEqual(without)
+    // external_alias_match evidence 不得出现（休眠维度未激活）
+    expect(withAlias.evidence.some((e) => e.type === 'external_alias_match')).toBe(false)
+  })
+})
