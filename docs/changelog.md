@@ -6462,3 +6462,22 @@
 - **新增依赖**：无｜**数据库变更**：无（original_language/media_catalog_aliases 列已存在）｜**新端点**：无｜**admin-ui Props**：无｜**architecture.md**：无需同步
 - **质量门禁全绿**：typecheck 7ws EXIT=0 / lint 4ok / test:changed 89 文件 1143 passed；e2e N/A（api 读路径，UI 消费归 3B-2/3B-3）。
 - **[AI-CHECK]**：六问过——①根因=读路径缺 original_language/结构化 aliases；②零回归（adminFindById 加性注入，aliases 覆盖 stale 数组列，1143 passed）；③边界=Service 注入不越层，SQL 加共用列；④复用=listVideoExternalRefs 注入范式 + listCatalogAliases(1A) + VIDEO_FULL_SELECT 共用列；⑤守 R3 单一真源（读结构化表非数组列）+ 回填作用域=提交作用域双向一致；⑥范围=2 api 文件 + 1 类型 + 1 测试。**解锁 META-50-3B-2（编辑抽屉 +titleOriginal·originalLanguage·aliases 输入·回填）。**
+
+## [META-50-3B-2] 编辑抽屉补原名/原语种/别名输入 + 回填 + 提交 diff（SEQ-20260616-01 / WS3 / D-206-9）— 2026-06-15
+
+**类型**：feat（admin 编辑抽屉 UI，ADR-206 D-206-9）｜**优先级**：🟡 中（3B 主编辑面，依 3B-1 读路径）｜**执行模型**：claude-opus-4-8（主循环 opus 直接落地，与 3B-1 连续执行）｜**子代理**：无（server-next 消费层原生 input，不碰 admin-ui Props）
+
+- **来源**：3B-1 读路径就绪后，编辑抽屉补三字段输入/回填/提交（WS3-3B 第 2 卡）。
+- **产出**：
+  - ① `FormState`（_videoEdit/types.ts）+`titleOriginal`/`originalLanguage`/`aliases`（逗号分隔 string）+ EMPTY_FORM。
+  - ② `videoToForm`（form-helpers）：title_original/original_language 回填 + `aliases:(v.aliases ?? []).join(', ')`（读 3B-1 注入的结构化 manual aka）。
+  - ③ `formToPatch`：三字段 diff（titleOriginal/originalLanguage 空串→null；`aliases` 经 splitComma→string[]；清空别名→`[]` 替换清空，非追加）。
+  - ④ `VideoMetaPatch`（lib/videos/types.ts）+三字段 → patchVideoMeta 发 PATCH /admin/videos/:id（3A VideoMetaSchema 接收）。
+  - ⑤ `TabBasicInfo`：英文标题后 +「原名 / 原语种（BCP47）」ROW；末尾 +「别名（aka，逗号分隔）」FIELD（原生 input + 既有「逗号分隔」范式，CSS 变量零硬编码）。
+- **关键决策**：aliases 用逗号分隔 string（与 genres/director/cast UI 一致）；清空别名 → 空数组替换（编辑表单提交即完整 manual aka 集，对齐 3A replaceManualAkaAliases）。
+- **修改/新增文件**：`_videoEdit/types.ts`（FormState）、`_videoEdit/form-helpers.ts`（videoToForm/formToPatch）、`_videoEdit/TabBasicInfo.tsx`（输入控件）、`lib/videos/types.ts`（VideoMetaPatch）、`tests/unit/components/server-next/admin/videos/form-helpers.test.ts`（新 7）。
+- **新增依赖**：无｜**数据库变更**：无｜**新端点**：无（复用 PATCH /admin/videos/:id）｜**admin-ui Props**：无｜**architecture.md**：无需同步
+- **质量门禁全绿**：typecheck 7ws EXIT=0 / lint 4ok / test:changed 5 文件 36 passed（含 VideoEditDrawer 16 既有未破坏）；e2e N/A（既有 edit-drawer-open.spec 覆盖抽屉打开，字段填充留 3B-3 完成后回归）。
+- **[AI-CHECK]**：六问过——①根因=编辑抽屉缺三字段输入/回填/提交；②零回归（FormState 加性，formToPatch diff 守卫未改不入 patch，VideoEditDrawer 16 既有 passed）；③边界=UI 消费层，formToPatch 纯函数 diff，不碰 api/schema；④复用=videoToForm/formToPatch/splitComma 既有范式 + 逗号分隔 input 范式（genres/director）；⑤守 D-206-9 替换语义（清空→[]）+ create 路径不受影响（createVideo 不传三字段，3A omit）；⑥范围=4 server-next 文件 + 1 测试。**解锁 META-50-3B-3（快编 moderation meta 扩 + 视频库列）。**
+
+  > 流程说明：3B-2 与 3B-1 连续落地，未单独写 tasks.md「进行中」卡（连续执行偏差，task-queue 三子卡登记可追溯）；3B-3 恢复先写卡。

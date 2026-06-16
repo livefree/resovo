@@ -166,6 +166,9 @@ export interface VideoAdminDetail extends VideoAdminRow {
 export interface VideoMetaPatch {
   title?: string
   titleEn?: string | null
+  // ADR-206 D-206-9（3B-2）：原名 / 原语种 / 别名（aka 数组，后端 replaceManualAkaAliases 替换写）
+  titleOriginal?: string | null
+  originalLanguage?: string | null
   description?: string | null
   coverUrl?: string | null
   type?: VideoType
@@ -179,6 +182,7 @@ export interface VideoMetaPatch {
   cast?: string[]
   writers?: string[]
   doubanId?: string | null
+  aliases?: string[]
 }
 
 // ── 状态迁移动作 ──────────────────────────────────────────────────

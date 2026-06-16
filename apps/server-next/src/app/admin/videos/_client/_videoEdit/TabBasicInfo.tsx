@@ -28,8 +28,8 @@ const ERROR: React.CSSProperties = {
 }
 
 export interface TabBasicInfoProps {
-  form: Pick<FormState, 'title' | 'titleEn' | 'type' | 'year' | 'country' | 'description' |
-    'genres' | 'episodeCount' | 'status' | 'rating' | 'director' | 'cast' | 'writers' | 'doubanId'>
+  form: Pick<FormState, 'title' | 'titleEn' | 'titleOriginal' | 'originalLanguage' | 'type' | 'year' | 'country' | 'description' |
+    'genres' | 'episodeCount' | 'status' | 'rating' | 'director' | 'cast' | 'writers' | 'doubanId' | 'aliases'>
   set: <K extends keyof FormState>(k: K, v: FormState[K]) => void
   skippedFields: string[]
   submitError: Error | undefined
@@ -53,6 +53,18 @@ export function TabBasicInfo({ form, set, skippedFields, submitError }: TabBasic
         <div style={FIELD}>
           <label style={LABEL}>英文标题</label>
           <input style={INPUT} value={form.titleEn} onChange={(e) => set('titleEn', e.target.value)} />
+        </div>
+      </div>
+      <div style={ROW}>
+        <div style={FIELD}>
+          <label style={LABEL}>原名（原语种标题）</label>
+          <input style={INPUT} value={form.titleOriginal} maxLength={200}
+            onChange={(e) => set('titleOriginal', e.target.value)} data-testid="edit-title-original" />
+        </div>
+        <div style={FIELD}>
+          <label style={LABEL}>原语种（BCP47，如 ja/ko）</label>
+          <input style={INPUT} value={form.originalLanguage} maxLength={35}
+            onChange={(e) => set('originalLanguage', e.target.value)} />
         </div>
       </div>
       <div style={ROW}>
@@ -115,6 +127,11 @@ export function TabBasicInfo({ form, set, skippedFields, submitError }: TabBasic
       <div style={FIELD}>
         <label style={LABEL}>豆瓣 ID</label>
         <input style={INPUT} value={form.doubanId} onChange={(e) => set('doubanId', e.target.value)} />
+      </div>
+      <div style={FIELD}>
+        <label style={LABEL}>别名（aka，逗号分隔）</label>
+        <input style={INPUT} value={form.aliases} onChange={(e) => set('aliases', e.target.value)}
+          data-testid="edit-aliases" />
       </div>
     </div>
   )

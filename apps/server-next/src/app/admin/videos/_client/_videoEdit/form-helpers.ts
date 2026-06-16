@@ -6,6 +6,8 @@ export function videoToForm(v: VideoAdminDetail): FormState {
   return {
     title: v.title,
     titleEn: v.title_en ?? '',
+    titleOriginal: v.title_original ?? '',
+    originalLanguage: v.original_language ?? '',
     type: v.type,
     year: v.year != null ? String(v.year) : '',
     country: v.country ?? '',
@@ -18,6 +20,7 @@ export function videoToForm(v: VideoAdminDetail): FormState {
     cast: v.cast.join(', '),
     writers: v.writers.join(', '),
     doubanId: v.douban_id ?? '',
+    aliases: (v.aliases ?? []).join(', '),
   }
 }
 
@@ -29,6 +32,8 @@ export function formToPatch(orig: FormState, curr: FormState): VideoMetaPatch {
   const p: VideoMetaPatch = {}
   if (curr.title !== orig.title) p.title = curr.title
   if (curr.titleEn !== orig.titleEn) p.titleEn = curr.titleEn || null
+  if (curr.titleOriginal !== orig.titleOriginal) p.titleOriginal = curr.titleOriginal || null
+  if (curr.originalLanguage !== orig.originalLanguage) p.originalLanguage = curr.originalLanguage || null
   if (curr.type !== orig.type) p.type = curr.type
   if (curr.year !== orig.year) p.year = curr.year ? parseInt(curr.year, 10) : null
   if (curr.country !== orig.country) p.country = curr.country || null
@@ -41,5 +46,6 @@ export function formToPatch(orig: FormState, curr: FormState): VideoMetaPatch {
   if (curr.cast !== orig.cast) p.cast = splitComma(curr.cast)
   if (curr.writers !== orig.writers) p.writers = splitComma(curr.writers)
   if (curr.doubanId !== orig.doubanId) p.doubanId = curr.doubanId || null
+  if (curr.aliases !== orig.aliases) p.aliases = splitComma(curr.aliases)
   return p
 }

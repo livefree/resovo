@@ -15,6 +15,9 @@ export function normalizeTabKey(tab: TabKey | 'douban' | 'external' | undefined)
 export interface FormState {
   title: string
   titleEn: string
+  // ADR-206 D-206-9（3B-2）：原名 / 原语种（BCP47）/ 别名（aka 逗号分隔）
+  titleOriginal: string
+  originalLanguage: string
   type: VideoType
   year: string
   country: string
@@ -27,10 +30,12 @@ export interface FormState {
   cast: string
   writers: string
   doubanId: string
+  aliases: string
 }
 
 export const EMPTY_FORM: FormState = {
-  title: '', titleEn: '', type: 'movie', year: '', country: '', description: '',
+  title: '', titleEn: '', titleOriginal: '', originalLanguage: '', type: 'movie',
+  year: '', country: '', description: '',
   genres: '', episodeCount: '', status: '', rating: '',
-  director: '', cast: '', writers: '', doubanId: '',
+  director: '', cast: '', writers: '', doubanId: '', aliases: '',
 }
