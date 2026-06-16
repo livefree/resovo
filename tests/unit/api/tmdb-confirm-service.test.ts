@@ -36,6 +36,9 @@ vi.mock('@/api/services/MediaCatalogService', () => ({
 // META-44-B：confirm 在选中 genres 时读 catalog 现值做 type 富集修正（ADR-203）
 vi.mock('@/api/db/queries/mediaCatalog', () => ({ findCatalogById: vi.fn(async () => ({ type: 'other' })) }))
 import { findCatalogById } from '@/api/db/queries/mediaCatalog'
+// META-50-1B：autoMatch 内 loadKnownNames → listCatalogAliases（默认空，多词测试按需覆盖 findCatalogById/别名）
+vi.mock('@/api/db/queries/catalogAliases', () => ({ listCatalogAliases: vi.fn(async () => []) }))
+import { listCatalogAliases } from '@/api/db/queries/catalogAliases'
 
 const clientQuery = vi.fn(async () => ({ rows: [] }))
 const client = { query: clientQuery, release: vi.fn() }
@@ -303,6 +306,17 @@ describe('pickBestTmdbCandidate', () => {
   it('空候选 → null', () => {
     expect(pickBestTmdbCandidate('abcdef', 2023, [])).toBeNull()
   })
+  // META-50-1B：多 target 数组入参（D-206-3）——跨 target 取 max
+  it('多 target 数组：首 target 不匹配、次 target（原名）命中 → max 取高分', () => {
+    const r = pickBestTmdbCandidate(['海贼王', 'ONE PIECE'], null, [
+      cand({ tmdbId: 21, title: 'One Piece', originalTitle: 'ONE PIECE' }),
+    ])
+    expect(r).toMatchObject({ candidate: { tmdbId: 21 } })
+    expect(r?.score).toBeCloseTo(1.0) // 'ONE PIECE' target ~ originalTitle 'ONE PIECE'
+  })
+  it('多 target 全不匹配 → null（兜底阈值不放宽）', () => {
+    expect(pickBestTmdbCandidate(['海贼王', '航海王'], null, [cand({ title: 'zzzzzz', originalTitle: 'zzzzzz' })])).toBeNull()
+  })
 })
 
 describe('autoMatch', () => {
@@ -460,5 +474,57 @@ describe('autoMatch', () => {
     expect(proposed.tmdbId).toBeUndefined()
     expect(proposed.imdbId).toBeUndefined()
     expect(proposed.type).toBeUndefined()
+  })
+
+  // ── META-50-1B：knownNames 驱动多词检索（D-206-2/3）——海贼王/航海王 跨译名修复 ──
+  it('多词检索：title_original 优先检索命中 + 逐词早停（searchTv 首发原名、仅 1 次、不发中文标题）', async () => {
+    vi.mocked(findCatalogById).mockResolvedValue(
+      catalogWith({ title: '航海王', titleOriginal: 'ONE PIECE', originalLanguage: 'en', type: 'series' }),
+    )
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    vi.mocked(tmdbLib.searchTv).mockResolvedValue(
+      search([{ id: 7, name: 'One Piece', original_name: 'ONE PIECE', original_language: 'ja', overview: 'x', first_air_date: '1999-10-20', poster_path: '/p.jpg' }]) as any,
+    )
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    vi.mocked(tmdbLib.getTvDetail).mockResolvedValue({ id: 7, name: 'One Piece', original_name: 'ONE PIECE', original_language: 'ja', overview: 'x', genres: [], external_ids: {} } as any)
+    const r = await svc.autoMatch('vid', 'cat', { title: '航海王', year: 1999, mediaType: 'tv' })
+    expect(r).toMatchObject({ matched: true, tmdbId: 7 })
+    // title_original='ONE PIECE' 作首词（D-206-2 优先级序）命中即早停 → searchTv 仅 1 次、未发中文 '航海王'
+    expect(tmdbLib.searchTv).toHaveBeenCalledTimes(1)
+    expect(vi.mocked(tmdbLib.searchTv).mock.calls[0][0]).toBe('ONE PIECE')
+  })
+
+  it('逐词早停不命中则发后续词 + 候选 by tmdbId 去重（首词分低续发、跨词合并选最佳 id=2）', async () => {
+    vi.mocked(findCatalogById).mockResolvedValue(
+      catalogWith({ title: '航海王', titleOriginal: 'ONE PIECE', originalLanguage: 'en', type: 'series' }),
+    )
+    vi.mocked(tmdbLib.searchTv)
+      // term1='ONE PIECE' → 无关候选 id=1（分低不早停）
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .mockResolvedValueOnce(search([{ id: 1, name: 'Unrelated', original_name: 'Unrelated', original_language: 'en', overview: '', first_air_date: null, poster_path: null }]) as any)
+      // term2='航海王' → 重复 id=1（去重保首条）+ 命中 id=2
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .mockResolvedValueOnce(search([
+        { id: 1, name: 'Dup', original_name: 'Dup', original_language: 'en', overview: '', first_air_date: null, poster_path: null },
+        { id: 2, name: 'One Piece', original_name: 'ONE PIECE', original_language: 'ja', overview: 'x', first_air_date: null, poster_path: '/p.jpg' },
+      ]) as any)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    vi.mocked(tmdbLib.getTvDetail).mockResolvedValue({ id: 2, name: 'One Piece', original_name: 'ONE PIECE', original_language: 'ja', overview: 'x', genres: [], external_ids: {} } as any)
+    const r = await svc.autoMatch('vid', 'cat', { title: '航海王', year: null, mediaType: 'tv' })
+    expect(r).toMatchObject({ matched: true, tmdbId: 2 })
+    expect(tmdbLib.searchTv).toHaveBeenCalledTimes(2) // term1 分低 → 未早停 → 发 term2
+  })
+
+  it('catalog 无别名/无 title_original → knownNames 仅视频标题兜底（行为等价 META-47 单词检索）', async () => {
+    vi.mocked(findCatalogById).mockResolvedValue(catalogWith({ title: null, titleOriginal: null }))
+    vi.mocked(listCatalogAliases).mockResolvedValueOnce([])
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    vi.mocked(tmdbLib.searchMovie).mockResolvedValue(search([movieItem()]) as any)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    vi.mocked(tmdbLib.getMovieDetail).mockResolvedValue({ ...MOVIE, id: 555 } as any)
+    const r = await svc.autoMatch('vid', 'cat', { title: 'abcdef', year: 2023, mediaType: 'movie' })
+    expect(r).toMatchObject({ matched: true, tmdbId: 555 })
+    expect(tmdbLib.searchMovie).toHaveBeenCalledTimes(1)
+    expect(vi.mocked(tmdbLib.searchMovie).mock.calls[0][0]).toBe('abcdef') // 兜底视频标题
   })
 })

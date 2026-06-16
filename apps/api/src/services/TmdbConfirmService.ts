@@ -28,6 +28,8 @@ import { baseLogger } from '@/api/lib/logger'
 import { similarity, normalizeForMatch, parseYear } from '@/api/lib/textMatch'
 import { splitIdentityScalarFields } from '@/api/services/metadata/fieldSplit'
 import { enqueueIdentityVideoRescore } from '@/api/services/identity/enqueueVideoRescore'
+import { loadKnownNames, filterForSearchQueries, filterForMatchScore, type KnownName } from '@/api/services/metadata/knownNames'
+import { normalizeForExternalMatch } from '@/api/services/TitleNormalizer'
 
 /** search 候选预览缩略图 base（base+w500；与 confirm 富图片应用的 configuration base 不同关注点，META-43）。 */
 const TMDB_PREVIEW_IMAGE_BASE = 'https://image.tmdb.org/t/p/w500'
@@ -40,6 +42,9 @@ const TMDB_PREVIEW_IMAGE_BASE = 'https://image.tmdb.org/t/p/w500'
  */
 const CONFIDENCE_AUTO_MATCH = 0.85
 const CONFIDENCE_CANDIDATE = 0.6
+
+/** TMDB 多词检索配额上限（D-206-2 / META-50-1B，限流保守值；逐词早停通常更早收敛）。 */
+const TMDB_SEARCH_TERM_CAP = 3
 
 /** confirm 富图片应用 size token（per kind；base 来自 getImageBaseUrl configuration 缓存，META-43）。 */
 const IMAGE_SIZE = { poster: 'w500', backdrop: 'w1280', logo: 'w500' } as const
@@ -104,13 +109,24 @@ function toCandidate(item: TmdbMovieSearchItem | TmdbTvSearchItem, mediaType: Tm
 }
 
 /**
- * TMDB 候选打分（META-47，仿 douban candidateScore）：title 与 originalTitle 取 max 归一相似度，
- * 再按年份匹配加权（同年 +0.2 / 相邻年 +0.1，封顶 1）。目标/候选年份任一缺失则仅用标题分。
+ * TMDB 候选打分（META-47，仿 douban candidateScore；META-50-1B 扩多 target）：
+ * 每个 target 与候选 title/originalTitle 取 max 归一相似度，跨 target 再取 max（D-206-3：
+ * knownNames 极性集合对候选取最佳匹配）；再按年份匹配加权（同年 +0.2 / 相邻年 +0.1，封顶 1）。
+ * 单字符串入参 = 原 META-47 行为（向后兼容）。目标/候选年份任一缺失则仅用标题分。
  */
-function tmdbCandidateScore(targetTitle: string, targetYear: number | null, cand: TmdbCandidate): number {
-  const titleScore = similarity(normalizeForMatch(targetTitle), normalizeForMatch(cand.title))
-  const origScore = similarity(normalizeForMatch(targetTitle), normalizeForMatch(cand.originalTitle))
-  const baseScore = Math.max(titleScore, origScore)
+function tmdbCandidateScore(
+  targetTitles: string | readonly string[],
+  targetYear: number | null,
+  cand: TmdbCandidate,
+): number {
+  const titles = typeof targetTitles === 'string' ? [targetTitles] : targetTitles
+  const candTitle = normalizeForMatch(cand.title)
+  const candOrig = normalizeForMatch(cand.originalTitle)
+  let baseScore = 0
+  for (const t of titles) {
+    const nt = normalizeForMatch(t)
+    baseScore = Math.max(baseScore, similarity(nt, candTitle), similarity(nt, candOrig))
+  }
 
   const candYear = parseYear(cand.year)
   if (targetYear == null || candYear == null) return baseScore
@@ -124,20 +140,53 @@ function tmdbCandidateScore(targetTitle: string, targetYear: number | null, cand
  * （过严会漏召回，由 detail + 上层置信度分档再兜底）。返回最佳候选与其分数，无合格候选返 null。
  */
 export function pickBestTmdbCandidate(
-  targetTitle: string,
+  targetTitles: string | readonly string[],
   targetYear: number | null,
   candidates: TmdbCandidate[],
 ): { candidate: TmdbCandidate; score: number } | null {
   let best: TmdbCandidate | null = null
   let bestScore = 0
   for (const cand of candidates) {
-    const score = tmdbCandidateScore(targetTitle, targetYear, cand)
+    const score = tmdbCandidateScore(targetTitles, targetYear, cand)
     if (score > bestScore) {
       bestScore = score
       best = cand
     }
   }
   return best && bestScore >= 0.45 ? { candidate: best, score: bestScore } : null
+}
+
+/** 归一去重保序（剔空白；`normalizeForExternalMatch` 键，简繁不归一 → 海贼王/航海王 不并）。 */
+function dedupeNormalizedTerms(values: readonly string[]): string[] {
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const v of values) {
+    const trimmed = v.trim()
+    if (!trimmed) continue
+    const key = normalizeForExternalMatch(trimmed)
+    if (key.length === 0 || seen.has(key)) continue
+    seen.add(key)
+    out.push(trimmed)
+  }
+  return out
+}
+
+/**
+ * 搜索词集（D-206-2 / META-50-1B）：`filterForSearchQueries` 优先级序
+ * [title_original, title_en, official/romanization alias, title] + 视频标题兜底，归一去重后截 N≤3。
+ */
+function buildTmdbSearchTerms(knownNames: readonly KnownName[], fallbackTitle: string): string[] {
+  const ordered = filterForSearchQueries(knownNames).map((n) => n.value)
+  return dedupeNormalizedTerms([...ordered, fallbackTitle]).slice(0, TMDB_SEARCH_TERM_CAP)
+}
+
+/**
+ * 打分 target 集（D-206-3 / META-50-1B）：`filterForMatchScore` 极性集合（title/official/original/
+ * localized，排 romanization/crawler）+ 视频标题兜底，归一去重；**不截断**（打分纯本地无 API 成本）。
+ */
+function buildTmdbScoreTargets(knownNames: readonly KnownName[], fallbackTitle: string): string[] {
+  const scored = filterForMatchScore(knownNames).map((n) => n.value)
+  return dedupeNormalizedTerms([...scored, fallbackTitle])
 }
 
 /**
@@ -345,6 +394,32 @@ export class TmdbConfirmService {
   }
 
   /**
+   * 多词检索（D-206-2 / META-50-1B）：按优先级序逐词 search，候选 by tmdbId 去重；每词后用
+   * scoreTargets 打分，interim best ≥ CONFIDENCE_CANDIDATE 即**逐词早停**（省后续配额）。
+   * searchTerms 已 N≤3 截断。返回最佳候选（或 null）。
+   */
+  private async multiTermSearch(
+    searchTerms: readonly string[],
+    scoreTargets: readonly string[],
+    targetYear: number | null,
+    mediaType: TmdbMediaType,
+    cfg: Awaited<ReturnType<typeof loadTmdbClientConfig>>,
+  ): Promise<{ candidate: TmdbCandidate; score: number } | null> {
+    const opts = { language: 'zh-CN', year: targetYear ?? undefined }
+    const byId = new Map<number, TmdbCandidate>()
+    for (const term of searchTerms) {
+      const results =
+        mediaType === 'movie'
+          ? (await searchMovie(term, opts, cfg, 'enrich_worker')).results.map((r) => toCandidate(r, 'movie'))
+          : (await searchTv(term, opts, cfg, 'enrich_worker')).results.map((r) => toCandidate(r, 'tv'))
+      for (const c of results) if (!byId.has(c.tmdbId)) byId.set(c.tmdbId, c)
+      const interim = pickBestTmdbCandidate(scoreTargets, targetYear, [...byId.values()])
+      if (interim && interim.score >= CONFIDENCE_CANDIDATE) return interim
+    }
+    return pickBestTmdbCandidate(scoreTargets, targetYear, [...byId.values()])
+  }
+
+  /**
    * auto 富集匹配（META-47 / ADR-205 D-205-7）——**非参数化 confirm**，供 worker（META-48）调用。
    *
    * 区别于 confirm：source/linkedBy='auto'、置信度来自打分（非 1）、按分档（auto_matched 写字段 /
@@ -370,12 +445,12 @@ export class TmdbConfirmService {
       const cfg = await loadTmdbClientConfig(this.db)
       if (!cfg.readAccessToken && !cfg.apiKey) return { matched: false, reason: 'no_credentials' }
 
-      const opts = { language: 'zh-CN', year: targetYear ?? undefined }
-      const candidates =
-        mediaType === 'movie'
-          ? (await searchMovie(title, opts, cfg, 'enrich_worker')).results.map((r) => toCandidate(r, 'movie'))
-          : (await searchTv(title, opts, cfg, 'enrich_worker')).results.map((r) => toCandidate(r, 'tv'))
-      const best = pickBestTmdbCandidate(title, targetYear, candidates)
+      // META-50-1B：knownNames 驱动多词检索（用 catalogId = effectiveCatalogId，含 bangumi redirect 后）。
+      // knownNames 空（如新建无别名）→ 兜底单视频标题，行为等价 META-47 单词检索。
+      const knownNames = await loadKnownNames(this.db, catalogId)
+      const searchTerms = buildTmdbSearchTerms(knownNames, title)
+      const scoreTargets = buildTmdbScoreTargets(knownNames, title)
+      const best = await this.multiTermSearch(searchTerms, scoreTargets, targetYear, mediaType, cfg)
       if (!best || best.score < CONFIDENCE_CANDIDATE) return { matched: false, reason: 'no_candidate' }
       tmdbId = best.candidate.tmdbId
       score = best.score
