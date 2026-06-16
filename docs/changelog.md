@@ -6415,3 +6415,18 @@
 - **新增依赖**：无｜**数据库变更**：无（复用 migration 120 表）｜**新端点**：无｜**admin-ui Props**：无
 - **质量门禁全绿**：typecheck 7ws EXIT=0 / lint 4ok / test:changed 通过 / **全量单测 565 文件 7825 passed EXIT=0**（buildSides/scorePair/PairSideInput 共享机制改动全仓零回归）/ verify:adr-contracts EXIT=0（无新端点 + sql-schema 对齐）；e2e N/A（纯 service 层）。
 - **[AI-CHECK]**：六问过——①根因=2A-1 派生键无消费方 + confirm 路径写键 stale → 段③ 接四召回 + confirm freshness；②零回归（PairSideInput 加可选字段，scorePair 零 diff 守护 + 全量单测）；③边界=不改评分逻辑/weights/阈值/veto/自动合并开关、不写 title_observations、不 populate aliasKeys；④复用=EXT_ID_SOURCE_SQL 范式 / sharedExternalBucketKeys 交集语义 / VideoService.update recompute 范式 / loadExternalIdSummaries buildSides 范式；⑤守误并红线（M-2A-3 scorePair 零读取 + M-2A-4 交集 + M-2A-6 空不注入零漂移 + D-206-6a 别名永不成正证据实证 + 自动合并 OFF）；⑥范围=6 机制文件 + 3 freshness 文件 + 9 测试文件，设计已 Opus 承担。**WS2 核心机制收口（2A-1 数据层 + 2A-2 召回机制）。解锁 META-50-2B（误并防护验证卡 + scorePair/weights 零 diff 实证）。**
+
+## [META-50-2B] alias blocking 误并防护回归验证卡（SEQ-20260616-01 / WS2 收官 / 纯测试锁红线）— 2026-06-16
+
+**类型**：test（误并三红线回归锁 / ADR-206 D-206-6/6a/10，无生产代码改动）｜**优先级**：🟡 中（WS2 收官验证；锁定 2A-2 扩召回面的误并防护不变量）｜**执行模型**：claude-opus-4-8（主循环，用户裁定继续 opus 会话承接 2A-2；2B 建议 sonnet）｜**子代理**：无
+
+- **来源**：2A-2 段③ 扩了 blocking 召回面（跨译名 pair 进评分），须以显式 fixture 锁定误并三红线，防未来误激活 alias-as-evidence / 误并同名不同作。
+- **产出**：新建 `tests/unit/api/identity-alias-blocking-redline.test.ts`（8 测试，纯 scorePair/weights 层无 DB/mock）——
+  - ① **external_alias_match 永久休眠**（D-206-6a 回归锁）：weights 保留 `external_alias_match:0.45 strong-positive` 定义但 scorePair 对任意输入（含 externalIds.aliasKeys / aliasBlockingKeys 双设）**永不发射**该 evidence；externalIds.aliasKeys 设值不改 identityScore。**若未来加 eval 激活则本测试失败 → 强制走 ADR amendment**。
+  - ② **alias 召回不入评分**（D-206-6a）：仅共享 aliasBlockingKeys（无其它差异）→ identityScore 与无 alias 时逐字节相等（alias 贡献 0 分）。
+  - ③ **同名不同作不误并**（D-206-6/10）：复仇者 2012 / 复仇者 1998（同 core + 共享 alias 桶 + year_far 14）→ `year_far_no_exact` 强负 veto + autoMergeBlocked=true；有/无 aliasBlockingKeys veto 结论恒等（alias 不削弱 veto）。
+  - ④ **跨译名不自动合并**（D-206-6c / D-105a-3）：NON_EXACT_CAP=0.90 < 0.92 自动绑定阈值不变量；跨译名（core 异）经 alias 召回 + 满源指纹重合 → identityScore ≤ 0.90 永不自动绑定；跨译名 + 共享 exact ID → 饱和 0.95 但仅产候选（autoMergeBlocked=false 表「无强负」≠「自动合并」，合并由独立闸门 D-105a-4 Phase 1-4 OFF 裁决）。
+- **修改/新增文件**：`tests/unit/api/identity-alias-blocking-redline.test.ts`（新 8）。
+- **新增依赖**：无｜**数据库变更**：无｜**新端点**：无｜**admin-ui Props**：无｜**生产代码**：零改动
+- **质量门禁全绿**：typecheck 7ws EXIT=0 / lint 4ok / test:changed 8 passed / verify:adr-contracts EXIT=0；e2e N/A（纯单测）。
+- **[AI-CHECK]**：六问过——①根因=扩召回面须锁误并不变量防回归；②零回归（纯新增测试，无生产代码）；③边界=零生产改动，不碰 scorePair/weights/blockingRecall；④复用=identity-scorer side/facets 范式 + weights 常量真源；⑤守误并三红线全锁（external_alias_match 休眠 + alias 不入评分 + 同名不同作 veto + 非 exact 封顶不自动绑定）；⑥范围=1 测试文件。**WS2 全收口（2A-1 数据层 + 2A-2 召回机制 + 2B 误并防护验证）。跨译名主修复（WS1 TMDB 多词 + WS2 identity 段③）端到端贯通并锁红线。解锁 META-50-3A（WS3 后端 VideoMetaSchema + catalogFields 写路径，sonnet）/ 3B（admin-ui Props，强制 Opus）。**
