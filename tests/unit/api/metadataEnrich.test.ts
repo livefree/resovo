@@ -588,6 +588,39 @@ describe('MetadataEnrichService.enrich → step3.5 TMDB (META-48)', () => {
     const ctx = safeUpdate.mock.calls.at(-1)?.[3] as Record<string, unknown>
     expect(ctx.preserveMetadataSource).toBeUndefined()
   })
+
+  // ── ADR-207 D-207-1/7：季级透传 + 季集数派发 ──
+  it('catalog.seasonNumber != null → autoMatch 透传 seasonNumber（D-207-1 季级路径）', async () => {
+    vi.mocked(catalogQueries.findCatalogById).mockResolvedValue({
+      id: 'c1', title: '某剧', year: 2011, type: 'series', seasonNumber: 3, status: 'completed',
+    } as Parameters<typeof catalogQueries.findCatalogById>[1] extends infer R ? R : never)
+    await service.enrich(makeJobData({ type: 'series', title: '某剧', year: 2011 }))
+    expect(mockAutoMatch).toHaveBeenCalledWith('v1', expect.any(String), expect.objectContaining({ mediaType: 'tv', seasonNumber: 3 }))
+  })
+
+  it('catalog.seasonNumber == null → autoMatch seasonNumber=undefined（D-207-1 现状 show 级）', async () => {
+    // 默认 catalog mock 无 seasonNumber（movie）→ 透传 undefined
+    await service.enrich(makeJobData({ type: 'movie', title: '电影名', year: 2020 }))
+    const arg = mockAutoMatch.mock.calls.at(-1)?.[2] as Record<string, unknown>
+    expect(arg.seasonNumber).toBeUndefined()
+  })
+
+  it('季级命中返回 seasonEpisodeCount → updateVideoEpisodes 按 catalog.status 派发 total（completed，D-207-7）', async () => {
+    vi.mocked(catalogQueries.findCatalogById).mockResolvedValue({
+      id: 'c1', title: '某剧', year: 2011, type: 'series', seasonNumber: 1, status: 'completed',
+    } as Parameters<typeof catalogQueries.findCatalogById>[1] extends infer R ? R : never)
+    mockAutoMatch.mockResolvedValue({
+      matched: true, tier: 'auto_matched', tmdbId: 1399, confidence: 1, applied: [], seasonEpisodeCount: 10,
+    })
+    await service.enrich(makeJobData({ type: 'series', title: '某剧', year: 2011 }))
+    expect(videosQueries.updateVideoEpisodes).toHaveBeenCalledWith(expect.anything(), 'v1', { totalEpisodes: 10 }, 'auto')
+  })
+
+  it('无 seasonEpisodeCount（show 级/movie）→ 不调 updateVideoEpisodes', async () => {
+    mockAutoMatch.mockResolvedValue({ matched: true, tier: 'auto_matched', tmdbId: 555, confidence: 1, applied: [], proposedFields: { title: 'T' } })
+    await service.enrich(makeJobData({ type: 'movie' }))
+    expect(videosQueries.updateVideoEpisodes).not.toHaveBeenCalled()
+  })
 })
 
 // ── episodesByStatus + step2/step3 集成（CHG-367-B-A / ADR-163 D-163-5/6）─────

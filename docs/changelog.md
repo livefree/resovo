@@ -6675,3 +6675,18 @@
   - **架构决策（重要）**：季集数 `episodesByStatus`→`updateVideoEpisodes`（写 videos 表 total/current）**留卡 C stepTmdb**——episodesByStatus 定义在 MetadataEnrichService，TmdbConfirmService 直接 import 会形成循环依赖；改由 autoMatch 返回 `seasonEpisodeCount`、卡 C 调 episodesByStatus 派发（与 douban 集数写在 enrich step 范式一致）。逐集 catalog_episodes upsert 仍在 autoMatch 内（D-207-10 同事务硬要求）。
   - **confirm 字段范围（follow-up 候选）**：confirm season 路径仅做 D-207-9a 必需的 external_id 纠偏 + skip cache + 剔标题三件套；非标题字段仍走 buildCatalogFields（show 级值，moderator 选）——manual 季字段季级化（季简介/季海报）非本卡 BLOCKER 范围，autoMatch auto 路径已完整季级化。
   - 卡 C（stepTmdb 透传 seasonNumber + catalogStatus 派发 seasonEpisodeCount）依赖本卡；卡 D 存量清理 + 回填依赖 -B/-C。
+
+## [META-53-C] stepTmdb 接线 — 透传 seasonNumber 触发季级路径 + 季集数派发（SEQ-20260616-03 / ADR-207 D-207-1/7）
+- **完成时间**：2026-06-16
+- **记录时间**：2026-06-16 15:46
+- **执行模型**：claude-opus-4-8（建议 sonnet；人工以 Opus 启动 SEQ-20260616-03，向上覆盖、不阻断）
+- **子代理**：无
+- **修改文件**：
+  - `apps/api/src/services/MetadataEnrichService.ts` — ① `stepTmdb` 新增 `seasonNumber: number | null` + `catalogStatus: string | null` 参数；`enrich` 调用点透传 `catalogSnapshot?.seasonNumber ?? null`（line 89 预取，bangumi redirect 去重键含 seasonNumber〔ADR-176 findOrCreateWithMatch〕→ effective catalog 季号守恒，原 snapshot 季号安全）+ `catalogStatus`；autoMatch 入参 `seasonNumber: seasonNumber ?? undefined`（D-207-1：season_number != null → 季级路径 / null → 现状 show 级，零回归）；② matched 后 `result.seasonEpisodeCount > 0` → `updateVideoEpisodes(this.db, videoId, episodesByStatus(catalogStatus, count), 'auto')`（D-207-7 季集数按 catalog.status 派发 total/current，auto 仅填空，与 douban stepTmdb:425 范式一致）；matched 日志补 season_number/season_episode_count
+  - `tests/unit/api/metadataEnrich.test.ts` — step3.5 describe 新增 4 用例：catalog.seasonNumber != null 透传 seasonNumber=3 / seasonNumber == null 透传 undefined（现状 show 级）/ seasonEpisodeCount 命中→updateVideoEpisodes 按 status=completed 派发 totalEpisodes / 无 seasonEpisodeCount 不调 updateVideoEpisodes。42→46 passed
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - 门禁：typecheck exit=0 / lint exit=0 / `npm run test:changed` 213 passed（13 文件）。
+  - 现状 movie/show 路径零回归（既有 step3.5 测试因 jest 忽略 undefined 属性，`seasonNumber: undefined` 不破坏 `toHaveBeenCalledWith({title,year,mediaType})` 断言）。
+  - 卡 D（存量 show-id-as-season 清理脚本 + 回填）依赖本卡 -B/-C 落地后跑——前向生效链路（-A/-B/-C）至此闭环，存量纠偏待 -D。

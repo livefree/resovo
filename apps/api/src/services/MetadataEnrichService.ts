@@ -149,7 +149,11 @@ export class MetadataEnrichService {
     // Step 3.5: TMDB 全类型自动富集（META-48 / ADR-205 D-205-7）——用 step3 后 effectiveCatalogId
     // （含 bangumi redirect 真去重场景，防写 orphan）；身份/ref/cache/type 在 autoMatch 自有事务写，
     // 内容标量上抛交 reconcile 加权（interim 交叉验证已退场）。
-    const tmdbSource = await this.stepTmdb(videoId, effectiveCatalogId, title, year, type)
+    // ADR-207 D-207-1：透传 catalogSnapshot.seasonNumber（season_number != null → 季级匹配 / null → 现状 show 级）。
+    // bangumi redirect 去重键含 seasonNumber（ADR-176 findOrCreateWithMatch）→ effective catalog 季号守恒，原 snapshot 季号安全。
+    const tmdbSource = await this.stepTmdb(
+      videoId, effectiveCatalogId, title, year, type, catalogSnapshot?.seasonNumber ?? null, catalogStatus,
+    )
     if (tmdbSource) reconcileSources.push(tmdbSource)
 
     // reconcile：douban/bangumi/tmdb 内容标量逐字段 canonical 加权裁决 + winner 写 catalog + proposals
@@ -197,6 +201,8 @@ export class MetadataEnrichService {
     title: string,
     year: number | null,
     type: string,
+    seasonNumber: number | null,
+    catalogStatus: string | null,
   ): Promise<ReconcileSource | null> {
     const tmdbLog = baseLogger.child({ module: 'enrich-tmdb', video_id: videoId })
     try {
@@ -210,12 +216,22 @@ export class MetadataEnrichService {
       }
 
       const mediaType: TmdbMediaType = type === 'movie' ? 'movie' : 'tv'
-      const result = await this.tmdbConfirmService.autoMatch(videoId, effectiveCatalogId, { title, year, mediaType })
+      // ADR-207 D-207-1：seasonNumber != null → autoMatch 季级路径（季解析 + season exact 季 id）；null → 现状 show 级
+      const result = await this.tmdbConfirmService.autoMatch(videoId, effectiveCatalogId, {
+        title, year, mediaType, seasonNumber: seasonNumber ?? undefined,
+      })
       if (result.matched) {
         tmdbLog.info(
-          { outcome: 'matched', tier: result.tier, tmdb_id: result.tmdbId, confidence: result.confidence, applied: result.applied.length },
+          { outcome: 'matched', tier: result.tier, tmdb_id: result.tmdbId, confidence: result.confidence, applied: result.applied.length, season_number: seasonNumber ?? undefined, season_episode_count: result.seasonEpisodeCount },
           'tmdb auto matched',
         )
+        // ADR-207 D-207-7：季级命中 → 季集数按 catalog.status 派发 total/current_episodes（auto 仅填空，与 douban:425 范式一致；
+        // episodesByStatus 在本文件定义，故集数派发留 stepTmdb——autoMatch 仅回传 seasonEpisodeCount 避免 service↔enrich 循环 import）。
+        if (result.seasonEpisodeCount && result.seasonEpisodeCount > 0) {
+          await videosQueries.updateVideoEpisodes(
+            this.db, videoId, episodesByStatus(catalogStatus, result.seasonEpisodeCount), 'auto',
+          )
+        }
         // META-49-B2（方案 X）：身份/ref/cache/type 已在 autoMatch 自有事务写；内容标量上抛交 reconcile 加权。
         if (result.proposedFields && Object.keys(result.proposedFields).length > 0) {
           return { source: 'tmdb', sourceRef: String(result.tmdbId), confidence: result.confidence, fields: result.proposedFields }
