@@ -6323,6 +6323,7 @@
 - **新增依赖**：无｜**数据库变更**：migration 120（新表 catalog_blocking_alias_keys）｜**新端点**：无｜**admin-ui Props**：无
 - **质量门禁全绿**：typecheck 7ws EXIT=0 / lint 4ok / test:changed 15 文件 219 passed（catalogBlockingKeys 11 + catalogBlockingAliasKeysQueries 4 + metadataEnrich 42 接线零回归）/ verify:adr-contracts EXIT=0（sql-schema-alignment 84 表新表列对齐）/ 真库 migrate 收敛 + 对拍 + 回填 6856 键；e2e N/A（纯数据层）。
 - **[AI-CHECK]**：六问过——①根因=normalizeForExternalMatch 不可 SQL 复刻 + 无预归一列 → 派生表 TS 单一真源预计算；②零回归（enrich 接线 try/catch 非阻断，219 passed）；③边界=纯加性键存储+写键，不改 reconcile/safeUpdate/CrawlerService，召回/buildSides/evidence_hash 归 2A-2；④复用=loadKnownNames(1A)+normalizeForExternalMatch+既有 query/migration 范式；⑤守 M-2A-1 单一归一真源 + M-2A-2 哨兵恒进（1A↔2A 衔接）+ D-206-6a 仅扩召回不进评分（本卡纯存储无评分接触）；⑥范围=migration+2 queries/service 新文件+1 接线+回填+architecture，schema 卡已 arch-reviewer Opus 承担。**解锁 META-50-2A-2（blockingRecall 段③ + PairSideInput.aliasBlockingKeys + buildSides + 四口径 + sharedAliasBucketKeys，红线密度最高）。**
+- **Codex stop-time review fix（2026-06-16）**：初版写键 recompute 仅接入 enrich auto 路径 → **手动编辑 catalog 标题后派生键 stale**。补 `VideoService.update`（手动编辑端点 source='manual'）改 title/titleEn 后 fire-and-forget 非阻断 recompute（沿 486 title_change hook 范式）+ 3 新单测（title/titleEn 触发 / rating-only 不触发）。**遗留登记**：confirm 路径（tmdb/douban/bangumi 标准确认改标题，非 enrich）写键重算并入 2A-2 前置（部署重跑回填脚本自愈存量）。门禁复跑全绿：typecheck 7ws / lint 4ok / test:changed 通过 / verify EXIT=0。
 
 ## [META-50-2A-DESIGN] alias_normalized 桶架构裁决 + 拆卡（SEQ-20260616-01 / WS2 / arch-reviewer Opus）— 2026-06-16
 

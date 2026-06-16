@@ -29,6 +29,7 @@ import { MediaCatalogService } from '@/api/services/MediaCatalogService'
 import { insertObservationIfAbsent } from '@/api/db/queries/titleObservations'
 import { buildTitleObservation } from '@/api/services/titleObservation.builder'
 import { enqueueIdentityVideoRescore } from '@/api/services/identity/enqueueVideoRescore'
+import { recomputeCatalogBlockingKeys } from '@/api/services/metadata/catalogBlockingKeys'
 import { baseLogger } from '@/api/lib/logger'
 import type { CatalogUpdateData } from '@/api/db/queries/mediaCatalog'
 import { VideoIndexSyncService } from '@/api/services/VideoIndexSyncService'
@@ -467,6 +468,15 @@ export class VideoService {
       const catalogService = new MediaCatalogService(this.db)
       const result = await catalogService.safeUpdate(video.catalog_id, catalogFields, 'manual', {})
       skippedFields = result.skippedFields
+    }
+
+    // META-50-2A-1（Codex stop-time review fix）：手动编辑改 catalog 已知名字段（title/titleEn，
+    // 3A 后含 titleOriginal/aliases）后重算 blocking 归一键——否则派生表 stale，2A-2 召回口径漂移。
+    // fire-and-forget 非阻断（沿 486 title_change hook 范式，失败仅 warn 不阻断 admin 主流程）。
+    if (catalogFields.title !== undefined || catalogFields.titleEn !== undefined) {
+      void recomputeCatalogBlockingKeys(this.db, video.catalog_id).catch((err: unknown) => {
+        baseLogger.warn({ err, catalog_id: video.catalog_id }, '[blocking-keys] manual edit recompute failed')
+      })
     }
 
     // Step 3: 更新 videos 表冗余副本字段（title/type/episodeCount/slug）
