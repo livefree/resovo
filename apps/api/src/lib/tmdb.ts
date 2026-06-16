@@ -30,6 +30,7 @@ import type {
   TmdbMovieDetail,
   TmdbMovieSearchResponse,
   TmdbPagedResponse,
+  TmdbSeasonDetail,
   TmdbTvDetail,
   TmdbTvSearchResponse,
 } from '@/api/lib/tmdb.types'
@@ -276,21 +277,46 @@ export async function getTvDetail(
   return getDetail<TmdbTvDetail>('tv', id, opts, cfg, source)
 }
 
+/**
+ * GET /tv/{id}/season/{n}（+append_to_response）— 季详情（逐集 + 季海报，ADR-207 D-207-3）。
+ * 失败/404 返回 null（valid negative）；调用方据 null 决定降级——季 REST 失败时仍可保已确定的
+ * season exact ref，仅跳逐集/季海报（D-207-10）。埋点 target=`{id}/season/{n}` 便于按季区分采集记录。
+ */
+export async function getTvSeasonDetail(
+  seriesId: number, seasonNumber: number, opts?: TmdbDetailOptions, cfg?: TmdbClientConfig, source?: FetchSource | null,
+): Promise<TmdbSeasonDetail | null> {
+  return getDetailAt<TmdbSeasonDetail>(
+    `/tv/${seriesId}/season/${seasonNumber}`, `${seriesId}/season/${seasonNumber}`, opts, cfg, source,
+  )
+}
+
+/** kind detail 便捷封装（path=`/{kind}/{id}`、target=id），委托 getDetailAt 单一降级+埋点真源。 */
 async function getDetail<R>(
   kind: 'movie' | 'tv', id: number, opts: TmdbDetailOptions | undefined,
   cfg: TmdbClientConfig | undefined, source: FetchSource | null | undefined,
 ): Promise<R | null> {
+  return getDetailAt<R>(`/${kind}/${id}`, String(id), opts, cfg, source)
+}
+
+/**
+ * GET {path}（+append_to_response）核心：失败/404→null（valid negative，对齐 bangumi.getSubject）。
+ * getMovieDetail/getTvDetail/getTvSeasonDetail 共用此单一降级+埋点真源（DRY）。
+ */
+async function getDetailAt<R>(
+  path: string, target: string, opts: TmdbDetailOptions | undefined,
+  cfg: TmdbClientConfig | undefined, source: FetchSource | null | undefined,
+): Promise<R | null> {
   const startedAt = Date.now()
   try {
-    const value = await tmdbGet<R>(`/${kind}/${id}`, {
+    const value = await tmdbGet<R>(path, {
       language: opts?.language ?? cfg?.language,
       append_to_response: opts?.append?.length ? opts.append.join(',') : undefined,
     }, cfg)
-    await recordTmdbFetch('detail', 'ok', source ?? null, String(id), 1, Date.now() - startedAt)
+    await recordTmdbFetch('detail', 'ok', source ?? null, target, 1, Date.now() - startedAt)
     return value
   } catch (err) {
     const status = statusForGetError(err)
-    await recordTmdbFetch('detail', status, source ?? null, String(id), 0, Date.now() - startedAt, status === 'ok' ? undefined : fetchErrorSummary(err))
+    await recordTmdbFetch('detail', status, source ?? null, target, 0, Date.now() - startedAt, status === 'ok' ? undefined : fetchErrorSummary(err))
     return null
   }
 }

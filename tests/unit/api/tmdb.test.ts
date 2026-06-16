@@ -14,6 +14,7 @@ import {
   searchTv,
   getMovieDetail,
   getTvDetail,
+  getTvSeasonDetail,
   getConfiguration,
   TmdbHttpError,
   type TmdbClientConfig,
@@ -132,6 +133,53 @@ describe('getMovieDetail / getTvDetail（append_to_response）', () => {
     expect(recordFetchMock).toHaveBeenCalledWith(
       expect.objectContaining({ operation: 'detail', status: 'fail', error: expect.any(String) }),
     )
+  })
+})
+
+describe('getTvSeasonDetail（季详情 + 逐集，ADR-207 D-207-3）', () => {
+  it('命中 /tv/{id}/season/{n}，append 拼接，埋点 detail/ok target=`{id}/season/{n}`', async () => {
+    const payload = {
+      id: 3624, name: 'Season 1', season_number: 1,
+      episodes: [{ id: 63056, episode_number: 1, name: 'Winter Is Coming' }],
+    }
+    fetchMock.mockResolvedValueOnce(fakeRes(payload))
+
+    const r = await getTvSeasonDetail(
+      1399, 1, { append: ['external_ids', 'images', 'translations', 'credits'] }, CFG, 'enrich_worker',
+    )
+
+    expect(r?.id).toBe(3624)
+    expect(r?.episodes).toHaveLength(1)
+    const url = calledUrl()
+    expect(url.pathname).toBe('/3/tv/1399/season/1')
+    expect(url.searchParams.get('append_to_response')).toBe('external_ids,images,translations,credits')
+    expect(recordFetchMock).toHaveBeenCalledWith(
+      expect.objectContaining({ operation: 'detail', status: 'ok', source: 'enrich_worker', target: '1399/season/1', itemCount: 1 }),
+    )
+  })
+
+  it('404：valid-negative 返 null（detail/ok 无 error，target 含季号）', async () => {
+    fetchMock.mockResolvedValueOnce(fakeRes({}, { status: 404 }))
+    const r = await getTvSeasonDetail(1399, 99, undefined, CFG)
+    expect(r).toBeNull()
+    expect(recordFetchMock).toHaveBeenCalledWith(
+      expect.objectContaining({ operation: 'detail', status: 'ok', target: '1399/season/99', itemCount: 0, error: undefined }),
+    )
+  })
+
+  it('500：失败返 null（detail/fail 带 error）', async () => {
+    fetchMock.mockResolvedValueOnce(fakeRes({}, { status: 500 }))
+    const r = await getTvSeasonDetail(1399, 2, undefined, CFG)
+    expect(r).toBeNull()
+    expect(recordFetchMock).toHaveBeenCalledWith(
+      expect.objectContaining({ operation: 'detail', status: 'fail', error: expect.any(String) }),
+    )
+  })
+
+  it('无凭证：返 null 不发请求', async () => {
+    const r = await getTvSeasonDetail(1399, 1, undefined, { minRequestIntervalMs: 0 })
+    expect(r).toBeNull()
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 })
 

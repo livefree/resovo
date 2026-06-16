@@ -6643,3 +6643,19 @@
   - **BLOCKER（D-207-9）**：-B 必含 confirm 内部解析季 id（消除 show-id-as-season 误写源头）+ -D 必含存量清理脚本，缺一则错绑持续/cache 一致性硬校验无法绿。
   - 完整执行档：`~/.claude/plans/tmdb-joyful-mochi.md`（plan mode 已批准，含逐集 + 前向+回填范围裁定）。
   - **ADR-207 REVISE 2026-06-16（实施前契约审核，2 BLOCKER + 1 HIGH + 1 MEDIUM 闭合）**：① **REVISE-1（BLOCKER）** 原 D-207-6「季 catalog tmdb_id cache 写 show id + 无 migration」与 `media_catalog.tmdb_id`(026:64)/`imdb_id`(026:62) 列级 **UNIQUE** 硬冲突（多季撞库 + findCatalogByTmdbId 误命中）→ 改「季 catalog 不写 tmdb_id/imdb_id cache」，身份归 season exact ref，取消原例外簇登记，仍无 migration；② **REVISE-2（BLOCKER）** card D 回填禁 `enqueueEnrichJob`/`batchEnqueueEnrich`（固定 jobId 被 Bull 残留 job 静默跳过漏跑）→ 复用 `scripts/reenrich-backfill.ts` run-unique jobId 范式；③ **REVISE-3（HIGH）** D-207-10 失败降级分层（getTvSeasonDetail 失败仍写 season exact，不丢可确定身份）；④ **REVISE-4（MEDIUM）** plan title 策略同步 ADR（季路径剔标题三件套）。decisions.md D-207-6/-10 重写 + REVISE 块；task-queue + plan 同步。保留：D-207-2 季自身 id + D-207-9 confirm 纠偏正确。**实现卡 A/B/C/D 须按修订后契约执行**。
+
+## [META-53-A] TMDB 客户端 + 类型 — 季端点 getTvSeasonDetail + 季摘要/季详情/逐集类型（SEQ-20260616-03 / ADR-207 D-207-3）
+- **完成时间**：2026-06-16
+- **记录时间**：2026-06-16 15:20
+- **执行模型**：claude-opus-4-8（建议 sonnet；人工以 Opus 启动 SEQ-20260616-03，向上覆盖、不阻断、质量更高，偏离已在卡片说明）
+- **子代理**：无（lib 层类型/客户端增量，非 admin-ui 公开 Props；设计已经 ADR-207 arch-reviewer Opus 裁定，实现卡不重复升 Opus）
+- **修改文件**：
+  - `apps/api/src/lib/tmdb.types.ts` — 新增 `TmdbTvSeason`（`/tv/{id}` 默认 seasons[] 摘要元素：id/name/overview/poster_path/air_date/episode_count/season_number/vote_average，季级匹配按 season_number 命中取 id 作 D-207-2 季 ref external_id）+ `TmdbTvDetail.seasons?: TmdbTvSeason[]`（默认字段非 append）+ `TmdbSeasonEpisode`（逐集：id/episode_number/name/overview/air_date/runtime/still_path/vote_average，→ upsertCatalogEpisodes source=tmdb）+ `TmdbSeasonDetail`（季详情 base + append external_ids/images/translations/credits；images 复用 TmdbImages 信封，注明 TMDB 季 images 仅返回 posters、消费方只取 posters）
+  - `apps/api/src/lib/tmdb.ts` — 新增 `getTvSeasonDetail(seriesId, seasonNumber, opts, cfg, source)` → GET /tv/{id}/season/{n}（append_to_response 拼接），失败/404→null（valid negative）、埋点 operation='detail' target=`{id}/season/{n}`；提取 `getDetailAt(path, target, ...)` 作 getMovieDetail/getTvDetail/getTvSeasonDetail 三者单一降级+埋点真源（DRY，getDetail 降级为薄封装），import 补 TmdbSeasonDetail
+  - `tests/unit/api/tmdb.test.ts` — 新增 getTvSeasonDetail describe（+4 用例）：命中 path+append 拼接+埋点 source/target/itemCount / 404 valid-negative null（detail/ok 无 error）/ 500 失败 null（detail/fail 带 error）/ 无凭证 null 不发请求；tmdb.test 14→18 passed
+- **新增依赖**：无
+- **数据库变更**：无（纯 lib 层；无 migration）
+- **注意事项**：
+  - 门禁：typecheck exit=0 / lint exit=0（无 error，warnings 为预存 react-hooks/img 与本卡无关）/ `npm run test:changed` 318 passed（含 tmdb.test 18 + tmdb-confirm-service 59 等关联）。
+  - 季 images 类型用 `TmdbImages` 复用——TMDB `/tv/{id}/season/{n}?append=images` 实际仅返回 posters（无 backdrops/logos），卡 B 季海报仅取 `images?.posters` 经 pickBestImage，运行时安全；不改 TmdbImages 以免影响 movie/tv detail。
+  - 季级路径接线/字段/逐集/season exact ref/confirm 纠偏由 **-B** 承载（依赖本卡），-C 接线 stepTmdb，-D 清理+回填。

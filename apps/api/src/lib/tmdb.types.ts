@@ -263,6 +263,8 @@ export interface TmdbTvDetail {
   vote_average: number
   vote_count: number
   homepage: string | null
+  /** `/tv/{id}` detail 默认返回的季摘要数组（无需 append，ADR-207 D-207-3）。 */
+  seasons?: TmdbTvSeason[]
   // append_to_response（仅请求时出现）
   external_ids?: TmdbExternalIds
   images?: TmdbImages
@@ -271,6 +273,60 @@ export interface TmdbTvDetail {
   aggregate_credits?: TmdbAggregateCredits
   content_ratings?: TmdbContentRatings
   translations?: TmdbTranslations
+}
+
+// ── TV Season（季摘要 + 季详情 + 逐集，ADR-207 D-207-3 / META-53）──────────────
+
+/**
+ * `/tv/{id}` detail 默认返回的 `seasons[]` 摘要元素（无需 append）。季级匹配按
+ * `season_number === catalog.seasonNumber` 命中后取 `id` 作季级 exact ref 的 external_id
+ * （ADR-207 D-207-2：季自身 id 全局唯一，绝非 show id）。
+ */
+export interface TmdbTvSeason {
+  id: number
+  name: string
+  overview: string
+  poster_path: string | null
+  air_date: string | null
+  episode_count: number
+  season_number: number
+  vote_average: number
+}
+
+/**
+ * `/tv/{id}/season/{n}` 季详情的 `episodes[]` 逐集元素（ADR-207 D-207-7）。
+ * → `upsertCatalogEpisodes(source='tmdb')`，`externalEpisodeId = String(id)`、`ep_type=0`（本篇）。
+ */
+export interface TmdbSeasonEpisode {
+  id: number
+  episode_number: number
+  name: string
+  overview: string
+  air_date: string | null
+  runtime: number | null
+  still_path: string | null
+  vote_average: number
+}
+
+/**
+ * `/tv/{id}/season/{n}` 季详情响应（base + append optional，ADR-207 D-207-3）。
+ * 季级标量回退 show（D-207-4）；季海报复用 `pickBestImage(images?.posters)`——TMDB 季 images
+ * 端点仅返回 posters（无 backdrops/logos），消费方只取 posters，故 images 复用 TmdbImages 信封。
+ */
+export interface TmdbSeasonDetail {
+  id: number
+  name: string
+  overview: string
+  poster_path: string | null
+  air_date: string | null
+  season_number: number
+  vote_average: number
+  episodes: TmdbSeasonEpisode[]
+  // append_to_response（仅请求时出现）
+  external_ids?: TmdbExternalIds
+  images?: TmdbImages
+  translations?: TmdbTranslations
+  credits?: TmdbCredits
 }
 
 // ── Configuration（image base URL / languages / countries，ADR-201 22839）──────
