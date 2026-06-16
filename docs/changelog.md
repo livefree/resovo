@@ -6532,3 +6532,16 @@
 - **新增依赖**：无｜**数据库变更**：无（复用 `md_<p>_state` 动态 LATERAL，零 migration）｜**新端点**：无（同 GET /admin/videos 加 query 参 + sort 值，verify:endpoint-adr 243 路由对齐）｜**admin-ui Props**：无｜**architecture.md**：无需同步（视频库 filter/sort 参数未文档化于 architecture）
 - **质量门禁全绿**：typecheck 7ws EXIT=0 / lint 4ok / test:changed 570 文件 7873 passed / verify:adr-contracts EXIT=0 / verify:endpoint-adr EXIT=0；e2e VIDEO 域留 PHASE 节点回归（过滤/排序 UI，dev server 依赖）。
 - **[AI-CHECK]**：六问过——①根因=meta 列无过滤 + 排序语义不明；②零回归（metadata_status 保留 + metadataProvider facet 正交不动，7873 passed）；③边界=query 过滤/排序 + 契约层，无 migration/Props/端点；④复用=`METADATA_MATCHED_*` SSOT + SQL 由 METADATA_PROVIDERS 派生；⑤守=NULL 安全（IS DISTINCT FROM / CASE ELSE 0）+ 列名/字面量代码常量无注入；⑥范围=过滤+排序 2 项 < 5。
+
+## [META-51-A] TMDB → title_en 英文标题抽取（库存回填前置 / plan Phase A）— 2026-06-16
+
+**类型**：feat（TMDB 富集字段扩展，ADR-202 / 库存回填计划 Phase A）｜**优先级**：🟡 中｜**执行模型**：claude-opus-4-8（Opus 主循环）｜**子代理**：无（无新端点 / 无 migration / 无 admin-ui Props）
+
+- **背景**：已批准计划「库存视频 TMDB 外部元数据回填」（`~/.claude/plans/glittery-forging-crystal.md`）。TMDB 实装（META-37~50）后**从未批量回填**（全库 4866 仅 47 匹配），且当前管线 `TMDB_APPLIABLE_FIELDS` **不含 title_en**——只写 title(zh-CN)/title_original(原语种)，采集源灌入的拼音 title_en（1617 条）无法被修。本卡补「TMDB→title_en 英文标题」前置能力，使回填能修拼音。
+- **方案**：① TMDB detail `append` 增 `translations`（autoMatch + confirm 两路）；② 新增私有 `pickEnglishTitle(detail,mediaType)`——优先 `translations` 的 `iso_639_1='en'` 条目（movie=`data.title`/tv=`data.name`），回退「`original_language` 以 en 开头则用 original_title/name」，**仅返回真英文**（含拉丁字母且无 CJK，防 en 翻译缺失时 TMDB 回退中文被误写）；③ `buildCatalogFields` 增 `title_en` 分支 + `'title_en'` 入 `TMDB_APPLIABLE_FIELDS`。
+- **写入路径**：autoMatch 内容字段经 reconcile——titleEn 不在 `RECONCILE_GROUPS` → 走 `splitReconcilePassthrough` 的 passthrough → reconcile.ts `safeUpdate(...,'tmdb')` 直写；TMDB 优先级（CATALOG_SOURCE_PRIORITY 4）> crawler（1）→ 覆盖拼音 title_en。confirm 路径直 safeUpdate。
+- **契约核实（零类型新增）**：`TMDB_APPEND_KEYS` 含 `translations` ✓ / `TmdbMovieDetail·TvDetail.translations?` ✓ / `TmdbTranslation.data.{title,name}` ✓ / `CatalogUpdateData.titleEn` ✓。
+- **修改文件**：`apps/api/src/services/TmdbConfirmService.ts`（pickEnglishTitle + buildCatalogFields title_en 分支 + TMDB_APPLIABLE_FIELDS + autoMatch/confirm append translations）、`tests/unit/api/tmdb-confirm-service.test.ts`（+5：en 翻译真英文→写 / tv data.name→写 / en 回退中文 CJK 守卫→不写 / original_language=en→用 original_title / confirm append 含 translations）。
+- **新增依赖**：无｜**数据库变更**：无｜**新端点**：无｜**admin-ui Props**：无｜**architecture.md**：无需同步（TMDB 字段映射属 ADR-202 范畴，未在 architecture 文档化）
+- **质量门禁全绿**：typecheck 7ws EXIT=0 / lint 4ok / test:changed 14 文件 264 passed（tmdb-confirm-service 55）；e2e N/A（富集服务层）。
+- **[AI-CHECK]**：六问过——①根因=管线不写 title_en，拼音无修复路径；②零回归（title_en 仅 sel.has 选中且真英文时写，既有字段不变，55 passed）；③边界=TmdbConfirmService 单文件 + 测试，passthrough 复用既有 reconcile 写路径；④复用=translations append 键/类型既有、safeUpdate 优先级覆盖既有；⑤守=CJK 守卫防中文误写英文字段、单源 passthrough 不扰 RECONCILE_GROUPS；⑥范围=抽取 1 项。**后续**：卡 B（tmdb-missing 回填模式）+ 运维执行回填/cleanup（plan Phase B/C/D）。

@@ -542,3 +542,43 @@ describe('autoMatch', () => {
     expect(vi.mocked(tmdbLib.searchMovie).mock.calls[0][0]).toBe('abcdef') // 兜底视频标题
   })
 })
+
+// META-51-A：TMDB → title_en 英文标题抽取（修拼音 title_en；仅真英文，CJK/中文回退不写）
+describe('META-51-A: confirm fields 含 title_en → 英文标题抽取', () => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const withTrans = (en: { title?: string; name?: string }): any => ({
+    translations: { translations: [{ iso_3166_1: 'US', iso_639_1: 'en', name: 'English', english_name: 'English', data: { ...en, overview: '' } }] },
+  })
+
+  it('movie translations.en.data.title 为真英文 → safeUpdate 写 titleEn', async () => {
+    vi.mocked(tmdbLib.getMovieDetail).mockResolvedValue({ ...MOVIE, ...withTrans({ title: 'Spirited Away' }) })
+    await svc.confirm('vid', 'cat', { tmdbId: 129, mediaType: 'movie', fields: ['title_en'] })
+    expect(safeUpdateMock).toHaveBeenCalledWith('cat', expect.objectContaining({ titleEn: 'Spirited Away' }), 'tmdb', expect.anything())
+  })
+
+  it('tv translations.en.data.name 为真英文 → 写 titleEn', async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    vi.mocked(tmdbLib.getTvDetail).mockResolvedValue({ id: 1429, name: '进击的巨人', original_name: '進撃の巨人', original_language: 'ja', overview: '', genres: [], external_ids: {}, ...withTrans({ name: 'Attack on Titan' }) } as any)
+    await svc.confirm('vid', 'cat', { tmdbId: 1429, mediaType: 'tv', fields: ['title_en'] })
+    expect(safeUpdateMock).toHaveBeenCalledWith('cat', expect.objectContaining({ titleEn: 'Attack on Titan' }), 'tmdb', expect.anything())
+  })
+
+  it('en 翻译缺失回退中文（CJK 守卫）→ 不写 titleEn', async () => {
+    vi.mocked(tmdbLib.getMovieDetail).mockResolvedValue({ ...MOVIE, ...withTrans({ title: '千与千寻' }) })
+    await svc.confirm('vid', 'cat', { tmdbId: 129, mediaType: 'movie', fields: ['title_en'] })
+    expect(safeUpdateMock).not.toHaveBeenCalledWith('cat', expect.objectContaining({ titleEn: expect.anything() }), 'tmdb', expect.anything())
+  })
+
+  it('无 translations 但 original_language=en → 用 original_title 写 titleEn', async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    vi.mocked(tmdbLib.getMovieDetail).mockResolvedValue({ ...MOVIE, original_language: 'en', original_title: 'The Matrix', translations: undefined } as any)
+    await svc.confirm('vid', 'cat', { tmdbId: 129, mediaType: 'movie', fields: ['title_en'] })
+    expect(safeUpdateMock).toHaveBeenCalledWith('cat', expect.objectContaining({ titleEn: 'The Matrix' }), 'tmdb', expect.anything())
+  })
+
+  it('confirm detail 拉取 append 含 translations', async () => {
+    vi.mocked(tmdbLib.getMovieDetail).mockResolvedValue(MOVIE)
+    await svc.confirm('vid', 'cat', { tmdbId: 129, mediaType: 'movie', fields: ['title_en'] })
+    expect(vi.mocked(tmdbLib.getMovieDetail).mock.calls[0][1]).toMatchObject({ append: expect.arrayContaining(['translations']) })
+  })
+})

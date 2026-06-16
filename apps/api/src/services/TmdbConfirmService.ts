@@ -57,7 +57,7 @@ const LOGO_LANG_PREF: readonly (string | null)[] = ['zh', null, 'en']
 const IMAGE_FIELDS: readonly string[] = ['cover_url', 'backdrop', 'logo']
 
 /** confirm 可应用的 catalog 字段白名单（ADR-202 D-202-8；fields 省略/[] = 仅绑 ID 不应用）。 */
-export const TMDB_APPLIABLE_FIELDS = ['title', 'title_original', 'original_language', 'description', 'genres', 'country', 'rating', 'cover_url', 'backdrop', 'logo'] as const
+export const TMDB_APPLIABLE_FIELDS = ['title', 'title_en', 'title_original', 'original_language', 'description', 'genres', 'country', 'rating', 'cover_url', 'backdrop', 'logo'] as const
 export type TmdbAppliableField = typeof TMDB_APPLIABLE_FIELDS[number]
 
 export type TmdbMediaType = 'movie' | 'tv'
@@ -248,6 +248,23 @@ function buildImageFields(detail: TmdbMovieDetail | TmdbTvDetail, imageBase: str
   return out
 }
 
+/**
+ * TMDB 英文标题抽取（META-51-A）：优先 `translations` 的 en 条目（movie=data.title / tv=data.name），
+ * 回退「`original_language` 以 en 开头则用 original_title/original_name」。**仅返回真英文**——含拉丁
+ * 字母且无 CJK（防 en 翻译缺失时 TMDB 回退中文被误当英文写入 title_en）。无合格候选返 null。
+ */
+function pickEnglishTitle(detail: TmdbMovieDetail | TmdbTvDetail, mediaType: TmdbMediaType): string | null {
+  const isMovie = mediaType === 'movie'
+  const en = detail.translations?.translations.find((t) => t.iso_639_1 === 'en')
+  const fromTrans = (isMovie ? en?.data.title : en?.data.name)?.trim()
+  const origTitle = (isMovie ? (detail as TmdbMovieDetail).original_title : (detail as TmdbTvDetail).original_name)?.trim()
+  const candidate = fromTrans || (detail.original_language?.toLowerCase().startsWith('en') ? origTitle : undefined)
+  if (!candidate) return null
+  // 必须含拉丁字母且无 CJK（中日韩统一表意 + 兼容表意），否则视为非英文不写。
+  if (!/[A-Za-z]/.test(candidate) || /[㐀-鿿豈-﫿]/.test(candidate)) return null
+  return candidate
+}
+
 /** detail → CatalogUpdateData（仅 fields 选中字段；ADR-202 D-202-8 M1/M3/M5 + META-42 country + META-43 图片）。 */
 function buildCatalogFields(
   detail: TmdbMovieDetail | TmdbTvDetail,
@@ -266,6 +283,11 @@ function buildCatalogFields(
     if (t) out.title = t
   }
   if (sel.has('title_original') && originalTitle?.trim()) out.titleOriginal = originalTitle.trim()
+  // META-51-A：英文标题 → title_en（仅真英文，修复采集源拼音 title_en；TMDB 优先级覆盖 crawler）。
+  if (sel.has('title_en')) {
+    const en = pickEnglishTitle(detail, mediaType)
+    if (en) out.titleEn = en
+  }
   // M3：存 language-only BCP47（TMDB ISO 639-1 zh/ja/...），不强推简繁 script（FU-202-3）
   if (sel.has('original_language') && detail.original_language) out.originalLanguage = detail.original_language
   if (sel.has('description') && detail.overview?.trim()) out.description = detail.overview.trim() // M1：空不写
@@ -322,8 +344,8 @@ export class TmdbConfirmService {
     // Phase 1：REST 事务外。append images（META-43）供图片应用；仅选中图片字段才拉 image base configuration。
     const detail =
       mediaType === 'movie'
-        ? await getMovieDetail(tmdbId, { language: 'zh-CN', append: ['external_ids', 'images'] }, cfg)
-        : await getTvDetail(tmdbId, { language: 'zh-CN', append: ['external_ids', 'images'] }, cfg)
+        ? await getMovieDetail(tmdbId, { language: 'zh-CN', append: ['external_ids', 'images', 'translations'] }, cfg)
+        : await getTvDetail(tmdbId, { language: 'zh-CN', append: ['external_ids', 'images', 'translations'] }, cfg)
     if (!detail) return { updated: false, reason: 'tmdb_fetch_failed' }
 
     const imageBase = fields.some((f) => IMAGE_FIELDS.includes(f))
@@ -467,8 +489,8 @@ export class TmdbConfirmService {
       if (score >= CONFIDENCE_AUTO_MATCH) {
         detail =
           mediaType === 'movie'
-            ? await getMovieDetail(tmdbId, { language: 'zh-CN', append: ['external_ids', 'images'] }, cfg, 'enrich_worker')
-            : await getTvDetail(tmdbId, { language: 'zh-CN', append: ['external_ids', 'images'] }, cfg, 'enrich_worker')
+            ? await getMovieDetail(tmdbId, { language: 'zh-CN', append: ['external_ids', 'images', 'translations'] }, cfg, 'enrich_worker')
+            : await getTvDetail(tmdbId, { language: 'zh-CN', append: ['external_ids', 'images', 'translations'] }, cfg, 'enrich_worker')
         if (!detail) return { matched: false, reason: 'no_candidate' }
         imageBase = await getImageBaseUrl(cfg, 'enrich_worker')
       }
