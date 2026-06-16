@@ -283,10 +283,12 @@ export function isLikelyPinyinSlug(input: string | null | undefined): boolean {
   if (isPinyinTitle(input)) return true
   if (!input) return false
   const trimmed = input.trim()
-  // ── 有真空格 → 拼音「逐音节分词」惯例（"Wo Cai Bu"=每词 1 音节）：要求每词恰为 1 个拼音音节，
-  //    借此排除多音节真英文词（"Running"=run-ning 2 音节 / "Game"=ga-me）→ 真英文多词标题保留（CHG-VIR-11-F 收敛）。
+  // ── 有真空格 → 拼音「逐音节分词」惯例（"Wo Cai Bu"=每词 1 音节）：先丢版本/VS/日期 token
+  //    （含数字词 或 无小写的纯大写词，如 "VS"/"V3"/"20260523"，Codex stop-time review），再要求剩余每词
+  //    恰为 1 个拼音音节——借此排除多音节真英文词（"Running"=run-ning 2 音节）→ 真英文多词标题保留（收敛）。
   if (/\s/.test(trimmed)) {
-    const words = trimmed.replace(/[0-9]/g, ' ').split(/\s+/).filter(Boolean)
+    const isDropToken = (w: string): boolean => /[0-9]/.test(w) || !/[a-z]/.test(w)
+    const words = trimmed.split(/\s+/).filter((w) => w && !isDropToken(w))
     return words.length > 1 && words.every((w) => w.length >= 2 && decomposeSyllableCount(w) === 1)
   }
   // ── 无真空格连写：两路互补（Codex stop-time review：title-case 首字母大写是拼音一部分，不可剥）──

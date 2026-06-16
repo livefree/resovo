@@ -297,6 +297,13 @@ describe('isLikelyPinyinSlug — 激进拼音判定（门禁专用）', () => {
     expect(isLikelyPinyinSlug('Wo Cai Bu Hui Xin Dong Ne')).toBe(true)
   })
 
+  it('空格逐音节拼音含 VS/版本/日期 token → true（Codex stop-time review：先丢 token）', () => {
+    expect(isLikelyPinyinSlug('Hu He Hao Te VS Yan Bian 20260523')).toBe(true) // 呼和浩特VS延边（VS+日期 token 丢弃）
+    expect(isLikelyPinyinSlug('Jia Mian Qi Shi V3')).toBe(true)                // 假面骑士V3（V3 token 丢弃）
+    // token 丢弃后剩余仍须逐词单音节：真英文 + token 不误判
+    expect(isLikelyPinyinSlug('Running Man VS Game')).toBe(false)             // Running 2 音节 → 仍 false
+  })
+
   it('能分解为拼音的真英文 → true（用户裁定可接受的误拦）', () => {
     expect(isLikelyPinyinSlug('banana')).toBe(true) // ba-na-na 可分解（罕见误拦，title_en→null 可恢复）
   })
