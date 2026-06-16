@@ -63,6 +63,10 @@ const BatchPublishSchema = z.object({
 const VideoMetaSchema = z.object({
   title: z.string().min(1).max(200).optional(),
   titleEn: z.string().max(200).optional().nullable(),
+  // ADR-206 D-206-8（M6）：原语种标题 + 语种标注（BCP47 subtag，如 ja/ko/zh-Hant）。
+  // 经既有 safeUpdate fieldMap（titleOriginal/originalLanguage）写，不旁路 reconcile。
+  titleOriginal: z.string().max(200).optional().nullable(),
+  originalLanguage: z.string().max(35).optional().nullable(),
   description: z.string().max(5000).optional().nullable(),
   coverUrl: z.string().url().optional().nullable(),
   type: z.enum(VIDEO_TYPES).optional(),
@@ -76,17 +80,28 @@ const VideoMetaSchema = z.object({
   cast: z.array(z.string()).optional(),
   writers: z.array(z.string()).optional(),
   doubanId: z.string().max(20).optional().nullable(),
+  // ADR-206 D-206-9（M7）：aka 别名（前端逗号拆分为数组），替换写 media_catalog_aliases
+  // （kind='aka'/source='manual'/confidence=1.0）。结构化编辑（kind/lang/region）留后续。
+  aliases: z.array(z.string().min(1).max(200)).max(50).optional(),
 })
 
 const CreateVideoSchema = VideoMetaSchema.required({ title: true, type: true })
 
 // ADR-145 / CHG-SN-8-FUP-VIDEO-MANUAL-ADD-EP-A：admin 手动添加视频 schema
 // 最小 3 字段（title/type/contentRating）+ 14 元数据 optional + publishMode 三路径 + force 重复检测
-const ManualAddVideoSchema = VideoMetaSchema.required({ title: true, type: true }).extend({
-  contentRating: z.enum(['general', 'adult'] as const).default('general'),
-  publishMode: z.enum(['draft', 'staging', 'published'] as const).default('staging'),
-  force: z.boolean().default(false),
+// META-50-3A：手动添加 MVP 不支持原名/原语种/别名（建后编辑，3A 聚焦编辑路径）→ 显式 omit，
+// 避免 schema 接受却被 create 静默丢弃（ManualAddVideoInput 不含三字段）。
+const ManualAddVideoSchema = VideoMetaSchema.omit({
+  titleOriginal: true,
+  originalLanguage: true,
+  aliases: true,
 })
+  .required({ title: true, type: true })
+  .extend({
+    contentRating: z.enum(['general', 'adult'] as const).default('general'),
+    publishMode: z.enum(['draft', 'staging', 'published'] as const).default('staging'),
+    force: z.boolean().default(false),
+  })
 
 // AMD2-PATCH-2（2026-05-24）：扩展 SORT_FIELDS 白名单同步 queries SORT_FIELD_WHITELIST
 // 兑现 ADR-150 AMD2 D-150-AMD2-1 "所有有数据的列默认可排序"原则

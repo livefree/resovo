@@ -18,6 +18,9 @@ vi.mock('@/api/services/MediaCatalogService', () => ({
 vi.mock('@/api/services/metadata/catalogBlockingKeys', () => ({
   recomputeCatalogBlockingKeys: vi.fn().mockResolvedValue(undefined),
 }))
+vi.mock('@/api/db/queries/catalogAliases', () => ({
+  replaceManualAkaAliases: vi.fn().mockResolvedValue(undefined),
+}))
 vi.mock('@/api/services/CacheService', () => ({ CACHE_PREFIXES: {} }))
 vi.mock('@/api/services/AuditLogService', () => ({ AuditLogService: vi.fn().mockImplementation(() => ({ write: vi.fn() })) }))
 vi.mock('@/api/services/VideoIndexSyncService', () => ({
@@ -30,6 +33,7 @@ vi.mock('@/api/lib/queue', () => ({ enrichmentQueue: { add: vi.fn().mockResolved
 
 import * as videoQueries from '@/api/db/queries/videos'
 import { recomputeCatalogBlockingKeys } from '@/api/services/metadata/catalogBlockingKeys'
+import { replaceManualAkaAliases } from '@/api/db/queries/catalogAliases'
 import { VideoService } from '@/api/services/VideoService'
 
 const VIDEO_ID = '00000000-0000-0000-0000-000000000aaa'
@@ -66,6 +70,28 @@ describe('VideoService.update — blocking 键重算 hook（Codex fix）', () =>
   it('仅改非已知名字段（rating）→ 不触发重算', async () => {
     await makeSvc().update(VIDEO_ID, { rating: 8.5 })
     await Promise.resolve()
+    expect(recomputeCatalogBlockingKeys).not.toHaveBeenCalled()
+  })
+
+  // ── META-50-3A 扩：titleOriginal / aliases 入 knownNames → 触发重算；originalLanguage 不触发 ──
+
+  it('改 titleOriginal（原名入 knownNames）→ 触发重算', async () => {
+    await makeSvc().update(VIDEO_ID, { titleOriginal: 'ONE PIECE' })
+    await Promise.resolve()
+    expect(recomputeCatalogBlockingKeys).toHaveBeenCalledTimes(1)
+  })
+
+  it('改 aliases → replaceManualAkaAliases(db, catalogId, aliases) + 触发重算', async () => {
+    await makeSvc().update(VIDEO_ID, { aliases: ['航海王', 'ONE PIECE'] })
+    await Promise.resolve()
+    expect(replaceManualAkaAliases).toHaveBeenCalledWith(expect.anything(), CATALOG_ID, ['航海王', 'ONE PIECE'])
+    expect(recomputeCatalogBlockingKeys).toHaveBeenCalledTimes(1)
+  })
+
+  it('仅改 originalLanguage（语种标注非名字，不入 knownNames 文本）→ 不触发重算', async () => {
+    await makeSvc().update(VIDEO_ID, { originalLanguage: 'ja' })
+    await Promise.resolve()
+    expect(replaceManualAkaAliases).not.toHaveBeenCalled()
     expect(recomputeCatalogBlockingKeys).not.toHaveBeenCalled()
   })
 })

@@ -6430,3 +6430,19 @@
 - **新增依赖**：无｜**数据库变更**：无｜**新端点**：无｜**admin-ui Props**：无｜**生产代码**：零改动
 - **质量门禁全绿**：typecheck 7ws EXIT=0 / lint 4ok / test:changed 8 passed / verify:adr-contracts EXIT=0；e2e N/A（纯单测）。
 - **[AI-CHECK]**：六问过——①根因=扩召回面须锁误并不变量防回归；②零回归（纯新增测试，无生产代码）；③边界=零生产改动，不碰 scorePair/weights/blockingRecall；④复用=identity-scorer side/facets 范式 + weights 常量真源；⑤守误并三红线全锁（external_alias_match 休眠 + alias 不入评分 + 同名不同作 veto + 非 exact 封顶不自动绑定）；⑥范围=1 测试文件。**WS2 全收口（2A-1 数据层 + 2A-2 召回机制 + 2B 误并防护验证）。跨译名主修复（WS1 TMDB 多词 + WS2 identity 段③）端到端贯通并锁红线。解锁 META-50-3A（WS3 后端 VideoMetaSchema + catalogFields 写路径，sonnet）/ 3B（admin-ui Props，强制 Opus）。**
+
+## [META-50-3A] VideoMetaSchema + VideoService catalogFields 扩 title_original/aliases 写路径（SEQ-20260616-01 / WS3 后端 / D-206-8/9）— 2026-06-15
+
+**类型**：feat（admin 编辑写路径，ADR-206 D-206-8 M6 / D-206-9 M7）｜**优先级**：🟡 中（WS3 字段漂移 UI 后端，供 3B 前端消费）｜**执行模型**：claude-opus-4-8（主循环，用户裁定 opus 续接 WS3；3A 建议 sonnet，能力超配不违「不可升级」）｜**子代理**：无（D-206-8/9/13 设计已固化，纯落地）
+
+- **来源**：海贼王/航海王字段漂移——admin 无法编辑 title_original/original_language/aliases，knownNames 匹配层与 blocking 桶缺料。WS1（TMDB 多词）+ WS2（identity 段③）已闭环，本卡补编辑写路径。
+- **关键发现**：CatalogUpdateData + safeUpdate fieldMap **已支持** titleOriginal/originalLanguage（mediaCatalog.internal.ts:168-170 + mutations.ts:109-110）→ M6 写路径就绪，天然不旁路 reconcile/safeUpdate（D-206-8）。
+- **产出**：
+  - ① `VideoMetaSchema` +titleOriginal(≤200)/originalLanguage(≤35 BCP47)/aliases(string[]≤50)；`ManualAddVideoSchema` `.omit` 三者（create MVP 不支持，诚实拒收避免静默丢弃）。
+  - ② `catalogAliases.ts` 新增 `replaceManualAkaAliases`（替换语义：DELETE source='manual' AND kind='aka' + 去重 trim 后逐条 upsert kind='aka'/source='manual'/conf=1.0；既有 `WHERE source<>'manual'` 护富集行；参照 catalogBlockingAliasKeys 事务范式 Pool 自取连接 / PoolClient 复用）。
+  - ③ `VideoService.update`：catalogFields +titleOriginal/originalLanguage（经 safeUpdate manual 优先级）；aliases→replaceManualAkaAliases（await 主数据写）；recompute blocking 键 hook 触发条件扩 titleOriginal/aliases（originalLanguage 语种标注非名字 → 不触发）。
+- **关键决策**：aliases 后端 schema 用 string[]（同 genres/director，前端 3B 负责逗号拆分）；**替换** vs 追加（编辑表单提交即完整 manual aka 集）；create 路径 omit 三字段（D-206-9 仅「编辑/快编/视频库」三面，手动添加建后编辑）。
+- **修改/新增文件**：`apps/api/src/routes/admin/videos.ts`（schema +3 / ManualAddVideoSchema omit）、`apps/api/src/db/queries/catalogAliases.ts`（replaceManualAkaAliases）、`apps/api/src/services/VideoService.ts`（catalogFields + aliases 接线 + recompute hook 扩）、`tests/unit/api/catalogAliasesMutations.test.ts`（新 5）、`tests/unit/api/video-service-blocking-recompute.test.ts`（扩 +3）。
+- **新增依赖**：无｜**数据库变更**：无（title_original/original_language/media_catalog_aliases 列全已存在）｜**新端点**：无（PATCH /admin/videos/:id 已存在，仅扩 schema 字段，verify:endpoint-adr 不触发）｜**admin-ui Props**：无｜**architecture.md**：无需同步
+- **质量门禁全绿**：typecheck 7ws EXIT=0 / lint 4ok / test:changed 27 文件 450 passed / verify:adr-contracts EXIT=0；e2e N/A（后端写路径，UI 消费归 3B）。
+- **[AI-CHECK]**：六问过——①根因=schema 缺三字段 + update 未提取 + aliases 无生产写路径；②零回归（纯加性，三字段未传即跳过，既有 update 行为不变）；③边界=Route(schema)→Service(编排)→DB query(replace) 不越层；④复用=safeUpdate fieldMap 已支持 M6（零新写路径）+ upsertStructuredCatalogAlias + catalogBlockingAliasKeys 事务范式；⑤守 D-206-8 不旁路 safeUpdate + D-206-9 既有 WHERE source<>'manual' 护富集 + D-206-13 只接 upsertStructuredCatalogAlias 未碰 reconcile/CrawlerService；⑥范围=3 生产文件 + 2 测试文件。**解锁 META-50-3B（admin-ui 编辑/快编表单 + 视频库列补 title_original+aliases，强制 Opus / arch-reviewer）。**

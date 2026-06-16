@@ -135,3 +135,62 @@ export async function upsertStructuredCatalogAlias(
     ],
   )
 }
+
+/**
+ * 全量替换某 catalog 的 manual aka 别名（admin 编辑表单写路径，ADR-206 D-206-9 / META-50-3A）。
+ *
+ * **替换语义**：传入列表即该 catalog 的完整 manual aka 集——先 DELETE `source='manual' AND kind='aka'`，
+ * 再去重 trim 非空后逐条 upsert（kind='aka'/source='manual'/confidence=1.0/lang·region·script=NULL）。
+ * 既有 `WHERE source<>'manual'` 保护承载富集行不被覆盖（撞非 manual 同名行仅补缺失维度，不夺 source）。
+ * 传 Pool 时自取连接包事务保 delete+insert 原子；传 PoolClient 时复用调用方事务（同 catalogBlockingAliasKeys 范式）。
+ */
+export async function replaceManualAkaAliases(
+  db: Pool | PoolClient,
+  catalogId: string,
+  aliases: readonly string[],
+): Promise<void> {
+  const hasConnect = typeof (db as Pool).connect === 'function'
+  // PoolClient 无 connect；Pool 自取连接包事务保 delete+insert 原子
+  if (hasConnect && !('release' in db)) {
+    const client = await (db as Pool).connect()
+    try {
+      await client.query('BEGIN')
+      await replaceManualAkaWithClient(client, catalogId, aliases)
+      await client.query('COMMIT')
+    } catch (err) {
+      try { await client.query('ROLLBACK') } catch { /* connection may already be lost */ }
+      throw err
+    } finally {
+      client.release()
+    }
+    return
+  }
+  await replaceManualAkaWithClient(db, catalogId, aliases)
+}
+
+async function replaceManualAkaWithClient(
+  db: Pool | PoolClient,
+  catalogId: string,
+  aliases: readonly string[],
+): Promise<void> {
+  await db.query(
+    `DELETE FROM media_catalog_aliases WHERE catalog_id = $1 AND source = 'manual' AND kind = 'aka'`,
+    [catalogId],
+  )
+  const seen = new Set<string>()
+  for (const raw of aliases) {
+    const alias = raw.trim()
+    if (!alias || seen.has(alias)) continue
+    seen.add(alias)
+    await upsertStructuredCatalogAlias(db, {
+      catalogId,
+      alias,
+      lang: null,
+      region: null,
+      script: null,
+      kind: 'aka',
+      confidence: 1.0,
+      source: 'manual',
+    })
+  }
+}

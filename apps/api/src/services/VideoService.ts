@@ -32,6 +32,8 @@ import { enqueueIdentityVideoRescore } from '@/api/services/identity/enqueueVide
 import { recomputeCatalogBlockingKeys } from '@/api/services/metadata/catalogBlockingKeys'
 import { baseLogger } from '@/api/lib/logger'
 import type { CatalogUpdateData } from '@/api/db/queries/mediaCatalog'
+// ADR-206 D-206-9（M7）：aliases 手动编辑替换写 manual aka（结构化表单一真源）
+import { replaceManualAkaAliases } from '@/api/db/queries/catalogAliases'
 import { VideoIndexSyncService } from '@/api/services/VideoIndexSyncService'
 import { CACHE_PREFIXES } from '@/api/services/CacheService'
 import { AuditLogService } from '@/api/services/AuditLogService'
@@ -450,6 +452,9 @@ export class VideoService {
     const catalogFields: CatalogUpdateData = {}
     if (input.title !== undefined) catalogFields.title = String(input.title)
     if (input.titleEn !== undefined) catalogFields.titleEn = input.titleEn as string | null
+    // ADR-206 D-206-8（M6）：原名/原语种经既有 safeUpdate fieldMap 写（不旁路 reconcile）
+    if (input.titleOriginal !== undefined) catalogFields.titleOriginal = input.titleOriginal as string | null
+    if (input.originalLanguage !== undefined) catalogFields.originalLanguage = input.originalLanguage as string | null
     if (input.description !== undefined) catalogFields.description = input.description as string | null
     if (input.coverUrl !== undefined) catalogFields.coverUrl = input.coverUrl as string | null
     if (input.type !== undefined) catalogFields.type = input.type as string
@@ -470,10 +475,21 @@ export class VideoService {
       skippedFields = result.skippedFields
     }
 
-    // META-50-2A-1（Codex stop-time review fix）：手动编辑改 catalog 已知名字段（title/titleEn，
-    // 3A 后含 titleOriginal/aliases）后重算 blocking 归一键——否则派生表 stale，2A-2 召回口径漂移。
-    // fire-and-forget 非阻断（沿 486 title_change hook 范式，失败仅 warn 不阻断 admin 主流程）。
-    if (catalogFields.title !== undefined || catalogFields.titleEn !== undefined) {
+    // META-50-3A（ADR-206 D-206-9 M7）：aliases 替换写 manual aka（结构化表单一真源）。
+    // 在 recompute 前 await——新 aka 入 knownNames → blocking 桶；写失败应让请求失败（主数据非派生）。
+    if (input.aliases !== undefined) {
+      await replaceManualAkaAliases(this.db, video.catalog_id, input.aliases as string[])
+    }
+
+    // META-50-2A-1（Codex fix）+ 3A 扩：手动编辑改 catalog 已知名字段（title/titleEn/titleOriginal/aliases）
+    // 后重算 blocking 归一键——否则派生表 stale，2A-2 召回口径漂移。originalLanguage 是语种标注非名字
+    // （不入 knownNames 文本投影）→ 不触发。fire-and-forget 非阻断（失败仅 warn 不阻断 admin 主流程）。
+    if (
+      catalogFields.title !== undefined ||
+      catalogFields.titleEn !== undefined ||
+      catalogFields.titleOriginal !== undefined ||
+      input.aliases !== undefined
+    ) {
       void recomputeCatalogBlockingKeys(this.db, video.catalog_id).catch((err: unknown) => {
         baseLogger.warn({ err, catalog_id: video.catalog_id }, '[blocking-keys] manual edit recompute failed')
       })
