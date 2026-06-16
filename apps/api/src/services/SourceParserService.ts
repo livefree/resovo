@@ -7,6 +7,7 @@
 
 import type { VideoType, VideoGenre, VideoStatus, SourceType, ContentFormat, EpisodePattern } from '@/types'
 import { mapSourceCategory } from '@/api/lib/genreMapper'
+import { isPinyinTitle } from './PinyinDetector'
 import { TYPE_MAP, GENRE_MAP, ADULT_CATEGORIES, COUNTRY_MAP } from './SourceParserService.maps'
 
 // ── 公开 re-export（外部 import 路径保持不变）──────────────────
@@ -248,9 +249,16 @@ export function parseVodItem(item: RawVodItem): {
     .map((s) => s.trim())
     .filter(Boolean)
   const rawCategory = classSegments[0] ?? (typeName || null)
+
+  // CHG-VIR-11-D 入库拼音门禁：苹果CMS `vod_en`（英文名）约定填中文标题全拼（slug，
+  // 如 "tabiqiannanyouzhire"）。拼音冒充英文官方名会污染 knownNames（被标 official/en/conf=1.0）
+  // → 误导 TMDB tier-1 搜索 + 误拉分。入库即过滤：拼音形态不写 title_en（真英文如 "The Avengers"
+  // 保留）；拼音仍由 video_aliases（规则C）承载跨站匹配不丢召回。口径同 catalog 迁出脚本（isPinyinTitle）。
+  const vodEn = item.vod_en?.trim() || null
+  const titleEn = vodEn && !isPinyinTitle(vodEn) ? vodEn : null
   const video: ParsedVideo = {
     title: (item.vod_name ?? '').trim(),
-    titleEn: item.vod_en?.trim() || null,
+    titleEn,
     coverUrl: item.vod_pic?.trim() || null,  // ADR-009: 存外链
     type,
     sourceContentType,

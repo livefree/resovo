@@ -6497,3 +6497,18 @@
 - **质量门禁全绿**：typecheck 7ws EXIT=0 / lint 4ok / test:changed 26 文件 274 passed / verify:adr-contracts EXIT=0；e2e N/A（快编/列消费层，留 PHASE 节点回归）。
 - **[AI-CHECK]**：六问过——①根因=快编/视频库缺三字段暴露；②零回归（MetaEditSchema 加性透传 + 快编既有 13 + VideoColumns 列声明性，274 passed）；③边界=schema 透传不改 moderation 写逻辑（复用 videoSvc.update）、UI 消费层；④复用=**videoSvc.update 复用**（零新写路径）+ country schema 透传范式 + genres lazy-fetch 范式 + country 列模板；⑤守 pending-only 守卫 + 别名替换语义对齐 3A + 不碰 admin-ui Props；⑥范围=5 文件 + 2 测试。**WS3 收官 → SEQ-20260616-01 全交付**：跨译名「海贼王/航海王」主修复端到端贯通——WS1（TMDB autoMatch 多词 search）+ WS2（identity 段③ alias_normalized blocking 召回 + 误并三红线）+ WS3（字段漂移 UI：3A 写路径 / 3B-1 读路径 / 3B-2 编辑抽屉 / 3B-3 快编+视频库）。
 - **Codex stop-time review FIX**：「stale quick-edit fields can write the previous video's aliases/original title to a new video」——根因：原名/别名无 props 种子（靠 getVideo lazy-fetch），`PendingMetaQuickEdit` 切视频时未即时清空 state/baseRef → `getVideo(新视频)` pending 窗口残留旧视频值，期间 blur 自动提交会把**上一视频的原名/别名误写到新视频**（year/country 有 v.year/v.country props 种子即时重置故无此问题）。修复：effect 开头**同步** `setTitleOriginal('')`/`setAliasesStr('')`/`baseRef` 清空（切视频立即归零，base='' value='' → pending blur 不提交）+ 1 测试（切视频即时重置 + pending blur 不写 stale 值到新视频）。编辑抽屉 `VideoEditDrawer` 无此问题（显式提交按钮非 blur 自动 + `formToPatch(original,form)` 双 stale 无 diff + loading spinner 覆盖）。18 passed。
+
+## [CHG-VIR-11-D] 入库侧拼音门禁 · vod_en 拼音不写 title_en（防 knownNames 污染）— 2026-06-15
+
+**类型**：fix（采集入库元数据质量，PinyinDetector 谱系 CHG-365 / CHG-VIR-11-C）｜**优先级**：🟡 中（TMDB 误匹配根因链上游）｜**执行模型**：claude-opus-4-8（主循环 opus 直接落地）｜**子代理**：无（无共享组件 Props / 无新端点 / 无 schema）
+
+- **背景**：用户报告审核区「他比前男友炙热」(2026, TV) 的 TMDB 待确认候选显示成「the Funeral... Again」(2008, movie)、置信度 100%。调查结论：① 该匹配本身**正确**（TMDB **TV** 323486 = 他比前男友炙热），审核区显示错误是展示链 `SOURCE_HREF_BUILDERS.tmdb` 硬编码 `/movie/{id}` 命中同号 **movie** 323486 所致（D-172-AMD2-C 已登记偏离，独立卡）；② **根因链上游**=采集源苹果CMS `vod_en`（英文名）约定填中文标题全拼（slug，如 `tabiqiannanyouzhire`），被 `knownNames` 标 `kind=official/lang=en/conf=1.0` 冒充高置信英文官方名 → 驱动 TMDB tier-1 拼音搜索 + 误拉分。库实测 88%（1617/1841）title_en 实为拼音。用户拍板「入库侧过滤掉拼音」。
+- **根因判断**：入库无拼音质量门禁，`SourceParserService.parseVodItem:253` 无条件 `titleEn: item.vod_en?.trim() || null` 透传。
+- **产出**：
+  - ① `PinyinDetector.ts` 沉淀正典组合谓词 `isPinyinTitle = isPinyin ∪ isConcatenatedPinyin`（两类污染形态：空格分词全拼 + 无空格连写 slug），消除与 catalog 迁出脚本 `catalog-multilingual-cleanup.ts:57` 的口径重复（脚本按红线-2 保留独立判定，不强制改用）。
+  - ② `SourceParserService.parseVodItem` 入库门禁：`vod_en` 经 `isPinyinTitle` 判定为拼音则 `title_en` 置 null；真英文（"The Avengers" 等）原样保留。
+- **关键决策**：拼音仍由 `video_aliases`（规则C `upsertVideoAliases`，**视频级**表）承载跨站标题匹配不丢召回——规则C 写 `video_aliases` 不入 `knownNames`（后者只读 `media_catalog_aliases` catalog 级），故污染向量仅 `title_en` 单点，门禁收敛于此。含数字混合噪声（`maoxuewang2026`）按 `isPinyinTitle` 既有保守口径判 false 不拦（年份/集数=混合元数据非罗马音）。
+- **修改/新增文件**：`apps/api/src/services/PinyinDetector.ts`（+`isPinyinTitle` 导出 + 谱系 JSDoc）、`apps/api/src/services/SourceParserService.ts`（import + parseVodItem :253 门禁）、`tests/unit/api/services/PinyinDetector.test.ts`（+`isPinyinTitle` 7 用例：连写 slug / 多词 / 真英文 / 数字·中文·空边界）、`tests/unit/api/sourceParserTitleEn.test.ts`（新建 5 用例：拼音置 null / 真英文保留 / 数字噪声保留 / 缺失空白）。
+- **新增依赖**：无｜**数据库变更**：无（存量 1617 条拼音 title_en 清理另由 `catalog-multilingual-cleanup.ts --apply`，本卡仅入库防新增）｜**新端点**：无（verify:endpoint-adr 不触发）｜**admin-ui Props**：无｜**architecture.md**：无需同步
+- **质量门禁全绿**：typecheck 7ws EXIT=0 / lint 4ok / test:changed 73 文件 1006 passed（含 PinyinDetector 43 + sourceParserTitleEn 5）；e2e N/A（采集入库解析层，无 UI 消费方）。
+- **[AI-CHECK]**：六问过——①根因=入库无拼音门禁致 vod_en 拼音冒充英文官方名污染 knownNames；②零回归（真英文 vod_en 行为不变 + 拼音由 video_aliases 兜底召回，1006 passed）；③边界=仅入库解析层 + PinyinDetector 谓词沉淀，未碰规则C / 迁出脚本 / 展示链；④复用=`isPinyinTitle` 单一真源沉淀，口径同 catalog 迁出脚本；⑤守=污染向量单点（title_en）收敛、保守口径不误伤真英文/混合噪声；⑥范围=2 源 + 2 测试。**遗留**：展示链 `/movie/` 硬编码（D-172-AMD2-C）= 独立卡，需 video_external_refs 增 media-type 判别符跨三层修复。

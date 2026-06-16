@@ -13,7 +13,7 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { isPinyin, isConcatenatedPinyin } from '../../../../apps/api/src/services/PinyinDetector'
+import { isPinyin, isConcatenatedPinyin, isPinyinTitle } from '../../../../apps/api/src/services/PinyinDetector'
 
 describe('PinyinDetector.isPinyin', () => {
   describe('典型拼音（plan §10.4.1 示例）', () => {
@@ -200,5 +200,35 @@ describe('isConcatenatedPinyin', () => {
 describe('isPinyin — DP 回溯（贪心歧义词）', () => {
   it('"Dierji Zhanshi" → true（dierji 词内须回溯 di-er-ji；修复前贪心 die+rji 误判 false）', () => {
     expect(isPinyin('Dierji Zhanshi')).toBe(true)
+  })
+})
+
+// ── isPinyinTitle 组合谓词（CHG-VIR-11-D：入库 title_en 拼音门禁正典口径）──────
+
+describe('isPinyinTitle — isPinyin ∪ isConcatenatedPinyin', () => {
+  it('无空格连写 slug（vod_en 实际污染形态）→ true', () => {
+    // 「他比前男友炙热」全拼，TMDB 误匹配调查的实证样本
+    expect(isPinyinTitle('tabiqiannanyouzhire')).toBe(true)
+    expect(isPinyinTitle('wuyanshashou')).toBe(true)
+    expect(isPinyinTitle('tunshixingkongdisanji')).toBe(true)
+  })
+
+  it('空格分隔多词拼音 → true', () => {
+    expect(isPinyinTitle('Wo Bei Quan Wang Da Bao')).toBe(true)
+    expect(isPinyinTitle('Da Hua Xi You')).toBe(true)
+  })
+
+  it('真英文标题 → false（保留写入 title_en）', () => {
+    expect(isPinyinTitle('The Avengers')).toBe(false)
+    expect(isPinyinTitle('Inception')).toBe(false)
+    expect(isPinyinTitle('Forrest Gump')).toBe(false)
+  })
+
+  it('含数字 / 非 ASCII / 空 → false', () => {
+    expect(isPinyinTitle('maoxuewang2026')).toBe(false) // 含数字（混合元数据噪声，不判拼音）
+    expect(isPinyinTitle('他比前男友炙热')).toBe(false) // 中文本体非罗马音
+    expect(isPinyinTitle(null)).toBe(false)
+    expect(isPinyinTitle('')).toBe(false)
+    expect(isPinyinTitle('   ')).toBe(false)
   })
 })

@@ -237,3 +237,17 @@ export function isConcatenatedPinyin(input: string | null | undefined): boolean 
 
   return DISTINCTIVE_PINYIN_PATTERN.test(trimmed)
 }
+
+/**
+ * `title_en` / 罗马音字段「是否实际是中文拼音（而非真英文标题）」的**正典组合谓词**——
+ * {@link isPinyin}（空格分隔 ≥2 词形态，如 "Wo Bei Quan Wang"）∪
+ * {@link isConcatenatedPinyin}（无空格连写 slug 形态，如 "tabiqiannanyouzhire"），二者各自保守。
+ *
+ * 两类污染形态在 `title_en` 真实并存（采集源 `vod_en` 既有空格分词全拼、也有无空格 slug）。
+ * 既有 catalog 迁出脚本（`scripts/catalog-multilingual-cleanup.ts`）按红线-2 在 catalog 层
+ * **独立**拼这两判定；本谓词把同一口径沉淀为单一真源供**入库侧**（`SourceParserService`
+ * vod_en → title_en 门禁）复用，避免判定漂移。catalog 迁出脚本不强制改用（红线-2 独立性保留）。
+ */
+export function isPinyinTitle(input: string | null | undefined): boolean {
+  return isPinyin(input) || isConcatenatedPinyin(input)
+}
