@@ -2738,8 +2738,10 @@
 | **META-50-1A** | `knownNames.ts` 共享原语（loadKnownNames + filterForMatchScore/filterForSearchQueries 双投影）+ `listCatalogAliases` query + 单测（D-206-1） | ✅ 已完成（2026-06-16，arch-reviewer Opus 7 MUST 全落实） | **强制 Opus**（新共享原语契约 M4） |
 | **META-50-1B** | enrich 预取扩 knownNames + TMDB autoMatch 多词 search（N≤3 早停去重 M5）+ 打分用 knownNames（极性约束 M2）+ 单测（D-206-2/3） | ✅ 已完成（2026-06-16，multiTermSearch + 多 target 打分） | sonnet 可起 |
 | **META-50-1C** | bangumi 本地召回补 alias 评估（D-206-4，可选/可并 1B 或独立观察卡） | ✅ 已完成（2026-06-16，评估观察 doc-only：bangumi 单 CN 键召回，多词召回登记 follow-up） | sonnet 可起 |
-| **META-50-2A** | alias_normalized 桶（数据源=knownNames 投影 R1，非仅 alias 表）+ 来源/置信阈值（manual=1.0/NULL+非manual排除/非manual≥0.80，R3）+ **四处口径**（blockingRecall+offlineRescore+videoRescore+ingestShadow，R4）+ alias 桶 key 纳入 evidence_hash.blockingKeys（R4）+ **不 populate aliasKeys 不激活 external_alias_match**（R2）+ 单测（D-206-5/6/6a） | ⏳ 待开始（依 1A 归一口径） | **ADR-105a AMENDMENT 实装** |
-| **META-50-2B** | 误并防护验证卡——跨译名 pair 仅进 candidate 不自动合并（M1-a/c）+ 同名不同作不误并回归 fixture（D-206-6/10） | ⏳ 待开始（依 2A） | sonnet 可起 |
+| **META-50-2A**（拆 -1/-2，arch-reviewer accd3e239e7731ba6 架构裁决 2026-06-16） | 原单卡 ≥9 项跨 schema/service/4 消费方 → 拆 2A-1/2A-2（详 ADR-206 §META-50-2A 架构裁决 + M-2A-1~8） | 已拆分（见下两行） | **schema 设计已 Opus 承担** |
+| **META-50-2A-1** | ① migration 120 建派生表 `catalog_blocking_alias_keys`（normalized_key/source/kind/confidence，方案 A，CASCADE+索引+验证块）② queries `upsertCatalogBlockingAliasKeys`/`listCatalogBlockingAliasKeys` ③ 写键 service fn（loadKnownNames→normalizeForExternalMatch→Q2 阈值，**含 'catalog' 哨兵恒进 M-2A-2**）④ 接线写键到 catalog 标题/别名变更位点（加性，不改 reconcile/safeUpdate 既有语义）⑤ 回填脚本 + architecture.md schema 同步 | ⏳ 待开始（依 1A） | **schema 卡，commit 带 Subagents trailer** |
+| **META-50-2A-2** | ① blockingRecall 段③（`ALIAS_NORM_SOURCE_SQL` 共享常量 + fetch/recall 双路）② `PairSideInput.aliasBlockingKeys`（独立字段 M-2A-3，**不碰 aliasKeys**）+ buildSides 载入 ③ offlineRescore 段③相位 ④ videoRescore+ingestShadow 单 video 段③ ⑤ pairScoringPersist `sharedAliasBucketKeys` 交集 M-2A-4 → blockingKeys（空不注入 M-2A-6）；scorePair/weights 零 diff 守护 | ⏳ 待开始（依 2A-1） | **红线密度最高（误并防护）** |
+| **META-50-2B** | 误并防护验证卡——跨译名 pair 仅进 candidate 不自动合并（M1-a/c）+ 同名不同作不误并回归 fixture（D-206-6/10）+ scorePair/weights 零 diff 实证 | ⏳ 待开始（依 2A-2） | sonnet 可起 |
 | **META-50-3A** | VideoMetaSchema + VideoService catalogFields 扩 title_original/aliases 写路径（M6/M7，不旁路 reconcile/safeUpdate）+ 单测（D-206-8/9 后端） | ⏳ 待开始 | sonnet 可起 |
 | **META-50-3B** | admin-ui 编辑/快编表单 + 视频库列补 title_original+aliases（D-206-8/9 前端） | ⏳ 待开始（依 3A） | **强制 Opus**（admin-ui Props M8） |
 

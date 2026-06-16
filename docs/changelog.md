@@ -6309,6 +6309,18 @@
 - **[AI-CHECK]**：六问过——①根因=A 卡后端契约无 UI 消费 → 建自取数轮询卡接入 row5；②零回归（DashboardClient 16 + 既有卡零改；补 stub mock 消 act 警告 + typecheck EXIT=0）；③边界=纯监控只读，操作/单任务进度留后续；④复用=复用 system/jobs 端点 + AutoCrawlScheduleCard 自取数范式 + SiteHealthCard 卡片壳样式；⑤守颜色零硬编码（全 CSS 变量、仅用已验证 token）+ 不改 admin-ui Props；⑥范围=1 api + 1 新组件 + 1 接线 + 2 测试，无端点/schema/migration。**DASH-QUEUE-HEALTH 全收口（-A 后端 + -B 前端）。用户「管理台站实时监控后台任务卡片」端到端交付**——仪表盘 row5 实时显示全 9 队列 waiting/active/completed/failed + 8s 轮询 + Redis 降级兜底。
 - **Codex stop-time review FIX**：「Dashboard E2E mock 仍返旧 queueCounts 形状 → 崩新卡」——`tests/e2e/admin/_shared/shell-mocks.ts` 的 `/admin/system/jobs` mock 仅返 crawler/maintenance 2 队列，QueueHealthCard 遍历 9 队列访问 `counts.enrichment.active` → `undefined.active` TypeError 崩卡（fetch 解析后首次重渲染触发）。修复：① mock 补全 9 队列 × 4 计数（契约对齐）；② QueueHealthCard 加防御 guard（`if (!c) return null` 跳过缺键队列，partial/陈旧响应优雅降级不崩仪表盘）；③ dashboard.spec.ts +断言队列卡可见 + 9 行（防回归）；④ +1 单测（partial 响应仅渲在场行）。门禁：typecheck EXIT=0 / lint 4ok / QueueHealthCard 单测 6 passed / **test:e2e:admin dashboard.spec 3 passed**。
 
+## [META-50-2A-DESIGN] alias_normalized 桶架构裁决 + 拆卡（SEQ-20260616-01 / WS2 / arch-reviewer Opus）— 2026-06-16
+
+**类型**：docs（ADR-206 §META-50-2A 架构裁决 + 2A 拆 2A-1/2A-2 / 强制 Opus schema 设计）｜**优先级**：🟡 中（WS2 最高风险卡前置设计）｜**执行模型**：claude-opus-4-8（主循环）｜**子代理**：arch-reviewer (claude-opus-4-8, agentId accd3e239e7731ba6) 架构裁决（schema 设计跨 4 消费方 → CLAUDE.md 模型路由强制升 Opus #2）
+
+- **触发**：实施 2A 前发现 D-206-5「经 normalizeForExternalMatch 归一」未闭合**实现架构**——该函数含 normalizeTitle（HTML/季数/画质 lookbehind 正则）SQL 不可复刻，且 title_original/title_en/别名均无预归一列 → 离线 SQL 分桶无法在不预计算的前提下达成与 TS 口径一致（D-105a-16）。属跨 4 消费方 schema 设计 → 强制 Opus。
+- **arch-reviewer 裁决（CONDITIONAL-PASS，8 MUST）**：① **Q1 方案 A 派生表** `catalog_blocking_alias_keys`（migration 120，TS normalizeForExternalMatch 单一真源算键，禁复用 title_normalized 列防第二归一语义 M-2A-1）；② **Q2 阈值落键时过滤**（M-2A-2 最高优先：1A 的 `source='catalog'` 哨兵不在 D-206-6(b) 白名单 → 须映射为「恒进桶/conf 1.0」否则三标题字段被拒、主修复失效）；③ **Q3 红线**（M-2A-3：独立 `PairSideInput.aliasBlockingKeys` 不碰 aliasKeys，scorePair/weights 零改动）；④ **Q4 共享 ALIAS_NORM_SOURCE_SQL**（M-2A-5 对齐 EXT_ID_SOURCE_SQL）；⑤ **Q5 hash 不漂移**（M-2A-4 sharedAliasBucketKeys 交集 + M-2A-6 交集空不注入 → 未命中 pair hash 不变、防 candidate re-upsert 风暴）。
+- **拆卡（M-2A-7）**：原 2A 单卡 ≥9 项跨 schema/service/4 消费方 → 拆 **2A-1**（migration 120 + queries + 写键 service〔哨兵恒进〕+ 写路径加性接线 + 回填 + architecture.md，schema 卡 commit 带 Subagents trailer）→ **2A-2**（段③ recall + buildSides + 四口径 + sharedAliasBucketKeys + scorePair/weights 零 diff 守护）→ 2B。
+- **修改文件**：`docs/decisions.md`（ADR-206 §META-50-2A 架构裁决，M-2A-1~8）、`docs/task-queue.md`（2A 拆 2A-1/2A-2）、`docs/changelog.md`。
+- **新增依赖**：无｜**数据库变更**：无（设计阶段；migration 120 归 2A-1）｜**新端点**：无｜**代码改动**：无
+- **质量门禁**：verify:adr-contracts EXIT=0；docs-only → test:changed 自动跳过。
+- **[AI-CHECK]**：六问过——①根因=D-206-5 归一未闭合 SQL 实现架构（normalizeForExternalMatch 不可 SQL 复刻 + 无预归一列）→ 派生表预计算 TS 单一真源；②零回归（纯设计 docs）；③边界=本卡仅架构裁决+拆卡，实施归 2A-1/2A-2；④复用=knownNames(1A)/normalizeForExternalMatch/EXT_ID_SOURCE_SQL 范式/sharedExternalBucketKeys 交集语义；⑤守误并红线（M-2A-3 scorePair 零改动 + M-2A-6 hash 不漂移 + 自动合并 OFF 安全网）+ 1A↔2A 哨兵衔接（M-2A-2）；⑥范围=2 文档（decisions+queue）。**解锁 META-50-2A-1（派生表 + 写键 + 回填，schema 卡）。**
+
 ## [META-50-1C] bangumi 本地召回 alias 评估（SEQ-20260616-01 第 4 卡 / WS1 / D-206-4 评估观察）— 2026-06-16
 
 **类型**：docs（D-206-4 评估观察项实证勘误 / 无代码改动）｜**优先级**：⚪ 低（评估卡）｜**执行模型**：claude-opus-4-8（主循环）｜**子代理**：无
