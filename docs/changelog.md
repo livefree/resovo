@@ -6446,3 +6446,19 @@
 - **新增依赖**：无｜**数据库变更**：无（title_original/original_language/media_catalog_aliases 列全已存在）｜**新端点**：无（PATCH /admin/videos/:id 已存在，仅扩 schema 字段，verify:endpoint-adr 不触发）｜**admin-ui Props**：无｜**architecture.md**：无需同步
 - **质量门禁全绿**：typecheck 7ws EXIT=0 / lint 4ok / test:changed 27 文件 450 passed / verify:adr-contracts EXIT=0；e2e N/A（后端写路径，UI 消费归 3B）。
 - **[AI-CHECK]**：六问过——①根因=schema 缺三字段 + update 未提取 + aliases 无生产写路径；②零回归（纯加性，三字段未传即跳过，既有 update 行为不变）；③边界=Route(schema)→Service(编排)→DB query(replace) 不越层；④复用=safeUpdate fieldMap 已支持 M6（零新写路径）+ upsertStructuredCatalogAlias + catalogBlockingAliasKeys 事务范式；⑤守 D-206-8 不旁路 safeUpdate + D-206-9 既有 WHERE source<>'manual' 护富集 + D-206-13 只接 upsertStructuredCatalogAlias 未碰 reconcile/CrawlerService；⑥范围=3 生产文件 + 2 测试文件。**解锁 META-50-3B（admin-ui 编辑/快编表单 + 视频库列补 title_original+aliases，强制 Opus / arch-reviewer）。**
+
+## [META-50-3B-1] api 读路径注入结构化 manual aka + original_language 镜像（SEQ-20260616-01 / WS3 / D-206-9 前端地基）— 2026-06-15
+
+**类型**：feat（api 读路径，ADR-206 D-206-9）｜**优先级**：🟡 中（3B 前端回填地基，供 3B-2 编辑抽屉 / 3B-3 快编消费）｜**执行模型**：claude-opus-4-8（主循环 opus 直接落地 3B 三子卡；用户裁定完整三面 + opus 直接落地）｜**子代理**：无（不碰 admin-ui Props，server-next 消费层，设计 opus 主循环裁决）
+
+- **来源**：3A 写路径就绪后，编辑/快编需读路径回填当前 title_original/original_language/aliases。WS3-3B 拆三子卡第 1 卡（探查发现 3B 跨 api 读+api 写moderation+前端 3 面，远超 5 项 → 拆 -1/-2/-3）。
+- **R3 回填源裁决**：mc.aliases 数组列与结构化表 media_catalog_aliases **无自动同步**（无 reconcile/trigger，grep 确认）→ 3A 写结构化表后读数组列 stale。回填改读结构化表 listCatalogAliases。
+- **产出**：
+  - ① `videos.internal.ts`：`VIDEO_FULL_SELECT` +`mc.original_language`（共用标准列，public+admin 同 select → DbVideoRow 始终有值）；`DbVideoRow` +`original_language: string | null`。
+  - ② `VideoService.adminFindById`：`listCatalogAliases(db, catalogId, ['aka'])` 过滤 `source==='manual'` → 注入 `aliases`（覆盖 row.aliases 数组列 stale 值）；original_language 随 row spread 透传。
+  - ③ server-next `VideoAdminDetail` +`original_language?` + `aliases?`（结构化 manual aka）。
+- **关键决策**：回填只含 manual aka（source='manual' ∧ kind='aka'）——与 3A replaceManualAkaAliases 替换作用域严格一致，防回填非 manual 别名（douban/tmdb aka）被提交时误转 manual（语义漂移）。全部别名只读展示归 ExternalMetaPanel（D-172-AMD3）/ follow-up。
+- **修改/新增文件**：`apps/api/src/db/queries/videos.internal.ts`、`apps/api/src/services/VideoService.ts`、`apps/server-next/src/lib/videos/types.ts`、`tests/unit/api/video-service-admin-detail.test.ts`（新 3）。
+- **新增依赖**：无｜**数据库变更**：无（original_language/media_catalog_aliases 列已存在）｜**新端点**：无｜**admin-ui Props**：无｜**architecture.md**：无需同步
+- **质量门禁全绿**：typecheck 7ws EXIT=0 / lint 4ok / test:changed 89 文件 1143 passed；e2e N/A（api 读路径，UI 消费归 3B-2/3B-3）。
+- **[AI-CHECK]**：六问过——①根因=读路径缺 original_language/结构化 aliases；②零回归（adminFindById 加性注入，aliases 覆盖 stale 数组列，1143 passed）；③边界=Service 注入不越层，SQL 加共用列；④复用=listVideoExternalRefs 注入范式 + listCatalogAliases(1A) + VIDEO_FULL_SELECT 共用列；⑤守 R3 单一真源（读结构化表非数组列）+ 回填作用域=提交作用域双向一致；⑥范围=2 api 文件 + 1 类型 + 1 测试。**解锁 META-50-3B-2（编辑抽屉 +titleOriginal·originalLanguage·aliases 输入·回填）。**

@@ -149,6 +149,9 @@ export interface VideoAdminDetail extends VideoAdminRow {
   douban_id: string | null
   // ADR-172 AMENDMENT 3：真源字段区（catalogFields 镜像；api raw row 已 select）
   title_original?: string | null
+  // ADR-206 D-206-9（3B-1）：原语种 + 结构化 manual aka（编辑/快编回填真源；aliases 仅 source=manual∧kind=aka）
+  original_language?: string | null
+  aliases?: string[]
   rating_votes?: number | null
   metadata_source?: string | null
   // ADR-172 AMENDMENT 3：外部源并集（仅 adminFindById 注入，列表不带）

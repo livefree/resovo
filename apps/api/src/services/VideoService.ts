@@ -33,7 +33,7 @@ import { recomputeCatalogBlockingKeys } from '@/api/services/metadata/catalogBlo
 import { baseLogger } from '@/api/lib/logger'
 import type { CatalogUpdateData } from '@/api/db/queries/mediaCatalog'
 // ADR-206 D-206-9（M7）：aliases 手动编辑替换写 manual aka（结构化表单一真源）
-import { replaceManualAkaAliases } from '@/api/db/queries/catalogAliases'
+import { replaceManualAkaAliases, listCatalogAliases } from '@/api/db/queries/catalogAliases'
 import { VideoIndexSyncService } from '@/api/services/VideoIndexSyncService'
 import { CACHE_PREFIXES } from '@/api/services/CacheService'
 import { AuditLogService } from '@/api/services/AuditLogService'
@@ -289,8 +289,14 @@ export class VideoService {
     // ADR-201 / META-32-A：详情注入统一 metadataStatus（单视频 refs）+ ADR-205 M3 冲突字段
     const refsMap = await getMetadataProviderRefs(this.db, [{ id: row.id, catalogId: row.catalog_id }])
     const conflictsMap = await getConflictFieldsByCatalogIds(this.db, [row.catalog_id])
+    // ADR-206 D-206-9（3B-1）：注入结构化 manual aka（source=manual ∧ kind=aka）供编辑/快编回填——
+    // 读结构化表（mc.aliases 数组列与结构化表无同步会 stale）；过滤 manual 保回填=replaceManualAkaAliases
+    // 提交作用域双向一致（防回填非 manual 别名被提交时误转 manual）。
+    const aliasRows = await listCatalogAliases(this.db, row.catalog_id, ['aka'])
+    const aliases = aliasRows.filter((a) => a.source === 'manual').map((a) => a.alias)
     return {
       ...row,
+      aliases,
       enrichmentSummary: videoQueries.buildEnrichmentSummary(row),
       metadataStatus: buildMetadataStatusSummary(
         toMetadataStatusSourceRow(row, refsMap.get(row.id) ?? [], conflictsMap.get(row.catalog_id) ?? []),

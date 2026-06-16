@@ -62,6 +62,8 @@ export interface DbVideoRow {
   // ── media_catalog JOIN 字段（mc.*）───────────────────────────────
   title_en: string | null
   title_original: string | null
+  // ADR-175 D-175-1 / ADR-206 D-206-9（3B-1）：原语种 BCP47 subtag（编辑/快编回填）
+  original_language: string | null
   description: string | null
   cover_url: string | null
   rating: number | null
@@ -240,7 +242,7 @@ export const VIDEO_FULL_SELECT = `
   v.douban_status, v.bangumi_status, v.source_check_status, v.meta_score, v.meta_quality,
   v.total_episodes, v.current_episodes, v.trending_tag,
   v.staff_note, v.review_label_key, v.review_source,
-  mc.title_en, mc.title_original, mc.description, mc.cover_url,
+  mc.title_en, mc.title_original, mc.original_language, mc.description, mc.cover_url,
   mc.rating, mc.rating_votes, mc.runtime_minutes, mc.year, mc.country,
   mc.status, mc.director, mc."cast", mc.writers, mc.genres,
   mc.aliases, mc.languages, mc.tags,
