@@ -317,7 +317,7 @@ describe('listAdminVideos (CHG-209)', () => {
     expect(countSql).toContain('LEFT JOIN LATERAL')
   })
 
-  it('META-36-C: metadataMatched 过滤——选中源 state=applied OR 合流 + none 哨兵(四源 IS DISTINCT FROM applied)', async () => {
+  it('META-52: metadataMatched 过滤改「有数据」口径——选中源 state IN applied/candidate/problem OR 合流 + none 哨兵(四源皆无数据)', async () => {
     query
       .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rows: [{ count: '0' }] })
@@ -331,11 +331,11 @@ describe('listAdminVideos (CHG-209)', () => {
 
     const [sql] = query.mock.calls[0]
     const [countSql] = query.mock.calls[1]
-    // 选中 provider → 严格 applied（区别于 metadataProvider facet 的 IN applied/candidate/problem）
-    expect(sql).toContain("md.md_tmdb_state = 'applied'")
-    // none 哨兵 → 四源皆 IS DISTINCT FROM applied（NULL 安全）AND 合流
-    expect(sql).toContain("md.md_douban_state IS DISTINCT FROM 'applied'")
-    expect(sql).toContain("md.md_imdb_state IS DISTINCT FROM 'applied'")
+    // 选中 provider → 有数据(含外部已获取未应用的 candidate)，与 metadataProvider facet 复用同口径
+    expect(sql).toContain("md.md_tmdb_state IN ('applied','candidate','problem')")
+    // none 哨兵 → 四源皆无数据（NULL 安全 IS NULL 兜底 + NOT IN）AND 合流
+    expect(sql).toContain("md.md_douban_state IS NULL OR md.md_douban_state NOT IN ('applied','candidate','problem')")
+    expect(sql).toContain("md.md_imdb_state IS NULL OR md.md_imdb_state NOT IN ('applied','candidate','problem')")
     expect(sql).toContain(' OR ')
     // 是 metadata 过滤 → 主 + count 均挂 LATERAL
     expect(sql).toContain('LEFT JOIN LATERAL')

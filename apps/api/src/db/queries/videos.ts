@@ -238,9 +238,14 @@ const PROVIDER_STATE_COL: Record<MetadataProvider, string> = {
 const METADATA_MATCHED_COUNT_EXPR = `(${METADATA_PROVIDERS
   .map((p) => `CASE WHEN ${PROVIDER_STATE_COL[p]} = 'applied' THEN 1 ELSE 0 END`)
   .join(' + ')})`
-// 「未匹配任何源」谓词：四源皆非 applied。NULL 安全用 IS DISTINCT FROM（NULL/missing/not_applicable 均判 true）。
-const NO_PROVIDER_APPLIED_SQL = `(${METADATA_PROVIDERS
-  .map((p) => `${PROVIDER_STATE_COL[p]} IS DISTINCT FROM 'applied'`)
+// META-52：provider「有数据」判定——state ∈ applied/candidate/problem（含外部已获取但未应用的 candidate）。
+// 与前端 METADATA_PRESENT_STATES + ADR-201 metadataProvider facet 同口径；状态字面量为代码常量，无用户输入拼接。
+const PROVIDER_DATA_STATES_SQL = "('applied','candidate','problem')"
+const providerHasDataSql = (col: string) => `${col} IN ${PROVIDER_DATA_STATES_SQL}`
+// 「无任何来源数据」谓词：四源皆无数据（state ∉ applied/candidate/problem，含 NULL/missing/not_applicable）。
+// NULL 安全：`NULL NOT IN (...)` 求值 unknown → 显式 `IS NULL` 兜底。
+const NO_PROVIDER_DATA_SQL = `(${METADATA_PROVIDERS
+  .map((p) => `(${PROVIDER_STATE_COL[p]} IS NULL OR ${PROVIDER_STATE_COL[p]} NOT IN ${PROVIDER_DATA_STATES_SQL})`)
   .join(' AND ')})`
 
 const SORT_FIELD_WHITELIST: Record<string, string> = {
@@ -456,13 +461,14 @@ export async function listAdminVideos(
     // META-36-A facet：选中 provider 中任一「有数据」(state ∈ applied/candidate/problem) 即命中，OR 合流。
     // 列名经 PROVIDER_STATE_COL 由校验后枚举映射、状态字面量为代码常量 → 无用户输入拼接（对齐 metadataTmdbPending 内联范式）。
     const cols = filters.metadataProvider.map((p) => PROVIDER_STATE_COL[p])
-    conditions.push(`(${cols.map((c) => `${c} IN ('applied','candidate','problem')`).join(' OR ')})`)
+    conditions.push(`(${cols.map((c) => providerHasDataSql(c)).join(' OR ')})`)
   }
   if (filters.metadataMatched?.length) {
-    // META-36-C：已匹配源 OR 合流——选中 provider 谓词 `<col>='applied'`；哨兵 none 谓词「四源皆非 applied」。
-    // 列名经 PROVIDER_STATE_COL 由校验后枚举映射、'applied'/none 谓词为代码常量 → 无用户输入拼接。
+    // META-52（原 META-36-C）：视频库「元数据」列来源过滤改「有数据」口径——选中 provider 谓词 = 该源
+    // state ∈ applied/candidate/problem（含外部已获取但未应用的 candidate），哨兵 none = 四源皆无数据；
+    // OR 合流。与 metadataProvider facet 复用 providerHasDataSql（消除重复实现）。列名/字面量皆代码常量。
     const preds = filters.metadataMatched.map((v) =>
-      v === METADATA_MATCHED_NONE ? NO_PROVIDER_APPLIED_SQL : `${PROVIDER_STATE_COL[v]} = 'applied'`,
+      v === METADATA_MATCHED_NONE ? NO_PROVIDER_DATA_SQL : providerHasDataSql(PROVIDER_STATE_COL[v]),
     )
     conditions.push(`(${preds.join(' OR ')})`)
   }

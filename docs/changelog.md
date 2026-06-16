@@ -6607,3 +6607,20 @@
 - **用户收敛（FP 取舍）**：title-case 修复的 two-pass 小写化误拦了能分解为拼音的真英文**多词**标题（`Running Man`/`Crime Scene`/`Casa Grande`）。用户裁定收敛：**空格分词要求逐词恰单音节**——拼音惯例逐音节分词（`Wo Cai Bu`=每词 1 音节）保留，多音节真英文词（`Running`=run-ning 2 音节）排除。重构 `isLikelyPinyinSlug` 按**输入是否有真空格**分流：有空格→逐词单音节（`decomposeSyllableCount===1`）；无空格连写→(a) 去数字整体分解（title-case）∪ (b) 去数字+大写 token 后片段分解（嵌入版本 token，多音节 OK）。单词连写真英文（`Canaan`/`banana`）仍属接受 FP（TMDB 还原）。**还原**：扫 title_en=NULL 的 romanization 别名（cleanup 迁出原值），新谓词不再判拼音的 8 个误清真英文（`Running Man`/`Crime Scene`/`The Gaze`/`Casa Grande`/`Maa Behen` 等）还原 title_en；3856 别名仅 8 FP 证精炼后精度高。+3 测试（多词英文保留 / 逐音节拼音命中）。门禁 typecheck/lint EXIT=0 + test:changed 72 文件 1025 passed（PinyinDetector 53）。
 - **Codex stop-time review FIX**：「whitespace branch regresses uppercase version/VS token filtering」——收敛后的「有空格」分支只剥数字、不处理嵌入大写 token，导致空格逐音节拼音里若含 VS/版本 token（`Hu He Hao Te VS Yan Bian 20260523`=呼和浩特VS延边）的 token 词过不了「单音节」检查 → 整串误判非拼音（相对旧 two-pass 回归）。修复：有空格分支**先丢版本/VS/日期 token**（含数字词 或 无小写的纯大写词 `VS`/`V3`/`20260523`），再对剩余拼音词逐词单音节。真英文 + token（`Running Man VS Game`）仍因 Running 多音节判 false。+3 测试。存量 cleanup dry-run 0 新命中（库内此类已清），闭合**入库门禁**对空格+token 拼音回归。门禁 typecheck/lint EXIT=0 + test:changed passed（PinyinDetector 54）。
 - **Codex stop-time review FIX**：「whitespace token filter now misses all-uppercase pinyin」——上一轮丢 token 判据用「无小写=纯大写就丢」，但**全大写拼音词**（`WO`/`HU`/`CAI`）也无小写 → 被当 token 丢 → 全大写空格拼音（`WO CAI BU`）全丢 → 漏判（`VS` 非拼音与 `WO` 拼音音节都纯大写，判据分不开）。修复：丢 token 判据加「**且不可分解为单音节**」——`WO`→`wo` 是 1 音节（留）、`VS`→`vs` 不分解（丢）、`N`/`WWE` 不分解（丢）；`decomposeSyllableCount` 内部已小写。+3 测试（全大写空格拼音 `WO CAI BU`/`HU HE HAO TE` 命中 / `VS WWE` 不误判）。门禁 typecheck/lint EXIT=0 + test:changed 72 文件 1027 passed（PinyinDetector 55）。
+
+## [META-52] 视频库「元数据」列来源过滤改「有数据」口径（含外部已获取未应用）
+- **完成时间**：2026-06-16
+- **记录时间**：2026-06-16 14:10
+- **执行模型**：claude-opus-4-8
+- **子代理**：无（不改 admin-ui 公开 Props / 无新端点 / 无 schema / 无类型契约改动）
+- **修改文件**：
+  - `apps/api/src/db/queries/videos.ts` — 抽共享「有数据」谓词 helper（`PROVIDER_DATA_STATES_SQL` + `providerHasDataSql` + `NO_PROVIDER_DATA_SQL`）；`metadataProvider` facet 改用 helper（输出不变，消除重复实现）；`metadataMatched`（视频库可见「元数据」列来源过滤）选中源谓词由 `<col>='applied'` → 有数据（`IN ('applied','candidate','problem')`，含外部已获取但未应用的 candidate），none 哨兵由「四源皆非 applied」（旧 `NO_PROVIDER_APPLIED_SQL`，已删）→「四源皆无数据」；口径自洽避免 candidate 视频同时命中某源与「无来源」矛盾。
+  - `apps/server-next/src/app/admin/videos/_client/VideoColumns.tsx` — `METADATA_MATCHED_OPTIONS` none 选项 label「未匹配任何源」→「无来源数据」（口径已变）；meta 列与选项常量注释校正为 META-52 有数据口径。值域（4 源 + none，`METADATA_MATCHED_FILTER_VALUES`）不变 → 零类型/字段/API schema 改动。
+  - `tests/unit/api/admin-video-list.test.ts` — metadataMatched 口径断言更新（provider→`IN (...)`；none→`IS NULL OR NOT IN (...)`）+ it 标题改 META-52。
+  - `tests/unit/components/server-next/admin/videos/VideoColumns.test.tsx` — it 标题文案校正（filterFieldName/values 断言不变）。
+- **新增依赖**：无
+- **数据库变更**：无（仅 WHERE 谓词口径调整，无 migration）
+- **注意事项**：
+  - **排序口径保留**：meta 列排序仍走 `metadata_matched_count`（已应用源数量，META-36-C），未随过滤改为「有数据数量」——用户仅要求调整「过滤条件」，记为有意边界；如需排序同口径化，独立 follow-up。
+  - **隐藏列 `metadata_provider` 未动**：其「有数据」facet 与本列改后重叠（visible 元数据列已覆盖且多 none 哨兵），属可选 follow-up，由用户决定是否合并/移除；本卡不做跨 3 层（types/api/server-next）字段删除以收敛回归面（价值排序 #1 稳定优先）。
+  - 门禁：typecheck 8ws / lint 4 successful（零本卡新警告）/ test:changed 82 文件 1119 passed / 集成 metadata SQL 6 passed（真库）/ verify:adr-contracts EXIT=0 / test:e2e:admin 84 passed（videos.spec 黄金路径零回归）。

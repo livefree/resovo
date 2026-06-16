@@ -108,7 +108,7 @@ describe('buildVideoColumns — 筛选面（§2.6）', () => {
     }
   })
 
-  it('META-36-C: meta 列挂「已匹配源」enum 过滤（metadataMatched，四源 + 未匹配哨兵）', () => {
+  it('META-52: meta 列挂「有数据」来源 enum 过滤（metadataMatched，四源含 candidate + 无来源数据哨兵）', () => {
     type FCol = { filterable?: boolean; filterKind?: string; filterFieldName?: string; filterOptions?: readonly { value: string }[] }
     const meta = colById('meta') as FCol
     expect(meta.filterable).toBe(true)
