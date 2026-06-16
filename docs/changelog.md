@@ -6545,6 +6545,7 @@
 - **新增依赖**：无｜**数据库变更**：无｜**新端点**：无｜**admin-ui Props**：无｜**architecture.md**：无需同步（TMDB 字段映射属 ADR-202 范畴，未在 architecture 文档化）
 - **质量门禁全绿**：typecheck 7ws EXIT=0 / lint 4ok / test:changed 14 文件 264 passed（tmdb-confirm-service 55）；e2e N/A（富集服务层）。
 - **[AI-CHECK]**：六问过——①根因=管线不写 title_en，拼音无修复路径；②零回归（title_en 仅 sel.has 选中且真英文时写，既有字段不变，55 passed）；③边界=TmdbConfirmService 单文件 + 测试，passthrough 复用既有 reconcile 写路径；④复用=translations append 键/类型既有、safeUpdate 优先级覆盖既有；⑤守=CJK 守卫防中文误写英文字段、单源 passthrough 不扰 RECONCILE_GROUPS；⑥范围=抽取 1 项。**后续**：卡 B（tmdb-missing 回填模式）+ 运维执行回填/cleanup（plan Phase B/C/D）。
+- **Codex stop-time review FIX**：「title_en write path can re-pollute catalog and leave blocking keys stale」——两处缺陷：① **再污染**：`pickEnglishTitle` 仅 CJK/拉丁守卫，但 TMDB 的 en 译名/original_title **本身可能是拼音/罗马音**（贡献者误填，如 "Qing Yu Nian"/"tabiqiannanyouzhire"），会通过守卫把拼音重新灌回 title_en——复用入库同一 `isPinyinTitle`（CHG-VIR-11-D）谓词拒绝；② **blocking 键 stale**：`title_en` 是 `knownNames`（kind=official）成员，confirm 应用英文标题后须重算 `catalog_blocking_alias_keys`，但 confirm 重算触发只看 `title`/`titleOriginal` 漏 `titleEn` → 派生表 stale（autoMatch/enrich 路径在 `MetadataEnrichService:166` reconcile 后**无条件**重算，已覆盖，仅 confirm 漏）。修复：`pickEnglishTitle` 加 `isPinyinTitle` 拒绝；confirm 重算条件补 `|| applied.includes('titleEn')`。+4 测试（空格拼音/连写拼音译名→不写 / confirm 应用 titleEn→重算 / 拼音被拒→不重算）。门禁复跑 typecheck/lint EXIT=0 + test:changed 14 文件 268 passed（tmdb-confirm 59）。
 
 ## [META-51-B] tmdb-missing 回填模式（库存回填 / plan Phase B）— 2026-06-16
 

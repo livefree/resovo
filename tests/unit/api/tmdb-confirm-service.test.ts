@@ -581,4 +581,32 @@ describe('META-51-A: confirm fields 含 title_en → 英文标题抽取', () => 
     await svc.confirm('vid', 'cat', { tmdbId: 129, mediaType: 'movie', fields: ['title_en'] })
     expect(vi.mocked(tmdbLib.getMovieDetail).mock.calls[0][1]).toMatchObject({ append: expect.arrayContaining(['translations']) })
   })
+
+  // Codex stop-time review FIX：防再污染——TMDB en 译名本身是拼音/罗马音 → 不写 title_en
+  it('en 译名为空格分词拼音（Qing Yu Nian）→ isPinyinTitle 拒绝，不写 titleEn', async () => {
+    vi.mocked(tmdbLib.getMovieDetail).mockResolvedValue({ ...MOVIE, ...withTrans({ title: 'Qing Yu Nian' }) })
+    await svc.confirm('vid', 'cat', { tmdbId: 129, mediaType: 'movie', fields: ['title_en'] })
+    expect(safeUpdateMock).not.toHaveBeenCalledWith('cat', expect.objectContaining({ titleEn: expect.anything() }), 'tmdb', expect.anything())
+  })
+
+  it('en 译名为无空格连写拼音（tabiqiannanyouzhire）→ 不写 titleEn', async () => {
+    vi.mocked(tmdbLib.getMovieDetail).mockResolvedValue({ ...MOVIE, ...withTrans({ title: 'tabiqiannanyouzhire' }) })
+    await svc.confirm('vid', 'cat', { tmdbId: 129, mediaType: 'movie', fields: ['title_en'] })
+    expect(safeUpdateMock).not.toHaveBeenCalledWith('cat', expect.objectContaining({ titleEn: expect.anything() }), 'tmdb', expect.anything())
+  })
+
+  // Codex stop-time review FIX：blocking 键 stale——confirm 应用 titleEn 须重算（titleEn 是 knownNames 成员）
+  it('confirm 应用 titleEn → COMMIT 后重算 blocking 键', async () => {
+    vi.mocked(tmdbLib.getMovieDetail).mockResolvedValue({ ...MOVIE, ...withTrans({ title: 'Spirited Away' }) })
+    await svc.confirm('vid', 'cat', { tmdbId: 129, mediaType: 'movie', fields: ['title_en'] })
+    await Promise.resolve()
+    expect(recomputeCatalogBlockingKeys).toHaveBeenCalledWith(db, 'cat')
+  })
+
+  it('confirm 仅 title_en 但译名是拼音被拒（applied 不含 titleEn）→ 不重算 blocking 键', async () => {
+    vi.mocked(tmdbLib.getMovieDetail).mockResolvedValue({ ...MOVIE, ...withTrans({ title: 'Qing Yu Nian' }) })
+    await svc.confirm('vid', 'cat', { tmdbId: 129, mediaType: 'movie', fields: ['title_en'] })
+    await Promise.resolve()
+    expect(recomputeCatalogBlockingKeys).not.toHaveBeenCalled()
+  })
 })

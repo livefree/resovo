@@ -31,6 +31,7 @@ import { splitIdentityScalarFields } from '@/api/services/metadata/fieldSplit'
 import { enqueueIdentityVideoRescore } from '@/api/services/identity/enqueueVideoRescore'
 import { loadKnownNames, filterForSearchQueries, filterForMatchScore, type KnownName } from '@/api/services/metadata/knownNames'
 import { normalizeForExternalMatch } from '@/api/services/TitleNormalizer'
+import { isPinyinTitle } from '@/api/services/PinyinDetector'
 
 /** search 候选预览缩略图 base（base+w500；与 confirm 富图片应用的 configuration base 不同关注点，META-43）。 */
 const TMDB_PREVIEW_IMAGE_BASE = 'https://image.tmdb.org/t/p/w500'
@@ -262,6 +263,9 @@ function pickEnglishTitle(detail: TmdbMovieDetail | TmdbTvDetail, mediaType: Tmd
   if (!candidate) return null
   // 必须含拉丁字母且无 CJK（中日韩统一表意 + 兼容表意），否则视为非英文不写。
   if (!/[A-Za-z]/.test(candidate) || /[㐀-鿿豈-﫿]/.test(candidate)) return null
+  // 防再污染（Codex stop-time review）：TMDB en 译名/original_title 本身可能是拼音/罗马音（贡献者误填，
+  // 如 "Qing Yu Nian"），复用入库同一 isPinyinTitle 谓词拒绝，避免把拼音重新灌回 title_en。
+  if (isPinyinTitle(candidate)) return null
   return candidate
 }
 
@@ -409,7 +413,9 @@ export class TmdbConfirmService {
       await client.query('COMMIT')
       // META-50-2A-2 前置：confirm 应用 catalog 已知名字段（title/title_original）后重算 blocking
       // 归一键——否则派生表 stale、段③ 召回口径漂移（fire-and-forget 非阻断，沿 VideoService.update 范式）。
-      if (applied.includes('title') || applied.includes('titleOriginal')) {
+      // META-51-A FIX（Codex stop-time review）：titleEn 也是 knownNames（kind=official）成员，
+      // confirm 应用英文标题后须重算 blocking 归一键，否则派生表 stale（autoMatch 路径在 enrich 无条件重算）。
+      if (applied.includes('title') || applied.includes('titleOriginal') || applied.includes('titleEn')) {
         void recomputeCatalogBlockingKeys(this.db, catalogId).catch((err: unknown) => {
           baseLogger.warn({ err, catalog_id: catalogId }, '[blocking-keys] tmdb confirm recompute failed')
         })
