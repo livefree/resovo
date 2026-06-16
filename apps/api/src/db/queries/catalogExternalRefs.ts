@@ -191,20 +191,19 @@ export async function demoteExactRef(
   db: Pool | PoolClient,
   catalogId: string,
   provider: ExternalRefProvider,
-  exceptExternalId?: string
+  exceptExternalId?: string,
+  note?: string
 ): Promise<number> {
+  // 降级原因 note：调用方可显式传（ADR-207 D-207-9b 存量清理传 'demoted: stale show-id-as-season'）；
+  // 省略时按 exceptExternalId 派生默认值（保持 D-177-5 cache 联动既有行为，非破坏性扩展）。
+  const noteText = note ?? (exceptExternalId === undefined ? 'demoted: cache cleared' : 'demoted: cache value replaced')
   const r = await db.query(
     `UPDATE catalog_external_refs
         SET relation = 'candidate', is_primary = false, updated_at = NOW(),
             notes = COALESCE(notes || ' | ', '') || $3
       WHERE catalog_id = $1 AND provider = $2 AND relation = 'exact'
         AND ($4::text IS NULL OR external_id <> $4)`,
-    [
-      catalogId,
-      provider,
-      exceptExternalId === undefined ? 'demoted: cache cleared' : 'demoted: cache value replaced',
-      exceptExternalId ?? null,
-    ]
+    [catalogId, provider, noteText, exceptExternalId ?? null]
   )
   return r.rowCount ?? 0
 }

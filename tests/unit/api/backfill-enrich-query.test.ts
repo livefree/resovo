@@ -62,6 +62,17 @@ describe('listVideosForBackfillEnrich (META-15-C)', () => {
     expect(sql).not.toContain('v.meta_quality IS NULL')
   })
 
+  it('mode=tmdb-season → season_number IS NOT NULL + TV 家族类型（ADR-207 D-207-9b/-10）', async () => {
+    await listVideosForBackfillEnrich(db, { mode: 'tmdb-season' })
+    const [sql, params] = query.mock.calls[0]
+    expect(sql).toContain('mc.season_number IS NOT NULL')
+    expect(sql).toContain('v.type = ANY($1::text[])')
+    expect(params[0]).toEqual(['series', 'anime', 'variety', 'documentary']) // 排除 movie（无季）
+    // 独立档：不混入 tmdb-missing / douban 状态条件
+    expect(sql).not.toContain('mc.tmdb_id IS NULL')
+    expect(sql).not.toContain('v.meta_quality IS NULL')
+  })
+
   it('type + limit 参数化', async () => {
     await listVideosForBackfillEnrich(db, { mode: 'never', type: 'anime', limit: 50 })
     const [sql, params] = query.mock.calls[0]

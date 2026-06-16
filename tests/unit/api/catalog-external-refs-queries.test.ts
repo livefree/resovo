@@ -168,4 +168,13 @@ describe('demoteExactRef（D-177-5 清 cache 联动降级）', () => {
       'cat-a', 'douban', 'demoted: cache value replaced', 'new-val',
     ])
   })
+
+  it('显式 note 参数（ADR-207 D-207-9b 存量清理）→ 写自定义降级原因，保留正确季 id（exceptExternalId）', async () => {
+    mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 1 })
+    const n = await demoteExactRef(mockClient, 'cat-a', 'tmdb', '3624', 'demoted: stale show-id-as-season')
+    expect(n).toBe(1)
+    expect(mockQuery.mock.calls[0]![1]).toEqual([
+      'cat-a', 'tmdb', 'demoted: stale show-id-as-season', '3624',
+    ])
+  })
 })

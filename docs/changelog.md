@@ -6690,3 +6690,23 @@
   - 门禁：typecheck exit=0 / lint exit=0 / `npm run test:changed` 213 passed（13 文件）。
   - 现状 movie/show 路径零回归（既有 step3.5 测试因 jest 忽略 undefined 属性，`seasonNumber: undefined` 不破坏 `toHaveBeenCalledWith({title,year,mediaType})` 断言）。
   - 卡 D（存量 show-id-as-season 清理脚本 + 回填）依赖本卡 -B/-C 落地后跑——前向生效链路（-A/-B/-C）至此闭环，存量纠偏待 -D。
+
+## [META-53-D] 存量 show-id-as-season 清理脚本 + 季级回填（SEQ-20260616-03 / ADR-207 D-207-9b BLOCKER / -10）
+- **完成时间**：2026-06-16
+- **记录时间**：2026-06-16 15:56
+- **执行模型**：claude-opus-4-8（建议 sonnet；人工以 Opus 启动 SEQ-20260616-03，向上覆盖、不阻断）
+- **子代理**：无
+- **修改文件**：
+  - `scripts/cleanup-tmdb-season-refs.ts`（新）— 存量 show-id-as-season 清理（D-207-9b）：查 `provider='tmdb'∧external_kind='season'∧relation='exact'∧mc.season_number IS NOT NULL` → 对每行把 external_id 当 show id 调 `getTvDetail`，seasons[] 按 season_number 命中季、正确季 id ≠ external_id → `demoteExactRef(except=正确季id, note='demoted: stale show-id-as-season')` 降级 candidate（非 DELETE，保审计；幂等——降级后不再被 exact 查询命中）。纯检测逻辑抽 `classifyStaleSeasonRef`（导出可测）；`main()` 由 `process.env.VITEST` 守卫（import 零副作用）；`--dry-run` 复核；TMDB 凭证缺失终止。低概率边界（季 id 巧为有效 show id）已在头部标注，要求先 dry-run 复核
+  - `apps/api/src/db/queries/videos.ts` — `BackfillEnrichMode` 加 `'tmdb-season'` + `TV_FAMILY_TYPES`（series/anime/variety/documentary，排除 movie）；`listVideosForBackfillEnrich` 加 tmdb-season 分支（`mc.season_number IS NOT NULL` ∧ TV 家族类型）——触发分季 catalog 经 stepTmdb 透传 seasonNumber 写正确 season exact 季 id + 逐集
+  - `scripts/reenrich-backfill.ts` — `--mode` 验证列表 + 帮助文本加 `tmdb-season`（复用既有 run-unique jobId `backfill-${runTs}-${id}` 范式，禁 enqueueEnrichJob/batchEnqueueEnrich〔REVISE-2 固定 jobId 漏跑〕）
+  - `apps/api/src/db/queries/catalogExternalRefs.ts` — `demoteExactRef` 加可选 `note?` 参数（非破坏：省略时按 exceptExternalId 派生默认 note，保 D-177-5 既有行为；清理脚本传 'demoted: stale show-id-as-season'）
+  - `tests/unit/scripts/cleanup-tmdb-season-refs.test.ts`（新，5）— classifyStaleSeasonRef 分支（show=null 非 stale / show id≠季 id stale+correctSeasonId / external_id 已是季 id 非 stale / 无对应季号保守跳过 / seasons 缺失）
+  - `tests/unit/api/backfill-enrich-query.test.ts`（+1=8）— mode=tmdb-season SQL 断言（season_number IS NOT NULL + TV 家族参数化，不混 tmdb-missing/douban 条件）
+  - `tests/unit/api/catalog-external-refs-queries.test.ts`（+1=15）— demoteExactRef 显式 note 参数写自定义降级原因 + exceptExternalId 保留正确季 id
+- **新增依赖**：无
+- **数据库变更**：无（清理走 demoteExactRef UPDATE relation='candidate'，非 schema；无 migration）
+- **注意事项**：
+  - 门禁：typecheck exit=0（apps/api/src 改动覆盖；scripts/tests 按根 tsconfig include 既有约定不入 tsc 门禁，经 vitest esbuild 运行）/ lint exit=0 / `npm run test:changed` 1336 passed（92 文件，videos.ts 基础改动按 ADR-180 升全量）。
+  - **运行顺序（运维）**：① `node --env-file=.env.local --import tsx scripts/reenrich-backfill.ts --mode tmdb-season`（写正确 season exact 季 id + 逐集）→ ② `scripts/cleanup-tmdb-season-refs.ts --dry-run`（复核 stale 报表）→ ③ 去 --dry-run 正式跑（降级 stale show-id 行）。dry-run 优先，规避季 id↔show id 罕见碰撞误判。
+  - **SEQ-20260616-03 全交付 ✅**：ADR-207 + 实现卡 A（客户端/类型）/B（service 季级路径+confirm 纠偏）/C（stepTmdb 接线）/D（清理+回填）全完成；前向生效（A/B/C）+ 存量纠偏（D BLOCKER 闭合）端到端闭环。闭合 ADR-202 D-202-α + 兑现 ADR-177 D-177-11。

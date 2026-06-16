@@ -586,10 +586,13 @@ export async function findAdminVideoById(
  *   独立档因 never/unmatched/all 基于 douban/bangumi 状态，会漏掉「douban 已匹配且 meta_quality 非空但无 TMDB」的视频
  * all=never∪unmatched∪missing-characters（默认；不含 tmdb-missing，避免重跑全量误带短剧/other）
  */
-export type BackfillEnrichMode = 'never' | 'unmatched' | 'missing-characters' | 'tmdb-missing' | 'all'
+export type BackfillEnrichMode = 'never' | 'unmatched' | 'missing-characters' | 'tmdb-missing' | 'tmdb-season' | 'all'
 
 /** TMDB 可匹配类型（META-51-B）：short/other 基本不在 TMDB，tmdb-missing 模式内即收敛排除。 */
 const TMDB_MATCHABLE_TYPES = ['movie', 'series', 'anime', 'variety', 'documentary'] as const
+
+/** TV 家族类型（ADR-207 D-207-9b/10）：仅分季 catalog（season_number IS NOT NULL）进季级回填，movie 无季。 */
+const TV_FAMILY_TYPES = ['series', 'anime', 'variety', 'documentary'] as const
 
 /** backfill 入队所需最小字段（对齐 EnrichJobData：videoId/catalogId/title/year/type）。 */
 export interface BackfillEnrichRow {
@@ -634,6 +637,12 @@ export async function listVideosForBackfillEnrich(
     conditions.push('mc.tmdb_id IS NULL')
     conditions.push(`v.type = ANY($${idx++}::text[])`)
     params.push(TMDB_MATCHABLE_TYPES)
+  } else if (mode === 'tmdb-season') {
+    // ADR-207 D-207-9b/-10：季级 TMDB 回填——TV 家族 ∧ season_number IS NOT NULL（仅分季 catalog 进季级路径，
+    // 触发 stepTmdb 透传 seasonNumber → autoMatch 写正确 season exact 季 id + 逐集；存量 stale 行由清理脚本另行降级）。
+    conditions.push('mc.season_number IS NOT NULL')
+    conditions.push(`v.type = ANY($${idx++}::text[])`)
+    params.push(TV_FAMILY_TYPES)
   } else {
     conditions.push(
       "(v.meta_quality IS NULL OR v.douban_status = 'unmatched' OR v.bangumi_status = 'unmatched' OR " +

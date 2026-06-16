@@ -8,11 +8,12 @@
  * 用法：
  *   node --env-file=.env.local --import tsx scripts/reenrich-backfill.ts [选项]
  * 选项：
- *   --mode <never|unmatched|missing-characters|tmdb-missing|all>  默认 all
+ *   --mode <never|unmatched|missing-characters|tmdb-missing|tmdb-season|all>  默认 all
  *       never=meta_quality NULL / unmatched=douban|bangumi 未命中 /
  *       missing-characters=anime 无 catalog_characters（含已 matched anime，补 META-19 角色）/
  *       tmdb-missing=catalog 无 tmdb_id 且类型可匹配 TMDB（META-51-B，TMDB 首次回填用）/
- *       all=前三者并集（不含 tmdb-missing）
+ *       tmdb-season=TV 家族 ∧ season_number IS NOT NULL（ADR-207 季级回填，触发分季 catalog 写正确 season exact 季 id + 逐集）/
+ *       all=前三者并集（不含 tmdb-missing / tmdb-season）
  *   --type <anime|movie|tv|...>   仅某类型（可选）
  *   --limit <N>                   仅前 N 条（小批验证用）
  *   --dry-run                     只统计不入队
@@ -38,8 +39,8 @@ function parseArgs(): { mode: BackfillEnrichMode; type: VideoType | undefined; l
     return i !== -1 ? args[i + 1] ?? null : null
   }
   const rawMode = getOpt('--mode') ?? 'all'
-  if (!['never', 'unmatched', 'missing-characters', 'tmdb-missing', 'all'].includes(rawMode)) {
-    throw new Error(`--mode 非法：${rawMode}（应为 never|unmatched|missing-characters|tmdb-missing|all）`)
+  if (!['never', 'unmatched', 'missing-characters', 'tmdb-missing', 'tmdb-season', 'all'].includes(rawMode)) {
+    throw new Error(`--mode 非法：${rawMode}（应为 never|unmatched|missing-characters|tmdb-missing|tmdb-season|all）`)
   }
   const rawLimit = getOpt('--limit')
   const limit = rawLimit != null ? Number.parseInt(rawLimit, 10) : null
