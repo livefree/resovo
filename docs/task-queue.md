@@ -2722,3 +2722,26 @@
 
 - 本序列产出于 docs/audit/metadata-enrichment-investigation-20260615.md 第五节 follow-up「TMDB 自动链路」。
 - 原子化：实施卡 -B/47/48/49 为 ADR 定稿前的蓝图占位，最终拆分（尤其 META-49 -A/-B）以 META-46-A ADR 蓝图为准。
+
+---
+
+## SEQ-20260616-01 — 原名/别名驱动的外部匹配 + 跨译名查重 + 字段漂移 UI（META-50）
+
+- **创建时间**：2026-06-16｜**最后更新**：2026-06-16
+- **来源**：用户「海贼王/航海王 案例——TMDB 以英文/原名为主，中文译名不一致；优化查询/匹配/查重合并 + 更新编辑/快编/视频库 UI」。ADR 设计先行（用户 AskUserQuestion 裁定）。
+- **设计真源**：ADR-206（decisions.md）+ ADR-105a AMENDMENT 2026-06-16。arch-reviewer (claude-opus-4-8, agentId ad0578cea5038ec95) REVISE→CONDITIONAL-PASS，M1–M9 吸收为 D-206-1~10。
+- **依赖序**：1A → {1B, 1C, 2A} → 2B；3A → 3B（WS3 可与 WS1/2 并行）。
+
+| 卡 | 内容 | 状态 | 门禁 |
+|---|---|---|---|
+| **META-50-A** | ADR-206 起草 + ADR-105a AMENDMENT + 本序列登记 | ✅ 已完成（2026-06-16，arch-reviewer Opus 设计裁决） | ADR-level Opus ✅ |
+| **META-50-1A** | `knownNames.ts` 共享原语（loadKnownNames + filterForMatchScore/filterForSearchQueries 双投影）+ `listCatalogAliases` query + 单测（D-206-1） | ⏳ 待开始 | **强制 Opus**（新共享原语契约 M4） |
+| **META-50-1B** | enrich 预取扩 knownNames + TMDB autoMatch 多词 search（N≤3 早停去重 M5）+ 打分用 knownNames（极性约束 M2）+ 单测（D-206-2/3） | ⏳ 待开始（依 1A） | sonnet 可起 |
+| **META-50-1C** | bangumi 本地召回补 alias 评估（D-206-4，可选/可并 1B 或独立观察卡） | ⏳ 待开始（依 1A） | sonnet 可起 |
+| **META-50-2A** | `blockingRecall` 新增段③ alias_normalized 桶 + 来源/置信门槛（M1-b/M3）+ 双口径一致 + 单测（D-206-5/6） | ⏳ 待开始（依 1A 归一口径） | **ADR-105a AMENDMENT 实装** |
+| **META-50-2B** | 误并防护验证卡——跨译名 pair 仅进 candidate 不自动合并（M1-a/c）+ 同名不同作不误并回归 fixture（D-206-6/10） | ⏳ 待开始（依 2A） | sonnet 可起 |
+| **META-50-3A** | VideoMetaSchema + VideoService catalogFields 扩 title_original/aliases 写路径（M6/M7，不旁路 reconcile/safeUpdate）+ 单测（D-206-8/9 后端） | ⏳ 待开始 | sonnet 可起 |
+| **META-50-3B** | admin-ui 编辑/快编表单 + 视频库列补 title_original+aliases（D-206-8/9 前端） | ⏳ 待开始（依 3A） | **强制 Opus**（admin-ui Props M8） |
+
+- **WS2 最高风险**：别名 blocking 误并——M1 三红线（仅扩召回永不成正证据 / 来源置信门槛 / 自动合并仍受 ADR-105a 闸门）+ ADR-105a 自动合并 Phase 1-4 默认 OFF 安全网双重兜底。
+- **关键事实**（arch-reviewer 校正）：① title_original/originalLanguage 已在 ADR-205 RECONCILE_GROUPS，knownNames 只读消费不开第二写入方；② alias blocking 用独立桶不写 title_observations；③ romanization 仅召回不拉分（ADR-175 D-175-4）；④ external_id 桶已召回同 ID pair，别名 blocking 价值仅在"译名桥接、ID 未都填"场景。

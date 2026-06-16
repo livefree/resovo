@@ -6308,3 +6308,25 @@
 - **偏离/follow-up**：① 轮询固定 8s（未做可见性暂停/window blur 节流，MVP）；② 仅监控只读无队列操作按钮（取消/重试归 admin/tasks 既有能力或 ADR-194）；③ 单任务级进度（每个 job 进度条）归 ADR-194 path B（enrichment 写 task_runs）独立后续。
 - **[AI-CHECK]**：六问过——①根因=A 卡后端契约无 UI 消费 → 建自取数轮询卡接入 row5；②零回归（DashboardClient 16 + 既有卡零改；补 stub mock 消 act 警告 + typecheck EXIT=0）；③边界=纯监控只读，操作/单任务进度留后续；④复用=复用 system/jobs 端点 + AutoCrawlScheduleCard 自取数范式 + SiteHealthCard 卡片壳样式；⑤守颜色零硬编码（全 CSS 变量、仅用已验证 token）+ 不改 admin-ui Props；⑥范围=1 api + 1 新组件 + 1 接线 + 2 测试，无端点/schema/migration。**DASH-QUEUE-HEALTH 全收口（-A 后端 + -B 前端）。用户「管理台站实时监控后台任务卡片」端到端交付**——仪表盘 row5 实时显示全 9 队列 waiting/active/completed/failed + 8s 轮询 + Redis 降级兜底。
 - **Codex stop-time review FIX**：「Dashboard E2E mock 仍返旧 queueCounts 形状 → 崩新卡」——`tests/e2e/admin/_shared/shell-mocks.ts` 的 `/admin/system/jobs` mock 仅返 crawler/maintenance 2 队列，QueueHealthCard 遍历 9 队列访问 `counts.enrichment.active` → `undefined.active` TypeError 崩卡（fetch 解析后首次重渲染触发）。修复：① mock 补全 9 队列 × 4 计数（契约对齐）；② QueueHealthCard 加防御 guard（`if (!c) return null` 跳过缺键队列，partial/陈旧响应优雅降级不崩仪表盘）；③ dashboard.spec.ts +断言队列卡可见 + 9 行（防回归）；④ +1 单测（partial 响应仅渲在场行）。门禁：typecheck EXIT=0 / lint 4ok / QueueHealthCard 单测 6 passed / **test:e2e:admin dashboard.spec 3 passed**。
+
+## [META-50-A] ADR-206 起草：原名/别名驱动的外部匹配 + 跨译名查重 + 字段漂移 UI（设计先行）— 2026-06-16
+
+**类型**：docs（ADR-206 新增 + ADR-105a AMENDMENT / SEQ-20260616-01 第 1 卡）｜**优先级**：🟡 中（大初始设计地基）｜**执行模型**：claude-opus-4-8（主循环）｜**子代理**：arch-reviewer (claude-opus-4-8, agentId ad0578cea5038ec95) 设计 gate（撰写 ADR → CLAUDE.md 模型路由强制升 Opus #3）
+
+- **来源**：用户「海贼王（又名航海王，原名 ワンピース/ONE PIECE）TMDB 匹配失败——TMDB 以英文/原名为主，中文译名不一致；体现别名 + 原始名称的重要性。优化查询/匹配/查重合并策略，再更新视频编辑/快编/视频库 UI」。AskUserQuestion 裁定 **ADR 设计先行**。
+- **调研根因**：① `TmdbConfirmService.autoMatch` 仅用 `catalog.title`（海贼王）单词调 TMDB search → TMDB 英文/日文索引无中文 → `no_candidate`；② `MetadataEnrichService.enrich` 预取仅 imdbId/titleEn/status，未取 title_original/aliases；③ 身份 blocking（`blockingRecall.ts`）召回源仅 title_observations coreTitleKey/normalized + external_id，别名未作 blocking 源 → 海贼王↔航海王（aka）不进同桶；④ 编辑表单 title_original/aliases/originalLanguage 字段漂移不可编辑。数据模型已具备（media_catalog.title_original/original_language + media_catalog_aliases，ALIAS_KINDS=official/localized/romanization/abbreviation/aka/original）。
+- **arch-reviewer 设计裁决（REVISE→CONDITIONAL-PASS，M1–M9）**：
+  - **M1（最高·WS2 误并三红线）**：别名 blocking 仅扩召回**永不直接成正证据** / 来源置信门槛（`source∈{manual,tmdb,bangumi,douban}`+`kind∈{official,localized,aka,original}`，crawler 不进桶）/ 自动合并仍受 ADR-105a 闸门（不改 0.92/0.75 阈值、不豁免 veto）+ Phase 1-4 自动合并 OFF 安全网。
+  - **M2**：knownNames 打分极性——romanization 仅召回不拉分（继承 ADR-175 D-175-4）。
+  - **M3**：alias blocking 用独立 `alias_normalized` 桶（数据源 media_catalog_aliases），**禁写 title_observations**（污染 coreTitleKey 观测语义）。
+  - **M4**：knownNames 沉淀共享原语 `services/metadata/knownNames.ts`（强制 Opus）。
+  - **M5**：TMDB 多词 search N≤3 + 逐词早停 + 词去重 + 候选 by tmdbId 去重。
+  - **M6**：title_original/originalLanguage **已在 ADR-205 RECONCILE_GROUPS**，knownNames 只读消费**不开第二写入方**。
+  - **M7**：aliases 手动写结构化表 kind=aka/source=manual（不写数组列 cache，manual 不被富集覆盖由既有 `WHERE source<>'manual'` 保护）。
+  - **M8**：admin-ui Props 扩展强制 Opus。**M9**：全新 ADR-206 + ADR-105a AMENDMENT（不 AMEND ADR-175——它是定档蓝图，D-206 是实装）。
+  - **关键校正**：external_id 桶已召回"标题异但外部 ID 同"的 pair，**别名 blocking 真正价值仅在"译名桥接、外部 ID 未都填"场景**（D-206-7 边界，避免夸大扩误并面）。
+- **产出**：decisions.md ADR-206（D-206-1~10）+ ADR-105a AMENDMENT 2026-06-16（alias_normalized blocking 数据源）；task-queue.md 登记 SEQ-20260616-01 共 7 实施卡（WS1 1A/1B/1C + WS2 2A/2B + WS3 3A/3B，依赖序 1A→{1B,1C,2A}→2B / 3A→3B，强制 Opus=1A 共享原语/3B admin-ui Props/2A=AMENDMENT 实装）。
+- **修改文件**：`docs/decisions.md`（ADR-206 + ADR-105a AMENDMENT）、`docs/task-queue.md`（SEQ-20260616-01）、`docs/tasks.md`、`docs/changelog.md`。
+- **新增依赖**：无｜**数据库变更**：无（设计阶段）｜**新端点**：无
+- **质量门禁**：verify:adr-contracts EXIT=0（endpoint-adr 无新端点对齐；advisory 为既有 ADR-157 enum baseline）；docs-only → test:changed 自动跳过。
+- **[AI-CHECK]**：六问过——①根因=匹配/blocking 以显示标题为主键未纳原名别名 → ADR-206 定型 knownNames 驱动；②零回归（纯 docs，无代码）；③边界=本卡仅 ADR+拆卡，实施归 META-50-1A…；④复用=ADR-175 D-175-4 匹配分层 + ADR-105a D-105a-2 blocking key #2 实装兑现，非新发明；⑤守误并风险（M1 三红线 + 自动合并 OFF 安全网）+ 不开第二写入方（M6 复用 reconcile/safeUpdate）；⑥范围=2 ADR 文档 + 7 卡登记，无代码/schema/端点。**解锁 META-50-1A（knownNames 共享原语 + listCatalogAliases，强制 Opus）。**
