@@ -249,5 +249,14 @@ export function isConcatenatedPinyin(input: string | null | undefined): boolean 
  * vod_en → title_en 门禁）复用，避免判定漂移。catalog 迁出脚本不强制改用（红线-2 独立性保留）。
  */
 export function isPinyinTitle(input: string | null | undefined): boolean {
-  return isPinyin(input) || isConcatenatedPinyin(input)
+  if (isPinyin(input) || isConcatenatedPinyin(input)) return true
+  // CHG-VIR-11-E 数字盲区：季数/年份嵌入的连写拼音（如 "geleisidi6ji"=格雷斯第6季 /
+  // "...dangshidi4ji"=第4季）——isConcatenatedPinyin 的 `^[a-z]+$` 拒绝含数字串而漏判。
+  // 剥离数字后再测无空格拼音；短串/<4 音节仍由 isConcatenatedPinyin 阈值放过（"miqing2025"→"miqing" 2 音节不判）。
+  if (input) {
+    const trimmed = input.trim()
+    const stripped = trimmed.replace(/[0-9]/g, '')
+    if (stripped.length !== trimmed.length && isConcatenatedPinyin(stripped)) return true
+  }
+  return false
 }

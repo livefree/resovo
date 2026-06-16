@@ -224,11 +224,24 @@ describe('isPinyinTitle — isPinyin ∪ isConcatenatedPinyin', () => {
     expect(isPinyinTitle('Forrest Gump')).toBe(false)
   })
 
-  it('含数字 / 非 ASCII / 空 → false', () => {
-    expect(isPinyinTitle('maoxuewang2026')).toBe(false) // 含数字（混合元数据噪声，不判拼音）
+  it('短串 / 非 ASCII / 空 → false', () => {
+    expect(isPinyinTitle('maoxuewang2026')).toBe(false) // 剥数字→maoxuewang 仅 3 音节 < 4 阈值，放过
     expect(isPinyinTitle('他比前男友炙热')).toBe(false) // 中文本体非罗马音
     expect(isPinyinTitle(null)).toBe(false)
     expect(isPinyinTitle('')).toBe(false)
     expect(isPinyinTitle('   ')).toBe(false)
+  })
+
+  // CHG-VIR-11-E：含数字（季数/年份嵌入）的连写拼音——剥数字后再测，长串命中、短串放过
+  it('数字嵌入的长连写拼音（季数/年份）→ true', () => {
+    expect(isPinyinTitle('geleisidi6ji')).toBe(true) // 格雷斯第6季：剥6→geleisidiji 5 音节
+    expect(isPinyinTitle('guanyuwozhuanshengbianchengshilaimuzhedangshidi4ji')).toBe(true) // 第4季
+    expect(isPinyinTitle('jimaofeishangtiankuangbiao1978')).toBe(true) // 鸡毛飞上天:狂飙1978
+  })
+
+  it('剥数字后短串 / 非拼音 → 仍 false（保守不误伤）', () => {
+    expect(isPinyinTitle('miqing2025')).toBe(false) // 迷情：剥→miqing 2 音节，短
+    expect(isPinyinTitle('se7en')).toBe(false)       // 真英文含数字：剥→seen 非拼音
+    expect(isPinyinTitle('2012')).toBe(false)        // 纯数字
   })
 })

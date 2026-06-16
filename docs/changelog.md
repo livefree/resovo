@@ -6574,3 +6574,16 @@
 - **质量门禁全绿**：typecheck 7ws EXIT=0 / lint 4ok / test:changed 全量 passed（基础包改动自动升全量）/ verify:adr-contracts / verify:endpoint-adr EXIT=0。
 - **[AI-CHECK]**：六问过——①根因=tmdb 外链硬编码 /movie 无视命名空间；②零回归（href 中性可选+回退、必填字段经 fixture+derive 全覆盖，全量 passed）；③边界=按 arch-reviewer 收敛，卡不持 media-type、不碰退役组件；④复用=builder 委托、helper 单一真源、面板预构造统一口径；⑤守=必填消除跳错默认、纯展示字段不进 SQL 镜像；⑥范围=外链分流 1 项。**闭合 D-172-AMD2-C**。问题2（stills/多图相册）= 未来扩展仅记录。
 - **Codex stop-time review FIX**：「active TMDB link path still defaults to movie」——`MetadataSourceCard`（活跃组件）回退仍 `hrefProp ?? SOURCE_HREF_BUILDERS[provider](externalId)`，其中 `SOURCE_HREF_BUILDERS.tmdb` 默认 `/movie`——虽面板现总传 href，但卡内代码仍保留 tmdb→/movie 的可达默认路径（静态分析判活跃跳错）。确认全仓 deprecated 的 enrichment-badge-cluster / external-meta-panel 无 JSX 渲染点（真死路径，非活跃），故唯一带 tmdb→/movie 默认的活跃组件即此卡。修复：卡内回退**排除 tmdb**——`hrefProp ?? (provider !== 'tmdb' && externalId ? SOURCE_HREF_BUILDERS[provider](externalId) : undefined)`，tmdb 未传 href 则无链接（绝不退 /movie），href 必由面板按 tmdbHrefKind 显式传。+新建 `metadata-source-card.test.tsx`（tmdb 无 href→无链接 / 传 /tv→用传入值 / 非 tmdb 仍回退自建）。门禁复跑 typecheck/lint EXIT=0 + test:changed 全量 passed。
+
+## [CHG-VIR-11-E] 拼音检测补数字盲区（季数/年份嵌入）+ Phase D 残留补清 + 入库门禁堵盲区 — 2026-06-16
+
+**类型**：fix（拼音检测一致性 + 存量清理，CHG-VIR-11 谱系）｜**优先级**：🟡 中｜**执行模型**：claude-opus-4-8（Opus 主循环）｜**子代理**：无（无新端点 / 无 migration / 无 admin-ui Props）
+
+- **背景**：用户执行库存 TMDB 回填 + Phase D 清拼音后，发现残留含数字 lowercase title_en 几乎全是拼音（季数/年份嵌入，如 `geleisidi6ji`=格雷斯第6季 / `weixianguanxi2023`=危险关系2023）。根因：`isConcatenatedPinyin` 的 `^[a-z]+$` 按设计拒绝含数字串（原 CHG-VIR-11-C 注释「含年份 slug = 元数据噪声不迁」）而漏判；**入库门禁用同一 `isPinyinTitle` 谓词，故未来采集数字拼音同样漏网**。用户拍板 (A) 补盲区。
+- **方案**：① `isPinyinTitle`（CHG-VIR-11-D 组合谓词）加 strip-digit 分支——含数字时剥离全部数字后再测 `isConcatenatedPinyin`（短串/<4 音节仍由其阈值放过，`miqing2025`→`miqing` 2 音节不判；真英文含数字 `se7en`→`seen` 非拼音放过）；**不改** `isConcatenatedPinyin`/`isPinyin` 本身语义（其他严格消费方不受影响）。② `catalog-multilingual-cleanup.ts` 判定改用 `isPinyinTitle`（统一正典口径，消除 R5/红线-2 独立判定漂移）。
+- **存量补清（运维数据操作）**：扩展后重跑 cleanup——dry-run 命中 302（全季数/年份拼音，样例核对零真英文误判）→ `--apply` 迁出 302/302（title_en→NULL + romanization 别名）。**两轮共清 1166**（首轮 864 + 本轮 302）；真英文 691（含 tmdb 530）全保留；残留 282 = 短拼音（<4 音节，如 `daocaoren` 稻草人）检测器保守阈值刻意放过防误伤真英文短词。
+- **入库门禁自动受益**：CrawlerService 门禁用 `isPinyinTitle`，扩展后未来采集的数字拼音（`geleisidi6ji` 类）一并被堵在 catalog.title_en 之外。
+- **修改文件**：`apps/api/src/services/PinyinDetector.ts`（isPinyinTitle strip-digit 扩展）、`scripts/catalog-multilingual-cleanup.ts`（import + 判定改用 isPinyinTitle）、`tests/unit/api/services/PinyinDetector.test.ts`（+数字拼音 6 用例：长串命中 / 短串·真英文·纯数字放过）。
+- **新增依赖**：无｜**数据库变更**：无（cleanup 是数据迁出，非 schema）｜**新端点**：无｜**admin-ui Props**：无
+- **质量门禁全绿**：typecheck 7ws EXIT=0 / lint 4ok / test:changed passed（PinyinDetector 45）。
+- **[AI-CHECK]**：六问过——①根因=检测器拒数字串致数字拼音漏判（清理+门禁同盲区）；②零回归（仅扩 isPinyinTitle 组合谓词加性分支，isConcatenatedPinyin/isPinyin 严格语义不变，45 passed）；③边界=单谓词扩展 + cleanup 统一口径，未碰严格底层；④复用=isPinyinTitle 单一真源，cleanup 与入库门禁同源；⑤守=strip 后仍走 isConcatenatedPinyin 全阈值（长度/音节/distinctive），短串与真英文不误伤；⑥范围=检测扩展 1 项。

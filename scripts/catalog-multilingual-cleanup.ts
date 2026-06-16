@@ -18,7 +18,7 @@
  */
 
 import { db } from '@/api/lib/postgres'
-import { isPinyin, isConcatenatedPinyin } from '@/api/services/PinyinDetector'
+import { isPinyin, isPinyinTitle } from '@/api/services/PinyinDetector'
 import { upsertStructuredCatalogAlias } from '@/api/db/queries/catalogAliases'
 
 const STEPS = ['pinyin', 'original-language', 'aliases-array'] as const
@@ -52,9 +52,9 @@ async function stepPinyin(apply: boolean): Promise<void> {
       ORDER BY mc.id`,
     ['title_en'],
   )
-  // catalog 层独立双判定（R5/红线-2）：空格分隔形态（isPinyin）+ 无空格连写 slug 形态
-  // （isConcatenatedPinyin / catalog 实际污染形态如 "wuyanshashou"）
-  const hits = rows.rows.filter((r) => isPinyin(r.title_en) || isConcatenatedPinyin(r.title_en))
+  // CHG-VIR-11-E：统一正典口径 isPinyinTitle（= isPinyin ∪ isConcatenatedPinyin ∪ 剥数字后连写拼音），
+  // 与入库门禁同源，消除红线-2 独立判定漂移；含季数/年份的数字拼音（"geleisidi6ji"）一并命中。
+  const hits = rows.rows.filter((r) => r.title_en != null && isPinyinTitle(r.title_en))
   console.log(`[pinyin] title_en 非空候选 ${rows.rows.length}，catalog 层判定命中 ${hits.length}`)
   for (const h of hits.slice(0, 20)) console.log(`  样例: ${h.id.slice(0, 8)} "${h.title_en}"`)
   if (!apply) return
