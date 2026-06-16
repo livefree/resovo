@@ -273,11 +273,19 @@ describe('isLikelyPinyinSlug — 激进拼音判定（门禁专用）', () => {
     expect(isLikelyPinyinSlug('shijiebeixiaozusaibilishiVSaiji20260616')).toBe(true) // 世界杯…比利时VS埃及
   })
 
+  it('④ title-case 拼音（首字母大写是拼音一部分）→ true（Codex stop-time review）', () => {
+    expect(isLikelyPinyinSlug('Chixia')).toBe(true)                 // 炽夏 title-case 连写（剥大写会断成 hixia）
+    expect(isLikelyPinyinSlug('Womenyukuaidehaorizi')).toBe(true)   // title-case 连写
+    expect(isLikelyPinyinSlug('Wo Cai Bu Hui Xin Dong Ne')).toBe(true) // title-case 空格分词
+    expect(isLikelyPinyinSlug('Reconglingkaishideyishijieshenghuo')).toBe(true) // Re从零开始…（re 是合法音节）
+  })
+
   it('真英文 → false（不误伤）', () => {
     expect(isLikelyPinyinSlug('Inception')).toBe(false)   // 不可分解
     expect(isLikelyPinyinSlug('The Avengers')).toBe(false) // 分词 avengers 不可分解
     expect(isLikelyPinyinSlug('Joy of Life')).toBe(false)  // oy/ife 不可分解
     expect(isLikelyPinyinSlug('time')).toBe(false)         // 4 字符 < 6 阈值
+    expect(isLikelyPinyinSlug('BORDERLESS')).toBe(false)   // 全大写真英文不可分解
     expect(isLikelyPinyinSlug(null)).toBe(false)
     expect(isLikelyPinyinSlug('')).toBe(false)
   })

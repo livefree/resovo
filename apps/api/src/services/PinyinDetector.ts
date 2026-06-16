@@ -279,17 +279,24 @@ const MIN_AGGRESSIVE_SLUG_LENGTH = 6
  * 保守语义不变（knownNames 分类 / blocking 召回不受影响）。极少数能分解为拼音的真英文（"banana"=ba-na-na /
  * "manganese"）误拦可接受（用户裁定）。
  */
+/** 归一串（已去数字/token）能否整体判为拼音 slug：连写 ≥阈值、空格逐词 ≥2，均能完整分解为拼音音节。 */
+function decomposesAsPinyinSlug(normalized: string): boolean {
+  const core = normalized.replace(/\s+/g, ' ').trim()
+  if (!core) return false
+  const words = core.split(' ').filter(Boolean)
+  // 空格/分词形态：每词 ≥2 字符且能完整分解（canDecomposeAsPinyin 内部已小写，故 title-case 自然兼容）。
+  if (words.length > 1) return words.every((w) => w.length >= 2 && canDecomposeAsPinyin(w))
+  // 连写单词：长度 ≥ 阈值且能完整分解。
+  return core.length >= MIN_AGGRESSIVE_SLUG_LENGTH && canDecomposeAsPinyin(core)
+}
+
 export function isLikelyPinyinSlug(input: string | null | undefined): boolean {
   if (isPinyinTitle(input)) return true
   if (!input) return false
-  // 剥数字 + 大写字母 → 当作分词符（"jiaNcifang"→"jia cifang"、"...VSaiji..."→分词）；保留小写 + 原空格。
-  const core = input.trim().replace(/[0-9A-Z]/g, ' ').replace(/\s+/g, ' ').trim()
-  if (!core) return false
-  const words = core.split(' ').filter(Boolean)
-  if (words.length > 1) {
-    // 空格/分词形态：每词 ≥2 字符且能完整分解为拼音音节（不要求 distinctive / 词数）
-    return words.every((w) => w.length >= 2 && canDecomposeAsPinyin(w))
-  }
-  // 连写单词：长度 ≥ 阈值且能完整分解
-  return core.length >= MIN_AGGRESSIVE_SLUG_LENGTH && canDecomposeAsPinyin(core)
+  const trimmed = input.trim()
+  // 两种归一互补（Codex stop-time review：title-case 拼音首字母大写是拼音一部分，不可剥）：
+  //  (a) 仅去数字 → 覆盖 title-case（"Chixia"/"Wo Cai Bu"，canDecomposeAsPinyin 内部小写）+ pinyin+digit；
+  //  (b) 去数字 + 大写字母当分词符 → 覆盖嵌入版本/VS token（"jiamianqishiV3"/"...VSaiji"，大写非拼音首字母）。
+  return decomposesAsPinyinSlug(trimmed.replace(/[0-9]/g, ' '))
+      || decomposesAsPinyinSlug(trimmed.replace(/[0-9A-Z]/g, ' '))
 }
