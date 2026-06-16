@@ -23176,6 +23176,7 @@ ADR-186（fill-if-empty/INV-1 + D-186-1 tmdb/imdb 自动写入 follow-up 锚点 
 - **D-206-3（打分 target 用 knownNames + 极性约束，M2）**：`tmdbCandidateScore`（及 identity）打分 target 从单 title 改为 `filterForMatchScore(knownNames)` 对 candidate.title/originalTitle 取 max 相似度。**极性红线（继承 ADR-175 D-175-4）**：参与"相似度拉分"的仅 official/original/title/localized；**romanization 仅参与召回不参与拉分**（防拼音/罗马音误拉无关候选）；crawler 来源 aka 泛词不进打分集。
 
 - **D-206-4（bangumi 评估，不阻塞）**：knownNames 含 original（日文原名）后 bangumi 本地 dump 召回天然受益，无需单独改 bangumi 召回 SQL；douban 已多字段召回（title→alias）不改。标记为评估观察项。
+  - **META-50-1C 评估结论（2026-06-16，实证勘误）**：上述「天然受益」表述**不精确**。实证：`external_data.bangumi_entries` 每 subject **单行**，`title_normalized = normalizeTitle(title_cn || title_jp)`（**CN 优先单键**，import-bangumi-dump.ts:144/158）；召回 `findBangumiByTitleNorm` = `WHERE title_normalized = $1` **单键精确匹配**（externalData.ts:258）；auto 路径 `step3Bangumi(…, titleNorm, …)` 喂入**单**归一标题（MetadataEnrichService.ts:136）。→ bangumi 本地召回**不索引日文原名、不做多词召回**，knownNames-original 不会自动提升 bangumi 召回。**裁定**：① 跨译名主修复由 TMDB（META-50-1B，索引 original/英文）交付；② bangumi 唯一受益场景 = 喂入备选 **CN 别名**做多词召回（似 1B），但需改 step3Bangumi——属 **identity 相邻路径**（bangumi subject 绑定影响 catalog 身份），本评估卡**不擅自改行为**；③ **follow-up 登记**：「多词 bangumi 本地召回（knownNames CN 别名喂入 step3Bangumi）」需独立卡 + 误绑风险评估（比照 2A 误并防护严谨度），不在 META-50 范围。douban 多字段召回不改维持原结论。
 
 **WS2 — 跨译名查重（alias blocking 召回，最高风险）**
 

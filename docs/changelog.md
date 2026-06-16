@@ -6309,6 +6309,18 @@
 - **[AI-CHECK]**：六问过——①根因=A 卡后端契约无 UI 消费 → 建自取数轮询卡接入 row5；②零回归（DashboardClient 16 + 既有卡零改；补 stub mock 消 act 警告 + typecheck EXIT=0）；③边界=纯监控只读，操作/单任务进度留后续；④复用=复用 system/jobs 端点 + AutoCrawlScheduleCard 自取数范式 + SiteHealthCard 卡片壳样式；⑤守颜色零硬编码（全 CSS 变量、仅用已验证 token）+ 不改 admin-ui Props；⑥范围=1 api + 1 新组件 + 1 接线 + 2 测试，无端点/schema/migration。**DASH-QUEUE-HEALTH 全收口（-A 后端 + -B 前端）。用户「管理台站实时监控后台任务卡片」端到端交付**——仪表盘 row5 实时显示全 9 队列 waiting/active/completed/failed + 8s 轮询 + Redis 降级兜底。
 - **Codex stop-time review FIX**：「Dashboard E2E mock 仍返旧 queueCounts 形状 → 崩新卡」——`tests/e2e/admin/_shared/shell-mocks.ts` 的 `/admin/system/jobs` mock 仅返 crawler/maintenance 2 队列，QueueHealthCard 遍历 9 队列访问 `counts.enrichment.active` → `undefined.active` TypeError 崩卡（fetch 解析后首次重渲染触发）。修复：① mock 补全 9 队列 × 4 计数（契约对齐）；② QueueHealthCard 加防御 guard（`if (!c) return null` 跳过缺键队列，partial/陈旧响应优雅降级不崩仪表盘）；③ dashboard.spec.ts +断言队列卡可见 + 9 行（防回归）；④ +1 单测（partial 响应仅渲在场行）。门禁：typecheck EXIT=0 / lint 4ok / QueueHealthCard 单测 6 passed / **test:e2e:admin dashboard.spec 3 passed**。
 
+## [META-50-1C] bangumi 本地召回 alias 评估（SEQ-20260616-01 第 4 卡 / WS1 / D-206-4 评估观察）— 2026-06-16
+
+**类型**：docs（D-206-4 评估观察项实证勘误 / 无代码改动）｜**优先级**：⚪ 低（评估卡）｜**执行模型**：claude-opus-4-8（主循环）｜**子代理**：无
+
+- **来源**：ADR-206 D-206-4「bangumi 评估，不阻塞」标记的评估观察项。
+- **评估结论（实证勘误）**：D-206-4 原称「knownNames 含 original 后 bangumi 本地 dump 召回天然受益，无需改 SQL」表述**不精确**。实证：① `external_data.bangumi_entries` 每 subject **单行**，`title_normalized = normalizeTitle(title_cn || title_jp)`（CN 优先单键，import-bangumi-dump.ts:144/158）；② 召回 `findBangumiByTitleNorm` = `WHERE title_normalized = $1` **单键精确匹配**（externalData.ts:258，单列非多字段）；③ auto 路径 `step3Bangumi(…, titleNorm, …)` 喂入**单**归一标题（MetadataEnrichService.ts:136）。→ bangumi 本地召回**不索引日文原名、不做多词召回**，knownNames-original 不会自动提升 bangumi 召回。
+- **裁定**：① 跨译名主修复由 **TMDB（META-50-1B，索引 original/英文）交付**——bangumi 与 TMDB 召回机制不同（bangumi 单 CN 键 vs TMDB 外部搜索索引）；② bangumi 唯一可受益场景 = 喂入备选 **CN 别名**做多词召回（似 1B），但需改 step3Bangumi，属 **identity 相邻路径**（bangumi subject 绑定影响 catalog 身份），ADR 已显式 defer，本评估卡**不擅自改行为**；③ **follow-up 登记**：「多词 bangumi 本地召回」需独立卡 + 误绑风险评估（比照 2A 误并防护严谨度），不在 META-50 范围。
+- **修改文件**：`docs/decisions.md`（D-206-4 追加 META-50-1C 评估结论）、`docs/task-queue.md`、`docs/tasks.md`、`docs/changelog.md`。
+- **新增依赖**：无｜**数据库变更**：无｜**新端点**：无｜**代码改动**：无（纯评估）
+- **质量门禁**：verify:adr-contracts EXIT=0；docs-only → test:changed 自动跳过。
+- **[AI-CHECK]**：六问过——①根因=D-206-4「天然受益」前提与 bangumi 单 CN 键召回实证不符 → 评估勘误 + 主修复归 TMDB；②零回归（无代码）；③边界=纯评估不改 bangumi 召回 SQL/step3Bangumi/绑定语义；④复用=实证既有 import-bangumi-dump/externalData/MetadataEnrichService 现状；⑤守不擅自改 identity 相邻路径（多词 bangumi 召回登记 follow-up 待独立卡评估误绑风险）；⑥范围=doc-only 4 文档。**WS1 全收口（1A 原语 + 1B TMDB 多词 + 1C bangumi 评估）。解锁 META-50-2A（alias_normalized 桶，依 1A 归一口径，ADR-105a AMENDMENT 实装）。**
+
 ## [META-50-1B] TMDB autoMatch 多词 search + 打分用 knownNames（SEQ-20260616-01 第 3 卡 / WS1 / 依 1A）— 2026-06-16
 
 **类型**：feat（TmdbConfirmService.autoMatch 检索+打分 / ADR-206 D-206-2/3）｜**优先级**：🟡 中（海贼王/航海王 跨译名匹配修复）｜**执行模型**：claude-opus-4-8（主循环，opus 会话连续推进，1B 非强制 Opus）｜**子代理**：无（1A 契约已 arch-reviewer 定稿，本卡纯消费）
