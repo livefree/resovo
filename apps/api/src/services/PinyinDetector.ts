@@ -250,13 +250,14 @@ export function isConcatenatedPinyin(input: string | null | undefined): boolean 
  */
 export function isPinyinTitle(input: string | null | undefined): boolean {
   if (isPinyin(input) || isConcatenatedPinyin(input)) return true
-  // CHG-VIR-11-E 数字盲区：季数/年份嵌入的连写拼音（如 "geleisidi6ji"=格雷斯第6季 /
-  // "...dangshidi4ji"=第4季）——isConcatenatedPinyin 的 `^[a-z]+$` 拒绝含数字串而漏判。
-  // 剥离数字后再测无空格拼音；短串/<4 音节仍由 isConcatenatedPinyin 阈值放过（"miqing2025"→"miqing" 2 音节不判）。
+  // CHG-VIR-11-E 数字盲区：季数/年份嵌入的拼音——isPinyin（含数字直接 false）/ isConcatenatedPinyin
+  // （`^[a-z]+$` 拒数字）均漏判。剥离数字后**两种形态都再测**：连写（"geleisidi6ji"=格雷斯第6季）
+  // 经 isConcatenatedPinyin、空格分词（"Wei Xian Guan Xi 2023"）经 isPinyin（Codex stop-time review）。
+  // 短串/<4 音节仍由各自阈值放过（"miqing2025"→"miqing" 2 音节不判 / 真英文 "se7en"→"seen" 非拼音）。
   if (input) {
     const trimmed = input.trim()
     const stripped = trimmed.replace(/[0-9]/g, '')
-    if (stripped.length !== trimmed.length && isConcatenatedPinyin(stripped)) return true
+    if (stripped.length !== trimmed.length && (isPinyin(stripped) || isConcatenatedPinyin(stripped))) return true
   }
   return false
 }

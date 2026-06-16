@@ -239,6 +239,12 @@ describe('isPinyinTitle — isPinyin ∪ isConcatenatedPinyin', () => {
     expect(isPinyinTitle('jimaofeishangtiankuangbiao1978')).toBe(true) // 鸡毛飞上天:狂飙1978
   })
 
+  // Codex stop-time review：空格分词拼音含数字（isPinyin 遇数字直接 false）剥数字后经 isPinyin 命中
+  it('数字嵌入的空格分词拼音 → true', () => {
+    expect(isPinyinTitle('Wei Xian Guan Xi 2023')).toBe(true) // 危险关系2023
+    expect(isPinyinTitle('Ge Lei Si Di 2 Ji')).toBe(true)     // 格雷斯第2季
+  })
+
   it('剥数字后短串 / 非拼音 → 仍 false（保守不误伤）', () => {
     expect(isPinyinTitle('miqing2025')).toBe(false) // 迷情：剥→miqing 2 音节，短
     expect(isPinyinTitle('se7en')).toBe(false)       // 真英文含数字：剥→seen 非拼音
