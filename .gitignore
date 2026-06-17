@@ -50,6 +50,14 @@ logs/
 
 .playwright-mcp/
 
+# design-sync（claude.ai/design 同步）：暂存脚本 / 构建产物 / 机器状态（durable set 在 .design-sync/ 下另行入库）
+.ds-sync/
+ds-bundle/
+.design-sync/.cache/
+.design-sync/learnings/
+.design-sync/node_modules
+.design-sync/gen-*.mjs
+
 # Playwright visual baseline storageState（admin 登录 cookies 快照；ADR-116 §2.7 / Y-NEW-1）
 # 每个开发者本地生成，含有效 refresh_token，禁止入库
 tests/visual/.auth/

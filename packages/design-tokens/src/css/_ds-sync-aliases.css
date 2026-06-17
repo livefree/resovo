@@ -1,0 +1,51 @@
+/**
+ * _ds-sync-aliases.css — design-sync 别名桥接层（非产品运行时使用）
+ *
+ * 由 /design-sync（claude.ai/design 同步）维护。admin-ui 组件引用了一批语义别名
+ * token（如 --fg-danger / --font-mono），但 design-tokens 的 CSS 构建（build-css.ts）
+ * 从未发射这些名字（components 层只发射 player；danger/ok/warn 以 --state-error/success/warning-*
+ * 规范名发射）。本文件把这些**别名**映射到 design-tokens **已有的规范值**，
+ * 仅用于 Claude Design 预览忠实出样——绝不臆造数值，全部 var() 引用既有 theme-aware token，
+ * 因此单个 :root 块即自动覆盖 light / dark 两态。
+ *
+ * 真实 app 不受影响：server-next globals.css 仅 `@import '@resovo/design-tokens/css'`
+ * （= tokens.css 单文件），不走 `src/css/*.css` glob，故本桥接文件不进入 app 运行时。
+ *
+ * 若 design-tokens 日后正式补齐这些别名 → 删除本文件并收回 tokensGlob glob。
+ */
+
+:root {
+  /* 前景语义色（danger/ok/warn → state-*-fg；secondary → fg-muted） */
+  --fg-danger: var(--state-error-fg);
+  --fg-ok: var(--state-success-fg);
+  --fg-warn: var(--state-warning-fg);
+  --fg-secondary: var(--fg-muted);
+
+  /* 边框语义色 */
+  --border-danger: var(--state-error-border);
+  --border-ok: var(--state-success-border);
+  --border-warn: var(--state-warning-border);
+
+  /* state-* 别名（picker 错误文案 / 成功标记的别名链尾） */
+  --state-danger: var(--state-error-fg);
+  --state-danger-fg: var(--state-error-fg);
+  --state-danger-border: var(--state-error-border);
+  --state-ok: var(--state-success-fg);
+  --state-ok-soft: var(--state-success-bg);
+
+  /* accent 别名（segment 未选中底色 = 弱化 accent） */
+  --accent-soft: var(--accent-muted);
+  --accent-on: var(--accent-fg);
+
+  /* 背景别名 */
+  --bg-subtle: var(--bg-surface-sunken);
+  --bg-surface-hover: var(--bg-surface-row);
+  --bg3: var(--bg-surface-sunken);
+
+  /* 排版 / 形状 / 阴影 / 层级 */
+  --font-mono: var(--font-family-mono);
+  --radius-pill: var(--radius-full);
+  --radius-xs: var(--radius-sm);
+  --shadow-xs: var(--shadow-sm);
+  --z-shell: var(--z-sticky);
+}
