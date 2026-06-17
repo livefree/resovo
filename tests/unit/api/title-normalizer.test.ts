@@ -11,6 +11,7 @@ import {
   normalizeForExternalMatch,
   normalizeMergeKey,
   stripExternalMatchPunct,
+  stripSeasonSuffix,
 } from '@/api/services/TitleNormalizer'
 
 describe('normalizeTitle', () => {
@@ -340,5 +341,54 @@ describe('normalizeMergeKey', () => {
   it('buildMatchKey 经 normalizeMergeKey：同番不同标点写法同 matchKey', () => {
     expect(buildMatchKey('当前，正被打扰中！', 2026, 'anime'))
       .toBe(buildMatchKey('当前正被打扰中', 2026, 'anime'))
+  })
+})
+
+// ── stripSeasonSuffix（ADR-207 D-207-11 / META-54-D：TMDB 季级搜索词剥多语言季号）──
+describe('stripSeasonSuffix', () => {
+  // 中文形态
+  it('中文 第N季 剥离（阿拉伯/CJK 数字）', () => {
+    expect(stripSeasonSuffix('机械之声的传奇第四季')).toBe('机械之声的传奇')
+    expect(stripSeasonSuffix('一人之下 第6季')).toBe('一人之下')
+    expect(stripSeasonSuffix('斗罗大陆 第十二季')).toBe('斗罗大陆')
+  })
+  it('中文 第N期 / 第N部 剥离', () => {
+    expect(stripSeasonSuffix('某番 第2期')).toBe('某番')
+    expect(stripSeasonSuffix('某剧 第3部')).toBe('某剧')
+  })
+
+  // 日文形态（既有两处季号正则均缺，本函数补齐）
+  it('日文 第N期 / Nシリーズ / シーズンN / Nクール 剥离', () => {
+    expect(stripSeasonSuffix('転生したらスライムだった件 第4期')).toBe('転生したらスライムだった件')
+    expect(stripSeasonSuffix('魔入りました！入間くん 第4シリーズ')).toBe('魔入りました！入間くん')
+    expect(stripSeasonSuffix('ある作品 シーズン2')).toBe('ある作品')
+    expect(stripSeasonSuffix('ある作品 2クール')).toBe('ある作品')
+  })
+
+  // 英文形态
+  it('英文 Season N / 独立 SN / Part N / Vol N 剥离', () => {
+    expect(stripSeasonSuffix('The Legend of Vox Machina S4')).toBe('The Legend of Vox Machina')
+    expect(stripSeasonSuffix('Some Show Season 2')).toBe('Some Show')
+    expect(stripSeasonSuffix('Some Show Part 3')).toBe('Some Show')
+    expect(stripSeasonSuffix('Some Show Vol.2')).toBe('Some Show')
+  })
+
+  // 防误剥：裸尾随数字 / 作品名本体含季期部无季号锚 / 内嵌 S 数字
+  it('反例不误剥：裸尾随数字（《复联4》）+ 本体含「季/期」无第N锚 + 单词内 S 数字', () => {
+    expect(stripSeasonSuffix('复仇者联盟4')).toBe('复仇者联盟4')
+    expect(stripSeasonSuffix('四重奏')).toBe('四重奏')
+    expect(stripSeasonSuffix('第3学期的故事')).toBe('第3学期的故事') // 「期」前非紧贴数字+季号锚
+    expect(stripSeasonSuffix('PS4 大冒险')).toBe('PS4 大冒险') // S4 非独立 token（无词边界）
+  })
+
+  // 剥成空串 → 回退原串 trim（防发空 query）
+  it('剥成空串回退原串', () => {
+    expect(stripSeasonSuffix('第一季')).toBe('第一季')
+    expect(stripSeasonSuffix('  Season 1  ')).toBe('Season 1')
+  })
+
+  // 与持久化键口径分立：stripSeasonSuffix 不小写、保留作品本体大小写（normalizeTitle 才小写）
+  it('保留大小写（区别于 normalizeTitle 的小写归一）', () => {
+    expect(stripSeasonSuffix('Vox Machina S4')).toBe('Vox Machina')
   })
 })

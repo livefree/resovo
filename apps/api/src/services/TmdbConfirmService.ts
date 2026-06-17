@@ -31,7 +31,7 @@ import { similarity, normalizeForMatch, parseYear } from '@/api/lib/textMatch'
 import { splitIdentityScalarFields } from '@/api/services/metadata/fieldSplit'
 import { enqueueIdentityVideoRescore } from '@/api/services/identity/enqueueVideoRescore'
 import { loadKnownNames, filterForSearchQueries, filterForMatchScore, type KnownName } from '@/api/services/metadata/knownNames'
-import { normalizeForExternalMatch } from '@/api/services/TitleNormalizer'
+import { normalizeForExternalMatch, stripSeasonSuffix } from '@/api/services/TitleNormalizer'
 import { isPinyinTitle } from '@/api/services/PinyinDetector'
 
 /** search 候选预览缩略图 base（base+w500；与 confirm 富图片应用的 configuration base 不同关注点，META-43）。 */
@@ -181,19 +181,36 @@ function dedupeNormalizedTerms(values: readonly string[]): string[] {
 /**
  * 搜索词集（D-206-2 / META-50-1B）：`filterForSearchQueries` 优先级序
  * [title_original, title_en, official/romanization alias, title] + 视频标题兜底，归一去重后截 N≤3。
+ *
+ * `stripSeason=true`（季级路径，ADR-207 D-207-11 / META-54-D）：① 排除 `romanization` kind
+ * （整句拼音糊一起、误召回，季级拉分集本就排 romanization）；② 每个词经 `stripSeasonSuffix`
+ * 剥多语言季号后缀（季号已由 season_number 列承载，搜索只用裸作品名）。`stripSeason=false`
+ * （movie/show 非季路径）→ 行为逐字节不变（零回归）。
  */
-function buildTmdbSearchTerms(knownNames: readonly KnownName[], fallbackTitle: string): string[] {
-  const ordered = filterForSearchQueries(knownNames).map((n) => n.value)
-  return dedupeNormalizedTerms([...ordered, fallbackTitle]).slice(0, TMDB_SEARCH_TERM_CAP)
+function buildTmdbSearchTerms(
+  knownNames: readonly KnownName[], fallbackTitle: string, stripSeason: boolean,
+): string[] {
+  const selected = stripSeason
+    ? filterForSearchQueries(knownNames).filter((n) => n.kind !== 'romanization')
+    : filterForSearchQueries(knownNames)
+  const terms = [...selected.map((n) => n.value), fallbackTitle]
+  const cleaned = stripSeason ? terms.map(stripSeasonSuffix) : terms
+  return dedupeNormalizedTerms(cleaned).slice(0, TMDB_SEARCH_TERM_CAP)
 }
 
 /**
  * 打分 target 集（D-206-3 / META-50-1B）：`filterForMatchScore` 极性集合（title/official/original/
  * localized，排 romanization/crawler）+ 视频标题兜底，归一去重；**不截断**（打分纯本地无 API 成本）。
+ *
+ * `stripSeason=true`（季级路径，ADR-207 D-207-11）：每个 target 经 `stripSeasonSuffix` 剥季号后缀——
+ * 季级 `searchYear=null` 打分纯标题，target 带后缀会被 TMDB 裸名候选拉低相似度至 <0.6（no_candidate）。
  */
-function buildTmdbScoreTargets(knownNames: readonly KnownName[], fallbackTitle: string): string[] {
-  const scored = filterForMatchScore(knownNames).map((n) => n.value)
-  return dedupeNormalizedTerms([...scored, fallbackTitle])
+function buildTmdbScoreTargets(
+  knownNames: readonly KnownName[], fallbackTitle: string, stripSeason: boolean,
+): string[] {
+  const targets = [...filterForMatchScore(knownNames).map((n) => n.value), fallbackTitle]
+  const cleaned = stripSeason ? targets.map(stripSeasonSuffix) : targets
+  return dedupeNormalizedTerms(cleaned)
 }
 
 /**
@@ -625,13 +642,16 @@ export class TmdbConfirmService {
 
       // META-50-1B：knownNames 驱动多词检索（用 catalogId = effectiveCatalogId，含 bangumi redirect 后）。
       // knownNames 空（如新建无别名）→ 兜底单视频标题，行为等价 META-47 单词检索。
+      // ADR-207 D-207-11 / META-54-D：季级路径（tv ∧ seasonNumber）搜索词剥多语言季号后缀 + 排 romanization
+      //（季号已由 season_number 承载，搜索用裸作品名）。复用同一 gate 控 searchYear（review P1-1）。
+      const stripSeason = mediaType === 'tv' && seasonNumber != null
       const knownNames = await loadKnownNames(this.db, catalogId)
-      const searchTerms = buildTmdbSearchTerms(knownNames, title)
-      const scoreTargets = buildTmdbScoreTargets(knownNames, title)
+      const searchTerms = buildTmdbSearchTerms(knownNames, title, stripSeason)
+      const scoreTargets = buildTmdbScoreTargets(knownNames, title, stripSeason)
       // review P1-1：季级 catalog 的 year 是**该季年份**（非 show first_air_date_year）；若传给 searchTv（映射 first_air_date_year）
       // 会把 S2/S3 等非首播季的正确 show 直接过滤掉。季级路径搜剧不带 year（也不按季年份打分），命中后由 resolveSeason
       // 对 season.air_date 做弱校验（软 warn 不阻断，ADR-207 D-207-3）。movie/show 路径 year 行为不变。
-      const searchYear = mediaType === 'tv' && seasonNumber != null ? null : targetYear
+      const searchYear = stripSeason ? null : targetYear
       const best = await this.multiTermSearch(searchTerms, scoreTargets, searchYear, mediaType, cfg)
       if (!best || best.score < CONFIDENCE_CANDIDATE) return { matched: false, reason: 'no_candidate' }
       tmdbId = best.candidate.tmdbId

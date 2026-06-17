@@ -725,6 +725,60 @@ describe('autoMatch 季级路径（ADR-207）', () => {
   })
 })
 
+// ADR-207 D-207-11 / META-54-D：季级搜索词剥多语言季号后缀 + 排 romanization；movie/show 零回归
+describe('autoMatch 季级搜索词剥季号（ADR-207 D-207-11）', () => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const catalogWith = (over: Record<string, unknown>): any => ({
+    type: 'series', metadataSource: 'bangumi', title: null, titleOriginal: null, originalLanguage: null,
+    description: null, genres: [], genresRaw: [], country: null, rating: null, coverUrl: null, backdropUrl: null, logoUrl: null, ...over,
+  })
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const search = (items: any[]) => ({ page: 1, total_pages: 1, total_results: items.length, results: items })
+  const tvItem = () => ({ id: 1399, name: 'abcdef', original_name: 'abcdef', original_language: 'en', overview: 'o', first_air_date: '2012-04-01', poster_path: '/s.jpg' })
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const tvDetail = (): any => ({
+    id: 1399, name: 'abcdef', original_name: 'abcdef', original_language: 'en', overview: 'o',
+    genres: [{ id: 18, name: 'Drama' }], origin_country: ['US'], vote_average: 9, poster_path: '/s.jpg', external_ids: {},
+    seasons: [{ id: 3625, season_number: 2, name: 'S2', overview: 's2', poster_path: '/s2.jpg', air_date: '2012-04-01', episode_count: 10, vote_average: 8 }],
+  })
+
+  beforeEach(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    vi.mocked(tmdbLib.searchTv).mockResolvedValue(search([tvItem()]) as any)
+    vi.mocked(tmdbLib.getTvDetail).mockResolvedValue(tvDetail())
+    vi.mocked(tmdbLib.getTvSeasonDetail).mockResolvedValue(null) // 季 detail 失败仍写 season exact（不影响搜索词断言）
+  })
+
+  it('季级：title（中文第N季）+ title_original（日文第N期）后缀剥离后均用裸名搜', async () => {
+    vi.mocked(findCatalogById).mockResolvedValue(catalogWith({ title: 'abcdef 第二季', titleOriginal: 'abcdef 第2期', type: 'anime' }))
+    await svc.autoMatch('vid', 'cat', { title: 'abcdef 第二季', year: 2012, mediaType: 'tv', seasonNumber: 2 })
+    // 中文「第二季」+ 日文「第2期」+ fallback 均剥季号 → 归一为裸名 'abcdef'，所有 searchTv 实参 == 'abcdef'
+    expect(tmdbLib.searchTv).toHaveBeenCalled()
+    for (const c of vi.mocked(tmdbLib.searchTv).mock.calls) expect(c[0]).toBe('abcdef')
+  })
+
+  it('季级：排除 romanization kind（整句拼音不发 query）', async () => {
+    vi.mocked(findCatalogById).mockResolvedValue(catalogWith({ title: 'abcdef 第二季', type: 'anime' }))
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    vi.mocked(listCatalogAliases).mockResolvedValueOnce([{ alias: 'abcdefdierji', kind: 'romanization', source: 'crawler', lang: null, confidence: 0.5 }] as any)
+    await svc.autoMatch('vid', 'cat', { title: 'abcdef 第二季', year: 2012, mediaType: 'tv', seasonNumber: 2 })
+    const args = vi.mocked(tmdbLib.searchTv).mock.calls.map((c) => c[0])
+    expect(args).not.toContain('abcdefdierji') // romanization 季级排除
+    expect(args).toContain('abcdef') // 裸名仍发
+  })
+
+  it('movie 路径零回归：季号后缀不剥（searchMovie 收到原始带后缀标题）', async () => {
+    vi.mocked(findCatalogById).mockResolvedValue(catalogWith({ title: 'abcdef 第二季', titleOriginal: null, type: 'movie' }))
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    vi.mocked(tmdbLib.searchMovie).mockResolvedValue(search([{ id: 9, title: 'abcdef 第二季', original_title: 'abcdef 第二季', original_language: 'zh', overview: '', release_date: '2012-01-01', poster_path: null }]) as any)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    vi.mocked(tmdbLib.getMovieDetail).mockResolvedValue({ ...MOVIE, id: 9 } as any)
+    await svc.autoMatch('vid', 'cat', { title: 'abcdef 第二季', year: 2012, mediaType: 'movie' })
+    // movie 路径 stripSeason=false → 搜索词保留季号后缀（逐字节零回归）
+    expect(vi.mocked(tmdbLib.searchMovie).mock.calls[0][0]).toBe('abcdef 第二季')
+  })
+})
+
 // META-51-A：TMDB → title_en 英文标题抽取（修拼音 title_en；仅真英文，CJK/中文回退不写）
 describe('META-51-A: confirm fields 含 title_en → 英文标题抽取', () => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

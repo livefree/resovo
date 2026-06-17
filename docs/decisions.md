@@ -23277,3 +23277,20 @@ ADR-207 提交后实施前契约审核发现 4 项缺口（arch-reviewer 首轮 
 - **REVISE-4（MEDIUM，方案↔ADR title 一致）**：plan §字段优先级残留「title_en/title_original 取 show 级」与 D-207-5「季路径剔标题三件套」冲突 → 同步 plan 以 ADR 为准，card B 单测覆盖三件套不写。
 
 **保留不变**（审核确认正确）：D-207-2（季 ref 用 TMDB season 自身 id，exact 唯一键确不含 season_number）+ D-207-9（manual confirm 源头纠偏必要）。
+
+### ADR-207 AMENDMENT 2026-06-16（META-54-D：季级搜索词剥多语言季号 + 排 romanization — 召回口径增补）
+
+**状态**：Accepted（arch-reviewer (claude-opus-4-8, agentId ac12b583572ec4efb) CONDITIONAL-PASS）。
+
+**动因**：SEQ-20260616-03（ADR-207 季级）完工后验证「TMDB 自动增强非电影类别」，真实库（resovo_dev）只读盘点 + 6 样本 inline `autoMatch` 实证发现：季级 applied 代码路径已通（1 条「灵不灵」S1 → season exact + 逐集），但**存量非电影 0 条 season exact、485 条全 show-candidate（待确认）**，6 样本重富集 **5/6 `no_candidate`**（含「一人之下」「入间同学入魔了」「史莱姆」等 TMDB 明确存在的知名番）。根因：`buildTmdbSearchTerms`（TmdbConfirmService.ts）把**带季号后缀的原始标题**直发 `searchTv`，季号后缀以多语言形态嵌进所有标题变体——中文 `第N季/期/部`、日文 `第N期/Nシリーズ/シーズンN/Nクール`、英文 `SN/Season N`，连罗马音都糊成整句拼音。多语言量化：**397 条非电影季级 catalog 中 370 条（93%）无任何干净作品名**（series 95% / anime 82% / variety 96%）。季号已由 `media_catalog.season_number` 列承载（ADR-176），季解析靠 `seasonNumber` 参数，搜索本应只用裸作品名。
+
+- **D-207-11（季级搜索词剥多语言季号 + 排 romanization）**：
+  - **① 剥离位置 = 搜索词层（运行时），不动上游采集**。`title`/`title_original` 是展示字段（前台依赖带季号显示标题），改采集存裸名属破坏性 schema/语义变更 + 需全库回填，否决。运行时在 knownNames 搜索词投影出口剥离是唯一收敛点。
+  - **② 新建独立纯函数 `stripSeasonSuffix`（`TitleNormalizer.ts`），不改 `normalizeTitle`、不复用 `TitleIdentityParser.SEASON_PATTERNS`**。理由：`TitleNormalizer.SEASON_PATTERNS` 喂 `normalizeTitle` → `normalizeMergeKey`（持久化归并键 ADR-174）+ `normalizeForExternalMatch`（META-22），改它致归并键位移回归；`TitleIdentityParser.SEASON_PATTERNS` 改动须 bump `TITLE_PARSER_VERSION` 触发 `evidence_hash` 全量重算（ADR-105a）。新函数自带正则表 + **补齐既有两处均缺的日文 `第N期/Nシリーズ/シーズンN/Nクール`**；剥后为空回退原串（防发空 query）。日文季号增补只进新函数，既有归并键对日文 `第N期` 行为不变（季号残留只让归并更保守 under-match，不误并）。
+  - **③ 门控 `mediaType==='tv' ∧ seasonNumber != null`**（复用 D-207-1 季级 gate / autoMatch searchYear 同分流）。`buildTmdbSearchTerms`/`buildTmdbScoreTargets` 增 `stripSeason` 参数；**movie/show 非季路径 `stripSeason=false`，逐字节零回归**（硬门禁：movie 路径搜索词快照逐字节一致）。
+  - **④ scoreTargets 同步剥**：季级 `searchYear=null`，`tmdbCandidateScore` 纯标题打分，target 带后缀会被压到 `< CONFIDENCE_CANDIDATE(0.6)` → 即便召回也判 no_candidate（即 5/6 失败机制）。
+  - **⑤ 季级搜索词排除 `kind==='romanization'`**（仅季级）：整句拼音（`yirenzhixiadiliuji`）无用 + 误召回，季级拉分集 `filterForMatchScore` 本就排 romanization。movie/show 路径仍含（行为不变）。本卡**不**剥拼音季号、不改全局 `searchTier`（拼音季号正则发散、误剥风险高 → 登记 follow-up）。
+  - **⑥ 与 META-54-A 协同**：本卡（D）先于 META-54-A（alreadyBound force-rematch / stale 恢复）。搜索词修好是 A 卡产生价值的前置（否则存量重富集仍 93% no_candidate）。A 卡验收（存量季级重富集命中率）须在本卡合并后量测。
+  - **防误剥边界**：季号正则必带数字/CJK 数字 + 季号关键词锚（`第N季`/`第N期`/`SN` 而非裸「季/期」「数字」）；作品名本体含「季/期/部」无数字 → 不剥；裸尾随数字（《复联4》）无季号锚 → 保留（沿 TitleIdentityParser Y4 护栏口径）。日文 `第N期` vs 单集噪声 `第N话` 须区分（中风险，真实番名样本验证）。
+
+**关联**：ADR-206（knownNames 多词搜索投影 = 本卡剥离落点）/ ADR-176（season_number 列承载季号 = 搜索用裸名依据）/ ADR-174 + META-22（持久化归并键/外部匹配键口径分立 = 不污染既有键的依据）/ ADR-105a（evidence_hash = 不改 TitleIdentityParser 的依据）/ META-54-A（先后依赖）。

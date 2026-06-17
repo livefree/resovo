@@ -6750,3 +6750,25 @@
   - 门禁：typecheck/lint exit=0 / test:changed 291 passed（15 文件）。
   - **F1 是本轮实质项**：D-207-9 BLOCKER（停产+移除错绑）确闭合；「端到端闭环」措辞夸大了「季精度存量回填恢复」（被 alreadyBound 架空），已全面纠正声明 + 登记 META-54-A（先核查生产 stale 行存在再做 force-rematch）。**未做前不得宣称季精度存量回填完成**。
   - F3（文件 774 行超 500）按 reviewer 建议登记专项重构卡 META-54-C（需移 ~280 行跨纯函数+候选打分两组、re-export 公开 API，不在本轮 patch 仓促做），未在本卡内联提取。
+
+## [META-54-D] SEQ-20260616-04 非电影季级 TMDB 搜索词剥多语言季号标记（脱离 93% 不匹配）
+- **完成时间**：2026-06-16
+- **记录时间**：2026-06-16 19:48
+- **执行模型**：claude-opus-4-8
+- **子代理**：arch-reviewer (claude-opus-4-8, ac12b583572ec4efb) — 设计「多语言季号剥离」方案，CONDITIONAL PASS（7 设计决策 + 4 转 PASS 条件）
+- **背景（验证驱动）**：SEQ-20260616-03（ADR-207 季级）完工后验证「TMDB 自动增强非电影类别」，真实库（resovo_dev）只读盘点 + 6 样本 inline `autoMatch` 实证发现：季级 applied 代码路径已通（「灵不灵」S1 → season exact + 逐集），但**存量非电影 0 条 season exact、485 条全 show-candidate（待确认）**，6 样本重富集 **5/6 `no_candidate`**（含「一人之下/入间/史莱姆」等 TMDB 明确存在的知名番）。根因：`buildTmdbSearchTerms` 把带季号后缀的原始标题直发 searchTv，季号后缀以多语言形态嵌进所有标题变体（中文 第N季/期/部、日文 第N期/Nシリーズ、英文 SN）。多语言量化：**397 条非电影季级 catalog 中 370 条（93%）无任何干净作品名**（series 95% / anime 82% / variety 96%）。
+- **修改文件**：
+  - `apps/api/src/services/TitleNormalizer.ts` — 新增独立纯函数 `stripSeasonSuffix(title)` + 专用正则表 `SEASON_SUFFIX_FOR_SEARCH`（中文 第N季/期/部 + 日文 第N期/Nシリーズ/シーズンN/Nクール〔既有两处季号正则均缺〕 + 英文 Season N/独立 SN/Part N/Vol N；均带数字+季号锚防误剥；剥成空串回退原串）。**不改 `normalizeTitle`/`SEASON_PATTERNS`**——后者喂持久化归并键（`normalizeMergeKey` ADR-174 / `normalizeForExternalMatch` META-22），改它致归并键位移；新函数不进任何持久化键/evidence_hash 链。
+  - `apps/api/src/services/TmdbConfirmService.ts` — `buildTmdbSearchTerms`/`buildTmdbScoreTargets` 增 `stripSeason: boolean` 参数：`true` 时①排除 `kind==='romanization'`（仅 search terms；整句拼音误召回，季级拉分集本就排 romanization）②每词经 `stripSeasonSuffix` 剥多语言季号。`autoMatch` 加 `stripSeason = mediaType==='tv' ∧ seasonNumber!=null` gate（复用 searchYear 同分流），movie/show 非季路径 `stripSeason=false` 逐字节零回归。
+  - `tests/unit/api/title-normalizer.test.ts`（+1 describe，60→72，+12）— stripSeasonSuffix 中/日/英三形态剥离 + 反例不误剥（复联4/四重奏/第3学期/PS4）+ 剥空回退 + 保留大小写
+  - `tests/unit/api/tmdb-confirm-service.test.ts`（72→75，+3）— 季级 title（中文第N季）+title_original（日文第N期）剥后用裸名搜 / 季级排除 romanization kind / movie 路径零回归（searchMovie 收原始带后缀标题）
+  - `docs/decisions.md` — ADR-207 AMENDMENT 2026-06-16 / **D-207-11**（季级搜索词剥多语言季号 + 排 romanization，召回口径增补，arch-reviewer CONDITIONAL-PASS）
+  - `docs/task-queue.md` / `docs/tasks.md` — 卡登记 + 完成
+- **新增依赖**：无
+- **数据库变更**：无（纯搜索词构造逻辑；不动 schema/采集存储）
+- **注意事项**：
+  - 门禁全绿：typecheck exit=0 / lint 4ok / verify:adr-contracts EXIT=0（endpoint-adr/sql-schema/style/mirror ✅，无新增 admin route）/ `npm run test:changed` 升全量 1064 passed（65 文件）。e2e N/A（后端 enrich/TMDB 服务，非 route/UI/player 域）。
+  - **arch-reviewer 4 转 PASS 条件达成**：① ADR-207 D-207-11 已落；② 不动 META-54-A（注册为后置，搜索词修好才值得对存量重富集）；③ movie 路径零回归测试（searchMovie 收未剥标题）；④ 日文 第N期/Nシリーズ 用真实番名（転生したらスライム/魔入りました）单测验证防误剥。
+  - **与 META-54-A 协同**：本卡修好搜索词召回；META-54-A（alreadyBound force-rematch / stale 恢复）后置，存量季级重富集命中率须本卡合并后量测。
+  - **follow-up（已记 ADR）**：拼音季号正则（romanization 整句拼音里的 diliuji 等）发散、误剥风险高，本卡仅做「季级排除 romanization kind」保守处理，未剥拼音季号、未改全局 searchTier。
+  - **遗留**：验证实验在 dev 库 `灵不灵`(b869891e) 留下 1 条季 exact ref + 1 逐集（正确升级，无害；内容字段因直调 autoMatch 未走 reconcile 故未落）。

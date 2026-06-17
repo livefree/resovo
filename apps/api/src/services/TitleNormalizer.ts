@@ -38,6 +38,29 @@ const SEASON_PATTERNS = [
   /\bvol\.?\s*\d+/gi,
 ]
 
+/**
+ * 季号后缀剥离专用正则（**仅供 TMDB 季级搜索词剥离**，ADR-207 D-207-11 / META-54-D）。
+ *
+ * 与 `SEASON_PATTERNS` 刻意分立：`SEASON_PATTERNS` 喂 `normalizeTitle` → 持久化归并键
+ * （`normalizeMergeKey` ADR-174 / `normalizeForExternalMatch` META-22），改它致归并键位移回归；
+ * 本表只服务 `stripSeasonSuffix`，不进任何持久化键/evidence_hash 链，故可激进剥离 + 补日文形态。
+ *
+ * 覆盖（均带数字 + 季号关键词锚，裸「季/期/部」或裸尾随数字如《复联4》不匹配 → 防误剥）：
+ *   - 中文：第N季 / 第N期 / 第N部（N = CJK 数字或阿拉伯数字）
+ *   - 日文（既有两处季号正则均缺）：第N期 / Nシリーズ / 第Nシリーズ / シーズンN / Nクール
+ *   - 英文：Season N / 独立 SN token / Part N / Vol N
+ */
+const SEASON_SUFFIX_FOR_SEARCH: readonly RegExp[] = [
+  /第\s*[一二三四五六七八九十百千零〇\d]+\s*[季期部]/g,
+  /第?\s*\d+\s*シリーズ/g,
+  /シーズン\s*\d+/g,
+  /\d+\s*クール/g,
+  /\bseasons?\s*\d+\b/gi,
+  /(?:^|\s)s\d{1,2}(?=\s|$)/gi,
+  /\bpart\.?\s*\d+\b/gi,
+  /\bvol\.?\s*\d+\b/gi,
+]
+
 // ── 年份模式 ─────────────────────────────────────────────────────
 
 /** 括号包裹的四位年份：(2024)、（2024）、[2024]、【2024】 */
@@ -173,4 +196,23 @@ export function buildMatchKey(
 ): string {
   const normalized = normalizeMergeKey(title)
   return `${normalized}|${year ?? ''}|${type}`
+}
+
+/**
+ * 剥离作品名中的季号后缀（中/英/日），供 TMDB 季级搜索词构造（ADR-207 D-207-11 / META-54-D）。
+ *
+ * 季号已由 `media_catalog.season_number` 列单独承载（ADR-176），TMDB 季解析靠 `seasonNumber`
+ * 参数，搜索 query 只需裸作品名——而采集存的 title/title_original/别名常带各语言季号后缀
+ * （中文「第N季」、日文「第N期/第Nシリーズ」、英文「S4」），直发 search 会因后缀噪声漏召回。
+ *
+ * 剥后折叠空白 + trim；**剥成空串则回退原串 trim**（防发空 query）。保留大小写（TMDB 搜索
+ * 大小写不敏感，但不破坏原标题形态）。纯函数，无副作用，**不参与持久化归并键/evidence_hash**。
+ */
+export function stripSeasonSuffix(title: string): string {
+  let s = title
+  for (const re of SEASON_SUFFIX_FOR_SEARCH) {
+    s = s.replace(re, ' ')
+  }
+  s = s.replace(/\s+/g, ' ').trim()
+  return s.length > 0 ? s : title.trim()
 }
