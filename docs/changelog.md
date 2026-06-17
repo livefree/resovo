@@ -6772,3 +6772,21 @@
   - **与 META-54-A 协同**：本卡修好搜索词召回；META-54-A（alreadyBound force-rematch / stale 恢复）后置，存量季级重富集命中率须本卡合并后量测。
   - **follow-up（已记 ADR）**：拼音季号正则（romanization 整句拼音里的 diliuji 等）发散、误剥风险高，本卡仅做「季级排除 romanization kind」保守处理，未剥拼音季号、未改全局 searchTier。
   - **遗留**：验证实验在 dev 库 `灵不灵`(b869891e) 留下 1 条季 exact ref + 1 逐集（正确升级，无害；内容字段因直调 autoMatch 未走 reconcile 故未落）。
+
+## [META-54-A2] SEQ-20260616-04 存量非电影季级全量重富集（兑现脱离待确认）
+- **完成时间**：2026-06-16
+- **记录时间**：2026-06-16 23:20
+- **执行模型**：claude-opus-4-8
+- **子代理**：无
+- **类型**：ops backfill（无代码改动；dev 库数据回填 + 完成记录）
+- **操作**：`scripts/reenrich-backfill.ts --mode tmdb-season`（ADR-207 D-207-10 card D 指定路径，run-unique jobId）→ 入队 **305 videos**（series 127 / anime 95 / variety 54 / documentary 29）→ 运行中 apps/api enrichmentWorker（concurrency=2）全量 enrich（含 reconcile 内容字段 + bangumi + 源检验 + 季级 tmdb autoMatch with META-54-D 修复后搜索词）；alreadyBound 自动跳过已 auto/manual primary 人群。队列 ~8.5 分钟（t+510s）健康排空，无本次新增失败（failed=50 系历史残留）。
+- **结果**（BEFORE → AFTER，非电影 tmdb season exact catalog 数）：**9 → 170（+161 升级，脱离待确认）**
+  - series 87（87% 升级率，87/100 有 ref）/ variety 34（87%）/ documentary 11（85%）/ anime 38（58%，下界——冷门国产动态漫画/网络番 TMDB 无数据 + 2026 未来季待上架）
+  - `catalog_episodes(source=tmdb)` 3069 条（季级逐集）
+- **数据库变更**：无 schema（dev 库 catalog_external_refs/catalog_episodes/媒体字段数据回填，经标准 enrich 写路径）
+- **新增依赖**：无
+- **注意事项**：
+  - 量测预测（META-54-A2，anime 样本 40% 季 exact）被全量验证：anime 实际 58%、非 anime 类别 85-87%（anime 为下界判断成立）。
+  - 剩余未升级：only_candidate（匹配 show 但季未解析，多为 2026 未来季，TMDB 上架后下次 enrich 自动解析）+ no_candidate（TMDB 库无数据的冷门国产内容，非搜索可解）。
+  - **META-54-A（窄口径 stale）+ A2（广口径重富集）合并收口**：「非电影恒待确认」根因（META-54-D 季号后缀）已修 + 存量已大批兑现脱离待确认。未来季/冷门长尾为数据源固有局限，非缺陷。
+  - 生产库回填：本次仅 dev；生产需在 META-54-D 合并部署后跑同款 `--mode tmdb-season`（worker 在线即可，run-unique jobId 防漏跑）。
