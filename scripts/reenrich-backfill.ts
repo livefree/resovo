@@ -12,7 +12,10 @@
  *       never=meta_quality NULL / unmatched=douban|bangumi 未命中 /
  *       missing-characters=anime 无 catalog_characters（含已 matched anime，补 META-19 角色）/
  *       tmdb-missing=catalog 无 tmdb_id 且类型可匹配 TMDB（META-51-B，TMDB 首次回填用）/
- *       tmdb-season=TV 家族 ∧ season_number IS NOT NULL（ADR-207 季级回填，触发分季 catalog 写正确 season exact 季 id + 逐集）/
+ *       tmdb-season=TV 家族 ∧ season_number IS NOT NULL（ADR-207 季级回填，触发分季 catalog 写正确 season exact 季 id + 逐集；
+ *         ⚠️ review F1：stepTmdb alreadyBound 守卫会**跳过已有 manual_confirmed/auto_matched isPrimary tmdb ref 的 video**——
+ *         即恰好跳过 show-id-as-season stale 人群〔均人工 confirm〕，故本模式**不能**为 stale catalog 写回正确季 ref；
+ *         stale 恢复见 cleanup-tmdb-season-refs.ts 头部说明 + task-queue follow-up）/
  *       all=前三者并集（不含 tmdb-missing / tmdb-season）
  *   --type <anime|movie|tv|...>   仅某类型（可选）
  *   --limit <N>                   仅前 N 条（小批验证用）

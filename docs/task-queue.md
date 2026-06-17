@@ -2775,3 +2775,13 @@
 
 - **BLOCKER 红线登记（D-207-9）**：confirm 路径是 show-id-as-season 误写源头——**-B 必含 confirm 内部解析季 id**（消除新错绑产生）+ **-D 必含存量清理脚本**（降级旧错绑行）；二者缺一则错绑持续/cache 一致性硬校验无法绿。
 - **关键约束**（含实施前契约审核 REVISE-1~4，详 ADR-207 REVISE 2026-06-16）：① 季 ref external_id=TMDB 季自身 id（索引①不含 season_number，用 show id 则同剧多季互撞）；② **季 catalog 不写 tmdb_id/imdb_id cache**（二者 026 列级 UNIQUE，多季写同一 show id 必撞 + findCatalogByTmdbId 误命中——REVISE-1 推翻原「写 show id」）；③ 逐集读侧 source 优先级 anime bangumi>tmdb 防重复集（D-207-7，UI 接线若拆卡须标 follow-up）；④ 季海报复用 pickBestImage/buildImageFields 禁新写（D-207-4）；⑤ 回填禁固定 jobId 入口（REVISE-2）；⑥ getTvSeasonDetail 失败不丢 season exact（REVISE-3）。
+
+### SEQ-20260616-03 round-2 follow-up 登记（code review round 2 / META-53-F 2026-06-16）
+
+> **存量纠偏闭合口径纠正（F1）**：D-207-9 BLOCKER 的「停止新错绑产生（D-207-9a confirm 源头纠偏）+ 移除残留错绑 exact（D-207-9b cleanup demote）」**确已闭合**；此前 changelog/task-queue 的「端到端闭环」措辞**夸大**了——「为 stale 人群写回正确 season exact 恢复季精度」这一**超出 BLOCKER 的增强**未达成：stale 行只来自人工 confirm（manual_confirmed isPrimary video ref），被 `MetadataEnrichService.stepTmdb` alreadyBound 守卫（:210-216）跳过，故 `reenrich-backfill --mode tmdb-season` 跳过整个 stale 人群、autoMatch 不跑、正确季 ref 不写回。cleanup 只降级（安全有益），季精度恢复需人工重新 confirm 或另路。
+
+- **META-54-A（follow-up，HIGH，gated）— stale season ref 季精度恢复路径**：① **先核实生产库**经 cleanup 脚本判定的 stale 行数（show-id-as-season exact）；若为 0（端点/UI 实际从未发 seasonNumber）→ 降级为纯文档项、关闭。② 若 >0 → 设计 force-rematch 路径（对 stale 人群先解绑/降级 video ref 绕过 alreadyBound，或 cleanup 后即调 autoMatch 写回正确季 ref + 逐集），须 ADR 增补 + 测试覆盖 alreadyBound×season 交互。**未做前不得宣称季精度存量回填完成**。
+- **META-54-B（follow-up，MEDIUM）— confirm 季级逐集对称（F2）**：confirm 季级现不写逐集（seasonDetail=null）+ 无季多语言海报择优，与 auto（D-207-7 写逐集）不对称；且 confirm 后 manual_confirmed ref 致后续 enrich alreadyBound 跳过、逐集不自动补。补 confirm 拉 getTvSeasonDetail + upsertCatalogEpisodes（与 F1 force 路径可合并设计）。
+- **META-54-C（follow-up，MEDIUM）— TmdbConfirmService.ts 模块拆分（F3）**：774 行超 500 红线（SEQ 前已 593）。提取 `tmdb-catalog-fields.ts`（纯函数 buildCatalogFields/buildSeasonCatalogFields/buildImageFields/pickBestImage/pickEnglishTitle/toTmdbEpisodeInput + 常量 + 候选打分组 toCandidate/pickBestTmdbCandidate）至 <500；TMDB_APPLIABLE_FIELDS/pickBestTmdbCandidate/TmdbMediaType 须 re-export 保公开 API。属累积技术债（非本 SEQ 独有，本次越线点）。
+- **观察项（F5，INFO）**：`demoteExactRef` WHERE 仅 catalog_id+provider+relation='exact' 无 external_kind 过滤——季 catalog 实务上只有 season exact 故安全，复用既有函数既有性质；若将来同 catalog 多 kind exact 共存需补 kind 约束。
+- **已修（F4，LOW，META-53-F 本卡）**：季 catalog 降级 show 时也剔标题三件套（autoMatch else 分支，与 resolved 季路径一致，D-207-5）。

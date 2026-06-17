@@ -449,6 +449,11 @@ export class TmdbConfirmService {
     // 字段构建（review P1-2）：season 命中 → **季级字段**（人工确认季也用季简介/季海报/季评分，复用 buildSeasonCatalogFields，
     // 与 auto 路径对称；season summary 已含 overview/poster_path → seasonDetail=null 零额外 REST），尊重 moderator 选的 fields；
     // 非季级 → show/movie 路径不变。
+    // FOLLOW-UP（review round-2 F2）：confirm 季级**不写逐集**（seasonDetail=null，无 getTvSeasonDetail/upsertCatalogEpisodes）
+    //   + 拿不到季级多语言海报择优——有意省一次 REST 的取舍；auto 路径已写逐集（D-207-7）。**注意（与 F1 同根）**：confirm 写
+    //   manual_confirmed isPrimary video ref 后，后续 enrich 的 stepTmdb alreadyBound 守卫会跳过该 video → 逐集**不会**被自动补；
+    //   故 manual confirm 季逐集缺口至 follow-up 补齐前持续存在。对称化（confirm 拉 getTvSeasonDetail 写逐集）登记
+    //   task-queue「META-53 round-2 follow-up」。
     const updateFields = (confirmKind === 'season' && confirmSeason)
       ? buildSeasonCatalogFields(detail as TmdbTvDetail, confirmSeason, null, imageBase, new Set(applicableFields))
       : buildCatalogFields(detail, mediaType, applicableFields, imageBase)
@@ -666,7 +671,10 @@ export class TmdbConfirmService {
         // auto 路径应用全部可应用字段（sel = 全集）。
         Object.assign(updateFields, buildSeasonCatalogFields(detail as TmdbTvDetail, season, seasonDetail, imageBase, new Set(TMDB_APPLIABLE_FIELDS)))
       } else {
-        Object.assign(updateFields, buildCatalogFields(detail, mediaType, TMDB_APPLIABLE_FIELDS, imageBase))
+        // review F4：季 catalog 降级 show 时也剔标题三件套（与 resolved 季路径一致，D-207-5：不让 TMDB show 名覆盖季 catalog 标题；
+        // movie/tv-show-root 非季 catalog 仍写 title）。
+        const degradedFields = isSeasonCatalog ? TMDB_APPLIABLE_FIELDS.filter((f) => !SEASON_TITLE_TRIPLE.includes(f)) : TMDB_APPLIABLE_FIELDS
+        Object.assign(updateFields, buildCatalogFields(detail, mediaType, degradedFields, imageBase))
         // D-207-6：季 catalog（season_number != null）即便降级 show candidate 也不写 cache（多季写同一 show id 撞 026 列级 UNIQUE）
         if (!isSeasonCatalog) {
           updateFields.tmdbId = tmdbId // 经 safeUpdate fill-if-empty 白名单（M4），受下方 ref 成功约束

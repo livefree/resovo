@@ -6709,7 +6709,7 @@
 - **注意事项**：
   - 门禁：typecheck exit=0（apps/api/src 改动覆盖；scripts/tests 按根 tsconfig include 既有约定不入 tsc 门禁，经 vitest esbuild 运行）/ lint exit=0 / `npm run test:changed` 1336 passed（92 文件，videos.ts 基础改动按 ADR-180 升全量）。
   - **运行顺序（运维）**：① `node --env-file=.env.local --import tsx scripts/reenrich-backfill.ts --mode tmdb-season`（写正确 season exact 季 id + 逐集）→ ② `scripts/cleanup-tmdb-season-refs.ts --dry-run`（复核 stale 报表）→ ③ 去 --dry-run 正式跑（降级 stale show-id 行）。dry-run 优先，规避季 id↔show id 罕见碰撞误判。
-  - **SEQ-20260616-03 全交付 ✅**：ADR-207 + 实现卡 A（客户端/类型）/B（service 季级路径+confirm 纠偏）/C（stepTmdb 接线）/D（清理+回填）全完成；前向生效（A/B/C）+ 存量纠偏（D BLOCKER 闭合）端到端闭环。闭合 ADR-202 D-202-α + 兑现 ADR-177 D-177-11。
+  - **SEQ-20260616-03 全交付 ✅**：ADR-207 + 实现卡 A（客户端/类型）/B（service 季级路径+confirm 纠偏）/C（stepTmdb 接线）/D（清理+回填）全完成；前向生效（A/B/C）+ 存量纠偏（D BLOCKER 闭合）端到端闭环。闭合 ADR-202 D-202-α + 兑现 ADR-177 D-177-11。**【措辞纠正 — review round-2 F1，详见下方 META-53-F 条目】**：「端到端闭环」夸大——D-207-9 BLOCKER（停产新错绑 + demote 移除残留 stale exact）确已闭合；但「为 manual_confirmed stale 人群写回正确 season exact 恢复季精度」（超 BLOCKER 增强）**未达成**（被 stepTmdb alreadyBound 守卫架空，reenrich-backfill tmdb-season 跳过该人群）。季精度存量恢复见 task-queue「META-54-A follow-up」（gated on 验证生产 stale 行）。
 
 ## [META-53-E] SEQ-20260616-03 code review 返工 — 4 finding（P1×2 季级召回/字段 + P2×2 provenance/事务）
 - **完成时间**：2026-06-16
@@ -6735,3 +6735,18 @@
   - `tests/unit/api/tmdb-confirm-service.test.ts` — confirm 季级字段测试补断言 safeUpdate sourceRef='60001'(季 id，非 show 1429)
 - **数据库变更**：无 ｜ **新增依赖**：无
 - **注意事项**：typecheck/lint exit=0 / test:changed 286 passed。补齐后 SEQ-20260616-03 季级 provenance（auto + manual confirm 双路径）全部指向 season id。
+
+## [META-53-F] SEQ-20260616-03 code review round 2 返工 — F1 声明纠正 + F4 一致性 + F2/F3/F5 登记
+- **完成时间**：2026-06-16 ｜ **记录时间**：2026-06-16 17:15 ｜ **执行模型**：claude-opus-4-8 ｜ **子代理**：无
+- **修改文件**：
+  - `apps/api/src/services/TmdbConfirmService.ts` — **F4**：autoMatch 降级 show 分支对 `isSeasonCatalog` 也剔标题三件套（`degradedFields` 过滤 SEASON_TITLE_TRIPLE）——与 resolved 季路径一致，不让 TMDB show 名覆盖季 catalog 标题（D-207-5 一致性；movie/tv-show-root 非季 catalog 仍写 title）。**F2**：confirm 季级字段构建处加 FOLLOW-UP 注释（confirm 不写逐集 + 后续 enrich 因 manual_confirmed ref 触 alreadyBound 跳过、逐集不自动补，登记 META-54-B）
+  - `tests/unit/api/tmdb-confirm-service.test.ts` — F4 测试：「未命中季降级 show」断言 proposedFields.title/titleOriginal 均 undefined（72→72，扩断言）
+  - `scripts/cleanup-tmdb-season-refs.ts` — **F1**：头部加「重要限制」段——stale 人群（人工 confirm，manual_confirmed isPrimary ref）被 reenrich-backfill 的 alreadyBound 守卫跳过 → 清理只能 demote、无法自动写回正确季 ref，需人工重新 confirm 或 force 路径；附生产库 stale 行核查 SQL
+  - `scripts/reenrich-backfill.ts` — **F1**：tmdb-season 模式说明加 alreadyBound 限制警告（跳过 manual_confirmed/auto_matched 人群）
+  - `docs/task-queue.md` — **F1/F2/F3/F5**：SEQ 节加「round-2 follow-up 登记」——F1 闭合口径纠正（BLOCKER 闭合 ✅ / 季精度回填恢复未达成）+ META-54-A（stale 恢复，gated 核查生产）/ META-54-B（confirm 逐集对称）/ META-54-C（TmdbConfirmService 拆分 <500）/ F5 观察项
+  - `docs/changelog.md` — **F1**：line 6712 META-53-D 条目「端到端闭环」加措辞纠正注记（指向本条目 + META-54-A）
+- **数据库变更**：无 ｜ **新增依赖**：无
+- **注意事项**：
+  - 门禁：typecheck/lint exit=0 / test:changed 291 passed（15 文件）。
+  - **F1 是本轮实质项**：D-207-9 BLOCKER（停产+移除错绑）确闭合；「端到端闭环」措辞夸大了「季精度存量回填恢复」（被 alreadyBound 架空），已全面纠正声明 + 登记 META-54-A（先核查生产 stale 行存在再做 force-rematch）。**未做前不得宣称季精度存量回填完成**。
+  - F3（文件 774 行超 500）按 reviewer 建议登记专项重构卡 META-54-C（需移 ~280 行跨纯函数+候选打分两组、re-export 公开 API，不在本轮 patch 仓促做），未在本卡内联提取。

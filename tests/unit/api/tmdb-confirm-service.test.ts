@@ -693,6 +693,10 @@ describe('autoMatch 季级路径（ADR-207）', () => {
     expect(catalogRefs.insertCandidateRef).toHaveBeenCalledWith(client, expect.objectContaining({ externalKind: 'show', externalId: '1399' }))
     expect(catalogRefs.resolveAndWriteExactRef).not.toHaveBeenCalled()
     expect(tmdbLib.getTvSeasonDetail).not.toHaveBeenCalled()
+    // review F4：季 catalog 降级 show 也剔标题三件套（不让 show 名覆盖季 catalog 标题，与 resolved 季路径一致）
+    const proposed = (r.matched ? r.proposedFields : undefined) ?? {}
+    expect(proposed.title).toBeUndefined()
+    expect(proposed.titleOriginal).toBeUndefined()
   })
 
   // review P1-1：季级搜剧不按季年份过滤（catalog.year 是季年份，非 show first_air_date_year）

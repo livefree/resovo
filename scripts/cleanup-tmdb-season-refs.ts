@@ -13,7 +13,17 @@
  * **幂等**：降级后行 relation='candidate' 不再被 exact 查询命中；重跑零副作用。
  *
  * ⚠️ 边界（低概率）：若某季 id 恰好也是一个有效 tv show id 且该 show 含同 season_number 的季，会被误判 stale。
- *   故**务必先 --dry-run 复核报表**再正式跑。建议先跑 `reenrich-backfill --mode tmdb-season`（写正确季 ref）再跑本清理。
+ *   故**务必先 --dry-run 复核报表**再正式跑。
+ *
+ * ⚠️⚠️ 重要限制（review round-2 F1）——「写回正确季 ref」对 stale 人群**不自动生效**：
+ *   stale 行只来自人工 `confirm`（端点收 seasonNumber），这些 video 都有 `manual_confirmed` isPrimary tmdb video ref；
+ *   而 `reenrich-backfill --mode tmdb-season` 经 `MetadataEnrichService.stepTmdb` 的 alreadyBound 守卫（跳过任何带
+ *   isPrimary auto_matched/manual_confirmed ref 的 video）**恰好跳过整个 stale 人群** → autoMatch 不跑、正确 season exact 不会写回。
+ *   故本清理只能**降级**（去除错误精确绑定，安全有益），**无法自动恢复**季精度——这些 catalog 需**人工重新 confirm**（confirm 已纠偏 D-207-9a），
+ *   或另起 force-rematch/先解绑 video ref 的恢复路径（见 task-queue「META-53 round-2 follow-up」，须先核实生产库确有 stale 行）。
+ *   上线前先查：`SELECT count(*) FROM catalog_external_refs r JOIN media_catalog mc ON mc.id=r.catalog_id
+ *     WHERE r.provider='tmdb' AND r.external_kind='season' AND r.relation='exact' AND mc.season_number IS NOT NULL;`
+ *   若该口径下经本脚本判定的 stale 数为 0（端点/UI 实际从未发 seasonNumber），则纯属文档措辞、无需恢复动作。
  *
  * 用法：
  *   node --env-file=.env.local --import tsx scripts/cleanup-tmdb-season-refs.ts [--dry-run]
