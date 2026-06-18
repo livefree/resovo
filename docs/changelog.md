@@ -6790,3 +6790,19 @@
   - 剩余未升级：only_candidate（匹配 show 但季未解析，多为 2026 未来季，TMDB 上架后下次 enrich 自动解析）+ no_candidate（TMDB 库无数据的冷门国产内容，非搜索可解）。
   - **META-54-A（窄口径 stale）+ A2（广口径重富集）合并收口**：「非电影恒待确认」根因（META-54-D 季号后缀）已修 + 存量已大批兑现脱离待确认。未来季/冷门长尾为数据源固有局限，非缺陷。
   - 生产库回填：本次仅 dev；生产需在 META-54-D 合并部署后跑同款 `--mode tmdb-season`（worker 在线即可，run-unique jobId 防漏跑）。
+
+## [META-54-A2-PROD] SEQ-20260616-04 生产库非电影季级重富集 — 作废收口（无独立生产库）
+- **完成时间**：2026-06-18
+- **记录时间**：2026-06-18
+- **执行模型**：claude-opus-4-8
+- **子代理**：无
+- **类型**：任务收口（无代码改动；前提核验 + 卡片作废 + 文档收口）
+- **结论**：本卡作废——其前提「有独立远程生产库待部署 META-54-D 后单独重富集」不成立。
+- **核验**（只读盘点，`.env.local` / resovo_dev）：
+  - 本地 postgres 仅 `resovo_dev`（`.env.local` 连）+ `media_atlas` + `postgres`，**无 `resovo_prod`** —— 不存在独立生产库。
+  - 该唯一库已由 META-54-A2 完成季级重富集：非电影 season exact 现 **175**（series 92 / anime 38 / variety 34 / documentary 11）、`catalog_episodes(source=tmdb)` **3204** 条，较 META-54-A2 收口（170/3069）自然增长。
+  - PROD 卡阻塞理由早已失效：META-54-D commit `6b7b7a5c` **已在 main 祖先链**，dev 仅领先 main **1 个无关 commit**（`c4bf46f5` design-sync），非卡片所述"541 commit / 未合并 main"。
+  - 剩余 135 条非电影长尾（anime 57 / series 40 / variety 20 / documentary 18）无 tmdb season exact，但对应 **136 video 全部 `alreadyBound`**（已有 isPrimary tmdb ref）→ `reenrich --mode tmdb-season` 守卫全跳过，重跑新增升级 ≈ 0。属 only_candidate（2026 未来季待 TMDB 上架）+ no_candidate（冷门国产 TMDB 无数据），数据源固有局限，非缺陷。
+- **数据库变更**：无（纯只读盘点核验）
+- **新增依赖**：无
+- **文档收口**：撤销 docs/tasks.md PROD 卡（未提交登记回退）+ task-queue.md `META-54-A2-PROD` 条目改 ✅ 作废收口。
