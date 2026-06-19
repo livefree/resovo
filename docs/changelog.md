@@ -1824,3 +1824,18 @@
 - **新增依赖**：无
 - **数据库变更**：无
 - **注意事项**：① 归档文件按 doc-governance §6 为只读终态，后续仅允许追加索引 / 修复入链；② 下次 changelog 活跃段再超 4000 行时同样需同步 `CHANGELOG_ARCHIVES` 数组（强制项，§3 Step 2.4）；③ 本次未处理 designs/audit 文档归档判定（多数仍有活跃引用或新建，属 T1 全量范围，本 T5 不扩大）；docs-format 25 项 + manual 缺页存量债务留待下次 T1 全量治理。
+
+## [CHORE-CODEX-REVIEW-NONCODE-20260619] 制定 Codex 对抗性独立审核条款（非代码产物）
+- **完成时间**：2026-06-19
+- **记录时间**：2026-06-19 15:15
+- **执行模型**：claude-opus-4-8（主循环；交互式规范制定，用户逐步授权方向与落地）
+- **子代理**：无
+- **来源**：用户「Codex 复审仅对代码改动有效，方案/文档/任务不做自动审核；能否纳入或制定规范调用独立审核」。经查 Codex stop-gate 审查指令写死在插件 `prompts/stop-review-gate.md`（*"Only review it if Claude actually did code changes in that turn"*），非代码产物按设计被自动 ALLOW；改插件 cache prompt 脆弱（升级被覆盖）故不取。用户 AskUserQuestion 选定「制定规范 + 手动触发」方向。
+- **修改文件**：
+  - `docs/rules/workflow-rules.md` — 新增「Codex 对抗性独立审核条款（非代码产物）」小节（挂「Phase 独立审计员条款」之后，同属独立审核家族）：适用对象/checkpoint/强制度分级表（ADR 必须 / 方案文档跨 3+ 消费方必须 / 任务卡 ≥3 项必须）+ `/codex:adversarial-review --wait` 调用方式 + 与 Opus arch-reviewer 分工 + 结论处理 + 流程性约束声明。
+  - `CLAUDE.md` — 模型路由区新增「### Codex 对抗性审核（非代码产物）」小节衔接「强制升 Opus 子代理」；规范索引表 workflow-rules 行补触发词「独立审核 / Codex 审核 / 方案审核」。
+- **关键约束沉淀**：① 产物须先落盘（对话态方案 Codex 看不到）；② `adversarial-review` 是 Codex 入口唯一支持 focus text 的命令，`/codex:review` 与自动门禁仅跑代码 native review；③ 分工——Opus 出方案做架构决策（正确性主审）/ Codex 挑战已成形产物（对抗性第二意见），高风险产物并行。
+- **新增依赖**：无
+- **数据库变更**：无
+- **质量门禁**：docs-only 改动（2 文件，纯规范）→ `test:changed` 自动 SKIP（ADR-180）；typecheck/lint 不涉代码。走 MAINT 快速通道（≤5 文件、仅文档、可逆）。
+- **注意事项**：① 本条为**流程性约束，无自动核验脚本背书**，靠会话自觉执行，preflight/commit 不阻断漏审；如需硬门禁须另立带 `verify-*` 脚本的独立卡；② 自动 stop-gate 门禁本身未改动，仍按设计只审本轮代码改动。
