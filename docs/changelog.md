@@ -6806,3 +6806,26 @@
 - **数据库变更**：无（纯只读盘点核验）
 - **新增依赖**：无
 - **文档收口**：撤销 docs/tasks.md PROD 卡（未提交登记回退）+ task-queue.md `META-54-A2-PROD` 条目改 ✅ 作废收口。
+
+## [MODUX-ACPT-5 收口] 审核台头部去 h1 验收纠正 — 恢复验收 + 全量门禁收口
+- **完成时间**：2026-06-18
+- **记录时间**：2026-06-18
+- **执行模型**：claude-opus-4-8
+- **子代理**：无
+- **类型**：任务收口（验收门禁复核，无新代码改动——技术改动已于 3 检查点提交）
+- **背景**：MODUX-ACPT-5（SEQ-20260610-03 item 5 人工验收第 5 条纠正）技术改动已全部落地（7 轮 + Codex 3 轮拦截，检查点 b6496861/587b2999/58ca2fc4），暂停等人工验收。2026-06-18 恢复，按用户要求跑全量验收门禁后收口。
+- **必跑门禁结果（全绿）**：
+  - typecheck EXIT=0（8 workspace 含 server-next，无 error）
+  - lint 4 successful（2 个 web-next warning 为前台既有、与本卡 server-next moderation 无关）
+  - moderation 单测 14 文件 **88 passed**
+  - e2e admin 域 **84 passed**（filter-presets / moderation 黄金路径 / player Y4 / right-pane-tabs / videos 全绿——覆盖审核台真实渲染与交互）
+  - verify:adr-contracts EXIT=0（端点 243 全对齐；error-message/D-N 为既有 advisory baseline，与本卡无关）
+- **visual baseline（非必跑门禁）真实状态 — 诚实记录**：
+  - `npm run test:visual` 本地跑 **EXIT=1（29 failed / 12 passed）**。**根因 = 本地 auth fixture 过期，非本卡视觉回归**：visual spec 用 `test.use({ storageState: 'tests/visual/.auth/admin.json' })`，该文件 .gitignore 不入库、需手动 codegen 生成；本地这份 admin 登录 cookie 已过期 → 携过期 cookie 访问被重定向登录页 → `[data-moderation-console]` 永不可见 → 30s timeout。
+  - **铁证非本卡引入**：失败覆盖与本卡无关的 crawler（kpi row/timeline card/site list）、user-submissions 等全套（共用同一过期 storageState），非仅 moderation。
+  - **过程教训**：首轮后台 `npm run test:visual 2>&1 | tail` 误报「exit 0」系**管道末端 tail 退出码吞掉 playwright 真实退出码**；改 `; echo EXIT=$?` 直抓得 EXIT=1。收口前务必直抓被测命令退出码，勿信管道末端码。
+  - 本卡 7 张 admin-moderation 快照已于检查点提交时（auth 有效环境）重生成入库（diff 实证 png 已更新）。如需本地 visual 复核：先 `npx playwright codegen --save-storage tests/visual/.auth/admin.json http://localhost:3003/login` 刷新登录态再 `npm run test:visual`。
+- **结论**：必跑门禁全绿 + 审核台真实渲染由 e2e admin 84 passed 覆盖 → 技术验收通过收口；视觉主观验收由用户在 UI 完成。
+- **数据库变更**：无
+- **新增依赖**：无
+- **文档收口**：删 docs/tasks.md MODUX-ACPT-5 卡 + task-queue.md SEQ-20260610-03 序列补 ACPT-5 收口登记。
