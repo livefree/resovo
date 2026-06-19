@@ -25,9 +25,12 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 const ROOT = resolve(__dirname, '..')
 const DECISIONS = join(ROOT, 'docs/decisions.md')
 const CHANGELOG = join(ROOT, 'docs/changelog.md')
-// 历史 changelog 归档（保持 D-N 闭环识别跨归档不丢失）
+// 历史 changelog 归档（保持 D-N 闭环识别跨归档不丢失 / doc-governance §3 Step 2.4 强制项）
 const CHANGELOG_ARCHIVES = [
+  join(ROOT, 'docs/archive/changelog/changelog_m0-m6.md'),
   join(ROOT, 'docs/archive/changelog/changelog_M-SN-2-to-7_20260523.md'),
+  join(ROOT, 'docs/archive/changelog/changelog_M-SN-8-to-META_20260605.md'),
+  join(ROOT, 'docs/archive/changelog/changelog_VSR-VIR_20260618.md'),
 ]
 const OUTPUT_DIR = join(ROOT, 'docs/audit')
 const OUTPUT_PATH = join(OUTPUT_DIR, 'adr-d-status.json')

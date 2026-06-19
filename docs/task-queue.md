@@ -2793,3 +2793,22 @@
 - **META-54-D（✅ 已完成 2026-06-16，SEQ-20260616-04，主循环 claude-opus-4-8 / 子代理 arch-reviewer claude-opus-4-8）— 非电影季级 TMDB 搜索词剥离多语言季号标记**：SEQ-20260616-03 完工后验证「TMDB 自动增强非电影」发现（resovo_dev 只读盘点 + 6 样本 inline autoMatch 实证）：季级 applied 代码路径已通（灵不灵 S1 → season exact + 逐集），但存量非电影 **0 条 season exact**、485 条全 show-candidate（待确认），6 样本重富集 **5/6 no_candidate**（含一人之下/入间/史莱姆等知名番）。根因：`buildTmdbSearchTerms` 把带季号后缀的原始标题直发 searchTv，季号后缀以多语言形态（中文第N季/期/部、日文第N期/Nシリーズ、英文 SN）嵌进所有标题变体 → **397 条非电影季级 catalog 中 370 条（93%）无干净作品名**。修：搜索词层剥离多语言季号标记（季号已由 season_number 列承载）；复用 `TitleNormalizer.SEASON_KEYWORDS`/`TitleIdentityParser.SEASON_PATTERNS`（但缺日文形态需补）；回归边界保 movie/show 级 + 不误剥合法标题。**与 META-54-A 协同**：搜索词修好后才值得对存量触发重富集（否则 93% no_candidate）。卡片详见 tasks.md。
 - **观察项（F5，INFO）**：`demoteExactRef` WHERE 仅 catalog_id+provider+relation='exact' 无 external_kind 过滤——季 catalog 实务上只有 season exact 故安全，复用既有函数既有性质；若将来同 catalog 多 kind exact 共存需补 kind 约束。
 - **已修（F4，LOW，META-53-F 本卡）**：季 catalog 降级 show 时也剔标题三件套（autoMatch else 分支，与 resolved 季路径一致，D-207-5）。
+
+---
+
+## [SEQ-20260618-01] 文档治理 T5（changelog 活跃段分段归档 · doc-governance 触发器 T5）
+
+- **状态**：✅ 已完成（1/1 卡收口 2026-06-18；changelog 活跃段 6886 → 1805 行 / D-N 闭环零回退〔丢失 0 + 净新增识别 217〕 / verify 三件套零新增）
+- **创建时间**：2026-06-18
+- **最后更新时间**：2026-06-18
+- **目标**：按 `docs/rules/doc-governance.md` 触发器 T5（活文档超限）执行 changelog 分段归档：活跃段 6886 行 > 4000 阈值，归档早段保留当前 milestone（META-24 / SEQ-20260613-01 起）。同步修复盘点中发现的历史债务：`scripts/verify-adr-d-numbers.mjs` 的 `CHANGELOG_ARCHIVES` 仅登记 1/3 段（漏 `M-SN-8-to-META` + `m0-m6`），违反 doc-governance §3 Step 2.4 强制项。
+- **范围**：`docs/changelog.md` + 新建 `docs/archive/changelog/changelog_VSR-VIR_20260618.md` + `docs/README.md` + `scripts/verify-adr-d-numbers.mjs`（仅归档常量数组，零逻辑改动）。纯文档治理，零业务代码。本序列明确标注"更新文档"。
+- **依赖**：无 BLOCKER；SEQ-20260610-02 剩余 2 卡时序阻塞中（非进行中），工作台可承接治理卡。
+- **先例**：SEQ-20260610-01（CHORE-DOCS-CLEANUP-20260610，T1）/ SEQ-20260605-02（CHORE-DOCS-CLEANUP-20260605）同范式；本次为首次 T5（changelog 分段）触发。
+
+### 任务列表
+
+1. **CHORE-DOCS-CLEANUP-20260618** — changelog 活跃段分段归档 + 归档数组同步 + 索引更新（状态：✅ 已完成）
+   - 创建时间：2026-06-18 ｜ 实际开始：2026-06-18 ｜ 完成时间：2026-06-18 18:30
+   - 建议模型：haiku（机械分割 + 索引事务性）；实际主循环 claude-opus-4-8（用户会话人工覆盖）
+   - 完成备注：明细见 changelog [CHORE-DOCS-CLEANUP-20260618]。① changelog 分段：切点行 5124（META-24 / SEQ-20260613-01 干净边界），归档 CHG-VSR-1 ~ CHORE-TEST-CPU-CONCURRENCY（行 43-5122）→ `docs/archive/changelog/changelog_VSR-VIR_20260618.md`；活跃段 6886 → 1805 行；行数守恒校验通过。② 历史债务修复：`CHANGELOG_ARCHIVES` 1 段 → 4 段（补漏 m0-m6 + M-SN-8-to-META，§3 Step 2.4 强制项）。③ 索引：changelog 头部归档说明 + README §1/§3.5 三段→四段对齐（同步修复 K1 冲突——changelog 头部此前漏列 M-SN-8-to-META）+ 两文件 last_reviewed 刷新。④ 验证：D-N 闭环零回退（丢失 0 / 净新增识别 217）+ verify:adr-contracts EXIT=0 + verify:docs-format 25 项〔与基线一致零新增〕 + R1/R2 四段引用零断链。未扩大到 designs/audit 归档判定（多数有活跃引用，属 T1 范围）。执行模型: claude-opus-4-8（建议 haiku，用户会话人工覆盖）；子代理: 无。
