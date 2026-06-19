@@ -6829,3 +6829,19 @@
 - **数据库变更**：无
 - **新增依赖**：无
 - **文档收口**：删 docs/tasks.md MODUX-ACPT-5 卡 + task-queue.md SEQ-20260610-03 序列补 ACPT-5 收口登记。
+
+## [CHORE-VIDEOCARD-TAGLAYER-E2E] card-dual-exit.spec.ts:99 TagLayer 布局断言修复（mock 数据不足致 grid 塌缩）
+- **完成时间**：2026-06-18
+- **记录时间**：2026-06-18
+- **执行模型**：claude-opus-4-8（建议 sonnet，会话覆盖）
+- **子代理**：无
+- **类型**：e2e 测试修复（test fixture，无产品代码改动）
+- **来源**：SEQ-20260613-02 衍生 follow-up（card-dual-exit:99 一致失败，最初基线即在，与 player/seed/PLAYER-11 无关）
+- **根因（复现实证）**：失败**不在** `:132` tag/title 断言，而在 `:112` poll 超时（`div.group/poster` height ≤100px，根本没跑到布局断言）。该 spec mock `/videos/trending` 只返回 1 个 item，但 FeaturedRow 请求 `limit=4` → FeaturedGrid（`1.6fr 1fr 1fr 1fr`）用 3 个 `aspectRatio:'2/3'` 空占位填充剩余列 → 空占位从被拉伸的 grid row height(625) **反推出过大 width(416px each)**，把真实 VideoCard 列挤压到 min-content(~27px) → poster 按 2:3 塌缩到 41px<100 → poll 超时。实测 `grid-template-columns` 计算为 `27.47px 416.66 416.66 416.66`（416≈625×2/3 印证空占位反推）。
+- **判定**：mock 数据不足（1 卡 vs `limit=4`）触发的测试环境布局塌缩，**TagLayer 布局本身正确**（修 mock 后 :132 断言通过）。排除了卡片原述「TagLayer↔title 布局问题」及中途假设的「FallbackCover 缺尺寸」（实测 poster 41=27×1.5，aspect-ratio 工作正常）。
+- **修复**：① mock `/videos/trending` 返回 4 卡（不同 id/shortId）填满 FeaturedGrid 消除空占位 → 卡片宽度正常 → 测试跑到并通过 `:132` 真实断言；② 顺带删同文件 pre-existing 死代码 `const API_BASE`（ts6133 unused，M5-CLOSE-03 引入、零引用）。
+- **发现的独立真 bug（已登记 follow-up `task_2e725753`）**：FeaturedGrid 空占位 grid item 缺 `min-width:0`，真实 trending <4 卡时空占位 aspect-ratio 反推 width 会挤垮真实卡列——边缘但真实的产品布局脆弱性（新站点/冷门品牌 trending 不足 4 时显现；真实首页通常 ≥4 卡故平时不现）。
+- **验证**：`card-dual-exit.spec.ts` 2/2 passed（TagLayer + FloatingPlayButton）；typecheck EXIT=0 / lint EXIT=0（FULL TURBO）。
+- **数据库变更**：无
+- **新增依赖**：无
+- **文件**：`tests/e2e-next/card-dual-exit.spec.ts`（mock 返回 4 卡 + 删 API_BASE 死代码）。

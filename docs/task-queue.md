@@ -2372,12 +2372,12 @@
 > - **Codex stop-time review FIX**（「global e2e seed breaks web video/detail specs」）：① **seed 收窄到 player 域**——`playwright.config` globalSetup 门控加 `process.env.E2E_SEED_WATCH === '1'`，仅 `test:e2e:player` 脚本显式置该 env；`test:e2e:video`/`search`/`smoke`/全量 `test:e2e` 不 seed → detail/video/browse spec 回到基线、不被 seed 影响（detail.spec 与 player 共用 aB3kR9x1/bC4lS0y2，全局 seed 会让 detail 页 SSR 命中 seed 视频但渲染数据/testid 不匹配 → 误失败）。② **复用随机 catalog → 专属 catalog**——避免把 seed 视频塞进真实 catalog 的副作用。实证：`test:e2e:player`（带 env）33 passed；`detail.spec`（无 env）跑后 DB seed 视频 count=0（门控生效、seed 未运行）。
 >
 > #### CHORE-VIDEOCARD-TAGLAYER-E2E — card-dual-exit:99 TagLayer 布局断言修复
-> - **状态**：⬜ 待开始
+> - **状态**：✅ 已完成（2026-06-18）
 > - **创建时间**：2026-06-13 14:10
 > - **建议模型**：sonnet
 > - **变更原因**：`card-dual-exit.spec.ts:99`「TagLayer 左上象限垂直位于 title 上方（tagBox.y ≤ titleBox.y）」隔离一致失败、最初基线即在、与 player/seed/PLAYER-11 无关（测有 tag 的真实首页卡，跳过无 tag 的 seed 卡）。需查 VideoCard StackedPosterFrame TagLayer 与 title 实际相对布局判定真布局 bug vs 陈旧断言。
 > - **文件范围**：`tests/e2e-next/card-dual-exit.spec.ts` + 可能 VideoCard/StackedPosterFrame 组件
-> - **完成备注**：_（AI 填写）_
+> - **完成备注**（2026-06-18，claude-opus-4-8，子代理无）：根因复现实证——失败在 `:112` poster height poll（**非** :132 tag/title 断言）。mock `/videos/trending` 只返回 1 卡但 FeaturedRow 请求 limit=4 → FeaturedGrid 3 空占位（aspect 2:3）从拉伸的 row height(625) 反推过大 width(416px) 挤压真实卡列到 ~27px → poster 塌 41px<100 poll 超时（grid-template-columns 实测 `27.47px 416 416 416`）。修：mock 返回 4 卡填满 grid 消除空占位 + 删同文件死代码 `API_BASE`；**TagLayer 布局本身正确**（:132 通过）。验证 card-dual-exit 2/2 passed + typecheck/lint EXIT=0。**发现独立真 bug 登记 follow-up `task_2e725753`**（FeaturedGrid 空占位缺 `min-width:0`，trending<4 卡时挤垮真实卡）。详见 changelog [CHORE-VIDEOCARD-TAGLAYER-E2E]。
 >
 > #### CHORE-E2E-DETAIL-SSR-SEED — video/detail 域 SSR seed + 陈旧测试清理（平行 player 域）
 > - **状态**：✅ 已完成（2026-06-13，并入 CHORE-E2E-WATCH-SSR-SEED 第二轮 Codex 修复）

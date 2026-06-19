@@ -10,8 +10,6 @@
 
 import { test, expect } from './_fixtures'
 
-const API_BASE = 'http://localhost:4000/v1'
-
 const MOCK_MOVIE = {
   id: 'uuid-dx-movie',
   shortId: 'DxMovie1',
@@ -52,13 +50,21 @@ async function mockHomeRoutes(page: import('@playwright/test').Page) {
   )
   await page.route(/\/videos\/trending/, (route) => {
     const type = new URL(route.request().url()).searchParams.get('type')
-    const item = type === 'series' ? MOCK_SERIES : MOCK_MOVIE
+    const base = type === 'series' ? MOCK_SERIES : MOCK_MOVIE
+    // 返回 4 张卡填满 FeaturedRow 的 1.6fr+3×1fr grid（请求 limit=4）。
+    // 单卡时 FeaturedGrid 的 3 个空占位（aspectRatio 2/3）会从被拉伸的 grid row height
+    // 反推出过大 width，把真实卡列挤压到 min-content（~27px），poster 高度塌缩致断言前置 poll 失败。
+    const items = Array.from({ length: 4 }, (_, i) => ({
+      ...base,
+      id: `${base.id}-${i}`,
+      shortId: `${base.shortId}${i}`,
+    }))
     route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({
-        data: [item],
-        pagination: { total: 1, page: 1, limit: 10, hasNext: false },
+        data: items,
+        pagination: { total: items.length, page: 1, limit: 10, hasNext: false },
       }),
     })
   })
