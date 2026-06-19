@@ -2391,12 +2391,12 @@
 > - **完成备注**：执行模型 claude-opus-4-8。**seed 改全局启用 + 富集 catalog 后，detail 域全绿（detail.spec 10/10 + detail-episode-pick 2/2 + brand-detection 4/4）**。① 补 DetailEp 到 fixtures（12 集 anime）；② detail.spec 3 陈旧断言修复：`detail-description` testid 加到实际可见的 VideoDetailClient.DescriptionBlock（原 testid 在未使用的 legacy `components/video/VideoDetailHero`，实际渲染用 `components/detail/DetailHero` + DescriptionBlock）/ watch URL 正则放宽（`/watch/{slug}-{shortId}` 含 slug 前缀）/ episode-btn 数 12→10（EpisodePicker RANGE_SIZE=10 分段）；③ detail-episode-pick 2 用例按新交互重写（EpisodePicker handleSelect 现 `router.push(/watch?ep=N)` 直跳，旧"详情页 shallow 选集 + aria-pressed + 单独 play"模型随 BUGFIX-PREVIEW-LINK-B 退役）。
 >
 > #### CHORE-E2E-HOMEPAGE-SEARCH-E2E — homepage/search 域预存 e2e 失败修复
-> - **状态**：⬜ 待开始
+> - **状态**：✅ 已完成（2026-06-18）
 > - **创建时间**：2026-06-13 15:30
 > - **建议模型**：sonnet
 > - **变更原因**：`homepage.spec`（HeroBanner CTA/指示点 / 语言切换 / 免责声明）+ `search-page.spec`（结果网格/数量/清除/q 透传）在**基线（无 seed）即失败**（对照跑确认 search-page:104/108/116/136/158 无 seed 同样红）——与 CHORE-E2E-WATCH-SSR-SEED 的 seed 无关（search 客户端 mock、seed 独立），是独立预存问题（疑 search 页 SSR 化 / banner 数据 / 语言切换链路漂移）。需单独 triage：判 SSR-seed 缺口 vs 陈旧断言。
-> - **文件范围**：`tests/e2e-next/homepage.spec.ts` / `search-page.spec.ts` + 可能 search/homepage SSR + seed fixture 扩展。
-> - **完成备注**：_（AI 填写）_
+> - **文件范围**：`tests/e2e-next/homepage.spec.ts` / `search-page.spec.ts`（仅 spec，无产品代码改动）。
+> - **完成备注**（2026-06-18，claude-opus-4-8，子代理无）：**triage 结论：12 失败全为陈旧 spec，零产品 bug**（非 SSR-seed 缺口——两 spec 均 page.route mock 不依赖 seed）。① **search ×5**：mock URL `limit=40` 漂移（SearchPage 服务端分页实际 `/v1/search?q=…&limit=20&page=1`）→ 改 URL predicate 精确匹配 `url.pathname==='/v1/search'`+q（首版误用 `endsWith('/search')` 连页面路由 `/{locale}/search` 一起拦截、已修）+ response 补 `pagination`（代码读 `res.pagination.total`）；结果容器 testid `search-results-grid`→`search-results-list`、结果项 `video-card`→`search-result-row`（SearchPage 改 row 布局）；清除按钮 `getByLabel('清除搜索')`→en「Clear search」（测试在 /en locale）。② **homepage ×7**：`nav-logo` `toHaveText('Resovo')`→`toContainText`（logo 加 "R" 图标 span）；HeroBanner :161/166/171 **PC(md:flex)+mobile(md:hidden) 双布局 testid 翻倍**（count 4/strict violation）→ `:visible` 限定可见布局；`footer-disclaimer`→`global-footer`；语言切换 :260/267 **功能未实装**（SettingsDrawer「语言偏好」为 comingSoon 占位、全站无 LocaleSwitcher）→ `test.describe.skip` 待功能实装恢复。验证：homepage+search `--workers=1` **26 passed + 2 skipped**；typecheck/lint EXIT=0。**流程偏离登记**：本卡未先写 tasks.md 卡即开始 triage/改 spec（违 workflow，记录自警）。详见 changelog [CHORE-E2E-HOMEPAGE-SEARCH-E2E]。
 
 ---
 

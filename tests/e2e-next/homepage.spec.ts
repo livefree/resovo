@@ -140,7 +140,7 @@ test.describe('首页', () => {
 
   test('首页正常加载，显示导航栏', async ({ page }) => {
     await expect(page.getByTestId('nav-logo')).toBeVisible()
-    await expect(page.getByTestId('nav-logo')).toHaveText('Resovo')
+    await expect(page.getByTestId('nav-logo')).toContainText('Resovo')
   })
 
   test('导航栏显示分类标签', async ({ page }) => {
@@ -159,17 +159,20 @@ test.describe('首页', () => {
   })
 
   test('HeroBanner 视频 banner 显示"立即播放"和"详情信息"双 CTA', async ({ page }) => {
-    await expect(page.getByTestId('hero-watch-btn')).toBeVisible()
-    await expect(page.getByTestId('hero-detail-btn')).toBeVisible()
+    // HeroBanner 响应式双布局（PC md:flex + mobile md:hidden）均渲染 CTA，
+    // 用 :visible 限定当前视口（1280，PC）可见的那套，避免 strict mode 双匹配
+    await expect(page.locator('[data-testid="hero-watch-btn"]:visible')).toBeVisible()
+    await expect(page.locator('[data-testid="hero-detail-btn"]:visible')).toBeVisible()
   })
 
   test('HeroBanner 指示点数量与 banner 数量一致', async ({ page }) => {
-    const dots = page.getByTestId(/^banner-dot-/)
+    // 双布局：仅数当前视口可见的 dots（PC 一套），mobile md:hidden 不计
+    const dots = page.locator('[data-testid^="banner-dot-"]:visible')
     await expect(dots).toHaveCount(2)
   })
 
   test('点击第二个指示点切换到第二条 banner', async ({ page }) => {
-    await page.getByTestId('banner-dot-1').click()
+    await page.locator('[data-testid="banner-dot-1"]:visible').click()
     await expect(page.getByTestId('hero-banner')).toContainText('热门剧集')
   })
 
@@ -186,8 +189,9 @@ test.describe('首页', () => {
     await expect(page.getByTestId('series-grid')).toContainText('测试剧集')
   })
 
-  test('底部免责声明常驻显示', async ({ page }) => {
-    await expect(page.getByTestId('footer-disclaimer')).toBeVisible()
+  test('底部页脚常驻显示', async ({ page }) => {
+    // footer-disclaimer testid 已退役 → Footer 顶层 global-footer（含免责声明区）
+    await expect(page.getByTestId('global-footer')).toBeVisible()
   })
 
 })
@@ -251,7 +255,10 @@ test.describe('主题切换', () => {
 // 语言切换
 // ═══════════════════════════════════════════════════════════════════
 
-test.describe('语言切换', () => {
+// 语言切换功能当前未实装：SettingsDrawer「语言偏好」为 comingSoon 占位，全站无 LocaleSwitcher。
+// 旧 nav-locale-trigger/lang-* 交互已退役 → skip，待功能实装后删 .skip 恢复
+// （CHORE-E2E-HOMEPAGE-SEARCH-E2E triage 2026-06-18）。
+test.describe.skip('语言切换', () => {
   test.beforeEach(async ({ page }) => {
     await mockApiRoutes(page)
     await page.goto('/en')
