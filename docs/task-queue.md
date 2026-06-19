@@ -2379,6 +2379,10 @@
 > - **文件范围**：`tests/e2e-next/card-dual-exit.spec.ts` + 可能 VideoCard/StackedPosterFrame 组件
 > - **完成备注**（2026-06-18，claude-opus-4-8，子代理无）：根因复现实证——失败在 `:112` poster height poll（**非** :132 tag/title 断言）。mock `/videos/trending` 只返回 1 卡但 FeaturedRow 请求 limit=4 → FeaturedGrid 3 空占位（aspect 2:3）从拉伸的 row height(625) 反推过大 width(416px) 挤压真实卡列到 ~27px → poster 塌 41px<100 poll 超时（grid-template-columns 实测 `27.47px 416 416 416`）。修：mock 返回 4 卡填满 grid 消除空占位 + 删同文件死代码 `API_BASE`；**TagLayer 布局本身正确**（:132 通过）。验证 card-dual-exit 2/2 passed + typecheck/lint EXIT=0。**发现独立真 bug 登记 follow-up `task_2e725753`**（FeaturedGrid 空占位缺 `min-width:0`，trending<4 卡时挤垮真实卡）。详见 changelog [CHORE-VIDEOCARD-TAGLAYER-E2E]。
 >
+> #### CHORE-FEATUREDGRID-SPARSE — FeaturedGrid 真实卡<4 时空占位挤垮真实卡列（CHORE-VIDEOCARD-TAGLAYER-E2E 派生，用户启动）
+> - **状态**：✅ 已完成（2026-06-18）
+> - **完成备注**（2026-06-18，claude-opus-4-8，子代理无）：根因——grid item 默认 `min-width:auto`，空占位 div aspect-ratio 无 width → automatic minimum size 从被 stretch 的 grid row height 反推 width 成 min-content → 撑宽空占位列挤压 fr 真实卡列。修：FeaturedGrid 直接子加 `min-width:0`（VideoCard 传 `className="min-w-0"` + 空占位 div `minWidth:0`）。验证：新 e2e `featured-row-sparse.spec.ts`（mock trending 1 卡）**红(真实卡 width 88.5<100)→绿**；card-dual-exit(4卡)+smoke `--workers=1` 串行无回归 5 passed；typecheck/lint EXIT=0、test:changed 3 passed。注：首轮 3 spec 并发 goto /en 30s 超时系 dev server 冷启动+并发抖动（非回归），串行复跑全绿。详见 changelog [CHORE-FEATUREDGRID-SPARSE]。
+>
 > #### CHORE-E2E-DETAIL-SSR-SEED — video/detail 域 SSR seed + 陈旧测试清理（平行 player 域）
 > - **状态**：✅ 已完成（2026-06-13，并入 CHORE-E2E-WATCH-SSR-SEED 第二轮 Codex 修复）
 > - **创建时间**：2026-06-13 14:40

@@ -6845,3 +6845,18 @@
 - **数据库变更**：无
 - **新增依赖**：无
 - **文件**：`tests/e2e-next/card-dual-exit.spec.ts`（mock 返回 4 卡 + 删 API_BASE 死代码）。
+
+## [CHORE-FEATUREDGRID-SPARSE] 首页 FeaturedGrid 真实卡<4 时空占位挤垮真实卡列修复
+- **完成时间**：2026-06-18
+- **记录时间**：2026-06-18
+- **执行模型**：claude-opus-4-8（建议 sonnet，会话覆盖）
+- **子代理**：无
+- **类型**：前端布局 bug 修复（产品代码）
+- **来源**：CHORE-VIDEOCARD-TAGLAYER-E2E 修复时发现的产品布局脆弱性（spawn chip task_2e725753，用户启动）
+- **问题**：`FeaturedRow.FeaturedGrid`（`1.6fr 1fr 1fr 1fr`）真实卡 < MIN_SLOTS(4) 时用 `aspectRatio:'2/3'` 空占位 div 填剩余列；真实卡少时（如 trending 返回 1-2 张）真实 VideoCard 被挤成 ~27-88px 细长条、poster 按 2:3 塌缩。真实首页 trending 通常 ≥4 卡故平时不现，新站点/冷门品牌/trending<4 时触发。
+- **根因**：grid item 默认 `min-width:auto`（=min-content）。空占位 div 有 aspect-ratio 无 width → 其 automatic minimum size 从被 stretch 的 grid row height 反推出 width（~416px）成为 min-content → 撑宽空占位列、挤压 fr 真实卡列到 min-content。
+- **修复**：经典 grid item 防溢出——FeaturedGrid 直接子加 `min-width:0`：VideoCard 传 `className="min-w-0"`（拼入 article）+ 空占位 div `style.minWidth:0`。阻止空占位 aspect-ratio 反推撑宽 → fr 正常分配、真实卡列恢复 1.6fr 正常宽 → 空占位由 fr 列宽约束、stretch 跟随 row height 与真实卡同高（视觉协调）。Skeleton 路径恒 4 个对称占位无混排，不受影响不动。
+- **验证**：新 e2e `featured-row-sparse.spec.ts`（mock trending 1 卡触发空占位）**红（真实卡 poster width 88.5<100）→ 绿**，证明 fix 有效；card-dual-exit（4 卡场景）+ smoke + 新用例 `--workers=1` 串行 **5 passed** 无回归；typecheck EXIT=0 / lint EXIT=0 / test:changed 3 passed（FeaturedRow 单测）。**过程登记**：首轮 3 spec 并发跑 `page.goto('/en')` 30s 超时 = dev server 冷启动 + 并发 worker 抢占抖动（非回归，单独跑均绿），串行复跑全绿。
+- **数据库变更**：无
+- **新增依赖**：无
+- **文件**：`apps/web-next/src/components/home/FeaturedRow.tsx`（FeaturedGrid 直接子 min-width:0）+ `tests/e2e-next/featured-row-sparse.spec.ts`（新，<4 卡布局回归用例）。
