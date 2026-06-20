@@ -39,6 +39,7 @@ import {
 } from '@resovo/admin-ui'
 import { SwitchDomainModal } from './SwitchDomainModal'
 import { BrokenSamplesGrid } from './BrokenSamplesGrid'
+import { ImageGovernanceDrawer } from './ImageGovernanceDrawer'
 import {
   getImageHealthStats,
   getTopBrokenDomains,
@@ -125,6 +126,11 @@ export function ImageHealthClient() {
   const [missingColumnPrefs, setMissingColumnPrefs] = useState<ReadonlyMap<string, ColumnPreference>>(new Map())
   const [domainsColumnPrefs, setDomainsColumnPrefs] = useState<ReadonlyMap<string, ColumnPreference>>(new Map())
 
+  // IMGH-P2-3A：图片治理抽屉（行点击打开）+ 成功行 flash
+  const [drawerRow, setDrawerRow] = useState<MissingVideoRow | null>(null)
+  const [drawerOpen, setDrawerOpen] = useState(false)
+  const [flashKeys, setFlashKeys] = useState<ReadonlySet<string>>(new Set())
+
   // ── 数据加载（KPI + 域名 + 缺图列表 并行） ──
   useEffect(() => {
     let cancelled = false
@@ -175,6 +181,25 @@ export function ImageHealthClient() {
   }, [page, pageSize, sort, retryKey])
 
   const refresh = useCallback(() => setRetryKey((k) => k + 1), [])
+
+  // IMGH-P2-3A：行点击打开治理抽屉
+  const handleRowClick = useCallback((r: MissingVideoRow) => {
+    setDrawerRow(r)
+    setDrawerOpen(true)
+  }, [])
+
+  // 抽屉内 apply/resolve/手填 成功 → 行 flash + 重载
+  const handleGovernanceMutated = useCallback((videoId: string) => {
+    setFlashKeys(new Set([videoId]))
+    refresh()
+  }, [refresh])
+
+  // flash 一次性：动画时长后清除（避免常驻高亮）
+  useEffect(() => {
+    if (flashKeys.size === 0) return
+    const t = setTimeout(() => setFlashKeys(new Set()), 1500)
+    return () => clearTimeout(t)
+  }, [flashKeys])
 
   const handleRescan = useCallback(async () => {
     setRescanPending(true)
@@ -280,6 +305,12 @@ export function ImageHealthClient() {
       onPreview={handleSwitchDomainPreview}
       onConfirm={handleSwitchDomainConfirm}
       initialFromDomain={switchDomainInitialFrom}
+    />
+    <ImageGovernanceDrawer
+      open={drawerOpen}
+      row={drawerRow}
+      onClose={() => setDrawerOpen(false)}
+      onMutated={handleGovernanceMutated}
     />
     <div data-image-health-client style={PAGE_STYLE}>
       <PageHeader
@@ -474,6 +505,8 @@ export function ImageHealthClient() {
                 data-testid="image-health-missing-table"
                 enableHeaderMenu
                 enableColumnResizing
+                onRowClick={handleRowClick}
+                flashRowKeys={flashKeys}
                 pagination={{ pageSizeOptions: [10, 20, 50, 100] }}
               />
             )}

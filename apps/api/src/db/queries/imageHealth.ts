@@ -302,7 +302,7 @@ const MISSING_VIDEOS_FROM = `
      FROM videos v
      JOIN media_catalog mc ON mc.id = v.catalog_id
      LEFT JOIN LATERAL (
-       SELECT last_seen_at, url, occurrence_count, event_type
+       SELECT id, last_seen_at, url, occurrence_count, event_type
        FROM broken_image_events
        WHERE video_id = v.id
          AND image_kind = 'poster'
@@ -367,6 +367,9 @@ export interface MissingVideoRow {
   occurrenceCount: number
   // ADR-209 D-209-4：最近未解决 poster 事件类型（P1-3 推迟项，供 Lightbox 精确破损原因）
   eventType: string | null
+  // IMGH-P2-3A：最近未解决 poster 事件 id（供治理抽屉「标记已解决」精确 resolve 展示中的事件；
+  // 复用 1D 既有 LATERAL〔最近未解决 poster 事件〕仅加 select evt.id，不违反 BLOCK-2 的"resolve 整 video"deferral）
+  eventId: string | null
   // ADR-209 D-209-4 BLOCK-4：跨源图片候选聚合（page CTE 上 LATERAL，避全量 N+1/死列）
   candidateCount: number
   hasHighConfidenceCandidate: boolean
@@ -398,6 +401,7 @@ export async function listMissingPosterVideos(
     broken_domain: string | null
     occurrence_count: string | null
     event_type: string | null
+    event_id: string | null
     candidate_count: number
     has_high_confidence: boolean
   }>(
@@ -405,7 +409,7 @@ export async function listMissingPosterVideos(
        SELECT
          v.id, v.title, v.catalog_id, v.created_at,
          mc.poster_status, mc.cover_url, mc.poster_source,
-         evt.last_seen_at, evt.url AS broken_url, evt.occurrence_count, evt.event_type
+         evt.id AS event_id, evt.last_seen_at, evt.url AS broken_url, evt.occurrence_count, evt.event_type
        ${MISSING_VIDEOS_FROM}
        WHERE ${whereSql}
        ORDER BY ${orderInner} ${dir} NULLS LAST
@@ -422,6 +426,7 @@ export async function listMissingPosterVideos(
        regexp_replace(page.broken_url, '^https?://([^/]+).*', '\\1') AS broken_domain,
        page.occurrence_count,
        page.event_type,
+       page.event_id,
        COALESCE(c.candidate_count, 0) AS candidate_count,
        COALESCE(c.has_winner, false)  AS has_high_confidence
      FROM page
@@ -445,6 +450,7 @@ export async function listMissingPosterVideos(
     brokenDomain: r.broken_domain,
     occurrenceCount: r.occurrence_count ? parseInt(r.occurrence_count, 10) : 0,
     eventType: r.event_type,
+    eventId: r.event_id,
     candidateCount: r.candidate_count,
     hasHighConfidenceCandidate: r.has_high_confidence,
   }))

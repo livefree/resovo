@@ -87,14 +87,14 @@ describe('listMissingPosterVideos — D-209-1 筛选 + CTE 候选聚合', () => 
       cover_url: 'https://x/a.jpg', poster_source: 'tmdb',
       last_seen_broken_at: '2026-06-20T00:00:00Z',
       broken_domain: 'cdn.example.com', occurrence_count: '4',
-      event_type: 'fetch_404', candidate_count: 2, has_high_confidence: true,
+      event_type: 'fetch_404', event_id: 'evt-1', candidate_count: 2, has_high_confidence: true,
     }])
     const rows = await listMissingPosterVideos(db, 20, 0)
     expect(rows[0]).toEqual({
       videoId: 'v-1', catalogId: 'c-1', title: 'T', posterStatus: 'broken',
       posterUrl: 'https://x/a.jpg', posterSource: 'tmdb',
       lastSeenBrokenAt: '2026-06-20T00:00:00Z', brokenDomain: 'cdn.example.com',
-      occurrenceCount: 4, eventType: 'fetch_404',
+      occurrenceCount: 4, eventType: 'fetch_404', eventId: 'evt-1',
       candidateCount: 2, hasHighConfidenceCandidate: true,
     })
   })

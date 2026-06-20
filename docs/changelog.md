@@ -2157,3 +2157,19 @@
 - **修复**：`apps/api/src/db/queries/imageHealth.scan.ts` `resolveImageEvents` WHERE 加 `AND resolved_at IS NULL` → 已解决事件被排除、不重复 UPDATE、不计入 rowCount；重复调用 resolvedCount=0（route 据此幂等不报 404，真幂等）+ 修正 JSDoc。
 - **测试**：新建 `tests/unit/api/image-health-scan-queries.test.ts`（8：resolveImageEvents 幂等守卫 SQL 断言 `resolved_at IS NULL` + rowCount + 空短路 + note null；getCatalogIdsByVideoIds DISTINCT/deleted_at 守卫 + 空短路；rescanPostersByCatalogIds id=ANY scoped + cover_url 守卫 + 空短路）——补 1C scan 查询此前仅 route 级 mock 覆盖的 SQL 级断言缺口。
 - **门禁**：typecheck/lint EXIT=0 / 新增 8 测 + 1C route 测试 12 回归全过 / test:changed 增量 100 全过。
+
+## [IMGH-P2-3A] UI 编排 ImageGovernanceDrawer（server-next · SEQ-20260619-02 Phase 3 / 设计 §6.3·§17.3.3）
+- **完成时间**：2026-06-20｜**记录时间**：2026-06-20 11:35｜**执行模型**：claude-opus-4-8｜**子代理**：无（模块编排非共享契约）
+- **修改文件**：
+  - `apps/server-next/src/app/admin/image-health/_client/ImageGovernanceDrawer.tsx` — 新建治理抽屉编排（Drawer right 680px/90vw）
+  - `apps/server-next/src/app/admin/image-health/_client/ImageHealthClient.tsx` — Tab B DataTable 接 onRowClick 开抽屉 + flashRowKeys + 抽屉 wiring + flash 1.5s 自动清
+  - `apps/api/src/db/queries/imageHealth.ts` — 1D LATERAL 加 select `evt.id` + page CTE/outer/行 DTO 补 `eventId`（供抽屉「标记已解决」精确 resolve 展示中的事件）
+  - `apps/server-next/src/lib/image-health/api.ts` — MissingVideoRow 补 `eventId`
+  - `tests/unit/components/server-next/admin/image-health/ImageGovernanceDrawer.test.tsx` — 新建（8：渲染矩阵4类+破损详情 / 候选补图§C source+sourceRef / 无候选EmptyState / 手填URL update(poster) / 空URL禁用 / 标记已解决resolve([eventId]) / eventId=null禁用）
+  - `tests/unit/api/image-health-missing-filter.test.ts` + `tests/unit/components/server-next/admin/image-health/BrokenSamplesGrid.test.tsx` — mock 补 eventId 字段
+- **新增依赖**：无
+- **数据库变更**：无（1D query LATERAL 加 select evt.id，broken_image_events 既有列；零 migration）
+- **测试覆盖**：typecheck/lint EXIT=0 / verify:endpoint-adr 247（无新 route）/ verify:adr-contracts EXIT=0 / 8 视图测试 + image-health client 回归 45 全过 / test:changed 增量 145 全过
+- **实现要点**（数据可用性核查后 §17.5「无端点不渲染」裁定）：① **图片矩阵**复用 `useVideoImages(videoId)` 4 类（poster/backdrop/logo/banner_backdrop）缩略 → 点击 `ImageLightbox`；**stills 省略**（VideoImagesData 无字段、无 hook 支撑，不渲染看似精确 UI）② **替换聚焦 poster/coverUrl**（missing-videos 上下文 + §6.3「替换封面」）：`ImageCandidatePicker`（listImageCandidates coverUrl）→ `ImageCompare` 探活+尺寸闸门 → `applyImageCandidate`；**§C 协同**持 `Map<optionKey,ImageCandidate>` 取回 sourceRef 构造 apply（否则 CANDIDATE_STALE 409 无从校验）；手填 URL 复用 `useVideoImages.update('poster',url)`（PUT images，含乐观更新）③ **标记已解决**：1D DTO 补 `eventId`（复用 1D 既有 LATERAL〔最近未解决 poster 事件〕仅加 select evt.id）→ `resolveImageEvents([eventId])` resolve 展示中的单事件，**不违反 BLOCK-2** 的"resolve 整 video 全部事件"deferral；eventId=null → 按钮禁用（无死按钮）④ **行点击**：DataTable `onRowClick` 开抽屉 + 成功 `flashRowKeys` 行 flash（1.5s 自动清）+ toast + refresh ⑤ server-next ImageStatus → admin-ui ImageStatus 映射（unknown/null→undefined）；颜色全 design-tokens
+- **六问自检**：① 契约对齐 §6.3/§17.3.3 + §17.5「无端点不渲染」（stills/批量等未渲染无支撑 UI）✓ ② 复用 ImageCompare/ImageCandidatePicker/ImageLightbox（2A/2B/P1）+ useVideoImages（既有 hook）+ Drawer，零平行实现 ✓ ③ 编排层只调 lib api（listImageCandidates/applyImageCandidate/resolveImageEvents/useVideoImages），不直连 DB ✓ ④ 无 any / 无空 catch（fail toast）/ 无硬编码色 ✓ ⑤ §C Map 取 sourceRef 闭合 apply 链 ✓ ⑥ eventId 扩展为 1D 加性、resolve 单事件不越 BLOCK-2 边界 ✓
+- **解锁**：3B（DataTable 治理工作台增强）依赖本卡抽屉（行点击开抽屉）+ 1A-1D（缩略列/筛选 chips/bulk/候选数列）。

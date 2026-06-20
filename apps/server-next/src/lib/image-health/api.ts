@@ -42,6 +42,8 @@ export interface MissingVideoRow {
   readonly occurrenceCount: number
   // ADR-209 D-209-4：最近未解决 poster 事件类型（供 Lightbox 精确破损原因）
   readonly eventType: string | null
+  // IMGH-P2-3A：最近未解决 poster 事件 id（供治理抽屉「标记已解决」精确 resolve 展示中的事件）
+  readonly eventId: string | null
   // ADR-209 D-209-4 BLOCK-4：跨源候选聚合（候选数列单查询取得，避 N+1/死列）
   readonly candidateCount: number
   readonly hasHighConfidenceCandidate: boolean

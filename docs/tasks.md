@@ -6,7 +6,7 @@
 
 ## 当前任务（单任务工作台：同时仅 1 个 🔄 进行中；完成即删卡，历史见 docs/changelog.md）
 
-_（**SEQ-20260619-02 image-health P2 治理闭环 🔄 10/11 — Phase 0 ✅ + Phase 1 ✅ + Phase 2 ✅ 全收口**：Phase 0 双 ADR + Phase 1 后端 4 卡（1A/1B/1C/1D）+ **Phase 2 共享组件 2 卡（2A ImageCompare + 2B ImageCandidatePicker，Opus arch-reviewer agentId a9732b79ad7128d4d 一次定双契约，admin-ui feedback 族 + 各自组件测试 11+12 全过）**。**下一阶段 Phase 3**：3A `ImageGovernanceDrawer`（server-next `_client/` 编排，依赖 1A/1B/1C+2A/2B；**§C 协同关键 — 消费方须持 `Map<optionKey, ImageCandidate>` 取回 sourceRef 构造 apply-candidate，否则 CANDIDATE_STALE 409 无从校验**）→ 3B DataTable 治理工作台（依赖 1A-1D+3A）→ 3C 文档（haiku）。取下一卡前查 task-queue.md 是否有 🚨 BLOCKER。）_
+_（**SEQ-20260619-02 image-health P2 治理闭环 🔄 — Phase 0 ✅ + Phase 1 ✅ + Phase 2 ✅ + Phase 3 进行中**：Phase 0/1/2 全完成。**Phase 3**：3A ✅ ImageGovernanceDrawer（Drawer 680px 编排 ImageCandidatePicker+ImageCompare+ImageLightbox；§C 持 Map 取 sourceRef + 1D DTO 补 eventId + 行点击/flash/refresh；8 视图测试）。**下一卡 3B DataTable 治理工作台增强**（§5.2 全复用 admin-ui 一体化 props：缩略列 Thumb + filter chips〔posterStatus/event_type/posterSource enum + brokenDomain distinctFetcher，消费 1D〕+ bulkActions〔批量重扫选中=1C ids 端点 / 批量去编辑深链；批量补图按 0A CONCERN-3 仅渲染「批量打开候选队列」不伪批量〕+ flashRowKeys + 跨源候选数列〔消费 1D candidateCount/hasHighConfidenceCandidate，🟢/🟡，不逐行请求〕+ 行点击开 3A 抽屉；依赖 1A-1D+3A）→ 3C 文档（haiku）。取下一卡前查 task-queue.md 是否有 🚨 BLOCKER。）_
 
 ---
 

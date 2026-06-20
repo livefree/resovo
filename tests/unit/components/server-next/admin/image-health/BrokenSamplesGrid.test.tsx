@@ -31,6 +31,7 @@ function makeRow(overrides: Partial<MissingVideoRow> = {}): MissingVideoRow {
     brokenDomain: 'cdn.example.com',
     occurrenceCount: 3,
     eventType: null,
+    eventId: null,
     candidateCount: 0,
     hasHighConfidenceCandidate: false,
     ...overrides,
