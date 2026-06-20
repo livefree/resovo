@@ -1908,3 +1908,21 @@
   - **arch-reviewer 5 必改全落地**：归属 feedback/（包壳层先例 RejectModal/LineHealthDrawer，非 overlay 原语层）；命名 testId（feedback 层统一）；复用 useOverlay+OverlayBackdrop 不复用 Modal（size≤800px 不匹配全屏看图）；颜色 --state-error-*（--state-danger-bg 不存在）；扩展边界 JSDoc（多图轮播作外层 ImageGallery、meta 冻结 P1 不纳 P2 eventType）。
   - 破损图 URL 多失效 → Lightbox 走降级占位 + 尺寸 '—'，核心价值是元信息诊断 + URL 复制（符合 P1 红线零后端改动）。
   - Props 不耦合 MissingVideoRow，可复用于未来 TabImages / 审核详情（≥3 消费方）。
+
+## [IMGH-P1-4] TOP 域行内「切此域」+ 危险动作强化（SEQ-20260619-01 第 4 卡）
+- **完成时间**：2026-06-19
+- **记录时间**：2026-06-19 18:00
+- **执行模型**：claude-opus-4-8（建议 sonnet，本会话「跑完整个 P1」用户裁定；人工覆盖）
+- **子代理**：无
+- **修改文件**：
+  - `apps/server-next/src/app/admin/image-health/_client/ImageHealthColumns.tsx` — buildBrokenDomainColumns 加 BrokenDomainColumnsOptions{onSwitchDomain} + 「操作」列「切此域」按钮（warn 语义）；附带修 :45 broken badge --state-danger-bg→--state-error-bg（同文件 pre-existing 不存在 token）
+  - `apps/server-next/src/app/admin/image-health/_client/SwitchDomainModal.tsx` — +initialFromDomain prop（open 时预填源域，省略→空白）
+  - `apps/server-next/src/app/admin/image-health/_client/ImageHealthClient.tsx` — switchDomainInitialFrom state + handleSwitchThisDomain（列回调打开 Modal 预填）+ 全局「批量切」按钮清空预填 + 传 initialFromDomain
+  - `tests/unit/components/server-next/admin/image-health/ImageHealthClient.test.tsx` — +22 行内切此域预填 / +23 全局空填，21→23
+- **新增依赖**：无
+- **数据库变更**：无
+- **测试覆盖**：typecheck / lint EXIT=0 / image-health 37/37（ImageHealthClient 23 + BrokenSamplesGrid 14）/ test:changed 23/23
+- **注意事项**：
+  - **§17.3.4 危险动作流程现状已满足**（SwitchDomainModal 既有：默认 dry-run 预览 + affectedRows/breakdown 三列 + 仅 affectedRows>0 出现确认按钮 + BTN_WARN 语义）；本卡补「行内入口预填 + 全局入口清空」，未重写既有二次确认流程。
+  - 切 fallback 域仍是按域而非按行的全局动作（PageHeader 入口保留）；行内「切此域」仅是预填快捷方式，复用同一 Modal + 同一 onPreview/onConfirm（零新端点）。
+  - P1 红线遵守：零新 route / 零 schema；缺图表选中批量/复杂筛选仍留 P2。

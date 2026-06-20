@@ -123,6 +123,7 @@ export function ImageHealthClient() {
 
   const [rescanPending, setRescanPending] = useState(false)
   const [switchDomainOpen, setSwitchDomainOpen] = useState(false)
+  const [switchDomainInitialFrom, setSwitchDomainInitialFrom] = useState<string | undefined>(undefined)
 
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE)
@@ -238,8 +239,17 @@ export function ImageHealthClient() {
     }
   }, [toast])
 
+  // IMGH-P1-4：行内「切此域」→ 预填源域 + 打开 Modal
+  const handleSwitchThisDomain = useCallback((domain: string) => {
+    setSwitchDomainInitialFrom(domain)
+    setSwitchDomainOpen(true)
+  }, [])
+
   const missingColumns = useMemo(() => buildMissingVideoColumns(), [])
-  const domainColumns = useMemo(() => buildBrokenDomainColumns(), [])
+  const domainColumns = useMemo(
+    () => buildBrokenDomainColumns({ onSwitchDomain: handleSwitchThisDomain }),
+    [handleSwitchThisDomain],
+  )
 
   // brokenTrend.date（IMGH-P1-1 对齐后端实返）→ Spark data: number[]（按日 count）
   const trendCounts = useMemo(
@@ -276,6 +286,7 @@ export function ImageHealthClient() {
       onClose={() => setSwitchDomainOpen(false)}
       onPreview={handleSwitchDomainPreview}
       onConfirm={handleSwitchDomainConfirm}
+      initialFromDomain={switchDomainInitialFrom}
     />
     <div data-image-health-client style={PAGE_STYLE}>
       <PageHeader
@@ -304,7 +315,7 @@ export function ImageHealthClient() {
             <AdminButton
               variant="default"
               size="sm"
-              onClick={() => setSwitchDomainOpen(true)}
+              onClick={() => { setSwitchDomainInitialFrom(undefined); setSwitchDomainOpen(true) }}
               data-testid="image-health-switch-domain"
             >
               批量切 fallback 域

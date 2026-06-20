@@ -42,7 +42,7 @@ export function buildMissingVideoColumns(): readonly TableColumn<MissingVideoRow
       cell: ({ row }) => {
         const badge: Record<string, { label: string; bg: string; color: string }> = {
           missing:        { label: '缺失',     bg: 'var(--state-warning-bg)',  color: 'var(--state-warning-fg)' },
-          broken:         { label: '破损',     bg: 'var(--state-danger-bg)',   color: 'var(--state-danger-fg)' },
+          broken:         { label: '破损',     bg: 'var(--state-error-bg)',    color: 'var(--state-danger-fg)' },
           pending_review: { label: '待复核',   bg: 'var(--state-info-bg)',     color: 'var(--state-info-fg)' },
         }
         const cfg = badge[row.posterStatus] ?? { label: row.posterStatus, bg: 'var(--bg-surface-sunken)', color: 'var(--fg-muted)' }
@@ -139,7 +139,25 @@ export function buildMissingVideoColumns(): readonly TableColumn<MissingVideoRow
   ]
 }
 
-export function buildBrokenDomainColumns(): readonly TableColumn<BrokenDomainRow>[] {
+// IMGH-P1-4：TOP 破损域名行内「切此域」入口配置
+export interface BrokenDomainColumnsOptions {
+  /** 点击行内「切此域」→ 打开 SwitchDomainModal 并预填该域名为源域 */
+  readonly onSwitchDomain: (domain: string) => void
+}
+
+const SWITCH_BTN_STYLE = {
+  border: '1px solid var(--state-warning-border)',
+  borderRadius: 'var(--radius-sm)',
+  background: 'var(--state-warning-bg)',
+  color: 'var(--state-warning-fg)',
+  fontSize: 'var(--font-size-xs)',
+  padding: '2px 8px',
+  cursor: 'pointer',
+} as const
+
+export function buildBrokenDomainColumns(
+  options: BrokenDomainColumnsOptions,
+): readonly TableColumn<BrokenDomainRow>[] {
   return [
     {
       id: 'domain',
@@ -169,6 +187,25 @@ export function buildBrokenDomainColumns(): readonly TableColumn<BrokenDomainRow
       width: 160,
       defaultVisible: true,
       cell: ({ row }) => <span data-affected-videos>{row.affectedVideos.toLocaleString()}</span>,
+    },
+    {
+      id: 'actions',
+      kind: 'computed',
+      header: '操作',
+      accessor: () => '',
+      width: 110,
+      defaultVisible: true,
+      cell: ({ row }) => (
+        <button
+          type="button"
+          style={SWITCH_BTN_STYLE}
+          onClick={() => options.onSwitchDomain(row.domain)}
+          data-switch-this-domain={row.domain}
+          aria-label={`切换 fallback 域：${row.domain}`}
+        >
+          切此域
+        </button>
+      ),
     },
   ]
 }

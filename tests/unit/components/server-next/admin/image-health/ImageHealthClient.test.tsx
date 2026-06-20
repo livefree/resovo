@@ -424,4 +424,36 @@ describe('ImageHealthClient', () => {
     await waitFor(() => expect(screen.getByTestId('image-health-missing-card')).not.toBeNull())
     expect(screen.queryByTestId('image-health-kpi-grid')).toBeNull()
   })
+
+  // ── IMGH-P1-4：TOP 域行内「切此域」预填 ──
+
+  it('22. TOP 域行内「切此域」→ 打开 Modal 预填 fromDomain', async () => {
+    getImageHealthStatsMock.mockResolvedValue(STATS_FIXTURE)
+    getTopBrokenDomainsMock.mockResolvedValue(DOMAINS_FIXTURE)
+    listMissingVideosMock.mockResolvedValue(EMPTY_MISSING)
+    render(<ImageHealthClient />)
+    await waitFor(() => screen.getByText('cdn-broken.example.com'))
+    const switchBtn = document.querySelector('[data-switch-this-domain="cdn-broken.example.com"]') as HTMLElement
+    expect(switchBtn).not.toBeNull()
+    fireEvent.click(switchBtn)
+    await waitFor(() => {
+      const input = document.getElementById('switch-from-domain') as HTMLInputElement
+      expect(input).not.toBeNull()
+      expect(input.value).toBe('cdn-broken.example.com')
+    })
+  })
+
+  it('23. 全局「批量切 fallback 域」→ Modal 不预填（空 fromDomain）', async () => {
+    getImageHealthStatsMock.mockResolvedValue(STATS_FIXTURE)
+    getTopBrokenDomainsMock.mockResolvedValue(EMPTY_DOMAINS)
+    listMissingVideosMock.mockResolvedValue(EMPTY_MISSING)
+    render(<ImageHealthClient />)
+    await waitFor(() => screen.getByTestId('image-health-switch-domain'))
+    fireEvent.click(screen.getByTestId('image-health-switch-domain'))
+    await waitFor(() => {
+      const input = document.getElementById('switch-from-domain') as HTMLInputElement
+      expect(input).not.toBeNull()
+      expect(input.value).toBe('')
+    })
+  })
 })
