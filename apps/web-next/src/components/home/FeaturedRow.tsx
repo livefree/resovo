@@ -108,7 +108,8 @@ function FeaturedGrid({ videos }: { readonly videos: VideoCardType[] }) {
       }}
     >
       {displayed.map((video) => (
-        <VideoCard key={video.id} video={video} />
+        // min-w-0：grid item 防溢出——阻止真实卡被空占位反推 width 挤垮（默认 min-width:auto）
+        <VideoCard key={video.id} video={video} className="min-w-0" />
       ))}
       {displayed.length < MIN_SLOTS &&
         Array.from({ length: MIN_SLOTS - displayed.length }).map((_, i) => (
@@ -116,6 +117,9 @@ function FeaturedGrid({ videos }: { readonly videos: VideoCardType[] }) {
             key={`empty-${i}`}
             aria-hidden="true"
             style={{
+              // minWidth:0：阻止空占位的 aspect-ratio 从被拉伸的 grid row height 反推出过大
+              // width（真实卡 <4 时会挤垮真实卡列到 min-content，见 CHORE-FEATUREDGRID-SPARSE）
+              minWidth: 0,
               aspectRatio: '2/3',
               borderRadius: '8px',
               border: '1px dashed var(--border-default)',

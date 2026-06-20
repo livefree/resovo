@@ -19,6 +19,18 @@ export interface UseOverlayOptions {
   readonly onClose: () => void
   readonly closeOnEscape?: boolean
   readonly closeOnBackdropClick?: boolean
+  /**
+   * 容器就绪标志（默认 true）。
+   *
+   * focus trap 需在 dialog 容器真实挂载后才能绑定。消费方若有 `mounted` 两阶段守卫
+   * （createPortal SSR 安全：首帧返回 null、`useEffect` 置 mounted 后才渲染 dialog），
+   * 且组件**初始即 `open=true`** —— focus trap effect 首帧跑时 `containerRef` 仍为 null
+   * 会早退，而 `open` 不再变化导致 effect 不重跑、focus trap 永久丢失。
+   *
+   * 这类消费方须传 `ready={mounted}`：mounted false→true 触发 focus trap effect 重跑，
+   * 此时容器已挂载。默认 true 保持无两阶段消费方（直接渲染）行为不变。
+   */
+  readonly ready?: boolean
 }
 
 export interface UseOverlayReturn {
@@ -31,6 +43,7 @@ export function useOverlay({
   onClose,
   closeOnEscape = true,
   closeOnBackdropClick = true,
+  ready = true,
 }: UseOverlayOptions): UseOverlayReturn {
   const containerRef = useRef<HTMLDivElement | null>(null)
 
@@ -55,8 +68,9 @@ export function useOverlay({
   }, [open])
 
   // focus trap：Tab/Shift+Tab 在容器内循环；mount 时 focus 首个可聚焦元素
+  // 依赖含 ready：消费方两阶段挂载（初始 open=true）时 ready false→true 触发重跑、绑定 trap
   useEffect(() => {
-    if (!open) return
+    if (!open || !ready) return
     const container = containerRef.current
     if (!container) return
     const focusable = () =>
@@ -85,7 +99,7 @@ export function useOverlay({
     }
     container.addEventListener('keydown', onKeyDown)
     return () => container.removeEventListener('keydown', onKeyDown)
-  }, [open])
+  }, [open, ready])
 
   const backdropOnClick = useCallback(
     (e: React.MouseEvent) => {

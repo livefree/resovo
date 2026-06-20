@@ -6,7 +6,7 @@
 > source_of_truth: yes
 > supersedes: none
 > superseded_by: none
-> last_reviewed: 2026-06-10
+> last_reviewed: 2026-06-18
 
 本文件用于快速定位"当前生效文档"。执行约束仍以仓库根目录 `CLAUDE.md` 为准。
 
@@ -21,7 +21,7 @@
 5. **`docs/designs/backend_design_v2.1/reference.md`**：**后台设计真源**（合并稿 §0 七条裁决 + §11 修复顺序）；新视图必读。
 6. **`docs/task-queue.md`**：任务序列池（活跃：SEQ-20260524-01 M-SN-9 容器 🟡 + SEQ-20260601-01 起全部序列；更早分段归档见 `docs/archive/task-queue/`——M0~M-SN-0 / M-SN-1~6 / M-SN-7~META 三段）。
 7. **`docs/tasks.md`**：单任务工作台。
-8. **`docs/changelog.md`**：完成任务变更历史（追加型，活跃段：CHG-VSR-1〔SEQ-20260601-01〕起；更早分段归档见 `docs/archive/changelog/`——m0-m6 / M-SN-2~7 / M-SN-8~META 三段）。
+8. **`docs/changelog.md`**：完成任务变更历史（追加型，活跃段：META-24〔SEQ-20260613-01〕起；更早分段归档见 `docs/archive/changelog/`——m0-m6 / M-SN-2~7 / M-SN-8~META / VSR-VIR 四段）。
 9. **`docs/tracks.md`**：并行 track 历史记录（用户决策保留顶层；当前活跃 Track 数 0，bangumi 已于 2026-05-29 集成）。
 
 ## 2. 当前执行上下文（Current Context）
@@ -67,7 +67,7 @@ SEQ-20260429-02 / M-SN-4 阶段的 plan / audit / walkthrough 共 11 份；**新
 - `docs/archive/2026Q2/server_next_PRE-01-A-drill-2026-05-12.md`（staging cookie + nginx e2e 演练记录）
 - `docs/archive/m0-m6/frontend_design_spec_20260423.md`（M0-M6 前台设计 spec；前台 web-next 部分内容仍有参考价值）
 - `docs/archive/2026Q1/README.md` / `docs/archive/2026Q2/README.md`
-- changelog 分段归档：`docs/archive/changelog/changelog_m0-m6.md`（M0–M6）/ `changelog_M-SN-2-to-7_20260523.md`（M-SN-2 ~ M-SN-7）/ `changelog_M-SN-8-to-META_20260605.md`（M-SN-8 ~ M-SN-9 / MOD Waves / META / DTR，2026-05-23 ~ 2026-06-01）
+- changelog 分段归档：`docs/archive/changelog/changelog_m0-m6.md`（M0–M6）/ `changelog_M-SN-2-to-7_20260523.md`（M-SN-2 ~ M-SN-7）/ `changelog_M-SN-8-to-META_20260605.md`（M-SN-8 ~ M-SN-9 / MOD Waves / META / DTR，2026-05-23 ~ 2026-06-01）/ `changelog_VSR-VIR_20260618.md`（CHG-VSR-1 ~ CHORE-TEST-CPU-CONCURRENCY，VSR/VIR 重构期 + merge-split UX / MODUX / PLAYER / HOME-UX，2026-06-01 ~ 2026-06-12，CHORE-DOCS-CLEANUP-20260618 / T5 归档）
 - task-queue 分段归档：`docs/archive/task-queue/task-queue_archive_20260427.md`（M0 ~ M-SN-0）/ `task-queue_archive_M-SN-1-to-6_20260523.md`（M-SN-1 ~ M-SN-6）/ `task-queue_archive_SEQ-20260521-06_20260523.md`（GAPS 小卡批量）/ `task-queue_archive_M-SN-7-to-META_20260605.md`（M-SN-7 跟踪卡 ~ SEQ-20260531-01）
 - 2026-06-05 大清理（CHORE-DOCS-CLEANUP-20260605）：`docs/archive/2026Q2/` 新增 `external-metadata-ux-overhaul_20260529.md` + `datatable-header-redesign-plan_20260523.md` + `known-failing-tests_20260529.md`；`docs/archive/tasks/tasks-bangumi.md`（bangumi track 看板，track 已集成）
 

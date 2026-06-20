@@ -118,6 +118,8 @@ export function resolveRollbackTarget(row: AdminAuditLogListRow): RollbackTarget
     case 'video.refetch_sources':
     case 'image_health.rescan':
     case 'image_health.switch_domain':
+    case 'image_health.apply_candidate': // ADR-208 / IMGH-P2-1B：写 catalog + 异步入队，不可回滚
+    case 'image_health.resolve_event':   // ADR-209 D-209-2 / IMGH-P2-1C：批量标记事件已解决，不可回滚
     case 'system.cache_clear':
     case 'system.config_update':
     case 'system.settings_update':

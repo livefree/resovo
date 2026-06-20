@@ -6,8 +6,6 @@
 
 import { test, expect } from './_fixtures'
 
-const API_BASE = 'http://localhost:4000/v1'
-
 const MOCK_RESULTS = [
   {
     id: 'uuid-s1',
@@ -45,30 +43,47 @@ const MOCK_RESULTS = [
   },
 ]
 
+// SearchPage 服务端分页（PAGE_SIZE=20）：实际请求 /search?q=…&limit=20&page=N[&type=X]。
+// 用 URL predicate 按 pathname + q 匹配，避免对 limit/page/type 参数硬编码漂移；
+// response 含 ApiListResponse 的 pagination（SearchPage 读 res.pagination.total）。
 async function mockSearchApi(
-  page: Parameters<typeof test>[1] extends { page: infer P } ? P : never,
+  page: import('@playwright/test').Page,
   query: string,
   results: typeof MOCK_RESULTS
 ) {
-  await page.route(`${API_BASE}/search?q=${encodeURIComponent(query)}&limit=40`, (route) => {
-    route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({ data: results }),
-    })
-  })
+  await page.route(
+    // 精确匹配 API path /v1/search（排除页面路由 /{locale}/search）
+    (url) => url.pathname === '/v1/search' && url.searchParams.get('q') === query,
+    (route) => {
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          data: results,
+          pagination: { total: results.length, page: 1, limit: 20, hasNext: false },
+        }),
+      })
+    },
+  )
 }
 
 async function mockSearchApiEmpty(
-  page: Parameters<typeof test>[1] extends { page: infer P } ? P : never,
+  page: import('@playwright/test').Page,
 ) {
-  await page.route(`${API_BASE}/search**`, (route) => {
-    route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({ data: [] }),
-    })
-  })
+  await page.route(
+    // 精确匹配 API path /v1/search（排除页面路由 /{locale}/search）
+    (url) => url.pathname === '/v1/search',
+    (route) => {
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          data: [],
+          pagination: { total: 0, page: 1, limit: 20, hasNext: false },
+        }),
+      })
+    },
+  )
 }
 
 // ── 搜索页基础 ───────────────────────────────────────────────────────────
@@ -102,11 +117,11 @@ test.describe('搜索结果展示', () => {
   })
 
   test('搜索有结果时显示结果网格', async ({ page }) => {
-    await expect(page.getByTestId('search-results-grid')).toBeVisible()
+    await expect(page.getByTestId('search-results-list')).toBeVisible()
   })
 
   test('结果数量正确', async ({ page }) => {
-    await expect(page.getByTestId('search-results-grid').getByTestId('video-card')).toHaveCount(2)
+    await expect(page.getByTestId('search-results-list').getByTestId('search-result-row')).toHaveCount(2)
   })
 })
 
@@ -116,11 +131,12 @@ test.describe('搜索输入行为', () => {
   test('清除按钮清空输入并重置结果', async ({ page }) => {
     await mockSearchApi(page, '测试', MOCK_RESULTS)
     await page.goto('/en/search?q=测试')
-    await expect(page.getByTestId('search-results-grid')).toBeVisible()
+    await expect(page.getByTestId('search-results-list')).toBeVisible()
 
-    await page.getByLabel('清除搜索').click()
+    // 测试在 /en locale，清除按钮 aria-label = en「Clear search」（非中文）
+    await page.getByLabel('Clear search').click()
     await expect(page.getByTestId('search-input')).toHaveValue('')
-    await expect(page.getByTestId('search-results-grid')).not.toBeVisible()
+    await expect(page.getByTestId('search-results-list')).not.toBeVisible()
   })
 
   test('无结果时显示空态（有关键词）', async ({ page }) => {

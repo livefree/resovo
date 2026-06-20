@@ -137,7 +137,7 @@ npm run verify:adr-contracts # ADR 协议合规 3 类核验（端点/错误码/D
 | 测试编写     | `docs/rules/test-rules.md`            | Vitest、Playwright、test、spec、覆盖率                                         |
 | 后台模块（v2，**唯一现行**） | `docs/designs/backend_design_v2.1/reference.md` §4.4 + §10 | server-next 模块：DataTable 一体化、admin-ui shell、cell 复合组件 |
 | ~~后台模块（v1）~~ | ~~`docs/rules/admin-module-template.md`~~ | **已退役**（CHG-CUTOVER-EXECUTE 2026-06-08，apps/server 物理删除；v1 章节仅存历史参考）        |
-| 任务工作流   | `docs/rules/workflow-rules.md`        | 开工、选任务、BLOCKER、PHASE COMPLETE                                          |
+| 任务工作流   | `docs/rules/workflow-rules.md`        | 开工、选任务、BLOCKER、PHASE COMPLETE、独立审核、Codex 审核、方案审核          |
 | 并行开发     | `docs/rules/parallel-dev-rules.md`    | 并行、多轨道、Track、同时开发、并发任务、track 分支                            |
 | Git 提交     | `docs/rules/git-rules.md`             | commit、branch、merge、TASK-ID                                                 |
 | 质量门禁     | `docs/rules/quality-gates.md`         | 任务完成前、六问、AI-CHECK、偏离检测                                           |
@@ -172,6 +172,10 @@ npm run verify:adr-contracts # ADR 协议合规 3 类核验（端点/错误码/D
          prompt: "<独立设计任务，自带完整上下文>")
 
 主循环拿到子代理输出后按其结论实施，子代理的模型 ID 必须记入 tasks.md 卡片的"子代理调用"字段。
+
+### Codex 对抗性审核（非代码产物）
+
+Codex stop-gate 自动门禁按设计只审「本轮代码改动」，方案 / 文档 / 任务卡等非代码产物不在其覆盖内。这些产物**落盘后、定稿 commit 前**须调 `/codex:adversarial-review --wait "<focus>"` 做对抗性独立审核，与上述 Opus `arch-reviewer` 分工（Opus 出方案，Codex 挑战已成形产物）。适用对象、checkpoint 与强制度分级见 `docs/rules/workflow-rules.md`「Codex 对抗性独立审核条款」。
 
 ### 强制降 Haiku 子代理的情形
 

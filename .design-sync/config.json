@@ -1,0 +1,35 @@
+{
+  "pkg": "@resovo/admin-ui",
+  "globalName": "ResovoAdminUI",
+  "projectId": "71384327-889a-48fb-8bd6-5793a72564dd",
+  "shape": "package",
+  "buildCmd": "npm run build -w @resovo/design-tokens",
+  "componentSrcMap": {
+    "InteractionStyles": null
+  },
+  "overrides": {
+    "Drawer": { "cardMode": "single", "viewport": "1280x900", "primaryStory": "RightDrawerLineEdit" },
+    "Modal": { "cardMode": "single", "viewport": "1280x800", "primaryStory": "BatchAddVideosMd" },
+    "AdminDropdown": { "cardMode": "single", "primaryStory": "Open" },
+    "Popover": { "cardMode": "single", "primaryStory": "FilterPresetOpen" },
+    "KpiCard": { "cardMode": "column" },
+    "Pagination": { "cardMode": "column" },
+    "Segment": { "cardMode": "column" },
+    "DataTable": { "cardMode": "column" },
+    "SelectionActionBar": { "cardMode": "column" },
+    "Toolbar": { "cardMode": "column" },
+    "VisChip": { "cardMode": "column" },
+    "RejectModal": { "cardMode": "single", "viewport": "900x700", "primaryStory": "Open" }
+  },
+  "readmeHeader": ".design-sync/conventions.md",
+  "tokensPkg": "@resovo/design-tokens",
+  "tokensGlob": "src/css/*.css",
+  "runtimeFontPrefixes": [
+    "Noto",
+    "PingFang",
+    "Hiragino",
+    "Microsoft YaHei",
+    "JetBrains Mono",
+    "SF Mono"
+  ]
+}

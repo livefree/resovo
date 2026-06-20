@@ -123,6 +123,10 @@ export const ACTION_TYPES: readonly AdminAuditActionType[] = [
   // （Codex stop-time review 守卫补登的同类既有欠账：union 在档而本真源漏同步）
   'image_health.rescan',
   'image_health.switch_domain',
+  // ADR-208 / IMGH-P2-1B：候选补图（apply-candidate 复用 safeUpdate 闸门写回 + 审计，零 migration）
+  'image_health.apply_candidate',
+  // ADR-209 D-209-2 / IMGH-P2-1C：批量解决破损事件（target_id=NULL，零 migration）
+  'image_health.resolve_event',
   // CHG-SN-9-CW1-B-EP / ADR-151：task 级 cancel + batch（同上欠账补登）
   'crawler_task.cancel',
   'crawler_task.batch_cancel',

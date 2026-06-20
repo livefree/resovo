@@ -81,6 +81,8 @@ export interface SwitchDomainModalProps {
   readonly onClose: () => void
   readonly onPreview: (fromDomain: string, toDomain: string) => Promise<SwitchDomainResult>
   readonly onConfirm: (fromDomain: string, toDomain: string) => Promise<void>
+  /** IMGH-P1-4：从 TOP 破损域名行「切此域」打开时预填源域名（省略 → 空白手填） */
+  readonly initialFromDomain?: string
 }
 
 export function SwitchDomainModal({
@@ -88,6 +90,7 @@ export function SwitchDomainModal({
   onClose,
   onPreview,
   onConfirm,
+  initialFromDomain,
 }: SwitchDomainModalProps): React.ReactElement {
   const [fromDomain, setFromDomain] = useState('')
   const [toDomain, setToDomain] = useState('')
@@ -99,13 +102,13 @@ export function SwitchDomainModal({
 
   useEffect(() => {
     if (open) {
-      setFromDomain('')
+      setFromDomain(initialFromDomain ?? '')
       setToDomain('')
       setErrors({})
       setPreview(null)
       setPreviewError(null)
     }
-  }, [open])
+  }, [open, initialFromDomain])
 
   const validate = (): boolean => {
     const errs: Record<string, string> = {}

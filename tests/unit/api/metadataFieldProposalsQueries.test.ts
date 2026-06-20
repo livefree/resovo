@@ -18,6 +18,7 @@ import {
   deleteFieldProposalsByFields,
   getConflictFieldsByCatalogIds,
   getFieldProposalsByCatalogId,
+  getFieldProposalsByCatalogIdAndField,
 } from '@/api/db/queries/metadata-field-proposals'
 
 const CID = 'cat-uuid-1'
@@ -205,5 +206,44 @@ describe('getFieldProposalsByCatalogId — SELECT + mapper', () => {
     } as unknown as Pool
     const rows = await getFieldProposalsByCatalogId(db, CID)
     expect(rows[0].confidence).toBeNull()
+  })
+})
+
+describe('getFieldProposalsByCatalogIdAndField — 字段过滤 SELECT（IMGH-P2-1A / ADR-208 D-208-2）', () => {
+  it('WHERE catalog_id=$1 AND field_name=$2 + ORDER BY confidence DESC NULLS LAST + 参数透传', async () => {
+    const m = makeMockDb()
+    await getFieldProposalsByCatalogIdAndField(m.db, CID, 'coverUrl')
+    expect(m.sql).toContain('WHERE catalog_id = $1 AND field_name = $2')
+    expect(m.sql).toContain('ORDER BY confidence DESC NULLS LAST, source_kind')
+    expect(m.params).toEqual([CID, 'coverUrl'])
+  })
+
+  it('复用 mapProposal：snake→camel + confidence string→number', async () => {
+    const db = {
+      query: vi.fn(async () => ({
+        rows: [
+          {
+            catalog_id: CID,
+            field_name: 'coverUrl',
+            source_kind: 'tmdb',
+            source_ref: 'tmdb-1',
+            proposed_value: 'https://img.example/x.jpg',
+            confidence: '0.7',
+            is_winner: true,
+            applied: false,
+            conflict_state: null,
+            proposed_at: '2026-06-20T00:00:00.000Z',
+          },
+        ],
+        rowCount: 1,
+      })),
+    } as unknown as Pool
+    const rows = await getFieldProposalsByCatalogIdAndField(db, CID, 'coverUrl')
+    expect(rows[0]).toMatchObject({
+      sourceKind: 'tmdb',
+      proposedValue: 'https://img.example/x.jpg',
+      confidence: 0.7,
+      isWinner: true,
+    })
   })
 })

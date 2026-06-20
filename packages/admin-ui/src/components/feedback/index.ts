@@ -28,3 +28,33 @@ export type {
   RejectModalProps,
   RejectModalSubmitPayload,
 } from './reject-modal.types'
+
+// ── ImageLightbox（IMGH-P1-3）─────────────────────────────────────
+
+export { ImageLightbox } from './image-lightbox'
+export type {
+  ImageLightboxProps,
+  ImageLightboxMeta,
+  ImageStatus,
+  ImageNaturalSize,
+} from './image-lightbox.types'
+
+// ── ImageCompare（IMGH-P2-2A）─────────────────────────────────────
+
+export { ImageCompare } from './image-compare'
+export { DEFAULT_MIN_DIMENSION } from './image-compare.types'
+export type {
+  ImageCompareProps,
+  ImageCompareSide,
+  ImageCompareConfirmPayload,
+  ImageCompareValidation,
+} from './image-compare.types'
+
+// ── ImageCandidatePicker（IMGH-P2-2B）─────────────────────────────
+
+export { ImageCandidatePicker } from './image-candidate-picker'
+export type {
+  ImageCandidatePickerProps,
+  ImageCandidateOption,
+  ImageCandidatePickerError,
+} from './image-candidate-picker.types'
