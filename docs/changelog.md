@@ -1839,3 +1839,35 @@
 - **数据库变更**：无
 - **质量门禁**：docs-only 改动（2 文件，纯规范）→ `test:changed` 自动 SKIP（ADR-180）；typecheck/lint 不涉代码。走 MAINT 快速通道（≤5 文件、仅文档、可逆）。
 - **注意事项**：① 本条为**流程性约束，无自动核验脚本背书**，靠会话自觉执行，preflight/commit 不阻断漏审；如需硬门禁须另立带 `verify-*` 脚本的独立卡；② 自动 stop-gate 门禁本身未改动，仍按设计只审本轮代码改动。
+
+---
+
+## [IMGH-P1-SEQ] image-health 页面重构 P1 序列设计 + 登记（SEQ-20260619-01）
+- **完成时间**：2026-06-19
+- **记录时间**：2026-06-19 17:10
+- **执行模型**：claude-opus-4-8
+- **子代理**：无（序列对抗性审核走 codex exec，非 Task 子代理）
+- **修改文件**：
+  - `docs/task-queue.md` — 新增 SEQ-20260619-01 序列（5 卡：P1-1 事实纠错 / P1-2 双 Tab IA+KPI/Spark / P1-3 ImageLightbox 新共享组件 / P1-4 切此域+危险动作 / P1-5 文档收尾）
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - 设计真源 `docs/designs/image-health-ux-handoff_20260618.md` §17.4（两轮复审后权威分期）+ `docs/research/image-health-codebase-survey_20260619.md`。
+  - **开卡前事实核验纠正方案假设**：admin-ui 已有 KpiCard/Spark/Pill/Thumb/Segment/Drawer/Modal（经 `export *` 间接导出，方案 §11.1「复用」成立）；后端 stats 确返 brokenTrend 但 DTO 字段名 day≠后端 date。
+  - **Codex 对抗性审核（落盘后/执行前，范围≥3 项必须）裁决 NEEDS REVISION → 已修订消解**：① BLOCK(P1-3) — ImageLightbox 元信息要的 posterWidth/posterHeight+event_type 现 MissingVideoRow DTO 无、query 未 SELECT → 修订为尺寸用客户端 naturalWidth/Height（零后端）、event_type 推迟 P2；② CONCERN — KpiCard 无 sub/data-testid（适配点入卡）+ P1-3 测试/a11y 欠规格（组件测试清单入卡）；③ P1-3/P1-4 依赖序升级硬串行。
+  - **P1 红线**：零新 admin route / 零 schema / 零 ADR / 零 response-contract 扩展；候选应用·服务端筛选·选中批量·自愈·通知全部 P2/P3。
+
+## [IMGH-P1-1] image-health 事实/契约硬纠错（地基 · SEQ-20260619-01 第 1 卡）
+- **完成时间**：2026-06-19
+- **记录时间**：2026-06-19 17:10
+- **执行模型**：claude-opus-4-8（建议 sonnet，本会话承接「设计序列+开卡执行」连续指令人工覆盖；已持完整事实上下文，子代理冷启动会重复研究）
+- **子代理**：无
+- **修改文件**：
+  - `docs/manual/20-pages/P-image-health.md` — 6 处端点 `/admin/images/*`→`/admin/image-health/*`（对照 image-health.ts:47-159）+ rescan 参数 mode→scope（补 scope 三枚举 + poster/cover_url 约束）+ backfill 语义纠错（删「重新下载到 fallback CDN」误述）+ §3.3 actionType image.switch_fallback_domain→image_health.switch_domain + §5/§6 枚举 dead→broken + last_reviewed 刷新
+  - `apps/server-next/src/lib/image-health/api.ts` — DTO brokenTrend 字段 day→date（对齐 imageHealth.scan.ts:43 实返 push({date,count})；附注释说明 AS day 仅 SQL 内部别名）
+- **新增依赖**：无
+- **数据库变更**：无
+- **测试覆盖**：typecheck 全过 / lint EXIT=0（warning 均 pre-existing 与本卡无关）/ test:changed 18/18 PASS（ImageHealthClient.test.tsx 关联识别 api.ts 改动）
+- **注意事项**：
+  - DTO day→date grep 确认零消费方（唯一 .day 引用即 DTO 声明本身），零运行时断裂；P1-2 接 Spark 趋势时消费 `point.date`。
+  - 手册页面形态描述（§2 布局图 / §7 FAQ / §8 AttentionCard）本卡不碰，留 P1-5 统一更新（双 Tab 形态定型后）。

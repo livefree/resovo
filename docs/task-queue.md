@@ -2812,3 +2812,41 @@
    - 创建时间：2026-06-18 ｜ 实际开始：2026-06-18 ｜ 完成时间：2026-06-18 18:30
    - 建议模型：haiku（机械分割 + 索引事务性）；实际主循环 claude-opus-4-8（用户会话人工覆盖）
    - 完成备注：明细见 changelog [CHORE-DOCS-CLEANUP-20260618]。① changelog 分段：切点行 5124（META-24 / SEQ-20260613-01 干净边界），归档 CHG-VSR-1 ~ CHORE-TEST-CPU-CONCURRENCY（行 43-5122）→ `docs/archive/changelog/changelog_VSR-VIR_20260618.md`；活跃段 6886 → 1805 行；行数守恒校验通过。② 历史债务修复：`CHANGELOG_ARCHIVES` 1 段 → 4 段（补漏 m0-m6 + M-SN-8-to-META，§3 Step 2.4 强制项）。③ 索引：changelog 头部归档说明 + README §1/§3.5 三段→四段对齐（同步修复 K1 冲突——changelog 头部此前漏列 M-SN-8-to-META）+ 两文件 last_reviewed 刷新。④ 验证：D-N 闭环零回退（丢失 0 / 净新增识别 217）+ verify:adr-contracts EXIT=0 + verify:docs-format 25 项〔与基线一致零新增〕 + R1/R2 四段引用零断链。未扩大到 designs/audit 归档判定（多数有活跃引用，属 T1 范围）。执行模型: claude-opus-4-8（建议 haiku，用户会话人工覆盖）；子代理: 无。
+
+---
+
+## SEQ-20260619-01 — image-health 页面重构 P1（IA + 概览强化 · 只消费现有端点）
+
+- **状态**：🔄 进行中（1/5 — IMGH-P1-1 ✅ 2026-06-19）
+- **创建时间**：2026-06-19｜**最后更新**：2026-06-19
+- **来源**：用户「阅读图片健康（image-health）页面重构方案报告，设计任务序列，开卡执行」。
+- **设计真源**：`docs/designs/image-health-ux-handoff_20260618.md`（已两轮复审，§17.4 为收敛后权威分期）+ `docs/research/image-health-codebase-survey_20260619.md`（事实底座）。
+- **范围裁定（P1 = 只消费现有 6 端点，零新 route / 零 schema / 零 ADR）**：候选应用、精确筛选、选中批量、自愈自动化、通知全部进 P2/P3。本序列**唯一新共享组件 = `ImageLightbox`**（P1-3，触发 Opus 子代理契约门禁）。
+- **开卡前事实核验（本会话 Opus 亲验，纠正方案/调研若干假设）**：
+  - ✅ admin-ui **已有** `KpiCard`/`Spark`/`Pill`/`Thumb`/`Segment`/`Drawer`/`Modal`（`packages/admin-ui/src/components/cell/` + `segment/` + `overlay/`，经 `export *` 间接导出）→ 方案 §11.1「复用」假设成立，P1-2「淘汰本地 ImageHealthKpiCard → 复用共享 KpiCard」是**复用非新建**。
+  - ✅ 后端 `GET /admin/image-health/stats` **确返** `brokenTrend`（`apps/api/src/routes/admin/image-health.ts:48-52` `{ ...stats, brokenTrend }`）→ P1-2 趋势 Spark 数据可用。
+  - ⚠️ 但 server-next DTO `lib/image-health/api.ts:20` 声明 `{ day, count }`，后端 `getBrokenEventsTrend`（`imageHealth.scan.ts:43`）实返 `{ date, count }`，**全链无转换层** → P1-2 若按 `point.day` 渲染 Spark 取 `undefined` 空白。P1-1 先对齐 DTO 为 `date`。
+  - ⚠️ 现有 `POST /admin/image-health/rescan` 仅 `scope`（无 `videoIds`/`catalogIds`）→ P1 **不渲染**「选中后批量重扫」（否则误扫全局，§17.3.1）；批量留 P2 新增 ids 精确端点。
+  - ⚠️ `/missing-videos` 仅支持 page/limit/sortField/sortDir，**无服务端筛选** → P1 治理表保留现分页/排序，**不做 filter chips**（否则前端过滤致 total 不一致，§17.3.2）；筛选留 P2 补服务端 query 后再接。
+- **依赖序**：P1-1 →（地基）→ P1-2 →（IA 定型）→ P1-3 → P1-4 →（形态定型）→ P1-5。**P1-3/P1-4 硬串行**（Codex 审 OK→升级）：二者均改 `ImageHealthClient.tsx`（P1-3 wire Lightbox state / P1-4 wire 列 action + Modal 预填），并行必冲突。依赖链 5 层（advisory，纯文档 P1-5 末端不阻塞）。
+- **模型策略**：P1-3 含**新共享组件 API 契约**（`ImageLightbox` Props）→ 强制 spawn arch-reviewer (Opus) 设计 + commit `Subagents:` trailer；建议 **opus 会话**。P1-1/P1-2/P1-4 标准 UI/契约对齐，建议 **sonnet 会话**；P1-5 纯文档，建议 **haiku（doc-janitor）**。
+
+### 任务列表（5 卡，每卡范围 ≤ 5 项 / 验收口径唯一）
+
+| 卡 | 内容 | 范围项 | 建议模型 | 依赖 | 门禁 |
+|---|---|---|---|---|---|
+| **IMGH-P1-1** ✅ | **事实/契约硬纠错（地基）**：① 手册 `P-image-health.md` 端点纠错（§0 `:18` + §3.1/3.3/3.4/3.6 全部 `/admin/images/*` → `/admin/image-health/*`，含真实子路径 stats/broken-domains/missing-videos）② rescan 参数 `mode` → `scope`（§3.1 `:57`）③ backfill 语义纠错（§3.2 `:65`「重新下载到 fallback CDN」→「仅入队探活/blurhash，不下载、不改 URL」）④ 枚举 `dead` → `broken`（§5 `:115-117` + §6 `:130`）⑤ `lib/image-health/api.ts:20` DTO `brokenTrend` 字段 `day` → `date`（对齐后端实返）。**额外**：§3.3 audit actionType `image.switch_fallback_domain`→`image_health.switch_domain`（同类硬错）。**已完成 2026-06-19**：typecheck/lint/test:changed 18/18 全过；零消费方断裂。执行模型: claude-opus-4-8（建议 sonnet，会话人工覆盖）；子代理: 无。详见 changelog [IMGH-P1-1] | 5 | sonnet | 无 | docs（任务明确「更新文档」）+ typecheck |
+| **IMGH-P1-2** | **双 Tab IA + 共享 KPI/趋势**：① `Segment` + `?tab=` 双 Tab（健康概览 / 图片治理）置于 PageHeader 下 ② 淘汰本地 `ImageHealthKpiCard` → 复用共享 `KpiCard`（删 `ImageHealthKpiCard.tsx`；**Codex CONCERN 适配**：共享 KpiCard 无 `sub`/`data-testid` → `sub` 改 `value` 复合节点或 `delta` flat，`data-testid` 改 `testId`，同步测试断言）③ 接共享 `Spark` 渲染 7 日破损趋势（消费已对齐的 `brokenTrend.date`）④ Tab A 概览（KPI + 趋势 + TOP 域 + 破损样本）/ Tab B 治理（缺图 DataTable 保留现分页排序，**不做**选中批量 / 复杂筛选 / 候选列） | 4 | sonnet | P1-1 | 共享原语占比 ≥80% + 视图测试 ≥9 |
+| **IMGH-P1-3** | **`ImageLightbox` 新共享组件 + 破损样本接入**：① `packages/admin-ui` 新建 `ImageLightbox`（放大遮罩 + 元信息面板）② `BrokenSamplesGrid` 缩略点击 → 打开 Lightbox。**元信息 P1 字段（Codex BLOCK 收敛，零后端改动）**：尺寸=客户端 `<img>` `naturalWidth×naturalHeight`（非后端 DTO）/ 来源 `posterSource` / 状态 pill `posterStatus` / 破损 `brokenDomain`+`occurrenceCount` / 原始 URL 可复制；**`event_type` 精确破损原因 DTO 缺失 → 推迟 P2**（连同服务端筛选 DTO 扩展）。**新共享组件 API 契约 → spawn arch-reviewer (Opus) 设计 Props + commit `Subagents:` trailer**。**测试/a11y（Codex CONCERN）**：组件测试覆盖 click-to-open / Escape 关闭 / 复制 URL / 焦点管理 / 尺寸未加载降级态 | 2（跨 admin-ui + server-next 2 层：新契约 + 接入属同一预览闭环） | **opus** | P1-2 | **Opus 子代理 + arch-reviewer PASS + Subagents trailer** + admin-ui 组件测试 |
+| **IMGH-P1-4** | **TOP 域行内「切此域」+ 危险动作强化**：① `ImageHealthColumns` broken-domain 列加行内 action「切此域」→ 打开 `SwitchDomainModal` 预填 `fromDomain` ② Modal 默认 dry-run 预览（展示 affectedRows / affectedColumns / 三列 breakdown）③ 二次确认才启用执行按钮（warn/danger 语义，§17.3.4） | 3 | sonnet | P1-2 | 视图测试（dry-run → 二次确认流程断言） |
+| **IMGH-P1-5** | **文档形态收尾**：① 手册 `P-image-health.md` §1/§2/§3 页面形态更新（双 Tab 布局 + Lightbox + 行内切此域 + dry-run 流程）② `W3-image-fallback.md` 工作流对齐 dry-run 二次确认 ③ frontmatter last_reviewed 刷新 | 3 | haiku | P1-2/P1-3/P1-4 | docs-only（doc-janitor） |
+
+- **P1 范围红线（不得越界）**：零新 admin route / 零 schema 变更 / 零 ADR；不渲染无后端能力支撑的按钮（无死按钮，§13）；颜色零硬编码（design-tokens）；DataTable 用 v2 一体化（禁 v1 三件套）。
+- **P1 不做（明确推迟）**：候选选图 / apply-candidate / resolveImageEvents 端点（P2）；服务端筛选 + filter chips（P2）；选中批量重扫（P2，需 ids 端点）；ImageGovernanceDrawer / ImageCompare / ImageCandidatePicker（P2）；**Lightbox `event_type` 精确破损原因元信息（需扩展 `/missing-videos` DTO+query，与 P2 服务端筛选 DTO 一起做，P2）**；分级自愈 / image_governance_status 推导 / Dashboard 真实端点 / 阈值告警（P3）。
+- **Codex 对抗性审核（2026-06-19，落盘后/执行前，范围 ≥ 3 项必须）**：裁决 **NEEDS REVISION → 已修订消解**。
+  - **BLOCK（P1-3）已消解**：ImageLightbox 元信息要的 `posterWidth/posterHeight`+`event_type` 现 `MissingVideoRow` DTO 无（`api.ts:29-38`）、query 未 SELECT（`imageHealth.ts:313-319`）→ 展示需扩展 response/query 跨 API 层，违 P1"纯前端"边界。**修订**：尺寸改客户端 `naturalWidth/Height`（零后端）；`event_type` 推迟 P2。P1-3 现真正零后端改动。
+  - **CONCERN（P1-2 KpiCard 非 drop-in）已纳入**：`sub`/`data-testid` 适配点写入 P1-2 卡面。
+  - **CONCERN（P1-3 测试/a11y 欠规格）已纳入**：组件测试清单写入 P1-3 门禁。
+  - **OK→升级**：P1-3/P1-4 依赖序由"建议串行"升级"硬串行"。
+  - **OK**：P1-1 day→date 无消费方断裂（codex grep 确认）；P1-4 零新 route（switch 端点已支持 dryRun+breakdown）。
+  - 完整审核日志：codex exec read-only / 121K tokens / 2026-06-19。结论摘要同步 changelog [IMGH-P1-SEQ]。

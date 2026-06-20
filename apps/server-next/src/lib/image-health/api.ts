@@ -17,7 +17,9 @@ export interface ImageHealthStats {
   readonly backdropOkCount: number
   readonly backdropCoverage: number
   readonly brokenLast7Days: number
-  readonly brokenTrend?: ReadonlyArray<{ readonly day: string; readonly count: number }>
+  // brokenTrend 字段对齐后端 getBrokenEventsTrend 实返（imageHealth.scan.ts:43 push({ date, count })）；
+  // SQL 内部别名 AS day 不出现在返回值，全链无转换层（IMGH-P1-1 修正：原误标 day → date）
+  readonly brokenTrend?: ReadonlyArray<{ readonly date: string; readonly count: number }>
 }
 
 export interface BrokenDomainRow {

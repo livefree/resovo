@@ -6,7 +6,7 @@
 > source_of_truth: no
 > supersedes: none
 > superseded_by: none
-> last_reviewed: 2026-06-10
+> last_reviewed: 2026-06-19
 
 ## 0. 元信息
 
@@ -15,7 +15,7 @@
 | 真源页面路径 | `/admin/image-health` |
 | 设计稿引用 | reference.md §5.8 |
 | 主任务卡 | CHG-SN-6-02（页面骨架）+ CHG-SN-7-MISC-IMAGE-1（重扫 + 切 fallback 域）+ CHG-SN-7-MISC-IMAGE-2（破损样本 grid）+ CHG-SN-8-FUP-IMAGE（手册定稿） |
-| 涉及端点 | `GET /admin/images/health` / `GET /admin/images/top-broken-domains` / `GET /admin/images/missing` / `POST /admin/images/rescan` / `POST /admin/images/backfill` / `POST /admin/images/switch-fallback-domain` |
+| 涉及端点 | `GET /admin/image-health/stats` / `GET /admin/image-health/broken-domains` / `GET /admin/image-health/missing-videos` / `POST /admin/image-health/rescan` / `POST /admin/image-health/backfill` / `POST /admin/image-health/switch-fallback-domain` |
 | 适用角色 | editor + admin（破坏性 action 需 admin） |
 | 最近更新 | 2026-05-21 (CHG-SN-8-FUP-IMAGE) |
 | 同事走读签字 | (未走读) |
@@ -54,7 +54,7 @@
 ### 3.1 重扫所有封面（CHG-SN-7-MISC-IMAGE-1）
 
 - **位置**：PageHeader 右上 「重扫所有封面」按钮
-- **行为**：调 `POST /admin/images/rescan` with `mode='broken_only'`（只重置已标 broken 的封面状态，让 backfill worker 重新探测）
+- **行为**：调 `POST /admin/image-health/rescan` with `scope='broken_only'`（把符合 scope 的 `poster_status` 重置为 `pending_review` 且要求 `cover_url IS NOT NULL`，只动 poster、不动 backdrop，让 backfill worker 重新探测；scope 可选 `all` / `broken_only` / `missing_only`，默认 `broken_only`）
 - **前置**：editor+ 角色
 - **期望结果**：toast「重扫已触发 · 已重置 N 条封面，backfill 任务已入队」+ 列表 refresh
 - **失败处理**：toast danger 显示错误信息
@@ -62,10 +62,10 @@
 ### 3.2 手动触发 backfill
 
 - **位置**：PageHeader 「backfill」按钮
-- **行为**：调 `POST /admin/images/backfill` → worker 重新下载所有 broken 封面到 fallback CDN
+- **行为**：调 `POST /admin/image-health/backfill` → 扫 `pending_review` 图片 + 缺 blurhash 的 ok 图片，分批入队 `health-check` / `blurhash-extract` job。**不下载图片、不改任何 URL**（仅触发探活与 blurhash 提取；纠正旧文档「重新下载到 fallback CDN」的错误说法）
 - **前置**：editor+ 角色；建议先用 3.1 重扫
 - **期望结果**：toast「backfill 已入队」
-- **何时用**：3.1 重扫后；或 fallback 域已切但旧图仍有缓存时强制重下
+- **何时用**：3.1 重扫后，让 worker 对 `pending_review` 封面批量探活 / 补 blurhash
 
 ### 3.3 批量切 fallback 域（CHG-SN-7-MISC-IMAGE-1 + ADR-135）
 
@@ -78,13 +78,13 @@
   2. Modal 内填「源域 from」（如失效的 img3.doubanio.com）+「目标域 to」（fallback CDN）
   3. 点击「预览」→ 显示「将影响 N 条 video 封面」
   4. 点击「确认」→ 批量改写 + audit log + toast 成功
-- **回滚**：通过 audit log 找到本次 actionType=`image.switch_fallback_domain` 条目 → 手动反向操作
+- **回滚**：通过 audit log 找到本次 actionType=`image_health.switch_domain` 条目 → 手动反向操作（无自动逆操作）
 - **失败处理**：from/to 域为空 → 校验错误；500 → toast danger
 
 ### 3.4 看破损 TOP 域名
 
 - **位置**：主体左侧 card「TOP 破损域名」
-- **行为**：调 `GET /admin/images/top-broken-domains` → 显示域名 + 破损数量条形图
+- **行为**：调 `GET /admin/image-health/broken-domains` → 显示域名 + 破损数量条形图
 - **用途**：定位"哪个 CDN 域是主要问题源"，决策是否 3.3 切 fallback
 
 ### 3.5 看破损样本（CHG-SN-7-MISC-IMAGE-2）
@@ -96,7 +96,7 @@
 ### 3.6 缺图视频表
 
 - **位置**：页面底部 DataTable
-- **行为**：调 `GET /admin/images/missing` → 列出缺 poster 或 backdrop 的视频
+- **行为**：调 `GET /admin/image-health/missing-videos` → 列出缺 poster 或 backdrop 的视频
 - **列定义**：视频标题 + 缺哪类（poster / backdrop / 两者）+ 操作（去视频库编辑 / 触发 backfill）
 
 ## 4. 进阶操作
@@ -112,9 +112,9 @@
 | KPI | 含义 |
 |---|---|
 | 已上架视频 | is_published=true AND visibility=public 的视频总数 |
-| P0 封面失效 | poster_status='dead' 的视频数 |
-| P1 背景图失效 | backdrop_status='dead' 的视频数 |
-| 7 天新增破损 | 最近 7 天内首次标 dead 的封面数 |
+| P0 封面失效 | poster_status='broken' 的视频数（枚举无 `dead`，失效态是 `broken`） |
+| P1 背景图失效 | backdrop_status='broken' 的视频数 |
+| 7 天新增破损 | 最近 7 天内首次标 broken 的封面数 |
 
 | 破损样本字段 | 含义 |
 |---|---|
@@ -127,7 +127,7 @@
 |---|---|
 | 绿（ok）| 探测通过，封面可用 |
 | 黄（warn）| 部分集 / 部分尺寸失效 |
-| 红（danger）| 完全失效（poster_status=dead）|
+| 红（danger）| 失效（poster_status=broken）|
 | 灰（muted）| 待探测 |
 
 ## 7. FAQ
