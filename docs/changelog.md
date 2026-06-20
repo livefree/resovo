@@ -1888,3 +1888,23 @@
   - 共享原语占比提升（新增 Segment/KpiCard/Spark，删本地 KpiCard）；P1-2 仅 IA + 概览，治理 Tab 缺图表保留现分页/排序，选中批量·复杂筛选·候选列仍留 P2（红线遵守）。
   - 趋势独立卡用固定宽 Spark（width 420/height 56，svg 非响应式）——P1 可接受；如需响应式趋势图属后续增强。
   - `enableHeaderMenu` deprecation 警告为缺图表原有用法（pre-existing，本卡未引入，超范围未动）。
+
+## [IMGH-P1-3] ImageLightbox 新共享组件 + 破损样本接入（SEQ-20260619-01 第 3 卡）
+- **完成时间**：2026-06-19
+- **记录时间**：2026-06-19 17:55
+- **执行模型**：claude-opus-4-8
+- **子代理**：arch-reviewer (claude-opus-4-8) — 新共享组件 API 契约设计（CLAUDE.md 模型路由强制），CONDITIONAL PASS → 5 必改全吸收
+- **修改文件**：
+  - `packages/admin-ui/src/components/feedback/image-lightbox.types.ts` — 新建 Props 契约（ImageLightboxProps/ImageLightboxMeta/ImageStatus/ImageNaturalSize），含扩展边界 JSDoc
+  - `packages/admin-ui/src/components/feedback/image-lightbox.tsx` — 新建实装（包壳 useOverlay+OverlayBackdrop 非 Modal；src null/error 降级占位；内部 onLoad 读 naturalWidth/Height；status→Pill 映射；URL 复制内置+接管+非空 catch；meta/status slot 互斥 dev warn）
+  - `packages/admin-ui/src/components/feedback/index.ts` — 导出 ImageLightbox
+  - `apps/server-next/src/app/admin/image-health/_client/BrokenSamplesGrid.tsx` — 缩略 div→button 点击打开 Lightbox；MissingVideoRow→meta 映射；修 --state-danger-bg→--state-error-bg（pre-existing 踩坑，arch-reviewer 必改 2）
+  - `tests/unit/components/admin-ui/feedback/image-lightbox.test.tsx` — 新建 16 用例（open守卫/dialog a11y/Esc/关闭/src null/onError/onLoad尺寸/status Pill/slot 互斥/复制内置+接管+reject 非空 catch）
+  - `tests/unit/components/server-next/admin/image-health/BrokenSamplesGrid.test.tsx` — +点击打开/关闭 2 用例（替换 pre-existing 空测试体），13→14
+- **新增依赖**：无
+- **数据库变更**：无
+- **测试覆盖**：typecheck / lint EXIT=0 / 直接测试 51（16+14+21）/ test:changed 全量 85 文件 1058 全过零回归 / verify:token-references 本卡零新增违规（清单全 pre-existing，--state-danger-bg 已修）
+- **注意事项**：
+  - **arch-reviewer 5 必改全落地**：归属 feedback/（包壳层先例 RejectModal/LineHealthDrawer，非 overlay 原语层）；命名 testId（feedback 层统一）；复用 useOverlay+OverlayBackdrop 不复用 Modal（size≤800px 不匹配全屏看图）；颜色 --state-error-*（--state-danger-bg 不存在）；扩展边界 JSDoc（多图轮播作外层 ImageGallery、meta 冻结 P1 不纳 P2 eventType）。
+  - 破损图 URL 多失效 → Lightbox 走降级占位 + 尺寸 '—'，核心价值是元信息诊断 + URL 复制（符合 P1 红线零后端改动）。
+  - Props 不耦合 MissingVideoRow，可复用于未来 TabImages / 审核详情（≥3 消费方）。

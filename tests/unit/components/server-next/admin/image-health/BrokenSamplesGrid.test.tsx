@@ -12,10 +12,12 @@
  * - count badge 显示正确数量
  */
 
-import { describe, it, expect } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { describe, it, expect, afterEach } from 'vitest'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { BrokenSamplesGrid } from '../../../../../../apps/server-next/src/app/admin/image-health/_client/BrokenSamplesGrid'
 import type { MissingVideoRow } from '../../../../../../apps/server-next/src/lib/image-health/api'
+
+afterEach(() => cleanup())
 
 function makeRow(overrides: Partial<MissingVideoRow> = {}): MissingVideoRow {
   return {
@@ -105,12 +107,28 @@ describe('BrokenSamplesGrid — overlay 内容', () => {
   })
 })
 
-describe('BrokenSamplesGrid — count badge', () => {
-  it('1 个 broken → badge 显示「1」', () => {
-    render(<BrokenSamplesGrid rows={[makeRow()]} />)
-    const badge = screen.getByTestId ? null : null // 用 querySelector
+describe('BrokenSamplesGrid — 点击打开 ImageLightbox（IMGH-P1-3）', () => {
+  it('点击破损样本 → 打开 Lightbox（元信息含来源/破损域）', async () => {
+    const rows = [makeRow({ videoId: 'v-1', posterSource: 'tmdb', brokenDomain: 'cdn.example.com', occurrenceCount: 7 })]
+    const { container } = render(<BrokenSamplesGrid rows={rows} />)
+    expect(document.querySelector('[data-image-lightbox]')).toBeNull()
+    fireEvent.click(container.querySelector('[data-broken-sample]') as HTMLElement)
+    expect(await screen.findByTestId('broken-sample-lightbox')).not.toBeNull()
+    expect(screen.getByTestId('lightbox-meta-source').textContent).toBe('tmdb')
+    expect(screen.getByTestId('lightbox-meta-broken').textContent).toContain('cdn.example.com')
   })
 
+  it('Lightbox 关闭后从 DOM 移除', async () => {
+    const rows = [makeRow({ videoId: 'v-1' })]
+    const { container } = render(<BrokenSamplesGrid rows={rows} />)
+    fireEvent.click(container.querySelector('[data-broken-sample]') as HTMLElement)
+    await screen.findByTestId('broken-sample-lightbox')
+    fireEvent.click(document.querySelector('[data-close-btn]') as HTMLElement)
+    expect(document.querySelector('[data-image-lightbox]')).toBeNull()
+  })
+})
+
+describe('BrokenSamplesGrid — count badge', () => {
   it('count badge data-broken-count 显示正确数字', () => {
     const rows = Array.from({ length: 3 }, (_, i) => makeRow({ videoId: `v-${i}` }))
     const { container } = render(<BrokenSamplesGrid rows={rows} />)

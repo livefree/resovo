@@ -1,15 +1,18 @@
 'use client'
 
 /**
- * BrokenSamplesGrid.tsx — 破损样本瀑布格（CHG-SN-7-MISC-IMAGE-2）
+ * BrokenSamplesGrid.tsx — 破损样本瀑布格（CHG-SN-7-MISC-IMAGE-2 / IMGH-P1-3 接入 Lightbox）
  *
  * 设计：reference.md §5.8「右侧 破损样本（grid，2:3 ratio placeholder、
  *       danger dashed border、底部错误信息 overlay）」
  *
- * 数据来源：ImageHealthClient 传入 missingRows，client-side 过滤 posterStatus=broken。
- * 无新端点，UI 纯前端改动。
+ * IMGH-P1-3：缩略点击 → 打开共享 ImageLightbox（放大 + 元信息诊断）。
+ *   破损图 URL 多失效 → Lightbox 走降级占位 + 尺寸 '—'，核心价值是元信息 + URL 复制。
+ *
+ * 数据来源：ImageHealthClient 传入 missingRows，client-side 过滤 posterStatus=broken。无新端点。
  */
-import type { CSSProperties } from 'react'
+import { useState, type CSSProperties } from 'react'
+import { ImageLightbox, type ImageStatus } from '@resovo/admin-ui'
 import type { MissingVideoRow } from '@/lib/image-health/api'
 
 // ── 样式常量 ──────────────────────────────────────────────────────
@@ -27,6 +30,11 @@ const CARD_STYLE: CSSProperties = {
   borderRadius: 'var(--radius-sm)',
   overflow: 'hidden',
   background: 'var(--bg-surface-sunken)',
+  padding: 0,
+  cursor: 'pointer',
+  font: 'inherit',
+  color: 'inherit',
+  width: '100%',
 }
 
 const PLACEHOLDER_STYLE: CSSProperties = {
@@ -45,7 +53,7 @@ const OVERLAY_STYLE: CSSProperties = {
   bottom: 0,
   left: 0,
   right: 0,
-  background: 'var(--state-danger-bg)',
+  background: 'var(--state-error-bg)',
   padding: '3px 4px',
   fontSize: '9px',
   lineHeight: '1.2',
@@ -74,7 +82,7 @@ const HEADER_STYLE: CSSProperties = {
 const COUNT_BADGE_STYLE: CSSProperties = {
   fontSize: 'var(--font-size-xs)',
   color: 'var(--state-danger-fg)',
-  background: 'var(--state-danger-bg)',
+  background: 'var(--state-error-bg)',
   padding: '2px 6px',
   borderRadius: 'var(--radius-pill)',
   fontWeight: 600,
@@ -83,17 +91,32 @@ const COUNT_BADGE_STYLE: CSSProperties = {
 // ── 最多渲染 n 个破损样本 ─────────────────────────────────────────
 const MAX_SAMPLES = 24
 
+// posterStatus（union with string）→ ImageStatus（Lightbox meta）
+const IMAGE_STATUS_SET: ReadonlySet<string> = new Set<ImageStatus>([
+  'ok', 'broken', 'missing', 'pending_review', 'low_quality',
+])
+function toImageStatus(s: string): ImageStatus | undefined {
+  return IMAGE_STATUS_SET.has(s) ? (s as ImageStatus) : undefined
+}
+
 // ── 子组件 ────────────────────────────────────────────────────────
 
-function BrokenPosterCard({ row }: { row: MissingVideoRow }) {
+function BrokenPosterCard({ row, onOpen }: { row: MissingVideoRow; onOpen: (r: MissingVideoRow) => void }) {
   const overlayText = row.brokenDomain ?? row.posterStatus
   return (
-    <div style={CARD_STYLE} data-broken-sample title={row.title}>
+    <button
+      type="button"
+      style={CARD_STYLE}
+      data-broken-sample
+      title={row.title}
+      onClick={() => onOpen(row)}
+      aria-label={`查看破损样本：${row.title}`}
+    >
       <div style={PLACEHOLDER_STYLE} aria-hidden>✕</div>
       <div style={OVERLAY_STYLE} data-broken-overlay>
         {overlayText}
       </div>
-    </div>
+    </button>
   )
 }
 
@@ -105,6 +128,7 @@ export interface BrokenSamplesGridProps {
 
 export function BrokenSamplesGrid({ rows }: BrokenSamplesGridProps) {
   const broken = rows.filter((r) => r.posterStatus === 'broken').slice(0, MAX_SAMPLES)
+  const [selected, setSelected] = useState<MissingVideoRow | null>(null)
 
   return (
     <div data-broken-samples-grid>
@@ -121,10 +145,29 @@ export function BrokenSamplesGrid({ rows }: BrokenSamplesGridProps) {
       ) : (
         <div style={GRID_STYLE} data-broken-grid>
           {broken.map((row) => (
-            <BrokenPosterCard key={row.videoId} row={row} />
+            <BrokenPosterCard key={row.videoId} row={row} onOpen={setSelected} />
           ))}
         </div>
       )}
+
+      <ImageLightbox
+        open={selected !== null}
+        onClose={() => setSelected(null)}
+        src={selected?.posterUrl ?? null}
+        alt={selected?.title}
+        title={selected?.title}
+        meta={
+          selected
+            ? {
+                source: selected.posterSource ?? undefined,
+                status: toImageStatus(selected.posterStatus),
+                brokenDomain: selected.brokenDomain ?? undefined,
+                occurrenceCount: selected.occurrenceCount,
+              }
+            : undefined
+        }
+        testId="broken-sample-lightbox"
+      />
     </div>
   )
 }

@@ -28,3 +28,13 @@ export type {
   RejectModalProps,
   RejectModalSubmitPayload,
 } from './reject-modal.types'
+
+// ── ImageLightbox（IMGH-P1-3）─────────────────────────────────────
+
+export { ImageLightbox } from './image-lightbox'
+export type {
+  ImageLightboxProps,
+  ImageLightboxMeta,
+  ImageStatus,
+  ImageNaturalSize,
+} from './image-lightbox.types'
