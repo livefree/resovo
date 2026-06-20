@@ -2843,6 +2843,7 @@
 
 - **P1 范围红线（不得越界）**：零新 admin route / 零 schema 变更 / 零 ADR；不渲染无后端能力支撑的按钮（无死按钮，§13）；颜色零硬编码（design-tokens）；DataTable 用 v2 一体化（禁 v1 三件套）。
 - **P1 不做（明确推迟）**：候选选图 / apply-candidate / resolveImageEvents 端点（P2）；服务端筛选 + filter chips（P2）；选中批量重扫（P2，需 ids 端点）；ImageGovernanceDrawer / ImageCompare / ImageCandidatePicker（P2）；**Lightbox `event_type` 精确破损原因元信息（需扩展 `/missing-videos` DTO+query，与 P2 服务端筛选 DTO 一起做，P2）**；分级自愈 / image_governance_status 推导 / Dashboard 真实端点 / 阈值告警（P3）。
+- **Follow-up（收口后）**：**IMGH-P1-2-FUP ✅ 2026-06-19**（用户验收发现 KPI「近 7 日新增破损」mini spark 与独立「7 日破损趋势」area 卡同源冗余〔同消费 trendCounts〕→ 用户裁定移除独立趋势卡只留 KPI mini spark）：删 ImageHealthClient 独立趋势 AdminCard + TREND_SPARK_STYLE + 测试 20 改断言 KPI mini spark + 手册布局图同步；image-health 37/37 + test:changed 23/23 + typecheck/lint EXIT=0。｜**Codex stop-gate 修复 ✅**：FIX-1 ImageLightbox 初始 open focus trap（useOverlay +ready 参数）/ FIX-2 Modal/Drawer 补全 ready=mounted（overlay 61/61）。
 - **Codex 对抗性审核（2026-06-19，落盘后/执行前，范围 ≥ 3 项必须）**：裁决 **NEEDS REVISION → 已修订消解**。
   - **BLOCK（P1-3）已消解**：ImageLightbox 元信息要的 `posterWidth/posterHeight`+`event_type` 现 `MissingVideoRow` DTO 无（`api.ts:29-38`）、query 未 SELECT（`imageHealth.ts:313-319`）→ 展示需扩展 response/query 跨 API 层，违 P1"纯前端"边界。**修订**：尺寸改客户端 `naturalWidth/Height`（零后端）；`event_type` 推迟 P2。P1-3 现真正零后端改动。
   - **CONCERN（P1-2 KpiCard 非 drop-in）已纳入**：`sub`/`data-testid` 适配点写入 P1-2 卡面。

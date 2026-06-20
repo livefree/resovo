@@ -83,13 +83,6 @@ const SECTION_SPLIT_STYLE: CSSProperties = {
   alignItems: 'start',
 }
 
-const TREND_SPARK_STYLE: CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  padding: '8px 0',
-}
-
 // ── 主组件 ────────────────────────────────────────────────────────
 
 export function ImageHealthClient() {
@@ -391,29 +384,6 @@ export function ImageHealthClient() {
                   ) : null
             }
           </div>
-
-          {/* 7 日破损趋势（消费 brokenTrend，按日 count） */}
-          {stats && trendCounts.length > 0 && (
-            <AdminCard
-              surface="plain"
-              padding="md"
-              header={{
-                title: '7 日破损趋势',
-                subtitle: '每日新增破损事件视频去重计数',
-              }}
-              data-testid="image-health-trend-card"
-            >
-              <div style={TREND_SPARK_STYLE}>
-                <Spark
-                  data={trendCounts}
-                  variant="area"
-                  color="var(--state-error-fg)"
-                  width={420}
-                  height={56}
-                />
-              </div>
-            </AdminCard>
-          )}
 
           {/* 主体 1fr/1fr：TOP 破损域名 + 破损样本 grid */}
           <div style={SECTION_SPLIT_STYLE}>

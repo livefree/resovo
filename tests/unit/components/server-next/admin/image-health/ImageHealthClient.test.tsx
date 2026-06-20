@@ -405,14 +405,16 @@ describe('ImageHealthClient', () => {
     expect(routerPushMock).toHaveBeenCalledWith(expect.stringContaining('tab=governance'))
   })
 
-  it('20. 概览 Tab 渲染 7 日破损趋势 Spark（消费 brokenTrend.date）', async () => {
+  it('20. 概览 Tab：近 7 日破损 KPI 含 mini 趋势 spark，无独立趋势卡（IMGH-P1-2-FUP 收敛）', async () => {
     getImageHealthStatsMock.mockResolvedValueOnce(STATS_FIXTURE)
     getTopBrokenDomainsMock.mockResolvedValueOnce(EMPTY_DOMAINS)
     listMissingVideosMock.mockResolvedValueOnce(EMPTY_MISSING)
     render(<ImageHealthClient />)
-    await waitFor(() => {
-      expect(screen.getByTestId('image-health-trend-card')).not.toBeNull()
-    })
+    await waitFor(() => screen.getByTestId('kpi-broken-7d'))
+    // KPI「近 7 日新增破损」卡内含 mini 趋势 spark（Spark 渲染 svg，消费 brokenTrend.date）
+    expect(screen.getByTestId('kpi-broken-7d').querySelector('svg')).not.toBeNull()
+    // 独立「7 日破损趋势」卡已移除（与 KPI mini spark 同源冗余）
+    expect(screen.queryByTestId('image-health-trend-card')).toBeNull()
   })
 
   it('21. 治理 Tab：仅缺图表渲染，概览的 KPI grid 不在', async () => {

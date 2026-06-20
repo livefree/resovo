@@ -1982,3 +1982,18 @@
 - **测试覆盖**：overlay 61/61（overlay-backdrop 17 + modal 21 + drawer 23）/ typecheck / lint EXIT=0 / test:changed 90 文件 1156 全过零回归
 - **背景**：[IMGH-P1-3-FIX] 只给 ImageLightbox 传 ready，Codex 第 2 轮指出共享 overlay 修复对现有同款 mounted 消费者（Modal/Drawer）不完整——二者同有 mounted 两阶段守卫 + useOverlay 未传 ready，初始 open=true 时同样丢失 focus trap。本卡补全：Modal/Drawer 均传 ready={mounted}，彻底消除该 bug 类。
 - **注意事项**：所有 admin-ui overlay 消费者（ImageLightbox/Modal/Drawer）现已全部用上 ready=mounted；useOverlay ready 默认 true 仍保证非两阶段消费者行为不变。修正了 [IMGH-P1-3-FIX] 注意事项中「Modal/Drawer 保持原行为」的不完整处置。
+
+## [IMGH-P1-2-FUP] 趋势冗余收敛——移除独立 7 日趋势卡（SEQ-20260619-01 follow-up）
+- **完成时间**：2026-06-19
+- **记录时间**：2026-06-19 18:40
+- **执行模型**：claude-opus-4-8（主循环）
+- **子代理**：无
+- **修改文件**：
+  - `apps/server-next/src/app/admin/image-health/_client/ImageHealthClient.tsx` — 删独立「7 日破损趋势」AdminCard（area Spark 420×56）+ TREND_SPARK_STYLE 常量；保留 KPI「近 7 日新增破损」mini line spark
+  - `tests/unit/components/server-next/admin/image-health/ImageHealthClient.test.tsx` — 测试 20 改断言（KPI 卡含 mini spark svg + 独立趋势卡 testid 已移除）
+  - `docs/manual/20-pages/P-image-health.md` — §2 布局图删趋势卡块（KPI 行标注「含 mini 趋势 Spark」）+ 文末更新说明
+- **新增依赖**：无
+- **数据库变更**：无
+- **测试覆盖**：typecheck / lint EXIT=0 / image-health 37/37 / test:changed 23/23
+- **背景**：用户验收 P1-2 时发现 KPI「近 7 日新增破损」的 mini spark 与独立「7 日破损趋势」卡**同源**（都消费 trendCounts = brokenTrend.count[]）、同主题并排，视觉冗余。成因：P1-2 实现时照搬设计稿 §5.1（KPI 含 mini spark + 独立趋势区两处都画了）未做收敛取舍。
+- **决策**：用户裁定移除独立趋势卡，只留 KPI mini spark（KpiCard spark slot 是该组件标准用法，mini 走势 + 总数已足够概览；日后若需详细趋势再做带交互的专用图）。
