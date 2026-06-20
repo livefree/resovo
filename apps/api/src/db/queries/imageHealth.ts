@@ -259,32 +259,105 @@ export async function getTopBrokenDomains(
 
 /** 未补图视频列表（后台治理优先排队） */
 // ADR-150 阶段 5 EP-4 follow-up（2026-05-25）：sort 白名单扩展 4 子查询派生字段
-// 关键发现：LATERAL JOIN evt 字段（evt.url / evt.last_seen_at / evt.occurrence_count）
-// 可在主查询 ORDER BY 直接引用，无需 CTE 重写（注释 ImageHealthColumns.tsx L69 "需 CTE" 误判修正）
+// ADR-209 D-209-1/D-209-4（IMGH-P2-1D）：服务端筛选 + total 一致 + 行级数据契约
 export type MissingVideoSortField =
   | 'created_at' | 'title' | 'poster_status'
   | 'poster_source' | 'broken_domain' | 'occurrence_count' | 'last_seen_broken_at'
 export type SortDir = 'asc' | 'desc'
 
+// ADR-209 D-209-1：服务端筛选条件（poster-only scope，与现状一致；backdrop/治理状态推导属 P3）
+export interface MissingVideosFilters {
+  search?: string         // (v.title ILIKE %x% OR v.short_id = x)，含 short_id 对齐 videos.ts 搜索口径
+  posterStatus?: string   // mc.poster_status =（∈ missing/broken/pending_review，route 校验）
+  posterSource?: string   // mc.poster_source =（∈ CatalogMetadataSource，route 校验）
+  eventType?: string      // evt.event_type =（∈ 8 CHECK 值，route 校验；置外层 WHERE 使 LATERAL 等价 INNER）
+  brokenDomain?: string   // SQL 派生域名 =（对齐 getTopBrokenDomains regexp_replace 口径）
+}
+
+// 内层 CTE 排序列（v./mc./evt. 原始别名）
 const MISSING_VIDEO_SORT_SQL: Record<MissingVideoSortField, string> = {
   created_at:           'v.created_at',
   title:                'v.title',
   poster_status:        'mc.poster_status',
-  // HOTFIX follow-up（2026-05-25）：4 子查询派生字段 ORDER BY 直接引用
   poster_source:        'mc.poster_source',
-  broken_domain:        'evt.url',            // domain 提取在 JS / URL 排序近似域名（同主机邻近）
+  broken_domain:        'evt.url',            // domain 提取在 SQL / URL 排序近似域名（同主机邻近）
   occurrence_count:     'evt.occurrence_count',
   last_seen_broken_at:  'evt.last_seen_at',
 }
 
-export async function listMissingPosterVideos(
-  db: Pool,
-  limit = 20,
-  offset = 0,
-  sortField: MissingVideoSortField = 'created_at',
-  sortDir: SortDir = 'desc'
-): Promise<{
+// 外层（page CTE 之上）排序列：候选聚合在分页后做，须在外层重排（CTE 不保证行序）
+const MISSING_VIDEO_SORT_OUTER: Record<MissingVideoSortField, string> = {
+  created_at:           'page.created_at',
+  title:                'page.title',
+  poster_status:        'page.poster_status',
+  poster_source:        'page.poster_source',
+  broken_domain:        'page.broken_url',
+  occurrence_count:     'page.occurrence_count',
+  last_seen_broken_at:  'page.last_seen_at',
+}
+
+// page 与 count 共用的 FROM + LATERAL（**逐字相同**，防 total 漂移，D-209-1 §17.3.2）
+// 注：media_catalog 历史字段名为 cover_url（poster_status / poster_source 等 048 新增字段独立）
+const MISSING_VIDEOS_FROM = `
+     FROM videos v
+     JOIN media_catalog mc ON mc.id = v.catalog_id
+     LEFT JOIN LATERAL (
+       SELECT last_seen_at, url, occurrence_count, event_type
+       FROM broken_image_events
+       WHERE video_id = v.id
+         AND image_kind = 'poster'
+         AND resolved_at IS NULL
+       ORDER BY last_seen_at DESC
+       LIMIT 1
+     ) evt ON TRUE`
+
+/**
+ * ADR-209 D-209-1：拼 WHERE + 参数，page 与 count 共用（禁两处各写，防 total 漂移）。
+ * evt 谓词（eventType/brokenDomain）置外层 WHERE → LEFT JOIN LATERAL 等价 INNER（MEDIUM-1），
+ * 自动滤除无未解决 poster 事件的 video；LATERAL LIMIT 1 保证每 video ≤1 行 evt，count 不膨胀。
+ */
+function buildMissingVideosFilter(
+  filters: MissingVideosFilters | undefined,
+  startIndex: number,
+): { whereSql: string; params: unknown[] } {
+  const clauses: string[] = [
+    `v.deleted_at IS NULL`,
+    `mc.poster_status IN ('missing','broken','pending_review')`,
+  ]
+  const params: unknown[] = []
+  let i = startIndex
+  if (filters?.search) {
+    clauses.push(`(v.title ILIKE $${i} OR v.short_id = $${i + 1})`)
+    params.push(`%${filters.search}%`, filters.search)
+    i += 2
+  }
+  if (filters?.posterStatus) {
+    clauses.push(`mc.poster_status = $${i}`)
+    params.push(filters.posterStatus)
+    i += 1
+  }
+  if (filters?.posterSource) {
+    clauses.push(`mc.poster_source = $${i}`)
+    params.push(filters.posterSource)
+    i += 1
+  }
+  if (filters?.eventType) {
+    clauses.push(`evt.event_type = $${i}`)
+    params.push(filters.eventType)
+    i += 1
+  }
+  if (filters?.brokenDomain) {
+    clauses.push(`regexp_replace(evt.url, '^https?://([^/]+).*', '\\1') = $${i}`)
+    params.push(filters.brokenDomain)
+    i += 1
+  }
+  return { whereSql: clauses.join('\n       AND '), params }
+}
+
+export interface MissingVideoRow {
   videoId: string
+  // ADR-209 D-209-4 BLOCK-3：行内携带 catalogId，供治理抽屉调 candidates/apply-candidate
+  catalogId: string
   title: string
   posterStatus: string
   posterUrl: string | null
@@ -292,62 +365,108 @@ export async function listMissingPosterVideos(
   lastSeenBrokenAt: string | null
   brokenDomain: string | null
   occurrenceCount: number
-}[]> {
-  const orderCol = MISSING_VIDEO_SORT_SQL[sortField] ?? 'v.created_at'
-  const dir = sortDir === 'asc' ? 'ASC' : 'DESC'
+  // ADR-209 D-209-4：最近未解决 poster 事件类型（P1-3 推迟项，供 Lightbox 精确破损原因）
+  eventType: string | null
+  // ADR-209 D-209-4 BLOCK-4：跨源图片候选聚合（page CTE 上 LATERAL，避全量 N+1/死列）
+  candidateCount: number
+  hasHighConfidenceCandidate: boolean
+}
 
-  // CHG-SN-6-RETRO-3-B / ultrareview P2-7：列扩展
-  // LEFT JOIN LATERAL 聚合 broken_image_events 最近未解决事件 → last_seen / domain / occurrence
-  // 注：media_catalog 历史字段名为 cover_url（不是 poster_url；poster_status / poster_source
-  //     等 048_image_pipeline 新增字段独立）
+export async function listMissingPosterVideos(
+  db: Pool,
+  limit = 20,
+  offset = 0,
+  sortField: MissingVideoSortField = 'created_at',
+  sortDir: SortDir = 'desc',
+  filters?: MissingVideosFilters,
+): Promise<MissingVideoRow[]> {
+  const orderInner = MISSING_VIDEO_SORT_SQL[sortField] ?? 'v.created_at'
+  const orderOuter = MISSING_VIDEO_SORT_OUTER[sortField] ?? 'page.created_at'
+  const dir = sortDir === 'asc' ? 'ASC' : 'DESC'
+  // page 查询 filter 从 $3 起（$1=limit / $2=offset）
+  const { whereSql, params: filterParams } = buildMissingVideosFilter(filters, 3)
+
+  // page CTE 先分页（≤limit 行），候选聚合仅在分页后的 ≤20 行上 LATERAL（Codex CONCERN：禁全量相关子查询）
   const result = await db.query<{
     id: string
+    catalog_id: string
     title: string
     poster_status: string
     cover_url: string | null
     poster_source: string | null
     last_seen_broken_at: string | null
-    broken_url: string | null
+    broken_domain: string | null
     occurrence_count: string | null
+    event_type: string | null
+    candidate_count: number
+    has_high_confidence: boolean
   }>(
-    `SELECT
-       v.id,
-       v.title,
-       mc.poster_status,
-       mc.cover_url,
-       mc.poster_source,
-       evt.last_seen_at::text AS last_seen_broken_at,
-       evt.url               AS broken_url,
-       evt.occurrence_count  AS occurrence_count
-     FROM videos v
-     JOIN media_catalog mc ON mc.id = v.catalog_id
+    `WITH page AS (
+       SELECT
+         v.id, v.title, v.catalog_id, v.created_at,
+         mc.poster_status, mc.cover_url, mc.poster_source,
+         evt.last_seen_at, evt.url AS broken_url, evt.occurrence_count, evt.event_type
+       ${MISSING_VIDEOS_FROM}
+       WHERE ${whereSql}
+       ORDER BY ${orderInner} ${dir} NULLS LAST
+       LIMIT $1 OFFSET $2
+     )
+     SELECT
+       page.id,
+       page.catalog_id,
+       page.title,
+       page.poster_status,
+       page.cover_url,
+       page.poster_source,
+       page.last_seen_at::text AS last_seen_broken_at,
+       regexp_replace(page.broken_url, '^https?://([^/]+).*', '\\1') AS broken_domain,
+       page.occurrence_count,
+       page.event_type,
+       COALESCE(c.candidate_count, 0) AS candidate_count,
+       COALESCE(c.has_winner, false)  AS has_high_confidence
+     FROM page
      LEFT JOIN LATERAL (
-       SELECT last_seen_at, url, occurrence_count
-       FROM broken_image_events
-       WHERE video_id = v.id
-         AND image_kind = 'poster'
-         AND resolved_at IS NULL
-       ORDER BY last_seen_at DESC
-       LIMIT 1
-     ) evt ON TRUE
-     WHERE v.deleted_at IS NULL
-       AND mc.poster_status IN ('missing','broken','pending_review')
-     ORDER BY ${orderCol} ${dir} NULLS LAST
-     LIMIT $1 OFFSET $2`,
-    [limit, offset]
+       SELECT COUNT(*)::int AS candidate_count, bool_or(is_winner) AS has_winner
+       FROM metadata_field_proposals
+       WHERE catalog_id = page.catalog_id
+         AND field_name IN ('coverUrl','backdropUrl','logoUrl')
+     ) c ON TRUE
+     ORDER BY ${orderOuter} ${dir} NULLS LAST`,
+    [limit, offset, ...filterParams],
   )
   return result.rows.map(r => ({
     videoId: r.id,
+    catalogId: r.catalog_id,
     title: r.title,
     posterStatus: r.poster_status,
     posterUrl: r.cover_url,
     posterSource: r.poster_source,
     lastSeenBrokenAt: r.last_seen_broken_at,
-    brokenDomain: r.broken_url
-      ? r.broken_url.replace(/^https?:\/\/([^/]+).*/, '$1')
-      : null,
+    brokenDomain: r.broken_domain,
     occurrenceCount: r.occurrence_count ? parseInt(r.occurrence_count, 10) : 0,
+    eventType: r.event_type,
+    candidateCount: r.candidate_count,
+    hasHighConfidenceCandidate: r.has_high_confidence,
   }))
+}
+
+/**
+ * ADR-209 D-209-1：missing-videos 筛选后总数。与 listMissingPosterVideos **共用** FROM+LATERAL+WHERE
+ * （buildMissingVideosFilter），保证分页 total 与筛选结果一致（§17.3.2 硬约束）。
+ */
+export async function countMissingPosterVideos(
+  db: Pool,
+  filters?: MissingVideosFilters,
+): Promise<number> {
+  // count 查询无 limit/offset，filter 从 $1 起
+  const { whereSql, params } = buildMissingVideosFilter(filters, 1)
+  const result = await db.query<{ total: string }>(
+    `SELECT COUNT(v.id)::int AS total
+     ${MISSING_VIDEOS_FROM}
+     WHERE ${whereSql}`,
+    params,
+  )
+  return parseInt(result.rows[0]?.total ?? '0', 10)
 }
 
 // ── 查询：待检图 URL 批量读取（供 imageHealthWorker / imageBlurhashWorker 使用）────

@@ -22,6 +22,7 @@ afterEach(() => cleanup())
 function makeRow(overrides: Partial<MissingVideoRow> = {}): MissingVideoRow {
   return {
     videoId: 'v-001',
+    catalogId: 'c-001',
     title: 'Test Video',
     posterStatus: 'broken',
     posterUrl: null,
@@ -29,6 +30,9 @@ function makeRow(overrides: Partial<MissingVideoRow> = {}): MissingVideoRow {
     lastSeenBrokenAt: null,
     brokenDomain: 'cdn.example.com',
     occurrenceCount: 3,
+    eventType: null,
+    candidateCount: 0,
+    hasHighConfidenceCandidate: false,
     ...overrides,
   }
 }

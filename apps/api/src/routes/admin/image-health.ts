@@ -17,11 +17,12 @@ import {
   getImageHealthStats,
   getTopBrokenDomains,
   listMissingPosterVideos,
+  countMissingPosterVideos,
   getBrokenEventsTrend,
   rescanPosters,
   switchFallbackDomain,
 } from '@/api/db/queries/imageHealth'
-import type { MissingVideoSortField, SortDir } from '@/api/db/queries/imageHealth'
+import type { MissingVideoSortField, SortDir, MissingVideosFilters } from '@/api/db/queries/imageHealth'
 import { getFieldProposalsByCatalogIdAndField, markFieldProposalApplied } from '@/api/db/queries/metadata-field-proposals'
 import { CATALOG_SOURCE_PRIORITY, MediaCatalogService } from '@/api/services/MediaCatalogService'
 import type { CatalogMetadataSource } from '@/api/services/MediaCatalogService'
@@ -35,6 +36,12 @@ const BrokenDomainsQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(50).default(20),
 })
 
+// broken_image_events.event_type CHECK 8 值（048_image_pipeline.sql:67）
+const IMAGE_EVENT_TYPES = [
+  'client_load_error', 'empty_src', 'fetch_404', 'fetch_5xx',
+  'timeout', 'decode_fail', 'dimension_too_small', 'aspect_mismatch',
+] as const
+
 const MissingVideosQuerySchema = z.object({
   page:      z.coerce.number().int().min(1).default(1),
   limit:     z.coerce.number().int().min(1).max(100).default(20),
@@ -44,6 +51,12 @@ const MissingVideosQuerySchema = z.object({
     'poster_source', 'broken_domain', 'occurrence_count', 'last_seen_broken_at',
   ]).default('created_at'),
   sortDir:   z.enum(['asc', 'desc']).default('desc'),
+  // ADR-209 D-209-1：服务端筛选（静态 options；brokenDomain distinct 复用 /broken-domains）
+  search:       z.string().trim().min(1).max(100).optional(),
+  posterStatus: z.enum(['missing', 'broken', 'pending_review']).optional(),
+  posterSource: z.enum(['manual', 'tmdb', 'bangumi', 'douban', 'crawler']).optional(),
+  eventType:    z.enum(IMAGE_EVENT_TYPES).optional(),
+  brokenDomain: z.string().trim().min(1).max(253).optional(),
 })
 
 // ADR-208 D-208-2：补图候选读端点。field 枚举 = metadata_field_proposals.field_name 图片三字段
@@ -121,24 +134,17 @@ export async function adminImageHealthRoutes(fastify: FastifyInstance) {
         error: { code: 'VALIDATION_ERROR', message: parsed.error.errors[0]?.message ?? 'Invalid query', status: 400 },
       })
     }
-    const { page, limit, sortField, sortDir } = parsed.data
+    const { page, limit, sortField, sortDir, search, posterStatus, posterSource, eventType, brokenDomain } = parsed.data
     const offset = (page - 1) * limit
+    // ADR-209 D-209-1：page 与 count 共用同一 filters（buildMissingVideosFilter）→ total 与筛选一致
+    const filters: MissingVideosFilters = { search, posterStatus, posterSource, eventType, brokenDomain }
 
-    const [rows, countResult] = await Promise.all([
-      listMissingPosterVideos(db, limit, offset, sortField as MissingVideoSortField, sortDir as SortDir),
-      db.query<{ total: string }>(
-        `SELECT COUNT(v.id)::int AS total
-         FROM videos v
-         JOIN media_catalog mc ON mc.id = v.catalog_id
-         WHERE v.deleted_at IS NULL
-           AND mc.poster_status IN ('missing', 'broken', 'pending_review')`
-      ),
+    const [rows, total] = await Promise.all([
+      listMissingPosterVideos(db, limit, offset, sortField as MissingVideoSortField, sortDir as SortDir, filters),
+      countMissingPosterVideos(db, filters),
     ])
 
-    return reply.send({
-      data: rows,
-      total: parseInt(countResult.rows[0]?.total ?? '0'),
-    })
+    return reply.send({ data: rows, total })
   })
 
   // ── GET /admin/image-health/candidates（ADR-208 D-208-2）──────────

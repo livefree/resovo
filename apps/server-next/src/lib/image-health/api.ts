@@ -30,6 +30,8 @@ export interface BrokenDomainRow {
 
 export interface MissingVideoRow {
   readonly videoId: string
+  // ADR-209 D-209-4 BLOCK-3：行内 catalogId，供治理抽屉调 candidates/apply-candidate
+  readonly catalogId: string
   readonly title: string
   readonly posterStatus: 'missing' | 'broken' | 'pending_review' | string
   // CHG-SN-6-RETRO-3-B / ultrareview P2-7：列扩展
@@ -38,6 +40,11 @@ export interface MissingVideoRow {
   readonly lastSeenBrokenAt: string | null
   readonly brokenDomain: string | null
   readonly occurrenceCount: number
+  // ADR-209 D-209-4：最近未解决 poster 事件类型（供 Lightbox 精确破损原因）
+  readonly eventType: string | null
+  // ADR-209 D-209-4 BLOCK-4：跨源候选聚合（候选数列单查询取得，避 N+1/死列）
+  readonly candidateCount: number
+  readonly hasHighConfidenceCandidate: boolean
 }
 
 export interface ListMissingVideosParams {
@@ -48,6 +55,14 @@ export interface ListMissingVideosParams {
     | 'created_at' | 'title' | 'poster_status'
     | 'poster_source' | 'broken_domain' | 'occurrence_count' | 'last_seen_broken_at'
   readonly sortDir?: 'asc' | 'desc'
+  // ADR-209 D-209-1：服务端筛选（brokenDomain options 复用 getTopBrokenDomains）
+  readonly search?: string
+  readonly posterStatus?: 'missing' | 'broken' | 'pending_review'
+  readonly posterSource?: 'manual' | 'tmdb' | 'bangumi' | 'douban' | 'crawler'
+  readonly eventType?:
+    | 'client_load_error' | 'empty_src' | 'fetch_404' | 'fetch_5xx'
+    | 'timeout' | 'decode_fail' | 'dimension_too_small' | 'aspect_mismatch'
+  readonly brokenDomain?: string
 }
 
 export interface ListMissingVideosResult {
@@ -199,6 +214,12 @@ export async function listMissingVideos(
   if (params.limit != null)     qs.set('limit', String(params.limit))
   if (params.sortField)         qs.set('sortField', params.sortField)
   if (params.sortDir)           qs.set('sortDir', params.sortDir)
+  // ADR-209 D-209-1：服务端筛选入参
+  if (params.search)            qs.set('search', params.search)
+  if (params.posterStatus)      qs.set('posterStatus', params.posterStatus)
+  if (params.posterSource)      qs.set('posterSource', params.posterSource)
+  if (params.eventType)         qs.set('eventType', params.eventType)
+  if (params.brokenDomain)      qs.set('brokenDomain', params.brokenDomain)
   const q = qs.toString()
   return apiClient.get<ListMissingVideosResult>(
     `/admin/image-health/missing-videos${q ? `?${q}` : ''}`,

@@ -6,7 +6,7 @@
 
 ## 当前任务（单任务工作台：同时仅 1 个 🔄 进行中；完成即删卡，历史见 docs/changelog.md）
 
-_（**SEQ-20260619-02 image-health P2 治理闭环 🔄 7/11 — Phase 0 ✅ + Phase 1 进行中**：Phase 0 双 ADR（ADR-208 补图闭环 + ADR-209 治理表增强）全 Accepted。Phase 1：**1A ✅ candidates 端点** + **1B ✅ apply-candidate 端点** + **1C ✅ resolve-event + ids 精确重扫端点**（route→ImageHealthService→query 守分层 + resolveImageEvents void→rowCount 幂等 + rescan-selected scoped 闭环禁全局 enqueueBackfillJob〔Codex BLOCK 守卫〕 + resolve_event 审计 6 真源零 migration；verify:endpoint-adr 247；test:changed 升全量 8006 全过）。**下一卡 IMGH-P2-1D**（missing-videos 服务端筛选 query + 行级数据契约：query 扩 WHERE〔search/posterStatus/event_type/posterSource/brokenDomain〕保持分页 total 一致 + SELECT 补 catalog_id〔BLOCK-3〕+ candidateCount/hasHighConfidenceCandidate 聚合〔BLOCK-4 避 N+1〕+ DTO 补筛选入参；硬串行依赖 1C）。Phase 1 余 1D 收口。取下一卡前查 task-queue.md 是否有 🚨 BLOCKER。）_
+_（**SEQ-20260619-02 image-health P2 治理闭环 🔄 8/11 — Phase 0 ✅ + Phase 1 ✅ 全收口**：Phase 0 双 ADR（ADR-208/209）全 Accepted。**Phase 1 后端 4 卡全完成**：1A ✅ candidates / 1B ✅ apply-candidate / 1C ✅ resolve-event + ids 重扫 / 1D ✅ missing-videos 服务端筛选 + 行级数据契约（buildMissingVideosFilter 共用 page+count 防 total 漂移 + evt 谓词外层 WHERE 等价 INNER + 候选聚合 page CTE 避 N+1 + DTO 补 catalogId/eventType/candidateCount/hasHighConfidenceCandidate）。**下一阶段 Phase 2**：2A/2B 前台共享组件（ImageCompare / ImageCandidatePicker，**强制 spawn Opus arch-reviewer 子代理定 Props 契约** — CLAUDE.md 共享组件 API 契约强制 Opus；commit 需 `子代理` trailer）。取下一卡前查 task-queue.md 是否有 🚨 BLOCKER。）_
 
 ---
 
