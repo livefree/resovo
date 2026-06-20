@@ -6,7 +6,7 @@
 
 ## 当前任务（单任务工作台：同时仅 1 个 🔄 进行中；完成即删卡，历史见 docs/changelog.md）
 
-_（**SEQ-20260619-02 image-health P2 治理闭环 🔄 1/11 — Phase 0 进行中**：IMGH-P2-0A ✅ ADR-208 Accepted〔candidates 读 proposals + apply-candidate 复用 safeUpdate 闸门 + 审计 TS 枚举零 migration + batch 不做伪批量；arch-reviewer CONDITIONAL-PASS + Codex BLOCK→消解全吸收〕。**下一卡 IMGH-P2-0B**（ADR：治理表增强端点契约——missing-videos 服务端筛选 + resolve-event `{eventIds}` 薄端点 + ids 精确重扫 + DTO 补 catalogId/candidateCount，依赖 0A 命名空间裁定，opus + arch-reviewer + Codex）。Phase 1 后端 1A→1B→1C→1D 硬串行依赖 0A/0B Accepted。取下一卡前查 task-queue.md 是否有 🚨 BLOCKER。）_
+_（**SEQ-20260619-02 image-health P2 治理闭环 🔄 2/11 — Phase 0 ADR 全收口 ✅**：0A ✅ ADR-208〔补图闭环：candidates + apply-candidate 复用 safeUpdate 闸门 + 审计零 migration〕+ 0B ✅ ADR-209〔治理表增强：missing-videos 服务端筛选 + resolve-event 薄端点 + ids scoped 重扫 + DTO 补 catalogId/event_type/candidateCount〕均 Accepted（各经 arch-reviewer CONDITIONAL-PASS + Codex BLOCK→消解）。**Phase 1 后端解锁：1A→1B→1C→1D 硬串行**（均改 api.ts + image-health route + imageHealth queries；建议 sonnet 会话）。下一卡 **IMGH-P2-1A**（candidates 端点，零 migration，依赖 ADR-208）。取下一卡前查 task-queue.md 是否有 🚨 BLOCKER。）_
 
 ---
 

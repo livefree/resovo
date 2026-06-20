@@ -2014,3 +2014,20 @@
 - **核心决策（5 裁决项）**：① 端点命名空间并入 `/admin/image-health/*`（否决方案 §7.2 的 `/admin/images/*`，与现有 6 端点同文件同风格）② GET candidates 读 `metadata_field_proposals WHERE catalog_id,field_name` 跨源候选 DTO（实时 TMDB 拉取推迟）③ POST apply-candidate 复用 `safeUpdate` 天然得 §7.3 优先级闸门 + manual hard lock（`field∈skippedFields→409` 不静默成功），trust 用 canonical `CATALOG_SOURCE_PRIORITY`（设计 §7.3 字面 imdb/crawler 值与代码分歧）④ 审计扩 `AdminAuditActionType` TS 枚举零 migration ⑤ batch 不实现伪批量（无死按钮）+ PUT images 审计保持不变（可追溯由 apply-candidate 承担）
 - **双审吸收**：arch-reviewer CONDITIONAL-PASS（6 事实断言逐条为真）→ H1 权限（image-health 全域 admin-only，非 editor+）+ M1 状态列并入 safeUpdate + M2 applied best-effort + M3 target_id=catalogId 单值 + L1/L2 全吸收。Codex BLOCK→消解 → 端点表 verifier 范式（7 列）+ source runtime guard（422）+ apply 入参补 videoId（health-check job 必需）+ stale candidate sourceRef 校验（409）；6 OK 确认核心设计稳固。
 - **解锁**：实现卡 IMGH-P2-1A（candidates）/ 1B（apply-candidate）。
+
+## [IMGH-P2-0B] ADR-209：image-health P2 治理表增强端点契约（SEQ-20260619-02 Phase 0 收口）
+- **完成时间**：2026-06-20
+- **记录时间**：2026-06-20 11:00
+- **执行模型**：claude-opus-4-8（主循环）
+- **子代理**：arch-reviewer (claude-opus-4-8, agentId afc4626c3108bc505)
+- **对抗性审核**：codex exec (gpt-5.5, read-only)
+- **修改文件**：
+  - `docs/decisions.md` — 新增 ADR-209（missing-videos 服务端筛选 + resolve-event 薄端点 + ids scoped 重扫 + DTO 行级契约）；端点契约表（verifier 范式）+ arch-reviewer 裁定摘要 + Codex 审核摘要
+  - `docs/task-queue.md` — IMGH-P2-0B 标 ✅；序列状态 1/11→2/11（Phase 0 全收口）
+  - `docs/tasks.md` — 删 0B 卡片（Phase 0 收口回稳定态）
+- **新增依赖**：无
+- **数据库变更**：无（resolve_event 为 TS 枚举扩展，零 migration）
+- **测试覆盖**：docs-only（ADR）。verify:endpoint-adr ✅ 243 路由对齐（132 ADR 端点，含 ADR-209 新 2 端点解析成立）/ verify:docs-format decisions.md 零新增违规（25 项 pre-existing baseline）
+- **核心决策（4 裁决项）**：① `/missing-videos` 服务端筛选 query（search 含 short_id / posterStatus / event_type / posterSource / brokenDomain；**total 一致**=page/count 共用 buildMissingVideosFilter + evt 谓词置外层 WHERE 使 LEFT JOIN 等价 INNER）+ brokenDomain distinct **复用 broken-domains 端点**（零 ADR-150 扩展）② resolve-event 薄端点 `{eventIds, note?}`（不支持 videoId；`resolveImageEvents` 改返 rowCount；经 ImageHealthService 守分层；0 命中幂等不 404）+ 审计 `image_health.resolve_event` ③ ids 精确重扫 `{videoIds}` **scoped 入队**（扩 `listPendingImageUrls(catalogIds?)` 仅入队选中集，**禁裸调全局 enqueueBackfillJob**——否则扫全库 pending_review 顺带重扫非选中行）④ DTO 补 catalogId（BLOCK-3）+ event_type（Lightbox P2）+ candidateCount/hasHighConfidenceCandidate（bool_or(is_winner) 免阈值，page CTE 聚合避 N+1）；尺寸字段不入后端
+- **双审吸收**：arch-reviewer CONDITIONAL-PASS（7 事实断言逐条为真 + reconcile field_name 一致）→ HIGH-1 入队改两段式 + MEDIUM-1 LATERAL count 外层 WHERE 不变量 + MEDIUM-2 纯 missing 行 UI 反馈 + LOW-1/2/3。Codex BLOCK→消解 → **D-209-3 全局副作用**（arch-reviewer 的两段式 enqueueBackfillJob 仍全局，改 scoped listPendingImageUrls）+ search short_id + resolvedCount/分层 + 审计清单补 audit-log-coverage.test.ts + page CTE。两轮审核层层递进抓出真实缺陷。
+- **解锁**：Phase 1 后端 IMGH-P2-1A（candidates）→ 1B（apply-candidate）→ 1C（resolve-event + ids-rescan）→ 1D（筛选 query + 行级契约）硬串行。
