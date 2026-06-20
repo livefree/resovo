@@ -158,9 +158,11 @@ export async function switchFallbackDomain(
 }
 
 /**
- * 标记事件为已处理，返回实际更新行数（resolvedCount）。
- * ADR-209 D-209-2：原返 void → 改返 rowCount，供 response/审计载荷一致；
- * 已解决（resolved_at 已非空）的事件会被重复 UPDATE（幂等无害，rowCount 仍含其内）。
+ * 标记未解决事件为已处理，返回实际更新行数（resolvedCount）。
+ * ADR-209 D-209-2：原返 void → 改返 rowCount，供 response/审计载荷一致。
+ * **幂等硬约束**（Codex stop-time review 修正）：WHERE 含 `resolved_at IS NULL` →
+ *   已解决事件被排除、不重复 UPDATE（不覆盖既有 resolved_at 时间戳 / resolution_note）、不计入 rowCount。
+ *   故重复调用 resolvedCount=0（= 事件不存在或已解决），route 据此幂等不报 404。
  */
 export async function resolveImageEvents(
   db: Pool | PoolClient,
@@ -171,7 +173,8 @@ export async function resolveImageEvents(
   const result = await db.query(
     `UPDATE broken_image_events
      SET resolved_at = NOW(), resolution_note = $1
-     WHERE id = ANY($2::uuid[])`,
+     WHERE id = ANY($2::uuid[])
+       AND resolved_at IS NULL`,
     [note ?? null, ids]
   )
   return result.rowCount ?? 0
