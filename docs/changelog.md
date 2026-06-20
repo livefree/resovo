@@ -1926,3 +1926,27 @@
   - **§17.3.4 危险动作流程现状已满足**（SwitchDomainModal 既有：默认 dry-run 预览 + affectedRows/breakdown 三列 + 仅 affectedRows>0 出现确认按钮 + BTN_WARN 语义）；本卡补「行内入口预填 + 全局入口清空」，未重写既有二次确认流程。
   - 切 fallback 域仍是按域而非按行的全局动作（PageHeader 入口保留）；行内「切此域」仅是预填快捷方式，复用同一 Modal + 同一 onPreview/onConfirm（零新端点）。
   - P1 红线遵守：零新 route / 零 schema；缺图表选中批量/复杂筛选仍留 P2。
+
+## [IMGH-P1-5] image-health 文档形态收尾（SEQ-20260619-01 第 5 卡 · 序列收口）
+- **完成时间**：2026-06-19
+- **记录时间**：2026-06-19 18:10
+- **执行模型**：claude-opus-4-8（主循环）
+- **子代理**：doc-janitor (claude-haiku-4-5) — 手册/工作流形态更新（CLAUDE.md 强制降 Haiku：文档更新）
+- **修改文件**：
+  - `docs/manual/20-pages/P-image-health.md` — §1/§2 形态更新（双 Tab 布局图 + ImageLightbox 交互 + TOP 域行内切此域）+ §3.4/3.5/3.6 操作补充 + 文末更新标注
+  - `docs/manual/10-workflows/W3-image-fallback.md` — §2 步骤②「切此域」快捷入口 + 步骤④ 预填/dry-run breakdown + last_reviewed 刷新 + 主循环修正步骤⑧「强制重下」误述（→「入队探活/blurhash，不下载、不改 URL」，对齐 P1-1 backfill 语义纠正）
+- **新增依赖**：无
+- **数据库变更**：无
+- **测试覆盖**：docs-only（test:changed 自动跳过）；verify:docs-format 两文件零新增违规（25 项为 pre-existing baseline，与 SEQ-20260618-01 记录一致）
+- **注意事项**：
+  - **主循环复核 haiku 产物**：doc-janitor 在 W3 步骤⑧ 引入「强制重下」描述，与 IMGH-P1-1 已纠正的 backfill 语义（不下载、不改 URL）冲突 → 主循环修正。haiku 子代理产物需主循环事实复核。
+  - **SEQ-20260619-01 P1 序列全收口（5/5）**：P1-1 事实纠错 + P1-2 双 Tab IA + P1-3 ImageLightbox + P1-4 切此域 + P1-5 文档。零新 route / 零 schema / 零 ADR（P1 红线全程遵守）。P2（候选补图/服务端筛选/选中批量/ImageGovernanceDrawer）+ P3（自愈/通知）见设计稿 §17.4。
+
+---
+
+## [SEQ-20260619-01-DONE] image-health 重构 P1 序列收口
+- **完成时间**：2026-06-19
+- **执行模型**：claude-opus-4-8（主循环全程）；子代理：arch-reviewer (claude-opus-4-8, P1-3) + doc-janitor (claude-haiku-4-5, P1-5)
+- **交付**：双 Tab 治理工作台（健康概览 / 图片治理）+ 共享 KpiCard/Spark 趋势 + ImageLightbox 新共享组件（feedback 层）+ TOP 域行内切此域预填 + 事实/契约纠错（端点/参数/枚举/DTO day→date）+ 手册形态对齐。
+- **门禁**：序列 Codex 对抗性审核 NEEDS REVISION → 修订消解；各卡 typecheck/lint EXIT=0/test:changed 全过（P1-3 全量 1058 零回归）；新共享组件 arch-reviewer Opus CONDITIONAL PASS 5 必改全吸收 + Subagents trailer。
+- **commits**：dfe09b18（P1-1）/ 6b92ce72（P1-2）/ 22bd70a2（P1-3）/ a2c3f82e（P1-4）/ 本卡（P1-5）。

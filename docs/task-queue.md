@@ -2815,10 +2815,10 @@
 
 ---
 
-## SEQ-20260619-01 — image-health 页面重构 P1（IA + 概览强化 · 只消费现有端点）
+## SEQ-20260619-01 — image-health 页面重构 P1（IA + 概览强化 · 只消费现有端点）✅
 
-- **状态**：🔄 进行中（4/5 — IMGH-P1-1/2/3/4 ✅ 2026-06-19）
-- **创建时间**：2026-06-19｜**最后更新**：2026-06-19
+- **状态**：✅ 已完成（5/5 — IMGH-P1-1/2/3/4/5 全收口 2026-06-19）
+- **创建时间**：2026-06-19｜**最后更新**：2026-06-19｜**完成时间**：2026-06-19
 - **来源**：用户「阅读图片健康（image-health）页面重构方案报告，设计任务序列，开卡执行」。
 - **设计真源**：`docs/designs/image-health-ux-handoff_20260618.md`（已两轮复审，§17.4 为收敛后权威分期）+ `docs/research/image-health-codebase-survey_20260619.md`（事实底座）。
 - **范围裁定（P1 = 只消费现有 6 端点，零新 route / 零 schema / 零 ADR）**：候选应用、精确筛选、选中批量、自愈自动化、通知全部进 P2/P3。本序列**唯一新共享组件 = `ImageLightbox`**（P1-3，触发 Opus 子代理契约门禁）。
@@ -2839,7 +2839,7 @@
 | **IMGH-P1-2** ✅ | **双 Tab IA + 共享 KPI/趋势**：① `Segment` + `?tab=` 双 Tab（健康概览 / 图片治理）置于 PageHeader 下 ② 淘汰本地 `ImageHealthKpiCard` → 复用共享 `KpiCard`（删 `ImageHealthKpiCard.tsx`；**Codex CONCERN 适配**：共享 KpiCard 无 `sub`/`data-testid` → `sub` 改 `value` 复合节点或 `delta` flat，`data-testid` 改 `testId`，同步测试断言）③ 接共享 `Spark` 渲染 7 日破损趋势（消费已对齐的 `brokenTrend.date`）④ Tab A 概览（KPI + 趋势 + TOP 域 + 破损样本）/ Tab B 治理（缺图 DataTable 保留现分页排序，**不做**选中批量 / 复杂筛选 / 候选列）。**已完成 2026-06-19**：`sub`→`delta` flat / `data-testid`→`testId` 适配；趋势双形态（KPI mini line spark + 独立 area 趋势卡）；测试 18→21（+next/navigation mock + 缺图表切治理 Tab + 双 Tab 切换/趋势用例）；image-health 34/34 + test:changed 21/21 全过。执行模型: claude-opus-4-8（建议 sonnet，会话人工覆盖）；子代理: 无。详见 changelog [IMGH-P1-2] | 4 | sonnet | P1-1 | 共享原语占比 ≥80% + 视图测试 ≥9 |
 | **IMGH-P1-3** ✅ | **`ImageLightbox` 新共享组件 + 破损样本接入**：① `packages/admin-ui` 新建 `ImageLightbox`（放大遮罩 + 元信息面板）② `BrokenSamplesGrid` 缩略点击 → 打开 Lightbox。元信息 P1 字段（Codex BLOCK 收敛，零后端改动）：尺寸=客户端 naturalWidth×naturalHeight / 来源 / 状态 pill / 破损 domain+occurrence / URL 可复制；event_type 推迟 P2。**已完成 2026-06-19**：arch-reviewer (claude-opus-4-8) CONDITIONAL PASS → 5 必改全吸收【归属 feedback/（非 overlay）+ testId（非 data-testid）+ 复用 useOverlay/OverlayBackdrop 非 Modal + `--state-danger-bg` 不存在改 `--state-error-bg`（顺带修 BrokenSamplesGrid:48/77 pre-existing 踩坑）+ 扩展边界 JSDoc】；测试 ImageLightbox 16 + BrokenSamplesGrid 14（+点击打开）+ ImageHealthClient 21 全过；test:changed 全量 1058 全过零回归；typecheck/lint EXIT=0；verify:token-references 我零新增（pre-existing 失败不归本卡）。执行模型: claude-opus-4-8；子代理: arch-reviewer (claude-opus-4-8)。详见 changelog [IMGH-P1-3] | 2（跨 admin-ui + server-next 2 层：新契约 + 接入属同一预览闭环） | **opus** | P1-2 | **Opus 子代理 + arch-reviewer PASS + Subagents trailer** + admin-ui 组件测试 |
 | **IMGH-P1-4** ✅ | **TOP 域行内「切此域」+ 危险动作强化**：① `ImageHealthColumns` broken-domain 列加行内 action「切此域」→ 打开 `SwitchDomainModal` 预填 `fromDomain` ② Modal 默认 dry-run 预览（展示 affectedRows / 三列 breakdown）③ 二次确认才启用执行按钮（warn 语义，§17.3.4）。**已完成 2026-06-19**：现状 Modal 已实现 §17.3.4 危险动作流程（默认 dry-run + breakdown + 二次确认 + warn 语义），本卡补 `initialFromDomain` 预填 + broken-domain 列「切此域」入口 + wire；附带修 ImageHealthColumns:45 `--state-danger-bg`→`--state-error-bg`（同文件 pre-existing 踩坑）；测试 +2（22 预填 / 23 全局空填），image-health 37/37 + test:changed 23/23 全过。执行模型: claude-opus-4-8（建议 sonnet，会话人工覆盖）；子代理: 无。详见 changelog [IMGH-P1-4] | 3 | sonnet | P1-2 | 视图测试（dry-run → 二次确认流程断言） |
-| **IMGH-P1-5** | **文档形态收尾**：① 手册 `P-image-health.md` §1/§2/§3 页面形态更新（双 Tab 布局 + Lightbox + 行内切此域 + dry-run 流程）② `W3-image-fallback.md` 工作流对齐 dry-run 二次确认 ③ frontmatter last_reviewed 刷新 | 3 | haiku | P1-2/P1-3/P1-4 | docs-only（doc-janitor） |
+| **IMGH-P1-5** ✅ | **文档形态收尾**：① 手册 `P-image-health.md` §1/§2/§3 页面形态更新（双 Tab 布局 + Lightbox + 行内切此域 + dry-run 流程）② `W3-image-fallback.md` 工作流对齐 dry-run 二次确认 ③ frontmatter last_reviewed 刷新。**已完成 2026-06-19**：doc-janitor (claude-haiku-4-5) 执行；主循环复核修正 haiku 引入的 W3 步骤⑧「强制重下」误述（与 P1-1 backfill 语义纠正冲突 → 改「入队探活/blurhash，不下载」）；verify:docs-format 我的两文件零新增违规（25 项 pre-existing baseline）。执行模型: claude-opus-4-8（主循环）；子代理: doc-janitor (claude-haiku-4-5)。详见 changelog [IMGH-P1-5] | 3 | haiku | P1-2/P1-3/P1-4 | docs-only（doc-janitor） |
 
 - **P1 范围红线（不得越界）**：零新 admin route / 零 schema 变更 / 零 ADR；不渲染无后端能力支撑的按钮（无死按钮，§13）；颜色零硬编码（design-tokens）；DataTable 用 v2 一体化（禁 v1 三件套）。
 - **P1 不做（明确推迟）**：候选选图 / apply-candidate / resolveImageEvents 端点（P2）；服务端筛选 + filter chips（P2）；选中批量重扫（P2，需 ids 端点）；ImageGovernanceDrawer / ImageCompare / ImageCandidatePicker（P2）；**Lightbox `event_type` 精确破损原因元信息（需扩展 `/missing-videos` DTO+query，与 P2 服务端筛选 DTO 一起做，P2）**；分级自愈 / image_governance_status 推导 / Dashboard 真实端点 / 阈值告警（P3）。

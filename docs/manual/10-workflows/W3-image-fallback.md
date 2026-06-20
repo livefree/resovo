@@ -6,7 +6,7 @@
 > source_of_truth: no
 > supersedes: none
 > superseded_by: none
-> last_reviewed: 2026-06-10
+> last_reviewed: 2026-06-19
 > 触发场景：图片健康页发现 TOP 破损域名累积 / Dashboard AttentionCard 图片告警
 
 ## 0. 元信息
@@ -26,19 +26,21 @@
 ```
 ①  /admin/image-health
     └─ KPI 4 看 P0 失效数（dashboard AttentionCard 深链同入口）
-②  主体左侧「TOP 破损域名」card → 看条形图
+②  「健康概览」Tab → 主体左侧「TOP 破损域名」card → 看条形图
     └─ 定位主要问题源（如 img3.doubanio.com 占 95%）
+    └─ 快捷操作：该行「切此域」按钮 → 直接打开 Modal 且预填源域名（省去步骤④手填 from）
 ③  小范围验证（建议）：
     a. 在视频库选 3-5 个 P0 失效视频
     b. 手动改其 cover_url 到 fallback CDN
     c. spot-check 新 URL 是否可达
-④  PageHeader 「切 fallback 域」（admin only）
-    └─ Modal: 填 from = "img3.doubanio.com" / to = "fallback.resovo.cdn"
-    └─ 点「预览」→ 「将影响 N 条 video 封面」
+④  PageHeader 「批量切 fallback 域」按钮（admin only）
+    └─ Modal: 若从步骤②「切此域」进入，from 已预填为该行域名（无需手填）
+    └─ 或手动填 from = "img3.doubanio.com" / to = "fallback.resovo.cdn"
+    └─ 点「预览」→ dry-run 展示「将影响 N 条 video 封面」+ 三列 breakdown（cover_url / backdrop_url / banner_backdrop_url）
 ⑤  确认 → 批量改写 + audit log
 ⑥  toast「N 条已切」+ 等 backfill worker 重新探测（异步）
 ⑦  返回看 KPI「P0 失效」下降 / 「7 天新增破损」清零
-⑧  如需强制重下：PageHeader「backfill」触发 worker
+⑧  如需让 worker 重新探活 / 补 blurhash：PageHeader「backfill」入队（不下载、不改 URL）
 ```
 
 ## 3. 反例
