@@ -2133,3 +2133,20 @@
 - **实现要点**（Opus arch-reviewer 裁定）：① **A-1 探活+尺寸校验下沉组件内部**（唯一信号源=候选 `<img onLoad/onError>`，不要求消费方传校验态）② **A-2 minWidth/minHeight prop + 默认 DEFAULT_MIN_DIMENSION=200**（不写死业务值，可覆盖）③ **A-3 onConfirm 哑回传 `{candidateUrl,candidateSize}` 不含 source/sourceRef、不调 API**（对齐 lightbox 受控范式，实际 apply 由消费方持有）④ **A-4 aspect 仅标注不入确认闸门**（aspect_mismatch 由后端巡检负责，前置硬阻断误伤异比例图）⑤ 确认 enabled ⇔ 候选 url 非空 && onLoad 成功 && 通过最小尺寸（无死按钮：尺寸过小/不可达给明确提示 §17.5）⑥ 循 P1 lightbox 范式（复用 ImageStatus/ImageNaturalSize + slot 逃生口 metaSlot + dev warn + testId）⑦ 颜色全 design-tokens（可达 --state-success-fg / 不可达 --state-error-fg / 提示 --state-warning-fg / 确认按钮 --accent-default + --fg-on-accent），零硬编码 + 零图标库 + Edge 兼容
 - **六问自检**：① 契约对齐 §6.2 + 子代理 A-1~A-4 ✓ ② 复用 lightbox ImageStatus/ImageNaturalSize + Pill，无平行实现 ✓ ③ 依赖方向正确（admin-ui 不反向 import server-next）✓ ④ 无 any（联合类型显式）/ 无空 catch / 无硬编码色 ✓ ⑤ admin-ui 公开 Props 契约经 Opus arch-reviewer + Subagents trailer ✓ ⑥ 哑组件不调 API、扩展边界 JSDoc 锁死（数组化/aspect 闸门/source 携带）✓
 - **解锁**：2B（ImageCandidatePicker）硬串行，复用同一子代理双契约设计（选中候选 → 喂 ImageCompare 候选图 → 确认替换数据流，§C 协同）。
+
+## [IMGH-P2-2B] 共享组件 ImageCandidatePicker（admin-ui · SEQ-20260619-02 Phase 2 收口 / ADR-208 §5.2）
+- **完成时间**：2026-06-20
+- **记录时间**：2026-06-20 03:05
+- **执行模型**：claude-opus-4-8（主循环）
+- **子代理**：arch-reviewer (claude-opus-4-8, agentId a9732b79ad7128d4d) — 复用 2A 一次性双契约设计（B-1~B-5 裁定）
+- **修改文件**：
+  - `packages/admin-ui/src/components/feedback/image-candidate-picker.types.ts` — 新建 Props 契约（ImageCandidatePickerProps/ImageCandidateOption/ImageCandidatePickerError）
+  - `packages/admin-ui/src/components/feedback/image-candidate-picker.tsx` — 新建实装（候选网格 + 选中受控 + confidence dot + applied 标记 + 三态复用 + loadMoreSlot）
+  - `packages/admin-ui/src/components/feedback/index.ts` — barrel 导出 ImageCandidatePicker + 3 类型
+  - `tests/unit/components/admin-ui/feedback/image-candidate-picker.test.tsx` — 新建（12：网格/选中受控+onSelect/confidence 仅 isWinner/applied/source pill 内置+逃生口/缩略 onError/loading/error+retry/空态/loadMore）
+- **新增依赖**：无
+- **数据库变更**：无（纯前端共享组件）
+- **测试覆盖**：typecheck/lint EXIT=0 / 12 组件测试全过 / test:changed 升 admin-ui 全量 1056 全过
+- **实现要点**（Opus arch-reviewer 裁定）：① **B-1 依赖方向**：admin-ui 自定义 `ImageCandidateOption`，**禁反向 import server-next 的 ImageCandidate**（依赖单向 server-next→admin-ui 防成环 + Edge 兼容）；消费方做一次 DTO→Option 纯映射 ② **B-2 候选键由消费方计算填 option.key**（建议 `${source}::${sourceRef ?? ''}`），组件不内部拼键（PK 规则变化不改契约）③ **B-3 confidence 视觉仅由 isWinner 决定**（🟢高置信/🟡待确认，复用 ADR-205 D-205-4 语义，不在组件设 confidence 阈值——单测断言 confidence 数值不影响分级）④ **B-4 loadMoreSlot 逃生口非 onLoadMore+hasMore**（"加载更多 TMDB 多图"是消费方实时拉取业务，组件不持分页态）⑤ **B-5 空/加载/错误态复用 EmptyState/LoadingState/ErrorState**（ErrorState 需 Error → 包 `new Error(message)`）⑥ renderSourcePill 逃生口（admin-ui 零图标库 → 来源图标由消费方注入 ReactNode）⑦ 颜色全 design-tokens（选中 --accent-default / 🟢 --state-success-fg / 🟡 --state-warning-fg / applied --state-success-bg），零硬编码 + Edge 兼容
+- **六问自检**：① 契约对齐 §5.2 + 子代理 B-1~B-5 ✓ ② 复用 Pill + state 原语，无平行实现 ✓ ③ 依赖方向正确（admin-ui 不反向 import server-next，自有 Option 类型）✓ ④ 无 any / 无空 catch / 无硬编码色 ✓ ⑤ admin-ui 公开 Props 契约经 Opus arch-reviewer + Subagents trailer ✓ ⑥ 哑组件不调 API、扩展边界 JSDoc 锁死（key 构成/confidence 阈值/缩略尺寸）✓
+- **Phase 2 全收口**：2A ImageCompare + 2B ImageCandidatePicker 共享组件就绪。**下一阶段 Phase 3**（3A ImageGovernanceDrawer 编排）——**§C 协同关键约束记入 3A**：消费方须持 `Map<optionKey, ImageCandidate>` 在 onSelect 后取回 sourceRef 构造 apply-candidate（Option 不携带裸 sourceRef），否则 CANDIDATE_STALE 409 无从校验。

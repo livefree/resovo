@@ -6,7 +6,7 @@
 
 ## 当前任务（单任务工作台：同时仅 1 个 🔄 进行中；完成即删卡，历史见 docs/changelog.md）
 
-_（**SEQ-20260619-02 image-health P2 治理闭环 🔄 9/11 — Phase 0 ✅ + Phase 1 ✅ + Phase 2 进行中**：Phase 0 双 ADR + Phase 1 后端 4 卡（1A/1B/1C/1D）。**Phase 2**：2A ✅ ImageCompare（Opus arch-reviewer agentId a9732b79ad7128d4d 一次性定 ImageCompare+ImageCandidatePicker 双契约；探活+尺寸校验下沉组件 + onConfirm 哑回传不调 API + flex-wrap 窄屏堆叠 + token 零硬编码；11 组件测试 + admin-ui 全量 1055 全过）。**下一卡 2B ImageCandidatePicker**（硬串行，复用同一子代理设计：自有 ImageCandidateOption 禁反向 import server-next + isWinner→🟢/🟡 + loadMoreSlot + 复用 EmptyState/LoadingState/ErrorState；§C 协同 — 3A 消费方须持 Map<key,candidate> 取 sourceRef）。取下一卡前查 task-queue.md 是否有 🚨 BLOCKER。）_
+_（**SEQ-20260619-02 image-health P2 治理闭环 🔄 10/11 — Phase 0 ✅ + Phase 1 ✅ + Phase 2 ✅ 全收口**：Phase 0 双 ADR + Phase 1 后端 4 卡（1A/1B/1C/1D）+ **Phase 2 共享组件 2 卡（2A ImageCompare + 2B ImageCandidatePicker，Opus arch-reviewer agentId a9732b79ad7128d4d 一次定双契约，admin-ui feedback 族 + 各自组件测试 11+12 全过）**。**下一阶段 Phase 3**：3A `ImageGovernanceDrawer`（server-next `_client/` 编排，依赖 1A/1B/1C+2A/2B；**§C 协同关键 — 消费方须持 `Map<optionKey, ImageCandidate>` 取回 sourceRef 构造 apply-candidate，否则 CANDIDATE_STALE 409 无从校验**）→ 3B DataTable 治理工作台（依赖 1A-1D+3A）→ 3C 文档（haiku）。取下一卡前查 task-queue.md 是否有 🚨 BLOCKER。）_
 
 ---
 

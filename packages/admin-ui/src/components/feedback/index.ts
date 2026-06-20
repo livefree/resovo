@@ -49,3 +49,12 @@ export type {
   ImageCompareConfirmPayload,
   ImageCompareValidation,
 } from './image-compare.types'
+
+// ── ImageCandidatePicker（IMGH-P2-2B）─────────────────────────────
+
+export { ImageCandidatePicker } from './image-candidate-picker'
+export type {
+  ImageCandidatePickerProps,
+  ImageCandidateOption,
+  ImageCandidatePickerError,
+} from './image-candidate-picker.types'
