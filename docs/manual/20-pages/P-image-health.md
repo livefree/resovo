@@ -1,23 +1,23 @@
 # P-image-health · 图片健康
 
-> status: 🟢 完整定稿（CHG-SN-8-FUP-IMAGE 2026-05-21）
+> status: 🟢 完整定稿（IMGH-P2 治理闭环 2026-06-20）
 > owner: @engineering
-> scope: 图片健康监控页面使用说明 — 破损域统计、fallback 域切换、图片重扫
+> scope: 图片健康监控页面使用说明 — 破损域统计、fallback 域切换、图片重扫、缺图视频治理工作台（筛选/批量/补图闭环）
 > source_of_truth: no
 > supersedes: none
 > superseded_by: none
-> last_reviewed: 2026-06-19
+> last_reviewed: 2026-06-20
 
 ## 0. 元信息
 
 | 字段 | 值 |
 |---|---|
 | 真源页面路径 | `/admin/image-health` |
-| 设计稿引用 | reference.md §5.8 |
-| 主任务卡 | CHG-SN-6-02（页面骨架）+ CHG-SN-7-MISC-IMAGE-1（重扫 + 切 fallback 域）+ CHG-SN-7-MISC-IMAGE-2（破损样本 grid）+ CHG-SN-8-FUP-IMAGE（手册定稿） |
-| 涉及端点 | `GET /admin/image-health/stats` / `GET /admin/image-health/broken-domains` / `GET /admin/image-health/missing-videos` / `POST /admin/image-health/rescan` / `POST /admin/image-health/backfill` / `POST /admin/image-health/switch-fallback-domain` |
+| 设计稿引用 | reference.md §5.8 + `image-health-ux-handoff_20260618.md` §5.2/§6.3 |
+| 主任务卡 | CHG-SN-6-02（页面骨架）+ CHG-SN-7-MISC-IMAGE-1（重扫 + 切 fallback 域）+ CHG-SN-7-MISC-IMAGE-2（破损样本 grid）+ CHG-SN-8-FUP-IMAGE（手册定稿）+ SEQ-20260619-01（双 Tab 重构）+ **SEQ-20260619-02（P2 治理闭环：候选补图 / 标记已解决 / 工作台增强，ADR-208 + ADR-209）** |
+| 涉及端点 | `GET /stats` / `GET /broken-domains` / `GET /missing-videos`（含服务端筛选 search·posterStatus·posterSource·eventType·brokenDomain + 行级 catalogId·eventId·candidateCount）/ `GET /candidates` / `POST /apply-candidate` / `POST /resolve-event` / `POST /rescan` / `POST /rescan-selected` / `POST /backfill` / `POST /switch-fallback-domain`（均 `/admin/image-health/*`）|
 | 适用角色 | editor + admin（破坏性 action 需 admin） |
-| 最近更新 | 2026-05-21 (CHG-SN-8-FUP-IMAGE) |
+| 最近更新 | 2026-06-20 (SEQ-20260619-02 Phase 3：治理抽屉 + 工作台增强) |
 | 同事走读签字 | (未走读) |
 
 ---
@@ -31,6 +31,8 @@
 **破损样本交互**：破损样本 grid 中的缩略图可点击打开 ImageLightbox（全屏放大 + 元信息诊断面板，含尺寸 / 来源 / 状态 / 破损域名和次数 / 可复制原始 URL）。
 
 **TOP 域行内快捷操作**：TOP 破损域名表中每行都有「切此域」按钮，点击直接打开切 fallback 域 Modal 并预填源域名（无需手动输入）。
+
+**图片治理工作台（Tab B，SEQ-20260619-02）**：缺图视频 DataTable 升级为治理工作台 —— 缩略列直观看坏图、服务端筛选（海报状态 / 来源 / 事件类型 / 破损域名）按面定位、批量重扫选中、「跨源候选数」列（🟢 高置信 / 🟡 待确认）一眼看哪些视频有补图候选；**点击任意行打开「图片治理抽屉」**承载单视频精细治理（候选补图 / 手填封面 URL / 标记已解决）的端到端闭环。
 
 ## 2. 页面布局
 
@@ -58,10 +60,23 @@
 │                        │  ImageLightbox）                   │
 └────────────────────────────────────────────────────────────────┘
 
-【Tab B：图片治理】
+【Tab B：图片治理 — 治理工作台（density=poster 行高）】
 ┌─ 缺图视频 DataTable ──────────────────────────────────────────┐
-│ 分页 + 排序：标题 / 海报状态 / 海报来源 / 破损域名 / 破损次数  │
-│            / 最近破损                                       │
+│ 列：封面缩略 / 标题 / 海报状态 / 海报来源 / 事件类型 /        │
+│     破损域名 / 破损次数 / 最近破损 / 跨源候选（🟢/🟡/—）       │
+│ 列头 ⋯ 服务端筛选：标题(search) · 海报状态 · 来源 · 事件类型   │
+│     (enum) · 破损域名(distinct，复用 /broken-domains)         │
+│ 勾选行 → 底部 bulk 条：批量重扫选中 / 打开候选队列            │
+│ 点击行 → 右侧「图片治理抽屉」                                  │
+└────────────────────────────────────────────────────────────────┘
+
+【图片治理抽屉（点行展开，680px right Drawer）】
+┌────────────────────────────────────────────────────────────────┐
+│ ① 图片矩阵：Poster / Backdrop / Logo / Banner（点击放大）      │
+│ ② 破损详情：事件类型 / 破损域 / 次数 / 最近                    │
+│ ③ 替换封面：跨源候选 Picker → ImageCompare 探活 → 应用        │
+│           或 手填封面 URL → 替换                              │
+│ ④ 标记已解决（resolve 当前展示事件）/ 关闭                    │
 └────────────────────────────────────────────────────────────────┘
 ```
 
@@ -111,11 +126,40 @@
 - **ImageLightbox 内容**：全屏放大显示 + 元信息诊断面板（尺寸 / 来源 / 状态 / 破损域名和次数 / 可复制原始 URL）
 - **用途**：直观看坏图样式（404 / 5xx / dns error / timeout 等分类）+ 诊断元信息
 
-### 3.6 缺图视频表
+### 3.6 缺图视频治理工作台（SEQ-20260619-02 / 3B）
 
 - **位置**：「图片治理」Tab 内 DataTable
-- **行为**：调 `GET /admin/image-health/missing-videos` → 列出缺 poster 或 backdrop 的视频
-- **列定义**：视频标题 / 海报状态 / 海报来源 / 破损域名 / 破损次数 / 最近破损（分页 + 排序支持）
+- **行为**：调 `GET /admin/image-health/missing-videos` → 列出 `poster_status ∈ {missing, broken, pending_review}` 的视频
+- **列定义**：封面缩略 / 视频标题 / 海报状态 / 海报来源 / 事件类型 / 破损域名 / 破损次数 / 最近破损 / 跨源候选（分页 + 排序支持）
+- **缩略列**：缺失 → 占位符；破损 / 待复核 → 直显当前 URL（坏图本身即运维信号）。行高用 `density=poster`（80px）容纳 poster-md 封面
+- **服务端筛选**（列头 ⋯ 菜单，消费后端筛选 query，保分页 total 一致）：
+  - 标题（text，映射 `search`，ILIKE 标题 / short_id）
+  - 海报状态 / 海报来源 / 事件类型（enum 多选，**当前后端单值语义：取首项生效**）
+  - 破损域名（distinct 下拉，**复用 `GET /broken-domains`** 拉候选，不接通用 distinct）
+- **「跨源候选」列**：🟢 高置信 / 🟡 待确认 / —（无候选）。数据来自 `missing-videos` 单查询聚合 `metadata_field_proposals`（**不逐行请求**，避 N+1）
+- **批量操作**（勾选行 → 底部 bulk 条）：
+  - **批量重扫选中**：调 `POST /rescan-selected` with `{videoIds}`（scoped 重置选中行 `poster_status=pending_review` 且 `cover_url IS NOT NULL` + 仅入队选中行；纯 missing 行无 URL 被跳过，toast 反馈「N 行无可重扫 URL 跳过」）
+  - **打开候选队列**：打开首个选中行的治理抽屉，逐个补图（选区保留）。**无「批量从候选补图」**——ADR 不支持 batch apply，不渲染伪批量按钮
+- **行点击**：打开右侧「图片治理抽屉」（见 §3.7）；替换 / 重扫成功后该行 flash 高亮 1.5s
+
+### 3.7 图片治理抽屉 — 单视频补图闭环（SEQ-20260619-02 / 3A）
+
+- **打开**：在 §3.6 工作台点击任意缺图行 → 右侧 680px Drawer
+- **① 图片矩阵**：Poster / Backdrop / Logo / Banner 四类缩略（点击任一打开 ImageLightbox 放大）
+- **② 破损详情**：事件类型 / 破损域 / 次数 / 最近破损时间
+- **③ 替换封面**（聚焦 poster/coverUrl）两条路径：
+  - **跨源候选补图**：候选 Picker（调 `GET /candidates?field=coverUrl`）→ 选候选 → ImageCompare 加载并探活（达最小尺寸才放行）→ 确认 → `POST /apply-candidate`（经 safeUpdate 优先级闸门写回 + 置 `pending_review` + 入队巡检）。候选过期 → 409 CANDIDATE_STALE 提示刷新
+  - **手填封面 URL**：输入框填 URL → 「替换」→ 写回 + 置 `pending_review`
+- **④ 标记已解决**：见 §3.8
+- **成功反馈**：toast + 抽屉关闭 + 对应行 flash + 列表刷新
+
+### 3.8 标记已解决（SEQ-20260619-02 / ADR-209 D-209-2）
+
+- **位置**：图片治理抽屉底部「标记已解决」按钮
+- **行为**：调 `POST /resolve-event` with `{eventIds:[当前展示事件]}` → 把该破损事件 `resolved_at` 置时；`resolvedCount=0`（事件已解决/不存在）**幂等不报错**
+- **范围**：仅 resolve 抽屉中展示的**单个**最近未解决 poster 事件（行无关联事件 → 按钮禁用，无死按钮）。「解决某视频全部未解决事件」是另一业务端点，本期不含
+- **审计**：`image_health.resolve_event`（target_kind=image_health，afterJsonb `{eventIds, resolvedCount, note}`）
+- **何时用**：确认某破损封面已人工修复（或属误报），把对应事件从未解决队列清出
 
 ## 4. 进阶操作
 
@@ -165,4 +209,6 @@
 
 ---
 
-**本次更新** (2026-06-19)：新增双 Tab 结构（健康概览 / 图片治理）、破损样本 ImageLightbox 交互、TOP 域行内「切此域」快捷按钮、「近 7 日新增破损」KPI 含 mini 趋势 Spark（SEQ-20260619-01 P1 双 Tab 重构落地；独立趋势卡与 KPI mini spark 同源冗余已收敛移除）
+**本次更新** (2026-06-20，SEQ-20260619-02 P2 治理闭环 Phase 3)：「图片治理」Tab 升级为治理工作台 —— 缩略列 + 服务端筛选（状态/来源/事件类型/破损域名）+ 批量重扫选中 / 打开候选队列 + 「跨源候选数」列（🟢/🟡）；新增**图片治理抽屉**（点行展开）承载单视频补图闭环（跨源候选 Picker→ImageCompare 探活→apply / 手填 URL）+ **标记已解决**（resolve 单事件，幂等）。涉及端点扩至 candidates / apply-candidate / resolve-event / rescan-selected（ADR-208 + ADR-209）。
+
+**上次更新** (2026-06-19)：新增双 Tab 结构（健康概览 / 图片治理）、破损样本 ImageLightbox 交互、TOP 域行内「切此域」快捷按钮、「近 7 日新增破损」KPI 含 mini 趋势 Spark（SEQ-20260619-01 P1 双 Tab 重构落地；独立趋势卡与 KPI mini spark 同源冗余已收敛移除）

@@ -6,7 +6,7 @@
 
 ## 当前任务（单任务工作台：同时仅 1 个 🔄 进行中；完成即删卡，历史见 docs/changelog.md）
 
-_（**SEQ-20260619-02 image-health P2 治理闭环 🔄 — Phase 0 ✅ + Phase 1 ✅ + Phase 2 ✅ + Phase 3 进行中**：Phase 0/1/2 全完成。**Phase 3**：3A ✅ ImageGovernanceDrawer（Drawer 680px 编排 ImageCandidatePicker+ImageCompare+ImageLightbox；§C 持 Map 取 sourceRef + 1D DTO 补 eventId + 行点击/flash/refresh；8 视图测试）；3B ✅ DataTable 治理工作台增强（新建 imageHealthFilters.ts〔buildMissingFilters + distinctFetcher 复用 /broken-domains〕+ ImageHealthBulkActions.tsx〔批量重扫=1C / 打开候选队列 CONCERN-3 无伪批量〕；缩略列 + eventType/跨源候选数列 + 4 列服务端 filter〔消费 1D〕+ selection/bulkActions/distinctFetcher 接线；+27 新测，全门禁绿）。**下一卡 3C 文档收尾**（手册 P-image-health.md / W3-image-fallback.md + decisions.md index + frontmatter；建议 haiku/doc-janitor + 主循环复核；依赖 3A/3B）。取下一卡前查 task-queue.md 是否有 🚨 BLOCKER。）_
+_（**SEQ-20260619-02 image-health P2 治理闭环 ✅ 全交付 2026-06-20**：Phase 0〔ADR-208 + ADR-209〕+ Phase 1〔1A-1D 后端：candidates / apply-candidate / resolve-event + rescan-selected / missing-videos 筛选+行级契约〕+ Phase 2〔2A ImageCompare + 2B ImageCandidatePicker，admin-ui 共享组件〕+ Phase 3〔3A 治理抽屉 + 3B 工作台增强 + 3C 文档收尾〕全完成。**收口待办（合并 dev→main 前）**：PHASE COMPLETE 全量审计——`npm run test -- --run` + `npm run test:e2e`（4 projects）本 SEQ 收口处尚未跑，建议合并前补跑。下一任务取 task-queue.md 按优先级；取前先查 🚨 BLOCKER。）_
 
 ---
 

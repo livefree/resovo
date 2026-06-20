@@ -2199,3 +2199,14 @@
 - **修复**：① ImageHealthClient Tab B DataTable 加 `density="poster"`（行高 `--row-h-poster` 80px，类型注释明确「含 Thumb poster-md 48×72 封面的列表」专用，与 VideoListClient 一致）② ImageHealthColumns 缩略列 Thumb `poster-sm`→`poster-md`（48×72，poster 行高内不裁切）。
 - **回归守卫**：ImageHealthColumns.test 断言 thumb `data-size="poster-md"`；ImageHealthClient.test 断言 body 行 `style` 含 `var(--row-h-poster)`。
 - **门禁**：typecheck/lint/verify:adr-contracts EXIT=0 / image-health 全域 76 测过（含 2 新守卫断言）。
+
+## [IMGH-P2-3C] 文档收尾：手册 + ADR 实现标记（server-next · SEQ-20260619-02 Phase 3 收口 → SEQ 全交付）
+- **完成时间**：2026-06-20｜**记录时间**：2026-06-20 12:30｜**执行模型**：claude-opus-4-8（主循环直接做，用户选「A 主循环不 spawn」）｜**子代理**：无
+- **修改文件**（docs-only，CLAUDE.md「更新文档」豁免）：
+  - `docs/manual/20-pages/P-image-health.md` — §0 元信息（涉及端点扩 candidates/apply-candidate/resolve-event/rescan-selected + 主任务卡补 SEQ-20260619-02）+ §1/§2 布局图补 Tab B 治理工作台 + 治理抽屉 + §3.6 工作台（缩略/服务端筛选/候选数/bulk）+ §3.7 治理抽屉补图闭环 + §3.8 标记已解决 + 本次更新条；status/last_reviewed → 2026-06-20
+  - `docs/manual/10-workflows/W3-image-fallback.md` — frontmatter scope/触发场景扩单视频补图 + §2b 单视频精细补图/标记已解决端到端工作流（含与 §2 域级批量切的分工判据）+ §5 ADR-208/209 链接；last_reviewed → 2026-06-20
+  - `docs/decisions.md` — ADR-208/ADR-209 状态 `Accepted`→`Accepted + 已实现` + 补「实现」行（changelog 标签 + 手册 cross-ref）
+- **新增依赖**：无 ｜ **数据库变更**：无
+- **测试覆盖**：docs-only（test:changed 自动跳过）；verify:docs-format 我改 3 文件全在「带元信息文档检查完成 143 ✅」内（报错 25 项均既有遗留：archive 缺 frontmatter + README source_of_truth 冲突，与本卡无关，EXIT=0 不阻断）
+- **Codex 非代码审核**：不适用（条款强制项=ADR / 跨 3+ 消费方设计方案文档 / 含设计决策任务卡；3C 为操作手册 + 索引交叉引用，描述已落地且已审〔Opus arch-reviewer + Codex〕的 3A/3B 代码，无新设计决策可挑战 — 按条款「明示接受并记录」处理）
+- **SEQ-20260619-02 全交付**：Phase 0（ADR-208 + ADR-209）+ Phase 1（1A-1D）+ Phase 2（2A/2B）+ Phase 3（3A/3B/3C）全完成。**收口待办（合并 dev→main 前）**：PHASE COMPLETE 全量审计 `npm run test -- --run` + `npm run test:e2e`（4 projects）尚未在本 SEQ 收口处跑（code 阶段均增量门禁过），建议合并前补跑。
