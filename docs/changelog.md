@@ -2116,3 +2116,20 @@
 - **实现要点**：① **total 一致硬约束（§17.3.2）**：抽 `buildMissingVideosFilter` + `MISSING_VIDEOS_FROM` 常量 → page 与 count **逐字共用 FROM+LATERAL+WHERE**，禁两处各写 WHERE（防 total 漂移）② **LATERAL count 不变量（MEDIUM-1）**：evt 谓词（eventType/brokenDomain）置**外层 WHERE**（非 LATERAL 子查询内）使 `LEFT JOIN LATERAL (... LIMIT 1)` 经外层 `WHERE evt.x=$` 等价 INNER（自动滤无未解决事件 video）；单测断言谓词出现在 `) evt ON TRUE` 之后 ③ **候选聚合避全量 N+1（BLOCK-4 + Codex CONCERN）**：`metadata_field_proposals` 聚合（COUNT + bool_or(is_winner)）在**分页后 page CTE〔≤20 行〕**上 LATERAL，禁大过滤集全量相关子查询；CTE 不保证行序 → 外层重排（MISSING_VIDEO_SORT_OUTER）④ search 含 `v.short_id` exact（对齐 videos.ts 口径，否则 UI 输入 short_id 不命中，Codex CONCERN）⑤ brokenDomain 输出/筛选改 SQL `regexp_replace` 派生（统一 getTopBrokenDomains 口径，替代 JS 派生）⑥ brokenDomain distinct 复用 `GET /broken-domains`（零新 distinct 端点、零 ADR-150 扩展），posterStatus/eventType/posterSource 用静态 enum options ⑦ catalogId（BLOCK-3，P2 关键缺口）供 3A 治理抽屉行→调 candidates/apply-candidate
 - **六问自检**：① 契约对齐 ADR-209 D-209-1/D-209-4 逐条（含 MEDIUM-1 + BLOCK-3/4 + 4 CONCERN）✓ ② 复用既有 LATERAL/regexp_replace 口径 + 既有 /broken-domains distinct，无平行实现 ✓ ③ 守分层（route→query，filters 在 route 校验枚举后传入）✓ ④ 无 any（filterParams 用 `unknown[]`，SQL 字面量谓词）/ 无空 catch / 无硬编码色 ✓ ⑤ total 一致 page+count 共用谓词（单测断言）✓ ⑥ DTO 新列必填 + 消费方 mock 同步（typecheck 守卫）✓
 - **Phase 1 全收口**：1A/1B/1C/1D 后端 4 卡全完成。**下一阶段 Phase 2**（2A/2B 前台共享组件 ImageCompare/ImageCandidatePicker）须先 spawn Opus arch-reviewer 子代理定义 Props 契约（CLAUDE.md 共享组件 API 契约强制 Opus + commit `子代理` trailer）。
+
+## [IMGH-P2-2A] 共享组件 ImageCompare（admin-ui · SEQ-20260619-02 Phase 2 / ADR-208 §6.2）
+- **完成时间**：2026-06-20
+- **记录时间**：2026-06-20 03:00
+- **执行模型**：claude-opus-4-8（主循环；用户裁定进入 Phase 2 + spawn Opus 子代理）
+- **子代理**：arch-reviewer (claude-opus-4-8, agentId a9732b79ad7128d4d) — CONDITIONAL PASS，一次性定 ImageCompare + ImageCandidatePicker 双 Props 契约（2B 复用）
+- **修改文件**：
+  - `packages/admin-ui/src/components/feedback/image-compare.types.ts` — 新建 Props 契约（ImageCompareProps/ImageCompareSide/ImageCompareConfirmPayload/ImageCompareValidation + DEFAULT_MIN_DIMENSION）
+  - `packages/admin-ui/src/components/feedback/image-compare.tsx` — 新建实装（哑受控区块 + 双侧并排 + 候选探活/尺寸校验闸门 + flex-wrap 窄屏堆叠）
+  - `packages/admin-ui/src/components/feedback/index.ts` — barrel 导出 ImageCompare + 4 类型 + DEFAULT_MIN_DIMENSION
+  - `tests/unit/components/admin-ui/feedback/image-compare.test.tsx` — 新建（11：open 守卫/双侧渲染/status Pill/探活+尺寸闸门/onConfirm 回传/尺寸过小拦/onError 不可达/url=null 占位/minDimension 覆盖/onCancel/onCandidateValidated/metaSlot）
+- **新增依赖**：无
+- **数据库变更**：无（纯前端共享组件）
+- **测试覆盖**：typecheck/lint EXIT=0 / 11 组件测试全过 / test:changed 升 admin-ui 全量 85 文件 1055 全过
+- **实现要点**（Opus arch-reviewer 裁定）：① **A-1 探活+尺寸校验下沉组件内部**（唯一信号源=候选 `<img onLoad/onError>`，不要求消费方传校验态）② **A-2 minWidth/minHeight prop + 默认 DEFAULT_MIN_DIMENSION=200**（不写死业务值，可覆盖）③ **A-3 onConfirm 哑回传 `{candidateUrl,candidateSize}` 不含 source/sourceRef、不调 API**（对齐 lightbox 受控范式，实际 apply 由消费方持有）④ **A-4 aspect 仅标注不入确认闸门**（aspect_mismatch 由后端巡检负责，前置硬阻断误伤异比例图）⑤ 确认 enabled ⇔ 候选 url 非空 && onLoad 成功 && 通过最小尺寸（无死按钮：尺寸过小/不可达给明确提示 §17.5）⑥ 循 P1 lightbox 范式（复用 ImageStatus/ImageNaturalSize + slot 逃生口 metaSlot + dev warn + testId）⑦ 颜色全 design-tokens（可达 --state-success-fg / 不可达 --state-error-fg / 提示 --state-warning-fg / 确认按钮 --accent-default + --fg-on-accent），零硬编码 + 零图标库 + Edge 兼容
+- **六问自检**：① 契约对齐 §6.2 + 子代理 A-1~A-4 ✓ ② 复用 lightbox ImageStatus/ImageNaturalSize + Pill，无平行实现 ✓ ③ 依赖方向正确（admin-ui 不反向 import server-next）✓ ④ 无 any（联合类型显式）/ 无空 catch / 无硬编码色 ✓ ⑤ admin-ui 公开 Props 契约经 Opus arch-reviewer + Subagents trailer ✓ ⑥ 哑组件不调 API、扩展边界 JSDoc 锁死（数组化/aspect 闸门/source 携带）✓
+- **解锁**：2B（ImageCandidatePicker）硬串行，复用同一子代理双契约设计（选中候选 → 喂 ImageCompare 候选图 → 确认替换数据流，§C 协同）。

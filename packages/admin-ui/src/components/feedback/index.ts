@@ -38,3 +38,14 @@ export type {
   ImageStatus,
   ImageNaturalSize,
 } from './image-lightbox.types'
+
+// ── ImageCompare（IMGH-P2-2A）─────────────────────────────────────
+
+export { ImageCompare } from './image-compare'
+export { DEFAULT_MIN_DIMENSION } from './image-compare.types'
+export type {
+  ImageCompareProps,
+  ImageCompareSide,
+  ImageCompareConfirmPayload,
+  ImageCompareValidation,
+} from './image-compare.types'

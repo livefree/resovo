@@ -6,7 +6,7 @@
 
 ## 当前任务（单任务工作台：同时仅 1 个 🔄 进行中；完成即删卡，历史见 docs/changelog.md）
 
-_（**SEQ-20260619-02 image-health P2 治理闭环 🔄 8/11 — Phase 0 ✅ + Phase 1 ✅ 全收口**：Phase 0 双 ADR（ADR-208/209）全 Accepted。**Phase 1 后端 4 卡全完成**：1A ✅ candidates / 1B ✅ apply-candidate / 1C ✅ resolve-event + ids 重扫 / 1D ✅ missing-videos 服务端筛选 + 行级数据契约（buildMissingVideosFilter 共用 page+count 防 total 漂移 + evt 谓词外层 WHERE 等价 INNER + 候选聚合 page CTE 避 N+1 + DTO 补 catalogId/eventType/candidateCount/hasHighConfidenceCandidate）。**下一阶段 Phase 2**：2A/2B 前台共享组件（ImageCompare / ImageCandidatePicker，**强制 spawn Opus arch-reviewer 子代理定 Props 契约** — CLAUDE.md 共享组件 API 契约强制 Opus；commit 需 `子代理` trailer）。取下一卡前查 task-queue.md 是否有 🚨 BLOCKER。）_
+_（**SEQ-20260619-02 image-health P2 治理闭环 🔄 9/11 — Phase 0 ✅ + Phase 1 ✅ + Phase 2 进行中**：Phase 0 双 ADR + Phase 1 后端 4 卡（1A/1B/1C/1D）。**Phase 2**：2A ✅ ImageCompare（Opus arch-reviewer agentId a9732b79ad7128d4d 一次性定 ImageCompare+ImageCandidatePicker 双契约；探活+尺寸校验下沉组件 + onConfirm 哑回传不调 API + flex-wrap 窄屏堆叠 + token 零硬编码；11 组件测试 + admin-ui 全量 1055 全过）。**下一卡 2B ImageCandidatePicker**（硬串行，复用同一子代理设计：自有 ImageCandidateOption 禁反向 import server-next + isWinner→🟢/🟡 + loadMoreSlot + 复用 EmptyState/LoadingState/ErrorState；§C 协同 — 3A 消费方须持 Map<key,candidate> 取 sourceRef）。取下一卡前查 task-queue.md 是否有 🚨 BLOCKER。）_
 
 ---
 
