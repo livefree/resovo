@@ -23294,3 +23294,75 @@ ADR-207 提交后实施前契约审核发现 4 项缺口（arch-reviewer 首轮 
   - **防误剥边界**：季号正则必带数字/CJK 数字 + 季号关键词锚（`第N季`/`第N期`/`SN` 而非裸「季/期」「数字」）；作品名本体含「季/期/部」无数字 → 不剥；裸尾随数字（《复联4》）无季号锚 → 保留（沿 TitleIdentityParser Y4 护栏口径）。日文 `第N期` vs 单集噪声 `第N话` 须区分（中风险，真实番名样本验证）。
 
 **关联**：ADR-206（knownNames 多词搜索投影 = 本卡剥离落点）/ ADR-176（season_number 列承载季号 = 搜索用裸名依据）/ ADR-174 + META-22（持久化归并键/外部匹配键口径分立 = 不污染既有键的依据）/ ADR-105a（evidence_hash = 不改 TitleIdentityParser 的依据）/ META-54-A（先后依赖）。
+
+---
+
+## ADR-208：image-health P2 补图闭环端点契约 + 审计扩展 — candidates 读 proposals + apply-candidate 复用 safeUpdate 闸门（SEQ-20260619-02 / IMGH-P2-0A）
+
+**状态**：**Accepted**（arch-reviewer (claude-opus-4-8, agentId a31cfd74f9999549c) CONDITIONAL-PASS〔6 事实断言逐条为真，1 HIGH + 3 MEDIUM + 2 LOW 全吸收〕+ Codex 对抗性审核 (gpt-5.5, read-only) BLOCK→修订消解〔1 BLOCK 端点表 verifier 范式 + 3 CONCERN〕；二者裁定摘要见文末。解锁实现卡 1A/1B）。
+
+**背景/问题**：image-health P2「治理闭环」需「破损 → 选外部源候选 → 对比 → 一键补图」的人工闭环。底座已具备（设计 §7.1）：元数据富集（`MetadataEnrichService`）跑 TMDB/豆瓣/Bangumi 时，图片字段候选（`coverUrl`/`backdropUrl`/`logoUrl`）已写入 `metadata_field_proposals`（migration 119，ADR-205 D-205-2），缺的只是 image-health 侧**读候选 + 应用候选**两个消费端点。CLAUDE.md MUST-8：新增 admin route 须先起独立 ADR + Opus PASS + `verify:endpoint-adr`。本 ADR 定型契约，实现走卡 1A（candidates）/ 1B（apply-candidate）。
+
+**事实核验（本会话 Opus 亲验 + Codex BLOCK-1 纠正）**：
+
+- `metadata_field_proposals` PK `(catalog_id, field_name, source_kind)`（119:34）→ **每 catalog 每字段每源一行**；候选 = 该 `(catalog_id, field_name)` 跨 `source_kind` 全部行（§17.2.1「每来源每字段一条最优候选」非「同源多图列表」成立）。列：`proposed_value JSONB`（图片字段=URL）/`confidence NUMERIC`/`source_ref`（外部 ID）/`is_winner`/`applied`/`conflict_state`/`proposed_at`。
+- `CATALOG_SOURCE_PRIORITY`（`MediaCatalogService.ts:54`）= `manual:5 / tmdb:4 / bangumi:4 / douban:3 / crawler:1`，未列源（如 imdb）走 `?? 0`。**设计 §7.3 字面「imdb(2)/crawler(0)」与代码分歧** → 本 ADR 一律引用 canonical 常量，禁复制分歧硬编码（D-205-3）。
+- `safeUpdate(catalogId, fields, source, provenanceCtx?: { sourceRef?; db?; preserveMetadataSource? })` → `{ updated: MediaCatalogRow|null; skippedFields: string[] }`（`MediaCatalogService.ts:335`）：内置**优先级闸门**（`incomingPriority < currentPriority` → skip，外部 ID fill-if-empty 例外）+ **hard lock**（`getHardLockedFields`，任何源阻挡，`metadataProvenance.ts:132`）+ **soft lock**（`lockedFields`，非 manual 阻挡）。`skippedFields` 回报被锁/被拦字段 → §7.3「manual hard lock 不覆盖」语义**已由 safeUpdate 实现，apply-candidate 复用即得，禁自建平行闸门**。`coverUrl`/`backdropUrl`/`logoUrl` + 状态列 `posterStatus`/`backdropStatus`/`logoStatus` 均在 `CatalogUpdateData`（`mediaCatalog.internal.ts`）→ 列 `cover_url`/`backdrop_url`/`logo_url` + `*_status`，safeUpdate 可写。
+- `admin_audit_log.action_type` 为 `TEXT` **无 DB CHECK**（052:27-32 仅 `target_kind` 有 CHECK）；`target_kind='image_health'` 经 **069（ADR-135，CHECK 6→13）加入**、现已合法（TS 侧 `AdminAuditTargetKind` `admin-moderation.types.ts:293`）→ 新 actionType **零 migration**，仅扩 `AdminAuditActionType` TS 枚举（Codex BLOCK-1 纠正原「CHECK 扩展 migration」误判）。
+- `PUT /admin/videos/:id/images`（`videoImages.ts:64`，`adminOnly`）：经 `updateCatalogFields` 写 URL + `[statusField]='pending_review'`（:82-84）+ 入队 `health-check`/`blurhash-extract`（:87-95）→ **无 `insertAuditLog`**（§17.2.2 成立）。
+- 现有 6 image-health 端点全用全路径 `/admin/image-health/*` + `preHandler: auth`，其中 **`auth = [authenticate, requireRole(['admin'])]`（`image-health.ts:44`）—— 全域 admin-only**（与 videoImages 的 `auth=['moderator','admin']` 不同，arch-reviewer H1 纠正）；注册于 `routes/admin/image-health.ts`（`adminImageHealthRoutes`）。
+
+### 决策
+
+- **D-208-1（端点命名空间：并入 `/admin/image-health/*`，否决方案 §7.2 的 `/admin/images/*`）**：新端点注册进现有 `routes/admin/image-health.ts`，与 6 个既有端点同文件同前缀同风格（价值排序 4 一致性 > 方案字面）。终态：
+  - `GET /admin/image-health/candidates?catalogId=<uuid>&field=<coverUrl|backdropUrl|logoUrl>` —— flat query 风格对齐 `stats`/`broken-domains`/`missing-videos`；`preHandler: auth`（**复用域内既有 `auth = requireRole(['admin'])`，admin-only**）。
+  - `POST /admin/image-health/apply-candidate` —— `preHandler: auth`（**同域 admin-only**；写改已上架 catalog 与 rescan/switch-fallback-domain 同权重——image-health 全域最高即 admin，无需另设 `adminOnly` 分级）。
+  - **权限裁定（arch-reviewer H1）**：image-health 全域 admin-only（`image-health.ts:44`）。candidates 不引入 moderator 只读权限——单一 moderator 可读端点会割裂域权限模型；如未来确需 editor+ 只读，须另立理由 + 独立守卫，非本 ADR 默认。
+  - **理由**：避免同域双命名空间（`/admin/images/*` 会割裂 image-health route 文件 + 触发 Codex BLOCK-5 的并行冲突）；`/admin/images/*` 当前不存在，新建无收益。
+
+- **D-208-2（`GET candidates` 契约：读 proposals 跨源候选，实时 TMDB 拉取推迟）**：
+  - 入参：`catalogId`（UUID，必填）+ `field`（枚举 `coverUrl|backdropUrl|logoUrl`，必填；P2 仅图片三字段）。
+  - 查询：`metadata_field_proposals WHERE catalog_id=$1 AND field_name=$2`，按 `CATALOG_SOURCE_PRIORITY[source_kind]` 降序 + `confidence` 降序返回。
+  - 返回 DTO（每候选）：`{ source: string, sourceRef: string|null, url: string（proposed_value 取标量）, confidence: number|null, isWinner: boolean, applied: boolean, trust: number（派生 CATALOG_SOURCE_PRIORITY[source]??0，供前端排序/标记，禁前端再硬编码）}`。文案「跨源候选」（§17.3.5）。
+  - **实时 TMDB 多图拉取推迟**（§7.2「无候选时按 tmdb_id 实时重搜」）：涉外部 API + 缓存 + 限流，复杂度高 → 本期仅读 proposals；实时拉取另起独立 ADR（标 follow-up）。无候选时返回空数组（UI 走 EmptyState「加载更多 TMDB 图片」入口槽留待 follow-up，不渲染死按钮）。
+
+- **D-208-3（`POST apply-candidate` 契约：复用 safeUpdate 闸门，禁自建）**：
+  - 入参：`{ catalogId: string, videoId: string, field: 'coverUrl'|'backdropUrl'|'logoUrl', source: string, sourceRef: string|null }`（`videoId` 供入队 + `broken_image_events` 归属，Codex CONCERN-2——UI 从 missing-videos 行已同时有 videoId + catalogId〔序列 BLOCK-3〕）。**`source` 运行时校验 ∈ `CatalogMetadataSource`（manual/tmdb/bangumi/douban/crawler），未知值 → 422 `INVALID_SOURCE`，禁 `as` cast 兜底（Codex CONCERN-1：proposals.source_kind 是开放字符串）。**
+  - 流程（service 层）：① 查 proposal 行 `(catalogId, field, source)`（PK 精确）取 `proposed_value`；行不存在 → 404 `CANDIDATE_NOT_FOUND`；**runtime 校验 `typeof proposed_value==='string'`（非串 → 422）；请求 `sourceRef` 与行 `source_ref` 不一致 → 409 `CANDIDATE_STALE`（候选已被后台 reconcile 重建，提示前端刷新；PK 不含 sourceRef，须显式校验，Codex CONCERN-3）**。② `catalogService.safeUpdate(catalogId, { [field]: url, [statusField]: 'pending_review' }, source, { sourceRef })` —— **优先级闸门 + manual hard lock + soft lock 全由 safeUpdate 执行**（url + 状态列同源写，受同一闸门，M1）；若 `field ∈ skippedFields` → 候选被锁/被拦未写入 → 返回 409 `FIELD_LOCKED_OR_LOWER_PRIORITY`（含 skippedFields，前端区分「已应用」vs「被锁未应用」，呼应 safeUpdate `:333` 语义），**不静默成功**。③ 写入成功 → 同步 proposal 行 `applied=true`（**M2：best-effort——与后台 reconcile 的 delete-then-upsert〔`reconcile.ts:188-189`〕并发时该行可能被重建/命中 0 行；catalog 真值以 safeUpdate 写入为准，不做强一致依赖**）。④ 入队 `health-check` + `blurhash-extract`（**`ImageHealthJobData{ catalogId, videoId, kind, url }`——二 job 类型均必需 videoId，`imageHealthWorker.ts:28`；videoId 来自入参，Codex CONCERN-2**；复用 imageHealthQueue）。⑤ 审计 `image_health.apply_candidate`（target_kind=`image_health`，**target_id=`catalogId`**〔M3：单值——受影响主体即 media_catalog；既有 rescan/switch 不设 target_id，本端点设 catalogId 供按 catalog 检索审计时间线〕，载荷含 field/source/sourceRef/url before-after）。
+  - **trust 一律取 canonical `CATALOG_SOURCE_PRIORITY`**，不复制设计 §7.3 字面值。
+
+- **D-208-4（审计扩展：TS 枚举，零 migration — Codex BLOCK-1）**：扩 `AdminAuditActionType`（`admin-moderation.types.ts:158`）+ `image_health.apply_candidate`（本 ADR）+ `image_health.resolve_event`（ADR-0B 预登记，1C 落地）。`action_type` 列无 DB CHECK + `target_kind='image_health'` 已存在 → **无 migration**。审计经 `AuditLogService`（fire-and-forget `.catch`，`:282`）或 `insertAuditLog`（`auditLog.ts:25`）写入，与既有 `image_health.rescan`/`image_health.switch_domain` 同范式。**架构同步**：`docs/architecture.md` §审计若列 actionType 清单则同步补两枚（落地卡核验）。
+
+- **D-208-5（batch apply 策略 + PUT images 审计归属）**：
+  - **batch apply（CONCERN-3）**：本期 apply-candidate **仅单条**（每行 field/source/sourceRef 不一，批量需逐行决策）。Tab B「批量从候选补图」**不实现伪批量**——3B 仅渲染「批量打开候选队列」（选中行依次打开治理抽屉），不渲染一键批量补图按钮（无死按钮，§13）。如未来确需 batch apply，另起 ADR 定义「逐行取 is_winner 候选 + 失败汇总」语义。
+  - **PUT images 审计归属（§17.2.2）**：`PUT /admin/videos/:id/images` 当前无审计**保持不变**（本 ADR 不改既有端点，避免回归）；**人工替换的可追溯审计由 apply-candidate 端点承担**（候选补图走审计闭环）。手填 URL 路径（PUT images）的审计补齐如确需，另起独立小卡评估（不阻塞 P2）。
+
+### 端点契约（verify:endpoint-adr）
+
+> 表格遵循 adr-parser 范式（`### 端点契约` 标题 + ≥6 列，method=列2 / path=列3〔code 包裹〕/ Response=列6；Codex BLOCK 修正）。
+
+| # | 方法 | 路径 | 用途 | Request | Response | 错误码 | 权限 |
+|---|---|---|---|---|---|---|---|
+| 1 | GET | `/admin/image-health/candidates` | 读字段跨源候选 | `?catalogId&field` | 200 `{ candidates }` | 400 / 404 | admin-only |
+| 2 | POST | `/admin/image-health/apply-candidate` | 应用候选补图 | `{ catalogId, videoId, field, source, sourceRef }` | 200 `{ applied, status }` | 400 / 404 / 409 / 422 | admin-only |
+
+### 关联 ADR
+
+ADR-205（D-205-2 metadata_field_proposals 字段级候选载体 = candidates 数据源 / D-205-3 trust 派生 CATALOG_SOURCE_PRIORITY 禁平行硬编码 = D-208-2/3 直接遵守 / D-205-4 is_winner≠applied 双列 = D-208-3③ 同步 applied）/ ADR-186（D-186-1/2 safeUpdate 优先级闸门 + fill-if-empty = apply-candidate 复用机制）/ ADR-020（规则 D 低优先级整体拦截 = safeUpdate skippedFields 语义）/ ADR-135（image_health audit target_kind〔069 入 CHECK〕= D-208-4 复用）/ ADR-046（048 图片治理 schema / poster_status 枚举 = D-208-3③ 状态重置）/ ADR-150（通用 distinct 白名单 = ADR-0B brokenDomain 裁定，非本 ADR）/ 设计真源 `image-health-ux-handoff_20260618.md` §7.2/§7.3/§12.2 + §17.2/§17.4。
+
+### arch-reviewer 裁定摘要 2026-06-19（claude-opus-4-8 / agentId a31cfd74f9999549c）
+
+**CONDITIONAL-PASS。** 6 条事实断言独立核验**逐条为真**（proposals PK/列；CATALOG_SOURCE_PRIORITY 实值与 §7.3 字面分歧；safeUpdate 签名 + 闸门 + hard/soft lock + 图片字段可写；action_type 无 CHECK + image_health 经 069 入 target_kind CHECK；PUT images 无审计；image-health 全域 admin-only）。核心架构判断（读 proposals 作候选 / 复用 safeUpdate 闸门禁自建 / `field∈skippedFields→409` 不静默成功 / 审计零 migration / batch 不做伪批量）均站得住，无越层、无 any、无空 catch、无硬编码色、与 ADR-205/186/135 无冲突。**放行条件全吸收**：
+- **HIGH（H1，已修订）**：原把 `image-health.ts:44` 的 `auth`（实为 `requireRole(['admin'])` admin-only）误述为「editor+ 只读」、并与 `videoImages.ts` 的 `auth=moderator+admin` 混淆 → D-208-1 改判 candidates/apply-candidate 均 admin-only（域内最高即 admin，不引入 moderator 读权限割裂域权限模型）+ 登记表权限列同步。
+- **MEDIUM（M1/M2/M3，已修订）**：M1 状态列写法定为「并入同一次 safeUpdate 的 fields，受同一闸门约束」；M2 `applied=true` 注明 best-effort（与 reconcile delete-then-upsert 并发时不强一致）；M3 `target_id` 定为单值 `catalogId`（删「或 video id」二义）。
+- **LOW（L1/L2，已修订）**：L1 safeUpdate 第 4 参补形参名 `provenanceCtx`；L2 补引 069（image_health 实际入 target_kind CHECK 的迁移）。
+
+**BLOCKER：无。** 转 Accepted 前置：本摘要列 H1+M1/M2/M3 已在 ADR 正文消解 + Codex 对抗性审核通过。
+
+### Codex 对抗性审核摘要 2026-06-19（gpt-5.5 / codex exec read-only / 169.6K tokens）
+
+**BLOCK → 修订消解。** 6 OK 确认核心设计稳固（proposed_value 图片字段取标量成立〔`reconcile.ts:174/83`〕/ 字段名映射正确 / 状态列并入 safeUpdate 语义可接受〔低优先级 url+status 一起 skip 反避假应用〕/ candidates 非死数据〔`reconcile.canonical.ts:39` 三组图片字段入 proposals〕/ 审计零 migration / route 命名空间无冲突）。修订项：
+- **BLOCK（端点表 verifier 范式，已修订）**：原 `### 端点契约登记（...）` 标题「登记」二字致 adr-parser 正则 `^###\s+端点契约(?:\s|$|（)` 不匹配 + 表仅 4 列（parser 需 ≥6 列、method=列2/path=列3/Response=列6，`scripts/lib/adr-parser.mjs:55`）→ 改标题 `### 端点契约（verify:endpoint-adr）` + 7 列范式（直调 parser 实证原返回 `endpoints:[]`，加 route 后会被门禁挡）。
+- **CONCERN-1（source 强转，已修订）**：`source: string as CatalogMetadataSource` 对开放 `source_kind`（119:39）不安全 → D-208-3 入参加 runtime 校验 ∈ CatalogMetadataSource，未知 → 422 `INVALID_SOURCE`。
+- **CONCERN-2（入队缺 videoId，已修订）**：`ImageHealthJobData` 二 job 类型均必需 `videoId`（`imageHealthWorker.ts:28`，worker 写 broken_image_events 用 videoId :121）→ apply 入参加 `videoId`（UI 行已有），入队 `{catalogId, videoId, kind, url}`。
+- **CONCERN-3（stale candidate，已修订）**：PK 不含 sourceRef/proposedAt，UI 打开后 reconcile 重建同 source 行会令 apply 应用「新行」≠ 用户所见 → D-208-3① 加 `sourceRef` 一致校验，不一致 → 409 `CANDIDATE_STALE`。

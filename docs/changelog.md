@@ -1997,3 +1997,20 @@
 - **测试覆盖**：typecheck / lint EXIT=0 / image-health 37/37 / test:changed 23/23
 - **背景**：用户验收 P1-2 时发现 KPI「近 7 日新增破损」的 mini spark 与独立「7 日破损趋势」卡**同源**（都消费 trendCounts = brokenTrend.count[]）、同主题并排，视觉冗余。成因：P1-2 实现时照搬设计稿 §5.1（KPI 含 mini spark + 独立趋势区两处都画了）未做收敛取舍。
 - **决策**：用户裁定移除独立趋势卡，只留 KPI mini spark（KpiCard spark slot 是该组件标准用法，mini 走势 + 总数已足够概览；日后若需详细趋势再做带交互的专用图）。
+
+## [IMGH-P2-0A] ADR-208：image-health P2 补图闭环端点契约 + 审计扩展（SEQ-20260619-02 Phase 0）
+- **完成时间**：2026-06-19
+- **记录时间**：2026-06-19 19:30
+- **执行模型**：claude-opus-4-8（主循环）
+- **子代理**：arch-reviewer (claude-opus-4-8, agentId a31cfd74f9999549c)
+- **对抗性审核**：codex exec (gpt-5.5, read-only, 169.6K tokens)
+- **修改文件**：
+  - `docs/decisions.md` — 新增 ADR-208（candidates 读 proposals + apply-candidate 复用 safeUpdate 闸门 + 审计 TS 枚举零 migration + batch 不做伪批量 + PUT images 审计归属）；端点契约表（verifier 范式 7 列）+ arch-reviewer 裁定摘要 + Codex 审核摘要
+  - `docs/task-queue.md` — IMGH-P2-0A 标 ✅（完成备注）
+  - `docs/tasks.md` — 删 0A 卡片（回稳定态）
+- **新增依赖**：无
+- **数据库变更**：无（审计扩展为 TS 枚举 AdminAuditActionType，action_type 列无 DB CHECK + target_kind=image_health 经 069 已入 CHECK → 零 migration，Codex BLOCK-1 纠正原误判）
+- **测试覆盖**：docs-only（ADR）。verify:endpoint-adr ✅ 243 路由对齐（130 ADR 端点，含 ADR-208 新 2 端点解析成立）/ verify:docs-format decisions.md 零新增违规（25 项 pre-existing baseline）
+- **核心决策（5 裁决项）**：① 端点命名空间并入 `/admin/image-health/*`（否决方案 §7.2 的 `/admin/images/*`，与现有 6 端点同文件同风格）② GET candidates 读 `metadata_field_proposals WHERE catalog_id,field_name` 跨源候选 DTO（实时 TMDB 拉取推迟）③ POST apply-candidate 复用 `safeUpdate` 天然得 §7.3 优先级闸门 + manual hard lock（`field∈skippedFields→409` 不静默成功），trust 用 canonical `CATALOG_SOURCE_PRIORITY`（设计 §7.3 字面 imdb/crawler 值与代码分歧）④ 审计扩 `AdminAuditActionType` TS 枚举零 migration ⑤ batch 不实现伪批量（无死按钮）+ PUT images 审计保持不变（可追溯由 apply-candidate 承担）
+- **双审吸收**：arch-reviewer CONDITIONAL-PASS（6 事实断言逐条为真）→ H1 权限（image-health 全域 admin-only，非 editor+）+ M1 状态列并入 safeUpdate + M2 applied best-effort + M3 target_id=catalogId 单值 + L1/L2 全吸收。Codex BLOCK→消解 → 端点表 verifier 范式（7 列）+ source runtime guard（422）+ apply 入参补 videoId（health-check job 必需）+ stale candidate sourceRef 校验（409）；6 OK 确认核心设计稳固。
+- **解锁**：实现卡 IMGH-P2-1A（candidates）/ 1B（apply-candidate）。
