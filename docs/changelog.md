@@ -2031,3 +2031,20 @@
 - **核心决策（4 裁决项）**：① `/missing-videos` 服务端筛选 query（search 含 short_id / posterStatus / event_type / posterSource / brokenDomain；**total 一致**=page/count 共用 buildMissingVideosFilter + evt 谓词置外层 WHERE 使 LEFT JOIN 等价 INNER）+ brokenDomain distinct **复用 broken-domains 端点**（零 ADR-150 扩展）② resolve-event 薄端点 `{eventIds, note?}`（不支持 videoId；`resolveImageEvents` 改返 rowCount；经 ImageHealthService 守分层；0 命中幂等不 404）+ 审计 `image_health.resolve_event` ③ ids 精确重扫 `{videoIds}` **scoped 入队**（扩 `listPendingImageUrls(catalogIds?)` 仅入队选中集，**禁裸调全局 enqueueBackfillJob**——否则扫全库 pending_review 顺带重扫非选中行）④ DTO 补 catalogId（BLOCK-3）+ event_type（Lightbox P2）+ candidateCount/hasHighConfidenceCandidate（bool_or(is_winner) 免阈值，page CTE 聚合避 N+1）；尺寸字段不入后端
 - **双审吸收**：arch-reviewer CONDITIONAL-PASS（7 事实断言逐条为真 + reconcile field_name 一致）→ HIGH-1 入队改两段式 + MEDIUM-1 LATERAL count 外层 WHERE 不变量 + MEDIUM-2 纯 missing 行 UI 反馈 + LOW-1/2/3。Codex BLOCK→消解 → **D-209-3 全局副作用**（arch-reviewer 的两段式 enqueueBackfillJob 仍全局，改 scoped listPendingImageUrls）+ search short_id + resolvedCount/分层 + 审计清单补 audit-log-coverage.test.ts + page CTE。两轮审核层层递进抓出真实缺陷。
 - **解锁**：Phase 1 后端 IMGH-P2-1A（candidates）→ 1B（apply-candidate）→ 1C（resolve-event + ids-rescan）→ 1D（筛选 query + 行级契约）硬串行。
+
+## [IMGH-P2-1A] 后端：image-health candidates 端点（SEQ-20260619-02 Phase 1 / ADR-208 D-208-2）
+- **完成时间**：2026-06-20
+- **记录时间**：2026-06-20 12:30
+- **执行模型**：claude-opus-4-8（主循环；会话用户裁定 Opus 续跑 Phase 1，卡建议 sonnet）
+- **子代理**：无
+- **修改文件**：
+  - `apps/api/src/db/queries/metadata-field-proposals.ts` — 新增 `getFieldProposalsByCatalogIdAndField`（字段过滤 SELECT，复用 mapProposal + 类型）
+  - `apps/api/src/routes/admin/image-health.ts` — 新增 `GET /admin/image-health/candidates`（admin-only）+ CandidatesQuerySchema；import getFieldProposalsByCatalogIdAndField + CATALOG_SOURCE_PRIORITY
+  - `apps/server-next/src/lib/image-health/api.ts` — 新增 `ImageCandidate`/`ImageCandidateField` 类型 + `listImageCandidates` client
+  - `tests/unit/api/admin-image-health-candidates.test.ts` — 新建 route 测试（7：排序/非串剔除/空/校验/权限）
+  - `tests/unit/api/metadataFieldProposalsQueries.test.ts` — +2 query 测试（WHERE 形状 + mapper 复用）
+- **新增依赖**：无
+- **数据库变更**：无（零 migration；审计枚举扩展归 1B/1C）
+- **测试覆盖**：typecheck/lint EXIT=0 / verify:endpoint-adr ✅ 244 路由对齐（candidates 匹配 ADR-208）/ test:changed 28 文件 364 全过 + 新增 9 测全绿
+- **实现要点**：① 读端点跟 image-health 域内 5 个兄弟读端点范式走 route→query（ImageHealthService 偏 worker 侧 enqueue/getStats；引入 service 仅为单读端点反破坏一致性，价值排序 4）② trust 用 canonical `CATALOG_SOURCE_PRIORITY`（MediaCatalogService）在 route 层派生 + 排序（trust 降序 → confidence 次级降序），**禁 SQL/前端硬编码 priority**（D-205-3）③ proposed_value 是 JSONB，非串候选防御性剔除（Codex CONCERN）④ 无候选返空数组（实时 TMDB 拉取推迟，不渲染死按钮）
+- **解锁**：1B（apply-candidate）依赖本卡 candidates DTO + 硬串行（同改 api.ts/route/queries）。

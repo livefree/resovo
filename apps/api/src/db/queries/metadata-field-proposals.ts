@@ -199,3 +199,24 @@ export async function getFieldProposalsByCatalogId(
   )
   return result.rows.map(mapProposal)
 }
+
+/**
+ * 查询单 catalog 单字段的跨源 proposal 候选（ADR-208 D-208-2：image-health candidates 端点数据源）。
+ * 仅返该 (catalog_id, field_name) 跨 source_kind 全部行；trust 排序由调用方用 canonical
+ * CATALOG_SOURCE_PRIORITY 派生（禁 SQL 内硬编码 priority，D-205-3）。confidence 降序作次级稳定排序。
+ */
+export async function getFieldProposalsByCatalogIdAndField(
+  db: Pool | PoolClient,
+  catalogId: string,
+  fieldName: string,
+): Promise<FieldProposalRow[]> {
+  const result = await db.query<DbFieldProposalRow>(
+    `SELECT catalog_id, field_name, source_kind, source_ref, proposed_value,
+            confidence, is_winner, applied, conflict_state, proposed_at
+     FROM metadata_field_proposals
+     WHERE catalog_id = $1 AND field_name = $2
+     ORDER BY confidence DESC NULLS LAST, source_kind`,
+    [catalogId, fieldName],
+  )
+  return result.rows.map(mapProposal)
+}

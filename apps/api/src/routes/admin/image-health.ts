@@ -22,6 +22,8 @@ import {
   switchFallbackDomain,
 } from '@/api/db/queries/imageHealth'
 import type { MissingVideoSortField, SortDir } from '@/api/db/queries/imageHealth'
+import { getFieldProposalsByCatalogIdAndField } from '@/api/db/queries/metadata-field-proposals'
+import { CATALOG_SOURCE_PRIORITY } from '@/api/services/MediaCatalogService'
 import { enqueueBackfillJob } from '@/api/workers/imageBackfillWorker'
 import { insertAuditLog } from '@/api/db/queries/auditLog'
 
@@ -38,6 +40,12 @@ const MissingVideosQuerySchema = z.object({
     'poster_source', 'broken_domain', 'occurrence_count', 'last_seen_broken_at',
   ]).default('created_at'),
   sortDir:   z.enum(['asc', 'desc']).default('desc'),
+})
+
+// ADR-208 D-208-2：补图候选读端点。field 枚举 = metadata_field_proposals.field_name 图片三字段
+const CandidatesQuerySchema = z.object({
+  catalogId: z.string().uuid(),
+  field:     z.enum(['coverUrl', 'backdropUrl', 'logoUrl']),
 })
 
 export async function adminImageHealthRoutes(fastify: FastifyInstance) {
@@ -90,6 +98,36 @@ export async function adminImageHealthRoutes(fastify: FastifyInstance) {
       data: rows,
       total: parseInt(countResult.rows[0]?.total ?? '0'),
     })
+  })
+
+  // ── GET /admin/image-health/candidates（ADR-208 D-208-2）──────────
+  // 读单 catalog 单字段的跨源图片候选（metadata_field_proposals）。trust 用 canonical
+  // CATALOG_SOURCE_PRIORITY 派生 + 排序（禁前端/SQL 硬编码 priority，D-205-3）。
+  // 无候选返空数组（实时 TMDB 拉取推迟，§7.2）。
+  fastify.get('/admin/image-health/candidates', { preHandler: auth }, async (request, reply) => {
+    const parsed = CandidatesQuerySchema.safeParse(request.query)
+    if (!parsed.success) {
+      return reply.code(400).send({
+        error: { code: 'VALIDATION_ERROR', message: parsed.error.errors[0]?.message ?? 'Invalid query', status: 400 },
+      })
+    }
+    const { catalogId, field } = parsed.data
+    const proposals = await getFieldProposalsByCatalogIdAndField(db, catalogId, field)
+    const candidates = proposals
+      // proposed_value 是 JSONB，图片字段存 URL 标量；非串候选防御性剔除（Codex CONCERN）
+      .filter((p): p is typeof p & { proposedValue: string } =>
+        typeof p.proposedValue === 'string' && p.proposedValue.length > 0)
+      .map((p) => ({
+        source:     p.sourceKind,
+        sourceRef:  p.sourceRef,
+        url:        p.proposedValue,
+        confidence: p.confidence,
+        isWinner:   p.isWinner,
+        applied:    p.applied,
+        trust:      CATALOG_SOURCE_PRIORITY[p.sourceKind] ?? 0,
+      }))
+      .sort((a, b) => b.trust - a.trust || (b.confidence ?? 0) - (a.confidence ?? 0))
+    return reply.send({ data: { candidates } })
   })
 
   // ── POST /admin/image-health/backfill ──────────────────────────

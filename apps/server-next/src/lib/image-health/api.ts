@@ -79,9 +79,37 @@ export interface SwitchDomainResult {
   }
 }
 
+// ADR-208 D-208-2：补图候选（跨源 metadata_field_proposals）
+export type ImageCandidateField = 'coverUrl' | 'backdropUrl' | 'logoUrl'
+
+export interface ImageCandidate {
+  readonly source: string
+  readonly sourceRef: string | null
+  readonly url: string
+  readonly confidence: number | null
+  /** reconcile 逻辑 winner（ADR-205 D-205-4）；UI 高置信 🟢 信号 */
+  readonly isWinner: boolean
+  /** 已经 safeUpdate 落 media_catalog */
+  readonly applied: boolean
+  /** 派生 CATALOG_SOURCE_PRIORITY[source]（后端算，UI 直接用、禁再硬编码） */
+  readonly trust: number
+}
+
 export async function getImageHealthStats(): Promise<ImageHealthStats> {
   const result = await apiClient.get<{ data: ImageHealthStats }>('/admin/image-health/stats')
   return result.data
+}
+
+/** 读单 catalog 单字段的跨源补图候选（ADR-208 D-208-2）。无候选返空数组。 */
+export async function listImageCandidates(
+  catalogId: string,
+  field: ImageCandidateField,
+): Promise<readonly ImageCandidate[]> {
+  const qs = new URLSearchParams({ catalogId, field })
+  const result = await apiClient.get<{ data: { candidates: readonly ImageCandidate[] } }>(
+    `/admin/image-health/candidates?${qs.toString()}`,
+  )
+  return result.data.candidates
 }
 
 export async function getTopBrokenDomains(limit = 20): Promise<readonly BrokenDomainRow[]> {
