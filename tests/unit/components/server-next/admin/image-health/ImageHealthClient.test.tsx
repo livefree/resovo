@@ -1,23 +1,41 @@
 /**
- * ImageHealthClient.test.tsx — /admin/image-health 视图单元测试（CHG-SN-6-02）
+ * ImageHealthClient.test.tsx — /admin/image-health 视图单元测试
+ *
+ * IMGH-P1-2（SEQ-20260619-01）双 Tab 重构：
+ *   - 概览 Tab（默认）：KPI（共享 KpiCard）+ 趋势 Spark + TOP 域 + 破损样本
+ *   - 治理 Tab（?tab=governance）：缺图视频 DataTable
+ *   - 缺图表相关用例通过 setTab('governance') 切到治理 Tab 再断言
  *
  * 覆盖（≥ 9 用例硬清单，quality-gates §7 第 1 项）：
- *   1. 渲染基础：PageHeader + KPI grid
- *   2. KPI 加载成功：4 卡片显示正确百分比格式
- *   3. KPI 加载失败：ErrorState + onRetry
- *   4. 破损域名表加载成功：渲染 domain + eventCount + affectedVideos
- *   5. 破损域名表空态
- *   6. 缺图视频表加载成功：title + posterStatus badge
- *   7. 缺图视频空态
- *   8. backfill 按钮点击 → toast success
- *   9. backfill 按钮失败 → toast danger
- *   10. 分页 onQueryChange 更新 page
- *   11. 整体加载失败（3 端点全 reject）所有 ErrorState 显示
- *   12. refresh 按钮触发 retry
+ *   1-5  概览 Tab：PageHeader / KPI / 趋势 / TOP 域
+ *   6-7,13-16  治理 Tab：缺图表 + 扩展列
+ *   8-9  backfill toast ｜ 17 rescan ｜ 18 切域 Modal
+ *   10-12 加载/refresh ｜ 19-20 双 Tab 切换 + 趋势 Spark
  */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+
+// ── mock next/navigation（双 Tab ?tab= 同步，仿 ExternalResources.test）──
+
+let currentParams = new URLSearchParams()
+const routerPushMock = vi.fn()
+function setTab(tab: string | null) {
+  currentParams = new URLSearchParams(tab ? `tab=${tab}` : '')
+}
+
+vi.mock('next/navigation', () => ({
+  useSearchParams: () => currentParams,
+  useRouter: () => ({
+    push: routerPushMock,
+    replace: vi.fn(),
+    back: vi.fn(),
+    forward: vi.fn(),
+    refresh: vi.fn(),
+    prefetch: vi.fn(),
+  }),
+  usePathname: () => '/admin/image-health',
+}))
 
 // ── mock api ──────────────────────────────────────────────────────
 
@@ -61,6 +79,16 @@ const STATS_FIXTURE = {
   backdropOkCount: 9876,
   backdropCoverage: 0.8,
   brokenLast7Days: 42,
+  // IMGH-P1-1 对齐后端实返字段 date（非 day）
+  brokenTrend: [
+    { date: '2026-06-13', count: 3 },
+    { date: '2026-06-14', count: 5 },
+    { date: '2026-06-15', count: 2 },
+    { date: '2026-06-16', count: 8 },
+    { date: '2026-06-17', count: 6 },
+    { date: '2026-06-18', count: 9 },
+    { date: '2026-06-19', count: 9 },
+  ],
 }
 
 const DOMAINS_FIXTURE = [
@@ -115,6 +143,8 @@ beforeEach(() => {
   triggerImageRescanMock.mockReset()
   switchImageFallbackDomainMock.mockReset()
   toastPushMock.mockReset()
+  routerPushMock.mockReset()
+  setTab(null)  // 默认概览 Tab
 })
 
 // ── 测试 ──────────────────────────────────────────────────────────
@@ -176,7 +206,8 @@ describe('ImageHealthClient', () => {
     })
   })
 
-  it('6. 缺图视频表加载成功：title + posterStatus badge 3 类', async () => {
+  it('6. 缺图视频表加载成功：title + posterStatus badge 3 类（治理 Tab）', async () => {
+    setTab('governance')
     getImageHealthStatsMock.mockResolvedValueOnce(STATS_FIXTURE)
     getTopBrokenDomainsMock.mockResolvedValueOnce(EMPTY_DOMAINS)
     listMissingVideosMock.mockResolvedValueOnce(MISSING_VIDEOS_FIXTURE)
@@ -189,7 +220,8 @@ describe('ImageHealthClient', () => {
     })
   })
 
-  it('7. 缺图视频表空态', async () => {
+  it('7. 缺图视频表空态（治理 Tab）', async () => {
+    setTab('governance')
     getImageHealthStatsMock.mockResolvedValueOnce(STATS_FIXTURE)
     getTopBrokenDomainsMock.mockResolvedValueOnce(EMPTY_DOMAINS)
     listMissingVideosMock.mockResolvedValueOnce(EMPTY_MISSING)
@@ -271,7 +303,8 @@ describe('ImageHealthClient', () => {
 
   // ── CHG-SN-6-RETRO-3-B / ultrareview P2-7：列扩展测试 ──
 
-  it('13. 缺图视频表扩展列：posterSource 显示', async () => {
+  it('13. 缺图视频表扩展列：posterSource 显示（治理 Tab）', async () => {
+    setTab('governance')
     getImageHealthStatsMock.mockResolvedValueOnce(STATS_FIXTURE)
     getTopBrokenDomainsMock.mockResolvedValueOnce(EMPTY_DOMAINS)
     listMissingVideosMock.mockResolvedValueOnce(MISSING_VIDEOS_FIXTURE)
@@ -283,20 +316,21 @@ describe('ImageHealthClient', () => {
     })
   })
 
-  it('14. 缺图视频表扩展列：brokenDomain 显示 + null 兜底', async () => {
+  it('14. 缺图视频表扩展列：brokenDomain 显示 + null 兜底（治理 Tab）', async () => {
+    setTab('governance')
     getImageHealthStatsMock.mockResolvedValueOnce(STATS_FIXTURE)
     getTopBrokenDomainsMock.mockResolvedValueOnce(EMPTY_DOMAINS)
     listMissingVideosMock.mockResolvedValueOnce(MISSING_VIDEOS_FIXTURE)
     const { container } = render(<ImageHealthClient />)
     await waitFor(() => {
-      // cdn-broken.example.com 同时出现在 DataTable 列 + BrokenSamplesGrid overlay
       expect(screen.queryAllByText('cdn-broken.example.com').length).toBeGreaterThan(0)
       // null domain 显示"—"占位
       expect(container.querySelectorAll('[data-broken-domain]').length).toBe(3)
     })
   })
 
-  it('15. 缺图视频表扩展列：occurrenceCount 千分位 + 加粗（> 10）', async () => {
+  it('15. 缺图视频表扩展列：occurrenceCount 千分位 + 加粗（> 10）（治理 Tab）', async () => {
+    setTab('governance')
     getImageHealthStatsMock.mockResolvedValueOnce(STATS_FIXTURE)
     getTopBrokenDomainsMock.mockResolvedValueOnce(EMPTY_DOMAINS)
     listMissingVideosMock.mockResolvedValueOnce(MISSING_VIDEOS_FIXTURE)
@@ -314,7 +348,8 @@ describe('ImageHealthClient', () => {
     })
   })
 
-  it('16. 缺图视频表扩展列：lastSeenBrokenAt 相对时间格式（h 前）+ null 兜底"—"', async () => {
+  it('16. 缺图视频表扩展列：lastSeenBrokenAt 相对时间格式（h 前）+ null 兜底"—"（治理 Tab）', async () => {
+    setTab('governance')
     getImageHealthStatsMock.mockResolvedValueOnce(STATS_FIXTURE)
     getTopBrokenDomainsMock.mockResolvedValueOnce(EMPTY_DOMAINS)
     listMissingVideosMock.mockResolvedValueOnce(MISSING_VIDEOS_FIXTURE)
@@ -353,5 +388,40 @@ describe('ImageHealthClient', () => {
     await waitFor(() => {
       expect(screen.getByTestId('switch-domain-modal')).not.toBeNull()
     })
+  })
+
+  // ── IMGH-P1-2：双 Tab + 趋势 Spark ──
+
+  it('19. 双 Tab 切换：默认概览渲染 KPI；点治理 Tab 调 router.push(tab=governance)', async () => {
+    getImageHealthStatsMock.mockResolvedValue(STATS_FIXTURE)
+    getTopBrokenDomainsMock.mockResolvedValue(EMPTY_DOMAINS)
+    listMissingVideosMock.mockResolvedValue(EMPTY_MISSING)
+    render(<ImageHealthClient />)
+    // 默认概览 Tab：KPI grid 在、缺图表不在
+    await waitFor(() => expect(screen.getByTestId('image-health-kpi-grid')).not.toBeNull())
+    expect(screen.queryByTestId('image-health-missing-table')).toBeNull()
+    // 点「图片治理」→ router.push 带 tab=governance
+    fireEvent.click(screen.getByText('图片治理'))
+    expect(routerPushMock).toHaveBeenCalledWith(expect.stringContaining('tab=governance'))
+  })
+
+  it('20. 概览 Tab 渲染 7 日破损趋势 Spark（消费 brokenTrend.date）', async () => {
+    getImageHealthStatsMock.mockResolvedValueOnce(STATS_FIXTURE)
+    getTopBrokenDomainsMock.mockResolvedValueOnce(EMPTY_DOMAINS)
+    listMissingVideosMock.mockResolvedValueOnce(EMPTY_MISSING)
+    render(<ImageHealthClient />)
+    await waitFor(() => {
+      expect(screen.getByTestId('image-health-trend-card')).not.toBeNull()
+    })
+  })
+
+  it('21. 治理 Tab：仅缺图表渲染，概览的 KPI grid 不在', async () => {
+    setTab('governance')
+    getImageHealthStatsMock.mockResolvedValueOnce(STATS_FIXTURE)
+    getTopBrokenDomainsMock.mockResolvedValueOnce(EMPTY_DOMAINS)
+    listMissingVideosMock.mockResolvedValueOnce(MISSING_VIDEOS_FIXTURE)
+    render(<ImageHealthClient />)
+    await waitFor(() => expect(screen.getByTestId('image-health-missing-card')).not.toBeNull())
+    expect(screen.queryByTestId('image-health-kpi-grid')).toBeNull()
   })
 })

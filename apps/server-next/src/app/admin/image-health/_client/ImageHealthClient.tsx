@@ -1,21 +1,27 @@
 'use client'
 
 /**
- * ImageHealthClient.tsx — `/admin/image-health` 图片健康视图（M-SN-6 / CHG-SN-6-02）
+ * ImageHealthClient.tsx — `/admin/image-health` 图片健康视图
  *
- * 范围：消费 4 既有端点（apps/api/src/routes/admin/image-health.ts / IMG-05 / allowlist 豁免）
- *   - getImageHealthStats     → KPI 卡片（视频总数 / poster 覆盖率 / backdrop 覆盖率 / 近 7 日新增破损）
- *   - getTopBrokenDomains     → TOP 破损域名表
- *   - listMissingVideos       → 缺图视频分页列表（DataTable）
- *   - triggerImageBackfill    → 手动触发 backfill（toast 反馈）
+ * IMGH-P1-2（SEQ-20260619-01）：从「只读监控」升级为「概览 + 治理 双 Tab」工作台。
+ *   - Tab A 健康概览：KPI（共享 KpiCard）+ 7 日破损趋势（共享 Spark）+ TOP 破损域 + 破损样本 Grid
+ *   - Tab B 图片治理：缺图视频 DataTable（保留现分页/排序；选中批量 / 复杂筛选 / 候选列留 P2）
+ *   - 全局破坏性 action（重扫 / 切 fallback 域 / backfill / 刷新）留 PageHeader（跨 Tab）
+ *   - Tab 状态走 `?tab=` query（仿 external-resources/ExternalResourcesClient 范式）
+ *
+ * 消费既有 6 端点（apps/api/src/routes/admin/image-health.ts / IMG-05）：
+ *   getImageHealthStats（含 brokenTrend）/ getTopBrokenDomains / listMissingVideos
+ *   / triggerImageBackfill / triggerImageRescan / switchImageFallbackDomain
  *
  * 共享原语（≥ 80% 占比硬清单，quality-gates §7 第 2 项）：
- *   DataTable / PageHeader / AdminCard / AdminButton / EmptyState / ErrorState / LoadingState
+ *   Segment / KpiCard / Spark / DataTable / PageHeader / AdminCard
+ *   / EmptyState / ErrorState / LoadingState
  *
  * 设计模式：Mode A 整页滚动（ADR-103 AMENDMENT 2026-05-14 默认）
  */
 
 import { useState, useEffect, useMemo, useCallback, type CSSProperties } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import {
   DataTable,
   AdminCard,
@@ -24,6 +30,9 @@ import {
   LoadingState,
   PageHeader,
   AdminButton,
+  Segment,
+  KpiCard,
+  Spark,
   useToast,
   type ColumnPreference,
   type TableSortState,
@@ -40,14 +49,19 @@ import {
   type ImageHealthStats,
   type BrokenDomainRow,
   type MissingVideoRow,
-  type SwitchDomainResult,
 } from '@/lib/image-health/api'
-import { KpiCard } from './ImageHealthKpiCard'
 import { buildMissingVideoColumns, buildBrokenDomainColumns } from './ImageHealthColumns'
 
 // ── 常量 ──────────────────────────────────────────────────────────
 
 const DEFAULT_PAGE_SIZE = 20
+
+type TabId = 'overview' | 'governance'
+const DEFAULT_TAB: TabId = 'overview'
+const TABS: ReadonlyArray<{ readonly id: TabId; readonly label: string }> = [
+  { id: 'overview', label: '健康概览' },
+  { id: 'governance', label: '图片治理' },
+]
 
 const PAGE_STYLE: CSSProperties = {
   display: 'flex',
@@ -69,10 +83,32 @@ const SECTION_SPLIT_STYLE: CSSProperties = {
   alignItems: 'start',
 }
 
+const TREND_SPARK_STYLE: CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  padding: '8px 0',
+}
+
 // ── 主组件 ────────────────────────────────────────────────────────
 
 export function ImageHealthClient() {
   const toast = useToast()
+  const router = useRouter()
+  const searchParams = useSearchParams()
+
+  const rawTab = searchParams.get('tab')
+  const activeTab: TabId = TABS.some((t) => t.id === rawTab) ? (rawTab as TabId) : DEFAULT_TAB
+
+  const switchTab = useCallback(
+    (next: string) => {
+      const params = new URLSearchParams(searchParams.toString())
+      if (next === DEFAULT_TAB) params.delete('tab')
+      else params.set('tab', next)
+      router.push(`/admin/image-health${params.size > 0 ? `?${params}` : ''}`)
+    },
+    [router, searchParams],
+  )
 
   // ── KPI / 破损域名 / 缺图列表 三类状态 ──
   const [stats, setStats] = useState<ImageHealthStats | null>(null)
@@ -205,6 +241,12 @@ export function ImageHealthClient() {
   const missingColumns = useMemo(() => buildMissingVideoColumns(), [])
   const domainColumns = useMemo(() => buildBrokenDomainColumns(), [])
 
+  // brokenTrend.date（IMGH-P1-1 对齐后端实返）→ Spark data: number[]（按日 count）
+  const trendCounts = useMemo(
+    () => stats?.brokenTrend?.map((p) => p.count) ?? [],
+    [stats],
+  )
+
   const missingQuery = useMemo(
     () => ({
       pagination: { page, pageSize },
@@ -280,131 +322,183 @@ export function ImageHealthClient() {
         data-testid="image-health-page-header"
       />
 
-      {/* ── KPI 仪表盘 ── */}
-      <div data-testid="image-health-kpi-grid">
-        {loading && !stats
-          ? <LoadingState variant="skeleton" />
-          : statsError
-            ? <ErrorState error={statsError} title="统计加载失败" onRetry={refresh} />
-            : stats ? (
-                <div style={KPI_GRID_STYLE}>
-                  <KpiCard
-                    label="视频总数（已发布）"
-                    value={stats.totalVideos.toLocaleString()}
-                    data-testid="kpi-total-videos"
-                  />
-                  <KpiCard
-                    label="Poster 覆盖率"
-                    value={`${(stats.posterCoverage * 100).toFixed(1)}%`}
-                    sub={`${stats.posterOkCount.toLocaleString()} / ${stats.totalVideos.toLocaleString()}`}
-                    data-testid="kpi-poster-coverage"
-                  />
-                  <KpiCard
-                    label="Backdrop 覆盖率"
-                    value={`${(stats.backdropCoverage * 100).toFixed(1)}%`}
-                    sub={`${stats.backdropOkCount.toLocaleString()} / ${stats.totalVideos.toLocaleString()}`}
-                    data-testid="kpi-backdrop-coverage"
-                  />
-                  <KpiCard
-                    label="近 7 日新增破损"
-                    value={stats.brokenLast7Days.toLocaleString()}
-                    sub="未解决的事件视频去重计数"
-                    data-testid="kpi-broken-7d"
-                  />
-                </div>
-              ) : null
-        }
-      </div>
+      <Segment
+        items={TABS.map((t) => ({ value: t.id, label: t.label }))}
+        value={activeTab}
+        onChange={switchTab}
+        size="md"
+        aria-label="图片健康 tab"
+        data-testid="image-health-tab-segment"
+      />
 
-      {/* ── 主体 1fr/1fr：TOP 破损域名 + 破损样本 grid ── */}
-      <div style={SECTION_SPLIT_STYLE}>
-        <AdminCard
-          surface="plain"
-          padding="md"
-          header={{
-            title: 'TOP 破损域名',
-            subtitle: 'CDN 故障定位（按事件总数倒序，前 20）',
-          }}
-          data-testid="image-health-domains-card"
-        >
-          {domainsError ? (
-            <ErrorState error={domainsError} title="域名加载失败" onRetry={refresh} />
-          ) : (
-            <DataTable<BrokenDomainRow>
-              rows={domains}
-              columns={domainColumns}
-              rowKey={(r) => r.domain}
-              mode="client"
-              query={domainsQuery}
-              onQueryChange={(patch) => { if (patch.columns) setDomainsColumnPrefs(patch.columns) }}
-              loading={loading && domains.length === 0}
-              emptyState={<EmptyState title="暂无破损域名" description="所有 CDN 域名健康" />}
-              data-testid="image-health-domains-table"
-              enableColumnResizing
-              pagination={{ hidden: true }}
-            />
+      {/* ── Tab A 健康概览 ── */}
+      {activeTab === 'overview' && (
+        <section role="tabpanel" data-image-health-tabpanel="overview">
+          {/* KPI 仪表盘 */}
+          <div data-testid="image-health-kpi-grid">
+            {loading && !stats
+              ? <LoadingState variant="skeleton" />
+              : statsError
+                ? <ErrorState error={statsError} title="统计加载失败" onRetry={refresh} />
+                : stats ? (
+                    <div style={KPI_GRID_STYLE}>
+                      <KpiCard
+                        label="视频总数（已发布）"
+                        value={stats.totalVideos.toLocaleString()}
+                        testId="kpi-total-videos"
+                      />
+                      <KpiCard
+                        label="Poster 覆盖率"
+                        value={`${(stats.posterCoverage * 100).toFixed(1)}%`}
+                        delta={{
+                          text: `${stats.posterOkCount.toLocaleString()} / ${stats.totalVideos.toLocaleString()}`,
+                          direction: 'flat',
+                        }}
+                        testId="kpi-poster-coverage"
+                      />
+                      <KpiCard
+                        label="Backdrop 覆盖率"
+                        value={`${(stats.backdropCoverage * 100).toFixed(1)}%`}
+                        delta={{
+                          text: `${stats.backdropOkCount.toLocaleString()} / ${stats.totalVideos.toLocaleString()}`,
+                          direction: 'flat',
+                        }}
+                        testId="kpi-backdrop-coverage"
+                      />
+                      <KpiCard
+                        label="近 7 日新增破损"
+                        value={stats.brokenLast7Days.toLocaleString()}
+                        variant={stats.brokenLast7Days > 0 ? 'is-danger' : 'default'}
+                        spark={
+                          trendCounts.length > 0
+                            ? <Spark data={trendCounts} variant="line" color="var(--state-error-fg)" />
+                            : undefined
+                        }
+                        testId="kpi-broken-7d"
+                      />
+                    </div>
+                  ) : null
+            }
+          </div>
+
+          {/* 7 日破损趋势（消费 brokenTrend，按日 count） */}
+          {stats && trendCounts.length > 0 && (
+            <AdminCard
+              surface="plain"
+              padding="md"
+              header={{
+                title: '7 日破损趋势',
+                subtitle: '每日新增破损事件视频去重计数',
+              }}
+              data-testid="image-health-trend-card"
+            >
+              <div style={TREND_SPARK_STYLE}>
+                <Spark
+                  data={trendCounts}
+                  variant="area"
+                  color="var(--state-error-fg)"
+                  width={420}
+                  height={56}
+                />
+              </div>
+            </AdminCard>
           )}
-        </AdminCard>
 
-        <AdminCard
-          surface="plain"
-          padding="md"
-          header={{
-            title: '破损样本',
-            subtitle: '2:3 比例缩略 · 实时反映最新破损封面',
-          }}
-          data-testid="image-health-broken-samples-card"
-        >
-          {missingError ? (
-            <ErrorState error={missingError} title="加载失败" onRetry={refresh} />
-          ) : loading && missingRows.length === 0 ? (
-            <LoadingState variant="skeleton" />
-          ) : (
-            <BrokenSamplesGrid rows={missingRows} />
-          )}
-        </AdminCard>
-      </div>
+          {/* 主体 1fr/1fr：TOP 破损域名 + 破损样本 grid */}
+          <div style={SECTION_SPLIT_STYLE}>
+            <AdminCard
+              surface="plain"
+              padding="md"
+              header={{
+                title: 'TOP 破损域名',
+                subtitle: 'CDN 故障定位（按事件总数倒序，前 20）',
+              }}
+              data-testid="image-health-domains-card"
+            >
+              {domainsError ? (
+                <ErrorState error={domainsError} title="域名加载失败" onRetry={refresh} />
+              ) : (
+                <DataTable<BrokenDomainRow>
+                  rows={domains}
+                  columns={domainColumns}
+                  rowKey={(r) => r.domain}
+                  mode="client"
+                  query={domainsQuery}
+                  onQueryChange={(patch) => { if (patch.columns) setDomainsColumnPrefs(patch.columns) }}
+                  loading={loading && domains.length === 0}
+                  emptyState={<EmptyState title="暂无破损域名" description="所有 CDN 域名健康" />}
+                  data-testid="image-health-domains-table"
+                  enableColumnResizing
+                  pagination={{ hidden: true }}
+                />
+              )}
+            </AdminCard>
 
-      {/* ── 缺图视频治理（全宽 DataTable）── */}
-      <AdminCard
-        surface="plain"
-        padding="md"
-        header={{
-          title: '缺图视频治理',
-          subtitle: `${missingTotal} 条 · poster_status ∈ {missing, broken, pending_review}`,
-        }}
-        data-testid="image-health-missing-card"
-      >
-        {missingError ? (
-          <ErrorState error={missingError} title="加载失败" onRetry={refresh} />
-        ) : (
-          <DataTable<MissingVideoRow>
-            rows={missingRows}
-            columns={missingColumns}
-            rowKey={(r) => r.videoId}
-            mode="server"
-            query={missingQuery}
-            onQueryChange={(patch) => {
-              if (patch.pagination) {
-                if (patch.pagination.page !== undefined) setPage(patch.pagination.page)
-                if (patch.pagination.pageSize !== undefined) {
-                  setPageSize(patch.pagination.pageSize)
-                  setPage(1)
-                }
-              }
-              if (patch.sort) setSort(patch.sort)
-              if (patch.columns) setMissingColumnPrefs(patch.columns)
+            <AdminCard
+              surface="plain"
+              padding="md"
+              header={{
+                title: '破损样本',
+                subtitle: '2:3 比例缩略 · 实时反映最新破损封面',
+              }}
+              data-testid="image-health-broken-samples-card"
+            >
+              {missingError ? (
+                <ErrorState error={missingError} title="加载失败" onRetry={refresh} />
+              ) : loading && missingRows.length === 0 ? (
+                <LoadingState variant="skeleton" />
+              ) : (
+                <BrokenSamplesGrid rows={missingRows} />
+              )}
+            </AdminCard>
+          </div>
+        </section>
+      )}
+
+      {/* ── Tab B 图片治理 ── */}
+      {activeTab === 'governance' && (
+        <section role="tabpanel" data-image-health-tabpanel="governance">
+          <AdminCard
+            surface="plain"
+            padding="md"
+            header={{
+              title: '缺图视频治理',
+              subtitle: `${missingTotal} 条 · poster_status ∈ {missing, broken, pending_review}`,
             }}
-            totalRows={missingTotal}
-            loading={loading && missingRows.length === 0}
-            emptyState={<EmptyState title="无缺图视频" description="所有发布视频海报状态健康" />}
-            data-testid="image-health-missing-table"
-            enableHeaderMenu
-            enableColumnResizing
-            pagination={{ pageSizeOptions: [10, 20, 50, 100] }}
-          />
-        )}
-      </AdminCard>
+            data-testid="image-health-missing-card"
+          >
+            {missingError ? (
+              <ErrorState error={missingError} title="加载失败" onRetry={refresh} />
+            ) : (
+              <DataTable<MissingVideoRow>
+                rows={missingRows}
+                columns={missingColumns}
+                rowKey={(r) => r.videoId}
+                mode="server"
+                query={missingQuery}
+                onQueryChange={(patch) => {
+                  if (patch.pagination) {
+                    if (patch.pagination.page !== undefined) setPage(patch.pagination.page)
+                    if (patch.pagination.pageSize !== undefined) {
+                      setPageSize(patch.pagination.pageSize)
+                      setPage(1)
+                    }
+                  }
+                  if (patch.sort) setSort(patch.sort)
+                  if (patch.columns) setMissingColumnPrefs(patch.columns)
+                }}
+                totalRows={missingTotal}
+                loading={loading && missingRows.length === 0}
+                emptyState={<EmptyState title="无缺图视频" description="所有发布视频海报状态健康" />}
+                data-testid="image-health-missing-table"
+                enableHeaderMenu
+                enableColumnResizing
+                pagination={{ pageSizeOptions: [10, 20, 50, 100] }}
+              />
+            )}
+          </AdminCard>
+        </section>
+      )}
     </div>
     </>
   )

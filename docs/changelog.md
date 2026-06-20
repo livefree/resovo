@@ -1871,3 +1871,20 @@
 - **注意事项**：
   - DTO day→date grep 确认零消费方（唯一 .day 引用即 DTO 声明本身），零运行时断裂；P1-2 接 Spark 趋势时消费 `point.date`。
   - 手册页面形态描述（§2 布局图 / §7 FAQ / §8 AttentionCard）本卡不碰，留 P1-5 统一更新（双 Tab 形态定型后）。
+
+## [IMGH-P1-2] image-health 双 Tab IA + 共享 KPI/趋势（SEQ-20260619-01 第 2 卡）
+- **完成时间**：2026-06-19
+- **记录时间**：2026-06-19 17:40
+- **执行模型**：claude-opus-4-8（建议 sonnet，本会话「跑完整个 P1」用户裁定继续；人工覆盖）
+- **子代理**：无
+- **修改文件**：
+  - `apps/server-next/src/app/admin/image-health/_client/ImageHealthClient.tsx` — 双 Tab（Segment + ?tab= 同步，仿 ExternalResourcesClient）；KPI 改共享 KpiCard（sub→delta flat / data-testid→testId）；趋势 Spark 双形态（近7日破损 KPI mini line spark + 独立「7日破损趋势」area Spark 卡，消费 brokenTrend.date）；Tab A 概览（KPI+趋势+TOP域+破损样本）/ Tab B 治理（缺图 DataTable）
+  - `apps/server-next/src/app/admin/image-health/_client/ImageHealthKpiCard.tsx` — 删除（淘汰本地实现，沉淀到共享 KpiCard）
+  - `tests/unit/components/server-next/admin/image-health/ImageHealthClient.test.tsx` — +next/navigation mock（setTab 控制 ?tab=）；缺图表用例（6/7/13-16）切治理 Tab；新增 19 双 Tab 切换（router.push tab=governance）/ 20 趋势 Spark 卡 / 21 治理 Tab 仅缺图表；18→21 用例
+- **新增依赖**：无
+- **数据库变更**：无
+- **测试覆盖**：typecheck 全过 / lint EXIT=0 / image-health 目录 34/34（ImageHealthClient 21 + BrokenSamplesGrid 13）/ test:changed 21/21
+- **注意事项**：
+  - 共享原语占比提升（新增 Segment/KpiCard/Spark，删本地 KpiCard）；P1-2 仅 IA + 概览，治理 Tab 缺图表保留现分页/排序，选中批量·复杂筛选·候选列仍留 P2（红线遵守）。
+  - 趋势独立卡用固定宽 Spark（width 420/height 56，svg 非响应式）——P1 可接受；如需响应式趋势图属后续增强。
+  - `enableHeaderMenu` deprecation 警告为缺图表原有用法（pre-existing，本卡未引入，超范围未动）。
