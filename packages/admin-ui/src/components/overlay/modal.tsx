@@ -97,7 +97,8 @@ export function Modal({
 
   const titleId = useId()
 
-  const { containerRef, backdropProps } = useOverlay({ open, onClose, closeOnEscape, closeOnBackdropClick })
+  // ready={mounted}：两阶段挂载 + 初始 open=true 时，mounted false→true 触发 focus trap 绑定（见 use-overlay ready JSDoc）
+  const { containerRef, backdropProps } = useOverlay({ open, onClose, closeOnEscape, closeOnBackdropClick, ready: mounted })
 
   if (!open || !mounted) return null
 

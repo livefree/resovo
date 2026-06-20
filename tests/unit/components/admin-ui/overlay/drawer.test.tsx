@@ -172,3 +172,14 @@ describe('Drawer — SSR 零 throw', () => {
     ).not.toThrow()
   })
 })
+
+// ── 初始 open focus trap（Codex stop-gate 回归 / ready=mounted）────
+
+describe('Drawer — 初始 open focus trap', () => {
+  it('初始即 open=true → 焦点落入容器内（mounted 两阶段不丢 trap）', () => {
+    makeDrawer()
+    const drawer = document.querySelector('[data-drawer]') as HTMLElement
+    expect(drawer).not.toBeNull()
+    expect(drawer.contains(document.activeElement)).toBe(true)
+  })
+})

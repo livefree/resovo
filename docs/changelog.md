@@ -1966,3 +1966,19 @@
 - **根因**：ImageLightbox（同 Modal）`mounted` 两阶段守卫——组件初始即 `open=true` 时，focus trap effect 首帧跑时 `containerRef.current` 仍 null（dialog 未渲染）→ 早退；`setMounted(true)` 后 dialog 渲染但 `open` 未变 → effect 不重跑 → focus trap 永久丢失。
 - **修法**：useOverlay 加 `ready` 参数表达「容器就绪」，effect 依赖含 ready，mounted false→true 触发重跑绑定 trap。向后兼容：Modal/Drawer 不传 → ready 默认 true → 依赖 [open, true] 行为与原 [open] 一致。
 - **注意事项**：实际消费方（BrokenSamplesGrid `open={selected!==null}`）是 false→true 不触发此 bug；本修复是共享组件健壮性（未来初始 open=true 消费方）。Modal/Drawer 现状仍有同一潜在模式但保持原行为（未传 ready），如未来出现初始 open 消费方可同法传 ready={mounted}。
+
+## [IMGH-P1-3-FIX-2] Modal/Drawer 补全 ready=mounted（Codex stop-gate 第 2 轮）
+- **完成时间**：2026-06-19
+- **记录时间**：2026-06-19 18:25
+- **执行模型**：claude-opus-4-8（主循环）
+- **子代理**：无（Codex stop-time review 第 2 轮触发）
+- **修改文件**：
+  - `packages/admin-ui/src/components/overlay/modal.tsx` — useOverlay 传 `ready: mounted`
+  - `packages/admin-ui/src/components/overlay/drawer.tsx` — useOverlay 传 `ready: mounted`
+  - `tests/unit/components/admin-ui/overlay/modal.test.tsx` — +初始 open focus trap 回归（21 tests）
+  - `tests/unit/components/admin-ui/overlay/drawer.test.tsx` — +初始 open focus trap 回归（23 tests）
+- **新增依赖**：无
+- **数据库变更**：无
+- **测试覆盖**：overlay 61/61（overlay-backdrop 17 + modal 21 + drawer 23）/ typecheck / lint EXIT=0 / test:changed 90 文件 1156 全过零回归
+- **背景**：[IMGH-P1-3-FIX] 只给 ImageLightbox 传 ready，Codex 第 2 轮指出共享 overlay 修复对现有同款 mounted 消费者（Modal/Drawer）不完整——二者同有 mounted 两阶段守卫 + useOverlay 未传 ready，初始 open=true 时同样丢失 focus trap。本卡补全：Modal/Drawer 均传 ready={mounted}，彻底消除该 bug 类。
+- **注意事项**：所有 admin-ui overlay 消费者（ImageLightbox/Modal/Drawer）现已全部用上 ready=mounted；useOverlay ready 默认 true 仍保证非两阶段消费者行为不变。修正了 [IMGH-P1-3-FIX] 注意事项中「Modal/Drawer 保持原行为」的不完整处置。
