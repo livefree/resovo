@@ -19,6 +19,13 @@ import { test, expect } from './_fixtures'
 const PLAYER_SESSION_KEY = 'resovo:player-host:v1'
 const MINI_GEOMETRY_KEY = 'resovo:player-mini-geometry:v1'
 
+// web-mobile project（iPhone 14 device）下 @media (hover:none) and (pointer:coarse) → MiniPlayer
+// display:none（§5 专门验证该移动屏蔽）。§1/§2/§4/§7 为桌面浮窗可见性 / 几何用例，仅在 web-chromium
+// 有意义；在移动 device 下 MiniPlayer 恒不可见，故按 isMobile 跳过（CHG-TEST-SLIM-C 将本 spec 纳入
+// WEB_MOBILE_SPECS 后，这些桌面用例曾在 web-mobile 误跑必败——E2E-AUDIT-FIX-20260620 P3 修复）。
+const MOBILE_SKIP_REASON =
+  'MiniPlayer 桌面专属可见性/几何用例：移动端 @media(hover:none) → display:none（见 §5），仅在 web-chromium 有效'
+
 interface SessionPlayerV1 {
   v: 1
   hostMode: 'mini' | 'pip'
@@ -51,6 +58,7 @@ async function seedMiniMode(page: import('@playwright/test').Page) {
 
 // ─── §1 注入 + 可见 ──────────────────────────────────────────────
 test.describe('MiniPlayer · §1 注入', () => {
+  test.skip(({ isMobile }) => Boolean(isMobile), MOBILE_SKIP_REASON)
   test('sessionStorage 注入 hostMode=mini → MiniPlayer 可见（默认 320×180）', async ({ page }) => {
     await seedMiniMode(page)
     const mini = page.getByTestId('mini-player')
@@ -69,6 +77,7 @@ test.describe('MiniPlayer · §1 注入', () => {
 // ─── §2 关闭按钮 ────────────────────────────────────────────────
 // HANDOFF-31：header 默认 opacity:0 + pointer-events:none，需先 hover 使 header 可见
 test.describe('MiniPlayer · §2 关闭', () => {
+  test.skip(({ isMobile }) => Boolean(isMobile), MOBILE_SKIP_REASON)
   test('hover → ✕ 按钮点击 → releaseMiniPlayer → MiniPlayer 隐藏', async ({ page }) => {
     await seedMiniMode(page)
     const mini = page.getByTestId('mini-player')
@@ -88,6 +97,7 @@ test.describe('MiniPlayer · §2 关闭', () => {
 
 // ─── §4 localStorage 几何持久化 ─────────────────────────────────
 test.describe('MiniPlayer · §4 几何持久化', () => {
+  test.skip(({ isMobile }) => Boolean(isMobile), MOBILE_SKIP_REASON)
   test('写 localStorage 几何 + mini 态 reload → 几何应用（非默认 br） + 双向持久化一致', async ({ page }) => {
     await seedMiniMode(page)
     // 模拟用户拖拽后的结果：把几何写到 localStorage（corner=tl，width=360）
@@ -186,6 +196,7 @@ test.describe('?_theme= query · HANDOFF-01 Nit #2', () => {
 
 // ─── §7 window.resize 越界 re-snap ──────────────────────────────
 test.describe('MiniPlayer · §7 window.resize 越界 re-snap', () => {
+  test.skip(({ isMobile }) => Boolean(isMobile), MOBILE_SKIP_REASON)
   test('视口缩小到 mini 不足容纳 → 浮窗自动 re-snap 并落在视口内', async ({ page }) => {
     // 先 seed + 预置几何为 corner=tl width=480（最大宽度）
     await page.goto('/')

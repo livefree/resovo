@@ -2210,3 +2210,18 @@
 - **测试覆盖**：docs-only（test:changed 自动跳过）；verify:docs-format 我改 3 文件全在「带元信息文档检查完成 143 ✅」内（报错 25 项均既有遗留：archive 缺 frontmatter + README source_of_truth 冲突，与本卡无关，EXIT=0 不阻断）
 - **Codex 非代码审核**：不适用（条款强制项=ADR / 跨 3+ 消费方设计方案文档 / 含设计决策任务卡；3C 为操作手册 + 索引交叉引用，描述已落地且已审〔Opus arch-reviewer + Codex〕的 3A/3B 代码，无新设计决策可挑战 — 按条款「明示接受并记录」处理）
 - **SEQ-20260619-02 全交付**：Phase 0（ADR-208 + ADR-209）+ Phase 1（1A-1D）+ Phase 2（2A/2B）+ Phase 3（3A/3B/3C）全完成。**收口待办（合并 dev→main 前）**：PHASE COMPLETE 全量审计 `npm run test -- --run` + `npm run test:e2e`（4 projects）尚未在本 SEQ 收口处跑（code 阶段均增量门禁过），建议合并前补跑。
+
+## [E2E-AUDIT-FIX-20260620] SEQ-20260619-02 收口审计 test:e2e 12 失败修复（P1 产品重定向 + P3 mobile 配置 + P2 测试腐化）
+- **完成时间**：2026-06-20｜**记录时间**：2026-06-20 15:30｜**执行模型**：claude-opus-4-8（建议 sonnet；12 失败诊断已在本 opus 会话沉淀，承接连续）｜**子代理**：无
+- **背景**：SEQ-20260619-02 收口待办「合并前补跑 `test:e2e`」执行后暴露 12 失败 / 207（168 过 / 27 跳）。排查分 3 簇、按严重度逐一定性修复。
+- **修改文件**：
+  - `apps/web-next/next.config.ts` — [P1 产品缺陷] variety→tvshow 重定向改 locale-aware：`localePrefix:'always'` 下旧 `source:'/variety/:path*'` 不匹配 `/en/variety/*` → 落 `[locale]/[type]`(variety 非 slug)→ `notFound()` 404；新增 `/:locale(<routing.locales 派生>)/variety/:path*` → `/:locale/tvshow/:path*` 308 + 保留无前缀兜底
+  - `tests/e2e-next/browse-tvshow.spec.ts` — [P1+P2] ②a 改校验 308 重定向契约本身（`redirectedFrom().status()===308` + 终态 `/tvshow/`，detail 为 SSR、client mock 对落地页无效故不依赖伪 slug 渲染 200）；②b/②c 改测 path-based `/tvshow`（BrowseGrid client `/videos?type=variety` + BrowseCard href `/tvshow/`）+ `**` 404 兜底防 CDN 阻塞
+  - `tests/e2e-next/mini-player.spec.ts` — [P3 配置回归] §1/§2/§4/§7 加 `test.skip(({isMobile})=>...)` 守卫（共享 MOBILE_SKIP_REASON）：CHG-TEST-SLIM-C 将本 spec 纳入 WEB_MOBILE_SPECS 后，iPhone14 device 下 MiniPlayer 设计性 display:none（§5 验证）致桌面可见性用例误跑必败；§5/§6 保留
+  - `tests/e2e-next/browse-category-routes.spec.ts` — [P2 腐化] 随 HANDOFF-15 分类页重构同步：mock `/videos/trending`→`/videos?`、断言 `video-card`→`browse-card`（VideoGrid→BrowseGrid）+ `**` 404 兜底
+- **根因定性**：P1=真实产品缺陷（旧 variety 外链/SEO 404，唯一影响线上）；P3=测试配置回归（CHG-TEST-SLIM-C 引入）；P2=测试腐化（实现重构、断言未同步，产品正常）。
+- **新增依赖**：无 ｜ **数据库变更**：无
+- **门禁**：typecheck 8 workspace ✅ / lint 4/4 ✅ / test:changed ✅（无受影响单测）/ 定向 3 spec 双 project 20 pass·5 skip·0 fail / 全量 `test:e2e` **173 pass·32 skip·2 flaky·0 fail**（flaky=web-chromium mini §4 几何时序、重试即过、桌面逻辑未动、非本次引入）/ 全量单测 `npm run test -- --run` **585 文件·8084 测全过·0 fail**（SEQ-20260619-02 收口待办另一半，Codex stop-time 复审要求补跑，零回归）
+- **Codex stop-time review FIX**：原 next.config 硬编码 `(en|zh-CN)` 重复 i18n SSOT → 改 `routing.locales.join('|')` 派生（零漂移）；web-next typecheck + browse-tvshow 3/3 重验通过
+- **ADR 核对**：落在 ADR-048/042 既定 tvshow↔variety 映射 + 308 永久范式 D6，无新 ADR / admin route / schema / architecture.md 同步
+- **注意事项**：mini-player.spec 作为 WEB_MOBILE_SPECS「显式移动入口」保留，移动 device 仅跑 §5(display:none)+§6(theme)，§1/§2/§4/§7 桌面专属由 web-chromium 覆盖。`/codex:adversarial-review`（≥3 项卡应做）因 skill 不在本会话工具集未执行，已在卡片登记。

@@ -31,38 +31,43 @@ const MOCK_TVSHOW = {
 // ═══════════════════════════════════════════════════════════════════
 
 test.describe('variety → tvshow 308 重定向', () => {
-  test('/variety/xxx 重定向到 /tvshow/xxx', async ({ page }) => {
+  test('/variety/xxx 永久重定向（308）到 /tvshow/xxx', async ({ page }) => {
     const slug = 'test-tvshow-tV1sHoW1'
-    let interceptedUrl = ''
 
-    await page.route(`${API_BASE}/videos/**`, (route) => {
-      interceptedUrl = route.request().url()
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          data: MOCK_TVSHOW,
-          episodes: [],
-        }),
-      })
-    })
+    // 详情页为 SSR（fetchVideoDetail 直连 API，404 即 notFound），client 侧 page.route 对落地页取数
+    // 无效；本用例只校验「variety→tvshow 308 重定向契约」本身，不依赖伪 slug 的 SSR 落地渲染。
+    const response = await page.goto(`/en/variety/${slug}`)
 
-    const response = await page.goto(`/en/variety/${slug}`, { waitUntil: 'commit' })
-    // 308 重定向后最终 URL 应为 /tvshow/...
+    // 终态 URL 落在 /tvshow/，已脱离 /variety/
     expect(page.url()).toContain('/tvshow/')
     expect(page.url()).not.toContain('/variety/')
-    // HTTP 状态码：最终落地页（跟随重定向后）为 200
-    expect(response?.status()).toBe(200)
+
+    // 重定向为 308 永久（ADR-048/042 D6）：从 /variety/ 请求 308 跳到 /tvshow/
+    const redirectedFrom = response?.request().redirectedFrom()
+    expect(redirectedFrom, '应存在来自 /variety/ 的重定向请求').not.toBeNull()
+    expect(redirectedFrom!.url()).toContain('/variety/')
+    const redirectResponse = await redirectedFrom!.response()
+    expect(redirectResponse?.status()).toBe(308)
   })
 })
 
 // ═══════════════════════════════════════════════════════════════════
-// 视频卡片 href：variety 类型 → /tvshow/...
+// 分类卡片 href：variety 类型 → /tvshow/...
+// E2E-AUDIT-FIX-20260620 P2：随 HANDOFF-15 重构改测当前 mockable 的分类页（/tvshow →
+// BrowseGrid 客户端 /videos? → BrowseCard，href=getVideoDetailHref，variety→/tvshow/）。
+// 首页卡走 SSR /home/shelf 聚合（容器 movie-grid/series-grid），非本契约的稳定校验点。
 // ═══════════════════════════════════════════════════════════════════
 
-test.describe('VideoCard href 使用 /tvshow/ 前缀', () => {
-  test('首页 variety 视频卡片链接包含 /tvshow/', async ({ page }) => {
-    await page.route(`${API_BASE}/videos/trending*`, (route) => {
+test.describe('分类卡片 href 使用 /tvshow/ 前缀', () => {
+  test('variety 视频卡片链接包含 /tvshow/（不含 /variety/）', async ({ page }) => {
+    await page.route(`${API_BASE}/**`, (route) =>
+      route.fulfill({
+        status: 404,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: { code: 'NOT_FOUND', message: 'not mocked', status: 404 } }),
+      }),
+    )
+    await page.route(/\/videos\?/, (route) => {
       route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -73,28 +78,31 @@ test.describe('VideoCard href 使用 /tvshow/ 前缀', () => {
       })
     })
 
-    await page.goto('/en')
-    // 等待视频卡片出现
-    const card = page.getByTestId('video-card').first()
+    await page.goto('/en/tvshow')
+    // BrowseCard 的 testid 直接挂在 <Link>(<a>) 根节点
+    const card = page.getByTestId('browse-card').first()
     await expect(card).toBeVisible({ timeout: 10000 })
 
-    const link = card.locator('a').first()
-    const href = await link.getAttribute('href')
+    const href = await card.getAttribute('href')
     expect(href).toMatch(/\/tvshow\//)
     expect(href).not.toMatch(/\/variety\//)
   })
 })
 
 // ═══════════════════════════════════════════════════════════════════
-// 浏览页 ?type=tvshow → API 接收 type=variety
+// 分类页 /tvshow → API 接收 type=variety（ALL_CATEGORIES SSOT 映射）
 // ═══════════════════════════════════════════════════════════════════
 
-test.describe('BrowseGrid ?type=tvshow 别名映射', () => {
-  test('URL 含 type=tvshow 时 API 请求发送 type=variety', async ({ page }) => {
-    let capturedApiUrl = ''
-
-    await page.route(`${API_BASE}/videos/trending*`, (route) => {
-      capturedApiUrl = route.request().url()
+test.describe('分类页 /tvshow 别名映射', () => {
+  test('/tvshow 分类页 BrowseGrid 请求发送 type=variety', async ({ page }) => {
+    await page.route(`${API_BASE}/**`, (route) =>
+      route.fulfill({
+        status: 404,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: { code: 'NOT_FOUND', message: 'not mocked', status: 404 } }),
+      }),
+    )
+    await page.route(/\/videos\?/, (route) => {
       route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -105,11 +113,12 @@ test.describe('BrowseGrid ?type=tvshow 别名映射', () => {
       })
     })
 
-    await page.goto('/en/browse?type=tvshow')
-    // 等待至少一次 API 调用
-    await page.waitForTimeout(1500)
+    // 捕获 BrowseGrid 客户端首次 /videos? 请求（initialType=variety 强制覆盖）
+    const videosReqPromise = page.waitForRequest(/\/videos\?/)
+    await page.goto('/en/tvshow')
+    const videosReq = await videosReqPromise
 
-    expect(capturedApiUrl).toContain('type=variety')
-    expect(capturedApiUrl).not.toContain('type=tvshow')
+    expect(videosReq.url()).toContain('type=variety')
+    expect(videosReq.url()).not.toContain('type=tvshow')
   })
 })
