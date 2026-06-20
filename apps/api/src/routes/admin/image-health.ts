@@ -22,10 +22,13 @@ import {
   switchFallbackDomain,
 } from '@/api/db/queries/imageHealth'
 import type { MissingVideoSortField, SortDir } from '@/api/db/queries/imageHealth'
-import { getFieldProposalsByCatalogIdAndField } from '@/api/db/queries/metadata-field-proposals'
-import { CATALOG_SOURCE_PRIORITY } from '@/api/services/MediaCatalogService'
+import { getFieldProposalsByCatalogIdAndField, markFieldProposalApplied } from '@/api/db/queries/metadata-field-proposals'
+import { CATALOG_SOURCE_PRIORITY, MediaCatalogService } from '@/api/services/MediaCatalogService'
+import type { CatalogMetadataSource } from '@/api/services/MediaCatalogService'
 import { enqueueBackfillJob } from '@/api/workers/imageBackfillWorker'
 import { insertAuditLog } from '@/api/db/queries/auditLog'
+import { imageHealthQueue } from '@/api/lib/queue'
+import type { ImageKind } from '@/types'
 
 const BrokenDomainsQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(50).default(20),
@@ -47,6 +50,32 @@ const CandidatesQuerySchema = z.object({
   catalogId: z.string().uuid(),
   field:     z.enum(['coverUrl', 'backdropUrl', 'logoUrl']),
 })
+
+// ADR-208 D-208-3：应用候选补图。source 用 z.string()（proposals.source_kind 是开放字符串，119:39），
+// 运行时再校验 ∈ CatalogMetadataSource → 422 INVALID_SOURCE（禁 as cast 兜底，Codex CONCERN-1）。
+const ApplyCandidateBodySchema = z.object({
+  catalogId: z.string().uuid(),
+  videoId:   z.string().uuid(),
+  field:     z.enum(['coverUrl', 'backdropUrl', 'logoUrl']),
+  source:    z.string().min(1),
+  sourceRef: z.string().nullable(),
+})
+
+// field → media_catalog 状态列 + 入队 ImageKind（与 videoImages IMAGE_KIND_FIELDS 对齐）
+const CANDIDATE_FIELD_MAP: Record<
+  'coverUrl' | 'backdropUrl' | 'logoUrl',
+  { statusField: 'posterStatus' | 'backdropStatus' | 'logoStatus'; kind: ImageKind }
+> = {
+  coverUrl:    { statusField: 'posterStatus',   kind: 'poster' },
+  backdropUrl: { statusField: 'backdropStatus', kind: 'backdrop' },
+  logoUrl:     { statusField: 'logoStatus',     kind: 'logo' },
+}
+
+// proposals.source_kind 是开放字符串列，apply 前须收口到 safeUpdate 接受的 CatalogMetadataSource
+const VALID_CATALOG_SOURCES = new Set<string>(['manual', 'tmdb', 'bangumi', 'douban', 'crawler'])
+function isCatalogMetadataSource(s: string): s is CatalogMetadataSource {
+  return VALID_CATALOG_SOURCES.has(s)
+}
 
 export async function adminImageHealthRoutes(fastify: FastifyInstance) {
   const auth = [fastify.authenticate, fastify.requireRole(['admin'])]
@@ -128,6 +157,98 @@ export async function adminImageHealthRoutes(fastify: FastifyInstance) {
       }))
       .sort((a, b) => b.trust - a.trust || (b.confidence ?? 0) - (a.confidence ?? 0))
     return reply.send({ data: { candidates } })
+  })
+
+  // ── POST /admin/image-health/apply-candidate（ADR-208 D-208-3）────
+  // 应用选中候选：经 safeUpdate 优先级闸门 + hard/soft lock 写回 media_catalog（**禁自建平行闸门**），
+  // status 重置 pending_review，入队健康巡检，审计 image_health.apply_candidate（零 migration）。
+  // field∈skippedFields → 409 不静默成功（前端区分"已应用" vs "被锁未应用"）。
+  fastify.post('/admin/image-health/apply-candidate', { preHandler: auth }, async (request, reply) => {
+    const parsed = ApplyCandidateBodySchema.safeParse(request.body)
+    if (!parsed.success) {
+      return reply.code(400).send({
+        error: { code: 'VALIDATION_ERROR', message: parsed.error.errors[0]?.message ?? 'Invalid body', status: 400 },
+      })
+    }
+    const { catalogId, videoId, field, source, sourceRef } = parsed.data
+
+    // source 运行时校验（proposals.source_kind 开放字符串 → 收口 CatalogMetadataSource，Codex CONCERN-1）
+    if (!isCatalogMetadataSource(source)) {
+      return reply.code(422).send({
+        error: { code: 'INVALID_SOURCE', message: `未知来源：${source}`, status: 422 },
+      })
+    }
+
+    // ① 取候选行（PK 精确 catalog+field+source）
+    const proposals = await getFieldProposalsByCatalogIdAndField(db, catalogId, field)
+    const proposal = proposals.find((p) => p.sourceKind === source)
+    if (!proposal) {
+      return reply.code(404).send({
+        error: { code: 'CANDIDATE_NOT_FOUND', message: '候选不存在或已被清理，请刷新', status: 404 },
+      })
+    }
+    if (typeof proposal.proposedValue !== 'string' || proposal.proposedValue.length === 0) {
+      return reply.code(422).send({
+        error: { code: 'INVALID_CANDIDATE_VALUE', message: '候选值非法（非 URL 标量）', status: 422 },
+      })
+    }
+    // PK 不含 sourceRef：候选被后台 reconcile 重建后 source_ref 可能变 → 显式一致校验（Codex CONCERN-3）
+    if (proposal.sourceRef !== sourceRef) {
+      return reply.code(409).send({
+        error: { code: 'CANDIDATE_STALE', message: '候选已更新，请刷新后重试', status: 409 },
+      })
+    }
+    const url = proposal.proposedValue
+    const { statusField, kind } = CANDIDATE_FIELD_MAP[field]
+
+    // ② safeUpdate 复用闸门（优先级 + hard/soft lock 全内置；url + 状态列同源写，受同一闸门，M1）
+    const catalogService = new MediaCatalogService(db)
+    const result = await catalogService.safeUpdate(
+      catalogId,
+      { [field]: url, [statusField]: 'pending_review' },
+      source,
+      { sourceRef: sourceRef ?? undefined },
+    )
+    if (result.updated === null) {
+      return reply.code(404).send({
+        error: { code: 'CATALOG_NOT_FOUND', message: 'catalog 不存在', status: 404 },
+      })
+    }
+    if (result.skippedFields.includes(field)) {
+      // 被锁/被拦未写入 → 不静默成功；返 skippedFields 供前端区分"已应用" vs "被锁未应用"
+      return reply.code(409).send({
+        error: {
+          code: 'FIELD_LOCKED_OR_LOWER_PRIORITY',
+          message: '字段被锁定或来源优先级不足，未应用',
+          status: 409,
+        },
+        skippedFields: result.skippedFields,
+      })
+    }
+
+    // ③ 同步 proposal applied=true（best-effort：与 reconcile delete-then-upsert 并发不强一致，M2）
+    try {
+      await markFieldProposalApplied(db, catalogId, field, source)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      request.log.warn(`[apply-candidate] markFieldProposalApplied 失败（best-effort 忽略）: ${msg}`)
+    }
+
+    // ④ 入队 health-check + blurhash-extract（二 job 类型均必需 videoId，imageHealthWorker.ts:28）
+    await imageHealthQueue.add('health-check', { type: 'health-check', catalogId, videoId, kind, url })
+    await imageHealthQueue.add('blurhash-extract', { type: 'blurhash-extract', catalogId, videoId, kind, url })
+
+    // ⑤ 审计（target_id=catalogId，供按 catalog 检索审计时间线，M3）
+    await insertAuditLog(db, {
+      actorId: request.user!.userId,
+      actionType: 'image_health.apply_candidate',
+      targetKind: 'image_health',
+      targetId: catalogId,
+      afterJsonb: { field, source, sourceRef, url, videoId },
+      requestId: request.id,
+    })
+
+    return reply.send({ data: { applied: true, status: 'pending_review' } })
   })
 
   // ── POST /admin/image-health/backfill ──────────────────────────

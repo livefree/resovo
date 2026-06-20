@@ -2048,3 +2048,27 @@
 - **测试覆盖**：typecheck/lint EXIT=0 / verify:endpoint-adr ✅ 244 路由对齐（candidates 匹配 ADR-208）/ test:changed 28 文件 364 全过 + 新增 9 测全绿
 - **实现要点**：① 读端点跟 image-health 域内 5 个兄弟读端点范式走 route→query（ImageHealthService 偏 worker 侧 enqueue/getStats；引入 service 仅为单读端点反破坏一致性，价值排序 4）② trust 用 canonical `CATALOG_SOURCE_PRIORITY`（MediaCatalogService）在 route 层派生 + 排序（trust 降序 → confidence 次级降序），**禁 SQL/前端硬编码 priority**（D-205-3）③ proposed_value 是 JSONB，非串候选防御性剔除（Codex CONCERN）④ 无候选返空数组（实时 TMDB 拉取推迟，不渲染死按钮）
 - **解锁**：1B（apply-candidate）依赖本卡 candidates DTO + 硬串行（同改 api.ts/route/queries）。
+
+## [IMGH-P2-1B] 后端：image-health apply-candidate 端点（SEQ-20260619-02 Phase 1 / ADR-208 D-208-3）
+- **完成时间**：2026-06-20
+- **记录时间**：2026-06-20 01:42
+- **执行模型**：claude-opus-4-8（主循环；会话用户裁定 Opus 续跑 Phase 1，卡建议 sonnet）
+- **子代理**：无
+- **修改文件**：
+  - `apps/api/src/db/queries/metadata-field-proposals.ts` — 新增 `markFieldProposalApplied`（UPDATE applied=true，返 rowCount，best-effort）
+  - `apps/api/src/routes/admin/image-health.ts` — 新增 `POST /admin/image-health/apply-candidate`（admin-only）+ ApplyCandidateBodySchema + CANDIDATE_FIELD_MAP + isCatalogMetadataSource 类型守卫；import MediaCatalogService/CatalogMetadataSource/markFieldProposalApplied/imageHealthQueue/ImageKind
+  - `packages/types/src/admin-moderation.types.ts` — `AdminAuditActionType` +`image_health.apply_candidate`
+  - `apps/api/src/services/AuditLogService.ts` — ACTION_TYPES +`image_health.apply_candidate`
+  - `apps/api/src/services/AuditRollbackService.ts` — 非可回滚集 +`image_health.apply_candidate`（写 catalog + 异步入队）
+  - `apps/server-next/src/lib/audit/rollback-routes.ts` — 不可回滚 switch case +`image_health.apply_candidate`
+  - `apps/server-next/src/i18n/messages/zh-CN/audit-action-labels.ts` — +`'应用补图候选'`
+  - `apps/server-next/src/lib/image-health/api.ts` — 新增 `ApplyImageCandidateInput/Result` + `applyImageCandidate` client
+  - `tests/unit/api/admin-image-health-apply-candidate.test.ts` — 新建 route 测试（10：成功+审计载荷/locked/stale/notfound/非串/invalid-source/catalog-notfound/坏body/权限）
+  - `tests/unit/api/audit-log-coverage.test.ts` — REQUIRED_ACTION_TYPES + PAYLOAD_ASSERTION_REQUIRED 各 +1
+  - `tests/unit/api/audit-log-service-enums-set-equal.test.ts` — EXPECTED_ACTION_TYPES +1
+- **新增依赖**：无
+- **数据库变更**：无（**零 migration**——`admin_audit_log.action_type` 是 TEXT 无 CHECK；target_kind=image_health 已经 migration 069/ADR-135 入 CHECK；新 actionType 纯 TS 枚举 6 真源同步）
+- **测试覆盖**：typecheck/lint EXIT=0 / verify:endpoint-adr ✅ **245 路由**对齐（apply-candidate 匹配 ADR-208，较 1A +1）/ test:changed **升全量 576 文件 7992 全过**（packages/types 改动触发 ADR-180 升全量）+ 新增 10 测全绿
+- **实现要点**：① **复用 `MediaCatalogService.safeUpdate` 闸门**（优先级 + hard/soft lock 全内置）写回 url + 状态列同源，**禁自建平行闸门**（D-208-3②）；`field∈skippedFields → 409 FIELD_LOCKED_OR_LOWER_PRIORITY`（含 skippedFields，**不静默成功**）② source 走 `z.string()` + 运行时类型守卫 ∈ CatalogMetadataSource → 422 `INVALID_SOURCE`（proposals.source_kind 开放字符串，禁 as cast，Codex CONCERN-1）③ PK 不含 sourceRef → 显式一致校验，不符 → 409 `CANDIDATE_STALE`（Codex CONCERN-3）④ 入队 health-check + blurhash-extract 二 job 均含 videoId（imageHealthWorker.ts:28，Codex CONCERN-2）⑤ proposal `applied=true` best-effort（与 reconcile delete-then-upsert 并发不强一致，M2）⑥ 审计 target_id=catalogId（M3）；audit payload 内容断言入 PAYLOAD_ASSERTION_REQUIRED 守卫
+- **六问自检**：① 契约对齐 ADR-208 D-208-3 逐条 ✓ ② 复用既有 safeUpdate 闸门，无平行实现 ✓ ③ 无越层（route→service safeUpdate / route→query 读 proposal + markApplied，分层清晰）✓ ④ 无 any（类型守卫用 `s is CatalogMetadataSource` + Set<string>.has，无 as 兜底）/ 无空 catch（best-effort markApplied 失败 log.warn）/ 无硬编码色 ✓ ⑤ 审计枚举 6 真源 + 3 测试镜像全同步（set-equal/coverage/payload）✓ ⑥ 错误码语义完整（400/404/409×2/422×2）✓
+- **解锁**：1C（resolve-event + ids 精确重扫）硬串行依赖本卡（同改 api.ts/route，复用 actionType 扩展范式）。

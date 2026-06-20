@@ -112,6 +112,37 @@ export async function listImageCandidates(
   return result.data.candidates
 }
 
+// ADR-208 D-208-3：应用候选补图
+export interface ApplyImageCandidateInput {
+  readonly catalogId: string
+  readonly videoId: string
+  readonly field: ImageCandidateField
+  readonly source: string
+  /** 与候选 sourceRef 一致校验（不符 → 409 CANDIDATE_STALE，提示刷新） */
+  readonly sourceRef: string | null
+}
+
+export interface ApplyImageCandidateResult {
+  readonly applied: boolean
+  /** 写回后状态——恒为 pending_review（待新一轮健康巡检确认） */
+  readonly status: string
+}
+
+/**
+ * 应用候选补图（ADR-208 D-208-3）：经 safeUpdate 优先级闸门写回 media_catalog + 入队巡检 + 审计。
+ * 失败语义：422 INVALID_SOURCE/INVALID_CANDIDATE_VALUE｜404 CANDIDATE_NOT_FOUND/CATALOG_NOT_FOUND｜
+ * 409 CANDIDATE_STALE（候选过期）/ FIELD_LOCKED_OR_LOWER_PRIORITY（被锁/优先级不足，含 skippedFields）。
+ */
+export async function applyImageCandidate(
+  input: ApplyImageCandidateInput,
+): Promise<ApplyImageCandidateResult> {
+  const result = await apiClient.post<{ data: ApplyImageCandidateResult }>(
+    '/admin/image-health/apply-candidate',
+    input,
+  )
+  return result.data
+}
+
 export async function getTopBrokenDomains(limit = 20): Promise<readonly BrokenDomainRow[]> {
   const result = await apiClient.get<{ data: readonly BrokenDomainRow[] }>(
     `/admin/image-health/broken-domains?limit=${limit}`,

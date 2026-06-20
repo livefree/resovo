@@ -215,6 +215,8 @@ export type AdminAuditActionType =
   // CHG-SN-7-MISC-IMAGE-1 / ADR-135：图片健康 rescan + domain 切换 audit
   | 'image_health.rescan'         // POST /admin/image-health/rescan
   | 'image_health.switch_domain'  // POST /admin/image-health/switch-fallback-domain
+  // ADR-208 / IMGH-P2-1B：候选补图（apply-candidate 复用 safeUpdate 闸门写回 + 审计，零 migration）
+  | 'image_health.apply_candidate' // POST /admin/image-health/apply-candidate
 
   // CHG-SN-8-FUP-USERS-ROLE-INV-EP / ADR-139：admin 修改用户角色 audit（含 session invalidate 触发）
   | 'user.role_change'            // PATCH /admin/users/:id/role

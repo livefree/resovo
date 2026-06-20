@@ -220,3 +220,25 @@ export async function getFieldProposalsByCatalogIdAndField(
   )
   return result.rows.map(mapProposal)
 }
+
+/**
+ * 标记单 (catalog, field, source) proposal 行 applied=true（ADR-208 D-208-3③）。
+ *
+ * apply-candidate 经 safeUpdate 写回 media_catalog 成功后调用。**best-effort 语义**：与后台
+ * reconcile 的 delete-then-upsert（`reconcile.ts:188-189`）并发时该 PK 行可能被重建/命中 0 行，
+ * catalog 真值以 safeUpdate 写入为准，本调用不做强一致依赖。返回受影响行数（0 = 行已被重建/不存在）。
+ */
+export async function markFieldProposalApplied(
+  db: Pool | PoolClient,
+  catalogId: string,
+  fieldName: string,
+  sourceKind: string,
+): Promise<number> {
+  const result = await db.query(
+    `UPDATE metadata_field_proposals
+        SET applied = true
+      WHERE catalog_id = $1 AND field_name = $2 AND source_kind = $3`,
+    [catalogId, fieldName, sourceKind],
+  )
+  return result.rowCount ?? 0
+}

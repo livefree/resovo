@@ -6,7 +6,7 @@
 
 ## 当前任务（单任务工作台：同时仅 1 个 🔄 进行中；完成即删卡，历史见 docs/changelog.md）
 
-_（**SEQ-20260619-02 image-health P2 治理闭环 🔄 3/11 — Phase 0 ✅ + Phase 1 进行中**：Phase 0 双 ADR（ADR-208 补图闭环 + ADR-209 治理表增强）全 Accepted。Phase 1：**1A ✅ candidates 端点**（`GET /admin/image-health/candidates` 读 proposals 跨源候选 + trust canonical 派生 + DTO/client；route 7 + query 2 测试全绿；verify:endpoint-adr 244）。**下一卡 IMGH-P2-1B**（apply-candidate 端点：复用 safeUpdate 闸门 + status=pending_review + 入队 + 审计 image_health.apply_candidate〔扩 AdminAuditActionType TS 枚举，零 migration〕；硬串行依赖 1A，同改 api.ts/route/queries）。Phase 1 余 1C/1D。取下一卡前查 task-queue.md 是否有 🚨 BLOCKER。）_
+_（**SEQ-20260619-02 image-health P2 治理闭环 🔄 5/11 — Phase 0 ✅ + Phase 1 进行中**：Phase 0 双 ADR（ADR-208 补图闭环 + ADR-209 治理表增强）全 Accepted。Phase 1：**1A ✅ candidates 端点** + **1B ✅ apply-candidate 端点**（复用 safeUpdate 闸门禁自建 + field∈skippedFields→409 不静默成功 + source 守卫 422 + sourceRef 校验 409 STALE + 入队巡检 + 审计 image_health.apply_candidate〔6 真源 + 3 测试镜像同步，零 migration〕；verify:endpoint-adr 245；test:changed 升全量 7992 全过）。**下一卡 IMGH-P2-1C**（resolve-event + ids 精确重扫：薄封装 resolveImageEvents〔eventIds[]+note?〕 + ids 重扫 route/service 与全局 rescan 切开禁伪装 + 扩 image_health.resolve_event 零 migration；硬串行依赖 1B，同改 api.ts/route）。Phase 1 余 1D。取下一卡前查 task-queue.md 是否有 🚨 BLOCKER。）_
 
 ---
 
