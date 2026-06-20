@@ -493,6 +493,11 @@ describe('ImageHealthClient', () => {
       const imgs = Array.from(container.querySelectorAll('[data-thumb][data-state="has-src"] img'))
       expect(imgs.some((el) => el.getAttribute('src') === 'https://cdn-broken.example.com/p.jpg')).toBe(true)
     })
+    // 回归守卫（Codex stop-time review）：density=poster → 行高 var(--row-h-poster)，缩略图不被默认 40px 行裁切
+    const bodyRows = Array.from(container.querySelectorAll('[role="row"]')).filter(
+      (el) => (el.getAttribute('style') ?? '').includes('var(--row-h-poster)'),
+    )
+    expect(bodyRows.length).toBeGreaterThan(0)
   })
 
   it('25. 治理 Tab：跨源候选数列 🟢高置信 / 🟡待确认 / — 三态', async () => {

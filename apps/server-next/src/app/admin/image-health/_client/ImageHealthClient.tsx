@@ -545,6 +545,8 @@ export function ImageHealthClient() {
                 data-testid="image-health-missing-table"
                 enableHeaderMenu
                 enableColumnResizing
+                // IMGH-P2-3B：缩略列 Thumb poster-md（48×72）需 poster 行高（80px），否则默认 40px 裁切封面
+                density="poster"
                 onRowClick={handleRowClick}
                 flashRowKeys={flashKeys}
                 selection={selection}

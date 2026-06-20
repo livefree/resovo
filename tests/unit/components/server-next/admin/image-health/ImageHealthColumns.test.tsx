@@ -89,11 +89,13 @@ describe('buildMissingVideoColumns — cell 渲染', () => {
     expect(container.querySelector('img')).toBeNull()
   })
 
-  it('thumb：破损 → 直显 posterUrl（has-src img）', () => {
+  it('thumb：破损 → 直显 posterUrl（has-src img）+ poster-md 尺寸（配 density=poster 防裁切）', () => {
     const { container } = renderCell('thumb', makeRow({ posterStatus: 'broken', posterUrl: 'https://cdn/p.jpg' }))
     const img = container.querySelector('img')
     expect(img).not.toBeNull()
     expect(img?.getAttribute('src')).toBe('https://cdn/p.jpg')
+    // 回归守卫（Codex stop-time review）：缩略图须 poster-md，配 density=poster（80px 行）不裁切
+    expect(container.querySelector('[data-thumb]')?.getAttribute('data-size')).toBe('poster-md')
   })
 
   it('candidateCount：高置信 🟢 + 数量', () => {

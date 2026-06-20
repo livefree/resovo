@@ -2192,3 +2192,10 @@
 - **偏离登记**：① enum auto-filter 为多选（FilterValue.enum.value 恒数组），1D 服务端为单值 `z.enum` 且 3B 为 UI-only 卡不改 1D schema → 翻译取 `value[0]`（单 facet 语义，多选仅首项生效）② admin-ui 无 FallbackCover / Thumb 无 onError 钩子 → 缺失走 Thumb fallback 占位、破损/待复核直显 posterUrl（broken-img 即运维信号，比统一占位更具信息量）③ brokenDomain distinct 经哨兵 table 复用 GET /broken-domains（卡明确「reuse /broken-domains」），不接通用 `_dt/distinct`（避免给 broken_image_events 加白名单的额外 ADR 负担）
 - **六问自检**：① 契约对齐 §5.2 + 消费 1A-1D 既有端点 ✓ ② 复用 DataTable 一体化 props + Thumb + 镜像 VideoListClient selection/bulk/distinctFetcher 范式，filters/bulk 逻辑抽 helper/独立文件零平行实现 ✓ ③ 消费层只调 lib api 不直连 DB ✓ ④ 无 any（value[0] 转具体 union 非 any）/ 无空 catch（toast）/ 无硬编码色 ✓ ⑤ filterFieldName 作 Map key 桥接 1D 入参，total 一致由后端共享 FROM 保证 ✓ ⑥ 无新 route / 不改 admin-ui Props，改动收敛于 server-next image-health _client + 测试 ✓
 - **解锁**：3C 文档收尾（手册 P-image-health.md / W3-image-fallback.md + decisions.md index + frontmatter；依赖 3A/3B）。
+
+## [IMGH-P2-3B · Codex stop-time review FIX] 缩略列被默认行高裁切
+- **记录时间**：2026-06-20 12:18｜**执行模型**：claude-opus-4-8｜**子代理**：无
+- **问题**（Codex stop-time review）：缩略列 Thumb 用 `poster-sm`（32×48），但 Tab B DataTable 未设 density → 默认 `comfortable` 行高 40px，48px 缩略图被裁切 8px。
+- **修复**：① ImageHealthClient Tab B DataTable 加 `density="poster"`（行高 `--row-h-poster` 80px，类型注释明确「含 Thumb poster-md 48×72 封面的列表」专用，与 VideoListClient 一致）② ImageHealthColumns 缩略列 Thumb `poster-sm`→`poster-md`（48×72，poster 行高内不裁切）。
+- **回归守卫**：ImageHealthColumns.test 断言 thumb `data-size="poster-md"`；ImageHealthClient.test 断言 body 行 `style` 含 `var(--row-h-poster)`。
+- **门禁**：typecheck/lint/verify:adr-contracts EXIT=0 / image-health 全域 76 测过（含 2 新守卫断言）。

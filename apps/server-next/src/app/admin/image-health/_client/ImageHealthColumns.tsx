@@ -79,10 +79,11 @@ export function buildMissingVideoColumns(): readonly TableColumn<MissingVideoRow
       accessor: (r) => r.posterUrl ?? '',
       width: 64,
       defaultVisible: true,
+      // 行高随 DataTable density="poster"（80px）→ Thumb poster-md（48×72）不裁切
       cell: ({ row }) => (
         <Thumb
           src={row.posterStatus === 'missing' ? undefined : (row.posterUrl ?? undefined)}
-          size="poster-sm"
+          size="poster-md"
           fallback={<span style={THUMB_FALLBACK_STYLE} aria-hidden>⊘</span>}
           testId={`missing-thumb-${row.videoId}`}
         />
