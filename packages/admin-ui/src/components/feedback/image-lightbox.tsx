@@ -238,7 +238,9 @@ export function ImageLightbox({
   const [copied, setCopied] = useState(false)
 
   const titleId = useId()
-  const { containerRef, backdropProps } = useOverlay({ open, onClose, closeOnEscape, closeOnBackdropClick })
+  // ready={mounted}：两阶段挂载（首帧 return null）+ 初始 open=true 时，
+  // mounted false→true 触发 useOverlay focus trap effect 重跑、绑定 trap（Codex stop-gate 回归）
+  const { containerRef, backdropProps } = useOverlay({ open, onClose, closeOnEscape, closeOnBackdropClick, ready: mounted })
 
   // src 变化 / 重新打开 → 重置图片态
   useEffect(() => {

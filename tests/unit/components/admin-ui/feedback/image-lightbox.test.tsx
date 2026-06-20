@@ -35,6 +35,14 @@ describe('ImageLightbox — open 守卫 + a11y', () => {
     render(<ImageLightbox open onClose={vi.fn()} src={SRC} testId="lb-x" />)
     expect(screen.getByTestId('lb-x')).not.toBeNull()
   })
+
+  it('初始即 open=true → focus trap 建立（焦点落在容器内，Codex stop-gate 回归）', () => {
+    // 组件首次渲染时就 open=true（mounted 两阶段），focus 须仍落到容器内可聚焦元素
+    render(<ImageLightbox open onClose={vi.fn()} src={SRC} alt="x" />)
+    const dialog = document.querySelector('[data-image-lightbox]') as HTMLElement
+    expect(dialog).not.toBeNull()
+    expect(dialog.contains(document.activeElement)).toBe(true)
+  })
 })
 
 describe('ImageLightbox — 关闭交互', () => {

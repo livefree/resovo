@@ -1950,3 +1950,19 @@
 - **交付**：双 Tab 治理工作台（健康概览 / 图片治理）+ 共享 KpiCard/Spark 趋势 + ImageLightbox 新共享组件（feedback 层）+ TOP 域行内切此域预填 + 事实/契约纠错（端点/参数/枚举/DTO day→date）+ 手册形态对齐。
 - **门禁**：序列 Codex 对抗性审核 NEEDS REVISION → 修订消解；各卡 typecheck/lint EXIT=0/test:changed 全过（P1-3 全量 1058 零回归）；新共享组件 arch-reviewer Opus CONDITIONAL PASS 5 必改全吸收 + Subagents trailer。
 - **commits**：dfe09b18（P1-1）/ 6b92ce72（P1-2）/ 22bd70a2（P1-3）/ a2c3f82e（P1-4）/ 本卡（P1-5）。
+
+## [IMGH-P1-3-FIX] ImageLightbox 初始 open focus trap 修复（Codex stop-gate）
+- **完成时间**：2026-06-19
+- **记录时间**：2026-06-19 18:15
+- **执行模型**：claude-opus-4-8（主循环）
+- **子代理**：无（Codex stop-time review 为独立审核方，触发本修复）
+- **修改文件**：
+  - `packages/admin-ui/src/components/overlay/use-overlay.ts` — UseOverlayOptions +`ready?: boolean`（默认 true，向后兼容）；focus trap effect 依赖 `[open]`→`[open, ready]` + 守卫 `if (!open || !ready) return`
+  - `packages/admin-ui/src/components/feedback/image-lightbox.tsx` — useOverlay 传 `ready: mounted`
+  - `tests/unit/components/admin-ui/feedback/image-lightbox.test.tsx` — +初始 open=true focus trap 回归用例（16→17）
+- **新增依赖**：无
+- **数据库变更**：无
+- **测试覆盖**：先复现（修复前回归用例失败）→ 修复后 ImageLightbox 17/17 + overlay/feedback 146/146（Modal/Drawer/RejectModal/LineHealthDrawer 零回归）+ test:changed 91 文件 1171 全过 / typecheck / lint EXIT=0
+- **根因**：ImageLightbox（同 Modal）`mounted` 两阶段守卫——组件初始即 `open=true` 时，focus trap effect 首帧跑时 `containerRef.current` 仍 null（dialog 未渲染）→ 早退；`setMounted(true)` 后 dialog 渲染但 `open` 未变 → effect 不重跑 → focus trap 永久丢失。
+- **修法**：useOverlay 加 `ready` 参数表达「容器就绪」，effect 依赖含 ready，mounted false→true 触发重跑绑定 trap。向后兼容：Modal/Drawer 不传 → ready 默认 true → 依赖 [open, true] 行为与原 [open] 一致。
+- **注意事项**：实际消费方（BrokenSamplesGrid `open={selected!==null}`）是 false→true 不触发此 bug；本修复是共享组件健壮性（未来初始 open=true 消费方）。Modal/Drawer 现状仍有同一潜在模式但保持原行为（未传 ready），如未来出现初始 open 消费方可同法传 ready={mounted}。
