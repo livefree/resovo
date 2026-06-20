@@ -2072,3 +2072,29 @@
 - **实现要点**：① **复用 `MediaCatalogService.safeUpdate` 闸门**（优先级 + hard/soft lock 全内置）写回 url + 状态列同源，**禁自建平行闸门**（D-208-3②）；`field∈skippedFields → 409 FIELD_LOCKED_OR_LOWER_PRIORITY`（含 skippedFields，**不静默成功**）② source 走 `z.string()` + 运行时类型守卫 ∈ CatalogMetadataSource → 422 `INVALID_SOURCE`（proposals.source_kind 开放字符串，禁 as cast，Codex CONCERN-1）③ PK 不含 sourceRef → 显式一致校验，不符 → 409 `CANDIDATE_STALE`（Codex CONCERN-3）④ 入队 health-check + blurhash-extract 二 job 均含 videoId（imageHealthWorker.ts:28，Codex CONCERN-2）⑤ proposal `applied=true` best-effort（与 reconcile delete-then-upsert 并发不强一致，M2）⑥ 审计 target_id=catalogId（M3）；audit payload 内容断言入 PAYLOAD_ASSERTION_REQUIRED 守卫
 - **六问自检**：① 契约对齐 ADR-208 D-208-3 逐条 ✓ ② 复用既有 safeUpdate 闸门，无平行实现 ✓ ③ 无越层（route→service safeUpdate / route→query 读 proposal + markApplied，分层清晰）✓ ④ 无 any（类型守卫用 `s is CatalogMetadataSource` + Set<string>.has，无 as 兜底）/ 无空 catch（best-effort markApplied 失败 log.warn）/ 无硬编码色 ✓ ⑤ 审计枚举 6 真源 + 3 测试镜像全同步（set-equal/coverage/payload）✓ ⑥ 错误码语义完整（400/404/409×2/422×2）✓
 - **解锁**：1C（resolve-event + ids 精确重扫）硬串行依赖本卡（同改 api.ts/route，复用 actionType 扩展范式）。
+
+## [IMGH-P2-1C] 后端：image-health resolve-event + ids 精确重扫端点（SEQ-20260619-02 Phase 1 / ADR-209 D-209-2 + D-209-3）
+- **完成时间**：2026-06-20
+- **记录时间**：2026-06-20 02:30
+- **执行模型**：claude-opus-4-8（主循环；会话用户裁定 Opus 续跑 Phase 1，卡建议 sonnet）
+- **子代理**：无
+- **修改文件**：
+  - `apps/api/src/db/queries/imageHealth.scan.ts` — `resolveImageEvents` 返回 `void`→`number`（rowCount）；新增 `getCatalogIdsByVideoIds`（videoIds→distinct catalog_id，软删除/无 catalog 剔除）+ `rescanPostersByCatalogIds`（scoped 重置，镜像 cover_url 守卫）
+  - `apps/api/src/db/queries/imageHealth.ts` — `listPendingImageUrls` 加可选 `catalogIds?` 参数（4 UNION 分支共用 $3 `AND mc.id=ANY` 谓词，scoped 入队）；re-export 2 新 query
+  - `apps/api/src/services/ImageHealthService.ts` — 新增 `resolveEvents(eventIds,note)` + `rescanSelectedVideos(queue,videoIds)`（scoped 闭环：解析→重置→仅入选中行 dedup jobId）
+  - `apps/api/src/routes/admin/image-health.ts` — 新增 `POST /admin/image-health/resolve-event` + `POST /admin/image-health/rescan-selected`（均 admin-only）+ ResolveEventBodySchema/RescanSelectedBodySchema（UUID 数组 min(1).max(200)）；import ImageHealthService
+  - `packages/types/src/admin-moderation.types.ts` — `AdminAuditActionType` +`image_health.resolve_event`
+  - `apps/api/src/services/AuditLogService.ts` — ACTION_TYPES +`image_health.resolve_event`
+  - `apps/api/src/services/AuditRollbackService.ts` — 非可回滚集 +`image_health.resolve_event`
+  - `apps/server-next/src/lib/audit/rollback-routes.ts` — 不可回滚 switch case +`image_health.resolve_event`
+  - `apps/server-next/src/i18n/messages/zh-CN/audit-action-labels.ts` — +`'解决破损事件'`
+  - `apps/server-next/src/lib/image-health/api.ts` — 新增 `ResolveEventResult`/`RescanSelectedResult` + `resolveImageEvents`/`rescanSelectedVideos` client
+  - `tests/unit/api/admin-image-health-resolve-rescan.test.ts` — 新建 route 测试（12：resolve 成功+审计/幂等0/空数组/非uuid/权限 + rescan 成功+scoped闭环+禁全局守卫/空解析/空数组/非uuid/权限）
+  - `tests/unit/api/audit-log-coverage.test.ts` — REQUIRED_ACTION_TYPES + PAYLOAD_ASSERTION_REQUIRED 各 +`image_health.resolve_event`
+  - `tests/unit/api/audit-log-service-enums-set-equal.test.ts` — EXPECTED_ACTION_TYPES +`image_health.resolve_event`
+- **新增依赖**：无
+- **数据库变更**：无（**零 migration**——resolve_event 复用 `admin_audit_log.action_type` TEXT 无 CHECK + target_kind=image_health 已在 CHECK；rescan-selected 复用既有 `image_health.rescan` actionType，无新枚举）
+- **测试覆盖**：typecheck/lint EXIT=0 / verify:endpoint-adr ✅ **247 路由**对齐（resolve-event + rescan-selected 匹配 ADR-209，较 1B +2）/ verify:adr-contracts EXIT=0 / test:changed **升全量 577 文件 8006 全过** + 新增 12 测全绿
+- **实现要点**：① **route→ImageHealthService→query 守分层**（Codex CONCERN：D-209-2 禁 route 直调 query）——resolve-event 经 `resolveEvents`、rescan-selected 经 `rescanSelectedVideos`，审计载荷在 route 装配（actorId/requestId 请求态）② `resolveImageEvents` void→rowCount（全仓零调用方，安全）供 response/审计含 resolvedCount；`resolvedCount=0`（事件不存在/已解决）**幂等不报 404**（对齐 dismiss 软移除范式）③ **rescan-selected scoped 闭环禁全局副作用**（Codex BLOCK）：`getCatalogIdsByVideoIds`→`rescanPostersByCatalogIds`（`cover_url IS NOT NULL` 守卫，纯 missing 行跳过不计 updatedCount）→扩 `listPendingImageUrls(...catalogIds?)` 仅入选中 catalog 的 pending 行（dedup jobId `health-check-{catalogId}-{kind}` 复用 worker 语义）；**单测显式断言 `enqueueBackfillJob` 永不调用**（守 §17.3.1「全局伪装选中批量」红线）④ 选中集 pending 上界 = catalog 数 × 4 图种，limit 取上界保证不截断 ⑤ resolve_event 审计 6 真源 + 3 测试镜像同步；rescan-selected 复用 `image_health.rescan`（scoped 变体 afterJsonb `{videoIds,catalogIds,updatedCount,enqueuedCount}`）
+- **六问自检**：① 契约对齐 ADR-209 D-209-2/D-209-3 逐条（含 Codex BLOCK + 4 CONCERN 全吸收）✓ ② 复用既有 worker dedup/守卫语义 + 既有 rescan actionType，无平行实现 ✓ ③ 守分层（route→service→query，service 处理 rowCount，禁 route 直调 query）✓ ④ 无 any（catalogFilter 用 `unknown[]` params + 字面量 SQL 注入；queue 类型 `ImageHealthQueue`）/ 无空 catch / 无硬编码色 ✓ ⑤ 审计枚举 6 真源 + 3 测试镜像全同步 ✓ ⑥ 错误码语义完整（400 校验 / 500 入队失败；resolvedCount=0 幂等非错误）✓
+- **解锁**：1D（missing-videos 服务端筛选 + 行级数据契约）硬串行依赖本卡；Phase 1 余 1D 收口。

@@ -6,7 +6,7 @@
 
 ## 当前任务（单任务工作台：同时仅 1 个 🔄 进行中；完成即删卡，历史见 docs/changelog.md）
 
-_（**SEQ-20260619-02 image-health P2 治理闭环 🔄 5/11 — Phase 0 ✅ + Phase 1 进行中**：Phase 0 双 ADR（ADR-208 补图闭环 + ADR-209 治理表增强）全 Accepted。Phase 1：**1A ✅ candidates 端点** + **1B ✅ apply-candidate 端点**（复用 safeUpdate 闸门禁自建 + field∈skippedFields→409 不静默成功 + source 守卫 422 + sourceRef 校验 409 STALE + 入队巡检 + 审计 image_health.apply_candidate〔6 真源 + 3 测试镜像同步，零 migration〕；verify:endpoint-adr 245；test:changed 升全量 7992 全过）。**下一卡 IMGH-P2-1C**（resolve-event + ids 精确重扫：薄封装 resolveImageEvents〔eventIds[]+note?〕 + ids 重扫 route/service 与全局 rescan 切开禁伪装 + 扩 image_health.resolve_event 零 migration；硬串行依赖 1B，同改 api.ts/route）。Phase 1 余 1D。取下一卡前查 task-queue.md 是否有 🚨 BLOCKER。）_
+_（**SEQ-20260619-02 image-health P2 治理闭环 🔄 7/11 — Phase 0 ✅ + Phase 1 进行中**：Phase 0 双 ADR（ADR-208 补图闭环 + ADR-209 治理表增强）全 Accepted。Phase 1：**1A ✅ candidates 端点** + **1B ✅ apply-candidate 端点** + **1C ✅ resolve-event + ids 精确重扫端点**（route→ImageHealthService→query 守分层 + resolveImageEvents void→rowCount 幂等 + rescan-selected scoped 闭环禁全局 enqueueBackfillJob〔Codex BLOCK 守卫〕 + resolve_event 审计 6 真源零 migration；verify:endpoint-adr 247；test:changed 升全量 8006 全过）。**下一卡 IMGH-P2-1D**（missing-videos 服务端筛选 query + 行级数据契约：query 扩 WHERE〔search/posterStatus/event_type/posterSource/brokenDomain〕保持分页 total 一致 + SELECT 补 catalog_id〔BLOCK-3〕+ candidateCount/hasHighConfidenceCandidate 聚合〔BLOCK-4 避 N+1〕+ DTO 补筛选入参；硬串行依赖 1C）。Phase 1 余 1D 收口。取下一卡前查 task-queue.md 是否有 🚨 BLOCKER。）_
 
 ---
 

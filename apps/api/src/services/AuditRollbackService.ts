@@ -139,6 +139,7 @@ export const UNSUPPORTED_ACTION_TYPES: ReadonlySet<AdminAuditActionType> = new S
   'image_health.rescan',
   'image_health.switch_domain',
   'image_health.apply_candidate', // ADR-208 / IMGH-P2-1B：写 catalog + 异步入队巡检，不可回滚
+  'image_health.resolve_event',   // ADR-209 D-209-2 / IMGH-P2-1C：批量标记事件已解决，不可回滚
   // 复杂多表 / 状态机（首期入 UNSUPPORTED，N1-138-1 P1/P2/P3 后续注册 handler）
   'sources.route_action',
   'source_line_alias.upsert',

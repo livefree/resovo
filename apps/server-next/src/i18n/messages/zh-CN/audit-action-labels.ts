@@ -82,6 +82,7 @@ export const AUDIT_ACTION_LABELS: Readonly<Record<string, string>> = {
   'image_health.rescan':             '图片健康重扫',
   'image_health.switch_domain':      '图片 CDN 域切换',
   'image_health.apply_candidate':    '应用补图候选',
+  'image_health.resolve_event':      '解决破损事件',
 
   // ── CHG-SN-8-FUP-USERS-ROLE-INV-EP / ADR-139 ─────────────────────
   'user.role_change':                '修改用户角色',

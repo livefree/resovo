@@ -143,6 +143,47 @@ export async function applyImageCandidate(
   return result.data
 }
 
+// ADR-209 D-209-2：批量解决破损事件
+export interface ResolveEventResult {
+  readonly resolvedCount: number
+}
+
+/**
+ * 批量标记破损事件已解决（ADR-209 D-209-2）。
+ * resolvedCount=0（事件不存在/已解决）幂等不报错。
+ */
+export async function resolveImageEvents(
+  eventIds: readonly string[],
+  note?: string,
+): Promise<ResolveEventResult> {
+  const result = await apiClient.post<{ data: ResolveEventResult }>(
+    '/admin/image-health/resolve-event',
+    { eventIds, note },
+  )
+  return result.data
+}
+
+// ADR-209 D-209-3：对选中视频精确重扫封面（scoped，禁全局副作用）
+export interface RescanSelectedResult {
+  readonly updatedCount: number
+  /** 实际入队的待巡检行数；updatedCount < videoIds 数 → 部分行无可重扫 URL（纯 missing） */
+  readonly enqueuedCount: number
+}
+
+/**
+ * 对选中视频精确重扫封面（ADR-209 D-209-3）：scoped 重置 + 仅入队选中行。
+ * 纯 missing（无 cover_url）行被守卫跳过、不计 updatedCount（UI 据此反馈"N 行无可重扫 URL"）。
+ */
+export async function rescanSelectedVideos(
+  videoIds: readonly string[],
+): Promise<RescanSelectedResult> {
+  const result = await apiClient.post<{ data: RescanSelectedResult }>(
+    '/admin/image-health/rescan-selected',
+    { videoIds },
+  )
+  return result.data
+}
+
 export async function getTopBrokenDomains(limit = 20): Promise<readonly BrokenDomainRow[]> {
   const result = await apiClient.get<{ data: readonly BrokenDomainRow[] }>(
     `/admin/image-health/broken-domains?limit=${limit}`,

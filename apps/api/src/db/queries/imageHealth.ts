@@ -361,13 +361,20 @@ export interface PendingImageRow {
 
 /**
  * 读取 media_catalog 中状态为 pending_review 的图片 URL，批量供 worker 消费。
- * 返回最多 limit 条，按 media_catalog.updated_at 升序（最旧优先）。
+ * 返回最多 limit 条，按 url 升序。
+ * ADR-209 D-209-3：可选 `catalogIds` 过滤——非空时仅返回选中 catalog 的 pending 行
+ * （scoped 入队，禁全局副作用）；为空/省略时维持全库扫描（backfill worker 既有语义）。
  */
 export async function listPendingImageUrls(
   db: Pool,
   limit = 100,
-  offset = 0
+  offset = 0,
+  catalogIds?: string[],
 ): Promise<PendingImageRow[]> {
+  const scoped = catalogIds != null && catalogIds.length > 0
+  // 4 个 UNION 分支共用同一 $3 过滤谓词（Postgres 允许复用位置参数）
+  const catalogFilter = scoped ? 'AND mc.id = ANY($3::uuid[])' : ''
+  const params: unknown[] = scoped ? [limit, offset, catalogIds] : [limit, offset]
   const result = await db.query<{
     catalog_id: string
     video_id: string
@@ -384,6 +391,7 @@ export async function listPendingImageUrls(
      WHERE mc.cover_url IS NOT NULL
        AND mc.poster_status = 'pending_review'
        AND v.deleted_at IS NULL
+       ${catalogFilter}
      UNION ALL
      SELECT
        mc.id           AS catalog_id,
@@ -395,6 +403,7 @@ export async function listPendingImageUrls(
      WHERE mc.backdrop_url IS NOT NULL
        AND mc.backdrop_status = 'pending_review'
        AND v.deleted_at IS NULL
+       ${catalogFilter}
      UNION ALL
      SELECT
        mc.id      AS catalog_id,
@@ -406,6 +415,7 @@ export async function listPendingImageUrls(
      WHERE mc.logo_url IS NOT NULL
        AND mc.logo_status = 'pending_review'
        AND v.deleted_at IS NULL
+       ${catalogFilter}
      UNION ALL
      SELECT
        mc.id                   AS catalog_id,
@@ -417,9 +427,10 @@ export async function listPendingImageUrls(
      WHERE mc.banner_backdrop_url IS NOT NULL
        AND mc.banner_backdrop_status = 'pending_review'
        AND v.deleted_at IS NULL
+       ${catalogFilter}
      ORDER BY url
      LIMIT $1 OFFSET $2`,
-    [limit, offset]
+    params,
   )
   return result.rows.map(r => ({
     catalogId: r.catalog_id,
@@ -492,4 +503,12 @@ export async function listMissingBlurhashUrls(
 
 // ── 重扫 / 趋势 / 切换域 / 事件解决（已迁至 imageHealth.scan.ts）────
 export type { BrokenTrendPoint, RescanScope, RescanPostersResult, SwitchFallbackDomainResult } from './imageHealth.scan'
-export { getBrokenEventsTrend, rescanPosters, switchFallbackDomain, resolveImageEvents } from './imageHealth.scan'
+export {
+  getBrokenEventsTrend,
+  rescanPosters,
+  switchFallbackDomain,
+  resolveImageEvents,
+  // ADR-209 D-209-3：ids 精确重扫 scoped 闭环
+  getCatalogIdsByVideoIds,
+  rescanPostersByCatalogIds,
+} from './imageHealth.scan'

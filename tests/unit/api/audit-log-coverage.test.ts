@@ -83,6 +83,8 @@ const REQUIRED_ACTION_TYPES = [
   'image_health.switch_domain',
   // ADR-208 / IMGH-P2-1B：候选补图（apply-candidate）
   'image_health.apply_candidate',
+  // ADR-209 D-209-2 / IMGH-P2-1C：批量解决破损事件（resolve-event）
+  'image_health.resolve_event',
   // CHG-SN-8-FUP-USERS-ROLE-INV-EP / ADR-139：admin 改用户角色 audit（R-MID-1 第 17 次）
   'user.role_change',
   // CHG-SN-8-FUP-USERS-EDIT-EP / ADR-140：admin 改邮箱 + 编辑资料 audit（R-MID-1 第 18 次）
@@ -208,6 +210,8 @@ const PAYLOAD_ASSERTION_REQUIRED = [
   'image_health.switch_domain',
   // ADR-208 / IMGH-P2-1B：候选补图 apply-candidate payload 内容断言（admin-image-health-apply-candidate.test.ts）
   'image_health.apply_candidate',
+  // ADR-209 D-209-2 / IMGH-P2-1C：resolve-event payload 内容断言（admin-image-health-resolve-event.test.ts）
+  'image_health.resolve_event',
   // CHG-SN-8-FUP-USERS-ROLE-INV-EP / ADR-139：admin 改用户角色 audit payload 内容断言（R-MID-1 第 17 次）
   'user.role_change',
   // CHG-SN-8-FUP-USERS-EDIT-EP / ADR-140：admin 改邮箱 + 编辑资料 audit payload 内容断言（R-MID-1 第 18 次）

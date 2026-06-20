@@ -157,17 +157,62 @@ export async function switchFallbackDomain(
   return { dryRun, affectedRows, affectedColumns, breakdown }
 }
 
-/** 标记事件为已处理 */
+/**
+ * 标记事件为已处理，返回实际更新行数（resolvedCount）。
+ * ADR-209 D-209-2：原返 void → 改返 rowCount，供 response/审计载荷一致；
+ * 已解决（resolved_at 已非空）的事件会被重复 UPDATE（幂等无害，rowCount 仍含其内）。
+ */
 export async function resolveImageEvents(
   db: Pool | PoolClient,
   ids: string[],
   note?: string
-): Promise<void> {
-  if (ids.length === 0) return
-  await db.query(
+): Promise<number> {
+  if (ids.length === 0) return 0
+  const result = await db.query(
     `UPDATE broken_image_events
      SET resolved_at = NOW(), resolution_note = $1
      WHERE id = ANY($2::uuid[])`,
     [note ?? null, ids]
   )
+  return result.rowCount ?? 0
+}
+
+/**
+ * ADR-209 D-209-3：将 videoIds 解析为去重 catalog_id 列表（软删除/无 catalog 的剔除）。
+ * 供 ids 精确重扫 scoped 闭环——禁全局副作用。
+ */
+export async function getCatalogIdsByVideoIds(
+  db: Pool | PoolClient,
+  videoIds: string[],
+): Promise<string[]> {
+  if (videoIds.length === 0) return []
+  const result = await db.query<{ catalog_id: string }>(
+    `SELECT DISTINCT catalog_id
+       FROM videos
+      WHERE id = ANY($1::uuid[])
+        AND catalog_id IS NOT NULL
+        AND deleted_at IS NULL`,
+    [videoIds],
+  )
+  return result.rows.map(r => r.catalog_id)
+}
+
+/**
+ * ADR-209 D-209-3：对选中 catalog 集 scoped 重置 poster_status=pending_review。
+ * 镜像 rescanPosters 的 `cover_url IS NOT NULL` 守卫，仅 WHERE 由 scope 改为 id 集；
+ * 纯 missing（cover_url IS NULL）行被守卫跳过、不计 updatedCount（UI 据此反馈"N 行无可重扫 URL"）。
+ */
+export async function rescanPostersByCatalogIds(
+  db: Pool | PoolClient,
+  catalogIds: string[],
+): Promise<RescanPostersResult> {
+  if (catalogIds.length === 0) return { updatedCount: 0 }
+  const result = await db.query(
+    `UPDATE media_catalog
+     SET poster_status = 'pending_review', updated_at = NOW()
+     WHERE id = ANY($1::uuid[])
+       AND cover_url IS NOT NULL`,
+    [catalogIds],
+  )
+  return { updatedCount: result.rowCount ?? 0 }
 }

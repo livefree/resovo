@@ -25,6 +25,7 @@ import type { MissingVideoSortField, SortDir } from '@/api/db/queries/imageHealt
 import { getFieldProposalsByCatalogIdAndField, markFieldProposalApplied } from '@/api/db/queries/metadata-field-proposals'
 import { CATALOG_SOURCE_PRIORITY, MediaCatalogService } from '@/api/services/MediaCatalogService'
 import type { CatalogMetadataSource } from '@/api/services/MediaCatalogService'
+import { ImageHealthService } from '@/api/services/ImageHealthService'
 import { enqueueBackfillJob } from '@/api/workers/imageBackfillWorker'
 import { insertAuditLog } from '@/api/db/queries/auditLog'
 import { imageHealthQueue } from '@/api/lib/queue'
@@ -76,6 +77,17 @@ const VALID_CATALOG_SOURCES = new Set<string>(['manual', 'tmdb', 'bangumi', 'dou
 function isCatalogMetadataSource(s: string): s is CatalogMetadataSource {
   return VALID_CATALOG_SOURCES.has(s)
 }
+
+// ADR-209 D-209-2：批量解决破损事件。eventIds UUID 数组（min(1) 防空批 + max 守卫批量上限）
+const ResolveEventBodySchema = z.object({
+  eventIds: z.array(z.string().uuid()).min(1).max(200),
+  note:     z.string().max(500).optional(),
+})
+
+// ADR-209 D-209-3：对选中视频精确重扫。videoIds UUID 数组（min(1) + max 守卫）
+const RescanSelectedBodySchema = z.object({
+  videoIds: z.array(z.string().uuid()).min(1).max(200),
+})
 
 export async function adminImageHealthRoutes(fastify: FastifyInstance) {
   const auth = [fastify.authenticate, fastify.requireRole(['admin'])]
@@ -249,6 +261,65 @@ export async function adminImageHealthRoutes(fastify: FastifyInstance) {
     })
 
     return reply.send({ data: { applied: true, status: 'pending_review' } })
+  })
+
+  // ── POST /admin/image-health/resolve-event（ADR-209 D-209-2）──────
+  // 批量标记破损事件已解决：route → ImageHealthService.resolveEvents() → query（守分层）。
+  // resolvedCount=0（事件不存在/已解决）幂等不报 404（对齐 dismiss 软移除）。
+  // 审计 image_health.resolve_event（target_id=NULL，批量；零 migration）。
+  fastify.post('/admin/image-health/resolve-event', { preHandler: auth }, async (request, reply) => {
+    const parsed = ResolveEventBodySchema.safeParse(request.body)
+    if (!parsed.success) {
+      return reply.code(400).send({
+        error: { code: 'VALIDATION_ERROR', message: parsed.error.errors[0]?.message ?? 'Invalid body', status: 400 },
+      })
+    }
+    const { eventIds, note } = parsed.data
+    const { resolvedCount } = await new ImageHealthService(db).resolveEvents(eventIds, note)
+
+    await insertAuditLog(db, {
+      actorId: request.user!.userId,
+      actionType: 'image_health.resolve_event',
+      targetKind: 'image_health',
+      afterJsonb: { eventIds, resolvedCount, note: note ?? null },
+      requestId: request.id,
+    })
+
+    return reply.send({ data: { resolvedCount } })
+  })
+
+  // ── POST /admin/image-health/rescan-selected（ADR-209 D-209-3）────
+  // 对选中视频精确重扫封面：service scoped 闭环（videoIds→catalogIds→重置→仅入队选中行），
+  // **禁裸调 enqueueBackfillJob 全局扫库**（Codex BLOCK：全局伪装选中批量）。
+  // 纯 missing（无 cover_url）行被守卫跳过、不计 updatedCount。审计复用 image_health.rescan（scoped 变体）。
+  fastify.post('/admin/image-health/rescan-selected', { preHandler: auth }, async (request, reply) => {
+    const parsed = RescanSelectedBodySchema.safeParse(request.body)
+    if (!parsed.success) {
+      return reply.code(400).send({
+        error: { code: 'VALIDATION_ERROR', message: parsed.error.errors[0]?.message ?? 'Invalid body', status: 400 },
+      })
+    }
+    const { videoIds } = parsed.data
+    try {
+      const { updatedCount, enqueuedCount, catalogIds } =
+        await new ImageHealthService(db).rescanSelectedVideos(imageHealthQueue, videoIds)
+
+      await insertAuditLog(db, {
+        actorId: request.user!.userId,
+        actionType: 'image_health.rescan',
+        targetKind: 'image_health',
+        afterJsonb: { videoIds, catalogIds, updatedCount, enqueuedCount },
+        requestId: request.id,
+      })
+
+      return reply.send({ data: { updatedCount, enqueuedCount } })
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      process.stderr.write(`[POST /admin/image-health/rescan-selected] 500: ${msg}\n`)
+      return reply.code(500).send({
+        error: { code: 'INTERNAL_ERROR', message: `操作失败：${msg}`, status: 500 },
+      })
+    }
   })
 
   // ── POST /admin/image-health/backfill ──────────────────────────

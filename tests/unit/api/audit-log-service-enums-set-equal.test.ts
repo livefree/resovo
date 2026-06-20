@@ -109,6 +109,8 @@ const EXPECTED_ACTION_TYPES = [
   'image_health.switch_domain',
   // ADR-208 / IMGH-P2-1B：候选补图（apply-candidate）
   'image_health.apply_candidate',
+  // ADR-209 D-209-2 / IMGH-P2-1C：批量解决破损事件（resolve-event）
+  'image_health.resolve_event',
   // CHG-SN-9-CW1-B-EP / ADR-151（同上欠账补登）
   'crawler_task.cancel',
   'crawler_task.batch_cancel',
