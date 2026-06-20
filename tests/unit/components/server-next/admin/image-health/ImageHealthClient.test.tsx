@@ -45,6 +45,7 @@ const listMissingVideosMock = vi.fn()
 const triggerImageBackfillMock = vi.fn()
 const triggerImageRescanMock = vi.fn()
 const switchImageFallbackDomainMock = vi.fn()
+const rescanSelectedVideosMock = vi.fn()
 const toastPushMock = vi.fn()
 
 vi.mock('../../../../../../apps/server-next/src/lib/image-health/api', () => ({
@@ -54,6 +55,8 @@ vi.mock('../../../../../../apps/server-next/src/lib/image-health/api', () => ({
   triggerImageBackfill: (...args: unknown[]) => triggerImageBackfillMock(...args),
   triggerImageRescan: (...args: unknown[]) => triggerImageRescanMock(...args),
   switchImageFallbackDomain: (...args: unknown[]) => switchImageFallbackDomainMock(...args),
+  // IMGH-P2-3B：批量重扫端点（bulkActions 消费）
+  rescanSelectedVideos: (...args: unknown[]) => rescanSelectedVideosMock(...args),
 }))
 
 vi.mock('@resovo/admin-ui', async () => {
@@ -100,6 +103,7 @@ const MISSING_VIDEOS_FIXTURE = {
   data: [
     {
       videoId: '00000000-0000-0000-0000-000000000001',
+      catalogId: 'cat-1',
       title: 'Missing Poster Movie 1',
       posterStatus: 'missing' as const,
       posterUrl: null,
@@ -107,9 +111,14 @@ const MISSING_VIDEOS_FIXTURE = {
       lastSeenBrokenAt: null,
       brokenDomain: null,
       occurrenceCount: 0,
+      eventType: null,
+      eventId: null,
+      candidateCount: 0,
+      hasHighConfidenceCandidate: false,
     },
     {
       videoId: '00000000-0000-0000-0000-000000000002',
+      catalogId: 'cat-2',
       title: 'Broken Poster Series',
       posterStatus: 'broken' as const,
       posterUrl: 'https://cdn-broken.example.com/p.jpg',
@@ -117,9 +126,14 @@ const MISSING_VIDEOS_FIXTURE = {
       lastSeenBrokenAt: new Date(Date.now() - 2 * 3600_000).toISOString(),  // 2h ago
       brokenDomain: 'cdn-broken.example.com',
       occurrenceCount: 15,
+      eventType: 'fetch_404',
+      eventId: 'evt-2',
+      candidateCount: 2,
+      hasHighConfidenceCandidate: true,
     },
     {
       videoId: '00000000-0000-0000-0000-000000000003',
+      catalogId: 'cat-3',
       title: 'Pending Review Anime',
       posterStatus: 'pending_review' as const,
       posterUrl: 'https://images.test.com/p.jpg',
@@ -127,6 +141,10 @@ const MISSING_VIDEOS_FIXTURE = {
       lastSeenBrokenAt: null,
       brokenDomain: null,
       occurrenceCount: 0,
+      eventType: null,
+      eventId: null,
+      candidateCount: 1,
+      hasHighConfidenceCandidate: false,
     },
   ],
   total: 3,
@@ -142,6 +160,7 @@ beforeEach(() => {
   triggerImageBackfillMock.mockReset()
   triggerImageRescanMock.mockReset()
   switchImageFallbackDomainMock.mockReset()
+  rescanSelectedVideosMock.mockReset()
   toastPushMock.mockReset()
   routerPushMock.mockReset()
   setTab(null)  // 默认概览 Tab
@@ -457,5 +476,68 @@ describe('ImageHealthClient', () => {
       expect(input).not.toBeNull()
       expect(input.value).toBe('')
     })
+  })
+
+  // ── IMGH-P2-3B：治理工作台增强（缩略 / 候选数 / 选区批量）──
+
+  it('24. 治理 Tab：缩略列 thumb（缺失走 placeholder，破损直显 img）', async () => {
+    setTab('governance')
+    getImageHealthStatsMock.mockResolvedValueOnce(STATS_FIXTURE)
+    getTopBrokenDomainsMock.mockResolvedValueOnce(EMPTY_DOMAINS)
+    listMissingVideosMock.mockResolvedValueOnce(MISSING_VIDEOS_FIXTURE)
+    const { container } = render(<ImageHealthClient />)
+    await waitFor(() => {
+      // 缺失行 → placeholder thumb
+      expect(container.querySelector('[data-thumb][data-state="placeholder"]')).not.toBeNull()
+      // 破损行 → 直显 posterUrl
+      const imgs = Array.from(container.querySelectorAll('[data-thumb][data-state="has-src"] img'))
+      expect(imgs.some((el) => el.getAttribute('src') === 'https://cdn-broken.example.com/p.jpg')).toBe(true)
+    })
+  })
+
+  it('25. 治理 Tab：跨源候选数列 🟢高置信 / 🟡待确认 / — 三态', async () => {
+    setTab('governance')
+    getImageHealthStatsMock.mockResolvedValueOnce(STATS_FIXTURE)
+    getTopBrokenDomainsMock.mockResolvedValueOnce(EMPTY_DOMAINS)
+    listMissingVideosMock.mockResolvedValueOnce(MISSING_VIDEOS_FIXTURE)
+    const { container } = render(<ImageHealthClient />)
+    await waitFor(() => {
+      expect(container.querySelector('[data-candidate-count="0"]')?.textContent).toBe('—')
+      expect(container.querySelector('[data-high-confidence="true"]')?.textContent).toContain('🟢')
+      expect(container.querySelector('[data-high-confidence="false"]')?.textContent).toContain('🟡')
+    })
+  })
+
+  it('26. 治理 Tab：选中行 → 批量操作条出现（批量重扫 + 打开候选队列）', async () => {
+    setTab('governance')
+    getImageHealthStatsMock.mockResolvedValue(STATS_FIXTURE)
+    getTopBrokenDomainsMock.mockResolvedValue(EMPTY_DOMAINS)
+    listMissingVideosMock.mockResolvedValue(MISSING_VIDEOS_FIXTURE)
+    render(<ImageHealthClient />)
+    await waitFor(() => screen.getByLabelText('选择行 00000000-0000-0000-0000-000000000002'))
+    fireEvent.click(screen.getByLabelText('选择行 00000000-0000-0000-0000-000000000002'))
+    await waitFor(() => {
+      expect(screen.getByText('批量重扫选中（1）')).not.toBeNull()
+      expect(screen.getByText('打开候选队列（1）')).not.toBeNull()
+    })
+  })
+
+  it('27. 治理 Tab：批量重扫 → rescanSelectedVideos(ids) + toast + 选区清空', async () => {
+    setTab('governance')
+    getImageHealthStatsMock.mockResolvedValue(STATS_FIXTURE)
+    getTopBrokenDomainsMock.mockResolvedValue(EMPTY_DOMAINS)
+    listMissingVideosMock.mockResolvedValue(MISSING_VIDEOS_FIXTURE)
+    rescanSelectedVideosMock.mockResolvedValueOnce({ updatedCount: 1, enqueuedCount: 1 })
+    render(<ImageHealthClient />)
+    await waitFor(() => screen.getByLabelText('选择行 00000000-0000-0000-0000-000000000002'))
+    fireEvent.click(screen.getByLabelText('选择行 00000000-0000-0000-0000-000000000002'))
+    await waitFor(() => screen.getByText('批量重扫选中（1）'))
+    fireEvent.click(screen.getByText('批量重扫选中（1）'))
+    await waitFor(() => {
+      expect(rescanSelectedVideosMock).toHaveBeenCalledWith(['00000000-0000-0000-0000-000000000002'])
+      expect(toastPushMock).toHaveBeenCalledWith(expect.objectContaining({ level: 'success', title: '已重扫选中封面' }))
+    })
+    // 选区清空 → 批量条消失
+    await waitFor(() => expect(screen.queryByText('批量重扫选中（1）')).toBeNull())
   })
 })

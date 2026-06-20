@@ -1,5 +1,7 @@
-import type { TableColumn } from '@resovo/admin-ui'
+import type { TableColumn, DistinctOption } from '@resovo/admin-ui'
+import { Thumb } from '@resovo/admin-ui'
 import type { MissingVideoRow, BrokenDomainRow } from '@/lib/image-health/api'
+import { IMAGE_HEALTH_DOMAIN_DISTINCT } from './imageHealthFilters'
 
 function formatRelativeTime(iso: string | null): string {
   if (!iso) return '—'
@@ -13,6 +15,41 @@ function formatRelativeTime(iso: string | null): string {
   return `${day}d 前`
 }
 
+// IMGH-P2-3B：服务端筛选 enum 静态选项（消费 1D；brokenDomain 走 distinctFetcher 不在此列）
+const POSTER_STATUS_OPTIONS: readonly DistinctOption[] = [
+  { value: 'missing', label: '缺失' },
+  { value: 'broken', label: '破损' },
+  { value: 'pending_review', label: '待复核' },
+]
+const POSTER_SOURCE_OPTIONS: readonly DistinctOption[] = [
+  { value: 'manual', label: 'manual' },
+  { value: 'tmdb', label: 'tmdb' },
+  { value: 'bangumi', label: 'bangumi' },
+  { value: 'douban', label: 'douban' },
+  { value: 'crawler', label: 'crawler' },
+]
+// broken_image_events.event_type CHECK 8 值（与 IMAGE_EVENT_TYPES / 1D 后端枚举一致）
+const EVENT_TYPE_OPTIONS: readonly DistinctOption[] = [
+  { value: 'client_load_error' },
+  { value: 'empty_src' },
+  { value: 'fetch_404' },
+  { value: 'fetch_5xx' },
+  { value: 'timeout' },
+  { value: 'decode_fail' },
+  { value: 'dimension_too_small' },
+  { value: 'aspect_mismatch' },
+]
+
+const THUMB_FALLBACK_STYLE = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  width: '100%',
+  height: '100%',
+  color: 'var(--fg-muted)',
+  fontSize: '16px',
+} as const
+
 export function buildMissingVideoColumns(): readonly TableColumn<MissingVideoRow>[] {
   return [
     {
@@ -23,6 +60,8 @@ export function buildMissingVideoColumns(): readonly TableColumn<MissingVideoRow
       enableSorting: true,
       defaultVisible: true,
       pinned: true,
+      // IMGH-P2-3B：title 文本筛选桥接 1D search（ILIKE title/short_id）
+      filterable: true, filterFieldName: 'search', filterKind: 'text',
       cell: ({ row }) => (
         <span style={{ display: 'inline-flex', flexDirection: 'column', gap: '2px' }}>
           <span data-video-title>{row.title}</span>
@@ -32,6 +71,23 @@ export function buildMissingVideoColumns(): readonly TableColumn<MissingVideoRow
         </span>
       ),
     },
+    // IMGH-P2-3B：缩略列（Thumb；缺失走 fallback 占位，破损/待复核直显 posterUrl —— broken-img 即运维信号）
+    {
+      id: 'thumb',
+      kind: 'media',
+      header: '封面',
+      accessor: (r) => r.posterUrl ?? '',
+      width: 64,
+      defaultVisible: true,
+      cell: ({ row }) => (
+        <Thumb
+          src={row.posterStatus === 'missing' ? undefined : (row.posterUrl ?? undefined)}
+          size="poster-sm"
+          fallback={<span style={THUMB_FALLBACK_STYLE} aria-hidden>⊘</span>}
+          testId={`missing-thumb-${row.videoId}`}
+        />
+      ),
+    },
     {
       id: 'posterStatus',
       header: '海报状态',
@@ -39,6 +95,8 @@ export function buildMissingVideoColumns(): readonly TableColumn<MissingVideoRow
       width: 130,
       enableSorting: true,
       defaultVisible: true,
+      // IMGH-P2-3B：服务端筛选（enum 单 facet，消费 1D posterStatus）
+      filterable: true, filterFieldName: 'posterStatus', filterKind: 'enum', filterOptions: POSTER_STATUS_OPTIONS,
       cell: ({ row }) => {
         const badge: Record<string, { label: string; bg: string; color: string }> = {
           missing:        { label: '缺失',     bg: 'var(--state-warning-bg)',  color: 'var(--state-warning-fg)' },
@@ -76,9 +134,26 @@ export function buildMissingVideoColumns(): readonly TableColumn<MissingVideoRow
       accessor: (r) => r.posterSource ?? '—',
       width: 110,
       defaultVisible: true,
+      // IMGH-P2-3B：服务端筛选（enum 单 facet，消费 1D posterSource）
+      filterable: true, filterFieldName: 'posterSource', filterKind: 'enum', filterOptions: POSTER_SOURCE_OPTIONS,
       cell: ({ row }) => (
         <code style={{ fontSize: 'var(--font-size-xs)', color: 'var(--fg-muted)' }} data-poster-source>
           {row.posterSource ?? '—'}
+        </code>
+      ),
+    },
+    // IMGH-P2-3B：事件类型列 + enum 筛选（消费 1D eventType / DTO eventType；后端无该字段排序白名单故不排序）
+    {
+      id: 'eventType',
+      kind: 'computed',
+      header: '事件类型',
+      accessor: (r) => r.eventType ?? '',
+      width: 140,
+      defaultVisible: true,
+      filterable: true, filterFieldName: 'eventType', filterKind: 'enum', filterOptions: EVENT_TYPE_OPTIONS,
+      cell: ({ row }) => (
+        <code style={{ fontSize: 'var(--font-size-xs)', color: 'var(--fg-muted)' }} data-event-type>
+          {row.eventType ?? '—'}
         </code>
       ),
     },
@@ -91,6 +166,8 @@ export function buildMissingVideoColumns(): readonly TableColumn<MissingVideoRow
       // CHG-DT-RESIZE-ROLLOUT：补 width（原仅 minWidth）→ 全表仅 title 留无宽作主列，规避开 resize 后 title+brokenDomain 双塌 minWidth
       width: 220, minWidth: 200,
       defaultVisible: true,
+      // IMGH-P2-3B：服务端筛选（无 filterOptions → 触发 distinctFetcher，哨兵 table 复用 GET /broken-domains）
+      filterable: true, filterFieldName: 'brokenDomain', filterKind: 'enum', filterDistinctTable: IMAGE_HEALTH_DOMAIN_DISTINCT,
       cell: ({ row }) => (
         <code style={{ fontSize: 'var(--font-size-xs)' }} data-broken-domain>
           {row.brokenDomain ?? <span style={{ color: 'var(--fg-muted)' }}>—</span>}
@@ -135,6 +212,31 @@ export function buildMissingVideoColumns(): readonly TableColumn<MissingVideoRow
           {formatRelativeTime(row.lastSeenBrokenAt)}
         </span>
       ),
+    },
+    // IMGH-P2-3B：跨源候选数列（消费 1D candidateCount/hasHighConfidenceCandidate 聚合，不逐行请求避 N+1）
+    {
+      id: 'candidateCount',
+      kind: 'computed',
+      header: '跨源候选',
+      accessor: (r) => r.candidateCount,
+      width: 110,
+      defaultVisible: true,
+      cell: ({ row }) => {
+        if (row.candidateCount === 0) {
+          return <span style={{ color: 'var(--fg-muted)' }} data-candidate-count="0">—</span>
+        }
+        const high = row.hasHighConfidenceCandidate
+        return (
+          <span
+            style={{ fontSize: 'var(--font-size-xs)', color: 'var(--fg-default)' }}
+            title={high ? '含高置信候选' : '候选待确认'}
+            data-candidate-count={row.candidateCount}
+            data-high-confidence={high ? 'true' : 'false'}
+          >
+            {high ? '🟢' : '🟡'} {row.candidateCount}
+          </span>
+        )
+      },
     },
   ]
 }

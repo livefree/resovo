@@ -36,10 +36,14 @@ import {
   useToast,
   type ColumnPreference,
   type TableSortState,
+  type TableSelectionState,
+  type FilterValue,
 } from '@resovo/admin-ui'
 import { SwitchDomainModal } from './SwitchDomainModal'
 import { BrokenSamplesGrid } from './BrokenSamplesGrid'
 import { ImageGovernanceDrawer } from './ImageGovernanceDrawer'
+import { ImageHealthBulkActions } from './ImageHealthBulkActions'
+import { buildMissingFilters, imageHealthDistinctFetcher } from './imageHealthFilters'
 import {
   getImageHealthStats,
   getTopBrokenDomains,
@@ -131,6 +135,10 @@ export function ImageHealthClient() {
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [flashKeys, setFlashKeys] = useState<ReadonlySet<string>>(new Set())
 
+  // IMGH-P2-3B：服务端筛选（消费 1D）+ 行选区（批量重扫 / 候选队列）
+  const [filters, setFilters] = useState<ReadonlyMap<string, FilterValue>>(new Map())
+  const [selection, setSelection] = useState<TableSelectionState>({ selectedKeys: new Set(), mode: 'page' })
+
   // ── 数据加载（KPI + 域名 + 缺图列表 并行） ──
   useEffect(() => {
     let cancelled = false
@@ -158,6 +166,8 @@ export function ImageHealthClient() {
           }
         })(),
         sortDir: sort.direction,
+        // IMGH-P2-3B：DataTable filters Map → 1D 服务端筛选入参（分页 total 一致由后端共享 FROM 保证）
+        ...buildMissingFilters(filters),
       }),
     ]).then(([statsRes, domainsRes, missingRes]) => {
       if (cancelled) return
@@ -178,7 +188,7 @@ export function ImageHealthClient() {
     })
 
     return () => { cancelled = true }
-  }, [page, pageSize, sort, retryKey])
+  }, [page, pageSize, sort, retryKey, filters])
 
   const refresh = useCallback(() => setRetryKey((k) => k + 1), [])
 
@@ -200,6 +210,23 @@ export function ImageHealthClient() {
     const t = setTimeout(() => setFlashKeys(new Set()), 1500)
     return () => clearTimeout(t)
   }, [flashKeys])
+
+  // IMGH-P2-3B：批量重扫成功 → flash 受影响行 + 清空选区 + 刷新
+  const handleBulkResolved = useCallback((videoIds: readonly string[]) => {
+    setFlashKeys(new Set(videoIds))
+    setSelection({ selectedKeys: new Set(), mode: 'page' })
+    refresh()
+  }, [refresh])
+
+  // IMGH-P2-3B：打开候选队列 → 打开首个选中行的治理抽屉（逐个补图入口；选区保留）
+  const handleOpenQueue = useCallback((videoIds: readonly string[]) => {
+    const idSet = new Set(videoIds)
+    const first = missingRows.find((r) => idSet.has(r.videoId))
+    if (first) {
+      setDrawerRow(first)
+      setDrawerOpen(true)
+    }
+  }, [missingRows])
 
   const handleRescan = useCallback(async () => {
     setRescanPending(true)
@@ -279,12 +306,23 @@ export function ImageHealthClient() {
     () => ({
       pagination: { page, pageSize },
       sort,
-      filters: new Map(),
+      filters,
       columns: missingColumnPrefs,
-      selection: { selectedKeys: new Set<string>(), mode: 'page' as const },
+      selection,
     }),
-    [page, pageSize, sort, missingColumnPrefs],
+    [page, pageSize, sort, filters, missingColumnPrefs, selection],
   )
+
+  // IMGH-P2-3B：批量操作条（仅选区非空时渲染；DataTable.bulkActions 直传）
+  const bulkActionsNode = selection.selectedKeys.size > 0
+    ? (
+      <ImageHealthBulkActions
+        selectedKeys={selection.selectedKeys}
+        onResolved={handleBulkResolved}
+        onOpenQueue={handleOpenQueue}
+      />
+    )
+    : undefined
 
   const domainsQuery = useMemo(
     () => ({
@@ -498,6 +536,8 @@ export function ImageHealthClient() {
                   }
                   if (patch.sort) setSort(patch.sort)
                   if (patch.columns) setMissingColumnPrefs(patch.columns)
+                  // IMGH-P2-3B：筛选变更回 page 1（避免落在越界页）；选区走专用 onSelectionChange 通道
+                  if (patch.filters) { setFilters(patch.filters); setPage(1) }
                 }}
                 totalRows={missingTotal}
                 loading={loading && missingRows.length === 0}
@@ -507,6 +547,10 @@ export function ImageHealthClient() {
                 enableColumnResizing
                 onRowClick={handleRowClick}
                 flashRowKeys={flashKeys}
+                selection={selection}
+                onSelectionChange={setSelection}
+                distinctFetcher={imageHealthDistinctFetcher}
+                bulkActions={bulkActionsNode}
                 pagination={{ pageSizeOptions: [10, 20, 50, 100] }}
               />
             )}
