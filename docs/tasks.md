@@ -6,7 +6,7 @@
 
 ## 当前任务（单任务工作台：同时仅 1 个 🔄 进行中；完成即删卡，历史见 docs/changelog.md）
 
-_（**当前无 🔄 进行中卡片。SEQ-20260620-01 全交付 ✅ 2026-06-20**：IMGH-P3-1A/1B〔破损样本区根治，ADR-210，`f804de79`〕+ P3-2〔KPI 信息密度，`f804de79`〕+ ADR-211 设计〔`2f71cb31`〕+ P3-4A〔problem-images 端点，`3a827433`〕+ P3-4B〔问题图片治理板 + recent-broken-samples 退役全链，`c335e393`〕+ P3-4C〔前台 SafeImage 零裂图核查，报告 `docs/research/imgh-p3-4c-safeimage-coverage_20260620.md`〕。**后续 follow-up（task-queue 已登记，按优先级取）**：① **IMGH-P3-4D** 修复 `DailyAnimeRow.tsx:97` 裸 img → SafeImage（4C 核出唯一前台裂图漏网点，sonnet 小卡）；② problem-images DTO 加 eventId 使治理板可 resolve（4B gap，sonnet）。取卡前先查 🚨 BLOCKER。）_
+_（**当前无 🔄 进行中卡片。SEQ-20260620-01 全交付 ✅ 2026-06-20**：1A/1B〔`f804de79`〕+ 2〔`f804de79`〕+ ADR-211 设计〔`2f71cb31`〕+ 4A〔`3a827433`〕+ 4B〔治理板 + 退役，`c335e393`〕+ 4C〔SafeImage 覆盖面核查，`4afddb3d`〕+ 4D〔DailyAnimeRow 裸 img → SafeImage，**前台零裂图全闭环**，本提交〕。**整个「破损样本区根治」主题收官**：后台问题图片治理板（看图分诊失效图）+ 前台 SafeImage 安全网全覆盖（用户端零裂图）。**剩余可选 follow-up**：problem-images DTO 加 eventId 使治理板可 resolve（4B gap，sonnet 小卡，task-queue 备注）。取卡前先查 🚨 BLOCKER。）_
 
 ---
 

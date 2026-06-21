@@ -15,6 +15,7 @@ import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { apiClient } from '@/lib/api-client'
 import { Skeleton } from '@/components/primitives/feedback/Skeleton'
+import { SafeImage } from '@/components/media'
 
 // ── 类型（镜像后端 /home/daily-anime 响应，web-next 侧声明）─────────────
 interface DailyAnimeLinkedVideo {
@@ -92,15 +93,18 @@ function DailyAnimeCard({
           background: 'var(--bg-surface-sunken)',
         }}
       >
-        {item.coverUrl && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={item.coverUrl}
-            alt={item.title}
-            loading="lazy"
-            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-          />
-        )}
+        {/* IMGH-P3-4D：裸 <img> → SafeImage（失败/空封面走 FallbackCover，前台零裂图闭环）。
+            DailyAnime 封面为 Bangumi calendar 外部源（非站内 media_catalog 治理对象），
+            故仅做不裂图兜底、不接 reportBrokenImage（broken_image_events 需 video_id，语义不符）。 */}
+        <SafeImage
+          src={item.coverUrl}
+          alt={item.title}
+          width={200}
+          height={300}
+          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', aspectRatio: 'unset' }}
+          imgClassName="object-cover"
+          fallback={{ title: item.title, type: 'anime', seed: item.bangumiSubjectId }}
+        />
         <span
           data-daily-anime-badge={linked ? 'available' : 'wish'}
           style={{

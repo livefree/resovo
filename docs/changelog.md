@@ -2286,3 +2286,15 @@
 - **新增依赖**：无
 - **数据库变更**：无
 - **注意事项**：**仅核查不修复**（apps/web-next 只读）。结论：前台 12/13 图片入口走 `SafeImage` 安全网（`onError`→`FallbackCover` 零裂图，含 VideoCard→StackedPosterFrame→SafeImage 主链路）；**唯一漏网点 = `components/home/DailyAnimeRow.tsx:97`** 裸 `<img src={item.coverUrl}>`（无 onError/不经 SafeImage，首页「每日新番」公开行）→ 用户端裂图风险。建议起 **IMGH-P3-4D 修复卡**（改 SafeImage + `onLoadFail`→reportBrokenImage，对齐 VideoCard/BrowseCard 范式）。**工具教训**：本环境 `find -type f`/`grep -rn` 递归**静默失败返假空**（误判 components 目录为空），核查类任务一律用 `git grep`/`git ls-files`。
+
+## [IMGH-P3-4D] 修复 DailyAnimeRow 裸 img → SafeImage（前台零裂图闭环）
+- **完成时间**：2026-06-20
+- **记录时间**：2026-06-20 23:50
+- **执行模型**：claude-opus-4-8
+- **子代理**：无
+- **修改文件**：
+  - `apps/web-next/src/components/home/DailyAnimeRow.tsx` — 裸 `<img src={item.coverUrl}>` → `SafeImage`（`fallback={{ title, type:'anime', seed: bangumiSubjectId }}`，对齐 BrowseCard 容器 2/3 + absolute inset-0 范式），去 `eslint-disable no-img-element`
+  - `tests/unit/web-next/DailyAnimeRow.test.tsx` — 加用例：coverUrl=null → SafeImage 渲染 FallbackCover(`role="img"`)（不裂图兜底）
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：4C 核出唯一前台裂图漏网点修复 → **前台「用户端零裂图」全闭环**。**上报权衡（修正 4C 报告建议）**：DailyAnime 封面为 Bangumi calendar 外部源（非站内 media_catalog 治理对象），仅做 SafeImage 不裂图兜底、**不接** `reportBrokenImage`（broken_image_events 需 video_id，未入站项无、语义不符）。改进：coverUrl=null 旧显空 sunken 块、现显 FallbackCover（标题+动画图标）。门禁：typecheck/lint（去 no-img-element warning）/test:changed 5/**test:e2e:smoke 19**（首页含 DailyAnimeRow 渲染正常）全过。
