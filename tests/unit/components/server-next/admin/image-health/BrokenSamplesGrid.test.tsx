@@ -1,13 +1,16 @@
 /**
- * BrokenSamplesGrid.test.tsx — 破损样本 grid 单元测试（CHG-SN-7-MISC-IMAGE-2）
+ * BrokenSamplesGrid.test.tsx — 破损样本 grid 单元测试
+ *
+ * ADR-210 / IMGH-P3-1B：数据源改为 recent-broken-samples 端点（broken_image_events 事件流口径）。
+ *   每行即破损样本，组件不再 client-side 过滤 posterStatus='broken'（旧设计因 poster_status
+ *   全库无 'broken' 恒空 = 破损样本区空白根因）。
  *
  * 覆盖：
  * - 空 rows → 暂无破损样本
- * - 非 broken 状态 rows → 不渲染任何 sample card
- * - broken rows → 渲染 data-broken-sample
+ * - 任意行均渲染 sample card（不再依赖 posterStatus 过滤）
  * - 2:3 ratio + danger dashed border（inline style 校验）
  * - bottom overlay 显示 brokenDomain
- * - brokenDomain 为 null → overlay 显示 posterStatus
+ * - 点击 → 打开 ImageLightbox（元信息含来源/破损域）
  * - 超过 MAX_SAMPLES(24) 截断
  * - count badge 显示正确数量
  */
@@ -15,25 +18,22 @@
 import { describe, it, expect, afterEach } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { BrokenSamplesGrid } from '../../../../../../apps/server-next/src/app/admin/image-health/_client/BrokenSamplesGrid'
-import type { MissingVideoRow } from '../../../../../../apps/server-next/src/lib/image-health/api'
+import type { BrokenSampleRow } from '../../../../../../apps/server-next/src/lib/image-health/api'
 
 afterEach(() => cleanup())
 
-function makeRow(overrides: Partial<MissingVideoRow> = {}): MissingVideoRow {
+function makeRow(overrides: Partial<BrokenSampleRow> = {}): BrokenSampleRow {
   return {
     videoId: 'v-001',
     catalogId: 'c-001',
     title: 'Test Video',
-    posterStatus: 'broken',
-    posterUrl: null,
+    posterUrl: 'https://cdn.example.com/poster.jpg',
     posterSource: null,
-    lastSeenBrokenAt: null,
+    posterStatus: 'pending_review',
+    eventType: 'fetch_404',
     brokenDomain: 'cdn.example.com',
     occurrenceCount: 3,
-    eventType: null,
-    eventId: null,
-    candidateCount: 0,
-    hasHighConfidenceCandidate: false,
+    lastSeenBrokenAt: '2026-06-20T00:00:00.000Z',
     ...overrides,
   }
 }
@@ -43,28 +43,16 @@ describe('BrokenSamplesGrid — empty state', () => {
     render(<BrokenSamplesGrid rows={[]} />)
     expect(screen.queryByText('暂无破损样本')).not.toBeNull()
   })
-
-  it('rows 全为 missing 状态 → 无 broken card → 显示空提示', () => {
-    const rows = [makeRow({ posterStatus: 'missing', videoId: 'v-1' })]
-    render(<BrokenSamplesGrid rows={rows} />)
-    expect(screen.queryByText('暂无破损样本')).not.toBeNull()
-  })
-
-  it('rows 全为 pending_review → 无 broken card → 显示空提示', () => {
-    const rows = [makeRow({ posterStatus: 'pending_review', videoId: 'v-2' })]
-    render(<BrokenSamplesGrid rows={rows} />)
-    expect(screen.queryByText('暂无破损样本')).not.toBeNull()
-  })
 })
 
-describe('BrokenSamplesGrid — broken rows 渲染', () => {
-  it('broken row → 渲染 data-broken-sample', () => {
+describe('BrokenSamplesGrid — 行即破损样本（ADR-210 无 client 过滤）', () => {
+  it('单行 → 渲染 data-broken-sample', () => {
     const rows = [makeRow({ videoId: 'v-001' })]
     const { container } = render(<BrokenSamplesGrid rows={rows} />)
     expect(container.querySelector('[data-broken-sample]')).not.toBeNull()
   })
 
-  it('3 个 broken rows → 渲染 3 个 sample card', () => {
+  it('3 行 → 渲染 3 个 sample card', () => {
     const rows = [
       makeRow({ videoId: 'v-1' }),
       makeRow({ videoId: 'v-2' }),
@@ -74,11 +62,10 @@ describe('BrokenSamplesGrid — broken rows 渲染', () => {
     expect(container.querySelectorAll('[data-broken-sample]').length).toBe(3)
   })
 
-  it('混合 broken + missing → 只渲染 broken cards', () => {
+  it('posterStatus 非 broken（pending_review/low_quality）也渲染 → 不再 client 过滤', () => {
     const rows = [
-      makeRow({ videoId: 'v-1', posterStatus: 'broken' }),
-      makeRow({ videoId: 'v-2', posterStatus: 'missing' }),
-      makeRow({ videoId: 'v-3', posterStatus: 'broken' }),
+      makeRow({ videoId: 'v-1', posterStatus: 'pending_review' }),
+      makeRow({ videoId: 'v-2', posterStatus: 'low_quality' }),
     ]
     const { container } = render(<BrokenSamplesGrid rows={rows} />)
     expect(container.querySelectorAll('[data-broken-sample]').length).toBe(2)
@@ -102,13 +89,6 @@ describe('BrokenSamplesGrid — overlay 内容', () => {
     const overlay = container.querySelector('[data-broken-overlay]') as HTMLElement
     expect(overlay).not.toBeNull()
     expect(overlay.textContent).toContain('cdn.example.com')
-  })
-
-  it('brokenDomain 为 null → overlay 显示 posterStatus', () => {
-    const rows = [makeRow({ brokenDomain: null, posterStatus: 'broken', videoId: 'v-1' })]
-    const { container } = render(<BrokenSamplesGrid rows={rows} />)
-    const overlay = container.querySelector('[data-broken-overlay]') as HTMLElement
-    expect(overlay.textContent).toContain('broken')
   })
 })
 
@@ -144,7 +124,7 @@ describe('BrokenSamplesGrid — count badge', () => {
 })
 
 describe('BrokenSamplesGrid — MAX_SAMPLES 截断', () => {
-  it('超过 24 个 broken rows → 最多渲染 24 个 card', () => {
+  it('超过 24 行 → 最多渲染 24 个 card', () => {
     const rows = Array.from({ length: 30 }, (_, i) => makeRow({ videoId: `v-${i}` }))
     const { container } = render(<BrokenSamplesGrid rows={rows} />)
     expect(container.querySelectorAll('[data-broken-sample]').length).toBe(24)

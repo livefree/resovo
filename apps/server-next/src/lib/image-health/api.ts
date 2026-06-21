@@ -10,12 +10,23 @@
 
 import { apiClient } from '@/lib/api-client'
 
+/**
+ * 单口径（已发布 / 全部）4 类图片 ok 计数 + 视频分母（对齐后端 ImageCoverageScope）。
+ * 覆盖率 = `<kind>Ok / videoCount`，由 KPI 卡片现算（不预存浮点）。
+ */
+export interface ImageCoverageScope {
+  readonly videoCount: number
+  readonly posterOk: number
+  readonly backdropOk: number
+  readonly logoOk: number
+  readonly bannerOk: number
+}
+
 export interface ImageHealthStats {
-  readonly totalVideos: number
-  readonly posterOkCount: number
-  readonly posterCoverage: number      // 0–1
-  readonly backdropOkCount: number
-  readonly backdropCoverage: number
+  /** 已发布视频范围（is_published = true） */
+  readonly published: ImageCoverageScope
+  /** 全部视频范围（含未发布） */
+  readonly all: ImageCoverageScope
   readonly brokenLast7Days: number
   // brokenTrend 字段对齐后端 getBrokenEventsTrend 实返（imageHealth.scan.ts:43 push({ date, count })）；
   // SQL 内部别名 AS day 不出现在返回值，全链无转换层（IMGH-P1-1 修正：原误标 day → date）
@@ -47,6 +58,22 @@ export interface MissingVideoRow {
   // ADR-209 D-209-4 BLOCK-4：跨源候选聚合（候选数列单查询取得，避 N+1/死列）
   readonly candidateCount: number
   readonly hasHighConfidenceCandidate: boolean
+}
+
+// ADR-210：破损样本区数据源行（事件流口径，对齐后端 RecentBrokenSampleRow）。
+// 字段对齐 BrokenSamplesGrid 现消费面（Lightbox meta + overlay），结构兼容 MissingVideoRow 子集。
+export interface BrokenSampleRow {
+  readonly videoId: string
+  readonly catalogId: string
+  readonly title: string
+  /** 破损事件记录的失效 URL（即「破损的那张」） */
+  readonly posterUrl: string
+  readonly posterSource: string | null
+  readonly posterStatus: string
+  readonly eventType: string | null
+  readonly brokenDomain: string
+  readonly occurrenceCount: number
+  readonly lastSeenBrokenAt: string | null
 }
 
 export interface ListMissingVideosParams {
@@ -204,6 +231,17 @@ export async function rescanSelectedVideos(
 export async function getTopBrokenDomains(limit = 20): Promise<readonly BrokenDomainRow[]> {
   const result = await apiClient.get<{ data: readonly BrokenDomainRow[] }>(
     `/admin/image-health/broken-domains?limit=${limit}`,
+  )
+  return result.data
+}
+
+/**
+ * 近期破损海报样本（ADR-210）：破损样本区数据源，对齐 broken_image_events 事件流口径
+ * （与 KPI / 趋势 / TOP域名同源）。取代旧「治理表第一页 + 客户端 poster_status='broken' 过滤」。
+ */
+export async function getRecentBrokenSamples(limit = 24): Promise<readonly BrokenSampleRow[]> {
+  const result = await apiClient.get<{ data: readonly BrokenSampleRow[] }>(
+    `/admin/image-health/recent-broken-samples?limit=${limit}`,
   )
   return result.data
 }

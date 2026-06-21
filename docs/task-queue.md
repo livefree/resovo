@@ -2902,3 +2902,21 @@
   - **CONCERN 全纳入**：①1D 尺寸字段无底座 → 删，沿用客户端 naturalWidth；②`brokenDomain` distinct 派生自 `broken_image_events.url` 非简单列 → 0B 裁定受控表达式/专用 distinct；③批量补图缺 batch 语义 → 0A 裁定（不支持则仅「批量打开候选队列」，不渲染伪批量）；④2A/2B 改 admin-ui barrel/types → 标 **2A→2B 硬串行**。
   - **OK**：P2/P3 边界与 §17.4 对齐；Phase 0 拆 0A/0B 合理（不合并）；无死按钮 + 新 route ADR + 共享组件 Opus + Subagents trailer + schema 同步红线均已登记。
   - **后续**：两份 ADR（0A/0B）落盘后各自再调 Codex 对抗性审核（ADR = 非代码产物）。
+
+---
+
+## SEQ-20260620-01 — 图片健康「破损样本区」空白根治 🔄
+
+- **创建时间**：2026-06-20 ｜ **最后更新**：2026-06-20
+- **状态**：🔄 进行中（用户授权全自动推进 2026-06-20；分支 `fix/imgh-broken-samples-empty-20260620`）
+- **背景/根因**：`/admin/image-health` 健康概览「破损样本」区恒空（「暂无破损样本」），而 KPI「近 7 日新增破损」非零（实测 834）→ 用户视角自相矛盾。根因＝破损样本区与页面其余部分用**两套不一致「破损」口径**：样本区客户端硬过滤 `posterStatus==='broken'`，但 `media_catalog.poster_status` 全库 **0 条 broken**（实测 pending_review 2533 / low_quality 1980 / ok 1070）；KPI/趋势/TOP域名基于 `broken_image_events` 事件流（5376 unresolved / 近7日 834 / 4488 视频）。两口径不重叠 → 样本区恒 0 命中。叠加：数据借治理表第一页（已排除 low_quality）+ client 过滤；前端上报 `/internal/image-broken` 只写事件表不回写 poster_status，worker 仅 URL 非法/连续3次失败（内存计数易重置）才写 broken。**根治＝破损样本区改对齐事件流口径（ADR-210）。**
+
+| 卡 | 内容 | 范围项 | 建议模型 | 依赖 | 门禁 |
+|---|---|---|---|---|---|
+| **IMGH-P3-1A** 🔄 | **后端：recent-broken-samples 端点 + ADR-210**：① 起 **ADR-210**（recent-broken-samples 端点契约：D-210-1 破损样本口径切到 `broken_image_events` 事件流〔废弃 poster_status='broken' client 过滤〕/ D-210-2 限定 `image_kind='poster'`〔2:3 海报位〕/ D-210-3 `DISTINCT ON (video_id)` 去重）② `getRecentBrokenSamples(db,limit)` query 落 `imageHealth.scan.ts`（避恶化 imageHealth.ts 639 行已超限；基于 broken_image_events `resolved_at IS NULL AND image_kind='poster'`，DISTINCT ON video_id 取最近 last_seen_at，JOIN videos+media_catalog，broken_domain SQL `regexp_replace` 统一口径）③ ImageHealthService 方法（守分层）④ `GET /admin/image-health/recent-broken-samples` route（admin-only，limit clamp 1-50 默认 24，只读无审计，对齐 stats/broken-domains 范式）⑤ 端点单测 + imageHealth.ts re-export | 5 | **opus** | 无 | **ADR-210 先行 + Opus arch-reviewer PASS + Subagents trailer** + Codex 对抗性审核（ADR） + `verify:endpoint-adr` + 端点单测 |
+| **IMGH-P3-1B** 🔄 | **前端：破损样本区改独立数据源**：① `lib/image-health/api.ts` 新增 `BrokenSampleRow` 类型 + `getRecentBrokenSamples(limit)` fetcher ② `BrokenSamplesGrid` props 改 `BrokenSampleRow[]`，**去客户端 `posterStatus==='broken'` 过滤**（行即破损样本，保留 MAX_SAMPLES slice + Lightbox meta）③ `ImageHealthClient` overview 并行加载独立 `brokenSamples` state（不再从 missingRows 借数据传入）④ 组件测试更新（BrokenSamplesGrid + ImageHealthClient fixture） | 4 | sonnet | 1A（端点 + DTO 先行） | 模块内消费范式 + 组件测试 + `test:e2e:admin` |
+| **IMGH-P3-2** 🔄 | **健康概览 KPI 卡片信息密度增强（用户会话内插入，补登记）**：① 卡①「视频总数（已发布）」→「图片正常视频」：已发布+全部双口径「封面 ok / 视频数 + 覆盖率」②「Poster/Backdrop 覆盖率」两卡合并「图片覆盖率」：封面/背景/台标/Banner 4 类各 已发布%/全部% ③ KPI 网格 4→3 卡（留近 7 日破损）。**口径**：卡①健康=封面 `poster_status='ok'`（用户 AskUserQuestion 选定）。**实现**：`getImageHealthStats` 改单次扫描 `COUNT(*) FILTER(...)` 双口径×4 类；`ImageHealthStats` 重构 `{published,all,brokenLast7Days}`（保留顶层 brokenLast7Days/NavCountsService 依赖）；改现有 `/stats`〔非新 route〕；新建 `ImageHealthKpiCards.tsx` 复用共享 `KpiCard`〔`value:ReactNode` 槽，**不改 admin-ui Props**〕；ImageHealthClient 591→541 收敛；复合 value 根用 `display:grid` `<span>` 避 `<p>` 内 `<div>` 非法嵌套。**已完成 2026-06-20**（代码+单测，待 commit）：typecheck/lint EXIT=0 / test:changed 22 文件 192 测全过 / 集成测试新契约（preflight 跑）。执行模型: claude-opus-4-8（用户交互直驱，建议 sonnet）；子代理: 无。 | 5 | sonnet | 无（同分支，逻辑独立于 1A/1B） | typecheck/lint/test:changed；无新 route（`verify:endpoint-adr` 不触发）/ 无 admin-ui Props 改（M8 不触发）/ 无新 ADR |
+
+- **原子化判据**：1A 后端单模块（query/service/route 同域 + ADR）范围 5 项未超线；1B 前端单层消费 4 项；跨层但按前后端拆 2 卡，符合 workflow-rules 原子化四问。
+- **范围红线**：新 route 先 ADR 后实施（`verify:endpoint-adr` 必过）；只读端点对齐既有 stats/broken-domains 范式（无审计）；颜色零硬编码；后端 Route→Service→DB 分层；不改 admin-ui 公开 Props（纯 server-next 消费 + 新后端只读端点）。
+- **IMGH-P3-2 补登记说明**：用户在 P3-1A/1B 代码完成（待 commit）后于会话内**直接指令**「按上次草案落地图片健康 KPI 卡片」并明确两卡口径；当时**未先写卡即执行代码** → 违反 CLAUDE.md「❌ 未写任务卡片就开始执行代码 / 修改文件范围以外文件」，Codex stop-gate 标记 "KPI work implemented outside the active task scope"。本行为补登记。P3-1A/1B 与 P3-2 均**代码完成 + 门禁通过、未提交**，在 `imageHealth.ts`/`api.ts`/`ImageHealthClient.tsx`/`ImageHealthClient.test.tsx` 等文件交织 → commit 时一并提交或按 hunk 拆两条逻辑 commit（待用户定夺）。单轨「仅 1 个 🔄」临时双活，因二者均待提交、commit 后同时收口。

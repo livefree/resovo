@@ -31,26 +31,33 @@ afterAll(async () => {
 })
 
 describe('getImageHealthStats SQL 集成', () => {
-  it('JOIN media_catalog 计算 poster / backdrop 覆盖率跑通', async () => {
+  it('JOIN media_catalog 计算双口径（已发布/全部）4 类图片 ok 数跑通', async () => {
     const stats = await getImageHealthStats(db)
-    expect(stats).toHaveProperty('totalVideos')
-    expect(stats).toHaveProperty('posterOkCount')
-    expect(stats).toHaveProperty('posterCoverage')
-    expect(stats).toHaveProperty('backdropOkCount')
-    expect(stats).toHaveProperty('backdropCoverage')
+    expect(stats).toHaveProperty('published')
+    expect(stats).toHaveProperty('all')
     expect(stats).toHaveProperty('brokenLast7Days')
-    expect(stats.totalVideos).toBeGreaterThanOrEqual(0)
-    expect(stats.posterCoverage).toBeGreaterThanOrEqual(0)
-    expect(stats.posterCoverage).toBeLessThanOrEqual(1)
-    expect(stats.backdropCoverage).toBeGreaterThanOrEqual(0)
-    expect(stats.backdropCoverage).toBeLessThanOrEqual(1)
+    // 两口径各字段非负 + ok ≤ videoCount（不可能正常图片多于视频数）
+    for (const scope of [stats.published, stats.all]) {
+      expect(scope.videoCount).toBeGreaterThanOrEqual(0)
+      for (const ok of [scope.posterOk, scope.backdropOk, scope.logoOk, scope.bannerOk]) {
+        expect(ok).toBeGreaterThanOrEqual(0)
+        expect(ok).toBeLessThanOrEqual(scope.videoCount)
+      }
+    }
+    // 已发布是全部的子集
+    expect(stats.published.videoCount).toBeLessThanOrEqual(stats.all.videoCount)
+    expect(stats.brokenLast7Days).toBeGreaterThanOrEqual(0)
   })
 
-  it('totalVideos = 0 时覆盖率退化为 0（不除零）', async () => {
+  it('videoCount = 0 时各 ok 计数为 0（空库不报错、消费方按 ok/count 现算覆盖率不除零）', async () => {
     const stats = await getImageHealthStats(db)
-    if (stats.totalVideos === 0) {
-      expect(stats.posterCoverage).toBe(0)
-      expect(stats.backdropCoverage).toBe(0)
+    for (const scope of [stats.published, stats.all]) {
+      if (scope.videoCount === 0) {
+        expect(scope.posterOk).toBe(0)
+        expect(scope.backdropOk).toBe(0)
+        expect(scope.logoOk).toBe(0)
+        expect(scope.bannerOk).toBe(0)
+      }
     }
   })
 })

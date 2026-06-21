@@ -177,29 +177,51 @@ export async function updateCatalogImageBlurhash(
 
 // ── 查询：后台监控统计 ────────────────────────────────────────────
 
+/**
+ * 单口径（已发布 / 全部）4 类图片 ok 计数 + 视频分母。
+ * 覆盖率由消费方按 `<kind>Ok / videoCount` 现算（不在后端预存浮点，避免双口径冗余字段）。
+ */
+export interface ImageCoverageScope {
+  videoCount: number   // 该范围视频数（分母）
+  posterOk: number     // poster_status = 'ok'
+  backdropOk: number   // backdrop_status = 'ok'
+  logoOk: number       // logo_status = 'ok'
+  bannerOk: number     // banner_backdrop_status = 'ok'
+}
+
 export interface ImageHealthStats {
-  totalVideos: number
-  posterOkCount: number
-  posterCoverage: number       // 0–1 浮点，posterOkCount / totalVideos
-  backdropOkCount: number
-  backdropCoverage: number
+  /** 已发布视频范围（is_published = true） */
+  published: ImageCoverageScope
+  /** 全部视频范围（deleted_at IS NULL，含未发布） */
+  all: ImageCoverageScope
+  /** 近 7 日新增未解决破损视频数（NavCountsService 顶层消费，勿移除/改名） */
   brokenLast7Days: number
 }
 
 export async function getImageHealthStats(db: Pool): Promise<ImageHealthStats> {
-  const [statsResult, brokenResult] = await Promise.all([
+  // 单次扫描同时算「全部」与「已发布」两口径 4 类 ok 数（FILTER 条件聚合，避两遍 JOIN）
+  const [scopeResult, brokenResult] = await Promise.all([
     db.query<{
-      total_videos: string
-      poster_ok: string
-      backdrop_ok: string
+      all_count: string;       pub_count: string
+      all_poster_ok: string;   pub_poster_ok: string
+      all_backdrop_ok: string; pub_backdrop_ok: string
+      all_logo_ok: string;     pub_logo_ok: string
+      all_banner_ok: string;   pub_banner_ok: string
     }>(
       `SELECT
-         COUNT(v.id)::int                                              AS total_videos,
-         COUNT(CASE WHEN mc.poster_status = 'ok' THEN 1 END)::int     AS poster_ok,
-         COUNT(CASE WHEN mc.backdrop_status = 'ok' THEN 1 END)::int   AS backdrop_ok
+         COUNT(v.id)::int                                                                 AS all_count,
+         COUNT(v.id) FILTER (WHERE v.is_published)::int                                   AS pub_count,
+         COUNT(*) FILTER (WHERE mc.poster_status = 'ok')::int                             AS all_poster_ok,
+         COUNT(*) FILTER (WHERE mc.poster_status = 'ok' AND v.is_published)::int          AS pub_poster_ok,
+         COUNT(*) FILTER (WHERE mc.backdrop_status = 'ok')::int                           AS all_backdrop_ok,
+         COUNT(*) FILTER (WHERE mc.backdrop_status = 'ok' AND v.is_published)::int        AS pub_backdrop_ok,
+         COUNT(*) FILTER (WHERE mc.logo_status = 'ok')::int                               AS all_logo_ok,
+         COUNT(*) FILTER (WHERE mc.logo_status = 'ok' AND v.is_published)::int            AS pub_logo_ok,
+         COUNT(*) FILTER (WHERE mc.banner_backdrop_status = 'ok')::int                    AS all_banner_ok,
+         COUNT(*) FILTER (WHERE mc.banner_backdrop_status = 'ok' AND v.is_published)::int AS pub_banner_ok
        FROM videos v
        JOIN media_catalog mc ON mc.id = v.catalog_id
-       WHERE v.deleted_at IS NULL AND v.is_published = true`
+       WHERE v.deleted_at IS NULL`
     ),
     db.query<{ broken_last_7d: string }>(
       `SELECT COUNT(DISTINCT video_id)::int AS broken_last_7d
@@ -209,17 +231,25 @@ export async function getImageHealthStats(db: Pool): Promise<ImageHealthStats> {
     ),
   ])
 
-  const total = parseInt(statsResult.rows[0]?.total_videos ?? '0')
-  const posterOk = parseInt(statsResult.rows[0]?.poster_ok ?? '0')
-  const backdropOk = parseInt(statsResult.rows[0]?.backdrop_ok ?? '0')
+  const r = scopeResult.rows[0]
+  const n = (v: string | undefined): number => parseInt(v ?? '0', 10)
 
   return {
-    totalVideos: total,
-    posterOkCount: posterOk,
-    posterCoverage: total > 0 ? posterOk / total : 0,
-    backdropOkCount: backdropOk,
-    backdropCoverage: total > 0 ? backdropOk / total : 0,
-    brokenLast7Days: parseInt(brokenResult.rows[0]?.broken_last_7d ?? '0'),
+    published: {
+      videoCount: n(r?.pub_count),
+      posterOk:   n(r?.pub_poster_ok),
+      backdropOk: n(r?.pub_backdrop_ok),
+      logoOk:     n(r?.pub_logo_ok),
+      bannerOk:   n(r?.pub_banner_ok),
+    },
+    all: {
+      videoCount: n(r?.all_count),
+      posterOk:   n(r?.all_poster_ok),
+      backdropOk: n(r?.all_backdrop_ok),
+      logoOk:     n(r?.all_logo_ok),
+      bannerOk:   n(r?.all_banner_ok),
+    },
+    brokenLast7Days: n(brokenResult.rows[0]?.broken_last_7d),
   }
 }
 
@@ -626,8 +656,8 @@ export async function listMissingBlurhashUrls(
   }))
 }
 
-// ── 重扫 / 趋势 / 切换域 / 事件解决（已迁至 imageHealth.scan.ts）────
-export type { BrokenTrendPoint, RescanScope, RescanPostersResult, SwitchFallbackDomainResult } from './imageHealth.scan'
+// ── 重扫 / 趋势 / 切换域 / 事件解决 / 破损样本（已迁至 imageHealth.scan.ts）────
+export type { BrokenTrendPoint, RescanScope, RescanPostersResult, SwitchFallbackDomainResult, RecentBrokenSampleRow } from './imageHealth.scan'
 export {
   getBrokenEventsTrend,
   rescanPosters,
@@ -636,4 +666,6 @@ export {
   // ADR-209 D-209-3：ids 精确重扫 scoped 闭环
   getCatalogIdsByVideoIds,
   rescanPostersByCatalogIds,
+  // ADR-210：破损样本区数据源（事件流口径）
+  getRecentBrokenSamples,
 } from './imageHealth.scan'

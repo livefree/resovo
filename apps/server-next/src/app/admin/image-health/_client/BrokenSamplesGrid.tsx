@@ -9,11 +9,14 @@
  * IMGH-P1-3：缩略点击 → 打开共享 ImageLightbox（放大 + 元信息诊断）。
  *   破损图 URL 多失效 → Lightbox 走降级占位 + 尺寸 '—'，核心价值是元信息 + URL 复制。
  *
- * 数据来源：ImageHealthClient 传入 missingRows，client-side 过滤 posterStatus=broken。无新端点。
+ * 数据来源（ADR-210，IMGH-P3-1B）：ImageHealthClient 传入 recent-broken-samples 端点结果
+ *   （broken_image_events 事件流口径，与 KPI/趋势/TOP域名同源）。每行即破损样本，无需 client 过滤。
+ *   取代旧「借治理表第一页 missingRows + client-side 过滤 posterStatus='broken'」——
+ *   该旧设计因 media_catalog.poster_status 全库无 'broken' 恒空（破损样本区空白根因）。
  */
 import { useState, type CSSProperties } from 'react'
 import { ImageLightbox, type ImageStatus } from '@resovo/admin-ui'
-import type { MissingVideoRow } from '@/lib/image-health/api'
+import type { BrokenSampleRow } from '@/lib/image-health/api'
 
 // ── 样式常量 ──────────────────────────────────────────────────────
 
@@ -101,8 +104,13 @@ function toImageStatus(s: string): ImageStatus | undefined {
 
 // ── 子组件 ────────────────────────────────────────────────────────
 
-function BrokenPosterCard({ row, onOpen }: { row: MissingVideoRow; onOpen: (r: MissingVideoRow) => void }) {
-  const overlayText = row.brokenDomain ?? row.posterStatus
+function BrokenPosterCard({ row, onOpen }: { row: BrokenSampleRow; onOpen: (r: BrokenSampleRow) => void }) {
+  // ADR-210 MEDIUM-1：brokenDomain 由 SQL regexp_replace 派生，empty_src 等非 http URL 不匹配时
+  // PostgreSQL 返回原串（裸 URL / 空）。overlay 仅在派生出真实域名（含 '.'）时显示域名，
+  // 否则降级到破损原因 eventType，最后兜底 posterStatus。
+  const overlayText = row.brokenDomain && row.brokenDomain.includes('.')
+    ? row.brokenDomain
+    : (row.eventType ?? row.posterStatus)
   return (
     <button
       type="button"
@@ -123,12 +131,14 @@ function BrokenPosterCard({ row, onOpen }: { row: MissingVideoRow; onOpen: (r: M
 // ── 主组件 ────────────────────────────────────────────────────────
 
 export interface BrokenSamplesGridProps {
-  readonly rows: readonly MissingVideoRow[]
+  /** ADR-210：recent-broken-samples 端点结果（每行即破损样本，事件流口径） */
+  readonly rows: readonly BrokenSampleRow[]
 }
 
 export function BrokenSamplesGrid({ rows }: BrokenSamplesGridProps) {
-  const broken = rows.filter((r) => r.posterStatus === 'broken').slice(0, MAX_SAMPLES)
-  const [selected, setSelected] = useState<MissingVideoRow | null>(null)
+  // ADR-210：rows 已是事件流破损样本，无需 client 过滤；仅截断到 MAX_SAMPLES
+  const broken = rows.slice(0, MAX_SAMPLES)
+  const [selected, setSelected] = useState<BrokenSampleRow | null>(null)
 
   return (
     <div data-broken-samples-grid>
