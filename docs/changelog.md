@@ -2243,3 +2243,16 @@
 - **新增依赖**：无
 - **数据库变更**：无（仅新只读 query；ADR-211 零 migration）
 - **注意事项**：口径 D-211-2（url 非空 btrim 守卫 + status<>ok ∪ 真坏事件白名单，排除 timeout/dimension/aspect 误报）；真库验证 poster published 27（broken_event 7 排首+low_quality 20）、banner 0（url-guard 生效）。门禁全绿：typecheck/lint/test:changed 127/verify:endpoint-adr 249/集成 12。arch-reviewer PASS 3 LOW 全吸收/登记。**4B**：问题板 + recent-broken-samples 退役（同 commit checklist）+「加载更多」按 videoId+kind 去重（per-video 计数）。
+
+## [IMGH-P3-1A/1B + IMGH-P3-2] 破损样本区事件流口径根治 + KPI 卡片信息密度增强（补登记）
+- **完成时间**：2026-06-20
+- **记录时间**：2026-06-20 22:30
+- **执行模型**：claude-opus-4-8（用户交互直驱；P3-2 建议 sonnet 经人工覆盖）
+- **子代理**：无（P3-1A/1B 的 ADR-210 arch-reviewer + Codex 双审在前序会话完成，见 ADR-210 文末）
+- **修改文件**（合并提交 `f804de79`，两任务在共享文件交织、环境不支持 git add -p 拆分）：
+  - 后端：`apps/api/src/db/queries/imageHealth.scan.ts`（getRecentBrokenSamples 事件流口径 + BROKEN_SAMPLE_EVENT_TYPES 白名单）/ `imageHealth.ts`（getImageHealthStats 改双口径 published/all × 4 类 FILTER + re-export）/ `ImageHealthService.ts` / `routes/admin/image-health.ts`（recent-broken-samples route）
+  - 前端：`lib/image-health/api.ts`（BrokenSampleRow + getRecentBrokenSamples + ImageHealthStats 双口径 DTO）/ `_client/BrokenSamplesGrid.tsx`（独立数据源去 client 过滤）/ `_client/ImageHealthKpiCards.tsx`（新，3 卡：图片正常视频/4 类覆盖率/近 7 日破损，复用共享 KpiCard value:ReactNode 槽不改 admin-ui Props）/ `_client/ImageHealthClient.tsx`（591→541 收敛）
+  - 测试：endpoint/component/integration 多文件
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：P3-1A/1B 根因＝poster_status 与 broken_image_events 双不可靠（详见 ADR-210/211）；P3-2 卡①健康口径=封面 poster_status='ok'（用户 AskUserQuestion 选定，后续经实测发现该口径仍失准 → 催生 ADR-211 problem-images 看图分诊方案）。门禁：typecheck/lint/test:changed 192/verify:endpoint-adr/集成。
