@@ -2275,3 +2275,14 @@
 - **新增依赖**：无
 - **数据库变更**：无
 - **注意事项**：退役 checklist 6 项同 commit（D-211-5）；verify:endpoint-adr 133 端点（删 recent-broken 表行 -1）。**已知 gap（follow-up）**：problem-images DTO 无 `eventId` → 板进抽屉「标记已解决」disabled（resolve 在 Tab B 治理表完整支持）；如需板内 resolve 须后端 DTO 加 eventId（改 ADR-211 端点契约，另起卡）。门禁全绿：typecheck/lint/test:changed 199/verify:endpoint-adr 248·133/verify:adr-contracts。`<img>` lint warning 与 ImageGovernanceDrawer/TabImages 后台范式一致（外部任意 URL + onError 失败态，next/image 不适用）。
+
+## [IMGH-P3-4C] 核查：前台 SafeImage 零裂图覆盖面（ADR-211 §8 / Codex LOW-2/L-4）
+- **完成时间**：2026-06-20
+- **记录时间**：2026-06-20 23:45
+- **执行模型**：claude-opus-4-8
+- **子代理**：无
+- **修改文件**：
+  - `docs/research/imgh-p3-4c-safeimage-coverage_20260620.md` — 新核查报告（`git grep` 枚举 web-next 全图片入口 + 安全网架构 + 12 消费点清单 + 漏网点清单）
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：**仅核查不修复**（apps/web-next 只读）。结论：前台 12/13 图片入口走 `SafeImage` 安全网（`onError`→`FallbackCover` 零裂图，含 VideoCard→StackedPosterFrame→SafeImage 主链路）；**唯一漏网点 = `components/home/DailyAnimeRow.tsx:97`** 裸 `<img src={item.coverUrl}>`（无 onError/不经 SafeImage，首页「每日新番」公开行）→ 用户端裂图风险。建议起 **IMGH-P3-4D 修复卡**（改 SafeImage + `onLoadFail`→reportBrokenImage，对齐 VideoCard/BrowseCard 范式）。**工具教训**：本环境 `find -type f`/`grep -rn` 递归**静默失败返假空**（误判 components 目录为空），核查类任务一律用 `git grep`/`git ls-files`。
