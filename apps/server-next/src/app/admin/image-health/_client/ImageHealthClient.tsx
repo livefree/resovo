@@ -38,7 +38,7 @@ import {
   type FilterValue,
 } from '@resovo/admin-ui'
 import { SwitchDomainModal } from './SwitchDomainModal'
-import { BrokenSamplesGrid } from './BrokenSamplesGrid'
+import { ImageHealthProblemBoard } from './ImageHealthProblemBoard'
 import { ImageHealthKpiCards } from './ImageHealthKpiCards'
 import { ImageGovernanceDrawer } from './ImageGovernanceDrawer'
 import { ImageHealthBulkActions } from './ImageHealthBulkActions'
@@ -47,14 +47,12 @@ import {
   getImageHealthStats,
   getTopBrokenDomains,
   listMissingVideos,
-  getRecentBrokenSamples,
   triggerImageBackfill,
   triggerImageRescan,
   switchImageFallbackDomain,
   type ImageHealthStats,
   type BrokenDomainRow,
   type MissingVideoRow,
-  type BrokenSampleRow,
 } from '@/lib/image-health/api'
 import { buildMissingVideoColumns, buildBrokenDomainColumns } from './ImageHealthColumns'
 
@@ -74,13 +72,6 @@ const PAGE_STYLE: CSSProperties = {
   flexDirection: 'column',
   gap: 'var(--section-gap)',
   padding: 'var(--page-padding-y) var(--page-padding-x) 0',
-}
-
-const SECTION_SPLIT_STYLE: CSSProperties = {
-  display: 'grid',
-  gridTemplateColumns: '1fr 1fr',
-  gap: 'var(--section-gap)',
-  alignItems: 'start',
 }
 
 // ── 主组件 ────────────────────────────────────────────────────────
@@ -111,11 +102,8 @@ export function ImageHealthClient() {
   const [missingRows, setMissingRows] = useState<readonly MissingVideoRow[]>([])
   const [missingTotal, setMissingTotal] = useState(0)
   const [missingError, setMissingError] = useState<Error | null>(null)
-  // ADR-210 / IMGH-P3-1B：破损样本区独立数据源（事件流口径，与治理表 missingRows 解耦）
-  const [brokenSamples, setBrokenSamples] = useState<readonly BrokenSampleRow[]>([])
-  const [brokenSamplesError, setBrokenSamplesError] = useState<Error | null>(null)
-  // ADR-210 MEDIUM-2：概览（stats/domains/brokenSamples）与治理表（missing）加载态拆分，
-  // 使治理表翻页/筛选不重复拉取概览三端点（落实「概览与治理解耦」语义）
+  // ADR-211：概览（stats/domains）与治理表（missing）加载态拆分；问题图片板自管理数据
+  // （ImageHealthProblemBoard 内部 fetch problem-images，与概览/治理表均解耦）
   const [overviewLoading, setOverviewLoading] = useState(true)
   const [missingLoading, setMissingLoading] = useState(true)
   const [backfillPending, setBackfillPending] = useState(false)
@@ -145,23 +133,18 @@ export function ImageHealthClient() {
   useEffect(() => {
     let cancelled = false
     setOverviewLoading(true)
-    setStatsError(null); setDomainsError(null); setBrokenSamplesError(null)
+    setStatsError(null); setDomainsError(null)
 
     Promise.allSettled([
       getImageHealthStats(),
       getTopBrokenDomains(20),
-      getRecentBrokenSamples(24),
-    ]).then(([statsRes, domainsRes, brokenSamplesRes]) => {
+    ]).then(([statsRes, domainsRes]) => {
       if (cancelled) return
       if (statsRes.status === 'fulfilled') setStats(statsRes.value)
       else                                  setStatsError(statsRes.reason instanceof Error ? statsRes.reason : new Error('stats 加载失败'))
 
       if (domainsRes.status === 'fulfilled') setDomains(domainsRes.value)
       else                                    setDomainsError(domainsRes.reason instanceof Error ? domainsRes.reason : new Error('域名加载失败'))
-
-      // ADR-210：破损样本区独立数据源（事件流口径）
-      if (brokenSamplesRes.status === 'fulfilled') setBrokenSamples(brokenSamplesRes.value)
-      else                                          setBrokenSamplesError(brokenSamplesRes.reason instanceof Error ? brokenSamplesRes.reason : new Error('破损样本加载失败'))
     }).finally(() => {
       if (!cancelled) setOverviewLoading(false)
     })
@@ -430,54 +413,37 @@ export function ImageHealthClient() {
             }
           </div>
 
-          {/* 主体 1fr/1fr：TOP 破损域名 + 破损样本 grid */}
-          <div style={SECTION_SPLIT_STYLE}>
-            <AdminCard
-              surface="plain"
-              padding="md"
-              header={{
-                title: 'TOP 破损域名',
-                subtitle: 'CDN 故障定位（按事件总数倒序，前 20）',
-              }}
-              data-testid="image-health-domains-card"
-            >
-              {domainsError ? (
-                <ErrorState error={domainsError} title="域名加载失败" onRetry={refresh} />
-              ) : (
-                <DataTable<BrokenDomainRow>
-                  rows={domains}
-                  columns={domainColumns}
-                  rowKey={(r) => r.domain}
-                  mode="client"
-                  query={domainsQuery}
-                  onQueryChange={(patch) => { if (patch.columns) setDomainsColumnPrefs(patch.columns) }}
-                  loading={overviewLoading && domains.length === 0}
-                  emptyState={<EmptyState title="暂无破损域名" description="所有 CDN 域名健康" />}
-                  data-testid="image-health-domains-table"
-                  enableColumnResizing
-                  pagination={{ hidden: true }}
-                />
-              )}
-            </AdminCard>
+          {/* ADR-211：问题图片可视化治理板（全宽，自管理 problem-images 数据源） */}
+          <ImageHealthProblemBoard />
 
-            <AdminCard
-              surface="plain"
-              padding="md"
-              header={{
-                title: '破损样本',
-                subtitle: '2:3 比例缩略 · 实时反映最新破损封面',
-              }}
-              data-testid="image-health-broken-samples-card"
-            >
-              {brokenSamplesError ? (
-                <ErrorState error={brokenSamplesError} title="加载失败" onRetry={refresh} />
-              ) : overviewLoading && brokenSamples.length === 0 ? (
-                <LoadingState variant="skeleton" />
-              ) : (
-                <BrokenSamplesGrid rows={brokenSamples} />
-              )}
-            </AdminCard>
-          </div>
+          {/* TOP 破损域名（下移全宽，CDN 故障定位） */}
+          <AdminCard
+            surface="plain"
+            padding="md"
+            header={{
+              title: 'TOP 破损域名',
+              subtitle: 'CDN 故障定位（按事件总数倒序，前 20）',
+            }}
+            data-testid="image-health-domains-card"
+          >
+            {domainsError ? (
+              <ErrorState error={domainsError} title="域名加载失败" onRetry={refresh} />
+            ) : (
+              <DataTable<BrokenDomainRow>
+                rows={domains}
+                columns={domainColumns}
+                rowKey={(r) => r.domain}
+                mode="client"
+                query={domainsQuery}
+                onQueryChange={(patch) => { if (patch.columns) setDomainsColumnPrefs(patch.columns) }}
+                loading={overviewLoading && domains.length === 0}
+                emptyState={<EmptyState title="暂无破损域名" description="所有 CDN 域名健康" />}
+                data-testid="image-health-domains-table"
+                enableColumnResizing
+                pagination={{ hidden: true }}
+              />
+            )}
+          </AdminCard>
         </section>
       )}
 

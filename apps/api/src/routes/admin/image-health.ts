@@ -5,7 +5,7 @@
  * GET  /admin/image-health/stats                  — 总览统计
  * GET  /admin/image-health/broken-domains         — TOP 破损域名
  * GET  /admin/image-health/missing-videos         — 缺图视频列表（分页）
- * GET  /admin/image-health/recent-broken-samples  — 近期破损样本（事件流口径，ADR-210）
+ * GET  /admin/image-health/problem-images         — 问题图片可视化治理板（4 类×scope，ADR-211）
  * POST /admin/image-health/backfill               — 手动触发存量 pending_review 回填（CHORE-09）
  * POST /admin/image-health/rescan                 — 重扫封面（ADR-135）
  * POST /admin/image-health/switch-fallback-domain — 批量切 fallback 域（ADR-135）
@@ -36,11 +36,6 @@ import type { ImageKind } from '@/types'
 
 const BrokenDomainsQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(50).default(20),
-})
-
-// ADR-210：破损样本区数据源。limit clamp 1-50，默认 24（对齐前端 MAX_SAMPLES）
-const RecentBrokenSamplesQuerySchema = z.object({
-  limit: z.coerce.number().int().min(1).max(50).default(24),
 })
 
 // ADR-211：问题图片可视化治理板。kind enum 复用 PROBLEM_IMAGE_KINDS SSoT（默认 poster=必须项优先）；
@@ -161,20 +156,6 @@ export async function adminImageHealthRoutes(fastify: FastifyInstance) {
     ])
 
     return reply.send({ data: rows, total })
-  })
-
-  // ── GET /admin/image-health/recent-broken-samples（ADR-210）────
-  // 破损样本区数据源：对齐 broken_image_events 事件流口径（与 KPI/趋势/TOP域名同源），
-  // 取代旧「治理表第一页 + 客户端 poster_status='broken' 过滤」。只读、无审计。
-  fastify.get('/admin/image-health/recent-broken-samples', { preHandler: auth }, async (request, reply) => {
-    const parsed = RecentBrokenSamplesQuerySchema.safeParse(request.query)
-    if (!parsed.success) {
-      return reply.code(400).send({
-        error: { code: 'VALIDATION_ERROR', message: parsed.error.errors[0]?.message ?? 'Invalid query', status: 400 },
-      })
-    }
-    const rows = await new ImageHealthService(db).getRecentBrokenSamples(parsed.data.limit)
-    return reply.send({ data: rows })
   })
 
   // ── GET /admin/image-health/problem-images（ADR-211，supersede ADR-210）────

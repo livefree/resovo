@@ -60,20 +60,51 @@ export interface MissingVideoRow {
   readonly hasHighConfidenceCandidate: boolean
 }
 
-// ADR-210：破损样本区数据源行（事件流口径，对齐后端 RecentBrokenSampleRow）。
-// 字段对齐 BrokenSamplesGrid 现消费面（Lightbox meta + overlay），结构兼容 MissingVideoRow 子集。
-export interface BrokenSampleRow {
+// ADR-211：问题图片可视化治理板数据源（对齐后端 imageHealth.scan.ts ProblemImageRow camelCase DTO）。
+// supersede ADR-210 破损样本区（problem-images 是 recent-broken-samples 超集：4 类 + 状态∪真坏事件口径）。
+export type ProblemImageKind = 'poster' | 'backdrop' | 'logo' | 'banner_backdrop'
+export type ProblemImageScope = 'published' | 'all'
+/** problemReason：UI 分色 + 后端默认排序优先级（真坏在前，ADR-211 D-211-3 / Codex H-2）。 */
+export type ProblemReason = 'broken_event' | 'broken' | 'low_quality' | 'pending_review' | 'other'
+
+export interface ProblemImageRow {
   readonly videoId: string
   readonly catalogId: string
   readonly title: string
-  /** 破损事件记录的失效 URL（即「破损的那张」） */
-  readonly posterUrl: string
-  readonly posterSource: string | null
-  readonly posterStatus: string
+  readonly isPublished: boolean
+  readonly kind: ProblemImageKind
+  /** <kind>_url，后端口径已含 IS NOT NULL + btrim<>'' 守卫 → 恒非空非空白（无「无图卡」） */
+  readonly imageUrl: string
+  readonly status: string
+  readonly problemReason: ProblemReason
+  /** poster_source（仅 poster 有意义；secondary 恒 null → UI 隐藏空字段） */
+  readonly source: string | null
   readonly eventType: string | null
-  readonly brokenDomain: string
+  readonly brokenDomain: string | null
   readonly occurrenceCount: number
   readonly lastSeenBrokenAt: string | null
+}
+
+/** 4 类问题图片计数（tab badge + 当前 kind 的 total），一次返回避 4 次请求（ADR-211 D-211-4）。 */
+export interface ProblemImageCounts {
+  readonly poster: number
+  readonly backdrop: number
+  readonly logo: number
+  readonly banner_backdrop: number
+}
+
+export interface ListProblemImagesParams {
+  readonly kind?: ProblemImageKind
+  readonly scope?: ProblemImageScope
+  readonly offset?: number
+  readonly limit?: number
+}
+
+export interface ListProblemImagesResult {
+  readonly data: readonly ProblemImageRow[]
+  /** 当前 kind+scope 命中总数（= counts[kind]） */
+  readonly total: number
+  readonly counts: ProblemImageCounts
 }
 
 export interface ListMissingVideosParams {
@@ -236,14 +267,22 @@ export async function getTopBrokenDomains(limit = 20): Promise<readonly BrokenDo
 }
 
 /**
- * 近期破损海报样本（ADR-210）：破损样本区数据源，对齐 broken_image_events 事件流口径
- * （与 KPI / 趋势 / TOP域名同源）。取代旧「治理表第一页 + 客户端 poster_status='broken' 过滤」。
+ * 问题图片可视化治理板数据源（ADR-211）：按 kind/scope 返回「有非空 URL 但可能失效」的图，
+ * 供运营看真实缩略图人眼分诊。返回 { data, total, counts }——counts 一次给 4 类 tab badge。
+ * supersede ADR-210 recent-broken-samples（problem-images 是其超集）。
  */
-export async function getRecentBrokenSamples(limit = 24): Promise<readonly BrokenSampleRow[]> {
-  const result = await apiClient.get<{ data: readonly BrokenSampleRow[] }>(
-    `/admin/image-health/recent-broken-samples?limit=${limit}`,
+export async function getProblemImages(
+  params: ListProblemImagesParams = {},
+): Promise<ListProblemImagesResult> {
+  const qs = new URLSearchParams()
+  if (params.kind)            qs.set('kind', params.kind)
+  if (params.scope)           qs.set('scope', params.scope)
+  if (params.offset != null)  qs.set('offset', String(params.offset))
+  if (params.limit != null)   qs.set('limit', String(params.limit))
+  const q = qs.toString()
+  return apiClient.get<ListProblemImagesResult>(
+    `/admin/image-health/problem-images${q ? `?${q}` : ''}`,
   )
-  return result.data
 }
 
 export async function listMissingVideos(

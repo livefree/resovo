@@ -14,11 +14,9 @@ import {
   resolveImageEvents,
   getCatalogIdsByVideoIds,
   rescanPostersByCatalogIds,
-  getRecentBrokenSamples,
   getProblemImages,
   getProblemImageCounts,
   type ImageHealthStats,
-  type RecentBrokenSampleRow,
   type ProblemImageKind,
   type ProblemImageScope,
   type ProblemImageRow,
@@ -90,14 +88,6 @@ export class ImageHealthService {
 
   async getStats(): Promise<ImageHealthStats> {
     return getImageHealthStats(this.db)
-  }
-
-  /**
-   * ADR-210：近期破损海报样本（破损样本区数据源，事件流口径）。
-   * 只读端点，无审计；与 KPI / 趋势 / TOP域名同源 broken_image_events。
-   */
-  async getRecentBrokenSamples(limit = 24): Promise<RecentBrokenSampleRow[]> {
-    return getRecentBrokenSamples(this.db, limit)
   }
 
   /**

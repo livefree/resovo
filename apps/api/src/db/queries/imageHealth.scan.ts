@@ -45,102 +45,14 @@ export async function getBrokenEventsTrend(
   return points
 }
 
-// ── 查询：近期破损样本（ADR-210 D-210，破损样本区数据源）─────────
+// ── 真·加载失败事件白名单（ADR-210 D-210-6 裁定；ADR-211 problem-images 口径复用）─────────
 
-// ADR-210 D-210-6（用户裁定 2026-06-20）：破损样本仅取「真·加载失败」event_type（图实际打不开）。
-// 排除 timeout（worker 300ms HEAD 超时误报，浏览器能正常加载——真库 unresolved poster 最大头 2080
-// 视频）+ dimension_too_small/aspect_mismatch（图能加载、仅尺寸/比例不合规，属 low_quality 治理范畴）。
-// → 避免「破损样本却能正常预览」的语义错位。
+// 「真·加载失败」event_type（图实际打不开）。排除 timeout（worker 300ms HEAD 超时误报，浏览器能正常
+// 加载）+ dimension_too_small/aspect_mismatch（图能加载、仅尺寸/比例不合规，属 low_quality 范畴）。
+// problemFilterSql（getProblemImages/getProblemImageCounts）据此判「② 真坏事件」分支。
 export const BROKEN_SAMPLE_EVENT_TYPES = [
   'client_load_error', 'empty_src', 'fetch_404', 'fetch_5xx', 'decode_fail',
 ] as const
-
-export interface RecentBrokenSampleRow {
-  videoId: string
-  catalogId: string
-  title: string
-  /** 破损事件记录的失效 URL（e.url，即「破损的那张」，非 mc.cover_url 可能已被改） */
-  posterUrl: string
-  posterSource: string | null
-  posterStatus: string
-  eventType: string | null
-  /** 从 e.url SQL 派生，统一 getTopBrokenDomains 口径 */
-  brokenDomain: string
-  occurrenceCount: number
-  lastSeenBrokenAt: string | null
-}
-
-/**
- * 近期破损海报样本（ADR-210）：破损样本区数据源，对齐 broken_image_events 事件流口径
- * （与 KPI / 趋势 / TOP域名同源），取代旧「治理表第一页 + 客户端 poster_status='broken' 过滤」。
- *
- * - 仅未解决（resolved_at IS NULL）+ poster（image_kind='poster'，2:3 海报位 scope，D-210-2）
- * - DISTINCT ON (video_id) 取每视频最近一条事件（D-210-3），避免同封面多事件刷满
- * - 外层按 last_seen_at DESC + LIMIT；已删视频 / 无 catalog 经 JOIN 自动滤除
- */
-export async function getRecentBrokenSamples(
-  db: Pool,
-  limit = 24,
-): Promise<RecentBrokenSampleRow[]> {
-  const result = await db.query<{
-    video_id: string
-    catalog_id: string
-    title: string
-    url: string
-    poster_source: string | null
-    poster_status: string
-    event_type: string | null
-    broken_domain: string
-    occurrence_count: number | null
-    last_seen_broken_at: string | null
-  }>(
-    `SELECT
-       sub.video_id,
-       sub.catalog_id,
-       sub.title,
-       sub.url,
-       sub.poster_source,
-       sub.poster_status,
-       sub.event_type,
-       regexp_replace(sub.url, '^https?://([^/]+).*', '\\1') AS broken_domain,
-       sub.occurrence_count,
-       sub.last_seen_at::text AS last_seen_broken_at
-     FROM (
-       SELECT DISTINCT ON (e.video_id)
-         e.video_id,
-         v.catalog_id,
-         v.title,
-         e.url,
-         mc.poster_source,
-         mc.poster_status,
-         e.event_type,
-         e.occurrence_count,
-         e.last_seen_at
-       FROM broken_image_events e
-       JOIN videos v ON v.id = e.video_id AND v.deleted_at IS NULL
-       JOIN media_catalog mc ON mc.id = v.catalog_id
-       WHERE e.resolved_at IS NULL
-         AND e.image_kind = 'poster'
-         AND e.event_type = ANY($2::text[])
-       ORDER BY e.video_id, e.last_seen_at DESC, e.id DESC
-     ) sub
-     ORDER BY sub.last_seen_at DESC
-     LIMIT $1`,
-    [limit, [...BROKEN_SAMPLE_EVENT_TYPES]],
-  )
-  return result.rows.map(r => ({
-    videoId: r.video_id,
-    catalogId: r.catalog_id,
-    title: r.title,
-    posterUrl: r.url,
-    posterSource: r.poster_source,
-    posterStatus: r.poster_status,
-    eventType: r.event_type,
-    brokenDomain: r.broken_domain,
-    occurrenceCount: r.occurrence_count ?? 0,
-    lastSeenBrokenAt: r.last_seen_broken_at,
-  }))
-}
 
 // ── 查询：问题图片可视化治理板（ADR-211，supersede ADR-210 破损样本区）────
 

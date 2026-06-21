@@ -6,7 +6,7 @@
 
 ## 当前任务（单任务工作台：同时仅 1 个 🔄 进行中；完成即删卡，历史见 docs/changelog.md）
 
-_（**当前无 🔄 进行中卡片。** SEQ-20260620-01 已交付：IMGH-P3-1A/1B〔破损样本区根治，ADR-210，`f804de79`〕+ P3-2〔KPI 卡片信息密度，`f804de79`〕+ 设计 ADR-211〔problem-images 治理板，arch-reviewer + Codex 双审，`2f71cb31`〕+ P3-4A〔problem-images 端点，arch-reviewer PASS，`3a827433`〕。**剩余 P3-4B 前端问题板 + 退役 recent-broken-samples / P3-4C 前台零裂图核查**，登记见 `docs/task-queue.md` SEQ-20260620-01。取卡前先查 🚨 BLOCKER。）_
+_（**当前无 🔄 进行中卡片。** SEQ-20260620-01 进展：IMGH-P3-1A/1B〔破损样本区根治，ADR-210，`f804de79`〕+ P3-2〔KPI 卡片信息密度，`f804de79`〕+ 设计 ADR-211〔`2f71cb31`〕+ P3-4A〔problem-images 端点，arch-reviewer PASS，`3a827433`〕+ **P3-4B〔问题图片可视化治理板 + recent-broken-samples 退役全链，ADR-211，门禁全绿 typecheck·lint·test:changed 199·verify:endpoint-adr 133·e2e:admin 84，本提交〕✅** 已交付。**剩余 P3-4C 前台 SafeImage 零裂图覆盖面核查**（与 4A/4B 解耦，建议模型 sonnet，仅核查出清单不修复），登记见 `docs/task-queue.md` SEQ-20260620-01。取卡前先查 🚨 BLOCKER。）_
 
 ---
 

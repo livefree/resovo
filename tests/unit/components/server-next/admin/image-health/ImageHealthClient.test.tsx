@@ -42,7 +42,7 @@ vi.mock('next/navigation', () => ({
 const getImageHealthStatsMock = vi.fn()
 const getTopBrokenDomainsMock = vi.fn()
 const listMissingVideosMock = vi.fn()
-const getRecentBrokenSamplesMock = vi.fn()
+const getProblemImagesMock = vi.fn()
 const triggerImageBackfillMock = vi.fn()
 const triggerImageRescanMock = vi.fn()
 const switchImageFallbackDomainMock = vi.fn()
@@ -53,8 +53,8 @@ vi.mock('../../../../../../apps/server-next/src/lib/image-health/api', () => ({
   getImageHealthStats: (...args: unknown[]) => getImageHealthStatsMock(...args),
   getTopBrokenDomains: (...args: unknown[]) => getTopBrokenDomainsMock(...args),
   listMissingVideos: (...args: unknown[]) => listMissingVideosMock(...args),
-  // ADR-210 / IMGH-P3-1B：破损样本区独立数据源（事件流口径）
-  getRecentBrokenSamples: (...args: unknown[]) => getRecentBrokenSamplesMock(...args),
+  // ADR-211：问题图片板数据源（problem-board 自管理；ImageHealthProblemBoard 消费）
+  getProblemImages: (...args: unknown[]) => getProblemImagesMock(...args),
   triggerImageBackfill: (...args: unknown[]) => triggerImageBackfillMock(...args),
   triggerImageRescan: (...args: unknown[]) => triggerImageRescanMock(...args),
   switchImageFallbackDomain: (...args: unknown[]) => switchImageFallbackDomainMock(...args),
@@ -154,28 +154,12 @@ const MISSING_VIDEOS_FIXTURE = {
 const EMPTY_MISSING = { data: [], total: 0 }
 const EMPTY_DOMAINS: never[] = []
 
-// ADR-210：破损样本区 fixture（事件流口径，BrokenSampleRow）
-const BROKEN_SAMPLES_FIXTURE = [
-  {
-    videoId: '00000000-0000-0000-0000-0000000000a1',
-    catalogId: 'cat-a1',
-    title: 'Broken Sample A',
-    posterUrl: 'https://cdn-broken.example.com/sample-a.jpg',
-    posterSource: 'tmdb',
-    posterStatus: 'pending_review',
-    eventType: 'fetch_404',
-    brokenDomain: 'cdn-broken.example.com',
-    occurrenceCount: 5,
-    lastSeenBrokenAt: '2026-06-20T00:00:00.000Z',
-  },
-]
-
 beforeEach(() => {
   getImageHealthStatsMock.mockReset()
   getTopBrokenDomainsMock.mockReset()
   listMissingVideosMock.mockReset()
-  // 默认空破损样本（不干扰既有 getByText 唯一性断言）；正向用例单独覆写
-  getRecentBrokenSamplesMock.mockReset().mockResolvedValue([])
+  // 默认空问题图片（problem-board 自管理，不干扰 KPI/domains 断言）；正向用例单独覆写
+  getProblemImagesMock.mockReset().mockResolvedValue({ data: [], total: 0, counts: { poster: 0, backdrop: 0, logo: 0, banner_backdrop: 0 } })
   triggerImageBackfillMock.mockReset()
   triggerImageRescanMock.mockReset()
   switchImageFallbackDomainMock.mockReset()
@@ -309,7 +293,7 @@ describe('ImageHealthClient', () => {
     })
   })
 
-  it('10. 初次加载并行调 4 端点 + 默认参数 page=1 limit=20 + 破损样本 limit=24', async () => {
+  it('10. 初次加载：概览 stats/domains + 治理 missing + 问题板 problem-images（默认 poster/published）', async () => {
     getImageHealthStatsMock.mockResolvedValueOnce(STATS_FIXTURE)
     getTopBrokenDomainsMock.mockResolvedValueOnce(EMPTY_DOMAINS)
     listMissingVideosMock.mockResolvedValueOnce(EMPTY_MISSING)
@@ -320,49 +304,33 @@ describe('ImageHealthClient', () => {
       expect(listMissingVideosMock).toHaveBeenCalledWith(
         expect.objectContaining({ page: 1, limit: 20 }),
       )
-      // ADR-210：破损样本区独立端点（事件流口径，limit 24 对齐 MAX_SAMPLES）
-      expect(getRecentBrokenSamplesMock).toHaveBeenCalledWith(24)
+      // ADR-211：问题图片板自管理数据源（默认 kind=poster / scope=published）
+      expect(getProblemImagesMock).toHaveBeenCalledWith(
+        expect.objectContaining({ kind: 'poster', scope: 'published' }),
+      )
     })
   })
 
-  it('10b. 概览 Tab：破损样本区渲染来自 recent-broken-samples（事件流口径，与治理表解耦）', async () => {
-    getImageHealthStatsMock.mockResolvedValueOnce(STATS_FIXTURE)
-    getTopBrokenDomainsMock.mockResolvedValueOnce(EMPTY_DOMAINS)
-    // 治理表空，但破损样本区仍有数据（独立数据源 = 根因修复核心）
-    listMissingVideosMock.mockResolvedValueOnce(EMPTY_MISSING)
-    getRecentBrokenSamplesMock.mockResolvedValueOnce(BROKEN_SAMPLES_FIXTURE)
-    const { container } = render(<ImageHealthClient />)
-    await waitFor(() => {
-      const card = screen.getByTestId('image-health-broken-samples-card')
-      expect(card.querySelector('[data-broken-sample]')).not.toBeNull()
-      expect(card.querySelector('[data-broken-count]')?.textContent).toBe('1')
-    })
-    // 治理表为空不影响破损样本区（旧设计两者同源 → 此处证明已解耦）
-    expect(container.querySelector('[data-broken-overlay]')?.textContent).toContain('cdn-broken.example.com')
-  })
-
-  it('10c. 破损样本区加载失败 → 独立 ErrorState，不阻塞 KPI', async () => {
+  it('10b. 概览 Tab：问题图片板渲染（ADR-211，取代破损样本区）', async () => {
     getImageHealthStatsMock.mockResolvedValueOnce(STATS_FIXTURE)
     getTopBrokenDomainsMock.mockResolvedValueOnce(EMPTY_DOMAINS)
     listMissingVideosMock.mockResolvedValueOnce(EMPTY_MISSING)
-    getRecentBrokenSamplesMock.mockReset().mockRejectedValueOnce(new Error('broken-samples 500'))
     render(<ImageHealthClient />)
     await waitFor(() => {
-      // KPI 正常
-      expect(screen.getByTestId('kpi-healthy-videos')).not.toBeNull()
-      // 破损样本卡内 ErrorState
-      const card = screen.getByTestId('image-health-broken-samples-card')
-      expect(card.textContent).toMatch(/加载失败|500/)
+      expect(screen.getByTestId('image-health-problem-board')).not.toBeNull()
     })
+    // 旧破损样本卡已退役
+    expect(screen.queryByTestId('image-health-broken-samples-card')).toBeNull()
   })
 
-  it('11. 整体加载失败（3 端点全 reject）三类 ErrorState 不阻塞彼此', async () => {
+  it('11. 概览整体失败：stats/domains/problem-board 各自 ErrorState 不阻塞彼此', async () => {
     getImageHealthStatsMock.mockRejectedValueOnce(new Error('stats 500'))
     getTopBrokenDomainsMock.mockRejectedValueOnce(new Error('domains 500'))
     listMissingVideosMock.mockRejectedValueOnce(new Error('missing 500'))
+    getProblemImagesMock.mockReset().mockRejectedValueOnce(new Error('problem 500'))
     render(<ImageHealthClient />)
     await waitFor(() => {
-      // 三个独立 ErrorState（Promise.allSettled 不互相阻塞）
+      // 概览 Tab 三个独立 ErrorState（stats/domains/problem-board；Promise.allSettled + board 自管理）
       expect(screen.getAllByText(/加载失败|500/).length).toBeGreaterThanOrEqual(3)
     })
   })

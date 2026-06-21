@@ -2256,3 +2256,22 @@
 - **新增依赖**：无
 - **数据库变更**：无
 - **注意事项**：P3-1A/1B 根因＝poster_status 与 broken_image_events 双不可靠（详见 ADR-210/211）；P3-2 卡①健康口径=封面 poster_status='ok'（用户 AskUserQuestion 选定，后续经实测发现该口径仍失准 → 催生 ADR-211 problem-images 看图分诊方案）。门禁：typecheck/lint/test:changed 192/verify:endpoint-adr/集成。
+
+## [IMGH-P3-4B] 前端：问题图片可视化治理板 + recent-broken-samples 退役（ADR-211）
+- **完成时间**：2026-06-20
+- **记录时间**：2026-06-20 23:25
+- **执行模型**：claude-opus-4-8（会话以 Opus 启动；卡建议 sonnet）
+- **子代理**：无（按已审 ADR-211 实现；`focusKind` 为 server-next 模块内组件 Props、非 admin-ui 公开 Props，设计 §9 裁定不触发强制 Opus 组件契约）
+- **修改文件**：
+  - `apps/server-next/src/lib/image-health/api.ts` — 加 `ProblemImage*` 类型 + `getProblemImages(params)` fetcher；删 `BrokenSampleRow` + `getRecentBrokenSamples`
+  - `apps/server-next/src/app/admin/image-health/_client/ProblemImageCard.tsx` — 新：缩略真实 URL + `<img onError>`→`--state-error-border` 失败态（不复用 admin Thumb，D-211-6）+ 标题取代域名 + hover 详情浮层（secondary 空字段隐藏 L-2）+ problemReason 分色
+  - `apps/server-next/src/app/admin/image-health/_client/ImageHealthProblemBoard.tsx` — 新：2×Segment（kind tab badge=counts + scope）+ reason 子筛选 + 网格 + 加载更多（offset 累积+videoId+kind 去重）+ 自带 ImageGovernanceDrawer；漂移三缓解（H-3）
+  - `apps/server-next/src/app/admin/image-health/_client/ImageGovernanceDrawer.tsx` — 加 `focusKind?: VideoImageKind`（默认 poster 向后兼容 Tab B）→ 候选字段/替换/手填/标题按 kind（banner_backdrop 无候选→仅手填）
+  - `apps/server-next/src/app/admin/image-health/_client/ImageHealthClient.tsx` — 概览布局 KPI→问题板（全宽）→TOP 破损域名（下移全宽）；删 brokenSamples state/调用/BrokenSamplesGrid
+  - 删 `apps/server-next/src/app/admin/image-health/_client/BrokenSamplesGrid.tsx`
+  - 后端退役：`apps/api/src/db/queries/imageHealth.scan.ts`（删 `RecentBrokenSampleRow` + `getRecentBrokenSamples`，**保留** `BROKEN_SAMPLE_EVENT_TYPES`——problem-images 复用）/ `imageHealth.ts`（re-export）/ `ImageHealthService.ts`（方法+import）/ `routes/admin/image-health.ts`（route + schema + 头注释）
+  - 测试：新增 `ProblemImageCard.test.tsx`(11) + `ImageHealthProblemBoard.test.tsx`(10)；改 `ImageHealthClient.test.tsx`/`ImageGovernanceDrawer.test.tsx`（focusKind 用例）；删 `BrokenSamplesGrid.test.tsx` + `admin-image-health-recent-broken-samples.test.ts`；`image-health-scan-queries.test.ts` 去 getRecentBrokenSamples 段
+  - `docs/decisions.md` — ADR-210 端点契约表行删除（D-211-5 checklist）+ 状态行标「端点已退役」
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：退役 checklist 6 项同 commit（D-211-5）；verify:endpoint-adr 133 端点（删 recent-broken 表行 -1）。**已知 gap（follow-up）**：problem-images DTO 无 `eventId` → 板进抽屉「标记已解决」disabled（resolve 在 Tab B 治理表完整支持）；如需板内 resolve 须后端 DTO 加 eventId（改 ADR-211 端点契约，另起卡）。门禁全绿：typecheck/lint/test:changed 199/verify:endpoint-adr 248·133/verify:adr-contracts。`<img>` lint warning 与 ImageGovernanceDrawer/TabImages 后台范式一致（外部任意 URL + onError 失败态，next/image 不适用）。

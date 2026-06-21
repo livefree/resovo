@@ -658,7 +658,7 @@ export async function listMissingBlurhashUrls(
 
 // ── 重扫 / 趋势 / 切换域 / 事件解决 / 破损样本（已迁至 imageHealth.scan.ts）────
 export type {
-  BrokenTrendPoint, RescanScope, RescanPostersResult, SwitchFallbackDomainResult, RecentBrokenSampleRow,
+  BrokenTrendPoint, RescanScope, RescanPostersResult, SwitchFallbackDomainResult,
   // ADR-211：问题图片可视化治理板
   ProblemImageKind, ProblemImageScope, ProblemReason, ProblemImageRow, ProblemImageCounts,
 } from './imageHealth.scan'
@@ -670,9 +670,7 @@ export {
   // ADR-209 D-209-3：ids 精确重扫 scoped 闭环
   getCatalogIdsByVideoIds,
   rescanPostersByCatalogIds,
-  // ADR-210：破损样本区数据源（事件流口径）
-  getRecentBrokenSamples,
-  // ADR-211：problem-images 端点（4 类 + 状态∪真坏事件口径）
+  // ADR-211：problem-images 端点（4 类 + 状态∪真坏事件口径，复用 BROKEN_SAMPLE_EVENT_TYPES 白名单）
   PROBLEM_IMAGE_KINDS,
   getProblemImages,
   getProblemImageCounts,
