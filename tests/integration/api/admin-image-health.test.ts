@@ -18,6 +18,8 @@ import {
   getTopBrokenDomains,
   listMissingPosterVideos,
   getBrokenEventsTrend,
+  getProblemImages,
+  getProblemImageCounts,
 } from '../../../apps/api/src/db/queries/imageHealth'
 
 let db: Pool
@@ -59,6 +61,45 @@ describe('getImageHealthStats SQL 集成', () => {
         expect(scope.bannerOk).toBe(0)
       }
     }
+  })
+})
+
+describe('getProblemImages / getProblemImageCounts SQL 集成（ADR-211 / 4A arch-reviewer 风险 3）', () => {
+  const REASON_RANK: Record<string, number> = {
+    broken_event: 1, broken: 2, low_quality: 3, pending_review: 4, other: 5,
+  }
+
+  it('getProblemImageCounts 返回 4 类非负计数', async () => {
+    const counts = await getProblemImageCounts(db, 'published')
+    for (const k of ['poster', 'backdrop', 'logo', 'banner_backdrop'] as const) {
+      expect(typeof counts[k]).toBe('number')
+      expect(counts[k]).toBeGreaterThanOrEqual(0)
+    }
+  })
+
+  it('getProblemImages(poster,published) 跑通：url 非空守卫 + problemReason 合法 + 优先级非递减排序', async () => {
+    const rows = await getProblemImages(db, 'poster', 'published', 0, 48)
+    expect(rows).toBeInstanceOf(Array)
+    expect(rows.length).toBeLessThanOrEqual(48)
+    let prevRank = 0
+    for (const r of rows) {
+      // D-211-2 url-guard：imageUrl 恒非空非空白
+      expect(typeof r.imageUrl).toBe('string')
+      expect(r.imageUrl.trim().length).toBeGreaterThan(0)
+      // problemReason ∈ 合法集
+      expect(REASON_RANK[r.problemReason]).toBeDefined()
+      // Codex H-2 默认排序：reason 优先级非递减（broken_event 在前）
+      expect(REASON_RANK[r.problemReason]).toBeGreaterThanOrEqual(prevRank)
+      prevRank = REASON_RANK[r.problemReason]
+      // broken_event 行必带事件信息
+      if (r.problemReason === 'broken_event') expect(r.eventType).not.toBeNull()
+    }
+  })
+
+  it('total=counts[kind] 一致：limit 超量时 page 行数 === 当前 kind 计数', async () => {
+    const counts = await getProblemImageCounts(db, 'published')
+    const rows = await getProblemImages(db, 'poster', 'published', 0, 100000)
+    expect(rows.length).toBe(Math.min(100000, counts.poster))
   })
 })
 

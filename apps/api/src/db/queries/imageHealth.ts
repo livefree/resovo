@@ -657,7 +657,11 @@ export async function listMissingBlurhashUrls(
 }
 
 // ── 重扫 / 趋势 / 切换域 / 事件解决 / 破损样本（已迁至 imageHealth.scan.ts）────
-export type { BrokenTrendPoint, RescanScope, RescanPostersResult, SwitchFallbackDomainResult, RecentBrokenSampleRow } from './imageHealth.scan'
+export type {
+  BrokenTrendPoint, RescanScope, RescanPostersResult, SwitchFallbackDomainResult, RecentBrokenSampleRow,
+  // ADR-211：问题图片可视化治理板
+  ProblemImageKind, ProblemImageScope, ProblemReason, ProblemImageRow, ProblemImageCounts,
+} from './imageHealth.scan'
 export {
   getBrokenEventsTrend,
   rescanPosters,
@@ -668,4 +672,8 @@ export {
   rescanPostersByCatalogIds,
   // ADR-210：破损样本区数据源（事件流口径）
   getRecentBrokenSamples,
+  // ADR-211：problem-images 端点（4 类 + 状态∪真坏事件口径）
+  PROBLEM_IMAGE_KINDS,
+  getProblemImages,
+  getProblemImageCounts,
 } from './imageHealth.scan'

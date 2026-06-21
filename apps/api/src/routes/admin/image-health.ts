@@ -22,6 +22,7 @@ import {
   getBrokenEventsTrend,
   rescanPosters,
   switchFallbackDomain,
+  PROBLEM_IMAGE_KINDS,
 } from '@/api/db/queries/imageHealth'
 import type { MissingVideoSortField, SortDir, MissingVideosFilters } from '@/api/db/queries/imageHealth'
 import { getFieldProposalsByCatalogIdAndField, markFieldProposalApplied } from '@/api/db/queries/metadata-field-proposals'
@@ -40,6 +41,15 @@ const BrokenDomainsQuerySchema = z.object({
 // ADR-210：破损样本区数据源。limit clamp 1-50，默认 24（对齐前端 MAX_SAMPLES）
 const RecentBrokenSamplesQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(50).default(24),
+})
+
+// ADR-211：问题图片可视化治理板。kind enum 复用 PROBLEM_IMAGE_KINDS SSoT（默认 poster=必须项优先）；
+// scope published/all（默认 published）；offset/limit 加载更多（limit clamp 1-100 默认 48）。
+const ProblemImagesQuerySchema = z.object({
+  kind:   z.enum(PROBLEM_IMAGE_KINDS).default('poster'),
+  scope:  z.enum(['published', 'all']).default('published'),
+  offset: z.coerce.number().int().min(0).default(0),
+  limit:  z.coerce.number().int().min(1).max(100).default(48),
 })
 
 // broken_image_events.event_type CHECK 8 值（048_image_pipeline.sql:67）
@@ -165,6 +175,25 @@ export async function adminImageHealthRoutes(fastify: FastifyInstance) {
     }
     const rows = await new ImageHealthService(db).getRecentBrokenSamples(parsed.data.limit)
     return reply.send({ data: rows })
+  })
+
+  // ── GET /admin/image-health/problem-images（ADR-211，supersede ADR-210）────
+  // 问题图片可视化治理板数据源：按 kind/scope 返回「有非空 URL 但可能失效」的图（口径 D-211-2）
+  // + 4 类计数（tab badge）。total=counts[kind]（省一次 count 查询）。只读、无审计，对齐同域读端点。
+  fastify.get('/admin/image-health/problem-images', { preHandler: auth }, async (request, reply) => {
+    const parsed = ProblemImagesQuerySchema.safeParse(request.query)
+    if (!parsed.success) {
+      return reply.code(400).send({
+        error: { code: 'VALIDATION_ERROR', message: parsed.error.errors[0]?.message ?? 'Invalid query', status: 400 },
+      })
+    }
+    const { kind, scope, offset, limit } = parsed.data
+    const service = new ImageHealthService(db)
+    const [data, counts] = await Promise.all([
+      service.getProblemImages(kind, scope, offset, limit),
+      service.getProblemImageCounts(scope),
+    ])
+    return reply.send({ data, total: counts[kind], counts })
   })
 
   // ── GET /admin/image-health/candidates（ADR-208 D-208-2）──────────

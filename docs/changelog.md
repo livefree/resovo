@@ -2225,3 +2225,21 @@
 - **Codex stop-time review FIX**：原 next.config 硬编码 `(en|zh-CN)` 重复 i18n SSOT → 改 `routing.locales.join('|')` 派生（零漂移）；web-next typecheck + browse-tvshow 3/3 重验通过
 - **ADR 核对**：落在 ADR-048/042 既定 tvshow↔variety 映射 + 308 永久范式 D6，无新 ADR / admin route / schema / architecture.md 同步
 - **注意事项**：mini-player.spec 作为 WEB_MOBILE_SPECS「显式移动入口」保留，移动 device 仅跑 §5(display:none)+§6(theme)，§1/§2/§4/§7 桌面专属由 web-chromium 覆盖。`/codex:adversarial-review`（≥3 项卡应做）因 skill 不在本会话工具集未执行，已在卡片登记。
+
+## [IMGH-P3-4A] 后端：problem-images 端点（ADR-211 Accepted，supersede ADR-210）
+- **完成时间**：2026-06-20
+- **记录时间**：2026-06-20 22:20
+- **执行模型**：claude-opus-4-8（主循环；新增 admin route + 实现 ADR-211 决策）
+- **子代理**：arch-reviewer (claude-opus-4-8)
+- **修改文件**：
+  - `apps/api/src/db/queries/imageHealth.scan.ts` — `getProblemImages`/`getProblemImageCounts` + `PROBLEM_KIND_COLS` 白名单（含 poster→cover_url 历史名）+ `problemFilterSql` + 类型/常量/`problemReason` 派生排序
+  - `apps/api/src/db/queries/imageHealth.ts` — re-export
+  - `apps/api/src/services/ImageHealthService.ts` — 两方法（守 Route→Service→DB）
+  - `apps/api/src/routes/admin/image-health.ts` — `ProblemImagesQuerySchema` + `GET /admin/image-health/problem-images`（total=counts[kind]）
+  - `tests/unit/api/admin-image-health-problem-images.test.ts` — 新 15 端点测试
+  - `tests/unit/api/image-health-actions.test.ts` — mock 补 `PROBLEM_IMAGE_KINDS`（route 顶层 z.enum 模块加载求值）
+  - `tests/integration/api/admin-image-health.test.ts` — 3 真库 SQL 断言（url 守卫/problemReason 排序/total=counts 等价）
+  - `docs/decisions.md` — D-211-4 per-video 计数注释
+- **新增依赖**：无
+- **数据库变更**：无（仅新只读 query；ADR-211 零 migration）
+- **注意事项**：口径 D-211-2（url 非空 btrim 守卫 + status<>ok ∪ 真坏事件白名单，排除 timeout/dimension/aspect 误报）；真库验证 poster published 27（broken_event 7 排首+low_quality 20）、banner 0（url-guard 生效）。门禁全绿：typecheck/lint/test:changed 127/verify:endpoint-adr 249/集成 12。arch-reviewer PASS 3 LOW 全吸收/登记。**4B**：问题板 + recent-broken-samples 退役（同 commit checklist）+「加载更多」按 videoId+kind 去重（per-video 计数）。

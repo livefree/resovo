@@ -15,8 +15,14 @@ import {
   getCatalogIdsByVideoIds,
   rescanPostersByCatalogIds,
   getRecentBrokenSamples,
+  getProblemImages,
+  getProblemImageCounts,
   type ImageHealthStats,
   type RecentBrokenSampleRow,
+  type ProblemImageKind,
+  type ProblemImageScope,
+  type ProblemImageRow,
+  type ProblemImageCounts,
 } from '@/api/db/queries/imageHealth'
 import type { ImageKind } from '@/types'
 
@@ -92,6 +98,24 @@ export class ImageHealthService {
    */
   async getRecentBrokenSamples(limit = 24): Promise<RecentBrokenSampleRow[]> {
     return getRecentBrokenSamples(this.db, limit)
+  }
+
+  /**
+   * ADR-211：问题图片可视化治理板数据源（按 kind/scope 返回「有非空 URL 但可能失效」的图）。
+   * 只读，无审计；supersede ADR-210 破损样本区。
+   */
+  async getProblemImages(
+    kind: ProblemImageKind,
+    scope: ProblemImageScope,
+    offset = 0,
+    limit = 48,
+  ): Promise<ProblemImageRow[]> {
+    return getProblemImages(this.db, kind, scope, offset, limit)
+  }
+
+  /** ADR-211 D-211-4：4 类问题图片计数（tab badge + 当前 kind 的 total）。 */
+  async getProblemImageCounts(scope: ProblemImageScope): Promise<ProblemImageCounts> {
+    return getProblemImageCounts(this.db, scope)
   }
 
   /**

@@ -49,9 +49,32 @@
 - 后端：`apps/api/src/db/queries/imageHealth.ts`（stats query + ImageHealthStats）、`tests/integration/api/admin-image-health.test.ts`
 - 前端：`apps/server-next/src/lib/image-health/api.ts`（DTO）、`_client/ImageHealthKpiCards.tsx`（新）、`_client/ImageHealthClient.tsx`、`tests/unit/components/server-next/admin/image-health/ImageHealthKpiCards.test.tsx`（新）+ `ImageHealthClient.test.tsx`
 
-**门禁**：typecheck ✅ / lint ✅ / test:changed ✅（22 文件 192 测）/ 集成测试新契约（preflight 节点跑）。无新 route（`verify:endpoint-adr` 不触发）；无 admin-ui Props 改动（M8 强制 Opus 不触发）；无新 ADR。
+**门禁**：typecheck ✅ / lint ✅ / test:changed ✅（22 文件 192 测）/ 集成测试新契约（preflight 节点跑）。无新 route（`verify:endpoint-adr` 不触发）；无 admin-ui Props 改动（M8 强制 Opus 不触发）；无新 ADR。**已提交 f804de79**。
 
 **子代理调用**：无
+
+---
+
+### 🔄 SEQ-20260620-01 · IMGH-P3-4A — 后端：problem-images 端点（ADR-211 Accepted）
+
+**创建**：2026-06-20 ｜ **建议模型**：opus ｜ **执行模型**：claude-opus-4-8 ｜ **分支**：`fix/imgh-broken-samples-empty-20260620`
+
+**问题理解**：图片健康数据信号双向不可靠 → 改「真实缩略图 + 人眼批量分诊」。本卡落后端 problem-images 只读端点（ADR-211），供前端问题板（4B）消费。
+
+**方案**（口径 D-211-2，含 Codex 终审吸收）：
+- `getProblemImages(db, kind, scope, offset, limit)` query 落 `imageHealth.scan.ts`：口径 `<kind>_url IS NOT NULL AND btrim(url)<>'' AND (status<>'ok' OR EXISTS 未解决真坏事件 image_kind=$kind ∧ event_type∈BROKEN_SAMPLE_EVENT_TYPES)`；**kind→列名经白名单 Record（含 poster→cover_url 历史名）禁裸插值**；LATERAL 取最近真坏事件；派生 `problemReason`（broken_event>broken>low_quality>pending）默认排序真坏在前 + last_seen DESC。
+- `getProblemImageCounts(db, scope)`：4 类 COUNT FILTER（各 kind 谓词 + EXISTS 真坏事件）。
+- `ImageHealthService` 两方法（守分层）；`imageHealth.ts` re-export。
+- `GET /admin/image-health/problem-images` route：admin-only / 只读无审计 / zod（kind enum 默认 poster / scope enum 默认 published / offset≥0 / limit clamp 1-100 默认 48）。
+- 端点单测（口径 / url 守卫 btrim / 注入防护〔kind 白名单〕/ reason 排序 / counts / scope）。
+
+**涉及文件**：`apps/api/src/db/queries/imageHealth.scan.ts`、`imageHealth.ts`（re-export）、`apps/api/src/services/ImageHealthService.ts`、`apps/api/src/routes/admin/image-health.ts`、`tests/unit/api/image-health-*.test.ts`
+
+**门禁**：**Opus arch-reviewer PASS（新 admin route，MUST-8）+ Subagents trailer** + `verify:endpoint-adr` + 端点单测 + typecheck/lint/test:changed。client DTO/fetcher 归 4B。
+
+**完成备注**（✅ 2026-06-20）：query `getProblemImages`/`getProblemImageCounts` 落 scan.ts（kind→列名 `PROBLEM_KIND_COLS` 白名单含 poster→cover_url 历史名 / btrim url 守卫 / LATERAL image_kind=$kind 白名单事件 / problemReason CASE + 优先级 ORDER）+ re-export + service 两方法 + route（zod kind 默认 poster/scope/offset/limit clamp，total=counts[kind] 省一次查询）+ 15 端点单测 + 3 集成 SQL 断言 + 修 actions 测试 mock 补 PROBLEM_IMAGE_KINDS。**arch-reviewer (claude-opus-4-8, agentId a5537f6bbb482bf06) PASS**〔SQL/注入/total=counts/分层/边界逐项通过；3 LOW 非阻塞：风险2 per-video 计数〔已加注释+ADR〕/ 风险3 SQL 测试〔已补集成测试〕/ 风险1 counts 规模〔ADR 已登记〕〕。门禁：typecheck/lint/test:changed 127 / verify:endpoint-adr 249（+problem-images）/ 集成 12（真库 url 守卫+排序+total=counts 等价）/ 真库口径验证 poster published 27（broken_event 7 排首+low_quality 20）、banner 0。执行模型: claude-opus-4-8；子代理: arch-reviewer (claude-opus-4-8)。
+
+**子代理调用**：arch-reviewer (claude-opus-4-8)
 
 ---
 

@@ -28,6 +28,10 @@ vi.mock('@/api/db/queries/imageHealth', () => ({
   getBrokenEventsTrend: vi.fn(),
   rescanPosters: rescanPostersMock,
   switchFallbackDomain: switchFallbackDomainMock,
+  // ADR-211：route 顶层 z.enum(PROBLEM_IMAGE_KINDS) 在模块加载求值 → 全量 mock 须提供该 SSoT 常量
+  PROBLEM_IMAGE_KINDS: ['poster', 'backdrop', 'logo', 'banner_backdrop'] as const,
+  getProblemImages: vi.fn(),
+  getProblemImageCounts: vi.fn(),
 }))
 
 const enqueueBackfillJobMock = vi.hoisted(() => vi.fn().mockResolvedValue(undefined))

@@ -142,6 +142,199 @@ export async function getRecentBrokenSamples(
   }))
 }
 
+// ── 查询：问题图片可视化治理板（ADR-211，supersede ADR-210 破损样本区）────
+
+export const PROBLEM_IMAGE_KINDS = ['poster', 'backdrop', 'logo', 'banner_backdrop'] as const
+export type ProblemImageKind = (typeof PROBLEM_IMAGE_KINDS)[number]
+export type ProblemImageScope = 'published' | 'all'
+
+/**
+ * kind → media_catalog 列名映射（**白名单 Record，ADR-211 MEDIUM-1：禁请求参数裸插值列名**）。
+ * 注意 poster 的 URL 列历史名为 `cover_url`（非 poster_url）。值均为代码常量、非请求输入。
+ */
+const PROBLEM_KIND_COLS: Record<ProblemImageKind, { url: string; status: string }> = {
+  poster:          { url: 'cover_url',           status: 'poster_status' },
+  backdrop:        { url: 'backdrop_url',        status: 'backdrop_status' },
+  logo:            { url: 'logo_url',            status: 'logo_status' },
+  banner_backdrop: { url: 'banner_backdrop_url', status: 'banner_backdrop_status' },
+}
+
+/** problemReason：UI 分色 + 默认排序优先级（ADR-211 D-211-3 / Codex H-2，broken_event 最先展示）。 */
+export type ProblemReason = 'broken_event' | 'broken' | 'low_quality' | 'pending_review' | 'other'
+
+export interface ProblemImageRow {
+  videoId: string
+  catalogId: string
+  title: string
+  isPublished: boolean
+  kind: ProblemImageKind
+  /** <kind>_url，口径已含 IS NOT NULL + btrim<>'' 守卫 → 恒非空非空白 */
+  imageUrl: string
+  status: string
+  problemReason: ProblemReason
+  /** poster_source（仅 poster 有意义；secondary 恒 null） */
+  source: string | null
+  eventType: string | null
+  brokenDomain: string | null
+  occurrenceCount: number
+  lastSeenBrokenAt: string | null
+}
+
+export interface ProblemImageCounts {
+  poster: number
+  backdrop: number
+  logo: number
+  banner_backdrop: number
+}
+
+/**
+ * 单 kind 的「问题图片」WHERE 谓词（ADR-211 D-211-2，与 counts 共用确保一致）：
+ *   `<kind>_url 非空非空白 AND (status<>'ok' OR 存在未解决真坏事件)`。
+ * 列名 + kind 字面量均来自 PROBLEM_KIND_COLS / 常量，非请求输入（防注入）；
+ * 真坏事件白名单走参数 `$evtParam`（BROKEN_SAMPLE_EVENT_TYPES）。
+ */
+function problemFilterSql(kind: ProblemImageKind, evtParam: string): string {
+  const { url, status } = PROBLEM_KIND_COLS[kind]
+  return `mc.${url} IS NOT NULL AND btrim(mc.${url}) <> '' AND (
+    mc.${status} <> 'ok' OR EXISTS (
+      SELECT 1 FROM broken_image_events b
+      WHERE b.video_id = v.id AND b.image_kind = '${kind}'
+        AND b.resolved_at IS NULL AND b.event_type = ANY(${evtParam}::text[])
+    ))`
+}
+
+/**
+ * ADR-211：按 kind/scope 返回「有非空 URL 但可能失效」的问题图片分页集，供问题板看图分诊。
+ * - 口径 D-211-2（problemFilterSql）+ LATERAL 取最近未解决真坏事件（domain/原因/次数/时间）。
+ * - 默认排序 problemReason 优先级（真坏在前）+ last_seen DESC（Codex H-2 防 low_quality 淹没）。
+ * - 已删视频经 JOIN 滤除；offset/limit 加载更多（漂移缓解在前端，Codex H-3）。
+ */
+export async function getProblemImages(
+  db: Pool,
+  kind: ProblemImageKind,
+  scope: ProblemImageScope,
+  offset = 0,
+  limit = 48,
+): Promise<ProblemImageRow[]> {
+  const { url: urlCol, status: statusCol } = PROBLEM_KIND_COLS[kind]
+  const publishedFilter = scope === 'published' ? 'AND v.is_published = true' : ''
+  const sourceExpr = kind === 'poster' ? 'mc.poster_source' : 'NULL::text'
+
+  const result = await db.query<{
+    video_id: string
+    catalog_id: string
+    title: string
+    is_published: boolean
+    image_url: string
+    status: string
+    problem_reason: ProblemReason
+    source: string | null
+    event_type: string | null
+    broken_domain: string | null
+    occurrence_count: number | null
+    last_seen_broken_at: string | null
+  }>(
+    `WITH base AS (
+       SELECT
+         v.id AS video_id, v.catalog_id, v.title, v.is_published,
+         mc.${urlCol} AS image_url, mc.${statusCol} AS status, ${sourceExpr} AS source,
+         evt.event_type, evt.url AS evt_url, evt.occurrence_count, evt.last_seen_at
+       FROM videos v
+       JOIN media_catalog mc ON mc.id = v.catalog_id
+       LEFT JOIN LATERAL (
+         SELECT event_type, url, occurrence_count, last_seen_at
+         FROM broken_image_events
+         WHERE video_id = v.id AND image_kind = $1
+           AND resolved_at IS NULL AND event_type = ANY($2::text[])
+         ORDER BY last_seen_at DESC, id DESC
+         LIMIT 1
+       ) evt ON TRUE
+       WHERE v.deleted_at IS NULL
+         ${publishedFilter}
+         AND mc.${urlCol} IS NOT NULL AND btrim(mc.${urlCol}) <> ''
+         AND (mc.${statusCol} <> 'ok' OR evt.event_type IS NOT NULL)
+     )
+     SELECT
+       base.video_id, base.catalog_id, base.title, base.is_published,
+       base.image_url, base.status, base.source, base.event_type,
+       base.occurrence_count, base.last_seen_at::text AS last_seen_broken_at,
+       CASE
+         WHEN base.event_type IS NOT NULL THEN 'broken_event'
+         WHEN base.status = 'broken'         THEN 'broken'
+         WHEN base.status = 'low_quality'    THEN 'low_quality'
+         WHEN base.status = 'pending_review' THEN 'pending_review'
+         ELSE 'other'
+       END AS problem_reason,
+       CASE WHEN base.evt_url IS NOT NULL
+         THEN regexp_replace(base.evt_url, '^https?://([^/]+).*', '\\1')
+         ELSE NULL
+       END AS broken_domain
+     FROM base
+     ORDER BY
+       CASE
+         WHEN base.event_type IS NOT NULL THEN 1
+         WHEN base.status = 'broken'         THEN 2
+         WHEN base.status = 'low_quality'    THEN 3
+         WHEN base.status = 'pending_review' THEN 4
+         ELSE 5
+       END,
+       base.last_seen_at DESC NULLS LAST,
+       base.video_id
+     LIMIT $3 OFFSET $4`,
+    [kind, [...BROKEN_SAMPLE_EVENT_TYPES], limit, offset],
+  )
+
+  return result.rows.map(r => ({
+    videoId: r.video_id,
+    catalogId: r.catalog_id,
+    title: r.title,
+    isPublished: r.is_published,
+    kind,
+    imageUrl: r.image_url,
+    status: r.status,
+    problemReason: r.problem_reason,
+    source: r.source,
+    eventType: r.event_type,
+    brokenDomain: r.broken_domain,
+    occurrenceCount: r.occurrence_count ?? 0,
+    lastSeenBrokenAt: r.last_seen_broken_at,
+  }))
+}
+
+/**
+ * ADR-211 D-211-4：4 类问题图片计数（tab badge + 当前 kind 的 total）。
+ * 每 kind 一个 COUNT FILTER，谓词与 getProblemImages 共用 problemFilterSql（确保 total 一致）。
+ * **per-video 计数**（arch-reviewer 风险 2）：与 getProblemImages 一致按 video 行计，N 个 video 共享
+ * 同一问题 catalog 时各计一次（对齐 recent-broken-samples DISTINCT ON video_id 的 per-video 范式）；
+ * 4B「加载更多」按 videoId+kind 去重即与此一致，非按 catalog 去重。
+ */
+export async function getProblemImageCounts(
+  db: Pool,
+  scope: ProblemImageScope,
+): Promise<ProblemImageCounts> {
+  const publishedFilter = scope === 'published' ? 'AND v.is_published = true' : ''
+  const result = await db.query<{
+    poster: number; backdrop: number; logo: number; banner_backdrop: number
+  }>(
+    `SELECT
+       COUNT(*) FILTER (WHERE ${problemFilterSql('poster', '$1')})::int          AS poster,
+       COUNT(*) FILTER (WHERE ${problemFilterSql('backdrop', '$1')})::int        AS backdrop,
+       COUNT(*) FILTER (WHERE ${problemFilterSql('logo', '$1')})::int            AS logo,
+       COUNT(*) FILTER (WHERE ${problemFilterSql('banner_backdrop', '$1')})::int AS banner_backdrop
+     FROM videos v
+     JOIN media_catalog mc ON mc.id = v.catalog_id
+     WHERE v.deleted_at IS NULL ${publishedFilter}`,
+    [[...BROKEN_SAMPLE_EVENT_TYPES]],
+  )
+  const row = result.rows[0]
+  return {
+    poster:          row?.poster ?? 0,
+    backdrop:        row?.backdrop ?? 0,
+    logo:            row?.logo ?? 0,
+    banner_backdrop: row?.banner_backdrop ?? 0,
+  }
+}
+
 // ── 运营 Action：重扫封面 + 切换 fallback 域（ADR-135）────────────
 
 export type RescanScope = 'all' | 'broken_only' | 'missing_only'
