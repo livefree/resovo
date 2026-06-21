@@ -2285,7 +2285,7 @@
   - `docs/research/imgh-p3-4c-safeimage-coverage_20260620.md` — 新核查报告（`git grep` 枚举 web-next 全图片入口 + 安全网架构 + 12 消费点清单 + 漏网点清单）
 - **新增依赖**：无
 - **数据库变更**：无
-- **注意事项**：**仅核查不修复**（apps/web-next 只读）。结论：前台 12/13 图片入口走 `SafeImage` 安全网（`onError`→`FallbackCover` 零裂图，含 VideoCard→StackedPosterFrame→SafeImage 主链路）；**唯一漏网点 = `components/home/DailyAnimeRow.tsx:97`** 裸 `<img src={item.coverUrl}>`（无 onError/不经 SafeImage，首页「每日新番」公开行）→ 用户端裂图风险。建议起 **IMGH-P3-4D 修复卡**（改 SafeImage + `onLoadFail`→reportBrokenImage，对齐 VideoCard/BrowseCard 范式）。**工具教训**：本环境 `find -type f`/`grep -rn` 递归**静默失败返假空**（误判 components 目录为空），核查类任务一律用 `git grep`/`git ls-files`。
+- **注意事项**：**仅核查不修复**（apps/web-next 只读）。结论：前台 12/13 图片入口走 `SafeImage` 安全网（`onError`→`FallbackCover` 零裂图，含 VideoCard→StackedPosterFrame→SafeImage 主链路）；**唯一漏网点 = `components/home/DailyAnimeRow.tsx:97`** 裸 `<img src={item.coverUrl}>`（无 onError/不经 SafeImage，首页「每日新番」公开行）→ 用户端裂图风险。建议起 **IMGH-P3-4D 修复卡**（改 SafeImage 不裂图兜底，对齐 BrowseCard 范式；**不接 reportBrokenImage**——DailyAnime 为 Bangumi calendar 外部源、非站内 media_catalog，已按此实施 `c39707bc`）。**工具教训**：本环境 `find -type f`/`grep -rn` 递归**静默失败返假空**（误判 components 目录为空），核查类任务一律用 `git grep`/`git ls-files`。
 
 ## [IMGH-P3-4D] 修复 DailyAnimeRow 裸 img → SafeImage（前台零裂图闭环）
 - **完成时间**：2026-06-20

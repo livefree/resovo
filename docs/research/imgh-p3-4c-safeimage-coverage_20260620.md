@@ -57,7 +57,7 @@ SafeImage (components/media/SafeImage.tsx)
 
 | # | 位置 | 风险 | 公开入口 | 修复建议 |
 |---|---|---|---|---|
-| **L-1** ❌ | `apps/web-next/src/components/home/DailyAnimeRow.tsx:97` | 裸 `<img src={item.coverUrl}>`，**无 `onError`、不经 SafeImage**；封面 URL 失败 → 浏览器原生裂图（虽有 `--bg-surface-sunken` 底色，仍显示裂图图标） | **是**（首页「每日新番」行，`app/[locale]/page.tsx:102` 消费） | 改用 `SafeImage`（mode lazy，`aspect="2:3"`，`fallback={{ title, type, seed }}`，`onLoadFail`→`reportBrokenImage`），对齐 `VideoCard`/`BrowseCard` 范式。注意保留 `item.coverUrl &&` 守卫语义（SafeImage src 空时自动 FallbackCover，可去守卫直接交 SafeImage） |
+| **L-1** ❌ | `apps/web-next/src/components/home/DailyAnimeRow.tsx:97` | 裸 `<img src={item.coverUrl}>`，**无 `onError`、不经 SafeImage**；封面 URL 失败 → 浏览器原生裂图（虽有 `--bg-surface-sunken` 底色，仍显示裂图图标） | **是**（首页「每日新番」行，`app/[locale]/page.tsx:102` 消费） | 改用 `SafeImage`（mode lazy，`fallback={{ title, type:'anime', seed }}`），对齐 `BrowseCard` 范式 → 失败/空封面走 `FallbackCover` 不裂图（去 `item.coverUrl &&` 守卫，src 空交 SafeImage 自动兜底）。**不接 `reportBrokenImage`**（Bangumi 外部源，见 §6 上报权衡）。**已实施 IMGH-P3-4D `c39707bc`** |
 
 **仅此 1 处。** 其余 `git grep "<img"` 命中（`LazyImage.tsx:100`）为安全网部件（由 SafeImage 注入 onError），非独立漏网。
 
@@ -77,4 +77,4 @@ SafeImage (components/media/SafeImage.tsx)
 
 - **覆盖面结论**：web-next 前台「用户端零裂图」**已 92% 闭环**（12/13 图片入口走安全网）；唯一缺口 = `DailyAnimeRow.tsx:97`（L-1）。
 - **后续卡建议**：起 **IMGH-P3-4D（修复卡，sonnet）** — DailyAnimeRow 裸 img 改 SafeImage（小改动，单文件，附组件测试断言 onError→FallbackCover）。修复后前台零裂图全闭环。
-- **上报链路提示**：DailyAnimeRow 当前无 `reportBrokenImage`，改 SafeImage 后建议接 `onLoadFail`，使「每日新番」失败封面也进 `broken_image_events`，被后台 problem-images 治理板（ADR-211）覆盖。
+- **上报权衡（IMGH-P3-4D 实施已定，`c39707bc`）**：DailyAnime 封面为 Bangumi calendar 外部源（**非站内 media_catalog 治理对象**），4D **不接** `reportBrokenImage`——`broken_image_events` 需 `video_id`、未入站项无，强接语义不符。4D 仅做 SafeImage 不裂图兜底（`onError`/空 → `FallbackCover`）；后台 problem-images 治理板（ADR-211）覆盖范围仍限站内视频封面，不含 Bangumi 发现板块。（本节原「建议接上报」已被 4D 决策推翻，留痕以正记录。）
