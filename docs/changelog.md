@@ -2402,3 +2402,18 @@
 - **问题（Codex stop-gate）**：`<kind>_client_error_at`/`<kind>_checked_at` 是裸时间戳、不记录对应 URL。写入侧有 URL 守卫，但信号写入后 URL 被替换（apply-candidate/手填/crawler）则旧信号残留 → 读端 `problemFilterSqlV2` 把**已替换的新图**继续判 client_error（≤7d 假阳性，同构 ADR-212 r1-HIGH-1）/ fresh-ok（masks 未验证新图）。「自过期 7d」只解时间衰减、不解 URL 替换。
 - **修复要点**：①触发器路径无关（覆盖所有 URL 写入路径，避免逐一挂钩漏网）②不靠 worker 复检清 client_error（服务端 HEAD/GET ok 但浏览器裂的防盗链/CORS 场景，清掉会重引假阴性）——信号只在 URL 变更时失效 ③孪生清 checked_at（同根因）④不干扰 worker（不改 url）/beacon（不改 url）的 NOW() 写入。
 - **门禁**：typecheck=0/lint=0/test:changed=58/verify:adr-contracts=0。触发器行为由 migration DO-block（存在性）+ 集成测 `image-health-url-change-trigger`（需 DB，随集成 suite/CI 跑）验证。部署 staging/prod 应用 122 后建议跑集成测确认。未含 IMGH-P3-5 parked 代码。
+
+## [IMGH-P4-D213-10·续] 方案C 信号 URL 绑定修复扫全孪生 — URL 替换一并重置 status + 渲染占位（migration 123，Codex stop-gate）
+- **完成时间**：2026-06-22
+- **记录时间**：2026-06-22 10:10
+- **执行模型**：claude-opus-4-8
+- **子代理**：无（Codex stop-gate「URL changes still leave stale status behind」；扩展 122 同名触发器函数，非新架构决策）
+- **修改文件**：
+  - `apps/api/src/db/migrations/123_image_signals_clear_status_on_url_change.sql`（新建）— `CREATE OR REPLACE` 122 的同名触发器函数，URL 变更时除两时间戳外**一并重置全 url 派生列**：`<kind>_status`（健康真源，**尊重显式写**：仅调用方未在同 UPDATE 改 status 才重置 `pending_review`/`missing`）+ `<kind>_blurhash`/`<kind>_primary_color`/`poster_width`/`poster_height`（渲染占位/尺寸缓存）。触发器（122 创建）绑定本函数名，替换即生效。
+  - `docs/decisions.md` ADR-213 D-213-10 + `docs/architecture.md` §5.11 — 扩展为「全 url 派生列」描述
+  - `tests/integration/api/image-health-url-change-trigger.test.ts` — 扩测：url 变更（未显式改 status）→ 时间戳/blurhash 清 + status 重置 pending_review；**url 变更 + 同 UPDATE 显式改 status → 尊重显式写（不覆盖）**
+- **新增依赖**：无
+- **数据库变更**：**是**——migration 123（幂等 CREATE OR REPLACE FUNCTION，无表/列/触发器结构改动）；同步 architecture.md §5.11
+- **问题（Codex stop-gate 续）**：122 只清了 `client_error_at`/`checked_at`，**未扫全 url 派生列**。`<kind>_status` 本身描述旧 URL——crawler/douban/tmdb/VideoService 改 url 均不重置 status（已核实）→ 旧 `ok` 掩盖未验证新图、旧 `broken` 误判新图。渲染占位（blurhash/primary_color/dimensions）旧图派生且 worker 仅拾 NULL 行再生 → 陈旧占位永久残留。
+- **修复要点**：①扫全 url 派生列（status + 渲染占位，补 122 之缺，ADR 教训：修命名问题须扫孪生）②status「尊重显式写」——不覆盖 apply-candidate/rescan 显式 pending_review；worker 写 verified status 不改 url 故永不触发本分支（不变式 `status='ok'`=worker 验证当前 url 不破）③渲染占位清 NULL → blurhash worker 对新图重生、尺寸下次健康检查重测。
+- **门禁**：typecheck=0/lint=0/test:changed=58/verify:adr-contracts=0。触发器行为由 migration DO-block + 集成测（需 DB）验证。部署应用 121+122+123 后建议跑集成测确认。未含 IMGH-P3-5 parked 代码。
