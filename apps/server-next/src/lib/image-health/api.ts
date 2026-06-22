@@ -64,8 +64,18 @@ export interface MissingVideoRow {
 // supersede ADR-210 破损样本区（problem-images 是 recent-broken-samples 超集：4 类 + 状态∪真坏事件口径）。
 export type ProblemImageKind = 'poster' | 'backdrop' | 'logo' | 'banner_backdrop'
 export type ProblemImageScope = 'published' | 'all'
-/** problemReason：UI 分色 + 后端默认排序优先级（真坏在前，ADR-211 D-211-3 / Codex H-2）。 */
-export type ProblemReason = 'broken_event' | 'broken' | 'low_quality' | 'pending_review' | 'other'
+/**
+ * problemReason：UI 分色 + 后端默认排序优先级（client_error 在前，ADR-213 D-213-7）。
+ * 方案 C dissolve：`broken_event`→`client_error`（浏览器自过期信号）；新增 `unknown`（stale-ok 兜底面）。
+ * 与后端 imageHealth.scan.ts ProblemReason 值域逐字对齐。
+ */
+export type ProblemReason =
+  | 'client_error'
+  | 'broken'
+  | 'low_quality'
+  | 'pending_review'
+  | 'unknown'
+  | 'other'
 
 export interface ProblemImageRow {
   readonly videoId: string

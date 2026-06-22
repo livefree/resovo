@@ -62,12 +62,15 @@ describe('ProblemImageCard — 标题 / reason 分色', () => {
 
   it('data-problem-reason 反映 problemReason + reason pill 文案', () => {
     const { container, rerender } = render(
-      <ProblemImageCard row={makeRow({ problemReason: 'broken_event' })} onOpen={vi.fn()} />,
+      <ProblemImageCard row={makeRow({ problemReason: 'client_error' })} onOpen={vi.fn()} />,
     )
-    expect(container.querySelector('[data-problem-reason]')?.getAttribute('data-problem-reason')).toBe('broken_event')
+    expect(container.querySelector('[data-problem-reason]')?.getAttribute('data-problem-reason')).toBe('client_error')
     expect(screen.getByText('加载失败')).not.toBeNull()
     rerender(<ProblemImageCard row={makeRow({ problemReason: 'low_quality' })} onOpen={vi.fn()} />)
     expect(screen.getByText('低质量')).not.toBeNull()
+    // ADR-213 D-213-7：新增 unknown（stale-ok 未验证）
+    rerender(<ProblemImageCard row={makeRow({ problemReason: 'unknown' })} onOpen={vi.fn()} />)
+    expect(screen.getByText('未验证')).not.toBeNull()
   })
 })
 
@@ -106,7 +109,7 @@ describe('ProblemImageCard — 详情字段（secondary 空隐藏，Codex L-2）
     const { container } = render(
       <ProblemImageCard
         row={makeRow({
-          problemReason: 'broken_event',
+          problemReason: 'client_error',
           eventType: 'fetch_404',
           brokenDomain: 'cdn.bad.com',
           occurrenceCount: 7,

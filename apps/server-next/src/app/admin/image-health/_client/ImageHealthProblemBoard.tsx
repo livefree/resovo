@@ -186,11 +186,11 @@ export function ImageHealthProblemBoard() {
     setDrawerOpen(true)
   }, [])
 
-  // reason 客户端子筛选（后端无 reason 参数；真坏 = broken_event ∪ broken）
+  // reason 客户端子筛选（后端无 reason 参数；真坏 = client_error ∪ broken，ADR-213 D-213-7）
   const visibleRows = useMemo(() => {
     if (reasonFilter === 'all') return rows
     if (reasonFilter === 'broken') {
-      return rows.filter((r) => r.problemReason === 'broken_event' || r.problemReason === 'broken')
+      return rows.filter((r) => r.problemReason === 'client_error' || r.problemReason === 'broken')
     }
     return rows.filter((r) => r.problemReason === reasonFilter)
   }, [rows, reasonFilter])

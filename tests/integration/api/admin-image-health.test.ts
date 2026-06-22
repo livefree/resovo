@@ -66,7 +66,7 @@ describe('getImageHealthStats SQL 集成', () => {
 
 describe('getProblemImages / getProblemImageCounts SQL 集成（ADR-211 / 4A arch-reviewer 风险 3）', () => {
   const REASON_RANK: Record<string, number> = {
-    broken_event: 1, broken: 2, low_quality: 3, pending_review: 4, other: 5,
+    client_error: 1, broken: 2, low_quality: 3, pending_review: 4, unknown: 5, other: 6,
   }
 
   it('getProblemImageCounts 返回 4 类非负计数', async () => {
@@ -88,11 +88,11 @@ describe('getProblemImages / getProblemImageCounts SQL 集成（ADR-211 / 4A arc
       expect(r.imageUrl.trim().length).toBeGreaterThan(0)
       // problemReason ∈ 合法集
       expect(REASON_RANK[r.problemReason]).toBeDefined()
-      // Codex H-2 默认排序：reason 优先级非递减（broken_event 在前）
+      // Codex H-2 默认排序：reason 优先级非递减（client_error 在前）
       expect(REASON_RANK[r.problemReason]).toBeGreaterThanOrEqual(prevRank)
       prevRank = REASON_RANK[r.problemReason]
-      // broken_event 行必带事件信息
-      if (r.problemReason === 'broken_event') expect(r.eventType).not.toBeNull()
+      // ADR-213 D-213-7：client_error 由 client_error_at 信号列驱动（非 events）→ eventType 不再必带，
+      // 不断言其非空（LATERAL 仅作纯遥测展示，可能无匹配未解决事件）。
     }
   })
 

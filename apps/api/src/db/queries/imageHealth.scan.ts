@@ -75,15 +75,28 @@ export type ProblemImageScope = 'published' | 'all'
  * kind → media_catalog 列名映射（**白名单 Record，ADR-211 MEDIUM-1：禁请求参数裸插值列名**）。
  * 注意 poster 的 URL 列历史名为 `cover_url`（非 poster_url）。值均为代码常量、非请求输入。
  */
-const PROBLEM_KIND_COLS: Record<ProblemImageKind, { url: string; status: string }> = {
-  poster:          { url: 'cover_url',           status: 'poster_status' },
-  backdrop:        { url: 'backdrop_url',        status: 'backdrop_status' },
-  logo:            { url: 'logo_url',            status: 'logo_status' },
-  banner_backdrop: { url: 'banner_backdrop_url', status: 'banner_backdrop_status' },
+const PROBLEM_KIND_COLS: Record<
+  ProblemImageKind,
+  { url: string; status: string; checkedAt: string; clientErrorAt: string }
+> = {
+  poster:          { url: 'cover_url',           status: 'poster_status',          checkedAt: 'poster_checked_at',          clientErrorAt: 'poster_client_error_at' },
+  backdrop:        { url: 'backdrop_url',        status: 'backdrop_status',        checkedAt: 'backdrop_checked_at',        clientErrorAt: 'backdrop_client_error_at' },
+  logo:            { url: 'logo_url',            status: 'logo_status',            checkedAt: 'logo_checked_at',            clientErrorAt: 'logo_client_error_at' },
+  banner_backdrop: { url: 'banner_backdrop_url', status: 'banner_backdrop_status', checkedAt: 'banner_backdrop_checked_at', clientErrorAt: 'banner_backdrop_client_error_at' },
 }
 
-/** problemReason：UI 分色 + 默认排序优先级（ADR-211 D-211-3 / Codex H-2，broken_event 最先展示）。 */
-export type ProblemReason = 'broken_event' | 'broken' | 'low_quality' | 'pending_review' | 'other'
+/**
+ * problemReason：UI 分色 + 默认排序优先级（ADR-213 D-213-7，client_error 最先展示）。
+ * 方案 C dissolve：`broken_event`→`client_error`（浏览器自过期信号驱动，非 events）；新增 `unknown`
+ *（status='ok' 但 checked_at 陈旧/NULL，stale-ok 兜底面，A-SCAN 后由 IMAGE_HEALTH_STALE_OK_ENABLED 开启）。
+ */
+export type ProblemReason =
+  | 'client_error'
+  | 'broken'
+  | 'low_quality'
+  | 'pending_review'
+  | 'unknown'
+  | 'other'
 
 export interface ProblemImageRow {
   videoId: string
@@ -111,19 +124,33 @@ export interface ProblemImageCounts {
 }
 
 /**
- * 单 kind 的「问题图片」WHERE 谓词（ADR-211 D-211-2，与 counts 共用确保一致）：
- *   `<kind>_url 非空非空白 AND (status<>'ok' OR 存在未解决真坏事件)`。
- * 列名 + kind 字面量均来自 PROBLEM_KIND_COLS / 常量，非请求输入（防注入）；
- * 真坏事件白名单走参数 `$evtParam`（BROKEN_SAMPLE_EVENT_TYPES）。
+ * stale-ok（unknown）面开关：默认 OFF。该道依赖 `checked_at` 已由部署期 A-SCAN 落真值——A-SCAN 跑前
+ * 存量 ok 行 checked_at 全 NULL，若开启会让全部健康 ok 行误判 unknown 泛滥（ADR-213 Codex round-4 红线）。
+ * 故 stale-ok 道用本 flag 门控，A-SCAN 排空后由运维置 IMAGE_HEALTH_STALE_OK_ENABLED=true 开启；其余 P4-C
+ * 改动（events 退出读路径 + client_error 窗口 + 分色）不依赖 checked_at，立即生效（核心误报上线即消失）。
  */
-function problemFilterSql(kind: ProblemImageKind, evtParam: string): string {
-  const { url, status } = PROBLEM_KIND_COLS[kind]
+function staleOkEnabled(): boolean {
+  return process.env.IMAGE_HEALTH_STALE_OK_ENABLED === 'true'
+}
+
+/**
+ * 单 kind 的「问题图片」WHERE 单一真源谓词（ADR-213 D-213-7，方案 C dissolve）：
+ *   `<kind>_url 非空非空白 AND ( status<>'ok'                                    -- ① 当前态非 ok
+ *                              OR client_error_at 在 7d 窗口                      -- ② 浏览器自过期信号
+ *                              [OR (status='ok' AND checked_at 早于 STALE_CHECK_DAYS)] )  -- ③ stale-ok（flag 门控）`
+ * **健康判定不再读 broken_image_events**（events 降级纯遥测）。列名/kind 字面量均来自 PROBLEM_KIND_COLS /
+ * 模块常量（CLIENT_ERROR_WINDOW_DAYS/STALE_CHECK_DAYS），非请求输入（防注入）。
+ * **counts 与 list 逐字共用本函数**（ADR-209 §17.3.2 total 不漂移红线）；includeStaleOk 两路必须取同值。
+ */
+function problemFilterSqlV2(kind: ProblemImageKind, includeStaleOk: boolean): string {
+  const { url, status, checkedAt, clientErrorAt } = PROBLEM_KIND_COLS[kind]
+  const staleOkClause = includeStaleOk
+    ? ` OR (mc.${status} = 'ok' AND COALESCE(mc.${checkedAt}, '-infinity'::timestamptz) < NOW() - INTERVAL '${STALE_CHECK_DAYS} days')`
+    : ''
   return `mc.${url} IS NOT NULL AND btrim(mc.${url}) <> '' AND (
-    mc.${status} <> 'ok' OR EXISTS (
-      SELECT 1 FROM broken_image_events b
-      WHERE b.video_id = v.id AND b.image_kind = '${kind}'
-        AND b.resolved_at IS NULL AND b.event_type = ANY(${evtParam}::text[])
-    ))`
+    mc.${status} <> 'ok'
+    OR mc.${clientErrorAt} >= NOW() - INTERVAL '${CLIENT_ERROR_WINDOW_DAYS} days'${staleOkClause}
+  )`
 }
 
 /**
@@ -139,9 +166,11 @@ export async function getProblemImages(
   offset = 0,
   limit = 48,
 ): Promise<ProblemImageRow[]> {
-  const { url: urlCol, status: statusCol } = PROBLEM_KIND_COLS[kind]
+  const { url: urlCol, status: statusCol, checkedAt: checkedCol, clientErrorAt: clientErrorCol } =
+    PROBLEM_KIND_COLS[kind]
   const publishedFilter = scope === 'published' ? 'AND v.is_published = true' : ''
   const sourceExpr = kind === 'poster' ? 'mc.poster_source' : 'NULL::text'
+  const includeStaleOk = staleOkEnabled()
 
   const result = await db.query<{
     video_id: string
@@ -157,11 +186,21 @@ export async function getProblemImages(
     occurrence_count: number | null
     last_seen_broken_at: string | null
   }>(
+    // ADR-213 D-213-7：健康判定单真源（status + client_error_at[ + stale-ok]），**events 退出 WHERE**；
+    // LATERAL 仅留作纯遥测展示（broken_domain/原因/次数），LEFT JOIN 不影响命中。problem_reason 在 base 算一次、ORDER BY 复用。
     `WITH base AS (
        SELECT
          v.id AS video_id, v.catalog_id, v.title, v.is_published,
          mc.${urlCol} AS image_url, mc.${statusCol} AS status, ${sourceExpr} AS source,
-         evt.event_type, evt.url AS evt_url, evt.occurrence_count, evt.last_seen_at
+         evt.event_type, evt.url AS evt_url, evt.occurrence_count, evt.last_seen_at,
+         CASE
+           WHEN mc.${clientErrorCol} >= NOW() - INTERVAL '${CLIENT_ERROR_WINDOW_DAYS} days' THEN 'client_error'
+           WHEN mc.${statusCol} = 'broken'         THEN 'broken'
+           WHEN mc.${statusCol} = 'low_quality'    THEN 'low_quality'
+           WHEN mc.${statusCol} = 'pending_review' THEN 'pending_review'
+           WHEN mc.${statusCol} = 'ok' AND COALESCE(mc.${checkedCol}, '-infinity'::timestamptz) < NOW() - INTERVAL '${STALE_CHECK_DAYS} days' THEN 'unknown'
+           ELSE 'other'
+         END AS problem_reason
        FROM videos v
        JOIN media_catalog mc ON mc.id = v.catalog_id
        LEFT JOIN LATERAL (
@@ -174,32 +213,26 @@ export async function getProblemImages(
        ) evt ON TRUE
        WHERE v.deleted_at IS NULL
          ${publishedFilter}
-         AND mc.${urlCol} IS NOT NULL AND btrim(mc.${urlCol}) <> ''
-         AND (mc.${statusCol} <> 'ok' OR evt.event_type IS NOT NULL)
+         AND ${problemFilterSqlV2(kind, includeStaleOk)}
      )
      SELECT
        base.video_id, base.catalog_id, base.title, base.is_published,
        base.image_url, base.status, base.source, base.event_type,
        base.occurrence_count, base.last_seen_at::text AS last_seen_broken_at,
-       CASE
-         WHEN base.event_type IS NOT NULL THEN 'broken_event'
-         WHEN base.status = 'broken'         THEN 'broken'
-         WHEN base.status = 'low_quality'    THEN 'low_quality'
-         WHEN base.status = 'pending_review' THEN 'pending_review'
-         ELSE 'other'
-       END AS problem_reason,
+       base.problem_reason,
        CASE WHEN base.evt_url IS NOT NULL
          THEN regexp_replace(base.evt_url, '^https?://([^/]+).*', '\\1')
          ELSE NULL
        END AS broken_domain
      FROM base
      ORDER BY
-       CASE
-         WHEN base.event_type IS NOT NULL THEN 1
-         WHEN base.status = 'broken'         THEN 2
-         WHEN base.status = 'low_quality'    THEN 3
-         WHEN base.status = 'pending_review' THEN 4
-         ELSE 5
+       CASE base.problem_reason
+         WHEN 'client_error'   THEN 1
+         WHEN 'broken'         THEN 2
+         WHEN 'low_quality'    THEN 3
+         WHEN 'pending_review' THEN 4
+         WHEN 'unknown'        THEN 5
+         ELSE 6
        END,
        base.last_seen_at DESC NULLS LAST,
        base.video_id
@@ -236,18 +269,20 @@ export async function getProblemImageCounts(
   scope: ProblemImageScope,
 ): Promise<ProblemImageCounts> {
   const publishedFilter = scope === 'published' ? 'AND v.is_published = true' : ''
+  const includeStaleOk = staleOkEnabled() // 与 getProblemImages 同源（同一 env 读）→ total 不漂移
   const result = await db.query<{
     poster: number; backdrop: number; logo: number; banner_backdrop: number
   }>(
+    // counts 与 list 逐字共用 problemFilterSqlV2（ADR-209 §17.3.2 total 不漂移红线）；谓词无 events、无参数。
     `SELECT
-       COUNT(*) FILTER (WHERE ${problemFilterSql('poster', '$1')})::int          AS poster,
-       COUNT(*) FILTER (WHERE ${problemFilterSql('backdrop', '$1')})::int        AS backdrop,
-       COUNT(*) FILTER (WHERE ${problemFilterSql('logo', '$1')})::int            AS logo,
-       COUNT(*) FILTER (WHERE ${problemFilterSql('banner_backdrop', '$1')})::int AS banner_backdrop
+       COUNT(*) FILTER (WHERE ${problemFilterSqlV2('poster', includeStaleOk)})::int          AS poster,
+       COUNT(*) FILTER (WHERE ${problemFilterSqlV2('backdrop', includeStaleOk)})::int        AS backdrop,
+       COUNT(*) FILTER (WHERE ${problemFilterSqlV2('logo', includeStaleOk)})::int            AS logo,
+       COUNT(*) FILTER (WHERE ${problemFilterSqlV2('banner_backdrop', includeStaleOk)})::int AS banner_backdrop
      FROM videos v
      JOIN media_catalog mc ON mc.id = v.catalog_id
      WHERE v.deleted_at IS NULL ${publishedFilter}`,
-    [[...BROKEN_SAMPLE_EVENT_TYPES]],
+    [],
   )
   const row = result.rows[0]
   return {

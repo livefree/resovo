@@ -5,7 +5,7 @@
  * - 初次加载默认 kind=poster / scope=published / offset=0 / limit=48
  * - 网格渲染 ProblemImageCard / 空态 EmptyState
  * - kind tab badge=counts / 切 kind|scope → 重拉（offset 重置）
- * - reason 子筛选客户端过滤（真破损 = broken_event ∪ broken）
+ * - reason 子筛选客户端过滤（真破损 = client_error ∪ broken）
  * - 加载更多：offset 累积 + videoId+kind 去重追加（漂移缓解①，Codex H-3）
  * - 点卡 → 打开 ImageGovernanceDrawer（focusKind 深链）
  */
@@ -133,9 +133,9 @@ describe('ImageHealthProblemBoard — tab/scope 切换重拉', () => {
 })
 
 describe('ImageHealthProblemBoard — reason 子筛选（客户端，H-2）', () => {
-  it('「真破损」→ 仅 broken_event/broken 卡可见（low_quality 过滤掉）', async () => {
+  it('「真破损」→ 仅 client_error/broken 卡可见（low_quality 过滤掉）', async () => {
     getProblemImagesMock.mockResolvedValue(pageOf([
-      makeRow({ videoId: 'a', problemReason: 'broken_event' }),
+      makeRow({ videoId: 'a', problemReason: 'client_error' }),
       makeRow({ videoId: 'b', problemReason: 'low_quality' }),
       makeRow({ videoId: 'c', problemReason: 'broken' }),
     ], 3))
@@ -145,7 +145,7 @@ describe('ImageHealthProblemBoard — reason 子筛选（客户端，H-2）', ()
     await waitFor(() => {
       const reasons = Array.from(container.querySelectorAll('[data-problem-card]'))
         .map((el) => el.getAttribute('data-problem-reason'))
-      expect(reasons).toEqual(['broken_event', 'broken'])
+      expect(reasons).toEqual(['client_error', 'broken'])
     })
   })
 })

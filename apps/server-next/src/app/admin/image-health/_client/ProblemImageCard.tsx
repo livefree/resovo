@@ -22,12 +22,14 @@ const KIND_ASPECT: Record<ProblemImageKind, string> = {
   banner_backdrop: '16 / 9',
 }
 
-// problemReason → Pill variant + 中文标签（分色：真坏 danger，low_quality info，pending_review warn）
+// problemReason → Pill variant + 中文标签（分色：真坏 danger，unknown 待验证 warn，low_quality info）
+// ADR-213 D-213-7：broken_event→client_error（浏览器上报）；新增 unknown（stale-ok：status=ok 但久未复检）。
 const REASON_META: Record<ProblemReason, { variant: 'danger' | 'warn' | 'info'; label: string }> = {
-  broken_event:   { variant: 'danger', label: '加载失败' },
+  client_error:   { variant: 'danger', label: '加载失败' },
   broken:         { variant: 'danger', label: '已标破损' },
   low_quality:    { variant: 'info',   label: '低质量' },
   pending_review: { variant: 'warn',   label: '待复核' },
+  unknown:        { variant: 'warn',   label: '未验证' },
   other:          { variant: 'info',   label: '其他' },
 }
 

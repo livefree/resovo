@@ -76,7 +76,7 @@ const ROW = {
   kind: 'poster',
   imageUrl: 'https://cdn.example.com/p.jpg',
   status: 'pending_review',
-  problemReason: 'broken_event',
+  problemReason: 'client_error',
   source: 'douban',
   eventType: 'client_load_error',
   brokenDomain: 'cdn.example.com',

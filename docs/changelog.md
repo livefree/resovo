@@ -2371,3 +2371,18 @@
 - **注意事项**：**A-SCAN ≠ P4-S**——A-SCAN（P4-A）是 C 前的一次性初始排空门（`checked_at IS NULL`），P4-S 是上线后周期维护（`checked_at` 陈旧）。**非阻塞根治收尾卡**：过渡正确性已由 P4-C `unknown` 面兜底，P4-S 上线（prod `IMAGE_HEALTH_SCHEDULER_ENABLED=true`）后健康板方宣称「零漏检/完备」。
 - **Codex stop-gate 修正（周期 jobId silent-skip）**：初版 `enqueueStaleHealthRecheck` 复用一次性扫描的**固定 jobId** `health-check-<catalogId>-<kind>` —— Bull 对已存在 jobId（含 `removeOnComplete:50` 保留的**已完成** job）静默忽略 add，致同一 (catalog,kind) 行复检一次后、后续周期重入被**永久静默跳过**，彻底丧失「周期」语义（stale-ok 根治失效）。**修复**：周期 jobId 追加本次调用时间戳周期戳 `-${cycleStamp}` → 单次调用内仍 dedup、跨周期不被旧 job 阻塞；一次性路径（A-SCAN/backfill/rescan）保持固定 jobId（语义本就一次性，不变）。新增回归测「连续两周期 jobId 不同」。
 - **门禁**：typecheck=0/lint=0/test:changed=127（修复改动集）·image-health 单测 32 全绿（worker 14/stale-recheck 3/client-error 4/beacon 11）/verify:endpoint-adr=0（无新端点·scheduler 非 route）/verify:adr-contracts=0。未含 IMGH-P3-5 parked 代码。
+
+## [IMGH-P4-C] 方案C 读端单真源 — problemFilterSqlV2（events 退出读路径）+ client_error/unknown DTO + 前端分色（ADR-213 D-213-7）
+- **完成时间**：2026-06-22
+- **记录时间**：2026-06-22 03:00
+- **执行模型**：claude-opus-4-8
+- **子代理**：arch-reviewer (claude-opus-4-8, a06695fa2c0aa033c — 读端单谓词 + DTO 值域变更设计已由 ADR-213 背书)
+- **修改文件**：
+  - `apps/api/src/db/queries/imageHealth.scan.ts` — ① `PROBLEM_KIND_COLS` 加 `checkedAt`/`clientErrorAt` 列 ② `ProblemReason` 值域变更：`broken_event`→`client_error` + 新增 `unknown`（DTO 跨消费方）③ `problemFilterSql`→`problemFilterSqlV2(kind,includeStaleOk)`：`<url>非空 AND (status<>'ok' OR client_error_at∈7d窗口 [OR stale-ok])`——**events 退出 WHERE**（降级纯遥测）④ `getProblemImages` 重写（problem_reason CASE 含 client_error/unknown、ORDER 复用 base.problem_reason、LATERAL 仅留遥测展示不进 WHERE）⑤ `getProblemImageCounts` 逐字共用 `problemFilterSqlV2`（去 events 参数，total 不漂移）⑥ `staleOkEnabled()` flag helper
+  - `apps/server-next/src/lib/image-health/api.ts` + `_client/ProblemImageCard.tsx` — `ProblemReason` 类型同步 + `REASON_META` 分色（client_error=加载失败/danger，新增 unknown=未验证/warn）
+  - `apps/server-next/src/app/admin/image-health/_client/ImageHealthProblemBoard.tsx` — 「真破损」子筛选 `broken_event`→`client_error`（仅此一行；parked IMGH-P3-5 改动经 git stash 隔离，未随本提交，pop 后仍未提交）
+  - 测试：新增 `image-health-problem-filter-v2.test.ts`（5：单真源谓词/events 退出/flag OFF·ON stale-ok 道/counts·list 逐字共用/CASE 含 client_error·unknown）+ 既有 4 测改名（ProblemImageCard/ImageHealthProblemBoard/admin-image-health-problem-images/集成 admin-image-health：broken_event→client_error + REASON_RANK + unknown 覆盖 + 移除「client_error 必带 eventType」失效断言）
+- **新增依赖**：无
+- **数据库变更**：无（消费 0M migration 121 的 `checked_at`/`client_error_at` 列）
+- **A-SCAN 部署门 = flag 门控（用户裁定）**：依赖 `checked_at` 的 **stale-ok→unknown** 道用 `IMAGE_HEALTH_STALE_OK_ENABLED`（默认 OFF）门控——A-SCAN 跑前存量 ok 行 checked_at 全 NULL，若开启会误判全部健康 ok 行 unknown 泛滥（ADR-213 Codex round-4 红线）。**flag OFF 即生效的核心修复**：events 退出读路径 → 7 张 `status='ok'` 误报封面**上线即消失**（无需重扫/resolve）；client_error 窗口道 + 分色。**flag ON（A-SCAN 排空后运维开启）**：stale-ok 行入板标 `unknown`（诚实未验证，非健康）。**counts/list 逐字共用 problemFilterSqlV2**（ADR-209 §17.3.2 total 不漂移）。
+- **门禁**：typecheck=0/lint=0/test:changed=235/verify:endpoint-adr=0（无新端点·读端改写不触契约）/verify:adr-contracts=0。**建议合并前补跑 `test:e2e:admin`**。未含 IMGH-P3-5 parked 代码（git stash 隔离 ImageHealthProblemBoard 视觉改动）。
