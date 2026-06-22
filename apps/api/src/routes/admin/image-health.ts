@@ -45,6 +45,8 @@ const ProblemImagesQuerySchema = z.object({
   scope:  z.enum(['published', 'all']).default('published'),
   offset: z.coerce.number().int().min(0).default(0),
   limit:  z.coerce.number().int().min(1).max(100).default(48),
+  // reason 子筛选服务端化（IMGH-P4-REASON-SSF）：'all' 不过滤；其余精确命中（消客户端分页假空）
+  reason: z.enum(['all', 'broken', 'unknown', 'low_quality', 'pending_review']).default('all'),
 })
 
 // broken_image_events.event_type CHECK 8 值（048_image_pipeline.sql:67）
@@ -168,13 +170,14 @@ export async function adminImageHealthRoutes(fastify: FastifyInstance) {
         error: { code: 'VALIDATION_ERROR', message: parsed.error.errors[0]?.message ?? 'Invalid query', status: 400 },
       })
     }
-    const { kind, scope, offset, limit } = parsed.data
+    const { kind, scope, offset, limit, reason } = parsed.data
     const service = new ImageHealthService(db)
-    const [data, counts] = await Promise.all([
-      service.getProblemImages(kind, scope, offset, limit),
+    const [page, counts] = await Promise.all([
+      service.getProblemImages(kind, scope, offset, limit, reason),
       service.getProblemImageCounts(scope),
     ])
-    return reply.send({ data, total: counts[kind], counts })
+    // total = 过滤后真总数（page.total，含 reason 过滤）→ hasMore 准；counts 仍全 reason 作 tab badge
+    return reply.send({ data: page.rows, total: page.total, counts })
   })
 
   // ── GET /admin/image-health/candidates（ADR-208 D-208-2）──────────

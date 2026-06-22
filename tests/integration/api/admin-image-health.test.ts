@@ -78,7 +78,7 @@ describe('getProblemImages / getProblemImageCounts SQL 集成（ADR-211 / 4A arc
   })
 
   it('getProblemImages(poster,published) 跑通：url 非空守卫 + problemReason 合法 + 优先级非递减排序', async () => {
-    const rows = await getProblemImages(db, 'poster', 'published', 0, 48)
+    const { rows } = await getProblemImages(db, 'poster', 'published', 0, 48)
     expect(rows).toBeInstanceOf(Array)
     expect(rows.length).toBeLessThanOrEqual(48)
     let prevRank = 0
@@ -96,10 +96,17 @@ describe('getProblemImages / getProblemImageCounts SQL 集成（ADR-211 / 4A arc
     }
   })
 
-  it('total=counts[kind] 一致：limit 超量时 page 行数 === 当前 kind 计数', async () => {
+  it('total=counts[kind] 一致：limit 超量时 page 行数 === total === 当前 kind 计数（reason=all）', async () => {
     const counts = await getProblemImageCounts(db, 'published')
-    const rows = await getProblemImages(db, 'poster', 'published', 0, 100000)
+    const { rows, total } = await getProblemImages(db, 'poster', 'published', 0, 100000)
     expect(rows.length).toBe(Math.min(100000, counts.poster))
+    expect(total).toBe(counts.poster) // COUNT(*) OVER() 全 reason = counts[kind]（IMGH-P4-REASON-SSF）
+  })
+
+  it('reason 服务端过滤（IMGH-P4-REASON-SSF）：reason=broken → 仅 client_error/broken；total 为过滤后数', async () => {
+    const { rows, total } = await getProblemImages(db, 'poster', 'all', 0, 100000, 'broken')
+    expect(rows.every((r) => r.problemReason === 'client_error' || r.problemReason === 'broken')).toBe(true)
+    expect(total).toBe(rows.length) // limit 超量 → total === 返回行数
   })
 })
 

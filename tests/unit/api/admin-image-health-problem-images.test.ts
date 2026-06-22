@@ -86,12 +86,13 @@ const ROW = {
 const COUNTS = { poster: 25, backdrop: 6, logo: 12, banner_backdrop: 0 }
 
 beforeEach(() => {
-  getProblemImagesMock.mockReset().mockResolvedValue([ROW])
+  // IMGH-P4-REASON-SSF：query getProblemImages 现返回 {rows,total}（total=过滤后 COUNT(*) OVER()）；route 用 page.total
+  getProblemImagesMock.mockReset().mockResolvedValue({ rows: [ROW], total: 1 })
   getProblemImageCountsMock.mockReset().mockResolvedValue(COUNTS)
 })
 
 describe('GET /admin/image-health/problem-images (IMGH-P3-4A / ADR-211)', () => {
-  it('admin 成功 → 200 { data, total, counts }；默认 poster/published/0/48 透传 + total=counts.poster', async () => {
+  it('admin 成功 → 200 { data, total, counts }；默认 poster/published/0/48/reason=all 透传 + total=page.total', async () => {
     const app = await buildApp()
     try {
       const res = await app.inject({
@@ -103,15 +104,15 @@ describe('GET /admin/image-health/problem-images (IMGH-P3-4A / ADR-211)', () => 
       const body = JSON.parse(res.body)
       expect(body.data).toEqual([ROW])
       expect(body.counts).toEqual(COUNTS)
-      expect(body.total).toBe(25) // counts[poster]
-      expect(getProblemImagesMock).toHaveBeenCalledWith(expect.anything(), 'poster', 'published', 0, 48)
+      expect(body.total).toBe(1) // page.total（getProblemImages 过滤后 COUNT(*) OVER()），非 counts[kind]
+      expect(getProblemImagesMock).toHaveBeenCalledWith(expect.anything(), 'poster', 'published', 0, 48, 'all')
       expect(getProblemImageCountsMock).toHaveBeenCalledWith(expect.anything(), 'published')
     } finally {
       await app.close()
     }
   })
 
-  it('自定义 kind=backdrop&scope=all&offset=48&limit=24 透传 + total 取 counts.backdrop', async () => {
+  it('自定义 kind=backdrop&scope=all&offset=48&limit=24 透传 + total 取 page.total', async () => {
     const app = await buildApp()
     try {
       const res = await app.inject({
@@ -120,16 +121,31 @@ describe('GET /admin/image-health/problem-images (IMGH-P3-4A / ADR-211)', () => 
         headers: authHeader('admin'),
       })
       expect(res.statusCode).toBe(200)
-      expect(JSON.parse(res.body).total).toBe(6) // counts[backdrop]
-      expect(getProblemImagesMock).toHaveBeenCalledWith(expect.anything(), 'backdrop', 'all', 48, 24)
+      expect(JSON.parse(res.body).total).toBe(1) // page.total（mock）
+      expect(getProblemImagesMock).toHaveBeenCalledWith(expect.anything(), 'backdrop', 'all', 48, 24, 'all')
       expect(getProblemImageCountsMock).toHaveBeenCalledWith(expect.anything(), 'all')
     } finally {
       await app.close()
     }
   })
 
+  it('reason=broken 透传服务端（IMGH-P4-REASON-SSF）', async () => {
+    const app = await buildApp()
+    try {
+      const res = await app.inject({
+        method: 'GET',
+        url: '/admin/image-health/problem-images?reason=broken',
+        headers: authHeader('admin'),
+      })
+      expect(res.statusCode).toBe(200)
+      expect(getProblemImagesMock).toHaveBeenCalledWith(expect.anything(), 'poster', 'published', 0, 48, 'broken')
+    } finally {
+      await app.close()
+    }
+  })
+
   it('空结果 → 200 { data: [], total: 0 }', async () => {
-    getProblemImagesMock.mockResolvedValue([])
+    getProblemImagesMock.mockResolvedValue({ rows: [], total: 0 })
     getProblemImageCountsMock.mockResolvedValue({ poster: 0, backdrop: 0, logo: 0, banner_backdrop: 0 })
     const app = await buildApp()
     try {

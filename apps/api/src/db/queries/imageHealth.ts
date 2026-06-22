@@ -825,6 +825,7 @@ export type {
   BrokenTrendPoint, RescanScope, RescanPostersResult, SwitchFallbackDomainResult,
   // ADR-211：问题图片可视化治理板
   ProblemImageKind, ProblemImageScope, ProblemReason, ProblemImageRow, ProblemImageCounts,
+  ProblemReasonFilter, ProblemImagesPage,
 } from './imageHealth.scan'
 export {
   getBrokenEventsTrend,

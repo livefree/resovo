@@ -2445,3 +2445,22 @@
 - **数据库变更**：无
 - **背景（A-SCAN 后实测）**：板 all 口径 poster reason 分布 = low_quality 2793（85%）/ pending 439 / broken 18 / unknown 17 / client_error 1。原排序 low_quality=3 把 broken/unknown 埋在第 ~70 页 + 无「未验证」筛选 → 可操作项不可见。**A 是 B 前提**（unknown 升优先级 3 → 落第 1 页 → 客户端筛选才命中）。
 - **注意事项**：A+C committed；B 经 stash 隔离（parked board 视觉改动仍未提交，待用户验收 IMGH-P3-5 一并 commit）。low_quality 阈值仍未动——C 上线后用分辨率角标观察再定（多数小图在未发布、published 口径仅 21）。门禁：typecheck=0/lint=0/test:changed=213/集成 admin-image-health=12/verify:adr-contracts=0。
+
+## [IMGH-P4-REASON-SSF] reason 子筛选改服务端，消「客户端过滤分页数据假空」（Codex stop-gate）
+- **完成时间**：2026-06-22
+- **记录时间**：2026-06-22 11:45
+- **执行模型**：claude-opus-4-8
+- **子代理**：无（读端过滤下沉，沿 ADR-211/213 既有谓词，非新架构）
+- **修改文件**：
+  - `apps/api/src/db/queries/imageHealth.scan.ts` — getProblemImages 加 `reasonFilter` 参（'all'/'broken'=client_error∪broken/'unknown'/'low_quality'/'pending_review'）→ 外层 `WHERE ($5::text[] IS NULL OR base.problem_reason = ANY($5))`；加 `COUNT(*) OVER()::int AS full_count` → 返回 `{rows,total}`（过滤后真总数，hasMore 准）。新增 `ProblemReasonFilter`/`ProblemImagesPage` 类型 + `REASON_FILTER_MAP`。
+  - `apps/api/src/db/queries/imageHealth.ts` — 重导出新类型。
+  - `apps/api/src/services/ImageHealthService.ts` — getProblemImages 透传 reasonFilter + 返回 `{rows,total}`。
+  - `apps/api/src/routes/admin/image-health.ts` — `/problem-images` 加 `reason` query（zod 枚举，默认 all）→ 传服务 → `{data: page.rows, total: page.total, counts}`（counts 仍全 reason 作 tab badge）。
+  - `apps/server-next/src/lib/image-health/api.ts` — `ProblemReasonFilter` 类型 + getProblemImages 传 reason query。
+  - `apps/server-next/src/app/admin/image-health/_client/ImageHealthProblemBoard.tsx`（**stash 隔离 parked**）— reasonFilter 入 fetch + useEffect/handleLoadMore deps；**删客户端 visibleRows 过滤**、直接渲染 rows。
+  - 测试：filter-v2（reason WHERE/$5/COUNT OVER）+ 集成 admin-image-health（{rows,total} 解构 + total=counts 当 all + reason=broken 过滤）+ board test（点筛选触发带 reason 重取，服务端语义）+ route 单测 admin-image-health-problem-images（mock query 返回 {rows,total}、total=page.total、reason 透传）。
+- **新增依赖**：无
+- **数据库变更**：无
+- **问题（Codex stop-gate）**：reason 子筛选客户端 `rows.filter` 仅覆盖已加载页 → 任何沉在加载窗口外的 reason（A 排序后 low_quality 在第 ~60 页）点筛选即**假空**（其实有 2793 个，未加载到）。客户端过滤分页数据的固有缺陷，对 unknown/pending 早已存在，A 让 low_quality 显形。
+- **修复要点**：①reason 过滤下沉服务端 → 任何 reason 精确命中、不受排序/分页影响；②`COUNT(*) OVER()` 返回过滤后真总数 → hasMore 准（不再 over-fetch 空页）；③保留 A 排序（默认视图可操作项浮顶）+ B 未验证筛选（现服务端生效）+ C 分辨率显示。端点加 query 参不增端点（verify:endpoint-adr 绿）。
+- **门禁**：typecheck=0/lint=0/test:changed=232/集成 admin-image-health=13（真库 {rows,total}+reason 过滤）/verify:endpoint-adr=0/verify:adr-contracts=0。board 改动经 stash 隔离 parked IMGH-P3-5。

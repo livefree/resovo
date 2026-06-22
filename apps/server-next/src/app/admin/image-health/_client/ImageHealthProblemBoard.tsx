@@ -135,12 +135,13 @@ export function ImageHealthProblemBoard() {
   const [drawerRow, setDrawerRow] = useState<ProblemImageRow | null>(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
 
-  // ③ 切 kind/scope/refreshKey → 重置 rows+offset 拉第一页（非追加）
+  // ③ 切 kind/scope/reasonFilter/refreshKey → 重置 rows+offset 拉第一页（非追加）
+  //    reason 服务端过滤（IMGH-P4-REASON-SSF）：切子筛选触发重取，不再客户端过滤已加载行（消分页假空）
   useEffect(() => {
     let cancelled = false
     setLoading(true)
     setError(null)
-    getProblemImages({ kind, scope, offset: 0, limit: PAGE_LIMIT })
+    getProblemImages({ kind, scope, offset: 0, limit: PAGE_LIMIT, reason: reasonFilter })
       .then((res) => {
         if (cancelled) return
         setRows(res.data)
@@ -156,12 +157,12 @@ export function ImageHealthProblemBoard() {
         if (!cancelled) setLoading(false)
       })
     return () => { cancelled = true }
-  }, [kind, scope, refreshKey])
+  }, [kind, scope, reasonFilter, refreshKey])
 
   const handleLoadMore = useCallback(async () => {
     setLoadingMore(true)
     try {
-      const res = await getProblemImages({ kind, scope, offset: requested, limit: PAGE_LIMIT })
+      const res = await getProblemImages({ kind, scope, offset: requested, limit: PAGE_LIMIT, reason: reasonFilter })
       // ① 去重追加（防边界重复行）
       setRows((prev) => dedupeAppend(prev, res.data))
       // ② 同步 counts/total（活动集随治理变化，防失真）
@@ -174,7 +175,7 @@ export function ImageHealthProblemBoard() {
     } finally {
       setLoadingMore(false)
     }
-  }, [kind, scope, requested])
+  }, [kind, scope, requested, reasonFilter])
 
   // ② 治理动作成功 → 刷新当前页 + counts（重置子筛选不必要，rows 重拉后过滤即对）
   const handleMutated = useCallback(() => {
@@ -187,14 +188,7 @@ export function ImageHealthProblemBoard() {
     setDrawerOpen(true)
   }, [])
 
-  // reason 客户端子筛选（后端无 reason 参数；真坏 = client_error ∪ broken，ADR-213 D-213-7）
-  const visibleRows = useMemo(() => {
-    if (reasonFilter === 'all') return rows
-    if (reasonFilter === 'broken') {
-      return rows.filter((r) => r.problemReason === 'client_error' || r.problemReason === 'broken')
-    }
-    return rows.filter((r) => r.problemReason === reasonFilter)
-  }, [rows, reasonFilter])
+  // reason 子筛选已服务端化（IMGH-P4-REASON-SSF）：rows 即当前 reason 过滤后的结果，直接渲染（消客户端分页假空）
 
   const kindItems = useMemo(
     () => KIND_TABS.map((t) => ({ value: t.value, label: `${t.label} ${counts[t.value]}` })),
@@ -244,14 +238,14 @@ export function ImageHealthProblemBoard() {
         <ErrorState error={error} title="问题图片加载失败" onRetry={() => setRefreshKey((k) => k + 1)} />
       ) : loading && rows.length === 0 ? (
         <LoadingState variant="skeleton" />
-      ) : visibleRows.length === 0 ? (
+      ) : rows.length === 0 ? (
         <EmptyState
           title="暂无问题图片"
           description={reasonFilter === 'all' ? '该类型图片均健康或未配置' : '当前子筛选无命中，试试「全部」'}
         />
       ) : (
         <div style={GRID_STYLE} data-problem-grid>
-          {visibleRows.map((row) => (
+          {rows.map((row) => (
             <ProblemImageCard key={`${row.videoId}::${row.kind}`} row={row} onOpen={handleOpen} />
           ))}
         </div>
@@ -271,8 +265,7 @@ export function ImageHealthProblemBoard() {
             </AdminButton>
           )}
           <span data-problem-count>
-            已显示 {visibleRows.length}
-            {reasonFilter === 'all' ? '' : ` / 已加载 ${rows.length}`} · 共 {total} 条
+            已显示 {rows.length} · 共 {total} 条
           </span>
         </div>
       )}

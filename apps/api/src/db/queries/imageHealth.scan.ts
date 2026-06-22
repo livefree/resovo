@@ -98,6 +98,26 @@ export type ProblemReason =
   | 'unknown'
   | 'other'
 
+/**
+ * reason 子筛选值（板 UI 口径 → 服务端过滤，IMGH-P4-REASON-SSF）：'all' 不过滤；'broken'=真破损（client_error∪broken）；
+ * 其余 1:1 映射 problemReason。**服务端过滤**取代客户端 `rows.filter`——后者仅过滤已加载页 → 沉在加载窗口外的
+ * reason（如 A 排序后 low_quality）点筛选假空（Codex stop-gate）。
+ */
+export type ProblemReasonFilter = 'all' | 'broken' | 'unknown' | 'low_quality' | 'pending_review'
+
+const REASON_FILTER_MAP: Record<Exclude<ProblemReasonFilter, 'all'>, readonly ProblemReason[]> = {
+  broken: ['client_error', 'broken'],
+  unknown: ['unknown'],
+  low_quality: ['low_quality'],
+  pending_review: ['pending_review'],
+}
+
+export interface ProblemImagesPage {
+  rows: ProblemImageRow[]
+  /** 过滤后真总数（COUNT(*) OVER()，含 reason 过滤）→ hasMore 准确，不受分页影响 */
+  total: number
+}
+
 export interface ProblemImageRow {
   videoId: string
   catalogId: string
@@ -165,12 +185,15 @@ export async function getProblemImages(
   scope: ProblemImageScope,
   offset = 0,
   limit = 48,
-): Promise<ProblemImageRow[]> {
+  reasonFilter: ProblemReasonFilter = 'all',
+): Promise<ProblemImagesPage> {
   const { url: urlCol, status: statusCol, checkedAt: checkedCol, clientErrorAt: clientErrorCol } =
     PROBLEM_KIND_COLS[kind]
   const publishedFilter = scope === 'published' ? 'AND v.is_published = true' : ''
   const sourceExpr = kind === 'poster' ? 'mc.poster_source' : 'NULL::text'
   const includeStaleOk = staleOkEnabled()
+  // 服务端 reason 过滤：null=全部不过滤；否则限定 problem_reason ∈ 集合（外层 WHERE，对 base 算好的 reason 过滤）
+  const reasons = reasonFilter === 'all' ? null : [...REASON_FILTER_MAP[reasonFilter]]
 
   const result = await db.query<{
     video_id: string
@@ -185,6 +208,7 @@ export async function getProblemImages(
     broken_domain: string | null
     occurrence_count: number | null
     last_seen_broken_at: string | null
+    full_count: number
   }>(
     // ADR-213 D-213-7：健康判定单真源（status + client_error_at[ + stale-ok]），**events 退出 WHERE**；
     // LATERAL 仅留作纯遥测展示（broken_domain/原因/次数），LEFT JOIN 不影响命中。problem_reason 在 base 算一次、ORDER BY 复用。
@@ -223,8 +247,11 @@ export async function getProblemImages(
        CASE WHEN base.evt_url IS NOT NULL
          THEN regexp_replace(base.evt_url, '^https?://([^/]+).*', '\\1')
          ELSE NULL
-       END AS broken_domain
+       END AS broken_domain,
+       COUNT(*) OVER()::int AS full_count  -- 过滤后真总数（在 LIMIT 前算）→ hasMore 准确
      FROM base
+     -- reason 子筛选服务端化（$5 NULL=全部）：对 base 算好的 problem_reason 过滤，任何 reason 精确命中、不受分页/排序影响
+     WHERE ($5::text[] IS NULL OR base.problem_reason = ANY($5::text[]))
      ORDER BY
        -- 可操作项优先（client_error/broken/unknown 浮顶）；low_quality（能加载、仅尺寸小）最不紧急 → 沉底，
        -- 避免大量 low_quality 把 broken/unknown 埋到末页（A-SCAN 后实测 low_quality 占 ~85%，IMGH-P4-BOARD-UX）。
@@ -239,24 +266,27 @@ export async function getProblemImages(
        base.last_seen_at DESC NULLS LAST,
        base.video_id
      LIMIT $3 OFFSET $4`,
-    [kind, [...BROKEN_SAMPLE_EVENT_TYPES], limit, offset],
+    [kind, [...BROKEN_SAMPLE_EVENT_TYPES], limit, offset, reasons],
   )
 
-  return result.rows.map(r => ({
-    videoId: r.video_id,
-    catalogId: r.catalog_id,
-    title: r.title,
-    isPublished: r.is_published,
-    kind,
-    imageUrl: r.image_url,
-    status: r.status,
-    problemReason: r.problem_reason,
-    source: r.source,
-    eventType: r.event_type,
-    brokenDomain: r.broken_domain,
-    occurrenceCount: r.occurrence_count ?? 0,
-    lastSeenBrokenAt: r.last_seen_broken_at,
-  }))
+  return {
+    rows: result.rows.map(r => ({
+      videoId: r.video_id,
+      catalogId: r.catalog_id,
+      title: r.title,
+      isPublished: r.is_published,
+      kind,
+      imageUrl: r.image_url,
+      status: r.status,
+      problemReason: r.problem_reason,
+      source: r.source,
+      eventType: r.event_type,
+      brokenDomain: r.broken_domain,
+      occurrenceCount: r.occurrence_count ?? 0,
+      lastSeenBrokenAt: r.last_seen_broken_at,
+    })),
+    total: result.rows[0]?.full_count ?? 0,
+  }
 }
 
 /**

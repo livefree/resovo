@@ -75,4 +75,24 @@ describe('problemFilterSqlV2 — 单真源谓词（ADR-213 D-213-7）', () => {
     // LATERAL 仍保留作纯遥测展示（broken_domain/原因），但不进 WHERE
     expect(sql).toContain('LEFT JOIN LATERAL')
   })
+
+  it('reason 服务端过滤（IMGH-P4-REASON-SSF）：$5 NULL=全部 / COUNT(*) OVER() 算过滤后真总数', async () => {
+    const { db, query } = mockDb([])
+    // reason='all' → 第 5 参为 null（不过滤）
+    await getProblemImages(db, 'poster', 'all', 0, 48, 'all')
+    const [sqlAll, paramsAll] = query.mock.calls[0]
+    expect(sqlAll).toContain('COUNT(*) OVER()::int AS full_count')   // 过滤后真总数（hasMore 准）
+    expect(sqlAll).toContain('base.problem_reason = ANY($5::text[])') // reason 外层 WHERE
+    expect(paramsAll[4]).toBeNull()                                   // all → $5=null
+
+    // reason='broken' → $5 = ['client_error','broken']
+    const { db: db2, query: q2 } = mockDb([])
+    await getProblemImages(db2, 'poster', 'all', 0, 48, 'broken')
+    expect(q2.mock.calls[0][1][4]).toEqual(['client_error', 'broken'])
+
+    // reason='unknown' → $5 = ['unknown']
+    const { db: db3, query: q3 } = mockDb([])
+    await getProblemImages(db3, 'poster', 'all', 0, 48, 'unknown')
+    expect(q3.mock.calls[0][1][4]).toEqual(['unknown'])
+  })
 })

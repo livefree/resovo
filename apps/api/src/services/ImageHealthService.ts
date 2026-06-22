@@ -21,7 +21,8 @@ import {
   type ImageHealthStats,
   type ProblemImageKind,
   type ProblemImageScope,
-  type ProblemImageRow,
+  type ProblemReasonFilter,
+  type ProblemImagesPage,
   type ProblemImageCounts,
 } from '@/api/db/queries/imageHealth'
 import { STALE_CHECK_DAYS } from '@/api/db/queries/imageHealth.scan'
@@ -169,8 +170,9 @@ export class ImageHealthService {
     scope: ProblemImageScope,
     offset = 0,
     limit = 48,
-  ): Promise<ProblemImageRow[]> {
-    return getProblemImages(this.db, kind, scope, offset, limit)
+    reasonFilter: ProblemReasonFilter = 'all',
+  ): Promise<ProblemImagesPage> {
+    return getProblemImages(this.db, kind, scope, offset, limit, reasonFilter)
   }
 
   /** ADR-211 D-211-4：4 类问题图片计数（tab badge + 当前 kind 的 total）。 */

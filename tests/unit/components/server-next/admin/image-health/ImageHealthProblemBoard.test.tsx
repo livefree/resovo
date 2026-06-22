@@ -5,7 +5,7 @@
  * - 初次加载默认 kind=poster / scope=published / offset=0 / limit=48
  * - 网格渲染 ProblemImageCard / 空态 EmptyState
  * - kind tab badge=counts / 切 kind|scope → 重拉（offset 重置）
- * - reason 子筛选客户端过滤（真破损 = client_error ∪ broken）
+ * - reason 子筛选服务端化（IMGH-P4-REASON-SSF）：点筛选带 reason 重取，消客户端分页假空
  * - 加载更多：offset 累积 + videoId+kind 去重追加（漂移缓解①，Codex H-3）
  * - 点卡 → 打开 ImageGovernanceDrawer（focusKind 深链）
  */
@@ -75,7 +75,7 @@ describe('ImageHealthProblemBoard — 初次加载与渲染', () => {
     render(<ImageHealthProblemBoard />)
     await waitFor(() => {
       expect(getProblemImagesMock).toHaveBeenCalledWith({
-        kind: 'poster', scope: 'published', offset: 0, limit: 48,
+        kind: 'poster', scope: 'published', offset: 0, limit: 48, reason: 'all',
       })
     })
   })
@@ -132,35 +132,42 @@ describe('ImageHealthProblemBoard — tab/scope 切换重拉', () => {
   })
 })
 
-describe('ImageHealthProblemBoard — reason 子筛选（客户端，H-2）', () => {
-  it('「真破损」→ 仅 client_error/broken 卡可见（low_quality 过滤掉）', async () => {
-    getProblemImagesMock.mockResolvedValue(pageOf([
-      makeRow({ videoId: 'a', problemReason: 'client_error' }),
-      makeRow({ videoId: 'b', problemReason: 'low_quality' }),
-      makeRow({ videoId: 'c', problemReason: 'broken' }),
-    ], 3))
+describe('ImageHealthProblemBoard — reason 子筛选（服务端，IMGH-P4-REASON-SSF）', () => {
+  it('「真破损」→ 重取时传 reason=broken，渲染服务端返回（消客户端分页假空）', async () => {
+    getProblemImagesMock.mockImplementation((p: { reason?: string }) =>
+      Promise.resolve(p?.reason === 'broken'
+        ? pageOf([makeRow({ videoId: 'a', problemReason: 'client_error' }), makeRow({ videoId: 'c', problemReason: 'broken' })], 2)
+        : pageOf([
+            makeRow({ videoId: 'a', problemReason: 'client_error' }),
+            makeRow({ videoId: 'b', problemReason: 'low_quality' }),
+            makeRow({ videoId: 'c', problemReason: 'broken' }),
+          ], 3)))
     const { container } = render(<ImageHealthProblemBoard />)
     await waitFor(() => expect(container.querySelectorAll('[data-problem-card]').length).toBe(3))
     fireEvent.click(screen.getByText('真破损'))
     await waitFor(() => {
+      expect(getProblemImagesMock).toHaveBeenLastCalledWith(expect.objectContaining({ reason: 'broken', offset: 0 }))
       const reasons = Array.from(container.querySelectorAll('[data-problem-card]'))
         .map((el) => el.getAttribute('data-problem-reason'))
       expect(reasons).toEqual(['client_error', 'broken'])
     })
   })
 
-  it('「未验证」→ 仅 unknown 卡可见（IMGH-P4-BOARD-UX）', async () => {
-    getProblemImagesMock.mockResolvedValue(pageOf([
-      makeRow({ videoId: 'a', problemReason: 'unknown' }),
-      makeRow({ videoId: 'b', problemReason: 'low_quality' }),
-      makeRow({ videoId: 'c', problemReason: 'broken' }),
-    ], 3))
+  it('「未验证」→ 重取时传 reason=unknown，渲染服务端返回', async () => {
+    getProblemImagesMock.mockImplementation((p: { reason?: string }) =>
+      Promise.resolve(p?.reason === 'unknown'
+        ? pageOf([makeRow({ videoId: 'a', problemReason: 'unknown' })], 1)
+        : pageOf([
+            makeRow({ videoId: 'a', problemReason: 'unknown' }),
+            makeRow({ videoId: 'b', problemReason: 'low_quality' }),
+          ], 2)))
     const { container } = render(<ImageHealthProblemBoard />)
-    await waitFor(() => expect(container.querySelectorAll('[data-problem-card]').length).toBe(3))
+    await waitFor(() => expect(container.querySelectorAll('[data-problem-card]').length).toBe(2))
     // '未验证' 同时出现在筛选 Segment 与 unknown 卡 Pill → 限定点筛选 Segment 内的
     const reasonSeg = container.querySelector('[data-testid="problem-board-reason-segment"]') as HTMLElement
     fireEvent.click(within(reasonSeg).getByText('未验证'))
     await waitFor(() => {
+      expect(getProblemImagesMock).toHaveBeenLastCalledWith(expect.objectContaining({ reason: 'unknown', offset: 0 }))
       const reasons = Array.from(container.querySelectorAll('[data-problem-card]'))
         .map((el) => el.getAttribute('data-problem-reason'))
       expect(reasons).toEqual(['unknown'])

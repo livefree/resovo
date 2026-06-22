@@ -103,16 +103,20 @@ export interface ProblemImageCounts {
   readonly banner_backdrop: number
 }
 
+/** reason 子筛选（服务端化，IMGH-P4-REASON-SSF）：'all' 不过滤；'broken'=真破损（client_error∪broken）。 */
+export type ProblemReasonFilter = 'all' | 'broken' | 'unknown' | 'low_quality' | 'pending_review'
+
 export interface ListProblemImagesParams {
   readonly kind?: ProblemImageKind
   readonly scope?: ProblemImageScope
   readonly offset?: number
   readonly limit?: number
+  readonly reason?: ProblemReasonFilter
 }
 
 export interface ListProblemImagesResult {
   readonly data: readonly ProblemImageRow[]
-  /** 当前 kind+scope 命中总数（= counts[kind]） */
+  /** 当前 kind+scope+reason 过滤后命中总数（服务端 COUNT(*) OVER()）→ hasMore 准 */
   readonly total: number
   readonly counts: ProblemImageCounts
 }
@@ -289,6 +293,7 @@ export async function getProblemImages(
   if (params.scope)           qs.set('scope', params.scope)
   if (params.offset != null)  qs.set('offset', String(params.offset))
   if (params.limit != null)   qs.set('limit', String(params.limit))
+  if (params.reason && params.reason !== 'all') qs.set('reason', params.reason)
   const q = qs.toString()
   return apiClient.get<ListProblemImagesResult>(
     `/admin/image-health/problem-images${q ? `?${q}` : ''}`,
