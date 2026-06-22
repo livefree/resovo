@@ -36,6 +36,7 @@
    - `merge-split-ux-redesign_20260603.md`（CHG-VIR-13 系列 ✅；「强负边不参与折叠连通」follow-up 待用户裁定）
    - `adr177-external-refs-relation_20260602.md`（ADR-177 定档输入，被 decisions.md / architecture.md 引用，保留）
    - `route-labeling-system.md`（线路别名三层体系设计稿，`docs/manual/route-labeling.md` 真源引用，保留）
+   - `client-video-card-sizing-audit_20260622.md`（前台视频卡片尺寸现状调查：三层分离结构 / 5 种定宽机制碎片化 / 死 token 与死代码清单；仅现状梳理，待裁定是否治理）
 5. 活跃台账（`docs/audit/`）：`user-review-2026-05-23.md`（SEQ-20260524-01 M-SN-9 容器的反馈登记簿）+ `adr-d-status.json`（verify:adr-contracts 生成）。
 
 ## 3. 已归档参考（Archived References）
